@@ -847,7 +847,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_hdr_color_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_hdr_color_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_hdr_color_tests PRIVATE veyra_engine)
-  add_executable(veyra WIN32 apps/veyra/main.cpp apps/veyra/ui/AppShell.cpp apps/veyra/ui/CapturePanel.cpp apps/veyra/ui/SubtitleOverlay.cpp apps/veyra/SettingsWindow.cpp apps/veyra/TelemetryWindow.cpp)
+  add_executable(veyra WIN32 apps/veyra/main.cpp apps/veyra/ui/AppShell.cpp apps/veyra/ui/CaptureConfigBlock.cpp apps/veyra/ui/CapturePanel.cpp apps/veyra/ui/SubtitleOverlay.cpp apps/veyra/SettingsWindow.cpp apps/veyra/TelemetryWindow.cpp)
   target_sources(veyra PRIVATE apps/veyra/ui/ScreenCapturePanel.cpp)
   add_executable(veyra_slider_reset_tests tests/integration/SliderResetTests.cpp apps/veyra/SettingsWindow.cpp)
   target_compile_features(veyra_slider_reset_tests PRIVATE cxx_std_20)
