@@ -1,4 +1,5 @@
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/source/AjaCaptureSource.h"
 #include "veyra/source/CaptureFrameRate.h"
 #include "veyra/source/WasapiAudioInput.h"
 #include "veyra/source/CaptureTiming.h"
@@ -221,6 +222,7 @@ bool parseCapturePath(std::wstring_view path,CaptureSelection& selection){
 }
 }
 struct CaptureCardSource::Impl:ISampleGrabberCB {
+    std::unique_ptr<AjaCaptureSource> aja;
     using Clock=std::chrono::steady_clock;
     std::atomic<ULONG> refs{1};std::mutex mutex;std::condition_variable wake;
     // One pending frame plus one reader-owned frame, never an IMediaSample
@@ -466,6 +468,7 @@ std::vector<CaptureDevice> CaptureCardSource::deviceDetails(bool audio){
         }
         result.push_back(std::move(device));
     }
+    if(!audio){auto native=AjaCaptureSource::devices();result.insert(result.end(),native.begin(),native.end());}
     if(audio)for(auto& endpoint:WasapiAudioInput::devices())result.push_back({std::move(endpoint.name),std::move(endpoint.id),false,true});
     return result;
 }
@@ -505,9 +508,9 @@ std::vector<CaptureFormat> enumerateFormats(IAMStreamConfig* config){
     std::stable_sort(out.begin(),out.end(),[](const CaptureFormat& a,const CaptureFormat& b){return a.rank<b.rank;});
     return out;
 }
-std::vector<CaptureFormat> CaptureCardSource::formats(unsigned device){ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;if(!configuration(device,g,b,f,c))return {};return enumerateFormats(c.Get());}
-std::vector<CaptureFormat> CaptureCardSource::formatsByPath(std::wstring_view devicePath){ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;if(!configuration(devicePath,g,b,f,c))return {};return enumerateFormats(c.Get());}
-const SourceInfo& CaptureCardSource::info()const{return p_->info;}
+std::vector<CaptureFormat> CaptureCardSource::formats(unsigned device){auto list=deviceDetails(false);if(device<list.size()&&AjaCaptureSource::isDevice(list[device].path))return AjaCaptureSource::formats(list[device].path);ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;if(!configuration(device,g,b,f,c))return {};return enumerateFormats(c.Get());}
+std::vector<CaptureFormat> CaptureCardSource::formatsByPath(std::wstring_view devicePath){if(AjaCaptureSource::isDevice(devicePath))return AjaCaptureSource::formats(devicePath);ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;if(!configuration(devicePath,g,b,f,c))return {};return enumerateFormats(c.Get());}
+const SourceInfo& CaptureCardSource::info()const{return p_->aja?p_->aja->info():p_->info;}
 void CaptureCardSource::setAudioIngress(unsigned mode){
     auto& p=*p_;
     const unsigned clamped=mode>2?0:mode;
@@ -525,6 +528,7 @@ void CaptureCardSource::setBufferMode(unsigned mode){
     log::info("capture-buffer",std::format("mode={} ({}) takes effect on the next connect",clamped,captureBufferModeKey(policy)));
 }
 void CaptureCardSource::setVerticalFlip(bool enabled){
+    if(p_->aja)p_->aja->setVerticalFlip(enabled);
     auto& p=*p_;
     if(p.verticalFlip.exchange(enabled)==enabled)return;
     log::info("capture-flip",std::format("manual vertical flip={} (applies to the next sample; ingest only)",enabled?1:0));
@@ -536,6 +540,7 @@ void CaptureCardSource::setCpuUnpack(bool enabled){
     log::warn("capture-unpack",std::format("legacy CPU per-pixel unpack={} (diagnostic; takes effect on the next connect)",enabled?1:0));
 }
 bool CaptureCardSource::setAudioGain(float gain){
+    if(p_->aja)return p_->aja->setAudioGain(gain);
     if(p_->wasapi){p_->wasapi->setGain(gain);return p_->wasapi->snapshot().available;}
     auto& p=*p_;if(p.audioSession){p.audioSession->setGain(gain);return p.audioSession->snapshot().available;}if(!p.graph||!p.audioFilter)return false;
     if(gain==p.lastAudioGain)return p.audioGainSupported;
@@ -544,14 +549,21 @@ bool CaptureCardSource::setAudioGain(float gain){
     p.lastAudioGain=gain;p.audioGainSupported=SUCCEEDED(hr);log::info("capture-audio",std::format("application gain={} hr=0x{:X}",gain,unsigned(hr)));return p.audioGainSupported;
 }
 void CaptureCardSource::videoPresented(double pts,int64_t time,int64_t arrival){
+    if(p_->aja){p_->aja->videoPresented(pts,time,arrival);return;}
     if(p_->wasapi)p_->wasapi->videoPresented(double(arrival)/10000,time,arrival);
     else if(p_->audioSession)p_->audioSession->videoPresented(pts,time,arrival);
 }
-void CaptureCardSource::videoReset(bool resetAudio){if(p_->wasapi)p_->wasapi->videoReset(resetAudio);else if(p_->audioSession)p_->audioSession->videoReset(resetAudio);}
-void CaptureCardSource::setAudioSync(unsigned mode,int offset){if(p_->wasapi)p_->wasapi->setSync(mode,offset);else if(p_->audioSession)p_->audioSession->setSync(mode,offset);}
-sink::CaptureAudioState CaptureCardSource::audioState()const{auto state=p_->wasapi?p_->wasapi->snapshot():p_->audioSession?p_->audioSession->snapshot():sink::CaptureAudioState{};if(!p_->audioError.empty())state.error=p_->audioError;return state;}
+void CaptureCardSource::videoReset(bool resetAudio){if(p_->aja){p_->aja->videoReset(resetAudio);return;}if(p_->wasapi)p_->wasapi->videoReset(resetAudio);else if(p_->audioSession)p_->audioSession->videoReset(resetAudio);}
+void CaptureCardSource::setAudioSync(unsigned mode,int offset){if(p_->aja){p_->aja->setAudioSync(mode,offset);return;}if(p_->wasapi)p_->wasapi->setSync(mode,offset);else if(p_->audioSession)p_->audioSession->setSync(mode,offset);}
+sink::CaptureAudioState CaptureCardSource::audioState()const{if(p_->aja)return p_->aja->audioState();auto state=p_->wasapi?p_->wasapi->snapshot():p_->audioSession?p_->audioSession->snapshot():sink::CaptureAudioState{};if(!p_->audioError.empty())state.error=p_->audioError;return state;}
 bool CaptureCardSource::open(const SourceOpenDesc& desc){return configure(desc)&&start();}
 bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.clear();p_->lastAudioGain=-1;auto& p=*p_;CaptureSelection selection;if(!parseCapturePath(desc.path,selection))return false;const unsigned index=selection.videoIndex;const int format=selection.format;const int audio=selection.audio;
+    if(selection.stable&&AjaCaptureSource::isDevice(selection.videoPath)){
+        if(selection.format!=0||selection.colorOverride!=0){error_=L"AJA 使用自动检测格式与 SDR 颜色，请恢复默认选项。";return false;}
+        p.aja=std::make_unique<AjaCaptureSource>();
+        if(!p.aja->configure(selection.videoPath,audio,selection.requestedFps)){error_=p.aja->error();p.aja.reset();return false;}
+        p.aja->setVerticalFlip(p.verticalFlip.load());reconnectDesc_=desc;return true;
+    }
     if(selection.stable?!configuration(selection.videoPath,p.graph,p.builder,p.device,p.config):!configuration(index,p.graph,p.builder,p.device,p.config))return false;
     int count=0,size=0;if(FAILED(p.config->GetNumberOfCapabilities(&count,&size))||format<0||format>=count||size<=0||size>65536)return false;
     std::vector<BYTE> caps(size);AM_MEDIA_TYPE* native=nullptr;if(FAILED(p.config->GetStreamCaps(format,&native,caps.data())))return false;
@@ -1082,6 +1094,7 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
     return connectedAudio;
 }
 bool CaptureCardSource::start(){
+    if(p_->aja){const bool ok=p_->aja->start();if(!ok)error_=p_->aja->error();return ok;}
     auto& p=*p_;if(p.info.opened)return true;if(!p.configured||!p.control)return false;
     if(p.audioSession&&p.audioSessionDeferred)log::info("capture-audio-bitstream","audio session starts with the first decoded bitstream frame");
     else if(p.audioSession&&!p.audioSession->start())log::warn("capture-audio","audio start failed; retaining video capture");
@@ -1123,6 +1136,7 @@ void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
     log::info("capture-audio-reconnect",std::format("connected={} Run hr=0x{:08X} epoch={} awaitingActualPCM=1",connected,uint32_t(resumed),epoch_));
 }
 bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
+    if(p_->aja){const auto desc=reconnectDesc_;const auto previous=info();if(!configure(desc))return false;if(info().width!=previous.width||info().height!=previous.height||info().nominalRateNum!=previous.nominalRateNum||info().nominalRateDen!=previous.nominalRateDen){close();error_=L"AJA 输入格式已变化，请重新连接。";return false;}setAudioGain(gain);setAudioSync(syncMode,offsetMs);++epoch_;return start();}
     CaptureSelection selection;
     if(!parseCapturePath(reconnectDesc_.path,selection)||!selection.stable||reconnectFormat_.empty()){
         log::warn("capture-reconnect","Stable device and format identity unavailable; manual selection required");return false;
@@ -1150,6 +1164,7 @@ bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
     close();reconnectDesc_=desc;reconnectFormat_=key;reconnectInfo_=expected;return false;
 }
 CaptureMetrics CaptureCardSource::metrics()const{
+    if(p_->aja)return p_->aja->metrics();
     auto& p=*p_;std::lock_guard lock(p.mutex);CaptureMetrics m;
     m.received=receivedOffset_+p.received;m.delivered=deliveredOffset_+p.sequence;m.dropped=droppedOffset_+p.dropped;m.readAgeMs=p.readAgeMs;
     if(p.recentArrivals.size()>1&&Impl::Clock::now()-p.latestArrival<std::chrono::seconds(1)){const double elapsed=std::chrono::duration<double>(p.recentArrivals.back()-p.recentArrivals.front()).count();if(elapsed>0)m.callbackFps=(p.recentArrivals.size()-1)/elapsed;}
@@ -1157,7 +1172,7 @@ CaptureMetrics CaptureCardSource::metrics()const{
 }
 SourceReadStatus CaptureCardSource::read(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,30);}
 SourceReadStatus CaptureCardSource::tryRead(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,0);}
-SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,const AVFrame** frame,unsigned milliseconds){auto& p=*p_;*frame=nullptr;if(!p.info.opened)return SourceReadStatus::Error;
+SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,const AVFrame** frame,unsigned milliseconds){auto& p=*p_;if(p.aja){auto status=p.aja->read(packet,frame,milliseconds);if(status==SourceReadStatus::Frame)packet.sourceEpoch=epoch_;else if(status==SourceReadStatus::Error)error_=p.aja->error();return status;}*frame=nullptr;if(!p.info.opened)return SourceReadStatus::Error;
     long code=0;LONG_PTR a=0,b=0;while(p.events&&p.events->GetEvent(&code,&a,&b,0)==S_OK){if(code==EC_DEVICE_LOST||code==EC_ERRORABORT)log::warn("capture-reconnect",std::format("DirectShow event={} detail=0x{:X}",code,uint64_t(a)));p.events->FreeEventParams(code,a,b);if(code==EC_DEVICE_LOST||code==EC_ERRORABORT)return SourceReadStatus::Error;}
     double time=0;uint32_t flags=0;uint64_t sequence=0;pipeline::Rational duration;AVFrame* delivered=nullptr;AVFrame* expiredHardware=nullptr;bool feedDecode=false;
     {
@@ -1208,6 +1223,7 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
     *frame=delivered;p.lastFrame=Impl::Clock::now();return SourceReadStatus::Frame;
 }
 void CaptureCardSource::close()noexcept{
+    if(p_->aja){p_->aja->close();p_->aja.reset();}
     auto& p=*p_;if(p.control){const HRESULT hr=p.control->Stop();if(FAILED(hr))log::error("capture-close",std::format("Stop failed hr=0x{:08X}; releasing graph",uint32_t(hr)));}if(p.grab){const HRESULT hr=p.grab->SetCallback(nullptr,0);if(FAILED(hr))log::error("capture-close",std::format("detach callback hr=0x{:08X}",uint32_t(hr)));}
     if(p.wasapi)p.wasapi->stop();p.wasapi.reset();
     p.averMediaSwitch.stop();p.embeddedAudioUnavailable=false;

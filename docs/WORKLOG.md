@@ -5245,3 +5245,42 @@ and leaves the previously verified resize-fix package untouched. Existing
 evidence/build paths are E:/项目/Veyra/tests/resize-hang-20260920 and
 E:/项目/Veyra/build/slider-reset-20260919; no new binary artifacts, runtime
 changes, publication or shutdown.
+
+## 2026-09-22 Native AJA KONA HDMI (implemented; PR submitted)
+
+Current status: native AJA video and embedded PCM support are implemented,
+built and submitted for upstream review in https://github.com/Likely7/Veyra-NRVideo/pull/8.
+The PR is not merged. This entry supersedes the earlier in-progress notes.
+
+Delivered: optional external MIT NTV2 backend; stable serial/HDMI-port selection
+in the existing capture UI; automatic input-format detection; exclusive device
+ownership; UHD TSI routing; bounded latest-frame ingress; shared video/audio
+pipeline; device-state restoration and failure reporting. Supported scope is
+KONA HDMI, progressive 8-bit SDR through UHD60 and 48 kHz linear PCM.
+The eight-channel PCM initialization issue was fixed using an explicit
+WAVEFORMATEXTENSIBLE layout. Temporary missing-NVOF fallback code was removed
+once the actual Optical Flow SDK became available.
+
+Validation completed on the local KONA HDMI / PS5 Pro / RTX 5090:
+- Native capture: 718 frames in 12 seconds, 59.926 fps at UHD59.94.
+- Full application preview: 858 processed frames; real PS5 screenshot verified.
+- AJA + NR + NVOF: smoke passed, 1009 processed frames and 1005 optical-flow
+  executions; terminal processing 60 fps and input 59.94 fps.
+- Embedded audio: 15-second diagnostic received 22,576,128 PCM bytes; conversion
+  and output buffers were captured, and the user confirmed audible playback.
+- Final review build, capture color contract tests and capture audio integration
+  tests passed. Git diff whitespace checks passed.
+
+Remaining validation limits: the hardware rerun after final review fixes had no
+HDMI signal, so it did not pass. Surround speaker mapping, end-to-end audio/video
+latency and formal AJA frame-generation quality validation are not established.
+HDR, compressed HDMI audio and other AJA models are outside this implementation's
+validated scope. These are explicit limits, not unfinished basic capture/audio
+implementation. No claim of precise game FPS or HDMI-to-display latency.
+
+Artifacts are under the user-selected Desktop/Veyra-AJA-work directory; the
+original portable package remains unchanged. Evidence includes logs/aja-ring-test.log,
+logs/aja-preview-app.log, logs/aja-nvof-nr-preview.log, logs/aja-audio-check.*,
+logs/aja-final-build.log and logs/review-audio-tests.log.
+AJA SDK commit: 007fb92b5328c01da85bd170dc5cfc9ede3cfe91; MIT attribution included.
+SDKs and runtime binaries are not committed. No driver changes or reboot.

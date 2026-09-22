@@ -110,6 +110,9 @@ case WM_TIMER:
             SetDlgItemTextW(h,18,std::format(L"{:g}",sameDevice?remembered.requestedFps:0).c_str());
             SendDlgItemMessageW(h,2,CB_SETCURSEL,restore,0);EnableWindow(GetDlgItem(h,4),restore>=0);
             SetDlgItemTextW(h,8,formats.empty()?L"未读到有效的4K以内采集格式，或设备正被其他应用占用。":L"连接后使用当前增强设置。格式与音频变更需要重新连接。");
+            const int ajaDevice=int(SendDlgItemMessageW(h,1,CB_GETCURSEL,0,0));
+            if(ajaDevice>=0&&size_t(ajaDevice)<videoDevices.size()&&videoDevices[size_t(ajaDevice)].path.starts_with(L"aja:"))
+                SetDlgItemTextW(h,8,L"AJA：选择已接线的 HDMI 端口，自动跟随输入；先关闭 Control Room。当前为 8-bit SDR，内嵌音频仅线性 PCM。");
             if(!formats.empty()&&restore<0)SetDlgItemTextW(h,8,L"上次格式已不可用，请重新选择格式。");
             if(SendDlgItemMessageW(h,3,CB_GETCURSEL,0,0)==CB_ERR){EnableWindow(GetDlgItem(h,4),FALSE);SetDlgItemTextW(h,8,L"上次音频设备未连接。请选择音频设备，或明确选择不监听音频。");}
         }

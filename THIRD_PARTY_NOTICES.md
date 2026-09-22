@@ -365,3 +365,16 @@ ingress. DXGI duplication is a Veyra addition. Screen capture is video-only.
 ## dav1d (1.3.0 AV1 playback)
 
 FFmpeg dynamically links dav1d 1.5.4 from the pinned local vcpkg build. The portable package includes its complete aggregated copyright/license text in `licenses/DAV1D-COPYRIGHT.txt` and provenance in `licenses/DAV1D-SPDX.json`. The FFmpeg corresponding-source ZIP includes dav1d source and its vcpkg port. Upstream: https://code.videolan.org/videolan/dav1d . License set recorded by the build: Apache-2.0, BSD-2-Clause, ISC and MIT; retain all notices supplied with the source.
+
+## AJA NTV2 native capture (optional)
+
+- Source: https://github.com/aja-video/ntv2
+- Pinned SDK commit: 007fb92b5328c01da85bd170dc5cfc9ede3cfe91
+- License: MIT, Copyright (c) 2021 AJA Video Systems; see licenses/AJA_NTV2_MIT.txt.
+- Integration: src/source/AjaCaptureSource.cpp and cmake/VeyraAja.cmake.
+- Uses SDK discovery, exclusive stream ownership, routing and AutoCirculate DMA.
+  UHD HDMI/TSI routing follows the upstream ntv2capture4k example, adapted to
+  the existing Veyra bounded mailbox and FramePacket/audio session contracts.
+- SDK checkout remains external, unmodified and outside this source repository.
+  Initial supported hardware: KONA HDMI; progressive SDR through UHD60,
+  UYVY 8-bit ingress. HDR and Dolby/DTS ingress are not certified by this path.

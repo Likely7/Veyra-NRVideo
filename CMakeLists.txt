@@ -490,6 +490,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
     src/source/CaptureCardSource.cpp
+    src/source/AjaCaptureSource.cpp
     src/source/ScreenCaptureSource.cpp
     src/source/AverMediaAudioSwitch.cpp
     src/source/CaptureCompressedDecoder.cpp
@@ -505,6 +506,8 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_link_libraries(veyra_sources PUBLIC veyra_pipeline veyra_media veyra_base)
   target_link_libraries(veyra_sources PRIVATE ${FFMPEG_LIBRARIES} strmiids ole32 oleaut32 d3d12 dxgi)
   target_link_libraries(veyra_sources PRIVATE d3d11 windowsapp dwmapi)
+
+  include(cmake/VeyraAja.cmake)
 
   if(VEYRA_ENABLE_REMOTEPLAY)
     set(VEYRA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
