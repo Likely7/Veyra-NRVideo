@@ -1,5 +1,316 @@
 # Veyra 工作记录
 
+## 2026-09-22 Settings scroll round 2: wheel carry, band virtualization, async repaint
+
+User still felt slight jank after the page-scoped move fix. Measured remaining
+per-event cost was dominated by (a) moving every visible-page row per notch,
+(b) the synchronous `RDW_ALLCHILDREN|RDW_UPDATENOW` full repaint, (c) a full
+outer-window invalidate per scroll, (d) integer wheel-delta truncation. All in
+`apps/veyra/SettingsWindow.cpp`:
+
+1. `WM_MOUSEWHEEL` now accumulates sub-notch deltas (`wheelCarry`) and skips
+   `arrange()` entirely while the carry has not reached a full notch; a notch is
+   still 36 DIP. High-resolution wheels no longer pay full cost for zero movement.
+2. Viewport band virtualization: while an arrange is "incremental" (same page,
+   width, fold mask, mixer band/mode, B&W switch, help fold, and scroll moved at
+   most one notch since the previous arrange), only rows intersecting
+   `[scroll-288, scroll+viewport+288]` join the Defer batch. Anything else — page
+   switch, resize, fold/mixer toggle, scrollbar-drag jumps, first layout — falls
+   back to a full pass, so stale off-band rows cannot reappear in view. The
+   snapshot lives in `arrangeScroll/arrangeWidth/arrangePage/arrangeFold/`
+   `arrangeMixer/arrangeHelp`, reset in WM_DESTROY. The 288-DIP reveal band covers
+   the 208-DIP colour wheels plus a notch.
+3. Scroll repaint is fully asynchronous: batch moves keep their painted pixels
+   (SWP_NOCOPYBITS/SWP_NOREDRAW dropped from the row batch) and
+   `RedrawWindow(body, RDW_INVALIDATE)` (no UPDATENOW, no ALLCHILDREN) lets a
+   burst of notches coalesce into few queue-driven paints. The outer window only
+   invalidates when width/page changed.
+
+Debugging note (evidence kept in `probe5.py` + app log): an intermediate probe
+tracked control id 1000, which sits at logical y=646 and is clipped off-screen at
+low scroll — band virtualization correctly does not move it, which first looked
+like "scroll stops working". Movement probes must track rows actually inside the
+viewport (`scroll_driver.py` now picks in-view markers adaptively).
+
+Measured (`timing-final2.json`, DPI 192, no media; baseline = round-1 numbers):
+per-event p50 增强 32.1→9.7 ms (spaced) / 13.5 ms moving; 色彩 41.1→12.2 ms;
+音频 12.6→7.1 ms; zero-carry deltas ~0.05 ms; 50-event burst 1326→938 ms (增强,
+53 events/s) and 2144→776 ms (色彩, 64 events/s). Movement semantics verified on
+an in-viewport row: 6×delta40 → 144 px, 12×delta10 → 72 px, 1×120 → 72 px.
+
+Correctness: probe3 page cycles stable (85/136/12/5/85 twice), colour fold
+136→112→136 reversible, per-page visible counts unchanged from the original
+layout. Visual check after an 8-notch burst: immediate and settled screenshots are
+byte-identical (async paints complete within ~0.3 s), rows aligned, no overlap or
+ghosting, scrollbar thumb visible (final-burst-*.png + analyze_image transcript).
+`ui-settings-page-scope.py` still blocked by the missing NGX runtime config on
+this machine (`ngx-local.json missing` → multiplier falls back to 1), unchanged
+from round 1. Build: `build-clean.log` exit 0, exe 15:00. Nothing committed.
+
+## 2026-09-22 Settings scrollbar visibility bump
+
+User feedback after the scroll fix: the inspector scrollbar thumb was not obvious
+enough. Change in `apps/veyra/SettingsWindow.cpp` `bodyProc` WM_PAINT only: thumb
+rail widened from 3 DIP (`right-5..right-2`) to 5 DIP (`right-8..right-3`) and
+recolored from `line` RGB(58,60,63) to the panel's existing dim-text gray
+RGB(120,125,132); corner radius and minimum 30-DIP thumb unchanged; the 12-DIP drag
+grab zone already covers the wider rail. Rebuilt `veyra` target
+(`build-scrollbar.log`, exit 0, exe 14:42).
+
+Verification (screenshot pixel sampling, `shot.py` + `thumb_runs.ps1`,
+`scrollbar-before/after.png`, colour page scrolled mid-way at 200% DPI): the old
+thumb produced no detectable flat run in the right-edge strip — RGB(58,60,63) is
+indistinguishable from the ~56 acrylic backdrop; the new thumb renders as a
+58 px run of exactly RGB(120,125,132), ~10 px wide with antialiased edges.
+Observed but not changed this round: `LiveStatusPanel.h:189` draws its own 2-DIP
+thumb filled with `panelBrush()` (same color as its background), which is likewise
+near-invisible — separate decision needed if that one should match.
+
+## 2026-09-22 Settings scroll fix: only the current page's visible controls move
+
+User decision after the ETW round: `arrange()` should only move the current page's
+visible controls. Implemented in `apps/veyra/SettingsWindow.cpp` (only file changed):
+
+- `Item` gains `placed` (init true — `add()` creates controls WS_VISIBLE, so the first
+  arrange must still position/hide every row once).
+- The Defer batch in `arrange()` skips non-fixed rows that are `!visible && !placed`,
+  and updates `placed=visible`. Off-page and folded rows are therefore hidden exactly
+  once and then never re-enter the per-wheel-event batch; page switches and fold
+  toggles re-show them because those rows still carry `placed=true` until an arrange
+  hides them.
+
+Build: full `veyra-build-x64-release.cmd` cannot complete on this machine because
+`veyra_fsr_probe`/`veyra_fsr_upscale_probe` need the absent
+`third_party_local/amd/FidelityFX-SDK-2.3.0` (pre-existing local-deps gap, tool
+targets only, unrelated to this change). Built the `veyra` target via vcvars + cmake
+wrapper `out/logs/settings-scroll-etw-20260922/build-veyra.cmd`
+(log `build-veyra-target.log`, exit 0, exe 14:32).
+
+Measured with the same driver (`scroll_driver.py --mode timing`, DPI 192, no media;
+`timing.json` = before, `timing-after.json` = after):
+
+- Per wheel event p50: 增强 110.6→32.1 ms, 色彩 112.6→41.1 ms, 音频 33.6→12.6 ms;
+  zero-movement truncated deltas 32→14 ms (增强) / 51→23 ms (色彩).
+- 50-event burst wall: 增强 3422→1326 ms (~14.6→37.7 events/s), 色彩 5179→2144 ms,
+  音频 1775→699 ms.
+- Remaining above one 60 Hz frame on 增强/色彩 pages: leftover cost is the forced
+  synchronous repaint (`RDW_ALLCHILDREN|RDW_UPDATENOW`) of visible rows plus the
+  in-memory rowResets/layout loops; next levers if needed: wheel remainder
+  accumulation and async/targeted invalidation (not implemented this round).
+
+Correctness: per-page visible counts identical to the pre-change build (85/136/5 in
+the driver; 85/136/12/5 stable across two full page cycles in `probe3.py`); colour
+section fold toggles 136→112→136 reversibly with scrolls interleaved; full-notch
+movement still exactly 72 px; small-delta truncation behavior unchanged (that defect
+is still present by design scope).
+
+`scripts/acceptance/ui-settings-page-scope.py` (media staged from
+`REAMDE MP4.mp4` → `logs/ui-repair-v3/glass-video.mp4`): FAILS at the
+`multiplier=2` GPU-log assertion — environmental, not this change: the app logs
+`[graph] ngx-local.json missing` → backend recovery forces multiplier=1, while the
+UI chain itself demonstrably applied settings (`[settings] Applied revision=5 ...
+multiplier=1`). This machine's `runtime_local` lacks `config/ngx-local.json` and the
+NR runtime, so NGX-backed acceptance cannot pass here regardless of UI changes.
+ETW attribution and fix verification scripts kept under
+`out/logs/settings-scroll-etw-20260922/`. Nothing committed/pushed.
+
+## 2026-09-22 Settings-panel wheel jank diagnosis (measurement only, no product code changed)
+
+User reported wheel scrolling in the professional-mode right tabs (增强/运动/色彩/导出)
+feels janky; asked for cause analysis first, then authorized dynamic confirmation on the
+existing build with ETW. No source changes this round.
+
+Environment note: `E:\项目\Veyra\` does not exist on this machine (no E: drive at all,
+only C:/D:). Per the artifact rule this is reported explicitly instead of silently
+substituting; this round's artifacts live under gitignored
+`out/logs/settings-scroll-etw-20260922/` (driver scripts, timing JSON, parsed stack
+report, raw scroll.etl ~3.9 GB).
+
+Method: `scroll_driver.py` launches `out/build/x64-release/veyra.exe` with
+`--smoke-view pro --smoke-empty --smoke-seconds 240 --no-nr --no-sr --no-fg` (fresh build
+from today 13:24, b8a1d2a tree; no media, preferences untouched because smokeSeconds>0),
+finds `VeyraApp` → `VeyraInspector` → `VeyraInspectorBody`, then drives
+`WM_MOUSEWHEEL` directly (SendMessage latency phases) or via PostMessage storms
+(8 ms cadence, 6 s colour page + 5 s enhancement page) under
+`wpr -start CPU -filemode`. Analysis with WPT `xperf -i scroll.etl -a stack -butterfly
+-process veyra` (symbol download from msdl did not populate; module-level attribution
+only). Note: `--smoke-view=pro` (equals form) is not a recognized flag form — the parser
+expects space-separated `--smoke-view pro`, otherwise the string becomes autoInput.
+
+Measured (DPI 192, window 2560×1600, body has 372 child HWNDs across all pages;
+visible per page: 增强 85, 色彩 136, 音频 5):
+
+- Per wheel event (SendMessage round-trip ≈ synchronous arrange + RDW_UPDATENOW repaint):
+  增强 page p50 110.6 ms moving; 色彩 p50 112.6 ms; 音频 page (5 visible controls)
+  p50 33.6 ms — a ~33 ms floor independent of visible control count.
+- Small-delta truncation confirmed behaviorally: 6×delta=40 and 12×delta=10 produce
+  zero movement (integer `delta/120*36`) yet still cost p50 32–51 ms each; one
+  delta=120 moves exactly 72 px (36 DIP × 2.0 scale).
+- Sustained throughput: 50 events burst = 3422 ms (增强, ≈14.6 events/s) /
+  5179 ms (色彩, ≈9.7 events/s); process CPU ≈ 2.0 s / 3.1 s during bursts.
+- ETW CPU sampling during storms: 99.4% of exclusive samples in kernel
+  (ntkrnlmp/win32k), user path rooted through Win32u.DLL→user32 (i.e. NtUser*
+  syscalls from DeferWindowPos/EndDeferWindowPos/RedrawWindow/message dispatch);
+  COMCTL32 present in 70.9% of stacks, UxTheme in 42.5%, GdiPlus only 0.2%,
+  veyra.exe own code ≈0%.
+
+Conclusion (corrects the static analysis emphasis): the dominant cost is NOT the
+GdiPlus/DRAW custom painting itself but the per-event full-pass window management —
+`arrange()` (apps/veyra/SettingsWindow.cpp:1115) moves/invalidates/force-repaints all
+372 child windows every wheel notch (SWP_NOCOPYBITS, RDW_ALLCHILDREN|RDW_UPDATENOW),
+so the kernel window manager plus native control procedures (comctl32 trackbars,
+uxtheme DrawThemeTextEx) do O(all-windows) work per event. Secondary confirmed cause:
+integer wheel-delta truncation wastes full-cost events with zero movement on
+high-resolution wheels (SettingsWindow.cpp:1708; the shell's volume path at
+AppShell.cpp:1318 does accumulate remainders, the settings panel does not).
+
+Highest-leverage fix directions (not implemented): accumulate wheel remainders; make
+the forced repaint asynchronous/not-all-children; only move/re-layout the active page's
+visible windows or use ScrollWindowEx blit scrolling. GdiPlus micro-optimization is low
+priority (0.2%).
+
+Evidence: out/logs/settings-scroll-etw-20260922/{scroll_driver.py,timing.json,
+etw_driver.json,scroll.etl,butterfly.txt,parse_butterfly.py,probe*.py}.
+
+## 2026-09-22 VS2026 startup repair
+
+User reported the project cannot start in Visual Studio 2026 (18.10.1,
+installed 2026-09-21). Root cause reproduced with VS2026's bundled CMake 4.3.1:
+the folder opens as a CMake project, VS defaulted to the base `x64-debug`
+preset (no local dependency variables), and CMakeLists.txt:955/958 called
+`target_sources(veyra)`/`target_link_options(veyra)` outside the
+`VEYRA_FFMPEG_ROOT` guard that creates the target (guard opens at line 422,
+closes at 932), so bare-preset configure died with "Cannot specify sources for
+target veyra" — no build.ninja, no launch target. The existing
+`out/build/x64-release` cache was already VS2026-toolchain-built (cl 14.51,
+VS2026 cmake) and unaffected.
+
+Changes (source repo):
+- `CMakeLists.txt`: wrapped the version-resource/manifest block (former lines
+  951-958) in `if(TARGET veyra)` so bare contract builds configure cleanly;
+  added POST_BUILD copy_if_different of the FFmpeg runtime DLLs
+  (avcodec-63/avformat-63/avutil-61/swresample-7/swscale-10, dav1d when
+  present) next to veyra.exe — previously only scripts/build.ps1 staged them,
+  so IDE-built EXEs failed to start on missing avcodec.
+- `apps/veyra/TelemetryWindow.cpp`: fixed an out-of-bounds stage-label read.
+  diagnostics::GpuStage grew to 13 entries (Fg4/Fg5/VideoHdr) but refresh()
+  indexed a 10-element name array with metrics.gpu.size(), feeding wild
+  pointers to wcslen. Reproduced as debug-build startup crash 0xC0000005 →
+  0xC000041D inside the telemetry wndproc (panel restored from saved prefs);
+  call stack captured under the VS2026 debugger (wcslen ← refresh() 行16 ←
+  proc() 行47). Labels now cover all 13 stages (FG 子帧4/5 realigned,
+  FG批次/最终blit moved to their true indices, added RTX Video HDR) with a
+  static_assert tying the count to GpuStage::Count. The same UB existed in
+  release builds (read garbage labels without crashing); release was rebuilt
+  with the fix.
+- `CMakeUserPresets.json` (gitignored, local): added `x64-debug-vs` mirroring
+  `x64-release-vs` (local FFmpeg/DLSS SDK/RemotePlay paths, Debug, D3D12 debug
+  layer on) reusing out/build/x64-debug. Debug-specific flags required by the
+  VS2026 toolset (cl 14.51, /MTd): `/EHsc` (debug STL <chrono> pulls exception
+  paths that warn C4530 → error under /WX) and
+  `CMAKE_EXE_LINKER_FLAGS_DEBUG=/INCREMENTAL:NO /debug` (incremental linking
+  switches CMake to the mt.exe manifest flow, which rejects /MANIFESTINPUT
+  with LNK1220; /debug must be restated because CMake only adds it alongside
+  /INCREMENTAL — omitting it strips the PDB).
+- `launch.vs.json` (new, untracked): default debug config targeting
+  `veyra.exe` via projectTarget so F5 has an explicit startup item.
+
+Verification (VS2026 vcvars + VS2026 cmake, logs under
+`logs/vs2026-startup-fix-20260922/`):
+- `cmake --preset x64-debug` after fix: exit 0, build files generated
+  (previously fatal, see configure-x64-debug.log vs configure-x64-debug-after-fix.log).
+- `cmake --preset x64-debug-vs`: exit 0 (configure-x64-debug-vs.log), Chiaki
+  RemotePlay deps resolved.
+- Full debug build of veyra target: exit 0 after the /EHsc and linker-flag
+  fixes (build-x64-debug-vs-veyra-retry3/4 logs; retry logs document each
+  intermediate failure and its fix).
+- `cmake --build --preset x64-release-vs --target veyra`: exit 0, relinked
+  (build-x64-release-vs-veyra.log); rebuilt again after the telemetry fix
+  (build-release-after-telemetry-fix.log).
+- Smoke: debug veyra.exe crashed at startup before the telemetry fix
+  (0xC000041D, WER offset symbolized to wcslen via llvm-symbolizer); after the
+  fix both out/build/x64-debug and out/build/x64-release veyra.exe stay alive
+  6s (~20-22MB) and were then killed (smoke-launch*.ps1).
+- scripts/gates/delivery.ps1 not run this round: no release delivery was
+  authorized; verification scope was IDE startup repair (configure/build/run
+  of both presets).
+
+Note: this machine has no E: drive, so per the 2026-09-18 artifact rule the
+E:/项目/Veyra target is unavailable; this round's logs/scripts were kept in the
+repo's existing gitignored `logs/` directory instead. No E: fallback scatter.
+IDE usage: open the folder, switch the configuration dropdown from x64-debug
+to `Veyra x64 Debug + 本机依赖 + RemotePlay (VS)` or
+`Veyra x64 Release + 本机依赖 + RemotePlay (VS)`, then start `veyra.exe`.
+Nothing was committed or pushed.
+
+### 2026-09-22 follow-up: crash returned after accidental local revert
+
+The telemetry fix above was lost mid-day: the user accidentally reverted
+`apps/veyra/TelemetryWindow.cpp` to HEAD (10:06 local, back to the 10-label
+array, no static_assert); VS2026 then rebuilt the debug EXE (10:11) from the
+reverted source and F5 crashed again. The other uncommitted repairs
+(CMakeLists.txt, launch.vs.json, CMakeUserPresets.json) survived.
+
+Re-diagnosis with ground truth this time (logs/vs2026-startup-fix-20260922/):
+- Built a 20-line dbghelp debug launcher (crash_launcher.cpp) that runs the EXE
+  under DEBUG_ONLY_THIS_PROCESS and breaks on the first-chance AV. Reproduced:
+  `reading address 0xFFFFFFFFFFFFFFFF` at RVA 0xd66946 — identical to the WER
+  event 1000 offset from 09:32, and matching the user's VS2026 exception dialog
+  ("读取访问权限冲突"). Offline symbolizer (symbolize.cpp, SymLoadModuleEx into
+  the tool's own process) resolved RVA 0xd66946 to
+  `common_strnlen_c<0,unsigned short>+0x56` (ucrt wcsnlen) — i.e. the stream
+  inserter consuming a wild `names[10..12]` label pointer, confirming the
+  telemetry OOB read as the sole crash site (the RemotePlay
+  `directory_iterator` and EngineController `**it` candidates were cleared).
+- Re-applied the fix in `apps/veyra/TelemetryWindow.cpp`: 13 labels aligned to
+  the GpuStage enum order (Color/Sr/Flow/Nr/Residual/Fg1-5/FgBatch/Blit/
+  VideoHdr) plus `static_assert(count == size_t(GpuStage::Count))` so a future
+  stage addition fails at compile time instead of crashing at startup.
+- Rebuilt: `--preset x64-debug-vs --target veyra` exit 0 (rebuild-debug-
+  after-revert-fix.log), `--preset x64-release-vs --target veyra` exit 0
+  (rebuild-release-after-revert-fix.log); release script initially failed with
+  C1083 windows.h — wrong vcvarsall path (missing `VC\`) in my own script, not
+  a project issue.
+- Verification: debug EXE under the crash launcher for 60s → "no access
+  violation" (repro-after-fix-1022.log; the run restored the saved
+  professional layout incl. telemetry panel per veyra-app.log 02:26Z session,
+  so refresh() ran repeatedly). Release smoke: alive 6s/22MB then killed.
+- Delivery gate not run (no release authorized). Lesson recorded: the fix
+  existed only as an uncommitted working-tree change, which is why one
+  accidental revert could reintroduce the crash; committing was left for the
+  user to authorize.
+
+### 2026-09-22 follow-up 2: why the shipped 1.4.3 Release package never crashed
+
+Question from the user: why does the packaged Release build start fine when
+the same source crashes under VS2026 F5? Answer established with evidence, not
+assumption:
+
+- The bug is IN the shipped packages. `89f4f7f` (2026-09-18) grew GpuStage to
+  13 entries without updating the telemetry labels; tags v1.4.1, v1.4.2 and
+  v1.4.3 all carry the mismatch (git show at each tag), and
+  TelemetryWindow.cpp is unchanged between 3b4570e (v1.4.3 source) and HEAD.
+  The user's accidental revert restored exactly the shipped source.
+- Controlled experiment (rebuild-release-143-source-experiment.log): restored
+  the exact 3b4570e telemetry file, rebuilt release, ran it under the crash
+  launcher for 60s — "no access violation" (experiment-release-143-source.log),
+  while the same source as debug faults within ~1s at RVA 0xd66946.
+- Mechanism (dumpbin disasm of the release obj, telemetry-release-disasm.txt):
+  `names[]` is a stack-local pointer array; release /O2 lays the ostringstream
+  and other live pointers immediately after the 10 slots, so names[10..12]
+  read valid readable pointers — wcsnlen returns garbage "labels" for the last
+  three stage rows (FgBatch/Blit/VideoHdr) without an access violation.
+  Debug (/Od, debug CRT stack fill) leaves 0xCC/npos-style values there;
+  wcsnlen dereferences 0xFFFFFFFFFFFFFFFF → 0xC0000005 → 0xC000041D.
+  Textbook undefined behavior: same code, one build survives, one crashes.
+- User-visible impact on shipped 1.4.1–1.4.3: opening the diagnostics panel
+  shows three meaningless trailing rows in the GPU timestamp list; no crash,
+  no other functional impact. Not a startup problem.
+- Working tree restored to the fixed source (from
+  TelemetryWindow.fixed.cpp.bak), debug + release rebuilt (rebuild-*-restore-
+  fix.log), both smoke-tested alive 6s then killed (smoke-launch.ps1,
+  smoke-launch-debug-restore.ps1).
+
 ## 2026-09-20 1.4.3 publication verified
 
 Released https://github.com/Likely7/Veyra-NRVideo/releases/tag/v1.4.3 as Latest,
@@ -5245,3 +5556,66 @@ and leaves the previously verified resize-fix package untouched. Existing
 evidence/build paths are E:/项目/Veyra/tests/resize-hang-20260920 and
 E:/项目/Veyra/build/slider-reset-20260919; no new binary artifacts, runtime
 changes, publication or shutdown.
+
+
+## 2026-09-22 PS5 远程控制 + 采集卡组合模式（隔离实施）
+
+方案与授权边界见 docs/PS5_CAPTURE_CONTROL_COMBINED_PLAN_2026-09-22.md（本轮对话授权实施，未授权推送/发布/打包）。隔离分支 codex/ps5-capture-control-20260922，开工存档 checkpoint/pre-ps5-capture-control-20260922（基线 ca1442c，含上一会话 IDE 启动修复）。提交：fbf592b（control-only 会话后端）、e4d3d4e（引擎旁路控制会话）、92f7908（共享采集配置区块提取）、1245bba（PS5 面板接入）与本条文档提交。
+
+功能：PS5 面板新增持久化"启用采集卡"复选框；勾选后内嵌完整采集卡配置（与采集弹窗同一 CaptureConfigBlock 实现），连接时先建 PS5 控制通道（固定 720p/30/H.264/5Mbps 保活档案，视频/Opus 在 Chiaki 回调处计数后丢弃，不解码零驻留；存档配对不被污染），成功后以采集卡为渲染源拉起画面与 HDMI 音频。StreamRecovery 进度改由收包计数驱动，30s 判死窗口对控制-only 会话不再误判。引擎以 controlRemote_ 旁路持有会话：同主机重开采集复用会话，打开其他源有序退役，停止按钮保留控制通道，断开/新串流会话关闭它。
+
+产物目录偏离说明：本机当前无 E 盘（历史 E:/项目/Veyra 不可用），按 AGENTS.md 不回落 C 盘散落，本轮使用仓库内 gitignored out/：构建增量复用 out/build/x64-release（依赖=上次会话配置：FFmpeg vcpkg_installed/x64-windows、chiaki stage out/remoteplay/chiaki-msvc-stage、SDL/protobuf remoteplay-deps），临时与日志 out/tmp/ps5-capture-control-20260922/。
+
+实际执行的验证（命令与日志均在 out/tmp/ps5-capture-control-20260922/）：
+- 步骤级增量构建 veyra_remoteplay_boundary_tests、veyra、veyra_ui_contract_targets 全部 exit0，自有代码零警告（FFmpeg 头文件 C4244 为既有第三方警告）。
+- veyra_remoteplay_boundary_tests.exe：REMOTEPLAY_BOUNDARY_PASS invalid_connect_reopen=3 decoded_latest_mailbox=1 control_only_boundary=1（新增 control-only 无效主机拒连×3、控制器队列边界）。
+- scripts/remoteplay/test-ui-combined.ps1（新增，BOM 编码）：REMOTEPLAY_COMBINED_UI_PASS——复选框切换、窗口增高/复原、内嵌区块显隐、仅观看与画质控件禁用、采集弹窗重构后控件齐全；不触 PS5/采集设备。
+- scripts/remoteplay/test-ui.ps1（原版回归）REMOTEPLAY_UI_PASS panel_open_close=2 invalid_pairing_rejected=1。为在 Windows PowerShell 5.1 可运行做了三处测试设施修复：文件加 UTF-8 BOM、delegate 去掉无效 DllImport 属性、配对点击前等待面板 PSN 刷新 worker 结束（Cancel 按钮恢复禁用），语义与断言不变，兼容 PowerShell 7。
+- scripts/remoteplay/test-core.ps1（vcvars 环境包 out/build/veyra-core-tests.cmd）：离线核心 77/77 Passed（5.73s）。
+- veyra_ui_contract_tests.exe：PASS 384 组四种 DPI 布局。
+- scripts/gates/delivery.ps1 未执行：脚本硬依赖 ffprobe 与 test_av_1080p/4k.mp4 夹具，均随缺失的 E 盘不存在，本机全盘检索无 ffprobe/夹具。以边界/UI/核心/合同回归补偿，不以上述替代交付门。
+
+未执行/待用户验收：真实 PS5 + USB3 采集卡组合链路（手柄控制、采集 4K/HDR 画面、HDMI 音频同步）、控制-only 保活计数日志核对、RP_IN_USE 20s 窗口重连、停止按钮后控制保持、打开普通文件自动断开控制。不得宣称零视频带宽（PS5 仍发送低码率视频）；采集画质/HDR 表现沿用采集管线既有验收状态。
+
+
+### 2026-09-22 追加：组合模式采集配置移至右侧栏（用户反馈调整）
+
+用户反馈勾选"启用采集卡"后配置放底部使窗口过长（1100 dip）不好操作。改为右侧栏：勾选后窗口加宽 590→990 dip、高度保持 709，PS5 原布局不动，采集区块以新增的单列窄栏布局 `CaptureConfigBlock::arrangeColumn(600,44,370)` 放置（替换原 arrangeCompact 两列布局），列首新增"采集卡 · 画面与声音来源（组合模式）"标题（静态 id 108，随区块显隐）；区块状态栏加 SS_EDITCONTROL 换行样式，窄列与弹窗中的长提示不再单行截断。
+
+验证：构建 exit0（out/tmp/ps5-capture-control-20260922/layout-build.log）；test-ui-combined.ps1 断言改为宽度增长/高度不变并加机器状态归一化（持久化 UseCapture=1 时先取消再测），REMOTEPLAY_COMBINED_UI_PASS；原版 test-ui.ps1 回归 PASS；展开态截图 panel-right-column.png 与逐控件坐标核验（右列 x=600 w=370 对齐、左列 x≤552 无重叠、面板 990×709）。真机组合链路验收仍待用户。
+
+
+### 2026-09-22 追加 2：真机反馈"提示生效但画面为 Video Signal is abnormal"的诊断与修复
+
+用户真机测试：组合模式状态提示生效，画面为采集卡无信号 OSD。读取 logs/veyra-app.log 证据：采集管线健康（4K60 NV12、60fps、零丢帧，OSD 为卡端烧录）；PS5 控制通道实际未连上（quitReason=2 控制连接失败、videoCallbacks 恒 0、30 秒无首帧超时终止）——主机大概率关机/待机或网络不可达，采集卡 HDMI 无输入同因。暴露三个软件缺陷并修复：
+
+1. 死会话复用：第一次连接失败后 owner 线程已退出，再次点连接时 openRemotePlayCapture 仍按主机/consoleId 匹配复用死对象（日志"reusing alive control session"为误报）。修复：RemotePlaySessionSource 增加 atomic alive_（run() 首尾置位），复用门控加 controlRemote_->alive()，不满足则退役并重建。
+2. 状态不报失败：remoteControl 分支只看 recovering，控制会话已 Failed（inbox state=Failed）时仍显示"生效"。修复：AppShell 组合状态增加 SessionState::Failed 分支，如实显示失败原因并提示确认主机开机/唤醒后重连。
+3. 断连日志刷屏：control-only 传输日志以 !native.connected 触发导致掉线时每 ~5ms 一行。修复：改回纯 1 秒时间门控。
+
+另：边界测试新增 --control-stress 模式（200 次控制-only connect/close 循环）。本轮某中间构建曾出现 3 次 0xC0000409 fail-fast（无符号、输出被缓冲截断），最终二进制连续 15 轮默认路径 + 200 次压力循环均通过，未能复现；若再现需抓 dump 分析，不以通过冒充已定位。
+
+验证：veyra 与 boundary 目标构建 exit0 零自有警告；boundary 默认路径 6/6 通过、--control-stress CONTROL_STRESS_PASS；test-ui-combined.ps1 与原版 test-ui.ps1 复跑通过（ui-combined-fix / ui-original-fix）。真机侧待用户按清单排查：PS5 开机（或面板唤醒）、HDMI 接采集卡输入口、必要时关闭 PS5 HDCP、输出分辨率降至采集卡支持档位。
+
+### 2026-09-22 追加 3：真机反馈"无法开启 NR 增强和帧生成"的诊断与本地运行时恢复
+
+用户真机测试报告 NR 增强与帧生成无法开启。读取 logs/veyra-app.log（今晚 20:02–20:05 本地会话，即日志内 12:02–12:05Z）：两个进程共 19 次点击开启 NR，UI 层全部接受请求（ui-feature click=NR enabled=true），但每次管线重建时 `[graph] ngx-local.json missing`，backend-recovery 随即回滚 `nr=false sr=false multiplier=1`，复选框弹回、补帧被一并关闭——两症状同一根因。
+
+根因：本机 E 盘整盘不存在（历史 E:/项目/Veyra 完整暂存与构建不可达，C:\veyra-deps、C:\veyra-releases 亦不存在），仓库根 runtime_local 系 09-21 22:51 的部分暂存，仅含 nvngx_dlss.dll/dlssd.dll/dlssg.dll，缺 EnhanceGraph.cpp:841 必需的 runtime_local/config/ngx-local.json 身份文件与 nvngx_dlssnr.dll。代码与本轮分支改动无关。
+
+恢复（用户指定来源 D:/Game/Veyra-1.4.4beta-elgato-win64-portable，逐项身份核验后操作，产物目录 out/tmp/runtime-restore-20260922/）：
+- 原件 nvngx_dlssnr.dll 经 stage-runtime.ps1 校验（165840496 字节 / SHA256 E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E / Valid / 310.8.0.0）复制到仓库根并暂存至 runtime_local/nvidia/，生成 runtime-manifest.json 与新的持久 config/ngx-local.json 身份。
+- restore-extras.ps1 核验并补齐：nvngx_dlss.dll（BE6E434A…/Valid）、nvngx_dlssg.dll（135EAF07…/Valid）、nvngx_truehdr.dll（9A80575F…/3955752 字节/1.1.0.0/Valid）、nvngx_vsr.dll（C3D88EEA…/Valid）、nr-community/nvngx_dlssnr.dll（984BEE0F…/HashMismatch）、nr-ampere/nvngx_dlssnr.dll（DCC0DC24…/HashMismatch），全部与 AGENTS.md 固定值一致；既有 nvngx_dlssd.dll（F4E97624…/Valid）保留并记录。RESTORE_EXTRAS_PASS。
+
+真机验证（本机 RTX 5070，同一 runtime_local 暂存）：
+- 构建 veyra_nr_harness / veyra_fg_harness（vcvars 包装，增量 exit0；首次裸 bash 构建因缺 SDK 环境链接失败 LNK1181，改 cmd+vcvars64 后成功，过程未污染源码树）。
+- veyra_nr_harness --load-only：PASS（核心 init、snippet 加载、导出、Shutdown1 全 Success）。
+- veyra_nr_harness --create-test --width 3840 --height 2160：PASS，Feature 18 CreateFeature result=0x1 handle=non-null，日志零 ERROR——即应用内点 NR 开关后失败的那一步。
+- veyra_fg_harness --fg-test：PASS，日志零 ERROR。
+
+未执行/边界：未在 GUI 内重放用户完整点击流（UI 层接受请求的证据已在日志，失败步骤即上列已通过的 NGX init/create）；应用级最终确认待用户重启 veyra.exe 后开启 NR/补帧。runtime_local 全部位于 gitignored 路径，仓库根 nvngx_dlssnr.dll 为 stage-runtime 固定来源位（/nvngx_dlssnr.dll 已 ignore），源码零改动（git status 仅剩先前会话的 SettingsWindow.cpp 滚动优化未提交修改）。无打包、推送或发布动作。
+
+
+### 2026-09-22 追加 3：并入 SettingsWindow 滚动条与滚动性能改动（用户指示随 PR 一并提交）
+
+应用并行完成的 apps/veyra/SettingsWindow.cpp 改动（非本轮功能代码）：滚动条滑轨加宽（3→8 DIP）并改用面板暗灰（原线色在亚克力背景上不可见）；arrange() 增量虚拟化——输入快照（页/宽/滚动/折叠/混色器/帮助）不变且滚动不超过一档时只重排视口带 ±288 DIP 内的行，Defer 批次随视口而非全部约 372 个子窗口伸缩（注释引 ETW 2026-09-22）；高分辨率滚轮累积亚档增量修复；重绘合并与外层窗口按几何变化重绘；WM_DESTROY 重置快照。验证：veyra 与 veyra_ui_contract_tests 构建 exit0，UI 合同 384 组四档 DPI PASS，test-ui.ps1 回归 PASS（含 20 轮模式切换动画）。提交 47c2043，随 PR #7 推送；滚动流畅度的主观体验未量化，不宣称 ETW 改善复测值。

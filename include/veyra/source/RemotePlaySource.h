@@ -28,6 +28,11 @@ struct RemotePlayConnectDesc {
     enum class DecodeMode { Automatic, Software, Hardware };
     DecodeMode decodeMode=DecodeMode::Automatic;
     bool highQualitySampling=true; // local reconstruction, never a server quality promise
+    // Combined PS5-control + capture-card mode: the session keeps the controller,
+    // keepalive and feedback channels but discards video/audio on receipt. The
+    // protocol has no "stop sending media" switch, so the console still
+    // transmits; only the local receive side drops it.
+    bool controlOnly=false;
     // Set by the engine; shared ownership keeps the exact presentation adapter
     // alive until the decoder owner has stopped, including failed connects.
     std::shared_ptr<ID3D12Device> decodeDevice;
@@ -110,6 +115,7 @@ private:
     RemotePlayConnectDesc::DecodeMode decodeMode_=RemotePlayConnectDesc::DecodeMode::Automatic;
     std::shared_ptr<ID3D12Device> decodeDevice_;
     bool hardwareFallback_=false;
+    bool discardMedia_=false;
 };
 
 class RemotePlayAudioSource final : public sink::AudioPcmSource {

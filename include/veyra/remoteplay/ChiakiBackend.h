@@ -54,7 +54,10 @@ public:
     ChiakiBackend& operator=(const ChiakiBackend&)=delete;
     // All methods, including snapshot(), must be called from one session-owner thread,
     // NEVER from a Chiaki callback. This object is not a renderer or a decoder.
-    BackendResult start(const NativeConnectRequest&,SessionInbox::Token);
+    // discardMedia: keep controller/keepalive/feedback, drop video and audio in
+    // the receive callbacks (combined PS5-control mode). The console still
+    // transmits; there is no protocol-level media switch.
+    BackendResult start(const NativeConnectRequest&,SessionInbox::Token,bool discardMedia=false);
     BackendResult stop(); // Does not call PS5 goto_bed; must precede inbox.finishStop().
     BackendResult requestIdr();
     BackendResult submitController(const ControllerState&);

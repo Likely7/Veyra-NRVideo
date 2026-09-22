@@ -847,7 +847,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_hdr_color_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_hdr_color_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_hdr_color_tests PRIVATE veyra_engine)
-  add_executable(veyra WIN32 apps/veyra/main.cpp apps/veyra/ui/AppShell.cpp apps/veyra/ui/CapturePanel.cpp apps/veyra/ui/SubtitleOverlay.cpp apps/veyra/SettingsWindow.cpp apps/veyra/TelemetryWindow.cpp)
+  add_executable(veyra WIN32 apps/veyra/main.cpp apps/veyra/ui/AppShell.cpp apps/veyra/ui/CaptureConfigBlock.cpp apps/veyra/ui/CapturePanel.cpp apps/veyra/ui/SubtitleOverlay.cpp apps/veyra/SettingsWindow.cpp apps/veyra/TelemetryWindow.cpp)
   target_sources(veyra PRIVATE apps/veyra/ui/ScreenCapturePanel.cpp)
   add_executable(veyra_slider_reset_tests tests/integration/SliderResetTests.cpp apps/veyra/SettingsWindow.cpp)
   target_compile_features(veyra_slider_reset_tests PRIVATE cxx_std_20)
@@ -877,6 +877,17 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_options(veyra PRIVATE /utf-8)
   target_link_libraries(veyra PRIVATE veyra_engine comctl32 comdlg32 shell32)
   add_dependencies(veyra veyra_shader_present_blit)
+
+  # build.ps1 stages FFmpeg's app-local runtime DLLs after a successful build;
+  # IDE-driven builds skip that wrapper, so the EXE must carry the copies itself
+  # or it fails to start with missing avcodec/avformat/avutil dependencies.
+  foreach(veyra_ffmpeg_dll IN ITEMS avcodec-63.dll avformat-63.dll avutil-61.dll swresample-7.dll swscale-10.dll dav1d.dll)
+    if(EXISTS "${VEYRA_FFMPEG_ROOT}/bin/${veyra_ffmpeg_dll}")
+      add_custom_command(TARGET veyra POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "${VEYRA_FFMPEG_ROOT}/bin/${veyra_ffmpeg_dll}" "$<TARGET_FILE_DIR:veyra>/${veyra_ffmpeg_dll}")
+    endif()
+  endforeach()
 
   # matrix executes through the shared product libraries only.
   add_executable(veyra_quality_probe
@@ -949,10 +960,15 @@ if(VEYRA_CLIP_TOOLS_ROOT AND EXISTS "${VEYRA_CLIP_TOOLS_ROOT}/include/libavcodec
 endif()
 
 # Layered child subtitle windows require a modern-Windows compatibility manifest.
-configure_file(apps/veyra/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc @ONLY)
-configure_file(apps/veyra/resource.h ${CMAKE_CURRENT_BINARY_DIR}/veyra-resource.h COPYONLY)
-configure_file(assets/veyra.ico ${CMAKE_CURRENT_BINARY_DIR}/veyra.ico COPYONLY)
-target_sources(veyra PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc PROPERTIES
-  OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
-target_link_options(veyra PRIVATE "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/veyra.manifest")
+# The veyra target only exists inside the VEYRA_FFMPEG_ROOT guard above; bare
+# contract builds (no local deps, e.g. the base CMakePresets entries opened in
+# an IDE) must still configure cleanly, so this wiring follows the target.
+if(TARGET veyra)
+  configure_file(apps/veyra/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc @ONLY)
+  configure_file(apps/veyra/resource.h ${CMAKE_CURRENT_BINARY_DIR}/veyra-resource.h COPYONLY)
+  configure_file(assets/veyra.ico ${CMAKE_CURRENT_BINARY_DIR}/veyra.ico COPYONLY)
+  target_sources(veyra PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc)
+  set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc PROPERTIES
+    OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
+  target_link_options(veyra PRIVATE "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/veyra.manifest")
+endif()

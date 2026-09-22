@@ -1,13 +1,19 @@
 #pragma once
 #include "veyra/Log.h"
+#include <utility>
+#include <vector>
 // V2 size also works without a Common Controls v6 activation context.
 namespace veyra::ui {
-inline void installDialogHelp(HWND root,std::initializer_list<std::pair<int,const wchar_t*>> entries){
+template<class Entries> void installDialogHelpImpl(HWND root,Entries&& entries){
     auto tip=CreateWindowExW(WS_EX_TOPMOST,TOOLTIPS_CLASSW,nullptr,WS_POPUP|TTS_ALWAYSTIP|TTS_NOPREFIX,0,0,0,0,root,nullptr,GetModuleHandleW(nullptr),nullptr);
     SetWindowTheme(tip,L"",L"");SendMessageW(tip,TTM_SETTIPBKCOLOR,RGB(28,31,33),0);SendMessageW(tip,TTM_SETTIPTEXTCOLOR,RGB(225,230,228),0);
     SendMessageW(tip,TTM_SETMAXTIPWIDTH,0,360);SendMessageW(tip,TTM_SETDELAYTIME,TTDT_INITIAL,550);SendMessageW(tip,TTM_SETDELAYTIME,TTDT_AUTOPOP,15000);
     for(auto [id,text]:entries){auto child=GetDlgItem(root,id);if(!child)continue;TOOLINFOW info{TTTOOLINFOW_V2_SIZE};info.uFlags=TTF_IDISHWND|TTF_SUBCLASS;info.hwnd=root;info.uId=UINT_PTR(child);info.lpszText=const_cast<wchar_t*>(text);if(!SendMessageW(tip,TTM_ADDTOOLW,0,LPARAM(&info)))veyra::log::error("ui-help","Tooltip registration failed");}
 }
+inline void installDialogHelp(HWND root,std::initializer_list<std::pair<int,const wchar_t*>> entries){installDialogHelpImpl(root,entries);}
+// Vector overload for hosts that aggregate entries from embedded blocks
+// (e.g. the shared capture configuration block with its id offset).
+inline void installDialogHelp(HWND root,const std::vector<std::pair<int,const wchar_t*>>& entries){installDialogHelpImpl(root,entries);}
 inline const wchar_t* settingHelp(int id){
     static const wchar_t* model[]={
         L"NR出手有多重。0–1，先小口尝，拉满不等于一定更好看。",

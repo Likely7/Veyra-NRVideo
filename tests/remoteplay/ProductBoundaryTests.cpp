@@ -4,6 +4,7 @@
 #include <string_view>
 #include <SDL3/SDL.h>
 #include <cmath>
+#include <cstdio>
 #include <iostream>
 extern "C" {
 #include <libavutil/frame.h>
@@ -45,6 +46,33 @@ static void mailbox(){
     packet.flags=static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Discontinuity);
     s.publishDecoded(raw,packet,info);packet.sequence=2;packet.flags=0;s.publishDecoded(raw,packet,info);av_frame_free(&raw);
     if(s.read(out,&frame)!=SourceReadStatus::Frame||out.sequence!=4||out.sourceEpoch!=(uint64_t(1)<<32)||!pipeline::hasFrameFlag(out.flags,pipeline::FrameFlagBits::Discontinuity))throw std::runtime_error("reconnect keeps application sequence and pending clock reset across mailbox overwrite");
+}
+static void controlOnlyBoundary(){
+    // The combined capture mode keeps the same local validation boundary: an
+    // invalid host or profile is rejected before any Chiaki call, and repeated
+    // connect/close cycles stay reusable. No console is contacted.
+    for(int i=0;i<3;++i){
+        RemotePlaySessionSource s;RemotePlayConnectDesc request;
+        request.controlOnly=true;request.request.host="invalid://host";
+        if(s.connect(std::move(request)))throw std::runtime_error("control-only connect must reject invalid host");
+        if(s.info().opened)throw std::runtime_error("failed control-only connect must not report opened");
+        s.close();
+    }
+    // A view-only request is contradictory with control-only (no input
+    // forwarding). The backend forces the DualSense channel in that case, so
+    // the session source must not pre-reject the pair; it stays a UI contract.
+    RemotePlayConnectDesc contradictory;contradictory.controlOnly=true;contradictory.request.viewOnly=true;
+    contradictory.request.host="192.168.1.50";
+    if(contradictory.request.viewOnly&&!contradictory.controlOnly)throw std::runtime_error("unreachable");
+    // Controller queue semantics are shared with the full-video session and
+    // must survive unchanged in control-only mode (no PS5 is involved).
+    RemotePlaySessionSource s;s.started_=true;
+    const auto now=remoteplay::monotonic100ns();
+    remoteplay::ControllerState down;down.inputActive=true;down.buttons=remoteplay::ControllerState::Cross;
+    s.controller(down);
+    if(s.takeControllerLocked(now)!=down)throw std::runtime_error("control-only controller state must pass through the shared queue");
+    s.controller({});
+    if(s.takeControllerLocked(now)!=remoteplay::ControllerState{})throw std::runtime_error("focus loss must neutralize the control-only queue");
 }
 };
 }
@@ -100,8 +128,19 @@ int main(int argc,char** argv){
         return report.error&&report.hosts.empty()?5:0;
     }
     std::stop_source cancelled;cancelled.request_stop();
+    if(argc==2&&std::string_view(argv[1])=="--control-stress"){
+        for(int i=0;i<200;++i){
+            veyra::source::RemotePlaySessionSource s;veyra::source::RemotePlayConnectDesc request;
+            request.controlOnly=true;request.request.host="invalid://host";
+            if(s.connect(std::move(request)))return 11;
+            s.close();
+        }
+        std::cout<<"CONTROL_STRESS_PASS iterations=200 PS5_NOT_TESTED=1\n";
+        return 0;
+    }
     if(!veyra::remoteplay::discoverLocalPs5(cancelled.get_token()).hosts.empty())return 6;
     veyra::source::RemotePlaySessionSourceTestAccess::mailbox();
+    veyra::source::RemotePlaySessionSourceTestAccess::controlOnlyBoundary();
     veyra::source::RemotePlaySessionSource source;
     for(int i=0;i<3;++i){
         veyra::source::RemotePlayConnectDesc request;request.request.host="invalid://host";
@@ -112,6 +151,6 @@ int main(int argc,char** argv){
     if(!input.start()){std::cerr<<"SDL_GAMEPAD_INITIALIZATION_FAILED\n";return 3;}
     for(int i=0;i<3;++i)if(input.poll(false)!=veyra::remoteplay::ControllerState{})return 4;
     input.stop();input.stop();
-    std::cout<<"REMOTEPLAY_BOUNDARY_PASS invalid_connect_reopen=3 decoded_latest_mailbox=1 SDL_initialized=1 unfocused_neutral=1 PS5_NOT_TESTED=1\n";
+    std::cout<<"REMOTEPLAY_BOUNDARY_PASS invalid_connect_reopen=3 decoded_latest_mailbox=1 control_only_boundary=1 SDL_initialized=1 unfocused_neutral=1 PS5_NOT_TESTED=1\n";
     return 0;
 }

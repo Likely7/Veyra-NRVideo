@@ -92,6 +92,7 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     request_.credentials.registrationKey = desc.request.credentials.registrationKey;
     request_.credentials.sessionKey = desc.request.credentials.sessionKey;
     decodeMode_=desc.decodeMode;decodeDevice_=desc.decodeDevice;hardwareFallback_=false;
+    discardMedia_=desc.controlOnly;
 
     origin100ns_ = static_cast<std::uint64_t>(remoteplay::monotonic100ns());
     try {
@@ -104,7 +105,7 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     auto token = inbox_->begin(static_cast<remoteplay::HostTime>(origin100ns_));
     inbox_->streamProfile(request_.video);
     token_ = token; // Keep a second weak token; backend owns the moved copy.
-    const auto started = backend_.start(request_, token);
+    const auto started = backend_.start(request_, token, discardMedia_);
     if (!started.ok) {
         veyra::log::error("remoteplay", std::format("{} failed code={}", started.operation, started.code));
         close();

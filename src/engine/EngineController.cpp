@@ -57,7 +57,13 @@ void logFrameFlow(const diagnostics::FrameFlowMetrics& m,const char* state){
 }
 }
 EngineController::EngineController(){worker_=std::thread(&EngineController::dispatch,this);}
-EngineController::~EngineController(){ {std::lock_guard lock(mutex_);shutdown_=true;pending_={};stop_=true;}wake_.notify_one();if(worker_.joinable())worker_.join(); }
+EngineController::~EngineController(){ {std::lock_guard lock(mutex_);shutdown_=true;pending_={};stop_=true;}wake_.notify_one();if(worker_.joinable())worker_.join();
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    // Join the worker first: its task may still be inside openRemotePlayCapture's
+    // console connect step, which is the only other user of the control session.
+    std::shared_ptr<source::RemotePlaySessionSource> retire;{std::lock_guard lock(mutex_);retire=std::move(controlRemote_);}if(retire)retire->close();
+#endif
+}
 void EngineController::dispatch(){
     for(;;){std::function<void()> task;{std::unique_lock lock(mutex_);wake_.wait(lock,[&]{return shutdown_||bool(pending_);});if(shutdown_)break;task=std::move(pending_);pending_={};busy_=true;stop_=false;}
         try{task();}catch(const std::exception&){status(L"任务异常，已停止；请查看诊断",true);}
@@ -72,6 +78,12 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
     // Diagnostics-only PlayerOptions fields never enter EnhancementSettings;
     // keep them across the snapshot round-trip below.
     const bool captureCpuUnpack=opts.captureCpuUnpack;
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    // A combined-mode control session survives re-opening its own registered
+    // capture path (device/format re-negotiation must not kill the PS5 link);
+    // any other source takes over the console slot and closes it.
+    {std::shared_ptr<source::RemotePlaySessionSource> retire;{std::lock_guard lock(mutex_);if(controlRemote_&&path!=combinedCapturePath_)retire=std::move(controlRemote_);}if(retire)retire->close();}
+#endif
     {std::lock_guard lock(mutex_);snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_);}
     opts.captureReplayForTest=captureReplay;
     opts.captureReplayDisableFgAdmissionForTest=disableAdmission;
@@ -81,12 +93,63 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc desc,PlayerOptions opts){
     auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
+    {std::shared_ptr<source::RemotePlaySessionSource> retire;{std::lock_guard lock(mutex_);retire=std::move(controlRemote_);combinedCapturePath_.clear();}if(retire)retire->close();}
     {std::lock_guard lock(mutex_);snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.remotePlay=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_);}
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"remoteplay:",opts,request);});
 }
-remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);return activeRemote_?activeRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
-void EngineController::remotePlayController(const remoteplay::ControllerState& state){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->controller(state);}
-void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));}
+void EngineController::openRemotePlayCapture(HWND window,source::RemotePlayConnectDesc desc,std::wstring capturePath,PlayerOptions opts){
+    const bool captureReplay=opts.captureReplayForTest;
+    const bool disableAdmission=opts.captureReplayDisableFgAdmissionForTest;
+    const bool captureCpuUnpack=opts.captureCpuUnpack;
+    // Reuse an alive control session for the same console; a different console
+    // gets an orderly teardown (idle controller -> stop -> join) outside the
+    // lock before this thread proceeds.
+    std::shared_ptr<source::RemotePlaySessionSource> retire;bool reuse=false;
+    {std::lock_guard lock(mutex_);
+        // Reuse only a LIVE control session for the same console. A session
+        // whose owner loop finished (terminal failure or stop) is retired and
+        // rebuilt; a dead object must never masquerade as a working link.
+        reuse=controlRemote_&&controlRemote_->alive()&&controlRemoteHost_==desc.request.host&&controlRemoteConsoleId_==desc.request.consoleId;
+        if(!reuse)retire=std::move(controlRemote_);
+        combinedCapturePath_=capturePath;
+        snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_);}
+    if(retire)retire->close();
+    opts.captureReplayForTest=captureReplay;
+    opts.captureReplayDisableFgAdmissionForTest=disableAdmission;
+    opts.captureCpuUnpack=captureCpuUnpack;
+    auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
+    post([this,window,request,path=std::move(capturePath),opts,reuse]{
+        paused_=false;seekSeconds_=-1;
+        if(reuse){
+            std::lock_guard lock(mutex_);snapshot_.remoteControl=true;
+            veyra::log::info("remoteplay-control","reusing alive control session for the capture run");
+        }else{
+            // Console first: it is the fragile handshake (pairing, network,
+            // login PIN). A failed connect must not open the capture run.
+            request->controlOnly=true;request->request.viewOnly=false;
+            const auto host=request->request.host;const auto consoleId=request->request.consoleId;
+            status(L"正在连接 PS5 控制通道…");
+            auto session=std::make_shared<source::RemotePlaySessionSource>();
+            if(!session->connect(std::move(*request))){
+                const auto recovery=session->recoveryStatus();
+                session->close();
+                status(recovery.message.empty()?L"PS5 控制通道连接失败，请查看诊断；采集卡未启动。":recovery.message+L"（采集卡未启动）",true);
+                {std::lock_guard lock(mutex_);combinedCapturePath_.clear();}
+                return;
+            }
+            {std::lock_guard lock(mutex_);controlRemote_=session;controlRemoteHost_=host;controlRemoteConsoleId_=consoleId;snapshot_.remoteControl=true;}
+        }
+        run(window,path,opts);
+    });
+}
+void EngineController::stopRemotePlayControl(){
+    std::shared_ptr<source::RemotePlaySessionSource> retire;
+    {std::lock_guard lock(mutex_);retire=std::move(controlRemote_);combinedCapturePath_.clear();}
+    if(retire)retire->close();
+}
+remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);if(controlRemote_)return controlRemote_->takeFeedback();return activeRemote_?activeRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
+void EngineController::remotePlayController(const remoteplay::ControllerState& state){std::lock_guard lock(mutex_);if(controlRemote_)controlRemote_->controller(state);else if(activeRemote_)activeRemote_->controller(state);}
+void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(controlRemote_)controlRemote_->loginPin(std::move(pin));else if(activeRemote_)activeRemote_->loginPin(std::move(pin));}
 #endif
 void EngineController::stop(){std::lock_guard lock(mutex_);stop_=true;pending_={};snapshot_.transport=busy_?TransportState::Stopping:TransportState::Empty;}
 void EngineController::pause(bool p){paused_=p;std::lock_guard lock(mutex_);if(snapshot_.running)snapshot_.transport=p?TransportState::Paused:TransportState::Playing;}
@@ -152,6 +215,16 @@ PlayerSnapshot EngineController::snapshot()const{
         copy.remoteReceivedFps=s.receivedFps;copy.remoteDecodedFps=s.decodedFps;copy.remoteRatesReady=s.ratesReady;
         copy.remoteReceived=s.video.accessUnits;copy.remoteDecoded=s.decodedFrames;copy.remoteIngressDropped=s.video.dropped;
         copy.remotePlaySkipped=activeRemote_->skipped();copy.captureAudio=activeRemote_->audioState();copy.audioAvailable=copy.captureAudio.available;
+    }else if(controlRemote_){
+        // Combined capture mode: the render source (capture card) owns the
+        // audio/telemetry fields above; here only the control-link state is
+        // reported. received counts discarded video callbacks (keepalive).
+        const auto s=controlRemote_->sessionSnapshot();copy.remoteStream=s;copy.remotePlayState=int(s.state);
+        const auto recovery=controlRemote_->recoveryStatus();copy.remoteRecovering=recovery.active;copy.remoteReconnectAttempts=recovery.attempts;copy.remoteRecoveryMessage=recovery.message;
+        const auto rates=controlRemote_->rates();
+        copy.remoteReceivedFps=rates.receivedFps;copy.remoteDecodedFps=0;copy.remoteRatesReady=rates.ready;
+        copy.remoteReceived=rates.received;copy.remoteDecoded=0;copy.remoteIngressDropped=0;
+        copy.remoteControl=true;
     }
 #endif
     auto& flow=copy.metrics.flow;
