@@ -5384,3 +5384,23 @@ and leaves the previously verified resize-fix package untouched. Existing
 evidence/build paths are E:/项目/Veyra/tests/resize-hang-20260920 and
 E:/项目/Veyra/build/slider-reset-20260919; no new binary artifacts, runtime
 changes, publication or shutdown.
+
+
+## 2026-09-22 PS5 远程控制 + 采集卡组合模式（隔离实施）
+
+方案与授权边界见 docs/PS5_CAPTURE_CONTROL_COMBINED_PLAN_2026-09-22.md（本轮对话授权实施，未授权推送/发布/打包）。隔离分支 codex/ps5-capture-control-20260922，开工存档 checkpoint/pre-ps5-capture-control-20260922（基线 ca1442c，含上一会话 IDE 启动修复）。提交：fbf592b（control-only 会话后端）、e4d3d4e（引擎旁路控制会话）、92f7908（共享采集配置区块提取）、1245bba（PS5 面板接入）与本条文档提交。
+
+功能：PS5 面板新增持久化"启用采集卡"复选框；勾选后内嵌完整采集卡配置（与采集弹窗同一 CaptureConfigBlock 实现），连接时先建 PS5 控制通道（固定 720p/30/H.264/5Mbps 保活档案，视频/Opus 在 Chiaki 回调处计数后丢弃，不解码零驻留；存档配对不被污染），成功后以采集卡为渲染源拉起画面与 HDMI 音频。StreamRecovery 进度改由收包计数驱动，30s 判死窗口对控制-only 会话不再误判。引擎以 controlRemote_ 旁路持有会话：同主机重开采集复用会话，打开其他源有序退役，停止按钮保留控制通道，断开/新串流会话关闭它。
+
+产物目录偏离说明：本机当前无 E 盘（历史 E:/项目/Veyra 不可用），按 AGENTS.md 不回落 C 盘散落，本轮使用仓库内 gitignored out/：构建增量复用 out/build/x64-release（依赖=上次会话配置：FFmpeg vcpkg_installed/x64-windows、chiaki stage out/remoteplay/chiaki-msvc-stage、SDL/protobuf remoteplay-deps），临时与日志 out/tmp/ps5-capture-control-20260922/。
+
+实际执行的验证（命令与日志均在 out/tmp/ps5-capture-control-20260922/）：
+- 步骤级增量构建 veyra_remoteplay_boundary_tests、veyra、veyra_ui_contract_targets 全部 exit0，自有代码零警告（FFmpeg 头文件 C4244 为既有第三方警告）。
+- veyra_remoteplay_boundary_tests.exe：REMOTEPLAY_BOUNDARY_PASS invalid_connect_reopen=3 decoded_latest_mailbox=1 control_only_boundary=1（新增 control-only 无效主机拒连×3、控制器队列边界）。
+- scripts/remoteplay/test-ui-combined.ps1（新增，BOM 编码）：REMOTEPLAY_COMBINED_UI_PASS——复选框切换、窗口增高/复原、内嵌区块显隐、仅观看与画质控件禁用、采集弹窗重构后控件齐全；不触 PS5/采集设备。
+- scripts/remoteplay/test-ui.ps1（原版回归）REMOTEPLAY_UI_PASS panel_open_close=2 invalid_pairing_rejected=1。为在 Windows PowerShell 5.1 可运行做了三处测试设施修复：文件加 UTF-8 BOM、delegate 去掉无效 DllImport 属性、配对点击前等待面板 PSN 刷新 worker 结束（Cancel 按钮恢复禁用），语义与断言不变，兼容 PowerShell 7。
+- scripts/remoteplay/test-core.ps1（vcvars 环境包 out/build/veyra-core-tests.cmd）：离线核心 77/77 Passed（5.73s）。
+- veyra_ui_contract_tests.exe：PASS 384 组四种 DPI 布局。
+- scripts/gates/delivery.ps1 未执行：脚本硬依赖 ffprobe 与 test_av_1080p/4k.mp4 夹具，均随缺失的 E 盘不存在，本机全盘检索无 ffprobe/夹具。以边界/UI/核心/合同回归补偿，不以上述替代交付门。
+
+未执行/待用户验收：真实 PS5 + USB3 采集卡组合链路（手柄控制、采集 4K/HDR 画面、HDMI 音频同步）、控制-only 保活计数日志核对、RP_IN_USE 20s 窗口重连、停止按钮后控制保持、打开普通文件自动断开控制。不得宣称零视频带宽（PS5 仍发送低码率视频）；采集画质/HDR 表现沿用采集管线既有验收状态。

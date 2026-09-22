@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$PlayerExe,[Parameter(Mandatory=$true)][string]$OutputDirectory)
+﻿param([Parameter(Mandatory=$true)][string]$PlayerExe,[Parameter(Mandatory=$true)][string]$OutputDirectory)
 $ErrorActionPreference='Stop'
 $PlayerExe=(Resolve-Path -LiteralPath $PlayerExe).Path
 $OutputDirectory=[IO.Path]::GetFullPath($OutputDirectory)
@@ -20,6 +20,7 @@ public static class RpUi {
  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l);
  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h,int command);
  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int width,int height,uint flags);
+ [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr h);
  [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr h);
  [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr h,IntPtr dc);
  [DllImport("gdi32.dll")] public static extern bool BitBlt(IntPtr dst,int x,int y,int w,int h,IntPtr src,int sx,int sy,uint rop);
@@ -61,6 +62,8 @@ try {
   }
   # Invalid local validation only; never contact a console or use a real key.
   foreach($field in @(1,2,3,11)){[RpUi]::SetWindowText([RpUi]::GetDlgItem($panel,$field),'')|Out-Null}
+  $busyDeadline=[DateTime]::UtcNow.AddSeconds(15)
+  while([RpUi]::IsWindowEnabled([RpUi]::GetDlgItem($panel,8)) -and [DateTime]::UtcNow -lt $busyDeadline){Start-Sleep -Milliseconds 100}
   [RpUi]::PostMessage($panel,0x111,[IntPtr]6,[IntPtr]::Zero)|Out-Null
   Start-Sleep -Milliseconds 150
   if(-not [RpUi]::Text([RpUi]::GetDlgItem($panel,13)).Contains('8 位配对码')){throw 'Pairing validation feedback missing'}

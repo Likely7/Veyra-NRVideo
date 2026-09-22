@@ -1,7 +1,7 @@
 # PS5 远程控制 + 采集卡画面组合模式执行方案
 
 日期：2026-09-22
-状态：方案待实施；本文档仅记录方案与证据，未修改任何源码，功能未开工。
+状态：隔离实施完成（分支 `codex/ps5-capture-control-20260922`，提交 fbf592b / e4d3d4e / 92f7908 / 1245bba / 文档提交；开工存档 `checkpoint/pre-ps5-capture-control-20260922` → `ca1442c`）。软件侧回归通过（边界/组合 UI/原版 UI/离线核心 77/77/UI 合同 384）；真实 PS5 + 采集卡组合验收与 delivery gate 未执行（后者因 ffprobe 与夹具随 E 盘缺失），见文末实施记录与 docs/WORKLOG.md 2026-09-22 条目。未合并 main、未推送、未发布。
 基线：本地 main HEAD `05998da`（1.4.3 发布记录）。开工时工作区存在未提交改动（`CMakeLists.txt`、`apps/veyra/TelemetryWindow.cpp`、`docs/WORKLOG.md`、未跟踪 `launch.vs.json`），实施前重新确认 `git status` 并保存开工存档点，不覆盖这些改动。
 分支约定：按项目惯例在隔离分支（建议 `codex/ps5-capture-control-20260922`）施工，开工前打 `checkpoint/pre-ps5-capture-control-20260922` 存档；合并 main 需用户当时明确授权。
 产物目录：遵守 AGENTS.md 本机产物目录规则，本轮产物写入 `E:\项目\Veyra\` 下 `build/ps5-capture-control-20260922`、`tests/…`、`logs/…`、`tmp/…`。
@@ -148,3 +148,17 @@
 
 - 本轮（2026-09-22）仅授权撰写本方案文档；实施、打包、push、GitHub Release 均未授权，需用户在后续对话中明确授权后进行。
 - 实施时遵守：隔离分支施工、不推送不发布；源码 Git 禁止 SDK/DLL/模型/凭据；产物写入 `E:\项目\Veyra\`；chiaki-ng AGPL-3.0 + OpenSSL exception 归因沿用现有 `licenses/remoteplay/`，不引入新的第三方代码。
+
+
+## 7. 实施记录（2026-09-22）
+
+按第 4 节顺序完成四步实施，每步独立提交并构建通过：
+
+1. **fbf592b 后端 control-only**：`RemotePlayConnectDesc.controlOnly`；`ChiakiBackend::start` 第三参 `discardMedia`（videoCallback 计数即拒收、opus 回调短路、`enable_dualsense=!viewOnly||discardMedia`）；`RemotePlaySessionSource::run()` 专用循环（无 WASAPI/feeder/解码，收包计数驱动 `recovery.frame()`，Keyframe 动作因无解码器而自然不触发）；ProductBoundaryTests 新增 `control_only_boundary`。
+2. **e4d3d4e 引擎旁路会话**：`EngineController::controlRemote_` + `openRemotePlayCapture`（先连 PS5 再开采集、同主机复用、失败不开采集）+ `stopRemotePlayControl` + 生命周期规则（open 非登记路径退役、stop 保留、析构/新串流关闭）+ 路由与快照 `remoteControl` 遥测。
+3. **92f7908 共享采集区块**：新建 `apps/veyra/ui/CaptureConfigBlock.{h,cpp}`（设备枚举/格式排序/异步查询/选中记忆/capture2: 组径与偏好保存，全列与紧凑双布局，ID 基址参数化）；CapturePanel 改为薄宿主（控件 ID 与布局不变）；`installDialogHelp` 增加 vector 重载。
+4. **1245bba PS5 面板接入**：`UseCapture` 复选框（持久化 [RemotePlay] UseCapture，纯 UI 切换不受 busy 限制）；勾选后内嵌区块、禁用仅观看与画质控件、窗口 709↔1100 dip；Connect 组合分支（低规格保活档案不写入存档配对、校验并保存采集偏好）；AppShell 组合回调/状态文案/断开（先 stopRemotePlayControl 再 stop）/ControllerTimer 纳入 remoteControl。
+
+验证证据与命令日志：out/tmp/ps5-capture-control-20260922/（构建 step1–step4*.log、core-tests.log、contract-tests.log、ui-combined*/）；新增 scripts/remoteplay/test-ui-combined.ps1；test-ui.ps1 三处测试设施修复（BOM/delegate 属性/busy 等待）见 WORKLOG。产物目录偏离（E 盘缺失改用仓库内 out/）已在 WORKLOG 说明。
+
+**未执行**：真实 PS5 + USB3 采集卡组合链路验收（第 5 节清单）、delivery gate（ffprobe 与夹具随 E 盘缺失）。合并 main 与发布需用户另行授权。
