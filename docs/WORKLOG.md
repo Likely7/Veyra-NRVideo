@@ -5596,3 +5596,26 @@ changes, publication or shutdown.
 另：边界测试新增 --control-stress 模式（200 次控制-only connect/close 循环）。本轮某中间构建曾出现 3 次 0xC0000409 fail-fast（无符号、输出被缓冲截断），最终二进制连续 15 轮默认路径 + 200 次压力循环均通过，未能复现；若再现需抓 dump 分析，不以通过冒充已定位。
 
 验证：veyra 与 boundary 目标构建 exit0 零自有警告；boundary 默认路径 6/6 通过、--control-stress CONTROL_STRESS_PASS；test-ui-combined.ps1 与原版 test-ui.ps1 复跑通过（ui-combined-fix / ui-original-fix）。真机侧待用户按清单排查：PS5 开机（或面板唤醒）、HDMI 接采集卡输入口、必要时关闭 PS5 HDCP、输出分辨率降至采集卡支持档位。
+
+### 2026-09-22 追加 3：真机反馈"无法开启 NR 增强和帧生成"的诊断与本地运行时恢复
+
+用户真机测试报告 NR 增强与帧生成无法开启。读取 logs/veyra-app.log（今晚 20:02–20:05 本地会话，即日志内 12:02–12:05Z）：两个进程共 19 次点击开启 NR，UI 层全部接受请求（ui-feature click=NR enabled=true），但每次管线重建时 `[graph] ngx-local.json missing`，backend-recovery 随即回滚 `nr=false sr=false multiplier=1`，复选框弹回、补帧被一并关闭——两症状同一根因。
+
+根因：本机 E 盘整盘不存在（历史 E:/项目/Veyra 完整暂存与构建不可达，C:\veyra-deps、C:\veyra-releases 亦不存在），仓库根 runtime_local 系 09-21 22:51 的部分暂存，仅含 nvngx_dlss.dll/dlssd.dll/dlssg.dll，缺 EnhanceGraph.cpp:841 必需的 runtime_local/config/ngx-local.json 身份文件与 nvngx_dlssnr.dll。代码与本轮分支改动无关。
+
+恢复（用户指定来源 D:/Game/Veyra-1.4.4beta-elgato-win64-portable，逐项身份核验后操作，产物目录 out/tmp/runtime-restore-20260922/）：
+- 原件 nvngx_dlssnr.dll 经 stage-runtime.ps1 校验（165840496 字节 / SHA256 E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E / Valid / 310.8.0.0）复制到仓库根并暂存至 runtime_local/nvidia/，生成 runtime-manifest.json 与新的持久 config/ngx-local.json 身份。
+- restore-extras.ps1 核验并补齐：nvngx_dlss.dll（BE6E434A…/Valid）、nvngx_dlssg.dll（135EAF07…/Valid）、nvngx_truehdr.dll（9A80575F…/3955752 字节/1.1.0.0/Valid）、nvngx_vsr.dll（C3D88EEA…/Valid）、nr-community/nvngx_dlssnr.dll（984BEE0F…/HashMismatch）、nr-ampere/nvngx_dlssnr.dll（DCC0DC24…/HashMismatch），全部与 AGENTS.md 固定值一致；既有 nvngx_dlssd.dll（F4E97624…/Valid）保留并记录。RESTORE_EXTRAS_PASS。
+
+真机验证（本机 RTX 5070，同一 runtime_local 暂存）：
+- 构建 veyra_nr_harness / veyra_fg_harness（vcvars 包装，增量 exit0；首次裸 bash 构建因缺 SDK 环境链接失败 LNK1181，改 cmd+vcvars64 后成功，过程未污染源码树）。
+- veyra_nr_harness --load-only：PASS（核心 init、snippet 加载、导出、Shutdown1 全 Success）。
+- veyra_nr_harness --create-test --width 3840 --height 2160：PASS，Feature 18 CreateFeature result=0x1 handle=non-null，日志零 ERROR——即应用内点 NR 开关后失败的那一步。
+- veyra_fg_harness --fg-test：PASS，日志零 ERROR。
+
+未执行/边界：未在 GUI 内重放用户完整点击流（UI 层接受请求的证据已在日志，失败步骤即上列已通过的 NGX init/create）；应用级最终确认待用户重启 veyra.exe 后开启 NR/补帧。runtime_local 全部位于 gitignored 路径，仓库根 nvngx_dlssnr.dll 为 stage-runtime 固定来源位（/nvngx_dlssnr.dll 已 ignore），源码零改动（git status 仅剩先前会话的 SettingsWindow.cpp 滚动优化未提交修改）。无打包、推送或发布动作。
+
+
+### 2026-09-22 追加 3：并入 SettingsWindow 滚动条与滚动性能改动（用户指示随 PR 一并提交）
+
+应用并行完成的 apps/veyra/SettingsWindow.cpp 改动（非本轮功能代码）：滚动条滑轨加宽（3→8 DIP）并改用面板暗灰（原线色在亚克力背景上不可见）；arrange() 增量虚拟化——输入快照（页/宽/滚动/折叠/混色器/帮助）不变且滚动不超过一档时只重排视口带 ±288 DIP 内的行，Defer 批次随视口而非全部约 372 个子窗口伸缩（注释引 ETW 2026-09-22）；高分辨率滚轮累积亚档增量修复；重绘合并与外层窗口按几何变化重绘；WM_DESTROY 重置快照。验证：veyra 与 veyra_ui_contract_tests 构建 exit0，UI 合同 384 组四档 DPI PASS，test-ui.ps1 回归 PASS（含 20 轮模式切换动画）。提交 47c2043，随 PR #7 推送；滚动流畅度的主观体验未量化，不宣称 ETW 改善复测值。
