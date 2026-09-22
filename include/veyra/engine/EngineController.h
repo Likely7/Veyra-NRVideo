@@ -86,6 +86,9 @@ struct PlayerSnapshot {
     // 1 = 2X). 0 = no FSR session has reported yet.
     int fsrMaxGeneratedFrames=0;
     bool running=false,failed=false,image=false,capture=false,remotePlay=false;
+    // A control-only PS5 session is alive beside the active render source
+    // (combined capture mode); remote* fields above carry its telemetry.
+    bool remoteControl=false;
     int remotePlayState=0; uint64_t remotePlaySkipped=0;
     bool remoteRecovering=false;unsigned remoteReconnectAttempts=0;std::wstring remoteRecoveryMessage;
     remoteplay::SessionInbox::Snapshot remoteStream;
@@ -101,6 +104,12 @@ public:
     void open(HWND video,const std::wstring& path,PlayerOptions options);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
+    // Combined capture mode: keep a control-only PS5 session alive beside the
+    // regular render pipeline and open the given capture path as the video
+    // source. The PS5 link is established first; a failed console connect does
+    // not open the capture run.
+    void openRemotePlayCapture(HWND, source::RemotePlayConnectDesc, std::wstring capturePath, PlayerOptions);
+    void stopRemotePlayControl();
     remoteplay::ControllerFeedback remotePlayFeedback();
     void remotePlayController(const remoteplay::ControllerState&);
     void remotePlayLoginPin(std::string);
@@ -128,6 +137,16 @@ private:
     uint64_t presentationRevision_=1;
     std::shared_ptr<FrameFlowWindow> activeFlow_;
     std::shared_ptr<source::RemotePlaySessionSource> activeRemote_;
+    // Combined capture mode: PS5 control session living outside run()'s single
+    // activeSource slot. controlRemoteHost_/ConsoleId/combinedCapturePath_
+    // decide reuse vs teardown when a new source is opened (all guarded by
+    // mutex_); the session itself is closed outside the lock because teardown
+    // joins its owner thread.
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    std::shared_ptr<source::RemotePlaySessionSource> controlRemote_;
+    std::string controlRemoteHost_, controlRemoteConsoleId_;
+    std::wstring combinedCapturePath_;
+#endif
     PreviewView previewView_;
     std::wstring savePath_;
     std::thread worker_;
