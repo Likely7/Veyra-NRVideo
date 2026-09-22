@@ -60,6 +60,9 @@ struct ChiakiBackend::Impl {
     std::atomic<std::uint64_t> warnings=0,errors=0,videoCallbacks=0,audioCallbacks=0;
     std::atomic<int> quitReason=0,apiError=0;
     std::atomic<uint64_t> callbackRejected=0,transportErrors=0,assemblyErrors=0;
+    // Combined control-only mode: media callbacks are counted (keepalive
+    // progress for StreamRecovery) and rejected without any copy or decode.
+    std::atomic<bool> discardMedia=false;
     std::atomic<int64_t> serverTargetBitrate=-1;
     std::atomic<uint64_t> qualityReports=0;
     // Only the upstream audio/Opus callback thread reads/writes these fields.
@@ -115,6 +118,7 @@ struct ChiakiBackend::Impl {
         const ChiakiVeyraVideoSampleInfo* info,void* user) noexcept {
         auto& self=*static_cast<Impl*>(user);
         if(!self.active.load()||!data||!size||!info)return false;
+        if(self.discardMedia.load()){++self.videoCallbacks;return false;}
         try{
             const auto nal=inspectAnnexB({data,size},self.profile.codec);
             if(!nal.valid || (!nal.hasConfig&&!nal.hasPicture)){++self.callbackRejected;return false;}
@@ -133,6 +137,7 @@ struct ChiakiBackend::Impl {
     }
     static void opusSettings(std::uint32_t channels,std::uint32_t rate,void* user) noexcept {
         auto& self=*static_cast<Impl*>(user);
+        if(self.discardMedia.load())return;
         // Sample position stays monotonic across repeated Opus headers within
         // one session; restarting at zero makes AudioIngress reject new PCM.
         self.channels=channels;self.rate=rate;self.audioDiscontinuity=true;
@@ -141,6 +146,7 @@ struct ChiakiBackend::Impl {
     static void opusFrame(std::int16_t* data,std::size_t count,void* user) noexcept {
         auto& self=*static_cast<Impl*>(user);
         if(!self.active.load()||!self.channels||!data)return;
+        if(self.discardMedia.load())return;
         if(count==0||count>self.rate/5u||count>(std::numeric_limits<std::uint64_t>::max)()-self.sampleIndex){self.token.failed(-1004);return;}
         try{
             PcmBlock block;block.generation=self.token.generation();block.channels=self.channels;block.rate=self.rate;
@@ -166,11 +172,12 @@ ChiakiBackend::~ChiakiBackend(){
         }
     }catch(...){if(p_){p_->active=false;(void)p_.release();}}
 }
-BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionInbox::Token token){
+BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionInbox::Token token,bool discardMedia){
     if(p_)return {false,-1100,"already_initialized"};
     if(!validHost(request.host)||request.video.validate()||token.generation()==0)return {false,-1101,"validate_connect"};
     auto init=initializeChiaki();if(!init.ok)return init;
     p_=std::make_unique<Impl>(std::move(token));auto& s=*p_;s.host=request.host;s.profile=request.video;
+    s.discardMedia.store(discardMedia);
     // Verbose formatting has per-packet overhead: enable only for explicit diagnostics.
     // Callback above whitelists numeric quality fields and never forwards raw text.
     const bool qualityTrace=std::getenv("VEYRA_TEST_PS5_QUALITY_TRACE")!=nullptr;
@@ -184,7 +191,10 @@ BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionIn
         request.video.fps==30?CHIAKI_VIDEO_FPS_PRESET_30:CHIAKI_VIDEO_FPS_PRESET_60);
     info.video_profile.codec=request.video.codec==Codec::H264?CHIAKI_CODEC_H264:request.video.codec==Codec::H265Hdr?CHIAKI_CODEC_H265_HDR:CHIAKI_CODEC_H265;
     info.video_profile.bitrate=request.video.bitrateKbps;
-    info.video_profile_auto_downgrade=false;info.enable_keyboard=false;info.enable_dualsense=!request.viewOnly;
+    info.video_profile_auto_downgrade=false;info.enable_keyboard=false;
+    // Control-only mode needs the DualSense channel even if the request was
+    // marked view-only; the pair is mutually exclusive at the UI layer.
+    info.enable_dualsense=!request.viewOnly||discardMedia;
     info.auto_regist=false;info.packet_loss_max=0.05;info.enable_idr_on_fec_failure=true;
     const auto code=chiaki_session_init(&s.session,&info,&s.log);
     wipe(info.regist_key,sizeof(info.regist_key));wipe(info.morning,sizeof(info.morning));wipe(info.psn_account_id,sizeof(info.psn_account_id));
