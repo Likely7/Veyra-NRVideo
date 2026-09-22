@@ -1,0 +1,12 @@
+{
+  "version": "3.0",
+  "defaults": {},
+  "configurations": [
+    {
+      "type": "default",
+      "name": "veyra.exe",
+      "project": "CMakeLists.txt",
+      "projectTarget": "veyra.exe"
+    }
+  ]
+}

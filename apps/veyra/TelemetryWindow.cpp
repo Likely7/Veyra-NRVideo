@@ -11,7 +11,26 @@ namespace {
 unsigned windowDpi=96;HWND window=nullptr;engine::EngineController* engine=nullptr;HFONT font=nullptr;std::wstring preview;
 std::wstring wide(const std::string& s){int n=MultiByteToWideChar(CP_UTF8,0,s.data(),int(s.size()),nullptr,0);std::wstring r(n,0);MultiByteToWideChar(CP_UTF8,0,s.data(),int(s.size()),r.data(),n);return r;}
 std::wstring value(std::optional<double> v){if(!v)return L"未能测量";std::wostringstream o;o<<std::fixed<<std::setprecision(3)<<*v;return o.str();}
-void refresh(){auto s=engine->snapshot();const wchar_t* names[]={L"上传/颜色转换",L"超分 SR",L"光流 GPU队列区间（含同步）",L"NR",L"NR变化量合成",L"FG 子帧1",L"FG 子帧2",L"FG 子帧3",L"FG批次",L"最终blit"};std::wostringstream o;
+void refresh(){auto s=engine->snapshot();
+    // Indexed by diagnostics::GpuStage order; keep in sync or refresh() feeds
+    // wild pointers to the stream inserters (startup crash in wcsnlen).
+    const wchar_t* names[]={
+        L"上传/颜色转换",   // Color
+        L"超分 SR",        // Sr
+        L"光流 GPU队列区间（含同步）", // Flow
+        L"NR",             // Nr
+        L"NR变化量合成",    // Residual
+        L"FG 子帧1",       // Fg1
+        L"FG 子帧2",       // Fg2
+        L"FG 子帧3",       // Fg3
+        L"FG 子帧4",       // Fg4
+        L"FG 子帧5",       // Fg5
+        L"FG批次",         // FgBatch
+        L"最终blit",       // Blit
+        L"RTX Video HDR",  // VideoHdr
+    };
+    static_assert(sizeof(names)/sizeof(names[0])==size_t(diagnostics::GpuStage::Count),"telemetry stage labels must cover every GpuStage");
+    std::wostringstream o;
     o<<L"GPU时间戳（毫秒）；未执行不记作0。样本帧 "<<s.metrics.identity.sourceFrameId<<L" / epoch "<<s.metrics.identity.epoch<<L" / 设置版本 "<<s.metrics.identity.settingsRevision<<L"\r\n";
     for(size_t i=0;i<s.metrics.gpu.size();++i){const auto& g=s.metrics.gpu[i];o<<names[i]<<L"："<<(g.state==diagnostics::SampleState::NotExecuted?L"未执行":g.state==diagnostics::SampleState::Pending?L"待GPU完成":value(g.milliseconds))<<L"\r\n";}
     o<<L"\r\nCPU与调度（毫秒，独立于GPU）：取帧 "<<value(s.metrics.decodeCpuMs)<<L" / 图提交 "<<value(s.metrics.submitCpuMs)<<L" / GPU就绪等待 "<<value(s.metrics.gpuWaitCpuMs)<<L"\r\n截止时间等待 "<<value(s.metrics.deadlineWaitCpuMs)<<L" / Present调用 "<<value(s.metrics.presentCpuMs)<<L"\r\n源帧 "<<s.metrics.sourceFrames<<L" / 有效生成 "<<s.metrics.validGenerated<<L" / 实际提交 "<<s.metrics.submitted<<L" / 过期补帧 "<<s.metrics.expired<<L"\r\n当前批次容量 "<<s.metrics.queueWatermark<<L"（上限4）；采集入口容量1；采集丢弃 "<<s.captureDropped<<L"\r\n实际提交频率（最近1秒观察）："<<value(s.submissionFps)<<L"fps；实际显示扫描率/光子延迟：未测\r\n";

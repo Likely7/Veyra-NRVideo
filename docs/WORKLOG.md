@@ -1,5 +1,144 @@
 # Veyra 工作记录
 
+## 2026-09-22 VS2026 startup repair
+
+User reported the project cannot start in Visual Studio 2026 (18.10.1,
+installed 2026-09-21). Root cause reproduced with VS2026's bundled CMake 4.3.1:
+the folder opens as a CMake project, VS defaulted to the base `x64-debug`
+preset (no local dependency variables), and CMakeLists.txt:955/958 called
+`target_sources(veyra)`/`target_link_options(veyra)` outside the
+`VEYRA_FFMPEG_ROOT` guard that creates the target (guard opens at line 422,
+closes at 932), so bare-preset configure died with "Cannot specify sources for
+target veyra" — no build.ninja, no launch target. The existing
+`out/build/x64-release` cache was already VS2026-toolchain-built (cl 14.51,
+VS2026 cmake) and unaffected.
+
+Changes (source repo):
+- `CMakeLists.txt`: wrapped the version-resource/manifest block (former lines
+  951-958) in `if(TARGET veyra)` so bare contract builds configure cleanly;
+  added POST_BUILD copy_if_different of the FFmpeg runtime DLLs
+  (avcodec-63/avformat-63/avutil-61/swresample-7/swscale-10, dav1d when
+  present) next to veyra.exe — previously only scripts/build.ps1 staged them,
+  so IDE-built EXEs failed to start on missing avcodec.
+- `apps/veyra/TelemetryWindow.cpp`: fixed an out-of-bounds stage-label read.
+  diagnostics::GpuStage grew to 13 entries (Fg4/Fg5/VideoHdr) but refresh()
+  indexed a 10-element name array with metrics.gpu.size(), feeding wild
+  pointers to wcslen. Reproduced as debug-build startup crash 0xC0000005 →
+  0xC000041D inside the telemetry wndproc (panel restored from saved prefs);
+  call stack captured under the VS2026 debugger (wcslen ← refresh() 行16 ←
+  proc() 行47). Labels now cover all 13 stages (FG 子帧4/5 realigned,
+  FG批次/最终blit moved to their true indices, added RTX Video HDR) with a
+  static_assert tying the count to GpuStage::Count. The same UB existed in
+  release builds (read garbage labels without crashing); release was rebuilt
+  with the fix.
+- `CMakeUserPresets.json` (gitignored, local): added `x64-debug-vs` mirroring
+  `x64-release-vs` (local FFmpeg/DLSS SDK/RemotePlay paths, Debug, D3D12 debug
+  layer on) reusing out/build/x64-debug. Debug-specific flags required by the
+  VS2026 toolset (cl 14.51, /MTd): `/EHsc` (debug STL <chrono> pulls exception
+  paths that warn C4530 → error under /WX) and
+  `CMAKE_EXE_LINKER_FLAGS_DEBUG=/INCREMENTAL:NO /debug` (incremental linking
+  switches CMake to the mt.exe manifest flow, which rejects /MANIFESTINPUT
+  with LNK1220; /debug must be restated because CMake only adds it alongside
+  /INCREMENTAL — omitting it strips the PDB).
+- `launch.vs.json` (new, untracked): default debug config targeting
+  `veyra.exe` via projectTarget so F5 has an explicit startup item.
+
+Verification (VS2026 vcvars + VS2026 cmake, logs under
+`logs/vs2026-startup-fix-20260922/`):
+- `cmake --preset x64-debug` after fix: exit 0, build files generated
+  (previously fatal, see configure-x64-debug.log vs configure-x64-debug-after-fix.log).
+- `cmake --preset x64-debug-vs`: exit 0 (configure-x64-debug-vs.log), Chiaki
+  RemotePlay deps resolved.
+- Full debug build of veyra target: exit 0 after the /EHsc and linker-flag
+  fixes (build-x64-debug-vs-veyra-retry3/4 logs; retry logs document each
+  intermediate failure and its fix).
+- `cmake --build --preset x64-release-vs --target veyra`: exit 0, relinked
+  (build-x64-release-vs-veyra.log); rebuilt again after the telemetry fix
+  (build-release-after-telemetry-fix.log).
+- Smoke: debug veyra.exe crashed at startup before the telemetry fix
+  (0xC000041D, WER offset symbolized to wcslen via llvm-symbolizer); after the
+  fix both out/build/x64-debug and out/build/x64-release veyra.exe stay alive
+  6s (~20-22MB) and were then killed (smoke-launch*.ps1).
+- scripts/gates/delivery.ps1 not run this round: no release delivery was
+  authorized; verification scope was IDE startup repair (configure/build/run
+  of both presets).
+
+Note: this machine has no E: drive, so per the 2026-09-18 artifact rule the
+E:/项目/Veyra target is unavailable; this round's logs/scripts were kept in the
+repo's existing gitignored `logs/` directory instead. No E: fallback scatter.
+IDE usage: open the folder, switch the configuration dropdown from x64-debug
+to `Veyra x64 Debug + 本机依赖 + RemotePlay (VS)` or
+`Veyra x64 Release + 本机依赖 + RemotePlay (VS)`, then start `veyra.exe`.
+Nothing was committed or pushed.
+
+### 2026-09-22 follow-up: crash returned after accidental local revert
+
+The telemetry fix above was lost mid-day: the user accidentally reverted
+`apps/veyra/TelemetryWindow.cpp` to HEAD (10:06 local, back to the 10-label
+array, no static_assert); VS2026 then rebuilt the debug EXE (10:11) from the
+reverted source and F5 crashed again. The other uncommitted repairs
+(CMakeLists.txt, launch.vs.json, CMakeUserPresets.json) survived.
+
+Re-diagnosis with ground truth this time (logs/vs2026-startup-fix-20260922/):
+- Built a 20-line dbghelp debug launcher (crash_launcher.cpp) that runs the EXE
+  under DEBUG_ONLY_THIS_PROCESS and breaks on the first-chance AV. Reproduced:
+  `reading address 0xFFFFFFFFFFFFFFFF` at RVA 0xd66946 — identical to the WER
+  event 1000 offset from 09:32, and matching the user's VS2026 exception dialog
+  ("读取访问权限冲突"). Offline symbolizer (symbolize.cpp, SymLoadModuleEx into
+  the tool's own process) resolved RVA 0xd66946 to
+  `common_strnlen_c<0,unsigned short>+0x56` (ucrt wcsnlen) — i.e. the stream
+  inserter consuming a wild `names[10..12]` label pointer, confirming the
+  telemetry OOB read as the sole crash site (the RemotePlay
+  `directory_iterator` and EngineController `**it` candidates were cleared).
+- Re-applied the fix in `apps/veyra/TelemetryWindow.cpp`: 13 labels aligned to
+  the GpuStage enum order (Color/Sr/Flow/Nr/Residual/Fg1-5/FgBatch/Blit/
+  VideoHdr) plus `static_assert(count == size_t(GpuStage::Count))` so a future
+  stage addition fails at compile time instead of crashing at startup.
+- Rebuilt: `--preset x64-debug-vs --target veyra` exit 0 (rebuild-debug-
+  after-revert-fix.log), `--preset x64-release-vs --target veyra` exit 0
+  (rebuild-release-after-revert-fix.log); release script initially failed with
+  C1083 windows.h — wrong vcvarsall path (missing `VC\`) in my own script, not
+  a project issue.
+- Verification: debug EXE under the crash launcher for 60s → "no access
+  violation" (repro-after-fix-1022.log; the run restored the saved
+  professional layout incl. telemetry panel per veyra-app.log 02:26Z session,
+  so refresh() ran repeatedly). Release smoke: alive 6s/22MB then killed.
+- Delivery gate not run (no release authorized). Lesson recorded: the fix
+  existed only as an uncommitted working-tree change, which is why one
+  accidental revert could reintroduce the crash; committing was left for the
+  user to authorize.
+
+### 2026-09-22 follow-up 2: why the shipped 1.4.3 Release package never crashed
+
+Question from the user: why does the packaged Release build start fine when
+the same source crashes under VS2026 F5? Answer established with evidence, not
+assumption:
+
+- The bug is IN the shipped packages. `89f4f7f` (2026-09-18) grew GpuStage to
+  13 entries without updating the telemetry labels; tags v1.4.1, v1.4.2 and
+  v1.4.3 all carry the mismatch (git show at each tag), and
+  TelemetryWindow.cpp is unchanged between 3b4570e (v1.4.3 source) and HEAD.
+  The user's accidental revert restored exactly the shipped source.
+- Controlled experiment (rebuild-release-143-source-experiment.log): restored
+  the exact 3b4570e telemetry file, rebuilt release, ran it under the crash
+  launcher for 60s — "no access violation" (experiment-release-143-source.log),
+  while the same source as debug faults within ~1s at RVA 0xd66946.
+- Mechanism (dumpbin disasm of the release obj, telemetry-release-disasm.txt):
+  `names[]` is a stack-local pointer array; release /O2 lays the ostringstream
+  and other live pointers immediately after the 10 slots, so names[10..12]
+  read valid readable pointers — wcsnlen returns garbage "labels" for the last
+  three stage rows (FgBatch/Blit/VideoHdr) without an access violation.
+  Debug (/Od, debug CRT stack fill) leaves 0xCC/npos-style values there;
+  wcsnlen dereferences 0xFFFFFFFFFFFFFFFF → 0xC0000005 → 0xC000041D.
+  Textbook undefined behavior: same code, one build survives, one crashes.
+- User-visible impact on shipped 1.4.1–1.4.3: opening the diagnostics panel
+  shows three meaningless trailing rows in the GPU timestamp list; no crash,
+  no other functional impact. Not a startup problem.
+- Working tree restored to the fixed source (from
+  TelemetryWindow.fixed.cpp.bak), debug + release rebuilt (rebuild-*-restore-
+  fix.log), both smoke-tested alive 6s then killed (smoke-launch.ps1,
+  smoke-launch-debug-restore.ps1).
+
 ## 2026-09-20 1.4.3 publication verified
 
 Released https://github.com/Likely7/Veyra-NRVideo/releases/tag/v1.4.3 as Latest,
