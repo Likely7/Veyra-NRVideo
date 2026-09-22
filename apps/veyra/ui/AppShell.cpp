@@ -672,7 +672,27 @@ case Split:compareMode=compareMode==2?0:2;updateComparison();break;
 case Reference:referenceBase=SendDlgItemMessageW(hwnd,Reference,CB_GETCURSEL,0,0)==1;updateComparison();break;
 case Settings:if(uiState.mode==veyra::ui::Mode::Daily)switchMode();selectInspector(0);break;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-case RemotePlay:veyra::ui::showRemotePlayPanel(hwnd,[](veyra::source::RemotePlayConnectDesc desc){cancelProtection();remoteViewOnly=desc.request.viewOnly;if(!desc.request.viewOnly){if(!remoteController.start())veyra::log::warn("remoteplay-input","SDL gamepad initialization failed");startShellTimer(mainWindow,ControllerTimer,8);}else{KillTimer(mainWindow,ControllerTimer);remoteController.stop();}currentFile=L"remoteplay:";refreshSubtitleTracks(currentFile);paused=false;engine.previewView({});engine.openRemotePlay(video,std::move(desc),options());SetWindowTextW(mainWindow,L"Veyra — PS5 Remote Play");layout();},[](std::string pin){engine.remotePlayLoginPin(std::move(pin));},[]{auto s=engine.snapshot();veyra::ui::RemotePlayPanelStatus result;
+case RemotePlay:{
+    veyra::ui::CaptureConfigBlock::Callbacks captureCallbacks;
+    captureCallbacks.readSdr=[]{return (uiState.enhanced?engine.snapshot().desired:uiState.configured).forceSdrPreview;};
+    captureCallbacks.setSdr=[](bool enabled){auto s=uiState.enhanced?engine.snapshot().desired:uiState.configured;s.forceSdrPreview=enabled;return applySettings(s);};
+    captureCallbacks.readAudioIngress=[]{return int((uiState.enhanced?engine.snapshot().desired:uiState.configured).captureAudio);};
+    captureCallbacks.setAudioIngress=[](int mode){auto s=uiState.enhanced?engine.snapshot().desired:uiState.configured;s.captureAudio=static_cast<veyra::engine::CaptureAudioIngress>(std::clamp(mode,0,2));return applySettings(s);};
+    captureCallbacks.readFlip=[]{return (uiState.enhanced?engine.snapshot().desired:uiState.configured).captureFlipVertical;};
+    captureCallbacks.setFlip=[](bool enabled){auto s=uiState.enhanced?engine.snapshot().desired:uiState.configured;s.captureFlipVertical=enabled;return applySettings(s);};
+    captureCallbacks.readBuffer=[]{return int((uiState.enhanced?engine.snapshot().desired:uiState.configured).captureBuffer);};
+    captureCallbacks.setBuffer=[](int mode){auto s=uiState.enhanced?engine.snapshot().desired:uiState.configured;s.captureBuffer=static_cast<veyra::source::CaptureBufferMode>(std::clamp(mode,0,2));return applySettings(s);};
+    veyra::ui::showRemotePlayPanel(hwnd,[](veyra::source::RemotePlayConnectDesc desc){cancelProtection();remoteViewOnly=desc.request.viewOnly;if(!desc.request.viewOnly){if(!remoteController.start())veyra::log::warn("remoteplay-input","SDL gamepad initialization failed");startShellTimer(mainWindow,ControllerTimer,8);}else{KillTimer(mainWindow,ControllerTimer);remoteController.stop();}currentFile=L"remoteplay:";refreshSubtitleTracks(currentFile);paused=false;engine.previewView({});engine.openRemotePlay(video,std::move(desc),options());SetWindowTextW(mainWindow,L"Veyra — PS5 Remote Play");layout();},[](veyra::source::RemotePlayConnectDesc desc,const std::wstring& capturePath){cancelProtection();remoteViewOnly=false;if(!remoteController.start())veyra::log::warn("remoteplay-input","SDL gamepad initialization failed");startShellTimer(mainWindow,ControllerTimer,8);currentFile=capturePath;refreshSubtitleTracks(currentFile);paused=false;engine.previewView({});engine.openRemotePlayCapture(video,std::move(desc),capturePath,options());SetWindowTextW(mainWindow,L"Veyra — 采集卡 · PS5 控制");layout();},[](std::string pin){engine.remotePlayLoginPin(std::move(pin));},[]{auto s=engine.snapshot();veyra::ui::RemotePlayPanelStatus result;
+    if(s.remoteControl){
+        // Combined mode: the PS5 link is control-only; picture and audio come
+        // from the capture card run.
+        result.active=true;
+        result.message=s.remoteRecovering?s.remoteRecoveryMessage:s.capture&&s.running?L"生效：采集卡画面 · PS5 控制已连接。手柄输入发送到 PS5；画面与声音来自采集卡，不受串流画质限制。":L"PS5 控制通道存活，采集画面未在播放；点“连接并观看”重新拉起，或断开连接结束控制。";
+        const auto c=remoteController.capabilities();
+        if(!c.connected)result.message+=L"\n未检测到电脑手柄。";
+        else result.message+=std::format(L"\n陀螺仪 {} · 触摸板 {} · 扳机 {} · 触觉 {}{}",c.gyro&&c.accel?L"已启用":L"不可用",c.touch?L"可用":L"不可用",c.triggers?L"已接入":L"不可用",c.haptics?L"端点已打开":L"未打开",c.calibrating?L" · 校准中（返回播放器静置）":L"");
+        return result;
+    }
     result.active=s.remotePlay&&(s.running||s.transport==veyra::engine::TransportState::Opening||s.transport==veyra::engine::TransportState::Stopping);
     result.message=s.failed?s.status:s.remoteRecovering?s.remoteRecoveryMessage:s.remotePlay&&s.running?L"PS5 画面已进入播放；关闭此面板不停止串流。":result.active?s.status:L"PS5 串流已停止，可以重新连接。";
     if(s.remotePlay&&s.running){
@@ -683,7 +703,7 @@ case RemotePlay:veyra::ui::showRemotePlayPanel(hwnd,[](veyra::source::RemotePlay
         else if(!c.connected)result.message+=L"\n未检测到电脑手柄。";
         else result.message+=std::format(L"\n陀螺仪 {} · 触摸板 {} · 扳机 {} · 触觉 {}{}",c.gyro&&c.accel?L"已启用":L"不可用",c.touch?L"可用":L"不可用",c.triggers?L"已接入":L"不可用",c.haptics?L"端点已打开":L"未打开",c.calibrating?L" · 校准中（返回播放器静置）":L"");
     }return result;
-},[]{engine.stop();},[]{return remoteController.calibrate();});break;
+},[]{engine.stopRemotePlayControl();engine.stop();},[]{return remoteController.calibrate();},std::move(captureCallbacks));break;}
 #endif
 case Capture:case ProRailCapture:veyra::ui::showCapturePanel(hwnd,[](const std::wstring& path){openFile(path);layout();},[]{return (uiState.enhanced?engine.snapshot().desired:uiState.configured).forceSdrPreview;},[](bool enabled){auto s=uiState.enhanced?engine.snapshot().desired:uiState.configured;s.forceSdrPreview=enabled;return applySettings(s);},[]{return int((uiState.enhanced?engine.snapshot().desired:uiState.configured).captureAudio);},[](int mode){auto s=uiState.enhanced?engine.snapshot().desired:uiState.configured;s.captureAudio=static_cast<veyra::engine::CaptureAudioIngress>(std::clamp(mode,0,2));return applySettings(s);},[]{return (uiState.enhanced?engine.snapshot().desired:uiState.configured).captureFlipVertical;},[](bool enabled){auto s=uiState.enhanced?engine.snapshot().desired:uiState.configured;s.captureFlipVertical=enabled;return applySettings(s);},[]{return int((uiState.enhanced?engine.snapshot().desired:uiState.configured).captureBuffer);},[](int mode){auto s=uiState.enhanced?engine.snapshot().desired:uiState.configured;s.captureBuffer=static_cast<veyra::source::CaptureBufferMode>(std::clamp(mode,0,2));return applySettings(s);});break;
 case Export:if(uiState.mode==veyra::ui::Mode::Professional)startVideoExport(false);break;
@@ -702,7 +722,7 @@ __declspec(noinline) LRESULT windowTimer(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp)
 switch(msg){
 case WM_TIMER:
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-if(wp==ControllerTimer){const auto state=engine.snapshot();if(state.remotePlay&&(state.running||state.transport==veyra::engine::TransportState::Opening)){const bool focused=GetForegroundWindow()==hwnd;engine.remotePlayController(remoteController.poll(focused));remoteController.feedback(engine.remotePlayFeedback(),focused);}else{engine.remotePlayController({});remoteController.stop();KillTimer(hwnd,ControllerTimer);}return 0;}
+if(wp==ControllerTimer){const auto state=engine.snapshot();if((state.remotePlay&&(state.running||state.transport==veyra::engine::TransportState::Opening))||state.remoteControl){const bool focused=GetForegroundWindow()==hwnd;engine.remotePlayController(remoteController.poll(focused));remoteController.feedback(engine.remotePlayFeedback(),focused);}else{engine.remotePlayController({});remoteController.stop();KillTimer(hwnd,ControllerTimer);}return 0;}
 #endif
 {if(wp==TransitionTimer){transition.sample(GetTickCount64());if(!transition.running){endTransition();veyra::log::info("ui-transition","completed; final layout and swapchain resize released");}layout();return 0;}
 if(full&&fullControls&&!menuOpen&&!veyra::ui::popupSelectorOpen()&&!GetCapture()&&GetTickCount64()-pointerTick>1600){POINT p{};GetCursorPos(&p);ScreenToClient(hwnd,&p);RECT r{};GetClientRect(hwnd,&r);if(p.y<r.bottom-veyra::ui::dip(hwnd,98)||p.x<0||p.x>=r.right||p.y>=r.bottom){fullControls=false;layout();if(GetForegroundWindow()==hwnd)SetCursor(nullptr);veyra::log::info("ui-fullscreen","controls hidden; video and subtitles only");}}

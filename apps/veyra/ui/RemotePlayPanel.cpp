@@ -15,10 +15,15 @@
 namespace veyra::ui {
 namespace {
 HWND window=nullptr;HFONT font=nullptr;
-enum {Host=1,Account,PairPin,Quality,CodecChoice,Pair,Connect,Cancel,Scan,Wake,LoginPin,SendPin,StatusText,Help,Bitrate,Forget,ViewOnly,Calibrate,DecodeChoice,LoginPsn,CompletePsn,ForgetPsn,SamplingChoice};
+enum {Host=1,Account,PairPin,Quality,CodecChoice,Pair,Connect,Cancel,Scan,Wake,LoginPin,SendPin,StatusText,Help,Bitrate,Forget,ViewOnly,Calibrate,DecodeChoice,LoginPsn,CompletePsn,ForgetPsn,SamplingChoice,UseCapture};
+constexpr int CaptureIdBase=600,CaptureTimerId=2;
+CaptureConfigBlock captureBlock;
+bool captureExpanded=false;
 uint64_t psnLoginStarted=0,psnRefreshAfter=0;
 std::function<bool()> calibrate;
 std::function<void(source::RemotePlayConnectDesc)> connect;
+std::function<void(source::RemotePlayConnectDesc,const std::wstring&)> connectCapture;
+CaptureConfigBlock::Callbacks captureSettings;
 std::function<void(std::string)> login;
 std::function<RemotePlayPanelStatus()> connectionStatus;std::function<void()> disconnect;bool watching=false;
 std::jthread worker;std::atomic<bool> done=false;bool busy=false,closing=false;
@@ -73,7 +78,10 @@ remoteplay::VideoProfile video(){
     p.width=q<2?1280:1920;p.height=q<2?720:1080;p.fps=(q==0||q==2)?30:60;
     p.codec=static_cast<remoteplay::Codec>(std::clamp<int>(int(SendDlgItemMessageW(window,CodecChoice,CB_GETCURSEL,0,0)),0,2));const auto rate=SendDlgItemMessageW(window,Bitrate,CB_GETCURSEL,0,0);p.bitrateKbps=bitrates[std::clamp<int>(int(rate),0,7)];return p;
 }
-void buttons(){for(int id:{Pair,Connect,Scan,Wake,Host,Account,PairPin,Quality,CodecChoice,Bitrate,SamplingChoice,Forget,LoginPsn,CompletePsn,ForgetPsn})EnableWindow(GetDlgItem(window,id),!busy);EnableWindow(GetDlgItem(window,Cancel),busy);}
+void buttons(){for(int id:{Pair,Connect,Scan,Wake,Host,Account,PairPin,Quality,CodecChoice,Bitrate,SamplingChoice,Forget,LoginPsn,CompletePsn,ForgetPsn})EnableWindow(GetDlgItem(window,id),!busy);EnableWindow(GetDlgItem(window,Cancel),busy);
+    // The combined capture mode uses a fixed low keepalive profile; the video
+    // request controls are meaningless there and stay disabled.
+    if(captureExpanded)for(int id:{Quality,CodecChoice,Bitrate,DecodeChoice,SamplingChoice})EnableWindow(GetDlgItem(window,id),FALSE);}
 template<class Work> void launch(Work work){
     if(busy)return;if(worker.joinable())worker.join();busy=true;done=false;buttons();SetDlgItemTextW(window,StatusText,L"正在处理…可随时取消");
     worker=std::jthread([work=std::move(work)](std::stop_token stop)mutable{
@@ -90,7 +98,17 @@ void arrange(){
     move(Quality,160,150,220,150);move(CodecChoice,392,150,160,150);
     move(Connect,160,199,180,36);move(Wake,352,199,200,36);
     move(LoginPin,160,250,180,28);move(SendPin,352,250,200,30);
-    move(Bitrate,160,295,180,180);move(Forget,352,295,80,32);move(Cancel,440,295,112,32);move(StatusText,20,341,530,64);move(ViewOnly,20,408,400,28);move(Calibrate,432,408,120,28);move(DecodeChoice,160,442,392,150);move(SamplingChoice,160,486,392,120);move(Help,20,529,530,86);
+    move(Bitrate,160,295,180,180);move(Forget,352,295,80,32);move(Cancel,440,295,112,32);move(StatusText,20,341,530,64);
+    move(ViewOnly,20,408,400,28);move(UseCapture,20,436,530,28);move(Calibrate,432,408,120,28);
+    move(DecodeChoice,160,470,392,150);move(SamplingChoice,160,514,392,120);move(Help,20,547,530,68);
+    if(captureExpanded)captureBlock.arrangeCompact(20,660,530);
+}
+void applyCaptureExpanded(HWND h){
+    captureBlock.setVisible(captureExpanded);
+    EnableWindow(GetDlgItem(h,ViewOnly),!captureExpanded&&!busy);
+    if(captureExpanded)CheckDlgButton(h,ViewOnly,BST_UNCHECKED);
+    SetWindowPos(h,nullptr,0,0,dip(h,590),dip(h,captureExpanded?1100:709),SWP_NOMOVE|SWP_NOZORDER);
+    arrange();
 }
 LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM wp,LPARAM lp)try{switch(msg){
 case WM_CREATE:{window=h;closing=false;font=makeFont(h);titleTheme(h);
@@ -99,6 +117,7 @@ case WM_CREATE:{window=h;closing=false;font=makeFont(h);titleTheme(h);
         SendMessageW(c,WM_SETFONT,WPARAM(font),TRUE);themeControl(c);return c;
     };
     add(L"BUTTON",L"仅观看（手柄连接 PS5；更改后需重新连接）",ViewOnly,BS_AUTOCHECKBOX|WS_TABSTOP);
+    add(L"BUTTON",L"启用采集卡（画面与声音走采集卡，PS5 远程仅作控制；更改后需重新连接）",UseCapture,BS_AUTOCHECKBOX|WS_TABSTOP);
     add(L"BUTTON",L"校准陀螺仪",Calibrate,BS_PUSHBUTTON|WS_TABSTOP);
     add(L"STATIC",L"解码（重连生效）",106,0,20,445,138,25);
     add(L"COMBOBOX",L"",DecodeChoice,CBS_DROPDOWNLIST|WS_TABSTOP);
@@ -149,8 +168,14 @@ case WM_CREATE:{window=h;closing=false;font=makeFont(h);titleTheme(h);
         {ViewOnly,L"只观看，不向PS5转发电脑手柄输入。不能保证同账号手柄仍能直连主机，这是PS5会话规则。"},
         {Calibrate,L"手柄放稳后校准陀螺仪，让镜头别自己散步。"},
         {DecodeChoice,L"自动优先硬解，失败回软件；强制硬解失败会报错。软件解码主要用CPU，硬解用视频解码单元。重连生效。"},
-        {SamplingChoice,L"精细模式按位置还原颜色采样，放大时用双三次插值并限制边缘光晕；1:1保留原像素。它不改变PS5码率，也不是AI超分：源头丢掉的细节，不能凭空变回来。会增加GPU工作；兼容模式可切回原有采样作对比。重连生效。"}});
-    watching=connectionStatus().active;buttons();arrange();SetTimer(h,1,100,nullptr);
+        {SamplingChoice,L"精细模式按位置还原颜色采样，放大时用双三次插值并限制边缘光晕；1:1保留原像素。它不改变PS5码率，也不是AI超分：源头丢掉的细节，不能凭空变回来。会增加GPU工作；兼容模式可切回原有采样作对比。重连生效。"},
+        {UseCapture,L"组合模式：勾选后用采集卡的HDMI画面和声音，PS5远程连接只负责把手柄输入发给主机。连接顺序是先连PS5再拉起采集画面；串流会以720p/30fps/H.264/5Mbps低规格保活（协议无法彻底关闭视频，本机收到后直接丢弃，不宣称零带宽）。取消勾选恢复完整串流。"}});
+    auto blockHelp=captureBlock.helpEntries();installDialogHelp(h,{blockHelp.begin(),blockHelp.end()});
+    captureBlock.create(h,font,CaptureIdBase,CaptureTimerId,captureSettings);
+    captureBlock.setVisible(false);
+    captureExpanded=GetPrivateProfileIntW(L"RemotePlay",L"UseCapture",0,(remoteplay::profileDirectory()/L"settings.ini").c_str())!=0;
+    CheckDlgButton(h,UseCapture,captureExpanded?BST_CHECKED:BST_UNCHECKED);
+    watching=connectionStatus().active;buttons();applyCaptureExpanded(h);SetTimer(h,1,100,nullptr);
     if(auto auth=remoteplay::loadPsnAuthorization()){
         psnRefreshAfter=GetTickCount64()+300000;
         const bool fillAccount=currentProfile.empty();
@@ -160,7 +185,9 @@ case WM_CREATE:{window=h;closing=false;font=makeFont(h);titleTheme(h);
             return out;});
     }
     return 0;}
-case WM_TIMER:if(busy&&done){if(worker.joinable())worker.join();busy=false;Outcome result;{std::lock_guard lock(mutex);result=std::move(outcome);}if(!result.savedPath.empty()){currentProfile=result.savedPath;WritePrivateProfileStringW(L"RemotePlay",L"LastProfile",currentProfile.filename().c_str(),(remoteplay::profileDirectory()/L"settings.ini").c_str());refreshProfiles();}buttons();SetDlgItemTextW(h,StatusText,result.message.c_str());if(result.account){auto id=remoteplay::accountIdToBase64(*result.account);SetDlgItemTextW(h,Account,std::wstring(id.begin(),id.end()).c_str());}if(!result.hosts.empty()){
+case WM_TIMER:
+    if(wp==CaptureTimerId){captureBlock.poll();return 0;}
+    if(busy&&done){if(worker.joinable())worker.join();busy=false;Outcome result;{std::lock_guard lock(mutex);result=std::move(outcome);}if(!result.savedPath.empty()){currentProfile=result.savedPath;WritePrivateProfileStringW(L"RemotePlay",L"LastProfile",currentProfile.filename().c_str(),(remoteplay::profileDirectory()/L"settings.ini").c_str());refreshProfiles();}buttons();SetDlgItemTextW(h,StatusText,result.message.c_str());if(result.account){auto id=remoteplay::accountIdToBase64(*result.account);SetDlgItemTextW(h,Account,std::wstring(id.begin(),id.end()).c_str());}if(!result.hosts.empty()){
         auto selected=remoteplay::loadProfile(currentProfile);bool matched=false;
         if(selected){for(auto& found:result.hosts){
             std::transform(found.consoleId.begin(),found.consoleId.end(),found.consoleId.begin(),[](unsigned char c){return char(std::tolower(c));});
@@ -183,7 +210,17 @@ case WM_TIMER:if(busy&&done){if(worker.joinable())worker.join();busy=false;Outco
         if(remoteplay::loadPsnAuthorization())launch([](std::stop_token stop){auto result=remoteplay::refreshPsn(stop);Outcome out;out.message=result.ok?L"PSN授权已就绪；已配对主机直接连接。":std::format(L"PSN刷新失败（{}）；局域网配对不受影响。",result.error);return out;});
     }
     if(window&&watching&&!busy){auto state=connectionStatus();SetDlgItemTextW(h,Connect,state.active?L"应用设置并重连":L"连接并观看");SetDlgItemTextW(h,StatusText,state.message.c_str());SetDlgItemTextW(h,Cancel,state.active?L"断开连接":L"取消操作");EnableWindow(GetDlgItem(h,Cancel),state.active);if(!state.active)watching=false;}return 0;
-case WM_COMMAND:switch(LOWORD(wp)){
+case WM_COMMAND:
+    if(LOWORD(wp)>=CaptureIdBase&&LOWORD(wp)<CaptureIdBase+40){captureBlock.handleCommand(wp,lp);return 0;}
+    switch(LOWORD(wp)){
+    case UseCapture:if(HIWORD(wp)==BN_CLICKED){
+        // Pure UI toggle: safe while a pairing/PSN worker runs; only the
+        // connect path itself is gated on busy.
+        captureExpanded=IsDlgButtonChecked(h,UseCapture)==BST_CHECKED;
+        WritePrivateProfileStringW(L"RemotePlay",L"UseCapture",captureExpanded?L"1":L"0",(remoteplay::profileDirectory()/L"settings.ini").c_str());
+        applyCaptureExpanded(h);buttons();
+        SetDlgItemTextW(h,StatusText,captureExpanded?L"组合模式：连接后手柄控制 PS5，画面与声音走采集卡。串流仅保留低码率保活通道，格式/码率设置已停用。":L"已切回完整串流模式：连接后使用上方的画面与码率设置。");
+    }break;
     case LoginPsn:{if(busy)break;auto url=remoteplay::psnLoginUrl();if(INT_PTR(ShellExecuteW(h,L"open",url.c_str(),nullptr,nullptr,SW_SHOWNORMAL))>32){psnLoginStarted=GetTickCount64();SetDlgItemTextW(h,StatusText,L"在Sony网页完成登录，复制最终回调URL，再点“从剪贴板提交登录结果”。");}else SetDlgItemTextW(h,StatusText,L"无法打开浏览器，请检查默认浏览器设置。");break;}
     case CompletePsn:{
         if(busy)break;
@@ -205,7 +242,25 @@ case WM_COMMAND:switch(LOWORD(wp)){
             auto result=remoteplay::pairLocalPs5(host,account,pin,stop);SecureZeroMemory(pin.data(),pin.size());Outcome out;
             if(result.result.ok&&!stop.stop_requested()){remoteplay::NativeConnectRequest request;request.host=host;request.video=format;request.credentials=std::move(result.credentials);for(auto byte:result.mac)request.consoleId+=std::format("{:02x}",byte);if(request.consoleId=="000000000000")request.consoleId.clear();if(remoteplay::saveProfile(targetPath,request)){out.savedPath=targetPath;out.message=L"配对成功并已加密保存，可以连接。";}else out.message=L"配对成功，但保存失败。请检查目录权限后重试。";}
             else out.message=result.canceled||stop.stop_requested()?L"已取消配对":std::format(L"配对失败（{}），检查 PS5 配对码、Account ID 与网络。",result.result.code);return out;});break;}
-    case Connect:{if(busy)break;auto saved=remoteplay::loadProfile(profilePath());auto host=ascii(Host);if(!saved||!remoteplay::validHost(host)){SetDlgItemTextW(h,StatusText,L"请先完成配对，并填写有效主机地址。");break;}saved->host=host;saved->video=video();saved->viewOnly=IsDlgButtonChecked(h,ViewOnly)==BST_CHECKED;if(!remoteplay::saveProfile(currentProfile,*saved)){SetDlgItemTextW(h,StatusText,L"保存连接设置失败，请检查目录权限。");break;}source::RemotePlayConnectDesc desc;saved->viewOnly=IsDlgButtonChecked(h,ViewOnly)==BST_CHECKED;desc.request=std::move(*saved);const auto decode=std::clamp<int>(int(SendDlgItemMessageW(h,DecodeChoice,CB_GETCURSEL,0,0)),0,2);desc.decodeMode=static_cast<source::RemotePlayConnectDesc::DecodeMode>(decode);WritePrivateProfileStringW(L"RemotePlay",L"DecodeMode",std::to_wstring(decode).c_str(),(remoteplay::profileDirectory()/L"settings.ini").c_str());desc.highQualitySampling=SendDlgItemMessageW(h,SamplingChoice,CB_GETCURSEL,0,0)==1;WritePrivateProfileStringW(L"RemotePlay",L"FineSampling",desc.highQualitySampling?L"1":L"0",(remoteplay::profileDirectory()/L"settings.ini").c_str());connect(std::move(desc));watching=true;EnableWindow(GetDlgItem(h,Cancel),TRUE);SetDlgItemTextW(h,StatusText,L"连接已开始。需要登录 PIN 时在下方提交。关闭面板不停止串流。");break;}
+    case Connect:{if(busy)break;auto saved=remoteplay::loadProfile(profilePath());auto host=ascii(Host);if(!saved||!remoteplay::validHost(host)){SetDlgItemTextW(h,StatusText,L"请先完成配对，并填写有效主机地址。");break;}saved->host=host;
+        const bool combined=IsDlgButtonChecked(h,UseCapture)==BST_CHECKED;
+        // The combined mode runs a fixed low keepalive profile; the saved
+        // profile keeps the user's normal streaming choices untouched.
+        if(combined)saved->viewOnly=false;
+        else{saved->video=video();saved->viewOnly=IsDlgButtonChecked(h,ViewOnly)==BST_CHECKED;}
+        if(!remoteplay::saveProfile(currentProfile,*saved)){SetDlgItemTextW(h,StatusText,L"保存连接设置失败，请检查目录权限。");break;}source::RemotePlayConnectDesc desc;desc.request=std::move(*saved);const auto decode=std::clamp<int>(int(SendDlgItemMessageW(h,DecodeChoice,CB_GETCURSEL,0,0)),0,2);desc.decodeMode=static_cast<source::RemotePlayConnectDesc::DecodeMode>(decode);WritePrivateProfileStringW(L"RemotePlay",L"DecodeMode",std::to_wstring(decode).c_str(),(remoteplay::profileDirectory()/L"settings.ini").c_str());desc.highQualitySampling=SendDlgItemMessageW(h,SamplingChoice,CB_GETCURSEL,0,0)==1;WritePrivateProfileStringW(L"RemotePlay",L"FineSampling",desc.highQualitySampling?L"1":L"0",(remoteplay::profileDirectory()/L"settings.ini").c_str());
+        if(combined){
+            desc.request.video=remoteplay::VideoProfile{};
+            desc.request.video.width=1280;desc.request.video.height=720;desc.request.video.fps=30;
+            desc.request.video.codec=remoteplay::Codec::H264;desc.request.video.bitrateKbps=5000;
+            desc.request.viewOnly=false;
+            auto capturePath=captureBlock.capturePath();
+            if(capturePath.empty()){SetDlgItemTextW(h,StatusText,(captureBlock.statusText().empty()?std::wstring(L"请先选择采集卡的视频设备与格式，再点连接。"):captureBlock.statusText()).c_str());break;}
+            connectCapture(std::move(desc),std::move(capturePath));
+            watching=true;EnableWindow(GetDlgItem(h,Cancel),TRUE);
+            SetDlgItemTextW(h,StatusText,L"组合模式连接已开始：先连 PS5 控制通道，成功后自动拉起采集画面。需要登录 PIN 时在下方提交。关闭面板不停止串流。");break;
+        }
+        connect(std::move(desc));watching=true;EnableWindow(GetDlgItem(h,Cancel),TRUE);SetDlgItemTextW(h,StatusText,L"连接已开始。需要登录 PIN 时在下方提交。关闭面板不停止串流。");break;}
     case Cancel:if(busy&&worker.joinable())worker.request_stop();else if(watching)disconnect();break;
     case Scan:launch([](std::stop_token stop){Outcome out;auto report=remoteplay::discoverLocalPs5(stop);for(const auto& line:report.diagnostics)veyra::log::info("remoteplay-discovery",line);out.hosts=std::move(report.hosts);out.message=stop.stop_requested()?L"已取消查找":out.hosts.empty()?(report.error?std::format(L"主机搜索发生错误（{}），详情见日志；可手填 IP。",report.error):L"搜索完成，未收到 PS5 回应；可手填 IP，检查主机开机和局域网。"):L"已填入发现的 PS5 地址。多台主机可手工输入目标 IP。";return out;});break;
     case Wake:{if(busy)break;auto saved=remoteplay::loadProfile(profilePath());if(!saved){SetDlgItemTextW(h,StatusText,L"需要先配对才能唤醒。");break;}saved->host=ascii(Host);launch([request=std::move(*saved)](std::stop_token stop){Outcome out;if(stop.stop_requested()){out.message=L"已取消唤醒";return out;}auto r=remoteplay::wakeLocalPs5(request);out.message=r.ok?L"已发送唤醒请求，等待 PS5 启动后点击连接。":std::format(L"唤醒请求失败（{}）",r.code);return out;});break;}
@@ -213,14 +268,17 @@ case WM_COMMAND:switch(LOWORD(wp)){
     }return 0;
 case WM_CTLCOLORSTATIC:case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORBTN:return colors(msg,wp,lp);
 case WM_CLOSE:if(busy){closing=true;worker.request_stop();SetDlgItemTextW(h,StatusText,L"正在取消并清理连接…");}else DestroyWindow(h);return 0;
-case WM_DESTROY:if(worker.joinable()){worker.request_stop();worker.join();}KillTimer(h,1);DeleteObject(font);window=nullptr;busy=false;return 0;
+case WM_DESTROY:captureBlock.destroy();if(worker.joinable()){worker.request_stop();worker.join();}KillTimer(h,1);DeleteObject(font);window=nullptr;busy=false;return 0;
 case WM_SIZE:arrange();return 0;
 }return DefWindowProcW(h,msg,wp,lp);}
 catch(...){veyra::log::error("remoteplay-ui","Operation failed; no credentials logged");if(msg==WM_CREATE)return -1;SetDlgItemTextW(h,StatusText,L"操作失败，请检查用户目录权限；原有配对文件不会自动删除。");return 0;}
 }
-void showRemotePlayPanel(HWND parent,std::function<void(source::RemotePlayConnectDesc)> start,std::function<void(std::string)> pin,std::function<RemotePlayPanelStatus()> status,std::function<void()> stop,std::function<bool()> calibration){
+void showRemotePlayPanel(HWND parent,std::function<void(source::RemotePlayConnectDesc)> start,std::function<void(source::RemotePlayConnectDesc,const std::wstring&)> startWithCapture,std::function<void(std::string)> pin,std::function<RemotePlayPanelStatus()> status,std::function<void()> stop,std::function<bool()> calibration,CaptureConfigBlock::Callbacks captureSettingsCallbacks){
     calibrate=std::move(calibration);
-    connect=std::move(start);login=std::move(pin);connectionStatus=std::move(status);disconnect=std::move(stop);if(window){SetForegroundWindow(window);return;}
+    connect=std::move(start);connectCapture=std::move(startWithCapture);captureSettings=captureSettingsCallbacks;
+    // The embedded block re-reads the live settings through these pairs on
+    // every timer tick, so copy rather than move keeps them valid.
+    login=std::move(pin);connectionStatus=std::move(status);disconnect=std::move(stop);if(window){SetForegroundWindow(window);return;}
     WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraRemotePlaySetup";wc.hbrBackground=panelBrush();wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);RegisterClassW(&wc);
     CreateWindowExW(WS_EX_TOOLWINDOW,wc.lpszClassName,L"PS5 · Remote Play",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,dip(parent,590),dip(parent,709),parent,nullptr,wc.hInstance,nullptr);
 }
