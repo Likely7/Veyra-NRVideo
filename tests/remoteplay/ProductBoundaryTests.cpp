@@ -4,6 +4,7 @@
 #include <string_view>
 #include <SDL3/SDL.h>
 #include <cmath>
+#include <cstdio>
 #include <iostream>
 extern "C" {
 #include <libavutil/frame.h>
@@ -127,6 +128,16 @@ int main(int argc,char** argv){
         return report.error&&report.hosts.empty()?5:0;
     }
     std::stop_source cancelled;cancelled.request_stop();
+    if(argc==2&&std::string_view(argv[1])=="--control-stress"){
+        for(int i=0;i<200;++i){
+            veyra::source::RemotePlaySessionSource s;veyra::source::RemotePlayConnectDesc request;
+            request.controlOnly=true;request.request.host="invalid://host";
+            if(s.connect(std::move(request)))return 11;
+            s.close();
+        }
+        std::cout<<"CONTROL_STRESS_PASS iterations=200 PS5_NOT_TESTED=1\n";
+        return 0;
+    }
     if(!veyra::remoteplay::discoverLocalPs5(cancelled.get_token()).hosts.empty())return 6;
     veyra::source::RemotePlaySessionSourceTestAccess::mailbox();
     veyra::source::RemotePlaySessionSourceTestAccess::controlOnlyBoundary();

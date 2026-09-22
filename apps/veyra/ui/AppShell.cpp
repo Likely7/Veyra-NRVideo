@@ -687,7 +687,12 @@ case RemotePlay:{
         // Combined mode: the PS5 link is control-only; picture and audio come
         // from the capture card run.
         result.active=true;
-        result.message=s.remoteRecovering?s.remoteRecoveryMessage:s.capture&&s.running?L"生效：采集卡画面 · PS5 控制已连接。手柄输入发送到 PS5；画面与声音来自采集卡，不受串流画质限制。":L"PS5 控制通道存活，采集画面未在播放；点“连接并观看”重新拉起，或断开连接结束控制。";
+        if(s.remotePlayState==int(veyra::remoteplay::SessionState::Failed)){
+            // The control link died (console unreachable, refused or timed
+            // out); never claim the combined link is working.
+            result.message=(s.remoteRecoveryMessage.empty()?std::wstring(L"PS5 控制通道未连上或已断开。"):s.remoteRecoveryMessage)
+                +L"\n采集画面不受影响。确认主机已开机（必要时用“唤醒已配对 PS5”），再点“连接并观看”重建控制通道。";
+        }else result.message=s.remoteRecovering?s.remoteRecoveryMessage:s.capture&&s.running?L"生效：采集卡画面 · PS5 控制已连接。手柄输入发送到 PS5；画面与声音来自采集卡，不受串流画质限制。":L"PS5 控制通道存活，采集画面未在播放；点“连接并观看”重新拉起，或断开连接结束控制。";
         const auto c=remoteController.capabilities();
         if(!c.connected)result.message+=L"\n未检测到电脑手柄。";
         else result.message+=std::format(L"\n陀螺仪 {} · 触摸板 {} · 扳机 {} · 触觉 {}{}",c.gyro&&c.accel?L"已启用":L"不可用",c.touch?L"可用":L"不可用",c.triggers?L"已接入":L"不可用",c.haptics?L"端点已打开":L"未打开",c.calibrating?L" · 校准中（返回播放器静置）":L"");

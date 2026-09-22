@@ -17,6 +17,7 @@ bool RemotePlaySessionSource::connect(RemotePlayConnectDesc desc) {
     return started_;
 }
 void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc desc) {
+    alive_.store(true);
     RemotePlaySource source;
     remoteplay::StreamRecovery recovery;
     bool repeatedTestDisconnect=false;
@@ -81,7 +82,9 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                     }
                     native=source.nativeSnapshot();
                     const auto snapshot=source.sessionSnapshot();
-                    if(now>=nextNativeLog||!native.connected){nextNativeLog=now+std::chrono::seconds(1);
+                    // Time-gated only: keying on !native.connected logged every
+                    // ~5 ms while the ctrl link was down (field log 2026-09-22).
+                    if(now>=nextNativeLog){nextNativeLog=now+std::chrono::seconds(1);
                         log::info("remoteplay-transport",std::format("attempt={} connected={} videoCallbacks={} audioCallbacks={} callbackRejected={} packetWindowReceived={} packetWindowLost={} upstreamWarnings={} upstreamErrors={} transportErrors={} assemblyErrors={} quitReason={} apiError={} (control-only; media discarded on receipt)",recovery.reconnects(),native.connected,native.videoCallbacks,native.audioCallbacks,native.callbackRejected,native.packetReceived,native.packetLost,native.warnings,native.errors,native.transportErrors,native.assemblyErrors,native.lastQuitReason,native.lastApiError));}
                     {std::lock_guard lock(mutex_);snapshot_=snapshot;feedback_.merge(source.takeFeedback());
                         rates_.received=receivedBase+native.videoCallbacks;
@@ -225,6 +228,9 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
     if(stop.stop_requested())break;
     }
     {std::lock_guard lock(mutex_);recovery_.active=false;}
+    // run() has no early return; this marks the owner loop (including its
+    // internal reconnect retries) as finished for reuse gating.
+    alive_.store(false);
 }
 void RemotePlaySessionSource::publishDecoded(const AVFrame* frame,pipeline::FramePacket packet,const SourceInfo& info){
     auto* cloned=av_frame_clone(frame);if(!cloned)throw std::bad_alloc();

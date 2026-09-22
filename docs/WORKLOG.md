@@ -1,5 +1,177 @@
 # Veyra 工作记录
 
+## 2026-09-22 Settings scroll round 2: wheel carry, band virtualization, async repaint
+
+User still felt slight jank after the page-scoped move fix. Measured remaining
+per-event cost was dominated by (a) moving every visible-page row per notch,
+(b) the synchronous `RDW_ALLCHILDREN|RDW_UPDATENOW` full repaint, (c) a full
+outer-window invalidate per scroll, (d) integer wheel-delta truncation. All in
+`apps/veyra/SettingsWindow.cpp`:
+
+1. `WM_MOUSEWHEEL` now accumulates sub-notch deltas (`wheelCarry`) and skips
+   `arrange()` entirely while the carry has not reached a full notch; a notch is
+   still 36 DIP. High-resolution wheels no longer pay full cost for zero movement.
+2. Viewport band virtualization: while an arrange is "incremental" (same page,
+   width, fold mask, mixer band/mode, B&W switch, help fold, and scroll moved at
+   most one notch since the previous arrange), only rows intersecting
+   `[scroll-288, scroll+viewport+288]` join the Defer batch. Anything else — page
+   switch, resize, fold/mixer toggle, scrollbar-drag jumps, first layout — falls
+   back to a full pass, so stale off-band rows cannot reappear in view. The
+   snapshot lives in `arrangeScroll/arrangeWidth/arrangePage/arrangeFold/`
+   `arrangeMixer/arrangeHelp`, reset in WM_DESTROY. The 288-DIP reveal band covers
+   the 208-DIP colour wheels plus a notch.
+3. Scroll repaint is fully asynchronous: batch moves keep their painted pixels
+   (SWP_NOCOPYBITS/SWP_NOREDRAW dropped from the row batch) and
+   `RedrawWindow(body, RDW_INVALIDATE)` (no UPDATENOW, no ALLCHILDREN) lets a
+   burst of notches coalesce into few queue-driven paints. The outer window only
+   invalidates when width/page changed.
+
+Debugging note (evidence kept in `probe5.py` + app log): an intermediate probe
+tracked control id 1000, which sits at logical y=646 and is clipped off-screen at
+low scroll — band virtualization correctly does not move it, which first looked
+like "scroll stops working". Movement probes must track rows actually inside the
+viewport (`scroll_driver.py` now picks in-view markers adaptively).
+
+Measured (`timing-final2.json`, DPI 192, no media; baseline = round-1 numbers):
+per-event p50 增强 32.1→9.7 ms (spaced) / 13.5 ms moving; 色彩 41.1→12.2 ms;
+音频 12.6→7.1 ms; zero-carry deltas ~0.05 ms; 50-event burst 1326→938 ms (增强,
+53 events/s) and 2144→776 ms (色彩, 64 events/s). Movement semantics verified on
+an in-viewport row: 6×delta40 → 144 px, 12×delta10 → 72 px, 1×120 → 72 px.
+
+Correctness: probe3 page cycles stable (85/136/12/5/85 twice), colour fold
+136→112→136 reversible, per-page visible counts unchanged from the original
+layout. Visual check after an 8-notch burst: immediate and settled screenshots are
+byte-identical (async paints complete within ~0.3 s), rows aligned, no overlap or
+ghosting, scrollbar thumb visible (final-burst-*.png + analyze_image transcript).
+`ui-settings-page-scope.py` still blocked by the missing NGX runtime config on
+this machine (`ngx-local.json missing` → multiplier falls back to 1), unchanged
+from round 1. Build: `build-clean.log` exit 0, exe 15:00. Nothing committed.
+
+## 2026-09-22 Settings scrollbar visibility bump
+
+User feedback after the scroll fix: the inspector scrollbar thumb was not obvious
+enough. Change in `apps/veyra/SettingsWindow.cpp` `bodyProc` WM_PAINT only: thumb
+rail widened from 3 DIP (`right-5..right-2`) to 5 DIP (`right-8..right-3`) and
+recolored from `line` RGB(58,60,63) to the panel's existing dim-text gray
+RGB(120,125,132); corner radius and minimum 30-DIP thumb unchanged; the 12-DIP drag
+grab zone already covers the wider rail. Rebuilt `veyra` target
+(`build-scrollbar.log`, exit 0, exe 14:42).
+
+Verification (screenshot pixel sampling, `shot.py` + `thumb_runs.ps1`,
+`scrollbar-before/after.png`, colour page scrolled mid-way at 200% DPI): the old
+thumb produced no detectable flat run in the right-edge strip — RGB(58,60,63) is
+indistinguishable from the ~56 acrylic backdrop; the new thumb renders as a
+58 px run of exactly RGB(120,125,132), ~10 px wide with antialiased edges.
+Observed but not changed this round: `LiveStatusPanel.h:189` draws its own 2-DIP
+thumb filled with `panelBrush()` (same color as its background), which is likewise
+near-invisible — separate decision needed if that one should match.
+
+## 2026-09-22 Settings scroll fix: only the current page's visible controls move
+
+User decision after the ETW round: `arrange()` should only move the current page's
+visible controls. Implemented in `apps/veyra/SettingsWindow.cpp` (only file changed):
+
+- `Item` gains `placed` (init true — `add()` creates controls WS_VISIBLE, so the first
+  arrange must still position/hide every row once).
+- The Defer batch in `arrange()` skips non-fixed rows that are `!visible && !placed`,
+  and updates `placed=visible`. Off-page and folded rows are therefore hidden exactly
+  once and then never re-enter the per-wheel-event batch; page switches and fold
+  toggles re-show them because those rows still carry `placed=true` until an arrange
+  hides them.
+
+Build: full `veyra-build-x64-release.cmd` cannot complete on this machine because
+`veyra_fsr_probe`/`veyra_fsr_upscale_probe` need the absent
+`third_party_local/amd/FidelityFX-SDK-2.3.0` (pre-existing local-deps gap, tool
+targets only, unrelated to this change). Built the `veyra` target via vcvars + cmake
+wrapper `out/logs/settings-scroll-etw-20260922/build-veyra.cmd`
+(log `build-veyra-target.log`, exit 0, exe 14:32).
+
+Measured with the same driver (`scroll_driver.py --mode timing`, DPI 192, no media;
+`timing.json` = before, `timing-after.json` = after):
+
+- Per wheel event p50: 增强 110.6→32.1 ms, 色彩 112.6→41.1 ms, 音频 33.6→12.6 ms;
+  zero-movement truncated deltas 32→14 ms (增强) / 51→23 ms (色彩).
+- 50-event burst wall: 增强 3422→1326 ms (~14.6→37.7 events/s), 色彩 5179→2144 ms,
+  音频 1775→699 ms.
+- Remaining above one 60 Hz frame on 增强/色彩 pages: leftover cost is the forced
+  synchronous repaint (`RDW_ALLCHILDREN|RDW_UPDATENOW`) of visible rows plus the
+  in-memory rowResets/layout loops; next levers if needed: wheel remainder
+  accumulation and async/targeted invalidation (not implemented this round).
+
+Correctness: per-page visible counts identical to the pre-change build (85/136/5 in
+the driver; 85/136/12/5 stable across two full page cycles in `probe3.py`); colour
+section fold toggles 136→112→136 reversibly with scrolls interleaved; full-notch
+movement still exactly 72 px; small-delta truncation behavior unchanged (that defect
+is still present by design scope).
+
+`scripts/acceptance/ui-settings-page-scope.py` (media staged from
+`REAMDE MP4.mp4` → `logs/ui-repair-v3/glass-video.mp4`): FAILS at the
+`multiplier=2` GPU-log assertion — environmental, not this change: the app logs
+`[graph] ngx-local.json missing` → backend recovery forces multiplier=1, while the
+UI chain itself demonstrably applied settings (`[settings] Applied revision=5 ...
+multiplier=1`). This machine's `runtime_local` lacks `config/ngx-local.json` and the
+NR runtime, so NGX-backed acceptance cannot pass here regardless of UI changes.
+ETW attribution and fix verification scripts kept under
+`out/logs/settings-scroll-etw-20260922/`. Nothing committed/pushed.
+
+## 2026-09-22 Settings-panel wheel jank diagnosis (measurement only, no product code changed)
+
+User reported wheel scrolling in the professional-mode right tabs (增强/运动/色彩/导出)
+feels janky; asked for cause analysis first, then authorized dynamic confirmation on the
+existing build with ETW. No source changes this round.
+
+Environment note: `E:\项目\Veyra\` does not exist on this machine (no E: drive at all,
+only C:/D:). Per the artifact rule this is reported explicitly instead of silently
+substituting; this round's artifacts live under gitignored
+`out/logs/settings-scroll-etw-20260922/` (driver scripts, timing JSON, parsed stack
+report, raw scroll.etl ~3.9 GB).
+
+Method: `scroll_driver.py` launches `out/build/x64-release/veyra.exe` with
+`--smoke-view pro --smoke-empty --smoke-seconds 240 --no-nr --no-sr --no-fg` (fresh build
+from today 13:24, b8a1d2a tree; no media, preferences untouched because smokeSeconds>0),
+finds `VeyraApp` → `VeyraInspector` → `VeyraInspectorBody`, then drives
+`WM_MOUSEWHEEL` directly (SendMessage latency phases) or via PostMessage storms
+(8 ms cadence, 6 s colour page + 5 s enhancement page) under
+`wpr -start CPU -filemode`. Analysis with WPT `xperf -i scroll.etl -a stack -butterfly
+-process veyra` (symbol download from msdl did not populate; module-level attribution
+only). Note: `--smoke-view=pro` (equals form) is not a recognized flag form — the parser
+expects space-separated `--smoke-view pro`, otherwise the string becomes autoInput.
+
+Measured (DPI 192, window 2560×1600, body has 372 child HWNDs across all pages;
+visible per page: 增强 85, 色彩 136, 音频 5):
+
+- Per wheel event (SendMessage round-trip ≈ synchronous arrange + RDW_UPDATENOW repaint):
+  增强 page p50 110.6 ms moving; 色彩 p50 112.6 ms; 音频 page (5 visible controls)
+  p50 33.6 ms — a ~33 ms floor independent of visible control count.
+- Small-delta truncation confirmed behaviorally: 6×delta=40 and 12×delta=10 produce
+  zero movement (integer `delta/120*36`) yet still cost p50 32–51 ms each; one
+  delta=120 moves exactly 72 px (36 DIP × 2.0 scale).
+- Sustained throughput: 50 events burst = 3422 ms (增强, ≈14.6 events/s) /
+  5179 ms (色彩, ≈9.7 events/s); process CPU ≈ 2.0 s / 3.1 s during bursts.
+- ETW CPU sampling during storms: 99.4% of exclusive samples in kernel
+  (ntkrnlmp/win32k), user path rooted through Win32u.DLL→user32 (i.e. NtUser*
+  syscalls from DeferWindowPos/EndDeferWindowPos/RedrawWindow/message dispatch);
+  COMCTL32 present in 70.9% of stacks, UxTheme in 42.5%, GdiPlus only 0.2%,
+  veyra.exe own code ≈0%.
+
+Conclusion (corrects the static analysis emphasis): the dominant cost is NOT the
+GdiPlus/DRAW custom painting itself but the per-event full-pass window management —
+`arrange()` (apps/veyra/SettingsWindow.cpp:1115) moves/invalidates/force-repaints all
+372 child windows every wheel notch (SWP_NOCOPYBITS, RDW_ALLCHILDREN|RDW_UPDATENOW),
+so the kernel window manager plus native control procedures (comctl32 trackbars,
+uxtheme DrawThemeTextEx) do O(all-windows) work per event. Secondary confirmed cause:
+integer wheel-delta truncation wastes full-cost events with zero movement on
+high-resolution wheels (SettingsWindow.cpp:1708; the shell's volume path at
+AppShell.cpp:1318 does accumulate remainders, the settings panel does not).
+
+Highest-leverage fix directions (not implemented): accumulate wheel remainders; make
+the forced repaint asynchronous/not-all-children; only move/re-layout the active page's
+visible windows or use ScrollWindowEx blit scrolling. GdiPlus micro-optimization is low
+priority (0.2%).
+
+Evidence: out/logs/settings-scroll-etw-20260922/{scroll_driver.py,timing.json,
+etw_driver.json,scroll.etl,butterfly.txt,parse_butterfly.py,probe*.py}.
+
 ## 2026-09-22 VS2026 startup repair
 
 User reported the project cannot start in Visual Studio 2026 (18.10.1,
@@ -5411,3 +5583,16 @@ changes, publication or shutdown.
 用户反馈勾选"启用采集卡"后配置放底部使窗口过长（1100 dip）不好操作。改为右侧栏：勾选后窗口加宽 590→990 dip、高度保持 709，PS5 原布局不动，采集区块以新增的单列窄栏布局 `CaptureConfigBlock::arrangeColumn(600,44,370)` 放置（替换原 arrangeCompact 两列布局），列首新增"采集卡 · 画面与声音来源（组合模式）"标题（静态 id 108，随区块显隐）；区块状态栏加 SS_EDITCONTROL 换行样式，窄列与弹窗中的长提示不再单行截断。
 
 验证：构建 exit0（out/tmp/ps5-capture-control-20260922/layout-build.log）；test-ui-combined.ps1 断言改为宽度增长/高度不变并加机器状态归一化（持久化 UseCapture=1 时先取消再测），REMOTEPLAY_COMBINED_UI_PASS；原版 test-ui.ps1 回归 PASS；展开态截图 panel-right-column.png 与逐控件坐标核验（右列 x=600 w=370 对齐、左列 x≤552 无重叠、面板 990×709）。真机组合链路验收仍待用户。
+
+
+### 2026-09-22 追加 2：真机反馈"提示生效但画面为 Video Signal is abnormal"的诊断与修复
+
+用户真机测试：组合模式状态提示生效，画面为采集卡无信号 OSD。读取 logs/veyra-app.log 证据：采集管线健康（4K60 NV12、60fps、零丢帧，OSD 为卡端烧录）；PS5 控制通道实际未连上（quitReason=2 控制连接失败、videoCallbacks 恒 0、30 秒无首帧超时终止）——主机大概率关机/待机或网络不可达，采集卡 HDMI 无输入同因。暴露三个软件缺陷并修复：
+
+1. 死会话复用：第一次连接失败后 owner 线程已退出，再次点连接时 openRemotePlayCapture 仍按主机/consoleId 匹配复用死对象（日志"reusing alive control session"为误报）。修复：RemotePlaySessionSource 增加 atomic alive_（run() 首尾置位），复用门控加 controlRemote_->alive()，不满足则退役并重建。
+2. 状态不报失败：remoteControl 分支只看 recovering，控制会话已 Failed（inbox state=Failed）时仍显示"生效"。修复：AppShell 组合状态增加 SessionState::Failed 分支，如实显示失败原因并提示确认主机开机/唤醒后重连。
+3. 断连日志刷屏：control-only 传输日志以 !native.connected 触发导致掉线时每 ~5ms 一行。修复：改回纯 1 秒时间门控。
+
+另：边界测试新增 --control-stress 模式（200 次控制-only connect/close 循环）。本轮某中间构建曾出现 3 次 0xC0000409 fail-fast（无符号、输出被缓冲截断），最终二进制连续 15 轮默认路径 + 200 次压力循环均通过，未能复现；若再现需抓 dump 分析，不以通过冒充已定位。
+
+验证：veyra 与 boundary 目标构建 exit0 零自有警告；boundary 默认路径 6/6 通过、--control-stress CONTROL_STRESS_PASS；test-ui-combined.ps1 与原版 test-ui.ps1 复跑通过（ui-combined-fix / ui-original-fix）。真机侧待用户按清单排查：PS5 开机（或面板唤醒）、HDMI 接采集卡输入口、必要时关闭 PS5 HDCP、输出分辨率降至采集卡支持档位。

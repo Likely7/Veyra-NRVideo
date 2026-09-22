@@ -106,7 +106,10 @@ void EngineController::openRemotePlayCapture(HWND window,source::RemotePlayConne
     // lock before this thread proceeds.
     std::shared_ptr<source::RemotePlaySessionSource> retire;bool reuse=false;
     {std::lock_guard lock(mutex_);
-        reuse=controlRemote_&&controlRemoteHost_==desc.request.host&&controlRemoteConsoleId_==desc.request.consoleId;
+        // Reuse only a LIVE control session for the same console. A session
+        // whose owner loop finished (terminal failure or stop) is retired and
+        // rebuilt; a dead object must never masquerade as a working link.
+        reuse=controlRemote_&&controlRemote_->alive()&&controlRemoteHost_==desc.request.host&&controlRemoteConsoleId_==desc.request.consoleId;
         if(!reuse)retire=std::move(controlRemote_);
         combinedCapturePath_=capturePath;
         snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_);}
