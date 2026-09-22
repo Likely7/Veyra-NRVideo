@@ -5404,3 +5404,10 @@ changes, publication or shutdown.
 - scripts/gates/delivery.ps1 未执行：脚本硬依赖 ffprobe 与 test_av_1080p/4k.mp4 夹具，均随缺失的 E 盘不存在，本机全盘检索无 ffprobe/夹具。以边界/UI/核心/合同回归补偿，不以上述替代交付门。
 
 未执行/待用户验收：真实 PS5 + USB3 采集卡组合链路（手柄控制、采集 4K/HDR 画面、HDMI 音频同步）、控制-only 保活计数日志核对、RP_IN_USE 20s 窗口重连、停止按钮后控制保持、打开普通文件自动断开控制。不得宣称零视频带宽（PS5 仍发送低码率视频）；采集画质/HDR 表现沿用采集管线既有验收状态。
+
+
+### 2026-09-22 追加：组合模式采集配置移至右侧栏（用户反馈调整）
+
+用户反馈勾选"启用采集卡"后配置放底部使窗口过长（1100 dip）不好操作。改为右侧栏：勾选后窗口加宽 590→990 dip、高度保持 709，PS5 原布局不动，采集区块以新增的单列窄栏布局 `CaptureConfigBlock::arrangeColumn(600,44,370)` 放置（替换原 arrangeCompact 两列布局），列首新增"采集卡 · 画面与声音来源（组合模式）"标题（静态 id 108，随区块显隐）；区块状态栏加 SS_EDITCONTROL 换行样式，窄列与弹窗中的长提示不再单行截断。
+
+验证：构建 exit0（out/tmp/ps5-capture-control-20260922/layout-build.log）；test-ui-combined.ps1 断言改为宽度增长/高度不变并加机器状态归一化（持久化 UseCapture=1 时先取消再测），REMOTEPLAY_COMBINED_UI_PASS；原版 test-ui.ps1 回归 PASS；展开态截图 panel-right-column.png 与逐控件坐标核验（右列 x=600 w=370 对齐、左列 x≤552 无重叠、面板 990×709）。真机组合链路验收仍待用户。

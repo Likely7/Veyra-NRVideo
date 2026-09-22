@@ -38,8 +38,9 @@ public:
     void destroy();
     // Full single-column layout (popup parity). x/y/w in DIPs.
     void arrange(int x,int y,int width);
-    // Two-column layout for space-constrained hosts. Returns block height.
-    int arrangeCompact(int x,int y,int width);
+    // Narrow vertical column for side-panel hosts (e.g. the PS5 panel's right
+    // column in combined mode). Returns the block height in DIPs.
+    int arrangeColumn(int x,int y,int width);
     void setVisible(bool visible);
     bool handleCommand(WPARAM wp,LPARAM lp);
     void poll();

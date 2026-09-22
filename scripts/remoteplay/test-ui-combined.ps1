@@ -48,12 +48,19 @@ try {
  if($checkbox -eq [IntPtr]::Zero){throw 'UseCapture checkbox (id 24) missing'}
  $embedded=[RpCombined]::GetDlgItem($panel,601)
  if($embedded -eq [IntPtr]::Zero){throw 'embedded capture device combo (id 601) missing'}
+ # Normalize machine state: a persisted UseCapture=1 from earlier manual use
+ # must not fail the start-hidden assertion.
+ if([RpCombined]::SendMessage($checkbox,0xF0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt32() -eq 1){
+   [RpCombined]::SendMessage($checkbox,0xF5,[IntPtr]::Zero,[IntPtr]::Zero)|Out-Null
+   Start-Sleep -Milliseconds 400
+ }
  if([RpCombined]::IsWindowVisible($embedded)){throw 'embedded capture block must start hidden'}
  $before=New-Object RpCombined+Rect;[RpCombined]::GetWindowRect($panel,[ref]$before)|Out-Null
  [RpCombined]::SendMessage($checkbox,0xF5,[IntPtr]::Zero,[IntPtr]::Zero)|Out-Null
  Start-Sleep -Milliseconds 400
  $after=New-Object RpCombined+Rect;[RpCombined]::GetWindowRect($panel,[ref]$after)|Out-Null
- if(($after.bottom-$after.top)-($before.bottom-$before.top) -lt 100){throw 'panel did not grow for the embedded capture block'}
+ if(($after.right-$after.left)-($before.right-$before.left) -lt 100){throw 'panel did not widen for the right-hand capture column'}
+ if(($after.bottom-$after.top)-($before.bottom-$before.top) -gt 16){throw 'combined mode must not grow the window height'}
  if(-not [RpCombined]::IsWindowVisible($embedded)){throw 'embedded capture device combo not visible after enabling'}
  $viewOnly=[RpCombined]::GetDlgItem($panel,17)
  if($viewOnly -ne [IntPtr]::Zero -and [RpCombined]::IsWindowEnabled($viewOnly)){throw 'view-only must be disabled in combined mode'}
@@ -64,7 +71,7 @@ try {
  Start-Sleep -Milliseconds 400
  $restored=New-Object RpCombined+Rect;[RpCombined]::GetWindowRect($panel,[ref]$restored)|Out-Null
  if([RpCombined]::IsWindowVisible($embedded)){throw 'embedded capture block still visible after unchecking'}
- if([Math]::Abs(($restored.bottom-$restored.top)-($before.bottom-$before.top)) -gt 16){throw 'panel height did not restore'}
+ if([Math]::Abs(($restored.right-$restored.left)-($before.right-$before.left)) -gt 16){throw 'panel width did not restore'}
  [RpCombined]::PostMessage($panel,0x10,[IntPtr]::Zero,[IntPtr]::Zero)|Out-Null
  Start-Sleep -Milliseconds 200
  # Refactored standalone capture popup must still build its shared block.

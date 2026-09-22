@@ -16,6 +16,7 @@ namespace veyra::ui {
 namespace {
 HWND window=nullptr;HFONT font=nullptr;
 enum {Host=1,Account,PairPin,Quality,CodecChoice,Pair,Connect,Cancel,Scan,Wake,LoginPin,SendPin,StatusText,Help,Bitrate,Forget,ViewOnly,Calibrate,DecodeChoice,LoginPsn,CompletePsn,ForgetPsn,SamplingChoice,UseCapture};
+constexpr int CaptureHeader=108;
 constexpr int CaptureIdBase=600,CaptureTimerId=2;
 CaptureConfigBlock captureBlock;
 bool captureExpanded=false;
@@ -101,13 +102,17 @@ void arrange(){
     move(Bitrate,160,295,180,180);move(Forget,352,295,80,32);move(Cancel,440,295,112,32);move(StatusText,20,341,530,64);
     move(ViewOnly,20,408,400,28);move(UseCapture,20,436,530,28);move(Calibrate,432,408,120,28);
     move(DecodeChoice,160,470,392,150);move(SamplingChoice,160,514,392,120);move(Help,20,547,530,68);
-    if(captureExpanded)captureBlock.arrangeCompact(20,660,530);
+    // Combined mode puts the capture configuration in a right-hand column:
+    // the window widens instead of growing a long bottom tail.
+    move(CaptureHeader,600,20,370,24);
+    if(captureExpanded)captureBlock.arrangeColumn(600,44,370);
 }
 void applyCaptureExpanded(HWND h){
     captureBlock.setVisible(captureExpanded);
+    if(auto header=GetDlgItem(h,CaptureHeader))ShowWindow(header,captureExpanded?SW_SHOW:SW_HIDE);
     EnableWindow(GetDlgItem(h,ViewOnly),!captureExpanded&&!busy);
     if(captureExpanded)CheckDlgButton(h,ViewOnly,BST_UNCHECKED);
-    SetWindowPos(h,nullptr,0,0,dip(h,590),dip(h,captureExpanded?1100:709),SWP_NOMOVE|SWP_NOZORDER);
+    SetWindowPos(h,nullptr,0,0,dip(h,captureExpanded?990:590),dip(h,709),SWP_NOMOVE|SWP_NOZORDER);
     arrange();
 }
 LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM wp,LPARAM lp)try{switch(msg){
@@ -129,7 +134,8 @@ case WM_CREATE:{window=h;closing=false;font=makeFont(h);titleTheme(h);
     SendDlgItemMessageW(h,SamplingChoice,CB_SETCURSEL,std::min(1u,GetPrivateProfileIntW(L"RemotePlay",L"FineSampling",1,(remoteplay::profileDirectory()/L"settings.ini").c_str())),0);
     add(L"STATIC",L"PS5 地址",100,0,20,21,130,25);add(L"STATIC",L"PSN Account ID",101,0,20,65,130,25);
     add(L"STATIC",L"8 位配对码",102,0,20,109,130,25);add(L"STATIC",L"格式（重连生效）",103,0,20,153,130,25);add(L"STATIC",L"登录 PIN（可选）",104,0,20,253,135,25);
-    add(L"STATIC",L"码率请求",105,0,20,298,130,25);add(L"COMBOBOX",L"",Host,CBS_DROPDOWN|CBS_AUTOHSCROLL|WS_TABSTOP);SendDlgItemMessageW(h,Host,CB_LIMITTEXT,253,0);
+    add(L"STATIC",L"码率请求",105,0,20,298,130,25);
+    add(L"STATIC",L"采集卡 · 画面与声音来源（组合模式）",CaptureHeader,0,600,20,370,24);ShowWindow(GetDlgItem(h,CaptureHeader),SW_HIDE);add(L"COMBOBOX",L"",Host,CBS_DROPDOWN|CBS_AUTOHSCROLL|WS_TABSTOP);SendDlgItemMessageW(h,Host,CB_LIMITTEXT,253,0);
     for(int id:{Account,PairPin,LoginPin}){add(L"EDIT",L"",id,WS_TABSTOP|ES_AUTOHSCROLL|((id==PairPin||id==LoginPin)?ES_PASSWORD:0));SendDlgItemMessageW(h,id,EM_SETLIMITTEXT,id==Host?253:id==Account?24:8,0);}
     add(L"COMBOBOX",L"",Quality,CBS_DROPDOWNLIST|WS_TABSTOP);for(auto label:{L"720p · 30 fps",L"720p · 60 fps",L"1080p · 30 fps",L"1080p · 60 fps"})SendDlgItemMessageW(h,Quality,CB_ADDSTRING,0,LPARAM(label));SendDlgItemMessageW(h,Quality,CB_SETCURSEL,3,0);
     add(L"COMBOBOX",L"",CodecChoice,CBS_DROPDOWNLIST|WS_TABSTOP);for(auto label:{L"H.264 · SDR",L"H.265 · SDR",L"H.265 · HDR（实验）"})SendDlgItemMessageW(h,CodecChoice,CB_ADDSTRING,0,LPARAM(label));SendDlgItemMessageW(h,CodecChoice,CB_SETCURSEL,0,0);

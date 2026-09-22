@@ -34,7 +34,9 @@ void CaptureConfigBlock::create(HWND parent,HFONT font,int idBase,int timerId,Ca
     SendDlgItemMessageW(parent_,idBase_+kBuffer,CB_SETCURSEL,WPARAM(std::clamp(callbacks_.readBuffer?callbacks_.readBuffer():0,0,2)),0);
     add(L"BUTTON",L"刷新设备",kRefresh,BS_PUSHBUTTON|WS_TABSTOP);
     add(L"STATIC",L"视频输入设备",kVideoLabel,0);add(L"STATIC",L"设备实际支持的格式",kFormatLabel,0);
-    add(L"STATIC",L"",kStatus,0);add(L"STATIC",L"音频监听（仅采集所选输入，默认关闭）",kAudioLabel,0);
+    // SS_EDITCONTROL lets long hint text wrap instead of clipping in the
+    // narrow side column (the popup status line benefits the same way).
+    add(L"STATIC",L"",kStatus,SS_EDITCONTROL);add(L"STATIC",L"音频监听（仅采集所选输入，默认关闭）",kAudioLabel,0);
     SetTimer(parent_,timerId_,100,nullptr);
     query(-1);
 }
@@ -214,19 +216,21 @@ void CaptureConfigBlock::arrange(int x,int y,int width){
     move(kBufferLabel,16,542,width-32,24);move(kBuffer,16,566,width-32,180);
     move(kFlip,16,602,width-32,24);
 }
-int CaptureConfigBlock::arrangeCompact(int x,int y,int width){
+int CaptureConfigBlock::arrangeColumn(int x,int y,int width){
     auto move=[&](int id,int cx,int cy,int w,int h){MoveWindow(item(id),dip(parent_,x+cx),dip(parent_,y+cy),dip(parent_,w),dip(parent_,h),TRUE);};
-    const int left=0,rightW=width*2/5,leftW=width-rightW-12,right=leftW+12;
-    move(kVideoLabel,left,0,leftW,24);move(kVideoDevice,left,26,width,180);
-    move(kFormatLabel,left,64,leftW,24);move(kFormat,left,90,leftW,180);
-    move(kColorLabel,right,64,rightW,24);move(kColor,right,90,rightW,180);
-    move(kAudioLabel,left,128,leftW,24);move(kAudioMonitor,left,154,leftW,180);
-    move(kIngressLabel,right,128,rightW,24);move(kIngress,right,154,rightW,180);
-    move(kFpsLabel,left,192,leftW,24);move(kFps,left,218,leftW/2-6,32);move(kBufferLabel,right,192,rightW,24);move(kBuffer,right,218,rightW,180);
-    move(kSdr,left,256,leftW+rightW/2,24);move(kFlip,left,284,leftW+rightW/2,24);
-    move(kStatus,left,318,width,44);
-    move(kRefresh,width-136,372,136,32);
-    return 414;
+    auto row=[&](int label,int control,int cy){move(label,0,cy,width,24);move(control,0,cy+26,width,180);};
+    row(kVideoLabel,kVideoDevice,0);
+    row(kFormatLabel,kFormat,60);
+    row(kColorLabel,kColor,120);
+    row(kAudioLabel,kAudioMonitor,180);
+    row(kIngressLabel,kIngress,240);
+    move(kFpsLabel,0,300,width,24);move(kFps,0,326,width,28);
+    row(kBufferLabel,kBuffer,362);
+    move(kSdr,0,424,width,24);
+    move(kFlip,0,452,width,24);
+    move(kStatus,0,486,width,48);
+    move(kRefresh,width-136,542,136,32);
+    return 574;
 }
 std::vector<std::pair<int,const wchar_t*>> CaptureConfigBlock::helpEntries()const{
     return {
