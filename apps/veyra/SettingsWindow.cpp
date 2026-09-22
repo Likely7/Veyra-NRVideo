@@ -39,7 +39,7 @@ constexpr auto smoothMotionHelp=L"只用 Smooth Motion\n"
     L"• 面板 FPS、耗时、队列不包含驱动生成部分，不能据此判断驱动是否生效，也不要直接把 FPS 乘二。\n"
     L"• 驱动额外延迟未测量，音画同步需实测。截图、导出不含驱动生成的帧；直播录制是否捕获到它们也需另测。\n"
     L"• 功能可用性以 NVIDIA App、显卡和驱动支持为准。";
-struct Item{HWND h;int page,x,y,w,height;bool hidden=false;};std::vector<Item> items;
+struct Item{HWND h;int page,x,y,w,height;bool hidden=false;bool placed=true;};std::vector<Item> items;
 struct RowReset {
     int slider,label,value;
     std::function<double(const engine::EnhancementSettings&)> get;
@@ -58,7 +58,9 @@ int viewportHeight(){RECT r{};GetClientRect(body,&r);return std::max(1,MulDiv(r.
 void arrange();
 LRESULT CALLBACK bodyProc(HWND h,UINT msg,WPARAM wp,LPARAM lp){
     if(msg==WM_ERASEBKGND)return 1;
-    if(msg==WM_PAINT){PaintBuffer paint(h);fillSurface(paint.dc,paint.rect,h);if(contentHeight>viewportHeight()){int thumb=std::max(dip(h,30),int(paint.rect.bottom*float(viewportHeight())/contentHeight));int y=int((paint.rect.bottom-thumb)*float(scroll)/std::max(1,contentHeight-viewportHeight()));RECT bar{paint.rect.right-dip(h,5),y,paint.rect.right-dip(h,2),y+thumb};roundRect(paint.dc,bar,line,dip(h,2));}return 0;}
+    if(msg==WM_PAINT){PaintBuffer paint(h);fillSurface(paint.dc,paint.rect,h);if(contentHeight>viewportHeight()){int thumb=std::max(dip(h,30),int(paint.rect.bottom*float(viewportHeight())/contentHeight));int y=int((paint.rect.bottom-thumb)*float(scroll)/std::max(1,contentHeight-viewportHeight()));// Scrollbar thumb: the old 3-DIP line-colored rail read as nothing against
+        // the acrylic backdrop, so it is wider and uses the panel's dim text gray.
+        RECT bar{paint.rect.right-dip(h,8),y,paint.rect.right-dip(h,3),y+thumb};roundRect(paint.dc,bar,RGB(120,125,132),dip(h,2));}return 0;}
     if(msg==WM_CTLCOLORSTATIC||msg==WM_CTLCOLOREDIT||msg==WM_CTLCOLORLISTBOX||msg==WM_CTLCOLORBTN)return colors(msg,wp,lp);
     if(msg==WM_COMMAND||msg==WM_HSCROLL||msg==WM_MOUSEWHEEL||msg==WM_VSCROLL||msg==WM_NOTIFY)return SendMessageW(window,msg,wp,lp);
     if(msg==WM_LBUTTONDOWN){RECT r{};GetClientRect(h,&r);if(GET_X_LPARAM(lp)>=r.right-dip(h,12))SetCapture(h);}
@@ -79,6 +81,10 @@ constexpr int kColorSections=7;
 void message(const std::wstring& text);
 bool submit(engine::EnhancementSettings s);
 uint32_t colorFoldMask=0;
+// Snapshot of the last arrange() inputs that decide row coordinates. While a new
+// arrange matches it and the scroll moved at most one notch, only rows inside the
+// viewport band are repositioned (see arrange); anything else forces a full pass.
+int arrangeScroll=-1000000,arrangeWidth=-1,arrangePage=-1,arrangeMixer=-1;uint32_t arrangeFold=0;bool arrangeHelp=false;
 std::wstring colorSectionName(int section){
     static const wchar_t* names[kColorSections]={L"亮",L"颜色",L"曲线",L"混色器",L"颜色分级",L"校准",L"LUT"};
     return section>=0&&section<kColorSections?names[section]:L"色彩";
@@ -1131,11 +1137,44 @@ void arrange(){
         if(entry.page==page&&!entry.hidden&&(GetDlgCtrlID(entry.h)!=1120||smoothMotionHelpExpanded)){wchar_t cls[32]{};GetClassNameW(entry.h,cls,32);contentHeight=std::max(contentHeight,entry.y+helpOffset(entry)+(_wcsicmp(cls,L"COMBOBOX")==0?36:entry.height)+12);}}
     if(page==2)contentHeight=std::max(contentHeight,colorPageContentHeight);
     scroll=std::clamp(scroll,0,std::max(0,contentHeight-viewport));
+    // Incremental-scroll detection: band virtualization below is only valid while
+    // every input that assigns row coordinates is unchanged and the scroll moved
+    // at most one notch since the previous arrange. Anything else (resize, page
+    // switch, fold/mixer/help toggle, scrollbar-drag jumps) must reposition every
+    // current-page row so no stale row reappears inside the viewport.
+    const int mixerKey=colourMixerMode*8+colourMixerBand+(colourBlackWhite?64:0);
+    const bool incremental=page==arrangePage&&width==arrangeWidth&&scroll-arrangeScroll<=72&&arrangeScroll-scroll<=72
+        &&colorFoldMask==arrangeFold&&mixerKey==arrangeMixer&&smoothMotionHelpExpanded==arrangeHelp;
+    arrangePage=page;arrangeWidth=width;arrangeScroll=scroll;arrangeFold=colorFoldMask;arrangeMixer=mixerKey;arrangeHelp=smoothMotionHelpExpanded;
     SetWindowPos(body,nullptr,0,dip(window,sticky),r.right,dip(window,viewport),SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOREDRAW);
     auto batch=BeginDeferWindowPos(int(items.size()));
+    // Scroll cost is dominated by how many HWNDs join the Defer batch (ETW
+    // 2026-09-22: kernel window-manager work scaled with all 372 children).
+    // Only the current page's visible rows need per-event moves; everything
+    // else is hidden once (placed=false) and skipped until its page or fold
+    // state makes it visible again. placed starts true because add() creates
+    // controls WS_VISIBLE, so the first arrange must still hide off-page rows.
     for(auto& entry:items){bool fixed=entry.page==-1,visible=!entry.hidden&&(entry.page==page||fixed)&&(GetDlgCtrlID(entry.h)!=1120||smoothMotionHelpExpanded);int w=entry.w<0?width-entry.x-12:entry.w;int y=fixed?(GetDlgCtrlID(entry.h)==400?0:(GetDlgCtrlID(entry.h)==211||GetDlgCtrlID(entry.h)==219)?86:42):entry.y+helpOffset(entry)-scroll;
-        if(fixed){SetWindowPos(entry.h,nullptr,dip(window,entry.x),dip(window,y),dip(window,std::max(1,w)),dip(window,42),SWP_NOACTIVATE|SWP_NOZORDER|SWP_NOREDRAW);continue;}batch=DeferWindowPos(batch,entry.h,nullptr,dip(window,entry.x),dip(window,y),dip(window,std::max(1,w)),dip(window,entry.height),SWP_NOACTIVATE|SWP_NOZORDER|SWP_NOREDRAW|SWP_NOCOPYBITS|(visible?SWP_SHOWWINDOW:SWP_HIDEWINDOW));}
-    EndDeferWindowPos(batch);RedrawWindow(body,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN|RDW_UPDATENOW);InvalidateRect(window,nullptr,FALSE);
+        if(fixed){SetWindowPos(entry.h,nullptr,dip(window,entry.x),dip(window,y),dip(window,std::max(1,w)),dip(window,42),SWP_NOACTIVATE|SWP_NOZORDER|SWP_NOREDRAW);continue;}
+        if(!visible&&!entry.placed)continue;entry.placed=visible;
+        // Band virtualization: during an incremental notch, rows well outside the
+        // viewport are clipped invisible anyway; skipping their moves is what
+        // keeps the per-notch window count proportional to the viewport, not the
+        // page. The 288-DIP reveal band covers the largest row (the 208-DIP
+        // colour wheels) plus a full notch so rows are pre-positioned before
+        // they can scroll into view.
+        if(incremental){const int rowTop=entry.y+helpOffset(entry);if(rowTop>scroll+viewport+288||rowTop+entry.height<scroll-288)continue;}
+        batch=DeferWindowPos(batch,entry.h,nullptr,dip(window,entry.x),dip(window,y),dip(window,std::max(1,w)),dip(window,entry.height),SWP_NOACTIVATE|SWP_NOZORDER|(visible?SWP_SHOWWINDOW:SWP_HIDEWINDOW));}
+    EndDeferWindowPos(batch);
+    // Scroll repaint policy: scrolled rows move with their painted pixels (no
+    // SWP_NOCOPYBITS/SWP_NOREDRAW on the batch) and every repaint — body
+    // background, exposed strips, scrollbar thumb, invalidated rows — goes
+    // through the normal queue, so a burst of wheel notches coalesces into few
+    // paints instead of one full synchronous repaint per notch. The outer
+    // window repaints only when header geometry (width/page) changed.
+    RedrawWindow(body,nullptr,nullptr,RDW_INVALIDATE);
+    static int chromeWidth=0,chromePage=-1;
+    if(width!=chromeWidth||page!=chromePage){chromeWidth=width;chromePage=page;InvalidateRect(window,nullptr,FALSE);}
 }
 
 HWND add(const wchar_t* cls,const wchar_t* text,int id,DWORD style,int group,int x,int y,int width,int height){auto h=CreateWindowExW(0,cls,text,WS_CHILD|WS_VISIBLE|WS_CLIPSIBLINGS|style,0,0,1,1,group==-1?window:body,reinterpret_cast<HMENU>(INT_PTR(id)),GetModuleHandleW(nullptr),nullptr);SendMessageW(h,WM_SETFONT,WPARAM(font),TRUE);themeControl(h);if(group!=-1)SetWindowSubclass(h,scrollOnly,950,0);items.push_back({h,group,x,y,width,height});return h;}
@@ -1705,7 +1744,11 @@ case WM_SIZE:arrange();return 0;
 case WM_ERASEBKGND:return 1;
 case WM_PAINT:{PaintBuffer paint(h);fillSurface(paint.dc,paint.rect,h);return 0;}
 case WM_VSCROLL:{switch(LOWORD(wp)){case SB_LINEUP:scroll-=40;break;case SB_LINEDOWN:scroll+=40;break;case SB_PAGEUP:scroll-=240;break;case SB_PAGEDOWN:scroll+=240;break;case SB_THUMBTRACK:{SCROLLINFO si{sizeof(si),SIF_TRACKPOS};GetScrollInfo(h,SB_VERT,&si);scroll=si.nTrackPos;break;}}arrange();return 0;}
-case WM_MOUSEWHEEL:scroll-=GET_WHEEL_DELTA_WPARAM(wp)/WHEEL_DELTA*36;arrange();return 0;
+case WM_MOUSEWHEEL:{// High-resolution wheels trickle deltas smaller than one notch; the old
+    // integer delta/120*36 discarded them (zero movement, full arrange+paint)
+    // and then jumped a whole notch. Accumulate the remainder instead and skip
+    // the layout entirely while the carry has not reached a full notch.
+    static int wheelCarry=0;wheelCarry+=int(GET_WHEEL_DELTA_WPARAM(wp));const int notches=wheelCarry/WHEEL_DELTA;wheelCarry-=notches*WHEEL_DELTA;if(notches){scroll-=notches*36;arrange();}return 0;}
 case WM_CTLCOLORSTATIC:case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORBTN:return colors(msg,wp,lp);
 case WM_COMMAND:return settingsCommand(h,msg,wp,lp);
 case WM_HSCROLL:{
@@ -1729,7 +1772,7 @@ int id=GetDlgCtrlID(reinterpret_cast<HWND>(lp));if(id>=600&&id<612){int index=id
         const int value=std::clamp(int(SendMessageW(reinterpret_cast<HWND>(lp),TBM_GETPOS,0,0)),0,64);putText(222,std::to_wstring(value).c_str());}
     return 0;}
 case WM_TIMER:return settingsTimer(h,msg,wp,lp);
-case WM_DESTROY:KillTimer(h,1);DeleteObject(font);window=nullptr;body=nullptr;items.clear();rowResets.clear();editDrafts.clear();return 0;
+case WM_DESTROY:KillTimer(h,1);DeleteObject(font);window=nullptr;body=nullptr;items.clear();rowResets.clear();editDrafts.clear();arrangeScroll=-1000000;arrangeWidth=-1;arrangePage=-1;arrangeFold=0;arrangeMixer=-1;arrangeHelp=false;return 0;
 }return DefWindowProcW(h,msg,wp,lp);}
 }
 engine::EnhancementSettings defaultSettings(){loadStore();return store.defaultSettings();}
