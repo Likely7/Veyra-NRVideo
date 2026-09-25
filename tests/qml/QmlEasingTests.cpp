@@ -70,6 +70,12 @@ void compare(QQmlEngine& engine, const char* property, auto reference) {
         return;
     }
     const auto curve = anim->property("easing").value<QEasingCurve>();
+    // Qt 6.8.3 corrupts the heap when a BezierSpline of 11+ segments is destroyed.
+    const qsizetype segments = curve.toCubicSpline().size() / 3;
+    if (segments > 10) {
+        std::printf("FAIL %s: %lld segments, Qt 6.8.3 crashes above 10\n", property, (long long)segments);
+        ++failures;
+    }
     double worst = 0, at = 0;
     for (int i = 0; i <= 200; ++i) {
         const double t = i / 200.0;
@@ -77,12 +83,13 @@ void compare(QQmlEngine& engine, const char* property, auto reference) {
         if (e > worst) { worst = e; at = t; }
     }
     const bool ok = worst <= 0.01;
-    std::printf("%s %s: type=%d max error %.4f at t=%.3f\n", ok ? "PASS" : "FAIL", property, int(curve.type()), worst, at);
+    std::printf("%s %s: type=%d segments=%lld max error %.4f at t=%.3f\n", ok ? "PASS" : "FAIL", property, int(curve.type()), (long long)segments, worst, at);
     if (!ok) ++failures;
 }
 }  // namespace
 
 int main(int argc, char** argv) {
+    std::setvbuf(stdout, nullptr, _IONBF, 0);  // keep every line if the process dies
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     QQmlEngine engine;

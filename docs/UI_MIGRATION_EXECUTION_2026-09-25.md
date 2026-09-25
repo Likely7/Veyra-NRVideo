@@ -43,6 +43,7 @@
 | G0.5 | 动效采样（设计 vs QML） | 完成（曲线已看） | `checkpoint/ui-mig-g0.5` | `tools/qt_probe/motion-sample.ps1`；设计端 `shotpage.js ?motion=1&probe=` 暂停 Web Animations 按 10ms 定位读值，QML 端 `--motion-probe` 每帧记日志。证据 `goal\g0.5\`（design/qml CSV + chart）。dock：设计 110ms 到位、130ms 超调峰 10.17px，QML 线性 566ms 到 8px 无超调；开关：设计峰 14.6px，QML 线性 500ms；页面切换：设计 rise 16→0 约 150ms，QML 无过渡。证实 4 值 bezierCurve 退化为线性（G1.1）与缺页面进入动画（G2.2） |
 | G0.6 | 缓动单元测试 `veyra_qml_easing_tests` | 完成（修前失败，符合预期） | `checkpoint/ui-mig-g0.6` | `tests/qml/QmlEasingTests.cpp` 通过 QML 读回 NumberAnimation 的曲线，与 CSS `linear()` / `cubic-bezier` 求值比较（容差 0.01）。修前三条曲线类型均为 0（Linear），最大误差 spring 0.81、springSoft 0.76、easeOut 0.53（`goal\g0.6\before-fix.txt`）。构建目录改为 `build\qt-probe-20260926`：旧目录 CMake 不再写 `rules.ninja`，根因是 936 代码页下 include-probe 前缀乱码（与 WORKLOG 0.0.4 同一故障），`build-qt-probe.ps1` 现以 65001 调用并加 `-Out` |
 | G0.7 | 全部门槛基线 | 完成 | `checkpoint/ui-mig-g0.7` | 证据 `goal/g0.7/`。构建 exit 0、stage 0；哈希 17/17 same；性能与 perf-baseline 同量级，提交 fps 全同，plain-1080 gpuReady P95 1.57→2.68ms（本轮未动引擎，按本轮基线记录）；delivery PASS；单元 pass=44 fail=33 skip=3 与基线一致 |
+| G1.1 | 缓动曲线改 6 值段 | 完成 | `checkpoint/ui-mig-g1.1` | 证据 `goal/g1.1/`。Theme `linearEasing()` 把 CSS linear() 停靠点逐段转三次段；veyra_qml_easing_tests 三曲线全过（spring 10 段误差 0.0068、springSoft/easeOut 0.0000）。Qt 6.8.3 缺陷：BezierSpline ≥11 段销毁时堆损坏（C++ 无 QML 复现，n≤10 正常），spring 删 28.4%/38.5% 两个停靠点降到 10 段，测试加段数上限检查（12 段版被判 FAIL，记录 12seg-caught.txt）。动效采样 dock 峰值 10.59 vs 设计 10.17、开关 14.6 vs 14.6；页面切换仍无过渡，属 G2.2 |
 
 ## 发现并修复的 bug
 

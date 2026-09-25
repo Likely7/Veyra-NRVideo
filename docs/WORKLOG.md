@@ -6570,3 +6570,12 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   nr-fg-4k 1.383→1.279，提交 fps 60/120/120/60 全同；plain-1080 gpuReady P95 1.57→2.68ms（本轮未改引擎，
   视为机器状态波动，作为本轮 B 阶段比较基线另记）；`delivery.ps1` PASS；单元 pass=44 fail=33 skip=3，与基线一致。
   G0 阶段完成。
+
+- G1.1 缓动（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.1/`）：
+  `qml/Veyra/Theme.qml` 新增 `linearEasing(stops)`，CSS linear() 相邻停靠点各转一段三次（控制点 1/3、2/3），easeOut 为单段 6 值。
+  首次测试两条弹簧误差 0.0000 后进程 0xC0000374 堆损坏；在 C++ 中不经 QML 直接构造 n 段 BezierSpline 复现：
+  n=1..10 正常，n=11/12 在复制销毁时崩溃，属 Qt 6.8.3 自身缺陷。spring 原 12 段，删去 1.035@28.4% 与 .998@38.5%
+  两点降为 10 段，最大误差 0.0068（阈值 0.01）。测试新增“段数 >10 判失败”，旧 12 段 Theme 被判 FAIL（12seg-caught.txt）。
+  命令：`scripts/build-qt-probe.ps1 -Targets veyra_qml_easing_tests` / `veyra_qml_ui` exit 0；
+  `tools/qt_probe/run-easing-tests.ps1` failures=0 exit=0（after-fix.txt）；`tools/qt_probe/motion-sample.ps1 -Out goal/g1.1`：
+  dock 峰值 QML 10.59 / 设计 10.17，开关 14.6 / 14.6，曲线图已看；page 仍无过渡（G2.2）。

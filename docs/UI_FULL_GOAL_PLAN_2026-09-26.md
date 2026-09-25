@@ -10,7 +10,7 @@
 | 阶段 | 状态 | 最后标签 | 备注 |
 |---|---|---|---|
 | G0 工具与基线 | 完成 | checkpoint/ui-mig-g0.7 | 设计参考 `design-ref/`、对比 `compare/`、动效曲线 `goal/g0.5/`、缓动测试 `veyra_qml_easing_tests`（构建目录 `build/qt-probe-20260926`）、门槛基线 `goal/g0.7/`（B 阶段性能对比用 `goal/g0.7/perf`） |
-| G1 基础（缓动/背景/字体/图标/组件动效） | 进行中 | | 下一步 G1.1 |
+| G1 基础（缓动/背景/字体/图标/组件动效） | 进行中 | checkpoint/ui-mig-g1.1 | G1.1 完成（Qt 6.8.3 BezierSpline 上限 10 段，spring 已降段）；下一步 G1.2 背景 |
 | G2 外壳 | 未开始 | | |
 | G3 四主屏 | 未开始 | | |
 | B1 小项 + 桥接补齐 | 未开始 | | |

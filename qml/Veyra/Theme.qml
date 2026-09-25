@@ -50,8 +50,18 @@ QtObject {
     readonly property int rCtl: 10
 
     // --- motion (--spring / --spring-soft / --out) ------------------------
-    // Four control points exactly: QEasingCurve.BezierSpline rejects any other
-    // count, and a rejected curve silently falls back to linear.
+    // easing.bezierCurve takes whole cubic segments, six numbers each
+    // [c1x, c1y, c2x, c2y, endX, endY], the last one ending at (1, 1). Any other
+    // length is rejected and the animation silently runs linear (G0.5/G0.6 caught
+    // the old four-number curves doing exactly that).
+    // --spring and --spring-soft are CSS linear() functions: straight lines between
+    // stops. A cubic with its control points at 1/3 and 2/3 of a line is that line,
+    // so each stop becomes one segment and the curve matches the design exactly,
+    // overshoot included. Stops without a position are spread evenly, as in CSS.
+    // At most 10 segments: Qt 6.8.3 corrupts the heap when a BezierSpline curve of
+    // 11+ segments is destroyed (reproduced in C++ with no QML, G1.1). --spring has
+    // 12, so its 1.035@28.4% and .998@38.5% stops are dropped; the remaining line
+    // stays within 0.007 of the design curve (veyra_qml_easing_tests checks 0.01).
     // Reduced motion (the design's .vy.reduced: every transition and animation at
     // 0s). Main.qml binds it to the saved setting or the --reduced-motion switch;
     // every duration in the app goes through d(), so one flag covers all of them.
@@ -62,9 +72,28 @@ QtObject {
     readonly property int durFast: 150
     readonly property int durNormal: 240
     readonly property int durSlow: 450
-    readonly property var spring: [0.34, 1.56, 0.64, 1.0]
-    readonly property var springSoft: [0.22, 1.25, 0.36, 1.0]
-    readonly property var easeOut: [0.2, 0.8, 0.2, 1.0]
+    function linearEasing(stops) {
+        var out = []
+        for (var i = 1; i < stops.length; ++i) {
+            var a = stops[i - 1], b = stops[i]
+            out.push(a[0] + (b[0] - a[0]) / 3, a[1] + (b[1] - a[1]) / 3,
+                     a[0] + (b[0] - a[0]) * 2 / 3, a[1] + (b[1] - a[1]) * 2 / 3,
+                     b[0], b[1])
+        }
+        return out
+    }
+    // linear(0,.009,.035 2.1%,.141 4.4%,.723 12.9%,.938 16.7%,1.017 20.2%,1.043 24%,
+    //        1.035 28.4%,.998 38.5%,.99 44.1%,1.001 60.7%,1)
+    readonly property var spring: linearEasing([
+        [0, 0], [0.0105, 0.009], [0.021, 0.035], [0.044, 0.141], [0.129, 0.723],
+        [0.167, 0.938], [0.202, 1.017], [0.24, 1.043],
+        [0.441, 0.99], [0.607, 1.001], [1, 1]])
+    // linear(0,.02,.08 3.2%,.3 7.5%,.84 17%,1.01 25%,1.025 31%,1.004 45%,1)
+    readonly property var springSoft: linearEasing([
+        [0, 0], [0.016, 0.02], [0.032, 0.08], [0.075, 0.3], [0.17, 0.84],
+        [0.25, 1.01], [0.31, 1.025], [0.45, 1.004], [1, 1]])
+    // cubic-bezier(.2,.8,.2,1)
+    readonly property var easeOut: [0.2, 0.8, 0.2, 1.0, 1.0, 1.0]
 
     // --- type (--f-ui / --f-mono and the .h1/.h2/.h3 scale) ---------------
     readonly property string fontUi: "Microsoft YaHei UI"
