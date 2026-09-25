@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([Parameter(Mandatory=$true)][string]$Root,[switch]$VisiblePlayer,[string]$BuildDirectory,[string]$PlayerExe,[switch]$PortablePlayer,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
     [Parameter(Mandatory=$true)][string]$FixtureRoot)
@@ -15,9 +15,10 @@ $timer=[Diagnostics.Stopwatch]::StartNew()
 $run=[Guid]::NewGuid().ToString('N')
 $dir=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) $run
 [IO.Directory]::CreateDirectory($dir)|Out-Null
-# The legacy quality probe accepts narrow paths; relative output avoids losing
-# Unicode directory names while keeping all artifacts in OutputDirectory.
-$qualityDir=(Resolve-Path -LiteralPath $dir -Relative)
+# The quality probe reads its arguments from the UTF-16 command line, so the
+# absolute output directory works even when it is on another drive or has
+# Unicode names (a relative path cannot cross from the repo drive to E:).
+$qualityDir=$dir
 $bin=Join-Path $Root 'out/build/x64-release'
 if($BuildDirectory){$bin=(Resolve-Path -LiteralPath $BuildDirectory).Path}
 if(-not $PlayerExe){$PlayerExe=Join-Path $bin 'veyra.exe'}

@@ -7,6 +7,7 @@
 // readback on sampled frames - the normal playback path never reads back.
 #include <windows.h>
 #include <psapi.h>
+#include <shellapi.h>
 #include <d3d12sdklayers.h>
 
 #include <algorithm>
@@ -222,9 +223,32 @@ int main(int argc, char** argv)
     int timeoutSeconds = 0;
     std::string dumpPath;
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    // argv is in the ANSI code page, which cannot hold every Unicode path (the
+    // logs live under E:\项目). Take the arguments from the UTF-16 command line
+    // and keep them as UTF-8 in the std::string fields below.
+    std::vector<std::string> args;
+    {
+        int wideCount = 0;
+        LPWSTR* wide = CommandLineToArgvW(GetCommandLineW(), &wideCount);
+        for (int n = 0; wide && n < wideCount; ++n) {
+            const int bytes = WideCharToMultiByte(CP_UTF8, 0, wide[n], -1, nullptr, 0, nullptr, nullptr);
+            std::string utf8(bytes > 0 ? bytes - 1 : 0, '\0');
+            if (bytes > 1) WideCharToMultiByte(CP_UTF8, 0, wide[n], -1, utf8.data(), bytes, nullptr, nullptr);
+            args.push_back(std::move(utf8));
+        }
+        LocalFree(wide);
+        if (args.empty()) for (int n = 0; n < argc; ++n) args.emplace_back(argv[n]);
+        argc = int(args.size());
+    }
+    auto widen = [](const std::string& utf8) {
+        const int chars = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+        std::wstring wide(chars > 0 ? chars - 1 : 0, L'\0');
+        if (chars > 1) MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, wide.data(), chars);
+        return wide;
+    };
     for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
-        auto value = [&]() -> std::string { return (i + 1 < argc) ? std::string(argv[++i]) : std::string(); };
+        const std::string arg = args[i];
+        auto value = [&]() -> std::string { return (i + 1 < argc) ? args[++i] : std::string(); };
         if (arg == "--diag") diag = true;
         else if(arg=="--legacy-motion")legacyMotion=true;
         else if (arg == "--native") native = true;
@@ -260,14 +284,14 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "--corpus or --input required\n");
         return 2;
     }
-    if (!logPath.empty()) (void)veyra::Logger::instance().openFile(std::wstring(logPath.begin(), logPath.end()));
+    if (!logPath.empty()) (void)veyra::Logger::instance().openFile(widen(logPath));
 
     // Build the run list (single input looping, or every corpus clip).
     struct RunClip { std::wstring path; std::string scenario; uint32_t w, h; };
     std::vector<RunClip> clips;
     std::string inputHashSource;
     if (!inputPath.empty()) {
-        clips.push_back({std::wstring(inputPath.begin(), inputPath.end()), "input",
+        clips.push_back({widen(inputPath), "input",
             0, 0});
         inputHashSource = inputPath;
     } else {
@@ -286,7 +310,7 @@ int main(int argc, char** argv)
             const size_t slash = corpusManifest.find_last_of("/\\");
             const std::string base = slash == std::string::npos ? "." : corpusManifest.substr(0, slash);
             const std::string full = base + "/" + rel;
-            clips.push_back({std::wstring(full.begin(), full.end()), rel, 0, 0});
+            clips.push_back({widen(full), rel, 0, 0});
             p = e;
         }
         if (clips.empty()) { noteFail("corpus manifest has no clips"); return 1; }
@@ -446,7 +470,7 @@ int main(int argc, char** argv)
         if (!dumpPath.empty() && framesThisClip > 0) {
             veyra::sink::RgbaImage image;
             if (!veyra::sink::readRgba8(ctx, ring, graph.videoFrameResource(lastOut.videoSlot), image) ||
-                !veyra::sink::saveImage(std::wstring(dumpPath.begin(),dumpPath.end()), image)) noteFail("diagnostic image write failed");
+                !veyra::sink::saveImage(widen(dumpPath), image)) noteFail("diagnostic image write failed");
         }
         aggNr += graph.metrics().nrEvaluateCount;
         aggNrMotion += graph.metrics().nrMotionFrames;
@@ -533,7 +557,7 @@ int main(int argc, char** argv)
 
     if (!jsonPath.empty()) {
         (void)veyra::harness::util::writeTextFileUtf8(
-            std::wstring(jsonPath.begin(), jsonPath.end()), j);
+            widen(jsonPath), j);
     }
     std::printf("%s", j.c_str());
     veyra::Logger::instance().flush();

@@ -916,11 +916,22 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_include_directories(veyra_quality_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_quality_probe PRIVATE
     veyra_pipeline veyra_sources veyra_media veyra_ngx veyra_nvof veyra_sinks
-    ${FFMPEG_LIBRARIES} psapi dxgi)
+    ${FFMPEG_LIBRARIES} psapi dxgi shell32)
   add_dependencies(veyra_quality_probe
     veyra_shader_yuv_to_rgb veyra_shader_parity_encode
     veyra_shader_parity_decode veyra_shader_scale_blit
     veyra_shader_nv12_upload veyra_shader_nvof_densify)
+
+  # UI migration guard: per-frame output hashes for fixed stage configurations.
+  add_executable(veyra_chain_hash_probe tools/chain_hash_probe/main.cpp)
+  target_compile_features(veyra_chain_hash_probe PRIVATE cxx_std_20)
+  target_compile_options(veyra_chain_hash_probe PRIVATE /WX-)
+  target_compile_definitions(veyra_chain_hash_probe PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_include_directories(veyra_chain_hash_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_chain_hash_probe PRIVATE
+    veyra_pipeline veyra_sources veyra_media veyra_ngx veyra_nvof veyra_sinks
+    ${FFMPEG_LIBRARIES} dxgi shell32)
+  add_dependencies(veyra_chain_hash_probe veyra_quality_probe)
 
   # Headless Remote Play probe: drives the product session stack with a saved
   # profile so codec/bitrate variants can be compared without the GUI.
