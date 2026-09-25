@@ -50,10 +50,18 @@ HWND createVideoWindow() {
     wc.lpszClassName = cls;
     wc.style = CS_HREDRAW | CS_VREDRAW;
     RegisterClassExW(&wc);
-    // WS_CLIPSIBLINGS keeps Qt's own children from drawing over the video;
-    // WS_EX_NOPARENTNOTIFY avoids a storm of notifications on every resize.
-    return CreateWindowExW(WS_EX_NOPARENTNOTIFY, cls, L"", WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
-                           0, 0, 16, 16, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+    // Created as an unrealised popup, then reparented into the QML window before
+    // anything reads its size. Creating it as WS_CHILD with no parent does not
+    // work: Windows refuses with ERROR_CANNOT_MAKE (1406), which is what left the
+    // video window invalid and the swapchain at 1x1. WS_POPUP with no WS_VISIBLE
+    // creates cleanly; SetParent plus the child style below turns it into a child.
+    HWND created = CreateWindowExW(WS_EX_NOPARENTNOTIFY | WS_EX_TOOLWINDOW, cls, L"",
+                                   WS_POPUP | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+                                   0, 0, 16, 16, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+    if (created == nullptr) {
+        veyra::log::error("qml", std::format("CreateWindowExW failed err={}", GetLastError()));
+    }
+    return created;
 }
 
 // Places the native video window at the QML item's position. Qt reports the
@@ -121,6 +129,21 @@ int main(int argc, char** argv) {
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
+    // Options are parsed rather than positional: `--page <id>` selects the screen
+    // a test wants to capture, and any other non-flag argument is a file to open.
+    const QStringList args = QCoreApplication::arguments();
+    QString openPath;
+    for (int i = 1; i < args.size(); ++i) {
+        if (args.at(i) == QLatin1String("--page") && i + 1 < args.size()) {
+            bridge.setInitialPage(args.at(++i));
+        } else if (!args.at(i).startsWith(QLatin1Char('-'))) {
+            openPath = args.at(i);
+        }
+    }
+    if (!openPath.isEmpty()) {
+        QTimer::singleShot(600, &bridge, [&bridge, openPath] { bridge.openPath(openPath); });
+    }
+
     engine.loadFromModule("Veyra", "Main");
 
     if (engine.rootObjects().isEmpty()) {
@@ -155,11 +178,10 @@ int main(int argc, char** argv) {
                                                 found != nullptr,
                                                 window->contentItem() ? window->contentItem()->childItems().size() : -1));
         }
-        static bool reparented = false;
-        if (!reparented) {
+        // Safety net: the pre-open hook parents the window before the engine reads
+        // its size, but a resize before any open must also keep it in place.
+        if (GetParent(g_video) == nullptr)
             SetParent(g_video, reinterpret_cast<HWND>(window->winId()));
-            reparented = true;
-        }
         if (auto* host = window->findChild<QQuickItem*>(QStringLiteral("videoHost"))) {
             // Report the resolved geometry once at each distinct size, so the log
             // says what the video window was actually given.
@@ -184,19 +206,35 @@ int main(int argc, char** argv) {
                                             host ? int(host->width()) : -1,
                                             host ? int(host->height()) : -1,
                                             window->contentItem() ? window->contentItem()->childItems().size() : -1));
+        // Parent first: a WS_CHILD window without a parent is not realized, so its
+        // rect stays 0x0 and any SetWindowPos is discarded. Reparenting here, not
+        // on a later timer tick, is what lets the geometry below take effect.
+        if (GetParent(g_video) == nullptr) {
+            const HWND parent = reinterpret_cast<HWND>(window->winId());
+            SetParent(g_video, parent);
+            // SetParent alone leaves the popup style in place; a child style is what
+            // makes the window clip to its parent and behave as part of the layout.
+            const LONG_PTR style = GetWindowLongPtrW(g_video, GWL_STYLE);
+            SetWindowLongPtrW(g_video, GWL_STYLE,
+                              (style & ~(WS_POPUP)) | WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+        }
         if (host) syncVideoGeometry(window, host);
+        ShowWindow(g_video, SW_SHOWNA);
         UpdateWindow(g_video);
+        // Report the native window's own client rect, not the QML item's: the
+        // presenter builds its swapchain from this, and the two sizes can differ.
+        // The size the engine will build its swapchain from. Reporting it is what
+        // makes a regression here visible instead of a 1x1 surface with no clue.
+        RECT client{};
+        GetClientRect(g_video, &client);
+        veyra::log::info("qml", std::format("video window {}x{} parent={}",
+                                            client.right, client.bottom,
+                                            GetParent(g_video) != nullptr));
     });
 
     // A file on the command line opens immediately. This exists so playback can
     // be verified end to end by a test rather than by a person clicking around;
     // it is not a user-facing feature.
-    const QStringList args = QCoreApplication::arguments();
-    if (args.size() > 1) {
-        const QString path = args.at(1);
-        QTimer::singleShot(600, &bridge, [&bridge, path] { bridge.openPath(path); });
-    }
-
     const int rc = app.exec();
     if (g_video) { DestroyWindow(g_video); g_video = nullptr; }
     return rc;

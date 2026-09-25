@@ -75,6 +75,13 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY settingsChanged)
     Q_PROPERTY(QString defaultPage READ defaultPage WRITE setDefaultPage NOTIFY settingsChanged)
     Q_PROPERTY(QString defaultPageLabel READ defaultPageLabel NOTIFY settingsChanged)
+    // Used by the shell to open on the saved page. Set from the command line in
+    // tests so a screenshot does not depend on clicking the dock.
+    Q_PROPERTY(QString initialPage READ initialPage WRITE setInitialPage NOTIFY settingsChanged)
+    // The page the shell is showing, pushed by the shell so a command can tell
+    // where the user is: opening a file from home goes to the player, and
+    // opening one from the professional page stays there.
+    Q_PROPERTY(QString currentPage READ currentPage WRITE setCurrentPage NOTIFY settingsChanged)
 
     // --- settings-page reporting -------------------------------------------
     Q_PROPERTY(QString remotePlayState READ remotePlayState NOTIFY snapshotChanged)
@@ -197,6 +204,7 @@ class QmlPlayerBridge : public QObject {
     // resolution" field does not exist, so the UI exposes the real control instead
     // of a picker that would change nothing.
     Q_PROPERTY(int srTargetIndex READ srTargetIndex WRITE setSrTargetIndex NOTIFY settingsChanged)
+    Q_PROPERTY(QString srTargetLabel READ srTargetLabel NOTIFY settingsChanged)
     // Presets as a picker model: one preset concept, list and node together.
     Q_PROPERTY(QVariantList presetChoices READ presetChoices NOTIFY presetsChanged)
 
@@ -241,6 +249,10 @@ public:
     QString defaultPage() const;
     void setDefaultPage(const QString& value);
     QString defaultPageLabel() const;
+    QString initialPage() const;
+    void setInitialPage(const QString& value);
+    QString currentPage() const;
+    void setCurrentPage(const QString& value);
     QString remotePlayState() const;
     QVariantList componentList() const;
     QString appName() const;
@@ -356,6 +368,7 @@ public:
     void setExportBitrateMbps(int value);
     QString exportPresetName() const;
     int srTargetIndex() const;
+    QString srTargetLabel() const;
     void setSrTargetIndex(int index);
     QVariantList presetChoices() const;
 

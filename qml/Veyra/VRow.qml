@@ -9,6 +9,7 @@ Item {
     default property alias control: slot.data
 
     implicitHeight: hint.length > 0 ? Theme.rowMinHeight + 12 : Theme.rowMinHeight
+    height: implicitHeight
     RowLayout {
         anchors.fill: parent
         spacing: 12

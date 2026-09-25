@@ -478,60 +478,117 @@ Item {
                         spacing: 6
                         visible: root.tab === "quality"
 
-                        VGroup {
+                        // The design builds the inspector from accordion cards, not
+                        // flat rows: an icon, a title, a live summary line, a switch
+                        // and a chevron, with nested groups inside.
+                        VAccordion {
+                            Layout.fillWidth: true
+                            glyph: "✨"
+                            hue: "#4F7BFF"
+                            title: "超分辨率"
+                            summary: (veyra.srEnabled ? "RTX 视频超分" : "已关闭")
+                                     + " · " + veyra.srTargetLabel
+                                     + (veyra.videoSrQuality > 0 ? " · 质量 " + veyra.videoSrQuality : "")
+                            on: veyra.srEnabled
+                            open: true
+                            onToggled: veyra.srEnabled = on
+
                             VRow {
-                                label: "超分辨率"
-                                VSwitch {
-                                    checked: veyra.srEnabled
-                                    onToggled: veyra.srEnabled = checked
+                                label: "目标尺寸"
+                                hint: "决定输出分辨率"
+                                VSeg {
+                                    options: [
+                                        { id: "1", label: "2K" },
+                                        { id: "2", label: "4K" },
+                                        { id: "3", label: "8K" }
+                                    ]
+                                    current: String(veyra.srTargetIndex)
+                                    onPicked: id => veyra.srTargetIndex = parseInt(id)
                                 }
                             }
                             VRow {
-                                label: "NR 画面增强"
-                                hint: "每层独立参数，最多 4 层"
-                                VSwitch {
-                                    checked: veyra.nrEnabled
-                                    onToggled: veyra.nrEnabled = checked
+                                label: "质量"
+                                hint: "RTX 视频超分档位"
+                                VSeg {
+                                    options: [
+                                        { id: "1", label: "1" },
+                                        { id: "2", label: "2" },
+                                        { id: "3", label: "3" },
+                                        { id: "4", label: "4" }
+                                    ]
+                                    current: String(veyra.videoSrQuality)
+                                    onPicked: id => veyra.videoSrQuality = parseInt(id)
                                 }
                             }
                         }
 
-                        // NR parameters, shown only when NR is on.
-                        VGroup {
-                            visible: veyra.nrEnabled
+                        VAccordion {
+                            Layout.fillWidth: true
+                            glyph: "🪄"
+                            hue: Theme.accent
+                            title: "NR 画面增强"
+                            summary: "每层参数独立 · 强度 " + veyra.nrIntensity.toFixed(2)
+                            on: veyra.nrEnabled
+                            onToggled: veyra.nrEnabled = on
+
                             VRow {
                                 label: "模型强度"
                                 value: veyra.nrIntensity.toFixed(2)
                                 VSlider {
-                                    implicitWidth: 150
+                                    implicitWidth: 140
                                     from: 0; to: 1; value: veyra.nrIntensity
                                     onMoved: veyra.nrIntensity = value
                                 }
                             }
-                            VRow {
-                                label: "局部明暗"
-                                value: veyra.nrTone.toFixed(2)
-                                VSlider {
-                                    implicitWidth: 150
-                                    from: 0; to: 1; value: veyra.nrTone
-                                    onMoved: veyra.nrTone = value
+                            VSubGroup {
+                                label: "模型参数"
+                                count: 3
+                                VRow {
+                                    label: "局部明暗"
+                                    value: veyra.nrTone.toFixed(2)
+                                    VSlider {
+                                        implicitWidth: 130
+                                        from: 0; to: 1; value: veyra.nrTone
+                                        onMoved: veyra.nrTone = value
+                                    }
+                                }
+                                VRow {
+                                    label: "局部结构"
+                                    value: veyra.nrStructure.toFixed(2)
+                                    VSlider {
+                                        implicitWidth: 130
+                                        from: 0; to: 1; value: veyra.nrStructure
+                                        onMoved: veyra.nrStructure = value
+                                    }
+                                }
+                                VRow {
+                                    label: "肤质 · 未证实"
+                                    value: veyra.nrSkin.toFixed(2)
+                                    VSlider {
+                                        implicitWidth: 130
+                                        from: -1; to: 1; value: veyra.nrSkin
+                                        onMoved: veyra.nrSkin = value
+                                    }
                                 }
                             }
-                            VRow {
-                                label: "局部结构"
-                                value: veyra.nrStructure.toFixed(2)
-                                VSlider {
-                                    implicitWidth: 150
-                                    from: 0; to: 1; value: veyra.nrStructure
-                                    onMoved: veyra.nrStructure = value
+                            VSubGroup {
+                                label: "实验"
+                                count: 2
+                                VRow {
+                                    label: "时间域防闪烁"
+                                    hint: "在 NR 之后稳定残差"
+                                    VSwitch {
+                                        checked: veyra.nrTemporal
+                                        onToggled: veyra.nrTemporal = checked
+                                    }
                                 }
-                            }
-                            VRow {
-                                label: "时间域防闪烁"
-                                hint: "在 NR 之后稳定残差，默认关闭"
-                                VSwitch {
-                                    checked: veyra.nrTemporal
-                                    onToggled: veyra.nrTemporal = checked
+                                VRow {
+                                    label: "低延迟模式"
+                                    hint: "先 NR 再超分，仅预览"
+                                    VSwitch {
+                                        checked: veyra.lowLatency
+                                        onToggled: veyra.lowLatency = checked
+                                    }
                                 }
                             }
                         }

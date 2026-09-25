@@ -65,6 +65,8 @@ struct QmlPlayerBridge::Impl {
     engine::ExportJobManager exportJob;
     engine::ExportJobSnapshot exportSnapshot;
     bool exportHevc = false;
+    QString initialPageOverride;
+    QString currentPage;
 
     QTimer* timer = nullptr;
 
@@ -332,6 +334,18 @@ QString QmlPlayerBridge::defaultPageLabel() const {
     if (page == QLatin1String("pro")) return tr("专业模式");
     return tr("首页");
 }
+
+QString QmlPlayerBridge::initialPage() const {
+    // The saved preference unless a test override was set.
+    return impl_->initialPageOverride.isEmpty() ? defaultPage() : impl_->initialPageOverride;
+}
+void QmlPlayerBridge::setInitialPage(const QString& value) {
+    impl_->initialPageOverride = value;
+    emit settingsChanged();
+}
+
+QString QmlPlayerBridge::currentPage() const { return impl_->currentPage; }
+void QmlPlayerBridge::setCurrentPage(const QString& value) { impl_->currentPage = value; }
 
 QString QmlPlayerBridge::remotePlayState() const {
     // The engine's own remote-play state word, or empty when there is none. No
@@ -731,6 +745,16 @@ void QmlPlayerBridge::setExportBitrateMbps(int value) {
 
 QString QmlPlayerBridge::exportPresetName() const { return currentPresetName(); }
 
+QString QmlPlayerBridge::srTargetLabel() const {
+    // The label follows the SR target, because that is what sets the output size.
+    switch (srTargetIndex()) {
+    case 1: return QStringLiteral("2K");
+    case 2: return QStringLiteral("4K");
+    case 3: return QStringLiteral("8K");
+    default: return tr("源尺寸");
+    }
+}
+
 int QmlPlayerBridge::srTargetIndex() const {
     // 0 keeps the source size; 1..3 are the engine's Qhd/Uhd4K/Uhd8K targets.
     switch (settings().srTarget) {
@@ -820,7 +844,11 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // geometry, and only then open. The presenter samples the window's client
     // size once at initialisation; opening before that point is what produced a
     // 1x1 swapchain.
-    emit navigate(QStringLiteral("minimal"));
+    // Only leave the current page when the user is choosing a source from home.
+    // Opening a file from the professional page keeps them there, which is what the
+    // design's source menu implies.
+    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home"))
+        emit navigate(QStringLiteral("min"));
     if (impl_->preOpen) impl_->preOpen();
     impl_->engine.open(impl_->videoWindow, wide, impl_->options);
 }
@@ -866,7 +894,7 @@ void QmlPlayerBridge::startExport() {
                                                 settings, impl_->exportHevc);
     if (!started) { emit notice(tr("导出启动失败；详见诊断"), true); return; }
     pollExport();
-    emit navigate(QStringLiteral("export"));
+    emit navigate(QStringLiteral("exp"));
 }
 
 void QmlPlayerBridge::cancelExport() {

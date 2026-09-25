@@ -49,11 +49,14 @@ Window {
     }
     onWidthChanged: if (cinema) height = Math.round(pictureHeight + barBelow)
     onPageChanged: {
+        // Tell the bridge where the user is, so a command like "open a file" can
+        // behave differently from home than from the professional page.
+        if (veyra.currentPage !== page) veyra.currentPage = page
         if (cinema) height = Math.round(pictureHeight + barBelow)
         else if (height < 600) height = 800
         // The video rect follows the page, and it must be settled before the
         // engine opens anything: it samples the window's client size once.
-        videoHost.update()
+        videoHost.syncRect()
     }
 
     // Background: pure black in cinema mode (the picture is the window), the
@@ -78,7 +81,7 @@ Window {
         id: videoHost
         objectName: "videoHost"
         visible: false          // geometry proxy; the native window draws pixels
-        function update() {
+        function syncRect() {
             const r = root.videoRect()
             x = r.x; y = r.y; width = r.width; height = r.height
         }
@@ -196,5 +199,10 @@ Window {
         }
     }
 
-    Component.onCompleted: videoHost.update()
+    Component.onCompleted: {
+        // Open on the configured page: the user's saved preference, or the
+        // override a test passes on the command line.
+        if (veyra.initialPage.length > 0) root.page = veyra.initialPage
+        videoHost.syncRect()
+    }
 }

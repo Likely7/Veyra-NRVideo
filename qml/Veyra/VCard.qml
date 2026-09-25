@@ -7,10 +7,14 @@ Rectangle {
     color: Theme.card
     border.width: 1
     border.color: Theme.stroke
-    implicitHeight: inner.childrenRect.height + 28
-    Item {
+    implicitHeight: inner.implicitHeight + 28
+    ColumnLayout {
         id: inner
-        anchors.fill: parent
-        anchors.margins: 14
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.leftMargin: 14
+        anchors.rightMargin: 14
+        spacing: 6
     }
 }

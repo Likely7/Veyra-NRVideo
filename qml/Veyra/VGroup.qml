@@ -8,13 +8,14 @@ Rectangle {
     color: Theme.card2
     border.width: 1
     border.color: Theme.stroke
-    implicitHeight: inner2.childrenRect.height + 4
-    Column {
+    implicitHeight: inner2.implicitHeight + 4
+    ColumnLayout {
         id: inner2
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         anchors.leftMargin: 14
         anchors.rightMargin: 14
+        spacing: 0
     }
 }
