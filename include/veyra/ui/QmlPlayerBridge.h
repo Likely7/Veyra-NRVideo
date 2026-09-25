@@ -237,6 +237,16 @@ class QmlPlayerBridge : public QObject {
     // Which preset the app opens with, as the manage page's "set default" uses.
     Q_PROPERTY(int defaultPresetIndex READ defaultPresetIndex NOTIFY presetsChanged)
 
+    // --- colour page -------------------------------------------------------
+    // The engine's ColorSettings carries a large parameter set. Rather than one
+    // property per field, the page reads and writes them by name through one pair
+    // of calls, and colourParameters() reports the catalogue the UI builds its
+    // controls from - so a control can only exist for a parameter that is real.
+    Q_PROPERTY(QVariantList colourParameters READ colourParameters NOTIFY chainChanged)
+    // The same catalogue grouped by section, so the page can nest its collapsible
+    // sub-panels without re-grouping in QML.
+    Q_PROPERTY(QVariantList colourGroups READ colourGroups NOTIFY chainChanged)
+
 public:
     // `engine` must outlive the bridge. `dataDirectory` holds ui-session.v1 and
     // the preset library; empty means the default user data directory.
@@ -421,6 +431,11 @@ public:
     QVariantList presetChoices() const;
     QVariantList presetSaveParts() const;
     int defaultPresetIndex() const;
+    QVariantList colourParameters() const;
+    QVariantList colourGroups() const;
+    Q_INVOKABLE double colourParameter(const QString& name) const;
+    Q_INVOKABLE bool setColourParameter(const QString& name, double value);
+    Q_INVOKABLE bool resetColourParameter(const QString& name);
 
     // The native HWND the engine presents into. The UI creates it as a child
     // window of the QML window and hands it over; the bridge never draws QML

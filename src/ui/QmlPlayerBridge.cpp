@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QHash>
 #include <QFile>
 #include <QTimer>
 
@@ -494,6 +495,152 @@ void QmlPlayerBridge::setRemotePlayPin(const QString& value) {
     // directory rather than here.
     impl_->remotePlayPin = value;
     emit settingsChanged();
+}
+
+
+// --- colour page -------------------------------------------------------------
+// One table of the parameters the engine actually carries, so a control can only
+// exist for a real field, and the UI can build itself from this catalogue.
+namespace {
+struct ColourParam {
+    const char* name;
+    const char* label;
+    const char* group;
+    float minimum, maximum, step;
+};
+// Names match ColorSettings' own members; the mixer bands are indexed.
+const ColourParam kColourParams[] = {
+    {"exposure",      "曝光（EV）",    "亮",       -5,     5,   0.05f},
+    {"contrast",      "对比度",        "亮",      -100,   100,   1},
+    {"highlights",    "高光",          "亮",      -100,   100,   1},
+    {"shadows",       "阴影",          "亮",      -100,   100,   1},
+    {"whites",        "白色",          "亮",      -100,   100,   1},
+    {"blacks",        "黑色",          "亮",      -100,   100,   1},
+    {"texture",       "纹理",          "效果",    -100,   100,   1},
+    {"clarity",       "清晰度",        "效果",    -100,   100,   1},
+    {"dehaze",        "去朦胧",        "效果",    -100,   100,   1},
+    {"temperature",   "色温（相对）",  "颜色",    -100,   100,   1},
+    {"tint",          "色调",          "颜色",    -100,   100,   1},
+    {"vibrance",      "自然饱和度",    "颜色",    -100,   100,   1},
+    {"saturation",    "饱和度",        "颜色",    -100,   100,   1},
+    {"paramHighlights","参数化高光",   "曲线",    -100,   100,   1},
+    {"paramLights",   "参数化亮调",    "曲线",    -100,   100,   1},
+    {"paramDarks",    "参数化暗调",    "曲线",    -100,   100,   1},
+    {"paramShadows",  "参数化阴影",    "曲线",    -100,   100,   1},
+    {"splitHighlights","分离高光",     "颜色分级", -100,  100,   1},
+    {"splitMidtones", "分离中间调",    "颜色分级", -100,  100,   1},
+    {"splitShadows",  "分离阴影",      "颜色分级", -100,  100,   1},
+    {"gradingBlending","混合",         "颜色分级",   0,   100,   1},
+    {"gradingBalance","平衡",          "颜色分级", -100,   100,   1},
+    {"calibrationShadowTint","阴影色调","校准",    -100,   100,   1},
+    {"lutStrength",   "LUT 强度",      "LUT",        0,   100,   1},
+};
+
+float* colourScalar(engine::ColorSettings& c, const char* name) {
+    const std::string_view n{name};
+    if (n == "exposure") return &c.exposure;
+    if (n == "contrast") return &c.contrast;
+    if (n == "highlights") return &c.highlights;
+    if (n == "shadows") return &c.shadows;
+    if (n == "whites") return &c.whites;
+    if (n == "blacks") return &c.blacks;
+    if (n == "texture") return &c.texture;
+    if (n == "clarity") return &c.clarity;
+    if (n == "dehaze") return &c.dehaze;
+    if (n == "temperature") return &c.temperature;
+    if (n == "tint") return &c.tint;
+    if (n == "vibrance") return &c.vibrance;
+    if (n == "saturation") return &c.saturation;
+    if (n == "paramHighlights") return &c.paramHighlights;
+    if (n == "paramLights") return &c.paramLights;
+    if (n == "paramDarks") return &c.paramDarks;
+    if (n == "paramShadows") return &c.paramShadows;
+    if (n == "splitHighlights") return &c.splitHighlights;
+    if (n == "splitMidtones") return &c.splitMidtones;
+    if (n == "splitShadows") return &c.splitShadows;
+    if (n == "gradingBlending") return &c.gradingBlending;
+    if (n == "gradingBalance") return &c.gradingBalance;
+    if (n == "calibrationShadowTint") return &c.calibrationShadowTint;
+    if (n == "lutStrength") return &c.lutStrength;
+    return nullptr;
+}
+} // namespace
+
+QVariantList QmlPlayerBridge::colourParameters() const {
+    QVariantList out;
+    for (const auto& p : kColourParams) {
+        QVariantMap item;
+        item["name"] = QString::fromUtf8(p.name);
+        item["label"] = QString::fromUtf8(p.label);
+        item["group"] = QString::fromUtf8(p.group);
+        item["min"] = double(p.minimum);
+        item["max"] = double(p.maximum);
+        item["step"] = double(p.step);
+        // Centred controls read their fill from the middle, as the design's sliders
+        // do for anything that can go either way.
+        item["center"] = p.minimum < 0 && p.maximum > 0;
+        out << item;
+    }
+    return out;
+}
+
+QVariantList QmlPlayerBridge::colourGroups() const {
+    // Grouped in catalogue order, so the sections appear in the design's order
+    // rather than in whatever order a hash would produce.
+    QVariantList groups;
+    QStringList order;
+    QHash<QString, QVariantList> buckets;
+    for (const auto& p : kColourParams) {
+        const QString group = QString::fromUtf8(p.group);
+        if (!buckets.contains(group)) order << group;
+        QVariantMap item;
+        item["name"] = QString::fromUtf8(p.name);
+        item["label"] = QString::fromUtf8(p.label);
+        item["min"] = double(p.minimum);
+        item["max"] = double(p.maximum);
+        item["center"] = p.minimum < 0 && p.maximum > 0;
+        buckets[group] << item;
+    }
+    for (const auto& group : order) {
+        QVariantMap entry;
+        entry["group"] = group;
+        entry["items"] = buckets.value(group);
+        groups << entry;
+    }
+    return groups;
+}
+
+double QmlPlayerBridge::colourParameter(const QString& name) const {
+    auto c = settings().color;
+    const auto utf8 = name.toUtf8();
+    if (float* field = colourScalar(c, utf8.constData())) return double(*field);
+    return 0.0;
+}
+
+bool QmlPlayerBridge::setColourParameter(const QString& name, double value) {
+    auto s = settings();
+    const auto utf8 = name.toUtf8();
+    float* field = colourScalar(s.color, utf8.constData());
+    if (field == nullptr) return false;
+    const float next = float(value);
+    if (*field == next) return true;
+    *field = next;
+    // Colour is live in the engine: it uploads per frame, so this never rebuilds the
+    // graph and does not need a rebuild check.
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+    return true;
+}
+
+bool QmlPlayerBridge::resetColourParameter(const QString& name) {
+    auto s = settings();
+    const auto utf8 = name.toUtf8();
+    float* field = colourScalar(s.color, utf8.constData());
+    if (field == nullptr) return false;
+    *field = 0.0f;
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+    return true;
 }
 
 void QmlPlayerBridge::attachVideoWindow(qulonglong nativeHandle) {

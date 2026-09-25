@@ -695,66 +695,60 @@ Item {
                     }
 
                     // --- 色彩 -------------------------------------------------
+                    // Built from the engine's own parameter catalogue, so a control
+                    // can only exist for a field ColorSettings really carries. The
+                    // groups follow the design's sections (亮 / 效果 / 颜色 / 曲线 /
+                    // 颜色分级 / 校准 / LUT).
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 6
                         visible: root.tab === "color"
-                        VGroup {
-                            VRow {
-                                label: "调色"
-                                VSwitch {
-                                    checked: veyra.colorEnabled
-                                    onToggled: veyra.colorEnabled = checked
+
+                        VAccordion {
+                            Layout.fillWidth: true
+                            glyph: "🎨"
+                            hue: "#E0C341"
+                            title: "调色"
+                            summary: veyra.colorEnabled
+                                     ? ("曝光 " + veyra.colourParameter("exposure").toFixed(2)
+                                        + " · 对比 " + Math.round(veyra.colourParameter("contrast")))
+                                     : "已关闭"
+                            on: veyra.colorEnabled
+                            open: true
+                            onToggled: veyra.colorEnabled = on
+
+                            Repeater {
+                                model: veyra.colourGroups
+                                delegate: VSubGroup {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    label: modelData.group
+                                    count: modelData.items.length
+                                    Repeater {
+                                        model: modelData.items
+                                        delegate: VRow {
+                                            required property var modelData
+                                            label: modelData.label
+                                            value: veyra.colourParameter(modelData.name).toFixed(2)
+                                            VSlider {
+                                                implicitWidth: 130
+                                                center: modelData.center
+                                                from: modelData.min
+                                                to: modelData.max
+                                                value: veyra.colourParameter(modelData.name)
+                                                onMoved: veyra.setColourParameter(modelData.name, value)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                        VGroup {
-                            visible: veyra.colorEnabled
-                            VRow {
-                                label: "曝光（EV）"
-                                value: veyra.colorExposure.toFixed(2)
-                                VSlider {
-                                    implicitWidth: 150
-                                    center: true
-                                    from: -5; to: 5; value: veyra.colorExposure
-                                    onMoved: veyra.colorExposure = value
-                                }
-                            }
-                            VRow {
-                                label: "对比度"
-                                value: String(Math.round(veyra.colorContrast))
-                                VSlider {
-                                    implicitWidth: 150
-                                    center: true
-                                    from: -100; to: 100; value: veyra.colorContrast
-                                    onMoved: veyra.colorContrast = value
-                                }
-                            }
-                            VRow {
-                                label: "饱和度"
-                                value: String(Math.round(veyra.colorSaturation))
-                                VSlider {
-                                    implicitWidth: 150
-                                    center: true
-                                    from: -100; to: 100; value: veyra.colorSaturation
-                                    onMoved: veyra.colorSaturation = value
-                                }
-                            }
-                            VRow {
-                                label: "色温（相对）"
-                                value: String(Math.round(veyra.colorTemperature))
-                                VSlider {
-                                    implicitWidth: 150
-                                    center: true
-                                    from: -100; to: 100; value: veyra.colorTemperature
-                                    onMoved: veyra.colorTemperature = value
-                                }
-                            }
-                        }
-                        // Honest scope note: the design's colour page is much larger
-                        // (curves, mixer, grading wheels, calibration, LUT). Those
-                        // controls are not wired to the bridge yet, so this panel
-                        // says so rather than showing dead sliders.
+
+                        // The design's colour page also has a curves editor, a mixer,
+                        // grading wheels and a LUT picker. Those need drawing widgets
+                        // (a curve canvas, colour wheels) that are not built yet, so
+                        // this says so rather than showing sliders that stand in for
+                        // them.
                         Rectangle {
                             Layout.fillWidth: true
                             implicitHeight: noteText.implicitHeight + 20
@@ -764,7 +758,8 @@ Item {
                                 id: noteText
                                 anchors.fill: parent
                                 anchors.margins: 10
-                                text: "曲线、混色器、颜色分级、校准与 LUT 尚未接入界面；引擎已支持，但本轮未接。"
+                                text: "曲线编辑器、混色器、颜色分级轮、原色校准与 LUT 选择尚未接入："
+                                    + "引擎已支持这些参数，但界面还需要曲线画布与色轮控件，本轮未做。"
                                 color: Theme.t2
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsSmall
