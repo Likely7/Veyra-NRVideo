@@ -1,5 +1,14 @@
 # Veyra 工作记录
 
+## 2026-09-26 桌面端接手 QML 界面迁移：VGroup 行重叠修复（S4.9）
+
+在 `codex/ui-qml-migration-20260925` 接手（交接存档 `checkpoint/ui-mig-wip-handoff`）。先用 `qml.exe` 跑交接留下的最小复现
+`E:\项目\Veyra\tmp\ui-qml-migration-20260925\min\Test.qml`，它没能复现（锚定的 `ColumnLayout` 正常）；补写 `Test2.qml`、
+`Test3.qml` 复现出两处原因：`VGroup` 内层是 `Column`，跳过没有宽度的 `VRow`；`VGroup` 放进 `ColumnLayout` 时自身宽 0。
+改为 `ColumnLayout` 并默认 `Layout.fillWidth: true`。`scripts/build-qt-probe.ps1 -Targets veyra_qml_ui` exit 0；导出页、设置页、
+专业页截图在 `E:\项目\Veyra\logs\ui-qml-migration-20260925\qml-shots\qml-*-vgroupfix2.png`，看图确认行不再重叠。对话框分组
+未截图（未执行）。详细记录见 [`UI_MIGRATION_EXECUTION_2026-09-25.md`](UI_MIGRATION_EXECUTION_2026-09-25.md) S4.9。未推送、未发布。
+
 ## 2026-09-25 界面迁移总方案（审查设计稿与现有软件）
 
 用户认可第三版设计稿后，要求整体审查设计稿与软件并确定迁移顺序。只读审查引擎（`EnhanceGraph`、

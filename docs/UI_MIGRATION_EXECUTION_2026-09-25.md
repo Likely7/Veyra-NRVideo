@@ -27,7 +27,8 @@
 | S2.1 | NR 叠层实现 | 完成（已修 G1） | `checkpoint/ui-mig-s2.1b` | 13 项原有哈希逐像素一致；1/2/3/4 层均为真实图像 |
 | S2.1b | NR 时域防闪烁修复 | 完成 | `checkpoint/ui-mig-s2.1b` | 单层路径不变；叠层下开关由“完全无效”变为生效 |
 | S3.0 | Qt 6.8.3 安装 + 承载 D3D12 窗口实测 | 完成 | `checkpoint/ui-mig-s3.0` | 499/499 Present 成功，平均 0.205 ms，QML 动画未被拖慢 |
-| S3.0b | （旧行）Qt 6.8.3 安装 | 完成 | | `E:\项目\Veyra\deps\qt.8.3\msvc2022_64`，含 Core/Gui/Qml/Quick/QuickControls2 + windeployqt |
+| S3.0b | （旧行）Qt 6.8.3 安装 | 完成 | | `E:\项目\Veyra\deps\qt\6.8.3\msvc2022_64`，含 Core/Gui/Qml/Quick/QuickControls2 + windeployqt |
+| S4.9 | `VGroup` 行重叠修复（桌面端接手第一步） | 完成（截图已看） | `checkpoint/ui-mig-s4.9-vgroup` | 最小复现定位两处原因；导出页/设置页行已正常排布 |
 
 ## 发现并修复的 bug
 
@@ -36,9 +37,28 @@
 | B1 | S0.2 | `veyra_live_timing_tests` 的“输出上限仍会跳过候选帧”断言一直失败：09-22 把输出上限改到独立时间网格（`rateSubmitted`）后，测试只调用了 `submitted()`，测的是旧行为。产品逻辑正确，测试过期 | 测试补上 `rateSubmitted()` |
 | B3 | S1.1 | 非 NVIDIA 显卡上，`initializePreview` 的能力归一化分支把 `enableSr` 直接写成 false，AMD FSR 超分（唯一的跨厂商超分）在预览里永远不生效，而 `disableUnsupportedNvidiaEffects` 是特意保留它的。导出路径没有这个问题 | 5 处描述合并进 `describeStages()`，两边同一套规则 |
 | B4 | S1.7 | 新建的 `PosterFrame.cpp` 直接把 FFmpeg 头文件放在 C++ 作用域里引用，`sws_*` 按 C++ 名字改编，链接必然失败（“无法解析的外部符号”）。项目里其它 FFmpeg 使用者都用 `extern "C" {}` 包住，新文件漏了 | 用 `extern "C" {}` 包住三个 FFmpeg 头；同时确认 `veyra_engine` 不需要额外链接 FFmpeg 库 |
+| B5 | S4.9 | `VGroup` 里的行全部叠在 `y=0`（导出页、设置页、对话框分组）。两处原因：① 内层用的是 `Column`，而 `VRow` 自身没有宽度、靠 `Layout.fillWidth` 取宽，`Column` 不认 `Layout.*`，并且**跳过宽度为 0 的子项**，于是一行都不排；② `VGroup` 放进 `ColumnLayout` 时自己没有 `Layout.fillWidth`，宽度为 0，内层宽 -28，行同样不排 | 内层改 `ColumnLayout`，`VGroup` 默认 `Layout.fillWidth: true`（与 `VRow` 一致）。`qml.exe` 最小复现逐项验证 |
 | B2 | S0.2 | `veyra_quality_probe` 用 ANSI `argv` 转宽字符，输出目录含中文（`E:\项目`）时写图失败，交付门槛因此失败；门槛脚本原先用相对路径绕开，但源码在 C:、日志在 E: 时相对路径无法跨盘 | 探针改为从 UTF-16 命令行读参数；门槛改传绝对路径 |
 
 ## 日志
+
+### S4.9（2026-09-26）`VGroup` 行重叠修复（桌面端接手）
+先跑交接留下的最小复现 `E:\项目\Veyra\tmp\ui-qml-migration-20260925\min\Test.qml`（`qml.exe`，`QT_QPA_PLATFORM=offscreen`、`QT_FORCE_STDERR_LOGGING=1`，否则 Windows 上 `console.log` 不输出）：
+`MIN colH=80 colIH=80 rootIH=86` —— 锚定在矩形里的 `ColumnLayout` 本身没问题，它没能复现。
+
+补两个复现（同目录 `Test2.qml`、`Test3.qml`，输出 `out*.txt`）：
+- A 真实 `VGroup` + 3 个真实 `VRow`：`groupH=6`、内层 `H=0 IH=0`、每行 `y=0 w=0` —— 与交接实测完全一致，复现成功。
+- B 普通 `Column` + 3 个不设宽度的 `Item`：同样 `H=0`、全部 `y=0`。C 同样的 `Column`，`Item` 给了宽度：`H=114`，`y=0/38/76` 正常。**第一处原因**：`Column` 跳过宽度为 0 的子项，而 `VRow` 没有宽度（它靠 `Layout.fillWidth`，只有布局认）。
+- 内层改 `ColumnLayout` 后 A 正常（`groupH=120`，`y=0/38/76`）。但真实导出页截图**仍然重叠**：D（`VGroup` 直接放进 `ColumnLayout`，不写 `Layout.fillWidth`）`groupW=0`、内层 `W=-28`、行全 `y=0`。**第二处原因**：`VGroup` 自己没有宽度。E（加 `Layout.fillWidth`）正常。
+- `VGroup` 默认 `Layout.fillWidth: true` 后 A/D/E 全部正常。
+
+构建 `scripts/build-qt-probe.ps1 -Targets veyra_qml_ui`（exit 0），同步到 `qml-app` 后截图并**看过图**：
+- 导出页 `E:\项目\Veyra\logs\ui-qml-migration-20260925\qml-shots\qml-exp-vgroupfix2.png`：编码 / 分辨率 / 码率 / 增强预设各占一行，不再重叠（修前 `qml-exp.png`、`qml-exp-vgroupfix.png`）。
+- 设置页 `qml-set-vgroupfix2.png`：页面切换栏 / 减少动画 / 默认页面三行正常。
+- 专业页 `qml-pro-vgroupfix2.png`：未受影响。
+- 对话框里的 `DGroup`（同样是 `VGroup`）未截图，**未执行**；待加对话框截图入口后补看。
+
+这一步只修容器，没有对照设计稿调样式；两页离设计稿的差距在逐屏比对里处理。
 
 ### S4.1-修正（2026-09-25）用户验收：界面与设计稿偏差很大 —— **S4.1 的"完成"不成立**
 用户验收后明确指出：当前前端和当初的网页设计稿**完全不一样，偏差很大**；最终要求**1:1 还原设计稿**。
