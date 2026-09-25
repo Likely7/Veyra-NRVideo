@@ -7,6 +7,15 @@ param([string]$App = 'E:\项目\Veyra\tests\ui-qml-migration-20260925\app',
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force $Out | Out-Null
 $env:TEMP = 'E:\项目\Veyra\tmp\ui-qml-migration-20260925'; $env:TMP = $env:TEMP
+# Several contract tests open a fixture through a path relative to the CWD
+# (loop/local/fixed_clips/corpus/...). They run from the staged app directory,
+# so stage the fixture tree beside the executables first; otherwise they report
+# "corpus missing" and look like a regression they are not.
+$fixtureRoot = Join-Path $App 'loop'
+if (-not (Test-Path -LiteralPath (Join-Path $fixtureRoot 'localixed_clips\corpus'))) {
+  $sourceRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'loop'
+  if (Test-Path -LiteralPath $sourceRoot) { Copy-Item -LiteralPath $sourceRoot -Destination $fixtureRoot -Recurse -Force }
+}
 # name -> reason. Anything not listed and matching *_tests.exe runs with no arguments.
 $skip = @{
   'veyra_capture_tests.exe' = 'needs a capture device'
