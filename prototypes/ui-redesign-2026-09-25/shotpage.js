@@ -111,9 +111,17 @@
         getComputedStyle(pop).scale; pop.classList.add('open'); getComputedStyle(pop).scale;
       };
       read = () => (+getComputedStyle(pop).scale).toFixed(4);
+    } else if (probe === 'dialog') {
+      // The capture dialog; .dlg scale .9 -> 1. Like the menu, .open is added here.
+      start = () => {
+        app.dialog('capture');
+        const scrim = root.querySelector('.scrim');
+        getComputedStyle(scrim.firstElementChild).scale; scrim.classList.add('open'); getComputedStyle(scrim.firstElementChild).scale;
+      };
+      read = () => (+getComputedStyle(root.querySelector('.scrim .dlg')).scale).toFixed(4);
     } else return;
     start();
-    if (probe === 'menu') { sample(); return; }   // the transitions exist now; waiting lets them finish
+    if (probe === 'menu' || probe === 'dialog') { sample(); return; }   // the transitions exist now; waiting lets them finish
     // The page switch shows the new page 150 ms later; wait for its animations to exist.
     setTimeout(sample, probe === 'page' ? 200 : 30);
     function sample() {

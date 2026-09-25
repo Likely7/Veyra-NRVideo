@@ -266,6 +266,7 @@ Window {
             else if (name === "page") root.page = "pro"
             else if (name === "switch") probeSwitch.item.checked = true
             else if (name === "menu") proPage.openTestMenu("source")
+            else if (name === "dialog") dialogs.open("capture")
             else if (name === "seg") { probe.x0 = probeSeg.item.indicatorX; probeSeg.item.current = "c"; probe.x1 = probeSeg.item.targetX }
             probe.t0 = Date.now()
             probe.running = true
@@ -284,6 +285,7 @@ Window {
             if (name === "dock") v = dock.barY
             else if (name === "page") v = proPage.opacity + "," + proPage.y
             else if (name === "menu") v = proPage.testMenuScale.toFixed(4)
+            else if (name === "dialog") v = dialogs.motionScale.toFixed(4)
             else if (name === "seg") v = ((probeSeg.item.indicatorX - x0) / (x1 - x0)).toFixed(4)
             else if (probeSwitch.item) v = probeSwitch.item.children[0].x - 3
             else return

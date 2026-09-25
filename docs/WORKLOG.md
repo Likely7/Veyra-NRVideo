@@ -6615,3 +6615,11 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
     - 结果：设计峰值 1.0042，QML 峰值 1.0042，chart-menu.png 曲线重合（QML 约晚一采样帧）。
   - 回归：`shoot.ps1 -Step g1.5-menu -Frames f-pro,x-menu-src,x-menu-preset` 看图正常；f-pro 的既有差距（质量 seg 无选中、未开片源）属 G3。
   - shoot-all 增加 x-menu-src/x-menu-preset 审查态；motion-sample 增加 menu。
+  - M16/M17 对话框（证据 `goal/g1.5-dialog/`）：
+    - 遮罩：opacity .2s 线性淡入淡出。
+    - DLayer 改为按 key 显示：scale .9→1 与下移 14px→0，.55s spring，关闭时反向；opacity .2s。
+    - 旧写法把 Behavior 挂在 visible 上，打开没有动画，已修正。
+    - 面板设 videoCover（圆角 16），从视频窗挖出。f-aud 对话框不再被视频遮挡。
+    - 偏差：原生视频画面无法被 QML 遮罩压暗，对话框旁的画面不变暗。
+    - 探针 dialog（设计 capture 对话框）：设计峰值 1.0041，QML 峰值 1.0041，chart-dialog.png 曲线重合。
+    - f-cap/f-aud 截图中对话框的内容与尺寸差距（设计有预览、格式行、音轨列表等）属 G3。

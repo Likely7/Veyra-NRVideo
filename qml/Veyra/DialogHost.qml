@@ -28,13 +28,19 @@ Item {
     signal startPs5()
     signal startScreen()
 
-    // Scrim: the design dims the page behind the dialog.
+    // Scrim (M16): the design dims the page behind the dialog, opacity .2s linear.
+    // The native video window cannot be dimmed from QML; only the dialog panel is cut
+    // out of it (videoCover below), so the picture beside the dialog stays undimmed.
     Rectangle {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.55)
-        visible: host.dialog !== ""
+        opacity: host.dialog !== "" ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
         TapHandler { onTapped: host.close() }
     }
+    // For the motion probe: the open dialog's scale.
+    property real motionScale: 1
 
     // --- shared chrome ----------------------------------------------------
     component DLayer: Rectangle {
@@ -47,6 +53,36 @@ Item {
         default property alias body: bodyCol.data
         signal actionTriggered(string label)
 
+        // Which dialog key shows this layer.
+        property string key: ""
+        readonly property bool shown: key.length > 0 && host.dialog === key
+        // M17: .dlg scale .9 -> 1 and translate 0 14px -> 0 over .55s --spring inside the
+        // scrim's .2s fade; closing runs the same back while the scrim fades out.
+        property real motionS: 0.9
+        property real motionDy: 14
+        onShownChanged: { if (shown) { motionS = 0.9; motionDy = 14; enterAnim.restart() } else exitAnim.restart() }
+        onMotionSChanged: if (shown) host.motionScale = motionS
+        ParallelAnimation {
+            id: enterAnim
+            NumberAnimation { target: dlg; property: "motionS"; to: 1; duration: Theme.d(550); easing.bezierCurve: Theme.spring }
+            NumberAnimation { target: dlg; property: "motionDy"; to: 0; duration: Theme.d(550); easing.bezierCurve: Theme.spring }
+        }
+        ParallelAnimation {
+            id: exitAnim
+            NumberAnimation { target: dlg; property: "motionS"; to: 0.9; duration: Theme.d(550); easing.bezierCurve: Theme.spring }
+            NumberAnimation { target: dlg; property: "motionDy"; to: 14; duration: Theme.d(550); easing.bezierCurve: Theme.spring }
+        }
+        opacity: shown ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
+        transform: [
+            Scale { origin.x: dlg.width / 2; origin.y: dlg.height / 2; xScale: dlg.motionS; yScale: dlg.motionS },
+            Translate { y: dlg.motionDy }
+        ]
+        // Cut out of the native video window (main.cpp syncVideoCovers).
+        objectName: "videoCover"
+        property real coverRadius: 16
+
         anchors.centerIn: parent
         width: dialogWidth
         implicitHeight: Math.min(720, header.height + bodyScroll.contentHeight + footer.height + 40)
@@ -55,9 +91,6 @@ Item {
         color: Theme.dialog
         border.width: 1
         border.color: Theme.stroke2
-        visible: host.dialog !== ""
-        scale: visible ? 1.0 : 0.9
-        Behavior on scale { NumberAnimation { duration: Theme.d(550); easing.bezierCurve: Theme.spring } }
 
         ColumnLayout {
             anchors.fill: parent
@@ -133,7 +166,7 @@ Item {
 
     // --- 采集卡 -----------------------------------------------------------
     DLayer {
-        visible: host.dialog === "capture"
+        key: "capture"
         glyph: "video"
         title: "采集卡"
         sub: "连接设备后，先关闭增强确认基础画面，再按需开启"
@@ -188,7 +221,7 @@ Item {
 
     // --- PS5 串流 ---------------------------------------------------------
     DLayer {
-        visible: host.dialog === "ps5"
+        key: "ps5"
         glyph: "gamepad"
         title: "PS5 串流"
         sub: "局域网 Remote Play · 凭据加密保存在本机"
@@ -238,7 +271,7 @@ Item {
 
     // --- 屏幕捕获 ---------------------------------------------------------
     DLayer {
-        visible: host.dialog === "screen"
+        key: "screen"
         glyph: "monitor"
         title: "屏幕捕获"
         sub: "把一个窗口或整块显示器作为片源"
@@ -280,7 +313,7 @@ Item {
 
     // --- 字幕设置 ---------------------------------------------------------
     DLayer {
-        visible: host.dialog === "subtitle"
+        key: "subtitle"
         glyph: "type"
         title: "字幕设置"
         sub: "实时预览，设置对所有文件生效"
@@ -297,7 +330,7 @@ Item {
 
     // --- 音频设置 ---------------------------------------------------------
     DLayer {
-        visible: host.dialog === "audio"
+        key: "audio"
         glyph: "music"
         title: "音频设置"
         dialogWidth: 560
@@ -400,7 +433,7 @@ Item {
     // the user can see what they are about to store.
     DLayer {
         id: saveDialog
-        visible: host.dialog === "save"
+        key: "save"
         glyph: "plus"
         title: "另存为预设"
         sub: "预设会保存下面勾选的部分；应用时只覆盖勾选的部分"
@@ -463,7 +496,7 @@ Item {
 
     // --- 管理预设 ---------------------------------------------------------
     DLayer {
-        visible: host.dialog === "manage"
+        key: "manage"
         glyph: "settings"
         title: "管理预设"
         sub: "内置预设可以复制，不能改名或删除"
