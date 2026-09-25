@@ -6635,3 +6635,9 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
     - M29 箭头：改用 Lucide right 图标。
     - M28/M29 只看了静态截图（zoom-acc.png），动效曲线未执行探针。
   - 偏差：提示气泡字号 11.5px 在 QML 里只能是整数 pixelSize，暂用 11，G3 统一处理小数字号。f-aud 对话框的白色滚动条属 G3。
+- G1.6 Qt Quick Test 组件冒烟（2026-09-26，`checkpoint/ui-mig-g1.6`）：
+  - 新目标 `veyra_qml_quick_tests`（`tests/qml/QuickSmokeTests.cpp` + `tests/qml/quick/tst_components.qml`），需 Qt6::QuickTest，缺失时跳过。
+  - 用例：开关切换、分段索引、滑块点击取值、滑块拖动取值（+20% 宽度≈70，释放时 moved 只发一次）、折叠高度、VMenu 选择（勾选移动、130ms 后发 index、禁用项无效）。测试中 `Theme.reduced = true`。
+  - 命令：`powershell -NoProfile -File tools/qt_probe/run-quick-tests.ps1 -Out E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\g1.6-quick-tests.txt`。
+  - 结果：8 passed, 0 failed（含 init/cleanup）。首次运行 test_slider_tap 计数为 2，原因是前一个拖动用例也发 moved，已在各用例开头 clear。
+  - 脚本内 QtTest 控制台输出经管道丢失，改为 `-o <file>,txt` 再读文件。

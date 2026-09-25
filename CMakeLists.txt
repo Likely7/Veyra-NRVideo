@@ -780,6 +780,18 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_compile_features(veyra_qml_easing_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_qml_easing_tests PRIVATE VEYRA_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
   target_link_libraries(veyra_qml_easing_tests PRIVATE Qt6::Gui Qt6::Qml Qt6::Quick)
+
+  # G1.6: component smoke tests (Qt Quick Test), tests/qml/quick/tst_*.qml.
+  find_package(Qt6 COMPONENTS QuickTest)
+  if(TARGET Qt6::QuickTest)
+    add_executable(veyra_qml_quick_tests tests/qml/QuickSmokeTests.cpp)
+    set_target_properties(veyra_qml_quick_tests PROPERTIES AUTOMOC ON)
+    target_compile_features(veyra_qml_quick_tests PRIVATE cxx_std_20)
+    target_compile_definitions(veyra_qml_quick_tests PRIVATE
+      VEYRA_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
+      QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/qml/quick")
+    target_link_libraries(veyra_qml_quick_tests PRIVATE Qt6::Qml Qt6::Quick Qt6::QuickTest)
+  endif()
 endif()
 
 # Qt + D3D12 host probe (S3.0): answers whether Qt can host the native video
