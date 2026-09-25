@@ -17,7 +17,10 @@ Item {
 
     // Where the picture ends and the pill straddles. Main.qml sets the window
     // height to pictureHeight + 46, so the bar's top edge is pictureHeight - 46.
-    readonly property real pictureHeight: parent ? parent.height - 46 : 0
+    // The picture is the window minus the control bar's full height: the bar
+    // sits below the picture rather than straddling it, because a native video
+    // window always draws above the QML scene.
+    readonly property real pictureHeight: parent ? parent.height - 92 : 0
 
     // --- the picture ------------------------------------------------------
     // .min .stage: full width, the picture height, radius 8 (the window radius),
@@ -51,7 +54,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         width: Math.min(860, root.width - 48)
         height: 92
-        y: root.pictureHeight - 46
+        y: root.pictureHeight
         radius: 30
         color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.86)
         border.width: 1

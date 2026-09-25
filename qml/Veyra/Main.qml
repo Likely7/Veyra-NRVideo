@@ -35,7 +35,10 @@ Window {
     // Cinema geometry, straight from the prototype: the picture is width/aspect
     // and the window is that plus the lower half of the control pill.
     property real filmAspect: 2.39
-    readonly property int barBelow: 46
+    // The design straddles the bar on the picture edge with barBelow = 46. The bar
+    // needs its own window for that, which does not exist yet, so the picture
+    // area reserves the whole bar height instead.
+    readonly property int barBelow: 92
     readonly property real pictureHeight: Math.round(width / filmAspect)
 
     function fitToFilm(aspect) {
@@ -47,7 +50,15 @@ Window {
         enabled: root.cinema
         NumberAnimation { duration: 700; easing.bezierCurve: Theme.springSoft }
     }
-    onWidthChanged: if (cinema) height = Math.round(pictureHeight + barBelow)
+    onWidthChanged: {
+        if (cinema) height = Math.round(pictureHeight + barBelow)
+        videoHost.syncRect()
+    }
+    // The window height animates towards the film's aspect, so the picture area has
+    // to follow every step of that animation. Without this the host kept its
+    // previous height and the picture sat inside black bars - exactly what cinema
+    // mode exists to avoid.
+    onHeightChanged: videoHost.syncRect()
     onPageChanged: {
         // Tell the bridge where the user is, so a command like "open a file" can
         // behave differently from home than from the professional page.
