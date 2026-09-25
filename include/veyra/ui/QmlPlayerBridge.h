@@ -32,6 +32,7 @@
 #include <memory>
 
 #include "veyra/engine/EffectChain.h"
+#include "veyra/engine/ExportJobManager.h"
 #include "veyra/engine/EnhancementSettings.h"
 #include "veyra/ui/PlayerUiFacade.h"
 
@@ -68,6 +69,18 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double colorContrast READ colorContrast WRITE setColorContrast NOTIFY settingsChanged)
     Q_PROPERTY(double colorSaturation READ colorSaturation WRITE setColorSaturation NOTIFY settingsChanged)
     Q_PROPERTY(double colorTemperature READ colorTemperature WRITE setColorTemperature NOTIFY settingsChanged)
+
+    // --- shell preferences -------------------------------------------------
+    // Kept by the facade so they survive a restart, and read by the shell.
+    Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY settingsChanged)
+    Q_PROPERTY(QString defaultPage READ defaultPage WRITE setDefaultPage NOTIFY settingsChanged)
+    Q_PROPERTY(QString defaultPageLabel READ defaultPageLabel NOTIFY settingsChanged)
+
+    // --- settings-page reporting -------------------------------------------
+    Q_PROPERTY(QString remotePlayState READ remotePlayState NOTIFY snapshotChanged)
+    // The loaded runtime components, as the engine reports them. A hand-written
+    // list here could drift from what the package actually contains.
+    Q_PROPERTY(QVariantList componentList READ componentList NOTIFY snapshotChanged)
 
     Q_PROPERTY(QString appName READ appName CONSTANT)
     Q_PROPERTY(QString version READ version CONSTANT)
@@ -165,9 +178,27 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString videoHdrStatus READ videoHdrStatus NOTIFY snapshotChanged)
 
     // --- export ------------------------------------------------------------
+    // Backed by the real ExportJobManager: state, progress and encoded counts come
+    // from its snapshot, not from a counter this file keeps.
     Q_PROPERTY(bool exportRunning READ exportRunning NOTIFY exportChanged)
+    Q_PROPERTY(bool exportPaused READ exportPaused NOTIFY exportChanged)
+    Q_PROPERTY(double exportProgress READ exportProgress NOTIFY exportChanged)
     Q_PROPERTY(QString exportStatus READ exportStatus NOTIFY exportChanged)
     Q_PROPERTY(QString exportTarget READ exportTarget NOTIFY exportChanged)
+    Q_PROPERTY(int exportEncoded READ exportEncoded NOTIFY exportChanged)
+    Q_PROPERTY(int exportGenerated READ exportGenerated NOTIFY exportChanged)
+    Q_PROPERTY(bool exportHevc READ exportHevc WRITE setExportHevc NOTIFY exportChanged)
+    Q_PROPERTY(int exportBitrateMbps READ exportBitrateMbps WRITE setExportBitrateMbps NOTIFY exportChanged)
+    // The preset the export will use. The design requires export to select a
+    // preset (list or node) rather than assembling effects separately.
+    Q_PROPERTY(QString exportPresetName READ exportPresetName NOTIFY exportChanged)
+    // The super-resolution target, which is what actually decides the export size
+    // in this engine (0 = source, then Qhd/Uhd4K/Uhd8K). A separate "export
+    // resolution" field does not exist, so the UI exposes the real control instead
+    // of a picker that would change nothing.
+    Q_PROPERTY(int srTargetIndex READ srTargetIndex WRITE setSrTargetIndex NOTIFY settingsChanged)
+    // Presets as a picker model: one preset concept, list and node together.
+    Q_PROPERTY(QVariantList presetChoices READ presetChoices NOTIFY presetsChanged)
 
 public:
     // `engine` must outlive the bridge. `dataDirectory` holds ui-session.v1 and
@@ -205,6 +236,13 @@ public:
     double colorTemperature() const;
     void setColorTemperature(double v);
 
+    bool reducedMotion() const;
+    void setReducedMotion(bool value);
+    QString defaultPage() const;
+    void setDefaultPage(const QString& value);
+    QString defaultPageLabel() const;
+    QString remotePlayState() const;
+    QVariantList componentList() const;
     QString appName() const;
     QString version() const;
 
@@ -306,8 +344,20 @@ public:
     QString videoHdrStatus() const;
 
     bool exportRunning() const;
+    bool exportPaused() const;
+    double exportProgress() const;
     QString exportStatus() const;
     QString exportTarget() const;
+    int exportEncoded() const;
+    int exportGenerated() const;
+    bool exportHevc() const;
+    void setExportHevc(bool value);
+    int exportBitrateMbps() const;
+    void setExportBitrateMbps(int value);
+    QString exportPresetName() const;
+    int srTargetIndex() const;
+    void setSrTargetIndex(int index);
+    QVariantList presetChoices() const;
 
     // The native HWND the engine presents into. The UI creates it as a child
     // window of the QML window and hands it over; the bridge never draws QML
@@ -340,6 +390,7 @@ public:
     Q_INVOKABLE void chooseExportPath();
     Q_INVOKABLE void startExport();
     Q_INVOKABLE void cancelExport();
+    Q_INVOKABLE void pauseExport(bool paused);
     Q_INVOKABLE void quit();
     // Returns this page's controls to the engine defaults (the design's
     // "重置本页"); it does not touch presets or other pages.
@@ -371,6 +422,8 @@ public:
     // Diagnostics for the settings page: what the engine actually reports,
     // never a summary written by hand.
     Q_INVOKABLE QString diagnosticsReport() const;
+    Q_INVOKABLE void openProjectPage();
+    Q_INVOKABLE void copyDiagnostics();
 
 signals:
     // Emitted only when the underlying snapshot actually changed, so QML
@@ -392,6 +445,8 @@ private:
     // engine has been asked to apply. Every settings property reads this, so
     // they can never disagree with each other.
     engine::EnhancementSettings settings() const;
+    // Reads the export job's snapshot and emits exportChanged.
+    void pollExport();
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

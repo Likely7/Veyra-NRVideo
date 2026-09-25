@@ -181,6 +181,9 @@ bool PlayerUiFacade::savePreferencesLocked() {
     out << (captureSession_.valid ? 1 : 0) << ' ' << std::quoted(utf8(captureSession_.devicePath)) << ' '
         << std::quoted(utf8(captureSession_.formatKey)) << ' ' << std::quoted(utf8(captureSession_.presetName)) << ' '
         << captureSession_.fps << '\n';
+    // Appended after the capture session so a file written by an earlier build
+    // still loads: the reader treats a missing tail as defaults.
+    out << (reducedMotion_ ? 1 : 0) << ' ' << std::quoted(utf8(defaultPage_)) << '\n';
     const auto temporary = std::filesystem::path(preferencesPath()).concat(L".tmp");
     { std::ofstream f(temporary, std::ios::binary | std::ios::trunc); if (!f) { error_ = L"界面状态写入失败"; return false; } f << out.str(); if (!f) { error_ = L"界面状态写入失败"; return false; } }
     if (!MoveFileExW(temporary.c_str(), preferencesPath().c_str(), MOVEFILE_REPLACE_EXISTING)) {
@@ -228,6 +231,15 @@ bool PlayerUiFacade::loadPreferences() {
     session.valid = valid != 0 && !session.devicePath.empty();
     recent_ = std::move(recent);
     captureSession_ = std::move(session);
+    // The shell preferences were appended after the capture session. A file from a
+    // build that predates them simply has no tail, and that is not an error: the
+    // defaults stand and the rest of the file is still valid.
+    int reduced = 0;
+    std::string defaultPage;
+    if (in >> reduced >> std::quoted(defaultPage)) {
+        reducedMotion_ = reduced != 0;
+        if (!defaultPage.empty()) defaultPage_ = wide(defaultPage);
+    }
     return true;
 }
 }

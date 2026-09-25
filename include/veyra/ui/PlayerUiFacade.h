@@ -75,6 +75,16 @@ public:
     // this, so it has to actually clear rather than just re-scan.
     void clearRecentFiles();
 
+    // --- shell preferences --------------------------------------------------
+    // Reduced motion turns off the springs and transitions. Default page is what
+    // the app opens on (home / minimal / professional). Both persist here so they
+    // survive a restart, and both are preferences rather than enhancement settings:
+    // they never affect the picture.
+    bool reducedMotion() const { return reducedMotion_; }
+    void setReducedMotion(bool value) { reducedMotion_ = value; savePreferences(); }
+    const std::wstring& defaultPage() const { return defaultPage_; }
+    void setDefaultPage(std::wstring value) { defaultPage_ = std::move(value); savePreferences(); }
+
     // --- last capture session ----------------------------------------------
     struct CaptureSession {
         std::wstring devicePath;
@@ -105,6 +115,8 @@ private:
     bool haveLast_ = false;
     std::vector<RecentEntry> recent_;
     CaptureSession captureSession_{};
+    bool reducedMotion_ = false;
+    std::wstring defaultPage_ = L"home";
     std::wstring error_;
     std::filesystem::path preferencesPath() const;
     bool savePreferencesLocked();

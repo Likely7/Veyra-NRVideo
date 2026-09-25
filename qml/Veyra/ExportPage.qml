@@ -1,11 +1,14 @@
-// 视频导出: its own simplified mode, as the user asked.
+// 导出, rebuilt from the design (pages-b.js PAGES.exp + pages.css .exp).
 //
-// Scope honesty: this page exports what the engine can export today — the
-// enhancement chain applied to the current file, encoded by NVENC through the
-// existing export job. Output resolution is NOT offered as a control, because
-// the engine has no export-size setting yet (it derives the size from the NR
-// size policy); showing a resolution picker that changed nothing would be a lie
-// about the product. The missing pieces are recorded in the execution doc.
+// Design grid: 250px | 1fr | 330px, rows auto | 1fr | auto, padding 14. The queue
+// card spans rows 2-3 on the left; the video sits in the middle with the trim range
+// under it; output settings fill the right column.
+//
+// Scope, stated on the page rather than hidden: this build has no multi-file queue
+// and no trim range, because the engine exports one file from the current source
+// and has no trim settings. Those two cards say so instead of looking functional.
+// What is real - preset selection, codec, output size, bitrate and progress - is
+// wired to the engine's export job.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -14,164 +17,316 @@ Item {
     id: root
     signal requestPage(string page)
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 28
-        spacing: 14
-
-        RowLayout {
-            Layout.fillWidth: true
-            Text {
-                text: "视频导出"
-                color: Theme.t1
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsH1
-                Layout.fillWidth: true
-            }
-            Rectangle {
-                implicitWidth: 68
-                implicitHeight: 28
-                radius: 14
-                color: backHover.hovered ? Theme.card3 : Theme.card2
-                Text {
-                    anchors.centerIn: parent
-                    text: "返回"
-                    color: Theme.t2
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSmall
-                }
-                HoverHandler { id: backHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: root.requestPage("pro") }
-            }
+    // --- header -----------------------------------------------------------
+    RowLayout {
+        id: head
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 14
+        height: 32
+        spacing: 8
+        VH2 { text: "导出" }
+        Text {
+            text: "按所选预设导出，导出期间可继续观看"
+            color: Theme.t3
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsBody
         }
+        Item { Layout.fillWidth: true }
+        VButton { text: "添加文件"; onClicked: veyra.openFileDialog() }
+    }
 
-        Rectangle {
-            Layout.fillWidth: true
-            radius: Theme.rCard
-            color: Theme.card
-            implicitHeight: detail.implicitHeight + 32
+    // --- left column: what is being exported ------------------------------
+    Rectangle {
+        anchors.left: parent.left
+        anchors.leftMargin: 14
+        anchors.top: head.bottom
+        anchors.topMargin: 10
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 14
+        width: 250
+        radius: Theme.rCard
+        color: Theme.card
+        border.width: 1
+        border.color: Theme.stroke
 
-            ColumnLayout {
-                id: detail
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 16
-                spacing: 10
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 8
+            VEyebrow { text: "导出内容" }
+            Text {
+                Layout.fillWidth: true
+                text: veyra.hasSource ? veyra.sourceName : "未打开文件"
+                color: veyra.hasSource ? Theme.t1 : Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsBody
+                elide: Text.ElideMiddle
+            }
+            Text {
+                Layout.fillWidth: true
+                text: veyra.hasSource ? veyra.sourceSummary : ""
+                color: Theme.t3
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsSmall
+            }
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.stroke }
+            // The design's card is a queue of several files. The engine exports one
+            // at a time, so no queue is drawn and the card says why.
+            Text {
+                Layout.fillWidth: true
+                text: "本版本一次导出当前打开的一个文件；多文件队列尚未实现。"
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+            }
+            Item { Layout.fillHeight: true }
+        }
+    }
 
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 2
-                    columnSpacing: 12
-                    rowSpacing: 10
+    // --- right column -----------------------------------------------------
+    Rectangle {
+        id: rightCol
+        anchors.right: parent.right
+        anchors.rightMargin: 14
+        anchors.top: head.bottom
+        anchors.topMargin: 10
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 14
+        width: 330
+        radius: Theme.rCard
+        color: Theme.card
+        border.width: 1
+        border.color: Theme.stroke
 
-                    Text { text: "源"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
-                    Text {
-                        Layout.fillWidth: true
-                        text: veyra.hasSource ? veyra.sourceName + "  " + veyra.sourceSummary : "未打开文件"
-                        color: Theme.t1
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsBody
-                        elide: Text.ElideMiddle
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 4
+
+            VH3 { text: "输出设置" }
+
+            VGroup {
+                VRow {
+                    label: "编码"
+                    VSeg {
+                        options: [{ id: "h264", label: "H.264" }, { id: "hevc", label: "HEVC" }]
+                        current: veyra.exportHevc ? "hevc" : "h264"
+                        onPicked: id => veyra.exportHevc = (id === "hevc")
                     }
-
-                    Text { text: "输出"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text {
-                            Layout.fillWidth: true
-                            text: veyra.exportTarget.length > 0 ? veyra.exportTarget : "未选择"
-                            color: veyra.exportTarget.length > 0 ? Theme.t1 : Theme.t3
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fsBody
-                            elide: Text.ElideMiddle
-                        }
-                        Rectangle {
-                            implicitWidth: 62
-                            implicitHeight: 26
-                            radius: 13
-                            color: pickHover.hovered ? Theme.card3 : Theme.card2
-                            Text {
-                                anchors.centerIn: parent
-                                text: "选择…"
-                                color: Theme.t2
-                                font.family: Theme.fontUi
-                                font.pixelSize: 11
-                            }
-                            HoverHandler { id: pickHover; cursorShape: Qt.PointingHandCursor }
-                            TapHandler { onTapped: veyra.chooseExportPath() }
-                        }
+                }
+                VRow {
+                    label: "分辨率"
+                    hint: "由超分目标尺寸决定"
+                    VSeg {
+                        options: [
+                            { id: "0", label: "源" },
+                            { id: "1", label: "2K" },
+                            { id: "2", label: "4K" },
+                            { id: "3", label: "8K" }
+                        ]
+                        current: String(veyra.srTargetIndex)
+                        onPicked: id => veyra.srTargetIndex = parseInt(id)
                     }
+                }
+                VRow {
+                    label: "码率"
+                    value: veyra.exportBitrateMbps > 0 ? veyra.exportBitrateMbps + " Mbps" : "恒定质量"
+                    VSlider {
+                        implicitWidth: 110
+                        from: 0
+                        to: 200
+                        value: veyra.exportBitrateMbps
+                        onMoved: veyra.exportBitrateMbps = Math.round(value)
+                    }
+                }
+            }
 
-                    Text { text: "编码"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
+            VGroup {
+                VRow {
+                    label: "增强预设"
+                    hint: "列表预设与节点预设共用一套"
+                    VSelect {
+                        value: veyra.currentPresetName
+                        options: veyra.presetChoices
+                        onPicked: id => veyra.applyPresetIndex(parseInt(id))
+                    }
+                }
+            }
+
+            // What the export will run with. Frozen when it starts.
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: pinfo.implicitHeight + 16
+                radius: 9
+                color: Qt.rgba(1, 1, 1, 0.03)
+                ColumnLayout {
+                    id: pinfo
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    spacing: 3
                     Text {
-                        text: "NVENC H.264（D3D12 直接编码，不经 CPU 回读）"
+                        text: (veyra.exportHevc ? "HEVC" : "H.264") + " · "
+                              + (veyra.exportBitrateMbps > 0 ? veyra.exportBitrateMbps + " Mbps" : "恒定质量")
                         color: Theme.t2
-                        font.family: Theme.fontUi
+                        font.family: Theme.fontMono
                         font.pixelSize: Theme.fsSmall
                     }
+                    Text {
+                        Layout.fillWidth: true
+                        text: "编码与码率在开始导出时固定；导出期间改设置不会影响正在进行的任务。"
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                    }
                 }
+            }
 
-                Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.stroke }
-
-                // A short, explicit note about what this page cannot do yet. The
-                // project rule is to say so rather than ship a control that does
-                // nothing.
-                Text {
-                    Layout.fillWidth: true
-                    text: "导出尺寸目前由 NR 处理尺寸策略决定；自定义输出分辨率尚未实现。"
-                    color: Theme.t3
-                    font.family: Theme.fontUi
-                    font.pixelSize: 11
-                    wrapMode: Text.WordWrap
+            VRow {
+                label: "保存到"
+                VButton {
+                    text: veyra.exportTarget.length > 0 ? "重新选择…" : "选择…"
+                    onClicked: veyra.chooseExportPath()
                 }
+            }
+            Text {
+                Layout.fillWidth: true
+                text: veyra.exportTarget.length > 0 ? veyra.exportTarget : "未选择输出位置"
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: 11
+                elide: Text.ElideMiddle
+            }
+
+            Item { Layout.fillHeight: true }
+
+            // --- progress and the action ---------------------------------
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 8
 
                 RowLayout {
-                    Layout.topMargin: 4
-                    spacing: 10
-                    Rectangle {
-                        implicitWidth: 108
-                        implicitHeight: 34
-                        radius: 17
-                        color: startHover.hovered ? Qt.lighter(Theme.accent, 1.1) : Theme.accent
-                        Behavior on color { ColorAnimation { duration: Theme.durFast } }
-                        Text {
-                            anchors.centerIn: parent
-                            text: veyra.exportRunning ? "导出中…" : "开始导出"
-                            color: Theme.accentInk
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fsBody
-                            font.bold: true
-                        }
-                        HoverHandler { id: startHover; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: veyra.startExport() }
-                    }
-                    Rectangle {
-                        implicitWidth: 88
-                        implicitHeight: 34
-                        radius: 17
-                        visible: veyra.exportRunning
-                        color: cancelHover.hovered ? Theme.card3 : Theme.card2
-                        Text {
-                            anchors.centerIn: parent
-                            text: "取消"
-                            color: Theme.t2
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fsBody
-                        }
-                        HoverHandler { id: cancelHover; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: veyra.cancelExport() }
-                    }
+                    Layout.fillWidth: true
                     Text {
+                        Layout.fillWidth: true
                         text: veyra.exportStatus
                         color: Theme.t2
                         font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsSmall
+                        font.pixelSize: 12
+                    }
+                    Text {
+                        text: veyra.exportRunning ? (veyra.exportProgress * 100).toFixed(1) + "%" : ""
+                        color: Theme.t1
+                        font.family: Theme.fontMono
+                        font.pixelSize: 11
+                    }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 8
+                    radius: 9
+                    color: Qt.rgba(1, 1, 1, 0.08)
+                    Rectangle {
+                        height: parent.height
+                        radius: 9
+                        color: Theme.accent
+                        width: parent.width * Math.max(0, Math.min(1, veyra.exportProgress))
+                        Behavior on width { NumberAnimation { duration: 300 } }
+                    }
+                }
+                // Counts come from the job's own snapshot, not a parallel counter.
+                Text {
+                    visible: veyra.exportRunning
+                    text: "已编码 " + veyra.exportEncoded + " 帧 · 生成 " + veyra.exportGenerated + " 帧"
+                    color: Theme.t3
+                    font.family: Theme.fontMono
+                    font.pixelSize: 11
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    VButton {
+                        Layout.fillWidth: true
+                        primary: !veyra.exportRunning
+                        text: veyra.exportRunning ? (veyra.exportPaused ? "继续导出" : "暂停导出") : "开始导出"
+                        onClicked: veyra.exportRunning ? veyra.pauseExport(!veyra.exportPaused)
+                                                       : veyra.startExport()
+                    }
+                    VButton {
+                        visible: veyra.exportRunning
+                        text: "取消"
+                        onClicked: veyra.cancelExport()
                     }
                 }
             }
         }
+    }
 
-        Item { Layout.fillHeight: true }
+    // --- middle: picture, then the trim card ------------------------------
+    Rectangle {
+        id: vwrap
+        anchors.left: parent.left
+        anchors.leftMargin: 14 + 250 + 10
+        anchors.right: rightCol.left
+        anchors.rightMargin: 10
+        anchors.top: head.bottom
+        anchors.topMargin: 10
+        anchors.bottom: trimCard.top
+        anchors.bottomMargin: 10
+        radius: Theme.rCard
+        color: Theme.videoBlack
+        border.width: 1
+        border.color: Theme.stroke
+        clip: true
+
+        Item {
+            id: videoArea
+            objectName: "videoArea"
+            anchors.fill: parent
+            Text {
+                anchors.centerIn: parent
+                visible: !veyra.hasSource
+                text: veyra.statusText
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsH3
+            }
+        }
+    }
+
+    Rectangle {
+        id: trimCard
+        anchors.left: vwrap.left
+        anchors.right: vwrap.right
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 14
+        height: 72
+        radius: Theme.rCard
+        color: Theme.card
+        border.width: 1
+        border.color: Theme.stroke
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 10
+            Text {
+                text: "导出范围"
+                color: Theme.t2
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsBody
+            }
+            Text {
+                Layout.fillWidth: true
+                text: "整段 · 00:00:00 — " + veyra.durationText
+                color: Theme.t1
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsSmall
+            }
+            VTag { text: "片段裁剪尚未实现" }
+        }
     }
 }

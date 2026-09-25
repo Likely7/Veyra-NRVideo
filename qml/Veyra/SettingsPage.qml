@@ -1,9 +1,11 @@
-// 设置: presets, subtitles/audio, and the engine's own diagnostics.
+// 设置, rebuilt from the design (pages-b.js PAGES.set + pages.css .set).
 //
-// The user asked for a real settings page (the old app buried things in the
-// main window), and for presets to be ONE concept with selectable parts rather
-// than separate NR presets. So a preset here carries whichever parts the user
-// ticks, and applying it leaves the unticked parts alone.
+// Design: a 220px nav column with six sections (通用与外观 / 播放 / PS5 串流 /
+// 快捷键 / 组件与许可 / 关于) and a large body. The design deliberately has NO
+// capture-card section here: capture settings live in the capture dialog.
+//
+// Rows that would need engine support this build does not have say so, rather than
+// being drawn as switches that would do nothing.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -12,277 +14,350 @@ Item {
     id: root
     signal requestPage(string page)
 
-    property int tab: 0
+    property string section: "look"
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 28
-        spacing: 14
+    readonly property var sections: [
+        { id: "look",  label: "通用与外观" },
+        { id: "play",  label: "播放" },
+        { id: "ps5",   label: "PS5 串流" },
+        { id: "keys",  label: "快捷键" },
+        { id: "comp",  label: "组件与许可" },
+        { id: "about", label: "关于" }
+    ]
 
-        RowLayout {
-            Layout.fillWidth: true
-            Text {
-                text: "设置"
-                color: Theme.t1
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsH1
-                Layout.fillWidth: true
-            }
-        }
+    // --- nav ---------------------------------------------------------------
+    Rectangle {
+        anchors.left: parent.left
+        anchors.leftMargin: 14
+        anchors.top: parent.top
+        anchors.topMargin: 14
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 14
+        width: 220
+        radius: Theme.rCard
+        color: Theme.card
+        border.width: 1
+        border.color: Theme.stroke
 
-        // Tabs rather than one long scroll: the diagnostics report alone is long
-        // enough to bury everything else.
-        RowLayout {
-            spacing: 6
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 2
+            VH2 { text: "设置"; Layout.margins: 8 }
+            Item { implicitHeight: 6 }
             Repeater {
-                model: ["预设", "字幕与音频", "诊断"]
+                model: root.sections
                 delegate: Rectangle {
-                    required property int index
-                    required property string modelData
-                    implicitWidth: tabText.implicitWidth + 24
-                    implicitHeight: 30
-                    radius: 15
-                    color: root.tab === index ? Theme.card3 : (tabHover.hovered ? Theme.card2 : "transparent")
-                    Behavior on color { ColorAnimation { duration: Theme.durFast } }
+                    required property var modelData
+                    Layout.fillWidth: true
+                    implicitHeight: 36
+                    radius: 9
+                    color: root.section === modelData.id ? Theme.card3
+                         : navHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
+                    Behavior on color { ColorAnimation { duration: 200 } }
                     Text {
-                        id: tabText
-                        anchors.centerIn: parent
-                        text: modelData
-                        color: root.tab === index ? Theme.t1 : Theme.t2
+                        anchors.left: parent.left
+                        anchors.leftMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.label
+                        color: root.section === modelData.id ? Theme.t1 : Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: 13
+                        font.weight: Font.Medium
+                    }
+                    HoverHandler { id: navHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: root.section = modelData.id }
+                }
+            }
+            Item { Layout.fillHeight: true }
+        }
+    }
+
+    // --- body --------------------------------------------------------------
+    Rectangle {
+        anchors.left: parent.left
+        anchors.leftMargin: 14 + 220 + 10
+        anchors.right: parent.right
+        anchors.rightMargin: 14
+        anchors.top: parent.top
+        anchors.topMargin: 14
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 14
+        radius: Theme.rCard
+        color: Theme.card
+        border.width: 1
+        border.color: Theme.stroke
+        clip: true
+
+        Flickable {
+            anchors.fill: parent
+            contentHeight: body.implicitHeight + 44
+            clip: true
+            ScrollBar.vertical: ScrollBar { }
+
+            ColumnLayout {
+                id: body
+                x: 26
+                y: 22
+                width: parent.width - 52
+                spacing: 12
+
+                // --- 通用与外观 ------------------------------------------
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "look"
+                    VH1 { text: "通用与外观" }
+                    Text {
+                        text: "界面随时可调，不影响播放和增强设置。"
+                        color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
                     }
-                    HoverHandler { id: tabHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: root.tab = index }
-                }
-            }
-        }
-
-        // --- presets -------------------------------------------------------
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            radius: Theme.rCard
-            color: Theme.card
-            visible: root.tab === 0
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 10
-
-                Text {
-                    text: "预设"
-                    color: Theme.t1
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsH3
-                }
-                Text {
-                    Layout.fillWidth: true
-                    text: "保存时勾选包含哪些部分；应用时只覆盖勾选的部分，其余保持当前设置。"
-                    color: Theme.t3
-                    font.family: Theme.fontUi
-                    font.pixelSize: 11
-                    wrapMode: Text.WordWrap
-                }
-
-                ListView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    model: veyra.presets
-                    spacing: 4
-                    delegate: Rectangle {
-                        required property var modelData
-                        width: ListView.view.width
-                        height: 40
-                        radius: 8
-                        color: rowHover.hovered ? Theme.card2 : "transparent"
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
-                            spacing: 10
-                            Text {
-                                Layout.fillWidth: true
-                                text: modelData.name
-                                color: Theme.t1
-                                font.family: Theme.fontUi
-                                font.pixelSize: Theme.fsBody
-                                elide: Text.ElideRight
-                            }
-                            Text {
-                                visible: modelData.builtin
-                                text: "内置"
-                                color: Theme.t3
-                                font.family: Theme.fontUi
-                                font.pixelSize: 10
-                            }
-                            Text {
-                                visible: modelData.nodeMode
-                                text: "节点"
-                                color: Theme.exp
-                                font.family: Theme.fontUi
-                                font.pixelSize: 10
+                    VGroup {
+                        VRow {
+                            label: "页面切换栏"
+                            hint: "平时隐藏；鼠标碰到窗口顶部时弹下来"
+                            VSeg {
+                                options: [{ id: "auto", label: "自动隐藏" }, { id: "always", label: "始终显示" }]
+                                current: "auto"
+                                onPicked: id => {}
                             }
                         }
-                        HoverHandler { id: rowHover; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: veyra.applyPresetIndex(modelData.index) }
+                        VRow {
+                            label: "减少动画"
+                            hint: "关闭弹性与转场"
+                            VSwitch {
+                                checked: veyra.reducedMotion
+                                onToggled: veyra.reducedMotion = checked
+                            }
+                        }
+                        VRow {
+                            label: "打开时的默认页面"
+                            hint: "首页 = 选择片源的页面（点顶部 Logo 也能回到这里）"
+                            VSelect {
+                                value: veyra.defaultPageLabel
+                                options: [
+                                    { id: "home", label: "首页" },
+                                    { id: "min", label: "极简模式" },
+                                    { id: "pro", label: "专业模式" }
+                                ]
+                                onPicked: id => veyra.defaultPage = id
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        // --- subtitles and audio -------------------------------------------
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            radius: Theme.rCard
-            color: Theme.card
-            visible: root.tab === 1
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 12
-
-                Text {
-                    text: "音频"
-                    color: Theme.t1
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsH3
-                }
-                RowLayout {
-                    spacing: 10
-                    Text { text: "音量"; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
-                    Slider {
-                        implicitWidth: 200
-                        from: 0; to: 1; value: veyra.volume
-                        onMoved: veyra.volume = value
-                    }
+                // --- 播放 ------------------------------------------------
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "play"
+                    VH1 { text: "播放" }
                     Text {
-                        text: Math.round(veyra.volume * 100) + "%"
+                        text: "文件播放与字幕的默认行为。"
                         color: Theme.t2
-                        font.family: Theme.fontMono
-                        font.pixelSize: Theme.fsSmall
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
                     }
-                }
-                Switch {
-                    text: "静音"
-                    checked: veyra.muted
-                    onToggled: veyra.muted = checked
-                }
-                RowLayout {
-                    spacing: 10
-                    Text { text: "音频偏移"; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
-                    SpinBox {
-                        from: -2000
-                        to: 2000
-                        stepSize: 10
-                        value: veyra.audioOffsetMs
-                        onValueModified: veyra.audioOffsetMs = value
-                    }
-                    Text { text: "毫秒"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
-                }
-
-                Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.stroke }
-
-                Text {
-                    text: "音轨"
-                    color: Theme.t1
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsH3
-                }
-                Text {
-                    visible: veyra.audioTracks.length === 0
-                    text: "当前源没有可选音轨。"
-                    color: Theme.t3
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSmall
-                }
-                Repeater {
-                    model: veyra.audioTracks
-                    delegate: Rectangle {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        implicitHeight: 32
-                        radius: 8
-                        color: trackHover.hovered ? Theme.card2 : "transparent"
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            spacing: 8
-                            Rectangle {
-                                width: 8; height: 8; radius: 4
-                                color: veyra.selectedAudioTrack === modelData.index ? Theme.accent : Theme.t3
+                    VGroup {
+                        VRow {
+                            label: "音频偏移"
+                            hint: "正值延后音频"
+                            value: veyra.audioOffsetMs + " ms"
+                            VSlider {
+                                implicitWidth: 150
+                                center: true
+                                from: -2000; to: 2000; value: veyra.audioOffsetMs
+                                onMoved: veyra.audioOffsetMs = Math.round(value)
                             }
+                        }
+                        VRow {
+                            label: "音量"
+                            value: Math.round(veyra.volume * 100) + "%"
+                            VSlider {
+                                implicitWidth: 150
+                                from: 0; to: 1; value: veyra.volume
+                                onMoved: veyra.volume = value
+                            }
+                        }
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: subNote.implicitHeight + 20
+                        radius: 9
+                        color: Qt.rgba(0.961, 0.784, 0.294, 0.06)
+                        Text {
+                            id: subNote
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            text: "字幕默认字号、描边与截图保存位置尚未接入设置；引擎侧没有对应字段，这里不放假控件。"
+                            color: Theme.t2
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSmall
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
+                // --- PS5 串流 --------------------------------------------
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "ps5"
+                    VH1 { text: "PS5 串流" }
+                    Text {
+                        text: "主机与 PSN 凭据加密保存在用户数据目录。"
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                    }
+                    VGroup {
+                        VRow {
+                            label: "串流状态"
+                            hint: veyra.remotePlayState.length > 0 ? veyra.remotePlayState : "未连接"
+                            VButton { text: "管理"; onClicked: veyra.openPs5Dialog() }
+                        }
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: psNote.implicitHeight + 20
+                        radius: 9
+                        color: Qt.rgba(0.961, 0.784, 0.294, 0.06)
+                        Text {
+                            id: psNote
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            text: "串流编码、请求码率与 PSN 账号管理尚未接入设置页；这些参数在 PS5 对话框里调整。"
+                            color: Theme.t2
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSmall
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
+                // --- 快捷键 ----------------------------------------------
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "keys"
+                    VH1 { text: "快捷键" }
+                    Text {
+                        text: "当前生效的快捷键；重新绑定尚未实现。"
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                    }
+                    VGroup {
+                        Repeater {
+                            model: [
+                                { a: "播放 / 暂停", k: "Space" },
+                                { a: "后退 / 前进 10 秒", k: "← / →" },
+                                { a: "截图", k: "Ctrl + S" }
+                            ]
+                            delegate: VRow {
+                                required property var modelData
+                                label: modelData.a
+                                VTag { text: modelData.k }
+                            }
+                        }
+                    }
+                }
+
+                // --- 组件与许可 ------------------------------------------
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "comp"
+                    VH1 { text: "组件与许可" }
+                    Text {
+                        Layout.fillWidth: true
+                        text: "运行组件均为实验运行时，非 NVIDIA 官方合作或认证。详细哈希见 release-runtime-manifest.json。"
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        wrapMode: Text.WordWrap
+                    }
+                    VGroup {
+                        // Reported by the engine's component state rather than a
+                        // hand-written list that could drift from the package.
+                        Repeater {
+                            model: veyra.componentList
+                            delegate: VRow {
+                                required property var modelData
+                                label: modelData.name
+                                hint: modelData.detail
+                                VTag {
+                                    text: modelData.experimental ? "实验" : (modelData.loaded ? "已加载" : "未加载")
+                                    kind: modelData.experimental ? "exp" : (modelData.loaded ? "ok" : "")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- 关于 ------------------------------------------------
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "about"
+                    RowLayout {
+                        spacing: 18
+                        Image {
+                            source: "logo.png"
+                            sourceSize.width: 88
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        ColumnLayout {
+                            spacing: 4
+                            VH1 { text: "Veyra" }
                             Text {
-                                Layout.fillWidth: true
-                                text: modelData.label
-                                color: Theme.t1
+                                text: "版本 " + veyra.version
+                                color: Theme.t2
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsBody
                             }
                         }
-                        HoverHandler { id: trackHover; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: veyra.selectedAudioTrack = modelData.index }
                     }
-                }
-
-                Item { Layout.fillHeight: true }
-            }
-        }
-
-        // --- diagnostics ---------------------------------------------------
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            radius: Theme.rCard
-            color: Theme.card
-            visible: root.tab === 2
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 10
-
-                Text {
-                    text: "诊断"
-                    color: Theme.t1
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsH3
-                }
-                // Every line comes from the engine's own snapshot. Submit FPS is
-                // labelled as submit FPS: there is no display-FPS number here,
-                // because we cannot measure one.
-                // A Flickable + Text rather than a TextArea: the platform style
-                // refuses to let a TextArea repaint its own background, and the
-                // report is read-only text, so a plain Text does the job without
-                // fighting the style.
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    radius: 8
-                    color: Theme.card2
-                    clip: true
-                    Flickable {
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        contentWidth: width
-                        contentHeight: reportText.implicitHeight
+                    VGroup {
+                        VRow {
+                            label: "检查更新"
+                            hint: "GitHub · Likely7/Veyra-NRVideo"
+                            VButton { text: "打开"; onClicked: veyra.openProjectPage() }
+                        }
+                        VRow {
+                            label: "诊断信息"
+                            hint: "复制后附在反馈里"
+                            VButton { text: "复制"; onClicked: veyra.copyDiagnostics() }
+                        }
+                    }
+                    // The diagnostics the engine actually reports, shown verbatim.
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 220
+                        radius: 9
+                        color: Theme.card2
                         clip: true
-                        ScrollBar.vertical: ScrollBar { }
-                        Text {
-                            id: reportText
-                            width: parent.width
-                            text: veyra.diagnosticsReport()
-                            color: Theme.t2
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.fsSmall
-                            wrapMode: Text.Wrap
+                        Flickable {
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            contentHeight: diagText.implicitHeight
+                            clip: true
+                            Text {
+                                id: diagText
+                                width: parent.width
+                                text: veyra.diagnosticsReport()
+                                color: Theme.t2
+                                font.family: Theme.fontMono
+                                font.pixelSize: Theme.fsSmall
+                                wrapMode: Text.Wrap
+                            }
                         }
                     }
                 }
+
+                Item { Layout.preferredHeight: 12 }
             }
         }
     }

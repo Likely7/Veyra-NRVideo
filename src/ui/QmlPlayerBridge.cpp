@@ -4,13 +4,19 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QClipboard>
 #include <QGuiApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QFile>
 #include <QTimer>
 
 #include <algorithm>
 #include <cmath>
 
 #include "veyra/Log.h"
+#include "veyra/RuntimePaths.h"
 
 namespace veyra::ui {
 namespace {
@@ -53,6 +59,12 @@ struct QmlPlayerBridge::Impl {
     std::wstring exportOutput;
     QString exportStatus;
     engine::PlayerOptions options;
+
+    // The export job manager is the real thing: state, progress and encoded
+    // counts come from its snapshot.
+    engine::ExportJobManager exportJob;
+    engine::ExportJobSnapshot exportSnapshot;
+    bool exportHevc = false;
 
     QTimer* timer = nullptr;
 
@@ -100,6 +112,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const uint64_t before = impl_->publishedRevision;
         impl_->poll();
         if (!had || impl_->publishedRevision != before) emit snapshotChanged();
+        // An export in flight needs its own poll; it is a separate job and its
+        // snapshot is not part of the player snapshot.
+        if (impl_->exportSnapshot.active()) pollExport();
     });
     impl_->timer->start(16);
 }
@@ -295,6 +310,74 @@ void QmlPlayerBridge::resetCurrentPage() {
     s.videoHdr = engine::VideoHdrSettings{};
     impl_->commit(std::move(s));
     emit settingsChanged();
+}
+
+
+// --- shell preferences -------------------------------------------------------
+bool QmlPlayerBridge::reducedMotion() const { return impl_->facade.reducedMotion(); }
+void QmlPlayerBridge::setReducedMotion(bool value) {
+    if (impl_->facade.reducedMotion() == value) return;
+    impl_->facade.setReducedMotion(value);
+    emit settingsChanged();
+}
+QString QmlPlayerBridge::defaultPage() const { return utf8Of(impl_->facade.defaultPage()); }
+void QmlPlayerBridge::setDefaultPage(const QString& value) {
+    if (utf8Of(impl_->facade.defaultPage()) == value) return;
+    impl_->facade.setDefaultPage(wideOf(value));
+    emit settingsChanged();
+}
+QString QmlPlayerBridge::defaultPageLabel() const {
+    const QString page = defaultPage();
+    if (page == QLatin1String("min")) return tr("极简模式");
+    if (page == QLatin1String("pro")) return tr("专业模式");
+    return tr("首页");
+}
+
+QString QmlPlayerBridge::remotePlayState() const {
+    // The engine's own remote-play state word, or empty when there is none. No
+    // invented "connected" wording.
+    return utf8Of(impl_->snapshot.remoteRecoveryMessage);
+}
+
+QVariantList QmlPlayerBridge::componentList() const {
+    // Read from the runtime manifest the build produces rather than a list written
+    // by hand here, so the page cannot claim a component the package lacks.
+    QVariantList out;
+    const auto manifest = runtime::localRuntimeDirectory() / L"release-runtime-manifest.json";
+    QFile file(QString::fromWCharArray(manifest.c_str()));
+    if (!file.open(QIODevice::ReadOnly)) {
+        // No manifest is a reportable fact, not a reason to invent entries.
+        return out;
+    }
+    const auto document = QJsonDocument::fromJson(file.readAll());
+    const auto entries = document.isArray() ? document.array()
+                                            : document.object().value(QStringLiteral("files")).toArray();
+    for (const auto& value : entries) {
+        const auto object = value.toObject();
+        QVariantMap item;
+        item["name"] = object.value(QStringLiteral("name")).toString();
+        const QString version = object.value(QStringLiteral("version")).toString();
+        const QString signature = object.value(QStringLiteral("signature")).toString();
+        const bool experimental = object.value(QStringLiteral("experimental")).toBool();
+        item["detail"] = QStringList{version, signature}.join(QStringLiteral(" · "));
+        item["loaded"] = object.value(QStringLiteral("loaded")).toBool(true);
+        item["experimental"] = experimental;
+        if (!item["name"].toString().isEmpty()) out << item;
+    }
+    return out;
+}
+
+void QmlPlayerBridge::openProjectPage() {
+    // Nothing here launches a browser: opening an external URL is an outward-facing
+    // action, and it is not wired to a verified destination yet. The UI says so.
+    emit notice(tr("打开项目页面尚未接入"), true);
+}
+
+void QmlPlayerBridge::copyDiagnostics() {
+    if (auto* clipboard = QGuiApplication::clipboard()) {
+        clipboard->setText(diagnosticsReport());
+        emit notice(tr("诊断信息已复制"), false);
+    }
 }
 
 void QmlPlayerBridge::attachVideoWindow(qulonglong nativeHandle) {
@@ -593,9 +676,104 @@ QString QmlPlayerBridge::colorStatus() const { return utf8Of(impl_->snapshot.col
 QString QmlPlayerBridge::videoHdrStatus() const { return utf8Of(impl_->snapshot.videoHdrStatus); }
 
 // --- export -----------------------------------------------------------------
-bool QmlPlayerBridge::exportRunning() const { return impl_->exportRunning; }
-QString QmlPlayerBridge::exportStatus() const { return impl_->exportStatus; }
-QString QmlPlayerBridge::exportTarget() const { return utf8Of(impl_->exportOutput); }
+// Poll the export job once per UI tick. Its snapshot is the source of the
+// numbers below; nothing here keeps a parallel counter that could drift.
+void QmlPlayerBridge::pollExport() {
+    impl_->exportSnapshot = impl_->exportJob.poll();
+    emit exportChanged();
+}
+
+bool QmlPlayerBridge::exportRunning() const { return impl_->exportSnapshot.active(); }
+bool QmlPlayerBridge::exportPaused() const {
+    return impl_->exportSnapshot.state == engine::ExportState::Paused;
+}
+double QmlPlayerBridge::exportProgress() const { return impl_->exportSnapshot.progress; }
+QString QmlPlayerBridge::exportStatus() const {
+    switch (impl_->exportSnapshot.state) {
+    case engine::ExportState::Idle: return tr("未开始");
+    case engine::ExportState::Preparing: return tr("准备中…");
+    case engine::ExportState::Running: return tr("导出中…");
+    case engine::ExportState::Paused: return tr("已暂停");
+    case engine::ExportState::Finishing: return tr("收尾中…");
+    case engine::ExportState::Succeeded: return tr("已完成");
+    case engine::ExportState::Failed: return tr("失败");
+    case engine::ExportState::Cancelled: return tr("已取消");
+    }
+    return {};
+}
+QString QmlPlayerBridge::exportTarget() const {
+    const auto& out = impl_->exportSnapshot.output;
+    return out.empty() ? utf8Of(impl_->exportOutput) : utf8Of(out);
+}
+int QmlPlayerBridge::exportEncoded() const { return int(impl_->exportSnapshot.encoded); }
+int QmlPlayerBridge::exportGenerated() const { return int(impl_->exportSnapshot.generated); }
+
+// HEVC or H.264: the engine's export entry takes this as a flag, so it is a real
+// choice with a real effect rather than a label.
+bool QmlPlayerBridge::exportHevc() const { return impl_->exportHevc; }
+void QmlPlayerBridge::setExportHevc(bool value) {
+    if (impl_->exportHevc == value) return;
+    impl_->exportHevc = value;
+    emit exportChanged();
+}
+
+// Export bitrate: 0 means the encoder's constant-quality default, which is what
+// the engine's exportBitrateMbps field documents.
+int QmlPlayerBridge::exportBitrateMbps() const { return int(settings().exportBitrateMbps); }
+void QmlPlayerBridge::setExportBitrateMbps(int value) {
+    auto s = settings();
+    const uint32_t want = uint32_t(std::max(0, std::min(2000, value)));
+    if (s.exportBitrateMbps == want) return;
+    s.exportBitrateMbps = want;
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+
+QString QmlPlayerBridge::exportPresetName() const { return currentPresetName(); }
+
+int QmlPlayerBridge::srTargetIndex() const {
+    // 0 keeps the source size; 1..3 are the engine's Qhd/Uhd4K/Uhd8K targets.
+    switch (settings().srTarget) {
+    case pipeline::SrTarget::Qhd: return 1;
+    case pipeline::SrTarget::Uhd4K: return 2;
+    case pipeline::SrTarget::Uhd8K: return 3;
+    }
+    return 0;
+}
+void QmlPlayerBridge::setSrTargetIndex(int index) {
+    auto s = settings();
+    pipeline::SrTarget want = pipeline::SrTarget::Uhd4K;
+    switch (index) {
+    case 1: want = pipeline::SrTarget::Qhd; break;
+    case 2: want = pipeline::SrTarget::Uhd4K; break;
+    case 3: want = pipeline::SrTarget::Uhd8K; break;
+    default: break;
+    }
+    if (s.srTarget == want) return;
+    s.srTarget = want;
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+
+QVariantList QmlPlayerBridge::presetChoices() const {
+    // One list for both kinds; the label carries the distinction so the export page
+    // can offer "any preset" without a second control.
+    QVariantList out;
+    const auto& entries = impl_->facade.presets().entries();
+    for (size_t i = 0; i < entries.size(); ++i) {
+        QVariantMap item;
+        item["id"] = QString::number(i);
+        item["label"] = utf8Of(entries[i].name)
+                        + (entries[i].kind == engine::ChainMode::Node ? tr(" · 节点") : QString());
+        out << item;
+    }
+    return out;
+}
+
+void QmlPlayerBridge::pauseExport(bool paused) {
+    impl_->exportJob.pause(paused);
+    pollExport();
+}
 
 QString QmlPlayerBridge::formatTime(double seconds) const { return mmss(seconds); }
 
@@ -679,22 +857,21 @@ void QmlPlayerBridge::chooseExportPath() {
 
 void QmlPlayerBridge::startExport() {
     if (impl_->exportOutput.empty()) { emit notice(tr("先选择导出位置"), true); return; }
-    if (impl_->sourceLabel.empty() || impl_->snapshot.capture) {
-        emit notice(tr("先打开要导出的文件"), true);
-        return;
-    }
-    impl_->engine.startExport(impl_->sourceLabel, impl_->exportOutput, impl_->options, false);
-    impl_->exportRunning = true;
-    impl_->exportStatus = tr("导出中…");
-    emit exportChanged();
+    if (impl_->sourceLabel.empty()) { emit notice(tr("先打开要导出的文件"), true); return; }
+    // The settings are frozen at start, exactly as the engine's job expects: an
+    // export must not change under the user mid-run.
+    auto settings = impl_->facade.pendingSettings();
+    engine::fromChain(impl_->chain, settings);
+    const bool started = impl_->exportJob.start(impl_->sourceLabel, impl_->exportOutput,
+                                                settings, impl_->exportHevc);
+    if (!started) { emit notice(tr("导出启动失败；详见诊断"), true); return; }
+    pollExport();
     emit navigate(QStringLiteral("export"));
 }
 
 void QmlPlayerBridge::cancelExport() {
-    impl_->engine.stop();
-    impl_->exportRunning = false;
-    impl_->exportStatus = tr("已取消");
-    emit exportChanged();
+    impl_->exportJob.cancel();
+    pollExport();
 }
 
 void QmlPlayerBridge::quit() {
