@@ -1,5 +1,14 @@
 # 当前项目状态 / Current Status
 
+## 进行中：QML 新界面迁移与引擎改造（2026-09-25 开工）
+
+分支 `codex/ui-qml-migration-20260925`，起点 main `df41580`（标签 `checkpoint/pre-ui-qml-migration-20260925`）。
+按 [总方案](UI_MIGRATION_MASTER_PLAN_2026-09-25.md) 施工：S0 基线 → S1 引擎地基（画面不变）→ S2 NR 叠层 / 独立调色 /
+可排序执行器 / 导出补齐 → S3 Qt 探针 → S4 QML 全功能界面 → S5 删除旧界面与打包。设计稿为
+`prototypes/ui-redesign-2026-09-25/`，设计决定见 [界面设计方案](UI_REDESIGN_QML_NODE_PLAN_2026-09-25.md)。
+进度、存档标签、测试结果见 [执行记录](UI_MIGRATION_EXECUTION_2026-09-25.md)。补帧锁定在最后；只显示提交帧率；
+不保留旧界面。未合并 main、未推送、未发布。
+
 ## 正式版 1.4.4 已发布（2026-09-22）
 
 `v1.4.4` 已推送到 GitHub 并作为 latest 发布：源码提交 `6851c27`，

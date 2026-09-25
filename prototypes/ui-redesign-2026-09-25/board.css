@@ -1,0 +1,70 @@
+/* Board: the white infinite canvas that holds the design frames */
+:root{
+  --board-bg:#FAFAF8;
+  --board-dot:#D6D6DC;
+  --board-ink:#18181C;
+  --board-ink-2:#6B6B75;
+  --board-line:#E6E6EA;
+  --note:#FFF7D6;
+  --note-ink:#4A3F12;
+  --note-line:#EEDFA0;
+  --tech:#EAF2FF;
+  --tech-ink:#15325C;
+  --tech-line:#C6DAFA;
+  --f-ui:"Geist","Noto Sans SC","Microsoft YaHei UI",system-ui,sans-serif;
+  --f-mono:"Geist Mono","Noto Sans SC",ui-monospace,Consolas,monospace;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--board-bg);color:var(--board-ink);font-family:var(--f-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+
+#board{position:fixed;inset:0;overflow:hidden;cursor:grab;touch-action:none;
+  background-color:var(--board-bg);
+  background-image:radial-gradient(var(--board-dot) 1.1px,transparent 1.3px);
+  background-size:24px 24px}
+#board.panning{cursor:grabbing}
+#world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+
+.frame{position:absolute}
+.frame-label{position:absolute;left:0;bottom:calc(100% + 14px);display:flex;align-items:baseline;gap:10px;white-space:nowrap;
+  font-size:22px;font-weight:600;letter-spacing:-.01em;color:var(--board-ink)}
+.frame-label small{font-size:15px;font-weight:450;color:var(--board-ink-2);letter-spacing:0}
+.frame-shadow{box-shadow:0 1px 0 rgba(0,0,0,.04),0 30px 80px -30px rgba(20,20,30,.45),0 12px 30px -18px rgba(20,20,30,.35);border-radius:22px}
+
+.section-title{position:absolute;width:2600px;font-size:44px;font-weight:650;letter-spacing:-.02em;color:var(--board-ink)}
+.section-title span{display:block;font-size:17px;font-weight:450;letter-spacing:0;color:var(--board-ink-2);margin-top:8px;max-width:760px;line-height:1.55}
+
+.note{position:absolute;width:300px;padding:16px 18px 18px;border-radius:14px;background:var(--note);border:1px solid var(--note-line);color:var(--note-ink);
+  font-size:14px;line-height:1.6;box-shadow:0 10px 24px -16px rgba(80,60,0,.35);cursor:default}
+.note b{display:block;font-size:13px;letter-spacing:.06em;margin-bottom:6px;opacity:.75}
+.note.tech{background:var(--tech);border-color:var(--tech-line);color:var(--tech-ink);box-shadow:0 10px 24px -16px rgba(0,40,120,.3)}
+.note ul{margin:6px 0 0;padding-left:18px}
+.note li+li{margin-top:4px}
+.note .q{display:inline-block;margin-top:8px;padding:2px 8px;border-radius:99px;background:rgba(0,0,0,.06);font-size:12px}
+
+/* connector arrows between notes and frames */
+.wire{position:absolute;pointer-events:none;overflow:visible}
+.wire path{fill:none;stroke:#B9B9C4;stroke-width:1.5;stroke-dasharray:5 6}
+
+/* Floating toolbar */
+.toolbar{position:fixed;z-index:50;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  display:flex;align-items:center;gap:6px;padding:6px;border-radius:16px;background:#111114;color:#EDEDF0;
+  box-shadow:0 18px 40px -18px rgba(0,0,0,.55);max-width:calc(100vw - 32px);overflow-x:auto;scrollbar-width:none}
+.toolbar::-webkit-scrollbar{display:none}
+.tb-group{display:flex;align-items:center;gap:2px;padding:2px;border-radius:11px;background:#1C1C21;flex:none}
+.tb-label{font-size:12px;color:#8A8A95;padding:0 6px 0 8px;white-space:nowrap}
+.tb-btn{appearance:none;border:0;background:transparent;color:inherit;font:500 13px/1 var(--f-ui);padding:8px 10px;border-radius:9px;cursor:pointer;white-space:nowrap;
+  transition:background .15s,color .15s,transform .35s var(--spring,cubic-bezier(.34,1.56,.64,1))}
+.tb-btn:hover{background:#26262C}
+.tb-btn:active{transform:scale(.94)}
+.tb-btn[aria-pressed="true"]{background:#EDEDF0;color:#111114}
+.tb-btn:focus-visible{outline:2px solid #7AA7FF;outline-offset:1px}
+.tb-zoom{font:500 12px/1 var(--f-mono);color:#B5B5BE;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+.tb-sep{width:1px;height:22px;background:#2A2A30;flex:none}
+
+.hint{position:fixed;z-index:50;left:16px;top:calc(16px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:12px;
+  padding:10px 14px;border-radius:14px;background:rgba(255,255,255,.9);border:1px solid var(--board-line);backdrop-filter:blur(8px);
+  font-size:13px;color:var(--board-ink-2);max-width:calc(100vw - 32px)}
+.hint img{width:34px;height:auto;filter:drop-shadow(0 0 0 #000) invert(1);opacity:.9}
+.hint strong{color:var(--board-ink);font-weight:600}
+@media (max-width:640px){.hint .keys{display:none}}

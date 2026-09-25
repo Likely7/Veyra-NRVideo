@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> 2026-09-25 用户授权以目标模式实施 QML 新界面迁移与引擎改造：单分支 `codex/ui-qml-migration-20260925`（起点 `df41580`，标签 `checkpoint/pre-ui-qml-migration-20260925`），按 `docs/UI_MIGRATION_MASTER_PLAN_2026-09-25.md` 施工，进度记在 `docs/UI_MIGRATION_EXECUTION_2026-09-25.md`。允许引入 Qt 6（装在 `E:\项目\Veyra\deps\qt`，不进源码 Git）；新界面完成后删除旧 Win32 界面；按 Magpie（`SAOG0721/Magpie` `3841698`，GPLv3）移植 NR 多实例结构并逐项标注来源。补帧锁定在链路最后；只显示提交帧率；低延迟不得退化；每步打存档标签。合并 main、推送、发布仍需用户另行授权。
+
 > 2026-09-19 用户授权修复全屏提示后构建并发布 1.4.2 至 Likely7/Veyra-NRVideo，整合本轮隔离修复到 main，更新双语 README 与 Release，重点说明 RTX Video HDR 和帧同步。授权公开本次新交流群二维码与 RTX Video HDR 对比图；赞助图保留，双二维码各 width=220。允许正式包携带已核验 TrueHDR 原件：RTX Video SDK 1.1.0，nvngx_truehdr.dll，3955752 bytes，1.1.0.0，Valid/NVIDIA，SHA256 9A80575F247190C05FE80EAC0C4BAA1D0D4D932348F26808310B5EC4BF9EEB4B，独立 manifest 与 NVIDIA_RTX_VIDEO_SDK_LICENSE.pdf。其余运行组件身份沿用；NVIDIA FSR4 实验保持撤回。执行记录见 docs/RELEASE_1.4.2_EXECUTION.md。本条取代此前仅本地测试包的发布范围限制。
 
 > 2026-09-18 用户授权目标模式实施可关闭帧同步、多模式与实际延迟验收。开工存档 `6e69eeb` / `checkpoint/pre-frame-pacing-20260918`，隔离分支 `codex/frame-pacing-20260918`。按 `docs/FRAME_PACING_EXECUTION_PLAN_2026-09-18.md` 施工，默认关闭、直接 NGX、保留 6X，不推送或发布。报告必须区分进程内排队、系统显示事件与未测量的屏幕端到端延迟。

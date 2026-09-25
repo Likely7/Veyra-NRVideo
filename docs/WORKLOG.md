@@ -1,5 +1,82 @@
 # Veyra 工作记录
 
+## 2026-09-25 界面迁移总方案（审查设计稿与现有软件）
+
+用户认可第三版设计稿后，要求整体审查设计稿与软件并确定迁移顺序。只读审查引擎（`EnhanceGraph`、
+`DlssNrRuntimeAdapter`、`EngineController` 重建判断与四处图描述构建、`ExportJobManager` 共享内存头、
+`PresetStore`、`FrameMetrics`/`GpuTimer`、`PresentSink` 帧统计、`ResolutionPlan`、`IFrameSource`）和界面
+（`AppShell.cpp`、`SettingsWindow.cpp`、各面板、字幕浮层、偏好存储、7 个 ctest 目标与验收脚本）。主要结论：
+NR 只有单实例，多 Feature 18 句柄未验证；处理顺序写死（约 20 处 `nrBeforeSr` 分支）；调色融合在导入着色器；
+导出共享内存要求可平凡复制；真实显示帧率未测量；没有影片宽高比；设置页、预设管理、导出队列与剪辑缺失；
+另列出 21 项现有功能需在新界面保留。方案见
+[`UI_MIGRATION_MASTER_PLAN_2026-09-25.md`](UI_MIGRATION_MASTER_PLAN_2026-09-25.md)：M0 基线 → M1 引擎地基
+（输出不变）与 M2 Qt 探针并行 → M3 QML 功能对等（列表模式）→ M4 新能力逐项带开关接入 → M5 节点界面 →
+M6 发布（需授权）。未改代码、未建分支、未构建或运行。
+
+同日修订为第 2 版：用户决定不保留旧界面、不做内测、单分支施工、设计稿功能全部实现、导出分辨率可自定义、
+统一预设（可选包含部分）、NR 叠层与自由排序照 Magpie 做。只读核实 `SAOG0721/Magpie` experimental `3841698`：
+多层 NR 为“一个片段会话 + 每层独立 NGX 句柄 / 参数 / 队列 / 历史”（`DLSSNRMultiPass.h`、`DLSSNRFilter.cpp`），
+与 Veyra 的 IAT 钩子机制相同，可移植；补帧节点在 Magpie 中只是标记，实际始终在链路输出端执行一次，不存在
+对生成帧再做 NR 的路径。计划改为单分支 `codex/ui-qml-migration-20260925`：S0 基线 → S1 引擎地基（画面不变）
+→ S2 新能力（NR 叠层 / 独立调色 / 可排序执行器 / 导出补齐 / 小项）→ S3 Qt 探针（可提前）→ S4 QML 全功能 →
+S5 删除旧界面与打包 → 用户验收后合并。临时文件在 `E:\veyra-tmp-ascii\magpie-nr\`，已删除。未改代码。
+
+## 2026-09-25 界面整体重做方案（QML 三页面、NR 叠层、节点模式）
+
+用户要求迁移 Qt QML 并整体改版：极简/专业/导出三页、深黑渐变背景取代玻璃、
+弹性动画、NR 叠层手风琴、专业模式内的节点视图；先出方案，不施工。只读核对
+UI 结构、`EngineController` 边界、`EnhanceGraph` 固定顺序与 NR 单实例（全局 IAT 钩子
+单占用）、`VEYRA_PRESETS` v21，以及桌面 `UI` 文件夹 6 张参考图；经 GitHub API 只读阅读
+`SAOG0721/Magpie` `3841698…`（线性效果链、参数元数据、无节点编辑器，UWP XAML 不可移植到
+QML）；查阅 Qt `WindowContainer`（嵌入原生窗口总在 QML 之上）与 6.8 `Popup.Window`。
+方案见 [`UI_REDESIGN_QML_NODE_PLAN_2026-09-25.md`](UI_REDESIGN_QML_NODE_PLAN_2026-09-25.md)：
+Qt 窗口探针与浏览器原型先行，效果链模型/注册表（输出不变）→ NR 叠层探针与执行器拆分
+→ QML 迁移 → 单链路节点视图。NR 叠层此前暂缓，恢复需用户确认。未改代码、未建分支、
+未安装 Qt、未构建或运行。
+
+用户随后补充：Magpie 只参考底层效果链，不参考 UI；Qt 用最新版；新增设置页；切换栏
+用侧边栏图的样式但位置可变；Logo 已有透明底。据此在
+`prototypes/ui-redesign-2026-09-25/`（index.html + 分文件 CSS/JS，纯静态、无依赖）做了
+白底无限画布的交互设计稿：极简播放中/空状态、专业列表（NR 叠层手风琴、拖动排序）、
+节点视图（右键添加、左右拖动排序、HDR 后接非 HDR 效果会退回）、导出、设置，以及顶部/
+底部浮动切换栏。Logo 缩成 360×240 透明 PNG 放进原型目录。`node --check` 六个脚本通过；
+Edge headless 截一张总览图（输出在 `E:\项目\Veyra\tmp\ui-prototype-20260925\`），据此修正了
+隐藏属性被覆盖、分区标题换行、节点过宽三处。发布为私有网页失败：当前会话没有 claude.ai
+登录，只能本地打开。未改产品代码。
+
+第二轮原型修订（按用户逐条意见）：窗口小圆角、视频全直角；顶部自动隐藏切换栏 + Logo 回首页；
+新增采集卡 / PS5 / 屏幕捕获 / 字幕 / 音频五个窗口（字段取自现有 Win32 面板）；设置加“打开时的
+默认页面”；极简改“预设”、去黑边；专业列表固定现有顺序、NR 容器内加层；色彩页按现有
+`SettingsWindow.cpp` 七组结构重做；节点模式改为上画面下画布、参数直接在节点上、可游离节点、拖到
+连线插入 / 拖远或 Alt 断开、按类型限制数量。脚本 `node --check` 全过；headless Edge 注入错误收集
+无运行时错误；逐帧截 7 张图检查，据此修正音量滑条塌缩、屏幕捕获缩略图撑破网格。输出在
+`E:\项目\Veyra\tmp\ui-prototype-20260925\`。未改产品代码。
+
+第三轮原型修订：极简改为按画幅适配的影院窗口与大圆角播放条；专业读数收进窗口并加“显示 fps”；
+补帧页对照 `SettingsWindow.cpp`（DLSS≤6X、XeSS≤4X、FSR 补帧隐藏、输出上限自定义等）；NR 参数按
+`NrSettings`/`ResidualSettings` 的 12 项对齐；新增预设另存为 / 管理、切换节点确认弹窗；节点模式加
+读数条、节点耗时、彩色耗时条、自动推开防重叠、调色全参数；导出改按预设、码率任意值；设置去掉采集
+卡页；采集卡窗口补“限定输入帧率”（沿用现有设备帧率字段）。`node --check` 全过，headless Edge 错误
+收集为空，截图 11 张存 `E:\项目\Veyra\tmp\ui-prototype-20260925\shots-round3\`。截图脚本曾以 ANSI
+读取中文路径，把临时文件写到已有的 `E:\椤圭洰\Veyra\`（仅本轮 headless 浏览器配置与截图），已删除该
+子目录，未触碰该文件夹里原有的其他内容。未改产品代码。
+
+## 2026-09-24 Qt Quick/QML 前端迁移调研与初步方案
+
+检查当前 Win32 UI、`EngineController -> VideoPresenter -> PresentSink` 窗口链路、
+既有双模式 UI 方案及 U1/F1 问题边界。确认普通窗口中的主播放控件位于视频区下方，专业参数
+位于视频右侧；全屏视频铺满窗口，现有原生控制栏和字幕 HWND 覆盖画面。D3D12 swapchain
+直接绑定视频子 `HWND`，Present resize 会 drain 队列，且销毁窗口必须晚于 swapchain。Qt 可
+先迁移视频以外 UI、沿用原生全屏栏；Qt 全屏覆盖仅是后续选项，窗口生命周期、resize、额外
+绘制负载仍需原型验证，不能承诺零影响。查阅 Qt 官方
+`QQuickWidget`、`QWidget::createWindowContainer`、`QWindow::fromWinId` 和
+`QQuickRenderControl` 文档。方案见
+[`QT_QML_UI_MIGRATION_RESEARCH_PLAN_2026-09-24.md`](QT_QML_UI_MIGRATION_RESEARCH_PLAN_2026-09-24.md)。
+
+本机 PATH 和常见安装目录未检测到 Qt 命令/SDK；本轮未安装、构建或运行程序，未改代码。
+下一步为用户确认后做隔离原型，沿用现有视频 HWND 和 Present 路径；不据此记录播放性能、
+HDR、OBS 或全屏通过。
+
 ## 2026-09-22 1.4.4 正式发布到 GitHub
 
 用户授权发布后完成：推送 `main`（`6851c27`）+ 签注标签 `v1.4.4`（`9e21d18 → 6851c27`），
