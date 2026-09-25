@@ -328,6 +328,7 @@ target_link_libraries(veyra_guidance_tests PRIVATE veyra_guidance)
 add_library(veyra_pipeline STATIC
   src/pipeline/ResetCoordinator.cpp
   src/pipeline/ColorGradeTables.cpp
+  src/pipeline/NrInstance.cpp
 )
 veyra_apply_warnings(veyra_pipeline)
 # FFmpeg/NVOF headers are third-party: /WX stays off for this target.

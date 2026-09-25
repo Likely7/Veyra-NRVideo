@@ -24,6 +24,8 @@
 | S1.6 | 统一预设库 | 完成 | `checkpoint/ui-mig-s1.6` | 33 项单元检查全过；旧文件只读导入 |
 | S1.8 | 界面接口层 `PlayerUiFacade` | 完成 | `checkpoint/ui-mig-s1.8` | 快照按差异推送、命令排队、预设与最近文件集中 |
 | S2.0 | NR 叠层可行性探针 | 完成 | `checkpoint/ui-mig-s2.0` | **4/6/8 个句柄全部成功** |
+| S2.1 | NR 叠层实现 | 完成 | `checkpoint/ui-mig-s2.1` | 13 项原有哈希逐像素一致；1/2/3/4 层输出各不相同 |
+| S3.0 | Qt 6.8.3 安装 | 完成 | | `E:\项目\Veyra\deps\qt.8.3\msvc2022_64`，含 Core/Gui/Qml/Quick/QuickControls2 + windeployqt |
 
 ## 发现并修复的 bug
 
@@ -35,6 +37,16 @@
 | B2 | S0.2 | `veyra_quality_probe` 用 ANSI `argv` 转宽字符，输出目录含中文（`E:\项目`）时写图失败，交付门槛因此失败；门槛脚本原先用相对路径绕开，但源码在 C:、日志在 E: 时相对路径无法跨盘 | 探针改为从 UTF-16 命令行读参数；门槛改传绝对路径 |
 
 ## 日志
+
+### S2.1（2026-09-25）NR 叠层实现
+- 新增 `include/veyra/pipeline/NrInstance.h` + `src/pipeline/NrInstance.cpp`：**每层 NR 自有一整套资源** —— 编码 proxy、神经输出、解码结果、残差暂存、自己的输入纹理，以及自己的 `NrTemporalPass` 时域历史。这与 Magpie `DLSSNRMultiPass` 的结构一致（一个片段会话 + 每 pass 独立句柄）。
+- `EnhanceGraph` 由单实例改为 `nrInstances_` 列表：`initNgxFeatures()` 为每层创建一个句柄和参数块；`process()` 按层依次「降采样 → 编码 → 求值 → 解码」；残差合成也逐层执行，**第 k 层合成到第 k-1 层的结果上**，最后一层写入图自己的残差纹理（后续 blit 一行未改）。
+- 描述符槽位按「SRV 全部在前、UAV 全部在后」重算：编码 `SRV k / UAV L+k`，解码 `SRV 3k..3k+2 / UAV 3L+k`，降采样 `SRV 2k / UAV 2L+2k`，残差 `SRV 3k..3k+2 / UAV 3L`。这是本步最容易出错的地方，改完由逐像素哈希兜住。
+- **单层路径保持逐字节不变**：单层时第 0 层直接借用图自己的输入纹理（`inputIsBorrowed()`），跳过降采样，与原实现完全一致。实测 13 项原有哈希全部 `same`。
+- 每层参数在建图时从描述播种（`desc_.nrLayersModel` 等）；`applySettings()` 的实时更新仍然只改第 0 层并给后续层**递增 `inputRevision`**，让它们丢弃失效的时域历史 —— 对应 Magpie 的 inputRevision 契约。
+- 抓帧探针新增 `nr2`/`nr3`/`nr4` 三种叠层用例（每层强度 1.0 / 0.8 / 0.6 / 0.4，刻意选可观测的差异值）。实测：**1、2、3、4 层输出两两不同**，证明链路真的在叠加而不是只跑第一层。
+- 踩到并修掉的两个自身 bug：(1) 早期版本每层都在同一条命令列表上继续录，导致 `acquireNext` 失败（slot-ring E_FAIL）；(2) 每层参数没有在建图时播种，导致所有层都用默认值、叠层输出与单层相同。
+- 期间还修了一个测试环境问题：多个残留的 `veyra.exe` 进程占住测试目录里的可执行文件，导致拷贝失败、误判为代码回归。
 
 ### S2.0（2026-09-25）NR 叠层可行性探针（结论：可行）
 新增 `tools/nr_probe/main.cpp`（目标 `veyra_nr_probe`）：在一个 NR 片段会话上创建 N 个 Feature 18 句柄，各自绑定独立的色彩/光流/深度/输出纹理并逐句柄执行，最后全部释放。

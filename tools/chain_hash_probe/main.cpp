@@ -65,6 +65,23 @@ bool configure(const std::string& name, uint32_t w, uint32_t h, pipeline::Enhanc
     auto nr = [&] { gd.enableNr = true; gd.enableNvofStandalone = true; };
     if (name == "passthrough") return true;
     if (name == "nr") { nr(); return true; }
+    // Stacked NR layers: the same settings repeated, so the probe exercises the
+    // multi-instance path (several Feature-18 handles chained).
+    if (name == "nr2" || name == "nr3" || name == "nr4") {
+        nr();
+        const int layers = name[2] - '0';
+        for (int n = 0; n < layers; ++n) {
+            // Distinct, non-trivial intensities: a near-zero strength disappears in the
+            // 8-bit parity round trip, so identical hashes would prove nothing.
+            engine::NrSettings model; model.intensity = 1.0f - 0.2f * float(n);
+            model.tone = 1.0f; model.structure = 1.0f; model.skin = -1.0f;
+            gd.nrLayersModel.push_back(model);
+            gd.nrLayersResidual.push_back(engine::ResidualSettings{});
+            gd.nrLayersTemporal.push_back(false);
+            gd.nrLayersProtection.push_back(engine::ProtectionSettings{});
+        }
+        return true;
+    }
     if (name == "nr-style2") { nr(); gd.model.style = 2; gd.model.intensity = .6f; return true; }
     if (name == "nr-residual") { nr(); gd.residual = {1.4f, .7f, 1.2f, .8f, 1.1f}; return true; }
     if (name == "nr-protect") {

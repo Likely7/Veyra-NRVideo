@@ -1,6 +1,7 @@
 #pragma once
 #include "veyra/engine/BackendRecovery.h"
 #include "veyra/pipeline/ColorGradeTables.h"
+#include "veyra/pipeline/NrInstance.h"
 #include "veyra/pipeline/NrTemporalPass.h"
 
 // EnhanceGraph - the real unified processing graph (Playbook R3.2).
@@ -108,6 +109,13 @@ struct EnhanceGraphDesc {
     engine::ContentRate contentRate=engine::ContentRate::Transport;
     engine::NrSettings model;
     engine::ResidualSettings residual;
+    // NR layers, in order. One entry (the default) is the single-layer product
+    // path; extra entries stack further Feature-18 instances, each with its own
+    // parameters and history. src/pipeline/NrInstance.h.
+    std::vector<engine::NrSettings> nrLayersModel;
+    std::vector<engine::ResidualSettings> nrLayersResidual;
+    std::vector<bool> nrLayersTemporal;
+    std::vector<engine::ProtectionSettings> nrLayersProtection;
     engine::ProtectionSettings protection;
     // Colour grade (plan v4). When color.enabled is false the stage does not
     // exist: no tables are allocated, no constants are packed and the ingest
@@ -231,13 +239,14 @@ public:
     };
     const Metrics& metrics() const { return metrics_; }
     const std::string& mvecSource() const { return mvecSource_; }
-    bool nrCreated() const { return nrHandle_ != nullptr; }
+    bool nrCreated() const { return !nrInstances_.empty() && nrInstances_.front()->handle() != nullptr; }
     bool initialized() const { return initialized_; }
     uint32_t sourceWidth() const { return srcW_; }
     uint32_t sourceHeight() const { return srcH_; }
     uint32_t workWidth() const { return workW_; }
     uint32_t workHeight() const { return workH_; }
     uint32_t nrWidth() const {return nrW_;}
+    uint32_t nrLayerCount() const {return uint32_t(nrInstances_.size());}
     uint32_t nrHeight() const {return nrH_;}
     uint32_t flowWidth() const {return nvofW_;}
     uint32_t flowHeight() const {return nvofH_;}
@@ -285,7 +294,7 @@ public:
     ID3D12Resource* diagnosticLinearInput() const { return srcRgba_.Get(); }
     // Offline diagnostics only. Borrowed after process; restore NON_PIXEL_SHADER_RESOURCE.
     ID3D12Resource* diagnosticNrBase() const { return desc_.nrBeforeSr?srcRgba_.Get():workRgba_.Get(); }
-    ID3D12Resource* diagnosticNrRaw() const { return desc_.nrTemporal?nrTemporal_.raw():residualRgba_.Get(); }
+    ID3D12Resource* diagnosticNrRaw() const { return desc_.nrTemporal&&!nrInstances_.empty()?nrInstances_.front()->temporal().raw():residualRgba_.Get(); }
     ID3D12Resource* diagnosticNrFiltered() const { return residualRgba_.Get(); }
     // Non-empty when the colour stage refused the referenced LUT (input space
     // does not match the content domain). The engine surfaces this in the
@@ -363,8 +372,13 @@ private:
     ComPtr<ID3D12Resource> workRgba_;
     ComPtr<ID3D12Resource> videoSrInput_,videoSrOutput_;
     ComPtr<ID3D12Resource> videoHdrInput_,videoHdrOutput_;
-    ComPtr<ID3D12Resource> nrInput_,residualRgba_,nrFlow_,baseFlow_;
-    NrTemporalPass nrTemporal_;
+    ComPtr<ID3D12Resource> residualRgba_,nrFlow_,baseFlow_;
+    // NR layers. One entry means the single-layer product path; the probe in
+    // tools/nr_probe verified several handles coexist on one snippet session.
+    std::vector<std::unique_ptr<NrInstance>> nrInstances_;
+    // The layer count the current graph was built with, so a settings change
+    // that adds or removes a layer is detected as a rebuild.
+    uint32_t nrLayerCount_=1;
     ComPtr<ID3D12Resource> presentMotion_[2];
     bool presentMotionValid_[2]={};
     uint64_t motionPreviousSource_[2]={},previousSource_=0;
@@ -433,7 +447,6 @@ private:
     ComPtr<ID3D12Resource> fsrSrDepth_, upFsrSrDepth_;
     size_t fsrSrDepthPitch_=0;
     NVSDK_NGX_Parameter* ngxParams_ = nullptr;
-    NVSDK_NGX_Handle* nrHandle_ = nullptr;
     uint64_t nrResult_ = 0;
     uint32_t nrSeh_ = 0;
     bool fgCapsAvailable_ = false;

@@ -6,7 +6,7 @@ param([string]$App = 'E:\项目\Veyra\tests\ui-qml-migration-20260925\app',
       [string]$Baseline = 'E:\项目\Veyra\tests\ui-qml-migration-20260925\hash-baseline.json',
       [string]$Out = 'E:\项目\Veyra\logs\ui-qml-migration-20260925\hash',
       [int]$Frames = 24,
-      [string[]]$Cases = @('passthrough','nr','nr-style2','nr-residual','nr-protect','nr-temporal','dlss-sr','vsr','sr-nr','nr-sr','vsr-nr','color','color-nr'),
+      [string[]]$Cases = @('passthrough','nr','nr-style2','nr-residual','nr-protect','nr-temporal','dlss-sr','vsr','sr-nr','nr-sr','vsr-nr','color','color-nr','nr2','nr3','nr4'),
       [switch]$Record)
 $env:TEMP = 'E:\项目\Veyra\tmp\ui-qml-migration-20260925'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
@@ -32,6 +32,8 @@ $bad = 0
 foreach ($c in $Cases) {
   $now = $result[$c]; $was = $base.$c
   if ($now -is [string]) { "FAIL $c : $now"; $bad++; continue }
+  if ($null -eq $was) { "NEW  $c (no baseline entry)"; continue }
+  if ($null -eq $now -or $now.Count -eq 0) { "FAIL $c : no frames produced"; $bad++; continue }
   $diff = @(for ($i = 0; $i -lt [math]::Max($now.Count, $was.Count); $i++) { if ($now[$i] -ne $was[$i]) { $i } })
   if ($diff.Count) { "FAIL $c : $($diff.Count) of $($was.Count) frames differ (first $($diff[0]))"; $bad++ } else { "same $c" }
 }
