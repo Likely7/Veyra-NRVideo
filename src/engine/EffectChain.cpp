@@ -5,12 +5,12 @@
 namespace veyra::engine {
 namespace {
 constexpr std::array<EffectInfo, effectTypeCount> kCatalog{{
-    {EffectType::Color, effectTypeName(EffectType::Color), "调色", kMaxColorInstances, true, false, false, false},
-    {EffectType::SuperResolution, effectTypeName(EffectType::SuperResolution), "超分辨率", 1, false, false, true, false},
-    {EffectType::NrEnhance, effectTypeName(EffectType::NrEnhance), "NR 画面增强", kMaxNrInstances, true, false, false, true},
-    {EffectType::Protection, effectTypeName(EffectType::Protection), "NR 保护区域", 1, false, false, false, false},
-    {EffectType::VideoHdr, effectTypeName(EffectType::VideoHdr), "RTX Video HDR", 1, false, false, false, false},
-    {EffectType::FrameGeneration, effectTypeName(EffectType::FrameGeneration), "补帧", 1, false, true, false, false},
+    {EffectType::Color, effectTypeName(EffectType::Color), "调色", kMaxColorInstances, true, false, false, false, false},
+    {EffectType::SuperResolution, effectTypeName(EffectType::SuperResolution), "超分辨率", 1, false, false, false, true, false},
+    {EffectType::NrEnhance, effectTypeName(EffectType::NrEnhance), "NR 画面增强", kMaxNrInstances, true, false, false, false, true},
+    {EffectType::Protection, effectTypeName(EffectType::Protection), "NR 保护区域", 1, false, false, false, false, false},
+    {EffectType::VideoHdr, effectTypeName(EffectType::VideoHdr), "RTX Video HDR", 1, false, false, true, false, false},
+    {EffectType::FrameGeneration, effectTypeName(EffectType::FrameGeneration), "补帧", 1, false, true, false, false, false},
 }};
 } // namespace
 
@@ -44,14 +44,23 @@ ChainValidation validateChain(const EffectChain& chain) {
             return {false, "补帧只能放在链路最后"};
         }
     }
-    // Video HDR turns an SDR frame into an HDR one; the stages after it must be
-    // able to consume HDR. Only frame generation is allowed to follow.
-    for (uint32_t i = 0; i < chain.nodeCount; ++i) {
-        if (chain.nodes[i].type != EffectType::VideoHdr || !chain.nodes[i].enabled) continue;
-        for (uint32_t j = i + 1; j < chain.nodeCount; ++j) {
-            const auto type = chain.nodes[j].type;
-            if (!chain.nodes[j].enabled) continue;
-            if (type != EffectType::FrameGeneration) return {false, "RTX Video HDR 之后只能接补帧"};
+    // Video HDR turns an SDR frame into an HDR one, and the stages after it
+    // would need HDR-aware handling that only frame generation has. It is
+    // therefore pinned immediately in front of frame generation: no other
+    // enabled stage may sit between them, and nothing else may follow it.
+    {
+        int32_t hdrIndex = -1, fgIndex = -1;
+        for (uint32_t i = 0; i < chain.nodeCount; ++i) {
+            if (!chain.nodes[i].enabled) continue;
+            if (chain.nodes[i].type == EffectType::VideoHdr) hdrIndex = int32_t(i);
+            if (chain.nodes[i].type == EffectType::FrameGeneration) fgIndex = int32_t(i);
+        }
+        if (hdrIndex >= 0) {
+            if (fgIndex >= 0 && hdrIndex > fgIndex) return {false, "RTX Video HDR 只能放在补帧前面"};
+            for (uint32_t j = uint32_t(hdrIndex) + 1; j < chain.nodeCount; ++j) {
+                if (!chain.nodes[j].enabled) continue;
+                if (chain.nodes[j].type != EffectType::FrameGeneration) return {false, "RTX Video HDR 之后只能接补帧"};
+            }
         }
     }
     return {};

@@ -137,6 +137,22 @@ int main() {
         ok.nodes[1] = ChainNode{}; ok.nodes[1].type = EffectType::FrameGeneration; ok.nodes[1].enabled = true;
         ok.nodes[2] = ChainNode{}; ok.nodes[2].type = EffectType::NrEnhance; ok.nodes[2].enabled = false;
         check(validateChain(ok).accepted, "a disabled stage after Video HDR is allowed");
+
+        // Video HDR is pinned in front of frame generation: an enabled stage
+        // between them would have to consume HDR, which only FG can do.
+        EffectChain between;
+        between.nodeCount = 3;
+        between.nodes[0] = ChainNode{}; between.nodes[0].type = EffectType::VideoHdr; between.nodes[0].enabled = true;
+        between.nodes[1] = ChainNode{}; between.nodes[1].type = EffectType::Color; between.nodes[1].enabled = true;
+        between.nodes[2] = ChainNode{}; between.nodes[2].type = EffectType::FrameGeneration; between.nodes[2].enabled = true;
+        check(!validateChain(between).accepted, "an enabled stage between Video HDR and frame generation is rejected");
+
+        // Video HDR after frame generation is also refused.
+        EffectChain afterFg;
+        afterFg.nodeCount = 2;
+        afterFg.nodes[0] = ChainNode{}; afterFg.nodes[0].type = EffectType::FrameGeneration; afterFg.nodes[0].enabled = true;
+        afterFg.nodes[1] = ChainNode{}; afterFg.nodes[1].type = EffectType::VideoHdr; afterFg.nodes[1].enabled = true;
+        check(!validateChain(afterFg).accepted, "Video HDR after frame generation is rejected");
     }
 
     // 6. Instance limits come from the catalog.
@@ -155,6 +171,10 @@ int main() {
               effectInfo(EffectType::NrEnhance).maxInstances == kMaxNrInstances,
               "the catalog marks NR as repeatable up to the ceiling");
         check(effectInfo(EffectType::FrameGeneration).mustBeLast, "the catalog marks frame generation as last");
+        check(effectInfo(EffectType::VideoHdr).justBeforeLast && !effectInfo(EffectType::VideoHdr).mustBeLast,
+              "the catalog pins Video HDR in front of frame generation");
+        check(!effectInfo(EffectType::NrEnhance).mustBeLast && !effectInfo(EffectType::NrEnhance).justBeforeLast,
+              "NR is not pinned to a fixed position");
     }
 
     // 7. Rebuild rules: shape changes rebuild, live parameters do not.

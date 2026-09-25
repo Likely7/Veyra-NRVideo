@@ -142,7 +142,12 @@ struct EffectInfo {
     std::string_view label;
     uint32_t maxInstances = 1;
     bool repeatable = false;
+    // mustBeLast: the stage runs after the whole chain (frame generation).
+    // justBeforeLast: the stage must sit immediately in front of it, because
+    // what follows would change the colour domain it just produced (Video HDR).
+    // The UI keeps both pinned; neither can be dragged.
     bool mustBeLast = false;
+    bool justBeforeLast = false;
     bool changesResolution = false;
     bool experimental = false;
 };
