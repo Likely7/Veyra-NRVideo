@@ -2,6 +2,7 @@ module Veyra
 singleton Theme 1.0 Theme.qml
 VAccordion 1.0 VAccordion.qml
 VSubGroup 1.0 VSubGroup.qml
+DialogHost 1.0 DialogHost.qml
 VButton 1.0 VButton.qml
 VCard 1.0 VCard.qml
 VDot 1.0 VDot.qml

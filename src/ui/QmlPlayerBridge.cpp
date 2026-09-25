@@ -17,6 +17,8 @@
 
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
+#include "veyra/source/CaptureCardSource.h"
+#include "veyra/source/ScreenCaptureSource.h"
 
 namespace veyra::ui {
 namespace {
@@ -67,6 +69,9 @@ struct QmlPlayerBridge::Impl {
     bool exportHevc = false;
     QString initialPageOverride;
     QString currentPage;
+    std::wstring captureDevice;
+    QString screenTarget;
+    QString remotePlayHost, remotePlayPin;
 
     QTimer* timer = nullptr;
 
@@ -392,6 +397,103 @@ void QmlPlayerBridge::copyDiagnostics() {
         clipboard->setText(diagnosticsReport());
         emit notice(tr("诊断信息已复制"), false);
     }
+}
+
+
+// --- capture dialog ----------------------------------------------------------
+QVariantList QmlPlayerBridge::captureDevices() const {
+    // The source's own enumeration. An empty list means the machine reports no
+    // capture devices, and the dialog says so rather than listing examples.
+    QVariantList out;
+    for (const auto& name : source::CaptureCardSource::devices(false)) {
+        QVariantMap item;
+        item["id"] = utf8Of(name);
+        item["label"] = utf8Of(name);
+        out << item;
+    }
+    return out;
+}
+QString QmlPlayerBridge::captureDeviceId() const { return utf8Of(impl_->captureDevice); }
+void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
+    impl_->captureDevice = wideOf(value);
+    emit captureChanged();
+}
+QString QmlPlayerBridge::captureDeviceLabel() const {
+    const QString id = captureDeviceId();
+    return id.isEmpty() ? tr("未选择设备") : id;
+}
+
+// Force-SDR and vertical flip are real settings the engine already carries, so
+// these are genuine controls rather than placeholders.
+bool QmlPlayerBridge::captureForceSdr() const { return settings().forceSdrPreview; }
+void QmlPlayerBridge::setCaptureForceSdr(bool value) {
+    auto s = settings();
+    if (s.forceSdrPreview == value) return;
+    s.forceSdrPreview = value;
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+bool QmlPlayerBridge::captureFlipVertical() const { return settings().captureFlipVertical; }
+void QmlPlayerBridge::setCaptureFlipVertical(bool value) {
+    auto s = settings();
+    if (s.captureFlipVertical == value) return;
+    s.captureFlipVertical = value;
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+
+// --- screen capture ----------------------------------------------------------
+QVariantList QmlPlayerBridge::screenTargets() const {
+    // Enumerated from the source, both kinds, so the dialog can offer windows and
+    // monitors from what the machine actually has.
+    QVariantList out;
+    for (auto kind : {source::ScreenTargetKind::Window, source::ScreenTargetKind::Monitor}) {
+        for (const auto& target : source::ScreenCaptureSource::targets(kind)) {
+            QVariantMap item;
+            item["id"] = QString::number(target.handle);
+            QString label = QString::fromWCharArray(target.name.c_str());
+            if (target.width > 0)
+                label += QStringLiteral(" · %1x%2").arg(target.width).arg(target.height);
+            if (target.refresh > 0) label += QStringLiteral(" · %1Hz").arg(target.refresh);
+            item["label"] = label;
+            out << item;
+        }
+    }
+    return out;
+}
+QString QmlPlayerBridge::screenTargetId() const { return impl_->screenTarget; }
+void QmlPlayerBridge::setScreenTargetId(const QString& value) {
+    impl_->screenTarget = value;
+    emit captureChanged();
+}
+QString QmlPlayerBridge::screenTargetLabel() const {
+    const QString id = screenTargetId();
+    if (id.isEmpty()) return tr("未选择目标");
+    for (const auto& item : screenTargets()) {
+        if (item.toMap().value(QStringLiteral("id")).toString() == id)
+            return item.toMap().value(QStringLiteral("label")).toString();
+    }
+    return tr("目标已失效");
+}
+void QmlPlayerBridge::refreshCaptureTargets() {
+    // Re-enumeration is what the dialog's refresh does; the lists are read fresh on
+    // every call, so this only has to tell the UI to ask again.
+    emit captureChanged();
+}
+
+// --- ps5 dialog --------------------------------------------------------------
+QString QmlPlayerBridge::remotePlayHost() const { return impl_->remotePlayHost; }
+void QmlPlayerBridge::setRemotePlayHost(const QString& value) {
+    impl_->remotePlayHost = value;
+    emit settingsChanged();
+}
+QString QmlPlayerBridge::remotePlayPin() const { return impl_->remotePlayPin; }
+void QmlPlayerBridge::setRemotePlayPin(const QString& value) {
+    // Held only until the connect command runs; it is never written to the session
+    // file, and the engine keeps PSN credentials encrypted in the user data
+    // directory rather than here.
+    impl_->remotePlayPin = value;
+    emit settingsChanged();
 }
 
 void QmlPlayerBridge::attachVideoWindow(qulonglong nativeHandle) {

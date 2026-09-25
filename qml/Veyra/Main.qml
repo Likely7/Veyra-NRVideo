@@ -143,6 +143,21 @@ Window {
         SettingsPage { onRequestPage: p => root.page = p }
     }
 
+    // The five dialogs sit above the pages and below the dock's own tooltips.
+    DialogHost {
+        id: dialogs
+        anchors.fill: parent
+        onStartCapture: {
+            if (veyra.captureDeviceId.length > 0) root.page = "min"
+            else toast.show("先选择一个采集设备", true)
+        }
+        onStartPs5: root.page = "min"
+        onStartScreen: {
+            if (veyra.screenTargetId.length > 0) root.page = "min"
+            else toast.show("先选择一个捕获目标", true)
+        }
+    }
+
     // The dock floats above every page and retracts on its own.
     TopDock {
         id: dock
@@ -186,7 +201,15 @@ Window {
     Connections {
         target: veyra
         function onNotice(text, isError) { toast.show(text, isError) }
-        function onNavigate(p) { root.page = (p === "export" ? "exp" : p) }
+        function onNavigate(p) {
+            // A dialog key opens the dialog; anything else is a page.
+            if (p === "capture" || p === "ps5" || p === "screen"
+                || p === "subtitle" || p === "audio") {
+                dialogs.open(p)
+                return
+            }
+            root.page = (p === "export" ? "exp" : p)
+        }
     }
 
     // The film's aspect drives the window in cinema mode. Reported only: the

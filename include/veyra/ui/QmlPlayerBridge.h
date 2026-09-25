@@ -89,6 +89,30 @@ class QmlPlayerBridge : public QObject {
     // list here could drift from what the package actually contains.
     Q_PROPERTY(QVariantList componentList READ componentList NOTIFY snapshotChanged)
 
+    // --- capture dialog ----------------------------------------------------
+    // Device and format lists come from the source's own enumeration, so the UI
+    // can only offer what the machine actually reports.
+    Q_PROPERTY(QVariantList captureDevices READ captureDevices NOTIFY captureChanged)
+    Q_PROPERTY(QString captureDeviceId READ captureDeviceId WRITE setCaptureDeviceId NOTIFY captureChanged)
+    Q_PROPERTY(QString captureDeviceLabel READ captureDeviceLabel NOTIFY captureChanged)
+    Q_PROPERTY(bool captureForceSdr READ captureForceSdr WRITE setCaptureForceSdr NOTIFY settingsChanged)
+    Q_PROPERTY(bool captureFlipVertical READ captureFlipVertical WRITE setCaptureFlipVertical NOTIFY settingsChanged)
+
+    // --- screen-capture dialog ---------------------------------------------
+    Q_PROPERTY(QVariantList screenTargets READ screenTargets NOTIFY captureChanged)
+    Q_PROPERTY(QString screenTargetId READ screenTargetId WRITE setScreenTargetId NOTIFY captureChanged)
+    Q_PROPERTY(QString screenTargetLabel READ screenTargetLabel NOTIFY captureChanged)
+    Q_INVOKABLE void refreshCaptureTargets();
+
+    // Subtitles: SubtitleStyle is owned by the old Win32 shell, not by the engine,
+    // so there is nothing here for the bridge to read or write. The subtitle dialog
+    // says it is not wired rather than keeping a second copy of that state that
+    // would silently disagree with the renderer.
+
+    // --- ps5 dialog --------------------------------------------------------
+    Q_PROPERTY(QString remotePlayHost READ remotePlayHost WRITE setRemotePlayHost NOTIFY settingsChanged)
+    Q_PROPERTY(QString remotePlayPin READ remotePlayPin WRITE setRemotePlayPin NOTIFY settingsChanged)
+
     Q_PROPERTY(QString appName READ appName CONSTANT)
     Q_PROPERTY(QString version READ version CONSTANT)
 
@@ -255,6 +279,25 @@ public:
     void setCurrentPage(const QString& value);
     QString remotePlayState() const;
     QVariantList componentList() const;
+    QVariantList captureDevices() const;
+    QString captureDeviceId() const;
+    void setCaptureDeviceId(const QString& value);
+    QString captureDeviceLabel() const;
+    bool captureForceSdr() const;
+    void setCaptureForceSdr(bool value);
+    bool captureFlipVertical() const;
+    void setCaptureFlipVertical(bool value);
+
+    QVariantList screenTargets() const;
+    QString screenTargetId() const;
+    void setScreenTargetId(const QString& value);
+    QString screenTargetLabel() const;
+
+    QString remotePlayHost() const;
+    void setRemotePlayHost(const QString& value);
+    QString remotePlayPin() const;
+    void setRemotePlayPin(const QString& value);
+
     QString appName() const;
     QString version() const;
 
@@ -447,6 +490,8 @@ signals:
     void recentFilesChanged();
     void presetsChanged();
     void exportChanged();
+    // Emitted when the capture device or screen-target lists are re-enumerated.
+    void captureChanged();
     // User-facing notices the UI shows as a transient message: a rejected
     // chain edit, an export that finished, a failed open.
     void notice(const QString& text, bool isError);
