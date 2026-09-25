@@ -301,8 +301,17 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     nvofStandalone_ = desc.enableNvofStandalone && !desc.noFeatures;
     if(desc.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx&&desc.amdFlowHalfResolution){nvofW_=std::max(1u,nvofW_/2);nvofH_=std::max(1u,nvofH_/2);}
     uint64_t budget=0,usage=0;
-    const uint64_t temporalBytes=desc_.nrTemporal?uint64_t(desc_.nrBeforeSr?srcW_:workW_)*(desc_.nrBeforeSr?srcH_:workH_)*40:0;
-    const uint64_t estimate=uint64_t(workW_)*workH_*(fgEnabled_?100:76)+uint64_t(nrW_)*nrH_*32+uint64_t(srcW_)*srcH_*32+temporalBytes;
+    // Every NR layer allocates its own full set of textures, and a stabilised
+    // layer adds two history/guide pairs on top. The stack is bounded (16 nodes),
+    // so a deep chain can genuinely exhaust a small adapter; the estimate has to
+    // count the layers or the check would pass and allocation would fail later.
+    const uint64_t nrStackLayers=uint64_t(std::max<size_t>(1,desc_.nrLayersModel.size()));
+    const uint64_t temporalLayers=uint64_t(desc_.nrTemporal?std::max<size_t>(1,desc_.nrLayersTemporal.size()):0);
+    const uint64_t layerExtent=uint64_t(desc_.nrBeforeSr?srcW_:workW_)*(desc_.nrBeforeSr?srcH_:workH_);
+    const uint64_t temporalBytes=temporalLayers*layerExtent*40;
+    const uint64_t estimate=uint64_t(workW_)*workH_*(fgEnabled_?100:76)
+        +nrStackLayers*(uint64_t(nrW_)*nrH_*16+layerExtent*8)
+        +uint64_t(srcW_)*srcH_*32+temporalBytes;
     if(context_.videoMemoryInfo(budget,usage)){
         veyra::log::info("memory",std::format("graph lower-bound={}MiB budget={}MiB usage={}MiB; SDK allocations additional",estimate>>20,budget>>20,usage>>20));
         if(usage>=budget||estimate>budget-usage){veyra::log::error("memory","insufficient adapter budget for requested graph textures");return false;}
@@ -1148,7 +1157,7 @@ bool EnhanceGraph::createComputePasses()
     {
         const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
         if(!residualPass_.loadShader("NrResidualComposite.dxil",cs)||
-           !residualPass_.create(context_.device(),cs,3*residualLayers+1,3*residualLayers,1,24))return false;
+           !residualPass_.create(context_.device(),cs,4*residualLayers,3*residualLayers,residualLayers,24))return false;
     }
     if(!flowAdaptPass_.loadShader("FlowAdapt.dxil",cs)||!flowAdaptPass_.create(context_.device(),cs,3,1,1))return false;
     if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 12, 2, 1, 12+kColorGradeConstantCount, 4)) return false;
@@ -1223,7 +1232,7 @@ bool EnhanceGraph::createViews()
             const UINT k = UINT(layerIndex);
             ID3D12Resource* source = layerIndex == 0
                 ? (desc_.nrBeforeSr ? srcRgba_.Get() : workRgba_.Get())
-                : nrInstances_[layerIndex - 1]->outputFull();
+                : nrInstances_[layerIndex - 1]->fullTarget();
             stagedSrv(source, DXGI_FORMAT_R16G16B16A16_FLOAT, downsamplePass_, 2 * k);
             if (!layer->inputIsBorrowed()) {
                 makeUav(context_.device(), layer->input(), DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(downsamplePass_, 2 * layers + 2 * k));
@@ -1232,25 +1241,53 @@ bool EnhanceGraph::createViews()
     }
     // The residual composite runs once per layer. Layer 0 keeps the original
     // slot triple (base, NR input, decoded output); every later layer owns the
-    // group starting at 1+3k, whose base is the previous layer's result.
+    // group starting at 3k, whose base is the previous layer's finished result.
+    //
+    // Each layer also needs its OWN output descriptor. A single shared u0 meant
+    // every layer's composite landed in the same texture while the barrier after
+    // it named a different resource: layer 1 read a texture nothing had written,
+    // which is what turned a two-layer stack black.
     for(size_t layerIndex=0;layerIndex<nrInstances_.size();++layerIndex){
         const UINT k=UINT(layerIndex);
         // The shader reads base (t0), the NR-extent input (t1) and the neural
         // result (t2); the heap keeps those three per layer, in order.
         ID3D12Resource* base=layerIndex==0
             ?(desc_.nrBeforeSr?srcRgba_.Get():workRgba_.Get())
-            :nrInstances_[layerIndex-1]->outputFull();
+            :nrInstances_[layerIndex-1]->fullTarget();
         stagedSrv(base,DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+0);
         stagedSrv(nrInstances_[layerIndex]->input(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+1);
         stagedSrv(nrInstances_[layerIndex]->finalRgba(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+2);
     }
-    // Temporal stabilisation belongs to a layer; the graph keeps none of its own
-    // once the stack exists, so the last layer's chain writes the final target.
-    if(nrLayerCount_==1&&desc_.nrTemporal&&!nrInstances_.empty()&&
-       !nrInstances_.front()->temporal().initialize(context_.device(),desc_.nrBeforeSr?srcRgba_.Get():workRgba_.Get(),flowTex_.Get(),residualRgba_.Get()))return false;
+    // Temporal stabilisation belongs to a layer, and its output is that layer's
+    // composite target: what the residual pass writes, what the next layer reads,
+    // and — for the last layer — what the output blit consumes. Initialising it
+    // with the residual target keeps one destination per layer; a previous
+    // version only ever initialised the single-layer case, so turning the switch
+    // on in a stacked chain did nothing at all.
     {
-        const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
-        makeUav(context_.device(),(nrLayerCount_==1&&desc_.nrTemporal&&!nrInstances_.empty())?nrInstances_.front()->temporal().raw():residualRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(residualPass_,3*residualLayers));
+        const UINT residualLayers = UINT(std::max<size_t>(1, nrInstances_.size()));
+        for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
+            auto* layer = nrInstances_[layerIndex].get();
+            const bool last = layerIndex + 1 == nrInstances_.size();
+            // A stabilised layer composites into the temporal pass's raw input;
+            // the pass then writes the layer's full-extent target. Either way
+            // `fullTarget()` is the finished image the next layer reads.
+            layer->stabilised = layer->temporalEnabled;
+            ID3D12Resource* target = last ? residualRgba_.Get() : layer->outputFull();
+            layer->setFullTarget(target);
+            ID3D12Resource* base = layerIndex == 0
+                ? (desc_.nrBeforeSr ? srcRgba_.Get() : workRgba_.Get())
+                : nrInstances_[layerIndex - 1]->fullTarget();
+            // Initialisation MUST come before the descriptor write: it is what
+            // allocates the raw input the descriptor names. Writing the
+            // descriptor first bound a null resource, so the composite went
+            // nowhere and the final texture was never touched.
+            if (layer->stabilised &&
+                !layer->temporal().initialize(context_.device(), base, flowTex_.Get(), target)) return false;
+            makeUav(context_.device(),
+                    layer->stabilised ? layer->temporal().raw() : target,
+                    DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(residualPass_, 3 * residualLayers + UINT(layerIndex)));
+        }
     }
     stagedSrv(flowTex_.Get(),DXGI_FORMAT_R16G16_FLOAT,flowAdaptPass_,0);
     makeUav(context_.device(),nrFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,1));
@@ -2060,7 +2097,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             auto* layer=nrInstances_[layerIndex].get();
             if(layer->handle()==nullptr||!layer->enabled)continue;
             const bool last=(layerIndex+1==nrInstances_.size());
-            const bool temporallyStabilised=last&&nrLayerCount_==1&&desc_.nrTemporal;
+            // A stabilised layer composites into the temporal pass's raw input
+            // (the pass then writes the real target); otherwise it writes the
+            // target directly. A stacked chain with the switch off keeps the
+            // byte-exact single-layer behaviour because no layer is stabilised.
+            const bool temporallyStabilised=layer->stabilised;
             ID3D12Resource* destination=temporallyStabilised?layer->temporal().raw():(last?residualRgba_.Get():layer->outputFull());
             const auto& r=layer->residualSettings;
             const auto& protection=layer->protection;
@@ -2069,7 +2110,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             for(size_t i=0;i<4;++i){const auto q=protection.regions[i];c[8+i*4]=q.left;c[9+i*4]=q.top;c[10+i*4]=q.right;c[11+i*4]=q.bottom;}
             const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
             residualPass_.bind(list,c,gpuHandleOf(residualPass_,3u*UINT(layerIndex)).ptr,
-                               gpuHandleOf(residualPass_,3u*residualLayers).ptr);
+                               gpuHandleOf(residualPass_,3u*residualLayers+UINT(layerIndex)).ptr);
             list->Dispatch(((desc_.nrBeforeSr?srcW_:workW_)+15)/16,((desc_.nrBeforeSr?srcH_:workH_)+15)/16,1);
             tracker_.uavBarrier(list,destination);
             tracker_.transition(list,destination,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

@@ -57,6 +57,12 @@ public:
     ID3D12Resource* baseFull() const { return baseFull_; }
     void setBaseFull(ID3D12Resource* resource) { baseFull_ = resource; }
     ID3D12Resource* outputFull() const { return outputFull_.Get(); }
+    // The finished full-extent image for this layer: the graph's residual
+    // texture for the last layer, the layer's own otherwise. A downstream layer
+    // reads this rather than `outputFull()` so a stabilised layer hands on the
+    // temporal pass's result instead of the pre-stabilisation composite.
+    ID3D12Resource* fullTarget() const { return fullTarget_ ? fullTarget_ : outputFull_.Get(); }
+    void setFullTarget(ID3D12Resource* resource) { fullTarget_ = resource; }
     uint32_t fullWidth() const { return fullWidth_; }
     uint32_t fullHeight() const { return fullHeight_; }
     ID3D12Resource* zeroDepth() const { return zeroDepth_; }
@@ -72,6 +78,11 @@ public:
     engine::ResidualSettings residualSettings{};
     engine::ProtectionSettings protection{};
     bool temporalEnabled = false;
+    // Decided when views are created: this layer runs the temporal pass, so it
+    // composites into the pass's raw input and the pass writes the real target.
+    // False (the default, and the whole stack when the switch is off) keeps the
+    // direct-to-target path.
+    bool stabilised = false;
     bool enabled = true;
     // Bumped when an upstream layer's settings or output change. A layer whose
     // input revision moved drops its history, the same contract Magpie's
@@ -82,6 +93,9 @@ public:
 private:
     ComPtr<ID3D12Resource> input_, proxy_, neural_, finalRgba_, residual_, outputFull_;
     ID3D12Resource* baseFull_ = nullptr;
+    // Not owned: either this layer's `outputFull_` or the graph's residual
+    // texture. Set when views are created.
+    ID3D12Resource* fullTarget_ = nullptr;
     uint32_t fullWidth_ = 0, fullHeight_ = 0;
     bool inputIsBorrowed_ = false;
     ID3D12Resource* zeroMotion_ = nullptr;

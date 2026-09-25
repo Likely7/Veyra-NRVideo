@@ -45,6 +45,7 @@ void NrInstance::close() {
     residual_.Reset();
     outputFull_.Reset();
     baseFull_ = nullptr;
+    fullTarget_ = nullptr;
     zeroMotion_ = zeroDepth_ = nullptr;
     handle_ = nullptr;
     parameters_ = nullptr;

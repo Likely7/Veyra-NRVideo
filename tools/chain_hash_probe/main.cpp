@@ -89,6 +89,22 @@ bool configure(const std::string& name, uint32_t w, uint32_t h, pipeline::Enhanc
         gd.protection.regions[0] = {.05f, .05f, .30f, .20f}; return true;
     }
     if (name == "nr-temporal") { nr(); gd.nrTemporal = true; return true; }
+    // Two layers with the per-layer switch on both: this is the combination the
+    // single-layer-only initialisation silently ignored (the switch did nothing
+    // once a chain had more than one layer).
+    if (name == "nr2-temporal") {
+        nr();
+        for (int n = 0; n < 2; ++n) {
+            engine::NrSettings model; model.intensity = 1.0f - 0.2f * float(n);
+            model.tone = 1.0f; model.structure = 1.0f; model.skin = -1.0f;
+            gd.nrLayersModel.push_back(model);
+            gd.nrLayersResidual.push_back(engine::ResidualSettings{});
+            gd.nrLayersTemporal.push_back(true);
+            gd.nrLayersProtection.push_back(engine::ProtectionSettings{});
+        }
+        gd.nrTemporal = true;
+        return true;
+    }
     if (name == "dlss-sr") { sr(0); return true; }
     if (name == "vsr") { sr(3); return true; }
     if (name == "sr-nr") { sr(0); nr(); return true; }
@@ -107,7 +123,7 @@ bool configure(const std::string& name, uint32_t w, uint32_t h, pipeline::Enhanc
 
 int main() {
     const auto args = utf8Arguments();
-    std::string input, caseName, outPath;
+    std::string input, caseName, outPath, dumpDir;
     int frames = 24;
     for (size_t i = 1; i < args.size(); ++i) {
         auto next = [&] { return i + 1 < args.size() ? args[++i] : std::string(); };
@@ -115,6 +131,7 @@ int main() {
         else if (args[i] == "--case") caseName = next();
         else if (args[i] == "--frames") frames = std::stoi(next());
         else if (args[i] == "--out") outPath = next();
+        else if (args[i] == "--dump-edge") dumpDir = next();
         else { std::fprintf(stderr, "unknown arg %s\n", args[i].c_str()); return 2; }
     }
     if (input.empty() || caseName.empty() || frames <= 0) {
@@ -150,6 +167,12 @@ int main() {
     if (!graph.initialize(gd) || !graph.createViews()) { std::fprintf(stderr, "graph init failed\n"); return 1; }
 
     std::vector<std::string> hashes;
+    // Temporal-stability metric for the anti-flicker question: the mean absolute
+    // frame-to-frame change of the output. Lower means a steadier picture. It is
+    // computed on the same frames the hashes cover, so the two agree.
+    double temporalDeltaSum = 0.0;
+    double temporalDeltaPixels = 0.0;
+    std::vector<uint8_t> previousFrame;
     bool reset = true;
     for (int n = 0; n < frames; ++n) {
         pipeline::FramePacket packet;
@@ -167,14 +190,29 @@ int main() {
             return 1;
         }
         hashes.push_back(sha256Hex(image.pixels.data(), image.pixels.size()));
+        if (!dumpDir.empty()) {
+            // Raw RGBA8, one file per frame: lets a companion script measure how
+            // many pixels a stage actually changes, which a hash cannot show.
+            std::ofstream f(widen(std::format("{}/frame{:03d}_{}x{}.rgba", dumpDir, n, image.width, image.height)),
+                            std::ios::binary);
+            f.write(reinterpret_cast<const char*>(image.pixels.data()), std::streamsize(image.pixels.size()));
+        }
+        if (!previousFrame.empty() && previousFrame.size() == image.pixels.size()) {
+            double sum = 0.0;
+            for (size_t i = 0; i < image.pixels.size(); ++i) sum += std::abs(int(image.pixels[i]) - int(previousFrame[i]));
+            temporalDeltaSum += sum / double(image.pixels.size());
+            temporalDeltaPixels += 1.0;
+        }
+        previousFrame = image.pixels;
     }
     (void)ring.waitIdle();
     graph.shutdown();
 
-    std::string json = std::format("{{\"case\":\"{}\",\"frames\":{},\"source\":\"{}x{}\",\"displayAspect\":{:.4f},\"rotation\":{},\"duration\":{:.3f},\"work\":\"{}x{}\",\"nr\":\"{}x{}\",\"hashes\":[",
+    std::string json = std::format("{{\"case\":\"{}\",\"frames\":{},\"source\":\"{}x{}\",\"displayAspect\":{:.4f},\"rotation\":{},\"duration\":{:.3f},\"work\":\"{}x{}\",\"nr\":\"{}x{}\",\"meanFrameDelta\":{:.4f},\"hashes\":[",
                                    caseName, hashes.size(), info.width, info.height, info.displayAspect,
                                    info.rotationDegrees, info.duration.toDouble(),
-                                   graph.workWidth(), graph.workHeight(), graph.nrWidth(), graph.nrHeight());
+                                   graph.workWidth(), graph.workHeight(), graph.nrWidth(), graph.nrHeight(),
+                                   temporalDeltaPixels > 0 ? temporalDeltaSum / temporalDeltaPixels : 0.0);
     for (size_t n = 0; n < hashes.size(); ++n) json += (n ? ",\"" : "\"") + hashes[n] + "\"";
     json += "]}\n";
     std::fputs(json.c_str(), stdout);
