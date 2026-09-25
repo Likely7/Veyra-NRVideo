@@ -19,6 +19,9 @@
 | S1.1 | 合并图描述构建 | 完成 | `checkpoint/ui-mig-s1.1` | 6 处合并为 `describeStages()`；13 项哈希一致 |
 | S1.7 | 快照补字段（宽高比 / 时长 / 封面） | 完成 | `checkpoint/ui-mig-s1.7` | 宽高比与时长实测正确；关键哈希一致 |
 | S1.2+S1.3 | 效果链模型与效果注册表 | 完成 | `checkpoint/ui-mig-s1.2` | 40 项单元检查全过；引擎尚未改用它 |
+| S1.4 | 重建判断改由链推导（影子比对） | 完成 | `checkpoint/ui-mig-s1.4` | 6 个 smoke 用例，0 处不一致 |
+| S1.5 | 导出携带效果链 | 完成 | `checkpoint/ui-mig-s1.4` | 共享内存版本 2→3，接收端反算校验 |
+| S1.6 | 统一预设库 | 完成 | `checkpoint/ui-mig-s1.6` | 33 项单元检查全过；旧文件只读导入 |
 
 ## 发现并修复的 bug
 
@@ -30,6 +33,21 @@
 | B2 | S0.2 | `veyra_quality_probe` 用 ANSI `argv` 转宽字符，输出目录含中文（`E:\项目`）时写图失败，交付门槛因此失败；门槛脚本原先用相对路径绕开，但源码在 C:、日志在 E: 时相对路径无法跨盘 | 探针改为从 UTF-16 命令行读参数；门槛改传绝对路径 |
 
 ## 日志
+
+### S1.6（2026-09-25）统一预设库
+- 新增 `include/veyra/engine/PresetLibrary.h` + `src/engine/PresetLibrary.cpp`：一个存储放全部预设，每个预设用 `contents` 掩码声明自己包含哪些部分（画质链路 / 调色 / 补帧 / 音频偏移），**这正是设计稿里“另存为时勾选要保存的部分”**。
+- 列表预设与节点预设用 `kind` 分开，互相不串。
+- 内置四个预设（原画 / 流畅 / 均衡 / 极致）；内置只读：不能改名、不能删除，但可以复制后改。
+- 管理操作：另存（重名可覆盖，覆盖内置会被拒）、改名、复制、删除、设为启动默认。
+- `apply()` 只覆盖预设声明包含的部分，其余字段原样保留 —— “只存链路”的预设不会顺手清掉用户的调色。
+- `importLegacy()` 用于把旧的 `user-presets.v1` / `nr-presets.v1` 导入：重名的一律跳过，不覆盖用户已有预设。
+- 文件格式 `VEYRA_PRESET_LIBRARY 1`，原子写（临时文件 + `MoveFileEx`），损坏文件保留原文并拒绝覆盖。
+- 新增 `veyra_preset_library_tests`（33 项检查）：内置只读、部分内容保存与套用、完整往返（含每层 NR 参数与节点模式标记）、管理操作与默认项持久化、旧文件导入不覆盖、损坏文件保护。
+- **注意**：这一步只是把库建好，界面还没接上；现有 Win32 界面继续用旧的 `PresetStore`。
+
+### S1.4 + S1.5（2026-09-25）重建判断与导出链路
+- S1.4：`EngineController` 现在同时计算旧的字段式判断和新的 `requiresGraphRebuild()`，不一致就写 `settings-rebuild` 警告日志，但**仍按旧判断执行**。跑 6 个 settings 类 smoke 用例（master / settings / fg-only / view / output-cap / rollback），0 处不一致。确认后再切换、再删旧判断。
+- S1.5：导出的共享内存头从版本 2 升到 3，多带一份 `EffectChain`；工作进程收到后会把链反算回设置并与头部里的设置逐字段比对，不一致直接拒绝任务，避免读到错版布局。
 
 ### S1.2 + S1.3（2026-09-25）效果链模型与效果注册表
 - 新增 `include/veyra/engine/EffectChain.h` + `src/engine/EffectChain.cpp`：

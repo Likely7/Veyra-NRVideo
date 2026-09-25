@@ -35,6 +35,7 @@
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/engine/GraphDescription.h"
+#include "veyra/engine/EffectChain.h"
 #include "veyra/engine/PosterFrame.h"
 #include <avrt.h>
 #include <chrono>
@@ -861,7 +862,34 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const bool xessFg=presentSinkFrameGeneration(next.settings.frameGenerationBackend);
                     describeStages(stageRequest(next),next.snapshot(),nextDesc);
                     nextDesc.hdrOutput=requested.useHdrPreview(nextDesc.hdrInput,displayHdrActive());
-                    const bool rebuild=gd.videoHdr.enabled!=nextDesc.videoHdr.enabled||gd.nrTemporal!=nextDesc.nrTemporal||(!nvidiaAdapter&&(next.nr||next.sr||(next.fg&&!xessFg)))||gd.hdrOutput!=nextDesc.hdrOutput||previous.captureCompatible!=requested.captureCompatible||gd.nrRuntime!=nextDesc.nrRuntime||gd.opticalFlowBackend!=nextDesc.opticalFlowBackend||gd.amdFlowHalfResolution!=nextDesc.amdFlowHalfResolution||gd.enableNr!=nextDesc.enableNr||gd.color.enabled!=nextDesc.color.enabled||gd.color.lutNameString()!=nextDesc.color.lutNameString()||gd.enableFg!=nextDesc.enableFg||gd.frameGenerationBackend!=nextDesc.frameGenerationBackend||gd.fgMultiplier!=nextDesc.fgMultiplier||gd.videoSrQuality!=nextDesc.videoSrQuality||gd.flowQuality!=nextDesc.flowQuality||gd.nrBeforeSr!=nextDesc.nrBeforeSr||gd.workWidth!=nextDesc.workWidth||gd.workHeight!=nextDesc.workHeight||gd.nrWidth!=nextDesc.nrWidth||gd.nrHeight!=nextDesc.nrHeight||gd.flowWidth!=nextDesc.flowWidth||gd.flowHeight!=nextDesc.flowHeight;
+                    // Legacy field-by-field rebuild decision. It stays until
+                    // the shadow comparison below shows the chain-derived
+                    // predicate agrees on every real edit; requiresGraphRebuild()
+                    // is the source of truth after that.
+                    const bool legacyRebuild=gd.videoHdr.enabled!=nextDesc.videoHdr.enabled||gd.nrTemporal!=nextDesc.nrTemporal||(!nvidiaAdapter&&(next.nr||next.sr||(next.fg&&!xessFg)))||gd.hdrOutput!=nextDesc.hdrOutput||previous.captureCompatible!=requested.captureCompatible||gd.nrRuntime!=nextDesc.nrRuntime||gd.opticalFlowBackend!=nextDesc.opticalFlowBackend||gd.amdFlowHalfResolution!=nextDesc.amdFlowHalfResolution||gd.enableNr!=nextDesc.enableNr||gd.color.enabled!=nextDesc.color.enabled||gd.color.lutNameString()!=nextDesc.color.lutNameString()||gd.enableFg!=nextDesc.enableFg||gd.frameGenerationBackend!=nextDesc.frameGenerationBackend||gd.fgMultiplier!=nextDesc.fgMultiplier||gd.videoSrQuality!=nextDesc.videoSrQuality||gd.flowQuality!=nextDesc.flowQuality||gd.nrBeforeSr!=nextDesc.nrBeforeSr||gd.workWidth!=nextDesc.workWidth||gd.workHeight!=nextDesc.workHeight||gd.nrWidth!=nextDesc.nrWidth||gd.nrHeight!=nextDesc.nrHeight||gd.flowWidth!=nextDesc.flowWidth||gd.flowHeight!=nextDesc.flowHeight;
+                    // Shadow comparison: same inputs, the chain description and
+                    // its predicate. A mismatch is a bug in whichever rule is
+                    // wrong, never something to paper over.
+                    bool chainRebuild=false;
+                    {
+                        const auto previousChain=engine::toChain(previous);
+                        const auto requestedChain=engine::toChain(requested);
+                        if(!(previousChain==requestedChain)||gd.enableNr!=nextDesc.enableNr||gd.enableSr!=nextDesc.enableSr||
+                           gd.enableFg!=nextDesc.enableFg||gd.nrBeforeSr!=nextDesc.nrBeforeSr){
+                            chainRebuild=engine::requiresGraphRebuild(previous,requested);
+                        }
+                        // The size fields are computed from the source extent,
+                        // which the predicate cannot see; compare them here.
+                        if(gd.workWidth!=nextDesc.workWidth||gd.workHeight!=nextDesc.workHeight||
+                           gd.nrWidth!=nextDesc.nrWidth||gd.nrHeight!=nextDesc.nrHeight||
+                           gd.flowWidth!=nextDesc.flowWidth||gd.flowHeight!=nextDesc.flowHeight)chainRebuild=true;
+                        if(chainRebuild!=legacyRebuild){
+                            veyra::log::warn("settings-rebuild",std::format(
+                                "rebuild decision mismatch revision {}->{} legacy={} chain={}; applying the legacy decision and reporting this",
+                                previous.revision,requested.revision,legacyRebuild,chainRebuild));
+                        }
+                    }
+                    const bool rebuild=legacyRebuild;
                     bool accepted=ring.drainQueue();out={};hasOutput=false;
                     resetRecord->rebuilt=rebuild;
                     markResetStage(diagnostics::ResetStage::Drain);

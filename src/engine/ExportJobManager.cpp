@@ -1,4 +1,5 @@
 #include "veyra/engine/ExportJobManager.h"
+#include "veyra/engine/EffectChain.h"
 #include "veyra/engine/VideoExportJob.h"
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
@@ -17,8 +18,13 @@ std::string utf8(std::wstring_view value) {
 }
 constexpr DWORD magic=0x56585931;
 struct Shared {
-    DWORD signature=magic,version=2,bytes=sizeof(Shared);
+    // Version 3 carries the effect chain alongside the settings struct. The
+    // chain is fixed-capacity and trivially copyable, so it can cross the
+    // process boundary; a worker that sees another version refuses the job
+    // instead of reading a mismatched layout.
+    DWORD signature=magic,version=3,bytes=sizeof(Shared);
     EnhancementSettings settings;
+    EffectChain chain;
     wchar_t input[32768]{},output[32768]{};
     unsigned hevc=0,maxFrames=0;
     int audioStreamIndex=-1;
@@ -50,7 +56,7 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     p_->mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,&sa,PAGE_READWRITE,0,sizeof(Shared),nullptr);
     if(!p_->mapping)return fail(L"无法创建导出通信资源");
     p_->shared=static_cast<Shared*>(MapViewOfFile(p_->mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!p_->shared)return fail(L"无法映射导出通信资源");
-    new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=settings;s.settings.nrPolicy=pipeline::NrSizePolicy::Native;s.hevc=hevc;s.maxFrames=maxFrames;
+    new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=settings;s.settings.nrPolicy=pipeline::NrSizePolicy::Native;s.chain=toChain(s.settings);s.hevc=hevc;s.maxFrames=maxFrames;
     s.audioStreamIndex=audioStreamIndex;
     wcscpy_s(s.input,input.c_str());wcscpy_s(s.output,output.c_str());
     p_->job=CreateJobObjectW(nullptr,nullptr);JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
@@ -90,8 +96,13 @@ ExportJobSnapshot ExportJobManager::poll(){
 }
 int runExportWorker(HANDLE mapping){
     auto s=static_cast<Shared*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!s)return 1;
-    if(s->signature!=magic||s->version!=2||s->bytes!=sizeof(Shared)||s->audioStreamIndex< -1||!s->settings.validate().empty()||s->input[32767]||s->output[32767]){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
+    if(s->signature!=magic||s->version!=3||s->bytes!=sizeof(Shared)||s->audioStreamIndex< -1||!s->settings.validate().empty()||s->input[32767]||s->output[32767]){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
     Logger::instance().openFile((runtime::logsDirectory()/std::format("export-worker-{}.log",GetCurrentProcessId())).wstring());
+    // The chain is the description of record for this job; the settings struct
+    // stays the runtime input until the executor consumes chains directly.
+    // Re-deriving one from the other must agree, otherwise the job is refused.
+    {auto fromChainSettings=s->settings;fromChain(s->chain,fromChainSettings);
+     if(fromChainSettings!=s->settings){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}}
     const auto settings=s->settings;log::info("export-frozen",std::format("revision={} nr={} sr={} multiplier={} intensity={} tone={} structure={} skin={} style={} autoMask={} ui={} total={} darken={} brighten={} color={} luminance={} flow={} content={} nativeNR=true",settings.revision,settings.nr,settings.sr,settings.multiplier,settings.model.intensity,settings.model.tone,settings.model.structure,settings.model.skin,settings.model.style,settings.model.autoMask,settings.model.uiCorrection,settings.residual.total,settings.residual.darken,settings.residual.brighten,settings.residual.color,settings.residual.luminance,int(settings.flow),int(settings.content)));std::atomic<bool> cancel=false,done=false;
     std::thread monitor([&]{while(!done){if(InterlockedCompareExchange(&s->cancel,0,0))cancel=true;std::this_thread::sleep_for(std::chrono::milliseconds(10));}});
     auto frameBoundary=[&]{
