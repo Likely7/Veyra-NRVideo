@@ -97,11 +97,12 @@ Window {
             return { x: 0, y: 0, width: width, height: Math.round(pictureHeight) }
         case "pro":
             // .pro grid: 1fr 376px, gap 10, padding 14. The video wrap is column
-            // 1 row 2; .meters below it is a fixed 172px; .pro-head is 32.
+            // 1 row 2; .meters below it is a fixed 172px; .pro-head is 32; and the
+            // card's own .vbar is 36px at its foot, which the picture must not cover.
             return { x: 14,
                      y: 14 + 32 + 10,
                      width: Math.max(1, width - 376 - 14 * 2 - 10 - 14),
-                     height: Math.max(1, height - 14 * 2 - 32 - 10 - 172 - 10) }
+                     height: Math.max(1, height - 14 * 2 - 32 - 10 - 172 - 10 - 36) }
         case "node":
             // .nodeview padding 14; .nv-top is a fixed 330px, minus its 40px bar.
             return { x: 14, y: 14, width: Math.max(1, width - 28), height: 330 - 40 }
