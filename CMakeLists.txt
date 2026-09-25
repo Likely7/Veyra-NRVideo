@@ -733,7 +733,22 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_include_directories(veyra_srfg_depth_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_compile_definitions(veyra_srfg_depth_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
   target_link_libraries(veyra_srfg_depth_tests PRIVATE veyra_engine)
-  add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionTests.cpp)
+  # Qt 6.8.3 is staged under deps/ (the user allowed the latest Qt). The probe is
+# opt-in so a normal product build never depends on Qt being present.
+option(VEYRA_BUILD_QT_PROBE "Build the Qt + D3D12 host probe" OFF)
+if(VEYRA_BUILD_QT_PROBE)
+  find_package(Qt6 6.8 QUIET COMPONENTS Core Gui Qml Quick QuickControls2)
+endif()
+
+# Qt + D3D12 host probe (S3.0): answers whether Qt can host the native video
+# swapchain window without costing present latency. Diagnostic only.
+if(VEYRA_BUILD_QT_PROBE AND Qt6_FOUND)
+  add_executable(veyra_qt_probe tools/qt_probe/main.cpp)
+  target_compile_features(veyra_qt_probe PRIVATE cxx_std_20)
+  target_link_libraries(veyra_qt_probe PRIVATE veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+endif()
+
+add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionTests.cpp)
   target_compile_features(veyra_sr_reconstruction_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_sr_reconstruction_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_compile_definitions(veyra_sr_reconstruction_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")

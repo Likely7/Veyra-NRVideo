@@ -26,7 +26,8 @@
 | S2.0 | NR 叠层可行性探针 | 完成 | `checkpoint/ui-mig-s2.0` | **4/6/8 个句柄全部成功** |
 | S2.1 | NR 叠层实现 | 完成（已修 G1） | `checkpoint/ui-mig-s2.1b` | 13 项原有哈希逐像素一致；1/2/3/4 层均为真实图像 |
 | S2.1b | NR 时域防闪烁修复 | 完成 | `checkpoint/ui-mig-s2.1b` | 单层路径不变；叠层下开关由“完全无效”变为生效 |
-| S3.0 | Qt 6.8.3 安装 | 完成 | | `E:\项目\Veyra\deps\qt.8.3\msvc2022_64`，含 Core/Gui/Qml/Quick/QuickControls2 + windeployqt |
+| S3.0 | Qt 6.8.3 安装 + 承载 D3D12 窗口实测 | 完成 | `checkpoint/ui-mig-s3.0` | 499/499 Present 成功，平均 0.205 ms，QML 动画未被拖慢 |
+| S3.0b | （旧行）Qt 6.8.3 安装 | 完成 | | `E:\项目\Veyra\deps\qt.8.3\msvc2022_64`，含 Core/Gui/Qml/Quick/QuickControls2 + windeployqt |
 
 ## 发现并修复的 bug
 
@@ -38,6 +39,28 @@
 | B2 | S0.2 | `veyra_quality_probe` 用 ANSI `argv` 转宽字符，输出目录含中文（`E:\项目`）时写图失败，交付门槛因此失败；门槛脚本原先用相对路径绕开，但源码在 C:、日志在 E: 时相对路径无法跨盘 | 探针改为从 UTF-16 命令行读参数；门槛改传绝对路径 |
 
 ## 日志
+
+### S3.0（2026-09-25）Qt 承载 D3D12 视频窗口 —— 可行性已实测通过
+这是整个迁移**唯一真正的技术风险**：视频由一个原生子 HWND 承载，Veyra 为它创建 D3D12 flip-model swapchain。如果 Qt 接管了呈现，低延迟优势就没了。已用最小探针实测，不再靠推断。
+
+探针：`tools/qt_probe/main.cpp`（工具 `veyra_qt_probe`），QML 窗口里放一个持续旋转的矩形（模拟真实界面动画），同时按 ~120 Hz 上限向原生子窗口 Present，计时每个 Present 并统计 QML 动画帧数。
+
+**本机实测（RTX 5070，100 Hz 面板，Qt 6.8.3）**
+| 指标 | 结果 |
+|---|---|
+| Present 次数 | 499 次，**失败 0** |
+| 平均 Present 耗时 | **0.205 ms** |
+| Present 期间 QML 动画帧 | 402 帧 / 4 秒 ≈ 100/s，**正好是面板刷新率，未被拖慢** |
+
+**结论**：Qt 可以承载原生 D3D12 呈现窗口，**不需要** `QQuickWidget`、`QQuickRenderControl` 或任何把视频合成进 QML 场景图的方案。视频仍是原生子窗口、自己的 swapchain、自己的 Present 调用；QML 只负责它周围和上面的界面层。低延迟路径得以保留。计划中原定的 `WindowContainer` 方案（Qt 6.7+ 支持，原生窗口始终绘制在 QML 场景之上）成立。
+
+**过程中修掉的两个真问题**
+1. `EngineController.cpp:1455`：同一个 lambda 无条件捕获 `&remote`，而 `remote` 只在 `VEYRA_ENABLE_REMOTEPLAY` 打开时声明 ⇒ **关闭 remoteplay 的配置根本编译不过**。已把该捕获放进同一个宏。这不是 Qt 引入的，是既有配置组合没人编译过。
+2. Qt 部署：`windeployqt` 不扫描 QML import，QML 模块要单独拷贝；`qtquickcontrols2plugin.dll` 还需要 `bin\*.dll` 里的 Qt 库才能加载。已固化为文档步骤。
+
+**未完成 / 不夸大**：以上只证明“承载可行 + Present 不被拖慢”。**没有**验证：QML 界面本身的渲染开销、窗口缩放/移动、多显示器与 HDR 输出、真实播放负载下的端到端延迟。这些要在 S4 用真正的播放器界面复测。探针只调用 Present，不画内容，所以它的 0.205 ms 是**呈现开销**，不是端到端延迟。
+
+代码：`tools/qt_probe/main.cpp`、`scripts/build-qt-probe.{ps1,cmd}`（独立构建目录，产品构建树未被 Qt 重配置）。
 
 ### 单元测试基线口径（2026-09-25 核对，重要）
 本仓库**当前就有大量单元测试在本机失败**，且与本次迁移无关。对照 S0（迁移开工时，16:14）与当前（21:30）两次完整跑：
