@@ -48,10 +48,12 @@ QtObject {
     readonly property int durationNormal: 220
     readonly property int durationSlow: 380
     // Overshooting curves, the QML equivalent of the prototype's
-    // cubic-bezier(.34,1.56,.64,1).
-    readonly property var spring: [0.34, 1.56, 0.64, 1.0, 1.0, 0.0]
-    readonly property var springSoft: [0.22, 1.25, 0.36, 1.0, 1.0, 0.0]
-    readonly property var easeOut: [0.2, 0.8, 0.2, 1.0, 1.0, 0.0]
+    // cubic-bezier(.34,1.56,.64,1). QEasingCurve.BezierSpline takes exactly four
+    // control points; passing six made every animation log "Invalid bezier curve"
+    // and fall back to linear, which is why the interface did not spring.
+    readonly property var spring: [0.34, 1.56, 0.64, 1.0]
+    readonly property var springSoft: [0.22, 1.25, 0.36, 1.0]
+    readonly property var easeOut: [0.2, 0.8, 0.2, 1.0]
 
     // --- type -------------------------------------------------------------
     readonly property string fontUi: "Microsoft YaHei UI"

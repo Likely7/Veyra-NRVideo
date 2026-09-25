@@ -33,7 +33,7 @@ Item {
                 // the same HWND.
                 Item {
                     id: videoHost
-                    objectName: "videoHost"
+                    objectName: "videoArea"
                     anchors.fill: parent
                     visible: root.visible
                 }

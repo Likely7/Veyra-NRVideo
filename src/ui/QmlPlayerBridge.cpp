@@ -45,6 +45,7 @@ struct QmlPlayerBridge::Impl {
     // The window the engine presents into, and the last file the UI opened.
     HWND videoWindow = nullptr;
     std::wstring sourceLabel;
+    std::function<void()> preOpen;
 
     // Export progress is mirror state: the engine reports an export through a
     // progress callback, and there is no export status in PlayerSnapshot yet.
@@ -107,6 +108,10 @@ QmlPlayerBridge::~QmlPlayerBridge() = default;
 
 void QmlPlayerBridge::attachVideoWindow(qulonglong nativeHandle) {
     impl_->videoWindow = reinterpret_cast<HWND>(nativeHandle);
+}
+
+void QmlPlayerBridge::setPreOpenHook(std::function<void()> hook) {
+    impl_->preOpen = std::move(hook);
 }
 
 QString QmlPlayerBridge::appName() const { return QStringLiteral("Veyra"); }
@@ -402,8 +407,13 @@ void QmlPlayerBridge::openPath(const QString& path) {
     impl_->sourceLabel = wide;
     impl_->facade.noteRecentFile(wide);
     emit recentFilesChanged();
-    impl_->engine.open(impl_->videoWindow, wide, impl_->options);
+    // Switch to a page with a video area, then settle the native window's
+    // geometry, and only then open. The presenter samples the window's client
+    // size once at initialisation; opening before that point is what produced a
+    // 1x1 swapchain.
     emit navigate(QStringLiteral("minimal"));
+    if (impl_->preOpen) impl_->preOpen();
+    impl_->engine.open(impl_->videoWindow, wide, impl_->options);
 }
 
 void QmlPlayerBridge::togglePlayPause() { impl_->engine.pause(impl_->snapshot.running); }

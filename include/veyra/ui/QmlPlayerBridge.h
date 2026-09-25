@@ -28,6 +28,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <functional>
 #include <memory>
 
 #include "veyra/engine/EffectChain.h"
@@ -239,6 +240,13 @@ public:
     // window of the QML window and hands it over; the bridge never draws QML
     // into it and Qt never touches its swapchain.
     void attachVideoWindow(qulonglong nativeHandle);
+
+    // Run immediately before the engine opens a source. The presenter reads the
+    // host window's client size once, when it initialises, and builds the
+    // swapchain from it; a window that is still 0x0 at that moment yields a 1x1
+    // surface that never recovers. The UI supplies this hook so the geometry is
+    // settled at the one moment that matters, instead of racing a timer.
+    void setPreOpenHook(std::function<void()> hook);
 
     // --- commands exposed to QML -------------------------------------------
     // Every one returns immediately; none touches the GPU or waits for the

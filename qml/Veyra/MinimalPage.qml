@@ -36,7 +36,7 @@ Item {
     // insetting this would crop or letterbox the picture.
     Item {
         id: videoHost
-        objectName: "videoHost"
+        objectName: "videoArea"
         anchors.fill: parent
     }
 

@@ -36,7 +36,7 @@ Item {
 
             Item {
                 id: videoHost
-                objectName: "videoHost"
+                objectName: "videoArea"
                 anchors.fill: parent
                 visible: root.visible
             }
