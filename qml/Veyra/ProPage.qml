@@ -16,6 +16,7 @@ import QtQuick.Shapes
 Item {
     id: root
     signal requestPage(string page)
+    signal requestDialog(string key)
 
     // Design's st.tab: quality / fg / color / audio / display.
     property string tab: "quality"
@@ -914,6 +915,7 @@ Item {
         MenuItem { text: "PS5 串流…"; onTriggered: veyra.openPs5Dialog() }
         MenuItem { text: "屏幕捕获…"; onTriggered: veyra.openScreenCaptureDialog() }
     }
+    // The design puts 另存为 / 管理 in the professional page's preset menu.
     Menu {
         id: presetMenu
         width: 260
@@ -925,6 +927,9 @@ Item {
                 onTriggered: veyra.applyPresetIndex(modelData.index)
             }
         }
+        MenuSeparator { }
+        MenuItem { text: "另存为预设…"; onTriggered: root.requestDialog("save") }
+        MenuItem { text: "管理预设…"; onTriggered: root.requestDialog("manage") }
     }
 
     // Switching to node mode rebuilds the chain, so the design asks first.

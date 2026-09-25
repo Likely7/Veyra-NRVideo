@@ -137,7 +137,10 @@ Window {
             onRequestPage: p => root.page = p
             onRequestAspect: aspect => root.fitToFilm(aspect)
         }
-        ProPage { onRequestPage: p => root.page = p }
+        ProPage {
+            onRequestPage: p => root.page = p
+            onRequestDialog: key => dialogs.open(key)
+        }
         NodePage { onRequestPage: p => root.page = p }
         ExportPage { onRequestPage: p => root.page = p }
         SettingsPage { onRequestPage: p => root.page = p }
@@ -204,7 +207,7 @@ Window {
         function onNavigate(p) {
             // A dialog key opens the dialog; anything else is a page.
             if (p === "capture" || p === "ps5" || p === "screen"
-                || p === "subtitle" || p === "audio") {
+                || p === "subtitle" || p === "audio" || p === "save" || p === "manage") {
                 dialogs.open(p)
                 return
             }

@@ -396,6 +396,152 @@ Item {
         }
     }
 
+    // --- 另存为预设 -------------------------------------------------------
+    // The design lists every part that will be saved before asking for a name, so
+    // the user can see what they are about to store.
+    DLayer {
+        id: saveDialog
+        visible: host.dialog === "save"
+        glyph: "☰"
+        title: "另存为预设"
+        sub: "预设会保存下面勾选的部分；应用时只覆盖勾选的部分"
+        dialogWidth: 620
+        property string presetName: ""
+        property var chosen: ({})
+        actions: [
+            { label: "取消" },
+            { label: "保存", primary: true }
+        ]
+        onActionTriggered: label => {
+            if (label !== "保存") { host.close(); return }
+            if (presetName.length === 0) { saveNote.text = "预设需要一个名字"; return }
+            let mask = 0
+            for (const part of veyra.presetSaveParts) {
+                if (chosen[part.id] === true) mask |= (1 << ["chain","color","fg","audio"].indexOf(part.id))
+            }
+            if (veyra.savePresetAs(presetName, mask, false)) host.close()
+            else saveNote.text = "保存失败：名称可能已存在"
+        }
+
+        DSection { text: "将要保存的内容" }
+        DGroup {
+            Repeater {
+                model: veyra.presetSaveParts
+                delegate: VRow {
+                    required property var modelData
+                    label: modelData.label
+                    hint: modelData.summary
+                    VSwitch {
+                        // A part at its default is still offered, but starts off: a
+                        // preset that stored nothing would be a surprise.
+                        checked: modelData.meaningful
+                        onToggled: {
+                            const c = Object.assign({}, saveDialog.chosen)
+                            c[modelData.id] = checked
+                            saveDialog.chosen = c
+                        }
+                    }
+                }
+            }
+        }
+        DSection { text: "名称" }
+        VTextField {
+            Layout.fillWidth: true
+            placeholder: "例如：夜间游戏"
+            onEdited: text => saveDialog.presetName = text
+        }
+        Text {
+            id: saveNote
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            text: ""
+            color: Theme.warn
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsSmall
+            wrapMode: Text.WordWrap
+        }
+    }
+
+    // --- 管理预设 ---------------------------------------------------------
+    DLayer {
+        visible: host.dialog === "manage"
+        glyph: "☰"
+        title: "管理预设"
+        sub: "内置预设可以复制，不能改名或删除"
+        dialogWidth: 620
+        actions: [{ label: "完成", primary: true }]
+        onActionTriggered: host.close()
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 6
+            Text {
+                visible: veyra.presets.length === 0
+                text: "还没有保存过预设。"
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSmall
+            }
+            Repeater {
+                model: veyra.presets
+                delegate: Rectangle {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    implicitHeight: 46
+                    radius: 12
+                    color: Theme.card2
+                    border.width: 1
+                    border.color: veyra.defaultPresetIndex === modelData.index ? Theme.accent : Theme.stroke
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: modelData.name
+                                color: Theme.t1
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.fsBody
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.note.length > 0 ? modelData.note
+                                      : (modelData.nodeMode ? "节点预设" : "列表预设")
+                                color: Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                        }
+                        VTag { visible: modelData.builtin; text: "内置" }
+                        VTag { visible: veyra.defaultPresetIndex === modelData.index; kind: "acc"; text: "启动默认" }
+                        VButton {
+                            ghost: true
+                            text: "复制"
+                            onClicked: veyra.duplicatePreset(modelData.index)
+                        }
+                        VButton {
+                            ghost: true
+                            text: "设为默认"
+                            visible: !modelData.builtin
+                            onClicked: veyra.setDefaultPreset(modelData.index)
+                        }
+                        VButton {
+                            ghost: true
+                            text: "删除"
+                            visible: !modelData.builtin
+                            onClicked: veyra.deletePreset(modelData.index)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // --- small building blocks the design's dialogs use --------------------
     component DSection: RowLayout {
         property string text: ""

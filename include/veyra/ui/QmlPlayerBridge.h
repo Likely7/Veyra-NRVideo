@@ -231,6 +231,11 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString srTargetLabel READ srTargetLabel NOTIFY settingsChanged)
     // Presets as a picker model: one preset concept, list and node together.
     Q_PROPERTY(QVariantList presetChoices READ presetChoices NOTIFY presetsChanged)
+    // The design's save flow lists what the preset will contain before naming it:
+    // each part, its current summary, and whether it is being saved.
+    Q_PROPERTY(QVariantList presetSaveParts READ presetSaveParts NOTIFY chainChanged)
+    // Which preset the app opens with, as the manage page's "set default" uses.
+    Q_PROPERTY(int defaultPresetIndex READ defaultPresetIndex NOTIFY presetsChanged)
 
 public:
     // `engine` must outlive the bridge. `dataDirectory` holds ui-session.v1 and
@@ -414,6 +419,8 @@ public:
     QString srTargetLabel() const;
     void setSrTargetIndex(int index);
     QVariantList presetChoices() const;
+    QVariantList presetSaveParts() const;
+    int defaultPresetIndex() const;
 
     // The native HWND the engine presents into. The UI creates it as a child
     // window of the QML window and hands it over; the bridge never draws QML
@@ -470,6 +477,7 @@ public:
     Q_INVOKABLE bool deletePreset(int index);
     Q_INVOKABLE bool renamePreset(int index, const QString& name);
     Q_INVOKABLE bool duplicatePreset(int index);
+    Q_INVOKABLE bool setDefaultPreset(int index);
 
     Q_INVOKABLE void refreshRecentFiles();
     Q_INVOKABLE void clearRecentFiles();

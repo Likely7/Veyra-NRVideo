@@ -1187,6 +1187,48 @@ bool QmlPlayerBridge::renamePreset(int index, const QString& name) {
     return ok;
 }
 
+QVariantList QmlPlayerBridge::presetSaveParts() const {
+    // What a preset would contain right now, part by part, so the save dialog can
+    // list it before the user names anything. `meaningful` marks the parts that are
+    // not at defaults, which is what makes "will be saved" honest.
+    const auto s = settings();
+    QVariantList out;
+    auto add = [&](const char* id, const QString& label, const QString& summary, bool meaningful) {
+        QVariantMap item;
+        item["id"] = QString::fromUtf8(id);
+        item["label"] = label;
+        item["summary"] = summary;
+        item["meaningful"] = meaningful;
+        out << item;
+    };
+    QStringList chainParts;
+    for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
+        chainParts << utf8Of(engine::effectInfo(impl_->chain.nodes[i].type).label);
+    add("chain", tr("效果链"),
+        chainParts.isEmpty() ? tr("空") : chainParts.join(QStringLiteral(" → ")),
+        impl_->chain.nodeCount > 0);
+    add("color", tr("色彩"), s.color.enabled ? tr("已启用") : tr("未启用"), s.color.enabled);
+    add("fg", tr("补帧"),
+        s.multiplier > 1 ? QStringLiteral("%1X").arg(s.multiplier) : tr("关闭"),
+        s.multiplier > 1);
+    add("audio", tr("声音"),
+        s.audioOffsetMs != 0 ? tr("偏移 %1 ms").arg(s.audioOffsetMs) : tr("默认"),
+        s.audioOffsetMs != 0);
+    return out;
+}
+
+int QmlPlayerBridge::defaultPresetIndex() const {
+    const auto index = impl_->facade.presets().defaultIndex();
+    return index.has_value() ? int(*index) : -1;
+}
+
+bool QmlPlayerBridge::setDefaultPreset(int index) {
+    if (index < 0 || size_t(index) >= impl_->facade.presets().entries().size()) return false;
+    const bool ok = impl_->facade.presets().setDefault(size_t(index));
+    if (ok) emit presetsChanged();
+    return ok;
+}
+
 bool QmlPlayerBridge::duplicatePreset(int index) {
     if (index < 0 || size_t(index) >= impl_->facade.presets().entries().size()) return false;
     const bool ok = impl_->facade.presets().duplicate(size_t(index));
