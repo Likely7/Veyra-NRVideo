@@ -60,10 +60,10 @@ Rectangle {
                     implicitHeight: 26
                     radius: 8
                     color: Qt.rgba(acc.hue.r, acc.hue.g, acc.hue.b, 0.16)
-                    Text {
+                    VIcon {
                         anchors.centerIn: parent
-                        text: acc.glyph
-                        font.pixelSize: 13
+                        name: acc.glyph
+                        size: 14
                         color: acc.hue
                     }
                 }

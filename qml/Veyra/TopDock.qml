@@ -29,10 +29,10 @@ Item {
 
     // --- page definitions (order and tooltips from core.js) ---------------
     readonly property var items: [
-        { id: "min",   icon: "🎬", tip: "极简" },
-        { id: "pro",   icon: "⚙",  tip: "专业模式" },
-        { id: "exp",   icon: "⬇",  tip: "导出" },
-        { id: "set",   icon: "☰",  tip: "设置" }
+        { id: "min",   icon: "tv", tip: "极简" },
+        { id: "pro",   icon: "sliders", tip: "专业模式" },
+        { id: "exp",   icon: "upload", tip: "导出" },
+        { id: "set",   icon: "settings", tip: "设置" }
     ]
 
     // .dock-zone { height:12px } and .dock-handle { 44x4, top:5 }
@@ -150,10 +150,11 @@ Item {
                             required property var modelData
                             width: 32
                             height: 30
-                            Text {
+                            // .dock-btn: color rgba(255,255,255,.45), selected #fff.
+                            VIcon {
                                 anchors.centerIn: parent
-                                text: modelData.icon
-                                font.pixelSize: 15
+                                name: modelData.icon
+                                color: "#FFFFFF"
                                 opacity: dockRoot.currentPage === modelData.id ? 1.0 : 0.45
                                 Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
                             }

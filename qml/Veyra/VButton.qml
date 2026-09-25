@@ -8,9 +8,11 @@ Rectangle {
     property bool ghost: false
     property bool icon: false
     property string glyph: ""
+    // A Lucide name from IconData.js; drawn before the text with the design's 7px gap.
+    property string iconName: ""
     signal clicked()
 
-    implicitWidth: icon ? Theme.ctlHeight : (label.implicitWidth + 24)
+    implicitWidth: icon ? Theme.ctlHeight : (content.implicitWidth + 24)
     implicitHeight: Theme.ctlHeight
     radius: Theme.rCtl
     color: primary ? Theme.accent
@@ -23,15 +25,27 @@ Rectangle {
     scale: tap.pressed ? 0.95 : 1.0
     Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
 
-    Text {
-        id: label
+    Row {
+        id: content
         anchors.centerIn: parent
-        text: btn.glyph.length > 0 ? btn.glyph + (btn.text.length > 0 ? "  " + btn.text : "") : btn.text
-        color: btn.primary ? Theme.accentInk : (btn.ghost ? Theme.t2 : Theme.t1)
-        font.family: Theme.fontUi
-        font.pixelSize: Theme.fsBody
-        font.weight: btn.primary ? Font.DemiBold : Font.Medium
-        font.variableAxes: btn.primary ? Theme.axesDemiBold : ({})
+        spacing: 7
+        VIcon {
+            visible: btn.iconName.length > 0
+            anchors.verticalCenter: parent.verticalCenter
+            name: btn.iconName
+            color: label.color
+        }
+        Text {
+            id: label
+            visible: text.length > 0
+            anchors.verticalCenter: parent.verticalCenter
+            text: btn.glyph.length > 0 ? btn.glyph + (btn.text.length > 0 ? "  " + btn.text : "") : btn.text
+            color: btn.primary ? Theme.accentInk : (btn.ghost ? Theme.t2 : Theme.t1)
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsBody
+            font.weight: btn.primary ? Font.DemiBold : Font.Medium
+            font.variableAxes: btn.primary ? Theme.axesDemiBold : ({})
+        }
     }
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
     TapHandler { id: tap; onTapped: btn.clicked() }

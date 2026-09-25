@@ -12,6 +12,7 @@ VGroup 1.0 VGroup.qml
 VH1 1.0 VH1.qml
 VH2 1.0 VH2.qml
 VH3 1.0 VH3.qml
+VIcon 1.0 VIcon.qml
 VPill 1.0 VPill.qml
 VRow 1.0 VRow.qml
 VSeg 1.0 VSeg.qml

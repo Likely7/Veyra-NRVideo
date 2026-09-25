@@ -136,11 +136,10 @@ Item {
                             radius: 16
                             color: cHover.hovered ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
                         }
-                        Text {
+                        VIcon {
                             anchors.centerIn: parent
-                            text: glyph
+                            name: glyph
                             color: cHover.hovered ? "#FFFFFF" : Theme.t2
-                            font.pixelSize: 14
                         }
                         scale: cTap.pressed ? 0.86 : 1.0
                         Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
@@ -148,8 +147,8 @@ Item {
                         TapHandler { id: cTap; onTapped: cbtn.tapped() }
                     }
 
-                    CBtn { glyph: "CC"; onTapped: {} }
-                    CBtn { glyph: "⏪"; onTapped: veyra.seekBy(-10) }
+                    CBtn { glyph: "cc"; onTapped: {} }
+                    CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
 
                     // .play: 40px white circle with the play/pause glyph.
                     Item {
@@ -160,11 +159,11 @@ Item {
                             radius: 20
                             color: "#FFFFFF"
                         }
-                        Text {
+                        VIcon {
                             anchors.centerIn: parent
-                            text: (veyra.running && !veyra.paused) ? "❚❚" : "▶"
+                            name: (veyra.running && !veyra.paused) ? "pausefill" : "playfill"
+                            filled: true
                             color: "#0A0A0C"
-                            font.pixelSize: 14
                         }
                         scale: playTap.pressed ? 0.88 : (playHover.hovered ? 1.06 : 1.0)
                         Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
@@ -172,8 +171,8 @@ Item {
                         TapHandler { id: playTap; onTapped: veyra.togglePlayPause() }
                     }
 
-                    CBtn { glyph: "⏩"; onTapped: veyra.seekBy(10) }
-                    CBtn { glyph: "♪"; onTapped: {} }
+                    CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
+                    CBtn { glyph: "music"; onTapped: {} }
                 }
 
                 // .seekrow: mono times either side of the rail.
@@ -245,7 +244,7 @@ Item {
                     RowLayout {
                         anchors.fill: parent
                         spacing: 6
-                        Text { text: "🔊"; color: Theme.t2; font.pixelSize: 12 }
+                        VIcon { name: "vol"; color: Theme.t2 }
                         VSlider {
                             Layout.fillWidth: true
                             from: 0; to: 1; value: veyra.volume
@@ -256,11 +255,10 @@ Item {
 
                 Item {
                     implicitWidth: 32; implicitHeight: 32
-                    Text {
+                    VIcon {
                         anchors.centerIn: parent
-                        text: "⛶"
+                        name: "max"
                         color: Theme.t2
-                        font.pixelSize: 14
                     }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: root.requestPage("pro") }

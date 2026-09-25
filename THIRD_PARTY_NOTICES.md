@@ -92,6 +92,8 @@ Source: https://github.com/lucide-icons/lucide/tree/a537cb6eb323b885f4c60baf3cec
 
 `assets/icons/lucide/manifest.json` records the pinned revision and per-file SHA256. `scripts/generate-lucide-icons.py` converts the SVG geometry to GDI+ paths in `apps/veyra/ui/LucideIcons.h`, using development-only fonttools 4.64.0. Veyra requires no fonttools, network request, icon font or external icon runtime.
 
+The Qt/QML interface (2026-09-26) draws the Lucide geometry that the approved prototype carries in `prototypes/ui-redesign-2026-09-25/icons.js`. `tools/qt_probe/make-icons.py` converts those SVG elements to path data in `qml/Veyra/IconData.js`, rendered by `qml/Veyra/VIcon.qml`; the same Lucide ISC / Feather MIT notices in `assets/icons/lucide/LICENSE` apply. `back10`, `fwd10`, `playfill` and `pausefill` in that file are the prototype's own inline SVGs, not Lucide.
+
 ## RTX Video SDK 1.1 local VSR adapter
 
 User-provided official SDK from https://developer.nvidia.com/rtx-video-sdk/getting-started, kept under ignored third_party_local/nvidia/RTX_Video_SDK_1.1.0. Its NVIDIA RTX SDK license remains applicable. VideoSrBackend is independently authored against the documented VSR parameter ABI; no SDK sample implementation or proprietary header is copied into the repository. Local nvngx_vsr.dll remains excluded from Git. Under the user-authorized 2026-09-09 Release Runtime Pack policy, its pinned signed release copy may be included only as a Release asset alongside the applicable SDK license and manifest; it is never committed to source control.

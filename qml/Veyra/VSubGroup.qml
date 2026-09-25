@@ -50,10 +50,9 @@ Rectangle {
                     font.family: Theme.fontUi
                     font.pixelSize: 11
                 }
-                Text {
-                    text: "⌄"
+                VIcon {
+                    name: "down"
                     color: Theme.t3
-                    font.pixelSize: 12
                     rotation: sub.expanded ? 180 : 0
                     Behavior on rotation { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
                 }

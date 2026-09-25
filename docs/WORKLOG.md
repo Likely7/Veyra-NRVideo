@@ -6595,3 +6595,10 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   于是 16 处 Font.DemiBold 加 `font.variableAxes: Theme.axesDemiBold`，VButton 主按钮同。
   验证：`scripts/build-qt-probe.ps1`、sync、`shoot-all.ps1 -Frames f-home,f-pro` + `compose-compare.ps1`（goal/g1.3/b），
   title-zoom-b.png 标题与设计同粗、Medium 文本正常；本次运行日志无 QML ERROR。
+
+- G1.4 图标（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.4/`）：
+  `python tools/qt_probe/make-icons.py` → `qml/Veyra/IconData.js`（69 条：icons.js 65 个 Lucide + pages-a.js 内联 back10/fwd10/playfill/pausefill），新 `VIcon.qml`、qmldir 注册，VButton 增 `iconName`。
+  DialogHost/HomePage/VAccordion/ProPage/NodePage/MinimalPage/TopDock/VSelect/VSubGroup/ChainNodeCard 的 emoji 全部替换（`tmp/.../g14-replace.py`）。
+  最小复现 `tmp/.../min/Icons.qml`（qml.exe）对比 headless Edge 渲染 icons.html：初次 layers/x/search/box/image 错位——多元素拼成一条 path 时首个相对 m 接在上一元素终点，改为前置 M0 0 后 65 个全部一致（icons-cmp.png）。
+  验证：sync、`shoot-all.ps1 -Frames f-home,f-min,f-pro,f-node,f-cap,f-aud,f-sub,f-color` + `compose-compare.ps1`，看图：dock/来源卡/手风琴/相机/播放/快进快退图标正确；f-min 黑屏、f-aud 对话框被视频窗遮挡与 qml-ref 基线相同，属既有差距（G3）。
+  偏差：设计无锁图标，锁定节点用 key。NOTICES Lucide 条目补充本次来源。

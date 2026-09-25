@@ -76,11 +76,11 @@ Item {
 
                     VButton {
                         icon: true
-                        glyph: (veyra.running && !veyra.paused) ? "❚❚" : "▶"
+                        iconName: (veyra.running && !veyra.paused) ? "pause" : "play"
                         onClicked: veyra.togglePlayPause()
                     }
-                    VButton { icon: true; glyph: "⏪"; onClicked: veyra.seekBy(-10) }
-                    VButton { icon: true; glyph: "⏩"; onClicked: veyra.seekBy(10) }
+                    VButton { icon: true; iconName: "back10"; onClicked: veyra.seekBy(-10) }
+                    VButton { icon: true; iconName: "fwd10"; onClicked: veyra.seekBy(10) }
 
                     // .nv-stats: each entry separated by a hairline, mono numbers.
                     RowLayout {
@@ -357,7 +357,7 @@ Item {
                             font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                         }
                     }
-                    Text { visible: card.locked; text: "🔒"; font.pixelSize: 10; opacity: 0.7 }
+                    VIcon { visible: card.locked; name: "key"; size: 10; color: Theme.t3 }
                 }
             }
 

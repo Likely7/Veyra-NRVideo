@@ -67,20 +67,20 @@ Rectangle {
             }
         }
 
-        Text {
+        VIcon {
             visible: card.locked
-            text: "🔒"
-            font.pixelSize: 13
-            opacity: 0.7
+            name: "key"
+            size: 13
+            color: Theme.t3
         }
 
         // Removing frame generation is refused by the engine too; greying it
         // here just avoids offering an action that cannot succeed.
-        Text {
-            text: "✕"
+        VIcon {
+            name: "x"
             visible: !card.locked
             color: removeHover.hovered ? Theme.err : Theme.t3
-            font.pixelSize: 14
+            size: 14
             HoverHandler { id: removeHover; cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: card.removeRequested() }
         }

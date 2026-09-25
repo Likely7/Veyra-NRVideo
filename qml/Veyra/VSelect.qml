@@ -29,7 +29,7 @@ Rectangle {
             font.weight: Font.Medium
             elide: Text.ElideRight
         }
-        Text { text: "▾"; color: Theme.t3; font.pixelSize: 10 }
+        VIcon { name: "down"; size: 14; color: Theme.t3 }
     }
 
     Menu {

@@ -33,7 +33,7 @@ Item {
         spacing: 8
 
         VButton {
-            glyph: "🎬"
+            iconName: "video"
             text: veyra.isCapture ? "采集卡" : "片源"
             onClicked: sourceMenu.popup()
         }
@@ -47,7 +47,7 @@ Item {
             current: "list"
             onPicked: id => { if (id === "node") switchDialog.open() }
         }
-        VButton { glyph: "📷"; text: "截图"; onClicked: veyra.takeScreenshot() }
+        VButton { iconName: "camera"; text: "截图"; onClicked: veyra.takeScreenshot() }
         VButton {
             text: "预设：" + veyra.currentPresetName
             onClicked: presetMenu.popup()
@@ -97,11 +97,10 @@ Item {
             spacing: 10
             Item {
                 implicitWidth: 28; implicitHeight: 28
-                Text {
+                VIcon {
                     anchors.centerIn: parent
-                    text: (veyra.running && !veyra.paused) ? "❚❚" : "▶"
+                    name: (veyra.running && !veyra.paused) ? "pause" : "play"
                     color: Theme.t2
-                    font.pixelSize: 13
                 }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: veyra.togglePlayPause() }
@@ -484,7 +483,7 @@ Item {
                         // and a chevron, with nested groups inside.
                         VAccordion {
                             Layout.fillWidth: true
-                            glyph: "✨"
+                            glyph: "sparkles"
                             hue: "#4F7BFF"
                             title: "超分辨率"
                             summary: (veyra.srEnabled ? "RTX 视频超分" : "已关闭")
@@ -525,7 +524,7 @@ Item {
 
                         VAccordion {
                             Layout.fillWidth: true
-                            glyph: "🪄"
+                            glyph: "wand"
                             hue: Theme.accent
                             title: "NR 画面增强"
                             summary: "每层参数独立 · 强度 " + veyra.nrIntensity.toFixed(2)
@@ -706,7 +705,7 @@ Item {
 
                         VAccordion {
                             Layout.fillWidth: true
-                            glyph: "🎨"
+                            glyph: "palette"
                             hue: "#E0C341"
                             title: "调色"
                             summary: veyra.colorEnabled

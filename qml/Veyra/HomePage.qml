@@ -57,10 +57,10 @@ Item {
             spacing: 12
             Repeater {
                 model: [
-                    { glyph: "📁", title: "打开视频", sub: "MP4 · MKV · 图片", act: "file" },
-                    { glyph: "🎬", title: "采集卡", sub: "HDMI 采集设备", act: "capture" },
-                    { glyph: "🎮", title: "PS5 串流", sub: "局域网串流", act: "ps5" },
-                    { glyph: "🖥", title: "屏幕捕获", sub: "窗口或显示器", act: "screen" }
+                    { glyph: "folder", title: "打开视频", sub: "MP4 · MKV · 图片", act: "file" },
+                    { glyph: "video", title: "采集卡", sub: "HDMI 采集设备", act: "capture" },
+                    { glyph: "gamepad", title: "PS5 串流", sub: "局域网串流", act: "ps5" },
+                    { glyph: "monitor", title: "屏幕捕获", sub: "窗口或显示器", act: "screen" }
                 ]
                 delegate: Rectangle {
                     required property var modelData
@@ -87,10 +87,9 @@ Item {
                             implicitHeight: 34
                             radius: 10
                             color: Qt.rgba(1, 1, 1, 0.06)
-                            Text {
+                            VIcon {
                                 anchors.centerIn: parent
-                                text: modelData.glyph
-                                font.pixelSize: 16
+                                name: modelData.glyph
                             }
                         }
                         Item { Layout.fillHeight: true }
@@ -151,7 +150,7 @@ Item {
                 Rectangle {
                     implicitWidth: 34; implicitHeight: 34; radius: 10
                     color: Theme.accentSoft
-                    Text { anchors.centerIn: parent; text: "🎮"; font.pixelSize: 15; color: Theme.accent }
+                    VIcon { anchors.centerIn: parent; name: "gamepad"; color: Theme.accent }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true

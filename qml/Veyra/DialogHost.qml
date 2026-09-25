@@ -71,7 +71,7 @@ Item {
                 Rectangle {
                     implicitWidth: 34; implicitHeight: 34; radius: 10
                     color: Qt.rgba(1, 1, 1, 0.06)
-                    Text { anchors.centerIn: parent; text: dlg.glyph; font.pixelSize: 16 }
+                    VIcon { anchors.centerIn: parent; name: dlg.glyph }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -93,7 +93,7 @@ Item {
                         wrapMode: Text.WordWrap
                     }
                 }
-                VButton { icon: true; glyph: "✕"; ghost: true; onClicked: host.close() }
+                VButton { icon: true; iconName: "x"; ghost: true; onClicked: host.close() }
             }
 
             Flickable {
@@ -134,7 +134,7 @@ Item {
     // --- 采集卡 -----------------------------------------------------------
     DLayer {
         visible: host.dialog === "capture"
-        glyph: "🎬"
+        glyph: "video"
         title: "采集卡"
         sub: "连接设备后，先关闭增强确认基础画面，再按需开启"
         dialogWidth: 620
@@ -189,7 +189,7 @@ Item {
     // --- PS5 串流 ---------------------------------------------------------
     DLayer {
         visible: host.dialog === "ps5"
-        glyph: "🎮"
+        glyph: "gamepad"
         title: "PS5 串流"
         sub: "局域网 Remote Play · 凭据加密保存在本机"
         dialogWidth: 640
@@ -239,7 +239,7 @@ Item {
     // --- 屏幕捕获 ---------------------------------------------------------
     DLayer {
         visible: host.dialog === "screen"
-        glyph: "🖥"
+        glyph: "monitor"
         title: "屏幕捕获"
         sub: "把一个窗口或整块显示器作为片源"
         dialogWidth: 700
@@ -281,7 +281,7 @@ Item {
     // --- 字幕设置 ---------------------------------------------------------
     DLayer {
         visible: host.dialog === "subtitle"
-        glyph: "🅰"
+        glyph: "type"
         title: "字幕设置"
         sub: "实时预览，设置对所有文件生效"
         dialogWidth: 620
@@ -298,7 +298,7 @@ Item {
     // --- 音频设置 ---------------------------------------------------------
     DLayer {
         visible: host.dialog === "audio"
-        glyph: "♪"
+        glyph: "music"
         title: "音频设置"
         dialogWidth: 560
         actions: [{ label: "完成", primary: true }]
@@ -346,11 +346,10 @@ Item {
                                 font.pixelSize: 11
                             }
                         }
-                        Text {
+                        VIcon {
                             visible: veyra.selectedAudioTrack === modelData.index
-                            text: "✓"
+                            name: "check"
                             color: Theme.accent
-                            font.pixelSize: 14
                         }
                     }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
@@ -402,7 +401,7 @@ Item {
     DLayer {
         id: saveDialog
         visible: host.dialog === "save"
-        glyph: "☰"
+        glyph: "plus"
         title: "另存为预设"
         sub: "预设会保存下面勾选的部分；应用时只覆盖勾选的部分"
         dialogWidth: 620
@@ -465,7 +464,7 @@ Item {
     // --- 管理预设 ---------------------------------------------------------
     DLayer {
         visible: host.dialog === "manage"
-        glyph: "☰"
+        glyph: "settings"
         title: "管理预设"
         sub: "内置预设可以复制，不能改名或删除"
         dialogWidth: 620
