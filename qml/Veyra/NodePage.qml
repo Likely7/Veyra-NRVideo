@@ -13,7 +13,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Shapes
 
-Item {
+VPage {
     id: root
     signal requestPage(string page)
 
@@ -33,6 +33,7 @@ Item {
 
         // --- video card (fixed 330px) --------------------------------------
         Rectangle {
+            id: nvTop
             Layout.fillWidth: true
             Layout.preferredHeight: 330
             radius: Theme.rCard
@@ -142,6 +143,7 @@ Item {
 
         // --- canvas --------------------------------------------------------
         Rectangle {
+            id: canvasCard
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: Theme.rCard
@@ -417,4 +419,8 @@ Item {
         items: veyra.effectCatalog.map(e => ({ label: e.label, id: e.id, tag: e.experimental ? "实验" : "", tagKind: e.experimental ? "warn" : "" }))
         onPicked: (i, o) => veyra.addEffect(o.id)
     }
+
+    // [data-in] entrance order from pages-node.js.
+    VRise { target: nvTop; d: 0 }
+    VRise { target: canvasCard; d: 1 }
 }

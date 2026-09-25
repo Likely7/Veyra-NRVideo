@@ -10,7 +10,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Item {
+VPage {
     id: root
     signal requestPage(string page)
 
@@ -27,6 +27,7 @@ Item {
 
     // --- nav ---------------------------------------------------------------
     Rectangle {
+        id: navCard
         anchors.left: parent.left
         anchors.leftMargin: 14
         anchors.top: parent.top
@@ -75,6 +76,7 @@ Item {
 
     // --- body --------------------------------------------------------------
     Rectangle {
+        id: bodyCard
         anchors.left: parent.left
         anchors.leftMargin: 14 + 220 + 10
         anchors.right: parent.right
@@ -361,4 +363,8 @@ Item {
             }
         }
     }
+
+    // [data-in] entrance order from pages-b.js PAGES.set.
+    VRise { target: navCard; d: 0 }
+    VRise { target: bodyCard; d: 1 }
 }

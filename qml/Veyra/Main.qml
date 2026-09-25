@@ -69,9 +69,34 @@ Window {
         if (veyra.currentPage !== page) veyra.currentPage = page
         if (cinema) height = Math.round(pictureHeight + barBelow)
         else if (height < 600) height = 800
+        // core.js app.go: the old page sinks (.22s) and the new one shows 150 ms
+        // later with its [data-in] items rising. Reduced motion shows it at once.
+        const prev = shownPage
+        if (prev === page) return
+        leavingPage = Theme.reduced || prev === "" ? "" : prev
+        if (leavingPage !== "") { leaveAnim.restart(); showTimer.restart() }
+        else showPage(false)
+    }
+    // The page on screen (entering or settled) and the one sinking out.
+    property string shownPage: "home"
+    property string leavingPage: ""
+    function showPage(animated) {
+        shownPage = page
+        if (animated)
+            for (const p of pages.children) if (p.pageId === page) p.enter()
         // The video rect follows the page, and it must be settled before the
-        // engine opens anything: it samples the window's client size once.
+        // engine opens anything: it samples the window's client size once. It moves
+        // here, once, not at the click: the native window cannot fade with the pages.
         videoHost.syncRect()
+    }
+    Timer { id: showTimer; interval: 150; onTriggered: root.showPage(true) }
+    // @keyframes sink { to { opacity: 0; transform: scale(.985) } }, .22s --out.
+    property real leaveT: 0
+    NumberAnimation {
+        id: leaveAnim
+        target: root; property: "leaveT"; from: 0; to: 1
+        duration: 220; easing.bezierCurve: Theme.easeOut
+        onFinished: root.leavingPage = ""
     }
 
     // Background: pure black in cinema mode (the picture is the window), the
@@ -127,33 +152,26 @@ Window {
 
     // Pages live for the whole session so switching never loses a half-edited
     // chain; only the visible page owns the video window.
-    StackLayout {
+    Item {
         id: pages
         anchors.fill: parent
-        currentIndex: {
-            switch (root.page) {
-            case "min": return 1
-            case "pro": return 2
-            case "node": return 3
-            case "exp": return 4
-            case "set": return 5
-            default: return 0
-            }
-        }
-
-        HomePage { onRequestPage: p => root.page = p }
+        // Each page is shown while current or while sinking out; the sinking one
+        // takes no input (.page.leave { pointer-events: none }).
+        HomePage { pageId: "home"; onRequestPage: p => root.page = p }
         MinimalPage {
+            pageId: "min"
             onRequestPage: p => root.page = p
             onRequestAspect: aspect => { if (root.testAspect <= 0) root.fitToFilm(aspect) }
         }
         ProPage {
             id: proPage
+            pageId: "pro"
             onRequestPage: p => root.page = p
             onRequestDialog: key => dialogs.open(key)
         }
-        NodePage { onRequestPage: p => root.page = p }
-        ExportPage { onRequestPage: p => root.page = p }
-        SettingsPage { onRequestPage: p => root.page = p }
+        NodePage { pageId: "node"; onRequestPage: p => root.page = p }
+        ExportPage { pageId: "exp"; onRequestPage: p => root.page = p }
+        SettingsPage { pageId: "set"; onRequestPage: p => root.page = p }
     }
 
     // The five dialogs sit above the pages and below the dock's own tooltips.
@@ -264,7 +282,7 @@ Window {
         onTriggered: {
             const name = root.test.motionProbe
             if (name === "dock") dock.opened = true
-            else if (name === "page") root.page = "pro"
+            else if (name === "page") { root.page = "pro"; probe.t0 = Date.now() + 150; probe.running = true; return }
             else if (name === "switch") probeSwitch.item.checked = true
             else if (name === "menu") proPage.openTestMenu("source")
             else if (name === "dialog") dialogs.open("capture")
@@ -284,7 +302,7 @@ Window {
             const name = root.test.motionProbe
             let v
             if (name === "dock") v = dock.barY
-            else if (name === "page") v = proPage.opacity + "," + proPage.y
+            else if (name === "page") { if (ms < 0) return; v = proPage.probeRise.target.opacity.toFixed(4) + "," + proPage.probeRise.ty.toFixed(3) }
             else if (name === "menu") v = proPage.testMenuScale.toFixed(4)
             else if (name === "dialog") v = dialogs.motionScale.toFixed(4)
             else if (name === "seg") v = ((probeSeg.item.indicatorX - x0) / (x1 - x0)).toFixed(4)

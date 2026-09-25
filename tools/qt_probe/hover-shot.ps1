@@ -8,7 +8,7 @@ param(
   [string]$Clip = '',
   [string]$Out = 'E:\项目\Veyra\logs\ui-qml-migration-20260925\hover',
   [string]$Extra = '',
-  # "x,y,name[,waitMs]" per step, steps separated by ';', window-relative pixels. One
+  # "x,y,name[,waitMs[,click]]" per step (click: a left click at the point), steps separated by ';', window-relative pixels. One
   # string: powershell -File does not split an array argument.
   [string]$Steps = '640,4,top',
   [int]$WaitSeconds = 8
@@ -23,6 +23,7 @@ public class HW {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, int d, IntPtr e);
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   delegate bool EnumProc(IntPtr h, IntPtr p);
@@ -55,10 +56,11 @@ if ($h -eq [IntPtr]::Zero) { "no window"; Stop-Process -Id $p.Id -Force; exit 1 
 [HW]::SetForegroundWindow($h) | Out-Null
 $r = New-Object HW+RECT
 foreach ($s in ($Steps -split ';')) {
-  $x, $y, $name, $ms = $s -split ','
+  $x, $y, $name, $ms, $click = $s -split ','
   if (-not $ms) { $ms = 900 }
   [HW]::GetWindowRect($h, [ref]$r) | Out-Null
   [HW]::SetCursorPos($r.Left + [int]$x, $r.Top + [int]$y) | Out-Null
+  if ($click -eq 'click') { Start-Sleep -Milliseconds 150; [HW]::mouse_event(2, 0, 0, 0, [IntPtr]::Zero); [HW]::mouse_event(4, 0, 0, 0, [IntPtr]::Zero) }
   Start-Sleep -Milliseconds ([int]$ms)
   [HW]::GetWindowRect($h, [ref]$r) | Out-Null
   $w = $r.Right - $r.Left; $ht = $r.Bottom - $r.Top

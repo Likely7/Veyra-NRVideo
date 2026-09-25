@@ -7,7 +7,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Item {
+VPage {
     id: root
     signal requestPage(string page)
 
@@ -17,6 +17,7 @@ Item {
 
         // .home .mark: 128px wide, with a slow "breathe" glow.
         Image {
+            id: mark
             Layout.alignment: Qt.AlignHCenter
             source: "logo.png"
             sourceSize.width: 128
@@ -32,6 +33,7 @@ Item {
 
         // .hello: .h1 plus a muted line.
         ColumnLayout {
+            id: hello
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
             Text {
@@ -63,7 +65,10 @@ Item {
                     { glyph: "monitor", title: "屏幕捕获", sub: "窗口或显示器", act: "screen" }
                 ]
                 delegate: Rectangle {
+                    id: srcCard
                     required property var modelData
+                    required property int index
+                    VRise { page: root; target: srcCard; d: 2 + srcCard.index }
                     // .srccard: 164x124, radius 14, content pinned top and bottom.
                     implicitWidth: 164
                     implicitHeight: 124
@@ -130,6 +135,7 @@ Item {
         // capture session was actually used before. Nothing invented: the text is
         // the recorded session, and the row is absent when there is none.
         Rectangle {
+            id: resume
             Layout.alignment: Qt.AlignHCenter
             visible: veyra.hasCaptureSession
             implicitWidth: 692
@@ -181,6 +187,7 @@ Item {
 
         // .recent: a row of chips, present only when there are recent files.
         RowLayout {
+            id: recent
             Layout.alignment: Qt.AlignHCenter
             visible: veyra.recentFiles.length > 0
             spacing: 8
@@ -215,4 +222,10 @@ Item {
             }
         }
     }
+
+    // [data-in] entrance order from pages-a.js (the source cards rise from their delegate, --d 2-5).
+    VRise { target: mark; d: 0 }
+    VRise { target: hello; d: 1 }
+    VRise { target: resume; d: 6 }
+    VRise { target: recent; d: 7 }
 }

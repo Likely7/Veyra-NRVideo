@@ -13,7 +13,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Shapes
 
-Item {
+VPage {
     id: root
     signal requestPage(string page)
     signal requestDialog(string key)
@@ -162,6 +162,7 @@ Item {
 
         // Card 1: signal chain. Reported values only.
         Rectangle {
+            id: meter1
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: 1.05
@@ -218,6 +219,7 @@ Item {
         // Card 2: per-stage GPU cost. Only stages the engine actually timed are
         // listed; a stage with no measurement is drawn as unmeasured.
         Rectangle {
+            id: meter2
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: 1.5
@@ -285,6 +287,7 @@ Item {
 
         // Card 3: frame rate and cadence.
         Rectangle {
+            id: meter3
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: 1.15
@@ -963,4 +966,13 @@ Item {
         }
         onAccepted: root.requestPage("node")
     }
+
+    // [data-in] entrance order from pages-pro.js.
+    VRise { id: headRise; target: head; d: 0 }
+    readonly property alias probeRise: headRise
+    VRise { target: vwrap; d: 1 }
+    VRise { target: meter1; d: 2 }
+    VRise { target: meter2; d: 3 }
+    VRise { target: meter3; d: 4 }
+    VRise { target: insp; d: 2 }
 }

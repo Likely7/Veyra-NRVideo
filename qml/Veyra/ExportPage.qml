@@ -13,7 +13,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Item {
+VPage {
     id: root
     signal requestPage(string page)
 
@@ -39,6 +39,7 @@ Item {
 
     // --- left column: what is being exported ------------------------------
     Rectangle {
+        id: queueCard
         anchors.left: parent.left
         anchors.leftMargin: 14
         anchors.top: head.bottom
@@ -329,4 +330,11 @@ Item {
             VTag { text: "片段裁剪尚未实现" }
         }
     }
+
+    // [data-in] entrance order from pages-b.js PAGES.exp.
+    VRise { target: head; d: 0 }
+    VRise { target: queueCard; d: 1 }
+    VRise { target: vwrap; d: 2 }
+    VRise { target: trimCard; d: 3 }
+    VRise { target: rightCol; d: 2 }
 }

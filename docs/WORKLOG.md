@@ -6648,3 +6648,10 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   - 新脚本 `tools/qt_probe/hover-shot.ps1`：带片源启动、置顶、真实移动光标、逐步 PrintWindow。
   - 实测（visible-scene.mp4，极简页）：中部无 dock → 顶边 4px 弹出 → 悬停专业模式出提示 → 移开 200ms 仍在 → 900ms 已收起（strip.png）。
   - 未执行：固定模式在播放中的截图（x-tip 已覆盖无片源情形）。
+- G2.2 页面切换动效（`checkpoint/ui-mig-g2.2`，证据 `goal/g2.2/`）：
+  - 对齐 core.js app.go：旧页 sink（.22s --out，opacity→0、scale .985），150ms 后新页显示，其 [data-in] 元素 rise（.6s --spring-soft，from opacity 0 / translateY 16 / scale .98，延迟 d×45ms，fill both）。减弱动效或首屏直接显示。
+  - 新组件 `VPage.qml`（页根：shownPage/leavingPage 控制可见与 sink）、`VRise.qml`（对目标挂独立 Scale/Translate，不动元素自身 y/scale/hover）；StackLayout 换为按 pageId 切换。各页 d 值照 pages-a.js / pages-pro.js 等；极简页设计稿无 [data-in]，不加。
+  - 视频矩形在新页显示时（showPage）才移动一次，不在点击时跳。
+  - 探针 `motion.ps1 -Step g2.2 -Probes page`：QML 与设计稿均为峰值 16，34ms 起 16→0、约 175ms 到 0 并小幅回弹（chart-page.png；g0.5 基线 QML 恒 0）。首次跑出恒 0：shownPage 初值 "" 使首次切换走无动画分支，改初值 "home" 后修正。
+  - 实机点击（hover-shot.ps1 新增 click 步骤，visible-scene.mp4 从极简页点专业模式）：t80 旧页仍在、t300/t1200 专业页就位；日志仅一次 `video host geometry 852x524` 与一次 `present-sink: resized`，无重新打开片源（switch/strip.png）。
+  - 未执行：原生视频窗随页面淡出（技术上不可淡，设计为切换完成后一次移动）；逐帧 sink 曲线探针（仅测 rise）。
