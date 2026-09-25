@@ -157,6 +157,11 @@ void PlayerUiFacade::refreshRecentFiles() {
     for (auto& entry : recent_) entry.exists = std::filesystem::exists(entry.path);
 }
 
+void PlayerUiFacade::clearRecentFiles() {
+    recent_.clear();
+    savePreferences();
+}
+
 void PlayerUiFacade::noteCaptureSession(const CaptureSession& session) {
     captureSession_ = session;
     captureSession_.valid = !session.devicePath.empty();

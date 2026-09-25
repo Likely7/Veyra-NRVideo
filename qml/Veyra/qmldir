@@ -1,0 +1,13 @@
+module Veyra
+singleton Theme 1.0 Theme.qml
+Main 1.0 Main.qml
+TopDock 1.0 TopDock.qml
+HomePage 1.0 HomePage.qml
+MinimalPage 1.0 MinimalPage.qml
+ProPage 1.0 ProPage.qml
+NodePage 1.0 NodePage.qml
+ExportPage 1.0 ExportPage.qml
+SettingsPage 1.0 SettingsPage.qml
+TimingBar 1.0 TimingBar.qml
+ChainList 1.0 ChainList.qml
+ChainNodeCard 1.0 ChainNodeCard.qml

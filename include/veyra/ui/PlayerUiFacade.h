@@ -71,6 +71,9 @@ public:
     // Drops entries whose file no longer exists (checked lazily, not on every
     // poll: the list is short and the check is a filesystem call).
     void refreshRecentFiles();
+    // Drops every recent entry and persists the empty list. The UI offers
+    // this, so it has to actually clear rather than just re-scan.
+    void clearRecentFiles();
 
     // --- last capture session ----------------------------------------------
     struct CaptureSession {

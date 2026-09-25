@@ -736,8 +736,42 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   # Qt 6.8.3 is staged under deps/ (the user allowed the latest Qt). The probe is
 # opt-in so a normal product build never depends on Qt being present.
 option(VEYRA_BUILD_QT_PROBE "Build the Qt + D3D12 host probe" OFF)
-if(VEYRA_BUILD_QT_PROBE)
-  find_package(Qt6 6.8 QUIET COMPONENTS Core Gui Qml Quick QuickControls2)
+option(VEYRA_BUILD_QML_UI "Build the QML front end" OFF)
+if(VEYRA_BUILD_QT_PROBE OR VEYRA_BUILD_QML_UI)
+  find_package(Qt6 6.8 QUIET COMPONENTS Core Gui Qml Quick QuickControls2 Widgets)
+endif()
+
+# The QML bridge. It is engine code (no QML files), so it compiles into a
+# separate small library rather than into veyra_engine: the product build must
+# never depend on Qt being installed.
+if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
+  add_library(veyra_qml_bridge STATIC src/ui/QmlPlayerBridge.cpp include/veyra/ui/QmlPlayerBridge.h)
+  # AUTOMOC: QmlPlayerBridge declares Q_OBJECT, so its meta-object has to be
+  # generated. Without this the library links but every signal is unresolved.
+  set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
+  target_compile_features(veyra_qml_bridge PRIVATE cxx_std_20)
+  target_include_directories(veyra_qml_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  # Widgets is needed only for QFileDialog: the native file picker is the one
+  # piece of the old shell worth keeping, and its own dialog is what users
+  # expect from a desktop app. No QWidget UI is created.
+  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets)
+  # VEYRA_DISPLAY_VERSION is the human-readable version the app reports; it is
+  # the same value the resource file uses, so the UI cannot drift from it.
+  target_compile_definitions(veyra_qml_bridge PRIVATE VEYRA_DISPLAY_VERSION="${VEYRA_DISPLAY_VERSION}")
+
+  # The QML module is deployed as plain files next to the executable rather
+  # than compiled into a resource: the qmldir-based module keeps the .qml
+  # editable in a build tree, which matters while the interface is still being
+  # worked on. A packaged release can switch to compiling them in.
+  # WIN32: a GUI subsystem binary. Without it a console window follows the app
+  # around, which is not what a player should look like. Diagnostics still reach
+  # the log file through the logger.
+  add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp)
+  add_custom_command(TARGET veyra_qml_ui POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/qml $<TARGET_FILE_DIR:veyra_qml_ui>/qml)
+  target_compile_features(veyra_qml_ui PRIVATE cxx_std_20)
+  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine)
 endif()
 
 # Qt + D3D12 host probe (S3.0): answers whether Qt can host the native video

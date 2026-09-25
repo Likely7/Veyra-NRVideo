@@ -40,6 +40,38 @@
 
 ## 日志
 
+### S4.1（2026-09-25）QML 前端可运行（骨架完成）
+新增可运行的 Qt/QML 前端，**本机实测启动无 QML 警告**，六个页面全部渲染。
+
+**代码**
+- `include/veyra/ui/QmlPlayerBridge.h` + `src/ui/QmlPlayerBridge.cpp` —— QML 唯一的视图层接口。约 60 个 Q_PROPERTY + 20 个 Q_INVOKABLE，全部指向既有引擎 API。**没有 QML 直接接触 EngineController / D3D12 / 解码帧 / 音频时钟。**
+- `qml/Veyra/` —— Theme（设计令牌来自已批准的浏览器原型）、Main（窗口外壳 + 顶部 dock + toast）、HomePage、MinimalPage、ProPage、NodePage、ExportPage、SettingsPage、TimingBar、ChainList、ChainNodeCard。
+- `apps/veyra-qml/main.cpp` —— 入口。创建原生视频子窗口、把它挂到 QML 窗口下、按 QML 里 `objectName: "videoHost"` 的项同步位置尺寸。**视频不进 QML 场景图**（S3 已证这会保住呈现延迟）。
+- `tools/qt_probe/shot.ps1` —— 截图脚本，用来实际"看"界面而不是假设它渲染正确。
+
+**已落实的用户决定**
+- 深黑 + 轻微渐变取代半透明玻璃；窗口圆角小（8px），**视频本身零圆角**（圆角会裁画面）。
+- 顶部 dock，鼠标触到顶边才落下，闲置 3.2 秒自动收起，收起时留一个抓手。
+- 点 logo 回主页空状态。
+- 极简模式**没有黑边**：控件浮在画面上并跟随鼠标淡入淡出；"画质"已改名"预设"。
+- 列表模式**不允许拖动排序**，只能增删和开关；重排留给节点模式。补帧与 RTX Video HDR 两处固定项在 UI 上画成锁定、引擎侧也拒绝移动。
+- 节点模式是**独立页面**：视频在上、自由画布在下、参数直接画在节点上、同类效果可多个实例。
+- 设置页含预设、字幕音频、诊断三页；**没有"显示帧率"**，只显示提交 FPS 并明确标注是提交 FPS。
+- 处处弹性动画（`Theme.spring` / `springSoft`）。
+
+**过程中发现并修掉的真问题**
+1. `EngineController.cpp:1455` 的 `&remote` 无条件捕获导致无采集配置编不过（S3 已记）。
+2. `windeployqt` 不部署 QML 模块，也**不复制 MSVC 运行库和 FFmpeg DLL**——三者缺一都会让 exe 以 `0xC0000135`（DLL 未找到）静默退出、连一行日志都不留。已在文档记下完整部署清单。
+3. `Main.qml` 最初 `color: "transparent"` 且没有背景项，窗口**透出桌面**（截图发现，不是推断）。
+4. `TextArea` 在默认样式下不允许自定义 `background`，产生 QML 警告；改为 Flickable + Text。
+
+**未完成 / 不夸大**
+- **没有验证真实播放**。当前 QML 前端只能启动、显示空状态页；打开文件后的实际播放、seek、采集、导出、节点拖拽画质等**全部未测**。
+- 导出页**没有输出分辨率控件**：引擎目前没有导出尺寸设置（由 NR 尺寸策略决定）。已按项目规则在页面上明说"自定义输出分辨率尚未实现"，而不是放一个改了没反应的控件。
+- 播放速度只有读取、没有设置（引擎没有对应 setter）。
+- 节点模式的连线、右键菜单细节、缩放边界只做了基本实现，未做交互验收。
+- 旧 Win32 UI 尚未删除（S5）。
+
 ### S3.0（2026-09-25）Qt 承载 D3D12 视频窗口 —— 可行性已实测通过
 这是整个迁移**唯一真正的技术风险**：视频由一个原生子 HWND 承载，Veyra 为它创建 D3D12 flip-model swapchain。如果 Qt 接管了呈现，低延迟优势就没了。已用最小探针实测，不再靠推断。
 
