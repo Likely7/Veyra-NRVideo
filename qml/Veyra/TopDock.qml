@@ -24,6 +24,8 @@ Item {
     property bool opened: false
     // Mirrors st.dockPinned in the design: pinned stays open regardless of hover.
     property bool pinned: false
+    // Review: holds one button's tooltip shown (--tip).
+    property string forcedTip: ""
     // The pill's top edge, read by the motion probe (G0.5).
     readonly property real barY: bar.y
 
@@ -97,13 +99,17 @@ Item {
             spacing: 2
 
             // .dock .logo: 40x30, returns to the empty state.
+            // M3: background .2s, :active scale .9 over .4s --spring.
             Item {
                 implicitWidth: 40
                 implicitHeight: 30
+                scale: logoTap.pressed ? 0.9 : 1
+                Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
                 Rectangle {
                     anchors.fill: parent
                     radius: height / 2
-                    color: logoHover.hovered ? "#1A1A1F" : "transparent"
+                    color: logoHover.hovered ? "#1A1A1F" : Qt.rgba(0.102, 0.102, 0.122, 0)
+                    Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                 }
                 Image {
                     anchors.centerIn: parent
@@ -113,8 +119,8 @@ Item {
                 }
                 HoverHandler { id: logoHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler {
+                    id: logoTap
                     onTapped: dockRoot.requestPage("home")
-                    onPressedChanged: if (pressed) scale = 0.9
                 }
             }
 
@@ -147,19 +153,54 @@ Item {
                     Repeater {
                         model: dockRoot.items
                         delegate: Item {
+                            id: btn
                             required property var modelData
                             width: 32
                             height: 30
-                            // .dock-btn: color rgba(255,255,255,.45), selected #fff.
+                            // M4: .dock-btn:active scale .86 over .45s --spring.
+                            scale: btnTap.pressed ? 0.86 : 1
+                            Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
+                            // .dock-btn: color rgba(255,255,255,.45), hover or selected #fff.
                             VIcon {
                                 anchors.centerIn: parent
-                                name: modelData.icon
+                                name: btn.modelData.icon
                                 color: "#FFFFFF"
-                                opacity: dockRoot.currentPage === modelData.id ? 1.0 : 0.45
+                                opacity: dockRoot.currentPage === btn.modelData.id || tip.on ? 1.0 : 0.45
                                 Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
                             }
-                            HoverHandler { cursorShape: Qt.PointingHandCursor }
-                            TapHandler { onTapped: dockRoot.requestPage(modelData.id) }
+                            // M5: .tip 38px below, opacity .15s, scale .85 -> 1 over .3s
+                            // --spring from its top centre.
+                            Rectangle {
+                                id: tip
+                                readonly property bool on: btnHover.hovered || dockRoot.forcedTip === btn.modelData.id
+                                // Below the dock it sits over the video: cut out of it.
+                                objectName: "videoCover"
+                                property real coverRadius: 7
+                                x: (btn.width - width) / 2
+                                y: 38
+                                width: tipText.implicitWidth + 16 + 2
+                                height: tipText.implicitHeight + 8 + 2
+                                radius: 7
+                                color: Theme.popover
+                                border.width: 1
+                                border.color: Theme.stroke2
+                                opacity: on ? 1 : 0
+                                visible: opacity > 0
+                                scale: on ? 1 : 0.85
+                                transformOrigin: Item.Top
+                                Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
+                                Behavior on scale { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
+                                Text {
+                                    id: tipText
+                                    anchors.centerIn: parent
+                                    text: btn.modelData.tip
+                                    color: "#FFFFFF"
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 11   // 11.5px; pixelSize is an int (fractional sizes: G3)
+                                }
+                            }
+                            HoverHandler { id: btnHover; cursorShape: Qt.PointingHandCursor }
+                            TapHandler { id: btnTap; onTapped: dockRoot.requestPage(btn.modelData.id) }
                         }
                     }
                 }

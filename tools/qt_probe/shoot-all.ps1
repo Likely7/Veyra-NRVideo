@@ -35,6 +35,7 @@ $states = [ordered]@{
   # Not design frames: states the frames only show in passing (menus), shot for review.
   'x-menu-src'    = @('pro', '--menu source')
   'x-menu-preset' = @('pro', '--menu preset')
+  'x-tip'         = @('pro', '--dock-pinned --tip exp')
 }
 $capture = Join-Path $PSScriptRoot 'capture-window.ps1'
 foreach ($id in $states.Keys) {

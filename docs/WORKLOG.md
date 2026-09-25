@@ -6623,3 +6623,15 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
     - 偏差：原生视频画面无法被 QML 遮罩压暗，对话框旁的画面不变暗。
     - 探针 dialog（设计 capture 对话框）：设计峰值 1.0041，QML 峰值 1.0041，chart-dialog.png 曲线重合。
     - f-cap/f-aud 截图中对话框的内容与尺寸差距（设计有预览、格式行、音轨列表等）属 G3。
+  - 其余组件动效（证据 `goal/g1.5-comp/`）：
+    - M3 logo：背景 .2s，按下 .9 用 .4s spring。原写法按下时直接把 scale 赋成 .9，永不复位，已修正。
+    - M4 dock 按钮：按下 .86 用 .45s spring；悬停图标变白。
+    - M5 提示气泡：新增，位于按钮下 38px，opacity .15s，scale .85→1 用 .3s spring，原点在顶部中心。气泡设为 videoCover。新增 `--tip <page>` 审查开关和 x-tip 审查态；zoom-tip.png 显示气泡在导出按钮下方，压在视频之上。
+    - M10 警告点：两半段改为 ease-in-out。
+    - M11 开关：已符合设计（按下且选中时圆钮 x=13，等于设计的 3+10），未改。
+    - M13 滑块：圆钮加阴影（0 2px 6px rgba(0,0,0,.5)），zoom-knob.png 可见。
+    - 顺带修正拖动 bug：activeTranslation 是相对按下点的累计值，旧代码却加在当前 x 上，导致圆钮越拖越快。改为以按下时的位置为起点。
+    - M28 折叠内容：opacity .2s，y -6→0 用 .45s spring，打开延迟 60ms；边框颜色 .25s。
+    - M29 箭头：改用 Lucide right 图标。
+    - M28/M29 只看了静态截图（zoom-acc.png），动效曲线未执行探针。
+  - 偏差：提示气泡字号 11.5px 在 QML 里只能是整数 pixelSize，暂用 11，G3 统一处理小数字号。f-aud 对话框的白色滚动条属 G3。

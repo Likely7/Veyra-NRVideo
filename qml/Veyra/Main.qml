@@ -177,6 +177,7 @@ Window {
         anchors.horizontalCenter: parent.horizontalCenter
         currentPage: root.page
         pinned: root.test.dockPinned === true
+        forcedTip: root.test.tip !== undefined ? root.test.tip : ""
         opened: pinned
         onRequestPage: p => root.page = p
     }

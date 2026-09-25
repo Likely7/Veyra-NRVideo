@@ -198,6 +198,7 @@ int main(int argc, char** argv) {
     //   --aspect <ratio>        cinema aspect, overriding the source's own
     //   --menu <source|preset>  professional-page popover menu open
     //   --dock-pinned           dock open and held open
+    //   --tip <page>            the dock button's tooltip for that page shown (review)
     //   --size <W>x<H>          window size in device-independent pixels
     //   --reduced-motion        every animation at zero duration
     //   --slow-animations <N>   every animation N times slower (motion sampling)
@@ -219,6 +220,8 @@ int main(int argc, char** argv) {
             testOptions.insert(QStringLiteral("menu"), args.at(++i));
         } else if (a == QLatin1String("--aspect") && hasValue) {
             testOptions.insert(QStringLiteral("aspect"), args.at(++i).toDouble());
+        } else if (a == QLatin1String("--tip") && hasValue) {
+            testOptions.insert(QStringLiteral("tip"), args.at(++i));
         } else if (a == QLatin1String("--dock-pinned")) {
             testOptions.insert(QStringLiteral("dockPinned"), true);
         } else if (a == QLatin1String("--size") && hasValue) {

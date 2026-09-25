@@ -34,6 +34,7 @@ Rectangle {
     color: Theme.card2
     border.width: 1
     border.color: open ? Theme.stroke2 : Theme.stroke
+    Behavior on border.color { ColorAnimation { duration: Theme.d(250) } }
     Behavior on implicitHeight { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.springSoft } }
     clip: true
 
@@ -98,10 +99,9 @@ Rectangle {
                 }
 
                 // .chev rotates 90 degrees when the card is open.
-                Text {
-                    text: "›"
+                VIcon {
+                    name: "right"
                     color: Theme.t3
-                    font.pixelSize: 16
                     rotation: acc.open ? 90 : 0
                     Behavior on rotation { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
                 }
@@ -119,7 +119,18 @@ Rectangle {
             Layout.rightMargin: 12
             Layout.bottomMargin: 10
             spacing: 2
-            visible: acc.open || implicitHeight > 0
+            visible: acc.open || acc.height > acc.headerHeight
+            // .acc-b .inner: opacity .2s and translateY(-6px) -> 0 over .45s --spring,
+            // delayed .06s when opening; closing starts at once.
+            property real dy: acc.open ? 0 : -6
+            opacity: acc.open ? 1 : 0
+            transform: Translate { y: body.dy }
+            Behavior on opacity { SequentialAnimation {
+                PauseAnimation { duration: acc.open ? Theme.d(60) : 0 }
+                NumberAnimation { duration: Theme.d(200) } } }
+            Behavior on dy { SequentialAnimation {
+                PauseAnimation { duration: acc.open ? Theme.d(60) : 0 }
+                NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } } }
 
             Repeater {
                 model: acc.groups
