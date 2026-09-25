@@ -6,6 +6,7 @@
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/RuntimePaths.h"
+#include "veyra/engine/GraphDescription.h"
 #include <filesystem>
 #include <format>
 #include <thread>
@@ -70,7 +71,6 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         int rateNum=info.nominalRateNum,rateDen=info.nominalRateDen;
         if(rateNum<=0||rateDen<=0){rateNum=30;rateDen=1;veyra::log::warn("export-timeline","missing nominal rate; encoder configured at 30 fps, source timestamps retained");}
         const double sourceInterval=double(rateDen)/rateNum;
-        const auto resolution=pipeline::ResolutionPlan::make({info.width,info.height},options.sr,pipeline::NrSizePolicy::Native,true,options.settings.revision,options.settings.srTarget);
         pipeline::EnhanceGraphDesc gd;gd.hdrInput=gd.hdrOutput=info.color.isHdrPath();
         gd.videoHdr=options.settings.videoHdr;
         gd.videoHdr.enabled=gd.videoHdr.enabled&&nvidiaAdapter;
@@ -87,11 +87,17 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         // upscaling is the only vendor-neutral video SR we ship. Requesting an
         // unavailable feature must degrade the export, never fail it.
         const bool nvidiaFeatures=nvidiaAdapter;
-        const bool srAvailable=resolution.srApplied&&(nvidiaFeatures||options.settings.videoSrQuality==kVideoSrFsr);
+        // One description for the whole job: the stage rules (which SR runs,
+        // whether NR/FG are available) come from the same place the preview uses.
+        StageRequest stages;stages.nr=options.nr;stages.sr=options.sr;stages.fg=options.fg;stages.fgMultiplier=options.fgMultiplier;
+        stages.width=info.width;stages.height=info.height;stages.exportJob=true;stages.nvidiaAdapter=nvidiaAdapter;
+        const auto plan=describeStages(stages,options.snapshot(),gd);
+        const auto resolution=plan;
+        const bool srAvailable=plan.srApplied&&(nvidiaFeatures||options.settings.videoSrQuality==kVideoSrFsr);
         if(options.nr&&!nvidiaFeatures)fgNote+=fgNote.empty()?L"当前显卡不能使用 DLSS NR，本次导出自动关闭 NR":L"；当前显卡不能使用 DLSS NR，本次导出自动关闭 NR";
         if(options.sr&&!srAvailable)fgNote+=fgNote.empty()?L"当前显卡不能使用所选超分，本次导出关闭超分":L"；当前显卡不能使用所选超分，本次导出关闭超分";
         if(!nvidiaFeatures&&srAvailable)fgNote+=fgNote.empty()?L"本次导出使用 AMD FSR 超分":L"；本次导出使用 AMD FSR 超分";
-        gd.sourceWidth=info.width;gd.sourceHeight=info.height;gd.workWidth=resolution.base.width;gd.workHeight=resolution.base.height;gd.nrWidth=resolution.nr.width;gd.nrHeight=resolution.nr.height;gd.flowWidth=resolution.flow.width;gd.flowHeight=resolution.flow.height;gd.enableSr=srAvailable;gd.videoSrQuality=options.settings.videoSrQuality;gd.enableNr=options.nr&&nvidiaFeatures;gd.nrRuntime=options.settings.nrRuntime;gd.nrTemporal=options.settings.nrTemporal;gd.enableFg=options.fg&&nvidiaFeatures;gd.fgMultiplier=options.fgMultiplier;gd.frameGenerationBackend=options.settings.frameGenerationBackend;gd.enableNvofStandalone=options.nr&&nvidiaFeatures;gd.model=options.settings.model;gd.residual=options.settings.residual;gd.protection=options.settings.protection;gd.color=options.settings.color;gd.settingsRevision=options.settings.revision;gd.flowQuality=options.settings.flow;gd.opticalFlowBackend=options.settings.opticalFlowBackend;gd.amdFlowHalfResolution=options.settings.amdFlowHalfResolution;gd.contentRate=options.settings.content;gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
+        gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
         // Keep the requested multiplier. Changing it after initialization fails
         // would produce a successful-looking file with different settings.
         bool graphReady=false,fgFailure=false;

@@ -34,6 +34,7 @@
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/RuntimePaths.h"
+#include "veyra/engine/GraphDescription.h"
 #include <avrt.h>
 #include <chrono>
 #include <filesystem>
@@ -320,14 +321,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             gd.captureBitDepth=activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::P010?10:activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::P016?16:8;
             gd.yuy2Input=isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Yuy2;gd.stillImage=isImage;
             gd.packedInput=isCapture?pipeline::packedInputCode(activeSource->info().color.pixelFormat):0;
-            const auto resolution=pipeline::ResolutionPlan::make({width,height},options.sr,options.snapshot().nrPolicy,isImage,options.settings.revision,options.settings.srTarget,options.settings.lowLatency&&options.nr);
-            gd.workWidth=resolution.base.width;gd.workHeight=resolution.base.height;gd.nrWidth=resolution.nr.width;gd.nrHeight=resolution.nr.height;gd.flowWidth=resolution.flow.width;gd.flowHeight=resolution.flow.height;
             const bool nvidiaAdapter=ctx.adapter().isNvidia;
+            auto stageRequest=[&](const PlayerOptions& o){
+                StageRequest r;r.nr=o.nr;r.sr=o.sr;r.fg=o.fg;r.fgMultiplier=o.fgMultiplier;
+                r.width=width;r.height=height;r.stillImage=isImage;r.nvidiaAdapter=nvidiaAdapter;return r;
+            };
+            describeStages(stageRequest(options),options.snapshot(),gd);
             const bool xessFg=presentSinkFrameGeneration(options.settings.frameGenerationBackend);
-            gd.nrBeforeSr=!isImage&&options.settings.lowLatency&&options.nr&&resolution.srApplied;gd.enableSr=resolution.srApplied&&(nvidiaAdapter||options.settings.videoSrQuality==kVideoSrFsr);gd.videoSrQuality=options.settings.videoSrQuality;gd.enableNr=options.nr&&nvidiaAdapter;gd.nrRuntime=options.settings.nrRuntime;gd.nrTemporal=options.settings.nrTemporal;gd.enableFg=options.fg&&(nvidiaAdapter||xessFg);gd.fgMultiplier=options.fgMultiplier;gd.frameGenerationBackend=options.settings.frameGenerationBackend;gd.enableNvofStandalone=gd.enableNr;
-            gd.noFeatures=false;gd.model=options.settings.model;gd.residual=options.settings.residual;gd.protection=options.settings.protection;gd.color=options.settings.color;gd.settingsRevision=options.settings.revision;gd.flowQuality=options.settings.flow;gd.contentRate=options.settings.content;
-            gd.opticalFlowBackend=options.settings.opticalFlowBackend;gd.amdFlowHalfResolution=options.settings.amdFlowHalfResolution;
-            gd.videoHdr=options.settings.videoHdr;
+            gd.noFeatures=false;
             gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
             veyra::log::info("display-color",std::format("hdrInput={} hdrOutput={} forceSdrPreview={}",gd.hdrInput,gd.hdrOutput,options.settings.forceSdrPreview));
             gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
@@ -338,9 +339,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 auto supported=selected.snapshot();
                 if(disableUnsupportedNvidiaEffects(supported,nvidiaAdapter)){
                     selected=PlayerOptions::from(supported);
-                    const auto plan=pipeline::ResolutionPlan::make({width,height},false,supported.nrPolicy,isImage,supported.revision,supported.srTarget,false);
-                    desc.workWidth=plan.base.width;desc.workHeight=plan.base.height;desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
-                    desc.enableNr=desc.enableSr=desc.enableNvofStandalone=desc.nrBeforeSr=false;desc.enableFg=selected.fg;desc.fgMultiplier=selected.fgMultiplier;
+                    // Same stage rules as every other build: AMD FSR upscaling
+                    // survives the normalization, it used to be dropped here.
+                    describeStages(stageRequest(selected),selected.snapshot(),desc);
                     backendRecoveryWarning=L"当前 GPU 不支持 NVIDIA 增强；NR、超分及 DLSS 已关闭，XeSS选择保留";
                     veyra::log::warn("capability","normalized requested NVIDIA effects before graph creation; applied settings reflect actual disabled stages");
                 }
@@ -403,10 +404,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                     if(!ring.drainQueue()||!ring.discardRecording())return false;
                     presenter.close();graph.shutdown();selected=PlayerOptions::from(reduced);
-                    const auto plan=pipeline::ResolutionPlan::make({width,height},selected.sr,reduced.nrPolicy,isImage,reduced.revision,reduced.srTarget,reduced.lowLatency&&selected.nr);
-                    desc.workWidth=plan.base.width;desc.workHeight=plan.base.height;desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
-                    desc.enableNr=selected.nr&&nvidiaAdapter;desc.enableSr=plan.srApplied&&(nvidiaAdapter||selected.settings.videoSrQuality==kVideoSrFsr);desc.enableFg=selected.fg&&(nvidiaAdapter||presentSinkFrameGeneration(reduced.frameGenerationBackend));desc.fgMultiplier=selected.fgMultiplier;
-                    desc.enableNvofStandalone=desc.enableNr;desc.nrBeforeSr=!isImage&&reduced.lowLatency&&selected.nr&&desc.enableSr;
+                    describeStages(stageRequest(selected),selected.snapshot(),desc);
                 }
                 return false;
             };
@@ -843,14 +841,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(requested.revision==previous.revision){finishReset(diagnostics::ResetOutcome::Cancelled);continue;}
                     resetRecord->settingsRevision=requested.revision;
                     auto next=PlayerOptions::from(requested);auto nextDesc=gd;
-                    const auto plan=pipeline::ResolutionPlan::make({width,height},next.sr,requested.nrPolicy,isImage,requested.revision,requested.srTarget,requested.lowLatency&&requested.nr);
-                    nextDesc.workWidth=plan.base.width;nextDesc.workHeight=plan.base.height;nextDesc.nrWidth=plan.nr.width;nextDesc.nrHeight=plan.nr.height;nextDesc.flowWidth=plan.flow.width;nextDesc.flowHeight=plan.flow.height;
                     const bool nvidiaAdapter=ctx.adapter().isNvidia;
                     const bool xessFg=presentSinkFrameGeneration(next.settings.frameGenerationBackend);
-                    nextDesc.nrBeforeSr=!isImage&&requested.lowLatency&&requested.nr&&plan.srApplied;nextDesc.enableSr=plan.srApplied&&(nvidiaAdapter||next.settings.videoSrQuality==kVideoSrFsr);nextDesc.videoSrQuality=next.settings.videoSrQuality;nextDesc.enableNr=next.nr&&nvidiaAdapter;nextDesc.nrRuntime=next.settings.nrRuntime;nextDesc.enableFg=next.fg&&(nvidiaAdapter||xessFg);nextDesc.fgMultiplier=next.fgMultiplier;nextDesc.frameGenerationBackend=next.settings.frameGenerationBackend;nextDesc.enableNvofStandalone=nextDesc.enableNr;
-                    nextDesc.model=requested.model;nextDesc.nrTemporal=requested.nrTemporal;nextDesc.residual=requested.residual;nextDesc.protection=requested.protection;nextDesc.color=requested.color;nextDesc.settingsRevision=requested.revision;nextDesc.flowQuality=requested.flow;nextDesc.contentRate=requested.content;
-                    nextDesc.opticalFlowBackend=requested.opticalFlowBackend;nextDesc.amdFlowHalfResolution=requested.amdFlowHalfResolution;
-                    nextDesc.videoHdr=requested.videoHdr;
+                    describeStages(stageRequest(next),next.snapshot(),nextDesc);
                     nextDesc.hdrOutput=requested.useHdrPreview(nextDesc.hdrInput,displayHdrActive());
                     const bool rebuild=gd.videoHdr.enabled!=nextDesc.videoHdr.enabled||gd.nrTemporal!=nextDesc.nrTemporal||(!nvidiaAdapter&&(next.nr||next.sr||(next.fg&&!xessFg)))||gd.hdrOutput!=nextDesc.hdrOutput||previous.captureCompatible!=requested.captureCompatible||gd.nrRuntime!=nextDesc.nrRuntime||gd.opticalFlowBackend!=nextDesc.opticalFlowBackend||gd.amdFlowHalfResolution!=nextDesc.amdFlowHalfResolution||gd.enableNr!=nextDesc.enableNr||gd.color.enabled!=nextDesc.color.enabled||gd.color.lutNameString()!=nextDesc.color.lutNameString()||gd.enableFg!=nextDesc.enableFg||gd.frameGenerationBackend!=nextDesc.frameGenerationBackend||gd.fgMultiplier!=nextDesc.fgMultiplier||gd.videoSrQuality!=nextDesc.videoSrQuality||gd.flowQuality!=nextDesc.flowQuality||gd.nrBeforeSr!=nextDesc.nrBeforeSr||gd.workWidth!=nextDesc.workWidth||gd.workHeight!=nextDesc.workHeight||gd.nrWidth!=nextDesc.nrWidth||gd.nrHeight!=nextDesc.nrHeight||gd.flowWidth!=nextDesc.flowWidth||gd.flowHeight!=nextDesc.flowHeight;
                     bool accepted=ring.drainQueue();out={};hasOutput=false;
@@ -1021,9 +1014,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if((isRemote||isScreen)&&frame&&(uint32_t(frame->width)!=width||uint32_t(frame->height)!=height||(isScreen&&gd.hdrInput!=activeSource->info().color.isHdrPath()))){
                     drainLivePresentation();if(!ring.drainQueue()){status(L"串流尺寸切换排空失败",true);break;}
                     width=uint32_t(frame->width);height=uint32_t(frame->height);
-                    auto plan=pipeline::ResolutionPlan::make({width,height},options.sr,options.settings.nrPolicy,false,options.settings.revision,options.settings.srTarget,options.settings.lowLatency&&options.nr);
-                    gd.nrBeforeSr=options.settings.lowLatency&&options.nr&&plan.srApplied;gd.enableSr=plan.srApplied&&(ctx.adapter().isNvidia||options.settings.videoSrQuality==kVideoSrFsr);
-                    gd.sourceWidth=width;gd.sourceHeight=height;gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());gd.workWidth=plan.base.width;gd.workHeight=plan.base.height;gd.nrWidth=plan.nr.width;gd.nrHeight=plan.nr.height;gd.flowWidth=plan.flow.width;gd.flowHeight=plan.flow.height;
+                    describeStages(stageRequest(options),options.snapshot(),gd);
+                    gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
                     presenter.close();graph.shutdown();out={};hasOutput=false;
                     if(!graph.initialize(gd)||!presenter.open(ctx,window,graph,options.settings.captureCompatible,!isCapture&&!isImage)||!graph.createViews()){status(L"串流尺寸切换失败",true);break;}
                     reset=true;pendingResetCause=pipeline::ResetReason::Resize;
@@ -1304,9 +1296,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             out={};hasOutput=false;presenter.close();graph.shutdown();
                             {std::lock_guard lock(mutex_);reduced.revision=++nextRevision_;}
                             options=PlayerOptions::from(reduced);
-                            const auto plan=pipeline::ResolutionPlan::make({width,height},options.sr,reduced.nrPolicy,isImage,reduced.revision,reduced.srTarget,reduced.lowLatency&&reduced.nr);
-                            gd.workWidth=plan.base.width;gd.workHeight=plan.base.height;gd.nrWidth=plan.nr.width;gd.nrHeight=plan.nr.height;gd.flowWidth=plan.flow.width;gd.flowHeight=plan.flow.height;
-                            gd.enableNr=options.nr&&nvidiaAdapter;gd.enableSr=plan.srApplied&&(nvidiaAdapter||options.settings.videoSrQuality==kVideoSrFsr);gd.enableFg=options.fg&&(nvidiaAdapter||presentSinkFrameGeneration(reduced.frameGenerationBackend));gd.fgMultiplier=options.fgMultiplier;gd.enableNvofStandalone=gd.enableNr;gd.settingsRevision=reduced.revision;gd.nrBeforeSr=!isImage&&reduced.lowLatency&&gd.enableNr&&gd.enableSr;
+                            describeStages(stageRequest(options),options.snapshot(),gd);
                             if(!initializePreview(gd,options)){status(L"增强故障后的基础图重建失败",true);break;}
                             publishFrameGenerationCapabilities();
                             backendRecoveryWarning=std::wstring(backendFailureName(failedComponent))+L"运行失败，已关闭对应效果；错误码见日志"+(backendRecoveryWarning.empty()?L"":L"；"+backendRecoveryWarning);
