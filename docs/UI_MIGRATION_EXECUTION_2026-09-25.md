@@ -42,6 +42,7 @@
 | G0.4 | `shoot-all.ps1`（17 屏 QML）+ `compose-compare.ps1`（左设计右 QML） | 完成（看图） | `checkpoint/ui-mig-g0.4` | QML 截图 `logs\ui-qml-migration-20260925\qml-ref\`，对比 `compare\cmp-f-*.png`。首页缺“继续上次/最近”、卡片图标为 emoji、标志偏低；专业页缺 NR 多层卡、仪表折线与分段柱、顺序条换行——列入 G1/G3 |
 | G0.5 | 动效采样（设计 vs QML） | 完成（曲线已看） | `checkpoint/ui-mig-g0.5` | `tools/qt_probe/motion-sample.ps1`；设计端 `shotpage.js ?motion=1&probe=` 暂停 Web Animations 按 10ms 定位读值，QML 端 `--motion-probe` 每帧记日志。证据 `goal\g0.5\`（design/qml CSV + chart）。dock：设计 110ms 到位、130ms 超调峰 10.17px，QML 线性 566ms 到 8px 无超调；开关：设计峰 14.6px，QML 线性 500ms；页面切换：设计 rise 16→0 约 150ms，QML 无过渡。证实 4 值 bezierCurve 退化为线性（G1.1）与缺页面进入动画（G2.2） |
 | G0.6 | 缓动单元测试 `veyra_qml_easing_tests` | 完成（修前失败，符合预期） | `checkpoint/ui-mig-g0.6` | `tests/qml/QmlEasingTests.cpp` 通过 QML 读回 NumberAnimation 的曲线，与 CSS `linear()` / `cubic-bezier` 求值比较（容差 0.01）。修前三条曲线类型均为 0（Linear），最大误差 spring 0.81、springSoft 0.76、easeOut 0.53（`goal\g0.6\before-fix.txt`）。构建目录改为 `build\qt-probe-20260926`：旧目录 CMake 不再写 `rules.ninja`，根因是 936 代码页下 include-probe 前缀乱码（与 WORKLOG 0.0.4 同一故障），`build-qt-probe.ps1` 现以 65001 调用并加 `-Out` |
+| G0.7 | 全部门槛基线 | 完成 | `checkpoint/ui-mig-g0.7` | 证据 `goal/g0.7/`。构建 exit 0、stage 0；哈希 17/17 same；性能与 perf-baseline 同量级，提交 fps 全同，plain-1080 gpuReady P95 1.57→2.68ms（本轮未动引擎，按本轮基线记录）；delivery PASS；单元 pass=44 fail=33 skip=3 与基线一致 |
 
 ## 发现并修复的 bug
 

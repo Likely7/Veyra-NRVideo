@@ -6563,3 +6563,10 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   该试验本轮在那里生成的 build/tmp 已删除；该乱码目录下原有的 logs 非本轮产物，保留未动。
   旧目录 `qt-probe-20260925` 留存未删。
   重建 `veyra_qml_ui` exit 0。
+
+- G0.7 本轮门槛基线（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g0.7/`）：
+  `build-ui-migration.ps1` exit 0；`stage-ui-migration.ps1` exit 0；`hash-ui-migration.ps1` 17 例全部 same；
+  `perf-ui-migration.ps1 -Compare perf-baseline.json`：nr-1080 submit P95 0.918→0.954、nr-fg-1080 1.281→1.292、
+  nr-fg-4k 1.383→1.279，提交 fps 60/120/120/60 全同；plain-1080 gpuReady P95 1.57→2.68ms（本轮未改引擎，
+  视为机器状态波动，作为本轮 B 阶段比较基线另记）；`delivery.ps1` PASS；单元 pass=44 fail=33 skip=3，与基线一致。
+  G0 阶段完成。
