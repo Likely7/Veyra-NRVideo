@@ -6542,3 +6542,12 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 - G0.4：`tools/qt_probe/shoot-all.ps1` 按 17 个设计帧状态截 QML（不带片源、减少动画），
   `compose-compare.ps1` 生成左右对比 `E:\项目\Veyra\logs\ui-qml-migration-20260925\compare\`。
   首次运行无输出：`$frames` 表覆盖了同名参数 `-Frames`（PowerShell 变量名不分大小写），改名 `$states`。
+
+- G0.5：`tools/qt_probe/motion-sample.ps1` 对 dock、开关、页面切换三组动效双端采样。设计端
+  `shotpage.js ?motion=1&probe=<名>` 启动动效后暂停 `document.getAnimations()`，按 10ms 步进读
+  变换矩阵/透明度；QML 端 `--motion-probe <名>`（Main.qml 探针 Loader/Timer/FrameAnimation）每帧写日志。
+  证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g0.5/`（design-*.csv、qml-*.csv、chart-*.png，已看图）。
+  结果：dock 设计 110ms 到位、130ms 超调至 10.17px 后回落，QML 线性 566ms 到 8px；开关设计峰 14.6px，
+  QML 线性 500ms；页面进入设计 y 16→0 约 150ms（spring-soft），QML 完全无过渡。
+  脚本首版反斜杠正则在生成时退化为非法正则，改用 `.Replace([char]92,[char]47)`。
+  引擎门槛未跑（仅测试探针，未动引擎）。

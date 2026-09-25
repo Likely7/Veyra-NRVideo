@@ -61,7 +61,49 @@
     app.root.style.width = frame.w + 'px';
     app.root.style.height = frame.h + 'px';
 
+    // Motion probes (G0.5): ?motion=1&probe=dock|page|switch starts one motion, then
+    // seeks every running animation to fixed times through the Web Animations API and
+    // reads the animated value back. &t=<ms> instead freezes the motion at that time for
+    // a screenshot. The numbers land in <pre id="motion-csv"> for --dump-dom.
+    const probe = params.get('probe');
+    if (probe) {
+      setTimeout(function () {
+        try { runProbe(app, probe, params.get('t')); }
+        catch (e) { const pre = document.createElement('pre'); pre.id = 'motion-csv'; pre.textContent = 'error ' + e; document.body.appendChild(pre); }
+      }, 300);
+      return;
+    }
+
     // A dialog opens on a later frame; the capture waits for it.
     setTimeout(function () { document.title = 'ready'; }, 900);
   });
+
+  function runProbe(app, probe, freezeAt) {
+    const root = app.root;
+    const ty = el => { const m = getComputedStyle(el).transform; return m === 'none' ? 0 : new DOMMatrix(m).m42; };
+    let start, read;
+    if (probe === 'dock') {
+      const dock = root.querySelector('.dock');
+      start = () => app.setDockPinned(true);
+      read = () => ty(dock);
+    } else if (probe === 'switch') {
+      const sw = [...root.querySelectorAll('.sw')].find(x => x.offsetParent !== null);
+      start = () => sw.click();
+      read = () => { const m = getComputedStyle(sw, '::after').transform; return m === 'none' ? 0 : new DOMMatrix(m).m41; };
+    } else if (probe === 'page') {
+      start = () => app.go('pro');
+      read = () => { const e = app.pages.pro.el.querySelector('[data-in]'); const cs = getComputedStyle(e); return cs.opacity + ',' + ty(e); };
+    } else return;
+    start();
+    // The page switch shows the new page 150 ms later; wait for its animations to exist.
+    setTimeout(function () {
+      const anims = () => document.getAnimations();
+      anims().forEach(a => a.pause());
+      if (freezeAt !== null) { anims().forEach(a => a.currentTime = +freezeAt); document.title = 'ready'; return; }
+      const rows = ['t_ms,value'];
+      for (let t = 0; t <= 1000; t += 10) { anims().forEach(a => a.currentTime = t); rows.push(t + ',' + read()); }
+      const pre = document.createElement('pre'); pre.id = 'motion-csv'; pre.textContent = rows.join(String.fromCharCode(10));
+      document.body.appendChild(pre); document.title = 'ready';
+    }, probe === 'page' ? 200 : 30);
+  }
 })();

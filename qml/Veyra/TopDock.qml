@@ -24,6 +24,8 @@ Item {
     property bool opened: false
     // Mirrors st.dockPinned in the design: pinned stays open regardless of hover.
     property bool pinned: false
+    // The pill's top edge, read by the motion probe (G0.5).
+    readonly property real barY: bar.y
 
     // --- page definitions (order and tooltips from core.js) ---------------
     readonly property var items: [

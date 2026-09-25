@@ -145,6 +145,7 @@ int main(int argc, char** argv) {
     //   --size <W>x<H>          window size in device-independent pixels
     //   --reduced-motion        every animation at zero duration
     //   --slow-animations <N>   every animation N times slower (motion sampling)
+    //   --motion-probe <name>   dock | page | switch: start that motion, log its value per frame
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
     QVariantMap testOptions;
@@ -165,6 +166,8 @@ int main(int argc, char** argv) {
         } else if (a == QLatin1String("--size") && hasValue) {
             const QStringList wh = args.at(++i).split(QLatin1Char('x'));
             if (wh.size() == 2) testSize = QSize(wh.at(0).toInt(), wh.at(1).toInt());
+        } else if (a == QLatin1String("--motion-probe") && hasValue) {
+            testOptions.insert(QStringLiteral("motionProbe"), args.at(++i));
         } else if (a == QLatin1String("--reduced-motion")) {
             testOptions.insert(QStringLiteral("reducedMotion"), true);
         } else if (a == QLatin1String("--slow-animations") && hasValue) {

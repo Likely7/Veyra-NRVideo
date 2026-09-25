@@ -40,6 +40,7 @@
 | G0.2 | 17 张设计参考（无头 Edge） | 完成（逐张看图） | `checkpoint/ui-mig-g0.2` | `logs\ui-qml-migration-20260925\design-ref\`；首版对话框被截在淡入中途、与底页重叠，`shotpage.js` 默认 `setReduced(true)` 后重渲染 |
 | G0.3 | 应用测试开关 | 完成（逐项截图已看） | `checkpoint/ui-mig-g0.3` | `--page --tab --dialog --aspect --dock-pinned --size WxH --reduced-motion --slow-animations N`；证据 `goal\g0.3\`。带片源时应用自动进极简且原生视频窗盖住 QML，对话框/dock 截图需不带片源 |
 | G0.4 | `shoot-all.ps1`（17 屏 QML）+ `compose-compare.ps1`（左设计右 QML） | 完成（看图） | `checkpoint/ui-mig-g0.4` | QML 截图 `logs\ui-qml-migration-20260925\qml-ref\`，对比 `compare\cmp-f-*.png`。首页缺“继续上次/最近”、卡片图标为 emoji、标志偏低；专业页缺 NR 多层卡、仪表折线与分段柱、顺序条换行——列入 G1/G3 |
+| G0.5 | 动效采样（设计 vs QML） | 完成（曲线已看） | `checkpoint/ui-mig-g0.5` | `tools/qt_probe/motion-sample.ps1`；设计端 `shotpage.js ?motion=1&probe=` 暂停 Web Animations 按 10ms 定位读值，QML 端 `--motion-probe` 每帧记日志。证据 `goal\g0.5\`（design/qml CSV + chart）。dock：设计 110ms 到位、130ms 超调峰 10.17px，QML 线性 566ms 到 8px 无超调；开关：设计峰 14.6px，QML 线性 500ms；页面切换：设计 rise 16→0 约 150ms，QML 无过渡。证实 4 值 bezierCurve 退化为线性（G1.1）与缺页面进入动画（G2.2） |
 
 ## 发现并修复的 bug
 

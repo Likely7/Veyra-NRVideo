@@ -245,6 +245,44 @@ Window {
         }
     }
 
+    // Motion probe (G0.5, --motion-probe): starts one motion 800 ms after load and logs
+    // "motion-probe,<name>,<ms>,<value>" every frame for a second, to line up against the
+    // design's curve from shotpage.js ?probe=. Sampled per rendered frame, so the spacing
+    // follows the display rate rather than a fixed 10 ms step.
+    Loader {
+        id: probeSwitch
+        active: root.test.motionProbe === "switch"
+        x: 40; y: 120; z: 100
+        sourceComponent: VSwitch {}
+    }
+    Timer {
+        running: root.test.motionProbe !== undefined
+        interval: 800
+        onTriggered: {
+            const name = root.test.motionProbe
+            if (name === "dock") dock.opened = true
+            else if (name === "page") root.page = "pro"
+            else if (name === "switch") probeSwitch.item.checked = true
+            probe.t0 = Date.now()
+            probe.running = true
+        }
+    }
+    FrameAnimation {
+        id: probe
+        property real t0: 0
+        running: false
+        onTriggered: {
+            const ms = Date.now() - t0
+            const name = root.test.motionProbe
+            let v
+            if (name === "dock") v = dock.barY
+            else if (name === "page") v = proPage.opacity + "," + proPage.y
+            else v = probeSwitch.item.children[0].x - 3
+            console.log("motion-probe," + name + "," + ms + "," + v)
+            if (ms > 1000) running = false
+        }
+    }
+
     Component.onCompleted: {
         // Open on the configured page: the user's saved preference, or the
         // override a test passes on the command line.
