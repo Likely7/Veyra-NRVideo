@@ -220,6 +220,18 @@ if(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR)
   add_dependencies(veyra_nr_harness veyra_shader_test_pattern
     veyra_shader_parity_encode veyra_shader_parity_decode)
 
+  # NR stacking probe: several Feature-18 handles on one snippet session.
+  add_executable(veyra_nr_probe
+    tools/nr_probe/main.cpp
+    tools/nr_harness/harness_util.cpp
+  )
+  veyra_apply_warnings(veyra_nr_probe)
+  target_compile_features(veyra_nr_probe PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_nr_probe PRIVATE
+    UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
+    VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
+  target_link_libraries(veyra_nr_probe PRIVATE veyra_gfx veyra_ngx)
+
   # Phase 6: DLSSG truth harness + WASAPI audio probe.
   add_executable(veyra_fg_harness
     tools/fg_harness/main.cpp
