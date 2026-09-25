@@ -1,13 +1,18 @@
 module Veyra
 singleton Theme 1.0 Theme.qml
+VButton 1.0 VButton.qml
+VCard 1.0 VCard.qml
+VDot 1.0 VDot.qml
+VEyebrow 1.0 VEyebrow.qml
+VGroup 1.0 VGroup.qml
+VH1 1.0 VH1.qml
+VH2 1.0 VH2.qml
+VH3 1.0 VH3.qml
+VPill 1.0 VPill.qml
+VRow 1.0 VRow.qml
+VSeg 1.0 VSeg.qml
+VSelect 1.0 VSelect.qml
+VSlider 1.0 VSlider.qml
+VSwitch 1.0 VSwitch.qml
+VTag 1.0 VTag.qml
 Main 1.0 Main.qml
-TopDock 1.0 TopDock.qml
-HomePage 1.0 HomePage.qml
-MinimalPage 1.0 MinimalPage.qml
-ProPage 1.0 ProPage.qml
-NodePage 1.0 NodePage.qml
-ExportPage 1.0 ExportPage.qml
-SettingsPage 1.0 SettingsPage.qml
-TimingBar 1.0 TimingBar.qml
-ChainList 1.0 ChainList.qml
-ChainNodeCard 1.0 ChainNodeCard.qml
