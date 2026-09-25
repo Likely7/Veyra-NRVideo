@@ -39,6 +39,7 @@
 | G | 目标模式全量计划 | 进行中 | `checkpoint/ui-mig-g-plan` | 见 [`UI_FULL_GOAL_PLAN_2026-09-26.md`](UI_FULL_GOAL_PLAN_2026-09-26.md) |
 | G0.2 | 17 张设计参考（无头 Edge） | 完成（逐张看图） | `checkpoint/ui-mig-g0.2` | `logs\ui-qml-migration-20260925\design-ref\`；首版对话框被截在淡入中途、与底页重叠，`shotpage.js` 默认 `setReduced(true)` 后重渲染 |
 | G0.3 | 应用测试开关 | 完成（逐项截图已看） | `checkpoint/ui-mig-g0.3` | `--page --tab --dialog --aspect --dock-pinned --size WxH --reduced-motion --slow-animations N`；证据 `goal\g0.3\`。带片源时应用自动进极简且原生视频窗盖住 QML，对话框/dock 截图需不带片源 |
+| G0.4 | `shoot-all.ps1`（17 屏 QML）+ `compose-compare.ps1`（左设计右 QML） | 完成（看图） | `checkpoint/ui-mig-g0.4` | QML 截图 `logs\ui-qml-migration-20260925\qml-ref\`，对比 `compare\cmp-f-*.png`。首页缺“继续上次/最近”、卡片图标为 emoji、标志偏低；专业页缺 NR 多层卡、仪表折线与分段柱、顺序条换行——列入 G1/G3 |
 
 ## 发现并修复的 bug
 

@@ -6538,3 +6538,7 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   `E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\g0.3\` 并看图：tab-fg、dlg-capture、min-aspect、
   node-size（1600x1150）、dock-pinned、slow-dialog（10 倍慢速截到对话框缩放中途）。
   引擎门槛未跑（本步只改 QML 前端与测试开关，未动引擎）。
+
+- G0.4：`tools/qt_probe/shoot-all.ps1` 按 17 个设计帧状态截 QML（不带片源、减少动画），
+  `compose-compare.ps1` 生成左右对比 `E:\项目\Veyra\logs\ui-qml-migration-20260925\compare\`。
+  首次运行无输出：`$frames` 表覆盖了同名参数 `-Frames`（PowerShell 变量名不分大小写），改名 `$states`。
