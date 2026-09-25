@@ -6655,3 +6655,9 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   - 探针 `motion.ps1 -Step g2.2 -Probes page`：QML 与设计稿均为峰值 16，34ms 起 16→0、约 175ms 到 0 并小幅回弹（chart-page.png；g0.5 基线 QML 恒 0）。首次跑出恒 0：shownPage 初值 "" 使首次切换走无动画分支，改初值 "home" 后修正。
   - 实机点击（hover-shot.ps1 新增 click 步骤，visible-scene.mp4 从极简页点专业模式）：t80 旧页仍在、t300/t1200 专业页就位；日志仅一次 `video host geometry 852x524` 与一次 `present-sink: resized`，无重新打开片源（switch/strip.png）。
   - 未执行：原生视频窗随页面淡出（技术上不可淡，设计为切换完成后一次移动）；逐帧 sink 曲线探针（仅测 rise）。
+- G2.3 视频窗口同步（`checkpoint/ui-mig-g2.3`，证据 `goal/g2.3/`）：
+  - `apps/veyra-qml/main.cpp`：删除 16ms 常驻 QTimer，改为 `QQuickWindow::afterAnimating`（每个渲染帧前、GUI 线程）驱动；场景静止不出帧即零开销；另在事件循环开始后跑一次兜底首帧布局。videoHost 查找结果缓存（QPointer），查找日志只在查找时写，不再每 2 秒刷屏。
+  - `syncVideoGeometry` 缓存上次矩形，未变化且窗口可见时不调 SetWindowPos；挖区（SetWindowRgn）原本就有变化比较。
+  - 实测（visible-scene.mp4）：极简页 → 点专业模式，日志仅 open 时 1280x720 与切页 852x524 各一次 `present-sink: resized`；静止画面正常（hover-idle.png）；弹层（--menu source / preset）在画面上方仍正确挖区（hover-menusrc.png、hover-menu.png）。
+  - 日志中 `audio-track decoder rejected stream=1 code=-22` 与改动前（22:02 起）一致，属该素材第二音轨，非本次引入。
+  - 未执行：拖拽改窗口尺寸的逐帧跟随录屏；PresentMon 对比（放 G2.5/W3）。

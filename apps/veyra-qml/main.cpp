@@ -16,6 +16,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QTimer>
+#include <QPointer>
 #include <QVariantMap>
 #include <QList>
 #include <QRect>
@@ -85,6 +86,11 @@ void syncVideoGeometry(QQuickWindow* window, QQuickItem* host) {
     const int y = int(std::floor(topLeft.y() * dpr));
     const int w = std::max(1, int(std::floor(host->width() * dpr)));
     const int h = std::max(1, int(std::floor(host->height() * dpr)));
+    // Called every rendered frame: only a changed rect reaches the window manager,
+    // so a moving popover never makes the presenter see a spurious resize.
+    static RECT last{-1, -1, -1, -1};
+    if (IsWindowVisible(g_video) && last.left == x && last.top == y && last.right == w && last.bottom == h) return;
+    last = RECT{x, y, w, h};
     SetWindowPos(g_video, HWND_TOP, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
 }
 
@@ -274,43 +280,46 @@ int main(int argc, char** argv) {
     // Reparent the native window under the QML window and keep it in step. The
     // host item is looked up by objectName so the QML side owns the layout and
     // this side only follows it.
-    // The host item's geometry is followed on a timer rather than through change
-    // signals. Signals only fire when a value changes, and the first layout pass
-    // can leave the host at its default (0x0) with no change to observe, which
-    // is how the engine ended up building a swapchain from a 1x1 window.
-    auto* follow = new QTimer(&app);
-    QObject::connect(follow, &QTimer::timeout, &app, [window] {
+    // The host item is followed per rendered frame rather than on a timer or through
+    // its own change signals. afterAnimating fires on the GUI thread before every
+    // frame Qt produces, so anything that moves the host (layout, a resize, the
+    // page switch, a cinema height animation, a popover scaling in) is picked up in
+    // the same frame, and an idle scene renders no frames and costs nothing. Change
+    // signals alone were not enough: the first layout pass can leave the host at its
+    // default 0x0 with no change to observe, which is how the engine once built a
+    // swapchain from a 1x1 window. The native calls only run when a value changed.
+    auto follow = [window] {
         if (!g_video) return;
-        // Report the search itself until it succeeds: "the log is silent" and
-        // "the lookup failed" look identical otherwise, and that ambiguity cost
-        // a round of guessing already.
-        static int ticks = 0;
-        ++ticks;
-        if (ticks < 3 || ticks % 120 == 0) {
-            auto* found = window->findChild<QQuickItem*>(QStringLiteral("videoHost"));
-            veyra::log::info("qml", std::format("video host lookup: found={} contentChildren={}",
-                                                found != nullptr,
-                                                window->contentItem() ? window->contentItem()->childItems().size() : -1));
-        }
         // Safety net: the pre-open hook parents the window before the engine reads
         // its size, but a resize before any open must also keep it in place.
         if (GetParent(g_video) == nullptr)
             SetParent(g_video, reinterpret_cast<HWND>(window->winId()));
-        if (auto* host = window->findChild<QQuickItem*>(QStringLiteral("videoHost"))) {
-            // Report the resolved geometry once at each distinct size, so the log
-            // says what the video window was actually given.
-            static int lastW = -1, lastH = -1;
-            const int w = int(host->width()), h = int(host->height());
-            if (w != lastW || h != lastH) {
-                lastW = w; lastH = h;
-                veyra::log::info("qml", std::format("video host geometry {}x{} at {},{}",
-                                                    w, h, int(host->x()), int(host->y())));
-            }
-            syncVideoGeometry(window, host);
-            syncVideoCovers(window, host);
+        static QPointer<QQuickItem> host;
+        if (!host) {
+            host = window->findChild<QQuickItem*>(QStringLiteral("videoHost"));
+            // Report the search: "the log is silent" and "the lookup failed" look
+            // identical otherwise.
+            veyra::log::info("qml", std::format("video host lookup: found={} contentChildren={}",
+                                                host != nullptr,
+                                                window->contentItem() ? window->contentItem()->childItems().size() : -1));
+            if (!host) return;
         }
-    });
-    follow->start(16);
+        // Report the resolved geometry once at each distinct size, so the log
+        // says what the video window was actually given.
+        static int lastW = -1, lastH = -1;
+        const int w = int(host->width()), h = int(host->height());
+        if (w != lastW || h != lastH) {
+            lastW = w; lastH = h;
+            veyra::log::info("qml", std::format("video host geometry {}x{} at {},{}",
+                                                w, h, int(host->x()), int(host->y())));
+        }
+        syncVideoGeometry(window, host);
+        syncVideoCovers(window, host);
+    };
+    QObject::connect(window, &QQuickWindow::afterAnimating, &app, follow);
+    // The first frame may come before the page layout settles; one pass after the
+    // event loop starts covers a scene that then never animates.
+    QTimer::singleShot(0, &app, follow);
 
     // Before every open, place the native window and force the pending layout to
     // be applied so the client size the presenter reads is the real one.
