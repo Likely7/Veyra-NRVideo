@@ -19,9 +19,10 @@
 | S1.1 | 合并图描述构建 | 完成 | `checkpoint/ui-mig-s1.1` | 6 处合并为 `describeStages()`；13 项哈希一致 |
 | S1.7 | 快照补字段（宽高比 / 时长 / 封面） | 完成 | `checkpoint/ui-mig-s1.7` | 宽高比与时长实测正确；关键哈希一致 |
 | S1.2+S1.3 | 效果链模型与效果注册表 | 完成 | `checkpoint/ui-mig-s1.2` | 40 项单元检查全过；引擎尚未改用它 |
-| S1.4 | 重建判断改由链推导（影子比对） | 完成 | `checkpoint/ui-mig-s1.4` | 6 个 smoke 用例，0 处不一致 |
+| S1.4 | 重建判断改由链推导（影子比对→切换） | 完成 | `checkpoint/ui-mig-s1.4b` | 影子 0 不一致后切换；13 项哈希一致，门槛 PASS |
 | S1.5 | 导出携带效果链 | 完成 | `checkpoint/ui-mig-s1.4` | 共享内存版本 2→3，接收端反算校验 |
 | S1.6 | 统一预设库 | 完成 | `checkpoint/ui-mig-s1.6` | 33 项单元检查全过；旧文件只读导入 |
+| S1.8 | 界面接口层 `PlayerUiFacade` | 完成 | `checkpoint/ui-mig-s1.8` | 快照按差异推送、命令排队、预设与最近文件集中 |
 
 ## 发现并修复的 bug
 
@@ -33,6 +34,16 @@
 | B2 | S0.2 | `veyra_quality_probe` 用 ANSI `argv` 转宽字符，输出目录含中文（`E:\项目`）时写图失败，交付门槛因此失败；门槛脚本原先用相对路径绕开，但源码在 C:、日志在 E: 时相对路径无法跨盘 | 探针改为从 UTF-16 命令行读参数；门槛改传绝对路径 |
 
 ## 日志
+
+### S1.4 切换 + S1.8（2026-09-25）重建判断切换与界面接口层
+- **S1.4 切换**：影子模式跑过 6 个 settings 类 smoke 用例（master / settings / fg-only / view / output-cap / rollback）确认 0 处不一致后，`EngineController` 改用 `requiresGraphRebuild()`，旧的手写字段判断已删除。仍保留三类**设置本身表达不了**的条件：有效 HDR 输出（取决于显示器）、各阶段实际尺寸（来自 `ResolutionPlan`）、非 NVIDIA 显卡的能力归一化。
+  - 重新验证：13 项抓帧哈希 0 差异；交付门槛 PASS；smoke 用例按各自正确参数复跑全部通过（`--smoke-fg-only` 必须不带 `--nr` 启动、`--smoke-output-cap` 需要帧率值、`--smoke-rollback` 需要 `VEYRA_TEST_REJECT_NR_STYLE2=1`，我最初传错了参数，不是产品问题）。
+- **S1.8 `PlayerUiFacade`**（`include/veyra/ui/PlayerUiFacade.h` + `src/ui/PlayerUiFacade.cpp`）：
+  - `poll()` 只在上次拿到的快照真正变化时才递增 `revision`，界面据此避免整份重刷（取代原来 100/250 ms 固定轮询后无条件重绘）；
+  - 命令走 `applySettings()`，同时保留界面自己的“待应用”副本，界面可以在引擎确认前就显示用户刚点的值；
+  - 预设库、最近文件（上限 8 条，带存在性刷新）、上次采集会话（含设备、格式、预设名、帧率）集中在 Facade，并原子写入 `ui-session.v1`；
+  - 旧预设迁移 `importLegacyStores()` 走 `PresetStore` 自己的解析器（不重写一遍位置式 schema），重名一律跳过，旧文件保持不动，方便降级。
+  - 这一层不依赖 Win32 也不依赖 Qt，S4 的 QML 前端和现有 Win32 外壳可以共用。
 
 ### S1.6（2026-09-25）统一预设库
 - 新增 `include/veyra/engine/PresetLibrary.h` + `src/engine/PresetLibrary.cpp`：一个存储放全部预设，每个预设用 `contents` 掩码声明自己包含哪些部分（画质链路 / 调色 / 补帧 / 音频偏移），**这正是设计稿里“另存为时勾选要保存的部分”**。
