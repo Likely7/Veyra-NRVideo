@@ -773,6 +773,13 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_compile_features(veyra_qml_ui PRIVATE cxx_std_20)
   # Qt6::CorePrivate only for QUnifiedTimer's slow mode behind --slow-animations.
   target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine Qt6::CorePrivate)
+
+  # G0.6: Theme easing curves read back through QML against the design's CSS curves.
+  # Loads qml/ from the source tree; runs offscreen with the Qt bin directory on PATH.
+  add_executable(veyra_qml_easing_tests tests/qml/QmlEasingTests.cpp)
+  target_compile_features(veyra_qml_easing_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_qml_easing_tests PRIVATE VEYRA_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
+  target_link_libraries(veyra_qml_easing_tests PRIVATE Qt6::Gui Qt6::Qml Qt6::Quick)
 endif()
 
 # Qt + D3D12 host probe (S3.0): answers whether Qt can host the native video

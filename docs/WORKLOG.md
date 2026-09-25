@@ -6551,3 +6551,15 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   QML 线性 500ms；页面进入设计 y 16→0 约 150ms（spring-soft），QML 完全无过渡。
   脚本首版反斜杠正则在生成时退化为非法正则，改用 `.Replace([char]92,[char]47)`。
   引擎门槛未跑（仅测试探针，未动引擎）。
+
+- G0.6：新增 `tests/qml/QmlEasingTests.cpp`（目标 `veyra_qml_easing_tests`，Qt offscreen），把 Theme.spring /
+  springSoft / easeOut 装进真实 NumberAnimation 读回 QEasingCurve，与设计稿 CSS `linear()` 停靠点和
+  `cubic-bezier(.2,.8,.2,1)` 逐 0.005 比较，容差 0.01。修前结果（预期失败）：三条曲线 type=0（线性），
+  最大误差 0.8141 / 0.7600 / 0.5276，输出 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g0.6/before-fix.txt`。
+  构建故障：在旧目录加目标后 ninja 报 unknown build rule，CMake 不再写 `CMakeFiles/rules.ninja`。
+  cl `/showIncludes` 在 936 代码页输出 GBK，include-probe 前缀乱码，与 0.0.4 时同一根因。
+  `scripts/build-qt-probe.ps1` 改为 chcp 65001 下调用（结束恢复原代码页），新增 `-Out`，默认新目录 `E:/项目/Veyra/build/qt-probe-20260926`。
+  在 .cmd 内部切代码页会让 cmd 以 UTF-8 重读非 ASCII 输出路径，产物落进乱码目录 `E:/椤圭洰`。
+  该试验本轮在那里生成的 build/tmp 已删除；该乱码目录下原有的 logs 非本轮产物，保留未动。
+  旧目录 `qt-probe-20260925` 留存未删。
+  重建 `veyra_qml_ui` exit 0。
