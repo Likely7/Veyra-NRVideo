@@ -19,16 +19,24 @@
 | S1.1 | 合并图描述构建 | 完成 | `checkpoint/ui-mig-s1.1` | 6 处合并为 `describeStages()`；13 项哈希一致 |
 | S1.7 | 快照补字段（宽高比 / 时长 / 封面） | 完成 | `checkpoint/ui-mig-s1.7` | 宽高比与时长实测正确；关键哈希一致 |
 | S1.2+S1.3 | 效果链模型与效果注册表 | 完成 | `checkpoint/ui-mig-s1.2` | 40 项单元检查全过；引擎尚未改用它 |
-| S1.4 | 重建判断改由链推导（影子比对→切换） | 完成 | `checkpoint/ui-mig-s1.4b` | 影子 0 不一致后切换；13 项哈希一致，门槛 PASS |
+| S1.4 | 重建判断改由链推导（影子比对→切换） | 完成 | `checkpoint/ui-mig-s1.8`（切换随 S1.8 提交 `cd71aad`；无 s1.4b 标签，G0.1 更正） | 影子 0 不一致后切换；13 项哈希一致，门槛 PASS |
 | S1.5 | 导出携带效果链 | 完成 | `checkpoint/ui-mig-s1.4` | 共享内存版本 2→3，接收端反算校验 |
-| S1.6 | 统一预设库 | 完成 | `checkpoint/ui-mig-s1.6` | 33 项单元检查全过；旧文件只读导入 |
+| S1.6 | 统一预设库 | 完成 | `checkpoint/ui-mig-s1.4`（预设库随 `74415d2` 提交；无 s1.6 标签，G0.1 更正） | 33 项单元检查全过；旧文件只读导入 |
 | S1.8 | 界面接口层 `PlayerUiFacade` | 完成 | `checkpoint/ui-mig-s1.8` | 快照按差异推送、命令排队、预设与最近文件集中 |
 | S2.0 | NR 叠层可行性探针 | 完成 | `checkpoint/ui-mig-s2.0` | **4/6/8 个句柄全部成功** |
 | S2.1 | NR 叠层实现 | 完成（已修 G1） | `checkpoint/ui-mig-s2.1b` | 13 项原有哈希逐像素一致；1/2/3/4 层均为真实图像 |
 | S2.1b | NR 时域防闪烁修复 | 完成 | `checkpoint/ui-mig-s2.1b` | 单层路径不变；叠层下开关由“完全无效”变为生效 |
 | S3.0 | Qt 6.8.3 安装 + 承载 D3D12 窗口实测 | 完成 | `checkpoint/ui-mig-s3.0` | 499/499 Present 成功，平均 0.205 ms，QML 动画未被拖慢 |
-| S3.0b | （旧行）Qt 6.8.3 安装 | 完成 | | `E:\项目\Veyra\deps\qt\6.8.3\msvc2022_64`，含 Core/Gui/Qml/Quick/QuickControls2 + windeployqt |
+| S4.1 | QML 前端可运行（骨架） | 完成（用户验收不通过，见 S4.1-修正） | `checkpoint/ui-mig-s4.1` | `a3d4dd0`（G0.1 补行） |
+| S4.2 | 按设计稿重建外壳与页面 | 部分 | `checkpoint/ui-mig-s4.2` | 标签指向 `ba61e57`（不在当前分支历史上，疑为改写前提交）；分支内对应 `31aaed4`/`032d223`（G0.1 补行） |
+| S4.3 | 视频窗口 1×1 修复 | 完成 | `checkpoint/ui-mig-s4.3` | `3b9fe4a`（G0.1 补行） |
+| S4.4 | 五个对话框 | 部分 | `checkpoint/ui-mig-s4.4` | `3197ca9`（G0.1 补行） |
+| S4.5 | 预设另存/管理对话框 | 部分 | `checkpoint/ui-mig-s4.5` | `b43f2b3`（G0.1 补行） |
+| S4.6 | 色彩页（参数目录驱动） | 部分 | `checkpoint/ui-mig-s4.6` | `33d65ca`；曲线/混色器/色轮/校准/LUT 未做（G0.1 补行） |
+| S4.7 | 专业页画面遮住播放条修复 | 完成 | `checkpoint/ui-mig-s4.7` | `1e5a11d`（G0.1 补行） |
+| S4.8 | 影院模式黑边与控制条修复 | 完成 | `checkpoint/ui-mig-s4.8` | `6f62e5f`（G0.1 补行） |
 | S4.9 | `VGroup` 行重叠修复（桌面端接手第一步） | 完成（截图已看） | `checkpoint/ui-mig-s4.9-vgroup` | 最小复现定位两处原因；导出页/设置页行已正常排布 |
+| G | 目标模式全量计划 | 进行中 | `checkpoint/ui-mig-g-plan` | 见 [`UI_FULL_GOAL_PLAN_2026-09-26.md`](UI_FULL_GOAL_PLAN_2026-09-26.md) |
 
 ## 发现并修复的 bug
 
@@ -39,6 +47,7 @@
 | B4 | S1.7 | 新建的 `PosterFrame.cpp` 直接把 FFmpeg 头文件放在 C++ 作用域里引用，`sws_*` 按 C++ 名字改编，链接必然失败（“无法解析的外部符号”）。项目里其它 FFmpeg 使用者都用 `extern "C" {}` 包住，新文件漏了 | 用 `extern "C" {}` 包住三个 FFmpeg 头；同时确认 `veyra_engine` 不需要额外链接 FFmpeg 库 |
 | B5 | S4.9 | `VGroup` 里的行全部叠在 `y=0`（导出页、设置页、对话框分组）。两处原因：① 内层用的是 `Column`，而 `VRow` 自身没有宽度、靠 `Layout.fillWidth` 取宽，`Column` 不认 `Layout.*`，并且**跳过宽度为 0 的子项**，于是一行都不排；② `VGroup` 放进 `ColumnLayout` 时自己没有 `Layout.fillWidth`，宽度为 0，内层宽 -28，行同样不排 | 内层改 `ColumnLayout`，`VGroup` 默认 `Layout.fillWidth: true`（与 `VRow` 一致）。`qml.exe` 最小复现逐项验证 |
 | B2 | S0.2 | `veyra_quality_probe` 用 ANSI `argv` 转宽字符，输出目录含中文（`E:\项目`）时写图失败，交付门槛因此失败；门槛脚本原先用相对路径绕开，但源码在 C:、日志在 E: 时相对路径无法跨盘 | 探针改为从 UTF-16 命令行读参数；门槛改传绝对路径 |
+| B6 | G0.1 | 桥接 `resetColourParameter` 一律写 0，但“颜色分级·混合”默认 50、“LUT 强度”默认 100，单项还原后值错误 | 待 B1 修（按 `ColorSettings{}` 的默认值还原） |
 
 ## 日志
 
