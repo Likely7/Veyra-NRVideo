@@ -53,7 +53,7 @@ Item {
                         text: modelData.measured
                               ? modelData.label + " " + modelData.ms.toFixed(1)
                               : modelData.label + " —"
-                        color: modelData.measured ? Theme.accentInk : Theme.text3
+                        color: modelData.measured ? Theme.accentInk : Theme.t3
                         font.family: Theme.fontMono
                         font.pixelSize: 10
                         elide: Text.ElideRight

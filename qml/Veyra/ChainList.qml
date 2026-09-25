@@ -39,6 +39,6 @@ ColumnLayout {
         color: Theme.err
         wrapMode: Text.WordWrap
         font.family: Theme.fontUi
-        font.pixelSize: Theme.fontSizeSmall
+        font.pixelSize: Theme.fsSmall
     }
 }

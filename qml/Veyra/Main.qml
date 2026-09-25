@@ -1,15 +1,17 @@
-// The application shell.
+// The application shell, rebuilt from the approved design.
 //
-// The window is frameless with a small radius (Windows' own default is small),
-// because the previous build's large rounding was rejected. The video area is
-// its own item and is NEVER clipped or rounded: rounding crops the picture.
+// Structure comes from the prototype (index.html + app.css + board.js):
+//   * a frameless window with the small 8px radius;
+//   * a hidden top dock that drops in when the pointer reaches the top edge;
+//   * one page visible at a time: home / min / pro / node / exp / set;
+//   * in cinema mode the WINDOW ITSELF snaps to the film's aspect ratio so the
+//     picture has no letterbox bars. The prototype's own technical note says the
+//     window must resize to the film when a file opens (capture cards and games
+//     are 16:9), and its fitAspect() adds BAR_BELOW = 46 for the control pill.
 //
-// Layout of the shell, top to bottom:
-//   * the top dock, hidden until the pointer reaches the top edge;
-//   * the page area, which swaps between home / minimal / pro / node / export /
-//     settings;
-//   * nothing else. The video is a native window placed over `videoHost` by
-//     apps/veyra-qml/main.cpp, so it is not part of this scene graph.
+// The video is not in this scene graph. It stays the native D3D12 child window
+// that apps/veyra-qml/main.cpp places over the item named "videoHost"; Qt hosts
+// it and never composites it, which is what preserved present cost in S3.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -18,195 +20,181 @@ Window {
     id: root
     width: 1280
     height: 800
-    minimumWidth: 880
-    minimumHeight: 560
+    minimumWidth: 720
+    minimumHeight: 260
     visible: true
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "Veyra " + veyra.version
 
-    // The current page. Changing it is what the dock and the engine's
-    // `navigate` signal both drive.
+    // Page ids match the prototype's PAGES keys so a design screenshot and an
+    // app screenshot can be compared under the same name.
     property string page: "home"
+    readonly property bool cinema: page === "min"
 
-    // The window background: deep black with a slight gradient, replacing the
-    // old translucent glass. This has to be an item, not Window.color: a
-    // frameless window cannot carry a gradient, and without this the desktop
-    // shows straight through the app.
+    // Cinema geometry, straight from the prototype: the picture is width/aspect
+    // and the window is that plus the lower half of the control pill.
+    property real filmAspect: 2.39
+    readonly property int barBelow: 46
+    readonly property real pictureHeight: Math.round(width / filmAspect)
+
+    function fitToFilm(aspect) {
+        if (aspect > 0.2 && aspect < 5.0) filmAspect = aspect
+        if (cinema) height = Math.round(pictureHeight + barBelow)
+    }
+    // .vy.cine transition: height .7s var(--spring-soft)
+    Behavior on height {
+        enabled: root.cinema
+        NumberAnimation { duration: 700; easing.bezierCurve: Theme.springSoft }
+    }
+    onWidthChanged: if (cinema) height = Math.round(pictureHeight + barBelow)
+    onPageChanged: {
+        if (cinema) height = Math.round(pictureHeight + barBelow)
+        else if (height < 600) height = 800
+        // The video rect follows the page, and it must be settled before the
+        // engine opens anything: it samples the window's client size once.
+        videoHost.update()
+    }
+
+    // Background: pure black in cinema mode (the picture is the window), the
+    // three-stop gradient otherwise - the prototype's .vy / .vy.cine split.
     Rectangle {
         id: backdrop
         anchors.fill: parent
-        radius: Theme.radiusWindow
+        radius: Theme.rWindow
         gradient: Gradient {
-            GradientStop { position: 0.0; color: Theme.backgroundTop }
-            GradientStop { position: 0.45; color: Theme.backgroundMid }
-            GradientStop { position: 1.0; color: Theme.background }
+            GradientStop { position: 0.0; color: Theme.bgInner }
+            GradientStop { position: 0.45; color: Theme.bgMid }
+            GradientStop { position: 1.0; color: Theme.bgOuter }
         }
-        // A hairline edge, so the small radius reads against a dark desktop.
         border.width: 1
-        border.color: Theme.stroke2
+        border.color: root.cinema ? "transparent" : Theme.stroke
     }
 
-    // The one place the native video window sits. There must be exactly ONE item
-    // named videoHost in the tree: main.cpp finds it by name, and an earlier
-    // version had a copy in each page, so the engine bound its swapchain to a
-    // hidden page's zero-sized item and presented into a 1x1 window.
-    //
-    // The pages do not own the video; they declare where it should go (an item
-    // named videoArea) and this follows the active page.
+    // The one host item for the native video window; main.cpp finds it by name.
+    // Exactly one must exist in the tree: an earlier version had a copy in each
+    // page and the engine bound its swapchain to a hidden, zero-sized one.
     Item {
         id: videoHost
         objectName: "videoHost"
-        // Visible on every video page, not only once a source is open. It has to
-        // be visible and correctly sized BEFORE the engine creates its swapchain:
-        // the swapchain is built from this window's client size, and gating it on
-        // hasSource meant the engine built it from a hidden 0x0 window and
-        // presented into a 1x1 surface.
-        visible: root.pageIsVideo
-        z: 1
-    }
-
-    readonly property bool pageIsVideo: page === "minimal" || page === "pro" || page === "node"
-
-    // Finds the video area of the page that is actually showing. Deliberately
-    // scoped to the current page: reading every page's area is what caused the
-    // 1x1 bug in the first place.
-    //
-    // The position is computed here rather than read from a child item's
-    // geometry, because the page does not lay itself out until the frame after
-    // the switch. On the frame the user opens a file, every child item still
-    // reports 0x0, and the presenter then builds a 1x1 swapchain. So the host's
-    // rect is derived from the same expressions the pages use, which are known
-    // synchronously.
-    function updateVideoHost() {
-        // Computed from `page` directly, NOT from the pageIsVideo property: this
-        // runs from onPageChanged, and a binding on `page` has not re-evaluated
-        // at that point. Reading the property here returned the PREVIOUS page's
-        // answer, so switching to a video page left the host at 0x0 and the
-        // presenter built a 1x1 swapchain.
-        const isVideo = (page === "minimal" || page === "pro" || page === "node")
-        if (!isVideo) {
-            videoHost.width = 0
-            videoHost.height = 0
-            return
-        }
-        if (page === "minimal") {
-            videoHost.x = 0
-            videoHost.y = 0
-            videoHost.width = root.width
-            videoHost.height = root.height
-        } else if (page === "pro") {
-            // Pro: full height on the left, the effect panel is a fixed 360 wide.
-            videoHost.x = 0
-            videoHost.y = 0
-            videoHost.width = Math.max(1, root.width - 360)
-            videoHost.height = Math.max(1, root.height - 44)
-        } else {
-            // Node: video on top, 40px toolbar between it and the canvas below.
-            videoHost.x = 0
-            videoHost.y = 0
-            videoHost.width = Math.max(1, root.width)
-            videoHost.height = Math.max(1, Math.round(Math.max(220, root.height * 0.42)))
+        visible: false          // geometry proxy; the native window draws pixels
+        function update() {
+            const r = root.videoRect()
+            x = r.x; y = r.y; width = r.width; height = r.height
         }
     }
 
-    onPageChanged: updateVideoHost()
-    onWidthChanged: updateVideoHost()
-    onHeightChanged: updateVideoHost()
+    // Where the picture sits, per page, computed from the design's own layout
+    // numbers rather than read from a laid-out child. A child reports 0x0 on the
+    // frame the user opens a file, and that once produced a 1x1 swapchain.
+    function videoRect() {
+        switch (page) {
+        case "min":
+            // .min .stage: full width, height = the picture height.
+            return { x: 0, y: 0, width: width, height: Math.round(pictureHeight) }
+        case "pro":
+            // .pro grid: 1fr 376px, gap 10, padding 14. The video wrap is column
+            // 1 row 2; .meters below it is a fixed 172px; .pro-head is 32.
+            return { x: 14,
+                     y: 14 + 32 + 10,
+                     width: Math.max(1, width - 376 - 14 * 2 - 10 - 14),
+                     height: Math.max(1, height - 14 * 2 - 32 - 10 - 172 - 10) }
+        case "node":
+            // .nodeview padding 14; .nv-top is a fixed 330px, minus its 40px bar.
+            return { x: 14, y: 14, width: Math.max(1, width - 28), height: 330 - 40 }
+        case "exp":
+            // .exp grid: 250px 1fr 330px; the video is column 2 row 2.
+            return { x: 14 + 250 + 10,
+                     y: 14 + 32 + 10,
+                     width: Math.max(1, width - 250 - 330 - 14 * 2 - 20),
+                     height: Math.max(1, height - 14 * 2 - 32 - 10 - 120 - 10) }
+        default:
+            return { x: 0, y: 0, width: 0, height: 0 }
+        }
+    }
 
-    // Every page is instantiated once and kept alive: switching pages must not
-    // rebuild the chain editor or lose a half-typed preset name.
+    // Pages live for the whole session so switching never loses a half-edited
+    // chain; only the visible page owns the video window.
     StackLayout {
         id: pages
         anchors.fill: parent
         currentIndex: {
             switch (root.page) {
-            case "minimal": return 1
+            case "min": return 1
             case "pro": return 2
             case "node": return 3
-            case "export": return 4
-            case "settings": return 5
+            case "exp": return 4
+            case "set": return 5
             default: return 0
             }
         }
 
-        HomePage { onRequestPage: page => root.page = page }
-        MinimalPage { onRequestPage: page => root.page = page }
-        ProPage { onRequestPage: page => root.page = page }
-        NodePage { onRequestPage: page => root.page = page }
-        ExportPage { onRequestPage: page => root.page = page }
-        SettingsPage { onRequestPage: page => root.page = page }
+        HomePage { onRequestPage: p => root.page = p }
+        MinimalPage {
+            onRequestPage: p => root.page = p
+            onRequestAspect: aspect => root.fitToFilm(aspect)
+        }
+        ProPage { onRequestPage: p => root.page = p }
+        NodePage { onRequestPage: p => root.page = p }
+        ExportPage { onRequestPage: p => root.page = p }
+        SettingsPage { onRequestPage: p => root.page = p }
     }
 
-    // The dock floats above the pages and hides itself again on a timer.
+    // The dock floats above every page and retracts on its own.
     TopDock {
         id: dock
         anchors.horizontalCenter: parent.horizontalCenter
         currentPage: root.page
-        onRequestPage: page => root.page = page
+        onRequestPage: p => root.page = p
     }
 
-    // Transient notices from the engine: a refused chain edit, a finished
-    // export, a failed open. Shown once and gone; no dialog to dismiss.
+    // Toasts: a refused edit, a finished export, a failed open.
     Rectangle {
         id: toast
-        property string text: ""
+        property string message: ""
         property bool isError: false
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 28
-        width: Math.min(toastText.implicitWidth + 32, root.width - 64)
-        height: tostRow.implicitHeight + 20
-        radius: Theme.radiusControl
-        color: toast.isError ? "#2A1416" : Theme.card2
+        anchors.bottomMargin: 24
+        width: Math.min(toastText.implicitWidth + 28, root.width - 48)
+        height: toastText.implicitHeight + 18
+        radius: 9
+        color: toast.isError ? "#2A1414" : "#132218"
         border.width: 1
-        border.color: toast.isError ? Theme.err : Theme.stroke2
+        border.color: toast.isError ? Qt.rgba(1, 0.365, 0.365, 0.4) : Qt.rgba(0.239, 0.863, 0.518, 0.35)
         opacity: 0
         visible: opacity > 0.01
-        // A spring pop-in, an eased fade-out: arriving should feel alive, leaving
-        // should not linger over the picture.
-        Behavior on opacity {
-            NumberAnimation { duration: Theme.durationNormal; easing.bezierCurve: Theme.easeOut }
-        }
-        function show(message, error) {
-            toast.text = message
-            toast.isError = error
-            toast.opacity = 1
-            hideTimer.restart()
-        }
-        Timer { id: hideTimer; interval: 4200; onTriggered: toast.opacity = 0 }
-        RowLayout {
-            id: tostRow
+        Behavior on opacity { NumberAnimation { duration: Theme.durNormal } }
+        function show(m, bad) { toast.message = m; toast.isError = bad; toast.opacity = 1; toastTimer.restart() }
+        Timer { id: toastTimer; interval: 4200; onTriggered: toast.opacity = 0 }
+        Text {
+            id: toastText
             anchors.centerIn: parent
-            spacing: 8
-            Rectangle {
-                width: 8; height: 8; radius: 4
-                color: toast.isError ? Theme.err : Theme.ok
-                Layout.alignment: Qt.AlignVCenter
-            }
-            Text {
-                id: toastText
-                text: toast.text
-                color: Theme.text1
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fontSizeBody
-                wrapMode: Text.NoWrap
-            }
+            width: parent.width - 20
+            text: toast.message
+            color: toast.isError ? "#FFC9C9" : "#BDF3D2"
+            font.family: Theme.fontUi
+            font.pixelSize: 12
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
         }
     }
 
     Connections {
         target: veyra
         function onNotice(text, isError) { toast.show(text, isError) }
-        function onNavigate(page) { root.page = page }
+        function onNavigate(p) { root.page = (p === "export" ? "exp" : p) }
     }
 
-    // The bridge drives page changes from engine-side commands too, so the dock
-    // and the engine never disagree about where the user is. The host rect is
-    // settled here as well: it must be correct before the first open, not one
-    // frame later.
-    Component.onCompleted: {
-        if (!veyra.hasSource) root.page = "home"
-        updateVideoHost()
+    // The film's aspect drives the window in cinema mode. Reported only: the
+    // engine's own values, never an invented ratio.
+    Connections {
+        target: veyra
+        function onSnapshotChanged() {
+            if (veyra.sourceAspect > 0.2 && Math.abs(veyra.sourceAspect - root.filmAspect) > 0.02)
+                root.fitToFilm(veyra.sourceAspect)
+        }
     }
+
+    Component.onCompleted: videoHost.update()
 }

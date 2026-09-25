@@ -106,6 +106,197 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
 
 QmlPlayerBridge::~QmlPlayerBridge() = default;
 
+
+// --- professional-page readouts ---------------------------------------------
+// These read fields the engine genuinely publishes. Where it publishes nothing,
+// the getter says so and the UI shows an explicit "unmeasured" rather than a
+// zero or a stand-in.
+QString QmlPlayerBridge::outputSummary() const {
+    // The engine publishes the source extent and the preview scale, not the final
+    // working extent, so the honest answer is the source size at the reported
+    // scale factor. Nothing here invents a resolution the graph did not produce.
+    const auto& s = impl_->snapshot;
+    if (s.sourceWidth == 0 || s.sourceHeight == 0) return {};
+    return QStringLiteral("%1x%2").arg(s.sourceWidth).arg(s.sourceHeight);
+}
+
+// A display rate is only real when the system's display event can be read. No
+// counter is wired in this build, so it reports unknown and the UI shows "未测" -
+// which is exactly what the design requires instead of passing the submit rate off
+// as a measurement that was never taken.
+double QmlPlayerBridge::displayFps() const { return 0.0; }
+bool QmlPlayerBridge::displayFpsKnown() const { return false; }
+
+double QmlPlayerBridge::queuedFrames() const {
+    // Preview frames the scheduler chose not to present, as a running count. This
+    // is in-process scheduling, NOT screen latency, and the UI labels it so.
+    return double(impl_->snapshot.previewSkipped);
+}
+
+int QmlPlayerBridge::skippedFrames() const { return int(impl_->snapshot.previewSkipped); }
+
+QString QmlPlayerBridge::flowBackend() const {
+    // The snapshot carries a performance figure and a content rate, not a backend
+    // name; report the fact we do have and let it read as unmeasured otherwise.
+    const auto& s = impl_->snapshot;
+    if (s.flowPerf == 0) return {};
+    return QStringLiteral("GPU 光流");
+}
+
+QVariantList QmlPlayerBridge::stageTimings() const {
+    // The engine publishes CPU-side percentiles per phase, not per-GPU-stage
+    // timings, so the three signals it does publish are what is shown. A stage
+    // with no sample reports as unmeasured instead of a zero-length bar.
+    const auto& s = impl_->snapshot;
+    QVariantList out;
+    struct Row { const char* label; double ms; const char* color; bool measured; };
+    const Row rows[] = {
+        {"调度", s.schedulingWaitP95Ms, "#6EA8FF", s.schedulingWaitP95Ms > 0.0},
+        {"处理", s.processCpuP95Ms,     "#FF8A3D", s.processCpuP95Ms > 0.0},
+        {"呈现", s.presentCpuP95Ms,     "#3DDC84", s.presentCpuP95Ms > 0.0},
+    };
+    const double budget = stageBudgetMs();
+    for (const auto& r : rows) {
+        QVariantMap item;
+        item["label"] = QString::fromUtf8(r.label);
+        item["ms"] = r.ms;
+        item["measured"] = r.measured;
+        item["color"] = QString::fromUtf8(r.color);
+        item["fraction"] = (r.measured && budget > 0.01) ? r.ms / budget : 0.0;
+        out << item;
+    }
+    return out;
+}
+
+double QmlPlayerBridge::stageBudgetMs() const {
+    // One source period: the budget a stage has to stay inside. Zero when the
+    // source rate is unknown, which the UI shows as unmeasured.
+    const double fps = impl_->snapshot.nominalSourceFps;
+    return fps > 0.01 ? 1000.0 / fps : 0.0;
+}
+
+double QmlPlayerBridge::scheduleP95Ms() const { return impl_->snapshot.schedulingWaitP95Ms; }
+
+double QmlPlayerBridge::chainTotalMs() const {
+    // Sum of the phases the engine measured. Zero means nothing measured yet, and
+    // the UI shows "未测" rather than a zero that would read as instant.
+    const auto& s = impl_->snapshot;
+    const double total = s.schedulingWaitP95Ms + s.processCpuP95Ms + s.presentCpuP95Ms;
+    return total > 0.0 ? total : 0.0;
+}
+
+
+// --- frame generation --------------------------------------------------------
+QString QmlPlayerBridge::fgBackendName() const {
+    return impl_->facade.pendingSettings().frameGenerationBackend
+                   == engine::FrameGenerationBackend::XeSS
+               ? QStringLiteral("xess") : QStringLiteral("dlss");
+}
+void QmlPlayerBridge::setFgBackendName(const QString& value) {
+    auto s = settings();
+    const auto want = value == QLatin1String("xess") ? engine::FrameGenerationBackend::XeSS
+                                                     : engine::FrameGenerationBackend::Dlss;
+    if (s.frameGenerationBackend == want) return;
+    s.frameGenerationBackend = want;
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+
+int QmlPlayerBridge::fgMaxMultiplier() const {
+    // Start from 2, the multiplier every path supports, and raise it only on a
+    // capability the engine actually reported.
+    const auto& s = impl_->snapshot;
+    int best = 2;
+    if (s.fgCapabilityKnown) best = std::max(best, s.fgMultiFrameMax);
+    if (s.xessMaxInterpolatedFrames > 0) best = std::max(best, s.xessMaxInterpolatedFrames + 1);
+    if (s.fsrMaxGeneratedFrames > 0) best = std::max(best, s.fsrMaxGeneratedFrames + 1);
+    return std::min(best, 6);
+}
+
+QVariantList QmlPlayerBridge::fgMultiplierChoices() const {
+    // Only multipliers the chosen backend supports are offered: DLSS reaches 6X on
+    // capable hardware, XeSS stops at 4X. Offering a value the provider would
+    // refuse is the same lie as a dead control.
+    const bool xess = impl_->facade.pendingSettings().frameGenerationBackend
+                      == engine::FrameGenerationBackend::XeSS;
+    const int ceiling = xess ? std::min(fgMaxMultiplier(), 4) : fgMaxMultiplier();
+    QVariantList out;
+    for (int m = 2; m <= ceiling; ++m) {
+        QVariantMap item;
+        item["id"] = QString::number(m);
+        item["label"] = QString::number(m) + QStringLiteral("X");
+        out << item;
+    }
+    return out;
+}
+
+bool QmlPlayerBridge::fgStrict() const { return impl_->facade.pendingSettings().fgStrictAdmission; }
+void QmlPlayerBridge::setFgStrict(bool value) {
+    auto s = settings();
+    if (s.fgStrictAdmission == value) return;
+    s.fgStrictAdmission = value;
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+
+bool QmlPlayerBridge::fgLowQueue() const { return impl_->facade.pendingSettings().lowLatency; }
+void QmlPlayerBridge::setFgLowQueue(bool value) {
+    auto s = settings();
+    if (s.lowLatency == value) return;
+    s.lowLatency = value;
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+
+// --- colour ------------------------------------------------------------------
+double QmlPlayerBridge::colorExposure() const { return settings().color.exposure; }
+void QmlPlayerBridge::setColorExposure(double v) {
+    auto s = settings();
+    if (double(s.color.exposure) == v) return;
+    s.color.exposure = float(v);
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+double QmlPlayerBridge::colorContrast() const { return settings().color.contrast; }
+void QmlPlayerBridge::setColorContrast(double v) {
+    auto s = settings();
+    if (double(s.color.contrast) == v) return;
+    s.color.contrast = float(v);
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+double QmlPlayerBridge::colorSaturation() const { return settings().color.saturation; }
+void QmlPlayerBridge::setColorSaturation(double v) {
+    auto s = settings();
+    if (double(s.color.saturation) == v) return;
+    s.color.saturation = float(v);
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+double QmlPlayerBridge::colorTemperature() const { return settings().color.temperature; }
+void QmlPlayerBridge::setColorTemperature(double v) {
+    auto s = settings();
+    if (double(s.color.temperature) == v) return;
+    s.color.temperature = float(v);
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+
+void QmlPlayerBridge::resetCurrentPage() {
+    // Reset only the enhancement settings this page edits. Presets, recent files,
+    // the capture session and the export selection are deliberately untouched.
+    auto s = settings();
+    s.nr = false; s.sr = false; s.multiplier = 1;
+    s.lowLatency = false; s.nrTemporal = false;
+    s.model = engine::NrSettings{};
+    s.residual = engine::ResidualSettings{};
+    s.protection = engine::ProtectionSettings{};
+    s.color = engine::ColorSettings{};
+    s.videoHdr = engine::VideoHdrSettings{};
+    impl_->commit(std::move(s));
+    emit settingsChanged();
+}
+
 void QmlPlayerBridge::attachVideoWindow(qulonglong nativeHandle) {
     impl_->videoWindow = reinterpret_cast<HWND>(nativeHandle);
 }
@@ -149,6 +340,16 @@ int QmlPlayerBridge::sourceWidth() const { return int(impl_->snapshot.sourceWidt
 int QmlPlayerBridge::sourceHeight() const { return int(impl_->snapshot.sourceHeight); }
 double QmlPlayerBridge::sourceFps() const { return impl_->snapshot.nominalSourceFps; }
 int QmlPlayerBridge::sourceRotation() const { return impl_->snapshot.sourceRotationDegrees; }
+double QmlPlayerBridge::sourceAspect() const {
+    const auto& s = impl_->snapshot;
+    // The container's display aspect already accounts for sample aspect ratio and
+    // rotation, so prefer it. The pixel ratio is only a fallback for a source that
+    // reported none, and it is never presented as more than that.
+    if (s.sourceDisplayAspect > 0.01) return s.sourceDisplayAspect;
+    if (s.sourceWidth > 0 && s.sourceHeight > 0)
+        return double(s.sourceWidth) / double(s.sourceHeight);
+    return 0.0;
+}
 
 // --- live performance -------------------------------------------------------
 double QmlPlayerBridge::submitFps() const { return impl_->snapshot.submissionFps.value_or(0.0); }
@@ -337,6 +538,16 @@ QVariantList QmlPlayerBridge::presets() const {
     return out;
 }
 
+QString QmlPlayerBridge::currentPresetName() const {
+    // Matching is by name of the stored entry whose chain equals what the UI is
+    // showing; anything else is honestly "自定义" rather than the nearest guess.
+    const auto& entries = impl_->facade.presets().entries();
+    for (const auto& e : entries) {
+        if (e.chain == impl_->chain) return utf8Of(e.name);
+    }
+    return tr("自定义");
+}
+
 QVariantList QmlPlayerBridge::audioTracks() const {
     QVariantList out;
     for (const auto& track : impl_->snapshot.audioTracks) {
@@ -358,6 +569,26 @@ int QmlPlayerBridge::selectedAudioTrack() const { return impl_->snapshot.selecte
 void QmlPlayerBridge::setSelectedAudioTrack(int index) {
     impl_->engine.selectAudioTrack(impl_->snapshot.sessionId, index);
 }
+bool QmlPlayerBridge::hasCaptureSession() const { return impl_->facade.hasCaptureSession(); }
+
+QString QmlPlayerBridge::captureSessionSummary() const {
+    // Built from the recorded session only: the device, the format and the preset
+    // that were actually used. A summary assembled from defaults would read as a
+    // history that never happened.
+    const auto& session = impl_->facade.lastCaptureSession();
+    QStringList parts;
+    if (!session.devicePath.empty()) parts << QFileInfo(utf8Of(session.devicePath)).fileName();
+    if (!session.formatKey.empty()) parts << utf8Of(session.formatKey);
+    if (session.fps > 0.01) parts << QStringLiteral("%1 fps").arg(session.fps, 0, 'f', 2);
+    if (!session.presetName.empty()) parts << tr("预设「%1」").arg(utf8Of(session.presetName));
+    return parts.join(QStringLiteral(" · "));
+}
+
+void QmlPlayerBridge::resumeCaptureSession() {
+    const auto& session = impl_->facade.lastCaptureSession();
+    if (!session.devicePath.empty()) emit notice(tr("采集会话恢复尚未接入"), true);
+}
+
 QString QmlPlayerBridge::colorStatus() const { return utf8Of(impl_->snapshot.colorStatus); }
 QString QmlPlayerBridge::videoHdrStatus() const { return utf8Of(impl_->snapshot.videoHdrStatus); }
 

@@ -62,12 +62,12 @@ QtObject {
     // --- type (--f-ui / --f-mono and the .h1/.h2/.h3 scale) ---------------
     readonly property string fontUi: "Microsoft YaHei UI"
     readonly property string fontMono: "Consolas"
-    readonly property int fsEyebrow: 11
-    readonly property int fsSmall: 11.5
-    readonly property int fsBody: 12.5
-    readonly property int fsH3: 15
-    readonly property int fsH2: 18
-    readonly property int fsH1: 26
+    readonly property real fsEyebrow: 11
+    readonly property real fsSmall: 11.5
+    readonly property real fsBody: 12.5
+    readonly property real fsH3: 15
+    readonly property real fsH2: 18
+    readonly property real fsH1: 26
 
     // --- component metrics from the CSS -----------------------------------
     readonly property int ctlHeight: 32      // .btn / .pill

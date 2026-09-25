@@ -23,9 +23,9 @@ Item {
             Layout.fillWidth: true
             Text {
                 text: "视频导出"
-                color: Theme.text1
+                color: Theme.t1
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fontSizeHeading
+                font.pixelSize: Theme.fsH1
                 Layout.fillWidth: true
             }
             Rectangle {
@@ -36,9 +36,9 @@ Item {
                 Text {
                     anchors.centerIn: parent
                     text: "返回"
-                    color: Theme.text2
+                    color: Theme.t2
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fontSizeSmall
+                    font.pixelSize: Theme.fsSmall
                 }
                 HoverHandler { id: backHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: root.requestPage("pro") }
@@ -47,7 +47,7 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
-            radius: Theme.radiusCard
+            radius: Theme.rCard
             color: Theme.card
             implicitHeight: detail.implicitHeight + 32
 
@@ -65,25 +65,25 @@ Item {
                     columnSpacing: 12
                     rowSpacing: 10
 
-                    Text { text: "源"; color: Theme.text3; font.family: Theme.fontUi; font.pixelSize: Theme.fontSizeSmall }
+                    Text { text: "源"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                     Text {
                         Layout.fillWidth: true
                         text: veyra.hasSource ? veyra.sourceName + "  " + veyra.sourceSummary : "未打开文件"
-                        color: Theme.text1
+                        color: Theme.t1
                         font.family: Theme.fontUi
-                        font.pixelSize: Theme.fontSizeBody
+                        font.pixelSize: Theme.fsBody
                         elide: Text.ElideMiddle
                     }
 
-                    Text { text: "输出"; color: Theme.text3; font.family: Theme.fontUi; font.pixelSize: Theme.fontSizeSmall }
+                    Text { text: "输出"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                     RowLayout {
                         Layout.fillWidth: true
                         Text {
                             Layout.fillWidth: true
                             text: veyra.exportTarget.length > 0 ? veyra.exportTarget : "未选择"
-                            color: veyra.exportTarget.length > 0 ? Theme.text1 : Theme.text3
+                            color: veyra.exportTarget.length > 0 ? Theme.t1 : Theme.t3
                             font.family: Theme.fontUi
-                            font.pixelSize: Theme.fontSizeBody
+                            font.pixelSize: Theme.fsBody
                             elide: Text.ElideMiddle
                         }
                         Rectangle {
@@ -94,7 +94,7 @@ Item {
                             Text {
                                 anchors.centerIn: parent
                                 text: "选择…"
-                                color: Theme.text2
+                                color: Theme.t2
                                 font.family: Theme.fontUi
                                 font.pixelSize: 11
                             }
@@ -103,12 +103,12 @@ Item {
                         }
                     }
 
-                    Text { text: "编码"; color: Theme.text3; font.family: Theme.fontUi; font.pixelSize: Theme.fontSizeSmall }
+                    Text { text: "编码"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                     Text {
                         text: "NVENC H.264（D3D12 直接编码，不经 CPU 回读）"
-                        color: Theme.text2
+                        color: Theme.t2
                         font.family: Theme.fontUi
-                        font.pixelSize: Theme.fontSizeSmall
+                        font.pixelSize: Theme.fsSmall
                     }
                 }
 
@@ -120,7 +120,7 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: "导出尺寸目前由 NR 处理尺寸策略决定；自定义输出分辨率尚未实现。"
-                    color: Theme.text3
+                    color: Theme.t3
                     font.family: Theme.fontUi
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap
@@ -134,13 +134,13 @@ Item {
                         implicitHeight: 34
                         radius: 17
                         color: startHover.hovered ? Qt.lighter(Theme.accent, 1.1) : Theme.accent
-                        Behavior on color { ColorAnimation { duration: Theme.durationFast } }
+                        Behavior on color { ColorAnimation { duration: Theme.durFast } }
                         Text {
                             anchors.centerIn: parent
                             text: veyra.exportRunning ? "导出中…" : "开始导出"
                             color: Theme.accentInk
                             font.family: Theme.fontUi
-                            font.pixelSize: Theme.fontSizeBody
+                            font.pixelSize: Theme.fsBody
                             font.bold: true
                         }
                         HoverHandler { id: startHover; cursorShape: Qt.PointingHandCursor }
@@ -155,18 +155,18 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: "取消"
-                            color: Theme.text2
+                            color: Theme.t2
                             font.family: Theme.fontUi
-                            font.pixelSize: Theme.fontSizeBody
+                            font.pixelSize: Theme.fsBody
                         }
                         HoverHandler { id: cancelHover; cursorShape: Qt.PointingHandCursor }
                         TapHandler { onTapped: veyra.cancelExport() }
                     }
                     Text {
                         text: veyra.exportStatus
-                        color: Theme.text2
+                        color: Theme.t2
                         font.family: Theme.fontUi
-                        font.pixelSize: Theme.fontSizeSmall
+                        font.pixelSize: Theme.fsSmall
                     }
                 }
             }

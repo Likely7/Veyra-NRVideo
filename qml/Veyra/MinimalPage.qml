@@ -1,14 +1,12 @@
-// 极简模式: the video, and almost nothing else.
+// 极简模式, rebuilt from the design (pages-a.js PAGES.min + pages.css .min/.cine-bar).
 //
-// Two rules the user set that drive this whole file:
-//   * NO black bars around the video. The video host fills the page and the
-//     controls sit ON it, fading with the pointer, rather than reserving a band
-//     that shows the window background.
-//   * "画质" is called 预设, because that is what it is: a preset, not a single
-//     quality slider.
+// The design's whole point here: the window snaps to the film's aspect ratio (no
+// letterbox bars), and a large rounded control pill straddles the bottom edge of
+// the picture - half on the picture, half below it. The pill is a 3-column grid
+// (230px | 1fr | 230px) at min(860px, 100% - 48px), 92px tall, radius 30.
 //
-// The video is a native D3D12 window placed over the `videoHost` item by
-// apps/veyra-qml/main.cpp. This page only says where that item goes.
+// The window resize itself is Main.qml's job (it owns the window); this page only
+// reports the film aspect and draws the bar.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -17,136 +15,273 @@ Item {
     id: root
     signal requestPage(string page)
 
-    property bool chromeVisible: true
-    Timer {
-        id: hideChrome
-        interval: 2600
-        onTriggered: if (!pointerHover.hovered && !progressHover.hovered) root.chromeVisible = false
-    }
+    // Where the picture ends and the pill straddles. Main.qml sets the window
+    // height to pictureHeight + 46, so the bar's top edge is pictureHeight - 46.
+    readonly property real pictureHeight: parent ? parent.height - 46 : 0
 
-    HoverHandler {
-        id: pointerHover
-        onHoveredChanged: {
-            root.chromeVisible = hovered
-            if (hovered) hideChrome.restart()
-        }
-    }
-
-    // The video itself. Square corners, no radius, no margin: rounding or
-    // insetting this would crop or letterbox the picture.
-    Item {
-        id: videoHost
-        objectName: "videoArea"
-        anchors.fill: parent
-    }
-
-    // The picture is letterboxed by the engine into this area, so the page
-    // background is only visible while nothing is open.
-    Text {
-        anchors.centerIn: parent
-        visible: !veyra.hasSource
-        text: veyra.statusText
-        color: Theme.text2
-        font.family: Theme.fontUi
-        font.pixelSize: Theme.fontSizeTitle
-    }
-
-    // --- controls, floating on the picture --------------------------------
-    ColumnLayout {
+    // --- the picture ------------------------------------------------------
+    // .min .stage: full width, the picture height, radius 8 (the window radius),
+    // pure black behind. The native video window is placed here by main.cpp; the
+    // radius applies to the black plate, never to the video, because rounding the
+    // picture crops it.
+    Rectangle {
+        id: stage
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: 16
-        spacing: 8
-        opacity: root.chromeVisible ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: Theme.durationNormal; easing.bezierCurve: Theme.easeOut } }
+        anchors.top: parent.top
+        height: root.pictureHeight
+        radius: Theme.rWindow
+        color: Theme.videoBlack
+        clip: true
 
-        TimingBar {
-            Layout.fillWidth: true
-            visible: veyra.running
-            stages: [
-                { label: "调度", ms: veyra.lateMs, color: Theme.warn, measured: veyra.submitFpsKnown },
-                { label: "处理", ms: veyra.lateP95Ms, color: Theme.accent, measured: veyra.submitFpsKnown },
-                { label: "呈现", ms: 0, color: Theme.ok, measured: false }
-            ]
+        Text {
+            anchors.centerIn: parent
+            visible: !veyra.hasSource
+            text: "选择一个片源开始"
+            color: Theme.t3
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsH3
+        }
+    }
+
+    // --- the control pill -------------------------------------------------
+    // .cine-bar: min(860px, 100% - 48px), 92px, radius 30, top = pictureHeight-46.
+    Rectangle {
+        id: cineBar
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(860, root.width - 48)
+        height: 92
+        y: root.pictureHeight - 46
+        radius: 30
+        color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.86)
+        border.width: 1
+        border.color: Qt.rgba(1, 1, 1, 0.1)
+        visible: veyra.hasSource
+
+        // barIn: opacity 0, translate 30px, scale .94 -> settled
+        opacity: 0
+        SequentialAnimation on opacity {
+            running: cineBar.visible
+            PauseAnimation { duration: 120 }
+            NumberAnimation { to: 1.0; duration: 800; easing.bezierCurve: Theme.spring }
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: 56
-            radius: Theme.radiusCard
-            color: Qt.rgba(0.07, 0.07, 0.08, 0.82)
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 14
+            anchors.rightMargin: 18
+            spacing: 18
 
+            // --- left: artwork + title (230px) ---------------------------
             RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 14
-                spacing: 12
-
-                // Play / pause. The spring scale is the one place the interface
-                // is allowed to be playful.
-                Text {
-                    text: veyra.paused || !veyra.running ? "▶" : "❚❚"
-                    color: Theme.text1
-                    font.pixelSize: 18
-                    HoverHandler { cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: veyra.togglePlayPause() }
-                    scale: playTap.pressed ? 0.85 : 1.0
-                    Behavior on scale { NumberAnimation { duration: Theme.durationNormal; easing.bezierCurve: Theme.spring } }
-                    TapHandler { id: playTap }
-                }
-
-                Text {
-                    text: veyra.positionText
-                    color: Theme.text2
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fontSizeSmall
-                }
-
-                // Seek bar. Dragging seeks on release, not continuously: a seek
-                // per pixel would queue rebuilds the engine cannot keep up with.
-                Slider {
-                    id: seek
-                    Layout.fillWidth: true
-                    from: 0
-                    to: Math.max(1, veyra.duration)
-                    value: veyra.position
-                    onMoved: if (!pressed) veyra.seekTo(value)
-                    HoverHandler { id: progressHover; cursorShape: Qt.PointingHandCursor }
-                }
-
-                Text {
-                    text: veyra.durationText
-                    color: Theme.text2
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fontSizeSmall
-                }
-
-                // 预设, not 画质.
+                Layout.preferredWidth: 230
+                Layout.fillHeight: true
+                spacing: 10
                 Rectangle {
-                    implicitWidth: presetRow.implicitWidth + 18
-                    implicitHeight: 30
-                    radius: 15
-                    color: presetHover.hovered ? Theme.card3 : Theme.card2
-                    RowLayout {
-                        id: presetRow
-                        anchors.centerIn: parent
-                        spacing: 6
-                        Text { text: "预设"; color: Theme.text1; font.family: Theme.fontUi; font.pixelSize: Theme.fontSizeSmall }
-                        Text { text: "▾"; color: Theme.text3; font.pixelSize: 10 }
+                    implicitWidth: 46; implicitHeight: 46; radius: 12
+                    color: Theme.videoBlack
+                    border.width: 1
+                    border.color: Theme.stroke
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: 2
+                    Text {
+                        Layout.fillWidth: true
+                        text: veyra.sourceName.length > 0 ? veyra.sourceName : "未打开"
+                        color: Theme.t1
+                        font.family: Theme.fontUi
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
                     }
-                    HoverHandler { id: presetHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: root.requestPage("settings") }
+                    Text {
+                        Layout.fillWidth: true
+                        text: veyra.sourceSummary
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 11
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+
+            // --- middle: transport + seek --------------------------------
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 4
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 10
+
+                    // .cbtn: 32px round, muted, brightens on hover.
+                    component CBtn: Item {
+                        id: cbtn
+                        property string glyph: ""
+                        property string tip: ""
+                        // The signal has to be declared: an inline component does not
+                        // inherit the TapHandler's signal, so callers cannot assign
+                        // onTapped without it.
+                        signal tapped()
+                        implicitWidth: 32
+                        implicitHeight: 32
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 16
+                            color: cHover.hovered ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            text: glyph
+                            color: cHover.hovered ? "#FFFFFF" : Theme.t2
+                            font.pixelSize: 14
+                        }
+                        scale: cTap.pressed ? 0.86 : 1.0
+                        Behavior on scale { NumberAnimation { duration: 400; easing.bezierCurve: Theme.spring } }
+                        HoverHandler { id: cHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { id: cTap; onTapped: cbtn.tapped() }
+                    }
+
+                    CBtn { glyph: "CC"; onTapped: {} }
+                    CBtn { glyph: "⏪"; onTapped: veyra.seekBy(-10) }
+
+                    // .play: 40px white circle with the play/pause glyph.
+                    Item {
+                        implicitWidth: 40
+                        implicitHeight: 40
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 20
+                            color: "#FFFFFF"
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            text: (veyra.running && !veyra.paused) ? "❚❚" : "▶"
+                            color: "#0A0A0C"
+                            font.pixelSize: 14
+                        }
+                        scale: playTap.pressed ? 0.88 : (playHover.hovered ? 1.06 : 1.0)
+                        Behavior on scale { NumberAnimation { duration: 450; easing.bezierCurve: Theme.spring } }
+                        HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { id: playTap; onTapped: veyra.togglePlayPause() }
+                    }
+
+                    CBtn { glyph: "⏩"; onTapped: veyra.seekBy(10) }
+                    CBtn { glyph: "♪"; onTapped: {} }
                 }
 
-                Text {
-                    text: "⛶"
-                    color: Theme.text2
-                    font.pixelSize: 16
+                // .seekrow: mono times either side of the rail.
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Text {
+                        text: veyra.positionText
+                        color: Theme.t3
+                        font.family: Theme.fontMono
+                        font.pixelSize: 10
+                    }
+                    Item {
+                        Layout.fillWidth: true
+                        implicitHeight: 14
+                        Rectangle {
+                            id: rail
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width
+                            height: seekHover.hovered ? 6 : 3
+                            radius: 9
+                            color: Qt.rgba(1, 1, 1, 0.14)
+                            Behavior on height { NumberAnimation { duration: 300; easing.bezierCurve: Theme.spring } }
+                            Rectangle {
+                                width: parent.width * Math.max(0, Math.min(1, veyra.progress))
+                                height: parent.height
+                                radius: 9
+                                color: "#FFFFFF"
+                            }
+                        }
+                        HoverHandler { id: seekHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler {
+                            onTapped: point => {
+                                const f = Math.max(0, Math.min(1, point.position.x / width))
+                                veyra.seekTo(f * veyra.duration)
+                            }
+                        }
+                    }
+                    Text {
+                        text: veyra.durationText
+                        color: Theme.t3
+                        font.family: Theme.fontMono
+                        font.pixelSize: 10
+                    }
+                }
+            }
+
+            // --- right: preset, volume, fullscreen (230px) ---------------
+            RowLayout {
+                Layout.preferredWidth: 230
+                Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                spacing: 6
+
+                // .pill with a status dot: the dot reports the engine's state, and
+                // the label is the preset actually in use.
+                VPill {
+                    key: ""
+                    value: veyra.currentPresetName
+                    onClicked: presetMenu.popup()
+                    Rectangle {
+                        width: 7; height: 7; radius: 3.5
+                        color: veyra.failed ? Theme.err : veyra.captureRecovering ? Theme.warn : Theme.ok
+                    }
+                }
+
+                Item {
+                    implicitWidth: 92
+                    implicitHeight: 20
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: 6
+                        Text { text: "🔊"; color: Theme.t2; font.pixelSize: 12 }
+                        VSlider {
+                            Layout.fillWidth: true
+                            from: 0; to: 1; value: veyra.volume
+                            onMoved: veyra.volume = value
+                        }
+                    }
+                }
+
+                Item {
+                    implicitWidth: 32; implicitHeight: 32
+                    Text {
+                        anchors.centerIn: parent
+                        text: "⛶"
+                        color: Theme.t2
+                        font.pixelSize: 14
+                    }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: root.requestPage("pro") }
                 }
             }
         }
     }
+
+    // The preset menu: list presets and node presets in one menu, as designed.
+    Menu {
+        id: presetMenu
+        width: 260
+        Repeater {
+            model: veyra.presets
+            delegate: MenuItem {
+                required property var modelData
+                text: modelData.name + (modelData.builtin ? "  （内置）" : "")
+                         + (modelData.nodeMode ? "  · 节点" : "")
+                onTriggered: veyra.applyPresetIndex(modelData.index)
+            }
+        }
+    }
+
+    // Report the film aspect upward so the window can snap to it.
+    onPictureHeightChanged: if (veyra.sourceAspect > 0.2) root.requestAspect(veyra.sourceAspect)
+    signal requestAspect(real aspect)
 }

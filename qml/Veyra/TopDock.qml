@@ -1,61 +1,47 @@
-// The top dock: hidden until the pointer reaches the top edge, then it drops in.
+// The top dock, rebuilt from the design (index.html .dock-zone/.dock/.dock-handle
+// and app.css's .dock* rules).
 //
-// The user asked for this specifically (the old always-visible sidebar was too
-// large and crowded), so the hit zone is a thin strip at the very top and the
-// dock retracts on its own after a few idle seconds. It never covers the video
-// for longer than it takes to pick a page.
+// Design facts this follows:
+//   * a 12px hit zone plus a 44x4 grab handle at the very top;
+//   * the dock itself is a black pill, 40px tall buttons with SVG icons and a
+//     tooltip; a separate indicator slides behind the selected button;
+//   * it drops in from above and retracts 450ms after the pointer leaves;
+//   * `dockPinned` keeps it open (the design uses that state for the 16:9 frame).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
 Item {
     id: dockRoot
-    // Sits above the pages without stealing input from them.
-    z: 30
+    z: 40
+    anchors.top: parent ? parent.top : undefined
     width: parent ? parent.width : 0
-    height: pointerZone.height + bar.height + 16
+    height: 12 + 46 + 20
 
     required property string currentPage
     signal requestPage(string page)
 
-    // How long the dock stays out after the last interaction.
-    readonly property int idleMs: 3200
     property bool opened: false
-    // Pinned open while a menu inside it is showing, so it cannot retract out
-    // from under the user mid-click.
+    // Mirrors st.dockPinned in the design: pinned stays open regardless of hover.
     property bool pinned: false
 
-    // The strip that summons the dock. Thin, or it eats clicks meant for the
-    // page underneath.
+    // --- page definitions (order and tooltips from core.js) ---------------
+    readonly property var items: [
+        { id: "min",   icon: "🎬", tip: "极简" },
+        { id: "pro",   icon: "⚙",  tip: "专业模式" },
+        { id: "exp",   icon: "⬇",  tip: "导出" },
+        { id: "set",   icon: "☰",  tip: "设置" }
+    ]
+
+    // .dock-zone { height:12px } and .dock-handle { 44x4, top:5 }
     Item {
-        id: pointerZone
+        id: zone
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         height: 12
         HoverHandler { onHoveredChanged: if (hovered) dockRoot.opened = true }
     }
-
-    Timer {
-        id: retractTimer
-        interval: dockRoot.idleMs
-        onTriggered: if (!dockRoot.pinned) dockRoot.opened = false
-    }
-    onOpenedChanged: if (opened) retractTimer.restart()
-
-    HoverHandler {
-        onHoveredChanged: {
-            if (hovered) {
-                dockRoot.opened = true
-                retractTimer.restart()
-            } else {
-                retractTimer.restart()
-            }
-        }
-    }
-
-    // The grab handle stays visible when the dock is away: without it there is
-    // nothing to tell the user the dock exists.
     Rectangle {
         id: handle
         anchors.horizontalCenter: parent.horizontalCenter
@@ -64,26 +50,43 @@ Item {
         width: dockRoot.opened ? 18 : 44
         height: 4
         radius: 4
-        color: Theme.text3
+        color: Qt.rgba(1, 1, 1, 0.28)
         opacity: dockRoot.opened ? 0 : 1
-        Behavior on width { NumberAnimation { duration: Theme.durationSlow; easing.bezierCurve: Theme.spring } }
-        Behavior on opacity { NumberAnimation { duration: Theme.durationFast } }
+        Behavior on width { NumberAnimation { duration: 400; easing.bezierCurve: Theme.spring } }
+        Behavior on opacity { NumberAnimation { duration: 200 } }
+        HoverHandler { onHoveredChanged: if (hovered) dockRoot.opened = true }
     }
 
+    // Retract 450ms after the pointer leaves, exactly like closeDock().
+    Timer {
+        id: retract
+        interval: 450
+        onTriggered: if (!dockRoot.pinned) dockRoot.opened = false
+    }
+    onOpenedChanged: if (!opened) ; else retract.stop()
+
+    // .dock: black pill, radius 999, 1px hairline, heavy drop shadow.
     Rectangle {
         id: bar
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
-        anchors.topMargin: dockRoot.opened ? 8 : -bar.height - 8
-        width: content.implicitWidth + 16
+        anchors.topMargin: dockRoot.opened ? 8 : -56
+        implicitWidth: content.implicitWidth + 20
         height: 44
         radius: height / 2
         color: "#000000"
         border.width: 1
-        border.color: Theme.stroke2
-        // The drop-in/retract spring is the whole feel of this control.
+        border.color: Qt.rgba(1, 1, 1, 0.1)
+        // .dock { transform: translate(-50%,-120%); transition: transform .55s spring }
         Behavior on anchors.topMargin {
-            NumberAnimation { duration: Theme.durationSlow; easing.bezierCurve: Theme.spring }
+            NumberAnimation { duration: 550; easing.bezierCurve: Theme.spring }
+        }
+
+        HoverHandler {
+            onHoveredChanged: {
+                if (hovered) { dockRoot.opened = true; retract.stop() }
+                else retract.restart()
+            }
         }
 
         RowLayout {
@@ -91,61 +94,82 @@ Item {
             anchors.centerIn: parent
             spacing: 2
 
-            // The logo returns to the empty state, as asked. It is the only way
-            // back to home from a zoomed-in page, so it is always available.
+            // .dock .logo: 40x30, returns to the empty state.
             Item {
-                width: 40
-                height: 30
+                implicitWidth: 40
+                implicitHeight: 30
                 Rectangle {
                     anchors.fill: parent
                     radius: height / 2
-                    color: logoHover.hovered ? Theme.card2 : "transparent"
-                    enabled: false
-                    id: logoBg
+                    color: logoHover.hovered ? "#1A1A1F" : "transparent"
                 }
-                Text {
+                Image {
                     anchors.centerIn: parent
-                    text: "V"
-                    color: Theme.accent
-                    font.family: Theme.fontUi
-                    font.pixelSize: 18
-                    font.bold: true
+                    source: "logo.png"
+                    sourceSize.width: 26
+                    fillMode: Image.PreserveAspectFit
                 }
                 HoverHandler { id: logoHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: dockRoot.requestPage("home") }
+                TapHandler {
+                    onTapped: dockRoot.requestPage("home")
+                    onPressedChanged: if (pressed) scale = 0.9
+                }
             }
 
-            Repeater {
-                model: [
-                    { id: "home", label: "主页" },
-                    { id: "minimal", label: "极简" },
-                    { id: "pro", label: "专业" },
-                    { id: "node", label: "节点" },
-                    { id: "export", label: "导出" },
-                    { id: "settings", label: "设置" }
-                ]
-                delegate: Item {
-                    required property var modelData
-                    implicitWidth: tabText.implicitWidth + 22
-                    implicitHeight: 30
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: height / 2
-                        color: dockRoot.currentPage === modelData.id ? Theme.card3
-                             : tabHover.hovered ? Theme.card2 : "transparent"
-                        Behavior on color { ColorAnimation { duration: Theme.durationFast } }
+            // .dock-sep
+            Rectangle { implicitWidth: 1; implicitHeight: 16; color: Qt.rgba(1, 1, 1, 0.14) }
+
+            // .dock-items with the sliding .dock-ind behind the active button.
+            Item {
+                implicitWidth: itemsRow.implicitWidth
+                implicitHeight: 30
+                Rectangle {
+                    id: indicator
+                    width: 32
+                    height: 30
+                    radius: 999
+                    color: "#26262D"
+                    x: {
+                        let idx = 0
+                        for (let i = 0; i < dockRoot.items.length; ++i)
+                            if (dockRoot.items[i].id === dockRoot.currentPage) idx = i
+                        return idx * 34
                     }
-                    Text {
-                        id: tabText
-                        anchors.centerIn: parent
-                        text: modelData.label
-                        color: dockRoot.currentPage === modelData.id ? Theme.text1 : Theme.text2
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fontSizeBody
-                    }
-                    HoverHandler { id: tabHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: dockRoot.requestPage(modelData.id) }
+                    visible: dockRoot.currentPage !== "home"
+                    // .dock-ind { transition: transform .55s var(--spring) }
+                    Behavior on x { NumberAnimation { duration: 550; easing.bezierCurve: Theme.spring } }
                 }
+                Row {
+                    id: itemsRow
+                    spacing: 2
+                    Repeater {
+                        model: dockRoot.items
+                        delegate: Item {
+                            required property var modelData
+                            width: 32
+                            height: 30
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.icon
+                                font.pixelSize: 15
+                                opacity: dockRoot.currentPage === modelData.id ? 1.0 : 0.45
+                                Behavior on opacity { NumberAnimation { duration: 200 } }
+                            }
+                            HoverHandler { cursorShape: Qt.PointingHandCursor }
+                            TapHandler { onTapped: dockRoot.requestPage(modelData.id) }
+                        }
+                    }
+                }
+            }
+
+            Rectangle { implicitWidth: 1; implicitHeight: 16; color: Qt.rgba(1, 1, 1, 0.14) }
+
+            // .dock-live: the engine-running lamp. Lit only when the engine really
+            // reports running; no decorative lamp.
+            Item {
+                implicitWidth: 19
+                implicitHeight: 30
+                VDot { anchors.centerIn: parent; off: !veyra.running; warn: veyra.captureRecovering }
             }
         }
     }

@@ -23,9 +23,9 @@ Item {
             Layout.fillWidth: true
             Text {
                 text: "设置"
-                color: Theme.text1
+                color: Theme.t1
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fontSizeHeading
+                font.pixelSize: Theme.fsH1
                 Layout.fillWidth: true
             }
         }
@@ -43,14 +43,14 @@ Item {
                     implicitHeight: 30
                     radius: 15
                     color: root.tab === index ? Theme.card3 : (tabHover.hovered ? Theme.card2 : "transparent")
-                    Behavior on color { ColorAnimation { duration: Theme.durationFast } }
+                    Behavior on color { ColorAnimation { duration: Theme.durFast } }
                     Text {
                         id: tabText
                         anchors.centerIn: parent
                         text: modelData
-                        color: root.tab === index ? Theme.text1 : Theme.text2
+                        color: root.tab === index ? Theme.t1 : Theme.t2
                         font.family: Theme.fontUi
-                        font.pixelSize: Theme.fontSizeBody
+                        font.pixelSize: Theme.fsBody
                     }
                     HoverHandler { id: tabHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: root.tab = index }
@@ -62,7 +62,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: Theme.radiusCard
+            radius: Theme.rCard
             color: Theme.card
             visible: root.tab === 0
 
@@ -73,14 +73,14 @@ Item {
 
                 Text {
                     text: "预设"
-                    color: Theme.text1
+                    color: Theme.t1
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fontSizeTitle
+                    font.pixelSize: Theme.fsH3
                 }
                 Text {
                     Layout.fillWidth: true
                     text: "保存时勾选包含哪些部分；应用时只覆盖勾选的部分，其余保持当前设置。"
-                    color: Theme.text3
+                    color: Theme.t3
                     font.family: Theme.fontUi
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap
@@ -106,22 +106,22 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 text: modelData.name
-                                color: Theme.text1
+                                color: Theme.t1
                                 font.family: Theme.fontUi
-                                font.pixelSize: Theme.fontSizeBody
+                                font.pixelSize: Theme.fsBody
                                 elide: Text.ElideRight
                             }
                             Text {
                                 visible: modelData.builtin
                                 text: "内置"
-                                color: Theme.text3
+                                color: Theme.t3
                                 font.family: Theme.fontUi
                                 font.pixelSize: 10
                             }
                             Text {
                                 visible: modelData.nodeMode
                                 text: "节点"
-                                color: Theme.experimental
+                                color: Theme.exp
                                 font.family: Theme.fontUi
                                 font.pixelSize: 10
                             }
@@ -137,7 +137,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: Theme.radiusCard
+            radius: Theme.rCard
             color: Theme.card
             visible: root.tab === 1
 
@@ -148,13 +148,13 @@ Item {
 
                 Text {
                     text: "音频"
-                    color: Theme.text1
+                    color: Theme.t1
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fontSizeTitle
+                    font.pixelSize: Theme.fsH3
                 }
                 RowLayout {
                     spacing: 10
-                    Text { text: "音量"; color: Theme.text2; font.family: Theme.fontUi; font.pixelSize: Theme.fontSizeSmall }
+                    Text { text: "音量"; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                     Slider {
                         implicitWidth: 200
                         from: 0; to: 1; value: veyra.volume
@@ -162,9 +162,9 @@ Item {
                     }
                     Text {
                         text: Math.round(veyra.volume * 100) + "%"
-                        color: Theme.text2
+                        color: Theme.t2
                         font.family: Theme.fontMono
-                        font.pixelSize: Theme.fontSizeSmall
+                        font.pixelSize: Theme.fsSmall
                     }
                 }
                 Switch {
@@ -174,7 +174,7 @@ Item {
                 }
                 RowLayout {
                     spacing: 10
-                    Text { text: "音频偏移"; color: Theme.text2; font.family: Theme.fontUi; font.pixelSize: Theme.fontSizeSmall }
+                    Text { text: "音频偏移"; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                     SpinBox {
                         from: -2000
                         to: 2000
@@ -182,23 +182,23 @@ Item {
                         value: veyra.audioOffsetMs
                         onValueModified: veyra.audioOffsetMs = value
                     }
-                    Text { text: "毫秒"; color: Theme.text3; font.family: Theme.fontUi; font.pixelSize: Theme.fontSizeSmall }
+                    Text { text: "毫秒"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                 }
 
                 Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.stroke }
 
                 Text {
                     text: "音轨"
-                    color: Theme.text1
+                    color: Theme.t1
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fontSizeTitle
+                    font.pixelSize: Theme.fsH3
                 }
                 Text {
                     visible: veyra.audioTracks.length === 0
                     text: "当前源没有可选音轨。"
-                    color: Theme.text3
+                    color: Theme.t3
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fontSizeSmall
+                    font.pixelSize: Theme.fsSmall
                 }
                 Repeater {
                     model: veyra.audioTracks
@@ -214,14 +214,14 @@ Item {
                             spacing: 8
                             Rectangle {
                                 width: 8; height: 8; radius: 4
-                                color: veyra.selectedAudioTrack === modelData.index ? Theme.accent : Theme.text3
+                                color: veyra.selectedAudioTrack === modelData.index ? Theme.accent : Theme.t3
                             }
                             Text {
                                 Layout.fillWidth: true
                                 text: modelData.label
-                                color: Theme.text1
+                                color: Theme.t1
                                 font.family: Theme.fontUi
-                                font.pixelSize: Theme.fontSizeBody
+                                font.pixelSize: Theme.fsBody
                             }
                         }
                         HoverHandler { id: trackHover; cursorShape: Qt.PointingHandCursor }
@@ -237,7 +237,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: Theme.radiusCard
+            radius: Theme.rCard
             color: Theme.card
             visible: root.tab === 2
 
@@ -248,9 +248,9 @@ Item {
 
                 Text {
                     text: "诊断"
-                    color: Theme.text1
+                    color: Theme.t1
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fontSizeTitle
+                    font.pixelSize: Theme.fsH3
                 }
                 // Every line comes from the engine's own snapshot. Submit FPS is
                 // labelled as submit FPS: there is no display-FPS number here,
@@ -276,9 +276,9 @@ Item {
                             id: reportText
                             width: parent.width
                             text: veyra.diagnosticsReport()
-                            color: Theme.text2
+                            color: Theme.t2
                             font.family: Theme.fontMono
-                            font.pixelSize: Theme.fontSizeSmall
+                            font.pixelSize: Theme.fsSmall
                             wrapMode: Text.Wrap
                         }
                     }

@@ -50,3 +50,27 @@
 <script src="presets.js"></script>
 <script src="pages-b.js"></script>
 <script src="board.js"></script>
+<div id="shotanchor"></div>
+<script>
+// Screenshot helper (build aid, untracked): focuses the design frame named in
+// ?f=<id> and hides the canvas chrome, so a capture is the app screen rather
+// than the whole board. index.html has no closing body tag, so this is appended
+// at the end of the document instead of replacing one.
+(function () {
+  const want = new URLSearchParams(location.search).get('f');
+  if (!want) return;
+  const hide = () => {
+    const tb = document.querySelector('.toolbar'); if (tb) tb.style.display = 'none';
+    const hint = document.querySelector('.hint'); if (hint) hint.style.display = 'none';
+  };
+  setTimeout(function () {
+    hide();
+    const btn = [...document.querySelectorAll('[data-f]')].find(b => b.dataset.f === want);
+    if (btn) btn.click();
+    setTimeout(function () {
+      document.querySelectorAll('.note, .frame-label, .frame-title').forEach(n => n.style.display = 'none');
+      hide();
+    }, 500);
+  }, 600);
+})();
+</script>

@@ -1,8 +1,8 @@
-// The empty state: what the app shows before anything is open.
+// 首页, rebuilt from the design (pages-a.js PAGES.home + pages.css .home).
 //
-// Clicking the logo anywhere returns here, so this is the anchor of the whole
-// interface. Recent files and the three ways to get a picture in are all here;
-// nothing is buried in a menu.
+// The design is: a large logo, a two-line greeting, a 4-up grid of source cards
+// (164x124 each), a "continue last capture" row, and a row of recent chips.
+// The logo in the dock returns here; there is no other home affordance.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -11,86 +11,110 @@ Item {
     id: root
     signal requestPage(string page)
 
-    // The logo sits behind everything, large and faint: the empty state should
-    // feel like the product, not like an error page.
-    Text {
-        anchors.centerIn: parent
-        anchors.verticalCenterOffset: -60
-        text: "V"
-        color: Theme.text1
-        opacity: 0.04
-        font.family: Theme.fontUi
-        font.bold: true
-        font.pixelSize: 260
-    }
-
     ColumnLayout {
         anchors.centerIn: parent
-        width: Math.min(parent.width - 96, 620)
-        spacing: 18
+        spacing: 24
 
-        Text {
+        // .home .mark: 128px wide, with a slow "breathe" glow.
+        Image {
             Layout.alignment: Qt.AlignHCenter
-            text: "Veyra"
-            color: Theme.text1
-            font.family: Theme.fontUi
-            font.pixelSize: 34
-            font.bold: true
-            font.letterSpacing: 2
-        }
-        Text {
-            Layout.alignment: Qt.AlignHCenter
-            text: veyra.statusText
-            color: Theme.text2
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fontSizeBody
+            source: "logo.png"
+            sourceSize.width: 128
+            fillMode: Image.PreserveAspectFit
+            opacity: 0.9
+            SequentialAnimation on scale {
+                loops: Animation.Infinite
+                NumberAnimation { to: 1.02; duration: 2250; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1.0; duration: 2250; easing.type: Easing.InOutSine }
+            }
         }
 
-        // The three sources. Each opens its own dialog; capture and PS5 carry
-        // their own settings pages rather than being folded into this one.
+        // .hello: .h1 plus a muted line.
+        ColumnLayout {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 6
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "今天看点什么？"
+                color: Theme.t1
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsH1
+                font.weight: Font.DemiBold
+            }
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "选一个片源开始，画质预设和补帧随时在播放栏切换"
+                color: Theme.t2
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsBody
+            }
+        }
+
+        // .srcgrid: repeat(4, 164px), gap 12.
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: 10
-            spacing: 10
+            spacing: 12
             Repeater {
                 model: [
-                    { label: "打开文件", hint: "视频或图片", action: "file" },
-                    { label: "采集卡", hint: "HDMI 输入", action: "capture" },
-                    { label: "PS5 串流", hint: "局域网", action: "ps5" },
-                    { label: "屏幕捕获", hint: "窗口或显示器", action: "screen" }
+                    { glyph: "📁", title: "打开视频", sub: "MP4 · MKV · 图片", act: "file" },
+                    { glyph: "🎬", title: "采集卡", sub: "HDMI 采集设备", act: "capture" },
+                    { glyph: "🎮", title: "PS5 串流", sub: "局域网串流", act: "ps5" },
+                    { glyph: "🖥", title: "屏幕捕获", sub: "窗口或显示器", act: "screen" }
                 ]
                 delegate: Rectangle {
                     required property var modelData
-                    implicitWidth: 136
-                    implicitHeight: 84
-                    radius: Theme.radiusCard
-                    color: hover.hovered ? Theme.card2 : Theme.card
+                    // .srccard: 164x124, radius 14, content pinned top and bottom.
+                    implicitWidth: 164
+                    implicitHeight: 124
+                    radius: Theme.rCard
+                    color: cardHover.hovered ? Theme.card2 : Theme.card
                     border.width: 1
-                    border.color: hover.hovered ? Theme.accent : Theme.stroke
-                    Behavior on color { ColorAnimation { duration: Theme.durationFast } }
-                    Behavior on border.color { ColorAnimation { duration: Theme.durationFast } }
+                    border.color: cardHover.hovered ? Theme.stroke2 : Theme.stroke
+                    // .srccard:hover { transform: translateY(-4px) }
+                    y: cardHover.hovered ? -4 : 0
+                    Behavior on y { NumberAnimation { duration: 500; easing.bezierCurve: Theme.spring } }
+                    scale: cardTap.pressed ? 0.97 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 500; easing.bezierCurve: Theme.spring } }
+
                     ColumnLayout {
-                        anchors.centerIn: parent
-                        spacing: 2
-                        Text {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: modelData.label
-                            color: Theme.text1
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fontSizeBody
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 0
+                        Rectangle {
+                            // .srccard .ico: 34x34, radius 10, translucent plate.
+                            implicitWidth: 34
+                            implicitHeight: 34
+                            radius: 10
+                            color: Qt.rgba(1, 1, 1, 0.06)
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.glyph
+                                font.pixelSize: 16
+                            }
                         }
-                        Text {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: modelData.hint
-                            color: Theme.text3
-                            font.family: Theme.fontUi
-                            font.pixelSize: 10
+                        Item { Layout.fillHeight: true }
+                        ColumnLayout {
+                            spacing: 3
+                            Text {
+                                text: modelData.title
+                                color: Theme.t1
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.fsBody
+                                font.weight: Font.Medium
+                            }
+                            Text {
+                                text: modelData.sub
+                                color: Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.fsSmall
+                            }
                         }
                     }
-                    HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
+                    HoverHandler { id: cardHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler {
+                        id: cardTap
                         onTapped: {
-                            switch (modelData.action) {
+                            switch (modelData.act) {
                             case "file": veyra.openFileDialog(); break
                             case "capture": veyra.openCaptureDialog(); break
                             case "ps5": veyra.openPs5Dialog(); break
@@ -102,47 +126,90 @@ Item {
             }
         }
 
-        // Recent files. Shown only when there are some, so a first run is clean.
-        ColumnLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: 14
-            spacing: 4
+        // .resume: 692 wide, an accent-tinted gradient plate, shown only when a
+        // capture session was actually used before. Nothing invented: the text is
+        // the recorded session, and the row is absent when there is none.
+        Rectangle {
+            Layout.alignment: Qt.AlignHCenter
+            visible: veyra.hasCaptureSession
+            implicitWidth: 692
+            implicitHeight: 54
+            radius: 14
+            border.width: 1
+            border.color: Theme.stroke
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: Theme.accentSoft }
+                GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.03) }
+            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 14
+                anchors.rightMargin: 10
+                spacing: 14
+                Rectangle {
+                    implicitWidth: 34; implicitHeight: 34; radius: 10
+                    color: Theme.accentSoft
+                    Text { anchors.centerIn: parent; text: "🎮"; font.pixelSize: 15; color: Theme.accent }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Text {
+                        text: "继续上次"
+                        color: Theme.t1
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        font.weight: Font.DemiBold
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: veyra.captureSessionSummary
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: 12
+                        elide: Text.ElideRight
+                    }
+                }
+                VButton {
+                    text: "开始"
+                    primary: true
+                    onClicked: veyra.resumeCaptureSession()
+                }
+            }
+        }
+
+        // .recent: a row of chips, present only when there are recent files.
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
             visible: veyra.recentFiles.length > 0
+            spacing: 8
             Text {
-                text: "最近打开"
-                color: Theme.text3
+                text: "最近"
+                color: Theme.t3
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fontSizeSmall
+                font.pixelSize: Theme.fsBody
             }
             Repeater {
                 model: veyra.recentFiles
                 delegate: Rectangle {
                     required property var modelData
-                    Layout.fillWidth: true
-                    implicitHeight: 30
-                    radius: 6
-                    color: rowHover.hovered ? Theme.card2 : "transparent"
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
-                        Text {
-                            Layout.fillWidth: true
-                            text: modelData.label
-                            color: modelData.exists ? Theme.text1 : Theme.text3
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fontSizeBody
-                            elide: Text.ElideMiddle
-                        }
-                        Text {
-                            visible: !modelData.exists
-                            text: "已移动"
-                            color: Theme.text3
-                            font.family: Theme.fontUi
-                            font.pixelSize: 10
-                        }
+                    implicitWidth: chipText.implicitWidth + 22
+                    implicitHeight: 28
+                    radius: 99
+                    color: chipHover.hovered ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.04)
+                    border.width: 1
+                    border.color: Theme.stroke
+                    Text {
+                        id: chipText
+                        anchors.centerIn: parent
+                        text: modelData.label
+                        color: chipHover.hovered ? Theme.t1 : Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: 12
+                        elide: Text.ElideMiddle
                     }
-                    HoverHandler { id: rowHover; cursorShape: Qt.PointingHandCursor }
+                    HoverHandler { id: chipHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: if (modelData.exists) veyra.openPath(modelData.path) }
                 }
             }

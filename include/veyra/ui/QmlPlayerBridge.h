@@ -39,6 +39,36 @@ namespace veyra::ui {
 
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
+    // --- professional-page readouts ---------------------------------------
+    // Every one of these reports an engine value. Where the engine has no
+    // measurement the getter says so (e.g. displayFpsKnown stays false, because
+    // a display rate is only real if the system display event can be read - the
+    // design requires exactly this distinction rather than reusing submit FPS).
+    Q_PROPERTY(QString outputSummary READ outputSummary NOTIFY snapshotChanged)
+    Q_PROPERTY(double displayFps READ displayFps NOTIFY snapshotChanged)
+    Q_PROPERTY(bool displayFpsKnown READ displayFpsKnown NOTIFY snapshotChanged)
+    Q_PROPERTY(double queuedFrames READ queuedFrames NOTIFY snapshotChanged)
+    Q_PROPERTY(int skippedFrames READ skippedFrames NOTIFY snapshotChanged)
+    Q_PROPERTY(QString flowBackend READ flowBackend NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantList stageTimings READ stageTimings NOTIFY snapshotChanged)
+    Q_PROPERTY(double stageBudgetMs READ stageBudgetMs NOTIFY snapshotChanged)
+    // Total measured cost of the chain, or 0 when nothing has been measured.
+    Q_PROPERTY(double chainTotalMs READ chainTotalMs NOTIFY snapshotChanged)
+    Q_PROPERTY(double scheduleP95Ms READ scheduleP95Ms NOTIFY snapshotChanged)
+
+    // --- frame generation settings ----------------------------------------
+    Q_PROPERTY(QString fgBackendName READ fgBackendName WRITE setFgBackendName NOTIFY settingsChanged)
+    Q_PROPERTY(int fgMaxMultiplier READ fgMaxMultiplier NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantList fgMultiplierChoices READ fgMultiplierChoices NOTIFY snapshotChanged)
+    Q_PROPERTY(bool fgStrict READ fgStrict WRITE setFgStrict NOTIFY settingsChanged)
+    Q_PROPERTY(bool fgLowQueue READ fgLowQueue WRITE setFgLowQueue NOTIFY settingsChanged)
+
+    // --- colour settings ---------------------------------------------------
+    Q_PROPERTY(double colorExposure READ colorExposure WRITE setColorExposure NOTIFY settingsChanged)
+    Q_PROPERTY(double colorContrast READ colorContrast WRITE setColorContrast NOTIFY settingsChanged)
+    Q_PROPERTY(double colorSaturation READ colorSaturation WRITE setColorSaturation NOTIFY settingsChanged)
+    Q_PROPERTY(double colorTemperature READ colorTemperature WRITE setColorTemperature NOTIFY settingsChanged)
+
     Q_PROPERTY(QString appName READ appName CONSTANT)
     Q_PROPERTY(QString version READ version CONSTANT)
 
@@ -63,6 +93,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int sourceHeight READ sourceHeight NOTIFY snapshotChanged)
     Q_PROPERTY(double sourceFps READ sourceFps NOTIFY snapshotChanged)
     Q_PROPERTY(int sourceRotation READ sourceRotation NOTIFY snapshotChanged)
+    // The film's display aspect, so the window can snap to it in cinema mode
+    // exactly as the prototype's fitAspect() does. 0 when nothing is open.
+    Q_PROPERTY(double sourceAspect READ sourceAspect NOTIFY snapshotChanged)
 
     // --- live performance --------------------------------------------------
     // Submit FPS only. There is deliberately no "display FPS": the user asked
@@ -119,8 +152,15 @@ class QmlPlayerBridge : public QObject {
     // --- dialogs the UI opens ----------------------------------------------
     Q_PROPERTY(QVariantList recentFiles READ recentFiles NOTIFY recentFilesChanged)
     Q_PROPERTY(QVariantList presets READ presets NOTIFY presetsChanged)
+    // The name of the preset currently in effect, or "自定义" when the
+    // settings no longer match any stored preset. Derived, never guessed.
+    Q_PROPERTY(QString currentPresetName READ currentPresetName NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList audioTracks READ audioTracks NOTIFY snapshotChanged)
     Q_PROPERTY(int selectedAudioTrack READ selectedAudioTrack WRITE setSelectedAudioTrack NOTIFY snapshotChanged)
+    // The last capture session the user actually ran, for the home page's
+    // "continue" row. Absent until one exists: nothing is invented.
+    Q_PROPERTY(bool hasCaptureSession READ hasCaptureSession NOTIFY snapshotChanged)
+    Q_PROPERTY(QString captureSessionSummary READ captureSessionSummary NOTIFY snapshotChanged)
     Q_PROPERTY(QString colorStatus READ colorStatus NOTIFY snapshotChanged)
     Q_PROPERTY(QString videoHdrStatus READ videoHdrStatus NOTIFY snapshotChanged)
 
@@ -135,6 +175,35 @@ public:
     QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory = {},
                     QObject* parent = nullptr);
     ~QmlPlayerBridge() override;
+
+    QString outputSummary() const;
+    double displayFps() const;
+    bool displayFpsKnown() const;
+    double queuedFrames() const;
+    int skippedFrames() const;
+    QString flowBackend() const;
+    QVariantList stageTimings() const;
+    double stageBudgetMs() const;
+    double chainTotalMs() const;
+    double scheduleP95Ms() const;
+
+    QString fgBackendName() const;
+    void setFgBackendName(const QString& value);
+    int fgMaxMultiplier() const;
+    QVariantList fgMultiplierChoices() const;
+    bool fgStrict() const;
+    void setFgStrict(bool value);
+    bool fgLowQueue() const;
+    void setFgLowQueue(bool value);
+
+    double colorExposure() const;
+    void setColorExposure(double v);
+    double colorContrast() const;
+    void setColorContrast(double v);
+    double colorSaturation() const;
+    void setColorSaturation(double v);
+    double colorTemperature() const;
+    void setColorTemperature(double v);
 
     QString appName() const;
     QString version() const;
@@ -161,6 +230,7 @@ public:
     int sourceHeight() const;
     double sourceFps() const;
     int sourceRotation() const;
+    double sourceAspect() const;
 
     double submitFps() const;
     bool submitFpsKnown() const;
@@ -226,9 +296,12 @@ public:
 
     QVariantList recentFiles() const;
     QVariantList presets() const;
+    QString currentPresetName() const;
     QVariantList audioTracks() const;
     int selectedAudioTrack() const;
     void setSelectedAudioTrack(int index);
+    bool hasCaptureSession() const;
+    QString captureSessionSummary() const;
     QString colorStatus() const;
     QString videoHdrStatus() const;
 
@@ -254,6 +327,8 @@ public:
     Q_INVOKABLE void openFileDialog();
     Q_INVOKABLE void openPath(const QString& path);
     Q_INVOKABLE void openCaptureDialog();
+    // Reopens the last capture session with the same device and format.
+    Q_INVOKABLE void resumeCaptureSession();
     Q_INVOKABLE void openPs5Dialog();
     Q_INVOKABLE void openScreenCaptureDialog();
     Q_INVOKABLE void togglePlayPause();
@@ -266,6 +341,9 @@ public:
     Q_INVOKABLE void startExport();
     Q_INVOKABLE void cancelExport();
     Q_INVOKABLE void quit();
+    // Returns this page's controls to the engine defaults (the design's
+    // "重置本页"); it does not touch presets or other pages.
+    Q_INVOKABLE void resetCurrentPage();
 
     // Chain editing. The validator decides whether an edit is allowed where it
     // was asked (frame generation is pinned last, RTX Video HDR immediately

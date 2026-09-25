@@ -1,157 +1,199 @@
-// 节点模式: a completely separate mode, not a toggle inside 专业模式.
+// 专业 · 节点模式, rebuilt from the design (pages-node.js + pages.css .nodeview).
 //
-// Layout the user asked for: video on top, nodes below on a free canvas,
-// parameters edited directly ON the nodes (no side panel), and multiple
-// instances of the same effect allowed (colour at the input and again at the
-// output, for example).
+// Design structure: padding 14; a fixed 330px video card on top with a stats bar
+// at its foot; a 10px split handle; then an infinite canvas with the nodes. The
+// stats bar carries 输入 / 输出 / 显示 fps / 提交 fps / 排队 / 链路总耗时, and each
+// node shows its own cost in its header. A timing strip along the bottom of the
+// canvas colours each stage by its cost, with the remaining budget hatched.
 //
-// What is pinned, and why it has to be: 补帧 is always the last stage and RTX
-// Video HDR always sits immediately in front of it. Video HDR turns an SDR frame
-// into an HDR one; anything after it would need HDR-aware handling that only
-// frame generation has. Both are drawn locked and cannot be dragged. Everything
-// else can be arranged freely, and the engine validates any reorder before
-// accepting it.
+// Pinned stages: 补帧 is always last, RTX Video HDR always immediately before it.
+// Both are drawn locked; everything else is freely arrangeable.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Shapes
 
 Item {
     id: root
     signal requestPage(string page)
 
-    // Canvas pan/zoom. Node mode is the one place free arrangement is allowed,
-    // and the engine writes viewX/viewY back so a layout survives a restart.
     property real panX: 0
     property real panY: 0
     property real zoom: 1.0
+    property int selectedNode: -1
+
+    onPanXChanged: canvasGrid.requestPaint()
+    onPanYChanged: canvasGrid.requestPaint()
+    onZoomChanged: canvasGrid.requestPaint()
 
     ColumnLayout {
         anchors.fill: parent
+        anchors.margins: 14
         spacing: 0
 
-        // --- video on top --------------------------------------------------
-        Item {
+        // --- video card (fixed 330px) --------------------------------------
+        Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.max(220, root.height * 0.42)
+            Layout.preferredHeight: 330
+            radius: Theme.rCard
+            color: Theme.videoBlack
+            border.width: 1
+            border.color: Theme.stroke
+            clip: true
 
+            // The native window sits over this area; the bar occupies its foot.
             Item {
-                id: videoHost
+                id: videoArea
                 objectName: "videoArea"
-                anchors.fill: parent
-                visible: root.visible
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: statsBar.top
+                Text {
+                    anchors.centerIn: parent
+                    visible: !veyra.hasSource
+                    text: veyra.statusText
+                    color: Theme.t3
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsH3
+                }
             }
-            Text {
-                anchors.centerIn: parent
-                visible: !veyra.hasSource
-                text: veyra.statusText
-                color: Theme.text2
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fontSizeTitle
+
+            // .nv-bar: transport, then the stats strip.
+            Rectangle {
+                id: statsBar
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 40
+                color: Theme.card
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    spacing: 8
+
+                    VButton {
+                        icon: true
+                        glyph: (veyra.running && !veyra.paused) ? "❚❚" : "▶"
+                        onClicked: veyra.togglePlayPause()
+                    }
+                    VButton { icon: true; glyph: "⏪"; onClicked: veyra.seekBy(-10) }
+                    VButton { icon: true; glyph: "⏩"; onClicked: veyra.seekBy(10) }
+
+                    // .nv-stats: each entry separated by a hairline, mono numbers.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Repeater {
+                            model: [
+                                { k: "输入", v: veyra.sourceSummary, hi: false },
+                                { k: "输出", v: veyra.outputSummary, hi: false },
+                                { k: "显示 fps", v: veyra.displayFpsKnown ? veyra.displayFps.toFixed(1) : "未测", hi: true },
+                                { k: "提交 fps", v: veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) : "未测", hi: false },
+                                { k: "排队", v: veyra.queuedFrames.toFixed(1) + " 帧", hi: false },
+                                { k: "链路总耗时", v: veyra.chainTotalMs > 0 ? veyra.chainTotalMs.toFixed(1) + " ms" : "未测", hi: false }
+                            ]
+                            delegate: RowLayout {
+                                required property var modelData
+                                required property int index
+                                spacing: 5
+                                Rectangle {
+                                    implicitWidth: 1; implicitHeight: 12
+                                    color: Theme.stroke
+                                    visible: index > 0
+                                }
+                                Text {
+                                    text: modelData.k
+                                    color: Theme.t3
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 10
+                                }
+                                Text {
+                                    text: modelData.v.length > 0 ? modelData.v : "—"
+                                    color: modelData.hi && veyra.displayFpsKnown ? Theme.ok : Theme.t1
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: modelData.hi ? 14 : 12
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                        }
+                    }
+
+                    VButton { text: "列表模式"; onClicked: root.requestPage("pro") }
+                }
             }
         }
 
-        // --- toolbar -------------------------------------------------------
-        Rectangle {
+        // --- split handle (10px) -------------------------------------------
+        Item {
             Layout.fillWidth: true
-            implicitHeight: 40
-            color: Theme.card
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 14
-                spacing: 10
-
-                Text {
-                    text: "节点模式"
-                    color: Theme.text1
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fontSizeBody
-                }
-                Text {
-                    text: "双击画布添加效果 · 右键节点删除 · 拖动节点调整位置"
-                    color: Theme.text3
-                    font.family: Theme.fontUi
-                    font.pixelSize: 11
-                    Layout.fillWidth: true
-                }
-                Rectangle {
-                    implicitWidth: 72
-                    implicitHeight: 26
-                    radius: 13
-                    color: backHover.hovered ? Theme.card3 : Theme.card2
-                    Text {
-                        anchors.centerIn: parent
-                        text: "列表模式"
-                        color: Theme.text2
-                        font.family: Theme.fontUi
-                        font.pixelSize: 11
-                    }
-                    HoverHandler { id: backHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: root.requestPage("pro") }
-                }
+            Layout.preferredHeight: 10
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+                anchors.topMargin: 3
+                width: 40; height: 4; radius: 4
+                color: splitHover.hovered ? Theme.accent : Qt.rgba(1, 1, 1, 0.18)
             }
+            HoverHandler { id: splitHover; cursorShape: Qt.SizeVerCursor }
         }
 
         // --- canvas --------------------------------------------------------
-        // White-background infinite canvas was the design prototype; in the app
-        // it is a dark canvas because the app is dark. The behaviour is what
-        // carried over: pan, zoom, free placement, no fixed grid of slots.
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Theme.background
+            radius: Theme.rCard
+            color: "#0A0A0D"
+            border.width: 1
+            border.color: Theme.stroke
             clip: true
 
-            // A faint dot grid, drawn only as far as the viewport: an "infinite"
-            // canvas is a feel, and drawing infinite dots would cost frames.
+            // .canvas dot grid: 22px spacing, drawn over the viewport only, since
+            // an "infinite" canvas is a feel and infinite dots would cost frames.
             Canvas {
-                id: grid
+                id: canvasGrid
                 anchors.fill: parent
-                opacity: 0.3
                 onPaint: {
                     const ctx = getContext("2d")
                     ctx.reset()
-                    ctx.fillStyle = Theme.stroke2
-                    const step = 28 * root.zoom
-                    if (step < 6) return
-                    const ox = (root.panX % step + step) % step
-                    const oy = (root.panY % step + step) % step
+                    const step = 22 * root.zoom
+                    if (step < 5) return
+                    ctx.fillStyle = Qt.rgba(1, 1, 1, 0.08)
+                    const ox = ((root.panX % step) + step) % step
+                    const oy = ((root.panY % step) + step) % step
                     for (let x = ox; x < width; x += step)
                         for (let y = oy; y < height; y += step)
-                            ctx.fillRect(x, y, 1.5, 1.5)
+                            ctx.fillRect(x, y, 1.2, 1.2)
                 }
-                Connections {
-                    target: root
-                    function onPanXChanged() { grid.requestPaint() }
-                    function onPanYChanged() { grid.requestPaint() }
-                    function onZoomChanged() { grid.requestPaint() }
-                }
+            }
+
+            // Hint and the right-click affordance.
+            Text {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.margins: 12
+                text: "双击空白处添加效果 · 右键节点删除 · 拖动节点移动"
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: 11
             }
 
             Item {
                 id: world
                 x: root.panX
                 y: root.panY
-                // Zoom via a transform, so node coordinates stay in chain space
-                // and the engine never sees a zoomed value.
                 transform: Scale { origin.x: 0; origin.y: 0; xScale: root.zoom; yScale: root.zoom }
 
-                // Input and output anchors: the chain's ends are part of the
-                // map, so it is clear where a stage sits in the pipeline.
+                // Input and output anchors, so the pipeline's ends are visible.
                 Rectangle {
-                    x: -180; y: 40; width: 140; height: 56
-                    radius: Theme.radiusCard
-                    color: Theme.card2
+                    x: -190; y: 30; width: 150; height: 56
+                    radius: 10
+                    color: "#1D1D22"
                     border.width: 1
                     border.color: Theme.stroke2
-                    Text {
-                        anchors.centerIn: parent
-                        text: "输入"
-                        color: Theme.text2
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fontSizeBody
-                    }
+                    Text { anchors.centerIn: parent; text: "输入"; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
                 }
 
                 Repeater {
@@ -162,28 +204,19 @@ Item {
                     }
                 }
 
-                // The output anchor sits after the pinned tail. Its position is
-                // the widest node's right edge, so it always reads as "after the
-                // chain" rather than floating at a fixed coordinate.
                 Rectangle {
-                    x: 60; y: 340; width: 140; height: 56
-                    radius: Theme.radiusCard
-                    color: Theme.card2
+                    x: 60; y: 380; width: 150; height: 56
+                    radius: 10
+                    color: "#1D1D22"
                     border.width: 1
                     border.color: Theme.stroke2
-                    Text {
-                        anchors.centerIn: parent
-                        text: "输出"
-                        color: Theme.text2
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fontSizeBody
-                    }
+                    Text { anchors.centerIn: parent; text: "输出"; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
                 }
             }
 
-            // Pan with the middle button or a drag on empty canvas.
+            // Pan on drag of empty canvas; zoom with the wheel (clamped so a
+            // layout cannot be shrunk into nothing).
             DragHandler {
-                id: panHandler
                 target: null
                 onTranslationChanged: {
                     root.panX += activeTranslation.x
@@ -192,66 +225,84 @@ Item {
             }
             WheelHandler {
                 onWheel: event => {
-                    // Zoom is clamped: node parameters must stay readable, and a
-                    // canvas that can shrink to nothing is a way to lose a layout.
                     root.zoom = Math.max(0.4, Math.min(2.0, root.zoom * (event.angleDelta.y > 0 ? 1.1 : 0.9)))
                 }
             }
-
-            // Double-click empty canvas to add a stage. A menu of the catalog is
-            // less to learn than a palette you drag from.
             TapHandler {
                 acceptedButtons: Qt.LeftButton
                 onDoubleTapped: addMenu.popup()
             }
 
-            Menu {
-                id: addMenu
-                Repeater {
-                    model: veyra.effectCatalog
-                    delegate: MenuItem {
-                        required property var modelData
-                        text: modelData.label
-                        enabled: !modelData.mustBeLast
-                        onTriggered: veyra.addEffect(modelData.id)
+            // .timing strip: each stage coloured by its cost; the remainder is
+            // drawn hatched, exactly as the design's .tspare does.
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: 12
+                height: 16
+                radius: 5
+                color: Qt.rgba(10 / 255, 10 / 255, 13 / 255, 0.85)
+
+                Row {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    spacing: 1
+                    Repeater {
+                        model: veyra.stageTimings
+                        delegate: Rectangle {
+                            required property var modelData
+                            height: parent.height
+                            width: modelData.measured ? Math.max(4, parent.width * modelData.fraction) : 24
+                            color: modelData.measured ? modelData.color : Qt.rgba(1, 1, 1, 0.12)
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.measured ? modelData.label + " " + modelData.ms.toFixed(1) : "未接入"
+                                color: Qt.rgba(0, 0, 0, 0.78)
+                                font.family: Theme.fontUi
+                                font.pixelSize: 10
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                                width: parent.width - 6
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    // A node with its own parameters on it, which is the whole point of this
-    // mode: no side panel, no selection round trip.
+    // A node card: header with its own cost, then its parameters on the card.
     component NodeCard: Rectangle {
         id: card
         required property var node
-
         readonly property bool locked: node.mustBeLast === true
 
         x: node.x
         y: node.y
-        width: 216
-        // NR carries the most parameters; other stages are shorter.
-        height: node.type === "nrEnhance" ? 244 : 104
-        radius: Theme.radiusCard
-        color: Theme.card2
+        width: 236
+        height: node.type === "nrEnhance" ? 248 : 104
+        radius: 10
+        color: "#1D1D22"
         border.width: 1
-        border.color: drag.dragging ? Theme.accent : Theme.stroke
-        Behavior on border.color { ColorAnimation { duration: Theme.durationFast } }
+        border.color: root.selectedNode === node.index ? "#FFFFFF" : Qt.rgba(1, 1, 1, 0.1)
+        Behavior on border.color { ColorAnimation { duration: 200 } }
 
         DragHandler {
             id: drag
-            // A pinned node cannot be dragged: the pipeline order is physics, not
-            // preference, and the engine would refuse the move anyway.
             enabled: !card.locked
             target: null
             onActiveTranslationChanged: {
-                card.x = Math.max(-600, card.x + activeTranslation.x / root.zoom)
-                card.y = Math.max(-400, card.y + activeTranslation.y / root.zoom)
+                card.x = Math.max(-800, card.x + activeTranslation.x / root.zoom)
+                card.y = Math.max(-600, card.y + activeTranslation.y / root.zoom)
             }
             onActiveChanged: if (!active) veyra.setEffectPosition(card.node.index, card.x, card.y)
         }
-
+        TapHandler {
+            acceptedButtons: Qt.LeftButton
+            onTapped: root.selectedNode = card.node.index
+        }
         TapHandler {
             acceptedButtons: Qt.RightButton
             onTapped: if (!card.locked) veyra.removeEffect(card.node.index)
@@ -259,78 +310,105 @@ Item {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 6
+            spacing: 0
 
-            RowLayout {
+            // Header: colour plate, title, the node's own cost, the lock, the switch.
+            Rectangle {
                 Layout.fillWidth: true
-                Rectangle {
-                    width: 8; height: 8; radius: 4
-                    color: card.node.enabled ? Theme.accent : Theme.text3
-                }
-                Text {
-                    Layout.fillWidth: true
-                    text: card.node.label
-                    color: Theme.text1
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fontSizeBody
-                }
-                Text {
-                    visible: card.locked
-                    text: "🔒"
-                    font.pixelSize: 11
-                    opacity: 0.7
-                }
-                Rectangle {
-                    width: 30; height: 17; radius: 9
-                    visible: !card.locked
-                    color: card.node.enabled ? Theme.accent : Theme.card3
+                implicitHeight: 32
+                radius: 9
+                color: "#26262C"
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 6
+                    spacing: 6
                     Rectangle {
-                        width: 12; height: 12; radius: 6
-                        color: card.node.enabled ? Theme.accentInk : Theme.text3
-                        anchors.verticalCenter: parent.verticalCenter
-                        x: card.node.enabled ? parent.width - width - 2.5 : 2.5
-                        Behavior on x { NumberAnimation { duration: Theme.durationNormal; easing.bezierCurve: Theme.spring } }
+                        width: 8; height: 8; radius: 4
+                        color: card.node.enabled ? Theme.accent : Theme.t3
                     }
-                    TapHandler { onTapped: veyra.setEffectEnabled(card.node.index, !card.node.enabled) }
+                    Text {
+                        Layout.fillWidth: true
+                        text: card.node.label
+                        color: Theme.t1
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                    }
+                    // .ms badge: this node's cost, or "未接入" when it has none.
+                    Rectangle {
+                        implicitWidth: msText.implicitWidth + 12
+                        implicitHeight: 18
+                        radius: 5
+                        color: Qt.rgba(0, 0, 0, 0.35)
+                        Text {
+                            id: msText
+                            anchors.centerIn: parent
+                            text: card.node.costMs > 0 ? card.node.costMs.toFixed(1) + " ms" : "未接入"
+                            color: card.node.costMs > 0 ? "#FFFFFF" : Theme.t3
+                            font.family: Theme.fontMono
+                            font.pixelSize: 10
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                    Text { visible: card.locked; text: "🔒"; font.pixelSize: 10; opacity: 0.7 }
                 }
             }
 
-            // Parameters live on the node. Only the stage's own are shown.
+            // Node parameters live on the node itself, per the design.
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                Layout.margins: 10
+                spacing: 4
                 visible: card.node.type === "nrEnhance"
 
-                Text { text: "强度"; color: Theme.text3; font.family: Theme.fontUi; font.pixelSize: 10 }
-                Slider {
+                Text { text: "强度"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10 }
+                VSlider {
                     Layout.fillWidth: true
-                    from: 0; to: 2; value: veyra.nrIntensity
+                    from: 0; to: 1; value: veyra.nrIntensity
                     onMoved: veyra.nrIntensity = value
                 }
-                Text { text: "色调"; color: Theme.text3; font.family: Theme.fontUi; font.pixelSize: 10 }
-                Slider {
+                Text { text: "局部明暗"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10 }
+                VSlider {
                     Layout.fillWidth: true
-                    from: 0; to: 2; value: veyra.nrTone
+                    from: 0; to: 1; value: veyra.nrTone
                     onMoved: veyra.nrTone = value
                 }
-                Text { text: "结构"; color: Theme.text3; font.family: Theme.fontUi; font.pixelSize: 10 }
-                Slider {
+                Text { text: "局部结构"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10 }
+                VSlider {
                     Layout.fillWidth: true
-                    from: 0; to: 2; value: veyra.nrStructure
+                    from: 0; to: 1; value: veyra.nrStructure
                     onMoved: veyra.nrStructure = value
                 }
-                Text { text: "肤色"; color: Theme.text3; font.family: Theme.fontUi; font.pixelSize: 10 }
-                Slider {
-                    Layout.fillWidth: true
-                    from: -1; to: 1; value: veyra.nrSkin
-                    onMoved: veyra.nrSkin = value
-                }
+            }
+
+            // A non-NR node shows its summary so the card is not blank.
+            Text {
+                Layout.fillWidth: true
+                Layout.margins: 10
+                visible: card.node.type !== "nrEnhance"
+                text: card.locked ? "固定为最后一步，不能拖动"
+                                  : (card.node.enabled ? "已启用" : "已关闭")
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
             }
 
             Item { Layout.fillHeight: true }
         }
     }
 
-    Component.onCompleted: veyra.nodeMode = 1
+    Menu {
+        id: addMenu
+        Repeater {
+            model: veyra.effectCatalog
+            delegate: MenuItem {
+                required property var modelData
+                text: modelData.label
+                onTriggered: veyra.addEffect(modelData.id)
+            }
+        }
+    }
 }
