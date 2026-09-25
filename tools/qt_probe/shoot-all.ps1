@@ -32,6 +32,9 @@ $states = [ordered]@{
   'f-node'   = @('node', '--size 1600x1150')
   'f-exp'    = @('exp',  '')
   'f-set'    = @('set',  '')
+  # Not design frames: states the frames only show in passing (menus), shot for review.
+  'x-menu-src'    = @('pro', '--menu source')
+  'x-menu-preset' = @('pro', '--menu preset')
 }
 $capture = Join-Path $PSScriptRoot 'capture-window.ps1'
 foreach ($id in $states.Keys) {

@@ -96,6 +96,13 @@ bool PlayerUiFacade::savePreset(const veyra::engine::PresetEntry& entry, bool re
 }
 
 bool PlayerUiFacade::importLegacyStores() {
+    // The library has to be read first: importing into an unloaded library would
+    // save it as built-ins plus imports and overwrite the user's own presets.v1.
+    // A corrupt file stays loaded-as-corrupt, and the library then refuses to save.
+    if (!presetsLoaded_) {
+        presetsLoaded_ = true;
+        if (!presets_.load()) { error_ = presets_.error(); return false; }
+    }
     // The old files are read-only inputs: they stay on disk untouched so a
     // downgrade still finds them. Their positional schema is owned by
     // PresetStore, so the migration goes through that parser instead of

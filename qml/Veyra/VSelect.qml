@@ -5,6 +5,8 @@ Rectangle {
     id: sel
     property string value: ""
     property var options: []      // [{ id, label }]
+    // .pop h6: the design titles a select's menu with the row label (core.js sel()).
+    property string title: ""
     signal picked(string id)
 
     implicitWidth: 150
@@ -14,7 +16,7 @@ Rectangle {
     border.width: 1
     border.color: Theme.stroke
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
-    TapHandler { onTapped: menu.popup() }
+    TapHandler { onTapped: menu.openAt(sel, "down") }
 
     RowLayout {
         anchors.fill: parent
@@ -32,16 +34,16 @@ Rectangle {
         VIcon { name: "down"; size: 14; color: Theme.t3 }
     }
 
-    Menu {
+    VMenu {
         id: menu
-        width: Math.max(sel.width, 180)
-        Repeater {
-            model: sel.options
-            delegate: MenuItem {
-                required property var modelData
-                text: modelData.label
-                onTriggered: sel.picked(modelData.id)
-            }
+        // Default to the enclosing VRow's label, as the design's sel(label, ...) does.
+        title: {
+            if (sel.title.length > 0) return sel.title
+            for (let p = sel.parent; p; p = p.parent)
+                if (p instanceof VRow) return p.label
+            return ""
         }
+        items: sel.options.map(o => ({ label: o.label, checked: o.label === sel.value }))
+        onPicked: (i, o) => sel.picked(sel.options[i].id)
     }
 }

@@ -229,9 +229,15 @@ Item {
                     root.zoom = Math.max(0.4, Math.min(2.0, root.zoom * (event.angleDelta.y > 0 ? 1.1 : 0.9)))
                 }
             }
+            // The add menu opens under the double-clicked point.
+            Item { id: tapAnchor; width: 1; height: 1 }
             TapHandler {
                 acceptedButtons: Qt.LeftButton
-                onDoubleTapped: addMenu.popup()
+                onDoubleTapped: eventPoint => {
+                    tapAnchor.x = eventPoint.position.x
+                    tapAnchor.y = eventPoint.position.y
+                    addMenu.openAt(tapAnchor, "down")
+                }
             }
 
             // .timing strip: each stage coloured by its cost; the remainder is
@@ -405,15 +411,10 @@ Item {
         }
     }
 
-    Menu {
+    VMenu {
         id: addMenu
-        Repeater {
-            model: veyra.effectCatalog
-            delegate: MenuItem {
-                required property var modelData
-                text: modelData.label
-                onTriggered: veyra.addEffect(modelData.id)
-            }
-        }
+        title: "添加节点"
+        items: veyra.effectCatalog.map(e => ({ label: e.label, id: e.id, tag: e.experimental ? "实验" : "", tagKind: e.experimental ? "warn" : "" }))
+        onPicked: (i, o) => veyra.addEffect(o.id)
     }
 }

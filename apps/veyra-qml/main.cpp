@@ -17,11 +17,14 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QVariantMap>
+#include <QList>
+#include <QRect>
 #include <QtCore/private/qabstractanimation_p.h>
 #include <QDebug>
 
 #include <windows.h>
 
+#include <cmath>
 #include <format>
 #include <memory>
 
@@ -80,6 +83,58 @@ void syncVideoGeometry(QQuickWindow* window, QQuickItem* host) {
     const int w = std::max(1, int(std::floor(host->width() * dpr)));
     const int h = std::max(1, int(std::floor(host->height() * dpr)));
     SetWindowPos(g_video, HWND_TOP, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+}
+
+struct Cover { QRectF rect; qreal radius = 0; };
+
+void collectCovers(QQuickItem* item, QList<Cover>& out) {
+    if (!item->isVisible() || item->opacity() <= 0.0) return;
+    if (item->objectName() == QLatin1String("videoCover")) {
+        // Scale is folded into the scene rect; the corner radius scales with it.
+        const QRectF r = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
+        const qreal s = item->width() > 0 ? r.width() / item->width() : 1.0;
+        out << Cover{r, item->property("coverRadius").toReal() * s};
+    }
+    for (QQuickItem* child : item->childItems()) collectCovers(child, out);
+}
+
+// The video is a native child window, so it is drawn above the whole QML scene
+// (airspace): a menu or a dialog over the picture would sit behind it. Items named
+// "videoCover" (popover panels, the dialog scrim) are cut out of the window's
+// region instead, so the QML under them shows. Scene rects include transforms,
+// so the hole follows a popover's scale-in. The region only changes when a cover
+// moves; with none the window gets its full rectangle back.
+void syncVideoCovers(QQuickWindow* window, QQuickItem* host) {
+    if (!window || !host || !g_video) return;
+    QList<Cover> covers;
+    collectCovers(window->contentItem()->parentItem() ? window->contentItem()->parentItem()
+                                                      : window->contentItem(), covers);
+    const qreal dpr = window->devicePixelRatio();
+    const QPointF origin = host->mapToScene(QPointF(0, 0));
+    static QList<QRect> last;
+    QList<QRect> holes;       // x, y, w, h; the radius rides along as a fifth rect
+    for (const Cover& c : covers) {
+        const QRectF local = c.rect.translated(-origin);
+        holes << QRect(int(std::floor(local.left() * dpr)), int(std::floor(local.top() * dpr)),
+                       int(std::ceil(local.width() * dpr)) + 1, int(std::ceil(local.height() * dpr)) + 1);
+        holes << QRect(0, 0, int(std::round(c.radius * dpr * 2)), 0);
+    }
+    if (holes == last) return;
+    last = holes;
+    if (holes.isEmpty()) { SetWindowRgn(g_video, nullptr, TRUE); return; }
+    const int w = std::max(1, int(std::floor(host->width() * dpr)));
+    const int h = std::max(1, int(std::floor(host->height() * dpr)));
+    HRGN region = CreateRectRgn(0, 0, w, h);
+    for (qsizetype i = 0; i + 1 < holes.size(); i += 2) {
+        const QRect& hole = holes[i];
+        const int d = holes[i + 1].width();
+        HRGN cut = d > 0 ? CreateRoundRectRgn(hole.left(), hole.top(), hole.left() + hole.width() + 1,
+                                              hole.top() + hole.height() + 1, d, d)
+                         : CreateRectRgn(hole.left(), hole.top(), hole.left() + hole.width(), hole.top() + hole.height());
+        CombineRgn(region, region, cut, RGN_DIFF);
+        DeleteObject(cut);
+    }
+    SetWindowRgn(g_video, region, TRUE);   // the system owns the region from here
 }
 } // namespace
 
@@ -141,11 +196,12 @@ int main(int argc, char** argv) {
     //   --tab <quality|fg|color|audio|display>   professional-page tab
     //   --dialog <capture|ps5|screen|subtitle|audio|save|manage|tonode>
     //   --aspect <ratio>        cinema aspect, overriding the source's own
+    //   --menu <source|preset>  professional-page popover menu open
     //   --dock-pinned           dock open and held open
     //   --size <W>x<H>          window size in device-independent pixels
     //   --reduced-motion        every animation at zero duration
     //   --slow-animations <N>   every animation N times slower (motion sampling)
-    //   --motion-probe <name>   dock | page | switch: start that motion, log its value per frame
+    //   --motion-probe <name>   dock | page | switch | seg | menu: start that motion, log its value per frame
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
     QVariantMap testOptions;
@@ -159,6 +215,8 @@ int main(int argc, char** argv) {
             testOptions.insert(QStringLiteral("tab"), args.at(++i));
         } else if (a == QLatin1String("--dialog") && hasValue) {
             testOptions.insert(QStringLiteral("dialog"), args.at(++i));
+        } else if (a == QLatin1String("--menu") && hasValue) {
+            testOptions.insert(QStringLiteral("menu"), args.at(++i));
         } else if (a == QLatin1String("--aspect") && hasValue) {
             testOptions.insert(QStringLiteral("aspect"), args.at(++i).toDouble());
         } else if (a == QLatin1String("--dock-pinned")) {
@@ -243,6 +301,7 @@ int main(int argc, char** argv) {
                                                     w, h, int(host->x()), int(host->y())));
             }
             syncVideoGeometry(window, host);
+            syncVideoCovers(window, host);
         }
     });
     follow->start(16);

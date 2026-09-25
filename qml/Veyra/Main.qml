@@ -265,6 +265,7 @@ Window {
             if (name === "dock") dock.opened = true
             else if (name === "page") root.page = "pro"
             else if (name === "switch") probeSwitch.item.checked = true
+            else if (name === "menu") proPage.openTestMenu("source")
             else if (name === "seg") { probe.x0 = probeSeg.item.indicatorX; probeSeg.item.current = "c"; probe.x1 = probeSeg.item.targetX }
             probe.t0 = Date.now()
             probe.running = true
@@ -282,6 +283,7 @@ Window {
             let v
             if (name === "dock") v = dock.barY
             else if (name === "page") v = proPage.opacity + "," + proPage.y
+            else if (name === "menu") v = proPage.testMenuScale.toFixed(4)
             else if (name === "seg") v = ((probeSeg.item.indicatorX - x0) / (x1 - x0)).toFixed(4)
             else if (probeSwitch.item) v = probeSwitch.item.children[0].x - 3
             else return
@@ -298,5 +300,8 @@ Window {
         if (root.testAspect > 0) root.fitToFilm(root.testAspect)
         if (root.test.dialog !== undefined) dialogs.open(root.test.dialog)
         videoHost.syncRect()
+        if (root.test.menu !== undefined) testMenuTimer.start()
     }
+    // The menu anchors on laid-out buttons, so it opens once the page has settled.
+    Timer { id: testMenuTimer; interval: 600; onTriggered: proPage.openTestMenu(root.test.menu) }
 }

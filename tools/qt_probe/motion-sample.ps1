@@ -17,7 +17,7 @@ $proto = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'prot
 $profile = 'E:\项目\Veyra\tmp\ui-qml-migration-20260925\edge-profile'
 $log = Join-Path $App 'logs\veyra-qml.log'
 # Where each motion lives in the design: the switch sits on the capture dialog.
-$designFrame = @{ dock = 'f-home'; switch = 'f-cap'; page = 'f-home'; seg = 'f-cap' }
+$designFrame = @{ dock = 'f-home'; switch = 'f-cap'; page = 'f-home'; seg = 'f-cap'; menu = 'f-pro' }
 
 function Read-Curve([string[]]$lines) {
   # "t,value" or "t,opacity,y": the curve is the last column.
@@ -34,7 +34,7 @@ foreach ($name in $Probes) {
   $design | Set-Content -Encoding utf8 (Join-Path $Out "design-$name.csv")
 
   $before = if (Test-Path $log) { (Get-Content $log).Count } else { 0 }
-  $p = Start-Process -FilePath (Join-Path $App 'veyra_qml_ui.exe') -ArgumentList @('--page', 'home', '--motion-probe', $name) -PassThru
+  $p = Start-Process -FilePath (Join-Path $App 'veyra_qml_ui.exe') -ArgumentList @('--page', $(if ($name -eq 'menu') { 'pro' } else { 'home' }), '--motion-probe', $name) -PassThru
   Start-Sleep -Seconds 4
   Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
   Start-Sleep -Milliseconds 500

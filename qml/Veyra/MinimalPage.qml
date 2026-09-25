@@ -231,7 +231,7 @@ Item {
                 VPill {
                     key: ""
                     value: veyra.currentPresetName
-                    onClicked: presetMenu.popup()
+                    onClicked: presetMenu.openAt(this, "up")
                     Rectangle {
                         width: 7; height: 7; radius: 3.5
                         color: veyra.failed ? Theme.err : veyra.captureRecovering ? Theme.warn : Theme.ok
@@ -268,17 +268,18 @@ Item {
     }
 
     // The preset menu: list presets and node presets in one menu, as designed.
-    Menu {
+    // pages-a.js presetMenu: list presets, node presets, then the way to manage them.
+    VMenu {
         id: presetMenu
-        width: 260
-        Repeater {
-            model: veyra.presets
-            delegate: MenuItem {
-                required property var modelData
-                text: modelData.name + (modelData.builtin ? "  （内置）" : "")
-                         + (modelData.nodeMode ? "  · 节点" : "")
-                onTriggered: veyra.applyPresetIndex(modelData.index)
-            }
+        title: "预设"
+        readonly property var mk: p => ({ label: p.name, note: p.note, checked: p.name === veyra.currentPresetName,
+                                          tag: p.nodeMode ? "节点" : "", preset: p.index })
+        items: [{ head: "列表预设" }].concat(veyra.presets.filter(p => !p.nodeMode).map(mk))
+            .concat([{ head: "节点预设" }]).concat(veyra.presets.filter(p => p.nodeMode).map(mk))
+            .concat([{ sep: true }, { label: "去专业模式管理预设…", icon: "sliders", act: "pro" }])
+        onPicked: (i, o) => {
+            if (o.act === "pro") root.requestPage("pro")
+            else veyra.applyPresetIndex(o.preset)
         }
     }
 

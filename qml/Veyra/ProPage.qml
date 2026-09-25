@@ -33,9 +33,10 @@ Item {
         spacing: 8
 
         VButton {
+            id: sourceBtn
             iconName: "video"
             text: veyra.isCapture ? "采集卡" : "片源"
-            onClicked: sourceMenu.popup()
+            onClicked: sourceMenu.openAt(this, "down")
         }
         VTag { text: veyra.sourceSummary.length > 0 ? veyra.sourceSummary : "未打开" }
         Item { Layout.fillWidth: true }
@@ -49,8 +50,9 @@ Item {
         }
         VButton { iconName: "camera"; text: "截图"; onClicked: veyra.takeScreenshot() }
         VButton {
+            id: presetBtn
             text: "预设：" + veyra.currentPresetName
-            onClicked: presetMenu.popup()
+            onClicked: presetMenu.openAt(this, "down")
         }
     }
 
@@ -901,29 +903,47 @@ Item {
         }
     }
 
-    Menu {
+    // Test hook (--menu, motion probe "menu"): open a header menu from its button.
+    function openTestMenu(name) {
+        if (name === "source") sourceMenu.openAt(sourceBtn, "down")
+        else if (name === "preset") presetMenu.openAt(presetBtn, "down")
+    }
+    readonly property real testMenuScale: sourceMenu.motionScale
+
+    // pages-pro.js data-srcbtn: the open source first (checked), then the ways in.
+    VMenu {
         id: sourceMenu
-        width: 260
-        MenuItem { text: "打开文件…"; onTriggered: veyra.openFileDialog() }
-        MenuItem { text: "采集卡设置…"; onTriggered: veyra.openCaptureDialog() }
-        MenuItem { text: "PS5 串流…"; onTriggered: veyra.openPs5Dialog() }
-        MenuItem { text: "屏幕捕获…"; onTriggered: veyra.openScreenCaptureDialog() }
+        title: "片源"
+        items: (veyra.sourceName.length > 0
+                ? [{ label: (veyra.isCapture ? "采集卡 · " : "") + veyra.sourceName, note: veyra.sourceSummary,
+                     checked: true, icon: "video", act: "" }] : [])
+            .concat([{ label: "打开文件…", icon: "folder", act: "file" },
+                     { label: "PS5 串流…", icon: "gamepad", act: "ps5" },
+                     { label: "屏幕捕获…", icon: "monitor", act: "screen" },
+                     { sep: true },
+                     { label: "采集卡设置…", icon: "settings", act: "capture" }])
+        onPicked: (i, o) => {
+            if (o.act === "file") veyra.openFileDialog()
+            else if (o.act === "ps5") veyra.openPs5Dialog()
+            else if (o.act === "screen") veyra.openScreenCaptureDialog()
+            else if (o.act === "capture") veyra.openCaptureDialog()
+        }
     }
     // The design puts 另存为 / 管理 in the professional page's preset menu.
-    Menu {
+    // presets.js VY.presetMenu(app, anchor, 'list').
+    VMenu {
         id: presetMenu
-        width: 260
-        Repeater {
-            model: veyra.presets
-            delegate: MenuItem {
-                required property var modelData
-                text: modelData.name + (modelData.builtin ? "  （内置）" : "")
-                onTriggered: veyra.applyPresetIndex(modelData.index)
-            }
+        title: "列表预设"
+        items: veyra.presets.filter(p => !p.nodeMode)
+            .map(p => ({ label: p.name, note: p.note, checked: p.name === veyra.currentPresetName,
+                         tag: p.builtin ? "内置" : "", preset: p.index }))
+            .concat([{ sep: true },
+                     { label: "把当前设置另存为预设…", icon: "plus", act: "save" },
+                     { label: "管理预设…", note: "重命名 · 删除 · 设为启动默认", icon: "settings", act: "manage" }])
+        onPicked: (i, o) => {
+            if (o.act) root.requestDialog(o.act)
+            else veyra.applyPresetIndex(o.preset)
         }
-        MenuSeparator { }
-        MenuItem { text: "另存为预设…"; onTriggered: root.requestDialog("save") }
-        MenuItem { text: "管理预设…"; onTriggered: root.requestDialog("manage") }
     }
 
     // Switching to node mode rebuilds the chain, so the design asks first.

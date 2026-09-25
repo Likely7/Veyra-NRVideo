@@ -101,10 +101,22 @@
       const x0 = tx(), x1 = btns[btns.length - 1].offsetLeft;
       start = () => btns[btns.length - 1].click();
       read = () => ((tx() - x0) / (x1 - x0)).toFixed(4);
+    } else if (probe === 'menu') {
+      // The professional page's source menu; the popover's scale .9 -> 1. app.menu adds
+      // .open on the next animation frame, which headless virtual time does not run, so
+      // the probe does that step itself after the closed style has been computed.
+      const pop = root.querySelector('.pop');
+      start = () => {
+        [...root.querySelectorAll('[data-srcbtn]')].find(x => x.offsetParent !== null).click();
+        getComputedStyle(pop).scale; pop.classList.add('open'); getComputedStyle(pop).scale;
+      };
+      read = () => (+getComputedStyle(pop).scale).toFixed(4);
     } else return;
     start();
+    if (probe === 'menu') { sample(); return; }   // the transitions exist now; waiting lets them finish
     // The page switch shows the new page 150 ms later; wait for its animations to exist.
-    setTimeout(function () {
+    setTimeout(sample, probe === 'page' ? 200 : 30);
+    function sample() {
       const anims = () => document.getAnimations();
       anims().forEach(a => a.pause());
       if (freezeAt !== null) { anims().forEach(a => a.currentTime = +freezeAt); document.title = 'ready'; return; }
@@ -112,6 +124,6 @@
       for (let t = 0; t <= 1000; t += 10) { anims().forEach(a => a.currentTime = t); rows.push(t + ',' + read()); }
       const pre = document.createElement('pre'); pre.id = 'motion-csv'; pre.textContent = rows.join(String.fromCharCode(10));
       document.body.appendChild(pre); document.title = 'ready';
-    }, probe === 'page' ? 200 : 30);
+    }
   }
 })();

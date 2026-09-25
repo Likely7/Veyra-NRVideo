@@ -55,8 +55,9 @@ public:
     // Saves the settings the UI is currently showing (pending, not applied -
     // the user saves what they see).
     bool savePreset(const veyra::engine::PresetEntry& entry, bool replace);
-    // Migrates the older single-purpose stores the first time the library is
-    // empty, so nobody loses their presets. Never overwrites an existing name.
+    // Loads the preset library (once), then migrates the older single-purpose
+    // stores into it, so nobody loses their presets. Never overwrites an
+    // existing name.
     bool importLegacyStores();
 
     // --- recent files ------------------------------------------------------
@@ -108,6 +109,7 @@ public:
 private:
     veyra::engine::EngineController& engine_;
     veyra::engine::PresetLibrary presets_;
+    bool presetsLoaded_ = false;
     std::filesystem::path dataDirectory_;
     veyra::engine::PlayerSnapshot last_{};
     veyra::engine::EnhancementSettings pending_{};

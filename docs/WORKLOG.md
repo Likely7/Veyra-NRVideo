@@ -6602,3 +6602,16 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   最小复现 `tmp/.../min/Icons.qml`（qml.exe）对比 headless Edge 渲染 icons.html：初次 layers/x/search/box/image 错位——多元素拼成一条 path 时首个相对 m 接在上一元素终点，改为前置 M0 0 后 65 个全部一致（icons-cmp.png）。
   验证：sync、`shoot-all.ps1 -Frames f-home,f-min,f-pro,f-node,f-cap,f-aud,f-sub,f-color` + `compose-compare.ps1`，看图：dock/来源卡/手风琴/相机/播放/快进快退图标正确；f-min 黑屏、f-aud 对话框被视频窗遮挡与 qml-ref 基线相同，属既有差距（G3）。
   偏差：设计无锁图标，锁定节点用 key。NOTICES Lucide 条目补充本次来源。
+
+- G1.5 组件动效（进行中，证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.5-*`）：
+  - M12 分段指示条随 spring 滑动（4a1fe2e），`motion.ps1 -Probes seg` 曲线与设计一致。
+  - M14/M15 弹层：新 `VMenu.qml`（设计 .pop/.opt：opacity .15s，scale .9→1、下移 8px→0 用 .45s spring，原点取锚点中心；勾选 opacity .15s + scale .4→1 .4s spring；点击 130 ms 后关闭再回调）。取代 Qt Menu：VSelect、专业页片源/列表预设、极简页预设胶囊、节点页双击添加节点。
+    - Qt Popup 不是 Item，没有 transform，变换放在 contentItem 上（第一次写在 Popup 上时整个应用加载失败）。
+  - 后端修正：`PlayerUiFacade::importLegacyStores` 从未调用 `PresetLibrary::load()`，导致 presets() 为空。修正后显示 4 个内置预设，顶栏为"预设：原画"。
+  - 空域：原生视频子窗压在 QML 上面。main.cpp `syncVideoCovers` 把 objectName=videoCover 的可见项按 coverRadius 从视频窗 `SetWindowRgn` 挖掉（圆角区域）；zoom-src.png 圆角正确。
+  - 探针：shotpage.js 增加 menu 分支。
+    - 设计页有 18 个 .pop，须在 root 内查询，否则读到别的页。
+    - rAF 在虚拟时间不跑，探针自己加 .open。
+    - 结果：设计峰值 1.0042，QML 峰值 1.0042，chart-menu.png 曲线重合（QML 约晚一采样帧）。
+  - 回归：`shoot.ps1 -Step g1.5-menu -Frames f-pro,x-menu-src,x-menu-preset` 看图正常；f-pro 的既有差距（质量 seg 无选中、未开片源）属 G3。
+  - shoot-all 增加 x-menu-src/x-menu-preset 审查态；motion-sample 增加 menu。
