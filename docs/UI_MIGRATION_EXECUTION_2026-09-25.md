@@ -16,7 +16,8 @@
 | S0.2 | 构建与现有测试基线 | 完成 | `checkpoint/ui-mig-s0` | 600/600 目标构建通过；交付门槛 PASS |
 | S0.3 | 抓帧哈希基线 | 完成 | `checkpoint/ui-mig-s0` | 13 种配置 × 24 帧，两次运行完全一致 |
 | S0.4 | 性能 / 延迟基线 | 完成 | `checkpoint/ui-mig-s0` | 4 种播放场景 |
-| S1.1 | 合并图描述构建 | 完成 | `checkpoint/ui-mig-s1.1` | 5 处合并为 `describeStages()`；13 项哈希一致 |
+| S1.1 | 合并图描述构建 | 完成 | `checkpoint/ui-mig-s1.1` | 6 处合并为 `describeStages()`；13 项哈希一致 |
+| S1.7 | 快照补字段（宽高比 / 时长 / 封面） | 完成 | `checkpoint/ui-mig-s1.7` | 宽高比与时长实测正确；关键哈希一致 |
 
 ## 发现并修复的 bug
 
@@ -24,9 +25,17 @@
 |---|---|---|---|
 | B1 | S0.2 | `veyra_live_timing_tests` 的“输出上限仍会跳过候选帧”断言一直失败：09-22 把输出上限改到独立时间网格（`rateSubmitted`）后，测试只调用了 `submitted()`，测的是旧行为。产品逻辑正确，测试过期 | 测试补上 `rateSubmitted()` |
 | B3 | S1.1 | 非 NVIDIA 显卡上，`initializePreview` 的能力归一化分支把 `enableSr` 直接写成 false，AMD FSR 超分（唯一的跨厂商超分）在预览里永远不生效，而 `disableUnsupportedNvidiaEffects` 是特意保留它的。导出路径没有这个问题 | 5 处描述合并进 `describeStages()`，两边同一套规则 |
+| B4 | S1.7 | 新建的 `PosterFrame.cpp` 直接把 FFmpeg 头文件放在 C++ 作用域里引用，`sws_*` 按 C++ 名字改编，链接必然失败（“无法解析的外部符号”）。项目里其它 FFmpeg 使用者都用 `extern "C" {}` 包住，新文件漏了 | 用 `extern "C" {}` 包住三个 FFmpeg 头；同时确认 `veyra_engine` 不需要额外链接 FFmpeg 库 |
 | B2 | S0.2 | `veyra_quality_probe` 用 ANSI `argv` 转宽字符，输出目录含中文（`E:\项目`）时写图失败，交付门槛因此失败；门槛脚本原先用相对路径绕开，但源码在 C:、日志在 E: 时相对路径无法跨盘 | 探针改为从 UTF-16 命令行读参数；门槛改传绝对路径 |
 
 ## 日志
+
+### S1.7（2026-09-25）快照补字段
+- `SourceInfo` 新增 `displayAspect`（应用容器 SAR 与旋转后的显示宽高比）与 `rotationDegrees`；`FFmpegDemuxer` 增加 `sampleAspect()` / `rotationDegrees()`（读 `sample_aspect_ratio`、`rotate` 元数据和 `AV_PKT_DATA_DISPLAYMATRIX`，用 FFmpeg 6+ 的 `codecpar->coded_side_data` 接口）。
+- 四种源都填了这个字段：文件按 SAR+旋转计算；采集卡与屏幕捕获按格式尺寸；PS5 按请求尺寸或实际解码尺寸。原先完全没有宽高比信息，变形宽银幕片源会算错窗口大小。
+- `PlayerSnapshot` 新增 `sourceWidth/sourceHeight/sourceDisplayAspect/sourceRotationDegrees`（打开时即可用，不必等第一帧）和封面帧 `posterRgba/posterWidth/posterHeight`（新增 `src/engine/PosterFrame.cpp`，swscale 缩到最大 320×180，只在打开时算一次，失败就留空，不伪造）。
+- 抓帧探针现在同时输出源尺寸、宽高比、旋转和时长，便于以后回归。
+- 验证：1080p 测试片读出 `displayAspect=1.7778 rotation=0 duration=60.000`；13 项中的 5 项抽查哈希全部一致；完整构建通过。
 
 ### S1.1（2026-09-25）合并图描述构建
 - 新增 `include/veyra/engine/GraphDescription.h`：`StageRequest` + `describeStages()`，把原先分散在 `EngineController.cpp`（初始打开、能力归一化、初始化失败降级、设置重建、串流尺寸切换、增强故障恢复共 6 处）和 `VideoExportJob.cpp` 的 `EnhanceGraphDesc` 填充合并成一处；尺寸策略、NR/超导顺序、厂商能力判断、参数下发全部由它决定。

@@ -52,6 +52,15 @@ struct PlayerSnapshot {
     uint64_t seekRequested=0,seekPresented=0;double seekTarget=0;
     double position=0,duration=0,fps=0,lateMs=0,lateP95Ms=0;
     double nominalSourceFps=0;
+    // Source geometry for the UI: coded size and the container's display aspect
+    // ratio (0 = use coded size). Known at open time, before the first frame.
+    uint32_t sourceWidth=0,sourceHeight=0;
+    double sourceDisplayAspect=0.0;
+    int sourceRotationDegrees=0;
+    // Poster frame for the minimal-mode bar, as a small RGBA8 image. Empty when
+    // unavailable; the UI must not fabricate one.
+    std::vector<uint8_t> posterRgba;
+    uint32_t posterWidth=0,posterHeight=0;
     diagnostics::FrameMetrics metrics;
     std::optional<double> submissionFps;
     uint32_t flowPerf=0;int contentFps=0;

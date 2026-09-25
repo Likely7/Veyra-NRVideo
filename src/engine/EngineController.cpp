@@ -35,6 +35,7 @@
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/engine/GraphDescription.h"
+#include "veyra/engine/PosterFrame.h"
 #include <avrt.h>
 #include <chrono>
 #include <filesystem>
@@ -235,7 +236,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(av_frame_get_buffer(imageFrame,32)<0){status(L"图片资源分配失败",true);break;}
                 for(unsigned y=0;y<image.height;++y)memcpy(imageFrame->data[0]+size_t(y)*imageFrame->linesize[0],image.pixels.data()+size_t(y)*image.width*4,size_t(image.width)*4);
                 width=image.width;height=image.height;options.fg=false;
-                {std::lock_guard lock(mutex_);desired_.multiplier=1;snapshot_.image=true;snapshot_.desired=desired_;}
+                {std::lock_guard lock(mutex_);desired_.multiplier=1;snapshot_.image=true;snapshot_.desired=desired_;
+                 snapshot_.sourceWidth=image.width;snapshot_.sourceHeight=image.height;
+                 snapshot_.sourceDisplayAspect=image.height>0?double(image.width)/image.height:0.0;
+                 snapshot_.sourceRotationDegrees=0;}
             }else{
                 source::SourceOpenDesc od;od.path=path;
                 // Files use the same shared D3D12 device as the graph. Capture
@@ -301,6 +305,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     cachedPacket=firstPacket;
                 }
                 width=activeSource->info().width;height=activeSource->info().height;duration=isCapture?0:activeSource->info().duration.toDouble();
+                {std::lock_guard lock(mutex_);
+                 const auto& si=activeSource->info();
+                 snapshot_.sourceWidth=si.width;snapshot_.sourceHeight=si.height;
+                 snapshot_.sourceDisplayAspect=si.displayAspect;
+                 snapshot_.sourceRotationDegrees=si.rotationDegrees;
+                 // Poster for the minimal-mode bar. Built once, from the frame
+                 // we already decoded; failure leaves it empty on purpose.
+                 std::vector<uint8_t> poster;uint32_t pw=0,ph=0;
+                 const AVFrame* posterSource=cachedFrame?cachedFrame:imageFrame;
+                 if(posterSource&&makePosterFrame(posterSource,320,180,poster,pw,ph)){
+                     snapshot_.posterRgba=std::move(poster);snapshot_.posterWidth=pw;snapshot_.posterHeight=ph;
+                 }else{snapshot_.posterRgba.clear();snapshot_.posterWidth=snapshot_.posterHeight=0;}}
                 {std::lock_guard lock(mutex_);snapshot_.sourceNotice=activeSource->info().dolbyVision.description();}
             }
             if(!pipeline::Extent{width,height}.valid()){status(L"图像尺寸超出单张GPU纹理能力，需要分块处理",true);break;}

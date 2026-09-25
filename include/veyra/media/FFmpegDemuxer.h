@@ -40,6 +40,12 @@ public:
     int videoTimeBaseNum() const; // stream time_base for frame PTS conversion
     int videoTimeBaseDen() const;
     std::string formatName() const;
+    // Stream sample aspect ratio (numerator, denominator) as stored in the
+    // container; 0/0 = unknown. The display aspect is this ratio applied to the
+    // coded size, then swapped for 90/270 degree rotations.
+    void sampleAspect(int& num, int& den) const;
+    // Container display-matrix rotation in degrees (0/90/180/270); 0 = none.
+    int rotationDegrees() const;
 
     // Returns false at end of file. The packet stays owned by this demuxer
     // and remains valid until the next call.

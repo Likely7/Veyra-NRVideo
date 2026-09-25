@@ -119,6 +119,9 @@ int main() {
     od.path = widen(input);
     od.preferHardwareDecode = false;  // CPU decode: bit-exact input every run
     if (!src.open(od)) { std::fprintf(stderr, "open failed\n"); return 1; }
+    const auto& info = src.info();
+    std::fprintf(stderr, "source %ux%u displayAspect=%.4f rotation=%d duration=%.3f\n",
+        info.width, info.height, info.displayAspect, info.rotationDegrees, info.duration.toDouble());
 
     pipeline::EnhanceGraphDesc gd{};
     if (!configure(caseName, src.info().width, src.info().height, gd)) {
@@ -151,8 +154,10 @@ int main() {
     (void)ring.waitIdle();
     graph.shutdown();
 
-    std::string json = std::format("{{\"case\":\"{}\",\"frames\":{},\"work\":\"{}x{}\",\"nr\":\"{}x{}\",\"hashes\":[",
-                                   caseName, hashes.size(), graph.workWidth(), graph.workHeight(), graph.nrWidth(), graph.nrHeight());
+    std::string json = std::format("{{\"case\":\"{}\",\"frames\":{},\"source\":\"{}x{}\",\"displayAspect\":{:.4f},\"rotation\":{},\"duration\":{:.3f},\"work\":\"{}x{}\",\"nr\":\"{}x{}\",\"hashes\":[",
+                                   caseName, hashes.size(), info.width, info.height, info.displayAspect,
+                                   info.rotationDegrees, info.duration.toDouble(),
+                                   graph.workWidth(), graph.workHeight(), graph.nrWidth(), graph.nrHeight());
     for (size_t n = 0; n < hashes.size(); ++n) json += (n ? ",\"" : "\"") + hashes[n] + "\"";
     json += "]}\n";
     std::fputs(json.c_str(), stdout);

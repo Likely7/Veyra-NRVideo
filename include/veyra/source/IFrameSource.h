@@ -32,6 +32,13 @@ struct SourceInfo {
     pipeline::SourceKind kind = pipeline::SourceKind::Unknown;
     uint32_t width = 0;
     uint32_t height = 0;
+    // Display aspect ratio (width/height) after the container's sample aspect
+    // ratio and rotation are applied. 0 = unknown, use width/height. Live
+    // sources report their format's ratio; files read it from the stream.
+    double displayAspect = 0.0;
+    // Rotation from the container display matrix, in degrees (0/90/180/270).
+    // Informational: the decoder does not rotate, the UI reports it.
+    int rotationDegrees = 0;
     pipeline::Rational duration;
     double averageFps = 0.0;         // informational only; the pipeline is PTS-driven
     int nominalRateNum = 0, nominalRateDen = 0; // candidate, not proof of CFR

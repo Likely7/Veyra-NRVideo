@@ -210,6 +210,21 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     info_.kind = pipeline::SourceKind::File;
     info_.width = static_cast<uint32_t>(decoder_.width());
     info_.height = static_cast<uint32_t>(decoder_.height());
+    // Display aspect for the window fit: coded size, the stream's sample aspect
+    // ratio (anamorphic DVD/HD content), then 90/270 rotations swap the axes.
+    // A stream without a usable ratio keeps displayAspect = 0 (caller uses the
+    // coded size), which is what every pre-existing caller already assumed.
+    {
+        int num = 0, den = 0;
+        demuxer_.sampleAspect(num, den);
+        info_.rotationDegrees = demuxer_.rotationDegrees();
+        if (num > 0 && den > 0 && info_.width > 0 && info_.height > 0) {
+            double aspect = (double(info_.width) * num) / (double(info_.height) * den);
+            if (info_.rotationDegrees == 90 || info_.rotationDegrees == 270) aspect = 1.0 / aspect;
+            if (std::isfinite(aspect) && aspect > 0.0) info_.displayAspect = aspect;
+        }
+        veyra::log::info("source-file", std::format("display aspect={:.4f} sar={}/{} rotation={}", info_.displayAspect, num, den, info_.rotationDegrees));
+    }
     const int64_t durUs = demuxer_.durationUs();
     if (durUs > 0) {
         info_.duration = pipeline::Rational{durUs, 1000000};
