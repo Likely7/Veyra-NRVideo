@@ -172,8 +172,9 @@ Item {
             // Hint and the right-click affordance.
             Text {
                 anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.margins: 12
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 12
+                anchors.bottomMargin: 34
                 text: "双击空白处添加效果 · 右键节点删除 · 拖动节点移动"
                 color: Theme.t3
                 font.family: Theme.fontUi
@@ -257,6 +258,10 @@ Item {
                             color: modelData.measured ? modelData.color : Qt.rgba(1, 1, 1, 0.12)
                             Text {
                                 anchors.centerIn: parent
+                                // Only draw the label where the segment is wide enough
+                                // to hold it; an elided repeat of every stage name
+                                // made the strip unreadable.
+                                visible: parent.width > 64
                                 text: modelData.measured ? modelData.label + " " + modelData.ms.toFixed(1) : "未接入"
                                 color: Qt.rgba(0, 0, 0, 0.78)
                                 font.family: Theme.fontUi

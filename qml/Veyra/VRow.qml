@@ -8,8 +8,12 @@ Item {
     property string value: ""
     default property alias control: slot.data
 
+    // The layout reads Layout.preferredHeight. `height` is deliberately NOT set: a
+    // layout-managed item that sets its own height is undefined behaviour, and this
+    // row is only ever placed inside a layout.
     implicitHeight: hint.length > 0 ? Theme.rowMinHeight + 12 : Theme.rowMinHeight
-    height: implicitHeight
+    Layout.preferredHeight: implicitHeight
+    Layout.fillWidth: true
     RowLayout {
         anchors.fill: parent
         spacing: 12
