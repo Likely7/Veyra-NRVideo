@@ -40,7 +40,7 @@ Item {
                 color: Theme.t1
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsH1
-                font.weight: Font.DemiBold
+                font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
             }
             Text {
                 Layout.alignment: Qt.AlignHCenter
@@ -161,7 +161,7 @@ Item {
                         color: Theme.t1
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
-                        font.weight: Font.DemiBold
+                        font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                     }
                     Text {
                         Layout.fillWidth: true

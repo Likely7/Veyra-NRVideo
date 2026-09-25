@@ -45,6 +45,7 @@
 | G0.7 | 全部门槛基线 | 完成 | `checkpoint/ui-mig-g0.7` | 证据 `goal/g0.7/`。构建 exit 0、stage 0；哈希 17/17 same；性能与 perf-baseline 同量级，提交 fps 全同，plain-1080 gpuReady P95 1.57→2.68ms（本轮未动引擎，按本轮基线记录）；delivery PASS；单元 pass=44 fail=33 skip=3 与基线一致 |
 | G1.1 | 缓动曲线改 6 值段 | 完成 | `checkpoint/ui-mig-g1.1` | 证据 `goal/g1.1/`。Theme `linearEasing()` 把 CSS linear() 停靠点逐段转三次段；veyra_qml_easing_tests 三曲线全过（spring 10 段误差 0.0068、springSoft/easeOut 0.0000）。Qt 6.8.3 缺陷：BezierSpline ≥11 段销毁时堆损坏（C++ 无 QML 复现，n≤10 正常），spring 删 28.4%/38.5% 两个停靠点降到 10 段，测试加段数上限检查（12 段版被判 FAIL，记录 12seg-caught.txt）。动效采样 dock 峰值 10.59 vs 设计 10.17、开关 14.6 vs 14.6；页面切换仍无过渡，属 G2.2 |
 | G1.2 | 窗口背景径向渐变 + 颗粒 | 完成 | `checkpoint/ui-mig-g1.2` | 证据 `goal/g1.2/`。先试 QML RadialGradient（形状对，但 7..28 级梯度量化成可见圆环，a/b/c 与拉伸图）；改为 `tools/qt_probe/make-backdrop.py` 浮点计算 app.css .vy 渐变并一次抖动生成 `backdrop.png`，`VBackdrop.qml` 以 Shape fillItem 圆角裁切。Qt 6.8.3 CurveRenderer + fillItem 访问冲突（qml.exe 最小复现），改 GeometryRenderer + 4x 多重采样。六个采样块均值与设计差 ≤0.1 级、颗粒 std 0.18–0.55（设计 0.29–0.66）；拉伸对比图无圆环。f-min 与改前逐像素一致，f-pro/f-node 仅背景像素变化 |
+| G1.3 | 字体（D4） | 完成 | `checkpoint/ui-mig-g1.3` | 证据 `goal/g1.3/`。本机无 Geist，按 D4 用设计稿 --f-ui 第二候选 Noto Sans SC（Edge 渲染参考图同此字体），等宽保持 Consolas（偏差记录）。Qt 6.8.3 对 Noto Sans SC 可变字体 font.weight 600 取到细体实例（500/700 正常，qml.exe 最小复现 `min/Font.qml`），故 DemiBold 处同时设 `font.variableAxes: Theme.axesDemiBold`（wght 600）。title-zoom（改前细体）与 title-zoom-b（修后，与设计同粗）已看 |
 
 ## 发现并修复的 bug
 

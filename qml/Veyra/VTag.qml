@@ -24,6 +24,6 @@ Rectangle {
              : Theme.t2
         font.family: Theme.fontUi
         font.pixelSize: 11
-        font.weight: Font.DemiBold
+        font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
     }
 }

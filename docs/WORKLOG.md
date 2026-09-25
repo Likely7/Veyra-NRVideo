@@ -6588,3 +6588,10 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   Qt 6.8.3 缺陷：Shape.CurveRenderer + fillItem 进程访问冲突（`tmp/.../min/Bd.qml` qml.exe exit -1073741819，GeometryRenderer exit 0），故用 GeometryRenderer + layer.samples 4。
   验证：`shoot-all.ps1 -Frames f-home,f-min,f-pro,f-node` + `compose-compare.ps1`，看图；六个 40px 采样块 RGB 均值与设计差 ≤0.1 级，拉伸图无圆环；
   f-min 与 G1.2 前逐像素一致（该屏黑画面为既有差距，G3 处理），f-pro/f-node 仅背景像素变化。
+
+- G1.3 字体（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.3/`）：
+  D4：本机无 Geist 原件，Theme.fontUi 改为设计稿 --f-ui 第二候选 "Noto Sans SC"；fontMono 仍 Consolas（设计 Geist Mono 缺失，偏差）。
+  第一次截图标题比设计细（title-zoom.png）；qml.exe 最小复现证明 Qt 6.8.3 可变字体 weight 600 取细体、wght 轴 400–700 正常，
+  于是 16 处 Font.DemiBold 加 `font.variableAxes: Theme.axesDemiBold`，VButton 主按钮同。
+  验证：`scripts/build-qt-probe.ps1`、sync、`shoot-all.ps1 -Frames f-home,f-pro` + `compose-compare.ps1`（goal/g1.3/b），
+  title-zoom-b.png 标题与设计同粗、Medium 文本正常；本次运行日志无 QML ERROR。

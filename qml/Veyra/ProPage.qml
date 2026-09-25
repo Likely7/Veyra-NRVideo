@@ -308,7 +308,7 @@ Item {
                         color: veyra.displayFpsKnown ? Theme.ok : Theme.t3
                         font.family: Theme.fontMono
                         font.pixelSize: 22
-                        font.weight: Font.DemiBold
+                        font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                     }
                     Text { text: "显示 fps"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11 }
                     Rectangle { implicitWidth: 1; implicitHeight: 12; color: Theme.stroke2 }
@@ -317,7 +317,7 @@ Item {
                         color: Theme.t1
                         font.family: Theme.fontMono
                         font.pixelSize: 13
-                        font.weight: Font.DemiBold
+                        font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                     }
                     Text { text: "提交"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11 }
                 }

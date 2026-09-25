@@ -115,7 +115,7 @@ Item {
                                     color: modelData.hi && veyra.displayFpsKnown ? Theme.ok : Theme.t1
                                     font.family: Theme.fontMono
                                     font.pixelSize: modelData.hi ? 14 : 12
-                                    font.weight: Font.DemiBold
+                                    font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                                 }
                             }
                         }
@@ -266,7 +266,7 @@ Item {
                                 color: Qt.rgba(0, 0, 0, 0.78)
                                 font.family: Theme.fontUi
                                 font.pixelSize: 10
-                                font.weight: Font.DemiBold
+                                font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                                 elide: Text.ElideRight
                                 width: parent.width - 6
                                 horizontalAlignment: Text.AlignHCenter
@@ -338,7 +338,7 @@ Item {
                         color: Theme.t1
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
-                        font.weight: Font.DemiBold
+                        font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                         elide: Text.ElideRight
                     }
                     // .ms badge: this node's cost, or "未接入" when it has none.
@@ -354,7 +354,7 @@ Item {
                             color: card.node.costMs > 0 ? "#FFFFFF" : Theme.t3
                             font.family: Theme.fontMono
                             font.pixelSize: 10
-                            font.weight: Font.DemiBold
+                            font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                         }
                     }
                     Text { visible: card.locked; text: "🔒"; font.pixelSize: 10; opacity: 0.7 }

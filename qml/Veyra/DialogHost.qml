@@ -81,7 +81,7 @@ Item {
                         color: Theme.t1
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsH2
-                        font.weight: Font.DemiBold
+                        font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                     }
                     Text {
                         Layout.fillWidth: true

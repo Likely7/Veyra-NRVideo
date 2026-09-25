@@ -96,7 +96,13 @@ QtObject {
     readonly property var easeOut: [0.2, 0.8, 0.2, 1.0, 1.0, 1.0]
 
     // --- type (--f-ui / --f-mono and the .h1/.h2/.h3 scale) ---------------
-    readonly property string fontUi: "Microsoft YaHei UI"
+    // --f-ui is "Geist", "Noto Sans SC", ...: Geist is not on this machine (D4), so
+    // the design's own second choice, which is also what Edge rendered the reference
+    // with. Noto Sans SC ships as a variable font; Qt 6.8.3 maps font.weight 600 to a
+    // thin instance of it (500 and 700 are fine), so every DemiBold also sets the wght
+    // axis directly (G1.3, tmp/.../min/Font.qml).
+    readonly property string fontUi: "Noto Sans SC"
+    readonly property var axesDemiBold: ({ "wght": 600 })
     readonly property string fontMono: "Consolas"
     readonly property real fsEyebrow: 11
     readonly property real fsSmall: 11.5

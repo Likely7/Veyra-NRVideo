@@ -31,6 +31,7 @@ Rectangle {
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsBody
         font.weight: btn.primary ? Font.DemiBold : Font.Medium
+        font.variableAxes: btn.primary ? Theme.axesDemiBold : ({})
     }
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
     TapHandler { id: tap; onTapped: btn.clicked() }

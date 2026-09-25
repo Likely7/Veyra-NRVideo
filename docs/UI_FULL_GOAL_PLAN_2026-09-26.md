@@ -10,7 +10,7 @@
 | 阶段 | 状态 | 最后标签 | 备注 |
 |---|---|---|---|
 | G0 工具与基线 | 完成 | checkpoint/ui-mig-g0.7 | 设计参考 `design-ref/`、对比 `compare/`、动效曲线 `goal/g0.5/`、缓动测试 `veyra_qml_easing_tests`（构建目录 `build/qt-probe-20260926`）、门槛基线 `goal/g0.7/`（B 阶段性能对比用 `goal/g0.7/perf`） |
-| G1 基础（缓动/背景/字体/图标/组件动效） | 进行中 | checkpoint/ui-mig-g1.2 | G1.1 缓动、G1.2 背景完成（Qt 6.8.3：BezierSpline ≤10 段；CurveRenderer 不能用 fillItem）；下一步 G1.3 字体 |
+| G1 基础（缓动/背景/字体/图标/组件动效） | 进行中 | checkpoint/ui-mig-g1.3 | G1.1 缓动、G1.2 背景、G1.3 字体完成（Qt 6.8.3：BezierSpline ≤10 段；CurveRenderer 不能用 fillItem；可变字体 600 须设 wght 轴）；下一步 G1.4 图标 |
 | G2 外壳 | 未开始 | | |
 | G3 四主屏 | 未开始 | | |
 | B1 小项 + 桥接补齐 | 未开始 | | |
@@ -28,7 +28,7 @@
 | D1 | 极简模式播放条压边需独立顶层窗口 | 做独立小窗，PresentMon 对比显示/隐藏；有可复现退化则退回“条在画面下方”并记录 |
 | D2 | 画幅跟随是全部片源还是仅极简 | 仅极简模式 |
 | D3 | 帧率读数 | 只显示“提交 fps”（用户 §6 决定），设计稿的“显示 fps”删除 |
-| D4 | Geist 字体 | 若本机可取得 OFL 原件则放 `E:\项目\Veyra\deps\fonts`、运行目录加载、NOTICES 标注；取不到则用 Noto Sans SC / Consolas 并记录偏差 |
+| D4 | Geist 字体（已触发：取不到，用 Noto Sans SC / Consolas） | 若本机可取得 OFL 原件则放 `E:\项目\Veyra\deps\fonts`、运行目录加载、NOTICES 标注；取不到则用 Noto Sans SC / Consolas 并记录偏差 |
 | D5 | 播放条毛玻璃 | 原生视频上无法取样模糊，用 rgba(22,22,26,.86) 近似，记录偏差 |
 | D6 | 调色“效果”组（纹理/清晰度/去雾） | 设计稿没有 → 不显示 |
 | D7 | AMD FSR 补帧 / NVIDIA FSR4 | 保持隐藏 / 已撤回 |
