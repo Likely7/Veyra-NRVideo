@@ -43,6 +43,9 @@ LRESULT CALLBACK videoProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     // swapchains fight and we lose the whole point of the native path.
     if (m == WM_ERASEBKGND) return 1;
     if (m == WM_PAINT) { ValidateRect(h, nullptr); return 0; }
+    // The pointer belongs to the QML layer under the picture (the dock's hot zone
+    // at the top edge, the cinema controls): pass hit testing through to it.
+    if (m == WM_NCHITTEST) return HTTRANSPARENT;
     return DefWindowProcW(h, m, w, l);
 }
 

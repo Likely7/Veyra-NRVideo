@@ -44,7 +44,8 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 12
-        HoverHandler { onHoveredChanged: if (hovered) dockRoot.opened = true }
+        // Leaving the zone for anywhere but the dock retracts it (closeDock).
+        HoverHandler { onHoveredChanged: if (hovered) dockRoot.open(); else if (!barHover.hovered) retract.restart() }
     }
     Rectangle {
         id: handle
@@ -58,16 +59,16 @@ Item {
         opacity: dockRoot.opened ? 0 : 1
         Behavior on width { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
-        HoverHandler { onHoveredChanged: if (hovered) dockRoot.opened = true }
+        HoverHandler { onHoveredChanged: if (hovered) dockRoot.open() }
     }
 
+    function open() { retract.stop(); opened = true }
     // Retract 450ms after the pointer leaves, exactly like closeDock().
     Timer {
         id: retract
         interval: 450
         onTriggered: if (!dockRoot.pinned) dockRoot.opened = false
     }
-    onOpenedChanged: if (!opened) ; else retract.stop()
 
     // .dock: black pill, radius 999, 1px hairline, heavy drop shadow.
     Rectangle {
@@ -81,16 +82,17 @@ Item {
         color: "#000000"
         border.width: 1
         border.color: Qt.rgba(1, 1, 1, 0.1)
+        // Over the picture on the cinema page: cut out of the video window.
+        objectName: "videoCover"
+        property real coverRadius: height / 2
         // .dock { transform: translate(-50%,-120%); transition: transform .55s spring }
         Behavior on anchors.topMargin {
             NumberAnimation { duration: Theme.d(550); easing.bezierCurve: Theme.spring }
         }
 
         HoverHandler {
-            onHoveredChanged: {
-                if (hovered) { dockRoot.opened = true; retract.stop() }
-                else retract.restart()
-            }
+            id: barHover
+            onHoveredChanged: if (hovered) dockRoot.open(); else retract.restart()
         }
 
         RowLayout {

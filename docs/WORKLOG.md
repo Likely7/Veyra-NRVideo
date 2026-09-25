@@ -6641,3 +6641,10 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   - 命令：`powershell -NoProfile -File tools/qt_probe/run-quick-tests.ps1 -Out E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\g1.6-quick-tests.txt`。
   - 结果：8 passed, 0 failed（含 init/cleanup）。首次运行 test_slider_tap 计数为 2，原因是前一个拖动用例也发 moved，已在各用例开头 clear。
   - 脚本内 QtTest 控制台输出经管道丢失，改为 `-o <file>,txt` 再读文件。
+- G2.1 顶部 dock 热区（`checkpoint/ui-mig-g2.1`，证据 `goal/g2.1/`）：
+  - 原问题：播放时原生视频子窗压在 QML 之上并吃掉鼠标，顶部 12px 热区在画面上无效。
+  - 修正：视频子窗 `WM_NCHITTEST` 返回 `HTTRANSPARENT`，指针交给下面的 QML；dock 本体设为 videoCover（圆角 = 高/2），画面上方可见。
+  - 收起逻辑对齐 core.js：离开热区且不在 dock 上 → 450ms 收起；进入热区/手柄/dock 取消计时。
+  - 新脚本 `tools/qt_probe/hover-shot.ps1`：带片源启动、置顶、真实移动光标、逐步 PrintWindow。
+  - 实测（visible-scene.mp4，极简页）：中部无 dock → 顶边 4px 弹出 → 悬停专业模式出提示 → 移开 200ms 仍在 → 900ms 已收起（strip.png）。
+  - 未执行：固定模式在播放中的截图（x-tip 已覆盖无片源情形）。
