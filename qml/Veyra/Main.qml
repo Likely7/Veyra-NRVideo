@@ -76,17 +76,10 @@ Window {
 
     // Background: pure black in cinema mode (the picture is the window), the
     // three-stop gradient otherwise - the prototype's .vy / .vy.cine split.
-    Rectangle {
+    VBackdrop {
         id: backdrop
         anchors.fill: parent
-        radius: Theme.rWindow
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: Theme.bgInner }
-            GradientStop { position: 0.45; color: Theme.bgMid }
-            GradientStop { position: 1.0; color: Theme.bgOuter }
-        }
-        border.width: 1
-        border.color: root.cinema ? "transparent" : Theme.stroke
+        strokeColor: root.cinema ? "transparent" : Theme.stroke
     }
 
     // The one host item for the native video window; main.cpp finds it by name.

@@ -6579,3 +6579,12 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   命令：`scripts/build-qt-probe.ps1 -Targets veyra_qml_easing_tests` / `veyra_qml_ui` exit 0；
   `tools/qt_probe/run-easing-tests.ps1` failures=0 exit=0（after-fix.txt）；`tools/qt_probe/motion-sample.ps1 -Out goal/g1.1`：
   dock 峰值 QML 10.59 / 设计 10.17，开关 14.6 / 14.6，曲线图已看；page 仍无过渡（G2.2）。
+
+- G1.2 背景（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.2/`）：
+  a：Shape + RadialGradient（椭圆经 fillTransform 压扁）形状对，拉伸 8 倍可见同心圆环（8 位量化）；
+  b/c：叠加 160px 平铺噪声（alpha 0..2）均值对上但圆环仍在。
+  d：`tools/qt_probe/make-backdrop.py` 按 app.css .vy 以浮点计算渐变、三角分布抖动一次，生成 `qml/Veyra/backdrop.png`（1280x800，拉伸使用，
+  渐变为盒相对故形状保持）；`qml/Veyra/VBackdrop.qml` 用 Shape fillItem 取窗口圆角与 1px 描边，Main.qml 替换原线性渐变 Rectangle。
+  Qt 6.8.3 缺陷：Shape.CurveRenderer + fillItem 进程访问冲突（`tmp/.../min/Bd.qml` qml.exe exit -1073741819，GeometryRenderer exit 0），故用 GeometryRenderer + layer.samples 4。
+  验证：`shoot-all.ps1 -Frames f-home,f-min,f-pro,f-node` + `compose-compare.ps1`，看图；六个 40px 采样块 RGB 均值与设计差 ≤0.1 级，拉伸图无圆环；
+  f-min 与 G1.2 前逐像素一致（该屏黑画面为既有差距，G3 处理），f-pro/f-node 仅背景像素变化。
