@@ -54,6 +54,10 @@
 
     // The real component, with the frame's own config.
     const app = window.VeyraApp(stage, Object.assign({}, frame.cfg));
+    // Static references are taken in the final state. A dialog fades in over the page
+    // with a CSS transition; headless Edge captured mid-fade, so the dialog and the page
+    // under it were drawn over each other. ?motion=1 keeps the transitions for motion work.
+    if (params.get('motion') !== '1') app.setReduced(true);
     app.root.style.width = frame.w + 'px';
     app.root.style.height = frame.h + 'px';
 
