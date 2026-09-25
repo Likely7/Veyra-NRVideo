@@ -18,6 +18,7 @@
 | S0.4 | 性能 / 延迟基线 | 完成 | `checkpoint/ui-mig-s0` | 4 种播放场景 |
 | S1.1 | 合并图描述构建 | 完成 | `checkpoint/ui-mig-s1.1` | 6 处合并为 `describeStages()`；13 项哈希一致 |
 | S1.7 | 快照补字段（宽高比 / 时长 / 封面） | 完成 | `checkpoint/ui-mig-s1.7` | 宽高比与时长实测正确；关键哈希一致 |
+| S1.2+S1.3 | 效果链模型与效果注册表 | 完成 | `checkpoint/ui-mig-s1.2` | 34 项单元检查全过；引擎尚未改用它 |
 
 ## 发现并修复的 bug
 
@@ -29,6 +30,18 @@
 | B2 | S0.2 | `veyra_quality_probe` 用 ANSI `argv` 转宽字符，输出目录含中文（`E:\项目`）时写图失败，交付门槛因此失败；门槛脚本原先用相对路径绕开，但源码在 C:、日志在 E: 时相对路径无法跨盘 | 探针改为从 UTF-16 命令行读参数；门槛改传绝对路径 |
 
 ## 日志
+
+### S1.2 + S1.3（2026-09-25）效果链模型与效果注册表
+- 新增 `include/veyra/engine/EffectChain.h` + `src/engine/EffectChain.cpp`：
+  - `EffectType` 六种（调色、超分辨率、NR、保护区域、RTX Video HDR、补帧），每种在 `effectCatalog()` 里登记名称、实例上限（调色 6、NR 4、其余 1）、是否可重复、是否必须最后、是否改变分辨率、是否实验；
+  - `ChainNode` 每节点带自己的载荷（NR 的参数与运行版本、保护区域、调色、Video HDR），NR 的每层参数独立；
+  - `EffectChain` 固定容量 16 节点 + `nodeCount` + 模式（列表 / 节点）+ 补帧倍率，整体可平凡复制（导出共享内存要求的静态断言仍然成立）；
+  - `validateChain()`：数量上限、补帧只能最后、RTX Video HDR 之后只能接补帧；
+  - `toChain()` / `fromChain()`：与 `EnhancementSettings` 双向转换，转换不会碰采集、音频、导出等非阶段字段；
+  - `requiresGraphRebuild()`：把“哪些变化要重建管线”从 `EngineController` 里 25 个字段的手写“或”判断收进一处。
+- 这一步只是把结构立起来，**引擎仍然使用 `EnhancementSettings`**，行为一字未改；`applySettings` 里原本的拒绝规则继续生效。
+- 新增 `veyra_effect_chain_tests`（34 项检查）：往返转换保真、禁用阶段保持禁用、非阶段字段不被改动、列表顺序、补帧必须在最后（含“后面只有禁用节点时允许”）、HDR 之后只能接补帧、NR 层数上限、以及重建判断的正反例。
+- 下一步 S1.4 会让引擎改用 `requiresGraphRebuild()`，并先与旧判断并行比对后再切换。
 
 ### S1.7（2026-09-25）快照补字段
 - `SourceInfo` 新增 `displayAspect`（应用容器 SAR 与旋转后的显示宽高比）与 `rotationDegrees`；`FFmpegDemuxer` 增加 `sampleAspect()` / `rotationDegrees()`（读 `sample_aspect_ratio`、`rotate` 元数据和 `AV_PKT_DATA_DISPLAYMATRIX`，用 FFmpeg 6+ 的 `codecpar->coded_side_data` 接口）。
