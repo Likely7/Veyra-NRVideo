@@ -248,6 +248,15 @@ Window {
         x: 40; y: 120; z: 100
         sourceComponent: VSwitch {}
     }
+    Loader {
+        id: probeSeg
+        active: root.test.motionProbe === "seg"
+        x: 40; y: 160; z: 100
+        sourceComponent: VSeg {
+            options: [{ id: "a", label: "自动" }, { id: "b", label: "有限 / Limited" }, { id: "c", label: "完整 / Full" }]
+            current: "a"
+        }
+    }
     Timer {
         running: root.test.motionProbe !== undefined
         interval: 800
@@ -256,6 +265,7 @@ Window {
             if (name === "dock") dock.opened = true
             else if (name === "page") root.page = "pro"
             else if (name === "switch") probeSwitch.item.checked = true
+            else if (name === "seg") { probe.x0 = probeSeg.item.indicatorX; probeSeg.item.current = "c"; probe.x1 = probeSeg.item.targetX }
             probe.t0 = Date.now()
             probe.running = true
         }
@@ -263,6 +273,8 @@ Window {
     FrameAnimation {
         id: probe
         property real t0: 0
+        property real x0: 0
+        property real x1: 1
         running: false
         onTriggered: {
             const ms = Date.now() - t0
@@ -270,7 +282,9 @@ Window {
             let v
             if (name === "dock") v = dock.barY
             else if (name === "page") v = proPage.opacity + "," + proPage.y
-            else v = probeSwitch.item.children[0].x - 3
+            else if (name === "seg") v = ((probeSeg.item.indicatorX - x0) / (x1 - x0)).toFixed(4)
+            else if (probeSwitch.item) v = probeSwitch.item.children[0].x - 3
+            else return
             console.log("motion-probe," + name + "," + ms + "," + v)
             if (ms > 1000) running = false
         }

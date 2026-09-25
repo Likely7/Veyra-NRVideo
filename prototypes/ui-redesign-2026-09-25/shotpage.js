@@ -93,6 +93,14 @@
     } else if (probe === 'page') {
       start = () => app.go('pro');
       read = () => { const e = app.pages.pro.el.querySelector('[data-in]'); const cs = getComputedStyle(e); return cs.opacity + ',' + ty(e); };
+    } else if (probe === 'seg') {
+      // The first visible seg; move to its last button. Progress 0..1 of the indicator's x.
+      const sg = [...root.querySelectorAll('.seg')].find(x => x.offsetParent !== null);
+      const ind = sg.querySelector('.seg-ind'), btns = sg.querySelectorAll('button');
+      const tx = () => { const m = getComputedStyle(ind).transform; return m === 'none' ? 0 : new DOMMatrix(m).m41; };
+      const x0 = tx(), x1 = btns[btns.length - 1].offsetLeft;
+      start = () => btns[btns.length - 1].click();
+      read = () => ((tx() - x0) / (x1 - x0)).toFixed(4);
     } else return;
     start();
     // The page switch shows the new page 150 ms later; wait for its animations to exist.
