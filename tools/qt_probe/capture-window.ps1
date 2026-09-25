@@ -10,7 +10,10 @@ param(
   [string]$Clip = '',
   [string]$Out = 'E:\项目\Veyra\logs\ui-qml-migration-20260925\qml-shots',
   [string]$Name = '',
-  [int]$WaitSeconds = 9
+  [int]$WaitSeconds = 9,
+  # Test switches passed straight to the app (G0.3), one string: '--tab fg --reduced-motion'.
+  # A string, not an array: powershell -File hands an array argument over as one literal.
+  [string]$Extra = ''
 )
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
@@ -40,6 +43,7 @@ public class PW {
 New-Item -ItemType Directory -Force $Out | Out-Null
 $exe = Join-Path $App 'veyra_qml_ui.exe'
 $launch = @('--page', $Page)
+if ($Extra -ne '') { $launch += ($Extra -split '\s+' | Where-Object { $_ -ne '' }) }
 if ($Clip -ne '') { $launch += ('"' + $Clip + '"') }
 $p = Start-Process -FilePath $exe -ArgumentList $launch -PassThru
 Start-Sleep -Seconds $WaitSeconds

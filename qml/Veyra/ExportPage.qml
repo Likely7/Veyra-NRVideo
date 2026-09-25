@@ -234,7 +234,7 @@ Item {
                         radius: 9
                         color: Theme.accent
                         width: parent.width * Math.max(0, Math.min(1, veyra.exportProgress))
-                        Behavior on width { NumberAnimation { duration: 300 } }
+                        Behavior on width { NumberAnimation { duration: Theme.d(300) } }
                     }
                 }
                 // Counts come from the job's own snapshot, not a parallel counter.

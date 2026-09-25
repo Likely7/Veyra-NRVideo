@@ -18,10 +18,10 @@ Rectangle {
          : (hover.hovered ? Theme.card3 : Theme.card2)
     border.width: (primary || ghost) ? 0 : 1
     border.color: hover.hovered ? Qt.rgba(1, 1, 1, 0.2) : Theme.stroke2
-    Behavior on color { ColorAnimation { duration: Theme.durFast } }
+    Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
     // .btn:active { transform: scale(.95) }
     scale: tap.pressed ? 0.95 : 1.0
-    Behavior on scale { NumberAnimation { duration: 400; easing.bezierCurve: Theme.spring } }
+    Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
 
     Text {
         id: label

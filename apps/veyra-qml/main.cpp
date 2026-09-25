@@ -16,6 +16,8 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QTimer>
+#include <QVariantMap>
+#include <QtCore/private/qabstractanimation_p.h>
 #include <QDebug>
 
 #include <windows.h>
@@ -131,15 +133,59 @@ int main(int argc, char** argv) {
                      [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
     // Options are parsed rather than positional: `--page <id>` selects the screen
     // a test wants to capture, and any other non-flag argument is a file to open.
+    //
+    // The rest are test switches (G0.3). They put the app into the exact state a
+    // design frame shows, so a screenshot of each can be compared with its design
+    // reference without anyone clicking. They go to QML as `vyTest`, never to the
+    // bridge's saved settings: a test run must not rewrite the user's preferences.
+    //   --tab <quality|fg|color|audio|display>   professional-page tab
+    //   --dialog <capture|ps5|screen|subtitle|audio|save|manage|tonode>
+    //   --aspect <ratio>        cinema aspect, overriding the source's own
+    //   --dock-pinned           dock open and held open
+    //   --size <W>x<H>          window size in device-independent pixels
+    //   --reduced-motion        every animation at zero duration
+    //   --slow-animations <N>   every animation N times slower (motion sampling)
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
+    QVariantMap testOptions;
+    QSize testSize;
     for (int i = 1; i < args.size(); ++i) {
-        if (args.at(i) == QLatin1String("--page") && i + 1 < args.size()) {
+        const QString& a = args.at(i);
+        const bool hasValue = i + 1 < args.size();
+        if (a == QLatin1String("--page") && hasValue) {
             bridge.setInitialPage(args.at(++i));
-        } else if (!args.at(i).startsWith(QLatin1Char('-'))) {
-            openPath = args.at(i);
+        } else if (a == QLatin1String("--tab") && hasValue) {
+            testOptions.insert(QStringLiteral("tab"), args.at(++i));
+        } else if (a == QLatin1String("--dialog") && hasValue) {
+            testOptions.insert(QStringLiteral("dialog"), args.at(++i));
+        } else if (a == QLatin1String("--aspect") && hasValue) {
+            testOptions.insert(QStringLiteral("aspect"), args.at(++i).toDouble());
+        } else if (a == QLatin1String("--dock-pinned")) {
+            testOptions.insert(QStringLiteral("dockPinned"), true);
+        } else if (a == QLatin1String("--size") && hasValue) {
+            const QStringList wh = args.at(++i).split(QLatin1Char('x'));
+            if (wh.size() == 2) testSize = QSize(wh.at(0).toInt(), wh.at(1).toInt());
+        } else if (a == QLatin1String("--reduced-motion")) {
+            testOptions.insert(QStringLiteral("reducedMotion"), true);
+        } else if (a == QLatin1String("--slow-animations") && hasValue) {
+            // Qt's own slow mode, the same one its debugging tools use: every
+            // animation driven by the unified timer runs N times longer, so a
+            // timed screenshot lands on a known point of the curve.
+            const qreal factor = args.at(++i).toDouble();
+            if (factor > 1.0) {
+                QUnifiedTimer::instance()->setSlowModeEnabled(true);
+                QUnifiedTimer::instance()->setSlowdownFactor(factor);
+                testOptions.insert(QStringLiteral("slowAnimations"), factor);
+            }
+        } else if (!a.startsWith(QLatin1Char('-'))) {
+            openPath = a;
         }
     }
+    if (!testOptions.isEmpty() || testSize.isValid())
+        veyra::log::info("qml", std::format("test switches: {} size={}x{}",
+                                            QStringList(testOptions.keys()).join(',').toStdString(),
+                                            testSize.width(), testSize.height()));
+    engine.rootContext()->setContextProperty(QStringLiteral("vyTest"), testOptions);
     if (!openPath.isEmpty()) {
         QTimer::singleShot(600, &bridge, [&bridge, openPath] { bridge.openPath(openPath); });
     }
@@ -156,6 +202,7 @@ int main(int argc, char** argv) {
         veyra::log::error("qml", "root object is not a window");
         return 1;
     }
+    if (testSize.isValid()) window->resize(testSize);
 
     // Reparent the native window under the QML window and keep it in step. The
     // host item is looked up by objectName so the QML side owns the layout and

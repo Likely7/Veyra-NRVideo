@@ -6524,3 +6524,17 @@ Artifacts remain under `E:/项目/Veyra/tests/5090-capture-fg-20260921/` and
 Retained baseline executable/logs and one runnable fixed staging app; no ZIP,
 portable duplication, runtime mutation, proprietary Git files, merge, push or
 release. 5090 live acceptance, 15-second hitch and user flicker remain unresolved.
+
+## 2026-09-26 UI 迁移目标模式 G0.2–G0.3
+
+- G0.2：`tools/qt_probe/shoot-design.ps1` 用无头 Edge 渲染 17 张设计参考到
+  `E:\项目\Veyra\logs\ui-qml-migration-20260925\design-ref\`。用户指出截图重叠：对话框淡入被截在中途；
+  `shotpage.js` 默认 `app.setReduced(true)`，`?motion=1` 保留动画。重渲染后逐张看图无重叠。
+- G0.3：`veyra_qml_ui` 增加测试开关 `--page --tab --dialog --aspect --dock-pinned --size WxH
+  --reduced-motion --slow-animations N`（后者用 QUnifiedTimer 慢速模式，链接 Qt6::CorePrivate）；
+  Theme 增加 `reduced` 与 `d(ms)`，全部 40 处时长改为 `Theme.d()`，无限动画在减少动画时停止。
+  `capture-window.ps1 -Extra` 改为单字符串（`-File` 模式数组会被当成一个参数传入，首次 `--tab` 因此无效）。
+  构建 `scripts/build-qt-probe.ps1 -Targets veyra_qml_ui` exit 0；逐项截图于
+  `E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\g0.3\` 并看图：tab-fg、dlg-capture、min-aspect、
+  node-size（1600x1150）、dock-pinned、slow-dialog（10 倍慢速截到对话框缩放中途）。
+  引擎门槛未跑（本步只改 QML 前端与测试开关，未动引擎）。

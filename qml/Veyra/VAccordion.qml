@@ -34,7 +34,7 @@ Rectangle {
     color: Theme.card2
     border.width: 1
     border.color: open ? Theme.stroke2 : Theme.stroke
-    Behavior on implicitHeight { NumberAnimation { duration: 500; easing.bezierCurve: Theme.springSoft } }
+    Behavior on implicitHeight { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.springSoft } }
     clip: true
 
     ColumnLayout {
@@ -103,7 +103,7 @@ Rectangle {
                     color: Theme.t3
                     font.pixelSize: 16
                     rotation: acc.open ? 90 : 0
-                    Behavior on rotation { NumberAnimation { duration: 450; easing.bezierCurve: Theme.spring } }
+                    Behavior on rotation { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
                 }
             }
 
@@ -143,6 +143,6 @@ Rectangle {
         height: acc.open ? 1 : 0
         color: Theme.stroke
         opacity: acc.open ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
     }
 }

@@ -22,8 +22,8 @@ Rectangle {
     color: selected ? Theme.card3 : Theme.card2
     border.width: 1
     border.color: selected ? Theme.accent : Theme.stroke
-    Behavior on color { ColorAnimation { duration: Theme.durFast } }
-    Behavior on border.color { ColorAnimation { duration: Theme.durFast } }
+    Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
+    Behavior on border.color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
 
     RowLayout {
         anchors.fill: parent
@@ -37,13 +37,13 @@ Rectangle {
             width: 34; height: 20; radius: 10
             Layout.alignment: Qt.AlignVCenter
             color: card.node.enabled ? Theme.accent : Theme.card3
-            Behavior on color { ColorAnimation { duration: Theme.durFast } }
+            Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
             Rectangle {
                 width: 14; height: 14; radius: 7
                 color: card.node.enabled ? Theme.accentInk : Theme.t3
                 anchors.verticalCenter: parent.verticalCenter
                 x: card.node.enabled ? parent.width - width - 3 : 3
-                Behavior on x { NumberAnimation { duration: Theme.durNormal; easing.bezierCurve: Theme.spring } }
+                Behavior on x { NumberAnimation { duration: Theme.d(Theme.durNormal); easing.bezierCurve: Theme.spring } }
             }
             HoverHandler { cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: card.toggleRequested(!card.node.enabled) }

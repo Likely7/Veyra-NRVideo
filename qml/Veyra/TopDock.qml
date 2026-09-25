@@ -52,8 +52,8 @@ Item {
         radius: 4
         color: Qt.rgba(1, 1, 1, 0.28)
         opacity: dockRoot.opened ? 0 : 1
-        Behavior on width { NumberAnimation { duration: 400; easing.bezierCurve: Theme.spring } }
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on width { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+        Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
         HoverHandler { onHoveredChanged: if (hovered) dockRoot.opened = true }
     }
 
@@ -79,7 +79,7 @@ Item {
         border.color: Qt.rgba(1, 1, 1, 0.1)
         // .dock { transform: translate(-50%,-120%); transition: transform .55s spring }
         Behavior on anchors.topMargin {
-            NumberAnimation { duration: 550; easing.bezierCurve: Theme.spring }
+            NumberAnimation { duration: Theme.d(550); easing.bezierCurve: Theme.spring }
         }
 
         HoverHandler {
@@ -137,7 +137,7 @@ Item {
                     }
                     visible: dockRoot.currentPage !== "home"
                     // .dock-ind { transition: transform .55s var(--spring) }
-                    Behavior on x { NumberAnimation { duration: 550; easing.bezierCurve: Theme.spring } }
+                    Behavior on x { NumberAnimation { duration: Theme.d(550); easing.bezierCurve: Theme.spring } }
                 }
                 Row {
                     id: itemsRow
@@ -153,7 +153,7 @@ Item {
                                 text: modelData.icon
                                 font.pixelSize: 15
                                 opacity: dockRoot.currentPage === modelData.id ? 1.0 : 0.45
-                                Behavior on opacity { NumberAnimation { duration: 200 } }
+                                Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
                             }
                             HoverHandler { cursorShape: Qt.PointingHandCursor }
                             TapHandler { onTapped: dockRoot.requestPage(modelData.id) }

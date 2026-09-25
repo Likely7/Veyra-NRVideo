@@ -30,7 +30,11 @@ Window {
     // Page ids match the prototype's PAGES keys so a design screenshot and an
     // app screenshot can be compared under the same name.
     property string page: "home"
+    // Test switches from the command line (main.cpp, G0.3); empty in normal use.
+    readonly property var test: typeof vyTest !== "undefined" ? vyTest : ({})
+    readonly property real testAspect: test.aspect !== undefined ? test.aspect : 0
     readonly property bool cinema: page === "min"
+    Binding { target: Theme; property: "reduced"; value: veyra.reducedMotion || root.test.reducedMotion === true }
 
     // Cinema geometry, straight from the prototype: the picture is width/aspect
     // and the window is that plus the lower half of the control pill.
@@ -48,7 +52,7 @@ Window {
     // .vy.cine transition: height .7s var(--spring-soft)
     Behavior on height {
         enabled: root.cinema
-        NumberAnimation { duration: 700; easing.bezierCurve: Theme.springSoft }
+        NumberAnimation { duration: Theme.d(700); easing.bezierCurve: Theme.springSoft }
     }
     onWidthChanged: {
         if (cinema) height = Math.round(pictureHeight + barBelow)
@@ -147,9 +151,10 @@ Window {
         HomePage { onRequestPage: p => root.page = p }
         MinimalPage {
             onRequestPage: p => root.page = p
-            onRequestAspect: aspect => root.fitToFilm(aspect)
+            onRequestAspect: aspect => { if (root.testAspect <= 0) root.fitToFilm(aspect) }
         }
         ProPage {
+            id: proPage
             onRequestPage: p => root.page = p
             onRequestDialog: key => dialogs.open(key)
         }
@@ -178,6 +183,8 @@ Window {
         id: dock
         anchors.horizontalCenter: parent.horizontalCenter
         currentPage: root.page
+        pinned: root.test.dockPinned === true
+        opened: pinned
         onRequestPage: p => root.page = p
     }
 
@@ -197,7 +204,7 @@ Window {
         border.color: toast.isError ? Qt.rgba(1, 0.365, 0.365, 0.4) : Qt.rgba(0.239, 0.863, 0.518, 0.35)
         opacity: 0
         visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: Theme.durNormal } }
+        Behavior on opacity { NumberAnimation { duration: Theme.d(Theme.durNormal) } }
         function show(m, bad) { toast.message = m; toast.isError = bad; toast.opacity = 1; toastTimer.restart() }
         Timer { id: toastTimer; interval: 4200; onTriggered: toast.opacity = 0 }
         Text {
@@ -232,6 +239,7 @@ Window {
     Connections {
         target: veyra
         function onSnapshotChanged() {
+            if (root.testAspect > 0) return
             if (veyra.sourceAspect > 0.2 && Math.abs(veyra.sourceAspect - root.filmAspect) > 0.02)
                 root.fitToFilm(veyra.sourceAspect)
         }
@@ -241,6 +249,9 @@ Window {
         // Open on the configured page: the user's saved preference, or the
         // override a test passes on the command line.
         if (veyra.initialPage.length > 0) root.page = veyra.initialPage
+        if (root.test.tab !== undefined) proPage.tab = root.test.tab
+        if (root.testAspect > 0) root.fitToFilm(root.testAspect)
+        if (root.test.dialog !== undefined) dialogs.open(root.test.dialog)
         videoHost.syncRect()
     }
 }

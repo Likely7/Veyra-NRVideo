@@ -385,7 +385,7 @@ Item {
                         radius: 9
                         color: root.tab === modelData.id ? Theme.card3
                              : tabHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
-                        Behavior on color { ColorAnimation { duration: 200 } }
+                        Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                         Text {
                             anchors.centerIn: parent
                             text: modelData.label

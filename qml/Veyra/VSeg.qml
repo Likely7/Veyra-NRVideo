@@ -29,7 +29,7 @@ Rectangle {
                     anchors.margins: 0
                     radius: 7
                     color: seg.current === modelData.id ? Theme.card3 : "transparent"
-                    Behavior on color { ColorAnimation { duration: Theme.durFast } }
+                    Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
                 }
                 Text {
                     id: segLabel

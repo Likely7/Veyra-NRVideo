@@ -23,9 +23,10 @@ Item {
             fillMode: Image.PreserveAspectFit
             opacity: 0.9
             SequentialAnimation on scale {
+                running: !Theme.reduced
                 loops: Animation.Infinite
-                NumberAnimation { to: 1.02; duration: 2250; easing.type: Easing.InOutSine }
-                NumberAnimation { to: 1.0; duration: 2250; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1.02; duration: Theme.d(2250); easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1.0; duration: Theme.d(2250); easing.type: Easing.InOutSine }
             }
         }
 
@@ -72,9 +73,9 @@ Item {
                     border.color: cardHover.hovered ? Theme.stroke2 : Theme.stroke
                     // .srccard:hover { transform: translateY(-4px) }
                     y: cardHover.hovered ? -4 : 0
-                    Behavior on y { NumberAnimation { duration: 500; easing.bezierCurve: Theme.spring } }
+                    Behavior on y { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
                     scale: cardTap.pressed ? 0.97 : 1.0
-                    Behavior on scale { NumberAnimation { duration: 500; easing.bezierCurve: Theme.spring } }
+                    Behavior on scale { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
 
                     ColumnLayout {
                         anchors.fill: parent

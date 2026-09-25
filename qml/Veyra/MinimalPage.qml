@@ -65,8 +65,8 @@ Item {
         opacity: 0
         SequentialAnimation on opacity {
             running: cineBar.visible
-            PauseAnimation { duration: 120 }
-            NumberAnimation { to: 1.0; duration: 800; easing.bezierCurve: Theme.spring }
+            PauseAnimation { duration: Theme.d(120) }
+            NumberAnimation { to: 1.0; duration: Theme.d(800); easing.bezierCurve: Theme.spring }
         }
 
         RowLayout {
@@ -143,7 +143,7 @@ Item {
                             font.pixelSize: 14
                         }
                         scale: cTap.pressed ? 0.86 : 1.0
-                        Behavior on scale { NumberAnimation { duration: 400; easing.bezierCurve: Theme.spring } }
+                        Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
                         HoverHandler { id: cHover; cursorShape: Qt.PointingHandCursor }
                         TapHandler { id: cTap; onTapped: cbtn.tapped() }
                     }
@@ -167,7 +167,7 @@ Item {
                             font.pixelSize: 14
                         }
                         scale: playTap.pressed ? 0.88 : (playHover.hovered ? 1.06 : 1.0)
-                        Behavior on scale { NumberAnimation { duration: 450; easing.bezierCurve: Theme.spring } }
+                        Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
                         HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
                         TapHandler { id: playTap; onTapped: veyra.togglePlayPause() }
                     }
@@ -196,7 +196,7 @@ Item {
                             height: seekHover.hovered ? 6 : 3
                             radius: 9
                             color: Qt.rgba(1, 1, 1, 0.14)
-                            Behavior on height { NumberAnimation { duration: 300; easing.bezierCurve: Theme.spring } }
+                            Behavior on height { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
                             Rectangle {
                                 width: parent.width * Math.max(0, Math.min(1, veyra.progress))
                                 height: parent.height

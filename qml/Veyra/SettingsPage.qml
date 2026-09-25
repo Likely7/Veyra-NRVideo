@@ -54,7 +54,7 @@ Item {
                     radius: 9
                     color: root.section === modelData.id ? Theme.card3
                          : navHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
-                    Behavior on color { ColorAnimation { duration: 200 } }
+                    Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                     Text {
                         anchors.left: parent.left
                         anchors.leftMargin: 10

@@ -17,9 +17,9 @@ Rectangle {
     }
     // .dot.warn { animation: pulse 1.2s infinite }
     SequentialAnimation on opacity {
-        running: warn
+        running: warn && !Theme.reduced
         loops: Animation.Infinite
-        NumberAnimation { to: 0.35; duration: 600 }
-        NumberAnimation { to: 1.0; duration: 600 }
+        NumberAnimation { to: 0.35; duration: Theme.d(600) }
+        NumberAnimation { to: 1.0; duration: Theme.d(600) }
     }
 }

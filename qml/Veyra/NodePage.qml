@@ -292,7 +292,7 @@ Item {
         color: "#1D1D22"
         border.width: 1
         border.color: root.selectedNode === node.index ? "#FFFFFF" : Qt.rgba(1, 1, 1, 0.1)
-        Behavior on border.color { ColorAnimation { duration: 200 } }
+        Behavior on border.color { ColorAnimation { duration: Theme.d(200) } }
 
         DragHandler {
             id: drag

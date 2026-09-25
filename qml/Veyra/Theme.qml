@@ -52,6 +52,13 @@ QtObject {
     // --- motion (--spring / --spring-soft / --out) ------------------------
     // Four control points exactly: QEasingCurve.BezierSpline rejects any other
     // count, and a rejected curve silently falls back to linear.
+    // Reduced motion (the design's .vy.reduced: every transition and animation at
+    // 0s). Main.qml binds it to the saved setting or the --reduced-motion switch;
+    // every duration in the app goes through d(), so one flag covers all of them.
+    // Endless animations also stop on it: a zero-length loop would spin.
+    property bool reduced: false
+    function d(ms) { return reduced ? 0 : ms }
+
     readonly property int durFast: 150
     readonly property int durNormal: 240
     readonly property int durSlow: 450

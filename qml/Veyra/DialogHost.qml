@@ -57,7 +57,7 @@ Item {
         border.color: Theme.stroke2
         visible: host.dialog !== ""
         scale: visible ? 1.0 : 0.9
-        Behavior on scale { NumberAnimation { duration: 550; easing.bezierCurve: Theme.spring } }
+        Behavior on scale { NumberAnimation { duration: Theme.d(550); easing.bezierCurve: Theme.spring } }
 
         ColumnLayout {
             anchors.fill: parent

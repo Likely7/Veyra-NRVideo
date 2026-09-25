@@ -19,7 +19,7 @@ Rectangle {
     radius: 9
     color: Qt.rgba(1, 1, 1, 0.03)
     clip: true
-    Behavior on implicitHeight { NumberAnimation { duration: 450; easing.bezierCurve: Theme.springSoft } }
+    Behavior on implicitHeight { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.springSoft } }
 
     ColumnLayout {
         anchors.left: parent.left
@@ -55,7 +55,7 @@ Rectangle {
                     color: Theme.t3
                     font.pixelSize: 12
                     rotation: sub.expanded ? 180 : 0
-                    Behavior on rotation { NumberAnimation { duration: 300; easing.bezierCurve: Theme.spring } }
+                    Behavior on rotation { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
                 }
             }
             HoverHandler { cursorShape: Qt.PointingHandCursor }

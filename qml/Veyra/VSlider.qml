@@ -40,7 +40,7 @@ Item {
         anchors.verticalCenter: track.verticalCenter
         x: track.width * slider.frac - width / 2
         scale: drag.active || hover.hovered ? 1.25 : 1.0
-        Behavior on scale { NumberAnimation { duration: 350; easing.bezierCurve: Theme.spring } }
+        Behavior on scale { NumberAnimation { duration: Theme.d(350); easing.bezierCurve: Theme.spring } }
     }
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor; enabled: slider.enabledControl }
     DragHandler {

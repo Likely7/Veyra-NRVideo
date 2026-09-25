@@ -13,7 +13,7 @@ Rectangle {
     border.width: 1
     border.color: Theme.stroke2
     scale: tap.pressed ? 0.95 : 1.0
-    Behavior on scale { NumberAnimation { duration: 400; easing.bezierCurve: Theme.spring } }
+    Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
     RowLayout {
         id: pillRow
         anchors.centerIn: parent

@@ -771,7 +771,8 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_CURRENT_SOURCE_DIR}/qml $<TARGET_FILE_DIR:veyra_qml_ui>/qml)
   target_compile_features(veyra_qml_ui PRIVATE cxx_std_20)
-  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine)
+  # Qt6::CorePrivate only for QUnifiedTimer's slow mode behind --slow-animations.
+  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine Qt6::CorePrivate)
 endif()
 
 # Qt + D3D12 host probe (S3.0): answers whether Qt can host the native video
