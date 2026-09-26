@@ -81,6 +81,7 @@ struct QmlPlayerBridge::Impl {
     engine::ExportJobSnapshot exportSnapshot;
     bool exportHevc = false;
     uint32_t exportBitrateMbps = 0;
+    sink::ExportRateControl exportRateControl = sink::ExportRateControl::Cq;
     int exportResolutionIndex = -1;
     double exportTrimStartSeconds = 0.0;
     double exportTrimEndSeconds = 0.0;
@@ -1014,6 +1015,8 @@ QString QmlPlayerBridge::exportTarget() const {
 }
 int QmlPlayerBridge::exportEncoded() const { return int(impl_->exportSnapshot.encoded); }
 int QmlPlayerBridge::exportGenerated() const { return int(impl_->exportSnapshot.generated); }
+double QmlPlayerBridge::exportEtaSeconds() const { return impl_->exportSnapshot.etaSeconds; }
+int QmlPlayerBridge::exportQueueCount() const { return int(impl_->exportSnapshot.queued); }
 
 // HEVC or H.264: the engine's export entry takes this as a flag, so it is a real
 // choice with a real effect rather than a label.
@@ -1031,6 +1034,15 @@ void QmlPlayerBridge::setExportBitrateMbps(int value) {
     const uint32_t want = uint32_t(std::max(0, std::min(2000, value)));
     if (impl_->exportBitrateMbps == want) return;
     impl_->exportBitrateMbps = want;
+    emit exportChanged();
+}
+
+int QmlPlayerBridge::exportRateControl() const { return int(impl_->exportRateControl); }
+void QmlPlayerBridge::setExportRateControl(int value) {
+    if (value < 0 || value > 2) return;
+    const auto want = static_cast<sink::ExportRateControl>(value);
+    if (impl_->exportRateControl == want) return;
+    impl_->exportRateControl = want;
     emit exportChanged();
 }
 
@@ -1294,7 +1306,8 @@ void QmlPlayerBridge::startExport() {
                                                 settings, impl_->exportHevc, 0,
                                                 impl_->snapshot.selectedAudioTrack,
                                                 impl_->exportTrimStartSeconds,
-                                                impl_->exportTrimEndSeconds);
+                                                impl_->exportTrimEndSeconds,
+                                                impl_->exportRateControl);
     if (!started) { emit notice(tr("导出启动失败；详见诊断"), true); return; }
     pollExport();
     emit navigate(QStringLiteral("exp"));
@@ -1454,6 +1467,29 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
     emit settingsChanged();
     emit chainChanged();
     return true;
+}
+
+void QmlPlayerBridge::enqueueExportFile(const QString& input, const QString& output) {
+    if (input.isEmpty() || output.isEmpty()) { emit notice(tr("队列项目缺少输入或输出"), true); return; }
+    auto settings = impl_->facade.pendingSettings();
+    engine::fromChain(impl_->chain, settings);
+    settings.exportBitrateMbps = impl_->exportBitrateMbps;
+    const bool queued = impl_->exportJob.enqueue(wideOf(input), wideOf(output), settings, impl_->exportHevc, 0,
+                                                  -1, 0.0, 0.0, impl_->exportRateControl);
+    if (!queued) { emit notice(tr("加入导出队列失败；详见诊断"), true); return; }
+    pollExport();
+}
+
+void QmlPlayerBridge::addExportFilesDialog() {
+    const auto files = QFileDialog::getOpenFileNames(nullptr, tr("加入导出队列"), QString(),
+                                                      tr("媒体文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts);;所有文件 (*)"));
+    if (files.isEmpty()) return;
+    const QString folder = QFileDialog::getExistingDirectory(nullptr, tr("选择队列输出目录"));
+    if (folder.isEmpty()) return;
+    for (const auto& file : files) {
+        const QFileInfo info(file);
+        enqueueExportFile(file, QDir(folder).filePath(info.completeBaseName() + QStringLiteral(".mp4")));
+    }
 }
 bool QmlPlayerBridge::selectExportPreset(int index) {
     if (index == -1) {

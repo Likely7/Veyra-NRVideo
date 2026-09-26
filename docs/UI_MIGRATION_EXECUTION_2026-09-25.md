@@ -280,3 +280,11 @@
 - 构建命令：`cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && cmake --build E:\项目\Veyra\build\qt-probe-20260926 --target veyra_qml_ui veyra_qml_quick_tests veyra_export_probe --parallel 4'`，exit 0；产物在 `E:\项目\Veyra\build\qt-probe-20260926\`，探针 staging 在 `E:\项目\Veyra\tests\ui-qml-migration-20260925\app\veyra_export_probe.exe`。
 - `audio-tracks-fixture.mkv`：`2→5s` exit 0，91 源帧/91 编码帧，视频约 3.033333s、音频约 3.029s；stream 2 英语音轨同样通过。非法 `5→2s` exit 1，证据 `E:\项目\Veyra\logs\ui-qml-migration-20260926\invalid-range.txt`。`7.9→8.02s` 输出 3 帧、约 0.100333s；`7.98→8.02s` 无入点之后的完整帧而拒绝，符合当前合同。日志显示 RTX 5070 / NVENC / D3D12，未发生 GPU→CPU 视频回读。
 - Quick Test：`tools/qt_probe/run-quick-tests.ps1 -Out E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-b-trim\quick-tests.txt`，9 passed, 0 failed。slider 目视截图、拖动/点击跳转回归、R0/R1 窗口分层总验收：未执行（用户要求暂缓小 UI 细节）。
+
+### R5.2-c（2026-09-26）导出队列与编码策略
+- `ExportRateControl` 从 QML bridge 贯通到 `PlayerOptions`、导出 worker 共享内存、`VideoExportJob`、NVENC 和 Media Foundation；CBR/VBR 没有码率时拒绝，CQ 使用恒定质量路径。
+- `ExportJobManager` 增加顺序等待队列、完成后启动下一项、ETA、队列数和取消时清空等待项；QML 导出页增加策略、ETA、队列入口。页面注释已同步为真实范围。
+- 构建：`cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && cmake --build E:\项目\Veyra\build\qt-probe-20260926 --target veyra_export_probe veyra_qml_quick_tests --parallel 4'`，exit 0；产物：`E:\项目\Veyra\build\qt-probe-20260926\veyra_export_probe.exe`、`E:\项目\Veyra\build\qt-probe-20260926\veyra_qml_quick_tests.exe`。
+- Quick Test：`E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-c\quick-tests.txt`，9 passed, 0 failed, 0 skipped。
+- 真实 `audio-tracks-fixture.mkv` NVENC/D3D12：CQ、VBR 6 Mbps、CBR 6 Mbps 均 exit 0，stdout 与 worker 日志记录对应策略；CBR 无码率 exit 2，输出 `CBR/VBR require --bitrate-mbps N` 且没有输出文件。原始 stdout：`cq.stdout.log`、`vbr.stdout.log`、`cbr.stdout.log`、`invalid-cbr.stdout.log`，均在 `E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-c\`。
+- 未执行：队列自动推进/取消的完整运行 harness；Media Foundation 实卡路径；B 阶段 hash/perf/delivery/unit 全门槛；导出页截图与真实 UI 多文件操作；缩略图、拖动/点击跳转、R0/R1 窗口分层总验收。旧 worker failure/audio 组合测试未作为本轮通过证据。

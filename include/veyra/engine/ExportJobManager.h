@@ -1,6 +1,7 @@
 #pragma once
 #include "veyra/engine/EngineController.h"
 #include <memory>
+#include <vector>
 namespace veyra::engine {
 enum class ExportState { Idle, Preparing, Running, Paused, Finishing, Succeeded, Failed, Cancelled };
 struct ExportJobSnapshot {
@@ -10,6 +11,8 @@ struct ExportJobSnapshot {
     EnhancementSettings frozen;
     std::wstring message,output,workerLog;
     uint32_t workerPid=0;
+    double etaSeconds=0;
+    uint64_t queuePosition=0,queued=0;
     bool active()const{return state>=ExportState::Preparing&&state<=ExportState::Finishing;}
 };
 // One isolated NGX context in a child process. Anonymous inherited mapping is
@@ -17,7 +20,10 @@ struct ExportJobSnapshot {
 class ExportJobManager {
 public:
     ExportJobManager();~ExportJobManager();
-    bool start(const std::wstring&,const std::wstring&,EnhancementSettings,bool hevc,unsigned maxFrames=0,int audioStreamIndex=-1,double trimStartSeconds=0.0,double trimEndSeconds=0.0);
+    bool start(const std::wstring&,const std::wstring&,EnhancementSettings,bool hevc,unsigned maxFrames=0,int audioStreamIndex=-1,double trimStartSeconds=0.0,double trimEndSeconds=0.0,sink::ExportRateControl rateControl=sink::ExportRateControl::Cq);
+    bool enqueue(const std::wstring&,const std::wstring&,EnhancementSettings,bool hevc,unsigned maxFrames=0,int audioStreamIndex=-1,double trimStartSeconds=0.0,double trimEndSeconds=0.0,sink::ExportRateControl rateControl=sink::ExportRateControl::Cq);
+    void clearQueue();
+    size_t queuedCount() const;
     void cancel();void pause(bool);void watching(bool);
     ExportJobSnapshot poll();
 private:struct Impl;std::unique_ptr<Impl> p_;

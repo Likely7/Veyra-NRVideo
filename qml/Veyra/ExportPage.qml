@@ -4,9 +4,10 @@
 // card spans rows 2-3 on the left; the video sits in the middle with the trim range
 // under it; output settings fill the right column.
 //
-// Scope, stated on the page rather than hidden: this build has no multi-file queue.
-// What is real - preset selection, codec, output size, bitrate and progress - is
-// wired to the engine's export job.
+// Scope: preset selection, codec, output size, rate control, queueing and
+// progress are wired to the engine's export job. Queue execution is serialized
+// by ExportJobManager; full multi-file cancellation/ordering acceptance remains
+// a separate runtime check.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -32,7 +33,7 @@ VPage {
             font.pixelSize: Theme.fsBody
         }
         Item { Layout.fillWidth: true }
-        VButton { text: "添加文件"; onClicked: veyra.openFileDialog() }
+        VButton { text: "添加文件"; onClicked: veyra.addExportFilesDialog() }
     }
 
     // --- left column: what is being exported ------------------------------
@@ -71,11 +72,17 @@ VPage {
                 font.pixelSize: Theme.fsSmall
             }
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.stroke }
-            // The design's card is a queue of several files. The engine exports one
-            // at a time, so no queue is drawn and the card says why.
+            Text {
+                visible: veyra.exportQueueCount > 0
+                Layout.fillWidth: true
+                text: "等待队列 " + veyra.exportQueueCount + " 项"
+                color: Theme.accent
+                font.family: Theme.fontMono
+                font.pixelSize: 11
+            }
             Text {
                 Layout.fillWidth: true
-                text: "本版本一次导出当前打开的一个文件；多文件队列尚未实现。"
+                text: "按加入顺序逐项导出；每项独立保留 partial。"
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: 11
@@ -142,6 +149,14 @@ VPage {
                         onMoved: veyra.exportBitrateMbps = Math.round(value)
                     }
                 }
+                VRow {
+                    label: "策略"
+                    VSeg {
+                        options: [{ id: "0", label: "CBR" }, { id: "1", label: "VBR" }, { id: "2", label: "CQ" }]
+                        current: String(veyra.exportRateControl)
+                        onPicked: id => veyra.exportRateControl = parseInt(id)
+                    }
+                }
             }
 
             VGroup {
@@ -169,7 +184,8 @@ VPage {
                     spacing: 3
                     Text {
                         text: (veyra.exportHevc ? "HEVC" : "H.264") + " · "
-                              + (veyra.exportBitrateMbps > 0 ? veyra.exportBitrateMbps + " Mbps" : "恒定质量")
+                              + (["CBR", "VBR", "CQ"][veyra.exportRateControl]) + " · "
+                              + (veyra.exportBitrateMbps > 0 ? veyra.exportBitrateMbps + " Mbps" : "自动质量")
                         color: Theme.t2
                         font.family: Theme.fontMono
                         font.pixelSize: Theme.fsSmall
@@ -220,6 +236,13 @@ VPage {
                     Text {
                         text: veyra.exportRunning ? (veyra.exportProgress * 100).toFixed(1) + "%" : ""
                         color: Theme.t1
+                        font.family: Theme.fontMono
+                        font.pixelSize: 11
+                    }
+                    Text {
+                        visible: veyra.exportRunning && veyra.exportEtaSeconds > 0
+                        text: "剩余约 " + veyra.formatTime(veyra.exportEtaSeconds)
+                        color: Theme.t3
                         font.family: Theme.fontMono
                         font.pixelSize: 11
                     }

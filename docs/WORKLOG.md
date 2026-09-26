@@ -6698,3 +6698,9 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   - 未执行：多音轨真实切换、全屏/多显示器/DPI 复查、字幕流选择（后端未接入）。R0/R1 窗口分层总验收未据此宣布通过；进度条缩略图、点击跳转和拖动问题仍需单独验收。
 
 - 2026-09-26 / R5.2-b：完成导出剪辑入出点垂直切片。桥接、worker 共享内存和 `VideoExportJob` 传递剪辑范围；视频从首个完整入点帧开始，音频同步裁剪，出点停止写入；QML 导出页 slider 和导出探针参数已接线。`2→5s` 与英语音轨真实 NVENC/D3D12 导出通过，非法范围拒绝，7.9 秒尾段通过；7.98 秒因无入点后的完整帧拒绝，按合同记录。Quick Test 9/9。证据：`E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-b-trim\`、`E:\项目\Veyra\logs\ui-qml-migration-20260926\`。slider 目视、拖动/点击跳转、R0/R1 总验收未执行，按用户要求暂缓。下一目标 R5.2-c：导出队列与编码策略。
+### 2026-09-26 / R5.2-c 导出队列与编码策略
+- 实现 CBR/VBR/CQ 从 QML 设置到 NVENC 与 Media Foundation 的真实参数映射；CBR/VBR 无码率拒绝，CQ 走恒定质量。
+- 实现 `ExportJobManager` 顺序等待队列、完成后自动启动下一项、ETA、队列数和取消时清空等待项；导出页增加多文件选择入口、策略、ETA 和队列状态。
+- 构建命令：`cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && cmake --build E:\项目\Veyra\build\qt-probe-20260926 --target veyra_export_probe veyra_qml_quick_tests --parallel 4'`，exit 0。
+- 原始运行证据：`E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-c\cq.stdout.log`、`vbr.stdout.log`、`cbr.stdout.log`、`invalid-cbr.stdout.log`、`quick-tests.txt`；三种真实 NVENC/D3D12 策略均成功，Quick Test `9 passed, 0 failed, 0 skipped`，CBR 无码率 exit 2 且无输出。
+- 未执行：队列自动推进/取消完整运行、Media Foundation 实卡、hash/perf/delivery/unit 门槛、导出页截图及用户暂缓的缩略图/进度条/R0/R1 总验收。`veyra_export_worker_failure_tests` 与 `veyra_audio_track_output_tests` 的混合结果不纳入本轮通过证据。

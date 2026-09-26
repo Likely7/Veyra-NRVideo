@@ -200,7 +200,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         };
         // Must drain before rate/writeAudioUntil/writer leave scope, including cancel/error.
         struct EncoderCloser {std::unique_ptr<sink::VideoEncoder>& encoder;~EncoderCloser(){encoder.reset();}} closer{encoder};
-        sink::EncoderConfig encoderConfig;encoderConfig.hevc=hevc;encoderConfig.fpsNum=unsigned(rate.num);encoderConfig.fpsDen=unsigned(rate.den);encoderConfig.bitrateMbps=options.settings.exportBitrateMbps;
+        sink::EncoderConfig encoderConfig;encoderConfig.hevc=hevc;encoderConfig.fpsNum=unsigned(rate.num);encoderConfig.fpsDen=unsigned(rate.den);encoderConfig.bitrateMbps=options.settings.exportBitrateMbps;encoderConfig.rateControl=options.exportRateControl;
         std::wstring encoderDetail;
         encoder=sink::openVideoEncoder(ctx,ring,graph,encoderConfig,writer,encoderDetail);
         if(!encoder){
@@ -210,7 +210,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             break;
         }
         encoderName=encoder->describe();
-        veyra::log::info("export",std::format("encoder={} codec={} bitrateMbps={} rate={}/{}",std::string(sink::encoderBackendName(encoder->backend())),hevc?"HEVC":"H264",encoderConfig.bitrateMbps,rate.num,rate.den));
+        veyra::log::info("export",std::format("encoder={} codec={} rateControl={} bitrateMbps={} rate={}/{}",std::string(sink::encoderBackendName(encoder->backend())),hevc?"HEVC":"H264",std::string(sink::exportRateControlName(encoderConfig.rateControl)),encoderConfig.bitrateMbps,rate.num,rate.den));
         auto headers=encoder->headers();cp->extradata=static_cast<uint8_t*>(av_mallocz(headers.size()+AV_INPUT_BUFFER_PADDING_SIZE));if(!cp->extradata)break;memcpy(cp->extradata,headers.data(),headers.size());cp->extradata_size=int(headers.size());
         int muxResult=avio_open(&mux->pb,utf8(partial).c_str(),AVIO_FLAG_WRITE);
         if(muxResult<0){failAv(L"创建输出文件",muxResult);break;}

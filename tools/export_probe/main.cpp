@@ -5,20 +5,23 @@
 //
 //   veyra_export_probe <input> <output> [--hevc] [--max-frames N]
 //                         [--trim-start seconds] [--trim-end seconds]
-//                         [--audio-stream index]
+//                         [--audio-stream index] [--rate-control cbr|vbr|cq]
+//                         [--bitrate-mbps N]
 //
 // Exit codes: 0 completed, 1 export refused/failed, 2 bad arguments.
 #include "veyra/engine/VideoExportJob.h"
 
 #include <atomic>
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include "veyra/sink/VideoEncoder.h"
 
 int wmain(int argc, wchar_t** argv)
 {
     if (argc < 3) {
-        std::fwprintf(stderr, L"usage: veyra_export_probe <input> <output> [--hevc] [--video-hdr] [--max-frames N] [--trim-start seconds] [--trim-end seconds] [--audio-stream index]\n");
+        std::fwprintf(stderr, L"usage: veyra_export_probe <input> <output> [--hevc] [--video-hdr] [--max-frames N] [--trim-start seconds] [--trim-end seconds] [--audio-stream index] [--rate-control cbr|vbr|cq] [--bitrate-mbps N]\n");
         return 2;
     }
     const std::wstring input = argv[1];
@@ -27,6 +30,8 @@ int wmain(int argc, wchar_t** argv)
     unsigned maxFrames = 0;
     double trimStart = 0.0, trimEnd = 0.0;
     int audioStream = -1;
+    auto rateControl = veyra::sink::ExportRateControl::Cq;
+    unsigned bitrateMbps = 0;
     for (int i = 3; i < argc; ++i) {
         const std::wstring arg = argv[i];
         if (arg == L"--hevc") {
@@ -41,6 +46,21 @@ int wmain(int argc, wchar_t** argv)
             trimEnd = std::wcstod(argv[++i], nullptr);
         } else if (arg == L"--audio-stream" && i + 1 < argc) {
             audioStream = int(std::wcstol(argv[++i], nullptr, 10));
+        } else if (arg == L"--rate-control" && i + 1 < argc) {
+            const std::wstring value = argv[++i];
+            if (value == L"cbr") rateControl = veyra::sink::ExportRateControl::Cbr;
+            else if (value == L"vbr") rateControl = veyra::sink::ExportRateControl::Vbr;
+            else if (value == L"cq") rateControl = veyra::sink::ExportRateControl::Cq;
+            else {
+                std::fwprintf(stderr, L"invalid rate control: %ls\n", value.c_str());
+                return 2;
+            }
+        } else if (arg == L"--bitrate-mbps" && i + 1 < argc) {
+            bitrateMbps = unsigned(std::wcstoul(argv[++i], nullptr, 10));
+            if (bitrateMbps > 300) {
+                std::fwprintf(stderr, L"bitrate must be 0..300 Mbps\n");
+                return 2;
+            }
         } else {
             std::fwprintf(stderr, L"unknown argument: %ls\n", arg.c_str());
             return 2;
@@ -52,6 +72,12 @@ int wmain(int argc, wchar_t** argv)
     options.exportStartSeconds = trimStart;
     options.exportEndSeconds = trimEnd;
     options.audioStreamIndex = audioStream;
+    options.exportRateControl = rateControl;
+    options.settings.exportBitrateMbps = bitrateMbps;
+    if (rateControl != veyra::sink::ExportRateControl::Cq && bitrateMbps == 0) {
+        std::fwprintf(stderr, L"CBR/VBR require --bitrate-mbps N\n");
+        return 2;
+    }
     std::atomic<bool> cancel{false};
     const bool ok = veyra::engine::exportVideo(input, output, options, hevc, cancel,
         [](double progress, const std::wstring& message) {

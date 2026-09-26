@@ -178,6 +178,7 @@ private:
     bool check(HRESULT hr,const wchar_t* stage){if(SUCCEEDED(hr))return true;error_=std::format(L"{} HRESULT=0x{:08X}",stage,unsigned(hr));log::error("mf-encoder",std::string(error_.begin(),error_.end()));return false;}
     bool hevc_=false;
     uint32_t bitrateMbps_=0;
+    ExportRateControl rateControl_=ExportRateControl::Cq;
     unsigned fpsNum_=1,fpsDen_=1;
     uint32_t width_=0,height_=0;
     ComputePass convert_;
@@ -195,7 +196,7 @@ private:
 
 bool MfVideoEncoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,EnhanceGraph& graph,const EncoderConfig& config,PacketWriter writer){
     ctx_=&ctx;ring_=&ring;graph_=&graph;writer_=std::move(writer);
-    hevc_=config.hevc;bitrateMbps_=config.bitrateMbps;
+    hevc_=config.hevc;bitrateMbps_=config.bitrateMbps;rateControl_=config.rateControl;
     fpsNum_=std::max(1u,config.fpsNum);fpsDen_=std::max(1u,config.fpsDen);
     width_=graph.workWidth();height_=graph.workHeight();
     error_=L"Media Foundation startup failed; see worker log";
@@ -308,7 +309,14 @@ bool MfVideoEncoder::applyRateControl(){
     value.ulVal=1;set(kPropLowLatencyMode,value,"LowLatencyMode");
     value.ulVal=std::max(1u,fpsNum_*2);set(kPropGOPSize,value,"GOPSize");
     value.ulVal=70;set(kPropQualityVsSpeed,value,"QualityVsSpeed");
-    if(bitrateMbps_>0){
+    if(rateControl_==ExportRateControl::Cbr){
+        const uint32_t bitsPerSecond=bitrateMbps_*1000000u;
+        value.ulVal=bitsPerSecond;set(kPropMeanBitRate,value,"MeanBitRate");
+        set(kPropMaxBitRate,value,"MaxBitRate");
+        value.ulVal=bitsPerSecond/2;set(kPropBufferSize,value,"BufferSize");
+        value.ulVal=uint32_t(eAVEncCommonRateControlMode_CBR);set(kPropRateControlMode,value,"RateControlMode");
+        log::info("mf-encoder",std::format("rate control CBR target={}Mbps",bitrateMbps_));
+    }else if(rateControl_==ExportRateControl::Vbr){
         const uint32_t bitsPerSecond=bitrateMbps_*1000000u;
         value.ulVal=bitsPerSecond;set(kPropMeanBitRate,value,"MeanBitRate");
         set(kPropMaxBitRate,value,"MaxBitRate");

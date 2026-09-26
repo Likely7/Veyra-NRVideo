@@ -223,6 +223,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int exportGenerated READ exportGenerated NOTIFY exportChanged)
     Q_PROPERTY(bool exportHevc READ exportHevc WRITE setExportHevc NOTIFY exportChanged)
     Q_PROPERTY(int exportBitrateMbps READ exportBitrateMbps WRITE setExportBitrateMbps NOTIFY exportChanged)
+    Q_PROPERTY(int exportRateControl READ exportRateControl WRITE setExportRateControl NOTIFY exportChanged)
+    Q_PROPERTY(double exportEtaSeconds READ exportEtaSeconds NOTIFY exportChanged)
+    Q_PROPERTY(int exportQueueCount READ exportQueueCount NOTIFY exportChanged)
     // The preset the export will use. The design requires export to select a
     // preset (list or node) rather than assembling effects separately.
     Q_PROPERTY(QString exportPresetName READ exportPresetName NOTIFY exportChanged)
@@ -432,6 +435,10 @@ public:
     void setExportHevc(bool value);
     int exportBitrateMbps() const;
     void setExportBitrateMbps(int value);
+    int exportRateControl() const;
+    void setExportRateControl(int value);
+    double exportEtaSeconds() const;
+    int exportQueueCount() const;
     QString exportPresetName() const;
     int exportSrTargetIndex() const;
     void setExportSrTargetIndex(int index);
@@ -493,6 +500,8 @@ public:
     // The export target without the dialog (the dialog's result, or --export-out in a test).
     void setExportPath(const QString& path);
     Q_INVOKABLE void startExport();
+    Q_INVOKABLE void enqueueExportFile(const QString& input, const QString& output);
+    Q_INVOKABLE void addExportFilesDialog();
     Q_INVOKABLE void cancelExport();
     Q_INVOKABLE void pauseExport(bool paused);
     Q_INVOKABLE void quit();

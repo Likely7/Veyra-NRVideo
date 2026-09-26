@@ -20,6 +20,16 @@ namespace veyra::pipeline { class EnhanceGraph; }
 
 namespace veyra::sink {
 
+enum class ExportRateControl : uint32_t { Cbr = 0, Vbr = 1, Cq = 2 };
+constexpr std::string_view exportRateControlName(ExportRateControl mode) {
+    switch (mode) {
+    case ExportRateControl::Cbr: return "CBR";
+    case ExportRateControl::Vbr: return "VBR";
+    case ExportRateControl::Cq: return "CQ";
+    }
+    return "unknown";
+}
+
 // (bitstream, bytes, output frame index, keyframe) -> accepted?
 using PacketWriter=std::function<bool(const uint8_t*,size_t,int64_t,bool)>;
 
@@ -41,6 +51,7 @@ struct EncoderConfig {
     // Export target bitrate in Mbps; 0 keeps the backend's constant-quality
     // default (NVENC CONSTQP / MFT quality mode).
     uint32_t bitrateMbps=0;
+    ExportRateControl rateControl=ExportRateControl::Cq;
     // Active adapter identity. A machine can have several vendors' hardware
     // MFTs registered at once (an AMD driver's MFT is visible on an NVIDIA
     // host), so the Media Foundation path must prefer the MFT of the GPU that

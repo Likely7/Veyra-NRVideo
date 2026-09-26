@@ -13,6 +13,7 @@
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/remoteplay/SessionInbox.h"
 #include "veyra/media/AudioTrack.h"
+#include "veyra/sink/VideoEncoder.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
@@ -23,6 +24,7 @@ struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t f
     int audioStreamIndex=-1; // export selection; -1 selects the container default
     double exportStartSeconds=0.0; // export-only trim; first complete frame at/after this time
     double exportEndSeconds=0.0; // export-only trim; 0 means source end
+    sink::ExportRateControl exportRateControl=sink::ExportRateControl::Cq;
     bool captureReplayForTest=false; // file-backed live scheduler test; never enabled by UI
     bool captureCpuUnpack=false; // N1 diagnostic: legacy per-pixel CPU unpack
     EnhancementSettings snapshot()const{auto s=settings;s.nr=nr;s.sr=sr;s.multiplier=fg?fgMultiplier:1;s.nrPolicy=realtime?(settings.nrPolicy==pipeline::NrSizePolicy::Native?pipeline::NrSizePolicy::Realtime:settings.nrPolicy):pipeline::NrSizePolicy::Native;return s;}
