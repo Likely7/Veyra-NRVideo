@@ -6661,3 +6661,15 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   - 实测（visible-scene.mp4）：极简页 → 点专业模式，日志仅 open 时 1280x720 与切页 852x524 各一次 `present-sink: resized`；静止画面正常（hover-idle.png）；弹层（--menu source / preset）在画面上方仍正确挖区（hover-menusrc.png、hover-menu.png）。
   - 日志中 `audio-track decoder rejected stream=1 code=-22` 与改动前（22:02 起）一致，属该素材第二音轨，非本次引入。
   - 未执行：拖拽改窗口尺寸的逐帧跟随录屏；PresentMon 对比（放 G2.5/W3）。
+- G2.4 拖放/快捷键/电源/徽标/toast（`checkpoint/ui-mig-g2.4`，证据 `goal/g2.4/`）：
+  - 拖放：Main.qml `DropArea` → `veyra.openUrl`（非本地 URL 提示“只能打开本地文件”），与 AppShell WM_DROPFILES 一样在投放内直接打开。离开 home/set 时立即 `syncRect`，否则同一调用里 open 读到 0x0（修正后 pre-open 1280x536）。
+  - 新脚本 `tools/qt_probe/drop-file.ps1`：WinForms 源窗 DoDragDrop + 独立进程注入鼠标移动（同一 runspace 在拖放期间无法跑计时器），输出 drag-result.txt、PrintWindow 与屏幕两张截图；另有 -NoDrag 对照、-AfterKeys/-AfterPoint/-Kick 诊断开关。
+  - 实测：`drag result: Copy`，日志 `ui-drop E:/项目/Veyra/tests/1.4.2beta/visible-scene.mp4` → `pre-open 1280x536` → `source-file opened` → `present-sink window 1280x536` → `resized to 1280x720`。
+  - 快捷键（Main.qml Shortcut，对齐 AppShell）：空格播放/暂停、F11/Alt+Enter 全屏、全屏时 Esc 退出、←→ ±10 秒、↑↓ 音量 ±0.05、Ctrl+O、Ctrl+E、全屏 Ctrl+L 锁定（锁定时 dock 不再下拉）、B/Z/X/T/Y 提示“字幕尚未接入（键）”——引擎无字幕，不做假控件。V 按住看原画：main.cpp 事件过滤器（仅专业页、非文本框、忽略自动重复、失焦释放）→ `engine.comparison(1/0)`。
+  - 电源：`PlaybackPowerGuard.h` 移到 `include/veyra/ui/`（Win32 目标同时编译通过），桥接每次 poll 按“文件播放中”更新；日志 playback-power acquired / 暂停 released。
+  - 导出徽标：dock 导出按钮右上角脉动 `.dot.warn`，仅 `veyra.exportRunning` 为真时显示；新增 `--export-out <path>` 测试开关。真实导出中截图 export/hover-dock-running.png 可见徽标。
+  - toast：对齐 pages.css .canvas-toast（top 12，from -8px/opacity 0，opacity .2s，位移 .45s spring，2600ms 收起，错误/成功两套配色），z 30 低于 dock。
+  - 键盘实测（keys/）：hover-subB 顶部 toast；F11 2560x1440；Ctrl+L 锁定后顶边不出 dock、解锁后出；Esc 回 1280x800；日志 seek、ui-compare on/off、ui-fullscreen enabled/locked。
+  - 环境问题（2026-09-26 00:00 前后）：拖放截图画面区为黑、之后 hover 不出 dock、motion-probe 无输出——HEAD（stash 后重建）同样复现，DWM 计时 `refreshes/s=1 composed/s=1`（tmp/.../dwm-vblank.ps1），判断为显示器休眠导致合成/帧驱动停摆，不是本次代码问题。曾尝试延迟 open（QML Timer / QTimer）排查，均已撤回。
+  - 未执行：拖放后画面截图（显示器休眠，待亮屏复拍）；toast 动效逐帧探针；导出文件内容校验。
+

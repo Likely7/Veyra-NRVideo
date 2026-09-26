@@ -74,6 +74,11 @@ Window {
         const prev = shownPage
         if (prev === page) return
         leavingPage = Theme.reduced || prev === "" ? "" : prev
+        // Leaving a page without a picture (home, settings): an open may follow in
+        // the same call (openPath navigates, then opens) and the engine samples the
+        // host size once, so the rect is placed now, not 150 ms later. There is no
+        // picture on the old page to fade against.
+        if (prev === "home" || prev === "set") videoHost.syncRect()
         if (leavingPage !== "") { leaveAnim.restart(); showTimer.restart() }
         else showPage(false)
     }
@@ -195,34 +200,92 @@ Window {
         anchors.horizontalCenter: parent.horizontalCenter
         currentPage: root.page
         pinned: root.test.dockPinned === true
+        locked: root.fullLocked
         forcedTip: root.test.tip !== undefined ? root.test.tip : ""
         opened: pinned
         onRequestPage: p => root.page = p
     }
 
+    // Drag and drop opens the file (AppShell WM_DROPFILES).
+    DropArea {
+        anchors.fill: parent
+        onDropped: drop => {
+            if (!drop.hasUrls || drop.urls.length === 0) return
+            drop.accept(Qt.CopyAction)
+            veyra.openUrl(drop.urls[0])
+        }
+    }
+
+    // Keyboard, aligned with AppShell's message loop. Text fields keep their own
+    // keys (Qt's shortcut override), so typing in a field never seeks. V (hold for
+    // the original picture) needs its release as well; main.cpp handles it.
+    readonly property bool fullscreen: visibility === Window.FullScreen
+    property bool fullLocked: false
+    onFullscreenChanged: if (!fullscreen) fullLocked = false
+    function toggleFullscreen() {
+        fullLocked = false
+        visibility = fullscreen ? Window.Windowed : Window.FullScreen
+        veyra.logUi("ui-fullscreen", "enabled=" + fullscreen)
+    }
+    function subtitleKey(k) { toast.show("字幕尚未接入（" + k + "）", true) }
+    Shortcut { sequence: "Space"; onActivated: veyra.togglePlayPause() }
+    Shortcut { sequences: ["F11", "Alt+Return", "Alt+Enter"]; onActivated: root.toggleFullscreen() }
+    Shortcut { sequence: "Esc"; enabled: root.fullscreen; onActivated: root.toggleFullscreen() }
+    Shortcut { sequence: "Left"; onActivated: veyra.seekBy(-10) }
+    Shortcut { sequence: "Right"; onActivated: veyra.seekBy(10) }
+    Shortcut { sequence: "Up"; onActivated: veyra.volume = Math.min(1, veyra.volume + 0.05) }
+    Shortcut { sequence: "Down"; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
+    Shortcut { sequence: "Ctrl+O"; onActivated: veyra.openFileDialog() }
+    Shortcut { sequence: "Ctrl+E"; onActivated: root.page = "exp" }
+    Shortcut {
+        sequence: "Ctrl+L"
+        enabled: root.fullscreen
+        onActivated: {
+            root.fullLocked = !root.fullLocked
+            if (root.fullLocked) dock.opened = false
+            toast.show(root.fullLocked ? "已锁定全屏 · Ctrl+L 解锁，Esc 退出全屏" : "已解锁全屏", false)
+            veyra.logUi("ui-fullscreen", "locked=" + root.fullLocked + " shortcut=Ctrl+L")
+        }
+    }
+    Shortcut { sequence: "B"; onActivated: root.subtitleKey("B") }
+    Shortcut { sequences: ["Z", "Shift+Z"]; onActivated: root.subtitleKey("Z") }
+    Shortcut { sequences: ["X", "Shift+X"]; onActivated: root.subtitleKey("X") }
+    Shortcut { sequence: "T"; onActivated: root.subtitleKey("T") }
+    Shortcut { sequence: "Y"; onActivated: root.subtitleKey("Y") }
+
     // Toasts: a refused edit, a finished export, a failed open.
+    // pages.css .canvas-toast: top 12px, padding 7px 12px, from translate -8px and
+    // opacity 0; .on: opacity .2s, translate .45s --spring; hidden after 2600 ms.
     Rectangle {
         id: toast
+        // Under the dock (z 40): an opened dock stays usable over a toast.
+        z: 30
         property string message: ""
         property bool isError: false
+        property bool on: false
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24
-        width: Math.min(toastText.implicitWidth + 28, root.width - 48)
-        height: toastText.implicitHeight + 18
+        anchors.top: parent.top
+        anchors.topMargin: 12
+        // Over the picture: cut out of the video window.
+        objectName: "videoCover"
+        property real coverRadius: 9
+        width: Math.min(toastText.implicitWidth + 24 + 2, root.width - 48)
+        height: toastText.implicitHeight + 14 + 2
         radius: 9
         color: toast.isError ? "#2A1414" : "#132218"
         border.width: 1
         border.color: toast.isError ? Qt.rgba(1, 0.365, 0.365, 0.4) : Qt.rgba(0.239, 0.863, 0.518, 0.35)
-        opacity: 0
+        opacity: on ? 1 : 0
         visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: Theme.d(Theme.durNormal) } }
-        function show(m, bad) { toast.message = m; toast.isError = bad; toast.opacity = 1; toastTimer.restart() }
-        Timer { id: toastTimer; interval: 4200; onTriggered: toast.opacity = 0 }
+        transform: Translate { id: toastShift; y: toast.on ? 0 : -8
+            Behavior on y { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } } }
+        Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
+        function show(m, bad) { toast.message = m; toast.isError = bad; toast.on = true; toastTimer.restart() }
+        Timer { id: toastTimer; interval: 2600; onTriggered: toast.on = false }
         Text {
             id: toastText
             anchors.centerIn: parent
-            width: parent.width - 20
+            width: Math.min(implicitWidth, root.width - 72)
             text: toast.message
             color: toast.isError ? "#FFC9C9" : "#BDF3D2"
             font.family: Theme.fontUi

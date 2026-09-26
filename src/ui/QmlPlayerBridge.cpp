@@ -18,6 +18,7 @@
 
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
+#include "veyra/ui/PlaybackPowerGuard.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/ScreenCaptureSource.h"
 
@@ -54,6 +55,11 @@ struct QmlPlayerBridge::Impl {
     // The window the engine presents into, and the last file the UI opened.
     HWND videoWindow = nullptr;
     std::wstring sourceLabel;
+
+    // Keeps the display and system awake while a video plays (AppShell rule: running,
+    // not failed, not a still image, transport Playing). Acquired and released on
+    // this GUI thread, as SetThreadExecutionState requires.
+    PlaybackPowerGuard power;
     std::function<void()> preOpen;
 
     // Export progress is mirror state: the engine reports an export through a
@@ -119,7 +125,11 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const bool had = impl_->haveSnapshot;
         const uint64_t before = impl_->publishedRevision;
         impl_->poll();
-        if (!had || impl_->publishedRevision != before) emit snapshotChanged();
+        if (!had || impl_->publishedRevision != before) {
+            const auto& s = impl_->snapshot;
+            impl_->power.update(s.running && !s.failed && !s.image && s.transport == engine::TransportState::Playing);
+            emit snapshotChanged();
+        }
         // An export in flight needs its own poll; it is a separate job and its
         // snapshot is not part of the player snapshot.
         if (impl_->exportSnapshot.active()) pollExport();
@@ -1108,6 +1118,23 @@ void QmlPlayerBridge::seekTo(double seconds) { impl_->engine.seek(seconds); }
 void QmlPlayerBridge::seekBy(double seconds) {
     impl_->engine.seek(std::max(0.0, impl_->snapshot.position + seconds));
 }
+void QmlPlayerBridge::openUrl(const QUrl& url) {
+    if (!url.isLocalFile()) {
+        emit notice(tr("只能打开本地文件"), true);
+        return;
+    }
+    // Opened inside the drop, as AppShell's WM_DROPFILES does.
+    veyra::log::info("ui-drop", url.toLocalFile().toStdString());
+    openPath(QDir::toNativeSeparators(url.toLocalFile()));
+}
+void QmlPlayerBridge::logUi(const QString& channel, const QString& text) {
+    const std::string c = channel.toStdString();
+    veyra::log::info(c.c_str(), text.toStdString());
+}
+void QmlPlayerBridge::holdOriginal(bool held) {
+    impl_->engine.comparison(held ? 1 : 0, false);
+    veyra::log::info("ui-compare", held ? "hold original on" : "hold original off");
+}
 void QmlPlayerBridge::stepFrame(int direction) {
     // A frame step is a small seek. The engine owns the real frame duration, so
     // this is honest about being approximate rather than pretending to be exact.
@@ -1126,6 +1153,10 @@ void QmlPlayerBridge::takeScreenshot() {
 void QmlPlayerBridge::chooseExportPath() {
     const QString path = QFileDialog::getSaveFileName(nullptr, tr("导出到"), QString(),
                                                       tr("MP4 视频 (*.mp4);;所有文件 (*)"));
+    setExportPath(path);
+}
+
+void QmlPlayerBridge::setExportPath(const QString& path) {
     if (path.isEmpty()) return;
     impl_->exportOutput = wideOf(path);
     impl_->exportStatus = QFileInfo(path).fileName();

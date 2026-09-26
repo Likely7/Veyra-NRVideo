@@ -25,6 +25,7 @@
 // not offered until the engine side exists.
 #include <QObject>
 #include <QString>
+#include <QUrl>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -463,9 +464,18 @@ public:
     Q_INVOKABLE void stopPlayback();
     Q_INVOKABLE void seekTo(double seconds);
     Q_INVOKABLE void seekBy(double seconds);
+    // V held down: the engine shows the unprocessed frame until release
+    // (AppShell holdOriginal -> engine.comparison(1, false)).
+    Q_INVOKABLE void holdOriginal(bool held);
+    // A dropped file (AppShell WM_DROPFILES): a local file URL goes to openPath.
+    Q_INVOKABLE void openUrl(const QUrl& url);
+    // UI events the shell logs (fullscreen, lock) under the given channel.
+    Q_INVOKABLE void logUi(const QString& channel, const QString& text);
     Q_INVOKABLE void stepFrame(int direction);
     Q_INVOKABLE void takeScreenshot();
     Q_INVOKABLE void chooseExportPath();
+    // The export target without the dialog (the dialog's result, or --export-out in a test).
+    void setExportPath(const QString& path);
     Q_INVOKABLE void startExport();
     Q_INVOKABLE void cancelExport();
     Q_INVOKABLE void pauseExport(bool paused);

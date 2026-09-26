@@ -8,7 +8,9 @@ param(
   [string]$Clip = '',
   [string]$Out = 'E:\项目\Veyra\logs\ui-qml-migration-20260925\hover',
   [string]$Extra = '',
-  # "x,y,name[,waitMs[,click]]" per step (click: a left click at the point), steps separated by ';', window-relative pixels. One
+  # "x,y,name[,waitMs[,action]]" per step, steps separated by ';', window-relative pixels.
+  # action: click (a left click at the point), or keys "k<vk>[+<vk>..]" tapped in order with
+  # modifiers held ("k17+76" is Ctrl+L), or "kd<vk>" / "ku<vk>" to press or release one key. One
   # string: powershell -File does not split an array argument.
   [string]$Steps = '640,4,top',
   [int]$WaitSeconds = 8
@@ -24,6 +26,7 @@ public class HW {
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, int d, IntPtr e);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint f, IntPtr e);
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   delegate bool EnumProc(IntPtr h, IntPtr p);
@@ -61,6 +64,13 @@ foreach ($s in ($Steps -split ';')) {
   [HW]::GetWindowRect($h, [ref]$r) | Out-Null
   [HW]::SetCursorPos($r.Left + [int]$x, $r.Top + [int]$y) | Out-Null
   if ($click -eq 'click') { Start-Sleep -Milliseconds 150; [HW]::mouse_event(2, 0, 0, 0, [IntPtr]::Zero); [HW]::mouse_event(4, 0, 0, 0, [IntPtr]::Zero) }
+  elseif ($click -match '^kd(\d+)$') { [HW]::keybd_event([byte]$Matches[1], 0, 0, [IntPtr]::Zero) }
+  elseif ($click -match '^ku(\d+)$') { [HW]::keybd_event([byte]$Matches[1], 0, 2, [IntPtr]::Zero) }
+  elseif ($click -match '^k([\d+]+)$') {
+    $vks = $Matches[1] -split '\+' | ForEach-Object { [byte]$_ }
+    foreach ($v in $vks) { [HW]::keybd_event($v, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 30 }
+    [array]::Reverse($vks); foreach ($v in $vks) { [HW]::keybd_event($v, 0, 2, [IntPtr]::Zero) }
+  }
   Start-Sleep -Milliseconds ([int]$ms)
   [HW]::GetWindowRect($h, [ref]$r) | Out-Null
   $w = $r.Right - $r.Left; $ht = $r.Bottom - $r.Top

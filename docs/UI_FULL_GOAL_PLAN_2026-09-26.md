@@ -11,7 +11,7 @@
 |---|---|---|---|
 | G0 工具与基线 | 完成 | checkpoint/ui-mig-g0.7 | 设计参考 `design-ref/`、对比 `compare/`、动效曲线 `goal/g0.5/`、缓动测试 `veyra_qml_easing_tests`（构建目录 `build/qt-probe-20260926`）、门槛基线 `goal/g0.7/`（B 阶段性能对比用 `goal/g0.7/perf`） |
 | G1 基础（缓动/背景/字体/图标/组件动效） | 完成 | checkpoint/ui-mig-g1.6 | G1.1–G1.6 完成（Qt 6.8.3：BezierSpline ≤10 段；CurveRenderer 不能用 fillItem；可变字体 600 须设 wght 轴；Popup 无 transform；视频子窗用 videoCover 挖区）；动效探针 dock/page/switch/seg/menu/dialog；Quick Test 8/8；M28/M29 曲线未执行；下一步 G2 |
-| G2 外壳 | 进行中 | checkpoint/ui-mig-g2.3 | G2.1 dock 热区；G2.2 页面切换 sink/rise（探针同曲线）；G2.3 视频窗随渲染帧同步（afterAnimating，去掉 16ms 计时器，矩形不变不调 SetWindowPos）；下一步 G2.4 拖放/快捷键/电源/徽标/toast |
+| G2 外壳 | 进行中 | checkpoint/ui-mig-g2.4 | G2.1 dock 热区；G2.2 页面切换 sink/rise（探针同曲线）；G2.3 视频窗随渲染帧同步；G2.4 拖放/快捷键/V 看原画/电源/导出徽标/toast（拖放后画面截图未执行：显示器休眠）；下一步 G2.5 全屏独立控制条 |
 | G3 四主屏 | 未开始 | | |
 | B1 小项 + 桥接补齐 | 未开始 | | |
 | B2 导出补齐（S2.5） | 未开始 | | |

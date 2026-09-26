@@ -15,6 +15,7 @@
 #include <QQmlContext>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QKeyEvent>
 #include <QTimer>
 #include <QPointer>
 #include <QVariantMap>
@@ -231,6 +232,9 @@ int main(int argc, char** argv) {
             testOptions.insert(QStringLiteral("aspect"), args.at(++i).toDouble());
         } else if (a == QLatin1String("--tip") && hasValue) {
             testOptions.insert(QStringLiteral("tip"), args.at(++i));
+        } else if (a == QLatin1String("--export-out") && hasValue) {
+            // A review run's export target, so a real export starts without the dialog.
+            bridge.setExportPath(args.at(++i));
         } else if (a == QLatin1String("--dock-pinned")) {
             testOptions.insert(QStringLiteral("dockPinned"), true);
         } else if (a == QLatin1String("--size") && hasValue) {
@@ -316,6 +320,32 @@ int main(int argc, char** argv) {
         syncVideoGeometry(window, host);
         syncVideoCovers(window, host);
     };
+    // V held shows the original picture on the professional page (AppShell: the
+    // OriginalHold key, engine.comparison(1, false) until release). A Shortcut only
+    // sees the press, so the window's key events are watched here. Auto-repeat is
+    // ignored, and a focused text field keeps its V.
+    struct HoldOriginalFilter : QObject {
+        QQuickWindow* window; ui::QmlPlayerBridge* bridge; bool held = false;
+        HoldOriginalFilter(QQuickWindow* w, ui::QmlPlayerBridge* b) : window(w), bridge(b) {}
+        bool eventFilter(QObject*, QEvent* e) override {
+            const auto t = e->type();
+            if (t == QEvent::FocusOut && held) { held = false; bridge->holdOriginal(false); return false; }
+            if (t != QEvent::KeyPress && t != QEvent::KeyRelease) return false;
+            auto* k = static_cast<QKeyEvent*>(e);
+            if (k->key() != Qt::Key_V || k->isAutoRepeat() || k->modifiers() != Qt::NoModifier) return false;
+            const bool press = t == QEvent::KeyPress;
+            if (press) {
+                if (window->property("page").toString() != QLatin1String("pro")) return false;
+                if (auto* f = window->activeFocusItem(); f && f->inherits("QQuickTextInput")) return false;
+                if (auto* f = window->activeFocusItem(); f && f->inherits("QQuickTextEdit")) return false;
+            }
+            if (press == held) return false;
+            held = press;
+            bridge->holdOriginal(press);
+            return true;
+        }
+    };
+    window->installEventFilter(new HoldOriginalFilter(window, &bridge));
     QObject::connect(window, &QQuickWindow::afterAnimating, &app, follow);
     // The first frame may come before the page layout settles; one pass after the
     // event loop starts covers a scene that then never animates.

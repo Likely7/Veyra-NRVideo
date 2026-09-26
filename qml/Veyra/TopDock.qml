@@ -62,7 +62,9 @@ Item {
         HoverHandler { onHoveredChanged: if (hovered) dockRoot.open() }
     }
 
-    function open() { retract.stop(); opened = true }
+    function open() { retract.stop(); if (!locked) opened = true }
+    // Fullscreen lock (Ctrl+L): the pointer no longer brings the dock down.
+    property bool locked: false
     // Retract 450ms after the pointer leaves, exactly like closeDock().
     Timer {
         id: retract
@@ -200,6 +202,15 @@ Item {
                                     font.family: Theme.fontUi
                                     font.pixelSize: 11   // 11.5px; pixelSize is an int (fractional sizes: G3)
                                 }
+                            }
+                            // Export badge: a running export marks the export button
+                            // with the design's pulsing .dot.warn; engine state only.
+                            VDot {
+                                visible: btn.modelData.id === "exp" && veyra.exportRunning
+                                warn: true
+                                x: btn.width - width - 3
+                                y: 3
+                                width: 6; height: 6; radius: 3
                             }
                             HoverHandler { id: btnHover; cursorShape: Qt.PointingHandCursor }
                             TapHandler { id: btnTap; onTapped: dockRoot.requestPage(btn.modelData.id) }

@@ -9,7 +9,7 @@
 #include "WorkspaceTransition.h"
 #include "UiSessionState.h"
 #include "UiPreferenceStore.h"
-#include "PlaybackPowerGuard.h"
+#include "veyra/ui/PlaybackPowerGuard.h"
 #include "CapturePanel.h"
 #include "ScreenCapturePanel.h"
 #ifdef VEYRA_ENABLE_REMOTEPLAY
