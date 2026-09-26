@@ -22,6 +22,7 @@ Rectangle {
     readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
+    readonly property bool seekPreviewOpen: seekMouse.containsMouse && seekMouse.enabled
     HoverHandler { id: barHover }
     implicitHeight: 92
     radius: 30
@@ -149,17 +150,29 @@ Rectangle {
                     id: seekArea
                     Layout.fillWidth: true
                     implicitHeight: 14
+                    property bool scrubbing: false
+                    property real scrubFrac: 0
                     // .seek:hover .thumb { left: 44% } - the thumb tracks the real
                     // progress, not the design's hard-coded 44%.
-                    readonly property real frac: Math.max(0, Math.min(1, veyra.progress))
-                    readonly property real hoverFrac: seekHover.hovered && width > 0
-                                                      ? Math.max(0, Math.min(1, seekHover.point.position.x / width))
-                                                      : frac
+                    readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, veyra.progress))
+                    readonly property real hoverFrac: scrubbing ? scrubFrac
+                                                      : seekMouse.containsMouse && seekArea.width > 0
+                                                        ? Math.max(0, Math.min(1, seekMouse.mouseX / seekArea.width))
+                                                        : frac
+                    property int thumbnailBucket: -1
+                    function fractionAt(x) {
+                        return seekArea.width > 0 ? Math.max(0, Math.min(1, x / seekArea.width)) : 0
+                    }
+                    Timer {
+                        id: thumbnailDelay
+                        interval: 120
+                        onTriggered: seekArea.thumbnailBucket = Math.floor(seekArea.hoverFrac * veyra.duration / 2)
+                    }
                     Rectangle {
                         id: rail
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width
-                        height: seekHover.hovered ? 6 : 3
+                        height: seekMouse.containsMouse ? 6 : 3
                         radius: 9
                         color: Qt.rgba(1, 1, 1, 0.14)
                         Behavior on height { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
@@ -176,14 +189,11 @@ Rectangle {
                         color: "#FFFFFF"
                         x: seekArea.frac * seekArea.width - width / 2
                         anchors.verticalCenter: parent.verticalCenter
-                        scale: seekHover.hovered ? 1 : 0
+                        scale: seekMouse.containsMouse || seekArea.scrubbing ? 1 : 0
                         Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
                     }
                     // .seek .peek: 144x104 above the rail, opacity .15s, scale .85 -> 1
-                    // over .4s --spring from its bottom centre. The design shows a frame
-                    // of the target position; the engine keeps no frame the UI can read
-                    // (only save-to-file), so the scene area is the design's own black
-                    // plate and the time is real. Recorded as 尚未接入 in WORKLOG (B1).
+                    // over .4s --spring from its bottom centre.
                     Rectangle {
                         visible: opacity > 0.01
                         width: 144
@@ -195,11 +205,32 @@ Rectangle {
                         x: Math.max(0, Math.min(parent.width - width,
                                                 seekArea.hoverFrac * seekArea.width - width / 2))
                         y: -height - 18
-                        opacity: seekHover.hovered ? 1 : 0
-                        scale: seekHover.hovered ? 1 : 0.85
+                        opacity: seekMouse.containsMouse || seekArea.scrubbing ? 1 : 0
+                        scale: seekMouse.containsMouse || seekArea.scrubbing ? 1 : 0.85
                         transformOrigin: Item.Bottom
                         Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
                         Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+                        Image {
+                            id: previewFrame
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            height: 81
+                            asynchronous: true
+                            cache: true
+                            fillMode: Image.PreserveAspectFit
+                            source: (seekMouse.containsMouse || seekArea.scrubbing) && seekArea.thumbnailBucket >= 0
+                                    ? "image://veyra-thumb/" + veyra.thumbnailGeneration + "/" + (seekArea.thumbnailBucket * 2000)
+                                    : ""
+                        }
+                        Text {
+                            anchors.centerIn: previewFrame
+                            visible: previewFrame.status === Image.Loading || previewFrame.status === Image.Error
+                            text: previewFrame.status === Image.Loading ? "加载中" : "预览不可用"
+                            color: Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 11
+                        }
                         Text {
                             anchors.left: parent.left
                             anchors.right: parent.right
@@ -219,12 +250,32 @@ Rectangle {
                             }
                         }
                     }
-                    HoverHandler { id: seekHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler {
-                        onTapped: point => {
-                            const f = Math.max(0, Math.min(1, point.position.x / width))
-                            veyra.seekTo(f * veyra.duration)
+                    MouseArea {
+                        id: seekMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        enabled: veyra.duration > 0 && !veyra.isCapture
+                        cursorShape: Qt.PointingHandCursor
+                        onEntered: thumbnailDelay.restart()
+                        onExited: {
+                            thumbnailDelay.stop()
+                            seekArea.thumbnailBucket = -1
                         }
+                        onPressed: mouse => {
+                            seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
+                            seekArea.scrubbing = true
+                        }
+                        onPositionChanged: mouse => {
+                            if (seekArea.scrubbing) seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
+                            thumbnailDelay.restart()
+                        }
+                        onReleased: mouse => {
+                            const target = seekArea.fractionAt(mouse.x) * veyra.duration
+                            seekArea.scrubbing = false
+                            veyra.logUi("ui-seek", "targetSeconds=" + target.toFixed(3))
+                            veyra.seekTo(target)
+                        }
+                        onCanceled: seekArea.scrubbing = false
                     }
                 }
                 Text {

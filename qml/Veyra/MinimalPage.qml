@@ -43,11 +43,8 @@ VPage {
     }
     onEnter: { cineIn.frac = 0.12; cineInAnim.restart() }
 
-    // Where the picture ends: Main.qml sets the window height to the picture plus
-    // BAR_BELOW (46), the lower half of the control pill. The pill itself is a
-    // separate top-level window (FullscreenBar in cinema mode, D1), because the
-    // native video window draws above this whole scene.
-    readonly property real pictureHeight: parent ? parent.height - 46 : 0
+    // The independent pill extends below this window; no opaque spacer is needed.
+    readonly property real pictureHeight: parent ? parent.height : 0
 
     // --- the picture ------------------------------------------------------
     // .min .stage: full width, the picture height, radius 8 (the window radius),

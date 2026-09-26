@@ -17,7 +17,7 @@ BEGIN
    VALUE "FileVersion", "@VEYRA_DISPLAY_VERSION@"
    VALUE "ProductName", "Veyra"
    VALUE "ProductVersion", "@VEYRA_DISPLAY_VERSION@"
-   VALUE "OriginalFilename", "Veyra.exe"
+   VALUE "OriginalFilename", "@VEYRA_RESOURCE_FILENAME@"
    VALUE "LegalCopyright", "Veyra contributors. GPL-3.0."
   END
  END

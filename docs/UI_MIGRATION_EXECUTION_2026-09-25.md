@@ -272,4 +272,11 @@
   - 1080p NR：提交 P95 0.92 ms，GPU 就绪 P95 8.09 ms，NR 5.78 ms，60 fps，跳帧 0
   - 1080p NR + 2X：提交 1.28 ms，GPU 就绪 9.41 ms，120 fps，跳帧 0
   - 4K NR + 2X：提交 1.38 ms，GPU 就绪 12.46 ms，120 fps，跳帧 0
-  - 1080p 无增强：提交 0.13 ms，GPU 就绪 1.57 ms
+- 1080p 无增强：提交 0.13 ms，GPU 就绪 1.57 ms
+
+### R5.2-b（2026-09-26）导出剪辑入出点
+- 在 R5.2-a 的独立导出预设、分辨率、码率和音轨选择上，`PlayerOptions`、导出 worker 共享内存和 `VideoExportJob` 增加入点/出点。视频从入点后的首个完整帧起写，音频丢弃剪辑原点之前的数据并重置时间戳，出点停止写入，进度按剪辑时长计算；换源清空旧范围。
+- `ExportPage.qml` 的两个入/出点 slider 与桥接真实属性绑定；`tools/export_probe/main.cpp` 增加 `--trim-start`、`--trim-end`、`--audio-stream`。
+- 构建命令：`cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && cmake --build E:\项目\Veyra\build\qt-probe-20260926 --target veyra_qml_ui veyra_qml_quick_tests veyra_export_probe --parallel 4'`，exit 0；产物在 `E:\项目\Veyra\build\qt-probe-20260926\`，探针 staging 在 `E:\项目\Veyra\tests\ui-qml-migration-20260925\app\veyra_export_probe.exe`。
+- `audio-tracks-fixture.mkv`：`2→5s` exit 0，91 源帧/91 编码帧，视频约 3.033333s、音频约 3.029s；stream 2 英语音轨同样通过。非法 `5→2s` exit 1，证据 `E:\项目\Veyra\logs\ui-qml-migration-20260926\invalid-range.txt`。`7.9→8.02s` 输出 3 帧、约 0.100333s；`7.98→8.02s` 无入点之后的完整帧而拒绝，符合当前合同。日志显示 RTX 5070 / NVENC / D3D12，未发生 GPU→CPU 视频回读。
+- Quick Test：`tools/qt_probe/run-quick-tests.ps1 -Out E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-b-trim\quick-tests.txt`，9 passed, 0 failed。slider 目视截图、拖动/点击跳转回归、R0/R1 窗口分层总验收：未执行（用户要求暂缓小 UI 细节）。

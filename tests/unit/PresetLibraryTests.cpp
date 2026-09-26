@@ -41,6 +41,10 @@ int main() {
         bool allBuiltin = true;
         for (const auto& e : library.entries()) allBuiltin = allBuiltin && e.builtin;
         check(allBuiltin, "built-ins are flagged read-only");
+        auto original = sample();
+        PresetLibrary::apply(library.entries().front(), original);
+        check(original.multiplier == 1 && !original.nr && !original.sr,
+              "original built-in disables frame generation and enhancement");
         check(!library.erase(0), "a built-in cannot be erased");
         check(!library.rename(0, L"改个名"), "a built-in cannot be renamed");
         check(library.duplicate(0), "a built-in can be duplicated");

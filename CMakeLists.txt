@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 1.4.4 LANGUAGES CXX RC)
+project(veyra VERSION 2.0.0 LANGUAGES CXX RC)
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "1.4.4beta" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.0.0" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -745,12 +745,13 @@ endif()
 # separate small library rather than into veyra_engine: the product build must
 # never depend on Qt being installed.
 if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
-  add_library(veyra_qml_bridge STATIC src/ui/QmlPlayerBridge.cpp include/veyra/ui/QmlPlayerBridge.h)
+  add_library(veyra_qml_bridge STATIC src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
+    include/veyra/ui/QmlPlayerBridge.h include/veyra/ui/ThumbnailProvider.h)
   # AUTOMOC: QmlPlayerBridge declares Q_OBJECT, so its meta-object has to be
   # generated. Without this the library links but every signal is unresolved.
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
   target_compile_features(veyra_qml_bridge PRIVATE cxx_std_20)
-  target_include_directories(veyra_qml_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_include_directories(veyra_qml_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src ${FFMPEG_INCLUDE_DIRS})
   # Widgets is needed only for QFileDialog: the native file picker is the one
   # piece of the old shell worth keeping, and its own dialog is what users
   # expect from a desktop app. No QWidget UI is created.
@@ -766,13 +767,17 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # WIN32: a GUI subsystem binary. Without it a console window follows the app
   # around, which is not what a player should look like. Diagnostics still reach
   # the log file through the logger.
-  add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp)
+  add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp src/ui/QmlDataDirectory.cpp)
   add_custom_command(TARGET veyra_qml_ui POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_CURRENT_SOURCE_DIR}/qml $<TARGET_FILE_DIR:veyra_qml_ui>/qml)
   target_compile_features(veyra_qml_ui PRIVATE cxx_std_20)
   # Qt6::CorePrivate only for QUnifiedTimer's slow mode behind --slow-animations.
   target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine Qt6::CorePrivate)
+
+  add_executable(veyra_qml_data_tests tests/unit/QmlDataDirectoryTests.cpp src/ui/QmlDataDirectory.cpp)
+  target_compile_features(veyra_qml_data_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_qml_data_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
   # G0.6: Theme easing curves read back through QML against the design's CSS curves.
   # Loads qml/ from the source tree; runs offscreen with the Qt bin directory on PATH.
@@ -1076,10 +1081,20 @@ if(VEYRA_CLIP_TOOLS_ROOT AND EXISTS "${VEYRA_CLIP_TOOLS_ROOT}/include/libavcodec
 endif()
 
 # Layered child subtitle windows require a modern-Windows compatibility manifest.
+set(VEYRA_RESOURCE_FILENAME "Veyra.exe")
 configure_file(apps/veyra/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc @ONLY)
+if(TARGET veyra_qml_ui)
+  set(VEYRA_RESOURCE_FILENAME "veyra_qml_ui.exe")
+  configure_file(apps/veyra/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc @ONLY)
+  target_sources(veyra_qml_ui PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc)
+endif()
 configure_file(apps/veyra/resource.h ${CMAKE_CURRENT_BINARY_DIR}/veyra-resource.h COPYONLY)
 configure_file(assets/veyra.ico ${CMAKE_CURRENT_BINARY_DIR}/veyra.ico COPYONLY)
 target_sources(veyra PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc PROPERTIES
   OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
+if(TARGET veyra_qml_ui)
+  set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc PROPERTIES
+    OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
+endif()
 target_link_options(veyra PRIVATE "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/veyra.manifest")

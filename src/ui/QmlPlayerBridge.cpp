@@ -50,6 +50,8 @@ struct QmlPlayerBridge::Impl {
     engine::PlayerSnapshot snapshot;
     uint64_t publishedRevision = 0;
     bool haveSnapshot = false;
+    bool openingSource = false;
+    uint64_t openingSessionId = 0;
 
     // The chain the UI edits, kept in step with the facade's pending settings.
     engine::EffectChain chain;
@@ -58,6 +60,7 @@ struct QmlPlayerBridge::Impl {
     // The window the engine presents into, and the last file the UI opened.
     HWND videoWindow = nullptr;
     std::wstring sourceLabel;
+    int thumbnailGeneration = 0;
 
     // Keeps the display and system awake while a video plays (AppShell rule: running,
     // not failed, not a still image, transport Playing). Acquired and released on
@@ -77,6 +80,11 @@ struct QmlPlayerBridge::Impl {
     engine::ExportJobManager exportJob;
     engine::ExportJobSnapshot exportSnapshot;
     bool exportHevc = false;
+    uint32_t exportBitrateMbps = 0;
+    int exportResolutionIndex = -1;
+    double exportTrimStartSeconds = 0.0;
+    double exportTrimEndSeconds = 0.0;
+    std::wstring exportPresetName;
     QString initialPageOverride;
     QString currentPage;
     std::wstring captureDevice;
@@ -98,6 +106,11 @@ struct QmlPlayerBridge::Impl {
         snapshot = frame.snapshot;
         publishedRevision = frame.revision;
         haveSnapshot = true;
+        if (openingSource && openingSessionId != 0 && snapshot.sessionId == openingSessionId &&
+            (snapshot.running || snapshot.image || snapshot.failed ||
+             snapshot.transport == engine::TransportState::Empty ||
+             snapshot.transport == engine::TransportState::Stopping))
+            openingSource = false;
     }
 
     // The chain is the source of truth for the stage settings; every commit
@@ -133,9 +146,20 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(impl_->timer, &QTimer::timeout, this, [this] {
         const bool had = impl_->haveSnapshot;
         const uint64_t before = impl_->publishedRevision;
+        const bool wasRunning = impl_->snapshot.running;
+        const bool wasImage = impl_->snapshot.image;
+        const bool wasFailed = impl_->snapshot.failed;
+        const auto wasTransport = impl_->snapshot.transport;
+        const uint64_t wasSession = impl_->snapshot.sessionId;
         impl_->poll();
         if (!had || impl_->publishedRevision != before) {
             const auto& s = impl_->snapshot;
+            if (!had || wasSession != s.sessionId || wasTransport != s.transport ||
+                wasRunning != s.running || wasImage != s.image || wasFailed != s.failed)
+                veyra::log::info("qml-window", std::format(
+                    "source-state session={} transport={} running={} image={} failed={} opening={} revision={}",
+                    s.sessionId, int(s.transport), s.running, s.image, s.failed,
+                    impl_->openingSource, impl_->publishedRevision));
             impl_->power.update(s.running && !s.failed && !s.image && s.transport == engine::TransportState::Playing);
             emit snapshotChanged();
         }
@@ -681,6 +705,7 @@ bool QmlPlayerBridge::failed() const { return impl_->snapshot.failed; }
 bool QmlPlayerBridge::isImage() const { return impl_->snapshot.image; }
 bool QmlPlayerBridge::isCapture() const { return impl_->snapshot.capture; }
 bool QmlPlayerBridge::hasSource() const { return impl_->snapshot.running || impl_->snapshot.image; }
+bool QmlPlayerBridge::openingSource() const { return impl_->openingSource; }
 double QmlPlayerBridge::position() const { return impl_->snapshot.position; }
 double QmlPlayerBridge::duration() const { return impl_->snapshot.duration; }
 double QmlPlayerBridge::progress() const {
@@ -1001,17 +1026,51 @@ void QmlPlayerBridge::setExportHevc(bool value) {
 
 // Export bitrate: 0 means the encoder's constant-quality default, which is what
 // the engine's exportBitrateMbps field documents.
-int QmlPlayerBridge::exportBitrateMbps() const { return int(settings().exportBitrateMbps); }
+int QmlPlayerBridge::exportBitrateMbps() const { return int(impl_->exportBitrateMbps); }
 void QmlPlayerBridge::setExportBitrateMbps(int value) {
-    auto s = settings();
     const uint32_t want = uint32_t(std::max(0, std::min(2000, value)));
-    if (s.exportBitrateMbps == want) return;
-    s.exportBitrateMbps = want;
-    impl_->commit(std::move(s));
-    emit settingsChanged();
+    if (impl_->exportBitrateMbps == want) return;
+    impl_->exportBitrateMbps = want;
+    emit exportChanged();
 }
 
-QString QmlPlayerBridge::exportPresetName() const { return currentPresetName(); }
+QString QmlPlayerBridge::exportPresetName() const {
+    return impl_->exportPresetName.empty() ? tr("当前播放设置") : utf8Of(impl_->exportPresetName);
+}
+
+int QmlPlayerBridge::exportSrTargetIndex() const {
+    return impl_->exportResolutionIndex;
+}
+void QmlPlayerBridge::setExportSrTargetIndex(int index) {
+    if (index < -1 || index > 3 || impl_->exportResolutionIndex == index) return;
+    impl_->exportResolutionIndex = index;
+    emit exportChanged();
+}
+
+double QmlPlayerBridge::exportTrimStart() const { return impl_->exportTrimStartSeconds; }
+void QmlPlayerBridge::setExportTrimStart(double seconds) {
+    if (!std::isfinite(seconds)) return;
+    const double duration = impl_->snapshot.duration;
+    const double end = impl_->exportTrimEndSeconds > 0.0 ? impl_->exportTrimEndSeconds : duration;
+    const double maxStart = end > 0.05 ? end - 0.05 : 0.0;
+    const double value = std::clamp(seconds, 0.0, std::max(0.0, maxStart));
+    if (std::abs(impl_->exportTrimStartSeconds - value) < 0.0005) return;
+    impl_->exportTrimStartSeconds = value;
+    emit exportChanged();
+}
+
+double QmlPlayerBridge::exportTrimEnd() const { return impl_->exportTrimEndSeconds; }
+void QmlPlayerBridge::setExportTrimEnd(double seconds) {
+    if (!std::isfinite(seconds)) return;
+    const double duration = impl_->snapshot.duration;
+    const double sourceEnd = duration > 0.0 ? duration : seconds;
+    const double value = std::clamp(seconds, 0.0, std::max(0.0, sourceEnd));
+    const double start = impl_->exportTrimStartSeconds;
+    if (value > 0.0 && value <= start + 0.05) return;
+    if (std::abs(impl_->exportTrimEndSeconds - value) < 0.0005) return;
+    impl_->exportTrimEndSeconds = value;
+    emit exportChanged();
+}
 
 QString QmlPlayerBridge::srTargetLabel() const {
     // The label follows the SR target, because that is what sets the output size.
@@ -1051,12 +1110,14 @@ QVariantList QmlPlayerBridge::presetChoices() const {
     // One list for both kinds; the label carries the distinction so the export page
     // can offer "any preset" without a second control.
     QVariantList out;
+    out << QVariantMap{{"id", QStringLiteral("-1")}, {"label", tr("当前播放设置")}};
     const auto& entries = impl_->facade.presets().entries();
     for (size_t i = 0; i < entries.size(); ++i) {
         QVariantMap item;
         item["id"] = QString::number(i);
         item["label"] = utf8Of(entries[i].name)
                         + (entries[i].kind == engine::ChainMode::Node ? tr(" · 节点") : QString());
+        item["disabled"] = entries[i].kind == engine::ChainMode::Node;
         out << item;
     }
     return out;
@@ -1096,16 +1157,27 @@ QString QmlPlayerBridge::diagnosticsReport() const {
 
 // --- commands ---------------------------------------------------------------
 void QmlPlayerBridge::openFileDialog() {
+    veyra::log::info("qml-file", "openFileDialog entered");
     const QString path = QFileDialog::getOpenFileName(
         nullptr, tr("打开视频或图片"), QString(),
         tr("媒体文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.jpg *.jpeg *.png *.bmp *.webp);;所有文件 (*)"));
+    veyra::log::info("qml-file", path.isEmpty() ? "openFileDialog cancelled" : "openFileDialog selected file");
     if (!path.isEmpty()) openPath(path);
 }
+int QmlPlayerBridge::thumbnailGeneration() const { return impl_->thumbnailGeneration; }
 
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
+    impl_->exportTrimStartSeconds = 0.0;
+    impl_->exportTrimEndSeconds = 0.0;
+    emit exportChanged();
+    impl_->openingSource = true;
+    impl_->openingSessionId = 0;
     const std::wstring wide = wideOf(path);
     impl_->sourceLabel = wide;
+    ++impl_->thumbnailGeneration;
+    emit thumbnailSourceChanged(path);
+    emit thumbnailGenerationChanged();
     impl_->facade.noteRecentFile(wide);
     emit recentFilesChanged();
     // Switch to a page with a video area, then settle the native window's
@@ -1119,10 +1191,15 @@ void QmlPlayerBridge::openPath(const QString& path) {
         emit navigate(QStringLiteral("min"));
     if (impl_->preOpen) impl_->preOpen();
     impl_->engine.open(impl_->videoWindow, wide, impl_->options);
+    impl_->openingSessionId = impl_->engine.snapshot().sessionId;
 }
 
 void QmlPlayerBridge::togglePlayPause() { impl_->engine.pause(impl_->snapshot.running); }
-void QmlPlayerBridge::stopPlayback() { impl_->engine.stop(); }
+void QmlPlayerBridge::stopPlayback() {
+    impl_->openingSource = false;
+    impl_->openingSessionId = 0;
+    impl_->engine.stop();
+}
 void QmlPlayerBridge::seekTo(double seconds) { impl_->engine.seek(seconds); }
 void QmlPlayerBridge::seekBy(double seconds) {
     impl_->engine.seek(std::max(0.0, impl_->snapshot.position + seconds));
@@ -1184,8 +1261,40 @@ void QmlPlayerBridge::startExport() {
     // export must not change under the user mid-run.
     auto settings = impl_->facade.pendingSettings();
     engine::fromChain(impl_->chain, settings);
+    if (!impl_->exportPresetName.empty()) {
+        const auto& entries = impl_->facade.presets().entries();
+        const auto preset = std::find_if(entries.begin(), entries.end(), [this](const auto& entry) {
+            return entry.name == impl_->exportPresetName;
+        });
+        if (preset == entries.end()) { emit notice(tr("导出预设已不存在，请重新选择"), true); return; }
+        if (preset->kind == engine::ChainMode::Node) {
+            emit notice(tr("节点预设尚未接入导出执行器"), true);
+            return;
+        }
+        engine::PresetLibrary::apply(*preset, settings);
+    }
+    settings.exportBitrateMbps = impl_->exportBitrateMbps;
+    if (impl_->exportResolutionIndex >= 0) {
+        settings.sr = impl_->exportResolutionIndex != 0;
+        if (settings.sr) {
+            switch (impl_->exportResolutionIndex) {
+            case 1: settings.srTarget = pipeline::SrTarget::Qhd; break;
+            case 2: settings.srTarget = pipeline::SrTarget::Uhd4K; break;
+            case 3: settings.srTarget = pipeline::SrTarget::Uhd8K; break;
+            default: break;
+            }
+        }
+    }
+    if (!settings.validate().empty()) { emit notice(tr("导出设置无效"), true); return; }
+    veyra::log::info("qml-export", std::format("preset={} revision={} nr={} sr={} fg={} bitrate={} srTarget={}",
+        impl_->exportPresetName.empty() ? "current" : utf8Of(impl_->exportPresetName).toStdString(),
+        settings.revision, settings.nr, settings.sr, settings.multiplier,
+        settings.exportBitrateMbps, settings.sr ? int(settings.srTarget) : -1));
     const bool started = impl_->exportJob.start(impl_->sourceLabel, impl_->exportOutput,
-                                                settings, impl_->exportHevc);
+                                                settings, impl_->exportHevc, 0,
+                                                impl_->snapshot.selectedAudioTrack,
+                                                impl_->exportTrimStartSeconds,
+                                                impl_->exportTrimEndSeconds);
     if (!started) { emit notice(tr("导出启动失败；详见诊断"), true); return; }
     pollExport();
     emit navigate(QStringLiteral("exp"));
@@ -1346,6 +1455,18 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
     emit chainChanged();
     return true;
 }
+bool QmlPlayerBridge::selectExportPreset(int index) {
+    if (index == -1) {
+        impl_->exportPresetName.clear();
+    } else {
+        const auto& entries = impl_->facade.presets().entries();
+        if (index < 0 || size_t(index) >= entries.size() || entries[size_t(index)].kind == engine::ChainMode::Node)
+            return false;
+        impl_->exportPresetName = entries[size_t(index)].name;
+    }
+    emit exportChanged();
+    return true;
+}
 
 bool QmlPlayerBridge::savePresetAs(const QString& name, int contentsMask, bool nodeMode) {
     if (name.isEmpty()) { emit notice(tr("预设需要一个名字"), true); return false; }
@@ -1367,15 +1488,23 @@ bool QmlPlayerBridge::deletePreset(int index) {
     if (index < 0 || size_t(index) >= impl_->facade.presets().entries().size()) return false;
     const auto& entry = impl_->facade.presets().entries()[size_t(index)];
     if (entry.builtin) { emit notice(tr("内置预设不能删除，可以另存一份"), true); return false; }
+    const bool selected = impl_->exportPresetName == entry.name;
     const bool ok = impl_->facade.presets().erase(size_t(index));
-    if (ok) emit presetsChanged();
+    if (ok) {
+        if (selected) { impl_->exportPresetName.clear(); emit exportChanged(); }
+        emit presetsChanged();
+    }
     return ok;
 }
 
 bool QmlPlayerBridge::renamePreset(int index, const QString& name) {
     if (index < 0 || size_t(index) >= impl_->facade.presets().entries().size()) return false;
+    const bool selected = impl_->exportPresetName == impl_->facade.presets().entries()[size_t(index)].name;
     const bool ok = impl_->facade.presets().rename(size_t(index), wideOf(name));
-    if (ok) emit presetsChanged();
+    if (ok) {
+        if (selected) { impl_->exportPresetName = wideOf(name); emit exportChanged(); }
+        emit presetsChanged();
+    }
     return ok;
 }
 

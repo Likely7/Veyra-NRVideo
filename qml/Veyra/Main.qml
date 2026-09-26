@@ -7,7 +7,7 @@
 //   * in cinema mode the WINDOW ITSELF snaps to the film's aspect ratio so the
 //     picture has no letterbox bars. The prototype's own technical note says the
 //     window must resize to the film when a file opens (capture cards and games
-//     are 16:9), and its fitAspect() adds BAR_BELOW = 46 for the control pill.
+//     are 16:9). The separate control window straddles its lower edge.
 //
 // The video is not in this scene graph. It stays the native D3D12 child window
 // that apps/veyra-qml/main.cpp places over the item named "videoHost"; Qt hosts
@@ -36,18 +36,14 @@ Window {
     readonly property bool cinema: page === "min"
     Binding { target: Theme; property: "reduced"; value: veyra.reducedMotion || root.test.reducedMotion === true }
 
-    // Cinema geometry, straight from the prototype: the picture is width/aspect
-    // and the window is that plus the lower half of the control pill.
+    // Cinema geometry: the main window ends at the picture. The independent pill
+    // can extend below it without leaving an opaque strip in this window.
     property real filmAspect: 2.39
-    // The design straddles the bar on the picture edge: BAR_BELOW = 46. The pill is
-    // its own top-level window (FullscreenBar, D1), so it can sit over the native
-    // video window.
-    readonly property int barBelow: 46
     readonly property real pictureHeight: Math.round(width / filmAspect)
 
     function fitToFilm(aspect) {
         if (aspect > 0.2 && aspect < 5.0) filmAspect = aspect
-        if (cinema && !fullTarget) height = Math.round(pictureHeight + barBelow)
+        if (cinema && !fullTarget) height = Math.round(pictureHeight)
     }
     // .vy.cine transition: height .7s var(--spring-soft)
     Behavior on height {
@@ -55,7 +51,7 @@ Window {
         NumberAnimation { duration: Theme.d(700); easing.bezierCurve: Theme.springSoft }
     }
     onWidthChanged: {
-        if (cinema && !fullTarget) height = Math.round(pictureHeight + barBelow)
+        if (cinema && !fullTarget) height = Math.round(pictureHeight)
         videoHost.syncRect()
     }
     // The window height animates towards the film's aspect, so the picture area has
@@ -68,7 +64,7 @@ Window {
         // behave differently from home than from the professional page.
         if (veyra.currentPage !== page) veyra.currentPage = page
         if (fullTarget) { /* the screen is the window */ }
-        else if (cinema) height = Math.round(pictureHeight + barBelow)
+        else if (cinema) height = Math.round(pictureHeight)
         else if (height < 600) height = 800
         // core.js app.go: the old page sinks (.22s) and the new one shows 150 ms
         // later with its [data-in] items rising. Reduced motion shows it at once.
@@ -110,6 +106,7 @@ Window {
     VBackdrop {
         id: backdrop
         anchors.fill: parent
+        visible: !root.cinema
         strokeColor: root.cinema ? "transparent" : Theme.stroke
     }
 
@@ -238,7 +235,7 @@ Window {
         fullTarget = fullscreen
         if (!fullscreen) {
             fullLocked = false
-            if (cinema) height = Math.round(pictureHeight + barBelow)
+            if (cinema) height = Math.round(pictureHeight)
         }
         fullControls = true
         fullHide.restart()

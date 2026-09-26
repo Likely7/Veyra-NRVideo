@@ -28,6 +28,7 @@ struct Shared {
     wchar_t input[32768]{},output[32768]{};
     unsigned hevc=0,maxFrames=0;
     int audioStreamIndex=-1;
+    double trimStartSeconds=0.0,trimEndSeconds=0.0;
     volatile LONG64 sourceFrames=0,generated=0,holds=0,encoded=0;
     volatile LONG messageLock=0;wchar_t message[1024]{};
     volatile LONG cancel=0,pause=0,watching=0,state=LONG(ExportState::Preparing),progress=0;
@@ -47,7 +48,7 @@ ExportJobManager::ExportJobManager():p_(std::make_unique<Impl>()){}
 // draining NVENC is terminated by clear() after a short grace instead of
 // stalling process exit for up to five seconds.
 ExportJobManager::~ExportJobManager(){cancel();if(p_->process)WaitForSingleObject(p_->process,1000);p_->clear();}
-bool ExportJobManager::start(const std::wstring& input,const std::wstring& output,EnhancementSettings settings,bool hevc,unsigned maxFrames,int audioStreamIndex){
+bool ExportJobManager::start(const std::wstring& input,const std::wstring& output,EnhancementSettings settings,bool hevc,unsigned maxFrames,int audioStreamIndex,double trimStartSeconds,double trimEndSeconds){
     if(poll().active())return false;p_->clear();p_->snapshot={};
     auto fail=[&](const wchar_t* message){const DWORD error=GetLastError();p_->clear();p_->snapshot.state=ExportState::Failed;p_->snapshot.message=message;log::error("export-worker",std::format("launch failed error={}",error));return false;};
     if(input.empty()||output.empty()||input.size()>=32768||output.size()>=32768||!settings.validate().empty()||input.starts_with(L"capture:")||input.starts_with(L"capture2:"))return fail(L"请选择本地视频与有效导出设置");
@@ -56,8 +57,10 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     p_->mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,&sa,PAGE_READWRITE,0,sizeof(Shared),nullptr);
     if(!p_->mapping)return fail(L"无法创建导出通信资源");
     p_->shared=static_cast<Shared*>(MapViewOfFile(p_->mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!p_->shared)return fail(L"无法映射导出通信资源");
+    if(!std::isfinite(trimStartSeconds)||!std::isfinite(trimEndSeconds)||trimStartSeconds<0||trimEndSeconds<0||(trimEndSeconds>0&&trimEndSeconds<=trimStartSeconds))return fail(L"导出剪辑范围无效");
     new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=settings;s.settings.nrPolicy=pipeline::NrSizePolicy::Native;s.chain=toChain(s.settings);s.hevc=hevc;s.maxFrames=maxFrames;
     s.audioStreamIndex=audioStreamIndex;
+    s.trimStartSeconds=trimStartSeconds;s.trimEndSeconds=trimEndSeconds;
     wcscpy_s(s.input,input.c_str());wcscpy_s(s.output,output.c_str());
     p_->job=CreateJobObjectW(nullptr,nullptr);JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     if(!p_->job||!SetInformationJobObject(p_->job,JobObjectExtendedLimitInformation,&limits,sizeof(limits)))return fail(L"无法建立导出进程生命周期");
@@ -96,7 +99,7 @@ ExportJobSnapshot ExportJobManager::poll(){
 }
 int runExportWorker(HANDLE mapping){
     auto s=static_cast<Shared*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!s)return 1;
-    if(s->signature!=magic||s->version!=3||s->bytes!=sizeof(Shared)||s->audioStreamIndex< -1||!s->settings.validate().empty()||s->input[32767]||s->output[32767]){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
+    if(s->signature!=magic||s->version!=3||s->bytes!=sizeof(Shared)||s->audioStreamIndex< -1||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
     Logger::instance().openFile((runtime::logsDirectory()/std::format("export-worker-{}.log",GetCurrentProcessId())).wstring());
     // The chain is the description of record for this job; the settings struct
     // stays the runtime input until the executor consumes chains directly.
@@ -113,7 +116,7 @@ int runExportWorker(HANDLE mapping){
         if(InterlockedCompareExchange(&s->watching,0,0))for(int i=0;i<5&&!cancel;++i)std::this_thread::sleep_for(std::chrono::milliseconds(10));
         return !cancel;
     };
-    auto options=PlayerOptions::from(settings);options.audioStreamIndex=s->audioStreamIndex;
+    auto options=PlayerOptions::from(settings);options.audioStreamIndex=s->audioStreamIndex;options.exportStartSeconds=s->trimStartSeconds;options.exportEndSeconds=s->trimEndSeconds;
     bool ok=false;try{ok=exportVideo(s->input,s->output,options,s->hevc!=0,cancel,[&](double p,const std::wstring& message){if(InterlockedCompareExchange(&s->messageLock,1,0)==0){wcsncpy_s(s->message,message.c_str(),_TRUNCATE);InterlockedExchange(&s->messageLock,0);}
 InterlockedExchange(&s->progress,LONG(std::clamp(p,0.0,.999)*10000));if(p>=.99)InterlockedExchange(&s->state,LONG(ExportState::Finishing));},s->maxFrames,frameBoundary,[&](const ExportCounts& count){InterlockedExchange64(&s->sourceFrames,count.source);InterlockedExchange64(&s->generated,count.generated);InterlockedExchange64(&s->holds,count.holds);InterlockedExchange64(&s->encoded,count.encoded);});}catch(...){log::error("export-worker","unhandled job exception");}
     done=true;monitor.join();InterlockedExchange(&s->state,LONG(ok?ExportState::Succeeded:cancel?ExportState::Cancelled:ExportState::Failed));UnmapViewOfFile(s);CloseHandle(mapping);return ok?0:cancel?3:1;

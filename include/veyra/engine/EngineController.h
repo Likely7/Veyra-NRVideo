@@ -21,6 +21,8 @@ namespace veyra::engine {
 class FrameFlowWindow;
 struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t fgMultiplier=2; EnhancementSettings settings;
     int audioStreamIndex=-1; // export selection; -1 selects the container default
+    double exportStartSeconds=0.0; // export-only trim; first complete frame at/after this time
+    double exportEndSeconds=0.0; // export-only trim; 0 means source end
     bool captureReplayForTest=false; // file-backed live scheduler test; never enabled by UI
     bool captureCpuUnpack=false; // N1 diagnostic: legacy per-pixel CPU unpack
     EnhancementSettings snapshot()const{auto s=settings;s.nr=nr;s.sr=sr;s.multiplier=fg?fgMultiplier:1;s.nrPolicy=realtime?(settings.nrPolicy==pipeline::NrSizePolicy::Native?pipeline::NrSizePolicy::Realtime:settings.nrPolicy):pipeline::NrSizePolicy::Native;return s;}

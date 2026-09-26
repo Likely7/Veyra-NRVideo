@@ -114,6 +114,7 @@ VPage {
                 font.pixelSize: Theme.fsSmall
             }
             Item {
+                id: proSeekArea
                 Layout.fillWidth: true
                 implicitHeight: 14
                 Rectangle {
@@ -131,7 +132,7 @@ VPage {
                 }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
                 TapHandler {
-                    onTapped: point => veyra.seekTo(Math.max(0, Math.min(1, point.position.x / width)) * veyra.duration)
+                    onTapped: point => veyra.seekTo(Math.max(0, Math.min(1, point.position.x / proSeekArea.width)) * veyra.duration)
                 }
             }
             Text {

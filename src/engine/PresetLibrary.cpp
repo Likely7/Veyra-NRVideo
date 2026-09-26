@@ -40,7 +40,7 @@ void PresetLibrary::addBuiltins() {
         s.videoHdr.enabled = hdr; s.color.enabled = color;
         entry.chain = toChain(s);
         entry.color = s.color;
-        entry.fg = {std::max(2u, s.multiplier), FrameGenerationBackend::Dlss};
+        entry.fg = {s.multiplier, FrameGenerationBackend::Dlss};
         entries_.push_back(std::move(entry));
     };
     if (!entries_.empty()) return;

@@ -6696,3 +6696,5 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   - 实机 Windows.Graphics.Capture 已看：字幕和音轨菜单完整显示在播放条上方，图在 `goal\r0\menu-subtitle-after.png` 与 `menu-audio-after.png`。修前同一音轨菜单底部压进播放条，修后底部离播放条约 18px。
   - Qt Quick Test `veyra_qml_quick_tests.exe -input tests\qml\quick -o goal\r0\menu-height-regression-tests.txt,txt`：9 passed, 0 failed，新增动态高度增长时底边不超过 `aboveLimit` 的回归用例。
   - 未执行：多音轨真实切换、全屏/多显示器/DPI 复查、字幕流选择（后端未接入）。R0/R1 窗口分层总验收未据此宣布通过；进度条缩略图、点击跳转和拖动问题仍需单独验收。
+
+- 2026-09-26 / R5.2-b：完成导出剪辑入出点垂直切片。桥接、worker 共享内存和 `VideoExportJob` 传递剪辑范围；视频从首个完整入点帧开始，音频同步裁剪，出点停止写入；QML 导出页 slider 和导出探针参数已接线。`2→5s` 与英语音轨真实 NVENC/D3D12 导出通过，非法范围拒绝，7.9 秒尾段通过；7.98 秒因无入点后的完整帧拒绝，按合同记录。Quick Test 9/9。证据：`E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-b-trim\`、`E:\项目\Veyra\logs\ui-qml-migration-20260926\`。slider 目视、拖动/点击跳转、R0/R1 总验收未执行，按用户要求暂缓。下一目标 R5.2-c：导出队列与编码策略。

@@ -56,9 +56,10 @@ Window {
     visible: shown || fade > 0.01
     onVisibleChanged: veyra.logUi("ui-fullscreen", "control window visible=" + visible)
 
-    // Only the pill takes the pointer; with the menu open, the whole window does,
-    // so a click beside the menu closes it instead of falling through to the picture.
+    // The seek preview rises above the pill, so its window region must include it.
+    // With the menu open, the whole window takes input to allow outside-click close.
     readonly property rect hitRect: menuOpen ? Qt.rect(0, 0, width, height)
+                                             : bar.seekPreviewOpen ? Qt.rect(0, menuRoom - 122, width, 214)
                                              : Qt.rect(0, menuRoom, width, 92)
     onHitRectChanged: veyra.setWindowMask(win, hitRect)
     Component.onCompleted: veyra.setWindowMask(win, hitRect)

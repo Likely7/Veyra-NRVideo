@@ -59,6 +59,8 @@ if ($offsets.ContainsKey($Page)) {
 }
 [W2]::SetCursorPos($r.Right + 300, $r.Bottom + 300) | Out-Null
 Start-Sleep -Milliseconds 400
+[W2]::SetForegroundWindow($h) | Out-Null
+Start-Sleep -Milliseconds 200
 
 [W2]::GetWindowRect($h, [ref]$r) | Out-Null
 $w = $r.Right - $r.Left

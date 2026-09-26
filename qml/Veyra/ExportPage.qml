@@ -4,9 +4,7 @@
 // card spans rows 2-3 on the left; the video sits in the middle with the trim range
 // under it; output settings fill the right column.
 //
-// Scope, stated on the page rather than hidden: this build has no multi-file queue
-// and no trim range, because the engine exports one file from the current source
-// and has no trim settings. Those two cards say so instead of looking functional.
+// Scope, stated on the page rather than hidden: this build has no multi-file queue.
 // What is real - preset selection, codec, output size, bitrate and progress - is
 // wired to the engine's export job.
 import QtQuick
@@ -120,16 +118,17 @@ VPage {
                 }
                 VRow {
                     label: "分辨率"
-                    hint: "由超分目标尺寸决定"
+                    hint: "跟随所选预设，或指定输出尺寸"
                     VSeg {
                         options: [
+                            { id: "-1", label: "预设" },
                             { id: "0", label: "源" },
                             { id: "1", label: "2K" },
                             { id: "2", label: "4K" },
                             { id: "3", label: "8K" }
                         ]
-                        current: String(veyra.srTargetIndex)
-                        onPicked: id => veyra.srTargetIndex = parseInt(id)
+                        current: String(veyra.exportSrTargetIndex)
+                        onPicked: id => veyra.exportSrTargetIndex = parseInt(id)
                     }
                 }
                 VRow {
@@ -148,11 +147,11 @@ VPage {
             VGroup {
                 VRow {
                     label: "增强预设"
-                    hint: "列表预设与节点预设共用一套"
+                    hint: "节点预设待执行器接入"
                     VSelect {
-                        value: veyra.currentPresetName
+                        value: veyra.exportPresetName
                         options: veyra.presetChoices
-                        onPicked: id => veyra.applyPresetIndex(parseInt(id))
+                        onPicked: id => veyra.selectExportPreset(parseInt(id))
                     }
                 }
             }
@@ -305,7 +304,7 @@ VPage {
         anchors.right: vwrap.right
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 14
-        height: 72
+        height: 92
         radius: Theme.rCard
         color: Theme.card
         border.width: 1
@@ -313,7 +312,7 @@ VPage {
         RowLayout {
             anchors.fill: parent
             anchors.margins: 12
-            spacing: 10
+            spacing: 6
             Text {
                 text: "导出范围"
                 color: Theme.t2
@@ -321,13 +320,29 @@ VPage {
                 font.pixelSize: Theme.fsBody
             }
             Text {
-                Layout.fillWidth: true
-                text: "整段 · 00:00:00 — " + veyra.durationText
+                text: veyra.formatTime(veyra.exportTrimStart) + " — "
+                      + veyra.formatTime(veyra.exportTrimEnd > 0 ? veyra.exportTrimEnd : veyra.duration)
                 color: Theme.t1
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsSmall
             }
-            VTag { text: "片段裁剪尚未实现" }
+            Item { Layout.fillWidth: true }
+            VSlider {
+                Layout.fillWidth: true
+                from: 0
+                to: Math.max(0.001, veyra.duration)
+                value: veyra.exportTrimStart
+                enabledControl: veyra.hasSource && !veyra.exportRunning && veyra.duration > 0
+                onMoved: veyra.exportTrimStart = value
+            }
+            VSlider {
+                Layout.fillWidth: true
+                from: 0
+                to: Math.max(0.001, veyra.duration)
+                value: veyra.exportTrimEnd > 0 ? veyra.exportTrimEnd : veyra.duration
+                enabledControl: veyra.hasSource && !veyra.exportRunning && veyra.duration > 0
+                onMoved: veyra.exportTrimEnd = value
+            }
         }
     }
 

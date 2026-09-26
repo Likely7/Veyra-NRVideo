@@ -32,7 +32,7 @@ inline constexpr uint32_t kPresetAllContent =
 // full EnhancementSettings: a preset must never smuggle in capture or export
 // fields.
 struct PresetFrameGeneration {
-    uint32_t multiplier = 2;
+    uint32_t multiplier = 1;
     FrameGenerationBackend backend = FrameGenerationBackend::Dlss;
     bool operator==(const PresetFrameGeneration&) const = default;
 };

@@ -133,6 +133,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString durationText READ durationText NOTIFY snapshotChanged)
 
     // --- source ------------------------------------------------------------
+    Q_PROPERTY(int thumbnailGeneration READ thumbnailGeneration NOTIFY thumbnailGenerationChanged)
     Q_PROPERTY(QString sourceName READ sourceName NOTIFY snapshotChanged)
     Q_PROPERTY(QString sourceSummary READ sourceSummary NOTIFY snapshotChanged)
     Q_PROPERTY(int sourceWidth READ sourceWidth NOTIFY snapshotChanged)
@@ -225,6 +226,9 @@ class QmlPlayerBridge : public QObject {
     // The preset the export will use. The design requires export to select a
     // preset (list or node) rather than assembling effects separately.
     Q_PROPERTY(QString exportPresetName READ exportPresetName NOTIFY exportChanged)
+    Q_PROPERTY(int exportSrTargetIndex READ exportSrTargetIndex WRITE setExportSrTargetIndex NOTIFY exportChanged)
+    Q_PROPERTY(double exportTrimStart READ exportTrimStart WRITE setExportTrimStart NOTIFY exportChanged)
+    Q_PROPERTY(double exportTrimEnd READ exportTrimEnd WRITE setExportTrimEnd NOTIFY exportChanged)
     // The super-resolution target, which is what actually decides the export size
     // in this engine (0 = source, then Qhd/Uhd4K/Uhd8K). A separate "export
     // resolution" field does not exist, so the UI exposes the real control instead
@@ -328,6 +332,7 @@ public:
     bool isImage() const;
     bool isCapture() const;
     bool hasSource() const;
+    bool openingSource() const;
     double position() const;
     double duration() const;
     double progress() const;
@@ -335,6 +340,7 @@ public:
     QString durationText() const;
 
     QString sourceName() const;
+    int thumbnailGeneration() const;
     QString sourceSummary() const;
     int sourceWidth() const;
     int sourceHeight() const;
@@ -427,6 +433,12 @@ public:
     int exportBitrateMbps() const;
     void setExportBitrateMbps(int value);
     QString exportPresetName() const;
+    int exportSrTargetIndex() const;
+    void setExportSrTargetIndex(int index);
+    double exportTrimStart() const;
+    void setExportTrimStart(double seconds);
+    double exportTrimEnd() const;
+    void setExportTrimEnd(double seconds);
     int srTargetIndex() const;
     QString srTargetLabel() const;
     void setSrTargetIndex(int index);
@@ -502,6 +514,7 @@ public:
     // Presets. A preset carries selected parts, so there is one preset concept,
     // not several.
     Q_INVOKABLE bool applyPresetIndex(int index);
+    Q_INVOKABLE bool selectExportPreset(int index);
     Q_INVOKABLE bool savePresetAs(const QString& name, int contentsMask, bool nodeMode);
     Q_INVOKABLE bool deletePreset(int index);
     Q_INVOKABLE bool renamePreset(int index, const QString& name);
@@ -522,6 +535,8 @@ signals:
     // Emitted only when the underlying snapshot actually changed, so QML
     // bindings do not re-evaluate 60 times a second for nothing.
     void snapshotChanged();
+    void thumbnailGenerationChanged();
+    void thumbnailSourceChanged(const QString& path);
     void settingsChanged();
     void chainChanged();
     void recentFilesChanged();
