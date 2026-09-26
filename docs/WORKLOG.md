@@ -6689,3 +6689,10 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   - 新测试开关 `--data-dir <path>`（在桥接创建前读取），审查时用 `tests/ui-qml-migration-20260925/g3-home-data`（种子历史）与 `g3-empty-data`（首次运行），不读写用户自己的数据。
   - 截图：cmp-f-home.png（有历史，对齐设计稿）、qml-empty.png（首次运行无继续/最近行）。PrintWindow 截图在显示器休眠时仍正常。
   - 未执行：卡片悬停上浮与按下缩放的实拍——显示器休眠期间 Qt Quick 不投递悬停（hover-shot 前后逐像素无差，与 G2.4 dock 同一现象）；点击最近条目打开文件。
+
+- R1.1 播放条菜单遮挡局部修复（2026-09-26，`checkpoint/ui-mig-r1.1`）：
+  - `CineBar.menuOpen` 覆盖字幕和音轨弹层，使独立 `FullscreenBar` 的窗口遮罩展开；三个上弹菜单设置播放条上沿边界。`VMenu` 在打开后按实际高度重定位，动态音轨项完成布局后不再压进播放条。音轨模型保留真实 `index` 用于选择。
+  - 构建：`scripts/build-qt-probe.ps1 -Targets veyra_qml_ui,veyra_qml_quick_tests -Log E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r0\menu-height-build.log`，exit 0，`ninja: no work to do`（QML 由运行时加载）；将 `VMenu.qml` 同步到 `tests\ui-qml-migration-20260925\qml-app-r0-final\qml\Veyra\` 后重启 `veyra_qml_ui_r0_final.exe`，以隔离 `--data-dir` 打开 `GTAVI_An_Extended_Look_4K_Native.mp4`。运行 stdout/stderr 为 `goal\r0\menu-height-stdout.log` / `menu-height-stderr.log`。
+  - 实机 Windows.Graphics.Capture 已看：字幕和音轨菜单完整显示在播放条上方，图在 `goal\r0\menu-subtitle-after.png` 与 `menu-audio-after.png`。修前同一音轨菜单底部压进播放条，修后底部离播放条约 18px。
+  - Qt Quick Test `veyra_qml_quick_tests.exe -input tests\qml\quick -o goal\r0\menu-height-regression-tests.txt,txt`：9 passed, 0 failed，新增动态高度增长时底边不超过 `aboveLimit` 的回归用例。
+  - 未执行：多音轨真实切换、全屏/多显示器/DPI 复查、字幕流选择（后端未接入）。R0/R1 窗口分层总验收未据此宣布通过；进度条缩略图、点击跳转和拖动问题仍需单独验收。

@@ -16,8 +16,10 @@ Rectangle {
     signal requestLock()
     // Set on the fullscreen bar: shows the lock button.
     property bool fullscreen: false
-    // The preset menu is open: an owner window that hides the bar on a timer waits.
-    readonly property bool menuOpen: presetMenu.visible
+    // Set by FullscreenBar so upward menus stop above the playback pill.
+    property real menuBottomLimit: -1
+    // Any popover needs the owner window's full mask, not just the preset menu.
+    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     HoverHandler { id: barHover }
@@ -286,6 +288,7 @@ Rectangle {
     // pages-a.js presetMenu: list presets, node presets, then the way to manage them.
     VMenu {
         id: presetMenu
+        aboveLimit: bar.menuBottomLimit
         title: "预设"
         readonly property var mk: p => ({ label: p.name, note: p.note, checked: p.name === veyra.currentPresetName,
                                           tag: p.nodeMode ? "节点" : "", preset: p.index })
@@ -304,6 +307,7 @@ Rectangle {
     // with nothing behind it. Shown disabled rather than silently doing nothing.
     VMenu {
         id: ccMenu
+        aboveLimit: bar.menuBottomLimit
         title: "字幕"
         items: [
             { label: "关闭", disabled: true },
@@ -320,10 +324,11 @@ Rectangle {
     // selected index, so the list and the check mark both come from the engine.
     VMenu {
         id: audioMenu
+        aboveLimit: bar.menuBottomLimit
         title: "音轨"
         // The bridge's label already carries language · title · codec; only the
         // channel count is separate.
-        readonly property var mk: t => ({ label: t.label,
+        readonly property var mk: t => ({ label: t.label, index: t.index,
                                           note: t.channels > 0 ? (t.channels + " 声道") : "",
                                           checked: t.index === veyra.selectedAudioTrack })
         items: veyra.audioTracks.length > 0

@@ -16,7 +16,11 @@ Popup {
     property string title: ""
     property var items: []
     property Item anchorItem: null
+    property string placement: "up"
     property bool above: false
+    // Optional local-window bottom boundary for upward menus. The fullscreen
+    // cinema bar uses this to keep a popover clear of the 92px playback pill.
+    property real aboveLimit: -1
     signal picked(int index, var item)
 
     // The design's local copy of the checked flags, so the tick moves on click
@@ -24,27 +28,35 @@ Popup {
     property var checks: []
     onItemsChanged: checks = items.map(o => o.checked === true)
 
+    function positionAtAnchor() {
+        if (!anchorItem) return
+        const win = anchorItem.Window.contentItem
+        const r = anchorItem.mapToItem(win, 0, 0)
+        const ph = height
+        const pw = width
+        let px = Math.max(8, Math.min(r.x + anchorItem.width / 2 - pw / 2, win.width - pw - 8))
+        let py = placement === "down" ? r.y + anchorItem.height + 8 : r.y - ph - 8
+        if (placement !== "down" && aboveLimit >= 0)
+            py = Math.min(py, aboveLimit - ph)
+        if (py < 8)
+            py = placement !== "down" && aboveLimit >= 0 ? 8 : r.y + anchorItem.height + 8
+        if (py + ph > win.height - 8) py = Math.max(8, r.y - ph - 8)
+        above = py < r.y
+        originX = r.x + anchorItem.width / 2 - px
+        const p = parent.mapFromItem(win, px, py)
+        x = p.x; y = p.y
+    }
     // place: "up" (the design's default) or "down" (selects).
     function openAt(anchor, place) {
         anchorItem = anchor
+        placement = place
         checks = items.map(o => o.checked === true)
-        const win = anchor.Window.contentItem
-        const r = anchor.mapToItem(win, 0, 0)
-        const w = Math.max(220, anchor.width)
-        width = w
-        const ph = implicitHeight
-        x = 0; y = 0
-        const pw = w
-        let px = Math.max(8, Math.min(r.x + anchor.width / 2 - pw / 2, win.width - pw - 8))
-        let py = place === "down" ? r.y + anchor.height + 8 : r.y - ph - 8
-        if (py < 8) py = r.y + anchor.height + 8
-        if (py + ph > win.height - 8) py = Math.max(8, r.y - ph - 8)
-        above = py < r.y
-        originX = r.x + anchor.width / 2 - px
-        const p = parent.mapFromItem(win, px, py)
-        x = p.x; y = p.y
+        width = Math.max(220, anchor.width)
+        positionAtAnchor()
         open()
+        Qt.callLater(positionAtAnchor)
     }
+    onHeightChanged: if (visible && anchorItem) positionAtAnchor()
     property real originX: width / 2
     // For the motion probe.
     readonly property real motionScale: motion.s

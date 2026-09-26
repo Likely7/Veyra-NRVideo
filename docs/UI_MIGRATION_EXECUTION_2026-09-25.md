@@ -37,6 +37,7 @@
 | S4.8 | 影院模式黑边与控制条修复 | 完成 | `checkpoint/ui-mig-s4.8` | `6f62e5f`（G0.1 补行） |
 | S4.9 | `VGroup` 行重叠修复（桌面端接手第一步） | 完成（截图已看） | `checkpoint/ui-mig-s4.9-vgroup` | 最小复现定位两处原因；导出页/设置页行已正常排布 |
 | G | 目标模式全量计划 | 进行中 | `checkpoint/ui-mig-g-plan` | 见 [`UI_FULL_GOAL_PLAN_2026-09-26.md`](UI_FULL_GOAL_PLAN_2026-09-26.md) |
+| R1.1 | 播放条字幕/音轨菜单遮挡局部修复 | 完成（仅此问题） | `checkpoint/ui-mig-r1.1` | 真实视频实机截图 `goal/r0/menu-subtitle-after.png`、`menu-audio-after.png` 已看；动态菜单高度回归 Quick Test 9/9。R0/R1 总验收未完成，字幕后端未接入 |
 | G0.2 | 17 张设计参考（无头 Edge） | 完成（逐张看图） | `checkpoint/ui-mig-g0.2` | `logs\ui-qml-migration-20260925\design-ref\`；首版对话框被截在淡入中途、与底页重叠，`shotpage.js` 默认 `setReduced(true)` 后重渲染 |
 | G0.3 | 应用测试开关 | 完成（逐项截图已看） | `checkpoint/ui-mig-g0.3` | `--page --tab --dialog --aspect --dock-pinned --size WxH --reduced-motion --slow-animations N`；证据 `goal\g0.3\`。带片源时应用自动进极简且原生视频窗盖住 QML，对话框/dock 截图需不带片源 |
 | G0.4 | `shoot-all.ps1`（17 屏 QML）+ `compose-compare.ps1`（左设计右 QML） | 完成（看图） | `checkpoint/ui-mig-g0.4` | QML 截图 `logs\ui-qml-migration-20260925\qml-ref\`，对比 `compare\cmp-f-*.png`。首页缺“继续上次/最近”、卡片图标为 emoji、标志偏低；专业页缺 NR 多层卡、仪表折线与分段柱、顺序条换行——列入 G1/G3 |

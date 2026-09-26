@@ -39,6 +39,12 @@ Item {
         title: "测试"
         items: [{ label: "甲", checked: true }, { sep: true }, { label: "乙" }, { label: "丙", disabled: true }]
     }
+    VMenu {
+        id: dynamicMenu
+        title: "动态菜单"
+        aboveLimit: 360
+        items: [{ label: "甲" }]
+    }
     SignalSpy { id: menuSpy; target: menu; signalName: "picked" }
 
     TestCase {
@@ -119,6 +125,18 @@ Item {
             wait(200)
             compare(menuSpy.count, 1)
             menu.close()
+        }
+
+        function test_menu_repositions_after_content_growth() {
+            dynamicMenu.openAt(anchorItem, "up")
+            tryCompare(dynamicMenu, "opened", true)
+            const initialHeight = dynamicMenu.height
+            dynamicMenu.items = [{ label: "甲", note: "第一项" },
+                                 { label: "乙", note: "第二项" },
+                                 { label: "丙", note: "第三项" }]
+            tryVerify(() => dynamicMenu.height > initialHeight)
+            tryVerify(() => dynamicMenu.y + dynamicMenu.height <= dynamicMenu.aboveLimit)
+            dynamicMenu.close()
         }
 
         // The option rows: Rectangles with radius 9 inside the menu's list.

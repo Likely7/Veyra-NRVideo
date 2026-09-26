@@ -90,6 +90,7 @@ Window {
         width: win.width
         height: 92
         fullscreen: !win.cinema
+        menuBottomLimit: win.menuRoom - 16
         opacity: win.fade * win.enterOpacity
         // barIn-like rise while showing: translate 30px -> 0 with the fade.
         transform: Translate { y: (win.cinema ? 0 : (1 - win.fade) * 30) + win.enterDy }
