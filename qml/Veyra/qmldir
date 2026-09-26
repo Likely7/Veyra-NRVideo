@@ -24,3 +24,5 @@ Main 1.0 Main.qml
 VMenu 1.0 VMenu.qml
 VPage 1.0 VPage.qml
 VRise 1.0 VRise.qml
+CineBar 1.0 CineBar.qml
+FullscreenBar 1.0 FullscreenBar.qml

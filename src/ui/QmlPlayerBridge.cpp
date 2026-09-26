@@ -1,5 +1,8 @@
 #include "veyra/ui/QmlPlayerBridge.h"
 
+#include <QRegion>
+#include <QWindow>
+
 #include <QDateTime>
 #include <QDir>
 #include <QFileDialog>
@@ -1130,6 +1133,11 @@ void QmlPlayerBridge::openUrl(const QUrl& url) {
 void QmlPlayerBridge::logUi(const QString& channel, const QString& text) {
     const std::string c = channel.toStdString();
     veyra::log::info(c.c_str(), text.toStdString());
+}
+void QmlPlayerBridge::setWindowMask(QObject* window, const QRectF& rect) {
+    auto* w = qobject_cast<QWindow*>(window);
+    if (!w) return;
+    w->setMask(QRegion(rect.toAlignedRect()));
 }
 void QmlPlayerBridge::holdOriginal(bool held) {
     impl_->engine.comparison(held ? 1 : 0, false);

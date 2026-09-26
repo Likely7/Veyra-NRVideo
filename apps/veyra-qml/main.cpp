@@ -212,6 +212,8 @@ int main(int argc, char** argv) {
     //   --size <W>x<H>          window size in device-independent pixels
     //   --reduced-motion        every animation at zero duration
     //   --slow-animations <N>   every animation N times slower (motion sampling)
+    //   --full-bar <shown|hidden>  fullscreen with the control window held shown / hidden
+    //   --full-debug            log every pointer movement the fullscreen controls see
     //   --motion-probe <name>   dock | page | switch | seg | menu: start that motion, log its value per frame
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
@@ -235,6 +237,10 @@ int main(int argc, char** argv) {
         } else if (a == QLatin1String("--export-out") && hasValue) {
             // A review run's export target, so a real export starts without the dialog.
             bridge.setExportPath(args.at(++i));
+        } else if (a == QLatin1String("--full-bar") && hasValue) {
+            testOptions.insert(QStringLiteral("fullBar"), args.at(++i));
+        } else if (a == QLatin1String("--full-debug")) {
+            testOptions.insert(QStringLiteral("fullDebug"), true);
         } else if (a == QLatin1String("--dock-pinned")) {
             testOptions.insert(QStringLiteral("dockPinned"), true);
         } else if (a == QLatin1String("--size") && hasValue) {

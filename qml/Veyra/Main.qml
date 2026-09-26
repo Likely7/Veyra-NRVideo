@@ -47,15 +47,15 @@ Window {
 
     function fitToFilm(aspect) {
         if (aspect > 0.2 && aspect < 5.0) filmAspect = aspect
-        if (cinema) height = Math.round(pictureHeight + barBelow)
+        if (cinema && !fullTarget) height = Math.round(pictureHeight + barBelow)
     }
     // .vy.cine transition: height .7s var(--spring-soft)
     Behavior on height {
-        enabled: root.cinema
+        enabled: root.cinema && !root.fullTarget
         NumberAnimation { duration: Theme.d(700); easing.bezierCurve: Theme.springSoft }
     }
     onWidthChanged: {
-        if (cinema) height = Math.round(pictureHeight + barBelow)
+        if (cinema && !fullTarget) height = Math.round(pictureHeight + barBelow)
         videoHost.syncRect()
     }
     // The window height animates towards the film's aspect, so the picture area has
@@ -67,7 +67,8 @@ Window {
         // Tell the bridge where the user is, so a command like "open a file" can
         // behave differently from home than from the professional page.
         if (veyra.currentPage !== page) veyra.currentPage = page
-        if (cinema) height = Math.round(pictureHeight + barBelow)
+        if (fullTarget) { /* the screen is the window */ }
+        else if (cinema) height = Math.round(pictureHeight + barBelow)
         else if (height < 600) height = 800
         // core.js app.go: the old page sinks (.22s) and the new one shows 150 ms
         // later with its [data-in] items rising. Reduced motion shows it at once.
@@ -129,6 +130,10 @@ Window {
     // numbers rather than read from a laid-out child. A child reports 0x0 on the
     // frame the user opens a file, and that once produced a 1x1 swapchain.
     function videoRect() {
+        // Fullscreen is a video-only viewport (AppShell): the picture is the screen
+        // and the controls float above it in their own window (FullscreenBar).
+        if (fullscreen && page !== "home" && page !== "set")
+            return { x: 0, y: 0, width: width, height: height }
         switch (page) {
         case "min":
             // .min .stage: full width, height = the picture height.
@@ -160,6 +165,10 @@ Window {
     Item {
         id: pages
         anchors.fill: parent
+        // In fullscreen the picture covers the page, and the native video window
+        // passes the pointer through: a hidden page control must not take a click
+        // meant for the picture.
+        visible: !root.fullscreen || root.page === "home" || root.page === "set"
         // Each page is shown while current or while sinking out; the sinking one
         // takes no input (.page.leave { pointer-events: none }).
         HomePage { pageId: "home"; onRequestPage: p => root.page = p }
@@ -167,6 +176,7 @@ Window {
             pageId: "min"
             onRequestPage: p => root.page = p
             onRequestAspect: aspect => { if (root.testAspect <= 0) root.fitToFilm(aspect) }
+            onRequestFullscreen: root.toggleFullscreen()
         }
         ProPage {
             id: proPage
@@ -220,12 +230,86 @@ Window {
     // keys (Qt's shortcut override), so typing in a field never seeks. V (hold for
     // the original picture) needs its release as well; main.cpp handles it.
     readonly property bool fullscreen: visibility === Window.FullScreen
+    // Set before the visibility changes: Windows resizes the window first, and the
+    // cinema rule would otherwise snap that fullscreen size back to the film.
+    property bool fullTarget: false
     property bool fullLocked: false
-    onFullscreenChanged: if (!fullscreen) fullLocked = false
+    onFullscreenChanged: {
+        fullTarget = fullscreen
+        if (!fullscreen) {
+            fullLocked = false
+            if (cinema) height = Math.round(pictureHeight + barBelow)
+        }
+        fullControls = true
+        fullHide.restart()
+        videoHost.syncRect()
+    }
     function toggleFullscreen() {
         fullLocked = false
-        visibility = fullscreen ? Window.Windowed : Window.FullScreen
+        fullTarget = !fullscreen
+        visibility = fullTarget ? Window.FullScreen : Window.Windowed
         veyra.logUi("ui-fullscreen", "enabled=" + fullscreen)
+    }
+
+    // G2.5 fullscreen controls. AppShell: any pointer movement shows the transport,
+    // and 1.6 s without movement hides it (and the cursor) unless the pointer rests
+    // on the bar or a menu is open; Ctrl+L locks it away. The bar is its own
+    // top-level window (FullscreenBar.qml), because the native video window draws
+    // above everything in this one.
+    property bool fullControls: true
+    function pointerActivity() {
+        if (!fullscreen || fullLocked || root.test.fullBar === "hidden") return
+        if (root.test.fullDebug === true) veyra.logUi("ui-fullscreen-debug", "pointer activity")
+        if (!fullControls) { fullControls = true; veyra.logUi("ui-fullscreen", "controls shown by pointer") }
+        fullHide.restart()
+    }
+    Timer {
+        id: fullHide
+        interval: 1600
+        onTriggered: {
+            if (!root.fullscreen || !root.fullControls) return
+            if (fullBar.hovered || fullBar.menuOpen || root.test.fullBar === "shown") { restart(); return }
+            root.fullControls = false
+            veyra.logUi("ui-fullscreen", "controls hidden; video and subtitles only")
+        }
+    }
+    // Every pointer move over this window (a HoverHandler sees them all, whatever
+    // item is under the pointer; the video window passes them through). The cursor
+    // hides with the controls, as in AppShell.
+    HoverHandler {
+        id: pointerWatch
+        cursorShape: root.fullscreen && (!root.fullControls || root.fullLocked) ? Qt.BlankCursor : Qt.ArrowCursor
+        // Qt re-sends hover while anything animates under a still pointer; only a
+        // real change of position counts as movement.
+        property point last: Qt.point(-1, -1)
+        onPointChanged: {
+            const p = point.scenePosition
+            if (Math.abs(p.x - last.x) < 1 && Math.abs(p.y - last.y) < 1) return
+            last = p
+            root.pointerActivity()
+        }
+    }
+    // AppShell VideoSurface: a double click on the picture leaves fullscreen,
+    // unless locked.
+    TapHandler {
+        enabled: root.fullscreen && !root.fullLocked
+        onDoubleTapped: root.toggleFullscreen()
+    }
+    FullscreenBar {
+        id: fullBar
+        owner: root
+        shown: root.fullscreen && root.fullControls && !root.fullLocked && veyra.hasSource
+        onRequestPage: p => { root.toggleFullscreen(); root.page = p }
+        onRequestFullscreen: root.toggleFullscreen()
+        onRequestLock: root.toggleLock()
+        onActivity: root.pointerActivity()
+    }
+    function toggleLock() {
+        fullLocked = !fullLocked
+        if (fullLocked) dock.opened = false
+        else { fullControls = true; fullHide.restart() }
+        toast.show(fullLocked ? "已锁定全屏 · Ctrl+L 解锁，Esc 退出全屏" : "已解锁全屏", false)
+        veyra.logUi("ui-fullscreen", "locked=" + fullLocked + " shortcut=Ctrl+L")
     }
     function subtitleKey(k) { toast.show("字幕尚未接入（" + k + "）", true) }
     Shortcut { sequence: "Space"; onActivated: veyra.togglePlayPause() }
@@ -240,12 +324,7 @@ Window {
     Shortcut {
         sequence: "Ctrl+L"
         enabled: root.fullscreen
-        onActivated: {
-            root.fullLocked = !root.fullLocked
-            if (root.fullLocked) dock.opened = false
-            toast.show(root.fullLocked ? "已锁定全屏 · Ctrl+L 解锁，Esc 退出全屏" : "已解锁全屏", false)
-            veyra.logUi("ui-fullscreen", "locked=" + root.fullLocked + " shortcut=Ctrl+L")
-        }
+        onActivated: root.toggleLock()
     }
     Shortcut { sequence: "B"; onActivated: root.subtitleKey("B") }
     Shortcut { sequences: ["Z", "Shift+Z"]; onActivated: root.subtitleKey("Z") }
@@ -385,7 +464,11 @@ Window {
         if (root.test.dialog !== undefined) dialogs.open(root.test.dialog)
         videoHost.syncRect()
         if (root.test.menu !== undefined) testMenuTimer.start()
+        if (root.test.fullBar !== undefined) testFullTimer.start()
     }
     // The menu anchors on laid-out buttons, so it opens once the page has settled.
+    // --full-bar shown|hidden: enter fullscreen with the control window held shown
+    // or held hidden, for the present-timing comparison (G2.5).
+    Timer { id: testFullTimer; interval: 1500; onTriggered: { root.toggleFullscreen(); if (root.test.fullBar === "hidden") root.fullControls = false } }
     Timer { id: testMenuTimer; interval: 600; onTriggered: proPage.openTestMenu(root.test.menu) }
 }

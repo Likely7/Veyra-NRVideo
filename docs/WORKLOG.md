@@ -6673,3 +6673,11 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   - 环境问题（2026-09-26 00:00 前后）：拖放截图画面区为黑、之后 hover 不出 dock、motion-probe 无输出——HEAD（stash 后重建）同样复现，DWM 计时 `refreshes/s=1 composed/s=1`（tmp/.../dwm-vblank.ps1），判断为显示器休眠导致合成/帧驱动停摆，不是本次代码问题。曾尝试延迟 open（QML Timer / QTimer）排查，均已撤回。
   - 未执行：拖放后画面截图（显示器休眠，待亮屏复拍）；toast 动效逐帧探针；导出文件内容校验。
 
+- G2.5 全屏控制条（`checkpoint/ui-mig-g2.5`，证据 `goal/g2.5/`）：
+  - 新 `CineBar.qml`：极简页播放条抽成组件（传输行/进度行/预设菜单），极简页与全屏共用；全屏时多一个锁定按钮，最大化按钮改为切全屏（原先误跳专业页）。
+  - 新 `FullscreenBar.qml`：独立顶层 Window（Tool|Frameless|WindowDoesNotAcceptFocus，transientParent=主窗），居中距底 24px；高出 440px 给预设菜单向上展开，`veyra.setWindowMask`（新桥接方法，QWindow::setMask）只让药丸（菜单打开时整窗）接指针；淡出 .2s 完成后整窗隐藏，隐藏时不参与合成。
+  - Main.qml：`fullTarget` 在切 visibility 前置位，修正进全屏时影院高度规则把窗口从 2560x1440 动画缩回 2560x812；全屏时视频占满窗口（home/set 除外）；指针真实移动（≥1px，过滤动画期间的 hover 重复）显示控件，静止 1600ms 隐藏并隐藏光标；双击退出；Ctrl+L `toggleLock()` 锁定后指针不再唤出控件。
+  - 测试开关：`--full-bar <shown|hidden>`（进全屏并固定控件状态）、`--full-debug`。
+  - 日志实测（probe1..3）：F11 → control window visible=true / enabled=true → 1.6s 后 controls hidden、visible=false → 移动指针重新出现 → Ctrl+L locked=true 窗隐藏、移动不出现 → 再 Ctrl+L 解锁出现 → Esc enabled=false、视频窗回 1280x720。
+  - 对比（`tools/qt_probe/fullbar-compare.ps1`，test_av_1080p.mp4，20s×2 轮，各 15 行 player-timing 均值，ms）：shown-1 present .316 / gpuReady 1.561 / graphSubmit .135 / returnAbs .715 / 60.7 提交每行；hidden-1 .376/1.541/.162/.779/60.6；shown-2 .411/1.546/.152/.793/60.4；hidden-2 .32/1.575/.141/.735/60.6。差异在噪声内、方向不一致，无可复现退化，按 D1 保留独立窗。summary.json 在 `goal/g2.5/compare/`。
+  - 未执行：PresentMon（本机未安装，以上为引擎 present 计时，不是显示端计时）；显示器休眠（DWM refreshes/s=1）期间的全部截图/目视；锁定按钮与条内预设菜单的实际点击；多显示器下的条位置。

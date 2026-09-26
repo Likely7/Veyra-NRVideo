@@ -25,6 +25,7 @@
 // not offered until the engine side exists.
 #include <QObject>
 #include <QString>
+#include <QRectF>
 #include <QUrl>
 #include <QVariantList>
 #include <QVariantMap>
@@ -471,6 +472,9 @@ public:
     Q_INVOKABLE void openUrl(const QUrl& url);
     // UI events the shell logs (fullscreen, lock) under the given channel.
     Q_INVOKABLE void logUi(const QString& channel, const QString& text);
+    // Limits a window's pointer input to a rectangle (QWindow::setMask); the
+    // fullscreen bar window uses it so only its pill takes the pointer.
+    Q_INVOKABLE void setWindowMask(QObject* window, const QRectF& rect);
     Q_INVOKABLE void stepFrame(int direction);
     Q_INVOKABLE void takeScreenshot();
     Q_INVOKABLE void chooseExportPath();
