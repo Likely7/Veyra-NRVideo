@@ -6,6 +6,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 
 VPage {
     id: root
@@ -15,19 +16,43 @@ VPage {
         anchors.centerIn: parent
         spacing: 24
 
-        // .home .mark: 128px wide, with a slow "breathe" glow.
-        Image {
+        // .home .mark: 128px wide, drop-shadow(0 0 20px rgba(255,255,255,.35)) and the
+        // 4.5s "breathe" loop: at 50% the glow is 30px at .55 and the mark scales 1.02.
+        // MultiEffect blur is 0..1 of blurMax (32px): 20px = .625, 30px = .94.
+        // The layer is padded 40px on every side so the glow has room (a layer on the
+        // bare image clips the shadow to the image's own bounds). Negative margins
+        // keep the layout the same as a plain 128px image.
+        Item {
             id: mark
             Layout.alignment: Qt.AlignHCenter
-            source: "logo.png"
-            sourceSize.width: 128
-            fillMode: Image.PreserveAspectFit
-            opacity: 0.9
-            SequentialAnimation on scale {
+            Layout.topMargin: -40
+            Layout.bottomMargin: -40
+            implicitWidth: logoImg.implicitWidth + 80
+            implicitHeight: logoImg.implicitHeight + 80
+            property real breath: 0
+            scale: 1 + 0.02 * breath
+            SequentialAnimation on breath {
                 running: !Theme.reduced
                 loops: Animation.Infinite
-                NumberAnimation { to: 1.02; duration: Theme.d(2250); easing.type: Easing.InOutSine }
-                NumberAnimation { to: 1.0; duration: Theme.d(2250); easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1; duration: Theme.d(2250); easing.type: Easing.InOutSine }
+                NumberAnimation { to: 0; duration: Theme.d(2250); easing.type: Easing.InOutSine }
+            }
+            Image {
+                id: logoImg
+                anchors.centerIn: parent
+                source: "logo.png"
+                sourceSize.width: 128
+                fillMode: Image.PreserveAspectFit
+            }
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: "#FFFFFF"
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+                blurMax: 64
+                shadowBlur: 0.625 + 0.3125 * mark.breath
+                shadowOpacity: 0.35 + 0.2 * mark.breath
             }
         }
 
@@ -58,20 +83,32 @@ VPage {
             Layout.alignment: Qt.AlignHCenter
             spacing: 12
             Repeater {
+                // Subtitles name what is really there: the device of the last capture
+                // session and the saved PS5 host; generic wording when there is none.
                 model: [
                     { glyph: "folder", title: "打开视频", sub: "MP4 · MKV · 图片", act: "file" },
-                    { glyph: "video", title: "采集卡", sub: "HDMI 采集设备", act: "capture" },
-                    { glyph: "gamepad", title: "PS5 串流", sub: "局域网串流", act: "ps5" },
+                    { glyph: "video", title: "采集卡",
+                      sub: veyra.hasCaptureSession ? veyra.captureSessionSummary.split(" · ")[0] : "HDMI 采集设备", act: "capture" },
+                    { glyph: "gamepad", title: "PS5 串流",
+                      sub: veyra.remotePlayHost.length > 0 ? "已保存主机 " + veyra.remotePlayHost : "局域网串流", act: "ps5" },
                     { glyph: "monitor", title: "屏幕捕获", sub: "窗口或显示器", act: "screen" }
                 ]
-                delegate: Rectangle {
-                    id: srcCard
+                // The layout owns the slot's position, so the card inside it is free to
+                // move its own y for the hover lift (a y set on a layout child is
+                // overwritten); the entrance rise goes on the slot.
+                delegate: Item {
+                    id: slot
                     required property var modelData
                     required property int index
-                    VRise { page: root; target: srcCard; d: 2 + srcCard.index }
-                    // .srccard: 164x124, radius 14, content pinned top and bottom.
                     implicitWidth: 164
                     implicitHeight: 124
+                    VRise { page: root; target: slot; d: 2 + slot.index }
+                  Rectangle {
+                    id: srcCard
+                    readonly property var modelData: slot.modelData
+                    // .srccard: 164x124, radius 14, content pinned top and bottom.
+                    width: 164
+                    height: 124
                     radius: Theme.rCard
                     color: cardHover.hovered ? Theme.card2 : Theme.card
                     border.width: 1
@@ -127,6 +164,7 @@ VPage {
                             }
                         }
                     }
+                  }
                 }
             }
         }
@@ -179,44 +217,65 @@ VPage {
                 }
                 VButton {
                     text: "开始"
+                    iconName: "play"
                     primary: true
                     onClicked: veyra.resumeCaptureSession()
                 }
             }
         }
 
-        // .recent: a row of chips, present only when there are recent files.
-        RowLayout {
+        // .recent: 692 wide, left-aligned, wrapping; "最近" in --v-t3 then 28px chips
+        // with a film/image icon. Present only when there are recent files; a chip
+        // whose file is gone is dimmed and does nothing (clicking it cannot open it).
+        Flow {
             id: recent
             Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 692
             visible: veyra.recentFiles.length > 0
             spacing: 8
             Text {
+                height: 28
+                verticalAlignment: Text.AlignVCenter
                 text: "最近"
                 color: Theme.t3
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fsBody
+                font.pixelSize: 12
             }
             Repeater {
                 model: veyra.recentFiles
                 delegate: Rectangle {
+                    id: chip
                     required property var modelData
-                    implicitWidth: chipText.implicitWidth + 22
-                    implicitHeight: 28
+                    readonly property bool isImage: /\.(png|jpe?g|bmp|webp|tiff?)$/i.test(modelData.path)
+                    width: chipRow.implicitWidth + 22
+                    height: 28
                     radius: 99
-                    color: chipHover.hovered ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.04)
+                    opacity: modelData.exists ? 1 : 0.45
+                    color: chipHover.hovered && modelData.exists ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.04)
                     border.width: 1
                     border.color: Theme.stroke
-                    Text {
-                        id: chipText
+                    Row {
+                        id: chipRow
                         anchors.centerIn: parent
-                        text: modelData.label
-                        color: chipHover.hovered ? Theme.t1 : Theme.t2
-                        font.family: Theme.fontUi
-                        font.pixelSize: 12
-                        elide: Text.ElideMiddle
+                        spacing: 7
+                        VIcon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: chip.isImage ? "image" : "film"
+                            size: 14
+                            color: chipText.color
+                        }
+                        Text {
+                            id: chipText
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.label
+                            color: chipHover.hovered && modelData.exists ? Theme.t1 : Theme.t2
+                            font.family: Theme.fontUi
+                            font.pixelSize: 12
+                        }
                     }
-                    HoverHandler { id: chipHover; cursorShape: Qt.PointingHandCursor }
+                    ToolTip.visible: chipHover.hovered && !modelData.exists
+                    ToolTip.text: "文件已不存在"
+                    HoverHandler { id: chipHover; cursorShape: modelData.exists ? Qt.PointingHandCursor : Qt.ArrowCursor }
                     TapHandler { onTapped: if (modelData.exists) veyra.openPath(modelData.path) }
                 }
             }

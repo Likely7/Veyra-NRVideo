@@ -6681,3 +6681,11 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
   - 日志实测（probe1..3）：F11 → control window visible=true / enabled=true → 1.6s 后 controls hidden、visible=false → 移动指针重新出现 → Ctrl+L locked=true 窗隐藏、移动不出现 → 再 Ctrl+L 解锁出现 → Esc enabled=false、视频窗回 1280x720。
   - 对比（`tools/qt_probe/fullbar-compare.ps1`，test_av_1080p.mp4，20s×2 轮，各 15 行 player-timing 均值，ms）：shown-1 present .316 / gpuReady 1.561 / graphSubmit .135 / returnAbs .715 / 60.7 提交每行；hidden-1 .376/1.541/.162/.779/60.6；shown-2 .411/1.546/.152/.793/60.4；hidden-2 .32/1.575/.141/.735/60.6。差异在噪声内、方向不一致，无可复现退化，按 D1 保留独立窗。summary.json 在 `goal/g2.5/compare/`。
   - 未执行：PresentMon（本机未安装，以上为引擎 present 计时，不是显示端计时）；显示器休眠（DWM refreshes/s=1）期间的全部截图/目视；锁定按钮与条内预设菜单的实际点击；多显示器下的条位置。
+- G3.1 首页（`checkpoint/ui-mig-g3.1`，证据 `goal/g3.1/`）：
+  - 标志 M18：MultiEffect 白色外发光 + breathe 4.5s（20px/.35 ↔ 30px/.55，scale 1.02）；图层四周留 40px 透明边（直接挂在图片上时光晕被裁到图片边界），负边距保持布局不变。logo-crop.png 与设计稿逐像素并排。
+  - 片源卡：外层 slot 交给 RowLayout 定位、入场 rise 挂 slot，卡片自身 y -4 悬停上浮（之前 y 被布局覆盖，悬停不会动）；副标题用真实数据：采集卡 = 上次采集设备，PS5 = 已保存主机，无记录时通用文案。
+  - 继续上次按钮加 play 图标；最近行改为 692 宽左对齐 Flow，film/image 图标，已删除文件变暗、不可点并提示“文件已不存在”。
+  - 修正：`ui-session.v1`（最近文件、上次采集、减弱动效、默认页）每次改动都写盘却从未读回——桥接构造时调用 `loadPreferences()`，损坏则记日志沿用默认。
+  - 新测试开关 `--data-dir <path>`（在桥接创建前读取），审查时用 `tests/ui-qml-migration-20260925/g3-home-data`（种子历史）与 `g3-empty-data`（首次运行），不读写用户自己的数据。
+  - 截图：cmp-f-home.png（有历史，对齐设计稿）、qml-empty.png（首次运行无继续/最近行）。PrintWindow 截图在显示器休眠时仍正常。
+  - 未执行：卡片悬停上浮与按下缩放的实拍——显示器休眠期间 Qt Quick 不投递悬停（hover-shot 前后逐像素无差，与 G2.4 dock 同一现象）；点击最近条目打开文件。

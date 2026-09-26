@@ -122,6 +122,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
     impl_->facade.importLegacyStores();
+    // Recent files, the last capture session and the shell preferences are saved
+    // on every change; without this load they were written but never read back,
+    // so every restart came up with an empty history. A damaged file is logged
+    // and the defaults stand.
+    if (!impl_->facade.loadPreferences())
+        veyra::log::error("ui", "preferences not loaded: " + utf8Of(impl_->facade.error()).toStdString());
     // 60 Hz ceiling, and it does nothing at all when the snapshot is unchanged.
     impl_->timer = new QTimer(this);
     connect(impl_->timer, &QTimer::timeout, this, [this] {

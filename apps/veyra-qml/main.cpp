@@ -175,8 +175,20 @@ int main(int argc, char** argv) {
     g_video = createVideoWindow();
 
     // The data directory mirrors what the Win32 build used, so presets and the
-    // session file carry over instead of starting empty.
-    ui::QmlPlayerBridge bridge(controller);
+    // session file carry over instead of starting empty. `--data-dir <path>` (a
+    // test switch) points it somewhere else, so a review run can show seeded
+    // history - recent files, the last capture session - without reading or
+    // rewriting the user's own.
+    std::filesystem::path dataDirectory;
+    {
+        const QStringList early = QCoreApplication::arguments();
+        const auto at = early.indexOf(QStringLiteral("--data-dir"));
+        if (at > 0 && at + 1 < early.size()) {
+            dataDirectory = std::filesystem::path(early.at(at + 1).toStdWString());
+            veyra::log::info("app", "test data directory " + early.at(at + 1).toStdString());
+        }
+    }
+    ui::QmlPlayerBridge bridge(controller, dataDirectory);
     bridge.attachVideoWindow(reinterpret_cast<qulonglong>(g_video));
 
     // Qt reports QML failures through its own message handler. Routing them to
@@ -214,6 +226,7 @@ int main(int argc, char** argv) {
     //   --slow-animations <N>   every animation N times slower (motion sampling)
     //   --full-bar <shown|hidden>  fullscreen with the control window held shown / hidden
     //   --full-debug            log every pointer movement the fullscreen controls see
+    //   --data-dir <path>       presets and session history from that folder (read before the bridge exists)
     //   --motion-probe <name>   dock | page | switch | seg | menu: start that motion, log its value per frame
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
@@ -241,6 +254,8 @@ int main(int argc, char** argv) {
             testOptions.insert(QStringLiteral("fullBar"), args.at(++i));
         } else if (a == QLatin1String("--full-debug")) {
             testOptions.insert(QStringLiteral("fullDebug"), true);
+        } else if (a == QLatin1String("--data-dir") && hasValue) {
+            ++i;  // handled before the bridge was created
         } else if (a == QLatin1String("--dock-pinned")) {
             testOptions.insert(QStringLiteral("dockPinned"), true);
         } else if (a == QLatin1String("--size") && hasValue) {
