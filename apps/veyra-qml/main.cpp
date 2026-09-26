@@ -97,6 +97,34 @@ void syncVideoGeometry(QQuickWindow* window, QQuickItem* host) {
 
 struct Cover { QRectF rect; qreal radius = 0; };
 
+// cineIn (pages.css @keyframes cineIn, plan M21): the stage is clipped with
+// inset(12% 0 12% 0) and expands to inset(0). The picture is a native window, so
+// the equivalent is its REGION: bands are cut off the top and bottom while the
+// animation runs. The window and the swapchain keep their size, so this costs no
+// ResizeBuffers - only the visible band changes. MinimalPage.inset carries the
+// fraction (0.12 -> 0).
+//
+// The walk starts at the window's content item, NOT at the video host: the host is a
+// sibling of the pages, so searching under it finds nothing. (The cover walk has the
+// same shape and the same reason; both are rooted at the scene.)
+qreal videoInsetFraction(QQuickItem* item) {
+    if (!item) return 0.0;
+    if (item->objectName() == QLatin1String("videoInset"))
+        return item->property("frac").toReal();
+    for (QQuickItem* child : item->childItems()) {
+        const qreal f = videoInsetFraction(child);
+        if (f > 0.0) return f;
+    }
+    return 0.0;
+}
+
+qreal sceneInsetFraction(QQuickWindow* window) {
+    if (!window) return 0.0;
+    QQuickItem* content = window->contentItem();
+    QQuickItem* root = content && content->parentItem() ? content->parentItem() : content;
+    return videoInsetFraction(root);
+}
+
 void collectCovers(QQuickItem* item, QList<Cover>& out) {
     if (!item->isVisible() || item->opacity() <= 0.0) return;
     if (item->objectName() == QLatin1String("videoCover")) {
@@ -113,14 +141,16 @@ void collectCovers(QQuickItem* item, QList<Cover>& out) {
 // "videoCover" (popover panels, the dialog scrim) are cut out of the window's
 // region instead, so the QML under them shows. Scene rects include transforms,
 // so the hole follows a popover's scale-in. The region only changes when a cover
-// moves; with none the window gets its full rectangle back.
-void syncVideoCovers(QQuickWindow* window, QQuickItem* host) {
+// moves or the cineIn inset changes; with neither the window gets its rectangle back.
+void syncVideoCovers(QQuickWindow* window, QQuickItem* host, qreal inset) {
     if (!window || !host || !g_video) return;
     QList<Cover> covers;
     collectCovers(window->contentItem()->parentItem() ? window->contentItem()->parentItem()
                                                       : window->contentItem(), covers);
     const qreal dpr = window->devicePixelRatio();
     const QPointF origin = host->mapToScene(QPointF(0, 0));
+    const int w = std::max(1, int(std::floor(host->width() * dpr)));
+    const int h = std::max(1, int(std::floor(host->height() * dpr)));
     static QList<QRect> last;
     QList<QRect> holes;       // x, y, w, h; the radius rides along as a fifth rect
     for (const Cover& c : covers) {
@@ -129,11 +159,31 @@ void syncVideoCovers(QQuickWindow* window, QQuickItem* host) {
                        int(std::ceil(local.width() * dpr)) + 1, int(std::ceil(local.height() * dpr)) + 1);
         holes << QRect(0, 0, int(std::round(c.radius * dpr * 2)), 0);
     }
-    if (holes == last) return;
-    last = holes;
+    // cineIn rides along as a marker entry so one cache covers both, and the last
+    // entry keeps its steadiness on a scene that renders without moving either.
+    const int insetBand = int(std::round(inset * h));
+    {
+        QList<QRect> key = holes;
+        key << QRect(0, 0, insetBand, 0);
+        if (key == last) return;
+        last = key;
+    }
+    // Covers win: a popover over the picture shows the QML beneath it, and the
+    // clip inset only ever runs without one. A cover opening mid-animation simply
+    // takes the whole rectangle back for as long as it is up.
+    if (holes.isEmpty() && insetBand > 0) {
+        // The design's inset(12% 0 12% 0 round 8px): both bands off the top and
+        // bottom, corners eased with the band so the last frame has no snap.
+        const int radius = std::max(2, int(std::round(8 * dpr * (inset / 0.12))));
+        HRGN band = CreateRoundRectRgn(0, insetBand, w + 1, h - insetBand + 1, radius, radius);
+        SetWindowRgn(g_video, band, TRUE);
+        // The picture is a native window PrintWindow cannot show, so the cineIn
+        // animation is evidenced here rather than in a screenshot.
+        veyra::log::info("qml", std::format("cineIn inset band={}px of {} (frac={:.3f}) radius={}",
+                                            insetBand, h, inset, radius));
+        return;
+    }
     if (holes.isEmpty()) { SetWindowRgn(g_video, nullptr, TRUE); return; }
-    const int w = std::max(1, int(std::floor(host->width() * dpr)));
-    const int h = std::max(1, int(std::floor(host->height() * dpr)));
     HRGN region = CreateRectRgn(0, 0, w, h);
     for (qsizetype i = 0; i + 1 < holes.size(); i += 2) {
         const QRect& hole = holes[i];
@@ -228,10 +278,14 @@ int main(int argc, char** argv) {
     //   --full-debug            log every pointer movement the fullscreen controls see
     //   --data-dir <path>       presets and session history from that folder (read before the bridge exists)
     //   --motion-probe <name>   dock | page | switch | seg | menu: start that motion, log its value per frame
+    //   --exit-after <ms>       quit the app by itself after N ms, so a test run ends
+    //                           through the engine's own teardown instead of a kill
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
     QVariantMap testOptions;
     QSize testSize;
+    // --exit-after: see the switch table. 0 means "run until closed".
+    int exitAfterMs = 0;
     for (int i = 1; i < args.size(); ++i) {
         const QString& a = args.at(i);
         const bool hasValue = i + 1 < args.size();
@@ -263,6 +317,8 @@ int main(int argc, char** argv) {
             if (wh.size() == 2) testSize = QSize(wh.at(0).toInt(), wh.at(1).toInt());
         } else if (a == QLatin1String("--motion-probe") && hasValue) {
             testOptions.insert(QStringLiteral("motionProbe"), args.at(++i));
+        } else if (a == QLatin1String("--exit-after") && hasValue) {
+            exitAfterMs = args.at(++i).toInt();
         } else if (a == QLatin1String("--reduced-motion")) {
             testOptions.insert(QStringLiteral("reducedMotion"), true);
         } else if (a == QLatin1String("--slow-animations") && hasValue) {
@@ -302,6 +358,32 @@ int main(int argc, char** argv) {
     }
     if (testSize.isValid()) window->resize(testSize);
 
+    // Closing the window must run the engine's own teardown, not just end the loop.
+    // A test harness that hard-kills the process (Stop-Process -Force) loses every
+    // log line still in the file sink's 64 KB buffer - including the ones a test is
+    // looking for, because the flush condition (250 ms since the last write) is
+    // never reached when the process dies first. Qt's default for a window with no
+    // explicit handler is to close it and exit on the last window, which does run
+    // teardown; this makes it explicit so a harness can also ask for a clean exit
+    // with --exit-after and get the same, complete log either way.
+    QObject::connect(window, &QQuickWindow::closing, &app, [](QQuickCloseEvent*) {
+        veyra::log::info("qml", "closing: quitting the application loop");
+        // Flush before quitting: the file sink is a 64 KB _IOFBF buffer, so a run
+        // that ends without this loses its last lines (the exact ones a headless
+        // check is looking for). closeFile() at teardown would also flush, but a
+        // quit path is not guaranteed to reach it.
+        veyra::Logger::instance().flush();
+        QCoreApplication::quit();
+    }, Qt::DirectConnection);
+    if (exitAfterMs > 0) {
+        // Self-terminating test run: the same teardown path as a user closing the
+        // window, so the log a harness reads is complete either way.
+        QTimer::singleShot(exitAfterMs, &app, [window] {
+            veyra::log::info("qml", "exit-after elapsed: closing the window");
+            window->close();
+        });
+    }
+
     // Reparent the native window under the QML window and keep it in step. The
     // host item is looked up by objectName so the QML side owns the layout and
     // this side only follows it.
@@ -339,7 +421,7 @@ int main(int argc, char** argv) {
                                                 w, h, int(host->x()), int(host->y())));
         }
         syncVideoGeometry(window, host);
-        syncVideoCovers(window, host);
+        syncVideoCovers(window, host, sceneInsetFraction(window));
     };
     // V held shows the original picture on the professional page (AppShell: the
     // OriginalHold key, engine.comparison(1, false) until release). A Shortcut only

@@ -103,6 +103,10 @@ QtObject {
     // axis directly (G1.3, tmp/.../min/Font.qml).
     readonly property string fontUi: "Noto Sans SC"
     readonly property var axesDemiBold: ({ "wght": 600 })
+    // 500: the design's .seek .peek time strip is `font: 500 11px/1 var(--f-mono)`.
+    // Same reason as DemiBold - 600 lands on a thin instance, so the axis is set
+    // explicitly rather than left to font.weight.
+    readonly property var axesMedium: ({ "wght": 500 })
     readonly property string fontMono: "Consolas"
     readonly property real fsEyebrow: 11
     readonly property real fsSmall: 11.5

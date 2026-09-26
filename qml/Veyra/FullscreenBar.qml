@@ -26,6 +26,12 @@ Window {
     signal activity()
     readonly property bool hovered: bar.hovered
     readonly property bool menuOpen: bar.menuOpen
+    // G3.2 (D1): the same window carries the cinema pill in windowed 极简 mode, where
+    // it straddles the picture's bottom edge: its top is pillTop (owner-relative),
+    // half over the native video window and half below it. In fullscreen it sits
+    // 24px above the screen edge.
+    property bool cinema: false
+    property real pillTop: 0
 
     transientParent: owner
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
@@ -36,9 +42,11 @@ Window {
     readonly property int barWidth: Math.min(860, owner.width - 48)
     width: barWidth
     height: 92 + menuRoom
-    // Centred, 24px above the screen's bottom edge (the design's 24px side margin).
+    // Centred; fullscreen: 24px above the screen's bottom edge (the design's 24px
+    // side margin); cinema: .cine-bar top = --pic-h - 46.
     x: owner.x + Math.round((owner.width - width) / 2)
-    y: owner.y + owner.height - height - 24
+    y: cinema ? owner.y + Math.round(pillTop) - menuRoom
+              : owner.y + owner.height - height - 24
 
     // Hidden outright rather than transparent, so it composes nothing over the video
     // (the PresentMon comparison in the plan measures exactly this). The fade is
@@ -55,16 +63,37 @@ Window {
     onHitRectChanged: veyra.setWindowMask(win, hitRect)
     Component.onCompleted: veyra.setWindowMask(win, hitRect)
 
+    // barIn (pages.css): from opacity 0, translate 30px, scale .94, .8s --spring
+    // after .12s. Played by enter() when the cinema page shows.
+    property real enterDy: 0
+    property real enterScale: 1
+    property real enterOpacity: 1
+    function enter() { barIn.restart() }
+    // The cinema pill enters with barIn each time it appears (page shown, dialog
+    // closed); the fullscreen one keeps the plain fade and rise.
+    onShownChanged: if (shown && cinema) enter()
+    SequentialAnimation {
+        id: barIn
+        ScriptAction { script: { win.enterDy = 30; win.enterScale = 0.94; win.enterOpacity = 0 } }
+        PauseAnimation { duration: Theme.d(120) }
+        ParallelAnimation {
+            NumberAnimation { target: win; property: "enterDy"; to: 0; duration: Theme.d(800); easing.bezierCurve: Theme.spring }
+            NumberAnimation { target: win; property: "enterScale"; to: 1; duration: Theme.d(800); easing.bezierCurve: Theme.spring }
+            NumberAnimation { target: win; property: "enterOpacity"; to: 1; duration: Theme.d(800); easing.bezierCurve: Theme.spring }
+        }
+    }
+
     CineBar {
         id: bar
         x: 0
         y: win.menuRoom
         width: win.width
         height: 92
-        fullscreen: true
-        opacity: win.fade
+        fullscreen: !win.cinema
+        opacity: win.fade * win.enterOpacity
         // barIn-like rise while showing: translate 30px -> 0 with the fade.
-        transform: Translate { y: (1 - win.fade) * 30 }
+        transform: Translate { y: (win.cinema ? 0 : (1 - win.fade) * 30) + win.enterDy }
+        scale: win.enterScale
         onRequestPage: p => win.requestPage(p)
         onRequestFullscreen: win.requestFullscreen()
         onRequestLock: win.requestLock()

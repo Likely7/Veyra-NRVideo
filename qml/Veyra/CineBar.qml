@@ -105,7 +105,7 @@ Rectangle {
                     TapHandler { id: cTap; onTapped: cbtn.tapped() }
                 }
 
-                CBtn { glyph: "cc"; onTapped: {} }
+                CBtn { glyph: "cc"; onTapped: ccMenu.openAt(this, "up") }
                 CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
 
                 // .play: 40px white circle with the play/pause glyph.
@@ -130,7 +130,7 @@ Rectangle {
                 }
 
                 CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
-                CBtn { glyph: "music"; onTapped: {} }
+                CBtn { glyph: "music"; onTapped: audioMenu.openAt(this, "up") }
             }
 
             // .seekrow: mono times either side of the rail.
@@ -144,8 +144,15 @@ Rectangle {
                     font.pixelSize: 10
                 }
                 Item {
+                    id: seekArea
                     Layout.fillWidth: true
                     implicitHeight: 14
+                    // .seek:hover .thumb { left: 44% } - the thumb tracks the real
+                    // progress, not the design's hard-coded 44%.
+                    readonly property real frac: Math.max(0, Math.min(1, veyra.progress))
+                    readonly property real hoverFrac: seekHover.hovered && width > 0
+                                                      ? Math.max(0, Math.min(1, seekHover.point.position.x / width))
+                                                      : frac
                     Rectangle {
                         id: rail
                         anchors.verticalCenter: parent.verticalCenter
@@ -155,10 +162,59 @@ Rectangle {
                         color: Qt.rgba(1, 1, 1, 0.14)
                         Behavior on height { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
                         Rectangle {
-                            width: parent.width * Math.max(0, Math.min(1, veyra.progress))
+                            width: parent.width * seekArea.frac
                             height: parent.height
                             radius: 9
                             color: "#FFFFFF"
+                        }
+                    }
+                    // .seek .thumb: 11px dot, scale 0 -> 1 over .4s --spring on hover.
+                    Rectangle {
+                        width: 11; height: 11; radius: 5.5
+                        color: "#FFFFFF"
+                        x: seekArea.frac * seekArea.width - width / 2
+                        anchors.verticalCenter: parent.verticalCenter
+                        scale: seekHover.hovered ? 1 : 0
+                        Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+                    }
+                    // .seek .peek: 144x104 above the rail, opacity .15s, scale .85 -> 1
+                    // over .4s --spring from its bottom centre. The design shows a frame
+                    // of the target position; the engine keeps no frame the UI can read
+                    // (only save-to-file), so the scene area is the design's own black
+                    // plate and the time is real. Recorded as 尚未接入 in WORKLOG (B1).
+                    Rectangle {
+                        visible: opacity > 0.01
+                        width: 144
+                        height: 104
+                        radius: 8
+                        color: "#000000"
+                        border.width: 1
+                        border.color: Theme.stroke2
+                        x: Math.max(0, Math.min(parent.width - width,
+                                                seekArea.hoverFrac * seekArea.width - width / 2))
+                        y: -height - 18
+                        opacity: seekHover.hovered ? 1 : 0
+                        scale: seekHover.hovered ? 1 : 0.85
+                        transformOrigin: Item.Bottom
+                        Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
+                        Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+                        Text {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 23
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            text: veyra.formatTime(seekArea.hoverFrac * veyra.duration)
+                            color: Theme.t1
+                            font.family: Theme.fontMono
+                            font.pixelSize: 11
+                            font.weight: Font.Medium; font.variableAxes: Theme.axesMedium
+                            Rectangle {
+                                anchors.fill: parent
+                                z: -1
+                                color: "#111111"
+                            }
                         }
                     }
                     HoverHandler { id: seekHover; cursorShape: Qt.PointingHandCursor }
@@ -219,7 +275,9 @@ Rectangle {
                     color: Theme.t2
                 }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: root.requestPage("pro") }
+                // The design's "全屏" button (title="全屏"). It used to call an
+                // undefined root.requestPage("pro").
+                TapHandler { onTapped: bar.requestFullscreen() }
             }
         }
     }
@@ -237,6 +295,44 @@ Rectangle {
         onPicked: (i, o) => {
             if (o.act === "pro") bar.requestPage("pro")
             else veyra.applyPresetIndex(o.preset)
+        }
+    }
+
+    // 字幕 (design: app.menu(anchor, '字幕', [...])): the design lists embedded
+    // tracks plus a settings dialog. The engine has no subtitle stream at all -
+    // no track list, no renderer - so every entry here is the design's own text
+    // with nothing behind it. Shown disabled rather than silently doing nothing.
+    VMenu {
+        id: ccMenu
+        title: "字幕"
+        items: [
+            { label: "关闭", disabled: true },
+            { label: "简体中文 · 内嵌 ASS", disabled: true },
+            { label: "English · 内嵌 SRT", disabled: true },
+            { label: "加载外部字幕…", icon: "import", disabled: true },
+            { sep: true },
+            { label: "字幕设置…", note: "字体、字号、描边、位置、延时（尚未接入）", icon: "type", disabled: true }
+        ]
+        onPicked: veyra.logUi("ui-cine", "subtitle menu picked index=" + i + " (no subtitle stream in the engine)")
+    }
+
+    // 音轨: this one is real - the bridge exposes the file's audio streams and the
+    // selected index, so the list and the check mark both come from the engine.
+    VMenu {
+        id: audioMenu
+        title: "音轨"
+        // The bridge's label already carries language · title · codec; only the
+        // channel count is separate.
+        readonly property var mk: t => ({ label: t.label,
+                                          note: t.channels > 0 ? (t.channels + " 声道") : "",
+                                          checked: t.index === veyra.selectedAudioTrack })
+        items: veyra.audioTracks.length > 0
+               ? veyra.audioTracks.map(mk).concat([{ sep: true },
+                     { label: "音频设置…", note: "输出设备、音画同步、偏移", icon: "music", act: "dlg" }])
+               : [{ label: "片源没有音轨或尚未打开", disabled: true }]
+        onPicked: (i, o) => {
+            if (o.act === "dlg") return bar.requestPage("set")
+            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
         }
     }
 }

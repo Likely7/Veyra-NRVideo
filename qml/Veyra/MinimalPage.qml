@@ -15,12 +15,39 @@ VPage {
     id: root
     signal requestPage(string page)
 
-    // Where the picture ends and the pill straddles. Main.qml sets the window
-    // height to pictureHeight + 46, so the bar's top edge is pictureHeight - 46.
-    // The picture is the window minus the control bar's full height: the bar
-    // sits below the picture rather than straddling it, because a native video
-    // window always draws above the QML scene.
-    readonly property real pictureHeight: parent ? parent.height - 92 : 0
+    // cineIn (pages.css @keyframes cineIn, plan M21 "上下各 12% 裁切展开 | 子窗口区域"):
+    // the stage opens from inset(12% 0 12% 0 round 8px) to inset(0). The picture is a
+    // native window above this scene, so a QML clip would not touch it - main.cpp
+    // reads this item and insets the video window's REGION instead (no resize, so no
+    // swapchain churn). It carries the value only: invisible, 0x0, never drawn. The
+    // C++ walk does not filter on visibility (unlike the cover walk, which must), so
+    // an invisible carrier still reaches it.
+    Item {
+        id: cineIn
+        objectName: "videoInset"
+        property real frac: 0
+        visible: false
+        width: 0
+        height: 0
+    }
+    // The animation itself: 12% -> 0 over .8s --spring-soft, started when the page
+    // shows through an animated switch (VPage.enter). A cold start (first open) has
+    // nothing to animate from, so it goes straight to 0.
+    NumberAnimation {
+        id: cineInAnim
+        target: cineIn
+        property: "frac"
+        to: 0
+        duration: Theme.d(800)
+        easing.bezierCurve: Theme.springSoft
+    }
+    onEnter: { cineIn.frac = 0.12; cineInAnim.restart() }
+
+    // Where the picture ends: Main.qml sets the window height to the picture plus
+    // BAR_BELOW (46), the lower half of the control pill. The pill itself is a
+    // separate top-level window (FullscreenBar in cinema mode, D1), because the
+    // native video window draws above this whole scene.
+    readonly property real pictureHeight: parent ? parent.height - 46 : 0
 
     // --- the picture ------------------------------------------------------
     // .min .stage: full width, the picture height, radius 8 (the window radius),
@@ -46,28 +73,6 @@ VPage {
             font.pixelSize: Theme.fsH3
         }
     }
-
-    // --- the control pill (CineBar.qml) ------------------------------------
-    // .cine-bar: min(860px, 100% - 48px), below the picture (see pictureHeight).
-    CineBar {
-        id: cineBar
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(860, root.width - 48)
-        height: 92
-        y: root.pictureHeight
-        visible: veyra.hasSource
-        onRequestPage: p => root.requestPage(p)
-        onRequestFullscreen: root.requestFullscreen()
-
-        // barIn: opacity 0, translate 30px, scale .94 -> settled
-        opacity: 0
-        SequentialAnimation on opacity {
-            running: cineBar.visible
-            PauseAnimation { duration: Theme.d(120) }
-            NumberAnimation { to: 1.0; duration: Theme.d(800); easing.bezierCurve: Theme.spring }
-        }
-    }
-
 
     // Report the film aspect upward so the window can snap to it.
     onPictureHeightChanged: if (veyra.sourceAspect > 0.2) root.requestAspect(veyra.sourceAspect)

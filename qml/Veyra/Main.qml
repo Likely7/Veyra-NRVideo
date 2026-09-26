@@ -39,10 +39,10 @@ Window {
     // Cinema geometry, straight from the prototype: the picture is width/aspect
     // and the window is that plus the lower half of the control pill.
     property real filmAspect: 2.39
-    // The design straddles the bar on the picture edge with barBelow = 46. The bar
-    // needs its own window for that, which does not exist yet, so the picture
-    // area reserves the whole bar height instead.
-    readonly property int barBelow: 92
+    // The design straddles the bar on the picture edge: BAR_BELOW = 46. The pill is
+    // its own top-level window (FullscreenBar, D1), so it can sit over the native
+    // video window.
+    readonly property int barBelow: 46
     readonly property real pictureHeight: Math.round(width / filmAspect)
 
     function fitToFilm(aspect) {
@@ -298,7 +298,14 @@ Window {
     FullscreenBar {
         id: fullBar
         owner: root
-        shown: root.fullscreen && root.fullControls && !root.fullLocked && veyra.hasSource
+        // Windowed cinema: the pill straddles the picture edge (D1). It hides under
+        // an open dialog, which lives in the main window below it.
+        cinema: root.cinema && !root.fullscreen
+        pillTop: root.pictureHeight - 46
+        shown: veyra.hasSource && (root.fullscreen ? root.fullControls && !root.fullLocked
+                                                   : root.cinema && root.shownPage === "min"
+                                                     && root.leavingPage === "" && dialogs.dialog === ""
+                                                     && root.visibility !== Window.Minimized)
         onRequestPage: p => { root.toggleFullscreen(); root.page = p }
         onRequestFullscreen: root.toggleFullscreen()
         onRequestLock: root.toggleLock()
