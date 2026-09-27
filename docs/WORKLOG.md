@@ -1,5 +1,76 @@
 # Veyra 工作记录
 
+## 2026-09-27 QML 迁移第五次对抗式审计：补齐历史残留冻结与阶段复查
+
+复查无人值守合同时发现，`scripts/acceptance/ui-migration-scope-guard.ps1` 曾整体忽略源码根目录的 `veyra_preset_library_tests/`、`veyra_qml_easing_tests/`、`veyra_qml_quick_tests`。三个目录共 405 个历史构建残留文件；它们不是本轮 QML 源码，但继续忽略会让后续变化逃过 scope guard。已移除该忽略并重新生成 `docs/UI_MIGRATION_SCOPE_BASELINE_2026-09-27.json`：初始变更 582 条，越界冻结 475 条；残留文件不删除、不编辑，按当前工作树 hash 冻结。
+
+活动方案已增加阶段间复查：U2 构建前后、entry contract 后、U3 结束后和 U4 smoke 结束后都必须重新运行固定 root/branch/main 的 scope guard。`docs/CURRENT_STATUS.md` 顶部已改为 UI-only 事实；恢复手册重复编号已修正；R5.3、采集、性能、导出和后端链路继续明确移出 2.0.0 队列。
+
+本条只修改 scope guard 和活动审计/方案文档。控制文件当前仍待 tracked + clean 提交；在提交并重新取得唯一 E 盘 guard 结果前，U0 未完成，U2–U6 未执行。旧 baseline 已保存在 `E:\项目\Veyra\archives\ui-qml-migration-20260927\control-audit\UI_MIGRATION_SCOPE_BASELINE_2026-09-27.pre-refresh.json`，未删除。
+
+## 2026-09-27 QML 迁移无人值守合同第三次审计
+
+针对“前端迁移不应改动原链路”的纠偏继续做对抗式复查，发现二次加固后仍有旧默认输入：entry contract 会默认复用 `E:\项目\Veyra\build\qt-probe-20260926`，smoke 会默认读取源码内旧 `loop\local\fixed_clips`，且 smoke/build TEMP 可能落到固定目录。已通过 `apply_patch` 修正以下 QML 迁移脚本：
+
+- `scripts/acceptance/test-ui-migration-entry-contract.ps1`：`-QmlBuild` 必填，只接受 E 盘本轮 build，拒绝 `qt-probe-*`；输出继续使用唯一 UTC+随机 `run-*`。
+- `scripts/acceptance/qml-ui-smoke.ps1`：移除旧 fixture 默认值；缺少 `-FixtureRoot`/媒体默认失败，显式允许时写 `skipped` 且退出 1；输出和 TEMP 在 E 盘根下各自生成唯一 `run-*`，JSON 记录真实路径。
+- `scripts/build-ui-migration.ps1`：显式 TEMP 也必须是新空目录。
+- `scripts/stage-ui-migration.ps1`：`-Release` 改为必填，并限制 build/release/staging 全部在 E 盘，防止旧发布依赖静默混入。
+
+本轮静态验证：7 个相关 PowerShell 文件 AST 解析均通过，`git diff --check` 通过。scope guard 将在本条文档写入完成后重新运行；QML 构建、entry contract、QML-only tests、smoke、17 个设计 frame 和 R5.3 均未执行/未通过，不能写成完成。冻结的 engine/pipeline/source/sink/media/gfx/ngx/shader/CMake/旧 Win32 路径没有在本轮编辑。
+
+## 2026-09-27 QML 迁移验收合同加固
+
+审计后发现，原有 QML 验收仍有三个自动化漏洞：smoke 缺少 `test_av_1080p.mp4` 时会静默减少案例；unit runner 接受 `legacy` 参数且可从另一个目录取测试；entry contract 固定复用输出目录，旧证据可能污染当前判断。已在 `scripts/acceptance/qml-ui-smoke.ps1`、`scripts/run-unit-ui-migration.ps1`、`scripts/acceptance/test-ui-migration-entry-contract.ps1` 修正：QML 脚本只接受 qml，播放 fixture 默认缺失即失败，显式允许时只记 skipped；三个 QML 测试必须来自同一个 QML staging；entry contract 每轮写入带 UTC 时间和随机后缀的唯一 run 目录。
+
+本条只修改验收脚本和活动 UI 文档，没有修改 engine、pipeline、source、sink、media、gfx、ngx、shader、CMake 或旧 Win32 UI。脚本语法、scope guard 和 QML 构建/运行尚未在本条记录时执行，未执行项不能写成通过。
+
+## 2026-09-27 QML 迁移范围纠偏与审计
+
+用户指出 2.0.0 任务从“替换 UI”跑偏为“UI + 引擎改造”。审计确认当前分支 `codex/ui-qml-migration-20260925` 与 `main=df41580` 仍隔离，当前 HEAD 为 `babebbb`，没有 merge/push/Release；当前目录是主 checkout 的隔离分支，不是 Codex managed linked worktree。
+
+已确认 `1530844` 至 `babebbb` 之间混入 GraphDescription、source metadata、EffectChain、Video HDR、Preset Library、NR 多实例、trim/export queue/rate control 等后端改动；工作树还存在 CMake、engine/pipeline/source/sink/media、shader、颜色/导出/采集测试和 R5.3 脚本的 dirty paths。它们不回滚、不继续修改、不计入 UI 完成度，待 `UI_MIGRATION_SCOPE_BASELINE_2026-09-27.json` 记录后按 hash 冻结。
+
+此前有一轮“UI”测试实际使用 `VEYRA_BUILD_QML_UI=OFF` 的 `veyra.exe`，不能作为 QML 证据；QML 证据必须使用 `VEYRA_BUILD_QML_UI=ON`、`veyra_qml_ui.exe` 和单独 staging。已修改 `scripts/build-ui-migration.*`、`scripts/stage-ui-migration.ps1`、`scripts/run-unit-ui-migration.ps1`，使入口和 QML-only 测试显式隔离。新增 `scripts/acceptance/ui-migration-scope-guard.ps1`，用于冻结现有越界文件并阻止新增后端路径。
+
+活动方案已改为 UI-only：`docs/UI_MIGRATION_MASTER_PLAN_2026-09-25.md`、`docs/UI_MIGRATION_EXECUTION_2026-09-25.md`、`docs/UI_FULL_GOAL_PLAN_2026-09-26.md`、`docs/UI_MIGRATION_RECOVERY_PLAN_2026-09-26.md` 已重写；审计见 `docs/UI_MIGRATION_SCOPE_AUDIT_2026-09-27.md`。R5.3/R5.4/R5.5、采集/解码/音频/导出/NR/FG/颜色链不再是 2.0.0 待办。
+
+本条记录只说明范围和文档修正；scope guard、PowerShell 5.1 语法、QML 构建、QML-only tests、smoke 和设计对照将在后续按 U0–U6 顺序执行，未执行项不计通过。
+
+## 2026-09-27 R5.3 4K 采集格式矩阵与缓冲复验
+
+用户确认真实采集卡仍连接后，使用同一 staging `E:/项目/Veyra/tests/ui-qml-migration-20260925/app/veyra.exe`，串行复验 `VIDEO 0 KUHAIMI 27P` 的全部 4K 格式：format 18/19（3840x2160@30 NV12）、36/37（3840x2160@30 I420）、54/55（3840x2160@60 MJPEG）。六项均完成 `SetFormat`、`ConnectDirect` 和 `Run`，但 8 秒内 `smoke frames=0`、`captureDropped=0`、exit 1，随后进入 `Stable device and format identity unavailable; manual selection required` 重连路径。矩阵结果：`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/capture-retry-20260927-4k-matrix/result.json`。
+
+为排除缓冲协商因素，format 54 又分别使用 `--capture-buffer=driver` 与 `--capture-buffer=minimum` 重试，仍为 0 帧、exit 1；随后同一环境 format 16（1920x1080@120 NV12）6 秒得到 720 帧、处理/回调 120 FPS、`captureDropped=0`、exit 0。证据位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/capture-retry-20260927-buffer-matrix/`。
+
+因此可以确认设备在线和非 4K 路径可持续回调；当前证据只把问题收窄到 4K 输入在协商后没有形成首帧，不能指定驱动、线材或硬件根因。未修改性能基线、阈值或采集逻辑；4K/高帧率格式矩阵和 Media Foundation 实卡导出仍阻塞 R5.3。
+
+## 2026-09-27 R5.3 真实采集卡复验：设备在线、4K 格式仍无回调
+
+使用 staging `E:/项目/Veyra/tests/ui-qml-migration-20260925/app/veyra.exe` 复验真实 `VIDEO 0 KUHAIMI 27P`，未使用虚拟摄像头。原始日志位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/capture-retry-20260927/`，4K 重试位于 `.../capture-retry-20260927-format54b/`。
+
+- format 16（1920x1080@120 NV12）8 秒：exit 0，970 帧，处理/回调均 120 FPS，`captureDropped=0`，`failed=false`。
+- format 62（1280x720@60 MJPEG）8 秒：exit 0，487 帧，处理/回调均 60 FPS，`captureDropped=0`，`failed=false`。
+- format 54（3840x2160@60 MJPEG）12 秒：SetFormat、软件 MJPEG decoder、ConnectDirect 均成功，但 `smoke frames=0`，随后反复 `Stable device and format identity unavailable; manual selection required`，exit 1。
+
+设备在线已由前两条格式的真实回调证明；4K 失败不能再写成“设备未连接”，也不能凭现有证据指定驱动或硬件根因。本轮不修改性能基线和门槛，4K/高帧率格式矩阵及 Media Foundation 实卡导出继续阻塞 R5.3。
+
+## 2026-09-27 R5.3 当前候选性能只读比较
+
+使用 `scripts/compare-ui-migration-perf.ps1` 将 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/perf-current-20260927/candidate-2/results.json` 与冻结 `E:/项目/Veyra/tests/ui-qml-migration-20260925/perf-baseline.json` 比较，报告写入 `.../perf-current-20260927/compare-candidate-2.json`。脚本保护输入文件，未改基线和阈值。
+
+四场景均未过固定门槛：`nr-1080` submit +13.73%、ready +245.27%；`nr-fg-1080` submit -15.07%、ready +245.45%；`nr-fg-4k` submit -15.69%、ready +222.92%；`plain-1080` submit -2.99%、ready +140.19%。四个候选进程均正常退出并有真实源帧，失败来自比较器门槛。代码审查确认独立调色计数为 0 时没有独立调色资源分配或逐帧 dispatch；旧版在当前环境也出现 GPU ready 波动。因此不把结果归因于 R5.3 调色改动，不修改冻结基线，不放宽门槛，R5.3 仍未提交/打标签。
+
+## 2026-09-26 R5.3 接手：修复图片 smoke 启动计时并复跑 delivery
+
+接手中断会话后先收取既有 delivery 会话 `36862`，结果为 exit 0；run `9c5d64306a23408db3afe558638df254` 的 `result.json` 状态为 `software_short_gate_passed`，26 项软件短检查全部通过，`capture=awaiting_user_capture_test`。输出位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/smoke-timer-fix/delivery/9c5d64306a23408db3afe558638df254/`。
+
+此前图片 smoke 失败不是图像结果失败，而是普通 smoke 从 `openFile()` 投递时刻开始计 3 秒，首次 `CreateFeature` 尚未完成就退出。修改 `apps/veyra/ui/AppShell.cpp`：普通 smoke 仅在 snapshot `running` 或 `failed` 后启动计时，`--smoke-empty` 保持启动计时，并删除自动打开文件后立即重置 `startTick`。构建 `E:/项目/Veyra/build/ui-qml-migration-20260925` exit 0，日志 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/smoke-timer-fix/build.log`。
+
+修复后的同一 `enhanced.png` 图片 smoke exit 0，日志出现 `smoke timer started running=true failed=false image=true frames=1`，最终 `smoke frames=1 ... failed=false nrEvaluated=1`；原始输出 `.../smoke-timer-fix/image.stdout.log`。这证明计时竞态已收口，不等于 R5.3 总验收通过。
+
+固定性能协议四轮仍全部失败；音频默认/重启诊断仍失败；TrueHDR 融合/独立最大差 0.183594 scRGB 超过既定容差；全集 unit 44/33/3 且冻结基线 `changes=[]`。因此不提交、不打 `checkpoint/ui-mig-r5.3`，不 push/merge/release，不进入 R5.4。
+
 ## 2026-09-26 桌面端接手 QML 界面迁移：VGroup 行重叠修复（S4.9）
 
 在 `codex/ui-qml-migration-20260925` 接手（交接存档 `checkpoint/ui-mig-wip-handoff`）。先用 `qml.exe` 跑交接留下的最小复现
@@ -6704,3 +6775,87 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 - 构建命令：`cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && cmake --build E:\项目\Veyra\build\qt-probe-20260926 --target veyra_export_probe veyra_qml_quick_tests --parallel 4'`，exit 0。
 - 原始运行证据：`E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-c\cq.stdout.log`、`vbr.stdout.log`、`cbr.stdout.log`、`invalid-cbr.stdout.log`、`quick-tests.txt`；三种真实 NVENC/D3D12 策略均成功，Quick Test `9 passed, 0 failed, 0 skipped`，CBR 无码率 exit 2 且无输出。
 - 未执行：队列自动推进/取消完整运行、Media Foundation 实卡、hash/perf/delivery/unit 门槛、导出页截图及用户暂缓的缩略图/进度条/R0/R1 总验收。`veyra_export_worker_failure_tests` 与 `veyra_audio_track_output_tests` 的混合结果不纳入本轮通过证据。
+
+### 2026-09-26 / R5.3 多实例 GPU 调色（验收中，未提交）
+- 实现和真实证据见 `docs/UI_MIGRATION_EXECUTION_2026-09-25.md` 的 R5.3 条目；所有本轮日志位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/`，staging 位于 `E:/项目/Veyra/tests/ui-qml-migration-20260925/r5.3/app`，临时目录位于 `E:/项目/Veyra/tmp/ui-qml-migration-20260925/r5.3`。
+- Qt 全量 build-all-4 exit 0；真实 D3D12 debug layer GPU 测试 exit 0；hash 17/17 一致；delivery `78c4e421a2114e0ba29ff702ba9a123e` 26 项短测检查通过。性能首轮有超限，单元全集待比对，不宣称 R5.3 完成。
+- 失败保留并修复：中性颜色默认值导致字节回归；初始化绕过 CommandSlotRing 引发 debug-layer error 547；RepairPreset 无参数/无父目录路径调用失败，改传新的 `./r53-presets-parent-2.txt` 后 exit 0。测试未掩盖为通过；本次性能控制台输出路径错误保留单独说明，结果 JSON 未丢失。
+- 未 push、未合并、未发布；已有未跟踪测试生成物原样保留，旧 Win32 与 1.4.4 资产不动。下一动作是完成 R5.3 门槛，不越过失败直接开 R5.4。
+
+### 2026-09-26 / R5.3 续接：容量修复、双构建与性能归因
+- 六实例预设满 64 条触发旧文件上限，新增回归先红后绿；PresetStore/PresetLibrary 统一有限 2 MiB 上限，Library 写入前校验可重载。`capacity-red`/`capacity-green` 原始失败及通过输出均保留在上述 r5.3 日志根；EffectChain 最终定向 exit 0。
+- 主配置 `build-main-2.log` 与 Qt `build-all-5.log` 全量构建 exit 0，均已 stage；不覆盖旧基线 app。最新产物的 GPU/hash/delivery 仍待复核。
+- 收取既有会话 88454：旧版 capture_audio、候选 capture_audio、候选 popup_selector 定向测试均 exit 0；全集 `unit-main` 的两个新增失败仍保留。Qt DLL 路径和参数纠正后三项定向通过，不能把配置错误隐藏成首次通过。
+- 性能固定四轮旧/新对照已完成但未过门槛；启动长尾/计时窗口与系统调度仍需归因，不能以旧版也波动为由宣布新版通过。下一动作核对 TimingWindow/ready 计时并复核最终产物；R5.3 未提交、未打标签。
+
+### 2026-09-26 / R5.3 续接：HDR→SDR 色域回归与门槛防误报
+- `ColorGradeGpuTests` 新增 PQ/HLG tone-map 后 LUT 用例；首次测试栈溢出修正为堆上 RAII 后，`domain-red-2` 六断言实际失败。`EnhanceGraph::createAdditionalColorResources` 将空间判断改为实际 `hdrWorking()`；`domain-green` 真 GPU/debug exit 0，半值 sRGB LUT 全图最大误差均 1 码值，PQ 拒绝后热更新仍禁用。首调色融合、呈现/音频/FG 调度未改。
+- 主构建 `build-main-3.log`、Qt `build-all-6.log` exit 0；此前 `final-verification-1` 的 GPU/hash 通过但 delivery image 在初始化阶段被 3 秒 smoke 截止，单元 43/34/3（capture_audio 新增失败），全部原始失败保留。最新产物不能沿用旧通过。
+- 新增只读性能结果比较器，沿用 10%/5% 固定阈值，缺数据与超限返回非零；12 项隔离脚本测试通过。最终固定性能协议正在 `perf-final-domain-fix` 执行，不自动追加复跑。
+- 1.4.4 标签与便携 zip 哈希复核一致（`rollback-assets-check.json`）。本轮日志/临时/测试产物仍限 E:/项目/Veyra；无 push、merge、Release、旧界面删除或运行库修改。
+
+### 2026-09-26 / R5.3 固定性能协议收取：未通过
+- 收取既有会话 32093，未重复启动。`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/perf-final-domain-fix/` 下四轮全部 gateExit=1；两次候选均 3/4 场景失败，两次旧版 4/4 失败。候选第二轮 nr-1080 submit=1.898ms（对冻结基线 +106.8%）、plain-1080 ready=2.866ms（+82.5%）。不选最好结果，不更换基线，不改门槛。
+- 当前仅色域修复后的双构建和 GPU debug 已通过；完整 hash/delivery/unit 仍待最新产物运行。已修正文档顶部的旧版通过/待核对摘要，保留历史原始记录。R5.3 未验收、未提交；R5.4/R5.5 不提前施工。
+
+### 2026-09-26 / R5.3 完整回归、音频锚点与图片启动诊断
+- 本段日志根 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/`。收取既有 87534 会话，不重复启动；目标 active，代码未提交、未打 R5.3 标签。
+- 最新产品 `final-verification-2`：hash 17/17；delivery exit 1（image-exit=1，原 3 秒 smoke 先于 Feature18 初始化完成）；unit pass44/fail33/skip3，与冻结 G0.7 各项状态一致，changes=[]。保留此前所有失败，不宣称全绿。
+- `CaptureAudioTests.cpp` 增加 `--restart-gap`、maxIngressLateMs/catchUpCallbacks；两次显式 stop/start 后重置模拟输入时间锚点，不重置连续 phase、videoReset 和刻意输入中断。只改测试，未改 CaptureAudioSession 产品实现/阈值。`audio-restart-diagnostic` red 和 fixed 均 exit 1，不能写成先红后绿；默认 `image-startup-audit/audio-default.*` 也 exit 1，160ms phase 偏差 58.6618ms 且无追赶回调。全集结果早于这个测试修改；Qt 测试产物待同步。
+- 命令 `powershell -NoProfile -ExecutionPolicy Bypass -File tests/integration/UiMigrationPerfGateTests.ps1 -OutputDirectory <日志根>/perf-gate-regression`：20/20 exit 0；输入 SHA 未变、畸形输入/进程失败/缺指标/阈值和覆盖保护均覆盖。首跑无 BOM 中文路径失败后加 UTF-8 BOM，未改门槛。
+- `image-startup-audit/protocol.json` 预登记旧 3s→旧 8s→新 8s，同 PNG、空闲 15s、无并发构建/GPU；结果 1/0/0，出帧 0/1/1。8 秒只证明此诊断条件能出图，不替代失败的原 3 秒 delivery。
+- `environment-audit` 仅记录剪映、OBS、CPU/GPU/电源快照；未杀进程、改电源或认定全部失败由背景负载造成。四轮性能失败仍阻塞，不再无理由复跑。
+
+### 2026-09-26 / R5.3 分块调色漏传与 TrueHDR 精度、输出隔离
+- 根目录 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/`，临时目录仍 `E:/项目/Veyra/tmp/ui-qml-migration-20260925/r5.3/`。目标 active，HEAD 仍 babebbb，未提交或打 R5.3 标签。
+- 分块修复：EngineControllerImage 补传额外调色链；TiledImageProcessor 将首调色、额外数组和 count 原样传入 tileSettings。`veyra_image_dimension_tests --tiled-color <证据目录>` 增加真实 GPU 整图/分块 6 例：1301×17 的 0/1/2/6 实例、17×1301 六实例、禁用首/中间实例。`tiled-colors/red.*` exit 1（零实例过、另外 5 例失败）；`fixed.*` exit 0（6/6、maxError8=0、debugErrors=0）。测试读回只限静态图和诊断，未增加产品视频读回。已查看 fixed-images 横向六实例 PNG。
+- `tiled-colors/build-main-all.log`、`build-qt-all.log` 全量构建各 exit 0；主/Qt stage 后 `qt-tiled.*`、主 `gpu-final.*` 和 `hash/`（17/17 same）均 exit 0。双构建已同步 CaptureAudioTests；此前“Qt 待同步”已完成，但其失败未被修复，也未重跑最新全集。
+- 命令 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-qt-probe.ps1 -Out <主构建目录> -Targets veyra_video_hdr_tests -Log <根>/hdr-color-chain/build-main.log` exit 0；随后主候选 `veyra_video_hdr_tests.exe --color-chain <根>/hdr-color-chain/main-images` exit 1。plain/fused/standalone/six 都真实运行/保存/释放成功、debugErrors=0；最大融合/独立误差 0.183594 scRGB（约 14.6875 nits）超过预设 1/64（1.25 nits）。不是通过，不包含 LUT 组合。
+- 增加重复融合与独立 SDR 诊断，不改阈值；`hdr-color-chain/diagnostic/build.log` exit 0、`run.*` exit 1。融合重复差 0；SDR 最大差 1 码值；HDR 平均差 0.00170135、最差 x883/y0/G（6.25781 vs 6.07422）。原始失败和独立 JXR 全部保留。仅支持量化/后续映射敏感的诊断，不把它写成画质正确。
+- 旧 `VideoHdrTests` 使用固定 video-hdr.jxr 导致复跑 HRESULT 0x80070050。新增尾部 `--output <路径>`，保留原数字参数及默认行为；run-unit-ui-migration 把该测试截图放到本轮 Out。没有删除或覆盖旧证据。`hdr-output-isolation/build-main.log`、`build-qt.log` exit 0；分别 stage 后 main/Qt `veyra_video_hdr_tests.exe --output <根>/hdr-output-isolation/<配置>-video-hdr.jxr` 均 exit 0、peakNits=400、parameterChange=0.448683。`results.json` 含命令/EXE hash/旧截图前后 hash，旧图未变；脚本语法检查通过。未做人眼 HDR 验收。
+- 本轮仅 HDR 测试目标重建，产品代码最后实跑仍为 tiled-colors；最新完整 unit/delivery/perf 未执行，不将旧 44/33/3 全集改成新通过。固定性能、原 3 秒 delivery、音频定向和新增 HDR 调色容差仍失败。未改冻结基线、阈值、首实例精度、产品音频/呈现/FG，也未 push/merge/发布/删除 Win32 或旧产物。
+
+### 2026-09-26 / R5.3 六调色链导出 worker 端到端证据
+- 目标仍 active，HEAD babebbb、最后 checkpoint R5.2-c；本轮只增加测试，不改产品实现。`tests/integration/ExportWorkerFailureTests.cpp` 增加 color-chain 模式，helper 为 `ExportColorChainTest.h`。显式数据根确认防止误写正常应用 LUT；输出必须新目录。
+- 证据根 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/export-color-worker/`；进程 TEMP/TMP 为 `E:/项目/Veyra/tmp/ui-qml-migration-20260925/r5.3`。main/Qt 运行目录分别为 tests/ui-qml-migration-20260925/r5.3/main-app 与 app，未覆盖冻结 app。运行前核对 NR 原件 SHA256/大小/有效签名，记录 runtime-identity.json；未修改运行库。
+- 构建命令 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-qt-probe.ps1 -Out <主或Qt构建目录> -Targets veyra_export_worker_failure_tests -Log <根>/build-<配置>-final.log` 两套 exit 0。预登记协议要求 12源帧/12编码帧/0生成/0hold、冻结设置和时间戳一致、直接/worker 解码像素误差 0；效果变化 >=2码值且 >=1%分量；新增显式 NVENC/D3D12 后端断言防止把 MF 回退算通过，未放宽任何阈值。
+- 命令 `<staging>/veyra_export_worker_failure_tests.exe color-chain <repo>/loop/local/fixed_clips/test_av_1080p.mp4 <根>/<配置>-final-color-chain-output`，只对测试进程环境设置 `VEYRA_TEST_COLOR_CHAIN_DATA_ROOT=<staging>/runtime_local`。plain/one/six/禁用首中间/反序/六个逐槽禁用共11例，六独立 LUT 尺寸2/3/5/17/33/4。main-final、qt-final均11/11、maxError8=0；528帧总编码（两配置×11例×直接/worker×12），全部真实 NVENC。worker 日志分别证明各 LUT 加载及后端；文件通过生产库软件解码逐帧比较，未增加产品GPU读回。
+- 原始失败保留：首轮 main 宽流中文路径使逐项日志缺失，修日志后双配置复验；原 encoder 故障用例误用 SDR 输入导致合法 MF 回退/测试失败，按既有测试合同换成 PQ 输入后两配置故障报告均通过，不改旧测试断言。cancel、未确认隔离目录保护也通过。runner 处理空 stdout 时中断，只续跑未执行 Qt，未重复主配置；见 runner-resume-note.txt。`final-results.json`记录8项；`verified-summary.json`检查22例；命令/EXE/输入/产物hash均已保存。
+- 使用本机 ffmpeg 对已编码 MP4 做测试专用静态抽图，exit0；已亲看 plain-six-reverse-first-frame.png，左原图/中六LUT/右反序，非黑且有实际变化。不把该静态抽检扩写成HDR、长期稳定、MF实卡、队列完整或QML截图验收。
+- 本轮没有完整 unit/delivery/perf 复跑；既有四轮性能、原3秒delivery、音频和TrueHDR调色容差失败继续阻塞。计划/恢复计划/执行记录已更新，R5.3未提交、未打标签，R5.4未开工，1.4.4、旧Win32和既有未跟踪产物保留。
+
+### 2026-09-26 / R5.3 FP32 预调色绑定修复接手
+- 修复 `src/pipeline/EnhanceGraph.cpp`：独立调色链在存在 `preGradeRgba_` 时读取 FP32 预调色资源；首实例融合路径保持不变。未改 TrueHDR 容差或性能门槛。
+- 构建日志：`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/fp32-pregrade/build.log`，exit 0。staging：`E:/项目/Veyra/tests/ui-qml-migration-20260925/r5.3/fp32-pregrade-stage`。
+- TrueHDR 定向复测 `hdr2-combined.log` exit 0，`maxFusedErrorScRgb=0`、`debugErrors=0`、融合重复差为 0；SDR 调色 GPU 回归 `color-gpu-combined.log` exit 0，包含六实例、LUT 拒绝和动态更新。首次直接 HDR 运行缺少构建目录 DLL，`0xC0000135` 原始证据保留，随后 staging 运行通过。
+- 线性诊断仍显示独立路径最大 `0.000976562 scRGB` FP16 级差；固定性能四轮、完整 unit、音频、真实采集卡和完整 TrueHDR 容差仍阻塞。未提交、未打标签、未 push/merge/release。
+
+### 2026-09-27 / R5.3 音频复验对账
+- 在当前空闲条件下重跑 `audio-repro-20260927`，160/400/900ms 自动延迟、共享输入偏移、stop/start 重启、video graph reset、手动同步、persistent dry input 重锚、真实 PCM 重锚、停止后状态清理和 burst budget 全部 `PASS`。日志：`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/audio-repro-20260927/stdout.log`。
+- 结论只限软件时序合同：当前条件下未复现音频逻辑故障；此前高系统负载/调度迟到失败证据仍保留。未放宽阈值、未修改产品音频策略，不宣称物理扬声器/显示器端到端延迟通过。
+- R5.3 仍受固定性能四轮、真实采集卡、Media Foundation 实卡导出和最终完整门槛阻塞；TrueHDR fresh 与六独立 LUT 双配置窄验收已通过，高负载音频失败证据仍需复现/解释；未提交、未打标签、未进入 R5.4。
+
+### 2026-09-27 / R5.3 双配置 delivery、TrueHDR fresh 与 unit 对账
+- 主配置 delivery 26/26 软件检查通过，结果 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/exposure-flag-delivery-main/bbcbc6411a6c48ebaf1288e21072a3d8/result.json`，exe SHA-256 `68F36662EB5091C54D55CAA08A44AC5EB30C7C288A3C3B75C7F42C04C6378E34`。Qt 配置 26/26 通过，结果 `.../exposure-flag-qt-delivery/4332003f4ef94782b5d52003e663b341/result.json`，exe SHA-256 `5BC0DD1972961455BF1A5EA174571104468008A93314D6EB4C7994D1BE90407F`。两者仍等待用户真实采集卡验收。
+- 完整 unit 对账：主 `44 pass / 33 fail / 3 skipped`，Qt `43 pass / 33 fail / 3 skipped`，相对冻结基线无新增失败；17/17 hash 两套一致。保留旧失败，不能写成全集通过。
+- TrueHDR 调色链改用全新输出目录后主/Qt 均 exit 0，`maxFusedErrorScRgb=0`、`maxLinearError=0`、`debugErrors=0`、`pass=1`；旧 Qt `0x80070050` 由 JXR 输出重名造成，不能与 fresh 结果混淆。
+- 固定性能协议四轮仍全部 `gateExit=1`，不改阈值/基线，不挑最好轮次；最新候选第二轮 `nr-1080 graphSubmit +106.8%`、`plain-1080 gpuReady +82.5%`。TrueHDR fresh 与六独立 LUT 已通过；实采集卡、MF 实卡导出和高负载音频解释仍未完成，R5.3 未提交、R5.4 未开始。
+
+### 2026-09-27 / R5.3 TrueHDR 六独立 LUT fresh 复验
+- 在隔离 staging 的 `runtime_local/luts` 生成并加载六个不同尺寸 `.cube` LUT（`2/3/5/17/33/4`，Cineon 输入空间），主配置与 Qt 配置分别运行 `veyra_video_hdr_tests --color-chain`。证据：`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/hdr-six-lut-20260927-main-2/run.log`、`.../hdr-six-lut-20260927-qt/run.log`。
+- 两套运行均 exit 0，六 LUT 输出峰值 `960 nits`，`meanSixChange=1.84216`，`meanSixLutChange=0.455866`，`maxFusedErrorScRgb=0`、`maxLinearError=0`、`debugErrors=0`、`pass=1`；六 LUT 的创建、加载、独立执行、释放和结果检查已补齐。该证据不覆盖真实 HDR 屏观感、实卡输入或长期稳定性。
+- 文档口径同步：R5.3 不再把“完整 HDR+六 LUT 未执行”列为阻塞；剩余阻塞为固定四轮性能、真实采集卡、Media Foundation 实卡导出、高负载音频失败复现/解释及最终完整门槛收口。性能阈值、冻结基线和历史失败证据不变，R5.3 仍未提交、未打标签。
+
+### 2026-09-27 / R5.3 真实采集卡 smoke
+- 设备 `VIDEO 0 KUHAIMI 27P` 已由 `veyra_capture_tests.exe --list` 枚举，未使用虚拟摄像头。完整输出与每次播放器日志位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/capture-paths-20260927/`。
+- `capture-paths-smoke.ps1` 原生路径 `format=16`（1920x1080@120 NV12）通过：12 秒 `frames=1441`、`dropped=0`、`failed=false`。同一物理卡压缩路径 `format=62`（1280x720@60 MJPEG）通过：`frames=721`、`processedFps=60`、`callbackFps=60`、`captureDropped=0`、`failed=false`；日志持续显示 `received=processed`。
+- 自动选择的压缩 `format=52`（1920x1080@240 MJPEG）结果为 `received=2880`、`processed=990`、`dropped=1900`、`failed=false`，说明输入速率高于当前处理/呈现速率后 mailbox 丢弃过期帧，不能记作零丢帧通过，也不是设备断开。
+- 单独测试 `format=54`（3840x2160@60 MJPEG）完成 `SetFormat`、软件解码器和颜色链初始化，但 12 秒 `frames=0`，反复记录 `Stable device and format identity unavailable; manual selection required`，退出码 1；4K 压缩路径本轮失败，不能由 720p 结果外推。
+- 本轮结论：物理采集卡 ingress 已有 1080p120 NV12 和 720p60 MJPEG 的真实通过证据；4K/高帧率格式矩阵、Media Foundation 实卡导出、屏幕/扬声器端到端延迟仍未验收。R5.3 继续受固定性能 gate、采集剩余格式、MF 实卡和最终门槛阻塞，未提交、未打标签、未进入 R5.4。
+# 2026-09-27 / QML 迁移第四次对抗式审计：固定控制证据源
+
+- 复核确认：当前目录仍是 `codex/ui-qml-migration-20260925` 的主 checkout，`main=df41580f7fa0d2b26718f355640470e8cb94b324`，没有 merge、push、Release，旧 Win32 UI 没有删除；隔离成立，但分支历史和 dirty worktree 仍包含冻结的后端/R5.3 越界改动。
+- 发现无人值守风险：scope guard 原来允许 `-Root`/`-Baseline` 替换证据源，且 baseline/guard 尚未纳入 Git clean 控制。该风险不是后端链路问题，但会让后续 UI 进度报告失去可追溯性。
+- 已修改 `scripts/acceptance/ui-migration-scope-guard.ps1`：固定 canonical root/branch/main/baseline/guard，记录并校验 guard SHA-256，要求 baseline 与 guard tracked + clean；保留已有越界路径 hash 冻结，不回滚、不继续修改后端。
+- 已同步 `docs/UI_MIGRATION_MASTER_PLAN_2026-09-25.md`、`docs/UI_MIGRATION_RECOVERY_PLAN_2026-09-26.md`、`docs/UI_MIGRATION_EXECUTION_2026-09-25.md` 和本审计文档。U0 在控制文件提交并重新验证前保持未完成；U2–U6 未执行。
+- 下一步顺序固定为：PowerShell AST 解析、`git diff --check`；只提交本轮活动文档、scope guard 和 baseline（不提交任何 SDK/runtime/测试媒体）；更新 baseline 的 guard blob/hash 后再次运行 guard；只有 U0 通过才允许创建新的 E 盘 QML build/staging/log/tmp 并进入 U2。

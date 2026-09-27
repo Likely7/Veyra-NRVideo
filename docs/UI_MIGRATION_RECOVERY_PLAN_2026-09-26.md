@@ -1,119 +1,34 @@
-# Veyra QML 迁移恢复计划（2026-09-26）
+# QML 迁移恢复与无人值守运行手册（2026-09-27）
+本手册用于从当前跑偏状态恢复执行顺序，不恢复旧的“先改引擎再换 UI”方案。
 
-本文件是 `codex/ui-qml-migration-20260925` 的当前施工入口，优先级高于此前的线性 S1/S2/S3/S4 计划。旧计划和执行记录保留作历史证据，不再作为自动推进队列。
+## 每轮固定顺序
+1. 记录 `git status --short --branch`、`git rev-parse --show-toplevel`、`git rev-parse HEAD`、`git rev-parse main`、`git worktree list --porcelain`，确认分支仍为 `codex/ui-qml-migration-20260925`，并明确当前目录是否为 linked worktree。
+2. 运行 `scripts/acceptance/ui-migration-scope-guard.ps1`；脚本固定当前仓库、目标分支、`main=df41580f7fa0d2b26718f355640470e8cb94b324`、baseline 和 guard 路径，并要求两份控制文件已 tracked 且 clean。失败立即停，不构建、不测试、不改代码。
+3. 生成本轮 UTC+随机后缀的 `build`、`staging`、`logs`、`tmp` 四个 E 盘目录。目录必须为空；任何已有 CMake cache、旧 executable、旧 `qml/` 或旧 `entry.json` 都不能复用。stage 的 Release 源也必须显式指定为 E 盘目录，不能使用脚本旧默认值。
+4. 只使用 `scripts/build-ui-migration.ps1 -UiTarget qml -Out <本轮build> -Log <本轮logs>\build.log -Temp <本轮tmp> -Targets veyra_qml_data_tests veyra_qml_easing_tests veyra_qml_quick_tests`；脚本会同时构建 `veyra_qml_ui`。构建前后各运行一次 scope guard；任一次失败立即停止。
+5. 使用本轮 build 显式运行 entry contract：`test-ui-migration-entry-contract.ps1 -QmlBuild <本轮build> -OutputDirectory <本轮logs>\entry-contract`。entry contract 后再次运行 scope guard，再用同一 QML staging 运行 `run-unit-ui-migration.ps1`；unit runner 只能从同一 QML staging 取三个 QML 测试。entry JSON 的 branch、commit、cache 开关和 executable hash 必须与本轮一致。
+6. U3 完成后再次运行 scope guard，再运行 `qml-ui-smoke.ps1`；显式传入本轮 staging、fixture root、output root 和 TEMP root。脚本在两个 root 下生成唯一 `run-*` 子目录并在 `result.json` 记录实际路径。缺少 `test_av_1080p.mp4` 默认失败；若明确使用 `-AllowMissingPlaybackFixture`，只能记录 skipped，不能记为 playback 通过，进程仍必须退出 1。smoke 完成后再运行一次 scope guard。
+7. U4 运行/交互通过后，单独执行 U5：逐张记录 17 个设计 frame 的截图和差异；未执行、失败、接口缺口必须保留原状态。
+8. 只在 `qml/**`、`apps/veyra-qml/**`、QML bridge、QML 测试、迁移脚本和 UI 文档中修复；更新执行文档和 `docs/WORKLOG.md`。
 
-## 目标
+## QML 入口合同
+- VEYRA_BUILD_QML_UI=ON；
+- veyra_qml_ui.exe；
+- 本轮新建且为空的 ...\app\qml staging；
+- staging 根目录不得同时存在 veyra.exe；
+- qml/Veyra/qmldir 存在且与构建目录匹配。
 
-交付 Veyra 2.0.0：真实播放的 QML 前端与设计稿 17 屏对齐，完成计划内后端能力，同时保持 1.4.4 的低延迟播放路径。用户确认 2.0.0 完成以前，必须随时能运行未改动的 1.4.4。窗口分层稳定前，不扩展页面功能。
+旧 veyra.exe、VEYRA_BUILD_QML_UI=OFF、旧 delivery staging 和后端 fixture 不能被写成 QML 通过。旧日志即使显示 pass，也不能替代当前 run 的 QML 证据。
 
-## 2.0.0 与 1.4.4 回退合同
+## 无人值守停止规则
+scope guard 任一冻结 hash 变化、新增后端路径、main 指针变化、控制文件未 tracked/不 clean、入口合同不一致、非空/复用 staging、QML-only 测试缺失或失败，均立即停止。不得通过参数替换 root/baseline，不得自动回滚、删除、改阈值、跳过测试或把失败改称诊断通过。若 QML 为了完成某控件需要修改 engine/pipeline/source/sink/media/gfx/ngx/shaders/CMake，立即记录接口缺口并结束本轮。
 
-- `v1.4.4` 标签固定在 `6851c277`；本机便携包 `E:\项目\Veyra\releases\1.4.4\final\Veyra-1.4.4-win64-portable.zip` 的 SHA-256 为 `BFF5149B55F8665FEBEAECEEE421956DF72370FA56515A013EE6ABBD45B8878B`，与同目录校验文件一致。禁止覆盖该包、解压目录、标签或 1.4.4 的构建入口。
-- 2.0.0 在当前迁移分支和独立构建/测试目录中开发；版本资源、应用内版本和后续包名统一为 `2.0.0`。这不是发布授权。
-- 2.0.0 默认用户数据与 1.4.4 分开。首次迁移只读取 1.4.4 配置并复制到 2.0.0 数据目录，不反写旧文件；格式升级须保留原文件和可重试路径。测试继续使用 `--data-dir` 指向隔离目录。
-- 每个影响设置、预设或运行组件的阶段都验证 1.4.4 便携版仍可独立启动、旧数据未被 2.0.0 改写。回退是启动原版程序并保留原配置，不是对工作分支执行 `git reset --hard`。
-- 用户确认 2.0.0 前保留旧 Win32 入口、1.4.4 便携包和源码标签；删除旧 UI、替换默认入口与发布均需放在最终验收门槛之后，且不自动合并、推送或发布。
+## 后端接口缺口
+只记录缺口，不改 engine/pipeline/source/sink/media/gfx/ngx/shaders/CMakeLists.txt。需要新增能力时创建独立后端计划和分支，由用户另行授权；当前 2.0.0 目标暂停该能力。
 
-## 当前判断
+## 结束条件
+U0–U6 当前证据齐全且用户验收后，才可讨论删除旧 Win32 UI、切换默认入口或整合主线。合并、push、Release 仍需用户当时明确授权。
 
-- 当前 HEAD 为 `7444a2d`，最后已提交标签为 `checkpoint/ui-mig-r5.2-b`；工作区包含待提交的 R5.2-c 改动，提交后标签为 `checkpoint/ui-mig-r5.2-c`。
-- G0/G1/G2/G3.1 已有代码和证据；R1.1 只修复字幕/音轨菜单遮挡局部问题，R0/R1 窗口分层尚未做完整总验收。
-- 用户已确认先继续前后端主线，进度条缩略图、拖动/点击跳转等小 UI 细节暂缓；未验收项仍必须保留“未执行”口径。
-- R5.2-a 已完成：导出预设、分辨率和码率状态与播放设置隔离，真实导出探针通过。
-- R5.2-b 已完成主路径：剪辑入出点、音轨选择、音画同步和 NVIDIA 零拷贝导出通过；非法范围拒绝；接近文件尾部若没有“入点之后的完整帧”会按合同拒绝。
-- R5.2-c 已实现 CBR/VBR/CQ 参数贯通、顺序队列、ETA、取消清空等待队列和多文件选择入口；队列自动推进/取消完整运行、Media Foundation 实卡路径、性能门槛、截图和 R0/R1 窗口分层总验收仍未执行。B1/B2 其余能力、G3.3、G3.4、G4、W 尚未完成，不能把垂直切片写成整块 B 阶段完成。
+## 当前污染状态说明
 
-## 施工规则
-
-1. 一次只改变一个主要变量。每个目标必须有构建、运行、原始 stdout 或日志、截图（如适用）和明确结论。
-2. 目标模式每次只承诺一个可验收目标，不把“继续做前端”当作目标。
-3. 未执行的项目必须写“未执行”。不能用 PrintWindow 黑图代替实机画面结论，不能用编译通过代替运行通过。
-4. 先保留回退点，再改代码。P0 诊断期间不做页面美化或后端新能力；R0 归因后允许用最小可测的窗口分层调整修复根因。
-5. 产物写入 `E:\项目\Veyra\`；仅对子进程设置 `TEMP/TMP`。不 push、不合并 main、不发布。
-6. 任何运行库身份不符、`nvngx_dlssnr.dll` 不符、许可证或第三方来源不清，立即停止该目标。
-
-## 目标队列
-
-### R0：黑面诊断闭环
-
-**目的**：把问题从“用户看到黑条”缩小为 geometry、region、visibility 或窗口分层中的一个原因。
-
-**只允许的改动**：诊断日志和最小开关；不改变默认行为，不继续做 UI。
-
-**必须记录**：QML window 客户区、DPR、`videoHost` scene 坐标和逻辑尺寸、`GetClientRect`、`GetWindowRect`、父 HWND、style、`SetWindowPos`/`SetWindowRgn` 返回值和错误码、当前 region 是否为空、source 是否已打开。
-
-**四个运行状态**：
-
-1. 没有打开片源，视频窗隐藏；
-2. 打开片源但强制隐藏视频窗；
-3. 打开片源、视频窗显示、禁用所有 region；
-4. 打开片源、只启用现有 cover region；`cineIn` 单独关闭。
-
-**通过条件**：正常用户路径（不带页面/动画测试参数）可复现，并能明确指出哪一个状态首次覆盖 QML；有 stdout/日志原始证据和实际屏幕采集。PrintWindow 仅作 QML 层辅助证据。若无法区分，R0 不通过，不进入 R1。
-
-### R1：恢复稳定的视频/QML分层
-
-**目的**：修复 R0 指出的单一根因，先让“打开视频后 QML 仍可见”稳定。
-
-**策略**：先据 R0 归因做最小修复，验证视频与 QML 同时可见。随后单独比较当前挖区方案与“原生视频 HWND + 单一透明 QML overlay”候选：真实播放、菜单/对话框、全屏、缩放、DPI 与窗口失焦恢复。只有后者的合成、命中测试、Present P95 和提交间隔均通过，才替换当前分层。此前讨论的 overlay 是待验证方案，不把简单探针数据当作产品性能结论。
-
-**通过条件**：正常用户路径打开本地视频，首页/极简页/专业页均可见；无视频时原生窗不遮挡 QML；没有用假色块代替视频；至少一次真实屏幕目视确认。未执行 hover、全屏、多显示器必须单独写明。
-
-### R2：固定窗口合同
-
-**目的**：把窗口坐标和尺寸合同写死并测试，避免后续页面继续引入黑面。
-
-**范围**：DIP/物理像素转换、child HWND style、parent client 坐标、窗口隐藏/显示生命周期、页面切换时 host 几何更新。暂不做新页面。
-
-**测试**：固定窗口尺寸、极简画幅变化、专业页切换、DPI 1.0/1.25/1.5（能运行的环境）；每个状态记录实际矩形，不依赖截图猜测。
-
-**通过条件**：没有 0x0/1x1/整窗覆盖；页面切换不重复打开片源；视频窗口只在有源且尺寸有效时显示。
-
-### R3：G3.2 极简页收口
-
-**前置**：R1、R2 通过。
-
-**范围**：只完成极简页的三个合同：按片源画幅调窗、播放条位置、进入动画。`cineIn` 若保留，必须作为独立小目标先在无视频/静帧条件验证，再接入真实视频窗。
-
-**通过条件**：2.39:1 和 16:9 两个状态真实运行；播放条不遮死 QML；动画未验证项不写完成。CineBar 菜单、悬停和全屏条分别验收，不捆绑。
-
-### R4：G3.3/G3.4 只做静态页面合同
-
-**目的**：在窗口合同稳定后补齐专业页和节点页的结构，不先接未完成后端。
-
-**范围**：17 屏中的 `f-pro`、`f-fg`、`f-color`、`f-node` 结构、状态和“尚未接入”标记。禁止画出引擎没有的可用控件。
-
-**通过条件**：同一 cfg 能生成稳定截图，与设计稿逐屏比对；后端未接入项明确禁用或标注。
-
-### R5：后端升级按垂直切片
-
-不再按 B1-B5 大块连续施工，每次只做一个可从 UI 到引擎验收的切片：
-
-1. 预设保存/加载与列表/节点隔离；
-2. 导出按预设选择；
-3. 调色独立 pass；
-4. 可排序执行器的固定顺序兼容层；
-5. 节点链最小运行闭环。
-
-每个切片必须单独跑相关单测、hash、性能和交付门槛；固定顺序 hash 不一致时停止，不能继续开放任意顺序。UI 状态必须绑定真实引擎能力，不能以静态状态代替运行结果。每片完成后仍要验证 1.4.4 回退合同。
-
-### R6：逐屏对齐和收尾
-
-按 `board.js` 的 17 个 `FRAMES` 逐屏建立状态、截图、差异记录。完成前不删除旧 Win32 界面，不替换默认产品入口，不发布。最终总验收含文件/采集/PS5/导出中本机实际可执行的路径、功能回归、2.0.0 版本一致性、1.4.4 回退演练和真实播放性能对比；缺失的设备或素材标“未执行”，不能宣布 2.0.0 全部完成。
-
-## 每个目标的交付模板
-
-目标开始前写清：目标、唯一变量、改动文件、回退标签、通过条件。
-
-目标结束必须报告：
-
-- 构建命令和产物路径；
-- 实际运行命令与原始 stdout/日志路径；
-- 截图路径和是否亲自看过；
-- 通过/失败/未执行项；
-- 新标签 `checkpoint/ui-mig-r<阶段>.<步>`；
-- 更新本文件、执行记录和 `WORKLOG.md`。
-
-## 下一目标
-
-当前目标模式继续 **R5.3：独立调色 pass**。R5.2-c 的代码与最小真实 NVENC 策略验证已完成并打 checkpoint；队列自动推进/取消完整运行、Media Foundation 实卡路径、性能门槛、截图和 R0/R1 窗口分层总验收仍未执行。R0/R1 窗口分层总验收、G3.3/G3.4 和小 UI 细节保留为未完成项，不在本切片中伪装通过。
+本分支保留了审计发现的历史后端改动，scope baseline 只负责冻结它们，不代表它们通过了链路验收，也不代表 QML 结果可以外推为 `main` 等价。R5.3、delivery、性能、采集和导出证据全部退出本手册的 UI 队列；不得因为无人值守流程需要“有东西可跑”而重新打开这些路径。

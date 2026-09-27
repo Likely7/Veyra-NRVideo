@@ -1,13 +1,15 @@
 # 当前项目状态 / Current Status
 
-## 进行中：QML 新界面迁移与引擎改造（2026-09-25 开工）
+## 当前活动：2.0.0 QML UI-only 迁移（2026-09-27 纠偏后）
 
-分支 `codex/ui-qml-migration-20260925`，起点 main `df41580`（标签 `checkpoint/pre-ui-qml-migration-20260925`）。
-按 [总方案](UI_MIGRATION_MASTER_PLAN_2026-09-25.md) 施工：S0 基线 → S1 引擎地基（画面不变）→ S2 NR 叠层 / 独立调色 /
-可排序执行器 / 导出补齐 → S3 Qt 探针 → S4 QML 全功能界面 → S5 删除旧界面与打包。设计稿为
-`prototypes/ui-redesign-2026-09-25/`，设计决定见 [界面设计方案](UI_REDESIGN_QML_NODE_PLAN_2026-09-25.md)。
-进度、存档标签、测试结果见 [执行记录](UI_MIGRATION_EXECUTION_2026-09-25.md)。补帧锁定在最后；只显示提交帧率；
-不保留旧界面。未合并 main、未推送、未发布。
+当前只做 QML 呈现层、输入适配层、已有 bridge 和 UI 验收。原有 source、engine、pipeline、sink、media、shader、
+运行库、时间戳、队列和输出语义是外部合同；页面缺字段只登记接口缺口，不为迁移改后端。活动阶段是
+`U0 scope/隔离 → U1 bridge 只读盘点 → U2 QML 构建 → U3 QML-only 测试 → U4 smoke/交互 → U5 17 个设计 frame → U6 封存`，
+详见 [总方案](UI_MIGRATION_MASTER_PLAN_2026-09-25.md) 和 [恢复手册](UI_MIGRATION_RECOVERY_PLAN_2026-09-26.md)。
+
+分支为 `codex/ui-qml-migration-20260925`，起点 main `df41580`（标签 `checkpoint/pre-ui-qml-migration-20260925`）。
+当前目录是该分支的主 checkout，不是 managed linked worktree；未合并 main、未推送、未发布，旧 Win32 UI 未删除。
+旧版“QML + 引擎改造”路线、R5.3 及其性能/采集/导出证据均降级为历史资料，不计入 2.0.0 UI 完成度。
 
 ## 正式版 1.4.4 已发布（2026-09-22）
 
