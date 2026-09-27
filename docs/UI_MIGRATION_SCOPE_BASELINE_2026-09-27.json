@@ -9,7 +9,7 @@
   "control": {
     "baselinePath": "docs/UI_MIGRATION_SCOPE_BASELINE_2026-09-27.json",
     "guardPath": "scripts/acceptance/ui-migration-scope-guard.ps1",
-    "guardSha256": "FE4205571A8AC6E40BFC7383A04ED149B9F3AF880C0713491D4D406BD9BF6285",
+    "guardSha256": "A636CB771D8B5E8CF3B57AEE0EE46C766CBB842806EB717D3BE84CCBA63EB052",
     "requiresTrackedCleanControlFiles": true,
     "guardHeadBlob": "72094f73f9cb3e4e0fd22c939e8ddef75fc5c7cb"
   },

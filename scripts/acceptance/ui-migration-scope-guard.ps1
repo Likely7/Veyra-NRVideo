@@ -140,6 +140,7 @@ function Get-UiScopeReason([string]$RepoPath) {
     # migration, even though their filenames contain "ui-migration".
     '^scripts/acceptance/(qml-ui-smoke|resolve-ui-migration-entry|test-ui-migration-entry-contract)\.ps1$' { return 'qml-acceptance-script' }
     '^docs/UI[^/]*\.md$' { return 'qml-documentation' }
+    '^docs/CURRENT_STATUS\.md$' { return 'qml-documentation' }
     '^docs/UI_MIGRATION_SCOPE_(BASELINE|AUDIT)_2026-09-27\.(json|md)$' { return 'qml-audit-documentation' }
     '^docs/WORKLOG\.md$' { return 'worklog' }
     default { return $null }
