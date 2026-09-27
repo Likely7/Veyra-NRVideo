@@ -216,6 +216,10 @@ if ($Initialize) {
       baselinePath = $canonicalBaselineRelative
       guardPath = $canonicalGuardRelative
       guardSha256 = Get-WorktreeHash $canonicalGuardRelative
+      # Record the exact guard blob that this baseline was created with. The
+      # verification path already requires this value, so initialization must
+      # produce a self-consistent control record for future unattended runs.
+      guardHeadBlob = Get-HeadBlob $head $canonicalGuardRelative
       requiresTrackedCleanControlFiles = $true
     }
     initialChangedPaths = @($records)
