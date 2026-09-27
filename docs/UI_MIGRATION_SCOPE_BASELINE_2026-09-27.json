@@ -4119,13 +4119,6 @@
       "worktreeSha256": "43DFA256524D8EFC4007E39077506A328F692E5BA6B302CDB1EBF217E509ABB8"
     },
     {
-      "path": "docs/CURRENT_STATUS.md",
-      "status": " M",
-      "scope": null,
-      "headBlob": "229d797d17438a24053c049054cc7296d00647e9",
-      "worktreeSha256": "66A881D35AE0EFE684DD0F1C07FC51DEE7AA573CAE8D54D3D5CA1EE2AC6B9264"
-    },
-    {
       "path": "docs/QT_QML_UI_MIGRATION_RESEARCH_PLAN_2026-09-24.md",
       "status": "committed",
       "scope": null,
