@@ -11,7 +11,7 @@
     "guardPath": "scripts/acceptance/ui-migration-scope-guard.ps1",
     "guardSha256": "A636CB771D8B5E8CF3B57AEE0EE46C766CBB842806EB717D3BE84CCBA63EB052",
     "requiresTrackedCleanControlFiles": true,
-    "guardHeadBlob": "72094f73f9cb3e4e0fd22c939e8ddef75fc5c7cb"
+    "guardHeadBlob": "b250fd44e6ba548728b217f63dc7034084547470"
   },
   "initialChangedPaths": [
     {
