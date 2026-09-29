@@ -5,6 +5,9 @@ enum class Mode { Daily, Professional };
 struct UiSessionState {
     Mode mode=Mode::Daily;
     bool enhanced=false,subtitles=true,diagnostics=false,drawer=false;
+    // Daily-mode immersive sub-state: the transport bar floats over the video
+    // and auto-hides (windowed and fullscreen). Professional mode ignores it.
+    bool immersive=false;
     // Subtitle look & language switches (persisted with the other UI prefs).
     bool subtitleOutline=true,subtitleBackground=false,subtitleSecondLanguage=false;
     int subtitleMargin=0,subtitleFont=0;

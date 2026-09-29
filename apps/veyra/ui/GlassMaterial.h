@@ -45,7 +45,11 @@ public:
     bool render(int width,int height,bool,bool full,const std::vector<GlassPane>& panes){if(full_!=full){full_=full;configure();}if(width==width_&&height==height_&&panes_==panes)return true;width_=width;height_=height;panes_=panes;++revision;return true;}
     bool copy(HDC target,HWND child,RECT area)const{
         if(!window_)return false;POINT origin{};MapWindowPoints(child,window_,&origin,1);AlphaGraphics paint(target);auto& g=paint.get();g.SetCompositingMode(Gdiplus::CompositingModeSourceCopy);g.SetClip(Gdiplus::Rect(area.left,area.top,area.right-area.left,area.bottom-area.top));
-        Gdiplus::SolidBrush base(Gdiplus::Color(active_?26:255,10,13,17));g.FillRectangle(&base,Gdiplus::Rect(area.left,area.top,area.right-area.left,area.bottom-area.top));if(full_)return true;
+        // Fullscreen and the daily immersive overlay have no backdrop material
+        // (nothing behind the window to blur), so the panes take the same solid
+        // fallback the windowed glass uses when transparency is off: one
+        // panel colour and one rim line, instead of a bare base fill.
+        Gdiplus::SolidBrush base(Gdiplus::Color(active_?26:255,10,13,17));g.FillRectangle(&base,Gdiplus::Rect(area.left,area.top,area.right-area.left,area.bottom-area.top));
         g.SetCompositingMode(Gdiplus::CompositingModeSourceOver);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.TranslateTransform(float(-origin.x),float(-origin.y));RECT rootArea=area;OffsetRect(&rootArea,origin.x,origin.y);
         for(const auto& pane:panes_){RECT overlap{};if(!IntersectRect(&overlap,&rootArea,&pane.rect)||pane.rect.right-pane.rect.left<3||pane.rect.bottom-pane.rect.top<3)continue;Gdiplus::GraphicsPath outline;path(outline,pane.rect,pane.radius);Gdiplus::SolidBrush tint(Gdiplus::Color(active_?pane.tint:BYTE(255),30,33,38));g.FillPath(&tint,&outline);Gdiplus::Pen rim(Gdiplus::Color(30,229,236,243),1);g.DrawPath(&rim,&outline);}
         return true;

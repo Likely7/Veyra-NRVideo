@@ -2,6 +2,7 @@
 #include "../../apps/veyra/ui/WorkspaceChrome.h"
 #include "../../apps/veyra/ui/WorkspaceTransition.h"
 #include "../../apps/veyra/ui/TransportLayout.h"
+#include "../../apps/veyra/ui/OverlayTransport.h"
 #include "../../apps/veyra/ui/UiPreferenceStore.h"
 #include "../../apps/veyra/ui/CapturePreferenceStore.h"
 #include "../../apps/veyra/ui/SourceTitle.h"
@@ -43,11 +44,52 @@ int wmain(int argc,wchar_t** argv){try{
     auto before=state.effective();require(state.mode==ui::Mode::Daily,"startup Daily");state.mode=ui::Mode::Professional;require(state.effective()==before,"mode cannot alter settings");state.enhanced=false;auto bypass=state.effective();require(!bypass.nr&&!bypass.sr&&bypass.multiplier==1,"true full bypass");require(bypass.forceSdrPreview,"master bypass retains SDR display choice");state.enhanced=true;require(state.effective()==before,"restore all settings");
     for(bool input:{false,true})for(bool display:{false,true})for(bool force:{false,true}){engine::EnhancementSettings s;s.forceSdrPreview=force;require(s.useHdrPreview(input,display)==(input&&display&&!force),"HDR output policy");}
     ui::ChromeLayout daily(1440,900,false,false);require(daily.left==0&&daily.top==0&&daily.viewWidth==1440&&daily.viewHeight==812&&daily.bottom==812,"daily video owns all space above transport");
+    ui::ChromeLayout immersive(1440,900,false,false,320,true);require(immersive.immersive&&immersive.left==0&&immersive.top==0&&immersive.viewWidth==1440&&immersive.viewHeight==900&&immersive.bottom==812,"immersive video owns the whole client while the bar overlays its last 88");
+    require(!ui::ChromeLayout(1440,900,true,false,320,true).immersive&&ui::ChromeLayout(1440,900,true,false,320,true).viewHeight==ui::ChromeLayout(1440,900,true,false).viewHeight,"professional layout ignores the immersive flag");
     for(int width:{688,768,868,928,1008,1040,1148,1248,1888,2528}){
-        ui::TransportLayout t(width,true);std::vector<ui::TransportSlot> slots={t.open,t.capture,t.recent,t.master,t.sr,t.stop,t.play,t.mute,t.volume,t.subtitle,t.fullscreen,t.mode,t.minimize,t.close};
+        ui::TransportLayout t(width,true);std::vector<ui::TransportSlot> slots={t.open,t.capture,t.recent,t.master,t.sr,t.stop,t.play,t.mute,t.volume,t.subtitle,t.fullscreen,t.immersive,t.mode,t.minimize,t.close};
         for(size_t i=0;i<slots.size();++i){require(slots[i].width>0&&slots[i].x>=0&&slots[i].x+slots[i].width<=width,"all daily actions visible and contained");for(size_t j=0;j<i;++j)require(slots[i].x>=slots[j].x+slots[j].width||slots[j].x>=slots[i].x+slots[i].width,"direct daily actions do not overlap");}
     }
     for(int width:{290,400,480,508,700,1000}){ui::TransportLayout t(width,false);require(t.play.x+t.play.width<=t.mute.x&&t.stop.x+t.stop.width<=t.mute.x,"compact professional transport leaves room for audio and subtitle controls");}
+    // Immersive fullscreen keeps the daily bar plus the lock; the toggle sits
+    // between the lock and the fullscreen button in every bar that has it.
+    for(int width:{688,720,727,728,768,868,928,1008,1040,1148,1248,1888,2528}){
+        ui::TransportLayout t(width,true,true);std::vector<ui::TransportSlot> slots={t.open,t.capture,t.recent,t.master,t.sr,t.stop,t.play,t.mute,t.volume,t.subtitle,t.fullscreen,t.immersive,t.mode,t.minimize,t.close};
+        require((t.lock.width>0)==(width>=728),"immersive fullscreen keeps the lock button from 728 dip and yields it below");
+        if(t.lock.width>0)slots.push_back(t.lock);
+        for(size_t i=0;i<slots.size();++i){require(slots[i].width>0&&slots[i].x>=0&&slots[i].x+slots[i].width<=width,"immersive fullscreen bar keeps every daily action plus the toggle");for(size_t j=0;j<i;++j)require(slots[i].x>=slots[j].x+slots[j].width||slots[j].x>=slots[i].x+slots[i].width,"immersive fullscreen actions do not overlap");}
+        require((t.lock.width==0||t.lock.x+t.lock.width<=t.immersive.x)&&t.immersive.x+t.immersive.width<=t.fullscreen.x,"toggle sits between the lock and the fullscreen button");
+        require(ui::TransportLayout(width,true).immersive.x+ui::TransportLayout(width,true).immersive.width<=ui::TransportLayout(width,true).fullscreen.x,"windowed daily toggle sits left of the fullscreen button");
+    }
+    require(ui::TransportLayout(1000,false,false,false).immersive.width==0,"professional workbench bar has no immersive toggle");
+    require(ui::TransportLayout(1000,false,true).immersive.width==32&&ui::TransportLayout(1000,false,true).lock.width==32,"plain fullscreen bar keeps the toggle and the lock");
+    {   // Overlay bar policy: plain fullscreen rule vs. the immersive rule.
+        using ui::OverlayTransport;ui::OverlayTransportInput in;in.now=10000;in.lastActivity=8000;
+        require(OverlayTransport::shouldHide(in),"plain fullscreen hides after the idle time with the pointer away");
+        in.pointerInBand=true;require(!OverlayTransport::shouldHide(in),"pointer in the bottom band keeps the bar");in.pointerInBand=false;
+        in.interacting=true;require(!OverlayTransport::shouldHide(in),"open popup or capture keeps the bar");in.interacting=false;
+        in.lastActivity=9000;require(!OverlayTransport::shouldHide(in),"not idle yet");in.lastActivity=8000;
+        in.visible=false;require(!OverlayTransport::shouldHide(in),"hidden bar has nothing to hide");in.visible=true;
+        require(OverlayTransport::revealOnPointer(in)&&OverlayTransport::revealOnKey(in),"plain fullscreen reveals on any pointer motion and on keys");
+        in.locked=true;require(!OverlayTransport::revealOnPointer(in)&&!OverlayTransport::revealOnKey(in),"lock blocks every reveal");in.locked=false;
+        in.immersive=true;require(!OverlayTransport::revealOnPointer(in),"immersive ignores motion outside the band");in.pointerInBand=true;require(OverlayTransport::revealOnPointer(in),"immersive reveals when the pointer enters the band");in.pointerInBand=false;
+        require(OverlayTransport::revealOnKey(in),"immersive keys still reveal");
+        require(OverlayTransport::shouldHide(in),"immersive hides once idle with media open");
+        in.mediaOpen=false;require(!OverlayTransport::shouldHide(in),"nothing open keeps the immersive bar");in.mediaOpen=true;
+        in.toastActive=true;require(!OverlayTransport::shouldHide(in),"a toast keeps the immersive bar");in.toastActive=false;
+        in.holdUntil=10001;require(!OverlayTransport::shouldHide(in),"entry grace keeps the immersive bar");in.holdUntil=10000;require(OverlayTransport::shouldHide(in),"grace expiry allows hiding");
+        // Sizing: the bar leaves even with the pointer in the band or a capture
+        // active, nothing reveals meanwhile, and afterwards the band must be
+        // re-entered (bandArmed) before pointer motion reveals again.
+        in.sizing=true;in.pointerInBand=true;in.interacting=true;require(OverlayTransport::shouldHide(in),"sizing hides the immersive bar even with the pointer in the band");
+        require(!OverlayTransport::revealOnPointer(in)&&!OverlayTransport::revealOnKey(in),"nothing reveals during sizing");
+        in.visible=false;require(!OverlayTransport::shouldHide(in),"already hidden during sizing");in.visible=true;
+        in.sizing=false;in.interacting=false;in.bandArmed=false;require(!OverlayTransport::revealOnPointer(in),"after sizing the band must be re-entered before it reveals");
+        in.bandArmed=true;require(OverlayTransport::revealOnPointer(in),"re-armed band reveals again");in.pointerInBand=false;
+        in.immersive=false;in.sizing=true;in.bandArmed=false;in.lastActivity=9500;require(OverlayTransport::revealOnPointer(in)&&OverlayTransport::revealOnKey(in)&&!OverlayTransport::shouldHide(in),"plain fullscreen ignores the sizing and band-arming inputs");in.sizing=false;in.bandArmed=true;in.lastActivity=8000;
+        in.immersive=false;in.mediaOpen=false;in.toastActive=true;in.holdUntil=99999;require(OverlayTransport::shouldHide(in),"plain fullscreen keeps its original rule regardless of media, toast or grace");
+        require(OverlayTransport::idleMs==1600&&OverlayTransport::graceMs==3000&&OverlayTransport::bandDip==98,"overlay timing constants match the documented contract");
+    }
     ui::WorkspaceTransition animation;animation.start(true,1000);animation.sample(1120);const auto halfway=animation.value;require(halfway>.49&&halfway<.51,"visible intermediate expansion");animation.start(false,1120);require(animation.value==halfway,"reverse without jump");animation.sample(1240);require(animation.value>0&&animation.value<halfway,"panel collapses progressively");animation.sample(1360);require(!animation.running&&animation.value==0,"collapse ends exactly");
     using pipeline::ResolutionPlan;using pipeline::NrSizePolicy;using pipeline::Extent;
     for(auto policy:{NrSizePolicy::P480,NrSizePolicy::P720,NrSizePolicy::P900,NrSizePolicy::Realtime,NrSizePolicy::P1440}){
@@ -127,6 +169,8 @@ int wmain(int argc,wchar_t** argv){try{
     for(int enabled:{0,1}){p.enhancementEnabled=enabled;before.nr=true;before.nrRuntime=engine::NrRuntime::Community;before.nrTemporal=true;require(prefs.save(p,&before),"master and runtime save");ui::UiPreferenceStore restart(dir);require(restart.load().enhancementEnabled==enabled,"master state survives restart");auto restoredSettings=restart.startup({});require(restoredSettings.nr&&restoredSettings.nrRuntime==before.nrRuntime&&restoredSettings.nrTemporal,"bypassed effects, runtime and temporal NR survive restart");}
     for(bool enabled:{false,true})for(unsigned mode=0;mode<3;++mode)for(unsigned sync=0;sync<3;++sync)for(unsigned rate=0;rate<3;++rate){p.presentation={enabled,engine::PacingMode(mode),engine::DisplaySync(sync),engine::OutputRateMode(rate),rate==2?119.88:60.0};require(prefs.save(p,nullptr),"presentation atomic save");ui::UiPreferenceStore restart(dir);require(restart.load().presentation==p.presentation,"all presentation combinations and output caps survive restart");}
     auto path=dir/"ui-preferences.v1";
+    {ui::UiPreferences imm;imm.immersive=true;require(prefs.save(imm,nullptr),"immersive preference save");ui::UiPreferenceStore reload(dir);require(reload.load().immersive,"immersive sub-state survives restart");imm.immersive=false;require(prefs.save(imm,nullptr),"immersive off save");ui::UiPreferenceStore again(dir);require(!again.load().immersive,"immersive off survives restart");}
+    {std::ofstream legacy(path);legacy<<"VEYRA_UI 10\n0.5 0 1 1280 800 0 0 0 0 22 392 1 0 0 0 0 0 1 0 0 0 2 0 0 60\n";legacy.close();ui::UiPreferenceStore migration(dir);auto old=migration.load();require(!old.immersive&&old.presentation.customFps==60.0&&old.subtitleLines==2&&old.inspectorWidth==392,"v10 migrates with immersive off and nothing else lost");require(migration.save(old,nullptr),"v10 remains writable");}
     for(int lines:{0,1,2,8})for(bool fit:{false,true}){p.subtitleLines=lines;p.subtitleFitToLines=fit;require(prefs.save(p,nullptr),"subtitle layout save");ui::UiPreferenceStore restart(dir);auto back=restart.load();require(back.subtitleLines==lines&&back.subtitleFitToLines==fit,"subtitle lines and explicit fitting survive restart");}
     {std::ofstream legacy(path);legacy<<"VEYRA_UI 6\n0.45 1 1 1280 800 0 0 0 4 22 392 1 0 1 16 3 0 1 1 2 1\n";legacy.close();ui::UiPreferenceStore migration(dir);auto old=migration.load();require(old.subtitleLines==2&&old.presentation.enabled&&old.presentation.mode==engine::PacingMode::Reflex&&old.subtitleMargin==16&&old.inspector==4,"v6 migrates subtitle layout without losing settings");require(migration.save(old,nullptr),"v6 remains writable");}
     for(int version=1;version<=5;++version){std::ofstream legacy(path);legacy<<"VEYRA_UI "<<version<<"\n1 0 1 1280 800 0 0 0 1 22";if(version>=2)legacy<<" 392";if(version>=3)legacy<<" 1 0 0 0 0";if(version>=4)legacy<<" 0";if(version>=5)legacy<<" 1";legacy.close();ui::UiPreferenceStore migration(dir);require(!migration.load().presentation.enabled,"old preferences default pacing off");require(migration.save({},nullptr),"old preferences migrate without corrupt lock");}

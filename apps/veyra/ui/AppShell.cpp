@@ -9,6 +9,7 @@
 #include "WorkspaceTransition.h"
 #include "UiSessionState.h"
 #include "UiPreferenceStore.h"
+#include "OverlayTransport.h"
 #include "PlaybackPowerGuard.h"
 #include "CapturePanel.h"
 #include "ScreenCapturePanel.h"
@@ -53,7 +54,7 @@ uint32_t multiplierFromDailyIndex(int index){const int i=index+1;return (index>=
 // RetiredPresetSlot keeps the control-id numbering stable after the preset UI
 // was deleted (2026-09-17). It is intentionally never created: named colour
 // presets live in the colour page and carry look parameters only.
-enum {Open=101,Play,Stop,Save,Nr,Sr,Fg,Seek,Info,Capture,Export,Realtime,Recent,Multiplier,Settings,OriginalHold,CompareToggle,Split,Reference,Fullscreen,ModeSwitch=220,Master,RetiredPresetSlot,Volume,Mute,Subtitle,SubtitleLoad,SubtitleSize,ImageOpen,InspectorDrawer,TabEnhance,TabFg,TabColor,TabExport,JobProgress,Details,Brand,MediaTitle,TimeLabel,EmptyTitle,EmptyHint,ProRailVideo,ProRailCapture,WindowMin,WindowMax,WindowClose,FpsLabel,RemotePlay,TabAudio,FullscreenLock,VideoSurface=1000};
+enum {Open=101,Play,Stop,Save,Nr,Sr,Fg,Seek,Info,Capture,Export,Realtime,Recent,Multiplier,Settings,OriginalHold,CompareToggle,Split,Reference,Fullscreen,ModeSwitch=220,Master,RetiredPresetSlot,Volume,Mute,Subtitle,SubtitleLoad,SubtitleSize,ImageOpen,InspectorDrawer,TabEnhance,TabFg,TabColor,TabExport,JobProgress,Details,Brand,MediaTitle,TimeLabel,EmptyTitle,EmptyHint,ProRailVideo,ProRailCapture,WindowMin,WindowMax,WindowClose,FpsLabel,RemotePlay,TabAudio,FullscreenLock,Immersive,VideoSurface=1000};
 // Settings-panel status text: it belongs to the player's bottom bar now, next to
 // the submitted-FPS readout (id 64 is free in the main window's id space).
 constexpr int ColourStatus=64; // transport-bar status line (settings messages + toasts)
@@ -107,10 +108,25 @@ HWND mainWindow=nullptr,video=nullptr,seekBar=nullptr,playbackBar=nullptr;
 // silently swallowed, sweep 2026-09-22 D1).
 std::wstring settingsStatusText,toastText;ULONGLONG toastUntil=0;
 void refreshColourStatus(){const bool toast=toastUntil&&GetTickCount64()<toastUntil;if(!toast)toastUntil=0;veyra::ui::setText(GetDlgItem(mainWindow,ColourStatus),toast?toastText:settingsStatusText);}
-void showToast(const std::wstring& text,unsigned ms=3000){toastText=text;toastUntil=GetTickCount64()+ms;if(mainWindow)refreshColourStatus();}
 veyra::ui::WorkspaceTransition transition;veyra::ui::GlassBackdrop backdrop;
-bool fullControls=true,fullLocked=false,menuOpen=false;ULONGLONG pointerTick=0,dashboardTick=0;
+// The transport bar floats over the video in fullscreen and in the daily
+// immersive sub-state; fullControls then says whether it is on screen.
+// overlayHoldUntil keeps it up for a grace period after entering/startup and
+// cursorTick is the last actual pointer motion (immersive hides the cursor on
+// its own idle timer because motion outside the band does not reveal the bar).
+bool fullControls=true,fullLocked=false,menuOpen=false;ULONGLONG pointerTick=0,dashboardTick=0,overlayHoldUntil=0,cursorTick=0;
+// sizingHold: inside the system SC_SIZE loop of a windowed immersive player the
+// bar stays away (the pointer sits in the band while dragging the bottom edge).
+// bandArmed goes false when that loop ends and back to true once the pointer
+// has left the band, so the picture edge remains visible after releasing.
+bool sizingHold=false,bandArmed=true;
 void layout();
+bool immersiveBar(){return uiState.immersive&&uiState.mode==veyra::ui::Mode::Daily;}
+bool overlayBar(){return full||immersiveBar();}
+bool pointerInRevealBand(){POINT p{};GetCursorPos(&p);ScreenToClient(mainWindow,&p);RECT r{};GetClientRect(mainWindow,&r);return p.x>=0&&p.x<r.right&&p.y<r.bottom&&p.y>=r.bottom-veyra::ui::dip(mainWindow,veyra::ui::OverlayTransport::bandDip);}
+// A toast lives in the bar, so an immersive bar that is hidden comes back for
+// it (failure and subtitle notices would otherwise vanish unseen).
+void showToast(const std::wstring& text,unsigned ms=3000){toastText=text;toastUntil=GetTickCount64()+ms;if(mainWindow){refreshColourStatus();if(immersiveBar()&&!fullControls&&!fullLocked&&!sizingHold){fullControls=true;pointerTick=GetTickCount64();layout();}}}
 enum : UINT_PTR { TelemetryTimer=1, TransitionTimer=2, ControllerTimer=3, ResizeCoalesceTimer=4, PreferenceSaveTimer=5 };
 bool interactiveResize=false,layoutPending=false;
 void startShellTimer(HWND window,UINT_PTR id,UINT interval){
@@ -118,13 +134,15 @@ void startShellTimer(HWND window,UINT_PTR id,UINT interval){
 }
 void endTransition(){transition.finish();KillTimer(mainWindow,TransitionTimer);if(video)RemovePropW(video,L"Veyra.ResizeDeferUntil");}
 veyra::ui::ChromeLayout chromeLayout(int w,int h){
-    using namespace veyra::ui;ChromeLayout target(w,h,uiState.mode==Mode::Professional,uiState.drawer,uiPreferences.inspectorWidth);
+    using namespace veyra::ui;ChromeLayout target(w,h,uiState.mode==Mode::Professional,uiState.drawer,uiPreferences.inspectorWidth,uiState.immersive);
     if(!transition.running){if(target.pro&&uiState.diagnostics){target.viewHeight-=132;target.bottom-=132;}return target;}
-    ChromeLayout daily(w,h,false,false),pro(w,h,true,uiState.drawer,uiPreferences.inspectorWidth);if(uiState.diagnostics){pro.viewHeight-=132;pro.bottom-=132;}
+    ChromeLayout daily(w,h,false,false,320,uiState.immersive),pro(w,h,true,uiState.drawer,uiPreferences.inspectorWidth);if(uiState.diagnostics){pro.viewHeight-=132;pro.bottom-=132;}
     target=pro;target.left=transition.mix(daily.left,pro.left);target.top=transition.mix(daily.top,pro.top);target.viewWidth=transition.mix(daily.viewWidth,pro.viewWidth);target.viewHeight=transition.mix(daily.viewHeight,pro.viewHeight);target.bottom=transition.mix(daily.bottom,pro.bottom);target.right=transition.mix(w+20,pro.right);return target;
 }
-LRESULT CALLBACK barProc(HWND h,UINT m,WPARAM w,LPARAM l){if(m==WM_ERASEBKGND)return 1;if(m==WM_PAINT){veyra::ui::PaintBuffer paint(h);veyra::ui::fillSurface(paint.dc,paint.rect,h);return 0;}return DefWindowProcW(h,m,w,l);}
-void pointerActivity(){if(!full||fullLocked)return;pointerTick=GetTickCount64();if(!fullControls){fullControls=true;layout();}SetCursor(LoadCursorW(nullptr,IDC_ARROW));}
+// Windowed immersive: the bar's empty background hit-tests through to the
+// shell, whose daily rule turns the bottom 88 dip into a caption drag area.
+LRESULT CALLBACK barProc(HWND h,UINT m,WPARAM w,LPARAM l){if(m==WM_ERASEBKGND)return 1;if(m==WM_NCHITTEST&&!full)return HTTRANSPARENT;if(m==WM_PAINT){veyra::ui::PaintBuffer paint(h);veyra::ui::fillSurface(paint.dc,paint.rect,h);return 0;}return DefWindowProcW(h,m,w,l);}
+void pointerActivity(){if(!overlayBar()||fullLocked)return;pointerTick=GetTickCount64();cursorTick=pointerTick;if(!fullControls){fullControls=true;layout();}SetCursor(LoadCursorW(nullptr,IDC_ARROW));}
 
 std::wstring currentFile,autoInput;bool paused=false,dragging=false,closing=false;int smokeSeconds=0;ULONGLONG startTick=0;int resultCode=0;
 std::wstring exportOutput;unsigned exportFrames=0;unsigned cancelAfterMs=0;bool exportHevc=false;veyra::engine::PlayerOptions initialOptions;
@@ -280,14 +298,44 @@ void openFile(const std::wstring&);
 void layout();
 void updateComparison(){engine.comparison(holdOriginal?1:compareMode,holdOriginal?false:referenceBase,compareSplit);}
 void toggleFullscreenLock(){if(!full)return;fullLocked=!fullLocked;fullControls=!fullLocked;pointerTick=GetTickCount64();layout();SetFocus(mainWindow);SetCursor(fullLocked?nullptr:LoadCursorW(nullptr,IDC_ARROW));veyra::log::info("ui-fullscreen",std::format("locked={} shortcut=Ctrl+L; Esc/F11 exit remains available",fullLocked));}
-void toggleFullscreen(){endTransition();fullLocked=false;full=!full;if(tooltips){SendMessageW(tooltips,TTM_POP,0,0);SendMessageW(tooltips,TTM_ACTIVATE,full?FALSE:TRUE,0);}DWORD corner=full?1:2;DwmSetWindowAttribute(mainWindow,33,&corner,sizeof(corner));fullControls=true;pointerTick=GetTickCount64();if(full){GetWindowPlacement(mainWindow,&windowPlacement);SetWindowLongPtrW(mainWindow,GWL_STYLE,WS_POPUP|WS_VISIBLE|WS_CLIPCHILDREN);MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(MonitorFromWindow(mainWindow,MONITOR_DEFAULTTONEAREST),&mi);SetWindowPos(mainWindow,HWND_TOP,mi.rcMonitor.left,mi.rcMonitor.top,mi.rcMonitor.right-mi.rcMonitor.left,mi.rcMonitor.bottom-mi.rcMonitor.top,SWP_FRAMECHANGED);}else{SetWindowLongPtrW(mainWindow,GWL_STYLE,ShellStyle|WS_VISIBLE);MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(MonitorFromRect(&windowPlacement.rcNormalPosition,MONITOR_DEFAULTTONEAREST),&mi);auto& r=windowPlacement.rcNormalPosition;if(r.right<mi.rcWork.left||r.left>mi.rcWork.right||r.bottom<mi.rcWork.top||r.top>mi.rcWork.bottom){OffsetRect(&r,mi.rcWork.left-r.left,mi.rcWork.top-r.top);}SetWindowPlacement(mainWindow,&windowPlacement);SetWindowPos(mainWindow,nullptr,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_FRAMECHANGED);}SetWindowTextW(GetDlgItem(mainWindow,Fullscreen),full?L"退出全屏":L"全屏 F11");SetCursor(LoadCursorW(nullptr,IDC_ARROW));layout();SetFocus(mainWindow);veyra::log::info("ui-fullscreen",std::format("enabled={} video-only viewport; transport auto-hides",full));}
+void toggleFullscreen(){endTransition();fullLocked=false;full=!full;if(tooltips){SendMessageW(tooltips,TTM_POP,0,0);SendMessageW(tooltips,TTM_ACTIVATE,full?FALSE:TRUE,0);}DWORD corner=full?1:2;DwmSetWindowAttribute(mainWindow,33,&corner,sizeof(corner));fullControls=true;bandArmed=true;pointerTick=GetTickCount64();cursorTick=pointerTick;overlayHoldUntil=immersiveBar()?pointerTick+veyra::ui::OverlayTransport::graceMs:0;if(full){GetWindowPlacement(mainWindow,&windowPlacement);SetWindowLongPtrW(mainWindow,GWL_STYLE,WS_POPUP|WS_VISIBLE|WS_CLIPCHILDREN);MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(MonitorFromWindow(mainWindow,MONITOR_DEFAULTTONEAREST),&mi);SetWindowPos(mainWindow,HWND_TOP,mi.rcMonitor.left,mi.rcMonitor.top,mi.rcMonitor.right-mi.rcMonitor.left,mi.rcMonitor.bottom-mi.rcMonitor.top,SWP_FRAMECHANGED);}else{SetWindowLongPtrW(mainWindow,GWL_STYLE,ShellStyle|WS_VISIBLE);MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(MonitorFromRect(&windowPlacement.rcNormalPosition,MONITOR_DEFAULTTONEAREST),&mi);auto& r=windowPlacement.rcNormalPosition;if(r.right<mi.rcWork.left||r.left>mi.rcWork.right||r.bottom<mi.rcWork.top||r.top>mi.rcWork.bottom){OffsetRect(&r,mi.rcWork.left-r.left,mi.rcWork.top-r.top);}SetWindowPlacement(mainWindow,&windowPlacement);SetWindowPos(mainWindow,nullptr,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_FRAMECHANGED);}SetWindowTextW(GetDlgItem(mainWindow,Fullscreen),full?L"退出全屏":L"全屏 F11");SetCursor(LoadCursorW(nullptr,IDC_ARROW));layout();SetFocus(mainWindow);veyra::log::info("ui-fullscreen",std::format("enabled={} video-only viewport; transport auto-hides",full));}
+void refreshImmersiveButton(){auto button=GetDlgItem(mainWindow,Immersive);if(!button)return;veyra::ui::setText(button,uiState.immersive?L"退出沉浸":L"沉浸");veyra::ui::selected(button,uiState.immersive);}
+// Daily immersive sub-state: same session and settings revision, only the
+// chrome changes (the video owns the client area, the bar overlays it and
+// auto-hides). Windowed it makes a borderless player; fullscreen it leaves the
+// picture alone until the pointer reaches the bottom band.
+__declspec(noinline) void toggleImmersive(){
+    if(uiState.mode!=veyra::ui::Mode::Daily)return;
+    endTransition();const auto before=engine.snapshot();
+    uiState.immersive=!uiState.immersive;uiPreferences.immersive=uiState.immersive;
+    const auto now=GetTickCount64();fullControls=true;bandArmed=true;sizingHold=false;pointerTick=now;cursorTick=now;overlayHoldUntil=uiState.immersive?now+veyra::ui::OverlayTransport::graceMs:0;
+    // No entry hint: it could only be read while the bar is still up, which is
+    // exactly when it is not needed. The button state, its tooltip, H and Esc
+    // carry the way out; the grace period lets the bar be seen before it hides.
+    refreshImmersiveButton();layout();SetFocus(mainWindow);
+    if(smokeSeconds<=0)SetTimer(mainWindow,PreferenceSaveTimer,1000,nullptr);
+    const auto after=engine.snapshot();
+    veyra::log::info("ui-immersive",std::format("enabled={} fullscreen={} sessionSame={} revisionSame={} reveal=bottom-band",uiState.immersive,full,before.sessionId==after.sessionId,before.desired.revision==after.desired.revision));
+}
 bool smokeProtection=false;int protectionStep=0;uint64_t protectionSession=0;bool protectionOverlayShown=false;
 bool protectionArmed=false,protectionDragging=false;POINT protectionStart{};std::pair<float,float> protectionSourceStart;HWND protectionOverlay=nullptr;
 void cancelProtection(){protectionArmed=protectionDragging=false;if(protectionOverlay)ShowWindow(protectionOverlay,SW_HIDE);if(video&&GetCapture()==video)ReleaseCapture();}
 std::pair<float,float> protectionPoint(HWND h,POINT p){RECT r{};GetClientRect(h,&r);auto e=engine.snapshot().metrics.resolution.output;return engine.previewView().sourcePoint(float(p.x),float(p.y),float(r.right),float(r.bottom),float(e.width),float(e.height));}
 LRESULT CALLBACK interaction(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR id,DWORD_PTR){
-    static POINT panPoint{};static bool panning=false;
+    static POINT panPoint{},dragOrigin{};static bool panning=false,dragArmed=false;
     if(id==VideoSurface&&m==WM_LBUTTONDOWN)SetFocus(h);
+    // Borderless resize: the video covers the shell's 7 dip edge band, so hand
+    // those hits back to the shell, which answers HTLEFT..HTBOTTOMRIGHT there.
+    if(id==VideoSurface&&m==WM_NCHITTEST&&!full&&!IsZoomed(mainWindow)){POINT p{GET_X_LPARAM(l),GET_Y_LPARAM(l)};ScreenToClient(mainWindow,&p);RECT r{};GetClientRect(mainWindow,&r);const int edge=veyra::ui::dip(mainWindow,7);if(p.x<edge||p.y<edge||p.x>=r.right-edge||p.y>=r.bottom-edge)return HTTRANSPARENT;}
+    // Windowed immersive: the video is the window. Press and drag moves it
+    // through the system caption loop; a press below the drag threshold stays
+    // a click, so the double-click fullscreen toggle survives.
+    if(id==VideoSurface&&immersiveBar()&&!full&&!protectionArmed){
+        if(m==WM_LBUTTONDOWN){dragOrigin={GET_X_LPARAM(l),GET_Y_LPARAM(l)};dragArmed=true;SetCapture(h);return 0;}
+        if(m==WM_MOUSEMOVE&&dragArmed){if(!(w&MK_LBUTTON)){dragArmed=false;if(GetCapture()==h)ReleaseCapture();}else{const int dx=GET_X_LPARAM(l)-dragOrigin.x,dy=GET_Y_LPARAM(l)-dragOrigin.y;if(std::abs(dx)>=GetSystemMetrics(SM_CXDRAG)||std::abs(dy)>=GetSystemMetrics(SM_CYDRAG)){dragArmed=false;ReleaseCapture();POINT s=dragOrigin;ClientToScreen(h,&s);veyra::log::info("ui-immersive","window drag started from the video surface");SendMessageW(mainWindow,WM_NCLBUTTONDOWN,HTCAPTION,MAKELPARAM(s.x,s.y));}}return 0;}
+        if(m==WM_CAPTURECHANGED&&dragArmed)dragArmed=false;
+        if(m==WM_LBUTTONUP&&dragArmed){dragArmed=false;if(GetCapture()==h)ReleaseCapture();return 0;}
+    }
     if(id==VideoSurface&&protectionArmed){
         if(m==WM_SETCURSOR){SetCursor(LoadCursorW(nullptr,IDC_CROSS));return TRUE;}
         if(m==WM_KEYDOWN&&w==VK_ESCAPE){cancelProtection();return 0;}
@@ -318,7 +366,13 @@ LRESULT CALLBACK interaction(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR id,DWORD_P
         if(m==WM_RBUTTONUP){engine.previewView({});return 0;}
     }
     if(id==VideoSurface&&(m==WM_MBUTTONUP||m==WM_CAPTURECHANGED)){panning=false;if(m==WM_MBUTTONUP&&GetCapture()==h)ReleaseCapture();}
-    if(id==VideoSurface&&m==WM_SETCURSOR&&full&&!fullControls){SetCursor(nullptr);return TRUE;}
+    if(id==VideoSurface&&m==WM_SETCURSOR&&overlayBar()&&!fullControls){
+        if(!immersiveBar()){SetCursor(nullptr);return TRUE;}
+        // Immersive: motion over the video shows the cursor without revealing
+        // the bar; it hides again on its own idle timer.
+        static POINT last{-9999,-9999};POINT p{};GetCursorPos(&p);if(p.x!=last.x||p.y!=last.y){cursorTick=GetTickCount64();last=p;}
+        if(GetTickCount64()-cursorTick>veyra::ui::OverlayTransport::idleMs){SetCursor(nullptr);return TRUE;}
+    }
     if(id==VideoSurface&&m==WM_ERASEBKGND)return 1;
     if(id==VideoSurface&&m==WM_PAINT){
         const auto state=engine.snapshot();
@@ -347,6 +401,8 @@ void switchMode(){
     const auto start=std::chrono::steady_clock::now();const auto before=engine.snapshot();const auto host=video;
     if(uiState.mode==veyra::ui::Mode::Daily){uiState.mode=veyra::ui::Mode::Professional;compareMode=uiState.preferredComparison;}
     else{uiState.mode=veyra::ui::Mode::Daily;engine.previewView({});uiState.preferredComparison=compareMode;compareMode=0;holdOriginal=false;if(GetCapture())ReleaseCapture();}
+    // Back in daily immersive the bar shows for the grace period so the exit stays visible.
+    if(immersiveBar()){fullControls=true;bandArmed=true;pointerTick=GetTickCount64();cursorTick=pointerTick;overlayHoldUntil=pointerTick+veyra::ui::OverlayTransport::graceMs;}
     updateComparison();if(auto focused=GetFocus();focused&&IsChild(inspector,focused))SetFocus(GetDlgItem(mainWindow,ModeSwitch));SetWindowTextW(GetDlgItem(mainWindow,ModeSwitch),uiState.mode==veyra::ui::Mode::Daily?L"专业模式":L"返回日常模式");transition.start(uiState.mode==veyra::ui::Mode::Professional,GetTickCount64());if(full)endTransition();else{SetPropW(video,L"Veyra.ResizeDeferUntil",HANDLE(uintptr_t(GetTickCount64()+390)));startShellTimer(mainWindow,TransitionTimer,16);}layout();veyra::log::info("ui-transition",std::format("started target={} durationMs=240 from={}",uiState.mode==veyra::ui::Mode::Professional,transition.from));
     const auto after=engine.snapshot();veyra::log::info("ui-mode",std::format("professional={} hostSame={} sessionSame={} revisionSame={} positionBefore={} positionAfter={} commandMs={:.3f}",uiState.mode==veyra::ui::Mode::Professional,host==video,before.sessionId==after.sessionId,before.desired.revision==after.desired.revision,before.position,after.position,std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()));
 }
@@ -356,10 +412,11 @@ void layout(){
     const bool pro=uiState.mode==Mode::Professional;auto g=chromeLayout(w,h);auto target=engine.snapshot();
     auto pane=[&](int x,int y,int width,int height,int radius,BYTE tint){return GlassPane{{dip(mainWindow,x),dip(mainWindow,y),dip(mainWindow,x+width),dip(mainWindow,y+height)},dip(mainWindow,radius),tint};};
     std::vector<GlassPane> panes;
-    if(full){if(fullControls)panes.push_back(pane(0,h-88,w,88,1,142));}
+    const bool overlay=overlayBar();
+    if(overlay){if(fullControls)panes.push_back(pane(0,h-88,w,88,1,142));}
     else if(g.pro){panes.push_back(pane(4,4,64,h-8,22,24));panes.push_back(pane(g.left,g.bottom,g.viewWidth,h-g.bottom-20,20,32));if(g.panelWidth){panes.push_back(pane(g.right,g.top,g.panelWidth,g.statusTop-g.top-10,20,30));panes.push_back(pane(g.right,g.statusTop,g.panelWidth,h-g.statusTop-20,20,40));}}
     else{panes.push_back(pane(0,h-88,w,88,1,32));}
-    backdrop.render(r.right,r.bottom,g.pro,full,panes);
+    backdrop.render(r.right,r.bottom,g.pro,overlay,panes);
     struct Placement{HWND child;int x,y,width,height;UINT flags;};std::vector<Placement> placements;
     auto pos=[&](HWND c,int x,int y,int width,int height,bool show=true){if(!c)return;UINT flags=SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOREDRAW|SWP_NOCOPYBITS|(show?SWP_SHOWWINDOW:SWP_HIDEWINDOW);if(!show&&c!=subtitleLabel)flags|=SWP_NOMOVE|SWP_NOSIZE;
         Placement next{c,dip(mainWindow,x),dip(mainWindow,y),dip(mainWindow,std::max(1,width)),dip(mainWindow,std::max(1,height)),flags};auto existing=std::find_if(placements.begin(),placements.end(),[&](const auto& p){return p.child==c;});if(existing==placements.end())placements.push_back(next);else *existing=next;};
@@ -390,10 +447,12 @@ void layout(){
     const int tabs[]={TabEnhance,TabFg,TabAudio,TabColor,TabExport};for(int i=0;i<5;++i)put(tabs[i],g.right+12+i*((g.panelWidth-24)/5),g.top+12,(g.panelWidth-24)/5,32,rightVisible);
     pos(inspector,g.right+12,g.top+56,g.panelWidth-24,g.statusTop-g.top-68,rightVisible);
     pos(liveStatusPanel,g.right,g.statusTop,g.panelWidth,h-g.statusTop-20,rightVisible);
-    const bool transport=!full||fullControls;int barTop=full?h-88:g.bottom;int tx=full?16:g.left+16,tw=full?w-32:g.viewWidth-32;
-    pos(playbackBar,0,h-88,w,88,full&&fullControls);
-    pos(seekBar,full?16:pro?tx:g.left,barTop-(full?10:5),full?w-32:pro?tw:g.viewWidth,full?20:12,transport&&!target.capture&&!target.image&&!(pro&&showDiagnostics&&!full));surface(seekBar,pro&&!full?panel:cinemaPanel);
-    const bool daily=!pro&&!full&&!transition.running;TransportLayout controls(tw,daily,full);
+    const bool transport=!overlay||fullControls;int barTop=full?h-88:g.bottom;int tx=full?16:g.left+16,tw=full?w-32:g.viewWidth-32;
+    pos(playbackBar,0,h-88,w,88,overlay&&fullControls);
+    pos(seekBar,overlay?16:pro?tx:g.left,barTop-(overlay?10:5),overlay?w-32:pro?tw:g.viewWidth,overlay?20:12,transport&&!target.capture&&!target.image&&!(pro&&showDiagnostics&&!full));surface(seekBar,pro&&!full?panel:cinemaPanel);
+    // Immersive fullscreen keeps the daily bar (same slots as the window) so
+    // the toggle and the source buttons stay where the user left them.
+    const bool daily=!pro&&!transition.running&&(!full||uiState.immersive);TransportLayout controls(tw,daily,full,!pro);
     const int timeWidth=std::min(240,std::max(0,(tw-154)/2));
     put(TimeLabel,tx,barTop+10,timeWidth,20,transport);
     // Settings messages live here now (the panel no longer draws its own line).
@@ -403,7 +462,7 @@ void layout(){
     put(ColourStatus,tx+tw-154-6-statusWidth,barTop+10,statusWidth,20,transport);
     int remoteSpace=0;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-    remoteSpace=daily?60:0;
+    remoteSpace=daily&&!full?60:0;
     put(RemotePlay,daily?tx+timeWidth:12,daily?barTop+4:316,daily?56:44,daily?28:44,!full&&(daily||pro));
 #endif
     put(MediaTitle,tx+timeWidth+8+remoteSpace,barTop+10,std::max(1,tw-timeWidth-170-remoteSpace-statusWidth-8),20,transport);
@@ -411,13 +470,14 @@ void layout(){
     auto slot=[&](int id,TransportSlot item,int height=34,int offset=36){put(id,tx+item.x,barTop+offset,item.width,height,transport&&item.width>0);};
     slot(Open,controls.open);slot(Capture,controls.capture);slot(Recent,controls.recent);if(!full&&pro)put(Recent,12,372,44,44);
     if(daily)slot(Master,controls.master);slot(Sr,controls.sr);
-    slot(Play,controls.play,44,30);slot(Stop,controls.stop);slot(Mute,controls.mute);slot(Volume,controls.volume,18,44);slot(Subtitle,controls.subtitle);slot(Fullscreen,controls.fullscreen);slot(FullscreenLock,controls.lock);
+    slot(Play,controls.play,44,30);slot(Stop,controls.stop);slot(Mute,controls.mute);slot(Volume,controls.volume,18,44);slot(Subtitle,controls.subtitle);slot(Fullscreen,controls.fullscreen);slot(Immersive,controls.immersive);slot(FullscreenLock,controls.lock);
     if(daily){slot(ModeSwitch,controls.mode);slot(WindowMin,controls.minimize);slot(WindowClose,controls.close);}
     else put(ModeSwitch,w-292,14,160,32,!full);
     icon(GetDlgItem(mainWindow,Open),Icon::Video,controls.captions);icon(GetDlgItem(mainWindow,Capture),Icon::Capture,controls.captions);
     icon(GetDlgItem(mainWindow,Master),Icon::Enhance,pro||controls.captions);icon(GetDlgItem(mainWindow,Sr),Icon::Upscale,true);
     icon(GetDlgItem(mainWindow,ModeSwitch),pro?Icon::PanelClose:Icon::PanelOpen,pro||controls.captions);
-for(int id:std::initializer_list<int>{Open,Capture,Recent,Master,Save,Sr,Play,Stop,Mute,Volume,Subtitle,Fullscreen,FullscreenLock,TimeLabel,MediaTitle,FpsLabel,ColourStatus,ModeSwitch})surface(GetDlgItem(mainWindow,id),pro&&!full?panel:cinemaPanel);
+    icon(GetDlgItem(mainWindow,Immersive),uiState.immersive?Icon::PanelBottomOpen:Icon::PanelBottomClose);
+for(int id:std::initializer_list<int>{Open,Capture,Recent,Master,Save,Sr,Play,Stop,Mute,Volume,Subtitle,Fullscreen,Immersive,FullscreenLock,TimeLabel,MediaTitle,FpsLabel,ColourStatus,ModeSwitch})surface(GetDlgItem(mainWindow,id),pro&&!full?panel:cinemaPanel);
     put(OriginalHold,tx,barTop+160,96,32,!full&&pro);put(Split,tx+102,barTop+160,92,32,!full&&pro);put(CompareToggle,tx+200,barTop+160,96,32,!full&&pro&&tw>=600);
     put(Reference,tx+(tw>=600?302:200),barTop+160,std::min(172,tw-(tw>=600?302:200)-88),180,!full&&pro&&tw>=500);
     put(Details,tx+tw-76,barTop+160,76,32,!full&&pro);put(Info,12,h-66,44,44,!full&&pro);pos(metricLabel,tx,barTop+212,tw,120,!full&&pro&&uiState.diagnostics);
@@ -435,7 +495,7 @@ for(int id:std::initializer_list<int>{Open,Capture,Recent,Master,Save,Sr,Play,St
     auto batch=BeginDeferWindowPos(int(placements.size()));for(const auto& p:placements){if(!batch)break;batch=DeferWindowPos(batch,p.child,nullptr,p.x,p.y,p.width,p.height,p.flags);}
     if(batch)EndDeferWindowPos(batch);else for(const auto& p:placements)SetWindowPos(p.child,nullptr,p.x,p.y,p.width,p.height,p.flags);
     auto front=[&](HWND child){if(child&&IsWindowVisible(child))SetWindowPos(child,HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_NOREDRAW);};
-    front(playbackBar);front(seekBar);front(GetDlgItem(mainWindow,RemotePlay));for(int id:{Open,Capture,Recent,Master,Save,Sr,Play,Stop,Mute,Volume,Subtitle,Fullscreen,FullscreenLock,WindowMin,WindowClose,TimeLabel,MediaTitle,FpsLabel,ModeSwitch,JobProgress,EmptyTitle,EmptyHint})front(GetDlgItem(mainWindow,id));front(inspector);front(subtitleLabel);if(showDiagnostics&&pro&&!full)front(diagnosticPanel);
+    front(playbackBar);front(seekBar);front(GetDlgItem(mainWindow,RemotePlay));for(int id:{Open,Capture,Recent,Master,Save,Sr,Play,Stop,Mute,Volume,Subtitle,Fullscreen,Immersive,FullscreenLock,WindowMin,WindowClose,TimeLabel,MediaTitle,FpsLabel,ModeSwitch,JobProgress,EmptyTitle,EmptyHint})front(GetDlgItem(mainWindow,id));front(inspector);front(subtitleLabel);if(showDiagnostics&&pro&&!full)front(diagnosticPanel);
     if(auto focused=GetFocus();focused&&IsChild(mainWindow,focused)&&!IsWindowVisible(focused))SetFocus(mainWindow);
     RedrawWindow(mainWindow,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
     if(smokeDual)veyra::log::info("ui-layout-timing",std::format("frameMs={:.3f} animation={}",std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-layoutBegin).count(),transition.running));
@@ -563,6 +623,10 @@ void startVideoExport(bool hevc){
 __declspec(noinline) LRESULT systemCommand(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
 switch(msg){
 case WM_SYSCOMMAND:
+    // The system sizing loop runs inside DefWindowProc below. A windowed
+    // immersive player drops its bar first so the picture edge being dragged
+    // stays visible; WM_EXITSIZEMOVE re-arms the band reveal.
+    if((wp&0xfff0)==SC_SIZE&&immersiveBar()&&!full&&!sizingHold){sizingHold=true;if(fullControls){fullControls=false;layout();}veyra::log::info("ui-immersive","interactive sizing begin; bar hidden so the picture edge stays visible");}
     if((wp&0xfff0)==SC_SCREENSAVE||(wp&0xfff0)==SC_MONITORPOWER){
         const auto s=engine.snapshot();
         if(s.running&&!s.failed&&!s.image&&s.transport==veyra::engine::TransportState::Playing)return 0;
@@ -610,6 +674,7 @@ control(L"BUTTON",L"性能  ▾",Details,BS_PUSHBUTTON,0,0,112,32);control(L"BUT
 control(L"BUTTON",L"最小化",WindowMin,BS_PUSHBUTTON,0,0,32,32);control(L"BUTTON",L"最大化",WindowMax,BS_PUSHBUTTON,0,0,32,32);control(L"BUTTON",L"关闭窗口",WindowClose,BS_PUSHBUTTON,0,0,32,32);
 control(L"BUTTON",L"锁定全屏 · Ctrl+L 解锁",FullscreenLock,BS_PUSHBUTTON,0,0,32,32);
 using veyra::ui::Icon;veyra::ui::icon(GetDlgItem(hwnd,FullscreenLock),Icon::Lock);veyra::ui::ghost(GetDlgItem(hwnd,FullscreenLock));SetPropW(GetDlgItem(hwnd,FullscreenLock),L"veyra.tip",HANDLE(L"锁定后鼠标移动不显示控制栏；Ctrl+L 解锁，Esc 退出全屏"));
+control(L"BUTTON",L"沉浸",Immersive,BS_PUSHBUTTON,0,0,32,32);veyra::ui::icon(GetDlgItem(hwnd,Immersive),Icon::PanelBottomClose);veyra::ui::ghost(GetDlgItem(hwnd,Immersive));SetPropW(GetDlgItem(hwnd,Immersive),L"veyra.tip",HANDLE(L"沉浸观看：底栏自动隐藏，鼠标移到底部唤回 · H 切换 · Esc 退出"));refreshImmersiveButton();
 veyra::ui::icon(GetDlgItem(hwnd,WindowMin),Icon::Minimize);veyra::ui::icon(GetDlgItem(hwnd,WindowMax),Icon::Maximize);veyra::ui::icon(GetDlgItem(hwnd,WindowClose),Icon::Close);
 veyra::ui::icon(GetDlgItem(hwnd,Play),Icon::Play);veyra::ui::icon(GetDlgItem(hwnd,Stop),Icon::Stop);veyra::ui::icon(GetDlgItem(hwnd,Mute),Icon::Volume);veyra::ui::icon(GetDlgItem(hwnd,Subtitle),Icon::Subtitle);veyra::ui::icon(GetDlgItem(hwnd,Fullscreen),Icon::Fullscreen);
 veyra::ui::icon(GetDlgItem(hwnd,ProRailVideo),Icon::Video);veyra::ui::icon(GetDlgItem(hwnd,ProRailCapture),Icon::Capture);veyra::ui::icon(GetDlgItem(hwnd,ImageOpen),Icon::Image);veyra::ui::icon(GetDlgItem(hwnd,Info),Icon::Subtitle);
@@ -701,6 +766,7 @@ if(id==Multiplier&&HIWORD(wp)==CBN_SELCHANGE&&changed.multiplier>1)changed.multi
 engine.requestSettings(changed);break;}
 
 case Fullscreen:toggleFullscreen();break;
+case Immersive:toggleImmersive();break;
 case FullscreenLock:toggleFullscreenLock();break;
 case VideoSurface:if(!fullLocked&&HIWORD(wp)==STN_DBLCLK)toggleFullscreen();break;
 case CompareToggle:compareMode=compareMode==1?0:1;updateComparison();break;
@@ -734,6 +800,17 @@ case WM_HSCROLL:if(reinterpret_cast<HWND>(lp)==GetDlgItem(hwnd,Volume)){engine.s
 }return DefWindowProcW(hwnd,msg,wp,lp);
 }
 
+// Hide policy for the floating bar (fullscreen and daily immersive), sampled
+// from the 100 ms tick. Reveals are event driven (message loop, keys, toasts).
+__declspec(noinline) void tickOverlayBar(HWND hwnd,const veyra::engine::PlayerSnapshot& s){
+    if(!overlayBar())return;const auto now=GetTickCount64();
+    veyra::ui::OverlayTransportInput in;in.now=now;in.lastActivity=pointerTick;in.holdUntil=overlayHoldUntil;in.visible=fullControls;in.immersive=immersiveBar();in.locked=fullLocked;in.pointerInBand=pointerInRevealBand();in.interacting=menuOpen||veyra::ui::popupSelectorOpen()||GetCapture()!=nullptr;in.mediaOpen=!currentFile.empty()&&!s.failed;in.toastActive=toastUntil!=0&&now<toastUntil;in.sizing=sizingHold;in.bandArmed=bandArmed;
+    if(veyra::ui::OverlayTransport::shouldHide(in)){fullControls=false;layout();if(!sizingHold&&GetForegroundWindow()==hwnd)SetCursor(nullptr);veyra::log::info(in.immersive?"ui-immersive":"ui-fullscreen","controls hidden; video and subtitles only");return;}
+    if(sizingHold)return;
+    // Immersive keeps the cursor on its own idle clock because motion outside
+    // the band shows the cursor without revealing the bar.
+    if(in.immersive&&!fullControls&&now-cursorTick>veyra::ui::OverlayTransport::idleMs&&GetForegroundWindow()==hwnd){POINT p{};GetCursorPos(&p);if(WindowFromPoint(p)==video)SetCursor(nullptr);}
+}
 __declspec(noinline) LRESULT windowTimer(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
 switch(msg){
 case WM_TIMER:
@@ -746,14 +823,13 @@ if(wp==ControllerTimer){const auto state=engine.snapshot();if(state.remotePlay&&
 {if(wp==ResizeCoalesceTimer){if(layoutPending){layoutPending=false;layout();}return 0;}
 if(wp==PreferenceSaveTimer){KillTimer(hwnd,PreferenceSaveTimer);if(!preferences.save(uiPreferences,nullptr))veyra::log::warn("preferences","Could not persist presentation settings");return 0;}
 if(wp==TransitionTimer){transition.sample(GetTickCount64());if(!transition.running){endTransition();veyra::log::info("ui-transition","completed; final layout and swapchain resize released");}layout();return 0;}
-if(full&&fullControls&&!menuOpen&&!veyra::ui::popupSelectorOpen()&&!GetCapture()&&GetTickCount64()-pointerTick>1600){POINT p{};GetCursorPos(&p);ScreenToClient(hwnd,&p);RECT r{};GetClientRect(hwnd,&r);if(p.y<r.bottom-veyra::ui::dip(hwnd,98)||p.x<0||p.x>=r.right||p.y>=r.bottom){fullControls=false;layout();if(GetForegroundWindow()==hwnd)SetCursor(nullptr);veyra::log::info("ui-fullscreen","controls hidden; video and subtitles only");}}
 if(closing){if(engine.idle()&&!exportJob.poll().active()){KillTimer(hwnd,TelemetryTimer);DestroyWindow(hwnd);}return 0;}if(!autoInput.empty()){auto file=autoInput;autoInput.clear();openFile(file);startTick=GetTickCount64();if(openColourPageOnStart){openColourPageOnStart=false;if(uiState.mode==veyra::ui::Mode::Daily)switchMode();selectInspector(2);layout();}}if(smokeControls&&startTick){const auto elapsed=GetTickCount64()-startTick;
 if(smokeStep==0&&elapsed>2200){engine.pause(true);smokeStep=1;}
 if(smokeStep==1&&elapsed>2600){engine.seek(1.0);smokeStep=2;}
 if(smokeStep==2&&elapsed>3200){engine.pause(false);smokeStep=3;}
 if(smokeStep==3&&elapsed>4100&&!smokeSave.empty()){engine.saveFrame(smokeSave);smokeStep=4;}
 if(smokeStep==4&&elapsed>5200&&GetEnvironmentVariableW(L"VEYRA_TEST_LARGE_IMAGE_SAVE_THROW",nullptr,0)){const auto retained=engine.snapshot();if(!retained.failed&&retained.running&&retained.frames>0){engine.saveFrame(smokeSave);smokeStep=5;veyra::log::info("image-save-test","retry after injected allocation failure; result/session retained");}}
-}auto s=engine.snapshot();playbackPower.update(!closing&&s.running&&!s.failed&&!s.image&&s.transport==veyra::engine::TransportState::Playing);pollSubtitleTracks();if(subtitleRequestAutoAlign&&subtitlePrimary>=0){subtitleRequestAutoAlign=false;startSubtitleAutoAlign();}pollSubtitleAutoAlign();
+}auto s=engine.snapshot();playbackPower.update(!closing&&s.running&&!s.failed&&!s.image&&s.transport==veyra::engine::TransportState::Playing);tickOverlayBar(hwnd,s);pollSubtitleTracks();if(subtitleRequestAutoAlign&&subtitlePrimary>=0){subtitleRequestAutoAlign=false;startSubtitleAutoAlign();}pollSubtitleAutoAlign();
 if(screenFill&&currentFile.starts_with(L"screen:")&&s.running){
     RECT r{};GetClientRect(video,&r);auto extent=s.metrics.resolution.output;
     if(r.right>0&&r.bottom>0&&extent.width&&extent.height&&(screenFitClient.cx!=r.right||screenFitClient.cy!=r.bottom||screenFitImage.cx!=LONG(extent.width)||screenFitImage.cy!=LONG(extent.height))){
@@ -794,7 +870,7 @@ if(screenFill&&currentFile.starts_with(L"screen:")&&s.running){
     view.background=uiState.subtitleBackground;
     view.bottomMargin=uiState.subtitleMargin;
     view.targetLines=uiPreferences.subtitleLines;view.fitToLines=uiPreferences.subtitleFitToLines;
-    if(full&&fullControls)view.bottomMargin+=84;
+    if(overlayBar()&&fullControls)view.bottomMargin+=84;
     view.preview=engine.previewView();
     view.videoWidth=s.metrics.resolution.output.width;
     view.videoHeight=s.metrics.resolution.output.height;
@@ -850,7 +926,7 @@ veyra::ui::icon(GetDlgItem(hwnd,Play),s.transport==veyra::engine::TransportState
 setText(GetDlgItem(hwnd,Play),s.transport==veyra::engine::TransportState::Playing?L"暂停":L"播放");
 setText(GetDlgItem(hwnd,Mute),!s.audioAvailable?L"无音轨":s.muted?L"静音":L"音量");EnableWindow(GetDlgItem(hwnd,Volume),s.audioAvailable);EnableWindow(GetDlgItem(hwnd,Mute),s.audioAvailable);
 if(GetCapture()!=GetDlgItem(hwnd,Volume)){const int volumePos=int(std::lround(s.volume*100));if(SendDlgItemMessageW(hwnd,Volume,TBM_GETPOS,0,0)!=volumePos)SendDlgItemMessageW(hwnd,Volume,TBM_SETPOS,TRUE,volumePos);}
-EnableWindow(seekBar,s.running&&!s.capture&&!s.image&&s.duration>0);ShowWindow(seekBar,(!full||fullControls)&&!s.capture&&!s.image&&!(showDiagnostics&&uiState.mode==veyra::ui::Mode::Professional&&!full)?SW_SHOW:SW_HIDE);EnableWindow(GetDlgItem(hwnd,Play),!currentFile.empty()&&!s.capture&&!s.image);EnableWindow(GetDlgItem(hwnd,Stop),s.running);
+EnableWindow(seekBar,s.running&&!s.capture&&!s.image&&s.duration>0);ShowWindow(seekBar,(!overlayBar()||fullControls)&&!s.capture&&!s.image&&!(showDiagnostics&&uiState.mode==veyra::ui::Mode::Professional&&!full)?SW_SHOW:SW_HIDE);EnableWindow(GetDlgItem(hwnd,Play),!currentFile.empty()&&!s.capture&&!s.image);EnableWindow(GetDlgItem(hwnd,Stop),s.running);
 setText(GetDlgItem(hwnd,MediaTitle),currentFile.empty()?L"尚未打开媒体":s.remotePlay?L"PS5 · LIVE":s.capture?L"采集卡 · LIVE":std::filesystem::path(currentFile).filename().wstring());
 auto stamp=[](double v){int seconds=std::max(0,int(v));return std::format(L"{:02}:{:02}:{:02}",seconds/3600,seconds/60%60,seconds%60);};
 setText(GetDlgItem(hwnd,TimeLabel),s.remotePlay?(s.remoteRatesReady?std::format(L"接收 {:.1f} · 解码 {:.1f} fps",s.remoteReceivedFps,s.remoteDecodedFps):std::wstring(L"PS5 帧率采样中")):s.capture?std::format(L"输入 {:.1f} fps{}",s.captureFps,s.captureHalfRate?L" · 60→30":s.applied.content==veyra::engine::ContentRate::Capture60To30?L" · 不适用":L""):s.image?L"静态图片":stamp(s.seekPresented<s.seekRequested&&!s.failed?s.seekTarget:s.position)+L"  /  "+stamp(s.duration)+(s.seekPresented<s.seekRequested&&!s.failed?L"  ·  跳转中…":L"")+(s.transport==veyra::engine::TransportState::Opening?L"  ·  正在打开…":s.failed?L"  ·  发生错误，详见专业诊断":L""));
@@ -870,7 +946,7 @@ if(!smokePacingApplied&&(!smokePacing.empty()||!smokeOutputCap.empty())&&s.frame
         else{p.outputRate=veyra::engine::OutputRateMode::Custom;p.customFps=_wtof(smokeOutputCap.c_str());}
     }
     engine.requestPresentation(p);}
-if(!smokeViewApplied&&!smokeView.empty()&&(s.frames>0||smokeEmpty)){smokeViewApplied=true;if(smokeView==L"small")SetWindowPos(hwnd,nullptr,0,0,800,600,SWP_NOMOVE|SWP_NOZORDER);if(smokeView!=L"daily"&&smokeView!=L"empty"&&uiState.mode==veyra::ui::Mode::Daily)switchMode();if(smokeView==L"export")selectInspector(3);if(smokeView==L"diagnostics"){showDiagnostics=true;layout();}if(smokeView==L"fullscreen")toggleFullscreen();}
+if(!smokeViewApplied&&!smokeView.empty()&&(s.frames>0||smokeEmpty)){smokeViewApplied=true;if(smokeView==L"small")SetWindowPos(hwnd,nullptr,0,0,800,600,SWP_NOMOVE|SWP_NOZORDER);if(smokeView!=L"daily"&&smokeView!=L"empty"&&smokeView!=L"immersive"&&uiState.mode==veyra::ui::Mode::Daily)switchMode();if(smokeView==L"immersive"){if(uiState.mode!=veyra::ui::Mode::Daily)switchMode();if(!uiState.immersive)toggleImmersive();}if(smokeView==L"export")selectInspector(3);if(smokeView==L"diagnostics"){showDiagnostics=true;layout();}if(smokeView==L"fullscreen")toggleFullscreen();}
 if(smokeDualPause&&pausedPosition<0&&s.frames>20){engine.pause(true);pausedPosition=s.position;pausedFrames=s.frames;}
 if(smokeDual&&startTick&&s.frames>10&&dualStep<40&&GetTickCount64()-startTick>ULONGLONG(1500+dualStep*200)){if(dualStep==4){modeGdiStart=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);GetProcessHandleCount(GetCurrentProcess(),&modeHandlesStart);PROCESS_MEMORY_COUNTERS_EX pm{};pm.cb=sizeof(pm);GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pm),sizeof(pm));modePrivateStart=pm.PrivateUsage;}switchMode();
 if(smokeDualPause&&pausedPosition>=0&&s.transport==veyra::engine::TransportState::Paused){auto after=engine.snapshot();if(after.position!=s.position||after.frames!=s.frames)dualStep=-100;}++dualStep;if(dualStep==40){DWORD handles=0;GetProcessHandleCount(GetCurrentProcess(),&handles);PROCESS_MEMORY_COUNTERS_EX pm{};pm.cb=sizeof(pm);GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pm),sizeof(pm));veyra::log::info("ui-resources",std::format("gdiStart={} gdiEnd={} handlesStart={} handlesEnd={} privateStart={} privateEnd={}",modeGdiStart,GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS),modeHandlesStart,handles,modePrivateStart,pm.PrivateUsage));}}
@@ -1188,7 +1264,7 @@ if(smokeSeconds>0&&startTick&&GetTickCount64()-startTick>ULONGLONG(smokeSeconds)
 
 __declspec(noinline) LRESULT closeWindow(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
 switch(msg){
-case WM_CLOSE:endTransition();KillTimer(hwnd,PreferenceSaveTimer);if(!closing&&smokeSeconds<=0&&exportJob.poll().active()&&MessageBoxW(hwnd,L"导出尚未完成。取消导出并退出？\n选择“否”返回播放器继续导出。",L"退出 Veyra",MB_YESNO|MB_DEFBUTTON2|MB_ICONQUESTION)!=IDYES)return 0;if(!closing&&smokeSeconds<=0){auto snapshot=engine.snapshot();WINDOWPLACEMENT placement{sizeof(placement)};if(full)placement=windowPlacement;else GetWindowPlacement(hwnd,&placement);auto r=placement.rcNormalPosition;uiPreferences.width=MulDiv(r.right-r.left,96,veyra::ui::layoutDpi(hwnd));uiPreferences.height=MulDiv(r.bottom-r.top,96,veyra::ui::layoutDpi(hwnd));uiPreferences.x=r.left;uiPreferences.y=r.top;uiPreferences.positioned=true;uiPreferences.volume=snapshot.volume;uiPreferences.muted=snapshot.muted;uiPreferences.subtitles=uiState.subtitles;uiPreferences.subtitleSize=subtitlePixels;uiPreferences.subtitleOutline=uiState.subtitleOutline;uiPreferences.subtitleBackground=uiState.subtitleBackground;uiPreferences.subtitleSecondLanguage=uiState.subtitleSecondLanguage;uiPreferences.subtitleMargin=uiState.subtitleMargin;uiPreferences.subtitleFont=uiState.subtitleFont;uiPreferences.inspector=uiState.inspector;uiPreferences.colourFoldMask=preferences.load().colourFoldMask;uiPreferences.enhancementEnabled=uiState.enhanced?1:0;auto saved=uiState.enhanced&&snapshot.running&&snapshot.frames>0&&!snapshot.applying&&!snapshot.failed?snapshot.applied:uiState.configured;if(!preferences.save(uiPreferences,&saved))veyra::log::warn("ui-preferences","preferences save failed; existing corrupt original preserved");else veyra::log::info("ui-preferences","UI and enhancement preferences saved");}playbackPower.update(false);exportJob.cancel();closing=true;engine.stop();showToast(L"正在释放当前任务资源…",10000);return 0;
+case WM_CLOSE:endTransition();KillTimer(hwnd,PreferenceSaveTimer);if(!closing&&smokeSeconds<=0&&exportJob.poll().active()&&MessageBoxW(hwnd,L"导出尚未完成。取消导出并退出？\n选择“否”返回播放器继续导出。",L"退出 Veyra",MB_YESNO|MB_DEFBUTTON2|MB_ICONQUESTION)!=IDYES)return 0;if(!closing&&smokeSeconds<=0){auto snapshot=engine.snapshot();WINDOWPLACEMENT placement{sizeof(placement)};if(full)placement=windowPlacement;else GetWindowPlacement(hwnd,&placement);auto r=placement.rcNormalPosition;uiPreferences.width=MulDiv(r.right-r.left,96,veyra::ui::layoutDpi(hwnd));uiPreferences.height=MulDiv(r.bottom-r.top,96,veyra::ui::layoutDpi(hwnd));uiPreferences.x=r.left;uiPreferences.y=r.top;uiPreferences.positioned=true;uiPreferences.volume=snapshot.volume;uiPreferences.muted=snapshot.muted;uiPreferences.subtitles=uiState.subtitles;uiPreferences.subtitleSize=subtitlePixels;uiPreferences.subtitleOutline=uiState.subtitleOutline;uiPreferences.subtitleBackground=uiState.subtitleBackground;uiPreferences.subtitleSecondLanguage=uiState.subtitleSecondLanguage;uiPreferences.subtitleMargin=uiState.subtitleMargin;uiPreferences.subtitleFont=uiState.subtitleFont;uiPreferences.inspector=uiState.inspector;uiPreferences.colourFoldMask=preferences.load().colourFoldMask;uiPreferences.enhancementEnabled=uiState.enhanced?1:0;uiPreferences.immersive=uiState.immersive;auto saved=uiState.enhanced&&snapshot.running&&snapshot.frames>0&&!snapshot.applying&&!snapshot.failed?snapshot.applied:uiState.configured;if(!preferences.save(uiPreferences,&saved))veyra::log::warn("ui-preferences","preferences save failed; existing corrupt original preserved");else veyra::log::info("ui-preferences","UI and enhancement preferences saved");}playbackPower.update(false);exportJob.cancel();closing=true;engine.stop();showToast(L"正在释放当前任务资源…",10000);return 0;
 }return DefWindowProcW(hwnd,msg,wp,lp);
 }
 
@@ -1235,6 +1311,9 @@ case WM_ENTERSIZEMOVE:
 case WM_EXITSIZEMOVE:
     interactiveResize=false;layoutPending=false;KillTimer(hwnd,ResizeCoalesceTimer);
     RemovePropW(video,L"Veyra.InteractiveMove");
+    // After sizing the pointer usually rests on the bottom edge: the bar waits
+    // for a fresh entry into the band. With nothing open it comes straight back.
+    if(sizingHold){sizingHold=false;bandArmed=false;if(currentFile.empty())fullControls=true;veyra::log::info("ui-immersive","interactive sizing end; bar waits for a fresh entry into the bottom band");}
     layout();
     veyra::log::info("ui-display","interactive move end; presentation resize released");
     return 0;
@@ -1242,7 +1321,7 @@ case WM_SIZE:cancelProtection();if(wp!=SIZE_MINIMIZED&&!dpiRefreshPending){endTr
 case WM_DROPFILES:{std::vector<wchar_t> file(32768);DragQueryFileW(reinterpret_cast<HDROP>(wp),0,file.data(),32768);DragFinish(reinterpret_cast<HDROP>(wp));openFile(file.data());layout();return 0;}
 case WM_COMMAND:return windowCommand(hwnd,msg,wp,lp);
 case WM_HSCROLL:return scrollCommand(hwnd,msg,wp,lp);
-case WM_KEYDOWN:if(wp==VK_ESCAPE&&protectionArmed){cancelProtection();return 0;}if(wp==VK_SPACE){SendMessageW(hwnd,WM_COMMAND,Play,0);return 0;}if(wp==VK_F11){toggleFullscreen();return 0;}if(wp==VK_ESCAPE&&full){toggleFullscreen();return 0;}if(wp=='V'&&uiState.mode==veyra::ui::Mode::Professional){holdOriginal=true;updateComparison();return 0;}break;
+case WM_KEYDOWN:if(wp==VK_ESCAPE&&protectionArmed){cancelProtection();return 0;}if(wp==VK_SPACE){SendMessageW(hwnd,WM_COMMAND,Play,0);return 0;}if(wp==VK_F11){toggleFullscreen();return 0;}if(wp==VK_ESCAPE&&full){toggleFullscreen();return 0;}if(wp==VK_ESCAPE&&immersiveBar()){toggleImmersive();return 0;}if(wp=='V'&&uiState.mode==veyra::ui::Mode::Professional){holdOriginal=true;updateComparison();return 0;}break;
 case WM_KEYUP:if(wp=='V'){holdOriginal=false;updateComparison();return 0;}break;
 case WM_SYSKEYDOWN:if(wp==VK_RETURN&&(lp&(1LL<<29))){toggleFullscreen();return 0;}break;
 case WM_THEMECHANGED:veyra::ui::glassTextTheme().reset();[[fallthrough]];
@@ -1317,7 +1396,7 @@ if(smokeSeconds>0){
     if(temporalArgv)LocalFree(temporalArgv);
     veyra::log::info("app",std::format("smoke NR temporal={}",initialOptions.settings.nrTemporal));
 }
-if(smokeSeconds<=0&&exportOutput.empty()){uiPreferences=preferences.load();initialOptions=veyra::engine::PlayerOptions::from(preferences.startup(initialOptions.snapshot()));engine.setVolume(uiPreferences.volume,uiPreferences.muted);uiState.subtitles=uiPreferences.subtitles;subtitlePixels=uiPreferences.subtitleSize;uiState.subtitleOutline=uiPreferences.subtitleOutline;uiState.subtitleBackground=uiPreferences.subtitleBackground;uiState.subtitleSecondLanguage=uiPreferences.subtitleSecondLanguage;uiState.subtitleMargin=uiPreferences.subtitleMargin;uiState.subtitleFont=uiPreferences.subtitleFont;}
+if(smokeSeconds<=0&&exportOutput.empty()){uiPreferences=preferences.load();initialOptions=veyra::engine::PlayerOptions::from(preferences.startup(initialOptions.snapshot()));engine.setVolume(uiPreferences.volume,uiPreferences.muted);uiState.subtitles=uiPreferences.subtitles;subtitlePixels=uiPreferences.subtitleSize;uiState.subtitleOutline=uiPreferences.subtitleOutline;uiState.subtitleBackground=uiPreferences.subtitleBackground;uiState.subtitleSecondLanguage=uiPreferences.subtitleSecondLanguage;uiState.subtitleMargin=uiPreferences.subtitleMargin;uiState.subtitleFont=uiPreferences.subtitleFont;uiState.immersive=uiPreferences.immersive;if(uiState.immersive){overlayHoldUntil=GetTickCount64()+veyra::ui::OverlayTransport::graceMs;veyra::log::info("ui-immersive","restored from preferences; bar shown for the startup grace");}}
 engine.requestPresentation(uiPreferences.presentation);
 engine.requestSettings(initialOptions.snapshot());
 if(!exportOutput.empty()){std::atomic<bool> cancel{false},finished{false};std::thread cancelTimer;if(cancelAfterMs)cancelTimer=std::thread([&]{const auto start=GetTickCount64();while(!finished&&GetTickCount64()-start<cancelAfterMs)std::this_thread::sleep_for(std::chrono::milliseconds(5));if(!finished)cancel=true;});bool ok=veyra::engine::exportVideo(autoInput,exportOutput,initialOptions,exportHevc,cancel,[](double,const std::wstring& s){OutputDebugStringW(s.c_str());},exportFrames);finished=true;if(cancelTimer.joinable())cancelTimer.join();veyra::log::info("app",std::format("export result={}",ok));CoUninitialize();return ok?0:cancel?3:1;}
@@ -1325,7 +1404,14 @@ WNDCLASSEXW wc{sizeof(wc)};wc.hInstance=instance;wc.lpfnWndProc=proc;wc.lpszClas
 wc.hIcon=static_cast<HICON>(LoadImageW(instance,MAKEINTRESOURCEW(IDI_VEYRA),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED));
 wc.hIconSm=static_cast<HICON>(LoadImageW(instance,MAKEINTRESOURCEW(IDI_VEYRA),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED));
 RegisterClassExW(&wc);
-auto hwnd=CreateWindowExW(0,wc.lpszClassName,L"Veyra — 本地实验版",ShellStyle,CW_USEDEFAULT,CW_USEDEFAULT,std::min(MulDiv(uiPreferences.width,GetDpiForSystem(),96),GetSystemMetrics(SM_CXSCREEN)),std::min(MulDiv(uiPreferences.height,GetDpiForSystem(),96),GetSystemMetrics(SM_CYSCREEN)-40),nullptr,nullptr,instance,nullptr);if(!hwnd)return 1;if(uiPreferences.positioned&&smokeSeconds<=0){RECT target{uiPreferences.x,uiPreferences.y,uiPreferences.x+MulDiv(uiPreferences.width,GetDpiForSystem(),96),uiPreferences.y+MulDiv(uiPreferences.height,GetDpiForSystem(),96)};MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(MonitorFromRect(&target,MONITOR_DEFAULTTONEAREST),&mi);int width=std::min(target.right-target.left,mi.rcWork.right-mi.rcWork.left),height=std::min(target.bottom-target.top,mi.rcWork.bottom-mi.rcWork.top);SetWindowPos(hwnd,nullptr,std::clamp(target.left,mi.rcWork.left,mi.rcWork.right-width),std::clamp(target.top,mi.rcWork.top,mi.rcWork.bottom-height),width,height,SWP_NOZORDER|SWP_NOACTIVATE);}CheckDlgButton(hwnd,Nr,initialOptions.nr?BST_CHECKED:BST_UNCHECKED);CheckDlgButton(hwnd,Sr,initialOptions.sr?BST_CHECKED:BST_UNCHECKED);CheckDlgButton(hwnd,Fg,initialOptions.fg?BST_CHECKED:BST_UNCHECKED);CheckDlgButton(hwnd,Realtime,initialOptions.realtime?BST_CHECKED:BST_UNCHECKED);ShowWindow(hwnd,show);MSG msg{};while(GetMessageW(&msg,nullptr,0,0)>0){if(full&&GetAncestor(msg.hwnd,GA_ROOT)==hwnd&&(msg.message==WM_MOUSEMOVE||msg.message==WM_LBUTTONDOWN||msg.message==WM_KEYDOWN)){static POINT previous{-9999,-9999};POINT now{};GetCursorPos(&now);if(msg.message!=WM_MOUSEMOVE||now.x!=previous.x||now.y!=previous.y)pointerActivity();previous=now;}if(GetAncestor(msg.hwnd,GA_ROOT)==hwnd&&(msg.message==WM_KEYDOWN||msg.message==WM_KEYUP||msg.message==WM_SYSKEYDOWN)){
+auto hwnd=CreateWindowExW(0,wc.lpszClassName,L"Veyra — 本地实验版",ShellStyle,CW_USEDEFAULT,CW_USEDEFAULT,std::min(MulDiv(uiPreferences.width,GetDpiForSystem(),96),GetSystemMetrics(SM_CXSCREEN)),std::min(MulDiv(uiPreferences.height,GetDpiForSystem(),96),GetSystemMetrics(SM_CYSCREEN)-40),nullptr,nullptr,instance,nullptr);if(!hwnd)return 1;if(uiPreferences.positioned&&smokeSeconds<=0){RECT target{uiPreferences.x,uiPreferences.y,uiPreferences.x+MulDiv(uiPreferences.width,GetDpiForSystem(),96),uiPreferences.y+MulDiv(uiPreferences.height,GetDpiForSystem(),96)};MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(MonitorFromRect(&target,MONITOR_DEFAULTTONEAREST),&mi);int width=std::min(target.right-target.left,mi.rcWork.right-mi.rcWork.left),height=std::min(target.bottom-target.top,mi.rcWork.bottom-mi.rcWork.top);SetWindowPos(hwnd,nullptr,std::clamp(target.left,mi.rcWork.left,mi.rcWork.right-width),std::clamp(target.top,mi.rcWork.top,mi.rcWork.bottom-height),width,height,SWP_NOZORDER|SWP_NOACTIVATE);}CheckDlgButton(hwnd,Nr,initialOptions.nr?BST_CHECKED:BST_UNCHECKED);CheckDlgButton(hwnd,Sr,initialOptions.sr?BST_CHECKED:BST_UNCHECKED);CheckDlgButton(hwnd,Fg,initialOptions.fg?BST_CHECKED:BST_UNCHECKED);CheckDlgButton(hwnd,Realtime,initialOptions.realtime?BST_CHECKED:BST_UNCHECKED);ShowWindow(hwnd,show);MSG msg{};while(GetMessageW(&msg,nullptr,0,0)>0){if(overlayBar()&&GetAncestor(msg.hwnd,GA_ROOT)==hwnd&&(msg.message==WM_MOUSEMOVE||msg.message==WM_LBUTTONDOWN||msg.message==WM_KEYDOWN)){static POINT previous{-9999,-9999};POINT now{};GetCursorPos(&now);const bool moved=now.x!=previous.x||now.y!=previous.y;previous=now;
+    // Plain fullscreen: any motion or click reveals. Immersive: only motion
+    // into the bottom band (keys reveal in both, as transport feedback).
+    veyra::ui::OverlayTransportInput in;in.immersive=immersiveBar();in.locked=fullLocked;in.sizing=sizingHold;in.pointerInBand=moved&&pointerInRevealBand();
+    // Leaving the band after a sizing loop re-arms the band reveal.
+    if(in.immersive&&moved&&!in.pointerInBand)bandArmed=true;in.bandArmed=bandArmed;
+    const bool reveal=msg.message==WM_KEYDOWN?veyra::ui::OverlayTransport::revealOnKey(in):in.immersive?(moved&&veyra::ui::OverlayTransport::revealOnPointer(in)):(msg.message!=WM_MOUSEMOVE||moved);
+    if(reveal)pointerActivity();}if(GetAncestor(msg.hwnd,GA_ROOT)==hwnd&&(msg.message==WM_KEYDOWN||msg.message==WM_KEYUP||msg.message==WM_SYSKEYDOWN)){
 wchar_t focusedClass[32]{};GetClassNameW(GetFocus(),focusedClass,32);const bool editing=_wcsicmp(focusedClass,L"Edit")==0||_wcsicmp(focusedClass,L"ComboBox")==0;
 const bool adjustingSlider=_wcsicmp(focusedClass,TRACKBAR_CLASSW)==0&&GetFocus()!=seekBar;
 if(!editing&&!adjustingSlider&&_wcsicmp(focusedClass,L"ListBox")!=0&&!veyra::ui::popupSelectorOpen()&&msg.message==WM_KEYDOWN&&(msg.wParam==VK_UP||msg.wParam==VK_DOWN)&&!(GetKeyState(VK_CONTROL)&0x8000)&&!(GetKeyState(VK_MENU)&0x8000)){
@@ -1334,6 +1420,7 @@ if(!editing&&!adjustingSlider&&_wcsicmp(focusedClass,L"ListBox")!=0&&!veyra::ui:
 if(!editing&&!veyra::ui::popupSelectorOpen()&&msg.message==WM_KEYDOWN&&!(GetKeyState(VK_CONTROL)&0x8000)&&!(GetKeyState(VK_MENU)&0x8000)){
     const bool shift=(GetKeyState(VK_SHIFT)&0x8000)!=0;
     switch(msg.wParam){
+    case 'H':toggleImmersive();continue;
     case 'B':uiState.subtitles=!uiState.subtitles;subtitleStatus=uiState.subtitles?L"字幕：开":L"字幕：关";continue;
     case 'Z':setSubtitleOffset(shift?-1000:-50);continue;
     case 'X':setSubtitleOffset(shift?1000:50);continue;
@@ -1362,7 +1449,7 @@ if(msg.message==WM_MOUSEWHEEL&&GetAncestor(msg.hwnd,GA_ROOT)==hwnd&&!veyra::ui::
     if(hovered==video&&uiState.mode==veyra::ui::Mode::Professional){SendMessageW(video,msg.message,msg.wParam,msg.lParam);continue;}
     if(hovered==video||hovered==GetDlgItem(hwnd,Volume)){
         static int wheelRemainder=0;wheelRemainder+=GET_WHEEL_DELTA_WPARAM(msg.wParam);const int steps=wheelRemainder/WHEEL_DELTA;wheelRemainder%=WHEEL_DELTA;
-        if(steps){const auto state=engine.snapshot();engine.setVolume(std::clamp(state.volume+steps*.05f,0.0f,1.0f),false);}continue;
+        if(steps){const auto state=engine.snapshot();engine.setVolume(std::clamp(state.volume+steps*.05f,0.0f,1.0f),false);if(immersiveBar())pointerActivity();}continue;
     }
 }
 if(veyra::ui::subtitleSettingsDialogMessage(msg)||veyra::ui::screenCaptureDialogMessage(msg)||IsDialogMessageW(hwnd,&msg))continue;TranslateMessage(&msg);DispatchMessageW(&msg);}

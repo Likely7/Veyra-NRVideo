@@ -20,7 +20,8 @@ ICONS = dict(Play="play", Pause="pause", Stop="square", Volume="volume-2",
              Settings="sliders-horizontal", Recent="clock", Enhance="sparkles",
              Upscale="scan", PanelOpen="panel-right-open", PanelClose="panel-right-close",
              Check="check", Chevron="chevron-down", Load="file-plus", Type="type",
-             ScreenCapture="app-window", Reset="rotate-ccw", Lock="lock-keyhole")
+             ScreenCapture="app-window", Reset="rotate-ccw", Lock="lock-keyhole",
+             PanelBottomClose="panel-bottom-close", PanelBottomOpen="panel-bottom-open")
 DEST = ROOT / "assets/icons/lucide"
 DEST.mkdir(parents=True, exist_ok=True)
 manifest = {"repository": "https://github.com/lucide-icons/lucide", "revision": REVISION,

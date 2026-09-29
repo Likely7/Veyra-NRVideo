@@ -3,7 +3,7 @@
 #pragma once
 #include "GlassMaterial.h"
 namespace veyra::ui {
-enum class Icon { None,Play,Pause,Stop,Volume,Muted,Fullscreen,Video,Capture,Image,Subtitle,Minimize,Maximize,Close,Back,Settings,Recent,Enhance,Upscale,PanelOpen,PanelClose,Check,Chevron,Load,Type,ScreenCapture,Reset,Lock };
+enum class Icon { None,Play,Pause,Stop,Volume,Muted,Fullscreen,Video,Capture,Image,Subtitle,Minimize,Maximize,Close,Back,Settings,Recent,Enhance,Upscale,PanelOpen,PanelClose,Check,Chevron,Load,Type,ScreenCapture,Reset,Lock,PanelBottomClose,PanelBottomOpen };
 inline void drawIcon(HDC dc,Icon icon,float x,float y,float size,COLORREF c){
 using namespace Gdiplus; AlphaGraphics drawing(dc);auto& g=drawing.get();
 g.SetSmoothingMode(SmoothingModeAntiAlias);g.TranslateTransform(x-size/2,y-size/2);g.ScaleTransform(size/24,size/24);
@@ -435,6 +435,40 @@ p.AddLine(7.0000000f,10.0000000f,7.0000000f,7.0000000f);
 p.AddBezier(7.0000000f,7.0000000f,7.0000000f,4.2385763f,9.2385763f,2.0000000f,12.0000000f,2.0000000f);
 p.AddBezier(12.0000000f,2.0000000f,14.7614237f,2.0000000f,17.0000000f,4.2385763f,17.0000000f,7.0000000f);
 p.AddLine(17.0000000f,7.0000000f,17.0000000f,10.0000000f);
+break;
+case Icon::PanelBottomClose: // panel-bottom-close.svg
+p.StartFigure();
+p.AddLine(5.0000000f,3.0000000f,19.0000000f,3.0000000f);
+p.AddBezier(19.0000000f,3.0000000f,20.1045695f,3.0000000f,21.0000000f,3.8954305f,21.0000000f,5.0000000f);
+p.AddLine(21.0000000f,5.0000000f,21.0000000f,19.0000000f);
+p.AddBezier(21.0000000f,19.0000000f,21.0000000f,20.1045695f,20.1045695f,21.0000000f,19.0000000f,21.0000000f);
+p.AddLine(19.0000000f,21.0000000f,5.0000000f,21.0000000f);
+p.AddBezier(5.0000000f,21.0000000f,3.8954305f,21.0000000f,3.0000000f,20.1045695f,3.0000000f,19.0000000f);
+p.AddLine(3.0000000f,19.0000000f,3.0000000f,5.0000000f);
+p.AddBezier(3.0000000f,5.0000000f,3.0000000f,3.8954305f,3.8954305f,3.0000000f,5.0000000f,3.0000000f);
+p.CloseFigure();
+p.StartFigure();
+p.AddLine(3.0000000f,15.0000000f,21.0000000f,15.0000000f);
+p.StartFigure();
+p.AddLine(15.0000000f,8.0000000f,12.0000000f,11.0000000f);
+p.AddLine(12.0000000f,11.0000000f,9.0000000f,8.0000000f);
+break;
+case Icon::PanelBottomOpen: // panel-bottom-open.svg
+p.StartFigure();
+p.AddLine(5.0000000f,3.0000000f,19.0000000f,3.0000000f);
+p.AddBezier(19.0000000f,3.0000000f,20.1045695f,3.0000000f,21.0000000f,3.8954305f,21.0000000f,5.0000000f);
+p.AddLine(21.0000000f,5.0000000f,21.0000000f,19.0000000f);
+p.AddBezier(21.0000000f,19.0000000f,21.0000000f,20.1045695f,20.1045695f,21.0000000f,19.0000000f,21.0000000f);
+p.AddLine(19.0000000f,21.0000000f,5.0000000f,21.0000000f);
+p.AddBezier(5.0000000f,21.0000000f,3.8954305f,21.0000000f,3.0000000f,20.1045695f,3.0000000f,19.0000000f);
+p.AddLine(3.0000000f,19.0000000f,3.0000000f,5.0000000f);
+p.AddBezier(3.0000000f,5.0000000f,3.0000000f,3.8954305f,3.8954305f,3.0000000f,5.0000000f,3.0000000f);
+p.CloseFigure();
+p.StartFigure();
+p.AddLine(3.0000000f,15.0000000f,21.0000000f,15.0000000f);
+p.StartFigure();
+p.AddLine(9.0000000f,10.0000000f,12.0000000f,7.0000000f);
+p.AddLine(12.0000000f,7.0000000f,15.0000000f,10.0000000f);
 break;
 default: return;}g.DrawPath(&pen,&p);
 }
