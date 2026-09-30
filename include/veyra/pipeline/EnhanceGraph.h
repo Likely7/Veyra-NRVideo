@@ -1,7 +1,13 @@
 #pragma once
+#include "veyra/engine/EffectChain.h"
+#include <optional>
 #include "veyra/engine/BackendRecovery.h"
 #include "veyra/pipeline/ColorGradeTables.h"
+#include "veyra/pipeline/ColorGradeInstance.h"
+#include "veyra/pipeline/NrInstance.h"
+#include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/pipeline/NrTemporalPass.h"
+#include "veyra/pipeline/NrHoldPass.h"
 
 // EnhanceGraph - the real unified processing graph (Playbook R3.2).
 // Chains, per real frame:
@@ -44,6 +50,7 @@ namespace veyra::gfx {
 class D3D12DeviceContext;
 class CommandSlotRing;
 class FsrSrBackend;
+class FsrFgPresenter;
 }
 
 namespace veyra::ngx {
@@ -78,6 +85,7 @@ struct EnhanceGraphDesc {
     bool nrBeforeSr = false;
     engine::NrRuntime nrRuntime=engine::NrRuntime::Original;
     bool nrTemporal=false;
+    engine::NrAntiFlicker nrAntiFlicker=engine::NrAntiFlicker::Flow;
     bool enableFg = true;
     bool validateMotion = true; // disable only in isolated legacy A/B diagnostics
     bool enableNvofStandalone = false; // run NVOF+densify per frame without FG (quality core)
@@ -86,7 +94,12 @@ struct EnhanceGraphDesc {
     bool hdrInput = false;       // PQ/HLG YUV ingress; SDR tone mapping unless hdrOutput.
     unsigned captureBitDepth = 8; // SDR P010/P016 storage, independent of HDR transfer.
     bool wideYuvInput() const { return hdrInput || captureBitDepth > 8; }
-    bool hdrOutput = false;      // HDR-preserving output: scRGB without FG; RGB10/PQ with FG.
+    bool hdrOutput = false;      // HDR-preserving output; HDR10 by default, FG requires HDR10.
+    engine::HdrOutputMode hdrOutputMode=engine::HdrOutputMode::Hdr10;
+    engine::MotionSource fgMotion=engine::MotionSource::Automatic,srMotion=engine::MotionSource::OpticalFlow,nrMotion=engine::MotionSource::OpticalFlow;
+    bool fgUsesFlow()const{return engine::motionUsesFlow(fgMotion,frameGenerationBackend);}
+    bool srUsesFlow()const{return engine::motionUsesFlow(srMotion);}
+    bool nrUsesFlow()const{return engine::motionUsesFlow(nrMotion);}
     engine::VideoHdrSettings videoHdr;
     bool hdrWorking() const {return hdrInput&&hdrOutput;}
     bool convertVideoHdr() const {return videoHdr.enabled&&!hdrInput&&hdrOutput;}
@@ -108,11 +121,252 @@ struct EnhanceGraphDesc {
     engine::ContentRate contentRate=engine::ContentRate::Transport;
     engine::NrSettings model;
     engine::ResidualSettings residual;
+    // NR layers, in order. One entry (the default) is the single-layer product
+    // path; extra entries stack further Feature-18 instances, each with its own
+    // parameters and history. src/pipeline/NrInstance.h.
+    std::vector<engine::NrSettings> nrLayersModel;
+    std::vector<NrSizePolicy> nrLayersSizePolicy;
+    std::vector<Extent> nrLayersExtent; // active instances; full output stays unchanged
+    std::vector<engine::ResidualSettings> nrLayersResidual;
+    std::vector<bool> nrLayersTemporal;
+    // Per-layer anti-flicker tier, parallel to nrLayersTemporal. Empty means the
+    // flat nrAntiFlicker applies to every layer.
+    std::vector<engine::NrAntiFlicker> nrLayersAntiFlicker;
+    std::vector<engine::ProtectionSettings> nrLayersProtection;
     engine::ProtectionSettings protection;
+    // Stage-5 output stabiliser (anti-flicker). 0 keeps the pass unallocated and
+    // the dispatch skipped, so a default session is byte-identical to a build
+    // without it. See shaders/NrHold.hlsl.
+    float nrHoldStrength=0.0f;
+    float nrHoldTolerance=0.02f;
     // Colour grade (plan v4). When color.enabled is false the stage does not
     // exist: no tables are allocated, no constants are packed and the ingest
     // shaders return their linear RGB untouched.
     engine::ColorSettings color;
+    // Instance zero keeps the fused ingress path. Additional instances execute
+    // in order on RGBA16F textures; never on a CPU copy of a video frame.
+    std::array<engine::ColorSettings,engine::kMaxColorInstances-1> additionalColors{};
+    uint32_t additionalColorCount=0;
+    // Production builders compile once and use this plan for NR resource
+    // sizes and node tail Color routing after the fixed base block. This is
+    // NOT an arbitrary-order GPU dispatcher. Direct
+    // diagnostic builders may omit it. Neither field crosses the worker ABI.
+    std::optional<engine::ChainExecutionPlan> fixedExecutionPlan;
+    bool runtimeNodeOrder=false;
+    std::string fixedExecutionPlanError;
+    // Supported non-ingress positions include the SR/NR boundaries and
+    // contiguous NR layers. Other interleaving still fails admission.
+    uint32_t nrBeforeSrLayerCount() const {
+        if(!runtimeNodeOrder||!fixedExecutionPlan)return 0;
+        uint32_t count=0;
+        for(uint32_t i=0;i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i){
+            const auto type=fixedExecutionPlan->steps[i].type;
+            if(type==engine::EffectType::SuperResolution)return count;
+            if(type==engine::EffectType::NrEnhance)++count;
+        }
+        return 0;
+    }
+    bool splitNrAcrossSr() const {
+        const auto before=nrBeforeSrLayerCount();
+        return before&&fixedExecutionPlan&&before<fixedExecutionPlan->resourceCounts[size_t(engine::EffectType::NrEnhance)];
+    }
+    // The source-size prefix has an unenhanced reference before SR. After
+    // SR, workRgba already contains that prefix's NR and is not an original.
+    bool protectionBeforeSr() const {
+        if(!splitNrAcrossSr())return false;
+        const auto& plan=*fixedExecutionPlan;
+        for(uint32_t i=1;i<plan.stepCount&&i<plan.steps.size();++i){
+            if(plan.steps[i].type==engine::EffectType::SuperResolution)return false;
+            if(plan.steps[i].type!=engine::EffectType::Protection)continue;
+            if(plan.steps[i-1].type!=engine::EffectType::NrEnhance)return false;
+            for(uint32_t j=i+1;j<plan.stepCount&&j<plan.steps.size();++j){
+                if(plan.steps[j].type==engine::EffectType::SuperResolution)return true;
+                if(plan.steps[j].type!=engine::EffectType::Color)return false;
+            }
+            return false;
+        }
+        return false;
+    }
+    // Protection may restore the upstream NR stack before another same-size
+    // NR consumes it. A split chain still has no all-NR original after SR.
+    uint32_t interNrProtectionTarget() const {
+        if(!runtimeNodeOrder||!fixedExecutionPlan)return engine::kMaxNrInstances;
+        const auto& plan=*fixedExecutionPlan;bool afterSr=false;
+        for(uint32_t i=0;i<plan.stepCount&&i<plan.steps.size();++i){
+            if(plan.steps[i].type==engine::EffectType::SuperResolution)afterSr=true;
+            if(plan.steps[i].type!=engine::EffectType::Protection)continue;
+            if(!i||plan.steps[i-1].type!=engine::EffectType::NrEnhance||
+               (afterSr&&splitNrAcrossSr()))return engine::kMaxNrInstances;
+            for(uint32_t j=i+1;j<plan.stepCount&&j<plan.steps.size();++j){
+                if(plan.steps[j].type==engine::EffectType::NrEnhance)return plan.steps[j].resourceIndex;
+                if(plan.steps[j].type!=engine::EffectType::Color)break;
+            }
+            return engine::kMaxNrInstances;
+        }
+        return engine::kMaxNrInstances;
+    }
+    Extent nrFullExtent(size_t resource) const {
+        if(runtimeNodeOrder&&fixedExecutionPlan){
+            for(uint32_t i=0;i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i){
+                const auto& step=fixedExecutionPlan->steps[i];
+                if(step.type==engine::EffectType::NrEnhance&&step.resourceIndex==resource)return step.input;
+            }
+        }
+        return nrBeforeSr?Extent{sourceWidth,sourceHeight}:Extent{workWidth,workHeight};
+    }
+    bool finalNrAfterSr() const { return !nrBeforeSr||splitNrAcrossSr(); }
+    bool preSrColor(uint32_t parameter) const {
+        if(!runtimeNodeOrder||!fixedExecutionPlan||!nrBeforeSr)return false;
+        using engine::EffectType;
+        const auto& plan=*fixedExecutionPlan;
+        bool afterNr=false;
+        for(uint32_t i=0;i<plan.stepCount&&i<plan.steps.size();++i){
+            const auto& step=plan.steps[i];
+            if(step.type==EffectType::SuperResolution)return false;
+            if(step.type==EffectType::NrEnhance)afterNr=true;
+            if(step.type!=EffectType::Color||step.parameterIndex!=parameter)continue;
+            if(!afterNr)return false;
+            for(uint32_t j=i+1;j<plan.stepCount&&j<plan.steps.size();++j){
+                if(plan.steps[j].type==EffectType::SuperResolution)return true;
+                if(plan.steps[j].type!=EffectType::Color)break;
+            }
+            return false;
+        }
+        return false;
+    }
+    bool preNrColor(uint32_t parameter) const {
+        if(!runtimeNodeOrder||!fixedExecutionPlan||(nrBeforeSr&&!splitNrAcrossSr()))return false;
+        using engine::EffectType;
+        bool afterSr=false;
+        for(uint32_t i=0;i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i){
+            const auto& step=fixedExecutionPlan->steps[i];
+            if(step.type==EffectType::NrEnhance&&afterSr)return false;
+            if(step.type==EffectType::SuperResolution)afterSr=true;
+            if(step.type!=EffectType::Color||step.parameterIndex!=parameter)continue;
+            if(!afterSr)return false;
+            for(uint32_t j=i+1;j<fixedExecutionPlan->stepCount&&j<fixedExecutionPlan->steps.size();++j)
+                if(fixedExecutionPlan->steps[j].type==EffectType::NrEnhance)return true;
+            return false;
+        }
+        return false;
+    }
+    // Compact NR resource ordinal consuming this grade. Only a contiguous
+    // NR -> [Protection] -> Color(s) -> NR segment is admitted here.
+    // Crossing SR needs a separate boundary, not a relaxed rank check.
+    uint32_t interNrColorTarget(uint32_t parameter) const {
+        if(!runtimeNodeOrder||!fixedExecutionPlan)return engine::kMaxNrInstances;
+        using engine::EffectType;
+        const auto& plan=*fixedExecutionPlan;
+        bool afterNr=false;
+        for(uint32_t i=0;i<plan.stepCount&&i<plan.steps.size();++i){
+            const auto& step=plan.steps[i];
+            if(step.type==EffectType::NrEnhance)afterNr=true;
+            else if(step.type!=EffectType::Color&&
+                    !(step.type==EffectType::Protection&&interNrProtectionTarget()<engine::kMaxNrInstances))afterNr=false;
+            if(step.type!=EffectType::Color||step.parameterIndex!=parameter)continue;
+            if(!afterNr)return engine::kMaxNrInstances;
+            for(uint32_t j=i+1;j<plan.stepCount&&j<plan.steps.size();++j){
+                const auto& next=plan.steps[j];
+                if(next.type==EffectType::NrEnhance)return next.resourceIndex;
+                if(next.type!=EffectType::Color)break;
+            }
+            return engine::kMaxNrInstances;
+        }
+        return engine::kMaxNrInstances;
+    }
+    bool nodeColor(uint32_t parameter) const {
+        return preNrColor(parameter)||preSrColor(parameter)||tailColor(parameter)||interNrColorTarget(parameter)<engine::kMaxNrInstances;
+    }
+    bool tailColor(uint32_t parameter) const {
+        if(!runtimeNodeOrder||!fixedExecutionPlan)return false;
+        using engine::EffectType;
+        bool afterBase=false;
+        for(uint32_t i=0;i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i){
+            const auto& step=fixedExecutionPlan->steps[i];
+            if(step.type==EffectType::SuperResolution||step.type==EffectType::NrEnhance||step.type==EffectType::Protection)afterBase=true;
+            if(step.type!=EffectType::Color||step.parameterIndex!=parameter)continue;
+            if(!afterBase)return false;
+            for(uint32_t j=i+1;j<fixedExecutionPlan->stepCount&&j<fixedExecutionPlan->steps.size();++j){
+                const auto type=fixedExecutionPlan->steps[j].type;
+                if(type==EffectType::SuperResolution||type==EffectType::NrEnhance||type==EffectType::Protection)return false;
+            }
+            return true;
+        }
+        return false;
+    }
+    std::string_view validateFixedExecutionPlan() const {
+        if(!fixedExecutionPlanError.empty())return fixedExecutionPlanError;
+        if(!fixedExecutionPlan)return {};
+        using engine::EffectType;
+        const auto& plan=*fixedExecutionPlan;
+        if(plan.stepCount>plan.steps.size()||plan.output!=Extent{workWidth,workHeight})
+            return "fixed execution plan output/count mismatch";
+        std::array<uint32_t,engine::effectTypeCount> counts{};
+        Extent cursor{sourceWidth,sourceHeight}; int lastRank=-1;
+        const bool split=splitNrAcrossSr();
+        const bool interProtection=interNrProtectionTarget()<engine::kMaxNrInstances;
+        if(interProtection&&(noFeatures||noNgx))return "inter-NR protection requires active NR resources";
+        if(split&&(noFeatures||noNgx))return "split NR execution requires active NR resources";
+        if(split&&protection.enabled&&!protectionBeforeSr()&&!interProtection)return "split NR protection requires a stage-local original reference";
+        bool afterSr=false;
+        for(uint32_t i=0;i<plan.stepCount;++i){
+            const auto& step=plan.steps[i];const auto type=size_t(step.type);
+            if(type>=counts.size())return "unknown fixed execution stage";
+            int rank=int(type);
+            if(nrBeforeSr){
+                if(step.type==EffectType::NrEnhance)rank=1;
+                if(step.type==EffectType::Protection)rank=2;
+                if(step.type==EffectType::SuperResolution)rank=3;
+            }
+            if(runtimeNodeOrder){
+                if(step.type==EffectType::Protection&&interProtection)rank=nrBeforeSr?1:2;
+                if(step.type==EffectType::Color){
+                    if(step.parameterIndex>additionalColorCount||step.parameterIndex>=engine::kMaxColorInstances||
+                       !(step.parameterIndex?additionalColors[step.parameterIndex-1].enabled:color.enabled))
+                        return "node Color parameter index/enabled mismatch";
+                    if(tailColor(step.parameterIndex))rank=4;
+                    else if(preNrColor(step.parameterIndex))rank=2;
+                    else if(preSrColor(step.parameterIndex))rank=3;
+                    else if(interNrColorTarget(step.parameterIndex)<engine::kMaxNrInstances)rank=nrBeforeSr?1:2;
+                }
+                if(step.type==EffectType::VideoHdr)rank=5;
+                if(step.type==EffectType::FrameGeneration)rank=6;
+            }
+            if(split){
+                if(step.type==EffectType::Protection){
+                    if(!protectionBeforeSr()&&!interProtection)return "split NR protection requires a stage-local original reference";
+                    rank=interProtection?1:2;
+                }
+                if(step.type==EffectType::SuperResolution){rank=3;afterSr=true;}
+                if(step.type==EffectType::NrEnhance)rank=afterSr?4:1;
+                if(step.type==EffectType::Color){
+                    if(tailColor(step.parameterIndex))rank=6;
+                    else if(preNrColor(step.parameterIndex))rank=4;
+                    else if(preSrColor(step.parameterIndex))rank=2;
+                    else if(interNrColorTarget(step.parameterIndex)<engine::kMaxNrInstances)rank=afterSr?4:1;
+                }
+                if(step.type==EffectType::VideoHdr)rank=7;
+                if(step.type==EffectType::FrameGeneration)rank=8;
+            }
+            if(rank<lastRank)return "ordered node execution is not supported by fixed dispatcher";
+            lastRank=rank;
+            if(step.input!=cursor||!step.processing.valid()||!step.output.valid()||
+               step.resourceIndex!=counts[type]++)return "invalid fixed stage dimensions/resource index";
+            if(step.type!=EffectType::SuperResolution&&step.output!=cursor)
+                return "fixed non-SR stage changes output dimensions";
+            if(step.type==EffectType::NrEnhance){
+                const Extent full=split?nrFullExtent(step.resourceIndex):(nrBeforeSr?Extent{sourceWidth,sourceHeight}:Extent{workWidth,workHeight});
+                if(!enableNr||step.input!=full||step.resourceIndex>=nrLayersExtent.size()||
+                   step.processing!=nrLayersExtent[step.resourceIndex]||step.parameterIndex>=engine::kMaxNrInstances)
+                    return "fixed NR plan/resource dimensions mismatch";
+            }
+            cursor=step.output;
+        }
+        const size_t expectedNr=enableNr?(nrLayersModel.empty()?1:nrLayersModel.size()):0;
+        if(cursor!=plan.output||counts!=plan.resourceCounts||counts[size_t(EffectType::NrEnhance)]!=expectedNr)
+            return "fixed execution plan resource count mismatch";
+        return {};
+    }
     std::wstring runtimeAbsPath; // absolute runtime_local/nvidia path
     // Optional stage instrumentation hook (GPU timing experiments).
     std::function<void(const char*)> stageMark;
@@ -148,7 +402,7 @@ public:
     bool initialize(const EnhanceGraphDesc& desc);
     // Uploads a .cube payload (size^3 RGB triples, 0..1) into the optional 3D
     // LUT the ingest shader samples. Without a LUT the strength stays 0.
-    bool setColorLut(const float* rgb,unsigned size);
+    bool setColorLut(const float* rgb,unsigned size,unsigned instance=0);
     bool createViews();
 
     struct FrameOutputs {
@@ -227,17 +481,19 @@ public:
         uint64_t nvofFrameFailures = 0;
         uint64_t fgGeneratedFrames = 0;
         uint64_t fgSubmittedCandidates = 0, fgDisabledFrames = 0;
+        uint64_t fgProviderDisabled = 0, fgDuplicateSuppressed = 0, fgBothDisabled = 0;
         uint64_t nrMotionFrames = 0, sceneCutCount = 0, resetCount = 0;
     };
     const Metrics& metrics() const { return metrics_; }
     const std::string& mvecSource() const { return mvecSource_; }
-    bool nrCreated() const { return nrHandle_ != nullptr; }
+    bool nrCreated() const { return !nrInstances_.empty() && nrInstances_.front()->handle() != nullptr; }
     bool initialized() const { return initialized_; }
     uint32_t sourceWidth() const { return srcW_; }
     uint32_t sourceHeight() const { return srcH_; }
     uint32_t workWidth() const { return workW_; }
     uint32_t workHeight() const { return workH_; }
     uint32_t nrWidth() const {return nrW_;}
+    uint32_t nrLayerCount() const {return uint32_t(nrInstances_.size());}
     uint32_t nrHeight() const {return nrH_;}
     uint32_t flowWidth() const {return nvofW_;}
     uint32_t flowHeight() const {return nvofH_;}
@@ -253,14 +509,16 @@ public:
     bool fgEnabled() const { return fgEnabled_; }
     bool hdrOutput() const { return desc_.hdrOutput; }
     bool videoHdrActive() const {return desc_.convertVideoHdr();}
-    bool hdr10Output() const { return desc_.hdrOutput && desc_.enableFg; }
+    bool hdr10Output() const { return desc_.hdrOutput && (desc_.enableFg||desc_.hdrOutputMode==engine::HdrOutputMode::Hdr10); }
     DXGI_FORMAT outputFormat() const { return hdr10Output()?DXGI_FORMAT_R10G10B10A2_UNORM:desc_.hdrOutput?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM; }
     bool highQualityPresentation() const { return desc_.highQualityPresentation; }
     bool xessEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && desc_.frameGenerationBackend==engine::FrameGenerationBackend::XeSS; }
-    bool fsrEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && desc_.frameGenerationBackend==engine::FrameGenerationBackend::Fsr; }
-    // Frame generation implemented by the present sink (XeSS, FSR) instead of
-    // the in-graph DLSSG path; both consume the same guidance motion texture.
-    bool presentSinkFg() const { return xessEnabled() || fsrEnabled(); }
+    bool fsrEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && engine::fsrFrameGeneration(desc_.frameGenerationBackend); }
+    bool fsrActive() const;
+    const char* fsrProviderVersion() const;
+    // XeSS generates in the present sink; FSR and DLSSG generate in the graph.
+    // All backends consume the same guidance motion texture.
+    bool presentSinkFg() const { return xessEnabled(); }
     // AMD FSR upscaling replaces the SR stage; it is a FidelityFX effect, not
     // an NGX feature, so it also works on non-NVIDIA adapters.
     bool fsrSrRequested() const { return desc_.enableSr && !desc_.stillImage && desc_.videoSrQuality==engine::kVideoSrFsr; }
@@ -285,15 +543,30 @@ public:
     ID3D12Resource* diagnosticLinearInput() const { return srcRgba_.Get(); }
     // Offline diagnostics only. Borrowed after process; restore NON_PIXEL_SHADER_RESOURCE.
     ID3D12Resource* diagnosticNrBase() const { return desc_.nrBeforeSr?srcRgba_.Get():workRgba_.Get(); }
-    ID3D12Resource* diagnosticNrRaw() const { return desc_.nrTemporal?nrTemporal_.raw():residualRgba_.Get(); }
+    // Last layer's pre-temporal result; stack protection is applied afterwards.
+    ID3D12Resource* diagnosticNrRaw() const { return !nrInstances_.empty()&&nrInstances_.back()->stabilised?nrInstances_.back()->temporal().raw():(!nrInstances_.empty()?nrInstances_.back()->fullTarget():residualRgba_.Get()); }
     ID3D12Resource* diagnosticNrFiltered() const { return residualRgba_.Get(); }
+    ID3D12Resource* diagnosticPreSrProtection() const { return preSrProtectionRgba_.Get(); }
+    ID3D12Resource* diagnosticInterNrProtection() const { return interNrProtectionRgba_.Get(); }
+    ID3D12Resource* diagnosticVideoSrInput() const { return videoSrInput_.Get(); }
+    ID3D12Resource* diagnosticVideoSrOutput() const { return videoSrOutput_.Get(); }
+    ID3D12Resource* diagnosticNrLayerInput(size_t index) const { return index < nrInstances_.size() ? nrInstances_[index]->input() : nullptr; }
+    ID3D12Resource* diagnosticNrLayerOutput(size_t index) const { return index < nrInstances_.size() ? nrInstances_[index]->fullTarget() : nullptr; }
+    engine::NrLayerSettings diagnosticNrLayerSettings(size_t index) const {
+        if(index>=nrInstances_.size())return {};
+        const auto& n=*nrInstances_[index];
+        const bool beforeSr=desc_.nrBeforeSr&&(!desc_.splitNrAcrossSr()||index<desc_.nrBeforeSrLayerCount());
+        return {n.model,n.residualSettings,desc_.nrRuntime,n.temporalEnabled,beforeSr,n.enabled};
+    }
+    uint64_t diagnosticNrInputRevision(size_t index) const { return index<nrInstances_.size()?nrInstances_[index]->inputRevision:0; }
+    D3D12_RESOURCE_STATES diagnosticResourceState(ID3D12Resource* resource) const { return tracker_.get(resource); }
     // Non-empty when the colour stage refused the referenced LUT (input space
     // does not match the content domain). The engine surfaces this in the
     // status panel so the refusal is visible, not only logged.
     const std::wstring& colorLutNotice() const { return colorLutNotice_; }
     // True when the colour stage exists in this graph (master switch on and not
     // neutral). The encoder uses it to dither its 8/10-bit conversion output.
-    bool colorGradeActive() const { return colorActive_; }
+    bool colorGradeActive() const { return colorActive_||additionalColorActiveCount_!=0||tailColorActiveCount_!=0||preNrColorActiveCount_!=0||preSrColorActiveCount_!=0||interNrColorActiveCount_!=0; }
     // Effective dither step for the 8/10-bit output paths (0 = no dither).
     float outputDitherStep() const;
     // Isolated diagnostics only: existing constant guidance, borrowed lifetime.
@@ -309,6 +582,8 @@ public:
     bool nvofSessionInitialized() const;
     uint64_t nvofNextOutValue() const;
     uint64_t nrCreateResult() const { return nrResult_; }
+    uint64_t failedNgxResult() const;
+    const std::wstring& driverRequirementNotice() const {return driverRequirementNotice_;}
     bool fgCapabilityAvailable() const { return fgCapsAvailable_; }
     int fgMultiFrameCountMax() const { return fgMultiFrameMax_; }
     // Scenario toggles (probe/UI): gates only; the feature handles stay alive.
@@ -326,6 +601,7 @@ private:
     bool initNvof();
     bool initNgxFeatures();
     bool initFsrSr();
+    bool initFsrFg();
     // RTX 40 series: opens the Blackwell-only multi-frame gate in the mapped
     // DLSS-G runtime. Never touched on any other architecture.
     void applyAdaMfgUnlock();
@@ -357,14 +633,24 @@ private:
     ComPtr<ID3D12Resource> lumaTex_;
     ComPtr<ID3D12Resource> chromaTex_;
     ComPtr<ID3D12Resource> srcRgba_;
+    // Preserve the ungraded decode at FP32 when the first enabled grade is an
+    // independent instance; later passes still use the RGBA16F chain.
+    ComPtr<ID3D12Resource> preGradeRgba_;
     ComPtr<ID3D12Resource> rgbTex_,upRgb_[2];
     uint8_t* mappedRgb_[2]={};
     size_t rgbPitch_=0;
     ComPtr<ID3D12Resource> workRgba_;
     ComPtr<ID3D12Resource> videoSrInput_,videoSrOutput_;
     ComPtr<ID3D12Resource> videoHdrInput_,videoHdrOutput_;
-    ComPtr<ID3D12Resource> nrInput_,residualRgba_,nrFlow_,baseFlow_;
-    NrTemporalPass nrTemporal_;
+    ComPtr<ID3D12Resource> residualRgba_,nrFlow_,baseFlow_;
+    ComPtr<ID3D12Resource> preSrProtectionRgba_;
+    ComPtr<ID3D12Resource> interNrProtectionRgba_;
+    // NR layers. One entry means the single-layer product path; the probe in
+    // tools/nr_probe verified several handles coexist on one snippet session.
+    std::vector<std::unique_ptr<NrInstance>> nrInstances_;
+    // The layer count the current graph was built with, so a settings change
+    // that adds or removes a layer is detected as a rebuild.
+    uint32_t nrLayerCount_=1;
     ComPtr<ID3D12Resource> presentMotion_[2];
     bool presentMotionValid_[2]={};
     uint64_t motionPreviousSource_[2]={},previousSource_=0;
@@ -391,25 +677,64 @@ private:
     ComputePass yuvPass_, encPass_, decPass_, blitPass_, uploadPass_, densifyPass_;
     float toneMapPeakNits_=0; // latched per graph/source; never varies with frame brightness
     ComputePass rgbPass_,hdrVideoSrPass_;
-    ComputePass downsamplePass_,residualPass_,flowAdaptPass_;
+    ComputePass downsamplePass_,residualPass_,stackProtectionPass_,flowAdaptPass_;
+    // Stage-5 output stabiliser (anti-flicker). Constructed only when the
+    // setting is non-zero; a default (0) session never allocates it and the
+    // dispatch is skipped, so the disabled path is unchanged.
+    std::unique_ptr<NrHoldPass> nrHoldPass_;
+    // The texture the rest of the graph reads as "the NR result". Without the
+    // stabiliser this is residualRgba_; with it, the stabilised copy the pass
+    // produces. Set once per frame, read by the SR/FG/tail bindings below.
+    ID3D12Resource* nrOutputView_=nullptr;
+    bool createNrHoldPass();
     // --- colour grade (v4): CPU-baked tables read by the ingest shaders -----
     bool colorActive_=false;
     std::wstring colorLutNotice_;
     bool colorDirty_=true;
     ColorGradeTables colorTables_;
     ComPtr<ID3D12Resource> colorCurveTex_,colorHueTex_,colorLumTex_,colorLutTex_;
-    ComPtr<ID3D12Resource> upColorCurve_,upColorHue_,upColorLum_;
-    float* mappedColorCurve_=nullptr;
-    float* mappedColorHue_=nullptr;
-    float* mappedColorLum_=nullptr;
+    // Only write the upload resources of the acquired (completed) command slot.
+    std::vector<std::array<ComPtr<ID3D12Resource>,3>> colorTableUploads_;
     unsigned colorLutSize_=0;
     std::vector<float> colorLutUpload_;
     unsigned colorLutPending_=0;
     std::array<ComPtr<ID3D12Resource>,2> colorLutStaging_{};
     unsigned colorLutStagingSlot_=0;
     bool createColorResources();
+    bool createAdditionalColorResources();
+    bool createNodeColorResources();
+    std::array<std::unique_ptr<ColorGradeInstance>,engine::kMaxColorInstances-1> additionalColorInstances_{};
+    std::array<ComPtr<ID3D12Resource>,2> colorScratch_{};
+    unsigned additionalColorActiveCount_=0;
+    // Indexed by settings identity (including disabled slots), not compact
+    // resource ordinal. Only enabled non-ingress nodes allocate resources.
+    std::array<std::unique_ptr<ColorGradeInstance>,engine::kMaxColorInstances> nodeColorInstances_{};
+    std::array<ComPtr<ID3D12Resource>,engine::kMaxColorInstances> nodeColorOutputs_{};
+    unsigned tailColorActiveCount_=0,preNrColorActiveCount_=0,preSrColorActiveCount_=0,interNrColorActiveCount_=0;
+    bool tailColorExecutionLogged_=false,preNrColorExecutionLogged_=false;
+    bool preSrColorExecutionLogged_=false;
+    bool interNrColorExecutionLogged_=false;
+    ID3D12Resource* tailColorOutput_=nullptr; // borrowed from nodeColorOutputs_
+    ID3D12Resource* preNrColorOutput_=nullptr;
+    ID3D12Resource* preSrColorOutput_=nullptr;
+    std::array<ID3D12Resource*,engine::kMaxNrInstances> interNrColorOutputs_{};
+    ID3D12Resource* nrBaseInput() const { return desc_.nrBeforeSr?srcRgba_.Get():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get()); }
+    ID3D12Resource* preSrBaseInput() const {
+        if(preSrProtectionRgba_)return preSrProtectionRgba_.Get();
+        const auto before=desc_.nrBeforeSrLayerCount();
+        return desc_.splitNrAcrossSr()&&before<=nrInstances_.size()?nrInstances_[before-1]->fullTarget():residualRgba_.Get();
+    }
+    ID3D12Resource* srStageInput() const {
+        return preSrColorOutput_?preSrColorOutput_:(desc_.nrBeforeSr?preSrBaseInput():srcRgba_.Get());
+    }
+    ID3D12Resource* nrLayerBase(size_t layer) const {
+        if(layer<interNrColorOutputs_.size()&&interNrColorOutputs_[layer])return interNrColorOutputs_[layer];
+        if(interNrProtectionRgba_&&layer==desc_.interNrProtectionTarget())return interNrProtectionRgba_.Get();
+        if(desc_.splitNrAcrossSr()&&layer==desc_.nrBeforeSrLayerCount())return preNrColorOutput_?preNrColorOutput_:workRgba_.Get();
+        return layer?nrInstances_[layer-1]->fullTarget():nrBaseInput();
+    }
     void refreshColorTables();
-    void uploadColorTables(ID3D12GraphicsCommandList* list);
+    bool uploadColorTables(ID3D12GraphicsCommandList* list,uint32_t slot);
     DescriptorStager stager_;
     Microsoft::WRL::ComPtr<ID3D12Resource> sourceReferences_[2],baseReferences_[2];
     StateTracker tracker_;
@@ -429,12 +754,14 @@ private:
     std::unique_ptr<ngx::VideoSrBackend> videoSrBackend_;
     std::unique_ptr<ngx::TrueHdrBackend> videoHdrBackend_;
     std::unique_ptr<ngx::DlssFgBackend> fgBackend_;
+    std::unique_ptr<gfx::FsrFgPresenter> fsrFgBackend_;
     std::unique_ptr<gfx::FsrSrBackend> fsrSrBackend_;
-    ComPtr<ID3D12Resource> fsrSrDepth_, upFsrSrDepth_;
+    ComPtr<ID3D12Resource> fsrSrDepth_, upFsrSrDepth_, fsrSrZeroMotion_, upFsrSrZeroMotion_;
     size_t fsrSrDepthPitch_=0;
     NVSDK_NGX_Parameter* ngxParams_ = nullptr;
-    NVSDK_NGX_Handle* nrHandle_ = nullptr;
     uint64_t nrResult_ = 0;
+    uint64_t fgInitResult_ = 0;
+    std::wstring driverRequirementNotice_;
     uint32_t nrSeh_ = 0;
     bool fgCapsAvailable_ = false;
     int fgMultiFrameMax_ = 0;

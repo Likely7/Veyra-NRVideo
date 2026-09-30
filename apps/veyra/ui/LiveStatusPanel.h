@@ -131,7 +131,7 @@ inline LRESULT CALLBACK proc(HWND h,UINT message,WPARAM wp,LPARAM lp){
             :s.applied.frameGenerationBackend==engine::FrameGenerationBackend::Fsr?L"AMD FSR":L"DLSS";
         rows.emplace_back(L"补帧方式",s.applied.multiplier<=1?L"关闭":std::format(L"{} {}X",fgName,s.applied.multiplier));
         rows.emplace_back(L"NR内部尺寸",s.applied.nr?std::format(L"{} x {}",s.metrics.resolution.nr.width,s.metrics.resolution.nr.height):L"关闭");
-        rows.emplace_back(L"NR运行版本",s.nrActive?(s.applied.nrRuntime==engine::NrRuntime::Ampere?L"RTX 30兼容 · 实验":s.applied.nrRuntime==engine::NrRuntime::Community?L"社区兼容 · 实验":L"NVIDIA原版"):L"未运行");
+        rows.emplace_back(L"NR运行版本",s.nrActive?(s.applied.nrRuntime==engine::NrRuntime::Ampere?L"RTX 30兼容 · SF-v2 实验":s.applied.nrRuntime==engine::NrRuntime::Community?L"社区兼容 · 实验":L"默认（Lecram 310.8.3）"):L"未运行");
         rows.emplace_back(L"显示模式",s.running?(s.applied.captureCompatible?L"直播兼容 · 实验":L"标准显示"):L"未运行");
         if(s.audioAvailable)rows.emplace_back(L"音频声道 · 输入 / 输出",std::format(L"{} / {}{}",s.capture?s.captureAudio.inputChannels:s.audioInputChannels,s.capture?s.captureAudio.outputChannels:s.audioOutputChannels,(s.capture?s.captureAudio.outputChannels<s.captureAudio.inputChannels:s.audioOutputChannels<s.audioInputChannels)?L" · 降混":L""));
         rows.emplace_back(L"音频同步",s.audioAvailable?(s.capture?(s.captureAudio.running?L"软件估算同步":L"等待视频锚点"):(s.audioEndpointRecovering?L"音频设备恢复中 · 时间线保持":s.audioRebuffering?L"重新同步 · 等待视频锚点":L"音频主时钟")):L"无音频");

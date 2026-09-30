@@ -54,6 +54,7 @@ private:
     int64_t lastPtsUs_ = INT64_MIN;
     std::wstring path_;
     bool preferHardwareDecode_ = false;
+    bool requireHardwareDecode_ = false; // "强制硬解": never fall back to software
 };
 
 } // namespace veyra::source

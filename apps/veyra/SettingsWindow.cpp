@@ -951,7 +951,7 @@ void populate(engine::EnhancementSettings s){
     syncProtection(s.protection);
     check(200,enhancementEnabled&&s.nr?BST_CHECKED:BST_UNCHECKED);
     check(201,enhancementEnabled&&s.sr?BST_CHECKED:BST_UNCHECKED);
-    for(int j=0;j<3;++j){auto h=item(730+j);if(j==int(s.srTarget))SetPropW(h,L"veyra.selected",HANDLE(1));else RemovePropW(h,L"veyra.selected");InvalidateRect(h,nullptr,FALSE);}
+    for(int j=0;j<6;++j){auto h=item(730+j);if(j==int(s.srTarget))SetPropW(h,L"veyra.selected",HANDLE(1));else RemovePropW(h,L"veyra.selected");InvalidateRect(h,nullptr,FALSE);}
     const int multiplierCount=multiplierChoiceCount(s.frameGenerationBackend);
     if(send(202,CB_GETCOUNT)!=multiplierCount){send(202,CB_RESETCONTENT);const wchar_t* choices[]={L"关闭补帧",L"2X · 一张中间帧",L"3X · 两张中间帧",L"4X · 三张中间帧",L"6X · 五张中间帧"};for(int i=0;i<multiplierCount;++i)send(202,CB_ADDSTRING,0,LPARAM(choices[i]));}
     send(207,CB_SETCURSEL,s.videoSrQuality,0);send(202,CB_SETCURSEL,multiplierChoiceIndex(s.multiplier),0);
@@ -968,13 +968,14 @@ void populate(engine::EnhancementSettings s){
     }
     send(208,CB_SETCURSEL,int(s.frameGenerationBackend),0);send(203,CB_SETCURSEL,int(s.nrPolicy),0);
     send(508,CB_SETCURSEL,int(engine::exportBitrateIndex(s.exportBitrateMbps)),0);
-    send(218,CB_SETCURSEL,int(s.nrRuntime));
+    send(218,CB_SETCURSEL,engine::currentNrRuntime(s.nrRuntime)==engine::NrRuntime::Ampere?1:0);
     check(219,s.captureCompatible?BST_CHECKED:BST_UNCHECKED);check(220,s.lowLatency?BST_CHECKED:BST_UNCHECKED);
     check(223,s.nrTemporal?BST_CHECKED:BST_UNCHECKED);
     check(230,enhancementEnabled&&s.videoHdr.enabled?BST_CHECKED:BST_UNCHECKED);
     const unsigned hdrValues[]={s.videoHdr.contrast,s.videoHdr.saturation,s.videoHdr.middleGray,s.videoHdr.peakNits};
     for(int i=0;i<4;++i){send(631+i,TBM_SETPOS,TRUE,hdrValues[i]);putText(1131+i,(std::to_wstring(hdrValues[i])+(i==3?L" nit":L"")).c_str());}
     send(204,CB_SETCURSEL,int(s.flow),0);send(205,CB_SETCURSEL,int(s.content),0);
+    send(246,CB_SETCURSEL,int(s.hdrOutputMode));send(247,CB_SETCURSEL,engine::motionUsesFlow(s.nrMotion)?1:0);send(248,CB_SETCURSEL,engine::motionUsesFlow(s.srMotion)?1:0);send(249,CB_SETCURSEL,engine::motionUsesFlow(s.fgMotion,s.frameGenerationBackend)?1:0);
     send(209,CB_SETCURSEL,int(s.opticalFlowBackend),0);
     check(215,s.amdFlowHalfResolution?BST_CHECKED:BST_UNCHECKED);
     check(210,s.fgStrictAdmission?BST_CHECKED:BST_UNCHECKED);
@@ -994,11 +995,11 @@ bool read(engine::EnhancementSettings& s,bool allPages=false){s=enhancementEnabl
         s.multiplier=(multiplier>=0&&multiplier<int(engine::kFgMultiplierChoiceCount))?engine::kFgMultiplierChoices[multiplier]:1;s.frameGenerationBackend=static_cast<engine::FrameGenerationBackend>(generation);s.opticalFlowBackend=static_cast<engine::OpticalFlowBackend>(flowBackend);s.amdFlowHalfResolution=checked(215)==BST_CHECKED;s.flow=static_cast<engine::FlowQuality>(flowQuality);s.content=static_cast<engine::ContentRate>(content);
         {const int bitrate=send(508,CB_GETCURSEL,0,0);if(bitrate==CB_ERR||bitrate<0||bitrate>=int(engine::kExportBitrateChoiceCount)){message(L"导出码率控件未完成初始化；未保存设置");return false;}s.exportBitrateMbps=engine::kExportBitrateChoices[bitrate];}
         s.audioSync=static_cast<engine::AudioSyncMode>(send(216,CB_GETCURSEL));
-        s.nrRuntime=static_cast<engine::NrRuntime>(send(218,CB_GETCURSEL));
+        s.nrRuntime=send(218,CB_GETCURSEL)==1?engine::NrRuntime::Ampere:engine::NrRuntime::Original;
         s.captureCompatible=checked(219)==BST_CHECKED;s.lowLatency=checked(220)==BST_CHECKED;s.nrTemporal=checked(223)==BST_CHECKED;
         wchar_t offset[32]{};GetWindowTextW(item(217),offset,32);wchar_t* offsetEnd=nullptr;const auto parsed=wcstol(offset,&offsetEnd,10);
         if(offsetEnd==offset||*offsetEnd||parsed<-250||parsed>250){message(L"声音偏移须为 -250 至 250 ms");return false;}s.audioOffsetMs=int(parsed);
-        for(int j=0;j<3;++j)if(GetPropW(item(730+j),L"veyra.selected")){s.srTarget=static_cast<pipeline::SrTarget>(j);break;}
+        for(int j=0;j<6;++j)if(GetPropW(item(730+j),L"veyra.selected")){s.srTarget=static_cast<pipeline::SrTarget>(j);break;}
         if(engine::presentSinkFrameGeneration(s.frameGenerationBackend)){
             const int choices=multiplierChoiceCount(s.frameGenerationBackend);
             const size_t index=size_t(std::clamp(choices-1,1,int(engine::kFgMultiplierChoiceCount)-1));
@@ -1026,7 +1027,11 @@ bool liveField(int id){
         case 107:s.residual.total=v;break;case 108:s.residual.darken=v;break;case 109:s.residual.brighten=v;break;case 110:s.residual.color=v;break;case 111:s.residual.luminance=v;break;default:return false;}
     }else switch(id){
         case 219:s.captureCompatible=checked(id)==BST_CHECKED;break;
-        case 218:s.nrRuntime=static_cast<engine::NrRuntime>(send(id,CB_GETCURSEL));break;
+        case 246:s.hdrOutputMode=engine::HdrOutputMode(send(id,CB_GETCURSEL));break;
+        case 247:s.nrMotion=engine::MotionSource(send(id,CB_GETCURSEL));break;
+        case 248:s.srMotion=engine::MotionSource(send(id,CB_GETCURSEL));break;
+        case 249:s.fgMotion=engine::MotionSource(send(id,CB_GETCURSEL));break;
+        case 218:s.nrRuntime=send(id,CB_GETCURSEL)==1?engine::NrRuntime::Ampere:engine::NrRuntime::Original;break;
         case 203:s.nrPolicy=static_cast<pipeline::NrSizePolicy>(send(id,CB_GETCURSEL));break;
         case 204:s.flow=static_cast<engine::FlowQuality>(send(id,CB_GETCURSEL));break;
         case 205:s.content=static_cast<engine::ContentRate>(send(id,CB_GETCURSEL));break;
@@ -1049,7 +1054,7 @@ bool liveField(int id){
         case 700:case 701:case 702:s.model.style=id-700;break;
         case 710:case 711:s.model.autoMask=id-710;break;
         case 720:case 721:s.model.uiCorrection=id-720;break;
-        case 730:case 731:case 732:s.srTarget=static_cast<pipeline::SrTarget>(id-730);break;
+        case 730:case 731:case 732:case 733:case 734:case 735:s.srTarget=static_cast<pipeline::SrTarget>(id-730);break;
         default:return false;
     }
     if(!s.validate().empty()){message(L"数值超出范围；仍使用上次有效值");return false;}
@@ -1164,8 +1169,9 @@ void layoutEnhancePage(int width){
     row(200,36);row(1117,24);row(218,36);row(203,36);
     row(220,36);row(223,36);row(201,36);
     const int third=(width-40)/3;
-    for(int i=0;i<3;++i)place(730+i,12+i*(third+8),y,third);
-    y+=44;row(207,36);
+    const int order[6]={0,1,3,4,5,2};
+    for(int i=0;i<6;++i)place(730+order[i],12+(i%3)*(third+8),y+(i/3)*44,third);
+    y+=88;row(207,36);
     row(206,36);
     const int half=(width-32)/2;
     place(213,12,y,half);place(214,20+half,y,half);y+=44;
@@ -1214,7 +1220,7 @@ void arrange(bool commitScroll){
     // The Smooth Motion explainer unfolds between the frame-generation rows and
     // the pacing rows, so everything below it moves down by the measured text
     // height. The control keeps its own y; only the rows after it shift.
-    const auto helpOffset=[&](const Item& entry){const auto id=GetDlgCtrlID(entry.h);return entry.page==1&&(id==1114||id==205||id==1110||id==240||id==241||id==242||id==243||id==244||id==1147||id==1150)?helpHeight:0;};
+    const auto helpOffset=[&](const Item& entry){const auto id=GetDlgCtrlID(entry.h);return entry.page==1&&(id==1114||id==205||id==1110||id==240||id==241||id==242||id==243||id==244||id==1147||id==1150||(id>=246&&id<=249))?helpHeight:0;};
     for(auto& entry:items){if(GetDlgCtrlID(entry.h)==1120)entry.height=helpHeight;
         if(entry.page==page&&!entry.hidden&&(GetDlgCtrlID(entry.h)!=1120||smoothMotionHelpExpanded)){wchar_t cls[32]{};GetClassNameW(entry.h,cls,32);contentHeight=std::max(contentHeight,entry.y+helpOffset(entry)+(_wcsicmp(cls,L"COMBOBOX")==0?36:entry.height)+12);}}
     if(page==2)contentHeight=std::max(contentHeight,colorPageContentHeight);
@@ -1490,16 +1496,17 @@ case WM_CREATE:{window=h;font=makeFont(h);items.clear();displayedBackendWarning.
     combo(207,0,100,{L"DLSS SR",L"RTX 视频超分 · 低",L"RTX 视频超分 · 中",L"RTX 视频超分 · 高",L"RTX 视频超分 · 最高",L"AMD FSR 超分 · 3.1.x（N卡可用）"});
     for(auto& entry:items)if(entry.page==0&&entry.y>=100)entry.y+=44;
     button(L"2K",730,0,12,100,80);button(L"4K",731,0,100,100,80);button(L"8K",732,0,188,100,80);
+    button(L"5K",733,0,12,144,80);button(L"6K",734,0,100,144,80);button(L"7K",735,0,188,144,80);
     for(auto& entry:items)if(entry.page==0&&entry.y>=56)entry.y+=24;
     add(L"STATIC",L"NR 运行版本",1117,0,0,12,56,-1,24);
-    combo(218,0,84,{L"NVIDIA 原版 · RTX 50",L"社区兼容 · RTX 40/50 实验",L"RTX 30 兼容 · 实验"});
-    SetPropW(item(218),L"veyra.tip",HANDLE(L"社区版为修改运行时。RTX 30 档需单独组件，性能与兼容性待持卡验证；不解锁 DLSS 补帧。切换会重建管线，失败恢复原设置。"));
+    combo(218,0,84,{L"RTX 50 · Lecram",L"RTX 20–50 · SF-v2"});
+    SetPropW(item(218),L"veyra.tip",HANDLE(L"两版都是社区实验运行库，全链共享。SF-v2 的 20/30/40 实卡仍需验收；不解锁 DLSS 补帧。切换重建管线，失败恢复原设置。"));
     // Final layout in reading order; existing control IDs and bindings stay intact.
     for(auto& entry:items){
         const int id=GetDlgCtrlID(entry.h);
         if(id==203)entry.y=128;
         if(id==201)entry.y=176;
-        if(id>=730&&id<=732)entry.y=220;
+        if(id>=730&&id<=735)entry.y=220;
         if(id==207)entry.y=264;
         // The capture/stream audio sync controls are created here but read as a
         // separate audio page.
@@ -1514,6 +1521,10 @@ case WM_CREATE:{window=h;font=makeFont(h);items.clear();displayedBackendWarning.
     // Reflex) was removed: all three measured identical (2026-09-22).
     add(L"BUTTON",L"低延迟队列（减少排队；本机无法验收）",240,BS_AUTOCHECKBOX|WS_TABSTOP,1,12,550,-1,32);
     combo(242,1,590,{L"显示同步：允许撕裂",L"显示同步：垂直同步",L"显示同步：自动"});
+    combo(246,1,872,{L"HDR 输出：HDR10（默认；补帧固定）",L"HDR 输出：scRGB 浮点"});
+    combo(247,1,920,{L"NR 运动：零运动（抗闪烁仍需光流）",L"NR 运动：光流"});
+    combo(248,1,968,{L"超分运动：零运动",L"超分运动：光流"});
+    combo(249,1,1016,{L"补帧运动：零运动",L"补帧运动：光流"});
     combo(243,1,634,{L"输出上限：关闭",L"输出上限：跟随显示器",L"输出上限：自定义"});
     add(L"EDIT",L"60",244,ES_AUTOHSCROLL|ES_RIGHT|WS_TABSTOP,1,182,678,90,28);
     add(L"STATIC",L"FPS",1147,0,1,276,678,40,28);
@@ -1655,6 +1666,7 @@ __declspec(noinline) LRESULT settingsCommand(HWND h,UINT msg,WPARAM wp,LPARAM lp
         if(setting.outputRate==engine::OutputRateMode::Custom){wchar_t fps[64]{};GetWindowTextW(item(244),fps,64);wchar_t* end=nullptr;const auto value=wcstod(fps,&end);if(end==fps||*end||!std::isfinite(value)||value<1||value>1000){message(L"自定义限帧须为 1–1000 FPS");return 0;}setting.customFps=value;}
         if(setting.valid()){controller->requestPresentation(setting);EnableWindow(item(244),setting.outputRate==engine::OutputRateMode::Custom);SendMessageW(GetParent(window),WM_APP+46,0,0);}return 0;
     }
+    if(msg==WM_COMMAND&&LOWORD(wp)>=246&&LOWORD(wp)<=249&&HIWORD(wp)==CBN_SELCHANGE&&!populating){liveField(int(LOWORD(wp)));return 0;}
     if(msg==WM_COMMAND&&LOWORD(wp)==221&&HIWORD(wp)==BN_CLICKED){smoothMotionHelpExpanded=!smoothMotionHelpExpanded;putText(221,smoothMotionHelpExpanded?L"Smooth Motion · 收起说明 ▴":L"Smooth Motion · 开启方法 ▾");arrange();return 0;}
     if(msg==WM_COMMAND&&!populating&&(LOWORD(wp)==220||LOWORD(wp)==223)&&HIWORD(wp)==BN_CLICKED){liveField(LOWORD(wp));return 0;}
     if(msg==WM_COMMAND&&!populating&&LOWORD(wp)==230&&HIWORD(wp)==BN_CLICKED){SendMessageW(GetParent(window),WM_APP+44,230,checked(230));return 0;}
@@ -1846,7 +1858,7 @@ __declspec(noinline) LRESULT settingsCommand(HWND h,UINT msg,WPARAM wp,LPARAM lp
     }
     if(msg==WM_COMMAND&&!populating&&((LOWORD(wp)==209&&HIWORD(wp)==CBN_SELCHANGE)||((LOWORD(wp)==215||LOWORD(wp)==210)&&HIWORD(wp)==BN_CLICKED))){liveField(LOWORD(wp));return 0;}
 switch(msg){
-case WM_COMMAND:{const int id=LOWORD(wp);if(!populating&&((id>=202&&id<=205||id==207||id==208)&&HIWORD(wp)==CBN_SELCHANGE||(id>=700&&id<=732)&&HIWORD(wp)==BN_CLICKED)){liveField(id);return 0;}if((id==206||id==213||id==214)&&HIWORD(wp)==BN_CLICKED){const auto accepted=SendMessageW(GetParent(h),WM_APP+45,id,checked(206));message(accepted?(id==213?L"请在画面中左键拖动框选；Esc取消。":L"已请求更新NR剔除区。"):L"未能操作：请先打开画面，或清除已满的4个区域。");return 0;}if((id==200||id==201)&&HIWORD(wp)==BN_CLICKED){const bool accepted=SendMessageW(GetParent(h),WM_APP+44,id,checked(id))!=0;message(accepted?L"已请求开关；确认帧边界结果后生效。":L"总增强正在切换，请待当前事务完成。");return 0;}if(HIWORD(wp)==EN_SETFOCUS){for(auto& item:items)if(GetDlgCtrlID(item.h)==id&&item.page==page){RECT r{};GetClientRect(h,&r);int height=MulDiv(r.bottom,96,veyra::ui::layoutDpi(h))-128;if(item.y<scroll)scroll=item.y;if(item.y+item.height>scroll+height)scroll=item.y+item.height-height;arrange(true);break;}}if(!populating&&id>=100&&id<=111&&HIWORD(wp)==EN_CHANGE){liveField(id);return 0;}
+case WM_COMMAND:{const int id=LOWORD(wp);if(!populating&&((id>=202&&id<=205||id==207||id==208)&&HIWORD(wp)==CBN_SELCHANGE||(id>=700&&id<=735)&&HIWORD(wp)==BN_CLICKED)){liveField(id);return 0;}if((id==206||id==213||id==214)&&HIWORD(wp)==BN_CLICKED){const auto accepted=SendMessageW(GetParent(h),WM_APP+45,id,checked(206));message(accepted?(id==213?L"请在画面中左键拖动框选；Esc取消。":L"已请求更新NR剔除区。"):L"未能操作：请先打开画面，或清除已满的4个区域。");return 0;}if((id==200||id==201)&&HIWORD(wp)==BN_CLICKED){const bool accepted=SendMessageW(GetParent(h),WM_APP+44,id,checked(id))!=0;message(accepted?L"已请求开关；确认帧边界结果后生效。":L"总增强正在切换，请待当前事务完成。");return 0;}if(HIWORD(wp)==EN_SETFOCUS){for(auto& item:items)if(GetDlgCtrlID(item.h)==id&&item.page==page){RECT r{};GetClientRect(h,&r);int height=MulDiv(r.bottom,96,veyra::ui::layoutDpi(h))-128;if(item.y<scroll)scroll=item.y;if(item.y+item.height>scroll+height)scroll=item.y+item.height-height;arrange(true);break;}}if(!populating&&id>=100&&id<=111&&HIWORD(wp)==EN_CHANGE){liveField(id);return 0;}
     if(!populating&&id>=100&&id<=111&&HIWORD(wp)==EN_KILLFOCUS){populate(enhancementEnabled?controller->snapshot().desired:configuredSettings);return 0;}
     engine::EnhancementSettings s;
     if(id==211){SetFocus(body);s={};if(submit(s)){editDrafts.clear();populate(s);}message(L"已还原内建默认。");}

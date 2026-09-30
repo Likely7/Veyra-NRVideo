@@ -25,20 +25,20 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;
     ++generation_;
     Status st=Status::Ok;
-    if(graph.fgEnabled()&&!graph.xessEnabled()&&!graph.fsrEnabled()){
+    if(graph.fgEnabled()&&!graph.xessEnabled()){
         D3D12_COMMAND_QUEUE_DESC desc{};desc.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;
         HRESULT hr=ctx.device()->CreateCommandQueue(&desc,IID_PPV_ARGS(&presentationQueue_));
         if(SUCCEEDED(hr))hr=ctx.device()->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&presentationFence_));
-        if(FAILED(hr)){veyra::log::error("present",std::format("DLSS presentation queue/fence hr=0x{:X}",unsigned(hr)));close();return false;}
+        if(FAILED(hr)){veyra::log::error("present",std::format("application frame-generation presentation queue/fence hr=0x{:X}",unsigned(hr)));close();return false;}
         presentationEvent_=CreateEventW(nullptr,FALSE,FALSE,nullptr);
         if(!presentationEvent_||!presentationRing_.initialize(ctx.device(),presentationQueue_.Get(),presentationFence_.Get(),presentationEvent_,3,st)){close();return false;}
-        veyra::log::info("present","DLSS presentation uses independent queue/fence, 3 command slots; shared textures use producer/consumer GPU fences");
+        veyra::log::info("present","application frame-generation presentation uses independent queue/fence, 3 command slots; shared textures use producer/consumer GPU fences");
     }
     auto* queue=presentationQueue_?presentationQueue_.Get():ctx.directQueue();
     gpuTimer_.initialize(ctx.device(),queue);window_=window;RECT rc{};GetClientRect(window,&rc);
-    gfx::PresentSink::Desc d;d.targetWindow=window;d.width=std::max(1L,rc.right);d.height=std::max(1L,rc.bottom);d.vsync=false;
+    gfx::PresentSink::Desc d;d.targetWindow=window;d.width=std::max(1L,rc.right);d.height=std::max(1L,rc.bottom);d.vsync=false;d.tearing=false;
     d.waitable=!GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_SWAPCHAIN",nullptr,0);
-    d.hdr=graph.hdrOutput();d.hdr10=graph.hdr10Output();d.xess=graph.xessEnabled();d.fsr=graph.fsrEnabled();d.renderWidth=graph.workWidth();d.renderHeight=graph.workHeight();d.captureCompatible=captureCompatible;d.fgMultiplier=graph.fgMultiplier();
+    d.hdr=graph.hdrOutput();d.hdr10=graph.hdr10Output();d.xess=graph.xessEnabled();d.captureCompatible=captureCompatible;d.fgMultiplier=graph.fgMultiplier();
     // Candidate X2 (2026-09-22) tried XeLL pass-through for media-clock-paced
     // sources; the audited provider then rejects generation with -15
     // (LATENCY_REDUCTION_UNSUPPORTED) and Intel's guide states frame
@@ -46,7 +46,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     // VEYRA_TEST_XESS_LOW_LATENCY=0 remains a diagnostic-only toggle.
     (void)mediaClockPaced;
     wchar_t lowLatency[4]{};
-    d.xessLowLatencySleep=!(GetEnvironmentVariableW(L"VEYRA_TEST_XESS_LOW_LATENCY",lowLatency,4)&&lowLatency[0]==L'0');lastXessFrame_={};lastXessIdentity_={};xessWasEnabled_=false;lastFsrFrame_={};lastFsrIdentity_={};fsrWasEnabled_=false;
+    d.xessLowLatencySleep=!(GetEnvironmentVariableW(L"VEYRA_TEST_XESS_LOW_LATENCY",lowLatency,4)&&lowLatency[0]==L'0');lastXessFrame_={};lastXessIdentity_={};xessWasEnabled_=false;
     if(d.xess){
         bufferMonitor_=MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST);
         MONITORINFO monitor{sizeof(monitor)};
@@ -86,13 +86,13 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     auto* fence=presentationFence_?presentationFence_.Get():ctx.fence();
     const auto presentStart=std::chrono::steady_clock::now();
     const auto slotWaitStart=ring.cpuWaitMilliseconds();
-    xessFailed_=false;fsrFailed_=false;
+    xessFailed_=false;
     RECT rc{};GetClientRect(window_,&rc);if(rc.right<1||rc.bottom<1)return true;
     const auto now=std::chrono::steady_clock::now();
     bool resized=false;
     const auto deferUntil=uint64_t(uintptr_t(GetPropW(window_,L"Veyra.ResizeDeferUntil")));
     if(viewWidth_!=unsigned(rc.right)||viewHeight_!=unsigned(rc.bottom)){
-        viewWidth_=rc.right;viewHeight_=rc.bottom;xessWasEnabled_=fsrWasEnabled_=false;
+        viewWidth_=rc.right;viewHeight_=rc.bottom;xessWasEnabled_=false;
     }
     unsigned targetWidth=rc.right,targetHeight=rc.bottom;
     if(sink_.xess()){
@@ -144,24 +144,27 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // DXGI stretches the retained buffer while the native workspace unfolds.
     // Compute contain in CURRENT client coordinates, then map back to buffer
     // coordinates so that the onscreen image keeps its aspect throughout.
-    const float scale=std::min(float(rc.right)/graph.workWidth(),float(rc.bottom)/graph.workHeight());
+    const auto [renderW,renderH]=view.renderedSize(float(rc.right),float(rc.bottom),float(graph.workWidth()),float(graph.workHeight()));
     D3D12_VIEWPORT viewport{0,0,float(sink_.bufferWidth()),float(sink_.bufferHeight()),0,1};
     D3D12_RECT rect{0,0,LONG(sink_.bufferWidth()),LONG(sink_.bufferHeight())};list->RSSetViewports(1,&viewport);list->RSSetScissorRects(1,&rect);
     ID3D12DescriptorHeap* heaps[]={pass_.heap.Get()};list->SetDescriptorHeaps(1,heaps);list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(pass_.pso.Get());
     const float samplingFlags=graph.highQualityPresentation()?2.0f:0.0f;
-    float dims[8]={float(graph.workWidth()),float(graph.workHeight()),samplingFlags,view.zoom,float(rc.right),float(rc.bottom),view.centerX,view.centerY};list->SetGraphicsRoot32BitConstants(0,8,dims,0);
+    // PresentBlit uses a contain mapping. Cancel its fit so these dimensions
+    // express the exact shared display transform, including stretch/SAR/fill.
+    const float inverseFit=1.0f/std::min(float(rc.right)/renderW,float(rc.bottom)/renderH);
+    float dims[8]={renderW,renderH,samplingFlags,inverseFit,float(rc.right),float(rc.bottom),view.centerX,view.centerY};list->SetGraphicsRoot32BitConstants(0,8,dims,0);
     list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+size_t(slot+(generated?2:0))*pass_.increment});
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);list->DrawInstanced(3,1,0,0);
     if(comparison&&!generated&&referencesValid){
         auto* reference=baseReference?graph.baseReference(slot):graph.sourceReference(slot);
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition.pResource=reference;b.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;b.Transition.StateBefore=D3D12_RESOURCE_STATE_COMMON;b.Transition.StateAfter=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;list->ResourceBarrier(1,&b);
         dims[2]=samplingFlags+(graph.hdr10Output()?4:graph.hdrOutput()?0:1)+(graph.videoHdrActive()?8:0);list->SetGraphicsRoot32BitConstants(0,8,dims,0);list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+size_t(12+slot+(baseReference?2:0))*pass_.increment});
-        if(comparison==2)rect.right=LONG(std::clamp((rc.right*.5f+(std::clamp(split,0.0f,1.0f)-view.centerX)*graph.workWidth()*scale*view.zoom)*sink_.bufferWidth()/rc.right,0.0f,float(sink_.bufferWidth())));list->RSSetScissorRects(1,&rect);list->DrawInstanced(3,1,0,0);
+        if(comparison==2)rect.right=LONG(std::clamp((rc.right*.5f+(std::clamp(split,0.0f,1.0f)-view.centerX)*renderW)*sink_.bufferWidth()/rc.right,0.0f,float(sink_.bufferWidth())));list->RSSetScissorRects(1,&rect);list->DrawInstanced(3,1,0,0);
         std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
         if(veyra::log::verboseFrameLogs())veyra::log::info("comparison",std::format("real-frame source={} epoch={} revision={} reference={} mode={} split={} (same leased frame)",identity.sourceFrameId,identity.epoch,identity.settingsRevision,baseReference?"base":"input",comparison,split));
     }
     for(auto& b:barriers)std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(2,barriers);
-    // Interpolation region for the present-sink FG backends (XeSS-FG, FSR-FG).
+    // Interpolation region for the XeSS present-sink FG backend.
     // It must follow the PresentBlit view mapping (contain * zoom, view
     // center) rather than assuming the default centered view: the previous
     // exact `view == PreviewView{}` guard disabled generation forever after
@@ -208,10 +211,11 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             states.transition(list,motion,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             states.transition(list,mapped,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const auto previous=reset?view:previousXessView_;
+            const auto [prevRenderW,prevRenderH]=previous.renderedSize(float(reset?rc.right:previousXessWidth_),float(reset?rc.bottom:previousXessHeight_),float(graph.workWidth()),float(graph.workHeight()));
             const float mapping[16]={float(graph.workWidth()),float(graph.workHeight()),float(rc.right),float(rc.bottom),
-                view.zoom,view.centerX,view.centerY,reset?1.0f:0.0f,
-                previous.zoom,previous.centerX,previous.centerY,0,
-                float(reset?rc.right:previousXessWidth_),float(reset?rc.bottom:previousXessHeight_),0,0};
+                renderW,view.centerX,view.centerY,reset?1.0f:0.0f,
+                renderH,previous.centerX,previous.centerY,0,
+                float(reset?rc.right:previousXessWidth_),float(reset?rc.bottom:previousXessHeight_),prevRenderW,prevRenderH};
             const auto heap=presentMotionPass_.heap->GetGPUDescriptorHandleForHeapStart().ptr;
             presentMotionPass_.bind(list,mapping,heap+size_t(slot*2)*presentMotionPass_.increment,heap+size_t(slot*2+1)*presentMotionPass_.increment);
             list->Dispatch((graph.workWidth()+7)/8,(graph.workHeight()+7)/8,1);
@@ -237,22 +241,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         if(enabled)lastXessPts100ns_=sourcePts100ns;
         previousXessView_=view;previousXessWidth_=rc.right;previousXessHeight_=rc.bottom;
     }
-    if(auto* fsr=sink_.fsr()){
-        const bool enabled=regionVisible&&!generated&&!comparison&&graph.presentMotionValid(slot)&&identity.sourceFrameId!=lastFsrIdentity_.sourceFrameId;
-        const bool reset=!fsrWasEnabled_||identity.epoch!=lastFsrIdentity_.epoch||identity.settingsRevision!=lastFsrIdentity_.settingsRevision||graph.motionPreviousSource(slot)!=lastFsrIdentity_.sourceFrameId;
-        const float elapsed=lastFsrFrame_==std::chrono::steady_clock::time_point{}?0.0f:float(std::chrono::duration<double,std::milli>(now-lastFsrFrame_).count());
-        // The AMD presenter degrades inside the provider (generation off, plain
-        // presentation continues) instead of failing the frame: tearing the
-        // swapchain down would only cost the session a restart.
-        if(enabled)gpuTimer_.mark(list,diagnostics::GpuStage::FgBatch);
-        if(!fsr->tag(list,bb,graph.presentMotion(slot),graph.presentDepth(),fgRect,enabled,reset,elapsed))fsrFailed_=true;
-        if(enabled)gpuTimer_.mark(list,diagnostics::GpuStage::FgBatch,true);
-        if(sink_.fsr()->failed())fsrFailed_=true;
-        // Same repeat rule as XeSS above.
-        const bool fsrRepeatOnly=identity.sourceFrameId==lastFsrIdentity_.sourceFrameId;
-        lastFsrFrame_=now;fsrWasEnabled_=enabled||(fsrWasEnabled_&&fsrRepeatOnly);
-        if(!fsrRepeatOnly)lastFsrIdentity_=identity;else lastFsrIdentity_.epoch=identity.epoch,lastFsrIdentity_.settingsRevision=identity.settingsRevision;
-    }
+
     gpuTimer_.mark(list,diagnostics::GpuStage::Blit,true);gpuTimer_.resolve(list);
     if(!ring.submitAndSignal(commandSlot))return false;gpuTimer_.submitted(ring.lastSignaledValue());lastBuffer_=backBufferIndex;hasPresented_=true;
     if(presentationQueue_)graph.presentationSubmitted(slot,fence,ring.lastSignaledValue());
@@ -269,16 +258,16 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         // display actually scanned out. This is still not a photon measurement.
         static const bool displayStats=GetEnvironmentVariableW(L"VEYRA_TEST_NO_DISPLAY_STATS",nullptr,0)==0;
         const auto stats=displayStats?sink_.sampleFrameStatistics():gfx::PresentSink::FrameStatisticsDelta{};
-        if(stats.supported)veyra::log::info("display-stats",std::format("refreshHz={:.3f} presentCalls={} dxgiPresentCount={} refreshes={} presentRefreshDelta={} backend={} (DXGI GetFrameStatistics delta over ~1s. These counters CANNOT tell how many frames the panel actually showed: with vsync off and tearing allowed, dxgiPresentCount tracks completed Present calls, and both refresh counters just advance with the monitor. Measuring scanout needs PresentMon. XeSS/FSR generated presents are provider-internal.)",sink_.displayRefreshHz(),stats.presents,stats.displayed,stats.refreshes,stats.displayedRefresh,sink_.xess()?"XeSS":sink_.fsr()?"FSR":"DXGI"));
-        else if(FAILED(stats.result))veyra::log::info("display-stats",std::format("unavailable hr=0x{:X} backend={}",unsigned(stats.result),sink_.xess()?"XeSS":sink_.fsr()?"FSR":"DXGI"));
+        if(stats.supported)veyra::log::info("display-stats",std::format("refreshHz={:.3f} presentCalls={} dxgiPresentCount={} refreshes={} presentRefreshDelta={} backend={} (DXGI GetFrameStatistics delta over ~1s. These counters CANNOT tell how many frames the panel actually showed: with vsync off and tearing allowed, dxgiPresentCount tracks completed Present calls, and both refresh counters just advance with the monitor. Measuring scanout needs PresentMon. XeSS generated presents are provider-internal.)",sink_.displayRefreshHz(),stats.presents,stats.displayed,stats.refreshes,stats.displayedRefresh,sink_.xess()?"XeSS":"DXGI"));
+        else if(FAILED(stats.result))veyra::log::info("display-stats",std::format("unavailable hr=0x{:X} backend={}",unsigned(stats.result),sink_.xess()?"XeSS":"DXGI"));
         const auto& timing=sink_.lastPresentTiming();
         veyra::log::info("present-cost",std::format("generated={} totalMs={:.3f} recordSubmitMs={:.3f} slotWaitMs={:.3f} dxgiMs={:.3f} slow={} source={} epoch={} backend={} resized={} resizeMs={:.3f} beginMs={:.3f} commandsMs={:.3f} beforeMs={:.3f} presentCallMs={:.3f} bufferMs={:.3f} afterMs={:.3f} hr=0x{:X}",generated,
             std::chrono::duration<double,std::milli>(presentEnd-presentStart).count(),
             std::chrono::duration<double,std::milli>(dxgiStart-presentStart).count(),ring.cpuWaitMilliseconds()-slotWaitStart,
-            ms(presentEnd-dxgiStart),slow,identity.sourceFrameId,identity.epoch,sink_.xess()?"XeSS":sink_.fsr()?"FSR":"DXGI",resized,
+            ms(presentEnd-dxgiStart),slow,identity.sourceFrameId,identity.epoch,sink_.xess()?"XeSS":"DXGI",resized,
             ms(resizeEnd-presentStart),ms(beginEnd-resizeEnd),ms(dxgiStart-beginEnd),timing.beforeMs,timing.callMs,timing.bufferMs,timing.afterMs,unsigned(timing.result)));
     }
-    xessFailed_=sink_.xessFailed();fsrFailed_=fsrFailed_||sink_.fsrFailed();return presented;
+    xessFailed_=sink_.xessFailed();return presented;
 }
 bool VideoPresenter::readPresentedFrameForTest(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,sink::RgbaImage& image){
     if(presentationQueue_&&!presentationRing_.drainQueue())return false;
@@ -305,29 +294,29 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     }
     auto effective=requested;
     std::wstring capNotice;
-    if((xessActive()||fsrActive())&&requested.outputRate!=OutputRateMode::Off){
+    if((xessActive())&&requested.outputRate!=OutputRateMode::Off){
         // Provider owns generated Present calls. Capping our real-frame input
         // would change the source cadence, not cap its final output.
         effective.outputRate=OutputRateMode::Off;
         capNotice=L" · 此补帧提供方暂不支持独立输出限帧；已保留设置";
     }
-    if(!reflexDisabled){effective.enabled=false;sink_.configurePacing(false,false);status=L"Reflex 驱动状态撤销失败；应用等待已停用，请关闭视频后重试";return effective;}
-    if(!requested.enabled){const bool restored=sink_.configurePacing(false,false);status=restored?L"帧同步已关闭":L"应用等待已关闭，但显示队列恢复失败；请关闭视频后重试";if(effective.outputRate==OutputRateMode::Custom)status+=std::format(L" · 输出上限 {:.3f} FPS",effective.customFps);status+=capNotice;return effective;}
-    if(xessActive()||fsrActive()){
+    const bool vsync=presentationVsync(requested),tearing=presentationTearing(requested);
+    providerOwnedPresentation_=xessActive();
+    const std::wstring sync=vsync?L"显示同步：垂直同步":tearing?L"显示同步：允许撕裂":L"显示同步：自动 · 防撕裂（不等待垂直同步）";
+    if(!reflexDisabled){effective.enabled=false;sink_.configurePacing(false,vsync,tearing);status=L"Reflex 驱动状态撤销失败；低延迟队列已停用 · "+sync;return effective;}
+    if(xessActive()){
         // The provider owns Present for its generated frames, so neither the
         // latency waiter nor an output cap can reach them. Only the DXGI VSync
         // bit still applies (XeSS accepts it on the proxy chain).
         effective.enabled=false;
         providerOwnedPresentation_=true;
-        const bool vsync=xessActive()&&requested.display!=DisplaySync::Tearing;
-        sink_.configurePacing(false,vsync);
-        if(fsrActive()){effective.display=DisplaySync::Tearing;status=L"FSR 提供方自行调度：低延迟队列与输出上限均不生效，显示同步暂不支持";}
-        else status=vsync?L"XeSS 提供方自行调度：低延迟队列与输出上限不生效 · 垂直同步":L"XeSS 提供方自行调度：低延迟队列与输出上限不生效 · 允许撕裂";
-        if(xessActive()&&requested.display==DisplaySync::Automatic)status+=L"（自动；VRR 状态未知）";
+        sink_.configurePacing(false,vsync,tearing);
+        status=L"XeSS 提供方自行调度：低延迟队列与输出上限不生效 · "+sync;
         return effective;
     }
     providerOwnedPresentation_=false;
-    if(!sink_.configurePacing(true,requested.display!=DisplaySync::Tearing)){effective.enabled=false;status=L"显示队列控制不可用，已回退原呈现方式";return effective;}
+    if(!requested.enabled){const bool restored=sink_.configurePacing(false,vsync,tearing);status=(restored?L"低延迟队列已关闭 · ":L"低延迟队列恢复失败 · ")+sync;if(effective.outputRate==OutputRateMode::Custom)status+=std::format(L" · 输出上限 {:.3f} FPS",effective.customFps);status+=capNotice;return effective;}
+    if(!sink_.configurePacing(true,vsync,tearing)){effective.enabled=false;status=L"显示队列控制不可用 · "+sync;return effective;}
     // Low latency = queue depth 1, plus Reflex when frame generation is off
     // (generated outputs would need separately validated out-of-band markers).
     std::wstring latency=L"低延迟队列：队列深度 1";
@@ -338,8 +327,6 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     if(followDisplay)cap=std::format(L"输出上限：跟随显示器 {:.0f} Hz",requested.customFps);
     else if(requested.outputRate==OutputRateMode::Custom)cap=std::format(L"输出上限：{:.3f} FPS",requested.customFps);
     else cap=L"输出上限：关闭";
-    const std::wstring sync=requested.display==DisplaySync::Automatic?L"显示同步：自动（按垂直同步处理，VRR 状态未知）"
-        :requested.display==DisplaySync::Vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
     status=latency+L" · "+cap+L" · "+sync;
     return effective;
 }

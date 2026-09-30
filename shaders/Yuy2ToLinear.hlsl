@@ -30,6 +30,6 @@ void main(uint3 p : SV_DispatchThreadID) {
     rgb=saturate(rgb);
     float3 decoded=float3(decode(rgb.r),decode(rgb.g),decode(rgb.b));
     if(primaries2020>0.5)decoded=HdrTo709(decoded);
-    if(colorFlags.x>0.5){ColorGradeParams grade={colorRow0,colorRow1,colorRow2,colorControls,colorFlags};decoded=ColorGradeApply(decoded,grade);}
+    if(colorFlags.x>0.5){ColorGradeParams grade={colorRow0,colorRow1,colorRow2,colorControls,colorFlags};decoded=ColorGradeApplyWithFlags(decoded,grade);}
     linearRgb[p.xy]=float4(decoded,1);
 }

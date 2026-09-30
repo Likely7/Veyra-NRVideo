@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "veyra/Result.h"
 
@@ -74,6 +75,8 @@ public:
 
     // GetDeviceRemovedReason; returns true when the device is still alive.
     bool checkDeviceAlive(uint32_t& removedReason) const;
+    // Bounded DRED snapshot on a failure path, never a normal per-frame readback.
+    bool reportDeviceFailure(std::string_view operation, uint64_t requestedFence=0) const;
 
     // Exercises the full slot ring: acquire (wait+reset), empty command list
     // with timestamp begin/end markers, execute, signal, wait idle. Phase 0

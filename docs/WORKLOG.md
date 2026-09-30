@@ -1,5 +1,904 @@
 # Veyra 工作记录
 
+## 2026-10-01 2.0.0 合并 main 与分支整理
+
+- 用户授权（“基本上 2.0.0 已经没啥问题了……先合并一手，存档一下，更新更新文档，对齐目前进度”）：整理 2.0.0 各分支并合并到**本地** `main`；不含 push / Release / 删旧 UI / 删 worktree。
+- 核查：7 个 2.0.0 分支全指向 `53a2d31`，`main`（`df41580`）是其祖先（落后 63 个提交，无分叉），合并无冲突；P0 之后的所有工作是 E 盘工作区 216 项未提交改动（153 修改 + 63 未跟踪），桌面原目录另有 50 个 9-26/27 旧状态的修改与 3 个误生成的构建目录（未纳入提交）。待提交内容无 DLL/二进制，仅 `qml/Veyra/backdrop-strong.png`（315 KB）一个图片资源；`runtime_local`、`third_party_local` 均在忽略列表。
+- 存档：`E:/项目/Veyra/archives/merge-2.0.0-20261001/`（全引用 git bundle 48.8 MB `git bundle verify` 通过；两处未提交状态的补丁与原件；引用/分支/worktree 清单；SHA256SUMS）。
+- 提交、标签、合并、分支删除的具体 SHA 见存档目录 `refs-after.txt` 与 `docs/BRANCH_MAP_2026-10-01.md`；构建与单元回归沿用 r7 候选（`candidate-claude-r7`，unit 合同 243/0、范围守卫 PASS），合并本身不改任何源码。
+- 文档：新增 `docs/BRANCH_MAP_2026-10-01.md`；`docs/CURRENT_STATUS.md` 页首加 2.0.0 总览；`docs/UI_V2_0_0_MASTER_PLAN_2026-09-27.md` 页首、P6/P7/P8 状态和「当前唯一下一步」对齐；`AGENTS.md` 记录本次授权范围。
+
+## 2026-09-30 反馈修复本机候选与最终回归
+
+- 开工前184份增量/1096源码哈希存档已保全，分支 `codex/field-issues-20260930`；HEAD/main不变，原桌面/原beta/下载DLL不写入。NR双版本、纯播放全屏同步、HDR输出/比例/motion、5/6/7K、驱动/DRED/采集/无效帧诊断及有界swapchain重试已完成本轮实现。各项尚未完成处逐项见 `docs/FIELD_ISSUES_EXECUTION_2026-09-30.md`，不按旧冻结误称UI全部验收，不称40系卡死或5080红屏根治。
+- 构建命令由 `python -B E:/项目/Veyra/tmp/field-issues-20260930/build.py build-clean-r3.log` 执行：VS vcvars、CMake x64-release，16个应用/定向验收target `--parallel 8 --clean-first`，422项完整编译/链接exit0。路径 `E:/项目/Veyra/build/field-issues-20260930-clean`；前两次clean重建也通过。MSVC中文showIncludes依赖前缀乱码曾导致旧增量混合ABI，相关失败和旧候选不作为验收。额外 `build_legacy.py` 新编译Win32/旧设置布局14项exit0，未发生头文件增量遗漏。
+- 本轮产物统一 `E:/项目/Veyra/{tests,logs,tmp}/field-issues-20260930`，源码留当前E盘工作树，所有测试≤300秒/构建≤900秒；构建/运行TEMP/TMP指向E盘子目录。`stage-ui-migration.ps1` 已增加Qt部署子进程临时目录E盘隔离，`stage-check.log` 通过，临时路径 `E:/项目/Veyra/tmp/ui-migration-stage/stage-check`。
+- 实际命令：`run_tests.py <unit|qml|gpu> <candidate> <fresh-log>`、`run_nr_ui.py candidate-final nr-live-final`、`run_field_ui.py candidate-final <display|nr-reject> <fresh-log>`、`run_options_ui.py candidate-final options-final`、`run_extra.py candidate-final extra-final`、`run_legacy_layout.py`。unit-final五项、qml-final三项、NR切换/重开/缺DLL回滚、纯播放窗口/全屏六种策略、motion/预设/session恢复、HDR10/scRGB、12截图、XeSS4X+VSync队列关闭、旧设置DPI/滚动均exit0。FSR独立输出/同HWND切换在NVIDIA和AMD通过，日志gpu-clean-r2，debugErrors=0。
+- 高分辨率：`run_long_ui.py candidate-r2 resolution resolution-clean-r2`，1080p源到5/6/7K+默认实时1080 NR各30秒通过；峰值整卡显存5722/6490/7428MiB，详见measurements.json。不是原生5/6/7K NR结果。
+- 红屏排查：`run_long_ui.py candidate-final export export8k-final` 及 `... export8k-no-nr-final --without-nr`；真实D3D12 NVENC HEVC/CQ、4K源→8K、SR+原生8K NR与SR-only各120帧exit0。`analyze_export.py <mp4> <fresh-analysis>` 全帧解码、320×180 area RGB均值统计均red_frames=[]。含NR/无NR峰值整卡显存11528/7805MiB；不以短测未复现或显存压力证明5080根因。
+- 保留失败：NR缺库降级关NR已修复为回滚；预设旧TEMP sidecar污染已隔离并补幂等清理；4K→4K SR旁路误作初始化失败；Qt.quit期间重复Timer保存已停Timer；CQ枚举误设CBR、导出4秒含终点121帧已按实际时间窗修正。另有初次include/旧probe接口/runner错误，所有日志保留。
+- 最终候选 `E:/项目/Veyra/tests/field-issues-20260930/candidate-final/veyra_qml_ui.exe` / SHA256 `ac86e3c2a1a0c9389401d9b0d7c5488683bc66b5de4807b756a5d49c99b5191c`；局部runtime仍有AMD/Intel本机junction，是本机候选不是新便携包。测试Main注入已恢复。中间候选与旧增量构建按真实路径核查、先非递归unlink junction再删除，8个本轮根已清理；保留当前build/候选/素材/profile/证据，worker日志已汇总。清单logs/.../cleanup.json，结案增量存档archives/field-issues-20260930-final，身份及原beta保护检查logs/.../final-audit.json。
+- 待验/待做：40系长时/TDR完整自动重建、其他采集厂商接口及实卡色彩/吞吐、HDR屏+Smooth Motion、5090无效原因/闪烁、重复纹理真值画质AB、5080红屏故障素材二分、旧Win32七档比例菜单和呈现截图合同、P6/P7。无commit/tag/merge/push/Release，运行库不patch、不入源码Git。
+
+## 2026-09-30 反馈修复开工：先存档、独立分支
+
+- 阅读用户指定 Claude A–K 方案及当前规则、产品合同、竞品审计和工作记录。驱动阈值/采集原因/重复帧解释保持待验证。
+- 命令 `python -B E:/项目/Veyra/tmp/field-issues-20260930/archive_start.py`；旧 FG guard PASS（1096 文件），184 份修改/未跟踪文件增量保全至 `E:/项目/Veyra/archives/field-issues-20260930-start`，附全部源码哈希、binary diff 与原方案；基线 SHA256 `9914a06b381fb6d5b90247d4169065b0c9503f84c48dd2272f571b771a18d354`。
+- 新分支 `codex/field-issues-20260930`，HEAD/main 未变，保留全部已有修改；无 commit/tag/merge/push/Release。新执行记录及独立 guard 已建立，功能尚未开始。
+- 新产物 `E:/项目/Veyra/{build,tests,logs,tmp}/field-issues-20260930`；旧 beta/发布/下载原件保留，仅新候选去掉旧40 DLL。
+
+## 2026-09-30 XeSS / FSR 3.1 / FSR 4 补帧接手实施
+
+- 用户授权开始排查修复和增加 FSR 3 / FSR 4，执行方案 `docs/FG_FSR_XESS_EXECUTION_2026-09-30.md`。
+- 实际工作区 `E:/项目/Veyra/worktrees/p0-p1-r53-20260927`；从 `53a2d31c6b34f74b7b6d2953ee2caaec63d44e1d` 及已有工作树修改切入 `codex/fg-fsr-xess-20260930`。旧分支/桌面 checkout/main/原 beta 保留。
+- `git diff --name-only -z HEAD` + `git ls-files --others --exclude-standard -z` 识别 169 个修改或未跟踪源码，逐文件复制到 `E:/项目/Veyra/archives/fg-fsr-xess-20260930-start/source/`；保存差异和状态。1091 文件不可变哈希基线 `scope-baseline.json` SHA256 `c871f25fe503e30aeae3f63234c920a7574edf65da8d1643ec29e94b173d8a11`。
+- 初步确认 QML 隐藏 FSR 入口、FSR → XeSS 的交换链引用清空、FSR provider 枚举误作选定版本及 prepare/configure 顺序缺口。AMD 用户 XeSS 4× 的具体失败仍缺型号/日志，不能把推测写成已复现。
+- 完成 FSR 独立 GPU 输出并接入共享图，移除旧 FSR retained swapchain；沿用 FrameBatch / fence / 调度，不增加副显示器或隐藏视频窗口。FSR 3.1 / 4 各自入口与 provider 核验、2× 上限、列表/节点和预设/session 已接入；legacy 必要时写 v25，旧格式可读。
+- 实际修复三项：XeSS mismatch 日志的临时迭代器 UB；preset library 缺 FG 组合验证导致非法 FSR 4× 可保存；真实 UI 中 FSR 4 请求拒绝后 facade 仍显示 FSR 4。新增请求 revision 精确回滚只恢复 FG 字段，最终运行状态栏分开显示 FSR 3.1 / 4。
+- 在修改前保存范围扩展 b / c / d，继承原哈希：b 增加 preset / 真实切换测试 / QML fragment，c 仅兼容原有导出 FG 替换检查，d 针对已复现 facade 回滚。最终基线 d SHA256 `dd0791c996344ea9f0cf8f516e84b5086dd8810eedbf36c7b400a1707dc90bfc`，guard PASS 1096 文件；本轮没有改 NR/SR 算法、采集/解码/音频、着色器、旧 Win32 或磁盘 DLL。
+- 构建：VS vcvars + `cmake --build E:/项目/Veyra/build/fg-fsr-xess-20260930 --target veyra_qml_ui veyra_qml_data_tests veyra_qml_easing_tests veyra_qml_quick_tests veyra_repair_contract_tests veyra_repair_preset_tests veyra_effect_chain_tests veyra_preset_library_tests veyra_fsr_dispatch_tests veyra_fsr_switch_tests veyra_fg_presentation_tests --parallel 6`，最终 exit 0，日志 `E:/项目/Veyra/logs/fg-fsr-xess-20260930/build-status-label-final.log`。TEMP/TMP 仅子进程使用 `E:/项目/Veyra/tmp/fg-fsr-xess-20260930`。
+- 针对性命令：`python -B scripts/acceptance/fg-fsr-xess-control.py <guard|unit|qml|gpu|ui> --out <新的 E 盘日志目录>`，日志根 `E:/项目/Veyra/logs/fg-fsr-xess-20260930/`。unit-rollback 四项 exit 0（contract 207 checks / 0 failures），qml-r2 三项 exit 0，gpu-final 五项 exit 0。NVIDIA/AMD 独立 FSR 运动图各 39/39 中间位置、meanError=0、debugErrors=0；同 HWND 切换 NVIDIA 18 周期 / 774 生成帧，AMD 15 周期 / 660 生成帧，debugErrors=0；DLSS 4/6/4× 原行为通过。
+- 最终真实 UI：`ui-final` live PID 12820 / 67.36 s / exit 0 / FG_UI_PASS，restore PID 9152 / 3.69 s / exit 0 / FG_UI_RESTORE_PASS。4K30 关闭 NR/SR 时 FSR 3.1≈60、XeSS 2/3/4×≈60/90/120、DLSS 4×≈120 提交 fps；切换、FSR 4 明确拒绝及回滚、暂停 seek/resize/resume、两模式独立、三份预设保存重开通过。注入 fragment 仅作用 staging，Main 已恢复，数据目录独立。
+- 负例：将同一独立 FSR 测试二进制复制到 `E:/项目/Veyra/tests/fg-fsr-xess-20260930/missing-runtime/`，建立空 runtime_local，分别 NVIDIA / AMD 运行。两次预期 exit 1、load failed、samples=0 / debugErrors=0，整体验收成功；日志 `missing-runtime/summary.json`。
+- 失败保留：初次 C 数组 .size / enum 比较构建错误、unit-final 非法预设断言、qml-final runner 少参数、AMD 测试错误读取 XeSS 私有队列 backbuffer、ui/live.log pending 回滚不一致。逐项定位修复并复测；XeSS 测试现在只读调用方真实输入并验证 SDK 生成报告，未宣称取得 XeSS 生成像素读回。完整证据与限制见执行方案末节。
+- 本轮候选 `E:/项目/Veyra/tests/fg-fsr-xess-20260930/candidate/veyra_qml_ui.exe`，SHA256 `25439d59af47813b7fadad7b4e3b3c839acc7531414a8613d9d86f6730b7d8a8`；最终增量存档 `E:/项目/Veyra/archives/fg-fsr-xess-20260930-final/`，身份复核 `E:/项目/Veyra/logs/fg-fsr-xess-20260930/final-audit.json`。这是本地测试 staging，不是新便携包。
+- 未验：RX 9000 的 FSR 4 ML 实际输出、反馈者 AMD XeSS 具体故障、真实 HDR 屏/物理延迟/长时稳定、全 2.0 P6/P7；原 beta/HEAD/main 保持，无 commit/tag/merge/push/Release。
+
+## 2026-09-30 复核终端会话的补帧升级与阶段 4–6，并打 2.0.0 Beta 测试包（Claude Code 桌面端）
+
+用户："检查下他干的怎么样？……有问题修一下，修好了给我打测试包……全部干完之后给我电脑关机。"终端会话（`8b4797e3…`）完成了 310.9.1 + DLSSG-Transfusion、A1/A2、阶段 4 审计、阶段 5 输出稳定器、阶段 6 抗闪烁档位，最后在打包时因三份新文档不在 allow 中被 guard 拦下，随后额度耗尽。本段为复核结论。
+
+- **核对 50 系不打补丁**：`FgCompatibilitySession::open` 先经 `requested()`，只有 Ada（0x2680–0x28FF）/Ampere（0x2200–0x267F）或测试强制变量才打开。50 系走 NVIDIA 原生路径，与 AGENTS 规定一致。
+- **范围基线 o**：`scope-baseline-o.json`（SHA `b2d3b820…e636`），继承 n，只追加 2.0.0 的三份文档和测试说明。
+- **全量构建（600–604）**：除两个 FSR 探针（worktree 缺 AMD SDK 2.3.0 头文件，属环境问题，产品不依赖）外全部编译通过。修复一个早于本轮的测试链接错误：`veyra_color_grade_gpu_tests` 缺 `EffectChain.cpp`。
+- **修复 1（真实缺陷，终端引入）**：`PresetStore` 在 v23 行也写了每层抗闪烁档位，而读取只在 v24 才读，导致**所有多层 NR 预设保存后读不回**（605 前复现：v23 四层往返=0）。改为只在写 v24 时写该字段；新增 v24 往返测试（四层不同档位加稳定器，与一条默认预设同文件）。608 通过。
+- **修复 2（致命，终端引入）**：`ProPage.qml` 的稳定器容差滑条用了 `VSlider` 不存在的 `stepSize`，导致**新界面整体加载失败、所有页面白屏**。删除该属性后五页加载检查 0 错误（616），QML 数据/动效/Quick 三组测试通过（618）。
+- **回归（606）**：效果链、预设库、repair 合同、repair 预设、采集颜色、NR 运行库断言、抗闪烁、稳定器 GPU、NR 时域 GPU、调色 GPU（含 lifecycle），11 项 exit 0。
+- **文档修正**：发布说明中"3X/4X/5X"改为 3X/4X/6X；运行组件文档把 Lecram、SF-v2 从"沿用 1.4.4"改为独立的"变化三/四"；补充 310.7 回退文件、NR 运行库与预设 v24 的说明；新增 `docs/TEST_PACKAGE_2.0.0beta.md`。
+- **打包方式**：`package-portable.ps1` 只打旧 Win32 `veyra.exe`，而且依赖原 checkout 的 SDK 目录，不适合这次测试。改用 `stage-ui-migration.ps1`（Lecram / SF-v2）加 `tests/beta-2.0.0-20260930/make_beta.py`：
+  - 去掉测试程序；运行库全部实拷，不用 junction；
+  - 补帧换成 310.9.1 官方 DLL，加 29 个内核，310.7 放在 `fallback-dlssg-310.7/`；
+  - 改写运行时清单，附文档、许可证和 `package-manifest.json`；六个固定身份全部核对，没有重解析点。
+- **包内实测（RTX 5070，GTA6 4K30、原生 4K，`pkgcheck` 副本）**：
+  - 612：原生 NR（22.3ms / 216W / 30fps）；原生 DLSS 2x 生成 601 帧；
+  - 强制 Ada 路径：2x 生成 598 帧，4x 生成 1797 帧；强制 Ampere 路径：2x 生成 600 帧。三者都确认补丁已应用、27 个网络内核与图像内核加载、退出时 `restored=true`，无 ERROR。每次都有两条 `CreateCuModule status=-14`（模块被拒 2 个），但不影响出帧；
+  - 613：换上 310.7 回退文件后自动走 `310.7-audited`，Ada 与 Ampere 旧解锁均生效并回滚，出帧正常；
+  - 619：新界面实机播放：NR + DLSS 2x 60fps，稳定器 0.8 仍 60fps，4x 120fps（FP_PASS）。
+- **交付**：`E:/项目/Veyra/test-packages/2.0.0beta/Veyra-2.0.0beta-win64-portable/`（1498 个文件，EXE `42703CAA…151B`），与实测副本逐文件相同；zip `Veyra-2.0.0beta-win64-portable.zip`（538,530,535 字节，SHA256 `BB6F9F0A…CA2F`）。
+- **未验证**：RTX 40 / 30 实卡（补丁、多倍补帧、SF-v2）；采集卡与 PS5 实时路径；抗闪烁各档的长时 P95。未 commit / push / Release。
+
+## 2026-09-29 NR/补帧优化：上游调研、施工方案与基线测量（Claude Code）
+
+- 调研：`docs/DLSSNR_UPDATE_RESEARCH_PLAN_2026-09-29.md`（逐个对比 30/40/50 系上游：对接时的版本与现在的最新版）；施工方案：`docs/NR_FG_OPTIMIZATION_PLAN_2026-09-29.md`。用户决定：不做重复帧跳过 NR；Lecram、DLSS SDK 310.9.1、SF-v2 由用户自行下载提供。
+- 范围基线 i：`archives/p4-rest-20260928/scope-baseline-i.json`（SHA `312fe03b…fa8d`），继承 h，只追加两份文档。
+- 339：用当前源码编译旧 Win32 `veyra` 目标（带 smoke 模式、同一引擎），exit 0。340：`tests/nr-fg-opt-20260929/stage.py` 组装 `app-base`，Veyra.exe SHA `a5e6340b…dc8a`；runtime 以 junction 只读引用 1.4.4 包，runtime_local 为独立目录。
+- 片段：p001.mp4 前 150 秒去掉音轨（视频流原样复制，4K60 H.264），静音测试，窗口隐藏不抢焦点。
+- 341/342：`baseline.py` 按 ABCD / DCBA 两轮，每项 30 秒，1080p 实时档，均 exit 0、failed=false、60fps、无 ERROR。结果见 `tests/nr-fg-opt-20260929/baseline/r{1,2}/summary.json` 和方案 §8。
+- 用户指出 1080p 没有压力，改用 `E:/Ai/知识/小七姐/GTAVI_An_Extended_Look_4K_Native.mp4`（截取 60–240 秒、去音轨、4K30、约 70.6Mbps，存于 `tests/nr-fg-opt-20260929/media/gta6-4k30-silent-180s.mp4`）加 `--native`。343/344：两轮，首项预热丢弃，全部 exit 0、failed=false、30fps、无跳帧、无 ERROR。原版 NR 23.2ms、约 220W；加 DLSS FG 2x 后 GPU 完成 P95 为 32.4ms（上限 33.3ms）、约 236W；社区版与原版相同；单次运行波动约 1ms。详见方案 §8。
+- 未测：两层 NR（smoke 没有命令行入口）、采集卡 / PS5 实时路径（采集卡被 1.4.4 占用，PS5 不连）。
+- Lecram A/B：用户提供三个文件，Lecram 和 SF-v2 的 zip 与 GitHub digest 一致；SDK 310.9.1 的 DLL 签名 Valid。Lecram DLL 的文件版本为 310.8.3.0，SHA `F95FEB54…`，HashMismatch。
+  - 345：`stage_lecram.py` 组装 `app-lecram`，把 Lecram 放进测试副本的 nr-community 位置。
+  - 346–348：原生 4K、三轮交替。Lecram 的 NR P95 平均 23.62ms，原版 24.18ms（-2.3%）；功耗 216.3W 对 221.0W（-4.7W）。全部 exit 0。
+  - 349：离线探针同帧比较，原版与 Lecram 的 NR 输出逐字节相同，debugErrors=0。
+  - 结论：画面不变的纯内核优化，没到 5% 门槛，未接入产品，等用户决定。
+- 用户决定"直接接入，替换原有文件"：Lecram 占用 NR 默认位置。
+  - 改动：`stage-runtime.ps1`、`package-portable.ps1`、`stage-ui-migration.ps1`（新增 -NrDefaultRuntime）、旧 Win32 三处文案、`QmlPlayerBridge::componentList` 字段兼容（顺带修复组件页版本和签名为空）、AGENTS、notices。范围基线 j（`11fa7ab3…`）。
+  - 350 构建 exit 0。353 `stage-runtime.ps1` 通过；351/352 两次失败已修（bash 中文路径乱码、源路径反斜杠被写坏）。
+  - 354 候选包 `tests/nr-fg-opt-20260929/candidate-lecram`（EXE `3fe153bf…`）；356 加载检查 0 错误；357 组件页读到 310.8.3.0 / HashMismatch（CL_PASS）。
+  - 359 默认位置实际加载 Lecram：原生 4K 下 NR 22.5ms、216W；加 DLSS 2x 后 GPU 完成 31.0ms、232W。
+  - 1.4.4 发布包与原 checkout 未改。
+- 用户决定 SR/FG 不升级 310.9.1（避免 30/40 补帧补丁失效），RTX30 NR 位置换成 SF-v2。
+  - 字节比较：SF-v2 除内核外还改了模型区约 1.42 亿字节，数字版本号 310.8.2.0。
+  - 兼容层：310.8.2 及以上不再把 Ampere 改报为 Blackwell（`nrRuntimeNeedsAmpereRewrite`，从 DLL 自身版本资源读取）。
+  - 打包：`package-portable.ps1` 从 2.0.0 起固定 SF-v2 身份；`stage-ui-migration.ps1` 新增 `-NrAmpereRuntime`。范围基线 k。
+  - 验证：360/365 构建、361 单元测试 exit 0。363 在 5070 上跑 SF-v2：日志确认不改写，NR 正常。364 同帧输出与原版逐字节相同。366–369 候选包 `candidate-nr-runtimes`：加载检查 0 错误，组件页 CL_PASS。
+  - 未验证：RTX 30 实卡。
+
+## 2026-09-29 用户反馈：连接采集卡 / PS5 时窗口“消失又蹦出来”（Claude Code）
+
+- **原因**：点连接的同一瞬间发生了切页（旧页淡出 + 150 ms 后新页浮现）、窗口高度 0.7 s 弹簧动画和引擎打开（原生视频窗口立即铺满并变黑），画面整体黑掉，等首帧到来才出现。
+- **修复**：bridge `openAfterCinema`：从首页开始的采集卡 / 屏幕捕获 / PS5（含“继续上次”）先切到极简并立即显示“正在连接 …”，820 ms（减少动画时 0）后再 preOpen 与打开引擎；新的打开或停止会作废等待中的打开（代次计数）。PS5 手柄转发随会话一起启动。
+- **验证**（候选 `E:/项目/Veyra/tests/p5-fix-20260929/candidate-liveopen`，EXE `73ff753ee343458835c5fb4e8b790f24bcb2a1bb765b0d965a29101bd6a1c68a`）：`liveopen.qml`（屏幕捕获，无真实输入）：点击同一调用内已是极简 + 提示条、引擎未开；约 1.2 s 后打开；等待中停止则作废（`superseded`）。加载检查、单测、gt（含 E20 继续上次→屏幕捕获，真实点击）通过。采集卡与 PS5 实连未测。未 commit。
+
+## 2026-09-29 用户试用：PS5“点连接后最小化、没有串流”（Claude Code）
+
+- **日志（`candidate-final/logs/veyra-qml.log`）**：两次连接 192.168.6.232（1080p60 H.264 20 Mbps）都在会话建立阶段失败：约 30 s 内 `connected=false`、视频回调 0，upstreamErrors/transportErrors 递增后 `recovery stopped`。原生层只计数、不记录错误文本，根因未定（主机休眠/关机、地址变化、被其他远程游玩占用都可能）。程序没有执行最小化：点连接后切到极简，未知画幅按 2.39 把窗口缩成 1280×536；失败后隐藏视频，只剩黑色窄条；失败原因只写进已关闭的 PS5 面板。配对档案写回的只有主机地址/画质/仅观看，凭据原样。
+- **修复（界面层）**：未知画幅默认 16:9；极简页连接中显示“正在连接 PS5 · 地址”+ 转圈（挖洞显示在画面上）；PS5/采集失败时弹出失败原因并回到首页（bridge `liveOpeningText`、`ui-live-failed`）。候选 `E:/项目/Veyra/tests/p5-fix-20260929/candidate-ps5ui`（EXE `1019bf0456bfb34da9dfaa9a7cb84ef6e0ab8d9a953920553cb1eda1d1ae9cc2`）：加载检查、gt、tf 通过；p5t 两次各有一处真实点击未生效（位置不同、与本改动无关，用户当时正在使用电脑），暂停真实输入测试。PS5 实连未测（不连接用户主机）。未 commit。
+
+## 2026-09-29 P5 逐屏差异修复（Claude Code）
+
+- **范围**：用户圈定 X1–X6、M1、D1/D4/D5/D6/D7（并删除全部内置预设）、P1–P5、E1–E4、S1–S3、N1–N3、动效；方案与结果见 `docs/UI_P5_DESIGN_DIFF_2026-09-29.md`。基线 `scope-baseline-g.json`（缩略图服务、转圈/均衡条组件、差异文档）→ `scope-baseline-h.json`（组件测试标题断言）。
+- **关键修复**：X1 五个弹窗覆盖 objectName 失去视频挖洞（改为 `videoCover` 属性）；弹窗高度公式少算 24 px；PresetLibrary 新增“不含内置预设”（仅新界面）与单个预设导入导出；bridge 新增 sourceKind/sourceTitle/sourceFormatText、调色撤销重做复制粘贴、导出队列行跟踪、采集信号状态；缩略图服务新增封面（自带 FFmpeg 无 PNG 解码器，PNG 封面由 Qt 解码）与任意文件帧。
+- **X5/X6 核实不是 bug**（缩略图加载顺序；测试片为烧录字幕）。D1 预览不做周期截帧（saveFrame 在渲染线程读回编码，会拖慢采集）。
+- **测试**：新增 `tests/p5-fix-20260929/p5t`（29 项真实输入、真实动效）；既有测试适配副本 gt/tf/a32 nodeedit；最终候选 `E:/项目/Veyra/tests/p5-fix-20260929/candidate-final`（EXE `a553e995ecdbfbb07391747db6f03c9d7ad559f951f70a222b99f774b737b93d`）全部通过（ledger 304–325；322 号因后台批次与手动重跑同时启动而重复，两者均有独立结果文件，回归以 323-324/324-325 为准）。未跑 P4-d/P4-e；D1 未连采集卡实测。未 commit/push/Release。
+
+## 2026-09-29 P5 范围（Claude Code）
+
+- 用户决定：P5 不要求 100% 还原、现有功能不删；设计稿功能补齐不算 17 屏工作。下一步逐屏（含动效）对照设计稿列差异清单，由用户逐项决定。总方案页首与 P5 行已按此更新。仅改文档。
+- 逐屏对照完成：设计稿 17 屏（headless Edge）与候选副本同状态截图（ledger 247–254，均 exit 0/guard pass；静音、未查询采集卡），差异清单 `docs/UI_P5_DESIGN_DIFF_2026-09-29.md`，截图 `tests/p5-compare-20260929/`。真实屏幕复核发现 5 个弹窗因覆盖 `objectName` 失去视频挖洞、被画面遮挡（X1）等 bug。待用户逐项决定，未改产品代码。
+
+## 2026-09-29 设计稿功能补齐（Claude Code）
+
+- **范围。** 对照设计稿第 3 版只补“设计稿有、现在没有”的功能，现有功能不删；用户逐项圈定，清单与决定见 `docs/UI_DESIGN_GAP_2026-09-29.md`。范围基线 `archives/p4-rest-20260928/scope-baseline-f.json` SHA `230b2d27…bd47`（追加文件源“只用硬解”所需的 IFrameSource/MediaFileSource）。
+- **补帧/光流/呈现（A1–A5）。** bridge 暴露既有引擎能力：运动估算质量、AMD 性能档（仅 AMD 光流时出现）、内容节奏（含采集 60→30）、显示同步、输出上限（关闭/跟随显示器/自定义帧率，`requestPresentation`）。列表模式在补帧页；节点模式 A1–A3 在输入节点、A4/A5 在输出节点。内容节奏与呈现设置持久化到偏好并启动恢复；XeSS 接管呈现时置灰。**顺带修正**：补帧页“低延迟队列”原接到 `lowLatency`（引擎含义“先 NR 再超分”），改接呈现队列 `PresentationSettings.enabled`。
+- **A6** Smooth Motion 开启方法移到 设置 → 播放。**B7** 直播兼容模式界面不提供（原本就未暴露，引擎字段保持默认关）。
+- **显示页（B8–B11）。** 分屏对比（引擎 `comparison`，画面上拖分割线，1.4.4 同款换算）、对照底图、画面比例 适应/原始/填充（按窗口与输出尺寸算缩放，随尺寸与会话重算，屏幕捕获“填满窗口”并入）、强制 SDR 预览、“按住 V 查看原画”开关。**顺带修正**：`main.cpp` 里一个旧的硬编码 V 过滤器（只认 V、只在专业页）与 bridge 的可重绑按住键并存，会绕过开关与改键；已删除，按住键只走 bridge。
+- **导出（C12–C16）。** 预览分屏对比、码率可直接输入 0–2000 Mbps、音轨行（原样复制，与播放音轨一致）、预计大小（设码率时按码率×时长；导出中按已写入 partial 推算）、时间线胶片缩略图与当前项缩略图（复用拖动预览的缩略图解码；队列中其他文件未列出，无缩略图）。
+- **D18** 音频设置“当前偏差”（实时输入的测得偏差）。**D19** 另存预设已有逐项勾选（含色彩、声音），补“保存后设为启动默认”。**E20** “继续上次”记录最近一次片源（采集卡/PS5/屏幕），首页卡片与继续动作随之切换。**F21** 列表 NR 层“恢复默认”（`resetNrLayer`）。**F23** 定位卡片边框闪烁（减少动画下保留 0.7 s 高亮）。**F24** 帧率卡帧时间折线（提交间隔 12 s，虚线为源帧预算；宽卡片显示）。**G25** 设置 → PS5：画质/编码/请求码率/PSN 退出（与串流窗口同一份表单，连接时写入配对档案）。**G26** 解码“强制硬解”：文件源新增 `requireHardwareDecode`，硬件解码打不开时报错并提示，不静默回退；图片不受影响。
+- **测试。** 新增 `tests/design-gap-20260929/gt`（真实鼠标键盘 24 项：A1–A6、B8–B11、C12–C16、D18/D19、E20、F21/F23/F24、G25/G26、节点输入/输出框，另由驱动核对 B11 关闭后按 V 不触发对比）与 `gt2`（重启后内容节奏、运动估算质量、显示同步、自定义输出上限、低延迟队列、画面比例、按住 V 开关、强制硬解均保持）。E20 首次点击在早期一次运行中未生效（5 次中 1 次），测试记录并允许重点一次；最终候选运行首点即通过。G25 只改表单，不连接、不写用户 PS5 档案；PSN 退出按钮未在测试中点击。
+- **G26 失败路径实测与修正。** 用 ffmpeg 生成 MJPEG 样片（`tests/design-gap-20260929/media/mjpeg-sample.mkv`）：首跑发现 D3D12VA 对 MJPEG “能打开”、首帧失败后走 `fallbackToSoftware` 静默回退软解，强制硬解形同虚设；`MediaFileSource` 记住 `requireHardwareDecode` 并在该回退处拒绝。复测：强制硬解下该片打开失败并弹提示“已设为强制硬解…改回自动”，切回“自动”同片正常播放（`gt3`）。
+- **测试稳定性（如实记录）。** 试用修复交互测试在最终候选上共跑 5 次：3 次 27 项全过；1 次 #5 音量滑条拖动未跟随（同一代码此前 4 次通过，未复现）；1 次 #16 节点右键落在缩到 0.25 的卡头边缘（测试几何问题，已改为先放大到 1 再点，其后 3 次全过）。
+- **最终候选** `E:/项目/Veyra/tests/design-gap-20260929/candidate-final2`，`veyra_qml_ui.exe` SHA256 `65f86c3a9a3fa199f6731df0e095ebdacc2fd6540af85c3776da8766be651e95`，QML 与源码一致。同一候选：QML 单测、smoke（含播放）、tier23（适配）、a32 节点编辑（适配）、P3 离线与实播回归、P4-b/b-img/b-mf/c/f/g、试用修复交互 27 项与重启测试、设计补齐 24 项与重启测试、17 屏巡检（不含采集卡对话框）全部 exit 0。未重跑 P4-d 真机音频端点切换与 P4-e 采集卡连接（避免干扰用户采集）。存档 `archives/p4-rest-20260928/design-gap-final`。未 commit/push/Release。
+
+
+## 2026-09-29 试用 18 条问题修复（Claude Code）
+
+- **来源与方案。** 用户试用 candidate-p4 后报 18 条问题（截图 9–22）；逐条排查根因与方案见 `docs/UI_TRIAL_FIXES_2026-09-29.md`。范围基线 `archives/p4-rest-20260928/scope-baseline-e.json` SHA `606d627b…af54`（继承哈希，追加 EffectChain/保护区域着色器与常量缓冲/分块导出/CommandSlotRing）。实际未改 EffectChain（节点模式“默认空”在 bridge 实现，避免改动引擎既有单测语义）。
+- **共性根因。** 共享控件 `TapHandler` 默认只拿被动抓取，点击继续传到下层：对话框遮罩据此关闭弹窗（#1），卡头据此展开卡片（#7a）；`VConfirm` 的拦截也无效。统一改 `gesturePolicy: WithinBounds`，弹窗面板加吞点击底层。
+- **逐条结果。** #1 弹窗内下拉/分段/开关不再关窗；#2 控制条两侧栏固定 230、边距对称，播放键居中（实测偏差 0）；#3 缩放边提到弹窗层之上、弹窗高度随窗口、设置新增“启动窗口大小”（含记住上次，重启实测 1500×900）；#4 列表新增 NR 层默认关闭；#5 `VSlider` 拖动中 40 ms 节流实时提交，专业页/导出页/极简页进度条拖动中 120 ms 节流 seek；#6 XeSS 上限只允许会话报告抬高、不降低；#7b 列表 NR 卡显示本层 GPU 耗时（实测 6.72 ms）；#8 画面上拖出矩形/圆形保护区域（最多 4 个，分层子窗口画描边，1.4.4 同款坐标换算），椭圆以“左右互换”编码进常量缓冲与预设/会话文件（格式与矩形字节不变），`NrProtection.hlsli` 增椭圆分支，分块导出不裁椭圆；#9 处理顺序芯片切页签并滚动展开对应卡片；#10 删除 GPU DIS；#11 曲线本地草稿+JS 移植引擎同款单调三次插值、单击曲线加点即拖、命中 16px、右键删点，列表模式标题“调色”；#12 恢复 1.4.4 声音同步“自动估算/手动/关闭”（专业页、音频对话框、设置、节点输出框），偏移范围改为引擎允许的 ±250 ms，同步方式与偏移持久化；#13 帧率卡三性能球（处理耗时/预算、GPU 占用 PDH 每秒采样、输出/目标帧率）与 1.4.4 规则的状态灯条（实测：11.04 ms/16.7 ms、GPU 96%、比 1.00、“正常 · 未补帧 · 源 60 fps”）；#14 节点首次进入为空图（输入直连输出）、框选+Delete、光流并入输入框、声音并入输出框、两模式设置重启保持；#15 耗时条改为运行路径上已启用节点按耗时比例、分隔条可拖（330→400）、统计条“已测增强 P95”换三性能球；#16 右键菜单在指针处、Esc 可关；#17 导出范围改单时间线入点/出点（I/O），输出设置行随提示换行增高，图片按钮分行。
+- **顺带修复。** 新数据目录首次保存偏好失败（目录不存在）——`savePrefs` 先建目录；列表音频偏移原滑条 ±2000 超出引擎 ±250 被拒。
+- **#18 PS5 卡死（未解决，需用户在场）。** 日志：连接成功、解码 45 帧后 PS5 侧视频/音频包同时停（packetWindowReceived=0、upstreamErrors 增），关键帧请求无响应，重连 `error=2002`；失败后引擎收尾在 graph shutdown 后无日志（进程被结束或卡住）。已在收尾各步加日志（`teardown: audio stopped / closing sources / sources closed`）。需同网络对比 1.4.4，以及列表无增强 vs 当时的节点 NR+调色+XeSS。
+- **测试中的问题与处理。** ①uihelper 按 pid 找不到窗口时回退按标题，曾把点击发到用户正在用的旧候选窗口；已关闭该旧实例，本轮驱动改为只按 pid。②日志 INFO 行按 250 ms/64 KB 刷盘，助手标记改用 warn 立即刷盘。③用户反馈测试期间 1.4.4 采集声音变闷：时间线上本轮测试 17:28:33 打开过采集卡对话框（查询 KUHAIMI 设备格式，当时 1.4.4 正在用这张卡采集）并在扬声器/显示器播放测试片，1.4.4 日志 17:29:35–17:30:28 音频重锚 10 次；此后测试全部静音、不再打开采集卡对话框，P4-d（真机音频端点切换）与 P4-e（采集卡连接）本轮未重跑。
+- **被改动行为影响的旧测试（副本适配，原件不改）。** a32 nodeedit（节点模式不再复制列表链：测试先自行添加原链）、tier23（更大的输入框使右键新增节点被 settle 向左推开）、s2-contracts（光流并入输入框；GPU DIS 已删改选 AMD）。s3-menu-boundary 原件通过（曾因“空图时移动输出框”失败，改为只适配视图后通过）。
+- **最终候选** `E:/项目/Veyra/tests/trial-fixes-20260929/candidate-final`，`veyra_qml_ui.exe` SHA256 `56b22f997a10efc461d38b4e511e81a2431f84a5970780b0a4386b2ad0e08287`，QML 与源码一致。同一候选：QML 单测 3/3、smoke（含播放）、tier23（适配）、a32 节点编辑（适配）、P3 离线与实播回归（s2 适配、s3 原件）、P4-b/b-img/b-mf/c/f/g、试用交互测试 27 项（真实鼠标键盘）、重启保持测试、17 屏巡检（不含采集卡对话框）全部 exit 0。存档 `archives/p4-rest-20260928/trial-fixes-final`。未 commit/push/Release。
+
+
+## 2026-09-28 P4续推（Claude Code 接续 Codex 01a0e687）：P4-b至P4-g接点补齐并实测
+
+- **纠偏。** Codex后半程按“UI-only冻结”把P4-b至P4-g全部记为partial停工，但本分支P4授权写明“P4所需既有服务/bridge接点获本次功能范围授权”；用户本轮“把p4推完”。按原授权补接点，不扩展P5外观/P6性能/算法与音频时钟。另查明Codex记为“入口可加载”的采集卡/PS5/屏幕三个对话框“开始”只切页面、从未打开片源；`refreshCaptureTargets`等声明在`public:`之前的Q_INVOKABLE对QML不可调用（“is not a function”），此前也未被真实调用验证过。
+- **范围基线。** `archives/p4-rest-20260928/scope-baseline.json` SHA `18a6a26f…480f`（P4-a哈希继承+追加allow）→ `scope-baseline-b.json` `fea78bac…ad94`（qml/Veyra全部组件：字幕框暴露VRow缺陷）→ `scope-baseline-c.json` `4d064c51…5f15`（EngineController：PlayerOptions.softwareDecode）。受控日志`logs/p4-rest-20260928/commands.json`共74条，每条post_guard=pass；失败均保留（p4g截图目录未建、overlay缺清单、p4c多段、link响应文件编码、测试夹具路径等）。
+- **P4-g 调色：** bridge接`ColorLutStore`（列出/导入.cube/选择/清除）与`ColorLookStore`（独立颜色预设保存/应用/删除/导入导出.vpcolor）；ColourPanel“颜色预设”行与LUT文件选择。实测：反相LUT后与原画面平均差227、清除后0、预设应用与LUT画面0、重启后预设/LUT库/会话LUT保持且画面仍反相（224）；坏.cube拒绝且原选择不变；两个调色实例只改选中实例。
+- **P4-c 字幕：** bridge持有`SubtitleLoader`（内嵌+同名外挂）、主/副轨、外挂文件、偏移、自动对齐；复用旧壳`SubtitleOverlay`作为视频原生窗口的分层子窗口（随视频区域裁剪，不压QML弹层）。样式（字号/字体/描边四档/背景条/底部距离/按行缩放/默认副字幕）持久化到`<data>/qml-preferences.v1.json`；快捷键B/Z/X/T/Y恢复1.4.4语义。首跑发现分层子窗口创建失败——QML exe缺Win8兼容清单，给`veyra_qml_ui`加同一份`veyra.manifest`后修复。实测：中文内嵌轨自动选中、cue与位置一致、+1000ms偏移后cue+1、双语、外挂加载、桌面真实像素（开/关差异只在底部）、全屏避让84、重启样式保持。共享VRow无提示行标签列不伸展的布局缺陷同批修复（控件现统一靠右）。
+- **P4-d 音频：** `WasapiAudioSink`新增进程级首选渲染端点ID（空=系统默认）、端点枚举、当前端点/回落状态、强制立体声下混；选择变化经既有端点重建路径生效（不改时钟、不丢PCM）；所选设备消失回落默认、重现切回。实测真机“扬声器↔Realtek数字输出”播放中切换并从原PTS恢复、未知ID回落并提示、5.1片源6→2下混、重启后选择与立体声设置保持。强制立体声相对设备布局映射的差异需多声道设备才可观察（本机两个端点均为双声道），未验。
+- **P4-b 导出：** 修`ExportJobManager::start()`递归`poll()`导致队列冲突项被静默跳过：冲突/失败项计数并保留原因，队列继续；bridge弹提示、导出页显示。实测三项队列中间项输出已存在：冲突项明确失败、第三项完成、两成品各288帧可解码、原文件未覆盖、无partial残留。新增图片导出：当前画面另存与批量图片（经列表链与引擎自身保存，节点模式拒绝、已存在输出不覆盖）；实测两张提亮输出、冲突一张失败。Media Foundation（测试开关强制）CQ/CBR8/VBR8三成品各288帧，实测约14.5/8.68/8.67 Mbps，worker日志`MediaFoundation-MFT`。**自定义任意宽高未做**：引擎导出尺寸由处理链决定（源/SR 2K/4K/8K），任意W×H需在导出链新增缩放步骤，属新管线能力，待用户决定。
+- **P4-f 设置：** 页面切换栏常驻（原为无动作假开关）、强调色橙/白、背景渐变无/轻/中、界面缩放自动/100/125/150（启动前读取，重启生效）、默认页“上次”、界面语言如实只显示简体中文、解码自动/软解、记住播放位置、字幕默认字号、截图目录（默认图片\Veyra，SDR PNG/HDR JXR）、快捷键表可重绑定持久化（播放/全屏F/锁定/按住原画V/截图Ctrl+S/切换Tab，按住键用应用级事件过滤器处理），关于页检查更新/反馈（复制诊断）/交流群/日志与数据目录。实测真实按键：按住V原画开/关、Tab切页、重绑Ctrl+P截图落盘；重启后强调色/背景/常驻/“上次”页/125%（DPR 1.25）/快捷键保持；软解日志`file decode preference=software`；同一文件从8.2s续播。
+- **P4-e 片源：** 采集卡完整连接（异步设备/格式查询、音频监听仅显式选择、位流模式、输入色彩/范围、设备帧率、缓冲、SDR/翻转，capture-preferences.v1记忆，“继续上次采集”）；屏幕捕获（窗口/显示器、WGC/DXGI、帧率上限、指针、裁剪、填满窗口）；PS5 Remote Play完整移植（已保存配对、查找、配对、PSN登录/提交/退出、唤醒、删除、格式/编码/码率/解码/采样、仅观看、登录PIN、手柄8ms转发与陀螺仪校准，SDL静态库）。实测：显示器捕获2552×1440（左裁8）、窗口捕获、KUHAIMI 27P采集卡1080p120 NV12实收约118fps、继续上次采集（含重启后）；PS5读取用户已有配对与PSN授权（只读）。**未连接用户PS5、未配对/唤醒/刷新授权**（会写用户配置或需用户在场），PS5串流实机与手柄转发未验。
+- **链接问题（记录）：** 加入SDL后`veyra_qml_ui`链接命令越过CMake响应文件阈值，link.exe按ANSI(936)读UTF-8响应文件，`E:/项目`下Qt库路径乱码（LNK1181）。经lib/link对照实验确认后，把QML复制从链接POST_BUILD移为独立`veyra_qml_files`目标、清单改相对路径、SDL只链库文件（系统库经`#pragma comment`），链接回到直接命令行。
+- **回归修复：** 调色卡加两行后节点自动排列改变，端口与相邻卡片距离变近，端口拖拽被卡头移动手柄抢走（二分定位：换回旧ColourPanel即通过）。卡头拖拽区左右内缩14px让出端口后，**原版a32节点编辑测试**两阶段通过。
+- **最终候选** `E:/项目/Veyra/tests/p4-rest-20260928/candidate-p4`，`veyra_qml_ui.exe` SHA256 `9eac448ade392142c1dd13cb51524a29b9f13580fd902b968356454e79c45776`，QML与源码一致。同一候选：QML单测3/3、入口smoke 8/8（含播放）、P4-g/c/d/b/b-img/b-mf/f/e八组实测、原版a32节点编辑、tier23、P3离线回归与实播回归（s5夹具改指候选）全部exit 0。存档`archives/p4-rest-20260928/p4-final`（107文件逐一哈希，manifest SHA256 `412c2cca…d9ca3`）。未commit/push/Release。
+- **用户试用后修复（同日）。** ①用户截图首页整片发白：P4-f“背景渐变强度”把`VBackdrop`的`fillItem`从`Image`改成了包着图片的`Rectangle`，而`ShapePath.fillItem`只接受纹理提供者，结果白填充；专业/设置页被卡片铺满而首页露出，此前截图未覆盖首页。恢复`Image`填充，“无”=纯底色、“轻”=原`backdrop.png`、“中”=新`backdrop-strong.png`（与`tools/qt_probe/make-backdrop.py`同一生成式、同种子20260926，渐变色距×1.8）。首跑“叠同图60%”方案被判无效改掉。首页左上像素三档(7,7,9)/(22,22,27)/(33,33,40)，右下均(8,8,10)（case 075）。范围基线追加`scope-baseline-d.json` SHA `9c23e248…25ca`（仅allow新图）。②全页面巡检（18屏：首页/极简/专业两页签/节点/导出/设置六节/五个对话框，case 076/081）发现两处**既有**缺陷（HEAD已有，非P4引入）：`onPageChanged`读`cinema`时该绑定尚未随`page`更新（读到旧值），致进极简页不收缩、离开后下一页被压到画面高度（1280宽下536）——窗口高度日志复现（有/无减少动画相同，case 077/079），改为直接判`page === "min"`后极简536、专业800（case 080）；无副标题的对话框（音频设置）标题列被标题自然宽度封顶，关闭按钮贴在标题旁——标题`Layout.fillWidth`。修后同一候选：单测3/3、smoke 8/8（含播放）、tier23、原版a32节点编辑、P3离线与实播回归、P4-c/e/f重跑全部exit 0（case 082、084–091；083为本人漏传`-FixtureRoot`的调用错误，保留）。EXE未变（`9eac448a…5776`），只改QML与新增图片。增补存档`archives/p4-rest-20260928/p4-final-r2`。
+
+
+## 2026-09-28：P4-b QML 导出队列续验（partial）
+
+- 原桌面 checkout 的 `scripts/acceptance/ui-migration-scope-guard.ps1` 在本轮编辑前两次通过，证据 `E:/项目/Veyra/logs/p4-b-20260928/origin-scope-before-queue-r2.json` 和 `origin-scope-before-queue-r3.json`，冻结 474 文件。隔离区仍为 `codex/p4-functions-20260928`；只改允许的 `src/ui/QmlPlayerBridge.cpp` 一处轮询条件及本文档，不改冻结链路。
+- 首次三项队列实际 QML 进程在首项成功后仍显示 `queued=2`，根因是 bridge UI tick 只在 `exportSnapshot.active()` 时轮询。改为 active 或 queued>0。第一次增量构建因 shell 未加载 VS 环境缺少 `<type_traits>` 失败；经 `vcvars64.bat` 后 `cmake --build E:/项目/Veyra/build/p4-a-20260928/build-001 --target veyra_qml_ui --parallel 4` exit 0。原始构建日志 `E:/项目/Veyra/logs/p4-b-20260928/qml-queue-build{,-vs}.log`。
+- 在隔离 staging 的 Main.qml 注入测试 Timer，生产 QML 文件未变。`qml-probe-app.log` 证实真实 worker 暂停、恢复、取消和无 final 的 `.partial` 残留。队列 r3 进程 exit 0；`qml-queue-r3-stdout.log` 记录首项完成、第三项启动、`queued=0`。两份新 MP4 各经 `ffprobe -count_frames` 确认为 288 H.264 帧、563 AAC 帧、12 秒；预存 `cq-30.mp4` 未覆盖。
+- 冻结的 `ExportJobManager::start()` 在输出存在检查前递归 `poll()`，冲突项被静默跳过，不是可验收的失败后继续。MF、图片列表、任意尺寸、ETA/残留细节仍开放。P4-b 和整体 P4 都保持 partial；存档路径与核验见 `docs/P4_FUNCTIONS_EXECUTION_2026-09-28.md`。
+- 收尾时曾尝试修正总方案旧措辞，但 P4-b 不可变范围守卫报 `frozen:docs/UI_V2_0_0_MASTER_PLAN_2026-09-27.md`。立即撤回我新增的总方案改动；守卫复跑通过。该旧措辞仍在总方案中，按本文件 AGENTS 最新 UI-only 规则和 P4 执行文档解释，需在获准的新范围内另行修订。
+
+## 2026-09-28：P4 目标开工
+
+- 用户授权完成 P4-a 至 P4-g，并要求存档。复用隔离工作区，开工前 104 个 dirty/untracked 文件逐文件 SHA-256 归档到 `E:/项目/Veyra/archives/p4-start-20260928/manifest.json`；原文件未清理或覆盖。
+- 桌面原区 `scripts/acceptance/ui-migration-scope-guard.ps1 -Evidence E:/项目/Veyra/logs/p4-functions-20260928/preflight-origin-scope.json`：pass，冻结 474 文件。隔离区从 `codex/p3-node-backend-20260927` 切到 `codex/p4-functions-20260928`，HEAD 仍为 `53a2d31`，main 仍为 `df41580`。
+- P4-a 独立不可变基线：`E:/项目/Veyra/archives/p4-start-20260928/p4a-scope-baseline.json`，SHA256 `5a4e63bdbdaa775db20912becb231a73324a644c109c38413e75967ce52501f7`。`p0-p1-r53-control.py guard` 首次 pass，原区 1457、隔离区 1066 文件受检，仅 15 条 P4-a 允许路径。旧 P3 基线没有改写。
+- 当前仅完成开工保护，P4-a 至 P4-g **均未标完成**。先处理默认预设启动语义、旧预设/异常矩阵与管理弹窗重启；其余按 `docs/P4_FUNCTIONS_EXECUTION_2026-09-28.md` 推进。每片记录命令、时限、结果、日志与存档；未测实机能力不判通过。
+
+
+## 2026-09-28：P4-g 调色计划状态纠偏（仅文档）
+
+- 用户指出调色UI已有部分实现。核对`ColourPanel.qml`、列表/节点调用及既有测试：七组面板、真实曲线/混色器/色轮、组旁路/还原、逐滑条复位、按住看原图和两实例隔离均非P4从零任务；现有定向证据不等于完整调色验收。
+- 修订`docs/UI_V2_0_0_MASTER_PLAN_2026-09-27.md`的F08、P4-g和VA02/VA03状态：LUT文件选择/导入明确未接，独立颜色预设操作待核；P4补功能闭环，P5复验外观/动效。未修改产品代码、旧原型、冻结后端或已有验收结果。
+- 开工及改后运行`python -B scripts/acceptance/p0-p1-r53-control.py guard --baseline E:/项目/Veyra/archives/p3-nodeedit-20260928-a32/scope-baseline.json --sha256 188f003d7b72324654b46bfd003055a5b4c24b70f1dc1b7a01130d6f52dc4c4e`，均pass（原区1457、隔离区1061文件）；总方案表格行已直接复核。`git diff --check`仅报WORKLOG原有末尾空行，未为本次纠偏改动历史尾部。纯文档修改，无构建/媒体测试产物。
+
+## 2026-09-28 a35：P4-a 管理预设 UI，默认启动缺口
+
+- 仅在隔离区`E:/项目/Veyra/worktrees/p0-p1-r53-20260927`续接。独立基线guard（`archives/p3-nodeedit-20260928-a32/scope-baseline.json`，SHA256 `188f003d7b72324654b46bfd003055a5b4c24b70f1dc1b7a01130d6f52dc4c4e`）开工和改QML后均pass；原桌面checkout的`ui-migration-scope-guard.ps1`前后均pass，改后证据`E:/项目/Veyra/logs/p4-preset-manage-20260928-a35/origin-scope-after-code.json`（冻结474文件）。
+- `DialogHost.qml`管理弹窗按列表/节点模式筛选；内置项禁改名/删除，用户项可改名，复制/删除反馈统一在弹窗处理，避免`presetsChanged`同步重建Repeater行后访问已销毁行。`ProPage.qml`管理入口文案随可用操作更新。`git diff --check -- qml/Veyra/DialogHost.qml qml/Veyra/ProPage.qml`通过。
+- 独立候选`E:/项目/Veyra/tests/p4-preset-manage-20260928-a35/`的旧QML在`run-3/manage`日志出现`P4MANAGE_PASS`，进程exit 0、QML错误为空、Main原字节恢复；当时覆盖模式筛选、内置只读、改名/重名拒绝、复制/删除和默认标记。但测试助手查找大小写不同的`P4Manage_PASS`，故`run-3/result.json`为`success=false`，第二进程reload未执行。run-1是夹具错误地把隐藏删除按钮算可见；run-2揭示并修了模型刷新后访问行的真实QML生命周期问题。三次控制记录在`E:/项目/Veyra/tests/p4-preset-manage-20260928-a35-control/commands.json`；后续同case被`Same-cause stop`拦截，不改名绕过、不继续重跑该路径。
+- 审计发现`PresetLibrary::setDefault`只保存名称，bridge启动构造只恢复`chain-session.v1`，未读取`defaultPresetIndex`来应用预设。因此“启动默认已更新”是假承诺；当前QML移除管理弹窗的默认按钮/徽标与专业页相关说明，保留底层已存元数据不改。**P4-a未完成**：启动默认与会话恢复优先级须明确并在相应授权边界内接线，旧版预设迁移/损坏/容量矩阵、管理弹窗reload及最终QML实跑仍未验。候选a35的运行证据不代表移除默认入口后的最终源码（`DialogHost.qml` SHA256 `AC08FBAEA1E367BEAB12086B43A88A919F85BDDB501F208EF4A4A802B05A4DA4`）；未构建新EXE、未commit/tag/merge/push/Release。
+
+## 2026-09-28 a34：P4-a 预设 UI 接线小切片
+
+- 施工于隔离区`E:/项目/Veyra/worktrees/p0-p1-r53-20260927`。开工/修改后范围守卫：`python -B scripts/acceptance/p0-p1-r53-control.py guard --baseline E:/项目/Veyra/archives/p3-nodeedit-20260928-a32/scope-baseline.json --sha256 188f003d7b72324654b46bfd003055a5b4c24b70f1dc1b7a01130d6f52dc4c4e`，最终pass；桌面原checkout未改。改前原字节存`E:/项目/Veyra/archives/p4-preset-ui-20260928-a34/pre-edit/`。
+- 原保存弹窗`chosen={}`但开关显示`meaningful`，直接保存可得到`contents=0`；提交又固定传`nodeMode=false`，节点模式被bridge拒绝。现在打开时快照四部分与勾选、清空名称/错误，按实际勾选构建掩码，拒绝空项，按当前模式调用`savePresetAs`。节点画布工具栏新增预设菜单，提供应用、另存、管理，经Main转发到DialogHost。Qt信号处理显式接收`checked`，无弃用警告。只改`qml/Veyra/{DialogHost,NodePage,Main}.qml`本片相关位置；其余既有脏文件未清理。
+- 独立候选`E:/项目/Veyra/tests/p4-preset-ui-20260928-a34/`从`candidate-a32`复制，三份QML与本片源码同步，原候选未覆盖。夹具`preset-ui-test.py/.qml`将测试片段临时注入候选Main，并在每次进程退出后按原字节恢复。最终命令：`python -B scripts/acceptance/p0-p1-r53-control.py run --baseline E:/项目/Veyra/archives/p3-nodeedit-20260928-a32/scope-baseline.json --sha256 188f003d7b72324654b46bfd003055a5b4c24b70f1dc1b7a01130d6f52dc4c4e --kind test --seconds 180 --case p4-preset-ui-a34-final --revision 1 --output E:/项目/Veyra/tests/p4-preset-ui-20260928-a34-final-control --cwd E:/项目/Veyra/worktrees/p0-p1-r53-20260927 -- python -B E:/项目/Veyra/tests/p4-preset-ui-20260928-a34/preset-ui-test.py E:/项目/Veyra/tests/p4-preset-ui-20260928-a34 E:/项目/Veyra/tests/p4-preset-ui-20260928-a34/run-7`；exit0，6.377秒，post_guard=pass。
+- `run-7/result.json`两进程success：列表/节点音频单项均`contents=8`；空选择、重名拒绝，重开表单清空；节点菜单的另存/管理入口存在并触发；重启后应用节点预设恢复73ms偏移、不改chain，跨模式应用被拒。两次Main字节恢复，QML错误列表为空。早期run-1/2/3/5失败分别来自夹具漏查Popup的`data`对象树、期望73ms却未在保存前设值；修正后复测，不计产品缺陷。测试以Qt对象事件驱动，未做人工点击/视觉像素、媒体播放或导出验收；这只证明P4-a一小片，不宣称P4-a或P4完成。未构建新的原生EXE、未commit/tag/merge/push/Release。
+
+## 2026-09-28 a32：节点编辑器按设计稿补齐（P3）
+
+- 用户指出：固定节点不能在画布上移动、节点参数要跳列表调、贴近弹开动效缺失、连线左键无效、拖到线上不能插入。裁定属P3（F11节点全参数/工作台防重叠），当场修。基线`archives/p3-nodeedit-20260928-a32/scope-baseline.json` SHA256 `188f003d…4c4e`；日志`logs/p3-nodeedit-20260928-a32/`，全部post_guard=pass。
+- **连线失效根因是a30回归**：a30新增“左键空白取消选中”用`world.childAt`判断命中，端口圆点一半在卡片外，点击输出端口后画布处理器把`wireFrom`清掉。改为按卡片/锚点外扩14px判定；另加端口拖拽连线（橡皮筋预览）与“已有连接则替换、失败还原”。
+- 卡片内完整参数：NR抽出`NrLayerEditor.qml`（列表NR卡与节点NR卡同一组件同一bridge调用）；调色卡嵌完整`ColourPanel`，经每卡适配器读`colourStateAt(index)`（新bridge只读接口）、写入前选中该层；SR/HDR/补帧卡与列表同项。去掉“完整参数（当前节点）”跳转。卡头：折叠、启用开关、断开、耗时徽标。
+- 输入/光流/输出锚点及补帧卡可在画布移动，锚点位置存`data-dir/node-anchors.json`（bridge `nodeAnchors`/`setNodeAnchor`）；卡片头部拖动，拖动量用场景坐标并从按下点计算（避免随移动反馈和阈值丢失）。
+- settle弹簧防重叠（设计稿GAP28、spring 550ms）：以目标位置计算（不用动画中位置）；链路向右推、旁置向下推，20轮后改纵向保证收敛；打开页面若布局贴近/重叠则一次性自动排列；隐藏页不运行布局。拖到连线插入（70px/缩放内高亮最近连线→insertNodeAfter），链路节点拖离>220或按Alt松手→断开并接回前后。适配视图/滚轮最小缩放0.4→0.25以容纳完整调色卡。
+- 验证：nodeedit两进程（卡内NR滑条、两调色卡独立、锚点/补帧卡移动与重启保存、端口点击与拖拽连线、拖到线上插入、拖远断开、settle无重叠、折叠）连续多轮通过；回归全集、tier23、逐节点计时实播通过。S5实播重启夹具a32副本改为布局静止后取基准快照（settle属设计行为），通过。候选`candidate-a32` EXE `b8b356a3…e34b`；存档`archives/p3-nodeedit-20260928-a32/nodeedit-slice`。未commit/push。
+
+
+## 2026-09-28 a31：Alt、补帧开关、XeSS“无效”、DLSS 6X
+
+- 基线`archives/p3-fgalt-20260928-a31/scope-baseline.json` SHA256 `92f95be3…4eed`（仅新增`apps/veyra-qml/main.cpp`）；日志`logs/p3-fgalt-20260928-a31/`，全部post_guard=pass。
+- DLSS倍率：bridge按2..上限逐整数列出（含引擎不接受的5X），且把`fgMultiFrameMax`（生成帧数）直接当倍率上限。改为SettingsWindow规则：只列`kFgMultiplierChoices`{2,3,4,6}，DLSS上限=生成帧数+1（本机5→6X），能力未知给全表；setFgMultiplier拒绝5X。实播DLSS 6X提交360 fps。
+- 补帧开关：列表倍率从2X起无“关”，新增`fgEnabled`与“启用补帧”开关，关/开保留原倍率。
+- XeSS“无效”两处根因：①UI“提交fps”只计引擎提交（XeSS生成帧在SDK内，恒显示60），改为XeSS时显示SDK上报提交率并标“SDK 提交”（AppShell同口径，非屏幕实测）；②DLSS>4X时切XeSS整笔提交被拒、后端仍是DLSS，现改为倍率夹到XeSS上限并提示；XeSS上限按审计unlock提供者给4X。实播XeSS 2X SDK提交115 fps，4X 227 fps（unlockApplied=true）。
+- Alt：main.cpp原生过滤拒绝WM_SYSCOMMAND/SC_KEYMENU（无边框窗口无菜单），投递SC_KEYMENU时a31记录拒绝、点击82 ms送达。**如实说明**：旧版a30在同样投递/单按Alt序列下也未复现约2秒卡顿（82–90 ms），之前现象来自测试助手在其他窗口在前时按Alt再切前台的特定序列；本修复为防护，原卡顿未能在应用内复现。
+- 回归全集、tier1（真实Space/移动/缩放/三按钮）、tier23（两进程重启）均过。候选`candidate-a31-v2` EXE `91451380…627ff`；存档`archives/p3-fgalt-20260928-a31/fgalt-slice`（223文件）。未commit/push。
+
+
+## 2026-09-28 a30：P4前修复批次（用户手测9条）
+
+- 计划/结果见`docs/UI_FIX_BATCH_2026-09-28.md`；扩展基线`archives/p3-fixbatch-20260928-a30/scope-baseline.json` SHA256 `a1e5c695…3731`；日志`E:/项目/Veyra/logs/p3-fixbatch-20260928-a30/`（全部post_guard=pass）。
+- 根因：暂停后`togglePlayPause`按`snapshot.running`判断（暂停时仍running）永远发暂停→改按transport（照旧AppShell，结束后重开文件）；TopDock无node项导致高亮落到“极简”，dock直跳pro→Main统一`goPage()`；窗口极简下FullscreenBar导航无条件toggleFullscreen→仅全屏时退出；VPill状态点不在行内、空key占位；无边框窗口无系统移动/缩放；列表缺光流/HDR入口（新增bridge `videoHdrParams`/`setVideoHdrParameter`，与节点参数同一校验回滚路径）；系统Dialog及过时文案→VConfirm；画布左键平移/双击添加→中键平移/右键添加+设计稿工具栏；172px卡片8行溢出→两列；默认ScrollBar→VScrollBar。
+- 验证：tier1-v2（真实Space/拖动/缩放）、tier23-v3（两进程保存重启）、scroll-v1、回归全集、逐节点计时实播复测全部通过。候选`candidate-a30-v2` EXE `163eb9ea…82ae6`；存档`fixbatch-slice` 251文件。测试过程中的3项助手问题及一次误点用户手测实例已如实记在批次文档。未commit/push，未进入P4。
+
+
+## 2026-09-28 a29：P3收尾（用户“全部同意，把p3给我干完”）
+
+- 授权记入AGENTS顶部；扩展基线`E:/项目/Veyra/archives/p3-finish-20260928-a29/scope-baseline.json` SHA256 `9eaa733b73432890bbe29a6b55c55fe9ff61474256536be82aa8497c35e18a09`，a8文件哈希原样继承，新增allow：FrameMetrics.h、TelemetryWindow.cpp、TrueHdrBackend.cpp。日志`E:/项目/Veyra/logs/p3-finish-20260928-a29/`（001–020，全部post_guard=pass）。
+- 代码（9文件）：FrameMetrics新增NrLayer0–3/ColorNode0–5（Count=23≤32掩码位，不进enhancementProcessing合并）；EnhanceGraph在前导附加Color、边界/层间/尾部Color dispatch及每层NR evaluate+decode打节点时间戳；EngineController快照新增videoHdrActive；bridge `nodeTimings`按layout接线路径映射（草稿/未连接/停用不借数）；NodePage徽标；TrueHdrBackend能力块直接Destroy并记返回值；旧Win32 TelemetryWindow名称表原为10项对13阶段（越界、FG4/5后标签错位），改为按枚举定长23项并单独编译通过。
+- 001/004构建、002/005 stage（a29、a29-v2）。003实播首轮失败：NR/Color/SR五节点已测，HDR因SDR显示器未构建、FG被实时预算拒绝（重链≈17–19 ms>60fps预算，仅5生成帧）——非缺陷；据此新增hdr-sdr/fg-skipped状态并加轻链阶段。006实播通过：徽标“0.02/2.58/7.17/7.28/0.11 ms”、HDR“SDR显示未转换”、FG“预算拒绝”、旁置“未连接”；轻链FG 1.85 ms、生成帧呈现104、untracked=0。
+- 007离线TrueHDR+NR+SR+DLSS FG 2x：合成/真实素材各pass=1、10生成批次、峰值383.6/397.9 nit、能力块destroy result=0x1、untracked=0（真实素材例SR为1:1未执行，合成例sr=12）。008/009原图像素：sourceReference与无效果线性输入逐字节相同（5529600字节×3帧中心裁剪），处理输出差3914856字节；reference-off探针自身“停用节点0次NR”计数因探针强制graph级NR而exit1，已在结果中记录，不影响像素oracle。
+- 失焦：010–012外部助手枚举窗口在按下后返回空（未查明，最后加连续轮询后未复现）；012查明根因：探针Window为主窗transient子窗，Qt在子窗获焦时仍报父窗active（Codex 108/109同因）。013–016改transientParent:null+外部SetForegroundWindow，015/016连续通过：active=false后自动`hold original off`，调色值不变。
+- 017回归（单测、QML组件21 passed、data/easing、S2合同、导出门禁、右键边界、深复制、复位）通过；s5实播重启先因旧tmp目录名冲突两次未启动（018），019修正路径后通过同态。旧s3-original第7步因transient缺陷不再使用，由015/016替代。020新库保护/羽化/四层同帧输入oracle全过，debugErrors=0。
+- 存档`archives/p3-finish-20260928-a29/p3-final-slice`：241文件+1396文件候选manifest，receipt p3_complete=true。最终候选`candidate-a29-v2` EXE SHA256 `cf761b566542f6c5ca5ac6660f56404b20f4eb2170debbf62d6d97259028a01e`。未commit/push/Release，未进入P4。
+
+
+## 2026-09-28 a28 131–143：Codex中断后接续，S1收口与S7最终候选
+
+- Codex会话在收取136前因`429 Too Many Requests`重试上限终止（UTC 21:00:31）。接续时双守卫pass（原区474冻结；隔离guard核验原区1457/隔离1061文件）。136`list-protection-regression`已exit0：stack1/4 color-protected与stack4-feather各3帧通过。
+- 131–136补存档`archives/p3-execution-20260928-a28/s4-s5-list-protection-slice`，120文件，源码与s3-compact-overlap相比无变化。
+- 137构建外部驱动`tests/p3-execution-20260928-a28/s1-list-protection-sr/`（NrVideoQualityProbe副本，新增protected-sr-first/protected-nr-first/unprotected-control，链接库hash与136一致）。138：5例全部exit0（16.8秒），NR→SR与SR→NR下1/4层区域内NR输出逐字节等于NR base，srRan=1、allLayersRan=1；关保护同区域unprotectedChanged=1证明比较非空转。边界：640x360中心裁剪、SDR，不含全帧边缘/HDR。
+- 139 build因Git Bash把`/d /c`改写成路径成为空跑（0.029秒），不计证据；140改`MSYS_NO_PATHCONV=1`后`ninja: no work to do`。141 stage到`candidate-a28-p3-final`，随即发现ColourMixer/ColourPanel/NodePage/ProPage/VSlider五个QML仍是build目录旧版，已从源码显式同步并哈希核对（与106同类问题）。
+- 142回归：EffectChain、PresetLibrary单测exit0；QML组件21 passed；easing通过；s2-contracts、s2-export-gates、s3-menu-boundary、s3-copy-payload、s3-reset、s7-live-restart（实播NR→Color→SR→NR→Color、切模式、两进程重启同态）全部通过。qml-data首次缺scratch参数exit2，143补参数PASS。s3-original前3例通过，第7步失焦未观测——即108/109已停路径，不重试、不算通过。
+- 存档`s7-final-candidate-slice`：140文件+1396文件候选manifest，receipt p3_complete=false。未commit/push，未关机。剩余需用户裁定：逐节点GPU计时冻结接口、TrueHDR warning、原图像素/失焦/HDR-FG实卡。
+
+
+## 2026-09-28 a28 128–130：修复重叠节点滑条点击穿透
+
+- 128新增组件红测：前景VSlider点击时下层VButton同时clicked=1（应0）。产品仅VSlider的TapHandler显式WithinBounds取得点击独占，保留原拖动处理与模型绑定，不改节点后端。129组件21 passed/0 failed（含init/cleanup），覆盖新增穿透、原拖动、拒绝参数、复位、外部同步。
+- 130恢复125/126的原重叠几何（没有移走Color卡），真实app/bridge下三个NR紧凑滑条全部改值/复位/外部同步通过，无requestInspector意外导航；另一NR保持。3.997秒、exit0/post_guard=pass，临时候选QML逐字节恢复。此前127分离布局通过并非替代此生产回归。
+- 本片新增/修改产品文件仅qml/Veyra/VSlider.qml和tests/qml/quick/tst_components.qml，其余为四份状态文档；无新原生编译、算法或管线修改。s3-compact-overlap-slice将保全源码、失败/成功证据和fixture，按receipt认定存档。P3整关/像素/冻结接口缺口未完成，不关机。
+
+## 2026-09-28 a28 122–127：紧凑卡片验收与命中证据
+
+- 122的s3-slider-binding-slice存档已实际完成：73文件/32源码及receipt，不再重建或覆盖。123/124两次紧凑卡失败不能计通过；首次按delegate更新重新取控件未解决。125/126定向诊断证实鼠标点(242.28,449)同时处于原Color卡完整参数按钮矩形(215,446,154,32)内，NR字段已改变且触发requestInspector(0,color)，不是后端NR setter主动导航。测试把NR放到(0,0)覆盖了既有Color卡。
+- 第二次有据夹具修正将其他卡移开；127四秒通过原生产NR卡intensity/tone/structure的改值、复位、外部更新和另一NR不变。125–127候选临时QML字节恢复、post_guard=pass；失败输入/日志保留。不再重复分离卡片验收。
+- 同时暴露真实重叠卡鼠标穿透风险：NR滑条和下层Color按钮接受同一次点击。下一片只加共享VSlider点击独占及组件红绿测试，再用重叠卡生产回归验证不跳页；最多两次有据产品修复，不改后端/算法。该缺陷未因移动夹具而被宣布修好。
+- 产物仍为E:/项目/Veyra/{tests,logs}/p3-execution-20260928-a28；Goal active，S4/S5像素及运行闭环、冻结诊断缺口/S7未齐，P3不完成、不关机。
+
+## 2026-09-28 a28 日志117–121：S3绑定修复与真实参数页验收
+
+- 117-s3-slider-binding-red：Qt Quick鼠标点击后模型改35、slider仍75，精确复现value binding丢失。118定向回归9 passed/0 failed（7用例+init/cleanup），119完整组件20 passed/0 failed（18用例+init/cleanup），3.067秒；新增拖动后外部更新、拒绝改值/复位不伪显示成功、NR与色轮外部更新断言。
+- 产品仅5个允许QML：VSlider新增显式valueFromModel及拖动预览，ProPage/NodePage/ColourPanel/ColourMixer的NR/Color参数明确选入；ColourWheel自身未改，由ColourPanel父属性继承。普通非受控滑条保留本地值行为。回归在tests/qml/quick/tst_components.qml；没有C++/算法/shader/CMake修改，没有新增原生编译；QML由现有Qt6.8.3 runner与真实app加载验语法/运行。
+- 120-s3-production-colour-reset：28.650秒，38个原生产调色滑条（八分组及黑白模式）逐项鼠标改值/点击复位、完整colourState恢复与另一实例隔离通过。121-s3-production-nr-reset：8.536秒，9个原生产NR参数滑条通过，肤质复位为-1并隐藏数值行，另一NR与所有非目标字段不变。此处使用真实app/bridge及原控件，非临时替代滑条；自动滚动/展开辅助定位后发送Qt鼠标事件，不宣称人工桌面体验或像素验收。
+- 117–121均post_guard=pass、未超时；生产测试无QML错误，候选临时同步的6个QML均finally逐字节恢复。组件测试offscreen有Qt字体目录提示，未证明字体/整屏视觉通过；无媒体/GPU/编码测试，不重跑200链/50切换/已停止失焦路径。
+- 证据在tests/p3-execution-20260928-a28/{slider-binding-red,slider-binding-green,slider-binding-components,colour-reset-production-v1,nr-reset-production-v1}，日志对应117–121。首次新增两文件补丁因嵌套换行转义被解析拒绝，未执行；改用chr(10)且分文件后成功，不计为产品失败。
+- 本片收口必须保全到s3-slider-binding-slice并校验receipt；新QML尚未永久同步到用户候选，最终S7必须显式同步并锁hash。P3整体不勾选，Goal未完成，不关机、不发布。
+
+## 2026-09-28 a28 118开工卡：S3滑条绑定定向红绿测试
+
+- 117恢复点s2-contract-history-slice已完成，receipt为57文件/32源码，逐文件哈希核验。
+- 静态发现VSlider鼠标与重置直接赋值value，可能切断外部参数binding，造成组/节点还原后滑条不跟随。新增单一Qt Quick真实鼠标回归先复现；若证实，只修允许QML共享滑条及显式受控参数入口，不动引擎/算法。独立控件原有本地值行为须保留。
+- 夹具slider-binding-run.py仅临时同步6个QML/测试文件到本轮候选并finally恢复原字节；TEMP/TMP与输出均E盘。单次≤90秒，不启动媒体/200链/50切换，不把控件通过算像素通过。
+
+## 2026-09-28 a28 114–116：合同复核及迁移前提纠正
+
+- 114耗时5.021秒，exit0/post_guard=pass。node-contracts-v1/result.json中seed/restart均success、无QML错误，Main字节恢复；候选EXE SHA256=8d4660075191c71277551768649fd6e4a8deb5523b6e33cde5c3c5f6ae256d39。真实鼠标光流、FG同槽互斥/倍率、禁用SR仍拒绝第二实例、端点复制拒绝、独立模式保存重启通过。无媒体，不能称GPU能力或补帧画面验收；与早期ui-s2-v1有覆盖重合，不再重复。
+- 115耗时0.063秒，exit0/post_guard=pass。sidecar-history.json核验3份历史源码manifest/hash和2份session v1样本：Protection先从节点取消，编辑侧车后引入且初版即拒绝Protection。纠正计划误判，不将人工构造的非法v2/v3当作必须成功迁移的历史格式。保留100–104线性迁移/损坏侧车拒绝与原件保护要求，不改产品解析器。
+- 116接续：原checkout守卫及32路径守卫通过，结果在logs/p3-execution-20260928-a28/116-original-scope-start.json及工具输出。当前goal仍active；读取的累计usage为3001972 tokens、10857秒，仅记录工具计数，不推断费用。发现重复验收与过时待办风险，后续不得用重复测试或文档改写充当产品推进。
+- 本片只同步四文档，未修改产品代码。首次合并补丁因CURRENT_STATUS标题锚点错误被整体拒绝；回读确认无写入，再用精确标题重试。114/115证据拟存s2-contract-history-slice，须实际receipt才算存档完成。P3未完成，不关机。
+
+## 2026-09-28 a28 114 开工卡：光流/FG/单SR的UI配置合同
+
+- 113已存档上一片44文件（32源码），receipt逐文件核验通过。下一片只用candidate-a28-original及独立data-dir，真实鼠标选择固定光流，再检查DLSS/XeSS共用槽、关闭FG不改光流设置、禁用/复制SR绕过拒绝、列表/节点保存重启隔离。
+- 改动落点仅E盘测试夹具及文档；候选Main临时插入测试驱动并finally字节恢复。不改产品代码、不启动媒体/GPU矩阵；设置留存不等于实际NVOF/AMD/GPU DIS运行或NR依赖已验。两个进程各最多30秒，总控制器120秒；同因最多两次有据修复。
+
+## 2026-09-28 a28 111–112：列表导出快照值隔离通过
+
+- 111独立夹具构建2.921秒，112测试4.099秒，exit=0、post_guard=pass。10项断言验证真实ExportJobManager开始快照、四NR/三Color配置、调用方转节点并修改参数后隔离、返回快照不反写、排队时配置复制及提升后仍为revision=222。比较完整EnhancementSettings，保留产品原有export Native policy转换。
+- 子进程是3秒生命周期替身并故意exit=7；实际管理器按既有失败路径提升排队任务。未执行媒体解码/GPU/编码，无媒体输出。不能用此结果宣称worker算法、GUI切模式端到端或列表正向导出通过。
+- 产物E:/项目/Veyra/tests/p3-execution-20260928-a28/export-freeze/；命令和前后守卫在logs/p3-execution-20260928-a28/111与112。编译复用现有Ninja参数但不修改Ninja/CMake，未改产品代码、测试集源文件或候选。传输封装被拒绝两次，未执行，缩短单层JSON后成功；不是产品测试失败。
+- 当前剩余包括保护旧编辑侧车/列表边界、光流FG单例全入口、控件/真实像素、保存运行边界、冻结逐节点计时接口及最终候选验收。P3未完成，不关机，不重复200链/50切换或原图失焦失败路径。
+
+## 2026-09-28 a28 111 开工卡：列表导出配置值隔离
+
+- 双守卫pass；110恢复点completion-receipt记录78文件/32源码。先前读取receipt.json路径错误，不代表存档丢失；文档标题补丁首次未匹配且未落盘，已按真实标题纠正。
+- P3-10唯一问题：ExportJobManager接收的列表配置在提交后是否仍会随调用方/节点配置编辑而改变。只读定位start/enqueue均按值接收，Shared/Request/snapshot也按值存储；静态分析不代替运行证据。
+- 本片使用E盘独立CPU测试夹具链接现有产品库，子进程只维持有限生命周期、不执行编码。验证真实manager的开始/排队/取队列配置快照；不修改冻结ExportJobManager、CMake或测试源，不冒充真实编码/GUI端到端验收。
+- 测试最长60秒，构建最长120秒，同因最多两次有据修正；产物放E:/项目/Veyra/tests/p3-execution-20260928-a28/export-freeze/。P3未完成，禁止关机；已失败两次的原图失焦验证不再运行。
+
+## 2026-09-28 a28 105–109：调色按住原图入口及组操作
+
+- 产品只改`qml/Veyra/ColourPanel.qml`：按住按钮调用既有holdOriginal；释放/取消/隐藏/销毁复位，Window.active变化时复位。没有仅关Color冒充原图，没有改engine/算法/原V键过滤。
+- 105暂存`candidate-a28-original`；106真实页面测试失败`missing visible original control`。哈希证实stage取build目录旧QML；显式复制本片源码ColourPanel后，107真实QtTest鼠标通过（4.042秒），Main恢复，无QML错误。EXE SHA256仍`8d4660075191c71277551768649fd6e4a8deb5523b6e33cde5c3c5f6ae256d39`，ColourPanel SHA256 `8ad3eb2a6d9d1cff6d9802b4bfc460cf3ebdbca132bcb0edf258673f9c2d0d69`。
+- 107证据：按住on/松手off、切home/音频tab后复位；原图不改曝光/饱和；真实组旁路保留值、恢复取消旁路、亮组还原不改颜色组。仅UI/参数与既有engine请求接线，不是源帧/像素证明。
+- 108/109增测真实焦点转移均失败`real focus transfer not observed`；第一次日志有off但瞬时激活断言不足，第二次改记录真实root.activeChanged仍无失焦事件。不能凭off认定失焦，原因未完全确认，不改产品/系统焦点策略；此环境验证路径停止，不再重跑。取消/隐藏证据和失焦证据分开。
+- 工具补丁曾局部多插入delegate行，运行前检查并删除，未作为可用候选发出；未改其他组件。新驱动`s3-original-check.py/.qml`及全部105–109日志在本轮tests/logs目录，失败证据保留。恢复点`E:/项目/Veyra/archives/p3-execution-20260928-a28/s3-original-ui-slice`按receipt核验；P3仍未完成，不关机。
+
+## 2026-09-28 a28 100–104：旧保护预设迁移与损坏侧车补验
+
+- 修改仅`tests/unit/PresetLibraryTests.cpp`及四份活动文档：库迁移扩展为SR前/后、NR层间/全栈后四位置×启用/禁用；除保护外完整EffectChain逐字段相等，原库字节不改、迁移侧车重启一致。已有会话迁移仍只执行一次。
+- 新增四种侧车磁盘损坏：重复ID、悬空边、旁置自环、合流。公开load失败时保留传入有效会话，禁止随后save覆盖坏侧车，原回退文件不改；另验旁置Protection新save拒绝。该第五项不是旧Protection侧车迁移，不能算迁移通过。
+- 100构建3.495秒、101CPU 1.459秒通过；102编译失败因测试错误调用private encode/decode。没有改可见性或生产代码，修为公开save/load及原始拓扑字段造坏；103构建3.465秒、104CPU 1.452秒通过，187条PASS、无FAIL，post_guard均pass。一次有据测试修正，失败日志保留。
+- 命令：受控`run --kind build --seconds 900 --case s1-sidecar-fault-build ... -- cmd.exe /d /c .../build-targets.cmd veyra_preset_library_tests`，以及`run --seconds 60 --case s1-sidecar-fault-unit ... -- E:/项目/Veyra/build/p2-nr-20260927/veyra_preset_library_tests.exe`；全部完整参数在`E:/项目/Veyra/logs/p3-execution-20260928-a28/100–104*.result.json`，临时夹具由控制器TEMP/TMP定向E盘。
+- 执行前一次命令漏`--kind build`被控制器拒绝，没有启动构建；修正后执行100。工具传输曾拒绝嵌套封装，未实际改文件，改短单层patch后成功。
+- 恢复点`E:/项目/Veyra/archives/p3-execution-20260928-a28/s1-migration-slice`以receipt及manifest复核为准。未改产品EXE或用户配置，不复测200链/50切换，不宣称P3完成或关机。
+
+## 2026-09-28 a28 095–098：节点导出入口先行门禁修复
+
+- 095红测精确复现`start-empty wrong notice: 先选择导出位置`，测试立即退出且恢复Main；未先打开旧版模态对话框。
+- 修改仅`src/ui/QmlPlayerBridge.cpp`：chooseExportPath/addExportFilesDialog添加前置节点模式拒绝；startExport/enqueueExportFile将已有模式拒绝移到字段校验之前。提示沿用现有文案，不改编码/导出后端/截图。
+- 096定向构建5.893秒、097 stage 2.321秒；098受控命令`p0-p1-r53-control.py run --case s2-export-gates-green --revision a28-early-node-export-guard-v1 --seconds 60 ... -- python -B .../s2-export-gates.py .../candidate-a28-export-gates .../export-gates-green`，2.823秒、exit=0、post_guard=pass。完整命令及输出在`E:/项目/Veyra/logs/p3-execution-20260928-a28/098-s2-export-gates-green*`。
+- 绿测证据`E:/项目/Veyra/tests/p3-execution-20260928-a28/export-gates-green/result.json`：空/图片/视频enqueue、start、路径/文件对话框门禁、真实鼠标两入口、预设过滤与列表字段验证通过；无QML错误，Main restored=true。不代表正向编码、冻结作业配置或P3整体验收。
+- 新候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a28-export-gates`，EXE SHA256 `8d4660075191c71277551768649fd6e4a8deb5523b6e33cde5c3c5f6ae256d39`；旧候选保持。恢复点`E:/项目/Veyra/archives/p3-execution-20260928-a28/s2-export-gates-slice`仅在receipt存在且哈希复核通过后成立。P3仍未完成，不关机。
+
+## 2026-09-28 a28 084–093：200条真实生产建图完成
+
+- 在既有隔离区继续active Goal；本片仅新增E盘外部验收驱动/证据与四份进度文档，未改任何产品代码、CMake、候选EXE/QML或冻结后端。开始前承接已通过双守卫，084–093每次受控命令post_guard均pass。
+- 驱动：`E:/项目/Veyra/tests/p3-execution-20260928-a28/production-plans/production-plans.cpp`，链接当前`veyra_engine/pipeline/ngx/gfx/base/nvof`生产库，库和驱动哈希见`build-identity.json`。由现有build.ninja读取编译/链接参数，不改CMake或原integration测试；编译084通过。
+- 085样本0，086样本1–24，087–093依次25–199；固定种子`0x5032026`，200个编号各一次。真实`fromChain/runtimeOrder/describeStages -> EnhanceGraph::initialize/createViews/shutdown`，不使用noFeatures/noNgx。独立核对类型顺序、参数/资源序号、处理/输出尺寸和实际NR/SR/FG/HDR启用状态。每批限300秒，最长44.537秒，合计348.031秒，未并行GPU测试、未用旧CPU结果代替。
+- 输入1280×720，单SR目标2560×1440；1–4个NR槽、1–6个Color槽、六档NR policy、358个禁用槽；31条链NR跨SR两侧，133条HDR、150条DLSS FG。184组含NR，363个NR参数块创建与显式销毁对应；无leaked parameter block或ERROR。结果与完整逐例记录：`production-plans/result.json`。
+- **未隐藏的例外：133条TrueHDR能力探测untracked block警告。** 首条在HDR capability日志之后、NR/SR/FG创建之前，并非上片修复的NR退出遗漏。`src/ngx/TrueHdrBackend.cpp:capability`直接GetCapabilityParameters，再传给仅跟踪allocateParameters的core.destroyParameters，因此报告未跟踪；随后确实调用销毁函数，但返回值未记录，不能据此宣称销毁成功或无泄漏。这两个文件哈希与不可变baseline一致、无本片修改。原始警告保留于`warnings.json`；冻结src/ngx不扩大授权、不屏蔽日志、不反复换测试。
+- **证据边界：** 200项只关闭生产建图子项，不是每条链真实播放/像素、XeSS呈现端、旁置/迁移、8K或跨显卡证明；不关闭S4/S5/S6整关。HDR能力探测日志缺口与逐节点计时缺口继续披露；P3未完成，不关机。外部恢复点计划保存为`E:/项目/Veyra/archives/p3-execution-20260928-a28/s6-production-plans-slice`，以archive工具结果和completion-receipt为实际成功依据。
+- 编写工具时一次传输包嵌套和一次patch换行被拒，均未执行；改成单层调用及chr(10)后成功。不是产品测试失败；未通过改产品或改判据解决。
+- **下一片唯一优先项：S1旧Protection迁移边界与S2导出入口边界。** 先以现有001–021、032–074证据排除已验项，补缺失位置/禁用/损坏拓扑及单例入口断言；不得再次跑200链或50切换，也不恢复节点保护/第二SR。
+
+## a28 S6参数块所有权修复078–081与下一资源短测
+
+**082已执行结果：** 219.23秒，同一PID=47048/start=1790537850638；6次预热后50次全部取得有效稳定窗口，925条系统采样。57组NR创建与57组显式参数块销毁对应，零leaked/untracked/QML错误，采样器正常退出，Main恢复，post_guard=pass。列表1NR/NVOF/DLSS2X/保护和节点4NR/AMD光流/XeSS2X/旁置Color均经真实播放恢复检查。
+
+| 模式 | 专用显存末5-首5 | 共享显存差 | 私有内存差 | 句柄差 | 既定delta/slope/peak判据 |
+|---|---:|---:|---:|---:|---|
+| 列表 | 93,458,432 B | 978,944 B | 156,221,440 B | -1 | 全通过 |
+| 节点 | 93,151,232 B | 856,064 B | 133,881,856 B | -1 | 全通过 |
+
+这是满足预先声明上限的有界短测，**内存并非零增长**，不能宣称无限切换无泄漏。原始趋势/每次窗口/采样在`E:/项目/Veyra/tests/p3-execution-20260928-a28/resources-v1/`，候选EXE SHA256=`3ea1768b6cc39c9d3e0fcd87574154595cecd5942abaee2147a6a72e29bf7eb0`。200链生产建图、逐节点计时、完整像素/迁移等仍未关闭。075–082与32允许路径将保存到外部`s6-diagnostics-lifetime-slice`；以存档工具成功及复核结果为准。
+
+本片工具层一条长传输被嵌套封装拒绝、一次新脚本patch换行验证失败、一次文档patch标题不匹配，均未执行；改用短小单层调用后成功，无产品测试重跑。定向产品文件diff-check通过；WORKLOG历史末尾空行仍存在，没有把全仓库检查报通过。
+
+- 续接Goal为active；原checkout守卫及32路径守卫pass。仅在隔离分支EnhanceGraph::shutdown的既有生命周期接点补逐层参数块逆序销毁，位于feature释放后、adapter卸载和core shutdown前；未改NR算法或播放循环。
+- 078实际构建、079独立stage通过；080单NR、081四NR真实视频/GPU采样后正常退出通过，创建层数分别[1]/[4]，显式销毁块数分别[1]/[4]，没有leaked/untracked parameter警告，Main原件恢复，post_guard均pass。候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a28-lifetime`；结果在`E:/项目/Veyra/tests/p3-execution-20260928-a28/lifetime-{1,4}-v1/result.json`。这是正常所有权修复，不宣称进程退出后永久泄漏或长期显存已验。
+- 075–077已有阶段诊断纠错与真实视频隔离证据沿用，不重复测试；逐节点GPU计时仍是明确接口缺口，不能将阶段/末层采样冒充逐节点。
+- 下一卡：同一进程6次预热模式切换，再50次列表/节点往返；列表1NR+NVOF+DLSS2X+全局保护，节点4NR+AMD光流+XeSS2X+未连接Color副本。每次等待当前revision已有GPU样本及播放进展，稳定窗口用系统GPUProcessMemory计数器、Get-Process句柄/PrivateMemory采样；记录PID、进程开始时间、模式和序号。不写用户配置。
+- 测前判据（回归阈值，不是无泄漏证明）：同模式前5与后5稳定窗口中位数差，专用显存≤256MiB、共享≤128MiB、PrivateMemory≤256MiB、句柄≤64；同模式线性趋势专用/Private≤4MiB每次切换、共享≤2MiB每次切换、句柄≤1每次；同模式峰值不超过初始窗口中位数+512MiB专用/Private、+256MiB共享、+128句柄。50次每次都要有有效稳定窗口样本，否则不通过。
+- 整个短测进程上限285秒、外层295秒；GPU计数器不可用/能力失败/无样本则保留失败，不改阈值、不减次数、不用重启拼接趋势。不干扰其他程序。S6/P3未完成，不关机。
+
+## a28 S6诊断接线075–077与退出告警定位
+
+- 075构建、076独立stage、077真实视频通过，post_guard均pass；`ui-live-diagnostics-v1/result.json`显示实际GPU阶段P95/样本数、SR输出2560×1440正确，空会话未伪造读数。旁置NR复制/改参/移动/删除、断线修改SR/FG/光流的日志区间内没有成功settings request、生产重建或NR分配，播放继续且运行输出保持2K。不是像素完全一致或50次资源趋势证明。
+- `candidate-a28-diagnostics`真实退出复现一条`destroying leaked parameter block`。只读归因：EnhanceGraph::initialize每层coreHost.allocateParameters；shutdown只释放layer handle和共享ngxParams，漏逐层parameters；NrInstance::close仅清指针。NgxCoreHost::shutdown会兜底destroy剩余块，因此不能声称它必然造成进程退出后显存泄漏；但正常所有权释放确实不完整。
+- 下一最小修复仅已授权32路径内`src/pipeline/EnhanceGraph.cpp`的节点资源销毁接点：所有feature释放后、adapter卸载/core shutdown前，倒序释放每层参数块并清指针，记录数量。不改NgxCoreHost/NrInstance、不改NR算法/处理次序/采集/音频/Present。验证同候选1层及4层退出、50次同进程切换资源趋势，不能只删除告警。
+- 另有三次较长apply_patch传输被嵌套封装拒绝，均未执行；终端检查文件不存在后改为单层exec写外部测试驱动成功。没有运行或重复失败的产品测试，不计作功能失败。
+
+## a28 下一切片：S6已有诊断接线纠错（开工卡）
+
+- 061–074恢复点`s3-global-draft-slice`已完成：32源码、132文件逐项SHA256核对；相对前一存档仅6个预期产品/测试文件和4份文档改变。候选EXE SHA256=`0b55cd4d321d3a0d0e213488de2add3442520ccd0da5ec49703451ba130ae9eb`，Main/NodePage与源码逐字节一致，身份在存档`candidate-identity.json`。
+- 只读发现：queuedFrames()错误返回previewSkipped；stageTimings()是CPU P95却在Pro页标GPU；chainTotalMs()将三个独立CPU P95相加称为链路总耗时。现有PlayerSnapshot.metrics.flow已有pendingOutputFrames、gpuTiming、enhancementProcessing，可只在bridge/QML读取，无需修改引擎/算法。
+- 最小范围：QmlPlayerBridge.h/.cpp、NodePage/ProPage显示及直接验证。修正为已测GPU阶段P95/输出待呈现机会，分开无样本与真实零，不把阶段P95相加。输出尺寸只读现有resolution.output。冻结范围及32路径基线不变。
+- 实际缺口：GpuTimer以GpuStage分配单组时间戳，多NR循环重复写同一Nr槽；ColorGradeInstance无逐节点测时接口；现有enhancementProcessing不含全部Color/VideoHDR/XeSS内部工作。因此不得声称全链总耗时或逐节点GPU完成。S6这部分仍未完成，需要越过现有计时接口时停止该路径，不分摊总值、不用CPU冒充GPU。
+- 验收只取已有应用的真实视频/快照，确认采样、模式切换、草稿断线和旁置不提交；单测≤300秒，失败保留，同因修复有界。不重跑061–074已验静态API/存储内容。
+
+## a28 断线全局草稿隔离与预设恢复（061–074，2026-09-28）
+
+- 已核对原始result：061–074每条post_guard均pass；061首次构建因测试误调用private codec失败，改用public store/load后062通过；063暴露旧optional无谓变化及首次globals文件未发现，修复后064/065通过。068以运行DLSS6X/草稿XeSS2X复现预设恢复混用参数，分开草稿/运行验证及失败回滚后069构建、070两套CPU测试通过。所有失败证据保留，没有放松断言。
+- 本片产品/测试改动仅EffectChain.h/.cpp、PresetLibrary.cpp、QmlPlayerBridge.cpp、PlayerUiFacade.cpp、PresetLibraryTests.cpp。ChainGlobalSettings区分最后有效运行与editor草稿，旧文档缺省继承保持；断线修改不提交，合法重连才提交。未改NR/颜色算法、采集/解码/音频/Present、shader、CMake、旧Win32。
+- 新会话v3、编辑预设v5携带独立globals；旧session v1/v2、preset v1–v4保持读取，新文件使用独立`.p3-editor.p3-globals`，不覆盖用户旧文件。非法参数原子回滚；SR旁置/reset不污染最后接受运行全局参数。
+- 071独立候选：`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a28-globals-final`。072真实bridge双进程/保存预设/重启通过：断线成功request=0，合法重连=1，旁置SR改参=0；运行DLSS6X与草稿XeSS2X分别保全。073完整Color/NR参数独立复制回归、074真实鼠标右键删除/重置/目标和容量边界回归通过。三组qml_errors为空、Main原件恢复。
+- 原始命令/退出码：`E:/项目/Veyra/logs/p3-execution-20260928-a28/061-*`至`074-*`。结果：`E:/项目/Veyra/tests/p3-execution-20260928-a28/ui-global-draft-v3/result.json`、`ui-global-copy-regression/result.json`、`ui-global-menu-regression/result.json`。新增驱动为同目录`s3-global-draft-check.py/.qml`。
+- 证据边界：072/073是实际bridge API/成功提交日志/持久化，并非鼠标滑条、媒体、GPU像素或资源趋势；074才有菜单鼠标证据。仅六文件diff-check已通过，不冒称全仓库通过。S3/S5及P3仍未整关完成，不关机。
+- 本次续接双守卫再次pass。恢复点目标为`E:/项目/Veyra/archives/p3-execution-20260928-a28/s3-global-draft-slice/`；完成复制、候选哈希与逐文件校验后才记存档成功。下一步仅收口既有待验边界，不重复已通过CPU/API切片，不扩展P4/P5。
+
+## a28 下一切片：断线全局参数隔离（开工卡）
+
+- 上轮为实质进展：页面reset布局修复、菜单/深复制回归及外部101文件存档。当前分支与双守卫再次通过，不重跑既有已验切片。
+- 唯一问题：SR目标/质量、FG后端和光流通过全局pending直接提交，断线编辑没有独立参数快照。目标是草稿可修改/保存/恢复，不影响最后有效运行配置；合法重连时才一起提交，拒绝原子恢复。
+- 最小落点：QmlPlayerBridge/PlayerUiFacade诊断与已有ChainConfiguration/NodeEditorDocument、PresetLibrary会话codec及直接单测；只限已授权的节点配置/持久化接点，不动NR/颜色算法、采集/解码/音频/Present、shader、CMake或旧Win32。原32路径基线不变。
+- 验证：真实界面参数状态及提交日志边界、旧会话兼容、新草稿非覆盖保存/重启、合法重连/错误拒绝；CPU/API不替代GPU资源与像素。每测≤300秒，构建≤900秒，同因最多两次有据修复；20分钟无新证据停止该路径。结果与恢复点完成后补写，当前不宣称通过。
+
+## a28 S3右键边界、页面重置布局修复及深复制（053–060）
+
+- 053真实鼠标已经过A重置、旁置B删除、连接A删除；最后上限菜单点击命中失败。054隔离无关卡片布局后通过。诊断显示整页reset后SR/NR/HDR/FG全部(0,0)，不是仅测试坐标问题：055新增唯一坐标断言在旧候选step0明确失败。
+- 仅修改`src/ui/QmlPlayerBridge.cpp`：抽取既有旧布局初始化，并在新建reset链成功后同样调用。保留已保存editor坐标，不变更处理顺序或算法。056构建/057新stage通过；058坐标断言已过，测试手动把B放在SR卡片上导致step4目标7误点成3；059在断言之后隔离无关卡片，双进程成功且qml_errors=[]。失败未覆盖、未放松坐标或目标断言。
+- 059真实右键重置/删除，已选其他参数时目标隔离，连接节点删除后重接，禁用副本payload、4NR/6Color上限及重启通过。证据`E:/项目/Veyra/tests/p3-execution-20260928-a28/ui-reset-layout-final/result.json`。
+- 060非默认曲线/HSL/分级/LUT强度与输入域、组旁路、NR模型/残差/六档尺寸，完整复制相等、双向独立修改、非法参数原子拒绝、旁置不连接及双进程恢复通过。证据`E:/项目/Veyra/tests/p3-execution-20260928-a28/ui-copy-payload-v1/result.json`。此项直接调用真实bridge，不是鼠标曲线拖动或LUT文件内容/GPU验收；原runner的通用boundary沿用菜单用语，以本条说明为准。
+- 045–052恢复点`s3-editor-storage-slice`已保存32源码路径/45文件并逐文件哈希复核；第一次生成脚本因转义语法错误在执行前失败，改用Path.as_posix后成功。与该恢复点比较，本片产品改动仅QmlPlayerBridge.cpp，其diff-check通过；没有声称全仓库差异检查通过。
+- 当前候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a28-reset-layout`。053–060post_guard均pass，脚本每次恢复Main原件。新切片外部恢复点`s3-menu-layout-payload-slice`保存当前32路径、测试驱动/断言、失败与成功结果、累计差异和候选身份，复制后逐项验哈希。
+- 未完成：旁置/断线SR目标/quality和FG backend/flow仍通过全局pending/commit，不能声称这些编辑不会影响当前运行链，下一片需定向复现并仅在允许接点修复；GPU资源趋势、实际生产链及S1/S2剩余验收仍在，S3/S5和P3未完成，不关机。
+
+## a28 S3/S5编辑预设补修（045–052）
+
+- 045/049构建、046/050预设CPU回归、047/051独立stage、048/052真实QML双进程检查通过，全部post_guard=pass。052原始证据位于`E:/项目/Veyra/tests/p3-execution-20260928-a28/ui-editor-storage-v1/result.json`，两进程success=true、qml_errors=[]、Main原件逐字节恢复；不是logs下同名目录。
+- 补修断线SR/HDR/FG草稿显示、SR整节点目标/质量复位及页面reset清除节点Protection。部分预设按编辑拓扑增减槽位而不扁平化；完整断线/旁置预设使用v4独立`.p3-editor`文件，复用已有session codec，旧文件不覆盖；put保存失败恢复内存。未改NR/颜色算法。
+- 新预设不完整时仍保留最后有效运行链；尚无GPU像素/资源趋势证据。EffectChain本次仅重新构建，不能据此声称重新执行通过。S3/S5与P3仍未完成，S1/S2待验及S4–S7保留，不关机。
+- 本次接续双守卫通过；下一片仅补右键删除/重置、目标选择与容量边界验证。恢复点计划写入`E:/项目/Veyra/archives/p3-execution-20260928-a28/s3-editor-storage-slice/`并逐文件复核，成功前不计存档完成。
+
+## a28 S3编辑图接线切片（037–044）
+
+- bridge分离编辑图与最后接受运行链；currentSession保存完整旁置文档，按稳定ID操作，断线文档保留最后运行链。NodePage接三项右键、真实连接线与端口连线；旁置复制不自动提交运行链。选择校验改按editor，复制避让280px高卡片。未改变算法或冻结路径。
+- 037构建成功；038的PowerShell退出码展开错误、039的路径转义错误不算测试通过；040用Python传播子进程退出码，两项CPU单测通过。041部署成功但未包含随后修改的QML；042根对象查找错误、043查出旧QML副本；044显式同步并核验后，真实鼠标菜单复制/端口连线及独立双进程保存重启通过。原失败保留。
+- 证据：`E:/项目/Veyra/tests/p3-execution-20260928-a28/ui-editor-v3/result.json`；命令037–044及原始日志在`E:/项目/Veyra/logs/p3-execution-20260928-a28/`。候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a28-editor`。没有媒体/GPU像素或资源趋势证据，不计S3/S5整关完成。
+- 已知未完成：部分预设结构变化当前临时拒绝，须保留合法功能并实现拓扑映射；SR整节点复位的全局字段、断线SR/HDR/FG草稿显示、页面整体重置Protection清理须检查；还需删除/重置实际鼠标、上限/禁用副本、完整颜色参数及不触运行链证明。下一片优先修这些直接缺口，不能用拒绝合法操作交差。
+- 接续双守卫pass，原checkout/main保持冻结。外部恢复点`s3-editor-wired-slice`保存当前32允许文件、差异和证据哈希；只代表该切片，不代表P3完成。Goal继续active，未完成不关机。
+
+## a28 S2属性提交缺陷修复（032–036）
+
+- 032先复现真实bridge的SR属性无效：`SR property ignored`。SR/HDR/FG宏只改flat settings，commit又从旧chain覆盖；列表setEffectEnabled此前也未提交运行引擎。修复仅在QmlPlayerBridge：写权威chain、统一revalidate提交，倍率/strict校验失败回滚，不改算法或冻结路径。
+- 033构建、034独立candidate-a28-setters部署、035原失败回归、036双模式及边界回归通过。覆盖SR/HDR开关、FG 3X/关闭、非法9X拒绝、strict、XeSS 4X接受/5X拒绝、保存重启。032失败证据保留，不改成成功。
+- 证据：`E:/项目/Veyra/tests/p3-execution-20260928-a28/ui-setters-before/result.json`、`ui-setters-fixed/result.json`、`ui-setters-boundaries/result.json`；命令记录在同任务logs目录。该脚本报告boundary沿用旧菜单说明，实际仅真实bridge API/状态/持久化测试，不是逐控件鼠标测试或GPU帧/像素验收，不能据此称画面已生效。
+- 接续前原checkout及32路径守卫通过；保留既有dirty和范围基线。外部恢复点`s2-setters-verified-slice`保存32允许路径、累计diff及证据哈希。下一片S3旁置选择持久化边界及bridge编辑文档接线；P3未完成，不关机。
+
+## a28 S3逐滑条复位切片（027–031）
+
+- 共享VSlider新增可选独立复位按钮/命中区域；NR及残差恢复1、肤质恢复未指定-1，颜色默认从现有ColorSettings读取（混合50、LUT100），混色器/分级亮度恢复0。色轮通过允许的父组件显式启用，不改冻结ColourWheel文件。非参数滑条保持原样。
+- 027构建、028独立stage通过；029新增复位测试通过但三个旧坐标测试仍按含按钮总宽点击而失败。按实际trackWidth修正坐标及中心填充断言，数值阈值未放宽；030组件19项全部通过，含NR/肤质/残差/混色器/色轮字段隔离及按钮不串滑轨。031真实应用两进程验证默认描述符、点击复位、未改字段保持和重启通过，临时Main逐字节恢复。证据：E:/项目/Veyra/tests/p3-execution-20260928-a28/ui-reset-v1/result.json。不是GPU像素验收。
+- 候选E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a28-s3-reset；QML和测试在030前显式同步。32路径守卫通过。前一基础存档首试字段名错误、复制前断言停止，按实际allow字段完成32文件哈希核对；中间两次工具封装错误未执行，已修正。
+- S3右键/旁置编辑图UI及S4–S7仍未完成。下一片接真实编辑文档/最后有效运行链隔离，不用现有立即插链的NR复制替代旁置合同。P3未完成，不关机。复位恢复点：E:/项目/Veyra/archives/p3-execution-20260928-a28/s3-reset-verified-slice/。
+
+## a28 S3编辑图/存储基础切片（022–026）
+
+- NodeGraphLayout新增稳定ID、独立旁置复制、连接/断开/删除和执行路径投影；不改变EffectChain/ChainNode二进制布局。ChainConfiguration独立保存不可变编辑文档和最后有效运行链，schema2仅带editor时启用，写入独立`.p3-editor`文件并保留旧配置。
+- 022/024构建通过；023/025/026 CPU测试通过，覆盖旁置不执行、环/合流/容量拒绝、独立参数、断线文档保存恢复、旧文件不覆盖。命令证据：E:/项目/Veyra/logs/p3-execution-20260928-a28/commands.json。既有失败记录不删除。
+- 真实bridge/QML尚未接入编辑文档，capture/切换/选中ID仍需接线；当前不能宣称画布已支持旁置复制或完整保存恢复。S3、S4–S7未完成；S1/S2剩余验收保留，P3未完成，不关机。
+- 本次接续双守卫通过；下一片先做共享参数滑条单项复位及真实鼠标测试，再接编辑图。恢复点：E:/项目/Veyra/archives/p3-execution-20260928-a28/s3-editor-foundation/，仅外部文件存档，不commit/tag。
+
+## a28 S2入口切片（019–021，本轮接续）
+
+- 接续读取Goal为active，原checkout与32路径守卫通过；未重建目标或基线。019重新构建最终fgChoicesChanged版本成功，020独立stage至candidate-a28-s2，021真实QML两进程测试6.257秒通过，Main.qml逐字节恢复。
+- 实际鼠标选择固定光流及DLSS入口；DLSS/XeSS复用唯一末位FG槽，非法光流/后端拒绝，禁用SR仍禁止重复，节点导出不入队，两模式光流/FG设置保存重启互不污染。证据：E:/项目/Veyra/tests/p3-execution-20260928-a28/ui-s2-v1/result.json；命令日志沿a28/commands.json。
+- 不是全部光流/FG实际GPU执行或所有导出入口验收，S2不打全通过。下一片先补独立编辑图身份/旁置状态，再接三项菜单，禁止把立即插入运行链的数组复制冒充旁置复制。
+- 恢复点：E:/项目/Veyra/archives/p3-execution-20260928-a28/s2-verified-slice/。S1剩余边界保留；P3未完成、不关机、不commit/tag/merge/push/Release。首次多文件文档补丁因锚点不完整被整体拒绝，回读后缩小重试。
+
+## 2026-09-28 a28 S1保护遗留清理切片
+
+- 在授权E盘隔离分支实施：Node链拒绝Protection，旧线性配置去除Protection并重映射选中索引；保留其他参数/布局，迁移提示明确，后续写`.p3-node`独立文件而不覆盖原件。列表全局保护保留，新增QML全局区域/羽化编辑入口；编辑边界显式替换旧多区域配置，节点模式拒绝此接口。未改算法/shader/采集/解码/音频/Present或CMake。
+- 命令与证据：`E:/项目/Veyra/logs/p3-execution-20260928-a28/commands.json`（001–017）；构建入口`build-targets.cmd`，CPU链/预设含旧格式迁移通过；005新增测试局部大对象导致0xC00000FD栈溢出，拆成独立noinline测试函数后007通过，未增大栈限额或删除断言。
+- 009直接从build启动GPU探针缺依赖（0xC0000135），改为新候选包含已核验运行依赖后011–014通过。单层保护、四层保护、四层保护+颜色、四层羽化各8帧；共享光流、独立参数/资源、同帧下游输入、全层Evaluate及D3D12 debug检查通过。范围是探针指定的1080p素材/中心裁剪，不冒称全部SR/HDR/全区域边界已验。
+- 015构建、016部署`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a28-s1`、017真实QML双进程通过：鼠标全局开关、模式确认/返回、实际菜单无Protection、直接调用拒绝、列表区域保存恢复与模式隔离。独立data-dir，注入Main.qml逐字节恢复；不是自由连线或完整GPU画面验收。
+- 恢复点使用`E:/项目/Veyra/archives/p3-execution-20260928-a28/s1-verified-slice/`逐文件+manifest+diff；写前原件位于`start/`、`s1-before/`及`s1-ui-before/`。header第一次CONSTANT→chainChanged更改前原件没有独立保存，不能将后续备份称为开工原件；该一行变化及当前文件完整保存。
+- S0身份完成；S1主体已验证但列表全边界/SR代表与旧UI启动迁移补验仍未齐，S1不打全通过。P3未完成、Goal继续active、未关机。独立S2入口接线可以继续，不得把S1待验结果作为已通过前提。无commit/tag/merge/push/Release。
+
+## 2026-09-28 a27 用户取舍入总方案，并原位重写P3剩余计划（仅文档）
+
+- 用户决定：NR跨SR与多Color穿插继续；节点右键只做删除/复制/重置，每滑条旁保留单项重置；复制为旁边相同参数但新ID/独立状态/未连接的副本，不绕单SR、HDR、FG或容量限制。2.0只做列表模式/列表预设离线导出，节点导出延期；其他旁置/诊断/高级字幕/屏幕等原需求保留。删除节点Protection及列表全NR栈保护合同沿a26，并优先处理遗留。
+- 先修改`UI_V2_0_0_MASTER_PLAN_2026-09-27.md`的F08/F11/F13/F22、P3/P4任务、设计稿例外与导出反例；避免旧“节点导出拒绝即F13失败”复活。新增完整Undo/Redo及独立参数复制粘贴工具栏不再强制，原图对比、颜色预设、LUT导入和真调色控件保留，不顺手删除旧版已实现能力。
+- 唯一`UI_P3_REMAINING_EXECUTION_2026-09-27.md`原位重写为S0–S7：守卫→Protection遗留→光流/FG/单SR/导出门禁→编辑/重置→合法执行→运行恢复→诊断/矩阵/稳定性→交付。逐片写修改边界、验收和出关条件，旧A/B及a16–a20证据复用，a24恢复后回归合并首个必要代码候选。13项完成清单均如实保留待完成/待补验，完整17屏/42动效仍P5，其他总方案功能不遗漏、不自动塞进P3。
+- 实际`get_goal`只读结果为paused；没有恢复、创建或完成Goal。旧objective中的“不缩减目标/按A→B→C→D→E”不能覆盖真人本次范围与顺序。本轮未启动夜间运行或设置服务端预算，不将停止规则描述为支出硬熔断。
+- 写前双守卫通过，使用原区`ui-migration-scope-guard.ps1 -Evidence E:/项目/Veyra/logs/p3-replan-20260928-a27/original-scope-start.json`及隔离`python -B scripts/acceptance/p0-p1-r53-control.py guard --baseline E:/项目/Veyra/archives/p3-colour-controls-20260927-a8/scope-baseline.json --sha256 0e5dd714ce5717219d6b8f02493a7060e456bbfb557a5fcfa51476bea70e2412`。写前哈希/dirty清单在本轮logs，四份原文档保全于`E:/项目/Veyra/archives/p3-replan-20260928-a27/`。
+- 首次整文件补丁因工具不允许同路径Delete+Add而被拒绝，未改旧P3计划。改用`apply_patch`写`E:/项目/Veyra/tmp/p3-replan-20260928-a27/p3-plan.md`，确认目标与已保全旧稿字节一致后，用同盘原子替换写回唯一计划；暂存文件已被移动，不留并行队列。记录在`plan-replacement.json`，原稿SHA256=`761efa65281e28794cd7ccebfd2f8016ae7d5a7131dd6dee079e3ebffee5ee2a`，原件校验保持一致。此为文档写入方式调整，不是产品回滚。
+- 最终双守卫已执行；随后文档校验脚本因传输中的换行转义触发Python SyntaxError，未执行到合同/哈希断言，也未改产品。修正为`chr(10)`拼接，复用已返回的守卫证据，仅重跑文档合同/哈希/差异检查，不重复守卫、构建或GPU测试。失败与修复记入本轮verification证据。
+- 同步CURRENT_STATUS以paused和新顺序覆盖旧历史状态。本轮仅四份文档，不改产品/算法/候选/用户数据/旧基线，不构建/GPU测试，不commit/tag/merge/push/Release。最终执行差异检查、合同断言、全文件哈希对比和双守卫；实际结果以`E:/项目/Veyra/logs/p3-replan-20260928-a27/verification.json`及两个scope-final证据为准，文档通过不等于P3功能完成。
+
+## 2026-09-28 用户缩减NR保护：仅列表全局保留，节点取消（a26，仅文档）
+
+- 用户明确取消节点NR保护，只在列表保留一个保护区域，区域内剔除所有层NR的效果。同步唯一P3剩余计划、2.0总方案、CURRENT_STATUS及本记录；不新增平行待办。节点设计从8类改为7类；光流固定输入后、DLSS/XeSS互斥、单SR实例限制保持。
+- 从活动C/D/E范围删除保护节点任意位置、层间、跨SR原图引用及第二SR参考路线；不再调试a23或重跑已取消的保护矩阵。历史失败/已验切片原样留存，不将取消记为通过。列表全局保护针对整个NR栈，保留应有的超分/调色等非NR效果；旧节点配置须显式兼容、不执行Protection、不丢其余链路、不静默覆盖原配置、不串改列表设置。
+- 写前原区`ui-migration-scope-guard.ps1 -Evidence E:/项目/Veyra/logs/p3-list-only-protection-20260928-a26/original-scope-start.json`通过；隔离`python -B scripts/acceptance/p0-p1-r53-control.py guard --baseline E:/项目/Veyra/archives/p3-colour-controls-20260927-a8/scope-baseline.json --sha256 0e5dd714ce5717219d6b8f02493a7060e456bbfb557a5fcfa51476bea70e2412`通过，核验原区1457/隔离1061文件。既有dirty不恢复，基线不改。
+- 本轮证据只写`E:/项目/Veyra/logs/p3-list-only-protection-20260928-a26/`；写前文件哈希`before-hashes.json`。收尾执行`git diff --check`、文档合同断言、全文件前后哈希对比及最终双守卫，实际结果以`verification.json`、`scope-final.json`、`original-scope-final.json`为准；这些仅证明文档范围与一致性，不代表功能验收。
+- 本轮不改产品代码、不启动构建/GPU测试、不动候选或用户配置，不commit/tag/merge/push/Release。a24撤回后尚未新构建/回归，纳入下一必要代码切片的定向检查；NR保护移除/列表语义也尚未实施。完整P3不标完成，不扩冻结范围。
+
+## 2026-09-28 P3节点设计确认：输入后固定光流、互斥补帧入口（仅文档）
+
+- 用户纠正位置为“输入节点的后面，也就是最前面”，并要求写入计划。已在唯一剩余计划`docs/UI_P3_REMAINING_EXECUTION_2026-09-27.md`第1.1节记录：固定共享光流配置，DLSS/XeSS两个入口共用一个补帧槽，单超分节点/运行实例；输入/输出另计。不调整NR/调色实例上限，不把8类新设计冒充当前已实现菜单。
+- 规定复用已有光流和补帧后端，只补展示/桥接/配置/保存恢复；共享光流不能因关闭补帧而错误切断NR/部分超分依赖。底层算法、实际调度与其他冻结范围不变，选择后端沿用原有重建/reset。新增验收并入原D/E，不缩减A–E，不启动新并行目标。
+- 同步计划中的陈旧“下一切片a23”：a23第二超分参考实例未通过RTX/FSR验收，a24已按单实例要求定向恢复三个产品文件；证据分别在`E:/项目/Veyra/logs/p3-postsr-protection-20260927-a23/`及`E:/项目/Veyra/logs/p3-single-sr-20260928-a24/restore.json`。撤回后的新构建/回归仍未执行，最后已验证候选仍是a22；本次没有重跑测试或修改代码。
+- 写前原区`ui-migration-scope-guard.ps1`与隔离32路径`p0-p1-r53-control.py guard`均通过；本轮证据目录`E:/项目/Veyra/logs/p3-node-design-20260928-a25/`。只修改本WORKLOG与上述剩余计划，不改旧基线、原checkout、main、候选、用户配置或运行库；不commit/tag/merge/push/Release。文档检查与最终范围/哈希核验结果以该目录的`verification.json`和`scope-final.json`为准，不代表功能验收。
+
+## P3 C：层间Protection切片a22通过（承接2026-09-27任务，主机时钟2026-09-28凌晨）
+
+- 本切片只修改`EnhanceGraph.h/.cpp`和`EffectChainTests.cpp`。新增有界层间保护纹理：`NR→Protection→NR`、`SR→NR→Protection→Color(s)→NR`及`NR(s)→Protection→Color(s)→NR→SR→NR`已接到生产执行；复用原Protection pass/shader。保护还原整个上游NR栈，下一层读取保护后纹理，最终不重复施加保护。按目标层尺寸分配/预算/释放；live结构开关和全局关闭NR在任何参数变化前拒绝，区域/羽化修改仍通过原applySettings重置历史。未修改算法、shader、采集/解码/音频/Present或其他冻结范围。
+- `E:/项目/Veyra/logs/p3-internr-protection-20260927-a22/001–006*.result.json`全部exit0、post_guard=pass：产品+单测构建11.752秒，完整EffectChain单测0.026秒，暂存2.197秒，GPU探针构建4.584秒，GPU11.468秒，产品恢复17.962秒。新增单测覆盖合法位置/紧凑NR索引/Color消费者/尺寸/禁用节点/无NGX拒绝，以及SR后无全栈原图继续拒绝。
+- 005真实GPU：两层原尺寸、两层SR后、四层跨SR三类链各全屏/部分区域12px羽化live，共六个新场景；逐RGB通道保护参考max half ULP=0，下一NR输入参考max half ULP=0，最终输出≤1 code。640²场景有526235个真实NR变化通道、部分保护覆盖133187个；1440²场景3981458/941437。最终filtered与末层NR结果逐字节一致，证明未重复保护。直接受影响的a21 SR前保护另外一个回归场景通过；`INTER_NR_PROTECTION_FAILURES=0`。固定列表最终Protection接线静态检查不变，本切片不宣称新跑完整固定列表矩阵。
+- 006产品真实`SR→NR→Protection→Color→NR`：edit/reload两进程均通过，实际播放、live不重建、两模式隔离/切回、保存重启、两类导出拒绝且无文件；qml_errors=[]、Main恢复。结果`E:/项目/Veyra/tests/p3-node-backend-20260927/internr-protection-order-a22-v1/result.json` success=true、main_restored=true；不是鼠标连线验收。
+- 候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a22/veyra_qml_ui.exe`，SHA256=`788aa7b5ca5e862b2a4e94e0dc869a4cf75dab32aa6316bbbe02cf1f39514cfd`。诊断夹具/原始纹理`E:/项目/Veyra/tests/p3-node-backend-20260927/protection-a22/`；独立data-dir在`internr-protection-order-a22-v1/data/`。开工前六份源/文档快照及hash在`E:/项目/Veyra/archives/p3-internr-protection-20260927-a22/`。旧候选/失败证据均保留，未启动重复旧矩阵。本轮测试每次≤300秒、构建≤900秒，由原32路径控制器执行。
+- 反向审查：`NR→SR→NR→Protection`仍不能把含前NR的SR结果当全栈原图；Color紧邻Protection之前等其他合法位置仍未覆盖。DLSS/FSR/HDR分段、D完整鼠标编辑、E生产建图/资源趋势与参数块退出警告、A整页接口边界仍待完成。Goal active，完整P3不勾选；不commit/tag/merge/push/Release。
+
+## 2026-09-27 P3 C：SR前Protection切片a21通过FP16与产品恢复验收
+
+- 仅修改`include/veyra/pipeline/EnhanceGraph.h`、`src/pipeline/EnhanceGraph.cpp`和直接EffectChain单测：分段链允许`NR(s)→Protection→Color(s)→SR→Color(s)→NR(s)→Color(s)`；Protection复用原pass/shader，源尺寸原图引用为增强前源图，独立FP16输出进入SR；最终输出不重复保护，SR后NR继续生效。未改NR/颜色/保护算法或shader。结构启停live拒绝且不污染状态，区域/羽化live允许。
+- 首轮005 GPU验收exit1：四场景各有一项“前NR变化超过1个8位码值”的样本敏感性断言失败；顺序、SR输入、下游NR输入与最终像素均通过。独立检查发现526235个FP16通道真实变化、最大131 half ULP，因此未删除断言或放宽最终像素误差；添加只读保护纹理诊断getter，改为逐通道核对FP16保护结果及真实变化覆盖。v1失败证据保留。
+- 最终006产品/单测构建12.287秒，007完整EffectChain单测、008暂存、009探针构建4.545秒、010 GPU测试8.085秒均exit0且post_guard=pass。四场景（两层/四层，全屏/部分区域12px羽化live）每次1228800个保护RGB通道独立参考max half ULP=0；全屏覆盖526235个变化通道，部分覆盖133187个。SR输入与最终输出max code=1，后NR输入max code=0；下游NR仍改变29173–2509234个RGB通道，`PROTECTION_BOUNDARY_GPU_FAILURES=0`。
+- 产品两进程edit/reload均exit0：实际`NR→Protection→Color→SR→NR`播放、live不重建、模式隔离/切回、保存重启通过；单项/批量导出均拒绝且无文件，qml_errors=[]，Main恢复。结果`E:/项目/Veyra/tests/p3-node-backend-20260927/protection-order-a21-v2/result.json`：success=true、main_restored=true。此为产品bridge恢复证据，不冒充鼠标连线验收。
+- 最终候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a21-v2/veyra_qml_ui.exe`，SHA256=`31e5189430f0c27a627bec532b37003d6733510e59d74c208c2414ccccf05c90`。日志`E:/项目/Veyra/logs/p3-protection-boundary-20260927-a21/`；诊断夹具及pixels-v1/v2位于`E:/项目/Veyra/tests/p3-node-backend-20260927/protection-a21/`。修改前七份源码/文档快照在同名archives目录，保留旧候选/失败证据。所有构建/测试经`p0-p1-r53-control.py run`按原32路径基线执行，原区及隔离guard均通过。
+- C仍未完成：SR后Protection的全栈原图引用、其他合法Protection位置仍缺；DLSS/FSR/HDR分段未实机验收。D完整鼠标编辑、E生产建图/资源趋势及退出参数块警告、A整页接口边界仍未收口。Goal保持active，不commit/tag/merge/push/Release。
+
+## 2026-09-27 P3 C：跨SR的NR分段执行a20通过RTX SDR定向验收
+
+- 本切片仅修改`include/veyra/pipeline/EnhanceGraph.h`、`include/veyra/engine/GraphDescription.h`、`src/pipeline/EnhanceGraph.cpp`、`tests/unit/EffectChainTests.cpp`及三份状态文档。按编译计划逐层分配源尺寸/工作尺寸NR资源，在前后NR之间执行一次SR；SR读取真实前NR/调色输出，后NR读取真实SR/调色输出，最终blit与live setter保留最后NR及尾部Color结果。复用既有算法，不改shader、NR/颜色算法、采集/解码/音频/Present或CMake。
+- 新增准入防护：分段链暂拒绝Protection（尚缺阶段本地原图引用）及noNgx/noFeatures；live关闭NR或开启Protection在任何状态写入前拒绝，要求controller重建。拒绝合法Protection只是防错，不计C完成；不能据此缩减原P3目标。
+- 命令均由`p0-p1-r53-control.py run`以不可变32路径基线执行，日志目录`E:/项目/Veyra/logs/p3-split-nr-20260927-a20/`：001产品/单测构建通过；002单测exit1（新增断言误要求等尺寸SR仍保留执行step，原编译器会折叠它）；003仅重建修正单测、004完整EffectChain单测通过；005暂存v1、006构建GPU探针、007真GPU矩阵及008产品edit/reload通过；009增加live/旁路防护后产品与单测构建、010最终单测、011暂存v2、012边界探针构建均通过；013最终v2真GPU拒绝后继续渲染通过（3.980秒）；014最终v2产品edit/reload通过（18.069秒）。各返回run均post_guard=pass，无超时，不覆盖002失败。
+- 007真实RTX SDR矩阵：NR→SR→NR、两侧连续Color/禁用槽、live反向曝光（reset=false）及NR→NR→SR→NR→NR。前NR为640×640，真实SR与后NR为1440×1440；SR输入逐RGB参考误差≤1 code，后NR输入与最终输出max code=0。后NR残差1场景确实改变26955个RGB通道；trace证明SR仅一次、NR/Color顺序正确。证据在`tests/p3-node-backend-20260927/split-nr-a20/pixels-v1/`（以下测试相对路径均位于E:/项目/Veyra/）。
+- 013最终v2边界：live关闭NR/开启Protection必须失败且不污染模型，两侧lowLatencyPairing分别为true/false，失败后仍实际渲染；SR输入、后NR输入、最终输出max code=0，`SPLIT_NR_EDGE_FAILURES=0`。仅补测新增准入行为，不重复007无变化的完整矩阵。证据`tests/p3-node-backend-20260927/split-nr-a20/edges-v2/`。
+- 008与014真实产品两进程通过模式隔离、切换、保存重启及live不重建；单项/批量导出明确拒绝且无输出，qml_errors=[]，临时Main注入均恢复。最终结果`E:/项目/Veyra/tests/p3-node-backend-20260927/split-nr-order-a20-v2/result.json`：success=true、main_restored=true，测试顺序NR→Color→SR→NR。此证据不是鼠标连线/断开验收。
+- 当前最终候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a20-v2/veyra_qml_ui.exe`，SHA256=`ba19b6102e7be43d215cca5ac54d29a84dfd9a0a80ffe298218aebf68ee16b68`；v1及旧候选保留。探针源码/编译入口在`split-nr-a20/`，读回只在外部诊断，不进入产品播放路径。接续原区/隔离范围守卫通过，1457/1061文件受保护；证据汇总命令有一次Python字符串转义语法失败，改PowerShell读取后成功，未修改产品。
+- 已知未完成：合法Protection位置/跨SR原图引用；DLSS/FSR/HDR分段实机像素；D完整鼠标节点编辑与失败回滚；E生产200条链/50次切换资源趋势。仍见`core-host: destroying leaked parameter block at shutdown`，不宣称无泄漏。A整页工具栏/片源接口边界仍在。Goal保持active，完整P3不勾选；未重跑a17/a18/a19及已完成A/B矩阵，未commit/tag/merge/push/Release。
+
+## 2026-09-27 P3 C：NR→Color→SR接点a19通过RTX直接验收
+
+- 范围仍为`EnhanceGraph.h/.cpp`和`EffectChainTests.cpp`。新增pre-SR颜色分类、逐槽源尺寸纹理、NR/保护完成后调度及清理；RTX Video SR编码输入/HDR重建原图、DLSS输入、FSR输入和compute旁路连接该输出。没有该节点边界时保持原列表资源选择，原图对比仍读原入口。仅增加两个借用SR诊断资源访问器，播放路径无CPU回读；未改算法、shader、采集/音频/Present、CMake、旧Win32。
+- 日志`E:/项目/Veyra/logs/p3-pre-sr-color-20260927-a19/`：001产品/单测构建exit0；002单测exit1，唯一失败是旧测试仍要求拒绝现已支持的NR→Color→SR。更新为实际顺序保留且preSrColor(0)成立的正断言，未削弱跨SR/离线保护；003构建、004完整EffectChain单测均exit0。005暂存新候选，006编译新GPU探针通过。
+- 007实际RTX5070/NGX像素验收exit0，6.941秒：禁用首Color/NR槽、连续两层+0.5EV、live两层-0.5EV、多NR与Protection后-1EV。每场景读取实际NR FP16基底、真正交给RTX Video SR的640×640 RGBA8纹理及1440×1440后端输出；独立逐步曝光/量化/编码参考的全部1228800输入RGB通道max code=0；最终6220800 RGB通道对照真实SR输出max code=0。GPU trace证实NR→Color(s)→SR，每Color只执行一次，live无重建。原纹理/PNG保存在`E:/项目/Veyra/tests/p3-node-backend-20260927/pre-sr-color-a19/pixels-v1/`。不将此RTX SDR结果外推为DLSS/FSR/HDR或所有显卡实测通过；这些输入接点已连接，但本切片没有相应实机像素证据。
+- 008实际软件edit/reload均exit0，17.209秒，qml_errors=[]：声明顺序实际运行、live不重建、列表/节点独立参数及模式切换、重启恢复；单项/批量导出明确拒绝，无导出文件；Main注入finally恢复。证据`E:/项目/Veyra/tests/p3-node-backend-20260927/pre-sr-order-a19-v1/result.json`。所有控制run post_guard=pass；本轮未重跑a17/a18像素或A/B矩阵。
+- 当前候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a19`，exe SHA256 `1f0ede4e89b648129a41f4c77bfd0089bab9355417201b457a4cdf12e00688ff`。诊断源/编译入口保存在`pre-sr-color-a19/`；旧候选及运行库未覆盖。4次工具封装错误被代理拒绝，未执行代码；探针生成命令另有一次Python换行转义语法失败，修命令后成功，均不计产品失败或通过。
+- 退出`destroying leaked parameter block`警告仍出现，未定位；NR跨SR、任意Protection位置、完整D编辑语义及E资源趋势仍缺。C和完整P3不勾选，Goal保持active。下轮切片只处理NR→SR→NR的逐层尺寸及GPU阶段边界；先明确最小接点，不再重复本轮有效验证。
+
+## 2026-09-27 P3 C：NR层间Color切片a18通过直接验收
+
+- 仅改`EnhanceGraph.h/.cpp`及`EffectChainTests.cpp`：接纳连续NR→Color(s)→NR，独立颜色槽与compact NR资源不混用；下一层encode、下采样、残差/temporal原图均消费层前调色结果，live更新失效下游历史。未改shader或NR/颜色算法。
+- 证据目录`E:/项目/Veyra/logs/p3-inter-nr-color-20260927-a18/`：001/004构建、002单测、005候选通过。006诊断编译错误把enabled放在参数而非ChainNode上，007修诊断通过。008像素参考失败：两个半档曝光的host nearest参考与本机FP16 UAV量化不符；对原纹理139组组合离线分析后改逐步向零量化，未放宽≤1 ULP阈值或改shader。010普通多层场景通过，但SR前场景误用offline合同被已有保护拒绝，整体exit1，不能称全通过；011仅修探针为真实preview，012单独补测通过，不重复已成功矩阵。
+- 真GPU通过范围：禁用槽、连续Color、live正负曝光、下游NR residual=0及1、四NR/三个调色边界、NR→Color→NR→SR预览。每640×640边界1228800个RGB通道input max ULP=0；零残差原图max ULP=0；最终RGB误差≤1 code。SR预览实际640→1440。FP16量化是本机观察，不外推所有GPU；temporal开启、多尺寸组合和长期性能未新增验收。
+- 013实际产品edit/reload均exit0，16.397秒：真实GPU顺序、live不重建、两模式隔离/切换/重启、单项及批量导出明确拒绝且无文件，qml_errors=[]，Main注入finally恢复。证据`E:/项目/Veyra/tests/p3-node-backend-20260927/inter-nr-order-a18-v1/result.json`。所有控制run的post_guard=pass。
+- 当前候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a18-v2`，exe SHA256 `7e425d11ce7e4ae10522ce2d354717db5ecbff6f5618c327821a443f0ac7bacd`。退出参数块警告仍未定位，不称无泄漏；C及完整P3不勾选。
+- a19开工原区guard及32路径controller guard均pass；原区证据`E:/项目/Veyra/logs/p3-pre-sr-color-20260927-a19/original-scope-start.json`。下一切片仅NR→Color(s)→SR输入接点，复用算法并检查所有SR后端；不触及NR跨SR。
+
+## 2026-09-27 P3 C：SR→Color→NR真实执行切片a17通过
+
+- 修改仅`EnhanceGraph.h/.cpp`及`EffectChainTests.cpp`：共享node Color资源，按执行位置排除入口重复调色；在SR后、NR前执行；NR借用、下采样、残差/temporal/堆叠保护原图引用中间调色输出。复用ColorGradeInstance，不改NR/颜色算法、shader或其他冻结链路。
+- `E:/项目/Veyra/logs/p3-prenr-color-20260927-a17/001–007*.result.json`保存完整命令、耗时、exit及守卫；001产品构建、002单测、003候选、004探针链接、005中间GPU、006受影响尾部GPU、007生产顺序均exit0/post_guard=pass。统一命令为`python -B scripts/acceptance/p0-p1-r53-control.py run --baseline <a8 scope-baseline.json> --sha256 0e5dd714ce5717219d6b8f02493a7060e456bbfb557a5fcfa51476bea70e2412 ...`，基线不变。
+- 真GPU：RTX Video SR quality1将640×640放大至1440×1440，实际NGX NR；pre+1/tail-1与live pre-1/tail+1，每场景2073600像素/6220800 RGB通道。NR输入对真实SR输出曝光的max half ULP=0，最终对真实NR结果尾部曝光的max code=1；入口无重复调色，stage顺序SR<pre-nr-color<NR<tail-color。`prenr-color-a17/pixels-v1`保存FP16/PNG，`tail-regression-v1`保存必要回归。
+- 007实际产品测试命令尾为`python -B E:/项目/Veyra/tests/p3-node-backend-20260927/tail-order-check.py <candidate-a17> <prenr-order-a17-v1> pre-nr`，17.088秒、exit0。`prenr-order-a17-v1/result.json`：edit/reload均success=true、qml_errors=[]、live_no_rebuild=true、实际pre-NR dispatch，列表/节点独立恢复、两种导出拒绝，Main在finally已恢复。该测试不冒充鼠标节点编辑或完整D。
+- 候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a17`；exe SHA256 `9169642a2235994ce2b05e86dd2c2e9fcbd124f85120ee2624ebfef79ca0af12`。没有提交、推送、发布或修改旧候选/用户配置。参数块退出警告未定位；C及完整P3仍未完成。下一切片为NR之间Color，见唯一剩余计划的一行切片卡。
+
+## 2026-09-27 P3 C：尾部Color真实执行切片a15–a16通过
+
+- 产品修改：`EnhanceGraph.h/.cpp`以原ColorGradeInstance连接SR/NR/保护之后、HDR/FG之前的Color；跳过前置重复调色，保留参数槽身份、独立资源及live更新。`QmlPlayerBridge.cpp`批量导出入口与单项导出一样拒绝尚未传输的Node链，防止静默摊平。`EffectChainTests.cpp`补合法尾部/禁用槽/越界/未支持中间交错检查。没有改算法、shader、采集、音频、Present、CMake、旧Win32。
+- 真实失败保留：001构建包装反斜杠损坏导致exit0/空日志，不计通过；005探针缺EffectChain目标链接失败；006直接链接已构建obj后通过。007真GPU发现live调色后最大误差44 code（旧setNrEnabled覆盖最终blit输入），以及探针未初始化COM导致PNG保存失败；前者修产品接线，后者只修诊断夹具，没有放宽像素阈值。
+- 008原生构建exit0，009新候选staging exit0，010探针重链接exit0。011真RTX5070/NGX测试exit0：NR→Color初始+1EV、live -1EV、禁用Color0的5层尾部Color，均409600像素、每RGB通道误差≤1 code、above_one=0；入口未重复调色，固定列表精确曝光回归通过，6张actual/expected PNG及NR FP16保留。旧参数块退出警告仍出现，未宣称无泄漏。
+- 012真实QML产品edit/reload均exit0：尾部GPU dispatch有日志；改曝光不重建；列表/节点参数隔离及切换、重启实际播放恢复；单项/批量导出均明确拒绝，无输出文件、队列不增长；Main注入finally恢复，qml_errors=[]。这不是鼠标节点连线或完整D验收。
+- 命令统一经`python -B scripts/acceptance/p0-p1-r53-control.py run --baseline <a8 scope-baseline.json> --sha256 0e5dd714ce5717219d6b8f02493a7060e456bbfb557a5fcfa51476bea70e2412`，各完整命令/exit/耗时/post_guard见`E:/项目/Veyra/logs/p3-tail-color-20260927-a15/001–012*.result.json`；产品构建目标`veyra_qml_ui veyra_effect_chain_tests`，单测003通过。所有实际控制run post_guard=pass。
+- 产物：新候选`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a16`；像素`tail-color-a15/pixels-v2`；生产证据`tail-order-a16-v1/result.json`；诊断源码/构建脚本`tail-color-a15/`。旧a14/a15和失败证据保留，未改用户配置/原checkout/main/运行库，没有commit/push/发布。
+- 完整C/P3仍未完成。下一切片：`C｜SR→Color→NR中间调色仍被拒绝｜EnhanceGraph及EffectChain定向测试｜SR输出先调色再进NR，复用算法｜计划单测+真GPU纹理输入+产品桥接｜同因两次有据修复/20分钟无进展停该路径`。NR跨SR及NR之间Color不在此切片，不冒充已支持。
+
+## 2026-09-27 真人恢复P3有限后端授权，开始C执行器切片
+
+- 用户对限定节点执行/独立配置/保存恢复授权回复“允许，继续吧”；get_goal已确认active，原A–E目标不变。原区及隔离区开工守卫pass，旧基线不改。
+- 切片卡：`C｜合法交错链被固定rank执行器拒绝｜GraphDescription/EnhanceGraph及直接EffectChain测试，必要时既有Controller传输接点｜按声明顺序复用现有GPU算法及资源｜针对性单测、限定构建、独立data-dir生产链验证｜越界立即停，同因最多两次修复，单测300s/构建900s上限`。不重跑A/B，不修改算法/采集/音频/Present/旧Win32/CMake。
+
+## 2026-09-27 P3三轮授权冲突审计：Goal已设blocked
+
+- 前一目标轮归类为实际进展：a14有QML修复和匹配范围的验证。当前为第二次自动续接，未收到真人追加后端授权；自动Goal提示不构成撤销UI-only限制。
+- 当前原区守卫pass（474冻结文件），隔离守卫pass（原区1457/隔离1061文件）。只读取当前冻结条款及剩余计划，没有重跑产品测试、创建候选或修改后端。
+- 同一冲突覆盖原用户触发轮、首个自动续接和当前续接，已达到三个实际目标轮次。安全UI切片已结束，A整页接口缺口及C–E推进均需消除范围冲突，无可继续的安全切片。
+- 已调用`update_goal(status=blocked)`，工具返回blocked；未标complete/paused，原完整P3目标保持不变。此后仅同步五份状态文档，不算新产品进度。
+- 恢复条件：真人明确恢复P3限定节点执行/独立配置/保存恢复所需后端接点，并恢复目标。采集/解码/音频/Present、NR颜色算法、CMake/旧Win32及提交发布等禁区保持，不因授权某个接点自动全量解冻。
+
+## 2026-09-27 P3 a12–a14：混色器实测对照及安全切片停止点
+
+- 切片卡：`A｜混色器列不齐/模式居中/视口不一致/中心填色缺失｜ColourMixer、ColourPanel、ProPage、VAccordion、VSlider及tst_components.qml｜设计同状态几何及真实参数操作｜a13/a14定向命令｜越界立即停，不进入冻结后端`。无commit/tag/merge/push/Release；原checkout/main/1.4.4、设计稿、运行库及用户配置不改。
+- a12补模式标签、150px滑轨及连续行，但原稿实际viewport1256×708而非1280×800；采样exit0不等于视觉通过。旧结果保留。a13外部夹具使用1304×892外窗，实际断言viewport1280×800/DPR1，不修改原稿。
+- a13把混色器行改为局部固定列RowLayout，不改共享VRow；补右侧模式切换。实测父级：侧栏边框2px、卡片边框2px、滚动占位10px导致原318/QML332差异；仅调色页按这些构成修正，非调色页边距/滚动条维持原值。
+- a14通过截图再发现中心填色缺失，VSlider增加默认关闭的showCenterFill，由调色参数显式启用；正负方向及混色器正数加号有测试，参数合同/处理算法不变。
+- 命令：`cmake -E copy_directory qml E:/项目/Veyra/build/p2-nr-20260927/qml`后经`p0-p1-r53-control.py run`封装stage、Quick Test和真实生产页面脚本。完整command、exit、耗时、post_guard见`E:/项目/Veyra/logs/p3-colour-controls-20260927-a13/*.result.json`和`...-a14/*.result.json`；a14 stage1.985s、7定向用例1.961s、生产页面3.753s，均exit0/post_guard=pass，测试上限120s。Qt报告9 passed/0 failed（包含init/cleanup），不是9个独立产品功能。
+- 生产结果`E:/项目/Veyra/tests/p3-node-backend-20260927/colour-ui-a14/result.json`：真实bridge写回、旁路、独立还原、几何断言通过；无QML错误、临时Main原字节恢复。原稿`colour-design-a13/result.json`仅混色器控件状态一致；容器318×184、滑轨x116/width150、三行y79/117/155均匹配。原稿/最终混色器/校准截图已查看。
+- `E:/项目/Veyra/logs/p3-colour-controls-20260927-a14/final-colour-comparison.json`：18项检查true，5个QML源/构建/候选一致；原生exe与a11同SHA256 `de8402f08dbe32c6841392ef2a6164ba5b3edcfed89249c520307b237650eadd`。本轮未重建/修改原生后端，不能据此声称所有历史后端改动已验收。
+- 本轮一次外部夹具生成出现Python字符串转义SyntaxError，无文件写入；改成chr(10)后成功，不重复原错误。所有新候选/脚本/截图在E盘，测试TEMP/TMP由control封装限定进程树。a11/a12/a13旧证据不覆盖。
+- **未完成**：A整页片源/工具栏状态不等价，缺接口功能不得伪造；B沿用a9-v3通过，不重跑。C–E因最新UI-only禁止engine/pipeline及R5.4/R5.5继续，现有后端成果保留冻结。Goal当前active，不宣称P3完成。
+- **下一次自动续接**：安全UI切片已收口，不再换候选编号重复刷验收。同一授权冲突已出现在用户触发轮及当前首个自动续接；压缩交接不是新turn。若下一实际Goal轮仍无真人授权/安全待办，达到连续三轮门槛后设置blocked，不能以保持active的方式循环消耗。
+
+## 2026-09-27 22:06 P3续接：A图标组头/滑条，B证据收口
+
+- 切片卡：`A｜组头仍是文字按钮、滑条列不齐/校准无渐变｜VAccordion.qml、ColourPanel.qml、tst_components.qml｜左眼睛右还原/42px组头/150px滑条/三原色渐变｜下列定向命令｜任何越界或同因两次失败即停`。只改QML和直接测试；后端现有修改冻结，没有继续C执行器。本轮新提供的UI-only规则比历史有限节点授权更新，C–E需要消除范围冲突，不能用分支顶部历史授权或32路径guard替代用户决定。
+- 开工原区守卫pass（474冻结文件）、隔离32路径guard pass（原区1457、隔离1061）；沿用a8子基线，未改guard或重采样hash。Goal读取为active，未再创建、暂停或宣称complete。
+- 产品修改：VAccordion新增默认关闭的紧凑组头/旁路表现及左动作槽，普通组头保留48px；ColourPanel用已有eye/eyeoff/reset图标、24/26px按钮及42px头，点击动作不折叠；旁路标题删除线、内容45%透明；本页参数行固定150px滑条与40px数值列，补红/绿/蓝校准色相渐变。参数上下限、默认值、既有接口/算法不改。
+- 资产部署：纯QML变更无需重复编译原生代码；先用既有cmake `-E copy_directory qml E:/项目/Veyra/build/p2-nr-20260927/qml` 刷新资产，再经control.py stage脚本生成全新 `E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a11`。`001-stage-a11` exit0/post_guard pass，2.018s。TEMP/TMP只在子进程树设为E盘任务目录；旧候选不覆盖。
+- 控件验收：control.py执行 `candidate-a11/veyra_qml_quick_tests.exe -o .../qt-header-a11.txt,txt Components::test_colour_header_leading_action Components::test_accordion_header_action_keeps_open_state Components::test_accordion Components::test_slider_tap Components::test_slider_drag`；`002-colour-header-a11` exit0/post_guard pass，0.619s，5个用例+init/cleanup共7 passed/0 failed。实际鼠标验证左右动作不误折叠、旁路透明度恢复和普通标题仍可折叠。
+- 生产页面：为旧外部测试建立`colour-ui-a11-check.py/.qml`独立版本，增加几何/图标/校准真实参数与还原断言，未覆盖旧脚本。control.py执行该脚本、candidate-a11及独立`colour-ui-a11`数据目录；`003-colour-ui-a11` exit0/post_guard pass，3.376s，result success=true、qml_errors=[]、main_restored=true。1280×800/DPR1三张截图保留；已查看overview/calibration，无新增遮挡。该测试是生产bridge/UI证据，不是GPU像素证据，也非与示例采集原稿同全部状态1:1。
+- 所有命令/输出/耗时记录：`E:/项目/Veyra/logs/p3-colour-controls-20260927-a11/commands.json`及001–003结果/日志；页面证据`E:/项目/Veyra/tests/p3-node-backend-20260927/colour-ui-a11/result.json`。a9的真实混色器400ms弹簧取样、曲线/色轮测试本次未受影响，沿用不重跑。
+- 补齐此前未同步事实：a8曾因no-op原生构建未复制新QML而失败，显式刷新资产后a9的8用例通过；a9生产UI脚本曾功能pass但Windows原生滚动条不支持自定义，改局部Basic.ScrollBar及显式toggled参数后a10无QML错误。失败证据均保留，不能只凭PASS marker宣称无错误。
+- B证据已直接核对`runtime-order-a9-v3/result.json`：edit/reload均exit0、success=true；reload等待独立提交/position进展后保留全部有效效果/尺寸断言。17.657s、post_guard pass，a7失败仍留存。B已在剩余计划勾选，不重复执行，也不推导完整R5.4/R5.5通过。A尚缺同全部状态对照，C/D/E仍未完成；不提交、打标签、推送、合并或发布。
+
+## 2026-09-27 P3恢复：A调色控件修复
+
+- 用户明确要求开启目标模式按小计划推进；Goal active，先A再B，C/D/E不靠分支或白名单推定后端解冻。原区守卫与28路径父基线均通过后开始修改。
+- A写前新增独立范围基线 `E:/项目/Veyra/archives/p3-colour-controls-20260927-a8/scope-baseline.json`，SHA256 `0e5dd714ce5717219d6b8f02493a7060e456bbfb557a5fcfa51476bea70e2412`；继承父基线全部原文件hash，只加ColourMixer/ColourPanel及其VAccordion/VSlider四个QML直接依赖，修改前副本同目录before。没有新增后端权限或更改旧guard/baseline。
+- 已修ProPage两侧14px留白、色彩页隐藏多余处理顺序卡、深色滚动条；混色器22px/radius7/1→1.08/400ms Theme.spring；旁路还原移入可选组头动作槽、颜色轨道按原稿渐变。共享控件默认行为保留，参数范围/默认值/算法未改。当前尚待本轮定向验收，不记A通过。
+
+## 2026-09-27 P3剩余小计划：保持暂停，不继续重复审查
+
+- 用户要求把五项剩余工作单独写成小计划。本轮新建 `docs/UI_P3_REMAINING_EXECUTION_2026-09-27.md`，固定A调色UI→B最新重启→C合法单链→D编辑恢复→E兼容/资源验收；各项给出改动边界、当前缺口和完成证据。完整P3不缩水，全应用17屏/42动效仍归P5。
+- 保持用户要求的停工，不调用恢复，不运行产品构建/测试，不改QML/bridge/后端。收尾 `get_goal` 返回 `goal=null`，本轮不据此新建目标；如实记录，不宣称仍有可见的paused Goal。同步总方案与P3后端记录入口，旧active和“完全未接入生产”不再作为当前事实；a7 edit通过/reload失败、CPU测试与GPU验收的区别保留。
+- 原区守卫通过（474冻结文件），结果 `E:/项目/Veyra/logs/p3-remaining-plan-20260927/origin-scope.json`；27路径父基线guard通过，结果同目录 `isolated-pre-scope.json`。执行命令为原区 `ui-migration-scope-guard.ps1 -Evidence <日志>` 与隔离区 `p0-p1-r53-control.py guard --baseline <runtime-order-scope-baseline.json> --sha256 472fb302c709632004b02eb209c857123082496f464d3836af5ffce80e83c42f`。
+- 用户要求新建独立文档，故从父基线复制不可变文档子基线 `runtime-order-plus-plan-document-scope-baseline.json`，SHA256 `73a179ab10dc7982c754625464de950f2bd1c00abff5a15266448c92d4704ee6`；保留所有原文件hash，只新增一个Markdown允许路径，不新增代码权限，不修改旧baseline/guard/AGENTS。写前全文件hash保存在上述日志目录 `before-files.json`。
+- 写后定向文档校验和 `git diff --check -- <四份文档>` 通过，文档子基线guard通过（exit0）。`document-validation.json`确认仅四文档变化、五项未完成任务齐全、父基线hash不变、子基线只增加本计划；`isolated-post-scope.json`保存范围结果。Git提示WORKLOG下次写入可能LF→CRLF，仅为换行提示，不是失败。随后按真实 `get_goal=null` 修正文档状态，未改产品。不能把计划写完记成产品通过。
+
+## 2026-09-27 设计核对续接：确认a5仍有VA01–VA07差异
+
+- 按用户“核对设计稿的动效和样子”限定本轮为审查与记录；没有继续修改节点后端、QML、原型或播放器底层，没有新建候选、构建或重复测试。已有工作树改动全部保留。
+- 首先收取上一轮session38100终态，不重启：033 `fixed-plan-colour-live`在22.924秒内exit0，post_guard pass。结果`E:/项目/Veyra/tests/p3-node-backend-20260927/fixed-plan-colour-a5/result.json`的success/main_restored均true；曝光、曲线、混色器、色轮相对中性画面的平均像素差分别为59.7262、65.2859、7.3546、29.7341，关闭后为0。仅为合成SDR图像的真实D3D视口OS截图，不是HDR精度、视觉还原或任意链GPU验收。engine.log有`fixed execution plan accepted`，本测试nr=0，不能当成多NR验证。
+- 已读取031链单测日志末尾：864组独立旧公式尺寸对照、生产描述计划消费、禁用层参数/资源序号分离、非法尺寸及不支持顺序拒绝等断言通过。没有重跑该测试。033完整命令和终态保留于`E:/项目/Veyra/logs/p3-node-backend-20260927/033-fixed-plan-colour-live.result.json`。
+- 原区执行`C:/Users/123/Desktop/Veyra DLSS Video Player/scripts/acceptance/ui-migration-scope-guard.ps1 -Evidence E:/项目/Veyra/logs/p3-node-backend-20260927/design-a5-origin-scope.json`，474冻结文件通过。隔离区执行`python -B scripts/acceptance/p0-p1-r53-control.py guard --baseline E:/项目/Veyra/archives/p3-node-backend-20260927/fixed-plan-scope-baseline.json --sha256 e9d79a11b2cad63ff68ff4dd6822813046e6f09fc66880c09da2a5b567d92288`，原区1457/隔离1061文件通过；旧基线未修改。
+- 复核源码/a5各41个QML以及19个原型文件，均与已有视觉证据清单一致。新证据`E:/项目/Veyra/tests/design-audit-20260927/a5-visual-followup.json`采用独占创建，不覆盖原记录。a5 EXE SHA256=`9e79c48b80fe869197ff05d5f11c4a7d847444c0ae6d50e1fdadc545db00197c`。VA01–VA07仍未修复，详见总方案P5.0；只沿用已有两页截图及六类动效探针，不把它们说成17屏42项已验收或a5新视觉实测。
+- 一次只读Python提取命令因换行转义失败，修正后读取成功；另两处只读rg路径猜测不存在，未造成任何文件修改。没有将这些读取失败计为产品故障。完整P3目标仍active，任意节点执行和完整视觉还原仍未完成。
+
+## 2026-09-27 P3续接：补齐019–027证据，进入有序执行接点
+
+- 上轮视觉复核未推进P3执行器，本轮不重复该审查、不重跑已通过025/027。开工核对分支`codex/p3-node-backend-20260927`/HEAD `53a2d31`；22路径guard通过（原区1457、隔离1060），原区ui-migration-scope-guard亦通过474冻结文件。新原区证据为logs/p3-node-backend-20260927下本轮`continuation-*-origin-scope.json`。
+- 019构建5.414秒、020部署1.938秒、021真实双进程预设测试4.829秒，均exit0/post_guard pass。修复部分预设恢复后NR/Color选中实例跳第一层；a4 `preset-a4/result.json`的success/main_restored均true。命令分别为`build-targets.cmd veyra_qml_ui`、`scripts/stage-ui-migration.ps1 -UiTarget qml -Build E:/项目/Veyra/build/p2-nr-20260927 -App E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a4 -Release E:/项目/Veyra/releases/1.4.4/final/Veyra-1.4.4-win64-portable`、`python -B E:/项目/Veyra/tests/p3-node-backend-20260927/preset-check.py E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a4 E:/项目/Veyra/tests/p3-node-backend-20260927/preset-a4`。
+- 022构建`veyra_effect_chain_tests veyra_qml_ui`通过（13.499秒）；023链单测栈溢出exit3221225725=`0xC00000FD`（3.260秒）。只将巨大测试main拆成分组函数，未删断言或改产品迁就测试。024/026单独构建`veyra_effect_chain_tests`分别4.076/4.009秒通过；025/027运行`E:/项目/Veyra/build/p2-nr-20260927/veyra_effect_chain_tests.exe`分别0.008/0.009秒通过，post_guard全部pass。原始完整命令和stdout/stderr/result保留于`E:/项目/Veyra/logs/p3-node-backend-20260927/019-*`至`027-*`及commands.json，不重新生成证据。
+- `compileChainExecutionPlan`仍为CPU-only：200条固定种子合法链与864组旧尺寸对照通过，不等于GPU建图/执行、画质、时序、性能或reset通过。生产尚无调用者。修正总方案把独立模式仍记为缺接口的过时描述，同时保持完整P3未完成。
+- Windows自动残留：`C:/ProgramData/Microsoft/Windows/WER/ReportArchive/AppCrash_veyra_effect_cha_443212455e23b9b4a29f586520915dd2a77e1f4b_ef9804c1_c767e1a6-3740-4d8e-a360-ae13880a0300/Report.wer`记录c00000fd；`C:/Users/123/AppData/Local/CrashDumps/veyra_effect_chain_tests.exe.14380.dmp`为174147字节。未删除、移动，runner TEMP/TMP仍在E盘。
+- 此次先补证据账目；下一实质切片需在修改任何新路径前记录最小接点并另建不可变baseline，不更改既有基线、候选、原区/main、运行库或用户配置。
+
+## 2026-09-27 P3续接：预设内容掩码不再重建节点布局
+
+- 接续先取得现有session25809终态：013 `preset-live` exit23/runner exit1，29.276秒、未超外层时限、post_guard pass。失败在save阶段step1；空片源设置保持pending，测试错误地无条件等待`applying=false`。本轮不重复旧视觉审查；013终态改变了下一步诊断，计为新证据，不把上轮重复说明计为代码进展。失败测试原件保存在`E:/项目/Veyra/archives/p3-node-backend-20260927/preset-before-merge-repair/`。
+- 独立确认产品缺陷：bridge对非“Chain+Color”组合执行`toChain(settings)`，音频预设也会清空坐标并固定化顺序。新增共享`PresetLibrary::applyToChain`，按掩码保留/恢复拓扑；颜色按现有槽位序号替换，新增紧随最后颜色槽位、减量只移除多余颜色，未声明颜色时保全所有当前颜色实例；FG按已有尾端合同处理。先整体校验，失败不修改链或设置。bridge使用该入口；未修改算法/呈现/解码/音频链路。
+- 单测覆盖16种掩码、六颜色增删、手工顺序/坐标、链预设保留未声明颜色、采集/导出设置不变、跨模式及HDR非法激活的原子拒绝。014构建因新增测试枚举`Xess`拼写错误失败；按现有`XeSS`修正后015构建通过（6.383秒）。016预设单测通过（1.360秒），已逐项读取新增PASS断言。未修改产品枚举迁就测试。
+- 017部署到全新`E:/项目/Veyra/tests/p3-node-backend-20260927/candidate-a3/`，不覆盖a1/a2。018真实应用双进程回归通过（5.194秒）：真实v1文件、重启后完整混色器/曲线/色轮/校准/布局/XeSS后端/音频恢复、跨模式拒绝不改链、音频only预设保留当前颜色与完整链JSON。只修测试在`hasSource`时才等待applying，不移除恢复断言。`preset-a3/result.json` success=true、Main还原=true；EXE SHA256=`97eb18036be659abcfa202046824578a35ff20aea2f1ed0dbfa8e6fa82b31a92`。这是编辑器持久化证据，不是GPU/任意链执行验收。
+- 补记前轮009–012：009测试使用不存在的layoutX导致编译失败；改用实际viewX，010构建5.576秒、011 v1兼容单测1.368秒通过，012部署a2成功。上述补丁不再是“未构建”，但a2的013真实回归失败按原样保留。
+- 命令均在`E:/项目/Veyra/logs/p3-node-backend-20260927/commands.json`及009–018的result/stdout/stderr记录：runner使用原22路径baseline和固定SHA256；构建900秒、单测60秒、部署120秒、双进程测试150秒上限。原区scope guard本轮通过（474冻结文件），证据`continuation-preset-origin-scope.json`；所有runner post_guard pass。新测试/日志/TEMP只在E盘，独立data-dir；无commit/tag/merge/push/Release，无旧候选/用户配置/运行库改写。
+- P3仍未完成：有序执行器、旁置节点资源语义、200链建图、代表链GPU验证及50次切换资源趋势仍缺证据；不能用本轮掩码单测代替。下一步定位共享建图/执行接点，写前另存最小扩展baseline，旧baseline绝不覆盖。
+
+## 2026-09-27 设计续核：a4仍未消除外观与动效偏差
+
+- 本次响应用户的设计核对请求，仅更新本日志及总方案P5.0；不推进执行器、不修改QML/底层、不扩大白名单或覆盖已有证据。当前Goal仍未完成，不能把状态/预设修复当成视觉还原完成。
+- 复用`E:/项目/Veyra/tests/design-audit-20260927/evidence-manifest.json`及调色/节点两组截图、六类已有动效取样；实际查看四张截图，并读取混色器`.band`与`ColourMixer.qml`、`TopDock.qml`定义。当前源码、`candidate-a4/qml/Veyra/`的41个审查文件均与既有a1审查哈希一致（Python hashlib逐文件比较，差异0）。没有重新启动应用或重复测试；旧截图不是a4运行验收。
+- VA01–VA07仍待修复：留白与工具布局、分组密度/滚动条/渐变、节点卡片和真实画布交互、混色器22px/radius7/1→1.08/400ms spring合同、M31/M32分组错峰、Dock收起几何。switch/menu/dialog已有抽测曲线接近，不宣称所有动效都错，也不宣称17屏/42项已全审。
+- 开工双guard通过：原区474冻结文件，独立baseline原区1457/隔离1060文件。原区证据`E:/项目/Veyra/logs/p3-node-backend-20260927/design-followup-origin-scope.json`；baseline沿用`state-scope-baseline.json`及SHA256 `d9943d4c28b305c80b7732558e50926a9c0a49e0a81c97c03df6eadb1e40fb9b`。只读定位脚本曾因换行转义报SyntaxError，去掉字符串中的换行后成功；没有运行任何产品测试重试。
+
+## 2026-09-27 用户追加：对照批准设计核对外观与动效
+
+- 本次只做审查及文档记录；未修改产品QML/C++/shader、原型、原桌面区、main、用户配置或旧候选，没有merge/push/Release。P3继续未完成，不以本轮审查代替节点执行交付。
+- 实际查看`reference/f-color.png`与`current/f-color.jpg`（都是1280×800），以及`reference/f-node.png`（1600×1150）与`current/f-node.jpg`（1600×1144）。新产物根为`E:/项目/Veyra/tests/design-audit-20260927/`；字体未实测、片源状态不同、节点尺寸不同，明确不做整屏像素通过判定。
+- 已确认调色页留白/间距、额外处理顺序块、工具栏与预设布局、组头密度、白色滚动条、渐变轨道、节点简化卡片与画布功能、混色器色带动效以及Dock尺寸/收起位移等差异。详见总方案P5.0的VA01–VA07；未找到M31/M32分组重绘接线，不能用整页VRise顶替。
+- 审核中纠正控件对应关系：混色器是`.band`，选中scale1.08/400ms spring；`.swatch`选中1.12属于设置主题色板M37，不能拿错合同指导修改。当前混色器0.82→1/180ms仍确实不同。
+- 既有六探针只跑一次：runner结果`E:/项目/Veyra/logs/p3-node-backend-20260927/008-design-motion-audit.result.json`，30.371秒、exit0、post_guard pass。只续取已运行session99958结果，未重跑。`python -B E:/项目/Veyra/tests/design-audit-20260927/summarize-evidence.py`做离线分析，保存`evidence-manifest.json`，不重新启动产品。
+- 41个源码QML文件与candidate-a1对应文件hash一致；16个核心设计文件除换行外与设计存档一致。switch/menu/dialog抽测曲线接近；dock几何有真实差异；page首帧触发和seg归一化不同未当成已通过或运行时缺陷。其余动效未验收，不报42项完成率。
+- 只读辅助命令曾出现Python字符串转义、局部读取越界及PowerShell路径通配错误；改为有界读取和独立离线脚本，未因此修改产品、扩保护基线或重启GPU测试。截图未加工，原始CSV无平移/掩码。
+- 范围核验沿用已获有限授权的P3状态基线（SHA256 `d9943d4c28b305c80b7732558e50926a9c0a49e0a81c97c03df6eadb1e40fb9b`），读前通过：原区1457、隔离区1060。收尾再次执行同一guard并回读本节及P5.0。
+- 同步前轮已返回但未记入文档的事实：`007-session-live`30.145秒、exit0/post_guard pass；`session-a2/result.json`记录独立模式参数/布局、鼠标确认取消、重启及播放中50次切换成功，但无GPU资源趋势/任意链执行证明。随后三个预设兼容源码文件尚未构建测试，不能用007倒签通过。
+
+## 2026-09-27 P3节点后端授权续接：状态隔离与持久化
+
+- 用户同意另开后端分支补齐节点执行、独立配置和恢复；Goal active。E盘隔离区切`codex/p3-node-backend-20260927`，82份既有变更保全。22路径不可变基线见`P3_NODE_BACKEND_EXECUTION_2026-09-27.md`，guard通过。没有修改原checkout/main/旧候选/运行库。
+- 新增ChainConfiguration/ChainSession，仅保存链及超分/FG/光流参数，不切走采集/音频/导出/显示设置。私有chain-session.v1复用现有链编码，完整保存逐实例Color/NR/布局/选择；原子替换、读入整体校验，损坏档拒绝覆盖。不是往用户预设库添加假预设。
+- 构建001成功；003链单测、004预设/会话单测实际输出全通过（50次数据切换、独立参数/布局、缺失/损坏/尾随数据、写失败保原档）。002误用Release子目录，PowerShell返回0但stderr明确未执行，**002无效，不计通过**；修正为实际路径直接运行003/004，原失败证据保留。
+- 新日志`E:/项目/Veyra/logs/p3-node-backend-20260927/`；runner临时目录仍在E盘`tmp/p0-p1-r53-20260927/`。正在接Facade/QML真实模式切换与恢复；该接线还未构建验收。数据层50次切换不是GPU资源趋势或完整P3通过。
+
+## 2026-09-27 P3目标转为blocked：结束无进展续跑
+
+- 原收口轮完成有效进展；随后两轮复核同一真实阻塞，累计连续三轮。最近一轮为no_progress，不把状态复述或审计记录写入当功能进展。原区AGENTS冻结条款、EffectChain转换和bridge源码SHA256均未变，未收到解除UI-only的用户新指令。
+- 范围guard通过，474个冻结文件无失败；证据`E:/项目/Veyra/logs/p3-node-color-20260927/continuation-2-scope.json`及`continuation-2-blocked-audit.json`。最近两轮没有重跑构建/产品测试，也没有修改产品源码或候选。
+- update_goal(status=blocked)已成功，目标原文完整保留，未标complete。停止自动续跑，保留已验UI切片和剩余P3合同；须用户明确解决节点后端与UI-only冲突后再恢复。既有预设可以保存chain，不把“独立模式自动切换/恢复未闭环”错误表述为完全没有预设持久化。
+
+## 2026-09-27 P3 UI切片收口：节点入口与最终候选核对
+
+- 节点012真实鼠标断言通过，但异步截图误抓导航后的列表，保留结果且不当布局证据。仅修测试为保存截图后导航，013在31.227秒内完成两进程，有/无视频、确认/取消、返回、两层NR参数不串改及NR/Color完整面板定位均通过，post_guard pass。`node-a3/video/nodes.png`已目视核对；视频弹窗日志有covers=2与成功SetWindowRgn记录。
+- 最终014 `color-controls-final --revision final-ui` exit0，`quick-final.txt`为14/0/0；测试超时90秒，实际1.917秒。沿用bounded runner和独立data-dir/TEMP/TMP。完整argv及运行结果在本轮`commands.json`与013/014日志。
+- 核验源码/build/candidate的45个QML模块文件，build侧Main/NodePage/ProPage三份旧副本已显式同步。candidate Main无测试注入，EXE匹配006构建，SHA256=`c9b4ceafe5e8950a3ef27aad850a0aeb76a6c1ebdb1237cd01657d380ee1f5db`。详细文件身份见本轮`staging-final.json`及archives收口清单。
+- 完成的是调色接线/真实控件和共享链节点UI切片，非完整P3。后端任意链与独立状态缺接口；不再重复已通过测试，不重建基线、不自动扩范围。当前弹窗样式、完整设计动效和P4-g余项未验收。Goal不标complete；后续只能在明确解决UI-only范围冲突后再开展执行器工作。
+- 输出保持`E:/项目/Veyra/{tests,logs,archives}/p3-node-color-20260927/`。本轮无新增引擎/shader/CMake/旧Win32改动，无commit/tag/merge/push/Release，不替换P2候选、不改用户配置。
+- 收口双guard通过：原区474个冻结文件无失败，独立P3检查原区1457/隔离1055文件；`git diff --check`通过。本轮源文件增量、候选身份与证据索引封存在`E:/项目/Veyra/archives/p3-node-color-20260927/ui-slice-closeout/`。此记录不宣称既有底层变更已全面审计。
+
+## 2026-09-27 P3-a真实调色验收与P3后端边界
+
+- 在既有隔离区修复Color节点写回和总开关覆盖，新增实际曲线/八色混色器/四区色轮；正确默认值和非法输入回滚、选中实例维护。未改引擎、pipeline、shader、CMake、旧Win32及运行库。
+- 构建001/002/006通过；Qt生产控件005为14/0。009真实播放器鼠标+bridge+双进程预设恢复通过；010固定SDR图原生窗口像素对照通过，关闭调色相对基准RGB逐像素差0。不得拿Qt UI黑色视频区当实际画面证据。
+- 产物/完整命令账本：`E:/项目/Veyra/logs/p3-node-color-20260927/commands.json`；测试/候选`E:/项目/Veyra/tests/p3-node-color-20260927/`；baseline/写前快照`E:/项目/Veyra/archives/p3-node-color-20260927/`。本轮命令仍走bounded runner，子进程TEMP/TMP在E盘；测试仅改独立data-dir，不写用户配置。
+- 失败经过和修复详见P3执行记录：transport大补丁失败、QuickTest API错误、Window/Repeater测试查找差异、无视频pending等待超时均保留，不删失败证据、不放宽实际断言。
+- 节点接口审计确认任意执行与独立模式恢复缺失；先修共享链视图的入口/类型/参数绑定/布局，后端执行器按用户最新UI-only冻结停止。P3不标完成，R5.4/R5.5不以UI能点击冒充通过。不自动扩白名单、commit/tag/merge/push/Release，不替换旧候选。
+
+## 2026-09-27 P3-a 开工：先纠正调色合同
+
+- 沿用 `E:/项目/Veyra/worktrees/p0-p1-r53-20260927` / `codex/p2-nr-20260927`；未重开分支或覆盖74项既有变更。新18路径baseline及写前快照位于 `E:/项目/Veyra/archives/p3-node-color-20260927/`，SHA256=`e78c75f6716a7fc59f8a7610b4e11468ec2820bff4dbf631e185f074514b5c9a`。
+- 开工命令：`python -B scripts/acceptance/p0-p1-r53-control.py guard --baseline E:/项目/Veyra/archives/p3-node-color-20260927/scope-baseline.json --sha256 e78c75f6716a7fc59f8a7610b4e11468ec2820bff4dbf631e185f074514b5c9a`，通过（原区1457、隔离1055文件检查）。
+- 发现颜色flat settings写入后被旧chain覆盖，现有界面明确保留未接入说明。下一步修复真实节点写回，再实现对应控件；未做产品验收，不把调查计为P3完成。新测试/日志/临时目录分别为 `E:/项目/Veyra/tests/p3-node-color-20260927`、`E:/项目/Veyra/logs/p3-node-color-20260927`、`E:/项目/Veyra/tmp/p3-node-color-20260927`。
+
+## 2026-09-27 P2非防闪目标收口：逐层参数/尺寸与真实操作
+
+- 本轮工作区`E:/项目/Veyra/worktrees/p0-p1-r53-20260927`，分支`codex/p2-nr-20260927`；25路径独立baseline SHA256=`7a3f811468e76b545a6e88284f14953e4a7da75e71f757c3ebfe9e9d39e781ce`。不更换原checkout/main/1.4.4，不修改旧用户手测候选或其配置；不改防闪shader、解码/音频/Present，不推进P3或发布。
+- 实现每层sizePolicy和真实NR纹理/调用尺寸、混合尺寸motion适配、尺寸变化重建；PresetStore v23及PresetLibrary v3保存/迁移；QML独立1–4层卡片、模型6项/残差5项/实验入口、肤质未指定与0–2自定义分离、数字Repeater保留控件状态。复制继承，六档沿用1.4.4，新建默认1080p；预览尺寸不偷改输出/离线完整尺寸。
+- 构建：`build-targets.cmd veyra_qml_ui veyra_qml_quick_tests veyra_effect_chain_tests veyra_preset_library_tests veyra_repair_preset_tests veyra_nr_video_quality_probe`，021最终构建通过。003–005三组数据单元通过；018/024真实生产控件+fixture鼠标测试11/0；020真实播放器鼠标/bridge/engine双进程保存恢复通过，44.122秒。
+- 014–016四层混合尺寸/NR先行/SR先行：各8帧/32次Evaluate、4份独立参数/资源、逐次尺寸、同帧层间零差异、debugErrors=0。025/026离线exportJob/stillImage各8帧确认全1920×1080内部尺寸；027单层8帧结构回归通过。4K离线为数据合同测试，不声称实机4K完整文件导出通过。GPU命令形式：`veyra_nr_video_quality_probe.exe <p001-derived1080.mp4> <输出> 25 8 <mode>`；全部实际argv、耗时和exit保存在命令ledger。
+- 失败未掩盖：首轮构建含不存在target；控件测试注册/布局时序在测试侧修正；019诊断脚本CRLF修复后020通过；023最终staging因build/qml为旧ProPage失败，显式同步源码后024原断言通过，旧新hash保存`final-qml-sync.json`。本轮未修改CMake/stage，后续staging必须先同步/逐文件验hash，不能把incremental build当QML已更新。
+- 退出仍有`destroying leaked parameter block at shutdown`，旧temporal的`qml-interaction-v2/engine.log:183,279`亦存在；未修复/不声称零warning。防闪按用户要求延期，节点入口/模式隔离/执行待P3，17屏42动效待P5；长稳、其他显卡、实屏HDR、4层60fps未新验。
+- 产物：`E:/项目/Veyra/build/p2-nr-20260927`；测试与新候选`E:/项目/Veyra/tests/p2-nr-ui-resolution-20260927`；命令/失败/原始stdout/stderr在`E:/项目/Veyra/logs/p2-nr-ui-resolution-20260927`；写前及收口证据在`E:/项目/Veyra/archives/p2-nr-ui-resolution-20260927`。新候选为`final-candidate/veyra_qml_ui.exe`，EXE SHA256=`967e2f0cf3e18f2dbd010f99dba5f2d4e81f39eca2dd0e559368e2a16de7f8d7`。
+- 范围保护命令：`python -B scripts/acceptance/p0-p1-r53-control.py guard --baseline E:/项目/Veyra/archives/p2-nr-ui-resolution-20260927/scope-baseline.json --sha256 7a3f811468e76b545a6e88284f14953e4a7da75e71f757c3ebfe9e9d39e781ce`。具体验收表见P2执行记录顶部；本轮非防闪目标结束后停止，不把完整P2/2.0.0标完成。
+
+## 2026-09-27 P2 两处最小修复保全，列表接线缺口未放行
+
+- 006初始层间测试不能单独作最终反证：同尺寸GPU下采样非位恒等；007–011改为同一shader计算期望、严格零差异，并修复测试读回的资源状态假设。036/037用同一测试object链接封存旧库，首帧仍有1,612,446/1,843,200字节差异、debug error 0、预期exit 1，确认产品缺陷。失败历史全部保留，不改基线。
+- 012–017六组2/3/4层×防闪开关逐层同帧精确比较通过；018–035九组单层P2前后hash相同。038–046独立增量构建、NR生命周期、EffectChain、调色、三种已批准NR运行库切换、真实QML三测试/八入口/短播放及P1严格全图回归全部通过。QML短播放 realPresented=346、无FG；不是完整交互/视觉验收。
+- 本轮产品变化仅 `NrInstance.cpp` 释放本实例借用ComPtr引用、`EnhanceGraph.cpp` 调整中间NR残差/防闪完成时机，以及 `EnhanceGraph.h` 三个只读诊断getter。没有改shader、播放循环、采集/解码/音频或CMake，没有覆盖原checkout/main/P1候选/1.4.4。
+- 新发现的阻塞：`fromChain`和`GraphDescription`未完整传递多层NR，现有engine/bridge冻结。不能把底层通过改写为P2完成；方案已明确NR列表接线是P2闭环前置，需单独最小范围确认，不提前做P3节点引擎。自然素材防闪/拖影/细节及多层交互、reset和显存等仍未全验。
+- 本轮产物：`E:/项目/Veyra/{build,tests,logs,tmp,archives}/p2-nr-20260927/`。实际argv/时限/结果见logs下commands.json；完整说明见 `P2_NR_EXECUTION_2026-09-27.md`。已验证的阶段性源码增量和身份记录保留在archives下 `verified-partial/`，用于恢复，不作为完成或发布证明。未创建commit/tag、未merge/push/Release。
+- 用户已暂缓1080p240，不再测试、不归因于性能。保留必要对照/反证证据，不清理其他任务资产，不再重复已通过的矩阵或45次性能采样。
+
+## 2026-09-27 P2 NR 多层开工与缺陷复现
+
+P1 最终 1054 文件逐项一致后，在原 E 盘隔离工作区转 `codex/p2-nr-20260927`，保留全部 63 项既有未提交成果。独立 baseline 与起点放 `E:/项目/Veyra/archives/p2-nr-20260927/`，测试/日志/临时和独立构建同名目录。guard 前后通过；不改原桌面 checkout/main。1080p240 暂缓。
+
+执行复用 `python -B scripts/acceptance/p0-p1-r53-control.py run --baseline E:/项目/Veyra/archives/p2-nr-20260927/scope-baseline.json --sha256 e66a8c95fcec590fced24ada038263288f9246b0a4eb8f3931597c827f40083b`，具体 argv、时限、结果与日志索引在 `E:/项目/Veyra/logs/p2-nr-20260927/commands.json`。构建命令生成转义失败一次，修正后编译通过；GPU 实测 close 借用引用残留和第二层未消费本帧上游合成结果（1,611,565/1,843,200 字节不同），只针对证实缺陷修改。完整记录见 `P2_NR_EXECUTION_2026-09-27.md`，验收进行中，不作完成声明。
+
+## 2026-09-27 P0/P1 独立目标修复与验收（未出关）
+
+- 授权仅P0/P1；实际工作区 `E:/项目/Veyra/worktrees/p0-p1-r53-20260927`，分支 `codex/p0-p1-r53-20260927`。原checkout、main、原型和1.4.4包不改；61个既有变更文件先完整封存再导入，不能把它们算成本轮新修改。
+- P0完成：固定基线SHA `ce18db0ec34c20fe671248250b86683cda7d2162d0c2033572effd72ac3707ba`；原1457文件和隔离区1054文件保护、9个反例、有界命令及实际超时杀本轮子进程验证。未建立账户消费硬上限，不修改模型路由。
+- 本轮产品修复只删除 `EnhanceGraph::refreshColorTables()` 为旧融合路径开启exposureOnly的两行，保留独立ColorGradeInstance功能。新增严格7场景全图回归先红后绿：022发现999字节差异；024/032恢复后344064字节一致。对照只替换经溯源的1.4.4 RGB shader，不等于完整1.4.4应用验收。
+- 构建003/020/023/029/030通过；025多实例GPU、026 HDR、027图生命周期、031设备资源恢复通过。028曾错误要求异步process在设备移除后必须返回false，已纠正为检查设备失效及新设备图像一致；没有修改引擎/呈现器来迎合断言，原失败保留。整机TDR/呈现器恢复未验。
+- 修复后033平铺6场景全部maxError8=0、debugErrors=0；034视频颜色11场景全部真实D3D12/NVENC，每场景12帧且direct/worker全像素相同。实际查看1301x17六实例full/tiles两图；目视不替代数值一致性，也不扩展到自然视频观感。
+- 修复后035 QML新staging、036三项QML测试、037八入口/真实播放短测通过且无skip；播放351次源提交、346次真实呈现。候选是 `E:/项目/Veyra/tests/p0-p1-r53-20260927/qml-repaired/veyra_qml_ui.exe`，不把legacy测试冒充QML。
+- 失败002/010/015/017分别是编排转义、漏测试参数、漏隔离data-root、旧PowerShell宿主模块；有具体纠正后结果，不抹掉历史记录。历史HDR 0.183594偏差未复现，不能声称已定位该问题。
+- 全部命令、stdout/stderr、result、候选身份位于 `E:/项目/Veyra/logs/p0-p1-r53-20260927-131215/`；原档位于同名 `archives/`，测试在 `tests/p0-p1-r53-20260927/`，构建在 `build/p0-p1-r53-20260927/`。性能按预定30秒/至少20样本、三组旧前新旧后、最多一次漂移补测协议执行；门槛不改，未取得有效结果前P1不完成。
+- C盘工具自动创建但未使用的托管worktree归档要求登录；未绕过认证、未手动删除。未commit/tag、merge/push/Release、删除旧UI、派subagent或推进P2–P8。详见 `docs/P0_P1_R53_EXECUTION_2026-09-27.md`。
+
+## 2026-09-27 补核 Codex 后续需求与 1:1 设计/动效合同（仅文档）
+
+用户要求不只查 Claude，还要核对 Codex 后续开发和方案调整，保留原设计并尽量1:1还原页面和动效。本轮沿用上一轮的完整需求总方案，不另起一套计划，不启动 Goal、不派 subagent、不运行播放器/构建/性能矩阵。
+
+本轮证据目录：`E:/项目/Veyra/logs/codex-plan-reconcile-20260927-1255/`。开工前保存四个目标文档副本及 `non-doc-hashes-before.json`（1148 个 tracked 或非忽略 untracked 非 docs 文件）。源码、AGENTS、guard、baseline、原型与既有 dirty 工作不改。
+
+核对方式与结论：
+- 使用 `read_thread` 读取用户指定的 Codex 会话，再只读解析本项目 `01a0dbab-f8d6-71c2-b434-59b6a5cb33b5`、`01a0dd72-c5ef-7831-bcbb-b9e5f29a1d72`、`01a0de1a-6123-7e30-b0b2-47e097294713` 三段本机 JSONL，抽取 `response_item/message/role=user`，将自动 Goal 续跑与人工指令分开。最初按 `event_msg/user_message` 查询无结果，已改用实际结构；无结果不当作没有用户指令。私人原始对话不复制进 Git。
+- `git show` 核对 `36dd851 / 8a1be6a / 7444a2d / babebbb` 的恢复/导出/局部 UI 修订，固定 `53a2d31:docs/UI_FULL_GOAL_PLAN_2026-09-26.md` 的完整动效表。总方案新增 C01–C06：主线优先、1.4.4 低延迟与回退、底部黑边/seek/菜单延期缺陷、真实新 UI 入口、R5.3 未收口等。历史新增功能不能抹掉，但不覆盖当前 UI-only 施工约束。
+- `git ls-tree`、`git show 5f307fc:<path>` 与当前原型字节对比：首次 raw 比较并非全通过，保留 `design-identity.json`；随后只归一 CRLF/LF，16 个核心设计文件一致。`shot.html` 增加24行截图辅助，另新增 `shot2.html` / `shotpage.js`；设计工作树相对 HEAD 无内容 diff。分类结果 `design-identity-classified.json` 保留旧/新 SHA256 与判定方法，不以重新定义通过掩盖原始差异。
+- P5 补齐17屏映射、M01–M42完整动效、时序/弹簧/超调/打断/减少动画、字体/模糊/播放条偏差台账、CUI01–CUI05真实播放分层债务及同一候选证据要求。现有六类动效探针不能冒充42项通过。未运行原型渲染；外部字体可用性、UI效果和动效均未新增验收。
+- 同步统一执行记录和 CURRENT_STATUS；明确后端冻结仍有效，恢复完整升级先取得明确授权及分支策略，不把改好方案解释为自动开冻。R5.3仍未解决，后续获准恢复时优先处理；本轮没有修改/回滚链路，也没有证明链路正确。
+
+命令修正：一次内联 Python 打印字符串的换行转义造成 SyntaxError；改为逐行输出后读取成功，失败命令未写文件。覆盖检查首版的管道字符在 JSON/正则转义后被当作 alternation，导致空匹配计数；废弃该计数，改用逐行表格字段解析，与原型 FRAMES 和固定版本 M1–M42 比对，未据错误计数改动原型或验收项。
+
+本轮最终验证：
+- 1148/1148 个非 docs 文件 SHA256 与本轮开工快照一致，新增/删除/改变均为0；原型、源码、脚本和既有 dirty 状态未被本轮改动。AGENTS 的 UI-only 纠偏相对 HEAD 本来就是 dirty，本轮哈希未变；不能错误宣称 AGENTS tracked-clean，也没有清掉这条规则。首次把它列入 clean 条件的检查报告 `verification.json` 保留；修正为开工哈希不变、仅 canonical guard/baseline 要求 clean，记录于 `verification-pre-guard.json`。
+- 17/17 frame ID 与实际 `board.js` 顺序一致；42/42 动效 ID 与固定版本 M1–M42 一一对应；CUI01–CUI05 无遗漏，所改入口的本地 Markdown 链接有效；`git diff --check` 无空白错误。四文件本轮 diff 留在证据目录，未将历史 dirty 都归为本轮成果。
+- 执行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/acceptance/ui-migration-scope-guard.ps1 -Evidence E:/项目/Veyra/logs/codex-plan-reconcile-20260927-1255/guard-final.json`，退出0：`status=pass`、`currentChanged=584`、`frozenChecked=474`、`failures=[]`。branch/HEAD/main 均与开工身份一致。该结果只证明保护范围，不证明播放器或视觉通过。
+- 一条验证调用因中继封装嵌套被工具拒绝、未执行；已使用单层 `exec_command` 修正。无重复运行产品测试。最终汇总及文档回读保存为 `verification-final.json`，只更新文档后不重跑相同产品/性能矩阵。
+
+本轮改动仅四个文档：完整总方案、统一执行记录、CURRENT_STATUS、WORKLOG。未修改 AGENTS、guard、baseline、设计原件或产品代码；未构建、未修复 R5.3、未完成设计渲染/动效/实机验收、未提交/建 tag/merge/push/Release。下方为历史时间切片，不覆盖本条事实或当前授权边界。
+
+## 2026-09-27 QML 迁移范围纠偏收口：U0/U1 对齐，U2–U6 保持未执行
+
+复核当前工作目录后确认：仓库根目录为 `C:\Users\123\Desktop\Veyra DLSS Video Player`，当前分支为 `codex/ui-qml-migration-20260925`，HEAD 为 `53a2d31c6b34f74b7b6d2953ee2caaec63d44e1d`，`main` 为 `df41580f7fa0d2b26718f355640470e8cb94b324`。当前目录是该分支的主 checkout，不是 managed linked worktree；没有 merge、push 或 Release，旧 Win32 UI 未删除。分支隔离成立，但工作树保留历史越界改动，不能据此宣称后端链路等价。
+
+活动方案已修正为 UI-only：QML 页面、既有 bridge 适配、QML-only 测试、入口合同、smoke 和 17 个设计 frame。engine/pipeline/source/sink/media/gfx/ngx/shader/CMake/旧 Win32/采集/解码/音频/导出/补帧/NR/颜色链/R5.3 均冻结，接口缺口只登记并停止交互点。`veyra.exe`、`VEYRA_BUILD_QML_UI=OFF`、旧 staging、旧 fixture 和 R5.3 结果不得作为 QML 证据。
+
+当前 baseline 为 `initialChanged=582`、`frozen=474`；最终 scope guard 为 `status=pass`、`currentChanged=582`、`frozenChecked=474`、`failures=[]`，证据位于 `E:\项目\Veyra\logs\ui-qml-migration-20260927\scope-guard\u0-final.json`。U0、U1 已通过；U2–U6 未执行。R5.3 未攻克且不属于 2.0.0 UI 前置条件。
+
+## 2026-09-27 QML 迁移第五次对抗式审计：补齐历史残留冻结与阶段复查
+
+复查无人值守合同时发现，`scripts/acceptance/ui-migration-scope-guard.ps1` 曾整体忽略源码根目录的 `veyra_preset_library_tests/`、`veyra_qml_easing_tests/`、`veyra_qml_quick_tests`。三个目录共 405 个历史构建残留文件；它们不是本轮 QML 源码，但继续忽略会让后续变化逃过 scope guard。已移除该忽略并重新生成 `docs/UI_MIGRATION_SCOPE_BASELINE_2026-09-27.json`：初始变更 582 条，越界冻结 474 条；残留文件不删除、不编辑，按当前工作树 hash 冻结。
+
+活动方案已增加阶段间复查：U2 构建前后、entry contract 后、U3 结束后和 U4 smoke 结束后都必须重新运行固定 root/branch/main 的 scope guard。`docs/CURRENT_STATUS.md` 顶部已改为 UI-only 事实；恢复手册重复编号已修正；R5.3、采集、性能、导出和后端链路继续明确移出 2.0.0 队列。
+
+本条只修改 scope guard 和活动审计/方案文档。控制文件已 tracked + clean；最终 U0 guard 结果为 `status=pass`、`currentChanged=582`、`frozenChecked=474`、`failures=[]`，原始结果位于 `E:\项目\Veyra\logs\ui-qml-migration-20260927\scope-guard\u0-final.json`。U2–U6 仍未执行。旧 baseline 已保存在 `E:\项目\Veyra\archives\ui-qml-migration-20260927\control-audit\UI_MIGRATION_SCOPE_BASELINE_2026-09-27.pre-refresh.json`，未删除。
+
+## 2026-09-27 QML 迁移无人值守合同第三次审计
+
+针对“前端迁移不应改动原链路”的纠偏继续做对抗式复查，发现二次加固后仍有旧默认输入：entry contract 会默认复用 `E:\项目\Veyra\build\qt-probe-20260926`，smoke 会默认读取源码内旧 `loop\local\fixed_clips`，且 smoke/build TEMP 可能落到固定目录。已通过 `apply_patch` 修正以下 QML 迁移脚本：
+
+- `scripts/acceptance/test-ui-migration-entry-contract.ps1`：`-QmlBuild` 必填，只接受 E 盘本轮 build，拒绝 `qt-probe-*`；输出继续使用唯一 UTC+随机 `run-*`。
+- `scripts/acceptance/qml-ui-smoke.ps1`：移除旧 fixture 默认值；缺少 `-FixtureRoot`/媒体默认失败，显式允许时写 `skipped` 且退出 1；输出和 TEMP 在 E 盘根下各自生成唯一 `run-*`，JSON 记录真实路径。
+- `scripts/build-ui-migration.ps1`：显式 TEMP 也必须是新空目录。
+- `scripts/stage-ui-migration.ps1`：`-Release` 改为必填，并限制 build/release/staging 全部在 E 盘，防止旧发布依赖静默混入。
+
+本轮静态验证：7 个相关 PowerShell 文件 AST 解析均通过，`git diff --check` 通过。scope guard 将在本条文档写入完成后重新运行；QML 构建、entry contract、QML-only tests、smoke、17 个设计 frame 和 R5.3 均未执行/未通过，不能写成完成。冻结的 engine/pipeline/source/sink/media/gfx/ngx/shader/CMake/旧 Win32 路径没有在本轮编辑。
+
+## 2026-09-27 QML 迁移验收合同加固
+
+审计后发现，原有 QML 验收仍有三个自动化漏洞：smoke 缺少 `test_av_1080p.mp4` 时会静默减少案例；unit runner 接受 `legacy` 参数且可从另一个目录取测试；entry contract 固定复用输出目录，旧证据可能污染当前判断。已在 `scripts/acceptance/qml-ui-smoke.ps1`、`scripts/run-unit-ui-migration.ps1`、`scripts/acceptance/test-ui-migration-entry-contract.ps1` 修正：QML 脚本只接受 qml，播放 fixture 默认缺失即失败，显式允许时只记 skipped；三个 QML 测试必须来自同一个 QML staging；entry contract 每轮写入带 UTC 时间和随机后缀的唯一 run 目录。
+
+本条只修改验收脚本和活动 UI 文档，没有修改 engine、pipeline、source、sink、media、gfx、ngx、shader、CMake 或旧 Win32 UI。脚本语法、scope guard 和 QML 构建/运行尚未在本条记录时执行，未执行项不能写成通过。
+
+## 2026-09-27 QML 迁移范围纠偏与审计
+
+用户指出 2.0.0 任务从“替换 UI”跑偏为“UI + 引擎改造”。审计确认当前分支 `codex/ui-qml-migration-20260925` 与 `main=df41580` 仍隔离，当前 HEAD 为 `babebbb`，没有 merge/push/Release；当前目录是主 checkout 的隔离分支，不是 Codex managed linked worktree。
+
+已确认 `1530844` 至 `babebbb` 之间混入 GraphDescription、source metadata、EffectChain、Video HDR、Preset Library、NR 多实例、trim/export queue/rate control 等后端改动；工作树还存在 CMake、engine/pipeline/source/sink/media、shader、颜色/导出/采集测试和 R5.3 脚本的 dirty paths。它们不回滚、不继续修改、不计入 UI 完成度，待 `UI_MIGRATION_SCOPE_BASELINE_2026-09-27.json` 记录后按 hash 冻结。
+
+此前有一轮“UI”测试实际使用 `VEYRA_BUILD_QML_UI=OFF` 的 `veyra.exe`，不能作为 QML 证据；QML 证据必须使用 `VEYRA_BUILD_QML_UI=ON`、`veyra_qml_ui.exe` 和单独 staging。已修改 `scripts/build-ui-migration.*`、`scripts/stage-ui-migration.ps1`、`scripts/run-unit-ui-migration.ps1`，使入口和 QML-only 测试显式隔离。新增 `scripts/acceptance/ui-migration-scope-guard.ps1`，用于冻结现有越界文件并阻止新增后端路径。
+
+活动方案已改为 UI-only：`docs/UI_MIGRATION_MASTER_PLAN_2026-09-25.md`、`docs/UI_MIGRATION_EXECUTION_2026-09-25.md`、`docs/UI_FULL_GOAL_PLAN_2026-09-26.md`、`docs/UI_MIGRATION_RECOVERY_PLAN_2026-09-26.md` 已重写；审计见 `docs/UI_MIGRATION_SCOPE_AUDIT_2026-09-27.md`。R5.3/R5.4/R5.5、采集/解码/音频/导出/NR/FG/颜色链不再是 2.0.0 待办。
+
+本条记录只说明范围和文档修正；scope guard、PowerShell 5.1 语法、QML 构建、QML-only tests、smoke 和设计对照将在后续按 U0–U6 顺序执行，未执行项不计通过。
+
+## 2026-09-27 R5.3 4K 采集格式矩阵与缓冲复验
+
+用户确认真实采集卡仍连接后，使用同一 staging `E:/项目/Veyra/tests/ui-qml-migration-20260925/app/veyra.exe`，串行复验 `VIDEO 0 KUHAIMI 27P` 的全部 4K 格式：format 18/19（3840x2160@30 NV12）、36/37（3840x2160@30 I420）、54/55（3840x2160@60 MJPEG）。六项均完成 `SetFormat`、`ConnectDirect` 和 `Run`，但 8 秒内 `smoke frames=0`、`captureDropped=0`、exit 1，随后进入 `Stable device and format identity unavailable; manual selection required` 重连路径。矩阵结果：`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/capture-retry-20260927-4k-matrix/result.json`。
+
+为排除缓冲协商因素，format 54 又分别使用 `--capture-buffer=driver` 与 `--capture-buffer=minimum` 重试，仍为 0 帧、exit 1；随后同一环境 format 16（1920x1080@120 NV12）6 秒得到 720 帧、处理/回调 120 FPS、`captureDropped=0`、exit 0。证据位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/capture-retry-20260927-buffer-matrix/`。
+
+因此可以确认设备在线和非 4K 路径可持续回调；当前证据只把问题收窄到 4K 输入在协商后没有形成首帧，不能指定驱动、线材或硬件根因。未修改性能基线、阈值或采集逻辑；4K/高帧率格式矩阵和 Media Foundation 实卡导出仍阻塞 R5.3。
+
+## 2026-09-27 R5.3 真实采集卡复验：设备在线、4K 格式仍无回调
+
+使用 staging `E:/项目/Veyra/tests/ui-qml-migration-20260925/app/veyra.exe` 复验真实 `VIDEO 0 KUHAIMI 27P`，未使用虚拟摄像头。原始日志位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/capture-retry-20260927/`，4K 重试位于 `.../capture-retry-20260927-format54b/`。
+
+- format 16（1920x1080@120 NV12）8 秒：exit 0，970 帧，处理/回调均 120 FPS，`captureDropped=0`，`failed=false`。
+- format 62（1280x720@60 MJPEG）8 秒：exit 0，487 帧，处理/回调均 60 FPS，`captureDropped=0`，`failed=false`。
+- format 54（3840x2160@60 MJPEG）12 秒：SetFormat、软件 MJPEG decoder、ConnectDirect 均成功，但 `smoke frames=0`，随后反复 `Stable device and format identity unavailable; manual selection required`，exit 1。
+
+设备在线已由前两条格式的真实回调证明；4K 失败不能再写成“设备未连接”，也不能凭现有证据指定驱动或硬件根因。本轮不修改性能基线和门槛，4K/高帧率格式矩阵及 Media Foundation 实卡导出继续阻塞 R5.3。
+
+## 2026-09-27 R5.3 当前候选性能只读比较
+
+使用 `scripts/compare-ui-migration-perf.ps1` 将 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/perf-current-20260927/candidate-2/results.json` 与冻结 `E:/项目/Veyra/tests/ui-qml-migration-20260925/perf-baseline.json` 比较，报告写入 `.../perf-current-20260927/compare-candidate-2.json`。脚本保护输入文件，未改基线和阈值。
+
+四场景均未过固定门槛：`nr-1080` submit +13.73%、ready +245.27%；`nr-fg-1080` submit -15.07%、ready +245.45%；`nr-fg-4k` submit -15.69%、ready +222.92%；`plain-1080` submit -2.99%、ready +140.19%。四个候选进程均正常退出并有真实源帧，失败来自比较器门槛。代码审查确认独立调色计数为 0 时没有独立调色资源分配或逐帧 dispatch；旧版在当前环境也出现 GPU ready 波动。因此不把结果归因于 R5.3 调色改动，不修改冻结基线，不放宽门槛，R5.3 仍未提交/打标签。
+
+## 2026-09-26 R5.3 接手：修复图片 smoke 启动计时并复跑 delivery
+
+接手中断会话后先收取既有 delivery 会话 `36862`，结果为 exit 0；run `9c5d64306a23408db3afe558638df254` 的 `result.json` 状态为 `software_short_gate_passed`，26 项软件短检查全部通过，`capture=awaiting_user_capture_test`。输出位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/smoke-timer-fix/delivery/9c5d64306a23408db3afe558638df254/`。
+
+此前图片 smoke 失败不是图像结果失败，而是普通 smoke 从 `openFile()` 投递时刻开始计 3 秒，首次 `CreateFeature` 尚未完成就退出。修改 `apps/veyra/ui/AppShell.cpp`：普通 smoke 仅在 snapshot `running` 或 `failed` 后启动计时，`--smoke-empty` 保持启动计时，并删除自动打开文件后立即重置 `startTick`。构建 `E:/项目/Veyra/build/ui-qml-migration-20260925` exit 0，日志 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/smoke-timer-fix/build.log`。
+
+修复后的同一 `enhanced.png` 图片 smoke exit 0，日志出现 `smoke timer started running=true failed=false image=true frames=1`，最终 `smoke frames=1 ... failed=false nrEvaluated=1`；原始输出 `.../smoke-timer-fix/image.stdout.log`。这证明计时竞态已收口，不等于 R5.3 总验收通过。
+
+固定性能协议四轮仍全部失败；音频默认/重启诊断仍失败；TrueHDR 融合/独立最大差 0.183594 scRGB 超过既定容差；全集 unit 44/33/3 且冻结基线 `changes=[]`。因此不提交、不打 `checkpoint/ui-mig-r5.3`，不 push/merge/release，不进入 R5.4。
+
+## 2026-09-26 桌面端接手 QML 界面迁移：VGroup 行重叠修复（S4.9）
+
+在 `codex/ui-qml-migration-20260925` 接手（交接存档 `checkpoint/ui-mig-wip-handoff`）。先用 `qml.exe` 跑交接留下的最小复现
+`E:\项目\Veyra\tmp\ui-qml-migration-20260925\min\Test.qml`，它没能复现（锚定的 `ColumnLayout` 正常）；补写 `Test2.qml`、
+`Test3.qml` 复现出两处原因：`VGroup` 内层是 `Column`，跳过没有宽度的 `VRow`；`VGroup` 放进 `ColumnLayout` 时自身宽 0。
+改为 `ColumnLayout` 并默认 `Layout.fillWidth: true`。`scripts/build-qt-probe.ps1 -Targets veyra_qml_ui` exit 0；导出页、设置页、
+专业页截图在 `E:\项目\Veyra\logs\ui-qml-migration-20260925\qml-shots\qml-*-vgroupfix2.png`，看图确认行不再重叠。对话框分组
+未截图（未执行）。详细记录见 [`UI_MIGRATION_EXECUTION_2026-09-25.md`](UI_MIGRATION_EXECUTION_2026-09-25.md) S4.9。未推送、未发布。
+
+## 2026-09-25 界面迁移总方案（审查设计稿与现有软件）
+
+用户认可第三版设计稿后，要求整体审查设计稿与软件并确定迁移顺序。只读审查引擎（`EnhanceGraph`、
+`DlssNrRuntimeAdapter`、`EngineController` 重建判断与四处图描述构建、`ExportJobManager` 共享内存头、
+`PresetStore`、`FrameMetrics`/`GpuTimer`、`PresentSink` 帧统计、`ResolutionPlan`、`IFrameSource`）和界面
+（`AppShell.cpp`、`SettingsWindow.cpp`、各面板、字幕浮层、偏好存储、7 个 ctest 目标与验收脚本）。主要结论：
+NR 只有单实例，多 Feature 18 句柄未验证；处理顺序写死（约 20 处 `nrBeforeSr` 分支）；调色融合在导入着色器；
+导出共享内存要求可平凡复制；真实显示帧率未测量；没有影片宽高比；设置页、预设管理、导出队列与剪辑缺失；
+另列出 21 项现有功能需在新界面保留。方案见
+[`UI_MIGRATION_MASTER_PLAN_2026-09-25.md`](UI_MIGRATION_MASTER_PLAN_2026-09-25.md)：M0 基线 → M1 引擎地基
+（输出不变）与 M2 Qt 探针并行 → M3 QML 功能对等（列表模式）→ M4 新能力逐项带开关接入 → M5 节点界面 →
+M6 发布（需授权）。未改代码、未建分支、未构建或运行。
+
+同日修订为第 2 版：用户决定不保留旧界面、不做内测、单分支施工、设计稿功能全部实现、导出分辨率可自定义、
+统一预设（可选包含部分）、NR 叠层与自由排序照 Magpie 做。只读核实 `SAOG0721/Magpie` experimental `3841698`：
+多层 NR 为“一个片段会话 + 每层独立 NGX 句柄 / 参数 / 队列 / 历史”（`DLSSNRMultiPass.h`、`DLSSNRFilter.cpp`），
+与 Veyra 的 IAT 钩子机制相同，可移植；补帧节点在 Magpie 中只是标记，实际始终在链路输出端执行一次，不存在
+对生成帧再做 NR 的路径。计划改为单分支 `codex/ui-qml-migration-20260925`：S0 基线 → S1 引擎地基（画面不变）
+→ S2 新能力（NR 叠层 / 独立调色 / 可排序执行器 / 导出补齐 / 小项）→ S3 Qt 探针（可提前）→ S4 QML 全功能 →
+S5 删除旧界面与打包 → 用户验收后合并。临时文件在 `E:\veyra-tmp-ascii\magpie-nr\`，已删除。未改代码。
+
+## 2026-09-25 界面整体重做方案（QML 三页面、NR 叠层、节点模式）
+
+用户要求迁移 Qt QML 并整体改版：极简/专业/导出三页、深黑渐变背景取代玻璃、
+弹性动画、NR 叠层手风琴、专业模式内的节点视图；先出方案，不施工。只读核对
+UI 结构、`EngineController` 边界、`EnhanceGraph` 固定顺序与 NR 单实例（全局 IAT 钩子
+单占用）、`VEYRA_PRESETS` v21，以及桌面 `UI` 文件夹 6 张参考图；经 GitHub API 只读阅读
+`SAOG0721/Magpie` `3841698…`（线性效果链、参数元数据、无节点编辑器，UWP XAML 不可移植到
+QML）；查阅 Qt `WindowContainer`（嵌入原生窗口总在 QML 之上）与 6.8 `Popup.Window`。
+方案见 [`UI_REDESIGN_QML_NODE_PLAN_2026-09-25.md`](UI_REDESIGN_QML_NODE_PLAN_2026-09-25.md)：
+Qt 窗口探针与浏览器原型先行，效果链模型/注册表（输出不变）→ NR 叠层探针与执行器拆分
+→ QML 迁移 → 单链路节点视图。NR 叠层此前暂缓，恢复需用户确认。未改代码、未建分支、
+未安装 Qt、未构建或运行。
+
+用户随后补充：Magpie 只参考底层效果链，不参考 UI；Qt 用最新版；新增设置页；切换栏
+用侧边栏图的样式但位置可变；Logo 已有透明底。据此在
+`prototypes/ui-redesign-2026-09-25/`（index.html + 分文件 CSS/JS，纯静态、无依赖）做了
+白底无限画布的交互设计稿：极简播放中/空状态、专业列表（NR 叠层手风琴、拖动排序）、
+节点视图（右键添加、左右拖动排序、HDR 后接非 HDR 效果会退回）、导出、设置，以及顶部/
+底部浮动切换栏。Logo 缩成 360×240 透明 PNG 放进原型目录。`node --check` 六个脚本通过；
+Edge headless 截一张总览图（输出在 `E:\项目\Veyra\tmp\ui-prototype-20260925\`），据此修正了
+隐藏属性被覆盖、分区标题换行、节点过宽三处。发布为私有网页失败：当前会话没有 claude.ai
+登录，只能本地打开。未改产品代码。
+
+第二轮原型修订（按用户逐条意见）：窗口小圆角、视频全直角；顶部自动隐藏切换栏 + Logo 回首页；
+新增采集卡 / PS5 / 屏幕捕获 / 字幕 / 音频五个窗口（字段取自现有 Win32 面板）；设置加“打开时的
+默认页面”；极简改“预设”、去黑边；专业列表固定现有顺序、NR 容器内加层；色彩页按现有
+`SettingsWindow.cpp` 七组结构重做；节点模式改为上画面下画布、参数直接在节点上、可游离节点、拖到
+连线插入 / 拖远或 Alt 断开、按类型限制数量。脚本 `node --check` 全过；headless Edge 注入错误收集
+无运行时错误；逐帧截 7 张图检查，据此修正音量滑条塌缩、屏幕捕获缩略图撑破网格。输出在
+`E:\项目\Veyra\tmp\ui-prototype-20260925\`。未改产品代码。
+
+第三轮原型修订：极简改为按画幅适配的影院窗口与大圆角播放条；专业读数收进窗口并加“显示 fps”；
+补帧页对照 `SettingsWindow.cpp`（DLSS≤6X、XeSS≤4X、FSR 补帧隐藏、输出上限自定义等）；NR 参数按
+`NrSettings`/`ResidualSettings` 的 12 项对齐；新增预设另存为 / 管理、切换节点确认弹窗；节点模式加
+读数条、节点耗时、彩色耗时条、自动推开防重叠、调色全参数；导出改按预设、码率任意值；设置去掉采集
+卡页；采集卡窗口补“限定输入帧率”（沿用现有设备帧率字段）。`node --check` 全过，headless Edge 错误
+收集为空，截图 11 张存 `E:\项目\Veyra\tmp\ui-prototype-20260925\shots-round3\`。截图脚本曾以 ANSI
+读取中文路径，把临时文件写到已有的 `E:\椤圭洰\Veyra\`（仅本轮 headless 浏览器配置与截图），已删除该
+子目录，未触碰该文件夹里原有的其他内容。未改产品代码。
+
+## 2026-09-24 Qt Quick/QML 前端迁移调研与初步方案
+
+检查当前 Win32 UI、`EngineController -> VideoPresenter -> PresentSink` 窗口链路、
+既有双模式 UI 方案及 U1/F1 问题边界。确认普通窗口中的主播放控件位于视频区下方，专业参数
+位于视频右侧；全屏视频铺满窗口，现有原生控制栏和字幕 HWND 覆盖画面。D3D12 swapchain
+直接绑定视频子 `HWND`，Present resize 会 drain 队列，且销毁窗口必须晚于 swapchain。Qt 可
+先迁移视频以外 UI、沿用原生全屏栏；Qt 全屏覆盖仅是后续选项，窗口生命周期、resize、额外
+绘制负载仍需原型验证，不能承诺零影响。查阅 Qt 官方
+`QQuickWidget`、`QWidget::createWindowContainer`、`QWindow::fromWinId` 和
+`QQuickRenderControl` 文档。方案见
+[`QT_QML_UI_MIGRATION_RESEARCH_PLAN_2026-09-24.md`](QT_QML_UI_MIGRATION_RESEARCH_PLAN_2026-09-24.md)。
+
+本机 PATH 和常见安装目录未检测到 Qt 命令/SDK；本轮未安装、构建或运行程序，未改代码。
+下一步为用户确认后做隔离原型，沿用现有视频 HWND 和 Present 路径；不据此记录播放性能、
+HDR、OBS 或全屏通过。
+
 ## 2026-09-22 1.4.4 正式发布到 GitHub
 
 用户授权发布后完成：推送 `main`（`6851c27`）+ 签注标签 `v1.4.4`（`9e21d18 → 6851c27`），
@@ -6438,3 +7337,443 @@ Artifacts remain under `E:/项目/Veyra/tests/5090-capture-fg-20260921/` and
 Retained baseline executable/logs and one runnable fixed staging app; no ZIP,
 portable duplication, runtime mutation, proprietary Git files, merge, push or
 release. 5090 live acceptance, 15-second hitch and user flicker remain unresolved.
+
+## 2026-09-26 UI 迁移目标模式 G0.2–G0.3
+
+- G0.2：`tools/qt_probe/shoot-design.ps1` 用无头 Edge 渲染 17 张设计参考到
+  `E:\项目\Veyra\logs\ui-qml-migration-20260925\design-ref\`。用户指出截图重叠：对话框淡入被截在中途；
+  `shotpage.js` 默认 `app.setReduced(true)`，`?motion=1` 保留动画。重渲染后逐张看图无重叠。
+- G0.3：`veyra_qml_ui` 增加测试开关 `--page --tab --dialog --aspect --dock-pinned --size WxH
+  --reduced-motion --slow-animations N`（后者用 QUnifiedTimer 慢速模式，链接 Qt6::CorePrivate）；
+  Theme 增加 `reduced` 与 `d(ms)`，全部 40 处时长改为 `Theme.d()`，无限动画在减少动画时停止。
+  `capture-window.ps1 -Extra` 改为单字符串（`-File` 模式数组会被当成一个参数传入，首次 `--tab` 因此无效）。
+  构建 `scripts/build-qt-probe.ps1 -Targets veyra_qml_ui` exit 0；逐项截图于
+  `E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\g0.3\` 并看图：tab-fg、dlg-capture、min-aspect、
+  node-size（1600x1150）、dock-pinned、slow-dialog（10 倍慢速截到对话框缩放中途）。
+  引擎门槛未跑（本步只改 QML 前端与测试开关，未动引擎）。
+
+- G0.4：`tools/qt_probe/shoot-all.ps1` 按 17 个设计帧状态截 QML（不带片源、减少动画），
+  `compose-compare.ps1` 生成左右对比 `E:\项目\Veyra\logs\ui-qml-migration-20260925\compare\`。
+  首次运行无输出：`$frames` 表覆盖了同名参数 `-Frames`（PowerShell 变量名不分大小写），改名 `$states`。
+
+- G0.5：`tools/qt_probe/motion-sample.ps1` 对 dock、开关、页面切换三组动效双端采样。设计端
+  `shotpage.js ?motion=1&probe=<名>` 启动动效后暂停 `document.getAnimations()`，按 10ms 步进读
+  变换矩阵/透明度；QML 端 `--motion-probe <名>`（Main.qml 探针 Loader/Timer/FrameAnimation）每帧写日志。
+  证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g0.5/`（design-*.csv、qml-*.csv、chart-*.png，已看图）。
+  结果：dock 设计 110ms 到位、130ms 超调至 10.17px 后回落，QML 线性 566ms 到 8px；开关设计峰 14.6px，
+  QML 线性 500ms；页面进入设计 y 16→0 约 150ms（spring-soft），QML 完全无过渡。
+  脚本首版反斜杠正则在生成时退化为非法正则，改用 `.Replace([char]92,[char]47)`。
+  引擎门槛未跑（仅测试探针，未动引擎）。
+
+- G0.6：新增 `tests/qml/QmlEasingTests.cpp`（目标 `veyra_qml_easing_tests`，Qt offscreen），把 Theme.spring /
+  springSoft / easeOut 装进真实 NumberAnimation 读回 QEasingCurve，与设计稿 CSS `linear()` 停靠点和
+  `cubic-bezier(.2,.8,.2,1)` 逐 0.005 比较，容差 0.01。修前结果（预期失败）：三条曲线 type=0（线性），
+  最大误差 0.8141 / 0.7600 / 0.5276，输出 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g0.6/before-fix.txt`。
+  构建故障：在旧目录加目标后 ninja 报 unknown build rule，CMake 不再写 `CMakeFiles/rules.ninja`。
+  cl `/showIncludes` 在 936 代码页输出 GBK，include-probe 前缀乱码，与 0.0.4 时同一根因。
+  `scripts/build-qt-probe.ps1` 改为 chcp 65001 下调用（结束恢复原代码页），新增 `-Out`，默认新目录 `E:/项目/Veyra/build/qt-probe-20260926`。
+  在 .cmd 内部切代码页会让 cmd 以 UTF-8 重读非 ASCII 输出路径，产物落进乱码目录 `E:/椤圭洰`。
+  该试验本轮在那里生成的 build/tmp 已删除；该乱码目录下原有的 logs 非本轮产物，保留未动。
+  旧目录 `qt-probe-20260925` 留存未删。
+  重建 `veyra_qml_ui` exit 0。
+
+- G0.7 本轮门槛基线（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g0.7/`）：
+  `build-ui-migration.ps1` exit 0；`stage-ui-migration.ps1` exit 0；`hash-ui-migration.ps1` 17 例全部 same；
+  `perf-ui-migration.ps1 -Compare perf-baseline.json`：nr-1080 submit P95 0.918→0.954、nr-fg-1080 1.281→1.292、
+  nr-fg-4k 1.383→1.279，提交 fps 60/120/120/60 全同；plain-1080 gpuReady P95 1.57→2.68ms（本轮未改引擎，
+  视为机器状态波动，作为本轮 B 阶段比较基线另记）；`delivery.ps1` PASS；单元 pass=44 fail=33 skip=3，与基线一致。
+  G0 阶段完成。
+
+- G1.1 缓动（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.1/`）：
+  `qml/Veyra/Theme.qml` 新增 `linearEasing(stops)`，CSS linear() 相邻停靠点各转一段三次（控制点 1/3、2/3），easeOut 为单段 6 值。
+  首次测试两条弹簧误差 0.0000 后进程 0xC0000374 堆损坏；在 C++ 中不经 QML 直接构造 n 段 BezierSpline 复现：
+  n=1..10 正常，n=11/12 在复制销毁时崩溃，属 Qt 6.8.3 自身缺陷。spring 原 12 段，删去 1.035@28.4% 与 .998@38.5%
+  两点降为 10 段，最大误差 0.0068（阈值 0.01）。测试新增“段数 >10 判失败”，旧 12 段 Theme 被判 FAIL（12seg-caught.txt）。
+  命令：`scripts/build-qt-probe.ps1 -Targets veyra_qml_easing_tests` / `veyra_qml_ui` exit 0；
+  `tools/qt_probe/run-easing-tests.ps1` failures=0 exit=0（after-fix.txt）；`tools/qt_probe/motion-sample.ps1 -Out goal/g1.1`：
+  dock 峰值 QML 10.59 / 设计 10.17，开关 14.6 / 14.6，曲线图已看；page 仍无过渡（G2.2）。
+
+- G1.2 背景（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.2/`）：
+  a：Shape + RadialGradient（椭圆经 fillTransform 压扁）形状对，拉伸 8 倍可见同心圆环（8 位量化）；
+  b/c：叠加 160px 平铺噪声（alpha 0..2）均值对上但圆环仍在。
+  d：`tools/qt_probe/make-backdrop.py` 按 app.css .vy 以浮点计算渐变、三角分布抖动一次，生成 `qml/Veyra/backdrop.png`（1280x800，拉伸使用，
+  渐变为盒相对故形状保持）；`qml/Veyra/VBackdrop.qml` 用 Shape fillItem 取窗口圆角与 1px 描边，Main.qml 替换原线性渐变 Rectangle。
+  Qt 6.8.3 缺陷：Shape.CurveRenderer + fillItem 进程访问冲突（`tmp/.../min/Bd.qml` qml.exe exit -1073741819，GeometryRenderer exit 0），故用 GeometryRenderer + layer.samples 4。
+  验证：`shoot-all.ps1 -Frames f-home,f-min,f-pro,f-node` + `compose-compare.ps1`，看图；六个 40px 采样块 RGB 均值与设计差 ≤0.1 级，拉伸图无圆环；
+  f-min 与 G1.2 前逐像素一致（该屏黑画面为既有差距，G3 处理），f-pro/f-node 仅背景像素变化。
+
+- G1.3 字体（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.3/`）：
+  D4：本机无 Geist 原件，Theme.fontUi 改为设计稿 --f-ui 第二候选 "Noto Sans SC"；fontMono 仍 Consolas（设计 Geist Mono 缺失，偏差）。
+  第一次截图标题比设计细（title-zoom.png）；qml.exe 最小复现证明 Qt 6.8.3 可变字体 weight 600 取细体、wght 轴 400–700 正常，
+  于是 16 处 Font.DemiBold 加 `font.variableAxes: Theme.axesDemiBold`，VButton 主按钮同。
+  验证：`scripts/build-qt-probe.ps1`、sync、`shoot-all.ps1 -Frames f-home,f-pro` + `compose-compare.ps1`（goal/g1.3/b），
+  title-zoom-b.png 标题与设计同粗、Medium 文本正常；本次运行日志无 QML ERROR。
+
+- G1.4 图标（证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.4/`）：
+  `python tools/qt_probe/make-icons.py` → `qml/Veyra/IconData.js`（69 条：icons.js 65 个 Lucide + pages-a.js 内联 back10/fwd10/playfill/pausefill），新 `VIcon.qml`、qmldir 注册，VButton 增 `iconName`。
+  DialogHost/HomePage/VAccordion/ProPage/NodePage/MinimalPage/TopDock/VSelect/VSubGroup/ChainNodeCard 的 emoji 全部替换（`tmp/.../g14-replace.py`）。
+  最小复现 `tmp/.../min/Icons.qml`（qml.exe）对比 headless Edge 渲染 icons.html：初次 layers/x/search/box/image 错位——多元素拼成一条 path 时首个相对 m 接在上一元素终点，改为前置 M0 0 后 65 个全部一致（icons-cmp.png）。
+  验证：sync、`shoot-all.ps1 -Frames f-home,f-min,f-pro,f-node,f-cap,f-aud,f-sub,f-color` + `compose-compare.ps1`，看图：dock/来源卡/手风琴/相机/播放/快进快退图标正确；f-min 黑屏、f-aud 对话框被视频窗遮挡与 qml-ref 基线相同，属既有差距（G3）。
+  偏差：设计无锁图标，锁定节点用 key。NOTICES Lucide 条目补充本次来源。
+
+- G1.5 组件动效（进行中，证据 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/g1.5-*`）：
+  - M12 分段指示条随 spring 滑动（4a1fe2e），`motion.ps1 -Probes seg` 曲线与设计一致。
+  - M14/M15 弹层：新 `VMenu.qml`（设计 .pop/.opt：opacity .15s，scale .9→1、下移 8px→0 用 .45s spring，原点取锚点中心；勾选 opacity .15s + scale .4→1 .4s spring；点击 130 ms 后关闭再回调）。取代 Qt Menu：VSelect、专业页片源/列表预设、极简页预设胶囊、节点页双击添加节点。
+    - Qt Popup 不是 Item，没有 transform，变换放在 contentItem 上（第一次写在 Popup 上时整个应用加载失败）。
+  - 后端修正：`PlayerUiFacade::importLegacyStores` 从未调用 `PresetLibrary::load()`，导致 presets() 为空。修正后显示 4 个内置预设，顶栏为"预设：原画"。
+  - 空域：原生视频子窗压在 QML 上面。main.cpp `syncVideoCovers` 把 objectName=videoCover 的可见项按 coverRadius 从视频窗 `SetWindowRgn` 挖掉（圆角区域）；zoom-src.png 圆角正确。
+  - 探针：shotpage.js 增加 menu 分支。
+    - 设计页有 18 个 .pop，须在 root 内查询，否则读到别的页。
+    - rAF 在虚拟时间不跑，探针自己加 .open。
+    - 结果：设计峰值 1.0042，QML 峰值 1.0042，chart-menu.png 曲线重合（QML 约晚一采样帧）。
+  - 回归：`shoot.ps1 -Step g1.5-menu -Frames f-pro,x-menu-src,x-menu-preset` 看图正常；f-pro 的既有差距（质量 seg 无选中、未开片源）属 G3。
+  - shoot-all 增加 x-menu-src/x-menu-preset 审查态；motion-sample 增加 menu。
+  - M16/M17 对话框（证据 `goal/g1.5-dialog/`）：
+    - 遮罩：opacity .2s 线性淡入淡出。
+    - DLayer 改为按 key 显示：scale .9→1 与下移 14px→0，.55s spring，关闭时反向；opacity .2s。
+    - 旧写法把 Behavior 挂在 visible 上，打开没有动画，已修正。
+    - 面板设 videoCover（圆角 16），从视频窗挖出。f-aud 对话框不再被视频遮挡。
+    - 偏差：原生视频画面无法被 QML 遮罩压暗，对话框旁的画面不变暗。
+    - 探针 dialog（设计 capture 对话框）：设计峰值 1.0041，QML 峰值 1.0041，chart-dialog.png 曲线重合。
+    - f-cap/f-aud 截图中对话框的内容与尺寸差距（设计有预览、格式行、音轨列表等）属 G3。
+  - 其余组件动效（证据 `goal/g1.5-comp/`）：
+    - M3 logo：背景 .2s，按下 .9 用 .4s spring。原写法按下时直接把 scale 赋成 .9，永不复位，已修正。
+    - M4 dock 按钮：按下 .86 用 .45s spring；悬停图标变白。
+    - M5 提示气泡：新增，位于按钮下 38px，opacity .15s，scale .85→1 用 .3s spring，原点在顶部中心。气泡设为 videoCover。新增 `--tip <page>` 审查开关和 x-tip 审查态；zoom-tip.png 显示气泡在导出按钮下方，压在视频之上。
+    - M10 警告点：两半段改为 ease-in-out。
+    - M11 开关：已符合设计（按下且选中时圆钮 x=13，等于设计的 3+10），未改。
+    - M13 滑块：圆钮加阴影（0 2px 6px rgba(0,0,0,.5)），zoom-knob.png 可见。
+    - 顺带修正拖动 bug：activeTranslation 是相对按下点的累计值，旧代码却加在当前 x 上，导致圆钮越拖越快。改为以按下时的位置为起点。
+    - M28 折叠内容：opacity .2s，y -6→0 用 .45s spring，打开延迟 60ms；边框颜色 .25s。
+    - M29 箭头：改用 Lucide right 图标。
+    - M28/M29 只看了静态截图（zoom-acc.png），动效曲线未执行探针。
+  - 偏差：提示气泡字号 11.5px 在 QML 里只能是整数 pixelSize，暂用 11，G3 统一处理小数字号。f-aud 对话框的白色滚动条属 G3。
+- G1.6 Qt Quick Test 组件冒烟（2026-09-26，`checkpoint/ui-mig-g1.6`）：
+  - 新目标 `veyra_qml_quick_tests`（`tests/qml/QuickSmokeTests.cpp` + `tests/qml/quick/tst_components.qml`），需 Qt6::QuickTest，缺失时跳过。
+  - 用例：开关切换、分段索引、滑块点击取值、滑块拖动取值（+20% 宽度≈70，释放时 moved 只发一次）、折叠高度、VMenu 选择（勾选移动、130ms 后发 index、禁用项无效）。测试中 `Theme.reduced = true`。
+  - 命令：`powershell -NoProfile -File tools/qt_probe/run-quick-tests.ps1 -Out E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\g1.6-quick-tests.txt`。
+  - 结果：8 passed, 0 failed（含 init/cleanup）。首次运行 test_slider_tap 计数为 2，原因是前一个拖动用例也发 moved，已在各用例开头 clear。
+  - 脚本内 QtTest 控制台输出经管道丢失，改为 `-o <file>,txt` 再读文件。
+- G2.1 顶部 dock 热区（`checkpoint/ui-mig-g2.1`，证据 `goal/g2.1/`）：
+  - 原问题：播放时原生视频子窗压在 QML 之上并吃掉鼠标，顶部 12px 热区在画面上无效。
+  - 修正：视频子窗 `WM_NCHITTEST` 返回 `HTTRANSPARENT`，指针交给下面的 QML；dock 本体设为 videoCover（圆角 = 高/2），画面上方可见。
+  - 收起逻辑对齐 core.js：离开热区且不在 dock 上 → 450ms 收起；进入热区/手柄/dock 取消计时。
+  - 新脚本 `tools/qt_probe/hover-shot.ps1`：带片源启动、置顶、真实移动光标、逐步 PrintWindow。
+  - 实测（visible-scene.mp4，极简页）：中部无 dock → 顶边 4px 弹出 → 悬停专业模式出提示 → 移开 200ms 仍在 → 900ms 已收起（strip.png）。
+  - 未执行：固定模式在播放中的截图（x-tip 已覆盖无片源情形）。
+- G2.2 页面切换动效（`checkpoint/ui-mig-g2.2`，证据 `goal/g2.2/`）：
+  - 对齐 core.js app.go：旧页 sink（.22s --out，opacity→0、scale .985），150ms 后新页显示，其 [data-in] 元素 rise（.6s --spring-soft，from opacity 0 / translateY 16 / scale .98，延迟 d×45ms，fill both）。减弱动效或首屏直接显示。
+  - 新组件 `VPage.qml`（页根：shownPage/leavingPage 控制可见与 sink）、`VRise.qml`（对目标挂独立 Scale/Translate，不动元素自身 y/scale/hover）；StackLayout 换为按 pageId 切换。各页 d 值照 pages-a.js / pages-pro.js 等；极简页设计稿无 [data-in]，不加。
+  - 视频矩形在新页显示时（showPage）才移动一次，不在点击时跳。
+  - 探针 `motion.ps1 -Step g2.2 -Probes page`：QML 与设计稿均为峰值 16，34ms 起 16→0、约 175ms 到 0 并小幅回弹（chart-page.png；g0.5 基线 QML 恒 0）。首次跑出恒 0：shownPage 初值 "" 使首次切换走无动画分支，改初值 "home" 后修正。
+  - 实机点击（hover-shot.ps1 新增 click 步骤，visible-scene.mp4 从极简页点专业模式）：t80 旧页仍在、t300/t1200 专业页就位；日志仅一次 `video host geometry 852x524` 与一次 `present-sink: resized`，无重新打开片源（switch/strip.png）。
+  - 未执行：原生视频窗随页面淡出（技术上不可淡，设计为切换完成后一次移动）；逐帧 sink 曲线探针（仅测 rise）。
+- G2.3 视频窗口同步（`checkpoint/ui-mig-g2.3`，证据 `goal/g2.3/`）：
+  - `apps/veyra-qml/main.cpp`：删除 16ms 常驻 QTimer，改为 `QQuickWindow::afterAnimating`（每个渲染帧前、GUI 线程）驱动；场景静止不出帧即零开销；另在事件循环开始后跑一次兜底首帧布局。videoHost 查找结果缓存（QPointer），查找日志只在查找时写，不再每 2 秒刷屏。
+  - `syncVideoGeometry` 缓存上次矩形，未变化且窗口可见时不调 SetWindowPos；挖区（SetWindowRgn）原本就有变化比较。
+  - 实测（visible-scene.mp4）：极简页 → 点专业模式，日志仅 open 时 1280x720 与切页 852x524 各一次 `present-sink: resized`；静止画面正常（hover-idle.png）；弹层（--menu source / preset）在画面上方仍正确挖区（hover-menusrc.png、hover-menu.png）。
+  - 日志中 `audio-track decoder rejected stream=1 code=-22` 与改动前（22:02 起）一致，属该素材第二音轨，非本次引入。
+  - 未执行：拖拽改窗口尺寸的逐帧跟随录屏；PresentMon 对比（放 G2.5/W3）。
+- G2.4 拖放/快捷键/电源/徽标/toast（`checkpoint/ui-mig-g2.4`，证据 `goal/g2.4/`）：
+  - 拖放：Main.qml `DropArea` → `veyra.openUrl`（非本地 URL 提示“只能打开本地文件”），与 AppShell WM_DROPFILES 一样在投放内直接打开。离开 home/set 时立即 `syncRect`，否则同一调用里 open 读到 0x0（修正后 pre-open 1280x536）。
+  - 新脚本 `tools/qt_probe/drop-file.ps1`：WinForms 源窗 DoDragDrop + 独立进程注入鼠标移动（同一 runspace 在拖放期间无法跑计时器），输出 drag-result.txt、PrintWindow 与屏幕两张截图；另有 -NoDrag 对照、-AfterKeys/-AfterPoint/-Kick 诊断开关。
+  - 实测：`drag result: Copy`，日志 `ui-drop E:/项目/Veyra/tests/1.4.2beta/visible-scene.mp4` → `pre-open 1280x536` → `source-file opened` → `present-sink window 1280x536` → `resized to 1280x720`。
+  - 快捷键（Main.qml Shortcut，对齐 AppShell）：空格播放/暂停、F11/Alt+Enter 全屏、全屏时 Esc 退出、←→ ±10 秒、↑↓ 音量 ±0.05、Ctrl+O、Ctrl+E、全屏 Ctrl+L 锁定（锁定时 dock 不再下拉）、B/Z/X/T/Y 提示“字幕尚未接入（键）”——引擎无字幕，不做假控件。V 按住看原画：main.cpp 事件过滤器（仅专业页、非文本框、忽略自动重复、失焦释放）→ `engine.comparison(1/0)`。
+  - 电源：`PlaybackPowerGuard.h` 移到 `include/veyra/ui/`（Win32 目标同时编译通过），桥接每次 poll 按“文件播放中”更新；日志 playback-power acquired / 暂停 released。
+  - 导出徽标：dock 导出按钮右上角脉动 `.dot.warn`，仅 `veyra.exportRunning` 为真时显示；新增 `--export-out <path>` 测试开关。真实导出中截图 export/hover-dock-running.png 可见徽标。
+  - toast：对齐 pages.css .canvas-toast（top 12，from -8px/opacity 0，opacity .2s，位移 .45s spring，2600ms 收起，错误/成功两套配色），z 30 低于 dock。
+  - 键盘实测（keys/）：hover-subB 顶部 toast；F11 2560x1440；Ctrl+L 锁定后顶边不出 dock、解锁后出；Esc 回 1280x800；日志 seek、ui-compare on/off、ui-fullscreen enabled/locked。
+  - 环境问题（2026-09-26 00:00 前后）：拖放截图画面区为黑、之后 hover 不出 dock、motion-probe 无输出——HEAD（stash 后重建）同样复现，DWM 计时 `refreshes/s=1 composed/s=1`（tmp/.../dwm-vblank.ps1），判断为显示器休眠导致合成/帧驱动停摆，不是本次代码问题。曾尝试延迟 open（QML Timer / QTimer）排查，均已撤回。
+  - 未执行：拖放后画面截图（显示器休眠，待亮屏复拍）；toast 动效逐帧探针；导出文件内容校验。
+
+- G2.5 全屏控制条（`checkpoint/ui-mig-g2.5`，证据 `goal/g2.5/`）：
+  - 新 `CineBar.qml`：极简页播放条抽成组件（传输行/进度行/预设菜单），极简页与全屏共用；全屏时多一个锁定按钮，最大化按钮改为切全屏（原先误跳专业页）。
+  - 新 `FullscreenBar.qml`：独立顶层 Window（Tool|Frameless|WindowDoesNotAcceptFocus，transientParent=主窗），居中距底 24px；高出 440px 给预设菜单向上展开，`veyra.setWindowMask`（新桥接方法，QWindow::setMask）只让药丸（菜单打开时整窗）接指针；淡出 .2s 完成后整窗隐藏，隐藏时不参与合成。
+  - Main.qml：`fullTarget` 在切 visibility 前置位，修正进全屏时影院高度规则把窗口从 2560x1440 动画缩回 2560x812；全屏时视频占满窗口（home/set 除外）；指针真实移动（≥1px，过滤动画期间的 hover 重复）显示控件，静止 1600ms 隐藏并隐藏光标；双击退出；Ctrl+L `toggleLock()` 锁定后指针不再唤出控件。
+  - 测试开关：`--full-bar <shown|hidden>`（进全屏并固定控件状态）、`--full-debug`。
+  - 日志实测（probe1..3）：F11 → control window visible=true / enabled=true → 1.6s 后 controls hidden、visible=false → 移动指针重新出现 → Ctrl+L locked=true 窗隐藏、移动不出现 → 再 Ctrl+L 解锁出现 → Esc enabled=false、视频窗回 1280x720。
+  - 对比（`tools/qt_probe/fullbar-compare.ps1`，test_av_1080p.mp4，20s×2 轮，各 15 行 player-timing 均值，ms）：shown-1 present .316 / gpuReady 1.561 / graphSubmit .135 / returnAbs .715 / 60.7 提交每行；hidden-1 .376/1.541/.162/.779/60.6；shown-2 .411/1.546/.152/.793/60.4；hidden-2 .32/1.575/.141/.735/60.6。差异在噪声内、方向不一致，无可复现退化，按 D1 保留独立窗。summary.json 在 `goal/g2.5/compare/`。
+  - 未执行：PresentMon（本机未安装，以上为引擎 present 计时，不是显示端计时）；显示器休眠（DWM refreshes/s=1）期间的全部截图/目视；锁定按钮与条内预设菜单的实际点击；多显示器下的条位置。
+- G3.1 首页（`checkpoint/ui-mig-g3.1`，证据 `goal/g3.1/`）：
+  - 标志 M18：MultiEffect 白色外发光 + breathe 4.5s（20px/.35 ↔ 30px/.55，scale 1.02）；图层四周留 40px 透明边（直接挂在图片上时光晕被裁到图片边界），负边距保持布局不变。logo-crop.png 与设计稿逐像素并排。
+  - 片源卡：外层 slot 交给 RowLayout 定位、入场 rise 挂 slot，卡片自身 y -4 悬停上浮（之前 y 被布局覆盖，悬停不会动）；副标题用真实数据：采集卡 = 上次采集设备，PS5 = 已保存主机，无记录时通用文案。
+  - 继续上次按钮加 play 图标；最近行改为 692 宽左对齐 Flow，film/image 图标，已删除文件变暗、不可点并提示“文件已不存在”。
+  - 修正：`ui-session.v1`（最近文件、上次采集、减弱动效、默认页）每次改动都写盘却从未读回——桥接构造时调用 `loadPreferences()`，损坏则记日志沿用默认。
+  - 新测试开关 `--data-dir <path>`（在桥接创建前读取），审查时用 `tests/ui-qml-migration-20260925/g3-home-data`（种子历史）与 `g3-empty-data`（首次运行），不读写用户自己的数据。
+  - 截图：cmp-f-home.png（有历史，对齐设计稿）、qml-empty.png（首次运行无继续/最近行）。PrintWindow 截图在显示器休眠时仍正常。
+  - 未执行：卡片悬停上浮与按下缩放的实拍——显示器休眠期间 Qt Quick 不投递悬停（hover-shot 前后逐像素无差，与 G2.4 dock 同一现象）；点击最近条目打开文件。
+
+- R1.1 播放条菜单遮挡局部修复（2026-09-26，`checkpoint/ui-mig-r1.1`）：
+  - `CineBar.menuOpen` 覆盖字幕和音轨弹层，使独立 `FullscreenBar` 的窗口遮罩展开；三个上弹菜单设置播放条上沿边界。`VMenu` 在打开后按实际高度重定位，动态音轨项完成布局后不再压进播放条。音轨模型保留真实 `index` 用于选择。
+  - 构建：`scripts/build-qt-probe.ps1 -Targets veyra_qml_ui,veyra_qml_quick_tests -Log E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r0\menu-height-build.log`，exit 0，`ninja: no work to do`（QML 由运行时加载）；将 `VMenu.qml` 同步到 `tests\ui-qml-migration-20260925\qml-app-r0-final\qml\Veyra\` 后重启 `veyra_qml_ui_r0_final.exe`，以隔离 `--data-dir` 打开 `GTAVI_An_Extended_Look_4K_Native.mp4`。运行 stdout/stderr 为 `goal\r0\menu-height-stdout.log` / `menu-height-stderr.log`。
+  - 实机 Windows.Graphics.Capture 已看：字幕和音轨菜单完整显示在播放条上方，图在 `goal\r0\menu-subtitle-after.png` 与 `menu-audio-after.png`。修前同一音轨菜单底部压进播放条，修后底部离播放条约 18px。
+  - Qt Quick Test `veyra_qml_quick_tests.exe -input tests\qml\quick -o goal\r0\menu-height-regression-tests.txt,txt`：9 passed, 0 failed，新增动态高度增长时底边不超过 `aboveLimit` 的回归用例。
+  - 未执行：多音轨真实切换、全屏/多显示器/DPI 复查、字幕流选择（后端未接入）。R0/R1 窗口分层总验收未据此宣布通过；进度条缩略图、点击跳转和拖动问题仍需单独验收。
+
+- 2026-09-26 / R5.2-b：完成导出剪辑入出点垂直切片。桥接、worker 共享内存和 `VideoExportJob` 传递剪辑范围；视频从首个完整入点帧开始，音频同步裁剪，出点停止写入；QML 导出页 slider 和导出探针参数已接线。`2→5s` 与英语音轨真实 NVENC/D3D12 导出通过，非法范围拒绝，7.9 秒尾段通过；7.98 秒因无入点后的完整帧拒绝，按合同记录。Quick Test 9/9。证据：`E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-b-trim\`、`E:\项目\Veyra\logs\ui-qml-migration-20260926\`。slider 目视、拖动/点击跳转、R0/R1 总验收未执行，按用户要求暂缓。下一目标 R5.2-c：导出队列与编码策略。
+### 2026-09-26 / R5.2-c 导出队列与编码策略
+- 实现 CBR/VBR/CQ 从 QML 设置到 NVENC 与 Media Foundation 的真实参数映射；CBR/VBR 无码率拒绝，CQ 走恒定质量。
+- 实现 `ExportJobManager` 顺序等待队列、完成后自动启动下一项、ETA、队列数和取消时清空等待项；导出页增加多文件选择入口、策略、ETA 和队列状态。
+- 构建命令：`cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && cmake --build E:\项目\Veyra\build\qt-probe-20260926 --target veyra_export_probe veyra_qml_quick_tests --parallel 4'`，exit 0。
+- 原始运行证据：`E:\项目\Veyra\logs\ui-qml-migration-20260925\goal\r5.2-c\cq.stdout.log`、`vbr.stdout.log`、`cbr.stdout.log`、`invalid-cbr.stdout.log`、`quick-tests.txt`；三种真实 NVENC/D3D12 策略均成功，Quick Test `9 passed, 0 failed, 0 skipped`，CBR 无码率 exit 2 且无输出。
+- 未执行：队列自动推进/取消完整运行、Media Foundation 实卡、hash/perf/delivery/unit 门槛、导出页截图及用户暂缓的缩略图/进度条/R0/R1 总验收。`veyra_export_worker_failure_tests` 与 `veyra_audio_track_output_tests` 的混合结果不纳入本轮通过证据。
+
+### 2026-09-26 / R5.3 多实例 GPU 调色（验收中，未提交）
+- 实现和真实证据见 `docs/UI_MIGRATION_EXECUTION_2026-09-25.md` 的 R5.3 条目；所有本轮日志位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/`，staging 位于 `E:/项目/Veyra/tests/ui-qml-migration-20260925/r5.3/app`，临时目录位于 `E:/项目/Veyra/tmp/ui-qml-migration-20260925/r5.3`。
+- Qt 全量 build-all-4 exit 0；真实 D3D12 debug layer GPU 测试 exit 0；hash 17/17 一致；delivery `78c4e421a2114e0ba29ff702ba9a123e` 26 项短测检查通过。性能首轮有超限，单元全集待比对，不宣称 R5.3 完成。
+- 失败保留并修复：中性颜色默认值导致字节回归；初始化绕过 CommandSlotRing 引发 debug-layer error 547；RepairPreset 无参数/无父目录路径调用失败，改传新的 `./r53-presets-parent-2.txt` 后 exit 0。测试未掩盖为通过；本次性能控制台输出路径错误保留单独说明，结果 JSON 未丢失。
+- 未 push、未合并、未发布；已有未跟踪测试生成物原样保留，旧 Win32 与 1.4.4 资产不动。下一动作是完成 R5.3 门槛，不越过失败直接开 R5.4。
+
+### 2026-09-26 / R5.3 续接：容量修复、双构建与性能归因
+- 六实例预设满 64 条触发旧文件上限，新增回归先红后绿；PresetStore/PresetLibrary 统一有限 2 MiB 上限，Library 写入前校验可重载。`capacity-red`/`capacity-green` 原始失败及通过输出均保留在上述 r5.3 日志根；EffectChain 最终定向 exit 0。
+- 主配置 `build-main-2.log` 与 Qt `build-all-5.log` 全量构建 exit 0，均已 stage；不覆盖旧基线 app。最新产物的 GPU/hash/delivery 仍待复核。
+- 收取既有会话 88454：旧版 capture_audio、候选 capture_audio、候选 popup_selector 定向测试均 exit 0；全集 `unit-main` 的两个新增失败仍保留。Qt DLL 路径和参数纠正后三项定向通过，不能把配置错误隐藏成首次通过。
+- 性能固定四轮旧/新对照已完成但未过门槛；启动长尾/计时窗口与系统调度仍需归因，不能以旧版也波动为由宣布新版通过。下一动作核对 TimingWindow/ready 计时并复核最终产物；R5.3 未提交、未打标签。
+
+### 2026-09-26 / R5.3 续接：HDR→SDR 色域回归与门槛防误报
+- `ColorGradeGpuTests` 新增 PQ/HLG tone-map 后 LUT 用例；首次测试栈溢出修正为堆上 RAII 后，`domain-red-2` 六断言实际失败。`EnhanceGraph::createAdditionalColorResources` 将空间判断改为实际 `hdrWorking()`；`domain-green` 真 GPU/debug exit 0，半值 sRGB LUT 全图最大误差均 1 码值，PQ 拒绝后热更新仍禁用。首调色融合、呈现/音频/FG 调度未改。
+- 主构建 `build-main-3.log`、Qt `build-all-6.log` exit 0；此前 `final-verification-1` 的 GPU/hash 通过但 delivery image 在初始化阶段被 3 秒 smoke 截止，单元 43/34/3（capture_audio 新增失败），全部原始失败保留。最新产物不能沿用旧通过。
+- 新增只读性能结果比较器，沿用 10%/5% 固定阈值，缺数据与超限返回非零；12 项隔离脚本测试通过。最终固定性能协议正在 `perf-final-domain-fix` 执行，不自动追加复跑。
+- 1.4.4 标签与便携 zip 哈希复核一致（`rollback-assets-check.json`）。本轮日志/临时/测试产物仍限 E:/项目/Veyra；无 push、merge、Release、旧界面删除或运行库修改。
+
+### 2026-09-26 / R5.3 固定性能协议收取：未通过
+- 收取既有会话 32093，未重复启动。`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/perf-final-domain-fix/` 下四轮全部 gateExit=1；两次候选均 3/4 场景失败，两次旧版 4/4 失败。候选第二轮 nr-1080 submit=1.898ms（对冻结基线 +106.8%）、plain-1080 ready=2.866ms（+82.5%）。不选最好结果，不更换基线，不改门槛。
+- 当前仅色域修复后的双构建和 GPU debug 已通过；完整 hash/delivery/unit 仍待最新产物运行。已修正文档顶部的旧版通过/待核对摘要，保留历史原始记录。R5.3 未验收、未提交；R5.4/R5.5 不提前施工。
+
+### 2026-09-26 / R5.3 完整回归、音频锚点与图片启动诊断
+- 本段日志根 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/`。收取既有 87534 会话，不重复启动；目标 active，代码未提交、未打 R5.3 标签。
+- 最新产品 `final-verification-2`：hash 17/17；delivery exit 1（image-exit=1，原 3 秒 smoke 先于 Feature18 初始化完成）；unit pass44/fail33/skip3，与冻结 G0.7 各项状态一致，changes=[]。保留此前所有失败，不宣称全绿。
+- `CaptureAudioTests.cpp` 增加 `--restart-gap`、maxIngressLateMs/catchUpCallbacks；两次显式 stop/start 后重置模拟输入时间锚点，不重置连续 phase、videoReset 和刻意输入中断。只改测试，未改 CaptureAudioSession 产品实现/阈值。`audio-restart-diagnostic` red 和 fixed 均 exit 1，不能写成先红后绿；默认 `image-startup-audit/audio-default.*` 也 exit 1，160ms phase 偏差 58.6618ms 且无追赶回调。全集结果早于这个测试修改；Qt 测试产物待同步。
+- 命令 `powershell -NoProfile -ExecutionPolicy Bypass -File tests/integration/UiMigrationPerfGateTests.ps1 -OutputDirectory <日志根>/perf-gate-regression`：20/20 exit 0；输入 SHA 未变、畸形输入/进程失败/缺指标/阈值和覆盖保护均覆盖。首跑无 BOM 中文路径失败后加 UTF-8 BOM，未改门槛。
+- `image-startup-audit/protocol.json` 预登记旧 3s→旧 8s→新 8s，同 PNG、空闲 15s、无并发构建/GPU；结果 1/0/0，出帧 0/1/1。8 秒只证明此诊断条件能出图，不替代失败的原 3 秒 delivery。
+- `environment-audit` 仅记录剪映、OBS、CPU/GPU/电源快照；未杀进程、改电源或认定全部失败由背景负载造成。四轮性能失败仍阻塞，不再无理由复跑。
+
+### 2026-09-26 / R5.3 分块调色漏传与 TrueHDR 精度、输出隔离
+- 根目录 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/`，临时目录仍 `E:/项目/Veyra/tmp/ui-qml-migration-20260925/r5.3/`。目标 active，HEAD 仍 babebbb，未提交或打 R5.3 标签。
+- 分块修复：EngineControllerImage 补传额外调色链；TiledImageProcessor 将首调色、额外数组和 count 原样传入 tileSettings。`veyra_image_dimension_tests --tiled-color <证据目录>` 增加真实 GPU 整图/分块 6 例：1301×17 的 0/1/2/6 实例、17×1301 六实例、禁用首/中间实例。`tiled-colors/red.*` exit 1（零实例过、另外 5 例失败）；`fixed.*` exit 0（6/6、maxError8=0、debugErrors=0）。测试读回只限静态图和诊断，未增加产品视频读回。已查看 fixed-images 横向六实例 PNG。
+- `tiled-colors/build-main-all.log`、`build-qt-all.log` 全量构建各 exit 0；主/Qt stage 后 `qt-tiled.*`、主 `gpu-final.*` 和 `hash/`（17/17 same）均 exit 0。双构建已同步 CaptureAudioTests；此前“Qt 待同步”已完成，但其失败未被修复，也未重跑最新全集。
+- 命令 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-qt-probe.ps1 -Out <主构建目录> -Targets veyra_video_hdr_tests -Log <根>/hdr-color-chain/build-main.log` exit 0；随后主候选 `veyra_video_hdr_tests.exe --color-chain <根>/hdr-color-chain/main-images` exit 1。plain/fused/standalone/six 都真实运行/保存/释放成功、debugErrors=0；最大融合/独立误差 0.183594 scRGB（约 14.6875 nits）超过预设 1/64（1.25 nits）。不是通过，不包含 LUT 组合。
+- 增加重复融合与独立 SDR 诊断，不改阈值；`hdr-color-chain/diagnostic/build.log` exit 0、`run.*` exit 1。融合重复差 0；SDR 最大差 1 码值；HDR 平均差 0.00170135、最差 x883/y0/G（6.25781 vs 6.07422）。原始失败和独立 JXR 全部保留。仅支持量化/后续映射敏感的诊断，不把它写成画质正确。
+- 旧 `VideoHdrTests` 使用固定 video-hdr.jxr 导致复跑 HRESULT 0x80070050。新增尾部 `--output <路径>`，保留原数字参数及默认行为；run-unit-ui-migration 把该测试截图放到本轮 Out。没有删除或覆盖旧证据。`hdr-output-isolation/build-main.log`、`build-qt.log` exit 0；分别 stage 后 main/Qt `veyra_video_hdr_tests.exe --output <根>/hdr-output-isolation/<配置>-video-hdr.jxr` 均 exit 0、peakNits=400、parameterChange=0.448683。`results.json` 含命令/EXE hash/旧截图前后 hash，旧图未变；脚本语法检查通过。未做人眼 HDR 验收。
+- 本轮仅 HDR 测试目标重建，产品代码最后实跑仍为 tiled-colors；最新完整 unit/delivery/perf 未执行，不将旧 44/33/3 全集改成新通过。固定性能、原 3 秒 delivery、音频定向和新增 HDR 调色容差仍失败。未改冻结基线、阈值、首实例精度、产品音频/呈现/FG，也未 push/merge/发布/删除 Win32 或旧产物。
+
+### 2026-09-26 / R5.3 六调色链导出 worker 端到端证据
+- 目标仍 active，HEAD babebbb、最后 checkpoint R5.2-c；本轮只增加测试，不改产品实现。`tests/integration/ExportWorkerFailureTests.cpp` 增加 color-chain 模式，helper 为 `ExportColorChainTest.h`。显式数据根确认防止误写正常应用 LUT；输出必须新目录。
+- 证据根 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/export-color-worker/`；进程 TEMP/TMP 为 `E:/项目/Veyra/tmp/ui-qml-migration-20260925/r5.3`。main/Qt 运行目录分别为 tests/ui-qml-migration-20260925/r5.3/main-app 与 app，未覆盖冻结 app。运行前核对 NR 原件 SHA256/大小/有效签名，记录 runtime-identity.json；未修改运行库。
+- 构建命令 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-qt-probe.ps1 -Out <主或Qt构建目录> -Targets veyra_export_worker_failure_tests -Log <根>/build-<配置>-final.log` 两套 exit 0。预登记协议要求 12源帧/12编码帧/0生成/0hold、冻结设置和时间戳一致、直接/worker 解码像素误差 0；效果变化 >=2码值且 >=1%分量；新增显式 NVENC/D3D12 后端断言防止把 MF 回退算通过，未放宽任何阈值。
+- 命令 `<staging>/veyra_export_worker_failure_tests.exe color-chain <repo>/loop/local/fixed_clips/test_av_1080p.mp4 <根>/<配置>-final-color-chain-output`，只对测试进程环境设置 `VEYRA_TEST_COLOR_CHAIN_DATA_ROOT=<staging>/runtime_local`。plain/one/six/禁用首中间/反序/六个逐槽禁用共11例，六独立 LUT 尺寸2/3/5/17/33/4。main-final、qt-final均11/11、maxError8=0；528帧总编码（两配置×11例×直接/worker×12），全部真实 NVENC。worker 日志分别证明各 LUT 加载及后端；文件通过生产库软件解码逐帧比较，未增加产品GPU读回。
+- 原始失败保留：首轮 main 宽流中文路径使逐项日志缺失，修日志后双配置复验；原 encoder 故障用例误用 SDR 输入导致合法 MF 回退/测试失败，按既有测试合同换成 PQ 输入后两配置故障报告均通过，不改旧测试断言。cancel、未确认隔离目录保护也通过。runner 处理空 stdout 时中断，只续跑未执行 Qt，未重复主配置；见 runner-resume-note.txt。`final-results.json`记录8项；`verified-summary.json`检查22例；命令/EXE/输入/产物hash均已保存。
+- 使用本机 ffmpeg 对已编码 MP4 做测试专用静态抽图，exit0；已亲看 plain-six-reverse-first-frame.png，左原图/中六LUT/右反序，非黑且有实际变化。不把该静态抽检扩写成HDR、长期稳定、MF实卡、队列完整或QML截图验收。
+- 本轮没有完整 unit/delivery/perf 复跑；既有四轮性能、原3秒delivery、音频和TrueHDR调色容差失败继续阻塞。计划/恢复计划/执行记录已更新，R5.3未提交、未打标签，R5.4未开工，1.4.4、旧Win32和既有未跟踪产物保留。
+
+### 2026-09-26 / R5.3 FP32 预调色绑定修复接手
+- 修复 `src/pipeline/EnhanceGraph.cpp`：独立调色链在存在 `preGradeRgba_` 时读取 FP32 预调色资源；首实例融合路径保持不变。未改 TrueHDR 容差或性能门槛。
+- 构建日志：`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/fp32-pregrade/build.log`，exit 0。staging：`E:/项目/Veyra/tests/ui-qml-migration-20260925/r5.3/fp32-pregrade-stage`。
+- TrueHDR 定向复测 `hdr2-combined.log` exit 0，`maxFusedErrorScRgb=0`、`debugErrors=0`、融合重复差为 0；SDR 调色 GPU 回归 `color-gpu-combined.log` exit 0，包含六实例、LUT 拒绝和动态更新。首次直接 HDR 运行缺少构建目录 DLL，`0xC0000135` 原始证据保留，随后 staging 运行通过。
+- 线性诊断仍显示独立路径最大 `0.000976562 scRGB` FP16 级差；固定性能四轮、完整 unit、音频、真实采集卡和完整 TrueHDR 容差仍阻塞。未提交、未打标签、未 push/merge/release。
+
+### 2026-09-27 / R5.3 音频复验对账
+- 在当前空闲条件下重跑 `audio-repro-20260927`，160/400/900ms 自动延迟、共享输入偏移、stop/start 重启、video graph reset、手动同步、persistent dry input 重锚、真实 PCM 重锚、停止后状态清理和 burst budget 全部 `PASS`。日志：`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/audio-repro-20260927/stdout.log`。
+- 结论只限软件时序合同：当前条件下未复现音频逻辑故障；此前高系统负载/调度迟到失败证据仍保留。未放宽阈值、未修改产品音频策略，不宣称物理扬声器/显示器端到端延迟通过。
+- R5.3 仍受固定性能四轮、真实采集卡、Media Foundation 实卡导出和最终完整门槛阻塞；TrueHDR fresh 与六独立 LUT 双配置窄验收已通过，高负载音频失败证据仍需复现/解释；未提交、未打标签、未进入 R5.4。
+
+### 2026-09-27 / R5.3 双配置 delivery、TrueHDR fresh 与 unit 对账
+- 主配置 delivery 26/26 软件检查通过，结果 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/exposure-flag-delivery-main/bbcbc6411a6c48ebaf1288e21072a3d8/result.json`，exe SHA-256 `68F36662EB5091C54D55CAA08A44AC5EB30C7C288A3C3B75C7F42C04C6378E34`。Qt 配置 26/26 通过，结果 `.../exposure-flag-qt-delivery/4332003f4ef94782b5d52003e663b341/result.json`，exe SHA-256 `5BC0DD1972961455BF1A5EA174571104468008A93314D6EB4C7994D1BE90407F`。两者仍等待用户真实采集卡验收。
+- 完整 unit 对账：主 `44 pass / 33 fail / 3 skipped`，Qt `43 pass / 33 fail / 3 skipped`，相对冻结基线无新增失败；17/17 hash 两套一致。保留旧失败，不能写成全集通过。
+- TrueHDR 调色链改用全新输出目录后主/Qt 均 exit 0，`maxFusedErrorScRgb=0`、`maxLinearError=0`、`debugErrors=0`、`pass=1`；旧 Qt `0x80070050` 由 JXR 输出重名造成，不能与 fresh 结果混淆。
+- 固定性能协议四轮仍全部 `gateExit=1`，不改阈值/基线，不挑最好轮次；最新候选第二轮 `nr-1080 graphSubmit +106.8%`、`plain-1080 gpuReady +82.5%`。TrueHDR fresh 与六独立 LUT 已通过；实采集卡、MF 实卡导出和高负载音频解释仍未完成，R5.3 未提交、R5.4 未开始。
+
+### 2026-09-27 / R5.3 TrueHDR 六独立 LUT fresh 复验
+- 在隔离 staging 的 `runtime_local/luts` 生成并加载六个不同尺寸 `.cube` LUT（`2/3/5/17/33/4`，Cineon 输入空间），主配置与 Qt 配置分别运行 `veyra_video_hdr_tests --color-chain`。证据：`E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/hdr-six-lut-20260927-main-2/run.log`、`.../hdr-six-lut-20260927-qt/run.log`。
+- 两套运行均 exit 0，六 LUT 输出峰值 `960 nits`，`meanSixChange=1.84216`，`meanSixLutChange=0.455866`，`maxFusedErrorScRgb=0`、`maxLinearError=0`、`debugErrors=0`、`pass=1`；六 LUT 的创建、加载、独立执行、释放和结果检查已补齐。该证据不覆盖真实 HDR 屏观感、实卡输入或长期稳定性。
+- 文档口径同步：R5.3 不再把“完整 HDR+六 LUT 未执行”列为阻塞；剩余阻塞为固定四轮性能、真实采集卡、Media Foundation 实卡导出、高负载音频失败复现/解释及最终完整门槛收口。性能阈值、冻结基线和历史失败证据不变，R5.3 仍未提交、未打标签。
+
+### 2026-09-27 / R5.3 真实采集卡 smoke
+- 设备 `VIDEO 0 KUHAIMI 27P` 已由 `veyra_capture_tests.exe --list` 枚举，未使用虚拟摄像头。完整输出与每次播放器日志位于 `E:/项目/Veyra/logs/ui-qml-migration-20260925/goal/r5.3/capture-paths-20260927/`。
+- `capture-paths-smoke.ps1` 原生路径 `format=16`（1920x1080@120 NV12）通过：12 秒 `frames=1441`、`dropped=0`、`failed=false`。同一物理卡压缩路径 `format=62`（1280x720@60 MJPEG）通过：`frames=721`、`processedFps=60`、`callbackFps=60`、`captureDropped=0`、`failed=false`；日志持续显示 `received=processed`。
+- 自动选择的压缩 `format=52`（1920x1080@240 MJPEG）结果为 `received=2880`、`processed=990`、`dropped=1900`、`failed=false`，说明输入速率高于当前处理/呈现速率后 mailbox 丢弃过期帧，不能记作零丢帧通过，也不是设备断开。
+- 单独测试 `format=54`（3840x2160@60 MJPEG）完成 `SetFormat`、软件解码器和颜色链初始化，但 12 秒 `frames=0`，反复记录 `Stable device and format identity unavailable; manual selection required`，退出码 1；4K 压缩路径本轮失败，不能由 720p 结果外推。
+- 本轮结论：物理采集卡 ingress 已有 1080p120 NV12 和 720p60 MJPEG 的真实通过证据；4K/高帧率格式矩阵、Media Foundation 实卡导出、屏幕/扬声器端到端延迟仍未验收。R5.3 继续受固定性能 gate、采集剩余格式、MF 实卡和最终门槛阻塞，未提交、未打标签、未进入 R5.4。
+# 2026-09-27 / QML 迁移第四次对抗式审计：固定控制证据源
+
+- 复核确认：当前目录仍是 `codex/ui-qml-migration-20260925` 的主 checkout，`main=df41580f7fa0d2b26718f355640470e8cb94b324`，没有 merge、push、Release，旧 Win32 UI 没有删除；隔离成立，但分支历史和 dirty worktree 仍包含冻结的后端/R5.3 越界改动。
+- 发现无人值守风险：scope guard 原来允许 `-Root`/`-Baseline` 替换证据源，且 baseline/guard 尚未纳入 Git clean 控制。该风险不是后端链路问题，但会让后续 UI 进度报告失去可追溯性。
+- 已修改 `scripts/acceptance/ui-migration-scope-guard.ps1`：固定 canonical root/branch/main/baseline/guard，记录并校验 guard SHA-256，要求 baseline 与 guard tracked + clean；保留已有越界路径 hash 冻结，不回滚、不继续修改后端。
+- 已同步 `docs/UI_MIGRATION_MASTER_PLAN_2026-09-25.md`、`docs/UI_MIGRATION_RECOVERY_PLAN_2026-09-26.md`、`docs/UI_MIGRATION_EXECUTION_2026-09-25.md` 和本审计文档。U0 在控制文件提交并重新验证前保持未完成；U2–U6 未执行。
+- 下一步顺序固定为：PowerShell AST 解析、`git diff --check`；只提交本轮活动文档、scope guard 和 baseline（不提交任何 SDK/runtime/测试媒体）；更新 baseline 的 guard blob/hash 后再次运行 guard；只有 U0 通过才允许创建新的 E 盘 QML build/staging/log/tmp 并进入 U2。
+
+## 2026-09-27 恢复性修复：停止旧目标，修复真实 QML 构建/验收故障
+- Run：`repair-overnight-20260927-035400`。修复已证实问题，不恢复 R5.3 或无人值守；上面的历史“下一步”不是本轮新提交/改 baseline 的授权。
+- 全新构建复现 QuickSmokeTests 的 QString 类型误用并最小修复；修正 runner 命名参数绑定与 scratch 创建冲突，补齐 staging 的 offscreen/QtTest 依赖及反例；限制构建目标和等待时限，把 QML 缓存定向至本轮 E 盘。未改冻结后端、CMake、旧 AppShell、guard 或 baseline。
+- 验证：修复后另一全新目录构建 387/387；entry contract 7/7；最终 QML 三程序 3/3（Quick 9/9）；自动 smoke 8/8。失败构建及首次 unit 日志保留，未用旧证据替代。
+- 备份 `E:/项目/Veyra/archives/repair-overnight-20260927-035400`；构建 `E:/项目/Veyra/build/repair-overnight-20260927-035400/qml-fixed`；staging `E:/项目/Veyra/tests/repair-overnight-20260927-035400/app-fixed`；日志 `E:/项目/Veyra/logs/repair-overnight-20260927-035400`；临时根 `E:/项目/Veyra/tmp/repair-overnight-20260927-035400`。
+- 独立 frozen 对比 checked=474、changed=[]（含 405 个既有生成残留），阶段 guard 均通过；文档收口后的最终结果保存 guard-final.json，失败必须停止。HEAD/main 保持 53a2d31/df41580，没有新增 commit/tag、merge、push、Release；当前为分支主 checkout，不是 linked worktree。
+- U2/U3 通过，U4 仅自动 smoke 通过；完整人工交互、U5 设计对照、U6 验收及后端正确性/性能仍未完成。DXC/VCINSTALLDIR 与字体警告保留，不能宣称新便携包已验收。
+- 具体文件、命令入口、证据与边界见 `docs/UI_MIGRATION_REPAIR_2026-09-27.md`。报告后停止，不追加审计循环，不更改模型/provider 配置，不把工程错误归因为已证实的模型路由。
+
+## 2026-09-27 范围澄清：UI 恢复不等于 R5.3 解决或完整 2.0.0 完成
+- 用户询问 R5.3 是否解决，以及 2.0.0 新增/改造功能是否进入方案。核对原总方案 Git 5f307fc 第 0/S2/S4/6 节、当前 bridge 审计及本日志最后 R5.3 记录。
+- 结论：R5.3 有局部通过，但固定性能四轮未过、全量 unit 仍有失败/跳过、4K MJPEG 短测失败、MF 实卡等未收口；本轮未重新执行这些测试，不能把刚恢复的 QML 构建和自动测试称为 R5.3 修复。
+- 原定升级包含 NR 叠层/排序、节点执行、独立多实例调色、导出扩展、字幕描边、音频设备/下混、屏幕缩略图、设置和预设等；UI-only 子方案不能替代完整功能清单或撤销这些需求。已补到总方案第 2.1 节并标记证据/缺口，同步全目标文件与执行记录。
+- 保留补帧最后、HDR 后只接补帧、只显示提交 FPS 的最终决定；没有把已取消的显示 FPS 新需求加回。新增台账不是后端施工授权；逐项功能施工方案尚未完成，不恢复旧 Goal，不改 guard/baseline，不解冻后端。
+- 本轮只改四份 UI/工作记录文档，无源码、构建、测试或运行库改动。最终检查命令：scope guard 的 -Evidence 指向 `E:/项目/Veyra/logs/scope-clarification-20260927-r53-features/guard-final.json`；另执行 `git diff --check`。守卫失败须报告，不自动重记 baseline。
+
+## 2026-09-27 完整 2.0.0 原始需求对齐与后续总方案
+- Run：`v200-plan-reconcile-20260927-1237`。读取项目专属 Claude 会话中的真实用户消息（09-25 三轮设计/功能决定、09-26 前后端目标）、批准原型及固定 Git 版本的原始 S/G/B/R 计划；来源消息 ID 与北京时间写入新方案，不复制私人会话到仓库。
+- 新建 `docs/UI_V2_0_0_MASTER_PLAN_2026-09-27.md`：F01–F24 完整需求台账，P0–P8 从当前 dirty 进度到 2.0.0 交付；R5.3 是第一工程关口，之后接 R5.4/R5.5、完整功能、17 屏/42 动效、同候选回归、候选包和授权发布。同步旧总方案、全目标、恢复、执行、状态和交接入口，历史记录保留。
+- 证据纠偏：既有性能报告比较历史基线，而同轮旧 EXE 的 GPU-ready 也显著漂移；不同目录候选 hash 不同，必须先核身份/fixture 再判因。未修改旧失败报告，不宣称 R5.3、底层或完整 2.0.0 已通过。
+- 本轮只改 11 份文档；不改源码、AGENTS、guard、baseline、运行库或原型，不做构建/功能测试，不创建 Goal/自动化/subagent，不新增 commit/tag，不 merge/push/Release。当前主 checkout 上的既有 dirty 工作全部保留，代码安全锁保持；后续先 P0 显式迁移，再 P1.1。
+- 证据目录：`E:/项目/Veyra/logs/v200-plan-reconcile-20260927-1237/`。`validation.json`：538 个源码/脚本/测试/原型文件哈希全部未变、该范围未新增文件；F01–F24、P0–P8、17 frame、原始 42 个动效编号完整，117 个本地 Markdown 链接有效，固定版本引用可解析；`git diff --check` 返回 0，仅有既有 LF/CRLF 提示。branch/HEAD/main 保持原值，guard/baseline 无 diff。
+- 校验过程修正了检查命令的字符串转义错误，以及将历史括号代码误当链接的匹配器；保留 `validation-initial.json`，未为消除误报修改历史内容。该检查不替代产品功能测试。
+- 文档落盘后的收尾命令：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/acceptance/ui-migration-scope-guard.ps1 -Evidence E:/项目/Veyra/logs/v200-plan-reconcile-20260927-1237/guard-final.json`；最终范围结果以该 JSON 为准，若失败立即停工，不改 guard/baseline 制造通过。
+
+## 2026-09-27 P2接线、保护修复及防闪质量停点
+
+- 用户追加“允许，这种原本设定中的都允许”。只在`E:/项目/Veyra/worktrees/p0-p1-r53-20260927`、`codex/p2-nr-20260927`内做P2；HEAD仍为`53a2d31c6b34f74b7b6d2953ee2caaec63d44e1d`，main仍`df41580f7fa0d2b26718f355640470e8cb94b324`。原checkout、设计稿、旧候选、正式1.4.4、运行库/配置保护不变。
+- 固定容量多层settings及EffectChain/GraphDescription接通真实产品图；QML选层参数、复制/删除/启停/reset和同步拒绝回滚有真实17步证据。保护开关原被fromChain覆盖，改复用Protection节点启停；全栈保护统一对原NR前基底；最终保护pass误裁负残差，严格GPU负例061复现后仅改常量保留signed输出，064八帧完全匹配。未动shader、采集、解码、音频、FG、旧UI或P3执行器。
+- 031九轮1–4层/尺寸/reset/释放短测通过，末三轮释放显存差4,767,744bytes；不冒称长期无泄漏，core-host残留parameter block shutdown警告保留。026/027命名空间及029累计计数误用均是测试错误，修测试后通过，不伪造产品修复。
+- 065/066原图资源与全关旁路逐字节通过，067调色保护通过。059无PQ标记FFV1被正确拒绝；068重新生成带实际PQ/BT.2020标记的HEVC测试片，069实际四层/HDR保护通过；保留错误fixture，不修改source/decoder放宽检查。
+- 070保护6步通过。071QML在引擎应用完成9毫秒后读取旧缓存断言失败，保留日志；外部测试等待新snapshot、原断言不变，072的17步33.925秒通过，未改产品。最终候选`E:/项目/Veyra/tests/p2-nr-wiring-20260927/final-candidate/veyra_qml_ui.exe`，SHA256 `1a850fe4590129edb17879c454c4ca694331dbd9be5d5cf7b0bd9464ceee42c0`。
+- 038–053只覆盖真实制作视频的网页文字/字幕；073抽帧确认后半段实际游戏画面，074–081有限补测75秒和125秒、1/4层、防闪开关各40帧。基底/reset一致，单层NR原始输出及光流也相等，但查看75秒暗墙、125秒粒子对照发现网纹/轮廓伪影，四层明显。数值波动下降不代表画质通过；P2未完成，Goal不complete，不启动P3。时域shader/host与开工及main源码一致，未运行旧发行包画质对照，不能据此外推二进制表现或根因。
+- 证据目录`E:/项目/Veyra/logs/p2-nr-wiring-20260927`，完整命令/返回码在`commands.json`，失败原始日志和`pixel-audit.json`保留。有限脚本为tests同任务目录`final-checks.py`、`gameplay-quality.py`和`qml-interaction.py`。构建在`build/p2-nr-20260927`，TEMP/TMP在E盘任务子目录，不改全局环境。新恢复点`archives/p2-nr-wiring-20260927/review-checkpoint`只存增量，核验看同任务logs中的`closeout-verification.json`。
+- 下一步收敛为防闪质量缺陷，不反复跑已通过矩阵；当前shader仍冻结，若修复需要改该文件，先解决最小范围边界，不改旧guard/baseline洗白、不降强度遮盖。未派subagent、未commit/tag/merge/push/Release、未删除旧UI；1080p240继续按用户决定暂缓。
+
+## 2026-09-27 P0/P1隔离目标收口（不推进P2）
+
+- 工作区仅 `E:/项目/Veyra/worktrees/p0-p1-r53-20260927`，分支 `codex/p0-p1-r53-20260927`，HEAD仍为 `53a2d31c6b34f74b7b6d2953ee2caaec63d44e1d`；原桌面checkout和main不变。完整结果见 `docs/P0_P1_R53_EXECUTION_2026-09-27.md`。相对P0固定基线仅变动4份文档、EnhanceGraph一个函数和其GPU回归测试；导入的61个旧dirty文件不是本轮新增改动。
+- 产品修复：删除默认融合调色路径两行曝光捷径并补解释注释，独立实例不变。严格7组全图FP16/RGBA比较从999字节不同修复为344064字节完全一致；GPU/HDR、多实例顺序/LUT、生命周期、新设备资源恢复、6场景平铺和11场景NVENC颜色导出通过。未修改采集/解码/声音/NR/FG/Win32/QML源代码，不宣称整机TDR恢复。
+- 修复后真实QML：036三程序通过、037八入口/真实播放通过；最终SHA `9af5678f80c24b7469e899af0b46cf3bfa6ab158ca78220b5bb99753dfc4f9c2`。用户看到的旧Win32窗口用于底层固定变量对照，不能算新UI验收；17屏/42动效/1:1仍待P5。
+- 最终底层性能四场景和独立QML外壳对照完成，原graph-submit +10% / GPU-ready +5%阈值未改，三组配对均有效、无补测。`python -B E:/项目/Veyra/logs/p0-p1-r53-20260927-131215/audit-final-evidence.py` 只读核验45份正式样本，pass；所有样本有实际呈现与GPU遥测。4K为NR/flow内部1080p实时档；统计为每秒P95均值，不是总体P95或屏幕延迟。
+- 076 cmd换行编排错误导致假退出0且无EXE，保留失败；078改UTF-8/CRLF且检查实际产物后构建通过。079/080参数齐全的color-look/LUT、081独立out下HDR、082新输出Video HDR、083采集稳定身份枚举通过。历史全量缺参数与loader失败逐项归因保存在 `historical-unit-failure-attribution.json`；未覆盖项不改写为产品pass。
+- `python -B E:/项目/Veyra/logs/p0-p1-r53-20260927-131215/remaining-behavior.py` 仅运行一次：095独立正式1.4.4播放12秒真实呈现696帧；096–099稳定device/format key配对，1080p240旧/新真实呈现2567/2690帧，4K60为694/722帧，无超时，逐次guard通过。1080p240两侧仍有204/182丢帧与频繁PTS重置，不能称稳定240fps；历史零帧本次未复现不称根治；共有非调色问题保留为P2/P4/P6专项。
+- 全部新产物使用E盘：构建 `E:/项目/Veyra/build/p0-p1-r53-20260927`；测试 `E:/项目/Veyra/tests/p0-p1-r53-20260927`；日志 `E:/项目/Veyra/logs/p0-p1-r53-20260927-131215`；临时目录 `E:/项目/Veyra/tmp/p0-p1-r53-20260927`；存档 `E:/项目/Veyra/archives/p0-p1-r53-20260927-131215`。保留有用产物及失败证据，不递归删除junction或他人文件。未用C盘托管worktree的归档工具要求登录，未绕过。
+- 最终外部checkpoint保存source/dirty哈希、patch、实际候选/fixture/runtime身份和证据索引；不提交二进制，不改HEAD/tag、guard或baseline。最终检查：`python -B scripts/acceptance/p0-p1-r53-control.py guard --baseline E:/项目/Veyra/archives/p0-p1-r53-20260927-131215/p0-p1-scope-baseline.json --sha256 ce18db0ec34c20fe671248250b86683cda7d2162d0c2033572effd72ac3707ba`；`git diff --check`。实际输出见日志 `final-guard.json`、`final-diff-check.json` 及存档 `final-p0-p1-r53/checkpoint.json`。本目标收口后停止，不自动启动下一阶段、merge、push或Release。
+
+## 2026-09-27 P2防闪单样本只读诊断（仍未完成）
+
+- 上轮真实封存为有效进展，不是等待中的测试：`E:/项目/Veyra/archives/p2-nr-wiring-20260927/review-checkpoint/checkpoint.json` SHA256 `4bb35df48cb4b1e1c6e72490f50b668a7ffba78271c85d4590078eaed9878fdf`；19个增量、1055份源码清单，回读一致。
+- 当前固定v2 guard通过。未收到解除`NrTemporal.hlsl`冻结的新指令，不把自动目标续跑视为授权。只查看已有截图和代码，单次离线CPU复算已有75秒单层前12帧，未新跑GPU/播放器/构建，未碰产品源码。
+- 命令：`python -B scripts/acceptance/p0-p1-r53-control.py run --baseline E:/项目/Veyra/archives/p2-nr-wiring-20260927/scope-baseline-v2.json --sha256 ad44036873581823f1eb77bef2465ca9051dca1dcf70199b6e9858cdf27c493b --seconds 120 --case temporal-offline-replay --revision archived-75s-single-layer-12frames-v1 --output E:/项目/Veyra/logs/p2-nr-wiring-20260927 --cwd E:/项目/Veyra/tests/p2-nr-wiring-20260927 -- python -B E:/项目/Veyra/tests/p2-nr-wiring-20260927/temporal-offline-replay.py`。编号082，2.283秒、exit0、post_guard=pass。TEMP/TMP仅子进程设为E盘既定tmp目录。
+- 结果：首帧相等；后11帧CPU/GPU支持区域MAE约1.02e-5–1.56e-5，防闪实际变化MAE约0.00102–0.00255。支持把诊断收敛到时域公式，但逐分量精确比例仅46%–58%，最大误差0.00934，不能拿近似复算冒充严格验收、根因或已修复。报告位于上述logs目录`temporal-offline-replay-75-stack1.json`。
+- 本轮只改P2执行文档和本WORKLOG；文档增量与诊断证据另存`E:/项目/Veyra/archives/p2-nr-wiring-20260927/temporal-readonly-review/`，不覆盖已封存检查点。防闪网纹仍是P2阻塞；不调整强度/默认值遮盖，不改guard/baseline，不推进P3，不继续同样本或全矩阵重复测试。
+
+## 2026-09-27 P2防闪必要修复：两项缺陷已修，粒子画质仍未通过
+
+- 用户最新授权“解除，为了新版的迁移，需要的合理部分都可以解除，不需要再问我”已经落实。AGENTS及新独立范围基线记录必要依赖解冻，不再把shader授权当作阻塞；这不是任意重写播放器或发布授权。仍在`E:/项目/Veyra/worktrees/p0-p1-r53-20260927`、`codex/p2-nr-20260927`，HEAD=`53a2d31c6b34f74b7b6d2953ee2caaec63d44e1d`、main=`df41580f7fa0d2b26718f355640470e8cb94b324`，不改桌面原checkout。
+- 新基线：`E:/项目/Veyra/archives/p2-nr-temporal-repair-20260927/scope-baseline.json`，SHA256=`b2636ea6d185bbf666d2bae47287944a84d5e7245ccb663a0ef5d1868750c509`。运行前后guard通过；旧baseline、旧guard和既有候选不覆盖。原checkout的1457份文件与隔离区1055份文件按该基线和白名单检查。
+- 本轮产品源码只改`shaders/NrTemporal.hlsl`，测试只改`tests/integration/NrTemporalGpuTests.cpp`。第一项修复：非负base/raw叠加过时负残差会产生原本不存在的负通道；使用连续阴影安全限制，历史保存真正输出的残差，合法signed负值仍保留。005真实GPU反例失败，007修后转绿。第二项修复：线性暗部guide的绝对容差接受明显相对亮度变化；仅匹配guide经有界压缩转感知域，实际输出/残差仍为线性FP16。012反例失败，014修后转绿。没有调低NR强度，没有改80ms权重、匹配阈值、默认开关或全局颜色链。
+- 受控命令共29条，见`E:/项目/Veyra/logs/p2-nr-temporal-repair-20260927/commands.json`，没有超时，最长35.396秒。完整命令及前后guard见同目录`*.result.json`；调用模板为`python -B scripts/acceptance/p0-p1-r53-control.py run --baseline <上述基线> --sha256 <上述SHA256> --seconds <本项限时> --case <用例> --revision <实现版本> --output E:/项目/Veyra/logs/p2-nr-temporal-repair-20260927 --cwd <实际目录> -- <命令>`，构建使用`--kind build`。不得因上下文交接重跑这29项。
+- 必须排除的假通过：002批处理LF行尾导致命令解析错误却exit0，003因此跑了旧测试，均不算新增验收。004改为UTF-8/CRLF并核对实际编译链接后，005才是有效旧shader反例。首次probe因未复制可执行文件WinError2未执行；复制探针后009才是真实样本。005、012的exit1是预期反证，不是隐去的回归失败。收尾只读汇总脚本另有一次字符串转义SyntaxError，未产生写入或测试；改用chr(10)后读取成功。
+- 游戏75/125秒各1/4层、每组40帧：新旧base字节一致，首帧及四层中点reset与防闪关闭输出精确一致，160帧未在非负输入制造负通道。四组旧异常负通道98217/308639/927711/1606559全部降为0；残差波动降低不等于画质通过。75秒四层明显暗墙网纹已不再出现；125秒亮粒子内部/渐变仍有细轮廓，四层更明显，根因尚未证实。
+- 有效回归：新增及既有GPU单测、四层羽化独立GPU参照逐字节一致、合成PQ/BT.2020 HDR四层保护、SR→NR与NR→SR真实4K工作图、两组文字对照、真实QML bridge+engine的17步交互均完成；有效probe的debugErrors=0。QML注入Main.qml已恢复。已查看`text-review-v2-0-1.png`及`text-review-v2-25-4.png`，所展示第10/39帧未见明显新增文字重影；这不是动态/全片/鼠标交互或设计动效验收。真实屏幕HDR、其他显卡、长期稳定性没有因此通过；core-host残留parameter block警告未确认为永久泄漏。
+- 候选为`E:/项目/Veyra/tests/p2-nr-temporal-repair-20260927/candidate-v2/`。EXE SHA256=`1a850fe4590129edb17879c454c4ca694331dbd9be5d5cf7b0bd9464ceee42c0`；`shaders/NrTemporal.dxil`=`f6fe501ca236eea3a7fdc5a086072750d1ebd528c0b6810f2d73bca7e8cc28fb`；GPU测试EXE=`38af849eac962b6362f6351d2e916cafab3427433d66aeab2d913d5841353ca7`；`qml/Veyra/Main.qml`=`cd43c350c232de02a45d9a3a2559f22ccbf056ddfe9e3c89ab7d48ab7f816eeb`。产品EXE与旧候选相同，本轮修复在外置shader，必须联合核对身份。
+- 产物目录：复用build=`E:/项目/Veyra/build/p2-nr-20260927`；本轮tests/logs/tmp/archives分别为`E:/项目/Veyra/{tests,logs,tmp,archives}/p2-nr-temporal-repair-20260927`。收尾封存位置为archives下`verified-partial/`，保存源码/文档增量、候选身份、证据索引及恢复说明；实际封存是否完成以`checkpoint.json`及`closeout-verification.json`的回读为准，不把待建目录当成已完成。不复制整个工程、不提交二进制、不删除旧候选或原始失败证据。
+- 停止结论：本因已经执行两次有依据修复，计数不因接续/上下文压缩重置。不进入第三轮调参，不重复全矩阵。下一步只应先基于已有125秒原始捕获建立能区分运动拒绝、重投影/量化等假设的可证伪判据；目前这些只是候选解释，不写成根因。没有新证据就不再启动产品改写或GPU循环。P2仍未完成，Goal不标完成；不推进P3–P8/R5.4/R5.5，不动暂缓1080p240采集问题，不commit/tag/merge/push/Release或删除旧UI。
+
+## 2026-09-27 P2用户手动试用：分层编辑及参数入口仍欠验收
+
+### 用户追加：每层NR内部处理分辨率
+
+- 将用户要求记入P2执行记录及2.0总方案：每层/节点参数内设置分辨率，新建默认1080p，保留1.4.4全部六档；复制继承、已有保存值保留，旧全局设置显式迁移，输出及导出边界不改。
+- 只读命令 `git grep -n 'P480' v1.4.4 -- ':!docs' ':!tests'`、`git grep -n -E '480p|900p|1080p.*1440p|1440p.*原生' v1.4.4 -- src apps include` 和 `git show v1.4.4:include/veyra/pipeline/ResolutionPlan.h`，确认旧设置窗1309行六档与内部尺寸上限语义，不靠印象猜范围。
+- 静态核对发现当前只有全局nrPolicy，共享nrWidth/nrHeight，每层结构和bridge缺少接口。按UI-only缺口规则只登记、不改管线，不把全局值包装成逐层独立；这不是已完成功能。
+- 前置既有P2 guard通过（原checkout1457、隔离区1055文件），本轮仅三个文档；无新构建、GPU或鼠标测试，无新构建/媒体产物，不触碰运行中的手测候选或用户配置。
+
+### 接续补充：节点入口与后续面板
+
+- 用户补充节点面板点不进去。只读核对 ProPage/VSeg/Main/NodePage/DialogHost、QmlPlayerBridge 的切换路径与现有原生视频避让实现。入口没有显式禁用；本页 Controls Dialog 缺少 videoCover 标记，存在视频遮挡缺口；尚未运行点击/几何复现，不能认定唯一根因。当前换页/改 mode 路径没有独立模式快照恢复，不把节点画布存在当成节点执行完成。
+- 已将列表/节点参数共用、实例选中与复制删除语义、真实入口交互、模式隔离和返回恢复补入 P2 执行记录及总方案 P3 前置关；功能入口不推给 P5 美化。接口缺口留在 P3，不提前修改引擎。
+- 前置命令：`python -B scripts/acceptance/p0-p1-r53-control.py guard --baseline E:/项目/Veyra/archives/p2-nr-temporal-repair-20260927/scope-baseline.json --sha256 b2636ea6d185bbf666d2bae47287944a84d5e7245ccb663a0ef5d1868750c509`，通过（原 checkout 1457、隔离区 1055 文件）。首次文档补丁因总方案上下文不匹配未写入，回读确认后缩小匹配锚点重试；不扩展范围或改 guard。
+- 本轮仅三个文档，无新构建/GPU/鼠标测试、无新媒体/包产物，不修改或关闭手测候选，不改用户配置。节点入口仍待修，P2 仍未完成，防闪两次修复计数不重置，不启动 P3/R5.4/R5.5。
+
+- 用户反馈四层叠加确实有效；截图显示仅第4层共用面板及模型强度，未单独展示各层，模型参数/实验分组入口未显示。将其作为新的真实界面证据，撤回“P2只剩防闪”的判断；不将功能入口问题全部归给P5美化。
+- 只读核对`ProPage.qml`、`VSubGroup.qml`、`VAccordion.qml`及`QmlPlayerBridge.h`：当前单个Accordion依赖selectedNrLayer，其他NR参数代码并未全部删除。两个直接VSubGroup无Layout.fillWidth且组件无implicitWidth，记录为布局嫌疑，未凭静态阅读宣称修好。候选ProPage/VAccordion/VSlider与源码哈希一致。
+- 修改仅P2执行记录、2.0总方案及本WORKLOG。后续P2补齐分层识别/独立编辑、参数可达性、真实鼠标逐层操作回归；保留既有底层短测，不重跑全矩阵。完整设计还原、节点排序及跨硬件/长稳边界分开记。
+- 前置guard通过（原checkout1457份、隔离区1055份文件）；未运行新的GPU/构建测试，未改候选或关闭用户试用窗口，未改用户配置/模型设置。防闪两次修复计数保持，P2不标完成。本轮仅文档，无新增构建/媒体产物；用户试用启动记录沿用`E:/项目/Veyra/logs/p2-manual-preview-20260927-174854/launch.json`。
+# 2026-09-28 a28：按用户授权恢复P3目标施工
+
+- 用户要求先同步文档、阶段完成留存档，P3验收完成后关机。get_goal返回null，已create_goal创建active目标；未将旧paused状态当作当前状态。
+- 原checkout scope guard与隔离32路径guard均pass；未改baseline，未覆盖现存dirty，未改原checkout/main。
+- 本轮日志`E:/项目/Veyra/logs/p3-execution-20260928-a28/`；开工文档原件已逐文件复制至`E:/项目/Veyra/archives/p3-execution-20260928-a28/start/`。
+- 首片S1：EffectChain节点Protection迁移/拒绝、bridge/QML入口清理、PresetLibrary兼容与直接单测；保留列表全局保护，不改算法/shader，不恢复第二SR。验证先局部CPU/Qt再必要生产候选，单测≤300秒/构建≤900秒，同因最多两次有据修复。
+- 每阶段成功后外部存档原件、结果、哈希和测试证据；不擅自commit/tag。仅P3全部必需验收完成且文档落盘后关机；未设消费硬上限。
+
+## 2026-09-28 P4-a 预设与状态
+
+- 仅在 `E:/项目/Veyra/worktrees/p0-p1-r53-20260927` 的 `codex/p4-functions-20260928` 施工；HEAD `53a2d31`，桌面原 checkout 和 main 不变。原区 scope guard 及 P4-a 不可变基线 guard 均通过。总合同和分片状态见 `docs/P4_FUNCTIONS_EXECUTION_2026-09-28.md`。
+- 产品完成启动默认预设恢复和管理弹窗；默认清除/替换写失败可回滚。QML staging 的默认设置、跨进程重启、清除及管理弹窗两进程验证通过；实跑证据在 `E:/项目/Veyra/logs/p4-a-20260928/004`–`010` 与 `E:/项目/Veyra/tests/p4-a-20260928/manage-r1/result.json`。测试注入定时器已从 staging 移除，`Main.qml` 与源码哈希相等。
+- `PresetLibraryTests` 和 `RepairPresetTests` 目标构建及单测通过。最终 `016-p4a-schema-unit.stdout.log` 报告 64 个六组调色预设、NR v23、66 个旧后端组合、退休 SR 模式及 v1–v21 升级回读全部通过。两次失败 `012`、`014` 原样保留；分别补足夹具字段及关闭占用原文件的读取流，v18 移除仅 v19 存在的 mask，并改用新测试数据路径避免旧容量文件污染。每条受控命令、退出码、时限及 post guard 在同目录 `commands.json` 和 `*.result.json`。
+- P4-a 软件路径完成；人工视觉、真实硬件以及 P4-b 至 P4-g 均未验收。新产物在 `E:/项目/Veyra/{tests,logs,tmp}/p4-a-20260928`，构建复用 `E:/项目/Veyra/build/p2-nr-20260927`。存档 `E:/项目/Veyra/archives/p4-a-20260928/checkpoint.json` 已回读通过，含 9 个源码/文档增量和 59 个证据文件，SHA-256 `87ff4b399e8ef6c3a106daa6c15908535cc9159b3b02cb3298ad6d96a716badb`。不提交运行库或测试媒体。
+
+## 2026-09-28 P4-b 导出实测（未封存）
+
+- 在 `E:/项目/Veyra/tests/p4-b-20260928/staged-001` 运行 `E:/项目/Veyra/build/p4-b-20260928/build-001/veyra_export_probe.exe`。CQ/CBR/VBR（CBR/VBR 为 8 Mbps）均 exit 0；NVENC H.264 D3D12 日志记录 30 源帧到 30 输出帧。系统 `ffprobe` 解码三份成品，均确认 30 视频帧、6 声道 AAC；日志与文件在 `E:/项目/Veyra/tests/p4-b-20260928/{cq-30,cbr-30,vbr-30}.*`。
+- trim `2..5 s` exit 0，`ffprobe` 确认 73 视频帧、约 3.056 s 容器和 6 声道 AAC。非法 trim 与非法音轨均 exit 1，final/partial 均不存在。两个顺序任务 8 帧、6 帧均成功且分别由 `ffprobe` 读出对应视频/音频帧数。
+- 保留首次失败证据：`cq-run.log` 是缺少 FFmpeg DLL 时的 `-1073741515`，不是导出逻辑失败；`veyra_media_probe.exe` 对路径返回 `AVERROR(ENOENT)`，源码逐字节窄宽转换损坏中文路径，未拿它冒充成品验收。当前独立成品证据由系统 `ffprobe` 提供。
+- 未通过/未执行：QML 多文件队列真实进程、暂停/恢复与取消后的 ETA/残留、失败后继续、Media Foundation 实卡编码、图片列表导出和任意自定义宽高。后端缺口记录在 `docs/P4_FUNCTIONS_EXECUTION_2026-09-28.md`，不修改冻结 engine/source/media/pipeline/sink。
+- 为避免把部分实测误报为完成，已保存并重新核对 `E:/项目/Veyra/archives/p4-b-20260928/checkpoint.json`；状态明确为 `partial`，其源码与证据哈希已与本轮文件对齐；P4-b 完成凭证仍待开放项收口。
+
+## 2026-09-30 补帧运行库升 310.9.1 + 移植 DLSSG-Transfusion（用户：“升级，然后文件我下好了……直接搞定掉”）
+
+- 依据：用户 2026-09-30 在延续会话中确认升级 310.9.1，并接受优化内核“两位作者未授权”的风险。范围基线扩为
+  `E:/项目/Veyra/archives/p4-rest-20260928/scope-baseline-l.json`（SHA256 `64a975294c580f7fa014ccf2718c792e15860b88da27eab99f299433a728478a`，
+  继承 k 的全部哈希，只追加 10 条 allow：新模块、质量策略头、fg_harness 三个文件）。本轮所有构建/测试均经 guard 通过。
+- 用户下载物（`C:/Users/123/Desktop/更新文件`）核对：`DLSSG-Transfusion-v1.4.5.3-rtx20-30-40.zip`
+  SHA256 `A4337D56E7D9545A8C7636845481D4199047D599C35E74A167AEEBF2D7A1F3D1`；官方 `DLSS-310.9.1.zip`。
+- 运行库：`nvngx_dlssg.dll` 310.9.1（`FF6E90EB…170B82`，7,460,976 bytes，Authenticode **Valid/NVIDIA**）；
+  SR 仍固定 310.7（`BE6E434A…6EE6E`），不升级。310.7 补帧运行库保留回退。
+- 新模块 `src/ngx/DlssgTransfusion.cpp` + `include/veyra/ngx/DlssgTransfusion.h`（移植 SilyNoMeta/DLSSG-Transfusion MIT，
+  tag `v1.4.5.3-rtx20-30-40`，commit `b56bd2de…`；质量策略头放 `src/ngx/transfusion/` 并随附上游 MIT 原文）。
+  改动：架构门槛、`GetGPUArchitecture`/`*_GetFeatureRequirements` 的 Ada 立即数、count/index validator、
+  Blackwell 内核 fatbin 重建 + 容器就地重定向、DL1/DL2 网络内核、输出图像内核、valid-warp 质量策略。
+  全部写入走记录器，release 时逐字节回滚（`restoreMemory` 读回验证）；NvAPI 只改 provider 自己的 `GetProcAddress` IAT 槽，
+  不用 Detours/全局钩子；内核从 `runtime/experimental/dlssg-kernels` 的 29 个 `.ptx` 运行时文件读取（未打进 EXE）。
+- `FgCompatibilitySession`：310.9.1 档（`transfusionProfile()`）在 open 内应用补丁，跳过 310.7 的 Ada/Ampere 解锁与
+  旧 count-policy 补丁；NGX 核心门控定位失败时在 310.9.1 上不是致命（驱动侧门控未定位），310.7 行为不变。
+  `EnhanceGraph` 仅在非 310.9.1 档调用旧解锁；`EngineController` 的 RTX30 提示同时覆盖新档。
+- 构建：`build-targets.cmd veyra veyra_ngx veyra_fg_harness …`（case 404 起全绿）；修了三处编译期问题
+  （DL2 形状表的 `uint8_t` 收窄告警、`narrowText` 不在该模块、`utf8()` 里的 NUL 字面量）。
+- 测试（RTX 5070，日志 `E:/项目/Veyra/tests/fg-3109-20260930/runs`）：310.9.1 基线 408 与 310.7 基线 415
+  **哈希相同**（`0x3039202C86BADB9F`）→ 可跨版本比较；全补丁 416/431–433 稳定为 `0x2055B062C57E7690`
+  （16 描述符、31 容器、144 写、27+2 内核、`exact=true`、`networkReady=true`、回滚 `restored=true`）；
+  关优化（421/434）、关 Blackwell（422）、关质量（423）各自回到基线哈希；真值 harness 441/442 前后均 PASS；
+  产品冒烟 450/451 为 2400+ 生成帧、`failed=false`、60.00 fps。
+- **未决**：质量策略与优化内核同时生效时的哈希变化未定性（单项都与基线逐位一致）；下一判据是抓帧数值对比，尚未执行。
+- **未验证**：RTX 40 / RTX 30 实卡。**未提交、未推送、未打包发布**。
+- 文档：`docs/NR_FG_OPTIMIZATION_PLAN_2026-09-29.md` §2026-09-30、`AGENTS.md`、`THIRD_PARTY_NOTICES.md`、
+  `scripts/stage-runtime.ps1`（310.9.1 + 内核落盘）、`scripts/package-portable.ps1`（2.0.0 起带内核，校验哈希/尺寸/版本）。
+## 2026-09-28 P4-c 至 P4-g QML 功能审计与封存前结论
+
+- 目标模式继续执行 `Veyra 2.0.0 P4-a..P4-g`，工作区 `E:/项目/Veyra/worktrees/p0-p1-r53-20260927`，分支 `codex/p4-functions-20260928`，HEAD `53a2d31c6b34f74b7b6d2953ee2caaec63d44e1d`。不 commit、tag、merge、push、Release。
+- 每轮 scope guard 已从 canonical checkout 执行：`C:/Users/123/Desktop/Veyra DLSS Video Player/scripts/acceptance/ui-migration-scope-guard.ps1 -Evidence E:/项目/Veyra/logs/p4-c-g-20260928/scope-guard/result-current.json`，结果 `pass`，branch `codex/ui-qml-migration-20260925`，main `df41580f7fa0d2b26718f355640470e8cb94b324`，`frozenChecked=474`，`failures=[]`。
+- 已回读既有证据：QML entry contract 通过；QML smoke 八项通过；subtitle/audio/ps5/screen/save/manage 六项 dialog matrix 均 `exit=0`；easing `failures=0`；Quick Test `21 passed, 0 failed`；数据迁移重跑输出 `PASS qml data migration`。
+- P4-c 静态审计确认 `QmlPlayerBridge` 没有字幕属性或方法，旧 Win32 shell 仍持有 `SubtitleStyle`；字幕轨道、外挂字幕、样式、描边、偏移、双行和全屏/DPI 因接口缺口保持未验。没有改冻结的字幕/媒体链路。
+- P4-d 确认音轨、选中音轨和音频偏移已暴露，输出设备和立体声下混仍由 `DialogHost.qml` 明确标为未接入；未把 UI 滑条或默认设备冒充真实 WASAPI 设备切换和持久化。
+- P4-e 确认四类来源入口与已有枚举字段可加载；真实采集卡、PS5 配对/凭据、屏幕缩略图/裁剪/指针/跨屏 DPI 和会话恢复未验，不改 source/capture/remote-play 后端。
+- P4-f 仅记录设置页启动和 `PASS qml data migration`；日志/组件/更新/支持链接、快捷键全量保存、截图目录、语言/缩放/主题逐项交互未验。
+- P4-g 记录七组调色控件及局部 bridge 已存在；Quick Test 的曲线、混色器、四区色轮、NR 实例隔离等 21 项通过。LUT 文件导入和独立颜色预设没有 bridge/真实证据，整链预设的 `color` mask 不计作独立颜色预设。
+- 文档已同步到 `docs/P4_FUNCTIONS_EXECUTION_2026-09-28.md`。P4-a 维持 completed，P4-b 至 P4-g 均明确为 partial；P4 整体不得标记完成。下一步只允许补现有接口的证据，或在新授权/新分支中处理接口缺口。
+
+## 2026-09-28 P4 续验：重建 staging 后的 QML-only 回归
+
+- canonical scope guard：`E:/项目/Veyra/logs/p4-continuation-20260928/scope-before-r3.json`，结果 `pass`，`frozenChecked=474`，无失败。
+- 由于旧 `p4-a-20260928/staged-001` 的 QML EXE 哈希与本轮队列修复 build 不一致，未复用旧目录；通过 `scripts/stage-ui-migration.ps1` 使用 `E:/项目/Veyra/build/p4-a-20260928/build-001` 与 `E:/项目/Veyra/releases/1.4.4/final/Veyra-1.4.4-win64-portable` 新建 `E:/项目/Veyra/tests/p4-continuation-20260928/staged-r3`。四个 EXE 均逐项 build/staging 哈希相等。
+- 单测命令结果：`scripts/run-unit-ui-migration.ps1` exit 0，`E:/项目/Veyra/logs/p4-continuation-20260928/qml-unit-r3/summary.json` 显示 `veyra_qml_data_tests.exe`、`veyra_qml_easing_tests.exe`、`veyra_qml_quick_tests.exe` 全部 `pass`，`failures=0`。
+- smoke 首次因未提供 playback fixture 按合同退出 1（7 pass、1 skipped），失败原始结果保留在 `qml-smoke-r3`；补充既有 fixture `E:/项目/Veyra/tests/ui-qml-migration-20260925/r5.3/main-app/loop/local/fixed_clips/test_av_1080p.mp4` 后，完整 smoke exit 0，结果 `E:/项目/Veyra/logs/p4-continuation-20260928/qml-smoke-r4/run-20260928T101254254Z-69334c50/result.json`，8/8 pass。
+- 续验未扩大 UI-only 范围，未触碰冻结 engine/source/pipeline/media/sink/shader/CMake/旧 Win32。P4-a 仍 completed，P4-b 至 P4-g 仍 partial；新增增量存档 `E:/项目/Veyra/archives/p4-continuation-20260928/checkpoint.json`，未 commit/tag/merge/push/Release。
+
+
+## 2026-09-30 RTX 5070：SF-v2 / Lecram 性能对照（用户指定 GTA VI 视频）
+
+- 本轮只做隔离基准、同帧输出检查和记录；不实施统一 DLL，不修改 NR / pipeline / QML / CMake / 旧 Win32。当前分支仍为 codex/fg-fsr-xess-20260930，HEAD 53a2d31；main、桌面原 checkout、原 beta 和已有候选不变。
+- 用户媒体 E:/Ai/知识/小七姐/GTAVI_An_Extended_Look_4K_Native.mp4，14,115,273,308 bytes，3840×2160 H.264 / 30fps / BT.709 limited。以 ffmpeg -ss 60 -t 90 -map 0:v:0 -c:v copy -an -avoid_negative_ts make_zero 原样 remux 到 E:/项目/Veyra/tests/nr-sfv2-lecram-20260930/media/gta6-native-4k30-silent-90s.mp4；受关键帧定位影响实际约91.767秒，未降分辨率或重编码。原媒体与测试段 SHA 写入 before.json / result.json。
+- DLL 固定原件：Lecram F95FEB54…9FCC / 310.8.3.0 / HashMismatch；SF-v2 6EB209E7…3927 / 310.8.2.0 / NotSigned。两份独立 staging 在 tests 同任务 app-Lecram / app-SF-v2，两版都放默认 NR 位置，使用 --nr-original；同一当前源码的 veyra.exe SHA cd18b5ab…755a，杜绝入口差异。
+- 构建：tmp/nr-sfv2-lecram-20260930/build-bench.cmd 用 VS vcvars 调 cmake --build E:/项目/Veyra/build/fg-fsr-xess-20260930 --target veyra veyra_nr_video_quality_probe --parallel 6，exit 0。复用当前共享 veyra_engine；没有用旧版本结果代替新实测。
+- 基准：python -B E:/项目/Veyra/tmp/nr-sfv2-lecram-20260930/benchmark.py warmup-clean / nr-clean / nr-fg / nr-fg-rest。原生4K、单层NR、SR关闭、时域关闭；NR正式顺序 L/S/S/L/S/L/L/S，每版4×45秒；NR+DLSS 2×顺序 S/L/L/S，每版2×40秒。每次进程有独立时限，TEMP/TMP仅对子进程重定向到 E 盘 tmp。每轮逐秒引擎 timing，剔除前8条，GPU P95观察取稳态中位数再跨运行平均；整卡功耗每0.5秒采样，稳态区间为launch+10s至exit-3s。
+- 初次warmup/nr八轮受OBS、Chrome和远程桌面负载影响，测试间隙整卡GPU约31%；该组完整保留并排除主结论。读数回落4%后重新预热、重测；正式NR每次启动前背景占用1–6%。FG组合第三轮前短暂13%触发runner停止，该轮未启动；观测回落2%后在nr-fg-rest续跑剩余两次。没有结束或改动用户应用；远程桌面保持。
+- 正式NR：Lecram 24.358 / 23.802 / 21.2445 / 22.9035 ms，均值23.077 ms；SF-v2 24.865 / 25.439 / 22.496 / 23.682 ms，均值24.1205 ms，耗时+4.52%。四组相邻配对方向全部SF-v2更慢。整卡功耗216.775 vs222.648 W，SF-v2+5.873 W。8次exit 0，failed=false，30fps，无预览跳帧 / 过期生成帧 / ERROR。
+- NR+DLSS 2×：NR耗时Lecram23.8945 vsSF-v2 25.4785 ms（+6.63%）；GPU完成P95观察均值32.9125 vs35.481 ms；整卡功耗233.577 vs240.221 W（+6.644 W）。4次exit 0，源30fps，无预览跳帧；Lecram一轮4个过期生成帧、另一轮0，SF-v2两轮0；这不是物理屏幕帧率或端到端延迟验收。
+- 同帧检查：quality_native4k.py 在 E 盘 tmp 复制现有 offline probe，只将输入断言改为4K、测试NR节点尺寸设为Native，按原目标编译参数链接现有产品库；仓库探针 / CMake不改。测试段第10/28秒各24帧，完整4K NR，中心640×360 linear FP16抓取；两版 base/raw/filtered/motion 和帧PTS/序号逐字节相同，四进程debugErrors=0。NR相对输入的正例确有变化，不能将这48帧抽样区域外推为全部画面/HDR/其他显卡画质相同。读回仅在离线测试。
+- 判定：SF-v2在5070可用，速度和功耗均不如Lecram。建议5070保留Lecram；不能把单卡测试当作20/30/40/50统一支持验收。默认DLL没有替换，运行库/SDK/媒体没有进入源码Git，没有commit/tag/merge/push/Release。
+- 输出及复现证据：E:/项目/Veyra/logs/nr-sfv2-lecram-20260930/{REPORT.md,result.json,before.json,build.log,quality.json,warmup,nr,warmup-clean,nr-clean,nr-fg,nr-fg-rest}；测试APP、媒体与抽样像素在 E:/项目/Veyra/tests/nr-sfv2-lecram-20260930；执行脚本、诊断probe源码/构建在 E:/项目/Veyra/tmp/nr-sfv2-lecram-20260930。保留可复现测试环境和必要证据，没有新增压缩中间包。
+- 收尾：report.py 逐文件对比开工1096个源码；允许本次WORKLOG追加，其他源码无新增/修改；六个原beta/候选EXE与NR文件、两个下载原件及用户视频/测试段均重核SHA，未改变。scripts/acceptance/fg-fsr-xess-control.py guard结果与实际核验写入 final-scope-guard.log / result.json；若失败停止交付，不改基线洗白。

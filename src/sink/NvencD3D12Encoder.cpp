@@ -87,7 +87,15 @@ bool NvencD3D12Encoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     NV_ENC_PRESET_CONFIG preset{};preset.version=NV_ENC_PRESET_CONFIG_VER;preset.presetCfg.version=NV_ENC_CONFIG_VER;
     if(!p.check(p.api.nvEncGetEncodePresetConfigEx(p.encoder,codec,NV_ENC_PRESET_P4_GUID,NV_ENC_TUNING_INFO_LOW_LATENCY,&preset),"GetPreset"))return false;
     preset.presetCfg.frameIntervalP=1;preset.presetCfg.gopLength=120;preset.presetCfg.rcParams.enableLookahead=0;
-    if(p.bitrateMbps>0){
+    if(config.rateControl==ExportRateControl::Cbr){
+        const uint32_t bitsPerSecond=p.bitrateMbps*1000000u;
+        preset.presetCfg.rcParams.rateControlMode=NV_ENC_PARAMS_RC_CBR;
+        preset.presetCfg.rcParams.averageBitRate=bitsPerSecond;
+        preset.presetCfg.rcParams.maxBitRate=bitsPerSecond;
+        preset.presetCfg.rcParams.vbvBufferSize=bitsPerSecond/2;
+        preset.presetCfg.rcParams.vbvInitialDelay=preset.presetCfg.rcParams.vbvBufferSize;
+        veyra::log::info("nvenc",std::format("rate control CBR target={}Mbps",p.bitrateMbps));
+    }else if(config.rateControl==ExportRateControl::Vbr){
         // Explicit user bitrate: VBR with the target as both average and peak,
         // which is what "编码码率" means to users (the VBV cap keeps peaks
         // bounded so the average is actually met).

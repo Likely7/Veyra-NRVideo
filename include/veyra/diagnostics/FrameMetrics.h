@@ -5,9 +5,18 @@
 #include "veyra/pipeline/FrameBatch.h"
 #include "veyra/pipeline/ResolutionPlan.h"
 namespace veyra::diagnostics {
-enum class GpuStage { Color, Sr, Flow, Nr, Residual, Fg1, Fg2, Fg3, Fg4, Fg5, FgBatch, Blit, VideoHdr, Count };
+// NrLayer*/ColorNode* are per-instance node spans nested inside the stage
+// spans above; they are never merged into enhancementProcessingMs.
+enum class GpuStage { Color, Sr, Flow, Nr, Residual, Fg1, Fg2, Fg3, Fg4, Fg5, FgBatch, Blit, VideoHdr,
+    NrLayer0, NrLayer1, NrLayer2, NrLayer3,
+    ColorNode0, ColorNode1, ColorNode2, ColorNode3, ColorNode4, ColorNode5, Count };
 static_assert(unsigned(GpuStage::Fg5)-unsigned(GpuStage::Fg1)==4);
 static_assert(unsigned(GpuStage::FgBatch)>unsigned(GpuStage::Fg5));
+static_assert(unsigned(GpuStage::Count)<=32,"GpuTimer keeps one mask bit per stage");
+inline constexpr unsigned kTimedNrLayers=4,kTimedColorNodes=6;
+// NR layers are indexed among EXECUTING layers; Color by parameter ordinal.
+constexpr GpuStage nrLayerStage(unsigned layer){return GpuStage(unsigned(GpuStage::NrLayer0)+layer);}
+constexpr GpuStage colorNodeStage(unsigned parameter){return GpuStage(unsigned(GpuStage::ColorNode0)+parameter);}
 enum class SampleState { NotExecuted, Pending, Measured, Unavailable };
 enum class CpuStage { Decode, Submit, SlotWait, ReadyWait, DeadlineWait, Present, DecodedQueue, EnhancementDelayEstimate, Count };
 enum class PairTiming { ArrivalInterval, GeneratedFromA, GeneratedFromB, Count };

@@ -58,6 +58,9 @@ public:
     uint64_t framesDecoded() const;
     uint64_t decodeFailures() const;
     uint64_t hardwareFallbacks() const;
+    // Running averages of the two halves of a software decode() call.
+    double decodeMsAverage() const;
+    double convertMsAverage() const;
     void close();
 
 private:

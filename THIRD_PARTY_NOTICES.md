@@ -2,6 +2,18 @@
 
 NVIDIA SDKs and runtimes are excluded from source control. The publisher-authorized experimental Release package contains only selected runtime DLLs and applicable notices, as documented in `docs/RUNTIME_COMPONENTS_0.0.2.md`. This is not vendor endorsement or a general redistribution grant. ReShade/RenoDX add-ons are not loaded or distributed by the product.
 
+## AVerMedia capture HDR-to-SDR control
+
+The AVerMedia hardware HDR-to-SDR property request in
+`src/source/CaptureCardSource.cpp` is adapted from `source/device-vendor.cpp`
+(`SetTonemapperAvermedia`) in [obsproject/libdshowcapture](https://github.com/obsproject/libdshowcapture/tree/c13d4b7b0c66979396ba0a9060c9aafc15bb7b22),
+fixed commit `c13d4b7b0c66979396ba0a9060c9aafc15bb7b22`, Copyright (C) 2023
+Lain Bailey, LGPL-2.1-or-later (see `licenses/capture/LIBDSHOWCAPTURE_LGPL.txt`). Veyra restricts
+the protocol to the selected AVerMedia filter, logs Set/Get results, and applies
+the wide/narrow format policy at each connection before SetFormat. Unsupported
+properties remain an explicit warning. This does not prove the GC573 15 FPS
+cause or provide unsupported Elgato 4K X HID control.
+
 ## Elgato MK.2 capture control
 
 MIT adaptations in `src/source/ElgatoHdrControl.cpp` and its header:
@@ -44,6 +56,16 @@ Source: https://github.com/Coldwood1026/OptiScaler , commit `70676c5f037c8c26f1e
 
 The provider DLL on disk is never modified, re-signed or renamed; only the mapped image of the process is patched, and every patched byte is restored when the XeFG/XeLL contexts are destroyed. Because Veyra itself is GPLv3, the ported GPL-3.0 code is compatible; the upstream authorship above is attributed here. Locked provider identity: `libxess_fg.dll` 1.3.1.78, 22,957,432 bytes, SHA-256 `EC5E0C65E075570C6EDE72618BB666D0BE0C2E10B2EA9762C0FE8CB8E375AB27`, PE TimeDateStamp `0x69CB0F4D`, SizeOfImage `0x015ED000`.
 
+2026-09-30 changes: `src/gfx/XessMfgUnlock.cpp` now stores the actual byte
+string before forming the mismatch diagnostic, avoiding iterators into two
+different temporaries; `src/gfx/XessPresenter.cpp` logs the unlock result detail.
+The five patch locations and transaction remain unchanged. They were compared
+with the renamed upstream [OptiScalerDp4aUnlock](https://github.com/Coldwood1026/OptiScalerDp4aUnlock),
+commit `9eea95bba9fda7121f214d2eba358423be598d7e` (GPL-3.0).
+The QML selector exposes experimental 3X/4X only for an audited provider and
+uses the running SDK capacity when available. This is not official Intel
+support for non-Intel multi-frame generation or proof for every AMD adapter.
+
 XeSS pacing adaptation (2026-09-19): `include/veyra/gfx/XessPacing.h` and `src/gfx/XessPacing.cpp` also adapt the above pinned OptiScaler `XeFGPacing.h` NoteFrame/PaceFrame/WaitUntil logic: a bounded 15-period median, generated-frame deadlines, and the provider-owned tail limiter condition. Veyra retains its audited call-site hooks, adds synchronized statistics and complete hooked-present-return gap measurements, and does not port upstream timestamp hooks. Provider scheduling remains preferred; wall-clock pacing is used only when its scheduler is unavailable. No on-disk runtime changes.
 
 XeSS read-only timing diagnostics (2026-09-21): the timestamp callback ABI and
@@ -76,6 +98,31 @@ Product D3D12 regression coverage is in
 `tests/integration/NrTemporalGpuTests.cpp`. The switch is default-off until affected RTX hardware and motion-scene
 quality tests reject ghosting and flicker regressions.
 
+## DLSS NR default runtime: community Lecram 310.8.3 (2026-09-29)
+
+The default NR slot (`runtime/experimental/nvngx_dlssnr.dll`) holds a community-modified build of
+NVIDIA's `nvngx_dlssnr.dll`, file version 310.8.3.0, SHA-256
+`F95FEB54137EA11979F9B4EC4F00AFD84B5C98A5624D3388FBF6A87714A39FCC`, 165840496 bytes, obtained by the user
+from https://github.com/RankFTW/rhi-repo/releases/tag/dlssnr-310.8.Lecram (archive SHA-256
+`ddb64e5545ba3f217c32555d2eb8fdfe76b9510d2256f13e8a5ecb1a9650ca54`). Compared with NVIDIA 310.8.0.0 it differs
+in the `.data` section that holds the GPU kernels (and 25 bytes of `.text`); the model weights are unchanged.
+Its Authenticode status is HashMismatch: NVIDIA's certificate over modified content, so it is not an
+NVIDIA-signed original and is not endorsed by NVIDIA. Veyra loads it unmodified by absolute path; it is
+never committed to source control. On an RTX 5070 its NR output was byte-identical to 310.8.0.0 on matched
+frames and about 2% cheaper. NVIDIA's rights in the runtime and the model are unaffected by Veyra's license.
+
+## DLSS NR RTX30 runtime: community SF-v2 310.8.2 (2026-09-29)
+
+The RTX30 NR slot (`runtime/experimental/nr-ampere/nvngx_dlssnr.dll`) holds ShortFuse's community-modified
+build of NVIDIA's `nvngx_dlssnr.dll`, version string 310.8.SF.0 (numeric 310.8.2.0), SHA-256
+`6EB209E764F39872625DEBD6ABAF45E2BB6322F6F270F781F70C059AE30B3927`, 165830144 bytes, unsigned, obtained by the user
+from https://github.com/RankFTW/rhi-repo/releases/tag/dlssnr-310.8.SF-v2 (archive SHA-256
+`1da35941894994eb087e017577829e492454e9bae3a6a9397027069ceb74955c`). It changes the kernel and model-weight
+sections to provide an FP16 route for RTX 20/30. On an RTX 5070 its NR output was byte-identical to NVIDIA's 310.8.0.0 on matched
+frames; the RTX 20/30 route has not been measured locally. Veyra
+loads it unmodified by absolute path and does not rewrite the reported GPU architecture for this build. It is
+never committed to source control and is not endorsed by NVIDIA.
+
 ## AMD FidelityFX Optical Flow
 
 FidelityFX SDK 1.1.4, upstream commit `c6efa6bf7f2027b3ec94f28578bb5965eabb9e55`, https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK . The optical-flow and DX12 backend libraries are statically linked. Copyright (C) 2024 Advanced Micro Devices, Inc.; MIT license, reproduced in the package's `licenses/AMD_FIDELITYFX_LICENSE.txt`. This is optical flow, not AMD NR or AMD super resolution.
@@ -91,6 +138,8 @@ Source: https://github.com/lucide-icons/lucide/tree/a537cb6eb323b885f4c60baf3cec
 24 native icon mappings use 23 Lucide SVGs, retained under `assets/icons/lucide/`. Lucide is ISC-licensed (Copyright 2026 Lucide Icons and Contributors); its Feather-derived subset is MIT-licensed (Copyright 2013-present Cole Bemis). The complete upstream notices are preserved in `assets/icons/lucide/LICENSE` and must accompany any distribution containing these icons.
 
 `assets/icons/lucide/manifest.json` records the pinned revision and per-file SHA256. `scripts/generate-lucide-icons.py` converts the SVG geometry to GDI+ paths in `apps/veyra/ui/LucideIcons.h`, using development-only fonttools 4.64.0. Veyra requires no fonttools, network request, icon font or external icon runtime.
+
+The Qt/QML interface (2026-09-26) draws the Lucide geometry that the approved prototype carries in `prototypes/ui-redesign-2026-09-25/icons.js`. `tools/qt_probe/make-icons.py` converts those SVG elements to path data in `qml/Veyra/IconData.js`, rendered by `qml/Veyra/VIcon.qml`; the same Lucide ISC / Feather MIT notices in `assets/icons/lucide/LICENSE` apply. `back10`, `fwd10`, `playfill` and `pausefill` in that file are the prototype's own inline SVGs, not Lucide.
 
 ## RTX Video SDK 1.1 local VSR adapter
 
@@ -181,8 +230,8 @@ Remote Play also depends on **OpenSSL, Opus, json-c, libevent, miniupnpc, curl, 
 
 ## AMD FidelityFX SDK 2.3.0 (experimental FSR frame generation and FSR upscaling)
 
-The player's AMD FSR backends (frame generation in the present sink and
-upscaling in the enhancement graph) are written against the public FidelityFX
+The player's AMD FSR backends (independent frame generation and upscaling in
+the enhancement graph) are written against the public FidelityFX
 API documented and shipped in the AMD FidelityFX SDK 2.3.0 (MIT licensed). The
 SDK itself is **not** vendored into this source repository: it stays in the
 gitignored `third_party_local/amd/FidelityFX-SDK-2.3.0` tree, and the signed
@@ -192,20 +241,127 @@ Integration code (`src/gfx/FsrFgPresenter.cpp`, `src/gfx/FsrSrBackend.cpp`) is a
 independent implementation of the documented API sequence and was written
 against these references:
 
+- Fixed SDK source: [GPUOpen-LibrariesAndSDKs/FidelityFX-SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/tree/60f4ea81909200d8542eca14dccb2628b763a9a3),
+  commit `60f4ea81909200d8542eca14dccb2628b763a9a3` (SDK 2.3.0).
+- `Kits/FidelityFX/framegeneration/include/ffx_framegeneration.h` and
+  `Kits/FidelityFX/framegeneration/fsr3/internal/ffx_provider_fsr3framegeneration.cpp`
+- `Kits/FidelityFX/docs/techniques/frame-interpolation-ml.md`
 - `Kits/FidelityFX/docs/techniques/frame-interpolation-swap-chain.md`
 - `Kits/FidelityFX/docs/techniques/frame-interpolation-api.md`
 - `Kits/FidelityFX/upscalers/include/ffx_upscale.h` and the FSR3 upscaler
   shader contract (`ffx_fsr3upscaler_reproject.h` for the motion convention)
 - `Samples/Upscalers/FidelityFX_FSR/dx12/fsrapirendermodule.cpp`
 
-Relevant negative finding, recorded so it is not re-litigated: a FidelityFX
+Historical negative finding: a FidelityFX
 frame-generation swapchain context keeps the real DXGI swapchain alive after
-`ffxDestroyContext` (measured locally), so the player retains the proxy
-swapchain for the window's lifetime. The FidelityFX upscale dispatch also does
+`ffxDestroyContext` (measured locally). The 2026-09-30 repair removes this proxy
+path from the player. `include/veyra/gfx/FsrFgPresenter.h` and
+`src/gfx/FsrFgPresenter.cpp` use the documented
+`FFX_FRAMEGENERATION_FLAG_NO_SWAPCHAIN_CONTEXT_NOTIFY` flag and the
+Configure → PrepareV2 → Generate sequence, with caller-owned command lists and
+output textures. `EnhanceGraph`, `VideoPresenter` and `PresentSink` share the
+existing bounded batch, GPU fences and native presentation path; no dummy
+display or second hidden video window is created. The adapter selects a
+provider version explicitly and verifies the version returned by the created
+context. FSR 3.1 and FSR 4 ML are separate requests, with no implicit version
+fallback. Modules retain one process reference per absolute path, while each
+effect context is destroyed after its GPU consumers finish.
+
+Version selection and API ordering were also compared with OptiScaler commit
+`45a2001303ddff632e279f77aef85ceede5832cb`,
+`FSRFG_Dx12.cpp` (GPL-3.0); no source code from that file was
+copied. AMD algorithm source, SDK files and runtime binaries are not added to
+the Veyra source repository. Changes and actual hardware evidence are in
+[FSR / XeSS repair execution](docs/FG_FSR_XESS_EXECUTION_2026-09-30.md).
+
+The FidelityFX upscale dispatch also does
 not complete under D3D12 GPU-based validation (the standalone probe stalls
 before its dispatch), so that validation mode is skipped for the FSR SR
 configuration with an explicit log line. See
 [AMD FSR frame generation integration record](docs/FSR_FRAMEGEN_INTEGRATION_2026-09-16.md).
+
+## DLSS-G 310.9.1 provider patches: DLSSG-Transfusion (2026-09-30)
+
+SilyNoMeta/DLSSG-Transfusion, tag `v1.4.5.3-rtx20-30-40`, commit
+`b56bd2deed114507ad2c88f986d90ed50ffb4639` (MIT; fork of
+TonyJoaca/DLSSG-Transfusion, MIT, Copyright (c) 2026 Michael Robles), ported
+into `include/veyra/ngx/DlssgTransfusion.h`, `src/ngx/DlssgTransfusion.cpp` and
+`src/ngx/transfusion/` (which keeps the upstream MIT text in
+`src/ngx/transfusion/LICENSE.txt`).
+
+Ported pieces, with upstream file names:
+
+- `patcher.cpp`: `SafeScanDlssgArchSites` / `PatchDlssgArchGates` (Blackwell
+  `cmp r32, 0x1b0` gates lowered to the architecture actually present),
+  `SafeFindUniqueImmediate` / `PatchDlssgMinimumArchitecture` (the unique Ada
+  immediate `0x190` inside `NVSDK_NGX_GetGPUArchitecture` and the three
+  `*_GetFeatureRequirements` exports), and `kNgxPatch` — the provider
+  count/index validator branch (`84 d2 0f 84 03 01 00 00 be 05 00 00 00`) whose
+  jz is removed, gate discovery by `PatchUniqueExecutablePattern`.
+- `midpoint_fix.cpp`: `PatchProvider`. With Blackwell kernels enabled it
+  rebuilds the `Kernel_EstimateIntermMvecsScatter` and
+  `Kernel_BlendCandidatesFused` fatbins from their sm_120 PTX (uncompressed,
+  relabelled for the target SM, so the driver JITs them instead of loading
+  NVIDIA's SASS), redirects the descriptor slots that point at them, and
+  retargets every remaining kernel container in place
+  (`RetargetContainers`, same-length `.target` rewrite inside the LZ4 literal
+  run, other images parked at arch 122). With Blackwell kernels disabled it
+  applies the Ada temporal midpoint fix instead (`BuildTemporalFatbin`: the
+  temporal parameter is injected and the 104 compiled-in `0f3F000000` midpoint
+  multiplies become the kernel's own temporal parameter).
+- `cu_module_hook.h`: interception of `NvAPI_D3D12_CreateCuModule` (id
+  `0xAD1A677D`) so image kernels can be replaced before the driver compiles them.
+- `network_optimizer.h`: the DL1/DL2 launch substitution (kernel ids, grids,
+  blocks and fusions of the dlssg_for_sm86 0.3.5 backend, whose output is
+  bit-identical to NVIDIA's; NVIDIA's weights and parameters are passed
+  unchanged), plus `image_kernels.h` (Blend `st.global.v2.u32` store merge and
+  the exact `Kernel_OutputPull` / `Kernel_OutputPushFine` replacements, matched
+  by an FNV-1a fingerprint of NVIDIA's 310.9.1 sm_120 PTX with the `.target`
+  line excluded) and `quality_fix.h` + `quality_explained_warp.h` (the
+  valid-warp anti-tearing/anti-ghosting protection: Transfusion's V4 policy or,
+  by default in Veyra, dlssg_for_sm86's `explained-warp` tuning).
+
+Veyra adaptations: the module is compiled into `veyra_ngx` and applies its edits
+through a recorded-write helper, so every patched byte is restored on release
+with read-back verification (`memProtectionUncertain` is raised when
+restoration cannot be proved); NvAPI is reached by redirecting only the
+provider's own `GetProcAddress` import slot, so no Detours, trampoline or
+global hook is installed; the optimized kernels are separate runtime files
+under `runtime/experimental/dlssg-kernels/` (gitignored authoring copy in
+`third_party_local/nvidia/dlssg-transfusion-kernels-1.4.5.3/`, extracted
+read-only from the upstream release DLL), never linked in, and a missing file
+set only disables the optimization; Turing, Vulkan, Streamline, the UI-assist
+capture and the scatter/input-motion experiments are **not** ported.
+
+### Optimized kernel files (`runtime/experimental/dlssg-kernels`)
+
+29 PTX files extracted, read-only, from the upstream release binary
+`DLSSG-Transfusion.dll` (release `v1.4.5.3-rtx20-30-40`, SHA256
+`3C0621BE577E56D03945ACCA48C2DFC5935A8A5759C432044E4E561B16DBBAD8`): 27 RCDATA
+resources 4000–4062 (the DL1/DL2 sm_86 network kernels) and the two embedded
+image kernels. Upstream's `docs/PUBLIC-SOURCE.md` and `docs/OPTIMIZED-KERNELS.md`
+state their provenance: they come from the `dlssg_for_sm86` 0.3.5 backend,
+which publishes no source and no license for them, and they derive from
+NVIDIA's DLSS-G network kernels; SilyNoMeta publishes them only as compiled
+resources and explicitly disclaims the right to license them. **No license is
+granted for these files by either author.** The 2026-09-30 user decision
+accepts that risk and ships them the same way as the other experimental runtime
+binaries: as separate runtime files, listed by name, size and SHA-256 in the
+package manifest and in `release-runtime-manifest.json`, never committed to
+source control. Each file is verified by FNV-1a fingerprint and per-launch
+shape checks before use; the provider fingerprint guard (the
+`Kernel_OutputPull` 310.9.1 match) is what enables the substitution at all, so
+a different provider build leaves the kernels unused. Removing the folder
+disables the optimization without affecting playback.
+
+Machine evidence (RTX 5070, 2026-09-30): the patched provider applies and rolls
+back cleanly, the harness reports `exact=true` and `networkReady=true`, the FG
+truth harness (translation, direction, scene cut) passes with the patches
+installed, and the product smoke path reports 2400+ generated frames with
+`failed=false`. RTX 40 and RTX 30 hardware behaviour is unverified; the valid
+warp and the optimized kernels only change output when both are active
+together, which is recorded as an open question in
+`docs/NR_FG_OPTIMIZATION_PLAN_2026-09-29.md`.
 
 ## RTX 40 series DLSS multi-frame unlock (ported)
 

@@ -1,0 +1,76 @@
+<title>Veyra 界面原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="board.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="pages.css">
+
+<div class="hint"><img src="logo.png" alt=""><span><strong>Veyra 界面原型</strong> · 画面里的按钮都能点<span class="keys"> · 拖动空白处平移 · 滚轮平移，Ctrl+滚轮或双指缩放</span></span></div>
+
+<div id="board" aria-label="设计画布">
+  <div id="world"></div>
+</div>
+
+<div class="toolbar" role="toolbar" aria-label="画布工具">
+  <div class="tb-group" data-jump>
+    <button class="tb-btn" data-f="f-min">极简</button>
+    <button class="tb-btn" data-f="f-cap">片源窗口</button>
+    <button class="tb-btn" data-f="f-pro">专业列表</button>
+    <button class="tb-btn" data-f="f-fg">补帧</button>
+    <button class="tb-btn" data-f="f-save">预设</button>
+    <button class="tb-btn" data-f="f-node">节点</button>
+    <button class="tb-btn" data-f="f-exp">导出</button>
+  </div>
+  <span class="tb-sep"></span>
+  <div class="tb-group">
+    <button class="tb-btn" data-z="-" aria-label="缩小">−</button>
+    <span class="tb-zoom" id="zoomv">100%</span>
+    <button class="tb-btn" data-z="+" aria-label="放大">+</button>
+    <button class="tb-btn" data-z="all">全部</button>
+  </div>
+  <span class="tb-sep"></span>
+  <div class="tb-group">
+    <span class="tb-label">强调色</span>
+    <button class="tb-btn" data-acc="orange" aria-pressed="true">橙</button>
+    <button class="tb-btn" data-acc="white" aria-pressed="false">白</button>
+  </div>
+  <div class="tb-group">
+    <button class="tb-btn" id="tb-motion" aria-pressed="false">减少动画</button>
+  </div>
+</div>
+
+<script src="icons.js"></script>
+<script src="data.js"></script>
+<script src="core.js"></script>
+<script src="pages-a.js"></script>
+<script src="dialogs.js"></script>
+<script src="pages-pro.js"></script>
+<script src="color.js"></script>
+<script src="pages-node.js"></script>
+<script src="presets.js"></script>
+<script src="pages-b.js"></script>
+<script src="board.js"></script>
+<div id="shotanchor"></div>
+<script>
+// Screenshot helper (build aid, untracked): focuses the design frame named in
+// ?f=<id> and hides the canvas chrome, so a capture is the app screen rather
+// than the whole board. index.html has no closing body tag, so this is appended
+// at the end of the document instead of replacing one.
+(function () {
+  const want = new URLSearchParams(location.search).get('f');
+  if (!want) return;
+  const hide = () => {
+    const tb = document.querySelector('.toolbar'); if (tb) tb.style.display = 'none';
+    const hint = document.querySelector('.hint'); if (hint) hint.style.display = 'none';
+  };
+  setTimeout(function () {
+    hide();
+    const btn = [...document.querySelectorAll('[data-f]')].find(b => b.dataset.f === want);
+    if (btn) btn.click();
+    setTimeout(function () {
+      document.querySelectorAll('.note, .frame-label, .frame-title').forEach(n => n.style.display = 'none');
+      hide();
+    }, 500);
+  }, 600);
+})();
+</script>

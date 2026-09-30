@@ -221,7 +221,7 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
             p.session=p.pool.CreateCaptureSession(p.item);p.session.IsCursorCaptureEnabled(o.cursor);p.session.StartCapture();
         }
         if(p.poolSize.Width<=int(o.left+o.right)||p.poolSize.Height<=int(o.top+o.bottom))throw winrt::hresult_error(E_INVALIDARG,L"裁剪范围超出画面");
-        p.info.opened=true;p.info.kind=pipeline::SourceKind::ScreenCapture;p.info.width=p.poolSize.Width-o.left-o.right;p.info.height=p.poolSize.Height-o.top-o.bottom;
+        p.info.opened=true;p.info.kind=pipeline::SourceKind::ScreenCapture;p.info.width=p.poolSize.Width-o.left-o.right;p.info.height=p.poolSize.Height-o.top-o.bottom;p.info.displayAspect=(p.poolSize.Height-o.top-o.bottom)>0?double(p.poolSize.Width-o.left-o.right)/(p.poolSize.Height-o.top-o.bottom):0.0;
         p.updateRate(monitor);p.info.hardwareDecodeActive=true;
         p.info.videoDecodePath=o.method==ScreenCaptureMethod::Wgc?"WGC shared GPU":"DXGI duplication shared GPU";
         p.info.containerName="screen";p.info.videoCodecName="GPU RGB";p.info.videoPixelFormatName=p.hdr?"scRGB FP16":"BGRA8 sRGB";p.color();

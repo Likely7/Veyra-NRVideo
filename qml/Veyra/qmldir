@@ -1,0 +1,37 @@
+module Veyra
+singleton Theme 1.0 Theme.qml
+VAccordion 1.0 VAccordion.qml
+VSubGroup 1.0 VSubGroup.qml
+DialogHost 1.0 DialogHost.qml
+VBackdrop 1.0 VBackdrop.qml
+VButton 1.0 VButton.qml
+VCard 1.0 VCard.qml
+VDot 1.0 VDot.qml
+VEyebrow 1.0 VEyebrow.qml
+VGroup 1.0 VGroup.qml
+VH1 1.0 VH1.qml
+VH2 1.0 VH2.qml
+VH3 1.0 VH3.qml
+VIcon 1.0 VIcon.qml
+VPill 1.0 VPill.qml
+VRow 1.0 VRow.qml
+VSeg 1.0 VSeg.qml
+VSelect 1.0 VSelect.qml
+VSlider 1.0 VSlider.qml
+VSwitch 1.0 VSwitch.qml
+VTag 1.0 VTag.qml
+Main 1.0 Main.qml
+VMenu 1.0 VMenu.qml
+VPage 1.0 VPage.qml
+VRise 1.0 VRise.qml
+CineBar 1.0 CineBar.qml
+FullscreenBar 1.0 FullscreenBar.qml
+ColourCurve 1.0 ColourCurve.qml
+ColourWheel 1.0 ColourWheel.qml
+ColourMixer 1.0 ColourMixer.qml
+ColourPanel 1.0 ColourPanel.qml
+VScrollBar 1.0 VScrollBar.qml
+VConfirm 1.0 VConfirm.qml
+NrLayerEditor 1.0 NrLayerEditor.qml
+VSpinner 1.0 VSpinner.qml
+VEqBars 1.0 VEqBars.qml

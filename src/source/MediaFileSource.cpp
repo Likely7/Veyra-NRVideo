@@ -52,6 +52,11 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
     if (!decoder_.hardwareActive() || path_.empty()) {
         return false;
     }
+    if (requireHardwareDecode_) {
+        veyra::log::error("source-file", std::format(
+            "hardware decode required by the user setting; refusing the software fallback (reason={})", reason));
+        return false;
+    }
     // Mid-stream failures (driver/pool errors after frames were delivered)
     // reopen in software and seek back to the last delivered PTS; the caller
     // sees a Discontinuity flag so temporal history resets (sweep B5).
@@ -156,6 +161,7 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     close();
     path_ = desc.path;
     preferHardwareDecode_ = desc.preferHardwareDecode && desc.d3d12Device != nullptr && desc.d3d12Queue != nullptr;
+    requireHardwareDecode_ = desc.requireHardwareDecode;
     if (!demuxer_.open(desc.path)) {
         veyra::log::error("source-file", "demuxer open failed");
         return false;
@@ -195,6 +201,10 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
             }
         }
     }
+    if (!decoderOpen && desc.requireHardwareDecode) {
+        veyra::log::error("source-file", "hardware decode required by the user setting and not available; not falling back to software");
+        return false;
+    }
     if (!decoderOpen) {
         decoderOpen = decoder_.openSoftware(params, demuxer_.videoTimeBaseNum(),
             demuxer_.videoTimeBaseDen(), softwareDecodeThreads(params->width, params->height));
@@ -210,6 +220,21 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     info_.kind = pipeline::SourceKind::File;
     info_.width = static_cast<uint32_t>(decoder_.width());
     info_.height = static_cast<uint32_t>(decoder_.height());
+    // Display aspect for the window fit: coded size, the stream's sample aspect
+    // ratio (anamorphic DVD/HD content), then 90/270 rotations swap the axes.
+    // A stream without a usable ratio keeps displayAspect = 0 (caller uses the
+    // coded size), which is what every pre-existing caller already assumed.
+    {
+        int num = 0, den = 0;
+        demuxer_.sampleAspect(num, den);
+        info_.rotationDegrees = demuxer_.rotationDegrees();
+        if (num > 0 && den > 0 && info_.width > 0 && info_.height > 0) {
+            double aspect = (double(info_.width) * num) / (double(info_.height) * den);
+            if (info_.rotationDegrees == 90 || info_.rotationDegrees == 270) aspect = 1.0 / aspect;
+            if (std::isfinite(aspect) && aspect > 0.0) info_.displayAspect = aspect;
+        }
+        veyra::log::info("source-file", std::format("display aspect={:.4f} sar={}/{} rotation={}", info_.displayAspect, num, den, info_.rotationDegrees));
+    }
     const int64_t durUs = demuxer_.durationUs();
     if (durUs > 0) {
         info_.duration = pipeline::Rational{durUs, 1000000};
@@ -470,6 +495,7 @@ void MediaFileSource::close() noexcept
     info_ = SourceInfo{};
     path_.clear();
     preferHardwareDecode_ = false;
+    requireHardwareDecode_ = false;
 }
 
 } // namespace veyra::source

@@ -25,11 +25,18 @@ NVSDK_NGX_Result getCapabilities(NVSDK_NGX_Parameter** caps,unsigned& seh){
         return NVSDK_NGX_D3D12_GetCapabilityParameters(caps);
     } __except(EXCEPTION_EXECUTE_HANDLER){seh=GetExceptionCode();return NVSDK_NGX_Result_FAIL_PlatformError;}
 }
+// GetCapabilityParameters hands out a block that NgxCoreHost never allocated,
+// so it must not go through the core's allocate/destroy tracking table.
+NVSDK_NGX_Result destroyCapabilities(NVSDK_NGX_Parameter* caps,unsigned& seh){
+    seh=0;
+    __try {return NVSDK_NGX_D3D12_DestroyParameters(caps);}
+    __except(EXCEPTION_EXECUTE_HANDLER){seh=GetExceptionCode();return NVSDK_NGX_Result_FAIL_PlatformError;}
+}
 NVSDK_NGX_Result getCapability(NVSDK_NGX_Parameter* caps,const char* key,int* value,unsigned& seh){
     __try {return caps->Get(key,value);}
     __except(EXCEPTION_EXECUTE_HANDLER){seh=GetExceptionCode();return NVSDK_NGX_Result_FAIL_PlatformError;}
 }
-void capability(NgxCoreHost& core){
+void capability(){
     NVSDK_NGX_Parameter* caps=nullptr;unsigned seh=0;
     const auto r=getCapabilities(&caps,seh);
     report(3,r,seh);
@@ -40,7 +47,10 @@ void capability(NgxCoreHost& core){
         log::info("video-hdr",std::format("capability {}={} result=0x{:X} seh=0x{:X}",key,value,unsigned(result),seh));
         if(seh)break;
     }
-    core.destroyParameters(caps);
+    unsigned destroySeh=0;
+    const auto destroyed=destroyCapabilities(caps,destroySeh);
+    const auto message=std::format("capability parameters destroyed result=0x{:X} seh=0x{:X}",unsigned(destroyed),destroySeh);
+    if(NVSDK_NGX_SUCCEED(destroyed)&&!destroySeh)log::info("video-hdr",message);else log::error("video-hdr",message);
 }
 }
 bool TrueHdrBackend::create(NgxCoreHost& core,ID3D12GraphicsCommandList* list,const std::wstring& directory){
@@ -50,7 +60,7 @@ bool TrueHdrBackend::create(NgxCoreHost& core,ID3D12GraphicsCommandList* list,co
     module_=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
     if(!module_){log::error("video-hdr",std::format("absolute runtime load failed win32={}",GetLastError()));return false;}
     log::info("video-hdr","loaded nvngx_truehdr.dll from explicit runtime directory; input=sRGB/RGBA8 output=linear-BT709/scRGB-FP16 (1=80nits)");
-    capability(core);
+    capability();
     core_=&core;Status st=Status::Ok;params_=core.allocateParameters(st);if(!params_)return false;
     params_->Set("CreationNodeMask",1u);params_->Set("VisibilityNodeMask",1u);
     unsigned seh=0;const auto result=invoke(0,list,params_,&handle_,seh);

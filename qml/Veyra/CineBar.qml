@@ -1,0 +1,431 @@
+// The cinema control pill (pages-a.js .cine-bar, pages.css .cine-bar), shared by the
+// minimal page and the fullscreen control window (G2.5). Only the pill: where it
+// sits and how it enters belong to the owner.
+//
+// .cine-bar: 3 columns (230px | 1fr | 230px), 92px tall, radius 30. The design's
+// frosted glass cannot sample a native video window, so the fill is the opaque
+// approximation rgba(22,22,26,.86) (D5).
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Effects
+
+Rectangle {
+    id: bar
+    signal requestPage(string page)
+    // Opens one of the main window's dialogs (字幕设置 / 音频设置).
+    signal requestDialog(string key)
+    signal requestFullscreen()
+    signal requestLock()
+    // Set on the fullscreen bar: shows the lock button.
+    property bool fullscreen: false
+    // Set by FullscreenBar so upward menus stop above the playback pill.
+    property real menuBottomLimit: -1
+    // Any popover needs the owner window's full mask, not just the preset menu.
+    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible
+    // The pointer is over the pill.
+    readonly property bool hovered: barHover.hovered
+    readonly property bool seekPreviewOpen: seekMouse.containsMouse && seekMouse.enabled
+    HoverHandler { id: barHover }
+    implicitHeight: 92
+    radius: 30
+    color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.86)
+    border.width: 1
+    border.color: Qt.rgba(1, 1, 1, 0.1)
+
+    RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: 16
+        anchors.rightMargin: 16
+        spacing: 18
+
+        // --- left: artwork + title (230px) ---------------------------
+        RowLayout {
+            Layout.preferredWidth: 230; Layout.minimumWidth: 230; Layout.maximumWidth: 230
+            Layout.fillHeight: true
+            spacing: 10
+            // The file's own cover art when it carries one (MP4 covr, MKV image
+            // attachment); otherwise the plate stays black - never a stand-in.
+            Rectangle {
+                id: coverPlate
+                implicitWidth: 46; implicitHeight: 46; radius: 12
+                color: Theme.videoBlack
+                border.width: 1
+                border.color: Theme.stroke
+                clip: true
+                Image {
+                    id: coverArt
+                    objectName: "cine-cover"
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    visible: status === Image.Ready
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    cache: false
+                    source: veyra.hasSource && !veyra.isCapture ? "image://veyra-thumb/cover/" + veyra.thumbnailGeneration : ""
+                    layer.enabled: visible
+                    layer.effect: MultiEffect {
+                        maskEnabled: true
+                        maskSource: coverMask
+                    }
+                }
+                Rectangle { id: coverMask; anchors.fill: coverArt; radius: 11; visible: false; layer.enabled: true }
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 2
+                Text {
+                    Layout.fillWidth: true
+                    text: veyra.sourceName.length > 0 ? veyra.sourceName : "未打开"
+                    color: Theme.t1
+                    font.family: Theme.fontUi
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
+                    elide: Text.ElideRight
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: veyra.sourceSummary
+                    color: Theme.t3
+                    font.family: Theme.fontUi
+                    font.pixelSize: 11
+                    elide: Text.ElideRight
+                }
+            }
+        }
+
+        // --- middle: transport + seek --------------------------------
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 4
+
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 10
+
+                // .cbtn: 32px round, muted, brightens on hover.
+                component CBtn: Item {
+                    id: cbtn
+                    property string glyph: ""
+                    property string tip: ""
+                    // The signal has to be declared: an inline component does not
+                    // inherit the TapHandler's signal, so callers cannot assign
+                    // onTapped without it.
+                    signal tapped()
+                    implicitWidth: 32
+                    implicitHeight: 32
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 16
+                        color: cHover.hovered ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+                    }
+                    VIcon {
+                        anchors.centerIn: parent
+                        name: glyph
+                        color: cHover.hovered ? "#FFFFFF" : Theme.t2
+                    }
+                    scale: cTap.pressed ? 0.86 : 1.0
+                    Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+                    HoverHandler { id: cHover; cursorShape: Qt.PointingHandCursor }
+                    ToolTip.visible: cHover.hovered && cbtn.tip.length > 0
+                    ToolTip.text: cbtn.tip
+                    TapHandler { id: cTap; gesturePolicy: TapHandler.WithinBounds; onTapped: cbtn.tapped() }
+                }
+
+                CBtn { glyph: "cc"; onTapped: ccMenu.openAt(this, "up") }
+                CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
+
+                // .play: 40px white circle with the play/pause glyph.
+                Item {
+                    implicitWidth: 40
+                    implicitHeight: 40
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 20
+                        color: "#FFFFFF"
+                    }
+                    VIcon {
+                        anchors.centerIn: parent
+                        name: (veyra.running && !veyra.paused) ? "pausefill" : "playfill"
+                        filled: true
+                        color: "#0A0A0C"
+                    }
+                    scale: playTap.pressed ? 0.88 : (playHover.hovered ? 1.06 : 1.0)
+                    Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
+                    HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { id: playTap; gesturePolicy: TapHandler.WithinBounds; onTapped: veyra.togglePlayPause() }
+                }
+
+                CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
+                CBtn { glyph: "music"; onTapped: audioMenu.openAt(this, "up") }
+            }
+
+            // .seekrow: mono times either side of the rail.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text {
+                    text: veyra.positionText
+                    color: Theme.t3
+                    font.family: Theme.fontMono
+                    font.pixelSize: 10
+                }
+                Item {
+                    id: seekArea
+                    Layout.fillWidth: true
+                    implicitHeight: 14
+                    property bool scrubbing: false
+                    property real scrubFrac: 0
+                    // .seek:hover .thumb { left: 44% } - the thumb tracks the real
+                    // progress, not the design's hard-coded 44%.
+                    readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, veyra.progress))
+                    readonly property real hoverFrac: scrubbing ? scrubFrac
+                                                      : seekMouse.containsMouse && seekArea.width > 0
+                                                        ? Math.max(0, Math.min(1, seekMouse.mouseX / seekArea.width))
+                                                        : frac
+                    property int thumbnailBucket: -1
+                    function fractionAt(x) {
+                        return seekArea.width > 0 ? Math.max(0, Math.min(1, x / seekArea.width)) : 0
+                    }
+                    Timer {
+                        id: scrubSeek
+                        interval: 120
+                        onTriggered: if (seekArea.scrubbing) veyra.seekTo(seekArea.scrubFrac * veyra.duration)
+                    }
+                    Timer {
+                        id: thumbnailDelay
+                        interval: 120
+                        onTriggered: seekArea.thumbnailBucket = Math.floor(seekArea.hoverFrac * veyra.duration / 2)
+                    }
+                    Rectangle {
+                        id: rail
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        height: seekMouse.containsMouse ? 6 : 3
+                        radius: 9
+                        color: Qt.rgba(1, 1, 1, 0.14)
+                        Behavior on height { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
+                        Rectangle {
+                            width: parent.width * seekArea.frac
+                            height: parent.height
+                            radius: 9
+                            color: "#FFFFFF"
+                        }
+                    }
+                    // .seek .thumb: 11px dot, scale 0 -> 1 over .4s --spring on hover.
+                    Rectangle {
+                        width: 11; height: 11; radius: 5.5
+                        color: "#FFFFFF"
+                        x: seekArea.frac * seekArea.width - width / 2
+                        anchors.verticalCenter: parent.verticalCenter
+                        scale: seekMouse.containsMouse || seekArea.scrubbing ? 1 : 0
+                        Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+                    }
+                    // .seek .peek: 144x104 above the rail, opacity .15s, scale .85 -> 1
+                    // over .4s --spring from its bottom centre.
+                    Rectangle {
+                        visible: opacity > 0.01
+                        width: 144
+                        height: 104
+                        radius: 8
+                        color: "#000000"
+                        border.width: 1
+                        border.color: Theme.stroke2
+                        x: Math.max(0, Math.min(parent.width - width,
+                                                seekArea.hoverFrac * seekArea.width - width / 2))
+                        y: -height - 18
+                        opacity: seekMouse.containsMouse || seekArea.scrubbing ? 1 : 0
+                        scale: seekMouse.containsMouse || seekArea.scrubbing ? 1 : 0.85
+                        transformOrigin: Item.Bottom
+                        Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
+                        Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+                        Image {
+                            id: previewFrame
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            height: 81
+                            asynchronous: true
+                            cache: true
+                            fillMode: Image.PreserveAspectFit
+                            source: (seekMouse.containsMouse || seekArea.scrubbing) && seekArea.thumbnailBucket >= 0
+                                    ? "image://veyra-thumb/" + veyra.thumbnailGeneration + "/" + (seekArea.thumbnailBucket * 2000)
+                                    : ""
+                        }
+                        Text {
+                            anchors.centerIn: previewFrame
+                            visible: previewFrame.status === Image.Loading || previewFrame.status === Image.Error
+                            text: previewFrame.status === Image.Loading ? "加载中" : "预览不可用"
+                            color: Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 11
+                        }
+                        Text {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 23
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            text: veyra.formatTime(seekArea.hoverFrac * veyra.duration)
+                            color: Theme.t1
+                            font.family: Theme.fontMono
+                            font.pixelSize: 11
+                            font.weight: Font.Medium; font.variableAxes: Theme.axesMedium
+                            Rectangle {
+                                anchors.fill: parent
+                                z: -1
+                                color: "#111111"
+                            }
+                        }
+                    }
+                    MouseArea {
+                        id: seekMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        enabled: veyra.duration > 0 && !veyra.isCapture
+                        cursorShape: Qt.PointingHandCursor
+                        onEntered: thumbnailDelay.restart()
+                        onExited: {
+                            thumbnailDelay.stop()
+                            seekArea.thumbnailBucket = -1
+                        }
+                        onPressed: mouse => {
+                            seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
+                            seekArea.scrubbing = true
+                        }
+                        onPositionChanged: mouse => {
+                            if (seekArea.scrubbing) {
+                                seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
+                                // Scrubbing seeks as it goes, 120 ms apart.
+                                if (!scrubSeek.running) scrubSeek.start()
+                            }
+                            thumbnailDelay.restart()
+                        }
+                        onReleased: mouse => {
+                            const target = seekArea.fractionAt(mouse.x) * veyra.duration
+                            scrubSeek.stop()
+                            seekArea.scrubbing = false
+                            veyra.logUi("ui-seek", "targetSeconds=" + target.toFixed(3))
+                            veyra.seekTo(target)
+                        }
+                        onCanceled: seekArea.scrubbing = false
+                    }
+                }
+                Text {
+                    text: veyra.durationText
+                    color: Theme.t3
+                    font.family: Theme.fontMono
+                    font.pixelSize: 10
+                }
+            }
+        }
+
+        // --- right: preset, volume, fullscreen (230px) ---------------
+        RowLayout {
+            Layout.preferredWidth: 230; Layout.minimumWidth: 230; Layout.maximumWidth: 230
+            Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+            spacing: 6
+
+            // .pill with a status dot: the dot reports the engine's state, and
+            // the label is the preset actually in use.
+            VPill {
+                key: ""
+                value: veyra.currentPresetName
+                onClicked: presetMenu.openAt(this, "up")
+                Rectangle {
+                    width: 7; height: 7; radius: 3.5
+                    color: veyra.failed ? Theme.err : veyra.captureRecovering ? Theme.warn : Theme.ok
+                }
+            }
+
+            Item {
+                implicitWidth: 92
+                implicitHeight: 20
+                RowLayout {
+                    anchors.fill: parent
+                    spacing: 6
+                    VIcon { name: "vol"; color: Theme.t2 }
+                    VSlider {
+                        Layout.fillWidth: true
+                        from: 0; to: 1; value: veyra.volume
+                        onMoved: veyra.volume = value
+                    }
+                }
+            }
+
+            Item {
+                implicitWidth: 32; implicitHeight: 32
+                VIcon {
+                    anchors.centerIn: parent
+                    name: "max"
+                    color: Theme.t2
+                }
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+                // The design's "全屏" button (title="全屏"). It used to call an
+                // undefined root.requestPage("pro").
+                TapHandler { onTapped: bar.requestFullscreen() }
+            }
+        }
+    }
+
+    // The preset menu: list presets and node presets in one menu, as designed.
+    // pages-a.js presetMenu: list presets, node presets, then the way to manage them.
+    VMenu {
+        id: presetMenu
+        aboveLimit: bar.menuBottomLimit
+        title: "预设"
+        readonly property var mk: p => ({ label: p.name, note: p.note, checked: p.name === veyra.currentPresetName,
+                                          tag: p.nodeMode ? "节点" : "", preset: p.index })
+        items: [{ head: "列表预设" }].concat(veyra.presets.filter(p => !p.nodeMode).map(mk))
+            .concat([{ head: "节点预设" }]).concat(veyra.presets.filter(p => p.nodeMode).map(mk))
+            .concat([{ sep: true }, { label: "去专业模式管理预设…", icon: "sliders", act: "pro" }])
+        onPicked: (i, o) => {
+            if (o.act === "pro") bar.requestPage("pro")
+            else veyra.applyPresetIndex(o.preset)
+        }
+    }
+
+    // 字幕 (design: app.menu(anchor, '字幕', [...])): the file's own tracks
+    // (embedded and same-name external) from the subtitle loader, the primary
+    // one checked, then loading a file and the settings dialog.
+    VMenu {
+        id: ccMenu
+        aboveLimit: bar.menuBottomLimit
+        title: "字幕"
+        items: [{ label: "关闭", checked: veyra.subtitlePrimary < 0, track: -1 }]
+            .concat(veyra.subtitleTracks.map(t => ({ label: t.label, note: t.note, track: t.index,
+                                                     disabled: !t.usable, checked: t.index === veyra.subtitlePrimary })))
+            .concat([{ label: "加载外部字幕…", icon: "import", act: "load" },
+                     { sep: true },
+                     { label: "字幕设置…", note: "字体、字号、描边、位置、延时", icon: "type", act: "dlg" }])
+        onPicked: (i, o) => {
+            if (o.act === "load") veyra.loadSubtitleDialog()
+            else if (o.act === "dlg") bar.requestDialog("subtitle")
+            else if (o.track !== undefined) veyra.subtitlePrimary = o.track
+        }
+    }
+
+    // 音轨: this one is real - the bridge exposes the file's audio streams and the
+    // selected index, so the list and the check mark both come from the engine.
+    VMenu {
+        id: audioMenu
+        aboveLimit: bar.menuBottomLimit
+        title: "音轨"
+        // The bridge's label already carries language · title · codec; only the
+        // channel count is separate.
+        readonly property var mk: t => ({ label: t.label, index: t.index,
+                                          note: t.channels > 0 ? (t.channels + " 声道") : "",
+                                          checked: t.index === veyra.selectedAudioTrack })
+        items: veyra.audioTracks.length > 0
+               ? veyra.audioTracks.map(mk).concat([{ sep: true },
+                     { label: "音频设置…", note: "输出设备、音画同步、偏移", icon: "music", act: "dlg" }])
+               : [{ label: "片源没有音轨或尚未打开", disabled: true }]
+        onPicked: (i, o) => {
+            if (o.act === "dlg") return bar.requestDialog("audio")
+            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
+        }
+    }
+}

@@ -28,7 +28,9 @@ int main(){
         }
         check(presented==240,"unpaced capture remains presentable after initial anchor");
         check(!cadence.rateSkipsCandidate(100000000,1000000,interval,interval),"late completion recovers instead of starving on expired media deadline");
-        cadence.submitted(100000000);
+        // The cap runs on its own absolute grid (rateSubmitted), not on the
+        // spacing anchor that submitted() moves.
+        cadence.submitted(100000000);cadence.rateSubmitted(100000000,interval*4);
         check(cadence.rateSkipsCandidate(100000001,100000001,interval,interval*4),"active cap still skips candidates before its next slot");
         cadence.reset();
         check(!cadence.rateSkipsCandidate(100000001,100000001,interval,interval*4),"reset admits first frame immediately");

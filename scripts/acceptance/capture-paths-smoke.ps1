@@ -9,21 +9,25 @@
 # floor below is the decisive check.
 param(
   [Parameter(Mandatory = $true)][string]$Root,
-  [string]$BuildDirectory,
+  [Parameter(Mandatory = $true)][string]$BuildDirectory,
+  [Parameter(Mandatory = $true)][string]$PlayerExe,
+  [Parameter(Mandatory = $true)][ValidateSet('legacy')][string]$UiTarget,
   [int]$CaseSeconds = 12,
   [int]$Device = 0,
-  [string]$OutputDirectory
+  [string]$OutputDirectory = 'E:\项目\Veyra\logs\ui-qml-migration-20260925\capture-paths'
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $Root).Path
-$bin = Join-Path $root 'out/build/x64-release'
-if ($BuildDirectory) { $bin = (Resolve-Path -LiteralPath $BuildDirectory).Path }
-$player = Join-Path $bin 'veyra.exe'
+$player = (Resolve-Path -LiteralPath $PlayerExe).Path
+$bin = if ($BuildDirectory) { (Resolve-Path -LiteralPath $BuildDirectory).Path } else { Split-Path -Parent $player }
 $lister = Join-Path $bin 'veyra_capture_tests.exe'
 if (-not (Test-Path -LiteralPath $player)) { throw "missing $player" }
 if (-not (Test-Path -LiteralPath $lister)) { throw "missing $lister" }
-$out = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $root ('logs/capture-paths/' + [Guid]::NewGuid().ToString('N')) }
+$out = [IO.Path]::GetFullPath($OutputDirectory)
 [IO.Directory]::CreateDirectory($out) | Out-Null
+$entryScript = Join-Path $PSScriptRoot 'resolve-ui-migration-entry.ps1'
+$null = & $entryScript -Root $root -UiTarget $UiTarget -PlayerExe $player -BuildDirectory $BuildDirectory -StagingDirectory (Split-Path -Parent $player) -ArtifactDirectory $out -OutputFile (Join-Path $out 'entry.json')
+if ($UiTarget -ne 'legacy') { throw 'capture-paths-smoke.ps1 is legacy-only; QML uses the separate qml-ui-smoke contract.' }
 
 $listing = & $lister --list 2>$null
 $native = $null

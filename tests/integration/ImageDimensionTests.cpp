@@ -4,6 +4,7 @@
 #include "veyra/sink/ImageExportSink.h"
 #include "veyra/engine/EnhancementSettings.h"
 #include "veyra/engine/TiledImageProcessor.h"
+#include "veyra/engine/GraphDescription.h"
 #include "veyra/pipeline/ColorMetadata.h"
 #include "veyra/ngx/NgxParameters.h"
 #include <filesystem>
@@ -372,9 +373,60 @@ bool nrOptionalResourcePixels(const std::filesystem::path& directory,bool rgba=f
     std::cout<<"NR_OPTIONAL_MATRIX executionPass="<<ok<<" expectedContractMatch="<<matrixMatch<<std::endl;
     return ok&&changed>100&&matrixMatch;
 }
+bool tiledColors(unsigned width,unsigned height,unsigned count,bool sparse,const std::filesystem::path& directory){
+    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;gfx::DeviceContextDesc device;device.enableDebugLayer=true;
+    if(!ctx.initialize(device,status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return false;
+    engine::EnhancementSettings settings;settings.additionalColorCount=count?count-1:0;
+    for(unsigned i=0;i<count;++i){auto& c=i?settings.additionalColors[i-1]:settings.color;
+        c.enabled=!sparse||(i!=0&&i!=2);c.exposure=.1f*float(i+1);c.contrast=float(i)*3;}
+    pipeline::EnhanceGraphDesc desc;desc.rgbInput=true;desc.stillImage=true;desc.noFeatures=true;desc.noNgx=true;desc.outputDitherStep=0;
+    engine::StageRequest request;request.width=width;request.height=height;request.stillImage=true;
+    engine::describeStages(request,settings,desc);
+    sink::RgbaImage source;source.width=width;source.height=height;source.pixels.resize(size_t(width)*height*4);
+    for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){auto* p=source.pixels.data()+(size_t(y)*width+x)*4;
+        p[0]=uint8_t(24+(x*7+y*11)%144);p[1]=uint8_t(32+(x*3+y*5)%128);p[2]=uint8_t(40+(x*13+y*7)%120);p[3]=255;}
+    const auto freeFrame=[](AVFrame* p){av_frame_free(&p);};
+    std::unique_ptr<AVFrame,decltype(freeFrame)> frame(av_frame_alloc(),freeFrame);if(!frame)return false;
+    frame->width=width;frame->height=height;frame->format=AV_PIX_FMT_RGBA;
+    frame->color_range=AVCOL_RANGE_JPEG;frame->color_trc=AVCOL_TRC_IEC61966_2_1;frame->colorspace=AVCOL_SPC_RGB;
+    if(av_frame_get_buffer(frame.get(),32)<0)return false;
+    for(unsigned y=0;y<height;++y)memcpy(frame->data[0]+size_t(y)*frame->linesize[0],source.pixels.data()+size_t(y)*width*4,size_t(width)*4);
+    sink::RgbaImage reference,result;pipeline::EnhanceGraph::FrameOutputs out;
+    auto graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring);
+    bool direct=graph->initialize(desc)&&graph->createViews()&&graph->process(frame.get(),0,true,out,1)&&
+        sink::readRgba8(ctx,ring,graph->videoFrameResource(out.videoSlot),reference);
+    out={};ring.drainQueue();graph->shutdown();graph.reset();
+    std::atomic<bool> cancel=false;engine::TiledImageProcessor::Stats stats;
+    const bool processed=engine::TiledImageProcessor::process(ctx,ring,source,result,desc,cancel,stats);
+    bool ok=direct&&processed&&result.width==width&&result.height==height&&result.pixels.size()==source.pixels.size()&&reference.pixels.size()==source.pixels.size()&&stats.tiles==2&&stats.nrEvaluations==0;
+    int maxError=0;size_t changed=0;
+    if(direct&&reference.pixels.size()==source.pixels.size())for(size_t i=0;i<source.pixels.size();++i)
+        if(i%4!=3&&std::abs(int(reference.pixels[i])-int(source.pixels[i]))>2)++changed;
+    if(ok){for(size_t i=0;i<result.pixels.size();++i)maxError=std::max(maxError,std::abs(int(result.pixels[i])-int(reference.pixels[i])));
+        ok=maxError<=1&&(count?changed>100:changed==0);
+        const auto prefix="tiled-color-"+std::to_string(width)+"x"+std::to_string(height)+"-"+std::to_string(count)+(sparse?"-sparse":"");
+        ok=sink::saveImage((directory/(prefix+"-full.png")).wstring(),reference)&&sink::saveImage((directory/(prefix+"-tiles.png")).wstring(),result)&&ok;}
+    ring.drainQueue();pipeline::ComPtr<ID3D12InfoQueue> info;uint64_t errors=0;
+    if(FAILED(ctx.device()->QueryInterface(IID_PPV_ARGS(&info))))ok=false;
+    else for(UINT64 i=0;i<info->GetNumStoredMessages();++i){SIZE_T bytes=0;
+        if(FAILED(info->GetMessage(i,nullptr,&bytes))){ok=false;break;}
+        std::vector<uint8_t> storage(bytes);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+        if(FAILED(info->GetMessage(i,message,&bytes))){ok=false;break;}
+        if(message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;std::cerr<<message->pDescription<<'\n';}}
+    ok=ok&&errors==0;
+    std::cout<<"TILED_COLOR width="<<width<<" height="<<height<<" instances="<<count<<" sparse="<<sparse
+        <<" direct="<<direct<<" tiled="<<processed<<" tiles="<<stats.tiles<<" maxError8="<<maxError<<" changed="<<changed<<" debugErrors="<<errors<<" pass="<<ok<<std::endl;
+    info.Reset();ring.shutdown();ctx.shutdown();return ok;
+}
+bool tiledColorMatrix(const std::filesystem::path& directory){
+    bool ok=true;for(unsigned count:{0u,1u,2u,6u})ok=tiledColors(1301,17,count,false,directory)&&ok;
+    ok=tiledColors(17,1301,6,false,directory)&&ok;
+    return tiledColors(1301,17,6,true,directory)&&ok;
+}
 int wmain(int argc,wchar_t** argv){
-    if(argc!=2&&!(argc==3&&(std::wstring(argv[1])==L"--nr-optional"||std::wstring(argv[1])==L"--nr-optional-rgba")))return 2;CoInitializeEx(nullptr,COINIT_MULTITHREADED);std::filesystem::path directory(argv[argc-1]);std::filesystem::create_directories(directory);
-    if(argc==3){bool result=nrOptionalResourcePixels(directory,std::wstring(argv[1])==L"--nr-optional-rgba");CoUninitialize();return result?0:1;}
+    if(argc!=2&&!(argc==3&&(std::wstring(argv[1])==L"--nr-optional"||std::wstring(argv[1])==L"--nr-optional-rgba"||std::wstring(argv[1])==L"--tiled-color")))return 2;CoInitializeEx(nullptr,COINIT_MULTITHREADED);std::filesystem::path directory(argv[argc-1]);std::filesystem::create_directories(directory);
+    if(argc==3){bool result=std::wstring(argv[1])==L"--tiled-color"?tiledColorMatrix(directory):nrOptionalResourcePixels(directory,std::wstring(argv[1])==L"--nr-optional-rgba");CoUninitialize();return result?0:1;}
+    if(!tiledColorMatrix(directory)){CoUninitialize();return 1;}
     bool ok=true;for(auto e:{pipeline::Extent{1,1},{257,513},{97,9001},{4097,257},{257,4097}}){if(!run(e.width,e.height,false,directory)){ok=false;break;}}
     if(ok)ok=run(257,513,true,directory);
     if(ok)ok=run(97,9001,true,directory);

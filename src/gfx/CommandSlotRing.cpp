@@ -109,9 +109,9 @@ ID3D12GraphicsCommandList* CommandSlotRing::acquire(uint32_t slot, Status& statu
         return nullptr;
     }
     Slot& target = slots_[slot];
-
+    const uint64_t completed = fence_->GetCompletedValue();
+    if(completed==UINT64_MAX){status=Status::DeviceFailure;veyra::log::error("gfx",std::format("slot-ring: removed-device fence sentinel slot={} removedReason=0x{:X}",slot,unsigned(device_->GetDeviceRemovedReason())));return nullptr;}
     if (target.fenceValue != 0) {
-        const uint64_t completed = fence_->GetCompletedValue();
         if (completed < target.fenceValue) {
             const HRESULT waitResult = fence_->SetEventOnCompletion(target.fenceValue, fenceEvent_);
             if (FAILED(waitResult)) {
@@ -252,7 +252,9 @@ bool CommandSlotRing::waitIdle()
     if (highest == 0) {
         return true;
     }
-    if (fence_->GetCompletedValue() >= highest) {
+    const auto completed=fence_->GetCompletedValue();
+    if(completed==UINT64_MAX){veyra::log::error("gfx",std::format("slot-ring: drain refused removed-device fence sentinel removedReason=0x{:X}",unsigned(device_->GetDeviceRemovedReason())));return false;}
+    if (completed >= highest) {
         return true;
     }
     const HRESULT setResult = fence_->SetEventOnCompletion(highest, fenceEvent_);
@@ -265,7 +267,7 @@ bool CommandSlotRing::waitIdle()
         veyra::log::error("gfx", std::format("slot-ring: waitIdle wait={} fenceValue={}", wait, highest));
         return false;
     }
-    return true;
+    return fence_->GetCompletedValue()!=UINT64_MAX&&SUCCEEDED(device_->GetDeviceRemovedReason());
 }
 
 uint32_t CommandSlotRing::timestampQueryIndex(uint32_t slot, bool end) const

@@ -5,6 +5,10 @@
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
+#include <libavutil/display.h>
+#include <libavutil/dict.h>
+#include <cmath>
+#include <cstdlib>
 }
 
 #include <format>
@@ -111,6 +115,43 @@ int FFmpegDemuxer::nominalRateNum() const {
 }
 int FFmpegDemuxer::nominalRateDen() const {
     return context_ && videoStreamIndex_ >= 0 ? context_->streams[videoStreamIndex_]->r_frame_rate.den : 0;
+}
+
+void FFmpegDemuxer::sampleAspect(int& num, int& den) const
+{
+    num = 0; den = 0;
+    if (context_ == nullptr || videoStreamIndex_ < 0) return;
+    const AVRational sar = context_->streams[videoStreamIndex_]->sample_aspect_ratio;
+    if (sar.num > 0 && sar.den > 0) { num = sar.num; den = sar.den; return; }
+    // Fall back to the codec parameters when the stream field is unset.
+    const AVRational coded = context_->streams[videoStreamIndex_]->codecpar->sample_aspect_ratio;
+    if (coded.num > 0 && coded.den > 0) { num = coded.num; den = coded.den; }
+}
+
+int FFmpegDemuxer::rotationDegrees() const
+{
+    if (context_ == nullptr || videoStreamIndex_ < 0) return 0;
+    const AVStream* stream = context_->streams[videoStreamIndex_];
+    // av_display_rotation_get reads the container's display matrix (the same
+    // metadata players use); it returns degrees counter-clockwise.
+    const AVDictionaryEntry* rotate = av_dict_get(stream->metadata, "rotate", nullptr, 0);
+    if (rotate != nullptr) {
+        const int value = std::atoi(rotate->value);
+        if (value != 0) return ((value % 360) + 360) % 360;
+    }
+    // FFmpeg 6+ exposes stream side data through the packet-side-data API.
+    const AVPacketSideData* side = stream->codecpar->coded_side_data;
+    const int sideCount = stream->codecpar->nb_coded_side_data;
+    const uint8_t* matrix = nullptr;
+    for (int i = 0; i < sideCount; ++i) {
+        if (side[i].type == AV_PKT_DATA_DISPLAYMATRIX && side[i].size >= 9 * int(sizeof(int32_t))) { matrix = side[i].data; break; }
+    }
+    if (matrix == nullptr) return 0;
+    const double degrees = av_display_rotation_get(reinterpret_cast<const int32_t*>(matrix));
+    if (!std::isfinite(degrees)) return 0;
+    int normalized = int(std::lround(-degrees)) % 360;
+    if (normalized < 0) normalized += 360;
+    return normalized;
 }
 
 const AVCodecParameters* FFmpegDemuxer::videoCodecParameters() const

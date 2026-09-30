@@ -179,59 +179,11 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     // external capture API. Neither mode changes the pixel format.
     scd.SwapEffect = desc.captureCompatible ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_FLIP_DISCARD;
     scd.Flags = tearingSupported_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
-    if(desc.waitable&&!desc.xess&&!desc.fsr)scd.Flags|=DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+    if(desc.waitable&&!desc.xess)scd.Flags|=DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
     ComPtr<IDXGISwapChain1> swapChain1;
-    // Backend switch bookkeeping. A retained AMD proxy and a live XeSS wrapper
-    // each hold the window's single flip-model swapchain; the DXGI swapchain
-    // only dies once every reference (including the provider's) is gone, and
-    // a second CreateSwapChainForHwnd for the same window fails while it
-    // lives. Tear down whichever backend this session leaves before the next
-    // one initializes, and never pass a non-empty ComPtr::GetAddressOf() to
-    // an initializer (that overwrites without releasing and leaks the old
-    // reference, keeping the slot occupied for the process lifetime).
-    if(fsr_&&!desc.fsr&&desc.xess){
-        // Deliberately keep the proxy alive. Verified on this machine: once
-        // the FidelityFX proxy has wrapped the window, destroying it (even in
-        // the documented order, with a drained queue and the final COM
-        // reference released) leaves the window unable to host ANY later
-        // swapchain - XeSS's create and native create both fail, and the
-        // provider cannot recreate its own proxy either (ERROR_RUNTIME_ERROR).
-        // Retaining the proxy keeps the session playable; generation is
-        // switched off while the proxy presents plain frames.
-        fsr_->disableGeneration();
-    }
-    if(xess_&&!desc.xess){
-        log::info("present","releasing the XeSS swapchain");
-        waitForQueueIdle();
-        xess_.reset();
-        for(auto& b:backBuffers_)b.Reset();
-        swapChain_.Reset();
-    }
-    if(desc.fsr&&!fsr_){
-        fsr_=std::make_unique<FsrFgPresenter>();
-        IDXGISwapChain4* proxy=nullptr;
-        const uint32_t renderW=desc.renderWidth?desc.renderWidth:scd.Width;
-        const uint32_t renderH=desc.renderHeight?desc.renderHeight:scd.Height;
-        if(!fsr_->initialize(device,queue,factory_.Get(),hwnd_,scd,renderW,renderH,&proxy,desc.fgMultiplier)){
-            // Like XeSS: a missing or incompatible local runtime must never
-            // prevent basic playback.
-            log::warn("present", "AMD FSR frame generation unavailable; falling back to native presentation");
-            fsr_.reset();
-        }
-    }
-    if(fsr_){
-        if(!desc.fsr)fsr_->disableGeneration();
-        IDXGISwapChain4* proxy=fsr_->swapchainHandle();
-        ComPtr<IDXGISwapChain3> proxied;
-        if(proxy==nullptr||FAILED(proxy->QueryInterface(IID_PPV_ARGS(&proxied)))){
-            log::error("present", "retained FSR proxy swapchain is no longer usable");
-            status = Status::WindowFailure;
-            return false;
-        }
-        swapChain_=proxied;
-        log::info("present", std::format("using the retained AMD proxy swapchain (frame generation {})", desc.fsr?"on":"off"));
-    }
+    // XeSS is the only provider that owns a swapchain. FSR is now a graph
+    // effect producing application-owned textures, so it never retains an HWND.
     if(desc.xess){
         // The XeSS initializer writes through the pointer: release any
         // existing reference first so the previous swapchain (native or a
@@ -250,21 +202,28 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
             // XeSS is an optional experimental presenter. A missing or
             // incompatible local runtime must not prevent basic playback.
             log::warn("present", "XeSS FG initialization failed; falling back to native presentation");
-            // Keep a retained AMD proxy when one exists: the provider keeps
-            // the HWND's DXGI swapchain alive for the process lifetime, so a
-            // fresh CreateSwapChainForHwnd for the same window is known to
-            // fail and the proxy still presents plain frames.
-            if(!fsr_)swapChain_.Reset();
+            swapChain_.Reset();
             xess_.reset();
         }
     }
     if (!swapChain_) {
-    HRESULT created=factory_->CreateSwapChainForHwnd(queue, hwnd_, &scd, nullptr, nullptr, &swapChain1);
-    if(FAILED(created)&&(scd.Flags&DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)){
+    const auto createNative=[&](){
+        HRESULT result=E_FAIL;
+        for(unsigned attempt=0;attempt<3;++attempt){
+            swapChain1.Reset();
+            result=factory_->CreateSwapChainForHwnd(queue,hwnd_,&scd,nullptr,nullptr,&swapChain1);
+            if(result!=E_ACCESSDENIED||!IsWindow(hwnd_)||attempt==2)break;
+            log::warn("present",std::format("swapchain transient access denied attempt={}; bounded owner-thread retry",attempt+1));
+            Sleep(50);
+        }
+        return result;
+    };
+    HRESULT created=createNative();
+    if(FAILED(created)&&created!=E_ACCESSDENIED&&(scd.Flags&DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)){
         log::warn("pacing",std::format("waitable swapchain unavailable hr=0x{:X}; retrying baseline",unsigned(created)));
         scd.Flags&=~DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
         swapChain1.Reset();
-        created=factory_->CreateSwapChainForHwnd(queue,hwnd_,&scd,nullptr,nullptr,&swapChain1);
+        created=createNative();
     }
     if (FAILED(created)) {
         log::error("present",std::format("CreateSwapChainForHwnd failed hr=0x{:X}",unsigned(created)));
@@ -307,14 +266,14 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     swapChainFlags_=actual.Flags;
     if(actual.Flags&DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT){
         latencyHandle_=swapChain_->GetFrameLatencyWaitableObject();
-        if(!configurePacing(false,desc.vsync))log::warn("pacing","baseline latency configuration failed; playback remains available");
+        if(!configurePacing(false,desc.vsync,desc.tearing))log::warn("pacing","baseline latency configuration failed; playback remains available");
     }
     tearingSupported_=tearingSupported_&&(actual.Flags&DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING)!=0;
     displayRefreshHz_=displayRefreshFps(hwnd_);
     frameStatisticsBaseValid_=false;
     log::info("display-refresh",std::format("monitor refresh={:.3f} Hz at swapchain creation (0 = unknown); submissions above this rate cannot all be scanned out",displayRefreshHz_));
     log::info("present", std::format("present-sink: window {}x{} swapEffect={} buffers=3 vsync={} tearing={} captureCompatible={} (capture not verified)",
-        width_, height_, actual.SwapEffect==DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL?"flip-sequential":"flip-discard", desc_.vsync ? 1 : 0, tearingSupported_ ? 1 : 0, desc.captureCompatible));
+        width_, height_, actual.SwapEffect==DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL?"flip-sequential":"flip-discard", desc_.vsync ? 1 : 0, (desc_.tearing && tearingSupported_) ? 1 : 0, desc.captureCompatible));
     return true;
 }
 
@@ -373,9 +332,8 @@ bool PresentSink::present(Status& status)
     presentTiming_={};
     capacityAcquired_=false;
     xessFailed_=false;
-    fsrFailed_=false;
     const UINT syncInterval = desc_.vsync ? 1 : 0;
-    const UINT flags = (!desc_.vsync && tearingSupported_) ? DXGI_PRESENT_ALLOW_TEARING : 0;
+    const UINT flags = (desc_.tearing && !desc_.vsync && tearingSupported_) ? DXGI_PRESENT_ALLOW_TEARING : 0;
     ++attemptedPresentCount_;
     const bool beforeOk=!xess_||xess_->beforePresent();
     presentTiming_.beforeMs=split();
@@ -383,13 +341,12 @@ bool PresentSink::present(Status& status)
     const HRESULT hr = swapChain_->Present(syncInterval, flags);
     presentTiming_.callMs=split();presentTiming_.result=hr;
     if(attemptedPresentCount_<=3||attemptedPresentCount_%120==0)
-        log::info("present-contract",std::format("backend={} sync={} flags=0x{:X} hr=0x{:X}",xess_?"XeSS":fsr_?"FSR":"DXGI",syncInterval,flags,unsigned(hr)));
+        log::info("present-contract",std::format("backend={} sync={} flags=0x{:X} hr=0x{:X}",xess_?"XeSS":"DXGI",syncInterval,flags,unsigned(hr)));
     if (SUCCEEDED(hr)) {
         ++presentCount_;
         backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
         presentTiming_.bufferMs=split();
         const bool afterOk=!xess_||xess_->afterPresent();
-        if(fsr_)fsr_->afterPresent();
         presentTiming_.afterMs=split();
         if(!afterOk){xessFailed_=true;status=Status::WindowFailure;return false;}
         return true;
@@ -464,20 +421,20 @@ PresentSink::FrameStatisticsDelta PresentSink::sampleFrameStatistics(){
     return delta;
 }
 
-bool PresentSink::configurePacing(bool enabled,bool vsync){
+bool PresentSink::configurePacing(bool enabled,bool vsync,bool tearing){
     // XeSS owns pacing, but its proxy accepts DXGI VSync independently.
     // Do not install another latency waiter on the provider swap chain.
-    if(xess_||fsr_){pacing_=false;capacityAcquired_=false;desc_.vsync=xess_&&vsync;log::info("pacing",std::format("provider={} applicationWait=0 vsync={}",xess_?"XeSS":"FSR",desc_.vsync));return !enabled;}
+    if(xess_){pacing_=false;capacityAcquired_=false;desc_.vsync=xess_&&vsync;desc_.tearing=tearing;log::info("pacing",std::format("provider={} applicationWait=0 vsync={} tearing={}","XeSS",desc_.vsync,desc_.tearing));return !enabled;}
     const HRESULT hr=latencyHandle_?swapChain_->SetMaximumFrameLatency(enabled?1:3):enabled?E_NOTIMPL:S_OK;
-    log::info("pacing",std::format("DXGI enabled={} maximumLatency={} vsync={} hr=0x{:X}",enabled,enabled?1:3,vsync,unsigned(hr)));
-    pacing_=enabled&&SUCCEEDED(hr);desc_.vsync=vsync;capacityAcquired_=false;
+    log::info("pacing",std::format("DXGI enabled={} maximumLatency={} vsync={} tearing={} hr=0x{:X}",enabled,enabled?1:3,vsync,tearing,unsigned(hr)));
+    pacing_=enabled&&SUCCEEDED(hr);desc_.vsync=vsync;desc_.tearing=tearing;capacityAcquired_=false;
     return SUCCEEDED(hr);
 }
 bool PresentSink::presentationReady(){
     if(!pacing_||!latencyHandle_||capacityAcquired_)return true;
     const auto result=WaitForSingleObject(latencyHandle_,0);
     if(result==WAIT_OBJECT_0)capacityAcquired_=true;
-    if(result==WAIT_FAILED){log::warn("pacing",std::format("DXGI capacity wait failed error={}",GetLastError()));configurePacing(false,false);return true;}
+    if(result==WAIT_FAILED){log::warn("pacing",std::format("DXGI capacity wait failed error={}",GetLastError()));configurePacing(false,desc_.vsync,desc_.tearing);return true;}
     return capacityAcquired_;
 }
 
@@ -561,15 +518,6 @@ void PresentSink::shutdown()
     }
     swapChain_.Reset();
     xess_.reset();
-    // The AMD proxy context is deliberately NOT destroyed here. Verified on
-    // this machine: once the FidelityFX proxy wrapped the window, destroying
-    // it (documented order, drained queue, final COM reference released)
-    // leaves the window unable to host any later swapchain - XeSS and native
-    // creation both fail and the provider cannot recreate its own proxy
-    // (ERROR_RUNTIME_ERROR). Retaining the proxy keeps FSR sessions playable
-    // across settings changes; it is torn down at process/engine teardown,
-    // where the provider's own destructor crash was fixed by flushing its
-    // presentation queue and clearing the destroyed context pointers.
     log::info("present", "sink-shutdown: sub-step window-destroy-last");
     if (hwnd_ != nullptr && !desc_.targetWindow) {
         DestroyWindow(hwnd_);

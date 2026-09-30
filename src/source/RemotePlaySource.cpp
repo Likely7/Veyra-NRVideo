@@ -114,6 +114,7 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     info_.opened = true;
     info_.kind = pipeline::SourceKind::RemotePlay;
     info_.width = request_.video.width;
+    info_.displayAspect = request_.video.height>0?double(request_.video.width)/request_.video.height:0.0;
     info_.height = request_.video.height;
     info_.averageFps = static_cast<double>(request_.video.fps);
     info_.nominalRateNum = static_cast<int>(request_.video.fps);
@@ -306,6 +307,7 @@ bool RemotePlaySource::drainDecoder(std::uint64_t sourceIndex, const pipeline::F
         if (info_.width != static_cast<uint32_t>(decoderFrame_->width) ||
             info_.height != static_cast<uint32_t>(decoderFrame_->height)) {
             info_.width = static_cast<uint32_t>(decoderFrame_->width);
+            info_.displayAspect = decoderFrame_->height>0?double(decoderFrame_->width)/decoderFrame_->height:0.0;
             info_.height = static_cast<uint32_t>(decoderFrame_->height);
             packet.flags |= static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Resize);
         }

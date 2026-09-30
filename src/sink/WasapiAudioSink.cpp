@@ -1,5 +1,8 @@
 #include "veyra/sink/AudioGain.h"
 #include "veyra/sink/WasapiAudioSink.h"
+#include <functiondiscoverykeys_devpkey.h>
+#include <propvarutil.h>
+#pragma comment(lib, "propsys.lib")
 
 #include <algorithm>
 #include <array>
@@ -345,18 +348,105 @@ bool AudioRenderer::copyPcm(BYTE* destination,const float* input,size_t frames){
     std::memcpy(destination,mixed_.data(),frames*outputFormat_.channels*sizeof(float));return true;
 }
 
+namespace {
+std::mutex gEndpointMutex;
+std::wstring gPreferredEndpoint;
+bool gForceStereo = false;
+ActiveRenderEndpoint gActiveEndpoint;
+std::atomic<uint64_t> gEndpointGeneration{1};
+std::wstring endpointName(IMMDevice* device){
+    std::wstring name;IPropertyStore* store=nullptr;
+    if(device&&SUCCEEDED(device->OpenPropertyStore(STGM_READ,&store))){
+        PROPVARIANT value;PropVariantInit(&value);
+        if(SUCCEEDED(store->GetValue(PKEY_Device_FriendlyName,&value))&&value.vt==VT_LPWSTR&&value.pwszVal)name=value.pwszVal;
+        PropVariantClear(&value);store->Release();
+    }
+    return name;
+}
+std::wstring endpointId(IMMDevice* device){
+    std::wstring id;LPWSTR raw=nullptr;
+    if(device&&SUCCEEDED(device->GetId(&raw))&&raw){id=raw;CoTaskMemFree(raw);}
+    return id;
+}
+std::string narrowName(const std::wstring& w){
+    if(w.empty())return {};
+    const int n=WideCharToMultiByte(CP_UTF8,0,w.data(),int(w.size()),nullptr,0,nullptr,nullptr);
+    std::string out(size_t(std::max(n,0)),'\0');
+    if(n>0)WideCharToMultiByte(CP_UTF8,0,w.data(),int(w.size()),out.data(),n,nullptr,nullptr);
+    return out;
+}
+}
+std::vector<RenderEndpoint> enumerateRenderEndpoints(){
+    std::vector<RenderEndpoint> out;
+    const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    IMMDeviceEnumerator* enumerator=nullptr;
+    if(SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator),nullptr,CLSCTX_ALL,__uuidof(IMMDeviceEnumerator),reinterpret_cast<void**>(&enumerator)))){
+        std::wstring defaultId;IMMDevice* fallback=nullptr;
+        if(SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender,eConsole,&fallback))){defaultId=endpointId(fallback);fallback->Release();}
+        IMMDeviceCollection* devices=nullptr;
+        if(SUCCEEDED(enumerator->EnumAudioEndpoints(eRender,DEVICE_STATE_ACTIVE,&devices))){
+            UINT count=0;devices->GetCount(&count);
+            for(UINT i=0;i<count;++i){
+                IMMDevice* device=nullptr;
+                if(FAILED(devices->Item(i,&device)))continue;
+                RenderEndpoint e;e.id=endpointId(device);e.name=endpointName(device);e.isDefault=e.id==defaultId;
+                device->Release();
+                if(!e.id.empty())out.push_back(std::move(e));
+            }
+            devices->Release();
+        }
+        enumerator->Release();
+    }
+    if(SUCCEEDED(com))CoUninitialize();
+    return out;
+}
+void setPreferredRenderEndpoint(std::wstring id){
+    std::lock_guard lock(gEndpointMutex);
+    if(gPreferredEndpoint==id)return;
+    gPreferredEndpoint=std::move(id);
+    gEndpointGeneration.fetch_add(1);
+    log::info("audio-endpoint",std::format("preferred endpoint set id={}",gPreferredEndpoint.empty()?std::string("<system default>"):narrowName(gPreferredEndpoint)));
+}
+std::wstring preferredRenderEndpoint(){std::lock_guard lock(gEndpointMutex);return gPreferredEndpoint;}
+void setForceStereoDownmix(bool enabled){
+    std::lock_guard lock(gEndpointMutex);
+    if(gForceStereo==enabled)return;
+    gForceStereo=enabled;gEndpointGeneration.fetch_add(1);
+    log::info("audio-endpoint",std::format("force stereo downmix={}",enabled));
+}
+bool forceStereoDownmix(){std::lock_guard lock(gEndpointMutex);return gForceStereo;}
+ActiveRenderEndpoint activeRenderEndpoint(){std::lock_guard lock(gEndpointMutex);return gActiveEndpoint;}
+uint64_t renderEndpointGeneration(){return gEndpointGeneration.load();}
+
 struct AudioRenderer::EndpointNotifier : IMMNotificationClient {
     std::atomic<HRESULT>* error;std::atomic<unsigned long> refs{1};
-    explicit EndpointNotifier(std::atomic<HRESULT>* target):error(target){}
+    AudioRenderer* owner=nullptr;
+    explicit EndpointNotifier(std::atomic<HRESULT>* target,AudioRenderer* renderer):error(target),owner(renderer){}
+    void invalidate(const char* why){
+        error->store(AUDCLNT_E_DEVICE_INVALIDATED);
+        log::info("audio",std::format("{}; scheduling endpoint rebuild",why));
+    }
     ULONG STDMETHODCALLTYPE AddRef()override{return ULONG(++refs);}
     ULONG STDMETHODCALLTYPE Release()override{const ULONG n=ULONG(--refs);if(!n)delete this;return n;}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** pp)override{if(!pp)return E_POINTER;if(id==__uuidof(IUnknown)||id==__uuidof(IMMNotificationClient)){*pp=this;AddRef();return S_OK;}*pp=nullptr;return E_NOINTERFACE;}
-    HRESULT STDMETHODCALLTYPE OnDeviceStateChanged(LPCWSTR,DWORD)override{return S_OK;}
-    HRESULT STDMETHODCALLTYPE OnDeviceAdded(LPCWSTR)override{return S_OK;}
-    HRESULT STDMETHODCALLTYPE OnDeviceRemoved(LPCWSTR)override{return S_OK;}
+    // The chosen device going away drops to the default; its return switches back.
+    HRESULT STDMETHODCALLTYPE OnDeviceStateChanged(LPCWSTR id,DWORD state)override{
+        if(!id||!owner)return S_OK;
+        if(!owner->followsDefault_.load()&&owner->deviceId_==id&&state!=DEVICE_STATE_ACTIVE)invalidate("chosen render endpoint left the active state");
+        else if(owner->onFallback_.load()&&owner->preferredId_==id&&state==DEVICE_STATE_ACTIVE)invalidate("chosen render endpoint is back");
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE OnDeviceAdded(LPCWSTR id)override{
+        if(id&&owner&&owner->onFallback_.load()&&owner->preferredId_==id)invalidate("chosen render endpoint was added");
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE OnDeviceRemoved(LPCWSTR id)override{
+        if(id&&owner&&!owner->followsDefault_.load()&&owner->deviceId_==id)invalidate("chosen render endpoint was removed");
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE OnPropertyValueChanged(LPCWSTR,const PROPERTYKEY)override{return S_OK;}
     HRESULT STDMETHODCALLTYPE OnDefaultDeviceChanged(EDataFlow flow,ERole role,LPCWSTR)override{
-        if(flow==eRender&&role==eConsole){
+        if(flow==eRender&&role==eConsole&&(!owner||owner->followsDefault_.load())){
             // Same code the write path reports when the device disappears; the
             // pipeline thread treats it as a recoverable endpoint loss.
             error->store(AUDCLNT_E_DEVICE_INVALIDATED);
@@ -367,7 +457,7 @@ struct AudioRenderer::EndpointNotifier : IMMNotificationClient {
 };
 void AudioRenderer::registerEndpointNotification(){
     if(!enum_||notifier_)return;
-    notifier_=new EndpointNotifier(&lastError_);
+    notifier_=new EndpointNotifier(&lastError_,this);
     const HRESULT hr=enum_->RegisterEndpointNotificationCallback(notifier_);
     if(FAILED(hr)){log::warn("audio",std::format("RegisterEndpointNotificationCallback hr=0x{:08X}; device changes recover on the next write error",unsigned(hr)));notifier_->Release();notifier_=nullptr;}
 }
@@ -392,8 +482,27 @@ bool AudioRenderer::start(AudioFormat input,double requestedBufferMs)
     hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
         __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enum_));
     if (!checked(hr,"Create MMDeviceEnumerator")) return false;
-    hr = enum_->GetDefaultAudioEndpoint(eRender, eConsole, &device_);
-    if (!checked(hr,"GetDefaultAudioEndpoint")) return false;
+    // Read the choice and its generation together, so a change made while this
+    // endpoint opens is seen as stale on the next check and rebuilds again.
+    bool stereo=false;
+    {std::lock_guard lock(gEndpointMutex);preferredId_=gPreferredEndpoint;stereo=gForceStereo;endpointGeneration_.store(gEndpointGeneration.load());}
+    followsDefault_=true;onFallback_=false;
+    if(!preferredId_.empty()){
+        IMMDevice* chosen=nullptr;DWORD state=0;
+        if(SUCCEEDED(enum_->GetDevice(preferredId_.c_str(),&chosen))&&SUCCEEDED(chosen->GetState(&state))&&state==DEVICE_STATE_ACTIVE){
+            device_=chosen;followsDefault_=false;
+        }else{
+            if(chosen)chosen->Release();
+            onFallback_=true;
+            log::warn("audio-endpoint","chosen render endpoint unavailable; using the system default until it returns");
+        }
+    }
+    if(!device_){
+        hr = enum_->GetDefaultAudioEndpoint(eRender, eConsole, &device_);
+        if (!checked(hr,"GetDefaultAudioEndpoint")) return false;
+    }
+    deviceId_=endpointId(device_);
+    const std::wstring deviceName=endpointName(device_);
     registerEndpointNotification();
     hr = device_->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
         reinterpret_cast<void**>(&client_));
@@ -404,7 +513,16 @@ bool AudioRenderer::start(AudioFormat input,double requestedBufferMs)
     outputFormat_=input;
     if(!known||(deviceFormat.layout.mask&input.mask)!=input.mask)
         outputFormat_=known?deviceFormat.layout:AudioFormat{};
+    // Forced stereo: the engine's own swr downmix, then Windows maps stereo onto
+    // the device (AUTOCONVERTPCM), exactly as for any stereo source.
+    if(stereo&&input.channels>2)outputFormat_=AudioFormat{};
     CoTaskMemFree(deviceMix);
+    {
+        std::lock_guard lock(gEndpointMutex);
+        gActiveEndpoint={deviceId_,deviceName,onFallback_.load(),outputFormat_.channels,outputFormat_.channels<input.channels,true};
+    }
+    log::info("audio-endpoint",std::format("opened name={} chosen={} fallback={} forceStereo={}",
+        narrowName(deviceName),!followsDefault_.load(),onFallback_.load(),stereo));
     auto mix=floatWave(outputFormat_);
     if(outputFormat_!=inputFormat_){
         AVChannelLayout from{},to{};av_channel_layout_from_mask(&from,inputFormat_.mask);av_channel_layout_from_mask(&to,outputFormat_.mask);

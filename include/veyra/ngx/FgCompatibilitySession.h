@@ -17,6 +17,8 @@ public:
     static bool processHealthy();
     bool open(ID3D12Device* device, uint32_t vendor, uint32_t deviceId, const std::wstring& directory);
     HMODULE provider() const;
+    // True when the 310.9.1 provider was opened and patched by DlssgTransfusion.
+    bool transfusionProfile() const;
     bool prepareDriver(const std::wstring& directory, const char* project, const char* engine);
     bool bindResources(std::span<ID3D12Resource* const> real, std::span<ID3D12Resource* const> generated);
     bool beginInitialization();

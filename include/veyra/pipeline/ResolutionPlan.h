@@ -14,13 +14,17 @@ constexpr bool validNrSizePolicy(NrSizePolicy policy){return policy>=NrSizePolic
 constexpr unsigned nrHeightLimit(NrSizePolicy policy){
     switch(policy){case NrSizePolicy::Realtime:return 1080;case NrSizePolicy::P480:return 480;case NrSizePolicy::P720:return 720;case NrSizePolicy::P900:return 900;case NrSizePolicy::P1440:return 1440;default:return 0;}
 }
-enum class SrTarget : uint32_t { Qhd, Uhd4K, Uhd8K };
-constexpr bool validSrTarget(SrTarget target) { return target<=SrTarget::Uhd8K; }
+// Preserve the existing 0/1/2 preset IDs. New choices are appended.
+enum class SrTarget : uint32_t { Qhd, Uhd4K, Uhd8K, Uhd5K, Uhd6K, Uhd7K };
+constexpr bool validSrTarget(SrTarget target) { return target<=SrTarget::Uhd7K; }
 constexpr Extent srTargetExtent(SrTarget target) {
     switch(target) {
     case SrTarget::Qhd:return {2560,1440};
     case SrTarget::Uhd4K:return {3840,2160};
     case SrTarget::Uhd8K:return {7680,4320};
+    case SrTarget::Uhd5K:return {5120,2880};
+    case SrTarget::Uhd6K:return {6144,3456};
+    case SrTarget::Uhd7K:return {7168,4032};
     }
     return {};
 }

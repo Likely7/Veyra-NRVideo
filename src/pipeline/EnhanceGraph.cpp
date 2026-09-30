@@ -7,7 +7,9 @@
 // views are created last. Per-frame execution uses the shared command slot
 // ring (NR evaluates on a fresh list - snippet constraint).
 #include "veyra/pipeline/EnhanceGraph.h"
+#include "veyra/engine/GraphDescription.h"
 #include "veyra/engine/ColorLut.h"
+#include "veyra/engine/EffectChain.h"
 #include "veyra/diagnostics/CpuStallTrace.h"
 
 #include <algorithm>
@@ -19,6 +21,7 @@
 #include <thread>
 
 #include "veyra/Log.h"
+#include "veyra/pipeline/CaptureUploadFrame.h"
 #include "veyra/Result.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
@@ -28,6 +31,7 @@
 #include "veyra/ngx/AmpereMfgUnlock.h"
 #include "veyra/ngx/NvapiArchSpoof.h"
 #include "veyra/gfx/FsrSrBackend.h"
+#include "veyra/gfx/FsrFgPresenter.h"
 #include "veyra/ngx/DlssNrParameters.h"
 #include "veyra/ngx/DlssNrRuntimeAdapter.h"
 #include "veyra/ngx/DlssSrBackend.h"
@@ -48,6 +52,8 @@ extern "C" {
 
 namespace veyra::pipeline {
 using diagnostics::GpuStage;
+static_assert(diagnostics::kTimedNrLayers==engine::kMaxNrInstances&&diagnostics::kTimedColorNodes==engine::kMaxColorInstances,
+              "every NR layer / Color instance needs its own node timing slot");
 
 namespace {
 
@@ -74,8 +80,8 @@ AVPixelFormat packedIngressFormat(uint32_t code){
     return AV_PIX_FMT_NONE;
 }
 // Coarse luma sample for scene analysis; mirrors the CPU luma weights.
-uint8_t packedIngressLuma(const AVFrame& frame,uint32_t code,unsigned x,unsigned y){
-    const auto* p=frame.data[0]+ptrdiff_t(y)*frame.linesize[0];
+uint8_t packedIngressLuma(const uint8_t* data,ptrdiff_t linesize,uint32_t code,unsigned x,unsigned y){
+    const auto* p=data+ptrdiff_t(y)*linesize;
     switch(code){
     case 1:{const auto* q=p+x*3;return uint8_t((54*unsigned(q[2])+183*unsigned(q[1])+19*unsigned(q[0])+128)>>8);}
     case 2:{const unsigned w=unsigned(p[x*2])|(unsigned(p[x*2+1])<<8);
@@ -144,16 +150,16 @@ bool EnhanceGraph::createColorResources(){
     // lutStrength stays 0 in that case, so it is never sampled.
     colorLutTex_=makeColorLut3D(context_.device(),1);
     colorLutSize_=0;
-    upColorCurve_=makeUploadBuffer(context_.device(),sizeof(float)*4*ColorGradeTables::kCurveEntries);
-    upColorHue_=makeUploadBuffer(context_.device(),sizeof(float)*4*ColorGradeTables::kHueEntries);
-    upColorLum_=makeUploadBuffer(context_.device(),sizeof(float)*4*ColorGradeTables::kLumEntries);
-    if(!colorCurveTex_||!colorHueTex_||!colorLumTex_||!colorLutTex_||!upColorCurve_||!upColorHue_||!upColorLum_){
+    if(!colorCurveTex_||!colorHueTex_||!colorLumTex_||!colorLutTex_){
         veyra::log::error("color-grade",std::format("colour resources unavailable tables={} lut={}",colorCurveTex_?1:0,colorLutTex_?1:0));
         return false;
     }
-    if(FAILED(upColorCurve_->Map(0,nullptr,reinterpret_cast<void**>(&mappedColorCurve_)))||
-       FAILED(upColorHue_->Map(0,nullptr,reinterpret_cast<void**>(&mappedColorHue_)))||
-       FAILED(upColorLum_->Map(0,nullptr,reinterpret_cast<void**>(&mappedColorLum_))))return false;
+    colorTableUploads_.resize(ring_.slotCount());
+    constexpr UINT widths[]={ColorGradeTables::kCurveEntries,ColorGradeTables::kHueEntries,ColorGradeTables::kLumEntries};
+    for(auto& slot:colorTableUploads_)for(unsigned t=0;t<3;++t){
+        slot[t]=makeUploadBuffer(context_.device(),uint64_t(widths[t])*16);
+        if(!slot[t])return false;
+    }
     return true;
 }
 // Product default: dither exactly one LSB of whatever the graph is writing while
@@ -163,21 +169,38 @@ float EnhanceGraph::outputDitherStep() const{
     if(desc_.outputDitherStep>=0.0f)return desc_.outputDitherStep;
     // A master switch that is on but neutral renders exactly like no grading at
     // all (contract), so it must not add noise either - only a real grade does.
-    if(!colorActive_||colorTables_.identity)return 0.0f;
+    bool graded=colorActive_&&!colorTables_.identity;
+    if(!graded&&additionalColorActiveCount_){
+        for(const auto& instance:additionalColorInstances_)if(instance&&!instance->identity()){graded=true;break;}
+    }
+    if(!graded)for(const auto& instance:nodeColorInstances_)if(instance&&!instance->identity()){graded=true;break;}
+    if(!graded)return 0.0f;
     if(hdr10Output())return 1.0f/1023.0f;
     if(desc_.hdrOutput)return 0.0f;   // FP16 target: nothing to quantise
     return 1.0f/255.0f;
 }
 void EnhanceGraph::refreshColorTables(){
-    colorTables_=ColorGradeTables::bake(desc_.color);
-    if(!colorActive_||!mappedColorCurve_||!mappedColorHue_||!mappedColorLum_)return;
-    std::copy(colorTables_.curve.begin(),colorTables_.curve.end(),mappedColorCurve_);
-    std::copy(colorTables_.hue.begin(),colorTables_.hue.end(),mappedColorHue_);
-    std::copy(colorTables_.lum.begin(),colorTables_.lum.end(),mappedColorLum_);
+    auto effective=desc_.color;
+    if(!colorLutSize_&&effective.hasLut()){
+        effective.lutName={};effective.lutStrength=100;effective.lutInputSpace=engine::ColorSettings::kLutInputCineon;
+    }
+    colorTables_=ColorGradeTables::bake(effective);
+    // Preserve the original fused-ingress table lookup, including its FP16
+    // rounding. The exact exposure shortcut belongs to independent instances;
+    // enabling it here changes existing single-grade output/intermediate bits.
     colorDirty_=true;
 }
-void EnhanceGraph::uploadColorTables(ID3D12GraphicsCommandList* list){
-    if(!colorDirty_)return;
+bool EnhanceGraph::uploadColorTables(ID3D12GraphicsCommandList* list,uint32_t slot){
+    if(!colorDirty_)return true;
+    if(slot>=colorTableUploads_.size())return false;
+    auto& uploads=colorTableUploads_[slot];
+    constexpr UINT widths[]={ColorGradeTables::kCurveEntries,ColorGradeTables::kHueEntries,ColorGradeTables::kLumEntries};
+    const float* data[]={colorTables_.curve.data(),colorTables_.hue.data(),colorTables_.lum.data()};
+    for(unsigned t=0;t<3;++t){
+        void* mapped=nullptr;const HRESULT hr=uploads[t]->Map(0,nullptr,&mapped);
+        if(FAILED(hr)){veyra::log::error("color-grade",std::format("table map slot={} table={} hr=0x{:08X}",slot,t,unsigned(hr)));return false;}
+        std::memcpy(mapped,data[t],size_t(widths[t])*16);uploads[t]->Unmap(0,nullptr);
+    }
     auto copyTable=[&](ID3D12Resource* dst,ID3D12Resource* src,UINT width){
         tracker_.transition(list,dst,D3D12_RESOURCE_STATE_COPY_DEST);
         D3D12_TEXTURE_COPY_LOCATION d{},s{};
@@ -187,9 +210,9 @@ void EnhanceGraph::uploadColorTables(ID3D12GraphicsCommandList* list){
         list->CopyTextureRegion(&d,0,0,0,&s,nullptr);
         tracker_.transition(list,dst,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     };
-    copyTable(colorCurveTex_.Get(),upColorCurve_.Get(),ColorGradeTables::kCurveEntries);
-    copyTable(colorHueTex_.Get(),upColorHue_.Get(),ColorGradeTables::kHueEntries);
-    copyTable(colorLumTex_.Get(),upColorLum_.Get(),ColorGradeTables::kLumEntries);
+    copyTable(colorCurveTex_.Get(),uploads[0].Get(),ColorGradeTables::kCurveEntries);
+    copyTable(colorHueTex_.Get(),uploads[1].Get(),ColorGradeTables::kHueEntries);
+    copyTable(colorLumTex_.Get(),uploads[2].Get(),ColorGradeTables::kLumEntries);
     if(colorLutPending_&&!colorLutUpload_.empty()){
         const unsigned size=colorLutPending_;
         // D3D12 requires the copy source row pitch to be 256-byte aligned. A
@@ -225,22 +248,39 @@ void EnhanceGraph::uploadColorTables(ID3D12GraphicsCommandList* list){
             list->CopyTextureRegion(&d,0,0,0,&s,nullptr);
             tracker_.transition(list,colorLutTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         }else{
-            veyra::log::warn("color-grade","lut staging buffer unavailable; keeping the previous table");
+            veyra::log::error("color-grade","LUT upload unavailable; refusing to sample uninitialized texture");
+            return false;
         }
         colorLutUpload_.clear();
         colorLutPending_=0;
     }
     colorDirty_=false;
+    return true;
 }
-bool EnhanceGraph::setColorLut(const float* rgb,unsigned size){
-    if(!colorActive_||size<2||size>64)return false;
+bool EnhanceGraph::setColorLut(const float* rgb,unsigned size,unsigned instance){
+    if(instance<nodeColorInstances_.size()&&nodeColorInstances_[instance]){
+        auto& grade=*nodeColorInstances_[instance];
+        if(!grade.setLut(context_.device(),rgb,size))return false;
+        grade.stageLut(stager_);
+        return true;
+    }
+    if(instance){
+        if(instance>desc_.additionalColorCount||instance>=engine::kMaxColorInstances||!additionalColorInstances_[instance-1])return false;
+        auto& grade=*additionalColorInstances_[instance-1];
+        if(!grade.setLut(context_.device(),rgb,size))return false;
+        grade.stageLut(stager_); // caller drained, same contract as ingress LUT
+        return true;
+    }
+    if(!colorActive_||!rgb||size<2||size>64)return false;
+    for(size_t i=0;i<size_t(size)*size*size*3;++i)if(!std::isfinite(rgb[i]))return false;
     if(!createColorResources())return false;
-    colorLutTex_=makeColorLut3D(context_.device(),size);
-    if(!colorLutTex_)return false;
+    auto texture=makeColorLut3D(context_.device(),size);
+    if(!texture)return false;
+    colorLutTex_=std::move(texture);
     colorLutSize_=size;
     colorLutUpload_.assign(rgb,rgb+std::size_t(size)*size*size*3);
     colorLutPending_=size;
-    colorDirty_=true;
+    refreshColorTables();
     // Callers must have drained the queue: the descriptor is re-staged in place.
     D3D12_SHADER_RESOURCE_VIEW_DESC lutSrv{};
     lutSrv.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -251,9 +291,100 @@ bool EnhanceGraph::setColorLut(const float* rgb,unsigned size){
     return true;
 }
 
+bool EnhanceGraph::createAdditionalColorResources(){
+    additionalColorActiveCount_=0;
+    for(unsigned i=0;i<desc_.additionalColorCount;++i){
+        const auto& settings=desc_.additionalColors[i];
+        if(!settings.enabled||desc_.nodeColor(i+1))continue;
+        auto& instance=additionalColorInstances_[i];
+        instance=std::make_unique<ColorGradeInstance>();
+        if(!instance->initialize(context_.device(),ring_.slotCount()))return false;
+        instance->refresh(settings);
+        if(settings.hasLut()){
+            // Ingress has already tone-mapped HDR -> SDR here. Validate against
+            // the texture being graded, not the source's original transfer.
+            // SDR -> RTX Video HDR also grades SDR before that later conversion.
+            const bool mismatch=desc_.hdrWorking()?settings.lutInputSpace==engine::ColorSettings::kLutInputSrgb:settings.lutInputSpace==engine::ColorSettings::kLutInputPq;
+            engine::ColorLutData lut;
+            const engine::ColorLutStore store(runtime::localDataDirectory());
+            if(mismatch||!store.resolve(settings.lutNameString(),lut)||!lut.valid()||!instance->setLut(context_.device(),lut.rgb.data(),unsigned(lut.size))){
+                colorLutNotice_+=std::format(L" 调色实例 {} LUT 未加载：{}；其他调色继续。",i+2,mismatch?L"输入空间不匹配":L"资源不可用");
+                veyra::log::warn("color-grade",std::format("instance={} lut rejected mismatch={} name={}",i+1,mismatch,utf8Of(settings.lutNameString())));
+            }else{
+                veyra::log::info("color-grade",std::format("instance={} independent LUT size={} name={}",i+1,lut.size,utf8Of(settings.lutNameString())));
+            }
+        }
+        ++additionalColorActiveCount_;
+    }
+    if(additionalColorActiveCount_){
+        for(auto& texture:colorScratch_){texture=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);if(!texture)return false;}
+        if(!colorActive_){
+            preGradeRgba_=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R32G32B32A32_FLOAT,true);
+            if(!preGradeRgba_)return false;
+        }
+    }
+    return true;
+}
+
+bool EnhanceGraph::createNodeColorResources(){
+    tailColorActiveCount_=preNrColorActiveCount_=preSrColorActiveCount_=interNrColorActiveCount_=0;
+    preSrColorOutput_=nullptr;
+    interNrColorOutputs_={};
+    if(!desc_.runtimeNodeOrder||!desc_.fixedExecutionPlan)return true;
+    const auto& plan=*desc_.fixedExecutionPlan;
+    for(uint32_t i=0;i<plan.stepCount;++i){
+        const auto& step=plan.steps[i];
+        if(step.type!=engine::EffectType::Color||!desc_.nodeColor(step.parameterIndex))continue;
+        const auto parameter=step.parameterIndex;
+        const auto& settings=parameter?desc_.additionalColors[parameter-1]:desc_.color;
+        auto& instance=nodeColorInstances_[parameter];
+        instance=std::make_unique<ColorGradeInstance>();
+        if(!instance->initialize(context_.device(),ring_.slotCount()))return false;
+        instance->refresh(settings);
+        if(settings.hasLut()){
+            const bool mismatch=desc_.hdrWorking()?settings.lutInputSpace==engine::ColorSettings::kLutInputSrgb:settings.lutInputSpace==engine::ColorSettings::kLutInputPq;
+            engine::ColorLutData lut;
+            const engine::ColorLutStore store(runtime::localDataDirectory());
+            if(mismatch||!store.resolve(settings.lutNameString(),lut)||!lut.valid()||!instance->setLut(context_.device(),lut.rgb.data(),unsigned(lut.size))){
+                colorLutNotice_+=std::format(L" 调色实例 {} LUT 未加载：{}；其他调色继续。",parameter+1,mismatch?L"输入空间不匹配":L"资源不可用");
+                veyra::log::warn("color-grade",std::format("node instance={} lut rejected mismatch={} name={}",parameter,mismatch,utf8Of(settings.lutNameString())));
+            }
+        }
+        nodeColorOutputs_[parameter]=makeTexture(context_.device(),step.output.width,step.output.height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+        if(!nodeColorOutputs_[parameter])return false;
+        if(desc_.preNrColor(parameter)){++preNrColorActiveCount_;preNrColorOutput_=nodeColorOutputs_[parameter].Get();}
+        else if(desc_.preSrColor(parameter)){++preSrColorActiveCount_;preSrColorOutput_=nodeColorOutputs_[parameter].Get();}
+        else if(const auto target=desc_.interNrColorTarget(parameter);target<engine::kMaxNrInstances){
+            ++interNrColorActiveCount_;interNrColorOutputs_[target]=nodeColorOutputs_[parameter].Get();
+        }
+        else ++tailColorActiveCount_;
+    }
+    return true;
+}
+
 bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
 {
+    fgInitResult_=0;
+    driverRequirementNotice_.clear();
     failedBackend_=engine::FailedBackend::Infrastructure;
+    if(const auto error=desc.validateFixedExecutionPlan();!error.empty()){
+        veyra::log::error("graph",std::format("execution plan rejected before GPU allocation: {}",error));return false;
+    }
+    if(desc.fixedExecutionPlan){
+        const auto& plan=*desc.fixedExecutionPlan;
+        veyra::log::info("graph",std::format("fixed execution plan accepted: steps={} nr={} output={}x{}; fixed base with node pre-NR/tail Color; mode={}",
+            plan.stepCount,plan.resourceCounts[size_t(engine::EffectType::NrEnhance)],plan.output.width,plan.output.height,
+            desc.runtimeNodeOrder?"node":"list"));
+        for(uint32_t i=0;i<plan.stepCount;++i){
+            const auto& step=plan.steps[i];
+            if(step.type==engine::EffectType::NrEnhance)
+                veyra::log::info("graph",std::format("fixed plan NR parameter={} resource={} input={}x{} processing={}x{} output={}x{}",
+                    step.parameterIndex,step.resourceIndex,step.input.width,step.input.height,
+                    step.processing.width,step.processing.height,step.output.width,step.output.height));
+        }
+    }
+    if(desc.additionalColorCount>desc.additionalColors.size()||!desc.color.validate().empty())return false;
+    for(unsigned i=0;i<desc.additionalColorCount;++i)if(!desc.additionalColors[i].validate().empty())return false;
     if(!desc.protection.validate().empty())return false;
     if(desc.compatibilityPreflight&&!desc.compatibilityPreflight(desc,context_)){
         failedBackend_=engine::FailedBackend::Fg;
@@ -277,6 +408,20 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     workW_ = desc.workWidth;
     workH_ = desc.workHeight;
     nrW_=desc.nrWidth?desc.nrWidth:workW_; nrH_=desc.nrHeight?desc.nrHeight:workH_;
+    // Layer count comes from the description: one entry (the default) keeps the
+    // single-layer product path unchanged, more entries stack further NR passes.
+    nrLayerCount_=desc.nrLayersModel.empty()?1u:uint32_t(desc.nrLayersModel.size());
+    if(nrLayerCount_>engine::kMaxNrInstances)nrLayerCount_=engine::kMaxNrInstances;
+    if(!desc_.nrLayersExtent.empty()&&desc_.nrLayersExtent.size()!=nrLayerCount_){
+        veyra::log::error("resolution","NR layer extent count mismatch");return false;
+    }
+    if(desc_.nrLayersExtent.empty())desc_.nrLayersExtent.assign(nrLayerCount_,Extent{nrW_,nrH_});
+    for(size_t i=0;i<desc_.nrLayersExtent.size();++i){
+        const auto extent=desc_.nrLayersExtent[i],full=desc_.nrFullExtent(i);
+        if(!extent.valid()||extent.width>full.width||extent.height>full.height){
+            veyra::log::error("resolution","invalid NR layer extent");return false;
+        }
+    }
     if((desc.flowWidth==0)!=(desc.flowHeight==0)){veyra::log::error("resolution","partial flow extent is invalid");return false;}
     nvofW_ = desc.flowWidth?desc.flowWidth:srcW_;
     nvofH_ = desc.flowHeight?desc.flowHeight:srcH_;
@@ -287,17 +432,38 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if(!Extent{nvofW_,nvofH_}.valid()||nvofW_>srcW_||nvofH_>srcH_){veyra::log::error("resolution","invalid source-space flow extent");return false;}
     diagnostics::DiagnosticEvent initDiagnostic;initDiagnostic.stage="initialize";initDiagnostic.identity={epoch_+1,desc.settingsRevision,0};initDiagnostic.resolution.source={srcW_,srcH_};initDiagnostic.resolution.base=initDiagnostic.resolution.fg=initDiagnostic.resolution.output={workW_,workH_};initDiagnostic.resolution.nr={nrW_,nrH_};initDiagnostic.resolution.flow={nvofW_,nvofH_};initDiagnostic.flowApplied=std::to_string(unsigned(desc.flowQuality));initDiagnostic.runtimeHash="unverified-user-replaceable";Logger::diagnosticContext(initDiagnostic);
     veyra::log::info("resolution",std::format("source={}x{} base={}x{} nr={}x{} flow={}x{} fg={}x{} output={}x{}",srcW_,srcH_,workW_,workH_,nrW_,nrH_,nvofW_,nvofH_,workW_,workH_,workW_,workH_));
-    veyra::log::info("pipeline-order",desc.nrBeforeSr?"NR -> residual(source) -> SR -> FG (experimental preview)":"SR -> NR -> residual -> FG");
+    veyra::log::info("pipeline-order",desc.splitNrAcrossSr()?"NR(source) -> SR -> NR(work) -> FG (node preview)":desc.nrBeforeSr?"NR -> residual(source) -> SR -> FG (experimental preview)":"SR -> NR -> residual -> FG");
     if(!desc.videoHdr.valid()||(desc.hdrOutput&&!desc.hdrInput&&!desc.convertVideoHdr())){veyra::log::error("hdr","HDR output requires native HDR input or explicit Video HDR conversion");return false;}
     srEnabled_ = desc.enableSr && (srcW_ != workW_ || srcH_ != workH_);
     nrEnabled_ = desc.enableNr && !desc.noFeatures && !desc.noNgx;
-    fgEnabled_ = desc.enableFg && !desc.noNgx && !desc.stillImage && desc.frameGenerationBackend!=engine::FrameGenerationBackend::XeSS
-        && desc.frameGenerationBackend!=engine::FrameGenerationBackend::Fsr;
+    fgEnabled_ = desc.enableFg && !desc.noFeatures && !desc.stillImage &&
+        desc.frameGenerationBackend != engine::FrameGenerationBackend::XeSS &&
+        (!desc.noNgx || engine::fsrFrameGeneration(desc.frameGenerationBackend));
     nvofStandalone_ = desc.enableNvofStandalone && !desc.noFeatures;
     if(desc.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx&&desc.amdFlowHalfResolution){nvofW_=std::max(1u,nvofW_/2);nvofH_=std::max(1u,nvofH_/2);}
     uint64_t budget=0,usage=0;
-    const uint64_t temporalBytes=desc_.nrTemporal?uint64_t(desc_.nrBeforeSr?srcW_:workW_)*(desc_.nrBeforeSr?srcH_:workH_)*40:0;
-    const uint64_t estimate=uint64_t(workW_)*workH_*(fgEnabled_?100:76)+uint64_t(nrW_)*nrH_*32+uint64_t(srcW_)*srcH_*32+temporalBytes;
+    // Every NR layer allocates its own full set of textures, and a stabilised
+    // layer adds two history/guide pairs on top. The stack is bounded (16 nodes),
+    // so a deep chain can genuinely exhaust a small adapter; the estimate has to
+    // count the layers or the check would pass and allocation would fail later.
+    uint64_t nrTextureBytes=0;
+    for(const auto extent:desc_.nrLayersExtent)
+        nrTextureBytes+=uint64_t(extent.width)*extent.height*(extent.width==nrW_&&extent.height==nrH_?32u:36u);
+    uint64_t fullLayerBytes=0,temporalBytes=0;
+    for(size_t i=0;i<desc_.nrLayersExtent.size();++i){
+        const auto full=desc_.nrFullExtent(i);const uint64_t pixels=uint64_t(full.width)*full.height;
+        fullLayerBytes+=pixels*8;
+        if(i<desc_.nrLayersTemporal.size()?desc_.nrLayersTemporal[i]:desc_.nrTemporal)temporalBytes+=pixels*40;
+    }
+    uint64_t tailColorBytes=0;
+    for(uint32_t i=0;i<engine::kMaxColorInstances;++i)if(desc_.nodeColor(i))tailColorBytes+=uint64_t(workW_)*workH_*8;
+    uint64_t interProtectionBytes=0;
+    if(const auto target=desc_.interNrProtectionTarget();target<engine::kMaxNrInstances){
+        const auto extent=desc_.nrFullExtent(target);interProtectionBytes=uint64_t(extent.width)*extent.height*8;
+    }
+    const uint64_t estimate=uint64_t(workW_)*workH_*(fgEnabled_?100:76)
+        +nrTextureBytes+fullLayerBytes
+        +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes;
     if(context_.videoMemoryInfo(budget,usage)){
         veyra::log::info("memory",std::format("graph lower-bound={}MiB budget={}MiB usage={}MiB; SDK allocations additional",estimate>>20,budget>>20,usage>>20));
         if(usage>=budget||estimate>budget-usage){veyra::log::error("memory","insufficient adapter budget for requested graph textures");return false;}
@@ -317,6 +483,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if (!initZeroAndDepthTextures()) return false;
     if (!initNvof()) { failedBackend_=engine::FailedBackend::OpticalFlow; return false; }
     if (!initFsrSr()) return false;
+    if (!initFsrFg()) return false;
     if(nrEnabled_&&GetEnvironmentVariableW(L"VEYRA_TEST_NR_INIT_FAILURE",nullptr,0)){
         failedBackend_=engine::FailedBackend::Nr;
         veyra::log::error("backend-recovery-test","test-only NR initialization rejection before SDK call; not a hardware failure");return false;
@@ -330,6 +497,9 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     veyra::log::info("graph", std::format("initialized src={}x{} work={}x{} sr={} nr={} fg={} nvof={}",
         srcW_, srcH_, workW_, workH_, srEnabled_ ? 1 : 0, nrEnabled_ ? 1 : 0,
         fgEnabled_ ? 1 : 0, (nvof_ && nvof_->initialized()) ? 1 : 0));
+    veyra::log::info("motion-policy",std::format("sr={} nr={} fg={} standalone={} hdrOutput={}",
+        desc_.srUsesFlow()?"flow":"zero",desc_.nrUsesFlow()?"flow":"zero",desc_.fgUsesFlow()?"flow":"zero",
+        desc_.enableNvofStandalone,hdr10Output()?"HDR10":desc_.hdrOutput?"scRGB":"SDR"));
     return true;
 }
 
@@ -386,22 +556,35 @@ bool EnhanceGraph::createResources()
     // be described as engine-native depth.
     if(srEnabled_&&desc_.videoSrQuality==engine::kVideoSrFsr){
         fsrSrDepth_=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R32_FLOAT,false);
-        if(!fsrSrDepth_)return false;
-        fsrSrDepthPitch_=size_t(srcW_)*sizeof(float);
+        fsrSrZeroMotion_=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R16G16_FLOAT,false);
+        if(!fsrSrDepth_||!fsrSrZeroMotion_)return false;
+        fsrSrDepthPitch_=(size_t(srcW_)*sizeof(float)+255)&~size_t(255);
         upFsrSrDepth_=makeUploadBuffer(context_.device(),fsrSrDepthPitch_*srcH_);
-        if(!upFsrSrDepth_)return false;
+        upFsrSrZeroMotion_=makeUploadBuffer(context_.device(),fsrSrDepthPitch_*srcH_);
+        if(!upFsrSrDepth_||!upFsrSrZeroMotion_)return false;
     }
-    const bool directBase=!srEnabled_&&srcW_==workW_&&srcH_==workH_;
+    const bool directBase=!srEnabled_&&srcW_==workW_&&srcH_==workH_&&!desc_.splitNrAcrossSr();
     workRgba_=directBase?srcRgba_:makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
-    for(unsigned i=0;i<2;++i){sourceReferences_[i]=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R16G16B16A16_FLOAT,false);baseReferences_[i]=(directBase&&!desc_.color.enabled)?sourceReferences_[i]:makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16B16A16_FLOAT,false);if(!sourceReferences_[i]||!baseReferences_[i])return false;}
-    nrInput_=(desc_.nrBeforeSr&&nrW_==srcW_&&nrH_==srcH_)?srcRgba_:(nrW_==workW_&&nrH_==workH_)?workRgba_:makeTexture(context_.device(),nrW_,nrH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
-    residualRgba_=makeTexture(context_.device(),desc_.nrBeforeSr?srcW_:workW_,desc_.nrBeforeSr?srcH_:workH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    const bool anyColor=desc_.color.enabled||std::any_of(desc_.additionalColors.begin(),desc_.additionalColors.begin()+desc_.additionalColorCount,[](const auto& s){return s.enabled;});
+    for(unsigned i=0;i<2;++i){sourceReferences_[i]=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R16G16B16A16_FLOAT,false);baseReferences_[i]=(directBase&&!anyColor)?sourceReferences_[i]:makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16B16A16_FLOAT,false);if(!sourceReferences_[i]||!baseReferences_[i])return false;}
+    // The residual composite runs once, after the last NR layer, at the working
+    // extent (or the source extent in the NR-first preview order).
+    residualRgba_=makeTexture(context_.device(),desc_.finalNrAfterSr()?workW_:srcW_,desc_.finalNrAfterSr()?workH_:srcH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    if(desc_.protectionBeforeSr()){
+        preSrProtectionRgba_=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+        if(!preSrProtectionRgba_)return false;
+    }
+    if(const auto target=desc_.interNrProtectionTarget();target<engine::kMaxNrInstances){
+        const auto extent=desc_.nrFullExtent(target);
+        interNrProtectionRgba_=makeTexture(context_.device(),extent.width,extent.height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+        if(!interNrProtectionRgba_)return false;
+    }
     nrFlow_=makeTexture(context_.device(),nrW_,nrH_,DXGI_FORMAT_R16G16_FLOAT,true);
     baseFlow_=makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16_FLOAT,true);
     if(presentSinkFg())for(auto& motion:presentMotion_){motion=makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16_FLOAT,false);if(!motion)return false;}
-    if(!nrInput_||!residualRgba_||!nrFlow_||!baseFlow_)return false;
+    if(!residualRgba_||!nrFlow_||!baseFlow_)return false;
     // Colour grade tables (v4): only allocated when the stage is enabled.
-    colorActive_=desc_.color.enabled;
+    colorActive_=desc_.color.enabled&&!desc_.nodeColor(0);
     if(colorActive_){
         if(!createColorResources())return false;
         refreshColorTables();
@@ -443,9 +626,8 @@ bool EnhanceGraph::createResources()
             ColorGradeTables::kCurveEntries,ColorGradeTables::kHueEntries,ColorGradeTables::kLumEntries,
             desc_.color.lutInputSpace,desc_.color.hasLut()?1:0));
     }
-    proxyTex_ = makeTexture(context_.device(), nrW_, nrH_, DXGI_FORMAT_R8G8B8A8_UNORM, true);
-    neuralTex_ = makeTexture(context_.device(), nrW_, nrH_, DXGI_FORMAT_R8G8B8A8_UNORM, true);
-    finalRgba_ = makeTexture(context_.device(), nrW_, nrH_, DXGI_FORMAT_R16G16B16A16_FLOAT, true);
+    if(!createAdditionalColorResources())return false;
+    if(!createNodeColorResources())return false;
     videoFrame_[0] = makeTexture(context_.device(), workW_, workH_, outputFormat(), true);
     videoFrame_[1] = makeTexture(context_.device(), workW_, workH_, outputFormat(), true);
     confTex_ = makeTexture(context_.device(), nvofW_, nvofH_, DXGI_FORMAT_R8_UNORM, true);
@@ -453,7 +635,11 @@ bool EnhanceGraph::createResources()
     depthTex_ = makeTexture(context_.device(), workW_, workH_, DXGI_FORMAT_R32_FLOAT, false);
     // Valid placeholder descriptors keep disabled FG inexpensive. Enabling it
     // is a graph rebuild, so no in-flight descriptor is resized in place.
-    for(auto& frame:genFrame_){frame=makeTexture(context_.device(),fgEnabled_?workW_:1,fgEnabled_?workH_:1,outputFormat(),true);if(!frame)return false;}
+    for(size_t i=0;i<kGeneratedPoolSlots;++i){
+        const bool used=fgEnabled_&&(!fsrEnabled()||i<2);
+        genFrame_[i]=makeTexture(context_.device(),used?workW_:1,used?workH_:1,outputFormat(),true);
+        if(!genFrame_[i])return false;
+    }
     nrZeroMotion_ = makeTexture(context_.device(), workW_, workH_, DXGI_FORMAT_R16G16_FLOAT, false);
     nrZeroDepth_ = makeTexture(context_.device(), workW_, workH_, DXGI_FORMAT_R32_FLOAT, false);
     rawW_ = (nvofW_ + nvofGrid_ - 1) / nvofGrid_;
@@ -465,13 +651,19 @@ bool EnhanceGraph::createResources()
 
     if (!upLuma_[0] || !upLuma_[1] || !upChroma_[0] || !upChroma_[1] ||
         !upDepth_ || !upZeroDepth_ || !upZeroMotion_ ||
-        !lumaTex_ || !chromaTex_ || !srcRgba_ || !workRgba_ || !proxyTex_ ||
-        !neuralTex_ || !finalRgba_ || !videoFrame_[0] || !videoFrame_[1] ||
+        !lumaTex_ || !chromaTex_ || !srcRgba_ || !workRgba_ ||
+        !videoFrame_[0] || !videoFrame_[1] ||
         !flowTex_ || !depthTex_ || !genFrame_[0] || !genFrame_[1] ||
         !nrZeroMotion_ || !nrZeroDepth_ || !nvofRawTex_ || !nvofCostTex_ ||
         !nvofInA_ || !nvofInB_ || !confTex_) {
         veyra::log::error("graph", "resource allocation failed");
         return false;
+    }
+
+    // Each NR layer must have allocated its own texture set; a partial
+    // allocation means a layer would run with another layer's history.
+    for (auto& layer : nrInstances_) {
+        if (!layer->created()) { veyra::log::error("graph", "NR layer allocation failed"); return false; }
     }
 
     // Persistent mapping of the NV12 upload ring (before any views).
@@ -523,7 +715,7 @@ bool EnhanceGraph::initZeroAndDepthTextures()
     Status st = Status::Ok;
     ID3D12GraphicsCommandList* list = ring_.acquire(0, st);
     if (list == nullptr) return false;
-    auto uploadTex = [&](ID3D12Resource* tex, const ComPtr<ID3D12Resource>& up, DXGI_FORMAT fmt) {
+    auto uploadTex = [&](ID3D12Resource* tex, const ComPtr<ID3D12Resource>& up, DXGI_FORMAT fmt,uint32_t width=0,uint32_t height=0,size_t pitch=0) {
         D3D12_RESOURCE_BARRIER b{};
         b.Transition.pResource = tex;
         b.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
@@ -536,10 +728,10 @@ bool EnhanceGraph::initZeroAndDepthTextures()
         src.pResource = up.Get();
         src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         src.PlacedFootprint.Footprint.Format = fmt;
-        src.PlacedFootprint.Footprint.Width = workW_;
-        src.PlacedFootprint.Footprint.Height = workH_;
+        src.PlacedFootprint.Footprint.Width = width?width:workW_;
+        src.PlacedFootprint.Footprint.Height = height?height:workH_;
         src.PlacedFootprint.Footprint.Depth = 1;
-        src.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(dPitch_);
+        src.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(pitch?pitch:dPitch_);
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         D3D12_RESOURCE_BARRIER back{};
         back.Transition.pResource = tex;
@@ -551,6 +743,7 @@ bool EnhanceGraph::initZeroAndDepthTextures()
     uploadTex(depthTex_.Get(), upDepth_, DXGI_FORMAT_R32_FLOAT);
     uploadTex(nrZeroDepth_.Get(), upZeroDepth_, DXGI_FORMAT_R32_FLOAT);
     uploadTex(nrZeroMotion_.Get(), upZeroMotion_, DXGI_FORMAT_R16G16_FLOAT);
+    if(fsrSrZeroMotion_){void* data=nullptr;D3D12_RANGE read{0,0};if(FAILED(upFsrSrZeroMotion_->Map(0,&read,&data))||!data)return false;std::memset(data,0,fsrSrDepthPitch_*srcH_);upFsrSrZeroMotion_->Unmap(0,nullptr);uploadTex(fsrSrZeroMotion_.Get(),upFsrSrZeroMotion_,DXGI_FORMAT_R16G16_FLOAT,srcW_,srcH_,fsrSrDepthPitch_);}
     if(fsrSrDepth_!=nullptr&&upFsrSrDepth_!=nullptr){
         D3D12_RESOURCE_BARRIER b{};
         b.Transition.pResource=fsrSrDepth_.Get();
@@ -573,17 +766,10 @@ bool EnhanceGraph::initZeroAndDepthTextures()
         b.Transition.StateAfter=D3D12_RESOURCE_STATE_COMMON;
         list->ResourceBarrier(1,&b);
     }
-    list->Close();
-    ID3D12CommandList* lists[] = { list };
-    context_.directQueue()->ExecuteCommandLists(1, lists);
-    ComPtr<ID3D12Fence> initFence;
-    context_.device()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&initFence));
-    context_.directQueue()->Signal(initFence.Get(), 1);
-    if (nvofOutEvent_ == nullptr) {
-        nvofOutEvent_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    }
-    initFence->SetEventOnCompletion(1, nvofOutEvent_);
-    WaitForSingleObject(nvofOutEvent_, 5000);
+    // Keep recording/fence ownership in the ring. Closing this list directly
+    // left slot 0 marked recording, so graph rebuild/shutdown closed it again.
+    // This is the existing one-time initialization wait, never a per-pass wait.
+    if(!ring_.submitAndSignal(0)||!ring_.waitIdle())return false;
     veyra::log::info("graph", "depth/zero guidance textures initialized");
     return true;
 }
@@ -591,8 +777,9 @@ bool EnhanceGraph::initZeroAndDepthTextures()
 bool EnhanceGraph::initNvof()
 {
     if(desc_.stillImage){mvecSource_="single-image (no temporal motion)";return true;}
-    if (desc_.noFeatures || !(nvofStandalone_ || presentSinkFg() || (fgEnabled_&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss) || (srEnabled_&&(desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr)))) {
-        veyra::log::info("graph", "VEYRA_NO_FEATURES: NVOF session skipped");
+    if (desc_.noFeatures || !(nvofStandalone_ || (presentSinkFg()&&desc_.fgUsesFlow()) || (fgEnabled_&&desc_.fgUsesFlow()&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss) || (srEnabled_&&desc_.srUsesFlow()&&(desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr)))) {
+        mvecSource_="zero motion (no external flow consumer)";
+        veyra::log::info("graph", "optical-flow session skipped: no external motion consumer");
         return true;
     }
     if(desc_.opticalFlowBackend==engine::OpticalFlowBackend::GpuDis){
@@ -821,6 +1008,21 @@ bool EnhanceGraph::initFsrSr()
     return true;
 }
 
+bool EnhanceGraph::fsrActive() const { return fsrFgBackend_&&fsrFgBackend_->available(); }
+const char* EnhanceGraph::fsrProviderVersion() const { return fsrFgBackend_?fsrFgBackend_->providerVersion():""; }
+bool EnhanceGraph::initFsrFg() {
+    if(!fsrEnabled()||!fgEnabled_)return true;
+    failedBackend_=engine::FailedBackend::Fg;
+    if(desc_.fgMultiplier!=2){
+        veyra::log::error("fsr-fg","FSR frame generation requires 2X");return false;
+    }
+    fsrFgBackend_=std::make_unique<gfx::FsrFgPresenter>();
+    if(!fsrFgBackend_->initializeIndependent(context_.device(),workW_,workH_,outputFormat(),
+            desc_.frameGenerationBackend==engine::FrameGenerationBackend::Fsr4))return false;
+    failedBackend_=engine::FailedBackend::None;
+    return true;
+}
+
 bool EnhanceGraph::initNgxFeatures()
 {
     failedBackend_=engine::FailedBackend::NgxCore;
@@ -831,7 +1033,7 @@ bool EnhanceGraph::initNgxFeatures()
     }
     // FSR upscaling is a FidelityFX effect: a session whose only feature is
     // FSR SR must not require (or fail on) the NGX core.
-    const bool needNgxCore = nrEnabled_ || fgEnabled_ || desc_.convertVideoHdr() ||
+    const bool needNgxCore = nrEnabled_ || (fgEnabled_ && !fsrEnabled()) || desc_.convertVideoHdr() ||
         (srEnabled_ && desc_.videoSrQuality!=engine::kVideoSrFsr);
     if (!needNgxCore) {
         veyra::log::info("graph", "NGX core skipped: AMD FSR upscaling is the only enabled stage");
@@ -872,9 +1074,13 @@ bool EnhanceGraph::initNgxFeatures()
         failedBackend_=engine::FailedBackend::Fg;
         fgCompatibility_=std::make_unique<ngx::FgCompatibilitySession>();
         if(!fgCompatibility_->open(context_.device(),context_.adapter().vendorId,context_.adapter().deviceId,desc_.runtimeAbsPath))return false;
+        // The 310.9.1 provider was patched by DlssgTransfusion inside open();
+        // the audited-310.7 unlocks only apply to the 310.7 provider.
+        if(!fgCompatibility_->transfusionProfile()){
         prepareAmpereFgSpoof();
         applyAdaMfgUnlock();
         applyAmpereMfgUnlock();
+        }
         if(!fgCompatibility_->prepareDriver(desc_.runtimeAbsPath,projectId.c_str(),engineVersion.c_str()))return false;
         std::array<ID3D12Resource*,2> real={videoFrame_[0].Get(),videoFrame_[1].Get()};
         std::array<ID3D12Resource*,kGeneratedPoolSlots> generated{};
@@ -901,6 +1107,10 @@ bool EnhanceGraph::initNgxFeatures()
     fgBackend_->setCompatibility(fgCompatibility_.get());
     ngx::DlssFgBackend::Capability fgCaps{};
     const bool fgAvailable = fgBackend_->queryCapability(*coreHost_, fgCaps, st);
+    fgInitResult_=uint64_t(fgCaps.featureInitResult);
+    driverRequirementNotice_.clear();
+    if(fgCaps.needsUpdatedDriver&&fgCaps.minDriverVersionMajor>0)
+        driverRequirementNotice_=std::format(L"当前 DLSS 补帧运行库要求至少 {}.{:02} 驱动（NGX 能力查询）",fgCaps.minDriverVersionMajor,fgCaps.minDriverVersionMinor);
     if (!fgAvailable) {
         veyra::log::error("graph", "FG capability startup failed; see native results and compatibility stage above");
         return false;
@@ -943,13 +1153,14 @@ bool EnhanceGraph::initNgxFeatures()
     if(nrEnabled_){
     failedBackend_=engine::FailedBackend::Nr;
     if(desc_.nrRuntime!=engine::NrRuntime::Original&&desc_.nrRuntime!=engine::NrRuntime::Community&&desc_.nrRuntime!=engine::NrRuntime::Ampere)return false;
-    auto nrDirectory=std::filesystem::path(desc_.runtimeAbsPath);if(desc_.nrRuntime==engine::NrRuntime::Community)nrDirectory/=L"nr-community";
-    if(desc_.nrRuntime==engine::NrRuntime::Ampere)nrDirectory/=L"nr-ampere";
-    veyra::log::info("nr-runtime",std::format("selected={} path={}",engine::nrRuntimeName(desc_.nrRuntime),nrDirectory.string()));
+    const auto selectedNr=engine::currentNrRuntime(desc_.nrRuntime);
+    auto nrDirectory=std::filesystem::path(desc_.runtimeAbsPath);
+    if(selectedNr==engine::NrRuntime::Ampere)nrDirectory/=L"nr-ampere";
+    veyra::log::info("nr-runtime",std::format("selected={} requestedId={} path={}",engine::nrRuntimeName(selectedNr),int(desc_.nrRuntime),nrDirectory.string()));
     nrAdapter_ = std::make_unique<ngx::DlssNrRuntimeAdapter>();
     if (!nrAdapter_->load(nrDirectory.wstring(), st) ||
         !nrAdapter_->installCallerCompatibility(st) ||
-        (desc_.nrRuntime==engine::NrRuntime::Ampere && !nrAdapter_->installAmpereCompatibility(context_.device(), st)) ||
+        (selectedNr==engine::NrRuntime::Ampere && !nrAdapter_->installAmpereCompatibility(context_.device(), st)) ||
         !nrAdapter_->snippetInitExt(context_.device(), nrDirectory.c_str(), nrResult_, nrSeh_) ||
         nrResult_ != static_cast<uint64_t>(NVSDK_NGX_Result_Success)) {
         veyra::log::error("graph", std::format("NR snippet init failed 0x{:X}", nrResult_));
@@ -970,30 +1181,79 @@ bool EnhanceGraph::initNgxFeatures()
         if(!ring_.submitAndSignal(0)||!ring_.waitIdle())return false;
     }
 
-    // NR feature create (8.5 create parameter contract).
-    if(nrEnabled_) {
+    // NR layers: one instance per requested layer, each owning its textures and
+    // history. The snippet session is shared (one adapter, one IAT shim), which
+    // is exactly the structure Magpie uses for its multi-pass DLSSNR.
+    if (nrEnabled_) {
+        const size_t layers = nrLayerCount_;
+        nrInstances_.clear();
+        nrInstances_.reserve(layers);
+        for (size_t index = 0; index < layers; ++index) {
+            auto instance = std::make_unique<NrInstance>();
+            const auto extent=desc_.nrLayersExtent[index];
+            const auto full=desc_.nrFullExtent(index);
+            const uint32_t fullW=full.width,fullH=full.height;
+            // Only a single layer may alias the graph's stage input, and only
+            // when the extents already match: that is what the original graph
+            // did, and the path has to stay byte-identical. Extra layers read
+            // the previous layer's output, which the downsample produces.
+            ID3D12Resource* borrowed = nullptr;
+            if (layers == 1) {
+                const bool sameExtent = extent.width==fullW&&extent.height==fullH;
+                if (sameExtent) borrowed = nrBaseInput();
+            }
+            auto* motion=extent.width==nrW_&&extent.height==nrH_?nrFlow_.Get():nullptr;
+            if (!instance->create(context_.device(), extent.width, extent.height, fullW, fullH,
+                                  nrZeroMotion_.Get(), nrZeroDepth_.Get(), borrowed, motion)) {
+                veyra::log::error("graph", std::format("NR layer {} texture allocation failed", index + 1));
+                return false;
+            }
+            // Parameters are seeded once, here. Layer 0 mirrors the flat product
+            // settings; extra layers take their entry from the description, so a
+            // stacked chain is configured the same way a single layer is.
+            instance->model = index < desc_.nrLayersModel.size() ? desc_.nrLayersModel[index] : desc_.model;
+            instance->residualSettings = index < desc_.nrLayersResidual.size() ? desc_.nrLayersResidual[index] : desc_.residual;
+            instance->protection = index < desc_.nrLayersProtection.size() ? desc_.nrLayersProtection[index] : desc_.protection;
+            instance->temporalEnabled = index < desc_.nrLayersTemporal.size() ? desc_.nrLayersTemporal[index] : desc_.nrTemporal;
+            veyra::log::info("resolution",std::format("NR layer={} internal={}x{} composite={}x{} sharedMotion={}",
+                index+1,extent.width,extent.height,fullW,fullH,motion!=nullptr));
+            nrInstances_.push_back(std::move(instance));
+        }
+        veyra::log::info("graph", std::format("NR layers={} extent={}x{}", layers, nrW_, nrH_));
+    }
+
+    // NR feature create (8.5 create parameter contract), one handle per layer.
+    for (size_t layerIndex = 0; nrEnabled_ && layerIndex < nrInstances_.size(); ++layerIndex) {
+        auto* layer = nrInstances_[layerIndex].get();
+        const uint32_t nrW=layer->width(),nrH=layer->height();
         namespace p = ngx::dlssnr;
         ngx::ParameterBlock pb(ngxParams_);
-        pb.setU32(p::kWidth, nrW_); pb.setU32(p::kHeight, nrH_);
-        pb.setU32(p::kInputWidth, nrW_); pb.setU32(p::kInputHeight, nrH_);
-        pb.setU32(p::kOutputWidth, nrW_); pb.setU32(p::kOutputHeight, nrH_);
-        pb.setU32(p::kOutputDotWidth, nrW_); pb.setU32(p::kOutputDotHeight, nrH_);
+        pb.setU32(p::kWidth, nrW); pb.setU32(p::kHeight, nrH);
+        pb.setU32(p::kInputWidth, nrW); pb.setU32(p::kInputHeight, nrH);
+        pb.setU32(p::kOutputWidth, nrW); pb.setU32(p::kOutputHeight, nrH);
+        pb.setU32(p::kOutputDotWidth, nrW); pb.setU32(p::kOutputDotHeight, nrH);
         pb.setU32(p::kUpscaling, 0);
         pb.setF32(p::kScale, 1.0f); pb.setF32(p::kScalingRatio, 1.0f);
         pb.setVoid(p::kComputeScalingRatioCallback,
             reinterpret_cast<void*>(&ngx::DlssNrRuntimeAdapter::scalingRatioCallback));
         pb.setI32(p::kHintRenderPreset, 0);
-        pb.setU32(p::kStdWidth, nrW_); pb.setU32(p::kStdHeight, nrH_);
+        pb.setU32(p::kStdWidth, nrW); pb.setU32(p::kStdHeight, nrH);
         pb.setI32(p::kPerfQualityValue, 1);
         pb.setU32(p::kCreationNodeMask, 1); pb.setU32(p::kVisibilityNodeMask, 1);
         ID3D12GraphicsCommandList* list = ring_.acquire(0, st);
         if (list == nullptr) { failedBackend_=engine::FailedBackend::Infrastructure; return false; }
         failedBackend_=engine::FailedBackend::Nr;
-        if (!nrAdapter_->snippetCreateFeature(list, ngxParams_, &nrHandle_, nrResult_, nrSeh_) ||
-            nrResult_ != static_cast<uint64_t>(NVSDK_NGX_Result_Success)) {
-            veyra::log::error("graph", std::format("NR create failed 0x{:X}", nrResult_));
+        // One parameter block per layer: the block carries the feature's create
+        // contract, and Magpie's evidence is that each pass needs its own.
+        layer->setParameters(coreHost_->allocateParameters(st));
+        if (layer->parameters() == nullptr) return false;
+        NVSDK_NGX_Handle* created = nullptr;
+        if (!nrAdapter_->snippetCreateFeature(list, ngxParams_, &created, nrResult_, nrSeh_) ||
+            nrResult_ != static_cast<uint64_t>(NVSDK_NGX_Result_Success) || created == nullptr) {
+            veyra::log::error("graph", std::format("NR layer {} create failed 0x{:X}", layerIndex + 1, nrResult_));
             return false;
         }
+        layer->setHandle(created);
         failedBackend_=engine::FailedBackend::Infrastructure;
         if(!ring_.submitAndSignal(0)||!ring_.waitIdle())return false;
     }
@@ -1080,17 +1340,72 @@ bool EnhanceGraph::initNgxFeatures()
     return true;
 }
 
+// Stage-5 output stabiliser. It reads the graph's NR result and the image that
+// fed NR, writes into its own ping-pong, and the caller copies the result back
+// into residualRgba_. Copying back is deliberate: every downstream reader
+// (SR, FG, tail colour, diagnostic views) keeps binding the same texture, so
+// enabling the stabiliser cannot silently mis-bind a consumer.
+bool EnhanceGraph::createNrHoldPass()
+{
+    nrHoldPass_.reset();
+    if(desc_.nrHoldStrength<=0.0f)return true;
+    if(!residualRgba_)return false;
+    auto pass=std::make_unique<NrHoldPass>();
+    // Take the extent from the texture we actually stabilise rather than
+    // recomputing it from the plan: the two must agree or the dispatch grid
+    // would not cover the image.
+    const auto resolved=residualRgba_->GetDesc();
+    const auto width=uint32_t(resolved.Width),height=resolved.Height;
+    // The base the shader compares against is the same image NR consumed.
+    if(!pass->initialize(context_.device(),width,height,residualRgba_.Get(),nrBaseInput())){
+        veyra::log::warn("nr-hold","output stabiliser unavailable; continuing without it");
+        return true; // a missing stabiliser must not fail the graph
+    }
+    nrHoldPass_=std::move(pass);
+    veyra::log::info("nr-hold",std::format("output stabiliser active extent={}x{} strength={:.3f} tolerance={:.3f}",
+        width,height,desc_.nrHoldStrength,desc_.nrHoldTolerance));
+    return true;
+}
+
 bool EnhanceGraph::createComputePasses()
 {
     std::vector<uint8_t> cs;
-    if(!downsamplePass_.loadShader("NrDownsample.dxil",cs)||!downsamplePass_.create(context_.device(),cs,2,1,1))return false;
-    if(!residualPass_.loadShader("NrResidualComposite.dxil",cs)||!residualPass_.create(context_.device(),cs,4,3,1,24))return false;
-    if(!flowAdaptPass_.loadShader("FlowAdapt.dxil",cs)||!flowAdaptPass_.create(context_.device(),cs,3,1,1))return false;
-    if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 12, 2, 1, 12+kColorGradeConstantCount, 4)) return false;
+    for(auto& instance:additionalColorInstances_)if(instance&&!instance->createPass(context_.device()))return false;
+    for(auto& instance:nodeColorInstances_)if(instance&&!instance->createPass(context_.device()))return false;
+    {
+        const UINT downsampleLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
+        const UINT downsampleRate=2*downsampleLayers;   // one (source, target) pair per layer
+        if(!downsamplePass_.loadShader("NrDownsample.dxil",cs)||
+           !downsamplePass_.create(context_.device(),cs,2*downsampleRate,downsampleRate,downsampleRate))return false;
+    }
+    // The residual composite runs once per layer: layer 0 uses the fixed slots
+    // (base, NR input, decoded output), later layers get a three-slot group each.
+    {
+        const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
+        if(!residualPass_.loadShader("NrResidualComposite.dxil",cs)||
+           !residualPass_.create(context_.device(),cs,4*residualLayers,3*residualLayers,residualLayers,24))return false;
+        // The existing residual shader can mask the complete stack against its
+        // original base. No extra texture: the final layer owns outputFull().
+        if(nrInstances_.size()>1&&!stackProtectionPass_.create(context_.device(),cs,4,3,1,24))return false;
+    }
+    if(!flowAdaptPass_.loadShader("FlowAdapt.dxil",cs)||!flowAdaptPass_.create(context_.device(),cs,3+UINT(nrInstances_.size()),1,1))return false;
+    // Stage-5 output stabiliser. Only allocated when the setting is non-zero:
+    // a default session never pays for it and the dispatch is skipped below, so
+    // the disabled path stays byte-identical to a build without this pass.
+    if(desc_.nrHoldStrength>0.0f&&!createNrHoldPass())return false;
+    // Keep the legacy ingress root signature when no independent colour grade
+    // needs the FP32 side output. The extra UAV is part of the R5.3 contract
+    // only for graphs that actually allocate preGradeRgba_.
+    const UINT ingressUavCount = preGradeRgba_ ? 2u : 1u;
+    if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 12, 2, ingressUavCount, 12+kColorGradeConstantCount, 4)) return false;
     const char* rgbShader=desc_.packedInput?"PackedCaptureToLinear.dxil":desc_.yuy2Input?"Yuy2ToLinear.dxil":"RgbToLinear.dxil";
-    if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,1,8+kColorGradeConstantCount,4)))return false;
-    if (!encPass_.loadShader("ParityEncode.dxil", cs) || !encPass_.create(context_.device(), cs, 8, 1, 1)) return false;
-    if (!decPass_.loadShader("ParityDecode.dxil", cs) || !decPass_.create(context_.device(), cs, 8)) return false;
+    if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,8+kColorGradeConstantCount,4)))return false;
+    // Descriptor budget grows with the NR stack: encode needs one SRV+UAV pair
+    // per layer, decode needs three SRVs and one UAV per layer. The base 8
+    // slots the single-layer graph always used are kept as the floor.
+    const UINT nrLayerSlots = UINT(std::max<size_t>(1, nrInstances_.size()));
+    if (!encPass_.loadShader("ParityEncode.dxil", cs) || !encPass_.create(context_.device(), cs, 2 * nrLayerSlots, nrLayerSlots, nrLayerSlots)) return false;
+    if (!decPass_.loadShader("ParityDecode.dxil", cs) || !decPass_.create(context_.device(), cs, 4 * nrLayerSlots, 3 * nrLayerSlots, nrLayerSlots)) return false;
     if (!blitPass_.loadShader("ScaleBlit.dxil", cs) || !blitPass_.create(context_.device(), cs, 21, 1, 1)) return false;
     // Nv12Upload stays: frame-time CopyTextureRegion is poisoned by the
     // injected layer (SEH in NGX evaluate, r33-final3 evidence); the compute
@@ -1140,23 +1455,133 @@ bool EnhanceGraph::createViews()
         stager_.stageSrv(resource, &srv, pass.heap.Get(), slot);
     };
 
+    if(preNrColorActiveCount_){
+        auto* input=workRgba_.Get();
+        const auto& plan=*desc_.fixedExecutionPlan;
+        for(uint32_t i=0;i<plan.stepCount;++i){
+            const auto& step=plan.steps[i];
+            if(step.type!=engine::EffectType::Color||!desc_.preNrColor(step.parameterIndex))continue;
+            auto* output=nodeColorOutputs_[step.parameterIndex].Get();
+            nodeColorInstances_[step.parameterIndex]->createViews(context_.device(),stager_,input,output);
+            input=output;
+            veyra::log::info("node-dispatch",std::format("pre-NR Color step={} parameter={} resource={} input={}x{} output={}x{}",
+                i,step.parameterIndex,step.resourceIndex,step.input.width,step.input.height,step.output.width,step.output.height));
+        }
+    }
+    if(interNrColorActiveCount_){
+        const auto& plan=*desc_.fixedExecutionPlan;
+        for(size_t layer=1;layer<nrInstances_.size();++layer){
+            auto* input=interNrProtectionRgba_&&layer==desc_.interNrProtectionTarget()?interNrProtectionRgba_.Get():nrInstances_[layer-1]->fullTarget();
+            for(uint32_t i=0;i<plan.stepCount;++i){
+                const auto& step=plan.steps[i];
+                if(step.type!=engine::EffectType::Color||desc_.interNrColorTarget(step.parameterIndex)!=layer)continue;
+                auto* output=nodeColorOutputs_[step.parameterIndex].Get();
+                nodeColorInstances_[step.parameterIndex]->createViews(context_.device(),stager_,input,output);
+                input=output;
+                veyra::log::info("node-dispatch",std::format("inter-NR Color step={} parameter={} resource={} beforeNR={} input={}x{} output={}x{}",
+                    i,step.parameterIndex,step.resourceIndex,layer,step.input.width,step.input.height,step.output.width,step.output.height));
+            }
+        }
+    }
+    if(preSrColorActiveCount_){
+        auto* input=preSrBaseInput();
+        const auto& plan=*desc_.fixedExecutionPlan;
+        for(uint32_t i=0;i<plan.stepCount;++i){
+            const auto& step=plan.steps[i];
+            if(step.type!=engine::EffectType::Color||!desc_.preSrColor(step.parameterIndex))continue;
+            auto* output=nodeColorOutputs_[step.parameterIndex].Get();
+            nodeColorInstances_[step.parameterIndex]->createViews(context_.device(),stager_,input,output);
+            input=output;
+        }
+    }
     stagedSrv(srcRgba_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, blitPass_, 15);
-    stagedSrv(desc_.nrBeforeSr?srcRgba_.Get():workRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,downsamplePass_,0);
-    makeUav(context_.device(),nrInput_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(downsamplePass_,1));
-    stagedSrv(desc_.nrBeforeSr?srcRgba_.Get():workRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,0);
-    stagedSrv(nrInput_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,1);
-    stagedSrv(finalRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,2);
-    if(desc_.nrTemporal&&!nrTemporal_.initialize(context_.device(),desc_.nrBeforeSr?srcRgba_.Get():workRgba_.Get(),flowTex_.Get(),residualRgba_.Get()))return false;
-    makeUav(context_.device(),desc_.nrTemporal?nrTemporal_.raw():residualRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(residualPass_,3));
+    // Layer 0 downsamples the stage input; later layers downsample the previous
+    // layer's result, so each gets its own slot-0 source.
+    // Downsample descriptors, one (source, target) pair per layer that needs
+    // one: a borrowing layer is skipped entirely. Layer 0 reads the stage input;
+    // later layers read the previous layer's full-extent output. Slots 0/1 keep
+    // the original arrangement so the single-layer graph is unchanged.
+    {
+        const UINT layers = UINT(std::max<size_t>(1, nrInstances_.size()));
+        for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
+            auto* layer = nrInstances_[layerIndex].get();
+            const UINT k = UINT(layerIndex);
+            ID3D12Resource* source = nrLayerBase(layerIndex);
+            stagedSrv(source, DXGI_FORMAT_R16G16B16A16_FLOAT, downsamplePass_, 2 * k);
+            if (!layer->inputIsBorrowed()) {
+                makeUav(context_.device(), layer->input(), DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(downsamplePass_, 2 * layers + 2 * k));
+            }
+        }
+    }
+    // The residual composite runs once per layer. Layer 0 keeps the original
+    // slot triple (base, NR input, decoded output); every later layer owns the
+    // group starting at 3k, whose base is the previous layer's finished result.
+    //
+    // Each layer also needs its OWN output descriptor. A single shared u0 meant
+    // every layer's composite landed in the same texture while the barrier after
+    // it named a different resource: layer 1 read a texture nothing had written,
+    // which is what turned a two-layer stack black.
+    for(size_t layerIndex=0;layerIndex<nrInstances_.size();++layerIndex){
+        const UINT k=UINT(layerIndex);
+        // The shader reads base (t0), the NR-extent input (t1) and the neural
+        // result (t2); the heap keeps those three per layer, in order.
+        ID3D12Resource* base=nrLayerBase(layerIndex);
+        stagedSrv(base,DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+0);
+        stagedSrv(nrInstances_[layerIndex]->input(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+1);
+        stagedSrv(nrInstances_[layerIndex]->finalRgba(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+2);
+    }
+    // Temporal stabilisation belongs to a layer, and its output is that layer's
+    // composite target: what the residual pass writes, what the next layer reads,
+    // and — for the last layer — what the output blit consumes. Initialising it
+    // with the residual target keeps one destination per layer; a previous
+    // version only ever initialised the single-layer case, so turning the switch
+    // on in a stacked chain did nothing at all.
+    {
+        const UINT residualLayers = UINT(std::max<size_t>(1, nrInstances_.size()));
+        for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
+            auto* layer = nrInstances_[layerIndex].get();
+            const bool last = layerIndex + 1 == nrInstances_.size();
+            // A stabilised layer composites into the temporal pass's raw input;
+            // the pass then writes the layer's full-extent target. Either way
+            // `fullTarget()` is the finished image the next layer reads.
+            layer->stabilised = layer->temporalEnabled;
+            ID3D12Resource* target = last && nrInstances_.size()==1 ? residualRgba_.Get() : layer->outputFull();
+            layer->setFullTarget(target);
+            ID3D12Resource* base = nrLayerBase(layerIndex);
+            // Initialisation MUST come before the descriptor write: it is what
+            // allocates the raw input the descriptor names. Writing the
+            // descriptor first bound a null resource, so the composite went
+            // nowhere and the final texture was never touched.
+            if (layer->stabilised &&
+                !layer->temporal().initialize(context_.device(), base, flowTex_.Get(), target,
+                    layerIndex < desc_.nrLayersAntiFlicker.size()
+                        ? desc_.nrLayersAntiFlicker[layerIndex] : desc_.nrAntiFlicker)) return false;
+            makeUav(context_.device(),
+                    layer->stabilised ? layer->temporal().raw() : target,
+                    DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(residualPass_, 3 * residualLayers + UINT(layerIndex)));
+        }
+    }
+    if(nrInstances_.size()>1){
+        auto* original=nrBaseInput();
+        stagedSrv(original,DXGI_FORMAT_R16G16B16A16_FLOAT,stackProtectionPass_,0);
+        stagedSrv(original,DXGI_FORMAT_R16G16B16A16_FLOAT,stackProtectionPass_,1);
+        auto* protectedInput=interNrProtectionRgba_?nrInstances_[desc_.interNrProtectionTarget()-1]->fullTarget():
+            (preSrProtectionRgba_?nrInstances_[desc_.nrBeforeSrLayerCount()-1]->fullTarget():nrInstances_.back()->fullTarget());
+        stagedSrv(protectedInput,DXGI_FORMAT_R16G16B16A16_FLOAT,stackProtectionPass_,2);
+        auto* protectionOutput=interNrProtectionRgba_?interNrProtectionRgba_.Get():(preSrProtectionRgba_?preSrProtectionRgba_.Get():residualRgba_.Get());
+        makeUav(context_.device(),protectionOutput,DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(stackProtectionPass_,3));
+    }
     stagedSrv(flowTex_.Get(),DXGI_FORMAT_R16G16_FLOAT,flowAdaptPass_,0);
     makeUav(context_.device(),nrFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,1));
     makeUav(context_.device(),baseFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,2));
+    for(size_t i=0;i<nrInstances_.size();++i)
+        makeUav(context_.device(),nrInstances_[i]->motion(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,3+UINT(i)));
     if(desc_.hdrWorking()&&videoSrInput_){
         stagedSrv(srcRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,hdrVideoSrPass_,0);
         stagedSrv(videoSrInput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,hdrVideoSrPass_,1);
         stagedSrv(videoSrOutput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,hdrVideoSrPass_,2);
         makeUav(context_.device(),workRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(hdrVideoSrPass_,3));
-        stagedSrv(residualRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,hdrVideoSrPass_,4);
+        stagedSrv(srStageInput(),DXGI_FORMAT_R16G16B16A16_FLOAT,hdrVideoSrPass_,4);
         stagedSrv(videoSrInput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,hdrVideoSrPass_,5);
         stagedSrv(videoSrOutput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,hdrVideoSrPass_,6);
     }
@@ -1164,16 +1589,35 @@ bool EnhanceGraph::createViews()
     if(desc_.rgbInput||desc_.yuy2Input||desc_.packedInput){
         stagedSrv(rgbTex_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,rgbPass_,0);
         makeUav(context_.device(),srcRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(rgbPass_,1));
+        if(preGradeRgba_)makeUav(context_.device(),preGradeRgba_.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpu(rgbPass_,2));
     }
     if (viewsTex) stagedSrv(lumaTex_.Get(), desc_.wideYuvInput()?DXGI_FORMAT_R16_UNORM:DXGI_FORMAT_R8_UNORM, yuvPass_, 0);
     if (viewsTex) stagedSrv(chromaTex_.Get(), desc_.wideYuvInput()?DXGI_FORMAT_R16G16_UNORM:DXGI_FORMAT_R8G8_UNORM, yuvPass_, 1);
-    if (viewsUav) makeUav(context_.device(), srcRgba_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(yuvPass_, 2));
-    if (viewsTex) stagedSrv(nrInput_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, encPass_, 0);
-    if (viewsUav) makeUav(context_.device(), proxyTex_.Get(), DXGI_FORMAT_R8G8B8A8_UNORM, cpu(encPass_, 1));
-    if (viewsTex) stagedSrv(nrInput_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, decPass_, 0);
-    if (viewsTex) stagedSrv(proxyTex_.Get(), DXGI_FORMAT_R8G8B8A8_UNORM, decPass_, 1);
-    if (viewsTex) stagedSrv(neuralTex_.Get(), DXGI_FORMAT_R8G8B8A8_UNORM, decPass_, 2);
-    if (viewsUav) makeUav(context_.device(), finalRgba_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(decPass_, 3));
+    if (viewsUav) {
+        makeUav(context_.device(), srcRgba_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(yuvPass_, 2));
+        if(preGradeRgba_)makeUav(context_.device(),preGradeRgba_.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpu(yuvPass_,3));
+    }
+    // NR encode/decode descriptors are per layer. Each layer gets the same
+    // slot layout inside its own ranges, so one shader pair serves every layer:
+    // slot 0 = the layer's input, slot 1 = its proxy (encode) or neural output
+    // (decode), slot 2 = its neural output (decode), slot 3 = its decoded RGBA.
+    {
+        // Encode: SRV k = the layer's input, UAV (L+k) = its proxy.
+        // Decode: SRVs 3k..3k+2 = input/proxy/neural, UAV (3L+k) = its decoded
+        // output. The heap puts every SRV before every UAV, so the UAV index
+        // carries the layer count.
+        const UINT layers = UINT(std::max<size_t>(1, nrInstances_.size()));
+        for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
+            auto* layer = nrInstances_[layerIndex].get();
+            const UINT k = UINT(layerIndex);
+            if (viewsTex) stagedSrv(layer->input(), DXGI_FORMAT_R16G16B16A16_FLOAT, encPass_, k);
+            if (viewsUav) makeUav(context_.device(), layer->proxy(), DXGI_FORMAT_R8G8B8A8_UNORM, cpu(encPass_, layers + k));
+            if (viewsTex) stagedSrv(layer->input(), DXGI_FORMAT_R16G16B16A16_FLOAT, decPass_, 3 * k + 0);
+            if (viewsTex) stagedSrv(layer->proxy(), DXGI_FORMAT_R8G8B8A8_UNORM, decPass_, 3 * k + 1);
+            if (viewsTex) stagedSrv(layer->neural(), DXGI_FORMAT_R8G8B8A8_UNORM, decPass_, 3 * k + 2);
+            if (viewsUav) makeUav(context_.device(), layer->finalRgba(), DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(decPass_, 3 * layers + k));
+        }
+    }
     if (viewsUav) makeUav(context_.device(), lumaTex_.Get(), desc_.wideYuvInput()?DXGI_FORMAT_R16_UNORM:DXGI_FORMAT_R8_UNORM, cpu(uploadPass_, 2));
     if (viewsUav) makeUav(context_.device(), chromaTex_.Get(), desc_.wideYuvInput()?DXGI_FORMAT_R16G16_UNORM:DXGI_FORMAT_R8G8_UNORM, cpu(uploadPass_, 3));
     // Software NV12 ingestion uses plane copies; no raw-SRV dispatch.
@@ -1186,7 +1630,7 @@ bool EnhanceGraph::createViews()
     // 13/14: genTex SRV (slot 2)
     if(videoSrInput_&&viewsUav)makeUav(context_.device(),videoSrInput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,cpu(blitPass_,16));
     if(videoSrOutput_&&viewsTex)stagedSrv(videoSrOutput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,blitPass_,17);
-    if (viewsTex) stagedSrv(residualRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,blitPass_,18);
+    if (viewsTex) stagedSrv(srStageInput(),DXGI_FORMAT_R16G16B16A16_FLOAT,blitPass_,18);
     if(videoHdrInput_&&viewsUav)makeUav(context_.device(),videoHdrInput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,cpu(blitPass_,19));
     if(videoHdrOutput_&&viewsTex)stagedSrv(videoHdrOutput_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,blitPass_,20);
     if (viewsTex) stagedSrv(srcRgba_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, blitPass_, 0);
@@ -1205,8 +1649,35 @@ bool EnhanceGraph::createViews()
             stager_.stageSrv(colorLutTex_.Get(),&lutSrv,pass->heap.Get(),11);
         }
     }
+    unsigned colorOrdinal=0;
+    // When the ingress grade is disabled, independent instances must consume
+    // the FP32 pre-grade conversion. Reading srcRgba_ here would quantize to
+    // FP16 before the non-linear standalone grade and recreate the HDR drift.
+    auto* colorInput=preGradeRgba_ ? preGradeRgba_.Get() : srcRgba_.Get();
+    for(auto& instance:additionalColorInstances_)if(instance){
+        // The last pass can write back to ingress once its input is scratch.
+        // A single standalone pass uses one GPU CopyResource after dispatch.
+        auto* target=(colorOrdinal+1==additionalColorActiveCount_&&colorOrdinal>0)?srcRgba_.Get():colorScratch_[colorOrdinal%2].Get();
+        instance->createViews(context_.device(),stager_,colorInput,target);
+        colorInput=target;++colorOrdinal;
+    }
     if (viewsUav) makeUav(context_.device(), workRgba_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(blitPass_, 1));
-    if (viewsTex) stagedSrv(nrEnabled_&&!desc_.nrBeforeSr ? residualRgba_.Get() : workRgba_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, blitPass_, 2);
+    auto* finalInput=nrEnabled_&&desc_.finalNrAfterSr()?residualRgba_.Get():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get());
+    if(tailColorActiveCount_){
+        const auto& plan=*desc_.fixedExecutionPlan;
+        for(uint32_t i=0;i<plan.stepCount;++i){
+            const auto& step=plan.steps[i];
+            if(step.type!=engine::EffectType::Color||!desc_.tailColor(step.parameterIndex))continue;
+            auto& instance=*nodeColorInstances_[step.parameterIndex];
+            auto* output=nodeColorOutputs_[step.parameterIndex].Get();
+            instance.createViews(context_.device(),stager_,finalInput,output);
+            finalInput=output;
+            veyra::log::info("node-dispatch",std::format("tail Color step={} parameter={} resource={} input={}x{} output={}x{}",
+                i,step.parameterIndex,step.resourceIndex,step.input.width,step.input.height,step.output.width,step.output.height));
+        }
+        tailColorOutput_=finalInput;
+    }
+    if (viewsTex) stagedSrv(finalInput, DXGI_FORMAT_R16G16B16A16_FLOAT, blitPass_, 2);
     if (viewsUav) makeUav(context_.device(), videoFrame_[0].Get(), outputFormat(), cpu(blitPass_, 3));
     if (viewsUav) makeUav(context_.device(), videoFrame_[1].Get(), outputFormat(), cpu(blitPass_, 4));
     if (viewsTex) stagedSrv(nvofInB_.Get(), DXGI_FORMAT_B8G8R8A8_UNORM, blitPass_, 5);
@@ -1340,6 +1811,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         if(FAILED(hr)){veyra::log::error("graph",std::format("presentation handoff wait hr=0x{:X}",unsigned(hr)));return false;}
     }
     hardwareInputFrames_[parity].reset();
+    // Set when this frame's own upload buffer feeds the GPU copy (see
+    // CaptureUploadFrame.h); its read fence is recorded after submission.
+    CaptureUploadFrame* gpuDirectFrame=nullptr;
     if(frame->format==AV_PIX_FMT_D3D12||frame->format==AV_PIX_FMT_D3D11){
         auto* retained=av_frame_clone(frame);
         if(!retained)return false;
@@ -1388,7 +1862,13 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         }
         const unsigned ingressRowBytes=packed?packedIngressRowBytes(desc_.packedInput,srcW_):srcW_*(desc_.yuy2Input?2:4);
         if(frame->width!=int(srcW_)||frame->height!=int(srcH_)||!frame->data[0]||std::abs(int64_t(frame->linesize[0]))<int64_t(ingressRowBytes))return false;
-        for(uint32_t y=0;y<srcH_;++y){
+        const unsigned ingressTexels=packed?packedIngressTexels(desc_.packedInput,srcW_):desc_.yuy2Input?srcW_/2:srcW_;
+        // Live capture frame already in an upload buffer of this device
+        // (CaptureUploadFrame.h): the GPU copies from the frame's own buffer.
+        if(auto* upload=(packed||desc_.yuy2Input)?captureUploadFrame(frame):nullptr;upload&&upload->direct&&upload->proxyValid&&upload->planes==1&&
+           upload->device.Get()==context_.device()&&frame->data[0]==upload->mapped&&upload->width==srcW_&&upload->height==srcH_&&
+           upload->pitch>=ingressTexels*4&&upload->pixelBytes==(packed&&desc_.packedInput==1?3u:2u))gpuDirectFrame=upload;
+        if(!gpuDirectFrame)for(uint32_t y=0;y<srcH_;++y){
             auto* dst=mappedRgb_[parity]+y*rgbPitch_;const auto* src=frame->data[0]+ptrdiff_t(y)*frame->linesize[0];
             if(packed||desc_.yuy2Input||frame->format==AV_PIX_FMT_RGBA)std::memcpy(dst,src,size_t(ingressRowBytes));
             else for(uint32_t x=0;x<srcW_;++x){
@@ -1400,18 +1880,22 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         if(!desc_.stillImage){
             auto& sample=lumaSample_;sample.clear();sample.reserve(64*36);
             const bool bgr=frame->format==AV_PIX_FMT_BGRA||frame->format==AV_PIX_FMT_BGR0;
+            // Upload-backed frames carry the same 64x36 pixels, sampled by the
+            // capture callback; the write-combined buffer is never read here.
+            const uint8_t* sampleData=gpuDirectFrame?gpuDirectFrame->proxy:frame->data[0];
+            const ptrdiff_t samplePitch=gpuDirectFrame?ptrdiff_t(gpuDirectFrame->proxyPitch()):ptrdiff_t(frame->linesize[0]);
             for(unsigned y=0;y<36;++y)for(unsigned x=0;x<64;++x){
-                const unsigned sx=x*srcW_/64,sy=y*srcH_/36;
-                if(packed)sample.push_back(packedIngressLuma(*frame,desc_.packedInput,sx,sy));
-                else{const auto* p=frame->data[0]+ptrdiff_t(sy)*frame->linesize[0]+sx*(desc_.yuy2Input?2:4);
+                const unsigned sx=gpuDirectFrame?x:x*srcW_/64,sy=gpuDirectFrame?y:y*srcH_/36;
+                if(packed)sample.push_back(packedIngressLuma(sampleData,samplePitch,desc_.packedInput,sx,sy));
+                else{const auto* p=sampleData+ptrdiff_t(sy)*samplePitch+sx*(desc_.yuy2Input?2:4);
                     sample.push_back(desc_.yuy2Input?p[0]:uint8_t((54*unsigned(p[bgr?2:0])+183*unsigned(p[1])+19*unsigned(p[bgr?0:2])+128)>>8));}
             }
             analyzeLuma(sample);
         }
         tracker_.transition(list,rgbTex_.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
         D3D12_TEXTURE_COPY_LOCATION dst{},src{};dst.pResource=rgbTex_.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        src.pResource=upRgb_[parity].Get();src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        src.PlacedFootprint.Footprint={DXGI_FORMAT_R8G8B8A8_UNORM,packed?packedIngressTexels(desc_.packedInput,srcW_):desc_.yuy2Input?srcW_/2:srcW_,srcH_,1,UINT(rgbPitch_)};
+        src.pResource=gpuDirectFrame?gpuDirectFrame->resource.Get():upRgb_[parity].Get();src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        src.PlacedFootprint.Footprint={DXGI_FORMAT_R8G8B8A8_UNORM,ingressTexels,srcH_,1,gpuDirectFrame?gpuDirectFrame->pitch:UINT(rgbPitch_)};
         list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
         tracker_.transition(list,rgbTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     } else if (frame->format == AV_PIX_FMT_D3D12 || frame->format == AV_PIX_FMT_D3D11) {
@@ -1500,7 +1984,12 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         const bool directUpload=sameLayout||(!desc_.wideYuvInput()&&(frame->format==AV_PIX_FMT_YUV420P||frame->format==AV_PIX_FMT_YUVJ420P));
         uint8_t* planes[4] = { directUpload?mappedLuma_[parity]:nv12Buf_.data(), directUpload?mappedChroma_[parity]:nv12Buf_.data() + lumaSize_ };
         const int strides[4] = { static_cast<int>(lumaPitch_), static_cast<int>(chromaPitch_) };
-        if(sameLayout){
+        // Live capture frame already in an upload buffer of this device: no
+        // CPU copy at all, the GPU copies from the frame's own buffer.
+        if(auto* upload=sameLayout?captureUploadFrame(frame):nullptr;upload&&upload->direct&&upload->proxyValid&&upload->device.Get()==context_.device()&&
+           frame->data[0]==upload->mapped&&upload->width==srcW_&&upload->height==srcH_&&upload->planes==2&&upload->pixelBytes==sampleBytes)gpuDirectFrame=upload;
+        if(gpuDirectFrame){
+        }else if(sameLayout){
             // Native semiplanar capture already matches the upload textures.
             // Copy rows once, preserving every code value and signed stride.
             const size_t rowBytes[2]={size_t(srcW_)*sampleBytes,size_t((srcW_+1)/2)*2*sampleBytes};
@@ -1537,7 +2026,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         const auto* sampleLuma=directUpload?frame->data[0]:planes[0];
         const auto samplePitch=directUpload?ptrdiff_t(frame->linesize[0]):ptrdiff_t(lumaPitch_);
         auto& sample=lumaSample_;sample.clear();sample.reserve(64*36);
-        for(unsigned y=0;y<36;++y)for(unsigned x=0;x<64;++x)
+        static_assert(CaptureUploadFrame::kProxyWidth==64&&CaptureUploadFrame::kProxyHeight==36);
+        // Same 64x36 points, sampled by the capture callback from the driver
+        // sample: the upload buffer is write-combined and is never read here.
+        if(gpuDirectFrame)for(unsigned i=0;i<64*36;++i)sample.push_back(gpuDirectFrame->proxy[i*sampleBytes+(sampleBytes-1)]);
+        else for(unsigned y=0;y<36;++y)for(unsigned x=0;x<64;++x)
             sample.push_back(sampleLuma[ptrdiff_t(y*srcH_/36)*samplePitch+(x*srcW_/64)*sampleBytes+(sampleBytes-1)]);
         analyzeLuma(sample);
         if(!directUpload){for (uint32_t y = 0; y < srcH_; ++y)
@@ -1545,20 +2038,21 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         for (uint32_t y = 0; y < (srcH_+1) / 2; ++y)
             std::memcpy(mappedChroma_[parity] + y * chromaPitch_, planes[1] + y * chromaPitch_, ((srcW_+1)/2)*(desc_.wideYuvInput()?4:2));}
         auto copyPlane = [&](ID3D12Resource* texture, ID3D12Resource* upload,
-                             DXGI_FORMAT format, UINT width, UINT height, UINT pitch) {
+                             DXGI_FORMAT format, UINT width, UINT height, UINT pitch, UINT64 offset = 0) {
             tracker_.transition(list, texture, D3D12_RESOURCE_STATE_COPY_DEST);
             D3D12_TEXTURE_COPY_LOCATION dst{}, src{};
             dst.pResource = texture;
             dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
             src.pResource = upload;
             src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            src.PlacedFootprint.Offset = offset;
             src.PlacedFootprint.Footprint = {format, width, height, 1, pitch};
             list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         };
-        copyPlane(lumaTex_.Get(), upLuma_[parity].Get(), desc_.wideYuvInput()?DXGI_FORMAT_R16_UNORM:DXGI_FORMAT_R8_UNORM,
-                  srcW_, srcH_, static_cast<UINT>(lumaPitch_));
-        copyPlane(chromaTex_.Get(), upChroma_[parity].Get(), desc_.wideYuvInput()?DXGI_FORMAT_R16G16_UNORM:DXGI_FORMAT_R8G8_UNORM,
-                  (srcW_+1)/2, (srcH_+1)/2, static_cast<UINT>(chromaPitch_));
+        copyPlane(lumaTex_.Get(), gpuDirectFrame?gpuDirectFrame->resource.Get():upLuma_[parity].Get(), desc_.wideYuvInput()?DXGI_FORMAT_R16_UNORM:DXGI_FORMAT_R8_UNORM,
+                  srcW_, srcH_, gpuDirectFrame?gpuDirectFrame->pitch:static_cast<UINT>(lumaPitch_));
+        copyPlane(chromaTex_.Get(), gpuDirectFrame?gpuDirectFrame->resource.Get():upChroma_[parity].Get(), desc_.wideYuvInput()?DXGI_FORMAT_R16G16_UNORM:DXGI_FORMAT_R8G8_UNORM,
+                  (srcW_+1)/2, (srcH_+1)/2, gpuDirectFrame?gpuDirectFrame->pitch:static_cast<UINT>(chromaPitch_), gpuDirectFrame?gpuDirectFrame->chromaOffset:0);
         tracker_.transition(list, lumaTex_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list, chromaTex_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     }
@@ -1566,15 +2060,15 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     cpuTrace.mark("upload");
 
     // 2. YUV -> RGBA16F.
-    if(colorActive_&&colorDirty_)uploadColorTables(list);
-    auto convertInput=[&](bool grade){
-    tracker_.transition(list, srcRgba_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if(colorActive_&&colorDirty_&&!uploadColorTables(list,slot))return false;
+    auto convertInput=[&](bool grade, ID3D12Resource* target, UINT uavSlot){
+    tracker_.transition(list, target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     if(desc_.rgbInput||desc_.yuy2Input||desc_.packedInput){
         float c[8+kColorGradeConstantCount]={uintBits(srcW_),uintBits(srcH_),uintBits(workingTransferCode(resolved)),uintBits(resolved.range==ColorRange::Limited?1u:0u),
             resolved.range==ColorRange::Full?0.0f:1.0f,resolved.matrix==YuvMatrix::BT2020NCL?2.0f:resolved.matrix==YuvMatrix::BT601?0.0f:1.0f,resolved.primaries==ColorPrimaries::BT2020?1.0f:0.0f,uintBits(desc_.packedInput)};
         if(grade)packColorGradeConstants(colorTables_,c+8);
         if(resolved.scRgb){c[4]=desc_.hdrWorking()?1.f:2.f;c[5]=toneMapPeakNits_;}
-        rgbPass_.bind(list,c,gpuHandleOf(rgbPass_,gpuRgb?3+parity:0).ptr,gpuHandleOf(rgbPass_,1).ptr,gpuHandleOf(rgbPass_,8).ptr);
+        rgbPass_.bind(list,c,gpuHandleOf(rgbPass_,gpuRgb?3+parity:0).ptr,gpuHandleOf(rgbPass_,1+uavSlot).ptr,gpuHandleOf(rgbPass_,8).ptr);
         list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);
     }else{
         float constants[12+kColorGradeConstantCount] = { resolved.range==ColorRange::Full?0.0f:1.0f,
@@ -1583,21 +2077,35 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             uintBits(srcW_), uintBits(srcH_), uintBits((desc_.hdrWorking()?1u:0u)|(resolved.primaries==ColorPrimaries::BT2020?2u:0u)),
             uintBits(resolved.reconstructChroma?std::max(1u,unsigned(resolved.chromaLocation)):0u),toneMapPeakNits_,203.0f,0,0 };
         if(grade)packColorGradeConstants(colorTables_,constants+12);
-        yuvPass_.bind(list, constants, gpuHandleOf(yuvPass_, nv12Texture ? 3 + parity * 2 : 0).ptr, gpuHandleOf(yuvPass_, 2).ptr,gpuHandleOf(yuvPass_,8).ptr);
+        yuvPass_.bind(list, constants, gpuHandleOf(yuvPass_, nv12Texture ? 3 + parity * 2 : 0).ptr, gpuHandleOf(yuvPass_, 2+uavSlot).ptr,gpuHandleOf(yuvPass_,8).ptr);
         list->Dispatch((srcW_ + 15) / 16, (srcH_ + 15) / 16, 1);
     }
-    tracker_.uavBarrier(list, srcRgba_.Get());
+    tracker_.uavBarrier(list, target);
     };
     // Grading is fused into input conversion. Retain a genuinely ungraded
     // reference only when comparison requests it, then run the normal input.
-    if(colorActive_&&retainReferences){
-        convertInput(false);
+    if(colorGradeActive()&&retainReferences){
+        convertInput(false,srcRgba_.Get(),0);
         tracker_.transition(list,srcRgba_.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         tracker_.transition(list,sourceReferences_[parity].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
         list->CopyResource(sourceReferences_[parity].Get(),srcRgba_.Get());
         tracker_.transition(list,sourceReferences_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
     }
-    convertInput(colorActive_);
+    if(preGradeRgba_&&!colorActive_)convertInput(false,preGradeRgba_.Get(),1);
+    else convertInput(colorActive_,srcRgba_.Get(),0);
+    if(additionalColorActiveCount_){
+        for(size_t i=0;i<additionalColorInstances_.size();++i)if(auto& instance=additionalColorInstances_[i]){
+            // additionalColorInstances_[i] is Color parameter i+1.
+            gpuTimer_.mark(list,diagnostics::colorNodeStage(unsigned(i+1)));
+            if(!instance->dispatch(list,tracker_,slot,srcW_,srcH_,desc_.hdrWorking()))return false;
+            gpuTimer_.mark(list,diagnostics::colorNodeStage(unsigned(i+1)),true);
+        }
+    }
+    if(additionalColorActiveCount_==1){
+        tracker_.transition(list,colorScratch_[0].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
+        tracker_.transition(list,srcRgba_.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
+        list->CopyResource(srcRgba_.Get(),colorScratch_[0].Get());
+    }
     tracker_.transition(list, srcRgba_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     if(gpuRgb)tracker_.transition(list,hardwareSurface->texture,D3D12_RESOURCE_STATE_COMMON);
     if (nv12Texture != nullptr) {
@@ -1625,7 +2133,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     };
     // Guidance from original source-space color before SR/NR. Queue waits are GPU-side.
     bool haveFlow = false;
-    const bool runMotion = nvofStandalone_ || presentSinkFg() || fgEnabled_ || (srEnabled_ && (desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr));
+    const bool runMotion = nvofStandalone_ || (presentSinkFg()&&desc_.fgUsesFlow()) || (fgEnabled_&&desc_.fgUsesFlow()) || (srEnabled_&&desc_.srUsesFlow()&&(desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr));
     if (runMotion && (gpuDis_ || amdOf_ || (nvof_ && nvof_->initialized()))) {
         const float dims[8] = {uintBits(nvofW_),uintBits(nvofH_),uintBits(nvofW_),uintBits(nvofH_),0,0,0,0};
         if (prevValid_) {
@@ -1715,6 +2223,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             list->Dispatch((w+15)/16,(h+15)/16,1);tracker_.uavBarrier(list,output);tracker_.transition(list,output,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         };
         adapt(nrFlow_.Get(),nrW_,nrH_,1);adapt(baseFlow_.Get(),workW_,workH_,2);
+        for(size_t i=0;i<nrInstances_.size();++i){const auto* layer=nrInstances_[i].get();
+            if(layer->motion()!=nrFlow_.Get())adapt(layer->motion(),layer->width(),layer->height(),3+UINT(i));
+        }
     }
     if(reset){++metrics_.resetCount;++epoch_;}
     out.historyReset=reset;
@@ -1722,18 +2233,21 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     out.batch.a100ns=static_cast<int64_t>(std::llround(prevPtsMs_*10000));
     out.batch.b100ns=static_cast<int64_t>(std::llround(ptsMs*10000));gpuTimer_.identity(out.batch.identity);
     auto runSr=[&]()->bool{
-    if(srEnabled_&&fsrSrEnabled()&&haveFlow){
+    if(desc_.splitNrAcrossSr())tracker_.transition(list,srStageInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    if(srEnabled_&&fsrSrEnabled()&&(haveFlow||!desc_.srUsesFlow())){
         // AMD FSR upscaling: FidelityFX effect, render-extent color + guidance
         // motion (previous = current + motion, same convention as the frame
         // generator) straight into the working texture. A frame without valid
         // motion falls through to the plain blit below instead of guessing.
         gpuTimer_.mark(list,GpuStage::Sr);
         const double deltaMs = (prevPtsMs_>=0.0&&ptsMs>prevPtsMs_)?(ptsMs-prevPtsMs_):16.6;
-        tracker_.transition(list,srcRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        tracker_.transition(list,flowTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        auto* srInput=desc_.splitNrAcrossSr()?srStageInput():(preSrColorOutput_?preSrColorOutput_:srcRgba_.Get());
+        tracker_.transition(list,srInput,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        auto* srMotion=desc_.srUsesFlow()?flowTex_.Get():fsrSrZeroMotion_.Get();
+        tracker_.transition(list,srMotion,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list,fsrSrDepth_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        if(!fsrSrBackend_->evaluate(list,srcRgba_.Get(),flowTex_.Get(),fsrSrDepth_.Get(),workRgba_.Get(),
+        if(!fsrSrBackend_->evaluate(list,srInput,srMotion,fsrSrDepth_.Get(),workRgba_.Get(),
                                     srcW_,srcH_,workW_,workH_,reset,float(deltaMs))){
             failedBackend_=engine::FailedBackend::Sr;
             return false;
@@ -1747,10 +2261,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         gpuTimer_.mark(list,GpuStage::Sr);
         tracker_.transition(list, workRgba_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         ngx::DlssSrBackend::EvalDesc ed{};
-        ed.color = desc_.nrBeforeSr?residualRgba_.Get():srcRgba_.Get();
+        ed.color = srStageInput();
+        tracker_.transition(list,ed.color,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         ed.output = workRgba_.Get();
         ed.depth = nrZeroDepth_.Get();
-        ed.motionVectors = haveFlow?baseFlow_.Get():nrZeroMotion_.Get();
+        ed.motionVectors = haveFlow&&desc_.srUsesFlow()?baseFlow_.Get():nrZeroMotion_.Get();
         if(desc_.srMotionProbe)ed.motionVectors=desc_.srMotionProbe;
         ed.reset = reset;
         if (!srBackend_->evaluate(list, ngxParams_, ed, st)) {
@@ -1766,7 +2281,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         const float constants[8] = {
             uintBits(srcW_), uintBits(srcH_),
             uintBits(workW_), uintBits(workH_), 0, 0, 0, 0 };
-        blitPass_.bind(list, constants, gpuHandleOf(blitPass_, 0).ptr, gpuHandleOf(blitPass_, 1).ptr);
+        blitPass_.bind(list, constants, gpuHandleOf(blitPass_, (preSrColorOutput_||desc_.splitNrAcrossSr())?18:0).ptr, gpuHandleOf(blitPass_, 1).ptr);
         list->Dispatch((workW_ + 15) / 16, (workH_ + 15) / 16, 1);
         tracker_.uavBarrier(list, workRgba_.Get());
         tracker_.transition(list, workRgba_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1774,7 +2289,24 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if (desc_.stageMark) desc_.stageMark("sr");
     cpuTrace.mark("sr");
     return true;};
+    auto runBoundaryColor=[&](bool beforeSr)->bool{
+    if(beforeSr?preSrColorActiveCount_:preNrColorActiveCount_){
+        auto& logged=beforeSr?preSrColorExecutionLogged_:preNrColorExecutionLogged_;
+        const auto& plan=*desc_.fixedExecutionPlan;
+        for(uint32_t i=0;i<plan.stepCount;++i){
+            const auto& step=plan.steps[i];
+            if(step.type!=engine::EffectType::Color||!(beforeSr?desc_.preSrColor(step.parameterIndex):desc_.preNrColor(step.parameterIndex)))continue;
+            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex));
+            if(!nodeColorInstances_[step.parameterIndex]->dispatch(list,tracker_,slot,step.output.width,step.output.height,desc_.hdrWorking()))return false;
+            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex),true);
+            if(!logged)veyra::log::info("node-dispatch",std::format("recorded {} Color step={} parameter={} resource={}",beforeSr?"pre-SR":"pre-NR",i,step.parameterIndex,step.resourceIndex));
+            if(desc_.stageMark)desc_.stageMark(beforeSr?"pre-sr-color":"pre-nr-color");
+        }
+        logged=true;
+    }
+    return true;};
     if(!desc_.nrBeforeSr&&!runSr())return false;
+    if(!desc_.splitNrAcrossSr()&&!runBoundaryColor(false))return false;
     if(desc_.nrBeforeSr&&retainReferences){
         tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         const float c[8]={uintBits(srcW_),uintBits(srcH_),uintBits(workW_),uintBits(workH_),0,0,0,0};
@@ -1784,117 +2316,278 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // Comparison references belong to this real-frame lease. Avoid the two
         // full-frame copies when comparison is disabled.
         auto retain=[&](ID3D12Resource* src,ID3D12Resource* dst){tracker_.transition(list,src,D3D12_RESOURCE_STATE_COPY_SOURCE);tracker_.transition(list,dst,D3D12_RESOURCE_STATE_COPY_DEST);list->CopyResource(dst,src);tracker_.transition(list,dst,D3D12_RESOURCE_STATE_COMMON);tracker_.transition(list,src,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);};
-        if(!colorActive_)retain(srcRgba_.Get(),sourceReferences_[parity].Get());
+        if(!colorGradeActive())retain(srcRgba_.Get(),sourceReferences_[parity].Get());
         if(baseReferences_[parity].Get()!=sourceReferences_[parity].Get())retain(workRgba_.Get(),baseReferences_[parity].Get());
     }
 
 
-    // 4a. Parity encode.
-    if (nrEnabled_ && nrHandle_ != nullptr) {
-        if(nrInput_.Get()!=(desc_.nrBeforeSr?srcRgba_.Get():workRgba_.Get())){
-        tracker_.transition(list,nrInput_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        const float down[8]={uintBits(desc_.nrBeforeSr?srcW_:workW_),uintBits(desc_.nrBeforeSr?srcH_:workH_),uintBits(nrW_),uintBits(nrH_),0,0,0,0};
-        downsamplePass_.bind(list,down,gpuHandleOf(downsamplePass_,0).ptr,gpuHandleOf(downsamplePass_,1).ptr);
-        list->Dispatch((nrW_+15)/16,(nrH_+15)/16,1);tracker_.uavBarrier(list,nrInput_.Get());tracker_.transition(list,nrInput_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        }
-        tracker_.transition(list, proxyTex_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        const float constants[8] = { 1.0f, 1.0f, 1.0f, desc_.hdrWorking()?1.0f:0.0f,
-            uintBits(nrW_), uintBits(nrH_), 0.0f, 0.0f };
-        encPass_.bind(list, constants, gpuHandleOf(encPass_, 0).ptr, gpuHandleOf(encPass_, 1).ptr);
-        list->Dispatch((nrW_ + 15) / 16, (nrH_ + 15) / 16, 1);
-        tracker_.uavBarrier(list, proxyTex_.Get());
-        tracker_.transition(list, proxyTex_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        if (desc_.stageMark) desc_.stageMark("encode");
-        cpuTrace.mark("nrPrepare");
+    // A downstream NR layer consumes the CURRENT upstream residual/temporal
+    // result. Record that result before submitting the next layer's encode,
+    // not in a second loop after all layers have already evaluated.
+    auto compositeNrLayer = [&](size_t layerIndex) {
+        auto* layer=nrInstances_[layerIndex].get();
+        if(layer->handle()==nullptr||!layer->enabled)return;
+        const bool temporallyStabilised=layer->stabilised;
+        ID3D12Resource* destination=temporallyStabilised?layer->temporal().raw():layer->fullTarget();
+        const auto& r=layer->residualSettings;
+        // One exclusion stage protects against ALL NR layers, not only the
+        // last layer's delta. Keep unmasked per-layer histories in a stack.
+        const auto protection=nrInstances_.size()>1?engine::ProtectionSettings{}:layer->protection;
+        tracker_.transition(list,destination,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        float c[24]={r.total,r.darken,r.brighten,r.color,r.luminance,protection.enabled?1.0f:0.0f,protection.featherPixels,desc_.hdrWorking()?1.0f:0.0f};
+        for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
+        const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
+        residualPass_.bind(list,c,gpuHandleOf(residualPass_,3u*UINT(layerIndex)).ptr,
+                           gpuHandleOf(residualPass_,3u*residualLayers+UINT(layerIndex)).ptr);
+        list->Dispatch((layer->fullWidth()+15)/16,(layer->fullHeight()+15)/16,1);
+        tracker_.uavBarrier(list,destination);
+        tracker_.transition(list,destination,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        if(temporallyStabilised)layer->temporal().run(list,tracker_,reset,haveFlow,ptsMs-prevPtsMs_,r.total,protection);
+    };
 
-        // 4b. NR evaluate on a FRESH list (snippet constraint).
-        if (!ring_.submitAndSignal(slot)) { veyra::log::error("graph", "submit before nr"); return false; }
-        ID3D12GraphicsCommandList* nlist = ring_.acquireNext(slot, st);
-        if (nlist == nullptr) { veyra::log::error("graph", "acquire nr list"); return false; }
-        cpuTrace.mark("nrAcquire");
-        {
-            namespace p = ngx::dlssnr;
-            ngx::ParameterBlock pb(ngxParams_);
-            pb.setD3D12Resource(p::kColor, proxyTex_.Get());
-            pb.setD3D12Resource(p::kOutput, neuralTex_.Get());
-            pb.setD3D12Resource(p::kMVec, haveFlow ? nrFlow_.Get() : nrZeroMotion_.Get());
-            pb.setD3D12Resource(p::kDepth, nrZeroDepth_.Get());
-            pb.setU32(p::kColorSubrectWidth, nrW_); pb.setU32(p::kColorSubrectHeight, nrH_);
-            pb.setU32(p::kOutputSubrectWidth, nrW_); pb.setU32(p::kOutputSubrectHeight, nrH_);
-            pb.setU32(p::kMVecSubrectWidth, nrW_); pb.setU32(p::kMVecSubrectHeight, nrH_);
-            pb.setU32(p::kDepthSubrectWidth, nrW_); pb.setU32(p::kDepthSubrectHeight, nrH_);
-            pb.setF32(p::kMVecScaleX, 1.0f); pb.setF32(p::kMVecScaleY, 1.0f);
-            pb.setI32(p::kDepthInverted, 1);
-            pb.setI32(p::kIndicatorInvertX, 0);
-            pb.setI32(p::kIndicatorInvertY, 0);
-            pb.setI32(p::kEnabled, 1);
-            pb.setI32(p::kReset, reset ? 1 : 0);
-            pb.setI32(p::kStyle, desc_.model.style);
-            pb.setF32(p::kIntensity, desc_.model.intensity);
-            pb.setF32(p::kLocalToneStrength, desc_.model.tone);
-            pb.setF32(p::kLocalStructureStrength, desc_.model.structure);
-            pb.setF32(p::kSkinStructureStrength, desc_.model.skin);
-            pb.setI32(p::kUseAutoMask, desc_.model.autoMask);
-            pb.setI32(p::kUICorrection, desc_.model.uiCorrection);
-            if(desc_.nrParameterProbe)desc_.nrParameterProbe(ngxParams_,proxyTex_.Get(),neuralTex_.Get(),nrW_,nrH_);
-            static bool injectedFailureConsumed=false;
-            if(!injectedFailureConsumed&&desc_.model.style==2&&GetEnvironmentVariableW(L"VEYRA_TEST_REJECT_NR_STYLE2",nullptr,0)){
-                injectedFailureConsumed=true;veyra::log::error("settings-test","injected NR execution rejection before NGX; rollback exercise, not a hardware failure");return false;
+    // 4. NR layers, in order. Each layer encodes its input to the 8-bit parity
+    // proxy, evaluates its own Feature-18 handle, and decodes back to linear
+    // FP16. Layer k reads layer k-1's decoded output, so the stack is a chain,
+    // not several parallel filters. Per layer: its own handle, parameter block,
+    // textures and history (src/pipeline/NrInstance.h).
+    //
+    // The snippet requires encode and evaluate on separate submissions, so each
+    // layer costs two lists: one for encode+decode prep, one for the evaluate
+    // (the original single-layer code did exactly the same, hence the identical
+    // output). The ring is drained by submission, never by a CPU wait.
+    if (nrEnabled_ && nrCreated()) {
+        for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
+            const bool preSrProtection=preSrProtectionRgba_&&layerIndex==desc_.nrBeforeSrLayerCount();
+            const bool interNrProtection=interNrProtectionRgba_&&layerIndex==desc_.interNrProtectionTarget();
+                if(preSrProtection||interNrProtection){
+                    auto* original=nrBaseInput();
+                    auto* prefix=nrInstances_[layerIndex-1]->fullTarget();
+                    auto* output=interNrProtection?interNrProtectionRgba_.Get():preSrProtectionRgba_.Get();
+                    const auto extent=desc_.nrFullExtent(layerIndex-1);
+                    tracker_.transition(list,original,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    tracker_.transition(list,prefix,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    tracker_.transition(list,output,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    // The original and upstream stack share this boundary's
+                    // extent. Later NR layers consume the masked result.
+                    float c[24]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
+                    for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(desc_.protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
+                    stackProtectionPass_.bind(list,c,gpuHandleOf(stackProtectionPass_,0).ptr,gpuHandleOf(stackProtectionPass_,3).ptr);
+                    list->Dispatch((extent.width+15)/16,(extent.height+15)/16,1);
+                    tracker_.uavBarrier(list,output);
+                    tracker_.transition(list,output,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    if(desc_.stageMark)desc_.stageMark(interNrProtection?"inter-nr-protection":"pre-sr-protection");
+                }
+            if(desc_.splitNrAcrossSr()&&layerIndex==desc_.nrBeforeSrLayerCount()){
+                if(!runBoundaryColor(true)||!runSr()||!runBoundaryColor(false))return false;
             }
-            if(GetEnvironmentVariableW(L"VEYRA_TEST_NR_RUNTIME_FAILURE",nullptr,0)){
-                failedBackend_=engine::FailedBackend::Nr;
-                veyra::log::error("backend-recovery-test","test-only NR runtime rejection before Evaluate; exercises partially recorded command cleanup, not a hardware failure");return false;
+            auto* layer = nrInstances_[layerIndex].get();
+            const uint32_t sourceW=layer->fullWidth(),sourceH=layer->fullHeight();
+            if (layer->handle() == nullptr || !layer->enabled) continue;
+            if(interNrColorActiveCount_){
+                const auto& plan=*desc_.fixedExecutionPlan;
+                for(uint32_t i=0;i<plan.stepCount;++i){
+                    const auto& step=plan.steps[i];
+                    if(step.type!=engine::EffectType::Color||desc_.interNrColorTarget(step.parameterIndex)!=layerIndex)continue;
+                    gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex));
+            if(!nodeColorInstances_[step.parameterIndex]->dispatch(list,tracker_,slot,step.output.width,step.output.height,desc_.hdrWorking()))return false;
+            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex),true);
+                    if(!interNrColorExecutionLogged_)veyra::log::info("node-dispatch",std::format("recorded inter-NR Color step={} parameter={} resource={} afterNR={} beforeNR={}",i,step.parameterIndex,step.resourceIndex,layerIndex-1,layerIndex));
+                    if(desc_.stageMark)desc_.stageMark("inter-nr-color");
+                }
             }
-            gpuTimer_.mark(nlist,GpuStage::Nr);
-            uint64_t er = 0; uint32_t es = 0;
-            cpuTrace.mark("nrParameters");
-            if (!nrAdapter_->snippetEvaluateFeature(nlist, nrHandle_, ngxParams_, er, es) ||
-                er != static_cast<uint64_t>(NVSDK_NGX_Result_Success)) {
-                diagnostic.stage="NR Evaluate";diagnostic.ngx=er;diagnostic.seh=es;Logger::diagnosticContext(diagnostic);veyra::log::error("graph", std::format("NR evaluate failed 0x{:X} seh={}", er, es));
-                failedBackend_=engine::FailedBackend::Nr;
-                return false;
-            }
-            cpuTrace.mark("nrEvaluate");
-            gpuTimer_.mark(nlist,GpuStage::Nr,true);
-            ++metrics_.nrEvaluateCount;
-            if(haveFlow)++metrics_.nrMotionFrames;
-            tracker_.uavBarrier(nlist, neuralTex_.Get());
-            tracker_.transition(nlist, neuralTex_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            const uint32_t nrW=layer->width(),nrH=layer->height();
+            ID3D12Resource* stageInput = nrLayerBase(layerIndex);
 
-            wchar_t profileFlag[2]{};
-            if(GetEnvironmentVariableW(L"VEYRA_PROFILE_SPLIT",profileFlag,2)&&profileFlag[0]==L'1'){
-                ring_.tag(slot,"nr-only");
-                if(!ring_.submitAndSignal(slot))return false;
-                nlist=ring_.acquireNext(slot,st);if(!nlist)return false;
-                ring_.tag(slot,"decode-output-fg");
+            // 4a. Downsample (unless the layer borrows the graph's input) and
+            // the parity encode, on one list.
+            {
+                if (layer->inputIsBorrowed()) {
+                    tracker_.transition(list, layer->input(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                } else {
+                    tracker_.transition(list, layer->input(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    const float down[8] = {uintBits(sourceW), uintBits(sourceH), uintBits(nrW), uintBits(nrH), 0, 0, 0, 0};
+                    const UINT layers = UINT(std::max<size_t>(1, nrInstances_.size()));
+                    downsamplePass_.bind(list, down, gpuHandleOf(downsamplePass_, 2u * UINT(layerIndex)).ptr,
+                                         gpuHandleOf(downsamplePass_, 2u * layers + 2u * UINT(layerIndex)).ptr);
+                    list->Dispatch((nrW + 15) / 16, (nrH + 15) / 16, 1);
+                    tracker_.uavBarrier(list, layer->input());
+                    tracker_.transition(list, layer->input(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                }
+                tracker_.transition(list, layer->proxy(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                const float constants[8] = {1.0f, 1.0f, 1.0f, desc_.hdrWorking() ? 1.0f : 0.0f,
+                    uintBits(nrW), uintBits(nrH), 0.0f, 0.0f};
+                {
+                    const UINT layers = UINT(std::max<size_t>(1, nrInstances_.size()));
+                    encPass_.bind(list, constants, gpuHandleOf(encPass_, UINT(layerIndex)).ptr,
+                                  gpuHandleOf(encPass_, layers + UINT(layerIndex)).ptr);
+                }
+                list->Dispatch((nrW + 15) / 16, (nrH + 15) / 16, 1);
+                tracker_.uavBarrier(list, layer->proxy());
+                tracker_.transition(list, layer->proxy(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                (void)stageInput;
+                if (layerIndex == 0 && desc_.stageMark) desc_.stageMark("encode");
+                cpuTrace.mark("nrPrepare");
             }
-            // 4c. Parity decode.
-            tracker_.transition(nlist, finalRgba_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            const float constants[8] = { 1.0f, 1.0f, 1.0f, desc_.hdrWorking()?1.0f:0.0f,
-                uintBits(nrW_), uintBits(nrH_), 0.0f, 0.0f };
-            decPass_.bind(nlist, constants, gpuHandleOf(decPass_, 0).ptr, gpuHandleOf(decPass_, 3).ptr);
-            nlist->Dispatch((nrW_ + 15) / 16, (nrH_ + 15) / 16, 1);
-            tracker_.uavBarrier(nlist, finalRgba_.Get());
-            tracker_.transition(nlist, finalRgba_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+            // 4b. Evaluate on a FRESH list: a snippet constraint that the
+            // single-layer path also honoured.
+            if (!ring_.submitAndSignal(slot)) { veyra::log::error("graph", "submit before nr"); return false; }
+            ID3D12GraphicsCommandList* nlist = ring_.acquireNext(slot, st);
+            if (nlist == nullptr) { veyra::log::error("graph", "acquire nr list"); return false; }
+            cpuTrace.mark("nrAcquire");
+            list = nlist;
+            {
+                const auto& model = layer->model;
+                namespace p = ngx::dlssnr;
+                ngx::ParameterBlock pb(layer->parameters());
+                pb.setD3D12Resource(p::kColor, layer->proxy());
+                pb.setD3D12Resource(p::kOutput, layer->neural());
+                pb.setD3D12Resource(p::kMVec, haveFlow&&desc_.nrUsesFlow() ? layer->motion() : layer->zeroMotion());
+                pb.setD3D12Resource(p::kDepth, layer->zeroDepth());
+                pb.setU32(p::kColorSubrectWidth, nrW); pb.setU32(p::kColorSubrectHeight, nrH);
+                pb.setU32(p::kOutputSubrectWidth, nrW); pb.setU32(p::kOutputSubrectHeight, nrH);
+                pb.setU32(p::kMVecSubrectWidth, nrW); pb.setU32(p::kMVecSubrectHeight, nrH);
+                pb.setU32(p::kDepthSubrectWidth, nrW); pb.setU32(p::kDepthSubrectHeight, nrH);
+                pb.setF32(p::kMVecScaleX, 1.0f); pb.setF32(p::kMVecScaleY, 1.0f);
+                pb.setI32(p::kDepthInverted, 1);
+                pb.setI32(p::kIndicatorInvertX, 0);
+                pb.setI32(p::kIndicatorInvertY, 0);
+                pb.setI32(p::kEnabled, 1);
+                // A layer resets on a frame reset, and also when an upstream
+                // layer changed: Magpie's inputRevision contract.
+                const bool layerReset = reset || layer->inputRevision != 1;
+                pb.setI32(p::kReset, layerReset ? 1 : 0);
+                pb.setI32(p::kStyle, model.style);
+                pb.setF32(p::kIntensity, model.intensity);
+                pb.setF32(p::kLocalToneStrength, model.tone);
+                pb.setF32(p::kLocalStructureStrength, model.structure);
+                pb.setF32(p::kSkinStructureStrength, model.skin);
+                pb.setI32(p::kUseAutoMask, model.autoMask);
+                pb.setI32(p::kUICorrection, model.uiCorrection);
+                if (desc_.nrParameterProbe) desc_.nrParameterProbe(layer->parameters(), layer->proxy(), layer->neural(), nrW, nrH);
+                static bool injectedFailureConsumed = false;
+                if (!injectedFailureConsumed && model.style == 2 && GetEnvironmentVariableW(L"VEYRA_TEST_REJECT_NR_STYLE2", nullptr, 0)) {
+                    injectedFailureConsumed = true;
+                    veyra::log::error("settings-test", "injected NR execution rejection before NGX; rollback exercise, not a hardware failure");
+                    return false;
+                }
+                if (GetEnvironmentVariableW(L"VEYRA_TEST_NR_RUNTIME_FAILURE", nullptr, 0)) {
+                    failedBackend_ = engine::FailedBackend::Nr;
+                    veyra::log::error("backend-recovery-test", "test-only NR runtime rejection before Evaluate; exercises partially recorded command cleanup, not a hardware failure");
+                    return false;
+                }
+                gpuTimer_.mark(nlist, GpuStage::Nr);
+                // Node span: this layer's evaluate + parity decode on its own
+                // list. The small encode/composite passes stay in stage spans.
+                gpuTimer_.mark(nlist, diagnostics::nrLayerStage(unsigned(layerIndex)));
+                uint64_t er = 0; uint32_t es = 0;
+                cpuTrace.mark("nrParameters");
+                if (!nrAdapter_->snippetEvaluateFeature(nlist, layer->handle(), layer->parameters(), er, es) ||
+                    er != static_cast<uint64_t>(NVSDK_NGX_Result_Success)) {
+                    diagnostic.stage = "NR Evaluate"; diagnostic.ngx = er; diagnostic.seh = es;
+                    Logger::diagnosticContext(diagnostic);
+                    veyra::log::error("graph", std::format("NR layer {} evaluate failed 0x{:X} seh={}", layerIndex + 1, er, es));
+                    failedBackend_ = engine::FailedBackend::Nr;
+                    return false;
+                }
+                cpuTrace.mark("nrEvaluate");
+                gpuTimer_.mark(nlist, GpuStage::Nr, true);
+                ++metrics_.nrEvaluateCount;
+                if (haveFlow) ++metrics_.nrMotionFrames;
+                tracker_.uavBarrier(nlist, layer->neural());
+                tracker_.transition(nlist, layer->neural(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+                // 4c. Parity decode to the layer's own linear output.
+                tracker_.transition(nlist, layer->finalRgba(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                const float constants[8] = {1.0f, 1.0f, 1.0f, desc_.hdrWorking() ? 1.0f : 0.0f,
+                    uintBits(nrW), uintBits(nrH), 0.0f, 0.0f};
+                {
+                    const UINT layers = UINT(std::max<size_t>(1, nrInstances_.size()));
+                    decPass_.bind(nlist, constants, gpuHandleOf(decPass_, 3u * UINT(layerIndex)).ptr,
+                                  gpuHandleOf(decPass_, 3u * layers + UINT(layerIndex)).ptr);
+                }
+                nlist->Dispatch((nrW + 15) / 16, (nrH + 15) / 16, 1);
+                tracker_.uavBarrier(nlist, layer->finalRgba());
+                tracker_.transition(nlist, layer->finalRgba(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                gpuTimer_.mark(nlist, diagnostics::nrLayerStage(unsigned(layerIndex)), true);
+                layer->historyValid = true;
+                layer->inputRevision = 1;
+            }
+            if (layerIndex + 1 < nrInstances_.size()) compositeNrLayer(layerIndex);
+            if(desc_.splitNrAcrossSr()&&desc_.stageMark)desc_.stageMark("nr-layer");
         }
-        list = nlist; // continue recording on the NR list
+        if(interNrColorActiveCount_)interNrColorExecutionLogged_=true;
     }
     if (desc_.stageMark) desc_.stageMark("nr");
     cpuTrace.mark("nr");
 
-    if(nrEnabled_&&nrHandle_){
+    // 5. Final residual composite. Intermediate layers were composed before
+    // their consumers above. Keep the single-layer command order unchanged.
+    if(nrEnabled_&&nrCreated()){
         gpuTimer_.mark(list,GpuStage::Residual);
-        auto* raw=desc_.nrTemporal?nrTemporal_.raw():residualRgba_.Get();
-        tracker_.transition(list,raw,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        const auto& r=desc_.residual;float c[24]={r.total,r.darken,r.brighten,r.color,r.luminance,desc_.protection.enabled?1.0f:0.0f,desc_.protection.featherPixels,desc_.hdrWorking()?1.0f:0.0f};
-        for(size_t i=0;i<4;++i){const auto q=desc_.protection.regions[i];c[8+i*4]=q.left;c[9+i*4]=q.top;c[10+i*4]=q.right;c[11+i*4]=q.bottom;}
-        residualPass_.bind(list,c,gpuHandleOf(residualPass_,0).ptr,gpuHandleOf(residualPass_,3).ptr);
-        list->Dispatch(((desc_.nrBeforeSr?srcW_:workW_)+15)/16,((desc_.nrBeforeSr?srcH_:workH_)+15)/16,1);tracker_.uavBarrier(list,raw);tracker_.transition(list,raw,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        if(desc_.nrTemporal)nrTemporal_.run(list,tracker_,reset,haveFlow,ptsMs-prevPtsMs_,r.total,desc_.protection);
+        if(!nrInstances_.empty())compositeNrLayer(nrInstances_.size()-1);
+        if(nrInstances_.size()>1){
+            auto* final=nrInstances_.back()->fullTarget();
+            if(desc_.protection.enabled&&!preSrProtectionRgba_&&!interNrProtectionRgba_){
+                auto* original=nrBaseInput();
+                tracker_.transition(list,original,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                tracker_.transition(list,final,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                tracker_.transition(list,residualRgba_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                // Each layer already applies its own SDR/HDR residual policy.
+                // This final exclusion mask must preserve the stack's signed
+                // temporal output, including pixels outside protected regions.
+                float c[24]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
+                for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(desc_.protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
+                stackProtectionPass_.bind(list,c,gpuHandleOf(stackProtectionPass_,0).ptr,gpuHandleOf(stackProtectionPass_,3).ptr);
+                list->Dispatch(((desc_.nrBeforeSr?srcW_:workW_)+15)/16,((desc_.nrBeforeSr?srcH_:workH_)+15)/16,1);
+                tracker_.uavBarrier(list,residualRgba_.Get());
+            }else{
+                // Byte-exact unprotected output, avoiding residual subtraction
+                // roundoff and keeping the additional cost explicit.
+                tracker_.transition(list,final,D3D12_RESOURCE_STATE_COPY_SOURCE);
+                tracker_.transition(list,residualRgba_.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
+                list->CopyResource(residualRgba_.Get(),final);
+                tracker_.transition(list,final,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            }
+            tracker_.transition(list,residualRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        }
         gpuTimer_.mark(list,GpuStage::Residual,true);
     }
 
-    if(desc_.nrBeforeSr&&!runSr())return false;
+    // 5b. Output stabiliser (anti-flicker, default off). Runs after the last NR
+    // layer and the residual composite, before SR/FG, so it can only smooth what
+    // NR emitted -- never a generated frame. The pass writes its own target and
+    // the result is copied back into residualRgba_, which deliberately leaves
+    // every downstream binding (SR, FG, tail colour, diagnostics) untouched.
+    if(nrHoldPass_){
+        gpuTimer_.mark(list,GpuStage::Residual);
+        nrHoldPass_->run(list,tracker_,reset,desc_.nrHoldStrength,desc_.nrHoldTolerance);
+        if(nrHoldPass_->active()&&nrHoldPass_->result()!=residualRgba_.Get()){
+            auto* stabilised=nrHoldPass_->result();
+            tracker_.transition(list,stabilised,D3D12_RESOURCE_STATE_COPY_SOURCE);
+            tracker_.transition(list,residualRgba_.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
+            list->CopyResource(residualRgba_.Get(),stabilised);
+            tracker_.transition(list,residualRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        }
+        gpuTimer_.mark(list,GpuStage::Residual,true);
+    }
+
+    if(!desc_.splitNrAcrossSr()&&!runBoundaryColor(true))return false;
+    if(desc_.nrBeforeSr&&!desc_.splitNrAcrossSr()&&!runSr())return false;
+    if(tailColorActiveCount_){
+        const auto& plan=*desc_.fixedExecutionPlan;
+        for(uint32_t i=0;i<plan.stepCount;++i){
+            const auto& step=plan.steps[i];
+            if(step.type!=engine::EffectType::Color||!desc_.tailColor(step.parameterIndex))continue;
+            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex));
+            if(!nodeColorInstances_[step.parameterIndex]->dispatch(list,tracker_,slot,step.output.width,step.output.height,desc_.hdrWorking()))return false;
+            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex),true);
+            if(!tailColorExecutionLogged_)veyra::log::info("node-dispatch",std::format("recorded tail Color step={} parameter={} resource={} after SR/NR/protection",i,step.parameterIndex,step.resourceIndex));
+            if(desc_.stageMark)desc_.stageMark("tail-color");
+        }
+        tailColorExecutionLogged_=true;
+        cpuTrace.mark("tailColor");
+    }
     if(videoHdrBackend_){
         gpuTimer_.mark(list,GpuStage::VideoHdr);
         tracker_.transition(list,videoHdrInput_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -1914,7 +2607,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     {
         const UINT srcSlot = videoHdrBackend_?20:2;
         const UINT uavSlot = 3 + parity;
-        tracker_.transition(list, (nrEnabled_ && nrHandle_ != nullptr && !desc_.nrBeforeSr) ? residualRgba_.Get() : workRgba_.Get(),
+        tracker_.transition(list, tailColorOutput_?tailColorOutput_:(nrEnabled_ && nrCreated() && desc_.finalNrAfterSr()) ? residualRgba_.Get() : (preNrColorOutput_?preNrColorOutput_:workRgba_.Get()),
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list, videoFrame_[parity].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         const float constants[8] = {
@@ -1927,17 +2620,19 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
 
     }
     if(presentSinkFg()){
-        auto* input=haveFlow&&!reset?baseFlow_.Get():nrZeroMotion_.Get();
+        auto* input=desc_.fgUsesFlow()&&haveFlow&&!reset?baseFlow_.Get():nrZeroMotion_.Get();
         tracker_.transition(list,input,D3D12_RESOURCE_STATE_COPY_SOURCE);
         tracker_.transition(list,presentMotion_[parity].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
         list->CopyResource(presentMotion_[parity].Get(),input);
         tracker_.transition(list,input,D3D12_RESOURCE_STATE_COMMON);
         tracker_.transition(list,presentMotion_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
-        presentMotionValid_[parity]=haveFlow&&!reset;
+        // Zero guidance still has valid source history. Marking it invalid
+        // would reset XeSS on every frame and suppress interpolation.
+        presentMotionValid_[parity]=(desc_.fgUsesFlow()?haveFlow:prevValid_)&&!reset;
         motionPreviousSource_[parity]=previousSource_;
     }
     previousSource_=sourceFrameId;
-    const bool fgBackendAvailable=fgEnabled_&&(fgBackend_&&fgBackend_->created());
+    const bool fgBackendAvailable=fgEnabled_&&fgCreated();
     const unsigned fgMultiplier=previewMultiplier&&fgBackendAvailable?std::clamp(previewMultiplier,2u,desc_.fgMultiplier):desc_.fgMultiplier;
     out.fgCandidates=fgBackendAvailable?fgMultiplier-1:0;
     bool resetFg=reset||!prevValid_||fgHistorySkipped_;
@@ -1970,15 +2665,16 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     out.videoFenceObject = context_.fence();
 
     // FG reads enhanced SDR color, not the pre-NR guidance input.
-    if (runFg && fgBackend_ && fgBackend_->created()) {
+    if (runFg && fgCreated()) {
       for(uint32_t sub=1;sub<=fgCalls;++sub){
         const uint32_t generatedSlot=parity+(sub-1)*2;
         auto* flist=ring_.acquireNext(slot,st); if(!flist)return false;
-        auto* motion=desc_.fgMotionProbe?desc_.fgMotionProbe:(haveFlow?baseFlow_.Get():nrZeroMotion_.Get());
+        auto* motion=desc_.fgMotionProbe?desc_.fgMotionProbe:(haveFlow&&desc_.fgUsesFlow()?baseFlow_.Get():nrZeroMotion_.Get());
         tracker_.transition(flist,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         if(!desc_.fgMotionProbe)tracker_.transition(flist,motion,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(flist,depthTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        if(!fsrFgBackend_){
         // One status resource for the whole input-frame pair, just like the
         // unchanged input parameters. Later MFG calls may retain its value.
         if(sub==1){
@@ -1986,6 +2682,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             flist->CopyBufferRegion(fgDisable_[parity].Get(),0,fgDisableInit_.Get(),0,4);
         }
         tracker_.transition(flist,fgDisable_[parity].Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        }
         ngx::DlssFgBackend::EvalDesc fe{};
         fe.hdr=hdr10Output();fe.backbuffer=videoFrame_[parity].Get(); fe.depth=depthTex_.Get(); fe.mvecs=motion;
         fe.outputInterpolated=genFrame_[generatedSlot].Get(); fe.reset=resetFg;
@@ -1998,14 +2695,27 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         if(sub==1)gpuTimer_.mark(flist,GpuStage::FgBatch);
         const auto timingStage=static_cast<GpuStage>(unsigned(GpuStage::Fg1)+sub-1);gpuTimer_.mark(flist,timingStage);
         cpuTrace.mark("fgPrepare");
-        if(!fgBackend_->evaluate(flist,ngxParams_,fe,st)){failedBackend_=engine::FailedBackend::Fg;return false;}
+        if(fsrFgBackend_){
+            // The SDK restores all externally registered textures to COMMON.
+            tracker_.transition(flist,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
+            tracker_.transition(flist,motion,D3D12_RESOURCE_STATE_COMMON);
+            tracker_.transition(flist,depthTex_.Get(),D3D12_RESOURCE_STATE_COMMON);
+            tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
+            const float interval=prevValid_&&ptsMs>prevPtsMs_?float(ptsMs-prevPtsMs_):16.6667f;
+            if(!fsrFgBackend_->generate(flist,videoFrame_[parity].Get(),motion,depthTex_.Get(),
+                    genFrame_[generatedSlot].Get(),resetFg,interval)){
+                failedBackend_=engine::FailedBackend::Fg;return false;
+            }
+        }else if(!fgBackend_->evaluate(flist,ngxParams_,fe,st)){failedBackend_=engine::FailedBackend::Fg;return false;}
         cpuTrace.mark("fgEvaluate");
         ++out.fgEvaluated;
         gpuTimer_.mark(flist,timingStage,true);if(sub==fgCalls)gpuTimer_.mark(flist,GpuStage::FgBatch,true);
         tracker_.uavBarrier(flist,genFrame_[generatedSlot].Get());
+        if(!fsrFgBackend_){
         tracker_.uavBarrier(flist,fgDisable_[parity].Get());
         tracker_.transition(flist,fgDisable_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         flist->CopyBufferRegion(fgDisableReadback_[generatedSlot].Get(),0,fgDisable_[parity].Get(),0,4);
+        }
         tracker_.transition(flist,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
         tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
         tracker_.transition(flist,depthTex_.Get(),D3D12_RESOURCE_STATE_COMMON);
@@ -2031,6 +2741,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // transition videoFrame_[parity] back to COMMON. Recording it before FG
     // (sweep A2, tried 2026-09-22) raised cross-queue barrier errors.
     uploadFences_[parity]=ring_.lastSignaledValue();
+    // The capture callback must not rewrite this frame's buffer before the
+    // lists submitted above have read it.
+    if(gpuDirectFrame)gpuDirectFrame->gpuRead(context_.fence(),uploadFences_[parity]);
 
     prevPtsMs_ = ptsMs;
     prevValid_ = true;
@@ -2054,15 +2767,23 @@ bool EnhanceGraph::resolveFrame(FrameOutputs& out,uint32_t index)
     auto& frame=out.batch.frames[index];
     if(!frame.lease||!frame.lease->ready())return false;
     if(frame.kind!=FrameKind::Generated||frame.validity!=GenerationValidity::Pending)return true;
+    if(fsrActive()){
+        frame.validity=out.contentDuplicate?GenerationValidity::Disabled:GenerationValidity::Valid;
+        if(out.contentDuplicate){++metrics_.fgDisabledFrames;++metrics_.fgDuplicateSuppressed;}else ++metrics_.fgGeneratedFrames;
+        return true;
+    }
     // Readback heaps may stay mapped; the 4-byte status is read directly.
     auto& mapped=fgDisableMapped_[frame.lease->slot];
     if(!mapped){D3D12_RANGE range{0,4};void* data=nullptr;const HRESULT hr=fgDisableReadback_[frame.lease->slot]->Map(0,&range,&data);
         if(FAILED(hr)){frame.validity=GenerationValidity::Failed;veyra::log::error("fg-status",std::format("Map hr=0x{:X}",unsigned(hr)));return true;}mapped=static_cast<const volatile uint8_t*>(data);}
     const bool disabled=*mapped!=0;
     const bool rejected=disabled||out.contentDuplicate;
+    metrics_.fgProviderDisabled+=disabled;
+    metrics_.fgDuplicateSuppressed+=out.contentDuplicate;
+    metrics_.fgBothDisabled+=disabled&&out.contentDuplicate;
     frame.validity=rejected?GenerationValidity::Disabled:GenerationValidity::Valid;
     if(rejected)++metrics_.fgDisabledFrames;else ++metrics_.fgGeneratedFrames;
-    if(veyra::log::verboseFrameLogs())veyra::log::info("fg-status",std::format("batch={} frame={} epoch={} revision={} subframe={} fence={} disable={} valid={}",out.batch.batchId,out.realFrameIndex,out.batch.identity.epoch,out.batch.identity.settingsRevision,frame.subframe,frame.lease->readyFence,disabled,!rejected));
+    if(veyra::log::verboseFrameLogs())veyra::log::info("fg-status",std::format("batch={} frame={} epoch={} revision={} subframe={} fence={} providerDisabled={} contentDuplicate={} valid={}",out.batch.batchId,out.realFrameIndex,out.batch.identity.epoch,out.batch.identity.settingsRevision,frame.subframe,frame.lease->readyFence,disabled,out.contentDuplicate,!rejected));
     return true;
 }
 
@@ -2080,41 +2801,114 @@ bool EnhanceGraph::resolveGeneration(FrameOutputs& out)
     if(complete)out.hasGenerated=anyValid;
     return complete;
 }
+uint64_t EnhanceGraph::failedNgxResult() const {
+    switch(failedBackend_) {
+    case engine::FailedBackend::Nr:return nrResult_;
+    case engine::FailedBackend::Sr:return srBackend_?srBackend_->createResult():0;
+    case engine::FailedBackend::Fg:return fgBackend_&&fgBackend_->createResult()?fgBackend_->createResult():fgInitResult_;
+    default:return 0;
+    }
+}
 
 bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
+    if(!s.validate().empty())return false;
+    if(s.hdrOutputMode!=desc_.hdrOutputMode||s.fgMotion!=desc_.fgMotion||s.srMotion!=desc_.srMotion||s.nrMotion!=desc_.nrMotion)return false;
+    // These change the admitted split topology/reference contract. Refuse
+    // before mutating any live parameter; the controller must rebuild.
+    if((desc_.splitNrAcrossSr()||interNrProtectionRgba_)&&(!s.nr||s.protection.enabled!=desc_.protection.enabled||
+       (s.protection.enabled&&!desc_.protectionBeforeSr()&&!interNrProtectionRgba_)))return false;
+    auto nextNr=desc_;engine::describeNrLayers(s,nextNr);
+    if(!desc_.nrLayersSizePolicy.empty()&&nextNr.nrLayersSizePolicy!=desc_.nrLayersSizePolicy)return false;
     if(s.nrTemporal!=desc_.nrTemporal)return false;
-    nrTemporal_.reset(); // settings/protection changes must not revive old corrections
+    if(s.nr&&desc_.enableNr){
+        if(s.activeNrLayerCount()!=nrInstances_.size())return false;
+        for(size_t i=0;i<nrInstances_.size();++i){
+            const bool temporal=i<nextNr.nrLayersTemporal.size()?nextNr.nrLayersTemporal[i]:s.nrTemporal;
+            if(temporal!=nrInstances_[i]->temporalEnabled)return false;
+        }
+    }
     // A non-NVIDIA adapter keeps the user's requested NR setting in the UI
     // but has this NGX-only stage explicitly disabled in the graph. Do not
     // reject unrelated live settings in that degraded, playable state.
-    if(s.nr&&desc_.enableNr&&!nrHandle_)return false;
+    if(s.nr&&desc_.enableNr&&!nrCreated())return false;
     if(s.opticalFlowBackend!=desc_.opticalFlowBackend||s.amdFlowHalfResolution!=desc_.amdFlowHalfResolution)return false;
     // DLSS allocates multiplier-specific feature/output resources.
     // XeSS has a fixed 2X proxy swapchain contract. Settings callers must
     // rebuild instead of accepting a change that cannot take effect in place.
-    if(s.nrRuntime!=desc_.nrRuntime||std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||s.videoSrQuality!=desc_.videoSrQuality||!s.validate().empty()||(s.multiplier>1&&!engine::presentSinkFrameGeneration(s.frameGenerationBackend)&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
+    if(s.nrRuntime!=desc_.nrRuntime||std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||s.videoSrQuality!=desc_.videoSrQuality||!s.validate().empty()||(s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
     // The colour master switch changes the graph shape (tables + shader branch)
     // and must rebuild; every other colour field is a live uniform update.
     if(s.color.enabled!=desc_.color.enabled)return false;
+    if(s.additionalColorCount!=desc_.additionalColorCount)return false;
+    for(unsigned i=0;i<s.additionalColorCount;++i){
+        const auto& a=s.additionalColors[i];const auto& b=desc_.additionalColors[i];
+        if(a.enabled!=b.enabled||a.lutName!=b.lutName||a.lutInputSpace!=b.lutInputSpace)return false;
+    }
     if(s.videoHdr.enabled!=desc_.videoHdr.enabled)return false;
-    desc_.videoHdr=s.videoHdr;
     // Switching the referenced .cube re-stages a descriptor, which needs the
     // queue drained: treat it as a rebuild (parameters stay live).
-    if(s.color.lutNameString()!=desc_.color.lutNameString())return false;
-    if(!(s.color==desc_.color)){desc_.color=s.color;refreshColorTables();}
+    if(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace)return false;
+    desc_.videoHdr=s.videoHdr;
+    if(!(s.color==desc_.color)){
+        desc_.color=s.color;
+        if(nodeColorInstances_[0])nodeColorInstances_[0]->refresh(s.color);
+        else refreshColorTables();
+    }
+    for(unsigned i=0;i<s.additionalColorCount;++i)if(!(s.additionalColors[i]==desc_.additionalColors[i])){
+        desc_.additionalColors[i]=s.additionalColors[i];
+        if(additionalColorInstances_[i])additionalColorInstances_[i]->refresh(s.additionalColors[i]);
+        if(nodeColorInstances_[i+1])nodeColorInstances_[i+1]->refresh(s.additionalColors[i]);
+    }
     desc_.contentRate=s.content;desc_.model=s.model;desc_.residual=s.residual;desc_.protection=s.protection;desc_.settingsRevision=s.revision;
-    desc_.fgMultiplier=std::max(2u,s.multiplier);desc_.enableNvofStandalone=s.nr&&!desc_.stillImage;nvofStandalone_=desc_.enableNvofStandalone;
+    desc_.nrLayersModel=std::move(nextNr.nrLayersModel);
+    desc_.nrLayersResidual=std::move(nextNr.nrLayersResidual);
+    desc_.nrLayersTemporal=std::move(nextNr.nrLayersTemporal);
+    desc_.nrLayersProtection=std::move(nextNr.nrLayersProtection);
+    for(size_t i=0;i<nrInstances_.size();++i){
+        auto& layer=*nrInstances_[i];
+        if(s.nr){
+            layer.model=i<desc_.nrLayersModel.size()?desc_.nrLayersModel[i]:s.model;
+            layer.residualSettings=i<desc_.nrLayersResidual.size()?desc_.nrLayersResidual[i]:s.residual;
+            layer.protection=i<desc_.nrLayersProtection.size()?desc_.nrLayersProtection[i]:s.protection;
+        }
+        layer.temporal().reset();
+        // Reset this feature and its downstream consumers after input/parameter
+        // changes, not just the final temporal filter. Rejected settings above
+        // leave both the parameters and the history untouched.
+        ++layer.inputRevision;
+    }
+    desc_.fgMultiplier=std::max(2u,s.multiplier);
+    const bool temporalMotion=s.nrTemporal||std::any_of(s.nrLayers.begin(),s.nrLayers.begin()+s.nrLayerCount,[](const auto& n){return n.enabled&&n.temporal;});
+    desc_.enableNvofStandalone=s.nr&&!desc_.stillImage&&(desc_.nrUsesFlow()||temporalMotion);nvofStandalone_=desc_.enableNvofStandalone;
     setNrEnabled(s.nr);setFgEnabled(s.multiplier>1&&!engine::presentSinkFrameGeneration(s.frameGenerationBackend));
     veyra::log::info("settings",std::format("requested revision={} intensity={} tone={} structure={} skin={} style={} autoMask={} UI={} residual={}/{}/{}/{}/{} multiplier={}",s.revision,s.model.intensity,s.model.tone,s.model.structure,s.model.skin,s.model.style,s.model.autoMask,s.model.uiCorrection,s.residual.total,s.residual.darken,s.residual.brighten,s.residual.color,s.residual.luminance,s.multiplier));
     return true;
 }
 void EnhanceGraph::setNrEnabled(bool on)
 {
-    nrEnabled_ = on && nrHandle_ != nullptr;
+    const bool wasEnabled=nrEnabled_;
+    nrEnabled_ = on && nrCreated();
+    if(tailColorOutput_){
+        // Live colour edits also call this setter. Keep the final blit bound
+        // to the tail, rather than silently bypassing every downstream grade.
+        // A genuine NR bypass changes only the first tail pass's input.
+        if(wasEnabled!=nrEnabled_){
+            const auto& plan=*desc_.fixedExecutionPlan;
+            for(uint32_t i=0;i<plan.stepCount;++i){
+                const auto& step=plan.steps[i];
+                if(step.type!=engine::EffectType::Color||!desc_.tailColor(step.parameterIndex))continue;
+                nodeColorInstances_[step.parameterIndex]->createViews(context_.device(),stager_,
+                    nrEnabled_&&desc_.finalNrAfterSr()?residualRgba_.Get():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get()),
+                    nodeColorOutputs_[step.parameterIndex].Get());
+                break;
+            }
+        }
+        return;
+    }
     // Refresh the section-5 blit SRV exactly as the probe did at runtime
     // (direct write into the visible heap - proven safe for this refresh).
     makeSrv(context_.device(),
-        nrEnabled_&&!desc_.nrBeforeSr ? residualRgba_.Get() : workRgba_.Get(),
+        nrEnabled_&&desc_.finalNrAfterSr() ? residualRgba_.Get() : (preNrColorOutput_?preNrColorOutput_:workRgba_.Get()),
         DXGI_FORMAT_R16G16B16A16_FLOAT, cpuHandleOf(blitPass_, 2));
 }
 
@@ -2122,7 +2916,7 @@ ID3D12Fence* EnhanceGraph::contextFence()const{return context_.fence();}
 uint32_t EnhanceGraph::actualFlowPerf()const{return nvof_?nvof_->caps().actualPerfLevel:0;}
 bool EnhanceGraph::fgCreated() const
 {
-    return fgBackend_ && fgBackend_->created();
+    return fsrActive() || (fgBackend_ && fgBackend_->created());
 }
 
 uint64_t EnhanceGraph::lastNvofSignal() const
@@ -2168,17 +2962,23 @@ void EnhanceGraph::shutdown()
     Status st = Status::Ok;
     if (nv12Ctx_ != nullptr) { sws_freeContext(nv12Ctx_); nv12Ctx_ = nullptr; }
 
-    if (nrHandle_ != nullptr) {
-        uint64_t rr = 0; uint32_t rs = 0;
-        (void)nrAdapter_->snippetReleaseFeature(nrHandle_, rr, rs);
-        nrHandle_ = nullptr;
+    // Release every layer's handle before the session goes away. The snippet
+    // requires release before Shutdown1, and each handle was created on this
+    // same session, so the order is simply back-to-front of creation.
+    for(auto& layer:nrInstances_){
+        if(layer->handle()==nullptr)continue;
+        uint64_t layerResult=0;uint32_t layerSeh=0;
+        (void)nrAdapter_->snippetReleaseFeature(layer->handle(),layerResult,layerSeh);
+        layer->setHandle(nullptr);
     }
     gpuDis_.reset();
     amdOf_.reset();
     for(auto& motion:presentMotion_)motion.Reset();
     if(fsrSrBackend_){fsrSrBackend_->release();fsrSrBackend_.reset();}
     fsrSrDepth_.Reset();
+    fsrSrZeroMotion_.Reset();upFsrSrZeroMotion_.Reset();
     upFsrSrDepth_.Reset();
+    fsrFgBackend_.reset();
     if (fgBackend_) fgBackend_->release();
     if(videoSrBackend_){videoSrBackend_->release();videoSrBackend_.reset();}
     videoHdrBackend_.reset();videoHdrInput_.Reset();videoHdrOutput_.Reset();
@@ -2201,6 +3001,21 @@ void EnhanceGraph::shutdown()
     if (nvof_) nvof_->shutdown();
 
     if (nvofOutEvent_ != nullptr) { CloseHandle(nvofOutEvent_); nvofOutEvent_ = nullptr; }
+    // Each NR instance owns a core-allocated parameter block independently of
+    // the shared graph parameters. Destroy it after feature release, while the
+    // core is still alive, rather than relying on its shutdown leak fallback.
+    if (coreHost_ && coreHost_->initialized()) {
+        unsigned releasedNrParameters = 0;
+        for (auto layer = nrInstances_.rbegin(); layer != nrInstances_.rend(); ++layer) {
+            if ((*layer)->parameters() == nullptr) continue;
+            coreHost_->destroyParameters((*layer)->parameters());
+            (*layer)->setParameters(nullptr);
+            ++releasedNrParameters;
+        }
+        if (releasedNrParameters != 0) {
+            veyra::log::info("graph", std::format("NR parameter blocks explicitly destroyed={}", releasedNrParameters));
+        }
+    }
     if (coreHost_ && coreHost_->initialized() && ngxParams_ != nullptr) {
         coreHost_->destroyParameters(ngxParams_);
         ngxParams_ = nullptr;
@@ -2219,12 +3034,26 @@ void EnhanceGraph::shutdown()
     decPass_ = ComputePass{};
     rgbPass_={};rgbTex_.Reset();
     for(unsigned i=0;i<2;++i){if(upRgb_[i]&&mappedRgb_[i])upRgb_[i]->Unmap(0,nullptr);mappedRgb_[i]=nullptr;upRgb_[i].Reset();}
-    downsamplePass_={};residualPass_={};flowAdaptPass_={};
-    nrTemporal_.close();nrInput_.Reset();residualRgba_.Reset();nrFlow_.Reset();baseFlow_.Reset();
+    downsamplePass_={};residualPass_={};stackProtectionPass_={};flowAdaptPass_={};
+    for(auto& layer:nrInstances_)layer->close();
+    nrInstances_.clear();
+    residualRgba_.Reset();preSrProtectionRgba_.Reset();interNrProtectionRgba_.Reset();nrFlow_.Reset();baseFlow_.Reset();
     for(unsigned i=0;i<kGeneratedPoolSlots;++i){if(fgDisableMapped_[i]&&fgDisableReadback_[i]){D3D12_RANGE written{0,0};fgDisableReadback_[i]->Unmap(0,&written);}fgDisableMapped_[i]=nullptr;fgDisable_[i].Reset();fgDisableReadback_[i].Reset();generatedLeases_[i].reset();genFrame_[i].Reset();}for(auto& lease:realLeases_)lease.reset();fgDisableInit_.Reset();
     encPass_ = ComputePass{};
     blitPass_ = ComputePass{};hdrVideoSrPass_={};
     yuvPass_ = ComputePass{};
+    for(auto i=additionalColorInstances_.rbegin();i!=additionalColorInstances_.rend();++i)i->reset();
+    for(auto i=nodeColorInstances_.rbegin();i!=nodeColorInstances_.rend();++i)i->reset();
+    nodeColorOutputs_={};tailColorActiveCount_=preNrColorActiveCount_=preSrColorActiveCount_=interNrColorActiveCount_=0;
+    preSrColorOutput_=nullptr;preSrColorExecutionLogged_=false;
+    interNrColorOutputs_={};interNrColorExecutionLogged_=false;
+    tailColorOutput_=preNrColorOutput_=nullptr;tailColorExecutionLogged_=preNrColorExecutionLogged_=false;
+    colorScratch_={};additionalColorActiveCount_=0;
+    colorTableUploads_.clear();
+    colorLutStaging_={};colorLutUpload_.clear();colorLutPending_=colorLutSize_=colorLutStagingSlot_=0;
+    colorCurveTex_.Reset();colorHueTex_.Reset();colorLumTex_.Reset();colorLutTex_.Reset();
+    colorActive_=false;colorDirty_=true;colorTables_={};colorLutNotice_.clear();
+    stager_={};
     toneMapPeakNits_=0;
     densifyPass_ = ComputePass{};
     confTex_.Reset();
@@ -2240,7 +3069,7 @@ void EnhanceGraph::shutdown()
     neuralTex_.Reset();
     proxyTex_.Reset();
     for(auto& r:sourceReferences_)r.Reset();for(auto& r:baseReferences_)r.Reset();workRgba_.Reset();
-    srcRgba_.Reset();videoSrInput_.Reset();videoSrOutput_.Reset();
+    preGradeRgba_.Reset();srcRgba_.Reset();videoSrInput_.Reset();videoSrOutput_.Reset();
     chromaTex_.Reset();
     lumaTex_.Reset();
     upZeroMotion_.Reset();

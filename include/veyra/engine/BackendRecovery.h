@@ -3,6 +3,15 @@
 
 namespace veyra::engine {
 enum class FailedBackend { None, Infrastructure, OpticalFlow, NgxCore, Nr, Sr, Fg, VideoHdr };
+// NGX 310.9.1 definitions. A failure on 566.07 alone does not establish a
+// universal minimum driver. Preserve the real result and suggest recovery.
+constexpr const wchar_t* ngxFailureHint(uint64_t result) {
+    switch(uint32_t(result)) {
+    case 0xBAD00002:return L"平台或驱动初始化失败；请更新 NVIDIA 驱动或选择兼容运行库";
+    case 0xBAD00001:return L"显卡、驱动或运行库不支持所选功能";
+    default:return L"初始化失败；详细原因见诊断日志";
+    }
+}
 inline bool disableUnsupportedNvidiaEffects(EnhancementSettings& settings,bool nvidia){
     if(nvidia)return false;
     const auto before=settings;
