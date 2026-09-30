@@ -44,6 +44,7 @@ enum class SourceKind : uint8_t {
     Image,        // WIC single image
     TestPattern,  // synthetic harness input
     ScreenCapture,
+    Moonlight,    // Sunshine / GameStream host stream (moonlight-common-c transport)
 };
 
 inline const char* sourceKindName(SourceKind k) {
@@ -54,6 +55,7 @@ inline const char* sourceKindName(SourceKind k) {
     case SourceKind::Image: return "Image";
     case SourceKind::TestPattern: return "TestPattern";
     case SourceKind::ScreenCapture: return "ScreenCapture";
+    case SourceKind::Moonlight: return "Moonlight";
     default: return "Unknown";
     }
 }

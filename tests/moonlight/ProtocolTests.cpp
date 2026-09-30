@@ -30,6 +30,7 @@
 #include "veyra/moonlight/Http.h"
 #include "veyra/moonlight/IdentityStore.h"
 #include "veyra/moonlight/Pairing.h"
+#include "veyra/moonlight/StreamConfig.h"
 #include "veyra/moonlight/Xml.h"
 
 using namespace veyra::moonlight;
@@ -393,6 +394,30 @@ void cryptoTests() {
     check(generatePin().size() == 4, "pin has four digits");
 }
 
+void streamConfigTests() {
+    // moonlight-qt's table: 1080p60 = 20 Mbps, 4K60 = 80 Mbps, 720p30 = 5 Mbps.
+    check(defaultBitrateKbps(1920, 1080, 60) == 20000, "1080p60 default bitrate");
+    check(defaultBitrateKbps(3840, 2160, 60) == 80000, "4K60 default bitrate");
+    check(defaultBitrateKbps(1280, 720, 30) == 5000, "720p30 default bitrate");
+    check(defaultBitrateKbps(3840, 2160, 30) == 40000, "4K30 default bitrate");
+    check(defaultBitrateKbps(3840, 2160, 120) == 113000, "frame rate factor grows with the square root above 60 fps");
+    check(defaultBitrateKbps(1920, 1080, 60, true) == 40000, "4:4:4 doubles the bitrate");
+    check(defaultBitrateKbps(2560, 1440, 60) > defaultBitrateKbps(1920, 1080, 60) && defaultBitrateKbps(2560, 1440, 60) < defaultBitrateKbps(3840, 2160, 60), "bitrate grows with resolution");
+    check(defaultBitrateKbps(320, 200, 30) == 1000, "never below the smallest table entry");
+    check(defaultBitrateKbps(7680, 4320, 60) == 80000, "never above the largest table entry");
+
+    const int sunshine = 197377;   // H.264, HEVC, HEVC Main10, AV1 Main8, AV1 Main10
+    check(chooseVideoFormats(CodecChoice::Auto, false, sunshine, false) == (kFormatH264 | kFormatH265), "auto SDR offers H.264 and HEVC, not AV1 without hardware decode");
+    check(chooseVideoFormats(CodecChoice::Auto, false, sunshine, true) == (kFormatH264 | kFormatH265 | kFormatAv1Main8), "auto SDR adds AV1 when it decodes in hardware");
+    check(chooseVideoFormats(CodecChoice::Hevc, false, sunshine, false) == kFormatH265, "HEVC only");
+    check(chooseVideoFormats(CodecChoice::Auto, true, sunshine, false) == kFormatH265Main10, "auto HDR offers HEVC Main10 only");
+    check(chooseVideoFormats(CodecChoice::Auto, true, sunshine, true) == (kFormatH265Main10 | kFormatAv1Main10), "auto HDR adds AV1 Main10 with hardware decode");
+    check(chooseVideoFormats(CodecChoice::H264, true, sunshine, true) == 0, "HDR cannot be carried by H.264");
+    check(chooseVideoFormats(CodecChoice::Hevc, false, kServerH264, false) == 0, "a host without HEVC cannot give HEVC");
+    check(chooseVideoFormats(CodecChoice::Auto, false, kServerH264, true) == kFormatH264, "an H.264-only host still streams");
+    check((chooseVideoFormats(CodecChoice::Av1, true, sunshine, false) & kFormatMask10Bit) == kFormatAv1Main10, "explicit AV1 HDR");
+}
+
 void storeTests() {
     wchar_t temp[MAX_PATH];
     GetTempPathW(MAX_PATH, temp);
@@ -529,6 +554,7 @@ int main() {
     xmlTests();
     cryptoTests();
     storeTests();
+    streamConfigTests();
     protocolTests();
     std::printf("moonlight protocol tests: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

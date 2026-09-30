@@ -12,7 +12,7 @@
 |---|---|---|
 | S0 | 依赖固定（`scripts/moonlight/dependency-lock.json` + 校验脚本）、CMake 开关、许可记录 | 完成 |
 | S1 | 协议层（Qt 无关）：XML、加密、HTTP(S)、主机请求、配对、身份存储 | 完成，离线测试 69 项通过 |
-| S2 | 会话来源：`LiStartConnection`、视频解码、音频、遥测、引擎接入 | 未开始 |
+| S2 | 会话来源：`LiStartConnection`、视频解码、音频、遥测、引擎接入 | 代码完成（S2a），只做了编译与离线检查，未连过任何主机 |
 | S3 | 输入：手柄、键鼠捕获、保留键 | 未开始 |
 | S4 | 前端：首页卡片、PC 串流页、配对对话框、设置、串流中 UI | 未开始 |
 | S5 | 质量：HDR、AV1、丢包与重连、稳定性 | 未开始 |
@@ -41,6 +41,16 @@
 
 **发现的测试自身问题**：Windows 上回环口被拒绝的连接有时要约 2 秒才报错，可能与 2 秒超时撞车而报成 Timeout；相应测试已同时接受 Connect 与 Timeout。
 
+## S2a 记录（会话来源与引擎接入）
+
+- `MoonlightSessionSource`（`IFrameSource`）：`connect()` 先 launch/resume，再 `LiStartConnection`，失败由库自行清理；拉取式渲染（`LiWaitForNextVideoFrame` / `LiCompleteVideoFrame`）由一个解码线程处理，复用采集卡的 `CaptureCompressedDecoder`（D3D12VA 硬解，失败回落软解 NV12）；丢帧放在解码之后，被跳过的帧记到下一帧的 Drop 标志，与 PS5 来源同一约定。
+- Opus 多声道经 `CaptureAudioSession`，增益与音画同步沿用采集卡的设置。
+- 引擎：`openMoonlight()`、`snapshot()` 带 `moonlightActive` 与 `MoonlightStats`；`isStream`（采集卡、PS5、Moonlight 共用的"实时来源"判断）替换了原来散落的 `isCapture || isRemote` 分支，PS5 与采集路径行为不变。
+- 码率与编码选择（`StreamConfig.h`，纯函数，有测试）：默认码率表取自 moonlight-qt，1080p60=20 Mbps、4K60=80 Mbps；HDR 只提供 10 位格式；AV1 只在已知有硬解时自动提供。
+- 构建陷阱（已处理）：① Moonlight 目标必须放在 `CMAKE_MSVC_RUNTIME_LIBRARY`（静态 CRT）设置之后，否则与 Qt 目标链接时 `msvcprt`/`libcpmt` 重复定义；② 带 Moonlight 的 `veyra_qml_ui` 链接行超过响应文件阈值，`link.exe` 按 ANSI 读响应文件，`E:\项目` 下的 Qt 库路径打不开。本机构建用 `C:eyra-deps\qt-veyra`（指向 Qt 的目录联接）作前缀；这是本机环境，不进仓库。
+- 验证：`veyra_moonlight_protocol_tests` 87 项通过；整个 `veyra_qml_ui` 链接成功；`veyra_qml_data_tests`、`veyra_qml_easing_tests`、`veyra_ui_contract_tests`、`veyra_effect_chain_tests`、`veyra_repair_contract_tests`、`veyra_preset_library_tests` 通过。
+- **未验证**：任何真实串流（连接、解码、音频、HDR、丢包恢复）；解码流水线还没有离线单测；`connect()` 会阻塞引擎线程直到启动完成，首帧最多等 20 秒；软解回落只出 8 位，HDR 需要硬解；手柄震动与输入是空实现（S3）；断线重连未做（S5）。
+
 ## 下一步
 
-S2：`MoonlightSessionSource`（拉取模式 `LiWaitForNextVideoFrame`、每帧立即解码、丢帧放在解码后且不标不连续）、Opus 多声道、遥测与延迟分解；先做离线可测的部分（解码单元拼接、HDR 元数据、时间戳换算）。
+S3 输入（手柄、键鼠、保留键）与 S4 前端（桥接接口、主机与应用列表、配对对话框、串流页与设置）。

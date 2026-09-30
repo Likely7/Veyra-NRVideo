@@ -61,6 +61,12 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(VeyraWarnings)
 include(VeyraShaders)
 
+# NVIDIA's static NGX core shim (nvsdk_ngx_s*.lib) is built against the
+# static CRT (MT/MTd); match it for the diagnostic tools that link it.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+# Moonlight targets come after the runtime setting: they link into the same
+# executables as the rest of the engine, so they must use the static CRT too.
 if(VEYRA_ENABLE_MOONLIGHT)
   set(VEYRA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
   include(VeyraMoonlight)
@@ -71,10 +77,6 @@ if(VEYRA_ENABLE_MOONLIGHT)
   target_link_libraries(veyra_moonlight_protocol_tests PRIVATE veyra_moonlight_protocol)
   veyra_apply_warnings(veyra_moonlight_protocol_tests)
 endif()
-
-# NVIDIA's static NGX core shim (nvsdk_ngx_s*.lib) is built against the
-# static CRT (MT/MTd); match it for the diagnostic tools that link it.
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 # ---------------------------------------------------------------------------
 # Targets grow phase by phase; only what actually compiles is declared.
@@ -545,6 +547,13 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     target_compile_definitions(veyra_sources PUBLIC VEYRA_ENABLE_REMOTEPLAY=1)
     target_sources(veyra_sources PRIVATE src/source/RemotePlaySource.cpp src/source/RemotePlaySessionSource.cpp)
     target_link_libraries(veyra_sources PUBLIC veyra_remoteplay_chiaki)
+  endif()
+
+  if(VEYRA_ENABLE_MOONLIGHT)
+    find_package(Opus CONFIG REQUIRED)
+    target_compile_definitions(veyra_sources PUBLIC VEYRA_ENABLE_MOONLIGHT=1)
+    target_sources(veyra_sources PRIVATE src/source/MoonlightSessionSource.cpp)
+    target_link_libraries(veyra_sources PUBLIC veyra_moonlight_protocol veyra_moonlight_common_c PRIVATE Opus::opus)
   endif()
 
   add_executable(veyra_source_tests
