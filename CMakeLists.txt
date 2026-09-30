@@ -48,6 +48,7 @@ set(VEYRA_CLIP_TOOLS_ROOT "" CACHE PATH "vcpkg-installed x64-windows root with o
 option(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR
   "Enable local-only experimental Feature 18 adapter" OFF)
 option(VEYRA_ENABLE_REMOTEPLAY "Build PS5 Remote Play with pinned Chiaki source" OFF)
+option(VEYRA_ENABLE_MOONLIGHT "Build the Moonlight / Sunshine streaming core (pinned moonlight-common-c)" OFF)
 option(VEYRA_ENABLE_DLSS_SR "Enable public DLSS SR backend" OFF)
 option(VEYRA_ENABLE_DLSS_FG "Enable public DLSSG backend" OFF)
 option(VEYRA_ENABLE_NVOF "Enable NVIDIA Optical Flow guidance" OFF)
@@ -59,6 +60,17 @@ set(VEYRA_FIDELITYFX2_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party_local/amd/Fi
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(VeyraWarnings)
 include(VeyraShaders)
+
+if(VEYRA_ENABLE_MOONLIGHT)
+  set(VEYRA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+  include(VeyraMoonlight)
+  veyra_apply_warnings(veyra_moonlight_protocol)
+  add_executable(veyra_moonlight_protocol_tests tests/moonlight/ProtocolTests.cpp)
+  target_compile_features(veyra_moonlight_protocol_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_moonlight_protocol_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_moonlight_protocol_tests PRIVATE veyra_moonlight_protocol)
+  veyra_apply_warnings(veyra_moonlight_protocol_tests)
+endif()
 
 # NVIDIA's static NGX core shim (nvsdk_ngx_s*.lib) is built against the
 # static CRT (MT/MTd); match it for the diagnostic tools that link it.

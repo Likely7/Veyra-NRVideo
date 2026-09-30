@@ -573,3 +573,25 @@ ingress. DXGI duplication is a Veyra addition. Screen capture is video-only.
 ## dav1d (1.3.0 AV1 playback)
 
 FFmpeg dynamically links dav1d 1.5.4 from the pinned local vcpkg build. The portable package includes its complete aggregated copyright/license text in `licenses/DAV1D-COPYRIGHT.txt` and provenance in `licenses/DAV1D-SPDX.json`. The FFmpeg corresponding-source ZIP includes dav1d source and its vcpkg port. Upstream: https://code.videolan.org/videolan/dav1d . License set recorded by the build: Apache-2.0, BSD-2-Clause, ISC and MIT; retain all notices supplied with the source.
+
+## Moonlight / GameStream streaming core (2026-10-01)
+
+The optional `VEYRA_ENABLE_MOONLIGHT` build compiles **moonlight-common-c** (GPL-3.0,
+https://github.com/moonlight-stream/moonlight-common-c) at commit
+`f900dd4767759c7b9d0e93bcea666b55c69ea62f` (2026-09-26) together with its two pinned submodules:
+ENet (MIT, https://github.com/cgutman/enet, `aca87840b57f045a1f7f9299e4b1b9b8e2a5e2f1`) and
+nanors (MIT, https://github.com/sleepybishop/nanors, `b1e3c22ca0cdc0bb83e3cd6ed1a2fc77869ed99a`).
+The build refuses any other checkout (`scripts/moonlight/verify-moonlight-stage.py`, pins in
+`scripts/moonlight/dependency-lock.json`). No Moonlight or Sunshine binary is committed or bundled.
+
+The host HTTP(S) client, the pairing handshake and the serverinfo / applist / launch handling in
+`src/moonlight/` and `include/veyra/moonlight/` are a port of **moonlight-qt** (GPL-3.0,
+https://github.com/moonlight-stream/moonlight-qt, commit `8369d1a0e11b999d4d1598f62ca5f6dea49602fb`):
+`app/backend/nvhttp.cpp`, `nvpairingmanager.cpp`, `identitymanager.cpp`, `nvcomputer.cpp` and the default
+bitrate table of `app/streaming/session.cpp`, with the Qt types replaced by standard C++, OpenSSL and Winsock.
+Nothing from the moonlight-qt tree is compiled. The OpenSSL (Apache-2.0) and Opus (BSD-3-Clause) libraries come
+from the same vcpkg tree as the PS5 build. Veyra is GPL-3.0, which is compatible with all of the above.
+License texts: `licenses/moonlight/ENET_MIT.txt`, `licenses/moonlight/NANORS_MIT.txt`; the GPL-3.0 text is Veyra's own `LICENSE`.
+
+The streamed machine runs **Sunshine** (GPL-3.0, https://github.com/LizardByte/Sunshine), which users install
+themselves; Veyra neither ships nor downloads it.
