@@ -70,6 +70,10 @@
 - 验证（离线，假主机）：`veyra_moonlight_model_tests` 42 项（添加主机、配对、游戏列表、设置校验与持久化、另一个游戏在跑时拒绝、HDR 与 H.264 冲突拒绝、恢复运行中的游戏、重启后保留、主机遗忘配对、删除）；测试发现并修掉两个真缺陷（JSON 迭代器用了两个临时对象、启动后读了已被移走的标签）。`scripts/moonlight/ui-demo.py` 用假主机进程驱动真实界面：添加主机、配对（界面显示的 PIN 交给假主机）、游戏列表、改设置、发起串流，最后 RTSP 被拒，界面给出可操作的失败原因；应用自报 `MLTEST_PASS`，逐步截图在 `tests/moonlight-20261001/ui-demo-r5`。
 - **未验证**：真实 Sunshine 互通、任何真实画面/音频/HDR/4K60、手柄键鼠实际效果、局域网自动发现（只验证了启动停止不崩溃）、`veyra_qml_quick_tests`（未暂存运行）。
 
+## Beta 包
+
+- 2026-10-01 构建本机测试包 `E:/项目/Veyra/test-packages/2.0.0beta2-moonlight-20261001/`（目录与 zip，约 408 MB；`scripts/moonlight/make-beta.py` 从 2026-09-30 候选的运行库布局加新播放器生成；说明见 `docs/TEST_PACKAGE_2.0.0beta2_moonlight.md`）。包内播放器 SHA256 `03C12063F51505C3AD29F406442B0F0A96FF5A50408D51DC300130D79098AC32`。只做了启动冒烟，未连真实主机；未推送、未打标签、未合并到 main。
+
 ## 下一步
 
 S3 输入（手柄、键鼠、保留键）与 S4 前端（桥接接口、主机与应用列表、配对对话框、串流页与设置）。

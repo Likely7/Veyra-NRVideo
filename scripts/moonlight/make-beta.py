@@ -1,0 +1,85 @@
+"""Builds the 2.0.0 beta 2 test package (with PC streaming) from the last validated package layout.
+
+usage: make-beta.py <base-stage> <moonlight-build-dir> <package-dir> <zip-path>
+
+<base-stage>   a staged 2.0.0 app with its runtime (the 2026-09-30 candidate): Qt, FFmpeg, runtime/, shaders ...
+<build-dir>    the VEYRA_ENABLE_MOONLIGHT build: veyra_qml_ui.exe and the qml folder come from here
+Test executables, test QML and logs are left out; every runtime is copied for real (no junctions).
+"""
+import hashlib
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import zipfile
+from pathlib import Path
+
+base, build, pkg, zpath = (Path(a) for a in sys.argv[1:5])
+repo = Path(__file__).resolve().parents[2]
+if pkg.exists():
+    raise SystemExit(f'refusing to reuse {pkg}')
+skip_files = {'veyra_qml_data_tests.exe', 'veyra_qml_easing_tests.exe', 'veyra_qml_quick_tests.exe', 'LOCAL_FIELD_FIXES.md'}
+skip_dirs = {'qml-tests', 'logs', 'data'}
+pkg.mkdir(parents=True)
+for item in base.iterdir():
+    if item.name in skip_files or item.name in skip_dirs:
+        continue
+    if item.is_dir():
+        shutil.copytree(item, pkg / item.name)
+    else:
+        shutil.copy2(item, pkg / item.name)
+
+# The new player and its QML (the base's Qt QML modules stay; only the Veyra module is replaced).
+shutil.copy2(build / 'veyra_qml_ui.exe', pkg / 'veyra_qml_ui.exe')
+shutil.rmtree(pkg / 'qml/Veyra')
+shutil.copytree(build / 'qml/Veyra', pkg / 'qml/Veyra')
+
+# Documents and licences.
+for name in ('LICENSE', 'THIRD_PARTY_NOTICES.md'):
+    shutil.copy2(repo / name, pkg / name)
+(pkg / 'docs').mkdir(exist_ok=True)
+for name in ('MOONLIGHT_EXECUTION_2026-10-01.md', 'STREAMING_PLAN_MOONLIGHT_XBOX_2026-10-01.md'):
+    shutil.copy2(repo / 'docs' / name, pkg / 'docs' / name)
+shutil.copy2(repo / 'docs/TEST_PACKAGE_2.0.0beta2_moonlight.md', pkg / '测试说明.md')
+(pkg / 'licenses').mkdir(exist_ok=True)
+shutil.copytree(repo / 'licenses/moonlight', pkg / 'licenses/moonlight', dirs_exist_ok=True)
+
+mf = pkg / 'runtime/experimental/release-runtime-manifest.json'
+if mf.exists():
+    manifest = json.loads(mf.read_text(encoding='utf-8-sig'))
+    manifest['package'] = 'Veyra 2.0.0beta2 (PC streaming)'
+    mf.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+
+# Checks: no reparse points, no test executables, the player is the new one.
+problems = []
+files = []
+for root, dirs, names in os.walk(pkg):
+    for d in dirs:
+        if os.stat(Path(root) / d, follow_symlinks=False).st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+            problems.append(f'reparse point: {Path(root) / d}')
+    for n in names:
+        p = Path(root) / n
+        files.append({'path': p.relative_to(pkg).as_posix(), 'size': p.stat().st_size,
+                      'sha256': hashlib.sha256(p.read_bytes()).hexdigest().upper()})
+names = {f['path'] for f in files}
+for bad in skip_files:
+    if bad in names:
+        problems.append(f'test file left in: {bad}')
+new_hash = hashlib.sha256((build / 'veyra_qml_ui.exe').read_bytes()).hexdigest().upper()
+if next(f for f in files if f['path'] == 'veyra_qml_ui.exe')['sha256'] != new_hash:
+    problems.append('player hash mismatch')
+commit = subprocess.run(['git', '-C', str(repo), 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+(pkg / 'package-manifest.json').write_text(json.dumps({
+    'package': 'Veyra 2.0.0beta2 (PC streaming)', 'commit': commit, 'player_sha256': new_hash,
+    'files': files}, ensure_ascii=False, indent=1), encoding='utf-8')
+if problems:
+    print('\n'.join(problems))
+    raise SystemExit(1)
+
+with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+    for f in files + [{'path': 'package-manifest.json'}]:
+        z.write(pkg / f['path'], Path(pkg.name) / f['path'])
+print('package', pkg, len(files), 'files; player sha256', new_hash)
+print('zip', zpath, zpath.stat().st_size)
