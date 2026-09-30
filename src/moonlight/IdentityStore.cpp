@@ -48,6 +48,9 @@ bool take(const uint8_t*& cursor, const uint8_t* end, std::string& text) {
 } // namespace
 
 std::filesystem::path dataDirectory() {
+    // Tests and demos point this somewhere disposable; it is not a user setting.
+    wchar_t override[MAX_PATH] = {};
+    if (GetEnvironmentVariableW(L"VEYRA_MOONLIGHT_DATA", override, MAX_PATH) > 0) return std::filesystem::path(override);
     PWSTR raw = nullptr;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &raw)))
         throw std::runtime_error("Cannot resolve the user data directory");

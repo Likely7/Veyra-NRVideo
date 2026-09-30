@@ -76,6 +76,12 @@ if(VEYRA_ENABLE_MOONLIGHT)
   target_compile_definitions(veyra_moonlight_protocol_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_moonlight_protocol_tests PRIVATE veyra_moonlight_protocol)
   veyra_apply_warnings(veyra_moonlight_protocol_tests)
+  # The same fake host as a process, for the end-to-end UI check (scripts/moonlight/ui-demo.py).
+  add_executable(veyra_moonlight_mockhost tests/moonlight/MockHostServer.cpp)
+  target_compile_features(veyra_moonlight_mockhost PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_moonlight_mockhost PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_include_directories(veyra_moonlight_mockhost PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/moonlight)
+  target_link_libraries(veyra_moonlight_mockhost PRIVATE veyra_moonlight_protocol)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -789,6 +795,21 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
   if(VEYRA_ENABLE_MOONLIGHT)
     target_sources(veyra_qml_bridge PRIVATE src/ui/MoonlightInputCapture.cpp include/veyra/ui/MoonlightInputCapture.h)
+    # The PC streaming model (hosts, pairing, apps, settings) is its own small library so it can be
+    # tested against the mock host without the whole player.
+    add_library(veyra_moonlight_model STATIC src/ui/MoonlightModel.cpp include/veyra/ui/MoonlightModel.h)
+    set_target_properties(veyra_moonlight_model PROPERTIES AUTOMOC ON)
+    target_compile_features(veyra_moonlight_model PUBLIC cxx_std_20)
+    target_include_directories(veyra_moonlight_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${FFMPEG_INCLUDE_DIRS})
+    target_compile_definitions(veyra_moonlight_model PUBLIC VEYRA_ENABLE_MOONLIGHT=1 PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(veyra_moonlight_model PUBLIC veyra_moonlight_protocol veyra_base Qt6::Core Qt6::Gui)
+    target_link_libraries(veyra_qml_bridge PUBLIC veyra_moonlight_model)
+
+    add_executable(veyra_moonlight_model_tests tests/moonlight/ModelTests.cpp)
+    target_compile_features(veyra_moonlight_model_tests PRIVATE cxx_std_20)
+    target_compile_definitions(veyra_moonlight_model_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_include_directories(veyra_moonlight_model_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/moonlight)
+    target_link_libraries(veyra_moonlight_model_tests PRIVATE veyra_moonlight_model)
   endif()
   target_compile_features(veyra_qml_bridge PRIVATE cxx_std_20)
   target_include_directories(veyra_qml_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src ${FFMPEG_INCLUDE_DIRS}

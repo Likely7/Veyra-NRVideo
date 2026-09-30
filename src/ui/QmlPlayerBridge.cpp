@@ -53,6 +53,10 @@
 #include "veyra/remoteplay/PsnAuth.h"
 #include "veyra/source/RemotePlaySource.h"
 #endif
+#ifdef VEYRA_ENABLE_MOONLIGHT
+#include "veyra/ui/MoonlightInputCapture.h"
+#include "veyra/ui/MoonlightModel.h"
+#endif
 #include <future>
 #include <functional>
 #include <map>
@@ -552,6 +556,14 @@ struct QmlPlayerBridge::Impl {
         options = engine::PlayerOptions::from(s,order);
         return true;
     }
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    // --- PC streaming (Moonlight). Last, so they are destroyed first: the model joins its workers.
+    QTimer* moonlightTimer = nullptr;
+    bool moonlightWantCapture = false, moonlightStatsVisible = false, moonlightWasActive = false;
+    int moonlightStatsTicks = 0;
+    std::unique_ptr<ui::MoonlightInputCapture> moonlightCapture;
+    std::unique_ptr<ui::MoonlightModel> moonlight;
+#endif
 };
 
 namespace {
@@ -613,6 +625,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fgChoicesChanged);
     impl_->loadPrefs();
     if (qApp) qApp->installEventFilter(this);
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    setupMoonlight();
+#endif
     // Before anything opens: the renderer reads the output choice at start().
     applyPreference(QStringLiteral("audioDevice"));
     applyPreference(QStringLiteral("audioForceStereo"));
@@ -737,6 +752,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         tickImageBatch();
         tickCapture();
         tickPs5();
+        tickMoonlight();
         // Geometry uses the source DAR and the same transform as mouse/compare.
         if (impl_->snapshot.running && impl_->videoWindow) {
             const bool fresh = impl_->aspectSession != impl_->snapshot.sessionId;
@@ -1655,6 +1671,148 @@ QVariantMap QmlPlayerBridge::ps5() const {
     return out;
 }
 QVariantList QmlPlayerBridge::ps5Profiles() const { return impl_->ps5ProfileList; }
+
+// --- PC streaming (Moonlight / Sunshine) -----------------------------------------------------------
+QObject* QmlPlayerBridge::moonlightModel() const {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    return impl_->moonlight.get();
+#else
+    return nullptr;
+#endif
+}
+bool QmlPlayerBridge::moonlightCaptured() const {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    return impl_->moonlightCapture && impl_->moonlightCapture->captured();
+#else
+    return false;
+#endif
+}
+bool QmlPlayerBridge::moonlightStatsVisible() const {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    return impl_->moonlightStatsVisible;
+#else
+    return false;
+#endif
+}
+void QmlPlayerBridge::setMoonlightStatsVisible(bool visible) {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    if (impl_->moonlightStatsVisible == visible) return;
+    impl_->moonlightStatsVisible = visible;
+    emit moonlightUiChanged();
+#else
+    (void)visible;
+#endif
+}
+void QmlPlayerBridge::openMoonlightDialog() { emit navigate(QStringLiteral("moonlight")); }
+
+void QmlPlayerBridge::moonlightCapture(bool on) {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    auto& i = *impl_;
+    if (!i.moonlightCapture) return;
+    if (!on) {
+        i.moonlightWantCapture = false;
+        i.moonlightCapture->capture(false);
+        return;
+    }
+    if (!i.snapshot.moonlightActive || !i.videoWindow) return;
+    i.moonlightCapture->setWindow(GetAncestor(i.videoWindow, GA_ROOT));
+    // The tick keeps trying until the window is in the foreground (right after connecting it may not be yet).
+    i.moonlightWantCapture = !i.moonlightCapture->capture(true);
+#else
+    (void)on;
+#endif
+}
+
+void QmlPlayerBridge::moonlightDisconnect() {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    moonlightCapture(false);
+    if (impl_->snapshot.moonlightActive) stopPlayback();
+#endif
+}
+
+#ifdef VEYRA_ENABLE_MOONLIGHT
+void QmlPlayerBridge::setupMoonlight() {
+    auto& i = *impl_;
+    i.moonlight = std::make_unique<ui::MoonlightModel>();
+    i.moonlightCapture = std::make_unique<ui::MoonlightInputCapture>(i.engine);
+    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::capturedChanged, this, [this](bool) { emit moonlightUiChanged(); });
+    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::releaseRequested, this, [this] {
+        impl_->moonlightWantCapture = false;
+        emit notice(tr("已释放键盘和鼠标（点击画面重新捕获）"), false);
+    });
+    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::quitRequested, this, [this] { moonlightDisconnect(); });
+    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::statsRequested, this, [this] { setMoonlightStatsVisible(!moonlightStatsVisible()); });
+    connect(i.moonlight.get(), &ui::MoonlightModel::notice, this, &QmlPlayerBridge::notice);
+    i.moonlight->setLaunchHandler([this](ui::MoonlightModel::Launch launch) -> bool {
+        auto& j = *impl_;
+        if (!j.videoWindow) return false;
+        rememberPosition(true);
+        j.openingSource = true;
+        j.sourceLabel = L"PC · " + launch.label.toStdWString();
+        j.resumeSession = 0;
+        j.screenFillActive = false;
+        const bool pad = (launch.desc.options.gamepadMask & 1) != 0;
+        j.moonlightWantCapture = launch.captureInput;
+        const QString label = launch.label;
+        auto request = std::make_shared<source::MoonlightConnectDesc>(std::move(launch.desc));
+        openAfterCinema(tr("正在连接 %1").arg(label), [this, request, pad] {
+            auto& k = *impl_;
+            if (k.preOpen) k.preOpen();
+            k.engine.previewView({});
+            k.engine.openMoonlight(k.videoWindow, std::move(*request), k.options);
+            k.openingSessionId = k.engine.snapshot().sessionId;
+            refreshSubtitles({});
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+            // The pad is polled on the UI thread at 250 Hz and sent only when it changes.
+            if (pad) {
+                if (!k.controller.start()) veyra::log::warn("moonlight-input", "SDL gamepad initialization failed");
+                if (!k.moonlightTimer) {
+                    k.moonlightTimer = new QTimer(this);
+                    k.moonlightTimer->setTimerType(Qt::PreciseTimer);
+                    connect(k.moonlightTimer, &QTimer::timeout, this, [this] {
+                        auto& m = *impl_;
+                        if (!m.snapshot.moonlightActive) { m.controller.stop(); m.moonlightTimer->stop(); return; }
+                        const bool focused = QGuiApplication::focusWindow() != nullptr;
+                        m.engine.moonlightController(m.controller.poll(focused));
+                        m.controller.feedback(m.engine.moonlightFeedback(), focused);
+                    });
+                }
+                k.moonlightTimer->start(4);
+            } else {
+                if (k.moonlightTimer) k.moonlightTimer->stop();
+                k.controller.stop();
+            }
+#else
+            (void)pad;
+#endif
+        });
+        rememberSource(QStringLiteral("moonlight"), label);
+        return true;
+    });
+}
+
+void QmlPlayerBridge::tickMoonlight() {
+    auto& i = *impl_;
+    if (!i.moonlight) return;
+    const auto& s = i.snapshot;
+    const bool active = s.moonlightActive;
+    if (active != i.moonlightWasActive) {
+        i.moonlightWasActive = active;
+        if (!active) {
+            i.moonlightWantCapture = false;
+            if (i.moonlightCapture) i.moonlightCapture->capture(false);
+        }
+        i.moonlight->updateStream(active, s.moonlight);
+    } else if (active && ++i.moonlightStatsTicks >= 15) {
+        i.moonlightStatsTicks = 0;
+        i.moonlight->updateStream(true, s.moonlight);
+    }
+    // Take the keyboard and mouse as soon as the picture is up (and again when the window comes to the front).
+    if (active && i.moonlightWantCapture && s.moonlight.state == source::MoonlightStats::State::Streaming) moonlightCapture(true);
+}
+#else
+void QmlPlayerBridge::tickMoonlight() {}
+#endif
 void QmlPlayerBridge::ps5Load() {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     auto& i = *impl_;
@@ -5132,6 +5290,8 @@ QVariantMap QmlPlayerBridge::lastSource() const {
         saved[QStringLiteral("summary")] = captureSessionSummary();
     } else if (kind == QLatin1String("ps5")) {
         saved[QStringLiteral("summary")] = tr("PS5 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
+    } else if (kind == QLatin1String("moonlight")) {
+        saved[QStringLiteral("summary")] = tr("PC 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
     } else if (kind == QLatin1String("screen")) {
         saved[QStringLiteral("summary")] = tr("屏幕捕获 · %1").arg(saved.value(QStringLiteral("label")).toString());
     } else if (hasCaptureSession()) {
@@ -5161,6 +5321,17 @@ void QmlPlayerBridge::resumeLastSource() {
         if (!ps5Connect()) emit notice(tr("没能继续上次的 PS5 串流：%1").arg(impl_->ps5Status), true);
 #else
         emit notice(tr("此版本不含 PS5 串流"), true);
+#endif
+        return;
+    }
+    if (kind == QLatin1String("moonlight")) {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+        if (!impl_->moonlight || !impl_->moonlight->resumeLast()) {
+            emit notice(tr("没能继续上次的 PC 串流，请在 PC 串流窗口里重新选择"), true);
+            emit navigate(QStringLiteral("moonlight"));
+        }
+#else
+        emit notice(tr("此版本不含 PC 串流"), true);
 #endif
         return;
     }
@@ -5229,6 +5400,7 @@ QString QmlPlayerBridge::sourceTitle() const {
         return tr("采集卡 · %1").arg(name.isEmpty() ? impl_->liveLabel : name);
     }
     if (kind == QLatin1String("ps5")) return tr("PS5 串流 · %1").arg(impl_->liveLabel);
+    if (kind == QLatin1String("moonlight")) return tr("PC 串流 · %1").arg(impl_->liveLabel);
     return tr("屏幕捕获 · %1").arg(impl_->liveLabel);
 }
 // "1080p60" / "1080p59.94": the reported height and nominal rate only.

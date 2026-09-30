@@ -40,6 +40,8 @@
 
 namespace veyra::ui {
 
+class MoonlightModel;
+
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
     // --- professional-page readouts ---------------------------------------
@@ -156,6 +158,11 @@ class QmlPlayerBridge : public QObject {
     // forwarding and gyro calibration. `ps5` carries the form state.
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
     Q_PROPERTY(QVariantList ps5Profiles READ ps5Profiles NOTIFY ps5Changed)
+    // PC streaming (Moonlight / Sunshine): hosts, pairing, apps and stream settings live in
+    // `moonlight` (null when the build has no Moonlight); capture state and the stats overlay here.
+    Q_PROPERTY(QObject* moonlight READ moonlightModel CONSTANT)
+    Q_PROPERTY(bool moonlightCaptured READ moonlightCaptured NOTIFY moonlightUiChanged)
+    Q_PROPERTY(bool moonlightStatsVisible READ moonlightStatsVisible WRITE setMoonlightStatsVisible NOTIFY moonlightUiChanged)
 
     // Shell preferences that are not enhancement settings: screenshot folder,
     // subtitle look, audio output. Stored in <data>/qml-preferences.v1.json and
@@ -531,6 +538,13 @@ public:
 
     QVariantMap ps5() const;
     QVariantList ps5Profiles() const;
+    QObject* moonlightModel() const;
+    bool moonlightCaptured() const;
+    bool moonlightStatsVisible() const;
+    void setMoonlightStatsVisible(bool visible);
+    Q_INVOKABLE void openMoonlightDialog();
+    Q_INVOKABLE void moonlightCapture(bool on);
+    Q_INVOKABLE void moonlightDisconnect();
     Q_INVOKABLE void ps5Load();
     Q_INVOKABLE bool ps5Set(const QString& key, const QVariant& value);
     Q_INVOKABLE void ps5SelectProfile(const QString& id);
@@ -931,6 +945,7 @@ public:
 signals:
     void nodeAnchorsChanged();
     void ps5Changed();
+    void moonlightUiChanged();
     void imageBatchChanged();
     void audioDevicesChanged();
     void subtitlesChanged();
@@ -990,6 +1005,10 @@ private:
     void tickImageBatch();
     void tickCapture();
     void tickPs5();
+    void tickMoonlight();
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    void setupMoonlight();
+#endif
     void queryCapture(int kind, std::wstring device);
     // Opens a device/stream URI (capture, screen) the way openPath opens a file.
     void openSourceUri(const std::wstring& uri, const std::wstring& label);

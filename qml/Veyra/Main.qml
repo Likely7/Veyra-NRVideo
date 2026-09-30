@@ -250,6 +250,7 @@ Window {
         // The dialogs open the source through the bridge; show the picture.
         onStartCapture: if (root.page === "home") root.goPage("min")
         onStartPs5: if (root.page === "home") root.goPage("min")
+        onStartMoonlight: if (root.page === "home") root.goPage("min")
         onStartScreen: if (root.page === "home") root.goPage("min")
     }
 
@@ -408,6 +409,24 @@ Window {
             root.toggleFullscreen()
         }
     }
+    // A click on the picture of a PC stream takes the keyboard and mouse back after a release
+    // (Ctrl+Alt+Shift+Z). While captured the clicks belong to the host and never get here.
+    TapHandler {
+        enabled: veyra.moonlight && veyra.moonlight.state.streaming === true && !veyra.moonlightCaptured && dialogs.dialog === ""
+        onTapped: eventPoint => {
+            const p = eventPoint.position
+            if (root.page !== "min" && root.page !== "pro" && root.page !== "node") return
+            if (p.x < videoHost.x || p.y < videoHost.y || p.x > videoHost.x + videoHost.width
+                || p.y > videoHost.y + videoHost.height) return
+            veyra.moonlightCapture(true)
+        }
+    }
+    StreamHud {
+        id: streamHud
+        x: 16
+        y: root.fullscreen ? 16 : 52
+        z: 90
+    }
     FullscreenBar {
         id: fullBar
         owner: root
@@ -524,7 +543,7 @@ Window {
         function onNotice(text, isError) { toast.show(text, isError) }
         function onNavigate(p) {
             // A dialog key opens the dialog; anything else is a page.
-            if (p === "capture" || p === "ps5" || p === "screen"
+            if (p === "capture" || p === "ps5" || p === "moonlight" || p === "screen"
                 || p === "subtitle" || p === "audio" || p === "save" || p === "manage") {
                 dialogs.open(p)
                 return

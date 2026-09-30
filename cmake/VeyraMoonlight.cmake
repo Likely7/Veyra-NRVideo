@@ -50,9 +50,10 @@ add_library(veyra_moonlight_protocol STATIC
   "${VEYRA_ROOT}/src/moonlight/Http.cpp"
   "${VEYRA_ROOT}/src/moonlight/Client.cpp"
   "${VEYRA_ROOT}/src/moonlight/Pairing.cpp"
-  "${VEYRA_ROOT}/src/moonlight/IdentityStore.cpp")
+  "${VEYRA_ROOT}/src/moonlight/IdentityStore.cpp"
+  "${VEYRA_ROOT}/src/moonlight/Discovery.cpp")
 target_compile_features(veyra_moonlight_protocol PUBLIC cxx_std_20)
 set_target_properties(veyra_moonlight_protocol PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_definitions(veyra_moonlight_protocol PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_include_directories(veyra_moonlight_protocol PUBLIC "${VEYRA_ROOT}/include")
-target_link_libraries(veyra_moonlight_protocol PUBLIC OpenSSL::SSL OpenSSL::Crypto PRIVATE ws2_32 crypt32 shell32 ole32 advapi32 user32)
+target_link_libraries(veyra_moonlight_protocol PUBLIC OpenSSL::SSL OpenSSL::Crypto PRIVATE ws2_32 crypt32 shell32 ole32 advapi32 user32 dnsapi)
