@@ -19,6 +19,9 @@ struct FgTestArgs {
     bool capabilityOnly = false; // --fg-cap: query + honest JSON, no create
     bool planarSix = false; // Direct NGX diagnostic; no player/EnhanceGraph.
     bool alternateGroups = false; // planarSix with multiFrameCount 1/5 alternating, no reset.
+    // "ada" or "ampere": patch the 310.9.1 provider with DlssgTransfusion before
+    // NGX Init (diagnostic; on non-Ada/Ampere hosts this forces that path).
+    std::string transfusion;
 };
 
 // Runs the full FG truth test and writes JSON to args.jsonFile.

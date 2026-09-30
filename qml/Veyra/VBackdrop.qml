@@ -17,19 +17,25 @@ Shape {
     layer.enabled: true
     layer.samples: 4
 
+    // fillItem must be a texture provider (an Image), not a container: a
+    // Rectangle holding images filled the shape white.
+    // 设置 → 背景渐变强度: 0 = flat base colour, 1 = the design's gradient,
+    // 2 = backdrop-strong.png: the same generator (tools/qt_probe/make-backdrop.py,
+    // same seed and grain) with the stops' distance from the edge colour x1.8.
     Image {
         id: fill
         visible: false
         width: backdrop.width
         height: backdrop.height
-        source: "backdrop.png"
+        source: Theme.backdropLevel === 2 ? "backdrop-strong.png" : "backdrop.png"
         smooth: true
     }
 
     ShapePath {
         strokeWidth: 1
         strokeColor: backdrop.strokeColor
-        fillItem: fill
+        fillColor: Theme.bgOuter
+        fillItem: Theme.backdropLevel === 0 ? null : fill
         PathRectangle {
             x: 0.5; y: 0.5
             width: backdrop.width - 1; height: backdrop.height - 1

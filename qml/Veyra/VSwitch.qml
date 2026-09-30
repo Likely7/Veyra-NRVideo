@@ -23,5 +23,5 @@ Rectangle {
         Behavior on width { NumberAnimation { duration: Theme.d(200) } }
     }
     HoverHandler { cursorShape: Qt.PointingHandCursor }
-    TapHandler { id: tap; onTapped: { sw.checked = !sw.checked; sw.toggled(sw.checked) } }
+    TapHandler { id: tap; gesturePolicy: TapHandler.WithinBounds; onTapped: { sw.checked = !sw.checked; sw.toggled(sw.checked) } }
 }

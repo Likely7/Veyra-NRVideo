@@ -16,6 +16,7 @@ ColumnLayout {
     }
 
     property int selected: -1
+    onSelectedChanged: veyra.selectedNrLayer = selected
 
     Repeater {
         model: veyra.chain

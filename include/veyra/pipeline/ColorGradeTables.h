@@ -29,6 +29,7 @@ struct ColorGradeTables {
     int lutInputSpace=0;
     bool blackWhite=false;            // monochrome mixer instead of the HSL mixer
     bool identity=true;               // master switch off or every parameter neutral
+    bool exposureOnly=false;          // only exposure is non-neutral; use exact linear gain
     static ColorGradeTables bake(const engine::ColorSettings& settings);
     // The exact piecewise-linear response the bake uses, exposed so the UI can
     // draw the same curve the shader will apply (no second implementation).
@@ -50,6 +51,6 @@ inline void packColorGradeConstants(const ColorGradeTables& t,float* out){
     // in either case the shader must return the input untouched.
     // flags.w(z) = black & white mixer active. Its per-band weights live in the
     // hue table's alpha channel, so no extra texture or constant slot is needed.
-    out[16]=t.identity?0.0f:1.0f;out[17]=float(t.identity?0:t.lutInputSpace);out[18]=t.blackWhite?1.0f:0.0f;out[19]=0;
+    out[16]=t.identity?0.0f:1.0f;out[17]=float(t.identity?0:t.lutInputSpace);out[18]=t.blackWhite?1.0f:0.0f;out[19]=t.exposureOnly?1.0f:0.0f;
 }
 } // namespace veyra::pipeline

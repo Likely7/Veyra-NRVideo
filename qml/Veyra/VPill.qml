@@ -5,6 +5,9 @@ Rectangle {
     id: pill
     property string key: ""
     property string value: ""
+    // Child items (e.g. a status dot) sit in the row before the text, not at
+    // the pill's top-left corner.
+    default property alias leading: lead.data
     signal clicked()
     implicitWidth: pillRow.implicitWidth + 21
     implicitHeight: Theme.ctlHeight
@@ -18,9 +21,10 @@ Rectangle {
         id: pillRow
         anchors.centerIn: parent
         spacing: 7
-        Text { text: pill.key; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
+        Row { id: lead; visible: children.length > 0; Layout.alignment: Qt.AlignVCenter }
+        Text { visible: pill.key.length > 0; text: pill.key; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
         Text { text: pill.value; color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; font.weight: Font.Medium }
     }
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
-    TapHandler { id: tap; onTapped: pill.clicked() }
+    TapHandler { id: tap; gesturePolicy: TapHandler.WithinBounds; onTapped: pill.clicked() }
 }

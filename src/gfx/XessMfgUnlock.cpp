@@ -194,8 +194,9 @@ XessMfgUnlock::State XessMfgUnlock::apply(HMODULE provider, uint32_t generatedFr
         }
         uint8_t* destination = base + patch.rva;
         if (memcmp(destination, patch.expected, patch.size) != 0) {
+            const auto actualBytes = toHex(destination, patch.size);
             state.detail = std::format(L"{} has unexpected bytes ({})", std::wstring(patch.name, patch.name + strlen(patch.name)),
-                                       std::wstring(toHex(destination, patch.size).begin(), toHex(destination, patch.size).end()));
+                                       std::wstring(actualBytes.begin(), actualBytes.end()));
             veyra::log::error("xess-mfg", std::format("unlock aborted: {} at 0x{:X} expected [{}] found [{}]", patch.name, patch.rva,
                                                       toHex(patch.expected, patch.size), toHex(destination, patch.size)));
             g_state = state;

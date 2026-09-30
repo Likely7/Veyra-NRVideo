@@ -20,6 +20,12 @@ Item {
 
     required property string currentPage
     signal requestPage(string page)
+    // Frameless window controls live in the capsule (user decision 2026-09-28).
+    property bool maximized: false
+    signal requestMinimize()
+    signal requestMaximize()
+    signal requestClose()
+    signal requestMove()
 
     property bool opened: false
     // Mirrors st.dockPinned in the design: pinned stays open regardless of hover.
@@ -46,6 +52,9 @@ Item {
         height: 12
         // Leaving the zone for anywhere but the dock retracts it (closeDock).
         HoverHandler { onHoveredChanged: if (hovered) dockRoot.open(); else if (!barHover.hovered) retract.restart() }
+        // The top strip is the title bar: drag moves, double click maximizes.
+        DragHandler { target: null; onActiveChanged: if (active) dockRoot.requestMove() }
+        TapHandler { onDoubleTapped: dockRoot.requestMaximize() }
     }
     Rectangle {
         id: handle
@@ -95,6 +104,12 @@ Item {
         HoverHandler {
             id: barHover
             onHoveredChanged: if (hovered) dockRoot.open(); else retract.restart()
+        }
+        // Dragging the capsule moves the window, as a title bar would.
+        DragHandler {
+            objectName: "dock-move"
+            target: null
+            onActiveChanged: if (active) dockRoot.requestMove()
         }
 
         RowLayout {
@@ -227,6 +242,76 @@ Item {
                 implicitWidth: 19
                 implicitHeight: 30
                 VDot { anchors.centerIn: parent; off: !veyra.running; warn: veyra.captureRecovering }
+            }
+
+            Rectangle { implicitWidth: 1; implicitHeight: 16; color: Qt.rgba(1, 1, 1, 0.14) }
+
+            // Window controls: minimize, maximize/restore, close.
+            Repeater {
+                model: [
+                    { id: "min", icon: "minus", tip: "最小化" },
+                    { id: "max", icon: "max", tip: dockRoot.maximized ? "还原" : "最大化" },
+                    { id: "close", icon: "x", tip: "关闭" }
+                ]
+                delegate: Item {
+                    id: wbtn
+                    required property var modelData
+                    objectName: "window-" + modelData.id
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    scale: wtap.pressed ? 0.86 : 1
+                    Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: height / 2
+                        color: whover.hovered ? (wbtn.modelData.id === "close" ? Qt.rgba(1, 0.365, 0.365, 0.22) : "#1A1A1F") : "transparent"
+                        Behavior on color { ColorAnimation { duration: Theme.d(200) } }
+                    }
+                    VIcon {
+                        anchors.centerIn: parent
+                        name: wbtn.modelData.icon
+                        size: 13
+                        color: whover.hovered && wbtn.modelData.id === "close" ? "#FF8A8A" : "#FFFFFF"
+                        opacity: whover.hovered ? 1.0 : 0.45
+                        Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
+                    }
+                    Rectangle {
+                        objectName: "videoCover"
+                        property real coverRadius: 7
+                        readonly property bool on: whover.hovered
+                        x: (wbtn.width - width) / 2
+                        y: 38
+                        width: wtipText.implicitWidth + 18
+                        height: wtipText.implicitHeight + 10
+                        radius: 7
+                        color: Theme.popover
+                        border.width: 1
+                        border.color: Theme.stroke2
+                        opacity: on ? 1 : 0
+                        visible: opacity > 0
+                        scale: on ? 1 : 0.85
+                        transformOrigin: Item.Top
+                        Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
+                        Behavior on scale { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
+                        Text {
+                            id: wtipText
+                            anchors.centerIn: parent
+                            text: wbtn.modelData.tip
+                            color: "#FFFFFF"
+                            font.family: Theme.fontUi
+                            font.pixelSize: 11
+                        }
+                    }
+                    HoverHandler { id: whover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler {
+                        id: wtap
+                        onTapped: {
+                            if (wbtn.modelData.id === "min") dockRoot.requestMinimize()
+                            else if (wbtn.modelData.id === "max") dockRoot.requestMaximize()
+                            else dockRoot.requestClose()
+                        }
+                    }
+                }
             }
         }
     }

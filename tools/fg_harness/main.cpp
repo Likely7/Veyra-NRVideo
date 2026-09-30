@@ -21,7 +21,7 @@ void printUsage()
     std::fprintf(stderr,
         "usage: veyra_fg_harness --fg-cap | --fg-test | --fg-planar6 | --fg-planar-alt | --audio-test\n"
         "  [--runtime-dir DIR] [--run-id ID] [--log-file FILE] [--json-file FILE]\n"
-        "  [--capture-dir DIR]\n");
+        "  [--capture-dir DIR] [--dlssg-transfusion ada|ampere]\n");
 }
 
 } // namespace
@@ -35,6 +35,7 @@ int main(int argc, char** argv)
     std::wstring runtimeDir;
     std::string runId = "fg-harness";
     std::wstring logFile, jsonFile, captureDir;
+    std::string transfusion;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -44,6 +45,7 @@ int main(int argc, char** argv)
         else if (arg == "--fg-planar-alt") { doFgTest = true; planarSix = true; alternateGroups = true; }
         else if (arg == "--audio-test") doAudio = true;
         else if (arg == "--run-id" && i + 1 < argc) runId = argv[++i];
+        else if (arg == "--dlssg-transfusion" && i + 1 < argc) transfusion = argv[++i];
         else if (arg == "--runtime-dir" && i + 1 < argc) {
             const std::string value = argv[++i];
             runtimeDir.assign(value.begin(), value.end());
@@ -86,6 +88,7 @@ int main(int argc, char** argv)
         args.captureDir = captureDir;
         args.planarSix = planarSix;
         args.alternateGroups = alternateGroups;
+        args.transfusion = transfusion;
         return runFgTest(args);
     }
     AudioTestArgs args{};

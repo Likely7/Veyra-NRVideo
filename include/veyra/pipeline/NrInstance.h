@@ -36,7 +36,7 @@ public:
     bool create(ID3D12Device* device, uint32_t width, uint32_t height,
                 uint32_t fullWidth, uint32_t fullHeight,
                 ID3D12Resource* zeroMotion, ID3D12Resource* zeroDepth,
-                ID3D12Resource* borrowedInput = nullptr);
+                ID3D12Resource* borrowedInput = nullptr, ID3D12Resource* borrowedMotion = nullptr);
     void close();
 
     bool created() const { return proxy_ != nullptr; }
@@ -52,6 +52,7 @@ public:
     ID3D12Resource* finalRgba() const { return finalRgba_.Get(); }
     ID3D12Resource* residual() const { return residual_.Get(); }
     ID3D12Resource* zeroMotion() const { return zeroMotion_; }
+    ID3D12Resource* motion() const { return motion_.Get(); }
     // The full-extent image this layer composites onto, and the full-extent
     // result it produces (except for the last layer, which the graph owns).
     ID3D12Resource* baseFull() const { return baseFull_; }
@@ -92,6 +93,7 @@ public:
 
 private:
     ComPtr<ID3D12Resource> input_, proxy_, neural_, finalRgba_, residual_, outputFull_;
+    ComPtr<ID3D12Resource> motion_; // same-size shared guidance or own adapted texture
     ID3D12Resource* baseFull_ = nullptr;
     // Not owned: either this layer's `outputFull_` or the graph's residual
     // texture. Set when views are created.

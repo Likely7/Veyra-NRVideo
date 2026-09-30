@@ -27,6 +27,7 @@
 #include "veyra/pipeline/ResetCoordinator.h"
 #include "veyra/gfx/XessMfgUnlock.h"
 #include "veyra/ngx/AmpereMfgUnlock.h"
+#include "veyra/ngx/DlssgTransfusion.h"
 #include "veyra/diagnostics/ResetCause.h"
 #include "veyra/diagnostics/CpuStallTrace.h"
 #include "veyra/sink/WasapiAudioSink.h"
@@ -77,15 +78,17 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
     // Diagnostics-only PlayerOptions fields never enter EnhancementSettings;
     // keep them across the snapshot round-trip below.
     const bool captureCpuUnpack=opts.captureCpuUnpack;
-    {std::lock_guard lock(mutex_);snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_);}
+    const bool softwareDecode=opts.softwareDecode;const bool hardwareDecodeOnly=opts.hardwareDecodeOnly;
+    {std::lock_guard lock(mutex_);snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
     opts.captureReplayForTest=captureReplay;
     opts.captureCpuUnpack=captureCpuUnpack;
+    opts.softwareDecode=softwareDecode;opts.hardwareDecodeOnly=hardwareDecodeOnly;
     post([this,video,path,opts]{paused_=false;seekSeconds_=-1;run(video,path,opts);});
 }
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc desc,PlayerOptions opts){
     auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
-    {std::lock_guard lock(mutex_);snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.remotePlay=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_);}
+    {std::lock_guard lock(mutex_);snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.remotePlay=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"remoteplay:",opts,request);});
 }
 remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);return activeRemote_?activeRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
@@ -101,8 +104,19 @@ bool EngineController::selectAudioTrack(uint64_t session,int streamIndex){
     if(std::none_of(snapshot_.audioTracks.begin(),snapshot_.audioTracks.end(),[&](const auto& t){return t.streamIndex==streamIndex;}))return false;
     pendingAudioSession_=session;pendingAudioTrack_=streamIndex;return true;
 }
-bool EngineController::requestSettings(EnhancementSettings s){
+bool EngineController::requestSettings(EnhancementSettings s,std::optional<ChainRuntimeOrder> order,uint64_t* acceptedRevision){
     if(!s.validate().empty()){veyra::log::warn("settings","invalid whole settings transaction rejected");status(L"整套设置无效，未应用任何字段",false);return false;}
+    if(order){
+        // Fail before changing desired state. This is a shape admission check,
+        // not a GPU test; actual dimensions are compiled again at graph creation.
+        StageRequest r;r.width=64;r.height=64;r.nr=s.nr;r.sr=s.sr;
+        r.fg=s.multiplier>1;r.fgMultiplier=s.multiplier;r.nodeOrder=&*order;
+        pipeline::EnhanceGraphDesc desc;describeStages(r,s,desc);
+        if(const auto error=desc.validateFixedExecutionPlan();!error.empty()){
+            veyra::log::warn("settings",std::format("node order rejected before commit: {}",error));
+            status(L"当前执行器尚不支持此节点顺序，原配置保持不变",false);return false;
+        }
+    }
     std::lock_guard lock(mutex_);if(snapshot_.image)s.multiplier=1;
     // Capability gate: refuse a multiplier the active GPU/runtime cannot honour
     // instead of letting the graph fail and silently turning frame generation
@@ -121,7 +135,7 @@ bool EngineController::requestSettings(EnhancementSettings s){
     // frame per presented frame; the probe (tools/fsr_probe) measured this on
     // every requested count, so anything above 2X is refused instead of
     // silently presenting 2X under a 4X label.
-    if(s.multiplier>2&&s.frameGenerationBackend==FrameGenerationBackend::Fsr){
+    if(s.multiplier>2&&fsrFrameGeneration(s.frameGenerationBackend)){
         snapshot_.status=L"AMD FSR 帧生成上限为 2X；请求未应用";
         snapshot_.failed=false;
         veyra::log::info("settings",std::format("fsr multiplier gate: requested={} maxGeneratedFrames=1 applied=unchanged",s.multiplier));
@@ -129,12 +143,17 @@ bool EngineController::requestSettings(EnhancementSettings s){
     }
     // Revision partitions GPU history and measurements. Audio-only edits must
     // not invalidate in-flight video, and identical notifications are no-ops.
-    s.revision=desired_.revision;if(s==desired_)return true;
-    if(!s.sameVideoConfiguration(desired_))s.revision=++nextRevision_;
-    desired_=s;snapshot_.desired=s;snapshot_.applying=snapshot_.applied!=desired_;return true;
+    s.revision=desired_.revision;if(s==desired_&&order==desiredNodeOrder_){if(acceptedRevision)*acceptedRevision=desired_.revision;return true;}
+    if(!s.sameVideoConfiguration(desired_)||order!=desiredNodeOrder_)s.revision=++nextRevision_;
+    desiredNodeOrder_=order;desired_=s;snapshot_.desired=s;snapshot_.applying=snapshot_.applied!=desired_;
+    if(acceptedRevision)*acceptedRevision=s.revision;return true;
 }
 void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(mutex_);savePath_=path;}
 void EngineController::startExport(const std::wstring& input,const std::wstring& output,PlayerOptions opts,bool hevc){
+    if(opts.nodeOrder){
+        veyra::log::warn("node-order","export has no runtime node-order transport; request rejected before posting");
+        status(L"节点链尚未接入导出执行器，请切换列表模式后导出",false);return;
+    }
     const auto frozen=opts.snapshot();const int audioStream=opts.audioStreamIndex;
     post([this,input,output,frozen,audioStream,hevc]{CoInitializeEx(nullptr,COINIT_MULTITHREADED);auto options=PlayerOptions::from(frozen);options.audioStreamIndex=audioStream;bool ok=exportVideo(input,output,options,hevc,stop_,[this](double p,const std::wstring& s){std::lock_guard lock(mutex_);snapshot_.status=s;snapshot_.position=p;snapshot_.duration=1;snapshot_.running=true;});{std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.failed=!ok&&!stop_;}CoUninitialize();});
 }
@@ -231,6 +250,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(isImage){
                 if(!sink::loadImage(path,image)){status(L"无法解码PNG/JPEG",true);break;}
                 if(!pipeline::Extent{image.width,image.height}.valid()||uint64_t(image.width)*image.height>16777216){
+                    if(options.nodeOrder){
+                        veyra::log::warn("node-order","large-image tiling has no runtime node-order transport; request rejected");
+                        status(L"节点模式尚未接入大图分块处理，请切换列表模式后打开",true);break;
+                    }
                     runLargeImage(window,image,options,ctx,ring);break;
                 }
                 imageFrame=av_frame_alloc();imageFrame->format=AV_PIX_FMT_RGBA;imageFrame->width=image.width;imageFrame->height=image.height;imageFrame->pts=0;imageFrame->color_range=AVCOL_RANGE_JPEG;imageFrame->colorspace=AVCOL_SPC_RGB;imageFrame->color_trc=AVCOL_TRC_IEC61966_2_1;
@@ -248,9 +271,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // VP9 through D3D12VA; MJPEG stays on the software path inside
                 // CaptureCompressedDecoder). Each source performs its own
                 // capability check and records its fallback.
-                od.preferHardwareDecode=true;
+                od.preferHardwareDecode=!(options.softwareDecode&&!isCapture);
+                od.requireHardwareDecode=options.hardwareDecodeOnly&&!options.softwareDecode&&!isCapture&&!isImage; // stills have no hardware decoder
                 od.d3d12Device=ctx.device();od.d3d12Queue=ctx.directQueue();
                 od.d3d12AdapterLuid=ctx.adapter().luid;
+                if(!isCapture)veyra::log::info("decode",std::format("file decode preference={}",options.softwareDecode?"software":options.hardwareDecodeOnly?"hardware-only":"hardware-first"));
                 // Diagnostic uses the production graph/presenter to validate
                 // D3D12VA imports without needing a paired PS5 or credentials.
                 if(!isCapture&&GetEnvironmentVariableW(L"VEYRA_TEST_FILE_HW_DECODE",nullptr,0)){
@@ -310,6 +335,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                  const auto& si=activeSource->info();
                  snapshot_.sourceWidth=si.width;snapshot_.sourceHeight=si.height;
                  snapshot_.sourceDisplayAspect=si.displayAspect;
+                 if(si.width&&si.height&&std::isfinite(si.displayAspect)&&si.displayAspect>0&&std::abs(si.displayAspect-double(si.width)/si.height)>.001)
+                     previewView_.displayAspect=si.displayAspect;
                  snapshot_.sourceRotationDegrees=si.rotationDegrees;
                  // Poster for the minimal-mode bar. Built once, from the frame
                  // we already decoded; failure leaves it empty on purpose.
@@ -341,21 +368,22 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             const bool nvidiaAdapter=ctx.adapter().isNvidia;
             auto stageRequest=[&](const PlayerOptions& o){
                 StageRequest r;r.nr=o.nr;r.sr=o.sr;r.fg=o.fg;r.fgMultiplier=o.fgMultiplier;
-                r.width=width;r.height=height;r.stillImage=isImage;r.nvidiaAdapter=nvidiaAdapter;return r;
+                r.width=width;r.height=height;r.stillImage=isImage;r.nvidiaAdapter=nvidiaAdapter;
+                r.nodeOrder=o.nodeOrder?&*o.nodeOrder:nullptr;return r;
             };
             describeStages(stageRequest(options),options.snapshot(),gd);
-            const bool xessFg=presentSinkFrameGeneration(options.settings.frameGenerationBackend);
+            const bool xessFg=crossVendorFrameGeneration(options.settings.frameGenerationBackend);
             gd.noFeatures=false;
             gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
             veyra::log::info("display-color",std::format("hdrInput={} hdrOutput={} forceSdrPreview={}",gd.hdrInput,gd.hdrOutput,options.settings.forceSdrPreview));
             gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
             gd.compatibilityPreflight=[this](const auto& desc,const auto& device){return checkFgCompatibility(desc,device,stop_);};
             std::wstring backendRecoveryWarning;
-            auto initializePreview=[&](pipeline::EnhanceGraphDesc& desc,PlayerOptions& selected,bool preserveWorkingFg=false){
+            auto initializePreview=[&](pipeline::EnhanceGraphDesc& desc,PlayerOptions& selected,bool preserveWorkingFg=false,bool preserveWorkingNr=false){
                 backendRecoveryWarning.clear();
                 auto supported=selected.snapshot();
                 if(disableUnsupportedNvidiaEffects(supported,nvidiaAdapter)){
-                    selected=PlayerOptions::from(supported);
+                    selected=PlayerOptions::from(supported,selected.nodeOrder);
                     // Same stage rules as every other build: AMD FSR upscaling
                     // survives the normalization, it used to be dropped here.
                     describeStages(stageRequest(selected),selected.snapshot(),desc);
@@ -371,7 +399,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         opened=presenter.open(ctx,window,graph,selected.settings.captureCompatible,!isCapture&&!isImage)&&graph.createViews();
                         failure=FailedBackend::Infrastructure;
                         if(opened&&graph.xessEnabled()&&!presenter.xessActive()){opened=false;failure=FailedBackend::Fg;}
-                        if(opened&&graph.fsrEnabled()&&!presenter.fsrActive()){opened=false;failure=FailedBackend::Fg;}
+                        if(opened&&graph.fsrEnabled()&&!graph.fsrActive()){opened=false;failure=FailedBackend::Fg;}
                         // Requested AMD FSR upscaling that could not be created
                         // (missing local runtime, unsupported layout) degrades
                         // to the plain scale path with a visible warning.
@@ -381,6 +409,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // A live backend/multiplier switch must not turn a working FG
                 // session into effects-off playback when the new provider fails.
                 if(preserveWorkingFg&&failure==FailedBackend::Fg)return false;
+                if(preserveWorkingNr&&failure==FailedBackend::Nr)return false;
                 auto reduced=selected.snapshot();
                 // Requested multiplier above this GPU's capability: clamp to what
                 // the runtime supports and say so, instead of dropping frame
@@ -394,8 +423,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto xessState=gfx::XessMfgUnlock::snapshot();
                         if(xessState.applied)capabilityGeneratedFrames=int(xessState.maxInterpolations);
                     }
-                    else if(reduced.frameGenerationBackend==FrameGenerationBackend::Fsr){
-                        capabilityGeneratedFrames=int(presenter.fsrMaxGeneratedFrames());
+                    else if(fsrFrameGeneration(reduced.frameGenerationBackend)){
+                        capabilityGeneratedFrames=int((graph.fsrActive()?1u:0u));
                     }
                 }
                 if(capabilityGeneratedFrames>0&&int(reduced.multiplier)-1>capabilityGeneratedFrames){
@@ -410,17 +439,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(!clampedOverCapability&&!disableFailedBackend(reduced,failure))return false;
                     veyra::log::warn("backend-recovery",std::format("initialization failed component={} attempt={} revision={} -> nr={} sr={} multiplier={}; original SDK error above",unsigned(failure),attempt+1,reduced.revision,reduced.nr,reduced.sr,reduced.multiplier));
                     if(!backendRecoveryWarning.empty())backendRecoveryWarning+=L"；";
-                    backendRecoveryWarning+=std::wstring(backendFailureName(failure))+L"初始化失败，已关闭依赖效果（错误码见日志）";
-                    if(failure==FailedBackend::Fg&&ngx::AmpereMfgUnlock::applied())backendRecoveryWarning+=L"；RTX 30 系补帧解锁已应用，但当前驱动/运行库组合下运行时不开放补帧，可改用 AMD FSR 补帧";
-                    if(failure==FailedBackend::Fg&&reduced.frameGenerationBackend==FrameGenerationBackend::XeSS&&presenter.fsrActive()){
-                        // The FidelityFX proxy owns the window's only flip-model
-                        // swapchain slot; it cannot be released without leaving
-                        // the window unable to host any later swapchain (verified
-                        // locally), so switching FSR -> XeSS needs a restart.
-                        backendRecoveryWarning+=L"；AMD FSR 的代理交换链仍占用窗口，切到 XeSS 需要重启软件";
-                    }
+                    const uint32_t ngxResult=uint32_t(graph.failedNgxResult());
+                    if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4&&failure==FailedBackend::Fg)
+                        backendRecoveryWarning+=L"FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已关闭补帧；原因见日志";
+                    else if((ngxResult&0xFFF00000u)==0xBAD00000u)
+                        backendRecoveryWarning+=std::wstring(backendFailureName(failure))+L"："+ngxFailureHint(ngxResult)+std::format(L"（NGX 0x{:08X}，驱动 {}），已关闭依赖效果",ngxResult,ctx.adapter().driverVersion);
+                    else if(!clampedOverCapability)
+                        backendRecoveryWarning+=std::wstring(backendFailureName(failure))+L" 初始化失败，已关闭依赖效果；原因见诊断日志";
+                    if(!graph.driverRequirementNotice().empty())backendRecoveryWarning+=L"；"+graph.driverRequirementNotice();
+                    if(failure==FailedBackend::Fg&&(ngx::AmpereMfgUnlock::applied()||(ngx::DlssgTransfusion::applied()&&ngx::DlssgTransfusion::snapshot().target==ngx::DlssgTransfusion::Target::Ampere)))backendRecoveryWarning+=L"；RTX 30 系补帧解锁已应用，但当前驱动/运行库组合下运行时不开放补帧，可改用 AMD FSR 补帧";
+
                     if(!ring.drainQueue()||!ring.discardRecording())return false;
-                    presenter.close();graph.shutdown();selected=PlayerOptions::from(reduced);
+                    presenter.close();graph.shutdown();selected=PlayerOptions::from(reduced,selected.nodeOrder);
                     describeStages(stageRequest(selected),selected.snapshot(),desc);
                 }
                 return false;
@@ -437,10 +467,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // session must not restrict the XeSS choices in the UI.
                 xessMaxInterpolatedFramesCap_=presenter.xessActive()?int(std::max(1u,xessState.maxInterpolations)):0;
                 snapshot_.xessMaxInterpolatedFrames=xessMaxInterpolatedFramesCap_;
-                // AMD FSR ceiling comes from the running presenter; 0 keeps the
+                // AMD FSR ceiling comes from the active graph provider; 0 keeps the
                 // settings UI on its static 2X fallback until a session ran.
-                fsrMaxGeneratedFramesCap_=graph.fsrEnabled()&&presenter.fsrActive()?int(presenter.fsrMaxGeneratedFrames()):0;
+                fsrMaxGeneratedFramesCap_=graph.fsrEnabled()&&graph.fsrActive()?int((graph.fsrActive()?1u:0u)):0;
                 snapshot_.fsrMaxGeneratedFrames=fsrMaxGeneratedFramesCap_;
+                snapshot_.fsrProviderVersion=graph.fsrProviderVersion();
                 if(fgMultiFrameMaxCap_>0)veyra::log::info("settings",std::format("frame-generation capability: maxGeneratedFrames={} maxMultiplier={}",fgMultiFrameMaxCap_,fgMultiFrameMaxCap_+1));
                 veyra::log::info("settings",std::format("xess capability: active={} maxInterpolatedFrames={} unlockApplied={} (active context only)",presenter.xessActive(),xessMaxInterpolatedFramesCap_,xessState.applied));
                 if(fsrMaxGeneratedFramesCap_>0)veyra::log::info("settings",std::format("fsr capability: generatedPerPresent={} => maxMultiplier={}",fsrMaxGeneratedFramesCap_,fsrMaxGeneratedFramesCap_+1));
@@ -503,6 +534,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             };
             PresentationScheduler liveTimeline;uint64_t submitted=0,expired=0;std::deque<int64_t> submissionTimes;
             DeadlineWait deadlineWait;
+            // Live capture: the GPU fence of a submitted frame wakes this thread
+            // directly. The 0.2 ms ready poll alone left a finished frame waiting
+            // up to one timer slice (plus timer jitter) before its Present.
+            struct EventHandle{HANDLE handle=CreateEventW(nullptr,FALSE,FALSE,nullptr);~EventHandle(){if(handle)CloseHandle(handle);}} gpuReadyEvent;
             // Realtime file preview scheduling (P2/P3): expired decoded
             // candidates lose their enhancement opportunity against the audio
             // master clock; FG admission predicts pair completion; XeSS-FG
@@ -519,7 +554,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // so per-call deltas systematically miss updates that land just
             // after a submission; feeding the cumulative difference at the
             // next submission cannot lose them. Reset with the presenter.
-            uint64_t fedXessPresented=0,fedXessGenerated=0,fedFsrPresented=0,fedFsrGenerated=0;
+            uint64_t fedXessPresented=0,fedXessGenerated=0;
             double playbackSpeedLastPts=0;Clock::time_point playbackSpeedLastWall{};
             CaptureHalfRate captureSampler;
             FrameLineageTracker lineageTracker;
@@ -694,7 +729,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             };
             auto drainLivePresentation=[&]{cadence.reset();if(liveScheduler){++presentationDrains;liveScheduler->cancel();pollCompletions();pendingCompletions.clear();}pairLatency.reset();};
             auto advanceLive=[&]{applyPresentation();if(liveScheduler){pollCompletions();if(stop_||(paused_&&!seekPreviewPending)||seekSeconds_>=0){liveScheduler->cancel();cadence.reset();}else liveScheduler->advance(host100ns());}};
-            auto waitLive=[&]{const auto due=liveScheduler?liveScheduler->wakeAt():0;deadlineWait.slice(due>host100ns()?std::min(1.0,double(due-host100ns())/10000):1.0,physicalCapture?captureSource.frameEvent():nullptr);};
+            auto waitLive=[&]{const auto due=liveScheduler?liveScheduler->wakeAt():0;deadlineWait.slice(due>host100ns()?std::min(1.0,double(due-host100ns())/10000):1.0,physicalCapture?captureSource.frameEvent():nullptr,physicalCapture?gpuReadyEvent.handle:nullptr);};
             uint64_t metricsRevision=options.settings.revision,metricsEpoch=0,metricsWindowEpoch=0,statsSourceBase=0;
             uint64_t slotWaitBase=ring.cpuWaitCount(),submitBase=ring.submitCount();double slotWaitMsBase=ring.cpuWaitMilliseconds();
             std::shared_ptr<FrameCompletionRates> completionRates;
@@ -723,11 +758,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             bool captureRecovering=false;unsigned captureRetries=0;
             Clock::time_point captureRetryAt{};
             bool xessPresentationRecovery=false;
-            bool fsrPresentationRecovery=false;
-            bool fsrDegradedReported=false;
             auto recoverXessPresentation=[&]{
-                const bool fsrFailed=presenter.fsrFailed();
-                if((!presenter.xessFailed()&&!fsrFailed)||FAILED(ctx.device()->GetDeviceRemovedReason()))return false;
+                if(!presenter.xessFailed()||FAILED(ctx.device()->GetDeviceRemovedReason()))return false;
                 auto reduced=options.snapshot();
                 if(!disableFailedBackend(reduced,FailedBackend::Fg))return false;
                 holdFileAudio();fileAudioAlignPending=true;
@@ -741,11 +773,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     std::lock_guard lock(mutex_);
                     desired_.rejectVideoRequest(options.snapshot(),reduced);
                     desired_.revision=++nextRevision_;snapshot_.desired=desired_;snapshot_.applying=true;
-                    snapshot_.backendWarning=fsrFailed?L"AMD FSR 帧生成呈现失败，正在恢复基础播放；错误码见日志":L"XeSS 呈现失败，正在恢复基础播放；错误码见日志";
+                    snapshot_.backendWarning=L"XeSS 呈现失败，正在恢复基础播放；错误码见日志";
                 }
-                veyra::log::warn("backend-recovery",std::format("{} presentation failed; drained commands, requesting swapchain rebuild without FG",fsrFailed?"AMD FSR":"XeSS"));
-                xessPresentationRecovery=!fsrFailed;
-                fsrPresentationRecovery=fsrFailed;
+                veyra::log::warn("backend-recovery",std::format("{} presentation failed; drained commands, requesting swapchain rebuild without FG","XeSS"));
+                xessPresentationRecovery=true;
                 reset=true;pendingResetCause=pipeline::ResetReason::Settings;
                 return true;
             };
@@ -785,7 +816,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(audioStarted)publishAudioStatus();
                 if(audioStarted&&injectFileEndpointLoss&&!fileEndpointLossInjected&&frames>=20){audioPipe.requestEndpointLossForTest();fileEndpointLossInjected=true;}
                 advanceLive();
-                if(liveScheduler&&liveScheduler->failed()){if(recoverXessPresentation())continue;status(L"视频呈现失败，请查看诊断",true);break;}
+                if(liveScheduler&&liveScheduler->failed()){
+                    if(recoverXessPresentation())continue;
+                    const bool alive=ctx.reportDeviceFailure("live-presentation-failed");
+                    status(alive?L"视频队列或呈现失败；GPU 未报告设备移除，请查看诊断":L"GPU 设备已移除或驱动已重置；请稍后重新连接，可切换 NR 运行库后重试",true);break;
+                }
                 const float gain=muted_?0.0f:volume_.load();audio.setGain(gain);
                 if(physicalCapture)captureSource.recoverAudio(gain,unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
                 captureSource.setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
@@ -798,7 +833,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #endif
                 // Save the latest processed real frame before a settings transaction
                 // invalidates it (live rendering can be one batch behind processing).
-                std::wstring save;EnhancementSettings requested;{std::lock_guard lock(mutex_);requested=desired_;if(hasOutput)save.swap(savePath_);}
+                std::wstring save;EnhancementSettings requested;std::optional<ChainRuntimeOrder> requestedOrder;
+                {std::lock_guard lock(mutex_);requested=desired_;requestedOrder=desiredNodeOrder_;if(hasOutput)save.swap(savePath_);}
                 if(!save.empty()){try{sink::RgbaImage result;const auto e=std::filesystem::path(save).extension().wstring();
                     drainLivePresentation();
                     if(graph.hdrOutput()){auto hdrPath=std::filesystem::path(save);hdrPath.replace_extension(L".jxr");if(sink::saveHdrScreenshot(hdrPath.wstring(),ctx,ring,graph.videoFrameResource(out.videoSlot)))status(L"HDR截图已保存："+hdrPath.wstring());else status(L"HDR截图保存失败，请查看日志",false);}else if(!sink::readRgba8(ctx,ring,graph.videoFrameResource(out.videoSlot),result)||!sink::saveImage(save,result,e==L".jpg"||e==L".jpeg"))status(L"保存失败（目标文件可能已存在），播放已保留",false);else{status(L"图片已保存："+save);veyra::log::info("image-save",std::format("saved extent={}x{} revision={}",gd.workWidth,gd.workHeight,options.settings.revision));}}
@@ -833,7 +869,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     std::lock_guard lock(mutex_);snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;
                     veyra::log::info("settings",std::format("Audio applied videoRevision={} mode={} offsetMs={} (video history retained)",requested.revision,unsigned(requested.audioSync),requested.audioOffsetMs));
                 }
-                const auto previous=options.snapshot();const auto previousDesc=gd;bool transaction=false;
+                const auto previous=options.snapshot();const auto previousDesc=gd;const auto previousOrder=options.nodeOrder;bool transaction=false;
                 if(requested.revision!=previous.revision){
                     holdFileAudio();
                     finishReset(diagnostics::ResetOutcome::Cancelled);
@@ -854,12 +890,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 
                     // A drain may outlive several slider notifications. Build
                     // only the latest pending configuration at this boundary.
-                    {std::lock_guard lock(mutex_);requested=desired_;}
+                    {std::lock_guard lock(mutex_);requested=desired_;requestedOrder=desiredNodeOrder_;}
                     if(requested.revision==previous.revision){finishReset(diagnostics::ResetOutcome::Cancelled);continue;}
                     resetRecord->settingsRevision=requested.revision;
-                    auto next=PlayerOptions::from(requested);auto nextDesc=gd;
+                    auto next=PlayerOptions::from(requested,requestedOrder);auto nextDesc=gd;
                     const bool nvidiaAdapter=ctx.adapter().isNvidia;
-                    const bool xessFg=presentSinkFrameGeneration(next.settings.frameGenerationBackend);
+                    const bool xessFg=crossVendorFrameGeneration(next.settings.frameGenerationBackend);
                     describeStages(stageRequest(next),next.snapshot(),nextDesc);
                     nextDesc.hdrOutput=requested.useHdrPreview(nextDesc.hdrInput,displayHdrActive());
                     // Rebuild decision.
@@ -875,7 +911,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     //    extents come from the resolution plan, and a non-NVIDIA
                     //    adapter resolves requested effects differently than the
                     //    settings record.
-                    bool rebuild=engine::requiresGraphRebuild(previous,requested);
+                    bool rebuild=engine::requiresGraphRebuild(previous,requested)||previousOrder!=requestedOrder;
                     if(gd.hdrOutput!=nextDesc.hdrOutput||
                        (!nvidiaAdapter&&(next.nr||next.sr||(next.fg&&!xessFg)))||
                        gd.enableNr!=nextDesc.enableNr||gd.enableFg!=nextDesc.enableFg||
@@ -890,14 +926,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     backendRecoveryWarning.clear();
                     const bool preserveWorkingFg=previous.multiplier>1&&requested.multiplier>1&&
                         (previous.frameGenerationBackend!=requested.frameGenerationBackend||previous.multiplier!=requested.multiplier);
-                    if(accepted&&rebuild){presenter.close();graph.shutdown();markResetStage(diagnostics::ResetStage::Destroy);accepted=initializePreview(nextDesc,next,preserveWorkingFg);
+                    const bool preserveWorkingNr=previous.nr&&requested.nr&&previous.nrRuntime!=requested.nrRuntime;
+                    if(accepted&&rebuild){presenter.close();graph.shutdown();markResetStage(diagnostics::ResetStage::Destroy);accepted=initializePreview(nextDesc,next,preserveWorkingFg,preserveWorkingNr);
                         markResetStage(diagnostics::ResetStage::Create);
                         if(!accepted){presenter.close();graph.shutdown();if(!graph.initialize(gd)||!presenter.open(ctx,window,graph,options.settings.captureCompatible,!isCapture&&!isImage)||!graph.createViews()){status(L"设置失败且旧资源恢复失败，已停止",true);break;}}
                     }else if(accepted)accepted=graph.applySettings(requested);
                     if(rebuild)publishFrameGenerationCapabilities();
                     if(accepted){
                         if(xessPresentationRecovery){backendRecoveryWarning=L"XeSS 呈现失败，已关闭补帧并恢复播放；错误码见日志";xessPresentationRecovery=false;}
-                        if(fsrPresentationRecovery){backendRecoveryWarning=L"AMD FSR 帧生成呈现失败，已关闭补帧并恢复播放；错误码见日志";fsrPresentationRecovery=false;}
                         if(!backendRecoveryWarning.empty()){
                             std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,next.snapshot());snapshot_.desired=desired_;snapshot_.backendWarning=backendRecoveryWarning;
                         }
@@ -907,7 +943,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                     else {
                         finishReset(diagnostics::ResetOutcome::RolledBack);
-                        std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=previous;snapshot_.status=L"设置应用失败，已恢复上一套参数";snapshot_.backendWarning=requested.nrRuntime!=previous.nrRuntime?L"NR运行版本切换失败，已恢复上一套参数":requested.frameGenerationBackend==FrameGenerationBackend::XeSS?L"XeSS 未能启用，已恢复上一套参数":requested.frameGenerationBackend==FrameGenerationBackend::Fsr?L"AMD FSR 帧生成未能启用，已恢复上一套参数":L"后端切换失败，已恢复上一套参数";}
+                        std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=previous;snapshot_.status=L"设置应用失败，已恢复上一套参数";snapshot_.backendWarning=requested.nrRuntime!=previous.nrRuntime?L"NR运行版本切换失败，已恢复上一套参数":requested.frameGenerationBackend==FrameGenerationBackend::XeSS?L"XeSS 未能启用，已恢复上一套参数":requested.frameGenerationBackend==FrameGenerationBackend::Fsr4?L"FSR 4 ML 未能启用（需要支持的 RX 9000 和驱动），已恢复上一套参数":fsrFrameGeneration(requested.frameGenerationBackend)?L"FSR 3.1 帧生成未能启用，已恢复上一套参数":L"后端切换失败，已恢复上一套参数";}
                 }
                 // Live uniform update. The revision identifies the graph *shape*
                 // (NR/SR/FG/resolution and the colour master switch); colour
@@ -917,7 +953,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // unrelated rebuild (toggling NR): the "sliders do nothing" report.
                 if(requested.revision==previous.revision&&!(requested==previous)){
                     if(graph.applySettings(requested)){
-                        options=PlayerOptions::from(requested);
+                        options=PlayerOptions::from(requested,requestedOrder);
                         {std::lock_guard lock(mutex_);snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;}
                         veyra::log::info("settings",std::format("live parameter update revision={} colourEnabled={} exposure={:.2f} contrast={:.2f} temperature={:.2f}",requested.revision,requested.color.enabled?1:0,requested.color.exposure,requested.color.contrast,requested.color.temperature));
                         // Colour lives inside the ingest dispatch, so a paused
@@ -926,7 +962,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         // be re-rendered before the next present.
                         if(paused_||isImage)refreshPausedFrame_=true;
                     }else{
-                        std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.applying=desired_!=previous;snapshot_.status=L"这套参数需要重建管线，已回到上一套数值";
+                        std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.applying=desired_!=previous;snapshot_.status=L"这套参数需要重建管线，已回到上一套数值";
                     }
                 }
                 if(stop_)break;
@@ -995,7 +1031,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(liveScheduler&&!transaction){
                     const auto enhancementPending=[&]{
                         if(presentationEffective.enabled&&!options.fg&&(isCapture||!fileAwaitingVideo)&&liveScheduler->occupancy()>=1)return true;
-                        return isCapture&&options.fg&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)&&!pendingCompletions.empty();
+                        // Live sources: never stack a second frame behind one the GPU
+                        // is still enhancing. When NR/SR cost more than one source
+                        // interval, a second queued frame doubled capture-to-present
+                        // latency (3 NR layers at 1440p60: 49 ms for 20 ms of GPU
+                        // work); waiting and then taking the newest mailbox sample
+                        // keeps it at one GPU pass. No effect while the GPU keeps up.
+                        return isCapture&&!(options.fg&&presentSinkFrameGeneration(options.settings.frameGenerationBackend))&&!pendingCompletions.empty();
                     };
                     const auto leaseWaitStart=Clock::now();
                     while((liveScheduler->occupancy()>=2||!graph.nextFrameSlotAvailable()||enhancementPending())&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){
@@ -1332,7 +1374,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             if(!ring.drainQueue()||!ring.discardRecording()){status(L"增强故障恢复排空失败",true);break;}
                             out={};hasOutput=false;presenter.close();graph.shutdown();
                             {std::lock_guard lock(mutex_);reduced.revision=++nextRevision_;}
-                            options=PlayerOptions::from(reduced);
+                            options=PlayerOptions::from(reduced,options.nodeOrder);
                             describeStages(stageRequest(options),options.snapshot(),gd);
                             if(!initializePreview(gd,options)){status(L"增强故障后的基础图重建失败",true);break;}
                             publishFrameGenerationCapabilities();
@@ -1345,12 +1387,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         }
                     }
                     if(transaction){
-                        ring.drainQueue();out={};presenter.close();graph.shutdown();options=PlayerOptions::from(previous);
+                        ring.drainQueue();out={};presenter.close();graph.shutdown();options=PlayerOptions::from(previous,previousOrder);
                         gd=previousDesc;
                         if(graph.initialize(gd)&&presenter.open(ctx,window,graph,options.settings.captureCompatible,!isCapture&&!isImage)&&graph.createViews()&&graph.process(frame,pts,true,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0)){
                             publishFrameGenerationCapabilities();
                             finishReset(diagnostics::ResetOutcome::RolledBack);
-                            std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=previous;snapshot_.status=L"参数执行失败，已整套回滚";transaction=false;
+                            std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=previous;snapshot_.status=L"参数执行失败，已整套回滚";transaction=false;
                         }else{status(L"参数回滚失败，已停止",true);break;}
                     }else{status(std::wstring(backendFailureName(failedComponent))+L"执行失败；请查看日志",true);break;}
                 }
@@ -1381,7 +1423,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // Admission predictions and the XeSS gate must not carry
                     // samples across a settings revision (new backend/dimensions);
                     // soft preview-skip history breaks do NOT reopen them.
-                    if(settingsChanged){fedXessPresented=fedXessGenerated=fedFsrPresented=fedFsrGenerated=0;}
+                    if(settingsChanged){fedXessPresented=fedXessGenerated=0;}
                     playbackSpeedLastWall={};
                     if(liveScheduler){liveStats={};liveSubmissions.clear();liveAges.clear();liveWaits.clear();livePresent.clear();livePresentGpu.clear();liveReady.clear();}
                     if(settingsChanged||!completionRates)completionRates=std::make_shared<FrameCompletionRates>(host100ns());
@@ -1434,6 +1476,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     watch->captureArrival=captureArrival;watch->presentationGeneration=jobGeneration;
                     watch->reflexFrame=currentReflexFrame;
                     pendingCompletions.push_back(watch);
+                    if(physicalCapture&&gpuReadyEvent.handle)for(unsigned i=0;i<out.batch.count;++i){
+                        const auto& lease=out.batch.frames[i].lease;
+                        if(lease&&lease->readyFenceObject&&lease->readyFence)lease->readyFenceObject->SetEventOnCompletion(lease->readyFence,gpuReadyEvent.handle);
+                    }
                     struct LiveStepState {
                         unsigned next=0,handled=0,remaining=0;bool readyReported=false;
                         Clock::time_point readyStart=Clock::now();std::optional<Clock::time_point> deadlineStart;
@@ -1452,7 +1498,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // loop, so all of these are declared above it. Adding a reference to a
                     // local declared after that guard is now a compile error instead of a
                     // silent dangling reference.
-                    if(!liveScheduler->push([this,&anchor,&anchorMs,&captureSource,&fedFsrGenerated,&fedFsrPresented,&fedXessGenerated,&fedXessPresented,&lastFilePresentLateness,&lastFilePresentedMs,&liveSubmissions,&presentationCompletedReal,
+                    if(!liveScheduler->push([this,&anchor,&anchorMs,&captureSource,&fedXessGenerated,&fedXessPresented,&lastFilePresentLateness,&lastFilePresentedMs,&liveSubmissions,&presentationCompletedReal,
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                         &remote,
 #endif
@@ -1480,7 +1526,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             if(traceSubframes&&generated&&(readiness==PreviewFrameReadiness::Expired||readiness==PreviewFrameReadiness::Suppressed))
                                 traceFrame(diagnostics::TraceKind::Discarded,item.identity,batch.batch.batchId,item.lease->readyFence,item.pts100ns,item.subframe,unsigned(readiness),isCapture?double(decisionTime-timeline.deadline(item.pts100ns))/10000:nowMs()-itemPtsMs);
                             if(readiness==PreviewFrameReadiness::Pending){
-                                if(elapsedMs(s.readyStart)>2000){veyra::log::error("capture-present","GPU frame ready timeout");return {State::Failed};}
+                                if(elapsedMs(s.readyStart)>2000){
+                                    ctx.reportDeviceFailure("GPU-frame-ready-timeout",item.lease?item.lease->readyFence:0);
+                                    veyra::log::error("capture-present",std::format("GPU frame ready timeout nr={} nrRuntime={} source={} epoch={} revision={} subframe={} dimensions={}x{} nrDimensions={}x{} flowBackend={}",graph.nrEnabled(),nrRuntimeName(options.settings.nrRuntime),item.identity.sourceFrameId,item.identity.epoch,item.identity.settingsRevision,item.subframe,graph.workWidth(),graph.workHeight(),graph.nrWidth(),graph.nrHeight(),opticalFlowBackendName(options.settings.opticalFlowBackend)));
+                                    return {State::Failed};
+                                }
                                 return {State::Pending,host100ns()+2000};
                             }
                             if(readiness==PreviewFrameReadiness::Invalid){++s.handled;++s.next;s.deadlineStart.reset();continue;}
@@ -1565,11 +1615,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 const auto xessPresentedTotal=presenter.xessPresentedCount(),xessGeneratedTotal=presenter.xessGeneratedCount();
                                 const uint64_t xessPresented=xessPresentedTotal-fedXessPresented,xessGenerated=xessGeneratedTotal-fedXessGenerated;
                                 if(xessPresented){flow->xessSubmitted(xessPresented,xessGenerated,host100ns());fedXessPresented=xessPresentedTotal;fedXessGenerated=xessGeneratedTotal;}
-                                const auto fsrPresentedTotal=presenter.fsrPresentedCount(),fsrGeneratedTotal=presenter.fsrGeneratedCount();
-                                const uint64_t fsrPresented=fsrPresentedTotal-fedFsrPresented,fsrGenerated=fsrGeneratedTotal-fedFsrGenerated;
-                                // Same metric shape for the AMD provider: frames it actually
-                                // submitted to the display, real and generated.
-                                if(fsrPresented){flow->xessSubmitted(fsrPresented,fsrGenerated,host100ns());fedFsrPresented=fsrPresentedTotal;fedFsrGenerated=fsrGeneratedTotal;}
+
                             }
                             if(didPresent&&!isCapture){
                                 lastFilePresentedMs=itemPtsMs;lastFilePresentLateness=returnDeviation;
@@ -1672,7 +1718,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                  // Present-sink FG backends record their application-side work on
                  // the presenter's list; surface that sample instead of leaving
                  // the stage unmeasured. The in-graph DLSS FG keeps its own.
-                 if(graph.xessEnabled()||graph.fsrEnabled())measured.gpu[size_t(diagnostics::GpuStage::FgBatch)]=presenter.fgTiming(ctx.fence(),options.settings.revision,out.batch.identity.epoch);
+                 if(graph.xessEnabled())measured.gpu[size_t(diagnostics::GpuStage::FgBatch)]=presenter.fgTiming(ctx.fence(),options.settings.revision,out.batch.identity.epoch);
                  slotWaitCount=ring.cpuWaitCount()-slotWaitBase;slotWaitMilliseconds=ring.cpuWaitMilliseconds()-slotWaitMsBase;commandSubmits=ring.submitCount()-submitBase;slotsInFlight=ring.inFlightCount();
                     loopTrace.mark("gpuStats");
                     collectTimings();
@@ -1682,15 +1728,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(graph.xessEnabled()){
                     graphStats.fgGeneratedFrames=presenter.xessGeneratedCount();
                 }
-                if(graph.fsrEnabled()){
-                    graphStats.fgGeneratedFrames=presenter.fsrGeneratedCount();
-                }
-                if(graph.fsrEnabled()&&presenter.fsrFailed()&&!fsrDegradedReported){
-                    fsrDegradedReported=true;
-                    std::lock_guard lock(mutex_);
-                    snapshot_.backendWarning=L"AMD FSR 帧生成已停用（原因见日志），继续基础播放";
-                    veyra::log::warn("backend-recovery","AMD FSR frame generation degraded to plain presentation inside the provider");
-                }
+
+
                 for(size_t stage=0;stage<measured.gpu.size();++stage){const auto& sample=measured.gpu[stage];if(sample.state==diagnostics::SampleState::Measured&&sample.milliseconds&&sample.end&&sample.end!=lastGpuSampleEnd[stage]){gpuStageTimes[stage].add(*sample.milliseconds);lastGpuSampleEnd[stage]=sample.end;}}
                 measured.resolution=pipeline::ResolutionPlan::make({width,height},options.sr,options.snapshot().nrPolicy,isImage,options.settings.revision,options.settings.srTarget,options.settings.lowLatency&&options.nr);measured.decodeCpuMs=decodeMs;measured.submitCpuMs=std::chrono::duration<double,std::milli>(processDone-processStart).count();measured.gpuWaitCpuMs=gpuWaitMs;measured.deadlineWaitCpuMs=frameWaitMs;measured.presentCpuMs=framePresentMs;measured.queueWatermark=out.batch.count;
                 LiveStats completed;if(liveScheduler)completed=liveStats;
@@ -1704,6 +1743,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 measured.sourceFrames=measured.flow.counters.sourceAccepted;measured.validGenerated=measured.flow.counters.fgReadyValid;measured.submitted=measured.flow.counters.realPresented+measured.flow.counters.generatedPresented;measured.expired=measured.flow.counters.generatedExpiredAfterEval;
                 const double ageP95=liveScheduler?completed.ageP95:captureAges.p95(),waitP95=liveScheduler?completed.waitP95:scheduleWaits.p95(),presentP95=liveScheduler?completed.presentP95:presentTimes.p95();
                 ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.colorStatus=graph.videoHdrActive()?L"SDR → RTX Video HDR":options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph.hdr10Output()?L"HDR → HDR10 / PQ":L"HDR → scRGB / 浮点"):gd.hdrInput?L"HDR → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
+                    snapshot_.videoHdrActive=graph.videoHdrActive();
                     snapshot_.videoHdrStatus=graph.videoHdrActive()?L"预览：SDR 转 HDR 已运行":
                         !options.settings.videoHdr.enabled?L"RTX Video HDR 已关闭":
                         gd.hdrInput?L"原生 HDR 输入，无需 SDR 转 HDR":
@@ -1739,6 +1779,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const auto gpuP95=[&](diagnostics::GpuStage stage){return gpuStageTimes[size_t(stage)].p95();};
                 if(veyra::log::verboseFrameLogs()&&Clock::now()>=nextTimingLog){const auto [retained,overwritten]=Logger::instance().frameTraceSize();
                     veyra::log::info("frame-trace",std::format("retained={} capacity=8192 overwritten={} (records available in diagnostic preview)",retained,overwritten));}
+                if(options.settings.multiplier>1&&Clock::now()>=nextTimingLog)
+                    veyra::log::info("fg-validity",std::format("revision={} candidate={} valid={} invalid={} providerDisabled={} contentDuplicate={} both={} contentPolicy={} sourceTransportFps={} backend={} (invalid union=provider+duplicate-both; no automatic content-rate/multiplier rewrite)",options.settings.revision,graphStats.fgSubmittedCandidates,graphStats.fgGeneratedFrames,graphStats.fgDisabledFrames,graphStats.fgProviderDisabled,graphStats.fgDuplicateSuppressed,graphStats.fgBothDisabled,int(options.settings.content),activeSource->info().averageFps,frameGenerationBackendName(options.settings.frameGenerationBackend)));
                 if(!isCapture&&Clock::now()>=nextTimingLog){const double playbackSpeedNow=[&]{std::lock_guard lock(mutex_);return snapshot_.playbackSpeed;}();
                 // present-deviation / output-queue are folded into the
                 // player-timing line below (sweep E5); the separate lines stay
@@ -1764,7 +1806,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     {std::lock_guard lock(mutex_);activeRemote_.reset();}
     if(remote)remote->close();
 #endif
-    audioPipe.stopThread();audio.shutdown();ring.drainQueue();presenter.close();graph.shutdown();captureSource.close();screenSource.close();source.close();av_frame_free(&cachedFrame);av_frame_free(&imageFrame);ring.shutdown();ctx.shutdown();
+    // Each step is logged: a session that stopped responding after a remote
+    // play failure left "graph shutdown complete" as its last line.
+    audioPipe.stopThread();audio.shutdown();veyra::log::info("engine","teardown: audio stopped");
+    ring.drainQueue();presenter.close();graph.shutdown();
+    veyra::log::info("engine","teardown: closing sources");
+    captureSource.close();screenSource.close();source.close();av_frame_free(&cachedFrame);av_frame_free(&imageFrame);
+    veyra::log::info("engine","teardown: sources closed");
+    ring.shutdown();ctx.shutdown();
     {std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.audioEndpointRecovering=false;snapshot_.audioRebuffering=false;}
     CoUninitialize();
 }

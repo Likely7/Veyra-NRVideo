@@ -38,6 +38,10 @@ int wmain(int argc,wchar_t** argv){
     if(ok)ok=test("pan",{2,.25f,.5f},0,{{280,60,255,0,0},{280,200,255,0,255}});
     if(ok)ok=test("reference",{2,.5f,.5f},1,{{40,10,255,0,0},{280,10,0,255,0}});
     if(ok)ok=test("reset",{},0,{{160,10,0,0,0},{280,80,0,255,0}});
+    if(ok)ok=test("dar-4-3",{1,.5f,.5f,0,4.0/3},0,{{40,10,255,0,0},{280,10,0,255,0},{40,230,255,0,255}});
+    if(ok)ok=test("stretch",{1,.5f,.5f,3},0,{{40,10,255,0,0},{280,10,0,255,0},{280,230,255,255,255}});
+    if(ok)ok=test("forced-16-9",{1,.5f,.5f,4},0,{{160,10,0,0,0},{40,40,255,0,0},{280,200,255,255,255}});
+    if(ok)ok=test("native",{1,.5f,.5f,1},0,{{40,80,0,0,0},{145,111,255,0,0},{175,129,255,255,255}});
     if(ok){
         SetPropW(window,L"Veyra.ResizeDeferUntil",reinterpret_cast<HANDLE>(uintptr_t(GetTickCount64()+60000)));
         SetWindowPos(window,nullptr,0,0,400,400,SWP_NOMOVE|SWP_NOZORDER);

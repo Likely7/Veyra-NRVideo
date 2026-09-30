@@ -30,6 +30,9 @@ int main(int argc,char** argv){
     const bool compensatedTransientTest=argc>=2&&std::string_view(argv[1])=="--transient-comp";
     const bool fastDrift=argc>=2&&std::string_view(argv[1])=="--drift-fast";
     const bool driftTest=fastDrift||(argc>=2&&std::string_view(argv[1])=="--drift-slow");
+    // Test-only stopped-device gap: no source callbacks should be replayed
+    // to catch up with a deadline from the previous ingress epoch.
+    const bool restartGap=argc>=2&&std::string_view(argv[1])=="--restart-gap";
     if(endpointTest)SetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_ENDPOINT_LOSS",L"1");
     if(slowStart)SetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_SLOW_START",L"1");
     const bool multichannel=argc>=3&&std::string_view(argv[2])=="--5.1";
@@ -38,7 +41,7 @@ int main(int argc,char** argv){
     if(!(multichannel?audio.configure(extended.Format,sizeof(extended)):audio.configure(f))||!audio.start())return 2;audio.setGain(0);
     const unsigned channels=multichannel?6:2;std::vector<int16_t> pcm(480*channels);
     for(size_t i=0;i<pcm.size()/channels;++i)for(unsigned c=0;c<channels;++c)pcm[i*channels+c]=int16_t(2000*std::sin((i*channels+c)*0.031));
-    const auto start=Clock::now();
+    auto start=Clock::now();
     const bool legacyClock=argc>=2&&std::string_view(argv[1])=="--legacy-clock";
     auto present=[&](double pts,int64_t host,double localDelay){
         audio.videoPresented(pts,host,legacyClock?std::nullopt:std::optional<int64_t>(host-int64_t(localDelay*10000)));
@@ -177,9 +180,13 @@ int main(int argc,char** argv){
     unsigned sequence=160;
     auto phase=[&](unsigned mode,int offset,double delay,double expectedComp,double expectedSkew,double commonInputMs=0,double maxSkewError=28){
         audio.setSync(mode,offset);double error=0;unsigned samples=0;bool boundedPhase=true;
+        double maxIngressLateMs=0;unsigned catchUpCallbacks=0;
         const unsigned steps=delay>500?300:150;
         for(unsigned j=0;j<steps;++j,++sequence){
-            pacer.until(start+std::chrono::milliseconds(sequence*10));
+            const auto due=start+std::chrono::milliseconds(sequence*10);pacer.until(due);
+            const double late=std::chrono::duration<double,std::milli>(Clock::now()-due).count();
+            maxIngressLateMs=std::max(maxIngressLateMs,late);
+            if(late>=10)++catchUpCallbacks;
             const auto host=std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;
             if(!audio.push(pcm.data(),pcm.size()*2,sequence*10.0-commonInputMs,j==0&&commonInputMs!=0))return false;
             present(sequence*10.0-commonInputMs-delay,host,delay);const auto s=audio.snapshot();
@@ -187,14 +194,20 @@ int main(int argc,char** argv){
             if(j>steps-80&&s.running&&s.skewMs){error+=std::abs(*s.skewMs-expectedSkew);++samples;}
         }
         const auto s=audio.snapshot();const bool pass=samples>=60&&error/samples<maxSkewError&&std::abs(s.compensationMs-expectedComp)<15&&boundedPhase&&s.overflows==0;
-        std::cout<<(pass?"PASS ":"FAIL ")<<"capture phase mode="<<mode<<" delay="<<delay<<" commonInputMs="<<commonInputMs<<" compensation="<<s.compensationMs<<" meanSkewError="<<(samples?error/samples:-1)<<" resets="<<s.resets<<" queueMs="<<s.bufferedMs<<" endpointMs="<<s.endpointBufferedMs<<" underruns="<<s.underruns<<" correctionPpm="<<s.driftCorrectionPpm<<'\n';return pass;
+        std::cout<<(pass?"PASS ":"FAIL ")<<"capture phase mode="<<mode<<" delay="<<delay<<" commonInputMs="<<commonInputMs<<" compensation="<<s.compensationMs<<" meanSkewError="<<(samples?error/samples:-1)<<" resets="<<s.resets<<" queueMs="<<s.bufferedMs<<" endpointMs="<<s.endpointBufferedMs<<" underruns="<<s.underruns<<" correctionPpm="<<s.driftCorrectionPpm<<" maxIngressLateMs="<<maxIngressLateMs<<" catchUpCallbacks="<<catchUpCallbacks<<'\n';return pass;
     };
     ok=phase(0,0,160,160,0)&&ok;
     ok=phase(0,0,400,400,0)&&ok;
     ok=phase(0,0,400,400,0,900)&&ok;
     ok=phase(0,0,900,900,0,900)&&ok;
     // Start a fresh ingress epoch after the shared-input offset fixture.
-    audio.stop();if(!audio.start())return 7;
+    audio.stop();
+    if(restartGap)std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    if(!audio.start())return 7;
+    // start() creates a fresh ingress clock. Restart the synthetic callback
+    // schedule too: stopped time is not captured PCM waiting to be replayed.
+    // Do not rebase between live phases or across the intentional input stall.
+    start=Clock::now()-std::chrono::milliseconds(sequence*10);
     ok=phase(0,0,80,80,0)&&ok;
     const auto beforeGraphReset=audio.snapshot();
     audio.videoReset(false);
@@ -229,7 +242,9 @@ int main(int argc,char** argv){
     audio.stop();
     const auto stopped=audio.snapshot();const bool stoppedClean=!stopped.available&&!stopped.running&&!stopped.skewMs&&stopped.bufferedMs==0;
     std::cout<<(stoppedClean?"PASS ":"FAIL ")<<"stopped audio has no stale clock or queued state\n";ok=stoppedClean&&ok;
+    if(restartGap)std::this_thread::sleep_for(std::chrono::milliseconds(400));
     if(!audio.start())return 4;
+    start=Clock::now()-std::chrono::milliseconds(sequence*10);
     ok=phase(0,0,80,80,0)&&ok;
     audio.stop();
     if(!audio.start())return 5;

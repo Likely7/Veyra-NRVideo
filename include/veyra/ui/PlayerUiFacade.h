@@ -42,7 +42,8 @@ public:
     // --- commands ----------------------------------------------------------
     // Applied to the engine's desired settings, keeping the facade's copy in
     // step so the UI can show the pending value before the engine confirms it.
-    bool applySettings(const veyra::engine::EnhancementSettings& settings);
+    bool applySettings(const veyra::engine::EnhancementSettings& settings,
+                       std::optional<veyra::engine::ChainRuntimeOrder> order = std::nullopt);
     veyra::engine::EnhancementSettings pendingSettings() const { return pending_; }
     void setPending(veyra::engine::EnhancementSettings settings) { pending_ = std::move(settings); }
     // True while the engine has not yet applied what the UI asked for.
@@ -104,6 +105,8 @@ public:
     // --- persistence -------------------------------------------------------
     bool loadPreferences();
     bool savePreferences();
+    bool loadChainSession(veyra::engine::ChainSession&);
+    bool saveChainSession(const veyra::engine::ChainSession&);
     const std::wstring& error() const { return error_; }
 
 private:
@@ -111,8 +114,14 @@ private:
     veyra::engine::PresetLibrary presets_;
     bool presetsLoaded_ = false;
     std::filesystem::path dataDirectory_;
+    veyra::engine::ChainSessionStore chainSessionStore_;
     veyra::engine::PlayerSnapshot last_{};
     veyra::engine::EnhancementSettings pending_{};
+    uint64_t pendingFgRevision_=0;
+    uint64_t pendingNrRevision_=0;
+    veyra::engine::NrRuntime requestedNrRuntime_=veyra::engine::NrRuntime::Original;
+    veyra::engine::FrameGenerationBackend requestedFgBackend_=veyra::engine::FrameGenerationBackend::Dlss;
+    uint32_t requestedFgMultiplier_=1;
     uint64_t revision_ = 0;
     bool haveLast_ = false;
     std::vector<RecentEntry> recent_;

@@ -4,6 +4,8 @@
 #include "veyra/engine/VideoHdrSettings.h"
 #include <array>
 #include <cstdint>
+#include <optional>
+#include <memory>
 #include <string_view>
 
 namespace veyra::engine {
@@ -18,8 +20,6 @@ namespace veyra::engine {
 // input, and toChain()/fromChain() convert between the two. Later engine work
 // (multi-NR, ordered executor, node mode) consumes the chain directly.
 inline constexpr uint32_t kMaxChainNodes = 16;
-inline constexpr uint32_t kMaxNrInstances = 4;
-inline constexpr uint32_t kMaxColorInstances = 6;
 
 enum class EffectType : uint8_t {
     Color = 0,          // tone/LUT grade
@@ -52,6 +52,10 @@ struct ChainNrParams {
     NrRuntime runtime = NrRuntime::Original;
     bool temporal = false;          // motion-reprojected residual stabilization
     bool lowLatencyPairing = false; // this layer may run before SR (preview only)
+    // Anti-flicker tier, only meaningful when `temporal` is set. Flow is the
+    // pre-tier behaviour, so an existing chain keeps doing exactly what it did.
+    NrAntiFlicker antiFlicker = NrAntiFlicker::Flow;
+    pipeline::NrSizePolicy sizePolicy = pipeline::NrSizePolicy::Realtime;
     bool operator==(const ChainNrParams&) const = default;
 };
 
@@ -112,6 +116,124 @@ struct ChainValidation {
 // Rules that apply to both editing modes. Node mode can order stages freely,
 // but the physics of the pipeline does not change with the UI.
 ChainValidation validateChain(const EffectChain& chain);
+
+// Editor-only topology. Deliberately NOT a field of EffectChain: that structure
+// crosses the export worker ABI. Node payloads stay in the existing chain; IDs
+// and edges never become GPU resources. 0 is the input/source (and no edge),
+// 1 is the output/sink; effect IDs start at 2 and are never recycled.
+struct NodeGraphLayout {
+    static constexpr uint32_t Input = 0, Output = 1;
+    std::array<uint32_t, kMaxChainNodes> ids{}, next{};
+    uint32_t inputNext = Output, nextId = 2;
+    bool operator==(const NodeGraphLayout&) const = default;
+
+    // Explicit migration from an already cleaned, valid legacy linear chain.
+    ChainValidation initialize(const EffectChain&);
+    int indexOf(const EffectChain&, uint32_t id) const;
+    // Partial/disconnected documents are legal, but duplicate IDs, merges,
+    // cycles, invalid endpoints and singleton/capacity violations are not.
+    ChainValidation validate(const EffectChain&) const;
+    // Only an input-to-output path can be submitted. Failure leaves `output`
+    // unchanged so callers can keep the last accepted runtime chain.
+    ChainValidation project(const EffectChain&, EffectChain& output) const;
+    ChainValidation connect(const EffectChain&, uint32_t from, uint32_t to);
+    ChainValidation disconnect(const EffectChain&, uint32_t from);
+    ChainValidation duplicate(EffectChain&, uint32_t id, uint32_t& createdId);
+    ChainValidation remove(EffectChain&, uint32_t id);
+    ChainValidation insertAfter(const EffectChain&, uint32_t id, uint32_t after);
+};
+// Legacy node chains are ordered arrays, so removing a stage unambiguously
+// bypasses it. List chains and all remaining payload/layout fields are retained.
+uint32_t removeLegacyNodeProtection(EffectChain&, int* selectedNr = nullptr, int* selectedColour = nullptr);
+
+// In-process topology envelope. Parameters remain in EnhancementSettings;
+// editor coordinates and persistent/export-worker layouts are unchanged.
+struct ChainRuntimeOrder {
+    std::array<EffectType, kMaxChainNodes> types{};
+    uint32_t nodeCount = 0;
+    bool operator==(const ChainRuntimeOrder&) const = default;
+};
+std::optional<ChainRuntimeOrder> runtimeOrder(const EffectChain&);
+ChainValidation restoreRuntimeOrder(const EnhancementSettings&, const ChainRuntimeOrder&, EffectChain&);
+
+// CPU-side execution contract, not proof that a GPU executor supports it.
+// Kept separate from EffectChain/EnhancementSettings so compiling a plan does
+// not change their persistent or export-worker shared-memory representation.
+struct ChainExecutionRequest {
+    pipeline::Extent source{};
+    pipeline::SrTarget srTarget = pipeline::SrTarget::Uhd4K;
+    bool stillImage = false;
+    bool exportJob = false;
+};
+struct ChainExecutionStep {
+    EffectType type = EffectType::NrEnhance;
+    uint32_t nodeIndex = 0;       // source editor node, never a compacted index
+    uint32_t parameterIndex = 0; // ordinal among ALL nodes of this type
+    uint32_t resourceIndex = 0;  // ordinal among executing nodes of this type
+    pipeline::Extent input{}, processing{}, output{};
+    bool operator==(const ChainExecutionStep&) const = default;
+};
+struct ChainExecutionPlan {
+    std::array<ChainExecutionStep, kMaxChainNodes> steps{};
+    uint32_t stepCount = 0;
+    std::array<uint32_t, effectTypeCount> resourceCounts{};
+    pipeline::Extent output{};
+    bool operator==(const ChainExecutionPlan&) const = default;
+};
+// Node mode preserves inter-effect order; list mode uses the existing fixed
+// default/NR-first schedules. Each NR size is relative to its actual input,
+// not a global nrBeforeSr flag. Disabled nodes and identity SR need no step.
+// Failure is atomic. Hardware admission and port connectivity are not inferred
+// here: callers must establish those before allocating/executing this plan.
+ChainValidation compileChainExecutionPlan(const EffectChain&, const ChainExecutionRequest&, ChainExecutionPlan&);
+
+// Editor state is separate from presets and from source/audio/export settings.
+// Only options belonging to the effect chain travel when the mode changes.
+struct ChainGlobalSettings {
+    pipeline::SrTarget srTarget = pipeline::SrTarget::Uhd4K;
+    uint32_t videoSrQuality = 0;
+    FrameGenerationBackend fgBackend = FrameGenerationBackend::Dlss;
+    FlowQuality flow = FlowQuality::Balanced;
+    OpticalFlowBackend opticalFlowBackend = OpticalFlowBackend::Nvidia;
+    bool amdFlowHalfResolution = false;
+    pipeline::NrSizePolicy nrPolicy = pipeline::NrSizePolicy::Realtime;
+    HdrOutputMode hdrOutputMode=HdrOutputMode::Hdr10;
+    MotionSource fgMotion=MotionSource::Automatic,srMotion=MotionSource::OpticalFlow,nrMotion=MotionSource::OpticalFlow;
+    static ChainGlobalSettings capture(const EnhancementSettings&);
+    void apply(EnhancementSettings&) const;
+    bool operator==(const ChainGlobalSettings&) const = default;
+};
+
+struct NodeEditorDocument {
+    EffectChain nodes{};
+    NodeGraphLayout layout{};
+    // Absent in legacy documents: inherit the enclosing runtime configuration.
+    std::optional<ChainGlobalSettings> globals;
+    bool operator==(const NodeEditorDocument&) const = default;
+};
+
+struct ChainConfiguration : ChainGlobalSettings {
+    EffectChain chain{};
+    // Runtime parameters remain accepted values; an incomplete editor may hold
+    // a different immutable draft without changing the running graph.
+    std::shared_ptr<const NodeEditorDocument> editor;
+    int selectedNr = -1, selectedColour = -1;
+    static ChainConfiguration capture(const EffectChain&, const EnhancementSettings&, int nr = -1, int colour = -1);
+    void apply(EnhancementSettings&) const;
+    bool valid() const;
+    bool operator==(const ChainConfiguration&) const;
+};
+
+struct ChainSession {
+    std::array<ChainConfiguration, 2> configurations{};
+    std::array<bool, 2> initialized{true, false};
+    ChainMode active = ChainMode::List;
+    static ChainSession initial(const EnhancementSettings&);
+    // Work on a copy until the caller has accepted the engine transaction.
+    bool select(ChainMode);
+    bool valid() const;
+    bool operator==(const ChainSession&) const = default;
+};
 
 // Converts between the chain description and the settings struct the engine
 // consumes today. `fromChain` keeps every non-stage field of `base`, so a

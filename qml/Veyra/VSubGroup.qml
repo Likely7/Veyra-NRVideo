@@ -58,7 +58,7 @@ Rectangle {
                 }
             }
             HoverHandler { cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: sub.expanded = !sub.expanded }
+            TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: sub.expanded = !sub.expanded }
         }
 
         ColumnLayout {

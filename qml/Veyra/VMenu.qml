@@ -34,6 +34,18 @@ Popup {
         const r = anchorItem.mapToItem(win, 0, 0)
         const ph = height
         const pw = width
+        // "at": a context menu whose top-left corner sits at the pointer (the
+        // anchor is a 1px item moved there), flipped to stay inside the window.
+        if (placement === "at") {
+            const ax = r.x + 2 + pw > win.width - 8 ? r.x - pw - 2 : r.x + 2
+            const ay = r.y + 2 + ph > win.height - 8 ? r.y - ph - 2 : r.y + 2
+            const cx = Math.max(8, Math.min(ax, win.width - pw - 8)), cy = Math.max(8, Math.min(ay, win.height - ph - 8))
+            above = cy < r.y
+            originX = r.x - cx
+            const q = parent.mapFromItem(win, cx, cy)
+            x = q.x; y = q.y
+            return
+        }
         let px = Math.max(8, Math.min(r.x + anchorItem.width / 2 - pw / 2, win.width - pw - 8))
         let py = placement === "down" ? r.y + anchorItem.height + 8 : r.y - ph - 8
         if (placement !== "down" && aboveLimit >= 0)
@@ -46,12 +58,13 @@ Popup {
         const p = parent.mapFromItem(win, px, py)
         x = p.x; y = p.y
     }
-    // place: "up" (the design's default) or "down" (selects).
+    // place: "up" (the design's default), "down" (selects) or "at" (context
+    // menus, at the pointer).
     function openAt(anchor, place) {
         anchorItem = anchor
         placement = place
         checks = items.map(o => o.checked === true)
-        width = Math.max(220, anchor.width)
+        width = place === "at" ? 220 : Math.max(220, anchor.width)
         positionAtAnchor()
         open()
         Qt.callLater(positionAtAnchor)
@@ -64,6 +77,8 @@ Popup {
     parent: Overlay.overlay
     padding: 0
     modal: false
+    // Takes focus so Esc closes it (CloseOnEscape needs the popup focused).
+    focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     implicitHeight: Math.min(420, col.implicitHeight + 12)
     background: null
@@ -133,6 +148,7 @@ Popup {
             contentHeight: col.implicitHeight
             implicitHeight: col.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: VScrollBar { }
             ColumnLayout {
                 id: col
                 width: parent.width
@@ -227,6 +243,7 @@ Popup {
                                 HoverHandler { id: optHover; enabled: !row.modelData.disabled; cursorShape: Qt.PointingHandCursor }
                                 TapHandler {
                                     enabled: !row.modelData.disabled
+                                    gesturePolicy: TapHandler.WithinBounds
                                     onTapped: {
                                         pop.checks = pop.items.map((o, i) => i === row.index)
                                         pickTimer.index = row.index

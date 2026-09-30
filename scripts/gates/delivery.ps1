@@ -1,5 +1,7 @@
 ﻿[CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$Root,[switch]$VisiblePlayer,[string]$BuildDirectory,[string]$PlayerExe,[switch]$PortablePlayer,
+param([Parameter(Mandatory=$true)][string]$Root,[switch]$VisiblePlayer,[Parameter(Mandatory=$true)][string]$BuildDirectory,
+    [Parameter(Mandatory=$true)][string]$PlayerExe,
+    [Parameter(Mandatory=$true)][ValidateSet('legacy')][string]$UiTarget,[switch]$PortablePlayer,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
     [Parameter(Mandatory=$true)][string]$FixtureRoot)
 # User-authorized local software acceptance, <=300s for this entire suite.
@@ -15,13 +17,15 @@ $timer=[Diagnostics.Stopwatch]::StartNew()
 $run=[Guid]::NewGuid().ToString('N')
 $dir=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) $run
 [IO.Directory]::CreateDirectory($dir)|Out-Null
+$entryScript=Join-Path $Root 'scripts/acceptance/resolve-ui-migration-entry.ps1'
+$null=& $entryScript -Root $Root -UiTarget $UiTarget -PlayerExe $PlayerExe -BuildDirectory $BuildDirectory -StagingDirectory (Split-Path -Parent $PlayerExe) -ArtifactDirectory $dir -OutputFile (Join-Path $dir 'entry.json')
+if($UiTarget -ne 'legacy'){throw 'delivery.ps1 is legacy-only. QML uses the separate qml-ui-smoke contract.'}
 # The quality probe reads its arguments from the UTF-16 command line, so the
 # absolute output directory works even when it is on another drive or has
 # Unicode names (a relative path cannot cross from the repo drive to E:).
 $qualityDir=$dir
 $bin=Join-Path $Root 'out/build/x64-release'
 if($BuildDirectory){$bin=(Resolve-Path -LiteralPath $BuildDirectory).Path}
-if(-not $PlayerExe){$PlayerExe=Join-Path $bin 'veyra.exe'}
 $PlayerExe=(Resolve-Path -LiteralPath $PlayerExe).Path
 $checks=[Collections.Generic.List[object]]::new()
 function Check([string]$Name,[bool]$Passed,[string]$Detail){$checks.Add([pscustomobject]@{name=$Name;passed=$Passed;detail=$Detail});if(-not $Passed){throw "$Name : $Detail"}}

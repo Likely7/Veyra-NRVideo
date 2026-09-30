@@ -3,6 +3,7 @@
 #include <QQuickImageProvider>
 #include <QString>
 
+#include <cstdint>
 #include <mutex>
 
 namespace veyra::ui {
@@ -16,6 +17,8 @@ public:
     QImage requestImage(const QString& id, QSize* size, const QSize& requestedSize) override;
 
 private:
+    static QImage frameAt(const QString& path, int64_t milliseconds);
+    static QImage coverArt(const QString& path);
     std::mutex mutex_;
     QString source_;
 };

@@ -550,6 +550,22 @@ void DlssNrRuntimeAdapter::restoreCallerCompatibility()
 bool DlssNrRuntimeAdapter::installAmpereCompatibility(ID3D12Device* device, Status& status)
 {
     if(!module_||!shimInstalled_||!device||archLookupSlot_||g_ampere.nvapi){status=Status::InvalidArgument;return false;}
+    // Read the loaded runtime's fixed version from its own resource (no version.lib).
+    uint32_t versionMs=0,versionLs=0;
+    if(HRSRC info=FindResourceW(module_,MAKEINTRESOURCEW(1),MAKEINTRESOURCEW(16))){
+        const auto size=SizeofResource(module_,info);
+        const auto* bytes=static_cast<const uint8_t*>(LockResource(LoadResource(module_,info)));
+        for(DWORD at=0;bytes&&at+52<=size;at+=4){
+            uint32_t signature=0;std::memcpy(&signature,bytes+at,4);
+            if(signature!=0xFEEF04BDu)continue;
+            std::memcpy(&versionMs,bytes+at+8,4);std::memcpy(&versionLs,bytes+at+12,4);break;
+        }
+    }
+    veyra::log::info("nr-ampere",std::format("runtime version {}.{}.{}.{}",versionMs>>16,versionMs&0xFFFFu,versionLs>>16,versionLs&0xFFFFu));
+    if(versionMs&&!nrRuntimeNeedsAmpereRewrite(versionMs,versionLs)){
+        veyra::log::info("nr-ampere","runtime selects its own RTX30 route; architecture rewrite not installed");
+        return true;
+    }
     auto fail=[&](const char* reason){veyra::log::error("nr-ampere",reason);ClearAmpereContext();status=Status::DeviceFailure;return false;};
     wchar_t system[MAX_PATH]{};
     if(!GetSystemDirectoryW(system,MAX_PATH))return fail("system directory lookup failed");

@@ -34,9 +34,35 @@ int thunkReplacementFunction(int value) { ++thunkHookCalls; return thunkOriginal
 #include "veyra/source/DolbyVision.h"
 #include "veyra/source/AudioInputRecovery.h"
 #include "veyra/engine/Subtitles.h"
+#include "veyra/engine/PresentationSettings.h"
+#include "veyra/engine/PresentationGeometry.h"
 int main(){
     using namespace veyra;int failures=0,checks=0;
     auto check=[&](bool ok,const char* name){++checks;if(!ok)++failures;std::cout<<(ok?"PASS ":"FAIL ")<<name<<'\n';};
+    {
+        engine::PreviewView v;v.displayAspect=16.0/9;
+        auto [w,h]=v.renderedSize(1000,1000,1440,1080);
+        check(std::abs(w-1000)<.01&&std::abs(h-562.5)<.01,"anamorphic source uses reported DAR");
+        const auto before=v.sourcePoint(850,420,1000,1000,1440,1080);
+        v.wheel(2,850,420,1000,1000,1440,1080);
+        const auto after=v.sourcePoint(850,420,1000,1000,1440,1080);
+        check(std::abs(before.first-after.first)<.00001&&std::abs(before.second-after.second)<.00001,"DAR zoom preserves cursor source coordinate");
+        v.zoom=1;v.mode=1;auto native=v.renderedSize(1000,1000,1440,1080);
+        check(native.first==1440&&native.second==1080,"native mode maps each output pixel once");
+        v.mode=2;auto fill=v.renderedSize(1000,1000,1440,1080);
+        check(std::abs(fill.first-1777.7778f)<.01&&fill.second==1000,"fill uses DAR and crops");
+        v.mode=3;auto stretch=v.renderedSize(1000,1000,1440,1080);
+        check(stretch.first==1000&&stretch.second==1000,"stretch fills client independently");
+        for(int mode=4;mode<=6;++mode){v.mode=mode;const auto size=v.renderedSize(1000,1000,1440,1080);
+            const double ratio=mode==4?16.0/9:mode==5?4.0/3:21.0/9;
+            check(std::abs(size.first/size.second-ratio)<.00001,"forced display ratio shares preview transform");}
+    }
+    check(std::wstring_view(engine::ngxFailureHint(0xFFFFFFFFBAD00002ull)).find(L"驱动")!=std::wstring_view::npos,"signed NGX PlatformError reports actual driver/platform failure");
+    check(std::wstring_view(engine::ngxFailureHint(0xBAD00001)).find(L"不支持")!=std::wstring_view::npos,"NGX FeatureNotSupported has a distinct visible reason");
+    for(bool lowQueue:{false,true})for(bool fullscreen:{false,true})for(auto sync:{engine::DisplaySync::Tearing,engine::DisplaySync::Vsync,engine::DisplaySync::Automatic}) {
+        engine::PresentationSettings s;s.enabled=lowQueue;s.fullscreen=fullscreen;s.display=sync;
+        check(engine::presentationVsync(s)==(sync==engine::DisplaySync::Vsync)&&engine::presentationTearing(s)==(sync==engine::DisplaySync::Tearing),"VSync and tearing only when explicitly selected; Automatic is neither, windowed or fullscreen");
+    }
     {
         source::AudioInputRecovery retry;retry.reset(1000);
         check(!retry.due(0,3999)&&retry.due(0,4000),"missing initial PCM retries after bounded startup grace");
@@ -159,13 +185,23 @@ int main(){
     check(p.nr==p.source&&p.flow==p.source,"native mode retains native4K NR and flow");
     p=pipeline::ResolutionPlan::make({3840,2160},true,pipeline::NrSizePolicy::Realtime,true);
     check(!p.srApplied&&p.nr==p.base,"native export and 1:1 SR bypass");
-    for(auto target:{pipeline::SrTarget::Qhd,pipeline::SrTarget::Uhd4K,pipeline::SrTarget::Uhd8K}){
+    for(auto target:{pipeline::SrTarget::Qhd,pipeline::SrTarget::Uhd4K,pipeline::SrTarget::Uhd8K,pipeline::SrTarget::Uhd5K,pipeline::SrTarget::Uhd6K,pipeline::SrTarget::Uhd7K}){
         const auto plan=pipeline::ResolutionPlan::make({1920,1080},true,pipeline::NrSizePolicy::Realtime,false,7,target);
         check(plan.output==pipeline::srTargetExtent(target)&&plan.nr==pipeline::Extent{1920,1080}&&plan.settingsRevision==7,"SR target changes real output, retains realtime NR and revision");
     }
     check(pipeline::ResolutionPlan::make({1448,1086},true,pipeline::NrSizePolicy::Native,true,1,pipeline::SrTarget::Uhd8K).output==pipeline::Extent{5760,4320},"8K 4:3 aspect preserved");
+    for(auto target:{pipeline::SrTarget::Uhd5K,pipeline::SrTarget::Uhd6K,pipeline::SrTarget::Uhd7K}){
+        const auto limit=pipeline::srTargetExtent(target);
+        for(auto source:{pipeline::Extent{1920,1080},pipeline::Extent{1440,1080},pipeline::Extent{2520,1080}}){
+            const auto output=pipeline::ResolutionPlan::make(source,true,pipeline::NrSizePolicy::Native,true,1,target).output;
+            check(output.width<=limit.width&&output.height<=limit.height&&!(output.width%2)&&!(output.height%2)
+                &&std::abs(int64_t(output.width)*source.height-int64_t(output.height)*source.width)<=2*source.width,"5/6/7K contain aspect within two-pixel rounding and even dimensions");
+        }
+    }
     check(pipeline::ResolutionPlan::make({8000,2000},true,pipeline::NrSizePolicy::Native,true,1,pipeline::SrTarget::Qhd).output==pipeline::Extent{8000,2000},"small target never shrinks long image");
     engine::EnhancementSettings s;check(s.validate().empty(),"default settings valid");
+    check(engine::motionUsesFlow(s.fgMotion,engine::FrameGenerationBackend::Dlss)&&!engine::motionUsesFlow(s.fgMotion,engine::FrameGenerationBackend::XeSS),"default motion follows provider: DLSS flow, XeSS zero");
+    check(!engine::motionUsesFlow(engine::MotionSource::Zero)&&engine::motionUsesFlow(engine::MotionSource::OpticalFlow),"explicit consumer motion choice wins");
     auto audioOnly=s;audioOnly.revision=2;audioOnly.audioSync=engine::AudioSyncMode::Manual;audioOnly.audioOffsetMs=90;
     check(audioOnly.sameVideoConfiguration(s),"audio changes do not invalidate video configuration");
     auto attempted=audioOnly;attempted.model.style=1;
@@ -195,7 +231,9 @@ int main(){
     check(engine::frameGenerationBackendName(engine::FrameGenerationBackend::Dlss)=="DLSS"&&engine::frameGenerationBackendName(engine::FrameGenerationBackend::XeSS)=="XeSS"&&engine::frameGenerationBackendName(engine::FrameGenerationBackend::Fsr)=="AMD-FSR","frame-generation backend names identify every backend");
     // The present-sink backends own generation inside their swapchain provider;
     // the in-graph DLSSG path must never try to run for them.
-    check(engine::presentSinkFrameGeneration(engine::FrameGenerationBackend::XeSS)&&engine::presentSinkFrameGeneration(engine::FrameGenerationBackend::Fsr)&&!engine::presentSinkFrameGeneration(engine::FrameGenerationBackend::Dlss),"present-sink frame generation covers XeSS and AMD FSR only");
+    check(engine::presentSinkFrameGeneration(engine::FrameGenerationBackend::XeSS)&&!engine::presentSinkFrameGeneration(engine::FrameGenerationBackend::Fsr)&&!engine::presentSinkFrameGeneration(engine::FrameGenerationBackend::Fsr4)&&!engine::presentSinkFrameGeneration(engine::FrameGenerationBackend::Dlss),"only XeSS owns provider presentation; FSR uses application batches");
+    check(engine::crossVendorFrameGeneration(engine::FrameGenerationBackend::Fsr)&&engine::crossVendorFrameGeneration(engine::FrameGenerationBackend::Fsr4)&&!engine::crossVendorFrameGeneration(engine::FrameGenerationBackend::Dlss),"FSR 3/4 admission is independent of NVIDIA requirements");
+    check(int(engine::FrameGenerationBackend::Fsr)==2&&int(engine::FrameGenerationBackend::Fsr4)==3,"FSR persisted identities remain stable and distinct");
     {
         engine::EnhancementSettings settings;
         settings.multiplier=4;settings.frameGenerationBackend=engine::FrameGenerationBackend::Fsr;

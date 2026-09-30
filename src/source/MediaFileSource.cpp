@@ -52,6 +52,11 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
     if (!decoder_.hardwareActive() || path_.empty()) {
         return false;
     }
+    if (requireHardwareDecode_) {
+        veyra::log::error("source-file", std::format(
+            "hardware decode required by the user setting; refusing the software fallback (reason={})", reason));
+        return false;
+    }
     // Mid-stream failures (driver/pool errors after frames were delivered)
     // reopen in software and seek back to the last delivered PTS; the caller
     // sees a Discontinuity flag so temporal history resets (sweep B5).
@@ -156,6 +161,7 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     close();
     path_ = desc.path;
     preferHardwareDecode_ = desc.preferHardwareDecode && desc.d3d12Device != nullptr && desc.d3d12Queue != nullptr;
+    requireHardwareDecode_ = desc.requireHardwareDecode;
     if (!demuxer_.open(desc.path)) {
         veyra::log::error("source-file", "demuxer open failed");
         return false;
@@ -194,6 +200,10 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
                 veyra::log::warn("source-file", "D3D12VA open failed; falling back to software decode (explicit)");
             }
         }
+    }
+    if (!decoderOpen && desc.requireHardwareDecode) {
+        veyra::log::error("source-file", "hardware decode required by the user setting and not available; not falling back to software");
+        return false;
     }
     if (!decoderOpen) {
         decoderOpen = decoder_.openSoftware(params, demuxer_.videoTimeBaseNum(),
@@ -485,6 +495,7 @@ void MediaFileSource::close() noexcept
     info_ = SourceInfo{};
     path_.clear();
     preferHardwareDecode_ = false;
+    requireHardwareDecode_ = false;
 }
 
 } // namespace veyra::source

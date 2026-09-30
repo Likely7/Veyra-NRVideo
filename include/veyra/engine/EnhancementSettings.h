@@ -9,11 +9,38 @@
 #include "veyra/source/CaptureBuffer.h"
 #include "veyra/engine/ColorSettings.h"
 namespace veyra::engine {
-enum class FrameGenerationBackend { Dlss, XeSS, Fsr };
+inline constexpr uint32_t kMaxColorInstances = 6;
+inline constexpr uint32_t kMaxNrInstances = 4;
+// Anti-flicker route for the NR temporal pass. The tiers come from Magpie's
+// DLSSNRTemporal (GPL-3.0, commit 3841698): see shaders/NrTemporal.hlsl.
+//   Off        - no temporal accumulation at all.
+//   Static     - accumulate only where the source is not moving; motion is
+//                published immediately. The safest tier.
+//   Flow       - motion-reprojected accumulation with a fixed 80 ms EMA. This is
+//                the behaviour the pass had before the tiers existed, so it
+//                stays the value a legacy `temporal=true` maps onto.
+//   FlowPlus   - as Flow, plus a 60 ms attack / 180 ms release memory and an
+//                explicit rejection of a correction whose direction reverses.
+//   LowFrequency - as Flow, but the accumulated signal is a half-resolution
+//                residual; this frame's high frequency rides through untouched.
+enum class NrAntiFlicker : uint8_t { Off, Static, Flow, FlowPlus, LowFrequency };
+// Narrowing for the wire and preset formats, which store this as one integer.
+inline bool validNrAntiFlicker(NrAntiFlicker v) {
+    return v>=NrAntiFlicker::Off&&v<=NrAntiFlicker::LowFrequency;
+}
+// Preserve persisted values 0/1/2; the old Fsr value now explicitly selects
+// the 3.1 provider. Fsr4 requires a real ML provider, never an auto fallback.
+enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3 };
+constexpr bool fsrFrameGeneration(FrameGenerationBackend backend) {
+    return backend == FrameGenerationBackend::Fsr || backend == FrameGenerationBackend::Fsr4;
+}
+constexpr bool crossVendorFrameGeneration(FrameGenerationBackend backend) {
+    return backend == FrameGenerationBackend::XeSS || fsrFrameGeneration(backend);
+}
 // Frame generation that runs inside the present sink (external frame
 // interpolation swapchain) instead of the in-graph DLSSG backend.
 constexpr bool presentSinkFrameGeneration(FrameGenerationBackend backend) {
-    return backend==FrameGenerationBackend::XeSS||backend==FrameGenerationBackend::Fsr;
+    return backend==FrameGenerationBackend::XeSS;
 }
 // Multipliers the UI offers. 5X is intentionally absent: the DLSS runtime
 // exposes 2/3/4/6 and MFG buyers pick from those; 1 = generation off.
@@ -42,11 +69,16 @@ constexpr std::wstring_view captureAudioIngressName(CaptureAudioIngress mode) {
     return L"自动（优先 PCM，必要时位流解码）";
 }
 enum class NrRuntime { Original, Community, Ampere };
+// Persisted value 1 selected the retired RTX40 DLL. Never load that DLL in
+// current builds; preserve 0 (Lecram) and 2 (SF-v2) as explicit user choices.
+constexpr NrRuntime currentNrRuntime(NrRuntime runtime) {
+    return runtime == NrRuntime::Community ? NrRuntime::Ampere : runtime;
+}
 constexpr std::string_view nrRuntimeName(NrRuntime runtime) {
     switch(runtime) {
-    case NrRuntime::Original:return "NVIDIA-original";
-    case NrRuntime::Community:return "community-RTX40-RTX50";
-    case NrRuntime::Ampere:return "community-RTX30-experimental";
+    case NrRuntime::Original:return "community-Lecram-RTX50";
+    case NrRuntime::Community:return "community-SF-v2-RTX20-RTX50-legacy40";
+    case NrRuntime::Ampere:return "community-SF-v2-RTX20-RTX50";
     }
     return "unknown";
 }
@@ -54,11 +86,17 @@ enum class FlowQuality { Performance, Balanced, Quality };
 enum class OpticalFlowBackend { Nvidia, AmdFidelityFx, GpuDis };
 enum class ContentRate { Transport, Auto, Fps30, Fps50, Fps60, Capture60To30 };
 enum class AudioSyncMode { Automatic, Manual, Off };
+enum class HdrOutputMode { Hdr10, ScRgb };
+enum class MotionSource { Zero, OpticalFlow, Automatic };
+constexpr bool motionUsesFlow(MotionSource source,FrameGenerationBackend backend=FrameGenerationBackend::Dlss) {
+    return source==MotionSource::OpticalFlow||(source==MotionSource::Automatic&&backend!=FrameGenerationBackend::XeSS);
+}
 constexpr std::string_view frameGenerationBackendName(FrameGenerationBackend backend) {
     switch(backend) {
     case FrameGenerationBackend::Dlss: return "DLSS";
     case FrameGenerationBackend::XeSS: return "XeSS";
     case FrameGenerationBackend::Fsr: return "AMD-FSR";
+    case FrameGenerationBackend::Fsr4: return "AMD-FSR4-ML";
     }
     return "unknown";
 }
@@ -79,11 +117,33 @@ struct ResidualSettings {
     float total=1,darken=1,brighten=1,color=1,luminance=1;
     bool operator==(const ResidualSettings&) const = default;
 };
+// Fixed storage: settings also cross the export worker's shared-memory POD.
+// Runtime and NR/SR order are shared by active instances, not separate adapters.
+struct NrLayerSettings {
+    NrSettings model{};
+    ResidualSettings residual{};
+    NrRuntime runtime=NrRuntime::Original;
+    bool temporal=false,lowLatencyPairing=false,enabled=false;
+    // The tier only applies when `temporal` is set; `temporal=false` forces Off.
+    // Kept as a separate field so an older preset that only knew the boolean
+    // keeps meaning exactly what it meant (Flow).
+    NrAntiFlicker antiFlicker=NrAntiFlicker::Flow;
+    pipeline::NrSizePolicy sizePolicy=pipeline::NrSizePolicy::Realtime;
+    bool operator==(const NrLayerSettings&) const = default;
+};
 struct ProtectionRect {
     float left=0,top=0,right=0,bottom=0;
+    // The ellipse inscribed in the rectangle instead of the rectangle itself.
+    bool ellipse=false;
     bool empty()const{return left==right||top==bottom;}
     bool operator==(const ProtectionRect&)const=default;
 };
+// Shader constants for one region (NrProtection.hlsli). An ellipse is sent with
+// left and right swapped: the constant layout stays the same and a rectangle's
+// constants stay byte-for-byte what they were.
+inline std::array<float,4> protectionConstants(const ProtectionRect& q){
+    return q.ellipse?std::array<float,4>{q.right,q.top,q.left,q.bottom}:std::array<float,4>{q.left,q.top,q.right,q.bottom};
+}
 struct ProtectionSettings {
     bool enabled=false;
     float featherPixels=2;
@@ -93,7 +153,10 @@ struct ProtectionSettings {
         // Upper bound is 64 px at the working extent; TiledImageProcessor keeps
         // its tile halo above this value so export tiles cannot clip the ramp.
         if(!std::isfinite(featherPixels)||featherPixels<0||featherPixels>64)return "invalid protection feather";
-        for(auto r:regions){for(float v:{r.left,r.top,r.right,r.bottom})if(!std::isfinite(v)||v<0||v>1)return "invalid protection rectangle";
+        // An ellipse may extend past the frame: a tiled export maps it into
+        // tile space without clipping, since clipping would change its shape.
+        for(auto r:regions){const float low=r.ellipse?-64.0f:0.0f,high=r.ellipse?65.0f:1.0f;
+            for(float v:{r.left,r.top,r.right,r.bottom})if(!std::isfinite(v)||v<low||v>high)return "invalid protection rectangle";
             if(r.left>r.right||r.top>r.bottom)return "inverted protection rectangle";}
         return {};
     }
@@ -107,6 +170,34 @@ struct EnhancementSettings {
     bool lowLatency=false; // preview only: NR before SR, opt-in
     NrRuntime nrRuntime=NrRuntime::Original;
     bool nrTemporal=false; // optional motion-reprojected residual stabilization
+    // Which anti-flicker tier the temporal pass runs, for the flat (non-list)
+    // path. Ignored when nrTemporal is false.
+    NrAntiFlicker nrAntiFlicker=NrAntiFlicker::Flow;
+    // Zero keeps the original flat, single-layer API byte-for-byte in use.
+    // Multi-layer lists retain disabled nodes; the flat fields mirror the first
+    // enabled layer (or the first node when every layer is bypassed).
+    std::array<NrLayerSettings,kMaxNrInstances> nrLayers{};
+    uint32_t nrLayerCount=0;
+    NrLayerSettings nrLayer(uint32_t index) const {
+        if(nrLayerCount&&index<nrLayers.size())return nrLayers[index];
+        return {model,residual,nrRuntime,nrTemporal,lowLatency,nr,nrAntiFlicker,nrPolicy};
+    }
+    uint32_t activeNrLayerCount() const {
+        if(!nr)return 0;
+        if(!nrLayerCount)return 1;
+        uint32_t count=0;
+        for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i)if(nrLayers[i].enabled)++count;
+        return count;
+    }
+    bool sameNrTopology(const EnhancementSettings& other) const {
+        if(nrLayerCount!=other.nrLayerCount)return false;
+        for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i){
+            const auto& a=nrLayers[i]; const auto& b=other.nrLayers[i];
+            if(a.enabled!=b.enabled||a.temporal!=b.temporal||a.runtime!=b.runtime||
+               a.lowLatencyPairing!=b.lowLatencyPairing||a.sizePolicy!=b.sizePolicy)return false;
+        }
+        return true;
+    }
     // Frame-generation admission strictness.
     //   false (default): a group is admitted when the whole group can still
     //     reach its LAST deadline, which is what 1.4.0 did. More generated
@@ -132,6 +223,10 @@ struct EnhancementSettings {
     // the next sample, so it is a live edit, not a graph rebuild.
     bool captureFlipVertical=false;
     bool forceSdrPreview=false; // display only; retain actual HDR source metadata
+    HdrOutputMode hdrOutputMode=HdrOutputMode::Hdr10;
+    MotionSource fgMotion=MotionSource::Automatic;
+    MotionSource srMotion=MotionSource::OpticalFlow;
+    MotionSource nrMotion=MotionSource::OpticalFlow;
     VideoHdrSettings videoHdr;
     bool useHdrPreview(bool hdrInput,bool hdrDisplayActive)const{return (hdrInput||videoHdr.enabled)&&hdrDisplayActive&&!forceSdrPreview;}
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
@@ -145,6 +240,18 @@ struct EnhancementSettings {
     // Lightroom-aligned colour grade. Live: the engine uploads it per frame, so
     // changing it never rebuilds the graph (see sameVideoConfiguration below).
     ColorSettings color;
+    // Instance zero remains the legacy field, including for live Win32 edits.
+    // Fixed capacity preserves the export shared-memory POD contract.
+    std::array<ColorSettings,kMaxColorInstances-1> additionalColors{};
+    uint32_t additionalColorCount=0;
+    // Stage-5 output stabiliser (anti-flicker). Holds the previous output where
+    // the source has not visibly changed. 0 is off, and off is the default: the
+    // graph then skips the dispatch entirely, so a build with this feature
+    // disabled is byte-identical to one without it. `nrHoldTolerance` is a
+    // relative 3x3 box-luma delta; the default is the value the pass was
+    // tuned against (see shaders/NrHold.hlsl).
+    float nrHoldStrength=0.0f;
+    float nrHoldTolerance=0.02f;
     pipeline::NrSizePolicy nrPolicy=pipeline::NrSizePolicy::Realtime;
     FlowQuality flow=FlowQuality::Balanced;
     OpticalFlowBackend opticalFlowBackend=OpticalFlowBackend::Nvidia;
@@ -168,6 +275,14 @@ struct EnhancementSettings {
         // master switch changes the graph shape, so it stays in the comparison.
         video.color=other.color;
         video.color.enabled=color.enabled;
+        video.color.lutName=color.lutName;
+        video.color.lutInputSpace=color.lutInputSpace;
+        video.additionalColors=other.additionalColors;
+        for(size_t i=0;i<additionalColors.size();++i){
+            video.additionalColors[i].enabled=additionalColors[i].enabled;
+            video.additionalColors[i].lutName=additionalColors[i].lutName;
+            video.additionalColors[i].lutInputSpace=additionalColors[i].lutInputSpace;
+        }
         video.videoHdr=other.videoHdr;
         video.videoHdr.enabled=videoHdr.enabled;
         return video==other;
@@ -181,6 +296,8 @@ struct EnhancementSettings {
         *this=restored;
     }
     std::string validate() const {
+        if(hdrOutputMode<HdrOutputMode::Hdr10||hdrOutputMode>HdrOutputMode::ScRgb)return "invalid HDR output mode";
+        for(auto source:{fgMotion,srMotion,nrMotion})if(source<MotionSource::Zero||source>MotionSource::Automatic)return "invalid motion source";
         if(!videoHdr.valid())return "invalid RTX Video HDR parameters";
         auto range=[](float v,float hi){return std::isfinite(v)&&v>=0&&v<=hi;};
         if(auto error=protection.validate();!error.empty())return error;
@@ -189,18 +306,38 @@ struct EnhancementSettings {
         if(captureAudio<CaptureAudioIngress::Auto||captureAudio>CaptureAudioIngress::BitstreamPreferred)return "invalid capture audio ingress mode";
         if(captureBuffer<source::CaptureBufferMode::Auto||captureBuffer>source::CaptureBufferMode::DriverDefault)return "invalid capture buffer mode";
         if(audioSync<AudioSyncMode::Automatic||audioSync>AudioSyncMode::Off||audioOffsetMs<-250||audioOffsetMs>250)return "invalid audio sync setting";
+        // Stage-5 output stabiliser: 0 is off, 1 is full hold; the tolerance is
+        // a relative box-luma delta, so anything above 1 would hold every pixel.
+        if(!range(nrHoldStrength,1))return "output stabiliser strength out of range";
+        if(!range(nrHoldTolerance,1))return "output stabiliser tolerance out of range";
         if(!range(model.intensity,1)||!range(model.tone,1)||!range(model.structure,1))return "model parameter out of range";
         if(model.skin!=-1&&!range(model.skin,2))return "skin parameter out of range";
         if(model.style<0||model.style>2||model.autoMask<0||model.autoMask>1||model.uiCorrection<0||model.uiCorrection>1)return "invalid experimental parameter";
         for(float v:{residual.total,residual.darken,residual.brighten,residual.color,residual.luminance})if(!range(v,2))return "residual parameter out of range";
-        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::Fsr)return "invalid frame generation backend";
+        if(nrLayerCount>nrLayers.size())return "too many NR instances";
+        for(uint32_t i=0;i<nrLayerCount;++i){
+            const auto& n=nrLayers[i];
+            if(!pipeline::validNrSizePolicy(n.sizePolicy))return "invalid NR layer size policy";
+            if(!range(n.model.intensity,1)||!range(n.model.tone,1)||!range(n.model.structure,1)||
+               (n.model.skin!=-1&&!range(n.model.skin,2)))return "NR layer model parameter out of range";
+            if(n.model.style<0||n.model.style>2||n.model.autoMask<0||n.model.autoMask>1||
+               n.model.uiCorrection<0||n.model.uiCorrection>1)return "invalid NR layer experimental parameter";
+            for(float v:{n.residual.total,n.residual.darken,n.residual.brighten,n.residual.color,n.residual.luminance})
+                if(!range(v,2))return "NR layer residual parameter out of range";
+            if(n.runtime!=NrRuntime::Original&&n.runtime!=NrRuntime::Community&&n.runtime!=NrRuntime::Ampere)
+                return "invalid NR layer runtime";
+            if(n.enabled&&(n.runtime!=nrRuntime||n.lowLatencyPairing!=lowLatency))
+                return "active NR layers must share runtime and NR/SR order";
+        }
+        if(nr&&nrLayerCount&&!activeNrLayerCount())return "enabled NR stack has no active layer";
+        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::Fsr4)return "invalid frame generation backend";
         // The XeSS provider reports its own generated-frame ceiling at session
         // start; the engine clamps/rejects above it, so validation only guards
         // the absolute API range here.
         if(frameGenerationBackend==FrameGenerationBackend::XeSS&&multiplier>4)return "XeSS frame generation supports up to 4X";
         // The AMD 3.1.x provider delivers one generated frame per present; the
         // probe measured the same count for 2/3/4 requested frames.
-        if(frameGenerationBackend==FrameGenerationBackend::Fsr&&multiplier>2)return "AMD FSR frame generation supports up to 2X";
+        if(fsrFrameGeneration(frameGenerationBackend)&&multiplier>2)return "AMD FSR frame generation supports up to 2X";
         if(videoSrQuality>kVideoSrFsr)return "invalid video SR quality";
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";
         if(opticalFlowBackend!=OpticalFlowBackend::Nvidia&&opticalFlowBackend!=OpticalFlowBackend::AmdFidelityFx&&opticalFlowBackend!=OpticalFlowBackend::GpuDis)return "invalid optical flow backend";
@@ -209,6 +346,9 @@ struct EnhancementSettings {
         // cannot ask a driver for a nonsense rate.
         if(exportBitrateMbps>300)return "export bitrate out of range";
         if(auto error=color.validate();!error.empty())return error;
+        if(additionalColorCount>additionalColors.size())return "too many color instances";
+        for(uint32_t i=0;i<additionalColorCount;++i)
+            if(auto error=additionalColors[i].validate();!error.empty())return error;
         if(!pipeline::validNrSizePolicy(nrPolicy))return "invalid NR size policy";
         if(flow<FlowQuality::Performance||flow>FlowQuality::Quality||content<ContentRate::Transport||content>ContentRate::Capture60To30)return "invalid flow/content mode";
         return {};

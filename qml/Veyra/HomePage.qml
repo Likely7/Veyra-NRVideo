@@ -174,8 +174,11 @@ VPage {
         // the recorded session, and the row is absent when there is none.
         Rectangle {
             id: resume
+            objectName: "home-resume"
             Layout.alignment: Qt.AlignHCenter
-            visible: veyra.hasCaptureSession
+            // The last source actually used: capture card, PS5 or screen capture.
+            readonly property var last: veyra.lastSource
+            visible: last.kind !== undefined
             implicitWidth: 692
             implicitHeight: 54
             radius: 14
@@ -194,7 +197,11 @@ VPage {
                 Rectangle {
                     implicitWidth: 34; implicitHeight: 34; radius: 10
                     color: Theme.accentSoft
-                    VIcon { anchors.centerIn: parent; name: "gamepad"; color: Theme.accent }
+                    VIcon {
+                        anchors.centerIn: parent
+                        name: resume.last.kind === "screen" ? "monitor" : resume.last.kind === "capture" ? "video" : "gamepad"
+                        color: Theme.accent
+                    }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -208,7 +215,7 @@ VPage {
                     }
                     Text {
                         Layout.fillWidth: true
-                        text: veyra.captureSessionSummary
+                        text: resume.last.summary || ""
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: 12
@@ -219,7 +226,7 @@ VPage {
                     text: "开始"
                     iconName: "play"
                     primary: true
-                    onClicked: veyra.resumeCaptureSession()
+                    onClicked: veyra.resumeLastSource()
                 }
             }
         }

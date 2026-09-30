@@ -44,14 +44,19 @@ if (-not $appVersion.ProductVersion.StartsWith($Version)) { throw "EXE version $
 # Publisher audit only. The application permits users to replace these DLLs.
 $runtimeFiles = @(
   @{ Name='nvngx_dlss.dll'; Folder='runtime/experimental'; Source='runtime_local/nvidia/nvngx_dlss.dll'; Hash='BE6E434A94CA32499515EB62CA0E6C274526055D568D0426E4C652DCDFB6EE6E'; Category='official-dlss-sdk-310.7.0-rel'; Experimental=$false },
-  @{ Name='nvngx_dlssg.dll'; Folder='runtime/experimental'; Source='runtime_local/nvidia/nvngx_dlssg.dll'; Hash='135EAF0733C1E37381A8C28ABCF7A862404A54132B81787C04E35D09EFC5E36F'; Category='pinned-dlss-sdk-310.7.0-rel'; Experimental=$true },
-  @{ Name='nvngx_dlssnr.dll'; Folder='runtime/experimental'; Source='runtime_local/nvidia/nvngx_dlssnr.dll'; Hash='E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E'; Category='user-provided-pinned-experimental-runtime'; Experimental=$true },
+  @{ Name='nvngx_dlssg.dll'; Folder='runtime/experimental'; Source='runtime_local/nvidia/nvngx_dlssg.dll'; Hash='FF6E90EB78B827927DFF5B4ECC6B1C870C2E9BCA29ED9F48C7D348CC9E170B82'; Signature='Valid'; Size=7460976; Version='310.9.1.0'; Category='official-dlss-sdk-310.9.1-rel'; Experimental=$true },
+  @{ Name='nvngx_dlssnr.dll'; Folder='runtime/experimental'; Source='runtime_local/nvidia/nvngx_dlssnr.dll'; Hash='F95FEB54137EA11979F9B4EC4F00AFD84B5C98A5624D3388FBF6A87714A39FCC'; Signature='HashMismatch'; Size=165840496; Version='310.8.3.0'; Category='user-approved-community-Lecram-310.8.3-RTX50-runtime'; Experimental=$true },
   @{ Name='nvngx_dlssnr.dll'; Folder='runtime/experimental/nr-community'; Source='runtime_local/nvidia/nr-community/nvngx_dlssnr.dll'; Hash='984BEE0F775C277D5829B8FD6775D53A7B0F75396C852B3AAF06A18375F81014'; Signature='HashMismatch'; Size=165840496; Version='310.8.0.0'; Category='user-provided-community-modified-RTX40-RTX50-runtime'; Experimental=$true },
   @{ Name='nvngx_vsr.dll'; Folder='runtime/experimental'; Source='runtime_local/nvidia/nvngx_vsr.dll'; Hash='C3D88EEA5FF7A548EDEFA66414CF6E77464D0947277C904F324DD23ABF58A1ED'; Category='official-rtx-video-sdk-1.1.0'; Experimental=$false },
   @{ Name='libxell.dll'; Folder='runtime_local/intel/experimental'; Source='runtime_local/intel/experimental/libxell.dll'; Hash='D2030DCD694FDA8F2EC7E044B13E6DB8F0B56D4BA9113A5EFAD334E3F3DED8C7'; Category='official-intel-xess-sdk-3.0.2'; Experimental=$true },
   @{ Name='libxess_fg.dll'; Folder='runtime_local/intel/experimental'; Source='runtime_local/intel/experimental/libxess_fg.dll'; Hash='EC5E0C65E075570C6EDE72618BB666D0BE0C2E10B2EA9762C0FE8CB8E375AB27'; Category='official-intel-xess-sdk-3.0.2'; Experimental=$true }
 )
 if ([version]$Version -ge [version]'1.3.1') {
+  if ([version]$Version -ge [version]'2.0.0') {
+    # New candidates ship exactly two NR versions. Historical 1.x manifests
+    # keep their original identities; the retired40 binary is not recopied.
+    $runtimeFiles = @($runtimeFiles | Where-Object { $_.Folder -ne 'runtime/experimental/nr-community' })
+  }
   # AMD FidelityFX SDK 2.3.0 runtime (MIT licensed, AMD-signed). Needed for the
   # FSR frame-generation and FSR upscaling paths; loaded from runtime_local/amd/fidelityfx.
   $runtimeFiles += @(
@@ -61,7 +66,12 @@ if ([version]$Version -ge [version]'1.3.1') {
   )
 }
 if ([version]$Version -ge [version]'1.1.1') {
-  $runtimeFiles += @{ Name='nvngx_dlssnr.dll'; Folder='runtime/experimental/nr-ampere'; Source='runtime_local/nvidia/nr-ampere/nvngx_dlssnr.dll'; Hash='DCC0DC2414AEDEC4A8E084647070383BE068554042587180C20C784D4772D36F'; Signature='HashMismatch'; Size=165840496; Version='310.8.0.0'; Category='user-provided-NeuralScreen-1.8.2-modified-RTX30-experimental-runtime'; Experimental=$true }
+  if ([version]$Version -ge [version]'2.0.0') {
+    # SF-v2 is the RTX20-50 compatible choice; the disk slot name is historical.
+    $runtimeFiles += @{ Name='nvngx_dlssnr.dll'; Folder='runtime/experimental/nr-ampere'; Source='runtime_local/nvidia/nr-ampere/nvngx_dlssnr.dll'; Hash='6EB209E764F39872625DEBD6ABAF45E2BB6322F6F270F781F70C059AE30B3927'; Signature='NotSigned'; Size=165830144; Version='310.8.2.0'; Category='user-approved-community-SF-v2-310.8.2-RTX20-RTX50-compatible-runtime'; Experimental=$true }
+  } else {
+    $runtimeFiles += @{ Name='nvngx_dlssnr.dll'; Folder='runtime/experimental/nr-ampere'; Source='runtime_local/nvidia/nr-ampere/nvngx_dlssnr.dll'; Hash='DCC0DC2414AEDEC4A8E084647070383BE068554042587180C20C784D4772D36F'; Signature='HashMismatch'; Size=165840496; Version='310.8.0.0'; Category='user-provided-NeuralScreen-1.8.2-modified-RTX30-experimental-runtime'; Experimental=$true }
+  }
 }
 if ($LocalVideoHdr -or [version]$Version -ge [version]'1.4.2') {
   if ($LocalVideoHdr -and -not $Label) { throw 'Local HDR package requires an explicit test label.' }
@@ -70,6 +80,22 @@ if ($LocalVideoHdr -or [version]$Version -ge [version]'1.4.2') {
 function Runtime-Source($Item) {
   if ([IO.Path]::IsPathRooted($Item.Source)) { return $Item.Source }
   return Join-Path $resolvedDependencies $Item.Source
+}
+if ([version]$Version -ge [version]'2.0.0') {
+  # DLSS-G 310.9.1 optimized network kernels (DLSSG-Transfusion 1.4.5.3, see
+  # THIRD_PARTY_NOTICES.md). Runtime data loaded from disk, not linked in.
+  $kernelSource = Join-Path $resolvedDependencies 'third_party_local/nvidia/dlssg-transfusion-kernels-1.4.5.3'
+  if (-not (Test-Path -LiteralPath $kernelSource -PathType Container)) { throw "DLSS-G optimized kernel set missing: $kernelSource" }
+  foreach ($kernel in (Get-ChildItem -LiteralPath $kernelSource -Filter *.ptx | Sort-Object Name)) {
+    $runtimeFiles += @{
+      Name = $kernel.Name; Folder = 'runtime/experimental/dlssg-kernels'
+      Source = "third_party_local/nvidia/dlssg-transfusion-kernels-1.4.5.3/$($kernel.Name)"
+      Hash = (Get-FileHash -LiteralPath $kernel.FullName -Algorithm SHA256).Hash
+      Signature = 'NotSigned'
+      Category = 'community-DLSSG-Transfusion-1.4.5.3-sm86-optimized-kernels'
+      Experimental = $true
+    }
+  }
 }
 $records = foreach ($item in $runtimeFiles) {
   $source = Runtime-Source $item

@@ -17,6 +17,7 @@
 #include <format>
 #include <mutex>
 #include <limits>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -39,6 +40,26 @@ constexpr double kAudioLowWatermarkMs = 250.0;
 constexpr double kAudioPrefillMs = 500.0;
 constexpr double kAudioHighWatermarkMs = 1000.0;
 constexpr uint32_t kAudioRate = 48000;
+
+// --- output endpoint choice (P4-d) -------------------------------------------
+// One process-wide choice shared by every renderer (file playback and capture
+// monitoring). Empty id = follow the Windows default device, which is also what
+// happens when the chosen device is missing; it is switched back to as soon as
+// it reappears. Changing the choice rebuilds live endpoints through the existing
+// recovery path (the same one a default-device change uses): the audio clock and
+// PCM handling are untouched.
+struct RenderEndpoint { std::wstring id, name; bool isDefault = false; };
+std::vector<RenderEndpoint> enumerateRenderEndpoints();
+void setPreferredRenderEndpoint(std::wstring id);
+std::wstring preferredRenderEndpoint();
+// Mix everything down to stereo before the endpoint (headphones on a 5.1/7.1
+// device), instead of mapping channels to the device layout.
+void setForceStereoDownmix(bool enabled);
+bool forceStereoDownmix();
+// What the most recently opened renderer actually uses.
+struct ActiveRenderEndpoint { std::wstring id, name; bool fallback = false; unsigned channels = 0; bool downmix = false; bool valid = false; };
+ActiveRenderEndpoint activeRenderEndpoint();
+uint64_t renderEndpointGeneration();
 
 class AudioRenderer; // forward: pipeline thread needs the renderer
 enum class AudioFadeResult { NotPlaying, Drained, Cancelled, TimedOut, Failed };
@@ -195,7 +216,8 @@ public:
     uint64_t recoveryFades() const{return recoveryFades_.load();}
     uint64_t clockStalledGaps() const{return clockStalledGaps_.load();}
     uint64_t framesWritten() const;
-    HRESULT lastError()const{return lastError_.load();}
+    // A changed endpoint choice reads as a lost device, so the owner rebuilds it.
+    HRESULT lastError()const{if(running_&&endpointGeneration_.load()!=renderEndpointGeneration())return AUDCLNT_E_DEVICE_INVALIDATED;return lastError_.load();}
     double bufferedMs()const{return bufferedMs_.load();}
     double capacityMs()const{std::lock_guard lock(endpointMutex_);return 1000.0*bufferFrames_/sampleRate_;}
 
@@ -221,6 +243,12 @@ private:
     void registerEndpointNotification();
     void unregisterEndpointNotification();
     IMMDevice* device_ = nullptr;
+    // Set in start() before the notifier is registered, read by its callbacks.
+    std::wstring deviceId_;
+    std::wstring preferredId_;
+    std::atomic<bool> followsDefault_{true};
+    std::atomic<bool> onFallback_{false};
+    std::atomic<uint64_t> endpointGeneration_{0};
     IAudioClient* client_ = nullptr;
     IAudioRenderClient* render_ = nullptr;
     IAudioClock* clock_ = nullptr;

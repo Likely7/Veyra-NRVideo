@@ -14,6 +14,9 @@ import QtQuick.Layouts
 Rectangle {
     id: group
     default property alias body: inner2.data
+    // For the staggered tab redraw (VRise.Stagger).
+    property real motionDy: 0
+    transform: Translate { y: group.motionDy }
     Layout.fillWidth: true
     radius: 12
     color: Theme.card2

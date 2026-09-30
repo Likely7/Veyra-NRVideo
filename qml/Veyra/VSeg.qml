@@ -73,20 +73,33 @@ Rectangle {
             model: seg.options
             delegate: Item {
                 required property var modelData
-                implicitWidth: segLabel.implicitWidth + 20
+                implicitWidth: segContent.implicitWidth + 20
                 implicitHeight: 24
-                Text {
-                    id: segLabel
+                // { id, label, icon? }: the design's 列表 / 节点 toggle carries icons.
+                Row {
+                    id: segContent
                     anchors.centerIn: parent
-                    text: modelData.label
-                    color: seg.current === modelData.id ? Theme.t1 : Theme.t2
-                    Behavior on color { ColorAnimation { duration: Theme.d(200) } }
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsBody
-                    font.weight: Font.Medium
+                    spacing: 6
+                    VIcon {
+                        visible: (modelData.icon || "").length > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: modelData.icon || ""
+                        size: 13
+                        color: segLabel.color
+                    }
+                    Text {
+                        id: segLabel
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.label
+                        color: seg.current === modelData.id ? Theme.t1 : Theme.t2
+                        Behavior on color { ColorAnimation { duration: Theme.d(200) } }
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        font.weight: Font.Medium
+                    }
                 }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: seg.picked(modelData.id) }
+                TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: seg.picked(modelData.id) }
             }
         }
     }

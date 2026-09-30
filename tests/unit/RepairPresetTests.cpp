@@ -34,6 +34,68 @@ bool retiredSrMode(const std::filesystem::path& path) {
  std::cout<<"retired SR migration and unknown mode preservation=1\n";
  return true;
 }
+bool schemaVersions(const std::filesystem::path& path) {
+ using namespace veyra::engine;
+ for(int version=1;version<=21;++version) {
+  std::ostringstream fixture;
+  fixture<<"VEYRA_PRESETS "<<version<<"\n\"versioned\" 1\n\"versioned\" 1 1 1 -1 0 0 0 1 1 1 1 1 0 0 1 0 1 0";
+  if(version>=2) {
+   fixture<<" 0 0";
+   for(int region=0;region<4;++region)fixture<<" 0 0 0 0";
+  }
+  if(version>=3)fixture<<" 2";
+  if(version>=4)fixture<<" 0";
+  if(version>=5)fixture<<" 1";
+  if(version>=6)fixture<<" 0 0";
+  if(version>=7)fixture<<" 1 137";
+  if(version>=9)fixture<<" 0";
+  if(version>=10)fixture<<" 1";
+  if(version>=11)fixture<<" 0";
+  if(version>=12)fixture<<" 0";
+  if(version>=14)fixture<<" 0";
+  if(version>=15)fixture<<" 60";
+  if(version>=16)fixture<<" 1";
+  if(version>=17)fixture<<" 1";
+  if(version>=18) {
+   std::ostringstream color;
+   writeColorSettings(color,{},"");
+   if(version==18) {
+    std::istringstream fields(color.str());
+    std::vector<std::string> tokens;
+    for(std::string token;fields>>token;)tokens.push_back(token);
+    if(tokens.size()<30||tokens[27]!="\"\""||tokens[28]!="0")return false;
+    tokens.erase(tokens.begin()+28); // v19 added the bypass mask after the LUT path.
+    for(const auto& token:tokens)fixture<<' '<<token;
+   } else fixture<<' '<<color.str();
+  }
+  if(version>=20)fixture<<" 0 100 100 50 1000";
+  if(version>=21)fixture<<" 1";
+  fixture<<'\n';
+  const auto original=fixture.str();
+  {std::ofstream file(path,std::ios::binary|std::ios::trunc);file<<original;}
+  PresetStore store(path);
+  if(!store.load()) {std::cout<<"schema v"<<version<<" load failed\n";return false;}
+  if(store.defaultSettings().audioOffsetMs!=(version>=7?137:0)||
+     store.defaultSettings().exportBitrateMbps!=(version>=15?60u:0u)||
+     store.defaultSettings().captureFlipVertical!=(version>=16)||
+     store.defaultSettings().nrTemporal!=(version>=21)) {
+   std::cout<<"schema v"<<version<<" fields mismatch\n";return false;
+  }
+  {
+   std::ifstream before(path,std::ios::binary);
+   if(std::string(std::istreambuf_iterator<char>(before),{})!=original) {
+    std::cout<<"schema v"<<version<<" modified on load\n";return false;
+   }
+  }
+  if(!store.save()) {std::cout<<"schema v"<<version<<" upgrade failed\n";return false;}
+  PresetStore upgraded(path);
+  if(!upgraded.load()||upgraded.defaultSettings()!=store.defaultSettings()) {
+   std::cout<<"schema v"<<version<<" upgrade mismatch\n";return false;
+  }
+ }
+ std::cout<<"v1-v21 preset read, unchanged source, and upgrade roundtrip=1\n";
+ return true;
+}
 bool legacyBackends(const std::filesystem::path& path) {
  using namespace veyra::engine;
  unsigned checks=0;
@@ -66,7 +128,7 @@ bool legacyBackends(const std::filesystem::path& path) {
    const auto value=store.defaultSettings();
    if(value.lowLatency||value.forceSdrPreview)return false;
    if(value.captureCompatible!=(version>=10))return false;
-   if(value.nrRuntime!=(version>=9?NrRuntime::Community:NrRuntime::Original))return false;
+   if(value.nrRuntime!=(version>=9?NrRuntime::Ampere:NrRuntime::Original))return false;
    const auto expectedBackend=fsr?FrameGenerationBackend::Fsr:xess?FrameGenerationBackend::XeSS:FrameGenerationBackend::Dlss;
    if(value.frameGenerationBackend!=expectedBackend||value.multiplier!=multiplier||value.videoSrQuality!=2)return false;
    if(version>=7&&(value.audioSync!=AudioSyncMode::Manual||value.audioOffsetMs!=137))return false;
@@ -91,9 +153,17 @@ int main(int argc,char** argv){if(argc!=2)return 2;using namespace veyra::engine
   auto value=family;const bool expected=selected&&result==0&&(family==0x170u||family==0x171u);
   ok=ok&&(veyra::ngx::rewriteNrAmpereArchitecture(value,selected,result)==expected)&&value==(expected?0x1B0u:family);
  }
+ // NeuralScreen 310.8.0.0 keeps the rewrite; SF 310.8.2.0 and Lecram 310.8.3.0 do not.
+ ok=ok&&veyra::ngx::nrRuntimeNeedsAmpereRewrite((310u<<16)|8u,0u)&&veyra::ngx::nrRuntimeNeedsAmpereRewrite((310u<<16)|8u,1u<<16)
+     &&!veyra::ngx::nrRuntimeNeedsAmpereRewrite((310u<<16)|8u,2u<<16)&&!veyra::ngx::nrRuntimeNeedsAmpereRewrite((310u<<16)|8u,3u<<16)
+     &&veyra::ngx::nrRuntimeNeedsAmpereRewrite((311u<<16)|0u,0u);
  s.srTarget=veyra::pipeline::SrTarget::Uhd8K;
+ ok=ok&&veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 2080 Ti")&&veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 3090")
+      &&veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 4070 SUPER")&&!veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 5070")
+      &&!veyra::ngx::preferSfNr(0x1002,L"RTX 4070")&&!veyra::ngx::preferSfNr(0x10DE,L"Unknown")
+      &&currentNrRuntime(NrRuntime::Community)==NrRuntime::Ampere&&currentNrRuntime(NrRuntime::Original)==NrRuntime::Original;
  s.audioSync=AudioSyncMode::Manual;s.audioOffsetMs=137;
-s.nrRuntime=NrRuntime::Community;s.captureCompatible=true;s.lowLatency=true;s.forceSdrPreview=true;
+s.nrRuntime=NrRuntime::Ampere;s.captureCompatible=true;s.lowLatency=true;s.forceSdrPreview=true;
 s.videoHdr={true,110,80,45,800};
 // Colour grade round-trips through schema v18 (plan P1: named colour presets).
 s.color.temperature=-40;s.color.tint=7.5f;s.color.exposure=1.25f;s.color.contrast=-12.5f;s.color.highlights=18;s.color.shadows=-22;
@@ -115,7 +185,14 @@ auto badExposure=s;badExposure.color.exposure=6;ok=ok&&!b.put(L"invalid exposure
 auto badHdr=s;badHdr.videoHdr.peakNits=2001;ok=ok&&!b.put(L"invalid HDR peak",badHdr);
 ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
  
- auto badTarget=s;badTarget.srTarget=static_cast<veyra::pipeline::SrTarget>(3);ok=ok&&!b.put(L"invalid target",badTarget);
+ auto badTarget=s;badTarget.srTarget=static_cast<veyra::pipeline::SrTarget>(6);ok=ok&&!b.put(L"invalid target",badTarget);
+ for(auto target:{veyra::pipeline::SrTarget::Uhd5K,veyra::pipeline::SrTarget::Uhd6K,veyra::pipeline::SrTarget::Uhd7K}){
+     auto higher=s;higher.srTarget=target;ok=ok&&b.put(L"higher resolution",higher);
+     PresetStore reload(p);ok=ok&&reload.load()&&reload.entries().back().settings==higher&&b.erase(1);
+ }
+ ok=ok&&unsigned(veyra::pipeline::SrTarget::Uhd8K)==2;
+ auto rendering=s;rendering.hdrOutputMode=HdrOutputMode::ScRgb;rendering.fgMotion=MotionSource::Zero;rendering.srMotion=MotionSource::Zero;rendering.nrMotion=MotionSource::Zero;
+ ok=ok&&b.put(L"rendering",rendering);PresetStore renderReload(p);ok=ok&&renderReload.load()&&renderReload.entries().back().settings==rendering&&b.erase(1);
  
  // XeSS presets may request up to 4X since the audited multi-frame unlock; the
  // engine clamps to the ceiling the provider reports at session start.
@@ -130,7 +207,11 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
  
  fsr.multiplier=2;ok=ok&&b.put(L"FSR 2X",fsr);PresetStore fsrReload(p);ok=ok&&fsrReload.load()&&fsrReload.entries().back().settings==fsr&&b.erase(1);
  
- auto badBackend=s;badBackend.frameGenerationBackend=static_cast<FrameGenerationBackend>(3);ok=ok&&!b.put(L"invalid backend",badBackend);
+ auto fsr4=fsr;fsr4.frameGenerationBackend=FrameGenerationBackend::Fsr4;
+ ok=ok&&b.put(L"FSR 4 ML 2X",fsr4);PresetStore fsr4Reload(p);
+ ok=ok&&fsr4Reload.load()&&fsr4Reload.entries().back().settings==fsr4&&b.erase(1);
+ fsr4.multiplier=4;ok=ok&&!b.put(L"FSR 4 ML 4X rejected",fsr4);
+ auto badBackend=s;badBackend.frameGenerationBackend=static_cast<FrameGenerationBackend>(4);ok=ok&&!b.put(L"invalid backend",badBackend);
  auto dis=s;dis.opticalFlowBackend=OpticalFlowBackend::GpuDis;ok=ok&&b.put(L"GPU DIS",dis)&&b.save();PresetStore disReload(p);ok=ok&&disReload.load()&&disReload.entries().back().settings==dis&&b.erase(1);
  
  auto badFlow=s;badFlow.opticalFlowBackend=static_cast<OpticalFlowBackend>(3);ok=ok&&!b.put(L"invalid flow backend",badFlow);
@@ -162,6 +243,51 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
  auto buffers=s;buffers.captureBuffer=veyra::source::CaptureBufferMode::Minimum;ok=ok&&b.put(L"capture buffer",buffers);
  PresetStore bufferReload(p);ok=ok&&bufferReload.load()&&bufferReload.entries().size()==1&&bufferReload.entries().back().settings.captureBuffer==veyra::source::CaptureBufferMode::Minimum&&b.erase(0);
  auto badBuffer=s;badBuffer.captureBuffer=static_cast<veyra::source::CaptureBufferMode>(3);ok=ok&&!b.put(L"invalid buffer",badBuffer);
+ auto multi=s;multi.additionalColorCount=5;
+ for(unsigned i=0;i<5;++i){multi.additionalColors[i].enabled=i!=2;multi.additionalColors[i].exposure=float(i)*.25f;multi.additionalColors[i].setLutName(L"grade-"+std::to_wstring(i)+L".cube");}
+ ok=ok&&b.put(L"six colors",multi);PresetStore multiReload(p);
+ ok=ok&&multiReload.load()&&multiReload.entries().size()==1&&multiReload.entries()[0].settings==multi&&b.erase(0);
+ // Six grades must not reduce the advertised 64-preset capacity. Exercise
+ // full curves and long Unicode LUT names, not just mostly-zero defaults.
+ {
+  auto dense=multi;
+  auto fill=[](ColorSettings& color){
+   color.enabled=true;color.setLutName(std::wstring(220,L'色')+L".cube");
+   for(auto& curve:color.curves){curve.count=kColorCurvePoints;
+    for(int j=0;j<kColorCurvePoints;++j)curve.points[j]={float(j)/7.0f,float(j*j)/49.0f};}
+  };
+  fill(dense.color);for(auto& color:dense.additionalColors)fill(color);
+  auto fullPath=p;fullPath+=L".capacity";PresetStore full(fullPath);bool capacity=full.load();
+  for(unsigned i=0;i<64&&capacity;++i)capacity=full.put(L"six-grade-"+std::to_wstring(i),dense);
+  PresetStore loaded(fullPath);capacity=capacity&&loaded.load()&&loaded.entries().size()==64;
+  for(const auto& entry:loaded.entries())capacity=capacity&&entry.settings==dense;
+  std::cout<<"64 six-grade presets full-curve/Unicode roundtrip="<<capacity<<'\n';ok=capacity&&ok;
+  auto hugePath=p;hugePath+=L".oversized";const size_t bytes=2u*1024u*1024u+1;
+  {std::ofstream f(hugePath,std::ios::binary);f<<std::string(bytes,'x');}
+  PresetStore huge(hugePath);ok=!huge.load()&&!huge.put(L"do not overwrite",{})&&std::filesystem::file_size(hugePath)==bytes&&ok;
+ }
+ {
+  auto stackPath=p;stackPath+=L".nr-stack-v23";PresetStore stack(stackPath);
+  EnhancementSettings layers;layers.nr=true;layers.nrLayerCount=4;layers.additionalColorCount=1;
+  layers.additionalColors[0].exposure=.75f;
+  for(unsigned i=0;i<4;++i){auto& n=layers.nrLayers[i];n.enabled=i!=1;
+   n.sizePolicy=static_cast<veyra::pipeline::NrSizePolicy>(i);
+   n.model.skin=1.5f;n.model.intensity=.25f*float(i+1);n.residual.total=.3f*float(i+1);n.temporal=(i%2)!=0;}
+  bool roundtrip=stack.load()&&stack.put(L"four-independent-NR",layers);
+  PresetStore loaded(stackPath);roundtrip=roundtrip&&loaded.load()&&loaded.entries().back().settings==layers;
+  std::cout<<"NR v23 four layers mixed sizes bypass/model/residual/color roundtrip="<<roundtrip<<'\n';ok=roundtrip&&ok;
+  // v24: per-layer tiers and the stabiliser pair, stored beside a default entry
+  // in the same file (every row must then carry the v24 fields consistently).
+  auto tierPath=p;tierPath+=L".nr-stack-v24";PresetStore tiers(tierPath);
+  auto tiered=layers;tiered.nrHoldStrength=.6f;tiered.nrHoldTolerance=.05f;
+  const NrAntiFlicker kinds[]={NrAntiFlicker::Off,NrAntiFlicker::Static,NrAntiFlicker::FlowPlus,NrAntiFlicker::LowFrequency};
+  for(unsigned i=0;i<4;++i)tiered.nrLayers[i].antiFlicker=kinds[i];
+  bool v24=tiers.load()&&tiers.put(L"plain-stack",layers)&&tiers.put(L"tiered-stack",tiered);
+  PresetStore tierLoaded(tierPath);v24=v24&&tierLoaded.load()&&tierLoaded.entries().size()==2;
+  for(const auto& e:v24?tierLoaded.entries():std::vector<UserPreset>{})v24=v24&&e.settings==(e.name==L"tiered-stack"?tiered:layers);
+  std::ifstream header(tierPath);std::string magic;int written=0;v24=v24&&(header>>magic>>written)&&written==24;
+  std::cout<<"NR v24 per-layer tiers and stabiliser with a default entry roundtrip="<<v24<<'\n';ok=v24&&ok;
+ }
  {std::ofstream legacy(p);legacy<<"VEYRA_PRESETS 1\n\"legacy\" 1\n\"legacy\" 1 1 1 -1 0 0 0 1 1 1 1 1 1 0 1 0 1 0\n";}
  PresetStore old(p);ok=ok&&old.load()&&!old.defaultSettings().protection.enabled&&old.defaultSettings().srTarget==veyra::pipeline::SrTarget::Uhd4K&&old.put(L"v2",s);
  PresetStore upgraded(p);ok=ok&&upgraded.load()&&upgraded.entries().size()==2&&upgraded.entries()[1].settings==s;
@@ -169,6 +295,6 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
 {std::ofstream f(p);f<<"VEYRA_PRESETS 99\ncorrupt mediaPath executable must reject";}PresetStore c(p);const bool corruptLoaded=c.load();const bool corruptPut=c.put(L"override",{});std::ifstream f(p);std::string data((std::istreambuf_iterator<char>(f)),{});
  const bool corruptPreserved=data=="VEYRA_PRESETS 99\ncorrupt mediaPath executable must reject";
  ok=ok&&!corruptLoaded&&!corruptPut&&corruptPreserved;
- f.close();ok=legacyBackends(p)&&ok;ok=retiredSrMode(p)&&ok;
+ f.close();ok=legacyBackends(p)&&ok;ok=retiredSrMode(p)&&ok;ok=schemaVersions(p)&&ok;
  
  std::cout<<"preset roundtrip, all fields, duplicate, rename-default, delete, validation, unknown schema, corrupt-preservation="<<ok<<'\n';return ok?0:1;}

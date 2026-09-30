@@ -51,18 +51,27 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double displayFps READ displayFps NOTIFY snapshotChanged)
     Q_PROPERTY(bool displayFpsKnown READ displayFpsKnown NOTIFY snapshotChanged)
     Q_PROPERTY(double queuedFrames READ queuedFrames NOTIFY snapshotChanged)
+    Q_PROPERTY(bool queuedFramesKnown READ queuedFramesKnown NOTIFY snapshotChanged)
     Q_PROPERTY(int skippedFrames READ skippedFrames NOTIFY snapshotChanged)
     Q_PROPERTY(QString flowBackend READ flowBackend NOTIFY snapshotChanged)
+    Q_PROPERTY(int opticalFlowChoice READ opticalFlowChoice NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList stageTimings READ stageTimings NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantMap nodeTimings READ nodeTimings NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantMap nodeAnchors READ nodeAnchors NOTIFY nodeAnchorsChanged)
     Q_PROPERTY(double stageBudgetMs READ stageBudgetMs NOTIFY snapshotChanged)
-    // Total measured cost of the chain, or 0 when nothing has been measured.
+    // Existing measured enhancement-interval P95, NOT full-chain latency.
     Q_PROPERTY(double chainTotalMs READ chainTotalMs NOTIFY snapshotChanged)
+    Q_PROPERTY(bool chainTotalMsKnown READ chainTotalMsKnown NOTIFY snapshotChanged)
     Q_PROPERTY(double scheduleP95Ms READ scheduleP95Ms NOTIFY snapshotChanged)
 
     // --- frame generation settings ----------------------------------------
     Q_PROPERTY(QString fgBackendName READ fgBackendName WRITE setFgBackendName NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantList fgBackendChoices READ fgBackendChoices CONSTANT)
+    Q_PROPERTY(QString fgProviderText READ fgProviderText NOTIFY fgChoicesChanged)
     Q_PROPERTY(int fgMaxMultiplier READ fgMaxMultiplier NOTIFY snapshotChanged)
-    Q_PROPERTY(QVariantList fgMultiplierChoices READ fgMultiplierChoices NOTIFY snapshotChanged)
+    Q_PROPERTY(bool fgEnabled READ fgEnabled WRITE setFgEnabled NOTIFY chainChanged)
+    Q_PROPERTY(QString submitFpsLabel READ submitFpsLabel NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantList fgMultiplierChoices READ fgMultiplierChoices NOTIFY fgChoicesChanged)
     Q_PROPERTY(bool fgStrict READ fgStrict WRITE setFgStrict NOTIFY settingsChanged)
     Q_PROPERTY(bool fgLowQueue READ fgLowQueue WRITE setFgLowQueue NOTIFY settingsChanged)
 
@@ -99,21 +108,73 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString captureDeviceLabel READ captureDeviceLabel NOTIFY captureChanged)
     Q_PROPERTY(bool captureForceSdr READ captureForceSdr WRITE setCaptureForceSdr NOTIFY settingsChanged)
     Q_PROPERTY(bool captureFlipVertical READ captureFlipVertical WRITE setCaptureFlipVertical NOTIFY settingsChanged)
+    // P4-e: the full capture connection, as the 1.4.4 panel: device details and
+    // formats come from asynchronous DirectShow queries (never on the UI thread),
+    // the choice is remembered in capture-preferences.v1 for "continue".
+    Q_PROPERTY(QVariantList captureFormats READ captureFormats NOTIFY captureChanged)
+    Q_PROPERTY(QString captureFormatKey READ captureFormatKey WRITE setCaptureFormatKey NOTIFY captureChanged)
+    Q_PROPERTY(QVariantList captureAudioInputs READ captureAudioInputs NOTIFY captureChanged)
+    Q_PROPERTY(int captureAudioChoice READ captureAudioChoice WRITE setCaptureAudioChoice NOTIFY captureChanged)
+    Q_PROPERTY(int captureColorSpace READ captureColorSpace WRITE setCaptureColorSpace NOTIFY captureChanged)
+    Q_PROPERTY(int captureColorRange READ captureColorRange WRITE setCaptureColorRange NOTIFY captureChanged)
+    Q_PROPERTY(double captureRequestedFps READ captureRequestedFps WRITE setCaptureRequestedFps NOTIFY captureChanged)
+    Q_PROPERTY(int captureAudioIngress READ captureAudioIngress WRITE setCaptureAudioIngress NOTIFY settingsChanged)
+    Q_PROPERTY(int captureBufferMode READ captureBufferMode WRITE setCaptureBufferMode NOTIFY settingsChanged)
+    Q_PROPERTY(bool captureQueryBusy READ captureQueryBusy NOTIFY captureChanged)
+    Q_PROPERTY(QString captureStatus READ captureStatus NOTIFY captureChanged)
 
     // --- screen-capture dialog ---------------------------------------------
     Q_PROPERTY(QVariantList screenTargets READ screenTargets NOTIFY captureChanged)
     Q_PROPERTY(QString screenTargetId READ screenTargetId WRITE setScreenTargetId NOTIFY captureChanged)
     Q_PROPERTY(QString screenTargetLabel READ screenTargetLabel NOTIFY captureChanged)
-    Q_INVOKABLE void refreshCaptureTargets();
+    // Screen capture options (ScreenCaptureOptions): kind 0 window / 1 monitor,
+    // method 0 WGC / 1 DXGI (monitor only), fps cap index into {follow,30,60,120,144,240},
+    // pointer, crop margins in source pixels, and "fill the window".
+    Q_PROPERTY(QVariantMap screenOptions READ screenOptions NOTIFY captureChanged)
 
-    // Subtitles: SubtitleStyle is owned by the old Win32 shell, not by the engine,
-    // so there is nothing here for the bridge to read or write. The subtitle dialog
-    // says it is not wired rather than keeping a second copy of that state that
-    // would silently disagree with the renderer.
+    // Subtitles (P4-c): the engine's SubtitleLoader reads the embedded tracks and
+    // the same-name external file; the old shell's SubtitleOverlay draws them as a
+    // layered child of the native video window, so the picture's window region
+    // also clips the subtitles away from QML popups. Style lives in preferences.
+    Q_PROPERTY(QVariantList subtitleTracks READ subtitleTracks NOTIFY subtitlesChanged)
+    Q_PROPERTY(int subtitlePrimary READ subtitlePrimary WRITE setSubtitlePrimary NOTIFY subtitlesChanged)
+    Q_PROPERTY(int subtitleSecondary READ subtitleSecondary WRITE setSubtitleSecondary NOTIFY subtitlesChanged)
+    Q_PROPERTY(int subtitleOffsetMs READ subtitleOffsetMs WRITE setSubtitleOffsetMs NOTIFY subtitlesChanged)
+    Q_PROPERTY(QString subtitleStatus READ subtitleStatus NOTIFY subtitlesChanged)
+    Q_PROPERTY(bool subtitleAligning READ subtitleAligning NOTIFY subtitlesChanged)
+    // The text the overlay is drawing now (joined lines), for tests and the a11y name.
+    Q_PROPERTY(QString subtitleText READ subtitleText NOTIFY subtitleTextChanged)
+    // Extra space the shell keeps free at the bottom (fullscreen controls).
+    Q_PROPERTY(int subtitleBottomInset READ subtitleBottomInset WRITE setSubtitleBottomInset NOTIFY subtitlesChanged)
 
     // --- ps5 dialog --------------------------------------------------------
     Q_PROPERTY(QString remotePlayHost READ remotePlayHost WRITE setRemotePlayHost NOTIFY settingsChanged)
     Q_PROPERTY(QString remotePlayPin READ remotePlayPin WRITE setRemotePlayPin NOTIFY settingsChanged)
+    // P4-e PS5 Remote Play, ported from the 1.4.4 panel: saved pairings (shared
+    // %LOCALAPPDATA%\Veyra\remoteplay, encrypted), discovery, pairing, PSN login,
+    // wake, stream profile, decode/sampling, view-only, login PIN, controller
+    // forwarding and gyro calibration. `ps5` carries the form state.
+    Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
+    Q_PROPERTY(QVariantList ps5Profiles READ ps5Profiles NOTIFY ps5Changed)
+
+    // Shell preferences that are not enhancement settings: screenshot folder,
+    // subtitle look, audio output. Stored in <data>/qml-preferences.v1.json and
+    // validated key by key in setPreference(); anything unknown is refused.
+    Q_PROPERTY(QVariantMap preferences READ preferences NOTIFY preferencesChanged)
+    Q_PROPERTY(QString screenshotDirectory READ screenshotDirectory NOTIFY preferencesChanged)
+    Q_PROPERTY(QString lastScreenshot READ lastScreenshot NOTIFY preferencesChanged)
+    Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
+    // Rebindable shortcuts: action -> key sequence text (defaults merged in).
+    Q_PROPERTY(QVariantMap shortcuts READ shortcuts NOTIFY preferencesChanged)
+    // The interface scale chosen for the next start (0 = follow Windows).
+    Q_PROPERTY(int uiScaleActive READ uiScaleActive CONSTANT)
+    // Audio output (P4-d): the active WASAPI render endpoints by device id, the
+    // stored choice (preferences.audioDevice, empty = system default) and what
+    // the renderer actually opened, including a fallback to the default.
+    Q_PROPERTY(QVariantList audioDevices READ audioDevices NOTIFY audioDevicesChanged)
+    Q_PROPERTY(QString audioOutputStatus READ audioOutputStatus NOTIFY audioDevicesChanged)
+    Q_PROPERTY(bool audioOutputFallback READ audioOutputFallback NOTIFY audioDevicesChanged)
+    Q_PROPERTY(QString logFile READ logFile CONSTANT)
 
     Q_PROPERTY(QString appName READ appName CONSTANT)
     Q_PROPERTY(QString version READ version CONSTANT)
@@ -143,6 +204,7 @@ class QmlPlayerBridge : public QObject {
     // The film's display aspect, so the window can snap to it in cinema mode
     // exactly as the prototype's fitAspect() does. 0 when nothing is open.
     Q_PROPERTY(double sourceAspect READ sourceAspect NOTIFY snapshotChanged)
+    Q_PROPERTY(double previewAspect READ previewAspect NOTIFY compareChanged)
 
     // --- live performance --------------------------------------------------
     // Submit FPS only. There is deliberately no "display FPS": the user asked
@@ -163,11 +225,16 @@ class QmlPlayerBridge : public QObject {
 
     // --- settings (what the UI shows) --------------------------------------
     Q_PROPERTY(bool nrEnabled READ nrEnabled WRITE setNrEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(int selectedNrLayer READ selectedNrLayer WRITE setSelectedNrLayer NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantList nrLayers READ nrLayers NOTIFY chainChanged)
     Q_PROPERTY(bool srEnabled READ srEnabled WRITE setSrEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int fgMultiplier READ fgMultiplier WRITE setFgMultiplier NOTIFY settingsChanged)
     Q_PROPERTY(bool lowLatency READ lowLatency WRITE setLowLatency NOTIFY settingsChanged)
     Q_PROPERTY(bool nrTemporal READ nrTemporal WRITE setNrTemporal NOTIFY settingsChanged)
+    Q_PROPERTY(double nrHoldStrength READ nrHoldStrength WRITE setNrHoldStrength NOTIFY settingsChanged)
+    Q_PROPERTY(double nrHoldTolerance READ nrHoldTolerance WRITE setNrHoldTolerance NOTIFY settingsChanged)
     Q_PROPERTY(bool videoHdr READ videoHdr WRITE setVideoHdr NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY chainChanged)
     Q_PROPERTY(int nrStyle READ nrStyle WRITE setNrStyle NOTIFY settingsChanged)
     Q_PROPERTY(double nrIntensity READ nrIntensity WRITE setNrIntensity NOTIFY settingsChanged)
     Q_PROPERTY(double nrTone READ nrTone WRITE setNrTone NOTIFY settingsChanged)
@@ -177,8 +244,77 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool nrUiCorrection READ nrUiCorrection WRITE setNrUiCorrection NOTIFY settingsChanged)
     Q_PROPERTY(int videoSrQuality READ videoSrQuality WRITE setVideoSrQuality NOTIFY settingsChanged)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY chainChanged)
     Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int audioOffsetMs READ audioOffsetMs WRITE setAudioOffsetMs NOTIFY settingsChanged)
+    // 1.4.4 声音补偿: 0 自动(软件估算) / 1 手动 / 2 关闭; live sources only.
+    Q_PROPERTY(int audioSyncMode READ audioSyncMode WRITE setAudioSyncMode NOTIFY settingsChanged)
+    Q_PROPERTY(bool audioSyncLive READ audioSyncLive NOTIFY snapshotChanged)
+    Q_PROPERTY(double audioCompensationMs READ audioCompensationMs NOTIFY snapshotChanged)
+    // Performance orbs and the status light (1.4.4 live status dashboard).
+    Q_PROPERTY(double gpuUtilization READ gpuUtilization NOTIFY perfChanged)
+    Q_PROPERTY(bool gpuUtilizationKnown READ gpuUtilizationKnown NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatus READ runStatus NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusLevel READ runStatusLevel NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusDetail READ runStatusDetail NOTIFY perfChanged)
+    // Achieved output rate / target (source x multiplier); -1 while unknown.
+    Q_PROPERTY(double outputRateRatio READ outputRateRatio NOTIFY perfChanged)
+    // Frame interval history (ms, newest last) for the frame-time line.
+    Q_PROPERTY(QVariantList frameTimes READ frameTimes NOTIFY perfChanged)
+    // 补帧 / 光流 (design gap A1-A5): motion estimation quality 0 性能 1 平衡 2 质量,
+    // AMD half-resolution flow, content cadence (engine::ContentRate order).
+    Q_PROPERTY(int flowQuality READ flowQuality WRITE setFlowQuality NOTIFY settingsChanged)
+    Q_PROPERTY(bool amdFlowHalf READ amdFlowHalf WRITE setAmdFlowHalf NOTIFY settingsChanged)
+    Q_PROPERTY(int contentRate READ contentRate WRITE setContentRate NOTIFY settingsChanged)
+    Q_PROPERTY(int hdrOutputMode READ hdrOutputMode WRITE setHdrOutputMode NOTIFY settingsChanged)
+    Q_PROPERTY(int fgMotionSource READ fgMotionSource WRITE setFgMotionSource NOTIFY settingsChanged)
+    Q_PROPERTY(int srMotionSource READ srMotionSource WRITE setSrMotionSource NOTIFY settingsChanged)
+    Q_PROPERTY(int nrMotionSource READ nrMotionSource WRITE setNrMotionSource NOTIFY settingsChanged)
+    // Presentation: display sync 0 允许撕裂 1 垂直同步 2 自动; output cap 0 关闭
+    // 1 跟随显示器 2 自定义 (+ fps). Owned by XeSS when presentationOwned.
+    Q_PROPERTY(int displaySync READ displaySync WRITE setDisplaySync NOTIFY presentationChanged)
+    Q_PROPERTY(int outputRateMode READ outputRateMode WRITE setOutputRateMode NOTIFY presentationChanged)
+    Q_PROPERTY(double outputCustomFps READ outputCustomFps WRITE setOutputCustomFps NOTIFY presentationChanged)
+    Q_PROPERTY(bool presentationOwned READ presentationOwned NOTIFY snapshotChanged)
+    Q_PROPERTY(QString presentationStatus READ presentationStatus NOTIFY snapshotChanged)
+    // 显示: compare 0 增强 1 原画 2 分屏; base false 输入原画 / true 增强前底图;
+    // split 0..1 of the picture. Aspect 0 适应 1 原始 2 填充.
+    Q_PROPERTY(int compareMode READ compareMode WRITE setCompareMode NOTIFY compareChanged)
+    Q_PROPERTY(bool compareBase READ compareBase WRITE setCompareBase NOTIFY compareChanged)
+    Q_PROPERTY(double compareSplit READ compareSplit NOTIFY compareChanged)
+    Q_PROPERTY(int aspectMode READ aspectMode WRITE setAspectMode NOTIFY compareChanged)
+    // Measured audio/video skew of a live source (ms); unknown otherwise.
+    Q_PROPERTY(double audioSkewMs READ audioSkewMs NOTIFY snapshotChanged)
+    Q_PROPERTY(bool audioSkewKnown READ audioSkewKnown NOTIFY snapshotChanged)
+    // Export: an estimate of the output size ("" when there is nothing to base it on).
+    Q_PROPERTY(QString exportSizeEstimate READ exportSizeEstimate NOTIFY exportChanged)
+    // 继续上次: {kind: capture|ps5|screen, label, summary}; empty when none.
+    Q_PROPERTY(QVariantMap lastSource READ lastSource NOTIFY preferencesChanged)
+    // P5 (2026-09-29): what is playing, for the page headers.
+    // sourceKind: "" | file | image | capture | ps5 | screen.
+    Q_PROPERTY(QString sourceKind READ sourceKind NOTIFY snapshotChanged)
+    Q_PROPERTY(QString sourceTitle READ sourceTitle NOTIFY snapshotChanged)
+    // "1080p60 · YUY2 · SDR": reported values only.
+    Q_PROPERTY(QString sourceFormatText READ sourceFormatText NOTIFY snapshotChanged)
+    Q_PROPERTY(QString sourceRateText READ sourceRateText NOTIFY snapshotChanged)
+    // 调色 undo / redo / copy / paste for the selected colour layer.
+    Q_PROPERTY(bool colourCanUndo READ colourCanUndo NOTIFY settingsChanged)
+    Q_PROPERTY(bool colourCanRedo READ colourCanRedo NOTIFY settingsChanged)
+    Q_PROPERTY(bool colourCanPaste READ colourCanPaste NOTIFY settingsChanged)
+    // Export queue rows: [{name, input, output, state, progress, note, current}].
+    Q_PROPERTY(QVariantList exportItems READ exportItems NOTIFY exportChanged)
+    // Capture dialog preview: the session's poster still (the engine's own
+    // first-frame poster), as a data URL; "" when the session has none. Never a
+    // periodic readback: that would stall the live capture path.
+    Q_PROPERTY(QString capturePreviewUrl READ capturePreviewUrl NOTIFY snapshotChanged)
+    Q_PROPERTY(QString captureSignalText READ captureSignalText NOTIFY snapshotChanged)
+    Q_PROPERTY(QString captureSignalLevel READ captureSignalLevel NOTIFY snapshotChanged)
+    // A live source (PS5 / capture) that is still opening: what the picture area
+    // says meanwhile ("" once it plays or when nothing is opening).
+    Q_PROPERTY(QString liveOpeningText READ liveOpeningText NOTIFY snapshotChanged)
+    // Protection regions as the engine holds them: [{left,top,right,bottom,ellipse}].
+    Q_PROPERTY(QVariantList protectionRegions READ protectionRegions NOTIFY chainChanged)
+    Q_PROPERTY(QString protectionDrawShape READ protectionDrawShape NOTIFY protectionDrawChanged)
     Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY snapshotChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY snapshotChanged)
     Q_PROPERTY(double playbackSpeed READ playbackSpeed NOTIFY snapshotChanged)
@@ -191,7 +327,8 @@ class QmlPlayerBridge : public QObject {
     // objects with positions. Both edit one chain, so switching modes never
     // loses work.
     Q_PROPERTY(QVariantList chain READ chain NOTIFY chainChanged)
-    Q_PROPERTY(QVariantList effectCatalog READ effectCatalog CONSTANT)
+    Q_PROPERTY(QVariantList nodeConnections READ nodeConnections NOTIFY chainChanged)
+    Q_PROPERTY(QVariantList effectCatalog READ effectCatalog NOTIFY chainChanged)
     Q_PROPERTY(QString chainError READ chainError NOTIFY chainChanged)
     Q_PROPERTY(bool chainValid READ chainValid NOTIFY chainChanged)
     Q_PROPERTY(int nodeMode READ nodeMode WRITE setNodeMode NOTIFY chainChanged)
@@ -226,6 +363,16 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int exportRateControl READ exportRateControl WRITE setExportRateControl NOTIFY exportChanged)
     Q_PROPERTY(double exportEtaSeconds READ exportEtaSeconds NOTIFY exportChanged)
     Q_PROPERTY(int exportQueueCount READ exportQueueCount NOTIFY exportChanged)
+    // Queue items that could not start, and why the latest one failed.
+    Q_PROPERTY(int exportQueueFailures READ exportQueueFailures NOTIFY exportChanged)
+    Q_PROPERTY(QString exportQueueFailure READ exportQueueFailure NOTIFY exportChanged)
+    // Image export (P4-b): each image goes through the real player chain (open,
+    // first processed frame, the engine's own frame save), one after another.
+    Q_PROPERTY(bool imageBatchActive READ imageBatchActive NOTIFY imageBatchChanged)
+    Q_PROPERTY(int imageBatchDone READ imageBatchDone NOTIFY imageBatchChanged)
+    Q_PROPERTY(int imageBatchTotal READ imageBatchTotal NOTIFY imageBatchChanged)
+    Q_PROPERTY(int imageBatchFailures READ imageBatchFailures NOTIFY imageBatchChanged)
+    Q_PROPERTY(QString imageBatchStatus READ imageBatchStatus NOTIFY imageBatchChanged)
     // The preset the export will use. The design requires export to select a
     // preset (list or node) rather than assembling effects separately.
     Q_PROPERTY(QString exportPresetName READ exportPresetName NOTIFY exportChanged)
@@ -255,6 +402,13 @@ class QmlPlayerBridge : public QObject {
     // The same catalogue grouped by section, so the page can nest its collapsible
     // sub-panels without re-grouping in QML.
     Q_PROPERTY(QVariantList colourGroups READ colourGroups NOTIFY chainChanged)
+    Q_PROPERTY(int selectedColourLayer READ selectedColourLayer WRITE setSelectedColourLayer NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap colourState READ colourState NOTIFY settingsChanged)
+    // Imported .cube files (ColorLutStore, the folder the engine resolves) and
+    // the saved colour looks (ColorLookStore): a colour preset is one Color
+    // node's settings, separate from the whole-chain presets.
+    Q_PROPERTY(QVariantList lutLibrary READ lutLibrary NOTIFY colourLibraryChanged)
+    Q_PROPERTY(QVariantList colourLooks READ colourLooks NOTIFY colourLibraryChanged)
 
 public:
     // `engine` must outlive the bridge. `dataDirectory` holds ui-session.v1 and
@@ -267,16 +421,29 @@ public:
     double displayFps() const;
     bool displayFpsKnown() const;
     double queuedFrames() const;
+    bool queuedFramesKnown() const;
     int skippedFrames() const;
     QString flowBackend() const;
+    int opticalFlowChoice() const;
+    Q_INVOKABLE bool setOpticalFlowChoice(int backend);
     QVariantList stageTimings() const;
+    QVariantMap nodeTimings() const;
+    QVariantMap nodeAnchors() const;
+    Q_INVOKABLE bool setNodeAnchor(const QString& key, double x, double y);
+    Q_INVOKABLE QVariantMap colourStateAt(int index) const;
     double stageBudgetMs() const;
     double chainTotalMs() const;
+    bool chainTotalMsKnown() const;
     double scheduleP95Ms() const;
 
     QString fgBackendName() const;
+    QVariantList fgBackendChoices() const;
+    QString fgProviderText() const;
     void setFgBackendName(const QString& value);
     int fgMaxMultiplier() const;
+    bool fgEnabled() const;
+    void setFgEnabled(bool enabled);
+    QString submitFpsLabel() const;
     QVariantList fgMultiplierChoices() const;
     bool fgStrict() const;
     void setFgStrict(bool value);
@@ -311,17 +478,99 @@ public:
     void setCaptureForceSdr(bool value);
     bool captureFlipVertical() const;
     void setCaptureFlipVertical(bool value);
+    QVariantList captureFormats() const;
+    QString captureFormatKey() const;
+    void setCaptureFormatKey(const QString& key);
+    QVariantList captureAudioInputs() const;
+    int captureAudioChoice() const;
+    void setCaptureAudioChoice(int choice);
+    int captureColorSpace() const;
+    void setCaptureColorSpace(int value);
+    int captureColorRange() const;
+    void setCaptureColorRange(int value);
+    double captureRequestedFps() const;
+    void setCaptureRequestedFps(double value);
+    int captureAudioIngress() const;
+    void setCaptureAudioIngress(int value);
+    int captureBufferMode() const;
+    void setCaptureBufferMode(int value);
+    bool captureQueryBusy() const;
+    QString captureStatus() const;
+    QVariantMap screenOptions() const;
+    // Declared here, in the public section: a Q_INVOKABLE above `public:` is
+    // private to QML ("is not a function").
+    Q_INVOKABLE void refreshCaptureTargets();
+    Q_INVOKABLE void refreshCaptureDevices();
+    Q_INVOKABLE bool startCaptureSession();
+    Q_INVOKABLE bool setScreenOption(const QString& key, const QVariant& value);
+    Q_INVOKABLE bool startScreenCapture();
 
     QVariantList screenTargets() const;
     QString screenTargetId() const;
     void setScreenTargetId(const QString& value);
     QString screenTargetLabel() const;
 
+    QVariantList subtitleTracks() const;
+    int subtitlePrimary() const;
+    void setSubtitlePrimary(int index);
+    int subtitleSecondary() const;
+    void setSubtitleSecondary(int index);
+    int subtitleOffsetMs() const;
+    void setSubtitleOffsetMs(int ms);
+    QString subtitleStatus() const;
+    bool subtitleAligning() const;
+    QString subtitleText() const;
+    int subtitleBottomInset() const;
+    void setSubtitleBottomInset(int value);
+    Q_INVOKABLE void loadSubtitleDialog();
+    Q_INVOKABLE bool loadSubtitleFile(const QString& path);
+    Q_INVOKABLE void nudgeSubtitle(int deltaMs);
+    Q_INVOKABLE void cycleSubtitle(bool secondary);
+    Q_INVOKABLE void toggleSubtitles();
+    Q_INVOKABLE void autoAlignSubtitle();
+
+    QVariantMap ps5() const;
+    QVariantList ps5Profiles() const;
+    Q_INVOKABLE void ps5Load();
+    Q_INVOKABLE bool ps5Set(const QString& key, const QVariant& value);
+    Q_INVOKABLE void ps5SelectProfile(const QString& id);
+    Q_INVOKABLE void ps5Scan();
+    Q_INVOKABLE void ps5Pair(const QString& pin);
+    Q_INVOKABLE bool ps5Connect();
+    Q_INVOKABLE void ps5Wake();
+    Q_INVOKABLE void ps5Forget();
+    Q_INVOKABLE void ps5PsnLogin();
+    Q_INVOKABLE void ps5PsnComplete();
+    Q_INVOKABLE void ps5PsnForget();
+    Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
+    Q_INVOKABLE void ps5Cancel();
+    Q_INVOKABLE void ps5Calibrate();
     QString remotePlayHost() const;
     void setRemotePlayHost(const QString& value);
     QString remotePlayPin() const;
     void setRemotePlayPin(const QString& value);
 
+    QVariantMap preferences() const;
+    Q_INVOKABLE void rememberWindowSize(int width, int height);
+    Q_INVOKABLE bool setPreference(const QString& key, const QVariant& value);
+    QString screenshotDirectory() const;
+    QString lastScreenshot() const;
+    QString dataDirectory() const;
+    QString logFile() const;
+    Q_INVOKABLE void chooseScreenshotDirectory();
+    QVariantMap shortcuts() const;
+    Q_INVOKABLE bool setShortcut(const QString& action, const QString& sequence);
+    Q_INVOKABLE void resetShortcuts();
+    int uiScaleActive() const;
+    Q_INVOKABLE void openFeedbackPage();
+    Q_INVOKABLE void openReleasesPage();
+    QVariantList audioDevices() const;
+    QString audioOutputStatus() const;
+    bool audioOutputFallback() const;
+    Q_INVOKABLE void refreshAudioDevices();
+    Q_INVOKABLE void openScreenshotDirectory();
+    Q_INVOKABLE void openLogFolder();
+    Q_INVOKABLE void openDataFolder();
     QString appName() const;
     QString version() const;
 
@@ -350,6 +599,7 @@ public:
     double sourceFps() const;
     int sourceRotation() const;
     double sourceAspect() const;
+    double previewAspect() const;
 
     double submitFps() const;
     bool submitFpsKnown() const;
@@ -372,6 +622,8 @@ public:
     double playbackSpeed() const;
 
     bool nrEnabled() const;
+    int selectedNrLayer() const;
+    void setSelectedNrLayer(int index);
     void setNrEnabled(bool value);
     bool srEnabled() const;
     void setSrEnabled(bool value);
@@ -381,8 +633,16 @@ public:
     void setLowLatency(bool value);
     bool nrTemporal() const;
     void setNrTemporal(bool value);
+    // Stage-5 output stabiliser (anti-flicker). Global rather than per-node:
+    // it runs once, after the whole NR stack and the residual composite.
+    double nrHoldStrength() const;
+    void setNrHoldStrength(double value);
+    double nrHoldTolerance() const;
+    void setNrHoldTolerance(double value);
     bool videoHdr() const;
     void setVideoHdr(bool value);
+    QVariantMap videoHdrParams() const;
+    Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
     int nrStyle() const;
     void setNrStyle(int value);
     double nrIntensity() const;
@@ -401,12 +661,99 @@ public:
     void setVideoSrQuality(int value);
     bool protectionEnabled() const;
     void setProtectionEnabled(bool value);
+    QVariantMap protectionState() const;
+    Q_INVOKABLE bool setProtectionRegion(double left, double top, double right, double bottom, double feather);
     bool colorEnabled() const;
     void setColorEnabled(bool value);
     int audioOffsetMs() const;
     void setAudioOffsetMs(int value);
+    int audioSyncMode() const;
+    void setAudioSyncMode(int value);
+    bool audioSyncLive() const;
+    double audioCompensationMs() const;
+    double gpuUtilization() const;
+    bool gpuUtilizationKnown() const;
+    QString runStatus() const;
+    QString runStatusLevel() const;
+    QString runStatusDetail() const;
+    double outputRateRatio() const;
+    QVariantList frameTimes() const;
+    int flowQuality() const;
+    int hdrOutputMode() const;
+    void setHdrOutputMode(int value);
+    int fgMotionSource() const;
+    void setFgMotionSource(int value);
+    int srMotionSource() const;
+    void setSrMotionSource(int value);
+    int nrMotionSource() const;
+    void setNrMotionSource(int value);
+    void setFlowQuality(int value);
+    bool amdFlowHalf() const;
+    void setAmdFlowHalf(bool value);
+    int contentRate() const;
+    void setContentRate(int value);
+    int displaySync() const;
+    void setDisplaySync(int value);
+    Q_INVOKABLE void setPresentationFullscreen(bool value);
+    int outputRateMode() const;
+    void setOutputRateMode(int value);
+    double outputCustomFps() const;
+    void setOutputCustomFps(double value);
+    bool presentationOwned() const;
+    QString presentationStatus() const;
+    int compareMode() const;
+    void setCompareMode(int value);
+    bool compareBase() const;
+    void setCompareBase(bool value);
+    double compareSplit() const;
+    int aspectMode() const;
+    void setAspectMode(int value);
+    double audioSkewMs() const;
+    bool audioSkewKnown() const;
+    QString exportSizeEstimate() const;
+    QVariantMap lastSource() const;
+    QString sourceKind() const;
+    QString sourceTitle() const;
+    QString sourceFormatText() const;
+    QString sourceRateText() const;
+    bool colourCanUndo() const;
+    bool colourCanRedo() const;
+    bool colourCanPaste() const;
+    Q_INVOKABLE bool colourUndo();
+    Q_INVOKABLE bool colourRedo();
+    Q_INVOKABLE void colourCopy();
+    Q_INVOKABLE bool colourPaste();
+    QVariantList exportItems() const;
+    Q_INVOKABLE void clearFinishedExportItems();
+    Q_INVOKABLE QString fileThumbnailId(const QString& path, double seconds) const;
+    QString capturePreviewUrl() const;
+    QString captureSignalText() const;
+    QString captureSignalLevel() const;
+    QString liveOpeningText() const;
+    Q_INVOKABLE void importPresetDialog();
+    Q_INVOKABLE bool importPreset(const QString& path);
+    Q_INVOKABLE void exportPresetDialog(int index);
+    Q_INVOKABLE bool exportPreset(int index, const QString& path);
+    // Split position from a pointer on the picture host (fractions of the host).
+    Q_INVOKABLE void setCompareSplitAt(double hostFractionX);
+    Q_INVOKABLE void resumeLastSource();
+    // List mode: an NR layer's model and residual back to their defaults.
+    Q_INVOKABLE bool resetNrLayer(int index);
+    QVariantList protectionRegions() const;
+    QString protectionDrawShape() const;
+    // Drawing on the picture: arm with "rect"/"ellipse" ("" cancels), then
+    // report the drag in picture-host pixels; commit adds the region.
+    Q_INVOKABLE bool beginProtectionDraw(const QString& shape);
+    Q_INVOKABLE void updateProtectionDraw(double x0, double y0, double x1, double y1);
+    Q_INVOKABLE bool commitProtectionDraw(double x0, double y0, double x1, double y1);
+    Q_INVOKABLE bool removeProtectionRegion(int index);
+    Q_INVOKABLE bool clearProtectionRegions();
+    Q_INVOKABLE bool setProtectionFeather(double pixels);
 
     QVariantList chain() const;
+    QVariantList nodeConnections() const;
+    QVariantList nrLayers() const;
+    Q_INVOKABLE bool setNrLayerParameter(int index, const QString& key, double value);
     QVariantList effectCatalog() const;
     QString chainError() const;
     bool chainValid() const;
@@ -439,6 +786,18 @@ public:
     void setExportRateControl(int value);
     double exportEtaSeconds() const;
     int exportQueueCount() const;
+    int exportQueueFailures() const;
+    bool imageBatchActive() const;
+    int imageBatchDone() const;
+    int imageBatchTotal() const;
+    int imageBatchFailures() const;
+    QString imageBatchStatus() const;
+    // The processed frame on screen, saved as PNG/JPEG (JXR for HDR output).
+    Q_INVOKABLE void saveFrameDialog();
+    Q_INVOKABLE void exportImagesDialog();
+    Q_INVOKABLE bool startImageBatch(const QStringList& files, const QString& folder);
+    Q_INVOKABLE void cancelImageBatch();
+    QString exportQueueFailure() const;
     QString exportPresetName() const;
     int exportSrTargetIndex() const;
     void setExportSrTargetIndex(int index);
@@ -454,9 +813,29 @@ public:
     int defaultPresetIndex() const;
     QVariantList colourParameters() const;
     QVariantList colourGroups() const;
+    int selectedColourLayer() const;
+    void setSelectedColourLayer(int index);
+    QVariantMap colourState() const;
     Q_INVOKABLE double colourParameter(const QString& name) const;
     Q_INVOKABLE bool setColourParameter(const QString& name, double value);
     Q_INVOKABLE bool resetColourParameter(const QString& name);
+    Q_INVOKABLE bool setColourCurve(int channel, const QVariantList& points);
+    Q_INVOKABLE bool setColourWheel(int zone, double hue, double saturation, double luminance);
+    Q_INVOKABLE bool setColourOption(const QString& name, int value);
+    Q_INVOKABLE bool resetColourGroup(int group);
+    QVariantList lutLibrary() const;
+    QVariantList colourLooks() const;
+    Q_INVOKABLE void importLutDialog();
+    Q_INVOKABLE bool importLut(const QString& path);
+    // Empty name clears the LUT from the selected Color node.
+    Q_INVOKABLE bool setColourLut(const QString& name);
+    Q_INVOKABLE bool saveColourLook(const QString& name, bool replace);
+    Q_INVOKABLE bool applyColourLook(int index);
+    Q_INVOKABLE bool deleteColourLook(int index);
+    Q_INVOKABLE void importColourLookDialog();
+    Q_INVOKABLE bool importColourLook(const QString& path);
+    Q_INVOKABLE void exportColourLookDialog(int index);
+    Q_INVOKABLE bool exportColourLook(int index, const QString& path);
 
     // The native HWND the engine presents into. The UI creates it as a child
     // window of the QML window and hands it over; the bridge never draws QML
@@ -480,6 +859,8 @@ public:
     Q_INVOKABLE void resumeCaptureSession();
     Q_INVOKABLE void openPs5Dialog();
     Q_INVOKABLE void openScreenCaptureDialog();
+    Q_INVOKABLE void openAudioDialog();
+    Q_INVOKABLE void openSubtitleDialog();
     Q_INVOKABLE void togglePlayPause();
     Q_INVOKABLE void stopPlayback();
     Q_INVOKABLE void seekTo(double seconds);
@@ -513,6 +894,13 @@ public:
     // was asked (frame generation is pinned last, RTX Video HDR immediately
     // before it) and reports why when it is not.
     Q_INVOKABLE int addEffect(const QString& type);
+    Q_INVOKABLE int duplicateNrLayer(int index);
+    Q_INVOKABLE int nodeIndexForId(uint id) const;
+    Q_INVOKABLE int duplicateNode(uint id);
+    Q_INVOKABLE bool resetNode(uint id);
+    Q_INVOKABLE bool connectNodes(uint from, uint to);
+    Q_INVOKABLE bool disconnectNode(uint from);
+    Q_INVOKABLE bool insertNodeAfter(uint id, uint after);
     Q_INVOKABLE bool removeEffect(int index);
     Q_INVOKABLE bool moveEffect(int from, int to);
     Q_INVOKABLE bool setEffectEnabled(int index, bool enabled);
@@ -541,12 +929,25 @@ public:
     Q_INVOKABLE void copyDiagnostics();
 
 signals:
+    void nodeAnchorsChanged();
+    void ps5Changed();
+    void imageBatchChanged();
+    void audioDevicesChanged();
+    void subtitlesChanged();
+    void subtitleTextChanged();
+    void preferencesChanged();
+    void colourLibraryChanged();
     // Emitted only when the underlying snapshot actually changed, so QML
     // bindings do not re-evaluate 60 times a second for nothing.
     void snapshotChanged();
+    void perfChanged();
+    void protectionDrawChanged();
+    void presentationChanged();
+    void compareChanged();
     void thumbnailGenerationChanged();
     void thumbnailSourceChanged(const QString& path);
     void settingsChanged();
+    void fgChoicesChanged();
     void chainChanged();
     void recentFilesChanged();
     void presetsChanged();
@@ -564,8 +965,34 @@ private:
     // engine has been asked to apply. Every settings property reads this, so
     // they can never disagree with each other.
     engine::EnhancementSettings settings() const;
+    void startGpuSampler();
+    void updateRunStatus();
+    void applyPresentation();
+    void applyAspect(bool force);
+    // Live sources started from the start page: switch to 极简 first, show the
+    // connecting note, and start the engine once the page and window have settled.
+    void openAfterCinema(const QString& pending, std::function<void()> open);
+    void rememberSource(const QString& kind, const QString& label);
+    // Edits the list chain's protection node; rolls back when refused.
+    bool editProtection(const std::function<bool(engine::ChainNode&)>& edit);
+    engine::ColorSettings selectedColourSettings() const;
+    bool commitColour(const engine::ColorSettings& colour);
     // Reads the export job's snapshot and emits exportChanged.
     void pollExport();
+    // Pushes a stored preference to whatever consumes it (subtitle overlay,
+    // audio endpoint). Called after load and after every accepted change.
+    void applyPreference(const QString& key);
+    // Hold-to-compare key (press/release), handled for the whole application.
+    bool eventFilter(QObject* watched, QEvent* event) override;
+    void rememberPosition(bool flush);
+    void refreshSubtitles(const std::wstring& media);
+    void tickSubtitles();
+    void tickImageBatch();
+    void tickCapture();
+    void tickPs5();
+    void queryCapture(int kind, std::wstring device);
+    // Opens a device/stream URI (capture, screen) the way openPath opens a file.
+    void openSourceUri(const std::wstring& uri, const std::wstring& label);
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

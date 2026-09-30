@@ -24,19 +24,15 @@ namespace { std::string utf8(const std::wstring& s){const int n=WideCharToMultiB
 bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOptions options,bool hevc,std::atomic<bool>& cancel,const std::function<void(double,const std::wstring&)>& progress,unsigned maxFrames,const std::function<bool()>& frameBoundary,const std::function<void(const ExportCounts&)>& counts){
     if(!std::isfinite(options.exportStartSeconds)||!std::isfinite(options.exportEndSeconds)||options.exportStartSeconds<0||options.exportEndSeconds<0||(options.exportEndSeconds>0&&options.exportEndSeconds<=options.exportStartSeconds)){progress(0,L"导出剪辑范围无效");return false;}
     if(std::filesystem::exists(output)||std::filesystem::exists(output+L".partial")){progress(0,L"目标或partial文件已存在，请使用其他名称");return false;}
-    // XeSS-FG and AMD FSR-FG interpolate inside the present swapchain: the
-    // provider presents the extra frames itself, so no output texture ever
-    // reaches the application (XeSS-FG 3.0.2 exports only xefgSwapChain*, and
-    // the FSR-FG context owns the proxy swapchain). Refusing the job left those
-    // users with no file at all, so export now runs the in-graph DLSS path and
-    // states the substitution. A rejected requested multiplier fails the job
-    // explicitly; a successful export must retain the requested cadence.
+    // XeSS still has no exposed output texture. FSR preview now does, but
+    // FSR encoder/HDR/cadence acceptance remains a separate task. Preserve the
+    // established, explicit DLSS substitution for this release candidate.
     std::wstring fgNote;
-    if(options.fg&&presentSinkFrameGeneration(options.settings.frameGenerationBackend)){
+    if(options.fg&&crossVendorFrameGeneration(options.settings.frameGenerationBackend)){
         const auto requested=options.settings.frameGenerationBackend;
-        fgNote=std::format(L"{}补帧由显示交换链直接生成，导出取不到它的画面；本次导出改用 DLSS 补帧 {}X",
-            requested==FrameGenerationBackend::XeSS?L"XeSS":L"AMD FSR",options.fgMultiplier);
-        veyra::log::warn("export",std::format("present-sink frame generation cannot feed the encoder requested={} multiplier={}; substituting the in-graph DLSS path",frameGenerationBackendName(requested),options.fgMultiplier));
+        fgNote=std::format(L"{} 补帧导出尚未验收；本次导出改用 DLSS 补帧 {}X",
+            requested==FrameGenerationBackend::XeSS?L"XeSS":requested==FrameGenerationBackend::Fsr4?L"FSR 4":L"FSR 3.1",options.fgMultiplier);
+        veyra::log::warn("export",std::format("requested preview backend is not admitted for export requested={} multiplier={}; substituting the in-graph DLSS path",frameGenerationBackendName(requested),options.fgMultiplier));
         options.settings.frameGenerationBackend=FrameGenerationBackend::Dlss;
     }
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;source::MediaFileSource source;pipeline::EnhanceGraph graph(ctx,ring);

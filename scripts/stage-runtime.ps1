@@ -3,9 +3,13 @@ param(
     [Parameter(Mandatory = $true)][string]$Root
 )
 
-# Stage the local NVIDIA DLSSNR runtime for Phase 0+ probes (Playbook 4.3/4.4).
-# - Copies (never moves) the workspace-root nvngx_dlssnr.dll into
-#   runtime_local/nvidia/ after verifying its pinned identity.
+# Stage the local DLSSNR runtime for Phase 0+ probes (Playbook 4.3/4.4).
+# - Copies (never moves) the pinned default NR runtime into runtime_local/nvidia/
+#   after verifying its identity. Since 2026-09-29 (user decision) the default
+#   slot holds the community Lecram build 310.8.3.0 (RankFTW/rhi-repo
+#   dlssnr-310.8.Lecram): kernels rebuilt, weights unchanged, output measured
+#   byte-identical to NVIDIA 310.8.0.0 on RTX 5070 and ~2% cheaper. It carries
+#   NVIDIA's certificate over modified content, so Authenticode is HashMismatch.
 # - Writes runtime-manifest.json with the real size/hash and local-experimental
 #   mode markers.
 # - Creates a persistent runtime_local/config/ngx-local.json identity exactly
@@ -15,9 +19,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $expectedSize = [long]165840496
-$expectedSha256 = "E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E"
+$expectedSha256 = "F95FEB54137EA11979F9B4EC4F00AFD84B5C98A5624D3388FBF6A87714A39FCC"
 
-$sourceDll = Join-Path $Root "nvngx_dlssnr.dll"
+$sourceDll = Join-Path $Root "third_party_local\nvidia\dlssnr-310.8.Lecram\nvngx_dlssnr.dll"
 if (-not (Test-Path -LiteralPath $sourceDll -PathType Leaf)) {
     Write-Host "stage-runtime.ps1: source DLL missing: $sourceDll"
     exit 2
@@ -34,7 +38,7 @@ if ($hash -ne $expectedSha256) {
     exit 3
 }
 $signature = Get-AuthenticodeSignature -LiteralPath $sourceDll
-if ([string]$signature.Status -ne "Valid") {
+if ([string]$signature.Status -ne "HashMismatch") {
     Write-Host ("stage-runtime.ps1: signature status {0}" -f [string]$signature.Status)
     exit 3
 }
@@ -50,7 +54,7 @@ if (-not (Test-Path -LiteralPath $targetDll -PathType Leaf)) {
 else {
     $stagedHash = (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash.ToUpperInvariant()
     if ($stagedHash -ne $expectedSha256) {
-        Write-Host "stage-runtime.ps1: staged DLL identity drifted; replacing from workspace root"
+        Write-Host "stage-runtime.ps1: staged DLL identity drifted; replacing from the pinned Lecram source"
         Copy-Item -LiteralPath $sourceDll -Destination $targetDll -Force
     }
     else {
@@ -77,12 +81,15 @@ if (Test-Path -LiteralPath $sdkRel -PathType Leaf) {
 }
 
 # Stage the official DLSSG runtime DLL from the SDK (Playbook section 14/3.2).
-# Pinned identity from the Playbook lock: 7,519,856 bytes, 310.7.0.0,
-# SHA256 135EAF0733C1E37381A8C28ABCF7A862404A54132B81787C04E35D09EFC5E36F,
-# Authenticode Valid / NVIDIA Corporation. Only this known SDK path may be used.
-$dlssgExpectedSize = [long]7519856
-$dlssgExpectedSha256 = "135EAF0733C1E37381A8C28ABCF7A862404A54132B81787C04E35D09EFC5E36F"
-$dlssgRel = Join-Path $Root "third_party_local\nvidia\DLSS_SDK_310.7.0\lib\Windows_x86_64\rel\nvngx_dlssg.dll"
+# 2026-09-30 user decision: the frame-generation provider moves to the official
+# NVIDIA DLSS SDK 310.9.1 build so the community 310.9.1 provider patches and
+# their optimized kernels can be used. Identity is still pinned and verified:
+# 7,460,976 bytes, 310.9.1.0, SHA256
+# FF6E90EB78B827927DFF5B4ECC6B1C870C2E9BCA29ED9F48C7D348CC9E170B82, Authenticode
+# Valid / NVIDIA Corporation. Only this SDK path may be used.
+$dlssgExpectedSize = [long]7460976
+$dlssgExpectedSha256 = "FF6E90EB78B827927DFF5B4ECC6B1C870C2E9BCA29ED9F48C7D348CC9E170B82"
+$dlssgRel = Join-Path $Root "third_party_local\nvidia\DLSS_SDK_310.9.1\lib\Windows_x86_64\rel\nvngx_dlssg.dll"
 $dlssgDll = Join-Path $runtimeDir "nvngx_dlssg.dll"
 $dlssgPinned = $true
 if (Test-Path -LiteralPath $dlssgRel -PathType Leaf) {
@@ -109,6 +116,23 @@ else {
     Write-Host "stage-runtime.ps1: SDK nvngx_dlssg.dll not found; skipped (Phase 6 requires it)"
 }
 
+# DLSS-G 310.9.1 optimized network kernels (DLSSG-Transfusion 1.4.5.3). They
+# are user-replaceable runtime data loaded from disk at session start, never
+# compiled into the executable. See THIRD_PARTY_NOTICES.md for provenance.
+$kernelSource = Join-Path $Root "third_party_local\nvidia\dlssg-transfusion-kernels-1.4.5.3"
+$kernelDir = Join-Path $runtimeDir "dlssg-kernels"
+if (Test-Path -LiteralPath $kernelSource -PathType Container) {
+    [IO.Directory]::CreateDirectory($kernelDir) | Out-Null
+    $kernels = @(Get-ChildItem -LiteralPath $kernelSource -Filter *.ptx | Sort-Object Name)
+    foreach ($kernel in $kernels) {
+        Copy-Item -LiteralPath $kernel.FullName -Destination (Join-Path $kernelDir $kernel.Name) -Force
+    }
+    Write-Host ("stage-runtime.ps1: staged {0} DLSS-G optimized kernel file(s) into runtime_local/nvidia/dlssg-kernels" -f $kernels.Count)
+}
+else {
+    Write-Host "stage-runtime.ps1: DLSSG-Transfusion kernel set not found; the provider optimization stays off"
+}
+
 $manifestPath = Join-Path $runtimeDir "runtime-manifest.json"
 $srManifestEntry = ""
 if (Test-Path -LiteralPath $srDll -PathType Leaf) {
@@ -121,9 +145,9 @@ if (Test-Path -LiteralPath $srDll -PathType Leaf) {
 $dlssgManifestEntry = ""
 if (Test-Path -LiteralPath $dlssgDll -PathType Leaf) {
     $dlssgVersion = [string](Get-Item -LiteralPath $dlssgDll).VersionInfo.FileVersion
-    $dlssgManifestEntry = ",`n    {`n      `"name`": `"nvngx_dlssg.dll`",`n      `"size`": $dlssgExpectedSize,`n      `"sha256`": `"$dlssgExpectedSha256`",`n      `"fileVersion`": `"$dlssgVersion`",`n      `"authenticode`": `"Valid`",`n      `"source`": `"official DLSS SDK 310.7.0 rel (pinned)`",`n      `"redistributable`": false`n    }"
+    $dlssgManifestEntry = ",`n    {`n      `"name`": `"nvngx_dlssg.dll`",`n      `"size`": $dlssgExpectedSize,`n      `"sha256`": `"$dlssgExpectedSha256`",`n      `"fileVersion`": `"$dlssgVersion`",`n      `"authenticode`": `"Valid`",`n      `"source`": `"official DLSS SDK 310.9.1 rel (pinned, 2026-09-30 user decision)`",`n      `"redistributable`": false`n    }"
 }
-$manifestJson = "{`n  `"schema`": 1,`n  `"mode`": `"local-experimental-only`",`n  `"files`": [`n    {`n      `"name`": `"nvngx_dlssnr.dll`",`n      `"size`": 165840496,`n      `"sha256`": `"E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E`",`n      `"fileVersion`": `"310.8.0.0`",`n      `"authenticode`": `"Valid`",`n      `"source`": `"user-provided workspace file`",`n      `"redistributable`": false`n    }$srManifestEntry$dlssgManifestEntry`n  ]`n}"
+$manifestJson = "{`n  `"schema`": 1,`n  `"mode`": `"local-experimental-only`",`n  `"files`": [`n    {`n      `"name`": `"nvngx_dlssnr.dll`",`n      `"size`": 165840496,`n      `"sha256`": `"F95FEB54137EA11979F9B4EC4F00AFD84B5C98A5624D3388FBF6A87714A39FCC`",`n      `"fileVersion`": `"310.8.3.0`",`n      `"authenticode`": `"HashMismatch`",`n      `"source`": `"community Lecram 310.8.3 (RankFTW/rhi-repo dlssnr-310.8.Lecram), user-approved 2026-09-29`",`n      `"redistributable`": false`n    }$srManifestEntry$dlssgManifestEntry`n  ]`n}"
 Set-Content -LiteralPath $manifestPath -Value $manifestJson -Encoding utf8
 Write-Host "stage-runtime.ps1: runtime-manifest.json written"
 

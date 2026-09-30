@@ -16,7 +16,7 @@ Rectangle {
     border.width: 1
     border.color: Theme.stroke
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
-    TapHandler { onTapped: menu.openAt(sel, "down") }
+    TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: menu.openAt(sel, "down") }
 
     RowLayout {
         anchors.fill: parent

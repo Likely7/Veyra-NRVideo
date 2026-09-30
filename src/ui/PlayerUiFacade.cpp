@@ -1,12 +1,14 @@
 #include "veyra/ui/PlayerUiFacade.h"
 
 #include "veyra/RuntimePaths.h"
+#include "veyra/Log.h"
 #include "veyra/engine/PresetStore.h"
 
 #include <windows.h>
 
 #include <algorithm>
 #include <fstream>
+#include <format>
 #include <iomanip>
 #include <sstream>
 
@@ -53,12 +55,40 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
 PlayerUiFacade::PlayerUiFacade(veyra::engine::EngineController& engine, std::filesystem::path dataDirectory)
     : engine_(engine),
       presets_((dataDirectory.empty() ? veyra::runtime::localDataDirectory() : dataDirectory) / L"presets.v1"),
-      dataDirectory_(dataDirectory.empty() ? veyra::runtime::localDataDirectory() : dataDirectory) {}
+      dataDirectory_(dataDirectory.empty() ? veyra::runtime::localDataDirectory() : dataDirectory),
+      chainSessionStore_(dataDirectory_ / L"chain-session.v1") {}
+
+bool PlayerUiFacade::loadChainSession(veyra::engine::ChainSession& session) {
+    const bool loaded = chainSessionStore_.load(session);
+    error_ = chainSessionStore_.error();
+    return loaded;
+}
+
+bool PlayerUiFacade::saveChainSession(const veyra::engine::ChainSession& session) {
+    if (chainSessionStore_.save(session)) return true;
+    error_ = chainSessionStore_.error(); return false;
+}
 
 PlayerUiFacade::Frame PlayerUiFacade::poll() {
     // The engine owns the snapshot lock; taking it here and comparing keeps the
     // UI free of the read-modify pattern it used to do at 4 Hz.
     const auto snapshot = engine_.snapshot();
+    if(pendingNrRevision_&&snapshot.rejectedRevision==pendingNrRevision_&&pending_.nrRuntime==requestedNrRuntime_) {
+        pending_.nrRuntime=snapshot.desired.nrRuntime;pendingNrRevision_=0;
+        for(uint32_t i=0;i<pending_.nrLayerCount&&i<pending_.nrLayers.size();++i)
+            pending_.nrLayers[i].runtime=pending_.nrRuntime;
+        veyra::log::info("ui-nr-rollback",std::format("rejectedRevision={} restoredRuntime={}",snapshot.rejectedRevision,veyra::engine::nrRuntimeName(pending_.nrRuntime)));
+    }
+    // A GPU/provider failure arrives after command admission. Match the exact
+    // accepted revision so a stale rejection cannot overwrite a newer choice.
+    // Reconcile only the FG pair; unrelated editable controls stay untouched.
+    if(pendingFgRevision_&&snapshot.rejectedRevision==pendingFgRevision_&&
+       pending_.frameGenerationBackend==requestedFgBackend_&&pending_.multiplier==requestedFgMultiplier_){
+        pending_.frameGenerationBackend=snapshot.desired.frameGenerationBackend;
+        pending_.multiplier=snapshot.desired.multiplier;pendingFgRevision_=0;
+        veyra::log::info("ui-fg-rollback",std::format("rejectedRevision={} restoredBackend={} restoredMultiplier={}",
+            snapshot.rejectedRevision,int(pending_.frameGenerationBackend),pending_.multiplier));
+    }
     Frame frame;
     frame.snapshot = snapshot;
     frame.changed = !haveLast_ || !sameSnapshot(snapshot, last_);
@@ -71,9 +101,18 @@ PlayerUiFacade::Frame PlayerUiFacade::poll() {
     return frame;
 }
 
-bool PlayerUiFacade::applySettings(const veyra::engine::EnhancementSettings& settings) {
+bool PlayerUiFacade::applySettings(const veyra::engine::EnhancementSettings& settings,
+                                  std::optional<veyra::engine::ChainRuntimeOrder> order) {
+    uint64_t acceptedRevision=0;
+    if (!engine_.requestSettings(settings, order,&acceptedRevision)) return false;
+    veyra::log::info("ui-settings-request", std::format(
+        "accepted srTarget={} quality={} fgBackend={} flowBackend={}",
+        int(settings.srTarget), settings.videoSrQuality, int(settings.frameGenerationBackend), int(settings.opticalFlowBackend)));
     pending_ = settings;
-    return engine_.requestSettings(settings);
+    pendingFgRevision_=acceptedRevision;
+    pendingNrRevision_=acceptedRevision;requestedNrRuntime_=settings.nrRuntime;
+    requestedFgBackend_=settings.frameGenerationBackend;requestedFgMultiplier_=settings.multiplier;
+    return true;
 }
 
 bool PlayerUiFacade::applying() const {
@@ -101,7 +140,10 @@ bool PlayerUiFacade::importLegacyStores() {
     // A corrupt file stays loaded-as-corrupt, and the library then refuses to save.
     if (!presetsLoaded_) {
         presetsLoaded_ = true;
+        // 2.0 ships no built-in presets (user decision 2026-09-29).
+        presets_.setIncludeBuiltins(false);
         if (!presets_.load()) { error_ = presets_.error(); return false; }
+        error_ = presets_.error(); // Successful legacy migration carries an explicit notice.
     }
     // The old files are read-only inputs: they stay on disk untouched so a
     // downgrade still finds them. Their positional schema is owned by

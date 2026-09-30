@@ -16,12 +16,24 @@ struct PresentationSettings {
     // which cannot be measured on this machine - do not claim a figure for it.
     bool enabled=false;
     PacingMode mode=PacingMode::LowQueue;  // deprecated, see above
-    DisplaySync display=DisplaySync::Tearing;
+    DisplaySync display=DisplaySync::Automatic;
     OutputRateMode outputRate=OutputRateMode::Off;
     double customFps=60.0;
+    bool fullscreen=false; // transient UI state, never persisted as a preference
     bool operator==(const PresentationSettings&) const = default;
     bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
 };
+// Automatic never waits for vertical sync and never requests tearing: a
+// flip-model Present(0, 0) replaces the queued frame at the next refresh.
+// Tearing is only requested when the user explicitly selects it, because a
+// borderless fullscreen window is promoted to independent flip, where
+// DXGI_PRESENT_ALLOW_TEARING really tears (windowed output is composed).
+constexpr bool presentationVsync(const PresentationSettings& s) {
+    return s.display==DisplaySync::Vsync;
+}
+constexpr bool presentationTearing(const PresentationSettings& s) {
+    return s.display==DisplaySync::Tearing;
+}
 // Media time remains the authority. Spacing adds at most one interval from
 // the current decision; stale generated frames are discarded by the caller.
 class PresentationCadence {

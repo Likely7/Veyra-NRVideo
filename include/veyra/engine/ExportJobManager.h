@@ -13,6 +13,11 @@ struct ExportJobSnapshot {
     uint32_t workerPid=0;
     double etaSeconds=0;
     uint64_t queuePosition=0,queued=0;
+    // Queue items that could not start (existing output, invalid range...) are
+    // counted and the latest reason kept, then the queue moves on; they are
+    // never skipped silently. Reset when a fresh export starts from idle.
+    uint64_t queueFailures=0;
+    std::wstring lastQueueFailure;
     bool active()const{return state>=ExportState::Preparing&&state<=ExportState::Finishing;}
 };
 // One isolated NGX context in a child process. Anonymous inherited mapping is

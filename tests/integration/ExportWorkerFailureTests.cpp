@@ -1,5 +1,6 @@
 #include "veyra/engine/ExportJobManager.h"
 #include "veyra/engine/FgCompatibilityProbe.h"
+#include "ExportColorChainTest.h"
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -20,6 +21,14 @@ int wmain(int argc,wchar_t** argv){
         return runFgCompatibilityProbe(reinterpret_cast<HANDLE>(_wcstoui64(argv[2],nullptr,10)));
     if(argc!=4)return 2;
     const std::wstring mode=argv[1];
+    if(mode==L"color-chain"){
+        const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+        if(FAILED(com))return 1;
+        bool ok=false;
+        try{ok=runExportColorChainTest(argv[2],argv[3]);}
+        catch(const std::exception& e){std::cerr<<"COLOR-WORKER exception="<<e.what()<<'\n';}
+        CoUninitialize();return ok?0:1;
+    }
     const bool encoder=mode==L"encoder",cancel=mode==L"cancel";
     if(encoder)SetEnvironmentVariableW(L"VEYRA_TEST_NVENC_FIRST_OPEN_FAILS",L"1");
     else{

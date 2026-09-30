@@ -46,7 +46,7 @@ Rectangle {
                 Behavior on x { NumberAnimation { duration: Theme.d(Theme.durNormal); easing.bezierCurve: Theme.spring } }
             }
             HoverHandler { cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: card.toggleRequested(!card.node.enabled) }
+            TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: card.toggleRequested(!card.node.enabled) }
         }
 
         ColumnLayout {
@@ -82,7 +82,7 @@ Rectangle {
             color: removeHover.hovered ? Theme.err : Theme.t3
             size: 14
             HoverHandler { id: removeHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: card.removeRequested() }
+            TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: card.removeRequested() }
         }
     }
     HoverHandler { id: cardHover }

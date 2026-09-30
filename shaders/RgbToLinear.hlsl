@@ -20,7 +20,7 @@ void main(uint3 p : SV_DispatchThreadID) {
     float3 decoded=float3(decode(c.r),decode(c.g),decode(c.b));
     if(primaries2020>0.5)decoded=HdrTo709(decoded);
     const bool scRgb=transfer==0&&reserved.x>0.5;
-    if(colorFlags.x>0.5){ColorGradeParams grade={colorRow0,colorRow1,colorRow2,colorControls,colorFlags};decoded=scRgb?ColorGradeApply(decoded*(80.0/203.0),grade)*(203.0/80.0):ColorGradeApply(decoded,grade);}
+    if(colorFlags.x>0.5){ColorGradeParams grade={colorRow0,colorRow1,colorRow2,colorControls,colorFlags};decoded=scRgb?ColorGradeApplyWithFlags(decoded*(80.0/203.0),grade)*(203.0/80.0):ColorGradeApplyWithFlags(decoded,grade);}
     if(scRgb&&reserved.x>1.5)decoded=HdrToSdr(decoded*80.0,reserved.y,203.0);
     linearRgb[p.xy]=float4(decoded*c.a,1);
 }

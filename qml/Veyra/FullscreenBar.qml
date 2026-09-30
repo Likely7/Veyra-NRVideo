@@ -19,6 +19,7 @@ Window {
     required property Window owner
     property bool shown: false
     signal requestPage(string page)
+    signal requestDialog(string key)
     signal requestFullscreen()
     signal requestLock()
     // Pointer movement over the bar keeps the controls up (the main window cannot
@@ -97,6 +98,7 @@ Window {
         transform: Translate { y: (win.cinema ? 0 : (1 - win.fade) * 30) + win.enterDy }
         scale: win.enterScale
         onRequestPage: p => win.requestPage(p)
+        onRequestDialog: k => win.requestDialog(k)
         onRequestFullscreen: win.requestFullscreen()
         onRequestLock: win.requestLock()
         HoverHandler {

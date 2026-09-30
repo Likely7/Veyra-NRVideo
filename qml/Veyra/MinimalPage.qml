@@ -63,11 +63,39 @@ VPage {
 
         Text {
             anchors.centerIn: parent
-            visible: !veyra.hasSource
+            visible: !veyra.hasSource && veyra.liveOpeningText.length === 0
             text: "选择一个片源开始"
             color: Theme.t3
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsH3
+        }
+        // A PS5 / capture session that is still connecting: a pill in the
+        // middle of the (still black) picture, cut out of the native video.
+        Rectangle {
+            objectName: "min-live-opening"
+            readonly property bool videoCover: true
+            property real coverRadius: height / 2
+            visible: veyra.liveOpeningText.length > 0
+            anchors.centerIn: parent
+            width: openingRow.implicitWidth + 32
+            height: 40
+            radius: height / 2
+            color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.92)
+            border.width: 1
+            border.color: Theme.stroke2
+            Row {
+                id: openingRow
+                anchors.centerIn: parent
+                spacing: 10
+                VSpinner { anchors.verticalCenter: parent.verticalCenter }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: veyra.liveOpeningText
+                    color: Theme.t1
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsBody
+                }
+            }
         }
     }
 

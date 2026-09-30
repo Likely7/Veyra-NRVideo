@@ -8,10 +8,13 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 
 Rectangle {
     id: bar
     signal requestPage(string page)
+    // Opens one of the main window's dialogs (字幕设置 / 音频设置).
+    signal requestDialog(string key)
     signal requestFullscreen()
     signal requestLock()
     // Set on the fullscreen bar: shows the lock button.
@@ -32,20 +35,41 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 14
-        anchors.rightMargin: 18
+        anchors.leftMargin: 16
+        anchors.rightMargin: 16
         spacing: 18
 
         // --- left: artwork + title (230px) ---------------------------
         RowLayout {
-            Layout.preferredWidth: 230
+            Layout.preferredWidth: 230; Layout.minimumWidth: 230; Layout.maximumWidth: 230
             Layout.fillHeight: true
             spacing: 10
+            // The file's own cover art when it carries one (MP4 covr, MKV image
+            // attachment); otherwise the plate stays black - never a stand-in.
             Rectangle {
+                id: coverPlate
                 implicitWidth: 46; implicitHeight: 46; radius: 12
                 color: Theme.videoBlack
                 border.width: 1
                 border.color: Theme.stroke
+                clip: true
+                Image {
+                    id: coverArt
+                    objectName: "cine-cover"
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    visible: status === Image.Ready
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    cache: false
+                    source: veyra.hasSource && !veyra.isCapture ? "image://veyra-thumb/cover/" + veyra.thumbnailGeneration : ""
+                    layer.enabled: visible
+                    layer.effect: MultiEffect {
+                        maskEnabled: true
+                        maskSource: coverMask
+                    }
+                }
+                Rectangle { id: coverMask; anchors.fill: coverArt; radius: 11; visible: false; layer.enabled: true }
             }
             ColumnLayout {
                 Layout.fillWidth: true
@@ -105,7 +129,9 @@ Rectangle {
                     scale: cTap.pressed ? 0.86 : 1.0
                     Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
                     HoverHandler { id: cHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { id: cTap; onTapped: cbtn.tapped() }
+                    ToolTip.visible: cHover.hovered && cbtn.tip.length > 0
+                    ToolTip.text: cbtn.tip
+                    TapHandler { id: cTap; gesturePolicy: TapHandler.WithinBounds; onTapped: cbtn.tapped() }
                 }
 
                 CBtn { glyph: "cc"; onTapped: ccMenu.openAt(this, "up") }
@@ -129,7 +155,7 @@ Rectangle {
                     scale: playTap.pressed ? 0.88 : (playHover.hovered ? 1.06 : 1.0)
                     Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
                     HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { id: playTap; onTapped: veyra.togglePlayPause() }
+                    TapHandler { id: playTap; gesturePolicy: TapHandler.WithinBounds; onTapped: veyra.togglePlayPause() }
                 }
 
                 CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
@@ -162,6 +188,11 @@ Rectangle {
                     property int thumbnailBucket: -1
                     function fractionAt(x) {
                         return seekArea.width > 0 ? Math.max(0, Math.min(1, x / seekArea.width)) : 0
+                    }
+                    Timer {
+                        id: scrubSeek
+                        interval: 120
+                        onTriggered: if (seekArea.scrubbing) veyra.seekTo(seekArea.scrubFrac * veyra.duration)
                     }
                     Timer {
                         id: thumbnailDelay
@@ -266,11 +297,16 @@ Rectangle {
                             seekArea.scrubbing = true
                         }
                         onPositionChanged: mouse => {
-                            if (seekArea.scrubbing) seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
+                            if (seekArea.scrubbing) {
+                                seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
+                                // Scrubbing seeks as it goes, 120 ms apart.
+                                if (!scrubSeek.running) scrubSeek.start()
+                            }
                             thumbnailDelay.restart()
                         }
                         onReleased: mouse => {
                             const target = seekArea.fractionAt(mouse.x) * veyra.duration
+                            scrubSeek.stop()
                             seekArea.scrubbing = false
                             veyra.logUi("ui-seek", "targetSeconds=" + target.toFixed(3))
                             veyra.seekTo(target)
@@ -289,7 +325,7 @@ Rectangle {
 
         // --- right: preset, volume, fullscreen (230px) ---------------
         RowLayout {
-            Layout.preferredWidth: 230
+            Layout.preferredWidth: 230; Layout.minimumWidth: 230; Layout.maximumWidth: 230
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
             spacing: 6
 
@@ -352,23 +388,24 @@ Rectangle {
         }
     }
 
-    // 字幕 (design: app.menu(anchor, '字幕', [...])): the design lists embedded
-    // tracks plus a settings dialog. The engine has no subtitle stream at all -
-    // no track list, no renderer - so every entry here is the design's own text
-    // with nothing behind it. Shown disabled rather than silently doing nothing.
+    // 字幕 (design: app.menu(anchor, '字幕', [...])): the file's own tracks
+    // (embedded and same-name external) from the subtitle loader, the primary
+    // one checked, then loading a file and the settings dialog.
     VMenu {
         id: ccMenu
         aboveLimit: bar.menuBottomLimit
         title: "字幕"
-        items: [
-            { label: "关闭", disabled: true },
-            { label: "简体中文 · 内嵌 ASS", disabled: true },
-            { label: "English · 内嵌 SRT", disabled: true },
-            { label: "加载外部字幕…", icon: "import", disabled: true },
-            { sep: true },
-            { label: "字幕设置…", note: "字体、字号、描边、位置、延时（尚未接入）", icon: "type", disabled: true }
-        ]
-        onPicked: veyra.logUi("ui-cine", "subtitle menu picked index=" + i + " (no subtitle stream in the engine)")
+        items: [{ label: "关闭", checked: veyra.subtitlePrimary < 0, track: -1 }]
+            .concat(veyra.subtitleTracks.map(t => ({ label: t.label, note: t.note, track: t.index,
+                                                     disabled: !t.usable, checked: t.index === veyra.subtitlePrimary })))
+            .concat([{ label: "加载外部字幕…", icon: "import", act: "load" },
+                     { sep: true },
+                     { label: "字幕设置…", note: "字体、字号、描边、位置、延时", icon: "type", act: "dlg" }])
+        onPicked: (i, o) => {
+            if (o.act === "load") veyra.loadSubtitleDialog()
+            else if (o.act === "dlg") bar.requestDialog("subtitle")
+            else if (o.track !== undefined) veyra.subtitlePrimary = o.track
+        }
     }
 
     // 音轨: this one is real - the bridge exposes the file's audio streams and the
@@ -387,7 +424,7 @@ Rectangle {
                      { label: "音频设置…", note: "输出设备、音画同步、偏移", icon: "music", act: "dlg" }])
                : [{ label: "片源没有音轨或尚未打开", disabled: true }]
         onPicked: (i, o) => {
-            if (o.act === "dlg") return bar.requestPage("set")
+            if (o.act === "dlg") return bar.requestDialog("audio")
             if (o.index !== undefined) veyra.selectedAudioTrack = o.index
         }
     }

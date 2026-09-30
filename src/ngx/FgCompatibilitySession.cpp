@@ -5,6 +5,7 @@
 #include "veyra/ngx/FgCompatibilitySession.h"
 #include "veyra/ngx/AdaMfgUnlock.h"
 #include "veyra/ngx/AmpereMfgUnlock.h"
+#include "veyra/ngx/DlssgTransfusion.h"
 #include "veyra/ngx/NvapiArchSpoof.h"
 #include "veyra/FileIdentity.h"
 #include "veyra/Log.h"
@@ -60,10 +61,15 @@ struct FgCompatibilitySession::Impl {
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> resources;
     uint64_t serial=0;
+    // transfusion: the 310.9.1 provider, patched by DlssgTransfusion instead of
+    // the audited-310.7 Ada/Ampere unlocks. driverGates: scoped NGX core gates
+    // located (required on 310.7, optional on 310.9.1).
+    bool transfusion=false, driverGates=false;
     bool ampere=false, ready=false, allocated=false, initializing=false, initialized=false, startup=false, createAttempted=false, fatal=false, uncertainGate=false;
     Patch metadata,validation;
     uintptr_t deviceGate=0;
     bool programs() const {
+        if(transfusion){const auto s=DlssgTransfusion::snapshot();return s.applied&&s.identityVerified;}
         if(ampere){const auto s=AmpereMfgUnlock::snapshot();return s.applied&&s.identityVerified&&s.fatbinsRedirected;}
         const auto s=AdaMfgUnlock::snapshot();return s.applied&&s.identityVerified&&s.kernelPatched&&s.mfgGatePatched;
     }
@@ -80,6 +86,7 @@ FgCompatibilitySession::~FgCompatibilitySession(){
         const auto result=protected_pointer::ReplaceProtectedBytes(s.deviceGate,before,after,2,PAGE_EXECUTE_READ,&VirtualProtect,&FlushInstructionCache,PAGE_EXECUTE_READWRITE);
         restored=(result.disposition==protected_pointer::PublishDisposition::ePublishedRestored)&&restored;
     }
+    restored=DlssgTransfusion::release()&&restored;
     restored=AdaMfgUnlock::release()&&restored;
     restored=AmpereMfgUnlock::release()&&restored;
     restored=NvapiArchSpoof::release()&&restored;
@@ -111,7 +118,8 @@ bool FgCompatibilitySession::open(ID3D12Device* device,uint32_t vendor,uint32_t 
     computeFileIdentity(path.wstring(),identity,error);
     log::info("fg-compat",std::format("provider path={} sha256={} bytes={} generation={} LUID={:08X}:{:08X} adapter=0x{:04X}",
         path.string(),identity.sha256Upper,identity.sizeBytes,s.serial,uint32_t(device->GetAdapterLuid().HighPart),device->GetAdapterLuid().LowPart,deviceId));
-    if(identity.sha256Upper!=AdaMfgUnlock::kKnownModuleSha256)return false;
+    s.transfusion=DlssgTransfusion::moduleIsKnown(identity.sizeBytes,identity.sha256Upper);
+    if(identity.sha256Upper!=AdaMfgUnlock::kKnownModuleSha256&&!s.transfusion)return false;
     s.provider=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
     if(!s.provider)return false;
     wchar_t actual[32768]{};
@@ -119,18 +127,29 @@ bool FgCompatibilitySession::open(ID3D12Device* device,uint32_t vendor,uint32_t 
     const auto entry=GetProcAddress(s.provider,"NVSDK_NGX_D3D12_CreateFeature");
     MEMORY_BASIC_INFORMATION memory{};
     if(!entry||!VirtualQuery(reinterpret_cast<const void*>(entry),&memory,sizeof(memory))||memory.AllocationBase!=s.provider)return false;
-    log::info("fg-compat",std::format("provider module=0x{:X} ownedCreate=0x{:X}",uintptr_t(s.provider),uintptr_t(entry)));
+    log::info("fg-compat",std::format("provider module=0x{:X} ownedCreate=0x{:X} profile={}",uintptr_t(s.provider),uintptr_t(entry),s.transfusion?"310.9.1-transfusion":"310.7-audited"));
+    if(s.transfusion){
+        // Patched before NGX initializes the provider: its NvAPI entry point
+        // and CUDA programs are resolved during Init.
+        const auto options=DlssgTransfusion::defaultOptions((std::filesystem::path(directory)/L"dlssg-kernels").wstring());
+        const auto state=DlssgTransfusion::apply(s.provider,s.ampere?DlssgTransfusion::Target::Ampere:DlssgTransfusion::Target::Ada,options);
+        log::info("fg-compat",std::format("310.9.1 provider patches applied={} target={}",state.applied,s.ampere?"ampere":"ada"));
+        if(!state.applied)return false;
+    }
     return true;
 }
+bool FgCompatibilitySession::transfusionProfile() const{return impl_->transfusion;}
 HMODULE FgCompatibilitySession::provider() const{return impl_->provider;}
 bool FgCompatibilitySession::prepareDriver(const std::wstring& directory,const char* project,const char* engine) {
     auto& s=*impl_;if(!s.provider||!s.programs()){log::error("fg-compat","prepareDriver: provider/programs missing");return false;}
     if(!s.ampere){s.ready=true;return true;}
+    uintptr_t gate=0;
+    compat::Image providerImage;if(!providerImage.Open(s.provider)){log::error("fg-compat","prepareDriver: invalid image");return false;}
+    // On 310.9.1 DlssgTransfusion already removed the same count-policy branch.
+    if(!s.transfusion){
     // The audited legacy provider has one preset. Preserve all count/index
     // checks, changing only its Blackwell-only choice of maximum=5.
-    compat::Image providerImage;if(!providerImage.Open(s.provider)){log::error("fg-compat","prepareDriver: invalid image");return false;}
     constexpr uint8_t pattern[]={0x84,0xd2,0x0f,0x84,0x03,0x01,0,0,0xbe,5,0,0,0};
-    uintptr_t gate=0;
     const auto* sections=IMAGE_FIRST_SECTION(providerImage.nt);
     for(unsigned i=0;i<providerImage.nt->FileHeader.NumberOfSections;++i){
       const auto& section=sections[i];
@@ -158,6 +177,7 @@ bool FgCompatibilitySession::prepareDriver(const std::wstring& directory,const c
     if(patched.disposition==protected_pointer::PublishDisposition::ePublishedRestored)s.deviceGate=gate+2;
     if(patched.disposition==protected_pointer::PublishDisposition::eIndeterminate)s.uncertainGate=true;
     if(patched.disposition!=protected_pointer::PublishDisposition::ePublishedRestored){log::error("fg-compat",std::format("prepareDriver: count policy publication disposition={}",uint32_t(patched.disposition)));return false;}
+    }
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
     if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))||FAILED(factory->EnumAdapterByLuid(s.device->GetAdapterLuid(),IID_PPV_ARGS(&adapter))))return false;
@@ -191,7 +211,15 @@ bool FgCompatibilitySession::prepareDriver(const std::wstring& directory,const c
         if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,reinterpret_cast<LPCWSTR>(module),&s.driver)||s.driver!=module)return false;
         metadata=m;validation=v;
     }
-    if(!s.driver)return false;
+    if(!s.driver){
+        if(!s.transfusion)return false;
+        // 310.9.1: the provider's own minimum architecture was lowered, which
+        // admits Ampere through the unmodified NGX core (upstream-validated).
+        log::info("fg-compat","NGX core gates not located; 310.9.1 relies on the provider minimum-architecture patch");
+        s.ready=s.programs();
+        return s.ready;
+    }
+    s.driverGates=true;
     s.metadata={metadata+ampere_patterns::kAmpereNgxMetadataBranchOffset,ampere_patterns::kAmpereNgxMetadataOriginal};
     s.validation={validation+ampere_patterns::kAmpereNgxCreateValidationBranchOffset,ampere_patterns::kAmpereNgxCreateValidationOriginal};
     if(!s.metadata.set(true))return false;
@@ -232,15 +260,15 @@ bool FgCompatibilitySession::beginInitialization(){
     if(!s.ready||!s.allocated||s.initializing||s.initialized||s.createAttempted||s.fatal)return false;
     // NGX caches provider initialization failures before the capability query.
     // Upstream BeginStartup covers this call as well as GetCapabilityParameters.
-    if(s.ampere&&!s.metadata.set(true)){s.fatal=true;return false;}
+    if(s.driverGates&&!s.metadata.set(true)){s.fatal=true;return false;}
     s.initializing=true;
-    log::info("fg-compat",std::format("Init scope generation={} ampereMetadata={}",s.serial,s.ampere));
+    log::info("fg-compat",std::format("Init scope generation={} ampereMetadata={}",s.serial,s.driverGates));
     return true;
 }
 bool FgCompatibilitySession::endInitialization(bool success){
     auto& s=*impl_;
     if(!s.initializing)return false;
-    const bool restored=!s.ampere||s.metadata.set(false);
+    const bool restored=!s.driverGates||s.metadata.set(false);
     s.initializing=false;s.initialized=success&&restored;
     s.fatal|=!restored||!success;
     log::info("fg-compat",std::format("Init completed generation={} success={} metadataRestored={}",s.serial,success,restored));
@@ -248,10 +276,10 @@ bool FgCompatibilitySession::endInitialization(bool success){
 }
 bool FgCompatibilitySession::beginCapabilities(){
     auto& s=*impl_;if(!s.ready||!s.allocated||!s.initialized||s.initializing||s.createAttempted||s.fatal)return false;
-    if(s.ampere&&!s.metadata.set(true)){s.fatal=true;return false;}return true;
+    if(s.driverGates&&!s.metadata.set(true)){s.fatal=true;return false;}return true;
 }
 bool FgCompatibilitySession::endCapabilities(){
-    auto& s=*impl_;if(s.ampere&&!s.metadata.set(false)){s.fatal=true;return false;}return !s.fatal;
+    auto& s=*impl_;if(s.driverGates&&!s.metadata.set(false)){s.fatal=true;return false;}return !s.fatal;
 }
 bool FgCompatibilitySession::publishStartup(NVSDK_NGX_Parameter* parameters){
     auto& s=*impl_;
@@ -276,12 +304,12 @@ bool FgCompatibilitySession::beginCreate(ID3D12GraphicsCommandList* list){
     if(!list||!s.startup||s.createAttempted||s.fatal||!s.programs()||!s.allocated||
        FAILED(list->GetDevice(IID_PPV_ARGS(&device)))||device.Get()!=s.device.Get()||!sameLuid(device->GetAdapterLuid(),s.device->GetAdapterLuid()))return false;
     s.createAttempted=true;
-    if(s.ampere&&!s.validation.set(true)){s.fatal=true;return false;}
+    if(s.driverGates&&!s.validation.set(true)){s.fatal=true;return false;}
     return true;
 }
 bool FgCompatibilitySession::endCreate(bool success){
     auto& s=*impl_;
-    if(s.ampere&&!s.validation.set(false))s.fatal=true;
+    if(s.driverGates&&!s.validation.set(false))s.fatal=true;
     log::info("fg-compat",std::format("Create completed generation={} success={} driverGateRestored={}",s.serial,success,!s.fatal));
     return !s.fatal;
 }

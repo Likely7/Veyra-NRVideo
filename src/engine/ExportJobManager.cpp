@@ -23,7 +23,7 @@ struct Shared {
     // chain is fixed-capacity and trivially copyable, so it can cross the
     // process boundary; a worker that sees another version refuses the job
     // instead of reading a mismatched layout.
-    DWORD signature=magic,version=4,bytes=sizeof(Shared);
+    DWORD signature=magic,version=5,bytes=sizeof(Shared); // R5.3 independent colour settings
     EnhancementSettings settings;
     EffectChain chain;
     wchar_t input[32768]{},output[32768]{};
@@ -44,6 +44,21 @@ struct ExportJobManager::Impl {
     ExportJobSnapshot snapshot;ULONGLONG cancelAt=0,startTick=0;
     struct Request { std::wstring input,output; EnhancementSettings settings; bool hevc=false; unsigned maxFrames=0; int audioStreamIndex=-1; double trimStart=0,trimEnd=0; sink::ExportRateControl rateControl=sink::ExportRateControl::Cq; };
     std::deque<Request> queue;
+    uint64_t queueFailures=0;std::wstring lastQueueFailure;bool launchingQueued=false;
+    // Starts queued items in order until one launches; each refusal is recorded.
+    bool startNext(ExportJobManager& owner){
+        while(!queue.empty()){
+            auto next=std::move(queue.front());queue.pop_front();
+            launchingQueued=true;
+            const bool started=owner.start(next.input,next.output,next.settings,next.hevc,next.maxFrames,next.audioStreamIndex,next.trimStart,next.trimEnd,next.rateControl);
+            launchingQueued=false;
+            if(started)return true;
+            ++queueFailures;
+            lastQueueFailure=std::filesystem::path(next.output).filename().wstring()+L"："+snapshot.message;
+            log::warn("export-queue",std::format("queued item refused output={} reason={} failures={}",utf8(next.output),utf8(snapshot.message),queueFailures));
+        }
+        return false;
+    }
     void clear(){if(shared){UnmapViewOfFile(shared);shared=nullptr;}close(process);close(job);close(mapping);cancelAt=0;}
     ~Impl(){clear();}
 };
@@ -53,7 +68,13 @@ ExportJobManager::ExportJobManager():p_(std::make_unique<Impl>()){}
 // stalling process exit for up to five seconds.
 ExportJobManager::~ExportJobManager(){cancel();clearQueue();if(p_->process)WaitForSingleObject(p_->process,1000);p_->clear();}
 bool ExportJobManager::start(const std::wstring& input,const std::wstring& output,EnhancementSettings settings,bool hevc,unsigned maxFrames,int audioStreamIndex,double trimStartSeconds,double trimEndSeconds,sink::ExportRateControl rateControl){
-    if(poll().active())return false;p_->clear();p_->snapshot={};
+    // Busy means a launched worker not yet collected. Not poll(): polling here
+    // starts the next queued item, which made a queued conflict look "busy"
+    // and dropped it without a failure.
+    if(p_->shared)return false;p_->clear();
+    if(!p_->launchingQueued){p_->queueFailures=0;p_->lastQueueFailure.clear();}
+    const auto failures=p_->queueFailures;const auto lastFailure=p_->lastQueueFailure;
+    p_->snapshot={};p_->snapshot.queueFailures=failures;p_->snapshot.lastQueueFailure=lastFailure;
     auto fail=[&](const wchar_t* message){const DWORD error=GetLastError();p_->clear();p_->snapshot.state=ExportState::Failed;p_->snapshot.message=message;log::error("export-worker",std::format("launch failed error={}",error));return false;};
     if(input.empty()||output.empty()||input.size()>=32768||output.size()>=32768||!settings.validate().empty()||input.starts_with(L"capture:")||input.starts_with(L"capture2:"))return fail(L"请选择本地视频与有效导出设置");
     if(rateControl!=sink::ExportRateControl::Cq&&settings.exportBitrateMbps==0)return fail(L"CBR/VBR 需要指定码率；CQ 不使用码率");
@@ -85,7 +106,9 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     log::info("export-worker",std::format("started jobId={} pid={} frozenRevision={} nativeNR=true independentPlayback=true log={}",p_->snapshot.jobId,pi.dwProcessId,settings.revision,std::filesystem::path(p_->snapshot.workerLog).string()));return true;
 }
 bool ExportJobManager::enqueue(const std::wstring& input,const std::wstring& output,EnhancementSettings settings,bool hevc,unsigned maxFrames,int audioStreamIndex,double trimStartSeconds,double trimEndSeconds,sink::ExportRateControl rateControl){
-    if(poll().active()){p_->queue.push_back({input,output,settings,hevc,maxFrames,audioStreamIndex,trimStartSeconds,trimEndSeconds,rateControl});return true;}
+    if(poll().active()||!p_->queue.empty()){p_->queue.push_back({input,output,settings,hevc,maxFrames,audioStreamIndex,trimStartSeconds,trimEndSeconds,rateControl});return true;}
+    // A new batch from idle starts with a clean failure record.
+    p_->queueFailures=0;p_->lastQueueFailure.clear();
     return start(input,output,settings,hevc,maxFrames,audioStreamIndex,trimStartSeconds,trimEndSeconds,rateControl);
 }
 void ExportJobManager::clearQueue(){p_->queue.clear();}
@@ -94,13 +117,9 @@ void ExportJobManager::cancel(){if(p_->shared&&p_->snapshot.active()){Interlocke
 void ExportJobManager::pause(bool v){if(p_->shared)InterlockedExchange(&p_->shared->pause,v);}
 void ExportJobManager::watching(bool v){if(p_->shared)InterlockedExchange(&p_->shared->watching,v);}
 ExportJobSnapshot ExportJobManager::poll(){
-    if(!p_->shared&&!p_->queue.empty()){
-        auto next=std::move(p_->queue.front());p_->queue.pop_front();
-        if(!start(next.input,next.output,next.settings,next.hevc,next.maxFrames,next.audioStreamIndex,next.trimStart,next.trimEnd,next.rateControl)){
-            p_->snapshot.queuePosition=0;p_->snapshot.queued=p_->queue.size();return p_->snapshot;
-        }
-    }
-    if(!p_->shared){p_->snapshot.queued=p_->queue.size();return p_->snapshot;}
+    if(!p_->shared&&!p_->queue.empty())p_->startNext(*this);
+    p_->snapshot.queueFailures=p_->queueFailures;p_->snapshot.lastQueueFailure=p_->lastQueueFailure;
+    if(!p_->shared){p_->snapshot.queuePosition=0;p_->snapshot.queued=p_->queue.size();return p_->snapshot;}
     auto& s=*p_->shared;p_->snapshot.sourceFrames=InterlockedCompareExchange64(&s.sourceFrames,0,0);p_->snapshot.generated=InterlockedCompareExchange64(&s.generated,0,0);p_->snapshot.holds=InterlockedCompareExchange64(&s.holds,0,0);p_->snapshot.encoded=InterlockedCompareExchange64(&s.encoded,0,0);p_->snapshot.state=static_cast<ExportState>(InterlockedCompareExchange(&s.state,0,0));p_->snapshot.progress=InterlockedCompareExchange(&s.progress,0,0)/10000.0;p_->snapshot.queued=p_->queue.size();p_->snapshot.queuePosition=p_->queue.empty()?0:1;
     if(p_->snapshot.progress>0.001&&p_->startTick){const double elapsed=double(GetTickCount64()-p_->startTick)/1000.0;p_->snapshot.etaSeconds=std::max(0.0,elapsed*(1.0-p_->snapshot.progress)/p_->snapshot.progress);}else p_->snapshot.etaSeconds=0;
     if(p_->cancelAt&&GetTickCount64()-p_->cancelAt>5000&&WaitForSingleObject(p_->process,0)==WAIT_TIMEOUT)TerminateJobObject(p_->job,3);
@@ -114,15 +133,17 @@ ExportJobSnapshot ExportJobManager::poll(){
         if(final.state==ExportState::Failed)p_->snapshot.message+=L"\n日志："+final.workerLog;
         p_->clear();
         if(!p_->queue.empty()){
-            auto next=std::move(p_->queue.front());p_->queue.pop_front();
-            if(!start(next.input,next.output,next.settings,next.hevc,next.maxFrames,next.audioStreamIndex,next.trimStart,next.trimEnd,next.rateControl))p_->snapshot.queued=p_->queue.size();
+            // The finished job's outcome is reported by this poll; the next one
+            // is launched on the following poll so the UI sees both states.
+            p_->snapshot.queued=p_->queue.size();p_->snapshot.queuePosition=0;
+            return p_->snapshot;
         }
     }
     if(p_->shared&&InterlockedCompareExchange(&p_->shared->messageLock,1,0)==0){if(p_->shared->message[0])p_->snapshot.message=p_->shared->message;InterlockedExchange(&p_->shared->messageLock,0);}if(p_->snapshot.message.empty()||p_->snapshot.state==ExportState::Paused||p_->snapshot.state==ExportState::Cancelled)p_->snapshot.message=label(p_->snapshot.state);return p_->snapshot;
 }
 int runExportWorker(HANDLE mapping){
     auto s=static_cast<Shared*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!s)return 1;
-    if(s->signature!=magic||s->version!=4||s->bytes!=sizeof(Shared)||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
+    if(s->signature!=magic||s->version!=5||s->bytes!=sizeof(Shared)||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
     Logger::instance().openFile((runtime::logsDirectory()/std::format("export-worker-{}.log",GetCurrentProcessId())).wstring());
     // The chain is the description of record for this job; the settings struct
     // stays the runtime input until the executor consumes chains directly.

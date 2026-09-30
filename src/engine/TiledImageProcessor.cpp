@@ -56,11 +56,19 @@ bool TiledImageProcessor::process(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotR
         // Source-normalized regions are mapped to this padded tile. Halo exceeds
         // the maximum feather, so clipping at tile edges cannot alter core pixels.
         engine::EnhancementSettings tileSettings;tileSettings.nr=desc.enableNr;tileSettings.model=desc.model;tileSettings.residual=desc.residual;tileSettings.protection=desc.protection;
+        // Protection is tile-local; grading remains the same ordered chain as
+        // the full image. Default colour settings would reject an enabled grade
+        // (or a nonempty additional chain) before the first tile is processed.
+        tileSettings.color=desc.color;tileSettings.additionalColors=desc.additionalColors;
+        tileSettings.additionalColorCount=desc.additionalColorCount;
         for(auto& q:tileSettings.protection.regions){
-            q.left=std::clamp(float(q.left*input.width-originX+halo)/tileW,0.0f,1.0f);
-            q.right=std::clamp(float(q.right*input.width-originX+halo)/tileW,0.0f,1.0f);
-            q.top=std::clamp(float(q.top*input.height-originY+halo)/tileH,0.0f,1.0f);
-            q.bottom=std::clamp(float(q.bottom*input.height-originY+halo)/tileH,0.0f,1.0f);
+            // A rectangle clipped to the tile is the same rectangle; an ellipse
+            // clipped would be a different ellipse, so it keeps its full box.
+            const float low=q.ellipse?-64.0f:0.0f,high=q.ellipse?65.0f:1.0f;
+            q.left=std::clamp(float(q.left*input.width-originX+halo)/tileW,low,high);
+            q.right=std::clamp(float(q.right*input.width-originX+halo)/tileW,low,high);
+            q.top=std::clamp(float(q.top*input.height-originY+halo)/tileH,low,high);
+            q.bottom=std::clamp(float(q.bottom*input.height-originY+halo)/tileH,low,high);
         }
         tileSettings.revision=desc.settingsRevision;if(!graph.applySettings(tileSettings))return false;
         pipeline::EnhanceGraph::FrameOutputs out;sink::RgbaImage tile;

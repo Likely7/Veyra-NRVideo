@@ -233,3 +233,13 @@ float3 ColorGradeApply(float3 lin, ColorGradeParams p)
     }
     return rgb;
 }
+
+// Keep the fused ingress path bit-for-bit aligned with ColorGradePass for a
+// pure exposure grade. The independent pass uses the same fast path because
+// neutral log/HSV/LUT work can otherwise move HDR scRGB values by a visible
+// amount before the FP16 store.
+float3 ColorGradeApplyWithFlags(float3 lin, ColorGradeParams p)
+{
+    if (p.flags.w > 0.5) return lin * exp2(p.controls.x);
+    return ColorGradeApply(lin, p);
+}

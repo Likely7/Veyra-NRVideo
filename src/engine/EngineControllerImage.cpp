@@ -66,6 +66,7 @@ void EngineController::runLargeImage(HWND window,const sink::RgbaImage& original
         if(requested.revision!=applied.revision){
             pipeline::EnhanceGraphDesc desc;desc.enableNr=requested.nr;desc.nrRuntime=requested.nrRuntime;desc.noFeatures=!requested.nr;
             desc.model=requested.model;desc.nrTemporal=requested.nrTemporal;desc.residual=requested.residual;desc.protection=requested.protection;desc.color=requested.color;desc.settingsRevision=requested.revision;
+            desc.additionalColors=requested.additionalColors;desc.additionalColorCount=requested.additionalColorCount;
             desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
             sink::RgbaImage candidate;TiledImageProcessor::Stats stats;
             status(L"正在分块增强大图，保留完整输出尺寸…");

@@ -7,7 +7,9 @@
 // Reading the curve through QML matters: easing.bezierCurve silently falls back to
 // linear when its length is not a multiple of 6, which is exactly the bug this catches.
 #include <QCoreApplication>
+#include <QDir>
 #include <QEasingCurve>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -93,7 +95,12 @@ int main(int argc, char** argv) {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     QQmlEngine engine;
-    engine.addImportPath(QStringLiteral(VEYRA_QML_DIR));
+    const QString qmlDir = QDir(app.applicationDirPath()).filePath(QStringLiteral("qml"));
+    if (!QFileInfo::exists(QDir(qmlDir).filePath(QStringLiteral("Veyra/qmldir")))) {
+        std::printf("FAIL missing staged QML module: %s\n", qPrintable(qmlDir));
+        return 2;
+    }
+    engine.addImportPath(qmlDir);
 
     const Stops spring = css_linear({{0, -1}, {.009, -1}, {.035, 2.1}, {.141, 4.4}, {.723, 12.9}, {.938, 16.7},
                                      {1.017, 20.2}, {1.043, 24}, {1.035, 28.4}, {.998, 38.5}, {.99, 44.1},

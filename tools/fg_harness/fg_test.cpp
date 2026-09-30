@@ -16,6 +16,7 @@
 #include <cstring>
 #include <format>
 #include <fstream>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,7 @@
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/ngx/NgxCoreHost.h"
 #include "veyra/ngx/DlssFgBackend.h"
+#include "veyra/ngx/DlssgTransfusion.h"
 #include "veyra/ngx/NgxParameters.h"
 
 namespace veyra::harness {
@@ -367,7 +369,8 @@ void copyUploadToTexture(ID3D12GraphicsCommandList* list, ID3D12Resource* dst,
 // history (F3 precondition, review 2026-09-22). Position/uniqueness checks
 // apply to every generated frame; group 1 expects the midpoint.
 static bool runPlanarSix(veyra::gfx::CommandSlotRing& ring,
-    veyra::ngx::NgxCoreHost& core, NVSDK_NGX_Parameter* params, GpuTextures& t, bool alternateGroups=false)
+    veyra::ngx::NgxCoreHost& core, NVSDK_NGX_Parameter* params, GpuTextures& t, bool alternateGroups=false,
+    const std::wstring& captureDir={})
 {
     veyra::Status status = veyra::Status::Ok;
     veyra::ngx::DlssFgBackend fg;
@@ -376,6 +379,9 @@ static bool runPlanarSix(veyra::gfx::CommandSlotRing& ring,
     if (!list || !fg.create(core,list,params,create,status) || !ring.submitAndSignal(0) || !ring.waitIdle()) return false;
     std::vector<uint8_t> previous(kRowPitch*kHeight), current(previous.size());
     unsigned generated=0, accurate=0, distinct=0;
+    std::vector<double> evaluateMs;
+    uint64_t sequenceHash=14695981039346656037ull;
+    LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);
     bool ok=true;
     for (unsigned frame=0; ok && frame<12; ++frame) {
         for(unsigned y=0;y<kHeight;++y)for(unsigned x=0;x<kWidth;++x){
@@ -414,7 +420,10 @@ static bool runPlanarSix(veyra::gfx::CommandSlotRing& ring,
             list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);list->CopyBufferRegion(t.readbackFlag.Get(),0,t.disableFlag.Get(),0,4);
             for(unsigned j=3;j<5;++j){barriers[j].Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;barriers[j].Transition.StateAfter=D3D12_RESOURCE_STATE_COMMON;}
             list->ResourceBarrier(2,barriers+3);
+            LARGE_INTEGER begin{},end{};QueryPerformanceCounter(&begin);
             ok=ring.submitAndSignal(0)&&ring.waitIdle()&&ok;if(!ok)break;
+            QueryPerformanceCounter(&end);
+            if(frame>=2)evaluateMs.push_back(double(end.QuadPart-begin.QuadPart)*1000.0/double(frequency.QuadPart));
             if(!frame)continue;
             uint8_t* pixels=nullptr;uint8_t* flag=nullptr;
             if(FAILED(t.readbackInterp->Map(0,nullptr,reinterpret_cast<void**>(&pixels)))){ok=false;break;}
@@ -435,7 +444,10 @@ static bool runPlanarSix(veyra::gfx::CommandSlotRing& ring,
             const double expectedShift=16.0*sub/(groupCount+1);
             const bool position=std::abs(shift-expectedShift)<=1.0;
             ++generated;distinct+=unique;accurate+=position&&unique&&!*flag;previousHash=hash;
-            log::info("fg-planar6",std::format("frame={} group={} sub={} expected={:.3f} observed={:.3f} distinct={} disabled={} positionPass={}",frame,groupCount,sub,expectedShift,shift,unique,unsigned(*flag),position));
+            sequenceHash=(sequenceHash^hash)*1099511628211ull;
+            log::info("fg-planar6",std::format("frame={} group={} sub={} expected={:.3f} observed={:.3f} distinct={} disabled={} positionPass={} hash=0x{:016X}",frame,groupCount,sub,expectedShift,shift,unique,unsigned(*flag),position,hash));
+            if(!captureDir.empty())
+                writeRgbaPng(captureDir+L"\\gen_"+std::to_wstring(frame)+L"_"+std::to_wstring(sub)+L".png",pixels,kWidth,kHeight,kRowPitch);
             t.readbackInterp->Unmap(0,nullptr);t.readbackFlag->Unmap(0,nullptr);
         }
         previous=current;
@@ -444,7 +456,10 @@ static bool runPlanarSix(veyra::gfx::CommandSlotRing& ring,
     // 12 frames: frame 0 is the reset seed (its outputs are not scored).
     // Fixed 5: 11*5=55. Alternating 1/5 from frame 1: odd frames 5, even frames 1 -> 6*5+5*1=35.
     const unsigned expectedGenerated=alternateGroups?35u:55u;
-    log::info("fg-planar6",std::format("directNGX=true alternateGroups={} generated={} distinct={} contentValid={} expected={} graphUsed=false",alternateGroups,generated,distinct,accurate,expectedGenerated));
+    std::sort(evaluateMs.begin(),evaluateMs.end());
+    const double medianMs=evaluateMs.empty()?0.0:evaluateMs[evaluateMs.size()/2];
+    const double meanMs=evaluateMs.empty()?0.0:std::accumulate(evaluateMs.begin(),evaluateMs.end(),0.0)/double(evaluateMs.size());
+    log::info("fg-planar6",std::format("directNGX=true alternateGroups={} generated={} distinct={} contentValid={} expected={} graphUsed=false sequenceHash=0x{:016X} evaluateSubmitWaitMs median={:.3f} mean={:.3f} samples={}",alternateGroups,generated,distinct,accurate,expectedGenerated,sequenceHash,medianMs,meanMs,evaluateMs.size()));
     return ok&&drained&&generated==expectedGenerated&&accurate==expectedGenerated;
 }
 
@@ -782,10 +797,34 @@ int runFgTest(const FgTestArgs& args)
     }
     if (projectId.empty()) { ring.shutdown(); context.shutdown(); return 7; }
 
+    // Diagnostic 310.9.1 provider patches, installed before NGX Init exactly
+    // like FgCompatibilitySession::open does in the product.
+    HMODULE transfusionProvider = nullptr;
+    if (!args.transfusion.empty()) {
+        const std::wstring provider = std::wstring(absRuntimeDir) + L"\\nvngx_dlssg.dll";
+        if (!veyra::ngx::DlssgTransfusion::moduleIsKnown(provider)) { log::error("fg-test", "transfusion: provider is not the pinned 310.9.1 build"); ring.shutdown(); context.shutdown(); return 13; }
+        transfusionProvider = LoadLibraryExW(provider.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
+        const auto target = args.transfusion == "ampere" ? veyra::ngx::DlssgTransfusion::Target::Ampere : veyra::ngx::DlssgTransfusion::Target::Ada;
+        const auto state = transfusionProvider ? veyra::ngx::DlssgTransfusion::apply(transfusionProvider, target,
+            veyra::ngx::DlssgTransfusion::defaultOptions(std::wstring(absRuntimeDir) + L"\\dlssg-kernels")) : veyra::ngx::DlssgTransfusion::State{};
+        log::info("fg-test", std::format("transfusion target={} applied={} detail={}", args.transfusion, state.applied, narrowText(state.detail)));
+        if (!state.applied) { ring.shutdown(); context.shutdown(); return 13; }
+    }
+    auto releaseTransfusion = [&]() {
+        if (!transfusionProvider) return;
+        const auto c = veyra::ngx::DlssgTransfusion::counters();
+        log::info("fg-test", std::format("transfusion counters nvapi={} modules accepted={} rejected={} rewritten={} exact={} networkReady={} networkFailed={} dl1Runs={} dl2Runs={}",
+            c.nvapiResolutions, c.modulesAccepted, c.modulesRejected, c.modulesRewritten, c.exactProviderKernels, c.networkReady, c.networkFailed, c.optimizedDl1Runs, c.optimizedDl2Runs));
+        const bool restored = veyra::ngx::DlssgTransfusion::release();
+        log::info("fg-test", std::format("transfusion release restored={}", restored));
+        FreeLibrary(transfusionProvider);
+        transfusionProvider = nullptr;
+    };
+
     veyra::ngx::NgxCoreHost coreHost;
     if (!coreHost.initialize(context.device(), absRuntimeDir,
             projectId.c_str(), engineVersion.c_str(), status)) {
-        ring.shutdown(); context.shutdown(); return 8;
+        releaseTransfusion(); ring.shutdown(); context.shutdown(); return 8;
     }
 
     // Capability query.
@@ -847,8 +886,8 @@ int runFgTest(const FgTestArgs& args)
     }
 
     if(args.planarSix){
-        const bool passed=caps.multiFrameCountMax>=5&&runPlanarSix(ring,coreHost,params,textures,args.alternateGroups);
-        coreHost.destroyParameters(params);coreHost.shutdown();ring.shutdown();context.shutdown();
+        const bool passed=caps.multiFrameCountMax>=5&&runPlanarSix(ring,coreHost,params,textures,args.alternateGroups,args.captureDir);
+        coreHost.destroyParameters(params);coreHost.shutdown();releaseTransfusion();ring.shutdown();context.shutdown();
         return passed?0:1;
     }
 

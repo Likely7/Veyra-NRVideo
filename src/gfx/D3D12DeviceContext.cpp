@@ -1,6 +1,8 @@
 #include "veyra/gfx/D3D12DeviceContext.h"
 
 #include <windows.h>
+#include <winevt.h>
+#pragma comment(lib, "wevtapi.lib")
 
 #include <format>
 #include <string>
@@ -122,6 +124,15 @@ bool D3D12DeviceContext::initialize(const DeviceContextDesc& desc, Status& statu
         shutdown();
     }
 
+    // Microsoft DRED settings apply only to subsequently created devices.
+    // Enable before even the adapter's D3D12 capability probe below.
+    ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> dredSettings;
+    const auto dredHr=D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings));
+    if(SUCCEEDED(dredHr)) {
+        dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+        dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+    }
+    veyra::log::info("dred",std::format("configured before device creation hr=0x{:X} breadcrumbs={} pageFault={}",unsigned(dredHr),SUCCEEDED(dredHr),SUCCEEDED(dredHr)));
     // 1. Optional debug layer.
     if (desc.enableDebugLayer) {
         ComPtr<ID3D12Debug> debug;
@@ -273,7 +284,10 @@ void D3D12DeviceContext::shutdown()
 
 bool D3D12DeviceContext::waitForFenceValue(uint64_t value, uint32_t timeoutMs)
 {
-    if (fence_->GetCompletedValue() >= value) {
+    if(!fence_)return false;
+    const auto completed=fence_->GetCompletedValue();
+    if(completed==UINT64_MAX){reportDeviceFailure("fence-sentinel",value);return false;}
+    if (completed >= value) {
         return true;
     }
     const HRESULT result = fence_->SetEventOnCompletion(value, fenceEvent_);
@@ -281,14 +295,62 @@ bool D3D12DeviceContext::waitForFenceValue(uint64_t value, uint32_t timeoutMs)
         veyra::log::error("gfx", std::format("SetEventOnCompletion failed hr={} value={}", veyra::hresultString(result), value));
         return false;
     }
-    return WaitForSingleObject(fenceEvent_, timeoutMs) == WAIT_OBJECT_0;
+    const auto wait=WaitForSingleObject(fenceEvent_, timeoutMs);
+    if(wait!=WAIT_OBJECT_0){reportDeviceFailure("fence-wait",value);return false;}
+    uint32_t reason=0;
+    return fence_->GetCompletedValue()!=UINT64_MAX&&checkDeviceAlive(reason);
 }
 
 bool D3D12DeviceContext::checkDeviceAlive(uint32_t& removedReason) const
 {
-    const HRESULT reason = device_->GetDeviceRemovedReason();
+    const HRESULT reason = device_?device_->GetDeviceRemovedReason():E_POINTER;
     removedReason = static_cast<uint32_t>(reason);
     return SUCCEEDED(reason);
+}
+bool D3D12DeviceContext::reportDeviceFailure(std::string_view operation,uint64_t requestedFence) const {
+    uint32_t reason=0;const bool alive=checkDeviceAlive(reason);
+    const auto completed=fence_?fence_->GetCompletedValue():0;
+    veyra::log::error("gpu-failure",std::format("operation={} alive={} removedReason=0x{:X} requestedFence={} completedFence={} sentinel={} adapter={} device=0x{:X} luid={} driver={}",operation,alive,reason,requestedFence,completed,completed==UINT64_MAX,narrow(adapterInfo_.description),adapterInfo_.deviceId,adapterInfo_.luidString,narrow(adapterInfo_.driverVersion)));
+    // Read at most 16 recent display/driver events; no application logs,
+    // registry changes or global diagnostic settings are touched.
+    const auto events=EvtQuery(nullptr,L"System",L"*[System[(Provider[@Name='Display'] or Provider[@Name='nvlddmkm']) and (EventID=4101 or EventID=153 or EventID=13 or EventID=14) and TimeCreated[timediff(@SystemTime)<=60000]]]",EvtQueryChannelPath|EvtQueryReverseDirection);
+    if(events) {
+        EVT_HANDLE items[16]{};DWORD count=0;
+        if(EvtNext(events,16,items,0,0,&count))for(DWORD i=0;i<count;++i) {
+            DWORD bytes=0,properties=0;
+            EvtRender(nullptr,items[i],EvtRenderEventXml,0,nullptr,&bytes,&properties);
+            if(bytes>0&&bytes<=65536) {
+                std::vector<wchar_t> xml(bytes/sizeof(wchar_t)+1);
+                if(EvtRender(nullptr,items[i],EvtRenderEventXml,DWORD(xml.size()*sizeof(wchar_t)),xml.data(),&bytes,&properties))
+                    veyra::log::error("gpu-system-event",std::format("recent60s={} xml={}",i,narrow(xml.data())));
+            }
+            EvtClose(items[i]);
+        }
+        else veyra::log::info("gpu-system-event",std::format("no readable recent display events win32={}",GetLastError()));
+        EvtClose(events);
+    } else veyra::log::warn("gpu-system-event",std::format("query unavailable win32={}",GetLastError()));
+    if(alive||!device_)return alive;
+    ComPtr<ID3D12DeviceRemovedExtendedData1> dred;
+    const auto query=device_.As(&dred);
+    if(FAILED(query)){veyra::log::error("dred",std::format("QueryInterface hr=0x{:X}",unsigned(query)));return false;}
+    D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 crumbs{};
+    const auto crumbsHr=dred->GetAutoBreadcrumbsOutput1(&crumbs);
+    veyra::log::error("dred",std::format("breadcrumb query hr=0x{:X}",unsigned(crumbsHr)));
+    if(SUCCEEDED(crumbsHr)) {
+        uint32_t count=0;
+        for(auto* n=crumbs.pHeadAutoBreadcrumbNode;n&&count<16;n=n->pNext,++count) {
+            const auto last=n->pLastBreadcrumbValue?*n->pLastBreadcrumbValue:0;
+            const auto nextOp=n->pCommandHistory&&last<std::min(n->BreadcrumbCount,65536u)?unsigned(n->pCommandHistory[last]):UINT_MAX;
+            veyra::log::error("dred",std::format("breadcrumb={} completed={} total={} nextOp={} list={} queue={}",count,last,n->BreadcrumbCount,nextOp,n->pCommandListDebugNameA?n->pCommandListDebugNameA:"unnamed",n->pCommandQueueDebugNameA?n->pCommandQueueDebugNameA:"unnamed"));
+        }
+    }
+    D3D12_DRED_PAGE_FAULT_OUTPUT1 fault{};const auto faultHr=dred->GetPageFaultAllocationOutput1(&fault);
+    veyra::log::error("dred",std::format("pageFault query hr=0x{:X} address=0x{:X}",unsigned(faultHr),fault.PageFaultVA));
+    if(SUCCEEDED(faultHr))for(const auto& group:{fault.pHeadExistingAllocationNode,fault.pHeadRecentFreedAllocationNode}) {
+        uint32_t count=0;for(auto* n=group;n&&count<16;n=n->pNext,++count)
+            veyra::log::error("dred",std::format("allocation={} type={} name={}",count,unsigned(n->AllocationType),n->ObjectNameA?n->ObjectNameA:"unnamed"));
+    }
+    return false;
 }
 
 bool D3D12DeviceContext::videoMemoryInfo(uint64_t& budget,uint64_t& usage) const {

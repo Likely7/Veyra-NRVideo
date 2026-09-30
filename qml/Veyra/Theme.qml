@@ -28,10 +28,15 @@ QtObject {
     readonly property color t3: Qt.rgba(0.953, 0.953, 0.961, 0.38)
 
     // --- accent and state -------------------------------------------------
-    readonly property color accent: "#FF8A3D"
-    readonly property color accentInk: "#1B0E04"
-    readonly property color accentSoft: Qt.rgba(1, 0.541, 0.239, 0.14)
-    readonly property color accentGlow: Qt.rgba(1, 0.541, 0.239, 0.35)
+    // 设置 → 强调色: orange (default) or the design's .accent-white variant.
+    property string accentName: "orange"
+    readonly property bool accentWhite: accentName === "white"
+    readonly property color accent: accentWhite ? "#F3F3F5" : "#FF8A3D"
+    readonly property color accentInk: accentWhite ? "#0B0B0E" : "#1B0E04"
+    readonly property color accentSoft: accentWhite ? Qt.rgba(1, 1, 1, 0.1) : Qt.rgba(1, 0.541, 0.239, 0.14)
+    readonly property color accentGlow: accentWhite ? Qt.rgba(1, 1, 1, 0.35) : Qt.rgba(1, 0.541, 0.239, 0.35)
+    // 设置 → 背景渐变强度: 0 none, 1 light (the design default), 2 medium.
+    property int backdropLevel: 1
     readonly property color ok: "#3DDC84"
     readonly property color okGlow: Qt.rgba(0.239, 0.863, 0.518, 0.16)
     readonly property color warn: "#F5C84B"

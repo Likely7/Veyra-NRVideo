@@ -23,8 +23,15 @@
 #include <QRect>
 #include <QtCore/private/qabstractanimation_p.h>
 #include <QDebug>
+#include <QAbstractNativeEventFilter>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include <windows.h>
+#include <shellapi.h>
+#include <shobjidl.h>
+#include <dbghelp.h>
 
 #include <cmath>
 #include <cstdlib>
@@ -185,7 +192,10 @@ qreal sceneInsetFraction(QQuickWindow* window) {
 
 void collectCovers(QQuickItem* item, QList<Cover>& out) {
     if (!item->isVisible() || item->opacity() <= 0.0) return;
-    if (item->objectName() == QLatin1String("videoCover")) {
+    // A cover is named "videoCover" or carries videoCover: true; the property lets a
+    // dialog keep its own objectName for tests (an overridden name used to drop
+    // the hole, leaving five dialogs behind the picture).
+    if (item->objectName() == QLatin1String("videoCover") || item->property("videoCover").toBool()) {
         // Scale is folded into the scene rect; the corner radius scales with it.
         const QRectF r = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
         const qreal s = item->width() > 0 ? r.width() / item->width() : 1.0;
@@ -286,6 +296,47 @@ void syncVideoCovers(QQuickWindow* window, QQuickItem* host, qreal inset) {
 }
 } // namespace
 
+namespace {
+// Last-chance handler, as in the Win32 shell (apps/veyra/main.cpp): provider and
+// driver faults are structured exceptions no C++ catch sees. The 2.0 beta had no
+// handler, so a field crash left neither a reason nor the last buffered log lines.
+std::wstring g_crashDumpDirectory;
+LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
+    static LONG entered = 0;
+    if (InterlockedIncrement(&entered) > 1) return EXCEPTION_CONTINUE_SEARCH;
+    const auto code = info && info->ExceptionRecord ? info->ExceptionRecord->ExceptionCode : 0u;
+    const auto address = info && info->ExceptionRecord
+        ? reinterpret_cast<uintptr_t>(info->ExceptionRecord->ExceptionAddress) : uintptr_t(0);
+    HMODULE module = nullptr;
+    wchar_t moduleName[MAX_PATH]{};
+    if (address && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                      reinterpret_cast<LPCWSTR>(address), &module) && module)
+        GetModuleFileNameW(module, moduleName, MAX_PATH);
+    veyra::log::error("crash", std::format("unhandled exception code=0x{:08X} address=0x{:X} module={} offset=0x{:X} thread={}",
+        code, address, std::filesystem::path(moduleName).filename().string(),
+        module ? address - reinterpret_cast<uintptr_t>(module) : uintptr_t(0), GetCurrentThreadId()));
+    SYSTEMTIME st{};
+    GetLocalTime(&st);
+    wchar_t name[96]{};
+    swprintf_s(name, L"veyra-crash-%04u%02u%02u-%02u%02u%02u-%lu.dmp", unsigned(st.wYear), unsigned(st.wMonth),
+               unsigned(st.wDay), unsigned(st.wHour), unsigned(st.wMinute), unsigned(st.wSecond), GetCurrentProcessId());
+    const std::wstring path = (std::filesystem::path(g_crashDumpDirectory) / name).wstring();
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+        MINIDUMP_EXCEPTION_INFORMATION mei{GetCurrentThreadId(), info, FALSE};
+        const BOOL ok = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file,
+                                          MiniDumpWithIndirectlyReferencedMemory, info ? &mei : nullptr, nullptr, nullptr);
+        CloseHandle(file);
+        veyra::log::error("crash", std::format("minidump written={} file={}", ok != FALSE,
+                                               std::filesystem::path(name).string()));
+    } else {
+        veyra::log::error("crash", std::format("minidump open failed error={}", GetLastError()));
+    }
+    veyra::Logger::instance().flush();
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+} // namespace
+
 int main(int argc, char** argv) {
     // ExportJobManager relaunches the owning executable with an inherited mapping.
     // Dispatch before Qt or the video HWND exists, as the Win32 shell does.
@@ -312,8 +363,50 @@ int main(int argc, char** argv) {
         logPath = logPath.parent_path() / (L"veyra-qml-" + std::to_wstring(GetCurrentProcessId()) + L".log");
         (void)veyra::Logger::instance().openFile(logPath.wstring(), true);
     }
+    g_crashDumpDirectory = logPath.parent_path().wstring();
+    SetUnhandledExceptionFilter(crashFilter);
 
+    // Interface scale (设置 → 界面缩放) has to be fixed before Qt starts, so the
+    // preference file is read here, from the same data directory the bridge uses.
+    // "Auto" leaves Qt following the Windows display scale.
+    int uiScale = 0;
+    {
+        int count = 0;
+        LPWSTR* args = CommandLineToArgvW(GetCommandLineW(), &count);
+        std::filesystem::path dir = veyra::runtime::localDataDirectory() / L"user-data-2.0.0";
+        for (int i = 1; args && i + 1 < count; ++i)
+            if (std::wstring(args[i]) == L"--data-dir") dir = args[i + 1];
+        if (args) LocalFree(args);
+        QFile prefs(QString::fromStdWString((dir / L"qml-preferences.v1.json").wstring()));
+        if (prefs.open(QIODevice::ReadOnly))
+            uiScale = QJsonDocument::fromJson(prefs.readAll()).object().value(QStringLiteral("uiScale")).toInt();
+        if (uiScale == 100 || uiScale == 125 || uiScale == 150) {
+            qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
+            qputenv("QT_SCALE_FACTOR", QByteArray::number(uiScale / 100.0));
+            veyra::log::info("app", std::format("interface scale fixed at {}%", uiScale));
+        } else {
+            uiScale = 0;
+        }
+    }
     QApplication app(argc, argv);
+    app.setProperty("veyraLogFile", QString::fromStdWString(logPath.wstring()));
+    app.setProperty("veyraUiScale", uiScale);
+    // Frameless windows have no menu, yet DefWindowProc turns a bare Alt tap into
+    // SC_KEYMENU and enters modal menu tracking: the next mouse click is eaten and
+    // input stalls for about two seconds. Qt has already handled the key itself
+    // (Alt+Enter etc. are unaffected), so the system menu loop is refused.
+    struct NoKeyMenuFilter final : QAbstractNativeEventFilter {
+        bool nativeEventFilter(const QByteArray& type, void* message, qintptr* result) override {
+            if (type != "windows_generic_MSG") return false;
+            const auto* msg = static_cast<const MSG*>(message);
+            if (msg->message != WM_SYSCOMMAND || (msg->wParam & 0xFFF0) != SC_KEYMENU) return false;
+            veyra::log::info("ui-window", std::format("system key menu refused (lParam=0x{:X})", unsigned(msg->lParam)));
+            if (result) *result = 0;
+            return true;
+        }
+    };
+    static NoKeyMenuFilter noKeyMenu;
+    app.installNativeEventFilter(&noKeyMenu);
     app.setApplicationName(QStringLiteral("Veyra"));
     app.setOrganizationName(QStringLiteral("Veyra"));
     veyra::log::info("app", "Veyra QML session started");
@@ -490,6 +583,24 @@ int main(int argc, char** argv) {
     }
     if (testSize.isValid()) window->resize(testSize);
 
+    // Fullscreen must own the whole monitor. Without telling the shell, the taskbar
+    // stayed above the fullscreen picture on some systems (field report with the
+    // control pill showing behind it): the shell decides "fullscreen application"
+    // from its own heuristics, and the owned control window defeats them.
+    // ITaskbarList2::MarkFullscreenWindow states it explicitly.
+    QObject::connect(window, &QWindow::visibilityChanged, &app, [window](QWindow::Visibility visibility) {
+        const bool full = visibility == QWindow::FullScreen;
+        ITaskbarList2* taskbar = nullptr;
+        const HRESULT created = CoCreateInstance(CLSID_TaskbarList, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&taskbar));
+        HRESULT marked = created;
+        if (SUCCEEDED(created) && taskbar) {
+            if (SUCCEEDED(taskbar->HrInit()))
+                marked = taskbar->MarkFullscreenWindow(reinterpret_cast<HWND>(window->winId()), full ? TRUE : FALSE);
+            taskbar->Release();
+        }
+        veyra::log::info("qml-window", std::format("taskbar fullscreen mark={} hr=0x{:X}", full, unsigned(marked)));
+    });
+
     // Closing the window must run the engine's own teardown, not just end the loop.
     // A test harness that hard-kills the process (Stop-Process -Force) loses every
     // log line still in the file sink's 64 KB buffer - including the ones a test is
@@ -562,32 +673,9 @@ int main(int argc, char** argv) {
         if (syncVideoGeometry(window, host))
             syncVideoCovers(window, host, sceneInsetFraction(window));
     };
-    // V held shows the original picture on the professional page (AppShell: the
-    // OriginalHold key, engine.comparison(1, false) until release). A Shortcut only
-    // sees the press, so the window's key events are watched here. Auto-repeat is
-    // ignored, and a focused text field keeps its V.
-    struct HoldOriginalFilter : QObject {
-        QQuickWindow* window; ui::QmlPlayerBridge* bridge; bool held = false;
-        HoldOriginalFilter(QQuickWindow* w, ui::QmlPlayerBridge* b) : window(w), bridge(b) {}
-        bool eventFilter(QObject*, QEvent* e) override {
-            const auto t = e->type();
-            if (t == QEvent::FocusOut && held) { held = false; bridge->holdOriginal(false); return false; }
-            if (t != QEvent::KeyPress && t != QEvent::KeyRelease) return false;
-            auto* k = static_cast<QKeyEvent*>(e);
-            if (k->key() != Qt::Key_V || k->isAutoRepeat() || k->modifiers() != Qt::NoModifier) return false;
-            const bool press = t == QEvent::KeyPress;
-            if (press) {
-                if (window->property("page").toString() != QLatin1String("pro")) return false;
-                if (auto* f = window->activeFocusItem(); f && f->inherits("QQuickTextInput")) return false;
-                if (auto* f = window->activeFocusItem(); f && f->inherits("QQuickTextEdit")) return false;
-            }
-            if (press == held) return false;
-            held = press;
-            bridge->holdOriginal(press);
-            return true;
-        }
-    };
-    window->installEventFilter(new HoldOriginalFilter(window, &bridge));
+    // Hold-to-compare (V by default) is the bridge's application event filter:
+    // the key is rebindable (设置 → 快捷键) and can be switched off (显示 →
+    // 按住 V 查看原画). A second hard-wired V filter here used to override both.
     QObject::connect(window, &QQuickWindow::afterAnimating, &app, follow);
     QObject::connect(&bridge, &ui::QmlPlayerBridge::snapshotChanged, &app, follow);
     // The first frame may come before the page layout settles; one pass after the

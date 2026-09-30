@@ -7,11 +7,14 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+#include <chrono>
 #include <cstring>
+#include <emmintrin.h>
 #include <format>
 
 #include "veyra/Log.h"
 #include "veyra/media/FFmpegVideoDecoder.h"
+#include "veyra/pipeline/CaptureUploadFrame.h"
 
 namespace veyra::source {
 
@@ -61,8 +64,61 @@ struct CaptureCompressedDecoder::Impl {
     bool depthWarningLogged = false;
     std::string error;
     uint64_t frames = 0, failures = 0, fallbacks = 0;
+    double decodeMs = 0, convertMs = 0;
 
     ~Impl() { close(); }
+
+    // MJPEG: full-range 4:2:2 / 4:2:0 planes of the target size go straight to
+    // NV12 (luma row copies; chroma rows averaged in pairs for 4:2:2, then
+    // interleaved). swscale's generic scaler did the same reformat several
+    // times slower, and this writer never reads the target, so the target may
+    // be write-combined GPU upload memory.
+    bool planarToNv12(const AVFrame& frame, AVFrame* target)
+    {
+        const bool is422 = frame.format == AV_PIX_FMT_YUVJ422P || frame.format == AV_PIX_FMT_YUV422P;
+        const bool is420 = frame.format == AV_PIX_FMT_YUVJ420P || frame.format == AV_PIX_FMT_YUV420P;
+        if (codec != CaptureCodec::Mjpeg || !(is422 || is420) || frame.width != int(width) || frame.height != int(height) ||
+            width % 2 || height % 2 || !frame.data[0] || !frame.data[1] || !frame.data[2] || !target->data[0] || !target->data[1] ||
+            target->linesize[0] < int(width) || target->linesize[1] < int(width)) return false;
+        for (unsigned y = 0; y < height; ++y)
+            std::memcpy(target->data[0] + ptrdiff_t(y) * target->linesize[0], frame.data[0] + ptrdiff_t(y) * frame.linesize[0], width);
+        const unsigned chromaWidth = width / 2;
+        for (unsigned row = 0; row < height / 2; ++row) {
+            const unsigned sourceRow = is422 ? row * 2 : row;
+            const uint8_t* u0 = frame.data[1] + ptrdiff_t(sourceRow) * frame.linesize[1];
+            const uint8_t* v0 = frame.data[2] + ptrdiff_t(sourceRow) * frame.linesize[2];
+            const uint8_t* u1 = is422 ? u0 + frame.linesize[1] : u0;
+            const uint8_t* v1 = is422 ? v0 + frame.linesize[2] : v0;
+            uint8_t* out = target->data[1] + ptrdiff_t(row) * target->linesize[1];
+            unsigned x = 0;
+            for (; x + 16 <= chromaWidth; x += 16) {
+                const __m128i u = _mm_avg_epu8(_mm_loadu_si128(reinterpret_cast<const __m128i*>(u0 + x)), _mm_loadu_si128(reinterpret_cast<const __m128i*>(u1 + x)));
+                const __m128i v = _mm_avg_epu8(_mm_loadu_si128(reinterpret_cast<const __m128i*>(v0 + x)), _mm_loadu_si128(reinterpret_cast<const __m128i*>(v1 + x)));
+                _mm_storeu_si128(reinterpret_cast<__m128i*>(out + 2 * x), _mm_unpacklo_epi8(u, v));
+                _mm_storeu_si128(reinterpret_cast<__m128i*>(out + 2 * x + 16), _mm_unpackhi_epi8(u, v));
+            }
+            for (; x < chromaWidth; ++x) {
+                out[2 * x] = uint8_t((unsigned(u0[x]) + u1[x] + 1) >> 1);
+                out[2 * x + 1] = uint8_t((unsigned(v0[x]) + v1[x] + 1) >> 1);
+            }
+        }
+        pipeline::sampleCaptureUploadProxy(*target, frame.data[0], size_t(frame.linesize[0]), false);
+        return true;
+    }
+
+    void copyFrameProperties(const AVFrame& frame, AVFrame* target, bool targetFullRange)
+    {
+        target->pts = frame.pts;
+        target->best_effort_timestamp = frame.best_effort_timestamp;
+        target->pkt_dts = frame.pkt_dts;
+        target->duration = frame.duration;
+        target->time_base = frame.time_base;
+        target->flags = frame.flags;
+        target->colorspace = frame.colorspace;
+        target->color_primaries = frame.color_primaries;
+        target->color_trc = frame.color_trc;
+        target->color_range = targetFullRange ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
+    }
 
     void close()
     {
@@ -74,6 +130,7 @@ struct CaptureCompressedDecoder::Impl {
         hardwareRequested = hardware = hardwareChecked = waiting = false;
         depthWarningLogged = false;
         frames = failures = fallbacks = 0;
+        decodeMs = convertMs = 0;
         error.clear();
     }
 
@@ -97,6 +154,9 @@ struct CaptureCompressedDecoder::Impl {
                     captureCodecKey(codec), description->comp[0].depth));
             }
         }
+        if (planarToNv12(frame, target)) { copyFrameProperties(frame, target, true); return true; }
+        // swscale cannot supply the analysis pixels of an upload-backed target.
+        pipeline::useCaptureUploadCpuPlanes(*target);
         sws = sws_getCachedContext(sws, frame.width, frame.height, sourceFormat,
             int(width), int(height), AV_PIX_FMT_NV12, SWS_BILINEAR, nullptr, nullptr, nullptr);
         if (sws == nullptr) {
@@ -118,16 +178,7 @@ struct CaptureCompressedDecoder::Impl {
             ++failures;
             return false;
         }
-        target->pts = frame.pts;
-        target->best_effort_timestamp = frame.best_effort_timestamp;
-        target->pkt_dts = frame.pkt_dts;
-        target->duration = frame.duration;
-        target->time_base = frame.time_base;
-        target->flags = frame.flags;
-        target->colorspace = frame.colorspace;
-        target->color_primaries = frame.color_primaries;
-        target->color_trc = frame.color_trc;
-        target->color_range = targetFullRange ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
+        copyFrameProperties(frame, target, targetFullRange != 0);
         return true;
     }
 };
@@ -204,6 +255,11 @@ bool CaptureCompressedDecoder::decode(const uint8_t* data, size_t bytes, int64_t
     // Two attempts at most: the second one re-sends the same payload after a
     // hardware decoder whose first frame cannot be imported has been replaced
     // by the software decoder.
+    const auto started = std::chrono::steady_clock::now();
+    const auto average = [](double& value, std::chrono::steady_clock::time_point from, std::chrono::steady_clock::time_point to) {
+        const double ms = std::chrono::duration<double, std::milli>(to - from).count();
+        value = value > 0 ? value * 0.95 + ms * 0.05 : ms;
+    };
     for (int attempt = 0; attempt < 2; ++attempt) {
         if (!receiveOnly) {
             AVPacket* packet = av_packet_alloc();
@@ -266,7 +322,10 @@ bool CaptureCompressedDecoder::decode(const uint8_t* data, size_t bytes, int64_t
             p.error.clear();
             return true;
         }
+        const auto decoded = std::chrono::steady_clock::now();
         if (!p.convertToNv12(*frame, nv12Target)) return false;
+        average(p.decodeMs, started, decoded);
+        average(p.convertMs, decoded, std::chrono::steady_clock::now());
         *out = nv12Target;
         hardware = false;
         ++p.frames;
@@ -292,6 +351,8 @@ const std::string& CaptureCompressedDecoder::lastError() const { return p_->erro
 uint64_t CaptureCompressedDecoder::framesDecoded() const { return p_->frames; }
 uint64_t CaptureCompressedDecoder::decodeFailures() const { return p_->failures; }
 uint64_t CaptureCompressedDecoder::hardwareFallbacks() const { return p_->fallbacks; }
+double CaptureCompressedDecoder::decodeMsAverage() const { return p_->decodeMs; }
+double CaptureCompressedDecoder::convertMsAverage() const { return p_->convertMs; }
 void CaptureCompressedDecoder::close() { p_->close(); }
 
 } // namespace veyra::source

@@ -19,6 +19,9 @@ namespace pipeline = veyra::pipeline;
 struct SourceOpenDesc {
     std::wstring path;
     bool preferHardwareDecode = true; // hardware first, software fallback explicit
+    // User setting "强制硬解": a file whose hardware decoder cannot open fails
+    // with a clear error instead of falling back to software decode.
+    bool requireHardwareDecode = false;
     void* d3d12Device = nullptr;      // ID3D12Device* when hardware decode is wanted
     void* d3d12Queue = nullptr;       // ID3D12CommandQueue*
     // Adapter the D3D12 device lives on. The D3D11VA path creates its own

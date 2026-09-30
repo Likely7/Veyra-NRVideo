@@ -4,7 +4,7 @@ namespace veyra::pipeline {
 bool NrInstance::create(ID3D12Device* device, uint32_t width, uint32_t height,
                         uint32_t fullWidth, uint32_t fullHeight,
                         ID3D12Resource* zeroMotion, ID3D12Resource* zeroDepth,
-                        ID3D12Resource* borrowedInput) {
+                        ID3D12Resource* borrowedInput, ID3D12Resource* borrowedMotion) {
     if (device == nullptr || width == 0 || height == 0 || zeroMotion == nullptr || zeroDepth == nullptr) return false;
     if (fullWidth == 0 || fullHeight == 0) return false;
     close();
@@ -20,7 +20,7 @@ bool NrInstance::create(ID3D12Device* device, uint32_t width, uint32_t height,
     // A borrowed input keeps the graph's original aliasing behaviour (no copy,
     // no downsample); otherwise the layer owns an NR-extent input.
     inputIsBorrowed_ = borrowedInput != nullptr;
-    if (borrowedInput != nullptr) input_ = borrowedInput;   // borrowed: never released here
+    if (borrowedInput != nullptr) input_ = borrowedInput;   // ComPtr holds its own reference to the graph's input.
     else input_ = makeTexture(device, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, true);
     proxy_ = makeTexture(device, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, true);
     neural_ = makeTexture(device, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, true);
@@ -30,20 +30,25 @@ bool NrInstance::create(ID3D12Device* device, uint32_t width, uint32_t height,
     // so an unused allocation there is harmless but wasteful, hence the caller
     // telling us the extent rather than us guessing the role.
     outputFull_ = makeTexture(device, fullWidth, fullHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, true);
-    if (!input_ || !proxy_ || !neural_ || !finalRgba_ || !residual_ || !outputFull_) { close(); return false; }
+    if(borrowedMotion)motion_=borrowedMotion;
+    else motion_=makeTexture(device,width,height,DXGI_FORMAT_R16G16_FLOAT,true);
+    if (!input_ || !proxy_ || !neural_ || !finalRgba_ || !residual_ || !outputFull_ || !motion_) { close(); return false; }
     historyValid = false;
     return true;
 }
 
 void NrInstance::close() {
     temporal_.close();
-    if (!inputIsBorrowed_) input_.Reset();
+    // Both owned and borrowed inputs are ComPtrs. Release this reference in
+    // either case; the graph retains its own reference to a borrowed input.
+    input_.Reset();
     inputIsBorrowed_ = false;
     proxy_.Reset();
     neural_.Reset();
     finalRgba_.Reset();
     residual_.Reset();
     outputFull_.Reset();
+    motion_.Reset();
     baseFull_ = nullptr;
     fullTarget_ = nullptr;
     zeroMotion_ = zeroDepth_ = nullptr;

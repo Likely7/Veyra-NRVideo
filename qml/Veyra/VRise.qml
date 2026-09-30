@@ -10,6 +10,25 @@ import QtQuick
 
 Item {
     id: rise
+    // M31 / M32: a tab or a settings section redraws its cards one after
+    // another - opacity 0 -> 1 and y +dy -> 0, each `delay` later than the last
+    // (pages-pro.js 460 ms / i*30 / y10; pages-b.js 480 ms / i*40 / y12). Items
+    // opt in with a `motionDy` property (VAccordion, VGroup). Created per item
+    // by the page (Component { VRise.Stagger {} }) and destroyed when done.
+    component Stagger: SequentialAnimation {
+        id: st
+        property Item target
+        property int delay: 0
+        property int span: 460
+        property real dy: 10
+        ScriptAction { script: { st.target.opacity = 0; st.target.motionDy = st.dy } }
+        PauseAnimation { duration: st.delay }
+        ParallelAnimation {
+            NumberAnimation { target: st.target; property: "opacity"; to: 1; duration: st.span; easing.bezierCurve: Theme.springSoft }
+            NumberAnimation { target: st.target; property: "motionDy"; to: 0; duration: st.span; easing.bezierCurve: Theme.spring }
+        }
+        onFinished: destroy()
+    }
     required property Item target
     property int d: 0
     property Item page: parent

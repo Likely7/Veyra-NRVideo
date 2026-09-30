@@ -139,6 +139,7 @@ bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,ID
         p.maxInterpolations=unlock.maxInterpolations;
         veyra::log::info("xess-mfg",std::format("unlock requestedGenerated={} applied={} identityVerified={} recognisedBuild={}",
             p.requestedGenerated,unlock.applied,unlock.identityVerified,unlock.recognisedBuild));
+        log::info("xess-mfg",std::format("unlock detail={}",narrowDetail(unlock.detail)));
         if(!unlock.applied){
             log::error("xess-mfg",std::format("unlock unavailable for {}X request; keeping stock presentation",p.requestedGenerated+1));
             return false;
@@ -174,11 +175,9 @@ bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,ID
     }
     xefg_swapchain_d3d12_init_params_t init{};init.maxInterpolatedFrames=p.requestedGenerated>0?p.requestedGenerated:1;init.uiMode=XEFG_SWAPCHAIN_UI_MODE_AUTO;
     xefg_swapchain_properties_t properties{};
-    // If the present sink already owns a window swapchain (the retained AMD
-    // proxy after an FSR session), wrap it instead of creating a second one.
-    // DXGI refuses a second flip-model swapchain on an occupied HWND, which is
-    // exactly why switching FSR -> XeSS used to fail with Init=-17. The
-    // wrapper becomes the swapchain the sink presents through.
+    // The API can wrap a caller-owned native swapchain if one is supplied.
+    // Veyra's sink supplies an empty pointer after releasing the old backend;
+    // independent FSR dispatch never creates or retains an HWND swapchain.
     DXGI_SWAP_CHAIN_DESC1 existingDesc{};
     IDXGISwapChain3* existing=swapchain!=nullptr?*swapchain:nullptr;
     const bool wrapExisting=existing!=nullptr&&SUCCEEDED(existing->GetDesc1(&existingDesc));
