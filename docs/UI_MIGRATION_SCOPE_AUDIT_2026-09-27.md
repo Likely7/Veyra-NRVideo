@@ -2,8 +2,8 @@
 
 审计日期：2026-09-27
 审计分支：`codex/ui-qml-migration-20260925`
-审计 HEAD：`babebbb`
-`main`：`df41580`
+审计 HEAD：`53a2d31c6b34f74b7b6d2953ee2caaec63d44e1d`
+`main`：`df41580f7fa0d2b26718f355640470e8cb94b324`
 
 ## 结论
 
@@ -149,12 +149,19 @@ R5.3 **未攻克、未提交、未打标签，且不再属于 2.0.0 UI 迁移队
 - baseline 与 guard 必须已经 tracked 且 Git 工作树 clean。两份控制文件任一未纳入 Git 或被修改，直接停止，不能继续构建或测试；
 - 继续冻结已有 engine/source/pipeline/sink/media/shader/CMake/旧 Win32 dirty 内容，新增越界路径和冻结 hash 变化仍直接失败。
 
-这项加固会先要求把当前审计脚本与 baseline 做一次本地提交，提交不等于 merge/push/release；在提交完成并重新验证前，U0 为未完成，U2–U6 不得启动。
+这项加固已通过本地控制提交 `53a2d31c6b34f74b7b6d2953ee2caaec63d44e1d` 完成；该提交不等于 merge/push/release。重新验证后 U0 已通过，U2–U6 仍不得跳阶段执行。
 
 ## 五次审计：冻结历史构建残留并增加阶段复查
 
-在准备控制文件时发现，scope guard 曾整体忽略源码根目录的 `veyra_preset_library_tests/`、`veyra_qml_easing_tests/` 和 `veyra_qml_quick_tests`。这三个目录共有 405 个未跟踪文件，虽然是历史构建残留，却仍可能在无人值守期间被覆盖或新增；忽略它们会让冻结合同失真。现已移除该忽略，重新生成的 baseline 记录 582 个初始变更路径，其中 475 个越界路径被冻结，残留文件按各自 SHA-256 处理，不删除也不当作 QML 源码。
+在准备控制文件时发现，scope guard 曾整体忽略源码根目录的 `veyra_preset_library_tests/`、`veyra_qml_easing_tests/` 和 `veyra_qml_quick_tests`。这三个目录共有 405 个未跟踪文件，虽然是历史构建残留，却仍可能在无人值守期间被覆盖或新增；忽略它们会让冻结合同失真。现已移除该忽略，重新生成的 baseline 记录 582 个初始变更路径，其中 474 个越界路径被冻结，残留文件按各自 SHA-256 处理，不删除也不当作 QML 源码。
 
 方案同步增加阶段间复查：U0 后、U2 构建前后、entry contract 后、U3 结束后、U4 smoke 结束后都必须重新运行固定 root/branch/main 的 scope guard。阶段目录仍全部放在 `E:\项目\Veyra`，但构建和测试本身可能触发源码内生成物或脚本改动；任何冻结 hash、控制文件、分支或 main 指针变化都要在下一阶段前停止。这样旧的“开头检查一次、后面一路跑完”不能再把中途污染带进结果。
 
-当前控制文件尚未完成 tracked + clean 提交，因此 U0 仍是未完成；在提交并取得新的唯一 E 盘 guard 结果前，不得进入 U2。
+控制文件的本地提交链为 `3827a51`、`07a726b`、`094e5b4`、`2093a20`、`8187b73`、`53a2d31`；baseline 与 guard 已 tracked + clean。最终 U0 guard 结果写入 `E:\项目\Veyra\logs\ui-qml-migration-20260927\scope-guard\u0-final.json`：`status=pass`、`currentChanged=582`、`frozenChecked=474`、`failures=[]`。U1 只读 bridge 审计也已通过；U2–U6 仍未执行。
+
+## 当前阶段状态（收口后的唯一活动状态）
+
+- U0：**通过**。控制文件、分支、main 指针和冻结路径均已复核。
+- U1：**通过**。bridge/facade 只读盘点完成，缺口已登记；没有为 UI 修改后端链路。
+- U2–U6：**未执行**。下一轮只能从 U2 开始，必须创建新的 E 盘 build/staging/log/TEMP 并按阶段复查 guard。
+- R5.3：**未攻克**，已经移出 2.0.0 UI 队列；任何 R5.3、delivery、性能、采集或导出结果都不能推进 U2–U6。

@@ -3,7 +3,7 @@
 ## 审计身份
 
 - 分支：`codex/ui-qml-migration-20260925`
-- HEAD：`babebbb`
+- HEAD：`53a2d31c6b34f74b7b6d2953ee2caaec63d44e1d`
 - 范围：`include/veyra/ui/QmlPlayerBridge.h`、`src/ui/QmlPlayerBridge.cpp`、`apps/veyra-qml/main.cpp`、`qml/Veyra/**`
 - 方法：只读检索 Q_PROPERTY、Q_INVOKABLE、信号和 QML 消费点；没有修改 engine、pipeline、source、sink、media、shader 或 CMake。
 
