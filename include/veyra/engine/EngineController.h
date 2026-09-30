@@ -133,6 +133,14 @@ public:
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
     void openMoonlight(HWND, source::MoonlightConnectDesc, PlayerOptions);
+    // Input for the running Moonlight session; all are no-ops when none is streaming.
+    void moonlightController(const remoteplay::ControllerState&);
+    remoteplay::ControllerFeedback moonlightFeedback();
+    void moonlightKey(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down);
+    void moonlightMouseMove(int dx, int dy);
+    void moonlightMouseButton(int button, bool down);
+    void moonlightScroll(int delta, bool horizontal);
+    void moonlightReleaseInput();
 #endif
     void stop();
     void comparison(int mode,bool base,float split=.5f){comparisonMode_=mode;comparisonBase_=base;comparisonSplit_=std::clamp(split,0.0f,1.0f);}

@@ -13,7 +13,7 @@
 | S0 | 依赖固定（`scripts/moonlight/dependency-lock.json` + 校验脚本）、CMake 开关、许可记录 | 完成 |
 | S1 | 协议层（Qt 无关）：XML、加密、HTTP(S)、主机请求、配对、身份存储 | 完成，离线测试 69 项通过 |
 | S2 | 会话来源：`LiStartConnection`、视频解码、音频、遥测、引擎接入 | 代码完成（S2a），只做了编译与离线检查，未连过任何主机 |
-| S3 | 输入：手柄、键鼠捕获、保留键 | 未开始 |
+| S3 | 输入：手柄、键鼠捕获、保留键 | 代码完成，转换逻辑有离线测试（130 项），未连过主机；接入界面在 S4 |
 | S4 | 前端：首页卡片、PC 串流页、配对对话框、设置、串流中 UI | 未开始 |
 | S5 | 质量：HDR、AV1、丢包与重连、稳定性 | 未开始 |
 
@@ -50,6 +50,16 @@
 - 构建陷阱（已处理）：① Moonlight 目标必须放在 `CMAKE_MSVC_RUNTIME_LIBRARY`（静态 CRT）设置之后，否则与 Qt 目标链接时 `msvcprt`/`libcpmt` 重复定义；② 带 Moonlight 的 `veyra_qml_ui` 链接行超过响应文件阈值，`link.exe` 按 ANSI 读响应文件，`E:\项目` 下的 Qt 库路径打不开。本机构建用 `C:eyra-deps\qt-veyra`（指向 Qt 的目录联接）作前缀；这是本机环境，不进仓库。
 - 验证：`veyra_moonlight_protocol_tests` 87 项通过；整个 `veyra_qml_ui` 链接成功；`veyra_qml_data_tests`、`veyra_qml_easing_tests`、`veyra_ui_contract_tests`、`veyra_effect_chain_tests`、`veyra_repair_contract_tests`、`veyra_preset_library_tests` 通过。
 - **未验证**：任何真实串流（连接、解码、音频、HDR、丢包恢复）；解码流水线还没有离线单测；`connect()` 会阻塞引擎线程直到启动完成，首帧最多等 20 秒；软解回落只出 8 位，HDR 需要硬解；手柄震动与输入是空实现（S3）；断线重连未做（S5）。
+
+## S3 记录（输入）
+
+- 手柄：沿用 PS5 用的 SDL 手柄读取（`ControllerInput`），`moonlight::mapPad` 转成 GameStream 帧：按位置映射（南键=A），摇杆 Y 取反（SDL 向下为正，主机向上为正；-32768 不溢出），扳机 0–255；状态变化才发送，失焦或设备丢失发全零以释放。只有 1 号手柄；首次发送前发一次到达事件（Xbox 类型，模拟量扳机 + 震动），旧主机回"不支持"也能工作。
+- 震动：主机的 rumble 回调存下来，`takeFeedback()` 交给 SDL；因为主机只在变化时通知、SDL 的震动有时长，非零值每 2 秒重发一次。
+- 键鼠：`moonlight::InputRouter` 把窗口消息转成主机事件（Win32 虚拟键码加 0x8000；Shift/Ctrl/Alt 按扫描码与扩展位分左右；关闭 Num Lock 的小键盘导航键按小键盘键发送；字符消息与 Alt 菜单被吞掉；长按重复由主机自己处理）。`MoonlightInputCapture`（Qt）用原生事件过滤器在 Qt 之前接管，鼠标用原始相对位移，光标隐藏并限制在窗口内，失焦自动释放并让主机松开所有键、鼠标键与手柄。
+- 保留键：Ctrl+Alt+Shift+Z 释放捕获，+Q 结束串流，+S 切换统计；这些键不会发给主机。
+- 未捕获：Windows 键、Alt+Tab、Ctrl+Alt+Del 仍归系统（Moonlight 客户端用低级钩子，这里先不用）。
+- 不含：陀螺仪与触摸板、电池状态、扳机震动、手柄退出组合键、多手柄。
+- 发送都在 `libMutex` 下检查 `streaming`，和 `LiStopConnection` 不会重叠。
 
 ## 下一步
 

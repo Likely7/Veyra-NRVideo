@@ -21,7 +21,9 @@
 #include <thread>
 
 #include "veyra/moonlight/Client.h"
+#include "veyra/moonlight/InputMap.h"
 #include "veyra/moonlight/StreamConfig.h"
+#include "veyra/remoteplay/Types.h"
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/source/IFrameSource.h"
 
@@ -110,6 +112,20 @@ public:
     void setAudioSync(unsigned mode, int offset) { audio_.setSync(mode, offset); }
     void videoPresented(double ptsMs, int64_t host100ns);
     void videoReset(bool resetAudio = true) { audio_.videoReset(resetAudio); }
+
+    // --- input: callable from any thread, ignored unless the stream is up ---------------------
+    // Controller 0 only. The pad state is sent when it changes; a device or focus loss (an
+    // inactive state) releases everything on the host.
+    void controller(const remoteplay::ControllerState& state);
+    // Rumble the host asked for (and the last non-zero value again every 2 s, since the host
+    // only reports changes and SDL rumble has to be renewed).
+    remoteplay::ControllerFeedback takeFeedback();
+    void keyboard(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down);
+    void mouseMove(int dx, int dy);
+    void mouseButton(int button, bool down);   // 1 left, 2 middle, 3 right, 4 X1, 5 X2
+    void scroll(int delta, bool horizontal);   // WHEEL_DELTA units (120 per notch)
+    // Releases every key, mouse button and the pad on the host (capture lost, focus lost, end).
+    void releaseInput();
 
     // The C callbacks of moonlight-common-c land here (static trampolines in the .cpp).
     struct Callbacks;

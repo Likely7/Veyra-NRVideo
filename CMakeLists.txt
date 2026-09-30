@@ -787,6 +787,9 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # AUTOMOC: QmlPlayerBridge declares Q_OBJECT, so its meta-object has to be
   # generated. Without this the library links but every signal is unresolved.
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
+  if(VEYRA_ENABLE_MOONLIGHT)
+    target_sources(veyra_qml_bridge PRIVATE src/ui/MoonlightInputCapture.cpp include/veyra/ui/MoonlightInputCapture.h)
+  endif()
   target_compile_features(veyra_qml_bridge PRIVATE cxx_std_20)
   target_include_directories(veyra_qml_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src ${FFMPEG_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/ui)

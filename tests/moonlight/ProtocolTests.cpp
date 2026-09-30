@@ -24,6 +24,8 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #include "veyra/moonlight/Client.h"
 #include "veyra/moonlight/Crypto.h"
@@ -31,6 +33,8 @@
 #include "veyra/moonlight/IdentityStore.h"
 #include "veyra/moonlight/Pairing.h"
 #include "veyra/moonlight/StreamConfig.h"
+#include "veyra/moonlight/InputMap.h"
+#include "veyra/moonlight/InputRouter.h"
 #include "veyra/moonlight/Xml.h"
 
 using namespace veyra::moonlight;
@@ -548,6 +552,114 @@ void protocolTests() {
     } catch (const std::exception& e) { ++g_failures; std::printf("FAIL exception: %s\n", e.what()); }
 }
 
+struct RecordingSink final : InputSink {
+    struct Key { uint32_t vk, scan; bool extended, down; };
+    std::vector<Key> keys;
+    std::vector<std::pair<int, bool>> buttons;
+    std::vector<std::pair<int, int>> moves, scrolls;
+    void key(uint32_t vk, uint32_t scan, bool extended, bool down) override { keys.push_back({vk, scan, extended, down}); }
+    void mouseMove(int dx, int dy) override { moves.emplace_back(dx, dy); }
+    void mouseButton(int button, bool down) override { buttons.emplace_back(button, down); }
+    void scroll(int delta, bool horizontal) override { scrolls.emplace_back(delta, horizontal ? 1 : 0); }
+};
+
+LPARAM keyParam(unsigned scan, bool extended, bool up = false) {
+    return LPARAM(1u | (scan << 16) | (extended ? 1u << 24 : 0u) | (up ? (3u << 30) : 0u));
+}
+
+void routerTests() {
+    RecordingSink sink;
+    InputRouter router(sink);
+    check(router.message(WM_KEYDOWN, 'A', keyParam(0x1E, false)) && sink.keys.size() == 1 && sink.keys[0].vk == 'A' && sink.keys[0].down, "a key press reaches the sink and is consumed");
+    check(router.message(WM_KEYUP, 'A', keyParam(0x1E, false, true)) && sink.keys.size() == 2 && !sink.keys[1].down, "and its release");
+    check(router.message(WM_CHAR, 'a', 0) && sink.keys.size() == 2, "characters are consumed but not forwarded");
+    check(router.message(WM_SYSCOMMAND, SC_KEYMENU, 0) && !router.message(WM_SYSCOMMAND, SC_CLOSE, 0), "the Alt menu is swallowed, other system commands are not");
+    check(!router.message(WM_PAINT, 0, 0) && !router.message(WM_SIZE, 0, 0), "unrelated messages pass through");
+
+    check(router.message(WM_LBUTTONDOWN, MK_LBUTTON, 0) && router.message(WM_LBUTTONUP, 0, 0) && sink.buttons.size() == 2 && sink.buttons[0] == std::make_pair(1, true) && sink.buttons[1] == std::make_pair(1, false), "left button");
+    router.message(WM_RBUTTONDOWN, MK_RBUTTON, 0);
+    router.message(WM_MBUTTONDOWN, MK_MBUTTON, 0);
+    router.message(WM_XBUTTONDOWN, MAKEWPARAM(0, XBUTTON1), 0);
+    router.message(WM_XBUTTONDOWN, MAKEWPARAM(0, XBUTTON2), 0);
+    check(sink.buttons[2].first == 3 && sink.buttons[3].first == 2 && sink.buttons[4].first == 4 && sink.buttons[5].first == 5, "right, middle and the two side buttons");
+    router.message(WM_LBUTTONDBLCLK, MK_LBUTTON, 0);
+    check(sink.buttons.back() == std::make_pair(1, true), "a double click is another press");
+    check(router.message(WM_MOUSEMOVE, 0, MAKELPARAM(10, 10)) && sink.moves.empty(), "window mouse moves are consumed; movement comes from raw input");
+    router.rawMouse(7, -3);
+    check(sink.moves.size() == 1 && sink.moves[0] == std::make_pair(7, -3), "raw movement is forwarded");
+    router.message(WM_MOUSEWHEEL, MAKEWPARAM(0, WORD(short(-240))), 0);
+    router.message(WM_MOUSEHWHEEL, MAKEWPARAM(0, WORD(short(120))), 0);
+    check(sink.scrolls.size() == 2 && sink.scrolls[0] == std::make_pair(-240, 0) && sink.scrolls[1] == std::make_pair(120, 1), "wheel and horizontal wheel");
+
+    // Reserved hotkey: Ctrl+Alt+Shift+Z is taken by the app; the modifiers still reached the host
+    // (the session releases them when the capture ends), the Z never does.
+    RecordingSink other;
+    InputRouter hotkeys(other);
+    hotkeys.message(WM_KEYDOWN, 0x11, keyParam(0x1D, false));
+    hotkeys.message(WM_SYSKEYDOWN, 0x12, keyParam(0x38, false));
+    hotkeys.message(WM_KEYDOWN, 0x10, keyParam(0x2A, false));
+    check(hotkeys.takeReserved() == Reserved::None, "modifiers alone are not a hotkey");
+    check(hotkeys.message(WM_KEYDOWN, 'Z', keyParam(0x2C, false)) && hotkeys.takeReserved() == Reserved::ReleaseCapture, "Ctrl+Alt+Shift+Z is reported");
+    check(hotkeys.takeReserved() == Reserved::None, "and only once");
+    const size_t before = other.keys.size();
+    hotkeys.message(WM_KEYUP, 'Z', keyParam(0x2C, false, true));
+    check(other.keys.size() == before, "the hotkey's key-up is not forwarded either");
+    bool zSent = false;
+    for (const auto& k : other.keys) zSent = zSent || k.vk == 'Z';
+    check(!zSent, "the hotkey key itself never reaches the host");
+    hotkeys.reset();
+    hotkeys.message(WM_KEYDOWN, 'Z', keyParam(0x2C, false));
+    check(other.keys.back().vk == 'Z' && hotkeys.takeReserved() == Reserved::None, "after a reset Z is an ordinary key");
+}
+
+void inputTests() {
+    using veyra::remoteplay::ControllerState;
+    {
+        ControllerState s;
+        s.inputActive = true;
+        s.buttons = ControllerState::Cross | ControllerState::Triangle | ControllerState::L1 | ControllerState::Options | ControllerState::Share | ControllerState::Down;
+        s.l2 = 200; s.r2 = 7; s.leftX = 1000; s.leftY = 32767; s.rightX = -5; s.rightY = -32768;
+        const PadFrame f = mapPad(s);
+        check(f.buttons == (kPadA | kPadY | kPadLeftBumper | kPadStart | kPadBack | kPadDown), "pad buttons keep the positional layout");
+        check(f.leftTrigger == 200 && f.rightTrigger == 7, "triggers pass through");
+        check(f.leftX == 1000 && f.leftY == -32767, "stick Y is flipped (SDL down-positive to host up-positive)");
+        check(f.rightX == -5 && f.rightY == 32767, "the most negative stick value flips without overflow");
+        s.inputActive = false;
+        check(mapPad(s) == PadFrame{}, "an inactive pad (focus or device lost) releases everything");
+        check(flipAxis(0) == 0 && flipAxis(INT16_MAX) == -INT16_MAX, "flipAxis is symmetric");
+    }
+    {
+        check(hostKey('A', 0x1E, false).code == hostCode('A'), "letters keep their virtual-key code with bit 15 set");
+        check(hostKey(0x10, 0x2A, false).code == hostCode(0xA0) && hostKey(0x10, 0x36, false).code == hostCode(0xA1), "VK_SHIFT resolves by scan code to left or right");
+        check(hostKey(0x11, 0x1D, false).code == hostCode(0xA2) && hostKey(0x11, 0x1D, true).code == hostCode(0xA3), "VK_CONTROL resolves by the extended flag");
+        check(hostKey(0x12, 0x38, false).code == hostCode(0xA4) && hostKey(0x12, 0x38, true).code == hostCode(0xA5), "VK_MENU resolves by the extended flag (AltGr is right Alt)");
+        check(hostKey(0x10, 0x2A, false).modifier == kModShift && hostKey(0x5B, 0x5B, true).modifier == kModMeta && hostKey('A', 0x1E, false).modifier == 0, "modifier bits");
+        check(hostKey(0x26, 0x48, false).code == hostCode(0x68), "keypad Up with Num Lock off is sent as Numpad8");
+        check(hostKey(0x26, 0x48, true).code == hostCode(0x26), "the arrow key stays an arrow key");
+        check(hostKey(0x2E, 0x53, false).code == hostCode(0x6E), "keypad Delete with Num Lock off is sent as the decimal key");
+    }
+    {
+        HeldKeys held;
+        const HostKey shift = hostKey(0x10, 0x2A, false), a = hostKey('A', 0x1E, false);
+        check(held.press(shift.code, shift.modifier) && held.modifiers() == kModShift, "shift goes down");
+        check(held.press(a.code, 0) && held.count() == 2, "a second key goes down");
+        check(!held.press(a.code, 0) && held.count() == 2, "auto-repeat of a held key is not a new press");
+        check(held.release(shift.code) && held.modifiers() == 0, "releasing shift clears the modifier");
+        check(!held.release(shift.code), "releasing a key that is not held does nothing");
+        held.clear();
+        check(held.count() == 0 && held.modifiers() == 0, "clear drops everything");
+    }
+    {
+        constexpr uint8_t all = kModShift | kModCtrl | kModAlt;
+        check(reservedHotkey('Z', all) == Reserved::ReleaseCapture, "Ctrl+Alt+Shift+Z releases the capture");
+        check(reservedHotkey('Q', all) == Reserved::Quit, "Ctrl+Alt+Shift+Q quits");
+        check(reservedHotkey('S', all) == Reserved::ToggleStats, "Ctrl+Alt+Shift+S toggles the stats");
+        check(reservedHotkey('Z', kModCtrl | kModAlt) == Reserved::None, "Ctrl+Alt+Z alone is forwarded to the host");
+        check(reservedHotkey('A', all) == Reserved::None, "other keys are forwarded");
+        check(clampDelta(100000) == 32767 && clampDelta(-100000) == -32767 && clampDelta(-3) == -3, "mouse deltas are clamped");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -555,6 +667,8 @@ int main() {
     cryptoTests();
     storeTests();
     streamConfigTests();
+    inputTests();
+    routerTests();
     protocolTests();
     std::printf("moonlight protocol tests: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

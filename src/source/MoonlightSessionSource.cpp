@@ -39,6 +39,14 @@ static_assert(moonlight::kFormatH264 == VIDEO_FORMAT_H264 && moonlight::kFormatH
 static_assert(moonlight::kServerH264 == SCM_H264 && moonlight::kServerHevc == SCM_HEVC && moonlight::kServerHevcMain10 == SCM_HEVC_MAIN10 &&
               moonlight::kServerAv1Main8 == SCM_AV1_MAIN8 && moonlight::kServerAv1Main10 == SCM_AV1_MAIN10,
               "SCM constants differ from moonlight-common-c");
+static_assert(moonlight::kPadUp == UP_FLAG && moonlight::kPadDown == DOWN_FLAG && moonlight::kPadLeft == LEFT_FLAG && moonlight::kPadRight == RIGHT_FLAG &&
+              moonlight::kPadStart == PLAY_FLAG && moonlight::kPadBack == BACK_FLAG && moonlight::kPadLeftStick == LS_CLK_FLAG && moonlight::kPadRightStick == RS_CLK_FLAG &&
+              moonlight::kPadLeftBumper == LB_FLAG && moonlight::kPadRightBumper == RB_FLAG && moonlight::kPadGuide == SPECIAL_FLAG &&
+              moonlight::kPadA == A_FLAG && moonlight::kPadB == B_FLAG && moonlight::kPadX == X_FLAG && moonlight::kPadY == Y_FLAG &&
+              moonlight::kPadTouchpad == TOUCHPAD_FLAG && moonlight::kPadMisc == MISC_FLAG,
+              "controller button flags differ from moonlight-common-c");
+static_assert(moonlight::kModShift == MODIFIER_SHIFT && moonlight::kModCtrl == MODIFIER_CTRL && moonlight::kModAlt == MODIFIER_ALT && moonlight::kModMeta == MODIFIER_META,
+              "keyboard modifier flags differ from moonlight-common-c");
 
 namespace {
 
@@ -160,6 +168,16 @@ struct MoonlightSessionSource::Impl {
     // The library allows its statistics calls only between LiStartConnection and LiStopConnection:
     // stats() holds this while it calls them, close() takes it to clear `streaming` first.
     std::mutex libMutex;
+    // Input state, guarded by libMutex as well: a send must not overlap LiStopConnection.
+    moonlight::HeldKeys keys;
+    unsigned mouseButtons = 0;            // bit per button 1..5
+    moonlight::PadFrame pad;
+    bool padArrived = false;
+    std::mutex feedbackMutex;
+    remoteplay::ControllerFeedback feedback;
+    bool feedbackPending = false;
+    uint16_t rumbleLow = 0, rumbleHigh = 0;
+    Clock::time_point feedbackSent{};
     std::mutex statsMutex;
     double hostLatencyMs = 0, receiveMs = 0, queueMs = 0, decodeMs = 0, receivedFps = 0, decodedFps = 0;
     std::chrono::steady_clock::time_point rateStart = Clock::now();
@@ -172,6 +190,20 @@ struct MoonlightSessionSource::Impl {
 };
 
 struct MoonlightSessionSource::Callbacks {
+    // Releases what is held on the host. The caller holds libMutex and has checked `streaming`.
+    static void releaseInputLocked(Impl& impl) {
+        for (int i = 0; i < impl.keys.count(); ++i)
+            LiSendKeyboardEvent(impl.keys.at(i), KEY_ACTION_UP, 0);
+        impl.keys.clear();
+        for (int button = 1; button <= 5; ++button)
+            if (impl.mouseButtons & (1u << button)) LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, button);
+        impl.mouseButtons = 0;
+        if (impl.padArrived && !(impl.pad == moonlight::PadFrame{})) {
+            LiSendMultiControllerEvent(0, int16_t(impl.desc.options.gamepadMask), 0, 0, 0, 0, 0, 0, 0);
+            impl.pad = {};
+        }
+    }
+
     // -- connection -------------------------------------------------------------------------
     static void stageStarting(int stage) { log::info("moonlight", std::format("stage starting: {}", LiGetStageName(stage))); }
     static void stageComplete(int stage) { log::info("moonlight", std::format("stage complete: {}", LiGetStageName(stage))); }
@@ -206,7 +238,15 @@ struct MoonlightSessionSource::Callbacks {
         while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
         if (!text.empty()) log::info("moonlight-lib", text);
     }
-    static void rumble(unsigned short, unsigned short, unsigned short) {}   // input/feedback: stage S3
+    static void rumble(unsigned short controller, unsigned short low, unsigned short high) {
+        if (controller != 0) return;
+        auto* self = g_active.load();
+        if (!self || !self->p_) return;
+        std::lock_guard lock(self->p_->feedbackMutex);
+        self->p_->rumbleLow = low;
+        self->p_->rumbleHigh = high;
+        self->p_->feedbackPending = true;
+    }
     static void connectionStatus(int status) {
         log::info("moonlight", status == CONN_STATUS_POOR ? "connection status: poor" : "connection status: okay");
     }
@@ -710,7 +750,9 @@ void MoonlightSessionSource::close() noexcept {
         bool wasStreaming = false;
         {
             std::lock_guard lib(p_->libMutex);
-            wasStreaming = p_->streaming.exchange(false);
+            wasStreaming = p_->streaming.load();
+            if (wasStreaming) Callbacks::releaseInputLocked(*p_);
+            p_->streaming = false;
         }
         if (wasStreaming) LiStopConnection();
     }
@@ -767,6 +809,97 @@ MoonlightStats MoonlightSessionSource::stats() const {
 }
 
 uint64_t MoonlightSessionSource::unitsReceived() const { return p_ ? p_->units.load() : 0; }
+
+// --- input ----------------------------------------------------------------------------------
+// Every send happens under libMutex after checking `streaming`: close() clears `streaming` under the
+// same mutex before LiStopConnection, so no send can overlap the teardown.
+
+namespace {
+constexpr uint32_t kPadSupported = moonlight::kPadUp | moonlight::kPadDown | moonlight::kPadLeft | moonlight::kPadRight |
+    moonlight::kPadStart | moonlight::kPadBack | moonlight::kPadLeftStick | moonlight::kPadRightStick |
+    moonlight::kPadLeftBumper | moonlight::kPadRightBumper | moonlight::kPadGuide | moonlight::kPadA | moonlight::kPadB | moonlight::kPadX | moonlight::kPadY;
+}
+
+void MoonlightSessionSource::controller(const remoteplay::ControllerState& state) {
+    if (!p_) return;
+    const moonlight::PadFrame frame = moonlight::mapPad(state);
+    std::lock_guard lib(p_->libMutex);
+    if (!p_->streaming.load() || (p_->desc.options.gamepadMask & 1) == 0) return;
+    if (!p_->padArrived) {
+        // Older hosts answer "unsupported" and work without the arrival event.
+        LiSendControllerArrivalEvent(0, uint16_t(p_->desc.options.gamepadMask), LI_CTYPE_XBOX, kPadSupported, LI_CCAP_ANALOG_TRIGGERS | LI_CCAP_RUMBLE);
+        p_->padArrived = true;
+        p_->pad = {};
+        p_->pad.buttons = ~frame.buttons;   // forces the first frame out
+    }
+    if (frame == p_->pad) return;
+    p_->pad = frame;
+    LiSendMultiControllerEvent(0, int16_t(p_->desc.options.gamepadMask), int(frame.buttons), frame.leftTrigger, frame.rightTrigger,
+                               frame.leftX, frame.leftY, frame.rightX, frame.rightY);
+}
+
+remoteplay::ControllerFeedback MoonlightSessionSource::takeFeedback() {
+    remoteplay::ControllerFeedback out;
+    if (!p_) return out;
+    std::lock_guard lock(p_->feedbackMutex);
+    const auto now = Clock::now();
+    const bool active = p_->rumbleLow != 0 || p_->rumbleHigh != 0;
+    if (p_->feedbackPending || (active && now - p_->feedbackSent >= std::chrono::seconds(2))) {
+        out.rumble = true;
+        out.left = uint8_t((p_->rumbleLow + 128) / 257);
+        out.right = uint8_t((p_->rumbleHigh + 128) / 257);
+        p_->feedbackPending = false;
+        p_->feedbackSent = now;
+    }
+    return out;
+}
+
+void MoonlightSessionSource::keyboard(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down) {
+    if (!p_) return;
+    const moonlight::HostKey key = moonlight::hostKey(virtualKey, scanCode, extended);
+    std::lock_guard lib(p_->libMutex);
+    if (!p_->streaming.load()) return;
+    if (down) {
+        if (!p_->keys.press(key.code, key.modifier)) return;   // auto-repeat: the host repeats by itself
+        LiSendKeyboardEvent(key.code, KEY_ACTION_DOWN, char(p_->keys.modifiers()));
+    } else {
+        if (!p_->keys.release(key.code)) return;
+        LiSendKeyboardEvent(key.code, KEY_ACTION_UP, char(p_->keys.modifiers()));
+    }
+}
+
+void MoonlightSessionSource::mouseMove(int dx, int dy) {
+    if (!p_ || (dx == 0 && dy == 0)) return;
+    std::lock_guard lib(p_->libMutex);
+    if (!p_->streaming.load()) return;
+    LiSendMouseMoveEvent(moonlight::clampDelta(dx), moonlight::clampDelta(dy));
+}
+
+void MoonlightSessionSource::mouseButton(int button, bool down) {
+    if (!p_ || button < 1 || button > 5) return;
+    std::lock_guard lib(p_->libMutex);
+    if (!p_->streaming.load()) return;
+    const unsigned bit = 1u << button;
+    if (down == ((p_->mouseButtons & bit) != 0)) return;
+    p_->mouseButtons ^= bit;
+    LiSendMouseButtonEvent(down ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, button);
+}
+
+void MoonlightSessionSource::scroll(int delta, bool horizontal) {
+    if (!p_ || delta == 0) return;
+    std::lock_guard lib(p_->libMutex);
+    if (!p_->streaming.load()) return;
+    const short amount = short(std::clamp(delta, -32767, 32767));
+    if (horizontal) LiSendHighResHScrollEvent(amount);
+    else LiSendHighResScrollEvent(amount);
+}
+
+void MoonlightSessionSource::releaseInput() {
+    if (!p_) return;
+    std::lock_guard lib(p_->libMutex);
+    if (!p_->streaming.load()) return;
+    Callbacks::releaseInputLocked(*p_);
+}
 
 uint64_t MoonlightSessionSource::skipped() const {
     std::lock_guard lock(mutex_);
