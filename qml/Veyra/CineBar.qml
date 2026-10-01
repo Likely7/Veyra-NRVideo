@@ -196,7 +196,15 @@ Rectangle {
                     property real scrubFrac: 0
                     // .seek:hover .thumb { left: 44% } - the thumb tracks the real
                     // progress, not the design's hard-coded 44%.
-                    readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, veyra.progress))
+                    readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, shownProgress))
+                    // Twice a second, not every snapshot: the pill is its own window and a rail
+                    // that moved every tick made it present ~50 times a second, more often than
+                    // a film plays, so OBS game capture could lock onto the pill.
+                    property real shownProgress: veyra.progress
+                    Timer {
+                        interval: 500; repeat: true; running: bar.visible
+                        onTriggered: seekArea.shownProgress = veyra.progress
+                    }
                     readonly property real hoverFrac: scrubbing ? scrubFrac
                                                       : seekMouse.containsMouse && seekArea.width > 0
                                                         ? Math.max(0, Math.min(1, seekMouse.mouseX / seekArea.width))
@@ -323,6 +331,7 @@ Rectangle {
                         onReleased: mouse => {
                             const target = seekArea.fractionAt(mouse.x) * veyra.duration
                             scrubSeek.stop()
+                            seekArea.shownProgress = seekArea.fractionAt(mouse.x)
                             seekArea.scrubbing = false
                             veyra.logUi("ui-seek", "targetSeconds=" + target.toFixed(3))
                             veyra.seekTo(target)

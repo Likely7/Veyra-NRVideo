@@ -952,7 +952,7 @@ VPage {
                             width: timingStrip.widthOf(modelData)
                             radius: 4
                             color: modelData.measured ? modelData.color : Qt.rgba(1, 1, 1, 0.12)
-                            Behavior on width { NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
+                            Behavior on width { enabled: visible; NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
                             Text {
                                 anchors.centerIn: parent
                                 width: parent.width - 6

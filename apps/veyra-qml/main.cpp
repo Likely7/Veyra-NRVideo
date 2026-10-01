@@ -17,6 +17,7 @@
 #include <QQuickWindow>
 #include <QKeyEvent>
 #include <QTimer>
+#include <atomic>
 #include <QPointer>
 #include <QVariantMap>
 #include <QList>
@@ -697,6 +698,21 @@ int main(int argc, char** argv) {
     // The first frame may come before the page layout settles; one pass after the
     // event loop starts covers a scene that then never animates.
     QTimer::singleShot(0, &app, follow);
+    // How often the Qt windows present. OBS game capture locks onto one swapchain and only
+    // moves to another after 16 presents in a row from it, so a UI that keeps presenting
+    // during playback keeps OBS on the UI instead of the video (field report 2026-10-01).
+    {
+        static std::atomic<int> mainFrames{0}, barFrames{0};
+        QObject::connect(window, &QQuickWindow::frameSwapped, &app, [] { ++mainFrames; }, Qt::DirectConnection);
+        if (auto* bar = window->findChild<QQuickWindow*>(QStringLiteral("fullscreenBar")))
+            QObject::connect(bar, &QQuickWindow::frameSwapped, &app, [] { ++barFrames; }, Qt::DirectConnection);
+        auto* frameLog = new QTimer(&app);
+        QObject::connect(frameLog, &QTimer::timeout, &app, [] {
+            const int m = mainFrames.exchange(0), b = barFrames.exchange(0);
+            if (m || b) veyra::log::info("qml-frames", std::format("ui presents per 10 s: main={} controlBar={}", m, b));
+        });
+        frameLog->start(10000);
+    }
     // Test only: VEYRA_TEST_DPI_FLIP=<ms> sends the window the WM_DPICHANGED a move to a
     // 150 % screen would, then back to 100 % three seconds later, so the screen-change
     // crash (field report 2026-10-01, two monitors) can be reproduced on one monitor.

@@ -10,10 +10,17 @@ Item {
     id: page
     property string pageId
     signal enter()
-    readonly property var shell: Window.window
+    // The item the page sits in (Main.qml's page stack). A page that is neither shown nor
+    // sinking out leaves the scene: its live bindings kept changing while hidden and Qt
+    // redrew the whole window for each change (~11 times a second during capture), which
+    // cost GPU time and kept OBS game capture on the UI instead of the video.
+    property Item home: null
+    parent: (current || leaving) ? home : null
+    readonly property var shell: home ? home.Window.window : null
     readonly property bool current: shell !== null && shell.shownPage === pageId
     readonly property bool leaving: shell !== null && shell.leavingPage === pageId
-    anchors.fill: parent
+    width: home ? home.width : 0
+    height: home ? home.height : 0
     visible: current || leaving
     enabled: current
     opacity: leaving ? 1 - shell.leaveT : 1

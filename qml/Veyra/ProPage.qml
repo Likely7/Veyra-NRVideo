@@ -176,7 +176,9 @@ VPage {
         implicitWidth: Math.max(size, labelText.implicitWidth)
         implicitHeight: showLabel ? size + 4 + labelText.implicitHeight : size
         property real shown: known ? Math.min(1, Math.max(0, fraction)) : 0
-        Behavior on shown { NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
+        // Live data changes every second; animating it behind another page redrew the
+        // window continuously (see VDot.qml), so only while shown.
+        Behavior on shown { enabled: orb.visible; NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
         onShownChanged: ring.requestPaint()
         onToneChanged: ring.requestPaint()
         Canvas {
@@ -277,7 +279,7 @@ VPage {
                 radius: 2
                 color: light.tone
                 opacity: veyra.runStatusLevel === "idle" ? 0.35 : 0.9
-                Behavior on color { ColorAnimation { duration: Theme.d(300) } }
+                Behavior on color { enabled: strip.visible; ColorAnimation { duration: Theme.d(300) } }
             }
             // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
             // a screen DPI change while it walks the parent's children, and the walk then touched
@@ -741,7 +743,7 @@ VPage {
                                     height: parent.height
                                     radius: 9
                                     color: modelData.color
-                                    Behavior on width { SequentialAnimation {
+                                    Behavior on width { enabled: stageRow.visible; SequentialAnimation {
                                         PauseAnimation { duration: root.barsSettled ? 0 : Theme.d(120 + stageRow.index * 60) }
                                         NumberAnimation { duration: Theme.d(800); easing.bezierCurve: Theme.springSoft } } }
                                 }

@@ -157,11 +157,13 @@ Window {
     }
     // The page on screen (entering or settled) and the one sinking out.
     property string shownPage: "home"
+    readonly property var pageItems: [homePage, minPage, proPage, nodePage, exportPage, settingsPage]
     property string leavingPage: ""
     function showPage(animated) {
         shownPage = page
         if (animated)
-            for (const p of pages.children) if (p.pageId === page) p.enter()
+            // By list, not pages.children: hidden pages are out of the scene (VPage.home).
+            for (const p of root.pageItems) if (p.pageId === page) p.enter()
         // The video rect follows the page, and it must be settled before the
         // engine opens anything: it samples the window's client size once. It moves
         // here, once, not at the click: the native window cannot fade with the pages.
@@ -245,10 +247,11 @@ Window {
         visible: !root.fullscreen || root.page === "home" || root.page === "set" || root.quickPanelShown
         // Each page is shown while current or while sinking out; the sinking one
         // takes no input (.page.leave { pointer-events: none }).
-        HomePage { pageId: "home"; onRequestPage: p => root.goPage(p) }
+        HomePage { id: homePage; pageId: "home"; home: pages; onRequestPage: p => root.goPage(p) }
         MinimalPage {
             id: minPage
             pageId: "min"
+            home: pages
             onRequestPage: p => root.goPage(p)
             onRequestAspect: aspect => { if (root.testAspect <= 0) root.fitToFilm(aspect) }
             onRequestFullscreen: root.toggleFullscreen()
@@ -256,13 +259,16 @@ Window {
         ProPage {
             id: proPage
             pageId: "pro"
+            home: pages
             overlay: root.quickPanelShown
             onRequestFullscreen: root.toggleFullscreen()
             onRequestPage: p => root.goPage(p)
             onRequestDialog: key => dialogs.open(key)
         }
         NodePage {
+            id: nodePage
             pageId: "node"
+            home: pages
             videoHeight: root.nodeVideoHeight
             onVideoHeightEdited: h => { root.nodeVideoHeight = h; videoHost.syncRect() }
             onRequestFullscreen: root.toggleFullscreen()
@@ -276,8 +282,8 @@ Window {
                 root.page = "pro"
             }
         }
-        ExportPage { pageId: "exp"; onRequestPage: p => root.goPage(p) }
-        SettingsPage { pageId: "set"; onRequestPage: p => root.goPage(p) }
+        ExportPage { id: exportPage; pageId: "exp"; home: pages; onRequestPage: p => root.goPage(p) }
+        SettingsPage { id: settingsPage; pageId: "set"; home: pages; onRequestPage: p => root.goPage(p) }
     }
 
     // The five dialogs sit above the pages and below the dock's own tooltips.

@@ -85,6 +85,10 @@ Item {
         }
         opacity: shown ? 1 : 0
         visible: opacity > 0
+        // A closed dialog leaves the scene. Its live bindings (capture preview, fps text)
+        // kept changing while hidden and Qt redrew the window for each change, ~40 times
+        // a second during capture; OBS game capture then held the UI instead of the video.
+        parent: visible ? host : null
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
         transform: [
             Scale { origin.x: dlg.width / 2; origin.y: dlg.height / 2; xScale: dlg.motionS; yScale: dlg.motionS },
@@ -96,7 +100,9 @@ Item {
         readonly property bool videoCover: true
         property real coverRadius: 16
 
-        anchors.centerIn: parent
+        // Centred by position, not anchors: the parent is null while closed.
+        x: Math.round((host.width - width) / 2)
+        y: Math.round((host.height - height) / 2)
         width: dialogWidth
         // Never taller than the window: the body scrolls instead of the panel
         // being cut off at the top and bottom of a small window.

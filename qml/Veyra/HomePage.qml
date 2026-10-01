@@ -31,8 +31,11 @@ VPage {
             implicitHeight: logoImg.implicitHeight + 80
             property real breath: 0
             scale: 1 + 0.02 * breath
+            // Only while the home page shows: running behind other pages it redrew the whole
+            // window every vsync during playback (~300 presents/s on a 320 Hz screen), which
+            // cost GPU time and kept OBS game capture on the UI instead of the video.
             SequentialAnimation on breath {
-                running: !Theme.reduced
+                running: !Theme.reduced && mark.visible
                 loops: Animation.Infinite
                 NumberAnimation { to: 1; duration: Theme.d(2250); easing.type: Easing.InOutSine }
                 NumberAnimation { to: 0; duration: Theme.d(2250); easing.type: Easing.InOutSine }
