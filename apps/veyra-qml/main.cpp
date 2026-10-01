@@ -210,7 +210,13 @@ void collectCovers(QQuickItem* item, QList<Cover>& out) {
     // A cover is named "videoCover" or carries videoCover: true; the property lets a
     // dialog keep its own objectName for tests (an overridden name used to drop
     // the hole, leaving five dialogs behind the picture).
-    if (item->objectName() == QLatin1String("videoCover") || item->property("videoCover").toBool()) {
+    // Hover tips are Controls ToolTips: their popup item sits in the window overlay and
+    // its QObject parent is the ToolTip. Every tip is a cover, so a tip over the
+    // picture is no longer hidden behind it (field report 2026-10-02).
+    // Only the popup's own item: its background and text are QObject children of the
+    // ToolTip too, and would only add the same hole again.
+    const bool toolTip = item->inherits("QQuickPopupItem") && item->parent() && item->parent()->inherits("QQuickToolTip");
+    if (toolTip || item->objectName() == QLatin1String("videoCover") || item->property("videoCover").toBool()) {
         // Scale is folded into the scene rect; the corner radius scales with it.
         const QRectF r = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
         const qreal s = item->width() > 0 ? r.width() / item->width() : 1.0;

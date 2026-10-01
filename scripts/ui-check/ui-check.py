@@ -11,6 +11,7 @@ through log lines:
   UITEST_DCLICK <x> <y>              a left double-click at screen coordinates
   UITEST_DRAG <x0> <y0> <x1> <y1>    a left-button drag at screen coordinates
   UITEST_KEY <vk> [count]            key presses (Windows virtual-key code) to the focused window
+  UITEST_HOVER <x> <y>               park the pointer at screen coordinates (app raised; the next SHOT lowers it)
   UITEST_DONE / UITEST_FAIL <why>    the verdict
 The log is flushed by the next log call, so the snippet keeps a heartbeat going.
 Clicks and drags move the real pointer for about a second.
@@ -174,6 +175,11 @@ try:
                     click(x, y)
                 finally:
                     raise_app(proc.pid, False)
+            elif 'UITEST_HOVER ' in line:
+                x, y = (float(v) for v in line.split('UITEST_HOVER ')[1].split()[:2])
+                raise_app(proc.pid, True)
+                time.sleep(0.2)
+                move(x, y)
             elif 'UITEST_DRAG ' in line:
                 x0, y0, x1, y1 = (float(v) for v in line.split('UITEST_DRAG ')[1].split()[:4])
                 raise_app(proc.pid, True)

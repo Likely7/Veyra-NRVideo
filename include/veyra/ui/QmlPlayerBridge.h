@@ -241,6 +241,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool nrEnabled READ nrEnabled WRITE setNrEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int selectedNrLayer READ selectedNrLayer WRITE setSelectedNrLayer NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList nrLayers READ nrLayers NOTIFY chainChanged)
+    // List mode's NR master switch: true while any NR layer is on.
+    Q_PROPERTY(bool nrAnyEnabled READ nrAnyEnabled NOTIFY chainChanged)
     Q_PROPERTY(bool srEnabled READ srEnabled WRITE setSrEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int fgMultiplier READ fgMultiplier WRITE setFgMultiplier NOTIFY settingsChanged)
     Q_PROPERTY(bool lowLatency READ lowLatency WRITE setLowLatency NOTIFY settingsChanged)
@@ -955,6 +957,9 @@ public:
     Q_INVOKABLE bool removeEffect(int index);
     Q_INVOKABLE bool moveEffect(int from, int to);
     Q_INVOKABLE bool setEffectEnabled(int index, bool enabled);
+    // Every NR layer off at once; on again restores the layers that were on.
+    Q_INVOKABLE bool setAllNrEnabled(bool enabled);
+    bool nrAnyEnabled() const;
     // Node-mode positions are UI state and persist with the chain.
     Q_INVOKABLE bool setEffectPosition(int index, double x, double y);
     Q_INVOKABLE QVariantMap effectDescriptor(const QString& type) const;

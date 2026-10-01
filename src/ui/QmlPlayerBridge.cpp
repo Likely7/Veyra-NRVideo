@@ -123,6 +123,8 @@ bool exportFileClosed(const QString& path){
 } // namespace
 
 struct QmlPlayerBridge::Impl {
+    // Per-layer on/off before the NR master switch turned them all off.
+    std::vector<bool> nrMasterRestore;
     engine::EngineController& engine;
     PlayerUiFacade facade;
 
@@ -4822,6 +4824,35 @@ bool QmlPlayerBridge::setEffectEnabled(int index, bool enabled) {
     }
     emit chainChanged();
     emit settingsChanged();
+    return true;
+}
+
+bool QmlPlayerBridge::nrAnyEnabled() const {
+    const auto& c=impl_->chain;
+    for(uint32_t i=0;i<c.nodeCount;++i)if(c.nodes[i].type==engine::EffectType::NrEnhance&&c.nodes[i].enabled)return true;
+    return false;
+}
+bool QmlPlayerBridge::setAllNrEnabled(bool enabled) {
+    auto& c=impl_->chain;const auto before=c;
+    std::vector<uint32_t> layers;
+    for(uint32_t i=0;i<c.nodeCount;++i)if(c.nodes[i].type==engine::EffectType::NrEnhance)layers.push_back(i);
+    if(layers.empty())return false;
+    auto& restore=impl_->nrMasterRestore;
+    if(!enabled){
+        restore.clear();
+        for(const auto i:layers){restore.push_back(c.nodes[i].enabled);c.nodes[i].enabled=false;}
+    }else{
+        // Layers added or removed since the switch went off: no faithful restore,
+        // so every layer comes back on. Same when nothing was on to begin with.
+        const bool faithful=restore.size()==layers.size()&&std::find(restore.begin(),restore.end(),true)!=restore.end();
+        for(size_t k=0;k<layers.size();++k)c.nodes[layers[k]].enabled=faithful?bool(restore[k]):true;
+    }
+    if(!impl_->revalidate(true)){
+        const auto error=impl_->validation.message;c=before;impl_->revalidate();
+        emit notice(utf8Of(error),true);emit chainChanged();return false;
+    }
+    veyra::log::info("ui-nr",std::format("master switch {} layers={}",enabled?"on":"off",layers.size()));
+    emit chainChanged();emit settingsChanged();
     return true;
 }
 
