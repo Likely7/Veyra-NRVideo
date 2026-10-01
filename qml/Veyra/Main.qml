@@ -20,7 +20,9 @@ Window {
     id: root
     width: 1280
     height: 800
-    minimumWidth: 720
+    // 极简 follows the film, and a portrait film needs a narrow window (the dock is
+    // about 330px wide).
+    minimumWidth: cinema ? 360 : 720
     minimumHeight: 260
     visible: true
     color: "transparent"
@@ -34,10 +36,8 @@ Window {
     property real nodeVideoHeight: 330
     // Every navigation goes through here: "专业" means the node page while the
     // node configuration is active, so the dock never drops into the list UI.
-    function goPage(p) {
-        if (p === "pro" && veyra.nodeMode === 1) p = "node"
-        page = p
-    }
+    function goPageTarget(p) { return p === "pro" && veyra.nodeMode === 1 ? "node" : p }
+    function goPage(p) { page = goPageTarget(p) }
     // Test switches from the command line (main.cpp, G0.3); empty in normal use.
     readonly property var test: typeof vyTest !== "undefined" ? vyTest : ({})
     readonly property real testAspect: test.aspect !== undefined ? test.aspect : 0
@@ -64,11 +64,39 @@ Window {
     onReportedAspectChanged: if (reportedAspect < 0.2) fitToFilm(16 / 9)
     property string lastPage: "home"
     property real heightBeforeCinema: 0
-    readonly property real pictureHeight: Math.round(width / filmAspect)
+    // The tallest picture that still fits on the screen with the pill (46px) under
+    // it. A portrait video or a captured portrait window used to make the window
+    // taller than the screen (field report 2026-10-01).
+    // The screen under the window's top centre (Screen.desktopAvailable* is the whole
+    // virtual desktop, wrong on multi-monitor setups).
+    readonly property rect screenArea: veyra.screenAvailableAt(root.x + root.width / 2, root.y + 20)
+    readonly property real maxPictureHeight: Math.max(200, root.screenArea.height - 46 - 16)
+    readonly property real pictureHeight: Math.min(Math.round(width / filmAspect), maxPictureHeight)
+    // The width a tall film took away, given back when a wider film fits again.
+    property real widthBeforeNarrow: 0
 
     function fitToFilm(aspect) {
         if (aspect > 0.2 && aspect < 5.0) filmAspect = aspect
-        if (cinema && !screenSized) height = Math.round(pictureHeight)
+        // The page, not `cinema`: onPageChanged calls this before that binding updates.
+        if (page !== "min" || screenSized) return
+        // Narrow the window for a film too tall for the screen, keeping its centre.
+        let w = widthBeforeNarrow > 0 ? widthBeforeNarrow : width
+        if (Math.round(w / filmAspect) > maxPictureHeight)
+            w = Math.max(minimumWidth, Math.round(maxPictureHeight * filmAspect))
+        if (Math.abs(w - width) >= 1) {
+            if (widthBeforeNarrow <= 0) widthBeforeNarrow = width
+            x += Math.round((width - w) / 2)
+            width = w
+        }
+        if (widthBeforeNarrow > 0 && w >= widthBeforeNarrow) widthBeforeNarrow = 0
+        height = Math.round(pictureHeight)
+        keepPillOnScreen()
+    }
+    // The pill hangs 46px below the picture: lift the window if that leaves the screen.
+    function keepPillOnScreen() {
+        const a = root.screenArea
+        const bottom = a.y + a.height
+        if (y + pictureHeight + 46 + 8 > bottom) y = Math.max(a.y, bottom - pictureHeight - 46 - 8)
     }
     // .vy.cine transition: height .7s var(--spring-soft)
     Behavior on height {
@@ -102,8 +130,15 @@ Window {
         // clears the cinema height on any other page).
         const wasCinema = lastPage === "min"
         lastPage = page
+        if (!screenSized && wasCinema && page !== "min" && widthBeforeNarrow > 0) {
+            // A tall film narrowed the window; the other pages get their width back.
+            x -= Math.round((widthBeforeNarrow - width) / 2)
+            width = widthBeforeNarrow
+            widthBeforeNarrow = 0
+        }
+        if (!screenSized && page !== "min" && width < 720) { x -= Math.round((720 - width) / 2); width = 720 }
         if (screenSized) { /* the screen is the window */ }
-        else if (page === "min") { if (!wasCinema) heightBeforeCinema = height; height = Math.round(pictureHeight) }
+        else if (page === "min") { if (!wasCinema) heightBeforeCinema = height; fitToFilm(filmAspect) }
         else if (wasCinema && heightBeforeCinema >= 400) height = heightBeforeCinema
         else if (height < 600) height = 800
         // core.js app.go: the old page sinks (.22s) and the new one shows 150 ms
@@ -121,11 +156,13 @@ Window {
     }
     // The page on screen (entering or settled) and the one sinking out.
     property string shownPage: "home"
+    readonly property var pageItems: [homePage, minPage, proPage, nodePage, exportPage, settingsPage]
     property string leavingPage: ""
     function showPage(animated) {
         shownPage = page
         if (animated)
-            for (const p of pages.children) if (p.pageId === page) p.enter()
+            // By list, not pages.children: hidden pages are out of the scene (VPage.home).
+            for (const p of root.pageItems) if (p.pageId === page) p.enter()
         // The video rect follows the page, and it must be settled before the
         // engine opens anything: it samples the window's client size once. It moves
         // here, once, not at the click: the native window cannot fade with the pages.
@@ -209,9 +246,12 @@ Window {
         visible: !root.fullscreen || root.page === "home" || root.page === "set" || root.quickPanelShown
         // Each page is shown while current or while sinking out; the sinking one
         // takes no input (.page.leave { pointer-events: none }).
-        HomePage { pageId: "home"; onRequestPage: p => root.goPage(p) }
+        HomePage { id: homePage; pageId: "home"; home: pages; onRequestPage: p => root.goPage(p) }
         MinimalPage {
+            id: minPage
             pageId: "min"
+            dragStripHeight: 0
+            home: pages
             onRequestPage: p => root.goPage(p)
             onRequestAspect: aspect => { if (root.testAspect <= 0) root.fitToFilm(aspect) }
             onRequestFullscreen: root.toggleFullscreen()
@@ -219,13 +259,17 @@ Window {
         ProPage {
             id: proPage
             pageId: "pro"
+            home: pages
             overlay: root.quickPanelShown
             onRequestFullscreen: root.toggleFullscreen()
             onRequestPage: p => root.goPage(p)
             onRequestDialog: key => dialogs.open(key)
         }
         NodePage {
+            id: nodePage
             pageId: "node"
+            dragStripHeight: 14
+            home: pages
             videoHeight: root.nodeVideoHeight
             onVideoHeightEdited: h => { root.nodeVideoHeight = h; videoHost.syncRect() }
             onRequestFullscreen: root.toggleFullscreen()
@@ -239,8 +283,8 @@ Window {
                 root.page = "pro"
             }
         }
-        ExportPage { pageId: "exp"; onRequestPage: p => root.goPage(p) }
-        SettingsPage { pageId: "set"; onRequestPage: p => root.goPage(p) }
+        ExportPage { id: exportPage; pageId: "exp"; home: pages; onRequestPage: p => root.goPage(p) }
+        SettingsPage { id: settingsPage; pageId: "set"; home: pages; onRequestPage: p => root.goPage(p) }
     }
 
     // The five dialogs sit above the pages and below the dock's own tooltips.
@@ -250,6 +294,8 @@ Window {
         // The dialogs open the source through the bridge; show the picture.
         onStartCapture: if (root.page === "home") root.goPage("min")
         onStartPs5: if (root.page === "home") root.goPage("min")
+        onStartMoonlight: if (root.page === "home") root.goPage("min")
+        onStartXbox: if (root.page === "home") root.goPage("min")
         onStartScreen: if (root.page === "home") root.goPage("min")
     }
 
@@ -264,11 +310,19 @@ Window {
         locked: root.fullLocked
         forcedTip: root.test.tip !== undefined ? root.test.tip : ""
         opened: pinned
-        onRequestPage: p => root.goPage(p)
+        // In fullscreen only the picture is on screen, so another page (专业 above all)
+        // would change nothing visible: leave fullscreen first, as the pill's menu does.
+        onRequestPage: p => {
+            if (root.fullscreen && root.goPageTarget(p) !== root.page) root.toggleFullscreen()
+            root.goPage(p)
+        }
         onRequestMinimize: root.showMinimized()
         onRequestMaximize: root.toggleMaximized()
         onRequestClose: root.close()
         onRequestMove: if (!root.fullscreen) root.startSystemMove()
+        pillToggleVisible: veyra.hasSource && (root.page === "min" || root.fullscreen)
+        pillHidden: root.pillHidden
+        onRequestTogglePill: root.setPillHidden(!root.pillHidden)
     }
 
     // Frameless window: the system resizes from 6px borders and 12px corners.
@@ -391,6 +445,30 @@ Window {
     // AppShell VideoSurface: a double click on the picture toggles fullscreen
     // (1.4.4 did both directions), unless locked. Windowed, only a double click
     // inside the picture counts; with the quick panel up, not one on the panel.
+    // A click on the picture of a playing file pauses or resumes it (field request
+    // 2026-10-02), and takes the keyboard back from a slider so the arrows seek again.
+    // Live sources ignore it: a click to focus the window mid-game must not stop the
+    // capture. The second click of a double click undoes the first; the double click
+    // itself toggles fullscreen below.
+    function pictureContains(p) {
+        return p.x >= videoHost.x && p.y >= videoHost.y && p.x <= videoHost.x + videoHost.width
+            && p.y <= videoHost.y + videoHost.height
+    }
+    TapHandler {
+        id: pictureTap
+        enabled: !root.fullLocked
+        onTapped: (eventPoint, button) => {
+            const p = eventPoint.position
+            if (root.page !== "min" && root.page !== "pro" && root.page !== "node" && !root.fullscreen) return
+            if (dialogs.dialog !== "" || !veyra.hasSource) return
+            if (root.fullscreen && root.quickPanelShown && proPage.overlayContains(p.x, p.y)) return
+            if (!root.fullscreen && !root.pictureContains(p)) return
+            root.contentItem.forceActiveFocus()
+            if (veyra.isCapture || veyra.duration <= 0) return
+            if (veyra.protectionDrawShape.length > 0 || veyra.compareMode === 2) return
+            if (pictureTap.tapCount <= 2) veyra.togglePlayPause()
+        }
+    }
     TapHandler {
         enabled: !root.fullLocked
         onDoubleTapped: (eventPoint, button) => {
@@ -408,6 +486,31 @@ Window {
             root.toggleFullscreen()
         }
     }
+    // A click on the picture of a PC stream takes the keyboard and mouse back after a release
+    // (Ctrl+Alt+Shift+Z). While captured the clicks belong to the host and never get here.
+    TapHandler {
+        enabled: veyra.moonlight && veyra.moonlight.state.streaming === true && !veyra.moonlightCaptured && dialogs.dialog === ""
+        onTapped: eventPoint => {
+            const p = eventPoint.position
+            if (root.page !== "min" && root.page !== "pro" && root.page !== "node") return
+            if (p.x < videoHost.x || p.y < videoHost.y || p.x > videoHost.x + videoHost.width
+                || p.y > videoHost.y + videoHost.height) return
+            veyra.moonlightCapture(true)
+        }
+    }
+    // Stream statistics on and off. While a PC stream has the keyboard, the capture filter sees the keys
+    // first and toggles the same switch.
+    Shortcut {
+        sequence: "Ctrl+Alt+Shift+S"
+        enabled: (veyra.moonlight && veyra.moonlight.state.streaming === true) || (veyra.xbox && veyra.xbox.state.streaming === true)
+        onActivated: veyra.moonlightStatsVisible = !veyra.moonlightStatsVisible
+    }
+    StreamHud {
+        id: streamHud
+        x: 16
+        y: root.fullscreen ? 16 : 52
+        z: 90
+    }
     FullscreenBar {
         id: fullBar
         owner: root
@@ -415,7 +518,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: veyra.hasSource && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: veyra.hasSource && !root.pillHidden && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)
@@ -423,7 +526,16 @@ Window {
         onRequestDialog: k => dialogs.open(k)
         onRequestFullscreen: root.toggleFullscreen()
         onRequestLock: root.toggleLock()
+        onRequestHide: root.setPillHidden(true)
+        onRequestMove: if (!root.fullscreen && !root.maximized) root.startSystemMove()
         onActivity: root.pointerActivity()
+    }
+    // The cinema / fullscreen pill can be hidden for games (capture card, streams); the
+    // dock's eye brings it back. Remembered across sessions.
+    readonly property bool pillHidden: veyra.preferences.cinePillHidden === true
+    function setPillHidden(hidden) {
+        veyra.setPreference("cinePillHidden", hidden)
+        toast.show(hidden ? "播放条已隐藏 · 鼠标移到顶部，点胶囊里的眼睛可重新打开" : "播放条已显示", false)
     }
     function toggleLock() {
         fullLocked = !fullLocked
@@ -456,8 +568,9 @@ Window {
             root.quickPanel = !root.quickPanel
         }
     }
-    Shortcut { sequence: "Left"; onActivated: veyra.seekBy(-10) }
-    Shortcut { sequence: "Right"; onActivated: veyra.seekBy(10) }
+    // 5 s steps (field request 2026-10-02).
+    Shortcut { sequence: "Left"; onActivated: veyra.seekBy(-5) }
+    Shortcut { sequence: "Right"; onActivated: veyra.seekBy(5) }
     Shortcut { sequence: "Up"; onActivated: veyra.volume = Math.min(1, veyra.volume + 0.05) }
     Shortcut { sequence: "Down"; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
     Shortcut { sequence: "Ctrl+O"; onActivated: veyra.openFileDialog() }
@@ -524,7 +637,7 @@ Window {
         function onNotice(text, isError) { toast.show(text, isError) }
         function onNavigate(p) {
             // A dialog key opens the dialog; anything else is a page.
-            if (p === "capture" || p === "ps5" || p === "screen"
+            if (p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
                 || p === "subtitle" || p === "audio" || p === "save" || p === "manage") {
                 dialogs.open(p)
                 return
@@ -608,14 +721,13 @@ Window {
         const text = choice === "last" ? (veyra.preferences.lastWindow || "1280x800") : choice
         const wh = text.split("x").map(Number)
         if (wh.length !== 2 || !(wh[0] > 0) || !(wh[1] > 0)) return
-        const sw = root.screen ? root.screen.desktopAvailableWidth : wh[0]
-        const sh = root.screen ? root.screen.desktopAvailableHeight : wh[1]
-        root.width = Math.max(root.minimumWidth, Math.min(wh[0], sw - 40))
-        root.height = Math.max(root.minimumHeight, Math.min(wh[1], sh - 40))
-        if (root.screen) {
-            root.x = root.screen.virtualX + Math.round((sw - root.width) / 2)
-            root.y = root.screen.virtualY + Math.round((sh - root.height) / 2)
-        }
+        // Centred on the monitor the pointer is on when Veyra starts (the one it was
+        // launched from), not across the whole desktop.
+        const a = veyra.launchScreenAvailable()
+        root.width = Math.max(root.minimumWidth, Math.min(wh[0], a.width - 40))
+        root.height = Math.max(root.minimumHeight, Math.min(wh[1], a.height - 40))
+        root.x = a.x + Math.round((a.width - root.width) / 2)
+        root.y = a.y + Math.round((a.height - root.height) / 2)
     }
     onClosing: if (!root.fullscreen && !root.maximized && !root.cinema) veyra.rememberWindowSize(root.width, root.height)
     Component.onCompleted: {
@@ -635,5 +747,9 @@ Window {
     // --full-bar shown|hidden: enter fullscreen with the control window held shown
     // or held hidden, for the present-timing comparison (G2.5).
     Timer { id: testFullTimer; interval: 1500; onTriggered: { root.toggleFullscreen(); if (root.test.fullBar === "hidden") root.fullControls = false } }
-    Timer { id: testMenuTimer; interval: 600; onTriggered: proPage.openTestMenu(root.test.menu) }
+    Timer {
+        id: testMenuTimer
+        interval: 600
+        onTriggered: root.test.menu === "min-source" ? minPage.openSourceMenuForTest() : proPage.openTestMenu(root.test.menu)
+    }
 }

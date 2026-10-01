@@ -1,6 +1,8 @@
 #include "veyra/ui/QmlPlayerBridge.h"
 
 #include <QRegion>
+#include <QCursor>
+#include <QScreen>
 #include <QWindow>
 
 #include <QDateTime>
@@ -39,6 +41,7 @@
 #include "veyra/source/CaptureFormatRank.h"
 #include "veyra/source/CaptureColorOverride.h"
 #include "veyra/source/CaptureFrameRate.h"
+#include "veyra/source/MagewellCapture.h"
 #include "CapturePreferenceStore.h"
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 // SDL3-static's system libraries (see CMakeLists: kept off the link line).
@@ -52,6 +55,13 @@
 #include "veyra/remoteplay/ProfileStore.h"
 #include "veyra/remoteplay/PsnAuth.h"
 #include "veyra/source/RemotePlaySource.h"
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+#include "veyra/ui/XboxModel.h"
+#endif
+#ifdef VEYRA_ENABLE_MOONLIGHT
+#include "veyra/ui/MoonlightInputCapture.h"
+#include "veyra/ui/MoonlightModel.h"
 #endif
 #include <future>
 #include <functional>
@@ -78,6 +88,9 @@ namespace Gdiplus { using std::min; using std::max; }
 #include "veyra/ui/PlaybackPowerGuard.h"
 #include "veyra/gfx/XessMfgUnlock.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
+#include "veyra/gfx/PresentationHooks.h"
+#include <dxgi1_4.h>
+#include <wrl/client.h>
 #include "veyra/ngx/NrArchitecturePolicy.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/ScreenCaptureSource.h"
@@ -109,6 +122,7 @@ struct QmlPlayerBridge::Impl {
     bool haveSnapshot = false;
     bool openingSource = false;
     uint64_t openingSessionId = 0;
+    uint64_t vramNoticeSession = 0;   // the session the video-memory warning was shown for
 
     // The chain the UI edits, kept in step with the facade's pending settings.
     engine::EffectChain chain;
@@ -552,6 +566,20 @@ struct QmlPlayerBridge::Impl {
         options = engine::PlayerOptions::from(s,order);
         return true;
     }
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    // --- PC streaming (Moonlight). Last, so they are destroyed first: the model joins its workers.
+    QTimer* moonlightTimer = nullptr;
+    bool moonlightWantCapture = false, moonlightStatsVisible = false, moonlightWasActive = false;
+    int moonlightStatsTicks = 0;
+    std::unique_ptr<ui::MoonlightInputCapture> moonlightCapture;
+    std::unique_ptr<ui::MoonlightModel> moonlight;
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    QTimer* xboxTimer = nullptr;
+    bool xboxWasActive = false;
+    int xboxStatsTicks = 0;
+    std::unique_ptr<ui::XboxModel> xbox;   // last: joins its worker first
+#endif
 };
 
 namespace {
@@ -606,6 +634,26 @@ bool prepareStartupPreset(const engine::PresetEntry& entry, engine::ChainSession
 }
 } // namespace
 
+// The first hardware adapter, the one the engine opens (gfx adapter[0]): 0x10DE NVIDIA,
+// 0x1002 AMD, 0x8086 Intel, 0 unknown.
+static uint32_t primaryGpuVendor() {
+    static const uint32_t vendor = [] {
+        Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+        if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return 0u;
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i, adapter.Reset()) {
+            DXGI_ADAPTER_DESC1 desc{};
+            if (FAILED(adapter->GetDesc1(&desc)) || (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) continue;
+            return unsigned(desc.VendorId);
+        }
+        return 0u;
+    }();
+    return vendor;
+}
+// FSR 4 ML frame generation needs an AMD RX 9000; on other GPUs the provider crashed the
+// whole program (field report 2026-10-01). Known non-AMD adapters are refused up front.
+static bool fsr4Possible() { const auto v = primaryGpuVendor(); return v == 0 || v == 0x1002; }
+
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
@@ -613,9 +661,16 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fgChoicesChanged);
     impl_->loadPrefs();
     if (qApp) qApp->installEventFilter(this);
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    setupMoonlight();
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    setupXbox();
+#endif
     // Before anything opens: the renderer reads the output choice at start().
     applyPreference(QStringLiteral("audioDevice"));
     applyPreference(QStringLiteral("audioForceStereo"));
+    applyPreference(QStringLiteral("magewellLowLatency"));
     const bool presetsLoaded = impl_->facade.importLegacyStores();
     const auto presetNotice = utf8Of(impl_->facade.error());
     if (!presetNotice.isEmpty())
@@ -733,10 +788,19 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
         if(impl_->poll()){emit settingsChanged();emit chainChanged();}
+        if (impl_->snapshot.vramRunawayMiB && impl_->vramNoticeSession != impl_->snapshot.sessionId) {
+            impl_->vramNoticeSession = impl_->snapshot.sessionId;
+            emit notice(tr("显存在设置没变的情况下涨了 %1 GB，已自动重建显示链回收显存（画面会闪一下）。"
+                           "如果反复出现：常见原因是 NVIDIA Smooth Motion、游戏加加、小飞机（RTSS）、显卡叠加层/即时重放"
+                           "或录屏软件在全屏时注入了本程序，请关掉它们后再试，并把日志发给我们（vram-watch）")
+                            .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
+        }
         tickSubtitles();
         tickImageBatch();
         tickCapture();
         tickPs5();
+        tickMoonlight();
+        tickXbox();
         // Geometry uses the source DAR and the same transform as mouse/compare.
         if (impl_->snapshot.running && impl_->videoWindow) {
             const bool fresh = impl_->aspectSession != impl_->snapshot.sessionId;
@@ -804,6 +868,47 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     });
     impl_->timer->start(16);
     startGpuSampler();
+    // Overlays that hook presentation get injected into this process when a D3D device
+    // appears (Qt's at start, the engine's at open); see gfx/PresentationHooks.h for what
+    // they broke in the field. Log each once (every 2 s for two minutes, then every 10 s).
+    auto* hookTimer = new QTimer(this);
+    connect(hookTimer, &QTimer::timeout, this, [this, hookTimer, started = GetTickCount64()] {
+        struct Seen { const wchar_t* module; const char* product; };
+        static const Seen others[] = {
+            {L"graphics-hook64.dll", "OBS game capture"}, {L"DiscordHook64.dll", "Discord overlay"},
+            {L"gameoverlayrenderer64.dll", "Steam overlay"}, {L"nvspcap64.dll", "NVIDIA overlay / instant replay"},
+            {L"ow-graphics-hook64.dll", "Overwolf overlay"},
+            // The driver's presentation layer; it carries NVIDIA Smooth Motion, which only
+            // engages for fullscreen windows (suspected in the fullscreen-only VRAM growth).
+            {L"NvPresent64.dll", "NVIDIA present layer (Smooth Motion)"},
+        };
+        static bool loggedOthers[std::size(others)]{};
+        for (size_t k = 0; k < std::size(others); ++k)
+            if (!loggedOthers[k] && GetModuleHandleW(others[k].module)) {
+                loggedOthers[k] = true;
+                veyra::log::info("overlay-hooks", std::format("{} is injected into this process", others[k].product));
+            }
+        // RivaTuner / GamePP are only logged. The XeSS guard that switched frame generation
+        // away from XeSS while they were injected was removed on request (2026-10-02): the
+        // interface now draws with Direct3D 12 like 1.4.4's process, which is what they
+        // coexisted with.
+        static bool handled = false;
+        if (const auto* hook = gfx::injectedPresentationHook(); hook && !handled) {
+            handled = true;
+            veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({})",
+                hook->product, QString::fromWCharArray(hook->module).toStdString()));
+        }
+        // Overlays inject when they decide the window is a game, e.g. on entering fullscreen
+        // long after start; after the first two minutes look every 10 s instead of every 2 s.
+        if (GetTickCount64() - started > 120000 && hookTimer->interval() < 10000) hookTimer->setInterval(10000);
+    });
+    hookTimer->start(2000);
+    // A saved FSR 4 ML choice on a non-AMD GPU crashed at the first open; move it on.
+    if (settings().frameGenerationBackend == engine::FrameGenerationBackend::Fsr4 && !fsr4Possible()) {
+        auto s = settings();
+        s.frameGenerationBackend = primaryGpuVendor() == 0x10DE ? engine::FrameGenerationBackend::Dlss : engine::FrameGenerationBackend::Fsr;
+        if (impl_->commit(s)) veyra::log::warn("fg-backend", "saved FSR 4 ML frame generation needs an AMD RX 9000; switched for this GPU");
+    }
 }
 
 QmlPlayerBridge::~QmlPlayerBridge() {
@@ -887,14 +992,33 @@ QVariantList QmlPlayerBridge::stageTimings() const {
         {"呈现", Stage::Blit, "#58CAD4"},
     };
     const double budget = stageBudgetMs();
+    // Several NR layers: every layer marks the shared NR slot, so it only ever held the last
+    // layer's time (field report 2026-10-01). Each layer also has its own slot; with two or
+    // more layers measured, show those instead of the shared row.
+    std::vector<Row> shown;
+    unsigned measuredLayers = 0;
+    for (unsigned i = 0; i < diagnostics::kTimedNrLayers; ++i)
+        if (s.metrics.flow.gpuTiming[size_t(diagnostics::nrLayerStage(i))].samples > 0) ++measuredLayers;
+    static const char* const layerLabels[] = {"NR 第1层", "NR 第2层", "NR 第3层", "NR 第4层"};
+    static const char* const layerColors[] = {"#FF8A3D", "#FFA866", "#FFC28F", "#FFD9B8"};
     for (const auto& r : rows) {
+        if (r.stage == Stage::Nr && measuredLayers >= 2) {
+            for (unsigned i = 0; i < diagnostics::kTimedNrLayers; ++i)
+                if (s.metrics.flow.gpuTiming[size_t(diagnostics::nrLayerStage(i))].samples > 0)
+                    shown.push_back({layerLabels[i], diagnostics::nrLayerStage(i), layerColors[i]});
+        } else shown.push_back(r);
+    }
+    for (const auto& r : shown) {
         const auto& sample = s.metrics.flow.gpuTiming[size_t(r.stage)];
+        // The mean of the last second, as 1.4.4's dashboard showed; P95 rides along for the
+        // tooltip. Showing P95 alone read as "slower than 1.4.4" for the same work.
         const bool measured = queuedFramesKnown() && sample.samples > 0 &&
-            sample.p95 && std::isfinite(*sample.p95) && *sample.p95 >= 0.0;
-        const double ms = measured ? *sample.p95 : 0.0;
+            sample.mean && std::isfinite(*sample.mean) && *sample.mean >= 0.0;
+        const double ms = measured ? *sample.mean : 0.0;
         QVariantMap item;
         item["label"] = QString::fromUtf8(r.label);
         item["ms"] = ms;
+        item["p95"] = measured && sample.p95 ? *sample.p95 : 0.0;
         item["measured"] = measured;
         item["samples"] = measured ? QVariant::fromValue<qulonglong>(sample.samples) : QVariant::fromValue<qulonglong>(0);
         item["domain"] = QStringLiteral("GPU timestamp P95");
@@ -937,9 +1061,9 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
         QVariantMap item{{"state", state}, {"ms", 0.0}, {"samples", QVariant::fromValue<qulonglong>(0)}};
         if (stage) {
             const auto& sample = flow.gpuTiming[size_t(*stage)];
-            if (live && sample.samples > 0 && sample.p95 && std::isfinite(*sample.p95) && *sample.p95 >= 0.0) {
+            if (live && sample.samples > 0 && sample.mean && std::isfinite(*sample.mean) && *sample.mean >= 0.0) {
                 item["state"] = QStringLiteral("measured");
-                item["ms"] = *sample.p95;
+                item["ms"] = *sample.mean;
                 item["samples"] = QVariant::fromValue<qulonglong>(sample.samples);
             }
         }
@@ -991,7 +1115,10 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
 double QmlPlayerBridge::stageBudgetMs() const {
     // One source period: the budget a stage has to stay inside. Zero when the
     // source rate is unknown, which the UI shows as unmeasured.
-    const double fps = impl_->snapshot.nominalSourceFps;
+    // With 60->30 capture half rate only every other frame is enhanced, so each has two
+    // source periods; dividing by one read 19 ms of 8K work as 115-130 % while it kept up
+    // (logs8, 2026-10-01).
+    const double fps = impl_->snapshot.nominalSourceFps * (impl_->snapshot.captureHalfRate ? 0.5 : 1.0);
     return fps > 0.01 ? 1000.0 / fps : 0.0;
 }
 
@@ -1000,12 +1127,13 @@ double QmlPlayerBridge::scheduleP95Ms() const { return impl_->snapshot.schedulin
 double QmlPlayerBridge::chainTotalMs() const {
     // Engine merges same-frame measured intervals before aggregation. Never
     // sum unrelated percentiles. This excludes uninstrumented stages/nodes.
-    return chainTotalMsKnown() ? *impl_->snapshot.metrics.flow.enhancementProcessing.p95 : 0.0;
+    // Mean of the last second, the same statistic as the stage rows (see stageTimings).
+    return chainTotalMsKnown() ? *impl_->snapshot.metrics.flow.enhancementProcessing.mean : 0.0;
 }
 bool QmlPlayerBridge::chainTotalMsKnown() const {
     const auto& sample = impl_->snapshot.metrics.flow.enhancementProcessing;
-    return queuedFramesKnown() && sample.samples > 0 && sample.p95 &&
-        std::isfinite(*sample.p95) && *sample.p95 >= 0.0;
+    return queuedFramesKnown() && sample.samples > 0 && sample.mean &&
+        std::isfinite(*sample.mean) && *sample.mean >= 0.0;
 }
 
 
@@ -1061,6 +1189,12 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
                     : value == QLatin1String("fsr4") ? engine::FrameGenerationBackend::Fsr4
                     : engine::FrameGenerationBackend::Dlss;
     if (s.frameGenerationBackend == want) return;
+    if (want == engine::FrameGenerationBackend::Fsr4 && !fsr4Possible()) {
+        // Keep the previous choice; the menu snaps back to it.
+        emit notice(tr("FSR 4 ML 补帧只支持 AMD RX 9000 显卡，当前显卡不能使用，已保持原来的补帧方式"), true);
+        emit settingsChanged();
+        return;
+    }
     s.frameGenerationBackend = want;
     // A DLSS multiplier above XeSS's ceiling used to make the switch fail
     // silently in effect (the backend stayed DLSS). Clamp to the ceiling instead.
@@ -1348,7 +1482,17 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
 int QmlPlayerBridge::captureAudioChoice() const { return impl_->captureAudioChoice; }
 void QmlPlayerBridge::setCaptureAudioChoice(int choice) {
     if (choice < source::kCaptureAudioFromVideoDevice || choice >= int(impl_->captureAudio.size())) return;
-    impl_->captureAudioChoice = choice; emit captureChanged();
+    impl_->captureAudioChoice = choice;
+    // Remember the audio choice for this device as soon as it is picked, not only on
+    // 连接并开始 (field report 2026-10-01: picked, closed, and it was gone next time).
+    auto& i = *impl_;
+    if (!i.captureDevice.empty() && i.captureDevice == i.capturePrefs.videoPath) {
+        const source::CaptureDevice* audio = choice >= 0 && size_t(choice) < i.captureAudio.size() ? &i.captureAudio[size_t(choice)] : nullptr;
+        i.capturePrefs.audioPath = audio ? audio->path : std::wstring{};
+        i.capturePrefs.audioMode = audio ? (audio->wasapi ? source::kCaptureAudioWasapi : 0) : choice;
+        if (!ui::CapturePreferenceStore(i.dataDir).save(i.capturePrefs)) veyra::log::warn("capture-ui", "capture audio choice not saved");
+    }
+    emit captureChanged();
 }
 int QmlPlayerBridge::captureColorSpace() const { return int(source::captureColorSpace(impl_->captureColor)); }
 void QmlPlayerBridge::setCaptureColorSpace(int value) {
@@ -1363,7 +1507,17 @@ void QmlPlayerBridge::setCaptureColorRange(int value) {
 double QmlPlayerBridge::captureRequestedFps() const { return impl_->captureFps; }
 void QmlPlayerBridge::setCaptureRequestedFps(double value) {
     if (!source::validCaptureFrameRate(value)) { emit notice(tr("采集帧率请输入 1–1000 的数字（可带小数），或 0 沿用设备默认"), true); return; }
-    impl_->captureFps = value; emit captureChanged();
+    if (impl_->captureFps == value) return;
+    impl_->captureFps = value;
+    // Saved as soon as it is typed, as the audio choice is (field report 2026-10-01: the
+    // new rate was lost unless another option was changed before closing).
+    auto& i = *impl_;
+    if (!i.captureDevice.empty() && i.captureDevice == i.capturePrefs.videoPath) {
+        i.capturePrefs.requestedFps = value;
+        if (!ui::CapturePreferenceStore(i.dataDir).save(i.capturePrefs)) veyra::log::warn("capture-ui", "capture frame rate not saved");
+    }
+    veyra::log::info("capture-ui", std::format("requested fps={}", value));
+    emit captureChanged();
 }
 int QmlPlayerBridge::captureAudioIngress() const { return int(settings().captureAudio); }
 void QmlPlayerBridge::setCaptureAudioIngress(int value) {
@@ -1379,6 +1533,13 @@ void QmlPlayerBridge::setCaptureBufferMode(int value) {
 }
 bool QmlPlayerBridge::captureQueryBusy() const { return impl_->captureBusy; }
 QString QmlPlayerBridge::captureStatus() const { return impl_->captureStatus; }
+bool QmlPlayerBridge::captureMagewellDevice() const { return source::magewell::isProCaptureDevicePath(impl_->captureDevice); }
+QString QmlPlayerBridge::captureMagewellStatus() const {
+    std::wstring runtime;
+    if (!source::magewell::runtimeAvailable(&runtime))
+        return tr("找不到美乐威运行库 LibMWCapture.dll（应在软件的 runtime\\magewell 文件夹里，或装美乐威驱动/SDK）");
+    return QString::fromStdWString(source::magewell::statusText());
+}
 void QmlPlayerBridge::refreshCaptureDevices() {
     impl_->capturePrefs = ui::CapturePreferenceStore(impl_->dataDir).load();
     queryCapture(0, {});
@@ -1488,6 +1649,7 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
     impl_->resumeSession = 0;
     impl_->screenFillActive = false;
     const bool screen = uri.find(L"screen") != std::wstring::npos;
+    veyra::log::info("capture-ui", "open uri " + QString::fromStdWString(uri).toStdString());
     openAfterCinema(screen ? tr("正在开始屏幕捕获…") : tr("正在打开采集设备 · %1").arg(utf8Of(label)), [this, uri] {
         if (impl_->preOpen) impl_->preOpen();
         impl_->engine.previewView({});
@@ -1655,6 +1817,234 @@ QVariantMap QmlPlayerBridge::ps5() const {
     return out;
 }
 QVariantList QmlPlayerBridge::ps5Profiles() const { return impl_->ps5ProfileList; }
+
+// --- PC streaming (Moonlight / Sunshine) -----------------------------------------------------------
+QObject* QmlPlayerBridge::moonlightModel() const {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    return impl_->moonlight.get();
+#else
+    return nullptr;
+#endif
+}
+bool QmlPlayerBridge::moonlightCaptured() const {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    return impl_->moonlightCapture && impl_->moonlightCapture->captured();
+#else
+    return false;
+#endif
+}
+bool QmlPlayerBridge::moonlightStatsVisible() const {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    return impl_->moonlightStatsVisible;
+#else
+    return false;
+#endif
+}
+void QmlPlayerBridge::setMoonlightStatsVisible(bool visible) {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    if (impl_->moonlightStatsVisible == visible) return;
+    impl_->moonlightStatsVisible = visible;
+    emit moonlightUiChanged();
+#else
+    (void)visible;
+#endif
+}
+void QmlPlayerBridge::openMoonlightDialog() { emit navigate(QStringLiteral("moonlight")); }
+
+// --- Xbox home streaming (unofficial) ------------------------------------------------------------------
+QObject* QmlPlayerBridge::xboxModel() const {
+#ifdef VEYRA_ENABLE_XBOX
+    return impl_->xbox.get();
+#else
+    return nullptr;
+#endif
+}
+void QmlPlayerBridge::openXboxDialog() { emit navigate(QStringLiteral("xbox")); }
+void QmlPlayerBridge::xboxDisconnect() {
+#ifdef VEYRA_ENABLE_XBOX
+    if (impl_->snapshot.xboxActive) stopPlayback();
+#endif
+}
+
+#ifdef VEYRA_ENABLE_XBOX
+void QmlPlayerBridge::setupXbox() {
+    auto& i = *impl_;
+    i.xbox = std::make_unique<ui::XboxModel>();
+    connect(i.xbox.get(), &ui::XboxModel::notice, this, &QmlPlayerBridge::notice);
+    i.xbox->setLaunchHandler([this](ui::XboxModel::Launch launch) -> bool {
+        auto& j = *impl_;
+        if (!j.videoWindow) return false;
+        rememberPosition(true);
+        j.openingSource = true;
+        j.openingSessionId = 0;
+        j.sourceLabel = L"Xbox · " + launch.label.toStdWString();
+        j.resumeSession = 0;
+        j.screenFillActive = false;
+        const bool pad = launch.desc.gamepad;
+        const QString label = launch.label;
+        auto request = std::make_shared<source::XboxConnectDesc>(std::move(launch.desc));
+        openAfterCinema(tr("正在连接 Xbox · %1").arg(label), [this, request, pad] {
+            auto& k = *impl_;
+            if (k.preOpen) k.preOpen();
+            k.engine.previewView({});
+            k.engine.openXbox(k.videoWindow, std::move(*request), k.options);
+            k.openingSessionId = k.engine.snapshot().sessionId;
+            refreshSubtitles({});
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+            // The pad is polled on the UI thread at 250 Hz; the session sends changes and a 33 ms heartbeat.
+            if (pad) {
+                if (!k.controller.start()) veyra::log::warn("xbox-input", "SDL gamepad initialization failed");
+                if (!k.xboxTimer) {
+                    k.xboxTimer = new QTimer(this);
+                    k.xboxTimer->setTimerType(Qt::PreciseTimer);
+                    connect(k.xboxTimer, &QTimer::timeout, this, [this] {
+                        auto& m = *impl_;
+                        if (!m.snapshot.xboxActive) { m.controller.stop(); m.xboxTimer->stop(); return; }
+                        const bool focused = QGuiApplication::focusWindow() != nullptr;
+                        m.engine.xboxController(m.controller.poll(focused));
+                        m.controller.feedback(m.engine.xboxFeedback(), focused);
+                    });
+                }
+                k.xboxTimer->start(4);
+            } else {
+                if (k.xboxTimer) k.xboxTimer->stop();
+                k.controller.stop();
+            }
+#else
+            (void)pad;
+#endif
+        });
+        rememberSource(QStringLiteral("xbox"), label);
+        return true;
+    });
+}
+
+void QmlPlayerBridge::tickXbox() {
+    auto& i = *impl_;
+    if (!i.xbox) return;
+    const auto& s = i.snapshot;
+    const bool active = s.xboxActive;
+    if (active != i.xboxWasActive) {
+        i.xboxWasActive = active;
+        i.xbox->updateStream(active, s.xbox);
+    } else if (active && ++i.xboxStatsTicks >= 15) {
+        i.xboxStatsTicks = 0;
+        i.xbox->updateStream(true, s.xbox);
+    }
+}
+#else
+void QmlPlayerBridge::tickXbox() {}
+#endif
+
+void QmlPlayerBridge::moonlightCapture(bool on) {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    auto& i = *impl_;
+    if (!i.moonlightCapture) return;
+    if (!on) {
+        i.moonlightWantCapture = false;
+        i.moonlightCapture->capture(false);
+        return;
+    }
+    if (!i.snapshot.moonlightActive || !i.videoWindow) return;
+    i.moonlightCapture->setWindow(GetAncestor(i.videoWindow, GA_ROOT));
+    // The tick keeps trying until the window is in the foreground (right after connecting it may not be yet).
+    i.moonlightWantCapture = !i.moonlightCapture->capture(true);
+#else
+    (void)on;
+#endif
+}
+
+void QmlPlayerBridge::moonlightDisconnect() {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    moonlightCapture(false);
+    if (impl_->snapshot.moonlightActive) stopPlayback();
+#endif
+}
+
+#ifdef VEYRA_ENABLE_MOONLIGHT
+void QmlPlayerBridge::setupMoonlight() {
+    auto& i = *impl_;
+    i.moonlight = std::make_unique<ui::MoonlightModel>();
+    i.moonlightCapture = std::make_unique<ui::MoonlightInputCapture>(i.engine);
+    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::capturedChanged, this, [this](bool) { emit moonlightUiChanged(); });
+    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::releaseRequested, this, [this] {
+        impl_->moonlightWantCapture = false;
+        emit notice(tr("已释放键盘和鼠标（点击画面重新捕获）"), false);
+    });
+    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::quitRequested, this, [this] { moonlightDisconnect(); });
+    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::statsRequested, this, [this] { setMoonlightStatsVisible(!moonlightStatsVisible()); });
+    connect(i.moonlight.get(), &ui::MoonlightModel::notice, this, &QmlPlayerBridge::notice);
+    i.moonlight->setLaunchHandler([this](ui::MoonlightModel::Launch launch) -> bool {
+        auto& j = *impl_;
+        if (!j.videoWindow) return false;
+        rememberPosition(true);
+        j.openingSource = true;
+        j.openingSessionId = 0;
+        j.sourceLabel = L"PC · " + launch.label.toStdWString();
+        j.resumeSession = 0;
+        j.screenFillActive = false;
+        const bool pad = (launch.desc.options.gamepadMask & 1) != 0;
+        j.moonlightWantCapture = launch.captureInput;
+        const QString label = launch.label;
+        auto request = std::make_shared<source::MoonlightConnectDesc>(std::move(launch.desc));
+        openAfterCinema(tr("正在连接 %1").arg(label), [this, request, pad] {
+            auto& k = *impl_;
+            if (k.preOpen) k.preOpen();
+            k.engine.previewView({});
+            k.engine.openMoonlight(k.videoWindow, std::move(*request), k.options);
+            k.openingSessionId = k.engine.snapshot().sessionId;
+            refreshSubtitles({});
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+            // The pad is polled on the UI thread at 250 Hz and sent only when it changes.
+            if (pad) {
+                if (!k.controller.start()) veyra::log::warn("moonlight-input", "SDL gamepad initialization failed");
+                if (!k.moonlightTimer) {
+                    k.moonlightTimer = new QTimer(this);
+                    k.moonlightTimer->setTimerType(Qt::PreciseTimer);
+                    connect(k.moonlightTimer, &QTimer::timeout, this, [this] {
+                        auto& m = *impl_;
+                        if (!m.snapshot.moonlightActive) { m.controller.stop(); m.moonlightTimer->stop(); return; }
+                        const bool focused = QGuiApplication::focusWindow() != nullptr;
+                        m.engine.moonlightController(m.controller.poll(focused));
+                        m.controller.feedback(m.engine.moonlightFeedback(), focused);
+                    });
+                }
+                k.moonlightTimer->start(4);
+            } else {
+                if (k.moonlightTimer) k.moonlightTimer->stop();
+                k.controller.stop();
+            }
+#else
+            (void)pad;
+#endif
+        });
+        rememberSource(QStringLiteral("moonlight"), label);
+        return true;
+    });
+}
+
+void QmlPlayerBridge::tickMoonlight() {
+    auto& i = *impl_;
+    if (!i.moonlight) return;
+    const auto& s = i.snapshot;
+    const bool active = s.moonlightActive;
+    if (active != i.moonlightWasActive) {
+        i.moonlightWasActive = active;
+        if (!active) {
+            i.moonlightWantCapture = false;
+            if (i.moonlightCapture) i.moonlightCapture->capture(false);
+        }
+        i.moonlight->updateStream(active, s.moonlight);
+    } else if (active && ++i.moonlightStatsTicks >= 15) {
+        i.moonlightStatsTicks = 0;
+        i.moonlight->updateStream(true, s.moonlight);
+    }
+    // Take the keyboard and mouse as soon as the picture is up (and again when the window comes to the front).
+    if (active && i.moonlightWantCapture && s.moonlight.state == source::MoonlightStats::State::Streaming) moonlightCapture(true);
+}
+#else
+void QmlPlayerBridge::tickMoonlight() {}
+#endif
 void QmlPlayerBridge::ps5Load() {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     auto& i = *impl_;
@@ -1833,7 +2223,9 @@ bool QmlPlayerBridge::ps5Connect() {
     WritePrivateProfileStringW(L"RemotePlay", L"FineSampling", desc.highQualitySampling ? L"1" : L"0", ps5Settings().c_str());
     const bool viewOnly = desc.request.viewOnly;
     rememberPosition(true);
-    i.openingSource = true; i.sourceLabel = L"PS5 · " + std::wstring(host.begin(), host.end()); i.resumeSession = 0; i.screenFillActive = false;
+    // The session id is cleared with the flag: the previous session's id left over here
+    // ended "opening" on the next snapshot while the old source still ran.
+    i.openingSource = true; i.openingSessionId = 0; i.sourceLabel = L"PS5 · " + std::wstring(host.begin(), host.end()); i.resumeSession = 0; i.screenFillActive = false;
     auto request = std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
     openAfterCinema(tr("正在连接 PS5 · %1").arg(QString::fromStdString(host)), [this, request, viewOnly] {
         auto& i = *impl_;
@@ -3694,7 +4086,17 @@ void QmlPlayerBridge::togglePlayPause() {
     // stays alive), so the decision must come from the transport state.
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
-    if (s.capture || s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    // Capture cards and streams pause too (field request 2026-10-02): the engine stops
+    // reading and enhancing, keeps the last picture and resets the source's queue, so
+    // play resumes with the newest frame rather than a backlog. The connection stays up.
+    if (s.capture && s.running) {
+        const bool pause = s.transport == T::Playing;
+        impl_->engine.pause(pause);
+        veyra::log::info("ui-transport", pause ? "live pause" : "live resume");
+        emit notice(pause ? tr("已暂停：画面停在当前帧，不再处理新画面；点播放继续") : tr("已继续"), false);
+        return;
+    }
     if (!s.running || s.transport == T::Ended) {
         // Only a real file is reopened; device/stream labels are not paths.
         const QString file = QString::fromStdWString(impl_->sourceLabel);
@@ -3771,12 +4173,23 @@ void QmlPlayerBridge::rememberWindowSize(int width, int height) {
     impl_->prefs[QStringLiteral("lastWindow")] = v;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "last window size not saved");
 }
+QRect QmlPlayerBridge::screenAvailableAt(int x, int y) const {
+    QScreen* screen = QGuiApplication::screenAt(QPoint(x, y));
+    if (!screen) screen = QGuiApplication::primaryScreen();
+    return screen ? screen->availableGeometry() : QRect(0, 0, 1920, 1040);
+}
+QRect QmlPlayerBridge::launchScreenAvailable() const {
+    const QPoint at = QCursor::pos();
+    return screenAvailableAt(at.x(), at.y());
+}
+
 bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
-                                   "subtitleSecondLanguage", "audioForceStereo", "holdCompare"};
+                                   "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
+                                   "magewellLowLatency", "cinePillHidden"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -3791,6 +4204,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = dir;
     } else if (key == QLatin1String("audioDevice")) {
         stored = value.toString();
+    } else if (key == QLatin1String("sliderKeyStep")) {
+        // Arrow-key step of a focused slider (设置 → 通用): 1, 0.1 or 0.01.
+        bool ok = false; const double v = value.toDouble(&ok);
+        if (!ok || !(qFuzzyCompare(v, 1.0) || qFuzzyCompare(v, 0.1) || qFuzzyCompare(v, 0.01))) return false;
+        stored = v;
     } else if (key == QLatin1String("accent")) {
         const QString v = value.toString();
         if (v != QLatin1String("orange") && v != QLatin1String("white")) return false;
@@ -3833,6 +4251,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
 void QmlPlayerBridge::applyPreference(const QString& key) {
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
+    else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
 }
 QVariantList QmlPlayerBridge::audioDevices() const {
     QVariantList out;
@@ -4757,6 +5176,9 @@ void QmlPlayerBridge::updateRunStatus() {
     QString status = tr("待机"), level = QStringLiteral("idle");
     if (s.failed) { status = tr("错误"); level = QStringLiteral("err"); }
     else if (s.remoteRecovering) { status = tr("恢复中"); level = QStringLiteral("warn"); }
+    // Comparison pauses frame generation by design; the output then runs at the source
+    // rate, which the rate check would call 输出未达标 (a field user read that as broken FG).
+    else if (active && i.compareMode != 0 && s.applied.multiplier > 1) { status = tr("对比中"); level = QStringLiteral("ok"); }
     else if (active && !s.applying && f.rateWindowReady) {
         status = QString::fromWCharArray(i.history.rateStatus(s));
         level = status == tr("正常") ? QStringLiteral("ok") : QStringLiteral("warn");
@@ -4778,7 +5200,8 @@ void QmlPlayerBridge::updateRunStatus() {
                           .arg(backend);
         }
         else detail << tr("未补帧");
-        if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed)) detail << tr("调度降档");
+        if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
+        else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed)) detail << tr("调度降档");
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);
     }
     // 1.4.4 DashboardHistory: target = source x multiplier (half-rate capture
@@ -4789,7 +5212,7 @@ void QmlPlayerBridge::updateRunStatus() {
         const double source = measuredInput ? std::min(s.nominalSourceFps, s.captureFps) : s.nominalSourceFps;
         const bool xessSink = s.applied.multiplier > 1 && engine::presentSinkFrameGeneration(s.applied.frameGenerationBackend);
         const double actual = xessSink ? f.xessSdkSubmitFps : f.presentSubmitFps;
-        const double target = source * (s.captureHalfRate ? 0.5 : 1.0) * s.applied.multiplier;
+        const double target = source * (s.captureHalfRate ? 0.5 : 1.0) * (i.compareMode != 0 ? 1u : s.applied.multiplier);
         if (target > 0) ratio = actual / target;
     }
     const bool ratioChanged = std::abs(ratio - i.rateRatio) > 0.005;
@@ -5040,6 +5463,11 @@ void QmlPlayerBridge::setCompareMode(int value) {
     impl_->compareMode = value;
     if (!impl_->holdKeyDown) impl_->engine.comparison(value, impl_->compareBase, float(impl_->compareSplit));
     veyra::log::info("ui-compare", std::format("mode={} base={} split={:.3f}", value, impl_->compareBase, impl_->compareSplit));
+    // Comparison shows real frames only (a generated frame has no original to set beside
+    // it), so frame generation pauses while it is on. A field user left split compare on
+    // for 24 minutes and reported "补帧无效" (logs9, 2026-10-01): say so.
+    if (value != 0 && impl_->snapshot.running && impl_->snapshot.applied.multiplier > 1)
+        emit notice(tr("对比模式下补帧暂停（对比只能用真实帧），关闭对比后自动恢复"), false);
     emit compareChanged();
 }
 bool QmlPlayerBridge::compareBase() const { return impl_->compareBase; }
@@ -5132,6 +5560,10 @@ QVariantMap QmlPlayerBridge::lastSource() const {
         saved[QStringLiteral("summary")] = captureSessionSummary();
     } else if (kind == QLatin1String("ps5")) {
         saved[QStringLiteral("summary")] = tr("PS5 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
+    } else if (kind == QLatin1String("moonlight")) {
+        saved[QStringLiteral("summary")] = tr("PC 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
+    } else if (kind == QLatin1String("xbox")) {
+        saved[QStringLiteral("summary")] = tr("Xbox 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
     } else if (kind == QLatin1String("screen")) {
         saved[QStringLiteral("summary")] = tr("屏幕捕获 · %1").arg(saved.value(QStringLiteral("label")).toString());
     } else if (hasCaptureSession()) {
@@ -5161,6 +5593,28 @@ void QmlPlayerBridge::resumeLastSource() {
         if (!ps5Connect()) emit notice(tr("没能继续上次的 PS5 串流：%1").arg(impl_->ps5Status), true);
 #else
         emit notice(tr("此版本不含 PS5 串流"), true);
+#endif
+        return;
+    }
+    if (kind == QLatin1String("xbox")) {
+#ifdef VEYRA_ENABLE_XBOX
+        if (!impl_->xbox || !impl_->xbox->resumeLast()) {
+            emit notice(tr("没能继续上次的 Xbox 串流，请在 Xbox 串流窗口里重新选择"), true);
+            emit navigate(QStringLiteral("xbox"));
+        }
+#else
+        emit notice(tr("此版本不含 Xbox 串流"), true);
+#endif
+        return;
+    }
+    if (kind == QLatin1String("moonlight")) {
+#ifdef VEYRA_ENABLE_MOONLIGHT
+        if (!impl_->moonlight || !impl_->moonlight->resumeLast()) {
+            emit notice(tr("没能继续上次的 PC 串流，请在 PC 串流窗口里重新选择"), true);
+            emit navigate(QStringLiteral("moonlight"));
+        }
+#else
+        emit notice(tr("此版本不含 PC 串流"), true);
 #endif
         return;
     }
@@ -5229,6 +5683,8 @@ QString QmlPlayerBridge::sourceTitle() const {
         return tr("采集卡 · %1").arg(name.isEmpty() ? impl_->liveLabel : name);
     }
     if (kind == QLatin1String("ps5")) return tr("PS5 串流 · %1").arg(impl_->liveLabel);
+    if (kind == QLatin1String("moonlight")) return tr("PC 串流 · %1").arg(impl_->liveLabel);
+    if (kind == QLatin1String("xbox")) return tr("Xbox 串流 · %1").arg(impl_->liveLabel);
     return tr("屏幕捕获 · %1").arg(impl_->liveLabel);
 }
 // "1080p60" / "1080p59.94": the reported height and nominal rate only.

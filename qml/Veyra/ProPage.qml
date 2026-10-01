@@ -176,7 +176,9 @@ VPage {
         implicitWidth: Math.max(size, labelText.implicitWidth)
         implicitHeight: showLabel ? size + 4 + labelText.implicitHeight : size
         property real shown: known ? Math.min(1, Math.max(0, fraction)) : 0
-        Behavior on shown { NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
+        // Live data changes every second; animating it behind another page redrew the
+        // window continuously (see VDot.qml), so only while shown.
+        Behavior on shown { enabled: orb.visible; NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
         onShownChanged: ring.requestPaint()
         onToneChanged: ring.requestPaint()
         Canvas {
@@ -235,7 +237,7 @@ VPage {
             fraction: known ? veyra.chainTotalMs / veyra.stageBudgetMs : 0
             value: veyra.chainTotalMsKnown ? veyra.chainTotalMs.toFixed(1) + "ms" : "—"
             label: "处理耗时"
-            tip: "增强链总耗时 P95，环 = 占源帧预算" + (veyra.stageBudgetMs > 0 ? " " + veyra.stageBudgetMs.toFixed(1) + " ms" : "") + " 的比例"
+            tip: "增强链总耗时（最近一秒平均，与 1.4.4 相同口径），环 = 占源帧预算" + (veyra.stageBudgetMs > 0 ? " " + veyra.stageBudgetMs.toFixed(1) + " ms" : "") + " 的比例"
         }
         PerfOrb {
             size: parent.size
@@ -246,15 +248,18 @@ VPage {
             label: "GPU 占用"
             tip: "Windows GPU 引擎占用率（最忙的引擎类型，全系统），每秒采样"
         }
+        // How much of one source frame's time the enhancement chain uses (the plan's
+        // "负载预算 = 耗时 / 预算"). It used to show output fps / target fps, which
+        // reads 100% whenever the output keeps up, however light the load.
         PerfOrb {
             size: parent.size
             showLabel: parent.showLabels
-            known: veyra.outputRateRatio >= 0
-            // Full ring = on target; a shortfall shows as a gap and turns amber/red.
-            fraction: known ? (veyra.outputRateRatio >= 0.95 ? 0.5 : veyra.outputRateRatio >= 0.8 ? 0.85 : 1.1) : 0
-            value: known ? Math.round(Math.min(1.5, veyra.outputRateRatio) * 100) + "%" : "—"
+            known: veyra.chainTotalMsKnown && veyra.stageBudgetMs > 0
+            fraction: known ? veyra.chainTotalMs / veyra.stageBudgetMs : 0
+            value: known ? Math.round(veyra.chainTotalMs / veyra.stageBudgetMs * 100) + "%" : "—"
             label: "负载预算"
-            tip: "实际输出帧率 / 目标帧率（源帧率 × 补帧倍率）：" + veyra.runStatus
+            tip: "增强链 GPU 耗时（最近一秒平均）占一个源帧时间（" + veyra.stageBudgetMs.toFixed(1)
+                 + " ms）的比例；超过 100% 就跟不上源帧率。当前状态：" + veyra.runStatus
         }
     }
     // The status light: 1.4.4's 当前状态 (正常 / 补帧调度降档 / 输出未达标 /
@@ -265,15 +270,27 @@ VPage {
         readonly property color tone: veyra.runStatusLevel === "ok" ? Theme.ok
                                     : veyra.runStatusLevel === "warn" ? "#F2B941"
                                     : veyra.runStatusLevel === "err" ? Theme.err : Qt.rgba(1, 1, 1, 0.3)
-        Rectangle {
+        Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 4
-            radius: 2
-            color: light.tone
-            opacity: veyra.runStatusLevel === "idle" ? 0.35 : 0.9
-            Behavior on color { ColorAnimation { duration: Theme.d(300) } }
-            layer.enabled: veyra.runStatusLevel !== "idle"
-            layer.effect: MultiEffect { shadowEnabled: true; shadowColor: light.tone; shadowBlur: 0.6; shadowVerticalOffset: 0; blurMax: 12; autoPaddingEnabled: true }
+            Rectangle {
+                id: strip
+                anchors.fill: parent
+                radius: 2
+                color: light.tone
+                opacity: veyra.runStatusLevel === "idle" ? 0.35 : 0.9
+                Behavior on color { enabled: strip.visible; ColorAnimation { duration: Theme.d(300) } }
+            }
+            // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
+            // a screen DPI change while it walks the parent's children, and the walk then touched
+            // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
+            MultiEffect {
+                source: strip
+                anchors.fill: strip
+                visible: veyra.runStatusLevel !== "idle"
+                opacity: strip.opacity
+                shadowEnabled: true; shadowColor: light.tone; shadowBlur: 0.6; shadowVerticalOffset: 0; blurMax: 12; autoPaddingEnabled: true
+            }
         }
         Text {
             text: veyra.runStatus + (veyra.runStatusDetail.length > 0 ? " · " + veyra.runStatusDetail : "")
@@ -356,7 +373,7 @@ VPage {
         VButton {
             id: sourceBtn
             objectName: "pro-source-button"
-            iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
+            iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
                     : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
             text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : "片源"
             maxTextWidth: 260
@@ -573,6 +590,36 @@ VPage {
                 kind: veyra.fgEnabled ? "acc" : ""
                 text: veyra.fgEnabled ? veyra.fgMultiplier + "X" : "补帧关"
             }
+            // Subtitle and audio-track menus (field request 2026-10-01), the same menus as the
+            // 极简 pill's, beside the fullscreen button.
+            component BarButton: Item {
+                id: barBtn
+                property string glyph: ""
+                property string tip: ""
+                signal tapped()
+                implicitWidth: 28; implicitHeight: 28
+                VIcon { anchors.centerIn: parent; name: barBtn.glyph; color: barHover.hovered ? Theme.t1 : Theme.t2 }
+                HoverHandler { id: barHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: barBtn.tapped() }
+                ToolTip.visible: barHover.hovered
+                ToolTip.text: barBtn.tip
+            }
+            BarButton {
+                id: proCcButton
+                objectName: "pro-subtitles"
+                glyph: "cc"
+                tip: "字幕"
+                visible: veyra.hasSource && !veyra.isCapture
+                onTapped: proCcMenu.openAt(proCcButton, "up")
+            }
+            BarButton {
+                id: proAudioButton
+                objectName: "pro-audio-tracks"
+                glyph: "music"
+                tip: "音轨"
+                visible: veyra.hasSource && !veyra.isCapture
+                onTapped: proAudioMenu.openAt(proAudioButton, "up")
+            }
             // Fullscreen, at the picture's bottom-right corner where players put it.
             Item {
                 objectName: "pro-fullscreen"
@@ -673,7 +720,7 @@ VPage {
                 spacing: 5
                 RowLayout {
                     Layout.fillWidth: true
-                    VEyebrow { text: "GPU 阶段采样 P95"; Layout.fillWidth: true }
+                    VEyebrow { text: "GPU 阶段耗时 · 最近一秒平均"; Layout.fillWidth: true }
                     Text {
                         text: "预算 " + veyra.stageBudgetMs.toFixed(1) + " ms / 源帧"
                         color: Theme.t3
@@ -691,12 +738,15 @@ VPage {
                     rowSpacing: 6
                     flow: GridLayout.TopToBottom
                     rows: Math.ceil(veyra.stageTimings.length / 2)
+                // The model is the row count, not the list: the list is a new array on
+                // every snapshot, and a list model rebuilt the rows each time, so every
+                // bar restarted from 0 (the 0 / 5.8 / 0 / 5.8 flicker in the field).
                 Repeater {
-                    model: veyra.stageTimings
+                    model: veyra.stageTimings.length
                     delegate: RowLayout {
                         id: stageRow
-                        required property var modelData
                         required property int index
+                        readonly property var modelData: veyra.stageTimings[index] || ({ label: "", ms: 0, fraction: 0, measured: false, color: "transparent" })
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         spacing: 8
@@ -718,11 +768,12 @@ VPage {
                                 radius: 9
                                 color: Qt.rgba(1, 1, 1, 0.08)
                                 Rectangle {
+                                    objectName: "stage-bar-fill"
                                     width: root.barsArmed ? parent.width * Math.max(0, Math.min(1, modelData.fraction)) : 0
                                     height: parent.height
                                     radius: 9
                                     color: modelData.color
-                                    Behavior on width { SequentialAnimation {
+                                    Behavior on width { enabled: stageRow.visible; SequentialAnimation {
                                         PauseAnimation { duration: root.barsSettled ? 0 : Theme.d(120 + stageRow.index * 60) }
                                         NumberAnimation { duration: Theme.d(800); easing.bezierCurve: Theme.springSoft } } }
                                 }
@@ -731,6 +782,9 @@ VPage {
                         Text {
                             Layout.preferredWidth: 48
                             text: modelData.measured ? modelData.ms.toFixed(1) + " ms" : "未测量"
+                            HoverHandler { id: stageValueHover }
+                            ToolTip.visible: stageValueHover.hovered && modelData.measured
+                            ToolTip.text: "平均 " + modelData.ms.toFixed(2) + " ms · P95 " + (modelData.p95 || 0).toFixed(2) + " ms（最近一秒）"
                             color: modelData.measured ? Theme.t1 : Theme.t3
                             font.family: Theme.fontMono
                             font.pixelSize: 11
@@ -1074,7 +1128,7 @@ VPage {
                                      + (veyra.videoSrQuality > 0 ? " · 质量 " + veyra.videoSrQuality : "")
                             on: veyra.srEnabled
                             open: true
-                            onToggled: veyra.srEnabled = on
+                            onToggled: on => veyra.srEnabled = on
 
                             VRow {
                                 label: "目标尺寸"
@@ -1123,7 +1177,7 @@ VPage {
                             title: "RTX Video HDR"
                             summary: veyra.videoHdr ? (veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : "已开启") : "已关闭"
                             on: veyra.videoHdr
-                            onToggled: veyra.videoHdr = on
+                            onToggled: on => veyra.videoHdr = on
                             Repeater {
                                 model: [{key:"contrast",label:"对比度",from:0,to:200,def:125},
                                         {key:"saturation",label:"饱和度",from:0,to:200,def:75},
@@ -1432,7 +1486,7 @@ VPage {
                                 hint: "帧同步 · 默认关闭"
                                 VSwitch {
                                     checked: veyra.fgStrict
-                                    onToggled: veyra.fgStrict = checked
+                                    onToggled: checked => veyra.fgStrict = checked
                                 }
                             }
                             VSubGroup {
@@ -1459,7 +1513,7 @@ VPage {
                                     VSwitch {
                                         objectName: "list-amd-half"
                                         checked: veyra.amdFlowHalf
-                                        onToggled: veyra.amdFlowHalf = checked
+                                        onToggled: checked => veyra.amdFlowHalf = checked
                                     }
                                 }
                                 VRow {
@@ -1489,7 +1543,7 @@ VPage {
                                 VSwitch {
                                     objectName: "list-low-queue"
                                     checked: veyra.fgLowQueue
-                                    onToggled: veyra.fgLowQueue = checked
+                                    onToggled: checked => veyra.fgLowQueue = checked
                                 }
                             }
                         }
@@ -1516,7 +1570,7 @@ VPage {
                                 value: Math.round(veyra.volume * 100) + "%"
                                 VSlider {
                                     implicitWidth: 150
-                                    from: 0; to: 1; value: veyra.volume
+                                    from: 0; to: 1; value: veyra.volume; inputScale: 100
                                     onMoved: veyra.volume = value
                                 }
                             }
@@ -1524,7 +1578,7 @@ VPage {
                                 label: "静音"
                                 VSwitch {
                                     checked: veyra.muted
-                                    onToggled: veyra.muted = checked
+                                    onToggled: checked => veyra.muted = checked
                                 }
                             }
                             VRow {
@@ -1609,7 +1663,7 @@ VPage {
                             PresentationRows { }
                             VRow {
                                 label: "原画 / 增强对比"
-                                hint: veyra.compareMode === 2 ? "在画面上按住左键拖动分割线：左边原画、右边增强" : ""
+                                hint: (veyra.compareMode === 2 ? "在画面上按住左键拖动分割线：左边原画、右边增强。" : "") + (veyra.compareMode !== 0 ? "对比时补帧暂停，关闭对比后恢复" : "")
                                 VSeg {
                                     objectName: "display-compare"
                                     options: [{ id: "0", label: "关闭" }, { id: "2", label: "分屏" }, { id: "1", label: "只看原画" }]
@@ -1634,7 +1688,7 @@ VPage {
                                 VSwitch {
                                     objectName: "display-hold-compare"
                                     checked: veyra.preferences.holdCompare !== false
-                                    onToggled: veyra.setPreference("holdCompare", checked)
+                                    onToggled: checked => veyra.setPreference("holdCompare", checked)
                                 }
                             }
                             VRow {
@@ -1653,7 +1707,7 @@ VPage {
                                 VSwitch {
                                     objectName: "display-force-sdr"
                                     checked: veyra.captureForceSdr
-                                    onToggled: veyra.captureForceSdr = checked
+                                    onToggled: checked => veyra.captureForceSdr = checked
                                 }
                             }
                             VRow {
@@ -1717,6 +1771,37 @@ VPage {
     }
     readonly property real testMenuScale: sourceMenu.motionScale
 
+    // The pill's 字幕 / 音轨 menus, for the video bar's buttons.
+    VMenu {
+        id: proCcMenu
+        title: "字幕"
+        items: [{ label: "关闭", checked: veyra.subtitlePrimary < 0, track: -1 }]
+            .concat(veyra.subtitleTracks.map(t => ({ label: t.label, note: t.note, track: t.index,
+                                                     disabled: !t.usable, checked: t.index === veyra.subtitlePrimary })))
+            .concat([{ label: "加载外部字幕…", icon: "import", act: "load" },
+                     { sep: true },
+                     { label: "字幕设置…", note: "字体、字号、描边、位置、延时", icon: "type", act: "dlg" }])
+        onPicked: (i, o) => {
+            if (o.act === "load") veyra.loadSubtitleDialog()
+            else if (o.act === "dlg") root.requestDialog("subtitle")
+            else if (o.track !== undefined) veyra.subtitlePrimary = o.track
+        }
+    }
+    VMenu {
+        id: proAudioMenu
+        title: "音轨"
+        readonly property var mk: t => ({ label: t.label, index: t.index,
+                                          note: t.channels > 0 ? (t.channels + " 声道") : "",
+                                          checked: t.index === veyra.selectedAudioTrack })
+        items: veyra.audioTracks.length > 0
+               ? veyra.audioTracks.map(mk).concat([{ sep: true },
+                     { label: "音频设置…", note: "输出设备、音画同步、偏移", icon: "music", act: "dlg" }])
+               : [{ label: "片源没有音轨或尚未打开", disabled: true }]
+        onPicked: (i, o) => {
+            if (o.act === "dlg") return root.requestDialog("audio")
+            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
+        }
+    }
     // pages-pro.js data-srcbtn: the open source first (checked), then the ways in.
     VMenu {
         id: sourceMenu
@@ -1726,12 +1811,16 @@ VPage {
                      checked: true, icon: "video", act: "" }] : [])
             .concat([{ label: "打开文件…", icon: "folder", act: "file" },
                      { label: "PS5 串流…", icon: "gamepad", act: "ps5" },
+                     { label: "PC 串流…", icon: "cast", act: "moonlight" },
+                     { label: "Xbox 串流…", icon: "gamepad", act: "xbox" },
                      { label: "屏幕捕获…", icon: "monitor", act: "screen" },
                      { sep: true },
                      { label: "采集卡设置…", icon: "settings", act: "capture" }])
         onPicked: (i, o) => {
             if (o.act === "file") veyra.openFileDialog()
             else if (o.act === "ps5") veyra.openPs5Dialog()
+            else if (o.act === "moonlight") veyra.openMoonlightDialog()
+            else if (o.act === "xbox") veyra.openXboxDialog()
             else if (o.act === "screen") veyra.openScreenCaptureDialog()
             else if (o.act === "capture") veyra.openCaptureDialog()
         }

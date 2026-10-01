@@ -17,16 +17,31 @@ Rectangle {
     signal requestDialog(string key)
     signal requestFullscreen()
     signal requestLock()
+    // Windowed 极简: a drag on the pill's empty space moves the window, like a title bar.
+    signal requestMove()
+    signal requestHide()
     // Set on the fullscreen bar: shows the lock button.
     property bool fullscreen: false
     // Set by FullscreenBar so upward menus stop above the playback pill.
     property real menuBottomLimit: -1
     // Any popover needs the owner window's full mask, not just the preset menu.
-    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible
+    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     readonly property bool seekPreviewOpen: seekMouse.containsMouse && seekMouse.enabled
     HoverHandler { id: barHover }
+    // Buttons, the seek rail and the volume slider take their own presses first; only
+    // a drag that starts on empty pill reaches this one.
+    DragHandler {
+        objectName: "cine-move"
+        target: null
+        enabled: !bar.fullscreen
+        // Never take a drag over from a control: by default a DragHandler steals the grab
+        // from an item once the pointer passes the drag threshold, so scrubbing the seek
+        // rail moved the window instead (field report 2026-10-02).
+        grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType | PointerHandler.ApprovesTakeOverByAnything
+        onActiveChanged: if (active) bar.requestMove()
+    }
     implicitHeight: 92
     radius: 30
     color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.86)
@@ -58,16 +73,22 @@ Rectangle {
                     objectName: "cine-cover"
                     anchors.fill: parent
                     anchors.margins: 1
-                    visible: status === Image.Ready
+                    // Drawn through the masking effect below, never directly.
+                    visible: false
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     cache: false
                     source: veyra.hasSource && !veyra.isCapture ? "image://veyra-thumb/cover/" + veyra.thumbnailGeneration : ""
-                    layer.enabled: visible
-                    layer.effect: MultiEffect {
-                        maskEnabled: true
-                        maskSource: coverMask
-                    }
+                }
+                // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
+                // a screen DPI change while it walks the parent's children, and the walk then touched
+                // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
+                MultiEffect {
+                    source: coverArt
+                    anchors.fill: coverArt
+                    visible: coverArt.status === Image.Ready
+                    maskEnabled: true
+                    maskSource: coverMask
                 }
                 Rectangle { id: coverMask; anchors.fill: coverArt; radius: 11; visible: false; layer.enabled: true }
             }
@@ -134,6 +155,8 @@ Rectangle {
                     TapHandler { id: cTap; gesturePolicy: TapHandler.WithinBounds; onTapped: cbtn.tapped() }
                 }
 
+                // 载入 (field request 2026-10-02): the home page's sources without leaving 极简.
+                CBtn { objectName: "cine-load"; glyph: "folder"; tip: "载入片源"; onTapped: loadMenu.openAt(this, "up") }
                 CBtn { glyph: "cc"; onTapped: ccMenu.openAt(this, "up") }
                 CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
 
@@ -174,13 +197,22 @@ Rectangle {
                 }
                 Item {
                     id: seekArea
+                    objectName: "cine-seek"
                     Layout.fillWidth: true
                     implicitHeight: 14
                     property bool scrubbing: false
                     property real scrubFrac: 0
                     // .seek:hover .thumb { left: 44% } - the thumb tracks the real
                     // progress, not the design's hard-coded 44%.
-                    readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, veyra.progress))
+                    readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, shownProgress))
+                    // Twice a second, not every snapshot: the pill is its own window and a rail
+                    // that moved every tick made it present ~50 times a second, more often than
+                    // a film plays, so OBS game capture could lock onto the pill.
+                    property real shownProgress: veyra.progress
+                    Timer {
+                        interval: 500; repeat: true; running: bar.visible
+                        onTriggered: seekArea.shownProgress = veyra.progress
+                    }
                     readonly property real hoverFrac: scrubbing ? scrubFrac
                                                       : seekMouse.containsMouse && seekArea.width > 0
                                                         ? Math.max(0, Math.min(1, seekMouse.mouseX / seekArea.width))
@@ -285,6 +317,7 @@ Rectangle {
                         id: seekMouse
                         anchors.fill: parent
                         hoverEnabled: true
+                        preventStealing: true
                         enabled: veyra.duration > 0 && !veyra.isCapture
                         cursorShape: Qt.PointingHandCursor
                         onEntered: thumbnailDelay.restart()
@@ -307,6 +340,7 @@ Rectangle {
                         onReleased: mouse => {
                             const target = seekArea.fractionAt(mouse.x) * veyra.duration
                             scrubSeek.stop()
+                            seekArea.shownProgress = seekArea.fractionAt(mouse.x)
                             seekArea.scrubbing = false
                             veyra.logUi("ui-seek", "targetSeconds=" + target.toFixed(3))
                             veyra.seekTo(target)
@@ -325,7 +359,7 @@ Rectangle {
 
         // --- right: preset, volume, fullscreen (230px) ---------------
         RowLayout {
-            Layout.preferredWidth: 230; Layout.minimumWidth: 230; Layout.maximumWidth: 230
+            Layout.preferredWidth: 250; Layout.minimumWidth: 250; Layout.maximumWidth: 250
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
             spacing: 6
 
@@ -342,7 +376,7 @@ Rectangle {
             }
 
             Item {
-                implicitWidth: 92
+                implicitWidth: 80
                 implicitHeight: 20
                 RowLayout {
                     anchors.fill: parent
@@ -350,7 +384,7 @@ Rectangle {
                     VIcon { name: "vol"; color: Theme.t2 }
                     VSlider {
                         Layout.fillWidth: true
-                        from: 0; to: 1; value: veyra.volume
+                        from: 0; to: 1; value: veyra.volume; inputScale: 100
                         onMoved: veyra.volume = value
                     }
                 }
@@ -367,6 +401,17 @@ Rectangle {
                 // The design's "全屏" button (title="全屏"). It used to call an
                 // undefined root.requestPage("pro").
                 TapHandler { onTapped: bar.requestFullscreen() }
+            }
+            // Hide the pill (field request 2026-10-01: it covers the game when playing
+            // through a capture card or a stream). The dock's eye button brings it back.
+            Item {
+                objectName: "cine-hide"
+                implicitWidth: 32; implicitHeight: 32
+                VIcon { anchors.centerIn: parent; name: "eyeoff"; color: hideHover.hovered ? "#FFFFFF" : Theme.t2 }
+                HoverHandler { id: hideHover; cursorShape: Qt.PointingHandCursor }
+                ToolTip.visible: hideHover.hovered
+                ToolTip.text: "隐藏播放条（顶部胶囊里可重新打开）"
+                TapHandler { onTapped: bar.requestHide() }
             }
         }
     }
@@ -405,6 +450,33 @@ Rectangle {
             if (o.act === "load") veyra.loadSubtitleDialog()
             else if (o.act === "dlg") bar.requestDialog("subtitle")
             else if (o.track !== undefined) veyra.subtitlePrimary = o.track
+        }
+    }
+
+    // 载入: the same six sources as the home page's cards, each opening its own dialog
+    // (or the file picker) in the main window; the pill steps aside while one is open.
+    VMenu {
+        id: loadMenu
+        objectName: "cine-load-menu"
+        aboveLimit: bar.menuBottomLimit
+        title: "载入片源"
+        items: [
+            { label: "打开视频", note: "MP4 · MKV · 图片", icon: "folder", act: "file" },
+            { label: "采集卡", note: "HDMI 采集设备", icon: "video", act: "capture" },
+            { label: "PS5 串流", note: "局域网串流", icon: "gamepad", act: "ps5" },
+            { label: "PC 串流", note: "Sunshine 主机", icon: "cast", act: "moonlight" },
+            { label: "Xbox 串流", note: "账号登录 · 实验", icon: "gamepad", act: "xbox" },
+            { label: "屏幕捕获", note: "窗口或显示器", icon: "monitor", act: "screen" }
+        ]
+        onPicked: (i, o) => {
+            switch (o.act) {
+            case "file": veyra.openFileDialog(); break
+            case "capture": veyra.openCaptureDialog(); break
+            case "ps5": veyra.openPs5Dialog(); break
+            case "moonlight": veyra.openMoonlightDialog(); break
+            case "xbox": veyra.openXboxDialog(); break
+            case "screen": veyra.openScreenCaptureDialog(); break
+            }
         }
     }
 

@@ -1,5 +1,12 @@
 # Veyra 工作记录
 
+## 2026-10-01 beta 5 试用反馈：界面与切换修复（分支 `codex/xbox-20261001`，beta 6）
+
+- 7 条反馈的原因与修改见 `docs/UI_FIELD_FIXES_2026-10-01.md`：极简播放条拖动窗口、全屏顶栏进专业页、GPU 阶段条每次刷新重建（0/5.8 跳动）、负载预算改为耗时/预算、换来源时清空视频窗口（PS5 慢连接时不再停在采集卡最后一帧）、空极简页点击弹片源菜单、竖屏片源窗口不超出屏幕。
+- 构建 `veyra_qml_ui` 与三项 QML 测试通过；`scripts/ui-check/ui-check.py` 真实程序点击/拖动/截图 PASS，证据 `E:/项目/Veyra/tests/ui-fixes-20261001/run5/`。PS5 慢连接未实测（不连接用户主机）。
+- 第二批（同日，用户本机 beta 5 日志、美乐威用户日志与转储、1.4.4 GC573 类日志）：美乐威低延迟运行时停掉 DirectShow 视频（两路 4K DMA 抢带宽，只剩约 28 帧、时间线每帧重置）；检测游加加等注入叠加层并提示（转储与两条交换链同时 ResizeBuffers 失败指向它）；ResizeBuffers 失败退避重试、交换链被拒时延长重试；新增 `[capture-driver-age]`；34 处 onToggled 显式参数。改参数重建约 1.7 秒（NGX 核心重初始化 1.07 秒）本轮未改。本机 KUHAIMI 采集 120 fps / 0 丢帧，证据 `tests/ui-fixes-20261001/capture1`。美乐威、游加加未实测。
+- 同分支此前的串流与美乐威工作见 `docs/STREAM_FIELD_FIXES_2026-10-01.md`、`docs/MAGEWELL_LOW_LATENCY_2026-10-01.md`。
+
 ## 2026-10-01 2.0.0 合并 main 与分支整理
 
 - 用户授权（“基本上 2.0.0 已经没啥问题了……先合并一手，存档一下，更新更新文档，对齐目前进度”）：整理 2.0.0 各分支并合并到**本地** `main`；不含 push / Release / 删旧 UI / 删 worktree。

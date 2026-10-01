@@ -31,8 +31,11 @@ VPage {
             implicitHeight: logoImg.implicitHeight + 80
             property real breath: 0
             scale: 1 + 0.02 * breath
+            // Only while the home page shows: running behind other pages it redrew the whole
+            // window every vsync during playback (~300 presents/s on a 320 Hz screen), which
+            // cost GPU time and kept OBS game capture on the UI instead of the video.
             SequentialAnimation on breath {
-                running: !Theme.reduced
+                running: !Theme.reduced && mark.visible
                 loops: Animation.Infinite
                 NumberAnimation { to: 1; duration: Theme.d(2250); easing.type: Easing.InOutSine }
                 NumberAnimation { to: 0; duration: Theme.d(2250); easing.type: Easing.InOutSine }
@@ -44,8 +47,12 @@ VPage {
                 sourceSize.width: 128
                 fillMode: Image.PreserveAspectFit
             }
-            layer.enabled: true
-            layer.effect: MultiEffect {
+            // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
+            // a screen DPI change while it walks the parent's children, and the walk then touched
+            // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
+            MultiEffect {
+                source: logoImg
+                anchors.fill: logoImg
                 shadowEnabled: true
                 shadowColor: "#FFFFFF"
                 shadowHorizontalOffset: 0
@@ -78,9 +85,12 @@ VPage {
             }
         }
 
-        // .srcgrid: repeat(4, 164px), gap 12.
-        RowLayout {
+        // .srcgrid: 164px cards, gap 12. Six cards since PC and Xbox streaming (1044 wide,
+        // fits a 1280 window); a narrower window wraps them onto a second row.
+        Flow {
+            id: srcGrid
             Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: Math.min(1044, root.width - 48)
             spacing: 12
             Repeater {
                 // Subtitles name what is really there: the device of the last capture
@@ -91,6 +101,10 @@ VPage {
                       sub: veyra.hasCaptureSession ? veyra.captureSessionSummary.split(" · ")[0] : "HDMI 采集设备", act: "capture" },
                     { glyph: "gamepad", title: "PS5 串流",
                       sub: veyra.remotePlayHost.length > 0 ? "已保存主机 " + veyra.remotePlayHost : "局域网串流", act: "ps5" },
+                    { glyph: "cast", title: "PC 串流",
+                      sub: veyra.moonlight && veyra.moonlight.state.lastLabel ? veyra.moonlight.state.lastLabel : "Sunshine 主机", act: "moonlight" },
+                    { glyph: "gamepad", title: "Xbox 串流",
+                      sub: veyra.xbox && veyra.xbox.state.lastLabel ? veyra.xbox.state.lastLabel : "账号登录 · 实验", act: "xbox" },
                     { glyph: "monitor", title: "屏幕捕获", sub: "窗口或显示器", act: "screen" }
                 ]
                 // The layout owns the slot's position, so the card inside it is free to
@@ -160,6 +174,8 @@ VPage {
                             case "file": veyra.openFileDialog(); break
                             case "capture": veyra.openCaptureDialog(); break
                             case "ps5": veyra.openPs5Dialog(); break
+                            case "moonlight": veyra.openMoonlightDialog(); break
+                            case "xbox": veyra.openXboxDialog(); break
                             case "screen": veyra.openScreenCaptureDialog(); break
                             }
                         }
@@ -179,7 +195,7 @@ VPage {
             // The last source actually used: capture card, PS5 or screen capture.
             readonly property var last: veyra.lastSource
             visible: last.kind !== undefined
-            implicitWidth: 692
+            implicitWidth: srcGrid.width
             implicitHeight: 54
             radius: 14
             border.width: 1
@@ -237,7 +253,7 @@ VPage {
         Flow {
             id: recent
             Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: 692
+            Layout.preferredWidth: srcGrid.width
             visible: veyra.recentFiles.length > 0
             spacing: 8
             Text {

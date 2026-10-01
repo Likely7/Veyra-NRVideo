@@ -40,6 +40,9 @@
 
 namespace veyra::ui {
 
+class MoonlightModel;
+class XboxModel;
+
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
     // --- professional-page readouts ---------------------------------------
@@ -122,6 +125,10 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int captureBufferMode READ captureBufferMode WRITE setCaptureBufferMode NOTIFY settingsChanged)
     Q_PROPERTY(bool captureQueryBusy READ captureQueryBusy NOTIFY captureChanged)
     Q_PROPERTY(QString captureStatus READ captureStatus NOTIFY captureChanged)
+    // Magewell Pro Capture low-latency mode (MagewellCapture.h): whether the selected device is
+    // one, and a one-line state (active with its latency, missing runtime, or why it fell back).
+    Q_PROPERTY(bool captureMagewellDevice READ captureMagewellDevice NOTIFY captureChanged)
+    Q_PROPERTY(QString captureMagewellStatus READ captureMagewellStatus NOTIFY snapshotChanged)
 
     // --- screen-capture dialog ---------------------------------------------
     Q_PROPERTY(QVariantList screenTargets READ screenTargets NOTIFY captureChanged)
@@ -156,6 +163,13 @@ class QmlPlayerBridge : public QObject {
     // forwarding and gyro calibration. `ps5` carries the form state.
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
     Q_PROPERTY(QVariantList ps5Profiles READ ps5Profiles NOTIFY ps5Changed)
+    // PC streaming (Moonlight / Sunshine): hosts, pairing, apps and stream settings live in
+    // `moonlight` (null when the build has no Moonlight); capture state and the stats overlay here.
+    Q_PROPERTY(QObject* moonlight READ moonlightModel CONSTANT)
+    // Xbox home streaming (unofficial): sign-in, consoles and stream state; null without Xbox support.
+    Q_PROPERTY(QObject* xbox READ xboxModel CONSTANT)
+    Q_PROPERTY(bool moonlightCaptured READ moonlightCaptured NOTIFY moonlightUiChanged)
+    Q_PROPERTY(bool moonlightStatsVisible READ moonlightStatsVisible WRITE setMoonlightStatsVisible NOTIFY moonlightUiChanged)
 
     // Shell preferences that are not enhancement settings: screenshot folder,
     // subtitle look, audio output. Stored in <data>/qml-preferences.v1.json and
@@ -475,6 +489,8 @@ public:
     void setCaptureDeviceId(const QString& value);
     QString captureDeviceLabel() const;
     bool captureForceSdr() const;
+    bool captureMagewellDevice() const;
+    QString captureMagewellStatus() const;
     void setCaptureForceSdr(bool value);
     bool captureFlipVertical() const;
     void setCaptureFlipVertical(bool value);
@@ -531,6 +547,16 @@ public:
 
     QVariantMap ps5() const;
     QVariantList ps5Profiles() const;
+    QObject* moonlightModel() const;
+    bool moonlightCaptured() const;
+    bool moonlightStatsVisible() const;
+    void setMoonlightStatsVisible(bool visible);
+    Q_INVOKABLE void openMoonlightDialog();
+    Q_INVOKABLE void moonlightCapture(bool on);
+    Q_INVOKABLE void moonlightDisconnect();
+    QObject* xboxModel() const;
+    Q_INVOKABLE void openXboxDialog();
+    Q_INVOKABLE void xboxDisconnect();
     Q_INVOKABLE void ps5Load();
     Q_INVOKABLE bool ps5Set(const QString& key, const QVariant& value);
     Q_INVOKABLE void ps5SelectProfile(const QString& id);
@@ -553,6 +579,11 @@ public:
     QVariantMap preferences() const;
     Q_INVOKABLE void rememberWindowSize(int width, int height);
     Q_INVOKABLE bool setPreference(const QString& key, const QVariant& value);
+    // Available area (taskbar excluded) of the screen holding a point, or of the screen the
+    // pointer is on at start. QML's Screen.desktopAvailable* span the whole virtual desktop,
+    // which centred the window across two of three monitors (field report 2026-10-01).
+    Q_INVOKABLE QRect screenAvailableAt(int x, int y) const;
+    Q_INVOKABLE QRect launchScreenAvailable() const;
     QString screenshotDirectory() const;
     QString lastScreenshot() const;
     QString dataDirectory() const;
@@ -931,6 +962,7 @@ public:
 signals:
     void nodeAnchorsChanged();
     void ps5Changed();
+    void moonlightUiChanged();
     void imageBatchChanged();
     void audioDevicesChanged();
     void subtitlesChanged();
@@ -990,6 +1022,14 @@ private:
     void tickImageBatch();
     void tickCapture();
     void tickPs5();
+    void tickMoonlight();
+    void tickXbox();
+#ifdef VEYRA_ENABLE_XBOX
+    void setupXbox();
+#endif
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    void setupMoonlight();
+#endif
     void queryCapture(int kind, std::wstring device);
     // Opens a device/stream URI (capture, screen) the way openPath opens a file.
     void openSourceUri(const std::wstring& uri, const std::wstring& label);

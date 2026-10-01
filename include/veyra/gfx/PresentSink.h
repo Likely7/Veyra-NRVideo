@@ -124,6 +124,9 @@ public:
     bool xessFailed() const { return xessFailed_; }
 
     void shutdown();
+    // False while a failed ResizeBuffers is backing off (see resize()).
+    bool resizeDue() const;
+    // True when XeSS was requested but an injected overlay made us present natively.
 
 private:
     static LRESULT CALLBACK wndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -147,6 +150,10 @@ private:
     bool tearingSupported_ = false;
     UINT swapChainFlags_ = 0;
     bool pendingResize_ = false;
+    // ResizeBuffers failures in a row and when the last one happened: retries back off
+    // instead of draining the queue every 100 ms while something holds the buffers.
+    uint32_t resizeFailures_ = 0;
+    uint64_t lastResizeFailureMs_ = 0;
     bool xessFailed_ = false;
     ID3D12Device* device_ = nullptr;
     ID3D12CommandQueue* queue_ = nullptr;

@@ -573,3 +573,56 @@ ingress. DXGI duplication is a Veyra addition. Screen capture is video-only.
 ## dav1d (1.3.0 AV1 playback)
 
 FFmpeg dynamically links dav1d 1.5.4 from the pinned local vcpkg build. The portable package includes its complete aggregated copyright/license text in `licenses/DAV1D-COPYRIGHT.txt` and provenance in `licenses/DAV1D-SPDX.json`. The FFmpeg corresponding-source ZIP includes dav1d source and its vcpkg port. Upstream: https://code.videolan.org/videolan/dav1d . License set recorded by the build: Apache-2.0, BSD-2-Clause, ISC and MIT; retain all notices supplied with the source.
+
+## Moonlight / GameStream streaming core (2026-10-01)
+
+The optional `VEYRA_ENABLE_MOONLIGHT` build compiles **moonlight-common-c** (GPL-3.0,
+https://github.com/moonlight-stream/moonlight-common-c) at commit
+`f900dd4767759c7b9d0e93bcea666b55c69ea62f` (2026-09-26) together with its two pinned submodules:
+ENet (MIT, https://github.com/cgutman/enet, `aca87840b57f045a1f7f9299e4b1b9b8e2a5e2f1`) and
+nanors (MIT, https://github.com/sleepybishop/nanors, `b1e3c22ca0cdc0bb83e3cd6ed1a2fc77869ed99a`).
+The build refuses any other checkout (`scripts/moonlight/verify-moonlight-stage.py`, pins in
+`scripts/moonlight/dependency-lock.json`). No Moonlight or Sunshine binary is committed or bundled.
+
+The host HTTP(S) client, the pairing handshake and the serverinfo / applist / launch handling in
+`src/moonlight/` and `include/veyra/moonlight/` are a port of **moonlight-qt** (GPL-3.0,
+https://github.com/moonlight-stream/moonlight-qt, commit `8369d1a0e11b999d4d1598f62ca5f6dea49602fb`):
+`app/backend/nvhttp.cpp`, `nvpairingmanager.cpp`, `identitymanager.cpp`, `nvcomputer.cpp` and the default
+bitrate table of `app/streaming/session.cpp`, with the Qt types replaced by standard C++, OpenSSL and Winsock.
+Nothing from the moonlight-qt tree is compiled. The OpenSSL (Apache-2.0) and Opus (BSD-3-Clause) libraries come
+from the same vcpkg tree as the PS5 build. Veyra is GPL-3.0, which is compatible with all of the above.
+License texts: `licenses/moonlight/ENET_MIT.txt`, `licenses/moonlight/NANORS_MIT.txt`; the GPL-3.0 text is Veyra's own `LICENSE`.
+
+The streamed machine runs **Sunshine** (GPL-3.0, https://github.com/LizardByte/Sunshine), which users install
+themselves; Veyra neither ships nor downloads it.
+
+## Xbox home streaming (unofficial, 2026-10-01)
+
+The optional `VEYRA_ENABLE_XBOX` build streams from the user's own Xbox console. It is **not affiliated with or
+endorsed by Microsoft**; it signs in with the client identity of xbox.com's web player, as the open-source clients do.
+
+The sign-in sequence (`src/xbox/Account.cpp`), the session API (`src/xbox/StreamApi.cpp`) and the data-channel
+protocol (`src/xbox/WebRtcSession.cpp`, `include/veyra/xbox/Protocol.h`) are ports of **Greenlight**
+(MIT, https://github.com/unknownskl/greenlight, commit `58e832a1b1e4bf6b5119a2c84df06ae5e5534993`,
+`packages/player` and `packages/desktop/main/helpers`) and of **xal-node** (MIT, https://github.com/unknownskl/xal-node,
+commit `a17a526b1d00e8456251908324ad51c9b24faa1a`, `src/msal.ts`). Nothing from either tree is compiled.
+
+Linked from the vcpkg tree (pins in `scripts/xbox/dependency-lock.json`):
+**libdatachannel** 0.24.5 (MPL-2.0, https://github.com/paullouisageneau/libdatachannel),
+**libjuice** 1.7.2 (MPL-2.0, https://github.com/paullouisageneau/libjuice; built with the one-line patch
+`scripts/xbox/vcpkg-overlay/libjuice/ipv4-interrupt.diff`, whose source is published there),
+**usrsctp** 0.9.5.0 (BSD-3-Clause), **libsrtp** 2.8.0 (BSD-3-Clause), **plog** 1.1.11 (MIT) and
+**nlohmann/json** 3.12.0 (MIT). MPL-2.0 is file-level copyleft and compatible with GPL-3.0; the MPL sources used are
+the published upstream releases plus the patch above. License texts: `licenses/xbox/`.
+
+## Magewell MWCapture SDK (Pro Capture low-latency capture, 2026-10-01)
+
+- Component: Magewell MWCapture SDK for Windows 3.3.1.1596 (Nanjing Magewell Electronics Co., Ltd.).
+- Use: `src/source/MagewellCapture.cpp` is compiled against the SDK header files (kept outside the
+  source tree, CMake `VEYRA_MAGEWELL_SDK_DIR`) and loads `LibMWCapture.dll` at run time; the call
+  sequence follows the SDK example `Examples/Applications/LowLatency`. Test packages carry the
+  unmodified `LibMWCapture.dll` in `runtime/magewell/`.
+- Licence: the header files and library are licensed for use, modification and redistribution with
+  Magewell's copyright notice and disclaimer retained; the full text is in
+  `licenses/magewell/MWCapture-SDK-NOTICE.txt`. The SDK as a whole (examples, tools) is under
+  Magewell's EULA and is not redistributed.

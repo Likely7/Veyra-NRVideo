@@ -22,6 +22,8 @@ Window {
     signal requestDialog(string key)
     signal requestFullscreen()
     signal requestLock()
+    signal requestMove()
+    signal requestHide()
     // Pointer movement over the bar keeps the controls up (the main window cannot
     // see it here).
     signal activity()
@@ -40,12 +42,18 @@ Window {
 
     // Room for the pill plus the preset menu above it (VMenu is at most 420 tall).
     readonly property int menuRoom: 440
-    readonly property int barWidth: Math.min(860, owner.width - 48)
+    // At least 760: the transport needs the middle column. A portrait film's narrow
+    // window lets the pill reach past the picture's sides.
+    readonly property int barWidth: Math.min(860, Math.max(760, owner.width - 48))
     width: barWidth
     height: 92 + menuRoom
     // Centred; fullscreen: 24px above the screen's bottom edge (the design's 24px
-    // side margin); cinema: .cine-bar top = --pic-h - 46.
-    x: owner.x + Math.round((owner.width - width) / 2)
+    // side margin); cinema: .cine-bar top = --pic-h - 46. Kept on the owner's screen.
+    x: {
+        const cx = owner.x + Math.round((owner.width - width) / 2)
+        const s = owner.screen
+        return s ? Math.max(s.virtualX, Math.min(cx, s.virtualX + s.width - width)) : cx
+    }
     y: cinema ? owner.y + Math.round(pillTop) - menuRoom
               : owner.y + owner.height - height - 24
 
@@ -101,6 +109,8 @@ Window {
         onRequestDialog: k => win.requestDialog(k)
         onRequestFullscreen: win.requestFullscreen()
         onRequestLock: win.requestLock()
+        onRequestMove: win.requestMove()
+        onRequestHide: win.requestHide()
         HoverHandler {
             // Real movement only: hover repeats while the bar animates.
             property point last: Qt.point(-1, -1)

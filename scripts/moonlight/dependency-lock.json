@@ -1,0 +1,44 @@
+{
+  "moonlight_common_c": {
+    "repository": "https://github.com/moonlight-stream/moonlight-common-c.git",
+    "commit": "f900dd4767759c7b9d0e93bcea666b55c69ea62f",
+    "commit_date": "2026-09-26",
+    "license": "GPL-3.0",
+    "submodules": {
+      "enet": {
+        "repository": "https://github.com/cgutman/enet.git",
+        "commit": "aca87840b57f045a1f7f9299e4b1b9b8e2a5e2f1",
+        "license": "MIT"
+      },
+      "nanors": {
+        "repository": "https://github.com/sleepybishop/nanors.git",
+        "commit": "b1e3c22ca0cdc0bb83e3cd6ed1a2fc77869ed99a",
+        "license": "MIT"
+      }
+    },
+    "local_path": "E:/项目/Veyra/deps/moonlight/moonlight-common-c",
+    "patches": []
+  },
+  "moonlight_qt_reference": {
+    "repository": "https://github.com/moonlight-stream/moonlight-qt.git",
+    "commit": "8369d1a0e11b999d4d1598f62ca5f6dea49602fb",
+    "commit_date": "2026-09-27",
+    "license": "GPL-3.0",
+    "note": "Reference only: pairing, launch and serverinfo logic in src/moonlight/ is a port of app/backend/{nvhttp,nvpairingmanager,identitymanager,nvcomputer}.cpp with the Qt types replaced; nothing from this tree is compiled.",
+    "local_path": "E:/项目/Veyra/deps/moonlight/moonlight-qt",
+    "ported_files": [
+      "app/backend/nvhttp.cpp",
+      "app/backend/nvpairingmanager.cpp",
+      "app/backend/identitymanager.cpp",
+      "app/backend/nvcomputer.cpp",
+      "app/streaming/session.cpp (stream configuration, default bitrate table)"
+    ]
+  },
+  "native_dependencies": [
+    "OpenSSL (crypto + ssl, static, from the existing remoteplay vcpkg tree)",
+    "Opus (audio decode, same tree)",
+    "ENet and nanors (bundled with moonlight-common-c as pinned submodules)"
+  ],
+  "no_runtime_dlls_or_vendor_sdks_in_this_package": true,
+  "sunshine_host": "Not bundled and not downloaded. Users install Sunshine (GPL-3.0, LizardByte) on the machine being streamed."
+}

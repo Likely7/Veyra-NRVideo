@@ -103,8 +103,9 @@ bool FFmpegVideoDecoder::openSoftware(const AVCodecParameters* codecParameters,
     // Legacy bounded packet pumps keep the default single thread. The file
     // source can supply compressed lookahead until receiveFrame succeeds and
     // explicitly opts into at most four codec workers; no application frame
-    // queue and no capture lookahead are introduced.
-    context_->thread_count = int(std::clamp(softwareThreads,1u,4u));
+    // queue and no capture lookahead are introduced. Streaming fallbacks ask
+    // for up to eight low-delay workers (dav1d then threads inside one frame).
+    context_->thread_count = int(std::clamp(softwareThreads,1u,8u));
     context_->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
     if (lowLatency) {
         // Live capture: never trade latency for throughput. Frame threading
@@ -146,7 +147,8 @@ bool FFmpegVideoDecoder::openD3D12VA(const AVCodecParameters* codecParameters,
     frameTimeBaseNum_ = streamTimeBaseNum;
     frameTimeBaseDen_ = streamTimeBaseDen;
 
-    const AVCodec* codec = avcodec_find_decoder(codecParameters->codec_id);
+    const AVCodec* codec = preferNativeAv1_ && codecParameters->codec_id == AV_CODEC_ID_AV1 ? avcodec_find_decoder_by_name("av1") : nullptr;
+    if (codec == nullptr) codec = avcodec_find_decoder(codecParameters->codec_id);
     if (codec == nullptr) {
         log::error("media", "decoder: no decoder for d3d12va codec");
         return false;
@@ -370,7 +372,8 @@ bool FFmpegVideoDecoder::openD3D11VA(const AVCodecParameters* codecParameters,
     frameTimeBaseNum_ = streamTimeBaseNum;
     frameTimeBaseDen_ = streamTimeBaseDen;
 
-    const AVCodec* codec = avcodec_find_decoder(codecParameters->codec_id);
+    const AVCodec* codec = preferNativeAv1_ && codecParameters->codec_id == AV_CODEC_ID_AV1 ? avcodec_find_decoder_by_name("av1") : nullptr;
+    if (codec == nullptr) codec = avcodec_find_decoder(codecParameters->codec_id);
     if (codec == nullptr) {
         log::error("media", "decoder: no decoder for d3d11va codec");
         return false;

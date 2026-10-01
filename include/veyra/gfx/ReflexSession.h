@@ -19,13 +19,18 @@ class ReflexSession {
     using Sleep=int(__cdecl*)(IUnknown*);
     using Marker=int(__cdecl*)(IUnknown*,MarkerParams*);
     HMODULE module_=nullptr;ID3D12Device* device_=nullptr;
-    Set set_=nullptr;Sleep sleep_=nullptr;Marker marker_=nullptr;Init unload_=nullptr;
+    Set set_=nullptr;Sleep sleep_=nullptr;Marker marker_=nullptr;
     bool initialized_=false,active_=false,driverEnabled_=false;uint64_t next_=0,sleeps_=0,markers_=0;
 public:
-    ~ReflexSession(){close();}
+    ~ReflexSession(){close();}   // the module stays pinned, see close()
     bool active()const{return active_;}
     bool disablePending()const{return driverEnabled_&&!active_;}
-    void close(){disable();device_=nullptr;if(initialized_&&unload_)unload_();initialized_=false;if(module_)FreeLibrary(module_);module_=nullptr;set_=nullptr;sleep_=nullptr;marker_=nullptr;unload_=nullptr;driverEnabled_=false;}
+    // nvapi64.dll stays loaded and initialized for the life of the process: the driver keeps
+    // per-device sleep-mode state that is called back when the D3D12 device is finally
+    // released. NvAPI_Unload + FreeLibrary here (on every re-enable and at shutdown) could
+    // leave that callback pointing into an unloaded module; a field dump of 2026-10-01
+    // crashed in D3D12Core on exit, reading code just past the NVIDIA user-mode driver.
+    void close(){disable();device_=nullptr;driverEnabled_=false;}
     bool disable(){
         active_=false;
         if(driverEnabled_&&set_){SleepParams p{};p.version=sizeof(p)|(1u<<16);const int r=set_(device_,&p);log::info("reflex",std::format("disable status={} successfulSleeps={} successfulMarkers={}",r,sleeps_,markers_));if(r)return false;driverEnabled_=false;}
@@ -34,16 +39,23 @@ public:
     bool enable(ID3D12Device* device){
         if(active_&&device_==device)return true;
         if(!disable())return false;
-        close();device_=device;wchar_t system[MAX_PATH]{};GetSystemDirectoryW(system,MAX_PATH);
-        const std::wstring path=std::wstring(system)+L"\\nvapi64.dll";
-        module_=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
-        auto query=module_?reinterpret_cast<Query>(GetProcAddress(module_,"nvapi_QueryInterface")):nullptr;
-        if(!query)return false;
-        auto init=reinterpret_cast<Init>(query(0x0150E828));unload_=reinterpret_cast<Init>(query(0xD22BDD7E));
-        set_=reinterpret_cast<Set>(query(0xac1ca9e0));sleep_=reinterpret_cast<Sleep>(query(0x852cd1d2));marker_=reinterpret_cast<Marker>(query(0xd9984c05));
-        if(!init||!set_||!sleep_||!marker_||!unload_)return false;
-        const int initialized=init();initialized_=initialized==0;
-        if(!initialized_){log::warn("reflex",std::format("initialize status={}",initialized));return false;}
+        close();device_=device;
+        if(!initialized_){
+            if(!module_){
+                wchar_t system[MAX_PATH]{};GetSystemDirectoryW(system,MAX_PATH);
+                const std::wstring path=std::wstring(system)+L"\\nvapi64.dll";
+                module_=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+                HMODULE pinned=nullptr;   // never unloaded, see close()
+                if(module_)GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,reinterpret_cast<LPCWSTR>(module_),&pinned);
+            }
+            auto query=module_?reinterpret_cast<Query>(GetProcAddress(module_,"nvapi_QueryInterface")):nullptr;
+            if(!query)return false;
+            auto init=reinterpret_cast<Init>(query(0x0150E828));
+            set_=reinterpret_cast<Set>(query(0xac1ca9e0));sleep_=reinterpret_cast<Sleep>(query(0x852cd1d2));marker_=reinterpret_cast<Marker>(query(0xd9984c05));
+            if(!init||!set_||!sleep_||!marker_)return false;
+            const int initialized=init();initialized_=initialized==0;
+            if(!initialized_){log::warn("reflex",std::format("initialize status={}",initialized));return false;}
+        }
         SleepParams p{};p.version=sizeof(p)|(1u<<16);p.low=1;p.markers=1;
         const int result=set_(device_,&p);log::info("reflex",std::format("enable status={} intervalUs=0 boost=0",result));
         sleeps_=markers_=0;return active_=driverEnabled_=result==0;

@@ -620,6 +620,8 @@ bool requiresGraphRebuild(const EnhancementSettings& previous, const Enhancement
     };
     if (planOf(previous) != planOf(next)) return true;
     if (previous.lowLatency != next.lowLatency) return true;
+    // The output stabiliser's pass exists only when it is on (EnhanceGraph::createNrHoldPass).
+    if ((previous.nrHoldStrength > 0.0f) != (next.nrHoldStrength > 0.0f)) return true;
     if (previous.nrPolicy != next.nrPolicy) return true;
     if (previous.srTarget != next.srTarget) return true;
     if (previous.frameGenerationBackend != next.frameGenerationBackend) return true;

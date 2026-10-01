@@ -15,8 +15,10 @@
 #include <QQmlContext>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSGRendererInterface>
 #include <QKeyEvent>
 #include <QTimer>
+#include <atomic>
 #include <QPointer>
 #include <QVariantMap>
 #include <QList>
@@ -32,6 +34,7 @@
 #include <shellapi.h>
 #include <shobjidl.h>
 #include <dbghelp.h>
+#include <d3d12.h>
 
 #include <cmath>
 #include <cstdlib>
@@ -54,6 +57,18 @@ HWND g_video = nullptr;
 enum class VideoProbeMode { Normal, Hidden, NoRegion, CoversOnly };
 VideoProbeMode g_videoProbe = VideoProbeMode::Normal;
 bool g_videoHiddenByProbe = false;
+// Set while a new source is opening: the window keeps the previous session's last
+// frame until the new one presents, so its region is emptied instead. A slow PS5
+// connect after a capture card left the card's last frame up for 20 s and the
+// window looked frozen (field report 2026-10-01).
+bool g_videoBlanked = false;
+
+void blankVideo(const char* why) {
+    if (!g_video || g_videoBlanked) return;
+    g_videoBlanked = true;
+    const int result = SetWindowRgn(g_video, CreateRectRgn(0, 0, 0, 0), TRUE);
+    veyra::log::info("qml-window", std::format("blank video until the new source presents ({}) result={}", why, result));
+}
 
 const char* videoProbeName() {
     switch (g_videoProbe) {
@@ -221,6 +236,8 @@ void syncVideoCovers(QQuickWindow* window, QQuickItem* host, qreal inset) {
     const int w = std::max(1, int(std::floor(host->width() * dpr)));
     const int h = std::max(1, int(std::floor(host->height() * dpr)));
     static QList<QRect> last;
+    // blankVideo() set the region behind this cache's back.
+    if (g_videoBlanked) { last.clear(); g_videoBlanked = false; }
     QList<QRect> holes;       // x, y, w, h; the radius rides along as a fifth rect
     for (const Cover& c : covers) {
         const QRectF local = c.rect.translated(-origin);
@@ -389,6 +406,21 @@ int main(int argc, char** argv) {
         }
     }
     QApplication app(argc, argv);
+    // The interface draws with Direct3D 12, like the video. Qt's default is Direct3D 11,
+    // and a D3D11 device in the process changed how overlays treat it: RivaTuner (MSI
+    // Afterburner) then crashed in d3d11.dll inside its own hooks while drawing its OSD on
+    // the XeSS swapchain through D3D11On12 (field dumps 2026-10-01). 1.4.4 drew its UI with
+    // GDI and had no D3D11 device; the overlays coexisted. VEYRA_UI_RHI=d3d11 restores
+    // Qt's default; without a usable D3D12 device Qt keeps it too.
+    {
+        wchar_t forced[16]{};
+        GetEnvironmentVariableW(L"VEYRA_UI_RHI", forced, 16);
+        const bool wantD3d11 = _wcsicmp(forced, L"d3d11") == 0;
+        const bool d3d12Usable = SUCCEEDED(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr));
+        if (!wantD3d11 && d3d12Usable) QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D12);
+        veyra::log::info("app", std::format("interface renderer={} (d3d12 usable={} forced={})",
+            !wantD3d11 && d3d12Usable ? "d3d12" : "d3d11", d3d12Usable, QString::fromWCharArray(forced).toStdString()));
+    }
     app.setProperty("veyraLogFile", QString::fromStdWString(logPath.wstring()));
     app.setProperty("veyraUiScale", uiScale);
     // Frameless windows have no menu, yet DefWindowProc turns a bare Alt tap into
@@ -644,7 +676,9 @@ int main(int argc, char** argv) {
         // GetParent() is null for an unattached WS_POPUP, so reparenting here on
         // every animation frame can starve input and timers before any source opens.
         if (!bridge.hasSource()) {
-            if (bridge.openingSource()) return;
+            // The window stays up for the presenter, but empty: the QML stage and its
+            // "正在连接" pill show instead of the last source's frozen frame.
+            if (bridge.openingSource()) { blankVideo("opening"); return; }
             if (IsWindowVisible(g_video)) {
                 veyra::log::info("qml-window", "follow: hide video because source snapshot is inactive");
                 ShowWindow(g_video, SW_HIDE);
@@ -681,6 +715,35 @@ int main(int argc, char** argv) {
     // The first frame may come before the page layout settles; one pass after the
     // event loop starts covers a scene that then never animates.
     QTimer::singleShot(0, &app, follow);
+    // How often the Qt windows present. OBS game capture locks onto one swapchain and only
+    // moves to another after 16 presents in a row from it, so a UI that keeps presenting
+    // during playback keeps OBS on the UI instead of the video (field report 2026-10-01).
+    {
+        static std::atomic<int> mainFrames{0}, barFrames{0};
+        QObject::connect(window, &QQuickWindow::frameSwapped, &app, [] { ++mainFrames; }, Qt::DirectConnection);
+        if (auto* bar = window->findChild<QQuickWindow*>(QStringLiteral("fullscreenBar")))
+            QObject::connect(bar, &QQuickWindow::frameSwapped, &app, [] { ++barFrames; }, Qt::DirectConnection);
+        auto* frameLog = new QTimer(&app);
+        QObject::connect(frameLog, &QTimer::timeout, &app, [] {
+            const int m = mainFrames.exchange(0), b = barFrames.exchange(0);
+            if (m || b) veyra::log::info("qml-frames", std::format("ui presents per 10 s: main={} controlBar={}", m, b));
+        });
+        frameLog->start(10000);
+    }
+    // Test only: VEYRA_TEST_DPI_FLIP=<ms> sends the window the WM_DPICHANGED a move to a
+    // 150 % screen would, then back to 100 % three seconds later, so the screen-change
+    // crash (field report 2026-10-01, two monitors) can be reproduced on one monitor.
+    if (const auto flip = qEnvironmentVariableIntValue("VEYRA_TEST_DPI_FLIP"); flip > 0) {
+        const auto send = [window](UINT dpi) {
+            const HWND hwnd = reinterpret_cast<HWND>(window->winId());
+            RECT r{};
+            GetWindowRect(hwnd, &r);
+            veyra::log::info("dpi-test", std::format("WM_DPICHANGED dpi={}", dpi));
+            SendMessageW(hwnd, WM_DPICHANGED, MAKEWPARAM(dpi, dpi), reinterpret_cast<LPARAM>(&r));
+        };
+        QTimer::singleShot(flip, &app, [send] { send(144); });
+        QTimer::singleShot(flip + 3000, &app, [send] { send(96); });
+    }
 
     // Before every open, place the native window and force the pending layout to
     // be applied so the client size the presenter reads is the real one.

@@ -383,7 +383,7 @@ VPage {
                     VButton {
                         id: nodeSourceBtn
                         objectName: "node-source-button"
-                        iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
+                        iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
                                 : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
                         text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : "片源"
                         maxTextWidth: 180
@@ -620,7 +620,7 @@ VPage {
                             Layout.fillWidth: true
                             visible: veyra.opticalFlowChoice === 1
                             NodeLabel { Layout.fillWidth: true; text: "AMD 性能档（宽高减半）" }
-                            VSwitch { objectName: "node-amd-half"; checked: veyra.amdFlowHalf; onToggled: veyra.amdFlowHalf = checked }
+                            VSwitch { objectName: "node-amd-half"; checked: veyra.amdFlowHalf; onToggled: checked => veyra.amdFlowHalf = checked }
                         }
                         NodeLabel { text: "内容节奏" }
                         VSelect {
@@ -677,11 +677,11 @@ VPage {
                             VSlider {
                                 objectName: "node-out-volume"
                                 Layout.fillWidth: true
-                                from: 0; to: 1; value: veyra.volume
+                                from: 0; to: 1; value: veyra.volume; inputScale: 100
                                 onMoved: value => veyra.volume = value
                             }
                             Text { text: Math.round(veyra.volume * 100) + "%"; color: Theme.t2; font.family: Theme.fontMono; font.pixelSize: 10 }
-                            VSwitch { objectName: "node-out-mute"; checked: !veyra.muted; onToggled: veyra.muted = !checked }
+                            VSwitch { objectName: "node-out-mute"; checked: !veyra.muted; onToggled: checked => veyra.muted = !checked }
                         }
                         VSeg {
                             objectName: "node-out-sync"
@@ -751,6 +751,29 @@ VPage {
                             value: { const d = veyra.audioDevices.find(x => x.id === chosen); return d ? d.label : "跟随系统默认" }
                             options: veyra.audioDevices
                             onPicked: id => veyra.setPreference("audioDevice", id)
+                        }
+                        // The list page's 输出稳定器 · 抗闪烁 (field request 2026-10-01: missing
+                        // in node mode). One global stage after the last NR, before SR and FG.
+                        NodeLabel { text: "输出稳定器 · 抗闪烁" }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 6
+                            VSwitch {
+                                objectName: "node-out-stabiliser"
+                                checked: veyra.nrHoldStrength > 0
+                                onToggled: checked => veyra.nrHoldStrength = checked ? 0.8 : 0
+                            }
+                            VSlider {
+                                objectName: "node-out-hold-strength"
+                                Layout.fillWidth: true
+                                visible: veyra.nrHoldStrength > 0
+                                from: 0.1; to: 1.0; value: veyra.nrHoldStrength
+                                onMoved: value => veyra.nrHoldStrength = value
+                            }
+                            Text {
+                                visible: veyra.nrHoldStrength > 0
+                                text: Math.round(veyra.nrHoldStrength * 100) + "%"
+                                color: Theme.t2; font.family: Theme.fontMono; font.pixelSize: 10
+                            }
                         }
                     }
                 }
@@ -952,7 +975,7 @@ VPage {
                             width: timingStrip.widthOf(modelData)
                             radius: 4
                             color: modelData.measured ? modelData.color : Qt.rgba(1, 1, 1, 0.12)
-                            Behavior on width { NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
+                            Behavior on width { enabled: visible; NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
                             Text {
                                 anchors.centerIn: parent
                                 width: parent.width - 6
@@ -967,7 +990,7 @@ VPage {
                             }
                             HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
                             ToolTip.visible: segHover.hovered
-                            ToolTip.text: modelData.label + "：" + (modelData.measured ? modelData.ms.toFixed(2) + " ms（GPU P95）" : "暂无本节点计时")
+                            ToolTip.text: modelData.label + "：" + (modelData.measured ? modelData.ms.toFixed(2) + " ms（GPU 最近一秒平均）" : "暂无本节点计时")
                             TapHandler {
                                 gesturePolicy: TapHandler.WithinBounds
                                 onTapped: root.focusNode(modelData.id)
@@ -1286,7 +1309,7 @@ VPage {
                     VSwitch {
                         objectName: "node-enable-" + card.node.id
                         checked: card.node.enabled === true
-                        onToggled: veyra.setEffectEnabled(card.node.index, checked)
+                        onToggled: checked => veyra.setEffectEnabled(card.node.index, checked)
                     }
                     VButton {
                         objectName: "node-unlink-" + card.node.id
@@ -1426,12 +1449,12 @@ VPage {
                 VRow {
                     label: "严格补帧节奏"
                     hint: "帧同步 · 默认关闭"
-                    VSwitch { checked: veyra.fgStrict; onToggled: veyra.fgStrict = checked }
+                    VSwitch { checked: veyra.fgStrict; onToggled: checked => veyra.fgStrict = checked }
                 }
                 VRow {
                     label: "低延迟队列"
                     hint: "减少排队；不宣称延迟下降"
-                    VSwitch { checked: veyra.fgLowQueue; onToggled: veyra.fgLowQueue = checked }
+                    VSwitch { checked: veyra.fgLowQueue; onToggled: checked => veyra.fgLowQueue = checked }
                 }
             }
         }
@@ -1542,12 +1565,16 @@ VPage {
                 ? [{ label: veyra.sourceTitle, note: veyra.sourceFormatText, checked: true, icon: "video", act: "" }] : [])
             .concat([{ label: "打开文件…", icon: "folder", act: "file" },
                      { label: "PS5 串流…", icon: "gamepad", act: "ps5" },
+                     { label: "PC 串流…", icon: "cast", act: "moonlight" },
+                     { label: "Xbox 串流…", icon: "gamepad", act: "xbox" },
                      { label: "屏幕捕获…", icon: "monitor", act: "screen" },
                      { sep: true },
                      { label: "采集卡设置…", icon: "settings", act: "capture" }])
         onPicked: (i, o) => {
             if (o.act === "file") veyra.openFileDialog()
             else if (o.act === "ps5") veyra.openPs5Dialog()
+            else if (o.act === "moonlight") veyra.openMoonlightDialog()
+            else if (o.act === "xbox") veyra.openXboxDialog()
             else if (o.act === "screen") veyra.openScreenCaptureDialog()
             else if (o.act === "capture") veyra.openCaptureDialog()
         }

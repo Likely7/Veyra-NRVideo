@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 Rectangle {
+    id: dot
     property bool warn: false
     property bool err: false
     property bool off: false
@@ -17,7 +18,11 @@ Rectangle {
     }
     // .dot.warn { animation: pulse 1.2s infinite }
     SequentialAnimation on opacity {
-        running: warn && !Theme.reduced
+        // Only while shown: the dock's export badge is a warn dot that is hidden until an
+        // export runs, and its pulse kept the window redrawing every vsync (OBS game
+        // capture then held the UI instead of the video).
+        running: warn && visible && !Theme.reduced
+        onRunningChanged: if (!running) dot.opacity = 1
         loops: Animation.Infinite
         // @keyframes pulse { 50% { opacity: .35 } } with ease-in-out per half.
         NumberAnimation { to: 0.35; duration: Theme.d(600); easing.bezierCurve: [0.42, 0, 0.58, 1, 1, 1] }

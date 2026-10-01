@@ -194,7 +194,17 @@ VPage {
                             hint: "关闭弹性与转场"
                             VSwitch {
                                 checked: veyra.reducedMotion
-                                onToggled: veyra.reducedMotion = checked
+                                onToggled: checked => veyra.reducedMotion = checked
+                            }
+                        }
+                        VRow {
+                            label: "滑块键盘微调"
+                            hint: "点一下滑块后用 ← → 调整，每次的幅度；Esc 或单击画面交还方向键给快进快退"
+                            VSeg {
+                                objectName: "set-slider-step"
+                                options: [{ id: "1", label: "1" }, { id: "0.1", label: "0.1" }, { id: "0.01", label: "0.01" }]
+                                current: String(veyra.preferences.sliderKeyStep !== undefined ? veyra.preferences.sliderKeyStep : 0.1)
+                                onPicked: id => veyra.setPreference("sliderKeyStep", Number(id))
                             }
                         }
                         VRow {
@@ -300,7 +310,7 @@ VPage {
                             VSwitch {
                                 objectName: "set-resume"
                                 checked: veyra.preferences.rememberPosition !== false
-                                onToggled: veyra.setPreference("rememberPosition", checked)
+                                onToggled: checked => veyra.setPreference("rememberPosition", checked)
                             }
                         }
                         VRow {
@@ -379,8 +389,9 @@ VPage {
                             label: "音量"
                             value: Math.round(veyra.volume * 100) + "%"
                             VSlider {
+                                objectName: "settings-volume"
                                 implicitWidth: 150
-                                from: 0; to: 1; value: veyra.volume
+                                from: 0; to: 1; value: veyra.volume; inputScale: 100
                                 onMoved: veyra.volume = value
                             }
                         }
@@ -534,7 +545,8 @@ VPage {
                     VGroup {
                         Repeater {
                             model: [
-                                { a: "后退 / 前进 10 秒", k: "← / →" },
+                                { a: "后退 / 前进 5 秒", k: "← / →" },
+                                { a: "播放 / 暂停（播放文件时）", k: "单击画面" },
                                 { a: "音量", k: "↑ / ↓" },
                                 { a: "打开文件 / 导出页", k: "Ctrl+O / Ctrl+E" },
                                 { a: "字幕开关 / 主轨 / 副轨", k: "B / T / Y" },

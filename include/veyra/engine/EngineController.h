@@ -13,9 +13,15 @@
 #include "veyra/engine/PreviewView.h"
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/remoteplay/SessionInbox.h"
+#ifdef VEYRA_ENABLE_MOONLIGHT
+#include "veyra/source/MoonlightSessionSource.h"
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+#include "veyra/source/XboxSessionSource.h"
+#endif
 #include "veyra/media/AudioTrack.h"
 #include "veyra/sink/VideoEncoder.h"
-namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; }
+namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
 namespace veyra::gfx { class D3D12DeviceContext; class CommandSlotRing; }
@@ -43,6 +49,9 @@ struct PlayerSnapshot {
     std::wstring presentationStatus;
     TransportState transport=TransportState::Empty;
     uint64_t sessionId=0,rejectedRevision=0;float volume=1;bool muted=false,audioAvailable=false;
+    // Video memory that kept growing with no settings change (MiB above the session's low point),
+    // 0 until the watchdog fires. Field logs 2026-10-01: +3 GB a minute in fullscreen only.
+    uint64_t vramRunawayMiB=0;
     std::wstring status=L"请打开视频或图片";
     EnhancementSettings desired,applied;bool applying=false;
     bool nrActive=false,srActive=false,fgActive=false;
@@ -110,6 +119,12 @@ struct PlayerSnapshot {
     bool remoteRecovering=false;unsigned remoteReconnectAttempts=0;std::wstring remoteRecoveryMessage;
     remoteplay::SessionInbox::Snapshot remoteStream;
     double remoteReceivedFps=0,remoteDecodedFps=0;bool remoteRatesReady=false;uint64_t remoteReceived=0,remoteDecoded=0,remoteIngressDropped=0;
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    bool moonlightActive=false;source::MoonlightStats moonlight;
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    bool xboxActive=false;source::XboxStats xbox;
+#endif
 };
 class EngineController {
 public:
@@ -125,6 +140,23 @@ public:
     void remotePlayController(const remoteplay::ControllerState&);
     void remotePlayLoginPin(std::string);
 #endif
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    void openMoonlight(HWND, source::MoonlightConnectDesc, PlayerOptions);
+    // Input for the running Moonlight session; all are no-ops when none is streaming.
+    void moonlightController(const remoteplay::ControllerState&);
+    remoteplay::ControllerFeedback moonlightFeedback();
+    void moonlightKey(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down);
+    void moonlightMouseMove(int dx, int dy);
+    void moonlightMouseButton(int button, bool down);
+    void moonlightScroll(int delta, bool horizontal);
+    void moonlightReleaseInput();
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    void openXbox(HWND, source::XboxConnectDesc, PlayerOptions);
+    // Pad and rumble for the running Xbox session; no-ops when none is streaming.
+    void xboxController(const remoteplay::ControllerState&);
+    remoteplay::ControllerFeedback xboxFeedback();
+#endif
     void stop();
     void comparison(int mode,bool base,float split=.5f){comparisonMode_=mode;comparisonBase_=base;comparisonSplit_=std::clamp(split,0.0f,1.0f);}
     void pause(bool p);
@@ -137,7 +169,7 @@ public:
     void startExport(const std::wstring& input,const std::wstring& output,PlayerOptions,bool hevc);
     PlayerSnapshot snapshot()const;
 private:
-    void run(HWND,std::wstring,PlayerOptions,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest={});
+    void run(HWND,std::wstring,PlayerOptions,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest={},std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest={},std::shared_ptr<source::XboxConnectDesc> xboxRequest={});
     void runLargeImage(HWND,const sink::RgbaImage&,PlayerOptions,gfx::D3D12DeviceContext&,gfx::CommandSlotRing&);
     void post(std::function<void()>);
     void dispatch();
@@ -148,6 +180,8 @@ private:
     uint64_t presentationRevision_=1;
     std::shared_ptr<FrameFlowWindow> activeFlow_;
     std::shared_ptr<source::RemotePlaySessionSource> activeRemote_;
+    std::shared_ptr<source::MoonlightSessionSource> activeMoonlight_;
+    std::shared_ptr<source::XboxSessionSource> activeXbox_;
     PreviewView previewView_;
     std::wstring savePath_;
     std::thread worker_;

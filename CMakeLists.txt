@@ -48,6 +48,8 @@ set(VEYRA_CLIP_TOOLS_ROOT "" CACHE PATH "vcpkg-installed x64-windows root with o
 option(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR
   "Enable local-only experimental Feature 18 adapter" OFF)
 option(VEYRA_ENABLE_REMOTEPLAY "Build PS5 Remote Play with pinned Chiaki source" OFF)
+option(VEYRA_ENABLE_MOONLIGHT "Build the Moonlight / Sunshine streaming core (pinned moonlight-common-c)" OFF)
+option(VEYRA_ENABLE_XBOX "Build Xbox home streaming (unofficial; libdatachannel from the vcpkg tree)" OFF)
 option(VEYRA_ENABLE_DLSS_SR "Enable public DLSS SR backend" OFF)
 option(VEYRA_ENABLE_DLSS_FG "Enable public DLSSG backend" OFF)
 option(VEYRA_ENABLE_NVOF "Enable NVIDIA Optical Flow guidance" OFF)
@@ -63,6 +65,25 @@ include(VeyraShaders)
 # NVIDIA's static NGX core shim (nvsdk_ngx_s*.lib) is built against the
 # static CRT (MT/MTd); match it for the diagnostic tools that link it.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+# Moonlight targets come after the runtime setting: they link into the same
+# executables as the rest of the engine, so they must use the static CRT too.
+if(VEYRA_ENABLE_MOONLIGHT)
+  set(VEYRA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+  include(VeyraMoonlight)
+  veyra_apply_warnings(veyra_moonlight_protocol)
+  add_executable(veyra_moonlight_protocol_tests tests/moonlight/ProtocolTests.cpp)
+  target_compile_features(veyra_moonlight_protocol_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_moonlight_protocol_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_moonlight_protocol_tests PRIVATE veyra_moonlight_protocol)
+  veyra_apply_warnings(veyra_moonlight_protocol_tests)
+  # The same fake host as a process, for the end-to-end UI check (scripts/moonlight/ui-demo.py).
+  add_executable(veyra_moonlight_mockhost tests/moonlight/MockHostServer.cpp)
+  target_compile_features(veyra_moonlight_mockhost PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_moonlight_mockhost PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_include_directories(veyra_moonlight_mockhost PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/moonlight)
+  target_link_libraries(veyra_moonlight_mockhost PRIVATE veyra_moonlight_protocol)
+endif()
 
 # ---------------------------------------------------------------------------
 # Targets grow phase by phase; only what actually compiles is declared.
@@ -515,8 +536,19 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/AverMediaAudioSwitch.cpp
     src/source/CaptureCompressedDecoder.cpp
     src/source/WasapiAudioInput.cpp
+    src/source/MagewellCapture.cpp
   )
   veyra_apply_warnings(veyra_sources)
+  # Magewell Pro Capture low-latency video: compiled against the vendor SDK headers when
+  # VEYRA_MAGEWELL_SDK_DIR points at them (kept outside the source tree); LibMWCapture.dll is
+  # loaded at run time. Without the headers the feature reports itself unavailable.
+  set(VEYRA_MAGEWELL_SDK_DIR "" CACHE PATH "MWCapture SDK root containing Include/LibMWCapture")
+  if(VEYRA_MAGEWELL_SDK_DIR AND EXISTS "${VEYRA_MAGEWELL_SDK_DIR}/Include/LibMWCapture/MWCapture.h")
+    set_source_files_properties(src/source/MagewellCapture.cpp PROPERTIES
+      COMPILE_DEFINITIONS VEYRA_HAS_MAGEWELL=1
+      INCLUDE_DIRECTORIES "${VEYRA_MAGEWELL_SDK_DIR}/Include;${VEYRA_MAGEWELL_SDK_DIR}/Include/LibMWCapture")
+    message(STATUS "Magewell SDK headers: ${VEYRA_MAGEWELL_SDK_DIR}")
+  endif()
   target_compile_options(veyra_sources PRIVATE /WX-)
   target_compile_features(veyra_sources PRIVATE cxx_std_20)
   target_link_libraries(veyra_sources PUBLIC veyra_sinks)
@@ -533,6 +565,22 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     target_compile_definitions(veyra_sources PUBLIC VEYRA_ENABLE_REMOTEPLAY=1)
     target_sources(veyra_sources PRIVATE src/source/RemotePlaySource.cpp src/source/RemotePlaySessionSource.cpp)
     target_link_libraries(veyra_sources PUBLIC veyra_remoteplay_chiaki)
+  endif()
+
+  if(VEYRA_ENABLE_MOONLIGHT)
+    find_package(Opus CONFIG REQUIRED)
+    target_compile_definitions(veyra_sources PUBLIC VEYRA_ENABLE_MOONLIGHT=1)
+    target_sources(veyra_sources PRIVATE src/source/MoonlightSessionSource.cpp)
+    target_link_libraries(veyra_sources PUBLIC veyra_moonlight_protocol veyra_moonlight_common_c PRIVATE Opus::opus)
+  endif()
+
+  if(VEYRA_ENABLE_XBOX)
+    set(VEYRA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+    include(VeyraXbox)
+    find_package(Opus CONFIG REQUIRED)
+    target_compile_definitions(veyra_sources PUBLIC VEYRA_ENABLE_XBOX=1)
+    target_sources(veyra_sources PRIVATE src/source/XboxSessionSource.cpp)
+    target_link_libraries(veyra_sources PUBLIC veyra_xbox_protocol PRIVATE Opus::opus)
   endif()
 
   add_executable(veyra_source_tests
@@ -671,6 +719,15 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_definitions(veyra_capture_compressed_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_capture_compressed_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_capture_compressed_tests PRIVATE veyra_sources veyra_gfx ${FFMPEG_LIBRARIES})
+  add_executable(veyra_magewell_probe tools/magewell_probe/main.cpp)
+  target_compile_features(veyra_magewell_probe PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_magewell_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_link_libraries(veyra_magewell_probe PRIVATE veyra_sources)
+  add_executable(veyra_stream_decode_bench tools/stream_decode_bench/main.cpp)
+  target_compile_features(veyra_stream_decode_bench PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_stream_decode_bench PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_include_directories(veyra_stream_decode_bench PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  target_link_libraries(veyra_stream_decode_bench PRIVATE veyra_sources ${FFMPEG_LIBRARIES} d3d12 dxgi)
   add_executable(veyra_yuy2_color_tests tests/integration/Yuy2ColorTests.cpp)
   target_compile_features(veyra_yuy2_color_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_yuy2_color_tests PRIVATE veyra_engine)
@@ -766,6 +823,33 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # AUTOMOC: QmlPlayerBridge declares Q_OBJECT, so its meta-object has to be
   # generated. Without this the library links but every signal is unresolved.
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
+  if(VEYRA_ENABLE_MOONLIGHT)
+    target_sources(veyra_qml_bridge PRIVATE src/ui/MoonlightInputCapture.cpp include/veyra/ui/MoonlightInputCapture.h)
+    # The PC streaming model (hosts, pairing, apps, settings) is its own small library so it can be
+    # tested against the mock host without the whole player.
+    add_library(veyra_moonlight_model STATIC src/ui/MoonlightModel.cpp include/veyra/ui/MoonlightModel.h)
+    set_target_properties(veyra_moonlight_model PROPERTIES AUTOMOC ON)
+    target_compile_features(veyra_moonlight_model PUBLIC cxx_std_20)
+    target_include_directories(veyra_moonlight_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${FFMPEG_INCLUDE_DIRS})
+    target_compile_definitions(veyra_moonlight_model PUBLIC VEYRA_ENABLE_MOONLIGHT=1 PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(veyra_moonlight_model PUBLIC veyra_moonlight_protocol veyra_base Qt6::Core Qt6::Gui)
+    target_link_libraries(veyra_qml_bridge PUBLIC veyra_moonlight_model)
+    if(VEYRA_ENABLE_XBOX)
+      add_library(veyra_xbox_model STATIC src/ui/XboxModel.cpp include/veyra/ui/XboxModel.h)
+      set_target_properties(veyra_xbox_model PROPERTIES AUTOMOC ON)
+      target_compile_features(veyra_xbox_model PUBLIC cxx_std_20)
+      target_include_directories(veyra_xbox_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${FFMPEG_INCLUDE_DIRS})
+      target_compile_definitions(veyra_xbox_model PUBLIC VEYRA_ENABLE_XBOX=1 PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+      target_link_libraries(veyra_xbox_model PUBLIC veyra_xbox_protocol veyra_base Qt6::Core Qt6::Gui)
+      target_link_libraries(veyra_qml_bridge PUBLIC veyra_xbox_model)
+    endif()
+
+    add_executable(veyra_moonlight_model_tests tests/moonlight/ModelTests.cpp)
+    target_compile_features(veyra_moonlight_model_tests PRIVATE cxx_std_20)
+    target_compile_definitions(veyra_moonlight_model_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_include_directories(veyra_moonlight_model_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/moonlight)
+    target_link_libraries(veyra_moonlight_model_tests PRIVATE veyra_moonlight_model)
+  endif()
   target_compile_features(veyra_qml_bridge PRIVATE cxx_std_20)
   target_include_directories(veyra_qml_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src ${FFMPEG_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/ui)

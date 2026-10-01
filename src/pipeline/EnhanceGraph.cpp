@@ -2845,6 +2845,10 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
         if(a.enabled!=b.enabled||a.lutName!=b.lutName||a.lutInputSpace!=b.lutInputSpace)return false;
     }
     if(s.videoHdr.enabled!=desc_.videoHdr.enabled)return false;
+    // Output stabiliser: its pass is allocated at build time, so on/off rebuilds; strength and
+    // tolerance are uniforms. Neither used to reach a running graph (field report
+    // 2026-10-01: switching it on mid-play did nothing until something else rebuilt).
+    if((s.nrHoldStrength>0.0f)!=(desc_.nrHoldStrength>0.0f))return false;
     // Switching the referenced .cube re-stages a descriptor, which needs the
     // queue drained: treat it as a rebuild (parameters stay live).
     if(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace)return false;
@@ -2860,6 +2864,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
         if(nodeColorInstances_[i+1])nodeColorInstances_[i+1]->refresh(s.additionalColors[i]);
     }
     desc_.contentRate=s.content;desc_.model=s.model;desc_.residual=s.residual;desc_.protection=s.protection;desc_.settingsRevision=s.revision;
+    desc_.nrHoldStrength=s.nrHoldStrength;desc_.nrHoldTolerance=s.nrHoldTolerance;
     desc_.nrLayersModel=std::move(nextNr.nrLayersModel);
     desc_.nrLayersResidual=std::move(nextNr.nrLayersResidual);
     desc_.nrLayersTemporal=std::move(nextNr.nrLayersTemporal);
