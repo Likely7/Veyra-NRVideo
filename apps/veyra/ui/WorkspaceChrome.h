@@ -8,7 +8,7 @@ struct ChromeLayout {
     int w,h,left,top,viewWidth,viewHeight,right,panelWidth,bottom,statusTop;
     bool pro,drawer;
     ChromeLayout(int width,int height,bool professional,bool showDrawer,int inspectorWidth=320):w(width),h(height),pro(professional),drawer(showDrawer){
-        panelWidth=pro?(w>=1180?std::clamp(inspectorWidth,296,420):w>=960?296:showDrawer?296:0):0;
+        panelWidth=pro?(w>=1180?std::clamp(inspectorWidth,340,480):w>=960?340:showDrawer?340:0):0;
         left=pro?(w>=960?84:68):0;top=pro?68:0;
         right=w-panelWidth-20;viewWidth=pro?((w>=960||showDrawer)?right-left-14:w-left-20):w-left*2;
         viewHeight=pro?std::max(160,h-306):h-88;
@@ -30,11 +30,11 @@ inline void paintChrome(HWND window,HDC dc,const ChromeLayout& l,const engine::P
     RECT client{};GetClientRect(window,&client);if(!copyGlass(dc,client,window))FillRect(dc,&client,bgBrush());if(full)return;
     using namespace Gdiplus;AlphaGraphics drawing(dc);auto& g=drawing.get();g.SetSmoothingMode(SmoothingModeAntiAlias);
     if(l.pro){
-        chromeText(dc,window,L"专业工作台",l.left,18,l.w<960?112:180,24,13,secondary);
+        chromeText(dc,window,L"Pro Workspace",l.left,18,l.w<960?106:126,24,13,secondary);
         const auto& resolution=s.metrics.resolution;
         auto extent=[](uint32_t w,uint32_t h){return w&&h?std::format(L"{} × {}",w,h):std::wstring(L"—");};
         const int column=std::min(154,(l.viewWidth-40)/3),size=l.viewWidth<600?13:17;
-        const std::wstring dimensions[]={extent(resolution.source.width,resolution.source.height),extent(resolution.base.width,resolution.base.height),!s.applied.nr?L"关闭":extent(resolution.nr.width,resolution.nr.height)};
+        const std::wstring dimensions[]={extent(resolution.source.width,resolution.source.height),extent(resolution.base.width,resolution.base.height),!s.applied.nr?L"Off":extent(resolution.nr.width,resolution.nr.height)};
         const wchar_t* headings[]={L"SOURCE",L"OUTPUT",L"NR PROCESS"};
         for(int i=0;i<3;++i){chromeText(dc,window,headings[i],l.left+20+i*column,l.bottom+94,column-4,20,10,secondary);chromeText(dc,window,dimensions[i],l.left+20+i*column,l.bottom+118,column-4,30,size,textColor);}
     }

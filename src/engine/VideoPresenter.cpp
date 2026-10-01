@@ -309,10 +309,10 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         // Provider owns generated Present calls. Capping our real-frame input
         // would change the source cadence, not cap its final output.
         effective.outputRate=OutputRateMode::Off;
-        capNotice=L" · 此补帧提供方暂不支持独立输出限帧；已保留设置";
+        capNotice=L" · This frame-generation provider does not support a separate output frame cap yet; settings kept";
     }
-    if(!reflexDisabled){effective.enabled=false;sink_.configurePacing(false,false);status=L"Reflex 驱动状态撤销失败；应用等待已停用，请关闭视频后重试";return effective;}
-    if(!requested.enabled){const bool restored=sink_.configurePacing(false,false);status=restored?L"帧同步已关闭":L"应用等待已关闭，但显示队列恢复失败；请关闭视频后重试";if(effective.outputRate==OutputRateMode::Custom)status+=std::format(L" · 输出上限 {:.3f} FPS",effective.customFps);status+=capNotice;return effective;}
+    if(!reflexDisabled){effective.enabled=false;sink_.configurePacing(false,false);status=L"Reverting the Reflex driver state failed; the app-side wait is disabled, please close the video and try again";return effective;}
+    if(!requested.enabled){const bool restored=sink_.configurePacing(false,false);status=restored?L"Frame sync disabled":L"The app-side wait was disabled, but restoring the display queue failed; please close the video and try again";if(effective.outputRate==OutputRateMode::Custom)status+=std::format(L" · Output cap {:.3f} FPS",effective.customFps);status+=capNotice;return effective;}
     if(xessActive()||fsrActive()){
         // The provider owns Present for its generated frames, so neither the
         // latency waiter nor an output cap can reach them. Only the DXGI VSync
@@ -321,25 +321,25 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         providerOwnedPresentation_=true;
         const bool vsync=xessActive()&&requested.display!=DisplaySync::Tearing;
         sink_.configurePacing(false,vsync);
-        if(fsrActive()){effective.display=DisplaySync::Tearing;status=L"FSR 提供方自行调度：低延迟队列与输出上限均不生效，显示同步暂不支持";}
-        else status=vsync?L"XeSS 提供方自行调度：低延迟队列与输出上限不生效 · 垂直同步":L"XeSS 提供方自行调度：低延迟队列与输出上限不生效 · 允许撕裂";
-        if(xessActive()&&requested.display==DisplaySync::Automatic)status+=L"（自动；VRR 状态未知）";
+        if(fsrActive()){effective.display=DisplaySync::Tearing;status=L"FSR provider schedules itself: low-latency queue and output cap have no effect, display sync is not supported yet";}
+        else status=vsync?L"XeSS provider schedules itself: low-latency queue and output cap have no effect · VSync":L"XeSS provider schedules itself: low-latency queue and output cap have no effect · tearing allowed";
+        if(xessActive()&&requested.display==DisplaySync::Automatic)status+=L" (automatic; VRR state unknown)";
         return effective;
     }
     providerOwnedPresentation_=false;
-    if(!sink_.configurePacing(true,requested.display!=DisplaySync::Tearing)){effective.enabled=false;status=L"显示队列控制不可用，已回退原呈现方式";return effective;}
+    if(!sink_.configurePacing(true,requested.display!=DisplaySync::Tearing)){effective.enabled=false;status=L"Display queue control is unavailable; reverted to the original presentation method";return effective;}
     // Low latency = queue depth 1, plus Reflex when frame generation is off
     // (generated outputs would need separately validated out-of-band markers).
-    std::wstring latency=L"低延迟队列：队列深度 1";
-    if(fg)latency+=L"（补帧运行，Reflex 不启用）";
-    else if(reflex_.enable(ctx.device()))latency=L"低延迟队列：队列深度 1 + NVIDIA Reflex（实验）";
-    else latency+=L"（Reflex 初始化失败）";
+    std::wstring latency=L"Low-latency queue: queue depth 1";
+    if(fg)latency+=L" (frame generation running, Reflex not enabled)";
+    else if(reflex_.enable(ctx.device()))latency=L"Low-latency queue: queue depth 1 + NVIDIA Reflex (experimental)";
+    else latency+=L" (Reflex initialization failed)";
     std::wstring cap;
-    if(followDisplay)cap=std::format(L"输出上限：跟随显示器 {:.0f} Hz",requested.customFps);
-    else if(requested.outputRate==OutputRateMode::Custom)cap=std::format(L"输出上限：{:.3f} FPS",requested.customFps);
-    else cap=L"输出上限：关闭";
-    const std::wstring sync=requested.display==DisplaySync::Automatic?L"显示同步：自动（按垂直同步处理，VRR 状态未知）"
-        :requested.display==DisplaySync::Vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
+    if(followDisplay)cap=std::format(L"Output cap: follow display {:.0f} Hz",requested.customFps);
+    else if(requested.outputRate==OutputRateMode::Custom)cap=std::format(L"Output cap: {:.3f} FPS",requested.customFps);
+    else cap=L"Output cap: off";
+    const std::wstring sync=requested.display==DisplaySync::Automatic?L"Display sync: automatic (treated as VSync, VRR state unknown)"
+        :requested.display==DisplaySync::Vsync?L"Display sync: VSync":L"Display sync: tearing allowed";
     status=latency+L" · "+cap+L" · "+sync;
     return effective;
 }

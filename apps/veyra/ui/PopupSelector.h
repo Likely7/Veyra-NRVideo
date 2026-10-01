@@ -36,7 +36,7 @@ inline LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
     case WM_NCPAINT:return 0;
     case WM_ERASEBKGND:return 1;
     case WM_CREATE:{titleTheme(h);s->glass.attach(h);s->font=makeFont(h,13);RECT r{};GetClientRect(h,&r);const int pad=dip(h,8);s->glass.render(r.right,r.bottom,false,false,{{r,dip(h,12),88}});
-        s->list=CreateWindowExW(0,L"LISTBOX",L"选项",WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_VSCROLL|LBS_NOTIFY|LBS_HASSTRINGS|LBS_OWNERDRAWFIXED|LBS_NOINTEGRALHEIGHT,pad,pad,r.right-2*pad,r.bottom-2*pad,h,HMENU(1),GetModuleHandleW(nullptr),nullptr);
+        s->list=CreateWindowExW(0,L"LISTBOX",L"Options",WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_VSCROLL|LBS_NOTIFY|LBS_HASSTRINGS|LBS_OWNERDRAWFIXED|LBS_NOINTEGRALHEIGHT,pad,pad,r.right-2*pad,r.bottom-2*pad,h,HMENU(1),GetModuleHandleW(nullptr),nullptr);
         SetWindowTheme(s->list,L"DarkMode_Explorer",nullptr);SendMessageW(s->list,WM_SETFONT,WPARAM(s->font),FALSE);SendMessageW(s->list,LB_SETITEMHEIGHT,0,dip(h,38));SetWindowSubclass(s->list,listProc,910,DWORD_PTR(s));
         for(const auto& option:*s->options)SendMessageW(s->list,LB_ADDSTRING,0,LPARAM(option.label.c_str()));SetTimer(h,1,100,nullptr);return 0;}
     case WM_MEASUREITEM:reinterpret_cast<MEASUREITEMSTRUCT*>(l)->itemHeight=dip(h,38);return TRUE;
@@ -54,7 +54,7 @@ inline LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
 }
 // Returns an option index, or -1 on cancellation. Commit is dispatched only
 // after this window is destroyed, so callers can safely rebuild controls.
-inline int popupSelector(HWND anchor,const std::vector<PopupOption>& options,int selected=-1,bool above=false,const wchar_t* title=L"选择选项"){
+inline int popupSelector(HWND anchor,const std::vector<PopupOption>& options,int selected=-1,bool above=false,const wchar_t* title=L"Select an option"){
     if(options.empty()||!IsWindowEnabled(anchor)||popupSelectorOpen())return -1;
     popup_detail::State state;state.options=&options;state.anchor=anchor;GetWindowRect(anchor,&state.anchorRect);auto owner=GetAncestor(anchor,GA_ROOT);auto priorFocus=GetFocus();
     MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(MonitorFromRect(&state.anchorRect,MONITOR_DEFAULTTONEAREST),&mi);auto work=mi.rcWork;int pad=dip(anchor,8),row=dip(anchor,38);int width=std::max(int(state.anchorRect.right-state.anchorRect.left),dip(anchor,236));

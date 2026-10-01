@@ -181,10 +181,10 @@ struct ScreenCaptureSource::Impl {
         ComPtr<IDXGIDevice> dxgi;check(device.As(&dxgi),"DXGI device");ComPtr<IDXGIAdapter> adapter;check(dxgi->GetAdapter(&adapter),"adapter");
         for(UINT i=0;;++i){ComPtr<IDXGIOutput> output;const auto hr=adapter->EnumOutputs(i,&output);if(hr==DXGI_ERROR_NOT_FOUND)break;check(hr,"EnumOutputs");
             DXGI_OUTPUT_DESC d{};check(output->GetDesc(&d),"output description");if(uint64_t(d.Monitor)!=options.target)continue;
-            if(d.Rotation!=DXGI_MODE_ROTATION_IDENTITY)throw winrt::hresult_error(E_NOTIMPL,L"旋转显示器请使用 Windows 采集方式");
+            if(d.Rotation!=DXGI_MODE_ROTATION_IDENTITY)throw winrt::hresult_error(E_NOTIMPL,L"For a rotated display, please use the Windows capture method");
             ComPtr<IDXGIOutput5> five;check(output.As(&five),"IDXGIOutput5");
             const DXGI_FORMAT formats[]={format};check(five->DuplicateOutput1(device.Get(),0,1,formats,&duplication),"DuplicateOutput1");return;
-        }throw winrt::hresult_error(DXGI_ERROR_NOT_FOUND,L"兼容方式要求显示器连接在处理显卡上；请选择 Windows 采集");
+        }throw winrt::hresult_error(DXGI_ERROR_NOT_FOUND,L"The compatible method requires the display to be connected to the processing GPU; please select Windows capture");
     }
 };
 ScreenCaptureSource::ScreenCaptureSource():p_(std::make_unique<Impl>()){}
@@ -192,9 +192,9 @@ ScreenCaptureSource::~ScreenCaptureSource(){close();}
 bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
     close();p_=std::make_unique<Impl>();auto& p=*p_;
     try{
-        if(!ScreenCaptureOptions::parse(desc.path,p.options)||!desc.d3d12Device)throw winrt::hresult_error(E_INVALIDARG,L"屏幕采集参数无效");
+        if(!ScreenCaptureOptions::parse(desc.path,p.options)||!desc.d3d12Device)throw winrt::hresult_error(E_INVALIDARG,L"Screen capture parameters are invalid");
         const auto& o=p.options;HWND window=o.kind==ScreenTargetKind::Window?reinterpret_cast<HWND>(o.target):nullptr;
-        if(window){GetWindowThreadProcessId(window,&p.targetPid);if(!IsWindow(window)||p.targetPid==GetCurrentProcessId())throw winrt::hresult_error(E_INVALIDARG,L"窗口已关闭或属于 Veyra");}
+        if(window){GetWindowThreadProcessId(window,&p.targetPid);if(!IsWindow(window)||p.targetPid==GetCurrentProcessId())throw winrt::hresult_error(E_INVALIDARG,L"The window is closed or belongs to Veyra");}
         HMONITOR monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST):reinterpret_cast<HMONITOR>(o.target);
         p.hdr=hdrMonitor(monitor);p.format=p.hdr?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_B8G8R8A8_UNORM;
         p.consumer=static_cast<ID3D12Device*>(desc.d3d12Device);
@@ -208,10 +208,10 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
         check(p.consumer->OpenSharedHandle(handle.value,IID_PPV_ARGS(&p.fence)),"Open fence D3D12");
         if(o.kind==ScreenTargetKind::Monitor){excludeOwnWindows();p.exclusion=true;}
         if(o.method==ScreenCaptureMethod::Duplication){
-            if(o.cursor)throw winrt::hresult_error(E_NOTIMPL,L"兼容方式请关闭鼠标指针，或改用 Windows 采集");
+            if(o.cursor)throw winrt::hresult_error(E_NOTIMPL,L"For the compatible method, turn off the mouse cursor, or switch to Windows capture");
             p.startDuplication();DXGI_OUTDUPL_DESC d{};p.duplication->GetDesc(&d);p.poolSize={int(d.ModeDesc.Width),int(d.ModeDesc.Height)};
         }else{
-            if(!GraphicsCaptureSession::IsSupported())throw winrt::hresult_error(E_NOTIMPL,L"系统不支持 Windows Graphics Capture");
+            if(!GraphicsCaptureSession::IsSupported())throw winrt::hresult_error(E_NOTIMPL,L"The system does not support Windows Graphics Capture");
             auto interop=winrt::get_activation_factory<GraphicsCaptureItem,IGraphicsCaptureItemInterop>();
             if(window)check(interop->CreateForWindow(window,winrt::guid_of<GraphicsCaptureItem>(),winrt::put_abi(p.item)),"CreateForWindow");
             else check(interop->CreateForMonitor(monitor,winrt::guid_of<GraphicsCaptureItem>(),winrt::put_abi(p.item)),"CreateForMonitor");
@@ -220,7 +220,7 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
             p.poolSize=p.item.Size();p.pool=Direct3D11CaptureFramePool::CreateFreeThreaded(p.wrapped,DirectXPixelFormat(p.format),2,p.poolSize);
             p.session=p.pool.CreateCaptureSession(p.item);p.session.IsCursorCaptureEnabled(o.cursor);p.session.StartCapture();
         }
-        if(p.poolSize.Width<=int(o.left+o.right)||p.poolSize.Height<=int(o.top+o.bottom))throw winrt::hresult_error(E_INVALIDARG,L"裁剪范围超出画面");
+        if(p.poolSize.Width<=int(o.left+o.right)||p.poolSize.Height<=int(o.top+o.bottom))throw winrt::hresult_error(E_INVALIDARG,L"The crop range exceeds the frame");
         p.info.opened=true;p.info.kind=pipeline::SourceKind::ScreenCapture;p.info.width=p.poolSize.Width-o.left-o.right;p.info.height=p.poolSize.Height-o.top-o.bottom;
         p.updateRate(monitor);p.info.hardwareDecodeActive=true;
         p.info.videoDecodePath=o.method==ScreenCaptureMethod::Wgc?"WGC shared GPU":"DXGI duplication shared GPU";
@@ -228,22 +228,22 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
         p.clockOffset=host100ns()-qpc100ns();p.frame=av_frame_alloc();if(!p.frame)throw std::bad_alloc();
         log::info("screen",std::format("opened method={} target={} size={}x{} hdr={} fpsLimit={:.3f} followDisplay={} cursor={} pool=6 cpuReadback=0 audioCapture=0",unsigned(o.method),o.target,p.info.width,p.info.height,p.hdr,p.info.averageFps,o.fps==0,o.cursor));
         return true;
-    }catch(const winrt::hresult_error& e){p.message=std::format(L"屏幕采集失败 0x{:08X}：{}",uint32_t(e.code()),e.message().c_str());log::error("screen",winrt::to_string(p.message));}
-    catch(const std::exception& e){p.message=L"屏幕采集资源分配失败";log::error("screen",e.what());}
+    }catch(const winrt::hresult_error& e){p.message=std::format(L"Screen capture failed 0x{:08X}: {}",uint32_t(e.code()),e.message().c_str());log::error("screen",winrt::to_string(p.message));}
+    catch(const std::exception& e){p.message=L"Screen capture resource allocation failed";log::error("screen",e.what());}
     auto error=p.message;close();p.message=error;return false;
 }
 SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const AVFrame** output){
     auto& p=*p_;*output=nullptr;if(!p.info.opened)return SourceReadStatus::Error;
     try{
         HWND window=p.options.kind==ScreenTargetKind::Window?reinterpret_cast<HWND>(p.options.target):nullptr;
-        if(window){DWORD pid=0;GetWindowThreadProcessId(window,&pid);if(!IsWindow(window)||pid!=p.targetPid){p.message=L"采集窗口已关闭，请重新选择窗口";return SourceReadStatus::Error;}
-            if(IsIconic(window)){p.message=L"窗口已最小化，等待恢复";p.wasWaiting=true;return SourceReadStatus::Waiting;}}
+        if(window){DWORD pid=0;GetWindowThreadProcessId(window,&pid);if(!IsWindow(window)||pid!=p.targetPid){p.message=L"The capture window is closed; please select a window again";return SourceReadStatus::Error;}
+            if(IsIconic(window)){p.message=L"The window is minimized; waiting for it to restore";p.wasWaiting=true;return SourceReadStatus::Waiting;}}
         const auto now=host100ns();
         if(now-p.lastColorCheck>10000000){
             p.lastColorCheck=now;
             const auto monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST):reinterpret_cast<HMONITOR>(p.options.target);
             MONITORINFO mi{sizeof(mi)};
-            if(!GetMonitorInfoW(monitor,&mi)){p.message=L"显示器已断开，请重新选择目标";return SourceReadStatus::Error;}
+            if(!GetMonitorInfoW(monitor,&mi)){p.message=L"The display was disconnected; please select a target again";return SourceReadStatus::Error;}
             if(!p.options.fps)p.updateRate(monitor);
             const bool hdr=hdrMonitor(monitor);
             if(hdr!=p.hdr){
@@ -275,9 +275,9 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
         // 1/60 would accidentally discard nearly half of a 60 Hz stream.
         if(pts<=p.lastPts||pts<p.nextPts-5000){++p.metrics.dropped;return SourceReadStatus::Waiting;}
         D3D11_TEXTURE2D_DESC td{};texture->GetDesc(&td);
-        if(td.Format!=p.format)throw winrt::hresult_error(E_UNEXPECTED,L"采集颜色格式发生变化，请重新连接");
+        if(td.Format!=p.format)throw winrt::hresult_error(E_UNEXPECTED,L"The capture color format changed; please reconnect");
         const auto& o=p.options;unsigned w=std::min(td.Width,unsigned(p.poolSize.Width)),h=std::min(td.Height,unsigned(p.poolSize.Height));
-        if(w<=o.left+o.right||h<=o.top+o.bottom){p.message=L"窗口小于裁剪范围，等待尺寸恢复";p.wasWaiting=true;return SourceReadStatus::Waiting;}
+        if(w<=o.left+o.right||h<=o.top+o.bottom){p.message=L"The window is smaller than the crop range; waiting for the size to recover";p.wasWaiting=true;return SourceReadStatus::Waiting;}
         w-=o.left+o.right;h-=o.top+o.bottom;
         av_frame_unref(p.frame);auto slot=p.acquire(w,h);if(!slot){++p.metrics.dropped;return SourceReadStatus::Waiting;}
         D3D11_BOX box{o.left,o.top,0,o.left+w,o.top+h,1};p.context->CopySubresourceRegion(slot->producer.Get(),0,0,0,0,texture.Get(),0,&box);
@@ -300,8 +300,8 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
         p.metrics.ageMs=double(packet.arrivalHost100ns-now)/10000;
         if(p.metrics.delivered==1||p.metrics.delivered%300==0)log::info("screen-timing",std::format("readCpuMs={:.3f} compositorToReadMs={:.3f} delivered={} received={} dropped={}",p.metrics.ageMs,double(packet.arrivalHost100ns-pts)/10000,p.metrics.delivered,p.metrics.received,p.metrics.dropped));
         *output=p.frame;return SourceReadStatus::Frame;
-    }catch(const winrt::hresult_error& e){p.message=std::format(L"屏幕采集错误 0x{:08X}：{}",uint32_t(e.code()),e.message().c_str());log::error("screen",winrt::to_string(p.message));return SourceReadStatus::Error;}
-    catch(const std::exception& e){p.message=L"屏幕采集资源分配失败";log::error("screen",e.what());return SourceReadStatus::Error;}
+    }catch(const winrt::hresult_error& e){p.message=std::format(L"Screen capture error 0x{:08X}: {}",uint32_t(e.code()),e.message().c_str());log::error("screen",winrt::to_string(p.message));return SourceReadStatus::Error;}
+    catch(const std::exception& e){p.message=L"Screen capture resource allocation failed";log::error("screen",e.what());return SourceReadStatus::Error;}
 }
 void ScreenCaptureSource::close()noexcept{
     if(!p_)return;

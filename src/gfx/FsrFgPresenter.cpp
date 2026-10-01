@@ -390,7 +390,7 @@ bool FsrFgPresenter::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
                                     int(desc.Format), p.requestedGenerated + 1));
     return true;
 #else
-    (void)device; (void)queue; (void)factory; (void)window; (void)desc; (void)swapchain; (void)fgMultiplier;
+    (void)device; (void)queue; (void)factory; (void)window; (void)desc; (void)renderWidth; (void)renderHeight; (void)swapchain; (void)fgMultiplier;
     log::error("fsr-fg", "AMD FidelityFX SDK headers were unavailable at build time");
     return false;
 #endif

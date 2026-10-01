@@ -169,21 +169,21 @@ bool ColorLutStore::validName(std::wstring_view name)const{
 bool ColorLutStore::importFile(const std::filesystem::path& source,std::wstring& nameOut,std::string& error)const{
     error.clear();
     std::error_code ec;
-    if(!std::filesystem::exists(source,ec)){error="源文件不存在";return false;}
+    if(!std::filesystem::exists(source,ec)){error="Source file does not exist";return false;}
     const auto bytes=std::filesystem::file_size(source,ec);
-    if(ec||bytes==0||bytes>8u*1024u*1024u){error="文件为空或超过8MiB";return false;}
+    if(ec||bytes==0||bytes>8u*1024u*1024u){error="File is empty or exceeds 8MiB";return false;}
     std::ifstream file(source,std::ios::binary);
-    if(!file){error="无法读取源文件";return false;}
+    if(!file){error="Could not read source file";return false;}
     std::string text((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
     const auto lut=parseCube(text);
-    if(!lut.valid()){error="不是有效的 .cube（尺寸/行数/数值校验失败）";return false;}
+    if(!lut.valid()){error="Not a valid .cube (size/line count/value validation failed)";return false;}
     auto name=source.filename().wstring();
-    if(!validName(name)){error="文件名不被接受（需要 .cube，且不能包含路径分隔符）";return false;}
+    if(!validName(name)){error="File name is not accepted (must be .cube and must not contain path separators)";return false;}
     std::filesystem::create_directories(folder_,ec);
-    if(ec){error="无法创建 luts 目录";return false;}
+    if(ec){error="Could not create luts directory";return false;}
     const auto target=folder_/name;
     std::filesystem::copy_file(source,target,std::filesystem::copy_options::overwrite_existing,ec);
-    if(ec){error="复制到 luts 目录失败";return false;}
+    if(ec){error="Copying to the luts directory failed";return false;}
     // Manifest keeps the identity of every imported file next to the data; the
     // export worker resolves the same folder, so names are enough at runtime.
     std::ofstream manifest(folder_/"manifest.v1",std::ios::app);

@@ -434,13 +434,13 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
             if(const AVDictionaryEntry* language=av_dict_get(stream->metadata,"language",nullptr,0))track.language=wide(language->value);
             if(const AVDictionaryEntry* title=av_dict_get(stream->metadata,"title",nullptr,0))track.name=wide(title->value);
         }
-        if(track.name.empty())track.name=track.language.empty()?std::format(L"字幕轨 {}",tracks.size()+1):track.language;
+        if(track.name.empty())track.name=track.language.empty()?std::format(L"Subtitle track {}",tracks.size()+1):track.language;
         track.styles.push_back(SubtitleStyle{});
         streamToTrack[streamIndex]=int(tracks.size());
         decoders.emplace_back();
         const auto codec=stream->codecpar->codec_id;
         if(!isTextSubtitleCodec(track.codec)&&codec!=AV_CODEC_ID_HDMV_PGS_SUBTITLE&&codec!=AV_CODEC_ID_DVD_SUBTITLE&&codec!=AV_CODEC_ID_DVB_SUBTITLE){
-            track.note=L"暂不支持此字幕格式";
+            track.note=L"This subtitle format is not supported yet";
             log::info("subtitle",std::format("embedded track {} codec={} listed as unsupported",streamIndex,codecName?codecName:""));
             tracks.push_back(std::move(track));
             continue;
@@ -449,7 +449,7 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
         AVCodecContext* context=decoder?avcodec_alloc_context3(decoder):nullptr;
         if(context){context->pkt_timebase=stream->time_base;}
         if(!decoder||!context||avcodec_parameters_to_context(context,stream->codecpar)<0||avcodec_open2(context,decoder,nullptr)<0){
-            track.note=L"字幕解码器初始化失败";
+            track.note=L"Subtitle decoder initialization failed";
             if(context)avcodec_free_context(&context);
             tracks.push_back(std::move(track));
             continue;
@@ -519,8 +519,8 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
                         packetSeconds+double(subtitle.end_display_time)/1000.0:std::numeric_limits<double>::infinity();
                     cue.bitmap=std::move(frame);
                     if(totalCues<kMaxCues&&bytes<=maxCacheBytes-cacheBytes){cacheBytes+=bytes;++totalCues;track.cues.push_back(std::move(cue));}
-                    else track.note=L"字幕缓存已达上限，后续字幕未加载";
-                }else if(!valid){track.note=L"图形字幕数据无效或超出缓存上限";log::warn("subtitle","bitmap display rejected: invalid rectangle or cache budget");}
+                    else track.note=L"Subtitle cache reached its limit; later subtitles were not loaded";
+                }else if(!valid){track.note=L"Graphic subtitle data is invalid or exceeds the cache limit";log::warn("subtitle","bitmap display rejected: invalid rectangle or cache budget");}
             }
             for(unsigned rect=0;rect<subtitle.num_rects;++rect){
                 const auto* entry=subtitle.rects[rect];
@@ -537,7 +537,7 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
                 cue.alignOverride=alignOverride;cue.posX=posX;cue.posY=posY;
                 const size_t bytes=sizeof(SubtitleCue)+sizeof(double)+cue.text.size()*sizeof(wchar_t);
                 if(cue.end>cue.begin){
-                    if(totalCues>=kMaxCues||bytes>maxCacheBytes-cacheBytes){track.note=L"字幕缓存已达上限，后续字幕未加载";continue;}
+                    if(totalCues>=kMaxCues||bytes>maxCacheBytes-cacheBytes){track.note=L"Subtitle cache reached its limit; later subtitles were not loaded";continue;}
                     cacheBytes+=bytes;++totalCues;track.cues.push_back(std::move(cue));
                 }
             }
@@ -585,7 +585,7 @@ struct SubtitleLoader::Impl {
                     auto candidate=std::filesystem::path(path);candidate.replace_extension(extension);
                     std::error_code ec;if(!std::filesystem::exists(candidate,ec))continue;
                     auto track=loadSubtitleFile(candidate.wstring());if(!track.usable())continue;
-                    track.name=std::format(L"外挂 · {}",candidate.filename().wstring());external.push_back(std::move(track));break;
+                    track.name=std::format(L"External · {}",candidate.filename().wstring());external.push_back(std::move(track));break;
                 }
                 auto embedded=loadEmbeddedSubtitleTracks(path,stop,[&](const auto& tracks){auto listing=external;listing.insert(listing.end(),tracks.begin(),tracks.end());publish(std::move(listing),false);});
                 for(auto& track:embedded)external.push_back(std::move(track));
@@ -605,20 +605,20 @@ std::optional<SubtitleLoader::Result> SubtitleLoader::poll(){std::lock_guard loc
 
 SubtitleAlignResult alignSubtitleToAudio(const std::wstring& mediaPath,const SubtitleTrack& track,int maxShiftSeconds,std::stop_token stop){
     SubtitleAlignResult result;
-    if(track.cues.empty()){result.detail=L"没有可用的字幕内容";return result;}
+    if(track.cues.empty()){result.detail=L"No usable subtitle content";return result;}
     AVFormatContext* input=nullptr;
     const auto utf8Path=utf8(mediaPath);
-    if(avformat_open_input(&input,utf8Path.c_str(),nullptr,nullptr)<0||!input){result.detail=L"无法打开媒体";return result;}
-    if(avformat_find_stream_info(input,nullptr)<0){avformat_close_input(&input);result.detail=L"无法读取媒体信息";return result;}
+    if(avformat_open_input(&input,utf8Path.c_str(),nullptr,nullptr)<0||!input){result.detail=L"Could not open media";return result;}
+    if(avformat_find_stream_info(input,nullptr)<0){avformat_close_input(&input);result.detail=L"Could not read media information";return result;}
     const int audioIndex=av_find_best_stream(input,AVMEDIA_TYPE_AUDIO,-1,-1,nullptr,0);
-    if(audioIndex<0){avformat_close_input(&input);result.detail=L"该文件没有音轨，无法自动对齐";return result;}
+    if(audioIndex<0){avformat_close_input(&input);result.detail=L"This file has no audio track; automatic alignment is not possible";return result;}
     AVStream* stream=input->streams[audioIndex];
     const AVCodec* decoder=avcodec_find_decoder(stream->codecpar->codec_id);
     AVCodecContext* context=decoder?avcodec_alloc_context3(decoder):nullptr;
     if(!decoder||!context||avcodec_parameters_to_context(context,stream->codecpar)<0||avcodec_open2(context,decoder,nullptr)<0){
         if(context)avcodec_free_context(&context);
         avformat_close_input(&input);
-        result.detail=L"音轨解码器不可用";
+        result.detail=L"Audio track decoder is unavailable";
         log::info("subtitle",std::format("auto align skipped: {}",utf8(result.detail)));
         return result;
     }
@@ -633,7 +633,7 @@ SubtitleAlignResult alignSubtitleToAudio(const std::wstring& mediaPath,const Sub
         av_channel_layout_uninit(&inputLayout);
         avcodec_free_context(&context);
         avformat_close_input(&input);
-        result.detail=L"音频重采样初始化失败";
+        result.detail=L"Audio resampler initialization failed";
         log::info("subtitle",std::format("auto align skipped: {}",utf8(result.detail)));
         return result;
     }
@@ -671,7 +671,7 @@ SubtitleAlignResult alignSubtitleToAudio(const std::wstring& mediaPath,const Sub
     avcodec_free_context(&context);
     avformat_close_input(&input);
     if(envelope.size()<int(5.0/kStepSeconds)){
-        result.detail=L"音轨太短，无法自动对齐";
+        result.detail=L"Audio track is too short for automatic alignment";
         log::info("subtitle",std::format("auto align skipped: {}",utf8(result.detail)));
         return result;
     }
@@ -696,7 +696,7 @@ SubtitleAlignResult alignSubtitleToAudio(const std::wstring& mediaPath,const Sub
     size_t audioCount=0;
     for(auto value:audioActive)audioCount+=value;
     if(subtitleCount<20){
-        result.detail=L"字幕有效时长太短，无法可靠对齐";
+        result.detail=L"Subtitle active duration is too short for reliable alignment";
         log::info("subtitle",std::format("auto align skipped: {}",utf8(result.detail)));
         return result;
     }
@@ -721,8 +721,8 @@ SubtitleAlignResult alignSubtitleToAudio(const std::wstring& mediaPath,const Sub
     result.ok=bestScore>0.25;
     result.offsetMs=int(std::lround(bestShift*kStepSeconds*1000.0));
     result.score=bestScore;
-    result.detail=result.ok?std::format(L"相关性 {:.2f}，建议偏移 {} ms",bestScore,result.offsetMs)
-                          :std::format(L"相关性只有 {:.2f}，未找到可靠偏移（字幕可能与视频不匹配）",bestScore);
+    result.detail=result.ok?std::format(L"Correlation {:.2f}, suggested offset {} ms",bestScore,result.offsetMs)
+                          :std::format(L"Correlation is only {:.2f}; no reliable offset found (subtitles may not match the video)",bestScore);
     log::info("subtitle",std::format("auto align media={} cues={} shift={}ms score={:.3f} ok={}",std::filesystem::path(mediaPath).filename().string(),track.cues.size(),result.offsetMs,result.score,result.ok));
     return result;
 }

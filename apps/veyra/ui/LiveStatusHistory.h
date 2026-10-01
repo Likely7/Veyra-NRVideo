@@ -34,10 +34,10 @@ struct DashboardHistory {
         else{low=0;if(++good>=8)overloaded=false;}
     }
     const wchar_t* rateStatus(const engine::PlayerSnapshot& s)const{
-        if(resetSamples>=3)return L"输入时间线异常";
-        if(inputLimited)return L"输入帧率不足";
-        if(s.applied.multiplier>1&&(s.fgBudgetLimited||s.xessGenerationSuppressed))return L"补帧调度降档";
-        return overloaded?L"输出未达标":L"正常";
+        if(resetSamples>=3)return L"Input timeline anomaly";
+        if(inputLimited)return L"Input frame rate too low";
+        if(s.applied.multiplier>1&&(s.fgBudgetLimited||s.xessGenerationSuppressed))return L"Frame gen scheduling throttled";
+        return overloaded?L"Output below target":L"Normal";
     }
 };
 }

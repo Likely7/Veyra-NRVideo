@@ -540,7 +540,7 @@ std::vector<CaptureFormat> enumerateFormats(IAMStreamConfig* config){
         // indices so the selected row opens the exact driver media type.
         if(bitmap&&bitmap->biWidth>0&&bitmap->biWidth<=3840&&std::abs(int64_t(bitmap->biHeight))>0&&std::abs(int64_t(bitmap->biHeight))<=2160&&duration>0){unsigned width=bitmap->biWidth,height=unsigned(std::abs(int64_t(bitmap->biHeight)));double fps=1e7/duration;
             const auto pixel=capturePixelName(type->subtype);CaptureMediaLayout layout;const bool valid=captureMediaLayout(*type,layout);const bool knownRaw=capturePacking(type->subtype)!=CapturePacking::Unknown;
-            const wchar_t* support=valid?((layout.format==AV_PIX_FMT_P010||layout.format==AV_PIX_FMT_P016)?L"原生 · SDR":L"原生"):knownRaw?L"布局/颜色暂不支持":L"需系统解码/转换";
+            const wchar_t* support=valid?((layout.format==AV_PIX_FMT_P010||layout.format==AV_PIX_FMT_P016)?L"Native · SDR":L"Native"):knownRaw?L"Layout/color not supported yet":L"System decode/conversion required";
             // N3: latency tier + recommended rank; compressed/unknown sorts last.
             const auto tier=valid?captureFormatTier(layout.packing):CaptureFormatTier::Decoded;
             const int rank=valid?captureFormatRank(layout.packing):captureFormatRank(CapturePacking::Unknown);
@@ -604,7 +604,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     if(selection.stable?!configuration(selection.videoPath,p.graph,p.builder,p.device,p.config):!configuration(index,p.graph,p.builder,p.device,p.config))return false;
     const auto available=enumerateFormats(p.config.Get());
     const auto* chosen=selectCaptureFormat(available,format,selection.formatKey);
-    if(!selection.formatKey.empty()&&!chosen){error_=L"保存的采集格式已不可用，请重新选择分辨率、帧率和像素格式。";return false;}
+    if(!selection.formatKey.empty()&&!chosen){error_=L"The saved capture format is no longer available; please reselect resolution, frame rate and pixel format.";return false;}
     if(chosen)format=chosen->index;
     // Capture the advertised identity before SetFormat: some drivers mutate
     // their capability list to reflect the last negotiated rate/orientation.
@@ -616,12 +616,12 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         REFERENCE_TIME* interval=nullptr;
         if(native->formattype==FORMAT_VideoInfo&&native->cbFormat>=sizeof(VIDEOINFOHEADER))interval=&reinterpret_cast<VIDEOINFOHEADER*>(native->pbFormat)->AvgTimePerFrame;
         else if(native->formattype==FORMAT_VideoInfo2&&native->cbFormat>=sizeof(VIDEOINFOHEADER2))interval=&reinterpret_cast<VIDEOINFOHEADER2*>(native->pbFormat)->AvgTimePerFrame;
-        if(!interval){error_=L"该采集格式不支持设备帧率协商，请将采集帧率设为 0。";freeType(native);return false;}
+        if(!interval){error_=L"This capture format does not support device frame-rate negotiation; please set the capture frame rate to 0.";freeType(native);return false;}
         *interval=captureFrameInterval(selection.requestedFps);
         log::info("capture-rate",std::format("requestFps={:.6f} interval100ns={} deviceNegotiation=1 softwareLimiter=0",selection.requestedFps,*interval));
     }
     HRESULT hr=p.config->SetFormat(native);const GUID requestedSubtype=native->subtype;
-    log::info("capture",std::format("SetFormat device={} nativeIndex={} subtype=0x{:08X} hr=0x{:08X}",index,format,native->subtype.Data1,uint32_t(hr)));freeType(native);if(FAILED(hr)){if(selection.requestedFps>0)error_=std::format(L"采集卡拒绝 {:.3f} FPS（0x{:08X}）；请改用设备支持的帧率，或填 0 恢复默认。",selection.requestedFps,uint32_t(hr));return false;}
+    log::info("capture",std::format("SetFormat device={} nativeIndex={} subtype=0x{:08X} hr=0x{:08X}",index,format,native->subtype.Data1,uint32_t(hr)));freeType(native);if(FAILED(hr)){if(selection.requestedFps>0)error_=std::format(L"The capture card rejected {:.3f} FPS (0x{:08X}); use a frame rate the device supports, or enter 0 to restore the default.",selection.requestedFps,uint32_t(hr));return false;}
     // Read the driver-negotiated type back. Native YUY2/NV12/RGB32 connects
     // directly to our terminal filter: no intelligent-connect converter.
     native=nullptr;hr=p.config->GetFormat(&native);if(FAILED(hr)||!native){freeType(native);return false;}
@@ -652,7 +652,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     }
     if(native->subtype!=requestedSubtype){
         log::error("capture",std::format("Driver changed requested subtype 0x{:08X} to 0x{:08X}",requestedSubtype.Data1,native->subtype.Data1));
-        error_=L"采集卡返回的像素格式与所选格式不符，请重新选择采集格式。";
+        error_=L"The pixel format returned by the capture card does not match the selected format; please reselect the capture format.";
         freeType(native);return false;
     }
     const bool direct=nativeSupported&&!desc.legacyCaptureRgbForDiagnostic;
@@ -764,14 +764,14 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
             if(selection.stable?monikerPath(devices[i].Get())==selection.videoPath:i==index){deviceName=propertyString(devices[i].Get(),L"FriendlyName");break;}
         }
         if(!elgatoHdr->configure(p.device.Get(),deviceName,true,colorOverride,p.layout.color)){
-            error_=L"Elgato HDR 输出模式设置失败，请关闭其他采集程序后重新连接，并检查日志中的 capture-elgato。";
+            error_=L"Setting the Elgato HDR output mode failed; close other capture programs and reconnect, and check capture-elgato in the log.";
             return false;
         }
     }
     if(colorOverride){
-        if(compressedPath){error_=L"压缩采集使用码流颜色信息；手动颜色和范围请选择原生采集格式。";log::error("capture-color","Manual color override requires raw capture; compressed override is not silently ignored");return false;}
+        if(compressedPath){error_=L"Compressed capture uses the bitstream color information; for manual color and range, select a native capture format.";log::error("capture-color","Manual color override requires raw capture; compressed override is not silently ignored");return false;}
         const auto space=captureColorSpace(colorOverride);
-        if((space==1||space==2)&&p.layout.format!=AV_PIX_FMT_P010&&p.layout.format!=AV_PIX_FMT_P016){error_=L"手动 HDR 需要 P010/P016 格式；SDR 信号请选择自动或 Rec.709。";log::error("capture-color","Explicit HDR requires P010/P016");return false;}
+        if((space==1||space==2)&&p.layout.format!=AV_PIX_FMT_P010&&p.layout.format!=AV_PIX_FMT_P016){error_=L"Manual HDR requires the P010/P016 format; for an SDR signal, select Automatic or Rec.709.";log::error("capture-color","Explicit HDR requires P010/P016");return false;}
         applyCaptureColorOverride(p.layout.color,colorOverride);
         log::info("capture-color",std::format("manual space={} range={} effective transfer={} matrix={} primaries={} range={} (0=auto, space 1=PQ 2=HLG 3=709, range 1=limited 2=full)",space,captureColorRange(colorOverride),int(p.layout.color.transfer),int(p.layout.color.matrix),int(p.layout.color.primaries),int(p.layout.color.range)));
     }
@@ -779,10 +779,10 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     if(expectedFps>0){
         const bool accepted=captureFrameRateMatches(expectedFps,p.layout.duration);
         log::info("capture-rate",std::format("requestedFps={:.6f} connectedFps={:.6f} accepted={} softwareLimiter=0",expectedFps,p.info.averageFps,accepted));
-        if(!accepted){error_=std::format(L"所选格式为 {:.3f} FPS，但采集卡返回 {:.3f} FPS；请重新选择设备支持的格式。",expectedFps,p.info.averageFps);return false;}
+        if(!accepted){error_=std::format(L"The selected format is {:.3f} FPS, but the capture card returned {:.3f} FPS; please reselect a format the device supports.",expectedFps,p.info.averageFps);return false;}
     }
     if(chosen&&(p.info.width!=chosen->width||p.info.height!=chosen->height)){
-        error_=L"采集卡返回的分辨率与所选格式不符，请重新选择采集格式。";return false;
+        error_=L"The resolution returned by the capture card does not match the selected format; please reselect the capture format.";return false;
     }
     if(!compressedPath&&!colorOverride&&(p.layout.format==AV_PIX_FMT_P010||p.layout.format==AV_PIX_FMT_P016)&&p.info.color.transferAssumed)
         log::warn("capture-color","No explicit HDR transfer from driver; bit depth does not identify HDR. Keeping SDR fallback; manual PQ/HLG remains available.");
@@ -791,7 +791,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     log::info("capture-color",std::format("format={} stride={} rowBytes={} bytes={} bottomUp={} matrix={} assumed={} range={} assumed={} workingTransfer={} assumed={} (explicit transfer contract)",int(p.layout.format),p.layout.stride,p.layout.rowBytes,p.layout.sampleBytes,p.layout.bottomUp,int(p.info.color.matrix),p.info.color.matrixAssumed,int(p.info.color.range),p.info.color.rangeAssumed,int(p.info.color.transfer),p.info.color.transferAssumed));
     if(audio==kCaptureAudioWasapi){
         p.wasapi=std::make_unique<WasapiAudioInput>();
-        if(!p.wasapi->configure(selection.audioPath)){p.wasapi.reset();p.audioError=L"WASAPI 音频端点ID无效；视频继续运行";}
+        if(!p.wasapi->configure(selection.audioPath)){p.wasapi.reset();p.audioError=L"The WASAPI audio endpoint ID is invalid; video continues running";}
         log::info("capture-audio","binding=wasapi shared=1 explicitEndpoint=1 videoClock=ingress-host-estimate");
     }else if(audio!=kCaptureAudioDisabled){
         if(audio>=0){
@@ -811,7 +811,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         }
         const bool audioReady=connectDirectShowAudio(desc);
         if(!audioReady){
-            p.audioError=L"采集音频设备或 PCM 格式不可用；视频继续运行";
+            p.audioError=L"The capture audio device or PCM format is unavailable; video continues running";
             log::warn("capture-audio","audio connection unavailable; retaining video capture");
             if(p.audioFilter)p.graph->RemoveFilter(p.audioFilter.Get());
             p.audioFilter.Reset();
@@ -1168,7 +1168,7 @@ bool CaptureCardSource::start(){
     else if(p.audioSession&&!p.audioSession->start())log::warn("capture-audio","audio start failed; retaining video capture");
     p.audioRecovery.reset(GetTickCount64());
     p.lastFrame=Impl::Clock::now();const auto hr=p.control->Run();p.info.opened=SUCCEEDED(hr);
-    if(p.info.opened&&p.wasapi&&!p.wasapi->start())p.audioError=L"WASAPI 音频启动失败；视频继续运行";
+    if(p.info.opened&&p.wasapi&&!p.wasapi->start())p.audioError=L"WASAPI audio failed to start; video continues running";
     veyra::log::info("capture",std::format("Run hr=0x{:X} actual={}x{} nominalFps={:.3f} mailbox=1 ownedBuffers=2",unsigned(hr),p.info.width,p.info.height,p.info.averageFps));return p.info.opened;
 }
 void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
@@ -1187,7 +1187,7 @@ void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
     // only the audio branch; do not renegotiate or replace the video device.
     const HRESULT stopped=p.control->Stop();
     log::warn("capture-audio-reconnect",std::format("PCM stalled; Stop hr=0x{:08X} videoFilterRetained=1",uint32_t(stopped)));
-    if(FAILED(stopped)){p.audioError=L"音频恢复等待采集驱动停止；稍后重试";return;}
+    if(FAILED(stopped)){p.audioError=L"Audio recovery is waiting for the capture driver to stop; retry shortly";return;}
     const bool connected=[&]{
         if(p.audioSink){const HRESULT hr=p.graph->RemoveFilter(p.audioSink.Get());log::info("capture-audio-reconnect",std::format("Remove PCM sink hr=0x{:08X}",uint32_t(hr)));if(FAILED(hr))return false;p.audioSink.Reset();}
         if(p.audioSession)p.audioSession->stop();
@@ -1200,7 +1200,7 @@ void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
     {std::lock_guard lock(p.mutex);p.pending=false;p.forceDiscontinuity=true;}
     ++epoch_;p.lastFrame=Impl::Clock::now();
     const HRESULT resumed=p.control->Run();p.info.opened=SUCCEEDED(resumed);
-    p.audioError=connected&&p.info.opened?L"":L"采集音频暂不可用，正在重试原音频设备";
+    p.audioError=connected&&p.info.opened?L"":L"Capture audio is temporarily unavailable; retrying the original audio device";
     log::info("capture-audio-reconnect",std::format("connected={} Run hr=0x{:08X} epoch={} awaitingActualPCM=1",connected,uint32_t(resumed),epoch_));
 }
 bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){

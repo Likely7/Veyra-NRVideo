@@ -37,7 +37,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
         const bool ok=source.connect(desc);
         if(!ok){retryWasRpInUse=source.nativeSnapshot().startupRetryAllowed;retry=recovery.poll(milliseconds(),false,true)==remoteplay::StreamRecovery::Action::Reconnect;}
         {std::lock_guard lock(mutex_);publishedInfo_=source.info();if(!initialized_)started_=ok;failed_=!ok&&!retry;initialized_=true;telemetryInbox_=source.telemetryInbox();
-            if(failed_)recovery_.message=L"PS5 串流连接失败，请检查主机及网络；已保存的配对无需重输。";}
+            if(failed_)recovery_.message=L"PS5 stream connection failed; check the console and network; the saved pairing does not need to be re-entered.";}
         ready_.notify_all();
         if(ok) {
             monitor=std::jthread([inbox=source.telemetryInbox()](std::stop_token cancel){
@@ -129,13 +129,13 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                     const auto action=recovery.poll(milliseconds(),snapshot.state==remoteplay::SessionState::LoginPinRequired,result==SourceReadStatus::Error,native.automaticRetryAllowed,native.startupRetryAllowed);
                     if(action==remoteplay::StreamRecovery::Action::Keyframe){
                         source.recoverVideo();log::warn("remoteplay-recovery",std::format("request keyframe; received={} decoded={} videoCallbacks={} rejected={} packetReceived={} packetLost={}",snapshot.video.accessUnits,snapshot.decodedFrames,native.videoCallbacks,native.callbackRejected,native.packetReceived,native.packetLost));
-                        std::lock_guard lock(mutex_);recovery_.active=true;recovery_.message=L"画面中断，正在请求关键帧恢复…";
+                        std::lock_guard lock(mutex_);recovery_.active=true;recovery_.message=L"Frame interrupted; requesting a keyframe to recover...";
                     }else if(action==remoteplay::StreamRecovery::Action::Reconnect){retryWasRpInUse=native.startupRetryAllowed;retry=true;break;}
                     else if(action==remoteplay::StreamRecovery::Action::Fail){
                         log::error("remoteplay-recovery",std::format("recovery stopped attempts={} quitReason={} error={}",recovery.reconnects(),native.lastQuitReason,snapshot.errorCode));
                         std::lock_guard lock(mutex_);failed_=true;recovery_.active=false;
-                        recovery_.message=snapshot.state==remoteplay::SessionState::LoginPinRequired?L"等待 PS5 登录 PIN 超时，请重新连接。":native.startupRetryAllowed?L"PS5 仍被串流会话占用，请结束其他串流或稍后重试；无需重新配对。":!native.automaticRetryAllowed?L"PS5 已结束或拒绝串流，请检查主机状态后重新连接。":L"PS5 串流未恢复，请检查主机及网络后点击连接；无需重新配对。";
-                        recovery_.message+=std::format(L"（终止码 {} / 错误 {}）",native.lastQuitReason,snapshot.errorCode);break;
+                        recovery_.message=snapshot.state==remoteplay::SessionState::LoginPinRequired?L"Timed out waiting for the PS5 login PIN; please reconnect.":native.startupRetryAllowed?L"The PS5 is still occupied by a streaming session; end other streams or retry later; no re-pairing needed.":!native.automaticRetryAllowed?L"The PS5 ended or refused streaming; check the console state and reconnect.":L"The PS5 stream did not recover; check the console and network, then click Connect; no re-pairing needed.";
+                        recovery_.message+=std::format(L" (quit code {} / error {})",native.lastQuitReason,snapshot.errorCode);break;
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
@@ -144,14 +144,14 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
     } catch(const std::exception& e) {
         log::error("remoteplay",e.what());
         retry=false;
-        {std::lock_guard lock(mutex_);failed_=true;initialized_=true;recovery_.message=L"PS5 串流处理异常，已停止自动恢复，请查看日志。";}
+        {std::lock_guard lock(mutex_);failed_=true;initialized_=true;recovery_.message=L"PS5 stream processing exception; automatic recovery stopped; see the log.";}
         ready_.notify_all();
     }
     if(retry&&!stop.stop_requested()){
         std::lock_guard lock(mutex_);
         recovery_={true,recovery.episodeRetries(),retryWasRpInUse
-            ?std::format(L"PS5 正在释放上一个串流会话，等待后自动重试（{}/3）…",recovery.episodeRetries())
-            :std::format(L"串流中断，正在重新连接（{}/3）…",recovery.episodeRetries())};
+            ?std::format(L"The PS5 is releasing the previous streaming session; retrying automatically after a wait ({}/3)...",recovery.episodeRetries())
+            :std::format(L"Stream interrupted; reconnecting ({}/3)...",recovery.episodeRetries())};
         latest_.reset();pendingControllers_.clear();controller_={};feedback_={};
     }
     log::info("remoteplay-recovery",std::format("teardown begin attempt={} retry={} cancelled={}",recovery.reconnects(),retry,stop.stop_requested()));

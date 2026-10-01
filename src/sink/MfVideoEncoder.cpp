@@ -109,9 +109,9 @@ bool listHardwareMfts(bool hevc,uint32_t adapterVendorId,std::vector<MftCandidat
     MFT_REGISTER_TYPE_INFO outputInfo{MFMediaType_Video,hevc?MFVideoFormat_HEVC:MFVideoFormat_H264};
     IMFActivate** activates=nullptr;UINT32 count=0;
     const HRESULT listed=MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER,MFT_ENUM_FLAG_HARDWARE|MFT_ENUM_FLAG_SORTANDFILTER,&inputInfo,&outputInfo,&activates,&count);
-    if(FAILED(listed)){detail=L"系统编码器枚举失败";log::error("mf-encoder",std::format("MFTEnumEx failed hr={}",hrName(listed)));return false;}
+    if(FAILED(listed)){detail=L"System encoder enumeration failed";log::error("mf-encoder",std::format("MFTEnumEx failed hr={}",hrName(listed)));return false;}
     if(count==0){
-        detail=hevc?L"系统里没有可用的 HEVC 硬件编码器":L"系统里没有可用的 H.264 硬件编码器";
+        detail=hevc?L"No HEVC hardware encoder is available on the system":L"No H.264 hardware encoder is available on the system";
         log::warn("mf-encoder","no hardware MFT for the requested codec");CoTaskMemFree(activates);return false;
     }
     const auto keyword=vendorKeyword(adapterVendorId);
@@ -124,7 +124,7 @@ bool listHardwareMfts(bool hevc,uint32_t adapterVendorId,std::vector<MftCandidat
     }
     for(UINT32 index=0;index<count;++index)activates[index]->Release();
     CoTaskMemFree(activates);
-    if(candidates.empty()){detail=L"系统硬件编码器无法激活";return false;}
+    if(candidates.empty()){detail=L"The system hardware encoder could not be activated";return false;}
     std::stable_sort(candidates.begin(),candidates.end(),[&](const MftCandidate& a,const MftCandidate& b){
         return containsFold(a.name,keyword)&&!containsFold(b.name,keyword);
     });
@@ -145,7 +145,7 @@ public:
     EncoderBackend backend() const override {return EncoderBackend::MediaFoundation;}
     std::wstring lastError() const override {return error_;}
     std::wstring describe() const override {
-        return hevc_?std::format(L"系统硬件编码 HEVC（{}）",friendly_):std::format(L"系统硬件编码 H.264（{}）",friendly_);
+        return hevc_?std::format(L"System hardware encoding HEVC ({})",friendly_):std::format(L"System hardware encoding H.264 ({})",friendly_);
     }
 
 private:
@@ -203,7 +203,7 @@ bool MfVideoEncoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& rin
         // The MFT path is 8-bit 4:2:0 only; producing an SDR file from an HDR
         // source without telling the user would be a silent quality lie.
         log::error("mf-encoder","HDR export requires NVENC (HEVC Main10); Media Foundation path refused");
-        error_=L"HDR 10bit 不支持此系统编码路径（仅 8bit NV12）";
+        error_=L"HDR 10-bit is not supported on this system encoding path (8-bit NV12 only)";
         return false;
     }
     if(width_<16||height_<16||(width_&1)||(height_&1)){

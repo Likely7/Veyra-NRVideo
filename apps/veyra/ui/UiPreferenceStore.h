@@ -36,13 +36,13 @@ public:
         // range is 0..4. A narrower bound here silently discarded every saved
         // window size, volume and subtitle style for users who last sat on it.
         if(!(file>>magic>>version>>read.volume>>mute>>sub>>read.width>>read.height>>read.x>>read.y>>pos>>read.inspector>>read.subtitleSize)||magic!="VEYRA_UI"||(version<1||version>10)||!std::isfinite(read.volume)||read.volume<0||read.volume>1||mute<0||mute>1||sub<0||sub>1||pos<0||pos>1||read.width<720||read.width>10000||read.height<540||read.height>10000||abs(int64_t(read.x))>100000||abs(int64_t(read.y))>100000||read.inspector<0||read.inspector>4||read.subtitleSize<16||read.subtitleSize>56){corrupt_=true;return result;}
-        if(version==2&&(!(file>>read.inspectorWidth)||read.inspectorWidth<296||read.inspectorWidth>420)){corrupt_=true;return result;}
+        if(version==2&&(!(file>>read.inspectorWidth)||read.inspectorWidth<296||read.inspectorWidth>480)){corrupt_=true;return result;}
         if(version>=3){
             int outline=0,background=0,second=0;
             // Field order must match save(): inspectorWidth precedes the three
             // switches. It used to be read only for version 2, so every version
             // 3 file was rejected as corrupt and all UI preferences were lost.
-            if(!(file>>read.inspectorWidth>>outline>>background>>second>>read.subtitleMargin>>read.subtitleFont)||read.inspectorWidth<296||read.inspectorWidth>420||outline<0||outline>1||background<0||background>1||second<0||second>1||read.subtitleMargin<0||read.subtitleMargin>240||read.subtitleFont<0||read.subtitleFont>5){corrupt_=true;return result;}
+            if(!(file>>read.inspectorWidth>>outline>>background>>second>>read.subtitleMargin>>read.subtitleFont)||read.inspectorWidth<296||read.inspectorWidth>480||outline<0||outline>1||background<0||background>1||second<0||second>1||read.subtitleMargin<0||read.subtitleMargin>240||read.subtitleFont<0||read.subtitleFont>5){corrupt_=true;return result;}
             read.subtitleOutline=outline!=0;read.subtitleBackground=background!=0;read.subtitleSecondLanguage=second!=0;
         }
         // v4 appends the colour-page fold mask *after* the v3 subtitle block, so

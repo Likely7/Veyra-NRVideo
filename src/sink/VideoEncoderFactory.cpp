@@ -20,7 +20,7 @@ std::unique_ptr<VideoEncoder> openVideoEncoder(gfx::D3D12DeviceContext& ctx,gfx:
     // 8-bit 4:2:0 only, so an HDR export without NVENC fails loudly instead of
     // writing a silently tone-mapped file.
     if(graph.hdrOutput()&&!nvidia){
-        detail=L"HDR（10bit）导出需要 NVIDIA NVENC；当前显卡只有 8bit 系统编码器。请关闭 HDR 或换 N 卡导出";
+        detail=L"HDR (10-bit) export requires NVIDIA NVENC; this GPU only has an 8-bit system encoder. Turn off HDR or use an NVIDIA card to export";
         log::error("export","HDR export refused: the media foundation path is 8-bit only");
         return nullptr;
     }
@@ -46,8 +46,8 @@ std::unique_ptr<VideoEncoder> openVideoEncoder(gfx::D3D12DeviceContext& ctx,gfx:
         log::info("export",std::format("encoder selected={}",std::string(encoderBackendName(mf->backend()))));
         return mf;
     }
-    detail=nvencError.empty()?std::format(L"系统编码器初始化失败：{}",mf->lastError())
-        :std::format(L"编码器初始化失败；NVENC：{}；系统编码器：{}",nvencError,mf->lastError());
+    detail=nvencError.empty()?std::format(L"System encoder initialization failed: {}",mf->lastError())
+        :std::format(L"Encoder initialization failed; NVENC: {}; system encoder: {}",nvencError,mf->lastError());
     return nullptr;
 }
 } // namespace veyra::sink

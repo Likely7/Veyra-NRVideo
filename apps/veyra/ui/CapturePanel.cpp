@@ -28,9 +28,9 @@ std::function<bool()> readSdr;std::function<bool(bool)> setSdr;std::function<int
 std::function<bool()> readFlip;std::function<bool(bool)> setFlip;
 std::function<int()> readBuffer;std::function<bool(int)> setBuffer;
 void rebuildAudioList(HWND h,int device){
-    SendDlgItemMessageW(h,3,CB_RESETCONTENT,0,0);SendDlgItemMessageW(h,3,CB_ADDSTRING,0,LPARAM(L"不监听音频"));
+    SendDlgItemMessageW(h,3,CB_RESETCONTENT,0,0);SendDlgItemMessageW(h,3,CB_ADDSTRING,0,LPARAM(L"Do not monitor audio"));
     const bool videoSelected=device>=0&&size_t(device)<videoDevices.size();
-    if(videoSelected)SendDlgItemMessageW(h,3,CB_ADDSTRING,0,LPARAM(videoDevices[size_t(device)].hasEmbeddedAudio?L"使用视频设备内置音频（已检测）":L"尝试视频设备内置音频"));
+    if(videoSelected)SendDlgItemMessageW(h,3,CB_ADDSTRING,0,LPARAM(videoDevices[size_t(device)].hasEmbeddedAudio?L"Use the video device's built-in audio (detected)":L"Try the video device's built-in audio"));
     for(auto& audio:audioDevices){const auto label=std::format(L"[{}] {}",audio.wasapi?L"WASAPI":L"DirectShow",audio.name);SendDlgItemMessageW(h,3,CB_ADDSTRING,0,LPARAM(label.c_str()));}
     int restore=0;
     if(videoSelected&&videoDevices[size_t(device)].path==remembered.videoPath){
@@ -55,40 +55,40 @@ void maybeShowFormatHint(HWND h){
     const auto& format=formats[size_t(index)];
     const auto tier=static_cast<source::CaptureFormatTier>(format.tier);
     if(!source::captureFormatNeedsCostHint(tier))return;
-    SetDlgItemTextW(h,8,std::format(L"提示：{} 在高分辨率/高帧率下比低延迟格式多一道处理环节（{}）。建议优先选低延迟格式；此提示只出现一次。",format.label,source::captureFormatTierLabel(tier)).c_str());
+    SetDlgItemTextW(h,8,std::format(L"Tip: at high resolution/high frame rate, {} adds an extra processing step compared with low-latency formats ({}). Prefer a low-latency format; this tip appears only once.",format.label,source::captureFormatTierLabel(tier)).c_str());
     remembered.formatHintDismissed=true;
     CapturePreferenceStore(runtime::localDataDirectory()).save(remembered);
 }
-void query(int device){if(busy)return;busy=true;queriedDevice=device;queryStarted=GetTickCount64();SetDlgItemTextW(window,8,L"正在查询设备能力…当前播放继续");EnableWindow(GetDlgItem(window,4),FALSE);EnableWindow(GetDlgItem(window,5),FALSE);EnableWindow(GetDlgItem(window,1),FALSE);
+void query(int device){if(busy)return;busy=true;queriedDevice=device;queryStarted=GetTickCount64();SetDlgItemTextW(window,8,L"Querying device capabilities... current playback continues");EnableWindow(GetDlgItem(window,4),FALSE);EnableWindow(GetDlgItem(window,5),FALSE);EnableWindow(GetDlgItem(window,1),FALSE);
     const std::wstring videoPath=device>=0&&size_t(device)<videoDevices.size()?videoDevices[size_t(device)].path:L"";
     EnableWindow(GetDlgItem(window,10),FALSE);EnableWindow(GetDlgItem(window,20),FALSE);
     pending=std::async(std::launch::async,[device,videoPath]{CoInitializeEx(nullptr,COINIT_MULTITHREADED);Query result;result.device=device;try{if(device<0){result.video=source::CaptureCardSource::deviceDetails();result.audio=source::CaptureCardSource::deviceDetails(true);}else result.formats=videoPath.empty()?source::CaptureCardSource::formats(unsigned(device)):source::CaptureCardSource::formatsByPath(videoPath);}catch(...){}CoUninitialize();return result;});
 }
-void arrange(){RECT r{};GetClientRect(window,&r);const int width=MulDiv(r.right,96,veyra::ui::layoutDpi(window));const int ys[]={0,44,114,184,448,448,14,84,380,154,254,224,294,514,484,602,566,542,338,342,254,224};for(int id=1;id<=21;++id){int x=id==5?width-152:id==18?width-156:(id==20||id==21)?width-180:16;int w=id==4?width-184:id==5||id==18?136:id==19?width-184:(id==10||id==11)?width-212:(id==20||id==21)?164:width-32;MoveWindow(GetDlgItem(window,id),dip(window,x),dip(window,ys[id]),dip(window,w),dip(window,(id<=3||id==10||id==13||id==16||id==20)?180:id==8?56:id==4||id==5?36:id==18?32:24),TRUE);}}
+void arrange(){RECT r{};GetClientRect(window,&r);const int width=MulDiv(r.right,96,veyra::ui::layoutDpi(window));const int ys[]={0,44,114,184,448,448,14,84,380,154,254,224,294,514,484,606,566,542,338,342,254,224};for(int id=1;id<=21;++id){int x=id==5?width-152:id==18?width-156:(id==20||id==21)?width-180:16;int w=id==4?width-184:id==5||id==18?136:id==19?width-184:(id==10||id==11)?width-212:(id==20||id==21)?164:width-32;MoveWindow(GetDlgItem(window,id),dip(window,x),dip(window,ys[id]),dip(window,w),dip(window,(id<=3||id==10||id==13||id==16||id==20)?180:id==8?64:id==4||id==5?36:id==18?32:(id==12||id==15)?30:24),TRUE);}}
 LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM wp,LPARAM lp){switch(msg){
 case WM_CREATE:{window=h;font=makeFont(h);titleTheme(h);auto add=[&](const wchar_t* cls,const wchar_t* label,int id,DWORD style){auto c=CreateWindowExW(0,cls,label,WS_CHILD|WS_VISIBLE|style,0,0,1,1,h,HMENU(INT_PTR(id)),GetModuleHandleW(nullptr),nullptr);SendMessageW(c,WM_SETFONT,WPARAM(font),TRUE);themeControl(c);};
     remembered=CapturePreferenceStore(runtime::localDataDirectory()).load();
     add(L"EDIT",std::format(L"{:g}",remembered.requestedFps).c_str(),18,ES_AUTOHSCROLL|WS_TABSTOP);
     SendDlgItemMessageW(h,18,EM_SETLIMITTEXT,16,0);
-    add(L"STATIC",L"设备帧率 FPS（0 = 默认，需重连）",19,0);
+    add(L"STATIC",L"Device frame rate FPS (0 = default, requires reconnect)",19,0);
     refreshAfterQuery=busy;
     for(int i=1;i<=3;++i)add(L"COMBOBOX",L"",i,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);
-    add(L"COMBOBOX",L"",10,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);add(L"STATIC",L"输入颜色（变更需重连）",11,0);
-    for(auto name:{L"自动 · 设备元数据",L"Rec.2100 PQ · HDR10",L"Rec.2100 HLG",L"Rec.709 · SDR"})SendDlgItemMessageW(h,10,CB_ADDSTRING,0,LPARAM(name));SendDlgItemMessageW(h,10,CB_SETCURSEL,0,0);
-    add(L"COMBOBOX",L"",20,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);add(L"STATIC",L"输入范围",21,0);
-    for(auto name:{L"自动",L"有限 / Limited",L"完整 / Full"})SendDlgItemMessageW(h,20,CB_ADDSTRING,0,LPARAM(name));SendDlgItemMessageW(h,20,CB_SETCURSEL,0,0);
-    add(L"BUTTON",L"转为 SDR 显示（所有预览，立即生效）",12,BS_AUTOCHECKBOX|WS_TABSTOP);SendDlgItemMessageW(h,12,BM_SETCHECK,readSdr()?BST_CHECKED:BST_UNCHECKED,0);
-    add(L"COMBOBOX",L"",13,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);add(L"STATIC",L"采集音频（变更需重连）",14,0);
-    for(auto name:{L"自动：优先线性 PCM，必要时 Dolby/DTS 位流解码",L"强制线性 PCM（不接受 Dolby/DTS 位流）",L"位流优先：优先直通给功放（无直通时解码为 PCM）"})SendDlgItemMessageW(h,13,CB_ADDSTRING,0,LPARAM(name));
+    add(L"COMBOBOX",L"",10,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);add(L"STATIC",L"Input color (change requires reconnect)",11,0);
+    for(auto name:{L"Automatic · device metadata",L"Rec.2100 PQ · HDR10",L"Rec.2100 HLG",L"Rec.709 · SDR"})SendDlgItemMessageW(h,10,CB_ADDSTRING,0,LPARAM(name));SendDlgItemMessageW(h,10,CB_SETCURSEL,0,0);
+    add(L"COMBOBOX",L"",20,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);add(L"STATIC",L"Input range",21,0);
+    for(auto name:{L"Automatic",L"Limited",L"Full"})SendDlgItemMessageW(h,20,CB_ADDSTRING,0,LPARAM(name));SendDlgItemMessageW(h,20,CB_SETCURSEL,0,0);
+    add(L"BUTTON",L"Convert to SDR display (all previews, takes effect immediately)",12,BS_AUTOCHECKBOX|WS_TABSTOP);SendDlgItemMessageW(h,12,BM_SETCHECK,readSdr()?BST_CHECKED:BST_UNCHECKED,0);
+    add(L"COMBOBOX",L"",13,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);add(L"STATIC",L"Capture audio (change requires reconnect)",14,0);
+    for(auto name:{L"Automatic: prefer linear PCM, decode Dolby/DTS bitstream when needed",L"Force linear PCM (do not accept Dolby/DTS bitstream)",L"Bitstream first: prefer passthrough to the receiver (decode to PCM when passthrough is unavailable)"})SendDlgItemMessageW(h,13,CB_ADDSTRING,0,LPARAM(name));
     SendDlgItemMessageW(h,13,CB_SETCURSEL,WPARAM(std::clamp(readAudioIngress?readAudioIngress():0,0,2)),0);
-    add(L"BUTTON",L"画面上下翻转（采集画面倒置时勾选，立即生效）",15,BS_AUTOCHECKBOX|WS_TABSTOP);SendDlgItemMessageW(h,15,BM_SETCHECK,readFlip&&readFlip()?BST_CHECKED:BST_UNCHECKED,0);
-    add(L"COMBOBOX",L"",16,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);add(L"STATIC",L"设备缓冲（变更需重连）",17,0);
-    for(auto name:{L"自动：1080p 及以下 2 帧，更高分辨率 3 帧",L"最小：1 帧缓冲（延迟最低，高负载可能丢帧）",L"驱动默认：不做建议，沿用设备自身设置"})SendDlgItemMessageW(h,16,CB_ADDSTRING,0,LPARAM(name));
+    add(L"BUTTON",L"Flip image vertically (check when the capture image is upside down, takes effect immediately)",15,BS_AUTOCHECKBOX|WS_TABSTOP);SendDlgItemMessageW(h,15,BM_SETCHECK,readFlip&&readFlip()?BST_CHECKED:BST_UNCHECKED,0);
+    add(L"COMBOBOX",L"",16,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);add(L"STATIC",L"Device buffering (change requires reconnect)",17,0);
+    for(auto name:{L"Automatic: 2 frames at 1080p and below, 3 frames at higher resolutions",L"Minimum: 1-frame buffer (lowest latency, may drop frames under heavy load)",L"Driver default: no recommendation, use the device's own setting"})SendDlgItemMessageW(h,16,CB_ADDSTRING,0,LPARAM(name));
     SendDlgItemMessageW(h,16,CB_SETCURSEL,WPARAM(std::clamp(readBuffer?readBuffer():0,0,2)),0);
-    add(L"BUTTON",L"连接并开始观看",4,BS_PUSHBUTTON|WS_TABSTOP);marked(GetDlgItem(h,4));add(L"BUTTON",L"刷新设备",5,BS_PUSHBUTTON|WS_TABSTOP);
-    add(L"STATIC",L"视频输入设备",6,0);add(L"STATIC",L"设备实际支持的格式",7,0);add(L"STATIC",L"",8,0);add(L"STATIC",L"音频监听（仅采集所选输入，默认关闭）",9,0);
-    installDialogHelp(h,{{16,L"采集卡往软件送帧用的驱动缓冲数量。缓冲越多，卡可以提前排队，但每多一帧就多一帧的等待；缓冲太少，驱动来不及取走就会丢帧。自动：1080p 及以下建议 2 帧、更高分辨率建议 3 帧；最小：1 帧，延迟最低但高负载可能丢帧；驱动默认：不干预。改这个要重新连接采集卡，连接日志里会写建议值和驱动实际给的值（协商未生效时如实标注）。"},{15,L"给方向声明和实际画面不一致的采集卡用：常见于某些 RGB24 格式——设备在媒体类型里写的是底行在前，实际送来的却是顶行在前，于是画面上下颠倒。勾选后把采集画面上下翻转一次，立即生效；只影响本机采集预览、截图和从这里导出的画面，不改设备也不动其他格式。画面正常时不要勾选；换成不颠倒的格式后记得取消。"},{13,L"采集卡把 Dolby Atmos / Dolby Audio / DTS 以位流送来时，这里决定用哪条路。设备本身的音频格式不受影响；改这个要重新连接采集卡。自动优先 PCM，PCM 不可用时才走位流解码；位流优先则反过来：先尝试把位流原样直通给功放/回音壁（独占输出，卡不经过软件解码，只有接收端才能解出 Atmos/DTS:X 的对象声场；需要输出设备支持，探测见日志 bitstream-out），没有支持的输出端点时自动回退到解码。适合 PS5 已设成 Dolby 输出、但设备同时提供 PCM 的情况。"},{12,L"收到HDR也转成SDR显示，不用改PS5或Windows。增强照常用；只改预览，视频导出不受影响。切换会短暂停顿，截图跟随当前画面。关闭后跟随显示器。"},{10,L"设备没报HDR信息时手动指定，需选P010/P016。P010也可能装SDR，别给普通画面强戴HDR帽子。"},{1,L"选采集卡的视频设备。别把摄像头误请来直播PS5。"},{2,L"选设备真实提供的分辨率、帧率和像素格式。清晰度、带宽和延迟都受它影响。"},{3,L"如果设备自带 HDMI 音频，会显示“使用视频设备内置音频”；否则选择独立音频设备，也可不采声音。"},{4,L"按当前格式连接采集卡，并应用当前增强设置。"},{5,L"重新扫描设备和格式。设备被其他软件占用时，刷新不一定能抢回来。"}});
-    installDialogHelp(h,{{18,L"直接请求采集卡按此帧率送帧，支持小数。0 沿用所选格式；更改后重新连接。设备不支持或返回其他帧率时会报错，不在软件中偷偷丢帧。采集卡不能判断哪些画面是游戏重复帧，降帧率不保证消除重复画面。"}});
+    add(L"BUTTON",L"Connect and start watching",4,BS_PUSHBUTTON|WS_TABSTOP);marked(GetDlgItem(h,4));add(L"BUTTON",L"Refresh devices",5,BS_PUSHBUTTON|WS_TABSTOP);
+    add(L"STATIC",L"Video input device",6,0);add(L"STATIC",L"Formats the device actually supports",7,0);add(L"STATIC",L"",8,0);add(L"STATIC",L"Audio monitoring (only captures the selected input, off by default)",9,0);
+    installDialogHelp(h,{{16,L"The number of driver buffers the capture card uses to deliver frames to the software. More buffers let the card queue ahead, but every extra frame adds a frame of wait; too few buffers and the driver drops frames when it cannot fetch them in time. Automatic: recommends 2 frames at 1080p and below, 3 frames at higher resolutions; Minimum: 1 frame, lowest latency but may drop frames under heavy load; Driver default: no intervention. Changing this requires reconnecting the capture card; the connection log records the recommended value and the value the driver actually returned (marked honestly when negotiation did not take effect)."},{15,L"For capture cards whose orientation declaration does not match the actual image: common with some RGB24 formats, where the device declares bottom-row-first in the media type but actually delivers top-row-first, so the image is upside down. When checked, the capture image is flipped vertically once, takes effect immediately; only affects the local capture preview, screenshots and images exported from here, and does not change the device or other formats. Do not check it when the image is normal; remember to uncheck it after switching to a non-inverted format."},{13,L"When the capture card delivers Dolby Atmos / Dolby Audio / DTS as a bitstream, this decides which path to use. The device's own audio format is not affected; changing this requires reconnecting the capture card. Automatic prefers PCM and only uses bitstream decoding when PCM is unavailable; Bitstream first is the opposite: it first tries to pass the bitstream through unchanged to the receiver/soundbar (exclusive output, no software decoding by the card; only the receiver can render the Atmos/DTS:X object audio; requires output-device support, see the bitstream-out log), and automatically falls back to decoding when no supported output endpoint exists. Suitable when the PS5 is set to Dolby output but the device also provides PCM."},{12,L"Also convert incoming HDR to SDR display, without changing the PS5 or Windows. Enhancement runs as usual; only the preview changes, video export is unaffected. Switching causes a brief pause; screenshots follow the current image. When off, it follows the display."},{10,L"Specify manually when the device does not report HDR information; requires selecting P010/P016. P010 can also carry SDR, so do not force an HDR label onto ordinary content."},{1,L"Select the capture card's video device. Do not accidentally pick a webcam to stream the PS5."},{2,L"Select the resolution, frame rate and pixel format the device actually provides. Sharpness, bandwidth and latency all depend on it."},{3,L"If the device has built-in HDMI audio, \"Use the video device's built-in audio\" is shown; otherwise select a separate audio device, or capture no audio."},{4,L"Connect the capture card with the current format and apply the current enhancement settings."},{5,L"Rescan devices and formats. When the device is in use by another program, a refresh may not reclaim it."}});
+    installDialogHelp(h,{{18,L"Directly request the capture card to deliver frames at this rate, decimals supported. 0 uses the selected format; reconnect after changing. When the device does not support it or returns a different rate, an error is shown; frames are never silently dropped in the software. The capture card cannot tell which frames are duplicate game frames, so lowering the rate does not guarantee removing duplicate frames."}});
     EnableWindow(GetDlgItem(h,4),FALSE);arrange();SetTimer(h,1,100,nullptr);if(!busy)query(-1);return 0;}
 case WM_TIMER:
     SendDlgItemMessageW(h,12,BM_SETCHECK,readSdr()?BST_CHECKED:BST_UNCHECKED,0);
@@ -105,9 +105,9 @@ case WM_TIMER:
                 int restore=remembered.videoPath.empty()?0:-1;
                 for(size_t i=0;i<videoDevices.size();++i)if(videoDevices[i].path==remembered.videoPath)restore=int(i);
                 SendDlgItemMessageW(h,1,CB_SETCURSEL,restore,0);rebuildAudioList(h,restore);
-                if(restore>=0)query(restore);else SetDlgItemTextW(h,8,L"上次采集设备未连接。插回后刷新，或手动选择其他设备。");
+                if(restore>=0)query(restore);else SetDlgItemTextW(h,8,L"The last capture device is not connected. Reconnect it and refresh, or manually select another device.");
             }else{
-                rebuildAudioList(h,-1);SetDlgItemTextW(h,8,L"未找到采集设备。连接后点击刷新。");
+                rebuildAudioList(h,-1);SetDlgItemTextW(h,8,L"No capture device found. Connect one and click Refresh.");
             }
         }else{
             formats=std::move(result.formats);SendDlgItemMessageW(h,2,CB_RESETCONTENT,0,0);
@@ -123,29 +123,29 @@ case WM_TIMER:
             EnableWindow(GetDlgItem(h,10),TRUE);EnableWindow(GetDlgItem(h,20),TRUE);
             SetDlgItemTextW(h,18,std::format(L"{:g}",sameDevice?remembered.requestedFps:0).c_str());
             SendDlgItemMessageW(h,2,CB_SETCURSEL,restore,0);EnableWindow(GetDlgItem(h,4),restore>=0);
-            SetDlgItemTextW(h,8,formats.empty()?L"未读到有效的4K以内采集格式，或设备正被其他应用占用。":L"连接后使用当前增强设置。格式与音频变更需要重新连接。");
-            if(!formats.empty()&&restore<0)SetDlgItemTextW(h,8,L"上次格式已不可用，请重新选择格式。");
-            if(SendDlgItemMessageW(h,3,CB_GETCURSEL,0,0)==CB_ERR){EnableWindow(GetDlgItem(h,4),FALSE);SetDlgItemTextW(h,8,L"上次音频设备未连接。请选择音频设备，或明确选择不监听音频。");}
+            SetDlgItemTextW(h,8,formats.empty()?L"No valid capture format at or below 4K was read, or the device is in use by another application.":L"On connect, the current enhancement settings are used. Format and audio changes require a reconnect.");
+            if(!formats.empty()&&restore<0)SetDlgItemTextW(h,8,L"The last format is no longer available; please reselect a format.");
+            if(SendDlgItemMessageW(h,3,CB_GETCURSEL,0,0)==CB_ERR){EnableWindow(GetDlgItem(h,4),FALSE);SetDlgItemTextW(h,8,L"The last audio device is not connected. Please select an audio device, or explicitly choose not to monitor audio.");}
         }
-    }else if(busy&&GetTickCount64()-queryStarted>5000)SetDlgItemTextW(h,8,L"设备查询耗时较长。可以关闭此面板，当前播放不受影响。");
+    }else if(busy&&GetTickCount64()-queryStarted>5000)SetDlgItemTextW(h,8,L"The device query is taking a while. You can close this panel; current playback is unaffected.");
     return 0;
 case WM_COMMAND:
     if((LOWORD(wp)==10||LOWORD(wp)==20)&&HIWORD(wp)==CBN_SELCHANGE){saveDeviceColor(h);return 0;}
     if(LOWORD(wp)==12&&HIWORD(wp)==BN_CLICKED){
         const bool enabled=SendDlgItemMessageW(h,12,BM_GETCHECK,0,0)==BST_CHECKED;
-        if(!setSdr(enabled))SetDlgItemTextW(h,8,L"当前正在切换增强，请稍后再试。");
+        if(!setSdr(enabled))SetDlgItemTextW(h,8,L"Enhancement is currently switching; please try again shortly.");
         SendDlgItemMessageW(h,12,BM_SETCHECK,readSdr()?BST_CHECKED:BST_UNCHECKED,0);
     }else if(LOWORD(wp)==15&&HIWORD(wp)==BN_CLICKED){
         const bool enabled=SendDlgItemMessageW(h,15,BM_GETCHECK,0,0)==BST_CHECKED;
-        if(!setFlip||!setFlip(enabled))SetDlgItemTextW(h,8,L"当前正在切换增强，请稍后再试。");
+        if(!setFlip||!setFlip(enabled))SetDlgItemTextW(h,8,L"Enhancement is currently switching; please try again shortly.");
         if(readFlip)SendDlgItemMessageW(h,15,BM_SETCHECK,readFlip()?BST_CHECKED:BST_UNCHECKED,0);
     }else if(LOWORD(wp)==13&&HIWORD(wp)==CBN_SELCHANGE){
         const int mode=int(SendDlgItemMessageW(h,13,CB_GETCURSEL,0,0));
-        if(mode>=0&&setAudioIngress&&!setAudioIngress(mode))SetDlgItemTextW(h,8,L"当前正在切换增强或采集；请稍后再试。");
+        if(mode>=0&&setAudioIngress&&!setAudioIngress(mode))SetDlgItemTextW(h,8,L"Enhancement or capture is currently switching; please try again shortly.");
         if(readAudioIngress)SendDlgItemMessageW(h,13,CB_SETCURSEL,WPARAM(std::clamp(readAudioIngress(),0,2)),0);
     }else if(LOWORD(wp)==16&&HIWORD(wp)==CBN_SELCHANGE){
         const int mode=int(SendDlgItemMessageW(h,16,CB_GETCURSEL,0,0));
-        if(mode>=0&&setBuffer&&!setBuffer(mode))SetDlgItemTextW(h,8,L"当前正在切换增强或采集；请稍后再试。");
+        if(mode>=0&&setBuffer&&!setBuffer(mode))SetDlgItemTextW(h,8,L"Enhancement or capture is currently switching; please try again shortly.");
         if(readBuffer)SendDlgItemMessageW(h,16,CB_SETCURSEL,WPARAM(std::clamp(readBuffer(),0,2)),0);
     }else if(LOWORD(wp)==1&&HIWORD(wp)==CBN_SELCHANGE){
         const int device=int(SendDlgItemMessageW(h,1,CB_GETCURSEL,0,0));rebuildAudioList(h,device);query(device);
@@ -159,7 +159,7 @@ case WM_COMMAND:
         const int format=int(SendDlgItemMessageW(h,2,CB_GETCURSEL,0,0));
         const int audio=selectedAudio(h,device);
         wchar_t rateText[32]{};GetDlgItemTextW(h,18,rateText,32);double requestedFps=0;
-        if(!source::parseCaptureFrameRate(rateText,requestedFps)){SetDlgItemTextW(h,8,L"采集帧率请输入 1–1000 的数字（可带小数），或填 0 沿用设备默认。 ");SetFocus(GetDlgItem(h,18));return 0;}
+        if(!source::parseCaptureFrameRate(rateText,requestedFps)){SetDlgItemTextW(h,8,L"For the capture frame rate, enter a number from 1 to 1000 (decimals allowed), or 0 to use the device default. ");SetFocus(GetDlgItem(h,18));return 0;}
         const bool audioIndexValid=SendDlgItemMessageW(h,3,CB_GETCURSEL,0,0)!=CB_ERR&&(audio<0||size_t(audio)<audioDevices.size());
         if(!busy&&device==queriedDevice&&format>=0&&size_t(format)<formats.size()&&device>=0&&size_t(device)<videoDevices.size()&&audioIndexValid){
             const auto* audioDevice=audio>=0?&audioDevices[size_t(audio)]:nullptr;
@@ -185,5 +185,5 @@ case WM_DESTROY:KillTimer(h,1);DeleteObject(font);window=nullptr;
     return 0;
 }return DefWindowProcW(h,msg,wp,lp);}
 }
-void showCapturePanel(HWND parent,std::function<void(const std::wstring&)> callback,std::function<bool()> read,std::function<bool(bool)> write,std::function<int()> readIngress,std::function<bool(int)> writeIngress,std::function<bool()> readFlipped,std::function<bool(bool)> writeFlipped,std::function<int()> readBuffered,std::function<bool(int)> writeBuffered){start=std::move(callback);readSdr=std::move(read);setSdr=std::move(write);readAudioIngress=std::move(readIngress);setAudioIngress=std::move(writeIngress);readFlip=std::move(readFlipped);setFlip=std::move(writeFlipped);readBuffer=std::move(readBuffered);setBuffer=std::move(writeBuffered);if(window){SetForegroundWindow(window);return;}WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraCaptureSetup";wc.hbrBackground=panelBrush();wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);RegisterClassW(&wc);CreateWindowExW(WS_EX_TOOLWINDOW,wc.lpszClassName,L"采集卡 · 连接设置",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,dip(parent,560),dip(parent,680),parent,nullptr,wc.hInstance,nullptr);}
+void showCapturePanel(HWND parent,std::function<void(const std::wstring&)> callback,std::function<bool()> read,std::function<bool(bool)> write,std::function<int()> readIngress,std::function<bool(int)> writeIngress,std::function<bool()> readFlipped,std::function<bool(bool)> writeFlipped,std::function<int()> readBuffered,std::function<bool(int)> writeBuffered){start=std::move(callback);readSdr=std::move(read);setSdr=std::move(write);readAudioIngress=std::move(readIngress);setAudioIngress=std::move(writeIngress);readFlip=std::move(readFlipped);setFlip=std::move(writeFlipped);readBuffer=std::move(readBuffered);setBuffer=std::move(writeBuffered);if(window){SetForegroundWindow(window);return;}WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraCaptureSetup";wc.hbrBackground=panelBrush();wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);RegisterClassW(&wc);CreateWindowExW(WS_EX_TOOLWINDOW,wc.lpszClassName,L"Capture card · Connection settings",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,dip(parent,620),dip(parent,710),parent,nullptr,wc.hInstance,nullptr);}
 }

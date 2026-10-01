@@ -128,7 +128,7 @@ float ColorGradeTables::decodeLog(float encoded){
 
 float ColorGradeTables::curveValue(const engine::ColorCurve& curve,float x){return pointCurve(curve,std::clamp(x,0.0f,1.0f));}
 ColorGradeTables ColorGradeTables::bake(const engine::ColorSettings& s){
-    // Per-section bypass ("分组眼睛"): a bypassed section is baked as if its
+    // Per-section bypass ("group eye"): a bypassed section is baked as if its
     // parameters were neutral, so the user can A/B one group without losing the
     // numbers they dialled in. Cheap, exact and no shader branch is needed.
     const auto bypassed=[&](int section){return (s.groupBypassMask&(1u<<unsigned(section)))!=0;};

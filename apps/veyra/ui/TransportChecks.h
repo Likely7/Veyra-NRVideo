@@ -15,7 +15,7 @@ void tickTransportChecks(HWND hwnd,const veyra::engine::PlayerSnapshot& s){
         ShowWindow(hwnd,SW_SHOWNORMAL);SetForegroundWindow(hwnd);
         if(s.duration<60){require(false,"fixture_duration_at_least_60_seconds");break;}
         if(uiState.mode==veyra::ui::Mode::Daily){switchMode();return;}
-        engine.pause(true);paused=true;SetWindowTextW(GetDlgItem(hwnd,Play),L"播放");
+        engine.pause(true);paused=true;SetWindowTextW(GetDlgItem(hwnd,Play),L"Play");
         showDiagnostics=true;layout();SetFocus(GetDlgItem(hwnd,Volume));if(!full)toggleFullscreen();
         transportTick=GetTickCount64();transportStep=1;break;
     case 1:

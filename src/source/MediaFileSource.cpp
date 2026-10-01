@@ -229,7 +229,7 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     info_.color = parseColor(params);
     if(const auto* side=av_packet_side_data_get(params->coded_side_data,params->nb_coded_side_data,AV_PKT_DATA_DOVI_CONF)){
         if(side->size<offsetof(AVDOVIDecoderConfigurationRecord,dv_bl_signal_compatibility_id)+sizeof(uint8_t)){
-            errorMessage_=L"Dolby Vision 配置信息不完整";return false;
+            errorMessage_=L"Dolby Vision configuration information is incomplete";return false;
         }
         const auto& config=*reinterpret_cast<const AVDOVIDecoderConfigurationRecord*>(side->data);
         auto& dv=info_.dolbyVision;dv.present=true;dv.profile=config.dv_profile;dv.level=config.dv_level;
@@ -277,33 +277,33 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
             if (fallbackToSoftware("decoder-error")) {
                 continue;
             }
-            errorMessage_ = L"视频解码失败，已停止处理，请检查源文件是否损坏";
+            errorMessage_ = L"Video decoding failed; processing stopped; please check whether the source file is corrupted";
             return SourceReadStatus::Error;
         }
         if (draining_) {
-            errorMessage_ = L"视频解码失败，已停止处理，请检查源文件是否损坏";
+            errorMessage_ = L"Video decoding failed; processing stopped; please check whether the source file is corrupted";
             return SourceReadStatus::Error;
         }
         bool eof = false;
         if (!demuxer_.readVideoPacket(eof)) {
-            if (!eof) { errorMessage_ = L"源视频读取失败，已停止处理"; return SourceReadStatus::Error; }
+            if (!eof) { errorMessage_ = L"Reading the source video failed; processing stopped"; return SourceReadStatus::Error; }
             draining_ = true;
             if (!decoder_.sendPacket(nullptr)) {
-                errorMessage_ = L"视频尾帧解码失败，已停止处理";
+                errorMessage_ = L"Decoding the final video frame failed; processing stopped";
                 return SourceReadStatus::Error;
             }
             continue;
         }
         if (demuxer_.currentPacket()->flags & AV_PKT_FLAG_CORRUPT) {
             veyra::log::error("source-file", "corrupt video packet; refusing to skip source data");
-            errorMessage_ = L"源视频包含损坏数据，已停止处理";
+            errorMessage_ = L"The source video contains corrupted data; processing stopped";
             return SourceReadStatus::Error;
         }
         if (!decoder_.sendPacket(demuxer_.currentPacket())) {
             if (fallbackToSoftware("send-packet-error")) {
                 continue;
             }
-            errorMessage_ = L"视频解码失败，已停止处理，请检查源文件是否损坏";
+            errorMessage_ = L"Video decoding failed; processing stopped; please check whether the source file is corrupted";
             return SourceReadStatus::Error;
         }
     }
@@ -312,18 +312,18 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
         if (fallbackToSoftware("unsupported-d3d12-surface")) {
             return read(out, decodedFrame);
         }
-        errorMessage_ = L"硬件解码输出格式无法导入，且软件回退失败";
+        errorMessage_ = L"The hardware decode output format cannot be imported, and the software fallback failed";
         return SourceReadStatus::Error;
     }
 
     if ((frame->flags & AV_FRAME_FLAG_CORRUPT) || frame->decode_error_flags) {
         veyra::log::error("source-file", std::format("corrupt decoded frame flags={} decodeErrors={}", frame->flags, frame->decode_error_flags));
-        errorMessage_ = L"源视频包含损坏画面，已停止处理";
+        errorMessage_ = L"The source video contains a corrupted frame; processing stopped";
         return SourceReadStatus::Error;
     }
     if (frame->width <= 0 || frame->height <= 0 || uint32_t(frame->width) != info_.width || uint32_t(frame->height) != info_.height) {
         veyra::log::error("source-file", std::format("frame extent changed: opened={}x{} decoded={}x{}; file processing stopped before upload", info_.width, info_.height, frame->width, frame->height));
-        errorMessage_ = L"视频中途改变分辨率，当前文件处理不支持，已安全停止";
+        errorMessage_ = L"The video changed resolution mid-stream, which the current file processing does not support; stopped safely";
         return SourceReadStatus::Error;
     }
 
@@ -357,12 +357,12 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
     auto& dv=info_.dolbyVision;
     const bool hasRpu=av_frame_get_side_data(frame,AV_FRAME_DATA_DOVI_METADATA)||av_frame_get_side_data(frame,AV_FRAME_DATA_DOVI_RPU_BUFFER);
     if(hasRpu&&!dv.present){
-        errorMessage_=L"检测到 Dolby Vision RPU，但缺少基础层兼容声明，无法确认颜色，已停止";
+        errorMessage_=L"A Dolby Vision RPU was detected, but the base-layer compatibility declaration is missing, so the color cannot be confirmed; stopped";
         return SourceReadStatus::Error;
     }
     if(hasRpu&&!dv.rpuObserved){dv.rpuObserved=true;log::info("source-dovi","decoded RPU observed; compatibility playback does not apply dynamic metadata");}
     if(!dv.matches(out.colorInfo)){
-        errorMessage_=L"Dolby Vision 基础层颜色与兼容声明不匹配，已停止以避免错误颜色";
+        errorMessage_=L"The Dolby Vision base-layer color does not match the compatibility declaration; stopped to avoid incorrect color";
         return SourceReadStatus::Error;
     }
     // D3D12VA frames expose the underlying surface through AV_PIX_FMT_D3D12,

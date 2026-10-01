@@ -75,22 +75,24 @@ remoteplay::VideoProfile video(){
 }
 void buttons(){for(int id:{Pair,Connect,Scan,Wake,Host,Account,PairPin,Quality,CodecChoice,Bitrate,SamplingChoice,Forget,LoginPsn,CompletePsn,ForgetPsn})EnableWindow(GetDlgItem(window,id),!busy);EnableWindow(GetDlgItem(window,Cancel),busy);}
 template<class Work> void launch(Work work){
-    if(busy)return;if(worker.joinable())worker.join();busy=true;done=false;buttons();SetDlgItemTextW(window,StatusText,L"正在处理…可随时取消");
+    if(busy)return;if(worker.joinable())worker.join();busy=true;done=false;buttons();SetDlgItemTextW(window,StatusText,L"Processing... you can cancel at any time");
     worker=std::jthread([work=std::move(work)](std::stop_token stop)mutable{
         Outcome result;
-        try{result=work(stop);}catch(...){result.message=L"操作失败；请检查网络、输入和可用磁盘空间。";}
+        try{result=work(stop);}catch(...){result.message=L"Operation failed; check the network, input and available disk space.";}
         {std::lock_guard lock(mutex);outcome=std::move(result);}done=true;
     });
 }
 void arrange(){
     auto move=[](int id,int x,int y,int w,int h){MoveWindow(GetDlgItem(window,id),dip(window,x),dip(window,y),dip(window,w),dip(window,h),TRUE);};
-    move(LoginPsn,20,620,145,30);move(CompletePsn,175,620,200,30);move(ForgetPsn,385,620,167,30);
-    move(Host,160,18,270,180);move(Scan,440,18,112,28);
-    move(Account,160,62,392,28);move(PairPin,160,106,180,28);move(Pair,352,106,200,30);
-    move(Quality,160,150,220,150);move(CodecChoice,392,150,160,150);
-    move(Connect,160,199,180,36);move(Wake,352,199,200,36);
-    move(LoginPin,160,250,180,28);move(SendPin,352,250,200,30);
-    move(Bitrate,160,295,180,180);move(Forget,352,295,80,32);move(Cancel,440,295,112,32);move(StatusText,20,341,530,64);move(ViewOnly,20,408,400,28);move(Calibrate,432,408,120,28);move(DecodeChoice,160,442,392,150);move(SamplingChoice,160,486,392,120);move(Help,20,529,530,86);
+    move(LoginPsn,20,640,135,30);move(CompletePsn,162,640,245,30);move(ForgetPsn,415,640,175,30);
+    move(Host,170,18,290,180);move(Scan,470,18,120,28);
+    move(Account,170,62,420,28);move(PairPin,170,106,190,28);move(Pair,370,106,220,30);
+    move(Quality,170,150,230,150);move(CodecChoice,410,150,180,150);
+    move(Connect,170,199,190,36);move(Wake,370,199,220,36);
+    move(LoginPin,170,250,190,28);move(SendPin,370,250,220,30);
+    move(Bitrate,170,295,190,180);move(Forget,370,295,90,32);move(Cancel,470,295,120,32);
+    move(StatusText,20,341,570,64);move(ViewOnly,20,408,440,28);move(Calibrate,470,408,120,28);
+    move(DecodeChoice,170,442,420,150);move(SamplingChoice,170,486,420,120);move(Help,20,529,570,96);
 }
 LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM wp,LPARAM lp)try{switch(msg){
 case WM_CREATE:{window=h;closing=false;font=makeFont(h);titleTheme(h);
@@ -98,64 +100,64 @@ case WM_CREATE:{window=h;closing=false;font=makeFont(h);titleTheme(h);
         auto c=CreateWindowExW(0,cls,label,WS_CHILD|WS_VISIBLE|style,dip(h,x),dip(h,y),dip(h,w),dip(h,height),h,HMENU(INT_PTR(id)),GetModuleHandleW(nullptr),nullptr);
         SendMessageW(c,WM_SETFONT,WPARAM(font),TRUE);themeControl(c);return c;
     };
-    add(L"BUTTON",L"仅观看（手柄连接 PS5；更改后需重新连接）",ViewOnly,BS_AUTOCHECKBOX|WS_TABSTOP);
-    add(L"BUTTON",L"校准陀螺仪",Calibrate,BS_PUSHBUTTON|WS_TABSTOP);
-    add(L"STATIC",L"解码（重连生效）",106,0,20,445,138,25);
+    add(L"BUTTON",L"View only (controller connects to PS5; reconnect required after changes)",ViewOnly,BS_AUTOCHECKBOX|WS_TABSTOP);
+    add(L"BUTTON",L"Calibrate gyro",Calibrate,BS_PUSHBUTTON|WS_TABSTOP);
+    add(L"STATIC",L"Decode (applies on reconnect)",106,0,20,445,145,25);
     add(L"COMBOBOX",L"",DecodeChoice,CBS_DROPDOWNLIST|WS_TABSTOP);
-    for(auto label:{L"自动 · 优先硬解",L"CPU 软件解码",L"D3D12VA 硬件解码"})SendDlgItemMessageW(h,DecodeChoice,CB_ADDSTRING,0,LPARAM(label));
+    for(auto label:{L"Auto · prefer hardware decode",L"CPU software decode",L"D3D12VA hardware decode"})SendDlgItemMessageW(h,DecodeChoice,CB_ADDSTRING,0,LPARAM(label));
     SendDlgItemMessageW(h,DecodeChoice,CB_SETCURSEL,std::min(2u,GetPrivateProfileIntW(L"RemotePlay",L"DecodeMode",0,(remoteplay::profileDirectory()/L"settings.ini").c_str())),0);
-    add(L"STATIC",L"采样（重连生效）",107,0,20,489,138,25);
+    add(L"STATIC",L"Sampling (applies on reconnect)",107,0,20,489,145,25);
     add(L"COMBOBOX",L"",SamplingChoice,CBS_DROPDOWNLIST|WS_TABSTOP);
-    for(auto label:{L"兼容采样 · 原有方式",L"精细采样 · 色度重建与双三次缩放"})SendDlgItemMessageW(h,SamplingChoice,CB_ADDSTRING,0,LPARAM(label));
+    for(auto label:{L"Compatible sampling · legacy method",L"Fine sampling · chroma reconstruction and bicubic scaling"})SendDlgItemMessageW(h,SamplingChoice,CB_ADDSTRING,0,LPARAM(label));
     SendDlgItemMessageW(h,SamplingChoice,CB_SETCURSEL,std::min(1u,GetPrivateProfileIntW(L"RemotePlay",L"FineSampling",1,(remoteplay::profileDirectory()/L"settings.ini").c_str())),0);
-    add(L"STATIC",L"PS5 地址",100,0,20,21,130,25);add(L"STATIC",L"PSN Account ID",101,0,20,65,130,25);
-    add(L"STATIC",L"8 位配对码",102,0,20,109,130,25);add(L"STATIC",L"格式（重连生效）",103,0,20,153,130,25);add(L"STATIC",L"登录 PIN（可选）",104,0,20,253,135,25);
-    add(L"STATIC",L"码率请求",105,0,20,298,130,25);add(L"COMBOBOX",L"",Host,CBS_DROPDOWN|CBS_AUTOHSCROLL|WS_TABSTOP);SendDlgItemMessageW(h,Host,CB_LIMITTEXT,253,0);
+    add(L"STATIC",L"PS5 address",100,0,20,21,145,25);add(L"STATIC",L"PSN Account ID",101,0,20,65,145,25);
+    add(L"STATIC",L"8-digit pairing code",102,0,20,109,145,25);add(L"STATIC",L"Format (applies on reconnect)",103,0,20,153,145,25);add(L"STATIC",L"Login PIN (optional)",104,0,20,253,145,25);
+    add(L"STATIC",L"Bitrate request",105,0,20,298,145,25);add(L"COMBOBOX",L"",Host,CBS_DROPDOWN|CBS_AUTOHSCROLL|WS_TABSTOP);SendDlgItemMessageW(h,Host,CB_LIMITTEXT,253,0);
     for(int id:{Account,PairPin,LoginPin}){add(L"EDIT",L"",id,WS_TABSTOP|ES_AUTOHSCROLL|((id==PairPin||id==LoginPin)?ES_PASSWORD:0));SendDlgItemMessageW(h,id,EM_SETLIMITTEXT,id==Host?253:id==Account?24:8,0);}
     add(L"COMBOBOX",L"",Quality,CBS_DROPDOWNLIST|WS_TABSTOP);for(auto label:{L"720p · 30 fps",L"720p · 60 fps",L"1080p · 30 fps",L"1080p · 60 fps"})SendDlgItemMessageW(h,Quality,CB_ADDSTRING,0,LPARAM(label));SendDlgItemMessageW(h,Quality,CB_SETCURSEL,3,0);
-    add(L"COMBOBOX",L"",CodecChoice,CBS_DROPDOWNLIST|WS_TABSTOP);for(auto label:{L"H.264 · SDR",L"H.265 · SDR",L"H.265 · HDR（实验）"})SendDlgItemMessageW(h,CodecChoice,CB_ADDSTRING,0,LPARAM(label));SendDlgItemMessageW(h,CodecChoice,CB_SETCURSEL,0,0);
+    add(L"COMBOBOX",L"",CodecChoice,CBS_DROPDOWNLIST|WS_TABSTOP);for(auto label:{L"H.264 · SDR",L"H.265 · SDR",L"H.265 · HDR (experimental)"})SendDlgItemMessageW(h,CodecChoice,CB_ADDSTRING,0,LPARAM(label));SendDlgItemMessageW(h,CodecChoice,CB_SETCURSEL,0,0);
     add(L"COMBOBOX",L"",Bitrate,CBS_DROPDOWNLIST|WS_TABSTOP);for(auto rate:bitrates){auto label=std::format(L"{} Mbps",rate/1000);SendDlgItemMessageW(h,Bitrate,CB_ADDSTRING,0,LPARAM(label.c_str()));}SendDlgItemMessageW(h,Bitrate,CB_SETCURSEL,2,0);
-    add(L"BUTTON",L"登录 PSN",LoginPsn,BS_PUSHBUTTON|WS_TABSTOP);
-    add(L"BUTTON",L"从剪贴板提交登录结果",CompletePsn,BS_PUSHBUTTON|WS_TABSTOP);
-    add(L"BUTTON",L"退出 PSN",ForgetPsn,BS_PUSHBUTTON|WS_TABSTOP);
-    add(L"BUTTON",L"删除配对",Forget,BS_PUSHBUTTON|WS_TABSTOP);
-    for(auto [id,label]:{std::pair{Pair,L"配对并保存"},{Connect,L"连接并观看"},{Cancel,L"取消操作"},{Scan,L"查找主机"},{Wake,L"唤醒已配对 PS5"},{SendPin,L"提交登录 PIN"}})add(L"BUTTON",label,id,BS_PUSHBUTTON|WS_TABSTOP);
+    add(L"BUTTON",L"Log in to PSN",LoginPsn,BS_PUSHBUTTON|WS_TABSTOP);
+    add(L"BUTTON",L"Submit login result from clipboard",CompletePsn,BS_PUSHBUTTON|WS_TABSTOP);
+    add(L"BUTTON",L"Log out of PSN",ForgetPsn,BS_PUSHBUTTON|WS_TABSTOP);
+    add(L"BUTTON",L"Delete pairing",Forget,BS_PUSHBUTTON|WS_TABSTOP);
+    for(auto [id,label]:{std::pair{Pair,L"Pair and save"},{Connect,L"Connect and watch"},{Cancel,L"Cancel"},{Scan,L"Find host"},{Wake,L"Wake paired PS5"},{SendPin,L"Submit login PIN"}})add(L"BUTTON",label,id,BS_PUSHBUTTON|WS_TABSTOP);
     marked(GetDlgItem(h,Connect));
-    add(L"STATIC",L"首次使用先配对，之后直接连接。",StatusText,0);
-    add(L"STATIC",L"PS5：设置 → 系统 → 远程游玩 → 启用远程游玩 → 关联设备。\nAccount ID 填账号数字 ID 或对应 8 字节 Base64，不是昵称或密码。\n电脑与 PS5 先连接同一局域网。配对信息仅在本机加密保存。\n登录 PIN 仅在 PS5 提示时填写；取消操作不会关闭当前视频。",Help,0);
+    add(L"STATIC",L"Pair on first use, then connect directly afterward.",StatusText,0);
+    add(L"STATIC",L"PS5: Settings -> System -> Remote Play -> Enable Remote Play -> Link Device.\nAccount ID takes the account's numeric ID or the corresponding 8-byte Base64, not a nickname or password.\nConnect the PC and PS5 to the same LAN first. Pairing info is stored encrypted on this machine only.\nLogin PIN is only entered when the PS5 prompts for it; cancelling does not close the current video.",Help,0);
     const auto migration=remoteplay::migrateProfiles(runtime::localDataDirectory());
     refreshProfiles();
-    if(profileReadFailures)SetDlgItemTextW(h,StatusText,L"有配对存档无法读取或解密，详情见日志。请使用原Windows账户；不要删除原件。");
-    else if(migration.failed)SetDlgItemTextW(h,StatusText,L"部分旧配对无法迁移；原件已保留，请检查用户权限。不要重复配对覆盖原件。");
-    else if(!currentProfile.empty())SetDlgItemTextW(h,StatusText,L"已加载保存的主机，直接点“连接并观看”，无需重新填写8位配对码。");
+    if(profileReadFailures)SetDlgItemTextW(h,StatusText,L"Some pairing files can't be read or decrypted; see the log for details. Use the original Windows account; do not delete the original files.");
+    else if(migration.failed)SetDlgItemTextW(h,StatusText,L"Some old pairings couldn't be migrated; the originals are kept, please check user permissions. Do not re-pair and overwrite the originals.");
+    else if(!currentProfile.empty())SetDlgItemTextW(h,StatusText,L"Loaded a saved host; just click \"Connect and watch\", no need to re-enter the 8-digit pairing code.");
     installDialogHelp(h,{
-        {LoginPsn,L"打开Sony登录页。登录后复制浏览器回调地址，再点提交登录结果；软件不接触密码。"},
-        {CompletePsn,L"读取你复制的Sony登录回调URL，获取并加密保存授权和Account ID。不会读取其他剪贴板格式。"},
-        {ForgetPsn,L"只删除PSN授权，已有局域网主机配对仍然保留。"},
-        {Host,L"PS5的局域网IP或已保存主机。找不到时可手填，别把PSN昵称填这里。"},
-        {Account,L"配对用的Base64 PSN Account ID，不是在线昵称。名字相同不代表身份证号码相同。"},
-        {PairPin,L"PS5远程游玩页面显示的8位配对码，有时效。过期了再领一张票。"},
-        {Quality,L"选择PS5发送的分辨率和帧率。更改后点击应用设置并重连；当前生效值看下方状态，不要被下拉框骗了。"},
-        {CodecChoice,L"H.264兼容性好，H.265通常更省码率；更改后重连生效。HDR需要PS5实际输出HDR和Windows HDR开启；增强保留HDR基底并处理映射副本，NR本身不是原生HDR模型。SDR显示器会映射为SDR。"},
-        {Pair,L"用账户ID和8位码注册主机，凭据在本机加密保存。"},
-        {Connect,L"使用保存的配对信息连接PS5，把画面送进当前增强链路。"},
-        {Cancel,L"取消当前操作或断开串流，让连接安静收工。"},
-        {Scan,L"在局域网里寻找主机。同网段、防火墙和PS5设置都可能影响结果。"},
-        {Wake,L"尝试唤醒待机主机；需要已配对且PS5允许联网唤醒。关机不是待机，叫不醒别硬喊。"},
-        {LoginPin,L"主机要求登录PIN时填写。它不是前面的8位配对码。"},
-        {SendPin,L"把登录PIN发给当前串流会话。"},
-        {Bitrate,L"这是发给PS5的带宽请求，重连后生效。主机会按画面和网络决定实际码率，选100不代表必须跑满100。下方分别显示本次请求和实收视频码率。"},
-        {Forget,L"删除本机保存的这台主机配对信息；以后需要重新配对。"},
-        {ViewOnly,L"只观看，不向PS5转发电脑手柄输入。不能保证同账号手柄仍能直连主机，这是PS5会话规则。"},
-        {Calibrate,L"手柄放稳后校准陀螺仪，让镜头别自己散步。"},
-        {DecodeChoice,L"自动优先硬解，失败回软件；强制硬解失败会报错。软件解码主要用CPU，硬解用视频解码单元。重连生效。"},
-        {SamplingChoice,L"精细模式按位置还原颜色采样，放大时用双三次插值并限制边缘光晕；1:1保留原像素。它不改变PS5码率，也不是AI超分：源头丢掉的细节，不能凭空变回来。会增加GPU工作；兼容模式可切回原有采样作对比。重连生效。"}});
+        {LoginPsn,L"Opens the Sony login page. After logging in, copy the browser callback address, then click Submit login result; the software never touches your password."},
+        {CompletePsn,L"Reads the Sony login callback URL you copied, then fetches and encrypts the authorization and Account ID. It won't read other clipboard formats."},
+        {ForgetPsn,L"Only deletes the PSN authorization; existing LAN host pairings are kept."},
+        {Host,L"The PS5's LAN IP or a saved host. If not found you can type it in manually; don't put a PSN nickname here."},
+        {Account,L"The Base64 PSN Account ID used for pairing, not an online nickname. The same name doesn't mean the same ID number."},
+        {PairPin,L"The 8-digit pairing code shown on the PS5 Remote Play page; it expires. If it expires, get a fresh one."},
+        {Quality,L"Choose the resolution and frame rate the PS5 sends. After changing, click Apply settings and reconnect; check the status below for the value in effect, don't be fooled by the dropdown."},
+        {CodecChoice,L"H.264 is more compatible; H.265 usually saves more bitrate; changes apply on reconnect. HDR requires the PS5 to actually output HDR and Windows HDR to be on; enhancement keeps the HDR base and processes a mapped copy, NR itself is not a native HDR model. An SDR display maps to SDR."},
+        {Pair,L"Registers the host with the account ID and 8-digit code; credentials are stored encrypted on this machine."},
+        {Connect,L"Connects to the PS5 using the saved pairing info and feeds the image into the current enhancement pipeline."},
+        {Cancel,L"Cancels the current operation or disconnects the stream, letting the connection wind down quietly."},
+        {Scan,L"Searches for hosts on the LAN. The same subnet, firewall and PS5 settings can all affect the result."},
+        {Wake,L"Tries to wake a standby host; requires it to be paired and the PS5 to allow network wake. Powered off is not standby, so don't keep shouting if it won't wake."},
+        {LoginPin,L"Enter it when the host asks for a login PIN. It's not the 8-digit pairing code from earlier."},
+        {SendPin,L"Sends the login PIN to the current stream session."},
+        {Bitrate,L"This is a bandwidth request sent to the PS5, effective on reconnect. The host decides the actual bitrate based on the image and network; choosing 100 doesn't mean it must run at a full 100. The requested and actually received video bitrates are shown separately below."},
+        {Forget,L"Deletes this host's pairing info stored on this machine; you'll need to pair again later."},
+        {ViewOnly,L"Watch only, don't forward the PC controller input to the PS5. It can't guarantee a same-account controller can still connect directly to the host; that's a PS5 session rule."},
+        {Calibrate,L"Calibrate the gyro with the controller resting still, so the view doesn't wander on its own."},
+        {DecodeChoice,L"Auto prefers hardware decode and falls back to software on failure; forced hardware decode reports an error on failure. Software decode mainly uses the CPU, hardware decode uses the video decode unit. Applies on reconnect."},
+        {SamplingChoice,L"Fine mode reconstructs color sampling by position, uses bicubic interpolation when upscaling and limits edge halos; 1:1 keeps the original pixels. It doesn't change the PS5 bitrate, and it's not AI super resolution: detail lost at the source can't be recovered from nothing. It increases GPU work; compatible mode can switch back to the original sampling for comparison. Applies on reconnect."}});
     watching=connectionStatus().active;buttons();arrange();SetTimer(h,1,100,nullptr);
     if(auto auth=remoteplay::loadPsnAuthorization()){
         psnRefreshAfter=GetTickCount64()+300000;
         const bool fillAccount=currentProfile.empty();
         launch([fillAccount](std::stop_token stop){auto result=remoteplay::refreshPsn(stop);Outcome out;
-            out.message=result.ok?L"PSN授权已就绪；已配对主机直接连接，无需8位配对码。":std::format(L"PSN授权刷新失败（{}）；局域网配对仍可连接，必要时重新登录PSN。",result.error);
+            out.message=result.ok?L"PSN authorization is ready; paired hosts connect directly, no 8-digit pairing code needed.":std::format(L"PSN authorization refresh failed ({}); LAN pairings can still connect, log in to PSN again if needed.",result.error);
             if(fillAccount)out.account=result.account;
             return out;});
     }
@@ -170,58 +172,58 @@ case WM_TIMER:if(busy&&done){if(worker.joinable())worker.join();busy=false;Outco
                 selected->host=found.host;
                 if(found.consoleId.size()==12)selected->consoleId=found.consoleId;
                 if(remoteplay::saveProfile(currentProfile,*selected)){refreshProfiles();matched=true;}
-                else SetDlgItemTextW(h,StatusText,L"找到主机，但保存新地址失败；原配对仍保留。");
+                else SetDlgItemTextW(h,StatusText,L"Found the host, but failed to save the new address; the original pairing is kept.");
                 break;
             }
         }}
         if(!selected&&result.hosts.size()==1)SetDlgItemTextW(h,Host,std::wstring(result.hosts[0].host.begin(),result.hosts[0].host.end()).c_str());
-        else if(selected&&!matched)SetDlgItemTextW(h,StatusText,L"发现主机，但无法确认是已配对的这一台。保留原地址，可核对后手动修改。");
-        else if(!selected&&result.hosts.size()>1)SetDlgItemTextW(h,StatusText,L"发现多台PS5，请填写要配对的主机IP，避免选错主机。");
+        else if(selected&&!matched)SetDlgItemTextW(h,StatusText,L"Found a host, but couldn't confirm it's the paired one. Keeping the original address; verify and edit it manually if needed.");
+        else if(!selected&&result.hosts.size()>1)SetDlgItemTextW(h,StatusText,L"Found multiple PS5s; enter the IP of the host you want to pair to avoid choosing the wrong one.");
     }if(closing)DestroyWindow(h);}
     if(window&&!busy&&GetTickCount64()>psnRefreshAfter){
         psnRefreshAfter=GetTickCount64()+300000;
-        if(remoteplay::loadPsnAuthorization())launch([](std::stop_token stop){auto result=remoteplay::refreshPsn(stop);Outcome out;out.message=result.ok?L"PSN授权已就绪；已配对主机直接连接。":std::format(L"PSN刷新失败（{}）；局域网配对不受影响。",result.error);return out;});
+        if(remoteplay::loadPsnAuthorization())launch([](std::stop_token stop){auto result=remoteplay::refreshPsn(stop);Outcome out;out.message=result.ok?L"PSN authorization is ready; paired hosts connect directly.":std::format(L"PSN refresh failed ({}); LAN pairings are unaffected.",result.error);return out;});
     }
-    if(window&&watching&&!busy){auto state=connectionStatus();SetDlgItemTextW(h,Connect,state.active?L"应用设置并重连":L"连接并观看");SetDlgItemTextW(h,StatusText,state.message.c_str());SetDlgItemTextW(h,Cancel,state.active?L"断开连接":L"取消操作");EnableWindow(GetDlgItem(h,Cancel),state.active);if(!state.active)watching=false;}return 0;
+    if(window&&watching&&!busy){auto state=connectionStatus();SetDlgItemTextW(h,Connect,state.active?L"Apply settings and reconnect":L"Connect and watch");SetDlgItemTextW(h,StatusText,state.message.c_str());SetDlgItemTextW(h,Cancel,state.active?L"Disconnect":L"Cancel");EnableWindow(GetDlgItem(h,Cancel),state.active);if(!state.active)watching=false;}return 0;
 case WM_COMMAND:switch(LOWORD(wp)){
-    case LoginPsn:{if(busy)break;auto url=remoteplay::psnLoginUrl();if(INT_PTR(ShellExecuteW(h,L"open",url.c_str(),nullptr,nullptr,SW_SHOWNORMAL))>32){psnLoginStarted=GetTickCount64();SetDlgItemTextW(h,StatusText,L"在Sony网页完成登录，复制最终回调URL，再点“从剪贴板提交登录结果”。");}else SetDlgItemTextW(h,StatusText,L"无法打开浏览器，请检查默认浏览器设置。");break;}
+    case LoginPsn:{if(busy)break;auto url=remoteplay::psnLoginUrl();if(INT_PTR(ShellExecuteW(h,L"open",url.c_str(),nullptr,nullptr,SW_SHOWNORMAL))>32){psnLoginStarted=GetTickCount64();SetDlgItemTextW(h,StatusText,L"Complete the login on the Sony web page, copy the final callback URL, then click \"Submit login result from clipboard\".");}else SetDlgItemTextW(h,StatusText,L"Couldn't open the browser; check your default browser settings.");break;}
     case CompletePsn:{
         if(busy)break;
-        if(!psnLoginStarted||GetTickCount64()-psnLoginStarted>600000){SetDlgItemTextW(h,StatusText,L"请先点登录PSN，完成网页授权后再提交。");break;}
+        if(!psnLoginStarted||GetTickCount64()-psnLoginStarted>600000){SetDlgItemTextW(h,StatusText,L"Click Log in to PSN first, complete the web authorization, then submit.");break;}
         std::wstring callback;
         if(OpenClipboard(h)){auto data=GetClipboardData(CF_UNICODETEXT);if(data){auto size=GlobalSize(data);if(size&&size<=16386){auto chars=static_cast<const wchar_t*>(GlobalLock(data));if(chars){size_t count=0;while(count<size/sizeof(wchar_t)&&chars[count])++count;if(count<size/sizeof(wchar_t))callback.assign(chars,count);GlobalUnlock(data);}}}CloseClipboard();}
-        if(!remoteplay::validPsnCallback(callback)){SecureZeroMemory(callback.data(),callback.size()*sizeof(wchar_t));SetDlgItemTextW(h,StatusText,L"剪贴板不是有效的Sony授权回调地址。请复制登录完成后的完整URL。");break;}
+        if(!remoteplay::validPsnCallback(callback)){SecureZeroMemory(callback.data(),callback.size()*sizeof(wchar_t));SetDlgItemTextW(h,StatusText,L"The clipboard isn't a valid Sony authorization callback address. Copy the full URL after login completes.");break;}
         psnLoginStarted=0;
-        launch([callback=std::move(callback)](std::stop_token stop)mutable{auto result=remoteplay::authorizePsn(std::move(callback),stop);Outcome out;out.account=result.account;out.message=result.ok?L"PSN登录已保存，Account ID已填入。首次仍需配对；已配对主机直接连接。":std::format(L"PSN授权失败（{}）；原有配对不受影响，可重新登录。",result.error);return out;});break;
+        launch([callback=std::move(callback)](std::stop_token stop)mutable{auto result=remoteplay::authorizePsn(std::move(callback),stop);Outcome out;out.account=result.account;out.message=result.ok?L"PSN login saved and Account ID filled in. First time still needs pairing; paired hosts connect directly.":std::format(L"PSN authorization failed ({}); existing pairings are unaffected, you can log in again.",result.error);return out;});break;
     }
-    case ForgetPsn:if(!busy){SetDlgItemTextW(h,StatusText,remoteplay::forgetPsnAuthorization()?L"PSN授权已删除，局域网配对保留。":L"删除授权失败，请检查目录权限。");}break;
-    case Calibrate:if(calibrate&&calibrate())MessageBoxW(h,L"将手柄平放并保持静止，关闭此提示后返回播放器。\n采集 120 个稳定样本完成校准；10 秒内不稳定则保留原校准。",L"陀螺仪校准",MB_OK);else MessageBoxW(h,L"请先连接串流及带陀螺仪的电脑手柄。仅观看模式不使用电脑手柄。",L"无法校准",MB_OK);break;
+    case ForgetPsn:if(!busy){SetDlgItemTextW(h,StatusText,remoteplay::forgetPsnAuthorization()?L"PSN authorization deleted; LAN pairings are kept.":L"Failed to delete the authorization; check directory permissions.");}break;
+    case Calibrate:if(calibrate&&calibrate())MessageBoxW(h,L"Lay the controller flat and keep it still; return to the player after closing this prompt.\nCalibration completes after collecting 120 stable samples; if it's unstable within 10 seconds the existing calibration is kept.",L"Gyro calibration",MB_OK);else MessageBoxW(h,L"Connect a stream and a PC controller with a gyro first. View-only mode doesn't use the PC controller.",L"Can't calibrate",MB_OK);break;
     case Host:if(HIWORD(wp)==CBN_SELCHANGE&&!busy){const auto index=SendDlgItemMessageW(h,Host,CB_GETCURSEL,0,0);if(index>=0&&size_t(index)<profiles.size()){currentProfile=profiles[size_t(index)].path;WritePrivateProfileStringW(L"RemotePlay",L"LastProfile",currentProfile.filename().c_str(),(remoteplay::profileDirectory()/L"settings.ini").c_str());loadSelection();}}break;
-    case Forget:if(!busy&&!currentProfile.empty()){std::error_code ec;const bool removed=std::filesystem::remove(currentProfile,ec);if(removed){currentProfile.clear();refreshProfiles();if(profiles.empty()){SetDlgItemTextW(h,Account,L"");SetDlgItemTextW(h,Host,L"");}SetDlgItemTextW(h,StatusText,L"配对已删除。现有串流会保留；下次连接需选择其他主机或重新配对。");}else SetDlgItemTextW(h,StatusText,L"删除失败，请检查文件权限。");}break;
+    case Forget:if(!busy&&!currentProfile.empty()){std::error_code ec;const bool removed=std::filesystem::remove(currentProfile,ec);if(removed){currentProfile.clear();refreshProfiles();if(profiles.empty()){SetDlgItemTextW(h,Account,L"");SetDlgItemTextW(h,Host,L"");}SetDlgItemTextW(h,StatusText,L"Pairing deleted. Existing streams are kept; next connection you'll need to pick another host or pair again.");}else SetDlgItemTextW(h,StatusText,L"Deletion failed; check file permissions.");}break;
     case Pair:{if(busy)break;auto host=ascii(Host),id=ascii(Account),pin=ascii(PairPin);auto account=remoteplay::accountIdFromBase64(id);if(!account)account=remoteplay::accountIdFromDecimal(id);
-        if(!remoteplay::validHost(host)||!account||!remoteplay::parsePairingPin(pin)){SetDlgItemTextW(h,StatusText,L"请填写有效主机地址、Account ID 和 8 位配对码。");break;}
-        auto targetPath=pathForHost(host,*account);if(targetPath.empty()){SetDlgItemTextW(h,StatusText,L"无法分配配对存档，请重试。");break;}auto format=video();SetDlgItemTextW(h,PairPin,L"");
+        if(!remoteplay::validHost(host)||!account||!remoteplay::parsePairingPin(pin)){SetDlgItemTextW(h,StatusText,L"Enter a valid host address, Account ID and 8-digit pairing code.");break;}
+        auto targetPath=pathForHost(host,*account);if(targetPath.empty()){SetDlgItemTextW(h,StatusText,L"Couldn't allocate a pairing file; please try again.");break;}auto format=video();SetDlgItemTextW(h,PairPin,L"");
         launch([host=std::move(host),account=*account,pin=std::move(pin),format,targetPath](std::stop_token stop)mutable{
             auto result=remoteplay::pairLocalPs5(host,account,pin,stop);SecureZeroMemory(pin.data(),pin.size());Outcome out;
-            if(result.result.ok&&!stop.stop_requested()){remoteplay::NativeConnectRequest request;request.host=host;request.video=format;request.credentials=std::move(result.credentials);for(auto byte:result.mac)request.consoleId+=std::format("{:02x}",byte);if(request.consoleId=="000000000000")request.consoleId.clear();if(remoteplay::saveProfile(targetPath,request)){out.savedPath=targetPath;out.message=L"配对成功并已加密保存，可以连接。";}else out.message=L"配对成功，但保存失败。请检查目录权限后重试。";}
-            else out.message=result.canceled||stop.stop_requested()?L"已取消配对":std::format(L"配对失败（{}），检查 PS5 配对码、Account ID 与网络。",result.result.code);return out;});break;}
-    case Connect:{if(busy)break;auto saved=remoteplay::loadProfile(profilePath());auto host=ascii(Host);if(!saved||!remoteplay::validHost(host)){SetDlgItemTextW(h,StatusText,L"请先完成配对，并填写有效主机地址。");break;}saved->host=host;saved->video=video();saved->viewOnly=IsDlgButtonChecked(h,ViewOnly)==BST_CHECKED;if(!remoteplay::saveProfile(currentProfile,*saved)){SetDlgItemTextW(h,StatusText,L"保存连接设置失败，请检查目录权限。");break;}source::RemotePlayConnectDesc desc;saved->viewOnly=IsDlgButtonChecked(h,ViewOnly)==BST_CHECKED;desc.request=std::move(*saved);const auto decode=std::clamp<int>(int(SendDlgItemMessageW(h,DecodeChoice,CB_GETCURSEL,0,0)),0,2);desc.decodeMode=static_cast<source::RemotePlayConnectDesc::DecodeMode>(decode);WritePrivateProfileStringW(L"RemotePlay",L"DecodeMode",std::to_wstring(decode).c_str(),(remoteplay::profileDirectory()/L"settings.ini").c_str());desc.highQualitySampling=SendDlgItemMessageW(h,SamplingChoice,CB_GETCURSEL,0,0)==1;WritePrivateProfileStringW(L"RemotePlay",L"FineSampling",desc.highQualitySampling?L"1":L"0",(remoteplay::profileDirectory()/L"settings.ini").c_str());connect(std::move(desc));watching=true;EnableWindow(GetDlgItem(h,Cancel),TRUE);SetDlgItemTextW(h,StatusText,L"连接已开始。需要登录 PIN 时在下方提交。关闭面板不停止串流。");break;}
+            if(result.result.ok&&!stop.stop_requested()){remoteplay::NativeConnectRequest request;request.host=host;request.video=format;request.credentials=std::move(result.credentials);for(auto byte:result.mac)request.consoleId+=std::format("{:02x}",byte);if(request.consoleId=="000000000000")request.consoleId.clear();if(remoteplay::saveProfile(targetPath,request)){out.savedPath=targetPath;out.message=L"Pairing succeeded and was saved encrypted; you can connect now.";}else out.message=L"Pairing succeeded, but saving failed. Check directory permissions and try again.";}
+            else out.message=result.canceled||stop.stop_requested()?L"Pairing cancelled":std::format(L"Pairing failed ({}); check the PS5 pairing code, Account ID and network.",result.result.code);return out;});break;}
+    case Connect:{if(busy)break;auto saved=remoteplay::loadProfile(profilePath());auto host=ascii(Host);if(!saved||!remoteplay::validHost(host)){SetDlgItemTextW(h,StatusText,L"Complete pairing first, and enter a valid host address.");break;}saved->host=host;saved->video=video();saved->viewOnly=IsDlgButtonChecked(h,ViewOnly)==BST_CHECKED;if(!remoteplay::saveProfile(currentProfile,*saved)){SetDlgItemTextW(h,StatusText,L"Failed to save connection settings; check directory permissions.");break;}source::RemotePlayConnectDesc desc;saved->viewOnly=IsDlgButtonChecked(h,ViewOnly)==BST_CHECKED;desc.request=std::move(*saved);const auto decode=std::clamp<int>(int(SendDlgItemMessageW(h,DecodeChoice,CB_GETCURSEL,0,0)),0,2);desc.decodeMode=static_cast<source::RemotePlayConnectDesc::DecodeMode>(decode);WritePrivateProfileStringW(L"RemotePlay",L"DecodeMode",std::to_wstring(decode).c_str(),(remoteplay::profileDirectory()/L"settings.ini").c_str());desc.highQualitySampling=SendDlgItemMessageW(h,SamplingChoice,CB_GETCURSEL,0,0)==1;WritePrivateProfileStringW(L"RemotePlay",L"FineSampling",desc.highQualitySampling?L"1":L"0",(remoteplay::profileDirectory()/L"settings.ini").c_str());connect(std::move(desc));watching=true;EnableWindow(GetDlgItem(h,Cancel),TRUE);SetDlgItemTextW(h,StatusText,L"Connection started. Submit the login PIN below when required. Closing the panel doesn't stop the stream.");break;}
     case Cancel:if(busy&&worker.joinable())worker.request_stop();else if(watching)disconnect();break;
-    case Scan:launch([](std::stop_token stop){Outcome out;auto report=remoteplay::discoverLocalPs5(stop);for(const auto& line:report.diagnostics)veyra::log::info("remoteplay-discovery",line);out.hosts=std::move(report.hosts);out.message=stop.stop_requested()?L"已取消查找":out.hosts.empty()?(report.error?std::format(L"主机搜索发生错误（{}），详情见日志；可手填 IP。",report.error):L"搜索完成，未收到 PS5 回应；可手填 IP，检查主机开机和局域网。"):L"已填入发现的 PS5 地址。多台主机可手工输入目标 IP。";return out;});break;
-    case Wake:{if(busy)break;auto saved=remoteplay::loadProfile(profilePath());if(!saved){SetDlgItemTextW(h,StatusText,L"需要先配对才能唤醒。");break;}saved->host=ascii(Host);launch([request=std::move(*saved)](std::stop_token stop){Outcome out;if(stop.stop_requested()){out.message=L"已取消唤醒";return out;}auto r=remoteplay::wakeLocalPs5(request);out.message=r.ok?L"已发送唤醒请求，等待 PS5 启动后点击连接。":std::format(L"唤醒请求失败（{}）",r.code);return out;});break;}
-    case SendPin:{auto pin=ascii(LoginPin);if(pin.empty()||!std::all_of(pin.begin(),pin.end(),[](char c){return c>='0'&&c<='9';})){SetDlgItemTextW(h,StatusText,L"登录 PIN 必须为数字。");break;}login(std::move(pin));SetDlgItemTextW(h,LoginPin,L"");break;}
+    case Scan:launch([](std::stop_token stop){Outcome out;auto report=remoteplay::discoverLocalPs5(stop);for(const auto& line:report.diagnostics)veyra::log::info("remoteplay-discovery",line);out.hosts=std::move(report.hosts);out.message=stop.stop_requested()?L"Search cancelled":out.hosts.empty()?(report.error?std::format(L"An error occurred during host search ({}); see the log for details; you can type an IP manually.",report.error):L"Search complete, no PS5 responded; you can type an IP manually, check the host is on and on the LAN."):L"Filled in the discovered PS5 address. For multiple hosts you can type the target IP manually.";return out;});break;
+    case Wake:{if(busy)break;auto saved=remoteplay::loadProfile(profilePath());if(!saved){SetDlgItemTextW(h,StatusText,L"You need to pair before you can wake.");break;}saved->host=ascii(Host);launch([request=std::move(*saved)](std::stop_token stop){Outcome out;if(stop.stop_requested()){out.message=L"Wake cancelled";return out;}auto r=remoteplay::wakeLocalPs5(request);out.message=r.ok?L"Wake request sent; wait for the PS5 to start, then click Connect.":std::format(L"Wake request failed ({})",r.code);return out;});break;}
+    case SendPin:{auto pin=ascii(LoginPin);if(pin.empty()||!std::all_of(pin.begin(),pin.end(),[](char c){return c>='0'&&c<='9';})){SetDlgItemTextW(h,StatusText,L"The login PIN must be numeric.");break;}login(std::move(pin));SetDlgItemTextW(h,LoginPin,L"");break;}
     }return 0;
 case WM_CTLCOLORSTATIC:case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORBTN:return colors(msg,wp,lp);
-case WM_CLOSE:if(busy){closing=true;worker.request_stop();SetDlgItemTextW(h,StatusText,L"正在取消并清理连接…");}else DestroyWindow(h);return 0;
+case WM_CLOSE:if(busy){closing=true;worker.request_stop();SetDlgItemTextW(h,StatusText,L"Cancelling and cleaning up the connection...");}else DestroyWindow(h);return 0;
 case WM_DESTROY:if(worker.joinable()){worker.request_stop();worker.join();}KillTimer(h,1);DeleteObject(font);window=nullptr;busy=false;return 0;
 case WM_SIZE:arrange();return 0;
 }return DefWindowProcW(h,msg,wp,lp);}
-catch(...){veyra::log::error("remoteplay-ui","Operation failed; no credentials logged");if(msg==WM_CREATE)return -1;SetDlgItemTextW(h,StatusText,L"操作失败，请检查用户目录权限；原有配对文件不会自动删除。");return 0;}
+catch(...){veyra::log::error("remoteplay-ui","Operation failed; no credentials logged");if(msg==WM_CREATE)return -1;SetDlgItemTextW(h,StatusText,L"Operation failed; check user directory permissions; existing pairing files won't be deleted automatically.");return 0;}
 }
 void showRemotePlayPanel(HWND parent,std::function<void(source::RemotePlayConnectDesc)> start,std::function<void(std::string)> pin,std::function<RemotePlayPanelStatus()> status,std::function<void()> stop,std::function<bool()> calibration){
     calibrate=std::move(calibration);
     connect=std::move(start);login=std::move(pin);connectionStatus=std::move(status);disconnect=std::move(stop);if(window){SetForegroundWindow(window);return;}
     WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraRemotePlaySetup";wc.hbrBackground=panelBrush();wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);RegisterClassW(&wc);
-    CreateWindowExW(WS_EX_TOOLWINDOW,wc.lpszClassName,L"PS5 · Remote Play",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,dip(parent,590),dip(parent,709),parent,nullptr,wc.hInstance,nullptr);
+    CreateWindowExW(WS_EX_TOOLWINDOW,wc.lpszClassName,L"PS5 · Remote Play",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,dip(parent,630),dip(parent,740),parent,nullptr,wc.hInstance,nullptr);
 }
 }

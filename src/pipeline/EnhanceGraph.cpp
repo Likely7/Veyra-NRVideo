@@ -416,8 +416,8 @@ bool EnhanceGraph::createResources()
             const int space=desc_.color.lutInputSpace;
             const bool mismatch=hdrContent?(space==engine::ColorSettings::kLutInputSrgb):(space==engine::ColorSettings::kLutInputPq);
             if(mismatch){
-                colorLutNotice_=hdrContent?L"LUT 已禁用：HDR 内容不能使用 sRGB 显示参考输入空间（改选 Cineon Log 或 PQ）"
-                                        :L"LUT 已禁用：SDR 内容不能使用 PQ 输入空间（改选 Cineon Log 或 sRGB 显示参考）";
+                colorLutNotice_=hdrContent?L"LUT disabled: HDR content cannot use the sRGB display-reference input space (switch to Cineon Log or PQ)"
+                                        :L"LUT disabled: SDR content cannot use the PQ input space (switch to Cineon Log or sRGB display reference)";
                 desc_.color.lutStrength=0.0f;
                 refreshColorTables();
                 veyra::log::warn("color-grade",std::format("lut input space rejected space={} hdrContent={} name bytes={} (grade continues without the lookup)",space,hdrContent?1:0,desc_.color.lutNameString().size()));
@@ -677,11 +677,14 @@ HMODULE module = fgCompatibility_ ? fgCompatibility_->provider() : nullptr;
         return;
     }
     const auto state = ngx::AdaMfgUnlock::apply(module, true);
+    std::string detailStr;
+    detailStr.reserve(state.detail.size());
+    for (auto c : state.detail) detailStr.push_back(static_cast<char>(c));
     veyra::log::info("ada-mfg", std::format("adapter deviceId=0x{:04X} unlock applied={} gates={} mfgGate={} descriptors={} kernel={} ({})",
                                             adapter.deviceId, state.applied ? 1 : 0, state.archGateSites,
                                             state.mfgGatePatched ? 1 : 0, state.descriptorSlots,
                                             state.kernelPatched ? 1 : 0,
-                                            std::string(state.detail.begin(), state.detail.end())));
+                                            detailStr));
 }
 
 // Must run before the NGX core initializes the DLSS-G provider: the provider
@@ -729,8 +732,11 @@ HMODULE module = fgCompatibility_ ? fgCompatibility_->provider() : nullptr;
     ampereSpoofed_ = ngx::NvapiArchSpoof::install(module, spoofArchitecture);
     if (!ampereSpoofed_) {
         const auto state = ngx::NvapiArchSpoof::snapshot();
+        std::string detailStr;
+        detailStr.reserve(state.detail.size());
+        for (auto c : state.detail) detailStr.push_back(static_cast<char>(c));
         veyra::log::warn("ampere-mfg", std::format("NVAPI architecture spoof unavailable ({}); the arch-gate retarget will be used instead",
-                                                   std::string(state.detail.begin(), state.detail.end())));
+                                                   detailStr));
     }
 }
 
@@ -781,13 +787,16 @@ HMODULE module = fgCompatibility_ ? fgCompatibility_->provider() : nullptr;
     const auto spoofState = ngx::NvapiArchSpoof::snapshot();
     const bool spoofed = ampereSpoofed_ && spoofState.installed;
     const auto state = ngx::AmpereMfgUnlock::apply(module, !spoofed, adapter.luid);
+    std::string detailStr;
+    detailStr.reserve(state.detail.size());
+    for (auto c : state.detail) detailStr.push_back(static_cast<char>(c));
     veyra::log::info("ampere-mfg", std::format("adapter deviceId=0x{:04X} unlock applied={} spoofed={} reportedArch=0x{:X} runs={} slots={} inventoryFatbins={} inventoryLea={} gates={} ({})",
                                                adapter.deviceId, state.applied ? 1 : 0,
                                                spoofed ? 1 : 0, spoofState.reportedArchitecture, state.slotRuns,
                                                state.slotPointers,
                                                state.programFatbins + state.networkFatbins + state.auxFatbins,
                                                state.leaSites, state.archGateSites,
-                                               std::string(state.detail.begin(), state.detail.end())));
+                                               detailStr));
 }
 
 bool EnhanceGraph::initFsrSr()

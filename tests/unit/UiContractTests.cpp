@@ -48,7 +48,7 @@ int wmain(int argc,wchar_t** argv){try{
         for(size_t i=0;i<slots.size();++i){require(slots[i].width>0&&slots[i].x>=0&&slots[i].x+slots[i].width<=width,"all daily actions visible and contained");for(size_t j=0;j<i;++j)require(slots[i].x>=slots[j].x+slots[j].width||slots[j].x>=slots[i].x+slots[i].width,"direct daily actions do not overlap");}
     }
     for(int width:{290,400,480,508,700,1000}){ui::TransportLayout t(width,false);require(t.play.x+t.play.width<=t.mute.x&&t.stop.x+t.stop.width<=t.mute.x,"compact professional transport leaves room for audio and subtitle controls");}
-    ui::WorkspaceTransition animation;animation.start(true,1000);animation.sample(1120);const auto halfway=animation.value;require(halfway>.49&&halfway<.51,"visible intermediate expansion");animation.start(false,1120);require(animation.value==halfway,"reverse without jump");animation.sample(1240);require(animation.value>0&&animation.value<halfway,"panel collapses progressively");animation.sample(1360);require(!animation.running&&animation.value==0,"collapse ends exactly");
+    ui::WorkspaceTransition animation;animation.start(true,1000);animation.sample(1160);const auto halfway=animation.value;require(halfway>.49&&halfway<.51,"visible intermediate expansion");animation.start(false,1160);require(animation.value==halfway,"reverse without jump");animation.sample(1320);require(animation.value>0&&animation.value<halfway,"panel collapses progressively");animation.sample(1480);require(!animation.running&&animation.value==0,"collapse ends exactly");
     using pipeline::ResolutionPlan;using pipeline::NrSizePolicy;using pipeline::Extent;
     for(auto policy:{NrSizePolicy::P480,NrSizePolicy::P720,NrSizePolicy::P900,NrSizePolicy::Realtime,NrSizePolicy::P1440}){
         engine::EnhancementSettings s;s.nrPolicy=policy;
@@ -99,11 +99,11 @@ int wmain(int argc,wchar_t** argv){try{
         // window title again (it made the live window unrecognisable).
         const std::wstring encoded=L"capture2:005C005C003F005C0075007300620023007600690064005F003300340035006600:0:0:005C005C003F005C0061007500640069006F:0";
         require(ui::isCaptureCardSource(encoded)&&ui::isCaptureCardSource(L"capture:0:1:-1:0"),"capture connection strings detected");
-        require(ui::windowTitleForSource(encoded)==L"Veyra — 采集卡 · LIVE","capture2 connection string never becomes the window title");
-        require(ui::windowTitleForSource(L"capture:0:1:-1:0")==L"Veyra — 采集卡 · LIVE","legacy capture connection string never becomes the window title");
+        require(ui::windowTitleForSource(encoded)==L"Veyra — Capture Card · LIVE","capture2 connection string never becomes the window title");
+        require(ui::windowTitleForSource(L"capture:0:1:-1:0")==L"Veyra — Capture Card · LIVE","legacy capture connection string never becomes the window title");
         require(ui::windowTitleForSource(L"remoteplay:")==L"Veyra — PS5 Remote Play","remote play keeps its readable title");
         require(ui::windowTitleForSource(L"D:\\media\\clip.mp4")==L"Veyra — clip.mp4","file title keeps the file name");
-        require(ui::windowTitleForSource(L"")==L"Veyra — 本地实验版","empty source restores the default title");
+        require(ui::windowTitleForSource(L"")==L"Veyra — Local Experimental","empty source restores the default title");
         for(const auto& title:{ui::windowTitleForSource(encoded),ui::windowTitleForSource(L"capture:0:1:-1:0")})
             require(title.find(L"capture2:")==std::wstring::npos&&title.find(L"capture:")==std::wstring::npos&&title.find(L'\\')==std::wstring::npos&&title.size()<64,"exposed window title stays short and path free");
     }

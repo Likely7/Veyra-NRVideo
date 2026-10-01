@@ -29,14 +29,14 @@ bool ColorLookStore::load(){
     entries_.clear();corrupt_=false;error_.clear();
     std::error_code ec;
     if(!std::filesystem::exists(path_,ec))return true;
-    if(std::filesystem::file_size(path_,ec)>65536){corrupt_=true;error_=L"色彩预设文件超过64KiB，原文件保留";return false;}
+    if(std::filesystem::file_size(path_,ec)>65536){corrupt_=true;error_=L"Color preset file exceeds 64KiB; original file kept";return false;}
     std::ifstream file(path_,std::ios::binary);
-    if(!file){corrupt_=true;error_=L"色彩预设文件无法读取";return false;}
+    if(!file){corrupt_=true;error_=L"Color preset file could not be read";return false;}
     std::string data((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
     std::istringstream stream(data);
     stream.imbue(std::locale::classic());
     std::string magic;int version=0;
-    if(!(stream>>magic>>version)||magic!="VEYRA_COLOR_LOOKS"||version<1||version>2){corrupt_=true;error_=L"色彩预设文件损坏或版本不支持；原文件已保留";return false;}
+    if(!(stream>>magic>>version)||magic!="VEYRA_COLOR_LOOKS"||version<1||version>2){corrupt_=true;error_=L"Color preset file is corrupted or its version is unsupported; original file kept";return false;}
     std::vector<ColorLook> loaded;
     for(;;){
         std::string name;
@@ -44,21 +44,21 @@ bool ColorLookStore::load(){
         ColorLook look;look.name=wide(name);
         std::string lut;
         // Version 1 predates the per-section bypass mask (schema 18).
-        if(!readColorSettings(stream,look.color,lut,version>=2?19:18)){corrupt_=true;error_=L"色彩预设文件损坏；原文件已保留";return false;}
-        if(!lut.empty()&&!look.color.setLutName(wide(lut))){corrupt_=true;error_=L"色彩预设里的 LUT 名字非法；原文件已保留";return false;}
-        if(!nameOk(look.name)){corrupt_=true;error_=L"色彩预设名字非法；原文件已保留";return false;}
+        if(!readColorSettings(stream,look.color,lut,version>=2?19:18)){corrupt_=true;error_=L"Color preset file is corrupted; original file kept";return false;}
+        if(!lut.empty()&&!look.color.setLutName(wide(lut))){corrupt_=true;error_=L"A LUT name in the color preset is invalid; original file kept";return false;}
+        if(!nameOk(look.name)){corrupt_=true;error_=L"A color preset name is invalid; original file kept";return false;}
         loaded.push_back(std::move(look));
     }
     stream>>std::ws;
-    if(!stream.eof()||loaded.size()>64){corrupt_=true;error_=L"色彩预设文件尾部有残余内容；原文件已保留";return false;}
+    if(!stream.eof()||loaded.size()>64){corrupt_=true;error_=L"Color preset file has trailing content; original file kept";return false;}
     entries_=std::move(loaded);
     return true;
 }
 bool ColorLookStore::save(){
-    if(corrupt_){error_=L"预设文件损坏；拒绝覆盖";return false;}
+    if(corrupt_){error_=L"Preset file is corrupted; refusing to overwrite";return false;}
     std::error_code ec;
     std::filesystem::create_directories(path_.parent_path(),ec);
-    if(ec){error_=L"无法创建预设目录";return false;}
+    if(ec){error_=L"Could not create preset directory";return false;}
     std::ostringstream out;
     out.imbue(std::locale::classic());out<<std::setprecision(std::numeric_limits<float>::max_digits10);
     out<<"VEYRA_COLOR_LOOKS 2\n";
@@ -68,27 +68,27 @@ bool ColorLookStore::save(){
         out<<'\n';
     }
     const auto data=out.str();
-    if(data.size()>65536){error_=L"色彩预设超过64KiB";return false;}
+    if(data.size()>65536){error_=L"Color presets exceed 64KiB";return false;}
     auto temporary=path_;temporary+=L".tmp-"+std::to_wstring(GetCurrentProcessId());
     HANDLE file=CreateFileW(temporary.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
-    if(file==INVALID_HANDLE_VALUE){error_=L"无法创建预设临时文件";return false;}
+    if(file==INVALID_HANDLE_VALUE){error_=L"Could not create preset temporary file";return false;}
     DWORD written=0;
     bool ok=WriteFile(file,data.data(),DWORD(data.size()),&written,nullptr)&&written==data.size()&&FlushFileBuffers(file);
     CloseHandle(file);
     ok=ok&&MoveFileExW(temporary.c_str(),path_.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=FALSE;
-    if(!ok){DeleteFileW(temporary.c_str());error_=L"色彩预设原子保存失败，原文件未替换";return false;}
+    if(!ok){DeleteFileW(temporary.c_str());error_=L"Atomic save of color presets failed; original file was not replaced";return false;}
     error_.clear();
     return true;
 }
 bool ColorLookStore::put(std::wstring name,const ColorSettings& colour,bool replace){
-    if(!nameOk(name)||!colour.validate().empty()){error_=L"预设名字或参数无效";return false;}
+    if(!nameOk(name)||!colour.validate().empty()){error_=L"Preset name or parameters are invalid";return false;}
     const auto old=entries_;
     const auto existing=std::find_if(entries_.begin(),entries_.end(),[&](const ColorLook& look){return look.name==name;});
     if(existing!=entries_.end()){
-        if(!replace){error_=L"同名的色彩预设已存在";return false;}
+        if(!replace){error_=L"A color preset with the same name already exists";return false;}
         existing->color=colour;
     }else{
-        if(entries_.size()>=64){error_=L"最多保存64套色彩预设";return false;}
+        if(entries_.size()>=64){error_=L"At most 64 color presets can be saved";return false;}
         entries_.push_back({std::move(name),colour});
     }
     if(save())return true;
@@ -104,7 +104,7 @@ bool ColorLookStore::erase(size_t index){
     return false;
 }
 bool ColorLookStore::exportFile(size_t index,const std::filesystem::path& target){
-    if(index>=entries_.size()){error_=L"没有选中的色彩预设";return false;}
+    if(index>=entries_.size()){error_=L"No color preset is selected";return false;}
     const auto& look=entries_[index];
     std::ostringstream out;
     out.imbue(std::locale::classic());out<<std::setprecision(std::numeric_limits<float>::max_digits10);
@@ -113,27 +113,27 @@ bool ColorLookStore::exportFile(size_t index,const std::filesystem::path& target
     out<<'\n';
     const auto data=out.str();
     HANDLE file=CreateFileW(target.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
-    if(file==INVALID_HANDLE_VALUE){error_=L"无法写入导出文件";return false;}
+    if(file==INVALID_HANDLE_VALUE){error_=L"Could not write export file";return false;}
     DWORD written=0;
     const bool ok=WriteFile(file,data.data(),DWORD(data.size()),&written,nullptr)&&written==data.size();
     CloseHandle(file);
-    if(!ok)error_=L"导出文件写入失败";
+    if(!ok)error_=L"Writing the export file failed";
     return ok;
 }
 bool ColorLookStore::importFile(const std::filesystem::path& source,std::wstring& nameOut){
     std::ifstream file(source,std::ios::binary);
-    if(!file){error_=L"无法读取导入文件";return false;}
+    if(!file){error_=L"Could not read import file";return false;}
     std::string data((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
     std::istringstream stream(data);
     stream.imbue(std::locale::classic());
     std::string magic,name;int version=0;
-    if(!(stream>>magic>>version)||magic!="VEYRA_COLOR_LOOK"||version<1||version>2){error_=L"不是有效的 .vpcolor 文件";return false;}
-    if(!(stream>>std::quoted(name))){error_=L"导入文件缺少预设名";return false;}
+    if(!(stream>>magic>>version)||magic!="VEYRA_COLOR_LOOK"||version<1||version>2){error_=L"Not a valid .vpcolor file";return false;}
+    if(!(stream>>std::quoted(name))){error_=L"Import file is missing a preset name";return false;}
     ColorSettings colour;std::string lut;
-    if(!readColorSettings(stream,colour,lut,version>=2?19:18)){error_=L"导入文件的参数块损坏";return false;}
-    if(!lut.empty()&&!colour.setLutName(wide(lut))){error_=L"导入文件里的 LUT 名字非法";return false;}
+    if(!readColorSettings(stream,colour,lut,version>=2?19:18)){error_=L"The parameter block in the import file is corrupted";return false;}
+    if(!lut.empty()&&!colour.setLutName(wide(lut))){error_=L"The LUT name in the import file is invalid";return false;}
     stream>>std::ws;
-    if(!stream.eof()){error_=L"导入文件尾部有残余内容";return false;}
+    if(!stream.eof()){error_=L"Import file has trailing content";return false;}
     if(!put(wide(name),colour,true))return false;
     nameOut=wide(name);
     return true;

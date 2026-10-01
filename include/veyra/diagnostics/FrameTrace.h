@@ -66,7 +66,7 @@ public:
         return result;
     }
 private:
-    std::array<FrameTraceEvent,capacity> events_{};
+    std::array<FrameTraceEvent,capacity> events_;
     size_t next_=0,size_=0;
     uint64_t overwritten_=0;
 };

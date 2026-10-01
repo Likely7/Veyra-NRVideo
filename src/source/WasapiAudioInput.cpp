@@ -123,12 +123,12 @@ struct WasapiAudioInput::Impl {
     }
     void run(){
         ComScope apartment;
-        if(!checked(apartment.hr,"capture thread COM")){std::lock_guard lock(mutex);error=L"WASAPI 输入线程初始化失败";return;}
+        if(!checked(apartment.hr,"capture thread COM")){std::lock_guard lock(mutex);error=L"WASAPI input thread initialization failed";return;}
         for(uint64_t attempt=0;!stopping;++attempt){
             if(attempt){std::lock_guard lock(mutex);++metrics.retries;}
             const HRESULT hr=stream();
             {std::lock_guard lock(mutex);if(session)session->stop();session.reset();
-                if(FAILED(hr))error=std::format(L"WASAPI 输入失败 0x{:08X}；等待原设备重新连接，视频继续",uint32_t(hr));}
+                if(FAILED(hr))error=std::format(L"WASAPI input failed 0x{:08X}; waiting for the original device to reconnect, video continues",uint32_t(hr));}
             if(SUCCEEDED(hr)||stopping)break;
             const DWORD backoff=DWORD(std::min<uint64_t>(attempt+1,5)*1000);
             log::warn("wasapi-input",std::format("input attempt={} failed hr=0x{:08X} retryInMs={} defaultFallback=0",attempt+1,uint32_t(hr),backoff));
@@ -145,7 +145,7 @@ bool WasapiAudioInput::start(){
     p_->stopEvent.value=CreateEventW(nullptr,TRUE,FALSE,nullptr);if(!p_->stopEvent.value)return false;
     p_->stopping=false;
     {std::lock_guard lock(p_->mutex);p_->error.clear();p_->metrics={};p_->injectedLoss=false;}
-    try{p_->worker=std::thread([this]{try{p_->run();}catch(const std::exception& e){log::error("wasapi-input",e.what());std::lock_guard lock(p_->mutex);if(p_->session)p_->session->stop();p_->session.reset();p_->error=L"WASAPI 输入线程异常，请重新连接";}});}
+    try{p_->worker=std::thread([this]{try{p_->run();}catch(const std::exception& e){log::error("wasapi-input",e.what());std::lock_guard lock(p_->mutex);if(p_->session)p_->session->stop();p_->session.reset();p_->error=L"WASAPI input thread exception; please reconnect";}});}
     catch(...){p_->stopping=true;return false;}return true;
 }
 void WasapiAudioInput::stop(){p_->stopping=true;if(p_->stopEvent.value)SetEvent(p_->stopEvent.value);if(p_->worker.joinable())p_->worker.join();}

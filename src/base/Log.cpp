@@ -173,11 +173,11 @@ void Logger::diagnosticContext(diagnostics::DiagnosticEvent event){threadDiagnos
 std::string Logger::latestProblem(){std::lock_guard lock(mutex_);return diagnostics::redact(latestProblem_);}
 void Logger::recordFrame(diagnostics::FrameTraceEvent event){std::lock_guard lock(traceMutex_);frameTrace_.add(event);}
 std::pair<size_t,uint64_t> Logger::frameTraceSize(){std::lock_guard lock(traceMutex_);return {frameTrace_.size(),frameTrace_.overwritten()};}
-std::string Logger::diagnosticReport(){std::ostringstream o;o<<"Veyra 本地诊断（复制前脱敏预览；不会上传）\n";
+std::string Logger::diagnosticReport(){std::ostringstream o;o<<"Veyra local diagnostics (redacted preview before copying; not uploaded)\n";
     {std::lock_guard lock(mutex_);
     for(size_t i=0;i<diagnostics_.size();++i){const auto& e=diagnostics_.events()[i];const auto& r=e.resolution;
-        auto code=[](std::optional<uint64_t> v){return v?std::format("0x{:X}",*v):std::string("未提供");};
-        o<<"\n时间="<<e.timestamp<<" 严重级别="<<e.severity<<"\n组件="<<e.component<<" 阶段="<<e.stage<<" 次数="<<e.occurrenceCount<<"\n"<<e.message<<"\nHRESULT="<<code(e.hresult)<<" NGX="<<code(e.ngx)<<" NVOF="<<code(e.nvof)<<" SEH="<<code(e.seh)<<"\n";
+        auto code=[](std::optional<uint64_t> v){return v?std::format("0x{:X}",*v):std::string("not provided");};
+        o<<"\ntime="<<e.timestamp<<" severity="<<e.severity<<"\ncomponent="<<e.component<<" stage="<<e.stage<<" count="<<e.occurrenceCount<<"\n"<<e.message<<"\nHRESULT="<<code(e.hresult)<<" NGX="<<code(e.ngx)<<" NVOF="<<code(e.nvof)<<" SEH="<<code(e.seh)<<"\n";
         o<<"source="<<r.source.width<<'x'<<r.source.height<<" base="<<r.base.width<<'x'<<r.base.height<<" NR="<<r.nr.width<<'x'<<r.nr.height<<" flow="<<r.flow.width<<'x'<<r.flow.height<<" FG="<<r.fg.width<<'x'<<r.fg.height<<" output="<<r.output.width<<'x'<<r.output.height<<"\nepoch="<<e.identity.epoch<<" frame="<<e.identity.sourceFrameId<<" batch="<<e.batch<<" subframe="<<e.subframe<<" revision="<<e.identity.settingsRevision<<"\nruntime="<<e.runtimeHash<<" flow="<<e.flowApplied<<" fallback="<<e.fallbackReason<<"\n";
     }}
     std::vector<diagnostics::FrameTraceEvent> trace;uint64_t overwritten=0;

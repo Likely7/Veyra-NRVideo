@@ -29,7 +29,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $Root "CMakePresets.json") -PathType
 $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
 $vsRoot = ""
 if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
-    $vsRoot = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath) -join ""
+    $vsRoot = (& $vswhere -latest -version "[17,18)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath) -join ""
 }
 if ([string]::IsNullOrWhiteSpace($vsRoot)) {
     $fallback = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
@@ -40,10 +40,14 @@ if ([string]::IsNullOrWhiteSpace($vsRoot)) {
     exit 3
 }
 
-$cmakeExe = Join-Path $vsRoot "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-if (-not (Test-Path -LiteralPath $cmakeExe -PathType Leaf)) {
-    $found = Get-Command cmake -ErrorAction SilentlyContinue
-    if ($null -ne $found) { $cmakeExe = $found.Source }
+# Prefer the standalone system cmake over the VS-bundled cmake — the bundled
+# cmake in VS 18 Preview has an incomplete share/cmake-X.Y modules directory.
+$cmakeExe = ""
+$found = Get-Command cmake -ErrorAction SilentlyContinue
+if ($null -ne $found) { $cmakeExe = $found.Source }
+if ([string]::IsNullOrWhiteSpace($cmakeExe)) {
+    $vsCmake = Join-Path $vsRoot "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+    if (Test-Path -LiteralPath $vsCmake -PathType Leaf) { $cmakeExe = $vsCmake }
 }
 if ([string]::IsNullOrWhiteSpace($cmakeExe)) {
     Write-Host "build.ps1: cmake not found"
@@ -83,6 +87,9 @@ $clipToolsRoot = "C:\veyra-deps\tools-installed\x64-windows"
 if (Test-Path -LiteralPath (Join-Path $clipToolsRoot "include\libavcodec\avcodec.h") -PathType Leaf) {
     $configureExtra = $configureExtra + (' -DVEYRA_CLIP_TOOLS_ROOT="{0}"' -f $clipToolsRoot)
 }
+$configureExtra += ' -DVEYRA_NVOF_SDK_ROOT="C:/tools/Optical_Flow_SDK_5.0.7"'
+$configureExtra += ' -DVEYRA_XESS_ROOT="C:/tools/XeSS_302"'
+$configureExtra += ' -DVEYRA_FIDELITYFX_ROOT="C:/veyra-deps/FFX_SDK-114-MT/sdk"'
 
 # Remote Play is explicit: no dangling source/backend combination and no
 # silently substituted prebuilt Chiaki library. Shared CMake verifies the pin

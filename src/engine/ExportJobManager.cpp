@@ -28,7 +28,7 @@ struct Shared {
 };
 static_assert(std::is_trivially_copyable_v<Shared>);
 void close(HANDLE& h){if(h&&h!=INVALID_HANDLE_VALUE)CloseHandle(h);h=nullptr;}
-const wchar_t* label(ExportState s){switch(s){case ExportState::Preparing:return L"正在准备独立导出任务";case ExportState::Running:return L"正在编码";case ExportState::Paused:return L"导出已暂停，观看继续";case ExportState::Finishing:return L"正在封装和保存输出";case ExportState::Succeeded:return L"导出完成";case ExportState::Failed:return L"导出失败；详见独立任务日志，partial已保留";case ExportState::Cancelled:return L"导出已取消；已写入的partial保留";default:return L"尚无导出任务";}}
+const wchar_t* label(ExportState s){switch(s){case ExportState::Preparing:return L"Preparing standalone export task";case ExportState::Running:return L"Encoding";case ExportState::Paused:return L"Export paused; playback continues";case ExportState::Finishing:return L"Muxing and saving output";case ExportState::Succeeded:return L"Export complete";case ExportState::Failed:return L"Export failed; see the standalone task log, partial kept";case ExportState::Cancelled:return L"Export cancelled; the partial written so far is kept";default:return L"No export task yet";}}
 }
 struct ExportJobManager::Impl {
     HANDLE mapping=nullptr,process=nullptr,job=nullptr;Shared* shared=nullptr;
@@ -44,27 +44,27 @@ ExportJobManager::~ExportJobManager(){cancel();if(p_->process)WaitForSingleObjec
 bool ExportJobManager::start(const std::wstring& input,const std::wstring& output,EnhancementSettings settings,bool hevc,unsigned maxFrames,int audioStreamIndex){
     if(poll().active())return false;p_->clear();p_->snapshot={};
     auto fail=[&](const wchar_t* message){const DWORD error=GetLastError();p_->clear();p_->snapshot.state=ExportState::Failed;p_->snapshot.message=message;log::error("export-worker",std::format("launch failed error={}",error));return false;};
-    if(input.empty()||output.empty()||input.size()>=32768||output.size()>=32768||!settings.validate().empty()||input.starts_with(L"capture:")||input.starts_with(L"capture2:"))return fail(L"请选择本地视频与有效导出设置");
-    if(std::filesystem::exists(output)||std::filesystem::exists(output+L".partial"))return fail(L"输出或partial文件已存在，请选择新文件名");
+    if(input.empty()||output.empty()||input.size()>=32768||output.size()>=32768||!settings.validate().empty()||input.starts_with(L"capture:")||input.starts_with(L"capture2:"))return fail(L"Please select a local video and valid export settings");
+    if(std::filesystem::exists(output)||std::filesystem::exists(output+L".partial"))return fail(L"The output or partial file already exists; please choose a new file name");
     SECURITY_ATTRIBUTES sa{sizeof(sa),nullptr,TRUE};
     p_->mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,&sa,PAGE_READWRITE,0,sizeof(Shared),nullptr);
-    if(!p_->mapping)return fail(L"无法创建导出通信资源");
-    p_->shared=static_cast<Shared*>(MapViewOfFile(p_->mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!p_->shared)return fail(L"无法映射导出通信资源");
+    if(!p_->mapping)return fail(L"Could not create export communication resource");
+    p_->shared=static_cast<Shared*>(MapViewOfFile(p_->mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!p_->shared)return fail(L"Could not map export communication resource");
     new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=settings;s.settings.nrPolicy=pipeline::NrSizePolicy::Native;s.hevc=hevc;s.maxFrames=maxFrames;
     s.audioStreamIndex=audioStreamIndex;
     wcscpy_s(s.input,input.c_str());wcscpy_s(s.output,output.c_str());
     p_->job=CreateJobObjectW(nullptr,nullptr);JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    if(!p_->job||!SetInformationJobObject(p_->job,JobObjectExtendedLimitInformation,&limits,sizeof(limits)))return fail(L"无法建立导出进程生命周期");
+    if(!p_->job||!SetInformationJobObject(p_->job,JobObjectExtendedLimitInformation,&limits,sizeof(limits)))return fail(L"Could not establish export process lifetime");
     SIZE_T bytes=0;InitializeProcThreadAttributeList(nullptr,1,0,&bytes);std::vector<std::byte> attrs(bytes);
     STARTUPINFOEXW si{};si.StartupInfo.cb=sizeof(si);si.StartupInfo.dwFlags=STARTF_USESHOWWINDOW;si.StartupInfo.wShowWindow=SW_HIDE;si.lpAttributeList=reinterpret_cast<PPROC_THREAD_ATTRIBUTE_LIST>(attrs.data());
-    if(!InitializeProcThreadAttributeList(si.lpAttributeList,1,0,&bytes))return fail(L"无法初始化导出进程");
+    if(!InitializeProcThreadAttributeList(si.lpAttributeList,1,0,&bytes))return fail(L"Could not initialize export process");
     const bool attr=UpdateProcThreadAttribute(si.lpAttributeList,0,PROC_THREAD_ATTRIBUTE_HANDLE_LIST,&p_->mapping,sizeof(HANDLE),nullptr,nullptr)!=FALSE;
     wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);auto cmd=std::format(L"\"{}\" --export-worker {}",exe,reinterpret_cast<uintptr_t>(p_->mapping));PROCESS_INFORMATION pi{};
     const bool started=attr&&CreateProcessW(exe,cmd.data(),nullptr,nullptr,TRUE,EXTENDED_STARTUPINFO_PRESENT|CREATE_SUSPENDED|CREATE_NO_WINDOW|BELOW_NORMAL_PRIORITY_CLASS,nullptr,nullptr,&si.StartupInfo,&pi);
     DeleteProcThreadAttributeList(si.lpAttributeList);SetHandleInformation(p_->mapping,HANDLE_FLAG_INHERIT,0);
-    if(!started)return fail(L"无法启动导出进程");p_->process=pi.hProcess;
-    if(!AssignProcessToJobObject(p_->job,p_->process)){TerminateProcess(p_->process,1);CloseHandle(pi.hThread);return fail(L"导出进程隔离失败");}
-    if(ResumeThread(pi.hThread)==DWORD(-1)){TerminateProcess(p_->process,1);CloseHandle(pi.hThread);return fail(L"无法运行导出进程");}CloseHandle(pi.hThread);
+    if(!started)return fail(L"Could not start export process");p_->process=pi.hProcess;
+    if(!AssignProcessToJobObject(p_->job,p_->process)){TerminateProcess(p_->process,1);CloseHandle(pi.hThread);return fail(L"Export process isolation failed");}
+    if(ResumeThread(pi.hThread)==DWORD(-1)){TerminateProcess(p_->process,1);CloseHandle(pi.hThread);return fail(L"Could not run export process");}CloseHandle(pi.hThread);
     p_->snapshot.state=ExportState::Preparing;p_->snapshot.output=output;p_->snapshot.jobId=(GetTickCount64()<<16)^pi.dwProcessId;p_->snapshot.frozenRevision=settings.revision;p_->snapshot.frozen=s.settings;
     p_->snapshot.workerPid=pi.dwProcessId;
     p_->snapshot.workerLog=std::filesystem::absolute(runtime::logsDirectory()/std::format("export-worker-{}.log",pi.dwProcessId)).wstring();
@@ -84,7 +84,7 @@ ExportJobSnapshot ExportJobManager::poll(){
         const auto& final=p_->snapshot;
         log::info("export-worker",std::format("finished jobId={} pid={} exit={} state={} source={} generated={} holds={} encoded={} log={}",final.jobId,final.workerPid,code,int(final.state),final.sourceFrames,final.generated,final.holds,final.encoded,std::filesystem::path(final.workerLog).string()));
         log::info("export-worker",utf8(final.message));
-        if(final.state==ExportState::Failed)p_->snapshot.message+=L"\n日志："+final.workerLog;
+        if(final.state==ExportState::Failed)p_->snapshot.message+=L"\nLog: "+final.workerLog;
         p_->clear();}
     if(p_->shared&&InterlockedCompareExchange(&p_->shared->messageLock,1,0)==0){if(p_->shared->message[0])p_->snapshot.message=p_->shared->message;InterlockedExchange(&p_->shared->messageLock,0);}if(p_->snapshot.message.empty()||p_->snapshot.state==ExportState::Paused||p_->snapshot.state==ExportState::Cancelled)p_->snapshot.message=label(p_->snapshot.state);return p_->snapshot;
 }

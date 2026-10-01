@@ -28,25 +28,25 @@ inline LRESULT CALLBACK proc(HWND h,UINT msg,WPARAM w,LPARAM l){
             SendMessageW(c,WM_SETFONT,WPARAM(s->font),TRUE);themeControl(c);return c;
         };
         auto number=[&](const wchar_t* name,int id,int y,int value,int low,int high){
-            control(L"STATIC",name,0,SS_CENTERIMAGE,16,y,174,30);
-            HWND edit=control(L"EDIT",std::to_wstring(value).c_str(),id,WS_TABSTOP|ES_RIGHT|ES_AUTOHSCROLL,196,y,102,30);
+            control(L"STATIC",name,0,SS_CENTERIMAGE,16,y,214,30);
+            HWND edit=control(L"EDIT",std::to_wstring(value).c_str(),id,WS_TABSTOP|ES_RIGHT|ES_AUTOHSCROLL,236,y,102,30);
             SendMessageW(edit,EM_SETLIMITTEXT,6,0);
             HWND spin=control(UPDOWN_CLASSW,L"",id+20,UDS_ALIGNRIGHT|UDS_ARROWKEYS|UDS_SETBUDDYINT|UDS_NOTHOUSANDS,0,0,0,0);
             SendMessageW(spin,UDM_SETBUDDY,WPARAM(edit),0);SendMessageW(spin,UDM_SETRANGE32,low,high);SendMessageW(spin,UDM_SETPOS32,0,value);
         };
-        number(L"字号",101,16,s->settings.pixels,16,56);
-        number(L"底部距离",102,58,s->settings.margin,0,240);
-        number(L"主字幕延时 (ms)",103,100,s->settings.offset,-30000,30000);
-        number(L"缩放目标行数 (0 = 自动)",104,142,s->settings.lines,0,8);
-        HWND outline=control(L"BUTTON",L"描边",105,BS_AUTOCHECKBOX|WS_TABSTOP,16,188,124,30);
-        HWND background=control(L"BUTTON",L"背景条",106,BS_AUTOCHECKBOX|WS_TABSTOP,160,188,138,30);
+        number(L"Font size",101,16,s->settings.pixels,16,56);
+        number(L"Bottom margin",102,58,s->settings.margin,0,240);
+        number(L"Primary subtitle delay (ms)",103,100,s->settings.offset,-30000,30000);
+        number(L"Scale target lines (0 = auto)",104,142,s->settings.lines,0,8);
+        HWND outline=control(L"BUTTON",L"Outline",105,BS_AUTOCHECKBOX|WS_TABSTOP,16,188,134,30);
+        HWND background=control(L"BUTTON",L"Background bar",106,BS_AUTOCHECKBOX|WS_TABSTOP,160,188,178,30);
         SendMessageW(outline,BM_SETCHECK,s->settings.outline?BST_CHECKED:BST_UNCHECKED,0);
         SendMessageW(background,BM_SETCHECK,s->settings.background?BST_CHECKED:BST_UNCHECKED,0);
-        control(L"STATIC",L"字体",0,SS_CENTERIMAGE,16,232,80,30);
-        HWND font=control(L"COMBOBOX",L"",107,CBS_DROPDOWNLIST|WS_TABSTOP|WS_VSCROLL,100,232,198,220);
-        for(const auto* name:{L"字幕原字体",L"SimHei",L"SimSun",L"DengXian",L"Arial",L"Segoe UI"})SendMessageW(font,CB_ADDSTRING,0,LPARAM(name));
+        control(L"STATIC",L"Font",0,SS_CENTERIMAGE,16,232,80,30);
+        HWND font=control(L"COMBOBOX",L"",107,CBS_DROPDOWNLIST|WS_TABSTOP|WS_VSCROLL,100,232,238,220);
+        for(const auto* name:{L"Subtitle's original font",L"SimHei",L"SimSun",L"DengXian",L"Arial",L"Segoe UI"})SendMessageW(font,CB_ADDSTRING,0,LPARAM(name));
         SendMessageW(font,CB_SETCURSEL,s->settings.font,0);
-        HWND fit=control(L"BUTTON",L"自动缩小字号以适应目标行数",108,BS_AUTOCHECKBOX|WS_TABSTOP,16,274,282,30);
+        HWND fit=control(L"BUTTON",L"Auto-shrink font size to fit target lines",108,BS_AUTOCHECKBOX|WS_TABSTOP,16,274,322,30);
         SendMessageW(fit,BM_SETCHECK,s->settings.fitToLines?BST_CHECKED:BST_UNCHECKED,0);
         EnableWindow(GetDlgItem(h,104),s->settings.fitToLines);EnableWindow(GetDlgItem(h,124),s->settings.fitToLines);
         s->populating=false;return 0;
@@ -90,13 +90,13 @@ inline void showSubtitleSettings(HWND owner,SubtitleSettings settings,std::funct
     if(subtitlePanel::window){ShowWindow(subtitlePanel::window,SW_SHOWNORMAL);SetForegroundWindow(subtitlePanel::window);return;}
     WNDCLASSW wc{};wc.lpfnWndProc=subtitlePanel::proc;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraSubtitleSettings";wc.hbrBackground=panelBrush();wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);RegisterClassW(&wc);
     auto* state=new subtitlePanel::State;state->settings=settings;state->changed=std::move(changed);
-    RECT r{0,0,dip(owner,314),dip(owner,322)};AdjustWindowRectExForDpi(&r,WS_CAPTION|WS_SYSMENU,FALSE,WS_EX_TOOLWINDOW,layoutDpi(owner));
+    RECT r{0,0,dip(owner,360),dip(owner,340)};AdjustWindowRectExForDpi(&r,WS_CAPTION|WS_SYSMENU,FALSE,WS_EX_TOOLWINDOW,layoutDpi(owner));
     RECT p{};GetWindowRect(owner,&p);
     MONITORINFO monitor{sizeof(monitor)};GetMonitorInfoW(MonitorFromWindow(owner,MONITOR_DEFAULTTONEAREST),&monitor);
     const int width=r.right-r.left,height=r.bottom-r.top;
     const int x=std::clamp(int(p.left)+dip(owner,40),int(monitor.rcWork.left),std::max(int(monitor.rcWork.left),int(monitor.rcWork.right)-width));
     const int y=std::clamp(int(p.top)+dip(owner,80),int(monitor.rcWork.top),std::max(int(monitor.rcWork.top),int(monitor.rcWork.bottom)-height));
-    subtitlePanel::window=CreateWindowExW(WS_EX_TOOLWINDOW,wc.lpszClassName,L"字幕设置",WS_CAPTION|WS_SYSMENU|WS_CLIPCHILDREN,x,y,width,height,owner,nullptr,wc.hInstance,state);
+    subtitlePanel::window=CreateWindowExW(WS_EX_TOOLWINDOW,wc.lpszClassName,L"Subtitle Settings",WS_CAPTION|WS_SYSMENU|WS_CLIPCHILDREN,x,y,width,height,owner,nullptr,wc.hInstance,state);
     if(subtitlePanel::window)ShowWindow(subtitlePanel::window,SW_SHOW);
 }
 inline bool subtitleSettingsDialogMessage(MSG& message){return subtitlePanel::window&&IsDialogMessageW(subtitlePanel::window,&message);}

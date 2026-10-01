@@ -25,12 +25,12 @@ void EngineController::runLargeImage(HWND window,const sink::RgbaImage& original
         ~Cleanup(){ring.drainQueue();presenter.close();graph.shutdown();}
     } cleanup{ring,presenter,preview};
     bool captureCompatible=options.settings.captureCompatible;
-    if(!preview.initialize(previewDesc)||!presenter.open(ctx,window,preview,captureCompatible)||!preview.createViews()){status(L"大图预览初始化失败",true);return;}
+    if(!preview.initialize(previewDesc)||!presenter.open(ctx,window,preview,captureCompatible)||!preview.createViews()){status(L"Large-image preview initialization failed",true);return;}
     const auto freeFrame=[](AVFrame* p){av_frame_free(&p);};std::unique_ptr<AVFrame,decltype(freeFrame)> frame(av_frame_alloc(),freeFrame);
-    if(!frame){status(L"大图预览内存不足",true);return;}
+    if(!frame){status(L"Out of memory for large-image preview",true);return;}
     frame->format=AV_PIX_FMT_RGBA;frame->width=width;frame->height=height;
     frame->color_range=AVCOL_RANGE_JPEG;frame->color_trc=AVCOL_TRC_IEC61966_2_1;frame->colorspace=AVCOL_SPC_RGB;
-    if(av_frame_get_buffer(frame.get(),32)<0){status(L"大图预览内存不足",true);return;}
+    if(av_frame_get_buffer(frame.get(),32)<0){status(L"Out of memory for large-image preview",true);return;}
     sink::RgbaImage enhanced;EnhancementSettings applied;applied.revision=0;
     pipeline::EnhanceGraph::FrameOutputs out;bool havePreview=false;
     int lastComparison=-1;float lastSplit=-1;uint64_t previewRevision=0;PreviewView lastView;RECT lastClient{};
@@ -38,12 +38,12 @@ void EngineController::runLargeImage(HWND window,const sink::RgbaImage& original
         EnhancementSettings requested;std::wstring save;
         {std::lock_guard lock(mutex_);requested=desired_;if(!enhanced.pixels.empty())save.swap(savePath_);}
         if(requested.captureCompatible!=captureCompatible){
-            if(!ring.drainQueue()){status(L"显示切换排空失败",true);break;}
+            if(!ring.drainQueue()){status(L"Display-switch drain failed",true);break;}
             presenter.close();
             if(!presenter.open(ctx,window,preview,requested.captureCompatible)){
                 presenter.close();
-                if(!presenter.open(ctx,window,preview,captureCompatible)){status(L"显示切换恢复失败",true);break;}
-                std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,applied);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.backendWarning=L"直播兼容模式未能启用，已恢复";continue;
+                if(!presenter.open(ctx,window,preview,captureCompatible)){status(L"Display-switch recovery failed",true);break;}
+                std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,applied);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.backendWarning=L"Live-compatible mode could not be enabled; reverted";continue;
             }
             captureCompatible=requested.captureCompatible;
         }
@@ -55,9 +55,9 @@ void EngineController::runLargeImage(HWND window,const sink::RgbaImage& original
         if(!save.empty()){
             try {
             auto ext=std::filesystem::path(save).extension().wstring();for(auto& c:ext)c=towlower(c);
-            if(!sink::saveImage(save,enhanced,ext==L".jpg"||ext==L".jpeg"))status(L"图片保存失败（目标可能已存在）",false);
-            else {status(L"图片已保存，完整结果仍可继续预览");veyra::log::info("image-save",std::format("tiled full-resolution saved extent={}x{} revision={}",enhanced.width,enhanced.height,applied.revision));}
-            }catch(const std::exception& e){veyra::log::warn("image-save",std::format("save exception; retaining full result/session: {}",e.what()));status(L"保存异常，增强结果已保留；可再次保存",false);}
+            if(!sink::saveImage(save,enhanced,ext==L".jpg"||ext==L".jpeg"))status(L"Saving image failed (target may already exist)",false);
+            else {status(L"Image saved; the full result can still be previewed");veyra::log::info("image-save",std::format("tiled full-resolution saved extent={}x{} revision={}",enhanced.width,enhanced.height,applied.revision));}
+            }catch(const std::exception& e){veyra::log::warn("image-save",std::format("save exception; retaining full result/session: {}",e.what()));status(L"Save exception; the enhanced result is kept and can be saved again",false);}
         }
         if(requested.revision==applied.revision&&requested!=applied){
             applied=requested;
@@ -68,22 +68,22 @@ void EngineController::runLargeImage(HWND window,const sink::RgbaImage& original
             desc.model=requested.model;desc.nrTemporal=requested.nrTemporal;desc.residual=requested.residual;desc.protection=requested.protection;desc.color=requested.color;desc.settingsRevision=requested.revision;
             desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
             sink::RgbaImage candidate;TiledImageProcessor::Stats stats;
-            status(L"正在分块增强大图，保留完整输出尺寸…");
+            status(L"Enhancing large image in tiles, preserving the full output size...");
             bool processed=false;
-            try{processed=TiledImageProcessor::process(ctx,ring,original,candidate,desc,stop_,stats,[this](uint32_t n,uint32_t total){status(std::format(L"大图分块增强 {}/{} · 每块独立上下文",n,total));});}
+            try{processed=TiledImageProcessor::process(ctx,ring,original,candidate,desc,stop_,stats,[this](uint32_t n,uint32_t total){status(std::format(L"Large-image tile enhancement {}/{} · independent context per tile",n,total));});}
             catch(const std::exception& e){veyra::log::warn("image-tiles",std::format("settings exception; retaining previous result: {}",e.what()));}
             if(!processed){
                 if(stop_)break;
-                if(enhanced.pixels.empty()){status(L"大图分块增强失败，请查看诊断",true);break;}
+                if(enhanced.pixels.empty()){status(L"Large-image tile enhancement failed; see diagnostics",true);break;}
                 std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,applied);
                 snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=applied;
-                snapshot_.status=L"大图参数应用失败，已保留上一结果";continue;
+                snapshot_.status=L"Applying large-image parameters failed; the previous result is kept";continue;
             }
             enhanced=std::move(candidate);applied=requested;lastComparison=-1;
             {std::lock_guard lock(mutex_);snapshot_.applied=applied;snapshot_.desired=desired_;snapshot_.applying=desired_!=applied;
                 snapshot_.nrEvaluated=stats.nrEvaluations;snapshot_.frames=1;snapshot_.transport=TransportState::Playing;
                 auto& plan=snapshot_.metrics.resolution;plan.source=plan.base=plan.output={original.width,original.height};plan.nr={std::min(1280u,original.width)+256,std::min(1280u,original.height)+256};plan.flow=plan.fg={};plan.srApplied=false;plan.settingsRevision=applied.revision;
-                snapshot_.status=std::format(L"{}×{} · 分块NR（非整图上下文）· 保存保留完整尺寸",original.width,original.height);}
+                snapshot_.status=std::format(L"{}×{} · tiled NR (not a whole-image context) · save preserves full size",original.width,original.height);}
         }
         const int comparison=comparisonMode_.load();const float split=comparisonSplit_.load();
         const auto view=previewView();RECT client{};GetClientRect(window,&client);
@@ -102,10 +102,10 @@ void EngineController::runLargeImage(HWND window,const sink::RgbaImage& original
                 const auto& image=reference?original:enhanced;
                 memcpy(dst,image.pixels.data()+(size_t(sy)*image.width+sx)*4,4);
             }
-            out={};if(!preview.process(frame.get(),0,true,out,++previewRevision)){status(L"大图预览上传失败",true);break;}
+            out={};if(!preview.process(frame.get(),0,true,out,++previewRevision)){status(L"Large-image preview upload failed",true);break;}
             havePreview=true;lastComparison=comparison;lastSplit=split;lastView=view;lastClient=client;
         }
-        if(havePreview&&!presenter.present(ctx,ring,preview,out.videoSlot,false,false,0,false,.5f,{},PreviewView{0,.5f,.5f})){status(L"大图呈现失败",true);break;}
+        if(havePreview&&!presenter.present(ctx,ring,preview,out.videoSlot,false,false,0,false,.5f,{},PreviewView{0,.5f,.5f})){status(L"Large-image presentation failed",true);break;}
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
     out={}; // Cleanup drains before either presenter or graph releases GPU objects.
