@@ -794,9 +794,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         if(impl_->poll()){emit settingsChanged();emit chainChanged();}
         if (impl_->snapshot.vramRunawayMiB && impl_->vramNoticeSession != impl_->snapshot.sessionId) {
             impl_->vramNoticeSession = impl_->snapshot.sessionId;
-            emit notice(tr("显存在设置没变的情况下涨了 %1 GB，继续下去会越来越卡。常见原因是游戏加加、小飞机（RTSS）、"
-                           "显卡叠加层/即时重放或录屏软件在全屏时注入了本程序：请关掉它们的游戏内显示后重开本软件。"
-                           "当时加载的第三方模块已写进日志（vram-watch）")
+            emit notice(tr("显存在设置没变的情况下涨了 %1 GB，已自动重建显示链回收显存（画面会闪一下）。"
+                           "如果反复出现：常见原因是 NVIDIA Smooth Motion、游戏加加、小飞机（RTSS）、显卡叠加层/即时重放"
+                           "或录屏软件在全屏时注入了本程序，请关掉它们后再试，并把日志发给我们（vram-watch）")
                             .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
         }
         tickSubtitles();
@@ -883,6 +883,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             {L"graphics-hook64.dll", "OBS game capture"}, {L"DiscordHook64.dll", "Discord overlay"},
             {L"gameoverlayrenderer64.dll", "Steam overlay"}, {L"nvspcap64.dll", "NVIDIA overlay / instant replay"},
             {L"ow-graphics-hook64.dll", "Overwolf overlay"},
+            // The driver's presentation layer; it carries NVIDIA Smooth Motion, which only
+            // engages for fullscreen windows (suspected in the fullscreen-only VRAM growth).
+            {L"NvPresent64.dll", "NVIDIA present layer (Smooth Motion)"},
         };
         static bool loggedOthers[std::size(others)]{};
         for (size_t k = 0; k < std::size(others); ++k)
@@ -891,7 +894,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 veyra::log::info("overlay-hooks", std::format("{} is injected into this process", others[k].product));
             }
         static bool handled = false;
-        if (const auto* hook = gfx::injectedPresentationHook(); hook && !handled) {
+        if (const auto* hook = gfx::xessBlockingHook(); hook && !handled) {
             handled = true;
             veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({}); XeSS frame generation is "
                 "kept off while it is present", hook->product, QString::fromWCharArray(hook->module).toStdString()));
@@ -1187,7 +1190,7 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
         return;
     }
     if (want == engine::FrameGenerationBackend::XeSS) {
-        if (const auto* hook = gfx::injectedPresentationHook()) {
+        if (const auto* hook = gfx::xessBlockingHook()) {
             emit notice(tr("检测到 %1 正在注入本程序，它和 XeSS 补帧一起用会导致闪退，已保持原来的补帧方式。"
                            "关掉它的帧数显示后可以用 XeSS；不关也可以用 DLSS 或 FSR 补帧").arg(QString::fromUtf8(hook->product)), true);
             emit settingsChanged();

@@ -643,10 +643,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             auto nextTimingLog=Clock::now()+std::chrono::seconds(1);
             // Video memory watchdog. A field log (RTX 5060 Ti, 2026-10-01) grew +3 GB a minute while
             // fullscreen, kept it after leaving fullscreen, and every pass slowed down once usage
-            // passed the budget (5 fps). Unreproduced here; the log line names what else was loaded.
-            uint64_t vramFloor=0,vramRevision=~0ull;auto vramSettleUntil=Clock::now();bool vramWarned=false;
-            // VEYRA_TEST_VRAM_LEAK_MIB=n: hold on to n MiB more of video memory every second.
+            // passed the budget (5 fps). Unreproduced here. On growth beyond max(2 GiB, budget/4)
+            // with no settings change the log names every third-party module, and the loop
+            // rebuilds first the presentation swapchain, then (if that released less than half)
+            // the processing graph too, logging what each released: the swapchain step points
+            // at the driver or an overlay hooked on it, the graph step at our own passes.
+            uint64_t vramFloor=0,vramRevision=~0ull,vramRecoverBefore=0,vramRecoverGrowth=0;auto vramSettleUntil=Clock::now(),vramRecoverCheckAt=Clock::now();
+            bool vramWarned=false;int vramRecoverStep=0,vramRecoverDone=0,vramRecoveries=0;
+            // VEYRA_TEST_VRAM_LEAK_MIB=n: hold on to n MiB more of video memory every second;
+            // VEYRA_TEST_VRAM_LEAK_RELEASE=1 lets the swapchain rebuild free it (as a leak tied
+            // to the swapchain would), otherwise nothing frees it.
             const uint64_t testLeakMiB=[]{wchar_t v[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_VRAM_LEAK_MIB",v,16)?uint64_t(_wtoi(v)):0ull;}();
+            const bool testLeakReleases=GetEnvironmentVariableW(L"VEYRA_TEST_VRAM_LEAK_RELEASE",nullptr,0)>0;
             std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> testLeak;
             auto watchVram=[&](uint64_t usage,uint64_t budget){
                 if(testLeakMiB){
@@ -656,15 +664,34 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(SUCCEEDED(ctx.device()->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&r))))testLeak.push_back(r);
                 }
                 if(!usage)return;
+                if(vramRecoverDone){
+                    if(Clock::now()<vramRecoverCheckAt)return;
+                    const int64_t released=(int64_t(vramRecoverBefore)-int64_t(usage))/(1<<20);
+                    veyra::log::warn("vram-watch",std::format("{} rebuild released {} MiB of {} MiB growth (before {} MiB, now {} MiB)",
+                        vramRecoverDone==1?"swapchain":"graph+swapchain",released,vramRecoverGrowth>>20,vramRecoverBefore>>20,usage>>20));
+                    // The graph is rebuilt only with room for it: a rebuild that runs out of budget
+                    // stops the session, which is worse than running slowly.
+                    if(vramRecoverDone==1&&released<int64_t(vramRecoverGrowth>>21)){
+                        if(budget&&usage<budget/100*85)vramRecoverStep=2;
+                        else veyra::log::warn("vram-watch","graph rebuild skipped: too close to the budget to rebuild safely");
+                    }
+                    vramRecoverDone=0;vramFloor=0;vramSettleUntil=Clock::now()+std::chrono::seconds(5);
+                    return;
+                }
+                if(vramRecoverStep)return;
                 if(options.settings.revision!=vramRevision){vramRevision=options.settings.revision;vramFloor=0;vramSettleUntil=Clock::now()+std::chrono::seconds(10);}
                 if(Clock::now()<vramSettleUntil)return;
                 if(!vramFloor||usage<vramFloor)vramFloor=usage;
                 const uint64_t growth=usage-vramFloor,limit=std::max<uint64_t>(2048ull<<20,budget/4);
-                if(vramWarned||growth<=limit)return;
-                vramWarned=true;
-                veyra::log::warn("vram-watch",std::format("video memory grew {} MiB with no settings change (now {} of {} MiB budget); third-party modules: {}",
-                    growth>>20,usage>>20,budget>>20,gfx::thirdPartyModules()));
-                std::lock_guard lock(mutex_);snapshot_.vramRunawayMiB=growth>>20;
+                if(growth<=limit)return;
+                if(!vramWarned){
+                    vramWarned=true;
+                    veyra::log::warn("vram-watch",std::format("video memory grew {} MiB with no settings change (now {} of {} MiB budget); third-party modules: {}",
+                        growth>>20,usage>>20,budget>>20,gfx::thirdPartyModules()));
+                    std::lock_guard lock(mutex_);snapshot_.vramRunawayMiB=growth>>20;
+                }else veyra::log::warn("vram-watch",std::format("video memory grew {} MiB again (now {} MiB)",growth>>20,usage>>20));
+                if(vramRecoveries<3){++vramRecoveries;vramRecoverStep=1;vramRecoverGrowth=growth;}
+                else{vramFloor=usage;}   // give up rebuilding; report again only on further growth
             };
             auto anchor=Clock::now(),statsStart=anchor;double anchorMs=0;uint64_t frames=0,sourceFrames=0;bool wasPaused=false;double discardBefore=0;
             double lastAudioClockMs=0;bool audioClockExhausted=false;auto audioTailAnchor=anchor;
@@ -1273,6 +1300,19 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     presenter.close();graph.shutdown();out={};hasOutput=false;
                     if(!graph.initialize(gd)||!presenter.open(ctx,window,graph,options.settings.captureCompatible,!isCapture&&!isImage)||!graph.createViews()){status(L"串流尺寸切换失败",true);break;}
                     reset=true;pendingResetCause=pipeline::ResetReason::Resize;
+                }
+                if(vramRecoverStep){
+                    // Video memory watchdog (see watchVram): rebuild between frames, measure later.
+                    const int step=vramRecoverStep;vramRecoverStep=0;
+                    drainLivePresentation();if(!ring.drainQueue()){status(L"显存回收时排空失败",true);break;}
+                    uint64_t budget=0;ctx.videoMemoryInfo(budget,vramRecoverBefore);
+                    veyra::log::warn("vram-watch",std::format("rebuilding the {} to release video memory (usage {} MiB)",step==1?"presentation swapchain":"processing graph and swapchain",vramRecoverBefore>>20));
+                    presenter.close();
+                    if(step==2){graph.shutdown();out={};hasOutput=false;}
+                    if(step==1&&testLeakReleases)testLeak.clear();
+                    if((step==2&&!graph.initialize(gd))||!presenter.open(ctx,window,graph,options.settings.captureCompatible,!isCapture&&!isImage)||(step==2&&!graph.createViews())){status(L"显存回收后重建失败，请重新打开片源",true);break;}
+                    reset=true;pendingResetCause=pipeline::ResetReason::Resize;
+                    vramRecoverDone=step;vramRecoverCheckAt=Clock::now()+std::chrono::seconds(3);
                 }
                 const bool rereadCached=transaction&&frame==cachedFrame;
                 if(!isImage&&!isCapture&&seekSeconds_>=0)continue;
