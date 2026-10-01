@@ -63,11 +63,23 @@ VPage {
 
         Text {
             anchors.centerIn: parent
-            visible: !veyra.hasSource && veyra.liveOpeningText.length === 0
-            text: "选择一个片源开始"
+            visible: stageTap.enabled
+            text: "点击画面选择片源"
             color: Theme.t3
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsH3
+        }
+        // Nothing open: a click on the empty picture opens the source menu where it
+        // was clicked (the same menu as the professional page's 片源 button).
+        Item { id: menuAnchor; width: 1; height: 1 }
+        TapHandler {
+            id: stageTap
+            enabled: !veyra.hasSource && veyra.liveOpeningText.length === 0
+            onTapped: eventPoint => {
+                menuAnchor.x = eventPoint.position.x
+                menuAnchor.y = eventPoint.position.y
+                sourceMenu.openAt(menuAnchor, "at")
+            }
         }
         // A PS5 / capture session that is still connecting: a pill in the
         // middle of the (still black) picture, cut out of the native video.
@@ -98,6 +110,30 @@ VPage {
             }
         }
     }
+
+    VMenu {
+        id: sourceMenu
+        objectName: "min-source-menu"
+        title: "片源"
+        items: [{ label: "打开文件…", icon: "folder", act: "file" },
+                { label: "PS5 串流…", icon: "gamepad", act: "ps5" },
+                { label: "PC 串流…", icon: "cast", act: "moonlight" },
+                { label: "Xbox 串流…", icon: "gamepad", act: "xbox" },
+                { label: "屏幕捕获…", icon: "monitor", act: "screen" },
+                { sep: true },
+                { label: "采集卡设置…", icon: "settings", act: "capture" }]
+        onPicked: (i, o) => {
+            if (o.act === "file") veyra.openFileDialog()
+            else if (o.act === "ps5") veyra.openPs5Dialog()
+            else if (o.act === "moonlight") veyra.openMoonlightDialog()
+            else if (o.act === "xbox") veyra.openXboxDialog()
+            else if (o.act === "screen") veyra.openScreenCaptureDialog()
+            else if (o.act === "capture") veyra.openCaptureDialog()
+        }
+    }
+    readonly property bool sourceMenuOpen: sourceMenu.visible
+    function closeSourceMenu() { sourceMenu.close() }
+    function openSourceMenuForTest() { menuAnchor.x = width / 2; menuAnchor.y = pictureHeight / 2; sourceMenu.openAt(menuAnchor, "at") }
 
     // Report the film aspect upward so the window can snap to it.
     onPictureHeightChanged: if (veyra.sourceAspect > 0.2) root.requestAspect(veyra.sourceAspect)

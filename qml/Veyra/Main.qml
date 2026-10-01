@@ -20,7 +20,9 @@ Window {
     id: root
     width: 1280
     height: 800
-    minimumWidth: 720
+    // 极简 follows the film, and a portrait film needs a narrow window (the dock is
+    // about 330px wide).
+    minimumWidth: cinema ? 360 : 720
     minimumHeight: 260
     visible: true
     color: "transparent"
@@ -34,10 +36,8 @@ Window {
     property real nodeVideoHeight: 330
     // Every navigation goes through here: "专业" means the node page while the
     // node configuration is active, so the dock never drops into the list UI.
-    function goPage(p) {
-        if (p === "pro" && veyra.nodeMode === 1) p = "node"
-        page = p
-    }
+    function goPageTarget(p) { return p === "pro" && veyra.nodeMode === 1 ? "node" : p }
+    function goPage(p) { page = goPageTarget(p) }
     // Test switches from the command line (main.cpp, G0.3); empty in normal use.
     readonly property var test: typeof vyTest !== "undefined" ? vyTest : ({})
     readonly property real testAspect: test.aspect !== undefined ? test.aspect : 0
@@ -64,11 +64,40 @@ Window {
     onReportedAspectChanged: if (reportedAspect < 0.2) fitToFilm(16 / 9)
     property string lastPage: "home"
     property real heightBeforeCinema: 0
-    readonly property real pictureHeight: Math.round(width / filmAspect)
+    // The tallest picture that still fits on the screen with the pill (46px) under
+    // it. A portrait video or a captured portrait window used to make the window
+    // taller than the screen (field report 2026-10-01).
+    readonly property real maxPictureHeight: {
+        const s = root.screen
+        return s ? Math.max(200, Math.min(s.height, s.desktopAvailableHeight) - 46 - 16) : 100000
+    }
+    readonly property real pictureHeight: Math.min(Math.round(width / filmAspect), maxPictureHeight)
+    // The width a tall film took away, given back when a wider film fits again.
+    property real widthBeforeNarrow: 0
 
     function fitToFilm(aspect) {
         if (aspect > 0.2 && aspect < 5.0) filmAspect = aspect
-        if (cinema && !screenSized) height = Math.round(pictureHeight)
+        // The page, not `cinema`: onPageChanged calls this before that binding updates.
+        if (page !== "min" || screenSized) return
+        // Narrow the window for a film too tall for the screen, keeping its centre.
+        let w = widthBeforeNarrow > 0 ? widthBeforeNarrow : width
+        if (Math.round(w / filmAspect) > maxPictureHeight)
+            w = Math.max(minimumWidth, Math.round(maxPictureHeight * filmAspect))
+        if (Math.abs(w - width) >= 1) {
+            if (widthBeforeNarrow <= 0) widthBeforeNarrow = width
+            x += Math.round((width - w) / 2)
+            width = w
+        }
+        if (widthBeforeNarrow > 0 && w >= widthBeforeNarrow) widthBeforeNarrow = 0
+        height = Math.round(pictureHeight)
+        keepPillOnScreen()
+    }
+    // The pill hangs 46px below the picture: lift the window if that leaves the screen.
+    function keepPillOnScreen() {
+        const s = root.screen
+        if (!s) return
+        const bottom = s.virtualY + Math.min(s.height, s.desktopAvailableHeight)
+        if (y + pictureHeight + 46 + 8 > bottom) y = Math.max(s.virtualY, bottom - pictureHeight - 46 - 8)
     }
     // .vy.cine transition: height .7s var(--spring-soft)
     Behavior on height {
@@ -102,8 +131,15 @@ Window {
         // clears the cinema height on any other page).
         const wasCinema = lastPage === "min"
         lastPage = page
+        if (!screenSized && wasCinema && page !== "min" && widthBeforeNarrow > 0) {
+            // A tall film narrowed the window; the other pages get their width back.
+            x -= Math.round((widthBeforeNarrow - width) / 2)
+            width = widthBeforeNarrow
+            widthBeforeNarrow = 0
+        }
+        if (!screenSized && page !== "min" && width < 720) { x -= Math.round((720 - width) / 2); width = 720 }
         if (screenSized) { /* the screen is the window */ }
-        else if (page === "min") { if (!wasCinema) heightBeforeCinema = height; height = Math.round(pictureHeight) }
+        else if (page === "min") { if (!wasCinema) heightBeforeCinema = height; fitToFilm(filmAspect) }
         else if (wasCinema && heightBeforeCinema >= 400) height = heightBeforeCinema
         else if (height < 600) height = 800
         // core.js app.go: the old page sinks (.22s) and the new one shows 150 ms
@@ -211,6 +247,7 @@ Window {
         // takes no input (.page.leave { pointer-events: none }).
         HomePage { pageId: "home"; onRequestPage: p => root.goPage(p) }
         MinimalPage {
+            id: minPage
             pageId: "min"
             onRequestPage: p => root.goPage(p)
             onRequestAspect: aspect => { if (root.testAspect <= 0) root.fitToFilm(aspect) }
@@ -266,7 +303,12 @@ Window {
         locked: root.fullLocked
         forcedTip: root.test.tip !== undefined ? root.test.tip : ""
         opened: pinned
-        onRequestPage: p => root.goPage(p)
+        // In fullscreen only the picture is on screen, so another page (专业 above all)
+        // would change nothing visible: leave fullscreen first, as the pill's menu does.
+        onRequestPage: p => {
+            if (root.fullscreen && root.goPageTarget(p) !== root.page) root.toggleFullscreen()
+            root.goPage(p)
+        }
         onRequestMinimize: root.showMinimized()
         onRequestMaximize: root.toggleMaximized()
         onRequestClose: root.close()
@@ -450,6 +492,7 @@ Window {
         onRequestDialog: k => dialogs.open(k)
         onRequestFullscreen: root.toggleFullscreen()
         onRequestLock: root.toggleLock()
+        onRequestMove: if (!root.fullscreen && !root.maximized) root.startSystemMove()
         onActivity: root.pointerActivity()
     }
     function toggleLock() {
@@ -662,5 +705,9 @@ Window {
     // --full-bar shown|hidden: enter fullscreen with the control window held shown
     // or held hidden, for the present-timing comparison (G2.5).
     Timer { id: testFullTimer; interval: 1500; onTriggered: { root.toggleFullscreen(); if (root.test.fullBar === "hidden") root.fullControls = false } }
-    Timer { id: testMenuTimer; interval: 600; onTriggered: proPage.openTestMenu(root.test.menu) }
+    Timer {
+        id: testMenuTimer
+        interval: 600
+        onTriggered: root.test.menu === "min-source" ? minPage.openSourceMenuForTest() : proPage.openTestMenu(root.test.menu)
+    }
 }

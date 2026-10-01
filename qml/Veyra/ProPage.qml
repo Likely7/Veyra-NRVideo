@@ -246,15 +246,18 @@ VPage {
             label: "GPU 占用"
             tip: "Windows GPU 引擎占用率（最忙的引擎类型，全系统），每秒采样"
         }
+        // How much of one source frame's time the enhancement chain uses (the plan's
+        // "负载预算 = 耗时 / 预算"). It used to show output fps / target fps, which
+        // reads 100% whenever the output keeps up, however light the load.
         PerfOrb {
             size: parent.size
             showLabel: parent.showLabels
-            known: veyra.outputRateRatio >= 0
-            // Full ring = on target; a shortfall shows as a gap and turns amber/red.
-            fraction: known ? (veyra.outputRateRatio >= 0.95 ? 0.5 : veyra.outputRateRatio >= 0.8 ? 0.85 : 1.1) : 0
-            value: known ? Math.round(Math.min(1.5, veyra.outputRateRatio) * 100) + "%" : "—"
+            known: veyra.chainTotalMsKnown && veyra.stageBudgetMs > 0
+            fraction: known ? veyra.chainTotalMs / veyra.stageBudgetMs : 0
+            value: known ? Math.round(veyra.chainTotalMs / veyra.stageBudgetMs * 100) + "%" : "—"
             label: "负载预算"
-            tip: "实际输出帧率 / 目标帧率（源帧率 × 补帧倍率）：" + veyra.runStatus
+            tip: "增强链 GPU 耗时 P95 占一个源帧时间（" + veyra.stageBudgetMs.toFixed(1)
+                 + " ms）的比例；超过 100% 就跟不上源帧率。当前状态：" + veyra.runStatus
         }
     }
     // The status light: 1.4.4's 当前状态 (正常 / 补帧调度降档 / 输出未达标 /
@@ -691,12 +694,15 @@ VPage {
                     rowSpacing: 6
                     flow: GridLayout.TopToBottom
                     rows: Math.ceil(veyra.stageTimings.length / 2)
+                // The model is the row count, not the list: the list is a new array on
+                // every snapshot, and a list model rebuilt the rows each time, so every
+                // bar restarted from 0 (the 0 / 5.8 / 0 / 5.8 flicker in the field).
                 Repeater {
-                    model: veyra.stageTimings
+                    model: veyra.stageTimings.length
                     delegate: RowLayout {
                         id: stageRow
-                        required property var modelData
                         required property int index
+                        readonly property var modelData: veyra.stageTimings[index] || ({ label: "", ms: 0, fraction: 0, measured: false, color: "transparent" })
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         spacing: 8
@@ -718,6 +724,7 @@ VPage {
                                 radius: 9
                                 color: Qt.rgba(1, 1, 1, 0.08)
                                 Rectangle {
+                                    objectName: "stage-bar-fill"
                                     width: root.barsArmed ? parent.width * Math.max(0, Math.min(1, modelData.fraction)) : 0
                                     height: parent.height
                                     radius: 9

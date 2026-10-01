@@ -198,7 +198,28 @@ PlayerSnapshot EngineController::snapshot()const{
     // (sweep 2026-09-22 B3). Consecutive UI callers within 50 ms share one
     // flow snapshot.
     PlayerSnapshot copy;std::shared_ptr<FrameFlowWindow> flowWindow;
-    {std::lock_guard lock(mutex_);copy=snapshot_;copy.presentation=presentation_;flowWindow=activeFlow_;}
+    // The session pointers are copied under the lock: teardown resets them on the
+    // engine thread while the UI polls.
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    std::shared_ptr<source::RemotePlaySessionSource> activeRemote;
+#endif
+#ifdef VEYRA_ENABLE_MOONLIGHT
+    std::shared_ptr<source::MoonlightSessionSource> activeMoonlight;
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    std::shared_ptr<source::XboxSessionSource> activeXbox;
+#endif
+    {std::lock_guard lock(mutex_);copy=snapshot_;copy.presentation=presentation_;flowWindow=activeFlow_;
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+        activeRemote=activeRemote_;
+#endif
+#ifdef VEYRA_ENABLE_MOONLIGHT
+        activeMoonlight=activeMoonlight_;
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+        activeXbox=activeXbox_;
+#endif
+    }
     copy.volume=volume_;copy.muted=muted_;
     const bool playing=copy.running&&!copy.image&&copy.transport==TransportState::Playing;
     if(flowWindow){
@@ -210,24 +231,24 @@ PlayerSnapshot EngineController::snapshot()const{
     }
     copy.fgBudgetLimited=playing&&copy.metrics.flow.lastFgRejected100ns>0&&monotonic100ns()-copy.metrics.flow.lastFgRejected100ns<10000000;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-    if(copy.remotePlay&&activeRemote_){
-        const auto s=activeRemote_->sessionSnapshot();copy.remoteStream=s;copy.remotePlayState=int(s.state);
-        const auto recovery=activeRemote_->recoveryStatus();copy.remoteRecovering=recovery.active;copy.remoteReconnectAttempts=recovery.attempts;copy.remoteRecoveryMessage=recovery.message;
+    if(copy.remotePlay&&activeRemote){
+        const auto s=activeRemote->sessionSnapshot();copy.remoteStream=s;copy.remotePlayState=int(s.state);
+        const auto recovery=activeRemote->recoveryStatus();copy.remoteRecovering=recovery.active;copy.remoteReconnectAttempts=recovery.attempts;copy.remoteRecoveryMessage=recovery.message;
         copy.remoteReceivedFps=s.receivedFps;copy.remoteDecodedFps=s.decodedFps;copy.remoteRatesReady=s.ratesReady;
         copy.remoteReceived=s.video.accessUnits;copy.remoteDecoded=s.decodedFrames;copy.remoteIngressDropped=s.video.dropped;
-        copy.remotePlaySkipped=activeRemote_->skipped();copy.captureAudio=activeRemote_->audioState();copy.audioAvailable=copy.captureAudio.available;
+        copy.remotePlaySkipped=activeRemote->skipped();copy.captureAudio=activeRemote->audioState();copy.audioAvailable=copy.captureAudio.available;
     }
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
-    if(copy.moonlightActive&&activeMoonlight_){
-        copy.moonlight=activeMoonlight_->stats();
-        copy.captureAudio=activeMoonlight_->audioState();copy.audioAvailable=copy.captureAudio.available;
+    if(copy.moonlightActive&&activeMoonlight){
+        copy.moonlight=activeMoonlight->stats();
+        copy.captureAudio=activeMoonlight->audioState();copy.audioAvailable=copy.captureAudio.available;
     }
 #endif
 #ifdef VEYRA_ENABLE_XBOX
-    if(copy.xboxActive&&activeXbox_){
-        copy.xbox=activeXbox_->stats();
-        copy.captureAudio=activeXbox_->audioState();copy.audioAvailable=copy.captureAudio.available;
+    if(copy.xboxActive&&activeXbox){
+        copy.xbox=activeXbox->stats();
+        copy.captureAudio=activeXbox->audioState();copy.audioAvailable=copy.captureAudio.available;
     }
 #endif
     auto& flow=copy.metrics.flow;

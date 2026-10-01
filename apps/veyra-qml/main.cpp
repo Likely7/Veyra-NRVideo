@@ -54,6 +54,18 @@ HWND g_video = nullptr;
 enum class VideoProbeMode { Normal, Hidden, NoRegion, CoversOnly };
 VideoProbeMode g_videoProbe = VideoProbeMode::Normal;
 bool g_videoHiddenByProbe = false;
+// Set while a new source is opening: the window keeps the previous session's last
+// frame until the new one presents, so its region is emptied instead. A slow PS5
+// connect after a capture card left the card's last frame up for 20 s and the
+// window looked frozen (field report 2026-10-01).
+bool g_videoBlanked = false;
+
+void blankVideo(const char* why) {
+    if (!g_video || g_videoBlanked) return;
+    g_videoBlanked = true;
+    const int result = SetWindowRgn(g_video, CreateRectRgn(0, 0, 0, 0), TRUE);
+    veyra::log::info("qml-window", std::format("blank video until the new source presents ({}) result={}", why, result));
+}
 
 const char* videoProbeName() {
     switch (g_videoProbe) {
@@ -221,6 +233,8 @@ void syncVideoCovers(QQuickWindow* window, QQuickItem* host, qreal inset) {
     const int w = std::max(1, int(std::floor(host->width() * dpr)));
     const int h = std::max(1, int(std::floor(host->height() * dpr)));
     static QList<QRect> last;
+    // blankVideo() set the region behind this cache's back.
+    if (g_videoBlanked) { last.clear(); g_videoBlanked = false; }
     QList<QRect> holes;       // x, y, w, h; the radius rides along as a fifth rect
     for (const Cover& c : covers) {
         const QRectF local = c.rect.translated(-origin);
@@ -644,7 +658,9 @@ int main(int argc, char** argv) {
         // GetParent() is null for an unattached WS_POPUP, so reparenting here on
         // every animation frame can starve input and timers before any source opens.
         if (!bridge.hasSource()) {
-            if (bridge.openingSource()) return;
+            // The window stays up for the presenter, but empty: the QML stage and its
+            // "正在连接" pill show instead of the last source's frozen frame.
+            if (bridge.openingSource()) { blankVideo("opening"); return; }
             if (IsWindowVisible(g_video)) {
                 veyra::log::info("qml-window", "follow: hide video because source snapshot is inactive");
                 ShowWindow(g_video, SW_HIDE);

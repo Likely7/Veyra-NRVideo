@@ -17,6 +17,8 @@ Rectangle {
     signal requestDialog(string key)
     signal requestFullscreen()
     signal requestLock()
+    // Windowed 极简: a drag on the pill's empty space moves the window, like a title bar.
+    signal requestMove()
     // Set on the fullscreen bar: shows the lock button.
     property bool fullscreen: false
     // Set by FullscreenBar so upward menus stop above the playback pill.
@@ -27,6 +29,14 @@ Rectangle {
     readonly property bool hovered: barHover.hovered
     readonly property bool seekPreviewOpen: seekMouse.containsMouse && seekMouse.enabled
     HoverHandler { id: barHover }
+    // Buttons, the seek rail and the volume slider take their own presses first; only
+    // a drag that starts on empty pill reaches this one.
+    DragHandler {
+        objectName: "cine-move"
+        target: null
+        enabled: !bar.fullscreen
+        onActiveChanged: if (active) bar.requestMove()
+    }
     implicitHeight: 92
     radius: 30
     color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.86)
