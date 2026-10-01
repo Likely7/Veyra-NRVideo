@@ -36,6 +36,10 @@ Rectangle {
         objectName: "cine-move"
         target: null
         enabled: !bar.fullscreen
+        // Never take a drag over from a control: by default a DragHandler steals the grab
+        // from an item once the pointer passes the drag threshold, so scrubbing the seek
+        // rail moved the window instead (field report 2026-10-02).
+        grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType | PointerHandler.ApprovesTakeOverByAnything
         onActiveChanged: if (active) bar.requestMove()
     }
     implicitHeight: 92
@@ -191,6 +195,7 @@ Rectangle {
                 }
                 Item {
                     id: seekArea
+                    objectName: "cine-seek"
                     Layout.fillWidth: true
                     implicitHeight: 14
                     property bool scrubbing: false
@@ -310,6 +315,7 @@ Rectangle {
                         id: seekMouse
                         anchors.fill: parent
                         hoverEnabled: true
+                        preventStealing: true
                         enabled: veyra.duration > 0 && !veyra.isCapture
                         cursorShape: Qt.PointingHandCursor
                         onEntered: thumbnailDelay.restart()
