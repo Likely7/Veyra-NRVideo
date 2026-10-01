@@ -199,7 +199,7 @@ VPage {
                         }
                         VRow {
                             label: "滑块键盘微调"
-                            hint: "点一下滑块后用 ← → 调整，每次的幅度；Esc 交还方向键给快进快退"
+                            hint: "点一下滑块后用 ← → 调整，每次的幅度；Esc 或单击画面交还方向键给快进快退"
                             VSeg {
                                 objectName: "set-slider-step"
                                 options: [{ id: "1", label: "1" }, { id: "0.1", label: "0.1" }, { id: "0.01", label: "0.01" }]
@@ -545,7 +545,8 @@ VPage {
                     VGroup {
                         Repeater {
                             model: [
-                                { a: "后退 / 前进 10 秒", k: "← / →" },
+                                { a: "后退 / 前进 5 秒", k: "← / →" },
+                                { a: "播放 / 暂停（播放文件时）", k: "单击画面" },
                                 { a: "音量", k: "↑ / ↓" },
                                 { a: "打开文件 / 导出页", k: "Ctrl+O / Ctrl+E" },
                                 { a: "字幕开关 / 主轨 / 副轨", k: "B / T / Y" },

@@ -445,6 +445,30 @@ Window {
     // AppShell VideoSurface: a double click on the picture toggles fullscreen
     // (1.4.4 did both directions), unless locked. Windowed, only a double click
     // inside the picture counts; with the quick panel up, not one on the panel.
+    // A click on the picture of a playing file pauses or resumes it (field request
+    // 2026-10-02), and takes the keyboard back from a slider so the arrows seek again.
+    // Live sources ignore it: a click to focus the window mid-game must not stop the
+    // capture. The second click of a double click undoes the first; the double click
+    // itself toggles fullscreen below.
+    function pictureContains(p) {
+        return p.x >= videoHost.x && p.y >= videoHost.y && p.x <= videoHost.x + videoHost.width
+            && p.y <= videoHost.y + videoHost.height
+    }
+    TapHandler {
+        id: pictureTap
+        enabled: !root.fullLocked
+        onTapped: (eventPoint, button) => {
+            const p = eventPoint.position
+            if (root.page !== "min" && root.page !== "pro" && root.page !== "node" && !root.fullscreen) return
+            if (dialogs.dialog !== "" || !veyra.hasSource) return
+            if (root.fullscreen && root.quickPanelShown && proPage.overlayContains(p.x, p.y)) return
+            if (!root.fullscreen && !root.pictureContains(p)) return
+            root.contentItem.forceActiveFocus()
+            if (veyra.isCapture || veyra.duration <= 0) return
+            if (veyra.protectionDrawShape.length > 0 || veyra.compareMode === 2) return
+            if (pictureTap.tapCount <= 2) veyra.togglePlayPause()
+        }
+    }
     TapHandler {
         enabled: !root.fullLocked
         onDoubleTapped: (eventPoint, button) => {
@@ -544,8 +568,9 @@ Window {
             root.quickPanel = !root.quickPanel
         }
     }
-    Shortcut { sequence: "Left"; onActivated: veyra.seekBy(-10) }
-    Shortcut { sequence: "Right"; onActivated: veyra.seekBy(10) }
+    // 5 s steps (field request 2026-10-02).
+    Shortcut { sequence: "Left"; onActivated: veyra.seekBy(-5) }
+    Shortcut { sequence: "Right"; onActivated: veyra.seekBy(5) }
     Shortcut { sequence: "Up"; onActivated: veyra.volume = Math.min(1, veyra.volume + 0.05) }
     Shortcut { sequence: "Down"; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
     Shortcut { sequence: "Ctrl+O"; onActivated: veyra.openFileDialog() }
