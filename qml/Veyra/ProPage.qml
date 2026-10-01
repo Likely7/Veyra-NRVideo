@@ -590,6 +590,36 @@ VPage {
                 kind: veyra.fgEnabled ? "acc" : ""
                 text: veyra.fgEnabled ? veyra.fgMultiplier + "X" : "补帧关"
             }
+            // Subtitle and audio-track menus (field request 2026-10-01), the same menus as the
+            // 极简 pill's, beside the fullscreen button.
+            component BarButton: Item {
+                id: barBtn
+                property string glyph: ""
+                property string tip: ""
+                signal tapped()
+                implicitWidth: 28; implicitHeight: 28
+                VIcon { anchors.centerIn: parent; name: barBtn.glyph; color: barHover.hovered ? Theme.t1 : Theme.t2 }
+                HoverHandler { id: barHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: barBtn.tapped() }
+                ToolTip.visible: barHover.hovered
+                ToolTip.text: barBtn.tip
+            }
+            BarButton {
+                id: proCcButton
+                objectName: "pro-subtitles"
+                glyph: "cc"
+                tip: "字幕"
+                visible: veyra.hasSource && !veyra.isCapture
+                onTapped: proCcMenu.openAt(proCcButton, "up")
+            }
+            BarButton {
+                id: proAudioButton
+                objectName: "pro-audio-tracks"
+                glyph: "music"
+                tip: "音轨"
+                visible: veyra.hasSource && !veyra.isCapture
+                onTapped: proAudioMenu.openAt(proAudioButton, "up")
+            }
             // Fullscreen, at the picture's bottom-right corner where players put it.
             Item {
                 objectName: "pro-fullscreen"
@@ -1738,6 +1768,37 @@ VPage {
     }
     readonly property real testMenuScale: sourceMenu.motionScale
 
+    // The pill's 字幕 / 音轨 menus, for the video bar's buttons.
+    VMenu {
+        id: proCcMenu
+        title: "字幕"
+        items: [{ label: "关闭", checked: veyra.subtitlePrimary < 0, track: -1 }]
+            .concat(veyra.subtitleTracks.map(t => ({ label: t.label, note: t.note, track: t.index,
+                                                     disabled: !t.usable, checked: t.index === veyra.subtitlePrimary })))
+            .concat([{ label: "加载外部字幕…", icon: "import", act: "load" },
+                     { sep: true },
+                     { label: "字幕设置…", note: "字体、字号、描边、位置、延时", icon: "type", act: "dlg" }])
+        onPicked: (i, o) => {
+            if (o.act === "load") veyra.loadSubtitleDialog()
+            else if (o.act === "dlg") root.requestDialog("subtitle")
+            else if (o.track !== undefined) veyra.subtitlePrimary = o.track
+        }
+    }
+    VMenu {
+        id: proAudioMenu
+        title: "音轨"
+        readonly property var mk: t => ({ label: t.label, index: t.index,
+                                          note: t.channels > 0 ? (t.channels + " 声道") : "",
+                                          checked: t.index === veyra.selectedAudioTrack })
+        items: veyra.audioTracks.length > 0
+               ? veyra.audioTracks.map(mk).concat([{ sep: true },
+                     { label: "音频设置…", note: "输出设备、音画同步、偏移", icon: "music", act: "dlg" }])
+               : [{ label: "片源没有音轨或尚未打开", disabled: true }]
+        onPicked: (i, o) => {
+            if (o.act === "dlg") return root.requestDialog("audio")
+            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
+        }
+    }
     // pages-pro.js data-srcbtn: the open source first (checked), then the ways in.
     VMenu {
         id: sourceMenu

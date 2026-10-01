@@ -23,6 +23,7 @@ Window {
     signal requestFullscreen()
     signal requestLock()
     signal requestMove()
+    signal requestHide()
     // Pointer movement over the bar keeps the controls up (the main window cannot
     // see it here).
     signal activity()
@@ -109,6 +110,7 @@ Window {
         onRequestFullscreen: win.requestFullscreen()
         onRequestLock: win.requestLock()
         onRequestMove: win.requestMove()
+        onRequestHide: win.requestHide()
         HoverHandler {
             // Real movement only: hover repeats while the bar animates.
             property point last: Qt.point(-1, -1)

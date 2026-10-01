@@ -579,6 +579,11 @@ public:
     QVariantMap preferences() const;
     Q_INVOKABLE void rememberWindowSize(int width, int height);
     Q_INVOKABLE bool setPreference(const QString& key, const QVariant& value);
+    // Available area (taskbar excluded) of the screen holding a point, or of the screen the
+    // pointer is on at start. QML's Screen.desktopAvailable* span the whole virtual desktop,
+    // which centred the window across two of three monitors (field report 2026-10-01).
+    Q_INVOKABLE QRect screenAvailableAt(int x, int y) const;
+    Q_INVOKABLE QRect launchScreenAvailable() const;
     QString screenshotDirectory() const;
     QString lastScreenshot() const;
     QString dataDirectory() const;

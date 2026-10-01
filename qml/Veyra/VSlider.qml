@@ -34,6 +34,28 @@ Item {
         moved(amount)
     }
 
+    // Keyboard (field request 2026-10-01): a clicked or dragged slider takes focus and the
+    // arrow keys move it by the 设置 step (1 / 0.1 / 0.01), at least a thousandth of the
+    // range so wide ranges still move. While focused the arrows belong to the slider, not
+    // to the window's seek and volume shortcuts; Esc gives them back.
+    activeFocusOnTab: enabledControl
+    readonly property real keyStep: Math.max(Number(typeof veyra !== "undefined" && veyra.preferences ? (veyra.preferences.sliderKeyStep || 0.1) : 0.1), (to - from) / 1000)
+    function nudge(direction) {
+        const next = Math.max(from, Math.min(to, value + direction * keyStep))
+        // Snap to the step grid so 0.1 steps do not drift into 0.30000000000000004.
+        commitValue(Math.round(next / keyStep) * keyStep)
+    }
+    Keys.onShortcutOverride: event => {
+        if (event.key === Qt.Key_Left || event.key === Qt.Key_Right || event.key === Qt.Key_Up
+            || event.key === Qt.Key_Down || event.key === Qt.Key_Escape) event.accepted = true
+    }
+    Keys.onPressed: event => {
+        if (!enabledControl) return
+        if (event.key === Qt.Key_Left || event.key === Qt.Key_Down) { nudge(-1); event.accepted = true }
+        else if (event.key === Qt.Key_Right || event.key === Qt.Key_Up) { nudge(1); event.accepted = true }
+        else if (event.key === Qt.Key_Escape) { focus = false; event.accepted = true }
+    }
+
     implicitHeight: 20
     implicitWidth: 160
     readonly property real displayedValue: valueFromModel && drag.active ? dragValue : value
@@ -68,6 +90,8 @@ Item {
         anchors.verticalCenter: track.verticalCenter
         x: track.width * slider.frac - width / 2
         scale: drag.active || hover.hovered ? 1.25 : 1.0
+        border.width: slider.activeFocus ? 2 : 0
+        border.color: Theme.accent
         Behavior on scale { NumberAnimation { duration: Theme.d(350); easing.bezierCurve: Theme.spring } }
     }
     // box-shadow: 0 2px 6px rgba(0,0,0,.5). A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
@@ -104,6 +128,7 @@ Item {
         }
         onActiveChanged: {
             if (active) {
+                slider.forceActiveFocus()
                 slider.dragValue = slider.value
                 startX = track.width * slider.frac
             } else { liveTimer.stop(); slider.commitValue(slider.valueFromModel ? slider.dragValue : slider.value) }
@@ -115,6 +140,7 @@ Item {
         // activating an inspector button on a card underneath this slider.
         gesturePolicy: TapHandler.WithinBounds
         onTapped: point => {
+            slider.forceActiveFocus()
             const x = Math.max(0, Math.min(track.width, point.position.x))
             slider.commitValue(slider.from + (x / track.width) * (slider.to - slider.from))
         }

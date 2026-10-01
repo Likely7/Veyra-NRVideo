@@ -67,10 +67,10 @@ Window {
     // The tallest picture that still fits on the screen with the pill (46px) under
     // it. A portrait video or a captured portrait window used to make the window
     // taller than the screen (field report 2026-10-01).
-    readonly property real maxPictureHeight: {
-        const s = root.screen
-        return s ? Math.max(200, Math.min(s.height, s.desktopAvailableHeight) - 46 - 16) : 100000
-    }
+    // The screen under the window's top centre (Screen.desktopAvailable* is the whole
+    // virtual desktop, wrong on multi-monitor setups).
+    readonly property rect screenArea: veyra.screenAvailableAt(root.x + root.width / 2, root.y + 20)
+    readonly property real maxPictureHeight: Math.max(200, root.screenArea.height - 46 - 16)
     readonly property real pictureHeight: Math.min(Math.round(width / filmAspect), maxPictureHeight)
     // The width a tall film took away, given back when a wider film fits again.
     property real widthBeforeNarrow: 0
@@ -94,10 +94,9 @@ Window {
     }
     // The pill hangs 46px below the picture: lift the window if that leaves the screen.
     function keepPillOnScreen() {
-        const s = root.screen
-        if (!s) return
-        const bottom = s.virtualY + Math.min(s.height, s.desktopAvailableHeight)
-        if (y + pictureHeight + 46 + 8 > bottom) y = Math.max(s.virtualY, bottom - pictureHeight - 46 - 8)
+        const a = root.screenArea
+        const bottom = a.y + a.height
+        if (y + pictureHeight + 46 + 8 > bottom) y = Math.max(a.y, bottom - pictureHeight - 46 - 8)
     }
     // .vy.cine transition: height .7s var(--spring-soft)
     Behavior on height {
@@ -251,6 +250,7 @@ Window {
         MinimalPage {
             id: minPage
             pageId: "min"
+            dragStripHeight: 0
             home: pages
             onRequestPage: p => root.goPage(p)
             onRequestAspect: aspect => { if (root.testAspect <= 0) root.fitToFilm(aspect) }
@@ -268,6 +268,7 @@ Window {
         NodePage {
             id: nodePage
             pageId: "node"
+            dragStripHeight: 14
             home: pages
             videoHeight: root.nodeVideoHeight
             onVideoHeightEdited: h => { root.nodeVideoHeight = h; videoHost.syncRect() }
@@ -319,6 +320,9 @@ Window {
         onRequestMaximize: root.toggleMaximized()
         onRequestClose: root.close()
         onRequestMove: if (!root.fullscreen) root.startSystemMove()
+        pillToggleVisible: veyra.hasSource && (root.page === "min" || root.fullscreen)
+        pillHidden: root.pillHidden
+        onRequestTogglePill: root.setPillHidden(!root.pillHidden)
     }
 
     // Frameless window: the system resizes from 6px borders and 12px corners.
@@ -490,7 +494,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: veyra.hasSource && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: veyra.hasSource && !root.pillHidden && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)
@@ -498,8 +502,16 @@ Window {
         onRequestDialog: k => dialogs.open(k)
         onRequestFullscreen: root.toggleFullscreen()
         onRequestLock: root.toggleLock()
+        onRequestHide: root.setPillHidden(true)
         onRequestMove: if (!root.fullscreen && !root.maximized) root.startSystemMove()
         onActivity: root.pointerActivity()
+    }
+    // The cinema / fullscreen pill can be hidden for games (capture card, streams); the
+    // dock's eye brings it back. Remembered across sessions.
+    readonly property bool pillHidden: veyra.preferences.cinePillHidden === true
+    function setPillHidden(hidden) {
+        veyra.setPreference("cinePillHidden", hidden)
+        toast.show(hidden ? "播放条已隐藏 · 鼠标移到顶部，点胶囊里的眼睛可重新打开" : "播放条已显示", false)
     }
     function toggleLock() {
         fullLocked = !fullLocked
@@ -684,14 +696,13 @@ Window {
         const text = choice === "last" ? (veyra.preferences.lastWindow || "1280x800") : choice
         const wh = text.split("x").map(Number)
         if (wh.length !== 2 || !(wh[0] > 0) || !(wh[1] > 0)) return
-        const sw = root.screen ? root.screen.desktopAvailableWidth : wh[0]
-        const sh = root.screen ? root.screen.desktopAvailableHeight : wh[1]
-        root.width = Math.max(root.minimumWidth, Math.min(wh[0], sw - 40))
-        root.height = Math.max(root.minimumHeight, Math.min(wh[1], sh - 40))
-        if (root.screen) {
-            root.x = root.screen.virtualX + Math.round((sw - root.width) / 2)
-            root.y = root.screen.virtualY + Math.round((sh - root.height) / 2)
-        }
+        // Centred on the monitor the pointer is on when Veyra starts (the one it was
+        // launched from), not across the whole desktop.
+        const a = veyra.launchScreenAvailable()
+        root.width = Math.max(root.minimumWidth, Math.min(wh[0], a.width - 40))
+        root.height = Math.max(root.minimumHeight, Math.min(wh[1], a.height - 40))
+        root.x = a.x + Math.round((a.width - root.width) / 2)
+        root.y = a.y + Math.round((a.height - root.height) / 2)
     }
     onClosing: if (!root.fullscreen && !root.maximized && !root.cinema) veyra.rememberWindowSize(root.width, root.height)
     Component.onCompleted: {

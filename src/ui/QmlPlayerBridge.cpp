@@ -1,6 +1,8 @@
 #include "veyra/ui/QmlPlayerBridge.h"
 
 #include <QRegion>
+#include <QCursor>
+#include <QScreen>
 #include <QWindow>
 
 #include <QDateTime>
@@ -1464,7 +1466,17 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
 int QmlPlayerBridge::captureAudioChoice() const { return impl_->captureAudioChoice; }
 void QmlPlayerBridge::setCaptureAudioChoice(int choice) {
     if (choice < source::kCaptureAudioFromVideoDevice || choice >= int(impl_->captureAudio.size())) return;
-    impl_->captureAudioChoice = choice; emit captureChanged();
+    impl_->captureAudioChoice = choice;
+    // Remember the audio choice for this device as soon as it is picked, not only on
+    // 连接并开始 (field report 2026-10-01: picked, closed, and it was gone next time).
+    auto& i = *impl_;
+    if (!i.captureDevice.empty() && i.captureDevice == i.capturePrefs.videoPath) {
+        const source::CaptureDevice* audio = choice >= 0 && size_t(choice) < i.captureAudio.size() ? &i.captureAudio[size_t(choice)] : nullptr;
+        i.capturePrefs.audioPath = audio ? audio->path : std::wstring{};
+        i.capturePrefs.audioMode = audio ? (audio->wasapi ? source::kCaptureAudioWasapi : 0) : choice;
+        if (!ui::CapturePreferenceStore(i.dataDir).save(i.capturePrefs)) veyra::log::warn("capture-ui", "capture audio choice not saved");
+    }
+    emit captureChanged();
 }
 int QmlPlayerBridge::captureColorSpace() const { return int(source::captureColorSpace(impl_->captureColor)); }
 void QmlPlayerBridge::setCaptureColorSpace(int value) {
@@ -4124,13 +4136,23 @@ void QmlPlayerBridge::rememberWindowSize(int width, int height) {
     impl_->prefs[QStringLiteral("lastWindow")] = v;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "last window size not saved");
 }
+QRect QmlPlayerBridge::screenAvailableAt(int x, int y) const {
+    QScreen* screen = QGuiApplication::screenAt(QPoint(x, y));
+    if (!screen) screen = QGuiApplication::primaryScreen();
+    return screen ? screen->availableGeometry() : QRect(0, 0, 1920, 1040);
+}
+QRect QmlPlayerBridge::launchScreenAvailable() const {
+    const QPoint at = QCursor::pos();
+    return screenAvailableAt(at.x(), at.y());
+}
+
 bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency"};
+                                   "magewellLowLatency", "cinePillHidden"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -4145,6 +4167,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = dir;
     } else if (key == QLatin1String("audioDevice")) {
         stored = value.toString();
+    } else if (key == QLatin1String("sliderKeyStep")) {
+        // Arrow-key step of a focused slider (设置 → 通用): 1, 0.1 or 0.01.
+        bool ok = false; const double v = value.toDouble(&ok);
+        if (!ok || !(qFuzzyCompare(v, 1.0) || qFuzzyCompare(v, 0.1) || qFuzzyCompare(v, 0.01))) return false;
+        stored = v;
     } else if (key == QLatin1String("accent")) {
         const QString v = value.toString();
         if (v != QLatin1String("orange") && v != QLatin1String("white")) return false;

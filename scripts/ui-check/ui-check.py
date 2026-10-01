@@ -9,6 +9,7 @@ through log lines:
   UITEST_SHOT <name>                 screen shot of the main window plus the 60px below it (the pill)
   UITEST_CLICK <x> <y>               a left click at screen coordinates
   UITEST_DRAG <x0> <y0> <x1> <y1>    a left-button drag at screen coordinates
+  UITEST_KEY <vk> [count]            key presses (Windows virtual-key code) to the focused window
   UITEST_DONE / UITEST_FAIL <why>    the verdict
 The log is flushed by the next log call, so the snippet keeps a heartbeat going.
 Clicks and drags move the real pointer for about a second.
@@ -164,6 +165,25 @@ try:
                     drag(x0, y0, x1, y1)
                 finally:
                     raise_app(proc.pid, False)
+            elif 'UITEST_KEY ' in line:
+                # UITEST_KEY <virtual-key code> [count]: key presses to the foreground window.
+                parts = line.split('UITEST_KEY ')[1].split()
+                vk, count = int(parts[0]), int(parts[1]) if len(parts) > 1 else 1
+                win = main_window(proc.pid)
+                if win:
+                    user32.SetForegroundWindow(ctypes.c_void_p(win[0]))
+                    time.sleep(0.2)
+                fg = user32.GetForegroundWindow()
+                owner = ctypes.c_ulong()
+                user32.GetWindowThreadProcessId(ctypes.c_void_p(fg), ctypes.byref(owner))
+                if owner.value != proc.pid:
+                    print('key skipped: the app is not the foreground window')
+                    continue
+                for _ in range(count):
+                    user32.keybd_event(vk, 0, 0, 0)
+                    time.sleep(0.05)
+                    user32.keybd_event(vk, 0, 2, 0)
+                    time.sleep(0.15)
             elif 'UITEST_NOTE ' in line:
                 print(line.split('UITEST_NOTE ', 1)[1].strip())
             elif 'UITEST_FAIL' in line:

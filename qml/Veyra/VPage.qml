@@ -22,6 +22,28 @@ Item {
     width: home ? home.width : 0
     height: home ? home.height : 0
     visible: current || leaving
+    // Title-bar behaviour on the page's top strip (field request 2026-10-01: only the
+    // dock capsule moved the window). Below the page's own items, so buttons and fields
+    // there keep their clicks; empty space drags, a double click maximizes. Pages whose
+    // top is the picture set a smaller strip (node) or none (min).
+    property real dragStripHeight: 56
+    Item {
+        objectName: "page-drag-strip"
+        z: -1
+        x: 0; y: 0
+        width: page.width
+        height: page.dragStripHeight
+        visible: height > 0
+        DragHandler {
+            target: null
+            enabled: page.shell !== null && !page.shell.fullscreen && !page.shell.maximized
+            onActiveChanged: if (active) page.shell.startSystemMove()
+        }
+        TapHandler {
+            enabled: page.shell !== null && !page.shell.fullscreen
+            onDoubleTapped: page.shell.toggleMaximized()
+        }
+    }
     enabled: current
     opacity: leaving ? 1 - shell.leaveT : 1
     scale: leaving ? 1 - 0.015 * shell.leaveT : 1

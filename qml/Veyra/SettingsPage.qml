@@ -198,6 +198,16 @@ VPage {
                             }
                         }
                         VRow {
+                            label: "滑块键盘微调"
+                            hint: "点一下滑块后用 ← → 调整，每次的幅度；Esc 交还方向键给快进快退"
+                            VSeg {
+                                objectName: "set-slider-step"
+                                options: [{ id: "1", label: "1" }, { id: "0.1", label: "0.1" }, { id: "0.01", label: "0.01" }]
+                                current: String(veyra.preferences.sliderKeyStep !== undefined ? veyra.preferences.sliderKeyStep : 0.1)
+                                onPicked: id => veyra.setPreference("sliderKeyStep", Number(id))
+                            }
+                        }
+                        VRow {
                             label: "背景渐变强度"
                             hint: "深黑底上的极轻渐变与抖动（防色带）"
                             VSeg {

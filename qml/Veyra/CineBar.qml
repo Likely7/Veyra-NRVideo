@@ -19,6 +19,7 @@ Rectangle {
     signal requestLock()
     // Windowed 极简: a drag on the pill's empty space moves the window, like a title bar.
     signal requestMove()
+    signal requestHide()
     // Set on the fullscreen bar: shows the lock button.
     property bool fullscreen: false
     // Set by FullscreenBar so upward menus stop above the playback pill.
@@ -350,7 +351,7 @@ Rectangle {
 
         // --- right: preset, volume, fullscreen (230px) ---------------
         RowLayout {
-            Layout.preferredWidth: 230; Layout.minimumWidth: 230; Layout.maximumWidth: 230
+            Layout.preferredWidth: 250; Layout.minimumWidth: 250; Layout.maximumWidth: 250
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
             spacing: 6
 
@@ -367,7 +368,7 @@ Rectangle {
             }
 
             Item {
-                implicitWidth: 92
+                implicitWidth: 80
                 implicitHeight: 20
                 RowLayout {
                     anchors.fill: parent
@@ -392,6 +393,17 @@ Rectangle {
                 // The design's "全屏" button (title="全屏"). It used to call an
                 // undefined root.requestPage("pro").
                 TapHandler { onTapped: bar.requestFullscreen() }
+            }
+            // Hide the pill (field request 2026-10-01: it covers the game when playing
+            // through a capture card or a stream). The dock's eye button brings it back.
+            Item {
+                objectName: "cine-hide"
+                implicitWidth: 32; implicitHeight: 32
+                VIcon { anchors.centerIn: parent; name: "eyeoff"; color: hideHover.hovered ? "#FFFFFF" : Theme.t2 }
+                HoverHandler { id: hideHover; cursorShape: Qt.PointingHandCursor }
+                ToolTip.visible: hideHover.hovered
+                ToolTip.text: "隐藏播放条（顶部胶囊里可重新打开）"
+                TapHandler { onTapped: bar.requestHide() }
             }
         }
     }

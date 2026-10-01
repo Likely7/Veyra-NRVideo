@@ -26,6 +26,10 @@ Item {
     signal requestMaximize()
     signal requestClose()
     signal requestMove()
+    // The cinema pill's eye: shown on 极简 and in fullscreen, toggles the pill.
+    property bool pillToggleVisible: false
+    property bool pillHidden: false
+    signal requestTogglePill()
 
     property bool opened: false
     // Mirrors st.dockPinned in the design: pinned stays open regardless of hover.
@@ -235,6 +239,48 @@ Item {
             }
 
             Rectangle { implicitWidth: 1; implicitHeight: 16; color: Qt.rgba(1, 1, 1, 0.14) }
+
+            // Show / hide the cinema pill (field request 2026-10-01). Only where the pill lives.
+            Item {
+                objectName: "dock-pill-toggle"
+                visible: dockRoot.pillToggleVisible
+                implicitWidth: visible ? 32 : 0
+                implicitHeight: 30
+                scale: pillTap.pressed ? 0.86 : 1
+                Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
+                VIcon {
+                    anchors.centerIn: parent
+                    name: dockRoot.pillHidden ? "eye" : "eyeoff"
+                    color: "#FFFFFF"
+                    opacity: pillHover.hovered ? 1.0 : 0.45
+                }
+                Rectangle {
+                    objectName: "videoCover"
+                    property real coverRadius: 7
+                    readonly property bool on: pillHover.hovered
+                    x: (parent.width - width) / 2
+                    y: 38
+                    width: pillTipText.implicitWidth + 18
+                    height: pillTipText.implicitHeight + 10
+                    radius: 7
+                    color: Theme.popover
+                    border.width: 1
+                    border.color: Theme.stroke2
+                    opacity: on ? 1 : 0
+                    visible: opacity > 0
+                    Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
+                    Text {
+                        id: pillTipText
+                        anchors.centerIn: parent
+                        text: dockRoot.pillHidden ? "显示播放条" : "隐藏播放条"
+                        color: "#FFFFFF"
+                        font.family: Theme.fontUi
+                        font.pixelSize: 11
+                    }
+                }
+                HoverHandler { id: pillHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { id: pillTap; onTapped: dockRoot.requestTogglePill() }
+            }
 
             // .dock-live: the engine-running lamp. Lit only when the engine really
             // reports running; no decorative lamp.
