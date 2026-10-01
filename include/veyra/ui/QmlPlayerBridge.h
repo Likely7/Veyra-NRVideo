@@ -303,6 +303,14 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool colourCanPaste READ colourCanPaste NOTIFY settingsChanged)
     // Export queue rows: [{name, input, output, state, progress, note, current}].
     Q_PROPERTY(QVariantList exportItems READ exportItems NOTIFY exportChanged)
+    Q_PROPERTY(QObject* exportQueueModel READ exportQueueModel CONSTANT)
+    Q_PROPERTY(int exportContainer READ exportContainer WRITE setExportContainer NOTIFY exportChanged)
+    Q_PROPERTY(int exportReadyCount READ exportReadyCount NOTIFY exportChanged)
+    Q_PROPERTY(QVariantList exportTracks READ exportTracks NOTIFY exportChanged)
+    Q_PROPERTY(int exportAudioPolicy READ exportAudioPolicy NOTIFY exportChanged)
+    Q_PROPERTY(int exportSubtitlePolicy READ exportSubtitlePolicy NOTIFY exportChanged)
+    Q_PROPERTY(bool exportSelectionEditable READ exportSelectionEditable NOTIFY exportChanged)
+    Q_PROPERTY(bool exportCompletionSound READ exportCompletionSound WRITE setExportCompletionSound NOTIFY exportChanged)
     // Capture dialog preview: the session's poster still (the engine's own
     // first-frame poster), as a data URL; "" when the session has none. Never a
     // periodic readback: that would stall the live capture path.
@@ -724,6 +732,18 @@ public:
     Q_INVOKABLE void colourCopy();
     Q_INVOKABLE bool colourPaste();
     QVariantList exportItems() const;
+    QObject* exportQueueModel() const;
+    int exportContainer() const;void setExportContainer(int value);
+    int exportReadyCount() const;
+    QVariantList exportTracks() const;
+    int exportAudioPolicy() const;int exportSubtitlePolicy() const;
+    bool exportSelectionEditable() const;
+    bool exportCompletionSound() const;void setExportCompletionSound(bool enabled);
+    Q_INVOKABLE void addExportFiles(const QStringList& paths);
+    Q_INVOKABLE void addCurrentExportFile();
+    Q_INVOKABLE void previewExportItem(qulonglong id);
+    Q_INVOKABLE void setExportTrackPolicy(bool audio,int policy);
+    Q_INVOKABLE void toggleExportTrack(bool audio,int index,bool keep);
     Q_INVOKABLE void clearFinishedExportItems();
     Q_INVOKABLE QString fileThumbnailId(const QString& path, double seconds) const;
     QString capturePreviewUrl() const;

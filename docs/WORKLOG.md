@@ -1,5 +1,26 @@
 # Veyra 工作记录
 
+## 2026-10-02 导出页面优化实施与本机验收
+
+- 用户追加“开启目标模式搞定他”，在 `codex/export-page-20261002` / `E:/项目/Veyra/worktrees/export-page-20261002` 完成页面越界修复、左侧可整理批量队列、MKV/多音轨/内嵌字幕、取消重试与成功提示音。独立 ExportQueue、QmlExportQueueModel、ExportStreams 复用现有 worker/GPU 导出；未修改其他工作区、增强算法、运行库或旧 Win32。
+- 每轮 `python -B scripts/acceptance/export-page-control.py` PASS，1109 文件不可变基线 SHA256 `d135f9ad55aacddc3ca5cf6f0771991b863306ebb5931d6e00c0a5aac9d4daae`。构建命令 `python -B scripts/acceptance/export-page-build.py <唯一日志名> <目标>`，最终 QML app/相关测试可构建；日志 `E:/项目/Veyra/logs/export-page-20261002/build-{final-review-001,boundary-fix-001,boundary-test-001}.log`。
+- 定向驱动 `python -B scripts/acceptance/export-page-tests.py <模式> <标识> [素材]`：准备/暂停/编码/收尾取消、占用清理失败、旧 partial 保留和重试通过；实际 C/A/B 顺序、冻结成员和逐文件剪辑通过。MP4/MKV×H.264/HEVC、双轨/65轨/5.1/无音轨、文本转换/剪辑、ASS 字体、PGS 整片复制通过。内容校验修复 AAC priming 重复扣除；不支持压缩 PGS 不再假成功。图片字幕剪辑明确拒绝，不计为支持。
+- 实际产品联动见 `production-ui-final-001.log`：视频与图片批次成功各一次系统声音调用，失败/取消/混合结果不响，静音偏好保存有效。QML 29/29、四种尺寸与 100/125/150/200% 缩放通过；颜色导出链 11/11、数据目录/曲线回归通过。实机为 RTX5070 NVENC；不冒称跨硬件、NR/SR/FG 或人工听音验收。
+- 可运行版本 `E:/项目/Veyra/test-packages/export-page-20261002/veyra_qml_ui.exe`；构建在 `E:/项目/Veyra/build/export-page-20261002`；媒体/输出/截图/profile 在同任务 tests；日志在同任务 logs；TEMP/TMP 在同任务 tmp，stage 临时目录 `E:/项目/Veyra/tmp/ui-migration-stage/{baseline-app,candidate-ui-001,export-page-20261002}`。源码增量归档 `E:/项目/Veyra/archives/export-page-20261002-final`；包内无测试媒体/用户数据，SDK/runtime 不进源码 Git。
+- 全部证据、失败修复和限制见 `docs/EXPORT_PAGE_EXECUTION_2026-10-02.md`。最终 exe 与构建哈希相同，52 份 QML 源文件一致，测试注入已移除。中间 staging 删除被自动审批以 `blocked by policy` 拒绝，未执行；三个中间目录及日志保留，见 `cleanup-deferred.json`。最终包/构建/验收证据保留，没有 commit/tag/merge/push/Release。
+
+## 2026-10-02 导出页面优化研究与独立分支
+
+- 用户要求另开分支研究导出页越界、左侧多文件可编辑队列、多音轨/内嵌字幕及 MKV、取消后无法再次导出、完成提示音，并避免影响 Claude 的其他分支。本轮交付方案，没有修改产品实现。
+- 从本地 main `09392c4d66b267cc75269b068aaffe3189830d37` 执行 `git worktree add -b codex/export-page-20261002 E:/项目/Veyra/worktrees/export-page-20261002 09392c4d66b267cc75269b068aaffe3189830d37`，独立工作区建立成功。原桌面 checkout、其他工作区和既有分支均未写入；没有 stash/reset/切换其他分支或终止其他任务进程。开工状态和引用记录在 `E:/项目/Veyra/logs/export-page-20261002/` 的 `original-status-before.txt`、`branches-before.txt`、`worktrees-before.txt`、`research-baseline.json`。
+- 阅读 README、AGENTS、产品规格、竞品审计、UI migration 三份历史方案、相关阶段 WORKLOG 及导出源码；确认当前 main 已合入 2.0.0，旧桌面 guard 固定历史 main/目录，不作为本次研究或新分支保护证明。旧 guard/baseline/AGENTS 没有修改，本轮不是旧无人值守轮次。
+- 静态确认：330px 右栏内 8 段分辨率控件固有宽度与标签冲突；左右栏缺滚动；Main.qml 另写死原生视频位置；添加文件立即 enqueue/start；队列只镜像状态且缺预览/移除/拖排；导出写死 mp4、单条音轨且无字幕映射。取消保留 partial 与同名拒绝检查直接冲突；另识别 worker 提前发布终态、bridge 停轮询导致 shared 未回收的竞态窗口，未动态复现，不声称是唯一根因或已经修复。
+- 独立容器试验：系统 FFmpeg 8.1.1 生成两秒 64×64 10fps 的 MP4/MKV，小样本均含 20 视频帧、2 条 AAC 音轨和 2 条内嵌字幕，MP4 为 mov_text、MKV 为 subrip。生成及 `ffprobe -v error -count_frames -show_streams -show_format -of json <file>` 均 exit 0；完整参数和报告在 `E:/项目/Veyra/logs/export-page-20261002/container-probe/`。样本在 `E:/项目/Veyra/tests/export-page-20261002/container-probe/`，TEMP/TMP 只对子进程设为 `E:/项目/Veyra/tmp/export-page-20261002/container-probe/`。这不是 Veyra 导出验收，也未替换项目 patched FFmpeg。
+- 新增 `docs/EXPORT_PAGE_OPTIMIZATION_PLAN_2026-10-02.md`，给出交互语义、稳定任务 ID、逐项冻结配置、MKV/多音轨/字幕接口、专属临时文件和进程回收、批次成功提示音、四个实施切片与验收矩阵。研究引用 FFmpeg、Matroska、Qt、Microsoft 官方资料，无第三方实现搬运。
+- 已识别未来冲突面：Xbox/Moonlight 已提交内容也涉及 QmlPlayerBridge 与 CMake；计划将新增队列/封装职责独立，并限制 bridge 为导出接点。没有修改、提交或合并 Claude 的内容。
+- 收尾：`git diff --check` 通过，工作区只变更本方案和 WORKLOG；引用前后比对仅增加本任务分支，原桌面 status 清单无变化，main 仍为 `09392c4`。证据 `E:/项目/Veyra/logs/export-page-20261002/isolation-check.json`。这不是其他工作区内容逐字节审计，未据此冒称 Claude 的文件未自行变化。
+- 未执行：产品构建、真实 NVIDIA runtime/Create/Evaluate、取消重试复现、QML/DPI/拖排交互、ASS/PGS/字体/剪辑验收及提示音试听。保留轻量研究样本与日志作为证据，没有生成打包或解压副本。下一步为方案中的切片 1；没有 commit/tag/merge/push/Release。
+
 ## 2026-10-01 2.0.0 合并 main 与分支整理
 
 - 用户授权（“基本上 2.0.0 已经没啥问题了……先合并一手，存档一下，更新更新文档，对齐目前进度”）：整理 2.0.0 各分支并合并到**本地** `main`；不含 push / Release / 删旧 UI / 删 worktree。

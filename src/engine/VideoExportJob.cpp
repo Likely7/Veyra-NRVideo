@@ -1,4 +1,5 @@
 #include "veyra/engine/VideoExportJob.h"
+#include "veyra/engine/ExportStreams.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/pipeline/ResolutionPlan.h"
@@ -23,7 +24,8 @@ namespace veyra::engine {
 namespace { std::string utf8(const std::wstring& s){const int n=WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),nullptr,0,nullptr,nullptr);std::string r(n,0);WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),r.data(),n,nullptr,nullptr);return r;} }
 bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOptions options,bool hevc,std::atomic<bool>& cancel,const std::function<void(double,const std::wstring&)>& progress,unsigned maxFrames,const std::function<bool()>& frameBoundary,const std::function<void(const ExportCounts&)>& counts){
     if(!std::isfinite(options.exportStartSeconds)||!std::isfinite(options.exportEndSeconds)||options.exportStartSeconds<0||options.exportEndSeconds<0||(options.exportEndSeconds>0&&options.exportEndSeconds<=options.exportStartSeconds)){progress(0,L"导出剪辑范围无效");return false;}
-    if(std::filesystem::exists(output)||std::filesystem::exists(output+L".partial")){progress(0,L"目标或partial文件已存在，请使用其他名称");return false;}
+    if(std::filesystem::exists(output)){progress(0,L"目标文件已存在，请使用其他名称");return false;}
+    if(cancel){progress(0,L"导出已取消");return false;}
     // XeSS still has no exposed output texture. FSR preview now does, but
     // FSR encoder/HDR/cadence acceptance remains a separate task. Preserve the
     // established, explicit DLSS substitution for this release candidate.
@@ -37,8 +39,8 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
     }
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;source::MediaFileSource source;pipeline::EnhanceGraph graph(ctx,ring);
     std::unique_ptr<sink::VideoEncoder> encoder;
-    AVFormatContext *mux=nullptr,*audioInput=nullptr;AVStream* videoStream=nullptr;AVStream* audioStream=nullptr;AVPacket* audioPacket=av_packet_alloc();
-    int audioIndex=-1;bool audioPending=false,audioEof=false,ok=false,headerWritten=false;int64_t written=0;double audioEndSeconds=0,videoOriginSeconds=0;
+    AVFormatContext* mux=nullptr;AVStream* videoStream=nullptr;ExportStreams streams;
+    bool ok=false,headerWritten=false;int64_t written=0;double audioEndSeconds=0,videoOriginSeconds=0;
     uint64_t repairedTimestamps=0;
     std::wstring encoderName;
     std::wstring failureReason;
@@ -48,7 +50,8 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         veyra::log::error("export",std::format("stage={} code={} detail={}",utf8(stage),code,error));
         return false;
     };
-    const auto partial=output+L".partial";
+    const auto partial=options.exportTemporaryPath.empty()?reserveExportTemporaryFile(output,failureReason):options.exportTemporaryPath;
+    if(partial.empty()){progress(0,failureReason);return false;}
     try { do {
         Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.commandSlotCount=6;
         if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),6,st))break;
@@ -66,14 +69,14 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         const double requestedEnd=options.exportEndSeconds;
         if(requestedStart>0&& !source.seek(pipeline::Rational{static_cast<int64_t>(std::llround(requestedStart*1000000.0)),1000000})){failureReason=L"导出无法定位到剪辑入点";break;}
         pipeline::FramePacket firstPacket;const AVFrame* firstFrame=nullptr;bool firstReady=false;
-        while(!firstReady){
+        while(!firstReady&&!cancel){
             const auto firstStatus=source.read(firstPacket,&firstFrame);
             if(firstStatus!=source::SourceReadStatus::Frame||!firstFrame){failureReason=firstStatus==source::SourceReadStatus::Eos?L"剪辑入点已超过源视频时长":L"导出预读首帧失败";break;}
             const double firstPts=firstPacket.pts.toDouble();
             firstReady=requestedStart<=0||firstPacket.pts.isUnknown()||!std::isfinite(firstPts)||firstPts>=requestedStart;
             if(!firstReady)firstFrame=nullptr;
         }
-        if(!firstReady)break;
+        if(!firstReady||cancel)break;
         info=source.info(); // retain this frame for the export, without decoding it again
         int rateNum=info.nominalRateNum,rateDen=info.nominalRateDen;
         if(rateNum<=0||rateDen<=0){rateNum=30;rateDen=1;veyra::log::warn("export-timeline","missing nominal rate; encoder configured at 30 fps, source timestamps retained");}
@@ -128,12 +131,13 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             }
         } else startGraph(false,1);
         if(!graphReady){if(failureReason.empty())failureReason=L"增强管线初始化失败，请查看诊断";break;}
+        if(cancel)break;
         if(gd.hdrOutput&&!hevc){hevc=true;fgNote+=fgNote.empty()?L"HDR 视频自动使用 HEVC Main10 编码":L"；HDR 视频自动使用 HEVC Main10 编码";}
         if(!fgNote.empty())progress(0,fgNote);
         const AVRational rate=av_mul_q({rateNum,rateDen},{int(options.fg?options.fgMultiplier:1),1});
         constexpr AVRational mediaTimeBase{1,1000000};
         veyra::log::info("export-timeline",std::format("source-timed export nominal={}/{} encoder={}/{} fg={} backend={} note={} (no CFR preflight or output decode verification)",rateNum,rateDen,rate.num,rate.den,options.fg?options.fgMultiplier:1,frameGenerationBackendName(options.settings.frameGenerationBackend),utf8(fgNote)));
-        if(avformat_alloc_output_context2(&mux,nullptr,"mp4",utf8(partial).c_str())<0||!mux)break;
+        if(avformat_alloc_output_context2(&mux,nullptr,options.exportMedia.container==ExportContainer::Matroska?"matroska":"mp4",utf8(partial).c_str())<0||!mux)break;
         videoStream=avformat_new_stream(mux,nullptr);if(!videoStream)break;videoStream->time_base=mediaTimeBase;videoStream->avg_frame_rate=rate;
         auto* cp=videoStream->codecpar;cp->codec_type=AVMEDIA_TYPE_VIDEO;cp->codec_id=hevc?AV_CODEC_ID_HEVC:AV_CODEC_ID_H264;cp->width=gd.workWidth;cp->height=gd.workHeight;cp->format=AV_PIX_FMT_YUV420P;cp->color_range=AVCOL_RANGE_MPEG;cp->color_space=AVCOL_SPC_BT709;cp->color_primaries=AVCOL_PRI_BT709;cp->color_trc=AVCOL_TRC_IEC61966_2_1;
         if(gd.hdrOutput){cp->format=AV_PIX_FMT_YUV420P10LE;cp->color_space=AVCOL_SPC_BT2020_NCL;cp->color_primaries=AVCOL_PRI_BT2020;cp->color_trc=AVCOL_TRC_SMPTE2084;cp->profile=AV_PROFILE_HEVC_MAIN_10;}
@@ -148,28 +152,9 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
                 cll->MaxFALL=unsigned(info.color.hdrMaxFallNits);
             }else failureReason=L"无法写入内容亮度元数据（MaxCLL/MaxFALL）";
         }
-        auto inputUtf8=utf8(input);
-        if(avformat_open_input(&audioInput,inputUtf8.c_str(),nullptr,nullptr)<0||avformat_find_stream_info(audioInput,nullptr)<0){progress(0,L"无法读取源音轨信息，已停止导出");break;}
-        {
-            audioIndex=av_find_best_stream(audioInput,AVMEDIA_TYPE_AUDIO,-1,-1,nullptr,0);
-            if(options.audioStreamIndex>=0){
-                if(unsigned(options.audioStreamIndex)>=audioInput->nb_streams||audioInput->streams[options.audioStreamIndex]->codecpar->codec_type!=AVMEDIA_TYPE_AUDIO){progress(0,L"选定音轨已不存在，已停止导出");break;}
-                audioIndex=options.audioStreamIndex;
-            }
-            log::info("export-audio",std::format("selected stream={}",audioIndex));
-            if(audioIndex>=0){auto* acp=audioInput->streams[audioIndex]->codecpar;
-                audioStream=avformat_new_stream(mux,nullptr);if(!audioStream||avcodec_parameters_copy(audioStream->codecpar,acp)<0)break;audioStream->codecpar->codec_tag=0;audioStream->time_base=audioInput->streams[audioIndex]->time_base;
-                av_dict_copy(&audioStream->metadata,audioInput->streams[audioIndex]->metadata,0);
-            }
-            av_dict_copy(&mux->metadata,audioInput->metadata,0);
-        }
-        auto writeAudioUntil=[&](double seconds){if(!audioStream)return true;
-            for(;;){if(!audioPending){if(audioEof)return true;av_packet_unref(audioPacket);const int readResult=av_read_frame(audioInput,audioPacket);if(readResult==AVERROR_EOF){audioEof=true;return true;}if(readResult<0)return failAv(L"读取音轨",readResult);if(audioPacket->stream_index!=audioIndex)continue;audioPending=true;}
-                const auto tb=audioInput->streams[audioIndex]->time_base;const int64_t ts=audioPacket->pts!=AV_NOPTS_VALUE?audioPacket->pts:audioPacket->dts;const double time=ts==AV_NOPTS_VALUE?0:ts*av_q2d(tb)-videoOriginSeconds;if(time>seconds)return true;if(time<0){audioPending=false;continue;}
-                const int64_t origin=av_rescale_q(static_cast<int64_t>(videoOriginSeconds*1000000),{1,1000000},tb);
-                if(audioPacket->pts!=AV_NOPTS_VALUE)audioPacket->pts-=origin;if(audioPacket->dts!=AV_NOPTS_VALUE)audioPacket->dts-=origin;
-                av_packet_rescale_ts(audioPacket,tb,audioStream->time_base);audioPacket->stream_index=audioStream->index;audioPacket->pos=-1;audioPending=false;const int rc=av_interleaved_write_frame(mux,audioPacket);if(rc<0)return failAv(L"写入音轨",rc);
-            }};
+        if(!streams.prepare(input,mux,options.exportMedia,options.audioStreamIndex,requestedStart,requestedEnd,cancel,failureReason))break;
+        if(!streams.info().skipped.empty()){const std::wstring note=L"部分轨道当前封装装不下，未保留（详见队列说明）";fgNote+=fgNote.empty()?note:L"；"+note;progress(0,fgNote);}
+        auto writeAudioUntil=[&](double seconds,bool final=false){return streams.writeUntil(seconds,videoOriginSeconds,final,failureReason);};
         // Encoders retain ordinal timestamps; only the bounded in-flight queue
         // maps them to media time. Hold one compressed packet for its duration.
         std::deque<std::pair<int64_t,int64_t>> timestamps;
@@ -211,7 +196,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         int muxResult=avio_open(&mux->pb,utf8(partial).c_str(),AVIO_FLAG_WRITE);
         if(muxResult<0){failAv(L"创建输出文件",muxResult);break;}
         muxResult=avformat_write_header(mux,nullptr);
-        if(muxResult<0){failAv(L"写入MP4文件头",muxResult);break;}headerWritten=true;
+        if(muxResult<0){failAv(L"写入封装文件头",muxResult);break;}headerWritten=true;
         uint64_t sourceCount=0,generatedCount=0,holdCount=0;int64_t outputIndex=0;bool error=false;std::shared_ptr<pipeline::FrameLease> lastReal;
         double previousPts=0;int64_t lastOutputUs=-1;
         const uint32_t multiplier=options.fg?options.fgMultiplier:1u;
@@ -228,7 +213,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             double sourcePts=packet.pts.toDouble();
             if(sourceCount==0)videoOriginSeconds=!packet.pts.isUnknown()&&std::isfinite(sourcePts)?sourcePts:0;
             double pts=sourcePts-videoOriginSeconds;
-            if(requestedEnd>0&&pts>requestedEnd-requestedStart)break;
+            if(requestedEnd>0&&sourcePts>=requestedEnd)break;
             const bool repairPts=packet.pts.isUnknown()||!std::isfinite(pts)||(sourceCount&&pts<=previousPts);
             if(repairPts){
                 pts=sourceCount?previousPts+sourceInterval:0;++repairedTimestamps;
@@ -264,17 +249,26 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         veyra::log::info("export-counts",std::format("source={} generated={} hold={} output={} multiplier={} repairedTimestamps={} backend={} encoder={} bitrateMbps={} note={} (holds are not DLSSG)",sourceCount,generatedCount,holdCount,outputIndex,multiplier,repairedTimestamps,frameGenerationBackendName(options.settings.frameGenerationBackend),std::string(sink::encoderBackendName(encoder->backend())),options.settings.exportBitrateMbps,utf8(fgNote)));
         progress(.99,L"正在收尾：等待编码器输出剩余帧");
         if(!encoder->finish()){if(failureReason.empty())failureReason=L"编码器收尾失败，请查看编码器诊断";break;}
-        if(!flushVideo(lastOutputUs+std::max<int64_t>(1,int64_t(std::llround(sourceInterval*1000000/multiplier)))))break;
-        if(!writeAudioUntil(audioEndSeconds))break;
-        progress(.995,L"正在收尾：写入MP4索引");
+        const int64_t estimatedEnd=lastOutputUs+std::max<int64_t>(1,int64_t(std::llround(sourceInterval*1000000/multiplier)));
+        const int64_t finalEnd=requestedEnd>0?std::min(estimatedEnd,int64_t(std::llround((requestedEnd-videoOriginSeconds)*1000000))):estimatedEnd;
+        if(!flushVideo(finalEnd))break;
+        if(!writeAudioUntil(audioEndSeconds,true))break;
+        progress(.995,L"正在收尾：写入封装索引");
         muxResult=av_write_trailer(mux);
-        if(muxResult<0){failAv(L"写入MP4索引",muxResult);break;}
+        if(muxResult<0){failAv(L"写入封装索引",muxResult);break;}
         ok=written>0;if(counts)counts({sourceCount,generatedCount,holdCount,uint64_t(written)});
     }while(false); }catch(const std::exception& e){veyra::log::error("export",std::format("exception: {}",e.what()));failureReason=L"导出异常，请查看诊断";ok=false;}
-    encoder.reset();if(mux){if(mux->pb){const int rc=avio_closep(&mux->pb);if(rc<0){failAv(L"刷新并关闭输出文件",rc);ok=false;}}avformat_free_context(mux);}if(audioInput)avformat_close_input(&audioInput);av_packet_free(&audioPacket);
+    encoder.reset();if(mux){if(mux->pb){const int rc=avio_closep(&mux->pb);if(rc<0){failAv(L"刷新并关闭输出文件",rc);ok=false;}}avformat_free_context(mux);}
     ring.drainQueue();graph.shutdown();source.close();ring.shutdown();ctx.shutdown();
     if(ok){
         progress(.999,L"正在保存正式文件");
+        // Bounded deterministic acceptance hook around the real final rename.
+        // Normal runs do not wait here; no output or success result is faked.
+        wchar_t delayText[16]{};
+        if(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_SAVE_DELAY_MS",delayText,16)){
+            const auto deadline=GetTickCount64()+std::clamp(_wtoi(delayText),0,2000);
+            while(!cancel&&GetTickCount64()<deadline)Sleep(5);
+        }
         ok=!cancel&&MoveFileExW(partial.c_str(),output.c_str(),MOVEFILE_WRITE_THROUGH)!=FALSE;
         if(!ok&&!cancel){const DWORD error=GetLastError();failureReason=std::format(L"视频已编码，但保存文件名失败（Windows错误 {}）；可保留partial文件",error);veyra::log::error("export-rename",std::format("MoveFileExW failed error={} partial={}",error,utf8(partial)));}
         if(ok)veyra::log::info("export","encoder drained, mux closed, output saved; no post-export decoding");
@@ -287,7 +281,9 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
     else {
         std::wstring message=cancel?L"导出已取消":failureReason.empty()?L"视频导出失败，请查看诊断":failureReason;
         std::error_code ec;
-        message+=std::filesystem::exists(partial,ec)?L"；partial文件已保留":L"；未生成输出文件";
+        std::wstring cleanup;
+        if(cancel&&!removeExportTemporaryFile(partial,cleanup))message+=L"；"+cleanup;
+        else if(std::filesystem::exists(partial,ec))message+=L"；临时文件已保留："+partial;
         progress(0,message);
     }
     return ok;

@@ -1,4 +1,5 @@
 #include "veyra/ui/QmlPlayerBridge.h"
+#include "veyra/ui/QmlExportQueueModel.h"
 
 #include <QRegion>
 #include <QWindow>
@@ -22,6 +23,7 @@
 #include <QTimer>
 #include <QBuffer>
 #include <QImage>
+#include <QImageReader>
 
 #include <algorithm>
 #include <cmath>
@@ -95,6 +97,15 @@ QString mmss(double seconds) {
     const int h = total / 3600, m = (total % 3600) / 60, s = total % 60;
     return h > 0 ? QStringLiteral("%1:%2:%3").arg(h).arg(m, 2, 10, QLatin1Char('0')).arg(s, 2, 10, QLatin1Char('0'))
                  : QStringLiteral("%1:%2").arg(m).arg(s, 2, 10, QLatin1Char('0'));
+}
+void exportCompletionNotice(bool enabled,uint64_t event,const char* kind){
+    const BOOL queued=enabled?MessageBeep(MB_OK):FALSE;
+    veyra::log::info("export-notify",std::format("kind={} event={} soundEnabled={} systemSoundQueued={}",kind,event,enabled,queued!=FALSE));
+}
+bool exportFileClosed(const QString& path){
+    HANDLE file=CreateFileW(wideOf(path).c_str(),GENERIC_READ,0,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(file==INVALID_HANDLE_VALUE)return false;
+    CloseHandle(file);return true;
 }
 } // namespace
 
@@ -176,10 +187,6 @@ struct QmlPlayerBridge::Impl {
     qint64 colourLastPushMs = 0;
     int colourLastIndex = -1;
     bool colourReplaying = false;
-    // Export queue rows as the UI added them, tracked against the manager's
-    // snapshot by output path (the manager itself only reports a count).
-    struct ExportRow { std::wstring input, output; QString state; double progress = 0; QString note; };
-    std::vector<ExportRow> exportRows;
     // Poster data URL cache, per session.
     uint64_t posterSession = 0;
     QString posterUrl;
@@ -200,6 +207,12 @@ struct QmlPlayerBridge::Impl {
     // The export job manager is the real thing: state, progress and encoded
     // counts come from its snapshot.
     engine::ExportJobManager exportJob;
+    QmlExportQueueModel exportQueue{exportJob};
+    int exportContainer=0;
+    uint64_t exportNotifiedBatch=0;
+    QString pendingFrameExport;
+    qint64 pendingFrameDeadline=0;
+    uint64_t imageCompletionEvent=0;
     engine::ExportJobSnapshot exportSnapshot;
     bool exportHevc = false;
     uint32_t exportBitrateMbps = 0;
@@ -612,6 +625,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(this,&QmlPlayerBridge::snapshotChanged,this,&QmlPlayerBridge::fgChoicesChanged);
     connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fgChoicesChanged);
     impl_->loadPrefs();
+    connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
     if (qApp) qApp->installEventFilter(this);
     // Before anything opens: the renderer reads the output choice at start().
     applyPreference(QStringLiteral("audioDevice"));
@@ -800,7 +814,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         // An export in flight needs its own poll; it is a separate job and its
         // snapshot is not part of the player snapshot.
-        if (impl_->exportSnapshot.active() || impl_->exportSnapshot.queued > 0) pollExport();
+        if (impl_->exportQueue.queue().needsTick()) pollExport();
     });
     impl_->timer->start(16);
     startGpuSampler();
@@ -2443,6 +2457,7 @@ int QmlPlayerBridge::imageBatchTotal() const { return int(impl_->imageFiles.size
 int QmlPlayerBridge::imageBatchFailures() const { return impl_->imageFailures; }
 QString QmlPlayerBridge::imageBatchStatus() const { return impl_->imageStatus; }
 void QmlPlayerBridge::saveFrameDialog() {
+    if(!impl_->pendingFrameExport.isEmpty()||imageBatchActive()){emit notice(tr("请等待当前图片导出完成"),true);return;}
     if (!hasSource()) { emit notice(tr("没有可保存的画面"), true); return; }
     if (impl_->chain.mode == engine::ChainMode::Node) {
         emit notice(tr("图片导出只接受列表模式；请切回列表模式再导出"), true); return;
@@ -2454,6 +2469,7 @@ void QmlPlayerBridge::saveFrameDialog() {
     if (path.isEmpty()) return;
     if (QFileInfo::exists(path)) { emit notice(tr("目标文件已存在，请换一个文件名"), true); return; }
     impl_->engine.saveFrame(wideOf(QDir::toNativeSeparators(path)));
+    impl_->pendingFrameExport=path;impl_->pendingFrameDeadline=QDateTime::currentMSecsSinceEpoch()+30000;
     emit notice(tr("正在保存：%1").arg(QDir::toNativeSeparators(path)), false);
 }
 void QmlPlayerBridge::exportImagesDialog() {
@@ -2486,6 +2502,16 @@ void QmlPlayerBridge::cancelImageBatch() {
 }
 void QmlPlayerBridge::tickImageBatch() {
     auto& i = *impl_;
+    if(!i.pendingFrameExport.isEmpty()){
+        QString path=i.pendingFrameExport;
+        if(!QFileInfo(path).isFile())path=QFileInfo(path).path()+QLatin1Char('/')+QFileInfo(path).completeBaseName()+QStringLiteral(".jxr");
+        const bool reported=i.snapshot.status.find(L"已保存")!=std::wstring::npos;
+        if(reported&&QFileInfo(path).size()>0&&exportFileClosed(path)){
+            const bool valid=path.endsWith(QStringLiteral(".jxr"),Qt::CaseInsensitive)||!QImageReader(path).read().isNull();
+            if(valid){i.pendingFrameExport.clear();exportCompletionNotice(exportCompletionSound(),++i.imageCompletionEvent,"image");emit notice(tr("图片导出完成：%1").arg(path),false);}
+        }
+        if(!i.pendingFrameExport.isEmpty()&&QDateTime::currentMSecsSinceEpoch()>i.pendingFrameDeadline){i.pendingFrameExport.clear();emit notice(tr("图片保存未确认完成，请查看诊断"),true);}
+    }
     if (i.imagePhase == Impl::ImagePhase::Idle) return;
     auto fail = [&](const QString& why) {
         ++i.imageFailures;
@@ -2502,6 +2528,7 @@ void QmlPlayerBridge::tickImageBatch() {
             veyra::log::info("image-batch", std::format("finished done={} failed={}", i.imageDone, i.imageFailures));
             emit imageBatchChanged();
             emit notice(i.imageStatus, i.imageFailures > 0);
+            if(i.imageDone>0&&i.imageFailures==0)exportCompletionNotice(exportCompletionSound(),++i.imageCompletionEvent,"image-batch");
             return;
         }
         const QString input = i.imageFiles[i.imageIndex];
@@ -2527,7 +2554,7 @@ void QmlPlayerBridge::tickImageBatch() {
     // Saving: the engine writes on its own thread; HDR output becomes .jxr.
     QString written = i.imageTarget;
     if (!QFileInfo(written).isFile()) written = QFileInfo(i.imageTarget).path() + QLatin1Char('/') + QFileInfo(i.imageTarget).completeBaseName() + QStringLiteral(".jxr");
-    if (QFileInfo(written).isFile() && QFileInfo(written).size() > 0) {
+    if (QFileInfo(written).isFile() && QFileInfo(written).size() > 0 && s.status.find(L"已保存")!=std::wstring::npos && exportFileClosed(written)) {
         ++i.imageDone;
         veyra::log::info("image-batch", std::format("saved index={} path={}", i.imageIndex, written.toStdString()));
         i.imagePhase = Impl::ImagePhase::Opening; i.imageSession = 0;
@@ -3422,60 +3449,33 @@ QString QmlPlayerBridge::videoHdrStatus() const { return utf8Of(impl_->snapshot.
 // Poll the export job once per UI tick. Its snapshot is the source of the
 // numbers below; nothing here keeps a parallel counter that could drift.
 void QmlPlayerBridge::pollExport() {
-    const auto failuresBefore = impl_->exportSnapshot.queueFailures;
-    impl_->exportSnapshot = impl_->exportJob.poll();
-    const auto& snap = impl_->exportSnapshot;
-    if (snap.queueFailures > failuresBefore) {
-        emit notice(tr("队列中有一项未能开始：%1").arg(utf8Of(snap.lastQueueFailure)), true);
-        // The manager names no row; the oldest waiting row that is not the
-        // job now running is the one it refused.
-        for (auto& row : impl_->exportRows)
-            if (row.state == QLatin1String("queued") && row.output != snap.output) {
-                row.state = QStringLiteral("failed"); row.note = utf8Of(snap.lastQueueFailure); break;
-            }
+    const auto& queue=impl_->exportQueue.queue();
+    const bool changed=impl_->exportQueue.tick();
+    impl_->exportSnapshot=queue.snapshot();
+    const auto event=queue.successEvent();
+    if(event&&event!=impl_->exportNotifiedBatch){
+        impl_->exportNotifiedBatch=event;
+        exportCompletionNotice(exportCompletionSound(),event,"video-batch");
+        emit notice(utf8Of(queue.status()),false);
     }
-    for (auto& row : impl_->exportRows) {
-        if (row.output != snap.output || snap.output.empty()) continue;
-        using S = engine::ExportState;
-        if (snap.active()) { row.state = snap.state == S::Paused ? QStringLiteral("paused") : QStringLiteral("running"); row.progress = snap.progress; }
-        else if (snap.state == S::Succeeded) { row.state = QStringLiteral("done"); row.progress = 1.0; }
-        else if (snap.state == S::Failed) { row.state = QStringLiteral("failed"); row.note = utf8Of(snap.message); }
-        else if (snap.state == S::Cancelled) row.state = QStringLiteral("cancelled");
-    }
-    // A running row that is no longer the job (the next one started) finished.
-    if (!snap.output.empty())
-        for (auto& row : impl_->exportRows)
-            if (row.state == QLatin1String("running") && row.output != snap.output) { row.state = QStringLiteral("done"); row.progress = 1.0; }
-    emit exportChanged();
+    if(changed)emit exportChanged();
 }
 
-bool QmlPlayerBridge::exportRunning() const { return impl_->exportSnapshot.active(); }
+bool QmlPlayerBridge::exportRunning() const { return impl_->exportQueue.queue().busy(); }
 bool QmlPlayerBridge::exportPaused() const {
     return impl_->exportSnapshot.state == engine::ExportState::Paused;
 }
 double QmlPlayerBridge::exportProgress() const { return impl_->exportSnapshot.progress; }
 QString QmlPlayerBridge::exportStatus() const {
-    switch (impl_->exportSnapshot.state) {
-    case engine::ExportState::Idle: return tr("未开始");
-    case engine::ExportState::Preparing: return tr("准备中…");
-    case engine::ExportState::Running: return tr("导出中…");
-    case engine::ExportState::Paused: return tr("已暂停");
-    case engine::ExportState::Finishing: return tr("收尾中…");
-    case engine::ExportState::Succeeded: return tr("已完成");
-    case engine::ExportState::Failed: return tr("失败");
-    case engine::ExportState::Cancelled: return tr("已取消");
-    }
-    return {};
+    if(impl_->exportSnapshot.active())return utf8Of(impl_->exportSnapshot.message);
+    return utf8Of(impl_->exportQueue.queue().status());
 }
-QString QmlPlayerBridge::exportTarget() const {
-    const auto& out = impl_->exportSnapshot.output;
-    return out.empty() ? utf8Of(impl_->exportOutput) : utf8Of(out);
-}
+QString QmlPlayerBridge::exportTarget() const { return utf8Of(impl_->exportOutput); }
 int QmlPlayerBridge::exportEncoded() const { return int(impl_->exportSnapshot.encoded); }
 int QmlPlayerBridge::exportGenerated() const { return int(impl_->exportSnapshot.generated); }
 double QmlPlayerBridge::exportEtaSeconds() const { return impl_->exportSnapshot.etaSeconds; }
-int QmlPlayerBridge::exportQueueCount() const { return int(impl_->exportSnapshot.queued); }
-int QmlPlayerBridge::exportQueueFailures() const { return int(impl_->exportSnapshot.queueFailures); }
+int QmlPlayerBridge::exportQueueCount() const { return int(std::count_if(impl_->exportQueue.queue().items().begin(),impl_->exportQueue.queue().items().end(),[](const auto& i){return i.state==engine::ExportItemState::Queued;})); }
+int QmlPlayerBridge::exportQueueFailures() const { return int(impl_->exportQueue.queue().failures()); }
 QString QmlPlayerBridge::exportQueueFailure() const { return utf8Of(impl_->exportSnapshot.lastQueueFailure); }
 
 // HEVC or H.264: the engine's export entry takes this as a flag, so it is a real
@@ -3527,6 +3527,8 @@ void QmlPlayerBridge::setExportTrimStart(double seconds) {
     const double maxStart = end > 0.05 ? end - 0.05 : 0.0;
     const double value = std::clamp(seconds, 0.0, std::max(0.0, maxStart));
     if (std::abs(impl_->exportTrimStartSeconds - value) < 0.0005) return;
+    const auto selected=impl_->exportQueue.selectedId();
+    if(selected&&!impl_->exportQueue.queue().setTrim(selected,value,impl_->exportTrimEndSeconds))return;
     impl_->exportTrimStartSeconds = value;
     emit exportChanged();
 }
@@ -3540,6 +3542,8 @@ void QmlPlayerBridge::setExportTrimEnd(double seconds) {
     const double start = impl_->exportTrimStartSeconds;
     if (value > 0.0 && value <= start + 0.05) return;
     if (std::abs(impl_->exportTrimEndSeconds - value) < 0.0005) return;
+    const auto selected=impl_->exportQueue.selectedId();
+    if(selected&&!impl_->exportQueue.queue().setTrim(selected,impl_->exportTrimStartSeconds,value))return;
     impl_->exportTrimEndSeconds = value;
     emit exportChanged();
 }
@@ -3650,6 +3654,7 @@ int QmlPlayerBridge::thumbnailGeneration() const { return impl_->thumbnailGenera
 
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
+    impl_->exportQueue.setSelectedId(0);
     ++impl_->liveOpenGen; impl_->pendingLiveText.clear();   // a waiting live open is dropped
     impl_->exportTrimStartSeconds = 0.0;
     impl_->exportTrimEndSeconds = 0.0;
@@ -3994,8 +3999,7 @@ void QmlPlayerBridge::chooseExportPath() {
         emit notice(tr("节点链尚未接入导出执行器，请切换列表模式后导出"), true);
         return;
     }
-    const QString path = QFileDialog::getSaveFileName(nullptr, tr("导出到"), QString(),
-                                                      tr("MP4 视频 (*.mp4);;所有文件 (*)"));
+    const QString path = QFileDialog::getExistingDirectory(nullptr,tr("选择导出目录"),exportTarget());
     setExportPath(path);
 }
 
@@ -4007,34 +4011,28 @@ void QmlPlayerBridge::setExportPath(const QString& path) {
 }
 
 void QmlPlayerBridge::startExport() {
-    QString error;
-    auto settings = impl_->exportSettings(error);
-    if (!settings) { emit notice(error, true); return; }
-    if (impl_->exportOutput.empty()) { emit notice(tr("先选择导出位置"), true); return; }
-    if (!QFileInfo(utf8Of(impl_->sourceLabel)).isFile()) {
-        emit notice(tr("先打开要导出的本地文件"), true); return;
+    QString error;auto settings=impl_->exportSettings(error);
+    if(!settings){emit notice(error,true);return;}
+    if(impl_->exportQueue.count()==0){
+        if(!QFileInfo(utf8Of(impl_->sourceLabel)).isFile()){emit notice(tr("请先添加要导出的文件"),true);return;}
+        const QString target=exportTarget();
+        const bool fileTarget=!target.isEmpty()&&!QFileInfo(target).isDir();
+        const auto id=impl_->exportQueue.addFile(utf8Of(impl_->sourceLabel),fileTarget?target:QString());
+        impl_->exportQueue.queue().setTrim(id,impl_->exportTrimStartSeconds,impl_->exportTrimEndSeconds);
+        impl_->exportQueue.setSelectedId(id);
     }
-    veyra::log::info("qml-export", std::format("preset={} revision={} nr={} sr={} fg={} bitrate={} srTarget={}",
-        impl_->exportPresetName.empty() ? "current" : utf8Of(impl_->exportPresetName).toStdString(),
-        settings->revision, settings->nr, settings->sr, settings->multiplier,
-        settings->exportBitrateMbps, settings->sr ? int(settings->srTarget) : -1));
-    const bool started = impl_->exportJob.start(impl_->sourceLabel, impl_->exportOutput,
-                                                *settings, impl_->exportHevc, 0,
-                                                impl_->snapshot.selectedAudioTrack,
-                                                impl_->exportTrimStartSeconds,
-                                                impl_->exportTrimEndSeconds,
-                                                impl_->exportRateControl);
-    if (!started) { emit notice(tr("导出启动失败；详见诊断"), true); return; }
-    impl_->exportRows.push_back({impl_->sourceLabel, impl_->exportOutput, QStringLiteral("running"), 0.0, {}});
-    pollExport();
-    emit navigate(QStringLiteral("exp"));
+    if(impl_->exportOutput.empty())chooseExportPath();
+    if(impl_->exportOutput.empty())return;
+    const QFileInfo target(exportTarget());
+    const QString folder=target.isDir()?target.absoluteFilePath():target.absolutePath();
+    std::wstring reason;
+    if(!impl_->exportQueue.queue().start(wideOf(folder),*settings,impl_->exportHevc,impl_->exportRateControl,reason)){
+        emit notice(utf8Of(reason),true);emit exportChanged();return;
+    }
+    impl_->exportQueue.refresh();pollExport();emit navigate(QStringLiteral("exp"));
 }
-
 void QmlPlayerBridge::cancelExport() {
-    impl_->exportJob.cancel();
-    for (auto& row : impl_->exportRows)
-        if (row.state == QLatin1String("queued")) row.state = QStringLiteral("cancelled");
-    pollExport();
+    impl_->exportQueue.queue().cancel();impl_->exportQueue.refresh();pollExport();emit exportChanged();
 }
 
 void QmlPlayerBridge::quit() {
@@ -4518,38 +4516,20 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
     return true;
 }
 
-void QmlPlayerBridge::enqueueExportFile(const QString& input, const QString& output) {
-    QString error;
-    auto settings = impl_->exportSettings(error);
-    if (!settings) { emit notice(error, true); return; }
-    if (input.isEmpty() || output.isEmpty()) { emit notice(tr("队列项目缺少输入或输出"), true); return; }
-    if (!QFileInfo(input).isFile()) { emit notice(tr("队列输入文件不存在"), true); return; }
-    const bool currentFile = wideOf(input) == impl_->sourceLabel;
-    const bool busy = impl_->exportJob.poll().active() || impl_->exportJob.queuedCount() > 0;
-    const bool queued = impl_->exportJob.enqueue(wideOf(input), wideOf(output), *settings, impl_->exportHevc, 0,
-                                                  currentFile ? impl_->snapshot.selectedAudioTrack : -1,
-                                                  currentFile ? impl_->exportTrimStartSeconds : 0.0,
-                                                  currentFile ? impl_->exportTrimEndSeconds : 0.0,
-                                                  impl_->exportRateControl);
-    if (!queued) { emit notice(tr("加入导出队列失败；详见诊断"), true); return; }
-    impl_->exportRows.push_back({wideOf(input), wideOf(output), busy ? QStringLiteral("queued") : QStringLiteral("running"), 0.0, {}});
-    pollExport();
+void QmlPlayerBridge::enqueueExportFile(const QString& input,const QString& output) {
+    if(!QFileInfo(input).isFile()){emit notice(tr("队列输入文件不存在"),true);return;}
+    impl_->exportQueue.addFile(input,output);emit exportChanged();
 }
-
+void QmlPlayerBridge::addExportFiles(const QStringList& paths) {
+    for(const auto& path:paths){const auto url=QUrl(path);const QString file=url.isLocalFile()?url.toLocalFile():path;
+        if(QFileInfo(file).isFile())impl_->exportQueue.addFile(file);
+        else emit notice(tr("无法添加文件：%1").arg(file),true);
+    }
+    emit exportChanged();
+}
 void QmlPlayerBridge::addExportFilesDialog() {
-    if (impl_->chain.mode == engine::ChainMode::Node) {
-        emit notice(tr("节点链尚未接入导出执行器，请切换列表模式后导出"), true);
-        return;
-    }
-    const auto files = QFileDialog::getOpenFileNames(nullptr, tr("加入导出队列"), QString(),
-                                                      tr("媒体文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts);;所有文件 (*)"));
-    if (files.isEmpty()) return;
-    const QString folder = QFileDialog::getExistingDirectory(nullptr, tr("选择队列输出目录"));
-    if (folder.isEmpty()) return;
-    for (const auto& file : files) {
-        const QFileInfo info(file);
-        enqueueExportFile(file, QDir(folder).filePath(info.completeBaseName() + QStringLiteral(".mp4")));
-    }
+    addExportFiles(QFileDialog::getOpenFileNames(nullptr,tr("加入导出队列"),QString(),
+        tr("视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts);;所有文件 (*)")));
 }
 bool QmlPlayerBridge::selectExportPreset(int index) {
     if (index == -1) {
@@ -5327,20 +5307,82 @@ bool QmlPlayerBridge::colourPaste() {
 }
 
 QVariantList QmlPlayerBridge::exportItems() const {
-    QVariantList out;
-    for (const auto& row : impl_->exportRows) {
-        const QString input = utf8Of(row.input);
-        out << QVariantMap{{"name", QFileInfo(input).fileName()}, {"input", input}, {"output", utf8Of(row.output)},
-                           {"state", row.state}, {"progress", row.progress}, {"note", row.note},
-                           {"current", row.input == impl_->sourceLabel}};
+    QVariantList result;for(int i=0;i<impl_->exportQueue.count();++i)result<<impl_->exportQueue.get(i);return result;
+}
+void QmlPlayerBridge::addCurrentExportFile(){
+    if(!QFileInfo(utf8Of(impl_->sourceLabel)).isFile())return;
+    const auto id=impl_->exportQueue.addFile(utf8Of(impl_->sourceLabel));
+    impl_->exportQueue.queue().setTrim(id,impl_->exportTrimStartSeconds,impl_->exportTrimEndSeconds);
+    impl_->exportQueue.setSelectedId(id);emit exportChanged();
+}
+QObject* QmlPlayerBridge::exportQueueModel() const{return &impl_->exportQueue;}
+int QmlPlayerBridge::exportContainer()const{return impl_->exportContainer;}
+void QmlPlayerBridge::setExportContainer(int value){
+    if(value<0||value>1||value==impl_->exportContainer)return;
+    impl_->exportContainer=value;impl_->exportQueue.queue().setContainer(static_cast<engine::ExportContainer>(value));
+    impl_->exportQueue.refresh();
+}
+int QmlPlayerBridge::exportReadyCount()const{return int(impl_->exportQueue.queue().readyCount());}
+bool QmlPlayerBridge::exportSelectionEditable()const{
+    const auto* item=impl_->exportQueue.queue().find(impl_->exportQueue.selectedId());
+    return item&&item->state!=engine::ExportItemState::Running&&item->state!=engine::ExportItemState::Queued;
+}
+int QmlPlayerBridge::exportAudioPolicy()const{
+    const auto* item=impl_->exportQueue.queue().find(impl_->exportQueue.selectedId());return item?int(item->media.audio.policy):1;
+}
+int QmlPlayerBridge::exportSubtitlePolicy()const{
+    const auto* item=impl_->exportQueue.queue().find(impl_->exportQueue.selectedId());return item?int(item->media.subtitles.policy):1;
+}
+QVariantList QmlPlayerBridge::exportTracks()const{
+    QVariantList result;const auto* item=impl_->exportQueue.queue().find(impl_->exportQueue.selectedId());if(!item)return result;
+    for(const auto& track:item->info.tracks){const auto& selection=track.audio?item->media.audio:item->media.subtitles;
+        const bool selected=selection.policy==engine::ExportTrackPolicy::All||selection.contains(track.index);
+        result<<QVariantMap{{"index",track.index},{"audio",track.audio},{"selected",selected},{"compatible",track.compatible},
+            {"label",QStringLiteral("%1 · %2 · %3%4").arg(track.index).arg(utf8Of(track.codec)).arg(utf8Of(track.language)).arg(track.channels?QStringLiteral(" · %1 声道").arg(track.channels):QString())},
+            {"title",utf8Of(track.title)},{"action",utf8Of(track.action)}};
     }
-    return out;
+    return result;
+}
+void QmlPlayerBridge::setExportTrackPolicy(bool audio,int policy){
+    if(policy<1||policy>3)return;
+    auto& queue=impl_->exportQueue.queue();const auto id=impl_->exportQueue.selectedId();const auto* item=queue.find(id);if(!item)return;
+    engine::ExportTrackSelection selection;selection.policy=static_cast<engine::ExportTrackPolicy>(policy);
+    if(selection.policy==engine::ExportTrackPolicy::Selected){
+        for(const auto& track:item->info.tracks)if(track.audio==audio){selection.indices[0]=track.index;selection.count=1;break;}
+        if(!selection.count){emit notice(tr("该文件没有可选轨道"),true);return;}
+    }
+    if(queue.setTracks(id,audio,selection))impl_->exportQueue.refresh();
+}
+void QmlPlayerBridge::toggleExportTrack(bool audio,int index,bool keep){
+    auto& queue=impl_->exportQueue.queue();const auto id=impl_->exportQueue.selectedId();const auto* item=queue.find(id);if(!item)return;
+    const auto& previous=audio?item->media.audio:item->media.subtitles;
+    engine::ExportTrackSelection selection;selection.policy=engine::ExportTrackPolicy::Selected;
+    for(const auto& track:item->info.tracks)if(track.audio==audio){
+        // Leaving "all" keeps what "all" actually carried: tracks it skipped for
+        // this container stay out instead of turning into a hard failure.
+        const bool selected=track.index==index?keep:previous.policy==engine::ExportTrackPolicy::All?track.compatible:previous.contains(track.index);
+        if(selected){if(selection.count>=selection.indices.size()){emit notice(tr("手动选择最多 64 条；保留全部不限制轨道数量"),true);return;}selection.indices[selection.count++]=track.index;}
+    }
+    if(!selection.count)selection.policy=engine::ExportTrackPolicy::None;
+    if(queue.setTracks(id,audio,selection))impl_->exportQueue.refresh();
+}
+void QmlPlayerBridge::previewExportItem(qulonglong id){
+    const auto* item=impl_->exportQueue.queue().find(id);if(!item)return;
+    const QString input=utf8Of(item->input);const double start=item->start,end=item->end;
+    if(input!=utf8Of(impl_->sourceLabel))openPath(input);
+    impl_->exportQueue.setSelectedId(id);impl_->exportTrimStartSeconds=start;impl_->exportTrimEndSeconds=end;
+    emit exportChanged();
+}
+bool QmlPlayerBridge::exportCompletionSound()const{return impl_->prefs.value(QStringLiteral("exportCompletionSound"),true).toBool();}
+void QmlPlayerBridge::setExportCompletionSound(bool enabled){
+    const auto previous=impl_->prefs;impl_->prefs[QStringLiteral("exportCompletionSound")]=enabled;
+    if(!impl_->savePrefs()){impl_->prefs=previous;emit notice(tr("提示音设置保存失败"),true);}
+    emit exportChanged();
 }
 void QmlPlayerBridge::clearFinishedExportItems() {
-    std::erase_if(impl_->exportRows, [](const auto& row) {
-        return row.state != QLatin1String("running") && row.state != QLatin1String("queued") &&
-               row.state != QLatin1String("paused");
-    });
+    for(int row=impl_->exportQueue.count()-1;row>=0;--row){const auto& item=impl_->exportQueue.queue().items()[row];
+        if(item.state==engine::ExportItemState::Done||item.state==engine::ExportItemState::Failed||item.state==engine::ExportItemState::Cancelled)impl_->exportQueue.removeItem(item.id);
+    }
     emit exportChanged();
 }
 // A thumbnail of any file (export queue rows), through the same provider.
