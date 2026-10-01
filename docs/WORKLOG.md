@@ -1,5 +1,14 @@
 # Veyra 工作记录
 
+## 2026-10-02 合并 main 与 beta 7 测试包
+
+- 用户要求验收 Codex 导出页、检查导出链路、把最近分支合并到 main 并打包含全部修复的测试包。
+- 导出验收：Codex 原有验收全部重跑通过；修正默认“保留全部”遇到封装装不下的轨道整项失败（改为跳过并提示，手动选中仍报错），见 `docs/EXPORT_PAGE_EXECUTION_2026-10-02.md` 末节。提交 `e892c6a`（含 Codex 未提交的全部改动）。
+- 合并（本地 main，`--no-ff`，无标签、未 push）：`ab1fe96` ← `codex/xbox-20261001`（含 `codex/moonlight-20261001`）；`931eade` ← `codex/export-page-20261002`（冲突：AGENTS/WORKLOG 两边保留，EngineController.h 两边 include 合并，Main.qml 取 xbox 侧带 `home` 的页面声明）；`fb47a14` ← `codex/tooltip-nr-20261002`（悬停提示、NR 总开关、文档）。合并前 main 为 `09392c4`。工作区 `E:/项目/Veyra/worktrees/main-merge-20261002`。
+- 合并后验证（构建 `E:/项目/Veyra/build/main-merge-20261002`）：moonlight protocol 134 / model 47、xbox 72、capture color、qml data、easing 通过；QML 套件 29/29（修正导出页测试夹具以适配 VPage 的 home）；导出 mp4、mkv、mkv-trim、pgs-skip、pgs-reject、lifecycle、lifecycle-boundary、queue、真实界面 ui 全部 PASS（日志 `E:/项目/Veyra/logs/main-merge-20261002`）；ui-check `tooltip-over-video`、`nr-master-switch` PASS。
+- 测试包 `E:/项目/Veyra/test-packages/2.0.0beta7-20261002/Veyra-2.0.0beta7(.zip)`：以 beta 6 包为底换程序 / QML / 着色器 / 文档；去掉 beta 6 误带的 `runtime_local/user-data-2.0.0` 与测试生成的 `runtime_local/luts`。程序 SHA256 `EF4B992202F161E4585BF14F585C6C06D628BA8F8D82F57290D9C88D7C657DF8`，1469 文件清单 `package-manifest.json`。包副本冒烟 PASS（界面 D3D12）。
+- 未验证：RTSS / 游加加共存、显存泄漏根因、30/40 系实卡、PS5 / Xbox / Moonlight 真机。
+
 ## 2026-10-01 beta 5 试用反馈：界面与切换修复（分支 `codex/xbox-20261001`，beta 6）
 
 - 7 条反馈的原因与修改见 `docs/UI_FIELD_FIXES_2026-10-01.md`：极简播放条拖动窗口、全屏顶栏进专业页、GPU 阶段条每次刷新重建（0/5.8 跳动）、负载预算改为耗时/预算、换来源时清空视频窗口（PS5 慢连接时不再停在采集卡最后一帧）、空极简页点击弹片源菜单、竖屏片源窗口不超出屏幕。
