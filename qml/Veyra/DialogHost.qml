@@ -88,7 +88,9 @@ Item {
         // A closed dialog leaves the scene. Its live bindings (capture preview, fps text)
         // kept changing while hidden and Qt redrew the window for each change, ~40 times
         // a second during capture; OBS game capture then held the UI instead of the video.
-        parent: visible ? host : null
+        // Keyed on shown/opacity, never on visible: an item without a parent always
+        // reads invisible, so "visible ? host : null" never brought a dialog back.
+        parent: (shown || opacity > 0) ? host : null
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
         transform: [
             Scale { origin.x: dlg.width / 2; origin.y: dlg.height / 2; xScale: dlg.motionS; yScale: dlg.motionS },
@@ -358,6 +360,13 @@ Item {
                     implicitWidth: 100
                     text: String(veyra.captureRequestedFps)
                     onEdited: text => veyra.captureRequestedFps = Number(text)
+                    // Take a valid rate as it is typed. Only a canonical number ("59.94", not
+                    // "59.") so the field's binding never rewrites what is still being typed.
+                    onTyped: text => {
+                        const n = Number(text.trim())
+                        if (text.trim().length > 0 && String(n) === text.trim() && (n === 0 || (n >= 1 && n <= 1000)))
+                            veyra.captureRequestedFps = n
+                    }
                 }
             }
         }
@@ -1929,6 +1938,9 @@ Item {
         property string placeholder: ""
         property alias text: field.text
         signal edited(string text)
+        // Every keystroke. editingFinished alone needs Enter or a focus change: typing a
+        // value and clicking 连接 (which takes no focus) or closing the dialog lost it.
+        signal typed(string text)
         implicitHeight: 30
         radius: 9
         color: Qt.rgba(1, 1, 1, 0.04)
@@ -1945,6 +1957,7 @@ Item {
             font.pixelSize: Theme.fsBody
             selectByMouse: true
             onEditingFinished: parent.edited(text)
+            onTextEdited: parent.typed(text)
         }
         Text {
             anchors.verticalCenter: parent.verticalCenter

@@ -1506,7 +1506,17 @@ void QmlPlayerBridge::setCaptureColorRange(int value) {
 double QmlPlayerBridge::captureRequestedFps() const { return impl_->captureFps; }
 void QmlPlayerBridge::setCaptureRequestedFps(double value) {
     if (!source::validCaptureFrameRate(value)) { emit notice(tr("采集帧率请输入 1–1000 的数字（可带小数），或 0 沿用设备默认"), true); return; }
-    impl_->captureFps = value; emit captureChanged();
+    if (impl_->captureFps == value) return;
+    impl_->captureFps = value;
+    // Saved as soon as it is typed, as the audio choice is (field report 2026-10-01: the
+    // new rate was lost unless another option was changed before closing).
+    auto& i = *impl_;
+    if (!i.captureDevice.empty() && i.captureDevice == i.capturePrefs.videoPath) {
+        i.capturePrefs.requestedFps = value;
+        if (!ui::CapturePreferenceStore(i.dataDir).save(i.capturePrefs)) veyra::log::warn("capture-ui", "capture frame rate not saved");
+    }
+    veyra::log::info("capture-ui", std::format("requested fps={}", value));
+    emit captureChanged();
 }
 int QmlPlayerBridge::captureAudioIngress() const { return int(settings().captureAudio); }
 void QmlPlayerBridge::setCaptureAudioIngress(int value) {
