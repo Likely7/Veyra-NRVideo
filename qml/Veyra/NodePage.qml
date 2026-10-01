@@ -752,6 +752,29 @@ VPage {
                             options: veyra.audioDevices
                             onPicked: id => veyra.setPreference("audioDevice", id)
                         }
+                        // The list page's 输出稳定器 · 抗闪烁 (field request 2026-10-01: missing
+                        // in node mode). One global stage after the last NR, before SR and FG.
+                        NodeLabel { text: "输出稳定器 · 抗闪烁" }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 6
+                            VSwitch {
+                                objectName: "node-out-stabiliser"
+                                checked: veyra.nrHoldStrength > 0
+                                onToggled: checked => veyra.nrHoldStrength = checked ? 0.8 : 0
+                            }
+                            VSlider {
+                                objectName: "node-out-hold-strength"
+                                Layout.fillWidth: true
+                                visible: veyra.nrHoldStrength > 0
+                                from: 0.1; to: 1.0; value: veyra.nrHoldStrength
+                                onMoved: value => veyra.nrHoldStrength = value
+                            }
+                            Text {
+                                visible: veyra.nrHoldStrength > 0
+                                text: Math.round(veyra.nrHoldStrength * 100) + "%"
+                                color: Theme.t2; font.family: Theme.fontMono; font.pixelSize: 10
+                            }
+                        }
                     }
                 }
             }
@@ -967,7 +990,7 @@ VPage {
                             }
                             HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
                             ToolTip.visible: segHover.hovered
-                            ToolTip.text: modelData.label + "：" + (modelData.measured ? modelData.ms.toFixed(2) + " ms（GPU P95）" : "暂无本节点计时")
+                            ToolTip.text: modelData.label + "：" + (modelData.measured ? modelData.ms.toFixed(2) + " ms（GPU 最近一秒平均）" : "暂无本节点计时")
                             TapHandler {
                                 gesturePolicy: TapHandler.WithinBounds
                                 onTapped: root.focusNode(modelData.id)

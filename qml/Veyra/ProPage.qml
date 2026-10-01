@@ -237,7 +237,7 @@ VPage {
             fraction: known ? veyra.chainTotalMs / veyra.stageBudgetMs : 0
             value: veyra.chainTotalMsKnown ? veyra.chainTotalMs.toFixed(1) + "ms" : "—"
             label: "处理耗时"
-            tip: "增强链总耗时 P95，环 = 占源帧预算" + (veyra.stageBudgetMs > 0 ? " " + veyra.stageBudgetMs.toFixed(1) + " ms" : "") + " 的比例"
+            tip: "增强链总耗时（最近一秒平均，与 1.4.4 相同口径），环 = 占源帧预算" + (veyra.stageBudgetMs > 0 ? " " + veyra.stageBudgetMs.toFixed(1) + " ms" : "") + " 的比例"
         }
         PerfOrb {
             size: parent.size
@@ -258,7 +258,7 @@ VPage {
             fraction: known ? veyra.chainTotalMs / veyra.stageBudgetMs : 0
             value: known ? Math.round(veyra.chainTotalMs / veyra.stageBudgetMs * 100) + "%" : "—"
             label: "负载预算"
-            tip: "增强链 GPU 耗时 P95 占一个源帧时间（" + veyra.stageBudgetMs.toFixed(1)
+            tip: "增强链 GPU 耗时（最近一秒平均）占一个源帧时间（" + veyra.stageBudgetMs.toFixed(1)
                  + " ms）的比例；超过 100% 就跟不上源帧率。当前状态：" + veyra.runStatus
         }
     }
@@ -720,7 +720,7 @@ VPage {
                 spacing: 5
                 RowLayout {
                     Layout.fillWidth: true
-                    VEyebrow { text: "GPU 阶段采样 P95"; Layout.fillWidth: true }
+                    VEyebrow { text: "GPU 阶段耗时 · 最近一秒平均"; Layout.fillWidth: true }
                     Text {
                         text: "预算 " + veyra.stageBudgetMs.toFixed(1) + " ms / 源帧"
                         color: Theme.t3
@@ -782,6 +782,9 @@ VPage {
                         Text {
                             Layout.preferredWidth: 48
                             text: modelData.measured ? modelData.ms.toFixed(1) + " ms" : "未测量"
+                            HoverHandler { id: stageValueHover }
+                            ToolTip.visible: stageValueHover.hovered && modelData.measured
+                            ToolTip.text: "平均 " + modelData.ms.toFixed(2) + " ms · P95 " + (modelData.p95 || 0).toFixed(2) + " ms（最近一秒）"
                             color: modelData.measured ? Theme.t1 : Theme.t3
                             font.family: Theme.fontMono
                             font.pixelSize: 11

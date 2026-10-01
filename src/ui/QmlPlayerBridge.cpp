@@ -993,12 +993,15 @@ QVariantList QmlPlayerBridge::stageTimings() const {
     const double budget = stageBudgetMs();
     for (const auto& r : rows) {
         const auto& sample = s.metrics.flow.gpuTiming[size_t(r.stage)];
+        // The mean of the last second, as 1.4.4's dashboard showed; P95 rides along for the
+        // tooltip. Showing P95 alone read as "slower than 1.4.4" for the same work.
         const bool measured = queuedFramesKnown() && sample.samples > 0 &&
-            sample.p95 && std::isfinite(*sample.p95) && *sample.p95 >= 0.0;
-        const double ms = measured ? *sample.p95 : 0.0;
+            sample.mean && std::isfinite(*sample.mean) && *sample.mean >= 0.0;
+        const double ms = measured ? *sample.mean : 0.0;
         QVariantMap item;
         item["label"] = QString::fromUtf8(r.label);
         item["ms"] = ms;
+        item["p95"] = measured && sample.p95 ? *sample.p95 : 0.0;
         item["measured"] = measured;
         item["samples"] = measured ? QVariant::fromValue<qulonglong>(sample.samples) : QVariant::fromValue<qulonglong>(0);
         item["domain"] = QStringLiteral("GPU timestamp P95");
@@ -1041,9 +1044,9 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
         QVariantMap item{{"state", state}, {"ms", 0.0}, {"samples", QVariant::fromValue<qulonglong>(0)}};
         if (stage) {
             const auto& sample = flow.gpuTiming[size_t(*stage)];
-            if (live && sample.samples > 0 && sample.p95 && std::isfinite(*sample.p95) && *sample.p95 >= 0.0) {
+            if (live && sample.samples > 0 && sample.mean && std::isfinite(*sample.mean) && *sample.mean >= 0.0) {
                 item["state"] = QStringLiteral("measured");
-                item["ms"] = *sample.p95;
+                item["ms"] = *sample.mean;
                 item["samples"] = QVariant::fromValue<qulonglong>(sample.samples);
             }
         }
@@ -1104,12 +1107,13 @@ double QmlPlayerBridge::scheduleP95Ms() const { return impl_->snapshot.schedulin
 double QmlPlayerBridge::chainTotalMs() const {
     // Engine merges same-frame measured intervals before aggregation. Never
     // sum unrelated percentiles. This excludes uninstrumented stages/nodes.
-    return chainTotalMsKnown() ? *impl_->snapshot.metrics.flow.enhancementProcessing.p95 : 0.0;
+    // Mean of the last second, the same statistic as the stage rows (see stageTimings).
+    return chainTotalMsKnown() ? *impl_->snapshot.metrics.flow.enhancementProcessing.mean : 0.0;
 }
 bool QmlPlayerBridge::chainTotalMsKnown() const {
     const auto& sample = impl_->snapshot.metrics.flow.enhancementProcessing;
-    return queuedFramesKnown() && sample.samples > 0 && sample.p95 &&
-        std::isfinite(*sample.p95) && *sample.p95 >= 0.0;
+    return queuedFramesKnown() && sample.samples > 0 && sample.mean &&
+        std::isfinite(*sample.mean) && *sample.mean >= 0.0;
 }
 
 
@@ -1623,6 +1627,7 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
     impl_->resumeSession = 0;
     impl_->screenFillActive = false;
     const bool screen = uri.find(L"screen") != std::wstring::npos;
+    veyra::log::info("capture-ui", "open uri " + QString::fromStdWString(uri).toStdString());
     openAfterCinema(screen ? tr("正在开始屏幕捕获…") : tr("正在打开采集设备 · %1").arg(utf8Of(label)), [this, uri] {
         if (impl_->preOpen) impl_->preOpen();
         impl_->engine.previewView({});
