@@ -4104,7 +4104,17 @@ void QmlPlayerBridge::togglePlayPause() {
     // stays alive), so the decision must come from the transport state.
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
-    if (s.capture || s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    // Capture cards and streams pause too (field request 2026-10-02): the engine stops
+    // reading and enhancing, keeps the last picture and resets the source's queue, so
+    // play resumes with the newest frame rather than a backlog. The connection stays up.
+    if (s.capture && s.running) {
+        const bool pause = s.transport == T::Playing;
+        impl_->engine.pause(pause);
+        veyra::log::info("ui-transport", pause ? "live pause" : "live resume");
+        emit notice(pause ? tr("已暂停：画面停在当前帧，不再处理新画面；点播放继续") : tr("已继续"), false);
+        return;
+    }
     if (!s.running || s.transport == T::Ended) {
         // Only a real file is reopened; device/stream labels are not paths.
         const QString file = QString::fromStdWString(impl_->sourceLabel);
