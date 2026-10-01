@@ -421,6 +421,7 @@ void XboxSessionSource::decodeLoop() {
         }
         if (!seenKeyframe && !startsDecoding(unit.data)) { ++p.dropped; requestKeyframe(); continue; }
         if (!p.decoderOpen) {
+            p.decoder.setStreamProfile(true);
             if (!p.decoder.open(CaptureCodec::H264, p.width, p.height, nullptr, 0, p.desc.decodeDevice.get(), p.desc.decodeQueue.get())) {
                 log::error("xbox", "no usable H.264 decoder");
                 setState(XboxStats::State::Failed, L"没有可用的 H.264 解码器。");

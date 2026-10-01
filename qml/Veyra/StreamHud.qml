@@ -45,6 +45,7 @@ Rectangle {
             visible: !hud.xboxOn
             text: "主机 " + hud.ms(s.hostMs) + "  ·  往返 " + hud.ms(s.rttMs) + "  ·  接收 " + hud.ms(s.receiveMs)
                 + "  ·  排队 " + hud.ms(s.queueMs) + "  ·  解码 " + hud.ms(s.decodeMs)
+                + "  ·  码率 " + (s.videoMbps > 0 ? s.videoMbps.toFixed(1) + " Mbps" : "—")
             color: Theme.t2
             font.family: Theme.fontMono
             font.pixelSize: 11

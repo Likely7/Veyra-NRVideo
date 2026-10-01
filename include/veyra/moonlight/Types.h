@@ -45,6 +45,10 @@ struct ServerInfo {
     int maxLumaPixelsHevc = 0;
     int currentGame = 0;              // 0 unless the host is busy streaming
     bool paired = false;
+    // Only an answer over HTTPS with our client certificate says whether the host
+    // still trusts us: Sunshine reports PairStatus 0 over plain HTTP to anyone.
+    // False means `paired` must not be used to forget a pairing.
+    bool pairStatusKnown = false;
     bool nvidiaServerSoftware = false; // GFE / RTX Experience report "MJOLNIR"
     std::vector<DisplayMode> displayModes;
 

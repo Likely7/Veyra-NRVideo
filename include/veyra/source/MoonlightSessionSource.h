@@ -74,6 +74,7 @@ struct MoonlightStats {
     bool encrypted = false;
     uint64_t units = 0, decoded = 0, dropped = 0, decodeErrors = 0, idrRequests = 0;
     double receivedFps = 0, decodedFps = 0;
+    double videoMbps = 0;                         // video payload actually received
     double hostLatencyMs = 0;                     // average host capture+encode, reported by Sunshine
     double receiveMs = 0;                         // first packet to complete frame
     double queueMs = 0;                           // complete frame to decoder start

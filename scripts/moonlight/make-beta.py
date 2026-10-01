@@ -42,7 +42,7 @@ shutil.copytree(build / 'qml/Veyra', pkg / 'qml/Veyra')
 for name in ('LICENSE', 'THIRD_PARTY_NOTICES.md'):
     shutil.copy2(repo / name, pkg / name)
 (pkg / 'docs').mkdir(exist_ok=True)
-for name in ('MOONLIGHT_EXECUTION_2026-10-01.md', 'STREAMING_PLAN_MOONLIGHT_XBOX_2026-10-01.md', 'XBOX_EXECUTION_2026-10-01.md'):
+for name in ('MOONLIGHT_EXECUTION_2026-10-01.md', 'STREAMING_PLAN_MOONLIGHT_XBOX_2026-10-01.md', 'XBOX_EXECUTION_2026-10-01.md', 'STREAM_FIELD_FIXES_2026-10-01.md'):
     if (repo / 'docs' / name).exists():
         shutil.copy2(repo / 'docs' / name, pkg / 'docs' / name)
 shutil.copy2(repo / notes, pkg / '测试说明.md')

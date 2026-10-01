@@ -230,7 +230,9 @@ private:
             const auto replace = [&](const std::string& from, const std::string& to) { const auto at = info.find(from); if (at != std::string::npos) info.replace(at, from.size(), to); };
             replace("<HttpsPort>48000</HttpsPort>", "<HttpsPort>" + std::to_string(httpsPort) + "</HttpsPort>");
             replace("<currentgame>7</currentgame>", "<currentgame>" + std::to_string(currentGame.load()) + "</currentgame>");
-            replace("<PairStatus>1</PairStatus>", std::string("<PairStatus>") + (pairedClientDer_.empty() ? "0" : "1") + "</PairStatus>");
+            // Like Sunshine: only an HTTPS request (which needs the paired client certificate)
+            // is told "paired"; plain HTTP always answers 0.
+            replace("<PairStatus>1</PairStatus>", std::string("<PairStatus>") + (tls && !pairedClientDer_.empty() ? "1" : "0") + "</PairStatus>");
             return info;
         }
         if (q.command == "applist") return tls ? kAppListXml : fail(401, "The client is not authorized");

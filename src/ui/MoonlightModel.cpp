@@ -17,6 +17,8 @@
 #include "veyra/moonlight/Pairing.h"
 #include "veyra/moonlight/StreamConfig.h"
 
+#include <format>
+
 namespace veyra::ui {
 namespace {
 
@@ -41,10 +43,14 @@ QString describe(const std::exception& e) {
 }
 
 constexpr int kVersion = 1;
+// Testers asked for the stream at full rate by default (2026-10-01): 150 Mbps is what a
+// wired gigabit LAN and Wi-Fi 6 carry comfortably; the slider goes to 500 Mbps.
+constexpr int kDefaultBitrateMbps = 150;
+constexpr int kMaxBitrateMbps = 500;
 
 QVariantMap defaultSettings() {
     return QVariantMap{
-        {"res", "1080p"}, {"fps", 60}, {"bitrate", 0}, {"codec", 0}, {"hdr", false},
+        {"res", "1080p"}, {"fps", 60}, {"bitrate", kDefaultBitrateMbps}, {"codec", 0}, {"hdr", false},
         {"audio", 2}, {"gamepad", true}, {"sops", false}, {"hostAudio", false}, {"captureInput", true},
     };
 }
@@ -52,7 +58,7 @@ QVariantMap defaultSettings() {
 bool validSetting(const QString& key, const QVariant& value) {
     if (key == "res") return QStringList{"720p", "1080p", "1440p", "4k", "native"}.contains(value.toString());
     if (key == "fps") return QList<int>{30, 60, 90, 120, 144}.contains(value.toInt());
-    if (key == "bitrate") { const int v = value.toInt(); return v == 0 || (v >= 1 && v <= 500); }   // Mbps; 0 is automatic
+    if (key == "bitrate") { const int v = value.toInt(); return v >= 1 && v <= kMaxBitrateMbps; }   // Mbps
     if (key == "codec") return value.toInt() >= 0 && value.toInt() <= 3;
     if (key == "audio") return QList<int>{2, 6, 8}.contains(value.toInt());
     return key == "hdr" || key == "gamepad" || key == "sops" || key == "hostAudio" || key == "captureInput";
@@ -243,7 +249,10 @@ void MoonlightModel::applyInfo(Host& host, const moonlight::ServerInfo& info) {
     host.httpsPort = info.httpsPort;
     host.codecSupport = info.serverCodecModeSupport;
     host.nvidia = info.nvidiaServerSoftware;
-    host.paired = host.paired && info.paired;   // the host may have forgotten us
+    // The host may have forgotten us, but only an HTTPS answer can say so. Discovery and
+    // first contact ask over plain HTTP, where Sunshine always reports "not paired";
+    // trusting that turned every saved pairing into "unpaired" (field report 2026-10-01).
+    if (info.pairStatusKnown) host.paired = host.paired && info.paired;
     host.currentGame = info.currentGame;
     host.online = true;
 }
@@ -251,10 +260,20 @@ void MoonlightModel::applyInfo(Host& host, const moonlight::ServerInfo& info) {
 // A host that was asked once, off the job queue: used for found hosts and manual adds.
 void MoonlightModel::probe(const QString& address, int port, bool manual) {
     std::erase_if(probes_, [](std::jthread& t) { return !t.joinable(); });
-    probes_.emplace_back([this, address, port, manual](std::stop_token stop) {
+    // A host we already know is asked with its saved certificate (over HTTPS), so the
+    // answer can confirm the pairing instead of only saying "online".
+    QString cert;
+    int httpsPort = moonlight::kDefaultHttpsPort;
+    bool nvidia = false;
+    if (const Host* known = findByAddress(address, port); known && known->paired) {
+        cert = known->cert;
+        httpsPort = known->httpsPort;
+        nvidia = known->nvidia;
+    }
+    probes_.emplace_back([this, address, port, manual, cert, httpsPort, nvidia](std::stop_token stop) {
         try {
             const moonlight::Identity id = identity();
-            moonlight::ServerClient client(id, moonlight::HostAddress{utf8(address), uint16_t(port)}, {}, moonlight::kDefaultHttpsPort, true);
+            moonlight::ServerClient client(id, moonlight::HostAddress{utf8(address), uint16_t(port)}, utf8(cert), uint16_t(httpsPort), !nvidia);
             client.setCancel(&cancel_);
             const moonlight::ServerInfo info = client.serverInfo(true);
             if (stop.stop_requested()) return;
@@ -408,13 +427,35 @@ void MoonlightModel::pair(const QString& id) {
     startJob(tr("配对中：请在主机的 Sunshine 网页（https://%1:47990 的 PIN 页面）输入上面的 PIN。").arg(h.address),
              [this, h, pin](const std::atomic<bool>& cancel) -> std::function<void()> {
         const moonlight::Identity id = identity();
+        // Still trusted with the certificate we saved? Then pairing again is not needed
+        // (and pairing an already paired client is what left hosts unreachable before).
+        if (!h.cert.isEmpty()) {
+            try {
+                moonlight::ServerClient check(id, moonlight::HostAddress{utf8(h.address), uint16_t(h.port)}, utf8(h.cert), uint16_t(h.httpsPort), !h.nvidia);
+                check.setCancel(&cancel);
+                const moonlight::ServerInfo info = check.serverInfo(true);
+                if (info.pairStatusKnown && info.paired) {
+                    log::info("moonlight-ui", "pair: the host still trusts this computer; no PIN needed");
+                    const QString hostId = h.id;
+                    return [this, hostId, info] {
+                        pin_.clear();
+                        if (Host* host = find(hostId)) {
+                            applyInfo(*host, info);
+                            host->paired = true;
+                            host->saved = true;
+                            saveStore();
+                        }
+                        status_ = tr("这台电脑和主机仍是配对状态，不需要重新配对。");
+                        if (apps_.isEmpty()) reloadApps();
+                    };
+                }
+            } catch (const std::exception&) {}
+        }
         moonlight::ServerClient client(id, moonlight::HostAddress{utf8(h.address), uint16_t(h.port)}, {}, uint16_t(h.httpsPort), !h.nvidia);
         client.setCancel(&cancel);
         const moonlight::ServerInfo info = client.serverInfo(true);
-        if (info.paired) {
-            // The host already trusts a client with this id. Nothing to do unless we lost its certificate.
-        }
         const moonlight::PairOutcome outcome = moonlight::pairWithHost(client, id, info, pin, &cancel);
+        log::info("moonlight-ui", std::format("pair: result={} detail={}", int(outcome.result), outcome.detail));
         const QString hostId = h.id;
         return [this, outcome, hostId, info] {
             pin_.clear();
@@ -587,7 +628,14 @@ bool MoonlightModel::launchSelected(int appId) {
         moonlight::ServerClient client(id, moonlight::HostAddress{utf8(h.address), uint16_t(h.port)}, utf8(h.cert), uint16_t(h.httpsPort), !h.nvidia);
         client.setCancel(&cancel);
         const moonlight::ServerInfo info = client.serverInfo();
-        if (!info.paired) return [this] { status_ = tr("主机不再认得这台电脑，请重新配对。"); };
+        if (info.pairStatusKnown && !info.paired) {
+            log::warn("moonlight-ui", "launch: the host no longer trusts this computer");
+            const QString hostId = h.id;
+            return [this, hostId] {
+                if (Host* host = find(hostId)) { host->paired = false; saveStore(); }
+                status_ = tr("主机不再认得这台电脑（可能在 Sunshine 里被删除了），请重新配对。");
+            };
+        }
         if (info.currentGame != 0 && info.currentGame != appId)
             return [this] { status_ = tr("主机正在运行另一个游戏。先选它继续，或点「退出游戏」结束它（未保存的进度会丢失），再开始新的。"); };
         if (moonlight::chooseVideoFormats(options.codec, options.hdr, info.serverCodecModeSupport, options.av1HardwareDecode) == 0)
@@ -632,7 +680,7 @@ void MoonlightModel::updateStream(bool active, const source::MoonlightStats& s) 
             {"state", names[size_t(s.state)]}, {"message", QString::fromStdWString(s.message)},
             {"codec", qs(s.codec)}, {"hdr", s.hdr}, {"hardware", s.hardwareDecode},
             {"width", int(s.width)}, {"height", int(s.height)}, {"fps", s.fps},
-            {"receivedFps", s.receivedFps}, {"decodedFps", s.decodedFps},
+            {"receivedFps", s.receivedFps}, {"decodedFps", s.decodedFps}, {"videoMbps", s.videoMbps},
             {"hostMs", s.hostLatencyMs}, {"receiveMs", s.receiveMs}, {"queueMs", s.queueMs}, {"decodeMs", s.decodeMs},
             {"rttMs", s.rttMs}, {"rttVarianceMs", s.rttVarianceMs},
             {"lost", double(s.fecFailed)}, {"recovered", double(s.fecRecovered)}, {"packets", double(s.videoPackets)},

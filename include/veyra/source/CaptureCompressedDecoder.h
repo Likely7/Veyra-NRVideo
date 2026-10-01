@@ -16,6 +16,8 @@ struct AVFrame;
 struct ID3D12Device;
 struct ID3D12CommandQueue;
 
+namespace veyra::pipeline { struct HardwareSurfaceInput; }
+
 namespace veyra::source {
 
 class CaptureCompressedDecoder {
@@ -34,6 +36,16 @@ public:
     //
     // `extradata` (SPS/PPS from MPEG2VIDEOINFO) may be empty; the bitstream's
     // in-band parameter sets are then required.
+    // Streaming sources (PC and Xbox streaming) call this before open(): AV1
+    // then uses the native decoder with D3D12VA (the libdav1d decoder FFmpeg
+    // would pick has no hardware path), HEVC decodes through D3D11VA on its own
+    // device (HEVC D3D12VA fails at 4K and can remove the shared device on
+    // NVIDIA drivers, see FFmpegVideoDecoder::openD3D11VA), a hardware decoder
+    // that fails before its first picture is replaced by the software one, and
+    // the software decoder runs several low-delay threads. Capture cards keep
+    // the original behaviour.
+    void setStreamProfile(bool enabled);
+
     bool open(CaptureCodec codec, unsigned width, unsigned height,
         const uint8_t* extradata, size_t extradataBytes,
         ID3D12Device* device, ID3D12CommandQueue* queue);
@@ -48,6 +60,10 @@ public:
     // decoder reported an error; see lastError()/waitingForInput().
     bool decode(const uint8_t* data, size_t bytes, int64_t pts100ns,
         AVFrame* nv12Target, AVFrame** out, bool& hardware);
+
+    // For D3D11VA frames (AV_PIX_FMT_D3D11) the texture the graph reads is not
+    // inside the AVFrame: this fills the borrowed view of the last frame.
+    bool hardwareSurface(pipeline::HardwareSurfaceInput& out) const;
 
     bool opened() const;
     bool hardwareActive() const;

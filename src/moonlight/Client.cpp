@@ -139,14 +139,20 @@ ServerInfo ServerClient::serverInfo(bool fastFail) {
         if (httpsPossible) {
             // Always try HTTPS first, since it properly reports the pairing status.
             try {
-                return parseServerInfo(checkedRoot(request(true, "serverinfo", "", timeout)));
+                ServerInfo info = parseServerInfo(checkedRoot(request(true, "serverinfo", "", timeout)));
+                info.pairStatusKnown = true;
+                return info;
             } catch (const StatusError& e) {
                 if (e.status != 401) throw;
             } catch (const TransportError& e) {
                 // Certificate mismatch or a client certificate the host does not know: fall back to HTTP.
                 if (e.kind != TransportError::Kind::Tls) throw;
             }
-            return parseServerInfo(checkedRoot(request(false, "serverinfo", "", timeout)));
+            // The host turned our certificate away: that is a real "not paired".
+            ServerInfo info = parseServerInfo(checkedRoot(request(false, "serverinfo", "", timeout)));
+            info.paired = false;
+            info.pairStatusKnown = true;
+            return info;
         }
         // Before pairing only HTTP is used. It also tells us the HTTPS port.
         const ServerInfo info = parseServerInfo(checkedRoot(request(false, "serverinfo", "", timeout)));

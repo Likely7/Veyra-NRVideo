@@ -85,7 +85,7 @@ std::wstring describeTermination(int code) {
 }
 
 pipeline::SourcePixelFormat pixelFormatOf(const AVFrame& frame) {
-    if (frame.format == AV_PIX_FMT_D3D12 && frame.hw_frames_ctx) {
+    if ((frame.format == AV_PIX_FMT_D3D12 || frame.format == AV_PIX_FMT_D3D11) && frame.hw_frames_ctx) {
         const auto* context = reinterpret_cast<const AVHWFramesContext*>(frame.hw_frames_ctx->data);
         return context->sw_format == AV_PIX_FMT_NV12 ? pipeline::SourcePixelFormat::NV12
              : context->sw_format == AV_PIX_FMT_P010 ? pipeline::SourcePixelFormat::P010 : pipeline::SourcePixelFormat::Unknown;
@@ -160,7 +160,7 @@ struct MoonlightSessionSource::Impl {
     std::vector<float> pcm;
 
     // Counters written by the library threads
-    std::atomic<uint64_t> units{0}, decoded{0}, dropped{0}, errors{0}, idr{0};
+    std::atomic<uint64_t> units{0}, decoded{0}, dropped{0}, errors{0}, idr{0}, bytes{0};
     std::atomic<int64_t> lastFrameNumber{0};
     std::atomic<bool> terminated{false};
     std::atomic<int> terminationCode{0};
@@ -179,9 +179,30 @@ struct MoonlightSessionSource::Impl {
     uint16_t rumbleLow = 0, rumbleHigh = 0;
     Clock::time_point feedbackSent{};
     std::mutex statsMutex;
-    double hostLatencyMs = 0, receiveMs = 0, queueMs = 0, decodeMs = 0, receivedFps = 0, decodedFps = 0;
-    std::chrono::steady_clock::time_point rateStart = Clock::now();
-    uint64_t rateUnits = 0, rateDecoded = 0;
+    double hostLatencyMs = 0, receiveMs = 0, queueMs = 0, decodeMs = 0, receivedFps = 0, decodedFps = 0, videoMbps = 0;
+    std::chrono::steady_clock::time_point rateStart = Clock::now(), logStart = Clock::now();
+    uint64_t rateUnits = 0, rateDecoded = 0, rateBytes = 0;
+
+    // Once a second: frame and bit rates for the overlay; every ten seconds a log line,
+    // so a field log shows whether the host, the network or the decoder sets the pace.
+    void updateRates() {
+        const auto now = Clock::now();
+        const double seconds = std::chrono::duration<double>(now - rateStart).count();
+        if (seconds < 1.0) return;
+        const uint64_t u = units.load(), d = decoded.load(), b = bytes.load();
+        std::lock_guard lock(statsMutex);
+        receivedFps = double(u - rateUnits) / seconds;
+        decodedFps = double(d - rateDecoded) / seconds;
+        videoMbps = double(b - rateBytes) * 8.0 / seconds / 1e6;
+        rateUnits = u; rateDecoded = d; rateBytes = b;
+        rateStart = now;
+        if (now - logStart >= std::chrono::seconds(10)) {
+            logStart = now;
+            log::info("moonlight", std::format("stream {} received={:.1f}fps decoded={:.1f}fps video={:.1f}Mbps decodeMs={:.2f} queueMs={:.2f} receiveMs={:.2f} hostMs={:.1f} dropped={} errors={} idr={}",
+                decoder.backendName(), receivedFps, decodedFps, videoMbps, decodeMs, queueMs, receiveMs, hostLatencyMs,
+                dropped.load(), errors.load(), idr.load()));
+        }
+    }
 
     ~Impl() {
         if (dummyTarget) av_frame_free(&dummyTarget);
@@ -265,6 +286,7 @@ struct MoonlightSessionSource::Callbacks {
                 : (videoFormat & VIDEO_FORMAT_MASK_H265) ? CaptureCodec::Hevc
                 : (videoFormat & VIDEO_FORMAT_MASK_AV1) ? CaptureCodec::Av1 : CaptureCodec::None;
         if (p.codec == CaptureCodec::None) return -1;
+        p.decoder.setStreamProfile(true);
         if (!p.decoder.open(p.codec, p.width, p.height, nullptr, 0, p.desc.decodeDevice.get(), p.desc.decodeQueue.get())) {
             log::error("moonlight", std::format("no usable decoder for {}", codecLabel(videoFormat)));
             return -1;
@@ -322,6 +344,8 @@ struct MoonlightSessionSource::Callbacks {
             if (!LiWaitForNextVideoFrame(&handle, &du)) break;
             int status = DR_OK;
             ++p.units;
+            p.bytes += uint64_t(std::max(0, du->fullLength));
+            p.updateRates();
 
             const int64_t nowHost = host100ns();
             const uint64_t nowLib = LiGetMicroseconds();
@@ -391,6 +415,12 @@ struct MoonlightSessionSource::Callbacks {
             packet.duration = pipeline::Rational{nominal, 10000000};
             packet.arrivalHost100ns = matchedArrival;
             packet.decodedHost100ns = host100ns();
+            // D3D11VA (HEVC) pictures reach the graph through a borrowed view, not the AVFrame.
+            if (hardware && frame->format == AV_PIX_FMT_D3D11 && !p.decoder.hardwareSurface(packet.hardwareSurface)) {
+                ++p.errors;
+                LiCompleteVideoFrame(handle, DR_OK);
+                continue;
+            }
             if (recovering) { packet.flags |= static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Discontinuity); recovering = false; }
 
             auto fallback = fallbackColor(p.hdrStream);
@@ -407,8 +437,8 @@ struct MoonlightSessionSource::Callbacks {
                 info = self.info_;
             }
             info.color = packet.colorInfo;
-            info.hardwareDecodeActive = frame->format == AV_PIX_FMT_D3D12;
-            info.videoDecodePath = info.hardwareDecodeActive ? "d3d12va" : "software";
+            info.hardwareDecodeActive = frame->format == AV_PIX_FMT_D3D12 || frame->format == AV_PIX_FMT_D3D11;
+            info.videoDecodePath = p.decoder.backendName();
             if (info.width != unsigned(frame->width) || info.height != unsigned(frame->height)) {
                 info.width = unsigned(frame->width);
                 info.height = unsigned(frame->height);
@@ -792,6 +822,9 @@ MoonlightStats MoonlightSessionSource::stats() const {
         s.receiveMs = p_->receiveMs;
         s.queueMs = p_->queueMs;
         s.decodeMs = p_->decodeMs;
+        s.receivedFps = p_->receivedFps;
+        s.decodedFps = p_->decodedFps;
+        s.videoMbps = p_->videoMbps;
     }
     std::lock_guard lib(p_->libMutex);
     if (p_->streaming.load() && s.state == MoonlightStats::State::Streaming) {

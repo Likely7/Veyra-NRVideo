@@ -60,13 +60,26 @@ def screenshot(pid, path):
     if not win:
         return False
     hwnd, rect = win
-    ps = ('Add-Type -AssemblyName System.Drawing; '
-          f'$b = New-Object System.Drawing.Bitmap({rect.r - rect.l},{rect.b - rect.t}); '
-          '$g = [System.Drawing.Graphics]::FromImage($b); '
-          f'$g.CopyFromScreen({rect.l},{rect.t},0,0,$b.Size); '
-          f'$b.Save("{path}"); $g.Dispose(); $b.Dispose()')
-    subprocess.run(['powershell', '-NoProfile', '-Command', ps], check=True, timeout=60)
-    return True
+    # PrintWindow(PW_RENDERFULLCONTENT) reads the window's own composed content, so another
+    # window on top of it (a terminal, the IDE) does not end up in the picture.
+    width, height = rect.r - rect.l, rect.b - rect.t
+    gdi32 = ctypes.windll.gdi32
+    window_dc = user32.GetWindowDC(ctypes.c_void_p(hwnd))
+    memory_dc = gdi32.CreateCompatibleDC(window_dc)
+    bitmap = gdi32.CreateCompatibleBitmap(window_dc, width, height)
+    gdi32.SelectObject(memory_dc, bitmap)
+    printed = user32.PrintWindow(ctypes.c_void_p(hwnd), memory_dc, 2)
+    try:
+        from PIL import Image
+        buffer = ctypes.create_string_buffer(width * height * 4)
+        header = (ctypes.c_uint32 * 10)(40, width, ctypes.c_uint32(-height).value, 1 | (32 << 16), 0, 0, 0, 0, 0, 0)
+        gdi32.GetDIBits(memory_dc, bitmap, 0, height, buffer, header, 0)
+        Image.frombuffer('RGBA', (width, height), buffer, 'raw', 'BGRA', 0, 1).convert('RGB').save(str(path))
+    finally:
+        gdi32.DeleteObject(bitmap)
+        gdi32.DeleteDC(memory_dc)
+        user32.ReleaseDC(ctypes.c_void_p(hwnd), window_dc)
+    return bool(printed)
 
 
 result = 1

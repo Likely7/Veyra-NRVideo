@@ -611,8 +611,6 @@ Item {
             { id: "1440p", label: "1440p · 2560×1440" }, { id: "4k", label: "4K · 3840×2160" },
             { id: "native", label: "本机屏幕分辨率" }]
         readonly property var rates: [30, 60, 90, 120, 144].map(v => ({ id: String(v), label: v + " fps" }))
-        readonly property var bitrates: [{ id: "0", label: "自动（按分辨率与帧率）" }].concat(
-            [5, 10, 15, 20, 30, 40, 50, 60, 80, 100, 120, 150].map(m => ({ id: String(m), label: m + " Mbps" })))
         function labelOf(list, id, fallback) { const f = list.find(x => String(x.id) === String(id)); return f ? f.label : fallback }
         function stateText(s) {
             return s === "online" ? "在线" : s === "unpaired" ? "未配对" : s === "busy" ? "在线 · 有游戏在运行"
@@ -821,8 +819,26 @@ Item {
             }
             VRow {
                 label: "码率"
-                hint: "自动：1080p60 约 20 Mbps，4K60 约 80 Mbps；局域网有线可以放心调高"
-                VSelect { objectName: "moonlight-bitrate"; implicitWidth: 190; value: mlDialog.labelOf(mlDialog.bitrates, mlDialog.cfg.bitrate || 0, "自动"); options: mlDialog.bitrates; onPicked: id => mlDialog.ml.set("bitrate", Number(id)) }
+                hint: "默认 150 Mbps；有线千兆可以拉到 300–500，无线卡顿时调低。主机画面简单时实际码率会低于这里的上限"
+                RowLayout {
+                    spacing: 10
+                    VSlider {
+                        id: bitrateSlider
+                        objectName: "moonlight-bitrate"
+                        implicitWidth: 170
+                        from: 5; to: 500
+                        live: false
+                        value: mlDialog.cfg.bitrate || 150
+                        onMoved: v => mlDialog.ml.set("bitrate", Math.max(5, Math.round(v / 5) * 5))
+                    }
+                    Text {
+                        Layout.preferredWidth: 72
+                        text: Math.max(5, Math.round((bitrateSlider.dragging ? bitrateSlider.dragValue : bitrateSlider.value) / 5) * 5) + " Mbps"
+                        color: Theme.t1
+                        font.family: Theme.fontMono
+                        font.pixelSize: Theme.fsSmall
+                    }
+                }
             }
             VRow {
                 label: "编码"

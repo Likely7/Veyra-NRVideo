@@ -7,14 +7,18 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <d3d12.h>
+#include <thread>
 #include <emmintrin.h>
 #include <format>
 
 #include "veyra/Log.h"
 #include "veyra/media/FFmpegVideoDecoder.h"
 #include "veyra/pipeline/CaptureUploadFrame.h"
+#include "veyra/pipeline/FramePacket.h"
 
 namespace veyra::source {
 
@@ -57,6 +61,7 @@ struct CaptureCompressedDecoder::Impl {
     media::FFmpegVideoDecoder decoder;
     AVCodecParameters* parameters = nullptr;
     SwsContext* sws = nullptr;
+    bool stream = false;               // setStreamProfile(): PC / Xbox streaming
     bool hardwareRequested = false;
     bool hardware = false;
     bool hardwareChecked = false;
@@ -128,16 +133,41 @@ struct CaptureCompressedDecoder::Impl {
         codec = CaptureCodec::None;
         width = height = 0;
         hardwareRequested = hardware = hardwareChecked = waiting = false;
+        decoder.setPreferNativeAv1Hardware(false);
         depthWarningLogged = false;
         frames = failures = fallbacks = 0;
         decodeMs = convertMs = 0;
         error.clear();
     }
 
+    // Streams only: a GPU without this codec (for example AV1 before RTX 30)
+    // or a driver that rejects it fails before the first picture. Switch to
+    // software once; the caller asks the host for a key frame anyway.
+    void fallBackBeforeFirstPicture()
+    {
+        if (!stream || !hardware || frames != 0) return;
+        log::warn("capture-decode", std::format("codec={} hardware decode failed before the first picture; switching to the software decoder",
+            captureCodecKey(codec)));
+        decoder.close();
+        hardware = false;
+        if (!openSoftwareDecoder()) {
+            error = "software fallback after a failed hardware decoder failed";
+            return;
+        }
+        decoder.recoverAtKeyframe();
+        ++fallbacks;
+    }
+
     bool openSoftwareDecoder()
     {
         if (parameters == nullptr) return false;
-        return decoder.openSoftware(parameters, 1, 10000000, 1, true);
+        // Streams get slice/tile threads; low delay keeps them inside one frame,
+        // so latency does not grow. Software stays a last resort: at 150 Mbps
+        // one frame still takes 25-45 ms here (bench 2026-10-01), so the stream
+        // sources prefer every hardware path above.
+        const unsigned threads = stream && codec != CaptureCodec::Mjpeg
+            ? std::clamp(std::thread::hardware_concurrency() / 2u, 2u, 8u) : 1u;
+        return decoder.openSoftware(parameters, 1, 10000000, threads, true);
     }
 
     bool convertToNv12(const AVFrame& frame, AVFrame* target)
@@ -220,7 +250,16 @@ bool CaptureCompressedDecoder::open(CaptureCodec codec, unsigned width, unsigned
     // decoder as the recorded fallback.
     if (codec != CaptureCodec::Mjpeg && device != nullptr && queue != nullptr) {
         p.hardwareRequested = true;
-        if (p.decoder.openD3D12VA(p.parameters, 1, 10000000, device, queue, true)) {
+        bool opened = false;
+        if (p.stream && codec == CaptureCodec::Hevc) {
+            const LUID luid = device->GetAdapterLuid();
+            opened = p.decoder.openD3D11VA(p.parameters, 1, 10000000,
+                (uint64_t(uint32_t(luid.HighPart)) << 32) | uint64_t(luid.LowPart), device, true);
+        } else {
+            p.decoder.setPreferNativeAv1Hardware(p.stream);
+            opened = p.decoder.openD3D12VA(p.parameters, 1, 10000000, device, queue, true);
+        }
+        if (opened) {
             p.hardware = true;
         } else {
             log::warn("capture-decode", std::format(
@@ -282,6 +321,7 @@ bool CaptureCompressedDecoder::decode(const uint8_t* data, size_t bytes, int64_t
             if (!sent) {
                 p.error = "decoder rejected the compressed payload";
                 ++p.failures;
+                p.fallBackBeforeFirstPicture();
                 return false;
             }
         }
@@ -290,6 +330,7 @@ bool CaptureCompressedDecoder::decode(const uint8_t* data, size_t bytes, int64_t
             if (p.decoder.receiveStatus() == media::DecodeReceiveStatus::Error) {
                 p.error = "decoder receive failed";
                 ++p.failures;
+                p.fallBackBeforeFirstPicture();
             } else {
                 p.error.clear();
                 p.waiting = true;
@@ -343,7 +384,7 @@ bool CaptureCompressedDecoder::waitingForInput() const { return p_->waiting; }
 void CaptureCompressedDecoder::recoverAtKeyframe() { p_->decoder.recoverAtKeyframe(); }
 const char* CaptureCompressedDecoder::backendName() const
 {
-    if (p_->hardware) return "d3d12va";
+    if (p_->hardware) return p_->stream && p_->codec == CaptureCodec::Hevc ? "d3d11va" : "d3d12va";
     if (p_->hardwareRequested) return "software(after d3d12va)";
     return p_->decoder.opened() ? "software" : "none";
 }
@@ -354,5 +395,18 @@ uint64_t CaptureCompressedDecoder::hardwareFallbacks() const { return p_->fallba
 double CaptureCompressedDecoder::decodeMsAverage() const { return p_->decodeMs; }
 double CaptureCompressedDecoder::convertMsAverage() const { return p_->convertMs; }
 void CaptureCompressedDecoder::close() { p_->close(); }
+void CaptureCompressedDecoder::setStreamProfile(bool enabled) { p_->stream = enabled; }
+bool CaptureCompressedDecoder::hardwareSurface(pipeline::HardwareSurfaceInput& out) const
+{
+    const auto& view = p_->decoder.hardwareSurface();
+    if (!p_->hardware || view.texture == nullptr) return false;
+    out.texture = view.texture;
+    out.subresourceIndex = view.subresourceIndex;
+    out.waitFence = view.waitFence;
+    out.waitValue = view.waitValue;
+    out.textureWidth = view.textureWidth;
+    out.textureHeight = view.textureHeight;
+    return true;
+}
 
 } // namespace veyra::source

@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
         check(entry.value("name").toString() == "DESKTOP-TEST" && entry.value("state").toString() == "unpaired", "it is listed by the name the host reports, unpaired");
         check(model.state().value("selected").toString() == hostId, "and selected");
         check(entry.value("saved").toBool(), "a manually added host is saved");
+        check(model.state().value("settings").toMap().value("bitrate").toInt() == 150, "a new host streams at 150 Mbps by default");
 
         // --- pairing with the PIN the dialog shows
         model.pair(hostId);
@@ -149,6 +150,18 @@ int main(int argc, char** argv) {
         check(model.state().value("settings").toMap().value("fps").toInt() == 120, "settings were saved per host");
         check(model.state().value("lastLabel").toString().contains("Desktop"), "the last stream is remembered for resuming");
         check(waitFor([&] { return model.apps().size() == 3; }), "apps reload from the saved pairing (pinned certificate works)");
+
+        // --- finding the same host again (network search / adding by address) must not lose the pairing:
+        // the probe asks with the saved certificate; Sunshine says "not paired" to plain HTTP (field report 2026-10-01)
+        model.addHost(address);
+        check(waitFor([&] { return idle(model) && model.hosts().value(0).toMap().value("state").toString() != "checking"; }), "the second probe finishes");
+        waitFor([] { return false; }, 400);   // let the probe answer land
+        check(model.hosts().size() == 1 && model.hosts().value(0).toMap().value("paired").toBool(), "a host found again stays paired");
+
+        // --- "pair" on a host that still trusts us needs no PIN
+        model.pair(hostId);
+        check(waitFor([&] { return idle(model); }), "the pairing check finishes");
+        check(model.state().value("paired").toBool() && statusOf(model).contains(QString::fromUtf8("不需要重新配对")), "pairing again is skipped while the host still trusts us");
 
         // --- a host that no longer knows us
         host.forgetPairing();

@@ -86,6 +86,12 @@ public:
         uint64_t adapterLuid, ID3D12Device* d3d12Device, bool lowLatency = false);
     void close();
 
+    // This FFmpeg build registers libdav1d ahead of the native AV1 decoder, and
+    // libdav1d has no hardware path: avcodec_find_decoder(AV1) silently gives a
+    // software decoder to openD3D12VA/openD3D11VA. Streaming sources set this so
+    // the hardware opens use the native "av1" decoder (the one with the hwaccels).
+    void setPreferNativeAv1Hardware(bool prefer) { preferNativeAv1_ = prefer; }
+
     bool opened() const { return context_ != nullptr; }
     int width() const;
     int height() const;
@@ -162,6 +168,7 @@ private:
     int frameTimeBaseDen_ = 0;
     DecoderStats stats_{};
     bool hwAccelActive_ = false;
+    bool preferNativeAv1_ = false;
     HardwareDecodeKind hwAccelKind_ = HardwareDecodeKind::None;
     int lastFrameFormat_ = -1;
     uint64_t gpuQueueWaitCount_ = 0;
