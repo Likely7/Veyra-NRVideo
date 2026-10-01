@@ -34,14 +34,6 @@ inline const PresentationHook* injectedPresentationHook() {
     return nullptr;
 }
 
-// The overlay that keeps XeSS frame generation off, or nullptr. Since the interface draws
-// with Direct3D 12 (main.cpp) the crash may be gone; VEYRA_ALLOW_XESS_WITH_OVERLAYS=1 lets
-// a tester with RivaTuner or GamePP installed try XeSS anyway without a new build.
-inline const PresentationHook* xessBlockingHook() {
-    if (GetEnvironmentVariableW(L"VEYRA_ALLOW_XESS_WITH_OVERLAYS", nullptr, 0) > 0) return nullptr;
-    return injectedPresentationHook();
-}
-
 // Every loaded module that is neither part of Windows nor shipped next to the executable,
 // as "name; name; …" for the log. Overlays, recorders and monitoring tools show up here;
 // a field log with a mystery slowdown can then say which of them was in the process.

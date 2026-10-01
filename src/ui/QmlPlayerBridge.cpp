@@ -653,10 +653,6 @@ static uint32_t primaryGpuVendor() {
 // FSR 4 ML frame generation needs an AMD RX 9000; on other GPUs the provider crashed the
 // whole program (field report 2026-10-01). Known non-AMD adapters are refused up front.
 static bool fsr4Possible() { const auto v = primaryGpuVendor(); return v == 0 || v == 0x1002; }
-// What replaces XeSS FG while an overlay that crashes its proxy swapchain is injected.
-static engine::FrameGenerationBackend hookSafeBackend() {
-    return primaryGpuVendor() == 0x10DE ? engine::FrameGenerationBackend::Dlss : engine::FrameGenerationBackend::Fsr;
-}
 
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
@@ -874,8 +870,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     startGpuSampler();
     // Overlays that hook presentation get injected into this process when a D3D device
     // appears (Qt's at start, the engine's at open); see gfx/PresentationHooks.h for what
-    // they broke in the field. Look for them for two minutes, say so once, and move a
-    // saved XeSS frame generation (which they crash) to DLSS or FSR.
+    // they broke in the field. Log each once (every 2 s for two minutes, then every 10 s).
     auto* hookTimer = new QTimer(this);
     connect(hookTimer, &QTimer::timeout, this, [this, hookTimer, started = GetTickCount64()] {
         struct Seen { const wchar_t* module; const char* product; };
@@ -893,23 +888,15 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 loggedOthers[k] = true;
                 veyra::log::info("overlay-hooks", std::format("{} is injected into this process", others[k].product));
             }
+        // RivaTuner / GamePP are only logged. The XeSS guard that switched frame generation
+        // away from XeSS while they were injected was removed on request (2026-10-02): the
+        // interface now draws with Direct3D 12 like 1.4.4's process, which is what they
+        // coexisted with.
         static bool handled = false;
-        if (const auto* hook = gfx::xessBlockingHook(); hook && !handled) {
+        if (const auto* hook = gfx::injectedPresentationHook(); hook && !handled) {
             handled = true;
-            veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({}); XeSS frame generation is "
-                "kept off while it is present", hook->product, QString::fromWCharArray(hook->module).toStdString()));
-            auto s = settings();
-            if (s.frameGenerationBackend == engine::FrameGenerationBackend::XeSS) {
-                s.frameGenerationBackend = hookSafeBackend();
-                if (impl_->chain.fgMultiplier > 2 && engine::fsrFrameGeneration(s.frameGenerationBackend)) impl_->chain.fgMultiplier = 2;
-                if (impl_->commit(s)) { emit settingsChanged(); emit chainChanged(); }
-                emit notice(tr("检测到 %1 注入了本程序，它和 XeSS 补帧一起用会闪退，补帧已自动改用 %2。关掉它的帧数显示后可以换回 XeSS")
-                                .arg(QString::fromUtf8(hook->product),
-                                     s.frameGenerationBackend == engine::FrameGenerationBackend::Dlss ? tr("DLSS") : tr("FSR 3.1")), true);
-            } else {
-                emit notice(tr("检测到 %1 注入了本程序。它和 XeSS 补帧不兼容；如果改窗口大小、全屏或改设置时画面异常，请关掉它的帧数显示或滤镜")
-                                .arg(QString::fromUtf8(hook->product)), false);
-            }
+            veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({})",
+                hook->product, QString::fromWCharArray(hook->module).toStdString()));
         }
         // Overlays inject when they decide the window is a game, e.g. on entering fullscreen
         // long after start; after the first two minutes look every 10 s instead of every 2 s.
@@ -1128,7 +1115,10 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
 double QmlPlayerBridge::stageBudgetMs() const {
     // One source period: the budget a stage has to stay inside. Zero when the
     // source rate is unknown, which the UI shows as unmeasured.
-    const double fps = impl_->snapshot.nominalSourceFps;
+    // With 60->30 capture half rate only every other frame is enhanced, so each has two
+    // source periods; dividing by one read 19 ms of 8K work as 115-130 % while it kept up
+    // (logs8, 2026-10-01).
+    const double fps = impl_->snapshot.nominalSourceFps * (impl_->snapshot.captureHalfRate ? 0.5 : 1.0);
     return fps > 0.01 ? 1000.0 / fps : 0.0;
 }
 
@@ -1204,14 +1194,6 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
         emit notice(tr("FSR 4 ML 补帧只支持 AMD RX 9000 显卡，当前显卡不能使用，已保持原来的补帧方式"), true);
         emit settingsChanged();
         return;
-    }
-    if (want == engine::FrameGenerationBackend::XeSS) {
-        if (const auto* hook = gfx::xessBlockingHook()) {
-            emit notice(tr("检测到 %1 正在注入本程序，它和 XeSS 补帧一起用会导致闪退，已保持原来的补帧方式。"
-                           "关掉它的帧数显示后可以用 XeSS；不关也可以用 DLSS 或 FSR 补帧").arg(QString::fromUtf8(hook->product)), true);
-            emit settingsChanged();
-            return;
-        }
     }
     s.frameGenerationBackend = want;
     // A DLSS multiplier above XeSS's ceiling used to make the switch fail
@@ -5194,6 +5176,9 @@ void QmlPlayerBridge::updateRunStatus() {
     QString status = tr("待机"), level = QStringLiteral("idle");
     if (s.failed) { status = tr("错误"); level = QStringLiteral("err"); }
     else if (s.remoteRecovering) { status = tr("恢复中"); level = QStringLiteral("warn"); }
+    // Comparison pauses frame generation by design; the output then runs at the source
+    // rate, which the rate check would call 输出未达标 (a field user read that as broken FG).
+    else if (active && i.compareMode != 0 && s.applied.multiplier > 1) { status = tr("对比中"); level = QStringLiteral("ok"); }
     else if (active && !s.applying && f.rateWindowReady) {
         status = QString::fromWCharArray(i.history.rateStatus(s));
         level = status == tr("正常") ? QStringLiteral("ok") : QStringLiteral("warn");
@@ -5215,7 +5200,8 @@ void QmlPlayerBridge::updateRunStatus() {
                           .arg(backend);
         }
         else detail << tr("未补帧");
-        if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed)) detail << tr("调度降档");
+        if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
+        else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed)) detail << tr("调度降档");
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);
     }
     // 1.4.4 DashboardHistory: target = source x multiplier (half-rate capture
@@ -5226,7 +5212,7 @@ void QmlPlayerBridge::updateRunStatus() {
         const double source = measuredInput ? std::min(s.nominalSourceFps, s.captureFps) : s.nominalSourceFps;
         const bool xessSink = s.applied.multiplier > 1 && engine::presentSinkFrameGeneration(s.applied.frameGenerationBackend);
         const double actual = xessSink ? f.xessSdkSubmitFps : f.presentSubmitFps;
-        const double target = source * (s.captureHalfRate ? 0.5 : 1.0) * s.applied.multiplier;
+        const double target = source * (s.captureHalfRate ? 0.5 : 1.0) * (i.compareMode != 0 ? 1u : s.applied.multiplier);
         if (target > 0) ratio = actual / target;
     }
     const bool ratioChanged = std::abs(ratio - i.rateRatio) > 0.005;
@@ -5477,6 +5463,11 @@ void QmlPlayerBridge::setCompareMode(int value) {
     impl_->compareMode = value;
     if (!impl_->holdKeyDown) impl_->engine.comparison(value, impl_->compareBase, float(impl_->compareSplit));
     veyra::log::info("ui-compare", std::format("mode={} base={} split={:.3f}", value, impl_->compareBase, impl_->compareSplit));
+    // Comparison shows real frames only (a generated frame has no original to set beside
+    // it), so frame generation pauses while it is on. A field user left split compare on
+    // for 24 minutes and reported "补帧无效" (logs9, 2026-10-01): say so.
+    if (value != 0 && impl_->snapshot.running && impl_->snapshot.applied.multiplier > 1)
+        emit notice(tr("对比模式下补帧暂停（对比只能用真实帧），关闭对比后自动恢复"), false);
     emit compareChanged();
 }
 bool QmlPlayerBridge::compareBase() const { return impl_->compareBase; }

@@ -127,7 +127,6 @@ public:
     // False while a failed ResizeBuffers is backing off (see resize()).
     bool resizeDue() const;
     // True when XeSS was requested but an injected overlay made us present natively.
-    bool xessBlockedByHook() const { return xessBlockedByHook_; }
 
 private:
     static LRESULT CALLBACK wndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -156,7 +155,6 @@ private:
     uint32_t resizeFailures_ = 0;
     uint64_t lastResizeFailureMs_ = 0;
     bool xessFailed_ = false;
-    bool xessBlockedByHook_ = false;
     ID3D12Device* device_ = nullptr;
     ID3D12CommandQueue* queue_ = nullptr;
     ComPtr<IDXGIFactory2> factory_;

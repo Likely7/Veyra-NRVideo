@@ -1663,7 +1663,7 @@ VPage {
                             PresentationRows { }
                             VRow {
                                 label: "原画 / 增强对比"
-                                hint: veyra.compareMode === 2 ? "在画面上按住左键拖动分割线：左边原画、右边增强" : ""
+                                hint: (veyra.compareMode === 2 ? "在画面上按住左键拖动分割线：左边原画、右边增强。" : "") + (veyra.compareMode !== 0 ? "对比时补帧暂停，关闭对比后恢复" : "")
                                 VSeg {
                                     objectName: "display-compare"
                                     options: [{ id: "0", label: "关闭" }, { id: "2", label: "分屏" }, { id: "1", label: "只看原画" }]
