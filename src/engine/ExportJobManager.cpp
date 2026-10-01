@@ -1,6 +1,7 @@
 #include "veyra/engine/ExportJobManager.h"
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/VideoExportJob.h"
+#include "veyra/engine/ExportStreams.h"
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
 #include <filesystem>
@@ -23,10 +24,11 @@ struct Shared {
     // chain is fixed-capacity and trivially copyable, so it can cross the
     // process boundary; a worker that sees another version refuses the job
     // instead of reading a mismatched layout.
-    DWORD signature=magic,version=5,bytes=sizeof(Shared); // R5.3 independent colour settings
+    DWORD signature=magic,version=6,bytes=sizeof(Shared); // export container / tracks / owned temporary
     EnhancementSettings settings;
     EffectChain chain;
-    wchar_t input[32768]{},output[32768]{};
+    wchar_t input[32768]{},output[32768]{},temporary[32768]{};
+    ExportMediaOptions media;
     unsigned hevc=0,maxFrames=0;
     int audioStreamIndex=-1;
     double trimStartSeconds=0.0,trimEndSeconds=0.0;
@@ -37,7 +39,23 @@ struct Shared {
 };
 static_assert(std::is_trivially_copyable_v<Shared>);
 void close(HANDLE& h){if(h&&h!=INVALID_HANDLE_VALUE)CloseHandle(h);h=nullptr;}
-const wchar_t* label(ExportState s){switch(s){case ExportState::Preparing:return L"正在准备独立导出任务";case ExportState::Running:return L"正在编码";case ExportState::Paused:return L"导出已暂停，观看继续";case ExportState::Finishing:return L"正在封装和保存输出";case ExportState::Succeeded:return L"导出完成";case ExportState::Failed:return L"导出失败；详见独立任务日志，partial已保留";case ExportState::Cancelled:return L"导出已取消；已写入的partial保留";default:return L"尚无导出任务";}}
+const wchar_t* label(ExportState s){switch(s){case ExportState::Preparing:return L"正在准备独立导出任务";case ExportState::Running:return L"正在编码";case ExportState::Paused:return L"导出已暂停，观看继续";case ExportState::Finishing:return L"正在封装和保存输出";case ExportState::Cancelling:return L"正在取消并回收任务";case ExportState::Succeeded:return L"导出完成";case ExportState::Failed:return L"导出失败；详见独立任务日志";case ExportState::Cancelled:return L"导出已取消";default:return L"尚无导出任务";}}
+}
+std::wstring reserveExportTemporaryFile(const std::wstring& output, std::wstring& error) {
+    static std::atomic<uint64_t> sequence{0};
+    for (int attempt=0; attempt<32; ++attempt) {
+        const auto path=std::format(L"{}.veyra-{}-{}-{}.partial",output,GetCurrentProcessId(),GetTickCount64(),++sequence);
+        HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+        if(file!=INVALID_HANDLE_VALUE){CloseHandle(file);return path;}
+        const DWORD code=GetLastError();
+        if(code!=ERROR_FILE_EXISTS&&code!=ERROR_ALREADY_EXISTS){error=std::format(L"无法创建临时输出（Windows错误 {}）：{}",code,path);return {};}
+    }
+    error=L"无法为本次导出预留唯一临时文件";return {};
+}
+bool removeExportTemporaryFile(const std::wstring& path, std::wstring& error) {
+    if(path.empty()||DeleteFileW(path.c_str())||GetLastError()==ERROR_FILE_NOT_FOUND)return true;
+    error=std::format(L"临时文件清理失败（Windows错误 {}）：{}",GetLastError(),path);
+    log::warn("export-cleanup",utf8(error));return false;
 }
 struct ExportJobManager::Impl {
     HANDLE mapping=nullptr,process=nullptr,job=nullptr;Shared* shared=nullptr;
@@ -66,19 +84,32 @@ ExportJobManager::ExportJobManager():p_(std::make_unique<Impl>()){}
 // Shutdown is bounded: the job object is KILL_ON_CLOSE, so a worker still
 // draining NVENC is terminated by clear() after a short grace instead of
 // stalling process exit for up to five seconds.
-ExportJobManager::~ExportJobManager(){cancel();clearQueue();if(p_->process)WaitForSingleObject(p_->process,1000);p_->clear();}
-bool ExportJobManager::start(const std::wstring& input,const std::wstring& output,EnhancementSettings settings,bool hevc,unsigned maxFrames,int audioStreamIndex,double trimStartSeconds,double trimEndSeconds,sink::ExportRateControl rateControl){
+ExportJobManager::~ExportJobManager(){
+    cancel();clearQueue();
+    if(p_->process){
+        if(WaitForSingleObject(p_->process,1000)==WAIT_TIMEOUT){TerminateJobObject(p_->job,3);WaitForSingleObject(p_->process,1000);}
+        if(WaitForSingleObject(p_->process,0)==WAIT_OBJECT_0){std::wstring cleanup;removeExportTemporaryFile(p_->snapshot.temporaryPath,cleanup);}
+    }
+    p_->clear();
+}
+bool ExportJobManager::start(const std::wstring& input,const std::wstring& output,EnhancementSettings settings,bool hevc,unsigned maxFrames,int audioStreamIndex,double trimStartSeconds,double trimEndSeconds,sink::ExportRateControl rateControl,ExportMediaOptions media){
     // Busy means a launched worker not yet collected. Not poll(): polling here
     // starts the next queued item, which made a queued conflict look "busy"
     // and dropped it without a failure.
-    if(p_->shared)return false;p_->clear();
+    if(p_->shared&&WaitForSingleObject(p_->process,0)==WAIT_OBJECT_0)poll();
+    if(p_->shared){p_->snapshot.message=L"上一任务仍在回收，请等待取消完成";return false;}p_->clear();
     if(!p_->launchingQueued){p_->queueFailures=0;p_->lastQueueFailure.clear();}
     const auto failures=p_->queueFailures;const auto lastFailure=p_->lastQueueFailure;
     p_->snapshot={};p_->snapshot.queueFailures=failures;p_->snapshot.lastQueueFailure=lastFailure;
-    auto fail=[&](const wchar_t* message){const DWORD error=GetLastError();p_->clear();p_->snapshot.state=ExportState::Failed;p_->snapshot.message=message;log::error("export-worker",std::format("launch failed error={}",error));return false;};
+    auto fail=[&](const wchar_t* message){const DWORD error=GetLastError();p_->clear();p_->snapshot.state=ExportState::Failed;p_->snapshot.message=message;std::wstring cleanup;if(!removeExportTemporaryFile(p_->snapshot.temporaryPath,cleanup))p_->snapshot.message+=L"\n"+cleanup;log::error("export-worker",std::format("launch failed error={}",error));return false;};
     if(input.empty()||output.empty()||input.size()>=32768||output.size()>=32768||!settings.validate().empty()||input.starts_with(L"capture:")||input.starts_with(L"capture2:"))return fail(L"请选择本地视频与有效导出设置");
     if(rateControl!=sink::ExportRateControl::Cq&&settings.exportBitrateMbps==0)return fail(L"CBR/VBR 需要指定码率；CQ 不使用码率");
-    if(std::filesystem::exists(output)||std::filesystem::exists(output+L".partial"))return fail(L"输出或partial文件已存在，请选择新文件名");
+    if(!media.valid())return fail(L"导出封装或轨道设置无效");
+    if(std::filesystem::exists(output))return fail(L"输出文件已存在，请选择新文件名");
+    std::wstring reserveError;
+    p_->snapshot.temporaryPath=reserveExportTemporaryFile(output,reserveError);
+    if(p_->snapshot.temporaryPath.empty())return fail(reserveError.c_str());
+    if(p_->snapshot.temporaryPath.size()>=32768)return fail(L"输出路径过长");
     SECURITY_ATTRIBUTES sa{sizeof(sa),nullptr,TRUE};
     p_->mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,&sa,PAGE_READWRITE,0,sizeof(Shared),nullptr);
     if(!p_->mapping)return fail(L"无法创建导出通信资源");
@@ -87,6 +118,7 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=settings;s.settings.nrPolicy=pipeline::NrSizePolicy::Native;s.chain=toChain(s.settings);s.hevc=hevc;s.maxFrames=maxFrames;s.rateControl=uint32_t(rateControl);
     s.audioStreamIndex=audioStreamIndex;
     s.trimStartSeconds=trimStartSeconds;s.trimEndSeconds=trimEndSeconds;
+    s.media=media;wcscpy_s(s.temporary,p_->snapshot.temporaryPath.c_str());
     wcscpy_s(s.input,input.c_str());wcscpy_s(s.output,output.c_str());
     p_->job=CreateJobObjectW(nullptr,nullptr);JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     if(!p_->job||!SetInformationJobObject(p_->job,JobObjectExtendedLimitInformation,&limits,sizeof(limits)))return fail(L"无法建立导出进程生命周期");
@@ -113,7 +145,7 @@ bool ExportJobManager::enqueue(const std::wstring& input,const std::wstring& out
 }
 void ExportJobManager::clearQueue(){p_->queue.clear();}
 size_t ExportJobManager::queuedCount() const{return p_->queue.size();}
-void ExportJobManager::cancel(){if(p_->shared&&p_->snapshot.active()){InterlockedExchange(&p_->shared->cancel,1);if(!p_->cancelAt)p_->cancelAt=GetTickCount64();}p_->queue.clear();}
+void ExportJobManager::cancel(){if(p_->shared){InterlockedExchange(&p_->shared->cancel,1);if(!p_->cancelAt)p_->cancelAt=GetTickCount64();p_->snapshot.state=ExportState::Cancelling;p_->snapshot.message=L"正在取消并回收任务";}p_->queue.clear();}
 void ExportJobManager::pause(bool v){if(p_->shared)InterlockedExchange(&p_->shared->pause,v);}
 void ExportJobManager::watching(bool v){if(p_->shared)InterlockedExchange(&p_->shared->watching,v);}
 ExportJobSnapshot ExportJobManager::poll(){
@@ -127,6 +159,7 @@ ExportJobSnapshot ExportJobManager::poll(){
         // Preserve the worker's actual outcome, including codec substitutions.
         const bool explained=(p_->snapshot.state==ExportState::Failed||p_->snapshot.state==ExportState::Succeeded)&&InterlockedCompareExchange(&s.state,0,0)==LONG(p_->snapshot.state)&&s.message[0];
         p_->snapshot.message=explained?s.message:label(p_->snapshot.state);
+        if(p_->snapshot.state==ExportState::Cancelled){std::wstring cleanup;if(!removeExportTemporaryFile(p_->snapshot.temporaryPath,cleanup))p_->snapshot.message+=L"\n"+cleanup;else p_->snapshot.message=L"导出已取消，可重新开始";}
         const auto& final=p_->snapshot;
         log::info("export-worker",std::format("finished jobId={} pid={} exit={} state={} source={} generated={} holds={} encoded={} log={}",final.jobId,final.workerPid,code,int(final.state),final.sourceFrames,final.generated,final.holds,final.encoded,std::filesystem::path(final.workerLog).string()));
         log::info("export-worker",utf8(final.message));
@@ -139,12 +172,16 @@ ExportJobSnapshot ExportJobManager::poll(){
             return p_->snapshot;
         }
     }
-    if(p_->shared&&InterlockedCompareExchange(&p_->shared->messageLock,1,0)==0){if(p_->shared->message[0])p_->snapshot.message=p_->shared->message;InterlockedExchange(&p_->shared->messageLock,0);}if(p_->snapshot.message.empty()||p_->snapshot.state==ExportState::Paused||p_->snapshot.state==ExportState::Cancelled)p_->snapshot.message=label(p_->snapshot.state);return p_->snapshot;
+    // A shared terminal state is only a report. Keep polling until the actual
+    // process exits and all parent-owned handles have been collected.
+    if(p_->shared&&(p_->cancelAt||!p_->snapshot.active()))p_->snapshot.state=p_->cancelAt?ExportState::Cancelling:ExportState::Finishing;
+    if(p_->shared&&InterlockedCompareExchange(&p_->shared->messageLock,1,0)==0){if(p_->shared->message[0])p_->snapshot.message=p_->shared->message;InterlockedExchange(&p_->shared->messageLock,0);}if(p_->snapshot.message.empty()||p_->snapshot.state==ExportState::Paused)p_->snapshot.message=label(p_->snapshot.state);return p_->snapshot;
 }
 int runExportWorker(HANDLE mapping){
     auto s=static_cast<Shared*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!s)return 1;
-    if(s->signature!=magic||s->version!=5||s->bytes!=sizeof(Shared)||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
+    if(s->signature!=magic||s->version!=6||s->bytes!=sizeof(Shared)||!s->media.valid()||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]||s->temporary[32767]||!s->temporary[0]){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
     Logger::instance().openFile((runtime::logsDirectory()/std::format("export-worker-{}.log",GetCurrentProcessId())).wstring());
+    ExportStreams::enableWorkerLogging(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_FFMPEG_DEBUG",nullptr,0)>0);
     // The chain is the description of record for this job; the settings struct
     // stays the runtime input until the executor consumes chains directly.
     // Re-deriving one from the other must agree, otherwise the job is refused.
@@ -161,8 +198,13 @@ int runExportWorker(HANDLE mapping){
         return !cancel;
     };
     auto options=PlayerOptions::from(settings);options.audioStreamIndex=s->audioStreamIndex;options.exportStartSeconds=s->trimStartSeconds;options.exportEndSeconds=s->trimEndSeconds;options.exportRateControl=static_cast<sink::ExportRateControl>(s->rateControl);
+    options.exportMedia=s->media;options.exportTemporaryPath=s->temporary;
     bool ok=false;try{ok=exportVideo(s->input,s->output,options,s->hevc!=0,cancel,[&](double p,const std::wstring& message){if(InterlockedCompareExchange(&s->messageLock,1,0)==0){wcsncpy_s(s->message,message.c_str(),_TRUNCATE);InterlockedExchange(&s->messageLock,0);}
 InterlockedExchange(&s->progress,LONG(std::clamp(p,0.0,.999)*10000));if(p>=.99)InterlockedExchange(&s->state,LONG(ExportState::Finishing));},s->maxFrames,frameBoundary,[&](const ExportCounts& count){InterlockedExchange64(&s->sourceFrames,count.source);InterlockedExchange64(&s->generated,count.generated);InterlockedExchange64(&s->holds,count.holds);InterlockedExchange64(&s->encoded,count.encoded);});}catch(...){log::error("export-worker","unhandled job exception");}
-    done=true;monitor.join();InterlockedExchange(&s->state,LONG(ok?ExportState::Succeeded:cancel?ExportState::Cancelled:ExportState::Failed));UnmapViewOfFile(s);CloseHandle(mapping);return ok?0:cancel?3:1;
+    done=true;monitor.join();InterlockedExchange(&s->state,LONG(ok?ExportState::Succeeded:cancel?ExportState::Cancelled:ExportState::Failed));
+    // Deterministic lifetime regression hook: the real export already finished.
+    // No result is fabricated; only process exit is delayed, at most 2 seconds.
+    wchar_t delay[16]{};if(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EXIT_DELAY_MS",delay,16))Sleep(std::clamp(_wtoi(delay),0,2000));
+    UnmapViewOfFile(s);CloseHandle(mapping);return ok?0:cancel?3:1;
 }
 }

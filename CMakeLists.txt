@@ -755,6 +755,14 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   add_executable(veyra_repair_fg_tests tests/integration/RepairFgTests.cpp)
   add_executable(veyra_export_frame_pool_tests tests/integration/ExportFramePoolTests.cpp)
   add_executable(veyra_export_worker_failure_tests tests/integration/ExportWorkerFailureTests.cpp)
+  add_executable(veyra_export_workflow_tests tests/integration/ExportWorkflowTests.cpp)
+  target_compile_features(veyra_export_workflow_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_export_workflow_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_export_workflow_tests PRIVATE veyra_engine)
+  add_executable(veyra_export_queue_tests tests/unit/ExportQueueTests.cpp)
+  target_compile_features(veyra_export_queue_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_export_queue_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_export_queue_tests PRIVATE veyra_engine)
   target_compile_features(veyra_export_worker_failure_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_export_worker_failure_tests PRIVATE veyra_engine)
   add_executable(veyra_fg_lifecycle_tests tests/integration/FgLifecycleTests.cpp)
@@ -815,7 +823,7 @@ endif()
 # separate small library rather than into veyra_engine: the product build must
 # never depend on Qt being installed.
 if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
-  add_library(veyra_qml_bridge STATIC src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
+  add_library(veyra_qml_bridge STATIC src/ui/QmlExportQueueModel.cpp include/veyra/ui/QmlExportQueueModel.h src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
     include/veyra/ui/QmlPlayerBridge.h include/veyra/ui/ThumbnailProvider.h
     # P4-c: the existing subtitle renderer, reused as-is (no second renderer).
     apps/veyra/ui/SubtitleOverlay.cpp)
@@ -959,7 +967,7 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_link_libraries(veyra_repair_fg_tests PRIVATE veyra_pipeline veyra_sinks veyra_nvof)
 
   # Headless quality-core runner (Playbook R3.3): the phase5 gate's quality
-  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/VideoExportJob.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp)
+  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/VideoExportJob.cpp src/engine/ExportStreams.cpp src/engine/ExportQueue.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp)
   target_sources(veyra_pipeline PRIVATE src/guidance/AmdOpticalFlow.cpp
     src/guidance/GpuDisOpticalFlow.cpp third_party/gpu-dis/src/gpu/native_strict_dis_provider.cpp)
   target_include_directories(veyra_pipeline PRIVATE third_party/gpu-dis/src/gpu)

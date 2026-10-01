@@ -15,6 +15,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "ExportLayout.js" as ExportLayout
 
 Window {
     id: root
@@ -225,11 +226,7 @@ Window {
             // it resizes it) minus its 40px bar.
             return { x: 14, y: 14, width: Math.max(1, width - 28), height: root.nodeVideoHeight - 40 }
         case "exp":
-            // .exp grid: 250px 1fr 330px; the video is column 2 row 2.
-            return { x: 14 + 250 + 10,
-                     y: 14 + 32 + 10,
-                     width: Math.max(1, width - 250 - 330 - 14 * 2 - 20),
-                     height: Math.max(1, height - 14 * 2 - 32 - 10 - 120 - 10) }
+            return ExportLayout.calculate(width, height, exportPage.compactTab).video
         default:
             return { x: 0, y: 0, width: 0, height: 0 }
         }

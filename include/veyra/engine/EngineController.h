@@ -21,6 +21,7 @@
 #endif
 #include "veyra/media/AudioTrack.h"
 #include "veyra/sink/VideoEncoder.h"
+#include "veyra/engine/ExportOptions.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
@@ -33,6 +34,8 @@ struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t f
     double exportStartSeconds=0.0; // export-only trim; first complete frame at/after this time
     double exportEndSeconds=0.0; // export-only trim; 0 means source end
     sink::ExportRateControl exportRateControl=sink::ExportRateControl::Cq;
+    ExportMediaOptions exportMedia;
+    std::wstring exportTemporaryPath; // owned, uniquely reserved by this attempt
     bool captureReplayForTest=false; // file-backed live scheduler test; never enabled by UI
     bool captureCpuUnpack=false; // N1 diagnostic: legacy per-pixel CPU unpack
     bool softwareDecode=false; // user setting: files skip D3D12VA and decode on the CPU
