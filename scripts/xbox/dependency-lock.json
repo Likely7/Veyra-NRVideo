@@ -1,0 +1,25 @@
+{
+  "purpose": "Xbox home streaming (unofficial). Protocol ported from Greenlight; WebRTC through libdatachannel built by vcpkg.",
+  "reference_sources": {
+    "greenlight": { "repo": "https://github.com/unknownskl/greenlight", "commit": "58e832a1b1e4bf6b5119a2c84df06ae5e5534993", "license": "MIT", "use": "protocol reference (packages/player, packages/desktop/main/helpers); no code linked" },
+    "xal-node": { "repo": "https://github.com/unknownskl/xal-node", "commit": "a17a526b1d00e8456251908324ad51c9b24faa1a", "license": "MIT", "use": "MSAL device-code sign-in sequence (src/msal.ts); ported, not linked" }
+  },
+  "vcpkg": {
+    "checkout": "C:/veyra-deps/vcpkg",
+    "commit": "30ef65cad98f08e7197c9a1656fbd871bcb72f2d",
+    "triplet": "x64-windows-static",
+    "install_root": "C:/veyra-deps/xbox-installed (a copy of remoteplay-installed plus the packages below; same OpenSSL 3.6.4)",
+    "command": "vcpkg install \"libdatachannel[srtp]:x64-windows-static\" --overlay-ports=scripts/xbox/vcpkg-overlay --x-install-root=C:/veyra-deps/xbox-installed --classic",
+    "packages": {
+      "libdatachannel": { "version": "0.24.5", "license": "MPL-2.0", "features": ["srtp", "ws"] },
+      "libjuice": { "version": "1.7.2", "license": "MPL-2.0", "patched": "scripts/xbox/vcpkg-overlay/libjuice/ipv4-interrupt.diff" },
+      "usrsctp": { "version": "0.9.5.0", "license": "BSD-3-Clause" },
+      "libsrtp": { "version": "2.8.0", "license": "BSD-3-Clause" },
+      "plog": { "version": "1.1.11", "license": "MIT" },
+      "nlohmann-json": { "version": "3.12.0", "license": "MIT" }
+    }
+  },
+  "patches": {
+    "libjuice/ipv4-interrupt.diff": "The poll thread's wake-up socket binds 127.0.0.1 instead of \"localhost\". Where IPv6 loopback drops UDP (seen on the development machine with a VPN/TUN adapter) the wake-up packet to ::1 is lost without an error, and ICE checks wait for the 60 s poll timeout."
+  }
+}

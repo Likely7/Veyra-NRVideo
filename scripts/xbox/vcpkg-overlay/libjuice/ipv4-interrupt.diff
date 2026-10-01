@@ -1,0 +1,13 @@
+--- a/src/conn_poll.c
++++ b/src/conn_poll.c
+@@ -77,7 +77,9 @@
+ #ifdef _WIN32
+ 	udp_socket_config_t interrupt_config;
+ 	memset(&interrupt_config, 0, sizeof(interrupt_config));
+-	interrupt_config.bind_address = "localhost";
++	// Veyra: IPv4 loopback. "localhost" resolves to ::1 first, and where IPv6 loopback drops UDP
++	// (some VPN/TUN set-ups) the wake-up packet vanishes and ICE checks stall for a minute.
++	interrupt_config.bind_address = "127.0.0.1";
+ 	registry_impl->interrupt_sock = udp_create_socket(&interrupt_config);
+ 	if (registry_impl->interrupt_sock == INVALID_SOCKET) {
+ 		JLOG_FATAL("Dummy socket creation failed");

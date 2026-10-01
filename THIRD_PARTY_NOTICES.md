@@ -595,3 +595,22 @@ License texts: `licenses/moonlight/ENET_MIT.txt`, `licenses/moonlight/NANORS_MIT
 
 The streamed machine runs **Sunshine** (GPL-3.0, https://github.com/LizardByte/Sunshine), which users install
 themselves; Veyra neither ships nor downloads it.
+
+## Xbox home streaming (unofficial, 2026-10-01)
+
+The optional `VEYRA_ENABLE_XBOX` build streams from the user's own Xbox console. It is **not affiliated with or
+endorsed by Microsoft**; it signs in with the client identity of xbox.com's web player, as the open-source clients do.
+
+The sign-in sequence (`src/xbox/Account.cpp`), the session API (`src/xbox/StreamApi.cpp`) and the data-channel
+protocol (`src/xbox/WebRtcSession.cpp`, `include/veyra/xbox/Protocol.h`) are ports of **Greenlight**
+(MIT, https://github.com/unknownskl/greenlight, commit `58e832a1b1e4bf6b5119a2c84df06ae5e5534993`,
+`packages/player` and `packages/desktop/main/helpers`) and of **xal-node** (MIT, https://github.com/unknownskl/xal-node,
+commit `a17a526b1d00e8456251908324ad51c9b24faa1a`, `src/msal.ts`). Nothing from either tree is compiled.
+
+Linked from the vcpkg tree (pins in `scripts/xbox/dependency-lock.json`):
+**libdatachannel** 0.24.5 (MPL-2.0, https://github.com/paullouisageneau/libdatachannel),
+**libjuice** 1.7.2 (MPL-2.0, https://github.com/paullouisageneau/libjuice; built with the one-line patch
+`scripts/xbox/vcpkg-overlay/libjuice/ipv4-interrupt.diff`, whose source is published there),
+**usrsctp** 0.9.5.0 (BSD-3-Clause), **libsrtp** 2.8.0 (BSD-3-Clause), **plog** 1.1.11 (MIT) and
+**nlohmann/json** 3.12.0 (MIT). MPL-2.0 is file-level copyleft and compatible with GPL-3.0; the MPL sources used are
+the published upstream releases plus the patch above. License texts: `licenses/xbox/`.

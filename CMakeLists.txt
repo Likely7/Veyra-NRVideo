@@ -49,6 +49,7 @@ option(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR
   "Enable local-only experimental Feature 18 adapter" OFF)
 option(VEYRA_ENABLE_REMOTEPLAY "Build PS5 Remote Play with pinned Chiaki source" OFF)
 option(VEYRA_ENABLE_MOONLIGHT "Build the Moonlight / Sunshine streaming core (pinned moonlight-common-c)" OFF)
+option(VEYRA_ENABLE_XBOX "Build Xbox home streaming (unofficial; libdatachannel from the vcpkg tree)" OFF)
 option(VEYRA_ENABLE_DLSS_SR "Enable public DLSS SR backend" OFF)
 option(VEYRA_ENABLE_DLSS_FG "Enable public DLSSG backend" OFF)
 option(VEYRA_ENABLE_NVOF "Enable NVIDIA Optical Flow guidance" OFF)
@@ -560,6 +561,13 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     target_compile_definitions(veyra_sources PUBLIC VEYRA_ENABLE_MOONLIGHT=1)
     target_sources(veyra_sources PRIVATE src/source/MoonlightSessionSource.cpp)
     target_link_libraries(veyra_sources PUBLIC veyra_moonlight_protocol veyra_moonlight_common_c PRIVATE Opus::opus)
+  endif()
+
+  if(VEYRA_ENABLE_XBOX)
+    set(VEYRA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+    include(VeyraXbox)
+    target_compile_definitions(veyra_sources PUBLIC VEYRA_ENABLE_XBOX=1)
+    target_link_libraries(veyra_sources PUBLIC veyra_xbox_protocol)
   endif()
 
   add_executable(veyra_source_tests
