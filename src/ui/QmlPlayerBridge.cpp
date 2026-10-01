@@ -1005,7 +1005,23 @@ QVariantList QmlPlayerBridge::stageTimings() const {
         {"呈现", Stage::Blit, "#58CAD4"},
     };
     const double budget = stageBudgetMs();
+    // Several NR layers: every layer marks the shared NR slot, so it only ever held the last
+    // layer's time (field report 2026-10-01). Each layer also has its own slot; with two or
+    // more layers measured, show those instead of the shared row.
+    std::vector<Row> shown;
+    unsigned measuredLayers = 0;
+    for (unsigned i = 0; i < diagnostics::kTimedNrLayers; ++i)
+        if (s.metrics.flow.gpuTiming[size_t(diagnostics::nrLayerStage(i))].samples > 0) ++measuredLayers;
+    static const char* const layerLabels[] = {"NR 第1层", "NR 第2层", "NR 第3层", "NR 第4层"};
+    static const char* const layerColors[] = {"#FF8A3D", "#FFA866", "#FFC28F", "#FFD9B8"};
     for (const auto& r : rows) {
+        if (r.stage == Stage::Nr && measuredLayers >= 2) {
+            for (unsigned i = 0; i < diagnostics::kTimedNrLayers; ++i)
+                if (s.metrics.flow.gpuTiming[size_t(diagnostics::nrLayerStage(i))].samples > 0)
+                    shown.push_back({layerLabels[i], diagnostics::nrLayerStage(i), layerColors[i]});
+        } else shown.push_back(r);
+    }
+    for (const auto& r : shown) {
         const auto& sample = s.metrics.flow.gpuTiming[size_t(r.stage)];
         // The mean of the last second, as 1.4.4's dashboard showed; P95 rides along for the
         // tooltip. Showing P95 alone read as "slower than 1.4.4" for the same work.
