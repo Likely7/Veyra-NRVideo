@@ -122,6 +122,7 @@ struct QmlPlayerBridge::Impl {
     bool haveSnapshot = false;
     bool openingSource = false;
     uint64_t openingSessionId = 0;
+    uint64_t vramNoticeSession = 0;   // the session the video-memory warning was shown for
 
     // The chain the UI edits, kept in step with the facade's pending settings.
     engine::EffectChain chain;
@@ -791,6 +792,13 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
         if(impl_->poll()){emit settingsChanged();emit chainChanged();}
+        if (impl_->snapshot.vramRunawayMiB && impl_->vramNoticeSession != impl_->snapshot.sessionId) {
+            impl_->vramNoticeSession = impl_->snapshot.sessionId;
+            emit notice(tr("显存在设置没变的情况下涨了 %1 GB，继续下去会越来越卡。常见原因是游戏加加、小飞机（RTSS）、"
+                           "显卡叠加层/即时重放或录屏软件在全屏时注入了本程序：请关掉它们的游戏内显示后重开本软件。"
+                           "当时加载的第三方模块已写进日志（vram-watch）")
+                            .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
+        }
         tickSubtitles();
         tickImageBatch();
         tickCapture();
@@ -873,7 +881,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         struct Seen { const wchar_t* module; const char* product; };
         static const Seen others[] = {
             {L"graphics-hook64.dll", "OBS game capture"}, {L"DiscordHook64.dll", "Discord overlay"},
-            {L"gameoverlayrenderer64.dll", "Steam overlay"},
+            {L"gameoverlayrenderer64.dll", "Steam overlay"}, {L"nvspcap64.dll", "NVIDIA overlay / instant replay"},
+            {L"ow-graphics-hook64.dll", "Overwolf overlay"},
         };
         static bool loggedOthers[std::size(others)]{};
         for (size_t k = 0; k < std::size(others); ++k)
@@ -899,7 +908,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                                 .arg(QString::fromUtf8(hook->product)), false);
             }
         }
-        if (GetTickCount64() - started > 120000) hookTimer->stop();
+        // Overlays inject when they decide the window is a game, e.g. on entering fullscreen
+        // long after start; after the first two minutes look every 10 s instead of every 2 s.
+        if (GetTickCount64() - started > 120000 && hookTimer->interval() < 10000) hookTimer->setInterval(10000);
     });
     hookTimer->start(2000);
     // A saved FSR 4 ML choice on a non-AMD GPU crashed at the first open; move it on.

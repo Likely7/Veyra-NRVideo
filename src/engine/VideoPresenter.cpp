@@ -315,7 +315,14 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         return effective;
     }
     providerOwnedPresentation_=false;
-    if(!requested.enabled){const bool restored=sink_.configurePacing(false,vsync,tearing);status=(restored?L"低延迟队列已关闭 · ":L"低延迟队列恢复失败 · ")+sync;if(effective.outputRate==OutputRateMode::Custom)status+=std::format(L" · 输出上限 {:.3f} FPS",effective.customFps);status+=capNotice;return effective;}
+    if(!requested.enabled){
+        // Vertical sync with the default 3-frame queue lets presents pile up behind the
+        // refresh: on a 60 Hz panel that is up to ~50 ms, and a capture user measured
+        // "twice 1.4.4's latency" with 2.0 on vsync against 1.4.4 on tearing (field logs
+        // 2026-10-01). Under vsync the queue stays one deep even without 低延迟队列.
+        const bool shallow=vsync&&sink_.configurePacing(true,vsync,tearing);
+        const bool restored=shallow||sink_.configurePacing(false,vsync,tearing);
+        status=(shallow?L"垂直同步 · 队列深度 1 · ":restored?L"低延迟队列已关闭 · ":L"低延迟队列恢复失败 · ")+sync;if(effective.outputRate==OutputRateMode::Custom)status+=std::format(L" · 输出上限 {:.3f} FPS",effective.customFps);status+=capNotice;return effective;}
     if(!sink_.configurePacing(true,vsync,tearing)){effective.enabled=false;status=L"显示队列控制不可用 · "+sync;return effective;}
     // Low latency = queue depth 1, plus Reflex when frame generation is off
     // (generated outputs would need separately validated out-of-band markers).
