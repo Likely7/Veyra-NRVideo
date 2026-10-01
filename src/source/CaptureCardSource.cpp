@@ -36,6 +36,7 @@ extern "C" {
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <optional>
 #include <format>
 #include <chrono>
 #include "veyra/source/CaptureAudioClock.h"
@@ -46,6 +47,7 @@ extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/pixfmt.h>
 }
+#include "veyra/source/MagewellCapture.h"
 namespace veyra::source {
 using Microsoft::WRL::ComPtr;
 namespace {
@@ -366,6 +368,42 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     std::wstring audioError;
     AudioInputRecovery audioRecovery;
     SourceInfo info;CaptureMediaLayout layout;Clock::time_point lastFrame;
+    // Magewell Pro Capture low-latency video (MagewellCapture.h). While it runs, the DirectShow
+    // video samples are ignored and its frames enter the same native mailbox below; if it stops
+    // on its own, DirectShow delivery resumes by itself.
+    std::unique_ptr<magewell::LowLatencyVideo> magewell;
+    magewell::VideoRequest magewellRequest;bool magewellWanted=false;
+    std::atomic<bool> magewellDelivering{false};   // set after start, cleared before stop
+    bool externalTimeAnchored=false;double externalTimeOffset=0;
+    void deliverExternal(const uint8_t* data,size_t bytes,double deviceSeconds,bool discontinuity){
+        const auto arrival=Clock::now();
+        AVFrame* staged=nullptr;bool written=false;
+        {std::lock_guard lock(mutex);if(stagingFrame&&!stagingBusy){stagingBusy=true;staged=stagingFrame;}}
+        if(staged)written=writeCaptureFrame(layout,data,bytes,*staged,verticalFlip.load());
+        {
+            std::lock_guard lock(mutex);
+            if(staged)stagingBusy=false;
+            if(!staged||!written||!pendingFrame){++dropped;return;}
+            // Continue the stream's timeline from the last DirectShow sample instead of jumping
+            // to the card's clock, so the audio mapping and cadence checks see one timeline.
+            if(!externalTimeAnchored){
+                externalTimeOffset=(received?pendingTime+(nominalDuration100ns>0?double(nominalDuration100ns)/1e7:1.0/60):0.0)-deviceSeconds;
+                externalTimeAnchored=true;
+            }
+            const double time=deviceSeconds+externalTimeOffset;
+            std::swap(stagingFrame,pendingFrame);
+            if(pending)++dropped;
+            pendingDiscontinuity=captureDiscontinuity(pending,pendingDiscontinuity,discontinuity,received>0,pendingTime,time,info.averageFps);
+            pending=true;pendingTime=time;pendingArrival=arrival;
+            pendingDuration=captureDuration(0,0,false,nominalDuration100ns);
+            if(!received)firstArrival=arrival;
+            ++received;latestArrival=arrival;
+            recentArrivals.push_back(arrival);
+            while(recentArrivals.size()>1&&(recentArrivals.size()>1024||arrival-recentArrivals.front()>std::chrono::seconds(2)))recentArrivals.pop_front();
+        }
+        wake.notify_one();
+        if(frameEvent)SetEvent(frameEvent);
+    }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** pp)override{if(!pp)return E_POINTER;*pp=nullptr;if(id==IID_IUnknown||id==__uuidof(ISampleGrabberCB)){*pp=static_cast<ISampleGrabberCB*>(this);AddRef();return S_OK;}return E_NOINTERFACE;}
     ULONG STDMETHODCALLTYPE AddRef()override{return ++refs;}ULONG STDMETHODCALLTYPE Release()override{return --refs;}
     // Decode worker loop: pop a compressed payload, decode it with our own
@@ -487,6 +525,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
         }
     }
     HRESULT STDMETHODCALLTYPE SampleCB(double time,IMediaSample* sample)override{
+        if(!compressedPath&&magewellDelivering.load()&&magewell->running())return S_OK;   // the SDK delivers video
         // Register the DirectShow delivery thread with MMCSS once; the handle
         // lives for the thread (revert happens when the thread exits).
         static thread_local HANDLE mmcss=[]{DWORD index=0;HANDLE h=AvSetMmThreadCharacteristicsW(L"Pro Audio",&index);if(!h)log::warn("capture","MMCSS unavailable for the capture callback thread");return h;}();(void)mmcss;
@@ -997,6 +1036,25 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         }
     }
     p.elgatoHdr=std::move(elgatoHdr);
+    p.magewellWanted=false;
+    if(magewell::lowLatencyPreference()&&magewell::isProCaptureDevicePath(devicePath)){
+        const auto& l=p.layout;
+        const bool semiplanarOk=l.chromaOffset==size_t(l.stride)*l.height&&l.chromaStride==l.stride;
+        std::optional<magewell::Format> mw;
+        if(compressedPath||!direct)mw.reset();
+        else if(l.packing==CapturePacking::Nv12&&semiplanarOk)mw=magewell::Format::Nv12;
+        else if(l.packing==CapturePacking::P010&&semiplanarOk)mw=magewell::Format::P010;
+        else if(l.packing==CapturePacking::Yuy2)mw=magewell::Format::Yuy2;
+        else if(l.packing==CapturePacking::Bgr32||l.packing==CapturePacking::Bgra32)mw=magewell::Format::Bgra;
+        if(mw){
+            p.magewellRequest={};p.magewellRequest.directShowPath=devicePath;p.magewellRequest.format=*mw;
+            p.magewellRequest.width=l.width;p.magewellRequest.height=l.height;p.magewellRequest.stride=l.stride;
+            p.magewellRequest.frameBytes=l.sampleBytes;p.magewellRequest.bottomUp=l.bottomUp;p.magewellRequest.partialLines=64;
+            p.magewellWanted=true;
+        }else{
+            log::warn("magewell",std::format("low latency not available for this capture format (packing={} compressed={}); using DirectShow",int(l.packing),compressedPath));
+        }
+    }
     p.configured=true;
     reconnectDesc_=desc;reconnectInfo_=p.info;reconnectFormat_=selectedKey;
     // Log the upstream type after DirectShow has finished negotiation. The
@@ -1315,6 +1373,15 @@ bool CaptureCardSource::start(){
     p.audioRecovery.reset(GetTickCount64());
     p.lastFrame=Impl::Clock::now();const auto hr=p.control->Run();p.info.opened=SUCCEEDED(hr);
     if(p.info.opened&&p.wasapi&&!p.wasapi->start())p.audioError=L"WASAPI 音频启动失败；视频继续运行";
+    if(p.info.opened&&p.magewellWanted){
+        p.externalTimeAnchored=false;
+        p.magewell=std::make_unique<magewell::LowLatencyVideo>();
+        std::wstring why;
+        if(!p.magewell->start(p.magewellRequest,[&p](const uint8_t* data,size_t bytes,double t,bool d){p.deliverExternal(data,bytes,t,d);},why)){
+            log::warn("magewell",std::format("low latency not started; DirectShow video continues ({})",narrowForLog(why)));
+            p.magewell.reset();
+        }else p.magewellDelivering=true;
+    }
     veyra::log::info("capture",std::format("Run hr=0x{:X} actual={}x{} nominalFps={:.3f} mailbox=1 ownedBuffers=2",unsigned(hr),p.info.width,p.info.height,p.info.averageFps));return p.info.opened;
 }
 void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
@@ -1436,7 +1503,9 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
     *frame=delivered;p.lastFrame=Impl::Clock::now();return SourceReadStatus::Frame;
 }
 void CaptureCardSource::close()noexcept{
-    auto& p=*p_;if(p.control){const HRESULT hr=p.control->Stop();if(FAILED(hr))log::error("capture-close",std::format("Stop failed hr=0x{:08X}; releasing graph",uint32_t(hr)));}if(p.grab){const HRESULT hr=p.grab->SetCallback(nullptr,0);if(FAILED(hr))log::error("capture-close",std::format("detach callback hr=0x{:08X}",uint32_t(hr)));}
+    auto& p=*p_;
+    p.magewellDelivering=false;
+    if(p.magewell){p.magewell->stop();p.magewell.reset();}if(p.control){const HRESULT hr=p.control->Stop();if(FAILED(hr))log::error("capture-close",std::format("Stop failed hr=0x{:08X}; releasing graph",uint32_t(hr)));}if(p.grab){const HRESULT hr=p.grab->SetCallback(nullptr,0);if(FAILED(hr))log::error("capture-close",std::format("detach callback hr=0x{:08X}",uint32_t(hr)));}
     if(p.wasapi)p.wasapi->stop();p.wasapi.reset();
     p.elgatoHdr.reset();
     p.averMediaSwitch.stop();p.embeddedAudioUnavailable=false;

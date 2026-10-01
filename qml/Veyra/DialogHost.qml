@@ -330,6 +330,21 @@ Item {
                 }
             }
             VRow {
+                objectName: "capture-magewell-row"
+                label: "美乐威低延迟模式"
+                hint: !veyra.captureMagewellDevice
+                      ? "仅美乐威 Pro Capture（PCIe 内置卡）可用；USB Capture 系列不支持"
+                      : (veyra.captureMagewellStatus.length > 0 ? veyra.captureMagewellStatus + " · " : "")
+                        + "采集卡收到 64 行就开始传，整帧更早到达（官方：1080p60 约省 5 ms，4K60 约省 15 ms）。开关后点「连接」重新连接生效"
+                VSwitch {
+                    objectName: "capture-magewell"
+                    enabled: veyra.captureMagewellDevice
+                    opacity: enabled ? 1 : 0.35
+                    checked: veyra.captureMagewellDevice && veyra.preferences.magewellLowLatency === true
+                    onToggled: veyra.setPreference("magewellLowLatency", checked)
+                }
+            }
+            VRow {
                 label: "设备帧率 FPS"
                 hint: "0 = 沿用所选格式；设备返回其他帧率会报错，不在软件中偷偷丢帧"
                 VTextField {

@@ -125,6 +125,10 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int captureBufferMode READ captureBufferMode WRITE setCaptureBufferMode NOTIFY settingsChanged)
     Q_PROPERTY(bool captureQueryBusy READ captureQueryBusy NOTIFY captureChanged)
     Q_PROPERTY(QString captureStatus READ captureStatus NOTIFY captureChanged)
+    // Magewell Pro Capture low-latency mode (MagewellCapture.h): whether the selected device is
+    // one, and a one-line state (active with its latency, missing runtime, or why it fell back).
+    Q_PROPERTY(bool captureMagewellDevice READ captureMagewellDevice NOTIFY captureChanged)
+    Q_PROPERTY(QString captureMagewellStatus READ captureMagewellStatus NOTIFY snapshotChanged)
 
     // --- screen-capture dialog ---------------------------------------------
     Q_PROPERTY(QVariantList screenTargets READ screenTargets NOTIFY captureChanged)
@@ -485,6 +489,8 @@ public:
     void setCaptureDeviceId(const QString& value);
     QString captureDeviceLabel() const;
     bool captureForceSdr() const;
+    bool captureMagewellDevice() const;
+    QString captureMagewellStatus() const;
     void setCaptureForceSdr(bool value);
     bool captureFlipVertical() const;
     void setCaptureFlipVertical(bool value);

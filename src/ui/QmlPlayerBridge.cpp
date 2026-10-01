@@ -39,6 +39,7 @@
 #include "veyra/source/CaptureFormatRank.h"
 #include "veyra/source/CaptureColorOverride.h"
 #include "veyra/source/CaptureFrameRate.h"
+#include "veyra/source/MagewellCapture.h"
 #include "CapturePreferenceStore.h"
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 // SDL3-static's system libraries (see CMakeLists: kept off the link line).
@@ -643,6 +644,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // Before anything opens: the renderer reads the output choice at start().
     applyPreference(QStringLiteral("audioDevice"));
     applyPreference(QStringLiteral("audioForceStereo"));
+    applyPreference(QStringLiteral("magewellLowLatency"));
     const bool presetsLoaded = impl_->facade.importLegacyStores();
     const auto presetNotice = utf8Of(impl_->facade.error());
     if (!presetNotice.isEmpty())
@@ -1408,6 +1410,13 @@ void QmlPlayerBridge::setCaptureBufferMode(int value) {
 }
 bool QmlPlayerBridge::captureQueryBusy() const { return impl_->captureBusy; }
 QString QmlPlayerBridge::captureStatus() const { return impl_->captureStatus; }
+bool QmlPlayerBridge::captureMagewellDevice() const { return source::magewell::isProCaptureDevicePath(impl_->captureDevice); }
+QString QmlPlayerBridge::captureMagewellStatus() const {
+    std::wstring runtime;
+    if (!source::magewell::runtimeAvailable(&runtime))
+        return tr("找不到美乐威运行库 LibMWCapture.dll（应在软件的 runtime\\magewell 文件夹里，或装美乐威驱动/SDK）");
+    return QString::fromStdWString(source::magewell::statusText());
+}
 void QmlPlayerBridge::refreshCaptureDevices() {
     impl_->capturePrefs = ui::CapturePreferenceStore(impl_->dataDir).load();
     queryCapture(0, {});
@@ -4031,7 +4040,8 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
-                                   "subtitleSecondLanguage", "audioForceStereo", "holdCompare"};
+                                   "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
+                                   "magewellLowLatency"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -4088,6 +4098,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
 void QmlPlayerBridge::applyPreference(const QString& key) {
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
+    else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
 }
 QVariantList QmlPlayerBridge::audioDevices() const {
     QVariantList out;

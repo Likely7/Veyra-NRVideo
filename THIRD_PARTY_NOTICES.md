@@ -614,3 +614,15 @@ Linked from the vcpkg tree (pins in `scripts/xbox/dependency-lock.json`):
 **usrsctp** 0.9.5.0 (BSD-3-Clause), **libsrtp** 2.8.0 (BSD-3-Clause), **plog** 1.1.11 (MIT) and
 **nlohmann/json** 3.12.0 (MIT). MPL-2.0 is file-level copyleft and compatible with GPL-3.0; the MPL sources used are
 the published upstream releases plus the patch above. License texts: `licenses/xbox/`.
+
+## Magewell MWCapture SDK (Pro Capture low-latency capture, 2026-10-01)
+
+- Component: Magewell MWCapture SDK for Windows 3.3.1.1596 (Nanjing Magewell Electronics Co., Ltd.).
+- Use: `src/source/MagewellCapture.cpp` is compiled against the SDK header files (kept outside the
+  source tree, CMake `VEYRA_MAGEWELL_SDK_DIR`) and loads `LibMWCapture.dll` at run time; the call
+  sequence follows the SDK example `Examples/Applications/LowLatency`. Test packages carry the
+  unmodified `LibMWCapture.dll` in `runtime/magewell/`.
+- Licence: the header files and library are licensed for use, modification and redistribution with
+  Magewell's copyright notice and disclaimer retained; the full text is in
+  `licenses/magewell/MWCapture-SDK-NOTICE.txt`. The SDK as a whole (examples, tools) is under
+  Magewell's EULA and is not redistributed.

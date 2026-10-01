@@ -536,8 +536,19 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/AverMediaAudioSwitch.cpp
     src/source/CaptureCompressedDecoder.cpp
     src/source/WasapiAudioInput.cpp
+    src/source/MagewellCapture.cpp
   )
   veyra_apply_warnings(veyra_sources)
+  # Magewell Pro Capture low-latency video: compiled against the vendor SDK headers when
+  # VEYRA_MAGEWELL_SDK_DIR points at them (kept outside the source tree); LibMWCapture.dll is
+  # loaded at run time. Without the headers the feature reports itself unavailable.
+  set(VEYRA_MAGEWELL_SDK_DIR "" CACHE PATH "MWCapture SDK root containing Include/LibMWCapture")
+  if(VEYRA_MAGEWELL_SDK_DIR AND EXISTS "${VEYRA_MAGEWELL_SDK_DIR}/Include/LibMWCapture/MWCapture.h")
+    set_source_files_properties(src/source/MagewellCapture.cpp PROPERTIES
+      COMPILE_DEFINITIONS VEYRA_HAS_MAGEWELL=1
+      INCLUDE_DIRECTORIES "${VEYRA_MAGEWELL_SDK_DIR}/Include;${VEYRA_MAGEWELL_SDK_DIR}/Include/LibMWCapture")
+    message(STATUS "Magewell SDK headers: ${VEYRA_MAGEWELL_SDK_DIR}")
+  endif()
   target_compile_options(veyra_sources PRIVATE /WX-)
   target_compile_features(veyra_sources PRIVATE cxx_std_20)
   target_link_libraries(veyra_sources PUBLIC veyra_sinks)
@@ -708,6 +719,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_definitions(veyra_capture_compressed_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_capture_compressed_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_capture_compressed_tests PRIVATE veyra_sources veyra_gfx ${FFMPEG_LIBRARIES})
+  add_executable(veyra_magewell_probe tools/magewell_probe/main.cpp)
+  target_compile_features(veyra_magewell_probe PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_magewell_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_link_libraries(veyra_magewell_probe PRIVATE veyra_sources)
   add_executable(veyra_stream_decode_bench tools/stream_decode_bench/main.cpp)
   target_compile_features(veyra_stream_decode_bench PRIVATE cxx_std_20)
   target_compile_definitions(veyra_stream_decode_bench PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)

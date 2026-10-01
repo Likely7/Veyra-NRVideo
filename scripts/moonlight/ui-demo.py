@@ -45,19 +45,25 @@ def find_window(pid):
     def visit(hwnd, _):
         owner = ctypes.c_ulong()
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
-        if owner.value == pid and user32.IsWindowVisible(hwnd):
+        if owner.value == pid and user32.IsWindowVisible(hwnd) and not user32.IsIconic(hwnd):
             rect = RECT()
             user32.GetWindowRect(hwnd, ctypes.byref(rect))
             if rect.r - rect.l > 400:
                 found.append((hwnd, rect))
         return True
     user32.EnumWindows(visit, 0)
+    # The main window is the largest one; the native video window and tool windows are smaller.
+    found.sort(key=lambda w: (w[1].r - w[1].l) * (w[1].b - w[1].t), reverse=True)
     return found[0] if found else None
 
 
 def screenshot(pid, path):
     win = find_window(pid)
     if not win:
+        time.sleep(1.0)   # the window can be between two states (dialog animation, region update)
+        win = find_window(pid)
+    if not win:
+        print('  no window for pid', pid, 'alive' if app_proc and app_proc.poll() is None else 'exited')
         return False
     hwnd, rect = win
     # PrintWindow(PW_RENDERFULLCONTENT) reads the window's own composed content, so another
@@ -79,7 +85,15 @@ def screenshot(pid, path):
         gdi32.DeleteObject(bitmap)
         gdi32.DeleteDC(memory_dc)
         user32.ReleaseDC(ctypes.c_void_p(hwnd), window_dc)
-    return bool(printed)
+    if not printed:
+        # Fall back to the screen pixels (correct whenever nothing covers the window).
+        ps = ('Add-Type -AssemblyName System.Drawing; '
+              f'$b = New-Object System.Drawing.Bitmap({width},{height}); '
+              '$g = [System.Drawing.Graphics]::FromImage($b); '
+              f'$g.CopyFromScreen({rect.l},{rect.t},0,0,$b.Size); '
+              f'$b.Save("{path}"); $g.Dispose(); $b.Dispose()')
+        subprocess.run(['powershell', '-NoProfile', '-Command', ps], check=True, timeout=60)
+    return True
 
 
 result = 1

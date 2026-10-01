@@ -42,14 +42,20 @@ shutil.copytree(build / 'qml/Veyra', pkg / 'qml/Veyra')
 for name in ('LICENSE', 'THIRD_PARTY_NOTICES.md'):
     shutil.copy2(repo / name, pkg / name)
 (pkg / 'docs').mkdir(exist_ok=True)
-for name in ('MOONLIGHT_EXECUTION_2026-10-01.md', 'STREAMING_PLAN_MOONLIGHT_XBOX_2026-10-01.md', 'XBOX_EXECUTION_2026-10-01.md', 'STREAM_FIELD_FIXES_2026-10-01.md'):
+for name in ('MOONLIGHT_EXECUTION_2026-10-01.md', 'STREAMING_PLAN_MOONLIGHT_XBOX_2026-10-01.md', 'XBOX_EXECUTION_2026-10-01.md', 'STREAM_FIELD_FIXES_2026-10-01.md', 'MAGEWELL_LOW_LATENCY_2026-10-01.md'):
     if (repo / 'docs' / name).exists():
         shutil.copy2(repo / 'docs' / name, pkg / 'docs' / name)
 shutil.copy2(repo / notes, pkg / '测试说明.md')
 (pkg / 'licenses').mkdir(exist_ok=True)
-for sub in ('moonlight', 'xbox'):
+for sub in ('moonlight', 'xbox', 'magewell'):
     if (repo / 'licenses' / sub).exists():
         shutil.copytree(repo / 'licenses' / sub, pkg / 'licenses' / sub, dirs_exist_ok=True)
+
+# Magewell Pro Capture low-latency mode: the SDK library, unmodified (see licenses/magewell).
+magewell = Path('E:/项目/Veyra/deps/magewell/3.3.1.1596/bin/x64/LibMWCapture.dll')
+if magewell.exists():
+    (pkg / 'runtime/magewell').mkdir(parents=True, exist_ok=True)
+    shutil.copy2(magewell, pkg / 'runtime/magewell/LibMWCapture.dll')
 
 mf = pkg / 'runtime/experimental/release-runtime-manifest.json'
 if mf.exists():
