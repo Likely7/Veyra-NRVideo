@@ -8,7 +8,7 @@
 - 美乐威的运行库已经放在包里（`runtime\magewell\LibMWCapture.dll`），不用另装 SDK；美乐威驱动照常要装。
 - 如果低延迟启动失败，会自动回到普通采集，画面不会断，那行会写原因。
 - **作者手上没有美乐威卡，这个功能完全没在真卡上跑过。** 请有 Pro Capture 的群友测：能不能出画面、颜色对不对、开关前后延迟手感、音画是否同步、长时间是否稳定；
-  日志 `logseyra-qml.log` 搜 `magewell` 发给我。
+  日志 `logs\veyra-qml.log` 搜 `magewell` 发给我。
 
 其余内容与 beta 4 相同（见下）。
 
