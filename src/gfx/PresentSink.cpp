@@ -200,7 +200,7 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
         swapChain_.Reset();
         // An injected overlay draws into the XeSS proxy swapchain and crashes the process
         // (PresentationHooks.h); present natively instead, as for any XeSS failure.
-        if(const auto* hook=injectedPresentationHook()){
+        if(const auto* hook=xessBlockingHook()){
             log::warn("present",std::format("XeSS FG not started: {} is injected and crashes the XeSS swapchain; native presentation",hook->product));
             xessBlockedByHook_=true;
         }else{

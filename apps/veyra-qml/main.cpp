@@ -15,6 +15,7 @@
 #include <QQmlContext>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSGRendererInterface>
 #include <QKeyEvent>
 #include <QTimer>
 #include <atomic>
@@ -33,6 +34,7 @@
 #include <shellapi.h>
 #include <shobjidl.h>
 #include <dbghelp.h>
+#include <d3d12.h>
 
 #include <cmath>
 #include <cstdlib>
@@ -404,6 +406,21 @@ int main(int argc, char** argv) {
         }
     }
     QApplication app(argc, argv);
+    // The interface draws with Direct3D 12, like the video. Qt's default is Direct3D 11,
+    // and a D3D11 device in the process changed how overlays treat it: RivaTuner (MSI
+    // Afterburner) then crashed in d3d11.dll inside its own hooks while drawing its OSD on
+    // the XeSS swapchain through D3D11On12 (field dumps 2026-10-01). 1.4.4 drew its UI with
+    // GDI and had no D3D11 device; the overlays coexisted. VEYRA_UI_RHI=d3d11 restores
+    // Qt's default; without a usable D3D12 device Qt keeps it too.
+    {
+        wchar_t forced[16]{};
+        GetEnvironmentVariableW(L"VEYRA_UI_RHI", forced, 16);
+        const bool wantD3d11 = _wcsicmp(forced, L"d3d11") == 0;
+        const bool d3d12Usable = SUCCEEDED(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr));
+        if (!wantD3d11 && d3d12Usable) QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D12);
+        veyra::log::info("app", std::format("interface renderer={} (d3d12 usable={} forced={})",
+            !wantD3d11 && d3d12Usable ? "d3d12" : "d3d11", d3d12Usable, QString::fromWCharArray(forced).toStdString()));
+    }
     app.setProperty("veyraLogFile", QString::fromStdWString(logPath.wstring()));
     app.setProperty("veyraUiScale", uiScale);
     // Frameless windows have no menu, yet DefWindowProc turns a bare Alt tap into
