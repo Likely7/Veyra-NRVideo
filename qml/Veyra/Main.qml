@@ -251,6 +251,7 @@ Window {
         onStartCapture: if (root.page === "home") root.goPage("min")
         onStartPs5: if (root.page === "home") root.goPage("min")
         onStartMoonlight: if (root.page === "home") root.goPage("min")
+        onStartXbox: if (root.page === "home") root.goPage("min")
         onStartScreen: if (root.page === "home") root.goPage("min")
     }
 
@@ -421,6 +422,13 @@ Window {
             veyra.moonlightCapture(true)
         }
     }
+    // Stream statistics on and off. While a PC stream has the keyboard, the capture filter sees the keys
+    // first and toggles the same switch.
+    Shortcut {
+        sequence: "Ctrl+Alt+Shift+S"
+        enabled: (veyra.moonlight && veyra.moonlight.state.streaming === true) || (veyra.xbox && veyra.xbox.state.streaming === true)
+        onActivated: veyra.moonlightStatsVisible = !veyra.moonlightStatsVisible
+    }
     StreamHud {
         id: streamHud
         x: 16
@@ -543,7 +551,7 @@ Window {
         function onNotice(text, isError) { toast.show(text, isError) }
         function onNavigate(p) {
             // A dialog key opens the dialog; anything else is a page.
-            if (p === "capture" || p === "ps5" || p === "moonlight" || p === "screen"
+            if (p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
                 || p === "subtitle" || p === "audio" || p === "save" || p === "manage") {
                 dialogs.open(p)
                 return

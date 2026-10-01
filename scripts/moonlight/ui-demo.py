@@ -1,6 +1,6 @@
 """End-to-end check of the PC streaming dialog against the mock host (no real Sunshine, no real stream).
 
-usage: python ui-demo.py <staged-app-dir> <mockhost.exe> <out-dir>
+usage: python ui-demo.py <staged-app-dir> <mockhost.exe> <out-dir> [<snippet.qml>]
 
 <staged-app-dir> is a copy of the app with its Qt runtime (veyra_qml_ui.exe + qml). The script injects
 ui-demo.qml into the staged Main.qml (restoring it afterwards), starts the mock host, runs the app with a
@@ -27,7 +27,7 @@ for f in (pin_file, stop_file):
 main = app / 'qml/Veyra/Main.qml'
 original = main.read_bytes()
 source = original.decode('utf-8-sig')
-snippet = (here / 'ui-demo.qml').read_text(encoding='utf8')
+snippet = (Path(sys.argv[4]) if len(sys.argv) > 4 else here / 'ui-demo.qml').read_text(encoding='utf8')
 index = source.rfind('}')
 main.write_text(source[:index] + snippet + source[index:], encoding='utf8')
 

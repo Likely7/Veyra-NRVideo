@@ -356,7 +356,7 @@ VPage {
         VButton {
             id: sourceBtn
             objectName: "pro-source-button"
-            iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "screen" ? "monitor"
+            iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
                     : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
             text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : "片源"
             maxTextWidth: 260
@@ -1727,6 +1727,7 @@ VPage {
             .concat([{ label: "打开文件…", icon: "folder", act: "file" },
                      { label: "PS5 串流…", icon: "gamepad", act: "ps5" },
                      { label: "PC 串流…", icon: "cast", act: "moonlight" },
+                     { label: "Xbox 串流…", icon: "gamepad", act: "xbox" },
                      { label: "屏幕捕获…", icon: "monitor", act: "screen" },
                      { sep: true },
                      { label: "采集卡设置…", icon: "settings", act: "capture" }])
@@ -1734,6 +1735,7 @@ VPage {
             if (o.act === "file") veyra.openFileDialog()
             else if (o.act === "ps5") veyra.openPs5Dialog()
             else if (o.act === "moonlight") veyra.openMoonlightDialog()
+            else if (o.act === "xbox") veyra.openXboxDialog()
             else if (o.act === "screen") veyra.openScreenCaptureDialog()
             else if (o.act === "capture") veyra.openCaptureDialog()
         }

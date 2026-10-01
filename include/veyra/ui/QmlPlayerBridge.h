@@ -41,6 +41,7 @@
 namespace veyra::ui {
 
 class MoonlightModel;
+class XboxModel;
 
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
@@ -161,6 +162,8 @@ class QmlPlayerBridge : public QObject {
     // PC streaming (Moonlight / Sunshine): hosts, pairing, apps and stream settings live in
     // `moonlight` (null when the build has no Moonlight); capture state and the stats overlay here.
     Q_PROPERTY(QObject* moonlight READ moonlightModel CONSTANT)
+    // Xbox home streaming (unofficial): sign-in, consoles and stream state; null without Xbox support.
+    Q_PROPERTY(QObject* xbox READ xboxModel CONSTANT)
     Q_PROPERTY(bool moonlightCaptured READ moonlightCaptured NOTIFY moonlightUiChanged)
     Q_PROPERTY(bool moonlightStatsVisible READ moonlightStatsVisible WRITE setMoonlightStatsVisible NOTIFY moonlightUiChanged)
 
@@ -545,6 +548,9 @@ public:
     Q_INVOKABLE void openMoonlightDialog();
     Q_INVOKABLE void moonlightCapture(bool on);
     Q_INVOKABLE void moonlightDisconnect();
+    QObject* xboxModel() const;
+    Q_INVOKABLE void openXboxDialog();
+    Q_INVOKABLE void xboxDisconnect();
     Q_INVOKABLE void ps5Load();
     Q_INVOKABLE bool ps5Set(const QString& key, const QVariant& value);
     Q_INVOKABLE void ps5SelectProfile(const QString& id);
@@ -1006,6 +1012,10 @@ private:
     void tickCapture();
     void tickPs5();
     void tickMoonlight();
+    void tickXbox();
+#ifdef VEYRA_ENABLE_XBOX
+    void setupXbox();
+#endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
     void setupMoonlight();
 #endif

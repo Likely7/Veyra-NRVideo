@@ -53,6 +53,9 @@
 #include "veyra/remoteplay/PsnAuth.h"
 #include "veyra/source/RemotePlaySource.h"
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+#include "veyra/ui/XboxModel.h"
+#endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
 #include "veyra/ui/MoonlightInputCapture.h"
 #include "veyra/ui/MoonlightModel.h"
@@ -564,6 +567,12 @@ struct QmlPlayerBridge::Impl {
     std::unique_ptr<ui::MoonlightInputCapture> moonlightCapture;
     std::unique_ptr<ui::MoonlightModel> moonlight;
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+    QTimer* xboxTimer = nullptr;
+    bool xboxWasActive = false;
+    int xboxStatsTicks = 0;
+    std::unique_ptr<ui::XboxModel> xbox;   // last: joins its worker first
+#endif
 };
 
 namespace {
@@ -627,6 +636,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     if (qApp) qApp->installEventFilter(this);
 #ifdef VEYRA_ENABLE_MOONLIGHT
     setupMoonlight();
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    setupXbox();
 #endif
     // Before anything opens: the renderer reads the output choice at start().
     applyPreference(QStringLiteral("audioDevice"));
@@ -753,6 +765,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         tickCapture();
         tickPs5();
         tickMoonlight();
+        tickXbox();
         // Geometry uses the source DAR and the same transform as mouse/compare.
         if (impl_->snapshot.running && impl_->videoWindow) {
             const bool fresh = impl_->aspectSession != impl_->snapshot.sessionId;
@@ -1704,6 +1717,90 @@ void QmlPlayerBridge::setMoonlightStatsVisible(bool visible) {
 #endif
 }
 void QmlPlayerBridge::openMoonlightDialog() { emit navigate(QStringLiteral("moonlight")); }
+
+// --- Xbox home streaming (unofficial) ------------------------------------------------------------------
+QObject* QmlPlayerBridge::xboxModel() const {
+#ifdef VEYRA_ENABLE_XBOX
+    return impl_->xbox.get();
+#else
+    return nullptr;
+#endif
+}
+void QmlPlayerBridge::openXboxDialog() { emit navigate(QStringLiteral("xbox")); }
+void QmlPlayerBridge::xboxDisconnect() {
+#ifdef VEYRA_ENABLE_XBOX
+    if (impl_->snapshot.xboxActive) stopPlayback();
+#endif
+}
+
+#ifdef VEYRA_ENABLE_XBOX
+void QmlPlayerBridge::setupXbox() {
+    auto& i = *impl_;
+    i.xbox = std::make_unique<ui::XboxModel>();
+    connect(i.xbox.get(), &ui::XboxModel::notice, this, &QmlPlayerBridge::notice);
+    i.xbox->setLaunchHandler([this](ui::XboxModel::Launch launch) -> bool {
+        auto& j = *impl_;
+        if (!j.videoWindow) return false;
+        rememberPosition(true);
+        j.openingSource = true;
+        j.sourceLabel = L"Xbox · " + launch.label.toStdWString();
+        j.resumeSession = 0;
+        j.screenFillActive = false;
+        const bool pad = launch.desc.gamepad;
+        const QString label = launch.label;
+        auto request = std::make_shared<source::XboxConnectDesc>(std::move(launch.desc));
+        openAfterCinema(tr("正在连接 Xbox · %1").arg(label), [this, request, pad] {
+            auto& k = *impl_;
+            if (k.preOpen) k.preOpen();
+            k.engine.previewView({});
+            k.engine.openXbox(k.videoWindow, std::move(*request), k.options);
+            k.openingSessionId = k.engine.snapshot().sessionId;
+            refreshSubtitles({});
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+            // The pad is polled on the UI thread at 250 Hz; the session sends changes and a 33 ms heartbeat.
+            if (pad) {
+                if (!k.controller.start()) veyra::log::warn("xbox-input", "SDL gamepad initialization failed");
+                if (!k.xboxTimer) {
+                    k.xboxTimer = new QTimer(this);
+                    k.xboxTimer->setTimerType(Qt::PreciseTimer);
+                    connect(k.xboxTimer, &QTimer::timeout, this, [this] {
+                        auto& m = *impl_;
+                        if (!m.snapshot.xboxActive) { m.controller.stop(); m.xboxTimer->stop(); return; }
+                        const bool focused = QGuiApplication::focusWindow() != nullptr;
+                        m.engine.xboxController(m.controller.poll(focused));
+                        m.controller.feedback(m.engine.xboxFeedback(), focused);
+                    });
+                }
+                k.xboxTimer->start(4);
+            } else {
+                if (k.xboxTimer) k.xboxTimer->stop();
+                k.controller.stop();
+            }
+#else
+            (void)pad;
+#endif
+        });
+        rememberSource(QStringLiteral("xbox"), label);
+        return true;
+    });
+}
+
+void QmlPlayerBridge::tickXbox() {
+    auto& i = *impl_;
+    if (!i.xbox) return;
+    const auto& s = i.snapshot;
+    const bool active = s.xboxActive;
+    if (active != i.xboxWasActive) {
+        i.xboxWasActive = active;
+        i.xbox->updateStream(active, s.xbox);
+    } else if (active && ++i.xboxStatsTicks >= 15) {
+        i.xboxStatsTicks = 0;
+        i.xbox->updateStream(true, s.xbox);
+    }
+}
+#else
+void QmlPlayerBridge::tickXbox() {}
+#endif
 
 void QmlPlayerBridge::moonlightCapture(bool on) {
 #ifdef VEYRA_ENABLE_MOONLIGHT
@@ -5292,6 +5389,8 @@ QVariantMap QmlPlayerBridge::lastSource() const {
         saved[QStringLiteral("summary")] = tr("PS5 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
     } else if (kind == QLatin1String("moonlight")) {
         saved[QStringLiteral("summary")] = tr("PC 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
+    } else if (kind == QLatin1String("xbox")) {
+        saved[QStringLiteral("summary")] = tr("Xbox 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
     } else if (kind == QLatin1String("screen")) {
         saved[QStringLiteral("summary")] = tr("屏幕捕获 · %1").arg(saved.value(QStringLiteral("label")).toString());
     } else if (hasCaptureSession()) {
@@ -5321,6 +5420,17 @@ void QmlPlayerBridge::resumeLastSource() {
         if (!ps5Connect()) emit notice(tr("没能继续上次的 PS5 串流：%1").arg(impl_->ps5Status), true);
 #else
         emit notice(tr("此版本不含 PS5 串流"), true);
+#endif
+        return;
+    }
+    if (kind == QLatin1String("xbox")) {
+#ifdef VEYRA_ENABLE_XBOX
+        if (!impl_->xbox || !impl_->xbox->resumeLast()) {
+            emit notice(tr("没能继续上次的 Xbox 串流，请在 Xbox 串流窗口里重新选择"), true);
+            emit navigate(QStringLiteral("xbox"));
+        }
+#else
+        emit notice(tr("此版本不含 Xbox 串流"), true);
 #endif
         return;
     }
@@ -5401,6 +5511,7 @@ QString QmlPlayerBridge::sourceTitle() const {
     }
     if (kind == QLatin1String("ps5")) return tr("PS5 串流 · %1").arg(impl_->liveLabel);
     if (kind == QLatin1String("moonlight")) return tr("PC 串流 · %1").arg(impl_->liveLabel);
+    if (kind == QLatin1String("xbox")) return tr("Xbox 串流 · %1").arg(impl_->liveLabel);
     return tr("屏幕捕获 · %1").arg(impl_->liveLabel);
 }
 // "1080p60" / "1080p59.94": the reported height and nominal rate only.

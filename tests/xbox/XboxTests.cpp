@@ -463,7 +463,24 @@ void webrtcTests() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    // --live-device-code: asks Microsoft for a sign-in code with the client id the product uses (no account
+    // is involved, nothing is signed in). Confirms the first step of the real service still answers.
+    if (argc > 1 && std::string(argv[1]) == "--live-device-code") {
+        const auto dir = std::filesystem::temp_directory_path() / "veyra-xbox-live-check";
+        Account account(makeWinHttpTransport(), dir / "unused.bin");
+        try {
+            const DeviceCode code = account.beginSignIn();
+            std::printf("device code issued: user code %zu characters, verification %s, expires in %d s, interval %d s\n",
+                        code.userCode.size(), code.verificationUri.c_str(), code.expiresInSeconds, code.intervalSeconds);
+            return code.userCode.empty() ? 1 : 0;
+        } catch (const ServiceError& e) {
+            std::printf("service error %d: %s\n", e.status, e.body.substr(0, 300).c_str());
+        } catch (const std::exception& e) {
+            std::printf("error: %s\n", e.what());
+        }
+        return 1;
+    }
     protocolTests();
     apiTests();
     accountTests();

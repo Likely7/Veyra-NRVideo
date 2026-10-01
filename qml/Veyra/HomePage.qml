@@ -78,12 +78,12 @@ VPage {
             }
         }
 
-        // .srcgrid: 164px cards, gap 12. Five cards since PC streaming (868 wide in a
-        // 1280 window); a narrower window wraps them onto a second row.
+        // .srcgrid: 164px cards, gap 12. Six cards since PC and Xbox streaming (1044 wide,
+        // fits a 1280 window); a narrower window wraps them onto a second row.
         Flow {
             id: srcGrid
             Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: Math.min(868, root.width - 48)
+            Layout.preferredWidth: Math.min(1044, root.width - 48)
             spacing: 12
             Repeater {
                 // Subtitles name what is really there: the device of the last capture
@@ -96,6 +96,8 @@ VPage {
                       sub: veyra.remotePlayHost.length > 0 ? "已保存主机 " + veyra.remotePlayHost : "局域网串流", act: "ps5" },
                     { glyph: "cast", title: "PC 串流",
                       sub: veyra.moonlight && veyra.moonlight.state.lastLabel ? veyra.moonlight.state.lastLabel : "Sunshine 主机", act: "moonlight" },
+                    { glyph: "gamepad", title: "Xbox 串流",
+                      sub: veyra.xbox && veyra.xbox.state.lastLabel ? veyra.xbox.state.lastLabel : "账号登录 · 实验", act: "xbox" },
                     { glyph: "monitor", title: "屏幕捕获", sub: "窗口或显示器", act: "screen" }
                 ]
                 // The layout owns the slot's position, so the card inside it is free to
@@ -166,6 +168,7 @@ VPage {
                             case "capture": veyra.openCaptureDialog(); break
                             case "ps5": veyra.openPs5Dialog(); break
                             case "moonlight": veyra.openMoonlightDialog(); break
+                            case "xbox": veyra.openXboxDialog(); break
                             case "screen": veyra.openScreenCaptureDialog(); break
                             }
                         }

@@ -579,7 +579,7 @@ struct SubtitleLoader::Impl {
             };
             try{
                 std::vector<SubtitleTrack> external;
-                if(path.empty()||path.starts_with(L"capture:")||path.starts_with(L"capture2:")||path.starts_with(L"remoteplay:")||path.starts_with(L"moonlight:")||path.starts_with(L"screen:")){publish({},true);continue;}
+                if(path.empty()||path.starts_with(L"capture:")||path.starts_with(L"capture2:")||path.starts_with(L"remoteplay:")||path.starts_with(L"moonlight:")||path.starts_with(L"xbox:")||path.starts_with(L"screen:")){publish({},true);continue;}
                 for(const wchar_t* extension:{L".srt",L".ass",L".ssa",L".vtt"}){
                     if(stop.stop_requested())break;
                     auto candidate=std::filesystem::path(path);candidate.replace_extension(extension);

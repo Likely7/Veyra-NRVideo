@@ -107,11 +107,22 @@ void EngineController::moonlightScroll(int delta,bool horizontal){VEYRA_MOONLIGH
 void EngineController::moonlightReleaseInput(){VEYRA_MOONLIGHT_INPUT(releaseInput());}
 #undef VEYRA_MOONLIGHT_INPUT
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+void EngineController::xboxController(const remoteplay::ControllerState& state){std::shared_ptr<source::XboxSessionSource> x;{std::lock_guard lock(mutex_);x=activeXbox_;}if(x)x->controller(state);}
+remoteplay::ControllerFeedback EngineController::xboxFeedback(){std::shared_ptr<source::XboxSessionSource> x;{std::lock_guard lock(mutex_);x=activeXbox_;}return x?x->takeFeedback():remoteplay::ControllerFeedback{};}
+#endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
 void EngineController::openMoonlight(HWND window,source::MoonlightConnectDesc desc,PlayerOptions opts){
     auto request=std::make_shared<source::MoonlightConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.moonlightActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"moonlight:",opts,{},request);});
+}
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+void EngineController::openXbox(HWND window,source::XboxConnectDesc desc,PlayerOptions opts){
+    auto request=std::make_shared<source::XboxConnectDesc>(std::move(desc));
+    {std::lock_guard lock(mutex_);snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.xboxActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
+    post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"xbox:",opts,{},{},request);});
 }
 #endif
 void EngineController::stop(){std::lock_guard lock(mutex_);stop_=true;pending_={};snapshot_.transport=busy_?TransportState::Stopping:TransportState::Empty;}
@@ -213,6 +224,12 @@ PlayerSnapshot EngineController::snapshot()const{
         copy.captureAudio=activeMoonlight_->audioState();copy.audioAvailable=copy.captureAudio.available;
     }
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+    if(copy.xboxActive&&activeXbox_){
+        copy.xbox=activeXbox_->stats();
+        copy.captureAudio=activeXbox_->audioState();copy.audioAvailable=copy.captureAudio.available;
+    }
+#endif
     auto& flow=copy.metrics.flow;
     if(!playing){flow.sourceCompletedFps=flow.outputCompletedFps=flow.validGeneratedFps=flow.presentSubmitFps=flow.xessSdkSubmitFps=0;}
     copy.fps=flow.sourceCompletedFps;copy.submissionFps=flow.presentSubmitFps;
@@ -230,7 +247,7 @@ struct MmcssScope {
     ~MmcssScope(){if(handle)AvRevertMmThreadCharacteristics(handle);}
 };
 }
-void EngineController::run(HWND window,std::wstring path,PlayerOptions options,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest,std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest){
+void EngineController::run(HWND window,std::wstring path,PlayerOptions options,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest,std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest,std::shared_ptr<source::XboxConnectDesc> xboxRequest){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     MmcssScope mmcss(L"Pro Audio");
     status(L"正在初始化GPU与本地运行时…");
@@ -257,8 +274,15 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #else
     (void)moonlightRequest;const bool isMoonlight=false;
 #endif
-    // PS5 and Moonlight are both decoded network streams with the same live scheduling.
-    const bool isStream=isRemote||isMoonlight;
+#ifdef VEYRA_ENABLE_XBOX
+    auto xb=xboxRequest?std::make_shared<source::XboxSessionSource>():nullptr;
+    const bool isXbox=bool(xb);
+    {std::lock_guard lock(mutex_);activeXbox_=xb;}
+#else
+    (void)xboxRequest;const bool isXbox=false;
+#endif
+    // PS5, Moonlight and Xbox are all decoded network streams with the same live scheduling.
+    const bool isStream=isRemote||isMoonlight||isXbox;
     const bool isCapture=physicalCapture||options.captureReplayForTest||isStream||isScreen;
     // File replay has no hardware arrival clock; retain its continuous PTS anchor.
     const bool pairAnchoredLive=physicalCapture||isStream||isScreen;
@@ -269,6 +293,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
     if(moon)activeSource=moon.get();
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    if(xb)activeSource=xb.get();
 #endif
     if(options.captureReplayForTest)veyra::log::info("capture-test","file replay exercises live scheduler; no physical capture device or latency measurement");
     bool audioStarted=false;bool failed=false;
@@ -346,6 +373,24 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(stop_||!cachedFrame)break;
                 }
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+                if(xb){
+                    status(L"正在连接 Xbox…");
+                    ctx.device()->AddRef();xboxRequest->decodeDevice=std::shared_ptr<ID3D12Device>(ctx.device(),[](ID3D12Device* device){device->Release();});
+                    ctx.directQueue()->AddRef();xboxRequest->decodeQueue=std::shared_ptr<ID3D12CommandQueue>(ctx.directQueue(),[](ID3D12CommandQueue* queue){queue->Release();});
+                    if(!xb->connect(std::move(*xboxRequest))){const auto message=xb->stats().message;status(message.empty()?L"Xbox 串流连接失败，请查看诊断":message,true);break;}
+                    xboxRequest.reset();
+                    const auto firstFrameDeadline=Clock::now()+std::chrono::seconds(20);
+                    while(!stop_){
+                        const AVFrame* first=nullptr;const auto result=xb->read(cachedPacket,&first);
+                        if(result==source::SourceReadStatus::Frame){cachedFrame=av_frame_clone(first);break;}
+                        if(result==source::SourceReadStatus::Error){const auto message=xb->stats().message;status(message.empty()?L"Xbox 没有返回可解码的画面，请重新连接。":message,true);break;}
+                        if(Clock::now()>firstFrameDeadline){status(L"已连接 Xbox，但 20 秒内没有收到画面。请重新连接。",true);break;}
+                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    }
+                    if(stop_||!cachedFrame)break;
+                }
+#endif
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                 if(remote){
                     status(L"正在连接 PS5…");
@@ -364,7 +409,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(stop_||!cachedFrame)break;
                 }else{
 #endif
-                if(!isMoonlight&&!(physicalCapture?captureSource.configure(od):activeSource->open(od))){status(isScreen?screenSource.status():physicalCapture&&!captureSource.errorMessage().empty()?captureSource.errorMessage():!isCapture&&!source.errorMessage().empty()?source.errorMessage():L"无法打开视频，请查看诊断",true);break;}
+                if(!isMoonlight&&!isXbox&&!(physicalCapture?captureSource.configure(od):activeSource->open(od))){status(isScreen?screenSource.status():physicalCapture&&!captureSource.errorMessage().empty()?captureSource.errorMessage():!isCapture&&!source.errorMessage().empty()?source.errorMessage():L"无法打开视频，请查看诊断",true);break;}
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                 }
 #endif
@@ -555,7 +600,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             captureSource.setBufferMode(unsigned(options.settings.captureBuffer));
             if(physicalCapture&&!captureSource.start()){status(L"无法启动采集，请查看诊断",true);break;}
             {std::lock_guard lock(mutex_);snapshot_.duration=duration;snapshot_.nominalSourceFps=isImage?0:activeSource->info().averageFps;snapshot_.running=true;snapshot_.transport=TransportState::Playing;snapshot_.image=isImage;snapshot_.capture=isCapture;snapshot_.applied=options.snapshot();snapshot_.desired=desired_;}
-            status(isImage?L"图片已增强，可保存PNG/JPEG":std::format(L"{} | 输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",isRemote?L"PS5 串流":isMoonlight?L"PC 串流":isCapture?L"实时采集":L"播放",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.flowWidth,gd.flowHeight,gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）"));
+            status(isImage?L"图片已增强，可保存PNG/JPEG":std::format(L"{} | 输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",isRemote?L"PS5 串流":isMoonlight?L"PC 串流":isXbox?L"Xbox 串流":isCapture?L"实时采集":L"播放",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.flowWidth,gd.flowHeight,gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）"));
             pipeline::EnhanceGraph::FrameOutputs out;bool reset=true,hasOutput=false,audioRebuffering=false,seekPreviewPending=false;
             bool initialRemoteFramePending=isStream;
             bool initialFileFramePending=!isImage&&!isCapture;
@@ -891,6 +936,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const auto state=moon->audioState();
                     std::lock_guard lock(mutex_);snapshot_.audioAvailable=state.available;snapshot_.captureAudio=state;}
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+                if(xb){xb->setAudioGain(gain);xb->setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
+                    const auto state=xb->audioState();
+                    std::lock_guard lock(mutex_);snapshot_.audioAvailable=state.available;snapshot_.captureAudio=state;}
+#endif
                 // Save the latest processed real frame before a settings transaction
                 // invalidates it (live rendering can be one batch behind processing).
                 std::wstring save;EnhancementSettings requested;std::optional<ChainRuntimeOrder> requestedOrder;
@@ -949,6 +999,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
                     if(moon)moon->videoReset(false);
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+                    if(xb)xb->videoReset(false);
 #endif
 
                     // A drain may outlive several slider notifications. Build
@@ -1081,6 +1134,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_MOONLIGHT
                     if(moon)moon->videoReset();
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+                    if(xb)xb->videoReset();
+#endif
 }
                     if(audioStarted)audioPipe.setPaused(true);wasPaused=true;
                     const bool referencesValid=hasOutput&&out.batch.count&&out.batch.frames[out.batch.count-1].lease&&out.batch.frames[out.batch.count-1].lease->referencesValid;
@@ -1155,6 +1211,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
                         if(moon){const auto message=moon->stats().message;status(message.empty()?L"串流中断，请检查主机和网络后重新连接。":message,true);break;}
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+                        if(xb){const auto message=xb->stats().message;status(message.empty()?L"Xbox 串流中断，请重新连接。":message,true);break;}
 #endif
                         status(isScreen?screenSource.status():isCapture?L"采集信号中断，请检查设备连接或格式":source.errorMessage().empty()?L"视频解码或时间戳错误":source.errorMessage(),true);break;}
                 }
@@ -1574,6 +1633,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_MOONLIGHT
                         &moon,
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+                        &xb,
+#endif
                         &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
                         using State=LiveGpuScheduler::State;auto& batch=watch->output;auto& s=*step;
                         auto updatePending=[&](LiveStepState*){
@@ -1714,6 +1776,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_MOONLIGHT
                             if(didPresent&&moon)moon->videoPresented(double(item.pts100ns)/10000,host100ns());
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+                            if(didPresent&&xb)xb->videoPresented(double(item.pts100ns)/10000,host100ns());
+#endif
                             if(didPresent&&!generated&&!rereadCached){
                                 const auto returned=host100ns();
                                 flow->latency(captureArrival,returned);
@@ -1784,6 +1849,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(isScreen){const auto screen=screenSource.metrics();captureStats.received=screen.received;captureStats.delivered=screen.delivered;captureStats.dropped=screen.dropped;captureStats.readAgeMs=screen.ageMs;captureStats.frameAgeMs=double(std::max<int64_t>(0,host100ns()-pkt.pts.to100ns()))/10000;}
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                 if(remote){const auto rp=remote->sessionSnapshot();captureStats.received=rp.video.accessUnits;captureStats.dropped=remote->skipped();captureStats.delivered=sourceFrames;
+                    captureStats.readAgeMs=double(std::max<int64_t>(0,host100ns()-pkt.arrivalHost100ns))/10000;
+                }
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+                if(xb){captureStats.received=xb->unitsReceived();captureStats.dropped=xb->skipped();captureStats.delivered=sourceFrames;
                     captureStats.readAgeMs=double(std::max<int64_t>(0,host100ns()-pkt.arrivalHost100ns))/10000;
                 }
 #endif
@@ -1889,6 +1959,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_MOONLIGHT
     {std::lock_guard lock(mutex_);activeMoonlight_.reset();}
     if(moon)moon->close();
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    {std::lock_guard lock(mutex_);activeXbox_.reset();}
+    if(xb)xb->close();
 #endif
     // Each step is logged: a session that stopped responding after a remote
     // play failure left "graph shutdown complete" as its last line.

@@ -45,6 +45,7 @@ enum class SourceKind : uint8_t {
     TestPattern,  // synthetic harness input
     ScreenCapture,
     Moonlight,    // Sunshine / GameStream host stream (moonlight-common-c transport)
+    Xbox,         // Xbox home streaming (WebRTC, unofficial)
 };
 
 inline const char* sourceKindName(SourceKind k) {
@@ -56,6 +57,7 @@ inline const char* sourceKindName(SourceKind k) {
     case SourceKind::TestPattern: return "TestPattern";
     case SourceKind::ScreenCapture: return "ScreenCapture";
     case SourceKind::Moonlight: return "Moonlight";
+    case SourceKind::Xbox: return "Xbox";
     default: return "Unknown";
     }
 }
