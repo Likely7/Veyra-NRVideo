@@ -25,7 +25,7 @@ Rectangle {
     // Set by FullscreenBar so upward menus stop above the playback pill.
     property real menuBottomLimit: -1
     // Any popover needs the owner window's full mask, not just the preset menu.
-    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible
+    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     readonly property bool seekPreviewOpen: seekMouse.containsMouse && seekMouse.enabled
@@ -155,6 +155,8 @@ Rectangle {
                     TapHandler { id: cTap; gesturePolicy: TapHandler.WithinBounds; onTapped: cbtn.tapped() }
                 }
 
+                // 载入 (field request 2026-10-02): the home page's sources without leaving 极简.
+                CBtn { objectName: "cine-load"; glyph: "folder"; tip: "载入片源"; onTapped: loadMenu.openAt(this, "up") }
                 CBtn { glyph: "cc"; onTapped: ccMenu.openAt(this, "up") }
                 CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
 
@@ -448,6 +450,33 @@ Rectangle {
             if (o.act === "load") veyra.loadSubtitleDialog()
             else if (o.act === "dlg") bar.requestDialog("subtitle")
             else if (o.track !== undefined) veyra.subtitlePrimary = o.track
+        }
+    }
+
+    // 载入: the same six sources as the home page's cards, each opening its own dialog
+    // (or the file picker) in the main window; the pill steps aside while one is open.
+    VMenu {
+        id: loadMenu
+        objectName: "cine-load-menu"
+        aboveLimit: bar.menuBottomLimit
+        title: "载入片源"
+        items: [
+            { label: "打开视频", note: "MP4 · MKV · 图片", icon: "folder", act: "file" },
+            { label: "采集卡", note: "HDMI 采集设备", icon: "video", act: "capture" },
+            { label: "PS5 串流", note: "局域网串流", icon: "gamepad", act: "ps5" },
+            { label: "PC 串流", note: "Sunshine 主机", icon: "cast", act: "moonlight" },
+            { label: "Xbox 串流", note: "账号登录 · 实验", icon: "gamepad", act: "xbox" },
+            { label: "屏幕捕获", note: "窗口或显示器", icon: "monitor", act: "screen" }
+        ]
+        onPicked: (i, o) => {
+            switch (o.act) {
+            case "file": veyra.openFileDialog(); break
+            case "capture": veyra.openCaptureDialog(); break
+            case "ps5": veyra.openPs5Dialog(); break
+            case "moonlight": veyra.openMoonlightDialog(); break
+            case "xbox": veyra.openXboxDialog(); break
+            case "screen": veyra.openScreenCaptureDialog(); break
+            }
         }
     }
 
