@@ -209,12 +209,16 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     if (!swapChain_) {
     const auto createNative=[&](){
         HRESULT result=E_FAIL;
-        for(unsigned attempt=0;attempt<3;++attempt){
+        // E_ACCESSDENIED: the window still has the previous swapchain. That is normally gone
+        // within a frame or two, but an overlay that hooks presentation (GamePP in the field
+        // log 2026-10-01) can hold it longer; wait up to ~1.3 s before failing the rebuild.
+        constexpr unsigned attempts=8;
+        for(unsigned attempt=0;attempt<attempts;++attempt){
             swapChain1.Reset();
             result=factory_->CreateSwapChainForHwnd(queue,hwnd_,&scd,nullptr,nullptr,&swapChain1);
-            if(result!=E_ACCESSDENIED||!IsWindow(hwnd_)||attempt==2)break;
+            if(result!=E_ACCESSDENIED||!IsWindow(hwnd_)||attempt+1==attempts)break;
             log::warn("present",std::format("swapchain transient access denied attempt={}; bounded owner-thread retry",attempt+1));
-            Sleep(50);
+            Sleep(std::min(50u*(attempt+1),300u));
         }
         return result;
     };
@@ -459,10 +463,19 @@ bool PresentSink::waitForQueueIdle()
     return completed;
 }
 
+bool PresentSink::resizeDue() const
+{
+    // After a failure, wait 0.2, 0.4 ... up to 3.2 s before the next attempt; the old
+    // buffers keep presenting (stretched) meanwhile.
+    return resizeFailures_ == 0 ||
+        GetTickCount64() - lastResizeFailureMs_ >= (100ull << std::min<uint32_t>(resizeFailures_, 5));
+}
+
 void PresentSink::resize(uint32_t width, uint32_t height)
 {
     if (width == 0 || height == 0) return;
     if (width == width_ && height == height_) return;
+    if (!resizeDue()) return;
     diagnostics::CpuStallTrace trace("resize-stall");
     const UINT flags = swapChainFlags_;
     // DXGI spec compliance before ResizeBuffers: wait for outstanding GPU
@@ -475,11 +488,18 @@ void PresentSink::resize(uint32_t width, uint32_t height)
         desc_.hdr10?DXGI_FORMAT_R10G10B10A2_UNORM:desc_.hdr?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM, flags);
     trace.mark("resizeBuffers");
     if (FAILED(hr)) {
-        log::error("present", std::format("ResizeBuffers FAILED hr=0x{:X} (queue idle, buffers released)",
-            static_cast<unsigned>(hr)));
+        ++resizeFailures_;
+        lastResizeFailureMs_ = GetTickCount64();
+        // DXGI_ERROR_INVALID_CALL with our own references released means another module
+        // still holds a back buffer: an overlay or capture hook in this process.
+        if (resizeFailures_ <= 3 || (resizeFailures_ & (resizeFailures_ - 1)) == 0)
+            log::error("present", std::format("ResizeBuffers FAILED hr=0x{:X} (queue idle, buffers released; failures in a row={}; "
+                "an injected overlay/capture hook can hold the buffers)", static_cast<unsigned>(hr), resizeFailures_));
         refetchBackBuffers();
         return;
     }
+    if (resizeFailures_ > 0) log::info("present", std::format("ResizeBuffers recovered after {} failures", resizeFailures_));
+    resizeFailures_ = 0;
     if (!refetchBackBuffers()) return;
     trace.mark("refetchBuffers");
     width_ = width;

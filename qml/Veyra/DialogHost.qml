@@ -341,7 +341,7 @@ Item {
                     enabled: veyra.captureMagewellDevice
                     opacity: enabled ? 1 : 0.35
                     checked: veyra.captureMagewellDevice && veyra.preferences.magewellLowLatency === true
-                    onToggled: veyra.setPreference("magewellLowLatency", checked)
+                    onToggled: checked => veyra.setPreference("magewellLowLatency", checked)
                 }
             }
             VRow {
@@ -411,7 +411,7 @@ Item {
                 hint: "收到 HDR 也按 SDR 预览，立即生效"
                 VSwitch {
                     checked: veyra.captureForceSdr
-                    onToggled: veyra.captureForceSdr = checked
+                    onToggled: checked => veyra.captureForceSdr = checked
                 }
             }
             VRow {
@@ -419,7 +419,7 @@ Item {
                 hint: "采集画面倒置时开启，立即生效"
                 VSwitch {
                     checked: veyra.captureFlipVertical
-                    onToggled: veyra.captureFlipVertical = checked
+                    onToggled: checked => veyra.captureFlipVertical = checked
                 }
             }
         }
@@ -553,7 +553,7 @@ Item {
             VRow {
                 label: "仅观看"
                 hint: "不向 PS5 转发电脑手柄输入"
-                VSwitch { checked: veyra.ps5.viewOnly === true; onToggled: veyra.ps5Set("viewOnly", checked) }
+                VSwitch { checked: veyra.ps5.viewOnly === true; onToggled: checked => veyra.ps5Set("viewOnly", checked) }
             }
             VRow {
                 label: "陀螺仪"
@@ -868,7 +868,7 @@ Item {
             VRow {
                 label: "HDR"
                 hint: mlDialog.st.hdrHost ? "需要主机显示器开启 HDR，且编码选 HEVC 或 AV1；本机需要硬件解码" : "这台主机没有报告 10 位编码能力"
-                VSwitch { objectName: "moonlight-hdr"; enabled: !!mlDialog.st.hdrHost || mlDialog.cfg.hdr === true; checked: mlDialog.cfg.hdr === true; onToggled: mlDialog.ml.set("hdr", checked) }
+                VSwitch { objectName: "moonlight-hdr"; enabled: !!mlDialog.st.hdrHost || mlDialog.cfg.hdr === true; checked: mlDialog.cfg.hdr === true; onToggled: checked => mlDialog.ml.set("hdr", checked) }
             }
             VRow {
                 label: "声道"
@@ -882,22 +882,22 @@ Item {
             VRow {
                 label: "手柄"
                 hint: "把电脑手柄当作主机上的 Xbox 手柄（1 号）"
-                VSwitch { objectName: "moonlight-gamepad"; checked: mlDialog.cfg.gamepad !== false; onToggled: mlDialog.ml.set("gamepad", checked) }
+                VSwitch { objectName: "moonlight-gamepad"; checked: mlDialog.cfg.gamepad !== false; onToggled: checked => mlDialog.ml.set("gamepad", checked) }
             }
             VRow {
                 label: "自动捕获键盘鼠标"
                 hint: "开始后键鼠交给主机；Ctrl+Alt+Shift+Z 释放，+Q 断开，+S 统计"
-                VSwitch { objectName: "moonlight-capture"; checked: mlDialog.cfg.captureInput !== false; onToggled: mlDialog.ml.set("captureInput", checked) }
+                VSwitch { objectName: "moonlight-capture"; checked: mlDialog.cfg.captureInput !== false; onToggled: checked => mlDialog.ml.set("captureInput", checked) }
             }
             VRow {
                 label: "让主机切换到串流分辨率"
                 hint: "关闭时主机保持自己的分辨率，画面由主机缩放"
-                VSwitch { objectName: "moonlight-sops"; checked: mlDialog.cfg.sops === true; onToggled: mlDialog.ml.set("sops", checked) }
+                VSwitch { objectName: "moonlight-sops"; checked: mlDialog.cfg.sops === true; onToggled: checked => mlDialog.ml.set("sops", checked) }
             }
             VRow {
                 label: "主机同时出声"
                 hint: "默认只在本机出声"
-                VSwitch { objectName: "moonlight-hostaudio"; checked: mlDialog.cfg.hostAudio === true; onToggled: mlDialog.ml.set("hostAudio", checked) }
+                VSwitch { objectName: "moonlight-hostaudio"; checked: mlDialog.cfg.hostAudio === true; onToggled: checked => mlDialog.ml.set("hostAudio", checked) }
             }
         }
         DNote { objectName: "moonlight-status"; visible: (mlDialog.st.status || "").length > 0; text: (mlDialog.st.busy ? "处理中 · " : "") + (mlDialog.st.status || "") }
@@ -1039,7 +1039,7 @@ Item {
             VRow {
                 label: "手柄"
                 hint: "把电脑手柄当作主机上的手柄"
-                VSwitch { objectName: "xbox-gamepad"; checked: xbDialog.st.gamepad !== false; onToggled: xbDialog.xb.set("gamepad", checked) }
+                VSwitch { objectName: "xbox-gamepad"; checked: xbDialog.st.gamepad !== false; onToggled: checked => xbDialog.xb.set("gamepad", checked) }
             }
         }
         DNote { objectName: "xbox-status"; visible: (xbDialog.st.status || "").length > 0; text: (xbDialog.st.busy ? "处理中 · " : "") + (xbDialog.st.status || "") }
@@ -1121,7 +1121,7 @@ Item {
                 VSwitch {
                     enabled: screenDialog.o.method === 0
                     checked: screenDialog.o.cursor === true
-                    onToggled: veyra.setScreenOption("cursor", checked)
+                    onToggled: checked => veyra.setScreenOption("cursor", checked)
                 }
             }
             VRow {
@@ -1273,7 +1273,7 @@ Item {
                 hint: "打开新文件时自动选第二条可用字幕"
                 VSwitch {
                     checked: subtitleDialog.pref("subtitleSecondLanguage", false)
-                    onToggled: veyra.setPreference("subtitleSecondLanguage", checked)
+                    onToggled: checked => veyra.setPreference("subtitleSecondLanguage", checked)
                 }
             }
         }
@@ -1314,7 +1314,7 @@ Item {
                 VSwitch {
                     objectName: "subtitle-enabled"
                     checked: subtitleDialog.pref("subtitleEnabled", true)
-                    onToggled: veyra.setPreference("subtitleEnabled", checked)
+                    onToggled: checked => veyra.setPreference("subtitleEnabled", checked)
                 }
             }
             VRow {
@@ -1351,7 +1351,7 @@ Item {
                 label: "背景条"
                 VSwitch {
                     checked: subtitleDialog.pref("subtitleBackground", false)
-                    onToggled: veyra.setPreference("subtitleBackground", checked)
+                    onToggled: checked => veyra.setPreference("subtitleBackground", checked)
                 }
             }
             VRow {
@@ -1369,7 +1369,7 @@ Item {
                 hint: "默认保持字号；开启后超过目标行数才缩小"
                 VSwitch {
                     checked: subtitleDialog.pref("subtitleFit", false)
-                    onToggled: veyra.setPreference("subtitleFit", checked)
+                    onToggled: checked => veyra.setPreference("subtitleFit", checked)
                 }
             }
             VRow {
@@ -1467,7 +1467,7 @@ Item {
                 label: "静音"
                 VSwitch {
                     checked: veyra.muted
-                    onToggled: veyra.muted = checked
+                    onToggled: checked => veyra.muted = checked
                 }
             }
         }
@@ -1520,7 +1520,7 @@ Item {
                 VSwitch {
                     objectName: "audio-stereo"
                     checked: veyra.preferences.audioForceStereo === true
-                    onToggled: veyra.setPreference("audioForceStereo", checked)
+                    onToggled: checked => veyra.setPreference("audioForceStereo", checked)
                 }
             }
         }

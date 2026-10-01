@@ -835,6 +835,35 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     });
     impl_->timer->start(16);
     startGpuSampler();
+    // Overlays that hook presentation get injected into this process when a D3D device
+    // appears (Qt's at start, the engine's at open). Field log 2026-10-01: with GamePP's
+    // modules loaded, both the video swapchain and Qt's own failed every resize, a
+    // settings rebuild could not recreate the swapchain, and the driver crashed on a
+    // window change. Look for them for two minutes and say so once.
+    auto* hookTimer = new QTimer(this);
+    connect(hookTimer, &QTimer::timeout, this, [this, hookTimer, started = GetTickCount64()] {
+        struct Hook { const wchar_t* module; const char* product; bool warn; };
+        static const Hook hooks[] = {
+            {L"GPP64.dll", "GamePP", true}, {L"shade64.dll", "GamePP", true}, {L"GameTracker64.dll", "GamePP", true},
+            {L"RTSSHooks64.dll", "RivaTuner Statistics Server", false}, {L"graphics-hook64.dll", "OBS game capture", false},
+            {L"DiscordHook64.dll", "Discord overlay", false}, {L"gameoverlayrenderer64.dll", "Steam overlay", false},
+        };
+        static bool seen[std::size(hooks)]{};
+        static bool warned = false;
+        for (size_t k = 0; k < std::size(hooks); ++k) {
+            if (seen[k] || !GetModuleHandleW(hooks[k].module)) continue;
+            seen[k] = true;
+            veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({}); it hooks presentation and can "
+                "hold swapchain buffers", hooks[k].product, QString::fromWCharArray(hooks[k].module).toStdString()));
+            if (hooks[k].warn && !warned) {
+                warned = true;
+                emit notice(tr("检测到游加加（GamePP）注入了本程序。它会钩住画面输出，可能导致改窗口大小、全屏、改设置时画面异常或崩溃。"
+                               "请在游加加里关闭对 Veyra 的帧数显示 / 滤镜，或退出游加加后再用。"), true);
+            }
+        }
+        if (GetTickCount64() - started > 120000) hookTimer->stop();
+    });
+    hookTimer->start(5000);
 }
 
 QmlPlayerBridge::~QmlPlayerBridge() {

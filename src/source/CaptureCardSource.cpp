@@ -374,9 +374,35 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     std::unique_ptr<magewell::LowLatencyVideo> magewell;
     magewell::VideoRequest magewellRequest;bool magewellWanted=false;
     std::atomic<bool> magewellDelivering{false};   // set after start, cleared before stop
+    std::atomic<uint64_t> externalFrames{0};
+    // DirectShow keeps capturing while the SDK runs unless the graph is stopped. Two 4K60
+    // P010 DMA streams (~1.5 GB/s each) exceed a Pro Capture card's PCIe link: both fell to
+    // ~28 fps and the SDK frames took 42-49 ms to land (field log 2026-10-01). The graph
+    // is stopped once the SDK has delivered, when no DirectShow audio shares it.
+    bool magewellCanPauseGraph=false,directShowPaused=false;
+    // How old a frame already is, by the driver's own timestamp, when DirectShow hands it to
+    // us: graph clock now - (run reference + sample start). Anything the driver queued
+    // shows up here and nowhere else (some GC573 users report high latency, others not).
+    // The run reference is read just before Run, so the value can read a few ms high.
+    ComPtr<IReferenceClock> ageClock;REFERENCE_TIME runReference=0;std::vector<double> driverAges;
+    void observeDriverAge(REFERENCE_TIME sampleStart){
+        if(!ageClock||runReference<=0)return;
+        REFERENCE_TIME now=0;if(FAILED(ageClock->GetTime(&now)))return;
+        const double ms=double(now-runReference-sampleStart)/10000.0;
+        if(!std::isfinite(ms)||ms<-1000||ms>10000)return;
+        driverAges.push_back(ms);
+        if(driverAges.size()<600)return;
+        auto sorted=driverAges;std::sort(sorted.begin(),sorted.end());
+        log::info("capture-driver-age",std::format("frames={} p50Ms={:.1f} p95Ms={:.1f} minMs={:.1f} maxMs={:.1f} driverBuffers={} "
+            "(driver timestamp -> our callback; includes one frame if the driver stamps the frame start; ~few ms high)",
+            sorted.size(),sorted[sorted.size()/2],sorted[sorted.size()*95/100],sorted.front(),sorted.back(),driverBuffers));
+        driverAges.clear();
+    }
+    long driverBuffers=0;
     bool externalTimeAnchored=false;double externalTimeOffset=0;
     void deliverExternal(const uint8_t* data,size_t bytes,double deviceSeconds,bool discontinuity){
         const auto arrival=Clock::now();
+        externalFrames.fetch_add(1,std::memory_order_relaxed);
         AVFrame* staged=nullptr;bool written=false;
         {std::lock_guard lock(mutex);if(stagingFrame&&!stagingBusy){stagingBusy=true;staged=stagingFrame;}}
         if(staged)written=writeCaptureFrame(layout,data,bytes,*staged,verticalFlip.load());
@@ -532,6 +558,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
         const auto arrival=Clock::now();BYTE* data=nullptr;
         REFERENCE_TIME sampleStart=0,sampleEnd=0;
         const bool sampleTime=sample&&sample->GetTime(&sampleStart,&sampleEnd)==S_OK;
+        if(sampleTime&&!compressedPath)observeDriverAge(sampleStart);
         const bool valid=sample&&std::isfinite(time)&&SUCCEEDED(sample->GetPointer(&data))&&data&&
             (compressedPath?sample->GetActualDataLength()>0:sample->GetActualDataLength()>=LONG(layout.sampleBytes));
         bool enqueued=false;uint64_t timingSequence=0;int64_t copied100ns=0;double lockWaitMs=0,arrivalDeltaMs=0,ptsDeltaMs=0;
@@ -845,6 +872,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
             const auto allocatorHr=queryCaptureAllocatorProperties(input.Get(),actual);
             const bool negotiated=suggestedBuffers>0;
             const bool honored=negotiated&&SUCCEEDED(allocatorHr)&&actual.cBuffers==suggestedBuffers;
+            p.driverBuffers=SUCCEEDED(allocatorHr)?actual.cBuffers:0;
             log::info("capture-buffer",std::format("mode={} requested={} actual buffers={} bytes={} align={} hr=0x{:08X} {}",captureBufferModeKey(bufferPolicy),suggestedBuffers,actual.cBuffers,actual.cbBuffer,actual.cbAlign,uint32_t(allocatorHr),!negotiated?"(driver default)":honored?"(driver honored)":"(driver ignored; negotiation not applied)"));
         }
         log::info("capture",std::format("native ConnectDirect subtype=0x{:08X} hr=0x{:08X} converters=0",native->subtype.Data1,uint32_t(hr)));
@@ -1371,16 +1399,29 @@ bool CaptureCardSource::start(){
     if(p.audioSession&&p.audioSessionDeferred)log::info("capture-audio-bitstream","audio session starts with the first decoded bitstream frame");
     else if(p.audioSession&&!p.audioSession->start())log::warn("capture-audio","audio start failed; retaining video capture");
     p.audioRecovery.reset(GetTickCount64());
+    // Driver frame age (observeDriverAge): fix the graph clock now and note its time at Run.
+    p.ageClock.Reset();p.runReference=0;p.driverAges.clear();
+    {ComPtr<IFilterGraph> fg;ComPtr<IMediaFilter> mf;
+     if(SUCCEEDED(p.graph.As(&fg))&&SUCCEEDED(p.graph.As(&mf))){
+         if(!p.referenceClock)fg->SetDefaultSyncSource();
+         if(SUCCEEDED(mf->GetSyncSource(&p.ageClock))&&p.ageClock&&FAILED(p.ageClock->GetTime(&p.runReference)))p.runReference=0;}}
     p.lastFrame=Impl::Clock::now();const auto hr=p.control->Run();p.info.opened=SUCCEEDED(hr);
     if(p.info.opened&&p.wasapi&&!p.wasapi->start())p.audioError=L"WASAPI 音频启动失败；视频继续运行";
     if(p.info.opened&&p.magewellWanted){
         p.externalTimeAnchored=false;
         p.magewell=std::make_unique<magewell::LowLatencyVideo>();
         std::wstring why;
+        p.externalFrames=0;p.directShowPaused=false;
+        // Audio from a DirectShow device lives in the same graph and would stop with it.
+        p.magewellCanPauseGraph=!p.audioSink&&!p.audioFilter&&!p.audioPassthrough;
         if(!p.magewell->start(p.magewellRequest,[&p](const uint8_t* data,size_t bytes,double t,bool d){p.deliverExternal(data,bytes,t,d);},why)){
             log::warn("magewell",std::format("low latency not started; DirectShow video continues ({})",narrowForLog(why)));
             p.magewell.reset();
-        }else p.magewellDelivering=true;
+        }else{
+            p.magewellDelivering=true;
+            if(!p.magewellCanPauseGraph)log::warn("magewell","audio comes from a DirectShow device in the capture graph, so DirectShow video keeps running beside the SDK; "
+                "choose the card's WASAPI audio endpoint for the full frame rate at 4K");
+        }
     }
     veyra::log::info("capture",std::format("Run hr=0x{:X} actual={}x{} nominalFps={:.3f} mailbox=1 ownedBuffers=2",unsigned(hr),p.info.width,p.info.height,p.info.averageFps));return p.info.opened;
 }
@@ -1452,6 +1493,19 @@ CaptureMetrics CaptureCardSource::metrics()const{
 SourceReadStatus CaptureCardSource::read(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,30);}
 SourceReadStatus CaptureCardSource::tryRead(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,0);}
 SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,const AVFrame** frame,unsigned milliseconds){auto& p=*p_;*frame=nullptr;if(!p.info.opened)return SourceReadStatus::Error;
+    // Magewell: stop DirectShow video once the SDK has proved itself (30 frames), and run
+    // it again if the SDK thread ends, so video never stops altogether.
+    if(p.magewellDelivering.load()&&p.control){
+        const bool sdk=p.magewell&&p.magewell->running();
+        if(sdk&&!p.directShowPaused&&p.magewellCanPauseGraph&&p.externalFrames.load(std::memory_order_relaxed)>=30){
+            const HRESULT hr=p.control->Stop();p.directShowPaused=SUCCEEDED(hr);
+            log::info("magewell",std::format("DirectShow video stopped while the SDK delivers (frees the card's DMA bandwidth) hr=0x{:08X}",uint32_t(hr)));
+        }else if(!sdk&&p.directShowPaused){
+            const HRESULT hr=p.control->Run();p.directShowPaused=false;
+            {std::lock_guard lock(p.mutex);p.forceDiscontinuity=true;}
+            log::warn("magewell",std::format("SDK capture ended; DirectShow video resumed hr=0x{:08X}",uint32_t(hr)));
+        }
+    }
     long code=0;LONG_PTR a=0,b=0;while(p.events&&p.events->GetEvent(&code,&a,&b,0)==S_OK){if(code==EC_DEVICE_LOST||code==EC_ERRORABORT)log::warn("capture-reconnect",std::format("DirectShow event={} detail=0x{:X}",code,uint64_t(a)));p.events->FreeEventParams(code,a,b);if(code==EC_DEVICE_LOST||code==EC_ERRORABORT)return SourceReadStatus::Error;}
     double time=0;uint32_t flags=0;uint64_t sequence=0;pipeline::Rational duration;AVFrame* delivered=nullptr;AVFrame* expiredHardware=nullptr;bool feedDecode=false;
     {
@@ -1511,7 +1565,7 @@ void CaptureCardSource::close()noexcept{
     p.averMediaSwitch.stop();p.embeddedAudioUnavailable=false;
     if(p.audioSession)p.audioSession->stop();p.audioError.clear();
     if(p.audioPassthrough)p.audioPassthrough->close();
-    p.events.Reset();p.control.Reset();p.grab.Reset();p.nullFilter.Reset();p.grabFilter.Reset();p.audioSink.Reset();p.audioFilter.Reset();p.config.Reset();p.device.Reset();p.builder.Reset();p.graph.Reset();p.referenceClock.Reset();p.audioSession.reset();p.audioPassthrough.reset();
+    p.events.Reset();p.control.Reset();p.grab.Reset();p.nullFilter.Reset();p.grabFilter.Reset();p.audioSink.Reset();p.audioFilter.Reset();p.config.Reset();p.device.Reset();p.builder.Reset();p.graph.Reset();p.referenceClock.Reset();p.ageClock.Reset();p.runReference=0;p.audioSession.reset();p.audioPassthrough.reset();
     if(p.decodeThread.joinable()){{std::lock_guard lock(p.mutex);p.decodeStop=true;p.compressedQueue.clear();p.payloadPool.clear();}p.decodeWake.notify_all();p.decodeThread.join();}
     for(auto& thread:p.extraDecodeThreads)if(thread.joinable())thread.join();
     p.extraDecodeThreads.clear();p.extraDecoders.clear();p.mjpegParallel=false;

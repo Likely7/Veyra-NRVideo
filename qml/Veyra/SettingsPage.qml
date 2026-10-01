@@ -194,7 +194,7 @@ VPage {
                             hint: "关闭弹性与转场"
                             VSwitch {
                                 checked: veyra.reducedMotion
-                                onToggled: veyra.reducedMotion = checked
+                                onToggled: checked => veyra.reducedMotion = checked
                             }
                         }
                         VRow {
@@ -300,7 +300,7 @@ VPage {
                             VSwitch {
                                 objectName: "set-resume"
                                 checked: veyra.preferences.rememberPosition !== false
-                                onToggled: veyra.setPreference("rememberPosition", checked)
+                                onToggled: checked => veyra.setPreference("rememberPosition", checked)
                             }
                         }
                         VRow {

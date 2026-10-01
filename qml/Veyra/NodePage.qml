@@ -620,7 +620,7 @@ VPage {
                             Layout.fillWidth: true
                             visible: veyra.opticalFlowChoice === 1
                             NodeLabel { Layout.fillWidth: true; text: "AMD 性能档（宽高减半）" }
-                            VSwitch { objectName: "node-amd-half"; checked: veyra.amdFlowHalf; onToggled: veyra.amdFlowHalf = checked }
+                            VSwitch { objectName: "node-amd-half"; checked: veyra.amdFlowHalf; onToggled: checked => veyra.amdFlowHalf = checked }
                         }
                         NodeLabel { text: "内容节奏" }
                         VSelect {
@@ -681,7 +681,7 @@ VPage {
                                 onMoved: value => veyra.volume = value
                             }
                             Text { text: Math.round(veyra.volume * 100) + "%"; color: Theme.t2; font.family: Theme.fontMono; font.pixelSize: 10 }
-                            VSwitch { objectName: "node-out-mute"; checked: !veyra.muted; onToggled: veyra.muted = !checked }
+                            VSwitch { objectName: "node-out-mute"; checked: !veyra.muted; onToggled: checked => veyra.muted = !checked }
                         }
                         VSeg {
                             objectName: "node-out-sync"
@@ -1286,7 +1286,7 @@ VPage {
                     VSwitch {
                         objectName: "node-enable-" + card.node.id
                         checked: card.node.enabled === true
-                        onToggled: veyra.setEffectEnabled(card.node.index, checked)
+                        onToggled: checked => veyra.setEffectEnabled(card.node.index, checked)
                     }
                     VButton {
                         objectName: "node-unlink-" + card.node.id
@@ -1426,12 +1426,12 @@ VPage {
                 VRow {
                     label: "严格补帧节奏"
                     hint: "帧同步 · 默认关闭"
-                    VSwitch { checked: veyra.fgStrict; onToggled: veyra.fgStrict = checked }
+                    VSwitch { checked: veyra.fgStrict; onToggled: checked => veyra.fgStrict = checked }
                 }
                 VRow {
                     label: "低延迟队列"
                     hint: "减少排队；不宣称延迟下降"
-                    VSwitch { checked: veyra.fgLowQueue; onToggled: veyra.fgLowQueue = checked }
+                    VSwitch { checked: veyra.fgLowQueue; onToggled: checked => veyra.fgLowQueue = checked }
                 }
             }
         }

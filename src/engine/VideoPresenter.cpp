@@ -110,7 +110,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // stretch current buffers there instead of repeatedly draining the GPU
     // and rebuilding provider resources at monitor/DPI boundaries.
     const bool windowChanging=GetPropW(window_,L"Veyra.InteractiveMove")||GetPropW(window_,L"Veyra.DpiTransition");
-    if(!windowChanging&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)) {
+    if(!windowChanging&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)&&sink_.resizeDue()) {
         resized=true;
         if(!ring.drainQueue())return false;sink_.resize(targetWidth,targetHeight);
         // A capture hook may temporarily retain a DXGI buffer. Keep the old

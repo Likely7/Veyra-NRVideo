@@ -90,7 +90,8 @@ if problems:
     raise SystemExit(1)
 
 with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-    for f in files + [{'path': 'package-manifest.json'}]:
+    # The base's own manifest is in `files` already; the rewritten one goes in once.
+    for f in [f for f in files if f['path'] != 'package-manifest.json'] + [{'path': 'package-manifest.json'}]:
         z.write(pkg / f['path'], Path(pkg.name) / f['path'])
 print('package', pkg, len(files), 'files; player sha256', new_hash)
 print('zip', zpath, zpath.stat().st_size)

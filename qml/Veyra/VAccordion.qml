@@ -166,7 +166,7 @@ Rectangle {
                     objectName: acc.switchObjectName
                     visible: acc.enabledSwitch
                     checked: acc.on
-                    onToggled: acc.toggled(checked)
+                    onToggled: checked => acc.toggled(checked)
                 }
 
                 // .chev rotates 90 degrees when the card is open.

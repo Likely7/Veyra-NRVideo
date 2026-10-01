@@ -1081,7 +1081,7 @@ VPage {
                                      + (veyra.videoSrQuality > 0 ? " · 质量 " + veyra.videoSrQuality : "")
                             on: veyra.srEnabled
                             open: true
-                            onToggled: veyra.srEnabled = on
+                            onToggled: on => veyra.srEnabled = on
 
                             VRow {
                                 label: "目标尺寸"
@@ -1130,7 +1130,7 @@ VPage {
                             title: "RTX Video HDR"
                             summary: veyra.videoHdr ? (veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : "已开启") : "已关闭"
                             on: veyra.videoHdr
-                            onToggled: veyra.videoHdr = on
+                            onToggled: on => veyra.videoHdr = on
                             Repeater {
                                 model: [{key:"contrast",label:"对比度",from:0,to:200,def:125},
                                         {key:"saturation",label:"饱和度",from:0,to:200,def:75},
@@ -1439,7 +1439,7 @@ VPage {
                                 hint: "帧同步 · 默认关闭"
                                 VSwitch {
                                     checked: veyra.fgStrict
-                                    onToggled: veyra.fgStrict = checked
+                                    onToggled: checked => veyra.fgStrict = checked
                                 }
                             }
                             VSubGroup {
@@ -1466,7 +1466,7 @@ VPage {
                                     VSwitch {
                                         objectName: "list-amd-half"
                                         checked: veyra.amdFlowHalf
-                                        onToggled: veyra.amdFlowHalf = checked
+                                        onToggled: checked => veyra.amdFlowHalf = checked
                                     }
                                 }
                                 VRow {
@@ -1496,7 +1496,7 @@ VPage {
                                 VSwitch {
                                     objectName: "list-low-queue"
                                     checked: veyra.fgLowQueue
-                                    onToggled: veyra.fgLowQueue = checked
+                                    onToggled: checked => veyra.fgLowQueue = checked
                                 }
                             }
                         }
@@ -1531,7 +1531,7 @@ VPage {
                                 label: "静音"
                                 VSwitch {
                                     checked: veyra.muted
-                                    onToggled: veyra.muted = checked
+                                    onToggled: checked => veyra.muted = checked
                                 }
                             }
                             VRow {
@@ -1641,7 +1641,7 @@ VPage {
                                 VSwitch {
                                     objectName: "display-hold-compare"
                                     checked: veyra.preferences.holdCompare !== false
-                                    onToggled: veyra.setPreference("holdCompare", checked)
+                                    onToggled: checked => veyra.setPreference("holdCompare", checked)
                                 }
                             }
                             VRow {
@@ -1660,7 +1660,7 @@ VPage {
                                 VSwitch {
                                     objectName: "display-force-sdr"
                                     checked: veyra.captureForceSdr
-                                    onToggled: veyra.captureForceSdr = checked
+                                    onToggled: checked => veyra.captureForceSdr = checked
                                 }
                             }
                             VRow {

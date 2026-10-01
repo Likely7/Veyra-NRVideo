@@ -209,7 +209,7 @@ ColumnLayout {
             hint: "低延迟顺序，仅预览、全层同步"
             VSwitch {
                 checked: editor.nrFirst
-                onToggled: editor.orderEdited(checked)
+                onToggled: checked => editor.orderEdited(checked)
             }
         }
     }
