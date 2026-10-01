@@ -68,16 +68,22 @@ Rectangle {
                     objectName: "cine-cover"
                     anchors.fill: parent
                     anchors.margins: 1
-                    visible: status === Image.Ready
+                    // Drawn through the masking effect below, never directly.
+                    visible: false
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     cache: false
                     source: veyra.hasSource && !veyra.isCapture ? "image://veyra-thumb/cover/" + veyra.thumbnailGeneration : ""
-                    layer.enabled: visible
-                    layer.effect: MultiEffect {
-                        maskEnabled: true
-                        maskSource: coverMask
-                    }
+                }
+                // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
+                // a screen DPI change while it walks the parent's children, and the walk then touched
+                // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
+                MultiEffect {
+                    source: coverArt
+                    anchors.fill: coverArt
+                    visible: coverArt.status === Image.Ready
+                    maskEnabled: true
+                    maskSource: coverMask
                 }
                 Rectangle { id: coverMask; anchors.fill: coverArt; radius: 11; visible: false; layer.enabled: true }
             }

@@ -86,6 +86,9 @@ namespace Gdiplus { using std::min; using std::max; }
 #include "veyra/ui/PlaybackPowerGuard.h"
 #include "veyra/gfx/XessMfgUnlock.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
+#include "veyra/gfx/PresentationHooks.h"
+#include <dxgi1_4.h>
+#include <wrl/client.h>
 #include "veyra/ngx/NrArchitecturePolicy.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/ScreenCaptureSource.h"
@@ -628,6 +631,30 @@ bool prepareStartupPreset(const engine::PresetEntry& entry, engine::ChainSession
 }
 } // namespace
 
+// The first hardware adapter, the one the engine opens (gfx adapter[0]): 0x10DE NVIDIA,
+// 0x1002 AMD, 0x8086 Intel, 0 unknown.
+static uint32_t primaryGpuVendor() {
+    static const uint32_t vendor = [] {
+        Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+        if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return 0u;
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i, adapter.Reset()) {
+            DXGI_ADAPTER_DESC1 desc{};
+            if (FAILED(adapter->GetDesc1(&desc)) || (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) continue;
+            return unsigned(desc.VendorId);
+        }
+        return 0u;
+    }();
+    return vendor;
+}
+// FSR 4 ML frame generation needs an AMD RX 9000; on other GPUs the provider crashed the
+// whole program (field report 2026-10-01). Known non-AMD adapters are refused up front.
+static bool fsr4Possible() { const auto v = primaryGpuVendor(); return v == 0 || v == 0x1002; }
+// What replaces XeSS FG while an overlay that crashes its proxy swapchain is injected.
+static engine::FrameGenerationBackend hookSafeBackend() {
+    return primaryGpuVendor() == 0x10DE ? engine::FrameGenerationBackend::Dlss : engine::FrameGenerationBackend::Fsr;
+}
+
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
@@ -836,34 +863,49 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     impl_->timer->start(16);
     startGpuSampler();
     // Overlays that hook presentation get injected into this process when a D3D device
-    // appears (Qt's at start, the engine's at open). Field log 2026-10-01: with GamePP's
-    // modules loaded, both the video swapchain and Qt's own failed every resize, a
-    // settings rebuild could not recreate the swapchain, and the driver crashed on a
-    // window change. Look for them for two minutes and say so once.
+    // appears (Qt's at start, the engine's at open); see gfx/PresentationHooks.h for what
+    // they broke in the field. Look for them for two minutes, say so once, and move a
+    // saved XeSS frame generation (which they crash) to DLSS or FSR.
     auto* hookTimer = new QTimer(this);
     connect(hookTimer, &QTimer::timeout, this, [this, hookTimer, started = GetTickCount64()] {
-        struct Hook { const wchar_t* module; const char* product; bool warn; };
-        static const Hook hooks[] = {
-            {L"GPP64.dll", "GamePP", true}, {L"shade64.dll", "GamePP", true}, {L"GameTracker64.dll", "GamePP", true},
-            {L"RTSSHooks64.dll", "RivaTuner Statistics Server", false}, {L"graphics-hook64.dll", "OBS game capture", false},
-            {L"DiscordHook64.dll", "Discord overlay", false}, {L"gameoverlayrenderer64.dll", "Steam overlay", false},
+        struct Seen { const wchar_t* module; const char* product; };
+        static const Seen others[] = {
+            {L"graphics-hook64.dll", "OBS game capture"}, {L"DiscordHook64.dll", "Discord overlay"},
+            {L"gameoverlayrenderer64.dll", "Steam overlay"},
         };
-        static bool seen[std::size(hooks)]{};
-        static bool warned = false;
-        for (size_t k = 0; k < std::size(hooks); ++k) {
-            if (seen[k] || !GetModuleHandleW(hooks[k].module)) continue;
-            seen[k] = true;
-            veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({}); it hooks presentation and can "
-                "hold swapchain buffers", hooks[k].product, QString::fromWCharArray(hooks[k].module).toStdString()));
-            if (hooks[k].warn && !warned) {
-                warned = true;
-                emit notice(tr("检测到游加加（GamePP）注入了本程序。它会钩住画面输出，可能导致改窗口大小、全屏、改设置时画面异常或崩溃。"
-                               "请在游加加里关闭对 Veyra 的帧数显示 / 滤镜，或退出游加加后再用。"), true);
+        static bool loggedOthers[std::size(others)]{};
+        for (size_t k = 0; k < std::size(others); ++k)
+            if (!loggedOthers[k] && GetModuleHandleW(others[k].module)) {
+                loggedOthers[k] = true;
+                veyra::log::info("overlay-hooks", std::format("{} is injected into this process", others[k].product));
+            }
+        static bool handled = false;
+        if (const auto* hook = gfx::injectedPresentationHook(); hook && !handled) {
+            handled = true;
+            veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({}); XeSS frame generation is "
+                "kept off while it is present", hook->product, QString::fromWCharArray(hook->module).toStdString()));
+            auto s = settings();
+            if (s.frameGenerationBackend == engine::FrameGenerationBackend::XeSS) {
+                s.frameGenerationBackend = hookSafeBackend();
+                if (impl_->chain.fgMultiplier > 2 && engine::fsrFrameGeneration(s.frameGenerationBackend)) impl_->chain.fgMultiplier = 2;
+                if (impl_->commit(s)) { emit settingsChanged(); emit chainChanged(); }
+                emit notice(tr("检测到 %1 注入了本程序，它和 XeSS 补帧一起用会闪退，补帧已自动改用 %2。关掉它的帧数显示后可以换回 XeSS")
+                                .arg(QString::fromUtf8(hook->product),
+                                     s.frameGenerationBackend == engine::FrameGenerationBackend::Dlss ? tr("DLSS") : tr("FSR 3.1")), true);
+            } else {
+                emit notice(tr("检测到 %1 注入了本程序。它和 XeSS 补帧不兼容；如果改窗口大小、全屏或改设置时画面异常，请关掉它的帧数显示或滤镜")
+                                .arg(QString::fromUtf8(hook->product)), false);
             }
         }
         if (GetTickCount64() - started > 120000) hookTimer->stop();
     });
-    hookTimer->start(5000);
+    hookTimer->start(2000);
+    // A saved FSR 4 ML choice on a non-AMD GPU crashed at the first open; move it on.
+    if (settings().frameGenerationBackend == engine::FrameGenerationBackend::Fsr4 && !fsr4Possible()) {
+        auto s = settings();
+        s.frameGenerationBackend = primaryGpuVendor() == 0x10DE ? engine::FrameGenerationBackend::Dlss : engine::FrameGenerationBackend::Fsr;
+        if (impl_->commit(s)) veyra::log::warn("fg-backend", "saved FSR 4 ML frame generation needs an AMD RX 9000; switched for this GPU");
+    }
 }
 
 QmlPlayerBridge::~QmlPlayerBridge() {
@@ -1121,6 +1163,20 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
                     : value == QLatin1String("fsr4") ? engine::FrameGenerationBackend::Fsr4
                     : engine::FrameGenerationBackend::Dlss;
     if (s.frameGenerationBackend == want) return;
+    if (want == engine::FrameGenerationBackend::Fsr4 && !fsr4Possible()) {
+        // Keep the previous choice; the menu snaps back to it.
+        emit notice(tr("FSR 4 ML 补帧只支持 AMD RX 9000 显卡，当前显卡不能使用，已保持原来的补帧方式"), true);
+        emit settingsChanged();
+        return;
+    }
+    if (want == engine::FrameGenerationBackend::XeSS) {
+        if (const auto* hook = gfx::injectedPresentationHook()) {
+            emit notice(tr("检测到 %1 正在注入本程序，它和 XeSS 补帧一起用会导致闪退，已保持原来的补帧方式。"
+                           "关掉它的帧数显示后可以用 XeSS；不关也可以用 DLSS 或 FSR 补帧").arg(QString::fromUtf8(hook->product)), true);
+            emit settingsChanged();
+            return;
+        }
+    }
     s.frameGenerationBackend = want;
     // A DLSS multiplier above XeSS's ceiling used to make the switch fail
     // silently in effect (the backend stayed DLSS). Clamp to the ceiling instead.

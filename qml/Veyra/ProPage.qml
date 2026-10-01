@@ -268,15 +268,27 @@ VPage {
         readonly property color tone: veyra.runStatusLevel === "ok" ? Theme.ok
                                     : veyra.runStatusLevel === "warn" ? "#F2B941"
                                     : veyra.runStatusLevel === "err" ? Theme.err : Qt.rgba(1, 1, 1, 0.3)
-        Rectangle {
+        Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 4
-            radius: 2
-            color: light.tone
-            opacity: veyra.runStatusLevel === "idle" ? 0.35 : 0.9
-            Behavior on color { ColorAnimation { duration: Theme.d(300) } }
-            layer.enabled: veyra.runStatusLevel !== "idle"
-            layer.effect: MultiEffect { shadowEnabled: true; shadowColor: light.tone; shadowBlur: 0.6; shadowVerticalOffset: 0; blurMax: 12; autoPaddingEnabled: true }
+            Rectangle {
+                id: strip
+                anchors.fill: parent
+                radius: 2
+                color: light.tone
+                opacity: veyra.runStatusLevel === "idle" ? 0.35 : 0.9
+                Behavior on color { ColorAnimation { duration: Theme.d(300) } }
+            }
+            // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
+            // a screen DPI change while it walks the parent's children, and the walk then touched
+            // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
+            MultiEffect {
+                source: strip
+                anchors.fill: strip
+                visible: veyra.runStatusLevel !== "idle"
+                opacity: strip.opacity
+                shadowEnabled: true; shadowColor: light.tone; shadowBlur: 0.6; shadowVerticalOffset: 0; blurMax: 12; autoPaddingEnabled: true
+            }
         }
         Text {
             text: veyra.runStatus + (veyra.runStatusDetail.length > 0 ? " · " + veyra.runStatusDetail : "")

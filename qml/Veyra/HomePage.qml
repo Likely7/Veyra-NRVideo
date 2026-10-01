@@ -44,8 +44,12 @@ VPage {
                 sourceSize.width: 128
                 fillMode: Image.PreserveAspectFit
             }
-            layer.enabled: true
-            layer.effect: MultiEffect {
+            // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
+            // a screen DPI change while it walks the parent's children, and the walk then touched
+            // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
+            MultiEffect {
+                source: logoImg
+                anchors.fill: logoImg
                 shadowEnabled: true
                 shadowColor: "#FFFFFF"
                 shadowHorizontalOffset: 0

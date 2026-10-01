@@ -697,6 +697,20 @@ int main(int argc, char** argv) {
     // The first frame may come before the page layout settles; one pass after the
     // event loop starts covers a scene that then never animates.
     QTimer::singleShot(0, &app, follow);
+    // Test only: VEYRA_TEST_DPI_FLIP=<ms> sends the window the WM_DPICHANGED a move to a
+    // 150 % screen would, then back to 100 % three seconds later, so the screen-change
+    // crash (field report 2026-10-01, two monitors) can be reproduced on one monitor.
+    if (const auto flip = qEnvironmentVariableIntValue("VEYRA_TEST_DPI_FLIP"); flip > 0) {
+        const auto send = [window](UINT dpi) {
+            const HWND hwnd = reinterpret_cast<HWND>(window->winId());
+            RECT r{};
+            GetWindowRect(hwnd, &r);
+            veyra::log::info("dpi-test", std::format("WM_DPICHANGED dpi={}", dpi));
+            SendMessageW(hwnd, WM_DPICHANGED, MAKEWPARAM(dpi, dpi), reinterpret_cast<LPARAM>(&r));
+        };
+        QTimer::singleShot(flip, &app, [send] { send(144); });
+        QTimer::singleShot(flip + 3000, &app, [send] { send(96); });
+    }
 
     // Before every open, place the native window and force the pending layout to
     // be applied so the client size the presenter reads is the real one.

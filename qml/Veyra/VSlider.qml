@@ -69,16 +69,20 @@ Item {
         x: track.width * slider.frac - width / 2
         scale: drag.active || hover.hovered ? 1.25 : 1.0
         Behavior on scale { NumberAnimation { duration: Theme.d(350); easing.bezierCurve: Theme.spring } }
-        // box-shadow: 0 2px 6px rgba(0,0,0,.5)
-        layer.enabled: true
-        layer.effect: MultiEffect {
-            shadowEnabled: true
-            shadowColor: Qt.rgba(0, 0, 0, 0.5)
-            shadowVerticalOffset: 2
-            shadowBlur: 0.5
-            blurMax: 12
-            autoPaddingEnabled: true
-        }
+    }
+    // box-shadow: 0 2px 6px rgba(0,0,0,.5). A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
+    // a screen DPI change while it walks the parent's children, and the walk then touched
+    // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
+    MultiEffect {
+        source: knob
+        anchors.fill: knob
+        scale: knob.scale
+        shadowEnabled: true
+        shadowColor: Qt.rgba(0, 0, 0, 0.5)
+        shadowVerticalOffset: 2
+        shadowBlur: 0.5
+        blurMax: 12
+        autoPaddingEnabled: true
     }
     Item {
     id: trackInput

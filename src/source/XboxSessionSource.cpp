@@ -246,7 +246,12 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
             const xbox::SessionState state = p.api->state(p.sessionId);
             log::info("xbox", "session state " + state.state);
             if (state.state == "Provisioned") break;
-            if (state.state == "Failed") { fail(describeSessionFailure(state.errorCode, state.errorMessage)); return; }
+            if (state.state == "Failed") {
+                log::error("xbox", "session failed code=" + (state.errorCode.empty() ? std::string("?") : state.errorCode) +
+                                   " message=" + (state.errorMessage.empty() ? std::string("?") : state.errorMessage));
+                fail(describeSessionFailure(state.errorCode, state.errorMessage));
+                return;
+            }
             if (state.state == "ReadyToConnect" && !connectSent) {
                 p.api->connect(p.sessionId, p.desc.account->transferToken());
                 connectSent = true;

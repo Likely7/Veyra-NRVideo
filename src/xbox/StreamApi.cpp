@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "veyra/xbox/StreamApi.h"
+#include "veyra/Log.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -134,14 +135,32 @@ std::string StreamApi::exchangeSdp(const std::string& sessionId, const std::stri
     const std::string path = "/v5/sessions/home/" + sessionId + "/sdp";
     call("POST", path, body.dump());
     const std::string exchange = getExchange(path);
+    json answer;
     try {
-        const json answer = json::parse(exchange);
-        const std::string sdp = answer.value("sdp", "");
-        if (sdp.empty()) throw std::runtime_error("the console's answer has no SDP (status: " + answer.value("status", std::string("?")) + ")");
-        return sdp;
+        answer = json::parse(exchange);
     } catch (const json::exception&) {
         throw std::runtime_error("the console's answer is not JSON");
     }
+    // A refusal comes back with "sdp": null plus a status and error details (field log
+    // 2026-10-01: value("sdp") threw on the null and hid the reason). Log the whole answer
+    // without the SDP body; it carries no credentials.
+    const auto text = [&](const char* key) {
+        return answer.contains(key) && answer[key].is_string() ? answer[key].get<std::string>() : std::string();
+    };
+    const std::string sdp = text("sdp");
+    if (sdp.empty()) {
+        json summary = answer;
+        summary.erase("sdp");
+        log::warn("xbox", "console SDP answer without SDP: " + summary.dump());
+        std::string why = text("status");
+        if (answer.contains("errorDetails") && answer["errorDetails"].is_object()) {
+            const json& e = answer["errorDetails"];
+            for (const char* key : {"code", "message"})
+                if (e.contains(key) && e[key].is_string()) why += std::string(why.empty() ? "" : " / ") + e[key].get<std::string>();
+        }
+        throw std::runtime_error("the console refused the offer (" + (why.empty() ? std::string("no reason given") : why) + ")");
+    }
+    return sdp;
 }
 
 bool StreamApi::teredoIpv4(const std::string& ipv6, std::string* ipv4, int* port) {
