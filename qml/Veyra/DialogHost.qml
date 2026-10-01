@@ -1474,7 +1474,7 @@ Item {
                 value: Math.round(veyra.volume * 100) + "%"
                 VSlider {
                     implicitWidth: 170
-                    from: 0; to: 1; value: veyra.volume
+                    from: 0; to: 1; value: veyra.volume; inputScale: 100
                     onMoved: veyra.volume = value
                 }
             }

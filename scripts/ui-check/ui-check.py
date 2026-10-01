@@ -8,6 +8,7 @@ The snippet is appended inside the staged Main.qml (restored afterwards) and tal
 through log lines:
   UITEST_SHOT <name>                 screen shot of the main window plus the 60px below it (the pill)
   UITEST_CLICK <x> <y>               a left click at screen coordinates
+  UITEST_DCLICK <x> <y>              a left double-click at screen coordinates
   UITEST_DRAG <x0> <y0> <x1> <y1>    a left-button drag at screen coordinates
   UITEST_KEY <vk> [count]            key presses (Windows virtual-key code) to the focused window
   UITEST_DONE / UITEST_FAIL <why>    the verdict
@@ -116,6 +117,14 @@ def click(x, y):
     user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
 
 
+def double_click(x, y):
+    click(x, y)
+    time.sleep(0.08)
+    user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+    time.sleep(0.06)
+    user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+
+
 def drag(x0, y0, x1, y1):
     move(x0, y0)
     time.sleep(0.15)
@@ -149,6 +158,14 @@ try:
                 name = line.split('UITEST_SHOT ')[1].strip()
                 time.sleep(0.2)
                 print('shot', name, 'ok' if shot(proc.pid, out / f'{name}.png') else 'NO WINDOW')
+            elif 'UITEST_DCLICK ' in line:
+                x, y = (float(v) for v in line.split('UITEST_DCLICK ')[1].split()[:2])
+                raise_app(proc.pid, True)
+                time.sleep(0.3)
+                try:
+                    double_click(x, y)
+                finally:
+                    raise_app(proc.pid, False)
             elif 'UITEST_CLICK ' in line:
                 x, y = (float(v) for v in line.split('UITEST_CLICK ')[1].split()[:2])
                 raise_app(proc.pid, True)

@@ -376,7 +376,7 @@ Rectangle {
                     VIcon { name: "vol"; color: Theme.t2 }
                     VSlider {
                         Layout.fillWidth: true
-                        from: 0; to: 1; value: veyra.volume
+                        from: 0; to: 1; value: veyra.volume; inputScale: 100
                         onMoved: veyra.volume = value
                     }
                 }

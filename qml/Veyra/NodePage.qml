@@ -677,7 +677,7 @@ VPage {
                             VSlider {
                                 objectName: "node-out-volume"
                                 Layout.fillWidth: true
-                                from: 0; to: 1; value: veyra.volume
+                                from: 0; to: 1; value: veyra.volume; inputScale: 100
                                 onMoved: value => veyra.volume = value
                             }
                             Text { text: Math.round(veyra.volume * 100) + "%"; color: Theme.t2; font.family: Theme.fontMono; font.pixelSize: 10 }
