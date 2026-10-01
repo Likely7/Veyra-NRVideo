@@ -64,7 +64,9 @@ Rectangle {
         function togglePlayPause(){}
         function setExportTrackPolicy(audio,policy){}
     }
-    ExportPage { id: page; property var veyra: backend; pageId: "exp"; visible: true; enabled: true }
+    // VPage takes its parent and size from Main.qml's page stack (home) and only joins
+    // the scene while it is the shown page; the fixture places it directly instead.
+    ExportPage { id: page; property var veyra: backend; pageId: "exp"; parent: fixture; width: fixture.width; height: fixture.height; visible: true; enabled: true }
     TestCase {
         name: "ExportPage"
         when: windowShown
