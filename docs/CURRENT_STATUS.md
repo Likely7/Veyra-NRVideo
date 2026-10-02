@@ -1,5 +1,9 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-03 2.0.2 已发布（最新）
+
+[正式 Release](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.2)，tag/source `0dafc57`，已合并并推送 nrvideo/main，latest/公开/一个便携 ZIP。三版 NR、Claude RTSS 兼容、Codex Xbox/VRR/倍速/启动恢复全部包含；英文首页、中文切换、双语 Release 与支持二维码已远端核对。最终包 1520 文件审计、干净解压实跑和远端 SHA256 一致。完整身份与验证在 WORKLOG 最新节；以下准备/未发布状态均为历史。用户现场显存根因与 Xbox/VRR 实卡边界没有冒称通过。
+
 ## 2026-10-03 2.0.2 集成与发布
 
 用户最新明确授权恢复 NVIDIA 原版 NR，与 Lecram、SF-v2 共三版，并合并 Claude `28a440b` 和 Codex `bfafbea` 后发布 2.0.2。两边已合入隔离发布分支，新增原版用 ID 3，旧 ID/默认值保留。已通过编译、11 组回归、真实列表/节点 NR 切换与重启保存、倍速与启动恢复。英文 README 为首页，中文见 README_CN.md；Release 英文在前中文在后，保留 2.0.0 主要更新与双 220px 二维码，资产为单个便携 ZIP。发布和最终包证据见 WORKLOG 与 RELEASE_2.0.2_PLAN_2026-10-03.md；以下“未授权/README 不动/候选不发布”等是此前历史，不覆盖此次授权。

@@ -1,5 +1,15 @@
 # Veyra 工作记录
 
+## 2026-10-03 2.0.2 正式发布完成
+
+- 发布地址 https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.2 ，2026-10-02 18:40:18 UTC（台北 10-03 02:40:18）公开并设为 latest，非 draft / 非 prerelease。源码 tag v2.0.2 指向 `0dafc57e7ad54880b1748e7046970ddc825e7e46`；该提交同时包含 Claude `28a440b` 与 Codex `bfafbea`。主分支从 `8f42fd5` 干净 fast-forward 后用 `git push --atomic nrvideo main refs/tags/v2.0.2` 推送，未动 origin。
+- `python -B scripts/package-qml-release.py --build E:/项目/Veyra/build/release-2.0.2-20261003 --runtime-source E:/项目/Veyra/releases/2.0.1-20261002/Veyra-2.0.1-win64-portable --original-nr <已批准桌面原件> --legacy-licenses E:/项目/Veyra/releases/1.4.4/final/Veyra-1.4.4-win64-portable/licenses --qt C:/veyra-deps/qt-veyra/6.8.3/msvc2022_64 --qt-licenses E:/项目/Veyra/deps/qt-licenses-6.8.3 --output E:/项目/Veyra/releases/2.0.2 --label 2.0.2 --release` 退出 0。43 个 runtime 哈希/数字版本/签名、patched FFmpeg provenance、1520 个载荷文件审核通过；manifest 的源码树 clean、releaseReady=true。
+- **唯一上传资产** `Veyra-2.0.2-win64-portable.zip`：525684472 bytes / SHA256 `98c37f3c31cec0370a73a42e746ee4fed6c6833f75d86231f8b48e58ea41ba50`。EXE SHA256 `eafb7511f00321eec3b8bafce07ecea89b12c3deaff83b8f3634b7939bcf2ba8`。本地源码快照和 sha 文件仅留作审计，未增加上传附件；对应应用源码由已核对的 v2.0.2 tag 提供（含 SoundTouch），未变动第三方源码链接到原 2.0.0 dependency-source，均公开可访问。最终交付索引 `E:/项目/Veyra/releases/2.0.2/delivery-index.json`。
+- `python -B E:/项目/Veyra/tmp/release-2.0.2-20261003/verify-package.py` 退出 0：从最终 ZIP 解压到 `verify/.../final/unpacked`，PATH 仅 Windows，默认启动检测 RTSS，原版 NR 实际启用、2× 实测恰为 2、XeSS/FSR3 与原版 NR 组合出帧，无 ERROR/FATAL，截图成功。测试结束重新核验全部 1520 文件，注入 QML 已原样恢复；报告 `verify/.../final/report.json`。没有借开发环境 DLL 补齐最终包。
+- 发布命令：`gh release create v2.0.2 <唯一便携ZIP> --repo Likely7/Veyra-NRVideo --title "Veyra 2.0.2" --notes-file docs/RELEASE_NOTES_2.0.2.md --draft --verify-tag --target main`，上传完先检查 assetCount=1、state=uploaded、525684472 bytes 和 GitHub sha256 等于本地，再 `gh release edit v2.0.2 --repo Likely7/Veyra-NRVideo --draft=false --latest`。远端正文逐字与本地核对，英文先于中文、2.0.0 主内容和双 QR 各 220px 保留。最终 Release/下载/英文 README/两图全部 HTTP 200，latest API 返回 v2.0.2。证据 `logs/.../release-draft-verified.json`、`release-published.json`、`public-verification.json`、`remote-source-check.json` 与 `merge-push.log`。
+- 收尾只申请删除本轮 `verify/release-2.0.2-20261003/final/unpacked` 重复解压目录，命令包含绝对路径、运行进程和 reparse-point 检查；工具在 CreateProcess 前以 `blocked by policy` 拒绝，检查和删除均未执行，未绕过。副本保留；最终 ZIP/当前构建/对应源码/必要验收记录完整。RTSS 临时 OSD 槽已由测试 helper 正常释放，未修改用户 RTSS/OBS 配置，无测试 Veyra 实例遗留。
+- 群公告在 `docs/GROUP_ANNOUNCEMENT_2.0.2.md`，仅交付文案，没有代发群消息。真实 Xbox 长稳、主机 VRR 采集与 5060 Ti 显存增长根因仍按 Release 明确保留；公开发布不等于这些未验证项通过。
+
 ## 2026-10-03 2.0.2 集成、三版 NR 与发布准备
 
 - `python -B .../rtss-tests-v2.py`：RTSS 7.3.7 实际运行，临时空闲共享 OSD 槽写入测试文字（不改 RTSS/OBS 配置，结束已释放）。Auto 软件 UI 与 Off D3D12 UI 各 52 秒，NR+SR、DLSS 2×、XeSS、FSR3、全屏/窗口/专业/首页均通过；按日志断言实际后端而非请求值，无 ERROR/FATAL、无设备移除。截图确认 Auto 视频上有 OSD、首页无 OSD；Off 本进程无 OSD。此轮保留 Claude 的 OBS 真正捕获证据，未声称本轮重做 OBS 抓帧。
