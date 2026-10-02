@@ -183,6 +183,7 @@ Rectangle {
 
                 CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
                 CBtn { glyph: "music"; onTapped: audioMenu.openAt(this, "up") }
+                PlaybackRateButton { objectName: "cine-playback-rate" }
             }
 
             // .seekrow: mono times either side of the rail.

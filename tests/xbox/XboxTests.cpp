@@ -499,8 +499,33 @@ void webrtcTests() {
     if (!(stats.videoUnits >= 2 && stats.audioPackets >= 2 && stats.handshakeDone && stats.videoBytes > 5000))
         std::printf("stats: units=%llu audio=%llu handshake=%d bytes=%llu\n", (unsigned long long)stats.videoUnits, (unsigned long long)stats.audioPackets, int(stats.handshakeDone), (unsigned long long)stats.bytesReceived);
     check(stats.videoUnits >= 2 && stats.audioPackets >= 2 && stats.handshakeDone && stats.videoBytes > 5000, "statistics");
-    session.close();
-    check(!session.ready() || true, "close() returns");
+    // Malformed fields used to throw through the asynchronous callback.
+    console.message->send(std::string("{\"type\":null}"));
+    console.message->send(std::string("{\"type\":\"Message\",\"target\":null}"));
+    session.videoPresented(0xFABCDE12,1000000,1100000,1200000,1300000);
+    check(console.waitFor([&]{for(const auto& report:console.reports)if(report.size()==43&&report[0]==ReportMetadata)return true;return false;}),"rendered video feedback is sent even without a gamepad change");
+    {
+        std::lock_guard lock(console.mutex);
+        bool valid=false;
+        for(const auto& report:console.reports)if(report.size()==43&&report[0]==ReportMetadata)
+            valid=report[14]==1&&detail::get32(report.data()+15)==0xFABCDE12;
+        check(valid,"feedback preserves the original RTP key and count");
+    }
+    const auto encoded=videoFeedbackReport(7,1234,{0xFABCDE12,101,102,103,104});
+    check(encoded.size()==43&&detail::get32(encoded.data()+2)==7&&detail::get32(encoded.data()+19)==101&&
+          detail::get32(encoded.data()+23)==102&&detail::get32(encoded.data()+27)==103&&
+          detail::get32(encoded.data()+31)==104&&detail::get32(encoded.data()+35)==1234&&
+          detail::get32(encoded.data()+39)==1234,"frame feedback matches Greenlight's seven-field wire format");
+    // Exercise real transport shutdown while the caller sends input/keyframe
+    // requests. This covers both the isOpen/send race and local close racing
+    // callbacks; exceptions escaping any thread terminate this test process.
+    std::atomic<bool> stopped=false;
+    std::thread sender([&]{while(!stopped){session.sendGamepad(pad);session.requestKeyframe();std::this_thread::sleep_for(std::chrono::milliseconds(1));}});
+    console.pc->close();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    session.close();stopped=true;sender.join();
+    session.sendGamepad(pad);session.requestKeyframe();session.close();
+    check(!session.ready(), "remote/local close with active sends is contained and clears readiness");
 }
 
 } // namespace

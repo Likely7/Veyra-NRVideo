@@ -84,6 +84,23 @@ int main(){
     check(captureDiscontinuity(false,false,true,true,1,1+1.0/60,60),"driver discontinuity retained at normal cadence");
     check(captureDiscontinuity(false,false,false,true,1,0.5,60),"backwards callback clock remains hard discontinuity");
     check(captureDiscontinuity(false,false,false,true,1,1.2,60),"callback gap remains hard discontinuity");
+    driverFlag.reset();
+    unsigned resets=0;double vrrPts=0;bool vrrContinuous=true;
+    for(int i=0;i<2400;++i){
+        const double delta=1./(i%4==0?48.:i%4==1?120.:i%4==2?60.:90.);
+        const bool boundary=driverFlag.observe(true,true,true,i>0,delta,delta+.0002,120);
+        resets+=boundary;
+        vrrContinuous&=!veyra::source::captureClockBreak(vrrPts,vrrPts+delta,120);
+        const auto interval=veyra::engine::capturePairInterval100ns({83333,10000000},120,vrrPts*1000,(vrrPts+delta)*1000,false);
+        if(std::abs(interval-delta*1e7)>1)++failed;
+        vrrPts+=delta;
+    }
+    check(vrrContinuous,"2400 variable 48-120 Hz intervals preserve source history");
+    check(resets==3,"120 Hz format with 48-120 Hz VRR exits persistent driver-flag warmup");
+    check(driverFlag.observe(true,true,true,true,.2,.2,120),"VRR still resets on a real 200 ms stall");
+    check(driverFlag.observe(true,true,true,true,.02,.09,120),"VRR does not hide source/arrival disagreement");
+    check(veyra::source::captureClockBreak(1,.9,120),"VRR preserves backward-clock reset");
+    check(veyra::engine::capturePairInterval100ns({83333,10000000},120,0,20,true)==83333,"reset does not reuse stale A/B interval");
     constexpr auto drop=static_cast<veyra::pipeline::FrameFlags>(veyra::pipeline::FrameFlagBits::Drop);
     constexpr auto resize=static_cast<veyra::pipeline::FrameFlags>(veyra::pipeline::FrameFlagBits::Resize);
     check(veyra::pipeline::breaksHistory(drop),"mailbox overwrite resets temporal history");

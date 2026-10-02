@@ -26,7 +26,8 @@ REQUIRED = {'veyra_qml_ui.exe', 'qml/Veyra/Main.qml', 'platforms/qwindows.dll',
             'licenses/NVIDIA_RTX_VIDEO_SDK_LICENSE.pdf', 'licenses/INTEL_XESS_LICENSE.txt',
             'licenses/AMD-FIDELITYFX-LICENSE.txt', 'licenses/moonlight/LICENSE.txt',
             'licenses/xbox/libdatachannel.txt', 'licenses/magewell/MWCapture-SDK-NOTICE.txt',
-            'licenses/DLSSG-Transfusion-MIT.txt', 'release-runtime-manifest.json',
+            'licenses/DLSSG-Transfusion-MIT.txt', 'licenses/SoundTouch-LGPL-2.1.txt',
+            'licenses/SoundTouch-origin.md', 'qml/Veyra/PlaybackRateButton.qml', 'release-runtime-manifest.json',
             'runtime/experimental/release-runtime-manifest.json'}
 
 
@@ -246,6 +247,8 @@ foreach($f in $lock.files) {
     tree(ROOT / 'licenses', 'licenses')
     copy(ARTIFACTS / 'deps/moonlight/moonlight-common-c/LICENSE.txt', 'licenses/moonlight/LICENSE.txt')
     copy(ROOT / 'src/ngx/transfusion/LICENSE.txt', 'licenses/DLSSG-Transfusion-MIT.txt')
+    copy(ROOT / 'third_party/soundtouch/COPYING.TXT', 'licenses/SoundTouch-LGPL-2.1.txt')
+    copy(ROOT / 'third_party/soundtouch/VEYRA_ORIGIN.md', 'licenses/SoundTouch-origin.md')
     tree(args.qt_licenses, 'licenses/qt')
     tree(args.qt / 'sbom', 'licenses/qt/sbom')
     copy(ffmpeg / 'share/ffmpeg/veyra-local-build.json', 'licenses/FFMPEG-VEYRA-BUILD.json')

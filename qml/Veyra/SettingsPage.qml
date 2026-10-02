@@ -272,6 +272,24 @@ VPage {
                     }
                     VGroup {
                         VRow {
+                            label: qsTr("启动后自动继续上次内容")
+                            hint: qsTr("视频恢复上次进度；采集卡沿用上次设备与设置")
+                            VSwitch {
+                                objectName: "set-auto-resume"
+                                checked: !!veyra.preferences.autoResume
+                                onToggled: v => veyra.setPreference("autoResume", v)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("全屏显存增长保护")
+                            hint: qsTr("检测异常增长时自动退出全屏；默认关闭")
+                            VSwitch {
+                                objectName: "set-fullscreen-memory-protection"
+                                checked: !!veyra.preferences.fullscreenMemoryProtection
+                                onToggled: v => veyra.setPreference("fullscreenMemoryProtection", v)
+                            }
+                        }
+                        VRow {
                             label: qsTr("打开时的默认页面")
                             hint: qsTr("首页 = 选择片源的页面（点顶部 Logo 也能回到这里）")
                             VSeg {

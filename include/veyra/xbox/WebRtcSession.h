@@ -70,6 +70,7 @@ public:
 
     void sendGamepad(const GamepadFrame& frame);   // sent when it changes, and at least every 33 ms by the caller
     void requestKeyframe();
+    void videoPresented(uint32_t rtpTimestamp,int64_t arrival,int64_t submitted,int64_t decoded,int64_t presented);
     void close();
 
     WebRtcStats stats() const;
@@ -80,11 +81,19 @@ public:
 private:
     void onMessageChannel(const std::string& text);
     void onInputChannel(const uint8_t* data, size_t size);
-    void sendMessageJson(const std::string& text);
-    void sendClientConfig();
+    bool sendMessageJson(const std::string& text);
+    bool sendClientConfig();
+    bool sendBinary(const std::shared_ptr<rtc::DataChannel>& channel,const uint8_t* data,size_t size);
+    void sendFailure(const std::exception& error);
     double nowMs() const;
 
     WebRtcCallbacks callbacks_;
+    // Shared with asynchronous callbacks so a queued callback can check the
+    // gate after destruction without ever dereferencing its captured this.
+    struct CallbackGate { std::recursive_mutex mutex; bool open=true; };
+    std::shared_ptr<CallbackGate> gate_=std::make_shared<CallbackGate>();
+    bool sendErrorLogged_=false,feedbackSent_=false;
+    uint32_t lastFeedbackRtp_=0;
     std::shared_ptr<rtc::PeerConnection> pc_;
     std::shared_ptr<rtc::Track> audio_, video_;
     std::shared_ptr<rtc::DataChannel> chat_, control_, input_, message_;

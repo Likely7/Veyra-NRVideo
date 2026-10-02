@@ -107,6 +107,7 @@ struct PlayerSnapshot {
     // proof that "adjust while paused" works.
     uint64_t pausedFrameRefreshes=0;
     double playbackSpeed=0;
+    double playbackRate=1; // requested file-preview transport rate; separate from measurement
     bool fgBudgetLimited=false,xessGenerationSuppressed=false;
     unsigned previewFgMultiplier=0;
     // Runtime-reported DLSSG MultiFrameCountMax: 1 = 2X only, 5 = 6X.
@@ -168,6 +169,8 @@ public:
     void stop();
     void comparison(int mode,bool base,float split=.5f){comparisonMode_=mode;comparisonBase_=base;comparisonSplit_=std::clamp(split,0.0f,1.0f);}
     void pause(bool p);
+    bool setPlaybackRate(double rate);
+    void setFullscreenMemoryProtection(bool enabled);
     void previewView(PreviewView view){if(!std::isfinite(view.zoom)||!std::isfinite(view.centerX)||!std::isfinite(view.centerY)||!std::isfinite(view.displayAspect)||view.displayAspect<0||view.mode<0||view.mode>6)return;std::lock_guard lock(mutex_);view.zoom=std::clamp(view.zoom,.05f,64.0f);if(view.displayAspect==0)view.displayAspect=previewView_.displayAspect;previewView_=view;}
     PreviewView previewView()const{std::lock_guard lock(mutex_);return previewView_;}
     void setVolume(float gain,bool mute);
@@ -199,6 +202,8 @@ private:
     std::atomic<bool> stop_{false},paused_{false},muted_{false};
     std::atomic<float> volume_{1};uint64_t sessionId_=0;
     std::atomic<double> seekSeconds_{-1};
+    std::atomic<double> requestedPlaybackRate_{1};
+    std::atomic<bool> fullscreenMemoryProtection_{false};
     int pendingAudioTrack_=-1;uint64_t pendingAudioSession_=0; // mutex_
     std::atomic<int> comparisonMode_{0};std::atomic<bool> comparisonBase_{false};std::atomic<float> comparisonSplit_{.5f};
     // Guarded by mutex_: DLSSG MultiFrameCountMax of the active session.

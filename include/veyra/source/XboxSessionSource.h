@@ -71,7 +71,7 @@ public:
     sink::CaptureAudioState audioState() const { return audio_.snapshot(); }
     void setAudioGain(float value) { audio_.setGain(value); }
     void setAudioSync(unsigned mode, int offset) { audio_.setSync(mode, offset); }
-    void videoPresented(double ptsMs, int64_t host100ns);
+    void videoPresented(double ptsMs, int64_t host100ns, bool sourceFrame = true);
     void videoReset(bool resetAudio = true) { audio_.videoReset(resetAudio); }
 
     // Controller 0; sent when it changes and at least every 33 ms (the console expects a heartbeat).

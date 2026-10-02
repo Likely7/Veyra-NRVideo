@@ -583,6 +583,7 @@ VPage {
                 font.pixelSize: Theme.fsSmall
             }
             VTag { visible: veyra.sourceRateText.length > 0; text: qsTr("源 ") + veyra.sourceRateText }
+            PlaybackRateButton { objectName: "pro-playback-rate" }
             VTag { visible: veyra.outputSummary.length > 0; text: qsTr("输出 ") + veyra.outputSummary.replace("x", "×") }
             VTag {
                 objectName: "pro-fg-tag"

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <format>
 #include <limits>
+#include <SoundTouch.h>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -76,6 +77,7 @@ bool AudioPipeline::selectTrack(int si)
     }
     avcodec_free_context(&codecCtx_);codecCtx_=candidate;streamIndex_=si;stream_=fmt_->streams[si];pcmFormat_=format;
     if(swr_)swr_free(&swr_);
+    resetTempo();
     av_packet_unref(packet_);havePacket_=demuxEof_=drainSent_=false;decodedEof_=false;
     {std::lock_guard lock(mutex_);ring_.clear();segments_.clear();ringFrames_=0;}
     log::info("audio-format",std::format("file input channels={} mask=0x{:X}; preserve to renderer",pcmFormat_.channels,pcmFormat_.mask));
@@ -102,7 +104,7 @@ double AudioPipeline::tailPtsMs() const
     std::lock_guard<std::mutex> lock(mutex_);
     if (segments_.empty()) return -1.0;
     const Segment& t = segments_.back();
-    return t.startPtsMs + 1000.0 * static_cast<double>(t.frames) / kAudioRate;
+    return t.startPtsMs + static_cast<double>(t.frames) * t.stepMs;
 }
 
 uint64_t AudioPipeline::underruns() const { return underruns_.load(); }
@@ -115,6 +117,7 @@ size_t AudioPipeline::pull(float* dst, size_t maxFrames, double* firstPtsMs)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     if (firstPtsMs) *firstPtsMs = segments_.empty() ? -1.0 : segments_.front().startPtsMs;
+    lastPullEnd_=-1;
     const size_t take = std::min(maxFrames, ringFrames_);
     size_t copied = 0;
     while (copied < take && !segments_.empty()) {
@@ -127,7 +130,8 @@ size_t AudioPipeline::pull(float* dst, size_t maxFrames, double* firstPtsMs)
         }
         copied += n;
         seg.frames -= n;
-        seg.startPtsMs += 1000.0 * static_cast<double>(n) / kAudioRate;
+        seg.startPtsMs += static_cast<double>(n) * seg.stepMs;
+        lastPullEnd_=seg.startPtsMs;
         if (seg.frames == 0) segments_.pop_front();
     }
     ringFrames_ -= take;
@@ -235,40 +239,73 @@ void AudioPipeline::videoPresented(double nextPtsMs)
     wake_.notify_all();
 }
 
+bool AudioPipeline::setPlaybackRate(double rate)
+{
+    if(rate!=1.0&&rate!=1.5&&rate!=2.0&&rate!=3.0)return false;
+    requestedRate_=rate;return true;
+}
+
+std::optional<double> AudioPipeline::lastPullEndPtsMs()const
+{
+    const double end=lastPullEnd_.load();
+    return activeRate_.load()!=1.0&&end>=0?std::optional<double>(end):std::nullopt;
+}
+
+void AudioPipeline::resetTempo()
+{
+    activeRate_=requestedRate_.load();tempo_.reset();tempoAnchored_=tempoFlushed_=false;lastPullEnd_=-1;
+    if(activeRate_!=1.0){
+        tempo_=std::make_unique<soundtouch::SoundTouch>();
+        tempo_->setSampleRate(kAudioRate);tempo_->setChannels(pcmFormat_.channels);
+        tempo_->setTempo(activeRate_.load());
+        tempoBuffer_.resize(4096*pcmFormat_.channels);
+    }
+}
+
+void AudioPipeline::pushPcm(const float* samples,size_t frames,double pts,double step)
+{
+    if(!frames)return;
+    std::lock_guard lock(mutex_);
+    if(ringFrames_+frames>kMaxRingFrames){
+        ++overruns_;log::error("audio","ring overflow despite watermarks (bug)");return;
+    }
+    ring_.insert(ring_.end(),samples,samples+frames*pcmFormat_.channels);ringFrames_+=frames;
+    if(!segments_.empty()){
+        auto& last=segments_.back();
+        if(std::abs(last.stepMs-step)<1e-9&&std::abs(last.startPtsMs+last.frames*last.stepMs-pts)<1.0){last.frames+=frames;return;}
+    }
+    segments_.push_back({pts,frames,step});
+}
+
+void AudioPipeline::drainTempo(bool finish)
+{
+    if(!tempo_||!tempoAnchored_)return;
+    if(finish&&!tempoFlushed_){tempo_->flush();tempoFlushed_=true;}
+    for(unsigned count;(count=tempo_->receiveSamples(tempoBuffer_.data(),4096))!=0;){
+        const double end=std::min(tempoInputEndMs_,tempoPtsMs_+count*1000.0*activeRate_.load()/kAudioRate);
+        if(end>tempoPtsMs_)pushPcm(tempoBuffer_.data(),count,tempoPtsMs_,(end-tempoPtsMs_)/count);
+        tempoPtsMs_=end;
+    }
+}
+
 void AudioPipeline::pushConverted(int frames)
 {
-    if (frames <= 0) return;
-    size_t skip = 0;
-    if (discardUntilPtsMs_ >= 0 && nextPtsMs_ < discardUntilPtsMs_) {
-        skip = std::min(static_cast<size_t>(frames), static_cast<size_t>(
-            std::ceil((discardUntilPtsMs_ - nextPtsMs_) * kAudioRate / 1000.0 - 1e-7)));
+    if(frames<=0)return;
+    size_t skip=0;
+    if(discardUntilPtsMs_>=0&&nextPtsMs_<discardUntilPtsMs_)
+        skip=std::min(size_t(frames),size_t(std::ceil((discardUntilPtsMs_-nextPtsMs_)*kAudioRate/1000.0-1e-7)));
+    nextPtsMs_+=1000.0*skip/kAudioRate;
+    const size_t count=size_t(frames)-skip;
+    if(!count)return;
+    const double start=nextPtsMs_;nextPtsMs_+=1000.0*count/kAudioRate;
+    const float* samples=converted_.data()+skip*pcmFormat_.channels;
+    if(!tempo_){pushPcm(samples,count,start,1000.0/kAudioRate);return;}
+    if(tempoAnchored_&&std::abs(start-tempoInputEndMs_)>1.0){
+        drainTempo(true);tempo_->clear();tempoAnchored_=tempoFlushed_=false;
     }
-    nextPtsMs_ += 1000.0 * skip / kAudioRate;
-    const size_t addFrames = static_cast<size_t>(frames) - skip;
-    if (!addFrames) return;
-
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (ringFrames_ + addFrames > kMaxRingFrames) {
-        // Player mode: never drop. This is a hard error (bounded ring
-        // should never overflow because production is watermarked).
-        overruns_.fetch_add(1);
-        veyra::log::error("audio", "ring overflow despite watermarks (bug)");
-        return;
-    }
-    ring_.insert(ring_.end(), converted_.data() + skip * pcmFormat_.channels, converted_.data() + static_cast<size_t>(frames) * pcmFormat_.channels);
-    ringFrames_ += addFrames;
-    if (!segments_.empty()) {
-        Segment& last = segments_.back();
-        const double lastEnd = last.startPtsMs + 1000.0 * static_cast<double>(last.frames) / kAudioRate;
-        if (std::fabs(lastEnd - nextPtsMs_) < 1.0) {
-            last.frames += addFrames;      // contiguous: extend
-        } else {
-            segments_.push_back({ nextPtsMs_, addFrames });
-        }
-    } else {
-        segments_.push_back({ nextPtsMs_, addFrames });
-    }
-    nextPtsMs_ += 1000.0 * static_cast<double>(addFrames) / kAudioRate;
+    if(!tempoAnchored_){tempoPtsMs_=start;tempoAnchored_=true;}
+    tempoInputEndMs_=nextPtsMs_;
+    tempo_->putSamples(samples,static_cast<unsigned>(count));drainTempo();
 }
 
 void AudioPipeline::decodeBlock()
@@ -291,6 +328,7 @@ void AudioPipeline::decodeBlock()
                 if (count > 0) { pushConverted(count); continue; }
                 if (count < 0) log::error("audio", std::format("resampler drain failed code={}", count));
             }
+            drainTempo(true);
             decodedEof_ = true;
             break;
         }
@@ -798,6 +836,7 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
             if(havePacket_){av_packet_unref(packet_);havePacket_=false;}
             avcodec_flush_buffers(codecCtx_);
             if(swr_)swr_free(&swr_);
+            resetTempo();
             // Matroska commonly indexes only video keyframes. Seeking an audio
             // stream can use its sparse, previously observed packet index and
             // decode minutes of audio. Seek the container's video index, then
@@ -818,6 +857,7 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
         return true;
     };
     if(renderer&&ownEndpoint&&!endpointReady)recovering(renderer->lastError());
+    resetTempo();
     // Initial prefill (open case).
     if(initialMs>=0){if(!rewind(initialMs))recovering(E_FAIL);}
     else decodeBlock();

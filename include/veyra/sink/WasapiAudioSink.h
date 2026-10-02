@@ -16,6 +16,7 @@
 #include <deque>
 #include <format>
 #include <mutex>
+#include <memory>
 #include <limits>
 #include <string>
 #include <thread>
@@ -33,6 +34,7 @@ struct AVStream;
 struct AVPacket;
 struct SwrContext;
 typedef struct AVFrame AVFrame;
+namespace soundtouch { class SoundTouch; }
 
 namespace veyra::sink {
 
@@ -94,13 +96,16 @@ public:
     // explicit silence; a live source may return 0 so the owner can preserve
     // its media timeline and apply its bounded recovery policy.
     size_t pull(float* dst, size_t maxFrames, double* firstPtsMs) override;
+    std::optional<double> lastPullEndPtsMs()const override;
+    // Applied by the audio owner on initial open or the next atomic seek.
+    bool setPlaybackRate(double rate);
 
     void stopThread();
     void setPaused(bool value) { paused_.store(value); }
 
     // File playback: audio is the master clock. Prefill while explicitly held
     // (open/seek/settings rebuild/pause); once released the device clock runs
-    // at one-times speed regardless of video lag — slow enhancement drops
+    // at the requested tempo regardless of video lag — slow enhancement drops
     // preview frames instead of pausing sound. Coverage is published for
     // diagnostics only.
     void holdForVideo();
@@ -127,10 +132,14 @@ private:
     struct Segment {
         double startPtsMs;
         size_t frames;
+        double stepMs=1000.0/kAudioRate;
     };
 
     void pushDecoded(const AVFrame* frame);
     void pushConverted(int frames);
+    void pushPcm(const float*,size_t,double,double);
+    void drainTempo(bool finish=false);
+    void resetTempo();
     void decodeBlock();
     void closeAll();
 
@@ -151,6 +160,11 @@ private:
     std::atomic<bool> decodedEof_{false};
     double nextPtsMs_ = 0.0;           // PTS of the NEXT decoded sample
     double discardUntilPtsMs_ = -1.0;  // seek pruning
+    std::unique_ptr<soundtouch::SoundTouch> tempo_;
+    std::atomic<double> requestedRate_{1},activeRate_{1},lastPullEnd_{-1};
+    double tempoPtsMs_=0,tempoInputEndMs_=0;
+    bool tempoAnchored_=false,tempoFlushed_=false;
+    std::vector<float> tempoBuffer_;
     static constexpr size_t kMaxRingFrames = kAudioRate * 2; // 2s hard bound
 
     mutable std::mutex mutex_;

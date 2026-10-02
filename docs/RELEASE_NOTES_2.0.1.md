@@ -7,8 +7,12 @@
 ### 2.0.1 修复
 
 - **导出时显卡被系统重置，不再整段作废**：8K、长视频开 NR 导出时，有 40 系用户遇到驱动卡死并被 Windows 重置。现在已导出的部分会自动保存，新开一个导出进程从断点接着导，最后无损拼接成一个文件，不重新编码；最多续 3 次。这是重置后的恢复，不代表驱动挂起根因已修复；已用模拟设备移除验证续导，8K 反馈者实机结果待确认。
-- **全屏显存异常增长保护**：设置稳定后检测持续增长，自动退出全屏并在本次播放中限制再次进入，保持片源、NR 和补帧设置，用窗口继续播放，避免原先反复重建却继续增长。已分配的异常显存不保证释放，重新开程序可重测。**这是应急保护，5060 Ti 的 4K 全屏泄漏根因尚未确认、现场结果待验证**；本机加载同一 NVIDIA 插件也能稳定播放，不能仅凭模块出现就认定它是原因。设置中的 OBS 游戏采集兼容可用于切换界面显示路径后重测。
-- **Xbox 空值应答导致协商中断**：成功应答里的 `null` 错误字段不会再触发字符串异常；HTTP 200/202 的未完成应答继续有限轮询，数字错误码保留，空 ICE 元数据不会再次中断连接。协商失败显示实际阶段，不再一律提示 UDP 被拦截。本机 80 项协议/本地 WebRTC 测试通过，反馈者真实 Xbox 连接结果待确认。
+- **全屏显存异常增长保护（默认关闭）**：仅在设置中开启后检测持续增长，自动退出全屏并在本次播放中限制再次进入，保持片源、NR 和补帧设置，用窗口继续播放，避免原先反复重建却继续增长。已分配的异常显存不保证释放，重新开程序可重测。**这是应急保护，5060 Ti 的 4K 全屏泄漏根因尚未确认、现场结果待验证**；本机加载同一 NVIDIA 插件也能稳定播放，不能仅凭模块出现就认定它是原因。设置中的 OBS 游戏采集兼容可用于切换界面显示路径后重测。
+- **Xbox 空值应答导致协商中断**：成功应答里的 `null` 错误字段不会再触发字符串异常；HTTP 200/202 的未完成应答继续有限轮询，数字错误码保留，空 ICE 元数据不会再次中断连接。协商失败显示实际阶段，不再一律提示 UDP 被拦截。本机 83 项协议/本地 WebRTC 测试通过，反馈者真实 Xbox 连接结果待确认。
+- **Xbox 断开时崩溃与视频反馈**：关闭期间的输入/控制发送异常被捕获，异步回调不会访问已关闭的会话；补齐参考客户端的视频帧反馈。已验证本地双端握手、报文和并发关闭，真实主机长时间稳定性待复测。
+- **采集卡 VRR 补帧**：可变帧间隔不再仅因偏离标称帧率就反复重置补帧历史，呈现相位跟随实际 A/B 时间差；保留真实断流与时间倒退保护。可变间隔软件回归通过，主机/VRR 采集卡组合仍待实测。
+- **启动继续上次内容**：设置中可开启自动恢复视频与播放进度，或按上次采集配置直接开始；启动页可选极简/专业。
+- **视频倍速**：极简与专业播放栏均可选 1×、1.5×、2×、3×，音调保持；导出与实时采集不变速。
 - 以下几项已在 2.0.0 的更新包里修过，2.0.1 一并包含：
   - 输出稳定器·抗闪烁打开再关闭后画面定住；
   - 首页"继续上次"的采集卡没有声音；
@@ -17,18 +21,22 @@
   - 点击任务栏图标不能最小化；
   - 采集开始时显卡设备丢失或崩溃，且检测到 NVIDIA App 画面插件或 RTSS 注入时，提示去哪里关闭。
 
-对应源码：`Veyra-2.0.1-source.zip`；第三方依赖源码与 2.0.0 相同，`Veyra-2.0.0-dependency-source.zip` 随本 Release 一起提供。运行库没有变化。
+对应源码：`Veyra-2.0.1-source.zip`；新增 SoundTouch 2.4.1 源码已包含于 Veyra 源码中，其余第三方依赖源码与 2.0.0 相同，`Veyra-2.0.0-dependency-source.zip` 随本 Release 一起提供。运行库没有变化。
 
 ## English
 
 ### 2.0.1 fixes
 
 - **An export survives a GPU reset**: some RTX 40 users encountered driver hangs/resets during 8K or long NR exports. Completed parts are kept, a fresh export process resumes, and parts are joined without re-encoding (up to three resets). Recovery was tested with injected device removal; the original driver's hang and the reporting user's 8K result remain unverified.
-- **Protection against sustained fullscreen VRAM growth**: after settings settle, sustained growth makes Veyra return to windowed playback and restrict fullscreen re-entry for that source session, keeping the source, NR and frame generation settings. It avoids repeated rebuilds that do not reclaim memory. Retained memory may require restarting Veyra. **This is containment; the RTX 5060 Ti 4K fullscreen leak and its field outcome remain unconfirmed.** The same NVIDIA plug-in is present in stable local playback, so its presence alone does not establish the cause. OBS game capture compatibility in Settings provides another UI display path for testing.
-- **Xbox nullable replies interrupted negotiation**: null error fields in successful responses are accepted; pending HTTP 200/202 wrappers are polled within a bounded budget; numeric service errors are preserved; nullable ICE metadata no longer aborts connection setup. Failures report their actual stage rather than always blaming blocked UDP. All 80 local protocol/WebRTC checks passed; the reporting user's real-console connection still needs confirmation.
+- **Optional fullscreen VRAM growth protection (off by default)**: when enabled in Settings, sustained growth makes Veyra return to windowed playback and restrict fullscreen re-entry for that source session, keeping the source, NR and frame generation settings. It avoids repeated rebuilds that do not reclaim memory. Retained memory may require restarting Veyra. **This is containment; the RTX 5060 Ti 4K fullscreen leak and its field outcome remain unconfirmed.** The same NVIDIA plug-in is present in stable local playback, so its presence alone does not establish the cause. OBS game capture compatibility in Settings provides another UI display path for testing.
+- **Xbox nullable replies interrupted negotiation**: null error fields in successful responses are accepted; pending HTTP 200/202 wrappers are polled within a bounded budget; numeric service errors are preserved; nullable ICE metadata no longer aborts connection setup. Failures report their actual stage rather than always blaming blocked UDP. All 83 local protocol/WebRTC checks passed; the reporting user's real-console connection still needs confirmation.
+- **Xbox disconnect safety and frame feedback**: transport send exceptions during shutdown are contained, callbacks cannot touch a closed session, and the reference client's video-frame feedback is now sent. Local-peer negotiation, packets and concurrent shutdown passed; real-console long-session stability needs retesting.
+- **VRR capture frame generation**: variable frame intervals no longer repeatedly reset history merely for departing from the negotiated frame rate; presentation phase follows the real A/B interval. Actual stalls and backward clocks remain protected. Variable-timing regression passed; console/VRR capture hardware remains unverified.
+- **Resume at startup**: optionally reopen the previous video and position, or the saved capture device/configuration; choose Minimal or Professional as the startup page.
+- **Movie playback speed**: 1×, 1.5×, 2× and 3× controls on both pages, preserving audio pitch. Export and live capture rates are unchanged.
 - Already in the refreshed 2.0.0 package and included here: the picture froze after turning the output stabiliser (anti-flicker) on and off; "Continue" on a capture card had no sound; the load gauge counted one of several NR layers; colour Texture / Clarity / Dehaze had no effect; clicking the taskbar button did not minimise; when the GPU device is lost or Veyra crashes as a capture starts with NVIDIA App's plug-in or RTSS injected, Veyra says where to turn them off.
 
-Corresponding source: `Veyra-2.0.1-source.zip`; third-party dependency sources are unchanged from 2.0.0 and `Veyra-2.0.0-dependency-source.zip` is attached to this Release too. Runtimes are unchanged.
+Corresponding source: `Veyra-2.0.1-source.zip`; SoundTouch 2.4.1 source is included in the Veyra archive; other third-party dependency sources are unchanged from 2.0.0 and `Veyra-2.0.0-dependency-source.zip` is attached to this Release too. Runtimes are unchanged.
 
 ---
 

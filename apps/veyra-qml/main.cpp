@@ -656,6 +656,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     engine.rootContext()->setContextProperty(QStringLiteral("vyTest"), testOptions);
     if (!openPath.isEmpty()) {
         QTimer::singleShot(600, &bridge, [&bridge, openPath] { bridge.openPath(openPath); });
+    } else {
+        QTimer::singleShot(600, &bridge, [&bridge] { bridge.autoResumeLastSource(); });
     }
 
     engine.loadFromModule("Veyra", "Main");

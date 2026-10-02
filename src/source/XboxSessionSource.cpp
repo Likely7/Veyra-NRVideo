@@ -139,7 +139,7 @@ struct XboxSessionSource::Impl {
     unsigned width = 1920, height = 1080;
     Clock::time_point lastKeyframeRequest{};
 
-    struct Meta { int64_t pts; int64_t arrival; };
+    struct Meta { int64_t pts,arrival; uint32_t rtp=0; int64_t submitted=0,decoded=0; };
     std::deque<Meta> presented;
     std::mutex presentedMutex;
 
@@ -446,7 +446,7 @@ void XboxSessionSource::decodeLoop() {
         int64_t pts = (rtpHigh + int64_t(unit.rtp)) * 1000 / 9;
         if (pts <= lastPts) pts = lastPts + 166667;
         lastPts = pts;
-        metas.push_back({pts, unit.arrival});
+        metas.push_back({pts,unit.arrival,unit.rtp,host100ns(),0});
         if (metas.size() > 64) metas.pop_front();
 
         const auto begin = Clock::now();
@@ -481,9 +481,11 @@ void XboxSessionSource::decodeLoop() {
             p.height = unsigned(frame->height);
         }
 
+        Impl::Meta frameMeta{pts,unit.arrival,unit.rtp,host100ns(),host100ns()};
         int64_t arrival = unit.arrival;
         const int64_t framePts = frame->pts != AV_NOPTS_VALUE ? frame->pts : pts;
-        for (const auto& meta : metas) if (meta.pts == framePts) { arrival = meta.arrival; break; }
+        for (const auto& meta : metas) if (meta.pts == framePts) { frameMeta=meta;arrival=meta.arrival;break; }
+        frameMeta.pts=framePts;frameMeta.decoded=host100ns();
 
         pipeline::FramePacket packet{};
         packet.sourceKind = pipeline::SourceKind::Xbox;
@@ -515,7 +517,7 @@ void XboxSessionSource::decodeLoop() {
         }
         {
             std::lock_guard lock(p.presentedMutex);
-            p.presented.push_back({framePts, arrival});
+            p.presented.push_back(frameMeta);
             if (p.presented.size() > 64) p.presented.pop_front();
         }
         {
@@ -557,12 +559,18 @@ SourceReadStatus XboxSessionSource::read(pipeline::FramePacket& packet, const AV
     return SourceReadStatus::Frame;
 }
 
-void XboxSessionSource::videoPresented(double ptsMs, int64_t host) {
+void XboxSessionSource::videoPresented(double ptsMs, int64_t host, bool sourceFrame) {
     std::optional<int64_t> arrival;
     if (p_) {
         std::lock_guard lock(p_->presentedMutex);
         const int64_t pts100 = int64_t(ptsMs * 10000.0);
-        for (const auto& meta : p_->presented) if (std::llabs(meta.pts - pts100) < 5) { arrival = meta.arrival; break; }
+        for (const auto& meta : p_->presented) if (std::llabs(meta.pts - pts100) < 5) {
+            arrival=meta.arrival;
+            // A generated midpoint can coincide with a decoded-but-dropped
+            // source PTS. Never acknowledge it as that original console frame.
+            if(sourceFrame)p_->rtc.videoPresented(meta.rtp,meta.arrival,meta.submitted,meta.decoded,host);
+            break;
+        }
     }
     audio_.videoPresented(ptsMs, host, arrival);
 }
@@ -649,7 +657,6 @@ void XboxSessionSource::close() noexcept {
             std::lock_guard lock(p.inputMutex);
             if (p.streaming.exchange(false) && p.padSent) p.rtc.sendGamepad(xbox::GamepadFrame{});   // release everything on the console
         }
-        p.rtc.close();
         {
             std::lock_guard lock(p.queueMutex);
             p.stopDecode = true;
@@ -657,6 +664,7 @@ void XboxSessionSource::close() noexcept {
         p.queueCv.notify_all();
         if (p.decodeThread.joinable()) p.decodeThread.join();
         if (p.keepaliveThread.joinable()) p.keepaliveThread.join();
+        p.rtc.close();
         if (p.decoderOpen) { p.decoder.close(); p.decoderOpen = false; }
         // End the console session so the next start does not find it busy (best effort, short timeout).
         // The session's own transport is cancelled by now, and teardown must not wait on the network:

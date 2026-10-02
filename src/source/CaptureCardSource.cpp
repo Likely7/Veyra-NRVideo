@@ -589,7 +589,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
                 // Interframe packet PTS may move backwards in decode order.
                 // Apply cadence checks to decoded output, not B-frame packets.
                 const bool clockBreak=received&&(!compressedPath||codec==CaptureCodec::Mjpeg)&&
-                    (time<=previous||time-previous>(info.averageFps>0?2.5/info.averageFps:.1));
+                    captureClockBreak(previous,time,info.averageFps);
                 if(driverBreak||clockBreak){
                     ++discontinuitySamples;
                     if(discontinuitySamples<=4||discontinuitySamples%120==0)

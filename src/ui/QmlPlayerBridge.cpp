@@ -764,6 +764,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(this,&QmlPlayerBridge::snapshotChanged,this,&QmlPlayerBridge::fgChoicesChanged);
     connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fgChoicesChanged);
     impl_->loadPrefs();
+    impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
     connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
@@ -924,7 +925,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             if (impl_->resumeSession && s.sessionId == impl_->resumeSession && s.running && s.duration > 0) {
                 const double at = impl_->resumeAt;
                 impl_->resumeSession = 0;
-                if (at > 5 && at < s.duration - 10) {
+                if (at >= 0.5 && at < s.duration - 0.5) {
                     seekTo(at);
                     veyra::log::info("ui-resume", std::format("resumed at {:.1f}s", at));
                     emit notice(tr("已从上次位置 %1 继续").arg(formatTime(at)), false);
@@ -3711,6 +3712,11 @@ void QmlPlayerBridge::setMuted(bool value) {
     impl_->engine.setVolume(impl_->snapshot.volume, value);
 }
 double QmlPlayerBridge::playbackSpeed() const { return impl_->snapshot.playbackSpeed; }
+double QmlPlayerBridge::playbackRate() const { return impl_->snapshot.playbackRate; }
+void QmlPlayerBridge::setPlaybackRate(double rate) {
+    if(!impl_->engine.setPlaybackRate(rate))return;
+    impl_->snapshot.playbackRate=rate;emit snapshotChanged();
+}
 
 // --- chain ------------------------------------------------------------------
 // The settings the UI is showing: the facade's pending copy, which the engine
@@ -4183,6 +4189,7 @@ int QmlPlayerBridge::thumbnailGeneration() const { return impl_->thumbnailGenera
 
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
+    rememberPosition(true);
     impl_->exportQueue.setSelectedId(0);
     ++impl_->liveOpenGen; impl_->pendingLiveText.clear();   // a waiting live open is dropped
     impl_->exportTrimStartSeconds = 0.0;
@@ -4208,7 +4215,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // design's source menu implies.
     if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home"))
         emit navigate(QStringLiteral("min"));
-    rememberPosition(true);   // the file being left
+    rememberSource(QStringLiteral("file"), path);
     if (impl_->preOpen) impl_->preOpen();
     auto options = impl_->options;
     options.softwareDecode = impl_->prefString("decode") == QLatin1String("software");
@@ -4216,7 +4223,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
     impl_->resumeSession = 0;
-    if (impl_->prefBool("rememberPosition", true)) {
+    if ((impl_->prefBool("rememberPosition", true)||impl_->prefBool("autoResume",false))) {
         const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();
         if (!saved.isEmpty()) { impl_->resumeSession = impl_->openingSessionId; impl_->resumeAt = saved.value("at").toDouble(); }
     }
@@ -4331,7 +4338,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback", "obsGameCapture"};
+                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -4400,6 +4407,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
     else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
@@ -4550,10 +4558,10 @@ bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
 void QmlPlayerBridge::rememberPosition(bool flush) {
     const auto& s = impl_->snapshot;
     const QString file = QString::fromStdWString(impl_->sourceLabel);
-    if (s.running && !s.image && !s.capture && s.duration > 30 && !file.isEmpty() && QFileInfo(file).isFile()) {
+    if (s.running && !s.image && !s.capture && s.duration > 0 && !file.isEmpty() && QFileInfo(file).isFile()) {
         auto positions = impl_->prefs.value("positions").toMap();
         const double at = s.position;
-        if (at > 5 && at < s.duration - 10) positions[file] = QVariantMap{{"at", at}, {"t", QDateTime::currentSecsSinceEpoch()}};
+        if (at >= 0.5 && at < s.duration - 0.5) positions[file] = QVariantMap{{"at", at}, {"t", QDateTime::currentSecsSinceEpoch()}};
         else positions.remove(file);   // finished or barely started: next time from the top
         while (positions.size() > 40) {
             auto oldest = positions.begin();
@@ -5623,7 +5631,7 @@ void QmlPlayerBridge::setContentRate(int value) {
 }
 
 int QmlPlayerBridge::displaySync() const { return int(impl_->presentation.display); }
-bool QmlPlayerBridge::fullscreenMemorySafe() const { return !impl_->snapshot.vramFullscreenUnsafe; }
+bool QmlPlayerBridge::fullscreenMemorySafe() const { return !impl_->prefBool("fullscreenMemoryProtection",false)||!impl_->snapshot.vramFullscreenUnsafe; }
 void QmlPlayerBridge::setPresentationFullscreen(bool value) {
     if(impl_->presentation.fullscreen==value)return;
     impl_->presentation.fullscreen=value;
@@ -5769,7 +5777,9 @@ QString QmlPlayerBridge::exportSizeEstimate() const {
 QVariantMap QmlPlayerBridge::lastSource() const {
     auto saved = impl_->prefs.value(QStringLiteral("lastSource")).toMap();
     const QString kind = saved.value(QStringLiteral("kind")).toString();
-    if (kind == QLatin1String("capture")) {
+    if (kind == QLatin1String("file")) {
+        saved[QStringLiteral("summary")]=QFileInfo(saved.value(QStringLiteral("label")).toString()).fileName();
+    } else if (kind == QLatin1String("capture")) {
         if (!hasCaptureSession()) return {};
         saved[QStringLiteral("summary")] = captureSessionSummary();
     } else if (kind == QLatin1String("ps5")) {
@@ -5787,8 +5797,7 @@ QVariantMap QmlPlayerBridge::lastSource() const {
     return saved;
 }
 void QmlPlayerBridge::rememberSource(const QString& kind, const QString& label) {
-    impl_->liveKind = kind;
-    impl_->liveLabel = label;
+    if(kind!=QLatin1String("file")){impl_->liveKind = kind;impl_->liveLabel = label;}
     QVariantMap value{{"kind", kind}, {"label", label}};
     if (kind == QLatin1String("screen")) value[QStringLiteral("screenKind")] = screenOptions().value(QStringLiteral("kind")).toInt();
     if (impl_->prefs.value(QStringLiteral("lastSource")).toMap() == value) return;
@@ -5796,10 +5805,21 @@ void QmlPlayerBridge::rememberSource(const QString& kind, const QString& label) 
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "last source not saved");
     emit preferencesChanged();
 }
+void QmlPlayerBridge::autoResumeLastSource() {
+    if(!impl_->prefBool("autoResume",false)||impl_->openingSource||impl_->snapshot.running)return;
+    if(lastSource().isEmpty())return;
+    veyra::log::info("ui-startup","automatically resuming the last source");
+    resumeLastSource();
+}
 void QmlPlayerBridge::resumeLastSource() {
     const auto last = lastSource();
     const QString kind = last.value(QStringLiteral("kind")).toString();
     veyra::log::info("ui-resume-source", "kind=" + kind.toStdString());
+    if(kind==QLatin1String("file")){
+        const QString path=last.value(QStringLiteral("label")).toString();
+        if(!QFileInfo(path).isFile()){emit notice(tr("上次的视频文件不存在：%1").arg(path),true);return;}
+        openPath(path);return;
+    }
     if (kind == QLatin1String("capture")) { resumeCaptureSession(); return; }
     if (kind == QLatin1String("ps5")) {
 #ifdef VEYRA_ENABLE_REMOTEPLAY

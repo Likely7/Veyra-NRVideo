@@ -51,7 +51,7 @@ void logOnce() {
     std::call_once(once, [] {
         // VEYRA_XBOX_RTC_DEBUG=1 logs libdatachannel's ICE/DTLS/SCTP details (for field diagnosis).
         const bool debug = GetEnvironmentVariableA("VEYRA_XBOX_RTC_DEBUG", nullptr, 0) > 0;
-        rtc::InitLogger(debug ? rtc::LogLevel::Verbose : rtc::LogLevel::Warning, [](rtc::LogLevel level, std::string text) {
+        rtc::InitLogger(debug ? rtc::LogLevel::Verbose : rtc::LogLevel::Info, [](rtc::LogLevel level, std::string text) {
             if (level <= rtc::LogLevel::Error) log::warn("xbox-rtc", text);
             else log::info("xbox-rtc", text);
         });
@@ -105,7 +105,8 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
     if (!bindAddress_.empty()) config.bindAddress = bindAddress_;
     pc_ = std::make_shared<rtc::PeerConnection>(config);
 
-    pc_->onStateChange([this](rtc::PeerConnection::State state) {
+    pc_->onStateChange([this, gate=gate_](rtc::PeerConnection::State state) {
+        std::lock_guard callbackLock(gate->mutex);if(!gate->open)return;
         log::info("xbox", std::string("peer connection state ") + std::to_string(int(state)));
         if (state == rtc::PeerConnection::State::Connected) connected_ = true;
         if (state == rtc::PeerConnection::State::Failed || state == rtc::PeerConnection::State::Closed ||
@@ -116,7 +117,8 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
         }
         changed_.notify_all();
     });
-    pc_->onGatheringStateChange([this](rtc::PeerConnection::GatheringState) { changed_.notify_all(); });
+    pc_->onGatheringStateChange([this, gate=gate_](rtc::PeerConnection::GatheringState) { std::lock_guard lock(gate->mutex);if(gate->open)changed_.notify_all(); });
+    pc_->onIceStateChange([](rtc::PeerConnection::IceState state){log::info("xbox","ICE state "+std::to_string(int(state)));});
 
     // Audio (send-receive, as the reference client; nothing is sent) and video (receive only, H.264
     // in the reference client's order: Main, Constrained Baseline, Baseline).
@@ -132,7 +134,8 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
     auto depacketizer = std::make_shared<rtc::H264RtpDepacketizer>(rtc::NalUnit::Separator::LongStartSequence);
     video_->setMediaHandler(depacketizer);
     video_->chainMediaHandler(std::make_shared<rtc::RtcpReceivingSession>());
-    video_->onFrame([this](rtc::binary data, rtc::FrameInfo info) {
+    video_->onFrame([this, gate=gate_](rtc::binary data, rtc::FrameInfo info) {
+        std::lock_guard callbackLock(gate->mutex);if(!gate->open)return;
         ++videoUnits_;
         videoBytes_ += data.size();
         if (!callbacks_.video) return;
@@ -142,7 +145,8 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
     });
     audio_->setMediaHandler(std::make_shared<rtc::OpusRtpDepacketizer>());
     audio_->chainMediaHandler(std::make_shared<rtc::RtcpReceivingSession>());
-    audio_->onFrame([this](rtc::binary data, rtc::FrameInfo info) {
+    audio_->onFrame([this, gate=gate_](rtc::binary data, rtc::FrameInfo info) {
+        std::lock_guard callbackLock(gate->mutex);if(!gate->open)return;
         ++audioPackets_;
         if (callbacks_.audio) callbacks_.audio(reinterpret_cast<const uint8_t*>(data.data()), data.size(), info.timestamp);
     });
@@ -160,7 +164,8 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
 
     // The handshake starts once every channel is open: its acknowledgement triggers sends on control and
     // input, which would be dropped by a channel still opening.
-    const auto maybeHandshake = [this] {
+    const auto maybeHandshake = [this, gate=gate_] {
+        std::lock_guard callbackLock(gate->mutex);if(!gate->open)return;
         if (!message_ || !control_ || !input_ || !chat_) return;
         if (!message_->isOpen() || !control_->isOpen() || !input_->isOpen() || !chat_->isOpen()) return;
         if (handshakeSent_.exchange(true)) return;
@@ -168,12 +173,14 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
         sendMessageJson(json{{"type", "Handshake"}, {"version", "messageV1"}, {"id", "be0bfc6d-1e83-4c8a-90ed-fa8601c5a179"}, {"cv", "0"}}.dump());
     };
     for (const auto& dc : {chat_, control_, input_, message_}) dc->onOpen(maybeHandshake);
-    message_->onMessage([this](rtc::message_variant data) {
+    message_->onMessage([this, gate=gate_](rtc::message_variant data) {
+        std::lock_guard callbackLock(gate->mutex);if(!gate->open)return;
         if (const auto* text = std::get_if<std::string>(&data)) onMessageChannel(*text);
         else if (const auto* bin = std::get_if<rtc::binary>(&data))
             onMessageChannel(std::string(reinterpret_cast<const char*>(bin->data()), bin->size()));
     });
-    input_->onMessage([this](rtc::message_variant data) {
+    input_->onMessage([this, gate=gate_](rtc::message_variant data) {
+        std::lock_guard callbackLock(gate->mutex);if(!gate->open)return;
         if (const auto* bin = std::get_if<rtc::binary>(&data)) onInputChannel(reinterpret_cast<const uint8_t*>(bin->data()), bin->size());
     });
     control_->onMessage([](rtc::message_variant data) {
@@ -247,41 +254,53 @@ bool WebRtcSession::waitReady(std::chrono::milliseconds timeout) {
     return changed_.wait_for(lock, timeout, [&] { return handshakeDone_.load() || failed_.load(); }) && handshakeDone_;
 }
 
-void WebRtcSession::sendMessageJson(const std::string& text) {
-    if (message_ && message_->isOpen()) message_->send(rtc::binary(reinterpret_cast<const std::byte*>(text.data()), reinterpret_cast<const std::byte*>(text.data()) + text.size()));
+void WebRtcSession::sendFailure(const std::exception& error) {
+    if(!sendErrorLogged_){sendErrorLogged_=true;log::warn("xbox",std::string("transport send stopped: ")+error.what());}
+}
+bool WebRtcSession::sendBinary(const std::shared_ptr<rtc::DataChannel>& channel,const uint8_t* data,size_t size) {
+    if(closed_||!channel||!channel->isOpen())return false;
+    // isOpen() is only a snapshot. The transport may close before send().
+    try {channel->send(reinterpret_cast<const std::byte*>(data),size);return true;}
+    catch(const std::exception& error){sendFailure(error);return false;}
+}
+bool WebRtcSession::sendMessageJson(const std::string& text) {
+    return sendBinary(message_,reinterpret_cast<const uint8_t*>(text.data()),text.size());
 }
 
-void WebRtcSession::sendClientConfig() {
-    sendMessageJson(message("/streaming/systemUi/configuration", {{"version", {0, 2, 0}}, {"systemUis", json::array()}}));
-    sendMessageJson(message("/streaming/properties/clientappinstallidchanged", {{"clientAppInstallId", "c97d7ee0-73b2-4239-bf1d-9d805a338429"}}));
-    sendMessageJson(message("/streaming/characteristics/orientationchanged", {{"orientation", 0}}));
-    sendMessageJson(message("/streaming/characteristics/touchinputenabledchanged", {{"touchInputEnabled", false}}));
-    sendMessageJson(message("/streaming/characteristics/clientdevicecapabilities", json::object()));
-    sendMessageJson(message("/streaming/characteristics/dimensionschanged", {
+bool WebRtcSession::sendClientConfig() {
+    bool sent=true;
+    sent &= sendMessageJson(message("/streaming/systemUi/configuration", {{"version", {0, 2, 0}}, {"systemUis", json::array()}}));
+    sent &= sendMessageJson(message("/streaming/properties/clientappinstallidchanged", {{"clientAppInstallId", "c97d7ee0-73b2-4239-bf1d-9d805a338429"}}));
+    sent &= sendMessageJson(message("/streaming/characteristics/orientationchanged", {{"orientation", 0}}));
+    sent &= sendMessageJson(message("/streaming/characteristics/touchinputenabledchanged", {{"touchInputEnabled", false}}));
+    sent &= sendMessageJson(message("/streaming/characteristics/clientdevicecapabilities", json::object()));
+    sent &= sendMessageJson(message("/streaming/characteristics/dimensionschanged", {
         {"horizontal", 1920}, {"vertical", 1080}, {"preferredWidth", 1920}, {"preferredHeight", 1080},
         {"safeAreaLeft", 0}, {"safeAreaTop", 0}, {"safeAreaRight", 1920}, {"safeAreaBottom", 1080}, {"supportsCustomResolution", true}}));
+    return sent;
 }
 
 void WebRtcSession::onMessageChannel(const std::string& text) {
     json j;
     try { j = json::parse(text); } catch (const json::exception&) { log::warn("xbox", "message channel: not JSON"); return; }
+    try {
     const std::string type = j.value("type", "");
     if (type == "HandshakeAck") {
         log::info("xbox", "handshake acknowledged");
         // Control: authorise, then announce pad 0 (the reference client adds, removes and re-adds it).
         const auto sendControl = [this](const std::string& s) {
-            if (control_ && control_->isOpen()) control_->send(rtc::binary(reinterpret_cast<const std::byte*>(s.data()), reinterpret_cast<const std::byte*>(s.data()) + s.size()));
+            return sendBinary(control_,reinterpret_cast<const uint8_t*>(s.data()),s.size());
         };
-        sendControl(json{{"message", "authorizationRequest"}, {"accessKey", "4BDB3609-C1F1-4195-9B37-FEFF45DA8B8E"}}.dump());
-        sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", true}}.dump());
-        sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", false}}.dump());
-        sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", true}}.dump());
+        bool initialized=sendControl(json{{"message", "authorizationRequest"}, {"accessKey", "4BDB3609-C1F1-4195-9B37-FEFF45DA8B8E"}}.dump());
+        initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", true}}.dump());
+        initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", false}}.dump());
+        initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", true}}.dump());
         if (input_ && input_->isOpen()) {
             const auto report = clientMetadataReport(0, nowMs(), 1);
-            input_->send(reinterpret_cast<const std::byte*>(report.data()), report.size());
+            initialized &= sendBinary(input_,report.data(),report.size());
         }
-        sendClientConfig();
-        handshakeDone_ = true;
+        initialized &= sendClientConfig();
+        handshakeDone_ = initialized;
         changed_.notify_all();
         return;
     }
@@ -301,6 +320,7 @@ void WebRtcSession::onMessageChannel(const std::string& text) {
         return;
     }
     log::info("xbox-message", "unhandled " + type);
+    } catch(const json::exception&){log::warn("xbox","message channel: invalid field type");}
 }
 
 void WebRtcSession::onInputChannel(const uint8_t* data, size_t size) {
@@ -317,22 +337,43 @@ void WebRtcSession::onInputChannel(const uint8_t* data, size_t size) {
 }
 
 void WebRtcSession::sendGamepad(const GamepadFrame& frame) {
-    if (!handshakeDone_ || !input_ || !input_->isOpen()) return;
-    const auto report = gamepadReport(++inputSequence_, nowMs(), {frame});
-    input_->send(reinterpret_cast<const std::byte*>(report.data()), report.size());
+    std::lock_guard lock(gate_->mutex);
+    if(!gate_->open||!handshakeDone_)return;
+    const auto report=gamepadReport(++inputSequence_,nowMs(),{frame});
+    sendBinary(input_,report.data(),report.size());
+}
+
+void WebRtcSession::videoPresented(uint32_t rtp,int64_t arrival,int64_t submitted,int64_t decoded,int64_t presented) {
+    std::lock_guard lock(gate_->mutex);
+    if(!gate_->open||!handshakeDone_||(feedbackSent_&&rtp==lastFeedbackRtp_))return;
+    const auto origin=std::chrono::duration_cast<std::chrono::nanoseconds>(origin_.time_since_epoch()).count()/100;
+    const auto ms=[origin](int64_t stamp){return uint32_t(uint64_t(std::max<int64_t>(0,stamp-origin)/10000));};
+    const auto report=videoFeedbackReport(++inputSequence_,nowMs(),{rtp,ms(arrival),ms(submitted),ms(decoded),ms(presented)});
+    if(sendBinary(input_,report.data(),report.size())){
+        if(!feedbackSent_)log::info("xbox","video presentation feedback started");
+        feedbackSent_=true;lastFeedbackRtp_=rtp;
+    }
 }
 
 void WebRtcSession::requestKeyframe() {
+    std::lock_guard lock(gate_->mutex);
+    if(!gate_->open||closed_)return;
     ++keyframeRequests_;
-    if (video_) video_->requestKeyframe();
-    if (control_ && control_->isOpen() && handshakeDone_) {
-        const std::string s = json{{"message", "videoKeyframeRequested"}, {"ifrRequested", true}}.dump();
-        control_->send(rtc::binary(reinterpret_cast<const std::byte*>(s.data()), reinterpret_cast<const std::byte*>(s.data()) + s.size()));
+    try{if(video_)video_->requestKeyframe();}catch(const std::exception& error){sendFailure(error);}
+    if(handshakeDone_){
+        const std::string s=json{{"message","videoKeyframeRequested"},{"ifrRequested",true}}.dump();
+        sendBinary(control_,reinterpret_cast<const uint8_t*>(s.data()),s.size());
     }
 }
 
 void WebRtcSession::close() {
     if (closed_.exchange(true)) return;
+    {std::lock_guard lock(gate_->mutex);gate_->open=false;handshakeDone_=false;connected_=false;}
+    // Wait for current callbacks via the gate, then detach callbacks before
+    // releasing channels. Do not hold the gate while library callbacks reset.
+    for(const auto& dc:{chat_,control_,input_,message_})if(dc)dc->resetCallbacks();
+    if(audio_)audio_->resetCallbacks();if(video_)video_->resetCallbacks();
+    if(pc_)pc_->resetCallbacks();
     if (pc_) {
         try { pc_->close(); } catch (...) {}
     }
@@ -343,13 +384,14 @@ void WebRtcSession::close() {
 }
 
 WebRtcStats WebRtcSession::stats() const {
+    std::lock_guard lock(gate_->mutex);
     WebRtcStats s;
     s.videoUnits = videoUnits_.load();
     s.audioPackets = audioPackets_.load();
     s.keyframeRequests = keyframeRequests_.load();
     s.videoBytes = videoBytes_.load();
     s.handshakeDone = handshakeDone_.load();
-    if (const auto pc = pc_) {
+    if (const auto pc = gate_->open?pc_:nullptr) {
         s.bytesReceived = pc->bytesReceived();
         if (const auto rtt = pc->rtt()) s.rttMs = double(rtt->count());
     }

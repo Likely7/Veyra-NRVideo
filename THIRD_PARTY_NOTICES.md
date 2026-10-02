@@ -626,3 +626,25 @@ the published upstream releases plus the patch above. License texts: `licenses/x
   Magewell's copyright notice and disclaimer retained; the full text is in
   `licenses/magewell/MWCapture-SDK-NOTICE.txt`. The SDK as a whole (examples, tools) is under
   Magewell's EULA and is not redistributed.
+
+
+## SoundTouch playback tempo (2026-10-03)
+
+Movie preview uses SoundTouch 2.4.1, LGPL-2.1, upstream
+https://codeberg.org/soundtouch/soundtouch commit
+`0047e0b1ecfceb041348579119bf79b73a322a3a` (tag 2.4.1).
+Unmodified headers and SoundTouch processing sources are under
+`third_party/soundtouch/`; Veyra supplies only its build definition and origin
+note. Copyright and COPYING.TXT are preserved. It is statically linked from
+these sources; the Veyra corresponding-source archive includes them and the
+build integration. Portable releases include the LGPL text and origin note.
+No separately downloaded SoundTouch binary is used.
+
+Xbox video feedback extends the existing Greenlight port at the same pinned
+commit `58e832a1b1e4bf6b5119a2c84df06ae5e5534993` (MIT), specifically
+`packages/player/src/client/lib/channel/input/packet.ts::_writeMetadataData`
+and `render/video.ts::processVideoMetadata`. `Protocol.h` encodes the original
+seven u32 fields and RTP key; `XboxSessionSource.cpp` records actual arrival,
+decode submission/completion and presentation-return times.
+`WebRtcSession.cpp` sends one bounded report per presented source frame, without
+an unbounded metadata queue. These CPU timestamps do not claim physical scanout.

@@ -1,5 +1,22 @@
 # Veyra 工作记录
 
+## 2026-10-03 启动恢复、倍速、Xbox 断开与采集 VRR（独立候选）
+
+- 最终 `build-final.log` 编译退出 0，`player-startup-speed-tests.py regression-final` 七组全部退出 0；包含最终“生成帧不发送源帧反馈”修正。`git diff --check`、scope guard、SoundTouch 31 文件身份、中英 README 无修改以及 2.0.0 Release 完整区块/二维码字节比对通过。
+- 用户新增授权：全屏自动退窗改成设置开关、默认关闭；可选启动继续上次视频进度或采集卡配置；极简/专业启动页；双页面 1/1.5/2/3× 视频倍速。随后追加 Xbox 反复断开及主机 VRR 经采集卡输入不能补帧的修复，要求与 Claude 分支隔离。
+- 分支 `codex/player-startup-speed-20261003`，基线 `15a0e39`，目录 `E:/项目/Veyra/worktrees/player-startup-speed-20261003`；checkpoint `checkpoint/pre-player-startup-speed-20261003`。全部新产物位于 `E:/项目/Veyra/build|tests|logs|tmp|archives/player-startup-speed-20261003`。历史 UI-only 禁令由当前明确功能授权扩展；独立 scope guard 检查允许文件，外部 baseline 未变。未改桌面、main 或 Claude 工作树。
+- Xbox 日志 13：五次连接后 Disconnected→Closed，14:56:05.080Z 的 SCTP send errno=108 后紧跟未处理 C++ 异常。最初按通用 WebRTC 语义怀疑可恢复 Disconnected，进一步读取实际 libdatachannel 0.24.5 源码确认库本身立即 remoteClose，因此没有实现无效的等待宽限。现在所有 transport sends 捕获关闭竞态异常，回调共享生命周期门控，停止解码线程后再关闭 RTC，异常 JSON 字段不会逸出回调；细化 ICE/transport 日志。
+- 对照已固定 Greenlight `58e832a1` 补齐原本缺失的输入通道视频反馈：原 RTP key + 到达/解码提交/解码完成/Present 返回时间，单帧有界报文；生成帧和缓存重画不伪装成真实源帧反馈。缺少此类反馈是协议差异，**尚无证据证明它解释了现场全部断开**。没有凭空宣称 Xbox 网络问题根治。
+- VRR：用户明确指 PS5/Switch→支持 VRR 的采集卡，不是 PC 显示器开关。旧的持续断点过滤要求 PTS 在标称间隔的 0.5–1.5 倍内，另以 2.5 倍判断断流；120 Hz 格式下正常的 48–120 Hz 变化会反复清空历史。改用有界的 PTS/到达时钟一致性，保留首帧、反向/非有限时钟、真正长停顿、单次驱动断点和压缩参考链保护；补帧呈现相位使用实际 A/B 间隔。2400 个可变间隔及异常边界自动回归通过。**本机 60 Hz 卡通过不能替代反馈者 VRR 主机实测。**
+- 倍速复用共享播放/seek/reset，不改变导出和实时输入速度。音频 SoundTouch 2.4.1（LGPL-2.1，固定提交 `0047e0b1ecfceb041348579119bf79b73a322a3a`）保调变速，设备音频时钟映射原媒体 PTS；视频与补帧 deadline 同时按速度换算。31 个上游源码/头/许可文件字节一致，身份记录 `archives/.../soundtouch-identity.json`；源码、许可证和构建集成随对应源码提供，proprietary runtime 不变。
+- `python -B scripts/acceptance/player-startup-speed-build.py build-v1.log ...` 到 build-v4.log 均成功；`...-tests.py regression-v2`：音频 8 项（全部速度、0/1.2 秒起播、音高约 440 Hz、精确时长/媒体时钟/无溢出）、Xbox 83 项真实本地双端、repair 243 项、Qt Quick 32 项含真实菜单点击、QML 数据/翻译及 live timing 全过。第一轮音频夹具误设 paused，只有预填充，超时失败；改为正常消费后通过，原证据保留。
+- `python -B E:/项目/Veyra/tmp/player-startup-speed-20261003/product-tests.py product-v3-software-ui`：实际 WASAPI 播放测得 1.5004×/2.0010×/3.0008×，暂停、暂停跳转、速度切回 1×、保存 26.9667 秒位置后重启恢复通过；rememberPosition 关闭而 autoResume 开启仍恢复。专业/极简启动页面及关闭自动恢复通过。界面通过 `QT_QUICK_BACKEND=software` 绘制，视频仍为 D3D12；解码设软件以隔离对照。
+- 默认 D3D12 UI 对照：product-v1 硬解起播、product-v2 软解暂停跳转遇到 `0x887A002B`，Qt 和视频设备同时丢失。用修改前 `field-2.0.1` EXE 及 QML 重跑 (`baseline-d3d12-ui`) 同样复现；未归因于新倍速，也没有根据插件加载就下因果结论。挂起的测试进程经绝对路径核对后只终止本轮实例，日志保留。观察到 Claude 的 `claude/rtss-compat-20261003` 工作树，因此不在此分支重叠修改 RTSS/UI renderer。该环境问题仍需后续合并对应修复，不据软件 UI 测试宣称默认渲染路径已通过。
+- `capture-tests.py capture-v1`：真实 1440p60 采集+NR，在注入持续 GPU 分配时，默认关闭保护保持全屏，启用后退窗且片源/效果保留。启用例的后置验证脚本误匹配日志文案，原 summary 记录失败；`capture-resume.py` 针对同一日志复核正确事件，写 `reviewed-summary.json`，未伪造重测。接着独立启动已保存采集会话，通过 2560×1440/60 NV12 配置自动打开，无需点击。
+- 自审：检查 Xbox 回调寿命与异步发送关闭竞态；只对真实源帧发帧反馈；VRR 仍有时钟跳变/压缩丢参考保护；所有 rate 下媒体 PTS 不重写、音调保持、导出不改；保护默认关闭、禁用立即解除 UI 全屏限制；CLI 显式片源优先于自动恢复。未声称有独立 Reviewer。
+- README 未改、完整 2.0.0 Release 内容和双 220px 二维码保持。公开 2.0.1 仍待现场验证与并行分支收尾，不合并或推送其他工作；本轮交付独立源码提交和候选包。5060 Ti 显存持续增长根因仍未确认，设置保护只是一种可选应急措施。
+
+
 ## 2026-10-02 Codex 接管 2.0.1：Xbox 修复、显存保护候选
 
 - 当前用户要求先处理日志 8/12 爆显存与日志 11 Xbox 连接失败，再按 Claude 对话发 2.0.1；发布授权已存在，不另问批准。已读取 Claude 本机原对话：README 不动，Release 保留 2.0.0 全部内容并追加修复，中英及双 220px 二维码保留。

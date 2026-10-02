@@ -43,7 +43,7 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
         a.sourceWidth == b.sourceWidth && a.sourceHeight == b.sourceHeight &&
         a.sourceDisplayAspect == b.sourceDisplayAspect && a.sourceRotationDegrees == b.sourceRotationDegrees &&
         a.capture == b.capture && a.image == b.image &&
-        a.vramRunawayMiB == b.vramRunawayMiB && a.vramFullscreenUnsafe == b.vramFullscreenUnsafe &&
+        a.playbackRate == b.playbackRate && a.vramRunawayMiB == b.vramRunawayMiB && a.vramFullscreenUnsafe == b.vramFullscreenUnsafe &&
         a.metrics.resolution.base.width == b.metrics.resolution.base.width &&
         a.metrics.resolution.base.height == b.metrics.resolution.base.height &&
         a.metrics.resolution.nr.width == b.metrics.resolution.nr.width &&

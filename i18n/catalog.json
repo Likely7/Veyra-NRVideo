@@ -1506,6 +1506,13 @@
    "ja": "Xbox のサインインの有効期限が切れました。再度サインインしてください。"
   },
   {
+   "zh": "Xbox 连接失败：{}",
+   "src": "src/source/XboxSessionSource.cpp",
+   "zh-TW": "Xbox 連線失敗：{}",
+   "en": "Xbox connection failed: {}",
+   "ja": "Xbox 接続失敗：{}"
+  },
+  {
    "zh": "XeSS 初始化失败；当前为普通呈现",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "XeSS 初始化失敗；當前為普通呈現",
@@ -1658,6 +1665,13 @@
    "zh-TW": "上次的擷取目標「%1」已不在，請重新選擇",
    "en": "The last capture target \"%1\" is gone; choose again",
    "ja": "前回のキャプチャー対象「%1」が見つかりません。選び直してください"
+  },
+  {
+   "zh": "上次的视频文件不存在：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "上次的影片檔案不存在：%1",
+   "en": "The previous video file does not exist: %1",
+   "ja": "前回の動画ファイルが見つかりません：%1"
   },
   {
    "zh": "上次的采集格式不可用，请在采集卡面板重新选择",
@@ -2610,6 +2624,20 @@
    "zh-TW": "全螢幕",
    "en": "Fullscreen",
    "ja": "全画面"
+  },
+  {
+   "zh": "全屏显存增长保护",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "全螢幕顯存增長保護",
+   "en": "Fullscreen VRAM growth protection",
+   "ja": "全画面の VRAM 増加保護"
+  },
+  {
+   "zh": "全屏期间显存持续增长了 %1 GB，已退出全屏保护播放；当前会话使用窗口播放。增强设置保留。原因尚未确认，可开启设置中的 OBS 游戏采集兼容、重启后测试全屏。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "全螢幕期間顯示記憶體持續增加了 %1 GB，已退出全螢幕保護播放；目前工作階段使用視窗播放。增強設定保留。原因尚未確認，可開啟設定中的 OBS 遊戲擷取相容、重新啟動後測試全螢幕。",
+   "en": "VRAM kept growing by %1 GB in fullscreen. Playback has returned to a window for this session, keeping enhancement settings. The cause is unconfirmed. You can enable OBS game capture compatibility in Settings, restart, and test fullscreen again.",
+   "ja": "全画面中に VRAM が %1 GB 増え続けたため、この再生はウィンドウ表示に戻りました。映像処理の設定は維持します。原因は未確認です。設定で OBS ゲームキャプチャ互換を有効にし、再起動して全画面を再テストできます。"
   },
   {
    "zh": "全屏画面（双击画面 / F11）",
@@ -3668,6 +3696,13 @@
    "zh-TW": "否",
    "en": "No",
    "ja": "いいえ"
+  },
+  {
+   "zh": "启动后自动继续上次内容",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "啟動後自動繼續上次內容",
+   "en": "Automatically resume on startup",
+   "ja": "起動時に前回の再生を再開"
   },
   {
    "zh": "启动窗口大小",
@@ -6541,6 +6576,13 @@
    "ja": "再生バーを非表示にしました · マウスを上端に移動し、ドックの目のアイコンで再表示できます"
   },
   {
+   "zh": "播放速度",
+   "src": "qml/Veyra/PlaybackRateButton.qml",
+   "zh-TW": "播放速度",
+   "en": "Playback speed",
+   "ja": "再生速度"
+  },
+  {
    "zh": "操作失败；请检查网络、输入和可用磁盘空间。",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "操作失敗；請檢查網路、輸入和可用磁盤空間。",
@@ -7080,6 +7122,13 @@
    "ja": "VRAM 回収時に排出できませんでした"
   },
   {
+   "zh": "显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "顯示記憶體在設定未變時增加了 %1 GB，正在嘗試回收；回收結果請見診斷日誌。原因尚未確認。",
+   "en": "VRAM grew by %1 GB without a settings change. Recovery is being attempted; see the diagnostic log for the result. The cause is unconfirmed.",
+   "ja": "設定を変えていないのに VRAM が %1 GB 増加したため、回収を試みています。結果は診断ログをご覧ください。原因は未確認です。"
+  },
+  {
    "zh": "显存在设置没变的情况下涨了 %1 GB。检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra：它只在全屏时介入，这部分显存很可能由它占用，Veyra 重建也释放不了。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项，或退出全屏；已占用的显存要重开 Veyra 才会释放",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "顯示記憶體在設定沒變的情況下增加了 %1 GB。偵測到 NVIDIA App 的畫面外掛（RTX HDR / 智慧平滑運動 / RTX 動態鮮豔度）注入了 Veyra：它只在全螢幕時介入，這部分顯示記憶體很可能由它佔用，Veyra 重建也釋放不了。請在 NVIDIA App → 圖形 → 程式設定中為 Veyra 關閉這幾項，或退出全螢幕；已佔用的顯示記憶體要重開 Veyra 才會釋放",
@@ -7612,6 +7661,13 @@
    "ja": "今回の書き出しは AMD FSR 超解像を使用します"
   },
   {
+   "zh": "本次播放检测到全屏显存持续增长，请使用窗口播放；重新打开片源后可再次测试全屏。",
+   "src": "qml/Veyra/Main.qml",
+   "zh-TW": "本次播放偵測到全螢幕顯示記憶體持續增加，請使用視窗播放；重新開啟來源後可再次測試全螢幕。",
+   "en": "VRAM kept growing in fullscreen during this session. Use windowed playback; reopen the source to test fullscreen again.",
+   "ja": "この再生では全画面中に VRAM が増え続けました。ウィンドウ表示を使用してください。ソースを開き直すと全画面を再テストできます。"
+  },
+  {
    "zh": "松开恢复",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "鬆開恢復",
@@ -7729,6 +7785,13 @@
    "zh-TW": "偵測到 RivaTuner（RTSS OSD）注入了 Veyra，請在 RTSS 中為 veyra_qml_ui.exe 關閉偵測（Application detection level 設為 None）後再試",
    "en": "RivaTuner (RTSS on-screen display) is injected into Veyra; set Application detection level to None for veyra_qml_ui.exe in RTSS and try again",
    "ja": "RivaTuner（RTSS の OSD）が Veyra に挿入されています。RTSS で veyra_qml_ui.exe の Application detection level を None にしてから再試行してください"
+  },
+  {
+   "zh": "检测异常增长时自动退出全屏；默认关闭",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "偵測異常增長時自動退出全螢幕；預設關閉",
+   "en": "Exit fullscreen if abnormal growth is detected; off by default",
+   "ja": "異常な増加を検出すると全画面を解除（初期設定はオフ）"
   },
   {
    "zh": "模型参数",
@@ -10130,6 +10193,13 @@
    "zh-TW": "影片已編碼，但儲存檔名失敗（Windows錯誤 {}）；可保留partial檔案",
    "en": "The video was encoded, but saving the file name failed (Windows error {}); the partial file can be kept",
    "ja": "動画はエンコードしましたが、ファイル名を付けて保存できませんでした（Windows エラー {}）。partial ファイルは残せます"
+  },
+  {
+   "zh": "视频恢复上次进度；采集卡沿用上次设备与设置",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "影片恢復上次進度；擷取卡沿用上次裝置與設定",
+   "en": "Resume the video position or reopen the last capture device and settings",
+   "ja": "動画の前回の位置、または前回のキャプチャーデバイスと設定を復元"
   },
   {
    "zh": "视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts);;所有文件 (*)",
@@ -13189,34 +13259,6 @@
    "zh-TW": "；本次匯出使用 AMD FSR 超解析",
    "en": "; this export uses AMD FSR super resolution",
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
-  },
-  {
-   "zh": "全屏期间显存持续增长了 %1 GB，已退出全屏保护播放；当前会话使用窗口播放。增强设置保留。原因尚未确认，可开启设置中的 OBS 游戏采集兼容、重启后测试全屏。",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "全螢幕期間顯示記憶體持續增加了 %1 GB，已退出全螢幕保護播放；目前工作階段使用視窗播放。增強設定保留。原因尚未確認，可開啟設定中的 OBS 遊戲擷取相容、重新啟動後測試全螢幕。",
-   "en": "VRAM kept growing by %1 GB in fullscreen. Playback has returned to a window for this session, keeping enhancement settings. The cause is unconfirmed. You can enable OBS game capture compatibility in Settings, restart, and test fullscreen again.",
-   "ja": "全画面中に VRAM が %1 GB 増え続けたため、この再生はウィンドウ表示に戻りました。映像処理の設定は維持します。原因は未確認です。設定で OBS ゲームキャプチャ互換を有効にし、再起動して全画面を再テストできます。"
-  },
-  {
-   "zh": "显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "顯示記憶體在設定未變時增加了 %1 GB，正在嘗試回收；回收結果請見診斷日誌。原因尚未確認。",
-   "en": "VRAM grew by %1 GB without a settings change. Recovery is being attempted; see the diagnostic log for the result. The cause is unconfirmed.",
-   "ja": "設定を変えていないのに VRAM が %1 GB 増加したため、回収を試みています。結果は診断ログをご覧ください。原因は未確認です。"
-  },
-  {
-   "zh": "本次播放检测到全屏显存持续增长，请使用窗口播放；重新打开片源后可再次测试全屏。",
-   "src": "qml/Veyra/Main.qml",
-   "zh-TW": "本次播放偵測到全螢幕顯示記憶體持續增加，請使用視窗播放；重新開啟來源後可再次測試全螢幕。",
-   "en": "VRAM kept growing in fullscreen during this session. Use windowed playback; reopen the source to test fullscreen again.",
-   "ja": "この再生では全画面中に VRAM が増え続けました。ウィンドウ表示を使用してください。ソースを開き直すと全画面を再テストできます。"
-  },
-  {
-   "zh": "Xbox 连接失败：{}",
-   "src": "src/source/XboxSessionSource.cpp",
-   "zh-TW": "Xbox 連線失敗：{}",
-   "en": "Xbox connection failed: {}",
-   "ja": "Xbox 接続失敗：{}"
   }
  ]
 }

@@ -19,10 +19,7 @@
 // QML animation.
 //
 // Scope note: this exposes what the engine can actually do today. Playback
-// speed is reported but has no setter (the engine has none), and export
-// resolution is absent (the engine derives it from the NR size policy). A
-// control that cannot change anything is worse than no control, so they are
-// not offered until the engine side exists.
+// speed measurement and requested file-preview rate are separate values.
 #include <QObject>
 #include <QString>
 #include <QRectF>
@@ -353,6 +350,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY snapshotChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY snapshotChanged)
     Q_PROPERTY(double playbackSpeed READ playbackSpeed NOTIFY snapshotChanged)
+    Q_PROPERTY(double playbackRate READ playbackRate WRITE setPlaybackRate NOTIFY snapshotChanged)
     // True while the engine has not yet applied what the UI asked for. The UI
     // shows the pending value and marks it, rather than lying about the state.
     Q_PROPERTY(bool applying READ applying NOTIFY snapshotChanged)
@@ -678,6 +676,8 @@ public:
     bool muted() const;
     void setMuted(bool value);
     double playbackSpeed() const;
+    double playbackRate() const;
+    void setPlaybackRate(double rate);
 
     bool nrEnabled() const;
     int selectedNrLayer() const;
@@ -808,6 +808,7 @@ public:
     // Split position from a pointer on the picture host (fractions of the host).
     Q_INVOKABLE void setCompareSplitAt(double hostFractionX);
     Q_INVOKABLE void resumeLastSource();
+    void autoResumeLastSource();
     // List mode: an NR layer's model and residual back to their defaults.
     Q_INVOKABLE bool resetNrLayer(int index);
     QVariantList protectionRegions() const;

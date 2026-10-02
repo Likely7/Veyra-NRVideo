@@ -15,6 +15,15 @@ inline int64_t liveSourceInterval100ns(pipeline::Rational duration,double nomina
 inline int64_t livePhaseInterval100ns(pipeline::Rational duration,double nominalFps,bool compositor){
     return liveSourceInterval100ns(compositor?pipeline::Rational{}:duration,nominalFps);
 }
+// Variable-refresh capture often retains the negotiated maximum-rate sample
+// duration. The actual A/B source span controls interpolation, not that cap.
+// Never use a stale/reset predecessor to establish the new phase.
+inline int64_t capturePairInterval100ns(pipeline::Rational duration,double nominalFps,
+                                      double previousPtsMs,double ptsMs,bool reset){
+    const double span=ptsMs-previousPtsMs;
+    if(!reset&&std::isfinite(span)&&span>=1&&span<=100)return int64_t(std::llround(span*10000));
+    return liveSourceInterval100ns(duration,nominalFps);
+}
 // Live capture never waits on an absolute source PTS. Once B is available,
 // display generated(A,B), then B up to half an input interval later. Anchor
 // each pair to current host time, not to the first (possibly stale) sample.

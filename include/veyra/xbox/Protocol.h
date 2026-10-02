@@ -58,6 +58,20 @@ inline std::vector<uint8_t> clientMetadataReport(uint32_t sequence, double timeM
     return b;
 }
 
+// Greenlight 58e832a1: input/packet.ts _writeMetadataData. Preserve the actual
+// RTP key and seven u32 fields; times share the session's monotonic origin.
+struct VideoFeedback {
+    uint32_t rtpTimestamp=0, arrivalMs=0, submittedMs=0, decodedMs=0, renderedMs=0;
+};
+inline std::vector<uint8_t> videoFeedbackReport(uint32_t sequence,double timeMs,const VideoFeedback& f){
+    std::vector<uint8_t> b(43,0);
+    detail::put16(b,0,ReportMetadata);detail::put32(b,2,sequence);detail::putDouble(b,6,timeMs);b[14]=1;
+    const auto sent=uint32_t(uint64_t(timeMs));
+    const uint32_t values[]={f.rtpTimestamp,f.arrivalMs,f.submittedMs,f.decodedMs,f.renderedMs,sent,sent};
+    for(size_t i=0;i<7;++i)detail::put32(b,15+4*i,values[i]);
+    return b;
+}
+
 // One report with up to a few gamepads: count (u8), then per pad 23 bytes: index, buttons, 4 axes,
 // 2 triggers, physicality (u32 LE 1) and virtual physicality (u32 written big-endian 1, as the
 // reference client does).
