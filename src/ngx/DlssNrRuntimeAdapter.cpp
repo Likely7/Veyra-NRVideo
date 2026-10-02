@@ -409,7 +409,8 @@ bool DlssNrRuntimeAdapter::load(const std::wstring& runtimeDir, Status& status)
 
     // Development staging and the explicitly named experimental Release pack.
     const auto allowed=[&](const wchar_t* suffix){const size_t n=wcslen(suffix);return dllPath_.size()>n&&_wcsicmp(dllPath_.c_str()+dllPath_.size()-n,suffix)==0;};
-    if (!allowed(L"\\runtime_local\\nvidia\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime\\experimental\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime_local\\nvidia\\nr-community\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime\\experimental\\nr-community\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime_local\\nvidia\\nr-ampere\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime\\experimental\\nr-ampere\\nvngx_dlssnr.dll")) {
+    if (!allowed(L"\\runtime_local\\nvidia\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime\\experimental\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime_local\\nvidia\\nr-community\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime\\experimental\\nr-community\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime_local\\nvidia\\nr-ampere\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime\\experimental\\nr-ampere\\nvngx_dlssnr.dll")
+        &&!allowed(L"\\runtime_local\\nvidia\\nr-original\\nvngx_dlssnr.dll")&&!allowed(L"\\runtime\\experimental\\nr-original\\nvngx_dlssnr.dll")) {
         status = Status::InvalidArgument;
         veyra::log::error("ngx", "nr-adapter: resolved runtime path is outside approved staging/experimental directory; refusing to load");
         return false;

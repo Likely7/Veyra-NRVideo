@@ -648,3 +648,7 @@ seven u32 fields and RTP key; `XboxSessionSource.cpp` records actual arrival,
 decode submission/completion and presentation-return times.
 `WebRtcSession.cpp` sends one bounded report per presented source frame, without
 an unbounded metadata queue. These CPU timestamps do not claim physical scanout.
+
+## NVIDIA original NR restored in 2.0.2
+
+The user-approved, unmodified NVIDIA-signed 310.8.0.0 NR (SHA256 E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E) is distributed only as a release runtime at runtime/experimental/nr-original/nvngx_dlssnr.dll. Existing community Lecram/SF-v2 choices and notices remain. See docs/RUNTIME_COMPONENTS_2.0.2.md and the publisher manifest. This experimental integration is not NVIDIA certification or complete official DLSS 5 support. No proprietary binary has been added to source Git.

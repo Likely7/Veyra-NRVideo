@@ -31,7 +31,7 @@ int wmain(int argc,wchar_t** argv) {
         engine.open(window,argv[1],{});
         check(wait([](const auto& s){return s.frames>30&&!s.nrActive&&!s.srActive&&!s.fgActive&&s.nrEvaluated==0&&s.generated==0;}),"fresh defaults play without enhancement");
         int cycle=0;
-        for(const auto runtime:{veyra::engine::NrRuntime::Ampere,veyra::engine::NrRuntime::Original,veyra::engine::NrRuntime::Community,veyra::engine::NrRuntime::Ampere}) {
+        for(const auto runtime:{veyra::engine::NrRuntime::Original,veyra::engine::NrRuntime::Ampere,veyra::engine::NrRuntime::NvidiaOriginal,veyra::engine::NrRuntime::Original}) {
             if(failures)break;
             auto settings=engine.snapshot().desired;settings.nr=true;settings.nrRuntime=runtime;
             if(!check(engine.requestSettings(settings),"request runtime switch"))break;

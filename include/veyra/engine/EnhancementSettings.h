@@ -68,7 +68,13 @@ constexpr std::wstring_view captureAudioIngressName(CaptureAudioIngress mode) {
     }
     return L"自动（优先 PCM，必要时位流解码）";
 }
-enum class NrRuntime { Original, Community, Ampere };
+// The original slot (0) became Lecram in 2.0.0. Give the restored NVIDIA
+// binary a new value so existing presets keep selecting the same DLL.
+enum class NrRuntime { Original = 0, Community = 1, Ampere = 2, NvidiaOriginal = 3 };
+constexpr bool validNrRuntime(NrRuntime runtime) {
+    return runtime == NrRuntime::Original || runtime == NrRuntime::Community ||
+           runtime == NrRuntime::Ampere || runtime == NrRuntime::NvidiaOriginal;
+}
 // Persisted value 1 selected the retired RTX40 DLL. Never load that DLL in
 // current builds; preserve 0 (Lecram) and 2 (SF-v2) as explicit user choices.
 constexpr NrRuntime currentNrRuntime(NrRuntime runtime) {
@@ -79,6 +85,7 @@ constexpr std::string_view nrRuntimeName(NrRuntime runtime) {
     case NrRuntime::Original:return "community-Lecram-RTX50";
     case NrRuntime::Community:return "community-SF-v2-RTX20-RTX50-legacy40";
     case NrRuntime::Ampere:return "community-SF-v2-RTX20-RTX50";
+    case NrRuntime::NvidiaOriginal:return "NVIDIA-original-RTX50-310.8.0";
     }
     return "unknown";
 }
@@ -302,7 +309,7 @@ struct EnhancementSettings {
         auto range=[](float v,float hi){return std::isfinite(v)&&v>=0&&v<=hi;};
         if(auto error=protection.validate();!error.empty())return error;
         if(!revision)return "settingsRevision must be nonzero";
-        if(nrRuntime!=NrRuntime::Original&&nrRuntime!=NrRuntime::Community&&nrRuntime!=NrRuntime::Ampere)return "invalid NR runtime";
+        if(!validNrRuntime(nrRuntime))return "invalid NR runtime";
         if(captureAudio<CaptureAudioIngress::Auto||captureAudio>CaptureAudioIngress::BitstreamPreferred)return "invalid capture audio ingress mode";
         if(captureBuffer<source::CaptureBufferMode::Auto||captureBuffer>source::CaptureBufferMode::DriverDefault)return "invalid capture buffer mode";
         if(audioSync<AudioSyncMode::Automatic||audioSync>AudioSyncMode::Off||audioOffsetMs<-250||audioOffsetMs>250)return "invalid audio sync setting";
@@ -324,7 +331,7 @@ struct EnhancementSettings {
                n.model.uiCorrection<0||n.model.uiCorrection>1)return "invalid NR layer experimental parameter";
             for(float v:{n.residual.total,n.residual.darken,n.residual.brighten,n.residual.color,n.residual.luminance})
                 if(!range(v,2))return "NR layer residual parameter out of range";
-            if(n.runtime!=NrRuntime::Original&&n.runtime!=NrRuntime::Community&&n.runtime!=NrRuntime::Ampere)
+            if(!validNrRuntime(n.runtime))
                 return "invalid NR layer runtime";
             if(n.enabled&&(n.runtime!=nrRuntime||n.lowLatencyPairing!=lowLatency))
                 return "active NR layers must share runtime and NR/SR order";

@@ -134,12 +134,14 @@ def main():
     p.add_argument('--verify', type=Path)
     p.add_argument('--build', type=Path)
     p.add_argument('--runtime-source', type=Path)
+    p.add_argument('--original-nr', type=Path, help='Approved original NR DLL, audited against the version runtime lock')
     p.add_argument('--legacy-licenses', type=Path)
     p.add_argument('--qt', type=Path)
     p.add_argument('--qt-licenses', type=Path)
     p.add_argument('--output', type=Path)
     p.add_argument('--label', default='2.0.0')
     p.add_argument('--no-archive', action='store_true')
+    p.add_argument('--release', action='store_true', help='Require a clean source tree and include corresponding-source links')
     args = p.parse_args()
     if args.verify:
         print(json.dumps(verify_zip(args.verify), indent=2))
@@ -149,8 +151,15 @@ def main():
             p.error('Missing --' + field.replace('_', '-'))
     if not re.fullmatch(r'2\.0\.\d+(?:-[a-z0-9.-]+)?', args.label):
         raise ValueError('Expected a 2.0.x version or an explicit test suffix')
-    # 2.0.x patch releases ship the 2.0.0 runtime lock unchanged; the notes follow the version.
     version = args.label.split('-')[0]
+    lock_path = ROOT / 'docs' / ('RELEASE_' + version + '_RUNTIME_LOCK.json')
+    if not lock_path.is_file():
+        lock_path = ROOT / 'docs/RELEASE_2.0.0_RUNTIME_LOCK.json'
+    if args.release:
+        if subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain']).strip():
+            raise ValueError('Public release requires a clean source tree')
+        if not (ROOT / 'docs' / ('BUILD_' + version + '.md')).is_file():
+            raise ValueError('Public release requires version-specific corresponding-source instructions')
     notes = 'RELEASE_NOTES_' + version + '.md' if (ROOT / 'docs' / ('RELEASE_NOTES_' + version + '.md')).is_file() else 'RELEASE_NOTES_2.0.0.md'
     if not args.output.resolve().is_relative_to(ARTIFACTS.resolve()):
         raise ValueError('Candidate output must stay in the E: artifact tree')
@@ -206,18 +215,20 @@ def main():
         copy(ffmpeg / 'bin/dav1d.dll', 'dav1d.dll')
 
     # These are the pinned, already approved runtime identities, including kernels.
-    lock = json.loads((ROOT / 'docs/RELEASE_2.0.0_RUNTIME_LOCK.json').read_text(encoding='utf8'))
+    lock = json.loads(lock_path.read_text(encoding='utf8'))
     audit_env = env.copy()
     # A parent PowerShell 7 session may otherwise force Windows PowerShell 5 to
     # import incompatible copies of its built-in Security module.
     audit_env = {k: v for k, v in audit_env.items() if k.upper() != 'PSMODULEPATH'}
     audit_env.update(VEYRA_PACKAGE_RUNTIME=str(args.runtime_source),
-                     VEYRA_PACKAGE_LOCK=str(ROOT / 'docs/RELEASE_2.0.0_RUNTIME_LOCK.json'))
+                     VEYRA_PACKAGE_LOCK=str(lock_path),
+                     VEYRA_PACKAGE_ORIGINAL_NR=str(args.original_nr) if args.original_nr else '')
     signature_check = r"""$ErrorActionPreference='Stop';
 $lock=Get-Content -LiteralPath $env:VEYRA_PACKAGE_LOCK -Raw -Encoding UTF8 | ConvertFrom-Json;
 foreach($f in $lock.files) {
   if(-not $f.path.EndsWith('.dll')) { continue };
   $p=Join-Path $env:VEYRA_PACKAGE_RUNTIME $f.path;
+  if($f.path -eq 'runtime/experimental/nr-original/nvngx_dlssnr.dll' -and $env:VEYRA_PACKAGE_ORIGINAL_NR) { $p=$env:VEYRA_PACKAGE_ORIGINAL_NR };
   $s=Get-AuthenticodeSignature -LiteralPath $p;
   $v=(Get-Item -LiteralPath $p).VersionInfo;
   $version="$($v.FileMajorPart).$($v.FileMinorPart).$($v.FileBuildPart).$($v.FilePrivatePart)";
@@ -227,6 +238,8 @@ foreach($f in $lock.files) {
                    env=audit_env, check=True, timeout=290)
     for record in lock['files']:
         source = args.runtime_source / relative(record['path'])
+        if record['path'] == 'runtime/experimental/nr-original/nvngx_dlssnr.dll' and args.original_nr:
+            source = args.original_nr
         if source.stat().st_size != record['size'] or digest(source) != record['sha256'].lower():
             raise ValueError('Publisher runtime mismatch: ' + record['path'])
         copy(source, record['path'])
@@ -262,11 +275,16 @@ foreach($f in $lock.files) {
         copy(ROOT / name, name)
     copy(ROOT / 'README.md', 'README.md')
     copy(ROOT / 'README_EN.md', 'README_EN.md')
+    if (ROOT / 'README_CN.md').is_file():
+        copy(ROOT / 'README_CN.md', 'README_CN.md')
     for name in ('veyra-app-icon.png', 'veyra-2.0.0-promo.webp'):
         copy(ROOT / 'assets' / name, 'assets/' + name)
     for name in sorted({'RUNTIME_COMPONENTS_2.0.0.md', 'BUILD.md', 'BUILD_2.0.0.md', 'RELEASE_NOTES_2.0.0.md', notes}):
         copy(ROOT / 'docs' / name, 'docs/' + name)
     copy(ROOT / 'docs' / notes, 'RELEASE_NOTES.md')
+    for name in ('BUILD_' + version + '.md', 'RUNTIME_COMPONENTS_' + version + '.md'):
+        if (ROOT / 'docs' / name).is_file():
+            copy(ROOT / 'docs' / name, 'docs/' + name)
 
     tree(ROOT / 'docs/images/2.0.0', 'docs/images/2.0.0')
     records = []
@@ -280,7 +298,12 @@ foreach($f in $lock.files) {
     commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD']).decode().strip()
     changed = subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain']).decode('utf8')
     manifest = dict(schema=2, version=version, candidate=args.label, baseCommit=commit,
-                    worktreeDirty=bool(changed), releaseReady=False, files=records)
+                    worktreeDirty=bool(changed), releaseReady=args.release, files=records)
+    if args.release:
+        manifest['correspondingSource'] = dict(
+            application='https://github.com/Likely7/Veyra-NRVideo/archive/refs/tags/v' + version + '.zip',
+            dependencies='https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.0.0/Veyra-2.0.0-dependency-source.zip',
+            instructions='docs/BUILD_' + version + '.md')
     if not args.no_archive:
         manifest['sourceSnapshot'] = source_snapshot(args.output, args.label, digest(stage / 'veyra_qml_ui.exe'))
     (stage / 'package-manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf8')

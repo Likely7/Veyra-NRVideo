@@ -1,0 +1,13 @@
+# Veyra 2.0.2 integration and release
+
+Current user explicitly authorises restoring the known NVIDIA RTX 50 original NR DLL alongside Lecram and SF-v2, merging Claude's and Codex's completed fixes into main, pushing to Likely7/Veyra-NRVideo and publishing 2.0.2. README.md becomes English with a Chinese language switch; Release is English first, Chinese second, retaining the main 2.0.0 changes and both 220px support QR images. Upload one portable ZIP; link corresponding application and unchanged dependency sources from the release and package. Draft a Chinese 2.0.0–2.0.2 group announcement, without sending messages.
+
+This replaces earlier README/no-publication holds and the historical UI-only freeze for these specific changes. Field uncertainty is disclosed, not converted into a claim that all reported failures are solved.
+
+Isolation: E:/项目/Veyra/worktrees/release-2.0.2-20261003, branch codex/release-2.0.2-20261003. Main checkpoint checkpoint/pre-release-2.0.2-20261003 is 8f42fd5. Merge Codex bfafbea and Claude 28a440b, preserving both sets of preference keys and translations. Do not touch the dirty desktop checkout or the source branches. Build/tests/logs/tmp/archives/verify use E:/项目/Veyra/<purpose>/release-2.0.2-20261003; final output releases/2.0.2. Each test <=300 seconds.
+
+- Add NR ID 3 (NvidiaOriginal) at runtime/experimental/nr-original/nvngx_dlssnr.dll. Keep IDs 0=Lecram, 2=SF-v2 and legacy 1→2 migration; keep existing defaults. List and node use the shared selector and graph. Save/load, all-layer switching, failure rollback and actual GPU Evaluate must work.
+- Original DLL: 310.8.0.0, 165840496 bytes, SHA256 E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E, Valid NVIDIA signature. Copy the approved local original unchanged. Add a new release publisher lock; leave 2.0.0 historical lock unchanged. No runtime/SDK/models in source Git, no runtime hash lock.
+- Validate merged RTSS settings/default UI, playback speed/resume, Xbox protocol and capture timing regressions. Test all three NR variants on the local RTX 5070, list/node preset persistence, clean package extraction and actual playback. Check patched FFmpeg provenance and all runtime hashes/signatures.
+- Keep 2.0.0 major features in each language, append cumulative post-2.0.0 fixes. Distinguish RTSS's locally reproduced fix, Xbox parsing/shutdown/protocol fixes, VRR timing regression and the still-unconfirmed 5060 Ti VRAM growth. Fullscreen fallback is opt-in/default-off. Real-console Xbox/VRR and other GPU families remain unverified.
+- After checks, merge candidate into clean main, push main/tag v2.0.2 to nrvideo, publish one ZIP. Verify remote tag, body, asset digest and accessible QR/source URLs. Record exact commands and results in WORKLOG.

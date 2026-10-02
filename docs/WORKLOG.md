@@ -1,5 +1,22 @@
 # Veyra 工作记录
 
+## 2026-10-03 2.0.2 集成、三版 NR 与发布准备
+
+- `python -B .../rtss-tests-v2.py`：RTSS 7.3.7 实际运行，临时空闲共享 OSD 槽写入测试文字（不改 RTSS/OBS 配置，结束已释放）。Auto 软件 UI 与 Off D3D12 UI 各 52 秒，NR+SR、DLSS 2×、XeSS、FSR3、全屏/窗口/专业/首页均通过；按日志断言实际后端而非请求值，无 ERROR/FATAL、无设备移除。截图确认 Auto 视频上有 OSD、首页无 OSD；Off 本进程无 OSD。此轮保留 Claude 的 OBS 真正捕获证据，未声称本轮重做 OBS 抓帧。
+- RTSS v1 测试虽然计时脚本返回 0，但审计发现旧 field 测试目录没有 XeSS/FSR provider，两次切换回退 DLSS，因此判失败并保留日志。现按 2.0.2 清单补齐并逐 SHA 核对 43 个运行文件，验收 helper 额外断言各后端实际生效；v2 才记通过。测试 staging 脚本已同步修正。
+- 内容审核：对照 GitHub 实际 2.0.0 Release，除已被本轮替代的 RTSS 边界文字，其余主要功能和基础修复段落保留；英文先于中文，双 QR 各 220px；两分支 tip 都是合并 HEAD 祖先；Git 待提交源文件无 DLL/EXE/LIB/PDB/模型/SDK archive。结果 `logs/.../content-audit.json`。
+- 最新用户授权：恢复 50 系原版 NR，保留 Lecram/SF-v2，合并双方改动到 main 并发布 2.0.2；英文 README 首页、中文切换，Release 英文在前中文在后、保留 2.0.0 主要更新和双 220px 支持二维码，上传一个便携 ZIP，起草群公告。此授权覆盖历史冻结/README 不动/候选暂不发布要求，未把现场未确认问题说成根治。
+- 隔离工作树 `E:/项目/Veyra/worktrees/release-2.0.2-20261003`，分支 `codex/release-2.0.2-20261003`；main 开工 `8f42fd5` / checkpoint/pre-release-2.0.2-20261003。先 fast-forward Codex `bfafbea`，再 merge Claude `28a440b`，合并点 `2787d15`；保留两边日志、按中文源串及翻译上下文合并 catalog。第一次合并辅助脚本错误地只按中文串去重而断言失败，随后按 `(zh,ctx)` 修正并在继续前修正本地 merge commit；无冲突标记进入交付。桌面脏工作树与两边原分支未改。
+- 原版 NR 从桌面已批准原件读取，165840496 bytes / 310.8.0.0 / Valid NVIDIA / E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E。增加 ID 3 与 nr-original 独立目录；旧 ID 0/2 与 1→2 迁移不变。新增 2.0.2 publisher lock，其余 42 个运行组件身份保持；仅 Release 带 DLL，不进 Git。
+- 全部新产物为 `E:/项目/Veyra/build|tests|logs|tmp|archives|verify/release-2.0.2-20261003`，正式包目标 `releases/2.0.2`。外部 baseline 是固定 `2787d15` Git blob SHA256；guard 按 git ls-files --eol 对文本规范化 CRLF，与不可变 blob 比较，未修改 baseline。初版 guard 比较 checkout CRLF 与 Git LF 导致全树误报，记录后修正比较表示。
+- 命令 `python -B scripts/acceptance/release-2.0.2-build.py build-v1.log ...` 与 build-v2.log：最终 13 个产品/测试目标编译退出 0；EXE FileVersion/ProductVersion 均为 2.0.2。现存 C4244 警告保留，不称无警告。
+- `...release-2.0.2-tests.py regression-v1` 发现新增预设夹具缺少 v1 共享调色字段，以及旧 UI 测试错误期待退役 NR ID 1 原样返回；修正夹具，并测试 0/1/2/3 的既定迁移规则。实际 NR v1 首次选择 ID 3 被加载目录限制拒绝，已补充精确的 nr-original 本地/发行路径；回退到先前 SF-v2 正常。
+- `...release-2.0.2-tests.py regression-v2` 十一组全部退出 0：audio_playback_rate、live_timing、xbox（83）、repair_contract（243）、qml_data、ui_i18n、qml_quick（32）、preset_library、repair_preset、effect_chain、ui_contract。新增三版预设与 list/node session 保存回读通过。原失败日志保留。
+- `python -B E:/项目/Veyra/tmp/release-2.0.2-20261003/nr-tests.py`：nr-three-v2 / nr-restore-v2 均退出 0。本机 RTX 5070、4K30 实际素材，列表两层 NR 与节点分别 0→2→3→0，均实际 Evaluate 且进度前进；保存 ID 3 列表/节点预设，重启回读均为 3，旧默认仍 Lecram。末尾截图请求与 close 同时到达导致 NO WINDOW，未把该空截图当视觉证据；数值/日志断言及进程关闭检查通过。
+- `python -B .../product-tests.py product-default-ui`：合并后的默认启动检测 RTSS 并用软件界面、D3D12 视频，实测 1.499625× / 2.000000× / 3.001501×，暂停、跳转、切回 1×、保存 26.9333 秒后重启恢复、专业/极简启动页与关闭自动恢复全部通过。原始前轮普通采集/保护实测见上方候选记录，未重复冒充 VRR 主机验证。
+- `python -B .../package-validator.py`：沿用 ZIP 负例测试，输出改本任务路径，10/10 通过。`scripts/i18n/extract.py --check`：1901 条，三语言缺失 0、占位符错误 0。git diff --check 无本轮空白问题；上游 SoundTouch COPYING 历史原有空白不修改。源 DLL/SDK 未纳入 Git。
+- 发布结构：README.md 英文、README_CN.md 中文、README_EN.md 保留兼容跳转；2.0.2 Release 包含各语言完整六组 2.0.0 主要更新和基础修复，追加本轮累计修复。源码通过 v2.0.2 Git tag 下载（含 SoundTouch 全源），其余对应依赖引用未改动的 2.0.0 dependency-source.zip，538838710 bytes / a293552434381a71169c1c27658f07202d67243ca82e748936b9db15077ce0de；不再另上传源码/SHA 资产。两张二维码及依赖源码 URL 已实际 HEAD 200，图像类型正确。
+
 ## 2026-10-03 启动恢复、倍速、Xbox 断开与采集 VRR（独立候选）
 
 - 完成交付候选 `E:/项目/Veyra/releases/2.0.1-player-xbox-vrr-20261003`，包/源码快照 `0f736be`，标签 `checkpoint/player-xbox-vrr-candidate-20261003`。`package-qml-release.py` 使用本轮 build、已批准 2.0.1 runtime source、既有 1.4.4 licenses、Qt 6.8.3 及已保存 Qt licenses，退出 0；1516 文件与发布者运行组件身份核验通过。便携 ZIP 412960904 bytes / SHA256 `5a9715e57f04620ebf5518f3418977f1adc4bd9639f088720b23c354b2f0b350`；EXE `3e867d707ab0fd7ec3f4ae5783a0fc7fffce8f33573171a371457da479c3c966`。对应 Veyra source ZIP `94c35b9d4dcc9efdadff9ccc84943330dcb56a9932e9d3fff0fabd584580f312`，同目录配对原依赖源码 `a293552434381a71169c1c27658f07202d67243ca82e748936b9db15077ce0de`；SoundTouch 原始源码已经在前者中。

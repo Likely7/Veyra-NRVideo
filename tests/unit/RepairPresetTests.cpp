@@ -216,7 +216,8 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
  
  auto badFlow=s;badFlow.opticalFlowBackend=static_cast<OpticalFlowBackend>(3);ok=ok&&!b.put(L"invalid flow backend",badFlow);
  auto ampere=s;ampere.nr=true;ampere.nrRuntime=NrRuntime::Ampere;ok=ok&&b.put(L"RTX30",ampere);PresetStore ampereReload(p);ok=ok&&ampereReload.load()&&ampereReload.entries().back().settings==ampere&&b.erase(1);
- auto badNr=s;badNr.nrRuntime=static_cast<NrRuntime>(3);ok=ok&&!b.put(L"invalid NR runtime",badNr);
+ auto original=s;original.nr=true;original.nrRuntime=NrRuntime::NvidiaOriginal;ok=ok&&b.put(L"NVIDIA original",original);PresetStore originalReload(p);ok=ok&&originalReload.load()&&originalReload.entries().back().settings==original&&b.erase(1);
+ auto badNr=s;badNr.nrRuntime=static_cast<NrRuntime>(4);ok=ok&&!b.put(L"invalid NR runtime",badNr);
  auto half=s;half.content=ContentRate::Capture60To30;ok=ok&&b.put(L"capture half rate",half);PresetStore halfReload(p);ok=ok&&halfReload.load()&&halfReload.entries().back().settings.content==ContentRate::Capture60To30&&b.erase(1);
  // 5 is the AMD FSR upscaling slot now, so it must round-trip; 6 stays invalid.
  auto fsrSr=s;fsrSr.videoSrQuality=veyra::engine::kVideoSrFsr;ok=ok&&b.put(L"FSR SR",fsrSr);

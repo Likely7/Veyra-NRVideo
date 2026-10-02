@@ -881,7 +881,29 @@ __declspec(noinline) void testRenderingChoices(){
     check(sw.save(*session),"rendering: v4 session with editor saves");
     ChainSessionStore nr(sessionPath);check(nr.load(*restored)&&*session==*restored,"rendering: v4 editor globals restore exactly");
 }
+void testNrVariants() {
+    for (const auto runtime : {NrRuntime::Original, NrRuntime::Ampere, NrRuntime::NvidiaOriginal}) {
+        auto settings=sample(); settings.nrRuntime=runtime;
+        const auto path=scratch((L"nr-"+std::to_wstring(int(runtime))+L".v1").c_str());
+        PresetLibrary writer(path); writer.setIncludeBuiltins(false);
+        PresetEntry entry; entry.name=L"NR variant"; entry.chain=toChain(settings);
+        entry.color=settings.color; // v1 stores the shared colour payload outside the chain.
+        entry.fg={settings.multiplier,settings.frameGenerationBackend};
+        check(writer.load()&&writer.put(entry), "NR variant: save preset");
+        PresetLibrary reader(path); reader.setIncludeBuiltins(false);
+        check(reader.load()&&reader.entries().size()==1&&reader.entries()[0]==entry,
+              "NR variant: preset retains exact DLL selection");
+        const auto sessionPath=scratch((L"nr-session-"+std::to_wstring(int(runtime))+L".v1").c_str());
+        auto session=std::make_unique<ChainSession>(ChainSession::initial(settings));
+        check(session->select(ChainMode::Node), "NR variant: initialize node session");
+        ChainSessionStore store(sessionPath);
+        auto restored=std::make_unique<ChainSession>(ChainSession::initial({}));
+        check(store.save(*session)&&store.load(*restored)&&*restored==*session,
+              "NR variant: list and node sessions retain exact DLL selection");
+    }
+}
 int main() {
+    testNrVariants();
     testRenderingChoices();
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     testLegacyProtectionMigration();

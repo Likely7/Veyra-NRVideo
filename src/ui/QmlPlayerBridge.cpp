@@ -3804,7 +3804,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     if(index<0||uint32_t(index)>=impl_->chain.nodeCount||
        impl_->chain.nodes[index].type!=engine::EffectType::NrEnhance||!std::isfinite(value))return false;
     if(key=="runtime") {
-        if(value!=0&&value!=2)return false;
+        if(value!=0&&value!=2&&value!=3)return false;
         const auto before=impl_->chain;
         for(uint32_t i=0;i<impl_->chain.nodeCount;++i)
             if(impl_->chain.nodes[i].type==engine::EffectType::NrEnhance)

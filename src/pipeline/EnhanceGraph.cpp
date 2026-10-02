@@ -1152,10 +1152,11 @@ bool EnhanceGraph::initNgxFeatures()
 
     if(nrEnabled_){
     failedBackend_=engine::FailedBackend::Nr;
-    if(desc_.nrRuntime!=engine::NrRuntime::Original&&desc_.nrRuntime!=engine::NrRuntime::Community&&desc_.nrRuntime!=engine::NrRuntime::Ampere)return false;
+    if(!engine::validNrRuntime(desc_.nrRuntime))return false;
     const auto selectedNr=engine::currentNrRuntime(desc_.nrRuntime);
     auto nrDirectory=std::filesystem::path(desc_.runtimeAbsPath);
     if(selectedNr==engine::NrRuntime::Ampere)nrDirectory/=L"nr-ampere";
+    if(selectedNr==engine::NrRuntime::NvidiaOriginal)nrDirectory/=L"nr-original";
     veyra::log::info("nr-runtime",std::format("selected={} requestedId={} path={}",engine::nrRuntimeName(selectedNr),int(desc_.nrRuntime),nrDirectory.string()));
     nrAdapter_ = std::make_unique<ngx::DlssNrRuntimeAdapter>();
     if (!nrAdapter_->load(nrDirectory.wstring(), st) ||

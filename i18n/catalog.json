@@ -1247,6 +1247,13 @@
    "ja": "PSN アカウント"
   },
   {
+   "zh": "RTX 50 · NVIDIA 原版",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "RTX 50 · NVIDIA 原版",
+   "en": "RTX 50 · NVIDIA original",
+   "ja": "RTX 50 · NVIDIA オリジナル"
+  },
+  {
    "zh": "RTX Video HDR 之后只能接补帧",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "RTX Video HDR 之後只能接補幀",

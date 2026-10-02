@@ -1,0 +1,162 @@
+# Veyra 2.0.2
+
+## English
+
+All major 2.0.0 updates are retained below, followed by the Chinese version. This patch combines the post-2.0.0 fixes and new playback options; it shares 2.0 settings.
+
+**Download only `Veyra-2.0.2-win64-portable.zip`**, extract to a new writable folder and run `veyra_qml_ui.exe`. Keep the previous version for rollback. One portable asset contains the application, runtimes, licences and manifests. Source for rebuilding: [Application source](https://github.com/Likely7/Veyra-NRVideo/archive/refs/tags/v2.0.2.zip) · [Unchanged dependency sources](https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.0.0/Veyra-2.0.0-dependency-source.zip) · [Build and licence details](https://github.com/Likely7/Veyra-NRVideo/blob/v2.0.2/docs/BUILD_2.0.2.md)
+
+### New in 2.0.2 and cumulative fixes
+
+- **Three NR versions:** restored the unmodified, NVIDIA-signed 310.8.0.0 original for RTX 50 alongside community Lecram 310.8.3 and SF-v2 310.8.2. List and Node selectors switch the whole NR chain. Existing defaults and saved selections are preserved.
+- **RTSS / MSI Afterburner OSD compatibility:** Monitoring compatibility defaults to Auto. When RTSS is running at launch, software UI rendering avoids the competing UI/video swapchains that caused a reproduced device-loss/frozen-picture failure. The video still uses D3D12, and OSD draws on the video only. Starting RTSS later offers a restart. With compatibility off, the GPU interface remains active and RTSS OSD is suppressed in this process. **RTSS plus OBS Game Capture:** enable “Use Microsoft Detours API hooking” in RTSS for Veyra, or use OBS Window Capture. Some software-rendered UI shadows/blur are simplified.
+
+- **An export survives a GPU reset**: some RTX 40 users encountered driver hangs/resets during 8K or long NR exports. Completed parts are kept, a fresh export process resumes, and parts are joined without re-encoding (up to three resets). Recovery was tested with injected device removal; the original driver's hang and the reporting user's 8K result remain unverified.
+- **Optional fullscreen VRAM growth protection (off by default)**: when enabled in Settings, sustained growth makes Veyra return to windowed playback and restrict fullscreen re-entry for that source session, keeping the source, NR and frame generation settings. It avoids repeated rebuilds that do not reclaim memory. Retained memory may require restarting Veyra. **This is containment; the RTX 5060 Ti 4K fullscreen leak and its field outcome remain unconfirmed.** The same NVIDIA plug-in is present in stable local playback, so its presence alone does not establish the cause. OBS game capture compatibility in Settings provides another UI display path for testing.
+- **Xbox nullable replies interrupted negotiation**: null error fields in successful responses are accepted; pending HTTP 200/202 wrappers are polled within a bounded budget; numeric service errors are preserved; nullable ICE metadata no longer aborts connection setup. Failures report their actual stage rather than always blaming blocked UDP. All 83 local protocol/WebRTC checks passed; the reporting user's real-console connection still needs confirmation.
+- **Xbox disconnect safety and frame feedback**: transport send exceptions during shutdown are contained, callbacks cannot touch a closed session, and the reference client's video-frame feedback is now sent. Local-peer negotiation, packets and concurrent shutdown passed; real-console long-session stability needs retesting.
+- **VRR capture frame generation**: variable frame intervals no longer repeatedly reset history merely for departing from the negotiated frame rate; presentation phase follows the real A/B interval. Actual stalls and backward clocks remain protected. Variable-timing regression passed; console/VRR capture hardware remains unverified.
+- **Resume at startup**: optionally reopen the previous video and position, or the saved capture device/configuration; choose Minimal or Professional as the startup page.
+- **Movie playback speed**: 1×, 1.5×, 2× and 3× controls on both pages, preserving audio pitch. Export and live capture rates are unchanged.
+- Already in the refreshed 2.0.0 package and included here: the picture froze after turning the output stabiliser (anti-flicker) on and off; "Continue" on a capture card had no sound; the load gauge counted one of several NR layers; colour Texture / Clarity / Dehaze had no effect; clicking the taskbar button did not minimise; capture device-loss/crash reports include loaded-module diagnostics and actionable plug-in advice; RTSS advice now points to Monitoring compatibility.
+
+
+### Major 2.0.0 updates included in this release
+
+**1. Rebuilt interface.** New Home/recent/resume, Cinema, Professional List, Node canvas, Colour, Export and Settings; consistent dark design, icons, menus, confirmations and animations. New rounded gradient-black EXE/window/taskbar icon and updated screenshot/tutorial. Simplified/Traditional Chinese, English and Japanese; configurable UI scale, startup size, shortcuts, audio device and monitored GPU. Hideable cinema controls, fullscreen mode switching/quick controls/locking, click-to-pause, double-click fullscreen, seeking, aspect/rotation, original/enhanced comparison, SDR preview, screenshots and subtitle/audio controls.
+
+**2. Executable node editing and layered processing.** Add/connect/insert/disconnect/delete/duplicate/reset nodes; middle-pan, wheel zoom, fit and auto-layout. Up to four independent NR instances with individual parameters/resolution; multiple colour instances and supported ordering around a single SR. Duplicates start disconnected. Draft edits and the last valid runtime chain are separate. List/Node sessions, presets and settings persist independently; personal preset content choices/import/export/startup default replace imposed built-ins. Flow is shared after input, Video HDR precedes final FG, one FG backend is selected. This is not arbitrary branching. **Offline export is List-only; node export is deferred.** Global NR protection is List-only. Curves, mixer, wheels, B&W/calibration, group bypass/reset, parameter reset, LUTs and colour presets are connected to real processing.
+
+**3. Enhancement backends and diagnostics.** Lecram/SF-v2 NR selection across the chain; new configurations use SF-v2 on RTX20/30/40 and Lecram on RTX50, still experimental. DLSS FG 310.9.1 with attributed Transfusion compatibility; native RTX50 path retained, RTX30/40 hardware validation outstanding. DLSS 2/3/4/6× and XeSS 2/3/4× follow capability limits. Separate FSR3.1/FSR4 ML 2× entries; FSR4 is AMD-only and requires the actual matching provider. Added 5K/6K/7K SR choices, motion inputs, flow quality/AMD half-resolution, cadence/sync/queue/cap controls, output stabiliser, per-layer/node last-second GPU timings and frame-time/load displays. Crash dumps, device-removal/DRED, module inventory, capture frame age and staged VRAM recovery diagnostics improve investigation, not proof that hangs/leaks are fixed.
+
+**4. Sources and capture.** Moonlight/Sunshine PC discovery/manual hosts, PIN pairing, apps, identity persistence, input and statistics; Sunshine is installed separately. Unofficial Xbox device-code login, session API/native WebRTC and UI. Streaming hardware AV1/HEVC, pairing retention and high-bitrate defaults; all sources reuse the enhancement engine. Magewell Pro Capture low-latency SDK option, reduced native capture upload copies, parallel MJPEG decode/direct NV12 and reduced extra queueing under overload. Specific KUHAIMI27P/RTX5070 static tests measured capture-callback-to-Present-return improvements (2K60 NV12 ~1.95→0.90 ms; 4K30 ~3.2→1.47 ms). **These are internal software intervals, not card latency or screen-to-screen latency and not a universal device result.**
+
+**5. Export workflow.** Ordered editable multi-file queue, per-job snapshots, trim/thumbnails, MP4/MKV, typed bitrate, estimated size and one current-file ETA. Keep all/select audio and embedded subtitles; automatic retention skips incompatible tracks with a notice, explicit incompatible selections fail. Pause/cancel/retry/completion sound; default VBR8Mbps and closing playback/capture/streaming on export (optional). Offline export processes source frames fully; List-only and no implied new XeSS/FSR offline FG support.
+
+**6. OBS compatibility.** Persistent default-off Settings switch asks Yes/No to restart; Yes shuts down normally and relaunches, No applies next launch; active exports defer restart. Software UI avoids competing UI/video DXGI chains, while native GPU video/NR/SR/FG remain unchanged; some shadows/blur simplify. Game Capture targets video; use Windows10(1903+) Window Capture for the full UI. The RTSS compatibility added in 2.0.2 is described above; GamePP remains unverified.
+
+### Baseline 2.0.0 fixes
+
+- **Layers/state:** stacked NR black frames/only one temporal instance, copied parameter isolation, List/Node contamination, mixed preset restoration, drafts changing live state, invalid FG multipliers and reset/slider binding synchronisation.
+- **FG/presentation:** independent FSR output textures and safer hot switching; rollback UI after rejected FSR4; XeSS temporary-iterator undefined behaviour/capability controls; low queue no longer changes NR/SR order; shallow vsync queue. Comparison explicitly reports FG paused.
+- **Windows/UI:** display/DPI crashes, picture covering controls/menus/tooltips, cinema bars/clipping, seek dragging the window, empty-source selection, portrait layout, fullscreen/taskbar/mode transitions, bare Alt stalls, disappearing dialogs, typed frame-rate resets; editable sliders and arrow keys.
+- **Readouts/navigation:** monitor one GPU instead of summing adapters; stable stage bars and per-layer NR timings; half-rate budget; stable Home cards and navigation logs. The un-reproduced Xbox/PS5 wrong-dialog report is not claimed conclusively diagnosed.
+- **Capture/streaming:** stop competing DirectShow video in Magewell SDK mode; resize-failure backoff; colour-control boundaries, excessive history resets on MJPEG drops, remembered audio selection, stale source picture, live-source pause/resume, pairing/decoding and Reflex unload fixes.
+- **Export:** cancellation retry, queue/job state, incompatible subtitle handling, paused/duplicate ETA and slow GPU frames incorrectly failing after two seconds. Device faults/timeouts remain explicit failures with diagnostics.
+- **OBS/icons:** compatibility mode avoids reproduced multi-swapchain resize crashes/UI-only capture. The failed Vulkan experiment was discarded. Explicit Qt window icons replace generic taskbar placeholders.
+
+
+### Validation and remaining limits
+
+The merged build passed 11 regression groups (including 83 Xbox checks and 32 Qt Quick checks), three NR variants in List/Node mode and restart persistence, plus measured 1.5×/2×/3× playback and startup resume. RTSS Auto/Off paths also passed NR/SR, DLSS/XeSS/FSR3 and fullscreen transitions with actual OSD content. Package verification is recorded in the 2.0.2 execution log. Tests on the local RTX 5070 do not replace RTX 20/30/40/other 50-series, real-console Xbox long runs or console/VRR capture-card validation. The RTX 5060 Ti 4K fullscreen VRAM-growth root cause remains unconfirmed; optional fallback is containment, not a cured leak. Some RTX 40 NR TDRs, specific RTX 5090 XeSS/cadence reports, GC573/4K X cases, HDR display quality/end-to-end latency and long runs remain unresolved or unverified. RTSS was tested locally with 7.3.7; GamePP and other overlay versions remain unverified.
+
+The application version does not remove experimental runtime limits. Community NR/FG components are not vendor certification or complete official DLSS 5 support. The restored original DLL has a valid NVIDIA signature; its integration is still experimental. User DLL replacement remains possible without an ABI/driver guarantee.
+
+---
+
+## 中文
+
+保留 2.0.0 的主要更新，并整合其后全部修复与本次新增功能；与 2.0.0 共用设置。
+
+**只需下载 `Veyra-2.0.2-win64-portable.zip`**，完整解压到可写新目录并运行 `veyra_qml_ui.exe`，保留旧版便于回退。软件、运行库、许可证和清单在同一包内；需要重编译时获取[应用源码](https://github.com/Likely7/Veyra-NRVideo/archive/refs/tags/v2.0.2.zip)与[未改动的依赖源码](https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.0.0/Veyra-2.0.0-dependency-source.zip)，见[构建说明](https://github.com/Likely7/Veyra-NRVideo/blob/v2.0.2/docs/BUILD_2.0.2.md)。
+
+### 2.0.2 新增与累计修复
+
+- **NR 三版本切换**：恢复 NVIDIA 有效签名的 310.8.0.0 原版（RTX 50），保留 Lecram 310.8.3 与 SF-v2 310.8.2 社区版本；列表/节点全 NR 链同步切换，原有默认值与已保存选择保留。
+- **小飞机 RTSS / MSI Afterburner OSD 兼容**：设置中的“监控软件兼容”默认自动。启动时检测到 RTSS，界面采用软件绘制，避免已复现的界面/视频双交换链冲突引起设备丢失、画面冻结；视频仍用 D3D12，OSD 只显示在视频上。RTSS 后启动会提示重启；关闭兼容则保留 GPU 界面并抑制本进程的 RTSS OSD。**与 OBS 游戏采集同时使用**：在 RTSS 给 Veyra 开启 “Use Microsoft Detours API hooking”，或改用 OBS 窗口采集。兼容界面的部分阴影/模糊简化。
+
+- **导出时显卡被系统重置，不再整段作废**：8K、长视频开 NR 导出时，有 40 系用户遇到驱动卡死并被 Windows 重置。现在已导出的部分会自动保存，新开一个导出进程从断点接着导，最后无损拼接成一个文件，不重新编码；最多续 3 次。这是重置后的恢复，不代表驱动挂起根因已修复；已用模拟设备移除验证续导，8K 反馈者实机结果待确认。
+- **全屏显存异常增长保护（默认关闭）**：仅在设置中开启后检测持续增长，自动退出全屏并在本次播放中限制再次进入，保持片源、NR 和补帧设置，用窗口继续播放，避免原先反复重建却继续增长。已分配的异常显存不保证释放，重新开程序可重测。**这是应急保护，5060 Ti 的 4K 全屏泄漏根因尚未确认、现场结果待验证**；本机加载同一 NVIDIA 插件也能稳定播放，不能仅凭模块出现就认定它是原因。设置中的 OBS 游戏采集兼容可用于切换界面显示路径后重测。
+- **Xbox 空值应答导致协商中断**：成功应答里的 `null` 错误字段不会再触发字符串异常；HTTP 200/202 的未完成应答继续有限轮询，数字错误码保留，空 ICE 元数据不会再次中断连接。协商失败显示实际阶段，不再一律提示 UDP 被拦截。本机 83 项协议/本地 WebRTC 测试通过，反馈者真实 Xbox 连接结果待确认。
+- **Xbox 断开时崩溃与视频反馈**：关闭期间的输入/控制发送异常被捕获，异步回调不会访问已关闭的会话；补齐参考客户端的视频帧反馈。已验证本地双端握手、报文和并发关闭，真实主机长时间稳定性待复测。
+- **采集卡 VRR 补帧**：可变帧间隔不再仅因偏离标称帧率就反复重置补帧历史，呈现相位跟随实际 A/B 时间差；保留真实断流与时间倒退保护。可变间隔软件回归通过，主机/VRR 采集卡组合仍待实测。
+- **启动继续上次内容**：设置中可开启自动恢复视频与播放进度，或按上次采集配置直接开始；启动页可选极简/专业。
+- **视频倍速**：极简与专业播放栏均可选 1×、1.5×、2×、3×，音调保持；导出与实时采集不变速。
+- 以下几项已在 2.0.0 的更新包里修过，2.0.2 一并包含：
+  - 输出稳定器·抗闪烁打开再关闭后画面定住；
+  - 首页"继续上次"的采集卡没有声音；
+  - 多层 NR 时性能球只算一层；
+  - 调色"效果"组的纹理 / 清晰度 / 去朦胧没有效果；
+  - 点击任务栏图标不能最小化；
+  - 采集开始发生设备丢失或崩溃时，记录加载模块并给出 NVIDIA App 插件/叠加层排查提示；RTSS 建议已更新为监控软件兼容设置。
+
+
+### 2.0.0 主要更新（本版全部保留）
+
+**1. 全新界面与操作**
+
+- 新首页、最近使用/继续上次、极简观影、专业列表、节点画布、独立调色、导出和设置页；统一暗色外观、图标、字体、菜单、确认框、滚动条与动效。
+- 全新圆角渐变黑底 Logo，EXE 与 Qt 窗口/任务栏图标统一。README 用新版专业模式截图替换旧动图，并重写操作教程。
+- 简体中文、繁体中文、English、日本語，支持跟随系统；设置包含界面缩放、启动尺寸、快捷键、音频设备和单显卡 GPU 占用监控。
+- 极简悬浮播放条可隐藏；全屏自动隐藏控制、顶部极简/专业切换、Home 快速调节与控制锁定。文件画面点击暂停、双击全屏、左右键跳转。
+- 文件比例/旋转信息、适应/原始/填充、原画/增强分屏、按住 V 对比、强制 SDR 预览、截图、字幕/音轨入口和高级字幕设置接入新界面。
+
+**2. 节点模式与多层增强**
+
+- 新增真实节点处理链：添加、端口拖拽/点击连接、拖到线上插入、拖离断开、右键删除/复制/重置、中键平移、滚轮缩放、适配视图与自动排列。
+- NR 最多四层，每层独立 Feature 实例、内部尺寸与参数；列表总开关支持恢复各层开关状态。调色可多实例，NR/调色可在允许拓扑中穿插于超分前后。
+- 复制节点保留参数并旁置为未连接副本；编辑草稿与最后有效运行链区分，非法/断线状态明确提示，不将可见节点冒充运行节点。
+- 列表/节点参数、会话和预设独立保存；切换恢复各自状态。个人预设支持内容选项、导入/导出、启动默认，取消强加内置预设。
+- 输入后共享光流、单个超分、Video HDR 在补帧前、单个末端补帧；不是任意分支混合图。**节点离线导出延期，2.0.0 只支持列表离线导出。**
+- 列表提供全局 NR 保护区域（含形状参数），排除区域内全部 NR 层并保留非 NR 处理；节点不提供保护区域。
+- 调色补齐曲线、八色混色器、色轮、黑白/校准、组旁路/复位、逐参数复位、LUT 文件导入、颜色预设和原图对比。
+
+**3. 增强后端、补帧与诊断**
+
+- NR 提供 Lecram / SF-v2 社区运行版本选择并全链切换；新配置按显卡分档选择（RTX20/30/40 SF-v2，RTX50 Lecram），保留实验边界。
+- DLSS FG 运行库升级 310.9.1，接入记录来源的 Transfusion 兼容路径；50 系原生路径保留，30/40 系实卡仍待验证。DLSS 倍率按能力提供 2/3/4/6×。
+- XeSS 选项与 SDK 能力对齐，支持适用环境中的 2/3/4×；FSR 3.1 与 FSR 4 ML 分开显示，FSR 为 2×，FSR 4 限 AMD 且需实际匹配 provider，不把回退 3.1 标成 4。
+- 超分增加 5K/6K/7K 尺寸选项与独立运动输入设置；运动估算质量、AMD 半分辨率光流、内容节奏、同步/低队列/输出上限在新版页面可调。
+- 输出稳定器/抗闪烁控制、逐层 NR/节点 GPU 最近一秒平均耗时、帧时间折线、处理预算与排队诊断。软件提交 FPS 不等于物理显示帧数。
+- 崩溃转储、设备移除/DRED 停止点、加载模块、采集驱动帧龄、显存回收诊断与分阶段重建 watchdog；这些诊断不等于已根治 TDR/显存增长。
+
+**4. 更多来源与采集优化**
+
+- PC 串流：Moonlight/Sunshine 协议、发现/手填主机、PIN 配对、应用列表、身份保存、键鼠/手柄输入与统计。主机 Sunshine 自行安装。
+- Xbox：账号设备码登录、主机会话与原生 WebRTC、首页/弹窗入口；非官方实验功能，不保证所有服务/主机环境可用。
+- 串流接入硬件 AV1/HEVC 解码、配对保持与高码率默认配置；PS5、PC、Xbox 共用现有增强链，不另造三套效果器。
+- 美乐威 Pro Capture SDK 低延迟入口；普通采集路径保留。原生格式采集上传减少拷贝，MJPEG 多解码器并行并直接写 NV12；高负载下减少额外排队。
+- 已有特定 KUHAIMI 27P/RTX5070 静态测试中，2K60 NV12 采集回调至 Present 返回约 1.95→0.90 ms，4K30 约 3.2→1.47 ms；**只代表该软件内部区间，不是采集卡固有延迟或屏幕端到端延迟，不外推所有设备。**
+
+**5. 新导出工作流**
+
+- 多文件可编辑顺序队列、每任务独立设置快照、剪辑范围/缩略图、MP4/MKV、码率直接输入、预计体积与单项剩余时间。
+- 多音轨与内嵌字幕保留全部/指定轨道；自动保留时跳过不支持封装的轨道并提示，手选不兼容轨道则明确失败。
+- 暂停、取消、重试、完成提示音；默认 VBR 8 Mbps。默认开始导出即关闭当前播放/采集/串流以释放 GPU，可关闭此选项。
+- 离线导出完整处理源帧；节点模式不导出，FSR/XeSS 实时补帧不等于新增对应离线补帧支持。
+
+**6. OBS 游戏采集兼容**
+
+- 设置 → 通用与外观新增持久化开关（默认关闭），保存后询问“是/否”重启。是正常释放播放器后重新启动，否下次生效；导出时提示等待。
+- 软件绘制 UI 避免 UI 与视频 DXGI 交换链竞争，视频/NR/SR/FG 仍走原 GPU 链；部分界面阴影和模糊简化。
+- 游戏采集针对视频，完整 UI 使用 Windows 10 (1903+) 窗口采集。2.0.2 的 RTSS 兼容另见上方；游戏加加未验证。
+
+### 2.0.0 基础修复
+
+- **多层与状态**：修复堆叠 NR 黑帧/仅一层时域执行、层参数复制隔离、列表/节点配置互相污染、预设恢复混用、断线草稿改动污染运行链、非法倍率写入预设、参数复位与滑条外部状态不同步。
+- **补帧与呈现**：FSR 改独立生成纹理，修复同窗口热切换资源生命周期；FSR 4 拒绝后 UI 正确回滚；修复 XeSS 临时字符串迭代器未定义行为和倍率入口；低延迟队列不再误改 NR/SR 顺序；垂直同步保持低深度排队。对比模式明确显示“补帧暂停”，避免误报无效。
+- **窗口与 UI**：修复切屏/DPI 崩溃、视频覆盖控制条/菜单/提示、极简黑边与播放条裁剪、拖进度误拖窗口、空页面无法选源、竖屏适配、全屏任务栏/模式切换、Alt 导致输入停顿、弹窗不再出现、输入帧率被刷新打断、滑条支持直接输入与方向键。
+- **信息显示**：GPU 占用不再累加多块显卡；阶段时间条不反复重建闪跳；列表显示每层 NR 耗时；负载预算跟随半速节奏；首页卡片稳定更新副标题，减少重建时点击丢失并增加导航日志（未将未复现的 Xbox/PS5 误开报告宣称为已完全定位）。
+- **采集/串流**：美乐威 SDK 模式停止并行 DirectShow 视频以避免争用；ResizeBuffers 失败退避；修正采集颜色控制边界、MJPEG 丢帧过度重置历史、音频设备选择保存、源切换残留画面；采集/串流可以暂停再恢复；保存配对、解码路径与 Reflex 卸载修复。
+- **导出**：取消后可重试、队列顺序/条目状态、格式不兼容字幕处理、暂停时 ETA 继续走、重复 ETA、慢 GPU 帧被固定两秒超时误杀。现按设备状态等待并记录慢帧/故障，不将真实 GPU 卡死当作导出成功。
+- **OBS**：默认 GPU UI 下复现缩放崩溃和捕获 UI 而非视频；新兼容模式规避多交换链冲突。此前 Vulkan 方案弃用，不计入成果。
+- **图标**：EXE 新图标及 Qt 窗口/任务栏图标显式设置，解决任务栏默认占位图标。
+
+
+### 验证与尚存边界
+
+合并构建通过 11 组回归（含 83 项 Xbox、32 项 Qt Quick）、三版 NR 列表/节点切换与重启保存，以及实际 1.5×/2×/3× 播放和启动恢复；RTSS 开启 OSD 内容时，自动/关闭兼容两种路径均通过 NR/SR、DLSS/XeSS/FSR3 与全屏切换。打包验证记录在 2.0.2 执行日志。本机 RTX 5070 测试不能替代 RTX 20/30/40/其他 50 系、真实 Xbox 长时间串流和主机 VRR 采集卡实测。5060 Ti 的 4K 全屏显存增长根因仍未确认，可选退窗只是应急保护。部分 RTX 40 NR TDR、5090 特定 XeSS/节奏、GC573/4K X、HDR 屏幕画质/端到端延迟和长稳问题仍未解决或未验证。RTSS 本机验证版本为 7.3.7，游戏加加与其他版本未验证。
+
+应用版本号不改变实验运行库边界。社区 NR/FG 不代表厂商认证或完整官方 DLSS 5 集成；新增原版 DLL 有效签名也不等于 Veyra 获得官方认证。用户仍可替换 DLL，但不保证 ABI/驱动兼容。
+
+## Support & feedback / 支持与反馈
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.0.0/docs/images/2.0.0/community-group.png" alt="Veyra 交流群 4" width="220">
+</p>
+
+Left: optional donation; right: community group. QR valid before 2026-10-09.
+
+左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-09 前**有效，过期请查看仓库更新。

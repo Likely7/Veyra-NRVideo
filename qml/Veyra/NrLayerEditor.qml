@@ -65,8 +65,10 @@ ColumnLayout {
         hint: qsTr("全链共享 · 切换会重建 NR 管线")
         VSelect {
             objectName: "nr-runtime"
-            value: editor.layerData.runtime === 2 ? "RTX 20–50 · SF-v2" : "RTX 50 · Lecram"
-            options: [{id:"0",label:"RTX 50 · Lecram"},{id:"2",label:"RTX 20–50 · SF-v2"}]
+            value: editor.layerData.runtime === 3 ? qsTr("RTX 50 · NVIDIA 原版")
+                   : editor.layerData.runtime === 2 ? "RTX 20–50 · SF-v2" : "RTX 50 · Lecram"
+            options: [{id:"0",label:"RTX 50 · Lecram"},{id:"2",label:"RTX 20–50 · SF-v2"},
+                      {id:"3",label:qsTr("RTX 50 · NVIDIA 原版")}]
             onPicked: id => editor.edited(editor.layerData.index, "runtime", Number(id))
         }
     }

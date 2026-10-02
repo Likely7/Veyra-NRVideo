@@ -661,7 +661,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if (r.left > r.right) { std::swap(r.left, r.right); r.ellipse = true; }
             }
             if (!(in >> hdrEnabled >> node.videoHdr.contrast >> node.videoHdr.saturation >> node.videoHdr.middleGray >> node.videoHdr.peakNits)) { error = L"预设库 HDR 字段损坏"; return false; }
-            if (type < 0 || type >= int(EffectType::Count) || enabled < 0 || enabled > 1 || runtime < 0 || runtime > 2 ||
+            if (type < 0 || type >= int(EffectType::Count) || enabled < 0 || enabled > 1 || !validNrRuntime(static_cast<NrRuntime>(runtime)) ||
                 temporal < 0 || temporal > 1 || lowLatency < 0 || lowLatency > 1 || protEnabled < 0 || protEnabled > 1 || hdrEnabled < 0 || hdrEnabled > 1) {
                 error = L"预设库节点取值超出范围"; return false;
             }
