@@ -411,6 +411,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // "Auto" leaves Qt following the Windows display scale.
     int uiScale = 0;
     bool obsGameCapture = false;
+    bool overlayCompatAuto = true;   // 设置 → 监控软件兼容: "auto" (default) or "off"
     {
         int count = 0;
         LPWSTR* args = CommandLineToArgvW(GetCommandLineW(), &count);
@@ -426,6 +427,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             const auto saved = QJsonDocument::fromJson(prefs.readAll()).object();
             uiScale = saved.value(QStringLiteral("uiScale")).toInt();
             obsGameCapture = saved.value(QStringLiteral("obsGameCapture")).toBool();
+            overlayCompatAuto = saved.value(QStringLiteral("overlayCompat")).toString() != QStringLiteral("off");
         }
         obsGameCapture = obsGameCapture || obsGameCaptureArg;
         if (uiScale == 100 || uiScale == 125 || uiScale == 150) {
@@ -440,9 +442,41 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // DXGI prevents its resize/destruction from freeing the video's capture
     // resources on another thread. This opt-in affects UI drawing only;
     // the native D3D12 video and enhancement pipeline are unchanged.
+    //
+    // Monitoring overlays: RivaTuner Statistics Server (MSI Afterburner's OSD) draws on one
+    // Direct3D 12 swapchain at a time, and a D3D12 interface next to the video's swapchain
+    // had the GPU device removed within a second of a video starting (gfx/PresentationHooks.h).
+    // A D3D11 interface survives but gets an OSD of its own showing the interface's rate, and
+    // crashed with XeSS frame generation in the field. Drawn in software the interface has no
+    // swapchain at all: RTSS sees only the video and puts its numbers there, as with 1.4.4's
+    // GDI interface. VEYRA_UI_RHI picks a renderer explicitly and skips this.
+    wchar_t forcedRenderer[16]{};
+    GetEnvironmentVariableW(L"VEYRA_UI_RHI", forcedRenderer, 16);
+    // VEYRA_TEST_IGNORE_RTSS=1 starts as if RivaTuner were not running (its late-start path).
+    const bool rivaTuner = !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_RTSS", nullptr, 0)
+                           && (veyra::gfx::rivaTunerRunning() || GetModuleHandleW(L"RTSSHooks64.dll"));
+    const bool overlayCompat = !obsGameCapture && overlayCompatAuto && rivaTuner && !forcedRenderer[0];
+    const bool softwareUi = obsGameCapture || overlayCompat;
     if (obsGameCapture) {
         QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
         veyra::log::info("app", "OBS game capture compatibility: software UI; native D3D12 video unchanged");
+    } else if (overlayCompat) {
+        QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
+        veyra::log::info("app", "RivaTuner Statistics Server is running: software UI so its OSD draws on the video only; native D3D12 video unchanged");
+    }
+    {
+        // A GPU interface keeps RTSS from drawing in this process at all, so a RivaTuner
+        // started after Veyra (or kept with 监控软件兼容 off) cannot take the device down.
+        // RTSS reads the variable when it loads its profile here; a software interface
+        // leaves it out (and clears it after a restart from a GPU-interface run).
+        wchar_t current[64]{};
+        const DWORD length = GetEnvironmentVariableW(veyra::gfx::kRivaTunerProfileOverride, current, 64);
+        const bool ours = length > 0 && wcscmp(current, veyra::gfx::kRivaTunerOsdOff) == 0;
+        const bool gpuD3d12 = !softwareUi && _wcsicmp(forcedRenderer, L"d3d11") != 0;
+        if (gpuD3d12 && length == 0) SetEnvironmentVariableW(veyra::gfx::kRivaTunerProfileOverride, veyra::gfx::kRivaTunerOsdOff);
+        else if (!gpuD3d12 && ours) SetEnvironmentVariableW(veyra::gfx::kRivaTunerProfileOverride, nullptr);
+        veyra::log::info("app", std::format("RivaTuner running={} injected={} compat={} OSD in this process={}", rivaTuner,
+            GetModuleHandleW(L"RTSSHooks64.dll") != nullptr, overlayCompatAuto ? "auto" : "off", gpuD3d12 ? "off (GPU interface)" : "on"));
     }
     QApplication app(argc, argv);
     // Qt does not automatically use the executable's Win32 icon for its windows.
@@ -467,18 +501,19 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // the XeSS swapchain through D3D11On12 (field dumps 2026-10-01). 1.4.4 drew its UI with
     // GDI and had no D3D11 device; the overlays coexisted. VEYRA_UI_RHI=d3d11 restores
     // Qt's default; without a usable D3D12 device Qt keeps it too.
-    if (!obsGameCapture) {
-        wchar_t forced[16]{};
-        GetEnvironmentVariableW(L"VEYRA_UI_RHI", forced, 16);
-        const bool wantD3d11 = _wcsicmp(forced, L"d3d11") == 0;
+    if (!softwareUi) {
+        const bool wantD3d11 = _wcsicmp(forcedRenderer, L"d3d11") == 0;
         const bool d3d12Usable = SUCCEEDED(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr));
         if (!wantD3d11 && d3d12Usable) QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D12);
         veyra::log::info("app", std::format("interface renderer={} (d3d12 usable={} forced={})",
-            !wantD3d11 && d3d12Usable ? "d3d12" : "d3d11", d3d12Usable, QString::fromWCharArray(forced).toStdString()));
+            !wantD3d11 && d3d12Usable ? "d3d12" : "d3d11", d3d12Usable, QString::fromWCharArray(forcedRenderer).toStdString()));
     }
     app.setProperty("veyraLogFile", QString::fromStdWString(logPath.wstring()));
     app.setProperty("veyraUiScale", uiScale);
     app.setProperty("veyraObsGameCapture", obsGameCapture);
+    app.setProperty("veyraOverlayCompat", overlayCompat);
+    app.setProperty("veyraSoftwareUi", softwareUi);
+    app.setProperty("veyraUiRendererForced", forcedRenderer[0] != 0);
     // Frameless windows have no menu, yet DefWindowProc turns a bare Alt tap into
     // SC_KEYMENU and enters modal menu tracking: the next mouse click is eaten and
     // input stalls for about two seconds. Qt has already handled the key itself

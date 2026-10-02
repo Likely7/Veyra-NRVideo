@@ -634,9 +634,21 @@ Window {
         }
     }
 
+    // RivaTuner started after Veyra: its OSD is kept out until a restart (QmlPlayerBridge).
+    VConfirm {
+        id: overlayRestart
+        objectName: "overlay-restart-confirm"
+        title: qsTr("检测到小飞机（RTSS）")
+        text: qsTr("小飞机在 Veyra 之后启动。为避免画面卡住，它的 OSD 暂不在 Veyra 里显示。重启后界面改用兼容绘制，OSD 只显示在视频上。现在重启吗？当前播放或串流将停止。")
+        acceptText: qsTr("重启")
+        rejectText: qsTr("稍后")
+        onAccepted: veyra.restartApplication()
+    }
+
     Connections {
         target: veyra
         function onNotice(text, isError) { toast.show(text, isError) }
+        function onOverlayRestartSuggested() { overlayRestart.open() }
         function onNavigate(p) {
             // A dialog key opens the dialog; anything else is a page.
             if (p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"

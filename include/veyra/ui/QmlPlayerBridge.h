@@ -188,6 +188,9 @@ class QmlPlayerBridge : public QObject {
     // The interface scale chosen for the next start (0 = follow Windows).
     Q_PROPERTY(int uiScaleActive READ uiScaleActive CONSTANT)
     Q_PROPERTY(bool obsGameCaptureActive READ obsGameCaptureActive CONSTANT)
+    // This run draws the interface in software because RivaTuner (RTSS) was running at start
+    // (设置 → 监控软件兼容, main.cpp): its OSD then sits on the video only.
+    Q_PROPERTY(bool overlayCompatActive READ overlayCompatActive CONSTANT)
     // Audio output (P4-d): the active WASAPI render endpoints by device id, the
     // stored choice (preferences.audioDevice, empty = system default) and what
     // the renderer actually opened, including a fallback to the default.
@@ -618,6 +621,9 @@ public:
     Q_INVOKABLE void resetShortcuts();
     int uiScaleActive() const;
     bool obsGameCaptureActive() const;
+    bool overlayCompatActive() const;
+    // RivaTuner Statistics Server is running now (gfx::rivaTunerRunning).
+    Q_INVOKABLE bool rivaTunerRunning() const;
     Q_INVOKABLE void openFeedbackPage();
     Q_INVOKABLE void openReleasesPage();
     QVariantList audioDevices() const;
@@ -1033,6 +1039,9 @@ signals:
     // User-facing notices the UI shows as a transient message: a rejected
     // chain edit, an export that finished, a failed open.
     void notice(const QString& text, bool isError);
+    // RivaTuner injected into a run whose interface draws on the GPU: its OSD is kept out
+    // of this process until a restart switches the interface to software drawing.
+    void overlayRestartSuggested();
     // The UI moves to a page by name when a command implies it.
     void navigate(const QString& page);
 

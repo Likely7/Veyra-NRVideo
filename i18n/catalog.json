@@ -1051,6 +1051,13 @@
    "ja": "OBS ゲームキャプチャ互換"
   },
   {
+   "zh": "OBS 游戏采集兼容已让界面软件绘制，小飞机 OSD 只显示在视频上",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "OBS 遊戲擷取相容已讓介面軟體繪製，小飛機 OSD 只顯示在影片上",
+   "en": "OBS game capture compatibility already draws the interface in software; the RTSS OSD shows on the video only",
+   "ja": "OBS ゲームキャプチャ互換でインターフェースはソフトウェア描画です。RTSS の OSD は映像にだけ表示されます"
+  },
+  {
    "zh": "PC 串流",
    "src": "qml/CineBar.qml",
    "zh-TW": "PC 串流",
@@ -1506,6 +1513,13 @@
    "ja": "Xbox のサインインの有効期限が切れました。再度サインインしてください。"
   },
   {
+   "zh": "Xbox 连接失败：",
+   "src": "src/source/XboxSessionSource.cpp",
+   "zh-TW": "Xbox 連線失敗：",
+   "en": "Xbox connection failed: ",
+   "ja": "Xbox 接続に失敗しました："
+  },
+  {
    "zh": "XeSS 初始化失败；当前为普通呈现",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "XeSS 初始化失敗；當前為普通呈現",
@@ -1602,13 +1616,6 @@
    "zh-TW": "{}顯示卡重置 {} 次，已分 {} 段匯出並無損拼接",
    "en": "{}GPU reset {} time(s); exported in {} parts and joined without re-encoding",
    "ja": "{}GPU リセット {} 回、{} 分割で書き出し再エンコードなしで結合しました"
-  },
-  {
-   "zh": "。请确认本机网络没有拦截 UDP，主机与本机最好在同一局域网。",
-   "src": "src/source/XboxSessionSource.cpp",
-   "zh-TW": "。請確認本機網路沒有攔截 UDP，主機與本機最好在同一區域網路。",
-   "en": ". Make sure this PC's network does not block UDP; the host and this PC should preferably be on the same LAN.",
-   "ja": "。この PC のネットワークが UDP をブロックしていないか確認してください。ホストとこの PC は同じ LAN にあるのが理想です。"
   },
   {
    "zh": "一键还原",
@@ -2610,6 +2617,13 @@
    "zh-TW": "全螢幕",
    "en": "Fullscreen",
    "ja": "全画面"
+  },
+  {
+   "zh": "全屏期间显存持续增长了 %1 GB，已退出全屏保护播放；当前会话使用窗口播放。增强设置保留。原因尚未确认，可开启设置中的 OBS 游戏采集兼容、重启后测试全屏。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "全螢幕期間顯示記憶體持續增加了 %1 GB，已退出全螢幕保護播放；目前工作階段使用視窗播放。增強設定保留。原因尚未確認，可開啟設定中的 OBS 遊戲擷取相容、重新啟動後測試全螢幕。",
+   "en": "VRAM kept growing by %1 GB in fullscreen. Playback has returned to a window for this session, keeping enhancement settings. The cause is unconfirmed. You can enable OBS game capture compatibility in Settings, restart, and test fullscreen again.",
+   "ja": "全画面中に VRAM が %1 GB 増え続けたため、この再生はウィンドウ表示に戻りました。映像処理の設定は維持します。原因は未確認です。設定で OBS ゲームキャプチャ互換を有効にし、再起動して全画面を再テストできます。"
   },
   {
    "zh": "全屏画面（双击画面 / F11）",
@@ -3668,6 +3682,13 @@
    "zh-TW": "否",
    "en": "No",
    "ja": "いいえ"
+  },
+  {
+   "zh": "启动时检测到小飞机（RTSS）就改用软件绘制界面，OSD 只显示在视频上",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "啟動時偵測到小飛機（RTSS）就改用軟體繪製介面，OSD 只顯示在影片上",
+   "en": "When RivaTuner (RTSS) is running at start, the interface is drawn in software and the OSD shows on the video only",
+   "ja": "起動時に RivaTuner（RTSS）を検出するとインターフェースをソフトウェア描画にし、OSD は映像にだけ表示します"
   },
   {
    "zh": "启动窗口大小",
@@ -4979,6 +5000,13 @@
    "ja": "小"
   },
   {
+   "zh": "小飞机在 Veyra 之后启动。为避免画面卡住，它的 OSD 暂不在 Veyra 里显示。重启后界面改用兼容绘制，OSD 只显示在视频上。现在重启吗？当前播放或串流将停止。",
+   "src": "qml/Main.qml",
+   "zh-TW": "小飛機在 Veyra 之後啟動。為避免畫面卡住，它的 OSD 暫不在 Veyra 中顯示。重新啟動後介面改用相容繪製，OSD 只顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
+   "en": "RivaTuner started after Veyra. To keep the picture from freezing, its OSD is not shown in Veyra for now. After a restart the interface uses compatible drawing and the OSD shows on the video only. Restart now? Current playback or streaming will stop.",
+   "ja": "RivaTuner が Veyra の後に起動しました。映像が止まらないよう、今は Veyra に OSD を表示しません。再起動するとインターフェースが互換描画になり、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
+  },
+  {
    "zh": "尚无导出任务",
    "src": "src/engine/ExportJobManager.cpp",
    "zh-TW": "尚無匯出任務",
@@ -5404,6 +5432,13 @@
    "zh-TW": "已有同名預設，換一個名稱才能儲存",
    "en": "A preset with this name already exists; choose another name to save",
    "ja": "同じ名前のプリセットがあります。別の名前にすると保存できます"
+  },
+  {
+   "zh": "已检测到小飞机（RTSS）：界面软件绘制，OSD 只显示在视频上；部分阴影与模糊简化",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "已偵測到小飛機（RTSS）：介面軟體繪製，OSD 只顯示在影片上；部分陰影與模糊簡化",
+   "en": "RivaTuner (RTSS) detected: the interface is drawn in software and the OSD shows on the video only; some shadows and blur are simplified",
+   "ja": "RivaTuner（RTSS）を検出：インターフェースはソフトウェア描画、OSD は映像にだけ表示。一部の影とぼかしは簡略化されます"
   },
   {
    "zh": "已登录",
@@ -6821,13 +6856,6 @@
    "ja": "キャプチャーを開始できませんでした。診断を確認してください"
   },
   {
-   "zh": "无法和主机建立连接：",
-   "src": "src/source/XboxSessionSource.cpp",
-   "zh-TW": "無法和主機建立連接：",
-   "en": "Could not connect to the host: ",
-   "ja": "ホストに接続できません："
-  },
-  {
    "zh": "无法复制轨道参数",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "無法複製軌道參數",
@@ -7080,18 +7108,11 @@
    "ja": "VRAM 回収時に排出できませんでした"
   },
   {
-   "zh": "显存在设置没变的情况下涨了 %1 GB。检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra：它只在全屏时介入，这部分显存很可能由它占用，Veyra 重建也释放不了。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项，或退出全屏；已占用的显存要重开 Veyra 才会释放",
+   "zh": "显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "顯示記憶體在設定沒變的情況下增加了 %1 GB。偵測到 NVIDIA App 的畫面外掛（RTX HDR / 智慧平滑運動 / RTX 動態鮮豔度）注入了 Veyra：它只在全螢幕時介入，這部分顯示記憶體很可能由它佔用，Veyra 重建也釋放不了。請在 NVIDIA App → 圖形 → 程式設定中為 Veyra 關閉這幾項，或退出全螢幕；已佔用的顯示記憶體要重開 Veyra 才會釋放",
-   "en": "Video memory grew by %1 GB with no settings change. NVIDIA App's picture plug-in (RTX HDR / Smooth Motion / RTX Dynamic Vibrance) is injected into Veyra: it engages only in fullscreen, this memory is most likely held by it, and Veyra cannot release it by rebuilding. Turn these off for Veyra in NVIDIA App → Graphics → Program Settings, or leave fullscreen; memory already taken is released when Veyra is reopened",
-   "ja": "設定を変えていないのにビデオメモリが %1 GB 増えました。NVIDIA App の画面プラグイン（RTX HDR / Smooth Motion / RTX Dynamic Vibrance）が Veyra に挿入されています。全画面のときだけ動作し、このメモリはおそらくプラグインが確保していて、Veyra の再構築では解放できません。NVIDIA App → グラフィックス → プログラム設定で Veyra に対してこれらをオフにするか、全画面を解除してください。確保済みのメモリは Veyra を開き直すと解放されます"
-  },
-  {
-   "zh": "显存在设置没变的情况下涨了 %1 GB，已自动重建显示链回收显存（画面会闪一下）。如果反复出现：常见原因是 NVIDIA Smooth Motion、游戏加加、小飞机（RTSS）、显卡叠加层/即时重放或录屏软件在全屏时注入了本程序，请关掉它们后再试，并把日志发给我们（vram-watch）",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "顯示記憶體在設定沒變的情況下漲了 %1 GB，已自動重建顯示鏈回收顯示記憶體（畫面會閃一下）。如果反復出現：常見原因是 NVIDIA Smooth Motion、遊戲加加、小飛機（RTSS）、顯示卡疊加層/即時重放或螢幕錄影軟體在全螢幕時注入了本程式，請關掉它們後再試，並把日誌發給我們（vram-watch）",
-   "en": "VRAM grew by %1 GB with no settings change; the display chain was rebuilt automatically to reclaim it (the picture blinks once). If it keeps happening, the usual cause is NVIDIA Smooth Motion, GamePP, RTSS (MSI Afterburner), a GPU overlay/instant replay or screen recording software hooking this app in fullscreen. Turn them off, try again, and send us the log (vram-watch)",
-   "ja": "設定を変えていないのに VRAM が %1 GB 増えたため、表示チェーンを自動で再構築して回収しました（映像が一瞬点滅します）。繰り返し起きる場合、よくある原因は NVIDIA Smooth Motion、GamePP、RTSS（MSI Afterburner）、GPU のオーバーレイ/インスタントリプレイ、または録画ソフトが全画面時にこのアプリへ注入していることです。それらをオフにして再試行し、ログ（vram-watch）を送ってください"
+   "zh-TW": "顯示記憶體在設定未變時增加了 %1 GB，正在嘗試回收；回收結果請見診斷日誌。原因尚未確認。",
+   "en": "VRAM grew by %1 GB without a settings change. Recovery is being attempted; see the diagnostic log for the result. The cause is unconfirmed.",
+   "ja": "設定を変えていないのに VRAM が %1 GB 増加したため、回収を試みています。結果は診断ログをご覧ください。原因は未確認です。"
   },
   {
    "zh": "显示",
@@ -7612,6 +7633,13 @@
    "ja": "今回の書き出しは AMD FSR 超解像を使用します"
   },
   {
+   "zh": "本次播放检测到全屏显存持续增长，请使用窗口播放；重新打开片源后可再次测试全屏。",
+   "src": "qml/Main.qml",
+   "zh-TW": "本次播放偵測到全螢幕顯示記憶體持續增加，請使用視窗播放；重新開啟來源後可再次測試全螢幕。",
+   "en": "VRAM kept growing in fullscreen during this session. Use windowed playback; reopen the source to test fullscreen again.",
+   "ja": "この再生では全画面中に VRAM が増え続けました。ウィンドウ表示を使用してください。ソースを開き直すと全画面を再テストできます。"
+  },
+  {
    "zh": "松开恢复",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "鬆開恢復",
@@ -7724,11 +7752,25 @@
    "ja": "NVIDIA App の画面プラグイン（RTX HDR / Smooth Motion / RTX Dynamic Vibrance）が Veyra に挿入されています。キャプチャ開始時に GPU デバイスの喪失やクラッシュを起こすことが確認されています。NVIDIA App → グラフィックス → プログラム設定で Veyra に対してこれらをオフにしてから再試行してください"
   },
   {
-   "zh": "检测到 RivaTuner（小飞机 OSD）注入了 Veyra，请在 RTSS 里为 veyra_qml_ui.exe 关闭检测（Application detection level 设为 None）后再试",
+   "zh": "检测到 OBS 游戏采集和小飞机（RTSS）同时注入 Veyra。两者默认的挂钩方式冲突，OBS 游戏采集可能抓不到画面（任何 D3D12 程序都一样）。在 RTSS 里添加 veyra_qml_ui.exe，并在它的设置中勾选“Use Microsoft Detours API hooking”；或在 OBS 改用窗口采集（Windows 10 1903+）",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "偵測到 RivaTuner（RTSS OSD）注入了 Veyra，請在 RTSS 中為 veyra_qml_ui.exe 關閉偵測（Application detection level 設為 None）後再試",
-   "en": "RivaTuner (RTSS on-screen display) is injected into Veyra; set Application detection level to None for veyra_qml_ui.exe in RTSS and try again",
-   "ja": "RivaTuner（RTSS の OSD）が Veyra に挿入されています。RTSS で veyra_qml_ui.exe の Application detection level を None にしてから再試行してください"
+   "zh-TW": "偵測到 OBS 遊戲擷取和小飛機（RTSS）同時注入 Veyra。兩者預設的掛鉤方式衝突，OBS 遊戲擷取可能抓不到畫面（任何 D3D12 程式都一樣）。在 RTSS 中新增 veyra_qml_ui.exe，並在它的設定中勾選「Use Microsoft Detours API hooking」；或在 OBS 改用視窗擷取（Windows 10 1903+）",
+   "en": "OBS game capture and RivaTuner (RTSS) are both injected into Veyra. Their default hooking conflicts, so OBS game capture may get no picture (true of any D3D12 program). Add veyra_qml_ui.exe in RTSS and tick \"Use Microsoft Detours API hooking\" in its settings, or use Window Capture in OBS (Windows 10 1903+)",
+   "ja": "OBS ゲームキャプチャと RivaTuner（RTSS）が両方とも Veyra に挿入されています。既定のフック方式が競合し、OBS ゲームキャプチャで映像が取れないことがあります（D3D12 のプログラムすべてで同じです）。RTSS に veyra_qml_ui.exe を追加して設定で「Use Microsoft Detours API hooking」をオンにするか、OBS でウィンドウキャプチャ（Windows 10 1903+）を使ってください"
+  },
+  {
+   "zh": "检测到 RivaTuner（小飞机 OSD）注入了 Veyra。请把 设置 → 监控软件兼容 设为“自动”并在小飞机运行时重启 Veyra：界面改用兼容绘制，OSD 只显示在视频上",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到 RivaTuner（小飛機 OSD）注入了 Veyra。請把 設定 → 監控軟體相容 設為「自動」，並在小飛機執行時重新啟動 Veyra：介面改用相容繪製，OSD 只顯示在影片上",
+   "en": "RivaTuner (RTSS OSD) is injected into Veyra. Set Settings → Monitoring overlay compatibility to Auto and restart Veyra while RTSS is running: the interface uses compatible drawing and the OSD shows on the video only",
+   "ja": "RivaTuner（RTSS OSD）が Veyra に挿入されています。設定 → モニタリングソフト互換 を「自動」にし、RTSS の実行中に Veyra を再起動してください。インターフェースが互換描画になり、OSD は映像にだけ表示されます"
+  },
+  {
+   "zh": "检测到小飞机（RTSS）",
+   "src": "qml/Main.qml",
+   "zh-TW": "偵測到小飛機（RTSS）",
+   "en": "RivaTuner (RTSS) detected",
+   "ja": "RivaTuner（RTSS）を検出"
   },
   {
    "zh": "模型参数",
@@ -8739,6 +8781,13 @@
    "ja": "アスペクト比"
   },
   {
+   "zh": "界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "介面始終用顯示卡繪製；為避免衝突，小飛機 OSD 不在 Veyra 中顯示",
+   "en": "The interface always draws on the GPU; to avoid a conflict the RTSS OSD is not shown in Veyra",
+   "ja": "インターフェースは常に GPU で描画します。競合を避けるため RTSS の OSD は Veyra に表示しません"
+  },
+  {
    "zh": "界面状态写入失败",
    "src": "src/ui/PlayerUiFacade.cpp",
    "zh-TW": "介面狀態寫入失敗",
@@ -8879,6 +8928,13 @@
    "ja": "白い光彩"
   },
   {
+   "zh": "监控软件兼容",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "監控軟體相容",
+   "en": "Monitoring overlay compatibility",
+   "ja": "モニタリングソフト互換"
+  },
+  {
    "zh": "目标",
    "src": "qml/DialogHost.qml",
    "zh-TW": "目標",
@@ -9010,6 +9066,13 @@
    "zh-TW": "離線",
    "en": "Offline",
    "ja": "オフライン"
+  },
+  {
+   "zh": "稍后",
+   "src": "qml/Main.qml",
+   "zh-TW": "稍後",
+   "en": "Later",
+   "ja": "後で"
   },
   {
    "zh": "稳定强度",
@@ -10323,9 +10386,9 @@
   {
    "zh": "设置已保存，但自动重启失败。请重新打开软件。\nSettings saved. Automatic restart failed; please reopen Veyra.",
    "src": "apps/veyra-qml/main.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "設定已儲存，但自動重新啟動失敗。請重新開啟軟體。",
+   "en": "Settings saved. Automatic restart failed; please reopen Veyra.",
+   "ja": "設定は保存されましたが、自動再起動に失敗しました。Veyra を開き直してください。"
   },
   {
    "zh": "设置已保存，请等待导出结束后重启软件",
@@ -11903,6 +11966,13 @@
    "ja": "やり直し"
   },
   {
+   "zh": "重启",
+   "src": "qml/Main.qml",
+   "zh-TW": "重新啟動",
+   "en": "Restart",
+   "ja": "再起動"
+  },
+  {
    "zh": "重启后生效",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "重啟後生效",
@@ -13189,34 +13259,6 @@
    "zh-TW": "；本次匯出使用 AMD FSR 超解析",
    "en": "; this export uses AMD FSR super resolution",
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
-  },
-  {
-   "zh": "全屏期间显存持续增长了 %1 GB，已退出全屏保护播放；当前会话使用窗口播放。增强设置保留。原因尚未确认，可开启设置中的 OBS 游戏采集兼容、重启后测试全屏。",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "全螢幕期間顯示記憶體持續增加了 %1 GB，已退出全螢幕保護播放；目前工作階段使用視窗播放。增強設定保留。原因尚未確認，可開啟設定中的 OBS 遊戲擷取相容、重新啟動後測試全螢幕。",
-   "en": "VRAM kept growing by %1 GB in fullscreen. Playback has returned to a window for this session, keeping enhancement settings. The cause is unconfirmed. You can enable OBS game capture compatibility in Settings, restart, and test fullscreen again.",
-   "ja": "全画面中に VRAM が %1 GB 増え続けたため、この再生はウィンドウ表示に戻りました。映像処理の設定は維持します。原因は未確認です。設定で OBS ゲームキャプチャ互換を有効にし、再起動して全画面を再テストできます。"
-  },
-  {
-   "zh": "显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "顯示記憶體在設定未變時增加了 %1 GB，正在嘗試回收；回收結果請見診斷日誌。原因尚未確認。",
-   "en": "VRAM grew by %1 GB without a settings change. Recovery is being attempted; see the diagnostic log for the result. The cause is unconfirmed.",
-   "ja": "設定を変えていないのに VRAM が %1 GB 増加したため、回収を試みています。結果は診断ログをご覧ください。原因は未確認です。"
-  },
-  {
-   "zh": "本次播放检测到全屏显存持续增长，请使用窗口播放；重新打开片源后可再次测试全屏。",
-   "src": "qml/Veyra/Main.qml",
-   "zh-TW": "本次播放偵測到全螢幕顯示記憶體持續增加，請使用視窗播放；重新開啟來源後可再次測試全螢幕。",
-   "en": "VRAM kept growing in fullscreen during this session. Use windowed playback; reopen the source to test fullscreen again.",
-   "ja": "この再生では全画面中に VRAM が増え続けました。ウィンドウ表示を使用してください。ソースを開き直すと全画面を再テストできます。"
-  },
-  {
-   "zh": "Xbox 连接失败：{}",
-   "src": "src/source/XboxSessionSource.cpp",
-   "zh-TW": "Xbox 連線失敗：{}",
-   "en": "Xbox connection failed: {}",
-   "ja": "Xbox 接続失敗：{}"
   }
  ]
 }

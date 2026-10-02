@@ -1,5 +1,11 @@
 # Veyra 工作记录
 
+## 2026-10-03 小飞机（RTSS）适配
+
+- 本机装了 RTSS 7.3.7 + Afterburner 后复现：界面与视频两条 D3D12 交换链，OSD 有内容时视频开始约 0.4 秒设备移除（ACCESS_DENIED）。根因与对照实验见 docs/RTSS_COMPAT_2026-10-03.md。
+- 修复：小飞机运行时（默认"监控软件兼容=自动"）界面软件绘制，RTSS 只看到视频，OSD 只在视频上；GPU 界面时用 RTSSHooksProfileOverride=EnableOSD,0 防止后启动的小飞机拖垮设备，并提示重启。OBS 游戏采集 + 小飞机在任何 D3D12 程序上都抓不到（RTSS 默认挂钩冲突），提示在 RTSS 给 Veyra 开 Detours 挂钩或用窗口采集。
+- 分支 claude/rtss-compat-20261003（基于 15a0e39），构建/测试/日志：E:/项目/Veyra/build|tests|logs/rtss-compat-20261003、tests/rtss-20261003。未合并、未发布。
+
 ## 2026-10-02 Codex 接管 2.0.1：Xbox 修复、显存保护候选
 
 - 当前用户要求先处理日志 8/12 爆显存与日志 11 Xbox 连接失败，再按 Claude 对话发 2.0.1；发布授权已存在，不另问批准。已读取 Claude 本机原对话：README 不动，Release 保留 2.0.0 全部内容并追加修复，中英及双 220px 二维码保留。

@@ -243,6 +243,32 @@ VPage {
                             }
                         }
                         VRow {
+                            // RivaTuner (MSI Afterburner's OSD): see main.cpp. Auto draws the interface in
+                            // software when RTSS runs at start, so its OSD only sits on the video.
+                            readonly property bool automatic: (veyra.preferences.overlayCompat || "auto") === "auto"
+                            label: qsTr("监控软件兼容")
+                            hint: veyra.obsGameCaptureActive
+                                  ? qsTr("OBS 游戏采集兼容已让界面软件绘制，小飞机 OSD 只显示在视频上")
+                                  : (automatic !== veyra.overlayCompatActive && (veyra.overlayCompatActive || veyra.rivaTunerRunning()))
+                                    ? qsTr("重启后生效")
+                                    : veyra.overlayCompatActive
+                                      ? qsTr("已检测到小飞机（RTSS）：界面软件绘制，OSD 只显示在视频上；部分阴影与模糊简化")
+                                      : automatic
+                                        ? qsTr("启动时检测到小飞机（RTSS）就改用软件绘制界面，OSD 只显示在视频上")
+                                        : qsTr("界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示")
+                            VSeg {
+                                objectName: "set-overlay-compat"
+                                options: [{ id: "auto", label: qsTr("自动") }, { id: "off", label: qsTr("关闭") }]
+                                current: veyra.preferences.overlayCompat || "auto"
+                                onPicked: id => {
+                                    if (veyra.setPreference("overlayCompat", id) && !veyra.obsGameCaptureActive
+                                            && (id === "auto") !== veyra.overlayCompatActive
+                                            && (veyra.overlayCompatActive || veyra.rivaTunerRunning()))
+                                        obsRestart.open()
+                                }
+                            }
+                        }
+                        VRow {
                             label: qsTr("启动窗口大小")
                             hint: qsTr("下次启动生效；超过屏幕时按屏幕缩小并居中")
                             VSelect {
