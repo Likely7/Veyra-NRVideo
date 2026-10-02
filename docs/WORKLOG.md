@@ -19,6 +19,11 @@
 - 自审：检查 Xbox 回调寿命与异步发送关闭竞态；只对真实源帧发帧反馈；VRR 仍有时钟跳变/压缩丢参考保护；所有 rate 下媒体 PTS 不重写、音调保持、导出不改；保护默认关闭、禁用立即解除 UI 全屏限制；CLI 显式片源优先于自动恢复。未声称有独立 Reviewer。
 - README 未改、完整 2.0.0 Release 内容和双 220px 二维码保持。公开 2.0.1 仍待现场验证与并行分支收尾，不合并或推送其他工作；本轮交付独立源码提交和候选包。5060 Ti 显存持续增长根因仍未确认，设置保护只是一种可选应急措施。
 
+## 2026-10-03 小飞机（RTSS）适配
+
+- 本机装了 RTSS 7.3.7 + Afterburner 后复现：界面与视频两条 D3D12 交换链，OSD 有内容时视频开始约 0.4 秒设备移除（ACCESS_DENIED）。根因与对照实验见 docs/RTSS_COMPAT_2026-10-03.md。
+- 修复：小飞机运行时（默认"监控软件兼容=自动"）界面软件绘制，RTSS 只看到视频，OSD 只在视频上；GPU 界面时用 RTSSHooksProfileOverride=EnableOSD,0 防止后启动的小飞机拖垮设备，并提示重启。OBS 游戏采集 + 小飞机在任何 D3D12 程序上都抓不到（RTSS 默认挂钩冲突），提示在 RTSS 给 Veyra 开 Detours 挂钩或用窗口采集。
+- 分支 claude/rtss-compat-20261003（基于 15a0e39），构建/测试/日志：E:/项目/Veyra/build|tests|logs/rtss-compat-20261003、tests/rtss-20261003。未合并、未发布。
 
 ## 2026-10-02 Codex 接管 2.0.1：Xbox 修复、显存保护候选
 

@@ -120,8 +120,8 @@ QString injectionAdvice(const QString& modules) {
     QStringList parts;
     if (modules.contains(QStringLiteral("nvppex.dll"), Qt::CaseInsensitive) || modules.contains(QStringLiteral("NvPresent64.dll"), Qt::CaseInsensitive))
         parts << QCoreApplication::translate("QmlPlayerBridge", "检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra，它已知会在采集开始时让显卡设备丢失或让程序崩溃。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项后再试");
-    if (modules.contains(QStringLiteral("RTSSHooks64.dll"), Qt::CaseInsensitive))
-        parts << QCoreApplication::translate("QmlPlayerBridge", "检测到 RivaTuner（小飞机 OSD）注入了 Veyra，请在 RTSS 里为 veyra_qml_ui.exe 关闭检测（Application detection level 设为 None）后再试");
+    if (modules.contains(QStringLiteral("RTSSHooks64.dll"), Qt::CaseInsensitive) && !qApp->property("veyraSoftwareUi").toBool())
+        parts << QCoreApplication::translate("QmlPlayerBridge", "检测到 RivaTuner（小飞机 OSD）注入了 Veyra。请把 设置 → 监控软件兼容 设为“自动”并在小飞机运行时重启 Veyra：界面改用兼容绘制，OSD 只显示在视频上");
     return parts.join(QStringLiteral("；"));
 }
 // Messages and fixed table labels shown to the user, in the interface language
@@ -1022,6 +1022,33 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             handled = true;
             veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({})",
                 hook->product, QString::fromWCharArray(hook->module).toStdString()));
+        }
+        // RivaTuner arrived after a start with the interface on the GPU (it was not running
+        // then, see main.cpp). Its OSD stays out of this process (RTSSHooksProfileOverride),
+        // so nothing breaks; a restart moves the interface to software drawing and puts the
+        // OSD on the video.
+        static bool rivaTunerLate = false;
+        if (!rivaTunerLate && !qApp->property("veyraSoftwareUi").toBool() && !qApp->property("veyraUiRendererForced").toBool()
+                && GetModuleHandleW(L"RTSSHooks64.dll")) {
+            rivaTunerLate = true;
+            const bool automatic = impl_->prefString("overlayCompat") != QLatin1String("off");
+            veyra::log::warn("overlay-hooks", std::format("RivaTuner injected into a run with a GPU interface; its OSD is off in this process ({})",
+                automatic ? "started after Veyra: restart suggested" : "monitoring compatibility off"));
+            if (automatic) emit overlayRestartSuggested();
+        }
+        // RivaTuner's default hooking keeps OBS game capture from hooking any Direct3D 12
+        // program (2026-10-03, RTSS 7.3.7 + OBS 32.1.2, a bare D3D12 window included); its
+        // "Use Microsoft Detours API hooking" option lets both work. Said once, ever.
+        static bool obsWithRivaTuner = false;
+        if (!obsWithRivaTuner && GetModuleHandleW(L"graphics-hook64.dll") && GetModuleHandleW(L"RTSSHooks64.dll")) {
+            obsWithRivaTuner = true;
+            veyra::log::warn("overlay-hooks", "OBS game capture and RivaTuner are both injected: OBS may not get the picture unless RTSS uses Detours hooking for Veyra");
+            if (!impl_->prefs.value(QStringLiteral("obsRivaTunerHintShown")).toBool()) {
+                impl_->prefs[QStringLiteral("obsRivaTunerHintShown")] = true;
+                (void)impl_->savePrefs();
+                emit notice(tr("检测到 OBS 游戏采集和小飞机（RTSS）同时注入 Veyra。两者默认的挂钩方式冲突，OBS 游戏采集可能抓不到画面（任何 D3D12 程序都一样）。"
+                               "在 RTSS 里添加 veyra_qml_ui.exe，并在它的设置中勾选“Use Microsoft Detours API hooking”；或在 OBS 改用窗口采集（Windows 10 1903+）"), false);
+            }
         }
         // Overlays inject when they decide the window is a game, e.g. on entering fullscreen
         // long after start; after the first two minutes look every 10 s instead of every 2 s.
@@ -4370,6 +4397,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         bool ok = false; const int n = value.toInt(&ok);
         if (!ok || (n != 0 && n != 100 && n != 125 && n != 150)) return false;
         stored = n;
+    } else if (key == QLatin1String("overlayCompat")) {
+        // 设置 → 监控软件兼容; read by main.cpp before Qt starts.
+        const QString v = value.toString();
+        if (v != QLatin1String("auto") && v != QLatin1String("off")) return false;
+        stored = v;
     } else if (key == QLatin1String("decode")) {
         const QString v = value.toString();
         if (v != QLatin1String("auto") && v != QLatin1String("software") && v != QLatin1String("hardware")) return false;
@@ -4520,6 +4552,8 @@ void QmlPlayerBridge::resetShortcuts() {
     emit preferencesChanged();
 }
 bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->property("veyraObsGameCapture").toBool(); }
+bool QmlPlayerBridge::overlayCompatActive() const { return qApp && qApp->property("veyraOverlayCompat").toBool(); }
+bool QmlPlayerBridge::rivaTunerRunning() const { return gfx::rivaTunerRunning(); }
 
 int QmlPlayerBridge::uiScaleActive() const { return qApp ? qApp->property("veyraUiScale").toInt() : 0; }
 void QmlPlayerBridge::openFeedbackPage() {

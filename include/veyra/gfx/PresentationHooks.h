@@ -46,6 +46,34 @@ inline std::wstring riskyInjections() {
     return out;
 }
 
+// RivaTuner Statistics Server (MSI Afterburner's OSD, also used by HWiNFO, CapFrameX and
+// others) is running: its shared memory exists and is live. True before it has injected
+// RTSSHooks64.dll here, which it does to every process that creates windows.
+//
+// Why it matters (reproduced 2026-10-03, RTSS 7.3.7, RTX 5070): RTSS draws on a single
+// Direct3D 12 swapchain at a time and rebuilds its renderer whenever a different one
+// presents. With the interface on D3D12 next to the video's own swapchain, the GPU device
+// was removed (DXGI_ERROR_ACCESS_DENIED) about half a second after a video started once its
+// OSD had something to draw. With the interface drawn without a swapchain, RTSS only sees
+// the video and draws its OSD there.
+inline bool rivaTunerRunning() {
+    HANDLE map = OpenFileMappingW(FILE_MAP_READ, FALSE, L"RTSSSharedMemoryV2");
+    if (!map) return false;
+    bool live = false;
+    if (const auto* header = static_cast<const DWORD*>(MapViewOfFile(map, FILE_MAP_READ, 0, 0, sizeof(DWORD)))) {
+        live = header[0] == 0x52545353;   // 'RTSS'; 0xDEAD while the server shuts down
+        UnmapViewOfFile(header);
+    }
+    CloseHandle(map);
+    return live;
+}
+
+// RTSS reads this variable from the process it hooks whenever it (re)loads its profile for
+// it ("Name,value[,Name,value…]", RTSSHooks64.dll); EnableOSD is one of the properties it
+// accepts. With EnableOSD,0 it still counts frames but never draws in this process.
+inline constexpr wchar_t kRivaTunerProfileOverride[] = L"RTSSHooksProfileOverride";
+inline constexpr wchar_t kRivaTunerOsdOff[] = L"EnableOSD,0";
+
 // The first injected overlay found, or nullptr.
 inline const PresentationHook* injectedPresentationHook() {
     for (const auto& hook : kPresentationHooks)
