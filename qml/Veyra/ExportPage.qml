@@ -303,7 +303,8 @@ VPage {
                     Note { text: veyra.imageBatchStatus }
                     VButton { visible: veyra.imageBatchActive; text: "取消图片批次"; onClicked: veyra.cancelImageBatch() }
                 }
-                Note { visible: root.exportKind === "video"; text: "点击开始时冻结本批设置；导出期间可以继续预览其他文件。" }
+                Note { visible: root.exportKind === "video"; text: "点击开始时冻结本批设置。" + (veyra.preferences.exportStopsPlayback !== false ? "开始导出时会关闭正在播放的内容，显卡全部留给导出。" : "导出期间可以继续预览其他文件，会和导出抢显卡。") }
+                VRow { label: "导出时关闭正在播放的内容"; VSwitch { objectName: "export-stop-playback"; checked: veyra.preferences.exportStopsPlayback !== false; onToggled: veyra.setPreference("exportStopsPlayback", checked) } }
                 VButton { objectName: "export-target"; Layout.fillWidth: true; iconName: "folder"; text: "选择保存目录…"; onClicked: veyra.chooseExportPath() }
                 Note { text: veyra.exportTarget; wrapMode: Text.WrapAnywhere }
                 VRow { label: "完成提示音"; VSwitch { objectName: "export-sound"; checked: veyra.exportCompletionSound; onToggled: veyra.exportCompletionSound = checked } }
@@ -330,7 +331,8 @@ VPage {
                 VButton { objectName: "export-start"; Layout.fillWidth: !root.compact; primary: !veyra.exportRunning; text: veyra.exportRunning ? (veyra.exportPaused ? "继续导出" : "暂停导出") : "开始导出 " + veyra.exportReadyCount + " 项"; enabled: root.exportKind === "video" && (veyra.exportRunning || veyra.exportReadyCount > 0); onClicked: veyra.exportRunning ? veyra.pauseExport(!veyra.exportPaused) : veyra.startExport() }
                 VButton { objectName: "export-cancel"; visible: veyra.exportRunning; text: "取消"; onClicked: veyra.cancelExport() }
             }
-            Note { visible: !root.compact; text: veyra.exportRunning ? "已编码 " + veyra.exportEncoded + " 帧 · 等待 " + veyra.exportQueueCount + " 项" : "取消后可重新开始；已完成文件会跳过。" }
+            // The one remaining-time readout (the old page had two); it holds still while paused.
+            Note { objectName: "export-eta"; visible: !root.compact; text: veyra.exportRunning ? "已编码 " + veyra.exportEncoded + " 帧" + (veyra.exportPaused ? " · 已暂停" : veyra.exportEtaSeconds > 0 ? " · 当前文件剩余约 " + veyra.formatTime(veyra.exportEtaSeconds) : "") + " · 等待 " + veyra.exportQueueCount + " 项" : "取消后可重新开始；已完成文件会跳过。" }
         }
     }
 
@@ -370,10 +372,16 @@ VPage {
                 onPressed: mouse => drag(mouse)
                 onPositionChanged: mouse => { if (pressed) drag(mouse) }
             }
+            // The engine's status line is the player's long diagnostic once a source
+            // closes (the export now closes playback); the preview says what it is for.
             Text {
                 anchors.centerIn: parent
+                width: parent.width - 40
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
                 visible: !veyra.hasSource
-                text: veyra.statusText
+                text: veyra.exportRunning ? "导出进行中，预览已关闭，显卡留给导出
+点左侧文件可重新预览（会和导出抢显卡）" : "点左侧文件预览"
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsH3

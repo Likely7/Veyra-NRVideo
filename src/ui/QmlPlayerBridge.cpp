@@ -84,6 +84,7 @@ namespace Gdiplus { using std::min; using std::max; }
 #include <pdhmsg.h>
 #pragma comment(lib, "pdh.lib")
 #include <atomic>
+#include <set>
 #include <mutex>
 #include <thread>
 #include "veyra/pipeline/ColorGradeTables.h"
@@ -91,7 +92,7 @@ namespace Gdiplus { using std::min; using std::max; }
 #include "veyra/gfx/XessMfgUnlock.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/PresentationHooks.h"
-#include <dxgi1_4.h>
+#include <dxgi1_6.h>
 #include <wrl/client.h>
 #include "veyra/ngx/NrArchitecturePolicy.h"
 #include "veyra/source/CaptureCardSource.h"
@@ -231,8 +232,9 @@ struct QmlPlayerBridge::Impl {
     uint64_t imageCompletionEvent=0;
     engine::ExportJobSnapshot exportSnapshot;
     bool exportHevc = false;
-    uint32_t exportBitrateMbps = 0;
-    sink::ExportRateControl exportRateControl = sink::ExportRateControl::Cq;
+    // Default: VBR at 8 Mbps (field request 2026-10-02); CQ stays one tap away.
+    uint32_t exportBitrateMbps = 8;
+    sink::ExportRateControl exportRateControl = sink::ExportRateControl::Vbr;
     int exportResolutionIndex = -1;
     double exportTrimStartSeconds = 0.0;
     double exportTrimEndSeconds = 0.0;
@@ -331,6 +333,65 @@ struct QmlPlayerBridge::Impl {
     int historyTicks = 0;
     QString runStatus, runLevel, runDetail;
     std::atomic<double> gpuUtil{-1.0};
+    // Hardware adapters in Windows' high-performance order (discrete first). The
+    // sampler only counts engines of the adapter whose LUID is in gpuMonitorLuid
+    // (0: every adapter, the old behaviour, used only when none was found).
+    struct GpuAdapter { QString id, name; uint32_t luidHigh = 0, luidLow = 0; };
+    std::vector<GpuAdapter> gpuAdapters;
+    std::atomic<uint64_t> gpuMonitorLuid{0};
+    QString gpuMonitorName;
+    // LUIDs that have "GPU Engine" counter instances. DXGI can list one physical GPU
+    // twice (a virtual display driver such as GameViewer's exposes a second adapter
+    // with the GPU's own name); only the real one has engines to measure.
+    static std::set<uint64_t> gpuEngineLuids() {
+        std::set<uint64_t> found;
+        DWORD counterBytes = 0, instanceBytes = 0;
+        if (PdhEnumObjectItemsW(nullptr, nullptr, L"GPU Engine", nullptr, &counterBytes, nullptr, &instanceBytes, PERF_DETAIL_WIZARD, 0) != PDH_MORE_DATA)
+            return found;
+        std::vector<wchar_t> counters(counterBytes + 1), instances(instanceBytes + 1);
+        if (PdhEnumObjectItemsW(nullptr, nullptr, L"GPU Engine", counters.data(), &counterBytes, instances.data(), &instanceBytes, PERF_DETAIL_WIZARD, 0) != ERROR_SUCCESS)
+            return found;
+        for (const wchar_t* name = instances.data(); *name; name += wcslen(name) + 1) {
+            unsigned high = 0, low = 0;
+            if (const wchar_t* at = wcsstr(name, L"luid_"); at && swscanf_s(at, L"luid_0x%x_0x%x", &high, &low) == 2)
+                found.insert(uint64_t(high) << 32 | low);
+        }
+        return found;
+    }
+    void enumerateGpuAdapters() {
+        const auto measured = gpuEngineLuids();
+        Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
+        if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)))) return;
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        for (UINT i = 0; SUCCEEDED(factory->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(adapter.ReleaseAndGetAddressOf()))); ++i) {
+            DXGI_ADAPTER_DESC1 d{};
+            if (FAILED(adapter->GetDesc1(&d)) || (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) || d.VendorId == 0x1414) continue;
+            const uint64_t luid = uint64_t(uint32_t(d.AdapterLuid.HighPart)) << 32 | d.AdapterLuid.LowPart;
+            if (!measured.empty() && !measured.count(luid)) {
+                veyra::log::info("perf", std::format("gpu adapter skipped (no engine counters) luid={:08X}:{:08X} {}", uint32_t(luid >> 32), uint32_t(luid),
+                    QString::fromWCharArray(d.Description).toStdString()));
+                continue;
+            }
+            // LUIDs change at every boot, so the saved choice is vendor:device:subsystem,
+            // with an ordinal for two identical cards.
+            QString id = QStringLiteral("%1:%2:%3").arg(d.VendorId, 4, 16, QLatin1Char('0')).arg(d.DeviceId, 4, 16, QLatin1Char('0')).arg(d.SubSysId, 8, 16, QLatin1Char('0'));
+            int same = 0;
+            for (const auto& a : gpuAdapters) if (a.id.section('#', 0, 0) == id) ++same;
+            if (same) id += QStringLiteral("#%1").arg(same);
+            gpuAdapters.push_back({id, QString::fromWCharArray(d.Description).trimmed(), uint32_t(d.AdapterLuid.HighPart), d.AdapterLuid.LowPart});
+            veyra::log::info("perf", std::format("gpu adapter {} id={} luid={:08X}:{:08X} dedicatedMiB={}", gpuAdapters.size() - 1,
+                id.toStdString(), uint32_t(d.AdapterLuid.HighPart), d.AdapterLuid.LowPart, d.DedicatedVideoMemory >> 20));
+        }
+    }
+    void resolveGpuMonitor() {
+        const QString wanted = prefString("monitorGpu");
+        const GpuAdapter* chosen = gpuAdapters.empty() ? nullptr : &gpuAdapters.front();
+        for (const auto& a : gpuAdapters) if (!wanted.isEmpty() && a.id == wanted) chosen = &a;
+        gpuMonitorLuid = chosen ? (uint64_t(chosen->luidHigh) << 32 | chosen->luidLow) : 0;
+        gpuMonitorName = chosen ? chosen->name : QString();
+        veyra::log::info("perf", std::format("gpu monitor wanted={} using={}", wanted.isEmpty() ? "auto" : wanted.toStdString(),
+            chosen ? chosen->name.toStdString() : "all adapters"));
+    }
     double gpuPublished = -2.0;
     double rateRatio = -1.0;
     std::deque<double> frameTimes;           // frame interval ms, newest last
@@ -675,6 +736,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(this,&QmlPlayerBridge::snapshotChanged,this,&QmlPlayerBridge::fgChoicesChanged);
     connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fgChoicesChanged);
     impl_->loadPrefs();
+    impl_->enumerateGpuAdapters();
+    impl_->resolveGpuMonitor();
     connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
     if (qApp) qApp->installEventFilter(this);
 #ifdef VEYRA_ENABLE_MOONLIGHT
@@ -4196,7 +4259,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "cinePillHidden"};
+                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -4234,6 +4297,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = v;
     } else if (key == QLatin1String("rememberPosition") || key == QLatin1String("dockPinned")) {
         stored = value.toBool();
+    } else if (key == QLatin1String("monitorGpu")) {
+        const QString v = value.toString();
+        if (!v.isEmpty() && std::none_of(impl_->gpuAdapters.begin(), impl_->gpuAdapters.end(), [&](const auto& a) { return a.id == v; })) return false;
+        stored = v;
     } else if (key == QLatin1String("windowSize")) {
         const QString v = value.toString();
         static const QStringList sizes{"1280x800", "1600x1000", "1920x1200", "last"};
@@ -4259,7 +4326,15 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
     else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
+    else if (key == QLatin1String("monitorGpu")) { impl_->resolveGpuMonitor(); impl_->gpuUtil = -1.0; emit perfChanged(); }
 }
+QVariantList QmlPlayerBridge::gpuMonitorChoices() const {
+    QVariantList out;
+    out << QVariantMap{{"id", QString()}, {"label", tr("自动（独立显卡）")}};
+    for (const auto& a : impl_->gpuAdapters) out << QVariantMap{{"id", a.id}, {"label", a.name}};
+    return out;
+}
+QString QmlPlayerBridge::gpuMonitorName() const { return impl_->gpuMonitorName; }
 QVariantList QmlPlayerBridge::audioDevices() const {
     QVariantList out;
     out << QVariantMap{{"id", QString()}, {"label", tr("跟随系统默认")}, {"isDefault", false}};
@@ -4451,6 +4526,12 @@ void QmlPlayerBridge::startExport() {
         emit notice(utf8Of(reason),true);emit exportChanged();return;
     }
     impl_->exportQueue.refresh();pollExport();emit navigate(QStringLiteral("exp"));
+    // Leave the GPU to the export (field request 2026-10-02): whatever plays is closed,
+    // unless 导出页 → 导出时关闭正在播放的内容 is off.
+    if(impl_->prefBool("exportStopsPlayback",true)&&(hasSource()||impl_->openingSource)){
+        veyra::log::info("qml-export","export started: closing the playing source");
+        stopPlayback();emit notice(tr("已关闭正在播放的内容，显卡全部留给导出"),false);
+    }
 }
 void QmlPlayerBridge::cancelExport() {
     impl_->exportQueue.queue().cancel();impl_->exportQueue.refresh();pollExport();emit exportChanged();
@@ -5164,9 +5245,14 @@ void QmlPlayerBridge::startGpuSampler() {
             auto* items = reinterpret_cast<PDH_FMT_COUNTERVALUE_ITEM_W*>(buffer.data());
             if (PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &bytes, &count, items) != ERROR_SUCCESS) continue;
             std::map<std::wstring, double> byType;
+            // Instance names carry the adapter: pid_<n>_luid_0x<high>_0x<low>_phys_..._engtype_<type>.
+            const uint64_t luid = impl->gpuMonitorLuid.load();
+            const std::wstring luidKey = luid ? std::format(L"luid_0x{:08x}_0x{:08x}_", uint32_t(luid >> 32), uint32_t(luid)) : std::wstring{};
             for (DWORD i = 0; i < count; ++i) {
                 if (items[i].FmtValue.CStatus != PDH_CSTATUS_VALID_DATA && items[i].FmtValue.CStatus != PDH_CSTATUS_NEW_DATA) continue;
-                const std::wstring name = items[i].szName ? items[i].szName : L"";
+                std::wstring name = items[i].szName ? items[i].szName : L"";
+                std::transform(name.begin(), name.end(), name.begin(), [](wchar_t ch) { return wchar_t(towlower(ch)); });
+                if (!luidKey.empty() && name.find(luidKey) == std::wstring::npos) continue;
                 const auto at = name.find(L"engtype_");
                 byType[at == std::wstring::npos ? std::wstring{} : name.substr(at + 8)] += items[i].FmtValue.doubleValue;
             }

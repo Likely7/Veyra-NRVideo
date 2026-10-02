@@ -92,20 +92,30 @@ VPage {
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: Math.min(1044, root.width - 48)
             spacing: 12
+            // Subtitles name what is really there: the device of the last capture
+            // session and the saved PS5 host; generic wording when there is none.
+            // Only the subtitle follows the live state. The cards themselves are a fixed
+            // list: when the whole array was one binding, every Xbox / PC state change
+            // (polling after sign-in) destroyed and rebuilt all six cards, and a click
+            // landing during the rebuild was lost (field report 2026-10-02).
+            function cardSub(act) {
+                switch (act) {
+                case "file": return "MP4 · MKV · 图片"
+                case "capture": return veyra.hasCaptureSession ? veyra.captureSessionSummary.split(" · ")[0] : "HDMI 采集设备"
+                case "ps5": return veyra.remotePlayHost.length > 0 ? "已保存主机 " + veyra.remotePlayHost : "局域网串流"
+                case "moonlight": return veyra.moonlight && veyra.moonlight.state.lastLabel ? veyra.moonlight.state.lastLabel : "Sunshine 主机"
+                case "xbox": return veyra.xbox && veyra.xbox.state.lastLabel ? veyra.xbox.state.lastLabel : "账号登录 · 实验"
+                default: return "窗口或显示器"
+                }
+            }
             Repeater {
-                // Subtitles name what is really there: the device of the last capture
-                // session and the saved PS5 host; generic wording when there is none.
                 model: [
-                    { glyph: "folder", title: "打开视频", sub: "MP4 · MKV · 图片", act: "file" },
-                    { glyph: "video", title: "采集卡",
-                      sub: veyra.hasCaptureSession ? veyra.captureSessionSummary.split(" · ")[0] : "HDMI 采集设备", act: "capture" },
-                    { glyph: "gamepad", title: "PS5 串流",
-                      sub: veyra.remotePlayHost.length > 0 ? "已保存主机 " + veyra.remotePlayHost : "局域网串流", act: "ps5" },
-                    { glyph: "cast", title: "PC 串流",
-                      sub: veyra.moonlight && veyra.moonlight.state.lastLabel ? veyra.moonlight.state.lastLabel : "Sunshine 主机", act: "moonlight" },
-                    { glyph: "gamepad", title: "Xbox 串流",
-                      sub: veyra.xbox && veyra.xbox.state.lastLabel ? veyra.xbox.state.lastLabel : "账号登录 · 实验", act: "xbox" },
-                    { glyph: "monitor", title: "屏幕捕获", sub: "窗口或显示器", act: "screen" }
+                    { glyph: "folder", title: "打开视频", act: "file" },
+                    { glyph: "video", title: "采集卡", act: "capture" },
+                    { glyph: "gamepad", title: "PS5 串流", act: "ps5" },
+                    { glyph: "cast", title: "PC 串流", act: "moonlight" },
+                    { glyph: "gamepad", title: "Xbox 串流", act: "xbox" },
+                    { glyph: "monitor", title: "屏幕捕获", act: "screen" }
                 ]
                 // The layout owns the slot's position, so the card inside it is free to
                 // move its own y for the hover lift (a y set on a layout child is
@@ -159,7 +169,7 @@ VPage {
                                 font.weight: Font.Medium
                             }
                             Text {
-                                text: modelData.sub
+                                text: srcGrid.cardSub(modelData.act)
                                 color: Theme.t3
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsSmall
@@ -170,6 +180,7 @@ VPage {
                     TapHandler {
                         id: cardTap
                         onTapped: {
+                            veyra.logUi("ui-source", "home card act=" + modelData.act)
                             switch (modelData.act) {
                             case "file": veyra.openFileDialog(); break
                             case "capture": veyra.openCaptureDialog(); break

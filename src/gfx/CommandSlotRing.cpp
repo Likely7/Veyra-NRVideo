@@ -66,6 +66,7 @@ bool CommandSlotRing::initialize(ID3D12Device* device,
             return false;
         }
         result = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, slots_[i].allocator.Get(), nullptr, IID_PPV_ARGS(&slots_[i].list));
+        if (SUCCEEDED(result)) slots_[i].list->SetName(std::format(L"Veyra slot {}", i).c_str());
         if (FAILED(result)) {
             status = Status::DeviceFailure;
             veyra::log::error("gfx", std::format("slot-ring: CreateCommandList slot={} failed hr={}", i, veyra::hresultString(result)));

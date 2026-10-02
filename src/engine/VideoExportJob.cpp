@@ -199,6 +199,11 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         if(muxResult<0){failAv(L"写入封装文件头",muxResult);break;}headerWritten=true;
         uint64_t sourceCount=0,generatedCount=0,holdCount=0;int64_t outputIndex=0;bool error=false;std::shared_ptr<pipeline::FrameLease> lastReal;
         double previousPts=0;int64_t lastOutputUs=-1;
+        uint64_t slowFrames=0;
+        // Acceptance hook: VEYRA_TEST_EXPORT_SLOW_FRAME=<source index>:<ms> holds that frame's
+        // completion back, standing in for a GPU that is slow but alive. Unset in normal use.
+        int slowFrameIndex=-1,slowFrameMs=0;
+        {wchar_t hook[32]{};if(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_SLOW_FRAME",hook,32)&&swscanf_s(hook,L"%d:%d",&slowFrameIndex,&slowFrameMs)!=2)slowFrameIndex=-1;slowFrameMs=std::clamp(slowFrameMs,0,40000);}
         const uint32_t multiplier=options.fg?options.fgMultiplier:1u;
         auto encodeAt=[&](unsigned slot,bool generated,double seconds){
             const int64_t timeUs=std::max(lastOutputUs+1,int64_t(std::llround(seconds*1000000)));
@@ -220,12 +225,36 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
                 if(repairedTimestamps<=5)veyra::log::warn("export-timeline",std::format("timestamp repaired source={} raw={} output={}",sourceCount,sourcePts,pts));
             }
             pipeline::EnhanceGraph::FrameOutputs out;if(!graph.process(frame,(pts+videoOriginSeconds)*1000,sourceCount==0||repairPts||pipeline::breaksHistory(packet.flags),out,packet.sequence,&packet.colorInfo,&packet.hardwareSurface,false)){error=true;break;}
+            // One frame's GPU work. A fixed 2 s limit failed whole exports on a frame that
+            // was only slow (8K NR + optical flow + NVENC near the VRAM budget; field log
+            // 2026-10-02, RTX 4070 Ti SUPER, 8K VR). Wait up to 30 s while the device is
+            // alive; a device Windows reset after a hang fails at once, with its reason.
             const auto readyStart=std::chrono::steady_clock::now();
-            while(!cancel&&!graph.resolveGeneration(out)){
-                if(std::chrono::steady_clock::now()-readyStart>std::chrono::seconds(2)){error=true;failureReason=L"GPU 在 2 秒内未完成一帧增强（可能显卡繁忙或驱动异常）";veyra::log::error("export","frame GPU completion timed out after 2s");break;}
+            auto nextHealthCheck=readyStart+std::chrono::milliseconds(250);
+            const bool injectedStall=slowFrameIndex>=0&&sourceCount==uint64_t(slowFrameIndex);
+            while(!cancel&&((injectedStall&&std::chrono::steady_clock::now()-readyStart<std::chrono::milliseconds(slowFrameMs))||!graph.resolveGeneration(out))){
+                const auto now=std::chrono::steady_clock::now();
+                if(now>=nextHealthCheck){
+                    nextHealthCheck=now+std::chrono::milliseconds(250);
+                    uint32_t removed=0;
+                    if(!ctx.checkDeviceAlive(removed)){
+                        ctx.reportDeviceFailure("export-frame",ring.lastSignaledValue());
+                        error=true;failureReason=std::format(L"显卡驱动在第 {} 帧卡死并被系统重置（0x{:X}）。40 系显卡开社区版 NR 时偶发；可关闭 NR、把 NR 内部分辨率调低或换光流后重试",sourceCount+1,removed);
+                        break;
+                    }
+                }
+                if(now-readyStart>std::chrono::seconds(30)){
+                    ctx.reportDeviceFailure("export-frame-timeout",ring.lastSignaledValue());
+                    error=true;failureReason=std::format(L"GPU 30 秒内未完成第 {} 帧的增强（显卡未报告重置）；可降低 NR / 超分分辨率后重试",sourceCount+1);
+                    veyra::log::error("export","frame GPU completion timed out after 30s");break;
+                }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             if(error||cancel)break;
+            if(const auto waited=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-readyStart).count();waited>1000){
+                ++slowFrames;uint64_t budget=0,usage=0;ctx.videoMemoryInfo(budget,usage);
+                if(slowFrames<=20)veyra::log::warn("export",std::format("slow frame source={} gpuWaitMs={:.0f} vramMiB={} budgetMiB={}",sourceCount,waited,usage>>20,budget>>20));
+            }
             if(sourceCount>0&&options.fg){
                 for(uint32_t j=1;j<options.fgMultiplier;++j){
                     pipeline::BatchFrame* item=nullptr;
@@ -246,7 +275,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         if(error||cancel)break;
         if(options.fg&&lastReal)for(uint32_t j=1;j<multiplier;++j){if(!encodeAt(lastReal->slot,false,previousPts+sourceInterval*j/multiplier)){error=true;break;}++holdCount;}
         if(error)break;
-        veyra::log::info("export-counts",std::format("source={} generated={} hold={} output={} multiplier={} repairedTimestamps={} backend={} encoder={} bitrateMbps={} note={} (holds are not DLSSG)",sourceCount,generatedCount,holdCount,outputIndex,multiplier,repairedTimestamps,frameGenerationBackendName(options.settings.frameGenerationBackend),std::string(sink::encoderBackendName(encoder->backend())),options.settings.exportBitrateMbps,utf8(fgNote)));
+        veyra::log::info("export-counts",std::format("slowFrames={} source={} generated={} hold={} output={} multiplier={} repairedTimestamps={} backend={} encoder={} bitrateMbps={} note={} (holds are not DLSSG)",slowFrames,sourceCount,generatedCount,holdCount,outputIndex,multiplier,repairedTimestamps,frameGenerationBackendName(options.settings.frameGenerationBackend),std::string(sink::encoderBackendName(encoder->backend())),options.settings.exportBitrateMbps,utf8(fgNote)));
         progress(.99,L"正在收尾：等待编码器输出剩余帧");
         if(!encoder->finish()){if(failureReason.empty())failureReason=L"编码器收尾失败，请查看编码器诊断";break;}
         const int64_t estimatedEnd=lastOutputUs+std::max<int64_t>(1,int64_t(std::llround(sourceInterval*1000000/multiplier)));
