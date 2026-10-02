@@ -219,16 +219,16 @@ Item {
         objectName: "capture-dialog"
         key: "capture"
         glyph: "video"
-        title: "采集卡"
-        sub: "连接设备后，先关闭增强确认基础画面，再按需开启"
+        title: qsTr("采集卡")
+        sub: qsTr("连接设备后，先关闭增强确认基础画面，再按需开启")
         dialogWidth: 660
-        foot: "关闭其他占用同一采集卡的软件"
+        foot: qsTr("关闭其他占用同一采集卡的软件")
         actions: [
-            { label: "取消" },
-            { label: "连接并开始", primary: true, icon: "play" }
+            { label: qsTr("取消") },
+            { label: qsTr("连接并开始"), primary: true, icon: "play" }
         ]
         onActionTriggered: label => {
-            if (label !== "连接并开始") { host.close(); return }
+            if (label !== qsTr("连接并开始")) { host.close(); return }
             if (veyra.startCaptureSession()) { host.close(); host.startCapture() }
         }
         Connections {
@@ -269,7 +269,7 @@ Item {
                 visible: !capturePoster.visible
                 VIcon { anchors.horizontalCenter: parent.horizontalCenter; name: "video"; size: 22; color: Theme.t3 }
                 Text {
-                    text: captureDialog.live ? "画面在主窗口播放" : "连接后在主窗口显示画面"
+                    text: captureDialog.live ? qsTr("画面在主窗口播放") : qsTr("连接后在主窗口显示画面")
                     color: Theme.t3
                     font.family: Theme.fontUi
                     font.pixelSize: 12
@@ -290,7 +290,7 @@ Item {
                     text: captureDialog.live
                           ? veyra.sourceSummary.replace("x", "×") + " · " + veyra.captureFps.toFixed(2) + " fps"
                             + (veyra.sourceFormatText.split(" · ").length > 2 ? " · " + veyra.sourceFormatText.split(" · ")[1] : "")
-                          : captureDialog.labelOf(veyra.captureFormats, veyra.captureFormatKey, "选择设备和格式后连接")
+                          : captureDialog.labelOf(veyra.captureFormats, veyra.captureFormatKey, qsTr("选择设备和格式后连接"))
                     color: Theme.t2
                     font.family: Theme.fontMono
                     font.pixelSize: 11
@@ -299,11 +299,11 @@ Item {
             }
         }
 
-        DSection { text: "设备" }
+        DSection { text: qsTr("设备") }
         DGroup {
             VRow {
-                label: "视频输入设备"
-                hint: veyra.captureQueryBusy ? "正在查询…当前播放继续" : (veyra.captureDevices.length === 0 ? "未检测到采集设备" : "")
+                label: qsTr("视频输入设备")
+                hint: veyra.captureQueryBusy ? qsTr("正在查询…当前播放继续") : (veyra.captureDevices.length === 0 ? qsTr("未检测到采集设备") : "")
                 RowLayout {
                     spacing: 6
                     VSelect {
@@ -320,7 +320,7 @@ Item {
                             objectName: "capture-refresh"
                             anchors.fill: parent
                             visible: !veyra.captureQueryBusy
-                            icon: true; ghost: true; iconName: "refresh"; tip: "刷新设备"
+                            icon: true; ghost: true; iconName: "refresh"; tip: qsTr("刷新设备")
                             onClicked: veyra.refreshCaptureDevices()
                         }
                         VSpinner { anchors.centerIn: parent; visible: veyra.captureQueryBusy }
@@ -328,23 +328,23 @@ Item {
                 }
             }
             VRow {
-                label: "设备实际支持的格式"
-                hint: { const f = veyra.captureFormats.find(x => x.id === veyra.captureFormatKey); return f && f.costHint ? "该格式比低延迟格式多一道处理环节，高分辨率/高帧率下建议优先低延迟格式" : "" }
+                label: qsTr("设备实际支持的格式")
+                hint: { const f = veyra.captureFormats.find(x => x.id === veyra.captureFormatKey); return f && f.costHint ? qsTr("该格式比低延迟格式多一道处理环节，高分辨率/高帧率下建议优先低延迟格式") : "" }
                 VSelect {
                     objectName: "capture-format"
                     implicitWidth: 260
-                    value: captureDialog.labelOf(veyra.captureFormats, veyra.captureFormatKey, veyra.captureFormats.length ? "请选择格式" : "—")
+                    value: captureDialog.labelOf(veyra.captureFormats, veyra.captureFormatKey, veyra.captureFormats.length ? qsTr("请选择格式") : "—")
                     options: veyra.captureFormats
                     onPicked: id => veyra.captureFormatKey = id
                 }
             }
             VRow {
                 objectName: "capture-magewell-row"
-                label: "美乐威低延迟模式"
+                label: qsTr("美乐威低延迟模式")
                 hint: !veyra.captureMagewellDevice
-                      ? "仅美乐威 Pro Capture（PCIe 内置卡）可用；USB Capture 系列不支持"
+                      ? qsTr("仅美乐威 Pro Capture（PCIe 内置卡）可用；USB Capture 系列不支持")
                       : (veyra.captureMagewellStatus.length > 0 ? veyra.captureMagewellStatus + " · " : "")
-                        + "采集卡收到 64 行就开始传，整帧更早到达（官方：1080p60 约省 5 ms，4K60 约省 15 ms）。开关后点「连接」重新连接生效"
+                        + qsTr("采集卡收到 64 行就开始传，整帧更早到达（官方：1080p60 约省 5 ms，4K60 约省 15 ms）。开关后点「连接」重新连接生效")
                 VSwitch {
                     objectName: "capture-magewell"
                     enabled: veyra.captureMagewellDevice
@@ -354,8 +354,8 @@ Item {
                 }
             }
             VRow {
-                label: "设备帧率 FPS"
-                hint: "0 = 沿用所选格式；设备返回其他帧率会报错，不在软件中偷偷丢帧"
+                label: qsTr("设备帧率 FPS")
+                hint: qsTr("0 = 沿用所选格式；设备返回其他帧率会报错，不在软件中偷偷丢帧")
                 VTextField {
                     objectName: "capture-fps"
                     implicitWidth: 100
@@ -371,68 +371,68 @@ Item {
                 }
             }
         }
-        DSection { text: "音频" }
+        DSection { text: qsTr("音频") }
         DGroup {
             VRow {
-                label: "音频监听"
-                hint: "只连接明确选中的输入，默认不监听"
+                label: qsTr("音频监听")
+                hint: qsTr("只连接明确选中的输入，默认不监听")
                 VSelect {
                     objectName: "capture-audio"
                     implicitWidth: 260
-                    value: captureDialog.labelOf(veyra.captureAudioInputs, veyra.captureAudioChoice, "不监听音频")
+                    value: captureDialog.labelOf(veyra.captureAudioInputs, veyra.captureAudioChoice, qsTr("不监听音频"))
                     options: veyra.captureAudioInputs
                     onPicked: id => veyra.captureAudioChoice = Number(id)
                 }
             }
             VRow {
-                label: "Dolby / DTS 位流"
+                label: qsTr("Dolby / DTS 位流")
                 VSeg {
-                    options: [{ id: "0", label: "自动" }, { id: "1", label: "强制 PCM" }, { id: "2", label: "位流优先" }]
+                    options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: qsTr("强制 PCM") }, { id: "2", label: qsTr("位流优先") }]
                     current: String(veyra.captureAudioIngress)
                     onPicked: id => veyra.captureAudioIngress = Number(id)
                 }
             }
         }
-        DSection { text: "格式与画面" }
+        DSection { text: qsTr("格式与画面") }
         DGroup {
             VRow {
-                label: "输入色彩（SDR / HDR）"
-                hint: "不确定就选「自动」。采集 HDR：采集格式选 P010，这里选「HDR · PQ」（游戏机、显卡的 HDR10 都是 PQ）。「HDR · HLG」用于广播信号。「SDR · 709」是普通画面。变更需重连"
+                label: qsTr("输入色彩（SDR / HDR）")
+                hint: qsTr("不确定就选「自动」。采集 HDR：采集格式选 P010，这里选「HDR · PQ」（游戏机、显卡的 HDR10 都是 PQ）。「HDR · HLG」用于广播信号。「SDR · 709」是普通画面。变更需重连")
                 VSeg {
-                    options: [{ id: "0", label: "自动" }, { id: "1", label: "HDR · PQ" }, { id: "2", label: "HDR · HLG" }, { id: "3", label: "SDR · 709" }]
+                    options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: "HDR · PQ" }, { id: "2", label: "HDR · HLG" }, { id: "3", label: "SDR · 709" }]
                     current: String(veyra.captureColorSpace)
                     onPicked: id => veyra.captureColorSpace = Number(id)
                 }
             }
             VRow {
-                label: "输入范围"
-                hint: "Limited = 16–235，Full = 0–255。画面发灰选「有限」，暗部全黑、亮部过曝选「完全」"
+                label: qsTr("输入范围")
+                hint: qsTr("Limited = 16–235，Full = 0–255。画面发灰选「有限」，暗部全黑、亮部过曝选「完全」")
                 VSeg {
-                    options: [{ id: "0", label: "自动" }, { id: "1", label: "有限 · Limited" }, { id: "2", label: "完全 · Full" }]
+                    options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: qsTr("有限 · Limited") }, { id: "2", label: qsTr("完全 · Full") }]
                     current: String(veyra.captureColorRange)
                     onPicked: id => veyra.captureColorRange = Number(id)
                 }
             }
             VRow {
-                label: "设备缓冲"
-                hint: "自动：1080p 及以下 2 帧，更高 3 帧；最小 1 帧延迟最低但可能丢帧"
+                label: qsTr("设备缓冲")
+                hint: qsTr("自动：1080p 及以下 2 帧，更高 3 帧；最小 1 帧延迟最低但可能丢帧")
                 VSeg {
-                    options: [{ id: "0", label: "自动" }, { id: "1", label: "最小" }, { id: "2", label: "驱动默认" }]
+                    options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: qsTr("最小") }, { id: "2", label: qsTr("驱动默认") }]
                     current: String(veyra.captureBufferMode)
                     onPicked: id => veyra.captureBufferMode = Number(id)
                 }
             }
             VRow {
-                label: "转为 SDR 显示"
-                hint: "收到 HDR 也按 SDR 预览，立即生效"
+                label: qsTr("转为 SDR 显示")
+                hint: qsTr("收到 HDR 也按 SDR 预览，立即生效")
                 VSwitch {
                     checked: veyra.captureForceSdr
                     onToggled: checked => veyra.captureForceSdr = checked
                 }
             }
             VRow {
-                label: "画面上下翻转"
-                hint: "采集画面倒置时开启，立即生效"
+                label: qsTr("画面上下翻转")
+                hint: qsTr("采集画面倒置时开启，立即生效")
                 VSwitch {
                     checked: veyra.captureFlipVertical
                     onToggled: checked => veyra.captureFlipVertical = checked
@@ -450,16 +450,16 @@ Item {
         objectName: "ps5-dialog"
         key: "ps5"
         glyph: "gamepad"
-        title: "PS5 串流"
-        sub: "局域网 Remote Play · 凭据加密保存在本机"
+        title: qsTr("PS5 串流")
+        sub: qsTr("局域网 Remote Play · 凭据加密保存在本机")
         dialogWidth: 680
         actions: [
-            { label: veyra.ps5.active ? "断开" : "取消" },
-            { label: veyra.ps5.active ? "应用设置并重连" : "连接", primary: true }
+            { label: veyra.ps5.active ? qsTr("断开") : qsTr("取消") },
+            { label: veyra.ps5.active ? qsTr("应用设置并重连") : qsTr("连接"), primary: true }
         ]
         onActionTriggered: label => {
-            if (label === "断开") { veyra.ps5Cancel(); return }
-            if (label === "取消") { if (veyra.ps5.busy) veyra.ps5Cancel(); else host.close(); return }
+            if (label === qsTr("断开")) { veyra.ps5Cancel(); return }
+            if (label === qsTr("取消")) { if (veyra.ps5.busy) veyra.ps5Cancel(); else host.close(); return }
             if (veyra.ps5Connect()) { host.close(); host.startPs5() }
         }
         Connections {
@@ -469,75 +469,75 @@ Item {
         readonly property var qualities: [{ id: "0", label: "720p · 30 fps" }, { id: "1", label: "720p · 60 fps" }, { id: "2", label: "1080p · 30 fps" }, { id: "3", label: "1080p · 60 fps" }]
         readonly property var bitrates: [5, 10, 15, 20, 30, 50, 80, 100].map((m, i) => ({ id: String(i), label: m + " Mbps" }))
 
-        DSection { text: "主机" }
+        DSection { text: qsTr("主机") }
         DGroup {
             VRow {
                 visible: veyra.ps5Profiles.length > 0
-                label: "已保存主机"
+                label: qsTr("已保存主机")
                 VSelect {
                     objectName: "ps5-profile"
                     implicitWidth: 220
-                    value: { const p = veyra.ps5Profiles.find(x => x.id === veyra.ps5.profile); return p ? p.label : "请选择" }
+                    value: { const p = veyra.ps5Profiles.find(x => x.id === veyra.ps5.profile); return p ? p.label : qsTr("请选择") }
                     options: veyra.ps5Profiles
                     onPicked: id => veyra.ps5SelectProfile(id)
                 }
             }
             VRow {
-                label: "主机地址"
-                hint: "PS5 设置 → 网络 → 连接状态；找不到时可手填 IP"
+                label: qsTr("主机地址")
+                hint: qsTr("PS5 设置 → 网络 → 连接状态；找不到时可手填 IP")
                 RowLayout {
                     spacing: 6
                     VTextField { objectName: "ps5-host"; implicitWidth: 170; placeholder: "192.168.1.x"; text: veyra.ps5.host || ""; onEdited: text => veyra.ps5Set("host", text) }
                     VSpinner { visible: veyra.ps5.busy === true; Layout.alignment: Qt.AlignVCenter }
-                    VButton { text: "查找"; ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5Scan() }
-                    VButton { text: "唤醒"; ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.profile.length > 0; onClicked: veyra.ps5Wake() }
+                    VButton { text: qsTr("查找"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5Scan() }
+                    VButton { text: qsTr("唤醒"); ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.profile.length > 0; onClicked: veyra.ps5Wake() }
                 }
             }
         }
-        DSection { text: "配对（首次）" }
+        DSection { text: qsTr("配对（首次）") }
         DGroup {
             VRow {
                 label: "PSN Account ID"
-                hint: "账号数字 ID 或 8 字节 Base64，不是昵称；登录 PSN 后自动填入"
+                hint: qsTr("账号数字 ID 或 8 字节 Base64，不是昵称；登录 PSN 后自动填入")
                 VTextField { implicitWidth: 240; text: veyra.ps5.account || ""; onEdited: text => veyra.ps5Set("account", text) }
             }
             VRow {
-                label: "8 位配对码"
-                hint: "PS5 设置 → 系统 → 远程游玩 → 关联设备"
+                label: qsTr("8 位配对码")
+                hint: qsTr("PS5 设置 → 系统 → 远程游玩 → 关联设备")
                 RowLayout {
                     spacing: 6
                     VTextField { id: pairPin; implicitWidth: 120; placeholder: "••••••••" }
-                    VButton { text: "配对并保存"; enabled: !veyra.ps5.busy; onClicked: { veyra.ps5Pair(pairPin.text); pairPin.text = "" } }
+                    VButton { text: qsTr("配对并保存"); enabled: !veyra.ps5.busy; onClicked: { veyra.ps5Pair(pairPin.text); pairPin.text = "" } }
                 }
             }
             VRow {
-                label: "删除配对"
-                hint: "只删除本机保存的这台主机；以后需要重新配对"
-                VButton { text: "删除"; ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.profile.length > 0; onClicked: veyra.ps5Forget() }
+                label: qsTr("删除配对")
+                hint: qsTr("只删除本机保存的这台主机；以后需要重新配对")
+                VButton { text: qsTr("删除"); ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.profile.length > 0; onClicked: veyra.ps5Forget() }
             }
         }
-        DSection { text: "PSN 账号" }
+        DSection { text: qsTr("PSN 账号") }
         DGroup {
             VRow {
-                label: veyra.ps5.psnReady ? "已登录" : "未登录"
-                hint: "在 Sony 网页登录后复制回调地址再提交；软件不接触密码"
+                label: veyra.ps5.psnReady ? qsTr("已登录") : qsTr("未登录")
+                hint: qsTr("在 Sony 网页登录后复制回调地址再提交；软件不接触密码")
                 RowLayout {
                     spacing: 6
-                    VButton { text: "登录 PSN"; ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnLogin() }
-                    VButton { text: "提交登录结果"; ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnComplete() }
-                    VButton { text: "退出"; ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.psnReady; onClicked: veyra.ps5PsnForget() }
+                    VButton { text: qsTr("登录 PSN"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnLogin() }
+                    VButton { text: qsTr("提交登录结果"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnComplete() }
+                    VButton { text: qsTr("退出"); ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.psnReady; onClicked: veyra.ps5PsnForget() }
                 }
             }
         }
-        DSection { text: "串流（重连生效）" }
+        DSection { text: qsTr("串流（重连生效）") }
         DGroup {
             VRow {
-                label: "分辨率与帧率"
+                label: qsTr("分辨率与帧率")
                 VSelect { implicitWidth: 170; value: ps5Dialog.qualities[veyra.ps5.quality || 0].label; options: ps5Dialog.qualities; onPicked: id => veyra.ps5Set("quality", Number(id)) }
             }
             VRow {
-                label: "编码"
-                hint: "HDR 需要 PS5 实际输出 HDR 且 Windows HDR 开启"
+                label: qsTr("编码")
+                hint: qsTr("HDR 需要 PS5 实际输出 HDR 且 Windows HDR 开启")
                 VSeg {
                     options: [{ id: "0", label: "H.264" }, { id: "1", label: "H.265" }, { id: "2", label: "H.265 HDR" }]
                     current: String(veyra.ps5.codec || 0)
@@ -545,51 +545,51 @@ Item {
                 }
             }
             VRow {
-                label: "请求码率"
-                hint: "发给 PS5 的带宽请求，主机不保证达到"
+                label: qsTr("请求码率")
+                hint: qsTr("发给 PS5 的带宽请求，主机不保证达到")
                 VSelect { implicitWidth: 130; value: ps5Dialog.bitrates[veyra.ps5.bitrate || 0].label; options: ps5Dialog.bitrates; onPicked: id => veyra.ps5Set("bitrate", Number(id)) }
             }
             VRow {
-                label: "解码"
+                label: qsTr("解码")
                 VSeg {
-                    options: [{ id: "0", label: "自动" }, { id: "1", label: "CPU 软件" }, { id: "2", label: "D3D12VA 硬件" }]
+                    options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: qsTr("CPU 软件") }, { id: "2", label: qsTr("D3D12VA 硬件") }]
                     current: String(veyra.ps5.decode || 0)
                     onPicked: id => veyra.ps5Set("decode", Number(id))
                 }
             }
             VRow {
-                label: "采样"
-                hint: "精细：按位置还原色度，放大用双三次；不是 AI 超分"
+                label: qsTr("采样")
+                hint: qsTr("精细：按位置还原色度，放大用双三次；不是 AI 超分")
                 VSeg {
-                    options: [{ id: "0", label: "兼容" }, { id: "1", label: "精细" }]
+                    options: [{ id: "0", label: qsTr("兼容") }, { id: "1", label: qsTr("精细") }]
                     current: String(veyra.ps5.sampling === undefined ? 1 : veyra.ps5.sampling)
                     onPicked: id => veyra.ps5Set("sampling", Number(id))
                 }
             }
             VRow {
-                label: "仅观看"
-                hint: "不向 PS5 转发电脑手柄输入"
+                label: qsTr("仅观看")
+                hint: qsTr("不向 PS5 转发电脑手柄输入")
                 VSwitch { checked: veyra.ps5.viewOnly === true; onToggled: checked => veyra.ps5Set("viewOnly", checked) }
             }
             VRow {
-                label: "陀螺仪"
-                hint: veyra.ps5.controller ? (veyra.ps5.gyro ? "手柄支持陀螺仪" : "手柄没有陀螺仪") : "连接串流及电脑手柄后可校准"
-                VButton { text: veyra.ps5.calibrating ? "校准中…" : "校准"; ghost: true; onClicked: veyra.ps5Calibrate() }
+                label: qsTr("陀螺仪")
+                hint: veyra.ps5.controller ? (veyra.ps5.gyro ? qsTr("手柄支持陀螺仪") : qsTr("手柄没有陀螺仪")) : qsTr("连接串流及电脑手柄后可校准")
+                VButton { text: veyra.ps5.calibrating ? qsTr("校准中…") : qsTr("校准"); ghost: true; onClicked: veyra.ps5Calibrate() }
             }
         }
-        DSection { text: "登录 PIN" }
+        DSection { text: qsTr("登录 PIN") }
         DGroup {
             VRow {
-                label: "PS5 提示时填写"
-                hint: "不是 8 位配对码"
+                label: qsTr("PS5 提示时填写")
+                hint: qsTr("不是 8 位配对码")
                 RowLayout {
                     spacing: 6
                     VTextField { id: loginPin; implicitWidth: 120 }
-                    VButton { text: "提交"; ghost: true; onClicked: { veyra.ps5SendLoginPin(loginPin.text); loginPin.text = "" } }
+                    VButton { text: qsTr("提交"); ghost: true; onClicked: { veyra.ps5SendLoginPin(loginPin.text); loginPin.text = "" } }
                 }
             }
         }
-        DNote { visible: (veyra.ps5.status || "").length > 0; text: (veyra.ps5.busy ? "处理中 · " : "") + (veyra.ps5.status || "") }
+        DNote { visible: (veyra.ps5.status || "").length > 0; text: (veyra.ps5.busy ? qsTr("处理中 · ") : "") + (veyra.ps5.status || "") }
     }
 
     // --- PC 串流（Sunshine / GameStream） ----------------------------------
@@ -600,8 +600,8 @@ Item {
         objectName: "moonlight-dialog"
         key: "moonlight"
         glyph: "cast"
-        title: "PC 串流"
-        sub: "串流另一台电脑（Sunshine 主机）· 增强与调色沿用软件自己的处理链"
+        title: qsTr("PC 串流")
+        sub: qsTr("串流另一台电脑（Sunshine 主机）· 增强与调色沿用软件自己的处理链")
         dialogWidth: 760
         readonly property var ml: veyra.moonlight
         readonly property var st: ml ? ml.state : ({})
@@ -613,16 +613,16 @@ Item {
             : (st.runningApp > 0 ? st.runningApp : (appList.length > 0 ? appList[0].id : -1))
         readonly property bool canStart: !!st.paired && !!st.online && !st.busy && effectiveApp >= 0 && !st.streaming
         actions: st.streaming ? [
-            { label: "关闭" },
-            { label: "断开", primary: true }
+            { label: qsTr("关闭") },
+            { label: qsTr("断开"), primary: true }
         ] : [
-            { label: st.busy ? "取消操作" : "关闭" },
-            { label: "开始串流", primary: true, icon: "play" }
+            { label: st.busy ? qsTr("取消操作") : qsTr("关闭") },
+            { label: qsTr("开始串流"), primary: true, icon: "play" }
         ]
         onActionTriggered: label => {
-            if (label === "断开") { veyra.moonlightDisconnect(); host.close(); return }
-            if (label === "取消操作") { ml.cancel(); return }
-            if (label === "关闭") { host.close(); return }
+            if (label === qsTr("断开")) { veyra.moonlightDisconnect(); host.close(); return }
+            if (label === qsTr("取消操作")) { ml.cancel(); return }
+            if (label === qsTr("关闭")) { host.close(); return }
             if (canStart) ml.connectStream(effectiveApp)
         }
         Connections {
@@ -640,19 +640,19 @@ Item {
         readonly property var resolutions: [
             { id: "720p", label: "720p · 1280×720" }, { id: "1080p", label: "1080p · 1920×1080" },
             { id: "1440p", label: "1440p · 2560×1440" }, { id: "4k", label: "4K · 3840×2160" },
-            { id: "native", label: "本机屏幕分辨率" }]
+            { id: "native", label: qsTr("本机屏幕分辨率") }]
         readonly property var rates: [30, 60, 90, 120, 144].map(v => ({ id: String(v), label: v + " fps" }))
         function labelOf(list, id, fallback) { const f = list.find(x => String(x.id) === String(id)); return f ? f.label : fallback }
         function stateText(s) {
-            return s === "online" ? "在线" : s === "unpaired" ? "未配对" : s === "busy" ? "在线 · 有游戏在运行"
-                 : s === "checking" ? "检查中…" : "离线"
+            return s === "online" ? qsTr("在线") : s === "unpaired" ? qsTr("未配对") : s === "busy" ? qsTr("在线 · 有游戏在运行")
+                 : s === "checking" ? qsTr("检查中…") : qsTr("离线")
         }
 
-        DSection { text: "主机" }
+        DSection { text: qsTr("主机") }
         DNote {
             visible: mlDialog.hostList.length === 0
-            text: "还没有主机。在要被串流的电脑上安装 Sunshine（官网 app.lizardbyte.dev/Sunshine，软件不自带），"
-                + "两台电脑接在同一个局域网，这里会自动出现；也可以在下面手填它的 IP。首次使用需要配对。"
+            text: qsTr("还没有主机。在要被串流的电脑上安装 Sunshine（官网 app.lizardbyte.dev/Sunshine，软件不自带），")
+                + qsTr("两台电脑接在同一个局域网，这里会自动出现；也可以在下面手填它的 IP。首次使用需要配对。")
         }
         Repeater {
             model: mlDialog.hostList
@@ -701,17 +701,17 @@ Item {
                             elide: Text.ElideRight
                         }
                     }
-                    VTag { visible: hostRow.modelData.paired; text: "已配对"; kind: "ok" }
+                    VTag { visible: hostRow.modelData.paired; text: qsTr("已配对"); kind: "ok" }
                     VButton {
                         visible: !hostRow.modelData.paired && hostRow.modelData.state !== "offline"
                         objectName: "moonlight-pair-" + hostRow.modelData.id
-                        text: "配对"
+                        text: qsTr("配对")
                         primary: true
                         enabled: !mlDialog.st.busy
                         onClicked: mlDialog.ml.pair(hostRow.modelData.id)
                     }
                     VButton {
-                        text: "删除"
+                        text: qsTr("删除")
                         ghost: true
                         enabled: !mlDialog.st.busy
                         onClicked: mlDialog.ml.forget(hostRow.modelData.id)
@@ -721,14 +721,14 @@ Item {
         }
         DGroup {
             VRow {
-                label: "手动添加"
-                hint: "IP 或主机名，端口不是 47989 时写成 192.168.1.20:47989"
+                label: qsTr("手动添加")
+                hint: qsTr("IP 或主机名，端口不是 47989 时写成 192.168.1.20:47989")
                 RowLayout {
                     spacing: 6
                     VTextField { id: mlAddress; objectName: "moonlight-address"; implicitWidth: 190; placeholder: "192.168.1.x"; onEdited: text => { if (text.length > 0) { mlDialog.ml.addHost(text); mlAddress.text = "" } } }
                     VSpinner { visible: mlDialog.st.busy === true; Layout.alignment: Qt.AlignVCenter }
-                    VButton { text: "添加"; ghost: true; enabled: !mlDialog.st.busy && mlAddress.text.length > 0; onClicked: { mlDialog.ml.addHost(mlAddress.text); mlAddress.text = "" } }
-                    VButton { text: "刷新"; ghost: true; enabled: !mlDialog.st.busy; onClicked: mlDialog.ml.refresh() }
+                    VButton { text: qsTr("添加"); ghost: true; enabled: !mlDialog.st.busy && mlAddress.text.length > 0; onClicked: { mlDialog.ml.addHost(mlAddress.text); mlAddress.text = "" } }
+                    VButton { text: qsTr("刷新"); ghost: true; enabled: !mlDialog.st.busy; onClicked: mlDialog.ml.refresh() }
                 }
             }
         }
@@ -750,7 +750,7 @@ Item {
                 spacing: 6
                 Text {
                     Layout.fillWidth: true
-                    text: "在主机上打开 Sunshine 网页（https://主机IP:47990），进入「PIN」页，输入下面的数字并提交："
+                    text: qsTr("在主机上打开 Sunshine 网页（https://主机IP:47990），进入「PIN」页，输入下面的数字并提交：")
                     color: Theme.t2
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSmall
@@ -768,14 +768,14 @@ Item {
             }
         }
 
-        DSection { visible: !!mlDialog.st.paired; text: "游戏与程序 · " + (mlDialog.st.hostName || "") }
+        DSection { visible: !!mlDialog.st.paired; text: qsTr("游戏与程序 · ") + (mlDialog.st.hostName || "") }
         DNote {
             visible: !!mlDialog.st.selected && !mlDialog.st.paired && !mlDialog.st.pairing
-            text: "这台主机还没有和本机配对。点「配对」，在主机的 Sunshine 网页里输入软件给出的 PIN。"
+            text: qsTr("这台主机还没有和本机配对。点「配对」，在主机的 Sunshine 网页里输入软件给出的 PIN。")
         }
         DNote {
             visible: !!mlDialog.st.paired && !mlDialog.st.online
-            text: "主机现在连不上（离线、休眠，或地址变了）。开机后点「刷新」。"
+            text: qsTr("主机现在连不上（离线、休眠，或地址变了）。开机后点「刷新」。")
         }
         Flow {
             visible: !!mlDialog.st.paired && !!mlDialog.st.online
@@ -814,7 +814,7 @@ Item {
                         }
                         RowLayout {
                             spacing: 6
-                            VTag { visible: appCard.modelData.running; text: "运行中"; kind: "acc" }
+                            VTag { visible: appCard.modelData.running; text: qsTr("运行中"); kind: "acc" }
                             VTag { visible: appCard.modelData.hdr; text: "HDR" }
                         }
                     }
@@ -828,29 +828,29 @@ Item {
             spacing: 8
             Text {
                 Layout.fillWidth: true
-                text: "主机上有游戏在运行。断开串流不会结束它；选它并开始即可继续。"
+                text: qsTr("主机上有游戏在运行。断开串流不会结束它；选它并开始即可继续。")
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSmall
                 wrapMode: Text.WordWrap
             }
-            VButton { objectName: "moonlight-quit-app"; text: "退出游戏"; ghost: true; enabled: !mlDialog.st.busy; onClicked: mlDialog.ml.quitApp() }
+            VButton { objectName: "moonlight-quit-app"; text: qsTr("退出游戏"); ghost: true; enabled: !mlDialog.st.busy; onClicked: mlDialog.ml.quitApp() }
         }
 
-        DSection { text: "串流设置（只影响串流本身，按主机保存）" }
+        DSection { text: qsTr("串流设置（只影响串流本身，按主机保存）") }
         DGroup {
             VRow {
-                label: "分辨率"
-                hint: "主机按这个尺寸编码；软件的超分与增强在收到之后再做"
+                label: qsTr("分辨率")
+                hint: qsTr("主机按这个尺寸编码；软件的超分与增强在收到之后再做")
                 VSelect { objectName: "moonlight-res"; implicitWidth: 190; value: mlDialog.labelOf(mlDialog.resolutions, mlDialog.cfg.res, "1080p · 1920×1080"); options: mlDialog.resolutions; onPicked: id => mlDialog.ml.set("res", id) }
             }
             VRow {
-                label: "帧率"
+                label: qsTr("帧率")
                 VSelect { objectName: "moonlight-fps"; implicitWidth: 130; value: (mlDialog.cfg.fps || 60) + " fps"; options: mlDialog.rates; onPicked: id => mlDialog.ml.set("fps", Number(id)) }
             }
             VRow {
-                label: "码率"
-                hint: "默认 150 Mbps；有线千兆可以拉到 300–500，无线卡顿时调低。主机画面简单时实际码率会低于这里的上限"
+                label: qsTr("码率")
+                hint: qsTr("默认 150 Mbps；有线千兆可以拉到 300–500，无线卡顿时调低。主机画面简单时实际码率会低于这里的上限")
                 RowLayout {
                     spacing: 10
                     VSlider {
@@ -872,51 +872,51 @@ Item {
                 }
             }
             VRow {
-                label: "编码"
-                hint: mlDialog.cfg.codec === 3 ? "AV1 需要主机显卡能编码、本机显卡能解码" : "自动：优先 HEVC，主机不支持时用 H.264"
+                label: qsTr("编码")
+                hint: mlDialog.cfg.codec === 3 ? qsTr("AV1 需要主机显卡能编码、本机显卡能解码") : qsTr("自动：优先 HEVC，主机不支持时用 H.264")
                 VSeg {
                     objectName: "moonlight-codec"
-                    options: [{ id: "0", label: "自动" }, { id: "1", label: "H.264" }, { id: "2", label: "HEVC" }, { id: "3", label: "AV1" }]
+                    options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: "H.264" }, { id: "2", label: "HEVC" }, { id: "3", label: "AV1" }]
                     current: String(mlDialog.cfg.codec || 0)
                     onPicked: id => mlDialog.ml.set("codec", Number(id))
                 }
             }
             VRow {
                 label: "HDR"
-                hint: mlDialog.st.hdrHost ? "需要主机显示器开启 HDR，且编码选 HEVC 或 AV1；本机需要硬件解码" : "这台主机没有报告 10 位编码能力"
+                hint: mlDialog.st.hdrHost ? qsTr("需要主机显示器开启 HDR，且编码选 HEVC 或 AV1；本机需要硬件解码") : qsTr("这台主机没有报告 10 位编码能力")
                 VSwitch { objectName: "moonlight-hdr"; enabled: !!mlDialog.st.hdrHost || mlDialog.cfg.hdr === true; checked: mlDialog.cfg.hdr === true; onToggled: checked => mlDialog.ml.set("hdr", checked) }
             }
             VRow {
-                label: "声道"
+                label: qsTr("声道")
                 VSeg {
                     objectName: "moonlight-audio"
-                    options: [{ id: "2", label: "立体声" }, { id: "6", label: "5.1" }, { id: "8", label: "7.1" }]
+                    options: [{ id: "2", label: qsTr("立体声") }, { id: "6", label: "5.1" }, { id: "8", label: "7.1" }]
                     current: String(mlDialog.cfg.audio || 2)
                     onPicked: id => mlDialog.ml.set("audio", Number(id))
                 }
             }
             VRow {
-                label: "手柄"
-                hint: "把电脑手柄当作主机上的 Xbox 手柄（1 号）"
+                label: qsTr("手柄")
+                hint: qsTr("把电脑手柄当作主机上的 Xbox 手柄（1 号）")
                 VSwitch { objectName: "moonlight-gamepad"; checked: mlDialog.cfg.gamepad !== false; onToggled: checked => mlDialog.ml.set("gamepad", checked) }
             }
             VRow {
-                label: "自动捕获键盘鼠标"
-                hint: "开始后键鼠交给主机；Ctrl+Alt+Shift+Z 释放，+Q 断开，+S 统计"
+                label: qsTr("自动捕获键盘鼠标")
+                hint: qsTr("开始后键鼠交给主机；Ctrl+Alt+Shift+Z 释放，+Q 断开，+S 统计")
                 VSwitch { objectName: "moonlight-capture"; checked: mlDialog.cfg.captureInput !== false; onToggled: checked => mlDialog.ml.set("captureInput", checked) }
             }
             VRow {
-                label: "让主机切换到串流分辨率"
-                hint: "关闭时主机保持自己的分辨率，画面由主机缩放"
+                label: qsTr("让主机切换到串流分辨率")
+                hint: qsTr("关闭时主机保持自己的分辨率，画面由主机缩放")
                 VSwitch { objectName: "moonlight-sops"; checked: mlDialog.cfg.sops === true; onToggled: checked => mlDialog.ml.set("sops", checked) }
             }
             VRow {
-                label: "主机同时出声"
-                hint: "默认只在本机出声"
+                label: qsTr("主机同时出声")
+                hint: qsTr("默认只在本机出声")
                 VSwitch { objectName: "moonlight-hostaudio"; checked: mlDialog.cfg.hostAudio === true; onToggled: checked => mlDialog.ml.set("hostAudio", checked) }
             }
         }
-        DNote { objectName: "moonlight-status"; visible: (mlDialog.st.status || "").length > 0; text: (mlDialog.st.busy ? "处理中 · " : "") + (mlDialog.st.status || "") }
+        DNote { objectName: "moonlight-status"; visible: (mlDialog.st.status || "").length > 0; text: (mlDialog.st.busy ? qsTr("处理中 · ") : "") + (mlDialog.st.status || "") }
     }
 
     // --- Xbox 串流（非官方） ---------------------------------------------------
@@ -927,25 +927,25 @@ Item {
         objectName: "xbox-dialog"
         key: "xbox"
         glyph: "gamepad"
-        title: "Xbox 串流"
-        sub: "串流你自己的 Xbox 主机 · 非官方实验功能 · 增强与调色沿用软件自己的处理链"
+        title: qsTr("Xbox 串流")
+        sub: qsTr("串流你自己的 Xbox 主机 · 非官方实验功能 · 增强与调色沿用软件自己的处理链")
         dialogWidth: 680
         readonly property var xb: veyra.xbox
         readonly property var st: xb ? xb.state : ({})
         readonly property var list: xb ? xb.consoles : []
         actions: st.streaming ? [
-            { label: "关闭" },
-            { label: "断开", primary: true }
+            { label: qsTr("关闭") },
+            { label: qsTr("断开"), primary: true }
         ] : !st.signedIn ? [
-            { label: st.busy ? "取消操作" : "关闭" }
+            { label: st.busy ? qsTr("取消操作") : qsTr("关闭") }
         ] : [
-            { label: st.busy ? "取消操作" : "关闭" },
-            { label: "开始串流", primary: true, icon: "play" }
+            { label: st.busy ? qsTr("取消操作") : qsTr("关闭") },
+            { label: qsTr("开始串流"), primary: true, icon: "play" }
         ]
         onActionTriggered: label => {
-            if (label === "断开") { veyra.xboxDisconnect(); host.close(); return }
-            if (label === "取消操作") { xb.cancel(); return }
-            if (label === "关闭") { host.close(); return }
+            if (label === qsTr("断开")) { veyra.xboxDisconnect(); host.close(); return }
+            if (label === qsTr("取消操作")) { xb.cancel(); return }
+            if (label === qsTr("关闭")) { host.close(); return }
             if (st.signedIn && !st.busy && (st.selected || "").length > 0) xb.connectStream()
         }
         Connections {
@@ -958,18 +958,18 @@ Item {
         }
 
         DNote {
-            text: "非官方：使用与 Greenlight 等开源客户端相同的方式连接微软的串流服务，不隶属于微软，微软随时可能改动导致失效。仅限你自己的账号和主机。"
+            text: qsTr("非官方：使用与 Greenlight 等开源客户端相同的方式连接微软的串流服务，不隶属于微软，微软随时可能改动导致失效。仅限你自己的账号和主机。")
         }
-        DSection { text: "账号" }
+        DSection { text: qsTr("账号") }
         DGroup {
             VRow {
-                label: xbDialog.st.signedIn ? "已登录" : "未登录"
-                hint: xbDialog.st.signedIn ? "登录信息加密保存在本机；退出会删除它" : "用你的 Xbox（微软）账号在微软的页面登录，软件看不到密码"
+                label: xbDialog.st.signedIn ? qsTr("已登录") : qsTr("未登录")
+                hint: xbDialog.st.signedIn ? qsTr("登录信息加密保存在本机；退出会删除它") : qsTr("用你的 Xbox（微软）账号在微软的页面登录，软件看不到密码")
                 RowLayout {
                     spacing: 6
                     VSpinner { visible: xbDialog.st.busy === true; Layout.alignment: Qt.AlignVCenter }
-                    VButton { objectName: "xbox-signin"; visible: !xbDialog.st.signedIn; text: "登录"; primary: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signIn() }
-                    VButton { visible: xbDialog.st.signedIn; text: "退出登录"; ghost: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signOut() }
+                    VButton { objectName: "xbox-signin"; visible: !xbDialog.st.signedIn; text: qsTr("登录"); primary: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signIn() }
+                    VButton { visible: xbDialog.st.signedIn; text: qsTr("退出登录"); ghost: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signOut() }
                 }
             }
         }
@@ -991,7 +991,7 @@ Item {
                 spacing: 8
                 Text {
                     Layout.fillWidth: true
-                    text: "在手机或浏览器打开 " + (xbDialog.st.verificationUri || "https://www.microsoft.com/link") + "，输入下面的登录码："
+                    text: qsTr("在手机或浏览器打开 ") + (xbDialog.st.verificationUri || "https://www.microsoft.com/link") + qsTr("，输入下面的登录码：")
                     color: Theme.t2
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSmall
@@ -1006,11 +1006,11 @@ Item {
                     font.pixelSize: 30
                     font.letterSpacing: 4
                 }
-                VButton { Layout.alignment: Qt.AlignHCenter; text: "在浏览器打开登录页"; ghost: true; onClicked: xbDialog.xb.openSignInPage() }
+                VButton { Layout.alignment: Qt.AlignHCenter; text: qsTr("在浏览器打开登录页"); ghost: true; onClicked: xbDialog.xb.openSignInPage() }
             }
         }
 
-        DSection { visible: !!xbDialog.st.signedIn; text: "主机" }
+        DSection { visible: !!xbDialog.st.signedIn; text: qsTr("主机") }
         Repeater {
             model: xbDialog.st.signedIn ? xbDialog.list : []
             delegate: Rectangle {
@@ -1035,7 +1035,7 @@ Item {
                     anchors.leftMargin: 14
                     anchors.rightMargin: 12
                     spacing: 12
-                    VDot { off: consoleRow.modelData.power === "关机"; warn: consoleRow.modelData.power === "正在更新"; Layout.alignment: Qt.AlignVCenter }
+                    VDot { off: consoleRow.modelData.power === qsTr("关机"); warn: consoleRow.modelData.power === qsTr("正在更新"); Layout.alignment: Qt.AlignVCenter }
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 1
@@ -1048,17 +1048,17 @@ Item {
         DGroup {
             visible: !!xbDialog.st.signedIn
             VRow {
-                label: "主机列表"
-                hint: "主机要用同一个账号登录，并在 设置 → 设备和连接 → 远程功能 里启用远程功能"
-                VButton { text: "刷新"; ghost: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.refresh() }
+                label: qsTr("主机列表")
+                hint: qsTr("主机要用同一个账号登录，并在 设置 → 设备和连接 → 远程功能 里启用远程功能")
+                VButton { text: qsTr("刷新"); ghost: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.refresh() }
             }
             VRow {
-                label: "手柄"
-                hint: "把电脑手柄当作主机上的手柄"
+                label: qsTr("手柄")
+                hint: qsTr("把电脑手柄当作主机上的手柄")
                 VSwitch { objectName: "xbox-gamepad"; checked: xbDialog.st.gamepad !== false; onToggled: checked => xbDialog.xb.set("gamepad", checked) }
             }
         }
-        DNote { objectName: "xbox-status"; visible: (xbDialog.st.status || "").length > 0; text: (xbDialog.st.busy ? "处理中 · " : "") + (xbDialog.st.status || "") }
+        DNote { objectName: "xbox-status"; visible: (xbDialog.st.status || "").length > 0; text: (xbDialog.st.busy ? qsTr("处理中 · ") : "") + (xbDialog.st.status || "") }
     }
 
     // --- 屏幕捕获 ---------------------------------------------------------
@@ -1067,15 +1067,15 @@ Item {
         objectName: "screen-dialog"
         key: "screen"
         glyph: "monitor"
-        title: "屏幕捕获"
-        sub: "把一个窗口或整块显示器作为片源"
+        title: qsTr("屏幕捕获")
+        sub: qsTr("把一个窗口或整块显示器作为片源")
         dialogWidth: 700
         actions: [
-            { label: "取消" },
-            { label: "开始捕获", primary: true }
+            { label: qsTr("取消") },
+            { label: qsTr("开始捕获"), primary: true }
         ]
         onActionTriggered: label => {
-            if (label !== "开始捕获") { host.close(); return }
+            if (label !== qsTr("开始捕获")) { host.close(); return }
             if (veyra.startScreenCapture()) { host.close(); host.startScreen() }
         }
         Connections {
@@ -1084,20 +1084,20 @@ Item {
         }
         readonly property var o: veyra.screenOptions
 
-        DSection { text: "目标" }
+        DSection { text: qsTr("目标") }
         DGroup {
             VRow {
-                label: "类型"
+                label: qsTr("类型")
                 VSeg {
                     objectName: "screen-kind"
-                    options: [{ id: "0", label: "窗口" }, { id: "1", label: "显示器" }]
+                    options: [{ id: "0", label: qsTr("窗口") }, { id: "1", label: qsTr("显示器") }]
                     current: String(screenDialog.o.kind)
                     onPicked: id => veyra.setScreenOption("kind", Number(id))
                 }
             }
             VRow {
-                label: "捕获目标"
-                hint: veyra.screenTargets.length === 0 ? "未找到可捕获的窗口或显示器" : ""
+                label: qsTr("捕获目标")
+                hint: veyra.screenTargets.length === 0 ? qsTr("未找到可捕获的窗口或显示器") : ""
                 RowLayout {
                     spacing: 6
                     VSelect {
@@ -1107,15 +1107,15 @@ Item {
                         options: veyra.screenTargets
                         onPicked: id => veyra.screenTargetId = id
                     }
-                    VButton { text: "刷新"; ghost: true; onClicked: veyra.refreshCaptureTargets() }
+                    VButton { text: qsTr("刷新"); ghost: true; onClicked: veyra.refreshCaptureTargets() }
                 }
             }
         }
-        DSection { text: "采集" }
+        DSection { text: qsTr("采集") }
         DGroup {
             VRow {
-                label: "采集方式"
-                hint: screenDialog.o.kind === 1 ? "DXGI 为显示器兼容方式，无鼠标指针" : "窗口只能用 Windows Graphics Capture"
+                label: qsTr("采集方式")
+                hint: screenDialog.o.kind === 1 ? qsTr("DXGI 为显示器兼容方式，无鼠标指针") : qsTr("窗口只能用 Windows Graphics Capture")
                 VSeg {
                     enabled: screenDialog.o.kind === 1
                     opacity: enabled ? 1 : 0.5
@@ -1125,15 +1125,15 @@ Item {
                 }
             }
             VRow {
-                label: "帧率上限"
+                label: qsTr("帧率上限")
                 VSeg {
-                    options: [{ id: "0", label: "跟随" }, { id: "1", label: "30" }, { id: "2", label: "60" }, { id: "3", label: "120" }, { id: "4", label: "144" }, { id: "5", label: "240" }]
+                    options: [{ id: "0", label: qsTr("跟随") }, { id: "1", label: "30" }, { id: "2", label: "60" }, { id: "3", label: "120" }, { id: "4", label: "144" }, { id: "5", label: "240" }]
                     current: String(screenDialog.o.fps)
                     onPicked: id => veyra.setScreenOption("fps", Number(id))
                 }
             }
             VRow {
-                label: "显示鼠标指针"
+                label: qsTr("显示鼠标指针")
                 VSwitch {
                     enabled: screenDialog.o.method === 0
                     checked: screenDialog.o.cursor === true
@@ -1141,8 +1141,8 @@ Item {
                 }
             }
             VRow {
-                label: "裁剪（像素）"
-                hint: "左 / 上 / 右 / 下，按源像素"
+                label: qsTr("裁剪（像素）")
+                hint: qsTr("左 / 上 / 右 / 下，按源像素")
                 RowLayout {
                     spacing: 4
                     Repeater {
@@ -1157,9 +1157,9 @@ Item {
                 }
             }
             VRow {
-                label: "画面"
+                label: qsTr("画面")
                 VSeg {
-                    options: [{ id: "fit", label: "适应窗口" }, { id: "fill", label: "填满窗口" }]
+                    options: [{ id: "fit", label: qsTr("适应窗口") }, { id: "fill", label: qsTr("填满窗口") }]
                     current: screenDialog.o.fill ? "fill" : "fit"
                     onPicked: id => veyra.setScreenOption("fill", id === "fill")
                 }
@@ -1173,12 +1173,12 @@ Item {
         objectName: "subtitle-dialog"
         key: "subtitle"
         glyph: "type"
-        title: "字幕设置"
-        sub: "实时预览，设置对所有文件生效"
+        title: qsTr("字幕设置")
+        sub: qsTr("实时预览，设置对所有文件生效")
         dialogWidth: 620
-        actions: [{ label: "恢复默认" }, { label: "完成", primary: true }]
+        actions: [{ label: qsTr("恢复默认") }, { label: qsTr("完成"), primary: true }]
         onActionTriggered: label => {
-            if (label !== "恢复默认") { host.close(); return }
+            if (label !== qsTr("恢复默认")) { host.close(); return }
             // The look only: tracks and the timing offset belong to the file.
             const defaults = { subtitleEnabled: true, subtitleSize: 22, subtitleFont: 0, subtitleOutline: 2,
                                subtitleBackground: false, subtitleMargin: 0, subtitleFit: false, subtitleLines: 2 }
@@ -1188,11 +1188,11 @@ Item {
 
         readonly property var prefs: veyra.preferences
         function pref(key, fallback) { return prefs[key] !== undefined ? prefs[key] : fallback }
-        readonly property var trackOptions: [{ id: "-1", label: "关闭" }]
+        readonly property var trackOptions: [{ id: "-1", label: qsTr("关闭", "off") }]
             .concat(veyra.subtitleTracks.map(t => ({ id: String(t.index), label: t.label + " · " + t.note, disabled: !t.usable })))
         function trackLabel(index) {
             const t = veyra.subtitleTracks.find(x => x.index === index)
-            return t ? t.label : "关闭"
+            return t ? t.label : qsTr("关闭", "off")
         }
 
         // dialogs.js .sub-prev: a sample line over the picture, drawn with the
@@ -1230,7 +1230,7 @@ Item {
                 spacing: 2
                 Repeater {
                     model: veyra.subtitleText.length > 0 ? veyra.subtitleText.split("\n").slice(0, 2)
-                                                         : ["这是字幕预览，", "改动会实时显示在这里。"]
+                                                         : [qsTr("这是字幕预览，"), qsTr("改动会实时显示在这里。")]
                     delegate: Rectangle {
                         required property string modelData
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -1255,11 +1255,11 @@ Item {
             }
         }
 
-        DSection { text: "字幕轨" }
+        DSection { text: qsTr("字幕轨") }
         DGroup {
             VRow {
-                label: "主字幕"
-                hint: veyra.subtitleTracks.length === 0 ? (veyra.hasSource ? "当前片源没有字幕" : "打开视频后显示可用字幕") : ""
+                label: qsTr("主字幕")
+                hint: veyra.subtitleTracks.length === 0 ? (veyra.hasSource ? qsTr("当前片源没有字幕") : qsTr("打开视频后显示可用字幕")) : ""
                 VSelect {
                     objectName: "subtitle-primary"
                     implicitWidth: 220
@@ -1269,8 +1269,8 @@ Item {
                 }
             }
             VRow {
-                label: "副字幕（双语）"
-                hint: "显示在主字幕上方"
+                label: qsTr("副字幕（双语）")
+                hint: qsTr("显示在主字幕上方")
                 VSelect {
                     objectName: "subtitle-secondary"
                     implicitWidth: 220
@@ -1280,24 +1280,24 @@ Item {
                 }
             }
             VRow {
-                label: "外挂字幕"
+                label: qsTr("外挂字幕")
                 hint: "SRT / ASS / SSA / WebVTT"
-                VButton { objectName: "subtitle-load"; text: "加载文件…"; onClicked: veyra.loadSubtitleDialog() }
+                VButton { objectName: "subtitle-load"; text: qsTr("加载文件…"); onClicked: veyra.loadSubtitleDialog() }
             }
             VRow {
-                label: "默认显示副字幕"
-                hint: "打开新文件时自动选第二条可用字幕"
+                label: qsTr("默认显示副字幕")
+                hint: qsTr("打开新文件时自动选第二条可用字幕")
                 VSwitch {
                     checked: subtitleDialog.pref("subtitleSecondLanguage", false)
                     onToggled: checked => veyra.setPreference("subtitleSecondLanguage", checked)
                 }
             }
         }
-        DSection { text: "时间" }
+        DSection { text: qsTr("时间") }
         DGroup {
             VRow {
-                label: "主字幕延时"
-                hint: "Z / X 微调 50 ms，Shift 为 1 s；正值 = 字幕推后"
+                label: qsTr("主字幕延时")
+                hint: qsTr("Z / X 微调 50 ms，Shift 为 1 s；正值 = 字幕推后")
                 // .stepper: − value +, 50 ms a step; the value can be typed.
                 RowLayout {
                     objectName: "subtitle-delay-stepper"
@@ -1313,20 +1313,20 @@ Item {
                 }
             }
             VRow {
-                label: "按音轨自动对齐"
-                hint: veyra.subtitleStatus.length > 0 ? veyra.subtitleStatus : "分析前 30 分钟的人声与字幕时间"
+                label: qsTr("按音轨自动对齐")
+                hint: veyra.subtitleStatus.length > 0 ? veyra.subtitleStatus : qsTr("分析前 30 分钟的人声与字幕时间")
                 VButton {
-                    text: veyra.subtitleAligning ? "分析中…" : "自动对齐"
+                    text: veyra.subtitleAligning ? qsTr("分析中…") : qsTr("自动对齐")
                     enabled: !veyra.subtitleAligning && veyra.subtitlePrimary >= 0
                     onClicked: veyra.autoAlignSubtitle()
                 }
             }
         }
-        DSection { text: "样式" }
+        DSection { text: qsTr("样式") }
         DGroup {
             VRow {
-                label: "显示字幕"
-                hint: "快捷键 B"
+                label: qsTr("显示字幕")
+                hint: qsTr("快捷键 B")
                 VSwitch {
                     objectName: "subtitle-enabled"
                     checked: subtitleDialog.pref("subtitleEnabled", true)
@@ -1334,7 +1334,7 @@ Item {
                 }
             }
             VRow {
-                label: "字号"
+                label: qsTr("字号")
                 value: subtitleDialog.pref("subtitleSize", 22) + " px"
                 VSlider {
                     objectName: "subtitle-size"
@@ -1344,34 +1344,34 @@ Item {
                 }
             }
             VRow {
-                label: "字体"
+                label: qsTr("字体")
                 VSelect {
                     objectName: "subtitle-font"
                     implicitWidth: 170
-                    readonly property var names: ["字幕原字体", "黑体", "宋体", "等线", "Arial", "Segoe UI"]
+                    readonly property var names: [qsTr("字幕原字体"), qsTr("黑体"), qsTr("宋体"), qsTr("等线"), "Arial", "Segoe UI"]
                     value: names[subtitleDialog.pref("subtitleFont", 0)]
                     options: names.map((n, i) => ({ id: String(i), label: n }))
                     onPicked: id => veyra.setPreference("subtitleFont", Number(id))
                 }
             }
             VRow {
-                label: "描边"
+                label: qsTr("描边")
                 VSeg {
                     objectName: "subtitle-outline"
-                    options: [{ id: "0", label: "无" }, { id: "1", label: "细" }, { id: "2", label: "标准" }, { id: "3", label: "粗" }]
+                    options: [{ id: "0", label: qsTr("无") }, { id: "1", label: qsTr("细") }, { id: "2", label: qsTr("标准") }, { id: "3", label: qsTr("粗") }]
                     current: String(subtitleDialog.pref("subtitleOutline", 2))
                     onPicked: id => veyra.setPreference("subtitleOutline", Number(id))
                 }
             }
             VRow {
-                label: "背景条"
+                label: qsTr("背景条")
                 VSwitch {
                     checked: subtitleDialog.pref("subtitleBackground", false)
                     onToggled: checked => veyra.setPreference("subtitleBackground", checked)
                 }
             }
             VRow {
-                label: "底部距离"
+                label: qsTr("底部距离")
                 value: subtitleDialog.pref("subtitleMargin", 0) + " px"
                 VSlider {
                     objectName: "subtitle-margin"
@@ -1381,8 +1381,8 @@ Item {
                 }
             }
             VRow {
-                label: "长句自动缩小"
-                hint: "默认保持字号；开启后超过目标行数才缩小"
+                label: qsTr("长句自动缩小")
+                hint: qsTr("默认保持字号；开启后超过目标行数才缩小")
                 VSwitch {
                     checked: subtitleDialog.pref("subtitleFit", false)
                     onToggled: checked => veyra.setPreference("subtitleFit", checked)
@@ -1390,7 +1390,7 @@ Item {
             }
             VRow {
                 visible: subtitleDialog.pref("subtitleFit", false)
-                label: "目标行数"
+                label: qsTr("目标行数")
                 value: String(subtitleDialog.pref("subtitleLines", 2))
                 VSlider {
                     implicitWidth: 170
@@ -1405,18 +1405,18 @@ Item {
     DLayer {
         key: "audio"
         glyph: "music"
-        title: "音频设置"
+        title: qsTr("音频设置")
         dialogWidth: 560
-        actions: [{ label: "完成", primary: true }]
+        actions: [{ label: qsTr("完成"), primary: true }]
         onActionTriggered: host.close()
 
-        DSection { text: "音轨" }
+        DSection { text: qsTr("音轨") }
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 6
             Text {
                 visible: veyra.audioTracks.length === 0
-                text: "当前源没有可选音轨。"
+                text: qsTr("当前源没有可选音轨。")
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSmall
@@ -1451,7 +1451,7 @@ Item {
                                 font.pixelSize: Theme.fsBody
                             }
                             Text {
-                                text: modelData.channels > 0 ? modelData.channels + " 声道" : ""
+                                text: modelData.channels > 0 ? modelData.channels + qsTr(" 声道") : ""
                                 color: Theme.t3
                                 font.family: Theme.fontUi
                                 font.pixelSize: 11
@@ -1468,10 +1468,10 @@ Item {
                 }
             }
         }
-        DSection { text: "输出" }
+        DSection { text: qsTr("输出") }
         DGroup {
             VRow {
-                label: "音量"
+                label: qsTr("音量")
                 value: Math.round(veyra.volume * 100) + "%"
                 VSlider {
                     implicitWidth: 170
@@ -1480,28 +1480,28 @@ Item {
                 }
             }
             VRow {
-                label: "静音"
+                label: qsTr("静音")
                 VSwitch {
                     checked: veyra.muted
                     onToggled: checked => veyra.muted = checked
                 }
             }
         }
-        DSection { text: "音画同步" }
+        DSection { text: qsTr("音画同步") }
         DGroup {
             VRow {
-                label: "声音同步"
-                hint: veyra.audioSyncMode === 0 ? (veyra.audioSyncLive ? "软件估算补偿 " + veyra.audioCompensationMs.toFixed(0) + " ms" : "自动估算 · 采集卡 / PS5 实时输入时生效")
-                      : veyra.audioSyncMode === 1 ? "手动偏移 · 实时输入时生效" : "关闭补偿"
+                label: qsTr("声音同步")
+                hint: veyra.audioSyncMode === 0 ? (veyra.audioSyncLive ? qsTr("软件估算补偿 ") + veyra.audioCompensationMs.toFixed(0) + " ms" : qsTr("自动估算 · 采集卡 / PS5 实时输入时生效"))
+                      : veyra.audioSyncMode === 1 ? qsTr("手动偏移 · 实时输入时生效") : qsTr("关闭补偿")
                 VSeg {
-                    options: [{ id: "0", label: "自动估算" }, { id: "1", label: "手动" }, { id: "2", label: "关闭" }]
+                    options: [{ id: "0", label: qsTr("自动估算") }, { id: "1", label: qsTr("手动") }, { id: "2", label: qsTr("关闭", "off") }]
                     current: String(veyra.audioSyncMode)
                     onPicked: id => veyra.audioSyncMode = Number(id)
                 }
             }
             VRow {
-                label: "手动偏移"
-                hint: "负值 = 声音提前"
+                label: qsTr("手动偏移")
+                hint: qsTr("负值 = 声音提前")
                 value: veyra.audioOffsetMs + " ms"
                 VSlider {
                     implicitWidth: 170
@@ -1511,28 +1511,28 @@ Item {
                 }
             }
             VRow {
-                label: "当前偏差"
-                hint: "软件内测得的音画偏差，不是扬声器实测；只在采集卡 / PS5 实时输入时有"
-                value: veyra.audioSkewKnown ? (veyra.audioSkewMs >= 0 ? "+" : "") + veyra.audioSkewMs.toFixed(0) + " ms" : "未测"
+                label: qsTr("当前偏差")
+                hint: qsTr("软件内测得的音画偏差，不是扬声器实测；只在采集卡 / PS5 实时输入时有")
+                value: veyra.audioSkewKnown ? (veyra.audioSkewMs >= 0 ? "+" : "") + veyra.audioSkewMs.toFixed(0) + " ms" : qsTr("未测")
             }
         }
-        DSection { text: "输出设备" }
+        DSection { text: qsTr("输出设备") }
         DGroup {
             VRow {
-                label: "输出设备"
+                label: qsTr("输出设备")
                 hint: veyra.audioOutputStatus
                 VSelect {
                     objectName: "audio-device"
                     implicitWidth: 240
                     readonly property string chosen: veyra.preferences.audioDevice || ""
-                    value: { const d = veyra.audioDevices.find(x => x.id === chosen); return d ? d.label : "跟随系统默认" }
+                    value: { const d = veyra.audioDevices.find(x => x.id === chosen); return d ? d.label : qsTr("跟随系统默认") }
                     options: veyra.audioDevices
                     onPicked: id => veyra.setPreference("audioDevice", id)
                 }
             }
             VRow {
-                label: "立体声下混"
-                hint: "多声道片源混成双声道再输出（耳机）；关闭时按设备声道布局映射"
+                label: qsTr("立体声下混")
+                hint: qsTr("多声道片源混成双声道再输出（耳机）；关闭时按设备声道布局映射")
                 VSwitch {
                     objectName: "audio-stereo"
                     checked: veyra.preferences.audioForceStereo === true
@@ -1555,19 +1555,19 @@ Item {
         objectName: "preset-save-dialog"
         key: "save"
         glyph: "plus"
-        readonly property string kindLabel: veyra.nodeMode === 1 ? "节点" : "列表"
-        title: "另存为" + kindLabel + "预设"
-        sub: kindLabel + "预设和" + (veyra.nodeMode === 1 ? "列表" : "节点") + "预设分开保存，互不影响；应用时只覆盖勾选的部分"
+        readonly property string kindLabel: veyra.nodeMode === 1 ? qsTr("节点") : qsTr("列表")
+        title: qsTr("另存为") + kindLabel + qsTr("预设")
+        sub: kindLabel + qsTr("预设和") + (veyra.nodeMode === 1 ? qsTr("列表") : qsTr("节点")) + qsTr("预设分开保存，互不影响；应用时只覆盖勾选的部分")
         dialogWidth: 580
         // presets.js currentItems: what the chain holds right now, one row per
         // node, with the parameters that matter.
         function nodeSummary(n) {
             switch (n.type) {
-            case "sr": return veyra.srTargetLabel + (veyra.videoSrQuality > 0 ? " · 质量 " + veyra.videoSrQuality : "")
-            case "nr": { const l = veyra.nrLayers.find(x => x.index === n.index); return l ? "强度 " + l.intensity.toFixed(2) : "NR" }
-            case "video-hdr": return "峰值 " + (veyra.videoHdrParams.peakNits || 1000) + " nits"
-            case "protection": return veyra.protectionRegions.length + " / 4 个区域"
-            case "color": return "调色参数"
+            case "sr": return veyra.srTargetLabel + (veyra.videoSrQuality > 0 ? qsTr(" · 质量 ") + veyra.videoSrQuality : "")
+            case "nr": { const l = veyra.nrLayers.find(x => x.index === n.index); return l ? qsTr("强度 ") + l.intensity.toFixed(2) : "NR" }
+            case "video-hdr": return qsTr("峰值 ") + (veyra.videoHdrParams.peakNits || 1000) + " nits"
+            case "protection": return veyra.protectionRegions.length + qsTr(" / 4 个区域")
+            case "color": return qsTr("调色参数")
             case "frame-generation": return veyra.fgMultiplier + "X · " + (veyra.fgBackendName === "xess" ? "Intel XeSS" : "DLSS")
             }
             return ""
@@ -1576,7 +1576,7 @@ Item {
             if (n.type !== "nr") return n.label
             let k = 0
             for (const m of veyra.chain) { if (m.type === "nr") ++k; if (m.index === n.index) break }
-            return "NR 层 " + k
+            return qsTr("NR 层 ") + k
         }
         readonly property bool nameTaken: presetNameField.text.trim().length > 0 &&
             veyra.presets.some(p => p.name === presetNameField.text.trim())
@@ -1593,20 +1593,20 @@ Item {
             saveAsDefault.checked = false
         }
         actions: [
-            { label: "取消" },
-            { label: "保存预设", primary: true, icon: "check" }
+            { label: qsTr("取消") },
+            { label: qsTr("保存预设"), primary: true, icon: "check" }
         ]
         onActionTriggered: label => {
-            if (label !== "保存预设") { host.close(); return }
+            if (label !== qsTr("保存预设")) { host.close(); return }
             const name = presetNameField.text.trim()
-            if (name.length === 0) { saveNote.text = "预设需要一个名字"; return }
+            if (name.length === 0) { saveNote.text = qsTr("预设需要一个名字"); return }
             let mask = 0
             const ids = ["chain", "color", "fg", "audio"]
             for (const part of parts) {
                 const bit = ids.indexOf(part.id)
                 if (bit >= 0 && chosen[part.id] === true) mask |= (1 << bit)
             }
-            if (mask === 0) { saveNote.text = "至少选择一项内容"; return }
+            if (mask === 0) { saveNote.text = qsTr("至少选择一项内容"); return }
             if (veyra.savePresetAs(name, mask, veyra.nodeMode === 1)) {
                 if (saveAsDefault.checked) {
                     const saved = veyra.presets.find(p => p.name === name && p.nodeMode === (veyra.nodeMode === 1))
@@ -1614,7 +1614,7 @@ Item {
                 }
                 host.close()
             }
-            else saveNote.text = "保存失败：名称可能已存在"
+            else saveNote.text = qsTr("保存失败：名称可能已存在")
         }
 
         // .namebox: the name first, with a live note under it.
@@ -1622,25 +1622,25 @@ Item {
             Layout.fillWidth: true
             Layout.topMargin: 4
             spacing: 6
-            Text { text: "预设名称"; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
+            Text { text: qsTr("预设名称"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
             VTextField {
                 id: presetNameField
                 objectName: "preset-name"
                 Layout.fillWidth: true
-                placeholder: "例如：夜间游戏"
+                placeholder: qsTr("例如：夜间游戏")
             }
             Text {
                 objectName: "preset-name-hint"
                 Layout.fillWidth: true
-                text: saveDialog.nameTaken ? "已有同名预设，换一个名称才能保存"
-                      : presetNameField.text.trim().length > 0 ? "可以保存"
-                      : "名称会显示在极简模式和导出页的预设菜单里"
+                text: saveDialog.nameTaken ? qsTr("已有同名预设，换一个名称才能保存")
+                      : presetNameField.text.trim().length > 0 ? qsTr("可以保存")
+                      : qsTr("名称会显示在极简模式和导出页的预设菜单里")
                 color: saveDialog.nameTaken ? Theme.warn : Theme.ok
                 font.family: Theme.fontUi
                 font.pixelSize: 11
             }
         }
-        DSection { text: "将保存的内容 · 当前正在使用的" + saveDialog.kindLabel + "设置" }
+        DSection { text: qsTr("将保存的内容 · 当前正在使用的") + saveDialog.kindLabel + qsTr("设置") }
         // .savelist: every node, a green dot when it runs; the list dims when
         // the effect chain itself is not part of the preset.
         ColumnLayout {
@@ -1681,18 +1681,18 @@ Item {
                             font.family: Theme.fontUi; font.pixelSize: 11
                             elide: Text.ElideRight
                         }
-                        VTag { visible: !modelData.enabled; text: "已关闭" }
+                        VTag { visible: !modelData.enabled; text: qsTr("已关闭") }
                     }
                 }
             }
         }
-        DSection { text: "选项" }
+        DSection { text: qsTr("选项") }
         DGroup {
             Repeater {
                 model: saveDialog.shown ? saveDialog.parts : []
                 delegate: VRow {
                     required property var modelData
-                    label: "包含" + modelData.label
+                    label: qsTr("包含") + modelData.label
                     hint: modelData.summary
                     VSwitch {
                         objectName: "preset-part-" + modelData.id
@@ -1708,8 +1708,8 @@ Item {
                 }
             }
             VRow {
-                label: "保存后设为启动默认"
-                hint: "下次启动软件时自动应用这个预设"
+                label: qsTr("保存后设为启动默认")
+                hint: qsTr("下次启动软件时自动应用这个预设")
                 VSwitch { id: saveAsDefault; objectName: "preset-save-default"; checked: false }
             }
         }
@@ -1731,8 +1731,8 @@ Item {
         id: manageDialog
         key: "manage"
         glyph: "settings"
-        title: "管理预设"
-        sub: "导出页和极简模式都从这里的预设中选择"
+        title: qsTr("管理预设")
+        sub: qsTr("导出页和极简模式都从这里的预设中选择")
         dialogWidth: 620
         property string mode: "list"
         property string feedback: ""
@@ -1745,16 +1745,16 @@ Item {
             else if (action === "default") ok = veyra.setDefaultPreset(index)
             feedbackError = !ok
             if (action === "rename")
-                feedback = ok ? "预设已改名" : "改名失败：名称不能为空、超过48字或与已有预设重复"
+                feedback = ok ? qsTr("预设已改名") : qsTr("改名失败：名称不能为空、超过48字或与已有预设重复")
             else if (action === "duplicate")
-                feedback = ok ? "预设已复制" : "复制失败：预设数量可能已达上限"
+                feedback = ok ? qsTr("预设已复制") : qsTr("复制失败：预设数量可能已达上限")
             else if (action === "delete")
-                feedback = ok ? "预设已删除" : "删除预设失败"
+                feedback = ok ? qsTr("预设已删除") : qsTr("删除预设失败")
             else if (action === "default")
-                feedback = ok ? (index < 0 ? "已取消启动默认预设" : "已设为启动默认预设") : "启动默认预设保存失败"
+                feedback = ok ? (index < 0 ? qsTr("已取消启动默认预设") : qsTr("已设为启动默认预设")) : qsTr("启动默认预设保存失败")
             return ok
         }
-        actions: [{ label: "完成", primary: true }]
+        actions: [{ label: qsTr("完成"), primary: true }]
         onActionTriggered: host.close()
 
         ColumnLayout {
@@ -1766,23 +1766,23 @@ Item {
                 spacing: 8
                 VSeg {
                     objectName: "preset-manage-mode"
-                    options: [{ id: "list", label: "列表预设" }, { id: "node", label: "节点预设" }]
+                    options: [{ id: "list", label: qsTr("列表预设") }, { id: "node", label: qsTr("节点预设") }]
                     current: manageDialog.mode
                     onPicked: mode => { manageDialog.mode = mode; manageDialog.feedback = "" }
                 }
                 Item { Layout.fillWidth: true }
-                VButton { objectName: "preset-import"; ghost: true; iconName: "import"; text: "导入"; onClicked: veyra.importPresetDialog() }
+                VButton { objectName: "preset-import"; ghost: true; iconName: "import"; text: qsTr("导入"); onClicked: veyra.importPresetDialog() }
                 VButton {
                     id: presetExportBtn
                     objectName: "preset-export"
-                    ghost: true; iconName: "upload"; text: "导出"
+                    ghost: true; iconName: "upload"; text: qsTr("导出")
                     enabled: presetRows.count > 0
                     onClicked: presetExportMenu.openAt(presetExportBtn, "down")
                 }
             }
             Text {
                 visible: presetRows.count === 0
-                text: "这个模式还没有预设。"
+                text: qsTr("这个模式还没有预设。")
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSmall
@@ -1846,30 +1846,30 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 text: modelData.note.length > 0 ? modelData.note
-                                      : (modelData.nodeMode ? "节点预设" : "列表预设")
+                                      : (modelData.nodeMode ? qsTr("节点预设") : qsTr("列表预设"))
                                 color: Theme.t3
                                 font.family: Theme.fontUi
                                 font.pixelSize: 11
                                 elide: Text.ElideRight
                             }
                         }
-                        VTag { objectName: "preset-default-tag-" + modelData.index; visible: presetRow.isDefault; kind: "acc"; text: "启动默认" }
+                        VTag { objectName: "preset-default-tag-" + modelData.index; visible: presetRow.isDefault; kind: "acc"; text: qsTr("启动默认") }
                         VButton {
                             objectName: "preset-default-" + modelData.index
                             icon: true; ghost: true; iconName: "home"
-                            tip: presetRow.isDefault ? "取消启动默认" : "设为启动默认"
+                            tip: presetRow.isDefault ? qsTr("取消启动默认") : qsTr("设为启动默认")
                             onClicked: manageDialog.runAction("default", presetRow.isDefault ? -1 : modelData.index)
                         }
                         VButton {
                             objectName: "preset-duplicate-" + modelData.index
                             icon: true; ghost: true; iconName: "dup"
-                            tip: "复制"
+                            tip: qsTr("复制")
                             onClicked: manageDialog.runAction("duplicate", modelData.index)
                         }
                         VButton {
                             objectName: "preset-delete-" + modelData.index
                             icon: true; ghost: true; iconName: "trash"
-                            tip: "删除"
+                            tip: qsTr("删除")
                             enabled: !modelData.builtin
                             onClicked: presetRow.remove()
                         }
@@ -1879,7 +1879,7 @@ Item {
             VMenu {
                 id: presetExportMenu
                 objectName: "preset-export-menu"
-                title: "导出预设"
+                title: qsTr("导出预设")
                 items: veyra.presets.filter(p => p.nodeMode === (manageDialog.mode === "node"))
                     .map(p => ({ label: p.name, note: p.note, icon: "upload", preset: p.index }))
                 onPicked: (i, o) => veyra.exportPresetDialog(o.preset)

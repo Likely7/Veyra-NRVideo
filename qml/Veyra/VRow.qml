@@ -36,7 +36,8 @@ Item {
             // fillWidth here too: without a hint the label is the column's only child,
             // and a layout with no filling child cannot grow, which left the control
             // beside the label instead of at the row's right edge.
-            Text { Layout.fillWidth: true; text: row.label; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; elide: Text.ElideRight }
+            // Two lines before eliding: English and Japanese labels run longer than Chinese.
+            Text { Layout.fillWidth: true; text: row.label; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight }
             Text {
                 visible: row.hint.length > 0 && !row.hintBelow
                 text: row.hint

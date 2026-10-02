@@ -24,7 +24,7 @@ ColumnLayout {
     // The tab redraw staggers this column's cards (ProPage M31).
     readonly property Item sectionColumn:panel
     readonly property var sectionCounts:[6,4,1,1,3,7,3,3]
-    readonly property var sections:["亮","颜色","曲线","混色器","颜色分级","校准","LUT","效果"]
+    readonly property var sections:[qsTr("亮"),qsTr("颜色"),qsTr("曲线"),qsTr("混色器"),qsTr("颜色分级"),qsTr("校准"),"LUT",qsTr("效果")]
     readonly property var light:["exposure","contrast","highlights","shadows","whites","blacks"]
     readonly property var colour:["temperature","tint","vibrance","saturation"]
     readonly property var parametric:["paramHighlights","paramLights","paramDarks","paramShadows","splitHighlights","splitMidtones","splitShadows"]
@@ -58,8 +58,8 @@ ColumnLayout {
         const found=api.colourParameters.find(p=>p.name===key)
         if(found)return found
         const parts=key.split(".")
-        return {name:key,label:["红原色","绿原色","蓝原色"][Number(parts[1])]+
-            (parts[0]==="calibrationHue"?" · 色相":" · 饱和度"),min:-100,max:100,step:1,defaultValue:0}
+        return {name:key,label:[qsTr("红原色"),qsTr("绿原色"),qsTr("蓝原色")][Number(parts[1])]+
+            (parts[0]==="calibrationHue"?qsTr(" · 色相"):qsTr(" · 饱和度")),min:-100,max:100,step:1,defaultValue:0}
     }
     component NameField: Rectangle {
         property alias text: field.text
@@ -155,13 +155,13 @@ ColumnLayout {
                     Layout.fillWidth:true
                     spacing:2
                     Text {
-                        text:panel.state.index<0?"没有调色节点":veyra.nodeMode===1?"调色 · 实例 "+(panel.state.index+1):"调色"
+                        text:panel.state.index<0?qsTr("没有调色节点"):veyra.nodeMode===1?qsTr("调色 · 实例 ")+(panel.state.index+1):qsTr("调色")
                         color:Theme.t1;font.family:Theme.fontUi;font.pixelSize:13
                         font.weight:Font.DemiBold;font.variableAxes:Theme.axesDemiBold
                     }
                     Text {
                         Layout.fillWidth:true
-                        text:panel.state.enabled?"关闭时这条链路不存在，零开销":"已关闭 · 参数保留但不生效"
+                        text:panel.state.enabled?qsTr("关闭时这条链路不存在，零开销"):qsTr("已关闭 · 参数保留但不生效")
                         color:Theme.t3;font.family:Theme.fontUi;font.pixelSize:11
                         elide:Text.ElideRight
                     }
@@ -176,25 +176,25 @@ ColumnLayout {
                 VButton {
                     objectName:"colour-undo"
                     icon:true;ghost:true;iconName:"undo";implicitWidth:28;implicitHeight:28
-                    tip:"撤销";enabled:panel.api.colourCanUndo
+                    tip:qsTr("撤销");enabled:panel.api.colourCanUndo
                     onClicked:panel.api.colourUndo()
                 }
                 VButton {
                     objectName:"colour-redo"
                     icon:true;ghost:true;iconName:"refresh";implicitWidth:28;implicitHeight:28
-                    tip:"重做";enabled:panel.api.colourCanRedo
+                    tip:qsTr("重做");enabled:panel.api.colourCanRedo
                     onClicked:panel.api.colourRedo()
                 }
                 VButton {
                     objectName:"colour-copy"
                     icon:true;ghost:true;iconName:"copy";implicitWidth:28;implicitHeight:28
-                    tip:"复制调色参数";enabled:panel.state.index>=0
+                    tip:qsTr("复制调色参数");enabled:panel.state.index>=0
                     onClicked:panel.api.colourCopy()
                 }
                 VButton {
                     objectName:"colour-paste"
                     icon:true;ghost:true;iconName:"import";implicitWidth:28;implicitHeight:28
-                    tip:"粘贴调色参数";enabled:panel.api.colourCanPaste&&panel.state.index>=0
+                    tip:qsTr("粘贴调色参数");enabled:panel.api.colourCanPaste&&panel.state.index>=0
                     onClicked:panel.api.colourPaste()
                 }
                 Item {Layout.fillWidth:true}
@@ -202,8 +202,8 @@ ColumnLayout {
                     objectName:"colour-original-hold"
                     implicitHeight:28
                     iconName:"eye"
-                    text:panel.originalHeld?"松开恢复":"按住看原图"
-                    Accessible.name:"按住查看原图，松开恢复增强画面"
+                    text:panel.originalHeld?qsTr("松开恢复"):qsTr("按住看原图")
+                    Accessible.name:qsTr("按住查看原图，松开恢复增强画面")
                     MouseArea {
                         anchors.fill:parent
                         acceptedButtons:Qt.LeftButton
@@ -215,7 +215,7 @@ ColumnLayout {
                 VButton {
                     objectName:"colour-reset-all"
                     implicitHeight:28
-                    ghost:true;iconName:"reset";text:"一键还原"
+                    ghost:true;iconName:"reset";text:qsTr("一键还原")
                     onClicked:panel.api.resetColourGroup(-1)
                 }
             }
@@ -225,11 +225,11 @@ ColumnLayout {
     // whole-chain presets. Applying one replaces this instance only.
     VRow {
         visible:!panel.compact
-        label:"颜色预设"
+        label:qsTr("颜色预设")
         VSelect {
             objectName:"colour-look-select"
             implicitWidth:170
-            value:panel.api.colourLooks.length?"应用预设…":"暂无颜色预设"
+            value:panel.api.colourLooks.length?qsTr("应用预设…"):qsTr("暂无颜色预设")
             options:panel.api.colourLooks.map(l=>({id:String(l.index),label:l.name+(l.lut?" · LUT":"")}))
             onPicked:id=>panel.api.applyColourLook(Number(id))
         }
@@ -242,13 +242,13 @@ ColumnLayout {
             id:lookName
             objectName:"colour-look-name"
             Layout.fillWidth:true
-            placeholder:"新预设名称"
+            placeholder:qsTr("新预设名称")
             onAccepted:saveLook.clicked()
         }
         VButton {
             id:saveLook
             objectName:"colour-look-save"
-            text:"保存"
+            text:qsTr("保存")
             enabled:lookName.text.trim().length>0&&panel.state.index>=0
             onClicked:{
                 const name=lookName.text.trim()
@@ -259,16 +259,16 @@ ColumnLayout {
         VButton {
             id:lookMore
             objectName:"colour-look-more"
-            text:"管理";ghost:true
-            Accessible.name:"颜色预设 · 导入/导出/删除"
+            text:qsTr("管理");ghost:true
+            Accessible.name:qsTr("颜色预设 · 导入/导出/删除")
             onClicked:lookMenu.openAt(lookMore,"down")
         }
         VMenu {
             id:lookMenu
-            title:"颜色预设"
-            items:[{act:"import",label:"导入 .vpcolor…",icon:"import"}]
-                .concat(panel.api.colourLooks.map(l=>({act:"export",look:l.index,label:"导出「"+l.name+"」…",icon:"upload"})))
-                .concat(panel.api.colourLooks.map(l=>({act:"delete",look:l.index,label:"删除「"+l.name+"」",icon:"trash"})))
+            title:qsTr("颜色预设")
+            items:[{act:"import",label:qsTr("导入 .vpcolor…"),icon:"import"}]
+                .concat(panel.api.colourLooks.map(l=>({act:"export",look:l.index,label:qsTr("导出「")+l.name+"」…",icon:"upload"})))
+                .concat(panel.api.colourLooks.map(l=>({act:"delete",look:l.index,label:qsTr("删除「")+l.name+"」",icon:"trash"})))
             onPicked:(i,item)=>{
                 if(item.act==="import")panel.api.importColourLookDialog()
                 else if(item.act==="export")panel.api.exportColourLookDialog(item.look)
@@ -284,7 +284,7 @@ ColumnLayout {
             objectName:"colour-section-"+index
             Layout.fillWidth:true
             title:panel.sections[index];glyph:"palette";hue:"#E0C341"
-            summary:panel.compact?panel.sectionCounts[index]+" 项":""
+            summary:panel.compact?panel.sectionCounts[index]+qsTr(" 项"):""
             open:!panel.compact&&index<2
             enabledSwitch:false
             compactHeader:true
@@ -295,7 +295,7 @@ ColumnLayout {
                     visible:section.index<7
                     icon:true;iconName:section.bypassed?"eyeoff":"eye"
                     ghost:true;implicitWidth:24;implicitHeight:24;radius:7
-                    Accessible.name:panel.sections[section.index]+(section.bypassed?" · 恢复":" · 旁路")
+                    Accessible.name:panel.sections[section.index]+(section.bypassed?qsTr(" · 恢复"):qsTr(" · 旁路"))
                     onClicked:panel.api.setColourOption("groupBypassMask",panel.state.groupBypassMask^(1<<section.index))
                 }
             ]
@@ -303,7 +303,7 @@ ColumnLayout {
                 VButton {
                     objectName:"colour-reset-"+section.index
                     icon:true;iconName:"reset";ghost:true;implicitWidth:26;implicitHeight:26
-                    Accessible.name:panel.sections[section.index]+" · 还原"
+                    Accessible.name:panel.sections[section.index]+qsTr(" · 还原")
                     onClicked:panel.api.resetColourGroup(section.index)
                 }
             ]
@@ -315,7 +315,7 @@ ColumnLayout {
             }
             Text {
                 Layout.fillWidth:true;visible:section.index===1
-                text:"色温为相对值；采集卡没有拍摄白平衡。"
+                text:qsTr("色温为相对值；采集卡没有拍摄白平衡。")
                 color:Theme.t3;font.pixelSize:11;wrapMode:Text.WordWrap
             }
             Loader {
@@ -323,7 +323,7 @@ ColumnLayout {
                 sourceComponent:ColumnLayout {
                 VSeg {
                     objectName:"colour-curve-mode"
-                    options:[{id:"points",label:"点曲线"},{id:"parametric",label:"参数曲线"}]
+                    options:[{id:"points",label:qsTr("点曲线")},{id:"parametric",label:qsTr("参数曲线")}]
                     current:panel.curveMode;onPicked:id=>panel.curveMode=id
                 }
                 ColourCurve {
@@ -357,7 +357,7 @@ ColumnLayout {
                             required property int index
                             objectName:"colour-wheel-"+index
                             Layout.fillWidth:true
-                            title:["阴影","中间调","高光","全局"][index]
+                            title:[qsTr("阴影"),qsTr("中间调"),qsTr("高光"),qsTr("全局")][index]
                             hue:panel.state.grading[index].hue
                             saturation:panel.state.grading[index].saturation
                             luminance:panel.state.grading[index].luminance
@@ -376,12 +376,12 @@ ColumnLayout {
                 Layout.fillWidth:true;active:section.index===6;visible:active
                 sourceComponent:ColumnLayout {
                 VRow {
-                    label:"LUT 文件"
+                    label:qsTr("LUT 文件")
                     VSelect {
                         objectName:"colour-lut-select"
                         implicitWidth:170
-                        value:panel.state.lutName?panel.state.lutName:"未使用"
-                        options:[{id:"",label:"不使用 LUT"}].concat(panel.api.lutLibrary.map(n=>({id:n,label:n})))
+                        value:panel.state.lutName?panel.state.lutName:qsTr("未使用")
+                        options:[{id:"",label:qsTr("不使用 LUT")}].concat(panel.api.lutLibrary.map(n=>({id:n,label:n})))
                         onPicked:id=>panel.api.setColourLut(id)
                     }
                 }
@@ -389,7 +389,7 @@ ColumnLayout {
                     Layout.fillWidth:true
                     VButton {
                         objectName:"colour-lut-import"
-                        text:"导入 .cube…";ghost:true
+                        text:qsTr("导入 .cube…");ghost:true
                         onClicked:panel.api.importLutDialog()
                     }
                     Item {Layout.fillWidth:true}
@@ -401,7 +401,7 @@ ColumnLayout {
                     onPicked:id=>panel.api.setColourOption("lutInputSpace",Number(id))
                 }
                 Text {
-                    Layout.fillWidth:true;text:"导入的 .cube 保存在程序目录 runtime_local/luts，导出也使用同一份。"
+                    Layout.fillWidth:true;text:qsTr("导入的 .cube 保存在程序目录 runtime_local/luts，导出也使用同一份。")
                     color:Theme.t3;font.pixelSize:11;wrapMode:Text.WordWrap
                 }
                 }

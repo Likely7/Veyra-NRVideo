@@ -41,10 +41,10 @@ Item {
 
     // --- page definitions (order and tooltips from core.js) ---------------
     readonly property var items: [
-        { id: "min",   icon: "tv", tip: "极简" },
-        { id: "pro",   icon: "sliders", tip: "专业模式" },
-        { id: "exp",   icon: "upload", tip: "导出" },
-        { id: "set",   icon: "settings", tip: "设置" }
+        { id: "min",   icon: "tv", tip: qsTr("极简") },
+        { id: "pro",   icon: "sliders", tip: qsTr("专业模式") },
+        { id: "exp",   icon: "upload", tip: qsTr("导出") },
+        { id: "set",   icon: "settings", tip: qsTr("设置") }
     ]
 
     // .dock-zone { height:12px } and .dock-handle { 44x4, top:5 }
@@ -272,7 +272,7 @@ Item {
                     Text {
                         id: pillTipText
                         anchors.centerIn: parent
-                        text: dockRoot.pillHidden ? "显示播放条" : "隐藏播放条"
+                        text: dockRoot.pillHidden ? qsTr("显示播放条") : qsTr("隐藏播放条")
                         color: "#FFFFFF"
                         font.family: Theme.fontUi
                         font.pixelSize: 11
@@ -295,9 +295,9 @@ Item {
             // Window controls: minimize, maximize/restore, close.
             Repeater {
                 model: [
-                    { id: "min", icon: "minus", tip: "最小化" },
-                    { id: "max", icon: "max", tip: dockRoot.maximized ? "还原" : "最大化" },
-                    { id: "close", icon: "x", tip: "关闭" }
+                    { id: "min", icon: "minus", tip: qsTr("最小化") },
+                    { id: "max", icon: "max", tip: dockRoot.maximized ? qsTr("还原") : qsTr("最大化") },
+                    { id: "close", icon: "x", tip: qsTr("关闭") }
                 ]
                 delegate: Item {
                     id: wbtn

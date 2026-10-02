@@ -70,7 +70,7 @@ VPage {
             spacing: 6
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "今天看点什么？"
+                text: qsTr("今天看点什么？")
                 color: Theme.t1
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsH1
@@ -78,7 +78,7 @@ VPage {
             }
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "选一个片源开始，画质预设和补帧随时在播放栏切换"
+                text: qsTr("选一个片源开始，画质预设和补帧随时在播放栏切换")
                 color: Theme.t2
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsBody
@@ -100,22 +100,22 @@ VPage {
             // landing during the rebuild was lost (field report 2026-10-02).
             function cardSub(act) {
                 switch (act) {
-                case "file": return "MP4 · MKV · 图片"
-                case "capture": return veyra.hasCaptureSession ? veyra.captureSessionSummary.split(" · ")[0] : "HDMI 采集设备"
-                case "ps5": return veyra.remotePlayHost.length > 0 ? "已保存主机 " + veyra.remotePlayHost : "局域网串流"
-                case "moonlight": return veyra.moonlight && veyra.moonlight.state.lastLabel ? veyra.moonlight.state.lastLabel : "Sunshine 主机"
-                case "xbox": return veyra.xbox && veyra.xbox.state.lastLabel ? veyra.xbox.state.lastLabel : "账号登录 · 实验"
-                default: return "窗口或显示器"
+                case "file": return qsTr("MP4 · MKV · 图片")
+                case "capture": return veyra.hasCaptureSession ? veyra.captureSessionSummary.split(" · ")[0] : qsTr("HDMI 采集设备")
+                case "ps5": return veyra.remotePlayHost.length > 0 ? qsTr("已保存主机 ") + veyra.remotePlayHost : qsTr("局域网串流")
+                case "moonlight": return veyra.moonlight && veyra.moonlight.state.lastLabel ? veyra.moonlight.state.lastLabel : qsTr("Sunshine 主机")
+                case "xbox": return veyra.xbox && veyra.xbox.state.lastLabel ? veyra.xbox.state.lastLabel : qsTr("账号登录 · 实验")
+                default: return qsTr("窗口或显示器")
                 }
             }
             Repeater {
                 model: [
-                    { glyph: "folder", title: "打开视频", act: "file" },
-                    { glyph: "video", title: "采集卡", act: "capture" },
-                    { glyph: "gamepad", title: "PS5 串流", act: "ps5" },
-                    { glyph: "cast", title: "PC 串流", act: "moonlight" },
-                    { glyph: "gamepad", title: "Xbox 串流", act: "xbox" },
-                    { glyph: "monitor", title: "屏幕捕获", act: "screen" }
+                    { glyph: "folder", title: qsTr("打开视频"), act: "file" },
+                    { glyph: "video", title: qsTr("采集卡"), act: "capture" },
+                    { glyph: "gamepad", title: qsTr("PS5 串流"), act: "ps5" },
+                    { glyph: "cast", title: qsTr("PC 串流"), act: "moonlight" },
+                    { glyph: "gamepad", title: qsTr("Xbox 串流"), act: "xbox" },
+                    { glyph: "monitor", title: qsTr("屏幕捕获"), act: "screen" }
                 ]
                 // The layout owns the slot's position, so the card inside it is free to
                 // move its own y for the hover lift (a y set on a layout child is
@@ -234,7 +234,7 @@ VPage {
                     Layout.fillWidth: true
                     spacing: 2
                     Text {
-                        text: "继续上次"
+                        text: qsTr("继续上次")
                         color: Theme.t1
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -250,7 +250,7 @@ VPage {
                     }
                 }
                 VButton {
-                    text: "开始"
+                    text: qsTr("开始")
                     iconName: "play"
                     primary: true
                     onClicked: veyra.resumeLastSource()
@@ -270,7 +270,7 @@ VPage {
             Text {
                 height: 28
                 verticalAlignment: Text.AlignVCenter
-                text: "最近"
+                text: qsTr("最近")
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: 12
@@ -308,7 +308,7 @@ VPage {
                         }
                     }
                     ToolTip.visible: chipHover.hovered && !modelData.exists
-                    ToolTip.text: "文件已不存在"
+                    ToolTip.text: qsTr("文件已不存在")
                     HoverHandler { id: chipHover; cursorShape: modelData.exists ? Qt.PointingHandCursor : Qt.ArrowCursor }
                     TapHandler { onTapped: if (modelData.exists) veyra.openPath(modelData.path) }
                 }

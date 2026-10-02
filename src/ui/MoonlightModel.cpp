@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "veyra/ui/MoonlightModel.h"
+#include "veyra/ui/UiLanguage.h"
 
 #include <QFile>
 #include <QGuiApplication>
@@ -677,7 +678,7 @@ void MoonlightModel::updateStream(bool active, const source::MoonlightStats& s) 
     if (active) {
         const char* names[] = {"idle", "launching", "connecting", "streaming", "ended", "failed"};
         now = QVariantMap{
-            {"state", names[size_t(s.state)]}, {"message", QString::fromStdWString(s.message)},
+            {"state", names[size_t(s.state)]}, {"message", veyra::ui::i18n::text(s.message)},
             {"codec", qs(s.codec)}, {"hdr", s.hdr}, {"hardware", s.hardwareDecode},
             {"width", int(s.width)}, {"height", int(s.height)}, {"fps", s.fps},
             {"receivedFps", s.receivedFps}, {"decodedFps", s.decodedFps}, {"videoMbps", s.videoMbps},

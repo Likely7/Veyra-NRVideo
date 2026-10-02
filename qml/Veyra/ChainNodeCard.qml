@@ -59,7 +59,7 @@ Rectangle {
                 font.pixelSize: Theme.fsBody
             }
             Text {
-                text: card.locked ? "固定为最后一步" : (card.node.experimental ? "实验" : "")
+                text: card.locked ? qsTr("固定为最后一步") : (card.node.experimental ? qsTr("实验") : "")
                 visible: text.length > 0
                 color: card.locked ? Theme.t3 : Theme.exp
                 font.family: Theme.fontUi

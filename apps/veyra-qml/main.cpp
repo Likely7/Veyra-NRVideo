@@ -503,6 +503,7 @@ int main(int argc, char** argv) {
                      [thumbnails](const QString& path) { thumbnails->setSource(path); });
     engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml");
     engine.rootContext()->setContextProperty(QStringLiteral("veyra"), &bridge);
+    bridge.setQmlEngine(&engine);   // Qt.uiLanguage drives the per-language font (Theme.qml)
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);

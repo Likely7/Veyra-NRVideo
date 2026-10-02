@@ -1,5 +1,6 @@
 #include "veyra/ui/QmlExportQueueModel.h"
 #include <QFileInfo>
+#include "veyra/ui/UiLanguage.h"
 
 namespace veyra::ui {
 QmlExportQueueModel::QmlExportQueueModel(engine::ExportJobManager& worker,QObject* parent):QAbstractListModel(parent),queue_(worker){}
@@ -16,7 +17,7 @@ QVariant QmlExportQueueModel::data(const QModelIndex& index,int role)const{
     case Output:return QString::fromStdWString(item.output);
     case State:switch(item.state){case S::Ready:return "ready";case S::Queued:return "queued";case S::Running:return "running";case S::Done:return "done";case S::Failed:return "failed";case S::Cancelled:return "cancelled";}break;
     case Progress:return item.progress;
-    case Note:return QString::fromStdWString(item.note);
+    case Note:return veyra::ui::i18n::text(item.note);
     case Duration:return item.info.duration;
     case Current:return item.id==selected_;
     case Locked:return item.state==S::Running;

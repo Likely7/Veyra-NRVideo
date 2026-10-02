@@ -106,7 +106,10 @@ QtObject {
     // with. Noto Sans SC ships as a variable font; Qt 6.8.3 maps font.weight 600 to a
     // thin instance of it (500 and 700 are fine), so every DemiBold also sets the wght
     // axis directly (G1.3, tmp/.../min/Font.qml).
-    readonly property string fontUi: "Noto Sans SC"
+    // Per interface language (Qt.uiLanguage, set by the bridge): Japanese kana and kanji
+    // and Traditional characters read best in their own Windows UI fonts.
+    readonly property string fontUi: Qt.uiLanguage === "ja" ? "Yu Gothic UI"
+                                   : Qt.uiLanguage === "zh-TW" ? "Microsoft JhengHei UI" : "Noto Sans SC"
     readonly property var axesDemiBold: ({ "wght": 600 })
     // 500: the design's .seek .peek time strip is `font: 500 11px/1 var(--f-mono)`.
     // Same reason as DemiBold - 600 lands on a thin instance, so the axis is set
