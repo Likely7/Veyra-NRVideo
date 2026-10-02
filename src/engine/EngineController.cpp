@@ -992,7 +992,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 advanceLive();
                 if(liveScheduler&&liveScheduler->failed()){
                     if(recoverXessPresentation())continue;
-                    const bool alive=ctx.reportDeviceFailure("live-presentation-failed");
+                    bool alive=ctx.reportDeviceFailure("live-presentation-failed");
+                    // A GPU hang is noticed here about two seconds before Windows resets the
+                    // GPU, and DRED only says which command list stopped once the device is
+                    // removed (4070S field log 2026-10-01: every report still read alive).
+                    // Wait for that, bounded, and report again.
+                    for(int i=0;alive&&i<50;++i){Sleep(100);uint32_t removed=0;alive=ctx.checkDeviceAlive(removed);}
+                    if(!alive)ctx.reportDeviceFailure("live-presentation-failed-after-reset");
                     status(alive?L"视频队列或呈现失败；GPU 未报告设备移除，请查看诊断":L"GPU 设备已移除或驱动已重置；请稍后重新连接，可切换 NR 运行库后重试",true);break;
                 }
                 const float gain=muted_?0.0f:volume_.load();audio.setGain(gain);

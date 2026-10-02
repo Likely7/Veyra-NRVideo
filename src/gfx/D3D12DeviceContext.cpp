@@ -238,6 +238,7 @@ bool D3D12DeviceContext::initialize(const DeviceContextDesc& desc, Status& statu
         veyra::log::error("gfx", std::format("CreateCommandQueue failed hr={}", veyra::hresultString(result)));
         return false;
     }
+    queue_->SetName(L"Veyra direct queue");   // DRED names the queue a hang happened on
 
     // 6. Fence + event.
     result = device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_));
@@ -341,7 +342,12 @@ bool D3D12DeviceContext::reportDeviceFailure(std::string_view operation,uint64_t
         for(auto* n=crumbs.pHeadAutoBreadcrumbNode;n&&count<16;n=n->pNext,++count) {
             const auto last=n->pLastBreadcrumbValue?*n->pLastBreadcrumbValue:0;
             const auto nextOp=n->pCommandHistory&&last<std::min(n->BreadcrumbCount,65536u)?unsigned(n->pCommandHistory[last]):UINT_MAX;
-            veyra::log::error("dred",std::format("breadcrumb={} completed={} total={} nextOp={} list={} queue={}",count,last,n->BreadcrumbCount,nextOp,n->pCommandListDebugNameA?n->pCommandListDebugNameA:"unnamed",n->pCommandQueueDebugNameA?n->pCommandQueueDebugNameA:"unnamed"));
+            // The op types around the stop point (D3D12_AUTO_BREADCRUMB_OP: dispatches, copies,
+            // barriers, resolves), so a hang inside NR's dispatches reads differently from one
+            // in a copy or a resolve.
+            std::string around;
+            if(n->pCommandHistory)for(uint32_t k=last>6?last-6:0;k<std::min(n->BreadcrumbCount,last+6);++k)around+=std::format("{}{}",around.empty()?"":",",unsigned(n->pCommandHistory[k]));
+            veyra::log::error("dred",std::format("breadcrumb={} completed={} total={} nextOp={} list={} queue={} ops[{}..]={}",count,last,n->BreadcrumbCount,nextOp,n->pCommandListDebugNameA?n->pCommandListDebugNameA:"unnamed",n->pCommandQueueDebugNameA?n->pCommandQueueDebugNameA:"unnamed",last>6?last-6:0,around));
         }
     }
     D3D12_DRED_PAGE_FAULT_OUTPUT1 fault{};const auto faultHr=dred->GetPageFaultAllocationOutput1(&fault);
