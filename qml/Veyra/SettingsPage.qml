@@ -243,6 +243,17 @@ VPage {
                                 onPicked: id => veyra.setPreference("windowSize", id)
                             }
                         }
+                        VRow {
+                            label: "GPU 占用监控"
+                            hint: "专业页「GPU 占用」只统计这一块显卡" + (veyra.gpuMonitorName ? "；当前：" + veyra.gpuMonitorName : "")
+                            VSelect {
+                                objectName: "set-monitor-gpu"
+                                implicitWidth: 230
+                                options: veyra.gpuMonitorChoices
+                                value: (options.find(o => o.id === (veyra.preferences.monitorGpu || "")) || options[0] || { label: "—" }).label
+                                onPicked: id => veyra.setPreference("monitorGpu", id)
+                            }
+                        }
                     }
                     VGroup {
                         VRow {

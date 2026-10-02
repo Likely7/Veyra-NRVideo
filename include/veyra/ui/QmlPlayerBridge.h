@@ -186,6 +186,11 @@ class QmlPlayerBridge : public QObject {
     // stored choice (preferences.audioDevice, empty = system default) and what
     // the renderer actually opened, including a fallback to the default.
     Q_PROPERTY(QVariantList audioDevices READ audioDevices NOTIFY audioDevicesChanged)
+    // The GPU the "GPU 占用" orb measures (设置 → 通用与外观): [{id, label}], the first
+    // entry ("", 自动) picks the high-performance (discrete) GPU. Field report
+    // 2026-10-02: the orb used to add the integrated and the discrete GPU together.
+    Q_PROPERTY(QVariantList gpuMonitorChoices READ gpuMonitorChoices CONSTANT)
+    Q_PROPERTY(QString gpuMonitorName READ gpuMonitorName NOTIFY preferencesChanged)
     Q_PROPERTY(QString audioOutputStatus READ audioOutputStatus NOTIFY audioDevicesChanged)
     Q_PROPERTY(bool audioOutputFallback READ audioOutputFallback NOTIFY audioDevicesChanged)
     Q_PROPERTY(QString logFile READ logFile CONSTANT)
@@ -606,6 +611,8 @@ public:
     Q_INVOKABLE void openFeedbackPage();
     Q_INVOKABLE void openReleasesPage();
     QVariantList audioDevices() const;
+    QVariantList gpuMonitorChoices() const;
+    QString gpuMonitorName() const;
     QString audioOutputStatus() const;
     bool audioOutputFallback() const;
     Q_INVOKABLE void refreshAudioDevices();
