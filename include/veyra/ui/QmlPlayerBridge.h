@@ -186,6 +186,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantMap shortcuts READ shortcuts NOTIFY preferencesChanged)
     // The interface scale chosen for the next start (0 = follow Windows).
     Q_PROPERTY(int uiScaleActive READ uiScaleActive CONSTANT)
+    Q_PROPERTY(bool obsGameCaptureActive READ obsGameCaptureActive CONSTANT)
     // Audio output (P4-d): the active WASAPI render endpoints by device id, the
     // stored choice (preferences.audioDevice, empty = system default) and what
     // the renderer actually opened, including a fallback to the default.
@@ -615,6 +616,7 @@ public:
     Q_INVOKABLE bool setShortcut(const QString& action, const QString& sequence);
     Q_INVOKABLE void resetShortcuts();
     int uiScaleActive() const;
+    bool obsGameCaptureActive() const;
     Q_INVOKABLE void openFeedbackPage();
     Q_INVOKABLE void openReleasesPage();
     QVariantList audioDevices() const;
@@ -953,6 +955,7 @@ public:
     Q_INVOKABLE void cancelExport();
     Q_INVOKABLE void pauseExport(bool paused);
     Q_INVOKABLE void quit();
+    Q_INVOKABLE void restartApplication();
     // Returns this page's controls to the engine defaults (the design's
     // "重置本页"); it does not touch presets or other pages.
     Q_INVOKABLE void resetCurrentPage();

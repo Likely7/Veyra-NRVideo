@@ -13000,6 +13000,55 @@
    "zh-TW": "；本次匯出使用 AMD FSR 超解析",
    "en": "; this export uses AMD FSR super resolution",
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
+  },
+  {
+   "zh": "OBS 游戏采集兼容",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "OBS 遊戲擷取相容",
+   "en": "OBS Game Capture compatibility",
+   "ja": "OBS ゲームキャプチャ互換"
+  },
+  {
+   "zh": "仅采集视频；界面软件绘制，部分阴影与模糊简化",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "僅擷取影片；介面以軟體繪製，部分陰影與模糊簡化",
+   "en": "Captures video only; software UI with simpler shadows and blur",
+   "ja": "映像のみキャプチャ。UI はソフトウェア描画になり、一部の影・ぼかしを簡略化"
+  },
+  {
+   "zh": "需要重启软件",
+   "zh-TW": "需要重新啟動軟體",
+   "en": "Restart required",
+   "ja": "再起動が必要です",
+   "src": "qml/Veyra/SettingsPage.qml"
+  },
+  {
+   "zh": "设置已保存，重启后生效。现在重启吗？当前播放或串流将停止。",
+   "zh-TW": "設定已儲存，重新啟動後生效。現在重新啟動嗎？目前播放或串流將停止。",
+   "en": "Settings saved. Restart to apply them. Restart now? Current playback or streaming will stop.",
+   "ja": "設定を保存しました。適用するには再起動が必要です。今すぐ再起動しますか？再生やストリーミングは停止します。",
+   "src": "qml/Veyra/SettingsPage.qml"
+  },
+  {
+   "zh": "设置已保存，请等待导出结束后重启软件",
+   "zh-TW": "設定已儲存，請等待匯出結束後重新啟動軟體",
+   "en": "Settings saved. Restart after the export finishes.",
+   "ja": "設定を保存しました。書き出し完了後に再起動してください。",
+   "src": "src/ui/QmlPlayerBridge.cpp"
+  },
+  {
+   "zh": "是",
+   "zh-TW": "是",
+   "en": "Yes",
+   "ja": "はい",
+   "src": "qml/Veyra/SettingsPage.qml"
+  },
+  {
+   "zh": "否",
+   "zh-TW": "否",
+   "en": "No",
+   "ja": "いいえ",
+   "src": "qml/Veyra/SettingsPage.qml"
   }
  ]
 }

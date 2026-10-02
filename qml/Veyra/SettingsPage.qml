@@ -228,6 +228,21 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("OBS 游戏采集兼容")
+                            hint: (!!veyra.preferences.obsGameCapture !== veyra.obsGameCaptureActive)
+                                  ? qsTr("重启后生效")
+                                  : qsTr("仅采集视频；界面软件绘制，部分阴影与模糊简化")
+                            VSwitch {
+                                objectName: "set-obs-game-capture"
+                                checked: !!veyra.preferences.obsGameCapture
+                                onToggled: v => {
+                                    if (veyra.setPreference("obsGameCapture", v)
+                                            && v !== veyra.obsGameCaptureActive)
+                                        obsRestart.open()
+                                }
+                            }
+                        }
+                        VRow {
                             label: qsTr("启动窗口大小")
                             hint: qsTr("下次启动生效；超过屏幕时按屏幕缩小并居中")
                             VSelect {
@@ -723,6 +738,16 @@ VPage {
                 Item { Layout.preferredHeight: 12 }
             }
         }
+    }
+
+    VConfirm {
+        id: obsRestart
+        objectName: "obs-restart-confirm"
+        title: qsTr("需要重启软件")
+        text: qsTr("设置已保存，重启后生效。现在重启吗？当前播放或串流将停止。")
+        acceptText: qsTr("是")
+        rejectText: qsTr("否")
+        onAccepted: veyra.restartApplication()
     }
 
     // [data-in] entrance order from pages-b.js PAGES.set.

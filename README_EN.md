@@ -1,188 +1,120 @@
 # Veyra
 
-<p align="center"><img src="assets/veyra-logo.png" alt="Veyra" width="200"></p>
+<p align="center"><img src="assets/veyra-app-icon.png" alt="Veyra" width="160"></p>
 
-English | [简体中文](README.md)
+[简体中文](README.md) | English
 
-<p align="center">
-  <a href="https://github.com/Likely7/Veyra-NRVideo/blob/main/REAMDE%20MP4.mp4">
-    <img src="assets/readme-demo.gif" alt="Veyra demo video" width="960">
-  </a>
-</p>
+<p align="center"><img src="docs/images/2.0.0/professional-mode.png" alt="Veyra 2.0.0 professional mode" width="1200"></p>
 
-<p align="center">The demo plays automatically; click it to open the original MP4.</p>
+A Windows enhancement player for videos, images, capture cards and streaming. Super-resolution, NR, colour grading, RTX Video HDR and frame generation share one engine. Community enhancements remain experimental.
 
-A Windows video player and capture-card enhancement tool. Play videos, process images, and preview capture devices with optional super resolution, NR enhancement, and frame generation.
+[Download 2.0.0 portable](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.0) · [Full changelog: Chinese / English](docs/RELEASE_NOTES_2.0.0.md) · [Issues](https://github.com/Likely7/Veyra-NRVideo/issues)
 
-[Download 1.4.4 Portable](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v1.4.4) · [Release Notes](docs/RELEASE_NOTES_1.4.4.md) · [Report an Issue](https://github.com/Likely7/Veyra-NRVideo/issues)
+## Highlights
 
-## 1.4.4 Update
+- **Rebuilt interface:** Home, Cinema, Professional List, Nodes, Colour, Export and Settings; Simplified/Traditional Chinese, English and Japanese.
+- **Node editing and layered NR:** executable connections, independent NR/colour parameters, separate List/Node configurations, sessions and presets.
+- **PC / Xbox streaming:** Moonlight/Sunshine-compatible PC streaming and unofficial experimental Xbox support, alongside PS5, capture cards and screen capture.
+- **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
+- **Enhancement and compatibility:** two NR runtime choices, DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-**Frame-generation flicker:** all three independent causes are fixed. File-playback frame skips, repeated presents and capture drops no longer wipe the NR / frame-generation temporal history, which used to force a provider warm-up every time.
+## Install and upgrade
 
-**Frame pacing redesigned:** the three mode selectors that measured identically are gone, replaced by three independent controls (low-latency queue, display sync, output cap). The **output cap now decides how many frames are actually generated** instead of dropping finished ones (native DLSS 6X: generated frames −71%, power 221→174 W; the true-upscale tier only drops about 4 W). The frame-generation page also gains a strict FG-cadence switch (default off = the 1.4.0 admission rule), and the row that used to overlap its neighbours is fixed.
+Download **Veyra-2.0.0-win64-portable.zip**, extract into a new writable folder and run **veyra_qml_ui.exe**. Source archives are for developers. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
-**Capture:** fixed the format mix-up behind "selected 1080p YUY2 but opened 4K RGB24"; added input color-space / range selection plus an Elgato 4K60 Pro MK.2 HDR metadata path, along with callback, buffer-pool and audio-endpoint recovery hardening.
+Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
-**UI and subtitles:** fixed white ghosting and duplicated rows when scrolling the professional panel quickly; re-laid out the enhancement and frame-generation pages; subtitles keep their configured size instead of shrinking when they wrap to two lines; fullscreen can be locked so mouse movement no longer pops the control bar.
+**The 1.4.4 UI guide is obsolete.** Version 2.0 uses separate settings. Retain the old version for rollback; do not overwrite the new package with old `veyra.ini`, an entire `runtime_local` folder or mixed DLLs.
 
-**Known limits:** true-upscale 1080p→4K with NR still shows long gaps at DLSS 4X/6X, and XeSS 4X continuity under heavy load is still open. Submitted FPS is not physical display refresh or a guarantee of smooth motion; this release does not claim the FG limitation is fully resolved. See the [complete changes, measurements and known issues](docs/RELEASE_NOTES_1.4.4.md).
+## Using 2.0
 
-## Features
+### Sources and pages
 
-| Feature | Options |
-| --- | --- |
-| Playback and capture | H.264 / HEVC / AV1 and compatible MOV/ProRes video, PNG / JPEG images, DirectShow / UVC capture cards |
-| Super resolution | DLSS SR and RTX Video SR; 1440p / 4K / 8K targets with aspect ratio preserved |
-| NR enhancement | Experimental NVIDIA NR; realtime and native modes, style, intensity, and region protection |
-| Frame generation | DLSS up to 6X; experimental XeSS preview with runtime-supported multipliers |
-| Smooth Motion | NVIDIA App driver-based frame generation, enabled manually; in-app setup guide |
-| Controls | Live settings, restore defaults, original/processed comparison, split view, preview zoom |
-| Export | PNG / JPEG images; NVENC H.264 / HEVC video |
-| Diagnostics | Completed source/generated frames, presentation submissions, stage timings, software latency |
+Home offers files, capture card, PS5, PC, Xbox and screen capture. Files/images can also be dropped into the window. Move to the bottom edge to reveal navigation between Home, Cinema, Professional, Colour, Export and Settings.
 
-Daily mode focuses on watching. Professional mode expands the controls, diagnostics, and export tools without reopening the video. The application currently uses a Chinese interface.
+- Cinema prioritises the picture with a floating source/transport/audio/fullscreen bar, optionally hidden in settings.
+- Professional List has Picture, Frame generation, Colour, Sound and Display tabs. The order strip locates effects; bottom panels report source/output, GPU stage time and load.
+- Click a file's picture to pause/resume; left/right arrows seek five seconds. Double-click or use the fullscreen button. The fullscreen top-edge bar switches Cinema/Professional; **Home** opens quick controls in fullscreen List mode, **Ctrl+L** locks controls. Shortcuts are configurable.
+- Use Screenshot and the preset menu to save pictures and personal settings. No imposed built-in quality presets.
 
-Features introduced in 1.2.0 include HDR file/capture enhancement, HDR10 export and HDR screenshots, retained 5.1 PCM, and a live Convert to SDR display switch. Fresh installations still disable all enhancements. Affected users have confirmed the 1.4.1 RTX30/40 repairs; other hardware combinations require individual testing.
+### List mode
 
-## Download and Run
+Select List at the top of Professional. Enable SR, NR or RTX Video HDR as needed. Up to four NR layers have independent internal resolution, strength and parameters. The master switch disables all layers and restores their previous enabled states.
 
-1. Download **Veyra-1.4.4-win64-portable.zip** from [Releases](https://github.com/Likely7/Veyra-NRVideo/releases). The Source code archives are for developers.
-2. Extract the entire archive into a writable directory and run **Veyra.exe**. No SDK, Python, or development tools are needed.
-   NR, upscaling and internal frame generation start disabled. Enable them as needed; importing old preferences restores their switches.
-3. Use a current GPU driver. NVIDIA NR, DLSS, RTX Video SR, and NVENC require compatible NVIDIA RTX hardware; this version was primarily tested on an RTX 5070.
+List mode's global NR protection region excludes every NR layer inside it while retaining non-NR effects, useful for HUDs/subtitles. Colour controls include basic adjustments, curves, mixer, wheels, LUTs and colour presets.
 
-Requirements: Windows 11 x64 and DirectX 12. Required application runtimes are included; GPU and capture-device drivers are supplied by the system. 8K upscaling and native-resolution enhancement need more VRAM and may not run in real time.
+Choose a supported FG backend/multiplier and check cadence, display sync, low-queue mode and output cap. Original/enhanced comparison temporarily pauses FG; leaving it resumes FG. Submitted FPS is not physical display FPS or end-to-end latency.
 
-To upgrade, close the old version and extract into a new directory. To retain settings, copy the old `runtime_local/*.v1` files and `veyra.ini`. Do not overwrite the new runtime directories with the old ones.
+### Node mode — build a processing chain
 
-## PS5 Streaming
+Select Nodes at the top of Professional. This is an executable chain editor:
 
-1. Connect the PS5 and PC to the same LAN, preferably by Ethernet. Enable **Settings → System → Remote Play** on the console.
-2. Open **PS5** in Veyra and search. If discovery fails, enter the IPv4 address from **Settings → Network → Connection Status → View Connection Status**.
-3. Enter the **PSN Account ID**, not a nickname or Online ID. Experimental PSN sign-in opens Sony's website. Complete sign-in, copy the final redirect URL, then submit it through Veyra's clipboard button.
-4. Initial pairing still requires the eight-digit code from **Remote Play → Link Device**. Afterwards select the saved console and connect without pairing again.
-5. Connect the gamepad to the **PC**; USB is preferred for DualSense. Touchpad, gyro, vibration and adaptive triggers depend on device, connection and game. View-only disables PC input forwarding; it does not guarantee same-account coexistence with a PS5-connected controller.
+1. Keep a valid connected path from input to output. Right-click blank canvas or choose Add node.
+2. Drag an output port to an input port, or click the two ports in order. Drop a node on a wire to insert; drag it away or release with **Alt** held to disconnect.
+3. Edit parameters inside nodes. NR/colour nodes have independent settings and supported positions before/after SR. Right-click to delete, duplicate or reset. A duplicate is an independent **disconnected copy** until connected.
+4. **Middle-drag to pan, wheel to zoom.** Fit/auto-layout organise the graph. “Draft not running” means invalid/disconnected edits, not that every visible node executes.
+5. Optical flow is shared after input; SR is a single instance. RTX Video HDR stays before final FG; select one DLSS/XeSS/FSR backend. This is not an arbitrary branching/mixing graph.
+6. List and Node settings, presets and sessions are separate. Returning to List restores its settings and retains the node graph. Switching rebuilds processing and may briefly pause the picture.
 
-Stream input is up to 1080p. 2K / 4K / 8K are local upscaling targets. H.264 / H.265 and 5–100Mbps bitrate requests are available; console output may differ. Auto decoding tries hardware then software; manual choices are available.
+**2.0.0 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
 
-Pairing and PSN credentials are encrypted in **%LOCALAPPDATA%/Veyra/remoteplay**, bound to the Windows user and retained across upgrades. Do not share this directory. Signing out retains console pairing. Pinless first registration and Internet streaming are not implemented.
+### Capture and streaming
 
-**Experimental HDR:** Windows HDR output can retain HDR with NR, SR and FG enabled. NR / RTX Video SR process an SDR proxy and composite changes onto the retained HDR base; this is not a native HDR NR model. SDR displays still use tone mapping. Real PS5 HDR and Sony authorization need further validation.
+| Source | Setup |
+|---|---|
+| Capture card | Select device, format, resolution, rate and audio input. Close competing apps. Match PQ/HLG/709 and Limited/Full to the signal. Magewell Pro Capture has a dedicated low-latency option. |
+| PS5 | Enable Remote Play, discover/enter IP, use PSN Account ID and the console's eight-digit pairing code; reconnect saved hosts. |
+| PC | Install/configure Sunshine yourself; discover/add the host, PIN-pair, select app/desktop and connect. Sunshine is not bundled. |
+| Xbox | Follow device-code sign-in and select a console with remote features enabled. Unofficial/experimental; account, service and console restrictions apply. |
+| Screen | Select a window/display; avoid recursively capturing Veyra itself. |
 
-## Quick Guide
+Pausing capture/streaming freezes the preview while keeping the session, not the host game. Physical hardware, networks, HDR and controllers need individual validation.
 
-### Videos and Images
+### Export
 
-Choose Open on the bottom bar. Playback, seeking, volume, subtitles, and fullscreen are available there. In Professional mode, use the mouse wheel over the picture to zoom.
+Use **List mode**, confirm effects, then open Export. Add/reorder files, edit individual jobs, trim, select MP4/MKV and encoding quality, and keep all or selected audio/subtitle tracks.
 
-### Capture Cards
+Keep all skips unsupported tracks with a notice; explicitly choosing an incompatible track is an error. Pause/cancel/retry and completion sound are available. Defaults are VBR 8 Mbps and closing playback on export to free GPU resources, both adjustable. Live FG does not imply every backend supports offline FG; follow accepted export settings.
 
-1. Connect the device and close other applications using the same capture card.
-2. Choose Capture, then select the device, resolution, frame rate, pixel format, and audio input.
-3. In Audio monitoring, choose a `[DirectShow]` device or an explicit `[WASAPI]` endpoint; the default is no audio monitoring. WASAPI stores the Windows endpoint ID and connects only to the selected input; it does not fall back to a microphone or system loopback.
-4. Confirm the picture with enhancement disabled, then enable NR, upscaling, or frame generation. Try YUY2 / NV12 when the device offers the same desired mode.
-5. For a 30fps console game carried over 60fps capture, select the 60-to-30 content cadence setting in Professional mode. Keep the original cadence for actual 60fps content.
+### OBS and settings
 
-### Enhancement and Frame Generation
+For OBS Game Capture, enable **Settings → General & appearance → OBS Game Capture compatibility**. Saved immediately: Yes restarts now; No applies next launch. Finish exports before restarting. Software UI rendering simplifies some shadows/blur; video enhancement stays on GPU. Game Capture targets **video**; use Windows 10 (1903+) Window Capture for the whole UI.
 
-Enable NR, super resolution, and frame generation independently in Professional mode. Select the upscaling method and target size beneath the super-resolution switch. The frame-generation page offers DLSS / XeSS and the supported multipliers.
+Settings include language/scale, shortcuts, monitoring GPU, audio devices and component info. Report GPU/driver, media, effects, time and `logs/veyra-qml.log`; include a crash `.dmp` if available. Review private data before sharing.
 
-Start with realtime NR, a lower RTX Video SR quality, and 2X frame generation. Compare the image and watch the diagnostics. Reduce quality, multiplier, or target size if processing falls behind. The main chart reports enhancement GPU processing time; estimated extra picture delay is separate in the detailed view. Frame generation does not reduce game input latency.
+## Limitations
 
-Audio synchronization follows the software processing chain without counting the capture card's shared input delay twice. Small timing fluctuations no longer stop audio on each frame. Sustained GPU overload skips expired preview opportunities while audio and media time continue; reduce workload to retain more video frames.
+RTSS/GamePP adaptation was cancelled; the OBS switch does not certify their compatibility. RTX 30/40 community NR/FG, FSR 4 ML hardware, some NR TDR/VRAM-growth reports and cross-device streaming retain unresolved/unverified cases. See the Release. Community runtimes are not vendor certification or a complete official DLSS 5 integration.
 
-Hover over settings for help. Default order is Upscale → NR → Frame generation. Optional Low latency mode uses NR → Upscale → Frame generation for preview only; it may reduce cost but increase ghosting or edge artifacts.
+## Architecture
 
-### Smooth Motion (NVIDIA App)
-
-To use Smooth Motion alone, set Veyra's frame-generation multiplier to **Off**, then enable **Smooth Motion** for the current **Veyra.exe** in **NVIDIA App → Graphics** and restart the player. NR and super resolution can stay enabled. The professional frame-generation panel includes an expandable guide.
-
-For internal DLSS / XeSS only, disable Smooth Motion in NVIDIA App and restart before selecting internal generation. Stacking both is also allowed without blocking; its quality and performance have not been validated, and ghosting, latency or GPU load may increase. Veyra's generation and master-enhancement switches do not disable driver generation.
-
-Software FPS, timings and queues exclude driver-generated work. Screenshots and exports do not include driver-generated intermediate frames. A/V timing and recording capture require separate verification. A user reported effective, stable operation on this machine; this is not validation of every GPU or driver.
-
-### Export and Runtime Replacement
-
-Use Professional mode to save an image or export a video, then choose the format and destination. XeSS is preview-only; supported video frame-generation export uses DLSS.
-
-You may replace DLLs while Veyra is closed. NVIDIA components belong in `runtime/experimental/`; XeSS / XeLL belong in `runtime_local/intel/experimental/`. Keep the filenames. Veyra does not enforce hash or signature locks; manifests describe the shipped files only. Replacement versions may have incompatible APIs or hardware requirements. To uninstall, close Veyra and delete its extracted directory.
-
-### NR Runtime Selection
-
-In Professional mode, select the NVIDIA original, community RTX40/50, or **RTX30 compatibility · Experimental** runtime, then enable NR. Switching briefly interrupts playback; failed changes restore the previous configuration. Community variants are included separately in `runtime/experimental/nr-community/` and `nr-ampere/`; both have Authenticode status `HashMismatch`.
-
-All three runtime paths were tested on RTX5070. Affected users report the 1.4.1 RTX30/40 repairs working; performance and image quality depend on the GPU, content and settings. NR runtime selection is separate from DLSS frame generation. A dedicated FG compatibility layer provides up to 6X on RTX30/40.
-
-### OBS Streaming and Recording
-
-Add a **Window Capture** source, select Veyra, and explicitly set **Capture Method** to **Windows 10 (1903 and up)**. Automatic may choose BitBlt, capturing the controls but missing the GPU-rendered video. Switching to the Windows capture method restored video in the reported local test.
-
-Veyra's experimental broadcast compatibility switch only changes the presentation swapchain; it does not fix BitBlt capture. Leave it off unless testing a specific capture issue. In other recording applications, prefer Windows Graphics Capture / WGC. Compatibility with every recorder and the capture cadence of generated frames have not been verified.
-
-## Technical Approach and Limits
-
-```text
-Video / image / capture card / PS5 -> color handling -> SR -> NR -> frame generation -> display / export
+```mermaid
+flowchart TD
+    UI[Qt Quick / QML pages] --> Bridge[Shared Bridge / settings / sessions / presets]
+    Sources[Files / capture / PS5 / PC / Xbox / screen] --> Source[FrameSource: frames, timestamps, colour]
+    Bridge --> Graph[Shared EnhanceGraph: valid chain]
+    Source --> Graph
+    Graph --> Effects[Multiple NR / single SR / colour / Video HDR]
+    Effects --> Live[Live preview: optional final FG]
+    Live --> Present[Native D3D12 video window]
+    Effects --> Export[List offline export / screenshots]
+    Export --> Sink[Encoding and muxing / image files]
+    Bridge --> Queue[Export queue: per-job settings snapshot]
+    Queue --> Export
 ```
 
-C++20, Win32, and D3D12. FFmpeg handles media files, DirectShow handles capture, and NVENC handles video encoding. Inputs share one enhancement graph; capture retains the latest frame, and optical flow supplies estimated motion.
+QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconnected drafts do not execute, and export does not record the preview window.
 
-NR and DLSS frame generation are **community-experimental integrations**, not NVIDIA certification or complete native game integration. Captured pixels lack game-engine depth and motion data; ghosting and altered detail are possible. AMD NR is unavailable, FRUC has been removed, and AV1 / ProRes export are unsupported; development HDR support is scoped below. Capture compatibility and long-term stability remain under testing.
+## Source and build
 
-## Development and License
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.0 build/source](docs/BUILD_2.0.0.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
-[Build Instructions](docs/BUILD.md) · [Runtime Components](docs/RUNTIME_COMPONENTS_1.4.4.md) · [Third-Party Notices](THIRD_PARTY_NOTICES.md)
-
-Original Veyra source is [GPLv3](LICENSE); the combined streaming program also falls under [AGPLv3 and the upstream OpenSSL exception](licenses/remoteplay/CHIAKI_AGPL3_OPENSSL.txt). Application source matches the release tag. The combined source ZIP includes RemotePlay and patched FFmpeg dependency source archives; it is not needed to run the player. SDKs, models, and runtimes are excluded from this source repository. Release components retain their separate licenses and experimental distribution boundaries.
-
-Stage cards and the main chart report enhancement GPU processing times. Extra picture delay is estimated separately in the detailed view; neither is measured button-to-screen latency. Files can be processed ahead. Sustained overload skips expired preview frame opportunities to keep media time advancing and audio continuous; export retains complete processing.
-
-### Experimental GPU DIS motion
-
-Select GPU DIS · FAST in the optical-flow menu to compare results. NVOF remains
-the default. This implementation was substantially slower than NVOF on our RTX
-5070 in a 1080p synthetic test; a performance improvement is not promised.
-
-Version 1.4.1 removes export qualification gates and the final frame-by-frame
-scan; encoding and muxing errors are still reported. Embedded subtitles are not preserved. Avoid simultaneous exports from
-multiple instances to the same target file.
-
-In Professional mode, click **Screenshot** in the top toolbar to save the latest processed full-resolution picture under **Pictures / Veyra Screenshots**: PNG for SDR and floating-point JPEG XR (`.jxr`) for HDR output. Use an HDR-capable viewer. Application UI and window zoom are excluded.
-
-## HDR and 5.1
-
-<p align="center"><img src="docs/images/1.4.2/rtx-video-hdr-comparison.jpg" alt="User RTX Video HDR off/on comparison" width="720"></p>
-<p align="center"><small>User camera comparison: top off, bottom on. This illustrates one setup; it is not raw HDR pixels or a luminance measurement.</small></p>
-
-Native HDR support is retained. Version 1.4.2 adds SDR conversion using RTX Video HDR. Since 1.4.0, supported Dolby/DTS capture streams can be decoded to PCM; this is not compressed bitstream passthrough. Individual HDR displays, 5.1 endpoints, and capture cards still require hardware acceptance.
-
-Enable RTX Video HDR under Professional mode > Enhancement, with contrast, saturation, middle gray and peak brightness controls. HDR preview requires an HDR display with Windows HDR enabled; SDR displays retain SDR, and HDR export needs no HDR display. This is the video technology, not game RTX HDR.
-
-Frame pacing under Professional mode > Motion defaults to Off. Choose Low Queue, Uniform Presentation or experimental NVIDIA Reflex. With FG, Reflex falls back to Low Queue; XeSS retains provider scheduling. These options control queuing and cadence, not GPU throughput. See the [latency report](docs/FRAME_PACING_ACCEPTANCE_2026-09-18.md).
-
-- Files, P010/P016 capture and PS5 can use explicitly described BT.2020 NCL PQ/HLG input. Windows HDR enables retained HDR output with NR, DLSS SR / RTX Video SR and DLSS / XeSS FG. NR / Video SR use an SDR proxy plus the retained HDR base, with reduced changes near black and compressed highlights. This is not native HDR NR inference. HLG uses a 1000-nit, gamma-1.2 reference conversion.
-- Capture defaults to device color metadata. Manual PQ / HLG is available for devices that omit it, requiring P010/P016. Ten-bit storage alone does not identify HDR. RGB/YUY2 HDR and BT.2020 constant-luminance input are unsupported.
-- HDR video export uses HEVC Main10 / BT.2020 / PQ, including HLG-to-PQ conversion and optional NR, SR and internal DLSS FG. XeSS remains preview-only. HDR export requests with H.264 selected use HEVC Main10. HDR screenshots use lossless scRGB FP16 JPEG XR. Original mastering/peak metadata is not invented or reused after processing.
-- File and capture PCM preserve speaker positions through one audio clock, compensation and volume path. Capture tries actual multichannel device formats first. Configure the Windows endpoint for 5.1; stereo endpoints receive an explicit downmix. Detailed status reports input/output channel counts. PS5 remains stereo. Compressed Dolby/DTS passthrough and Atmos object audio are not implemented.
-
-RTX 5070 GPU output, HDR export and software channel isolation have local test evidence. HDR display appearance, real 5.1 speaker positioning and individual capture cards require hardware acceptance. See the [execution record](docs/HDR_MULTICHANNEL_EXECUTION_2026-09-14.md). Fresh-install effects remain off.
-
-The capture panel also offers **Convert to SDR display**, off by default. It controls all live previews, maps HDR to SDR without changing input metadata or disabling enhancement, and can be toggled during playback without reconnecting. Disabling it follows the display HDR state. Screenshots follow the preview; video export retains its existing HDR policy.
-
-## Acknowledgments
-
-Thanks to [Magpie Experimental](https://github.com/SAOG0721/Magpie/tree/experimental) for research insights into NR residual composition, optical flow, and enhancement pipelines; to [chiaki-ng](https://github.com/streetpea/chiaki-ng) for the PS5 streaming foundation; and to [XeSS-GPU-Motion](https://github.com/gggz114514-oss/XeSS-GPU-Motion) for its GPU DIS optical-flow implementation.
-
-See [Third-Party Notices](THIRD_PARTY_NOTICES.md) for other dependencies, sources, and licenses.
-
-## Support and feedback
-
-If this project helped you, you can buy the author a coffee (WeChat QR below). For bugs, or to get beta builds first, join the group.
+## Support
 
 <p align="center">
-  <img src="docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/images/1.4.4/community-group.png" alt="Veyra community group / bug reports / beta builds" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.0.0/docs/images/2.0.0/community-group.png" alt="Veyra community group 4" width="220">
 </p>
-<p align="center"><small>Left: WeChat donation (voluntary; no feature is ever gated behind it) - Right: Veyra community group for bug reports and beta builds.</small></p>
+
+Left: optional donation, no feature restrictions. Right: community group; QR valid **before 2026-10-09** as shown. Check repository updates after expiry.

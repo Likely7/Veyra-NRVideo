@@ -1,5 +1,38 @@
 # Veyra 工作记录
 
+## 2026-10-02 GitHub 2.0.0 发布
+
+用户授权提交/发布 2.0.0，重写双语 README 与操作教程、重点节点模式和新版架构；Release 中文后英文、先新功能后修复。新 Logo、专业模式截图、新群码入文档，赞助图及 220px 保留。新增依赖源码及 Qt 官方源码材料已归档核验，运行库不变；公开执行与证据路径见 RELEASE_2.0.0_PUBLIC_2026-10-02.md。实际发布回执保存在 releases/2.0.0-final-20261002/publish-receipt.json。旧阶段“不发布”限制被当前用户授权取代，硬件未验项不变。
+
+## 2026-10-02 新 2.0.0 包：OBS 开关重启确认和图标整合
+
+- 用户确认 OBS 候选正常，授权加入开关、是/否重启弹窗、持久化并构建新包。在 release 隔离分支整合 OBS 五文件改动及既有图标，main/OBS 分支不动。产品新增仅 bridge 重启方法、Qt 生命周期结束后重启和设置页确认框；guard 增加四个必要 UI 路径，旧基线不改。
+- 保存后弹“需要重启软件”，否保留当前会话，是释放 UI/engine 后启动相同 EXE；保留 data-dir，不继承单次兼容/打开/测试参数，导出期间不打断任务。新 EXE 和窗口/任务栏统一用十尺寸图标。
+- build-obs-restart-v2.log 编译链接通过；obs-restart-v3 三组真实进程/信号回归全过，覆盖否、启用并重启、禁用并重启；1864 条 i18n 测试 0 failures。两次测试夹具问题及补证据见 docs/RELEASE_2.0.0_OBS_RESTART_2026-10-02.md，不冒充产品通过。
+- 新产物 releases/2.0.0-obs-20261002，构建/日志/测试/临时仍在 E:/项目/Veyra 对应 release-2.0.0-20261002 子目录。打包按已有锁逐文件检查 runtime、签名/版本、patched FFmpeg 来源及许可证，附 Veyra 源码快照。完整第三方对应源码集合仍是公开发布前待办，本轮仅本地交付。最终压缩包核验及冒烟记录随包另附。
+- 未 commit、merge、push 或公开发布；未宣称跨显卡/数小时稳定，无独立 Reviewer。
+
+## 2026-10-02 EXE/任务栏新图标与 OBS 缩放崩溃
+
+- 用户授权使用桌面 UI/新logo.png：内置 imagegen 生成圆角炭黑渐变底、保留白色像素手柄/柔光、角外透明、无文字。原图保留；生成图落地 assets/veyra-app-icon.png，格式转换 assets/veyra.ico（16/20/24/32/40/48/64/96/128/256）。生成器原输出位于 Codex generated_images，本地源码资产不依赖该路径。
+- apps/veyra-qml/main.cpp 用 LoadImageW 读取已有 IDI_VEYRA，QImage::fromHICON 转换十尺寸，DestroyIcon 释放句柄，QApplication::setWindowIcon 设置窗口/任务栏图标。未改变渲染后端。guard 仅新增上述三个明确路径许可，旧基线未改。package-qml-release.py 临时目录改为 E 盘唯一目录，避免同版本重复打包目录冲突。
+- `release-2.0.0-build.py build-icon.log veyra_qml_ui` 编译链接成功；ICO 十个资源负载与 EXE 逐字节相同。初始 PE 核对脚本误把 ICO planes=0 与 RC 规范化 planes=1 当作失败，排查后确认全部十个像素负载相同；该次启动脚本在断言处退出，尚未启动新版/验证任务栏外观。
+- 用户随后报告 OBS 游戏采集时 resize 崩溃并要求先不构建。已停止后续构建/打包，未覆盖已交付 ZIP 或 EXE。图标改动待运行验证和重新打包。
+- 已采集原包 17:38/17:40 两个转储、应用和 OBS 日志；对照官方 OBS 32.1.2 捕获源码。证据 E:/项目/Veyra/tests/obs-resize-20261002，诊断见 docs/OBS_RESIZE_CRASH_2026-10-02.md。OBS 多交换链共享资源生命周期冲突为首要假设，未完成符号化调用栈/隔离复现，不报告已修复。此问题阻断正式发布，不将之前 19 组回归与四分钟短测外推到 OBS 兼容通过。
+
+## 2026-10-02 2.0.0 正式版本号本地稳定性包
+
+- 用户取消 RTSS/GamePP 修复后，另行要求构建 2.0.0 正式版本包供稳定性测试。本轮新分支 `codex/release-2.0.0-20261002` 从 main `aafdeb061e45ae8cdaebfaf68e16c3d589771c05` 创建，产品源码保持逐文件一致；不恢复已取消的 UI 适配、不合并、不推送、不发布。
+- 独立产物：`E:/项目/Veyra/{build,tests,logs,tmp,archives}/release-2.0.0-20261002`。1256 文件基线存于 archives；`python -B scripts/acceptance/release-2.0.0-control.py` 在构建及验收时通过。旧桌面及旧 guard 未修改。
+- 全量 Release 构建：`python -B scripts/acceptance/release-2.0.0-build.py build-release.log <21 targets>`，497/497 编译链接通过，完整命令与生成配置在本轮日志和 tmp/build.cmd、dependencies.cmake。Qt 6.8.3；Remote Play、Moonlight、Xbox 开启；沿用已打 PS5 slice 补丁的 FFmpeg。
+- `stage-ui-migration.ps1 -UiTarget qml` 建立独立测试目录，随后 `release-2.0.0-tests.py unit-regression`：19 组全通过（QML 29 项通过，仍有既有夹具销毁警告）；`... export-regression --export`：10 场景全通过并用 ffprobe 核对生成视频及音轨/字幕数量，包含取消、边界取消、队列重试、MP4/MKV 和不兼容字幕负例。不会把离线串流协议测试写成实际主机通过。
+- `test-qml-release-package.py`：10 个正/负测试通过，覆盖错误哈希/大小、遗漏许可证、自引用清单、未列入文件、大小写冲突、越界路径、符号链接及私有/开发文件。
+- 新 QML 打包脚本只取当前产物和核验白名单；42 个增强/采集运行文件（13 DLL + 29 内核）复核大小/哈希，DLL 签名和数字版本一致；附 Qt/既有依赖/新增串流/Transfusion 许可。没有把个人配置、测试程序或媒体塞进包。windeployqt 报找不到可选 dxcompiler/dxil DLL，实际清空开发 PATH 的启动结果另见产品验证日志。
+- 便携 ZIP：`E:/项目/Veyra/releases/2.0.0-local-20261002/Veyra-2.0.0-win64-portable.zip`，414092210 字节，SHA256 `2eb3d93f50cca8c67442e4d5d409bc19397240a15682eb46f7e484e701f5d8e4`；清单 1507 个文件逐项核验，重新解压到 verify 目录后再次一致。EXE SHA256 `858fb8f63d9b7dc5dff2c8bc1981a6fa997912160617a48b4bfd76a6f220d783`。
+- Veyra 源码快照单独提供，明确标记不是完整第三方依赖对应源码集合。正式公开分发前仍须补齐该集合；本轮仅交付用户本地测试。README 明确标注 RTSS/GamePP 兼容未修、历史 TDR/显存反馈未解，以及跨硬件/真实串流等未验边界。
+- 从实际 ZIP 解压副本启动 4K H.264 产品验证：独立 data-dir、清空开发 PATH、240 秒定时退出和260秒外部超时，用户同时操作界面；本轮 RTSS/GamePP 未注入。最终退出码、实际帧数和错误汇总见随包单独提供的 STABILITY_REPORT.md，不以短测推断长期稳定。
+
+
 ## 2026-10-02 界面多语言（繁體中文 / English / 日本語）
 
 - 分支 `codex/i18n-20261002`（从 main `b205d29`）。设置 → 界面语言可选跟随系统 / 简中 / 繁中 / 英 / 日，立即生效；日志保持中文。说明见 `docs/I18N_2026-10-02.md`。

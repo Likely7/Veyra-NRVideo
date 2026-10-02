@@ -1,166 +1,119 @@
 # Veyra
 
-<p align="center"><img src="assets/veyra-logo.png" alt="Veyra" width="200"></p>
+<p align="center"><img src="assets/veyra-app-icon.png" alt="Veyra" width="160"></p>
 
-[English](README_EN.md) | 简体中文
+简体中文 | [English](README_EN.md)
 
-<p align="center">
-  <a href="https://github.com/Likely7/Veyra-NRVideo/blob/main/REAMDE%20MP4.mp4">
-    <img src="assets/readme-demo.gif" alt="Veyra 演示视频" width="960">
-  </a>
-</p>
+<p align="center"><img src="docs/images/2.0.0/professional-mode.png" alt="Veyra 2.0.0 专业模式" width="1200"></p>
 
+Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
 
-Windows 视频播放器与采集卡增强工具。支持视频、图片、采集卡实时预览和 PS5 局域网串流，可组合使用超分辨率、NR 画面增强与补帧。
+[下载 2.0.0 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.0) · [完整更新（中文 / English）](docs/RELEASE_NOTES_2.0.0.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
-[下载 1.4.4 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v1.4.4) · [更新记录](docs/RELEASE_NOTES_1.4.4.md) · [反馈问题](https://github.com/Likely7/Veyra-NRVideo/issues)
+## 2.0.0 重点
 
-## 1.4.4 更新
+- **全新界面**：首页、极简、专业列表、节点、调色、导出和设置重新组织；支持简中、繁中、English、日本語。
+- **节点编辑与多层 NR**：连线编排处理顺序，NR/调色独立参数；列表与节点各自保存配置、会话和预设。
+- **PC / Xbox 串流**：Moonlight/Sunshine 协议 PC 串流、非官方实验 Xbox 接入，与 PS5、采集卡、屏幕捕获共用增强。
+- **导出页重做**：可编辑顺序队列、剪辑、MP4/MKV、多音轨/内嵌字幕、取消重试和完成提示音。
+- **增强与兼容**：NR 双版本、DLSS/XeSS/FSR 补帧入口、采集优化及带重启确认的 OBS 游戏采集开关。详细新功能与修复见 Release。
 
-**补帧闪烁**：三个独立成因都已修掉——文件播放跳帧、重复呈现同一帧、采集丢帧，都不再清空 NR/补帧时域历史（此前每次都要重新预热）。
+## 下载、启动与升级
 
-**帧同步重做**：删掉实测无差异的三个模式选择器，改为低延迟队列／显示同步／输出上限三项独立控件；**输出上限现在决定补帧实际生成多少**，不再是算完再丢（原生 DLSS 6X 实测生成帧 −71%、功耗 221→174 W；真超分档只降约 4 W）。补帧页同时新增“严格补帧节奏”开关（默认关闭＝1.4.0 的宽松规则），并修掉它与相邻控件重叠的排版问题。
+1. 下载 **Veyra-2.0.0-win64-portable.zip**，完整解压到可写新目录，运行 **veyra_qml_ui.exe**。Source code 和依赖源码包不用于直接运行。
+2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
+3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
+4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
 
-**采集卡与管理**：修复“选 1080p YUY2 却打开 4K RGB24”的格式串档；新增输入色彩空间／范围选择与 Elgato 4K60 Pro MK.2 专用 HDR 元数据入口；采集链路回调、缓冲与音频端点变化的韧性修复。
+## 新版操作
 
-**界面与字幕**：修复专业模式快速滚动的白影／重叠；增强页与补帧页重排；字幕默认保留设置字号，双行不再自动缩小；全屏新增锁定，鼠标晃动不再弹出控制条。
+### 片源与页面
 
-**已知边界**：真 1080p→4K 超分＋NR 下 DLSS 4X/6X 仍有长间隔，XeSS 4X 重负载连续性仍待解决；软件提交 FPS 不等于屏幕刷新率或肉眼流畅度。本版不宣称“补帧受限”已根治。[完整更新、实测数据与已知问题](docs/RELEASE_NOTES_1.4.4.md)。
+首页选择 **打开视频、采集卡、PS5 串流、PC 串流、Xbox 串流、屏幕捕获**；本地视频/图片也可拖入。底部导航切换首页、极简、专业、调色、导出和设置；隐藏时移到下沿唤出。
 
-## 下载与运行
+- **极简**以画面为主，悬浮条控制片源、进度、音量和全屏，可在设置中隐藏。
+- **专业列表**右侧为画质、补帧、色彩、声音、显示；顶部处理顺序可定位设置，底部显示输入/输出、GPU 耗时和负载。
+- 文件画面点击暂停/继续，左右键跳转 5 秒；双击或点按钮切全屏。全屏移到顶沿可切换极简/专业，列表全屏按 **Home** 打开快速调节，**Ctrl+L** 锁定控制条。快捷键可在设置修改。
+- 顶部 **截图** 保存处理画面；预设菜单保存、管理、导入自己的配置，不强加内置画质预设。
 
-1. 在 [Releases](https://github.com/Likely7/Veyra-NRVideo/releases) 下载 **Veyra-1.4.4-win64-portable.zip**，不要下载 Source code。
-2. 完整解压到一个可写文件夹，双击 **Veyra.exe**。无需安装 SDK、Python 或开发工具。
-   首次启动 NR、超分和内部补帧均关闭，确认基础画面后按需开启；导入旧设置会恢复原来的开关。
-3. 使用当前显卡驱动。要使用 NVIDIA NR、DLSS、RTX Video SR 和 NVENC，需兼容的 NVIDIA RTX 显卡；本版本主要在 RTX 5070 上验证。
+### 列表模式
 
-系统要求：Windows 11 x64、DirectX 12。便携包含当前功能所需运行组件，显卡驱动和采集卡驱动由系统提供。8K 超分和原生高分辨率增强需要更多显存，不保证每个组合都能实时运行。
+顶部选 **列表**，按需开启超分、NR、RTX Video HDR。NR 最多四层，独立调整内部尺寸、强度等参数；总开关关闭全部 NR，重开恢复各层原状态。
 
-升级时先退出旧版，解压到新目录。需要保留设置时，复制旧目录下的 `runtime_local/*.v1` 与 `veyra.ini`；不要用旧目录整体覆盖新版运行组件。
+列表的 **NR 全局保护区域**排除区域内全部 NR 层效果，保留非 NR 处理结果，可用于 HUD/字幕。调色页提供基础调整、曲线、混色器、色轮、LUT 与颜色预设。
 
-## 使用教程
-如果这个项目对你有所帮助，欢迎请作者喝杯咖啡！你的支持是持续维护的最大动力
+补帧页选可用后端/倍率，并核对内容节奏、显示同步、低延迟队列、输出上限。原画/增强对比期间补帧暂停，退出恢复。提交 FPS 不等于物理屏幕显示帧数或端到端延迟。
 
-<img width="276" height="374" alt="7baf2084b2310a7e685c5355bf9307d3" src="https://github.com/user-attachments/assets/1438c8f7-08b4-46fd-ad5e-6d83c46cdec2" />
+### 节点模式：编排自己的处理链
 
-BUG反馈与新功能
+专业页顶部选 **节点**。这是实际执行的处理链，不只是示意图。
 
-<img width="318" height="476" alt="屏幕截图 2026-09-19 095641" src="https://github.com/user-attachments/assets/a4479395-1456-48c1-98d4-e343a2102c3b" />
+1. 从输入到输出保持有效连接。空白处右键或点 **添加节点**。
+2. 拖动输出端口到输入端口，或依次点击两端。节点拖到线上可插入；拖离主链或按住 **Alt** 松手可断开。
+3. 在节点内直接调参数，NR/调色可独立设置、按允许顺序放在超分前后。右键可删除、复制、重置；复制产生独立的**未连接副本**，接入前不运行。
+4. **中键平移、滚轮缩放**；适配视图/自动排列整理布局。“草稿未运行”表示编辑链未连通或不合法，不代表所有可见节点都生效。
+5. 光流在输入后计算并共享，超分为单实例；RTX Video HDR 在补帧前，补帧固定末端，DLSS/XeSS/FSR 选一个后端。不是任意分支混合图。
+6. 列表和节点分别保存参数、预设、会话。切回列表恢复原列表配置，节点链保留；切换重建处理链，可能短暂停顿。
 
+**2.0.0 节点模式不支持离线导出，也没有列表的 NR 全局保护区域。** 导出前切回列表并确认效果，不会自动转换节点链。
 
-### 视频与图片
+### 采集与串流
 
-专业模式顶部点击 **截图**，保存处理后的完整画面到系统“图片”文件夹下的 `Veyra Screenshots`，SDR 保存为 PNG，HDR 保存为保留浮点高亮的 JPEG XR（`.jxr`），需支持 HDR 的看图软件。
+| 来源 | 操作要点 |
+|---|---|
+| 采集卡 | 选设备、格式、尺寸、帧率和音频输入；关闭其他程序占用。PQ/HLG/709、Limited/Full 匹配实际信号。美乐威 Pro Capture 有专用低延迟选项。 |
+| PS5 | 主机启用远程游玩，搜索或手填 IP，使用 PSN Account ID 和主机八位配对码；已保存主机可重连。 |
+| PC | 主机自行安装配置 Sunshine；Veyra 发现/添加主机、PIN 配对、选应用或桌面连接。Sunshine 不随包安装。 |
+| Xbox | 按设备码流程登录，选开启远程功能的主机。非官方实验功能，服务、账号与主机限制可能影响连接。 |
+| 屏幕 | 选窗口/显示器，避免捕获 Veyra 自身形成递归。 |
 
-点击底栏“打开”选择文件。底栏提供播放、进度、音量、字幕和全屏；切换到专业模式后，鼠标位于画面上时可用滚轮缩放。
+暂停采集/串流冻结预览并保留会话，不会暂停主机游戏。实卡、网络、HDR、手柄需按设备验证。
 
-### 采集卡
+### 导出
 
-1. 连接设备，关闭其他软件对同一采集卡的占用。
-2. 点击“采集”，选择设备、分辨率、帧率、像素格式及音频设备。
-3. 在“音频监听”中按来源选择 `[DirectShow]` 或 `[WASAPI]`；默认是不监听音频。WASAPI 端点用 Windows 设备 ID 保存，只连接你明确选中的输入，不会自动切到麦克风或系统回录。
-4. 先关闭增强确认基础画面，再按需打开 NR、超分和补帧。同一模式下可优先试 YUY2 / NV12。
-5. 若主机游戏为30fps、采集卡输出60fps，在专业模式的内容节奏中选择60转30；真正60fps内容使用原始采集节奏。
+切到**列表**确认效果，再打开导出页。添加文件后可排序、逐项修改、设置剪辑、MP4/MKV 与编码质量；音轨/内嵌字幕可保留全部或指定。
 
-### PS5 串流
+“保留全部”遇到封装不支持的轨道会跳过并提示；明确指定不支持轨道则报错。可暂停、取消重试，完成可响铃。默认 VBR 8 Mbps、导出时关闭当前播放以释放 GPU，可修改。实时补帧不代表所有后端支持离线补帧，以导出页接受的配置为准。
 
-1. PS5 和电脑连接同一局域网，优先网线。在 PS5 **设置 → 系统 → 远程游玩**中启用远程游玩。
-2. 点击软件 **PS5** 并搜索主机。搜不到时，在 PS5 **设置 → 网络 → 连接状态 → 查看连接状态**找到 IPv4 地址，手动填写。
-3. 填入 **PSN Account ID**，不是昵称或 Online ID。实验性“登录 PSN”可打开索尼网页；完成登录后复制最终跳转网址，再点击“从剪贴板提交登录结果”获取 ID。
-4. 首次配对仍需 PS5 **远程游玩 → 关联设备**的八位配对码。成功后选已保存主机直接连接，不需每次重新配对。
-5. 手柄连接 **电脑**，DualSense 优先 USB。兼容设备支持触摸板、陀螺仪、震动及自适应扳机，效果取决于设备、连接方式和游戏。“仅观看”不转发 PC 手柄，也不保证同账号下 PS5 直连手柄与串流会话共存。
+### OBS 与设置
 
-输入最高可选 1080p；2K / 4K / 8K 是本地超分目标，不是主机原生串流分辨率。H.264 / H.265 可选，码率请求范围 5–100Mbps，不保证主机实际达到请求值。自动解码优先硬解、失败回退软解，也可手动指定。
+OBS 游戏采集前，开启 **设置 → 通用与外观 → OBS 游戏采集兼容**。立即保存，选“是”重启生效，“否”下次生效；导出时需等任务结束。兼容模式 UI 软件绘制，部分阴影/模糊简化，视频增强仍用 GPU。游戏采集抓**视频**；录完整界面用 Windows 10 (1903+) 窗口采集。
 
-主机和 PSN 凭据加密保存在 **%LOCALAPPDATA%/Veyra/remoteplay**，绑定当前 Windows 用户，升级不需搬运；不要分享这个目录。退出 PSN 不删除主机配对。首次免配对码注册、外网串流未实现。
+设置还包含语言/缩放、快捷键、GPU 监控显卡、音频设备、组件信息。反馈附显卡/驱动、素材、效果组合、发生时间及 `logs/veyra-qml.log`，崩溃附 `.dmp`；分享前检查私人信息。
 
-**实验 HDR**：H.265 HDR 在 Windows HDR 开启时可保留 HDR 输出，也可同时开启 NR、超分和补帧。NR / RTX Video SR 处理映射副本，再与原 HDR 基底合成，属于 HDR 保留增强，不是原生 HDR NR 模型；SDR 显示器仍先映射为 SDR。真实 PS5 HDR 与 Sony 登录仍待进一步验收。
+## 已知边界
 
-### 增强与补帧
+RTSS/游戏加加适配已撤回，OBS 开关不代表这些工具兼容。RTX 30/40 社区 NR/补帧、FSR 4 ML 实卡、部分 NR TDR/显存增长与跨设备串流仍有未验证或未解决项，详见 Release。社区运行库不代表厂商认证或完整官方 DLSS 5 集成。
 
-光流可选 NVIDIA NVOF、AMD FidelityFX 和 **GPU DIS · FAST 实验**，默认 NVOF。GPU DIS 供效果对比，本机 1080p 合成测试明显慢于 NVOF，不保证提升性能。
+## 架构
 
-专业模式中分别开启 NR、超分和补帧。超分下方选择算法及目标尺寸；补帧页选择 DLSS 或 XeSS 及可用倍率。建议从实时 NR、较低 RTX Video SR 档位和2X补帧开始，结合对比画面与实时状态调整。
+```mermaid
+flowchart TD
+    UI[Qt Quick / QML 页面] --> Bridge[共享 Bridge / 配置 / 会话 / 预设]
+    Sources[文件 / 采集卡 / PS5 / PC / Xbox / 屏幕] --> Source[FrameSource：帧、时间戳、色彩]
+    Bridge --> Graph[共享 EnhanceGraph：有效处理链]
+    Source --> Graph
+    Graph --> Effects[多 NR / 单 SR / 调色 / Video HDR]
+    Effects --> Live[实时预览：可选末端补帧]
+    Live --> Present[原生 D3D12 视频窗口]
+    Effects --> Export[列表离线导出 / 截图]
+    Export --> Sink[编码封装 / 图片保存]
+    Bridge --> Queue[导出队列：每任务配置快照]
+    Queue --> Export
+```
 
-处理跟不上时降低画质、倍率或目标尺寸。四个阶段卡显示光流、NR、超分、补帧的 GPU 耗时；曲线显示光流、NR、超分、残差合成、补帧的总增强处理耗时；展开后的第一项另列画面额外延迟估计。两者口径不同，都不是按键到屏幕的实测延迟。
+QML 管界面，视频由原生 D3D12 呈现。列表/节点共用引擎，未连接草稿不运行；导出不是录制预览窗口。
 
-音画同步自动跟随软件处理链路，采集卡音视频共同的输入延迟不会重复补偿。轻微耗时波动不会逐帧停放声音；持续欠速时实时预览跳过过期的补帧或源帧增强机会，保持媒体时间前进。导出仍完整处理，不采用预览跳帧策略。
+## 开源与构建
 
-鼠标在设置上停留约半秒即可查看说明。默认超分→NR→补帧；“低延迟模式”改为 NR→超分→补帧，默认关闭，仅影响预览。可能降低耗时，也可能增加拖影或边缘瑕疵。
-
-### Smooth Motion（NVIDIA App AI 插帧）
-
-只用 Smooth Motion 时，在软件中将补帧倍率设为**关闭补帧**，再到 **NVIDIA App → 图形 → 当前使用的 Veyra.exe → AI 插帧 → 开**，应用后重启播放器。NR、超分可以照常使用；专业模式的补帧页也提供展开说明。
-
-只想用 DLSS / XeSS 时，在 NVIDIA App 关掉 AI 插帧并重启，再选择软件补帧。也允许两者同时开启，不作拦截；叠加效果未验证，可能增加重影、延迟或 GPU 负担。软件的“关闭补帧”和总增强开关不会关闭驱动功能。
-
-软件 FPS、耗时与队列不包含驱动生成部分；截图、导出不包含驱动中间帧。额外音画延迟、直播捕获结果需自行验证。本机用户已反馈 Smooth Motion 有效且稳定，不代表所有显卡和驱动均已验收。
-
-### 导出与运行组件
-
-在专业模式选择图片保存或视频导出、格式与输出位置。1.4.1 已取消导出资格门禁和结束逐帧扫描；编码与封装失败仍报告真实错误，可取消任务。内嵌字幕暂不保留；不要让多个实例同时导出到同一个目标文件。XeSS 目前仅用于预览；视频导出使用已支持的 DLSS 路径。
-
-允许自行替换 DLL：退出软件后，NVIDIA 文件放在 `runtime/experimental/`，XeSS / XeLL 放在 `runtime_local/intel/experimental/`，保留文件名。软件不锁定哈希或签名；清单仅记录发布包原件，替换版的接口与硬件兼容性不作保证。卸载整个软件只需退出后删除解压目录。
-
-### NR 运行版本
-
-专业模式 → 增强 → NR 运行版本，可选 NVIDIA 原版、RTX 40/50 社区版或 **RTX 30 兼容 · 实验**。选择版本后再手动开启 NR。切换会短暂停顿，失败恢复上一套设置。
-
-两种社区组件分别在 `runtime/experimental/nr-community/` 和 `nr-ampere/`，无需覆盖原版；均为修改文件，签名状态 `HashMismatch`。三种运行版本已在 RTX5070 验证切换和 NR 执行。1.4.1 的 RTX30/40 修复经受影响用户反馈可用，具体性能与画质仍取决于显卡、素材和设置。NR 运行版本与 DLSS 补帧分别设置；RTX30/40 最高 6X 由补帧兼容层提供。
-
-### OBS 直播与录制
-
-添加“窗口采集”，选择 Veyra，并将“捕获方式”手动设为 **Windows 10（1903及以上）**。不要依赖“自动”：它可能选中 BitBlt，导致只捕获 UI、视频区域没有画面。本机已通过切换到该 Windows 捕获方式恢复视频。
-
-软件里的“直播兼容 · 实验”只切换显示交换链，不能解决 BitBlt 捕获问题，默认关闭即可。其他录屏软件优先选 Windows Graphics Capture / WGC；未验证所有录屏软件及补帧输出的捕获节奏。
-
-## 技术路线与边界
-
-<img width="332" height="576" alt="123" src="https://github.com/user-attachments/assets/3cd48fca-2f7b-418a-8b0e-0848f6bde556" />
-
-
-C++20、Win32、D3D12；文件由 FFmpeg 处理，采集使用 DirectShow，视频导出使用 NVENC。各入口共享增强管线，采集保留最新帧，光流提供估算的运动信息。
-
-NR 与 DLSS 帧生成属于 **community experimental / 社区实验集成**，不是 NVIDIA 官方认证或完整游戏原生集成。采集画面没有游戏引擎的原生深度和运动数据，效果可能存在拖影或细节变化。AMD NR 暂未提供；FRUC 已移除；HDR 适用范围见下文；AV1 / ProRes 导出尚不支持。实卡兼容性与长期稳定性仍需持续验证。
-
-## 开发与许可
-
-[构建说明](docs/BUILD.md) · [组件清单](docs/RUNTIME_COMPONENTS_1.4.4.md) · [第三方许可](THIRD_PARTY_NOTICES.md)
-
-Veyra 原有源码采用 [GPLv3](LICENSE)；含串流的组合程序同时适用 [AGPLv3 与上游 OpenSSL 例外](licenses/remoteplay/CHIAKI_AGPL3_OPENSSL.txt)。应用源码对应版本标签，Release 另附串流依赖与 FFmpeg 对应源码包，普通用户无需下载。SDK、模型和运行时不进入源码仓库；Release 组件按各自许可与实验发布范围单独提供。
-
-## HDR 与 5.1
-
-<p align="center"><img src="docs/images/1.4.2/rtx-video-hdr-comparison.jpg" alt="用户提供 RTX Video HDR 关闭与开启对比" width="720"></p>
-<p align="center"><small>用户拍摄对比：上图关闭，下图开启。照片仅展示该设备下的观感，不是原始 HDR 像素或显示器亮度测量。</small></p>
-
-保留原生 HDR 能力，1.4.2 新增 SDR 转 RTX Video HDR。真实 HDR 屏、5.1 扬声器和不同采集卡仍须逐台验收。1.4.0 起采集 Dolby/DTS 可解码到 PCM，不等于压缩码流直通。
-
-RTX Video HDR 开关在专业模式的增强设置，可调整对比度、饱和度、中间灰和峰值亮度。HDR 预览需要 HDR 显示器并开启 Windows HDR；SDR 屏保持 SDR，HDR 导出不要求 HDR 屏。这是视频版技术，不是游戏 RTX HDR。
-
-帧同步位于专业模式 → 运动，默认关闭，可选低排队、均匀呈现、NVIDIA Reflex（实验）。补帧开启时 Reflex 回退低排队，XeSS 保持自身调度。它控制排队和呈现节奏，不提高 GPU 算力。[实测与边界](docs/FRAME_PACING_ACCEPTANCE_2026-09-18.md)。
-
-- **HDR 输入 / 增强**：文件、P010/P016 采集与 PS5 HDR；支持明确标记的 BT.2020 NCL / PQ 或 HLG。Windows HDR 开启时，可组合 NR、DLSS SR / RTX Video SR、DLSS / XeSS 补帧。NR / Video SR 使用 SDR 代理和 HDR 基底合成，压缩高光和近黑区域的增强会衰减；不把 SDR 结果逆造为原始 HDR。HLG 使用 1000nit / gamma 1.2 参考转换。
-- **SDR 显示开关**：采集卡面板的“转为 SDR 显示”默认关闭，控制所有实时预览。打开后将 HDR 映射为 SDR，增强照常可用；播放中切换无需重连，可能短暂停顿。关闭后跟随显示器 HDR 状态。截图跟随当前画面，视频导出保持原有 HDR 规则。
-- **采集颜色**：默认使用设备元数据。设备漏报时，在采集面板选择手动 PQ 或 HLG，且必须选择 P010/P016。10bit 本身不代表 HDR；RGB / YUY2 HDR 及 BT.2020 constant-luminance 暂不支持。
-- **HDR 导出 / 截图**：视频选择 HEVC，输出 Main10 / BT.2020 / PQ；HLG 也统一输出 PQ。支持 NR、超分和内部 DLSS 补帧。XeSS 仍只支持预览；H.264 不承载此 HDR 导出。截图为 FP16 scRGB JPEG XR。导出不虚构或沿用处理前的峰值元数据；普通 PNG/JPEG 保持 SDR。
-- **5.1 音频**：文件解码与采集 PCM 保留声道位置，共用一套音频时钟、补偿和音量处理。采集优先尝试设备真实提供的多声道模式。Windows 输出设备须配置成 5.1；仅支持立体声时明确降混，在详细状态中显示输入 / 输出声道数。PS5 保持上游提供的立体声，不伪装成 5.1；本轮不提供 Dolby/DTS 压缩码流直通或 Atmos 对象音频。
-
-本机 RTX 5070 已验证 GPU 输出、HDR 文件导出及多声道软件数据；真实 HDR 屏观感、5.1 扬声器定位和各采集卡仍需实机验收。各组合记录及边界见 [施工记录](docs/HDR_MULTICHANNEL_EXECUTION_2026-09-14.md)。新安装默认仍关闭全部效果。
-
-## 致谢
-
-感谢 [Magpie Experimental](https://github.com/SAOG0721/Magpie/tree/experimental) 在 NR 残差合成、光流与增强处理链方面提供的研究启发；感谢 [chiaki-ng](https://github.com/streetpea/chiaki-ng) 提供 PS5 串流基础，以及 [XeSS-GPU-Motion](https://github.com/gggz114514-oss/XeSS-GPU-Motion) 的 GPU DIS 光流实现。
-
-其他依赖、来源与许可证见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.0.0 构建与对应源码](docs/BUILD_2.0.0.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
 
 ## 支持与反馈
 
-如果这个项目帮到了你，可以请作者喝杯咖啡（微信扫码）；有问题或想第一时间拿到 beta 版，欢迎进群反馈。
-
 <p align="center">
-  <img src="docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/images/1.4.4/community-group.png" alt="Veyra 交流群 / bug 反馈 / beta 测试" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.0.0/docs/images/2.0.0/community-group.png" alt="Veyra 交流群 4" width="220">
 </p>
-<p align="center"><small>左：微信赞助（自愿，不影响任何功能的可用性）　右：Veyra 交流群——bug 反馈与 beta 版本发布</small></p>
+
+左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-09 前**有效，过期请查看仓库更新。

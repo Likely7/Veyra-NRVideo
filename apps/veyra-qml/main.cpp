@@ -11,6 +11,11 @@
 // window to match. That keeps the layout in QML (where it belongs) and the
 // pixels in D3D12 (where the latency budget lives).
 #include <QApplication>
+#include <QProcess>
+#include <QIcon>
+#include <QImage>
+#include <QPixmap>
+#include "../veyra/resource.h"
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickItem>
@@ -360,7 +365,7 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
 }
 } // namespace
 
-int main(int argc, char** argv) {
+static int runApplication(int argc, char** argv, QString& restartProgram, QStringList& restartArgs) {
     // ExportJobManager relaunches the owning executable with an inherited mapping.
     // Dispatch before Qt or the video HWND exists, as the Win32 shell does.
     if (argc > 1 && std::strcmp(argv[1], "--export-worker") == 0) {
@@ -393,16 +398,24 @@ int main(int argc, char** argv) {
     // preference file is read here, from the same data directory the bridge uses.
     // "Auto" leaves Qt following the Windows display scale.
     int uiScale = 0;
+    bool obsGameCapture = false;
     {
         int count = 0;
         LPWSTR* args = CommandLineToArgvW(GetCommandLineW(), &count);
         std::filesystem::path dir = veyra::runtime::localDataDirectory() / L"user-data-2.0.0";
-        for (int i = 1; args && i + 1 < count; ++i)
-            if (std::wstring(args[i]) == L"--data-dir") dir = args[i + 1];
+        bool obsGameCaptureArg = false;
+        for (int i = 1; args && i < count; ++i) {
+            if (std::wstring(args[i]) == L"--data-dir" && i + 1 < count) dir = args[++i];
+            else if (std::wstring(args[i]) == L"--obs-game-capture") obsGameCaptureArg = true;
+        }
         if (args) LocalFree(args);
         QFile prefs(QString::fromStdWString((dir / L"qml-preferences.v1.json").wstring()));
-        if (prefs.open(QIODevice::ReadOnly))
-            uiScale = QJsonDocument::fromJson(prefs.readAll()).object().value(QStringLiteral("uiScale")).toInt();
+        if (prefs.open(QIODevice::ReadOnly)) {
+            const auto saved = QJsonDocument::fromJson(prefs.readAll()).object();
+            uiScale = saved.value(QStringLiteral("uiScale")).toInt();
+            obsGameCapture = saved.value(QStringLiteral("obsGameCapture")).toBool();
+        }
+        obsGameCapture = obsGameCapture || obsGameCaptureArg;
         if (uiScale == 100 || uiScale == 125 || uiScale == 150) {
             qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
             qputenv("QT_SCALE_FACTOR", QByteArray::number(uiScale / 100.0));
@@ -411,14 +424,38 @@ int main(int argc, char** argv) {
             uiScale = 0;
         }
     }
+    // OBS 32.1.2 shares capture state across DXGI swapchains. Keeping Qt off
+    // DXGI prevents its resize/destruction from freeing the video's capture
+    // resources on another thread. This opt-in affects UI drawing only;
+    // the native D3D12 video and enhancement pipeline are unchanged.
+    if (obsGameCapture) {
+        QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
+        veyra::log::info("app", "OBS game capture compatibility: software UI; native D3D12 video unchanged");
+    }
     QApplication app(argc, argv);
+    // Qt does not automatically use the executable's Win32 icon for its windows.
+    // Load the same embedded multi-size resource for the taskbar and Alt+Tab.
+    QIcon appIcon;
+    for (const int size : {16, 20, 24, 32, 40, 48, 64, 96, 128, 256}) {
+        const auto handle = static_cast<HICON>(LoadImageW(GetModuleHandleW(nullptr),
+            MAKEINTRESOURCEW(IDI_VEYRA), IMAGE_ICON, size, size, 0));
+        if (!handle) {
+            veyra::log::error("app-icon", std::format("LoadImageW size={} error={}", size, GetLastError()));
+            continue;
+        }
+        const auto image = QImage::fromHICON(handle);
+        DestroyIcon(handle);
+        if (!image.isNull()) appIcon.addPixmap(QPixmap::fromImage(image));
+    }
+    app.setWindowIcon(appIcon);
+    veyra::log::info("app-icon", std::format("embedded window icon sizes={}", appIcon.availableSizes().size()));
     // The interface draws with Direct3D 12, like the video. Qt's default is Direct3D 11,
     // and a D3D11 device in the process changed how overlays treat it: RivaTuner (MSI
     // Afterburner) then crashed in d3d11.dll inside its own hooks while drawing its OSD on
     // the XeSS swapchain through D3D11On12 (field dumps 2026-10-01). 1.4.4 drew its UI with
     // GDI and had no D3D11 device; the overlays coexisted. VEYRA_UI_RHI=d3d11 restores
     // Qt's default; without a usable D3D12 device Qt keeps it too.
-    {
+    if (!obsGameCapture) {
         wchar_t forced[16]{};
         GetEnvironmentVariableW(L"VEYRA_UI_RHI", forced, 16);
         const bool wantD3d11 = _wcsicmp(forced, L"d3d11") == 0;
@@ -429,6 +466,7 @@ int main(int argc, char** argv) {
     }
     app.setProperty("veyraLogFile", QString::fromStdWString(logPath.wstring()));
     app.setProperty("veyraUiScale", uiScale);
+    app.setProperty("veyraObsGameCapture", obsGameCapture);
     // Frameless windows have no menu, yet DefWindowProc turns a bare Alt tap into
     // SC_KEYMENU and enters modal menu tracking: the next mouse click is eaten and
     // input stalls for about two seconds. Qt has already handled the key itself
@@ -800,6 +838,30 @@ int main(int argc, char** argv) {
     // be verified end to end by a test rather than by a person clicking around;
     // it is not a user-facing feature.
     const int rc = app.exec();
+    if (rc == 42) {
+        restartProgram = QCoreApplication::applicationFilePath();
+        // Preserve the selected profile, not transient capture/open/test flags.
+        const auto args = QCoreApplication::arguments();
+        for (int i = 1; i + 1 < args.size(); ++i) {
+            if (args[i] == QStringLiteral("--data-dir")) {
+                restartArgs << args[i] << args[i + 1];
+                ++i;
+            }
+        }
+        restartArgs << QStringLiteral("--page") << QStringLiteral("set");
+    }
     if (g_video) { DestroyWindow(g_video); g_video = nullptr; }
     return rc;
+}
+
+int main(int argc, char** argv) {
+    QString program;
+    QStringList arguments;
+    const int result = runApplication(argc, argv, program, arguments);
+    if (result != 42) return result;
+    // Player, QML engine and QApplication have all been destroyed.
+    if (QProcess::startDetached(program, arguments)) return 0;
+    MessageBoxW(nullptr, L"设置已保存，但自动重启失败。请重新打开软件。\nSettings saved. Automatic restart failed; please reopen Veyra.",
+                L"Veyra", MB_OK | MB_ICONERROR);
+    return 1;
 }

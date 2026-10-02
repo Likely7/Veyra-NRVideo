@@ -4271,7 +4271,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback"};
+                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback", "obsGameCapture"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -4451,6 +4451,8 @@ void QmlPlayerBridge::resetShortcuts() {
     if (!impl_->savePrefs()) { impl_->prefs = previous; return; }
     emit preferencesChanged();
 }
+bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->property("veyraObsGameCapture").toBool(); }
+
 int QmlPlayerBridge::uiScaleActive() const { return qApp ? qApp->property("veyraUiScale").toInt() : 0; }
 void QmlPlayerBridge::openFeedbackPage() {
     copyDiagnostics();
@@ -4577,6 +4579,16 @@ void QmlPlayerBridge::startExport() {
 }
 void QmlPlayerBridge::cancelExport() {
     impl_->exportQueue.queue().cancel();impl_->exportQueue.refresh();pollExport();emit exportChanged();
+}
+
+void QmlPlayerBridge::restartApplication() {
+    if (exportRunning()) {
+        emit notice(tr("设置已保存，请等待导出结束后重启软件"), true);
+        return;
+    }
+    rememberPosition(true);
+    // main launches the replacement only after UI/engine owners unwind.
+    QCoreApplication::exit(42);
 }
 
 void QmlPlayerBridge::quit() {
