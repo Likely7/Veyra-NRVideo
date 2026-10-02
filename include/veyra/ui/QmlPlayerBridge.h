@@ -52,6 +52,7 @@ class QmlPlayerBridge : public QObject {
     // a display rate is only real if the system display event can be read - the
     // design requires exactly this distinction rather than reusing submit FPS).
     Q_PROPERTY(QString outputSummary READ outputSummary NOTIFY snapshotChanged)
+    Q_PROPERTY(bool fullscreenMemorySafe READ fullscreenMemorySafe NOTIFY snapshotChanged)
     Q_PROPERTY(double displayFps READ displayFps NOTIFY snapshotChanged)
     Q_PROPERTY(bool displayFpsKnown READ displayFpsKnown NOTIFY snapshotChanged)
     Q_PROPERTY(double queuedFrames READ queuedFrames NOTIFY snapshotChanged)
@@ -752,6 +753,7 @@ public:
     int displaySync() const;
     void setDisplaySync(int value);
     Q_INVOKABLE void setPresentationFullscreen(bool value);
+    bool fullscreenMemorySafe() const;
     int outputRateMode() const;
     void setOutputRateMode(int value);
     double outputCustomFps() const;

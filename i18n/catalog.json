@@ -13189,6 +13189,34 @@
    "zh-TW": "；本次匯出使用 AMD FSR 超解析",
    "en": "; this export uses AMD FSR super resolution",
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
+  },
+  {
+   "zh": "全屏期间显存持续增长了 %1 GB，已退出全屏保护播放；当前会话使用窗口播放。增强设置保留。原因尚未确认，可开启设置中的 OBS 游戏采集兼容、重启后测试全屏。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "全螢幕期間顯示記憶體持續增加了 %1 GB，已退出全螢幕保護播放；目前工作階段使用視窗播放。增強設定保留。原因尚未確認，可開啟設定中的 OBS 遊戲擷取相容、重新啟動後測試全螢幕。",
+   "en": "VRAM kept growing by %1 GB in fullscreen. Playback has returned to a window for this session, keeping enhancement settings. The cause is unconfirmed. You can enable OBS game capture compatibility in Settings, restart, and test fullscreen again.",
+   "ja": "全画面中に VRAM が %1 GB 増え続けたため、この再生はウィンドウ表示に戻りました。映像処理の設定は維持します。原因は未確認です。設定で OBS ゲームキャプチャ互換を有効にし、再起動して全画面を再テストできます。"
+  },
+  {
+   "zh": "显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "顯示記憶體在設定未變時增加了 %1 GB，正在嘗試回收；回收結果請見診斷日誌。原因尚未確認。",
+   "en": "VRAM grew by %1 GB without a settings change. Recovery is being attempted; see the diagnostic log for the result. The cause is unconfirmed.",
+   "ja": "設定を変えていないのに VRAM が %1 GB 増加したため、回収を試みています。結果は診断ログをご覧ください。原因は未確認です。"
+  },
+  {
+   "zh": "本次播放检测到全屏显存持续增长，请使用窗口播放；重新打开片源后可再次测试全屏。",
+   "src": "qml/Veyra/Main.qml",
+   "zh-TW": "本次播放偵測到全螢幕顯示記憶體持續增加，請使用視窗播放；重新開啟來源後可再次測試全螢幕。",
+   "en": "VRAM kept growing in fullscreen during this session. Use windowed playback; reopen the source to test fullscreen again.",
+   "ja": "この再生では全画面中に VRAM が増え続けました。ウィンドウ表示を使用してください。ソースを開き直すと全画面を再テストできます。"
+  },
+  {
+   "zh": "Xbox 连接失败：{}",
+   "src": "src/source/XboxSessionSource.cpp",
+   "zh-TW": "Xbox 連線失敗：{}",
+   "en": "Xbox connection failed: {}",
+   "ja": "Xbox 接続失敗：{}"
   }
  ]
 }

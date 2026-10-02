@@ -153,6 +153,48 @@ void apiTests() {
     bool threw = false;
     try { api.connect("ABC-123", "LPT"); } catch (const ServiceError& e) { threw = e.status == 401; }
     check(threw, "a refused connect is a ServiceError with the status");
+
+    // The xHome wrapper is nullable even on success (Greenlight's SDPResponse).
+    // A pending wrapper is different from a console error; neither may be turned
+    // into a json type exception or mistaken for a completed negotiation.
+    const std::string answer = json{{"sdp", "v=0\r\n"}, {"sdpType", "answer"}, {"status", "success"}}.dump();
+    const auto sdpReply = [&](const std::vector<std::pair<int, json>>& replies, std::string* error = nullptr) {
+        auto transport = std::make_shared<FakeTransport>();
+        StreamApi session(transport, host, "GS");
+        session.setRetryDelayMs(0);
+        const std::string path = "/v5/sessions/home/test/sdp";
+        transport->add(host, path, 202, "");
+        for (const auto& [status, body] : replies) transport->add(host, path, status, body.dump());
+        try { return session.exchangeSdp("test", "v=0 offer"); }
+        catch (const std::exception& e) { if (error) *error = e.what(); return std::string(); }
+    };
+    check(sdpReply({{200, {{"exchangeResponse", answer}, {"errorDetails", {{"code", nullptr}, {"message", nullptr}}}}}}) == "v=0\r\n",
+          "a successful SDP with null error fields is accepted (field log 11 regression)");
+    check(sdpReply({{200, {{"exchangeResponse", answer}, {"errorDetails", nullptr}}}}) == "v=0\r\n",
+          "a successful SDP with null errorDetails is accepted");
+    check(sdpReply({{200, {{"exchangeResponse", answer}, {"errorDetails", {{"code", 0}, {"message", nullptr}}}}}}) == "v=0\r\n",
+          "a zero numeric error code does not reject a successful answer");
+    check(sdpReply({{200, {{"exchangeResponse", nullptr}, {"errorDetails", {{"code", nullptr}, {"message", nullptr}}}}},
+                    {202, {{"exchangeResponse", ""}, {"errorDetails", nullptr}}},
+                    {200, {{"exchangeResponse", answer}, {"errorDetails", nullptr}}}}) == "v=0\r\n",
+          "pending 200/202 wrappers are polled until the SDP is ready");
+    std::string error;
+    check(sdpReply({{200, {{"exchangeResponse", answer}, {"errorDetails", {{"code", 17}, {"message", nullptr}}}}}}, &error).empty() &&
+              error.find("17") != std::string::npos,
+          "a nonzero numeric service error is not silently accepted even with SDP present");
+    error.clear();
+    check(sdpReply({{200, {{"exchangeResponse", nullptr}, {"errorDetails", {{"code", "OfferRejected"}, {"message", "unsupported codec"}}}}}}, &error).empty() &&
+              error.find("OfferRejected") != std::string::npos && error.find("unsupported codec") != std::string::npos,
+          "a real console refusal preserves its code and message");
+    error.clear();
+    std::vector<std::pair<int, json>> pending(40, {200, {{"exchangeResponse", nullptr}, {"errorDetails", nullptr}}});
+    check(sdpReply(pending, &error).empty() && error.find("did not answer") != std::string::npos && error.find("refused") == std::string::npos,
+          "an unfinished exchange times out within the bounded polling budget without claiming refusal");
+    try {
+        const auto nullableIce = StreamApi::parseIce(R"([{"candidate":null,"sdpMid":null,"sdpMLineIndex":null},{"candidate":"a=candidate:1 1 UDP 90 192.168.1.30 9002 typ host","sdpMid":null,"sdpMLineIndex":null}])");
+        check(nullableIce.size() == 1 && nullableIce[0].sdpMid == "0" && nullableIce[0].sdpMLineIndex == 0,
+              "null ICE metadata and end markers do not abort the connection after SDP succeeds");
+    } catch (const std::exception&) { check(false, "null ICE metadata and end markers do not abort the connection after SDP succeeds"); }
 }
 
 // ---------------------------------------------------------------- sign-in

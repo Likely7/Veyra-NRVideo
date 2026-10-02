@@ -388,6 +388,11 @@ Window {
         videoHost.syncRect()
     }
     function toggleFullscreen() {
+        if (!fullscreen && veyra.fullscreenMemorySafe === false) {
+            toast.show(qsTr("本次播放检测到全屏显存持续增长，请使用窗口播放；重新打开片源后可再次测试全屏。"), true)
+            veyra.logUi("ui-fullscreen", "blocked after sustained video-memory growth")
+            return
+        }
         fullLocked = false
         fullTarget = !fullscreen
         visibility = fullTarget ? Window.FullScreen : Window.Windowed
@@ -648,6 +653,7 @@ Window {
     Connections {
         target: veyra
         function onSnapshotChanged() {
+            if (root.fullscreen && veyra.fullscreenMemorySafe === false) root.toggleFullscreen()
             if (root.testAspect > 0) return
             if (veyra.previewAspect > 0.2 && Math.abs(veyra.previewAspect - root.filmAspect) > 0.02)
                 root.fitToFilm(veyra.previewAspect)

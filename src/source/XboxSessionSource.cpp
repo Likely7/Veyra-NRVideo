@@ -321,7 +321,9 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         ApiSignaling signaling(*p.api, p.sessionId);
         std::string error;
         if (!p.rtc.start(signaling, &error)) {
-            fail(L"无法和主机建立连接：" + widen(error) + L"。请确认本机网络没有拦截 UDP，主机与本机最好在同一局域网。");
+            // SDP/service failures happen before an ICE/UDP connection is attempted.
+            // Keep the actual stage instead of diagnosing every failure as a firewall.
+            fail(L"Xbox 连接失败：" + widen(error));
             return;
         }
         if (!p.rtc.waitReady(std::chrono::seconds(10))) { fail(L"主机连上了，但没有完成握手。请重试。"); return; }

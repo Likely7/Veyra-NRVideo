@@ -893,21 +893,19 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const bool wasRunning = impl_->snapshot.running;
         const bool wasImage = impl_->snapshot.image;
         const bool wasFailed = impl_->snapshot.failed;
+        const bool wasFullscreenUnsafe = impl_->snapshot.vramFullscreenUnsafe;
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
         if(impl_->poll()){emit settingsChanged();emit chainChanged();}
-        if (impl_->snapshot.vramRunawayMiB && impl_->vramNoticeSession != impl_->snapshot.sessionId) {
+        if (impl_->snapshot.vramRunawayMiB && (impl_->vramNoticeSession != impl_->snapshot.sessionId ||
+            (!wasFullscreenUnsafe && impl_->snapshot.vramFullscreenUnsafe))) {
             impl_->vramNoticeSession = impl_->snapshot.sessionId;
-            const auto& injected = impl_->snapshot.vramInjected;
-            if (injected.find(L"nvppex") != std::wstring::npos || injected.find(L"NvPresent64") != std::wstring::npos)
-                emit notice(tr("显存在设置没变的情况下涨了 %1 GB。检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra："
-                               "它只在全屏时介入，这部分显存很可能由它占用，Veyra 重建也释放不了。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项，"
-                               "或退出全屏；已占用的显存要重开 Veyra 才会释放")
+            if (impl_->snapshot.vramFullscreenUnsafe)
+                emit notice(tr("全屏期间显存持续增长了 %1 GB，已退出全屏保护播放；当前会话使用窗口播放。增强设置保留。"
+                               "原因尚未确认，可开启设置中的 OBS 游戏采集兼容、重启后测试全屏。")
                                 .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
-            else emit notice(tr("显存在设置没变的情况下涨了 %1 GB，已自动重建显示链回收显存（画面会闪一下）。"
-                           "如果反复出现：常见原因是 NVIDIA Smooth Motion、游戏加加、小飞机（RTSS）、显卡叠加层/即时重放"
-                           "或录屏软件在全屏时注入了本程序，请关掉它们后再试，并把日志发给我们（vram-watch）")
-                            .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
+            else emit notice(tr("显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。")
+                                 .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
         }
         tickSubtitles();
         tickImageBatch();
@@ -5625,6 +5623,7 @@ void QmlPlayerBridge::setContentRate(int value) {
 }
 
 int QmlPlayerBridge::displaySync() const { return int(impl_->presentation.display); }
+bool QmlPlayerBridge::fullscreenMemorySafe() const { return !impl_->snapshot.vramFullscreenUnsafe; }
 void QmlPlayerBridge::setPresentationFullscreen(bool value) {
     if(impl_->presentation.fullscreen==value)return;
     impl_->presentation.fullscreen=value;

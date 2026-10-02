@@ -6,9 +6,9 @@
 
 ### 2.0.1 修复
 
-- **导出时显卡被系统重置，不再整段作废**：8K、长视频开 NR 导出时，40 系显卡偶发驱动卡死并被 Windows 重置（社区版 NR 运行库在 Ada 上的已知问题）。现在已导出的部分会自动保存，新开一个导出进程从断点接着导，最后无损拼接成一个文件，不重新编码；最多续 3 次。注意：这让导出能扛过重置，重置本身仍会发生，画面会在重置那一刻停一下。
-- **全屏时显存一直涨**：现场日志显示，只在全屏时涨、退出全屏就停，Veyra 重建显示链和处理链都释放不了；同时进程里都有 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）。现在检测到它时会直接提示到 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项，不再做无效的重建（之前每次都会让画面闪一下）。
-- **Xbox 串流连不上时看不到原因**：主机回复里的空字段让程序先报错，把主机给出的拒绝原因盖住了。现在会显示主机的原因，并在日志里记录完整的连接协商内容，方便对照能连上的客户端排查。
+- **导出时显卡被系统重置，不再整段作废**：8K、长视频开 NR 导出时，有 40 系用户遇到驱动卡死并被 Windows 重置。现在已导出的部分会自动保存，新开一个导出进程从断点接着导，最后无损拼接成一个文件，不重新编码；最多续 3 次。这是重置后的恢复，不代表驱动挂起根因已修复；已用模拟设备移除验证续导，8K 反馈者实机结果待确认。
+- **全屏显存异常增长保护**：设置稳定后检测持续增长，自动退出全屏并在本次播放中限制再次进入，保持片源、NR 和补帧设置，用窗口继续播放，避免原先反复重建却继续增长。已分配的异常显存不保证释放，重新开程序可重测。**这是应急保护，5060 Ti 的 4K 全屏泄漏根因尚未确认、现场结果待验证**；本机加载同一 NVIDIA 插件也能稳定播放，不能仅凭模块出现就认定它是原因。设置中的 OBS 游戏采集兼容可用于切换界面显示路径后重测。
+- **Xbox 空值应答导致协商中断**：成功应答里的 `null` 错误字段不会再触发字符串异常；HTTP 200/202 的未完成应答继续有限轮询，数字错误码保留，空 ICE 元数据不会再次中断连接。协商失败显示实际阶段，不再一律提示 UDP 被拦截。本机 80 项协议/本地 WebRTC 测试通过，反馈者真实 Xbox 连接结果待确认。
 - 以下几项已在 2.0.0 的更新包里修过，2.0.1 一并包含：
   - 输出稳定器·抗闪烁打开再关闭后画面定住；
   - 首页"继续上次"的采集卡没有声音；
@@ -23,9 +23,9 @@
 
 ### 2.0.1 fixes
 
-- **An export survives a GPU reset**: 8K and long exports with NR occasionally hung the driver on RTX 40 cards and Windows reset the GPU (a known issue of the community NR runtimes on Ada), losing the whole file. The part already exported is now kept, a fresh export process continues from that point, and the parts are joined into one file without re-encoding (up to three resets). The reset itself still happens; this makes the export survive it.
-- **Video memory kept growing in fullscreen**: field logs grew only in fullscreen, stopped when leaving it, and neither a swapchain nor a pipeline rebuild released any of it, always with NVIDIA App's picture plug-in (RTX HDR / Smooth Motion / RTX Dynamic Vibrance) loaded. Veyra now names it and points to NVIDIA App → Graphics → Program Settings, instead of rebuilding in vain (each rebuild flashed the picture).
-- **Xbox connection failures hid the reason**: a null field in the console's reply raised an error first. The console's reason is now shown, and the whole negotiation is logged for comparison with a client that connects.
+- **An export survives a GPU reset**: some RTX 40 users encountered driver hangs/resets during 8K or long NR exports. Completed parts are kept, a fresh export process resumes, and parts are joined without re-encoding (up to three resets). Recovery was tested with injected device removal; the original driver's hang and the reporting user's 8K result remain unverified.
+- **Protection against sustained fullscreen VRAM growth**: after settings settle, sustained growth makes Veyra return to windowed playback and restrict fullscreen re-entry for that source session, keeping the source, NR and frame generation settings. It avoids repeated rebuilds that do not reclaim memory. Retained memory may require restarting Veyra. **This is containment; the RTX 5060 Ti 4K fullscreen leak and its field outcome remain unconfirmed.** The same NVIDIA plug-in is present in stable local playback, so its presence alone does not establish the cause. OBS game capture compatibility in Settings provides another UI display path for testing.
+- **Xbox nullable replies interrupted negotiation**: null error fields in successful responses are accepted; pending HTTP 200/202 wrappers are polled within a bounded budget; numeric service errors are preserved; nullable ICE metadata no longer aborts connection setup. Failures report their actual stage rather than always blaming blocked UDP. All 80 local protocol/WebRTC checks passed; the reporting user's real-console connection still needs confirmation.
 - Already in the refreshed 2.0.0 package and included here: the picture froze after turning the output stabiliser (anti-flicker) on and off; "Continue" on a capture card had no sound; the load gauge counted one of several NR layers; colour Texture / Clarity / Dehaze had no effect; clicking the taskbar button did not minimise; when the GPU device is lost or Veyra crashes as a capture starts with NVIDIA App's plug-in or RTSS injected, Veyra says where to turn them off.
 
 Corresponding source: `Veyra-2.0.1-source.zip`; third-party dependency sources are unchanged from 2.0.0 and `Veyra-2.0.0-dependency-source.zip` is attached to this Release too. Runtimes are unchanged.

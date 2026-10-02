@@ -650,20 +650,29 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // at the driver or an overlay hooked on it, the graph step at our own passes.
             uint64_t vramFloor=0,vramRevision=~0ull,vramRecoverBefore=0,vramRecoverGrowth=0;auto vramSettleUntil=Clock::now(),vramRecoverCheckAt=Clock::now();
             bool vramWarned=false;int vramRecoverStep=0,vramRecoverDone=0,vramRecoveries=0;
+            bool vramFullscreenBlocked=false;unsigned vramGrowthSamples=0;
             // VEYRA_TEST_VRAM_LEAK_MIB=n: hold on to n MiB more of video memory every second;
             // VEYRA_TEST_VRAM_LEAK_RELEASE=1 lets the swapchain rebuild free it (as a leak tied
             // to the swapchain would), otherwise nothing frees it.
             const uint64_t testLeakMiB=[]{wchar_t v[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_VRAM_LEAK_MIB",v,16)?uint64_t(_wtoi(v)):0ull;}();
             const bool testLeakReleases=GetEnvironmentVariableW(L"VEYRA_TEST_VRAM_LEAK_RELEASE",nullptr,0)>0;
+            const bool testLeakFullscreenOnly=GetEnvironmentVariableW(L"VEYRA_TEST_VRAM_LEAK_FULLSCREEN_ONLY",nullptr,0)>0;
             std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> testLeak;
             auto watchVram=[&](uint64_t usage,uint64_t budget){
-                if(testLeakMiB){
+                bool fullscreen=false;
+                {std::lock_guard lock(mutex_);fullscreen=presentation_.fullscreen;}
+                if(testLeakMiB&&(!testLeakFullscreenOnly||fullscreen)){
                     const D3D12_HEAP_PROPERTIES heap{D3D12_HEAP_TYPE_DEFAULT};
                     D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=testLeakMiB<<20;desc.Height=1;desc.DepthOrArraySize=1;desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
                     Microsoft::WRL::ComPtr<ID3D12Resource> r;
                     if(SUCCEEDED(ctx.device()->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&r))))testLeak.push_back(r);
                 }
                 if(!usage)return;
+                // Leaving fullscreen stopped further growth in both field logs. Preserve
+                // the source/effects and avoid repeated failed graph rebuilds. This only
+                // contains the observed trigger; it does not identify the allocation owner
+                // or promise that already retained memory is returned.
+                if(vramFullscreenBlocked)return;
                 if(vramRecoverDone){
                     if(Clock::now()<vramRecoverCheckAt)return;
                     const int64_t released=(int64_t(vramRecoverBefore)-int64_t(usage))/(1<<20);
@@ -679,26 +688,37 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     return;
                 }
                 if(vramRecoverStep)return;
-                if(options.settings.revision!=vramRevision){vramRevision=options.settings.revision;vramFloor=0;vramSettleUntil=Clock::now()+std::chrono::seconds(10);}
+                if(options.settings.revision!=vramRevision){vramRevision=options.settings.revision;vramFloor=0;vramGrowthSamples=0;vramSettleUntil=Clock::now()+std::chrono::seconds(10);}
                 if(Clock::now()<vramSettleUntil)return;
                 if(!vramFloor||usage<vramFloor)vramFloor=usage;
-                const uint64_t growth=usage-vramFloor,limit=std::max<uint64_t>(2048ull<<20,budget/4);
+                const uint64_t growth=usage-vramFloor;
+                const uint64_t fullscreenLimit=std::max<uint64_t>(512ull<<20,std::min<uint64_t>(2048ull<<20,budget/8));
+                if(fullscreen&&growth>fullscreenLimit){
+                    if(++vramGrowthSamples<3)return;
+                    vramFullscreenBlocked=true;vramWarned=true;
+                    const std::wstring injected=gfx::riskyInjections();
+                    {
+                        std::lock_guard lock(mutex_);
+                        snapshot_.vramRunawayMiB=growth>>20;snapshot_.vramInjected=injected;snapshot_.vramFullscreenUnsafe=true;
+                    }
+                    veyra::log::warn("vram-watch",std::format("sustained fullscreen growth {} MiB (usage {} / budget {} MiB); requesting windowed playback, preserving source/effects; allocation owner unconfirmed; modules: {}",
+                        growth>>20,usage>>20,budget>>20,gfx::thirdPartyModules()));
+                    return;
+                }
+                vramGrowthSamples=0;
+                const uint64_t limit=std::max<uint64_t>(2048ull<<20,budget/4);
                 if(growth<=limit)return;
-                // NVIDIA App's picture plug-in (nvppex.dll: RTX HDR, Smooth Motion, RTX Dynamic
-                // Vibrance) and the driver present layer engage for fullscreen windows. With it
-                // loaded, field logs grew ~700 MiB/min only in fullscreen and neither a swapchain
-                // nor a graph rebuild gave any of it back (5060 Ti, 2026-10-02): the memory is not
-                // ours to free, and every rebuild only flashed the picture. Name it instead.
+                // Module presence is diagnostic context, not proof of allocation ownership.
+                // Evaluate a bounded recovery by the measured memory result, regardless of
+                // whether NVIDIA's plug-in (also present in stable local runs) is loaded.
                 const std::wstring injected=gfx::riskyInjections();
-                const bool driverPlugin=injected.find(L"nvppex")!=std::wstring::npos||injected.find(L"NvPresent64")!=std::wstring::npos;
                 if(!vramWarned){
                     vramWarned=true;
                     veyra::log::warn("vram-watch",std::format("video memory grew {} MiB with no settings change (now {} of {} MiB budget); third-party modules: {}",
                         growth>>20,usage>>20,budget>>20,gfx::thirdPartyModules()));
                     std::lock_guard lock(mutex_);snapshot_.vramRunawayMiB=growth>>20;snapshot_.vramInjected=injected;
                 }else veyra::log::warn("vram-watch",std::format("video memory grew {} MiB again (now {} MiB)",growth>>20,usage>>20));
-                if(driverPlugin){vramFloor=usage;veyra::log::warn("vram-watch","NVIDIA App picture plug-in / present layer loaded; not rebuilding (it did not release this memory in field logs)");}
-                else if(vramRecoveries<3){++vramRecoveries;vramRecoverStep=1;vramRecoverGrowth=growth;}
+                if(vramRecoveries<3){++vramRecoveries;vramRecoverStep=1;vramRecoverGrowth=growth;}
                 else{vramFloor=usage;}   // give up rebuilding; report again only on further growth
             };
             auto anchor=Clock::now(),statsStart=anchor;double anchorMs=0;uint64_t frames=0,sourceFrames=0;bool wasPaused=false;double discardBefore=0;

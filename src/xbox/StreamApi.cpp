@@ -6,6 +6,7 @@
 #include <ws2tcpip.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <nlohmann/json.hpp>
 #include <sstream>
 #include <thread>
@@ -24,6 +25,29 @@ json parse(const HttpsResponse& response, const std::string& what) {
     } catch (const json::exception&) {
         throw std::runtime_error(what + " returned something that is not JSON");
     }
+}
+
+std::string text(const json& object, const char* key) {
+    const auto it = object.find(key);
+    return it != object.end() && it->is_string() ? it->get<std::string>() : std::string();
+}
+
+// Greenlight's SDPResponse defines code as number | null and message as
+// string | null. State errors also use string codes. Null is common on success;
+// it is not evidence that the console refused the offer.
+std::string errorCode(const json& details) {
+    const auto it = details.find("code");
+    if (it == details.end() || it->is_null()) return {};
+    if (it->is_string()) return it->get<std::string>();
+    if (it->is_number_integer()) return *it == 0 ? std::string() : it->dump();
+    return {};
+}
+
+std::string serviceError(const json& response) {
+    const auto it = response.find("errorDetails");
+    if (it == response.end() || !it->is_object()) return {};
+    const std::string code = errorCode(*it), message = text(*it, "message");
+    return message.empty() ? code : code.empty() ? message : code + " / " + message;
 }
 
 } // namespace
@@ -94,8 +118,8 @@ SessionState StreamApi::state(const std::string& sessionId) {
     s.state = j.value("state", "");
     if (j.contains("errorDetails") && j["errorDetails"].is_object()) {
         const json& e = j["errorDetails"];
-        s.errorCode = e.contains("code") && e["code"].is_string() ? e["code"].get<std::string>() : std::string();
-        s.errorMessage = e.contains("message") && e["message"].is_string() ? e["message"].get<std::string>() : std::string();
+        s.errorCode = errorCode(e);
+        s.errorMessage = text(e, "message");
     }
     return s;
 }
@@ -104,33 +128,27 @@ void StreamApi::connect(const std::string& sessionId, const std::string& transfe
     call("POST", "/v5/sessions/home/" + sessionId + "/connect", json{{"userToken", transferToken}}.dump());
 }
 
-// The service answers 204 until the console has replied; poll a bounded number of times.
+// The service returns 204 or a nullable pending wrapper until the console replies.
+// Keep the same bounded polling budget for both forms.
 std::string StreamApi::getExchange(const std::string& path) {
     for (int attempt = 0; attempt < 40; ++attempt) {
         const HttpsResponse response = call("GET", path, "");
         if (response.status != 204 && !response.body.empty()) {
             const json j = parse(response, path);
-            // json::value() throws on a null field ("type must be string, but is null"):
-            // the service sends null exchangeResponse / error fields on a refusal, and the
-            // exception text hid the reason (field log 2026-10-02). Read only strings.
-            const auto text = [](const json& o, const char* key) {
-                return o.contains(key) && o[key].is_string() ? o[key].get<std::string>() : std::string();
-            };
-            std::string why;
-            if (j.contains("errorDetails") && j["errorDetails"].is_object()) {
-                const std::string code = text(j["errorDetails"], "code"), message = text(j["errorDetails"], "message");
-                why = message.empty() ? code : code.empty() ? message : code + " / " + message;
+            if (!j.is_object()) throw std::runtime_error(path + ": invalid exchange wrapper");
+            const std::string why = serviceError(j);
+            if (!why.empty()) {
+                log::warn("xbox", "exchange " + path.substr(path.rfind('/')) + " failed: " + why);
+                throw std::runtime_error(path.substr(path.rfind('/') + 1) + ": the service reported " + why);
             }
-            const std::string exchange = text(j, "exchangeResponse");
-            if (!why.empty() || exchange.empty()) {
-                log::warn("xbox", "exchange " + path.substr(path.rfind('/')) + " answered without a response: " + j.dump());
-                if (why.empty()) why = text(j, "status");
-                throw std::runtime_error(path.substr(path.rfind('/') + 1) + ": the console refused (" +
-                                         (why.empty() ? std::string("no reason given") : why) + ")");
+            const auto exchange = j.find("exchangeResponse");
+            if (exchange != j.end() && !exchange->is_null()) {
+                if (!exchange->is_string()) throw std::runtime_error(path + ": invalid exchangeResponse type");
+                const std::string value = exchange->get<std::string>();
+                if (!value.empty()) return value;
             }
-            return exchange;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(retryDelayMs_));
+        if (attempt + 1 < 40) std::this_thread::sleep_for(std::chrono::milliseconds(retryDelayMs_));
     }
     throw std::runtime_error(path + ": the console did not answer");
 }
@@ -157,24 +175,14 @@ std::string StreamApi::exchangeSdp(const std::string& sessionId, const std::stri
     } catch (const json::exception&) {
         throw std::runtime_error("the console's answer is not JSON");
     }
-    // A refusal comes back with "sdp": null plus a status and error details (field log
-    // 2026-10-01: value("sdp") threw on the null and hid the reason). Log the whole answer
-    // without the SDP body; it carries no credentials.
-    const auto text = [&](const char* key) {
-        return answer.contains(key) && answer[key].is_string() ? answer[key].get<std::string>() : std::string();
-    };
-    const std::string sdp = text("sdp");
-    if (sdp.empty()) {
+    if (!answer.is_object()) throw std::runtime_error("the console's SDP answer is not an object");
+    const std::string sdp = text(answer, "sdp"), error = serviceError(answer);
+    if (sdp.empty() || !error.empty()) {
         json summary = answer;
         summary.erase("sdp");
-        log::warn("xbox", "console SDP answer without SDP: " + summary.dump());
-        std::string why = text("status");
-        if (answer.contains("errorDetails") && answer["errorDetails"].is_object()) {
-            const json& e = answer["errorDetails"];
-            for (const char* key : {"code", "message"})
-                if (e.contains(key) && e[key].is_string()) why += std::string(why.empty() ? "" : " / ") + e[key].get<std::string>();
-        }
-        throw std::runtime_error("the console refused the offer (" + (why.empty() ? std::string("no reason given") : why) + ")");
+        log::warn("xbox", "invalid console SDP answer: " + summary.dump());
+        const std::string why = error.empty() ? text(answer, "status") : error;
+        throw std::runtime_error("the console returned no usable SDP (" + (why.empty() ? std::string("no reason given") : why) + ")");
     }
     return sdp;
 }
@@ -195,12 +203,18 @@ bool StreamApi::teredoIpv4(const std::string& ipv6, std::string* ipv4, int* port
 std::vector<IceCandidate> StreamApi::parseIce(const std::string& exchangeResponse) {
     std::vector<IceCandidate> out;
     const json list = json::parse(exchangeResponse);
+    if (!list.is_array()) throw std::runtime_error("the console's ICE candidates are not an array");
     for (const auto& c : list) {
         IceCandidate candidate;
-        candidate.candidate = c.value("candidate", "");
-        candidate.sdpMid = c.contains("sdpMid") ? (c["sdpMid"].is_string() ? c["sdpMid"].get<std::string>() : std::to_string(c["sdpMid"].get<int>())) : "0";
-        candidate.sdpMLineIndex = c.contains("sdpMLineIndex") ? (c["sdpMLineIndex"].is_string() ? std::atoi(c["sdpMLineIndex"].get<std::string>().c_str()) : c["sdpMLineIndex"].get<int>()) : 0;
+        candidate.candidate = text(c, "candidate");
         if (candidate.candidate.empty() || candidate.candidate == "a=end-of-candidates") continue;
+        candidate.sdpMid = text(c, "sdpMid");
+        if (candidate.sdpMid.empty()) candidate.sdpMid = c.contains("sdpMid") && c["sdpMid"].is_number_integer() ? c["sdpMid"].dump() : "0";
+        if (c.contains("sdpMLineIndex")) {
+            const json& index = c["sdpMLineIndex"];
+            if (index.is_string()) candidate.sdpMLineIndex = std::atoi(index.get<std::string>().c_str());
+            else if (index.is_number_integer()) candidate.sdpMLineIndex = index.get<int>();
+        }
         // Greenlight: a Teredo candidate also reaches the console on the IPv4 address and port it hides,
         // and on port 9002 of that address.
         std::istringstream fields(candidate.candidate);
