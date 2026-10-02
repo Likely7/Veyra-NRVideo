@@ -39,7 +39,7 @@ struct Shared {
 };
 static_assert(std::is_trivially_copyable_v<Shared>);
 void close(HANDLE& h){if(h&&h!=INVALID_HANDLE_VALUE)CloseHandle(h);h=nullptr;}
-const wchar_t* label(ExportState s){switch(s){case ExportState::Preparing:return L"正在准备独立导出任务";case ExportState::Running:return L"正在编码";case ExportState::Paused:return L"导出已暂停，观看继续";case ExportState::Finishing:return L"正在封装和保存输出";case ExportState::Cancelling:return L"正在取消并回收任务";case ExportState::Succeeded:return L"导出完成";case ExportState::Failed:return L"导出失败；详见独立任务日志";case ExportState::Cancelled:return L"导出已取消";default:return L"尚无导出任务";}}
+const wchar_t* label(ExportState s){switch(s){case ExportState::Preparing:return L"正在准备独立导出任务";case ExportState::Running:return L"正在编码";case ExportState::Paused:return L"导出已暂停";case ExportState::Finishing:return L"正在封装和保存输出";case ExportState::Cancelling:return L"正在取消并回收任务";case ExportState::Succeeded:return L"导出完成";case ExportState::Failed:return L"导出失败；详见独立任务日志";case ExportState::Cancelled:return L"导出已取消";default:return L"尚无导出任务";}}
 }
 std::wstring reserveExportTemporaryFile(const std::wstring& output, std::wstring& error) {
     static std::atomic<uint64_t> sequence{0};
@@ -60,6 +60,9 @@ bool removeExportTemporaryFile(const std::wstring& path, std::wstring& error) {
 struct ExportJobManager::Impl {
     HANDLE mapping=nullptr,process=nullptr,job=nullptr;Shared* shared=nullptr;
     ExportJobSnapshot snapshot;ULONGLONG cancelAt=0,startTick=0;
+    // Time spent paused is not encoding time: the estimate left it in, so a paused
+    // export's remaining time kept growing (field report 2026-10-02).
+    ULONGLONG pausedAt=0,pausedTotal=0;
     struct Request { std::wstring input,output; EnhancementSettings settings; bool hevc=false; unsigned maxFrames=0; int audioStreamIndex=-1; double trimStart=0,trimEnd=0; sink::ExportRateControl rateControl=sink::ExportRateControl::Cq; };
     std::deque<Request> queue;
     uint64_t queueFailures=0;std::wstring lastQueueFailure;bool launchingQueued=false;
@@ -132,7 +135,7 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     if(!started)return fail(L"无法启动导出进程");p_->process=pi.hProcess;
     if(!AssignProcessToJobObject(p_->job,p_->process)){TerminateProcess(p_->process,1);CloseHandle(pi.hThread);return fail(L"导出进程隔离失败");}
     if(ResumeThread(pi.hThread)==DWORD(-1)){TerminateProcess(p_->process,1);CloseHandle(pi.hThread);return fail(L"无法运行导出进程");}CloseHandle(pi.hThread);
-    p_->snapshot.state=ExportState::Preparing;p_->snapshot.output=output;p_->snapshot.jobId=(GetTickCount64()<<16)^pi.dwProcessId;p_->snapshot.frozenRevision=settings.revision;p_->snapshot.frozen=s.settings;p_->startTick=GetTickCount64();
+    p_->snapshot.state=ExportState::Preparing;p_->snapshot.output=output;p_->snapshot.jobId=(GetTickCount64()<<16)^pi.dwProcessId;p_->snapshot.frozenRevision=settings.revision;p_->snapshot.frozen=s.settings;p_->startTick=GetTickCount64();p_->pausedAt=p_->pausedTotal=0;
     p_->snapshot.workerPid=pi.dwProcessId;
     p_->snapshot.workerLog=std::filesystem::absolute(runtime::logsDirectory()/std::format("export-worker-{}.log",pi.dwProcessId)).wstring();
     log::info("export-worker",std::format("started jobId={} pid={} frozenRevision={} nativeNR=true independentPlayback=true log={}",p_->snapshot.jobId,pi.dwProcessId,settings.revision,std::filesystem::path(p_->snapshot.workerLog).string()));return true;
@@ -146,14 +149,19 @@ bool ExportJobManager::enqueue(const std::wstring& input,const std::wstring& out
 void ExportJobManager::clearQueue(){p_->queue.clear();}
 size_t ExportJobManager::queuedCount() const{return p_->queue.size();}
 void ExportJobManager::cancel(){if(p_->shared){InterlockedExchange(&p_->shared->cancel,1);if(!p_->cancelAt)p_->cancelAt=GetTickCount64();p_->snapshot.state=ExportState::Cancelling;p_->snapshot.message=L"正在取消并回收任务";}p_->queue.clear();}
-void ExportJobManager::pause(bool v){if(p_->shared)InterlockedExchange(&p_->shared->pause,v);}
+void ExportJobManager::pause(bool v){
+    if(!p_->shared)return;InterlockedExchange(&p_->shared->pause,v);
+    const auto now=GetTickCount64();
+    if(v&&!p_->pausedAt)p_->pausedAt=now;
+    else if(!v&&p_->pausedAt){p_->pausedTotal+=now-p_->pausedAt;p_->pausedAt=0;}
+}
 void ExportJobManager::watching(bool v){if(p_->shared)InterlockedExchange(&p_->shared->watching,v);}
 ExportJobSnapshot ExportJobManager::poll(){
     if(!p_->shared&&!p_->queue.empty())p_->startNext(*this);
     p_->snapshot.queueFailures=p_->queueFailures;p_->snapshot.lastQueueFailure=p_->lastQueueFailure;
     if(!p_->shared){p_->snapshot.queuePosition=0;p_->snapshot.queued=p_->queue.size();return p_->snapshot;}
     auto& s=*p_->shared;p_->snapshot.sourceFrames=InterlockedCompareExchange64(&s.sourceFrames,0,0);p_->snapshot.generated=InterlockedCompareExchange64(&s.generated,0,0);p_->snapshot.holds=InterlockedCompareExchange64(&s.holds,0,0);p_->snapshot.encoded=InterlockedCompareExchange64(&s.encoded,0,0);p_->snapshot.state=static_cast<ExportState>(InterlockedCompareExchange(&s.state,0,0));p_->snapshot.progress=InterlockedCompareExchange(&s.progress,0,0)/10000.0;p_->snapshot.queued=p_->queue.size();p_->snapshot.queuePosition=p_->queue.empty()?0:1;
-    if(p_->snapshot.progress>0.001&&p_->startTick){const double elapsed=double(GetTickCount64()-p_->startTick)/1000.0;p_->snapshot.etaSeconds=std::max(0.0,elapsed*(1.0-p_->snapshot.progress)/p_->snapshot.progress);}else p_->snapshot.etaSeconds=0;
+    if(p_->snapshot.progress>0.001&&p_->startTick){const auto now=GetTickCount64();const double elapsed=double(now-p_->startTick-p_->pausedTotal-(p_->pausedAt?now-p_->pausedAt:0))/1000.0;p_->snapshot.etaSeconds=std::max(0.0,elapsed*(1.0-p_->snapshot.progress)/p_->snapshot.progress);}else p_->snapshot.etaSeconds=0;
     if(p_->cancelAt&&GetTickCount64()-p_->cancelAt>5000&&WaitForSingleObject(p_->process,0)==WAIT_TIMEOUT)TerminateJobObject(p_->job,3);
     if(WaitForSingleObject(p_->process,0)==WAIT_OBJECT_0){DWORD code=1;GetExitCodeProcess(p_->process,&code);p_->snapshot.state=code==0?ExportState::Succeeded:code==3||p_->cancelAt?ExportState::Cancelled:ExportState::Failed;if(code==0)p_->snapshot.progress=1;
         // Preserve the worker's actual outcome, including codec substitutions.

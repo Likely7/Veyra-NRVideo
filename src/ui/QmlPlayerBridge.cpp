@@ -232,8 +232,9 @@ struct QmlPlayerBridge::Impl {
     uint64_t imageCompletionEvent=0;
     engine::ExportJobSnapshot exportSnapshot;
     bool exportHevc = false;
-    uint32_t exportBitrateMbps = 0;
-    sink::ExportRateControl exportRateControl = sink::ExportRateControl::Cq;
+    // Default: VBR at 8 Mbps (field request 2026-10-02); CQ stays one tap away.
+    uint32_t exportBitrateMbps = 8;
+    sink::ExportRateControl exportRateControl = sink::ExportRateControl::Vbr;
     int exportResolutionIndex = -1;
     double exportTrimStartSeconds = 0.0;
     double exportTrimEndSeconds = 0.0;
@@ -4258,7 +4259,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "cinePillHidden"};
+                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -4525,6 +4526,12 @@ void QmlPlayerBridge::startExport() {
         emit notice(utf8Of(reason),true);emit exportChanged();return;
     }
     impl_->exportQueue.refresh();pollExport();emit navigate(QStringLiteral("exp"));
+    // Leave the GPU to the export (field request 2026-10-02): whatever plays is closed,
+    // unless 导出页 → 导出时关闭正在播放的内容 is off.
+    if(impl_->prefBool("exportStopsPlayback",true)&&(hasSource()||impl_->openingSource)){
+        veyra::log::info("qml-export","export started: closing the playing source");
+        stopPlayback();emit notice(tr("已关闭正在播放的内容，显卡全部留给导出"),false);
+    }
 }
 void QmlPlayerBridge::cancelExport() {
     impl_->exportQueue.queue().cancel();impl_->exportQueue.refresh();pollExport();emit exportChanged();

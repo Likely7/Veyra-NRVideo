@@ -27,6 +27,7 @@ Item {
             manageDialog.mode = veyra.nodeMode === 1 ? "node" : "list"
             manageDialog.feedback = ""
         }
+        veyra.logUi("ui-dialog", "open " + key + " (was " + (host.dialog || "none") + ")")
         host.dialog = key
     }
     function close() { host.dialog = "" }

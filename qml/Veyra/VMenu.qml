@@ -261,6 +261,6 @@ Popup {
         id: pickTimer
         property int index: -1
         interval: 130
-        onTriggered: { pop.close(); pop.picked(index, pop.items[index]) }
+        onTriggered: { const it = pop.items[index] || {}; if (typeof veyra !== "undefined") veyra.logUi("ui-menu", (pop.title || pop.objectName || "menu") + " pick " + index + " " + (it.act || it.id || it.label || "")); pop.close(); pop.picked(index, pop.items[index]) }
     }
 }
