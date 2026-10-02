@@ -64,7 +64,7 @@ VPage {
         Text {
             anchors.centerIn: parent
             visible: stageTap.enabled
-            text: "点击画面选择片源"
+            text: qsTr("点击画面选择片源")
             color: Theme.t3
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsH3
@@ -114,14 +114,14 @@ VPage {
     VMenu {
         id: sourceMenu
         objectName: "min-source-menu"
-        title: "片源"
-        items: [{ label: "打开文件…", icon: "folder", act: "file" },
-                { label: "PS5 串流…", icon: "gamepad", act: "ps5" },
-                { label: "PC 串流…", icon: "cast", act: "moonlight" },
-                { label: "Xbox 串流…", icon: "gamepad", act: "xbox" },
-                { label: "屏幕捕获…", icon: "monitor", act: "screen" },
+        title: qsTr("片源")
+        items: [{ label: qsTr("打开文件…"), icon: "folder", act: "file" },
+                { label: qsTr("PS5 串流…"), icon: "gamepad", act: "ps5" },
+                { label: qsTr("PC 串流…"), icon: "cast", act: "moonlight" },
+                { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
+                { label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" },
                 { sep: true },
-                { label: "采集卡设置…", icon: "settings", act: "capture" }]
+                { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }]
         onPicked: (i, o) => {
             if (o.act === "file") veyra.openFileDialog()
             else if (o.act === "ps5") veyra.openPs5Dialog()

@@ -831,6 +831,18 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # AUTOMOC: QmlPlayerBridge declares Q_OBJECT, so its meta-object has to be
   # generated. Without this the library links but every signal is unresolved.
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
+  # Interface language (UiLanguage.h): its own small library so the streaming models,
+  # which are tested without the player, translate their messages too.
+  add_library(veyra_ui_i18n STATIC src/ui/UiLanguage.cpp include/veyra/ui/UiLanguage.h)
+  target_compile_features(veyra_ui_i18n PUBLIC cxx_std_20)
+  target_compile_options(veyra_ui_i18n PRIVATE /utf-8)
+  target_include_directories(veyra_ui_i18n PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_ui_i18n PUBLIC veyra_base Qt6::Core)
+  target_link_libraries(veyra_qml_bridge PUBLIC veyra_ui_i18n)
+  add_executable(veyra_ui_i18n_tests tests/unit/UiLanguageTests.cpp)
+  target_compile_options(veyra_ui_i18n_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_ui_i18n_tests PRIVATE veyra_ui_i18n)
+  qt_add_resources(veyra_ui_i18n_tests "veyra_i18n_tests" PREFIX "/i18n" BASE "${CMAKE_CURRENT_SOURCE_DIR}/i18n" FILES i18n/catalog.json)
   if(VEYRA_ENABLE_MOONLIGHT)
     target_sources(veyra_qml_bridge PRIVATE src/ui/MoonlightInputCapture.cpp include/veyra/ui/MoonlightInputCapture.h)
     # The PC streaming model (hosts, pairing, apps, settings) is its own small library so it can be
@@ -840,7 +852,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     target_compile_features(veyra_moonlight_model PUBLIC cxx_std_20)
     target_include_directories(veyra_moonlight_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${FFMPEG_INCLUDE_DIRS})
     target_compile_definitions(veyra_moonlight_model PUBLIC VEYRA_ENABLE_MOONLIGHT=1 PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-    target_link_libraries(veyra_moonlight_model PUBLIC veyra_moonlight_protocol veyra_base Qt6::Core Qt6::Gui)
+    target_link_libraries(veyra_moonlight_model PUBLIC veyra_moonlight_protocol veyra_base veyra_ui_i18n Qt6::Core Qt6::Gui)
     target_link_libraries(veyra_qml_bridge PUBLIC veyra_moonlight_model)
     if(VEYRA_ENABLE_XBOX)
       add_library(veyra_xbox_model STATIC src/ui/XboxModel.cpp include/veyra/ui/XboxModel.h)
@@ -848,7 +860,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
       target_compile_features(veyra_xbox_model PUBLIC cxx_std_20)
       target_include_directories(veyra_xbox_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${FFMPEG_INCLUDE_DIRS})
       target_compile_definitions(veyra_xbox_model PUBLIC VEYRA_ENABLE_XBOX=1 PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-      target_link_libraries(veyra_xbox_model PUBLIC veyra_xbox_protocol veyra_base Qt6::Core Qt6::Gui)
+      target_link_libraries(veyra_xbox_model PUBLIC veyra_xbox_protocol veyra_base veyra_ui_i18n Qt6::Core Qt6::Gui)
       target_link_libraries(veyra_qml_bridge PUBLIC veyra_xbox_model)
     endif()
 
@@ -885,6 +897,9 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/qml ${CMAKE_CURRENT_BINARY_DIR}/qml
     COMMENT "Copying QML")
   add_dependencies(veyra_qml_ui veyra_qml_files)
+  # Interface translations (设置 → 界面语言): one catalog, compiled in so a package
+  # cannot ship without it. scripts/i18n/ builds it from the source strings.
+  qt_add_resources(veyra_qml_ui "veyra_i18n" PREFIX "/i18n" BASE "${CMAKE_CURRENT_SOURCE_DIR}/i18n" FILES i18n/catalog.json)
   target_compile_features(veyra_qml_ui PRIVATE cxx_std_20)
   # Qt6::CorePrivate only for QUnifiedTimer's slow mode behind --slow-animations.
   target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine Qt6::CorePrivate dbghelp ole32)

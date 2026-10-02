@@ -1,5 +1,10 @@
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/ui/QmlExportQueueModel.h"
+#include "veyra/ui/UiLanguage.h"
+#include <QQmlEngine>
+#include <QMetaMethod>
+#include <QMetaProperty>
+#include <QSet>
 
 #include <QRegion>
 #include <QCursor>
@@ -102,6 +107,11 @@ namespace veyra::ui {
 namespace {
 QString utf8Of(std::string_view s) { return QString::fromUtf8(s.data(), int(s.size())); }
 QString utf8Of(const std::wstring& w) { return QString::fromWCharArray(w.c_str(), int(w.size())); }
+// Messages and fixed table labels shown to the user, in the interface language
+// (UiLanguage.h). Data that only passes through the UI - paths, device, preset and
+// LUT names - keeps utf8Of(), and so do log lines.
+QString uiText(const std::wstring& w) { return veyra::ui::i18n::text(w); }
+QString uiText(std::string_view s) { return veyra::ui::i18n::text(QString::fromUtf8(s.data(), int(s.size()))); }
 std::wstring wideOf(const QString& s) {
     return std::wstring(reinterpret_cast<const wchar_t*>(s.utf16()), size_t(s.size()));
 }
@@ -126,6 +136,7 @@ bool exportFileClosed(const QString& path){
 struct QmlPlayerBridge::Impl {
     // Per-layer on/off before the NR master switch turned them all off.
     std::vector<bool> nrMasterRestore;
+    QQmlEngine* qmlEngine = nullptr;
     engine::EngineController& engine;
     PlayerUiFacade facade;
 
@@ -670,7 +681,7 @@ bool prepareStartupPreset(const engine::PresetEntry& entry, engine::ChainSession
     if (entry.kind == engine::ChainMode::List) {
         auto chain = configuration.chain;
         const auto result = engine::PresetLibrary::applyToChain(entry, chain, settings);
-        if (!result.accepted) { error = utf8Of(result.message); return false; }
+        if (!result.accepted) { error = uiText(result.message); return false; }
         configuration = engine::ChainConfiguration::capture(chain, settings);
     } else {
         engine::NodeEditorDocument document;
@@ -678,20 +689,20 @@ bool prepareStartupPreset(const engine::PresetEntry& entry, engine::ChainSession
         else {
             document.nodes = configuration.chain;
             const auto result = document.layout.initialize(document.nodes);
-            if (!result.accepted) { error = utf8Of(result.message); return false; }
+            if (!result.accepted) { error = uiText(result.message); return false; }
         }
         if (!document.globals)
             document.globals = static_cast<const engine::ChainGlobalSettings&>(configuration);
         auto draftSettings = settings;
         const auto result = engine::PresetLibrary::applyToEditor(entry, document, draftSettings);
-        if (!result.accepted) { error = utf8Of(result.message); return false; }
+        if (!result.accepted) { error = uiText(result.message); return false; }
         auto runtime = configuration.chain;
         const auto projected = document.layout.project(document.nodes, runtime);
         if (!projected.accepted) {
             uint32_t end = document.layout.inputNext;
             while (end > engine::NodeGraphLayout::Output)
                 end = document.layout.next[size_t(document.layout.indexOf(document.nodes, end))];
-            if (end != engine::NodeGraphLayout::Input) { error = utf8Of(projected.message); return false; }
+            if (end != engine::NodeGraphLayout::Input) { error = uiText(projected.message); return false; }
             runtime = configuration.chain;
         } else {
             document.globals->apply(settings);
@@ -747,11 +758,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     setupXbox();
 #endif
     // Before anything opens: the renderer reads the output choice at start().
+    applyPreference(QStringLiteral("language"));
     applyPreference(QStringLiteral("audioDevice"));
     applyPreference(QStringLiteral("audioForceStereo"));
     applyPreference(QStringLiteral("magewellLowLatency"));
     const bool presetsLoaded = impl_->facade.importLegacyStores();
-    const auto presetNotice = utf8Of(impl_->facade.error());
+    const auto presetNotice = uiText(impl_->facade.error());
     if (!presetNotice.isEmpty())
         QTimer::singleShot(0, this, [this, presetNotice, presetsLoaded] { emit notice(presetNotice, !presetsLoaded); });
     // Recent files, the last capture session and the shell preferences are saved
@@ -763,9 +775,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     auto restored = impl_->session;
     QString restoreError;
     if (!impl_->facade.loadChainSession(restored)) {
-        restoreError = utf8Of(impl_->facade.error());
+        restoreError = uiText(impl_->facade.error());
     } else {
-        const auto migrationNotice = utf8Of(impl_->facade.error());
+        const auto migrationNotice = uiText(impl_->facade.error());
         if (!migrationNotice.isEmpty())
             QTimer::singleShot(0, this, [this, migrationNotice] { emit notice(migrationNotice, false); });
         auto settings = impl_->facade.pendingSettings();
@@ -804,7 +816,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 impl_->revalidate();
                 impl_->options = engine::PlayerOptions::from(settings, engine::runtimeOrder(impl_->activeRuntime()));
                 if (candidate != before && !impl_->facade.saveChainSession(candidate))
-                    error = tr("默认预设已应用，但会话保存失败：") + utf8Of(impl_->facade.error());
+                    error = tr("默认预设已应用，但会话保存失败：") + uiText(impl_->facade.error());
                 else impl_->savedSession = candidate;
             }
             if (!error.isEmpty())
@@ -853,7 +865,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(impl_->sessionSaveTimer, &QTimer::timeout, this, [this] {
         if (!impl_->persistSession()) {
             veyra::log::error("ui-session", utf8Of(impl_->facade.error()).toStdString());
-            emit notice(tr("当前修改尚未保存：") + utf8Of(impl_->facade.error()), true);
+            emit notice(tr("当前修改尚未保存：") + uiText(impl_->facade.error()), true);
         }
     });
     // 60 Hz ceiling, and it does nothing at all when the snapshot is unchanged.
@@ -934,8 +946,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // start page: the reason used to land only in the (closed) PS5 panel,
             // leaving a black cinema strip that looked like a minimised window.
             if (had && !wasFailed && s.failed && (s.capture || s.remotePlay)) {
-                const QString why = QString::fromStdWString(s.status);
-                veyra::log::warn("ui-live-failed", std::format("remote={} status={}", s.remotePlay, why.toStdString()));
+                const QString why = veyra::ui::i18n::text(s.status);
+                veyra::log::warn("ui-live-failed", std::format("remote={} status={}", s.remotePlay, utf8Of(s.status).toStdString()));
                 emit notice(why.isEmpty() ? (s.remotePlay ? tr("PS5 串流没有连上") : tr("采集没有开始")) : why, true);
                 if (impl_->currentPage == QLatin1String("min")) emit navigate(QStringLiteral("home"));
             }
@@ -1095,7 +1107,7 @@ QVariantList QmlPlayerBridge::stageTimings() const {
             sample.mean && std::isfinite(*sample.mean) && *sample.mean >= 0.0;
         const double ms = measured ? *sample.mean : 0.0;
         QVariantMap item;
-        item["label"] = QString::fromUtf8(r.label);
+        item["label"] = uiText(std::string_view(r.label));
         item["ms"] = ms;
         item["p95"] = measured && sample.p95 ? *sample.p95 : 0.0;
         item["measured"] = measured;
@@ -1333,7 +1345,7 @@ void QmlPlayerBridge::setFgStrict(bool value) {
     if (!impl_->revalidate(true)) {
         const auto error = impl_->validation.message;
         impl_->chain.fgStrictAdmission = !value; impl_->revalidate();
-        emit notice(utf8Of(error), true);
+        emit notice(uiText(error), true);
     }
     emit settingsChanged();
     emit chainChanged();
@@ -1390,14 +1402,14 @@ void QmlPlayerBridge::resetCurrentPage() {
         if (!initialized.accepted) {
             impl_->chain = before; impl_->layout = oldLayout;
             impl_->selectedNr = selected; impl_->selectedColour = selectedColour;
-            emit notice(utf8Of(initialized.message), true); return;
+            emit notice(uiText(initialized.message), true); return;
         }
         impl_->initializeDefaultNodePositions();
     }
     if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;
         impl_->chain=before;impl_->layout=oldLayout;impl_->selectedNr=selected;impl_->selectedColour=selectedColour;impl_->revalidate();
-        emit notice(utf8Of(error),true);
+        emit notice(uiText(error),true);
     }
     emit settingsChanged();
     emit chainChanged();
@@ -1453,7 +1465,7 @@ void QmlPlayerBridge::setCurrentPage(const QString& value) {
 QString QmlPlayerBridge::remotePlayState() const {
     // The engine's own remote-play state word, or empty when there is none. No
     // invented "connected" wording.
-    return utf8Of(impl_->snapshot.remoteRecoveryMessage);
+    return uiText(impl_->snapshot.remoteRecoveryMessage);
 }
 
 QVariantList QmlPlayerBridge::componentList() const {
@@ -1537,7 +1549,7 @@ QString QmlPlayerBridge::captureDeviceLabel() const {
 QVariantList QmlPlayerBridge::captureFormats() const {
     QVariantList out;
     for (const auto& f : impl_->captureFormatList)
-        out << QVariantMap{{"id", utf8Of(f.key)}, {"label", utf8Of(f.label)}, {"tier", f.tier},
+        out << QVariantMap{{"id", utf8Of(f.key)}, {"label", uiText(f.label)}, {"tier", f.tier},
                            {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}};
     return out;
 }
@@ -1617,7 +1629,7 @@ QString QmlPlayerBridge::captureMagewellStatus() const {
     std::wstring runtime;
     if (!source::magewell::runtimeAvailable(&runtime))
         return tr("找不到美乐威运行库 LibMWCapture.dll（应在软件的 runtime\\magewell 文件夹里，或装美乐威驱动/SDK）");
-    return QString::fromStdWString(source::magewell::statusText());
+    return veyra::ui::i18n::text(source::magewell::statusText());
 }
 void QmlPlayerBridge::refreshCaptureDevices() {
     impl_->capturePrefs = ui::CapturePreferenceStore(impl_->dataDir).load();
@@ -2435,7 +2447,7 @@ void QmlPlayerBridge::tickPs5() {
         if (i.ps5Worker.joinable()) i.ps5Worker.join();
         i.ps5Busy = false;
         Impl::Ps5Outcome r; { std::lock_guard lock(i.ps5Mutex); r = std::move(i.ps5Outcome); }
-        i.ps5Status = QString::fromStdWString(r.message);
+        i.ps5Status = veyra::ui::i18n::text(r.message);
         if (!r.account.empty()) i.ps5Form["account"] = QString::fromStdString(r.account);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
         if (!r.savedPath.empty()) {
@@ -2467,16 +2479,16 @@ void QmlPlayerBridge::tickPs5() {
     if (i.ps5Watching && !i.ps5Busy) {
         const auto& s = i.snapshot;
         const bool active = s.remotePlay && (s.running || s.transport == engine::TransportState::Opening || s.transport == engine::TransportState::Stopping);
-        QString message = QString::fromStdWString(s.failed ? s.status : s.remoteRecovering ? s.remoteRecoveryMessage
+        QString message = veyra::ui::i18n::text(s.failed ? s.status : s.remoteRecovering ? s.remoteRecoveryMessage
                           : s.remotePlay && s.running ? std::wstring(L"PS5 画面已进入播放；关闭此面板不停止串流。") : active ? s.status : std::wstring(L"PS5 串流已停止，可以重新连接。"));
         if (s.remotePlay && s.running && !s.failed && !s.remoteRecovering) {
             const auto& r = s.remoteStream; const auto& p = r.requestedProfile;
-            message = QString::fromStdWString(std::format(L"生效：{}p / {} fps / {} / 请求 {} Mbps · 实收视频 {:.1f} Mbps", p.height, p.fps,
+            message = veyra::ui::i18n::text(std::format(L"生效：{}p / {} fps / {} / 请求 {} Mbps · 实收视频 {:.1f} Mbps", p.height, p.fps,
                 p.codec == remoteplay::Codec::H264 ? L"H.264" : p.codec == remoteplay::Codec::H265Hdr ? L"H.265 HDR" : L"H.265", p.bitrateKbps / 1000, r.videoMbps));
             const auto c = i.controller.capabilities();
             if (i.ps5Form.value("viewOnly").toBool()) message += tr("\n仅观看：电脑输入已关闭，手柄由 PS5 处理。");
             else if (!c.connected) message += tr("\n未检测到电脑手柄。");
-            else message += QString::fromStdWString(std::format(L"\n陀螺仪 {} · 触摸板 {} · 扳机 {} · 触觉 {}{}", c.gyro && c.accel ? L"已启用" : L"不可用",
+            else message += veyra::ui::i18n::text(std::format(L"\n陀螺仪 {} · 触摸板 {} · 扳机 {} · 触觉 {}{}", c.gyro && c.accel ? L"已启用" : L"不可用",
                 c.touch ? L"可用" : L"不可用", c.triggers ? L"已接入" : L"不可用", c.haptics ? L"端点已打开" : L"未打开", c.calibrating ? L" · 校准中" : L""));
         }
         if (message != i.ps5Status) { i.ps5Status = message; changed = true; }
@@ -2598,8 +2610,8 @@ QVariantList QmlPlayerBridge::colourParameters() const {
     for (const auto& p : kColourParams) {
         QVariantMap item;
         item["name"] = QString::fromUtf8(p.name);
-        item["label"] = QString::fromUtf8(p.label);
-        item["group"] = QString::fromUtf8(p.group);
+        item["label"] = uiText(std::string_view(p.label));
+        item["group"] = uiText(std::string_view(p.group));
         item["min"] = double(p.minimum);
         item["max"] = double(p.maximum);
         item["step"] = double(p.step);
@@ -2619,11 +2631,11 @@ QVariantList QmlPlayerBridge::colourGroups() const {
     QStringList order;
     QHash<QString, QVariantList> buckets;
     for (const auto& p : kColourParams) {
-        const QString group = QString::fromUtf8(p.group);
+        const QString group = uiText(std::string_view(p.group));
         if (!buckets.contains(group)) order << group;
         QVariantMap item;
         item["name"] = QString::fromUtf8(p.name);
-        item["label"] = QString::fromUtf8(p.label);
+        item["label"] = uiText(std::string_view(p.label));
         item["min"] = double(p.minimum);
         item["max"] = double(p.maximum);
         item["center"] = p.minimum < 0 && p.maximum > 0;
@@ -2682,7 +2694,7 @@ bool QmlPlayerBridge::commitColour(const engine::ColorSettings& colour){
     const int index=impl_->colourIndex();
     if(index<0){emit notice(tr("处理链中没有调色节点，未更改设置"),true);return false;}
     if(const auto error=colour.validate();!error.empty()){
-        emit notice(tr("调色参数被拒绝：%1").arg(utf8Of(error)),true);return false;
+        emit notice(tr("调色参数被拒绝：%1").arg(uiText(error)),true);return false;
     }
     auto& node=impl_->chain.nodes[index];
     if(node.color==colour&&node.enabled==colour.enabled)return true;
@@ -2690,7 +2702,7 @@ bool QmlPlayerBridge::commitColour(const engine::ColorSettings& colour){
     node.color=colour;node.enabled=colour.enabled;
     if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;node=previous;impl_->revalidate();
-        emit notice(utf8Of(error),true);emit settingsChanged();return false;
+        emit notice(uiText(error),true);emit settingsChanged();return false;
     }
     if(!impl_->colourReplaying){
         const qint64 now=QDateTime::currentMSecsSinceEpoch();
@@ -2839,13 +2851,13 @@ bool QmlPlayerBridge::saveColourLook(const QString& name, bool replace) {
     if (trimmed.isEmpty() || trimmed.size() > 48) { emit notice(tr("颜色预设名称需为 1–48 个字符"), true); return false; }
     if (impl_->colourIndex() < 0) { emit notice(tr("处理链中没有调色节点"), true); return false; }
     engine::ColorLookStore store(impl_->dataDir);
-    if (!store.load()) { emit notice(tr("颜色预设库无法读取：%1").arg(QString::fromStdWString(store.error())), true); return false; }
+    if (!store.load()) { emit notice(tr("颜色预设库无法读取：%1").arg(veyra::ui::i18n::text(store.error())), true); return false; }
     const bool exists = std::any_of(store.entries().begin(), store.entries().end(),
                                     [&](const auto& e) { return e.name == trimmed.toStdWString(); });
     if (exists && !replace) { emit notice(tr("已存在同名颜色预设"), true); return false; }
     auto colour = selectedColourSettings(); colour.enabled = true;
     if (!store.put(trimmed.toStdWString(), colour, replace) || !store.save()) {
-        emit notice(tr("颜色预设保存失败：%1").arg(QString::fromStdWString(store.error())), true); return false;
+        emit notice(tr("颜色预设保存失败：%1").arg(veyra::ui::i18n::text(store.error())), true); return false;
     }
     veyra::log::info("ui-colour", std::format("look saved name={} layer={}", trimmed.toStdString(), impl_->colourIndex()));
     emit colourLibraryChanged();
@@ -2887,7 +2899,7 @@ bool QmlPlayerBridge::importColourLook(const QString& path) {
     engine::ColorLookStore store(impl_->dataDir);
     std::wstring name;
     if (!store.load() || !store.importFile(std::filesystem::path(path.toStdWString()), name)) {
-        emit notice(tr("导入颜色预设失败：%1").arg(QString::fromStdWString(store.error())), true); return false;
+        emit notice(tr("导入颜色预设失败：%1").arg(veyra::ui::i18n::text(store.error())), true); return false;
     }
     emit colourLibraryChanged();
     emit notice(tr("已导入颜色预设：%1").arg(QString::fromStdWString(name)), false);
@@ -2901,7 +2913,7 @@ void QmlPlayerBridge::exportColourLookDialog(int index) {
 bool QmlPlayerBridge::exportColourLook(int index, const QString& path) {
     engine::ColorLookStore store(impl_->dataDir);
     if (!store.load() || index < 0 || !store.exportFile(size_t(index), std::filesystem::path(path.toStdWString()))) {
-        emit notice(tr("导出颜色预设失败：%1").arg(QString::fromStdWString(store.error())), true); return false;
+        emit notice(tr("导出颜色预设失败：%1").arg(veyra::ui::i18n::text(store.error())), true); return false;
     }
     emit notice(tr("已导出颜色预设"), false);
     return true;
@@ -3307,7 +3319,7 @@ QString QmlPlayerBridge::appName() const { return QStringLiteral("Veyra"); }
 QString QmlPlayerBridge::version() const { return QStringLiteral(VEYRA_DISPLAY_VERSION); }
 
 // --- playback ---------------------------------------------------------------
-QString QmlPlayerBridge::statusText() const { return utf8Of(impl_->snapshot.status); }
+QString QmlPlayerBridge::statusText() const { return uiText(impl_->snapshot.status); }
 bool QmlPlayerBridge::running() const { return impl_->snapshot.running; }
 bool QmlPlayerBridge::paused() const { return impl_->snapshot.transport == engine::TransportState::Paused; }
 bool QmlPlayerBridge::failed() const { return impl_->snapshot.failed; }
@@ -3380,7 +3392,7 @@ bool QmlPlayerBridge::fgActive() const { return impl_->snapshot.fgActive; }
 bool QmlPlayerBridge::captureRecovering() const { return impl_->snapshot.captureRecovering; }
 double QmlPlayerBridge::captureFps() const { return impl_->snapshot.captureFps; }
 double QmlPlayerBridge::captureDropped() const { return double(impl_->snapshot.captureDropped); }
-QString QmlPlayerBridge::backendWarning() const { return utf8Of(impl_->snapshot.backendWarning); }
+QString QmlPlayerBridge::backendWarning() const { return uiText(impl_->snapshot.backendWarning); }
 
 // --- settings ---------------------------------------------------------------
 
@@ -3467,7 +3479,7 @@ bool QmlPlayerBridge::setVideoHdrParameter(const QString& key, double value) {
         if (!node.videoHdr.valid()) { node = before; return false; }
         if (node == before) return true;
         const bool accepted = impl_->revalidate(true);
-        if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(utf8Of(error), true); }
+        if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(uiText(error), true); }
         emit settingsChanged(); emit chainChanged(); return accepted;
     }
     emit notice(tr("请先添加 RTX Video HDR 节点"), true);
@@ -3507,7 +3519,7 @@ void QmlPlayerBridge::setFgMultiplier(int multiplier) {
     if (!impl_->revalidate(true)) {
         const auto error = impl_->validation.message;
         node->enabled = beforeEnabled; chain.fgMultiplier = beforeMultiplier; impl_->revalidate();
-        emit notice(utf8Of(error), true);
+        emit notice(uiText(error), true);
     }
     emit settingsChanged(); emit chainChanged();
 }
@@ -3553,7 +3565,7 @@ bool QmlPlayerBridge::setProtectionRegion(double left,double top,double right,do
         node.protection.featherPixels=float(feather);
         if(node==before)return true;
         const bool accepted=impl_->revalidate(true);
-        if(!accepted){const auto error=impl_->validation.message;node=before;impl_->revalidate();emit notice(utf8Of(error),true);}
+        if(!accepted){const auto error=impl_->validation.message;node=before;impl_->revalidate();emit notice(uiText(error),true);}
         emit settingsChanged();emit chainChanged();return accepted;
     }
     return false;
@@ -3570,7 +3582,7 @@ bool QmlPlayerBridge::setProtectionRegion(double left,double top,double right,do
         const auto before=*n; n->member=decltype(n->member)(value);          \
         if(!impl_->revalidate(true)){                                       \
             const auto error=impl_->validation.message; *n=before;          \
-            impl_->revalidate();emit notice(utf8Of(error),true);             \
+            impl_->revalidate();emit notice(uiText(error),true);             \
         }                                                                  \
         emit settingsChanged();emit chainChanged();                         \
     }
@@ -3597,7 +3609,7 @@ void QmlPlayerBridge::setLowLatency(bool value){
         impl_->chain.nodes[i].nr.lowLatencyPairing=value;
     if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;impl_->chain=before;
-        impl_->revalidate();emit notice(utf8Of(error),true);
+        impl_->revalidate();emit notice(uiText(error),true);
     }
     emit settingsChanged();emit chainChanged();
 }
@@ -3660,7 +3672,7 @@ QVariantList QmlPlayerBridge::chain() const {
         item["index"] = int(i);
         item["id"] = c.mode == engine::ChainMode::Node ? impl_->layout.ids[i] : i + 2;
         item["type"] = utf8Of(info.id);
-        item["label"] = utf8Of(info.label);
+        item["label"] = uiText(info.label);
         if(node.type==engine::EffectType::FrameGeneration)
             for(const auto& choice:fgBackendChoices()){
                 const auto option=choice.toMap();
@@ -3705,7 +3717,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
             if(impl_->chain.nodes[i].type==engine::EffectType::NrEnhance)
                 impl_->chain.nodes[i].nr.runtime=static_cast<engine::NrRuntime>(int(value));
         const bool accepted=impl_->revalidate(true);
-        if(!accepted){const auto error=impl_->validation.message;impl_->chain=before;impl_->revalidate();emit notice(utf8Of(error),true);}
+        if(!accepted){const auto error=impl_->validation.message;impl_->chain=before;impl_->revalidate();emit notice(uiText(error),true);}
         emit settingsChanged();emit chainChanged();return accepted;
     }
     auto& node=impl_->chain.nodes[index];const auto before=node;auto& n=node.nr;
@@ -3730,7 +3742,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     }
     if(node==before)return true;
     const bool accepted=impl_->revalidate(true);
-    if(!accepted){const auto error=impl_->validation.message;node=before;impl_->revalidate();emit notice(utf8Of(error),true);}
+    if(!accepted){const auto error=impl_->validation.message;node=before;impl_->revalidate();emit notice(uiText(error),true);}
     emit settingsChanged();emit chainChanged();return accepted;
 }
 
@@ -3752,7 +3764,7 @@ QVariantList QmlPlayerBridge::effectCatalog() const {
         }
         QVariantMap item;
         item["id"] = utf8Of(info.id);
-        item["label"] = utf8Of(info.label);
+        item["label"] = uiText(info.label);
         item["maxInstances"] = int(info.maxInstances);
         item["repeatable"] = info.repeatable;
         item["mustBeLast"] = info.mustBeLast;
@@ -3763,7 +3775,7 @@ QVariantList QmlPlayerBridge::effectCatalog() const {
     return out;
 }
 
-QString QmlPlayerBridge::chainError() const { return utf8Of(impl_->validation.message); }
+QString QmlPlayerBridge::chainError() const { return uiText(impl_->validation.message); }
 bool QmlPlayerBridge::chainValid() const { return impl_->validation.accepted; }
 int QmlPlayerBridge::nodeMode() const { return impl_->chain.mode == engine::ChainMode::Node ? 1 : 0; }
 void QmlPlayerBridge::setNodeMode(int mode) {
@@ -3792,11 +3804,11 @@ void QmlPlayerBridge::setNodeMode(int mode) {
     if (!next.validate().empty()) { emit notice(tr("模式参数无效，未切换"), true); return; }
     // Save before changing the live mode; an unwritable/corrupt file cannot
     // silently discard the configuration the user is about to leave.
-    if (!impl_->facade.saveChainSession(candidate)) { emit notice(utf8Of(impl_->facade.error()), true); return; }
+    if (!impl_->facade.saveChainSession(candidate)) { emit notice(uiText(impl_->facade.error()), true); return; }
     if (!impl_->facade.applySettings(next,engine::runtimeOrder(configuration.chain))) {
         impl_->facade.setPending(previousSettings);
         if (!impl_->facade.saveChainSession(previousSession))
-            emit notice(tr("引擎拒绝切换，存档回退失败：") + utf8Of(impl_->facade.error()), true);
+            emit notice(tr("引擎拒绝切换，存档回退失败：") + uiText(impl_->facade.error()), true);
         emit notice(tr("引擎未接受模式设置，当前配置不变"), true); return;
     }
     impl_->session = impl_->savedSession = candidate;
@@ -3827,7 +3839,7 @@ QVariantList QmlPlayerBridge::presets() const {
         QVariantMap item;
         item["index"] = int(i);
         item["name"] = utf8Of(e.name);
-        item["note"] = utf8Of(e.note);
+        item["note"] = uiText(e.note);
         item["builtin"] = e.builtin;
         item["nodeMode"] = e.kind == engine::ChainMode::Node;
         item["contents"] = int(e.contents);
@@ -3899,8 +3911,8 @@ void QmlPlayerBridge::resumeCaptureSession() {
     queryCapture(2, impl_->captureDevice);
 }
 
-QString QmlPlayerBridge::colorStatus() const { return utf8Of(impl_->snapshot.colorStatus); }
-QString QmlPlayerBridge::videoHdrStatus() const { return utf8Of(impl_->snapshot.videoHdrStatus); }
+QString QmlPlayerBridge::colorStatus() const { return uiText(impl_->snapshot.colorStatus); }
+QString QmlPlayerBridge::videoHdrStatus() const { return uiText(impl_->snapshot.videoHdrStatus); }
 
 // --- export -----------------------------------------------------------------
 // Poll the export job once per UI tick. Its snapshot is the source of the
@@ -3913,7 +3925,7 @@ void QmlPlayerBridge::pollExport() {
     if(event&&event!=impl_->exportNotifiedBatch){
         impl_->exportNotifiedBatch=event;
         exportCompletionNotice(exportCompletionSound(),event,"video-batch");
-        emit notice(utf8Of(queue.status()),false);
+        emit notice(uiText(queue.status()),false);
     }
     if(changed)emit exportChanged();
 }
@@ -3924,8 +3936,8 @@ bool QmlPlayerBridge::exportPaused() const {
 }
 double QmlPlayerBridge::exportProgress() const { return impl_->exportSnapshot.progress; }
 QString QmlPlayerBridge::exportStatus() const {
-    if(impl_->exportSnapshot.active())return utf8Of(impl_->exportSnapshot.message);
-    return utf8Of(impl_->exportQueue.queue().status());
+    if(impl_->exportSnapshot.active())return uiText(impl_->exportSnapshot.message);
+    return uiText(impl_->exportQueue.queue().status());
 }
 QString QmlPlayerBridge::exportTarget() const { return utf8Of(impl_->exportOutput); }
 int QmlPlayerBridge::exportEncoded() const { return int(impl_->exportSnapshot.encoded); }
@@ -3933,7 +3945,7 @@ int QmlPlayerBridge::exportGenerated() const { return int(impl_->exportSnapshot.
 double QmlPlayerBridge::exportEtaSeconds() const { return impl_->exportSnapshot.etaSeconds; }
 int QmlPlayerBridge::exportQueueCount() const { return int(std::count_if(impl_->exportQueue.queue().items().begin(),impl_->exportQueue.queue().items().end(),[](const auto& i){return i.state==engine::ExportItemState::Queued;})); }
 int QmlPlayerBridge::exportQueueFailures() const { return int(impl_->exportQueue.queue().failures()); }
-QString QmlPlayerBridge::exportQueueFailure() const { return utf8Of(impl_->exportSnapshot.lastQueueFailure); }
+QString QmlPlayerBridge::exportQueueFailure() const { return uiText(impl_->exportSnapshot.lastQueueFailure); }
 
 // HEVC or H.264: the engine's export entry takes this as a flag, so it is a real
 // choice with a real effect rather than a label.
@@ -4077,7 +4089,7 @@ QString QmlPlayerBridge::diagnosticsReport() const {
     // Engine-reported values only. A diagnostic that guesses is worse than none.
     const auto& s = impl_->snapshot;
     QStringList lines;
-    lines << tr("状态: %1").arg(utf8Of(s.status));
+    lines << tr("状态: %1").arg(uiText(s.status));
     lines << tr("源: %1x%2 旋转 %3° 标称 %4 fps")
                  .arg(s.sourceWidth).arg(s.sourceHeight).arg(s.sourceRotationDegrees)
                  .arg(s.nominalSourceFps, 0, 'f', 2);
@@ -4092,9 +4104,9 @@ QString QmlPlayerBridge::diagnosticsReport() const {
         lines << tr("采集: 接收 %1 丢弃 %2 速率 %3 fps")
                      .arg(s.captureReceived).arg(s.captureDropped).arg(s.captureFps, 0, 'f', 2);
     }
-    if (!s.backendWarning.empty()) lines << tr("后端告警: %1").arg(utf8Of(s.backendWarning));
-    if (!s.colorStatus.empty()) lines << tr("色彩: %1").arg(utf8Of(s.colorStatus));
-    if (!s.videoHdrStatus.empty()) lines << tr("Video HDR: %1").arg(utf8Of(s.videoHdrStatus));
+    if (!s.backendWarning.empty()) lines << tr("后端告警: %1").arg(uiText(s.backendWarning));
+    if (!s.colorStatus.empty()) lines << tr("色彩: %1").arg(uiText(s.colorStatus));
+    if (!s.videoHdrStatus.empty()) lines << tr("Video HDR: %1").arg(uiText(s.videoHdrStatus));
     return lines.join(QLatin1Char('\n'));
 }
 
@@ -4297,6 +4309,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = v;
     } else if (key == QLatin1String("rememberPosition") || key == QLatin1String("dockPinned")) {
         stored = value.toBool();
+    } else if (key == QLatin1String("language")) {
+        const QString v = value.toString();
+        static const QStringList languages{"auto", "zh-CN", "zh-TW", "en", "ja"};
+        if (!languages.contains(v)) return false;
+        stored = v;
     } else if (key == QLatin1String("monitorGpu")) {
         const QString v = value.toString();
         if (!v.isEmpty() && std::none_of(impl_->gpuAdapters.begin(), impl_->gpuAdapters.end(), [&](const auto& a) { return a.id == v; })) return false;
@@ -4326,6 +4343,26 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
     else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
+    else if (key == QLatin1String("language")) {
+        const QString code = i18n::resolve(impl_->prefString("language"));
+        if (!i18n::apply(code)) emit notice(tr("这个语言的翻译没有找到，界面保持简体中文"), true);
+        if (impl_->qmlEngine) {
+            impl_->qmlEngine->setUiLanguage(i18n::current());
+            impl_->qmlEngine->retranslate();
+            // Strings the bridge builds itself (tr() in getters) follow once their
+            // properties notify: every argument-free notify signal fires once.
+            const QMetaObject* meta = metaObject();
+            QSet<int> fired;
+            for (int i = meta->propertyOffset(); i < meta->propertyCount(); ++i) {
+                const QMetaMethod notify = meta->property(i).notifySignal();
+                if (notify.isValid() && notify.parameterCount() == 0 && !fired.contains(notify.methodIndex())) {
+                    fired.insert(notify.methodIndex());
+                    notify.invoke(this, Qt::DirectConnection);
+                }
+            }
+            impl_->exportQueue.refresh();
+        }
+    }
     else if (key == QLatin1String("monitorGpu")) { impl_->resolveGpuMonitor(); impl_->gpuUtil = -1.0; emit perfChanged(); }
 }
 QVariantList QmlPlayerBridge::gpuMonitorChoices() const {
@@ -4335,6 +4372,11 @@ QVariantList QmlPlayerBridge::gpuMonitorChoices() const {
     return out;
 }
 QString QmlPlayerBridge::gpuMonitorName() const { return impl_->gpuMonitorName; }
+QString QmlPlayerBridge::uiLanguage() const { return i18n::current(); }
+void QmlPlayerBridge::setQmlEngine(QQmlEngine* engine) {
+    impl_->qmlEngine = engine;
+    if (engine) engine->setUiLanguage(i18n::current());
+}
 QVariantList QmlPlayerBridge::audioDevices() const {
     QVariantList out;
     out << QVariantMap{{"id", QString()}, {"label", tr("跟随系统默认")}, {"isDefault", false}};
@@ -4523,7 +4565,7 @@ void QmlPlayerBridge::startExport() {
     const QString folder=target.isDir()?target.absoluteFilePath():target.absolutePath();
     std::wstring reason;
     if(!impl_->exportQueue.queue().start(wideOf(folder),*settings,impl_->exportHevc,impl_->exportRateControl,reason)){
-        emit notice(utf8Of(reason),true);emit exportChanged();return;
+        emit notice(uiText(reason),true);emit exportChanged();return;
     }
     impl_->exportQueue.refresh();pollExport();emit navigate(QStringLiteral("exp"));
     // Leave the GPU to the export (field request 2026-10-02): whatever plays is closed,
@@ -4608,7 +4650,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         if (!impl_->revalidate(true, &previous)) {
             const auto error = impl_->validation.message; c = *before; impl_->layout = oldLayout;
             impl_->draftGlobals = oldGlobals;
-            impl_->facade.setPending(previous); impl_->revalidate(); emit notice(utf8Of(error), true); return -1;
+            impl_->facade.setPending(previous); impl_->revalidate(); emit notice(uiText(error), true); return -1;
         }
         if (info->type == engine::EffectType::NrEnhance) impl_->selectedNr = index;
         if (info->type == engine::EffectType::Color) impl_->selectedColour = index;
@@ -4655,7 +4697,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     if (c.nodeCount >= engine::kMaxChainNodes) { emit notice(tr("效果链已满"), true); return -1; }
     const auto& info = engine::effectInfo(wanted);
     if (c.countOf(wanted) >= info.maxInstances) {
-        emit notice(tr("%1 最多 %2 个").arg(utf8Of(info.label)).arg(info.maxInstances), true);
+        emit notice(tr("%1 最多 %2 个").arg(uiText(info.label)).arg(info.maxInstances), true);
         return -1;
     }
 
@@ -4694,11 +4736,11 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     if(!impl_->revalidate(live)){
         const auto error=impl_->validation.message;c=before;impl_->selectedNr=selected;
         impl_->selectedColour=colourSelected;
-        impl_->revalidate();emit notice(utf8Of(error),true);return -1;
+        impl_->revalidate();emit notice(uiText(error),true);return -1;
     }
     emit chainChanged();
     if (!impl_->validation.accepted) {
-        emit notice(utf8Of(impl_->validation.message), true);
+        emit notice(uiText(impl_->validation.message), true);
     } else {
         emit settingsChanged();
     }
@@ -4728,11 +4770,11 @@ int QmlPlayerBridge::duplicateNode(uint id) {
     const auto layout = impl_->layout;
     uint32_t created = 0;
     const auto result = impl_->layout.duplicate(impl_->chain, id, created);
-    if (!result.accepted) { emit notice(utf8Of(result.message), true); return -1; }
+    if (!result.accepted) { emit notice(uiText(result.message), true); return -1; }
     if (!impl_->revalidate(true)) {
         const auto error = impl_->validation.message;
         impl_->chain = *before; impl_->layout = layout; impl_->revalidate();
-        emit notice(utf8Of(error), true); return -1;
+        emit notice(uiText(error), true); return -1;
     }
     const int index = nodeIndexForId(created);
     if (impl_->chain.nodes[index].type == engine::EffectType::NrEnhance) impl_->selectedNr = index;
@@ -4764,7 +4806,7 @@ bool QmlPlayerBridge::resetNode(uint id) {
         impl_->draftGlobals = oldGlobals;
         impl_->facade.setPending(previous);
         impl_->chain.fgMultiplier = multiplier; impl_->chain.fgStrictAdmission = strict; impl_->revalidate();
-        emit notice(utf8Of(error), true); return false;
+        emit notice(uiText(error), true); return false;
     }
     emit chainChanged(); emit settingsChanged(); return true;
 }
@@ -4773,10 +4815,10 @@ bool QmlPlayerBridge::connectNodes(uint from, uint to) {
     if (impl_->chain.mode != engine::ChainMode::Node) return false;
     const auto before = impl_->layout;
     const auto result = impl_->layout.connect(impl_->chain, from, to);
-    if (!result.accepted) { emit notice(utf8Of(result.message), true); return false; }
+    if (!result.accepted) { emit notice(uiText(result.message), true); return false; }
     if (!impl_->revalidate(true)) {
         const auto error = impl_->validation.message; impl_->layout = before; impl_->revalidate();
-        emit notice(utf8Of(error), true); return false;
+        emit notice(uiText(error), true); return false;
     }
     emit chainChanged(); emit settingsChanged(); return true;
 }
@@ -4785,10 +4827,10 @@ bool QmlPlayerBridge::disconnectNode(uint from) {
     if (impl_->chain.mode != engine::ChainMode::Node) return false;
     const auto before = impl_->layout;
     const auto result = impl_->layout.disconnect(impl_->chain, from);
-    if (!result.accepted) { emit notice(utf8Of(result.message), true); return false; }
+    if (!result.accepted) { emit notice(uiText(result.message), true); return false; }
     if (!impl_->revalidate(true)) {
         const auto error = impl_->validation.message; impl_->layout = before; impl_->revalidate();
-        emit notice(utf8Of(error), true); return false;
+        emit notice(uiText(error), true); return false;
     }
     emit chainChanged(); emit settingsChanged(); return true;
 }
@@ -4797,10 +4839,10 @@ bool QmlPlayerBridge::insertNodeAfter(uint id, uint after) {
     if (impl_->chain.mode != engine::ChainMode::Node) return false;
     const auto before = impl_->layout;
     const auto result = impl_->layout.insertAfter(impl_->chain, id, after);
-    if (!result.accepted) { emit notice(utf8Of(result.message), true); return false; }
+    if (!result.accepted) { emit notice(uiText(result.message), true); return false; }
     if (!impl_->revalidate(true)) {
         const auto error = impl_->validation.message; impl_->layout = before; impl_->revalidate();
-        emit notice(utf8Of(error), true); return false;
+        emit notice(uiText(error), true); return false;
     }
     emit chainChanged(); emit settingsChanged(); return true;
 }
@@ -4819,7 +4861,7 @@ int QmlPlayerBridge::duplicateNrLayer(int index){
     if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;c=before;impl_->selectedNr=selected;
         impl_->selectedColour=colourSelected;
-        impl_->revalidate();emit notice(utf8Of(error),true);return -1;
+        impl_->revalidate();emit notice(uiText(error),true);return -1;
     }
     emit chainChanged();emit settingsChanged();return index+1;
 }
@@ -4834,7 +4876,7 @@ bool QmlPlayerBridge::removeEffect(int index) {
     const auto previousLayout = impl_->layout;
     if (c.mode == engine::ChainMode::Node) {
         const auto result = impl_->layout.remove(c, impl_->layout.ids[index]);
-        if (!result.accepted) { emit notice(utf8Of(result.message), true); return false; }
+        if (!result.accepted) { emit notice(uiText(result.message), true); return false; }
     } else {
         for (uint32_t i = uint32_t(index); i + 1 < c.nodeCount; ++i) c.nodes[i] = c.nodes[i + 1];
         --c.nodeCount;
@@ -4846,7 +4888,7 @@ bool QmlPlayerBridge::removeEffect(int index) {
     if(!impl_->revalidate(live)){
         const auto error=impl_->validation.message;c=before;impl_->layout=previousLayout;impl_->selectedNr=selected;
         impl_->selectedColour=colourSelected;
-        impl_->revalidate();emit notice(utf8Of(error),true);return false;
+        impl_->revalidate();emit notice(uiText(error),true);return false;
     }
     emit chainChanged();
     emit settingsChanged();
@@ -4878,7 +4920,7 @@ bool QmlPlayerBridge::moveEffect(int from, int to) {
         const auto error=impl_->validation.message;
         impl_->chain = before;
         impl_->revalidate();
-        emit notice(utf8Of(error), true);
+        emit notice(uiText(error), true);
         return false;
     }
     const auto remap=[&](int i){
@@ -4901,7 +4943,7 @@ bool QmlPlayerBridge::setEffectEnabled(int index, bool enabled) {
     c.nodes[index].enabled = enabled;
     if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;c.nodes[index].enabled=!enabled;
-        impl_->revalidate();emit notice(utf8Of(error),true);return false;
+        impl_->revalidate();emit notice(uiText(error),true);return false;
     }
     emit chainChanged();
     emit settingsChanged();
@@ -4930,7 +4972,7 @@ bool QmlPlayerBridge::setAllNrEnabled(bool enabled) {
     }
     if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;c=before;impl_->revalidate();
-        emit notice(utf8Of(error),true);emit chainChanged();return false;
+        emit notice(uiText(error),true);emit chainChanged();return false;
     }
     veyra::log::info("ui-nr",std::format("master switch {} layers={}",enabled?"on":"off",layers.size()));
     emit chainChanged();emit settingsChanged();
@@ -4968,7 +5010,7 @@ QVariantMap QmlPlayerBridge::effectDescriptor(const QString& type) const {
         if (utf8Of(info.id) != type) continue;
         QVariantMap out;
         out["id"] = utf8Of(info.id);
-        out["label"] = utf8Of(info.label);
+        out["label"] = uiText(info.label);
         out["maxInstances"] = int(info.maxInstances);
         out["repeatable"] = info.repeatable;
         out["mustBeLast"] = info.mustBeLast;
@@ -5005,7 +5047,7 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
         engine::fromChain(impl_->activeRuntime(), settings);
         engine::ChainGlobalSettings::capture(previous).apply(settings);
     } else validation = engine::PresetLibrary::applyToChain(entry, candidate, settings);
-    if (!validation.accepted) { emit notice(utf8Of(validation.message), true); return false; }
+    if (!validation.accepted) { emit notice(uiText(validation.message), true); return false; }
     if (const auto error = settings.validate(); !error.empty()) {
         veyra::log::error("qml-preset", error);
         emit notice(tr("预设参数无效，已保留原状态"), true); return false;
@@ -5038,7 +5080,7 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
         const auto error = impl_->validation.message; impl_->chain = *oldChain; impl_->layout = oldLayout;
         impl_->draftGlobals = oldGlobals;
         impl_->facade.setPending(previous); impl_->revalidate();
-        emit notice(utf8Of(error), true); return false;
+        emit notice(uiText(error), true); return false;
     }
     impl_->selectedNr = selectedNr;
     impl_->selectedColour = selectedColour;
@@ -5103,7 +5145,7 @@ bool QmlPlayerBridge::savePresetAs(const QString& name, int contentsMask, bool n
     }
     const bool ok = impl_->facade.savePreset(entry, false);
     if (ok) emit presetsChanged();
-    else emit notice(tr("保存预设失败: %1").arg(utf8Of(impl_->facade.error())), true);
+    else emit notice(tr("保存预设失败: %1").arg(uiText(impl_->facade.error())), true);
     return ok;
 }
 
@@ -5147,13 +5189,13 @@ QVariantList QmlPlayerBridge::presetSaveParts() const {
     };
     QStringList chainParts;
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
-        chainParts << utf8Of(engine::effectInfo(impl_->chain.nodes[i].type).label);
+        chainParts << uiText(engine::effectInfo(impl_->chain.nodes[i].type).label);
     add("chain", tr("效果链"),
         chainParts.isEmpty() ? tr("空") : chainParts.join(QStringLiteral(" → ")),
         impl_->chain.nodeCount > 0);
     add("color", tr("色彩"), s.color.enabled ? tr("已启用") : tr("未启用"), s.color.enabled);
     add("fg", tr("补帧"),
-        s.multiplier > 1 ? QStringLiteral("%1X").arg(s.multiplier) : tr("关闭"),
+        s.multiplier > 1 ? QStringLiteral("%1X").arg(s.multiplier) : tr("关闭", "off"),
         s.multiplier > 1);
     add("audio", tr("声音"),
         s.audioOffsetMs != 0 ? tr("偏移 %1 ms").arg(s.audioOffsetMs) : tr("默认"),
@@ -5171,7 +5213,7 @@ bool QmlPlayerBridge::setDefaultPreset(int index) {
     const bool ok = index == -1 ? impl_->facade.presets().clearDefault()
                                 : impl_->facade.presets().setDefault(size_t(index));
     if (ok) emit presetsChanged();
-    else emit notice(tr("默认预设保存失败：") + utf8Of(impl_->facade.presets().error()), true);
+    else emit notice(tr("默认预设保存失败：") + uiText(impl_->facade.presets().error()), true);
     return ok;
 }
 
@@ -5277,8 +5319,10 @@ void QmlPlayerBridge::updateRunStatus() {
     // rate, which the rate check would call 输出未达标 (a field user read that as broken FG).
     else if (active && i.compareMode != 0 && s.applied.multiplier > 1) { status = tr("对比中"); level = QStringLiteral("ok"); }
     else if (active && !s.applying && f.rateWindowReady) {
-        status = QString::fromWCharArray(i.history.rateStatus(s));
-        level = status == tr("正常") ? QStringLiteral("ok") : QStringLiteral("warn");
+        // Judged on the engine's own words, shown in the interface language.
+        const std::wstring rate = i.history.rateStatus(s);
+        status = uiText(rate);
+        level = rate == L"正常" ? QStringLiteral("ok") : QStringLiteral("warn");
     }
     else if (s.applying && s.running) { status = tr("调整中"); level = QStringLiteral("warn"); }
     else if (active) status = tr("采样中");
@@ -5380,7 +5424,7 @@ bool QmlPlayerBridge::editProtection(const std::function<bool(engine::ChainNode&
         if (!edit(node)) return false;
         if (node == before) return true;
         const bool accepted = impl_->revalidate(true);
-        if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(utf8Of(error), true); }
+        if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(uiText(error), true); }
         emit settingsChanged(); emit chainChanged();
         return accepted;
     }
@@ -5539,7 +5583,7 @@ void QmlPlayerBridge::setOutputCustomFps(double value) {
     applyPresentation();
 }
 bool QmlPlayerBridge::presentationOwned() const { return impl_->snapshot.presentationProviderOwned; }
-QString QmlPlayerBridge::presentationStatus() const { return utf8Of(impl_->snapshot.presentationStatus); }
+QString QmlPlayerBridge::presentationStatus() const { return uiText(impl_->snapshot.presentationStatus); }
 void QmlPlayerBridge::applyPresentation() {
     auto& p = impl_->presentation;
     if (!p.valid()) return;
@@ -5749,7 +5793,7 @@ bool QmlPlayerBridge::resetNrLayer(int index) {
     if (node == before) return true;
     if (!impl_->revalidate(true)) {
         const auto error = impl_->validation.message; node = before; impl_->revalidate();
-        emit notice(utf8Of(error), true); return false;
+        emit notice(uiText(error), true); return false;
     }
     emit settingsChanged(); emit chainChanged();
     return true;
@@ -5803,13 +5847,13 @@ QString QmlPlayerBridge::sourceFormatText() const {
     if (sourceKind() == QLatin1String("capture")) {
         for (const auto& f : impl_->captureFormatList)
             if (f.key == impl_->captureFormatKey) {
-                const QString label = utf8Of(f.label);
+                const QString label = uiText(f.label);
                 const int dot = label.lastIndexOf(QString::fromUtf8("·"));
                 if (dot >= 0) parts << label.mid(dot + 1).trimmed();
                 break;
             }
     }
-    const QString colour = utf8Of(impl_->snapshot.colorStatus);
+    const QString colour = uiText(impl_->snapshot.colorStatus);
     if (!colour.isEmpty()) parts << colour.section(QString::fromUtf8(" → "), 0, 0).trimmed();
     return parts.join(QString::fromUtf8(" · "));
 }
@@ -6006,7 +6050,7 @@ bool QmlPlayerBridge::importPreset(const QString& path) {
     auto& library = impl_->facade.presets();
     const bool ok = library.importFile(std::filesystem::path(wideOf(path)), name);
     veyra::log::info("ui-preset", std::format("import ok={} name={}", ok, utf8Of(name).toStdString()));
-    if (!ok) { emit notice(tr("导入失败：%1").arg(utf8Of(library.error())), true); return false; }
+    if (!ok) { emit notice(tr("导入失败：%1").arg(uiText(library.error())), true); return false; }
     emit presetsChanged();
     emit notice(tr("已导入预设：%1").arg(utf8Of(name)), false);
     return true;
@@ -6024,7 +6068,7 @@ bool QmlPlayerBridge::exportPreset(int index, const QString& path) {
     if (index < 0 || size_t(index) >= library.entries().size()) return false;
     const bool ok = library.exportEntry(size_t(index), std::filesystem::path(wideOf(path)));
     veyra::log::info("ui-preset", std::format("export index={} ok={}", index, ok));
-    if (!ok) { emit notice(tr("导出失败：%1").arg(utf8Of(library.error())), true); return false; }
+    if (!ok) { emit notice(tr("导出失败：%1").arg(uiText(library.error())), true); return false; }
     emit notice(tr("预设已导出到：%1").arg(QDir::toNativeSeparators(path)), false);
     return true;
 }
@@ -6033,7 +6077,7 @@ QString QmlPlayerBridge::liveOpeningText() const {
     if (!impl_->pendingLiveText.isEmpty()) return impl_->pendingLiveText;
     const auto& s = impl_->snapshot;
     if (s.running || s.failed || s.transport != engine::TransportState::Opening) return {};
-    const QString status = QString::fromStdWString(s.status);
+    const QString status = veyra::ui::i18n::text(s.status);
     if (s.remotePlay)
         return status.contains(QStringLiteral("PIN")) ? status : tr("正在连接 PS5 · %1").arg(impl_->liveLabel);
     if (impl_->liveKind == QLatin1String("screen")) return tr("正在开始屏幕捕获…");

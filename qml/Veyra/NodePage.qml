@@ -385,7 +385,7 @@ VPage {
                         objectName: "node-source-button"
                         iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
                                 : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
-                        text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : "片源"
+                        text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
                         maxTextWidth: 180
                         trailingIcon: "down"
                         onClicked: nodeSourceMenu.openAt(this, "down")
@@ -406,11 +406,11 @@ VPage {
                         spacing: 0
                         Repeater {
                             model: [
-                                { k: "输入", v: veyra.sourceSummary, hi: false },
-                                { k: "输出", v: veyra.outputSummary.length > 0 ? veyra.outputSummary : "未测", hi: false },
-                                { k: "显示 fps", v: veyra.displayFpsKnown ? veyra.displayFps.toFixed(1) : "未测", hi: true },
-                                { k: veyra.submitFpsLabel + " fps", v: veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) : "未测", hi: false },
-                                { k: "待呈现", v: veyra.queuedFramesKnown ? veyra.queuedFrames.toFixed(0) + " 帧" : "未测", hi: false }
+                                { k: qsTr("输入"), v: veyra.sourceSummary, hi: false },
+                                { k: qsTr("输出"), v: veyra.outputSummary.length > 0 ? veyra.outputSummary : qsTr("未测"), hi: false },
+                                { k: qsTr("显示 fps"), v: veyra.displayFpsKnown ? veyra.displayFps.toFixed(1) : qsTr("未测"), hi: true },
+                                { k: veyra.submitFpsLabel + " fps", v: veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) : qsTr("未测"), hi: false },
+                                { k: qsTr("待呈现"), v: veyra.queuedFramesKnown ? veyra.queuedFrames.toFixed(0) + qsTr(" 帧") : qsTr("未测"), hi: false }
                             ]
                             delegate: RowLayout {
                                 required property var modelData
@@ -443,24 +443,24 @@ VPage {
                     VButton {
                         objectName: "node-fullscreen"
                         icon: true; iconName: "max"
-                        tip: "全屏画面（双击画面 / F11）"
+                        tip: qsTr("全屏画面（双击画面 / F11）")
                         onClicked: root.requestFullscreen()
                     }
                     // .viewtog: 列表 asks first (the list configuration comes back).
                     VSeg {
                         objectName: "node-mode-switch"
-                        options: [{ id: "list", label: "列表", icon: "list" }, { id: "node", label: "节点", icon: "nodes" }]
+                        options: [{ id: "list", label: qsTr("列表"), icon: "list" }, { id: "node", label: qsTr("节点"), icon: "nodes" }]
                         current: "node"
                         onPicked: id => { if (id === "list") returnDialog.open() }
                     }
-                    VButton { objectName: "node-return-list"; visible: false; text: "返回列表"; onClicked: returnDialog.open() }
+                    VButton { objectName: "node-return-list"; visible: false; text: qsTr("返回列表"); onClicked: returnDialog.open() }
                     VButton {
                         id: nodePresetBtn
                         objectName: "node-preset-button"
                         iconName: "nodes"
                         trailingIcon: "down"
                         maxTextWidth: 150
-                        text: "节点预设：" + veyra.currentPresetName
+                        text: qsTr("节点预设：") + veyra.currentPresetName
                         onClicked: nodePresetMenu.openAt(this, "down")
                     }
                 }
@@ -533,8 +533,8 @@ VPage {
                 anchors.leftMargin: 12
                 anchors.topMargin: 10
                 z: 4
-                text: root.wireFrom >= 0 ? "请选择输入端口完成连接 · Esc 取消" :
-                      (veyra.chainValid ? "右键空白添加 · 拖到连线上插入 · 拖远（上下超过一截）或按住 Alt 松手即断开 · 端口拖拽/点击连线 · 中键平移 · 滚轮缩放" : veyra.chainError)
+                text: root.wireFrom >= 0 ? qsTr("请选择输入端口完成连接 · Esc 取消") :
+                      (veyra.chainValid ? qsTr("右键空白添加 · 拖到连线上插入 · 拖远（上下超过一截）或按住 Alt 松手即断开 · 端口拖拽/点击连线 · 中键平移 · 滚轮缩放") : veyra.chainError)
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: 11
@@ -594,46 +594,46 @@ VPage {
                         id: inCol
                         anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                         anchors.margins: 10; spacing: 8
-                        Text { text: "输入 · 光流"; color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; font.weight: Font.Medium }
+                        Text { text: qsTr("输入 · 光流"); color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; font.weight: Font.Medium }
                         Text {
                             Layout.fillWidth: true
-                            text: veyra.sourceSummary.length > 0 ? veyra.sourceSummary : "未打开片源"
+                            text: veyra.sourceSummary.length > 0 ? veyra.sourceSummary : qsTr("未打开片源")
                             color: Theme.t3; font.family: Theme.fontMono; font.pixelSize: 10; elide: Text.ElideRight
                         }
                         VSelect {
                             objectName: "node-flow-choice"
                             Layout.fillWidth: true
-                            title: "光流算法"
+                            title: qsTr("光流算法")
                             options: [{id:"0",label:"NVIDIA NVOF"},{id:"1",label:"AMD FidelityFX"}]
-                            value: options[veyra.opticalFlowChoice]?.label ?? (veyra.opticalFlowChoice === 2 ? "GPU DIS 已移除，请重选" : "未知配置")
+                            value: options[veyra.opticalFlowChoice]?.label ?? (veyra.opticalFlowChoice === 2 ? qsTr("GPU DIS 已移除，请重选") : qsTr("未知配置"))
                             onPicked: id => veyra.setOpticalFlowChoice(Number(id))
                         }
-                        NodeLabel { text: "运动估算质量" }
+                        NodeLabel { text: qsTr("运动估算质量") }
                         VSeg {
                             objectName: "node-flow-quality"
                             Layout.fillWidth: true
-                            options: [{ id: "0", label: "性能" }, { id: "1", label: "平衡" }, { id: "2", label: "质量" }]
+                            options: [{ id: "0", label: qsTr("性能") }, { id: "1", label: qsTr("平衡") }, { id: "2", label: qsTr("质量") }]
                             current: String(veyra.flowQuality)
                             onPicked: id => veyra.flowQuality = Number(id)
                         }
                         RowLayout {
                             Layout.fillWidth: true
                             visible: veyra.opticalFlowChoice === 1
-                            NodeLabel { Layout.fillWidth: true; text: "AMD 性能档（宽高减半）" }
+                            NodeLabel { Layout.fillWidth: true; text: qsTr("AMD 性能档（宽高减半）") }
                             VSwitch { objectName: "node-amd-half"; checked: veyra.amdFlowHalf; onToggled: checked => veyra.amdFlowHalf = checked }
                         }
-                        NodeLabel { text: "内容节奏" }
+                        NodeLabel { text: qsTr("内容节奏") }
                         VSelect {
                             objectName: "node-content-rate"
                             Layout.fillWidth: true
-                            title: "内容节奏"
+                            title: qsTr("内容节奏")
                             options: root.contentRates
                             value: (root.contentRates[veyra.contentRate] || root.contentRates[0]).label
                             onPicked: id => veyra.contentRate = Number(id)
                         }
                         Text {
                             Layout.fillWidth: true
-                            text: "补帧与 NR 共用，输入后计算一次，不随节点重复。"
+                            text: qsTr("补帧与 NR 共用，输入后计算一次，不随节点重复。")
                             color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10
                             wrapMode: Text.WordWrap
                         }
@@ -665,10 +665,10 @@ VPage {
                         id: outCol
                         anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                         anchors.margins: 10; spacing: 6
-                        Text { text: "输出 · 声音"; color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; font.weight: Font.Medium }
+                        Text { text: qsTr("输出 · 声音"); color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; font.weight: Font.Medium }
                         Text {
                             Layout.fillWidth: true
-                            text: veyra.outputSummary.length > 0 ? veyra.outputSummary : "未输出"
+                            text: veyra.outputSummary.length > 0 ? veyra.outputSummary : qsTr("未输出")
                             color: Theme.t3; font.family: Theme.fontMono; font.pixelSize: 10; elide: Text.ElideRight
                         }
                         RowLayout {
@@ -686,14 +686,14 @@ VPage {
                         VSeg {
                             objectName: "node-out-sync"
                             Layout.fillWidth: true
-                            options: [{ id: "0", label: "自动估算" }, { id: "1", label: "手动" }, { id: "2", label: "关闭" }]
+                            options: [{ id: "0", label: qsTr("自动估算") }, { id: "1", label: qsTr("手动") }, { id: "2", label: qsTr("关闭", "off") }]
                             current: String(veyra.audioSyncMode)
                             onPicked: id => veyra.audioSyncMode = Number(id)
                         }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 6
                             visible: veyra.audioSyncMode === 1
-                            Text { text: "偏移"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10 }
+                            Text { text: qsTr("偏移"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10 }
                             VSlider {
                                 Layout.fillWidth: true
                                 center: true
@@ -705,7 +705,7 @@ VPage {
                         Text {
                             Layout.fillWidth: true
                             visible: veyra.audioSyncMode === 0
-                            text: veyra.audioSyncLive ? "软件估算补偿 " + veyra.audioCompensationMs.toFixed(0) + " ms" : "自动估算：采集卡 / PS5 实时输入时生效"
+                            text: veyra.audioSyncLive ? qsTr("软件估算补偿 ") + veyra.audioCompensationMs.toFixed(0) + " ms" : qsTr("自动估算：采集卡 / PS5 实时输入时生效")
                             color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10; wrapMode: Text.WordWrap
                         }
                         // 显示同步 / 输出上限: presentation belongs to the output.
@@ -714,26 +714,26 @@ VPage {
                             spacing: 6
                             enabled: !veyra.presentationOwned
                             opacity: enabled ? 1 : 0.5
-                            NodeLabel { text: veyra.presentationOwned ? "显示同步 · Intel XeSS 接管呈现" : "显示同步" }
+                            NodeLabel { text: veyra.presentationOwned ? qsTr("显示同步 · Intel XeSS 接管呈现") : qsTr("显示同步") }
                             VSeg {
                                 objectName: "node-display-sync"
                                 Layout.fillWidth: true
-                                options: [{ id: "0", label: "允许撕裂" }, { id: "1", label: "垂直同步" }, { id: "2", label: "自动" }]
+                                options: [{ id: "0", label: qsTr("允许撕裂") }, { id: "1", label: qsTr("垂直同步") }, { id: "2", label: qsTr("自动") }]
                                 current: String(veyra.displaySync)
                                 onPicked: id => veyra.displaySync = Number(id)
                             }
-                            NodeLabel { text: "输出上限" }
+                            NodeLabel { text: qsTr("输出上限") }
                             VSeg {
                                 objectName: "node-output-rate"
                                 Layout.fillWidth: true
-                                options: [{ id: "0", label: "关闭" }, { id: "1", label: "跟随显示器" }, { id: "2", label: "自定义" }]
+                                options: [{ id: "0", label: qsTr("关闭", "off") }, { id: "1", label: qsTr("跟随显示器") }, { id: "2", label: qsTr("自定义") }]
                                 current: String(veyra.outputRateMode)
                                 onPicked: id => veyra.outputRateMode = Number(id)
                             }
                             RowLayout {
                                 Layout.fillWidth: true
                                 visible: veyra.outputRateMode === 2
-                                NodeLabel { Layout.fillWidth: true; text: "自定义上限（FPS）" }
+                                NodeLabel { Layout.fillWidth: true; text: qsTr("自定义上限（FPS）") }
                                 DialogHost.VTextField {
                                     objectName: "node-custom-fps"
                                     implicitWidth: 90
@@ -742,19 +742,19 @@ VPage {
                                 }
                             }
                         }
-                        NodeLabel { text: "输出设备" }
+                        NodeLabel { text: qsTr("输出设备") }
                         VSelect {
                             objectName: "node-out-device"
                             Layout.fillWidth: true
-                            title: "输出设备"
+                            title: qsTr("输出设备")
                             readonly property string chosen: veyra.preferences.audioDevice || ""
-                            value: { const d = veyra.audioDevices.find(x => x.id === chosen); return d ? d.label : "跟随系统默认" }
+                            value: { const d = veyra.audioDevices.find(x => x.id === chosen); return d ? d.label : qsTr("跟随系统默认") }
                             options: veyra.audioDevices
                             onPicked: id => veyra.setPreference("audioDevice", id)
                         }
                         // The list page's 输出稳定器 · 抗闪烁 (field request 2026-10-01: missing
                         // in node mode). One global stage after the last NR, before SR and FG.
-                        NodeLabel { text: "输出稳定器 · 抗闪烁" }
+                        NodeLabel { text: qsTr("输出稳定器 · 抗闪烁") }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 6
                             VSwitch {
@@ -898,7 +898,7 @@ VPage {
                     VButton {
                         id: toolsAdd
                         objectName: "node-add"
-                        ghost: true; iconName: "plus"; text: "添加节点"
+                        ghost: true; iconName: "plus"; text: qsTr("添加节点")
                         onClicked: {
                             root.addAt = Qt.point((canvasCard.width / 2 - root.panX) / root.zoom - root.cardWidth / 2,
                                                   (canvasCard.height / 3 - root.panY) / root.zoom)
@@ -908,13 +908,13 @@ VPage {
                     VButton {
                         id: nodePresetButton
                         objectName: "node-presets"
-                        ghost: true; text: "预设"
+                        ghost: true; text: qsTr("预设")
                         onClicked: nodePresetMenu.openAt(nodePresetButton, "up")
                     }
                     Rectangle { implicitWidth: 1; implicitHeight: 16; color: Theme.stroke2 }
                     Text {
                         Layout.leftMargin: 8; Layout.rightMargin: 8
-                        text: veyra.chain.length + " 个节点 · " + (veyra.chainValid ? "处理链有效" : "草稿未运行")
+                        text: veyra.chain.length + qsTr(" 个节点 · ") + (veyra.chainValid ? qsTr("处理链有效") : qsTr("草稿未运行"))
                         color: Theme.t3
                         font.family: Theme.fontUi
                         font.pixelSize: 11
@@ -982,7 +982,7 @@ VPage {
                                 horizontalAlignment: Text.AlignHCenter
                                 elide: Text.ElideRight
                                 text: modelData.label + " " + (modelData.measured ? modelData.ms.toFixed(1) + " ms"
-                                      : modelData.state === "sdk" ? "SDK内部" : modelData.state === "fused" ? "并入输入" : "等待样本")
+                                      : modelData.state === "sdk" ? qsTr("SDK内部") : modelData.state === "fused" ? qsTr("并入输入") : qsTr("等待样本"))
                                 color: modelData.measured ? Qt.rgba(0, 0, 0, 0.8) : Theme.t3
                                 font.family: Theme.fontUi
                                 font.pixelSize: 10
@@ -990,7 +990,7 @@ VPage {
                             }
                             HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
                             ToolTip.visible: segHover.hovered
-                            ToolTip.text: modelData.label + "：" + (modelData.measured ? modelData.ms.toFixed(2) + " ms（GPU 最近一秒平均）" : "暂无本节点计时")
+                            ToolTip.text: modelData.label + "：" + (modelData.measured ? modelData.ms.toFixed(2) + qsTr(" ms（GPU 最近一秒平均）") : qsTr("暂无本节点计时"))
                             TapHandler {
                                 gesturePolicy: TapHandler.WithinBounds
                                 onTapped: root.focusNode(modelData.id)
@@ -1010,7 +1010,7 @@ VPage {
                         Text {
                             anchors.centerIn: parent
                             visible: parent.width > 90
-                            text: "余量 " + timingStrip.spare.toFixed(1) + " ms"
+                            text: qsTr("余量 ") + timingStrip.spare.toFixed(1) + " ms"
                             color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10
                         }
                     }
@@ -1027,9 +1027,9 @@ VPage {
     }
     // engine::ContentRate order (same list as the professional page).
     readonly property var contentRates: [
-        { id: "0", label: "采用源时间戳" }, { id: "1", label: "自动识别内容节奏" },
-        { id: "2", label: "识别 30fps 内容" }, { id: "3", label: "识别 50fps 内容" },
-        { id: "4", label: "识别 60fps 内容" }, { id: "5", label: "采集 60→30（PS5 30 帧）" }
+        { id: "0", label: qsTr("采用源时间戳") }, { id: "1", label: qsTr("自动识别内容节奏") },
+        { id: "2", label: qsTr("识别 30fps 内容") }, { id: "3", label: qsTr("识别 50fps 内容") },
+        { id: "4", label: qsTr("识别 60fps 内容") }, { id: "5", label: qsTr("采集 60→30（PS5 30 帧）") }
     ]
     // A draggable fixed box (输入 / 光流 / 输出). The top strip (or the whole box
     // when it has no controls) is the drag handle.
@@ -1287,16 +1287,16 @@ VPage {
                             text: {
                                 switch (timing.state) {
                                 case "measured": return timing.ms.toFixed(2) + " ms"
-                                case "fused": return "并入输入"
-                                case "sdk": return "SDK内部"
-                                case "disabled": return "已停用"
-                                case "idle": return "未连接"
-                                case "draft": return "草稿未运行"
-                                case "pending": return "等待样本"
-                                case "stopped": return "未播放"
-                                case "hdr-sdr": return "SDR显示未转换"
-                                case "fg-skipped": return "预算拒绝"
-                                default: return "不计时"
+                                case "fused": return qsTr("并入输入")
+                                case "sdk": return qsTr("SDK内部")
+                                case "disabled": return qsTr("已停用")
+                                case "idle": return qsTr("未连接")
+                                case "draft": return qsTr("草稿未运行")
+                                case "pending": return qsTr("等待样本")
+                                case "stopped": return qsTr("未播放")
+                                case "hdr-sdr": return qsTr("SDR显示未转换")
+                                case "fg-skipped": return qsTr("预算拒绝")
+                                default: return qsTr("不计时")
                                 }
                             }
                             color: timing.state === "measured" ? Theme.t1 : Theme.t3
@@ -1355,8 +1355,8 @@ VPage {
                 objectName: "node-sr-editor-" + card.node.id
                 spacing: 6
                 VRow {
-                    label: "目标尺寸"
-                    hint: "决定输出分辨率"
+                    label: qsTr("目标尺寸")
+                    hint: qsTr("决定输出分辨率")
                     VSeg {
                         options: [{ id: "1", label: "2K" }, { id: "2", label: "4K" }, { id: "4", label: "5K" }, { id: "5", label: "6K" }, { id: "6", label: "7K" }, { id: "3", label: "8K" }]
                         current: String(veyra.srTargetIndex)
@@ -1364,13 +1364,13 @@ VPage {
                     }
                 }
                 VRow {
-                    label: "超分运动来源"
-                    hint: "零运动会限制时序重建；RTX 视频超分不使用此输入"
-                    VSeg { options: [{id:"0",label:"零运动"},{id:"1",label:"光流"}]; current: String(veyra.srMotionSource); onPicked: id => veyra.srMotionSource = Number(id) }
+                    label: qsTr("超分运动来源")
+                    hint: qsTr("零运动会限制时序重建；RTX 视频超分不使用此输入")
+                    VSeg { options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.srMotionSource); onPicked: id => veyra.srMotionSource = Number(id) }
                 }
                 VRow {
-                    label: "质量"
-                    hint: "RTX 视频超分档位"
+                    label: qsTr("质量")
+                    hint: qsTr("RTX 视频超分档位")
                     VSeg {
                         options: [{ id: "1", label: "1" }, { id: "2", label: "2" }, { id: "3", label: "3" }, { id: "4", label: "4" }]
                         current: String(veyra.videoSrQuality)
@@ -1386,14 +1386,14 @@ VPage {
                 spacing: 4
                 Text {
                     Layout.fillWidth: true
-                    text: veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : "SDR → HDR，在补帧之前"
+                    text: veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("SDR → HDR，在补帧之前")
                     color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11; wrapMode: Text.WordWrap
                 }
                 Repeater {
-                    model: [{key:"contrast",label:"对比度",from:0,to:200,def:125},
-                            {key:"saturation",label:"饱和度",from:0,to:200,def:75},
-                            {key:"middleGray",label:"中灰",from:10,to:100,def:44},
-                            {key:"peakNits",label:"峰值亮度 (nit)",from:400,to:2000,def:1000}]
+                    model: [{key:"contrast",label:qsTr("对比度"),from:0,to:200,def:125},
+                            {key:"saturation",label:qsTr("饱和度"),from:0,to:200,def:75},
+                            {key:"middleGray",label:qsTr("中灰"),from:10,to:100,def:44},
+                            {key:"peakNits",label:qsTr("峰值亮度 (nit)"),from:400,to:2000,def:1000}]
                     delegate: VRow {
                         required property var modelData
                         label: modelData.label
@@ -1418,11 +1418,11 @@ VPage {
                 spacing: 6
                 Text {
                     Layout.fillWidth: true
-                    text: "链路中固定为最后一步；画布上可移动"
+                    text: qsTr("链路中固定为最后一步；画布上可移动")
                     color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11; wrapMode: Text.WordWrap
                 }
                 VRow {
-                    label: "补帧方式"
+                    label: qsTr("补帧方式")
                     hint: veyra.fgProviderText
                     VSelect {
                         objectName: "node-fg-backend"
@@ -1432,8 +1432,8 @@ VPage {
                     }
                 }
                 VRow {
-                    label: "倍率"
-                    hint: veyra.fgMaxMultiplier + "X 为上限"
+                    label: qsTr("倍率")
+                    hint: veyra.fgMaxMultiplier + qsTr("X 为上限")
                     VSeg {
                         objectName: "node-fg-multiplier"
                         options: veyra.fgMultiplierChoices
@@ -1442,18 +1442,18 @@ VPage {
                     }
                 }
                 VRow {
-                    label: "补帧运动来源"
-                    hint: "XeSS 默认零运动；FSR 仍有自身的光流计算"
-                    VSeg { objectName: "node-fg-motion"; options: [{id:"0",label:"零运动"},{id:"1",label:"光流"}]; current: String(veyra.fgMotionSource); onPicked: id => veyra.fgMotionSource = Number(id) }
+                    label: qsTr("补帧运动来源")
+                    hint: qsTr("XeSS 默认零运动；FSR 仍有自身的光流计算")
+                    VSeg { objectName: "node-fg-motion"; options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.fgMotionSource); onPicked: id => veyra.fgMotionSource = Number(id) }
                 }
                 VRow {
-                    label: "严格补帧节奏"
-                    hint: "帧同步 · 默认关闭"
+                    label: qsTr("严格补帧节奏")
+                    hint: qsTr("帧同步 · 默认关闭")
                     VSwitch { checked: veyra.fgStrict; onToggled: checked => veyra.fgStrict = checked }
                 }
                 VRow {
-                    label: "低延迟队列"
-                    hint: "减少排队；不宣称延迟下降"
+                    label: qsTr("低延迟队列")
+                    hint: qsTr("减少排队；不宣称延迟下降")
                     VSwitch { checked: veyra.fgLowQueue; onToggled: checked => veyra.fgLowQueue = checked }
                 }
             }
@@ -1494,19 +1494,19 @@ VPage {
         }
         TapHandler { acceptedButtons: Qt.RightButton; onTapped: if (port.output) veyra.disconnectNode(port.nodeId) }
         ToolTip.visible: portHover.hovered
-        ToolTip.text: output ? "拖到输入端口连接，或点击后再点输入端口；右键断开" : "连接到此输入"
+        ToolTip.text: output ? qsTr("拖到输入端口连接，或点击后再点输入端口；右键断开") : qsTr("连接到此输入")
     }
 
     VMenu {
         id: nodePresetMenu
         objectName: "node-preset-menu"
-        title: "节点预设"
+        title: qsTr("节点预设")
         items: veyra.presets.filter(p => p.nodeMode === true)
             .map(p => ({ label: p.name, note: p.note, checked: p.name === veyra.currentPresetName,
-                         tag: p.builtin ? "内置" : "", preset: p.index }))
+                         tag: p.builtin ? qsTr("内置") : "", preset: p.index }))
             .concat([{ sep: true },
-                     { label: "把当前设置另存为预设…", icon: "plus", act: "save" },
-                     { label: "管理预设…", icon: "settings", act: "manage" }])
+                     { label: qsTr("把当前设置另存为预设…"), icon: "plus", act: "save" },
+                     { label: qsTr("管理预设…"), icon: "settings", act: "manage" }])
         onPicked: (i, o) => {
             if (o.act) root.requestDialog(o.act)
             else veyra.applyPresetIndex(o.preset)
@@ -1521,11 +1521,11 @@ VPage {
         readonly property var descriptor: veyra.effectDescriptor(targetNode.type || "")
         readonly property bool canCopy: descriptor.repeatable === true &&
             veyra.chain.filter(n => n.type === targetNode.type).length < descriptor.maxInstances
-        title: targetNode.label || "节点"
+        title: targetNode.label || qsTr("节点")
         items: [
-            {label: "删除节点", id: "delete", disabled: targetNode.mustBeLast === true, note: targetNode.mustBeLast ? "补帧固定末位，可关闭" : ""},
-            {label: "复制节点", id: "copy", disabled: !canCopy, note: canCopy ? "完整参数副本，旁置未连接" : "单例节点或数量已达上限"},
-            {label: "重置节点", id: "reset"}
+            {label: qsTr("删除节点"), id: "delete", disabled: targetNode.mustBeLast === true, note: targetNode.mustBeLast ? qsTr("补帧固定末位，可关闭") : ""},
+            {label: qsTr("复制节点"), id: "copy", disabled: !canCopy, note: canCopy ? qsTr("完整参数副本，旁置未连接") : qsTr("单例节点或数量已达上限")},
+            {label: qsTr("重置节点"), id: "reset"}
         ]
         onPicked: (i, item) => {
             const index = veyra.nodeIndexForId(targetId)
@@ -1542,8 +1542,8 @@ VPage {
     VMenu {
         id: addMenu
         objectName: "node-add-menu"
-        title: "添加节点"
-        items: veyra.effectCatalog.map(e => ({ label: e.label, id: e.id, tag: e.experimental ? "实验" : "", tagKind: e.experimental ? "warn" : "" }))
+        title: qsTr("添加节点")
+        items: veyra.effectCatalog.map(e => ({ label: e.label, id: e.id, tag: e.experimental ? qsTr("实验") : "", tagKind: e.experimental ? "warn" : "" }))
         onPicked: (i, o) => {
             // The new card's id is only known after it exists; the next id the
             // chain will hand out is one past the largest.
@@ -1560,16 +1560,16 @@ VPage {
     VMenu {
         id: nodeSourceMenu
         objectName: "node-source-menu"
-        title: "片源"
+        title: qsTr("片源")
         items: (veyra.sourceTitle.length > 0
                 ? [{ label: veyra.sourceTitle, note: veyra.sourceFormatText, checked: true, icon: "video", act: "" }] : [])
-            .concat([{ label: "打开文件…", icon: "folder", act: "file" },
-                     { label: "PS5 串流…", icon: "gamepad", act: "ps5" },
-                     { label: "PC 串流…", icon: "cast", act: "moonlight" },
-                     { label: "Xbox 串流…", icon: "gamepad", act: "xbox" },
-                     { label: "屏幕捕获…", icon: "monitor", act: "screen" },
+            .concat([{ label: qsTr("打开文件…"), icon: "folder", act: "file" },
+                     { label: qsTr("PS5 串流…"), icon: "gamepad", act: "ps5" },
+                     { label: qsTr("PC 串流…"), icon: "cast", act: "moonlight" },
+                     { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
+                     { label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" },
                      { sep: true },
-                     { label: "采集卡设置…", icon: "settings", act: "capture" }])
+                     { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }])
         onPicked: (i, o) => {
             if (o.act === "file") veyra.openFileDialog()
             else if (o.act === "ps5") veyra.openPs5Dialog()
@@ -1584,15 +1584,15 @@ VPage {
         objectName: "node-return-dialog"
         cardWidth: 480
         glyph: "list"
-        title: "切换回列表模式？"
-        acceptText: "切换到列表模式"
+        title: qsTr("切换回列表模式？")
+        acceptText: qsTr("切换到列表模式")
         acceptIcon: "list"
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 6
             Repeater {
-                model: ["回到列表模式，恢复列表之前的设置和预设。", "节点链会保留，下次切回节点模式时继续使用。",
-                        "切换会重建处理链，画面可能停顿几百毫秒。"]
+                model: [qsTr("回到列表模式，恢复列表之前的设置和预设。"), qsTr("节点链会保留，下次切回节点模式时继续使用。"),
+                        qsTr("切换会重建处理链，画面可能停顿几百毫秒。")]
                 delegate: RowLayout {
                     required property string modelData
                     Layout.fillWidth: true

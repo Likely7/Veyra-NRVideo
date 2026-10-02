@@ -45,7 +45,7 @@ Rectangle {
                 }
                 Text {
                     visible: sub.count > 0
-                    text: sub.count + " 项"
+                    text: sub.count + qsTr(" 项")
                     color: Theme.t3
                     font.family: Theme.fontUi
                     font.pixelSize: 11

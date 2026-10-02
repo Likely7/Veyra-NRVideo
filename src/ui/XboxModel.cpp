@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "veyra/ui/XboxModel.h"
+#include "veyra/ui/UiLanguage.h"
 
 #include <QDesktopServices>
 #include <QFile>
@@ -21,7 +22,7 @@ QString qs(const std::string& text) { return QString::fromUtf8(text.data(), qsiz
 QString describe(const std::exception& e) {
     if (const auto* service = dynamic_cast<const xbox::ServiceError*>(&e)) {
         const std::wstring xerr = xbox::describeXboxError(service->body);
-        if (!xerr.empty()) return QString::fromStdWString(xerr);
+        if (!xerr.empty()) return veyra::ui::i18n::text(xerr);
         if (service->status == 400 || service->status == 401 || service->status == 403) return QObject::tr("Xbox 登录已失效，请重新登录。");
         return QObject::tr("Xbox 服务返回错误（HTTP %1）。").arg(service->status);
     }
@@ -243,7 +244,7 @@ void XboxModel::updateStream(bool active, const source::XboxStats& s) {
     if (active) {
         const char* names[] = {"idle", "starting", "connecting", "streaming", "ended", "failed"};
         now = QVariantMap{
-            {"state", names[size_t(s.state)]}, {"message", QString::fromStdWString(s.message)}, {"codec", "H.264"},
+            {"state", names[size_t(s.state)]}, {"message", veyra::ui::i18n::text(s.message)}, {"codec", "H.264"},
             {"hardware", s.hardwareDecode}, {"width", int(s.width)}, {"height", int(s.height)},
             {"receivedFps", s.receivedFps}, {"decodedFps", s.decodedFps}, {"videoMbps", s.videoMbps},
             {"decodeMs", s.decodeMs}, {"rttMs", s.rttMs}, {"dropped", double(s.dropped)},

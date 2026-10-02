@@ -35,7 +35,7 @@ Rectangle {
         spacing: 4
         Text {
             text: (hud.xboxOn ? "Xbox · " : "PC · ") + (s.width > 0 ? s.width + "×" + s.height : "") + " · " + (s.codec || "")
-                + (s.hdr ? " HDR" : "") + " · " + (s.hardware ? "硬件解码" : "软件解码")
+                + (s.hdr ? " HDR" : "") + " · " + (s.hardware ? qsTr("硬件解码") : qsTr("软件解码"))
             color: Theme.t1
             font.family: Theme.fontMono
             font.pixelSize: 12
@@ -43,32 +43,32 @@ Rectangle {
         }
         Text {
             visible: !hud.xboxOn
-            text: "主机 " + hud.ms(s.hostMs) + "  ·  往返 " + hud.ms(s.rttMs) + "  ·  接收 " + hud.ms(s.receiveMs)
-                + "  ·  排队 " + hud.ms(s.queueMs) + "  ·  解码 " + hud.ms(s.decodeMs)
-                + "  ·  码率 " + (s.videoMbps > 0 ? s.videoMbps.toFixed(1) + " Mbps" : "—")
+            text: qsTr("主机 ") + hud.ms(s.hostMs) + qsTr("  ·  往返 ") + hud.ms(s.rttMs) + qsTr("  ·  接收 ") + hud.ms(s.receiveMs)
+                + qsTr("  ·  排队 ") + hud.ms(s.queueMs) + qsTr("  ·  解码 ") + hud.ms(s.decodeMs)
+                + qsTr("  ·  码率 ") + (s.videoMbps > 0 ? s.videoMbps.toFixed(1) + " Mbps" : "—")
             color: Theme.t2
             font.family: Theme.fontMono
             font.pixelSize: 11
         }
         Text {
             visible: hud.xboxOn
-            text: "往返 " + hud.ms(s.rttMs) + "  ·  解码 " + hud.ms(s.decodeMs) + "  ·  码率 " + (s.videoMbps > 0 ? s.videoMbps.toFixed(1) + " Mbps" : "—")
+            text: qsTr("往返 ") + hud.ms(s.rttMs) + qsTr("  ·  解码 ") + hud.ms(s.decodeMs) + qsTr("  ·  码率 ") + (s.videoMbps > 0 ? s.videoMbps.toFixed(1) + " Mbps" : "—")
             color: Theme.t2
             font.family: Theme.fontMono
             font.pixelSize: 11
         }
         Text {
             text: hud.xboxOn
-                ? "收 " + hud.num(s.receivedFps) + " / 解 " + hud.num(s.decodedFps) + " fps  ·  丢帧 " + (s.dropped || 0) + "  ·  关键帧请求 " + (s.keyframes || 0)
-                : "收 " + hud.num(s.receivedFps) + " / 解 " + hud.num(s.decodedFps) + " fps  ·  包 " + (s.packets || 0)
-                  + "  ·  FEC 恢复 " + (s.recovered || 0) + "  ·  未恢复 " + (s.lost || 0) + "  ·  丢帧 " + (s.dropped || 0)
+                ? qsTr("收 ") + hud.num(s.receivedFps) + qsTr(" / 解 ") + hud.num(s.decodedFps) + qsTr(" fps  ·  丢帧 ") + (s.dropped || 0) + qsTr("  ·  关键帧请求 ") + (s.keyframes || 0)
+                : qsTr("收 ") + hud.num(s.receivedFps) + qsTr(" / 解 ") + hud.num(s.decodedFps) + qsTr(" fps  ·  包 ") + (s.packets || 0)
+                  + qsTr("  ·  FEC 恢复 ") + (s.recovered || 0) + qsTr("  ·  未恢复 ") + (s.lost || 0) + qsTr("  ·  丢帧 ") + (s.dropped || 0)
             color: (s.lost || 0) > 0 ? Theme.warn : Theme.t2
             font.family: Theme.fontMono
             font.pixelSize: 11
         }
         Text {
-            text: hud.xboxOn ? "Ctrl+Alt+Shift+S 隐藏" :
-                  veyra.moonlightCaptured ? "键盘鼠标已交给主机 · Ctrl+Alt+Shift+Z 释放 · +Q 断开" : "键盘鼠标未捕获 · 点击画面捕获"
+            text: hud.xboxOn ? qsTr("Ctrl+Alt+Shift+S 隐藏") :
+                  veyra.moonlightCaptured ? qsTr("键盘鼠标已交给主机 · Ctrl+Alt+Shift+Z 释放 · +Q 断开") : qsTr("键盘鼠标未捕获 · 点击画面捕获")
             color: !hud.xboxOn && veyra.moonlightCaptured ? Theme.ok : Theme.t3
             font.family: Theme.fontUi
             font.pixelSize: 11

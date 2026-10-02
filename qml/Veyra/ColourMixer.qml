@@ -5,7 +5,7 @@ ColumnLayout {
     id: root
     property int band: 0
     property var state: ({blackWhite:false,mixerHue:[0,0,0,0,0,0,0,0],mixerSaturation:[0,0,0,0,0,0,0,0],mixerLuminance:[0,0,0,0,0,0,0,0],blackWhiteMix:[0,0,0,0,0,0,0,0]})
-    readonly property var names:["红色","橙色","黄色","绿色","浅绿色","蓝色","紫色","洋红"]
+    readonly property var names:[qsTr("红色"),qsTr("橙色"),qsTr("黄色"),qsTr("绿色"),qsTr("浅绿色"),qsTr("蓝色"),qsTr("紫色"),qsTr("洋红")]
     readonly property var colors:["#FF5A5A","#FF9A3D","#F5D547","#4CD964","#3DD6C8","#4F8BFF","#9B6BFF","#FF5AC8"]
     signal edited(string name, real value)
     signal modeEdited(bool blackWhite)
@@ -13,7 +13,7 @@ ColumnLayout {
     RowLayout {
         id: modeRow
         objectName:"colour-mixer-mode-row"
-        property string label:"模式"
+        property string label:qsTr("模式")
         Layout.fillWidth:true
         Layout.preferredHeight:Theme.rowMinHeight
         spacing:12
@@ -25,7 +25,7 @@ ColumnLayout {
         }
         VSeg {
             objectName:"colour-mixer-mode"
-            options:[{id:"hsl",label:"HSL"},{id:"bw",label:"黑白"}]
+            options:[{id:"hsl",label:"HSL"},{id:"bw",label:qsTr("黑白")}]
             current:root.state.blackWhite?"bw":"hsl"
             onPicked:id=>root.modeEdited(id==="bw")
         }
@@ -49,8 +49,8 @@ ColumnLayout {
         }
     }
     Repeater {
-        model:root.state.blackWhite?[{key:"blackWhiteMix",label:"黑白"}]:
-            [{key:"mixerHue",label:"色相"},{key:"mixerSaturation",label:"饱和度"},{key:"mixerLuminance",label:"明亮度"}]
+        model:root.state.blackWhite?[{key:"blackWhiteMix",label:qsTr("黑白")}]:
+            [{key:"mixerHue",label:qsTr("色相")},{key:"mixerSaturation",label:qsTr("饱和度")},{key:"mixerLuminance",label:qsTr("明亮度")}]
         delegate:RowLayout {
             required property var modelData
             objectName:"colour-mixer-row-"+modelData.key

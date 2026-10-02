@@ -98,7 +98,7 @@ Rectangle {
                 spacing: 2
                 Text {
                     Layout.fillWidth: true
-                    text: veyra.sourceName.length > 0 ? veyra.sourceName : "未打开"
+                    text: veyra.sourceName.length > 0 ? veyra.sourceName : qsTr("未打开")
                     color: Theme.t1
                     font.family: Theme.fontUi
                     font.pixelSize: 13
@@ -156,7 +156,7 @@ Rectangle {
                 }
 
                 // 载入 (field request 2026-10-02): the home page's sources without leaving 极简.
-                CBtn { objectName: "cine-load"; glyph: "folder"; tip: "载入片源"; onTapped: loadMenu.openAt(this, "up") }
+                CBtn { objectName: "cine-load"; glyph: "folder"; tip: qsTr("载入片源"); onTapped: loadMenu.openAt(this, "up") }
                 CBtn { glyph: "cc"; onTapped: ccMenu.openAt(this, "up") }
                 CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
 
@@ -289,7 +289,7 @@ Rectangle {
                         Text {
                             anchors.centerIn: previewFrame
                             visible: previewFrame.status === Image.Loading || previewFrame.status === Image.Error
-                            text: previewFrame.status === Image.Loading ? "加载中" : "预览不可用"
+                            text: previewFrame.status === Image.Loading ? qsTr("加载中") : qsTr("预览不可用")
                             color: Theme.t3
                             font.family: Theme.fontUi
                             font.pixelSize: 11
@@ -410,7 +410,7 @@ Rectangle {
                 VIcon { anchors.centerIn: parent; name: "eyeoff"; color: hideHover.hovered ? "#FFFFFF" : Theme.t2 }
                 HoverHandler { id: hideHover; cursorShape: Qt.PointingHandCursor }
                 ToolTip.visible: hideHover.hovered
-                ToolTip.text: "隐藏播放条（顶部胶囊里可重新打开）"
+                ToolTip.text: qsTr("隐藏播放条（顶部胶囊里可重新打开）")
                 TapHandler { onTapped: bar.requestHide() }
             }
         }
@@ -421,12 +421,12 @@ Rectangle {
     VMenu {
         id: presetMenu
         aboveLimit: bar.menuBottomLimit
-        title: "预设"
+        title: qsTr("预设")
         readonly property var mk: p => ({ label: p.name, note: p.note, checked: p.name === veyra.currentPresetName,
-                                          tag: p.nodeMode ? "节点" : "", preset: p.index })
-        items: [{ head: "列表预设" }].concat(veyra.presets.filter(p => !p.nodeMode).map(mk))
-            .concat([{ head: "节点预设" }]).concat(veyra.presets.filter(p => p.nodeMode).map(mk))
-            .concat([{ sep: true }, { label: "去专业模式管理预设…", icon: "sliders", act: "pro" }])
+                                          tag: p.nodeMode ? qsTr("节点") : "", preset: p.index })
+        items: [{ head: qsTr("列表预设") }].concat(veyra.presets.filter(p => !p.nodeMode).map(mk))
+            .concat([{ head: qsTr("节点预设") }]).concat(veyra.presets.filter(p => p.nodeMode).map(mk))
+            .concat([{ sep: true }, { label: qsTr("去专业模式管理预设…"), icon: "sliders", act: "pro" }])
         onPicked: (i, o) => {
             if (o.act === "pro") bar.requestPage("pro")
             else veyra.applyPresetIndex(o.preset)
@@ -439,13 +439,13 @@ Rectangle {
     VMenu {
         id: ccMenu
         aboveLimit: bar.menuBottomLimit
-        title: "字幕"
-        items: [{ label: "关闭", checked: veyra.subtitlePrimary < 0, track: -1 }]
+        title: qsTr("字幕")
+        items: [{ label: qsTr("关闭", "off"), checked: veyra.subtitlePrimary < 0, track: -1 }]
             .concat(veyra.subtitleTracks.map(t => ({ label: t.label, note: t.note, track: t.index,
                                                      disabled: !t.usable, checked: t.index === veyra.subtitlePrimary })))
-            .concat([{ label: "加载外部字幕…", icon: "import", act: "load" },
+            .concat([{ label: qsTr("加载外部字幕…"), icon: "import", act: "load" },
                      { sep: true },
-                     { label: "字幕设置…", note: "字体、字号、描边、位置、延时", icon: "type", act: "dlg" }])
+                     { label: qsTr("字幕设置…"), note: qsTr("字体、字号、描边、位置、延时"), icon: "type", act: "dlg" }])
         onPicked: (i, o) => {
             if (o.act === "load") veyra.loadSubtitleDialog()
             else if (o.act === "dlg") bar.requestDialog("subtitle")
@@ -459,14 +459,14 @@ Rectangle {
         id: loadMenu
         objectName: "cine-load-menu"
         aboveLimit: bar.menuBottomLimit
-        title: "载入片源"
+        title: qsTr("载入片源")
         items: [
-            { label: "打开视频", note: "MP4 · MKV · 图片", icon: "folder", act: "file" },
-            { label: "采集卡", note: "HDMI 采集设备", icon: "video", act: "capture" },
-            { label: "PS5 串流", note: "局域网串流", icon: "gamepad", act: "ps5" },
-            { label: "PC 串流", note: "Sunshine 主机", icon: "cast", act: "moonlight" },
-            { label: "Xbox 串流", note: "账号登录 · 实验", icon: "gamepad", act: "xbox" },
-            { label: "屏幕捕获", note: "窗口或显示器", icon: "monitor", act: "screen" }
+            { label: qsTr("打开视频"), note: qsTr("MP4 · MKV · 图片"), icon: "folder", act: "file" },
+            { label: qsTr("采集卡"), note: qsTr("HDMI 采集设备"), icon: "video", act: "capture" },
+            { label: qsTr("PS5 串流"), note: qsTr("局域网串流"), icon: "gamepad", act: "ps5" },
+            { label: qsTr("PC 串流"), note: qsTr("Sunshine 主机"), icon: "cast", act: "moonlight" },
+            { label: qsTr("Xbox 串流"), note: qsTr("账号登录 · 实验"), icon: "gamepad", act: "xbox" },
+            { label: qsTr("屏幕捕获"), note: qsTr("窗口或显示器"), icon: "monitor", act: "screen" }
         ]
         onPicked: (i, o) => {
             switch (o.act) {
@@ -485,16 +485,16 @@ Rectangle {
     VMenu {
         id: audioMenu
         aboveLimit: bar.menuBottomLimit
-        title: "音轨"
+        title: qsTr("音轨")
         // The bridge's label already carries language · title · codec; only the
         // channel count is separate.
         readonly property var mk: t => ({ label: t.label, index: t.index,
-                                          note: t.channels > 0 ? (t.channels + " 声道") : "",
+                                          note: t.channels > 0 ? (t.channels + qsTr(" 声道")) : "",
                                           checked: t.index === veyra.selectedAudioTrack })
         items: veyra.audioTracks.length > 0
                ? veyra.audioTracks.map(mk).concat([{ sep: true },
-                     { label: "音频设置…", note: "输出设备、音画同步、偏移", icon: "music", act: "dlg" }])
-               : [{ label: "片源没有音轨或尚未打开", disabled: true }]
+                     { label: qsTr("音频设置…"), note: qsTr("输出设备、音画同步、偏移"), icon: "music", act: "dlg" }])
+               : [{ label: qsTr("片源没有音轨或尚未打开"), disabled: true }]
         onPicked: (i, o) => {
             if (o.act === "dlg") return bar.requestDialog("audio")
             if (o.index !== undefined) veyra.selectedAudioTrack = o.index

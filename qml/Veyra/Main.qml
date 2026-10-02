@@ -532,13 +532,13 @@ Window {
     readonly property bool pillHidden: veyra.preferences.cinePillHidden === true
     function setPillHidden(hidden) {
         veyra.setPreference("cinePillHidden", hidden)
-        toast.show(hidden ? "播放条已隐藏 · 鼠标移到顶部，点胶囊里的眼睛可重新打开" : "播放条已显示", false)
+        toast.show(hidden ? qsTr("播放条已隐藏 · 鼠标移到顶部，点胶囊里的眼睛可重新打开") : qsTr("播放条已显示"), false)
     }
     function toggleLock() {
         fullLocked = !fullLocked
         if (fullLocked) dock.opened = false
         else { fullControls = true; fullHide.restart() }
-        toast.show(fullLocked ? "已锁定全屏 · Ctrl+L 解锁，Esc 退出全屏" : "已解锁全屏", false)
+        toast.show(fullLocked ? qsTr("已锁定全屏 · Ctrl+L 解锁，Esc 退出全屏") : qsTr("已解锁全屏"), false)
         veyra.logUi("ui-fullscreen", "locked=" + fullLocked + " shortcut=Ctrl+L")
     }
     // Subtitles keep clear of the control pill: fullscreen bar 24px margin + pill,
@@ -561,7 +561,7 @@ Window {
         sequence: "Home"
         enabled: root.fullscreen && !root.fullLocked && dialogs.dialog === ""
         onActivated: {
-            if (root.page !== "pro") { toast.show("快速调节只在专业模式的列表视图可用", false); return }
+            if (root.page !== "pro") { toast.show(qsTr("快速调节只在专业模式的列表视图可用"), false); return }
             root.quickPanel = !root.quickPanel
         }
     }
@@ -670,7 +670,7 @@ Window {
         active: root.test.motionProbe === "seg"
         x: 40; y: 160; z: 100
         sourceComponent: VSeg {
-            options: [{ id: "a", label: "自动" }, { id: "b", label: "有限 / Limited" }, { id: "c", label: "完整 / Full" }]
+            options: [{ id: "a", label: qsTr("自动") }, { id: "b", label: qsTr("有限 / Limited") }, { id: "c", label: qsTr("完整 / Full") }]
             current: "a"
         }
     }

@@ -12,8 +12,8 @@ Item {
     property string title: ""
     property string text: ""
     property string glyph: "info"
-    property string acceptText: "确定"
-    property string rejectText: "取消"
+    property string acceptText: qsTr("确定")
+    property string rejectText: qsTr("取消")
     property bool shown: false
     // Wider cards and custom content (the design's 列表 / 节点 comparison) go
     // between the text and the buttons.
