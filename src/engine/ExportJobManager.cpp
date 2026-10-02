@@ -8,6 +8,9 @@
 #include <format>
 #include <chrono>
 #include <type_traits>
+#include <cmath>
+#include <utility>
+#include <vector>
 #include <deque>
 namespace veyra::engine {
 namespace {
@@ -19,12 +22,14 @@ std::string utf8(std::wstring_view value) {
     return result;
 }
 constexpr DWORD magic=0x56585931;
+// A job continues after at most three GPU resets: four parts.
+constexpr unsigned kMaxExportParts=4;
 struct Shared {
     // Version 3 carries the effect chain alongside the settings struct. The
     // chain is fixed-capacity and trivially copyable, so it can cross the
     // process boundary; a worker that sees another version refuses the job
     // instead of reading a mismatched layout.
-    DWORD signature=magic,version=6,bytes=sizeof(Shared); // export container / tracks / owned temporary
+    DWORD signature=magic,version=7,bytes=sizeof(Shared); // 7: resume after a GPU reset
     EnhancementSettings settings;
     EffectChain chain;
     wchar_t input[32768]{},output[32768]{},temporary[32768]{};
@@ -36,6 +41,12 @@ struct Shared {
     volatile LONG64 sourceFrames=0,generated=0,holds=0,encoded=0;
     volatile LONG messageLock=0;wchar_t message[1024]{};
     volatile LONG cancel=0,pause=0,watching=0,state=LONG(ExportState::Preparing),progress=0;
+    // GPU reset mid-job (exit code 4): the worker closed its part and says where to go on.
+    double resumeAtSeconds=0,segmentOriginSeconds=0;
+    // Parts written by earlier processes of this job; the finishing worker joins them.
+    unsigned priorCount=0,resumeAttempt=0;
+    double priorOrigins[kMaxExportParts]{};
+    wchar_t priorPaths[kMaxExportParts][2048]{};
 };
 static_assert(std::is_trivially_copyable_v<Shared>);
 void close(HANDLE& h){if(h&&h!=INVALID_HANDLE_VALUE)CloseHandle(h);h=nullptr;}
@@ -63,7 +74,12 @@ struct ExportJobManager::Impl {
     // Time spent paused is not encoding time: the estimate left it in, so a paused
     // export's remaining time kept growing (field report 2026-10-02).
     ULONGLONG pausedAt=0,pausedTotal=0;
-    struct Request { std::wstring input,output; EnhancementSettings settings; bool hevc=false; unsigned maxFrames=0; int audioStreamIndex=-1; double trimStart=0,trimEnd=0; sink::ExportRateControl rateControl=sink::ExportRateControl::Cq; };
+    struct Request { std::wstring input,output; EnhancementSettings settings; bool hevc=false; unsigned maxFrames=0; int audioStreamIndex=-1; double trimStart=0,trimEnd=0; sink::ExportRateControl rateControl=sink::ExportRateControl::Cq; ExportMediaOptions media; };
+    // The running job, for relaunching after a GPU reset, and the parts it has written.
+    Request current;
+    std::vector<std::pair<std::wstring,double>> parts;
+    bool resuming=false;
+    void removeParts(){for(const auto& part:parts){std::wstring ignored;removeExportTemporaryFile(part.first,ignored);}parts.clear();}
     std::deque<Request> queue;
     uint64_t queueFailures=0;std::wstring lastQueueFailure;bool launchingQueued=false;
     // Starts queued items in order until one launches; each refusal is recorded.
@@ -102,6 +118,7 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     if(p_->shared&&WaitForSingleObject(p_->process,0)==WAIT_OBJECT_0)poll();
     if(p_->shared){p_->snapshot.message=L"上一任务仍在回收，请等待取消完成";return false;}p_->clear();
     if(!p_->launchingQueued){p_->queueFailures=0;p_->lastQueueFailure.clear();}
+    if(!p_->resuming){p_->removeParts();p_->current={input,output,settings,hevc,maxFrames,audioStreamIndex,trimStartSeconds,trimEndSeconds,rateControl,media};}
     const auto failures=p_->queueFailures;const auto lastFailure=p_->lastQueueFailure;
     p_->snapshot={};p_->snapshot.queueFailures=failures;p_->snapshot.lastQueueFailure=lastFailure;
     auto fail=[&](const wchar_t* message){const DWORD error=GetLastError();p_->clear();p_->snapshot.state=ExportState::Failed;p_->snapshot.message=message;std::wstring cleanup;if(!removeExportTemporaryFile(p_->snapshot.temporaryPath,cleanup))p_->snapshot.message+=L"\n"+cleanup;log::error("export-worker",std::format("launch failed error={}",error));return false;};
@@ -122,6 +139,11 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     s.audioStreamIndex=audioStreamIndex;
     s.trimStartSeconds=trimStartSeconds;s.trimEndSeconds=trimEndSeconds;
     s.media=media;wcscpy_s(s.temporary,p_->snapshot.temporaryPath.c_str());
+    s.resumeAttempt=unsigned(p_->parts.size());s.priorCount=unsigned(p_->parts.size());
+    for(size_t i=0;i<p_->parts.size()&&i<kMaxExportParts;++i){
+        if(p_->parts[i].first.size()>=2048)return fail(L"分段临时文件路径过长");
+        wcscpy_s(s.priorPaths[i],p_->parts[i].first.c_str());s.priorOrigins[i]=p_->parts[i].second;
+    }
     wcscpy_s(s.input,input.c_str());wcscpy_s(s.output,output.c_str());
     p_->job=CreateJobObjectW(nullptr,nullptr);JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     if(!p_->job||!SetInformationJobObject(p_->job,JobObjectExtendedLimitInformation,&limits,sizeof(limits)))return fail(L"无法建立导出进程生命周期");
@@ -163,11 +185,47 @@ ExportJobSnapshot ExportJobManager::poll(){
     auto& s=*p_->shared;p_->snapshot.sourceFrames=InterlockedCompareExchange64(&s.sourceFrames,0,0);p_->snapshot.generated=InterlockedCompareExchange64(&s.generated,0,0);p_->snapshot.holds=InterlockedCompareExchange64(&s.holds,0,0);p_->snapshot.encoded=InterlockedCompareExchange64(&s.encoded,0,0);p_->snapshot.state=static_cast<ExportState>(InterlockedCompareExchange(&s.state,0,0));p_->snapshot.progress=InterlockedCompareExchange(&s.progress,0,0)/10000.0;p_->snapshot.queued=p_->queue.size();p_->snapshot.queuePosition=p_->queue.empty()?0:1;
     if(p_->snapshot.progress>0.001&&p_->startTick){const auto now=GetTickCount64();const double elapsed=double(now-p_->startTick-p_->pausedTotal-(p_->pausedAt?now-p_->pausedAt:0))/1000.0;p_->snapshot.etaSeconds=std::max(0.0,elapsed*(1.0-p_->snapshot.progress)/p_->snapshot.progress);}else p_->snapshot.etaSeconds=0;
     if(p_->cancelAt&&GetTickCount64()-p_->cancelAt>5000&&WaitForSingleObject(p_->process,0)==WAIT_TIMEOUT)TerminateJobObject(p_->job,3);
-    if(WaitForSingleObject(p_->process,0)==WAIT_OBJECT_0){DWORD code=1;GetExitCodeProcess(p_->process,&code);p_->snapshot.state=code==0?ExportState::Succeeded:code==3||p_->cancelAt?ExportState::Cancelled:ExportState::Failed;if(code==0)p_->snapshot.progress=1;
+    if(WaitForSingleObject(p_->process,0)==WAIT_OBJECT_0){DWORD code=1;GetExitCodeProcess(p_->process,&code);
+        // Exit 4: the GPU was reset; the worker closed a valid part and named where to go
+        // on. NGX cannot start again in that process, so a fresh worker continues.
+        if(code==4&&!p_->cancelAt){
+            const double resumeAt=s.resumeAtSeconds,origin=s.segmentOriginSeconds;
+            const std::wstring part=p_->snapshot.temporaryPath;
+            const std::wstring workerMessage=s.message;
+            p_->parts.emplace_back(part,origin);
+            if(p_->parts.size()<kMaxExportParts&&std::isfinite(resumeAt)&&resumeAt>p_->current.trimStart&&
+               (p_->current.trimEnd<=0||resumeAt<p_->current.trimEnd)){
+                log::warn("export-resume",std::format("worker pid={} stopped at a GPU reset; part {} origin={:.3f}s; relaunching at {:.3f}s",p_->snapshot.workerPid,p_->parts.size(),origin,resumeAt));
+                // The queue follows a job by its id: the continuation keeps it.
+                const auto jobId=p_->snapshot.jobId;
+                p_->clear();
+                auto next=p_->current;next.trimStart=resumeAt;
+                p_->resuming=true;
+                const bool started=start(next.input,next.output,next.settings,next.hevc,next.maxFrames,next.audioStreamIndex,next.trimStart,next.trimEnd,next.rateControl,next.media);
+                p_->resuming=false;
+                if(started){
+                    p_->snapshot.jobId=jobId;
+                    p_->snapshot.message=std::format(L"显卡在导出时被系统重置（第 {} 次），前面已保存，正在从 {:.1f} 秒接着导出",p_->parts.size(),resumeAt);
+                    return p_->snapshot;
+                }
+            }
+            // Not continued (too many resets, or the relaunch was refused): a failure that
+            // keeps every part it has, and says where they are.
+            std::wstring kept;for(const auto& saved:p_->parts)kept+=L"\n"+saved.first;
+            p_->snapshot.state=ExportState::Failed;
+            p_->snapshot.message=(workerMessage.empty()?std::wstring(L"导出时显卡多次被系统重置"):workerMessage)+L"；已导出的部分保留在："+kept;
+            log::error("export-resume",std::format("job not continued after {} parts",p_->parts.size()));
+            p_->parts.clear();
+            if(p_->shared)p_->clear();
+            return p_->snapshot;
+        }
+        p_->snapshot.state=code==0?ExportState::Succeeded:code==3||p_->cancelAt?ExportState::Cancelled:ExportState::Failed;if(code==0)p_->snapshot.progress=1;
         // Preserve the worker's actual outcome, including codec substitutions.
         const bool explained=(p_->snapshot.state==ExportState::Failed||p_->snapshot.state==ExportState::Succeeded)&&InterlockedCompareExchange(&s.state,0,0)==LONG(p_->snapshot.state)&&s.message[0];
         p_->snapshot.message=explained?s.message:label(p_->snapshot.state);
-        if(p_->snapshot.state==ExportState::Cancelled){std::wstring cleanup;if(!removeExportTemporaryFile(p_->snapshot.temporaryPath,cleanup))p_->snapshot.message+=L"\n"+cleanup;else p_->snapshot.message=L"导出已取消，可重新开始";}
+        if(p_->snapshot.state==ExportState::Cancelled){p_->removeParts();std::wstring cleanup;if(!removeExportTemporaryFile(p_->snapshot.temporaryPath,cleanup))p_->snapshot.message+=L"\n"+cleanup;else p_->snapshot.message=L"导出已取消，可重新开始";}
+        // The finishing worker joined and removed the parts; a failed one leaves them listed.
+        if(p_->snapshot.state==ExportState::Succeeded)p_->parts.clear();
         const auto& final=p_->snapshot;
         log::info("export-worker",std::format("finished jobId={} pid={} exit={} state={} source={} generated={} holds={} encoded={} log={}",final.jobId,final.workerPid,code,int(final.state),final.sourceFrames,final.generated,final.holds,final.encoded,std::filesystem::path(final.workerLog).string()));
         log::info("export-worker",utf8(final.message));
@@ -187,7 +245,7 @@ ExportJobSnapshot ExportJobManager::poll(){
 }
 int runExportWorker(HANDLE mapping){
     auto s=static_cast<Shared*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!s)return 1;
-    if(s->signature!=magic||s->version!=6||s->bytes!=sizeof(Shared)||!s->media.valid()||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]||s->temporary[32767]||!s->temporary[0]){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
+    if(s->signature!=magic||s->version!=7||s->bytes!=sizeof(Shared)||!s->media.valid()||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]||s->temporary[32767]||!s->temporary[0]||s->priorCount>=kMaxExportParts){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
     Logger::instance().openFile((runtime::logsDirectory()/std::format("export-worker-{}.log",GetCurrentProcessId())).wstring());
     ExportStreams::enableWorkerLogging(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_FFMPEG_DEBUG",nullptr,0)>0);
     // The chain is the description of record for this job; the settings struct
@@ -207,12 +265,17 @@ int runExportWorker(HANDLE mapping){
     };
     auto options=PlayerOptions::from(settings);options.audioStreamIndex=s->audioStreamIndex;options.exportStartSeconds=s->trimStartSeconds;options.exportEndSeconds=s->trimEndSeconds;options.exportRateControl=static_cast<sink::ExportRateControl>(s->rateControl);
     options.exportMedia=s->media;options.exportTemporaryPath=s->temporary;
+    ExportSegments prior;
+    for(unsigned i=0;i<s->priorCount;++i){s->priorPaths[i][2047]=0;prior.emplace_back(s->priorPaths[i],s->priorOrigins[i]);}
+    ExportResume resume;
     bool ok=false;try{ok=exportVideo(s->input,s->output,options,s->hevc!=0,cancel,[&](double p,const std::wstring& message){if(InterlockedCompareExchange(&s->messageLock,1,0)==0){wcsncpy_s(s->message,message.c_str(),_TRUNCATE);InterlockedExchange(&s->messageLock,0);}
-InterlockedExchange(&s->progress,LONG(std::clamp(p,0.0,.999)*10000));if(p>=.99)InterlockedExchange(&s->state,LONG(ExportState::Finishing));},s->maxFrames,frameBoundary,[&](const ExportCounts& count){InterlockedExchange64(&s->sourceFrames,count.source);InterlockedExchange64(&s->generated,count.generated);InterlockedExchange64(&s->holds,count.holds);InterlockedExchange64(&s->encoded,count.encoded);});}catch(...){log::error("export-worker","unhandled job exception");}
+InterlockedExchange(&s->progress,LONG(std::clamp(p,0.0,.999)*10000));if(p>=.99)InterlockedExchange(&s->state,LONG(ExportState::Finishing));},s->maxFrames,frameBoundary,[&](const ExportCounts& count){InterlockedExchange64(&s->sourceFrames,count.source);InterlockedExchange64(&s->generated,count.generated);InterlockedExchange64(&s->holds,count.holds);InterlockedExchange64(&s->encoded,count.encoded);},&resume,prior,s->resumeAttempt);}catch(...){log::error("export-worker","unhandled job exception");}
+    const bool resumable=!ok&&!cancel&&resume.resumable;
+    if(resumable){s->resumeAtSeconds=resume.resumeAtSeconds;s->segmentOriginSeconds=resume.originSeconds;}
     done=true;monitor.join();InterlockedExchange(&s->state,LONG(ok?ExportState::Succeeded:cancel?ExportState::Cancelled:ExportState::Failed));
     // Deterministic lifetime regression hook: the real export already finished.
     // No result is fabricated; only process exit is delayed, at most 2 seconds.
     wchar_t delay[16]{};if(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EXIT_DELAY_MS",delay,16))Sleep(std::clamp(_wtoi(delay),0,2000));
-    UnmapViewOfFile(s);CloseHandle(mapping);return ok?0:cancel?3:1;
+    UnmapViewOfFile(s);CloseHandle(mapping);return ok?0:cancel?3:resumable?4:1;
 }
 }

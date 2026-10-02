@@ -146,8 +146,11 @@ def main():
     for field in ('build', 'runtime_source', 'legacy_licenses', 'qt', 'qt_licenses', 'output'):
         if getattr(args, field) is None:
             p.error('Missing --' + field.replace('_', '-'))
-    if not re.fullmatch(r'2\.0\.0(?:-[a-z0-9.-]+)?', args.label):
-        raise ValueError('Expected version 2.0.0 or an explicit test suffix')
+    if not re.fullmatch(r'2\.0\.\d+(?:-[a-z0-9.-]+)?', args.label):
+        raise ValueError('Expected a 2.0.x version or an explicit test suffix')
+    # 2.0.x patch releases ship the 2.0.0 runtime lock unchanged; the notes follow the version.
+    version = args.label.split('-')[0]
+    notes = 'RELEASE_NOTES_' + version + '.md' if (ROOT / 'docs' / ('RELEASE_NOTES_' + version + '.md')).is_file() else 'RELEASE_NOTES_2.0.0.md'
     if not args.output.resolve().is_relative_to(ARTIFACTS.resolve()):
         raise ValueError('Candidate output must stay in the E: artifact tree')
     stage = args.output / ('Veyra-' + args.label + '-win64-portable')
@@ -258,9 +261,9 @@ foreach($f in $lock.files) {
     copy(ROOT / 'README_EN.md', 'README_EN.md')
     for name in ('veyra-app-icon.png', 'veyra-2.0.0-promo.webp'):
         copy(ROOT / 'assets' / name, 'assets/' + name)
-    for name in ('RUNTIME_COMPONENTS_2.0.0.md', 'BUILD.md', 'BUILD_2.0.0.md', 'RELEASE_NOTES_2.0.0.md'):
+    for name in sorted({'RUNTIME_COMPONENTS_2.0.0.md', 'BUILD.md', 'BUILD_2.0.0.md', 'RELEASE_NOTES_2.0.0.md', notes}):
         copy(ROOT / 'docs' / name, 'docs/' + name)
-    copy(ROOT / 'docs/RELEASE_NOTES_2.0.0.md', 'RELEASE_NOTES.md')
+    copy(ROOT / 'docs' / notes, 'RELEASE_NOTES.md')
 
     tree(ROOT / 'docs/images/2.0.0', 'docs/images/2.0.0')
     records = []
@@ -273,7 +276,7 @@ foreach($f in $lock.files) {
             records.append(dict(path=name, size=f.stat().st_size, sha256=digest(f)))
     commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD']).decode().strip()
     changed = subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain']).decode('utf8')
-    manifest = dict(schema=2, version='2.0.0', candidate=args.label, baseCommit=commit,
+    manifest = dict(schema=2, version=version, candidate=args.label, baseCommit=commit,
                     worktreeDirty=bool(changed), releaseReady=False, files=records)
     if not args.no_archive:
         manifest['sourceSnapshot'] = source_snapshot(args.output, args.label, digest(stage / 'veyra_qml_ui.exe'))

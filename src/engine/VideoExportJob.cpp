@@ -14,6 +14,9 @@
 #include <chrono>
 #include <cmath>
 #include <deque>
+#include <cstring>
+#include <vector>
+#include <wrl/client.h>
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -22,7 +25,8 @@ extern "C" {
 }
 namespace veyra::engine {
 namespace { std::string utf8(const std::wstring& s){const int n=WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),nullptr,0,nullptr,nullptr);std::string r(n,0);WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),r.data(),n,nullptr,nullptr);return r;} }
-bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOptions options,bool hevc,std::atomic<bool>& cancel,const std::function<void(double,const std::wstring&)>& progress,unsigned maxFrames,const std::function<bool()>& frameBoundary,const std::function<void(const ExportCounts&)>& counts){
+bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOptions options,bool hevc,std::atomic<bool>& cancel,const std::function<void(double,const std::wstring&)>& progress,unsigned maxFrames,const std::function<bool()>& frameBoundary,const std::function<void(const ExportCounts&)>& counts,ExportResume* resume,const ExportSegments& priorSegments,unsigned resumeAttempt){
+    if(resume)*resume={};
     if(!std::isfinite(options.exportStartSeconds)||!std::isfinite(options.exportEndSeconds)||options.exportStartSeconds<0||options.exportEndSeconds<0||(options.exportEndSeconds>0&&options.exportEndSeconds<=options.exportStartSeconds)){progress(0,L"导出剪辑范围无效");return false;}
     if(std::filesystem::exists(output)){progress(0,L"目标文件已存在，请使用其他名称");return false;}
     if(cancel){progress(0,L"导出已取消");return false;}
@@ -204,6 +208,11 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         // completion back, standing in for a GPU that is slow but alive. Unset in normal use.
         int slowFrameIndex=-1,slowFrameMs=0;
         {wchar_t hook[32]{};if(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_SLOW_FRAME",hook,32)&&swscanf_s(hook,L"%d:%d",&slowFrameIndex,&slowFrameMs)!=2)slowFrameIndex=-1;slowFrameMs=std::clamp(slowFrameMs,0,40000);}
+        // Acceptance hook: VEYRA_TEST_EXPORT_REMOVE_DEVICE_AT=<source index> removes the D3D12
+        // device at that frame in the first process of a job, standing in for a driver reset.
+        int removeDeviceIndex=-1;
+        {wchar_t hook[16]{};if(resumeAttempt==0&&GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_REMOVE_DEVICE_AT",hook,16))removeDeviceIndex=_wtoi(hook);}
+        bool deviceLost=false;uint32_t removedReason=0;
         const uint32_t multiplier=options.fg?options.fgMultiplier:1u;
         auto encodeAt=[&](unsigned slot,bool generated,double seconds){
             const int64_t timeUs=std::max(lastOutputUs+1,int64_t(std::llround(seconds*1000000)));
@@ -224,6 +233,10 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
                 pts=sourceCount?previousPts+sourceInterval:0;++repairedTimestamps;
                 if(repairedTimestamps<=5)veyra::log::warn("export-timeline",std::format("timestamp repaired source={} raw={} output={}",sourceCount,sourcePts,pts));
             }
+            if(removeDeviceIndex>=0&&sourceCount==uint64_t(removeDeviceIndex)){
+                Microsoft::WRL::ComPtr<ID3D12Device5> device5;
+                if(SUCCEEDED(ctx.device()->QueryInterface(IID_PPV_ARGS(&device5)))){device5->RemoveDevice();veyra::log::warn("export","test hook: D3D12 device removed at this frame");}
+            }
             pipeline::EnhanceGraph::FrameOutputs out;if(!graph.process(frame,(pts+videoOriginSeconds)*1000,sourceCount==0||repairPts||pipeline::breaksHistory(packet.flags),out,packet.sequence,&packet.colorInfo,&packet.hardwareSurface,false)){error=true;break;}
             // One frame's GPU work. A fixed 2 s limit failed whole exports on a frame that
             // was only slow (8K NR + optical flow + NVENC near the VRAM budget; field log
@@ -236,10 +249,10 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
                 const auto now=std::chrono::steady_clock::now();
                 if(now>=nextHealthCheck){
                     nextHealthCheck=now+std::chrono::milliseconds(250);
-                    uint32_t removed=0;
-                    if(!ctx.checkDeviceAlive(removed)){
+                    if(!ctx.checkDeviceAlive(removedReason)){
                         ctx.reportDeviceFailure("export-frame",ring.lastSignaledValue());
-                        error=true;failureReason=std::format(L"显卡驱动在第 {} 帧卡死并被系统重置（0x{:X}）。40 系显卡开社区版 NR 时偶发；可关闭 NR、把 NR 内部分辨率调低或换光流后重试",sourceCount+1,removed);
+                        deviceLost=true;
+                        error=true;failureReason=std::format(L"显卡驱动在第 {} 帧卡死并被系统重置（0x{:X}）。40 系显卡开社区版 NR 时偶发；可关闭 NR、把 NR 内部分辨率调低或换光流后重试",sourceCount+1,removedReason);
                         break;
                     }
                 }
@@ -272,6 +285,26 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             ++sourceCount;if(counts)counts({sourceCount,generatedCount,holdCount,uint64_t(written)});const double clipDuration=requestedEnd>0?requestedEnd-requestedStart:std::max(0.001,info.duration.toDouble()-videoOriginSeconds);progress(clipDuration>0?std::clamp(pts/clipDuration,0.0,.99):0,std::format(L"正在导出：{}张源帧 / {}张编码帧（{}）",sourceCount,outputIndex,encoderName));
             if(maxFrames&&sourceCount>=maxFrames)break;
         }
+        // Submission or encoding can also be the first call to see the reset.
+        if(error&&!cancel&&!deviceLost&&!ctx.checkDeviceAlive(removedReason)){
+            ctx.reportDeviceFailure("export-frame",ring.lastSignaledValue());
+            deviceLost=true;
+            failureReason=std::format(L"显卡驱动在第 {} 帧卡死并被系统重置（0x{:X}）。40 系显卡开社区版 NR 时偶发；可关闭 NR、把 NR 内部分辨率调低或换光流后重试",sourceCount+1,removedReason);
+        }
+        if(deviceLost&&!cancel&&resume&&(written>0||pendingVideo->size)){
+            // Close what the encoder already returned into a valid file; the lost device is
+            // not asked to drain. The next part starts half a frame after the last written
+            // frame, so the following source frame is neither repeated nor lost to rounding.
+            const double frameSeconds=sourceInterval/multiplier;
+            const int64_t endUs=pendingVideo->size?pendingVideo->pts+std::max<int64_t>(1,std::llround(frameSeconds*1000000)):std::llround(audioEndSeconds*1000000);
+            if(flushVideo(endUs)&&writeAudioUntil(audioEndSeconds,true)&&av_write_trailer(mux)>=0){
+                resume->resumable=true;resume->originSeconds=videoOriginSeconds;
+                resume->resumeAtSeconds=videoOriginSeconds+audioEndSeconds-frameSeconds*0.5;
+                failureReason=std::format(L"显卡在第 {} 帧被系统重置；前 {:.1f} 秒已保存，接着导出剩余部分",sourceCount+1,audioEndSeconds);
+                veyra::log::warn("export-resume",std::format("device lost at source={} written={} part ends {:.3f}s; resume at source {:.3f}s, part origin {:.3f}s",
+                    sourceCount,written,audioEndSeconds,resume->resumeAtSeconds,videoOriginSeconds));
+            } else veyra::log::error("export-resume","the part written before the device loss could not be closed; not resumable");
+        }
         if(error||cancel)break;
         if(options.fg&&lastReal)for(uint32_t j=1;j<multiplier;++j){if(!encodeAt(lastReal->slot,false,previousPts+sourceInterval*j/multiplier)){error=true;break;}++holdCount;}
         if(error)break;
@@ -289,6 +322,25 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
     }while(false); }catch(const std::exception& e){veyra::log::error("export",std::format("exception: {}",e.what()));failureReason=L"导出异常，请查看诊断";ok=false;}
     encoder.reset();if(mux){if(mux->pb){const int rc=avio_closep(&mux->pb);if(rc<0){failAv(L"刷新并关闭输出文件",rc);ok=false;}}avformat_free_context(mux);}
     ring.drainQueue();graph.shutdown();source.close();ring.shutdown();ctx.shutdown();
+    // Earlier processes of this job stopped at a GPU reset: join their parts and this
+    // one into the output. The parts are removed only once the joined file is complete.
+    std::wstring finished=partial;
+    if(ok&&!priorSegments.empty()){
+        progress(.999,L"正在拼接显卡重置前后的各段");
+        auto parts=priorSegments;parts.emplace_back(partial,videoOriginSeconds);
+        const auto joined=partial+L".joined";
+        std::wstring joinError;
+        ok=!cancel&&joinExportSegments(parts,joined,options.exportMedia.container==ExportContainer::Matroska,joinError);
+        if(ok){
+            for(const auto& part:parts){std::error_code ec;std::filesystem::remove(part.first,ec);}
+            finished=joined;
+            fgNote+=std::format(L"{}显卡重置 {} 次，已分 {} 段导出并无损拼接",fgNote.empty()?L"":L"；",priorSegments.size(),parts.size());
+        } else {
+            std::error_code ec;std::filesystem::remove(joined,ec);
+            std::wstring kept;for(const auto& part:parts)kept+=L"\n"+part.first;
+            failureReason=(joinError.empty()?std::wstring(L"分段拼接失败"):joinError)+L"；各段文件已保留："+kept;
+        }
+    }
     if(ok){
         progress(.999,L"正在保存正式文件");
         // Bounded deterministic acceptance hook around the real final rename.
@@ -298,7 +350,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             const auto deadline=GetTickCount64()+std::clamp(_wtoi(delayText),0,2000);
             while(!cancel&&GetTickCount64()<deadline)Sleep(5);
         }
-        ok=!cancel&&MoveFileExW(partial.c_str(),output.c_str(),MOVEFILE_WRITE_THROUGH)!=FALSE;
+        ok=!cancel&&MoveFileExW(finished.c_str(),output.c_str(),MOVEFILE_WRITE_THROUGH)!=FALSE;
         if(!ok&&!cancel){const DWORD error=GetLastError();failureReason=std::format(L"视频已编码，但保存文件名失败（Windows错误 {}）；可保留partial文件",error);veyra::log::error("export-rename",std::format("MoveFileExW failed error={} partial={}",error,utf8(partial)));}
         if(ok)veyra::log::info("export","encoder drained, mux closed, output saved; no post-export decoding");
     }
@@ -315,6 +367,95 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         else if(std::filesystem::exists(partial,ec))message+=L"；临时文件已保留："+partial;
         progress(0,message);
     }
+    return ok;
+}
+
+bool joinExportSegments(const ExportSegments& parts,const std::wstring& output,bool matroska,std::wstring& error){
+    if(parts.size()<2){error=L"没有需要拼接的分段";return false;}
+    std::vector<AVFormatContext*> inputs(parts.size(),nullptr);
+    AVFormatContext* out=nullptr;AVPacket* packet=av_packet_alloc();
+    bool ok=false;
+    auto failAv=[&](const char* stage,int code){
+        char text[AV_ERROR_MAX_STRING_SIZE]{};av_strerror(code,text,sizeof(text));
+        veyra::log::error("export-join",std::format("{} failed code={} detail={}",stage,code,text));
+        error=std::format(L"分段拼接失败（{} 错误 {}）",std::wstring(stage,stage+std::strlen(stage)),code);
+        return false;
+    };
+    do {
+        if(!packet)break;
+        for(size_t i=0;i<parts.size();++i){
+            int rc=avformat_open_input(&inputs[i],utf8(parts[i].first).c_str(),nullptr,nullptr);
+            if(rc<0){failAv("open part",rc);break;}
+            rc=avformat_find_stream_info(inputs[i],nullptr);
+            if(rc<0){failAv("read part",rc);break;}
+        }
+        if(!error.empty())break;
+        const auto* first=inputs[0];
+        // Same streams in the same order, and identical codec headers: the joined file
+        // carries the first part's headers for all of them.
+        bool same=true;
+        for(size_t i=1;i<inputs.size()&&same;++i){
+            if(inputs[i]->nb_streams!=first->nb_streams){same=false;break;}
+            for(unsigned s=0;s<first->nb_streams;++s){
+                const auto* a=first->streams[s]->codecpar;const auto* b=inputs[i]->streams[s]->codecpar;
+                if(a->codec_type!=b->codec_type||a->codec_id!=b->codec_id){same=false;break;}
+                if(a->codec_type==AVMEDIA_TYPE_VIDEO&&(a->width!=b->width||a->height!=b->height||a->extradata_size!=b->extradata_size||
+                   (a->extradata_size>0&&std::memcmp(a->extradata,b->extradata,size_t(a->extradata_size))!=0))){same=false;break;}
+            }
+        }
+        if(!same){
+            error=L"显卡重置前后两段的编码参数不一致，无法无损拼接";
+            veyra::log::error("export-join","parts differ in streams or video parameter sets; not joined");
+            break;
+        }
+        if(avformat_alloc_output_context2(&out,nullptr,matroska?"matroska":"mp4",utf8(output).c_str())<0||!out){error=L"无法创建拼接输出";break;}
+        for(unsigned s=0;s<first->nb_streams;++s){
+            AVStream* stream=avformat_new_stream(out,nullptr);
+            if(!stream||avcodec_parameters_copy(stream->codecpar,first->streams[s]->codecpar)<0){error=L"无法复制轨道参数";break;}
+            stream->codecpar->codec_tag=0;
+            stream->time_base=first->streams[s]->time_base;
+            stream->avg_frame_rate=first->streams[s]->avg_frame_rate;
+            stream->disposition=first->streams[s]->disposition;
+            av_dict_copy(&stream->metadata,first->streams[s]->metadata,0);
+        }
+        if(!error.empty())break;
+        int rc=avio_open(&out->pb,utf8(output).c_str(),AVIO_FLAG_WRITE);
+        if(rc<0){failAv("create output",rc);break;}
+        rc=avformat_write_header(out,nullptr);
+        if(rc<0){failAv("write header",rc);break;}
+        std::vector<int64_t> lastDts(first->nb_streams,AV_NOPTS_VALUE);
+        uint64_t copied=0,dropped=0;
+        for(size_t i=0;i<inputs.size()&&error.empty();++i){
+            const int64_t offsetUs=std::llround((parts[i].second-parts[0].second)*1000000.0);
+            while((rc=av_read_frame(inputs[i],packet))>=0){
+                const unsigned s=unsigned(packet->stream_index);
+                if(s>=first->nb_streams){av_packet_unref(packet);continue;}
+                AVStream* to=out->streams[s];
+                av_packet_rescale_ts(packet,inputs[i]->streams[s]->time_base,to->time_base);
+                const int64_t offset=av_rescale_q(offsetUs,AVRational{1,1000000},to->time_base);
+                if(packet->pts!=AV_NOPTS_VALUE)packet->pts+=offset;
+                if(packet->dts!=AV_NOPTS_VALUE)packet->dts+=offset;
+                // A packet that does not move forward (audio overlapping the cut) is dropped:
+                // the earlier part already carries that time.
+                if(packet->dts!=AV_NOPTS_VALUE&&lastDts[s]!=AV_NOPTS_VALUE&&packet->dts<=lastDts[s]){++dropped;av_packet_unref(packet);continue;}
+                if(packet->dts!=AV_NOPTS_VALUE)lastDts[s]=packet->dts;
+                packet->pos=-1;
+                rc=av_interleaved_write_frame(out,packet);
+                if(rc<0){failAv("write packet",rc);break;}
+                ++copied;
+            }
+            if(rc<0&&rc!=AVERROR_EOF&&error.empty())failAv("read packet",rc);
+        }
+        if(!error.empty())break;
+        rc=av_write_trailer(out);
+        if(rc<0){failAv("write index",rc);break;}
+        veyra::log::info("export-join",std::format("joined parts={} packets={} droppedOverlap={}",parts.size(),copied,dropped));
+        ok=true;
+    } while(false);
+    av_packet_free(&packet);
+    for(auto*& input:inputs)if(input)avformat_close_input(&input);
+    if(out){if(out->pb){const int rc=avio_closep(&out->pb);if(rc<0&&ok)ok=failAv("close output",rc);}avformat_free_context(out);}
+    if(ok)error.clear();
     return ok;
 }
 }

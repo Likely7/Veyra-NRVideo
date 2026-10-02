@@ -684,13 +684,21 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(!vramFloor||usage<vramFloor)vramFloor=usage;
                 const uint64_t growth=usage-vramFloor,limit=std::max<uint64_t>(2048ull<<20,budget/4);
                 if(growth<=limit)return;
+                // NVIDIA App's picture plug-in (nvppex.dll: RTX HDR, Smooth Motion, RTX Dynamic
+                // Vibrance) and the driver present layer engage for fullscreen windows. With it
+                // loaded, field logs grew ~700 MiB/min only in fullscreen and neither a swapchain
+                // nor a graph rebuild gave any of it back (5060 Ti, 2026-10-02): the memory is not
+                // ours to free, and every rebuild only flashed the picture. Name it instead.
+                const std::wstring injected=gfx::riskyInjections();
+                const bool driverPlugin=injected.find(L"nvppex")!=std::wstring::npos||injected.find(L"NvPresent64")!=std::wstring::npos;
                 if(!vramWarned){
                     vramWarned=true;
                     veyra::log::warn("vram-watch",std::format("video memory grew {} MiB with no settings change (now {} of {} MiB budget); third-party modules: {}",
                         growth>>20,usage>>20,budget>>20,gfx::thirdPartyModules()));
-                    std::lock_guard lock(mutex_);snapshot_.vramRunawayMiB=growth>>20;
+                    std::lock_guard lock(mutex_);snapshot_.vramRunawayMiB=growth>>20;snapshot_.vramInjected=injected;
                 }else veyra::log::warn("vram-watch",std::format("video memory grew {} MiB again (now {} MiB)",growth>>20,usage>>20));
-                if(vramRecoveries<3){++vramRecoveries;vramRecoverStep=1;vramRecoverGrowth=growth;}
+                if(driverPlugin){vramFloor=usage;veyra::log::warn("vram-watch","NVIDIA App picture plug-in / present layer loaded; not rebuilding (it did not release this memory in field logs)");}
+                else if(vramRecoveries<3){++vramRecoveries;vramRecoverStep=1;vramRecoverGrowth=growth;}
                 else{vramFloor=usage;}   // give up rebuilding; report again only on further growth
             };
             auto anchor=Clock::now(),statsStart=anchor;double anchorMs=0;uint64_t frames=0,sourceFrames=0;bool wasPaused=false;double discardBefore=0;

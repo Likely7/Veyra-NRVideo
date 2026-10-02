@@ -1597,6 +1597,13 @@
    "ja": "{}に失敗しました（エラー {}）"
   },
   {
+   "zh": "{}显卡重置 {} 次，已分 {} 段导出并无损拼接",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "{}顯示卡重置 {} 次，已分 {} 段匯出並無損拼接",
+   "en": "{}GPU reset {} time(s); exported in {} parts and joined without re-encoding",
+   "ja": "{}GPU リセット {} 回、{} 分割で書き出し再エンコードなしで結合しました"
+  },
+  {
    "zh": "。请确认本机网络没有拦截 UDP，主机与本机最好在同一局域网。",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "。請確認本機網路沒有攔截 UDP，主機與本機最好在同一區域網路。",
@@ -2891,6 +2898,27 @@
    "zh-TW": "分析前 30 分鐘的人聲與字幕時間",
    "en": "Analyzes speech and subtitle timing in the first 30 minutes",
    "ja": "最初の 30 分の音声と字幕のタイミングを分析します"
+  },
+  {
+   "zh": "分段临时文件路径过长",
+   "src": "src/engine/ExportJobManager.cpp",
+   "zh-TW": "分段暫存檔路徑過長",
+   "en": "Part file path is too long",
+   "ja": "分割一時ファイルのパスが長すぎます"
+  },
+  {
+   "zh": "分段拼接失败",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "分段拼接失敗",
+   "en": "Joining the parts failed",
+   "ja": "分割ファイルの結合に失敗しました"
+  },
+  {
+   "zh": "分段拼接失败（{} 错误 {}）",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "分段拼接失敗（{} 錯誤 {}）",
+   "en": "Joining the parts failed ({} error {})",
+   "ja": "分割ファイルの結合に失敗しました（{} エラー {}）"
   },
   {
    "zh": "分离中间调",
@@ -4846,6 +4874,13 @@
    "ja": "書き出し時に再生中のコンテンツを閉じる"
   },
   {
+   "zh": "导出时显卡多次被系统重置",
+   "src": "src/engine/ExportJobManager.cpp",
+   "zh-TW": "匯出時顯示卡多次被系統重置",
+   "en": "The GPU was reset several times during the export",
+   "ja": "書き出し中に GPU が何度もリセットされました"
+  },
+  {
    "zh": "导出期间可以继续预览其他文件，会和导出抢显卡。",
    "src": "qml/ExportPage.qml",
    "zh-TW": "匯出期間可以繼續預覽其他檔案，會和匯出搶顯示卡。",
@@ -6737,6 +6772,13 @@
    "ja": "書き出し用の通信リソースを作成できませんでした"
   },
   {
+   "zh": "无法创建拼接输出",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "無法建立拼接輸出",
+   "en": "Cannot create the joined output",
+   "ja": "結合出力を作成できません"
+  },
+  {
    "zh": "无法创建音频线程",
    "src": "src/sink/CaptureAudioSession.cpp",
    "zh-TW": "無法建立音訊執行緒",
@@ -6784,6 +6826,13 @@
    "zh-TW": "無法和主機建立連接：",
    "en": "Could not connect to the host: ",
    "ja": "ホストに接続できません："
+  },
+  {
+   "zh": "无法复制轨道参数",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "無法複製軌道參數",
+   "en": "Cannot copy the track parameters",
+   "ja": "トラックのパラメーターをコピーできません"
   },
   {
    "zh": "无法建立串流连接（错误码 {}）。",
@@ -6989,6 +7038,27 @@
    "ja": "GPU、ドライバー、またはランタイムが選択した機能に対応していません"
   },
   {
+   "zh": "显卡在导出时被系统重置（第 {} 次），前面已保存，正在从 {:.1f} 秒接着导出",
+   "src": "src/engine/ExportJobManager.cpp",
+   "zh-TW": "顯示卡在匯出時被系統重置（第 {} 次），前面已儲存，正在從 {:.1f} 秒接著匯出",
+   "en": "The GPU was reset during the export (time {}); the part so far is saved, continuing from {:.1f} s",
+   "ja": "書き出し中に GPU がリセットされました（{} 回目）。ここまでは保存済みで、{:.1f} 秒から続けます"
+  },
+  {
+   "zh": "显卡在第 {} 帧被系统重置；前 {:.1f} 秒已保存，接着导出剩余部分",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "顯示卡在第 {} 幀被系統重置；前 {:.1f} 秒已儲存，接著匯出剩餘部分",
+   "en": "The GPU was reset at frame {}; the first {:.1f} s are saved, exporting the rest",
+   "ja": "{} フレーム目で GPU がリセットされました。最初の {:.1f} 秒は保存済みで、残りを書き出します"
+  },
+  {
+   "zh": "显卡重置前后两段的编码参数不一致，无法无损拼接",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "顯示卡重置前後兩段的編碼參數不一致，無法無損拼接",
+   "en": "The parts before and after the GPU reset have different encoder parameters and cannot be joined without re-encoding",
+   "ja": "GPU リセット前後の分割でエンコード設定が異なるため、再エンコードなしで結合できません"
+  },
+  {
    "zh": "显卡驱动在第 {} 帧卡死并被系统重置（0x{:X}）。40 系显卡开社区版 NR 时偶发；可关闭 NR、把 NR 内部分辨率调低或换光流后重试",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "顯示卡驅動在第 {} 幀卡死並被系統重置（0x{:X}）。40 系顯示卡開社區版 NR 時偶發；可關閉 NR、把 NR 內部解析度調低或換光流後重試",
@@ -7008,6 +7078,13 @@
    "zh-TW": "顯示記憶體回收時排空失敗",
    "en": "Could not drain while reclaiming VRAM",
    "ja": "VRAM 回収時に排出できませんでした"
+  },
+  {
+   "zh": "显存在设置没变的情况下涨了 %1 GB。检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra：它只在全屏时介入，这部分显存很可能由它占用，Veyra 重建也释放不了。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项，或退出全屏；已占用的显存要重开 Veyra 才会释放",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "顯示記憶體在設定沒變的情況下增加了 %1 GB。偵測到 NVIDIA App 的畫面外掛（RTX HDR / 智慧平滑運動 / RTX 動態鮮豔度）注入了 Veyra：它只在全螢幕時介入，這部分顯示記憶體很可能由它佔用，Veyra 重建也釋放不了。請在 NVIDIA App → 圖形 → 程式設定中為 Veyra 關閉這幾項，或退出全螢幕；已佔用的顯示記憶體要重開 Veyra 才會釋放",
+   "en": "Video memory grew by %1 GB with no settings change. NVIDIA App's picture plug-in (RTX HDR / Smooth Motion / RTX Dynamic Vibrance) is injected into Veyra: it engages only in fullscreen, this memory is most likely held by it, and Veyra cannot release it by rebuilding. Turn these off for Veyra in NVIDIA App → Graphics → Program Settings, or leave fullscreen; memory already taken is released when Veyra is reopened",
+   "ja": "設定を変えていないのにビデオメモリが %1 GB 増えました。NVIDIA App の画面プラグイン（RTX HDR / Smooth Motion / RTX Dynamic Vibrance）が Veyra に挿入されています。全画面のときだけ動作し、このメモリはおそらくプラグインが確保していて、Veyra の再構築では解放できません。NVIDIA App → グラフィックス → プログラム設定で Veyra に対してこれらをオフにするか、全画面を解除してください。確保済みのメモリは Veyra を開き直すと解放されます"
   },
   {
    "zh": "显存在设置没变的情况下涨了 %1 GB，已自动重建显示链回收显存（画面会闪一下）。如果反复出现：常见原因是 NVIDIA Smooth Motion、游戏加加、小飞机（RTSS）、显卡叠加层/即时重放或录屏软件在全屏时注入了本程序，请关掉它们后再试，并把日志发给我们（vram-watch）",
@@ -7906,6 +7983,13 @@
    "ja": "キャプチャーデバイスを開いています…"
   },
   {
+   "zh": "正在拼接显卡重置前后的各段",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "正在拼接顯示卡重置前後的各段",
+   "en": "Joining the parts written before and after the GPU reset",
+   "ja": "GPU リセット前後の分割を結合しています"
+  },
+  {
    "zh": "正在按队列顺序导出",
    "src": "src/engine/ExportQueue.cpp",
    "zh-TW": "正在按佇列順序匯出",
@@ -8240,6 +8324,13 @@
    "zh-TW": "沒有選中的色彩預設",
    "en": "No color preset selected",
    "ja": "カラープリセットが選ばれていません"
+  },
+  {
+   "zh": "没有需要拼接的分段",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "沒有需要拼接的分段",
+   "en": "No parts to join",
+   "ja": "結合する分割がありません"
   },
   {
    "zh": "没能继续上次的 PC 串流，请在 PC 串流窗口里重新选择",
@@ -13056,6 +13147,20 @@
    "zh-TW": "；臨時檔案已保留：",
    "en": "; temporary file kept: ",
    "ja": "；一時ファイルを保持しました："
+  },
+  {
+   "zh": "；各段文件已保留：",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "；各段檔案已保留：",
+   "en": "; the part files are kept: ",
+   "ja": "。分割ファイルは保存されています："
+  },
+  {
+   "zh": "；已导出的部分保留在：",
+   "src": "src/engine/ExportJobManager.cpp",
+   "zh-TW": "；已匯出的部分保留在：",
+   "en": "; the exported parts are kept at: ",
+   "ja": "。書き出し済みの部分は次の場所にあります："
   },
   {
    "zh": "；当前显卡不能使用 DLSS NR，本次导出自动关闭 NR",

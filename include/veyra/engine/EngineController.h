@@ -55,6 +55,8 @@ struct PlayerSnapshot {
     // Video memory that kept growing with no settings change (MiB above the session's low point),
     // 0 until the watchdog fires. Field logs 2026-10-01: +3 GB a minute in fullscreen only.
     uint64_t vramRunawayMiB=0;
+    // Known injected components loaded when the growth was seen (gfx::riskyInjections).
+    std::wstring vramInjected;
     std::wstring status=L"请打开视频或图片";
     EnhancementSettings desired,applied;bool applying=false;
     bool nrActive=false,srActive=false,fgActive=false;

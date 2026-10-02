@@ -898,7 +898,13 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         if(impl_->poll()){emit settingsChanged();emit chainChanged();}
         if (impl_->snapshot.vramRunawayMiB && impl_->vramNoticeSession != impl_->snapshot.sessionId) {
             impl_->vramNoticeSession = impl_->snapshot.sessionId;
-            emit notice(tr("显存在设置没变的情况下涨了 %1 GB，已自动重建显示链回收显存（画面会闪一下）。"
+            const auto& injected = impl_->snapshot.vramInjected;
+            if (injected.find(L"nvppex") != std::wstring::npos || injected.find(L"NvPresent64") != std::wstring::npos)
+                emit notice(tr("显存在设置没变的情况下涨了 %1 GB。检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra："
+                               "它只在全屏时介入，这部分显存很可能由它占用，Veyra 重建也释放不了。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项，"
+                               "或退出全屏；已占用的显存要重开 Veyra 才会释放")
+                                .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
+            else emit notice(tr("显存在设置没变的情况下涨了 %1 GB，已自动重建显示链回收显存（画面会闪一下）。"
                            "如果反复出现：常见原因是 NVIDIA Smooth Motion、游戏加加、小飞机（RTSS）、显卡叠加层/即时重放"
                            "或录屏软件在全屏时注入了本程序，请关掉它们后再试，并把日志发给我们（vram-watch）")
                             .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
@@ -998,6 +1004,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // The driver's presentation layer; it carries NVIDIA Smooth Motion, which only
             // engages for fullscreen windows (suspected in the fullscreen-only VRAM growth).
             {L"NvPresent64.dll", "NVIDIA present layer (Smooth Motion)"},
+            // NVIDIA App's picture plug-in (RTX HDR / Smooth Motion / RTX Dynamic Vibrance): in
+            // every fullscreen VRAM-growth log and in two capture crashes (2026-10-02).
+            {L"nvppex.dll", "NVIDIA App picture plug-in (RTX HDR / Smooth Motion / Dynamic Vibrance)"},
         };
         static bool loggedOthers[std::size(others)]{};
         for (size_t k = 0; k < std::size(others); ++k)

@@ -197,6 +197,9 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
         if (GetEnvironmentVariableA("VEYRA_XBOX_RTC_DEBUG", nullptr, 0) > 0) log::info("xbox", "local candidate [" + text + "] mid " + c.mid());
     }
     log::info("xbox", "offer codecs:\n" + describeCodecs(offer));
+    // The whole offer (no candidates, no account data): a refused offer can then be compared
+    // line by line with a client that connects (field report 2026-10-02).
+    log::info("xbox", "offer sdp:\n" + offer);
 
     std::string answer;
     try {
@@ -205,6 +208,7 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
         return fail(std::string("SDP exchange: ") + e.what());
     }
     log::info("xbox", "answer codecs:\n" + describeCodecs(answer));
+    log::info("xbox", "answer sdp:\n" + answer);
     try {
         pc_->setRemoteDescription(rtc::Description(answer, rtc::Description::Type::Answer));
     } catch (const std::exception& e) {
