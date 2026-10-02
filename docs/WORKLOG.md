@@ -2,7 +2,7 @@
 
 ## 2026-10-03 启动恢复、倍速、Xbox 断开与采集 VRR（独立候选）
 
-- 最终 `build-final.log` 编译退出 0，`player-startup-speed-tests.py regression-final` 七组全部退出 0；包含最终“生成帧不发送源帧反馈”修正。`git diff --check`、scope guard、SoundTouch 31 文件身份、中英 README 无修改以及 2.0.0 Release 完整区块/二维码字节比对通过。
+- 最终 `build-final.log` 编译退出 0，`player-startup-speed-tests.py regression-final` 七组全部退出 0；包含最终“生成帧不发送源帧反馈”修正。产品改动 `git diff --check`、scope guard、SoundTouch 31 文件身份、中英 README 无修改以及 2.0.0 Release 完整区块/二维码字节比对通过。首次纳入上游文件的 staged 检查另报 `third_party/soundtouch/COPYING.TXT:149` 原有行尾空白；为保持许可证原件字节身份保留，不把该警告写成全量检查无警告。代码提交 `74c8394`。
 - 用户新增授权：全屏自动退窗改成设置开关、默认关闭；可选启动继续上次视频进度或采集卡配置；极简/专业启动页；双页面 1/1.5/2/3× 视频倍速。随后追加 Xbox 反复断开及主机 VRR 经采集卡输入不能补帧的修复，要求与 Claude 分支隔离。
 - 分支 `codex/player-startup-speed-20261003`，基线 `15a0e39`，目录 `E:/项目/Veyra/worktrees/player-startup-speed-20261003`；checkpoint `checkpoint/pre-player-startup-speed-20261003`。全部新产物位于 `E:/项目/Veyra/build|tests|logs|tmp|archives/player-startup-speed-20261003`。历史 UI-only 禁令由当前明确功能授权扩展；独立 scope guard 检查允许文件，外部 baseline 未变。未改桌面、main 或 Claude 工作树。
 - Xbox 日志 13：五次连接后 Disconnected→Closed，14:56:05.080Z 的 SCTP send errno=108 后紧跟未处理 C++ 异常。最初按通用 WebRTC 语义怀疑可恢复 Disconnected，进一步读取实际 libdatachannel 0.24.5 源码确认库本身立即 remoteClose，因此没有实现无效的等待宽限。现在所有 transport sends 捕获关闭竞态异常，回调共享生命周期门控，停止解码线程后再关闭 RTC，异常 JSON 字段不会逸出回调；细化 ICE/transport 日志。
