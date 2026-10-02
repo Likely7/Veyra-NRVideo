@@ -111,6 +111,7 @@ bool ColorGradeInstance::dispatch(ID3D12GraphicsCommandList* list,StateTracker& 
     pass_.bind(list,c,gpuHandleOf(pass_,0).ptr,gpuHandleOf(pass_,1).ptr,gpuHandleOf(pass_,8).ptr);
     list->Dispatch((width+15)/16,(height+15)/16,1);
     tracker.uavBarrier(list,output_);
+    (void)detail_.run(list,tracker,output_,settings_,hdrWorking);
     tracker.transition(list,output_,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     return true;
 }

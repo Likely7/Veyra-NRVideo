@@ -51,6 +51,7 @@
 #include "veyra/RuntimePaths.h"
 #include "veyra/engine/EngineController.h"
 #include "veyra/engine/ExportJobManager.h"
+#include "veyra/gfx/PresentationHooks.h"
 #include "veyra/ui/QmlDataDirectory.h"
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/ui/ThumbnailProvider.h"
@@ -359,6 +360,17 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
                                                std::filesystem::path(name).string()));
     } else {
         veyra::log::error("crash", std::format("minidump open failed error={}", GetLastError()));
+    }
+    // What crashed and which known-risky injected components were loaded, for the next
+    // start to explain (QmlPlayerBridge reads and deletes it).
+    const std::wstring note = L"crash " + std::filesystem::path(moduleName).filename().wstring() + L"\n" +
+                              veyra::gfx::riskyInjections() + L"\n";
+    HANDLE marker = CreateFileW((std::filesystem::path(g_crashDumpDirectory) / L"veyra-last-failure.txt").c_str(),
+                                GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (marker != INVALID_HANDLE_VALUE) {
+        DWORD written = 0;
+        WriteFile(marker, note.data(), DWORD(note.size() * sizeof(wchar_t)), &written, nullptr);
+        CloseHandle(marker);
     }
     veyra::Logger::instance().flush();
     return EXCEPTION_CONTINUE_SEARCH;
@@ -677,6 +689,21 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         }
         veyra::log::info("qml-window", std::format("taskbar fullscreen mark={} hr=0x{:X}", full, unsigned(marked)));
     });
+
+    // Clicking the taskbar button minimises a window only when it has a minimise box;
+    // Qt's frameless window is a bare WS_POPUP, so the click did nothing (field report).
+    // The two bits add no frame or caption. Qt may rebuild the style on a fullscreen
+    // switch, so it is put back on every visibility change.
+    const auto allowTaskbarMinimise = [window] {
+        const HWND hwnd = reinterpret_cast<HWND>(window->winId());
+        const LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        const LONG_PTR wanted = style | WS_MINIMIZEBOX | WS_SYSMENU;
+        if (wanted == style) return;
+        SetWindowLongPtrW(hwnd, GWL_STYLE, wanted);
+        veyra::log::info("qml-window", std::format("taskbar minimise enabled style=0x{:X}", static_cast<unsigned long long>(wanted)));
+    };
+    allowTaskbarMinimise();
+    QObject::connect(window, &QWindow::visibilityChanged, &app, [allowTaskbarMinimise](QWindow::Visibility) { allowTaskbarMinimise(); });
 
     // Closing the window must run the engine's own teardown, not just end the loop.
     // A test harness that hard-kills the process (Stop-Process -Force) loses every

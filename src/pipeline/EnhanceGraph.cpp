@@ -1392,7 +1392,10 @@ bool EnhanceGraph::createComputePasses()
     // Stage-5 output stabiliser. Only allocated when the setting is non-zero:
     // a default session never pays for it and the dispatch is skipped below, so
     // the disabled path stays byte-identical to a build without this pass.
-    if(desc_.nrHoldStrength>0.0f&&!createNrHoldPass())return false;
+    // Always called: with the stabiliser off this releases a pass left by the
+    // previous graph, which otherwise kept copying its last frame over the
+    // live output (picture frozen after turning it off, 2026-10-02).
+    if(!createNrHoldPass())return false;
     // Keep the legacy ingress root signature when no independent colour grade
     // needs the FP32 side output. The extra UAV is part of the R5.3 contract
     // only for graphs that actually allocate preGradeRgba_.
@@ -2093,6 +2096,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     }
     if(preGradeRgba_&&!colorActive_)convertInput(false,preGradeRgba_.Get(),1);
     else convertInput(colorActive_,srcRgba_.Get(),0);
+    // A failure only drops the effects (logged once); the graded picture continues.
+    if(colorActive_)(void)colorDetail_.run(list,tracker_,srcRgba_.Get(),desc_.color,desc_.hdrWorking());
     if(additionalColorActiveCount_){
         for(size_t i=0;i<additionalColorInstances_.size();++i)if(auto& instance=additionalColorInstances_[i]){
             // additionalColorInstances_[i] is Color parameter i+1.
@@ -2551,7 +2556,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             }
             tracker_.transition(list,residualRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         }
-        gpuTimer_.mark(list,GpuStage::Residual,true);
+        // The stabiliser below closes this span: a second Residual pair would
+        // overwrite the composite's timestamps and drop its time from the load.
+        if(!nrHoldPass_)gpuTimer_.mark(list,GpuStage::Residual,true);
     }
 
     // 5b. Output stabiliser (anti-flicker, default off). Runs after the last NR
@@ -2560,7 +2567,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // the result is copied back into residualRgba_, which deliberately leaves
     // every downstream binding (SR, FG, tail colour, diagnostics) untouched.
     if(nrHoldPass_){
-        gpuTimer_.mark(list,GpuStage::Residual);
+        if(!(nrEnabled_&&nrCreated()))gpuTimer_.mark(list,GpuStage::Residual);
         nrHoldPass_->run(list,tracker_,reset,desc_.nrHoldStrength,desc_.nrHoldTolerance);
         if(nrHoldPass_->active()&&nrHoldPass_->result()!=residualRgba_.Get()){
             auto* stabilised=nrHoldPass_->result();
@@ -3075,6 +3082,8 @@ void EnhanceGraph::shutdown()
     proxyTex_.Reset();
     for(auto& r:sourceReferences_)r.Reset();for(auto& r:baseReferences_)r.Reset();workRgba_.Reset();
     preGradeRgba_.Reset();srcRgba_.Reset();videoSrInput_.Reset();videoSrOutput_.Reset();
+    nrHoldPass_.reset();
+    colorDetail_.close();
     chromaTex_.Reset();
     lumaTex_.Reset();
     upZeroMotion_.Reset();

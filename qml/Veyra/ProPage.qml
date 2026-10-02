@@ -1346,7 +1346,7 @@ VPage {
                                     objectName: "list-hold-strength"
                                     from: 0.1; to: 1.0
                                     value: veyra.nrHoldStrength
-                                    onMoved: veyra.nrHoldStrength = value
+                                    onMoved: value => veyra.nrHoldStrength = value
                                 }
                             }
                             VRow {
@@ -1357,7 +1357,7 @@ VPage {
                                     objectName: "list-hold-tolerance"
                                     from: 0.005; to: 0.10
                                     value: veyra.nrHoldTolerance
-                                    onMoved: veyra.nrHoldTolerance = value
+                                    onMoved: value => veyra.nrHoldTolerance = value
                                 }
                             }
                         }
@@ -1585,7 +1585,7 @@ VPage {
                                 VSlider {
                                     implicitWidth: 150
                                     from: 0; to: 1; value: veyra.volume; inputScale: 100
-                                    onMoved: veyra.volume = value
+                                    onMoved: value => veyra.volume = value
                                 }
                             }
                             VRow {
@@ -1613,7 +1613,7 @@ VPage {
                                     implicitWidth: 150
                                     center: true
                                     from: -250; to: 250; value: veyra.audioOffsetMs; enabledControl: veyra.audioSyncMode === 1
-                                    onMoved: veyra.audioOffsetMs = Math.round(value)
+                                    onMoved: value => veyra.audioOffsetMs = Math.round(value)
                                 }
                             }
                         }

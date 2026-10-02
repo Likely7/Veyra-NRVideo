@@ -153,7 +153,12 @@ try:
     deadline = time.time() + 290
     while time.time() < deadline and verdict is None:
         time.sleep(0.1)
-        lines = log.read_text(encoding='utf8', errors='replace').splitlines() if log.exists() else []
+        text = log.read_text(encoding='utf8', errors='replace') if log.exists() else ''
+        lines = text.splitlines()
+        # A line still being written is read again next time; counting it as seen
+        # dropped a command that arrived in two pieces.
+        if text and not text.endswith('\n'):
+            lines = lines[:-1]
         for line in lines[seen:]:
             if 'UITEST_SHOT ' in line:
                 name = line.split('UITEST_SHOT ')[1].strip()

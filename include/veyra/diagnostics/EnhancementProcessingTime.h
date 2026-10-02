@@ -13,7 +13,10 @@ namespace veyra::diagnostics {
 inline std::optional<double> enhancementProcessingMs(const GpuFrameTiming& frame) {
     // Presenter records only contain Blit. Never let them add zero samples.
     if(frame.gpu[size_t(GpuStage::Color)].state!=SampleState::Measured)return {};
-    constexpr GpuStage stages[]={GpuStage::Flow,GpuStage::Sr,GpuStage::Nr,GpuStage::Residual,GpuStage::FgBatch};
+    // Every NR layer marks the shared Nr slot, so it only holds the last layer;
+    // the per-layer spans carry the others (several layers read as one, 2026-10-02).
+    constexpr GpuStage stages[]={GpuStage::Flow,GpuStage::Sr,GpuStage::Nr,GpuStage::NrLayer0,GpuStage::NrLayer1,
+        GpuStage::NrLayer2,GpuStage::NrLayer3,GpuStage::Residual,GpuStage::FgBatch};
     struct Interval {uint64_t begin,end;};
     std::array<Interval,std::size(stages)> intervals{};
     size_t count=0;uint64_t frequency=0;

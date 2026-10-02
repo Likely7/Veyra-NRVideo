@@ -2,6 +2,12 @@
 
 <p align="center"><img src="assets/veyra-app-icon.png" alt="Veyra" width="160"></p>
 
+<p align="center">
+  <a href="https://github.com/Likely7/Veyra-NRVideo/blob/main/assets/veyra-2.0.0-promo.mp4">
+    <img src="assets/veyra-2.0.0-promo.webp" alt="Veyra 2.0 宣传动画（点击播放视频）" width="960">
+  </a>
+</p>
+
 简体中文 | [English](README_EN.md)
 
 <p align="center"><img src="docs/images/2.0.0/professional-mode.png" alt="Veyra 2.0.0 专业模式" width="1200"></p>

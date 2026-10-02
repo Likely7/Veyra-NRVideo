@@ -272,6 +272,10 @@ endif()
 veyra_add_compute_shader(veyra_shader_yuv_to_rgb YuvToLinearRgb)
 veyra_add_compute_shader(veyra_shader_rgb_to_linear RgbToLinear)
 veyra_add_compute_shader(veyra_shader_color_grade ColorGradePass)
+# 纹理 / 清晰度 / 去朦胧: block statistics, blur, apply (ColorDetailPass).
+veyra_add_compute_shader(veyra_shader_color_detail_reduce ColorDetailReduce)
+veyra_add_compute_shader(veyra_shader_color_detail_blur ColorDetailBlur)
+veyra_add_compute_shader(veyra_shader_color_detail_apply ColorDetailApply)
 veyra_add_compute_shader(veyra_shader_yuy2_to_linear Yuy2ToLinear)
 veyra_add_compute_shader(veyra_shader_packed_capture PackedCaptureToLinear)
 add_dependencies(veyra_shader_rgb_to_linear veyra_shader_yuy2_to_linear)
@@ -354,6 +358,7 @@ add_library(veyra_pipeline STATIC
   src/pipeline/ResetCoordinator.cpp
   src/pipeline/ColorGradeTables.cpp
   src/pipeline/ColorGradeInstance.cpp
+  src/pipeline/ColorDetailPass.cpp
   src/pipeline/NrInstance.cpp
 )
 veyra_apply_warnings(veyra_pipeline)
@@ -365,7 +370,7 @@ target_compile_definitions(veyra_pipeline PUBLIC
   VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
 target_include_directories(veyra_pipeline PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(veyra_pipeline PUBLIC veyra_base veyra_gfx d3d12 dxgi dxguid d3dcompiler)
-add_dependencies(veyra_pipeline veyra_shader_color_grade)
+add_dependencies(veyra_pipeline veyra_shader_color_grade veyra_shader_color_detail_reduce veyra_shader_color_detail_blur veyra_shader_color_detail_apply)
 
 add_executable(veyra_pipeline_tests
   tests/unit/PipelineContractTests.cpp

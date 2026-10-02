@@ -1044,6 +1044,13 @@
    "ja": "NVIDIA ドライバーレベルの AI フレーム補間。アプリ内のフレーム生成とはどちらか一方を使います"
   },
   {
+   "zh": "OBS 游戏采集兼容",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "OBS 遊戲擷取相容",
+   "en": "OBS Game Capture compatibility",
+   "ja": "OBS ゲームキャプチャ互換"
+  },
+  {
    "zh": "PC 串流",
    "src": "qml/CineBar.qml",
    "zh-TW": "PC 串流",
@@ -1625,6 +1632,13 @@
    "ja": "前回"
   },
   {
+   "zh": "上次 Veyra 异常退出（崩溃在 %1）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "上次 Veyra 異常結束（當機於 %1）",
+   "en": "Veyra closed unexpectedly last time (crash in %1)",
+   "ja": "前回 Veyra が異常終了しました（%1 でクラッシュ）"
+  },
+  {
    "zh": "上次格式已不可用，请重新选择格式。",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "上次格式已不可用，請重新選擇格式。",
@@ -1644,6 +1658,13 @@
    "zh-TW": "上次的擷取格式不可用，請在擷取卡面板重新選擇",
    "en": "The last capture format is not available; choose again in the capture card panel",
    "ja": "前回のキャプチャーフォーマットは使用できません。キャプチャーカードのパネルで選び直してください"
+  },
+  {
+   "zh": "上次采集时显卡设备丢失",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "上次擷取時顯示卡裝置遺失",
+   "en": "The GPU device was lost during the last capture",
+   "ja": "前回のキャプチャ中に GPU デバイスが失われました"
   },
   {
    "zh": "上次采集设备未连接。插回后刷新，或手动选择其他设备。",
@@ -2225,6 +2246,13 @@
    "zh-TW": "僅觀看",
    "en": "View only",
    "ja": "視聴のみ"
+  },
+  {
+   "zh": "仅采集视频；界面软件绘制，部分阴影与模糊简化",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "僅擷取影片；介面以軟體繪製，部分陰影與模糊簡化",
+   "en": "Captures video only; software UI with simpler shadows and blur",
+   "ja": "映像のみキャプチャ。UI はソフトウェア描画になり、一部の影・ぼかしを簡略化"
   },
   {
    "zh": "今天看点什么？",
@@ -3605,6 +3633,13 @@
    "zh-TW": "後退 / 前進 5 秒",
    "en": "Back / forward 5 seconds",
    "ja": "5 秒戻る / 進む"
+  },
+  {
+   "zh": "否",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "否",
+   "en": "No",
+   "ja": "いいえ"
   },
   {
    "zh": "启动窗口大小",
@@ -6940,6 +6975,13 @@
    "ja": "明度の変化"
   },
   {
+   "zh": "是",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "是",
+   "en": "Yes",
+   "ja": "はい"
+  },
+  {
    "zh": "显卡、驱动或运行库不支持所选功能",
    "src": "include/veyra/engine/BackendRecovery.h",
    "zh-TW": "顯示卡、驅動或執行庫不支援所選功能",
@@ -7596,6 +7638,20 @@
    "zh-TW": "檢測到 Dolby Vision RPU，但缺少基礎層相容聲明，無法確認顏色，已停止",
    "en": "A Dolby Vision RPU was found but the base layer's compatibility signalling is missing, so the colors cannot be confirmed; stopped",
    "ja": "Dolby Vision RPU を検出しましたが、ベースレイヤーの互換宣言がなく色を確認できないため停止しました"
+  },
+  {
+   "zh": "检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra，它已知会在采集开始时让显卡设备丢失或让程序崩溃。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项后再试",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到 NVIDIA App 的畫面外掛（RTX HDR / 智慧平滑運動 / RTX 動態鮮豔度）注入了 Veyra，已知它會在擷取開始時造成顯示卡裝置遺失或程式當機。請在 NVIDIA App → 圖形 → 程式設定中為 Veyra 關閉這幾項後再試",
+   "en": "NVIDIA App's picture plug-in (RTX HDR / Smooth Motion / RTX Dynamic Vibrance) is injected into Veyra; it is known to lose the GPU device or crash Veyra when a capture starts. Turn these off for Veyra in NVIDIA App → Graphics → Program Settings and try again",
+   "ja": "NVIDIA App の画面プラグイン（RTX HDR / Smooth Motion / RTX Dynamic Vibrance）が Veyra に挿入されています。キャプチャ開始時に GPU デバイスの喪失やクラッシュを起こすことが確認されています。NVIDIA App → グラフィックス → プログラム設定で Veyra に対してこれらをオフにしてから再試行してください"
+  },
+  {
+   "zh": "检测到 RivaTuner（小飞机 OSD）注入了 Veyra，请在 RTSS 里为 veyra_qml_ui.exe 关闭检测（Application detection level 设为 None）后再试",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到 RivaTuner（RTSS OSD）注入了 Veyra，請在 RTSS 中為 veyra_qml_ui.exe 關閉偵測（Application detection level 設為 None）後再試",
+   "en": "RivaTuner (RTSS on-screen display) is injected into Veyra; set Application detection level to None for veyra_qml_ui.exe in RTSS and try again",
+   "ja": "RivaTuner（RTSS の OSD）が Veyra に挿入されています。RTSS で veyra_qml_ui.exe の Application detection level を None にしてから再試行してください"
   },
   {
    "zh": "模型参数",
@@ -10174,6 +10230,27 @@
    "ja": "設定に失敗し、元のリソースも復元できなかったため停止しました"
   },
   {
+   "zh": "设置已保存，但自动重启失败。请重新打开软件。\nSettings saved. Automatic restart failed; please reopen Veyra.",
+   "src": "apps/veyra-qml/main.cpp",
+   "zh-TW": "",
+   "en": "",
+   "ja": ""
+  },
+  {
+   "zh": "设置已保存，请等待导出结束后重启软件",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "設定已儲存，請等待匯出結束後重新啟動軟體",
+   "en": "Settings saved. Restart after the export finishes.",
+   "ja": "設定を保存しました。書き出し完了後に再起動してください。"
+  },
+  {
+   "zh": "设置已保存，重启后生效。现在重启吗？当前播放或串流将停止。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "設定已儲存，重新啟動後生效。現在重新啟動嗎？目前播放或串流將停止。",
+   "en": "Settings saved. Restart to apply them. Restart now? Current playback or streaming will stop.",
+   "ja": "設定を保存しました。適用するには再起動が必要です。今すぐ再起動しますか？再生やストリーミングは停止します。"
+  },
+  {
    "zh": "设置应用失败，已恢复上一套参数",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "設定應用失敗，已恢復上一套參數",
@@ -11945,6 +12022,13 @@
    "ja": "実際の値にはシステムの表示イベントが必要です。取得できない場合は「未計測」と表示します"
   },
   {
+   "zh": "需要重启软件",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "需要重新啟動軟體",
+   "en": "Restart required",
+   "ja": "再起動が必要です"
+  },
+  {
    "zh": "静态最稳、光流为默认、低频保留高频细节",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "靜態最穩、光流為預設、低頻保留高頻細節",
@@ -13000,55 +13084,6 @@
    "zh-TW": "；本次匯出使用 AMD FSR 超解析",
    "en": "; this export uses AMD FSR super resolution",
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
-  },
-  {
-   "zh": "OBS 游戏采集兼容",
-   "src": "qml/Veyra/SettingsPage.qml",
-   "zh-TW": "OBS 遊戲擷取相容",
-   "en": "OBS Game Capture compatibility",
-   "ja": "OBS ゲームキャプチャ互換"
-  },
-  {
-   "zh": "仅采集视频；界面软件绘制，部分阴影与模糊简化",
-   "src": "qml/Veyra/SettingsPage.qml",
-   "zh-TW": "僅擷取影片；介面以軟體繪製，部分陰影與模糊簡化",
-   "en": "Captures video only; software UI with simpler shadows and blur",
-   "ja": "映像のみキャプチャ。UI はソフトウェア描画になり、一部の影・ぼかしを簡略化"
-  },
-  {
-   "zh": "需要重启软件",
-   "zh-TW": "需要重新啟動軟體",
-   "en": "Restart required",
-   "ja": "再起動が必要です",
-   "src": "qml/Veyra/SettingsPage.qml"
-  },
-  {
-   "zh": "设置已保存，重启后生效。现在重启吗？当前播放或串流将停止。",
-   "zh-TW": "設定已儲存，重新啟動後生效。現在重新啟動嗎？目前播放或串流將停止。",
-   "en": "Settings saved. Restart to apply them. Restart now? Current playback or streaming will stop.",
-   "ja": "設定を保存しました。適用するには再起動が必要です。今すぐ再起動しますか？再生やストリーミングは停止します。",
-   "src": "qml/Veyra/SettingsPage.qml"
-  },
-  {
-   "zh": "设置已保存，请等待导出结束后重启软件",
-   "zh-TW": "設定已儲存，請等待匯出結束後重新啟動軟體",
-   "en": "Settings saved. Restart after the export finishes.",
-   "ja": "設定を保存しました。書き出し完了後に再起動してください。",
-   "src": "src/ui/QmlPlayerBridge.cpp"
-  },
-  {
-   "zh": "是",
-   "zh-TW": "是",
-   "en": "Yes",
-   "ja": "はい",
-   "src": "qml/Veyra/SettingsPage.qml"
-  },
-  {
-   "zh": "否",
-   "zh-TW": "否",
-   "en": "No",
-   "ja": "いいえ",
-   "src": "qml/Veyra/SettingsPage.qml"
   }
  ]
 }

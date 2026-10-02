@@ -256,7 +256,7 @@ foreach($f in $lock.files) {
         copy(ROOT / name, name)
     copy(ROOT / 'README.md', 'README.md')
     copy(ROOT / 'README_EN.md', 'README_EN.md')
-    for name in ('veyra-app-icon.png',):
+    for name in ('veyra-app-icon.png', 'veyra-2.0.0-promo.webp'):
         copy(ROOT / 'assets' / name, 'assets/' + name)
     for name in ('RUNTIME_COMPONENTS_2.0.0.md', 'BUILD.md', 'BUILD_2.0.0.md', 'RELEASE_NOTES_2.0.0.md'):
         copy(ROOT / 'docs' / name, 'docs/' + name)

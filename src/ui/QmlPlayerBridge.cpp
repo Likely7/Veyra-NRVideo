@@ -107,6 +107,23 @@ namespace veyra::ui {
 namespace {
 QString utf8Of(std::string_view s) { return QString::fromUtf8(s.data(), int(s.size())); }
 QString utf8Of(const std::wstring& w) { return QString::fromWCharArray(w.c_str(), int(w.size())); }
+
+// Where crash and device-loss hints go: next to the log, where the crash handler in
+// apps/veyra-qml/main.cpp writes them too.
+QString lastFailurePath() {
+    return QFileInfo(qApp->property("veyraLogFile").toString()).absolutePath() + QStringLiteral("/veyra-last-failure.txt");
+}
+
+// What the user can switch off, for the injected components named in `modules`
+// ("nvppex.dll,RTSSHooks64.dll", see gfx::riskyInjections). Empty when none is known.
+QString injectionAdvice(const QString& modules) {
+    QStringList parts;
+    if (modules.contains(QStringLiteral("nvppex.dll"), Qt::CaseInsensitive) || modules.contains(QStringLiteral("NvPresent64.dll"), Qt::CaseInsensitive))
+        parts << QCoreApplication::translate("QmlPlayerBridge", "检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra，它已知会在采集开始时让显卡设备丢失或让程序崩溃。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项后再试");
+    if (modules.contains(QStringLiteral("RTSSHooks64.dll"), Qt::CaseInsensitive))
+        parts << QCoreApplication::translate("QmlPlayerBridge", "检测到 RivaTuner（小飞机 OSD）注入了 Veyra，请在 RTSS 里为 veyra_qml_ui.exe 关闭检测（Application detection level 设为 None）后再试");
+    return parts.join(QStringLiteral("；"));
+}
 // Messages and fixed table labels shown to the user, in the interface language
 // (UiLanguage.h). Data that only passes through the UI - paths, device, preset and
 // LUT names - keeps utf8Of(), and so do log lines.
@@ -948,7 +965,16 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             if (had && !wasFailed && s.failed && (s.capture || s.remotePlay)) {
                 const QString why = veyra::ui::i18n::text(s.status);
                 veyra::log::warn("ui-live-failed", std::format("remote={} status={}", s.remotePlay, utf8Of(s.status).toStdString()));
-                emit notice(why.isEmpty() ? (s.remotePlay ? tr("PS5 串流没有连上") : tr("采集没有开始")) : why, true);
+                QString text = why.isEmpty() ? (s.remotePlay ? tr("PS5 串流没有连上") : tr("采集没有开始")) : why;
+                // The interface itself may be gone with the device (Qt loses it too), so
+                // the hint is also left for the next start.
+                const QString injected = utf8Of(gfx::riskyInjections());
+                if (const QString advice = injectionAdvice(injected); !advice.isEmpty()) {
+                    text += QStringLiteral("；") + advice;
+                    QFile marker(lastFailurePath());
+                    if (marker.open(QIODevice::WriteOnly)) marker.write((QStringLiteral("device\n") + injected + QStringLiteral("\n")).toUtf8());
+                }
+                emit notice(text, true);
                 if (impl_->currentPage == QLatin1String("min")) emit navigate(QStringLiteral("home"));
             }
             emit snapshotChanged();
@@ -994,6 +1020,28 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         if (GetTickCount64() - started > 120000 && hookTimer->interval() < 10000) hookTimer->setInterval(10000);
     });
     hookTimer->start(2000);
+    // The previous run crashed or lost the GPU with a known-risky component injected:
+    // say so once the window is up (the crash handler cannot show anything itself).
+    QTimer::singleShot(2500, this, [this] {
+        QFile marker(lastFailurePath());
+        if (!marker.exists()) return;
+        QByteArray raw;
+        if (marker.open(QIODevice::ReadOnly)) raw = marker.readAll();
+        marker.close();
+        marker.remove();
+        // The crash handler writes UTF-16 (no allocation in the filter); the bridge UTF-8.
+        const QString text = raw.size() > 1 && raw.at(1) == 0
+            ? QString::fromUtf16(reinterpret_cast<const char16_t*>(raw.constData()), raw.size() / 2) : QString::fromUtf8(raw);
+        const QStringList lines = text.split(QLatin1Char('\n'));
+        const QString kind = lines.value(0), modules = lines.value(1);
+        QString advice = injectionAdvice(kind + QLatin1Char(',') + modules);
+        veyra::log::info("overlay-hooks", std::format("previous run: {} injected={}", kind.toStdString(), modules.toStdString()));
+        if (advice.isEmpty()) return;
+        const QString head = kind.startsWith(QStringLiteral("crash"))
+            ? tr("上次 Veyra 异常退出（崩溃在 %1）").arg(kind.mid(6).trimmed())
+            : tr("上次采集时显卡设备丢失");
+        emit notice(head + QStringLiteral("；") + advice, true);
+    });
     // A saved FSR 4 ML choice on a non-AMD GPU crashed at the first open; move it on.
     if (settings().frameGenerationBackend == engine::FrameGenerationBackend::Fsr4 && !fsr4Possible()) {
         auto s = settings();
@@ -1661,6 +1709,21 @@ void QmlPlayerBridge::tickCapture() {
     auto q = i.captureQuery.get();
     i.captureBusy = false;
     if (q.kind == 0 || q.kind == 2) { i.captureVideo = std::move(q.video); i.captureAudio = std::move(q.audio); i.captureListed = true; }
+    // The remembered rate and audio input, matched against the inputs listed now. Both the
+    // panel (kind 0) and 继续上次 (kind 2) need it: the resume path skipped it and connected
+    // without sound until the panel was opened once (field report 2026-10-02).
+    const auto restoreRememberedAudio = [&i] {
+        i.captureFps = i.capturePrefs.requestedFps;
+        const int mode = i.capturePrefs.audioMode;
+        if (mode == source::kCaptureAudioFromVideoDevice) i.captureAudioChoice = mode;
+        else if (!i.capturePrefs.audioPath.empty()) {
+            i.captureAudioChoice = source::kCaptureAudioDisabled;
+            for (size_t k = 0; k < i.captureAudio.size(); ++k)
+                if (i.captureAudio[k].path == i.capturePrefs.audioPath &&
+                    i.captureAudio[k].wasapi == (mode == source::kCaptureAudioWasapi)) i.captureAudioChoice = int(k);
+        } else i.captureAudioChoice = source::kCaptureAudioDisabled;
+    };
+    if (q.kind == 2 && q.device == i.capturePrefs.videoPath) restoreRememberedAudio();
     if (q.kind == 0) {
         veyra::log::info("capture-ui", std::format("devices video={} audio={}", i.captureVideo.size(), i.captureAudio.size()));
         // Restore the remembered device; otherwise the first one. Never guess audio.
@@ -1672,17 +1735,7 @@ void QmlPlayerBridge::tickCapture() {
         if (!pick.empty()) {
             i.captureDevice.clear();
             setCaptureDeviceId(utf8Of(pick));
-            if (pick == i.capturePrefs.videoPath) {
-                i.captureFps = i.capturePrefs.requestedFps;
-                const int mode = i.capturePrefs.audioMode;
-                if (mode == source::kCaptureAudioFromVideoDevice) i.captureAudioChoice = mode;
-                else if (!i.capturePrefs.audioPath.empty()) {
-                    i.captureAudioChoice = source::kCaptureAudioDisabled;
-                    for (size_t k = 0; k < i.captureAudio.size(); ++k)
-                        if (i.captureAudio[k].path == i.capturePrefs.audioPath &&
-                            i.captureAudio[k].wasapi == (mode == source::kCaptureAudioWasapi)) i.captureAudioChoice = int(k);
-                } else i.captureAudioChoice = source::kCaptureAudioDisabled;
-            }
+            if (pick == i.capturePrefs.videoPath) restoreRememberedAudio();
         }
         emit captureChanged();
         return;

@@ -110,9 +110,25 @@ std::string StreamApi::getExchange(const std::string& path) {
         const HttpsResponse response = call("GET", path, "");
         if (response.status != 204 && !response.body.empty()) {
             const json j = parse(response, path);
-            if (j.contains("errorDetails") && j["errorDetails"].is_object() && j["errorDetails"].value("code", "") != "")
-                throw std::runtime_error(path + ": " + j["errorDetails"].value("message", j["errorDetails"].value("code", "")));
-            return j.value("exchangeResponse", "");
+            // json::value() throws on a null field ("type must be string, but is null"):
+            // the service sends null exchangeResponse / error fields on a refusal, and the
+            // exception text hid the reason (field log 2026-10-02). Read only strings.
+            const auto text = [](const json& o, const char* key) {
+                return o.contains(key) && o[key].is_string() ? o[key].get<std::string>() : std::string();
+            };
+            std::string why;
+            if (j.contains("errorDetails") && j["errorDetails"].is_object()) {
+                const std::string code = text(j["errorDetails"], "code"), message = text(j["errorDetails"], "message");
+                why = message.empty() ? code : code.empty() ? message : code + " / " + message;
+            }
+            const std::string exchange = text(j, "exchangeResponse");
+            if (!why.empty() || exchange.empty()) {
+                log::warn("xbox", "exchange " + path.substr(path.rfind('/')) + " answered without a response: " + j.dump());
+                if (why.empty()) why = text(j, "status");
+                throw std::runtime_error(path.substr(path.rfind('/') + 1) + ": the console refused (" +
+                                         (why.empty() ? std::string("no reason given") : why) + ")");
+            }
+            return exchange;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(retryDelayMs_));
     }

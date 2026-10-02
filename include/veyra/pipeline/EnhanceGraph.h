@@ -682,6 +682,8 @@ private:
     // setting is non-zero; a default (0) session never allocates it and the
     // dispatch is skipped, so the disabled path is unchanged.
     std::unique_ptr<NrHoldPass> nrHoldPass_;
+    // 纹理 / 清晰度 / 去朦胧 of the list grade fused into input conversion (srcRgba_).
+    ColorDetailPass colorDetail_;
     // The texture the rest of the graph reads as "the NR result". Without the
     // stabiliser this is residualRgba_; with it, the stabilised copy the pass
     // produces. Set once per frame, read by the SR/FG/tail bindings below.
