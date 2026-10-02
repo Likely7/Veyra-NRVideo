@@ -9,7 +9,7 @@ Branch codex/player-startup-speed-20261003 starts at 15a0e39 in E:/项目/Veyra/
 - Rate is a file-preview transport setting, default 1x. Capture/streams, image processing and export are not sped up. Media PTS stay in original coordinates; the device audio clock maps output samples to those coordinates. Speed changes use the existing seek/reset boundary. SoundTouch 2.4.1, fixed upstream commit 0047e0b1ecfceb041348579119bf79b73a322a3a, supplies pitch-preserving tempo; no proprietary runtime changes. The copied LGPL-2.1 sources remain unmodified, with attribution and licence, statically built from the corresponding Veyra source archive.
 - Verify generated-tone pitch/duration, real WASAPI media-clock rates, switching/seek/pause, 1x regressions, startup file position and capture configuration, QML controls and default-off/opt-in VRAM behavior. Tests bounded to 300 seconds. Build and package candidate with identity audit; no fake real-device acceptance.
 
-Status: implementation and local regressions complete; final build/package audit in progress. Evidence and exact commands are in WORKLOG and task artifacts. Field Xbox/VRR and 5060 Ti results remain unverified; no publication or integration into Claude/main worktrees.
+Status: implementation, local regressions, package audit and clean-extraction smoke complete. Candidate: E:/项目/Veyra/releases/2.0.1-player-xbox-vrr-20261003, source snapshot 0f736be. Evidence and exact commands are in WORKLOG and task artifacts. Field Xbox/VRR and 5060 Ti results remain unverified; no publication or integration into Claude/main worktrees.
 
 Additional current user authorisation: investigate and fix repeated Xbox disconnects
 from veyra-qml(13).log, and frame generation with console VRR passed through a
