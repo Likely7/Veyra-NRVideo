@@ -16,7 +16,10 @@ ColumnLayout {
     signal duplicateRequested(int nodeIndex)
     signal removeRequested(int nodeIndex)
     signal orderEdited(bool enabled)
-    readonly property var sizeChoices: [
+    readonly property bool amdNr: (typeof veyra !== "undefined" && veyra.amdNrGpu) || layerData.runtime === 4
+    readonly property var sizeChoices: amdNr ? [
+        {id:"2",label:"480p"}, {id:"3",label:"720p"}, {id:"4",label:"900p"}, {id:"0",label:qsTr("1080p · 默认")}
+    ] : [
         {id:"2",label:"480p"}, {id:"3",label:"720p"}, {id:"4",label:"900p"},
         {id:"0",label:qsTr("1080p · 默认")}, {id:"5",label:"1440p"}, {id:"1",label:qsTr("原生")}
     ]
@@ -65,9 +68,10 @@ ColumnLayout {
         hint: qsTr("全链共享 · 切换会重建 NR 管线")
         VSelect {
             objectName: "nr-runtime"
-            value: editor.layerData.runtime === 3 ? qsTr("RTX 50 · NVIDIA 原版")
+            value: (typeof veyra !== "undefined" && veyra.amdNrGpu) || editor.layerData.runtime === 4 ? qsTr("RX 9000 · lmxxf（实验）")
+                   : editor.layerData.runtime === 3 ? qsTr("RTX 50 · NVIDIA 原版")
                    : editor.layerData.runtime === 2 ? "RTX 20–50 · SF-v2" : "RTX 50 · Lecram"
-            options: [{id:"0",label:"RTX 50 · Lecram"},{id:"2",label:"RTX 20–50 · SF-v2"},
+            options: typeof veyra !== "undefined" && veyra.amdNrGpu ? [{id:"4",label:qsTr("RX 9000 · lmxxf（实验）")}] : [{id:"0",label:"RTX 50 · Lecram"},{id:"2",label:"RTX 20–50 · SF-v2"},
                       {id:"3",label:qsTr("RTX 50 · NVIDIA 原版")}]
             onPicked: id => editor.edited(editor.layerData.index, "runtime", Number(id))
         }
@@ -93,7 +97,8 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
-        text: qsTr("预览保留比例且不放大小输入；图片/视频导出仍完整处理。")
+        text: editor.amdNr ? qsTr("预览可降采样到 1080p。AMD NR 图片/视频导出仅接受预算内原生尺寸，暂不支持 4K NR 导出。")
+                          : qsTr("预览保留比例且不放大小输入；图片/视频导出仍完整处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
@@ -102,8 +107,15 @@ ColumnLayout {
         amount: editor.layerData.intensity
         onEdited: amount => editor.edited(editor.layerData.index, "intensity", amount)
     }
+    Text {
+        Layout.fillWidth: true
+        visible: (typeof veyra !== "undefined" && veyra.amdNrGpu) || editor.layerData.runtime === 4
+        text: qsTr("AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。HDR 尚未验收。")
+        color: Theme.t3; font.pixelSize: 11; wrapMode: Text.WordWrap
+    }
     VSubGroup {
         objectName: "nr-model-group"
+        visible: !(typeof veyra !== "undefined" && veyra.amdNrGpu) && editor.layerData.runtime !== 4
         Layout.fillWidth: true
         label: qsTr("模型参数"); count: 6
         Repeater {

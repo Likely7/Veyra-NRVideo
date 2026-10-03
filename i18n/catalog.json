@@ -463,6 +463,13 @@
    "ja": "AMD FSR のフレーム生成は最大 2X です。要求は適用されていません"
   },
   {
+   "zh": "AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。HDR 尚未验收。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "AMD NR（實驗）：需要 RX 9000 驅動及 lmxxf 執行元件，內部最高 1080p 像素預算。支援模型強度、殘差與保護；風格使用執行元件設定。HDR 尚未驗收。",
+   "en": "AMD NR (experimental): requires an RX 9000 driver and lmxxf runtime, with an internal 1080p pixel budget. Model strength, residual and protection are supported; style uses the runtime configuration. HDR has not been validated.",
+   "ja": "AMD NR（実験）：RX 9000 ドライバーと lmxxf ランタイムが必要です。内部処理の画素数は最大 1080p 相当です。モデル強度・残差・保護に対応し、スタイルはランタイム設定を使います。HDR は未検証です。"
+  },
+  {
    "zh": "AMD 性能档",
    "src": "qml/ProPage.qml",
    "zh-TW": "AMD 性能檔",
@@ -1287,6 +1294,13 @@
    "zh-TW": "RTX 影片超解析檔位",
    "en": "RTX Video Super Resolution level",
    "ja": "RTX ビデオ超解像のレベル"
+  },
+  {
+   "zh": "RX 9000 · lmxxf（实验）",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "RX 9000 · lmxxf（實驗）",
+   "en": "RX 9000 · lmxxf (experimental)",
+   "ja": "RX 9000 · lmxxf（実験）"
   },
   {
    "zh": "Reflex 调用及驱动撤销失败；请关闭视频后重试",
@@ -4942,6 +4956,13 @@
    "zh-TW": "匯出設定無效",
    "en": "Invalid export settings",
    "ja": "書き出し設定が不正です"
+  },
+  {
+   "zh": "导出设置无效：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "匯出設定無效：%1",
+   "en": "Invalid export settings: %1",
+   "ja": "書き出し設定が不正です：%1"
   },
   {
    "zh": "导出进程隔离失败",
@@ -9012,6 +9033,13 @@
    "ja": "保存先のファイルがすでに存在します。別のファイル名にしてください"
   },
   {
+   "zh": "目标码率 1–300 Mbps；VBR 的实际平均码率随画面复杂度变化。",
+   "src": "qml/ExportPage.qml",
+   "zh-TW": "目標位元速率 1–300 Mbps；VBR 的實際平均位元速率隨畫面複雜度變化。",
+   "en": "Target bitrate: 1–300 Mbps. Actual VBR average bitrate varies with scene complexity.",
+   "ja": "目標ビットレートは 1～300 Mbps。VBR の実際の平均値は映像の複雑さによって変わります。"
+  },
+  {
    "zh": "目标码率影响画质与文件大小。",
    "src": "qml/ExportPage.qml",
    "zh-TW": "目標位元率影響畫質與檔案大小。",
@@ -12489,6 +12517,13 @@
    "zh-TW": "預覽保留比例且不放大小輸入；圖片/影片匯出仍完整處理。",
    "en": "The preview keeps the aspect ratio and does not upscale small inputs; image/video export is still fully processed.",
    "ja": "プレビューは縦横比を保ち、小さい入力は拡大しません。画像・動画の書き出しは完全に処理します。"
+  },
+  {
+   "zh": "预览可降采样到 1080p。AMD NR 图片/视频导出仅接受预算内原生尺寸，暂不支持 4K NR 导出。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "預覽可降採樣到 1080p。AMD NR 圖片/影片匯出僅接受預算內原生尺寸，暫不支援 4K NR 匯出。",
+   "en": "Preview can downsample to 1080p. AMD NR image/video export accepts only native sizes within that budget; 4K NR export is currently unsupported.",
+   "ja": "プレビューは 1080p まで縮小できます。AMD NR の画像・動画書き出しは画素数制限内のネイティブサイズのみ対応し、4K NR 書き出しは未対応です。"
   },
   {
    "zh": "预览：SDR 转 HDR 已运行",

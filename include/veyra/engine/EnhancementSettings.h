@@ -70,10 +70,10 @@ constexpr std::wstring_view captureAudioIngressName(CaptureAudioIngress mode) {
 }
 // The original slot (0) became Lecram in 2.0.0. Give the restored NVIDIA
 // binary a new value so existing presets keep selecting the same DLL.
-enum class NrRuntime { Original = 0, Community = 1, Ampere = 2, NvidiaOriginal = 3 };
+enum class NrRuntime { Original = 0, Community = 1, Ampere = 2, NvidiaOriginal = 3, LmxxfAmd = 4 };
 constexpr bool validNrRuntime(NrRuntime runtime) {
     return runtime == NrRuntime::Original || runtime == NrRuntime::Community ||
-           runtime == NrRuntime::Ampere || runtime == NrRuntime::NvidiaOriginal;
+           runtime == NrRuntime::Ampere || runtime == NrRuntime::NvidiaOriginal || runtime == NrRuntime::LmxxfAmd;
 }
 // Persisted value 1 selected the retired RTX40 DLL. Never load that DLL in
 // current builds; preserve 0 (Lecram) and 2 (SF-v2) as explicit user choices.
@@ -86,6 +86,7 @@ constexpr std::string_view nrRuntimeName(NrRuntime runtime) {
     case NrRuntime::Community:return "community-SF-v2-RTX20-RTX50-legacy40";
     case NrRuntime::Ampere:return "community-SF-v2-RTX20-RTX50";
     case NrRuntime::NvidiaOriginal:return "NVIDIA-original-RTX50-310.8.0";
+    case NrRuntime::LmxxfAmd:return "lmxxf-AMD-RDNA4";
     }
     return "unknown";
 }

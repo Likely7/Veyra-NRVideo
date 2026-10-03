@@ -27,18 +27,13 @@ inline constexpr PresentationHook kPresentationHooks[] = {
     {L"GameTracker64.dll", "GamePP"},
 };
 
-// Injected components that field logs tie to the GPU device being removed, or to a crash,
-// within seconds of a capture preview starting (2026-10-02): NVIDIA App's presentation
-// plug-in nvppex.dll (it carries RTX HDR, Smooth Motion and RTX Dynamic Vibrance; two
-// crashes inside it on an RTX 5080), the driver's present layer, and RTSS (device removed
-// with ACCESS_DENIED on an RTX 4070 SUPER). Veyra cannot switch them off; it can name them.
+// RTSS needs a different UI renderer. NVIDIA App module presence is not a failure
+// diagnosis and must not trigger a warning or a persistent failure marker.
 inline constexpr PresentationHook kRiskyInjections[] = {
-    {L"nvppex.dll", "NVIDIA App presentation plug-in"},
-    {L"NvPresent64.dll", "NVIDIA present layer"},
     {L"RTSSHooks64.dll", "RivaTuner Statistics Server"},
 };
 
-// The risky components loaded now, as "nvppex.dll,RTSSHooks64.dll" (empty when none).
+// The compatibility components loaded now (empty when none).
 inline std::wstring riskyInjections() {
     std::wstring out;
     for (const auto& hook : kRiskyInjections)

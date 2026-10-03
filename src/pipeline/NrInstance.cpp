@@ -38,6 +38,7 @@ bool NrInstance::create(ID3D12Device* device, uint32_t width, uint32_t height,
 }
 
 void NrInstance::close() {
+    amd.reset(); // runtime releases its references before the layer textures
     temporal_.close();
     // Both owned and borrowed inputs are ComPtrs. Release this reference in
     // either case; the graph retains its own reference to a borrowed input.

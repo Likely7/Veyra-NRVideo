@@ -251,9 +251,31 @@ VPage {
                     VRow {
                         visible: veyra.exportRateControl !== 2
                         label: qsTr("码率 Mbps")
-                        DialogHost.VTextField { objectName: "export-bitrate-field"; implicitWidth: 100; text: String(veyra.exportBitrateMbps); onEdited: value => { const n = Number(value); if (isFinite(n)) veyra.exportBitrateMbps = Math.max(1, Math.min(2000, Math.round(n))) } }
+                        Basic.TextField {
+                            id: bitrateEditor
+                            objectName: "export-bitrate-field"
+                            implicitWidth: 100
+                            implicitHeight: 28
+                            color: Theme.t1
+                            font.pixelSize: 12
+                            selectByMouse: true
+                            validator: IntValidator { bottom: 1; top: 300 }
+                            // exportChanged also covers codec, size and track choices. Keep the
+                            // draft independent of it, and commit valid keystrokes before a
+                            // start button can read the export settings.
+                            property int committedValue: veyra.exportBitrateMbps
+                            Component.onCompleted: text = String(committedValue)
+                            onCommittedValueChanged: if (!activeFocus) text = String(committedValue)
+                            onTextEdited: if (acceptableInput) veyra.exportBitrateMbps = Number(text)
+                            onEditingFinished: text = String(committedValue)
+                            background: Rectangle {
+                                color: Theme.bgOuter; radius: 4
+                                border.width: 1
+                                border.color: bitrateEditor.activeFocus ? Theme.accent : Theme.stroke
+                            }
+                        }
                     }
-                    Note { text: veyra.exportRateControl === 2 ? qsTr("CQ 使用恒定质量；文件大小随画面复杂度变化。") : qsTr("目标码率影响画质与文件大小。") }
+                    Note { text: veyra.exportRateControl === 2 ? qsTr("CQ 使用恒定质量；文件大小随画面复杂度变化。") : qsTr("目标码率 1–300 Mbps；VBR 的实际平均码率随画面复杂度变化。") }
                     VRow { label: qsTr("增强预设"); Choice { options: veyra.presetChoices; selected: String((veyra.presetChoices.find(o => o.label === veyra.exportPresetName) || {id: "-1"}).id); onPicked: id => veyra.selectExportPreset(Number(id)) } }
                 }
                 VGroup {
@@ -328,7 +350,7 @@ VPage {
             RowLayout {
                 Layout.fillWidth: true; spacing: 6
                 Text { visible: root.compact; Layout.fillWidth: true; text: veyra.exportStatus; color: Theme.t2; elide: Text.ElideRight; font.pixelSize: 11 }
-                VButton { objectName: "export-start"; Layout.fillWidth: !root.compact; primary: !veyra.exportRunning; text: veyra.exportRunning ? (veyra.exportPaused ? qsTr("继续导出") : qsTr("暂停导出")) : qsTr("开始导出 ") + veyra.exportReadyCount + qsTr(" 项"); enabled: root.exportKind === "video" && (veyra.exportRunning || veyra.exportReadyCount > 0); onClicked: veyra.exportRunning ? veyra.pauseExport(!veyra.exportPaused) : veyra.startExport() }
+                VButton { objectName: "export-start"; Layout.fillWidth: !root.compact; primary: !veyra.exportRunning; text: veyra.exportRunning ? (veyra.exportPaused ? qsTr("继续导出") : qsTr("暂停导出")) : qsTr("开始导出 ") + veyra.exportReadyCount + qsTr(" 项"); enabled: root.exportKind === "video" && (veyra.exportRunning || (veyra.exportReadyCount > 0 && (veyra.exportRateControl === 2 || bitrateEditor.acceptableInput))); onClicked: veyra.exportRunning ? veyra.pauseExport(!veyra.exportPaused) : veyra.startExport() }
                 VButton { objectName: "export-cancel"; visible: veyra.exportRunning; text: qsTr("取消"); onClicked: veyra.cancelExport() }
             }
             // The one remaining-time readout (the old page had two); it holds still while paused.

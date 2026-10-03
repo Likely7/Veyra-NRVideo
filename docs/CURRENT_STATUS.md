@@ -1,5 +1,16 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-03 五项问题修复：独立本地候选
+
+分支 codex/field-upgrade-20261003，已先存档写方案。修复 Xbox 音频输出线程未
+启动，加入按原因的有界重连；修复码率提交/回跳与范围；修复软件 UI 背景透明；
+删除 NVIDIA App 模块存在性误判。AMD RX9000 NR 的独立 MIT runtime 接入共享
+图，用户 0.39 模型/HIP 完整资产已补齐。真实 RTX5070 NVENC 导出、RTSS 下软件
+背景、39 项 QML、本地 Xbox/音频、AMD C ABI 测试通过。真实 Xbox 有声/长稳、
+RX9000 推理未验；AMD 当前限 1080p 像素预算，HDR/原生 4K NR 导出未支持。
+详见 FIELD_UPGRADE_ACCEPTANCE_2026-10-03.md。未合并 main、推送或发布，
+下面 2.0.2 已发布记录仍是公开版本事实。
+
 ## 2026-10-03 2.0.2 已发布（最新）
 
 [正式 Release](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.2)，tag/source `0dafc57`，已合并并推送 nrvideo/main，latest/公开/一个便携 ZIP。三版 NR、Claude RTSS 兼容、Codex Xbox/VRR/倍速/启动恢复全部包含；英文首页、中文切换、双语 Release 与支持二维码已远端核对。最终包 1520 文件审计、干净解压实跑和远端 SHA256 一致。完整身份与验证在 WORKLOG 最新节；以下准备/未发布状态均为历史。用户现场显存根因与 Xbox/VRR 实卡边界没有冒称通过。

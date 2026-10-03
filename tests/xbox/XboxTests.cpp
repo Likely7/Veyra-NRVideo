@@ -28,6 +28,7 @@
 #include "veyra/xbox/Protocol.h"
 #include "veyra/xbox/StreamApi.h"
 #include "veyra/xbox/WebRtcSession.h"
+#include "veyra/xbox/DisconnectPolicy.h"
 
 using namespace veyra::xbox;
 using json = nlohmann::json;
@@ -398,12 +399,14 @@ void webrtcTests() {
     std::vector<std::vector<uint8_t>> units;
     std::vector<std::vector<uint8_t>> opus;
     std::optional<Vibration> vibration;
+    std::string endedReason;
     uint32_t serverW = 0, serverH = 0;
     WebRtcCallbacks callbacks;
     callbacks.video = [&](std::vector<uint8_t>&& unit, uint32_t, int64_t arrival) { std::lock_guard l(m); if (arrival > 0) units.push_back(std::move(unit)); };
     callbacks.audio = [&](const uint8_t* d, size_t n, uint32_t) { std::lock_guard l(m); opus.emplace_back(d, d + n); };
     callbacks.vibration = [&](const Vibration& v) { std::lock_guard l(m); vibration = v; };
     callbacks.serverVideoSize = [&](uint32_t w, uint32_t h) { std::lock_guard l(m); serverW = w; serverH = h; };
+    callbacks.ended = [&](const std::string& reason) { std::lock_guard l(m); endedReason=reason; };
     session.setCallbacks(callbacks);
 
     std::string error;
@@ -517,6 +520,11 @@ void webrtcTests() {
           detail::get32(encoded.data()+31)==104&&detail::get32(encoded.data()+35)==1234&&
           detail::get32(encoded.data()+39)==1234,"frame feedback matches Greenlight's seven-field wire format");
     // Exercise real transport shutdown while the caller sends input/keyframe
+    console.message->send(json{{"type","TransactionStart"},{"target","/streaming/sessionLifetimeManagement/serverInitiatedDisconnect"},{"id","shutdown-test"},{"content",json{{"reason","KickForServerShutdown"}}.dump()}}.dump());
+    for(unsigned i=0;i<100;++i){ {std::lock_guard l(m);if(!endedReason.empty())break;} std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
+    {std::lock_guard l(m);check(endedReason=="KickForServerShutdown","specific server shutdown reason survives the real message channel");}
+
+    // Exercise real transport shutdown while the caller sends input/keyframe
     // requests. This covers both the isOpen/send race and local close racing
     // callbacks; exceptions escaping any thread terminate this test process.
     std::atomic<bool> stopped=false;
@@ -531,6 +539,15 @@ void webrtcTests() {
 } // namespace
 
 int main(int argc, char** argv) {
+    check(reconnectableDisconnect("KickForServerShutdown"), "server service restart is recoverable");
+    check(reconnectableDisconnect("connection lost"), "transport loss is recoverable");
+    check(!reconnectableDisconnect("KickForStreamingClientDisconnect") && !reconnectableDisconnect("unknown server disconnect"), "unknown kicks and takeover are not retried");
+    ReconnectBudget budget;
+    check(budget.take() && budget.take() && budget.take() && !budget.take(), "retry budget stops at three");
+    budget.decoded(1);budget.decoded(10000001);budget.disconnected();budget.decoded(400000000);
+    check(!budget.take(), "a brief return or a gap cannot refill retries");
+    for(int64_t t=400000000;t<=710000000;t+=5000000)budget.decoded(t);
+    check(budget.take() && budget.attempts()==1, "30 seconds of continuous decoded progress refills retries");
     // --live-device-code: asks Microsoft for a sign-in code with the client id the product uses (no account
     // is involved, nothing is signed in). Confirms the first step of the real service still answers.
     if (argc > 1 && std::string(argv[1]) == "--live-device-code") {

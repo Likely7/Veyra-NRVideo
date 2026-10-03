@@ -652,3 +652,22 @@ an unbounded metadata queue. These CPU timestamps do not claim physical scanout.
 ## NVIDIA original NR restored in 2.0.2
 
 The user-approved, unmodified NVIDIA-signed 310.8.0.0 NR (SHA256 E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E) is distributed only as a release runtime at runtime/experimental/nr-original/nvngx_dlssnr.dll. Existing community Lecram/SF-v2 choices and notices remain. See docs/RUNTIME_COMPONENTS_2.0.2.md and the publisher manifest. This experimental integration is not NVIDIA certification or complete official DLSS 5 support. No proprietary binary has been added to source Git.
+
+## lmxxf AMD NR local integration (2026-10-03)
+
+Veyra calls the independent MIT C ABI from
+[lmxxf/dlss5-on-amd-9070xt-porting](https://github.com/lmxxf/dlss5-on-amd-9070xt-porting),
+fixed commit `78f548749e74824327b8458c57be31a1df78376a`, Copyright (c) 2026 Kien.
+The unchanged public header, original MIT license and adaptation details are in
+`third_party/lmxxf/`. The runtime build uses upstream codec/network code directly;
+Veyra's GPL host adapter records producers/consumers on the existing D3D12 queue.
+It does not load a ReShade add-on or copy Magpie's player/loop.
+
+The user supplied `Magpie-DLSS5-AMD-0.39.zip` (SHA256
+`9ea84c665d270cd45e24184729b8272c152485df462a1528539ed778d41849f5`).
+Its NVIDIA-derived model weights are **not** MIT-licensed code. All weights,
+compiled HIP modules and runtime DLLs stay outside source Git; their use in this
+local candidate does not authorize a public release. HIP API license and the
+runtime MIT notice accompany the local asset directory. No AMD driver DLL is
+copied from that package; an RX 9000 driver must provide `amdhip64_7.dll`.
+Hardware inference, image quality and stability remain unverified on RX 9000.

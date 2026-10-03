@@ -26,7 +26,9 @@ Window {
     minimumWidth: cinema ? 360 : 720
     minimumHeight: 260
     visible: true
-    color: "transparent"
+    // The software scene graph cannot draw the Shape background. Keep the native
+    // window opaque as well, including while its first frame is being produced.
+    color: typeof vySoftwareUi !== "undefined" && vySoftwareUi ? (cinema ? Theme.videoBlack : Theme.bgOuter) : "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "Veyra " + veyra.version
 

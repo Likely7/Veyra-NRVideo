@@ -310,7 +310,10 @@ void WebRtcSession::onMessageChannel(const std::string& text) {
         log::info("xbox-message", target + " " + j.value("content", std::string()).substr(0, 300));
         if (target == "/streaming/sessionLifetimeManagement/serverInitiatedDisconnect") {
             sendMessageJson(json{{"type", "TransactionComplete"}, {"content", "\"\""}, {"id", id}, {"cv", ""}}.dump());
-            if (callbacks_.ended) callbacks_.ended("the console ended the stream");
+            const auto content = json::parse(j.value("content", std::string()), nullptr, false);
+            const std::string reason = content.is_object() && content.contains("reason") && content["reason"].is_string()
+                ? content["reason"].get<std::string>() : "unknown server disconnect";
+            if (callbacks_.ended) callbacks_.ended(reason);
         } else if (target == "/streaming/systemUi/messages/ShowMessageDialog") {
             // A system dialog meant for the player; acknowledge it so the console does not wait.
             sendMessageJson(json{{"type", "TransactionComplete"}, {"content", json{{"Result", 0}}.dump()}, {"id", id}, {"cv", ""}}.dump());

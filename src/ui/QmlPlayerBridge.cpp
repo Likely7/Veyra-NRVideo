@@ -115,11 +115,9 @@ QString lastFailurePath() {
 }
 
 // What the user can switch off, for the injected components named in `modules`
-// ("nvppex.dll,RTSSHooks64.dll", see gfx::riskyInjections). Empty when none is known.
+// (RTSSHooks64.dll, see gfx::riskyInjections). Empty when none is known.
 QString injectionAdvice(const QString& modules) {
     QStringList parts;
-    if (modules.contains(QStringLiteral("nvppex.dll"), Qt::CaseInsensitive) || modules.contains(QStringLiteral("NvPresent64.dll"), Qt::CaseInsensitive))
-        parts << QCoreApplication::translate("QmlPlayerBridge", "检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra，它已知会在采集开始时让显卡设备丢失或让程序崩溃。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项后再试");
     if (modules.contains(QStringLiteral("RTSSHooks64.dll"), Qt::CaseInsensitive) && !qApp->property("veyraSoftwareUi").toBool())
         parts << QCoreApplication::translate("QmlPlayerBridge", "检测到 RivaTuner（小飞机 OSD）注入了 Veyra。请把 设置 → 监控软件兼容 设为“自动”并在小飞机运行时重启 Veyra：界面改用兼容绘制，OSD 只显示在视频上");
     return parts.join(QStringLiteral("；"));
@@ -478,7 +476,8 @@ struct QmlPlayerBridge::Impl {
                 DXGI_ADAPTER_DESC1 desc{};
                 if(FAILED(adapter->GetDesc1(&desc))||(desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE))continue;
                 auto initial=facade.pendingSettings();
-                initial.nrRuntime=ngx::preferSfNr(desc.VendorId,desc.Description)?engine::NrRuntime::Ampere:engine::NrRuntime::Original;
+                initial.nrRuntime=desc.VendorId==0x1002?engine::NrRuntime::LmxxfAmd:ngx::preferSfNr(desc.VendorId,desc.Description)?engine::NrRuntime::Ampere:engine::NrRuntime::Original;
+                if(desc.VendorId==0x1002){initial.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;initial.videoSrQuality=engine::kVideoSrFsr;}
                 facade.setPending(initial);
                 veyra::log::info("nr-default",std::format("adapter={} selected={}",utf8Of(std::wstring(desc.Description)).toStdString(),engine::nrRuntimeName(initial.nrRuntime)));
                 break;
@@ -534,8 +533,9 @@ struct QmlPlayerBridge::Impl {
             error = QObject::tr("CBR/VBR 需要指定码率");
             return std::nullopt;
         }
-        if (!settings.validate().empty()) {
-            error = QObject::tr("导出设置无效");
+        if (const auto why = settings.validate(); !why.empty()) {
+            veyra::log::warn("export-settings", std::format("invalid: {} bitrateMbps={}", why, settings.exportBitrateMbps));
+            error = QObject::tr("导出设置无效：%1").arg(utf8Of(why));
             return std::nullopt;
         }
         return settings;
@@ -757,6 +757,7 @@ static uint32_t primaryGpuVendor() {
 // FSR 4 ML frame generation needs an AMD RX 9000; on other GPUs the provider crashed the
 // whole program (field report 2026-10-01). Known non-AMD adapters are refused up front.
 static bool fsr4Possible() { const auto v = primaryGpuVendor(); return v == 0 || v == 0x1002; }
+bool QmlPlayerBridge::amdNrGpu() const { return primaryGpuVendor()==0x1002; }
 
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
@@ -1000,12 +1001,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             {L"graphics-hook64.dll", "OBS game capture"}, {L"DiscordHook64.dll", "Discord overlay"},
             {L"gameoverlayrenderer64.dll", "Steam overlay"}, {L"nvspcap64.dll", "NVIDIA overlay / instant replay"},
             {L"ow-graphics-hook64.dll", "Overwolf overlay"},
-            // The driver's presentation layer; it carries NVIDIA Smooth Motion, which only
-            // engages for fullscreen windows (suspected in the fullscreen-only VRAM growth).
-            {L"NvPresent64.dll", "NVIDIA present layer (Smooth Motion)"},
-            // NVIDIA App's picture plug-in (RTX HDR / Smooth Motion / RTX Dynamic Vibrance): in
-            // every fullscreen VRAM-growth log and in two capture crashes (2026-10-02).
-            {L"nvppex.dll", "NVIDIA App picture plug-in (RTX HDR / Smooth Motion / Dynamic Vibrance)"},
         };
         static bool loggedOthers[std::size(others)]{};
         for (size_t k = 0; k < std::size(others); ++k)
@@ -3804,7 +3799,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     if(index<0||uint32_t(index)>=impl_->chain.nodeCount||
        impl_->chain.nodes[index].type!=engine::EffectType::NrEnhance||!std::isfinite(value))return false;
     if(key=="runtime") {
-        if(value!=0&&value!=2&&value!=3)return false;
+        if(value!=0&&value!=2&&value!=3&&value!=4)return false;
         const auto before=impl_->chain;
         for(uint32_t i=0;i<impl_->chain.nodeCount;++i)
             if(impl_->chain.nodes[i].type==engine::EffectType::NrEnhance)
@@ -4053,7 +4048,7 @@ void QmlPlayerBridge::setExportHevc(bool value) {
 // the engine's exportBitrateMbps field documents.
 int QmlPlayerBridge::exportBitrateMbps() const { return int(impl_->exportBitrateMbps); }
 void QmlPlayerBridge::setExportBitrateMbps(int value) {
-    const uint32_t want = uint32_t(std::max(0, std::min(2000, value)));
+    const uint32_t want = uint32_t(std::clamp(value, 0, 300));
     if (impl_->exportBitrateMbps == want) return;
     impl_->exportBitrateMbps = want;
     emit exportChanged();
@@ -4671,6 +4666,8 @@ void QmlPlayerBridge::startExport() {
     if(!impl_->exportQueue.queue().start(wideOf(folder),*settings,impl_->exportHevc,impl_->exportRateControl,reason)){
         emit notice(uiText(reason),true);emit exportChanged();return;
     }
+    veyra::log::info("qml-export",std::format("export frozen bitrateMbps={} rateControl={} hevc={} srTarget={}",
+        settings->exportBitrateMbps,int(impl_->exportRateControl),impl_->exportHevc,int(settings->srTarget)));
     impl_->exportQueue.refresh();pollExport();emit navigate(QStringLiteral("exp"));
     // Leave the GPU to the export (field request 2026-10-02): whatever plays is closed,
     // unless 导出页 → 导出时关闭正在播放的内容 is off.

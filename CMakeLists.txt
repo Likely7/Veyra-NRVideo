@@ -360,6 +360,7 @@ add_library(veyra_pipeline STATIC
   src/pipeline/ColorGradeInstance.cpp
   src/pipeline/ColorDetailPass.cpp
   src/pipeline/NrInstance.cpp
+  src/pipeline/LmxxfNrBackend.cpp
 )
 veyra_apply_warnings(veyra_pipeline)
 # FFmpeg/NVOF headers are third-party: /WX stays off for this target.
@@ -370,6 +371,15 @@ target_compile_definitions(veyra_pipeline PUBLIC
   VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
 target_include_directories(veyra_pipeline PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(veyra_pipeline PUBLIC veyra_base veyra_gfx d3d12 dxgi dxguid d3dcompiler)
+add_library(veyra_lmxxf_fake_runtime SHARED tests/unit/LmxxfNrFakeRuntime.cpp)
+target_compile_features(veyra_lmxxf_fake_runtime PRIVATE cxx_std_20)
+target_compile_definitions(veyra_lmxxf_fake_runtime PRIVATE LMXXF_NR_RUNTIME_EXPORTS NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(veyra_lmxxf_fake_runtime PRIVATE d3d12 dxgi dxguid)
+set_target_properties(veyra_lmxxf_fake_runtime PROPERTIES OUTPUT_NAME LmxxfNrRuntime RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lmxxf-test-runtime")
+add_executable(veyra_lmxxf_nr_tests tests/unit/LmxxfNrTests.cpp)
+target_compile_features(veyra_lmxxf_nr_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_lmxxf_nr_tests PRIVATE veyra_pipeline)
+add_dependencies(veyra_lmxxf_nr_tests veyra_lmxxf_fake_runtime)
 add_dependencies(veyra_pipeline veyra_shader_color_grade veyra_shader_color_detail_reduce veyra_shader_color_detail_blur veyra_shader_color_detail_apply)
 
 add_executable(veyra_pipeline_tests

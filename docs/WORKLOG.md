@@ -1,5 +1,29 @@
 # Veyra 工作记录
 
+## 2026-10-03 五项修复：代码与本机验收
+
+- 补充回归 `python -B scripts/acceptance/field-upgrade-tests.py ui-final qml-software ui-i18n nr-preset-persistence` exit0（build-localized-candidate.log 成功）；含 AMD ID4 list/node/session/preset 重启持久化，四语言 catalog 与最终软件背景。证据 E:/项目/Veyra/tests/field-upgrade-20261003/ui-final。候选脚本 scripts/acceptance/field-upgrade-package.py 仅本地组包，使用既有 43 原件与独立 AMD manifest，source zip 与模型/运行库分离。
+
+- 工作树 E:/项目/Veyra/worktrees/field-upgrade-20261003，分支 codex/field-upgrade-20261003，base 66cd3e5；先存档写方案，未改桌面用户工作区/main，未 push/Release。
+- 导出：有效键入即时提交，草稿不受无关 exportChanged 覆盖，1–300 Mbps 与后端统一；具体 validate 原因、冻结 bitrate/rateControl 入日志。两种真实复现均通过，不把目标当实际平均保证。
+- Xbox：configure float 后补 start；保留具体服务端断流原因，网络/服务器关闭/过期最多三次重连，1/2/3s 退避可取消，连续解码 30s 恢复额度，首帧后 reset 全图。404 不覆盖已收到的踢出原因；未知踢出不重连。没有真实主机有声/长稳证据。
+- RTSS：Window 软件模式不透明，VBackdrop 用 Rectangle/Image。RTSS 7.3.7 当前用户副本实际注入 RTSSHooks64，自动兼容截图 alpha=255；普通启动需提升，改以 RunAsInvoker 当前用户启动，结束只关闭自己 PID 35124，未编辑 RTSS/OBS 配置。删除 nvppex/NvPresent 检测与 NVIDIA App 归因；旧 marker 无误判提示。
+- AMD：固定 lmxxf 78f548749e74824327b8458c57be31a1df78376a / MIT，独立 C ABI、共享 NrInstance、同队列 producer/HIP/consumer/retire，退出先放 runtime 再放借用资源。ID4，AMD 光流/FSR SR 默认，未支持控件隐藏，1080p 预算/4K native export/HDR 边界明确。MSVC recipe 成功，E:/项目/Veyra/logs/field-upgrade-20261003/lmxxf-recipe.log；最初 st scope/GNU annotation/min-max/user32 问题已修复。
+- 用户 zip C:/Users/123/Downloads/Magpie-DLSS5-AMD-0.39.zip，SHA256 9ea84c665d270cd45e24184729b8272c152485df462a1528539ed778d41849f5；739 文件 hashes 匹配，186 权重/2 映射/62 HIP 模块。原解压 E:/项目/Veyra/deps/magpie-amd-039-20261003，宿主资源 E:/项目/Veyra/deps/veyra-amd-nr-039-20261003，逐文件 manifest 随目录。真实 DLL API/capabilities/module layout 通过，不加载 Magpie/ReShade。0.40 下载空缺已用本地资源解决；无 RX9000/amdhip64_7.dll，不称推理已验。
+- `python -B scripts/acceptance/field-upgrade-build.py build-final-contracts.log veyra_qml_ui veyra_xbox_tests veyra_capture_audio_tests veyra_qml_quick_tests veyra_export_probe veyra_lmxxf_nr_tests veyra_lmxxf_fake_runtime` exit0；fresh build E:/项目/Veyra/build/field-upgrade-20261003，logs/tmp 同任务目录。
+- `python -B scripts/acceptance/field-upgrade-tests.py final` exit0：Qt Quick39、Xbox90、本机 gain0 WASAPI 250×20ms float、AMD ABI identity GPU-copy62 均 0 failure。E:/项目/Veyra/tests/field-upgrade-20261003/final/summary.json；之前 executable/argv0/plugin 失败已修复，最终通过才算验收。
+- `python -B scripts/acceptance/field-upgrade-ui.py rtss --rtss` exit0：2K30 AVI→NR+最高档 SR→4K HEVC；VBR18 编辑其他选项与 CBR24 直接开始均完成，UI 后改7/8 不污染冻结参数。24/24帧，ffprobe 平均约20.745/27.311Mbps，NVENC D3D12。本机 RTX5070 616.56，不冒称用户616.92；logs E:/项目/Veyra/logs/field-upgrade-20261003/production-rtss，截图/媒体 E:/项目/Veyra/tests/field-upgrade-20261003/production-rtss。
+- 新文本 en/zh-TW/ja 补齐，AMD ID4 的 preset/list/node session 持久化纳入现有测试。构建 build-localized-candidate.log，测试/候选最终结果继续补记。git diff --check 与 source guard 通过，禁止 DLL/SDK/f16/f32/i32/hsaco 入 Git。旧 delivery.ps1 仅 legacy，不当作 QML 验收。
+- 详细报告 docs/FIELD_UPGRADE_ACCEPTANCE_2026-10-03.md、docs/AMD_NR_INTEGRATION_2026-10-03.md。
+
+## 2026-10-03 现场五项修复接管、开工存档与方案
+
+- 当前用户要求先存档、写方案、新分支修复 Xbox 音频/断开、AMD RX 9000 lmxxf NR、导出码率、RTSS 背景透明和 NVIDIA App 检测。桌面 checkout 仍为旧 UI migration 脏工作树，最新 2.0.2 main 在 E 盘，故基于干净 `66cd3e50590766e5a654528ab61e491dc4d30c83` 创建 `codex/field-upgrade-20261003` / `E:/项目/Veyra/worktrees/field-upgrade-20261003`。
+- `git bundle create E:/项目/Veyra/archives/field-upgrade-20261003-start/repository-before.bundle --all`、`git bundle verify` 成功，bundle 71223867 bytes。桌面 working binary diff 258615 bytes、index diff 0 bytes，未跟踪源码与 SHA 清单一起存档；不 stash/reset/切换桌面分支。首次 `--output=(Join-Path ...)` 被 PowerShell 错误解析，已改变量 `"--output=$taskPatch"` 并检查退出码后重生成 manifest。
+- 标签 `checkpoint/pre-field-upgrade-20261003` 指向上述 main；输入日志复制至 `E:/项目/Veyra/logs/field-upgrade-20261003/inputs`，原始文件未改。官方 lmxxf 源码获取目录 `E:/项目/Veyra/deps/lmxxf-nr-20261003`，尚未推理或添加模型。
+- 开工方案 `docs/FIELD_UPGRADE_PLAN_2026-10-03.md` 已在产品修改前落地。明确本轮授权覆盖对应历史冻结，保留源码/Runtime/模型隔离、硬件未验边界，不派 Agent、不合并/推送/发布。
+- 当前静态证据：导出 UI/bridge 2000 Mbps 上限与后端 300 不一致；字段只在 editingFinished 提交；透明主窗口依赖 Shape 背景而 RTSS 模式为软件绘制；Xbox 音频/视频时钟域待验证。尚未标任何产品问题通过。
+
 ## 2026-10-03 2.0.2 正式发布完成
 
 - 发布地址 https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.2 ，2026-10-02 18:40:18 UTC（台北 10-03 02:40:18）公开并设为 latest，非 draft / 非 prerelease。源码 tag v2.0.2 指向 `0dafc57e7ad54880b1748e7046970ddc825e7e46`；该提交同时包含 Claude `28a440b` 与 Codex `bfafbea`。主分支从 `8f42fd5` 干净 fast-forward 后用 `git push --atomic nrvideo main refs/tags/v2.0.2` 推送，未动 origin。

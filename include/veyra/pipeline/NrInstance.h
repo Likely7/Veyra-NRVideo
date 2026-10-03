@@ -9,6 +9,7 @@
 #pragma once
 #include "veyra/pipeline/GpuPassUtils.h"
 #include "veyra/pipeline/NrTemporalPass.h"
+#include "veyra/pipeline/LmxxfNrBackend.h"
 #include "veyra/engine/EnhancementSettings.h"
 
 #include <memory>
@@ -23,6 +24,7 @@ namespace veyra::pipeline {
 // its own input copy) and its temporal history.
 class NrInstance {
 public:
+    ~NrInstance() { close(); }
     // `zeroMotion` / `zeroDepth` are shared constant guidance textures owned by
     // the graph; the layer only borrows them. `fullWidth`/`fullHeight` are the
     // composite extent, which differs from the NR extent in the realtime path.
@@ -85,6 +87,7 @@ public:
     // direct-to-target path.
     bool stabilised = false;
     bool enabled = true;
+    std::unique_ptr<LmxxfNrBackend> amd;
     // Bumped when an upstream layer's settings or output change. A layer whose
     // input revision moved drops its history, the same contract Magpie's
     // inputRevision enforces between passes.

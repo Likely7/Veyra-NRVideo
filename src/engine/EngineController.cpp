@@ -20,6 +20,7 @@
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/ScreenCaptureSource.h"
+#include "veyra/xbox/DisconnectPolicy.h"
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 #include "veyra/source/RemotePlaySessionSource.h"
 #endif
@@ -312,6 +313,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #endif
 #ifdef VEYRA_ENABLE_XBOX
     auto xb=xboxRequest?std::make_shared<source::XboxSessionSource>():nullptr;
+    xbox::ReconnectBudget xboxReconnectBudget;
     const bool isXbox=bool(xb);
     {std::lock_guard lock(mutex_);activeXbox_=xb;}
 #else
@@ -414,8 +416,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     status(L"正在连接 Xbox…");
                     ctx.device()->AddRef();xboxRequest->decodeDevice=std::shared_ptr<ID3D12Device>(ctx.device(),[](ID3D12Device* device){device->Release();});
                     ctx.directQueue()->AddRef();xboxRequest->decodeQueue=std::shared_ptr<ID3D12CommandQueue>(ctx.directQueue(),[](ID3D12CommandQueue* queue){queue->Release();});
-                    if(!xb->connect(std::move(*xboxRequest))){const auto message=xb->stats().message;status(message.empty()?L"Xbox 串流连接失败，请查看诊断":message,true);break;}
-                    xboxRequest.reset();
+                    xboxRequest->stopRequested=&stop_;
+                    if(!xb->connect(*xboxRequest)){const auto message=xb->stats().message;status(message.empty()?L"Xbox 串流连接失败，请查看诊断":message,true);break;}
                     const auto firstFrameDeadline=Clock::now()+std::chrono::seconds(20);
                     while(!stop_){
                         const AVFrame* first=nullptr;const auto result=xb->read(cachedPacket,&first);
@@ -1346,7 +1348,42 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if(moon){const auto message=moon->stats().message;status(message.empty()?L"串流中断，请检查主机和网络后重新连接。":message,true);break;}
 #endif
 #ifdef VEYRA_ENABLE_XBOX
-                        if(xb){const auto message=xb->stats().message;status(message.empty()?L"Xbox 串流中断，请重新连接。":message,true);break;}
+                        if(xb){
+                            const auto failure=xb->stats();
+                            if(failure.reconnectable && xboxRequest && !stop_){
+                                xboxReconnectBudget.disconnected();
+                                drainLivePresentation();
+                                if(!ring.drainQueue()){status(L"Xbox 重连时 GPU 排空失败",true);break;}
+                                xb->videoReset();av_frame_free(&cachedFrame);out={};hasOutput=false;
+                                bool recovered=false;
+                                while(!stop_ && xboxReconnectBudget.take()){
+                                    const auto attempt=xboxReconnectBudget.attempts();
+                                    status(std::format(L"Xbox 串流中断（{}），正在重连 {}/3…",std::wstring(failure.disconnectReason.begin(),failure.disconnectReason.end()),attempt));
+                                    veyra::log::warn("xbox-reconnect",std::format("attempt={} reason={}",attempt,failure.disconnectReason));
+                                    for(unsigned wait=0;wait<attempt*10&&!stop_;++wait)std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                                    if(stop_)break;
+                                    if(!xb->connect(*xboxRequest))continue;
+                                    const auto deadline=Clock::now()+std::chrono::seconds(20);
+                                    while(!stop_&&Clock::now()<deadline){
+                                        const AVFrame* first=nullptr;
+                                        const auto result=xb->read(cachedPacket,&first);
+                                        if(result==source::SourceReadStatus::Frame){cachedFrame=av_frame_clone(first);recovered=cachedFrame!=nullptr;break;}
+                                        if(result==source::SourceReadStatus::Error)break;
+                                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                                    }
+                                    if(recovered)break;
+                                    xb->close();
+                                }
+                                if(recovered){
+                                    initialRemoteFramePending=true;reset=true;pendingResetCause=pipeline::ResetReason::SourceSwitch;
+                                    status(L"Xbox 已重新连接");veyra::log::info("xbox-reconnect","first decoded frame received; reset all graph history");
+                                    continue;
+                                }
+                                if(stop_)break;
+                                status(L"Xbox 重连失败："+xb->stats().message,true);break;
+                            }
+                            status(failure.message.empty()?L"Xbox 串流中断，请重新连接。":failure.message,true);break;
+                        }
 #endif
                         status(isScreen?screenSource.status():isCapture?L"采集信号中断，请检查设备连接或格式":source.errorMessage().empty()?L"视频解码或时间戳错误":source.errorMessage(),true);break;}
                 }
@@ -1387,6 +1424,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 if(!halfRate)captureSampler.reset();
                 if(isImage)pkt.sequence=1;
+#ifdef VEYRA_ENABLE_XBOX
+                if(xb&&!rereadCached)xboxReconnectBudget.decoded(monotonic100ns());
+#endif
                 if(!rereadCached)++sourceFrames;
                 const double decodeMs=elapsedMs(decodeStart);decodeTimes.add(decodeMs);
                 loopTrace.mark("read");

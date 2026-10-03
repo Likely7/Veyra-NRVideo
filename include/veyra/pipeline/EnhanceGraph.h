@@ -486,7 +486,7 @@ public:
     };
     const Metrics& metrics() const { return metrics_; }
     const std::string& mvecSource() const { return mvecSource_; }
-    bool nrCreated() const { return !nrInstances_.empty() && nrInstances_.front()->handle() != nullptr; }
+    bool nrCreated() const { return !nrInstances_.empty() && (nrInstances_.front()->handle() != nullptr || (nrInstances_.front()->amd && nrInstances_.front()->amd->ready())); }
     bool initialized() const { return initialized_; }
     uint32_t sourceWidth() const { return srcW_; }
     uint32_t sourceHeight() const { return srcH_; }
@@ -648,6 +648,8 @@ private:
     // NR layers. One entry means the single-layer product path; the probe in
     // tools/nr_probe verified several handles coexist on one snippet session.
     std::vector<std::unique_ptr<NrInstance>> nrInstances_;
+    bool lmxxfNr_ = false;
+    bool submitGraph(uint32_t slot);
     // The layer count the current graph was built with, so a settings change
     // that adds or removes a layer is detected as a rebuild.
     uint32_t nrLayerCount_=1;

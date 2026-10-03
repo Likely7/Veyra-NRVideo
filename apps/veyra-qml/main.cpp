@@ -582,6 +582,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     });
 
     QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("vySoftwareUi"), softwareUi);
     auto* thumbnails = new ui::ThumbnailProvider;
     engine.addImageProvider(QStringLiteral("veyra-thumb"), thumbnails);
     QObject::connect(&bridge, &ui::QmlPlayerBridge::thumbnailSourceChanged, &app,
