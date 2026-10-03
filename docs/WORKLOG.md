@@ -1,5 +1,25 @@
 # Veyra 工作记录
 
+## 2026-10-03 VFG 全倍率产品闭环（最终组包前）
+
+- 产品 native/graph/pool/presenter/NVENC、backend ID4与三质量、旧格式迁移、列表/节点预设/会话、worker ABI8、QML全部倍率控件完成。原生463 checks各720p/4K与实际21种导出通过；详情 `docs/VFG_INTEGRATION_ACCEPTANCE_2026-10-03.md`，此前“产品仍在进行”条目是早期状态。
+- 命令统一 Python311 `-B scripts/acceptance/...`：`vfg-build.py build-product-v4.log veyra_qml_ui veyra_vfg_export_probe veyra_vfg_gpu_tests veyra_vfg_settings_tests veyra_preset_library_tests veyra_repair_preset_tests veyra_repair_contract_tests veyra_effect_chain_tests veyra_qml_quick_tests` exit0，51步；`vfg-product-tests.py unit-v4 unit` exit0，331 settings/旧预设/合同/EffectChain/QML39；`vfg-ui.py ui-v4` exit0，run/restore/missing全部通过。输出统一 E:/项目/Veyra/logs/vfg-integration-20261003，与tests/tmp对应子目录。
+- `vfg-product-tests.py export-all-v2 export` exit0，30fps720p全部21组合，HEVC/NVENC，16..64帧和60..240fps/时长/音轨核验。首轮 runner 因 fps 微秒舍入和CLI日志读取失败，产品导出本身成功；修正断言及读实际stdout，不掩盖首轮失败。
+- `vfg-combination-tests.py combinations-v4` exit0：真实2560x1440/30fps AVI+SR最高档至4K+3840x2160原生NR+VFG8 Medium，24源/161生成/7尾hold/192输出；24→192与60→480fps；取消无最终文件；缺失SDK导出exit1是预期失败而非成功导出。
+- 缺失组件实际 UI bug 留证 ui-missing-diagnostic：active=false、enabled=true、position9.2、multiplier8；修复 EngineController recovery rejection revision 与 facade后端/倍率/质量对账，较新请求受保护，ui-v4验为enabled=false/multiplier1、9.1667s基础播放。外部光流策略对VFG完全关闭，NR/SR仍保留；runtime路径探测改error_code。
+- ui-v1 与QtQuick并行时进入Paused而GPU正常排空，不能称GPU卡死；干扰原因是推断。此后串行ui-v2/v4热切换正常，最终使用v4完整结果。8X Low约241次/秒提交，High约60且调度降档，不称240fps稳定显示或物理延迟下降。
+- 来源/固定MIT样例/原生API改造已写 THIRD_PARTY_NOTICES。源码Git没有新DLL/SDK/模型；最终包尚待组包/干净运行。无merge/push/Release，main/桌面状态待最后再次核对。
+
+## 2026-10-03 VFG 原生接入施工
+
+- 用户追加授权 VFG 2X–8X 全倍率及 Low/Medium/High 全质量；新分支 codex/vfg-integration-20261003，起点 1802f43565e07f3c3040d3fe745ca2e939aab00f，tag checkpoint/pre-vfg-integration-20261003。E:/项目/Veyra/archives/vfg-integration-20261003-start/source-before.bundle 验证通过，SHA256 1F3154049591C069B6CD63D266FC4447A153480D41608086BEB1422092E8D6F0。先存档/写 docs/VFG_INTEGRATION_EXECUTION_2026-10-03.md 后施工，桌面工作区/main 保留。
+- 原生 C++ 直接动态调用官方 Video Effects 1.3.0，外部 CUDA driver headers 仅编译依赖。NVCV 自行分配 opaque descriptor，D3D12 shared buffer + producer/completion fence 与 CUDA stream 互操作；逐帧无 CPU 像素读回/CPU fence wait，不引入 Python、Streamline、ReShade 产品依赖。shader/output 编码保持现有边界。
+- `python -B scripts/acceptance/vfg-build.py build-native-tests-v3.log veyra_vfg_gpu_tests` exit0；前次缺失 readback helper 编译失败已修复。`python -B scripts/acceptance/vfg-native-tests.py native-720-v2` exit0，463 checks/0 failures，RTX5070 616.56，RGBA8 与 RGB10A2，全部 2X–8X/三质量，8X 七张独立哈希/中间位置、manual cut 与当前帧一致、D3D12 debug errors 0。CPU readback 仅诊断测试。
+- native-720-v1 全测失败：SDK FromD3DFormat 不接受 RGB10A2，且参考声明误写 DestroyEffect 返回值。根据官方 void API 修复销毁，SDK packed format capability 实测确定 RGB10A2=13/P32=11，留证 packed-format-capabilities.json；v2 验证 10-bit 顺序/切镜精确拷贝通过。不能把首轮 SDR 部分通过当全测通过。
+- 高质量 720p 8X 约104–107ms/组（包含测试 CPU 提交、GPU copy 和同步），不证明实时 30fps；三质量/高倍允许离线完整生成，实时仍按现有预算/PTS调度记录实际跳帧。本轮物理屏幕节奏、RTX40、HDR 色度及组合性能尚待测。
+- 已扩 FrameBatch=8 / 生成池14 / 输出池16，present descriptor 改由池尺寸推导，保留 DLSS compatibility 原十张全尺寸绑定；新增 FG6/FG7 计时、专用 ID4 与 vfgQuality，预设/会话迁移和 worker ABI8。产品图/GUI/NVENC 完整构建与真实验证仍在进行，不宣称已交付。
+- 产物统一 E:/项目/Veyra/{build,tests,logs,tmp,test-packages}/vfg-integration-20261003，运行时 E:/项目/Veyra/deps/vfg-python-20261003，源码 Git 未新增 DLL/SDK/model。无 merge/push/Release。
+
 ## 2026-10-03 五项修复：代码与本机验收
 
 - 最终本地包 E:/项目/Veyra/test-packages/field-upgrade-20261003/Veyra-2.0.2-field-20261003-win64-portable.zip，766558374 bytes，SHA256 099751e596b4a7de814ddc2af9cdaa527817d1a422861cdcee5a6be77877c679，2054 payload 文件；审计 E:/项目/Veyra/logs/field-upgrade-20261003/candidate-package-audit.json。应用 SHA256 2d708d65aff3f61950243d4743397d1869aca2ec2e4b56311fcd63aa3abfbcd3；source ZIP 单独提供，代码存档 c80662f344032ca3adac42277b1ab6726609cde6 / checkpoint/field-upgrade-code-20261003，runtime/模型与源码分离。

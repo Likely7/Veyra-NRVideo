@@ -34,6 +34,7 @@ inline constexpr uint32_t kPresetAllContent =
 struct PresetFrameGeneration {
     uint32_t multiplier = 1;
     FrameGenerationBackend backend = FrameGenerationBackend::Dlss;
+    uint32_t vfgQuality = 1;
     bool operator==(const PresetFrameGeneration&) const = default;
 };
 

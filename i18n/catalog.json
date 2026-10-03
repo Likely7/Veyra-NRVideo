@@ -1044,6 +1044,13 @@
    "ja": "NVIDIA RTX のフレーム生成。倍率はランタイムの実際の対応範囲によります"
   },
   {
+   "zh": "NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "NVIDIA VFG 未能啟用（需要 Ada / Blackwell 顯示卡、VFG 執行組件和支援的輸出格式），已關閉補幀；原因見日誌",
+   "en": "NVIDIA VFG could not start (requires an Ada / Blackwell GPU, VFG runtime and a supported output format). Frame generation is off; see the log.",
+   "ja": "NVIDIA VFG を有効にできませんでした（Ada / Blackwell GPU、VFG ランタイム、対応する出力形式が必要）。フレーム生成はオフです。ログをご確認ください。"
+  },
+  {
    "zh": "NVIDIA 驱动级 AI 插帧，与软件内补帧二选一",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "NVIDIA 驅動級 AI 插幀，與軟體內補幀二選一",
@@ -1255,7 +1262,7 @@
   },
   {
    "zh": "RTX 50 · NVIDIA 原版",
-   "src": "qml/Veyra/NrLayerEditor.qml",
+   "src": "qml/NrLayerEditor.qml",
    "zh-TW": "RTX 50 · NVIDIA 原版",
    "en": "RTX 50 · NVIDIA original",
    "ja": "RTX 50 · NVIDIA オリジナル"
@@ -1380,6 +1387,34 @@
    "ja": "UI 補正 · 未検証"
   },
   {
+   "zh": "VFG 支持 2X～8X 和低 / 中 / 高质量；6X～8X 为实验档，高倍高质量会增加处理时间",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "VFG 支援 2X～8X 和低 / 中 / 高品質；6X～8X 為實驗檔，高倍高品質會增加處理時間",
+   "en": "VFG supports 2X–8X and Low / Medium / High quality. 6X–8X are experimental; higher multipliers and quality take more processing time.",
+   "ja": "VFG は 2X～8X と低 / 中 / 高品質に対応します。6X～8X は実験設定です。倍率や品質を上げると処理時間が増えます。"
+  },
+  {
+   "zh": "VFG 质量",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "VFG 品質",
+   "en": "VFG quality",
+   "ja": "VFG 品質"
+  },
+  {
+   "zh": "VFG 质量设置未被接受，原设置保留",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "VFG 品質設定未被接受，原設定保留",
+   "en": "VFG quality was not accepted; the previous setting was kept.",
+   "ja": "VFG 品質設定が拒否されたため、前の設定を保持しました。"
+  },
+  {
+   "zh": "VFG 需要 NVIDIA Ada / Blackwell 显卡（RTX 40 / 50）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "VFG 需要 NVIDIA Ada / Blackwell 顯示卡（RTX 40 / 50）",
+   "en": "VFG requires an NVIDIA Ada / Blackwell GPU (RTX 40 / 50).",
+   "ja": "VFG には NVIDIA Ada / Blackwell GPU（RTX 40 / 50）が必要です。"
+  },
+  {
    "zh": "Veyra 本地诊断（复制前脱敏预览；不会上传）\n",
    "src": "src/base/Log.cpp",
    "zh-TW": "Veyra 本地診斷（複製前脫敏預覽；不會上傳）\n",
@@ -1485,6 +1520,13 @@
    "ja": "Xbox ストリーミング…"
   },
   {
+   "zh": "Xbox 串流中断（{}），正在重连 {}/3…",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "Xbox 串流中斷（{}），正在重連 {}/3…",
+   "en": "Xbox stream interrupted ({}); reconnecting {}/3…",
+   "ja": "Xbox ストリームが中断されました（{}）。再接続中 {}/3…"
+  },
+  {
    "zh": "Xbox 串流中断，请重新连接。",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "Xbox 串流中斷，請重新連接。",
@@ -1504,6 +1546,20 @@
    "zh-TW": "Xbox 串流連接失敗，請查看診斷",
    "en": "Xbox streaming connection failed; see diagnostics",
    "ja": "Xbox ストリーミングの接続に失敗しました。診断を確認してください"
+  },
+  {
+   "zh": "Xbox 已重新连接",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "Xbox 已重新連接",
+   "en": "Xbox reconnected",
+   "ja": "Xbox に再接続しました"
+  },
+  {
+   "zh": "Xbox 服务结束了串流（",
+   "src": "src/source/XboxSessionSource.cpp",
+   "zh-TW": "Xbox 服務結束了串流（",
+   "en": "The Xbox service ended the stream (",
+   "ja": "Xbox サービスがストリームを終了しました（"
   },
   {
    "zh": "Xbox 服务返回错误（HTTP %1）。",
@@ -1539,6 +1595,20 @@
    "zh-TW": "Xbox 連線失敗：",
    "en": "Xbox connection failed: ",
    "ja": "Xbox 接続に失敗しました："
+  },
+  {
+   "zh": "Xbox 重连失败：",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "Xbox 重連失敗：",
+   "en": "Xbox reconnection failed: ",
+   "ja": "Xbox の再接続に失敗："
+  },
+  {
+   "zh": "Xbox 重连时 GPU 排空失败",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "Xbox 重連時 GPU 排空失敗",
+   "en": "Could not drain the GPU queue during Xbox reconnection.",
+   "ja": "Xbox 再接続時に GPU キューの待機処理に失敗しました。"
   },
   {
    "zh": "XeSS 初始化失败；当前为普通呈现",
@@ -1864,7 +1934,7 @@
   },
   {
    "zh": "中",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/NodePage.qml",
    "zh-TW": "中",
    "en": "Medium",
    "ja": "中"
@@ -2220,13 +2290,6 @@
    "ja": "ホストの証明書がペアリング時に保存したものと一致しません（ホストが再インストールされたか、ペアリングしたホストではありません）。このホストを削除して再ペアリングしてください。"
   },
   {
-   "zh": "主机结束了串流。",
-   "src": "src/source/XboxSessionSource.cpp",
-   "zh-TW": "主機結束了串流。",
-   "en": "The host ended the stream.",
-   "ja": "ホストがストリーミングを終了しました。"
-  },
-  {
    "zh": "主机要用同一个账号登录，并在 设置 → 设备和连接 → 远程功能 里启用远程功能",
    "src": "qml/DialogHost.qml",
    "zh-TW": "主機要用同一個帳號登入，並在 設定 → 裝置和連接 → 遠程功能 裡啟用遠程功能",
@@ -2330,6 +2393,13 @@
    "zh-TW": "位流優先（Dolby/DTS 直通解碼）",
    "en": "Bitstream first (Dolby/DTS passthrough decoding)",
    "ja": "ビットストリーム優先（Dolby/DTS パススルーデコード）"
+  },
+  {
+   "zh": "低",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "低",
+   "en": "Low",
+   "ja": "低"
   },
   {
    "zh": "低延迟",
@@ -2648,7 +2718,7 @@
   },
   {
    "zh": "全屏显存增长保护",
-   "src": "qml/Veyra/SettingsPage.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "全螢幕顯存增長保護",
    "en": "Fullscreen VRAM growth protection",
    "ja": "全画面の VRAM 増加保護"
@@ -3720,7 +3790,7 @@
   },
   {
    "zh": "启动后自动继续上次内容",
-   "src": "qml/Veyra/SettingsPage.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "啟動後自動繼續上次內容",
    "en": "Automatically resume on startup",
    "ja": "起動時に前回の再生を再開"
@@ -4951,13 +5021,6 @@
    "ja": "書き出し中も他のファイルをプレビューできますが、書き出しと GPU を取り合います。"
   },
   {
-   "zh": "导出设置无效",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "匯出設定無效",
-   "en": "Invalid export settings",
-   "ja": "書き出し設定が不正です"
-  },
-  {
    "zh": "导出设置无效：%1",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "匯出設定無效：%1",
@@ -6148,11 +6211,11 @@
    "ja": "選択したフォーマットは {:.3f} FPS ですが、キャプチャーカードは {:.3f} FPS を返しています。デバイスが対応するフォーマットを選び直してください。"
   },
   {
-   "zh": "所选补帧后端最高 %1X，倍率已调整为 %1X",
+   "zh": "所选补帧后端的倍率已调整为 %1X",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "所選補幀後端最高 %1X，倍率已調整為 %1X",
-   "en": "The selected frame generation backend goes up to %1X; the multiplier was set to %1X",
-   "ja": "選択したフレーム生成方式は最大 %1X のため、倍率を %1X にしました"
+   "zh-TW": "所選補幀後端的倍率已調整為 %1X",
+   "en": "The selected frame-generation backend adjusted the multiplier to %1X.",
+   "ja": "選択したフレーム生成方式の倍率を %1X に調整しました。"
   },
   {
    "zh": "所选设备不可用，已回落到系统默认：",
@@ -6626,7 +6689,7 @@
   },
   {
    "zh": "播放速度",
-   "src": "qml/Veyra/PlaybackRateButton.qml",
+   "src": "qml/PlaybackRateButton.qml",
    "zh-TW": "播放速度",
    "en": "Playback speed",
    "ja": "再生速度"
@@ -7493,6 +7556,13 @@
    "ja": "未実行"
   },
   {
+   "zh": "未找到 VFG 运行组件，请在组件页核对路径",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未找到 VFG 執行組件，請在組件頁核對路徑",
+   "en": "VFG runtime components were not found. Check their paths on the Components page.",
+   "ja": "VFG ランタイムが見つかりません。コンポーネントページでパスをご確認ください。"
+  },
+  {
    "zh": "未找到可捕获的窗口或显示器",
    "src": "qml/DialogHost.qml",
    "zh-TW": "未找到可擷取的視窗或顯示器",
@@ -7801,13 +7871,6 @@
    "ja": "Dolby Vision RPU を検出しましたが、ベースレイヤーの互換宣言がなく色を確認できないため停止しました"
   },
   {
-   "zh": "检测到 NVIDIA App 的画面插件（RTX HDR / 智能平滑运动 / RTX 动态鲜艳度）注入了 Veyra，它已知会在采集开始时让显卡设备丢失或让程序崩溃。请在 NVIDIA App → 图形 → 程序设置里为 Veyra 关闭这几项后再试",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "偵測到 NVIDIA App 的畫面外掛（RTX HDR / 智慧平滑運動 / RTX 動態鮮豔度）注入了 Veyra，已知它會在擷取開始時造成顯示卡裝置遺失或程式當機。請在 NVIDIA App → 圖形 → 程式設定中為 Veyra 關閉這幾項後再試",
-   "en": "NVIDIA App's picture plug-in (RTX HDR / Smooth Motion / RTX Dynamic Vibrance) is injected into Veyra; it is known to lose the GPU device or crash Veyra when a capture starts. Turn these off for Veyra in NVIDIA App → Graphics → Program Settings and try again",
-   "ja": "NVIDIA App の画面プラグイン（RTX HDR / Smooth Motion / RTX Dynamic Vibrance）が Veyra に挿入されています。キャプチャ開始時に GPU デバイスの喪失やクラッシュを起こすことが確認されています。NVIDIA App → グラフィックス → プログラム設定で Veyra に対してこれらをオフにしてから再試行してください"
-  },
-  {
    "zh": "检测到 OBS 游戏采集和小飞机（RTSS）同时注入 Veyra。两者默认的挂钩方式冲突，OBS 游戏采集可能抓不到画面（任何 D3D12 程序都一样）。在 RTSS 里添加 veyra_qml_ui.exe，并在它的设置中勾选“Use Microsoft Detours API hooking”；或在 OBS 改用窗口采集（Windows 10 1903+）",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "偵測到 OBS 遊戲擷取和小飛機（RTSS）同時注入 Veyra。兩者預設的掛鉤方式衝突，OBS 遊戲擷取可能抓不到畫面（任何 D3D12 程式都一樣）。在 RTSS 中新增 veyra_qml_ui.exe，並在它的設定中勾選「Use Microsoft Detours API hooking」；或在 OBS 改用視窗擷取（Windows 10 1903+）",
@@ -7830,7 +7893,7 @@
   },
   {
    "zh": "检测异常增长时自动退出全屏；默认关闭",
-   "src": "qml/Veyra/SettingsPage.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "偵測異常增長時自動退出全螢幕；預設關閉",
    "en": "Exit fullscreen if abnormal growth is detected; off by default",
    "ja": "異常な増加を検出すると全画面を解除（初期設定はオフ）"
@@ -9038,13 +9101,6 @@
    "zh-TW": "目標位元速率 1–300 Mbps；VBR 的實際平均位元速率隨畫面複雜度變化。",
    "en": "Target bitrate: 1–300 Mbps. Actual VBR average bitrate varies with scene complexity.",
    "ja": "目標ビットレートは 1～300 Mbps。VBR の実際の平均値は映像の複雑さによって変わります。"
-  },
-  {
-   "zh": "目标码率影响画质与文件大小。",
-   "src": "qml/ExportPage.qml",
-   "zh-TW": "目標位元率影響畫質與檔案大小。",
-   "en": "The target bitrate affects picture quality and file size.",
-   "ja": "目標ビットレートは画質とファイルサイズに影響します。"
   },
   {
    "zh": "目标行数",
@@ -10266,7 +10322,7 @@
   },
   {
    "zh": "视频恢复上次进度；采集卡沿用上次设备与设置",
-   "src": "qml/Veyra/SettingsPage.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "影片恢復上次進度；擷取卡沿用上次裝置與設定",
    "en": "Resume the video position or reopen the last capture device and settings",
    "ja": "動画の前回の位置、または前回のキャプチャーデバイスと設定を復元"
@@ -12687,6 +12743,13 @@
    "ja": "プリセットライブラリの NR 解像度が不正です"
   },
   {
+   "zh": "预设库 VFG 质量字段损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫 VFG 品質字段損壞",
+   "en": "The preset library has an invalid VFG quality field.",
+   "ja": "プリセットライブラリの VFG 品質フィールドが破損しています。"
+  },
+  {
    "zh": "预设库保护区域损坏",
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "預設庫保護區域損壞",
@@ -12804,6 +12867,13 @@
    "zh-TW": "預設庫補幀後端或倍率無效",
    "en": "Preset library: invalid frame generation backend or multiplier",
    "ja": "プリセットライブラリのフレーム生成方式または倍率が不正です"
+  },
+  {
+   "zh": "预设库补帧后端无效",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫補幀後端無效",
+   "en": "The preset library has an invalid frame-generation backend.",
+   "ja": "プリセットライブラリのフレーム生成方式が無効です。"
   },
   {
    "zh": "预设库调色参数超出范围",
@@ -13065,6 +13135,13 @@
    "ja": "ドライバーの既定（介入しない）"
   },
   {
+   "zh": "高",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "高",
+   "en": "High",
+   "ja": "高"
+  },
+  {
    "zh": "高光",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "高光",
@@ -13077,6 +13154,13 @@
    "zh-TW": "高延遲·需 CPU 拆包",
    "en": "high latency · needs CPU unpacking",
    "ja": "高遅延 · CPU での展開が必要"
+  },
+  {
+   "zh": "高质量需要更多处理时间",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "高品質需要更多處理時間",
+   "en": "High quality takes more processing time.",
+   "ja": "高品質にはより多くの処理時間が必要です。"
   },
   {
    "zh": "黄色",

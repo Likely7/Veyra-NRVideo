@@ -193,6 +193,7 @@ struct ChainGlobalSettings {
     pipeline::SrTarget srTarget = pipeline::SrTarget::Uhd4K;
     uint32_t videoSrQuality = 0;
     FrameGenerationBackend fgBackend = FrameGenerationBackend::Dlss;
+    uint32_t vfgQuality=1;
     FlowQuality flow = FlowQuality::Balanced;
     OpticalFlowBackend opticalFlowBackend = OpticalFlowBackend::Nvidia;
     bool amdFlowHalfResolution = false;

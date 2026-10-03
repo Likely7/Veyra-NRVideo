@@ -578,7 +578,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     veyra::log::warn("backend-recovery",std::format("initialization failed component={} attempt={} revision={} -> nr={} sr={} multiplier={}; original SDK error above",unsigned(failure),attempt+1,reduced.revision,reduced.nr,reduced.sr,reduced.multiplier));
                     if(!backendRecoveryWarning.empty())backendRecoveryWarning+=L"；";
                     const uint32_t ngxResult=uint32_t(graph.failedNgxResult());
-                    if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4&&failure==FailedBackend::Fg)
+                    if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&failure==FailedBackend::Fg)
+                        backendRecoveryWarning+=L"NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志";
+                    else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4&&failure==FailedBackend::Fg)
                         backendRecoveryWarning+=L"FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已关闭补帧；原因见日志";
                     else if((ngxResult&0xFFF00000u)==0xBAD00000u)
                         backendRecoveryWarning+=std::wstring(backendFailureName(failure))+L"："+ngxFailureHint(ngxResult)+std::format(L"（NGX 0x{:08X}，驱动 {}），已关闭依赖效果",ngxResult,ctx.adapter().driverVersion);
@@ -619,7 +621,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             publishFrameGenerationCapabilities();
             if(!previewInitialized){status(L"视频初始化失败，请查看对应组件的诊断日志",true);break;}
             if(!backendRecoveryWarning.empty()){
-                std::lock_guard lock(mutex_);desired_.rejectVideoRequest(initialRequested,options.snapshot());snapshot_.desired=desired_;snapshot_.backendWarning=backendRecoveryWarning;
+                std::lock_guard lock(mutex_);desired_.rejectVideoRequest(initialRequested,options.snapshot());snapshot_.desired=desired_;snapshot_.rejectedRevision=initialRequested.revision;snapshot_.backendWarning=backendRecoveryWarning;
             }
             if(!nvidiaAdapter&&(options.nr||options.sr||(options.fg&&!xessFg))){
                 veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested features: nr={} sr={} fgBackend={} flowBackend={}",options.nr,options.sr,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend)));
@@ -1172,7 +1174,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(!accepted){finishReset(diagnostics::ResetOutcome::Failed);status(L"设置切换排空失败，已停止",true);break;}
                     backendRecoveryWarning.clear();
                     const bool preserveWorkingFg=previous.multiplier>1&&requested.multiplier>1&&
-                        (previous.frameGenerationBackend!=requested.frameGenerationBackend||previous.multiplier!=requested.multiplier);
+                        (previous.frameGenerationBackend!=requested.frameGenerationBackend||previous.multiplier!=requested.multiplier||previous.vfgQuality!=requested.vfgQuality);
                     const bool preserveWorkingNr=previous.nr&&requested.nr&&previous.nrRuntime!=requested.nrRuntime;
                     if(accepted&&rebuild){presenter.close();graph.shutdown();markResetStage(diagnostics::ResetStage::Destroy);accepted=initializePreview(nextDesc,next,preserveWorkingFg,preserveWorkingNr);
                         markResetStage(diagnostics::ResetStage::Create);
@@ -1182,7 +1184,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(accepted){
                         if(xessPresentationRecovery){backendRecoveryWarning=L"XeSS 呈现失败，已关闭补帧并恢复播放；错误码见日志";xessPresentationRecovery=false;}
                         if(!backendRecoveryWarning.empty()){
-                            std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,next.snapshot());snapshot_.desired=desired_;snapshot_.backendWarning=backendRecoveryWarning;
+                            std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,next.snapshot());snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.backendWarning=backendRecoveryWarning;
                         }
                         options=next;gd=nextDesc;transaction=true;reset=true;
                         resetRecord->epoch=0;
@@ -1695,7 +1697,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             if(!initializePreview(gd,options)){status(L"增强故障后的基础图重建失败",true);break;}
                             publishFrameGenerationCapabilities();
                             backendRecoveryWarning=std::wstring(backendFailureName(failedComponent))+L"运行失败，已关闭对应效果；错误码见日志"+(backendRecoveryWarning.empty()?L"":L"；"+backendRecoveryWarning);
-                            {std::lock_guard lock(mutex_);desired_.rejectVideoRequest(attempted,options.snapshot());snapshot_.desired=desired_;snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;snapshot_.backendWarning=backendRecoveryWarning;}
+                            {std::lock_guard lock(mutex_);desired_.rejectVideoRequest(attempted,options.snapshot());snapshot_.desired=desired_;snapshot_.applied=options.snapshot();snapshot_.rejectedRevision=attempted.revision;snapshot_.applying=desired_!=snapshot_.applied;snapshot_.backendWarning=backendRecoveryWarning;}
                             veyra::log::warn("backend-recovery",std::format("runtime component={} disabled; rebuilt revision={} nr={} sr={} multiplier={}; retry next source frame",unsigned(failedComponent),options.settings.revision,options.nr,options.sr,options.snapshot().multiplier));
                             finishReset(diagnostics::ResetOutcome::Failed);reset=true;pendingResetCause=pipeline::ResetReason::Settings;
                             holdFileAudio();fileAudioAlignPending=true;

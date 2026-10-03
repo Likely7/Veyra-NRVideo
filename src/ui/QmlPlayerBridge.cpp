@@ -36,10 +36,12 @@
 #include <cmath>
 #include <limits>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
+#include "veyra/pipeline/VfgBackend.h"
 #include "veyra/engine/ColorLookStore.h"
 #include "veyra/engine/ColorLut.h"
 #include "veyra/engine/Subtitles.h"
@@ -567,7 +569,7 @@ struct QmlPlayerBridge::Impl {
         const auto before=facade.pendingSettings();
         auto frame = facade.poll();
         const auto restored=facade.pendingSettings();
-        const bool fgRollback=before.frameGenerationBackend!=restored.frameGenerationBackend||before.multiplier!=restored.multiplier;
+        const bool fgRollback=before.frameGenerationBackend!=restored.frameGenerationBackend||before.multiplier!=restored.multiplier||before.vfgQuality!=restored.vfgQuality;
         const bool nrRollback=before.nrRuntime!=restored.nrRuntime;
         if(nrRollback) {
             for(auto* c:{&chain,&acceptedChain})for(uint32_t i=0;i<c->nodeCount;++i)
@@ -581,6 +583,7 @@ struct QmlPlayerBridge::Impl {
             };
             restoreFg(chain);restoreFg(acceptedChain);
             if(draftGlobals.fgBackend==before.frameGenerationBackend)draftGlobals.fgBackend=restored.frameGenerationBackend;
+            if(draftGlobals.vfgQuality==before.vfgQuality)draftGlobals.vfgQuality=restored.vfgQuality;
             options=engine::PlayerOptions::from(restored,engine::runtimeOrder(acceptedChain));
         }
         if (!frame.changed && haveSnapshot) return fgRollback||nrRollback;
@@ -650,8 +653,10 @@ struct QmlPlayerBridge::Impl {
             if (!projected->firstOf(engine::EffectType::SuperResolution)) {
                 s.srTarget = previous.srTarget; s.videoSrQuality = previous.videoSrQuality;
             }
-            if (!projected->firstOf(engine::EffectType::FrameGeneration))
+            if (!projected->firstOf(engine::EffectType::FrameGeneration)){
                 s.frameGenerationBackend = previous.frameGenerationBackend;
+                s.vfgQuality = previous.vfgQuality;
+            }
         }
         engine::fromChain(*projected, s);
         if(const auto error=s.validate();!error.empty()){
@@ -757,6 +762,26 @@ static uint32_t primaryGpuVendor() {
 // FSR 4 ML frame generation needs an AMD RX 9000; on other GPUs the provider crashed the
 // whole program (field report 2026-10-01). Known non-AMD adapters are refused up front.
 static bool fsr4Possible() { const auto v = primaryGpuVendor(); return v == 0 || v == 0x1002; }
+// The menu checks the same default DXGI preference as the engine. The native
+// backend then verifies CUDA compute capability and the exact adapter LUID.
+static bool vfgHardwarePossible(){
+    static const bool supported=[] {
+        Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
+        if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))return false;
+        for(UINT i=0;;++i){Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+            if(factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter))==DXGI_ERROR_NOT_FOUND)break;
+            if(!adapter)break;DXGI_ADAPTER_DESC1 d{};
+            if(FAILED(adapter->GetDesc1(&d))||(d.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)||FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,__uuidof(ID3D12Device),nullptr)))continue;
+            const auto name=QString::fromWCharArray(d.Description);
+            return d.VendorId==0x10DE&&(name.contains(QStringLiteral("GeForce RTX 40"),Qt::CaseInsensitive)||
+                name.contains(QStringLiteral("GeForce RTX 50"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Ada"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Blackwell"),Qt::CaseInsensitive));
+        }return false;
+    }();return supported;
+}
+static unsigned normalizeFgMultiplier(unsigned value,engine::FrameGenerationBackend backend,unsigned cap){
+    value=std::clamp(value,2u,cap);
+    return backend==engine::FrameGenerationBackend::Dlss&&value==5?4u:value;
+}
 bool QmlPlayerBridge::amdNrGpu() const { return primaryGpuVendor()==0x1002; }
 
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
@@ -1156,7 +1181,7 @@ QVariantList QmlPlayerBridge::stageTimings() const {
         {"光流", Stage::Flow, "#9A85FF"},
         {"NR采样", Stage::Nr, "#FF8A3D"},
         {"残差", Stage::Residual, "#E7B868"},
-        {"DLSS FG", Stage::FgBatch, "#3DDC84"},
+        {"FG", Stage::FgBatch, "#3DDC84"},
         {"HDR", Stage::VideoHdr, "#E58BD9"},
         {"呈现", Stage::Blit, "#58CAD4"},
     };
@@ -1313,6 +1338,7 @@ QString QmlPlayerBridge::fgBackendName() const {
     case engine::FrameGenerationBackend::XeSS:return QStringLiteral("xess");
     case engine::FrameGenerationBackend::Fsr:return QStringLiteral("fsr3");
     case engine::FrameGenerationBackend::Fsr4:return QStringLiteral("fsr4");
+    case engine::FrameGenerationBackend::Vfg:return QStringLiteral("vfg");
     }
     return {};
 }
@@ -1321,11 +1347,17 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
         QVariantMap{{"id","dlss"},{"label",tr("DLSS 帧生成")}},
         QVariantMap{{"id","xess"},{"label",tr("Intel XeSS · 实验")}},
         QVariantMap{{"id","fsr3"},{"label",tr("FSR 3.1 · 2X")}},
-        QVariantMap{{"id","fsr4"},{"label",tr("FSR 4 ML · RX 9000 · 实验")}}
+        QVariantMap{{"id","fsr4"},{"label",tr("FSR 4 ML · RX 9000 · 实验")}},
+        QVariantMap{{"id","vfg"},{"label",tr("NVIDIA VFG · RTX 40 / 50")}}
     };
 }
 QString QmlPlayerBridge::fgProviderText() const {
     const auto& s=impl_->snapshot;
+    if(fgBackendName()==QLatin1String("vfg")){
+        if(!vfgHardwarePossible())return tr("VFG 需要 NVIDIA Ada / Blackwell 显卡（RTX 40 / 50）");
+        if(!pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring()))return tr("未找到 VFG 运行组件，请在组件页核对路径");
+        return tr("VFG 支持 2X～8X 和低 / 中 / 高质量；6X～8X 为实验档，高倍高质量会增加处理时间");
+    }
     if(engine::fsrFrameGeneration(s.applied.frameGenerationBackend)&&s.applied.multiplier>1&&!s.fsrProviderVersion.empty())
         return tr("实际运行：FSR %1 · 2X").arg(QString::fromStdString(s.fsrProviderVersion));
     if(fgBackendName()==QLatin1String("fsr4"))return tr("FSR 4 ML 需要支持的 RX 9000 和驱动；实卡待验");
@@ -1351,13 +1383,17 @@ static int xessCeiling(const engine::PlayerSnapshot& s) {
     return std::max(cap, seen);
 }
 void QmlPlayerBridge::setFgBackendName(const QString& value) {
-    if(value!=QLatin1String("dlss")&&value!=QLatin1String("xess")&&value!=QLatin1String("fsr3")&&value!=QLatin1String("fsr4")){emit notice(tr("未知补帧后端"),true);return;}
+    if(value!=QLatin1String("dlss")&&value!=QLatin1String("xess")&&value!=QLatin1String("fsr3")&&value!=QLatin1String("fsr4")&&value!=QLatin1String("vfg")){emit notice(tr("未知补帧后端"),true);return;}
     auto s = settings();
     const auto want = value == QLatin1String("xess") ? engine::FrameGenerationBackend::XeSS
                     : value == QLatin1String("fsr3") ? engine::FrameGenerationBackend::Fsr
                     : value == QLatin1String("fsr4") ? engine::FrameGenerationBackend::Fsr4
+                    : value == QLatin1String("vfg") ? engine::FrameGenerationBackend::Vfg
                     : engine::FrameGenerationBackend::Dlss;
     if (s.frameGenerationBackend == want) return;
+    if(want==engine::FrameGenerationBackend::Vfg&&(!vfgHardwarePossible()||!pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring()))){
+        emit notice(!vfgHardwarePossible()?tr("VFG 需要 NVIDIA Ada / Blackwell 显卡（RTX 40 / 50）"):tr("未找到 VFG 运行组件，请在组件页核对路径"),true);emit settingsChanged();return;
+    }
     if (want == engine::FrameGenerationBackend::Fsr4 && !fsr4Possible()) {
         // Keep the previous choice; the menu snaps back to it.
         emit notice(tr("FSR 4 ML 补帧只支持 AMD RX 9000 显卡，当前显卡不能使用，已保持原来的补帧方式"), true);
@@ -1370,14 +1406,14 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
     auto& chain = impl_->chain;
     const auto beforeMultiplier = chain.fgMultiplier;
     const int cap = want == engine::FrameGenerationBackend::XeSS ? xessCeiling(impl_->snapshot)
-                  : engine::fsrFrameGeneration(want) ? 2 : 6;
-    const bool clamped = chain.fgMultiplier > uint32_t(cap);
-    if (clamped) chain.fgMultiplier = uint32_t(cap);
+                  : engine::fsrFrameGeneration(want) ? 2 : want==engine::FrameGenerationBackend::Vfg?8:6;
+    chain.fgMultiplier=normalizeFgMultiplier(chain.fgMultiplier,want,uint32_t(cap));
+    const bool clamped = chain.fgMultiplier != beforeMultiplier;
     if(!impl_->commit(s)){
         chain.fgMultiplier = beforeMultiplier;
         emit notice(tr("补帧后端切换未被接受，原设置保留"),true);return;
     }
-    if (clamped) emit notice(tr("所选补帧后端最高 %1X，倍率已调整为 %1X").arg(cap), false);
+    if (clamped) emit notice(tr("所选补帧后端的倍率已调整为 %1X").arg(chain.fgMultiplier), false);
     emit settingsChanged();
     emit chainChanged();
 }
@@ -1389,6 +1425,7 @@ int QmlPlayerBridge::fgMaxMultiplier() const {
     // new context validates it. XeSS: 4X with the audited unlock provider, else
     // 2X, or what a running session already reported above 2X.
     const auto& s = impl_->snapshot;
+    if(settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg)return 8;
     if(engine::fsrFrameGeneration(settings().frameGenerationBackend))return 2;
     if (settings().frameGenerationBackend == engine::FrameGenerationBackend::XeSS)
         return xessCeiling(s);
@@ -1404,8 +1441,9 @@ QVariantList QmlPlayerBridge::fgMultiplierChoices() const {
                       == engine::FrameGenerationBackend::XeSS;
     const int ceiling = xess ? std::min(fgMaxMultiplier(), 4) : fgMaxMultiplier();
     QVariantList out;
-    // Only the engine's legal multipliers (kFgMultiplierChoices: no 5X).
-    for (const auto choice : engine::kFgMultiplierChoices) {
+    const auto choices=settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg?
+        std::span<const uint32_t>(engine::kVfgMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
+    for (const auto choice : choices) {
         const int m = int(choice);
         if (m < 2 || m > ceiling) continue;
         QVariantMap item;
@@ -1414,6 +1452,14 @@ QVariantList QmlPlayerBridge::fgMultiplierChoices() const {
         out << item;
     }
     return out;
+}
+
+int QmlPlayerBridge::vfgQuality()const{return int(settings().vfgQuality);}
+void QmlPlayerBridge::setVfgQuality(int value){
+    if(value<0||value>2)return;auto s=settings();if(s.vfgQuality==uint32_t(value))return;
+    s.vfgQuality=uint32_t(value);
+    if(!impl_->commit(s)){emit notice(tr("VFG 质量设置未被接受，原设置保留"),true);return;}
+    emit settingsChanged();emit chainChanged();
 }
 
 bool QmlPlayerBridge::fgStrict() const { return impl_->chain.fgStrictAdmission; }
@@ -1550,6 +1596,10 @@ QVariantList QmlPlayerBridge::componentList() const {
     // Read from the runtime manifest the build produces rather than a list written
     // by hand here, so the page cannot claim a component the package lacks.
     QVariantList out;
+    const auto vfgDirectory=pipeline::VfgBackend::runtimeDirectory(runtime::localRuntimeDirectory().wstring());
+    const bool vfgAvailable=pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring());
+    out<<QVariantMap{{"name",QStringLiteral("NVIDIA VFG")},{"detail",QString::fromStdWString(vfgDirectory)},
+        {"loaded",vfgAvailable},{"experimental",true}};
     const auto manifest = runtime::localRuntimeDirectory() / L"release-runtime-manifest.json";
     QFile file(QString::fromWCharArray(manifest.c_str()));
     if (!file.open(QIODevice::ReadOnly)) {
@@ -3587,8 +3637,9 @@ int QmlPlayerBridge::fgMultiplier() const {
     return node && node->enabled ? int(impl_->chain.fgMultiplier) : 1;
 }
 void QmlPlayerBridge::setFgMultiplier(int multiplier) {
-    const bool legal = std::find(std::begin(engine::kFgMultiplierChoices), std::end(engine::kFgMultiplierChoices),
-                                 uint32_t(std::max(multiplier, 0))) != std::end(engine::kFgMultiplierChoices);
+    const auto choices=settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg?
+        std::span<const uint32_t>(engine::kVfgMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
+    const bool legal = std::find(choices.begin(),choices.end(),uint32_t(std::max(multiplier,0)))!=choices.end();
     if (!legal || multiplier > fgMaxMultiplier()) {
         emit notice(tr("补帧倍率超出当前后端范围"), true); return;
     }
@@ -4707,12 +4758,15 @@ void QmlPlayerBridge::openSubtitleDialog() { emit navigate(QStringLiteral("subti
 // not silently dropped.
 int QmlPlayerBridge::addEffect(const QString& type) {
     const bool fgType=type==QLatin1String("dlss-fg")||type==QLatin1String("xess-fg")||
-        type==QLatin1String("fsr3-fg")||type==QLatin1String("fsr4-fg");
-    const auto fgBackend=type==QLatin1String("fsr4-fg")?engine::FrameGenerationBackend::Fsr4:
+        type==QLatin1String("fsr3-fg")||type==QLatin1String("fsr4-fg")||type==QLatin1String("vfg-fg");
+    const auto fgBackend=type==QLatin1String("vfg-fg")?engine::FrameGenerationBackend::Vfg:type==QLatin1String("fsr4-fg")?engine::FrameGenerationBackend::Fsr4:
         type==QLatin1String("fsr3-fg")?engine::FrameGenerationBackend::Fsr:
         type==QLatin1String("xess-fg")?engine::FrameGenerationBackend::XeSS:engine::FrameGenerationBackend::Dlss;
     const auto fgCeiling=engine::fsrFrameGeneration(fgBackend)?2u:
-        fgBackend==engine::FrameGenerationBackend::XeSS?uint32_t(xessCeiling(impl_->snapshot)):6u;
+        fgBackend==engine::FrameGenerationBackend::XeSS?uint32_t(xessCeiling(impl_->snapshot)):fgBackend==engine::FrameGenerationBackend::Vfg?8u:6u;
+    if(fgType&&fgBackend==engine::FrameGenerationBackend::Vfg&&(!vfgHardwarePossible()||!pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring()))){
+        emit notice(!vfgHardwarePossible()?tr("VFG 需要 NVIDIA Ada / Blackwell 显卡（RTX 40 / 50）"):tr("未找到 VFG 运行组件，请在组件页核对路径"),true);return -1;
+    }
     if (impl_->chain.mode == engine::ChainMode::Node) {
         const bool fg = fgType;
         const engine::EffectInfo* info = nullptr;
@@ -4726,7 +4780,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         const auto oldLayout = impl_->layout; const auto previous = impl_->facade.pendingSettings();
         const auto oldGlobals = impl_->draftGlobals;
         auto pending = settings();
-        if (fg){pending.frameGenerationBackend=fgBackend;c.fgMultiplier=std::clamp(c.fgMultiplier,2u,fgCeiling);}
+        if (fg){pending.frameGenerationBackend=fgBackend;c.fgMultiplier=normalizeFgMultiplier(c.fgMultiplier,fgBackend,fgCeiling);}
         int index = -1;
         if (fg) for (uint32_t i = 0; i < c.nodeCount; ++i)
             if (c.nodes[i].type == engine::EffectType::FrameGeneration) index = int(i);
@@ -4778,7 +4832,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
             c.nodes[slot].viewX=float(slot%4)*260;c.nodes[slot].viewY=float(slot/4)*300;
         }
         c.nodes[slot].enabled=true;
-        c.fgMultiplier=std::clamp(c.fgMultiplier,2u,fgCeiling);
+        c.fgMultiplier=normalizeFgMultiplier(c.fgMultiplier,fgBackend,fgCeiling);
         auto next=previous;engine::fromChain(c,next);
         next.frameGenerationBackend=fgBackend;
         impl_->validation=engine::validateChain(c);
@@ -5242,6 +5296,7 @@ bool QmlPlayerBridge::savePresetAs(const QString& name, int contentsMask, bool n
     entry.color = impl_->facade.pendingSettings().color;
     entry.fg.multiplier = impl_->facade.pendingSettings().multiplier;
     entry.fg.backend = impl_->facade.pendingSettings().frameGenerationBackend;
+    entry.fg.vfgQuality = impl_->facade.pendingSettings().vfgQuality;
     entry.audioSync = impl_->facade.pendingSettings().audioSync;
     entry.audioOffsetMs = impl_->facade.pendingSettings().audioOffsetMs;
     if (nodeMode) {
@@ -5252,6 +5307,7 @@ bool QmlPlayerBridge::savePresetAs(const QString& name, int contentsMask, bool n
         }
         entry.fg.multiplier = uint32_t(fgMultiplier());
         entry.fg.backend = impl_->draftGlobals.fgBackend;
+        entry.fg.vfgQuality = impl_->draftGlobals.vfgQuality;
         entry.globals=impl_->draftGlobals;
     }
     const bool ok = impl_->facade.savePreset(entry, false);
@@ -5447,6 +5503,7 @@ void QmlPlayerBridge::updateRunStatus() {
             case engine::FrameGenerationBackend::XeSS: backend = tr("XeSS"); break;
             case engine::FrameGenerationBackend::Fsr: backend = tr("FSR 3.1"); break;
             case engine::FrameGenerationBackend::Fsr4: backend = tr("FSR 4 ML"); break;
+            case engine::FrameGenerationBackend::Vfg: backend = QStringLiteral("NVIDIA VFG"); break;
             }
             detail << tr("补帧 %1X · %2").arg(s.applied.multiplier)
                           .arg(backend);

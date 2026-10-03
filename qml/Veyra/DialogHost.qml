@@ -1568,7 +1568,7 @@ Item {
             case "video-hdr": return qsTr("峰值 ") + (veyra.videoHdrParams.peakNits || 1000) + " nits"
             case "protection": return veyra.protectionRegions.length + qsTr(" / 4 个区域")
             case "color": return qsTr("调色参数")
-            case "frame-generation": return veyra.fgMultiplier + "X · " + (veyra.fgBackendName === "xess" ? "Intel XeSS" : "DLSS")
+            case "frame-generation": return veyra.fgMultiplier + "X · " + (veyra.fgBackendChoices.find(x => x.id === veyra.fgBackendName) || {label: "FG"}).label
             }
             return ""
         }

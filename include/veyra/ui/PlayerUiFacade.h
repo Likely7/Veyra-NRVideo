@@ -122,6 +122,7 @@ private:
     veyra::engine::NrRuntime requestedNrRuntime_=veyra::engine::NrRuntime::Original;
     veyra::engine::FrameGenerationBackend requestedFgBackend_=veyra::engine::FrameGenerationBackend::Dlss;
     uint32_t requestedFgMultiplier_=1;
+    uint32_t requestedVfgQuality_=1;
     uint64_t revision_ = 0;
     bool haveLast_ = false;
     std::vector<RecentEntry> recent_;

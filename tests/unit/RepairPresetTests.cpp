@@ -211,13 +211,13 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
  ok=ok&&b.put(L"FSR 4 ML 2X",fsr4);PresetStore fsr4Reload(p);
  ok=ok&&fsr4Reload.load()&&fsr4Reload.entries().back().settings==fsr4&&b.erase(1);
  fsr4.multiplier=4;ok=ok&&!b.put(L"FSR 4 ML 4X rejected",fsr4);
- auto badBackend=s;badBackend.frameGenerationBackend=static_cast<FrameGenerationBackend>(4);ok=ok&&!b.put(L"invalid backend",badBackend);
+ auto badBackend=s;badBackend.frameGenerationBackend=static_cast<FrameGenerationBackend>(5);ok=ok&&!b.put(L"invalid backend",badBackend);
  auto dis=s;dis.opticalFlowBackend=OpticalFlowBackend::GpuDis;ok=ok&&b.put(L"GPU DIS",dis)&&b.save();PresetStore disReload(p);ok=ok&&disReload.load()&&disReload.entries().back().settings==dis&&b.erase(1);
  
  auto badFlow=s;badFlow.opticalFlowBackend=static_cast<OpticalFlowBackend>(3);ok=ok&&!b.put(L"invalid flow backend",badFlow);
  auto ampere=s;ampere.nr=true;ampere.nrRuntime=NrRuntime::Ampere;ok=ok&&b.put(L"RTX30",ampere);PresetStore ampereReload(p);ok=ok&&ampereReload.load()&&ampereReload.entries().back().settings==ampere&&b.erase(1);
  auto original=s;original.nr=true;original.nrRuntime=NrRuntime::NvidiaOriginal;ok=ok&&b.put(L"NVIDIA original",original);PresetStore originalReload(p);ok=ok&&originalReload.load()&&originalReload.entries().back().settings==original&&b.erase(1);
- auto badNr=s;badNr.nrRuntime=static_cast<NrRuntime>(4);ok=ok&&!b.put(L"invalid NR runtime",badNr);
+ auto badNr=s;badNr.nrRuntime=static_cast<NrRuntime>(5);ok=ok&&!b.put(L"invalid NR runtime",badNr);
  auto half=s;half.content=ContentRate::Capture60To30;ok=ok&&b.put(L"capture half rate",half);PresetStore halfReload(p);ok=ok&&halfReload.load()&&halfReload.entries().back().settings.content==ContentRate::Capture60To30&&b.erase(1);
  // 5 is the AMD FSR upscaling slot now, so it must round-trip; 6 stays invalid.
  auto fsrSr=s;fsrSr.videoSrQuality=veyra::engine::kVideoSrFsr;ok=ok&&b.put(L"FSR SR",fsrSr);

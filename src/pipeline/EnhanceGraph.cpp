@@ -7,6 +7,7 @@
 // views are created last. Per-frame execution uses the shared command slot
 // ring (NR evaluates on a fresh list - snippet constraint).
 #include "veyra/pipeline/EnhanceGraph.h"
+#include "veyra/pipeline/VfgBackend.h"
 #include "veyra/engine/GraphDescription.h"
 #include "veyra/engine/ColorLut.h"
 #include "veyra/engine/EffectChain.h"
@@ -441,7 +442,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     nrEnabled_ = desc.enableNr && !desc.noFeatures && (!desc.noNgx || lmxxfNr_);
     fgEnabled_ = desc.enableFg && !desc.noFeatures && !desc.stillImage &&
         desc.frameGenerationBackend != engine::FrameGenerationBackend::XeSS &&
-        (!desc.noNgx || engine::fsrFrameGeneration(desc.frameGenerationBackend));
+        (!desc.noNgx || engine::fsrFrameGeneration(desc.frameGenerationBackend)||desc.frameGenerationBackend==engine::FrameGenerationBackend::Vfg);
     nvofStandalone_ = desc.enableNvofStandalone && !desc.noFeatures;
     if(desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx&&desc.amdFlowHalfResolution){nvofW_=std::max(1u,nvofW_/2);nvofH_=std::max(1u,nvofH_/2);}
     uint64_t budget=0,usage=0;
@@ -464,7 +465,10 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if(const auto target=desc_.interNrProtectionTarget();target<engine::kMaxNrInstances){
         const auto extent=desc_.nrFullExtent(target);interProtectionBytes=uint64_t(extent.width)*extent.height*8;
     }
-    const uint64_t estimate=uint64_t(workW_)*workH_*(fgEnabled_?100:76)
+    const bool vfg=fgEnabled_&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg;
+    const uint64_t vfgSharedBytes=vfg?uint64_t((workW_*4u+255u)&~255u)*workH_*(2u+2u*(desc_.fgMultiplier-1u)):0;
+    const unsigned generatedTextures=fgEnabled_?(fsrEnabled()?2u:vfg?2u*(desc_.fgMultiplier-1u):10u):0;
+    const uint64_t estimate=uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
         +nrTextureBytes+fullLayerBytes
         +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes;
     if(context_.videoMemoryInfo(budget,usage)){
@@ -487,6 +491,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if (!initNvof()) { failedBackend_=engine::FailedBackend::OpticalFlow; return false; }
     if (!initFsrSr()) return false;
     if (!initFsrFg()) return false;
+    if (!initVfg()) return false;
     if(nrEnabled_&&GetEnvironmentVariableW(L"VEYRA_TEST_NR_INIT_FAILURE",nullptr,0)){
         failedBackend_=engine::FailedBackend::Nr;
         veyra::log::error("backend-recovery-test","test-only NR initialization rejection before SDK call; not a hardware failure");return false;
@@ -639,7 +644,10 @@ bool EnhanceGraph::createResources()
     // Valid placeholder descriptors keep disabled FG inexpensive. Enabling it
     // is a graph rebuild, so no in-flight descriptor is resized in place.
     for(size_t i=0;i<kGeneratedPoolSlots;++i){
-        const bool used=fgEnabled_&&(!fsrEnabled()||i<2);
+        // DLSS compatibility binds ten full-sized resources even at 2X.
+        // VFG owns only the selected multiplier's outputs; FSR owns one pair.
+        const unsigned usedCount=fsrEnabled()?2u:desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg?2u*(desc_.fgMultiplier-1u):10u;
+        const bool used=fgEnabled_&&i<usedCount;
         genFrame_[i]=makeTexture(context_.device(),used?workW_:1,used?workH_:1,outputFormat(),true);
         if(!genFrame_[i])return false;
     }
@@ -1026,6 +1034,16 @@ bool EnhanceGraph::initFsrFg() {
     return true;
 }
 
+bool EnhanceGraph::initVfg()
+{
+    if(!fgEnabled_||desc_.frameGenerationBackend!=engine::FrameGenerationBackend::Vfg)return true;
+    failedBackend_=engine::FailedBackend::Fg;
+    vfgBackend_=std::make_unique<VfgBackend>();
+    if(!vfgBackend_->initialize(context_,desc_.runtimeAbsPath,workW_,workH_,outputFormat(),desc_.fgMultiplier,desc_.vfgQuality))return false;
+    fgCapsAvailable_=true;fgMultiFrameMax_=int(FrameBatch::Capacity)-1;
+    return true;
+}
+
 bool EnhanceGraph::initNgxFeatures()
 {
     Status st = Status::Ok;
@@ -1037,7 +1055,7 @@ bool EnhanceGraph::initNgxFeatures()
     }
     // FSR upscaling is a FidelityFX effect: a session whose only feature is
     // FSR SR must not require (or fail on) the NGX core.
-    const bool needNgxCore = (nrEnabled_ && !lmxxfNr_) || (fgEnabled_ && !fsrEnabled()) || desc_.convertVideoHdr() ||
+    const bool needNgxCore = (nrEnabled_ && !lmxxfNr_) || (fgEnabled_ && !fsrEnabled() && !vfgBackend_) || desc_.convertVideoHdr() ||
         (srEnabled_ && desc_.videoSrQuality!=engine::kVideoSrFsr);
     if (!needNgxCore) {
         veyra::log::info("graph", "NGX core skipped: lmxxf NR / AMD FSR stages use their own runtimes");
@@ -1086,7 +1104,7 @@ bool EnhanceGraph::initNgxFeatures()
         }
         if(!fgCompatibility_->prepareDriver(desc_.runtimeAbsPath,projectId.c_str(),engineVersion.c_str()))return false;
         std::array<ID3D12Resource*,2> real={videoFrame_[0].Get(),videoFrame_[1].Get()};
-        std::array<ID3D12Resource*,kGeneratedPoolSlots> generated{};
+        std::array<ID3D12Resource*,10> generated{};
         for(size_t i=0;i<generated.size();++i)generated[i]=genFrame_[i].Get();
         if(!fgCompatibility_->bindResources(real,generated))return false;
     }
@@ -1102,8 +1120,7 @@ bool EnhanceGraph::initNgxFeatures()
         return false;
     }
 
-    fgCapsAvailable_ = false;
-    fgMultiFrameMax_ = 0;
+    if(!vfgBackend_){fgCapsAvailable_ = false;fgMultiFrameMax_ = 0;}
     if (fgEnabled_ && desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss) {
     failedBackend_=engine::FailedBackend::Fg;
     fgBackend_ = std::make_unique<ngx::DlssFgBackend>();
@@ -2709,6 +2726,15 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if(reduced)out.fgSkippedBeforeEval=out.fgCandidates-fgCalls;
     out.fgRecovery=runFg&&(fgHistorySkipped_||reseedRejected);
     if(fgBackendAvailable&&!runFg){out.fgSkippedBeforeEval=out.fgCandidates;fgHistorySkipped_=true;}
+    if(runFg&&vfgBackend_){
+        // First timestamp precedes the producer signal/CUDA dependency wait;
+        // the matching end follows the consumer copy. The direct-queue span
+        // therefore includes actual cross-queue work, not CPU wall time.
+        gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);
+        tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
+        if(!vfgBackend_->capture(list,videoFrame_[parity].Get(),parity)){failedBackend_=engine::FailedBackend::Fg;return false;}
+        tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
+    }
     if(!runFg)gpuTimer_.resolve(list);
     if (!submitGraph(slot)) return false;
     if(!runFg)gpuTimer_.submitted(ring_.lastSignaledValue());
@@ -2719,6 +2745,30 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if (runFg && fgCreated()) {
       for(uint32_t sub=1;sub<=fgCalls;++sub){
         const uint32_t generatedSlot=parity+(sub-1)*2;
+        if(vfgBackend_){
+            // GPU producer -> CUDA interpolation -> GPU consumer. No per-frame
+            // CPU fence waits/readback; the bounded command ring owns reuse.
+            if(!vfgBackend_->generate(parity,sub,resetFg?2u:outputMultiplier,resetFg)){failedBackend_=engine::FailedBackend::Fg;return false;}
+            auto* flist=ring_.acquireNext(slot,st);if(!flist)return false;
+            tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
+            if(!vfgBackend_->copyOutput(flist,genFrame_[generatedSlot].Get(),generatedSlot)){failedBackend_=engine::FailedBackend::Fg;return false;}
+            tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
+            const auto timingStage=GpuStage(unsigned(GpuStage::Fg1)+sub-1);gpuTimer_.mark(flist,timingStage,true);
+            if(sub<fgCalls)gpuTimer_.mark(flist,GpuStage(unsigned(GpuStage::Fg1)+sub));
+            else{gpuTimer_.mark(flist,GpuStage::FgBatch,true);gpuTimer_.resolve(flist);}
+            if(!submitGraph(slot))return false;
+            if(sub==fgCalls)gpuTimer_.submitted(ring_.lastSignaledValue());
+            ++out.fgEvaluated;out.hasGenerated=!resetFg;out.genSlot=parity;
+            out.genFenceValue=ring_.lastSignaledValue();out.genFenceObject=context_.fence();out.generatedPtsMs=(prevPtsMs_+ptsMs)*0.5;
+            if(out.hasGenerated){
+                ++metrics_.fgSubmittedCandidates;
+                BatchFrame f;f.identity=out.batch.identity;f.kind=FrameKind::Generated;f.validity=GenerationValidity::Pending;f.subframe=sub;
+                f.pts100ns=FrameBatch::interpolate(out.batch.a100ns,out.batch.b100ns,sub,outputMultiplier);
+                f.lease=std::make_shared<FrameLease>();f.lease->texture=genFrame_[generatedSlot];f.lease->slot=generatedSlot;
+                f.lease->readyFence=out.genFenceValue;f.lease->readyFenceObject=out.genFenceObject;generatedLeases_[generatedSlot]=f.lease;out.batch.append(std::move(f));
+            }
+            continue;
+        }
         auto* flist=ring_.acquireNext(slot,st); if(!flist)return false;
         auto* motion=desc_.fgMotionProbe?desc_.fgMotionProbe:(haveFlow&&desc_.fgUsesFlow()?baseFlow_.Get():nrZeroMotion_.Get());
         tracker_.transition(flist,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -2818,7 +2868,7 @@ bool EnhanceGraph::resolveFrame(FrameOutputs& out,uint32_t index)
     auto& frame=out.batch.frames[index];
     if(!frame.lease||!frame.lease->ready())return false;
     if(frame.kind!=FrameKind::Generated||frame.validity!=GenerationValidity::Pending)return true;
-    if(fsrActive()){
+    if(fsrActive()||vfgBackend_){
         frame.validity=out.contentDuplicate?GenerationValidity::Disabled:GenerationValidity::Valid;
         if(out.contentDuplicate){++metrics_.fgDisabledFrames;++metrics_.fgDuplicateSuppressed;}else ++metrics_.fgGeneratedFrames;
         return true;
@@ -2888,7 +2938,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     // DLSS allocates multiplier-specific feature/output resources.
     // XeSS has a fixed 2X proxy swapchain contract. Settings callers must
     // rebuild instead of accepting a change that cannot take effect in place.
-    if(s.nrRuntime!=desc_.nrRuntime||std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||s.videoSrQuality!=desc_.videoSrQuality||!s.validate().empty()||(s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
+    if(s.nrRuntime!=desc_.nrRuntime||std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||s.vfgQuality!=desc_.vfgQuality||s.videoSrQuality!=desc_.videoSrQuality||!s.validate().empty()||(s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
     // The colour master switch changes the graph shape (tables + shader branch)
     // and must rebuild; every other colour field is a live uniform update.
     if(s.color.enabled!=desc_.color.enabled)return false;
@@ -2974,7 +3024,7 @@ ID3D12Fence* EnhanceGraph::contextFence()const{return context_.fence();}
 uint32_t EnhanceGraph::actualFlowPerf()const{return nvof_?nvof_->caps().actualPerfLevel:0;}
 bool EnhanceGraph::fgCreated() const
 {
-    return fsrActive() || (fgBackend_ && fgBackend_->created());
+    return (vfgBackend_&&vfgBackend_->created()) || fsrActive() || (fgBackend_ && fgBackend_->created());
 }
 
 uint64_t EnhanceGraph::lastNvofSignal() const
@@ -3038,6 +3088,7 @@ void EnhanceGraph::shutdown()
     fsrSrZeroMotion_.Reset();upFsrSrZeroMotion_.Reset();
     upFsrSrDepth_.Reset();
     fsrFgBackend_.reset();
+    vfgBackend_.reset();
     if (fgBackend_) fgBackend_->release();
     if(videoSrBackend_){videoSrBackend_->release();videoSrBackend_.reset();}
     videoHdrBackend_.reset();videoHdrInput_.Reset();videoHdrOutput_.Reset();

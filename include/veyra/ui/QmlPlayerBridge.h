@@ -68,6 +68,7 @@ class QmlPlayerBridge : public QObject {
 
     // --- frame generation settings ----------------------------------------
     Q_PROPERTY(QString fgBackendName READ fgBackendName WRITE setFgBackendName NOTIFY settingsChanged)
+    Q_PROPERTY(int vfgQuality READ vfgQuality WRITE setVfgQuality NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList fgBackendChoices READ fgBackendChoices CONSTANT)
     Q_PROPERTY(QString fgProviderText READ fgProviderText NOTIFY fgChoicesChanged)
     Q_PROPERTY(int fgMaxMultiplier READ fgMaxMultiplier NOTIFY snapshotChanged)
@@ -478,6 +479,8 @@ public:
     QVariantList fgBackendChoices() const;
     QString fgProviderText() const;
     void setFgBackendName(const QString& value);
+    int vfgQuality() const;
+    void setVfgQuality(int value);
     int fgMaxMultiplier() const;
     bool fgEnabled() const;
     void setFgEnabled(bool enabled);

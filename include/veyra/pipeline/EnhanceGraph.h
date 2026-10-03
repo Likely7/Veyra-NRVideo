@@ -45,6 +45,7 @@ struct SwsContext;
 struct NVSDK_NGX_Parameter;
 struct NVSDK_NGX_Handle;
 namespace veyra::guidance { class AmdOpticalFlow; class GpuDisOpticalFlow; }
+namespace veyra::pipeline { class VfgBackend; }
 
 namespace veyra::gfx {
 class D3D12DeviceContext;
@@ -69,9 +70,9 @@ struct ColorDescription;
 // Decoded-surface view for the D3D11VA ingress (defined in FramePacket.h).
 struct HardwareSurfaceInput;
 
-// One generated-frame texture per (parity, subframe): 2 parities x 5 generated
-// frames = 6X multi-frame generation. Sized once, reused for every FG backend.
-inline constexpr unsigned kGeneratedPoolSlots=10;
+// One generated texture per (parity, subframe), through seven subframes at 8X.
+// Each backend keeps its own supported multiplier and resource requirements.
+inline constexpr unsigned kGeneratedPoolSlots=2*(FrameBatch::Capacity-1);
 inline constexpr unsigned kOutputPoolSlots=2+kGeneratedPoolSlots;
 
 struct EnhanceGraphDesc {
@@ -114,6 +115,7 @@ struct EnhanceGraphDesc {
     uint32_t flowWidth=0,flowHeight=0; // zero preserves legacy source-space NVOF extent
     uint32_t fgMultiplier=2;
     engine::FrameGenerationBackend frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
+    uint32_t vfgQuality=1;
     uint64_t settingsRevision=1;
     engine::FlowQuality flowQuality=engine::FlowQuality::Balanced;
     engine::OpticalFlowBackend opticalFlowBackend=engine::OpticalFlowBackend::Nvidia;
@@ -602,6 +604,8 @@ private:
     bool initNgxFeatures();
     bool initFsrSr();
     bool initFsrFg();
+    bool initVfg();
+    std::unique_ptr<VfgBackend> vfgBackend_;
     // RTX 40 series: opens the Blackwell-only multi-frame gate in the mapped
     // DLSS-G runtime. Never touched on any other architecture.
     void applyAdaMfgUnlock();

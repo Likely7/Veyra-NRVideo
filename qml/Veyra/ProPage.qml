@@ -1484,6 +1484,7 @@ VPage {
                             }
                             VRow {
                                 label: qsTr("补帧运动来源")
+                                visible: veyra.fgBackendName !== "vfg"
                                 hint: qsTr("XeSS 默认零运动；FSR 仍有自身的光流计算")
                                 VSeg { objectName: "list-fg-motion"; options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.fgMotionSource); onPicked: id => veyra.fgMotionSource = Number(id) }
                             }
@@ -1491,9 +1492,28 @@ VPage {
                                 label: qsTr("倍率")
                                 hint: veyra.fgMaxMultiplier + qsTr("X 为上限")
                                 VSeg {
+                                    visible: veyra.fgBackendName !== "vfg"
                                     options: veyra.fgMultiplierChoices
                                     current: String(veyra.fgMultiplier)
                                     onPicked: id => veyra.fgMultiplier = parseInt(id)
+                                }
+                                VSelect {
+                                    objectName: "list-vfg-multiplier"
+                                    visible: veyra.fgBackendName === "vfg"
+                                    options: veyra.fgMultiplierChoices
+                                    value: String(veyra.fgMultiplier) + "X"
+                                    onPicked: id => veyra.fgMultiplier = Number(id)
+                                }
+                            }
+                            VRow {
+                                label: qsTr("VFG 质量")
+                                visible: veyra.fgBackendName === "vfg"
+                                hint: qsTr("高质量需要更多处理时间")
+                                VSelect {
+                                    objectName: "list-vfg-quality"
+                                    options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")}]
+                                    value: options[veyra.vfgQuality].label
+                                    onPicked: id => veyra.vfgQuality = Number(id)
                                 }
                             }
                             VRow {

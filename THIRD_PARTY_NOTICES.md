@@ -2,6 +2,42 @@
 
 NVIDIA SDKs and runtimes are excluded from source control. The publisher-authorized experimental Release package contains only selected runtime DLLs and applicable notices, as documented in `docs/RUNTIME_COMPONENTS_0.0.2.md`. This is not vendor endorsement or a general redistribution grant. ReShade/RenoDX add-ons are not loaded or distributed by the product.
 
+## NVIDIA Video Frame Generation (local integration, 2026-10-03)
+
+`src/pipeline/VfgBackend.cpp` and `include/veyra/pipeline/VfgBackend.h` implement
+the public native Video Effects SDK 1.3.0 and NvCVImage C APIs. Effect setup,
+`VideoFrameGeneration` selectors, multiplier/frame-index sequencing and quality
+modes were cross-checked against [NVIDIA-Maxine/VFX-SDK-Samples](https://github.com/NVIDIA-Maxine/VFX-SDK-Samples/tree/52011f89c1741d06b40ea312af1f20be8be9ec62),
+fixed commit `52011f89c1741d06b40ea312af1f20be8be9ec62`,
+`apps/VideoFrameGenerationEffectApp/VideoFrameGenerationEffectApp.cpp` and its README (MIT,
+Copyright NVIDIA Corporation). The sample remains in external dependencies;
+its CLI, OpenCV/CPU image transfer and implementation are not vendored.
+Veyra adds its own D3D12/CUDA external-buffer/fence bridge, opaque descriptors
+allocated by NvCVImage, exact adapter-LUID selection, asynchronous native calls,
+bounded output leases, shared preview/export integration, reset and diagnostics.
+The public NvCVImage documentation is authoritative for void destruction and
+borrowed pixel ownership; no proprietary SDK struct or header is copied into Git.
+
+The local runtime is the unmodified official `nvidia-vfx` 0.2.0.0 Windows wheel,
+`nvidia_vfx-0.2.0.0-cp311-cp311-win_amd64.whl`, 435809365 bytes, SHA-256
+`5aaf6a42bc6b6dbbf52fcb714194c994a6893cbbf7ada38bc2165a1f83e4a6fc`.
+Only the fourteen native VFG dependencies are used; Python and its extension
+are not a product dependency. This proprietary runtime is **not MIT**.
+The local candidate carries its NVIDIA software/AI/model terms and third-party
+notices with a separate `vfg-runtime-manifest.json`; public redistribution has
+not been authorized or established by this integration. CUDA driver headers
+are an external build dependency only; the system `nvcuda.dll` is never bundled.
+DLLs remain unmodified, separately identified and outside source control;
+manifest identity does not lock user replacements. Hardware/format support and
+initialization failures are reported by the native backend.
+
+Shared graph/pool, presenter, worker, settings/preset/session and QML modifications
+are Veyra code. The SDK provides frame inference; the local RTX 5070 tests do
+not establish RTX 40 hardware results, physical display latency, universal HDR
+color accuracy or official NVIDIA certification. Provenance and measurements:
+`docs/VFG_RESEARCH_AND_INTEGRATION_PLAN_2026-10-03.md` and
+`docs/VFG_INTEGRATION_ACCEPTANCE_2026-10-03.md`.
+
 ## AVerMedia capture HDR-to-SDR control
 
 The AVerMedia hardware HDR-to-SDR property request in

@@ -361,6 +361,7 @@ add_library(veyra_pipeline STATIC
   src/pipeline/ColorDetailPass.cpp
   src/pipeline/NrInstance.cpp
   src/pipeline/LmxxfNrBackend.cpp
+  src/pipeline/VfgBackend.cpp
 )
 veyra_apply_warnings(veyra_pipeline)
 # FFmpeg/NVOF headers are third-party: /WX stays off for this target.
@@ -370,6 +371,11 @@ target_compile_definitions(veyra_pipeline PUBLIC
   UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
   VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
 target_include_directories(veyra_pipeline PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(VEYRA_CUDA_DRIVER_INCLUDE_DIR "" CACHE PATH "External CUDA driver headers for native VFG (never vendored)")
+if(EXISTS "${VEYRA_CUDA_DRIVER_INCLUDE_DIR}/cuda.h")
+  target_include_directories(veyra_pipeline PRIVATE "${VEYRA_CUDA_DRIVER_INCLUDE_DIR}")
+  target_compile_definitions(veyra_pipeline PRIVATE VEYRA_HAVE_CUDA_DRIVER_HEADERS=1)
+endif()
 target_link_libraries(veyra_pipeline PUBLIC veyra_base veyra_gfx d3d12 dxgi dxguid d3dcompiler)
 add_library(veyra_lmxxf_fake_runtime SHARED tests/unit/LmxxfNrFakeRuntime.cpp)
 target_compile_features(veyra_lmxxf_fake_runtime PRIVATE cxx_std_20)
@@ -391,6 +397,9 @@ target_compile_definitions(veyra_pipeline_tests PRIVATE
   UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_include_directories(veyra_pipeline_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(veyra_pipeline_tests PRIVATE veyra_pipeline)
+add_executable(veyra_vfg_gpu_tests tests/integration/VfgGpuTests.cpp)
+target_compile_features(veyra_vfg_gpu_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_vfg_gpu_tests PRIVATE veyra_pipeline)
 
 add_executable(veyra_scene_tests
   tests/unit/SceneCadenceTests.cpp
@@ -1020,10 +1029,20 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_compile_options(veyra_engine PRIVATE /utf-8)
   target_compile_definitions(veyra_engine PUBLIC VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}" VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
   target_link_libraries(veyra_engine PUBLIC veyra_pipeline veyra_sources veyra_sinks veyra_ngx veyra_nvof)
+  add_executable(veyra_vfg_export_probe tests/integration/VfgExportProbe.cpp)
+  target_compile_features(veyra_vfg_export_probe PRIVATE cxx_std_20)
+  target_compile_options(veyra_vfg_export_probe PRIVATE /utf-8)
+  target_link_libraries(veyra_vfg_export_probe PRIVATE veyra_engine)
   add_executable(veyra_preset_library_tests tests/unit/PresetLibraryTests.cpp src/engine/PresetLibrary.cpp src/engine/EffectChain.cpp)
   target_compile_features(veyra_preset_library_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_preset_library_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_preset_library_tests PRIVATE veyra_base)
+  add_executable(veyra_vfg_settings_tests tests/unit/VfgSettingsTests.cpp src/engine/PresetLibrary.cpp src/engine/PresetStore.cpp src/engine/EffectChain.cpp)
+  target_compile_features(veyra_vfg_settings_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_vfg_settings_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_vfg_settings_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_include_directories(veyra_vfg_settings_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_vfg_settings_tests PRIVATE veyra_base)
 
   add_executable(veyra_effect_chain_tests tests/unit/EffectChainTests.cpp src/engine/EffectChain.cpp)
   target_compile_features(veyra_effect_chain_tests PRIVATE cxx_std_20)

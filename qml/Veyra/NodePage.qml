@@ -68,7 +68,7 @@ VPage {
         case "nr": return "#FF8A3D"
         case "protection": return "#8A8A96"
         case "video-hdr": return "#FFB547"
-        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": return "#3DDC84"
+        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": return "#3DDC84"
         }
         return "#55555C"
     }
@@ -1436,13 +1436,33 @@ VPage {
                     hint: veyra.fgMaxMultiplier + qsTr("X 为上限")
                     VSeg {
                         objectName: "node-fg-multiplier"
+                        visible: veyra.fgBackendName !== "vfg"
                         options: veyra.fgMultiplierChoices
                         current: String(veyra.fgMultiplier)
                         onPicked: id => veyra.fgMultiplier = parseInt(id)
                     }
+                    VSelect {
+                        objectName: "node-vfg-multiplier"
+                        visible: veyra.fgBackendName === "vfg"
+                        options: veyra.fgMultiplierChoices
+                        value: String(veyra.fgMultiplier) + "X"
+                        onPicked: id => veyra.fgMultiplier = Number(id)
+                    }
+                }
+                VRow {
+                    label: qsTr("VFG 质量")
+                    visible: veyra.fgBackendName === "vfg"
+                    hint: qsTr("高质量需要更多处理时间")
+                    VSelect {
+                        objectName: "node-vfg-quality"
+                        options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")}]
+                        value: options[veyra.vfgQuality].label
+                        onPicked: id => veyra.vfgQuality = Number(id)
+                    }
                 }
                 VRow {
                     label: qsTr("补帧运动来源")
+                    visible: veyra.fgBackendName !== "vfg"
                     hint: qsTr("XeSS 默认零运动；FSR 仍有自身的光流计算")
                     VSeg { objectName: "node-fg-motion"; options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.fgMotionSource); onPicked: id => veyra.fgMotionSource = Number(id) }
                 }
