@@ -272,10 +272,185 @@ void barrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource,
 
 } // namespace
 
+// --- RPU scan and playback-history comparison (no GPU work) ------------------
+// Two review questions need evidence that does not go through the shader:
+// does every frame of the sample carry usable conversion parameters, and does a
+// flat (placeholder) frame convert the same way no matter how playback reached
+// it (fresh open, sequential playback, or a backward seek into the opening).
+
+struct Decoder {
+    AVFormatContext* format = nullptr;
+    AVCodecContext* codec = nullptr;
+    AVStream* stream = nullptr;
+    int index = -1;
+    bool flushed = false;
+    ~Decoder() {
+        if (codec) avcodec_free_context(&codec);
+        if (format) avformat_close_input(&format);
+    }
+    bool open(const std::string& path) {
+        if (avformat_open_input(&format, path.c_str(), nullptr, nullptr) < 0) return false;
+        if (avformat_find_stream_info(format, nullptr) < 0) return false;
+        index = av_find_best_stream(format, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+        if (index < 0) return false;
+        stream = format->streams[index];
+        const AVCodec* decoder = avcodec_find_decoder(stream->codecpar->codec_id);
+        if (decoder == nullptr) return false;
+        codec = avcodec_alloc_context3(decoder);
+        if (codec == nullptr || avcodec_parameters_to_context(codec, stream->codecpar) < 0) return false;
+        codec->thread_count = 0;
+        return avcodec_open2(codec, decoder, nullptr) >= 0;
+    }
+    bool seekTo(double seconds) {
+        const int64_t stamp = int64_t(seconds / av_q2d(stream->time_base));
+        if (av_seek_frame(format, index, stamp, AVSEEK_FLAG_BACKWARD) < 0) return false;
+        avcodec_flush_buffers(codec);
+        flushed = false;
+        return true;
+    }
+    double ptsOf(const AVFrame* frame) const {
+        return frame->pts == AV_NOPTS_VALUE ? 0.0 : frame->pts * av_q2d(stream->time_base);
+    }
+    // Next decoded video frame (caller frees) or nullptr at EOF.
+    AVFrame* nextFrame() {
+        for (;;) {
+            AVFrame* frame = av_frame_alloc();
+            const int got = avcodec_receive_frame(codec, frame);
+            if (got == 0) return frame;
+            av_frame_free(&frame);
+            if (got != AVERROR(EAGAIN)) return nullptr;
+            if (flushed) return nullptr;
+            AVPacket* packet = av_packet_alloc();
+            int read = av_read_frame(format, packet);
+            while (read >= 0 && packet->stream_index != index) {
+                av_packet_unref(packet);
+                read = av_read_frame(format, packet);
+            }
+            if (read < 0) {
+                av_packet_free(&packet);
+                avcodec_send_packet(codec, nullptr); // drain
+                flushed = true;
+                continue;
+            }
+            avcodec_send_packet(codec, packet);
+            av_packet_free(&packet);
+        }
+    }
+};
+
+struct RpuFrame {
+    double pts = 0.0;
+    bool hasSide = false;
+    bool usable = false;
+    veyra::pipeline::DolbyVisionP5 params;
+    veyra::source::DolbyVisionP5Build build;
+};
+
+bool readRpu(const AVFrame* frame, RpuFrame& out) {
+    const AVFrameSideData* side = av_frame_get_side_data(frame, AV_FRAME_DATA_DOVI_METADATA);
+    out.hasSide = side != nullptr && side->size >= sizeof(AVDOVIMetadata);
+    if (!out.hasSide) return false;
+    out.build = veyra::source::buildDolbyVisionP5(
+        *reinterpret_cast<const AVDOVIMetadata*>(side->data), out.params);
+    out.usable = out.build.usable;
+    return true;
+}
+
+void printRpu(const char* tag, const RpuFrame& rpu) {
+    std::printf("%s pts=%.3f side=%d usable=%d active=%d missing=%d unsupported=%d placeholder=%d "
+                "curve0=[%.6f,%.6f,%.6f] curve1=[%.6f,%.6f,%.6f] curve2=[%.6f,%.6f,%.6f]\n",
+                tag, rpu.pts, rpu.hasSide ? 1 : 0, rpu.usable ? 1 : 0, rpu.params.active ? 1 : 0,
+                rpu.build.colorMetadataMissing ? 1 : 0, rpu.build.unsupportedMapping ? 1 : 0,
+                rpu.build.placeholderMapping ? 1 : 0,
+                rpu.params.curve[0][0], rpu.params.curve[0][1], rpu.params.curve[0][2],
+                rpu.params.curve[1][0], rpu.params.curve[1][1], rpu.params.curve[1][2],
+                rpu.params.curve[2][0], rpu.params.curve[2][1], rpu.params.curve[2][2]);
+}
+
+// Per-frame RPU report for `count` frames from `seconds`. With `sequential` the
+// file is decoded from the start instead of seeking, which is the other half of
+// the history-independence check.
+bool scanRpu(const std::string& path, double seconds, int count, bool sequential) {
+    Decoder decoder;
+    if (!decoder.open(path)) { std::fprintf(stderr, "dovi-p5-probe: cannot open %s\n", path.c_str()); return false; }
+    if (!sequential && !decoder.seekTo(seconds)) { std::fprintf(stderr, "dovi-p5-probe: seek failed\n"); return false; }
+    int seen = 0, usable = 0, noSide = 0, missing = 0, unsupported = 0, placeholder = 0;
+    while (seen < count) {
+        AVFrame* frame = decoder.nextFrame();
+        if (frame == nullptr) break;
+        RpuFrame rpu;
+        rpu.pts = decoder.ptsOf(frame);
+        if (sequential && rpu.pts + 1e-6 < seconds) { av_frame_free(&frame); continue; }
+        readRpu(frame, rpu);
+        ++seen;
+        if (!rpu.hasSide) ++noSide;
+        if (rpu.build.colorMetadataMissing) ++missing;
+        if (rpu.build.unsupportedMapping) ++unsupported;
+        if (rpu.build.placeholderMapping) ++placeholder;
+        if (rpu.usable) ++usable;
+        printRpu("scan", rpu);
+        av_frame_free(&frame);
+    }
+    std::printf("scan summary frames=%d usable=%d noSideData=%d missingColour=%d unsupported=%d placeholder=%d\n",
+                seen, usable, noSide, missing, unsupported, placeholder);
+    return seen > 0;
+}
+
+// Reaches the frame at `target` three ways and reports whether the conversion
+// parameters are identical, i.e. independent of playback history.
+bool compareHistory(const std::string& path, double target, double later) {
+    RpuFrame reached[3];
+    const char* names[3] = {"fresh-seek", "sequential", "seek-back"};
+    for (int mode = 0; mode < 3; ++mode) {
+        Decoder decoder;
+        if (!decoder.open(path)) { std::fprintf(stderr, "dovi-p5-probe: cannot open %s\n", path.c_str()); return false; }
+        if (mode == 2) {
+            // Play a later part first, then seek back to the target.
+            if (!decoder.seekTo(later)) return false;
+            for (int warm = 0; warm < 8; ++warm) {
+                AVFrame* frame = decoder.nextFrame();
+                if (frame == nullptr) break;
+                av_frame_free(&frame);
+            }
+        }
+        if (mode != 1 && !decoder.seekTo(target)) return false;
+        for (;;) {
+            AVFrame* frame = decoder.nextFrame();
+            if (frame == nullptr) break;
+            if (decoder.ptsOf(frame) + 1e-6 >= target) {
+                reached[mode].pts = decoder.ptsOf(frame);
+                readRpu(frame, reached[mode]);
+                av_frame_free(&frame);
+                break;
+            }
+            av_frame_free(&frame);
+        }
+        printRpu(names[mode], reached[mode]);
+    }
+    bool same = reached[0].hasSide == reached[1].hasSide && reached[1].hasSide == reached[2].hasSide &&
+                reached[0].params.active == reached[1].params.active &&
+                reached[1].params.active == reached[2].params.active;
+    for (int i = 0; same && i < 9; ++i)
+        same = reached[0].params.yccToRgb[i] == reached[1].params.yccToRgb[i] &&
+               reached[1].params.yccToRgb[i] == reached[2].params.yccToRgb[i] &&
+               reached[0].params.lmsToRgb[i] == reached[1].params.lmsToRgb[i] &&
+               reached[1].params.lmsToRgb[i] == reached[2].params.lmsToRgb[i];
+    for (int c = 0; same && c < 3; ++c)
+        for (int k = 0; k < 3; ++k)
+            same = reached[0].params.curve[c][k] == reached[1].params.curve[c][k] &&
+                   reached[1].params.curve[c][k] == reached[2].params.curve[c][k];
+    std::printf("history independent=%d target=%.3f later=%.3f\n", same ? 1 : 0, target, later);
+    return same;
+}
+
 int main(int argc, char** argv) {
     std::string input, output, shaderDir = VEYRA_SHADER_DIR;
     double seconds = 90.0;
+    double later = 0.0;
+    int scan = 0;
+    bool sequential = false, history = false;
     bool useDovi = true;
+    bool sdrOutput = false;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         const bool hasValue = i + 1 < argc;
@@ -283,16 +458,31 @@ int main(int argc, char** argv) {
         else if (arg == "--out" && hasValue) output = argv[++i];
         else if (arg == "--shader" && hasValue) shaderDir = argv[++i];
         else if (arg == "--time" && hasValue) seconds = std::atof(argv[++i]);
+        else if (arg == "--scan" && hasValue) scan = std::atoi(argv[++i]);
+        else if (arg == "--sequential") sequential = true;
+        else if (arg == "--history") history = true;
+        else if (arg == "--later" && hasValue) later = std::atof(argv[++i]);
         else if (arg == "--no-dovi") useDovi = false;
+        else if (arg == "--sdr") sdrOutput = true;
         else { std::fprintf(stderr, "dovi-p5-probe: unknown argument %s\n", arg.c_str()); return 2; }
     }
-    if (input.empty() || output.empty()) {
-        std::fprintf(stderr, "usage: veyra_dovi_p5_probe --input <file> --time <s> --out <raw> [--shader dir] [--no-dovi]\n");
+    if (input.empty()) {
+        std::fprintf(stderr,
+                     "usage: veyra_dovi_p5_probe --input <file> --time <s> --out <raw> [--shader dir] [--no-dovi] [--sdr]\n"
+                     "       veyra_dovi_p5_probe --input <file> --time <s> --scan <frames> [--sequential]\n"
+                     "       veyra_dovi_p5_probe --input <file> --time <s> --history [--later <s>]\n");
         return 2;
     }
+    input = pathForFfmpeg(input);
+    if (scan > 0) return scanRpu(input, seconds, scan, sequential) ? 0 : 3;
+    if (history) return compareHistory(input, seconds, later > 0.0 ? later : seconds + 600.0) ? 0 : 3;
+    if (output.empty()) {
+        std::fprintf(stderr, "dovi-p5-probe: --out is required unless --scan/--history is used\n");
+        return 2;
+    }
+    shaderDir = pathForFfmpeg(shaderDir); // the build directory may sit on a non-ASCII path
 
     DecodedFrame decoded;
-    input = pathForFfmpeg(input);
     if (!decodeFrame(input, seconds, decoded)) return 3;
     AVFrame* frame = decoded.frame;
     const uint32_t width = uint32_t(frame->width), height = uint32_t(frame->height);
@@ -321,7 +511,7 @@ int main(int argc, char** argv) {
     constants[3] = 1.0f;                       // ten-bit sample selector (P010-style)
     constants[4] = bitsToFloat(width);
     constants[5] = bitsToFloat(height);
-    constants[6] = bitsToFloat(1u | 2u);       // bit0 scRGB output, bit1 BT.2020 primaries
+    constants[6] = bitsToFloat(sdrOutput ? 2u : (1u | 2u));
     constants[7] = bitsToFloat(0u);            // chroma location 0 -> point sampling
     constants[8] = 1000.0f;                    // tone-map peak (unused with scRGB)
     constants[9] = 203.0f;
