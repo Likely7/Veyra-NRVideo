@@ -6,8 +6,12 @@
 VFG移除九个当前路径未用NPP，目录497,894,432→210,788,400 bytes；全部档位和插件原字节保持。
 720p/4K各463 native checks、331 settings、21 NVENC导出、组合/缺库/GUI/worker冻结通过。
 AMD生产噪声/reciprocal表、权重与62 HIP kernel保持；仅ABI/布局/哈希验证，不称实卡推理通过。
-当前正在极简新构建回归与完整7z/ZIP打包、独立解压验收；最终数值与源码见本轮DELIVERY索引。
-HDR PR仍只方案等审批。未merge/push/Release，所有产物在E盘；完成保存后按用户明确要求关机。
+最终完整7z523327604 bytes /499.08MiB，备用ZIP943265095 /899.57MiB；比原1098.25MiB ZIP减54.56%。
+2076载荷+manifest独立解压SHA、官方7-Zip CRC、包内VFG热切换/预设/High8冻结worker和GPU/软件六页通过。
+极简新EXE6个DPR用例通过；本机5070/616.56短测边界保持，原桌面/main/2077旧载荷复核一致。
+源码/完整bundle及HDR PR计划、最终索引在E:/项目/Veyra/test-packages/runtime-size-20261004；代码存档2df6dd7。
+临时/解压副本清理遭自动审批拒绝（无具体原因），未重试/绕过，E盘副本保留。HDR仍等审批，未merge/push/Release。
+完成存档/索引后按用户明确要求安排正常关机，使用延迟helper后shutdown /s /t0，操作结果另记E盘日志。
 
 ## 2026-10-04 极简像素缺口已修；HDR PR 等审批
 

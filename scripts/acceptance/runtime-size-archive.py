@@ -44,13 +44,13 @@ if sys.argv[1]=='archive':
 elif sys.argv[1]=='source':
     manifest=json.loads((STAGE/'package-manifest.json').read_text(encoding='utf8'));commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT).decode().strip()
     changed=subprocess.check_output(['git','diff','--name-only',manifest['baseCommit'],commit],cwd=ROOT).decode().splitlines()
-    assert all(p.startswith('docs/') for p in changed),'Product/recipe changed after package build'
+    assert all(p.startswith(('docs/','scripts/acceptance/runtime-size-')) for p in changed),'Product source changed after package build'
     names=subprocess.check_output(['git','ls-files'],cwd=ROOT).decode().splitlines()
     assert not [p for p in names if Path(p).suffix.lower() in {'.dll','.exe','.lib','.pdb','.whl','.f16','.f32','.i32','.onnx','.hsaco','.cso','.ptx','.addon64'}],'Runtime/model in source'
     source=OUT/('Veyra-'+LABEL+'-source.zip');assert not source.exists()
     subprocess.run(['git','archive','--format=zip','--output',str(source),commit],cwd=ROOT,timeout=60,check=True)
     with zipfile.ZipFile(source) as z:assert z.testzip() is None
     digest=pkg.digest(source);Path(str(source)+'.sha256').write_text(digest+'  '+source.name+'\n',encoding='ascii')
-    write(LOGS/'source-audit.json',{'source':str(source),'bytes':source.stat().st_size,'sha256':digest,'sourceArchiveCommit':commit,'compiledCodeCommit':manifest['baseCommit'],'onlyDocumentationChanged':changed,'completeDependencySource':False,'sdkRuntimeModelsIncluded':False})
+    write(LOGS/'source-audit.json',{'source':str(source),'bytes':source.stat().st_size,'sha256':digest,'sourceArchiveCommit':commit,'compiledCodeCommit':manifest['baseCommit'],'nonProductChanges':changed,'productCodeEqual':True,'completeDependencySource':False,'sdkRuntimeModelsIncluded':False})
     print('SOURCE ZIP PASS',source,digest,commit,flush=True)
 else:raise SystemExit('archive or source')

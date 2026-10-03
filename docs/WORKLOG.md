@@ -1,5 +1,17 @@
 # Veyra 工作记录
 
+## 2026-10-04 瘦身完整候选最终验收与关机准备
+
+- 当前产品commit2df6dd7 / checkpoint/runtime-size-code-20261004不变；随后只更新报告、修build脚本EOF空行、增加无损比较/独立CRC/最终索引验收recipe，不改产品源码、不重写模型。`git diff --check`与最终scope guard通过。
+- `runtime-size-archive.py archive`：ZIP9 943265095 bytes /SHA40b44bfe…c4b98（240.204s）；7z32MiB 728771789 /SHA5bb973da…1b78（705.671s），各2076载荷逐SHA/manifest通过。压缩不是单次产品测试；所有产品子进程仍≤300秒。
+- `runtime-size-dense-archive.py`：LZMA2/preset5/256MiB字典，523327604 bytes /SHAdcb38d16…5d94f，843.531s含新空目录独立解压和全文件SHA；499.08MiB，比原1098.25MiB ZIP少54.56%，比7z32进一步省205444185 bytes。仅压缩包装，不改运行内存/文件字节；原AMD586.54MiB保持。两份NR DLL的对齐chunk88.62%相同，跨文件复用有依据。已将较小dense改为正式本地候选同名.7z，原32MiB移tmp作对比，Windows native Move之前检查绝对task边界/普通文件与SHA。
+- 官方7zip26.03 extra/7zr从7-zip.org下载页指向ip7z/7zip固定tag；GitHub release asset digest核验，工具只在E:/项目/Veyra/deps/7zip-26.03-runtime-size-20261004，不进软件/源码。初次用py7zr解官方extra遇BCJ2不支持，改用作者7zr解出x64/7za，不涉及Veyra LZMA2包。`runtime-size-native-archive-check.py ... native-archive32-v1`和`native-archive-final-v1`各exit0、Everything is Ok，2077文件，解压1678742422 bytes，方法LZMA2:25/28；CLI SHA与来源在7zip-tool-provenance/native-archive JSON。
+- `runtime-size-clean-smoke.py verify/.../dense/Veyra-...` exit0：最终所选256MiB字典7z独立解压，Windows-only PATH、无SDK override，真实包内VFG run/restore/missing与High8冻结worker输出64HEVC帧/240fps+AAC通过；GPU和软件各六页alpha255/dark背景/正常退出，运行前后2076载荷全SHA不变。12截图在verify/task/dense/gpu-evidence、software-evidence；日志clean-smoke/ui-package-final；未捕获其它程序内容。
+- 收尾 `runtime-size-isolation.py audit` exit0：桌面status规范化、working/index二进制patch与11个未跟踪源码hash、main66cd3e5、原2077载荷与原EXE全部保持。新软件/源码/runtime分离，HDRPR未施工、未merge/push/Release，没有Agent。
+- 按目录规则清理自有中间包/两个解压APP/tests APP：单一PowerShell全程、每一绝对源/目标先验证仅在本轮task roots、普通路径/无reparse后Move/Remove。工具CreateProcess直接拒绝，只有blocked by policy无具体原因，整个命令未执行，未重试或绕过；cleanup.json记录deleted=[]，E盘副本仍保留，不能说已清理。最终交付不依赖清理。
+- 交付目录E:/项目/Veyra/test-packages/runtime-size-20261004保留完整stage、最终7z+ZIP、项目源码ZIP、DELIVERY.md/json、HDR_DOVI_PR_REVIEW；最终完整git bundle在archives/task并verify。源码包含后续报告/验收recipe，compiledCodeCommit与SOURCE对照严格无产品改动。对应各SHA记录在索引，避免源包自身哈希循环。
+- 用户明确要求完成后关机；所有本轮测试/build子进程已退出，保存最终索引/源码/bundle后才安排隐藏30秒helper调用shutdown /s /t0，不使用/f（官方/t>0会隐含/f）。运行结果将写logs/task/shutdown*.json；本条是关机准备，不冒充电脑已关闭。无全局TEMP修改，不杀用户其它应用。
+
 ## 2026-10-04 VFG / AMD NR 瘦身（组包前）
 
 - 用户要求稳定性优先、尽量瘦身、完整本地测试包、HDR PR计划、完成保存后关机。按前文将VSF理解为VFG；不开Agent。分支codex/runtime-size-20261004、基线fc2ca716、tag checkpoint/pre-runtime-size-20261004，bundle verify，SHA256 6d2b64b471cb84effd84670a07f3079b5f71f630940926338052099e4cbfd694；先写RUNTIME_SIZE_PLAN后修改最小依赖加载。
@@ -11,6 +23,7 @@
 - 压缩样本原450,593,392 bytes；ZIP9 277,853,065 / 7z-solid-LZMA2-32MiB 166,108,485，约40.2%样本收益。仅包装压缩、不改运行字节；原AMD目录615,032,656 bytes保持。完整包与独立解压验收尚待完成，数据不外推。新版SOURCE/7z/ZIP/manifest和最后交付索引将单独保存。
 - 再查PR13/14远端head分别f08934b8/57f2541b，与固定审查版本一致，OPEN/noCI；无PR评论/作者代码执行/HDR实施。推荐P5精确转换→亮度统计/reset→保存/worker兼容→同源列表/节点UI与输出校准→颜色/实机矩阵后经批准合并，详HDR_DOVI_PR_REVIEW。
 - `runtime-size-edge-tests.py edges-v1 after`6例通过：5种Qt模拟scale factor GPU与125%软件模式，当前新EXE实际native client右/底gap0，右侧/内侧/中心cyan一致。初始黑边分支30+12+2验收仍保留。本轮不是新的30例或实显示器跨DPI认证。
+- 本地产品代码存档2df6dd729b9fe7d32ed41753ab3422e5cc7eda0c / checkpoint/runtime-size-code-20261004，完整stage2076载荷；首轮cached diff-check指出生成build脚本EOF多余空行，已清理。后续source ZIP收最终报告/验收recipe，并严格只允许docs/runtime-size验收脚本变化，compiledCodeCommit保留，不能将产品改动混入未重构建的包。
 - 所有新产物为E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/runtime-size-20261004；单测试进程≤300s、构建≤900s，TEMP/TMP/CUDA cache仅子进程E盘。RTX5070/616.56短测；RX9000/Xbox真机/RTX40/616.92/HDR色度/实屏DPI/物理节奏/长稳未验仍明确保留。待最后桌面/main/旧包隔离复核与保存后才执行关机。
 
 ## 2026-10-04 极简右侧像素缺口与HDR PR静态审查

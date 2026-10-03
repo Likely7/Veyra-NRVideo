@@ -44,4 +44,3 @@ print('BUILD', code, log)
 print('\n'.join(log.read_text(encoding='utf8', errors='replace').splitlines()[-25:]))
 subprocess.run([sys.executable, '-B', str(CONTROL)], check=True)
 raise SystemExit(code)
-

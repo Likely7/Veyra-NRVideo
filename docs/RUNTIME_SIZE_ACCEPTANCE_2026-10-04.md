@@ -46,9 +46,30 @@ VFG/native/export/UI child PATH 限 Windows，无 SDK 路径、无 NPP 文件。
 - AMD原529记录逐文件哈希、真实C ABI144 bytes/ABI1、62模块布局验证通过。
   caps.hip=0，本机没有RX9000；没有执行 HIP 推理，不能称AMD画质/性能/稳定性验收。
 
-极简新EXE的分数DPR边缘回归、最终7z/ZIP校验及干净解压实跑另记WORKLOG/交付索引；
-本文件的包内版本为组包前快照，最终报告在同目录，避免为自身哈希反复改包。
+极简新EXE的6例分数DPR回归通过，右/底native gap0。最终2076载荷+manifest独立解压SHA通过，
+官方7-Zip26.03 CRC/兼容性通过；Windows-only PATH下包内VFG真实run/restore/missing与High8 worker通过，
+GPU/软件各六页背景alpha255和正常退出通过，运行前后所有载荷哈希一致。
+本文件包内版本为组包前快照，最终报告/交付索引在包同目录，避免为自身哈希反复改包。
 当前应用 SHA256 `88597f61c8d01105533927859726815aaf3c67034e71bddf17852fb13c341bfc`。
+
+## 最终完整包
+
+| 产物 | bytes | MiB | SHA256 |
+| --- | ---: | ---: | --- |
+| 首选7z / LZMA2 256MiB字典 | 523327604 | 499.08 | dcb38d16f59d9578b66d1f759092c2d5dd5c95606c3411c863cd5eb5fea5d94f |
+| 备用ZIP / deflate9 | 943265095 | 899.57 | 40b44bfea5d358fa94cc9cb6bbd303e11c18cc861471847c2bed9086bd3c4b98 |
+
+原完整VFG ZIP1151602649 bytes / 1098.25MiB → 首选499.08MiB，传输体积减少54.56%。
+这是裁未用依赖再换无损压缩格式，不能说AMD模型本身缩小了54.56%。
+32MiB字典7z728771789 bytes；256MiB字典进一步省205444185 bytes（28.19%）。
+两份NR DLL对齐1MiB chunk中146966128/165840496 bytes相同（88.62%）；大字典跨文件复用，
+不合并、patch或省略任何运行DLL。解压额外约256MiB字典内存，运行显存/内存不因此变化，ZIP备用保持。
+
+产品代码存档 `2df6dd729b9fe7d32ed41753ab3422e5cc7eda0c` / `checkpoint/runtime-size-code-20261004`。
+最终报告/验收脚本源码commit、项目源码ZIP和verify过的完整bundle见DELIVERY.json；产品代码保持相同。
+桌面status/working与index patch/11未跟踪源码、main66cd3e5、原2077载荷哈希全部复核一致。
+清理本轮中间压缩包与解压/测试APP副本的单一PowerShell命令被自动审批拒绝，仅给blocked by policy无细节。
+命令未执行，未重试或绕过，副本保留在E盘task目录，不影响交付/核验；不能报告它们已删除。
 
 ## 未验与复现位置
 
