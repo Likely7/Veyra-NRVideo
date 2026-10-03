@@ -29,6 +29,8 @@ DLSS 兼容原十张全尺寸纹理仍保留。FG 位于增强之后、OSD/字�
 | 实际 GUI | `ui-v4/summary.json`，全部倍率热切换、8X 三质量、暂停/seek/resize/resume、节点/列表独立质量、两预设保存与重启通过 |
 | worker 冻结 | 同 GUI 测试：启动8X Medium后父进程改2X Low，worker仍输出64帧/240fps；不读运行中的新设置 |
 | 缺失运行库预览 | `ui-v4/missing.log`，fgActive=false、fgEnabled=false、multiplier=1，9.1667s进度继续，警告明确点名 VFG |
+| 便携 staging 实跑 | `ui-package-stage-v3/summary.json`，PATH仅Windows、无VFG环境变量；全倍率/质量、真正DLSS6↔VFG8切换、保存恢复、缺失组件回退通过；SDK从 `runtime/nvidia-vfg` 加载 |
+| 非默认质量 worker 冻结 | `ui-package-stage-v3/export-worker-29212.log`，父进程启动8X High后改2X Low，worker SDK `multiplier=8 quality=2`，输出64帧；日志 `vfgQuality=2`，不依靠默认Medium制造通过 |
 
 21种导出的首尾填充是现有 CFR 策略：N张源、(N−1)(M−1)张生成、M−1张尾 hold。
 日志分别计数；尾 hold 不计作算法生成帧。输出倍率不等于每张视频图像都应互不相同。
@@ -71,6 +73,11 @@ unit-v1 的缺失 argv、unit-v2 的旧非法枚举值、export-v1 的过严微�
 GUI ui-v1 与 Qt Quick 并行时出现暂停；GPU正常排空，无卡死证据。焦点/按键干扰是推断，
 串行 ui-v2/v4 正常。不能把上述首次失败记录当最终通过。
 
+便携 staging 首次缺失 SDK：包实际以 `runtime/experimental` 为现有根目录，最初放在
+`runtime/nvidia/vfg` 无法找到；已改放自动发现的 sibling `runtime/nvidia-vfg`。这次独立
+运行测试发现的是实际打包错误，不以开发环境变量测试代替最终包测试。旧DLSS热切换
+测试曾只检查pending设置；已改为等真正“DLSS 6X”运行标签和出帧再返回VFG8。
+
 ## 来源与本地交付状态
 
 NVIDIA 官方 wheel0.2.0.0/SDK1.3.0，435809365 bytes，SHA256
@@ -79,6 +86,12 @@ MIT样例固定 `52011f89c1741d06b40ea312af1f20be8be9ec62`，改造/来源见 TH
 闭源 runtime 与样例许可证不同；十四个必需 DLL 原样保存在本地候选 `runtime/nvidia-vfg`，
 独立 `vfg-runtime-manifest.json`/许可证，不进入源码 Git，不增加用户运行库哈希锁。
 
-预定本地候选 `E:/项目/Veyra/test-packages/vfg-integration-20261003/`
-`Veyra-2.0.2-vfg-20261003-win64-portable.zip`；最终组包、清洁环境实跑与哈希将在完成后记录。
-源码已达到上述本机检查，最终包目前尚未验收。未 merge main、push 或公开发布。
+产品代码存档 `0d891731ba6556c47563a090c5746bac803cabe4` /
+`checkpoint/vfg-code-20261003`；之后仅修复组包/验收脚本与文档，产品源文件未变。
+VFG十四 DLL 已逐项核验原件 SHA256/版本/Valid NVIDIA 签名，原43运行组件与patched
+FFmpeg沿用既有身份。两者均是组包审计，不是用户替换运行库的加载锁。
+
+本地候选目录 `E:/项目/Veyra/test-packages/vfg-integration-20261003/`
+`Veyra-2.0.2-vfg-20261003-win64-portable` 的完整GUI与worker实跑已通过。
+此件记录组包前验收；最终ZIP额外做完整文件哈希核验、独立解压实跑和双渲染器六页检查，
+结果放在同目录交付报告与 `.sha256` 文件，源码仓库的本文件随后更新。未 merge main、push 或公开发布。

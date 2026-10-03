@@ -63,12 +63,15 @@ elif mode=='archive':
         pkg.validate_payload(name)
         records.append({'path':name,'size':file.stat().st_size,'sha256':pkg.digest(file)})
     assert not any('fake' in r['path'].lower() or r['path'].endswith(('.pyd','.addon64','.pdb','.lib','.whl')) for r in records)
-    manifest.update(files=records,localOnly=True,vfgProvenance='vfg-runtime-manifest.json',amdProvenance='runtime/amd-nr/amd-nr-local-manifest.json',rtx40HardwareVerified=False,amdInferenceVerified=False,xboxHardwareVerified=False)
+    archiveCommit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT).decode().strip()
+    changes=subprocess.check_output(['git','diff','--name-only',manifest['baseCommit'],archiveCommit],cwd=ROOT).decode().splitlines()
+    assert all(p.startswith(('docs/','scripts/acceptance/vfg-')) for p in changes),'Product source changed after staging'
+    manifest.update(files=records,localOnly=True,sourceArchiveCommit=archiveCommit,vfgProvenance='vfg-runtime-manifest.json',amdProvenance='runtime/amd-nr/amd-nr-local-manifest.json',rtx40HardwareVerified=False,amdInferenceVerified=False,xboxHardwareVerified=False)
     (STAGE/'package-manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf8')
     source=OUTPUT/('Veyra-'+LABEL+'-source.zip')
-    # The payload's source commit is the implementation checkpoint; later docs
-    # commits contain acceptance evidence but cannot silently repin its binaries.
-    subprocess.run(['git','archive','--format=zip','--output',str(source),manifest['baseCommit']],cwd=ROOT,timeout=60,check=True)
+    # Include the repaired packaging recipe and current evidence while retaining
+    # the exact implementation checkpoint; only docs/packaging may differ.
+    subprocess.run(['git','archive','--format=zip','--output',str(source),archiveCommit],cwd=ROOT,timeout=60,check=True)
     source.with_suffix('.zip.sha256').write_text(pkg.digest(source)+'  '+source.name+'\n',encoding='ascii')
     archive=Path(str(STAGE)+'.zip')
     with zipfile.ZipFile(archive,'x',zipfile.ZIP_DEFLATED,compresslevel=5) as z:

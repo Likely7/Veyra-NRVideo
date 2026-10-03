@@ -25,4 +25,5 @@ SDK 来源/固定版本/哈希/许可/研究证据见 [研究方案](VFG_RESEARC
 - P0 研究已完成；完整结果在研究方案。
 - P1–P4 已实现，P5 原生720p/4K全组合、21种真实导出、GUI热切换/会话/worker/缺失组件回退、本机 NR+最高 SR4K+VFG8 已通过，详见 `VFG_INTEGRATION_ACCEPTANCE_2026-10-03.md`。
 - 最终产品编译 `build-product-v4.log` exit0；设置/旧格式/QML回归 `unit-v4`、GUI `ui-v4`、组合 `combinations-v4` 通过。核心与早期失败证据均保留，不把短测当长稳或物理显示验收。
-- 本地便携候选组包和脱离开发目录的最终验证尚在进行；没有 merge/push/Release。
+- 本地便携 staging 全GUI/worker验证 `ui-package-stage-v3` 已通过，含无环境变量/仅Windows PATH、DLSS6↔VFG8和High2实际worker冻结。首次打包根目录错误已修为 `runtime/nvidia-vfg`；原件十四DLL版本/签名/哈希审计通过。
+- 最终ZIP组包及清洁解压检查在进行；没有 merge/push/Release。

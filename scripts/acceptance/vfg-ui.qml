@@ -17,6 +17,7 @@ Item {
     function next(n){step=n;waited=0}
     function find(item,name){if(item.objectName===name)return item;for(const child of item.children||[]){const r=find(child,name);if(r)return r}return null}
     function findNodePage(item){if(typeof item.selectId==="function")return item;for(const child of item.children||[]){const r=findNodePage(child);if(r)return r}return null}
+    function findProPage(item){if(typeof item.overlayContains==="function"&&typeof item.tab==="string")return item;for(const child of item.children||[]){const r=findProPage(child);if(r)return r}return null}
     function preset(name){return veyra.presets.findIndex(x=>x.name===name)}
     function startCase(){const c=cases[current];beforePosition=veyra.position;veyra.fgMultiplier=c.m;veyra.vfgQuality=c.q;next(2)}
     Connections {target: veyra;function onNotice(message,error){console.log("VFG_NOTICE",message,error)}}
@@ -24,6 +25,8 @@ Item {
         onTriggered: {try {
             if(++test.ticks>1150)test.check(false,"230-second deadline");++test.waited
             if(!test.media.length)return
+            const rtss=test.find(test.appWindow.contentItem,"overlay-restart-confirm")
+            if(rtss&&rtss.shown){rtss.close();rtss.rejected();console.log("VFG_UI_RTSS_DEFER")}
             if(test.step===0){
                 if(test.waited<10)return
                 test.check(veyra.fgBackendChoices.some(x=>x.id==="vfg"),"VFG backend menu")
@@ -37,6 +40,8 @@ Item {
                 }
                 veyra.muted=true;veyra.nrEnabled=false;veyra.srEnabled=false
                 test.appWindow.page="pro"
+                const professional=test.findProPage(test.appWindow.contentItem)
+                if(professional)professional.tab="fg"
                 if(test.phase==="missing"){
                     veyra.openPath(test.media);test.next(20);return
                 }
@@ -64,15 +69,17 @@ Item {
             }else if(test.step===3){
                 if(test.waited<8||veyra.applying)return
                 test.check(veyra.savePresetAs("VFG List 8 Medium",15,false),"save list VFG preset")
-                test.appWindow.contentItem.grabToImage(r=>r.saveToFile(test.evidence+"/vfg-list.png"))
-                veyra.fgBackendName="dlss";veyra.fgMultiplier=6;test.next(15)
+                test.next(12)
+                test.appWindow.contentItem.grabToImage(r=>{test.check(r.saveToFile(test.evidence+"/vfg-list.png"),"list screenshot");veyra.fgBackendName="dlss";veyra.fgMultiplier=6;test.next(15)})
             }else if(test.step===15){
                 if(test.waited<12||veyra.applying)return
+                if(veyra.runStatusDetail.indexOf("DLSS")<0||veyra.runStatusDetail.indexOf("6X")<0){if(test.waited<100)return;test.check(false,"DLSS 6X actual running label")}
                 test.check(veyra.fgActive&&veyra.fgBackendName==="dlss"&&veyra.fgMultiplier===6,"legacy DLSS 6X works after VFG 8X")
                 console.log("VFG_UI_DLSS6_PASS",veyra.runStatusDetail)
                 veyra.fgBackendName="vfg";veyra.fgMultiplier=8;test.next(16)
             }else if(test.step===16){
                 if(test.waited<12||veyra.applying)return
+                if(veyra.runStatusDetail.indexOf("NVIDIA VFG")<0||veyra.runStatusDetail.indexOf("8X")<0){if(test.waited<100)return;test.check(false,"VFG 8X actual running label after DLSS")}
                 test.check(veyra.fgActive&&veyra.fgBackendName==="vfg"&&veyra.fgMultiplier===8,"VFG 8X restores after DLSS 6X")
                 veyra.togglePlayPause();test.next(4)
             }else if(test.step===4){
@@ -94,12 +101,13 @@ Item {
                 const page=test.findNodePage(test.appWindow.contentItem),fg=veyra.chain.find(x=>x.type==="frame-generation")
                 if(page&&fg)page.selectId(fg.id)
                 test.check(veyra.savePresetAs("VFG Node 8 High",15,true),"save node VFG preset")
-                test.appWindow.contentItem.grabToImage(r=>r.saveToFile(test.evidence+"/vfg-node.png"))
-                veyra.stopPlayback();test.next(8)
+                test.next(12)
+                test.appWindow.contentItem.grabToImage(r=>{test.check(r.saveToFile(test.evidence+"/vfg-node.png"),"node screenshot");veyra.stopPlayback();test.next(8)})
             }else if(test.step===8){
                 if(test.waited<8||veyra.hasSource)return
                 veyra.nodeMode=0;test.appWindow.page="pro"
                 test.check(veyra.fgMultiplier===8&&veyra.vfgQuality===1,"list state survives node High")
+                veyra.vfgQuality=2
                 veyra.addExportFiles([test.shortMedia]);veyra.exportCompletionSound=false;veyra.exportHevc=true;veyra.exportSrTargetIndex=-1;veyra.exportRateControl=1;veyra.exportBitrateMbps=18
                 test.next(9)
             }else if(test.step===9){

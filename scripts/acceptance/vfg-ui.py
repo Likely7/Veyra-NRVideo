@@ -1,5 +1,5 @@
 """Real GUI hot switches, persistence and process-isolated VFG export; each run <300s."""
-import json, os, shutil, subprocess, sys
+import json, os, re, shutil, subprocess, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='vfg-integration-20261003'
 APP=BASE/'tests'/TASK/'app';BUILD=BASE/'build'/TASK
@@ -43,6 +43,14 @@ try:
         text=(logs/(phase+'.log')).read_text(encoding='utf8',errors='replace')
         marker={'run':'VFG_UI_PASS','restore':'VFG_UI_RESTORE_PASS','missing':'VFG_UI_MISSING_PASS'}[phase]
         assert code==0 and marker in text and 'VFG_UI_FAIL' not in text,text[-5000:]
+        if phase=='run':
+            pids=re.findall(r'\[export-worker\] started jobId=\d+ pid=(\d+)',text);assert len(pids)==1,pids
+            worker=APP/'logs'/('export-worker-'+pids[0]+'.log')
+            assert worker.resolve().is_relative_to(APP.resolve())
+            workerText=worker.read_text(encoding='utf8',errors='replace')
+            assert 'backend=NVIDIA-VFG vfgQuality=2' in workerText and 'multiplier=8 quality=2' in workerText,workerText[-4000:]
+            destination=logs/worker.name;assert destination.resolve().is_relative_to((BASE/'logs'/TASK).resolve())
+            shutil.move(str(worker),str(destination))
         results.append({'phase':phase,'returncode':code,'marker':marker});print(results[-1],flush=True)
 finally:main.write_bytes(original)
 if 'run' in phases:

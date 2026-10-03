@@ -1,5 +1,12 @@
 # Veyra 工作记录
 
+## 2026-10-03 VFG 本地便携 staging
+
+- 已存档产品 `0d891731ba6556c47563a090c5746bac803cabe4` / checkpoint/vfg-code-20261003。后续改动仅docs/acceptance脚本，产品源文件未变。`vfg-package.py stage` 完成现有43原件/FFmpeg/Qt组包，VFG附加审计最初失败三次：继承PSMODULEPATH大小写导致Security模块导入错、PowerShell5 JSON数组管道嵌套、Python误写utf8-sig codec；分别修环境key筛除/foreach/utf-8-sig，`finish-stage` exit0。失败由工具stdout记录，不宣称签名检查未运行时已经通过。
+- 初次 `vfg-ui.py ui-package-stage package <candidate>` exit1，“未找到VFG运行组件”；实际现有runtime root是runtime/experimental，runtime/nvidia/vfg不能自动发现。仅在本候选已核对的绝对路径间Move-Item迁到runtime/nvidia-vfg（原件SHA未变），修manifest/打包recipe后`finish-stage` exit0。
+- `vfg-ui.py ui-package-stage-v3 package <candidate>` exit0，PATH仅Windows、无VEYRA_VFG_RUNTIME，全倍率/三质量/保存恢复/缺失库回退通过。实际DLSS6↔VFG8切换通过，15:45:05.853运行标签“补帧6X·DLSS”，不是只看pending选择。High8导出后父进程改Low2，worker export-worker-29212.log SDK quality=2、64输出/vfgQuality=2，真实非默认质量冻结验证通过；日志移动至本任务logs，不携带进用户包。
+- staging十四VFG DLL SHA/版本/Valid NVIDIA签名核验通过；无Python扩展/SDK头文件/系统nvcuda进入包或源码Git。原五项候选的模型/HIP与MITruntime在runtime/amd-nr独立保留；AMD/主机硬件未验没有扩展为通过。最终ZIP核验/清洁解压检查在进行。
+
 ## 2026-10-03 VFG 全倍率产品闭环（最终组包前）
 
 - 产品 native/graph/pool/presenter/NVENC、backend ID4与三质量、旧格式迁移、列表/节点预设/会话、worker ABI8、QML全部倍率控件完成。原生463 checks各720p/4K与实际21种导出通过；详情 `docs/VFG_INTEGRATION_ACCEPTANCE_2026-10-03.md`，此前“产品仍在进行”条目是早期状态。
