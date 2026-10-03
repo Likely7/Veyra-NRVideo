@@ -8,20 +8,25 @@ NAMES=('cudart64_12.dll','nppc64_12.dll','nppial64_12.dll','nppicc64_12.dll','np
 spec=importlib.util.spec_from_file_location('qml_package',ROOT/'scripts/package-qml-release.py');pkg=importlib.util.module_from_spec(spec);spec.loader.exec_module(pkg)
 subprocess.run([sys.executable,'-B',str(ROOT/'scripts/acceptance/vfg-control.py')],check=True)
 mode=sys.argv[1]
-if mode=='stage':
+if mode in ('stage','finish-stage'):
     assert not subprocess.check_output(['git','status','--porcelain'],cwd=ROOT).strip(),'Commit the validated source before staging'
     assert pkg.digest(WHEEL)=='5aaf6a42bc6b6dbbf52fcb714194c994a6893cbbf7ada38bc2165a1f83e4a6fc'
     OUTPUT.mkdir(parents=True,exist_ok=True)
     command=[sys.executable,'-B',str(ROOT/'scripts/package-qml-release.py'),'--build',str(BASE/'build'/TASK),'--runtime-source',str(BASE/'releases/2.0.2/Veyra-2.0.2-win64-portable'),'--legacy-licenses',str(BASE/'releases/2.0.2/Veyra-2.0.2-win64-portable/licenses'),'--qt','C:/veyra-deps/qt-veyra/6.8.3/msvc2022_64','--qt-licenses',str(BASE/'deps/qt-licenses-6.8.3'),'--output',str(OUTPUT),'--label',LABEL,'--no-archive']
-    with (LOGS/'package-stage.log').open('xb') as log:subprocess.run(command,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,timeout=290,check=True)
-    shutil.copytree(BASE/'deps/veyra-amd-nr-039-20261003',STAGE/'runtime/amd-nr')
-    target=STAGE/'runtime/nvidia/vfg';target.mkdir(parents=True)
+    if mode=='stage':
+        with (LOGS/'package-stage.log').open('xb') as log:subprocess.run(command,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,timeout=290,check=True)
+        shutil.copytree(BASE/'deps/veyra-amd-nr-039-20261003',STAGE/'runtime/amd-nr')
+    target=STAGE/'runtime/nvidia/vfg'
+    if mode=='stage':target.mkdir(parents=True)
+    else:assert target.is_dir() and pkg.digest(STAGE/'veyra_qml_ui.exe')==pkg.digest(BASE/'build'/TASK/'veyra_qml_ui.exe')
     records=[]
     for name in NAMES:
-        source=SDK/'nvvfx/libs'/name;shutil.copy2(source,target/name)
+        source=SDK/'nvvfx/libs'/name
+        if mode=='stage':shutil.copy2(source,target/name)
+        else:assert pkg.digest(target/name)==pkg.digest(source),name
         records.append({'path':'runtime/nvidia/vfg/'+name,'name':name,'source':str(source),'size':source.stat().st_size,'sha256':pkg.digest(source),'experimental':True,'removable':True,'modified':False})
     identityFile=BASE/'tmp'/TASK/'vfg-identities.json';identityFile.write_text(json.dumps(records,ensure_ascii=False),encoding='utf8')
-    env=os.environ.copy();env.pop('PSModulePath',None);env['VEYRA_VFG_IDENTITIES']=str(identityFile)
+    env={k:v for k,v in os.environ.items() if k.upper()!='PSMODULEPATH'};env['VEYRA_VFG_IDENTITIES']=str(identityFile)
     script=r'''$ErrorActionPreference='Stop'; @(Get-Content -LiteralPath $env:VEYRA_VFG_IDENTITIES -Encoding UTF8 -Raw | ConvertFrom-Json) | ForEach-Object { $s=Get-AuthenticodeSignature -LiteralPath $_.source; $v=[System.Diagnostics.FileVersionInfo]::GetVersionInfo($_.source); [PSCustomObject]@{name=$_.name;version=$v.FileVersion;signature=[string]$s.Status;signer=$s.SignerCertificate.Subject} } | ConvertTo-Json -Depth 4'''
     identities=json.loads(subprocess.check_output(['powershell','-NoProfile','-NonInteractive','-Command',script],env=env,timeout=90).decode('utf8-sig'))
     for r in records:
@@ -73,4 +78,4 @@ elif mode=='archive':
     archive.with_suffix('.zip.sha256').write_text(audit['sha256']+'  '+archive.name+'\n',encoding='ascii')
     (LOGS/'candidate-package-audit.json').write_text(json.dumps(audit,indent=2),encoding='utf8')
     print('LOCAL VFG CANDIDATE ARCHIVE PASS',json.dumps(audit),flush=True)
-else:raise SystemExit('stage or archive')
+else:raise SystemExit('stage, finish-stage or archive')
