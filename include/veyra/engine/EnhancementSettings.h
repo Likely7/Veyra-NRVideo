@@ -292,6 +292,11 @@ struct EnhancementSettings {
         }
         video.videoHdr=other.videoHdr;
         video.videoHdr.enabled=videoHdr.enabled;
+        // Custom: the HDR-source route changes the working space and whether the
+        // TrueHDR feature exists, so it is part of the graph shape (revision)
+        // exactly like videoHdr.enabled above. The tone-map tuning parameters stay
+        // live uniforms and are deliberately not copied here.
+        video.videoHdr.convertHdrSource=videoHdr.convertHdrSource;
         return video==other;
     }
     void rejectVideoRequest(const EnhancementSettings& attempted,const EnhancementSettings& previous) {

@@ -630,6 +630,11 @@ bool requiresGraphRebuild(const EnhancementSettings& previous, const Enhancement
     if (previous.flow != next.flow) return true;
     if (previous.captureCompatible != next.captureCompatible) return true;
     if (previous.forceSdrPreview != next.forceSdrPreview) return true;
+    // Custom: switching HDR sources onto the RTX Video HDR route changes the
+    // working space and whether the TrueHDR feature is created at all, so it has
+    // to rebuild the graph rather than be applied live (same as videoHdr.enabled
+    // in planOf above).
+    if (previous.videoHdr.convertHdrSource != next.videoHdr.convertHdrSource) return true;
     if (previous.hdrOutputMode != next.hdrOutputMode || previous.fgMotion != next.fgMotion ||
         previous.srMotion != next.srMotion || previous.nrMotion != next.nrMotion) return true;
     if (previous.color.lutNameString() != next.color.lutNameString()) return true;

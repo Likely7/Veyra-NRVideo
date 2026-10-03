@@ -1,4 +1,5 @@
 #include "veyra/pipeline/ColorMetadata.h"
+#include "veyra/pipeline/HdrToSdrConstants.h"
 #include "veyra/pipeline/HdrToneMap.h"
 // EnhanceGraph implementation - the real GPU chain migrated from
 // tools/player_probe main.cpp (R3.2). Ordering constraints preserved from the
@@ -1403,7 +1404,7 @@ bool EnhanceGraph::createComputePasses()
     const UINT ingressUavCount = preGradeRgba_ ? 2u : 1u;
     if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 12, 2, ingressUavCount, 12+kColorGradeConstantCount, 4)) return false;
     const char* rgbShader=desc_.packedInput?"PackedCaptureToLinear.dxil":desc_.yuy2Input?"Yuy2ToLinear.dxil":"RgbToLinear.dxil";
-    if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,8+kColorGradeConstantCount,4)))return false;
+    if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,8+kColorGradeConstantCount+kHdrToSdrConstantCount,4)))return false;
     // Descriptor budget grows with the NR stack: encode needs one SRV+UAV pair
     // per layer, decode needs three SRVs and one UAV per layer. The base 8
     // slots the single-layer graph always used are kept as the floor.
@@ -1759,9 +1760,14 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         return false;
     }
     const auto resolved=resolveFrameColor(*frame,color?*color:ColorDescription{});
-    if(resolved.isHdrPath()&&!desc_.hdrOutput&&!toneMapPeakNits_){
+    // The HDR->SDR tone map runs whenever the working space is not HDR. Custom
+    // addition: that now includes the "HDR source -> SDR -> RTX Video HDR"
+    // route, where the sink is HDR but the frame in between is not. Previously
+    // this only ran for an SDR output, so on that route the peak stayed 0 and
+    // the tone map would have divided by nothing.
+    if(resolved.isHdrPath()&&!desc_.hdrWorking()&&!toneMapPeakNits_){
         const auto peak=hdrToneMapPeak(resolved);toneMapPeakNits_=peak.nits;
-        log::info("hdr-tone-map",std::format("method=BT2390-luminance sourcePeakNits={} peakSource={} targetPeakNits=203 blackNits=0 gamut=neutral-ray-soft-knee staticPerGraph=1",peak.nits,peak.source));
+        log::info("hdr-tone-map",std::format("method=BT2390-luminance sourcePeakNits={} peakSource={} manualSourcePeak={} targetPeakNits={} exposureEv={:.2f} shoulderPercent={} blackNits=0 gamut=neutral-ray-soft-knee staticPerGraph=1",peak.nits,peak.source,desc_.videoHdr.sourcePeakNits?desc_.videoHdr.sourcePeakNits:0,desc_.videoHdr.sdrWhiteNits,double(desc_.videoHdr.exposureEv100)/100.0,desc_.videoHdr.shoulderPercent));
     }
     if(desc_.hdrInput&&!resolved.isHdrPath()){
         veyra::log::error("hdr","HDR source transfer changed to SDR; reopen/rebuild required");return false;
@@ -1777,7 +1783,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             resolved.transfer==TransferFunction::HLG?"inverse-OETF+OOTF-gamma1.2":"ST2084-EOTF-absolute-nits",
             desc_.hdrWorking()?"linear-BT709-scRGB-1=80nits":"linear-BT709-SDR-relative",
             hdr10Output()?"PQ-BT2020-RGB10":desc_.hdrOutput?"scRGB-FP16":"sRGB-RGB8",
-            desc_.hdrOutput?"none":"BT2390-luminance+neutral-ray-gamut-compression"));
+            // Custom: the tone map also runs on the "HDR source -> SDR -> RTX
+            // Video HDR" route, where the output is HDR. Report what actually
+            // happens instead of claiming there is no mapping.
+            desc_.hdrWorking()?"none":(desc_.videoHdr.convertsHdrSource()?"BT2390-luminance+neutral-ray-gamut-compression (HDR source converted for RTX Video HDR)":"BT2390-luminance+neutral-ray-gamut-compression")));
     }
     const bool gpuRgb=desc_.rgbInput&&frame->format==AV_PIX_FMT_D3D11&&hardwareSurface&&hardwareSurface->present();
     if(resolved.scRgb&&(!gpuRgb||resolved.transfer!=TransferFunction::Linear||resolved.primaries!=ColorPrimaries::BT709||hardwareSurface->texture->GetDesc().Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))return false;
@@ -2067,11 +2076,22 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if(colorActive_&&colorDirty_&&!uploadColorTables(list,slot))return false;
     auto convertInput=[&](bool grade, ID3D12Resource* target, UINT uavSlot){
     tracker_.transition(list, target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    // Custom: HDR->SDR tone map inputs, shared by both ingress shaders. A manual
+    // source peak overrides the per-graph automatic one; the other three are
+    // tone-map tuning whose defaults reproduce the previously hard-coded values
+    // (203 nits, no exposure, the fixed BT.2390 knee) bit for bit.
+    const float toneMapSourcePeak=desc_.videoHdr.sourcePeakNits?float(desc_.videoHdr.sourcePeakNits):toneMapPeakNits_;
+    const float toneMapWhite=float(desc_.videoHdr.sdrWhiteNits);
+    const float toneMapExposure=float(desc_.videoHdr.exposureEv100)/100.0f;
+    const float toneMapShoulder=float(desc_.videoHdr.shoulderPercent)/100.0f;
     if(desc_.rgbInput||desc_.yuy2Input||desc_.packedInput){
-        float c[8+kColorGradeConstantCount]={uintBits(srcW_),uintBits(srcH_),uintBits(workingTransferCode(resolved)),uintBits(resolved.range==ColorRange::Limited?1u:0u),
+        float c[8+kColorGradeConstantCount+kHdrToSdrConstantCount]={uintBits(srcW_),uintBits(srcH_),uintBits(workingTransferCode(resolved)),uintBits(resolved.range==ColorRange::Limited?1u:0u),
             resolved.range==ColorRange::Full?0.0f:1.0f,resolved.matrix==YuvMatrix::BT2020NCL?2.0f:resolved.matrix==YuvMatrix::BT601?0.0f:1.0f,resolved.primaries==ColorPrimaries::BT2020?1.0f:0.0f,uintBits(desc_.packedInput)};
         if(grade)packColorGradeConstants(colorTables_,c+8);
-        if(resolved.scRgb){c[4]=desc_.hdrWorking()?1.f:2.f;c[5]=toneMapPeakNits_;}
+        if(resolved.scRgb){c[4]=desc_.hdrWorking()?1.f:2.f;c[5]=toneMapSourcePeak;}
+        c[8+kColorGradeConstantCount]=toneMapWhite;
+        c[8+kColorGradeConstantCount+1]=toneMapExposure;
+        c[8+kColorGradeConstantCount+2]=toneMapShoulder;
         rgbPass_.bind(list,c,gpuHandleOf(rgbPass_,gpuRgb?3+parity:0).ptr,gpuHandleOf(rgbPass_,1+uavSlot).ptr,gpuHandleOf(rgbPass_,8).ptr);
         list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);
     }else{
@@ -2079,7 +2099,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             resolved.matrix==YuvMatrix::BT2020NCL?2.0f:resolved.matrix==YuvMatrix::BT601?0.0f:1.0f,
             resolved.transfer==TransferFunction::HLG?5.0f:resolved.transfer==TransferFunction::PQ?4.0f:float(workingTransferCode(resolved)), (nv12Texture?(nv12Texture->GetDesc().Format==DXGI_FORMAT_P010?1.0f:0.0f):(desc_.captureBitDepth==16?2.0f:desc_.wideYuvInput()?1.0f:0.0f)),
             uintBits(srcW_), uintBits(srcH_), uintBits((desc_.hdrWorking()?1u:0u)|(resolved.primaries==ColorPrimaries::BT2020?2u:0u)),
-            uintBits(resolved.reconstructChroma?std::max(1u,unsigned(resolved.chromaLocation)):0u),toneMapPeakNits_,203.0f,0,0 };
+            uintBits(resolved.reconstructChroma?std::max(1u,unsigned(resolved.chromaLocation)):0u),toneMapSourcePeak,toneMapWhite,toneMapExposure,toneMapShoulder };
         if(grade)packColorGradeConstants(colorTables_,constants+12);
         yuvPass_.bind(list, constants, gpuHandleOf(yuvPass_, nv12Texture ? 3 + parity * 2 : 0).ptr, gpuHandleOf(yuvPass_, 2+uavSlot).ptr,gpuHandleOf(yuvPass_,8).ptr);
         list->Dispatch((srcW_ + 15) / 16, (srcH_ + 15) / 16, 1);
@@ -2853,6 +2873,10 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
         if(a.enabled!=b.enabled||a.lutName!=b.lutName||a.lutInputSpace!=b.lutInputSpace)return false;
     }
     if(s.videoHdr.enabled!=desc_.videoHdr.enabled)return false;
+    // Custom: the HDR-source switch decides the working space (SDR vs scRGB) and
+    // whether the TrueHDR feature is created, so it is a rebuild, not a live
+    // uniform. The tone-map parameters below are live.
+    if(s.videoHdr.convertHdrSource!=desc_.videoHdr.convertHdrSource)return false;
     // Output stabiliser: its pass is allocated at build time, so on/off rebuilds; strength and
     // tolerance are uniforms. Neither used to reach a running graph (field report
     // 2026-10-01: switching it on mid-play did nothing until something else rebuilt).

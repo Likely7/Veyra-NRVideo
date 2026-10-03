@@ -11,6 +11,8 @@ cbuffer YuvParams : register(b0)
     float4 colorParams0; // x=limitedRange y=matrix709 z=transferSRGB w=padding
     uint4 yuvDimensions; // x=width y=height z=bit0 nativeHDR, bit1 BT2020 primaries; w=chroma location
     float4 toneMapParams; // x=validated source peak nits, y=SDR target peak nits
+                          // Custom: z=exposure in EV, w=shoulder (1.0 = the
+                          // previous fixed knee). z/w were unused before.
     // Colour grade (plan v4): appended after the existing constants, packed by
     // veyra::pipeline::packColorGradeConstants (five float4s).
     float4 colorRow0; float4 colorRow1; float4 colorRow2;
@@ -117,7 +119,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         if(colorFlags.x>0.5){ColorGradeParams grade={colorRow0,colorRow1,colorRow2,colorControls,colorFlags};linear709=ColorGradeApplyWithFlags(linear709/203.0,grade)*203.0;}
         if((yuvDimensions.z&1)!=0)rgb=linear709/80.0; // scRGB: 1.0 = 80 nits.
         else{
-            rgb=HdrToSdr(linear709,toneMapParams.x,toneMapParams.y);
+            rgb=HdrToSdr(linear709,toneMapParams.x,toneMapParams.y,toneMapParams.z,toneMapParams.w);
         }
     } else if (colorParams0.z > 2.5) {
         rgb = pow(rgb, 2.4); // BT.1886 EOTF, ideal black SDR display intent.

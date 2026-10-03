@@ -564,7 +564,14 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
     });
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return e.globals.has_value();});
-    const int version=std::max(minimumVersion, rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    // Custom v7: RTX Video HDR's HDR-source route and its HDR->SDR tuning.
+    const bool hdrMap = std::any_of(entries_.begin(), entries_.end(), [](const auto& e) {
+        return std::any_of(e.chain.nodes.begin(), e.chain.nodes.begin() + e.chain.nodeCount, [](const auto& n) {
+            return n.type == EffectType::VideoHdr && (n.videoHdr.convertHdrSource || n.videoHdr.sourcePeakNits ||
+                n.videoHdr.sdrWhiteNits != 203 || n.videoHdr.exposureEv100 || n.videoHdr.shoulderPercent != 100);
+        });
+    });
+    const int version=std::max(minimumVersion, hdrMap?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -586,7 +593,13 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
             for (const auto& r : n.protection.regions)
                 o << ' ' << (r.ellipse ? r.right : r.left) << ' ' << r.top << ' ' << (r.ellipse ? r.left : r.right) << ' ' << r.bottom;
             o << ' ' << (n.videoHdr.enabled ? 1 : 0) << ' ' << n.videoHdr.contrast << ' ' << n.videoHdr.saturation << ' '
-              << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits << ' ';
+              << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits;
+            // v7 appends RTX Video HDR's HDR-source route and its HDR->SDR
+            // tuning. Written for every node once the file is v7, so the rows
+            // stay aligned; the reader only takes them at version>=7.
+            if (version >= 7) o << ' ' << (n.videoHdr.convertHdrSource ? 1 : 0) << ' ' << n.videoHdr.sourcePeakNits << ' '
+                << n.videoHdr.sdrWhiteNits << ' ' << n.videoHdr.exposureEv100 << ' ' << n.videoHdr.shoulderPercent;
+            o << ' ';
             if(version>=3)o<<int(n.nr.sizePolicy)<<' ';
             if (version>=2 && n.type == EffectType::Color) {
                 writeColorSettings(o, n.color, utf8(n.color.lutNameString()));
@@ -614,7 +627,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
 }
 
 bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out, std::wstring& def, std::wstring& error,
-                          bool* migrated, bool preserveLegacy) {
+                          bool* migrated, bool preserveLegacy, int maxVersion) {
     if (migrated) *migrated = false;
     if (data.size() > kMaxPresetBytes) { error = L"预设库超过 2 MiB"; return false; }
     std::istringstream in(data);
@@ -622,7 +635,10 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > (preserveLegacy ? 3 : 6)) { error = L"预设库格式或版本不支持"; return false; }
+    // maxVersion 0 keeps the original per-context cap; the chain session passes 7
+    // explicitly so it can hold the HDR-source fields it writes itself.
+    const int allowedVersion = maxVersion > 0 ? maxVersion : (preserveLegacy ? 3 : 7);
+    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
     for (size_t i = 0; i < count; ++i) {
@@ -661,6 +677,18 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if (r.left > r.right) { std::swap(r.left, r.right); r.ellipse = true; }
             }
             if (!(in >> hdrEnabled >> node.videoHdr.contrast >> node.videoHdr.saturation >> node.videoHdr.middleGray >> node.videoHdr.peakNits)) { error = L"预设库 HDR 字段损坏"; return false; }
+            // Custom v7: RTX Video HDR's HDR-source route and HDR->SDR tuning.
+            if (version >= 7) {
+                int convert = 0, srcPeak = 0, whiteNits = 203, ev = 0, shoulder = 100;
+                if (!(in >> convert >> srcPeak >> whiteNits >> ev >> shoulder)) { error = L"预设库 HDR 色调映射字段损坏"; return false; }
+                if (convert < 0 || convert > 1 || srcPeak < 0 || srcPeak > 4000 || whiteNits < 80 || whiteNits > 400 ||
+                    ev < -200 || ev > 200 || shoulder < 50 || shoulder > 150) { error = L"预设库 HDR 色调映射取值超出范围"; return false; }
+                node.videoHdr.convertHdrSource = convert != 0;
+                node.videoHdr.sourcePeakNits = unsigned(srcPeak);
+                node.videoHdr.sdrWhiteNits = unsigned(whiteNits);
+                node.videoHdr.exposureEv100 = ev;
+                node.videoHdr.shoulderPercent = unsigned(shoulder);
+            }
             if (type < 0 || type >= int(EffectType::Count) || enabled < 0 || enabled > 1 || !validNrRuntime(static_cast<NrRuntime>(runtime)) ||
                 temporal < 0 || temporal > 1 || lowLatency < 0 || lowLatency > 1 || protEnabled < 0 || protEnabled > 1 || hdrEnabled < 0 || hdrEnabled > 1) {
                 error = L"预设库节点取值超出范围"; return false;
@@ -802,7 +830,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 7) || entries.size() != 2 || !def.empty()) return false;
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
         parsed.configurations[i].chain = entries[i].chain;

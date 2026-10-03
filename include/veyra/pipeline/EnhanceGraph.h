@@ -101,8 +101,13 @@ struct EnhanceGraphDesc {
     bool srUsesFlow()const{return engine::motionUsesFlow(srMotion);}
     bool nrUsesFlow()const{return engine::motionUsesFlow(nrMotion);}
     engine::VideoHdrSettings videoHdr;
-    bool hdrWorking() const {return hdrInput&&hdrOutput;}
-    bool convertVideoHdr() const {return videoHdr.enabled&&!hdrInput&&hdrOutput;}
+    // Custom: with videoHdr.convertHdrSource the source is tone-mapped to SDR
+    // before RTX Video HDR raises it back, so the WORKING space is SDR even
+    // though source and sink are both HDR. Everything keyed off hdrWorking()
+    // then treats the frame as SDR, which is exactly the input the SDR->HDR
+    // stage expects.
+    bool hdrWorking() const {return hdrInput&&hdrOutput&&!videoHdr.convertsHdrSource();}
+    bool convertVideoHdr() const {return videoHdr.enabled&&hdrOutput&&(!hdrInput||videoHdr.convertHdrSource);}
     bool highQualityPresentation = false; // PS5 ordinary scaling, no AI SR
     bool rgbInput = false;       // allocate direct RGBA ingestion before NGX creation
     bool yuy2Input = false;      // packed Y0 U Y1 V -> linear FP16; never subsample to NV12
