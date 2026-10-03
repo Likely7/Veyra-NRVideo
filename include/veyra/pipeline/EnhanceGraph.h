@@ -101,6 +101,9 @@ struct EnhanceGraphDesc {
     bool srUsesFlow()const{return engine::motionUsesFlow(srMotion);}
     bool nrUsesFlow()const{return engine::motionUsesFlow(nrMotion);}
     engine::VideoHdrSettings videoHdr;
+    // Custom: per-scene HDR brightness management. Only the HDR-output path uses
+    // it (see HdrSceneMapping.h); every field is a live uniform.
+    engine::HdrBrightnessSettings hdrBrightness;
     // Custom: with videoHdr.convertHdrSource the source is tone-mapped to SDR
     // before RTX Video HDR raises it back, so the WORKING space is SDR even
     // though source and sink are both HDR. Everything keyed off hdrWorking()
@@ -514,6 +517,10 @@ public:
     bool fgEnabled() const { return fgEnabled_; }
     bool hdrOutput() const { return desc_.hdrOutput; }
     bool videoHdrActive() const {return desc_.convertVideoHdr();}
+    // Custom: live per-scene HDR brightness state, for the status line and logs.
+    bool hdrBrightnessMeasured() const {return hdrBrightMeasured_;}
+    float hdrBrightnessGain() const {return hdrBrightGain_;}
+    float hdrBrightnessPeakNits() const {return hdrBrightPeakNits_;}
     bool hdr10Output() const { return desc_.hdrOutput && (desc_.enableFg||desc_.hdrOutputMode==engine::HdrOutputMode::Hdr10); }
     DXGI_FORMAT outputFormat() const { return hdr10Output()?DXGI_FORMAT_R10G10B10A2_UNORM:desc_.hdrOutput?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM; }
     bool highQualityPresentation() const { return desc_.highQualityPresentation; }
@@ -681,6 +688,27 @@ private:
 
     ComputePass yuvPass_, encPass_, decPass_, blitPass_, uploadPass_, densifyPass_;
     float toneMapPeakNits_=0; // latched per graph/source; never varies with frame brightness
+    // Custom: per-scene HDR brightness measurement. The decoded luma never
+    // reaches the CPU on the hardware-decode path, so a tiny reduce pass writes a
+    // 64x36 grid into a UAV buffer that is read back one ring slot later (a slot
+    // is only reused once its work has completed, so the Map never waits).
+    ComputePass sceneReducePass_;
+    ComPtr<ID3D12Resource> sceneReduceBuf_;
+    std::array<ComPtr<ID3D12Resource>,8> sceneReadback_;
+    std::array<bool,8> sceneReadbackValid_{};
+    std::vector<uint8_t> sceneSample_;
+    // Custom: per-scene HDR brightness. The measurement is taken from the same
+    // per-frame histogram the cadence/scene detection uses; the applied values
+    // jump on a scene change and, when response > 0, follow the measurement
+    // within the scene. Written into the YUV pass's two spare toneMapParams lanes
+    // every frame, so the feature is a live uniform with no graph rebuild.
+    float hdrBrightGain_=1.0f;
+    float hdrBrightStartGain_=1.0f,hdrBrightStartPeakNits_=0.0f;
+    float hdrBrightTargetGain_=1.0f,hdrBrightTargetPeakNits_=0.0f;
+    float hdrBrightRampElapsedMs_=-1.0f;
+    double hdrBrightLastPtsMs_=-1.0;
+    float hdrBrightPeakNits_=0.0f;
+    bool hdrBrightMeasured_=false;
     ComputePass rgbPass_,hdrVideoSrPass_;
     ComputePass downsamplePass_,residualPass_,stackProtectionPass_,flowAdaptPass_;
     // Stage-5 output stabiliser (anti-flicker). Constructed only when the

@@ -13,8 +13,17 @@ namespace {
 // Six full grades per entry (plus the legacy first-grade field), up to 64
 // entries. Never remove the file-size guard as LUT names are external input.
 constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
-void writeRendering(std::ostream& out,const ChainGlobalSettings& g){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);}
-bool readRendering(std::istream& in,ChainGlobalSettings& g){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);EnhancementSettings s;g.apply(s);return s.validate().empty();}
+void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool extended=false,bool extendedTransition=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);
+    // Custom: per-scene HDR brightness, written from library v8 / chain session v5 on.
+    if(extended)out<<' '<<(g.hdrBrightness.enabled?1:0)<<' '<<g.hdrBrightness.strength<<' '<<g.hdrBrightness.targetPeakNits<<' '<<g.hdrBrightness.response;
+    if(extendedTransition)out<<' '<<g.hdrBrightness.transitionMs;}
+bool readRendering(std::istream& in,ChainGlobalSettings& g,bool extended=false,bool extendedTransition=false){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);
+    if(extended){int enabled,strength,peak,response;
+        if(!(in>>enabled>>strength>>peak>>response)||enabled<0||enabled>1)return false;
+        g.hdrBrightness.enabled=enabled!=0;g.hdrBrightness.strength=unsigned(strength);
+        g.hdrBrightness.targetPeakNits=unsigned(peak);g.hdrBrightness.response=unsigned(response);}
+    if(extendedTransition){int transition;if(!(in>>transition)||transition<0||transition>2000)return false;g.hdrBrightness.transitionMs=unsigned(transition);}
+    EnhancementSettings s;g.apply(s);return s.validate().empty();}
 void applyRenderingPreset(const PresetEntry& e,EnhancementSettings& s){
     if(!e.globals)return;
     const auto fg=s.frameGenerationBackend;const auto fgMotion=s.fgMotion;
@@ -571,7 +580,18 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
                 n.videoHdr.sdrWhiteNits != 203 || n.videoHdr.exposureEv100 || n.videoHdr.shoulderPercent != 100);
         });
     });
-    const int version=std::max(minimumVersion, hdrMap?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    // Custom v8: per-scene HDR brightness rides in the globals block.
+    const auto brightOf=[](const PresetEntry& e)->HdrBrightnessSettings{
+        if(e.globals)return e.globals->hdrBrightness;
+        if(e.nodeConfiguration&&e.nodeConfiguration->editor&&e.nodeConfiguration->editor->globals)
+            return e.nodeConfiguration->editor->globals->hdrBrightness;
+        return {};
+    };
+    const bool hdrBright=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
+        const auto b=brightOf(e);
+        return b.enabled||b.strength!=60||b.targetPeakNits!=1000||b.response!=50;});
+    const bool hdrTransition=hdrBright&&std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){return brightOf(e).transitionMs!=1000;});
+    const int version=std::max(minimumVersion, hdrTransition?9:hdrBright?8:hdrMap?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -619,7 +639,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         }
         if(version>=6){
             o<<' '<<e.globals.has_value();
-            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g);}
+            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=8,version>=9);}
         }
         o << '\n';
     }
@@ -637,7 +657,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     size_t count = 0;
     // maxVersion 0 keeps the original per-context cap; the chain session passes 7
     // explicitly so it can hold the HDR-source fields it writes itself.
-    const int allowedVersion = maxVersion > 0 ? maxVersion : (preserveLegacy ? 3 : 7);
+    const int allowedVersion = maxVersion > 0 ? maxVersion : (preserveLegacy ? 3 : 9);
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
@@ -746,7 +766,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){ChainGlobalSettings g;int target,backend,flow,optical,half,policy;
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
-                if(!readRendering(in,g))return false;e.globals=g;
+                if(!readRendering(in,g,version>=8,version>=9))return false;e.globals=g;
             }
         }
         out.push_back(std::move(e));
@@ -762,7 +782,12 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const auto& editor = session.configurations[1].editor;
     const auto extended=[](const ChainGlobalSettings& g){return g.srTarget>pipeline::SrTarget::Uhd8K||g.hdrOutputMode!=HdrOutputMode::Hdr10||g.fgMotion!=MotionSource::Automatic||g.srMotion!=MotionSource::OpticalFlow||g.nrMotion!=MotionSource::OpticalFlow;};
     const bool rendering=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return extended(c)||(c.editor&&c.editor->globals&&extended(*c.editor->globals));});
-    const int version = rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    // Custom: the session's own version 5 carries the HDR brightness globals.
+    const bool hdrBright=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
+        const auto& b=c.hdrBrightness;
+        return b.enabled||b.strength!=60||b.targetPeakNits!=1000||b.response!=50;});
+    const bool hdrTransition=hdrBright&&std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){return c.hdrBrightness.transitionMs!=1000;});
+    const int version = hdrTransition?6:hdrBright?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -771,7 +796,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         out << int(c.srTarget) << ' ' << c.videoSrQuality << ' ' << int(c.fgBackend) << ' '
             << int(c.flow) << ' ' << int(c.opticalFlowBackend) << ' ' << c.amdFlowHalfResolution << ' '
             << int(c.nrPolicy) << ' ' << c.selectedNr << ' ' << c.selectedColour;
-        if(version>=4)writeRendering(out,c);out<<'\n';
+        if(version>=4)writeRendering(out,c,version>=5,version>=6);out<<'\n';
         PresetEntry entry;
         entry.name = i == 0 ? L"list" : L"node";
         entry.kind = ChainMode(i); entry.chain = c.chain;
@@ -789,7 +814,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             const auto& g = *document.globals;
             out << int(g.srTarget) << ' ' << g.videoSrQuality << ' ' << int(g.fgBackend) << ' '
                 << int(g.flow) << ' ' << int(g.opticalFlowBackend) << ' ' << g.amdFlowHalfResolution << ' '
-                << int(g.nrPolicy);if(version>=4)writeRendering(out,g);out<<'\n';
+                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6);out<<'\n';
         }
         out << graph.nextId << ' ' << graph.inputNext << ' ' << document.nodes.nodeCount << '\n';
         // The ordinary preset codec validates a linear runtime chain. Use a
@@ -815,7 +840,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 4) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 6) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -826,11 +851,11 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         c.srTarget = pipeline::SrTarget(target); c.fgBackend = FrameGenerationBackend(backend);
         c.flow = FlowQuality(flow); c.opticalFlowBackend = OpticalFlowBackend(optical);
         c.amdFlowHalfResolution = half != 0; c.nrPolicy = pipeline::NrSizePolicy(policy);
-        if(version>=4&&!readRendering(in,c))return false;
+        if(version>=4&&!readRendering(in,c,version>=5,version>=6))return false;
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 7) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 9) || entries.size() != 2 || !def.empty()) return false;
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
         parsed.configurations[i].chain = entries[i].chain;
@@ -851,7 +876,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
             g.srTarget = pipeline::SrTarget(target); g.fgBackend = FrameGenerationBackend(backend);
             g.flow = FlowQuality(flow); g.opticalFlowBackend = OpticalFlowBackend(optical);
             g.amdFlowHalfResolution = half != 0; g.nrPolicy = pipeline::NrSizePolicy(policy);
-            if(version>=4&&!readRendering(in,g))return false;
+            if(version>=4&&!readRendering(in,g,version>=5,version>=6))return false;
             editor->globals = g;
         }
         uint32_t count = 0;

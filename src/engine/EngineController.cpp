@@ -528,6 +528,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 for(unsigned attempt=0;attempt<6;++attempt){
                     desc.videoHdr=selected.settings.videoHdr;
+                    desc.hdrBrightness=selected.settings.hdrBrightness;
                     desc.hdrOutput=selected.settings.useHdrPreview(desc.hdrInput,displayHdrActive());
                     bool opened=graph.initialize(desc);
                     auto failure=graph.failedBackend();
@@ -2048,6 +2049,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         !options.settings.videoHdr.enabled?L"RTX Video HDR 已关闭":
                         gd.hdrInput?(options.settings.videoHdr.convertHdrSource?L"HDR 片源转换已开启，但当前没有 HDR 输出（检查显示器 HDR 或 SDR 预览）":L"原生 HDR 输入；「HDR 片源转换」未开启"):
                         L"当前为 SDR 预览，HDR 转换未运行";
+                    // Custom: per-scene HDR brightness readout. Doubles as the
+                    // field-visible evidence that the map follows the picture.
+                    snapshot_.hdrBrightnessStatus=!options.settings.hdrBrightness.enabled?L"HDR 亮度管理已关闭":
+                        !gd.hdrInput?L"仅 HDR 片源可用":
+                        !graph.hdrBrightnessMeasured()?L"HDR 亮度管理：等待场景测量…":
+                        std::format(L"HDR 亮度管理：本场景增益 ×{:.2f}，峰值 {:.0f} nit（目标 {} nit）",
+                            graph.hdrBrightnessGain(),graph.hdrBrightnessPeakNits(),options.settings.hdrBrightness.targetPeakNits);
                     // Measured playback speed: media-PTS advance per wall time
                     // over ~1s windows (1.0 = normal speed), resampled on seek.
                     // A rejected LUT input space must be visible, not only logged

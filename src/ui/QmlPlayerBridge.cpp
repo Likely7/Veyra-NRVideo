@@ -4031,6 +4031,7 @@ void QmlPlayerBridge::resumeCaptureSession() {
 
 QString QmlPlayerBridge::colorStatus() const { return uiText(impl_->snapshot.colorStatus); }
 QString QmlPlayerBridge::videoHdrStatus() const { return uiText(impl_->snapshot.videoHdrStatus); }
+QString QmlPlayerBridge::hdrBrightnessStatus() const { return uiText(impl_->snapshot.hdrBrightnessStatus); }
 
 // --- export -----------------------------------------------------------------
 // Poll the export job once per UI tick. Its snapshot is the source of the
@@ -5652,6 +5653,29 @@ bool QmlPlayerBridge::setProtectionFeather(double pixels) {
 
 // --- design gap A1-A5: flow, cadence, presentation ----------------------------
 int QmlPlayerBridge::hdrOutputMode()const{return int(settings().hdrOutputMode);}
+// Custom: per-scene HDR brightness. Globals, not chain nodes, and every field is
+// a live uniform, so committing one never rebuilds the graph.
+bool QmlPlayerBridge::hdrBrightness()const{return settings().hdrBrightness.enabled;}
+void QmlPlayerBridge::setHdrBrightness(bool enabled){
+    auto s=settings();if(s.hdrBrightness.enabled==enabled)return;s.hdrBrightness.enabled=enabled;
+    if(impl_->commit(std::move(s)))emit settingsChanged();
+}
+QVariantMap QmlPlayerBridge::hdrBrightnessParams()const{
+    const auto& b=settings().hdrBrightness;
+    return {{"strength",int(b.strength)},{"targetPeakNits",int(b.targetPeakNits)},{"response",int(b.response)},{"transitionMs",int(b.transitionMs)}};
+}
+bool QmlPlayerBridge::setHdrBrightnessParameter(const QString& key,double value){
+    if(!std::isfinite(value)||value<0)return false;
+    auto s=settings();const auto v=unsigned(std::lround(value));
+    if(key=="strength")s.hdrBrightness.strength=v;
+    else if(key=="targetPeakNits")s.hdrBrightness.targetPeakNits=v;
+    else if(key=="response")s.hdrBrightness.response=v;
+    else if(key=="transitionMs")s.hdrBrightness.transitionMs=v;
+    else return false;
+    if(!s.hdrBrightness.valid())return false;
+    if(!impl_->commit(std::move(s)))return false;
+    emit settingsChanged();return true;
+}
 void QmlPlayerBridge::setHdrOutputMode(int value){if(value<0||value>1)return;auto s=settings();if(int(s.hdrOutputMode)==value)return;s.hdrOutputMode=engine::HdrOutputMode(value);if(impl_->commit(std::move(s)))emit settingsChanged();}
 int QmlPlayerBridge::fgMotionSource()const{return engine::motionUsesFlow(settings().fgMotion,settings().frameGenerationBackend)?1:0;}
 void QmlPlayerBridge::setFgMotionSource(int value){if(value<0||value>1)return;auto s=settings();s.fgMotion=engine::MotionSource(value);if(impl_->commit(std::move(s)))emit settingsChanged();}

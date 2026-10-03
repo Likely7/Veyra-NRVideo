@@ -114,6 +114,28 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             nits=1000.0*scene*pow(max(dot(scene,float3(.2627,.6780,.0593)),0),.2);
         }
         float3 linear709=mul(float3x3(1.660491,-0.587641,-0.072850,-0.124550,1.132900,-0.008349,-0.018151,-0.100579,1.118730),nits);
+        // Custom: per-scene HDR brightness management, HDR-output path only. The
+        // graph measures the scene from the luma histogram it already keeps and
+        // packs the map into the two spare toneMapParams lanes: z holds the gain in
+        // 1/4096 units in its low half and the source peak in nits in its high
+        // half, w holds the target peak in nits in its high half and 1 in the low
+        // half while the map is live. Packed because this pass already uses 60 of
+        // the 64 root constants D3D12 allows next to its three descriptor tables.
+        if((yuvDimensions.z&1)!=0){
+            const uint packedGain=asuint(toneMapParams.z),packedPeak=asuint(toneMapParams.w);
+            if((packedPeak&0xFFFFu)==1u){
+                const float sceneGain=float(packedGain&0xFFFFu)/4096.0;
+                const float sceneTargetPeak=float(packedPeak>>16);
+                const float sceneSourcePeak=max(float(packedGain>>16),sceneTargetPeak*1.001);
+                const float3 gained=linear709*sceneGain;
+                const float sceneY=dot(gained,float3(.212639,.715169,.072192));
+                // Reuse the verified BT.2390 EETF. ToneLuminance returns the mapped
+                // luminance normalised to the target peak, so scaling it back by the
+                // target keeps absolute nits for the scRGB working space.
+                const float mapped=ToneLuminance(max(sceneY,0.0),sceneSourcePeak,sceneTargetPeak,1.0)*sceneTargetPeak;
+                linear709=gained*clamp(mapped/max(sceneY,0.05),0.0,4.0);
+            }
+        }
         // Grade in the normalised domain: HDR is referenced to the BT.2408
         // 203 cd/m2 SDR reference white; SDR paths below are already 0..1.
         if(colorFlags.x>0.5){ColorGradeParams grade={colorRow0,colorRow1,colorRow2,colorControls,colorFlags};linear709=ColorGradeApplyWithFlags(linear709/203.0,grade)*203.0;}

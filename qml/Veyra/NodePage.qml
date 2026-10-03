@@ -1418,6 +1418,7 @@ VPage {
                             : String(veyra.videoHdrParams[modelData.key] ?? "—")
                         VSlider {
                             objectName: "node-hdr-" + modelData.key
+                            keyStepValue: 1
                             implicitWidth: 110
                             valueFromModel: true
                             resettable: true; defaultValue: modelData.def

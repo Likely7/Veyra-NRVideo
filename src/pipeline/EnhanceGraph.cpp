@@ -1,5 +1,6 @@
 #include "veyra/pipeline/ColorMetadata.h"
 #include "veyra/pipeline/HdrToSdrConstants.h"
+#include "veyra/pipeline/HdrSceneMapping.h"
 #include "veyra/pipeline/HdrToneMap.h"
 // EnhanceGraph implementation - the real GPU chain migrated from
 // tools/player_probe main.cpp (R3.2). Ordering constraints preserved from the
@@ -518,6 +519,19 @@ bool EnhanceGraph::createResources()
         hp.Type=D3D12_HEAP_TYPE_READBACK;bd.Flags=D3D12_RESOURCE_FLAG_NONE;
         hr=context_.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&fgDisableReadback_[i]));
         if(FAILED(hr)){veyra::log::error("fg-status",std::format("allocate readback hr=0x{:X}",unsigned(hr)));return false;}
+    }
+    // Custom: the 64x36 reduced-luma grid for per-scene HDR brightness, plus one
+    // readback copy per ring slot (the timing readback works the same way), and
+    // the reduce pass itself: one SRV (the luma plane), one UAV (the grid).
+    {
+        D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=64u*36u*sizeof(float);bd.Height=1;bd.DepthOrArraySize=1;bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;bd.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
+        if(FAILED(context_.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&sceneReduceBuf_))))return false;
+        hp.Type=D3D12_HEAP_TYPE_READBACK;bd.Flags=D3D12_RESOURCE_FLAG_NONE;
+        for(auto& buffer:sceneReadback_)
+            if(FAILED(context_.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&buffer))))return false;
+        std::vector<uint8_t> sceneBytecode;
+        if(!loadShaderBytes("HdrSceneReduce.dxil",sceneBytecode)||!sceneReducePass_.create(context_.device(),sceneBytecode,4,1,1))return false;
     }
     // NV12 CPU upload keeps UPLOAD-heap BUFFERS (upload-heap textures are
     // size-limited) with persistent mapping, but the GPU ingestion is now a
@@ -1857,6 +1871,40 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             veyra::log::info("scene",std::format("history boundary frame={} ptsMs={} cutCandidate={} cadenceBreak={} sad={} histogramDistance={}",
                 realFrameIndex_,ptsMs,analysis.isSceneCut,analysis.isCadenceBreak,analysis.sadScore,analysis.histogramDistance));
         }
+        // Custom: per-scene HDR brightness. Measured from the same histogram, on
+        // the HDR-output path only, where the tone map can act on absolute nits.
+        // A scene change jumps to the new mapping; inside a scene `response`
+        // decides whether it keeps following the measurement (0 = never, so the
+        // picture cannot breathe).
+        if(desc_.hdrBrightness.enabled&&desc_.hdrWorking()&&resolved.isHdrPath()&&resolved.transfer==TransferFunction::PQ){
+            const auto measured=measureHdrScene(hist.data(),hist.size(),float(desc_.hdrBrightness.targetPeakNits));
+            const float strength=float(desc_.hdrBrightness.strength)/100.0f;
+            const float gainTarget=1.0f+strength*(measured.gain-1.0f);
+            const float peakTarget=float(desc_.hdrBrightness.targetPeakNits)+(measured.sourcePeakNits-float(desc_.hdrBrightness.targetPeakNits))*strength;
+            // Time based, so the transition is the same at 24 and 60 fps.
+            const float dtMs=(hdrBrightLastPtsMs_>=0.0&&ptsMs>hdrBrightLastPtsMs_)?float(ptsMs-hdrBrightLastPtsMs_):33.3f;
+            hdrBrightLastPtsMs_=ptsMs;
+            if(analysis.isSceneCut||!hdrBrightMeasured_){
+                hdrBrightStartGain_=hdrBrightGain_;hdrBrightStartPeakNits_=hdrBrightPeakNits_;
+                hdrBrightTargetGain_=gainTarget;hdrBrightTargetPeakNits_=peakTarget;
+                hdrBrightRampElapsedMs_=0.0f;
+                veyra::log::info("hdr-brightness",std::format("sceneCut=1 frame={} p90Nits={:.1f} peakNits={:.1f} gain={:.3f}->{:.3f} sourcePeakNits={:.0f}->{:.0f} targetPeakNits={} strength={} response={} transitionMs={}",
+                    realFrameIndex_,measured.brightNits,measured.peakNits,measured.gain,gainTarget,measured.sourcePeakNits,peakTarget,desc_.hdrBrightness.targetPeakNits,desc_.hdrBrightness.strength,desc_.hdrBrightness.response,desc_.hdrBrightness.transitionMs));
+            }
+            if(hdrBrightRampElapsedMs_>=0.0f){
+                hdrBrightRampElapsedMs_+=dtMs;
+                const float span=float(desc_.hdrBrightness.transitionMs);
+                const float t=span<=0.0f?1.0f:std::clamp(hdrBrightRampElapsedMs_/span,0.0f,1.0f);
+                hdrBrightGain_=hdrBrightStartGain_+(hdrBrightTargetGain_-hdrBrightStartGain_)*t;
+                hdrBrightPeakNits_=hdrBrightStartPeakNits_+(hdrBrightTargetPeakNits_-hdrBrightStartPeakNits_)*t;
+                if(t>=1.0f)hdrBrightRampElapsedMs_=-1.0f;
+            } else if(desc_.hdrBrightness.response>0){
+                const float alpha=float(desc_.hdrBrightness.response)/100.0f*0.4f;
+                hdrBrightGain_+=(hdrBrightTargetGain_-hdrBrightGain_)*alpha;
+                hdrBrightPeakNits_+=(hdrBrightTargetPeakNits_-hdrBrightPeakNits_)*alpha;
+            }
+            hdrBrightMeasured_=true;
+        } else hdrBrightMeasured_=false;
         std::swap(previousLuma_,sample);
     };
 
@@ -1969,6 +2017,41 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // Slots 0/1 remain the CPU-upload views. Hardware views rotate with
         // hardwareInputFrames_/uploadFences_; never overwrite an in-flight SRV.
         stager_.stageSrv(nv12Texture, &lumaSrv, yuvPass_.heap.Get(), 3 + parity * 2);
+        // Custom: per-scene HDR brightness. The decoded luma never reaches the CPU
+        // on this path, so reduce it to a 64x36 grid and read that back one ring
+        // slot later. The reduced value is exactly the 8-bit luma proxy the
+        // software-decode path feeds the same histogram, so nothing else changes.
+        if(sceneReducePass_.pso&&sceneReduceBuf_&&desc_.hdrBrightness.enabled&&desc_.hdrWorking()&&slot<sceneReadback_.size()){
+            if(sceneReadbackValid_[slot]){
+                sceneReadbackValid_[slot]=false;
+                const D3D12_RANGE readRange{0,64u*36u*sizeof(float)};
+                void* mapped=nullptr;
+                if(SUCCEEDED(sceneReadback_[slot]->Map(0,&readRange,&mapped))&&mapped){
+                    const float* values=static_cast<const float*>(mapped);
+                    sceneSample_.resize(64u*36u);
+                    for(size_t i=0;i<sceneSample_.size();++i)
+                        sceneSample_[i]=uint8_t(std::clamp(values[i],0.0f,1.0f)*255.0f+0.5f);
+                    const D3D12_RANGE unwritten{0,0};
+                    sceneReadback_[slot]->Unmap(0,&unwritten);
+                    analyzeLuma(sceneSample_);
+                }
+            }
+            D3D12_SHADER_RESOURCE_VIEW_DESC reduceSrv=lumaSrv;
+            reduceSrv.ViewDimension=isArray?D3D12_SRV_DIMENSION_TEXTURE2DARRAY:D3D12_SRV_DIMENSION_TEXTURE2D;
+            if(isArray){reduceSrv.Texture2DArray.ArraySize=1;reduceSrv.Texture2DArray.FirstArraySlice=nv12Slice;reduceSrv.Texture2DArray.PlaneSlice=0;}
+            stager_.stageSrv(nv12Texture,&reduceSrv,sceneReducePass_.heap.Get(),0);
+            D3D12_UNORDERED_ACCESS_VIEW_DESC reduceUav{};reduceUav.Format=DXGI_FORMAT_UNKNOWN;reduceUav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;
+            reduceUav.Buffer.FirstElement=0;reduceUav.Buffer.NumElements=64u*36u;reduceUav.Buffer.StructureByteStride=sizeof(float);
+            reduceUav.Buffer.CounterOffsetInBytes=0;reduceUav.Buffer.Flags=D3D12_BUFFER_UAV_FLAG_NONE;
+            context_.device()->CreateUnorderedAccessView(sceneReduceBuf_.Get(),nullptr,&reduceUav,cpuHandleOf(sceneReducePass_,1));
+            tracker_.transition(list,sceneReduceBuf_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            const float reduceConstants[8]={};
+            sceneReducePass_.bind(list,reduceConstants,gpuHandleOf(sceneReducePass_,0).ptr,gpuHandleOf(sceneReducePass_,1).ptr);
+            list->Dispatch(8,5,1);
+            tracker_.transition(list,sceneReduceBuf_.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
+            list->CopyBufferRegion(sceneReadback_[slot].Get(),0,sceneReduceBuf_.Get(),0,64u*36u*sizeof(float));
+            sceneReadbackValid_[slot]=true;
+        }
         D3D12_SHADER_RESOURCE_VIEW_DESC chromaSrv{};
         chromaSrv.Format = nv12Texture->GetDesc().Format==DXGI_FORMAT_P010?DXGI_FORMAT_R16G16_UNORM:DXGI_FORMAT_R8G8_UNORM;
         chromaSrv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -2100,6 +2183,18 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             resolved.transfer==TransferFunction::HLG?5.0f:resolved.transfer==TransferFunction::PQ?4.0f:float(workingTransferCode(resolved)), (nv12Texture?(nv12Texture->GetDesc().Format==DXGI_FORMAT_P010?1.0f:0.0f):(desc_.captureBitDepth==16?2.0f:desc_.wideYuvInput()?1.0f:0.0f)),
             uintBits(srcW_), uintBits(srcH_), uintBits((desc_.hdrWorking()?1u:0u)|(resolved.primaries==ColorPrimaries::BT2020?2u:0u)),
             uintBits(resolved.reconstructChroma?std::max(1u,unsigned(resolved.chromaLocation)):0u),toneMapSourcePeak,toneMapWhite,toneMapExposure,toneMapShoulder };
+        // Custom: on the HDR-output path the two spare toneMapParams lanes carry
+        // the per-scene brightness map instead of the SDR exposure/shoulder pair
+        // (the two are mutually exclusive: the SDR tone map is a different path).
+        // Packed, because this pass already uses 60 of the 64 root constants that
+        // D3D12 allows next to its three descriptor tables.
+        if(desc_.hdrWorking()&&desc_.hdrBrightness.enabled){
+            const unsigned gainQ=unsigned(std::lround(std::clamp(hdrBrightGain_,0.25f,4.0f)*4096.0f))&0xFFFFu;
+            const unsigned sourcePeak=unsigned(std::lround(std::clamp(hdrBrightPeakNits_,0.0f,10000.0f)))&0xFFFFu;
+            const unsigned targetPeak=unsigned(std::lround(std::clamp(float(desc_.hdrBrightness.targetPeakNits),400.0f,4000.0f)))&0xFFFFu;
+            constants[10]=uintBits((sourcePeak<<16)|gainQ);
+            constants[11]=uintBits((targetPeak<<16)|1u);
+        }
         if(grade)packColorGradeConstants(colorTables_,constants+12);
         yuvPass_.bind(list, constants, gpuHandleOf(yuvPass_, nv12Texture ? 3 + parity * 2 : 0).ptr, gpuHandleOf(yuvPass_, 2+uavSlot).ptr,gpuHandleOf(yuvPass_,8).ptr);
         list->Dispatch((srcW_ + 15) / 16, (srcH_ + 15) / 16, 1);
@@ -2885,6 +2980,9 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     // queue drained: treat it as a rebuild (parameters stay live).
     if(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace)return false;
     desc_.videoHdr=s.videoHdr;
+    // Custom: per-scene HDR brightness. Every field is live (the map is written
+    // into the YUV pass's spare lanes per frame), so it never reaches a rebuild.
+    desc_.hdrBrightness=s.hdrBrightness;
     if(!(s.color==desc_.color)){
         desc_.color=s.color;
         if(nodeColorInstances_[0])nodeColorInstances_[0]->refresh(s.color);

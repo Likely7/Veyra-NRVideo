@@ -508,12 +508,14 @@ ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     c.opticalFlowBackend = s.opticalFlowBackend; c.amdFlowHalfResolution = s.amdFlowHalfResolution;
     c.nrPolicy = s.nrPolicy;
     c.hdrOutputMode=s.hdrOutputMode;c.fgMotion=s.fgMotion;c.srMotion=s.srMotion;c.nrMotion=s.nrMotion;
+    c.hdrBrightness=s.hdrBrightness;
     return c;
 }
 
 void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.nrPolicy = nrPolicy;
     s.hdrOutputMode=hdrOutputMode;s.fgMotion=fgMotion;s.srMotion=srMotion;s.nrMotion=nrMotion;
+    s.hdrBrightness=hdrBrightness;
     s.srTarget = srTarget; s.videoSrQuality = videoSrQuality;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
     s.opticalFlowBackend = opticalFlowBackend; s.amdFlowHalfResolution = amdFlowHalfResolution;

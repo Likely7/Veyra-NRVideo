@@ -199,6 +199,9 @@ struct ChainGlobalSettings {
     pipeline::NrSizePolicy nrPolicy = pipeline::NrSizePolicy::Realtime;
     HdrOutputMode hdrOutputMode=HdrOutputMode::Hdr10;
     MotionSource fgMotion=MotionSource::Automatic,srMotion=MotionSource::OpticalFlow,nrMotion=MotionSource::OpticalFlow;
+    // Custom: per-scene HDR brightness management (HdrBrightnessSettings.h).
+    // Carried here so a chain session can persist it, exactly like hdrOutputMode.
+    HdrBrightnessSettings hdrBrightness;
     static ChainGlobalSettings capture(const EnhancementSettings&);
     void apply(EnhancementSettings&) const;
     bool operator==(const ChainGlobalSettings&) const = default;

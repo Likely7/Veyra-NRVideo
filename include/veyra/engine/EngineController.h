@@ -68,6 +68,7 @@ struct PlayerSnapshot {
     std::wstring sourceNotice;
     std::wstring colorStatus;
     std::wstring videoHdrStatus;
+    std::wstring hdrBrightnessStatus; // custom: per-scene HDR brightness readout
     sink::CaptureAudioState captureAudio;
     unsigned audioInputChannels=0,audioOutputChannels=0;
     std::vector<media::AudioTrack> audioTracks;
