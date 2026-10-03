@@ -27,6 +27,7 @@ ALLOWED = {
     'scripts/acceptance/field-upgrade-tests.py',
     'scripts/acceptance/field-upgrade-ui.py', 'scripts/acceptance/field-upgrade-ui.qml',
     'scripts/acceptance/field-upgrade-package.py',
+    'scripts/acceptance/field-upgrade-clean-smoke.py',
 }
 def git(*args):
     return subprocess.check_output(['git', *args], cwd=ROOT).decode('utf8').strip()

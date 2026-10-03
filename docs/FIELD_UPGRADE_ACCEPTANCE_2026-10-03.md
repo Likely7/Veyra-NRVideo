@@ -54,6 +54,14 @@ RTSS 普通启动需提升，本轮以当前用户 RunAsInvoker 启动测试副�
 
 ## 本地候选
 
+最终候选 Veyra-2.0.2-field-20261003-win64-portable.zip，766558374 bytes，
+SHA256 `099751e596b4a7de814ddc2af9cdaa527817d1a422861cdcee5a6be77877c679`。
+代码存档 `c80662f344032ca3adac42277b1ab6726609cde6`，对应源码 ZIP 单独提供。
+2054 个 payload 文件校验通过。干净解压后在 GPU D3D12 与软件模式各启动
+home/pro/node/exp/set/min 六页，12 张截图、背景像素与正常退出均通过；
+证据 E:/项目/Veyra/logs/field-upgrade-20261003/clean-smoke/summary.json。
+最终多语言与 AMD NR preset/list/node session 持久化回归通过，见 ui-final。
+
 输出 `E:/项目/Veyra/test-packages/field-upgrade-20261003/`；软件版本仍为 2.0.2，
 候选名称带 field 标识。AMD 放 runtime/amd-nr，独立 manifest/许可证随包；
 原 2.0.2 的 43 个增强运行组件沿用原件身份。没有 SDK、测试替身、PDB、测试媒体、

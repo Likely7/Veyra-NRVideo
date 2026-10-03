@@ -2,6 +2,11 @@
 
 ## 2026-10-03 五项修复：代码与本机验收
 
+- 最终本地包 E:/项目/Veyra/test-packages/field-upgrade-20261003/Veyra-2.0.2-field-20261003-win64-portable.zip，766558374 bytes，SHA256 099751e596b4a7de814ddc2af9cdaa527817d1a422861cdcee5a6be77877c679，2054 payload 文件；审计 E:/项目/Veyra/logs/field-upgrade-20261003/candidate-package-audit.json。应用 SHA256 2d708d65aff3f61950243d4743397d1869aca2ec2e4b56311fcd63aa3abfbcd3；source ZIP 单独提供，代码存档 c80662f344032ca3adac42277b1ab6726609cde6 / checkpoint/field-upgrade-code-20261003，runtime/模型与源码分离。
+- `python -B scripts/acceptance/field-upgrade-package.py` exit0；未使用 --release、未上传。`python -B scripts/acceptance/field-upgrade-clean-smoke.py` exit0：最终 ZIP 干净解压 2054 文件全部哈希匹配，GPU D3D12 和软件模式各六页 home/pro/node/exp/set/min 截图/背景像素/正常退出通过；E:/项目/Veyra/logs/field-upgrade-20261003/clean-smoke/summary.json。
+- 收尾桌面 status --short --branch、working binary patch（258615 bytes）和 index patch（0 bytes）与开工存档一致；main 仍 66cd3e50590766e5a654528ab61e491dc4d30c83。公开 ABI header 与固定上游逐字节相同；源码 Git 未含 DLL/EXE/f16/f32/hsaco/ONNX/addon64，候选不含 identity/fake runtime 或用户配置。
+- 整理保留最终可运行候选目录/ZIP、单独源码 ZIP、当前编译、上游源码、AMD 可用依赖与必要证据。worker 日志转存 production-rtss/worker，12 张干净解压截图转存 tests/field-upgrade-20261003/clean-candidate。删除自有重复 tests/app、verify 下解压产品、tmp 的组合命令被自动审查拦截；核对固定绝对路径且确认非 reparse 后，以 LiteralPath 再试仍被拒绝，工具只返回 blocked by policy，无具体理由。未绕过审查或改用其它删除工具，三个目录暂保留；原始用户文件及其它任务产物未删。
+
 - 补充回归 `python -B scripts/acceptance/field-upgrade-tests.py ui-final qml-software ui-i18n nr-preset-persistence` exit0（build-localized-candidate.log 成功）；含 AMD ID4 list/node/session/preset 重启持久化，四语言 catalog 与最终软件背景。证据 E:/项目/Veyra/tests/field-upgrade-20261003/ui-final。候选脚本 scripts/acceptance/field-upgrade-package.py 仅本地组包，使用既有 43 原件与独立 AMD manifest，source zip 与模型/运行库分离。
 
 - 工作树 E:/项目/Veyra/worktrees/field-upgrade-20261003，分支 codex/field-upgrade-20261003，base 66cd3e5；先存档写方案，未改桌面用户工作区/main，未 push/Release。
