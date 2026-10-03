@@ -1359,13 +1359,6 @@
    "ja": "SDR → SDR（HDR 表示オフ）"
   },
   {
-   "zh": "SDR 参考白 (nit)",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "SDR 參考白 (nit)",
-   "en": "SDR reference white (nit)",
-   "ja": "SDR 基準白 (nit)"
-  },
-  {
    "zh": "SDR显示未转换",
    "src": "qml/NodePage.qml",
    "zh-TW": "SDR顯示未轉換",
@@ -7395,13 +7388,6 @@
    "ja": "暗いシーンは持ち上げ、明るいシーンは圧縮します"
   },
   {
-   "zh": "曝光 (EV)",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "曝光 (EV)",
-   "en": "Exposure (EV)",
-   "ja": "露光量 (EV)"
-  },
-  {
    "zh": "曝光（EV）",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "曝光（EV）",
@@ -8667,13 +8653,6 @@
    "zh-TW": "源尺寸",
    "en": "Source size",
    "ja": "ソースのサイズ"
-  },
-  {
-   "zh": "源峰值 (nit，0=自动)",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "源峰值 (nit，0=自動)",
-   "en": "Source peak (nit, 0 = automatic)",
-   "ja": "ソースピーク (nit、0=自動)"
   },
   {
    "zh": "源文件不存在",
@@ -13133,13 +13112,6 @@
    "zh-TW": "高光",
    "en": "Highlights",
    "ja": "ハイライト"
-  },
-  {
-   "zh": "高光滚降 (%)",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "高光滾降 (%)",
-   "en": "Highlight roll-off (%)",
-   "ja": "ハイライトのロールオフ (%)"
   },
   {
    "zh": "高延迟·需 CPU 拆包",

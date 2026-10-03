@@ -132,7 +132,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
                 // Reuse the verified BT.2390 EETF. ToneLuminance returns the mapped
                 // luminance normalised to the target peak, so scaling it back by the
                 // target keeps absolute nits for the scRGB working space.
-                const float mapped=ToneLuminance(max(sceneY,0.0),sceneSourcePeak,sceneTargetPeak,1.0)*sceneTargetPeak;
+                const float mapped=ToneLuminance(max(sceneY,0.0),sceneSourcePeak,sceneTargetPeak)*sceneTargetPeak;
                 linear709=gained*clamp(mapped/max(sceneY,0.05),0.0,4.0);
             }
         }
@@ -141,7 +141,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         if(colorFlags.x>0.5){ColorGradeParams grade={colorRow0,colorRow1,colorRow2,colorControls,colorFlags};linear709=ColorGradeApplyWithFlags(linear709/203.0,grade)*203.0;}
         if((yuvDimensions.z&1)!=0)rgb=linear709/80.0; // scRGB: 1.0 = 80 nits.
         else{
-            rgb=HdrToSdr(linear709,toneMapParams.x,toneMapParams.y,toneMapParams.z,toneMapParams.w);
+            rgb=HdrToSdr(linear709,toneMapParams.x,toneMapParams.y);
         }
     } else if (colorParams0.z > 2.5) {
         rgb = pow(rgb, 2.4); // BT.1886 EOTF, ideal black SDR display intent.

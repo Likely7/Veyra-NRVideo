@@ -573,14 +573,6 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
     });
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return e.globals.has_value();});
-    // Custom v7: RTX Video HDR's HDR->SDR tone-map tuning (the HDR-source route
-    // switch that used to share this row has been removed).
-    const bool hdrMap = std::any_of(entries_.begin(), entries_.end(), [](const auto& e) {
-        return std::any_of(e.chain.nodes.begin(), e.chain.nodes.begin() + e.chain.nodeCount, [](const auto& n) {
-            return n.type == EffectType::VideoHdr && (n.videoHdr.sourcePeakNits ||
-                n.videoHdr.sdrWhiteNits != 203 || n.videoHdr.exposureEv100 || n.videoHdr.shoulderPercent != 100);
-        });
-    });
     // Custom v8: per-scene HDR brightness rides in the globals block.
     const auto brightOf=[](const PresetEntry& e)->HdrBrightnessSettings{
         if(e.globals)return e.globals->hdrBrightness;
@@ -591,7 +583,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
     const bool hdrBright=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
         return brightOf(e)!=HdrBrightnessSettings{};});
     const bool hdrTransition=hdrBright&&std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){return brightOf(e).transitionMs!=1000;});
-    const int version=std::max(minimumVersion, hdrTransition?9:hdrBright?8:hdrMap?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const int version=std::max(minimumVersion, hdrTransition?9:hdrBright?8:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -614,13 +606,6 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
                 o << ' ' << (r.ellipse ? r.right : r.left) << ' ' << r.top << ' ' << (r.ellipse ? r.left : r.right) << ' ' << r.bottom;
             o << ' ' << (n.videoHdr.enabled ? 1 : 0) << ' ' << n.videoHdr.contrast << ' ' << n.videoHdr.saturation << ' '
               << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits;
-            // v7 appends RTX Video HDR's HDR->SDR tuning. Written for every node
-            // once the file is v7, so the rows stay aligned; the reader only takes
-            // them at version>=7. The leading field used to be the HDR-source route
-            // switch and is written as 0 to keep the row layout - and every file
-            // written while it existed - readable.
-            if (version >= 7) o << ' ' << 0 << ' ' << n.videoHdr.sourcePeakNits << ' '
-                << n.videoHdr.sdrWhiteNits << ' ' << n.videoHdr.exposureEv100 << ' ' << n.videoHdr.shoulderPercent;
             o << ' ';
             if(version>=3)o<<int(n.nr.sizePolicy)<<' ';
             if (version>=2 && n.type == EffectType::Color) {
@@ -699,18 +684,15 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if (r.left > r.right) { std::swap(r.left, r.right); r.ellipse = true; }
             }
             if (!(in >> hdrEnabled >> node.videoHdr.contrast >> node.videoHdr.saturation >> node.videoHdr.middleGray >> node.videoHdr.peakNits)) { error = L"预设库 HDR 字段损坏"; return false; }
-            // Custom v7: RTX Video HDR's HDR->SDR tuning. The first field is the
-            // retired HDR-source route switch: it is validated and dropped, so old
-            // presets keep loading and the row layout does not move.
-            if (version >= 7) {
+            // Files written by the fork's v7 carry the retired RTX Video HDR
+            // tuning block (five numbers). It is read and validated so those files
+            // keep loading, then dropped: the row no longer exists and no version
+            // writes it any more.
+            if (version == 7) {
                 int retired = 0, srcPeak = 0, whiteNits = 203, ev = 0, shoulder = 100;
                 if (!(in >> retired >> srcPeak >> whiteNits >> ev >> shoulder)) { error = L"预设库 HDR 色调映射字段损坏"; return false; }
                 if (retired < 0 || retired > 1 || srcPeak < 0 || srcPeak > 4000 || whiteNits < 80 || whiteNits > 400 ||
                     ev < -200 || ev > 200 || shoulder < 50 || shoulder > 150) { error = L"预设库 HDR 色调映射取值超出范围"; return false; }
-                node.videoHdr.sourcePeakNits = unsigned(srcPeak);
-                node.videoHdr.sdrWhiteNits = unsigned(whiteNits);
-                node.videoHdr.exposureEv100 = ev;
-                node.videoHdr.shoulderPercent = unsigned(shoulder);
             }
             if (type < 0 || type >= int(EffectType::Count) || enabled < 0 || enabled > 1 || !validNrRuntime(static_cast<NrRuntime>(runtime)) ||
                 temporal < 0 || temporal > 1 || lowLatency < 0 || lowLatency > 1 || protEnabled < 0 || protEnabled > 1 || hdrEnabled < 0 || hdrEnabled > 1) {

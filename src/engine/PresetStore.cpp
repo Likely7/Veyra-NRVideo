@@ -32,16 +32,11 @@ std::string PresetStore::serialize()const{
             if(p.settings.nrLayer(i).antiFlicker!=NrAntiFlicker::Flow)return true;
         return p.settings.nrAntiFlicker!=NrAntiFlicker::Flow;});
     const bool fsr4=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4;});
-    // Custom v28: the RTX Video HDR HDR->SDR tone-map tuning. Store-level like the
-    // other appended flags: once any entry needs it, every entry writes it, so the
-    // rows stay aligned.
-    const bool hdrMap=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){const auto& v=p.settings.videoHdr;
-        return v.sourcePeakNits!=0||v.sdrWhiteNits!=203||v.exposureEv100!=0||v.shoulderPercent!=100;});
     const bool higher=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.srTarget>pipeline::SrTarget::Uhd8K;});
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){const auto& s=p.settings;return s.hdrOutputMode!=HdrOutputMode::Hdr10||s.fgMotion!=MotionSource::Automatic||s.srMotion!=MotionSource::OpticalFlow||s.nrMotion!=MotionSource::OpticalFlow;});
     const bool fullSchema=fsr4||higher||rendering;
     // v26 introduces appended resolution IDs; old readers reject this schema.
-    std::ostringstream o;o.imbue(std::locale::classic());o<<std::setprecision(std::numeric_limits<float>::max_digits10)<<"VEYRA_PRESETS "<<(hdrMap?28:rendering?27:higher?26:fsr4?25:hold?24:stack?23:multi?22:21)<<'\n'<<std::quoted(utf8(default_))<<' '<<entries_.size()<<'\n';
+    std::ostringstream o;o.imbue(std::locale::classic());o<<std::setprecision(std::numeric_limits<float>::max_digits10)<<"VEYRA_PRESETS "<<(rendering?27:higher?26:fsr4?25:hold?24:stack?23:multi?22:21)<<'\n'<<std::quoted(utf8(default_))<<' '<<entries_.size()<<'\n';
     for(auto& p:entries_){const auto& s=p.settings;const auto& m=s.model;const auto& r=s.residual;o<<std::quoted(utf8(p.name))<<' '<<m.intensity<<' '<<m.tone<<' '<<m.structure<<' '<<m.skin<<' '<<m.style<<' '<<m.autoMask<<' '<<m.uiCorrection<<' '<<r.total<<' '<<r.darken<<' '<<r.brighten<<' '<<r.color<<' '<<r.luminance<<' '<<s.nr<<' '<<s.sr<<' '<<s.multiplier<<' '<<int(s.nrPolicy)<<' '<<int(s.flow)<<' '<<int(s.content)<<' '<<s.protection.enabled<<' '<<s.protection.featherPixels;for(auto q:s.protection.regions)o<<' '<<q.left<<' '<<q.top<<' '<<q.right<<' '<<q.bottom;o<<' '<<s.videoSrQuality<<' '<<int(s.frameGenerationBackend)<<' '<<int(s.srTarget)<<' '<<int(s.opticalFlowBackend)<<' '<<s.amdFlowHalfResolution<<' '<<int(s.audioSync)<<' '<<s.audioOffsetMs<<' '<<int(s.nrRuntime)<<' '<<s.captureCompatible<<' '<<s.lowLatency<<' '<<s.forceSdrPreview<<' '<<int(s.captureAudio)<<' '<<s.exportBitrateMbps<<' '<<s.captureFlipVertical<<' '<<int(s.captureBuffer)<<' ';writeColorSettings(o,s.color,utf8(s.color.lutNameString()));o<<' '<<s.videoHdr.enabled<<' '<<s.videoHdr.contrast<<' '<<s.videoHdr.saturation<<' '<<s.videoHdr.middleGray<<' '<<s.videoHdr.peakNits<<' '<<s.nrTemporal;
         if(multi||fullSchema){o<<' '<<s.additionalColorCount;for(unsigned i=0;i<s.additionalColorCount;++i){o<<' ';writeColorSettings(o,s.additionalColors[i],utf8(s.additionalColors[i].lutNameString()));}}
         if(stack||fullSchema){
@@ -61,11 +56,6 @@ std::string PresetStore::serialize()const{
         // differently.
         if(hold||fullSchema)o<<' '<<s.nrHoldStrength<<' '<<s.nrHoldTolerance;
         if(rendering)o<<' '<<int(s.hdrOutputMode)<<' '<<int(s.fgMotion)<<' '<<int(s.srMotion)<<' '<<int(s.nrMotion);
-        // v28: appended last, only when this store asks for it (the reader takes
-        // them at version>=28 only). The leading field used to be the HDR-source
-        // route switch and is written as 0 to keep the row layout, and every store
-        // written while it existed, readable.
-        if(hdrMap)o<<' '<<0<<' '<<s.videoHdr.sourcePeakNits<<' '<<s.videoHdr.sdrWhiteNits<<' '<<s.videoHdr.exposureEv100<<' '<<s.videoHdr.shoulderPercent;
         o<<'\n';
     }return o.str();
 }
@@ -132,19 +122,13 @@ bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std
             if(!std::isfinite(s.nrHoldTolerance)||s.nrHoldTolerance<0.0f||s.nrHoldTolerance>1.0f)return false;
         }
         if(version>=27){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;s.hdrOutputMode=HdrOutputMode(hdr);s.fgMotion=MotionSource(fg);s.srMotion=MotionSource(sr);s.nrMotion=MotionSource(nr);}
-        // Custom v28: RTX Video HDR's HDR->SDR tone map tuning. Absent in older
-        // stores, where the defaults (the previously hard-coded tone-map numbers)
-        // are exactly the old behaviour. The leading field is the retired
-        // HDR-source route switch: it is validated and dropped so old stores keep
-        // loading and the row layout does not move.
-        if(version>=28){
+        // Stores written by the fork's v28 carry the retired RTX Video HDR tuning
+        // block (five numbers). Read and validated so those stores keep loading,
+        // then dropped: no version writes it any more.
+        if(version==28){
             int retired,srcPeak,whiteNits,ev,shoulder;
             if(!(in>>retired>>srcPeak>>whiteNits>>ev>>shoulder))return false;
             if(retired<0||retired>1||srcPeak<0||srcPeak>4000||whiteNits<80||whiteNits>400||ev<-200||ev>200||shoulder<50||shoulder>150)return false;
-            s.videoHdr.sourcePeakNits=unsigned(srcPeak);
-            s.videoHdr.sdrWhiteNits=unsigned(whiteNits);
-            s.videoHdr.exposureEv100=ev;
-            s.videoHdr.shoulderPercent=unsigned(shoulder);
         }
         p.name=wide(n);if(!nameOk(p.name)||std::any_of(out.begin(),out.end(),[&](auto& a){return a.name==p.name;})||nr<0||nr>1||sr<0||sr>1)return false;
         s.nr=nr;s.sr=sr;s.nrPolicy=static_cast<pipeline::NrSizePolicy>(policy);s.flow=static_cast<FlowQuality>(flow);s.content=static_cast<ContentRate>(content);

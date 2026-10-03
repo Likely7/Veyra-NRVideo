@@ -9,16 +9,13 @@ float ToneNits(float code) {
     float p=pow(saturate(code),32.0/2523.0);
     return 10000.0*pow(max(p-3424.0/4096.0,0)/max(2413.0/128.0-(2392.0/128.0)*p,1e-6),16384.0/2610.0);
 }
-float ToneLuminance(float nits,float sourcePeak,float targetPeak,float shoulder) {
+float ToneLuminance(float nits,float sourcePeak,float targetPeak) {
     if(nits<=0)return 0;
     if(sourcePeak<=targetPeak)return min(nits/targetPeak,1.0);
     float black=TonePq(0),span=TonePq(sourcePeak)-black;
     float x=saturate((TonePq(nits)-black)/span);
     float top=(TonePq(targetPeak)-black)/span;
-    // Custom: `shoulder` moves where the Hermite roll-off starts. 1.0 keeps the
-    // previously fixed knee exactly (divide by 1.0 and a no-op clamp); larger
-    // values start it earlier, which reads as a softer highlight transition.
-    float knee=clamp((1.5*top-.5)/max(shoulder,0.01),0.0,0.999);
+    float knee=1.5*top-.5;
     if(x>=knee){
         float t=(x-knee)/(1-knee),t2=t*t,t3=t2*t;
         x=(2*t3-3*t2+1)*knee+(t3-2*t2+t)*(1-knee)+(-2*t3+3*t2)*top;
@@ -38,14 +35,9 @@ float3 ToneGamut(float3 rgb,float y) {
     if(extent>.9){float compressed=.9+.1*(1-exp(-(extent-.9)/.1));chroma*=compressed/extent;}
     return y+chroma;
 }
-// Custom: `exposureEv` and `shoulder` are the user's HDR->SDR tuning. Their
-// defaults (0 EV, 1.0) reproduce the previous fixed curve exactly - exp2(0) is
-// 1.0 and the shoulder divides by 1.0 - so an untouched install tone-maps
-// byte-for-byte as before.
-float3 HdrToSdr(float3 linear709Nits,float sourcePeak,float targetPeak,float exposureEv,float shoulder) {
-    linear709Nits*=exp2(exposureEv);
+float3 HdrToSdr(float3 linear709Nits,float sourcePeak,float targetPeak) {
     float y=dot(linear709Nits,float3(.212639,.715169,.072192));
     if(y<=0)return 0;
-    float mapped=ToneLuminance(y,sourcePeak,targetPeak,shoulder);
+    float mapped=ToneLuminance(y,sourcePeak,targetPeak);
     return ToneGamut(linear709Nits*(mapped/y),mapped);
 }

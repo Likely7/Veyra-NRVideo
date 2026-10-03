@@ -1395,11 +1395,7 @@ VPage {
                     model: [{key:"contrast",label:qsTr("对比度"),from:0,to:200,def:125},
                             {key:"saturation",label:qsTr("饱和度"),from:0,to:200,def:75},
                             {key:"middleGray",label:qsTr("中灰"),from:10,to:100,def:44},
-                            {key:"peakNits",label:qsTr("峰值亮度 (nit)"),from:400,to:2000,def:1000},
-                            {key:"exposureEv100",label:qsTr("曝光 (EV)"),from:-200,to:200,def:0,scale:100},
-                            {key:"sdrWhiteNits",label:qsTr("SDR 参考白 (nit)"),from:80,to:400,def:203},
-                            {key:"shoulderPercent",label:qsTr("高光滚降 (%)"),from:50,to:150,def:100},
-                            {key:"sourcePeakNits",label:qsTr("源峰值 (nit，0=自动)"),from:0,to:4000,def:0}]
+                            {key:"peakNits",label:qsTr("峰值亮度 (nit)"),from:400,to:2000,def:1000}]
                     delegate: VRow {
                         required property var modelData
                         label: modelData.label

@@ -894,22 +894,22 @@ __declspec(noinline) void testEditorPayloadVersions() {
     document->nodes = session->configurations[1].chain;
     check(document->layout.initialize(document->nodes).accepted, "payload version: initialize stable IDs");
     bool movedHdr = false;
-    for (uint32_t i = 0; i < document->nodes.nodeCount; ++i) {
-        if (document->nodes.nodes[i].type != EffectType::VideoHdr) continue;
-        auto& hdr = document->nodes.nodes[i].videoHdr;
-        hdr.sourcePeakNits = 1000; hdr.exposureEv100 = 25;
-        movedHdr = true;
-    }
+    for (uint32_t i = 0; i < document->nodes.nodeCount; ++i)
+        if (document->nodes.nodes[i].type == EffectType::VideoHdr) movedHdr = true;
     check(movedHdr, "payload version: sample chain carries RTX Video HDR");
     session->configurations[1].editor = document;
     ChainSessionStore writer(path);
-    check(writer.save(*session), "payload version: v7 editor payload saves");
-    check(readBytes(path).find("VEYRA_PRESET_LIBRARY 7") != std::string::npos,
-          "payload version: editor payload declares the version it needs");
+    check(writer.save(*session), "payload version: editor payload saves");
+    // The payload carries its own library header, so a reader can tell which
+    // blocks it may contain. (It used to be raised by an RTX Video HDR field that
+    // has since been removed; the session-level check below still covers the
+    // version actually moving.)
+    check(readBytes(path).find("VEYRA_PRESET_LIBRARY ") != std::string::npos,
+          "payload version: editor payload carries its own library header");
     auto restored = std::make_unique<ChainSession>(ChainSession::initial({}));
     ChainSessionStore reader(path);
     check(reader.load(*restored) && *restored == *session,
-          "payload version: HDR-source route survives save and reload");
+          "payload version: editor node parameters survive save and reload");
     // Only the editor's globals copy is changed here; the runtime configuration
     // keeps the defaults, which is exactly the case the version test used to miss.
     document->globals = static_cast<const ChainGlobalSettings&>(session->configurations[1]);

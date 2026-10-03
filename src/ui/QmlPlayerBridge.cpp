@@ -3558,12 +3558,8 @@ QVariantMap QmlPlayerBridge::videoHdrParams() const {
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
         if (impl_->chain.nodes[i].type == engine::EffectType::VideoHdr) {
             const auto& v = impl_->chain.nodes[i].videoHdr;
-            // Custom: the last four are the HDR->SDR tone-map tuning; their
-            // defaults reproduce the previously hard-coded values.
             return {{"contrast", int(v.contrast)}, {"saturation", int(v.saturation)},
-                    {"middleGray", int(v.middleGray)}, {"peakNits", int(v.peakNits)},
-                    {"sourcePeakNits", int(v.sourcePeakNits)}, {"sdrWhiteNits", int(v.sdrWhiteNits)},
-                    {"exposureEv100", int(v.exposureEv100)}, {"shoulderPercent", int(v.shoulderPercent)}};
+                    {"middleGray", int(v.middleGray)}, {"peakNits", int(v.peakNits)}};
         }
     return {};
 }
@@ -3573,25 +3569,12 @@ bool QmlPlayerBridge::setVideoHdrParameter(const QString& key, double value) {
         auto& node = impl_->chain.nodes[i];
         if (node.type != engine::EffectType::VideoHdr) continue;
         const auto before = node;
-        if (key == "exposureEv100") {
-            // Signed on purpose: exposure is the one parameter that goes both ways.
-            if (value < -200 || value > 200) return false;
-            node.videoHdr.exposureEv100 = int(std::lround(value));
-            if (!node.videoHdr.valid()) { node = before; return false; }
-            if (node == before) return true;
-            const bool accepted = impl_->revalidate(true);
-            if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(uiText(error), true); }
-            emit settingsChanged(); emit chainChanged(); return accepted;
-        }
         if (value < 0) return false;
         const auto v = unsigned(std::lround(value));
         if (key == "contrast") node.videoHdr.contrast = v;
         else if (key == "saturation") node.videoHdr.saturation = v;
         else if (key == "middleGray") node.videoHdr.middleGray = v;
         else if (key == "peakNits") node.videoHdr.peakNits = v;
-        else if (key == "sourcePeakNits") node.videoHdr.sourcePeakNits = v;
-        else if (key == "sdrWhiteNits") node.videoHdr.sdrWhiteNits = v;
-        else if (key == "shoulderPercent") node.videoHdr.shoulderPercent = v;
         else return false;
         if (!node.videoHdr.valid()) { node = before; return false; }
         if (node == before) return true;
