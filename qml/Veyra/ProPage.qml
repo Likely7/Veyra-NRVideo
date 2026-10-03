@@ -1775,7 +1775,7 @@ VPage {
                                 font.family: Theme.fontUi; font.pixelSize: 11
                             }
                             Repeater {
-                                model: [{key:"strength",label:qsTr("强度 (%)"),from:0,to:100,def:35},
+                                model: [{key:"strength",label:qsTr("强度 (%)"),from:0,to:100,def:50},
                                         {key:"targetPeakNits",label:qsTr("目标峰值 (nit)"),from:400,to:4000,def:1000,hint:qsTr("填你显示器的峰值亮度")},
                                         {key:"response",label:qsTr("响应速度 (%)"),from:0,to:100,def:0,hint:qsTr("0 = 只在场景切换时更新")},
                     {key:"transitionMs",label:qsTr("过渡时间 (ms)"),from:0,to:2000,def:1000,hint:qsTr("0 = 立即切换")}]
