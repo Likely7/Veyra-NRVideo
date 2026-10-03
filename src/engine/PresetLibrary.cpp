@@ -16,7 +16,6 @@ constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
 void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool extended=false,bool extendedTransition=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);
     // Custom: per-scene HDR brightness, written from library v8 / chain session v5 on.
     if(extended)out<<' '<<(g.hdrBrightness.enabled?1:0)<<' '<<g.hdrBrightness.strength<<' '<<g.hdrBrightness.targetPeakNits<<' '<<g.hdrBrightness.response;
-    // Custom:诊断用，确认写出去的就是当时的值（该文件没有 log 头文件，故不在此打日志）
     if(extendedTransition)out<<' '<<g.hdrBrightness.transitionMs;}
 bool readRendering(std::istream& in,ChainGlobalSettings& g,bool extended=false,bool extendedTransition=false){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);
     if(extended){int enabled,strength,peak,response;
@@ -589,8 +588,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return {};
     };
     const bool hdrBright=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
-        const auto b=brightOf(e);
-        return b.enabled||b.strength!=60||b.targetPeakNits!=1000||b.response!=50;});
+        return brightOf(e)!=HdrBrightnessSettings{};});
     const bool hdrTransition=hdrBright&&std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){return brightOf(e).transitionMs!=1000;});
     const int version=std::max(minimumVersion, hdrTransition?9:hdrBright?8:hdrMap?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
@@ -784,10 +782,18 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const auto extended=[](const ChainGlobalSettings& g){return g.srTarget>pipeline::SrTarget::Uhd8K||g.hdrOutputMode!=HdrOutputMode::Hdr10||g.fgMotion!=MotionSource::Automatic||g.srMotion!=MotionSource::OpticalFlow||g.nrMotion!=MotionSource::OpticalFlow;};
     const bool rendering=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return extended(c)||(c.editor&&c.editor->globals&&extended(*c.editor->globals));});
     // Custom: the session's own version 5 carries the HDR brightness globals.
-    const bool hdrBright=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
-        const auto& b=c.hdrBrightness;
-        return b.enabled||b.strength!=60||b.targetPeakNits!=1000||b.response!=50;});
-    const bool hdrTransition=hdrBright&&std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){return c.hdrBrightness.transitionMs!=1000;});
+    // Compare against the settings' own defaults: the old literals (60/50) came
+    // from defaults this fork changed, so every session looked customised.
+    // The node editor keeps its own globals copy, and that copy is written too,
+    // so either one being off-default has to raise the version.
+    const auto brightCustom=[](const ChainConfiguration& c){
+        return c.hdrBrightness!=HdrBrightnessSettings{} ||
+            (c.editor&&c.editor->globals&&c.editor->globals->hdrBrightness!=HdrBrightnessSettings{});};
+    const auto transitionCustom=[](const ChainConfiguration& c){
+        return c.hdrBrightness.transitionMs!=1000 ||
+            (c.editor&&c.editor->globals&&c.editor->globals->hdrBrightness.transitionMs!=1000);};
+    const bool hdrBright=std::any_of(session.configurations.begin(),session.configurations.end(),brightCustom);
+    const bool hdrTransition=hdrBright&&std::any_of(session.configurations.begin(),session.configurations.end(),transitionCustom);
     const int version = hdrTransition?6:hdrBright?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
@@ -890,7 +896,11 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         }
         if (!(in >> std::quoted(body))) return false;
         entries.clear(); def.clear(); error.clear();
-        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true) || entries.size() != 1 ||
+        // The editor payload is written by the same encoder as the runtime one,
+        // so it must be read with the same version cap. Leaving it at the
+        // legacy default (3) rejected every document whose payload needed a
+        // newer version, and save() then refused to write anything at all.
+        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 9) || entries.size() != 1 ||
             !def.empty() || entries[0].kind != ChainMode::Node || entries[0].chain.nodeCount != count) return false;
         editor->nodes = std::move(entries[0].chain);
         for (uint32_t i = 0; i < count; ++i) {
