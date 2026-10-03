@@ -28,7 +28,7 @@ if mode in ('stage','finish-stage'):
     identityFile=BASE/'tmp'/TASK/'vfg-identities.json';identityFile.write_text(json.dumps(records,ensure_ascii=False),encoding='utf8')
     env={k:v for k,v in os.environ.items() if k.upper()!='PSMODULEPATH'};env['VEYRA_VFG_IDENTITIES']=str(identityFile)
     script=r'''$ErrorActionPreference='Stop'; $rows=Get-Content -LiteralPath $env:VEYRA_VFG_IDENTITIES -Encoding UTF8 -Raw | ConvertFrom-Json; $identities=foreach($r in $rows) { $s=Get-AuthenticodeSignature -LiteralPath $r.source; $v=(Get-Item -LiteralPath $r.source).VersionInfo; [PSCustomObject]@{name=$r.name;version=$v.FileVersion;signature=[string]$s.Status;signer=$s.SignerCertificate.Subject} }; $identities | ConvertTo-Json -Depth 4'''
-    identities=json.loads(subprocess.check_output(['powershell','-NoProfile','-NonInteractive','-Command',script],env=env,timeout=90).decode('utf8-sig'))
+    identities=json.loads(subprocess.check_output(['powershell','-NoProfile','-NonInteractive','-Command',script],env=env,timeout=90).decode('utf-8-sig'))
     for r in records:
         identity=next(x for x in identities if x['name']==r['name']);assert identity['signature']=='Valid' and 'NVIDIA' in identity['signer'],identity
         r.update(identity);r.pop('source')
