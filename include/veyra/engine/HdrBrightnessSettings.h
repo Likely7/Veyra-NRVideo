@@ -14,7 +14,7 @@ namespace veyra::engine {
 struct HdrBrightnessSettings {
     bool enabled=false;
     // 0..100: how much of the measured correction is applied (0 = measure only).
-    unsigned strength=35;
+    unsigned strength=60;
     // The display's peak. The scene's highlights are compressed to it; when the
     // scene is darker than this nothing is compressed.
     unsigned targetPeakNits=1000;

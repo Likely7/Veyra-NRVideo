@@ -84,7 +84,7 @@ inline HdrSceneMeasurement measureHdrScene(const T* histogram, std::size_t bins,
     const float anchor = std::max(1.0f, targetPeakNits * 0.04f);
     // Ceiling/floor kept tight on purpose: +-1.2 stops is what still reads as a
     // correction rather than as the picture breathing. Strength scales inside it.
-    m.gain = std::clamp(anchor / std::max(m.brightNits, 0.5f), 0.6f, 2.2f);
+    m.gain = std::clamp(anchor / std::max(m.brightNits, 0.5f), 0.5f, 3.2f);
     // Headroom over the measured peak: the proxy is 8-bit and a frame can lack
     // the scene's brightest shot. The floor keeps the map from ever expanding
     // the range, so a scene below the target is left alone.
