@@ -31,6 +31,18 @@
 
 ## 2026-10-03 2.0.2 正式发布完成
 
+## 2026-10-03 VFG 官方开放与本机可行性调研
+
+- 用户请求“研究一下有没有 VFG……能不能接入，好像官方开放了”。只做调研、独立 SDK 调用和接入方案，产品引擎/QML/CMake 未改；没有将 VFG 加入当前便携包。详见 `docs/VFG_RESEARCH_AND_INTEGRATION_PLAN_2026-10-03.md`。
+- 产品源码改动前先存档 HEAD `a93af429930fd83563e0e4f1ae4e3c6a24623b25`，`E:/项目/Veyra/archives/vfg-research-20261003/source-before-vfg.bundle` 完整历史 verify pass / SHA256 C5C5A64A401A3BC880B4715285313FF4327CD9A736BCB6ABFD31675A340AAFE2；tag `checkpoint/pre-vfg-research-20261003`，新分支 `codex/vfg-research-20261003`（复用 E 盘 field-upgrade 工作树）。独立探针先于源码存档执行，期间产品源码未改；不声称先写方案再执行探针。field-upgrade 分支 a93、main 和桌面状态不写入。
+- 官方样例 MIT，固定 `52011f89c1741d06b40ea312af1f20be8be9ec62`，相关 4 文件保存在 `E:/项目/Veyra/deps/vfg-samples-20261003`，来源/哈希 `logs/vfg-research-20261003/official-samples.json`。官方 wheel 0.2.0.0 / VFX SDK 1.3.0.0，下载 435809365 bytes，SHA256 `5aaf6a42bc6b6dbbf52fcb714194c994a6893cbbf7ada38bc2165a1f83e4a6fc` 与 NVIDIA index 一致；新 deps `E:/项目/Veyra/deps/vfg-python-20261003`，旧 1.2.0 审计原件保持。
+- API/Core 正确匿名 URL 返回 401（旧 URL 曾 404）；官方 Python wheel 可匿名下载，包含真实 `nvVFXVideoFrameGeneration.dll` 207321712 bytes / Valid NVIDIA / SHA256 270CF4FFF9329908F9770D306CB51B910EE04323AF5520CD02A98A2E22ABA795。没有要求用户提供 API key、没有绕过访问控制；没 patch、没进 Git/发布包。
+- 实际执行 `first-probe.py` / `benchmark.py` / `benchmark-varying.py` 的外部 subprocess runner：超时分别 120/240/180秒，全部 exit0。命令 Python311 `-B`，输入为移动图块，RTX5070 / 驱动616.56。脚本在 `E:/项目/Veyra/tests/vfg-research-20261003`，JSON/log/npy 在 `E:/项目/Veyra/logs/vfg-research-20261003`；进程 TEMP/TMP、CUDA/CuPy cache 指向 `E:/项目/Veyra/tmp/vfg-research-20261003`，下载在 `E:/项目/Veyra/downloads/vfg-research-20261003`。
+- 720p首调用真实输出/手动切镜头旁路正常；720/1080/4K、中低高模型、10bit打包输入、任意t=.4与6/8X试调用通过。轮换3套帧对（每档12组）Medium 1080p 2X/4X 中位数 2.89/8.46ms，4K 3.88/11.97ms；High 1080p 14.59/44.05ms。4X 数字为三张生成帧总耗时；包含 Python 转换/提交、CUDA完成等待，不冒称纯推理/产品/屏幕延迟。初次报告 allocatedCudaBytes 字段实际为 free/total，轮换报告已准确命名，方案说明该旧字段不可当分配量。
+- 失败记录：初次探针 exec cwd 在目录创建前选择，CreateProcess 报无效目录，未运行代码；改为从现有工作树启动、先创建 E 盘测试目录后通过。CuPy 报未识别 CUDA_PATH 的警告，但运行和输出正常，不添加全局环境设置。所有成功和早期失败记录保留。
+- 接入方案分 P1 原生 SDK/GPU buffer+fence bridge、P2 共享图/列表节点2X4X、P3原 NVENC 导出、P4同素材/实时节奏/延迟/长稳。官方 Windows VFG 范围 RTX40/50；20/30及AMD/Intel无官方VFG支持。样例MIT不等于闭源runtime许可，商用/便携分发条件需依实际包核对。
+- 尚未验：C++头文件/Core取得、D3D12/CUDA互操作、Veyra NR/SR叠加、真实影片画质AB、HDR颜色、实际屏幕与手柄延迟、长稳、40系/616.92。6/8X虽可短调用，官方仍标实验，产品 FrameBatch容量6也需改。只给接入可行性和优先级，不宣称“画质必胜”或“完整4K链路已支持”。
+
 - 发布地址 https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.2 ，2026-10-02 18:40:18 UTC（台北 10-03 02:40:18）公开并设为 latest，非 draft / 非 prerelease。源码 tag v2.0.2 指向 `0dafc57e7ad54880b1748e7046970ddc825e7e46`；该提交同时包含 Claude `28a440b` 与 Codex `bfafbea`。主分支从 `8f42fd5` 干净 fast-forward 后用 `git push --atomic nrvideo main refs/tags/v2.0.2` 推送，未动 origin。
 - `python -B scripts/package-qml-release.py --build E:/项目/Veyra/build/release-2.0.2-20261003 --runtime-source E:/项目/Veyra/releases/2.0.1-20261002/Veyra-2.0.1-win64-portable --original-nr <已批准桌面原件> --legacy-licenses E:/项目/Veyra/releases/1.4.4/final/Veyra-1.4.4-win64-portable/licenses --qt C:/veyra-deps/qt-veyra/6.8.3/msvc2022_64 --qt-licenses E:/项目/Veyra/deps/qt-licenses-6.8.3 --output E:/项目/Veyra/releases/2.0.2 --label 2.0.2 --release` 退出 0。43 个 runtime 哈希/数字版本/签名、patched FFmpeg provenance、1520 个载荷文件审核通过；manifest 的源码树 clean、releaseReady=true。
 - **唯一上传资产** `Veyra-2.0.2-win64-portable.zip`：525684472 bytes / SHA256 `98c37f3c31cec0370a73a42e746ee4fed6c6833f75d86231f8b48e58ea41ba50`。EXE SHA256 `eafb7511f00321eec3b8bafce07ecea89b12c3deaff83b8f3634b7939bcf2ba8`。本地源码快照和 sha 文件仅留作审计，未增加上传附件；对应应用源码由已核对的 v2.0.2 tag 提供（含 SoundTouch），未变动第三方源码链接到原 2.0.0 dependency-source，均公开可访问。最终交付索引 `E:/项目/Veyra/releases/2.0.2/delivery-index.json`。
