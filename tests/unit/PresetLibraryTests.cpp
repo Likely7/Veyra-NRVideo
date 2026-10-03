@@ -897,7 +897,7 @@ __declspec(noinline) void testEditorPayloadVersions() {
     for (uint32_t i = 0; i < document->nodes.nodeCount; ++i) {
         if (document->nodes.nodes[i].type != EffectType::VideoHdr) continue;
         auto& hdr = document->nodes.nodes[i].videoHdr;
-        hdr.convertHdrSource = true; hdr.sourcePeakNits = 1000; hdr.exposureEv100 = 25;
+        hdr.sourcePeakNits = 1000; hdr.exposureEv100 = 25;
         movedHdr = true;
     }
     check(movedHdr, "payload version: sample chain carries RTX Video HDR");

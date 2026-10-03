@@ -764,20 +764,6 @@
    "ja": "HDR ソースも SDR で表示します。キャプチャーカードの「SDR で表示」と同じ設定です"
   },
   {
-   "zh": "HDR 片源也转换",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "HDR 片源也轉換",
-   "en": "Convert HDR sources too",
-   "ja": "HDR ソースも変換"
-  },
-  {
-   "zh": "HDR 片源转换已开启，但当前没有 HDR 输出（检查显示器 HDR 或 SDR 预览）",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "HDR 片源轉換已開啟，但目前沒有 HDR 輸出（檢查螢幕 HDR 或 SDR 預覽）",
-   "en": "HDR source conversion is on, but there is no HDR output right now (check display HDR or the SDR preview)",
-   "ja": "HDR ソース変換は有効ですが、現在 HDR 出力がありません（ディスプレイの HDR か SDR プレビューを確認してください）"
-  },
-  {
    "zh": "HDR 视频自动使用 HEVC Main10 编码",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "HDR 影片自動使用 HEVC Main10 編碼",
@@ -797,13 +783,6 @@
    "zh-TW": "HDR 需要 PS5 實際輸出 HDR 且 Windows HDR 開啟",
    "en": "HDR needs the PS5 to actually output HDR and Windows HDR to be on",
    "ja": "HDR には PS5 が実際に HDR を出力し、Windows の HDR がオンである必要があります"
-  },
-  {
-   "zh": "HDR10 / 杜比视界先转 SDR，再由 RTX Video HDR 升回 HDR",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "HDR10 / 杜比視界先轉 SDR，再由 RTX Video HDR 升回 HDR",
-   "en": "HDR10 / Dolby Vision is tone-mapped to SDR first, then raised back to HDR by RTX Video HDR",
-   "ja": "HDR10 / ドルビービジョンを先に SDR へ変換し、RTX Video HDR で HDR に戻します"
   },
   {
    "zh": "HDR10 默认；补帧固定 HDR10，需要 Windows HDR 开启",
@@ -5607,13 +5586,6 @@
    "zh-TW": "已請求主機退出遊戲。",
    "en": "Asked the host to quit the game.",
    "ja": "ホストにゲームの終了を要求しました。"
-  },
-  {
-   "zh": "已运行：HDR 片源先转 SDR，再由 RTX Video HDR 升回 HDR",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "已執行：HDR 片源先轉 SDR，再由 RTX Video HDR 升回 HDR",
-   "en": "Running: the HDR source is tone-mapped to SDR first, then raised back to HDR by RTX Video HDR",
-   "ja": "実行中：HDR ソースを先に SDR へ変換し、RTX Video HDR で HDR に戻します"
   },
   {
    "zh": "已连接 Xbox，但 20 秒内没有收到画面。请重新连接。",

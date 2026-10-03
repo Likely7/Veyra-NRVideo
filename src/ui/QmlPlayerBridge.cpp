@@ -3558,12 +3558,10 @@ QVariantMap QmlPlayerBridge::videoHdrParams() const {
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
         if (impl_->chain.nodes[i].type == engine::EffectType::VideoHdr) {
             const auto& v = impl_->chain.nodes[i].videoHdr;
-            // Custom: hdrSource is the "HDR 片源也转换" switch (0/1), and the last
-            // four are its HDR->SDR tone-map tuning; their defaults reproduce the
-            // previously hard-coded values.
+            // Custom: the last four are the HDR->SDR tone-map tuning; their
+            // defaults reproduce the previously hard-coded values.
             return {{"contrast", int(v.contrast)}, {"saturation", int(v.saturation)},
                     {"middleGray", int(v.middleGray)}, {"peakNits", int(v.peakNits)},
-                    {"hdrSource", v.convertHdrSource ? 1 : 0},
                     {"sourcePeakNits", int(v.sourcePeakNits)}, {"sdrWhiteNits", int(v.sdrWhiteNits)},
                     {"exposureEv100", int(v.exposureEv100)}, {"shoulderPercent", int(v.shoulderPercent)}};
         }
@@ -3591,7 +3589,6 @@ bool QmlPlayerBridge::setVideoHdrParameter(const QString& key, double value) {
         else if (key == "saturation") node.videoHdr.saturation = v;
         else if (key == "middleGray") node.videoHdr.middleGray = v;
         else if (key == "peakNits") node.videoHdr.peakNits = v;
-        else if (key == "hdrSource") node.videoHdr.convertHdrSource = v != 0;
         else if (key == "sourcePeakNits") node.videoHdr.sourcePeakNits = v;
         else if (key == "sdrWhiteNits") node.videoHdr.sdrWhiteNits = v;
         else if (key == "shoulderPercent") node.videoHdr.shoulderPercent = v;

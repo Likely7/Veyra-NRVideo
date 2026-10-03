@@ -1187,19 +1187,9 @@ VPage {
                             summary: veyra.videoHdr ? (veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("已开启")) : qsTr("已关闭")
                             on: veyra.videoHdr
                             onToggled: on => veyra.videoHdr = on
-                            // Custom: route HDR sources through SDR first so this
-                            // stage can run on them too. Needs an HDR display like
-                            // the rest of RTX Video HDR.
-                            VRow {
-                                label: qsTr("HDR 片源也转换")
-                                hint: qsTr("HDR10 / 杜比视界先转 SDR，再由 RTX Video HDR 升回 HDR")
-                                VSwitch {
-                                    objectName: "list-hdr-hdrSource"
-                                    enabled: veyra.videoHdr
-                                    checked: (veyra.videoHdrParams["hdrSource"] ?? 0) === 1
-                                    onToggled: checked => veyra.setVideoHdrParameter("hdrSource", checked ? 1 : 0)
-                                }
-                            }
+                            // RTX Video HDR is an SDR -> HDR stage: an HDR source
+                            // keeps the native HDR path (and the HDR brightness
+                            // management), so there is no "convert HDR sources" switch.
                             Repeater {
                                 model: [{key:"contrast",label:qsTr("对比度"),from:0,to:200,def:125},
                                         {key:"saturation",label:qsTr("饱和度"),from:0,to:200,def:75},

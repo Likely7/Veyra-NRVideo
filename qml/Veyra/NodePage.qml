@@ -1389,18 +1389,8 @@ VPage {
                     text: veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("SDR → HDR，在补帧之前")
                     color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11; wrapMode: Text.WordWrap
                 }
-                // Custom: the HDR-source route toggle, same parameter as the list page.
-                VRow {
-                    Layout.fillWidth: true
-                    label: qsTr("HDR 片源也转换")
-                    hint: qsTr("HDR10 / 杜比视界先转 SDR，再由 RTX Video HDR 升回 HDR")
-                    VSwitch {
-                        objectName: "node-hdr-hdrSource-" + card.node.id
-                        enabled: veyra.videoHdr
-                        checked: (veyra.videoHdrParams["hdrSource"] ?? 0) === 1
-                        onToggled: checked => veyra.setVideoHdrParameter("hdrSource", checked ? 1 : 0)
-                    }
-                }
+                // RTX Video HDR is an SDR -> HDR stage: an HDR source keeps the
+                // native HDR path, so there is no "convert HDR sources" switch here.
                 Repeater {
                     model: [{key:"contrast",label:qsTr("对比度"),from:0,to:200,def:125},
                             {key:"saturation",label:qsTr("饱和度"),from:0,to:200,def:75},

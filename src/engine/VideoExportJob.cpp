@@ -95,11 +95,6 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         // letting the user assume the static metadata tracks the graded output.
         if(gd.hdrInput&&gd.hdrOutput&&options.settings.color.enabled&&!options.settings.color.neutral())
             veyra::log::warn("color-export","HDR export with the colour grade active: MaxCLL/MaxFALL are carried over from the source and NOT recomputed for the graded output (marked as not updated)");
-        // Custom: with the HDR-source RTX Video HDR route the exported HDR is
-        // built from a tone-mapped SDR intermediate, so the source's static
-        // metadata describes the source rather than this encode either.
-        if(gd.hdrInput&&gd.hdrOutput&&gd.videoHdr.convertHdrSource)
-            veyra::log::warn("color-export","HDR export with RTX Video HDR converting an HDR source: MaxCLL/MaxFALL are carried over from the source and NOT recomputed for the converted output (marked as not updated)");
         gd.captureBitDepth=info.color.pixelFormat==pipeline::SourcePixelFormat::P010?10:info.color.pixelFormat==pipeline::SourcePixelFormat::P016?16:8;
         // Adapter gate mirrors the preview rules (EngineController): DLSS NR,
         // DLSS SR and the NVOF guidance need an NVIDIA device; AMD FSR

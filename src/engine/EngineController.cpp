@@ -2041,13 +2041,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 loopTrace.mark("flowSnapshot");
                 measured.sourceFrames=measured.flow.counters.sourceAccepted;measured.validGenerated=measured.flow.counters.fgReadyValid;measured.submitted=measured.flow.counters.realPresented+measured.flow.counters.generatedPresented;measured.expired=measured.flow.counters.generatedExpiredAfterEval;
                 const double ageP95=liveScheduler?completed.ageP95:captureAges.p95(),waitP95=liveScheduler?completed.waitP95:scheduleWaits.p95(),presentP95=liveScheduler?completed.presentP95:presentTimes.p95();
-                ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.colorStatus=graph.videoHdrActive()?(gd.hdrInput?L"HDR → SDR → RTX Video HDR":L"SDR → RTX Video HDR"):options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph.hdr10Output()?L"HDR → HDR10 / PQ":L"HDR → scRGB / 浮点"):gd.hdrInput?L"HDR → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
+                ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.colorStatus=graph.videoHdrActive()?L"SDR → RTX Video HDR":options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph.hdr10Output()?L"HDR → HDR10 / PQ":L"HDR → scRGB / 浮点"):gd.hdrInput?L"HDR → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
                     snapshot_.videoHdrActive=graph.videoHdrActive();
-                    // Custom: the switch can now also convert HDR sources, so the
-                    // "not running" reasons have to name which case this is.
-                    snapshot_.videoHdrStatus=graph.videoHdrActive()?(gd.hdrInput?L"已运行：HDR 片源先转 SDR，再由 RTX Video HDR 升回 HDR":L"预览：SDR 转 HDR 已运行"):
+                    // RTX Video HDR is an SDR -> HDR stage: an HDR source keeps the
+                    // native HDR path, so the "not running" reasons are about the SDR
+                    // input side only.
+                    snapshot_.videoHdrStatus=graph.videoHdrActive()?L"预览：SDR 转 HDR 已运行":
                         !options.settings.videoHdr.enabled?L"RTX Video HDR 已关闭":
-                        gd.hdrInput?(options.settings.videoHdr.convertHdrSource?L"HDR 片源转换已开启，但当前没有 HDR 输出（检查显示器 HDR 或 SDR 预览）":L"原生 HDR 输入；「HDR 片源转换」未开启"):
+                        gd.hdrInput?L"原生 HDR 输入（RTX Video HDR 只处理 SDR 片源）":
                         L"当前为 SDR 预览，HDR 转换未运行";
                     // Custom: per-scene HDR brightness readout. Doubles as the
                     // field-visible evidence that the map follows the picture.

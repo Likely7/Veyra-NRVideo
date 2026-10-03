@@ -573,10 +573,11 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
     });
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return e.globals.has_value();});
-    // Custom v7: RTX Video HDR's HDR-source route and its HDR->SDR tuning.
+    // Custom v7: RTX Video HDR's HDR->SDR tone-map tuning (the HDR-source route
+    // switch that used to share this row has been removed).
     const bool hdrMap = std::any_of(entries_.begin(), entries_.end(), [](const auto& e) {
         return std::any_of(e.chain.nodes.begin(), e.chain.nodes.begin() + e.chain.nodeCount, [](const auto& n) {
-            return n.type == EffectType::VideoHdr && (n.videoHdr.convertHdrSource || n.videoHdr.sourcePeakNits ||
+            return n.type == EffectType::VideoHdr && (n.videoHdr.sourcePeakNits ||
                 n.videoHdr.sdrWhiteNits != 203 || n.videoHdr.exposureEv100 || n.videoHdr.shoulderPercent != 100);
         });
     });
@@ -613,10 +614,12 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
                 o << ' ' << (r.ellipse ? r.right : r.left) << ' ' << r.top << ' ' << (r.ellipse ? r.left : r.right) << ' ' << r.bottom;
             o << ' ' << (n.videoHdr.enabled ? 1 : 0) << ' ' << n.videoHdr.contrast << ' ' << n.videoHdr.saturation << ' '
               << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits;
-            // v7 appends RTX Video HDR's HDR-source route and its HDR->SDR
-            // tuning. Written for every node once the file is v7, so the rows
-            // stay aligned; the reader only takes them at version>=7.
-            if (version >= 7) o << ' ' << (n.videoHdr.convertHdrSource ? 1 : 0) << ' ' << n.videoHdr.sourcePeakNits << ' '
+            // v7 appends RTX Video HDR's HDR->SDR tuning. Written for every node
+            // once the file is v7, so the rows stay aligned; the reader only takes
+            // them at version>=7. The leading field used to be the HDR-source route
+            // switch and is written as 0 to keep the row layout - and every file
+            // written while it existed - readable.
+            if (version >= 7) o << ' ' << 0 << ' ' << n.videoHdr.sourcePeakNits << ' '
                 << n.videoHdr.sdrWhiteNits << ' ' << n.videoHdr.exposureEv100 << ' ' << n.videoHdr.shoulderPercent;
             o << ' ';
             if(version>=3)o<<int(n.nr.sizePolicy)<<' ';
@@ -696,13 +699,14 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if (r.left > r.right) { std::swap(r.left, r.right); r.ellipse = true; }
             }
             if (!(in >> hdrEnabled >> node.videoHdr.contrast >> node.videoHdr.saturation >> node.videoHdr.middleGray >> node.videoHdr.peakNits)) { error = L"预设库 HDR 字段损坏"; return false; }
-            // Custom v7: RTX Video HDR's HDR-source route and HDR->SDR tuning.
+            // Custom v7: RTX Video HDR's HDR->SDR tuning. The first field is the
+            // retired HDR-source route switch: it is validated and dropped, so old
+            // presets keep loading and the row layout does not move.
             if (version >= 7) {
-                int convert = 0, srcPeak = 0, whiteNits = 203, ev = 0, shoulder = 100;
-                if (!(in >> convert >> srcPeak >> whiteNits >> ev >> shoulder)) { error = L"预设库 HDR 色调映射字段损坏"; return false; }
-                if (convert < 0 || convert > 1 || srcPeak < 0 || srcPeak > 4000 || whiteNits < 80 || whiteNits > 400 ||
+                int retired = 0, srcPeak = 0, whiteNits = 203, ev = 0, shoulder = 100;
+                if (!(in >> retired >> srcPeak >> whiteNits >> ev >> shoulder)) { error = L"预设库 HDR 色调映射字段损坏"; return false; }
+                if (retired < 0 || retired > 1 || srcPeak < 0 || srcPeak > 4000 || whiteNits < 80 || whiteNits > 400 ||
                     ev < -200 || ev > 200 || shoulder < 50 || shoulder > 150) { error = L"预设库 HDR 色调映射取值超出范围"; return false; }
-                node.videoHdr.convertHdrSource = convert != 0;
                 node.videoHdr.sourcePeakNits = unsigned(srcPeak);
                 node.videoHdr.sdrWhiteNits = unsigned(whiteNits);
                 node.videoHdr.exposureEv100 = ev;

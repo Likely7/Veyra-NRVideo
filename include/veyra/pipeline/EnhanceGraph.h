@@ -104,13 +104,11 @@ struct EnhanceGraphDesc {
     // Custom: per-scene HDR brightness management. Only the HDR-output path uses
     // it (see HdrSceneMapping.h); every field is a live uniform.
     engine::HdrBrightnessSettings hdrBrightness;
-    // Custom: with videoHdr.convertHdrSource the source is tone-mapped to SDR
-    // before RTX Video HDR raises it back, so the WORKING space is SDR even
-    // though source and sink are both HDR. Everything keyed off hdrWorking()
-    // then treats the frame as SDR, which is exactly the input the SDR->HDR
-    // stage expects.
-    bool hdrWorking() const {return hdrInput&&hdrOutput&&!videoHdr.convertsHdrSource();}
-    bool convertVideoHdr() const {return videoHdr.enabled&&hdrOutput&&(!hdrInput||videoHdr.convertHdrSource);}
+    // RTX Video HDR is an SDR -> HDR stage: it only ever runs for an SDR input,
+    // and an HDR source keeps the native HDR path (HDR10 / Dolby Vision) with the
+    // per-scene brightness management instead of being tone-mapped down first.
+    bool hdrWorking() const {return hdrInput&&hdrOutput;}
+    bool convertVideoHdr() const {return videoHdr.enabled&&hdrOutput&&!hdrInput;}
     bool highQualityPresentation = false; // PS5 ordinary scaling, no AI SR
     bool rgbInput = false;       // allocate direct RGBA ingestion before NGX creation
     bool yuy2Input = false;      // packed Y0 U Y1 V -> linear FP16; never subsample to NV12

@@ -1797,10 +1797,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             resolved.transfer==TransferFunction::HLG?"inverse-OETF+OOTF-gamma1.2":"ST2084-EOTF-absolute-nits",
             desc_.hdrWorking()?"linear-BT709-scRGB-1=80nits":"linear-BT709-SDR-relative",
             hdr10Output()?"PQ-BT2020-RGB10":desc_.hdrOutput?"scRGB-FP16":"sRGB-RGB8",
-            // Custom: the tone map also runs on the "HDR source -> SDR -> RTX
-            // Video HDR" route, where the output is HDR. Report what actually
-            // happens instead of claiming there is no mapping.
-            desc_.hdrWorking()?"none":(desc_.videoHdr.convertsHdrSource()?"BT2390-luminance+neutral-ray-gamut-compression (HDR source converted for RTX Video HDR)":"BT2390-luminance+neutral-ray-gamut-compression")));
+            // Custom: the tone map also runs when an HDR source has to go to an SDR
+            // output, so report what happens instead of claiming there is no mapping.
+            desc_.hdrWorking()?"none":"BT2390-luminance+neutral-ray-gamut-compression"));
     }
     const bool gpuRgb=desc_.rgbInput&&frame->format==AV_PIX_FMT_D3D11&&hardwareSurface&&hardwareSurface->present();
     if(resolved.scRgb&&(!gpuRgb||resolved.transfer!=TransferFunction::Linear||resolved.primaries!=ColorPrimaries::BT709||hardwareSurface->texture->GetDesc().Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))return false;
@@ -2980,10 +2979,6 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
         if(a.enabled!=b.enabled||a.lutName!=b.lutName||a.lutInputSpace!=b.lutInputSpace)return false;
     }
     if(s.videoHdr.enabled!=desc_.videoHdr.enabled)return false;
-    // Custom: the HDR-source switch decides the working space (SDR vs scRGB) and
-    // whether the TrueHDR feature is created, so it is a rebuild, not a live
-    // uniform. The tone-map parameters below are live.
-    if(s.videoHdr.convertHdrSource!=desc_.videoHdr.convertHdrSource)return false;
     // Output stabiliser: its pass is allocated at build time, so on/off rebuilds; strength and
     // tolerance are uniforms. Neither used to reach a running graph (field report
     // 2026-10-01: switching it on mid-play did nothing until something else rebuilt).

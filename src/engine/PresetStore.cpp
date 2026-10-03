@@ -32,11 +32,11 @@ std::string PresetStore::serialize()const{
             if(p.settings.nrLayer(i).antiFlicker!=NrAntiFlicker::Flow)return true;
         return p.settings.nrAntiFlicker!=NrAntiFlicker::Flow;});
     const bool fsr4=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4;});
-    // Custom v28: the RTX Video HDR HDR-source route and its HDR->SDR tuning.
-    // Store-level like the other appended flags: once any entry needs it, every
-    // entry writes it, so the rows stay aligned.
+    // Custom v28: the RTX Video HDR HDR->SDR tone-map tuning. Store-level like the
+    // other appended flags: once any entry needs it, every entry writes it, so the
+    // rows stay aligned.
     const bool hdrMap=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){const auto& v=p.settings.videoHdr;
-        return v.convertHdrSource||v.sourcePeakNits!=0||v.sdrWhiteNits!=203||v.exposureEv100!=0||v.shoulderPercent!=100;});
+        return v.sourcePeakNits!=0||v.sdrWhiteNits!=203||v.exposureEv100!=0||v.shoulderPercent!=100;});
     const bool higher=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.srTarget>pipeline::SrTarget::Uhd8K;});
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){const auto& s=p.settings;return s.hdrOutputMode!=HdrOutputMode::Hdr10||s.fgMotion!=MotionSource::Automatic||s.srMotion!=MotionSource::OpticalFlow||s.nrMotion!=MotionSource::OpticalFlow;});
     const bool fullSchema=fsr4||higher||rendering;
@@ -62,8 +62,10 @@ std::string PresetStore::serialize()const{
         if(hold||fullSchema)o<<' '<<s.nrHoldStrength<<' '<<s.nrHoldTolerance;
         if(rendering)o<<' '<<int(s.hdrOutputMode)<<' '<<int(s.fgMotion)<<' '<<int(s.srMotion)<<' '<<int(s.nrMotion);
         // v28: appended last, only when this store asks for it (the reader takes
-        // them at version>=28 only).
-        if(hdrMap)o<<' '<<s.videoHdr.convertHdrSource<<' '<<s.videoHdr.sourcePeakNits<<' '<<s.videoHdr.sdrWhiteNits<<' '<<s.videoHdr.exposureEv100<<' '<<s.videoHdr.shoulderPercent;
+        // them at version>=28 only). The leading field used to be the HDR-source
+        // route switch and is written as 0 to keep the row layout, and every store
+        // written while it existed, readable.
+        if(hdrMap)o<<' '<<0<<' '<<s.videoHdr.sourcePeakNits<<' '<<s.videoHdr.sdrWhiteNits<<' '<<s.videoHdr.exposureEv100<<' '<<s.videoHdr.shoulderPercent;
         o<<'\n';
     }return o.str();
 }
@@ -130,14 +132,15 @@ bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std
             if(!std::isfinite(s.nrHoldTolerance)||s.nrHoldTolerance<0.0f||s.nrHoldTolerance>1.0f)return false;
         }
         if(version>=27){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;s.hdrOutputMode=HdrOutputMode(hdr);s.fgMotion=MotionSource(fg);s.srMotion=MotionSource(sr);s.nrMotion=MotionSource(nr);}
-        // Custom v28: the RTX Video HDR HDR-source route plus its HDR->SDR tone
-        // map tuning. Absent in older stores, where the defaults (route off, the
-        // previously hard-coded tone-map numbers) are exactly the old behaviour.
+        // Custom v28: RTX Video HDR's HDR->SDR tone map tuning. Absent in older
+        // stores, where the defaults (the previously hard-coded tone-map numbers)
+        // are exactly the old behaviour. The leading field is the retired
+        // HDR-source route switch: it is validated and dropped so old stores keep
+        // loading and the row layout does not move.
         if(version>=28){
-            int convert,srcPeak,whiteNits,ev,shoulder;
-            if(!(in>>convert>>srcPeak>>whiteNits>>ev>>shoulder))return false;
-            if(convert<0||convert>1||srcPeak<0||srcPeak>4000||whiteNits<80||whiteNits>400||ev<-200||ev>200||shoulder<50||shoulder>150)return false;
-            s.videoHdr.convertHdrSource=convert!=0;
+            int retired,srcPeak,whiteNits,ev,shoulder;
+            if(!(in>>retired>>srcPeak>>whiteNits>>ev>>shoulder))return false;
+            if(retired<0||retired>1||srcPeak<0||srcPeak>4000||whiteNits<80||whiteNits>400||ev<-200||ev>200||shoulder<50||shoulder>150)return false;
             s.videoHdr.sourcePeakNits=unsigned(srcPeak);
             s.videoHdr.sdrWhiteNits=unsigned(whiteNits);
             s.videoHdr.exposureEv100=ev;
