@@ -10,6 +10,64 @@ constants `EnhanceGraph::convertInput` packs, plus its `--scan` / `--history`
 modes, which report the RPU-derived conversion parameters without touching the
 GPU.
 
+## Reproduce
+
+This repository has no CI configuration, so every number below is a local run.
+They are reproducible with the committed tooling — the probe, the comparison
+helper and the test target:
+
+```
+cmake --build <build> --target veyra_dovi_p5_probe veyra_repair_contract_tests
+<build>/veyra_repair_contract_tests.exe                                 # 249 checks, 0 failures
+
+PROBE=<build>/veyra_dovi_p5_probe.exe
+SAMPLE="<the profile-5 file, see below>"
+$PROBE --input "$SAMPLE" --time 0   --scan 1500 --sequential            # 1.
+$PROBE --input "$SAMPLE" --time 0.5 --later 600  --history              # 2.
+$PROBE --input "$SAMPLE" --time 95  --later 1200 --history
+$PROBE --input "$SAMPLE" --time 95  --out p5-on.raw                     # 3.
+$PROBE --input "$SAMPLE" --time 95  --out p5-off.raw --no-dovi
+ffmpeg -ss 95 -i "$SAMPLE" -frames:v 1 \
+  -vf "libplacebo=apply_dolbyvision=1:color_trc=smpte2084:format=rgb48" \
+  -f rawvideo -pix_fmt rgb48le ref95.raw
+python tools/dovi_p5_probe/compare_raw.py pq p5-on.raw  ref95.raw       # conversion
+python tools/dovi_p5_probe/compare_raw.py pq p5-off.raw ref95.raw       # control
+$PROBE --input "$SAMPLE" --time 95 --out p5-sdr-on.raw  --sdr           # 4.
+$PROBE --input "$SAMPLE" --time 95 --out p5-sdr-off.raw --sdr --no-dovi
+$PROBE --input "<HDR10-only file>" --time 95 --out hdr10-new.raw        # 5.
+$PROBE --input "<HDR10-only file>" --time 95 --out hdr10-old.raw --shader <pre-change shader dir>
+python tools/dovi_p5_probe/compare_raw.py f2 hdr10-new.raw hdr10-old.raw
+```
+
+`compare_raw.py`'s `pq` mode does the domain conversion the comparison needs: it
+takes the probe's linear scRGB output (1.0 = 80 nits), goes back to BT.2020 with
+the player's matrix and re-encodes PQ, so both sides live in one domain.
+
+## Tests
+
+| suite | result |
+| --- | --- |
+| `veyra_repair_contract_tests` | **249 checks, 0 failures** |
+| `veyra_preset_library_tests` | 236 checks, 0 failures (untouched by this PR) |
+| `veyra_effect_chain_tests` | 204 checks, 0 failures (untouched by this PR) |
+
+The profile-5 checks this PR adds or updates:
+
+```
+PASS DV P5 base layer is pinned to the routed HDR10 container so the RPU conversion can run
+PASS DV P5 does not report an RPU conversion before its parameters are actually in effect
+PASS DV P5 reports the IPT-PQ-C2 conversion once the RPU parameters are in effect
+PASS DV P5 conversion uses the RPU matrices and the per-frame reshaping curve
+PASS DV P5 refuses an RPU whose colour block is empty
+PASS DV P5 refuses a reshaping method it cannot reproduce instead of converting with the identity
+PASS DV P5 flat mappings convert to the identity regardless of playback history
+```
+
+The first of those replaces the assertion that expected profile 5 to stay
+`Unsupported`, which the new route made false.
+
+
+
 ## Sample
 
 | | |
