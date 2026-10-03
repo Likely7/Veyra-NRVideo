@@ -1,13 +1,15 @@
 # 当前项目状态 / Current Status
 
-## 2026-10-03 VFG 全档位：独立本地接入
+## 2026-10-04 VFG 全档位：独立本地交付
 
 `codex/vfg-integration-20261003` 已接原生 NVIDIA VFG 2X–8X、Low/Medium/High，
 共享图、实际预览/NVENC导出、列表/节点、预设/会话和worker冻结均接入。720p/4K
 8/10-bit全部21组合、21种真实导出、2K30AVI+最高SR4K+原生NR+VFG8、24/60fps、
 取消/缺失SDK、GUI热切换/重启和旧格式回归通过；缺失组件UI仍显示8X的错误已修复。
 RTX5070/616.56短测，不代表40系/616.92/HDR色度/物理显示/长稳通过。高档8X实时会降档。
-最终本地包在制作和验证中，公开2.0.2保持原状；详情 `VFG_INTEGRATION_ACCEPTANCE_2026-10-03.md`。
+最终本地便携包完成并通过独立解压实跑：2077载荷哈希、包内VFG全GUI/High8 worker、
+GPU与软件各六页检查通过。交付在 `E:/项目/Veyra/test-packages/vfg-integration-20261003`，
+公开2.0.2保持原状；详情 `VFG_INTEGRATION_ACCEPTANCE_2026-10-03.md`。
 
 ## 2026-10-03 五项问题修复：独立本地候选
 

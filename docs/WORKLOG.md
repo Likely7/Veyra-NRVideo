@@ -1,5 +1,15 @@
 # Veyra 工作记录
 
+## 2026-10-04 VFG 全档位本地交付完成
+
+- `python -B scripts/acceptance/vfg-package.py archive` exit0，最终 `E:/项目/Veyra/test-packages/vfg-integration-20261003/Veyra-2.0.2-vfg-20261003-win64-portable.zip`，1151602649 bytes，SHA256 `8efb3189ff47f00f63672c6d5259a6be4ca004a638432a116f27db6850426ee2`，2077个载荷。应用SHA256 `be4da2ff173aa74de8e2e1d5ecc73d40a23584ba8898ffd534e636a8793b3d6b`；单独源码ZIP SHA256 `5e575a74e9927ab27b520c00fabd005e0310070ad2a51c736ea52d211721e7cf`，源码快照003f897，产品代码仍0d891731。审计 `logs/vfg-integration-20261003/candidate-package-audit.json`。
+- `python -B scripts/acceptance/vfg-clean-smoke.py` exit0，最终ZIP独立解压、PATH仅Windows/无VFG环境变量，实际包内native VFG全部档位、真正DLSS6↔VFG8、run/restore/missing通过。High8导出worker保持quality=2且输出64帧/240fps/保留音轨，父进程改Low2无影响。`ui-package-final/summary.json`与worker日志留在logs。
+- GPU/软件UI各六页home/pro/node/exp/set/min的截图、背景alpha255及退出通过；测试运行前后全部2077个载荷哈希一致。结果 `logs/vfg-integration-20261003/clean-smoke/summary.json`，12张页面截图在 `verify/vfg-integration-20261003/{gpu,software}-evidence`；VFG列表/节点控件截图在tests/ui-package-final，仅证明设置与UI，独立原生视频窗口不由Qt截图捕获。
+- 同目录交付索引 `Veyra-2.0.2-vfg-20261003-delivery.json` / `DELIVERY.md` 记录最终包验证；ZIP内部报告是组包前快照，最终证据写回源码报告而不为自身哈希反复改包。2X–8X×三质量、预览、导出、节点/列表/预设/重启完整接入。RTX5070/616.56短测，8X High实时降档；RTX40/616.92/主机/采集VFG/影片画质AB/HDR色度/物理节奏/长稳未验不宣称通过。
+- 桌面隔离检查 `source-isolation.json`：status规范化编码/换行后相同（非原始字节相同），working patch258615 bytes和index patch0 bytes逐字节相同，11份未跟踪源码哈希相同；main保持66cd3e5。没有派Agent、合并main、推送或Release。旧legacy delivery gate不冒充QML验收，执行本任务native/UI/导出检查与scope guard。
+- 产物仍统一E盘task目录，TEMP/TMP只设子进程；保留当前构建、最终可用便携目录/ZIP、源码与证据。删除本轮自有tests/app、verify内解压产品前，单独检查固定绝对路径、0个嵌套reparse，worker日志先转存logs/retained-app-worker，截图位于删除目标外。删除工具调用在CreateProcess前被自动审批拒绝，只返回blocked by policy，无具体理由，检查/删除命令均未执行；副本暂留，未绕过或重试旧field被拒目录。
+- 收尾 `python -B E:/项目/Veyra/tmp/vfg-integration-20261003/finalize-delivery.py` exit0，基于实际JSON/worker日志生成交付索引；`git diff --check`通过，`vfg-control.py`输出46 paths/no SDK/runtime/model assets。`git diff --name-only 0d891731 -- src include qml shaders CMakeLists.txt i18n tests`为空，最终代码与已编译/实跑产品存档相同。
+
 ## 2026-10-03 VFG 本地便携 staging
 
 - 已存档产品 `0d891731ba6556c47563a090c5746bac803cabe4` / checkpoint/vfg-code-20261003。后续改动仅docs/acceptance脚本，产品源文件未变。`vfg-package.py stage` 完成现有43原件/FFmpeg/Qt组包，VFG附加审计最初失败三次：继承PSMODULEPATH大小写导致Security模块导入错、PowerShell5 JSON数组管道嵌套、Python误写utf8-sig codec；分别修环境key筛除/foreach/utf-8-sig，`finish-stage` exit0。失败由工具stdout记录，不宣称签名检查未运行时已经通过。

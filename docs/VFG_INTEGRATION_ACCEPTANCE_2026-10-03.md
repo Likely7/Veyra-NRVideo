@@ -1,4 +1,4 @@
-# VFG 全档位接入验收（2026-10-03，本地候选）
+# VFG 全档位接入验收（2026-10-03任务，2026-10-04本地交付）
 
 ## 已实现与实际验证
 
@@ -91,7 +91,34 @@ MIT样例固定 `52011f89c1741d06b40ea312af1f20be8be9ec62`，改造/来源见 TH
 VFG十四 DLL 已逐项核验原件 SHA256/版本/Valid NVIDIA 签名，原43运行组件与patched
 FFmpeg沿用既有身份。两者均是组包审计，不是用户替换运行库的加载锁。
 
-本地候选目录 `E:/项目/Veyra/test-packages/vfg-integration-20261003/`
-`Veyra-2.0.2-vfg-20261003-win64-portable` 的完整GUI与worker实跑已通过。
-此件记录组包前验收；最终ZIP额外做完整文件哈希核验、独立解压实跑和双渲染器六页检查，
-结果放在同目录交付报告与 `.sha256` 文件，源码仓库的本文件随后更新。未 merge main、push 或公开发布。
+最终目录 `E:/项目/Veyra/test-packages/vfg-integration-20261003/`：
+
+| 交付件 | 大小 / SHA256 |
+| --- | --- |
+| `Veyra-2.0.2-vfg-20261003-win64-portable.zip` | 1151602649 bytes；`8efb3189ff47f00f63672c6d5259a6be4ca004a638432a116f27db6850426ee2` |
+| `Veyra-2.0.2-vfg-20261003-source.zip` | SHA256 `5e575a74e9927ab27b520c00fabd005e0310070ad2a51c736ea52d211721e7cf`；源码快照 `003f897f6e26141c68d708eb305179a3ce51290b` |
+
+`vfg-package.py archive` exit0，2077个载荷文件逐项核验，应用 SHA256
+`be4da2ff173aa74de8e2e1d5ecc73d40a23584ba8898ffd534e636a8793b3d6b`。
+源码ZIP与运行库/SDK/模型物理分开；源码快照中的产品代码与上述产品存档一致。
+
+`python -B scripts/acceptance/vfg-clean-smoke.py` exit0：从最终ZIP独立解压，
+仅Windows PATH、无 `VEYRA_VFG_RUNTIME`，实际运行包内VFG；run/restore/missing
+三阶段通过，真正DLSS6↔VFG8、全部档位、High8 worker冻结（父进程改Low2）通过，
+HEVC输出64帧/240fps且保留音轨。GPU/软件渲染各home/pro/node/exp/set/min六页，
+12张截图的背景alpha=255、正常退出；运行前后2077个载荷哈希均一致。
+证据 `logs/vfg-integration-20261003/clean-smoke/summary.json`、
+`ui-package-final/summary.json`，截图在 `verify/vfg-integration-20261003/{gpu,software}-evidence`
+和 `tests/vfg-integration-20261003/ui-package-final`。截图中的独立原生视频窗口不由
+Qt grabToImage捕获，不拿空白视频区截图证明影片画质。
+
+最终ZIP内部此报告保留组包前快照；最终验收与哈希另存同目录
+`Veyra-2.0.2-vfg-20261003-delivery.json` 和 `DELIVERY.md`，避免为写入自身哈希反复改包。
+最终可用便携目录、ZIP、源码ZIP、当前构建与必要证据保留。
+删除本轮tests/app和verify内重复解压产品的操作被自动审批以 `blocked by policy`
+拒绝，未执行，未提供具体理由；两份副本暂留。此前field任务被拒的目录未重试。
+
+`source-isolation.json` 验证桌面status按编码/换行规范化后相同，working/index patch
+逐字节相同、11份未跟踪源码哈希相同；main仍为
+`66cd3e50590766e5a654528ab61e491dc4d30c83`。不将status原始字节比较说成相同。
+本轮在独立分支本地存档，未 merge main、push 或公开发布。
