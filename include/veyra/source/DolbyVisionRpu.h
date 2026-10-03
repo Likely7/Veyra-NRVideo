@@ -118,13 +118,20 @@ inline bool fitDolbyVisionP5Curve(const AVDOVIDataMapping& mapping, int componen
 // Why a stream stayed on the old path, for the caller's log line.
 struct DolbyVisionP5Build {
     bool ok = false;
+    // The RPU described every component with something this decoder can
+    // reproduce (a fitted polynomial, or a deliberate flat mapping that becomes
+    // the identity). Without it the base layer cannot be converted faithfully,
+    // so the caller refuses the frame rather than showing the ordinary YUV path.
+    bool usable = false;
     bool colorMetadataMissing = false;
+    // A component carried a mapping method this decoder does not implement.
     bool unsupportedMapping = false;
     // The RPU carried a mapping that reshapes the whole base layer onto a
     // single constant (black luma / neutral chroma in every sample observed).
-    // That is a placeholder, not a picture: a decoder must keep the mapping it
-    // already has instead of blanking the frame. Happens on this sample for the
-    // first ~1.9 s (the fade-in) and on genuinely black stretches.
+    // That is a placeholder, not a picture: applying it literally blanks the
+    // frame, so the affected components keep the identity instead. Happens on
+    // this sample for the first ~1.9 s (the fade-in) and on genuinely black
+    // stretches.
     bool placeholderMapping = false;
 };
 
@@ -133,11 +140,13 @@ inline bool dolbyVisionP5CurveIsPlaceholder(const float coeffs[kDolbyVisionP5Bas
     return std::fabs(coeffs[1]) < 1e-4f && std::fabs(coeffs[2]) < 1e-4f;
 }
 
-// Fills `out` from one frame's RPU metadata. `active` is only set when the RPU
-// really carries the profile-5 colour block, so a stream that does not describe
-// its base layer keeps the previous behaviour instead of being guessed at.
-// The reshaping curves update only from a usable mapping: `out` keeps whatever
-// it already had (identity on the very first frames) through a placeholder.
+// Fills `out` from one frame's RPU metadata. The result is a pure function of
+// that frame: `active` is only set when the RPU really carries the profile-5
+// colour block, and a component whose reshaping is missing, unusable or flat
+// keeps the identity rather than whatever an earlier frame left behind. A flat
+// mapping is a placeholder, not a shaping - applying one literally blanks the
+// frame - so identity is used for it, which also makes a backward seek into such
+// a frame produce exactly what a fresh open produces.
 inline DolbyVisionP5Build buildDolbyVisionP5(const AVDOVIMetadata& meta, pipeline::DolbyVisionP5& out) {
     DolbyVisionP5Build result;
     const AVDOVIColorMetadata* color = av_dovi_get_color(&meta);
@@ -145,6 +154,7 @@ inline DolbyVisionP5Build buildDolbyVisionP5(const AVDOVIMetadata& meta, pipelin
     const AVDOVIRpuDataHeader* header = av_dovi_get_header(&meta);
     if (color == nullptr || mapping == nullptr || header == nullptr) {
         result.colorMetadataMissing = true;
+        out = {}; // never leave an earlier frame's state in place
         return result;
     }
 
@@ -160,12 +170,14 @@ inline DolbyVisionP5Build buildDolbyVisionP5(const AVDOVIMetadata& meta, pipelin
     // RPU does not describe its base layer, which is not ours to assume.
     if (yccEnergy < 1e-6 || lmsEnergy < 1e-6) {
         result.colorMetadataMissing = true;
+        out = {}; // an unusable block deactivates the conversion
         return result;
     }
 
-    // Start from the live state so a placeholder frame cannot throw away a
-    // mapping that is still in force.
-    pipeline::DolbyVisionP5 built = out;
+    // Built from the identity, never from the state the previous frame left:
+    // the same frame has to convert to the same signal no matter how playback
+    // reached it (fresh open, sequential, or a backward seek).
+    pipeline::DolbyVisionP5 built;
     built.active = true;
     for (int i = 0; i < 9; ++i) built.yccToRgb[i] = float(ycc[i]);
     // The RPU crosstalk matrix and the fixed HPE stage are adjacent linear
@@ -178,31 +190,26 @@ inline DolbyVisionP5Build buildDolbyVisionP5(const AVDOVIMetadata& meta, pipelin
             built.lmsToRgb[row * 3 + col] = float(sum);
         }
 
-    float projected[3][kDolbyVisionP5BasisTerms] = {};
-    bool fitted[3] = {};
     bool placeholder = true;
+    int described = 0;
     for (int component = 0; component < 3; ++component) {
-        projected[component][2] = 1.0f;
-        fitted[component] = fitDolbyVisionP5Curve(*mapping, component, header->coef_log2_denom,
-                                                  header->bl_bit_depth, projected[component]);
-        if (!fitted[component]) {
+        float projected[kDolbyVisionP5BasisTerms] = {0.0f, 0.0f, 1.0f};
+        if (!fitDolbyVisionP5Curve(*mapping, component, header->coef_log2_denom,
+                                   header->bl_bit_depth, projected)) {
             if (mapping->curves[component].num_pivots >= 2) result.unsupportedMapping = true;
             placeholder = false; // unusable is not the same as deliberately flat
-            continue;
+            continue;            // identity for this component
         }
-        if (!dolbyVisionP5CurveIsPlaceholder(projected[component])) placeholder = false;
+        ++described;
+        if (dolbyVisionP5CurveIsPlaceholder(projected)) continue; // flat: identity
+        placeholder = false;
+        for (int k = 0; k < kDolbyVisionP5BasisTerms; ++k)
+            built.curve[component][k] = projected[k];
     }
-    if (placeholder) {
-        // Every component is flat: keep the curves already in force.
-        result.placeholderMapping = true;
-    } else {
-        for (int component = 0; component < 3; ++component)
-            if (fitted[component])
-                for (int k = 0; k < kDolbyVisionP5BasisTerms; ++k)
-                    built.curve[component][k] = projected[component][k];
-    }
+    if (placeholder) result.placeholderMapping = true;
     out = built;
     result.ok = true;
+    result.usable = described == 3;
     return result;
 }
 

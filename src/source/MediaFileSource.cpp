@@ -278,6 +278,10 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
                 c.primaries=pipeline::ColorPrimaries::BT2020;c.primariesAssumed=true;}
         }
     }
+    // Profile-5 conversion state belongs to the stream position, never to the
+    // previous open: a stale value would let a fresh play start from parameters
+    // this file did not provide.
+    info_.color.dolbyVisionP5 = {};
 
     sequence_ = 0;
     framesRead_ = 0;
@@ -401,11 +405,19 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
     // The shaping curves are re-sent per scene refresh, so this runs per frame;
     // the matrices arrive with them and are stable, but re-reading is cheap.
     if(dv.present&&dv.profile==5&&dv.baseLayer){
+        // Per frame, from the identity: nothing another frame established may
+        // leak into this one, so a frame converts the same way no matter how
+        // playback reached it.
+        info_.color.dolbyVisionP5=pipeline::DolbyVisionP5{};
+        bool usable=false;
         if(const auto* side=av_frame_get_side_data(frame,AV_FRAME_DATA_DOVI_METADATA);
            side!=nullptr&&side->size>=sizeof(AVDOVIMetadata)){
             const auto* meta=reinterpret_cast<const AVDOVIMetadata*>(side->data);
             const auto built=buildDolbyVisionP5(*meta,info_.color.dolbyVisionP5);
-            if(built.ok&&!dv.profile5Converted){
+            usable=built.usable;
+            if(built.usable&&!dv.profile5Converted){
+                // Only reported once the parameters really reproduce the RPU, so
+                // the status line never claims a conversion that is not running.
                 dv.profile5Converted=true;
                 log::info("source-dovi","profile 5 base layer converted as IPT-PQ-C2: RPU reshaping (per-frame, projected on {1,sqrt(x),x}) -> RPU ycc_to_rgb -> PQ EOTF -> RPU rgb_to_lms x fixed HPE LMS->BT.2020 -> PQ OETF; the routed HDR10/SDR path then consumes it unchanged");
                 const auto& p=info_.color.dolbyVisionP5;
@@ -419,16 +431,26 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
             }
             if(built.colorMetadataMissing&&!dv.profile5MissingColor){
                 dv.profile5MissingColor=true;
-                log::warn("source-dovi","profile 5 RPU carries no colour block; base layer colour is undefined, leaving the compatibility path in place");
+                log::warn("source-dovi","profile 5 RPU carries no colour block; the base layer colour is undefined and the frame is refused");
             }
             if(built.unsupportedMapping&&!dv.profile5UnsupportedMapping){
                 dv.profile5UnsupportedMapping=true;
-                log::warn("source-dovi","profile 5 reshaping uses a non-polynomial mapping method; that component stays on identity");
+                log::warn("source-dovi","profile 5 reshaping uses a mapping method this decoder cannot reproduce; such a frame is refused instead of converted with the identity");
             }
             if(built.placeholderMapping&&!dv.profile5Placeholder){
                 dv.profile5Placeholder=true;
-                log::info("source-dovi","profile 5 RPU carries a flat (placeholder) reshaping on this frame; keeping the mapping already in force instead of blanking the picture");
+                log::info("source-dovi","profile 5 RPU carries a flat (placeholder) reshaping on this frame; the affected components use the identity");
             }
+        }
+        // A profile-5 base layer is IPT-PQ-C2 and carries no usable VUI colour:
+        // reading it with the ordinary YUV matrix is what renders it green. The
+        // tags pinned in open() only satisfy matches(), they convert nothing, so
+        // refuse the frame when the RPU did not supply usable parameters instead
+        // of silently returning a wrong picture.
+        if(!usable){
+            errorMessage_=L"Dolby Vision P5：这一帧没有可用的 RPU 转换参数（缺少 RPU、颜色块为空或整形方式不受支持），无法正确转换，已停止以避免错误颜色";
+            log::error("source-dovi","profile 5 base layer has no usable RPU conversion parameters; refusing the ordinary YUV fallback");
+            return SourceReadStatus::Error;
         }
         out.colorInfo.dolbyVisionP5=info_.color.dolbyVisionP5;
     }
@@ -528,6 +550,9 @@ bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
     const int64_t targetUs = rationalToUs(targetSeconds);
     if (!demuxer_.seekToUs(targetUs)) { return false; }
     decoder_.flushBuffers();
+    // No profile-5 conversion state survives a seek: the next frame has to
+    // convert from its own RPU, exactly like the same frame after a fresh open.
+    info_.color.dolbyVisionP5 = {};
     errorMessage_.clear();
     draining_ = false;
     eofSignalled_ = false;
