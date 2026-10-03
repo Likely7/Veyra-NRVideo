@@ -604,7 +604,14 @@ struct QmlPlayerBridge::Impl {
             draftGlobals = engine::ChainGlobalSettings::capture(settings);
             // Non-node controls (e.g. audio) may still change while a wire is
             // incomplete. Keep runtime globals separate from that transaction.
+            // Custom: HDR brightness is one of those controls - it is not part of a
+            // node edit, so the restore below must not put the previous value back
+            // (field report: a new target peak took effect and then reverted on the
+            // next start, because this line overwrote it before the session was
+            // captured).
+            const auto brightness=settings.hdrBrightness;
             engine::ChainGlobalSettings::capture(previous).apply(settings);
+            settings.hdrBrightness=brightness;
             facade.setPending(settings);
             if (revalidate(true, &previous)) return true;
             draftGlobals = oldGlobals; facade.setPending(previous);
@@ -5658,7 +5665,7 @@ int QmlPlayerBridge::hdrOutputMode()const{return int(settings().hdrOutputMode);}
 bool QmlPlayerBridge::hdrBrightness()const{return settings().hdrBrightness.enabled;}
 void QmlPlayerBridge::setHdrBrightness(bool enabled){
     auto s=settings();if(s.hdrBrightness.enabled==enabled)return;s.hdrBrightness.enabled=enabled;
-    if(impl_->commit(std::move(s)))emit settingsChanged();
+    commitHdrBrightness(std::move(s));
 }
 QVariantMap QmlPlayerBridge::hdrBrightnessParams()const{
     const auto& b=settings().hdrBrightness;
@@ -5673,8 +5680,29 @@ bool QmlPlayerBridge::setHdrBrightnessParameter(const QString& key,double value)
     else if(key=="transitionMs")s.hdrBrightness.transitionMs=v;
     else return false;
     if(!s.hdrBrightness.valid())return false;
-    if(!impl_->commit(std::move(s)))return false;
-    emit settingsChanged();return true;
+    commitHdrBrightness(std::move(s));return true;
+}
+// The commit path deliberately re-derives the runtime globals from its own copy
+// (Impl::commit), and this block is not part of them, so a plain commit applies
+// the change to the engine but leaves it out of the pending settings the session is
+// captured from: it took effect and then reverted on the next start (field report:
+// target peak 1150 came back as an older value). Re-assert it afterwards, in both
+// places the session capture reads, and re-project.
+void QmlPlayerBridge::commitHdrBrightness(engine::EnhancementSettings settings){
+    const auto brightness=settings.hdrBrightness;
+    settings.hdrBrightness=brightness;
+    if(!impl_->commit(std::move(settings)))return;
+    auto after=impl_->facade.pendingSettings();
+    after.hdrBrightness=brightness;
+    impl_->facade.setPending(after);
+    impl_->draftGlobals.hdrBrightness=brightness;
+    impl_->revalidate(true);
+    // A global change has no other trigger that writes the session out: the capture
+    // runs once, at startup (instrumentation in currentSession showed exactly one
+    // line, with the old value), so a changed value took effect and was never
+    // stored. Ask for the write explicitly.
+    impl_->persistSession();
+    emit settingsChanged();emit chainChanged();
 }
 void QmlPlayerBridge::setHdrOutputMode(int value){if(value<0||value>1)return;auto s=settings();if(int(s.hdrOutputMode)==value)return;s.hdrOutputMode=engine::HdrOutputMode(value);if(impl_->commit(std::move(s)))emit settingsChanged();}
 int QmlPlayerBridge::fgMotionSource()const{return engine::motionUsesFlow(settings().fgMotion,settings().frameGenerationBackend)?1:0;}

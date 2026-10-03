@@ -16,6 +16,7 @@ constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
 void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool extended=false,bool extendedTransition=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);
     // Custom: per-scene HDR brightness, written from library v8 / chain session v5 on.
     if(extended)out<<' '<<(g.hdrBrightness.enabled?1:0)<<' '<<g.hdrBrightness.strength<<' '<<g.hdrBrightness.targetPeakNits<<' '<<g.hdrBrightness.response;
+    // Custom:诊断用，确认写出去的就是当时的值（该文件没有 log 头文件，故不在此打日志）
     if(extendedTransition)out<<' '<<g.hdrBrightness.transitionMs;}
 bool readRendering(std::istream& in,ChainGlobalSettings& g,bool extended=false,bool extendedTransition=false){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);
     if(extended){int enabled,strength,peak,response;

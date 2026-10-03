@@ -714,6 +714,7 @@ public:
     void setHdrBrightness(bool enabled);
     QVariantMap hdrBrightnessParams() const;
     Q_INVOKABLE bool setHdrBrightnessParameter(const QString& key, double value);
+    void commitHdrBrightness(engine::EnhancementSettings settings);
     Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
     int nrStyle() const;
     void setNrStyle(int value);

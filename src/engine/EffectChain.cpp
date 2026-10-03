@@ -539,6 +539,13 @@ bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
         fgBackend == other.fgBackend && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&
         selectedNr == other.selectedNr && selectedColour == other.selectedColour &&
+        // Custom: the globals are not compared by the original, so a change to one of
+        // them looked like "no change" and persistSession() skipped the write
+        // (field report: HDR brightness values were never remembered). Compare the
+        // block this fork added; the author's own globals have the same blind spot.
+        hdrBrightness.enabled == other.hdrBrightness.enabled && hdrBrightness.strength == other.hdrBrightness.strength &&
+        hdrBrightness.targetPeakNits == other.hdrBrightness.targetPeakNits && hdrBrightness.response == other.hdrBrightness.response &&
+        hdrBrightness.transitionMs == other.hdrBrightness.transitionMs &&
         ((!editor && !other.editor) || (editor && other.editor && *editor == *other.editor));
 }
 
