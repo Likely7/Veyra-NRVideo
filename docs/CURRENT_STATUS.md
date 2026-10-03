@@ -1,5 +1,17 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-04 极简像素缺口已修；HDR PR 等审批
+
+独立分支 `codex/minimal-edge-hdr-review-20261004` 从已验VFG候选存档开工。
+修复分数DPI时native child/region少一列与默认极简窗口contain取整黑线，完整输入映射到整数client，保留真实比例/原始像素/全屏黑边。
+完整/增量构建通过；30个尺寸/DPR/渲染模式真实GUI用例、12个行为回归、2个确定性跨页回归通过。
+RTX5070/616.56，Qt scale factor模拟，未宣称实显示器DPI移动或新HDR/FG画质通过。
+只制作基于`2.0.2-vfg-20261003`的EXE小补丁，记录见 `docs/MINIMAL_EDGE_ACCEPTANCE_2026-10-04.md`。
+
+PR #13/#14固定head静态审查完成：P5 offset/拟合/flat映射、#14缺失头文件/半套P5、HDR统计range/array/延迟/reset等问题和当前VFG持久化格式分叉均已记录。
+`docs/HDR_DOVI_PR_REVIEW_2026-10-04.md` 提供分拆适配、验收及“输入/处理/输出”界面编排；**HDR产品代码未施工，等用户通过后再修复并入**。
+桌面patch/11份未跟踪源码、main、原2077个便携载荷复核一致；未merge/push/Release。
+
 ## 2026-10-04 VFG 全档位：独立本地交付
 
 `codex/vfg-integration-20261003` 已接原生 NVIDIA VFG 2X–8X、Low/Medium/High，

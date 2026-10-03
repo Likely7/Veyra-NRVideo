@@ -1,5 +1,16 @@
 # Veyra 工作记录
 
+## 2026-10-04 极简右侧像素缺口与HDR PR静态审查
+
+- 按用户“黑边修掉，HDR先研究/UI方案等通过”分开处理；`a927f92`开`codex/minimal-edge-hdr-review-20261004`，先tag `checkpoint/pre-minimal-edge-hdr-review-20261004`、bundle verify。E盘archives/task/source-before.bundle SHA256 `417c6d03f90e0bd7b518af2f1ea50b9edd8515c91cda340983aa5eb6d6116a94`。开工方案与复现后最小PresentationGeometry/VideoPresenter范围先记录，不扩改HDR/增强链。
+- 125%复现root803×451、child802×451，150%965×543/964×543，175%右/底各少1；`before-v3`使用原包EXE与无遮挡自有cyan fixture重测。几何第一版虽client铺满，contain内容仍有一列黑，因此继续修正默认极简窗口的有界完整源映射，不拿尺寸断言冒充视觉通过。普通partial viewport仍floor，region按child实际client；当前/previous XeSS view几何同源，shader/颜色/图/音频/导出不改。
+- 构建 `python -B scripts/acceptance/minimal-edge-build.py build-v1.log veyra_qml_ui` 完整472步骤、`build-v2.log`增量5步骤，exit0；已有C4244记录保留。最终EXE17,299,968 bytes，SHA256 `8a2197ccd9b1716df1dad21169b49611c60ae65461c16171d580995da34922b0`。
+- `minimal-edge-tests.py after-v2 after full`30个独立GUI用例通过：5种Qt scale factor×3奇偶宽×GPU/软件，右/底native gap0，最右/内侧/中心cyan `[0,231,255]`，exit0。`behaviors-v1 after behaviors`12例resize/page/menu/native/fullscreen/pro回归通过，故意的黑边保留。`page-cycle-v3 after page-cycle`补2例最终803×451贴合通过；v2因同一JS回调跨页/改宽读取旧pictureHeight而506高失败，测试改下一tick+显式计算尺寸，产品布局不为断言改动。before-v1尺寸覆写、早期控件遮挡、after-v1尺寸-only不足均留证，不计入最终通过。
+- 仅截本测试进程自身无遮挡client，采样位置先验PID；独立profile/TEMP/TMP/CUDA cache为E盘task，未修改用户程序和全局Windows缩放。实际RTX5070/616.56；Qt分数DPR模拟不外推跨物理显示器DPI/FG新画质/HDR/AMD/Xbox验收。GUI每个子进程有短时限，不是长稳测试。
+- `hdr-pr-snapshot.py`固定PR13 f08934b8、PR14 57f2541b，保存Git blob/diff/SHA；再查远端head不变、OPEN、无CI。`hdr-pr-review.py`静态检查/独立ST2084反例exit0。发现PR14缺失DolbyVisionP5.h却引用接口，未构建/执行贡献者代码；当前标题中HDR→SDR→TrueHDR已撤回。Offset/拟合/flat映射、范围归一化/array SRV/回读延迟与reset、版本分叉等见`HDR_DOVI_PR_REVIEW_2026-10-04.md`，区分作者实测与本轮静态证据。HDR产品/UI未实施，未合并/评论PR，等待用户审批。
+- `minimal-edge-delivery.py audit`复核status含branch的规范化文本、working/index patch逐字节、11份未跟踪源码hash、main66cd3e5、原包2077载荷hash全部一致。初次audit遗漏原status的branch行而fail，补相同`--branch`再验通过，不洗白真实改动。输出`logs/minimal-edge-hdr-review-20261004/source-isolation.json`。
+- 所有新build/tests/logs/tmp/downloads/archives/test-packages在E:/项目/Veyra/task用途目录；模型/DLL只读硬链接复用，不进Git，不复写已验VFG包。源码/文档本地存档后制作小EXE补丁，基包/CRC/SHA/sourcecommit记录在`test-packages/minimal-edge-hdr-review-20261004/DELIVERY.json`；不是其他版本补丁。没有merge/push/Release，没有派Agent，没有重试已被拒的清理。
+
 ## 2026-10-04 VFG 全档位本地交付完成
 
 - `python -B scripts/acceptance/vfg-package.py archive` exit0，最终 `E:/项目/Veyra/test-packages/vfg-integration-20261003/Veyra-2.0.2-vfg-20261003-win64-portable.zip`，1151602649 bytes，SHA256 `8efb3189ff47f00f63672c6d5259a6be4ca004a638432a116f27db6850426ee2`，2077个载荷。应用SHA256 `be4da2ff173aa74de8e2e1d5ecc73d40a23584ba8898ffd534e636a8793b3d6b`；单独源码ZIP SHA256 `5e575a74e9927ab27b520c00fabd005e0310070ad2a51c736ea52d211721e7cf`，源码快照003f897，产品代码仍0d891731。审计 `logs/vfg-integration-20261003/candidate-package-audit.json`。

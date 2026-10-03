@@ -51,6 +51,7 @@
 #include "veyra/RuntimePaths.h"
 #include "veyra/engine/EngineController.h"
 #include "veyra/engine/ExportJobManager.h"
+#include "veyra/engine/PresentationGeometry.h"
 #include "veyra/gfx/PresentationHooks.h"
 #include "veyra/ui/QmlDataDirectory.h"
 #include "veyra/ui/QmlPlayerBridge.h"
@@ -160,12 +161,40 @@ bool syncVideoGeometry(QQuickWindow* window, QQuickItem* host) {
         if (IsWindowVisible(g_video)) ShowWindow(g_video, SW_HIDE);
         return false;
     }
-    // A fractional size is a resize artifact, not intent: floor it so the
-    // swapchain never alternates between two sizes on alternating frames.
+    // Keep partial QML viewports stable while they animate. A viewport that
+    // spans the window must use its actual physical client extent: Qt rounds
+    // the HWND at fractional DPI, whereas flooring width*dpr can leave a
+    // one-pixel strip outside the video (for example 642 DIP at 125%).
     const int x = int(std::floor(topLeft.x() * dpr));
     const int y = int(std::floor(topLeft.y() * dpr));
-    const int w = std::max(1, int(std::floor(host->width() * dpr)));
-    const int h = std::max(1, int(std::floor(host->height() * dpr)));
+    int w = std::max(1, int(std::floor(host->width() * dpr)));
+    int h = std::max(1, int(std::floor(host->height() * dpr)));
+    RECT parentClient{};
+    if (GetClientRect(reinterpret_cast<HWND>(window->winId()), &parentClient)) {
+        if (std::abs(topLeft.x()) < 0.001 && std::abs(host->width() - window->width()) < 0.001)
+            w = std::max(1L, parentClient.right);
+        if (std::abs(topLeft.y()) < 0.001 && std::abs(host->height() - window->height()) < 0.001)
+            h = std::max(1L, parentClient.bottom);
+    }
+    // A film-fitted cinema window can have no fractional HWND pixels. Tell
+    // the presenter the exact rounding bound; real bars/zoom/fullscreen retain
+    // their normal mapping. Keep this synchronized even when the rect is equal.
+    const qreal aspect = window->property("filmAspect").toReal();
+    const bool filmWindow = window->property("cinema").toBool() &&
+        !window->property("screenSized").toBool() && aspect > 0 &&
+        std::abs(topLeft.x()) < 0.001 && std::abs(topLeft.y()) < 0.001 &&
+        std::abs(host->width() - window->width()) < 0.001 &&
+        std::abs(host->height() - window->height()) < 0.001 &&
+        std::abs(window->height() - window->width() / aspect) <= 0.501;
+    const uintptr_t roundingUnits = filmWindow
+        ? uintptr_t(std::ceil((0.5 * dpr + 0.5 + 0.5 / aspect) * 1024)) : 0;
+    constexpr auto roundingProperty = veyra::engine::kFilmPixelRoundingProperty;
+    if (reinterpret_cast<uintptr_t>(GetPropW(g_video, roundingProperty)) != roundingUnits) {
+        if (roundingUnits && !SetPropW(g_video, roundingProperty, reinterpret_cast<HANDLE>(roundingUnits)))
+            veyra::log::error("qml-window", std::format("SetProp film pixel rounding failed err={}", GetLastError()));
+        if (!roundingUnits) RemovePropW(g_video, roundingProperty);
+        veyra::log::info("qml-window", std::format("film pixel rounding allowance={} height pixels", double(roundingUnits) / 1024));
+    }
     // Called every rendered frame: only a changed rect reaches the window manager,
     // so a moving popover never makes the presenter see a spurious resize.
     static RECT last{-1, -1, -1, -1};
@@ -245,8 +274,16 @@ void syncVideoCovers(QQuickWindow* window, QQuickItem* host, qreal inset) {
                                                       : window->contentItem(), covers);
     const qreal dpr = window->devicePixelRatio();
     const QPointF origin = host->mapToScene(QPointF(0, 0));
-    const int w = std::max(1, int(std::floor(host->width() * dpr)));
-    const int h = std::max(1, int(std::floor(host->height() * dpr)));
+    // The region clips the native HWND, so its dimensions must come from that
+    // same HWND. Repeating the logical-size floor here would cut off the last
+    // column again whenever a menu/control cover is present.
+    RECT nativeClient{};
+    if (!GetClientRect(g_video, &nativeClient)) {
+        veyra::log::error("qml-window", std::format("GetClientRect for video covers failed err={}", GetLastError()));
+        return;
+    }
+    const int w = std::max(1L, nativeClient.right);
+    const int h = std::max(1L, nativeClient.bottom);
     static QList<QRect> last;
     // blankVideo() set the region behind this cache's back.
     if (g_videoBlanked) { last.clear(); g_videoBlanked = false; }

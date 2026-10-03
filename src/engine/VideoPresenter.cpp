@@ -144,6 +144,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // DXGI stretches the retained buffer while the native workspace unfolds.
     // Compute contain in CURRENT client coordinates, then map back to buffer
     // coordinates so that the onscreen image keeps its aspect throughout.
+    view=filmPixelAlignedView(window_,rc.right,rc.bottom,graph.workWidth(),graph.workHeight(),view);
     const auto [renderW,renderH]=view.renderedSize(float(rc.right),float(rc.bottom),float(graph.workWidth()),float(graph.workHeight()));
     D3D12_VIEWPORT viewport{0,0,float(sink_.bufferWidth()),float(sink_.bufferHeight()),0,1};
     D3D12_RECT rect{0,0,LONG(sink_.bufferWidth()),LONG(sink_.bufferHeight())};list->RSSetViewports(1,&viewport);list->RSSetScissorRects(1,&rect);
