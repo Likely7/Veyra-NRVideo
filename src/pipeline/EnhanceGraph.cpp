@@ -1873,9 +1873,12 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         }
         // Custom: per-scene HDR brightness. Measured from the same histogram, on
         // the HDR-output path only, where the tone map can act on absolute nits.
-        // A scene change jumps to the new mapping; inside a scene `response`
-        // decides whether it keeps following the measurement (0 = never, so the
-        // picture cannot breathe).
+        // A scene change jumps to the new mapping; so does a change of the settings
+        // themselves, otherwise a slider moved inside a long scene did nothing until
+        // the next cut (field report 2026-10-03: on a concert film whose shots last
+        // minutes the four parameters looked inert). Inside a scene `response`
+        // decides whether the map keeps following the measurement (0 = only a cut or
+        // a settings change re-arms it, so the picture cannot breathe).
         if(desc_.hdrBrightness.enabled&&desc_.hdrWorking()&&resolved.isHdrPath()&&resolved.transfer==TransferFunction::PQ){
             const auto measured=measureHdrScene(hist.data(),hist.size(),float(desc_.hdrBrightness.targetPeakNits));
             const float strength=float(desc_.hdrBrightness.strength)/100.0f;
@@ -1884,12 +1887,21 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             // Time based, so the transition is the same at 24 and 60 fps.
             const float dtMs=(hdrBrightLastPtsMs_>=0.0&&ptsMs>hdrBrightLastPtsMs_)?float(ptsMs-hdrBrightLastPtsMs_):33.3f;
             hdrBrightLastPtsMs_=ptsMs;
-            if(analysis.isSceneCut||!hdrBrightMeasured_){
-                hdrBrightStartGain_=hdrBrightGain_;hdrBrightStartPeakNits_=hdrBrightPeakNits_;
+            const bool settingsChanged=!(desc_.hdrBrightness==hdrBrightApplied_);
+            const bool targetMoved=std::fabs(gainTarget-hdrBrightTargetGain_)>1e-3f
+                ||std::fabs(peakTarget-hdrBrightTargetPeakNits_)>0.5f;
+            const bool rearmed=analysis.isSceneCut||!hdrBrightMeasured_||settingsChanged;
+            hdrBrightApplied_=desc_.hdrBrightness;
+            if(rearmed||(desc_.hdrBrightness.response>0&&targetMoved)){
+                if(rearmed){
+                    hdrBrightStartGain_=hdrBrightGain_;hdrBrightStartPeakNits_=hdrBrightPeakNits_;
+                    hdrBrightRampElapsedMs_=0.0f;
+                }
                 hdrBrightTargetGain_=gainTarget;hdrBrightTargetPeakNits_=peakTarget;
-                hdrBrightRampElapsedMs_=0.0f;
-                veyra::log::info("hdr-brightness",std::format("sceneCut=1 frame={} p90Nits={:.1f} peakNits={:.1f} gain={:.3f}->{:.3f} sourcePeakNits={:.0f}->{:.0f} targetPeakNits={} strength={} response={} transitionMs={}",
-                    realFrameIndex_,measured.brightNits,measured.peakNits,measured.gain,gainTarget,measured.sourcePeakNits,peakTarget,desc_.hdrBrightness.targetPeakNits,desc_.hdrBrightness.strength,desc_.hdrBrightness.response,desc_.hdrBrightness.transitionMs));
+            }
+            if(rearmed){
+                veyra::log::info("hdr-brightness",std::format("sceneCut={} settingsChanged={} frame={} p90Nits={:.1f} peakNits={:.1f} gain={:.3f}->{:.3f} sourcePeakNits={:.0f}->{:.0f} targetPeakNits={} strength={} response={} transitionMs={}",
+                    analysis.isSceneCut,settingsChanged,realFrameIndex_,measured.brightNits,measured.peakNits,measured.gain,gainTarget,measured.sourcePeakNits,peakTarget,desc_.hdrBrightness.targetPeakNits,desc_.hdrBrightness.strength,desc_.hdrBrightness.response,desc_.hdrBrightness.transitionMs));
             }
             if(hdrBrightRampElapsedMs_>=0.0f){
                 hdrBrightRampElapsedMs_+=dtMs;

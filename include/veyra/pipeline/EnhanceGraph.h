@@ -699,9 +699,10 @@ private:
     std::vector<uint8_t> sceneSample_;
     // Custom: per-scene HDR brightness. The measurement is taken from the same
     // per-frame histogram the cadence/scene detection uses; the applied values
-    // jump on a scene change and, when response > 0, follow the measurement
-    // within the scene. Written into the YUV pass's two spare toneMapParams lanes
-    // every frame, so the feature is a live uniform with no graph rebuild.
+    // jump on a scene change (and on a settings change) and, when response > 0,
+    // follow the measurement within the scene. Written into the YUV pass's two
+    // spare toneMapParams lanes every frame, so the feature is a live uniform with
+    // no graph rebuild.
     float hdrBrightGain_=1.0f;
     float hdrBrightStartGain_=1.0f,hdrBrightStartPeakNits_=0.0f;
     float hdrBrightTargetGain_=1.0f,hdrBrightTargetPeakNits_=0.0f;
@@ -709,6 +710,11 @@ private:
     double hdrBrightLastPtsMs_=-1.0;
     float hdrBrightPeakNits_=0.0f;
     bool hdrBrightMeasured_=false;
+    // The settings the live target was computed from. A change to them re-arms the
+    // map, so a slider moved inside a long scene takes effect at once instead of
+    // waiting for the next cut (field report 2026-10-03: on a concert film whose
+    // shots last minutes the four parameters looked inert).
+    engine::HdrBrightnessSettings hdrBrightApplied_;
     ComputePass rgbPass_,hdrVideoSrPass_;
     ComputePass downsamplePass_,residualPass_,stackProtectionPass_,flowAdaptPass_;
     // Stage-5 output stabiliser (anti-flicker). Constructed only when the
