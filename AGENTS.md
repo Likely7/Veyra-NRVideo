@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-04 追加授权**：用户要求VFG（消息写VSF，按前文VFG理解）和AMD NR尽量瘦身，稳定性优先，再构建新的完整本地测试包、汇报HDR PR合并计划、保存完成后关机。在 `codex/runtime-size-20261004` 按 `docs/RUNTIME_SIZE_PLAN_2026-10-04.md` 执行，基线fc2ca716，tag `checkpoint/pre-runtime-size-20261004`、bundle在E盘archives/runtime-size-20261004。只授权必要依赖加载/打包/定向验证接点；不修改proprietary DLL/模型、不牺牲功能档位或未经实测移除必要文件。HDR仍只方案等审批，无merge/push/Release授权，不派Agent。所有产物E盘；测试每进程≤300秒、构建≤900秒；完成包/报告/源码存档和停止本轮子进程后，按用户明确要求关机。
+
 > **2026-10-04 当前授权**：立即修复极简窗口右侧像素缺口；HDR/Dolby Vision PR #13/#14 只做研究、静态审查和适配/UI方案，待用户审批才修复并入。在 `codex/minimal-edge-hdr-review-20261004` / 当前E盘隔离工作树按 `docs/MINIMAL_EDGE_HDR_REVIEW_PLAN_2026-10-04.md` 执行。黑边所需QML原生宿主窗口几何/裁切、默认极简窗口取整的最小显示几何接点及定向验收获本轮授权，覆盖对应历史冻结；HDR算法/UI/PR合并未授权。复现证据与新增PresentationGeometry/VideoPresenter范围先记录在方案，不改增强/颜色链。保留已验VFG/现场修复、main、桌面、候选和用户配置；不派Agent、不merge/push/Release，所有产物在E盘，测试≤300秒、构建≤900秒。
 
 > **2026-10-03 VFG 接入授权**：用户“接入看看，8x也支持上”“所有档位都加上”。在当前 E 盘隔离工作树的 `codex/vfg-integration-20261003`，以 `1802f43565e07f3c3040d3fe745ca2e939aab00f` 为基线，按 `docs/VFG_INTEGRATION_EXECUTION_2026-10-03.md` 接入 NVIDIA VFG、全部 2X–8X 与 Low/Medium/High。必要的 native backend、D3D12/CUDA bridge、共享 graph/pools/leases、settings/preset/session/worker、preview/export、QML/bridge、shader/CMake 与针对性验收获本轮授权，覆盖对应历史冻结；不扩改无关链路，不派子 Agent，不 merge/push/Release。存档 `checkpoint/pre-vfg-integration-20261003` 与 `E:/项目/Veyra/archives/vfg-integration-20261003-start/source-before.bundle`；原五项修复、main、桌面、用户配置与已有候选保持。新 SDK/运行库/模型仍在 E 盘独立 deps，不进源码 Git；默认 Medium，高倍率实验标识、实测与未验边界如实报告。测试≤300s、构建≤900s。

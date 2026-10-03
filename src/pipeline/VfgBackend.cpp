@@ -217,9 +217,13 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     Impl::Current current(p);if(!current.active)return false;
     if(!p.cu(p.cuStreamCreateFn(&p.stream,CU_STREAM_NON_BLOCKING),"cuStreamCreate"))return false;
     const fs::path runtime=runtimeDirectory(root);
-    const std::array<const wchar_t*,15> dependencies={L"cudart64_12.dll",L"nppc64_12.dll",L"nppial64_12.dll",L"nppicc64_12.dll",L"nppidei64_12.dll",L"nppif64_12.dll",L"nppig64_12.dll",L"nppim64_12.dll",L"nppist64_12.dll",L"nppitc64_12.dll",L"NVCVImage.dll",L"nvngxruntime.dll",L"NVVideoEffects.dll",L"nvVFXVideoFrameGeneration.dll",nullptr};
+    // VFG consumes our encoded shared CUDA buffers directly. Create/Init wrap
+    // these pixels without NvCVImage_Transfer or other NPP conversion effects.
+    // Keep the original core/plugin/CUDA bytes; unrelated SDK image-processing
+    // DLLs are not dependencies of this path (native 8/10-bit tests cover it).
+    const std::array<const wchar_t*,5> dependencies={L"cudart64_12.dll",L"NVCVImage.dll",L"nvngxruntime.dll",L"NVVideoEffects.dll",L"nvVFXVideoFrameGeneration.dll"};
     HMODULE core=nullptr,image=nullptr;
-    for(auto name:dependencies){if(!name)continue;auto dll=load(runtime/name);if(!dll)return false;p.libraries.push_back(dll);
+    for(auto name:dependencies){auto dll=load(runtime/name);if(!dll)return false;p.libraries.push_back(dll);
         if(std::wstring_view(name)==L"NVVideoEffects.dll")core=dll;if(std::wstring_view(name)==L"NVCVImage.dll")image=dll;}
 #define BIND_VFX(member,name) if(!bind(core,name,p.member))return false
     BIND_VFX(create,"NvVFX_CreateEffect");BIND_VFX(destroy,"NvVFX_DestroyEffect");BIND_VFX(setU32,"NvVFX_SetU32");BIND_VFX(setImage,"NvVFX_SetImage");

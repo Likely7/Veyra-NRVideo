@@ -1,5 +1,14 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-04 VFG / AMD NR 瘦身候选
+
+`codex/runtime-size-20261004` 以黑边已验修复fc2ca716为基线，先存档/写方案。
+VFG移除九个当前路径未用NPP，目录497,894,432→210,788,400 bytes；全部档位和插件原字节保持。
+720p/4K各463 native checks、331 settings、21 NVENC导出、组合/缺库/GUI/worker冻结通过。
+AMD生产噪声/reciprocal表、权重与62 HIP kernel保持；仅ABI/布局/哈希验证，不称实卡推理通过。
+当前正在极简新构建回归与完整7z/ZIP打包、独立解压验收；最终数值与源码见本轮DELIVERY索引。
+HDR PR仍只方案等审批。未merge/push/Release，所有产物在E盘；完成保存后按用户明确要求关机。
+
 ## 2026-10-04 极简像素缺口已修；HDR PR 等审批
 
 独立分支 `codex/minimal-edge-hdr-review-20261004` 从已验VFG候选存档开工。

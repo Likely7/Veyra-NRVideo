@@ -1,5 +1,18 @@
 # Veyra 工作记录
 
+## 2026-10-04 VFG / AMD NR 瘦身（组包前）
+
+- 用户要求稳定性优先、尽量瘦身、完整本地测试包、HDR PR计划、完成保存后关机。按前文将VSF理解为VFG；不开Agent。分支codex/runtime-size-20261004、基线fc2ca716、tag checkpoint/pre-runtime-size-20261004，bundle verify，SHA256 6d2b64b471cb84effd84670a07f3079b5f71f630940926338052099e4cbfd694；先写RUNTIME_SIZE_PLAN后修改最小依赖加载。
+- Python311 -B `runtime-size-audit.py`：PE import/delay-import、字符串和旧ZIP贡献统计；没有NPP直接/延迟依赖，factory保留老效果名称不当作当前VFG需要。只修改VfgBackend.cpp preload15→5；原插件/CUDA/NVCV/NVNGX/core字节不改，移除287,106,032 bytes九NPP。两个生产AMD表确有native_game_frame/native_game_oneshot引用，权重/flags可回退，未为名字/默认skip删文件。
+- `runtime-size-build.py build-v1.log` exit0，fresh481步，QML/nativeGPU/NVENCprobe/settings；已有C4244。`runtime-size-stage.py stage` owned完整新便携copy，原2077载荷逐hash核验，tests仅对不可变runtime硬链接复用，新EXE SHA88597f61…41bfc；原包不覆写。
+- `runtime-size-native-tests.py native-720-v1 1280 720`与`native-4k-v1 3840 2160`各463/0、exit0；Windows-only PATH，2–8X×三档、RGBA8/RGB10A2、切镜、invalid/device/debug检查；EnumProcessModules仅观察本轮自身PID，五个VFG DLL都来自精简目录、未加载NPP。
+- settings-v1.log：331/0；`runtime-size-export-tests.py export-all-v1`：21种D3D12 NVENC HEVC+AAC，16–64帧/60–240fps、时长、音轨/后端日志通过。`runtime-size-combination-tests.py combinations-v1`：2K30AVI+最高SR4K+原生4KNR+VFG8、24/60输入、取消、缺runtime均通过；missing-cudart-only / partial-missing-v1预期exit1无输出、LoadLibrary win32=126，不把报错当成功导出。
+- `runtime-size-ui.py ui-slim-v1 package tests/.../app` run/restore/missing exit0；专业列表/节点全部倍率质量，真实DLSS6↔VFG8、seek/resize/暂停、预设重启；High8独立worker冻结输出64帧/240fps且保留音轨。`runtime-size-amd-audit.py`529原记录逐SHA、186weights/62kernels、真实ABI1/144bytes与layout通过，caps.hip=0；无HIP推理。
+- 压缩样本原450,593,392 bytes；ZIP9 277,853,065 / 7z-solid-LZMA2-32MiB 166,108,485，约40.2%样本收益。仅包装压缩、不改运行字节；原AMD目录615,032,656 bytes保持。完整包与独立解压验收尚待完成，数据不外推。新版SOURCE/7z/ZIP/manifest和最后交付索引将单独保存。
+- 再查PR13/14远端head分别f08934b8/57f2541b，与固定审查版本一致，OPEN/noCI；无PR评论/作者代码执行/HDR实施。推荐P5精确转换→亮度统计/reset→保存/worker兼容→同源列表/节点UI与输出校准→颜色/实机矩阵后经批准合并，详HDR_DOVI_PR_REVIEW。
+- `runtime-size-edge-tests.py edges-v1 after`6例通过：5种Qt模拟scale factor GPU与125%软件模式，当前新EXE实际native client右/底gap0，右侧/内侧/中心cyan一致。初始黑边分支30+12+2验收仍保留。本轮不是新的30例或实显示器跨DPI认证。
+- 所有新产物为E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/runtime-size-20261004；单测试进程≤300s、构建≤900s，TEMP/TMP/CUDA cache仅子进程E盘。RTX5070/616.56短测；RX9000/Xbox真机/RTX40/616.92/HDR色度/实屏DPI/物理节奏/长稳未验仍明确保留。待最后桌面/main/旧包隔离复核与保存后才执行关机。
+
 ## 2026-10-04 极简右侧像素缺口与HDR PR静态审查
 
 - 按用户“黑边修掉，HDR先研究/UI方案等通过”分开处理；`a927f92`开`codex/minimal-edge-hdr-review-20261004`，先tag `checkpoint/pre-minimal-edge-hdr-review-20261004`、bundle verify。E盘archives/task/source-before.bundle SHA256 `417c6d03f90e0bd7b518af2f1ea50b9edd8515c91cda340983aa5eb6d6116a94`。开工方案与复现后最小PresentationGeometry/VideoPresenter范围先记录，不扩改HDR/增强链。
