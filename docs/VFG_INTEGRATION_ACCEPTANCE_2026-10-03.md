@@ -76,7 +76,7 @@ GUI ui-v1 与 Qt Quick 并行时出现暂停；GPU正常排空，无卡死证据
 NVIDIA 官方 wheel0.2.0.0/SDK1.3.0，435809365 bytes，SHA256
 `5aaf6a42bc6b6dbbf52fcb714194c994a6893cbbf7ada38bc2165a1f83e4a6fc`。
 MIT样例固定 `52011f89c1741d06b40ea312af1f20be8be9ec62`，改造/来源见 THIRD_PARTY_NOTICES。
-闭源 runtime 与样例许可证不同；十四个必需 DLL 原样保存在本地候选 `runtime/nvidia/vfg`，
+闭源 runtime 与样例许可证不同；十四个必需 DLL 原样保存在本地候选 `runtime/nvidia-vfg`，
 独立 `vfg-runtime-manifest.json`/许可证，不进入源码 Git，不增加用户运行库哈希锁。
 
 预定本地候选 `E:/项目/Veyra/test-packages/vfg-integration-20261003/`

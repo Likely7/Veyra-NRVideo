@@ -16,7 +16,7 @@ if mode in ('stage','finish-stage'):
     if mode=='stage':
         with (LOGS/'package-stage.log').open('xb') as log:subprocess.run(command,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,timeout=290,check=True)
         shutil.copytree(BASE/'deps/veyra-amd-nr-039-20261003',STAGE/'runtime/amd-nr')
-    target=STAGE/'runtime/nvidia/vfg'
+    target=STAGE/'runtime/nvidia-vfg'
     if mode=='stage':target.mkdir(parents=True)
     else:assert target.is_dir() and pkg.digest(STAGE/'veyra_qml_ui.exe')==pkg.digest(BASE/'build'/TASK/'veyra_qml_ui.exe')
     records=[]
@@ -24,7 +24,7 @@ if mode in ('stage','finish-stage'):
         source=SDK/'nvvfx/libs'/name
         if mode=='stage':shutil.copy2(source,target/name)
         else:assert pkg.digest(target/name)==pkg.digest(source),name
-        records.append({'path':'runtime/nvidia/vfg/'+name,'name':name,'source':str(source),'size':source.stat().st_size,'sha256':pkg.digest(source),'experimental':True,'removable':True,'modified':False})
+        records.append({'path':'runtime/nvidia-vfg/'+name,'name':name,'source':str(source),'size':source.stat().st_size,'sha256':pkg.digest(source),'experimental':True,'removable':True,'modified':False})
     identityFile=BASE/'tmp'/TASK/'vfg-identities.json';identityFile.write_text(json.dumps(records,ensure_ascii=False),encoding='utf8')
     env={k:v for k,v in os.environ.items() if k.upper()!='PSMODULEPATH'};env['VEYRA_VFG_IDENTITIES']=str(identityFile)
     script=r'''$ErrorActionPreference='Stop'; $rows=Get-Content -LiteralPath $env:VEYRA_VFG_IDENTITIES -Encoding UTF8 -Raw | ConvertFrom-Json; $identities=foreach($r in $rows) { $s=Get-AuthenticodeSignature -LiteralPath $r.source; $v=(Get-Item -LiteralPath $r.source).VersionInfo; [PSCustomObject]@{name=$r.name;version=$v.FileVersion;signature=[string]$s.Status;signer=$s.SignerCertificate.Subject} }; $identities | ConvertTo-Json -Depth 4'''
@@ -34,13 +34,13 @@ if mode in ('stage','finish-stage'):
         r.update(identity);r.pop('source')
     vfg={'schema':1,'localOnly':True,'runtime':'NVIDIA Video Effects SDK 1.3.0 / nvidia-vfx 0.2.0.0','sourceWheel':WHEEL.name,'sourceWheelBytes':WHEEL.stat().st_size,'sourceWheelSha256':pkg.digest(WHEEL),'license':'licenses/nvidia-vfg','publicDistributionAudited':False,'pythonRequired':False,'files':records}
     (STAGE/'vfg-runtime-manifest.json').write_text(json.dumps(vfg,ensure_ascii=False,indent=2),encoding='utf8')
-    shutil.copytree(SDK/'nvidia_vfx-0.2.0.0.dist-info/licenses/packaging',STAGE/'licenses/nvidia-vfg')
-    samples=STAGE/'licenses/vfg-samples';samples.mkdir();shutil.copy2(BASE/'deps/vfg-samples-20261003/LICENSE',samples/'MIT.txt')
+    shutil.copytree(SDK/'nvidia_vfx-0.2.0.0.dist-info/licenses/packaging',STAGE/'licenses/nvidia-vfg',dirs_exist_ok=True)
+    samples=STAGE/'licenses/vfg-samples';samples.mkdir(exist_ok=True);shutil.copy2(BASE/'deps/vfg-samples-20261003/LICENSE',samples/'MIT.txt')
     (STAGE/'LOCAL-VFG.md').write_text('''# Veyra VFG 本地候选
 
 双击 veyra_qml_ui.exe。专业页添加补帧，选择 NVIDIA VFG，再选倍率和质量；节点模式同样可用。
 包含 2X / 3X / 4X / 5X / 6X / 7X / 8X 和低 / 中 / 高三档，默认中档。
-预览、视频导出、预设与重启保存均接入原生 VFG。运行组件已放在 runtime/nvidia/vfg，无需 Python。
+预览、视频导出、预设与重启保存均接入原生 VFG。运行组件已放在 runtime/nvidia-vfg，无需 Python。
 RTX 40 / 50 是官方 Windows 支持范围；本机仅 RTX 5070、616.56 已测试。高倍率为实验选项。
 高档 8X 运算成本较高，实时播放可能降档或跳过预览帧；离线导出完整处理，不丢源帧。
 软件显示的是提交帧率。它不等于屏幕实际显示帧率，也不证明端到端延迟降低。
