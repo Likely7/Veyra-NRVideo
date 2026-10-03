@@ -7,11 +7,18 @@ namespace veyra::source {
 enum class DolbyBaseLayer : uint8_t { None, Unsupported, Hdr10, Sdr, Hlg };
 struct DolbyVisionInfo {
     bool present=false, baseLayer=false, enhancementLayer=false, rpuDeclared=false, rpuObserved=false;
+    // Profile-5 base-layer conversion bookkeeping (custom); each flag only
+    // exists to keep the matching log line to one occurrence per open.
+    bool profile5Converted=false, profile5MissingColor=false, profile5UnsupportedMapping=false, profile5Placeholder=false;
     uint8_t profile=0, level=0, compatibility=0;
     DolbyBaseLayer route() const {
         if(!present)return DolbyBaseLayer::None;
         if(!baseLayer)return DolbyBaseLayer::Unsupported;
         if(profile==7)return DolbyBaseLayer::Hdr10;
+        // Profile 5: 12-bit HEVC IPT-PQ with no HDR10/SDR compatibility layer.
+        // The HEVC base layer is still PQ/BT.2020-flagged and can be watched as
+        // HDR10 (RPU/enhancement layer is not applied, no native DV output).
+        if(profile==5)return DolbyBaseLayer::Hdr10;
         if(profile!=8&&profile!=10)return DolbyBaseLayer::Unsupported;
         switch(compatibility){
         case 1:return DolbyBaseLayer::Hdr10;
@@ -25,6 +32,11 @@ struct DolbyVisionInfo {
         const auto layer=route();
         const wchar_t* name=layer==DolbyBaseLayer::Hdr10?L"HDR10":layer==DolbyBaseLayer::Hlg?L"HLG":L"SDR";
         if(layer==DolbyBaseLayer::Unsupported)return L"Dolby Vision P"+std::to_wstring(profile)+L"：此类型需要 RPU 重建，当前不能正确显示";
+        // Profile 5 has no compatible base layer at all: its colour exists only
+        // inside the RPU, so say what is actually happening rather than
+        // claiming a base-layer compatibility that does not exist.
+        if(profile==5)return L"Dolby Vision P5 · IPT-PQ-C2 基础层按 RPU 转换（"
+            +std::wstring(name)+L" 输出，增强层/RPU 动态元数据不参与输出）";
         return L"Dolby Vision P"+std::to_wstring(profile)+L" · "+name+L" 基础层兼容（不应用 RPU/增强层，不输出原生 DV）";
     }
     bool matches(const pipeline::ColorDescription& c) const {
