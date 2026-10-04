@@ -98,6 +98,8 @@ private:
     std::optional<RetainedFrame> retainedFrame_;
     HWND window_=nullptr;
     std::chrono::steady_clock::time_point lastResize_{};
+    std::chrono::steady_clock::time_point captureResizeAfter_{};
+    unsigned captureResizeWidth_=0,captureResizeHeight_=0;
     unsigned viewWidth_=0,viewHeight_=0;
     HMONITOR bufferMonitor_=nullptr;
     unsigned monitorWidth_=0,monitorHeight_=0;

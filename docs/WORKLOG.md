@@ -8352,3 +8352,5 @@ OBS正常功能R0发现阻塞：v1 API207未ready修正有界重试；v3软件�
 R0-obs-candidate 92a181f/bundle708e4834c19078b50d33203ea0963255f3c1425fe9edae41413e93dba48d4f27已归档。最小恢复c593679暂停呈现生产部分：移除RetainedFrame/跳过Present/提前取view，回到resize后取view及50ms重复呈现；恢复ProPage旧动画并移除相关测试hook。退出取消/借用queue修复、限定3c、NR残差复用及Auto均保留。退役仅服务此候选的nr-present/PausedPresentExperiment和CMake target，完整源码可从c593679及既有before/candidate/accepted tags回放。此为待验证恢复候选，不提前把OBS标通过、不复用旧0.011%收益。
 
 5ede7f6恢复候选build-r0-idle-revert-v1成功12步，但R0-obs-idle-revert-v1仍GPU全屏黑，R0-obs-residual-off-v1明确关闭NR残差复用亦失败。因此不能说暂停呈现/NR残差缓存已经被证实为根因，恢复候选无效，先拒绝封存后恢复92a181f生产部分（保留完整回退记录）。官方OBS32.1.2 dxgi-capture.cpp源码确认单进程全局data.swap，任意ResizeBuffers会清空它并由随后首次Present重选；16连续不匹配才再择。当前日志resize后捕获到Qt暗背景，多DIRECT队列被记入同一采集候选。两交换链重建次序是新定位方向（推断，待实验），不改OBS或运行库。下一最小候选仅在实际graphics-hook64.dll存在、视频目标尺寸变更时先保留旧buffer伸展，让UI resize完成后视频再resize；普通播放/未注入保持原行为。
+
+恢复9a30cf8/bundle8f5d35dd7c8e1a3531bb9b49389c15d7e82e6a21ed29fb8b9df192fe6f135a86。新最小候选仅VideoPresenter在实际OBS graphics-hook64.dll已加载且目标尺寸变更时记录250ms截止，期间沿用已有buffer伸展，随后视频resize在Qt resize之后执行；每个新尺寸只设一次截止，失败重试保留旧backoff，close清空。未注入/尺寸不变没有额外等待，无CPU sleep/fence增加，无自动配置或重启提示。仍待真实OBS对照，不先称修复。
