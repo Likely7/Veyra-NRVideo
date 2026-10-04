@@ -34,7 +34,7 @@
 | 2a | 跨重建保留NGX核心 | retained-pending-R0 | v2三轮A/B/B-off完整输出0差异；暖创建减少75.83/71.23/64.58/72.04%；真实UI及SDK拒绝路径通过；导出待R0 |
 | 2c | 最近配置实例缓存 | retained-single-NR-pending-R0 | 三轮native/Qt画面与生命周期通过；实际NR开create363.851→3.602ms，显存压力/key/关闭源失效通过；SR历史另核验；PERF_2C_RECENT_CACHE |
 | 2d | 空闲预热 | retained-pending-R0 | Qt27组A/B/off首次成功Present1942→100 / 2053→107 / 1733→92ms；54完整输出0差异、5生命周期通过；PERF_2D_PREWARM |
-| 2b | 后台建图与帧边界切换 | pending | 取决于E2，不移除必要同步 |
+| 2b | 后台建图与帧边界切换 | rejected-continuity | 6轮新鲜Evaluate输出实际Present、300创建安全，但P99 32.044→74.189ms、>33.333ms次数3→55，未满足连续性；PERF_2B_BACKGROUND_CREATE |
 | 3b | NR自动内部尺寸 | pending | 取决于E1、真实预算/画质证据 |
 | 1b | 内容帧率预算 | rejected-prerequisite | 1a画面不成立，完整求值仍按transport次数；实测成本构造预算反例，PERF_1B_CONTENT_BUDGET；无生产改动 |
 | 1c | 重复节奏预测 | rejected | 三种节奏单像素瞬态反例均漏第49帧且后续未检测；PERF_1C_CADENCE_REJECTION；无产品代码需回退 |

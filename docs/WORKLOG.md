@@ -1,5 +1,9 @@
 # Veyra 工作记录
 
+## 2026-10-04 PERF 2b拒绝后台创建
+
+nr-concurrent-present.py B3a B2b-fresh-present-v1 六组各60秒/50创建，新鲜Feature18 Evaluate逐次对应实际成功Present，安全exit0/debug0/device0。三轮中位P99 serial32.043627→concurrent74.188956ms；超过33.333ms次数3→55，最坏1033.39ms。未达到无缝门槛，未加入生产后台图路径；完整present.csv/meters/身份与反例保留，详PERF_2B_BACKGROUND_CREATE。前存档034c2d8，拒绝节点归档本提交。
+
 ## 2026-10-04 PERF 2d预热保留，2c-SR/2b反例归档中
 
 单owner PreviewGpuSession将device/ring/core/recent/graph从首页空闲预建交给普通文件播放；Engine dispatcher串行，无第二adapter/并行Init，首次full-reset，关闭/取消/预算/key/直播路径回退。性能开关、显卡能力与四语言接入。build-prewarm-v1因EffectChain.chain错误失败，v2修正13步exit0；native-v1 2步exit0。nr-prewarm-ui.py的v1 baseline属性冲突未打开，修正referenceBuild；A2d-ui-v1/B2d-ui-v2/B2d-ui-off-v1各NR/SRNR/SR三轮，27组全部通过，首次成功软件Present中位A1963/2000/1698ms、B100/107/92、off1942/2053/1733。5个lifecycle（预建中打开/退出/关闭、尺寸miss、全效果关闭）通过。nr-prewarm-native.py B2d B2d-native-v1十八进程54张完整输出SHA0差异、A-A噪声0，NR/SRNR匹配此前2a封存自然第三帧；debug/device0，预建Evaluate0。详PERF_2D_PREWARM，原始日志/身份/CSV/E盘路径均同任务label。保留待R0，不称全方案完成。
