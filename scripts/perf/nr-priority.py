@@ -42,12 +42,14 @@ for repeat,order in enumerate(orders,1):
         print('LOAD_START',run_label,flush=True);started=time.monotonic()
         with (out/'console.log').open('xb') as console:
             load=subprocess.Popen(command,cwd=app,env=env,stdout=console,stderr=subprocess.STDOUT)
-            priority=set_owned(load,2)
+            priority=None
             try:
                 while time.monotonic()-started<40 and load.poll() is None:
                     if 'LOAD_READY' in (out/'console.log').read_text(encoding='utf-8',errors='replace'):break
                     time.sleep(.25)
                 assert load.poll() is None and 'LOAD_READY' in (out/'console.log').read_text(encoding='utf-8',errors='replace'),'competition load did not start'
+                priority=set_owned(load,2)
+                assert priority['applied'], 'Owned GPU load priority was not actually applied'
                 target_begin=time.monotonic()
                 matrix.run(variant,'M1','S3',run_label,50,gpuPriority=classes[name],allowedGpuPids=(load.pid,))
                 target_end=time.monotonic()
@@ -74,6 +76,7 @@ for repeat,order in enumerate(orders,1):
                 'presentIntervalsMs':{'p50':percentile(intervals,.5),'p95':percentile(intervals,.95),'p99':percentile(intervals,.99),'max':max(intervals),'count':len(intervals)},
                 'targetSummary':receipt['summary'],'loadRawLog':str(out),'targetRawLog':str(target),
                 'passed':receipt['passed'] and priority['applied'] and receipt['gpuPriority']['applied'],'measurement':'Actual successful Present software return intervals; load completed NR graphs; neither is display scanout'}
+        assert receipt['gpuPriority']['applied'], 'Player GPU priority was not actually applied; measurements invalid'
         (out/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');results.append(result)
         print('PRIORITY_RESULT',json.dumps({k:result[k] for k in ('label','targetPriority','loadCompletedFpsMedian','presentIntervalsMs','passed')},ensure_ascii=False),flush=True)
 with (BASE/'logs'/TASK/(label+'-summary.json')).open('x',encoding='utf-8') as f:json.dump(results,f,ensure_ascii=False,indent=2)

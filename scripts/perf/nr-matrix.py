@@ -76,9 +76,16 @@ def set_owned_gpu_priority(proc, priority):
     set_value=gdi.D3DKMTSetProcessSchedulingPriorityClass
     set_value.argtypes=[wintypes.HANDLE,ctypes.c_int];set_value.restype=wintypes.LONG
     before=ctypes.c_int(-1);after=ctypes.c_int(-1)
-    a=get(int(proc._handle),ctypes.byref(before));b=set_value(int(proc._handle),priority);c=get(int(proc._handle),ctypes.byref(after))
+    # WDDM has no scheduling record before the child creates its GPU device.
+    # Wait for the actual Get to succeed, retaining every failed status.
+    deadline=time.monotonic()+30;attempts=[]
+    while True:
+        a=get(int(proc._handle),ctypes.byref(before));attempts.append(hex(a&0xffffffff))
+        if a==0 or proc.poll() is not None or time.monotonic()>=deadline:break
+        time.sleep(.1)
+    b=set_value(int(proc._handle),priority);c=get(int(proc._handle),ctypes.byref(after))
     return {'pid':proc.pid,'beforeStatus':hex(a&0xffffffff),'beforeClass':before.value,
-            'setStatus':hex(b&0xffffffff),'afterStatus':hex(c&0xffffffff),'afterClass':after.value,
+            'setStatus':hex(b&0xffffffff),'afterStatus':hex(c&0xffffffff),'afterClass':after.value,'getAttempts':attempts,
             'applied':a==b==c==0 and after.value==priority}
 
 def stage(variant):

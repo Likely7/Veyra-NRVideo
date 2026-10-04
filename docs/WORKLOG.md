@@ -8203,3 +8203,8 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 ## 2026-10-04 PERF 1b 内容预算前提拒绝
 
 开工checkpoint/perf-nr-1b-before-20261004 c593679。运行ContentBudgetCounterexample.py exit0，以封存M1/S4滚动P95成本21.192ms构造300输入调度反例：真实60Hz安全预算13.333ms，原内容30Hz预算26.667ms错误放行。1a实际4500全输出图像已证明不能逐字节复用NR/SR，完整求值次数未减少。拒绝内容预算翻倍，未加入生产代码；3b按真实处理输入帧间隔。JSON在E:/项目/Veyra/logs/perf-nr-20261004/1b-budget-counterexample-v1.json，明确是构造模型而非新增60Hz GPU实测，详见PERF_1B_CONTENT_BUDGET。
+
+
+## 2026-10-04 PERF 3a API时机反例
+
+build-priority-load-v1 2步exit0。本轮三NR竞争fixture SHA a46c2923ab4b7a200ad9028de442377d7b5e0214d473722be4dabb4681014e2b。nr-priority.py B5c 3a-competition-v1 的Set/Get全部0xC000000D/applied=false，不能作为Normal/High/Realtime比较。只读已运行的本轮两个GPU进程Get均0/class2；修正为实际GPU上下文就绪后设置，完整Get失败重试序列与最终读回记录。v1前三完整组证据保留，第四owned load经其stop文件正常停止，driver对方早停断言exit1；没有强关用户应用。下一轮3a-competition-v2重新交错九组。
