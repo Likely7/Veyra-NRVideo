@@ -21,6 +21,8 @@ matrix = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(matrix)
 label = sys.argv[1]
 assert label.replace('-', '').isalnum()
+assert sys.argv[2:] in ([], ['confirm'])
+confirm = sys.argv[2:] == ['confirm']
 out = BASE/'logs'/TASK/(label+'-summary')
 out.mkdir(exist_ok=False)
 
@@ -61,7 +63,8 @@ matrix.CONFIGS['S4-2'] = {**matrix.CONFIGS['S4'], 'multiplier': 2}
 results = []
 keys = ('gpuNrP95Ms', 'gpuSrP95Ms', 'gpuFlowP95Ms', 'gpuResidualP95Ms',
         'gpuFgBatchP95Ms', 'enhancementProcessingMs', 'gpuReadyP95Ms')
-for repeat, order in enumerate((('A', 'B2d'), ('B2d', 'A'), ('A', 'B2d')), 1):
+orders = (('B2d', 'A'),) if confirm else (('A', 'B2d'), ('B2d', 'A'), ('A', 'B2d'))
+for repeat, order in enumerate(orders, 4 if confirm else 1):
     for variant in order:
         matrix.assert_gpu_tests_idle()
         name = f'{label}-{variant}-r{repeat}'
@@ -112,6 +115,7 @@ for variant in artifacts:
 comparison = {key: 100*(summary['B2d'][key]['median']/summary['A'][key]['median']-1)
               for key in keys if summary['A'][key]['median'] > 0}
 result = {'runs': results, 'summary': summary, 'BChangePercent': comparison,
+          'mode': 'confirmation-pair' if confirm else 'original-three-rounds',
           'competition': 'No owned competition process; external apps left untouched.',
           'measurement': 'Per-run medians of steady rolling statistics, not aggregate percentiles or scanout. NR is last layer P95; enhancement is merged interval mean.',
           'previousPressureSummary': str(BASE/'logs'/TASK/'B3c-present-priority-v1-summary.json')}

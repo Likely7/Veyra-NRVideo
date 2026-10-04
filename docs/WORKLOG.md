@@ -1,5 +1,9 @@
 # Veyra 工作记录
 
+## 2026-10-05 正常负载六组完成，连续性异常另存确认
+
+normal-load-20261005-v1六组exit0/配置/EXE及运行库一致，测量不代表连续性全部通过。A NR7.480/7.305/8.846、B7.267/7.237/8.813ms；A3提交断档2843.883ms、稳态跳帧87/全日志89，engine controlAndSchedule2946.789ms而graphSubmit1.141；B3最大139.918ms、稳态跳帧12–13/生成过期12–14。根因未证明，原六组不删、不择优。before561ea60，确认driver增加显式confirm模式只一对B/A第4轮50秒，label normal-load-20261005-v2-confirm，数据另存。详细数值及边界PERF_3C_NORMAL_LOAD_2026-10-05。
+
 ## 2026-10-05 用户授权正常负载匹配复测
 
 “测一波看看”：先封存before5782948，再准备nr-normal-load-compare.py。确认压力构建封存app-B2d EXE97dbccb…与旧receipt一致；当前build/B2d为重新链接的2e8d633…，明确拒绝混用。A封存app-A为b7081f…，M1/F95原字节、B产品QML与当前源码除测试Loader Main.qml外一致；无Veyra进程、空闲GPU快照2%/487MHz。六组A/B交错、50秒、同设置普通队列，不启动压力进程；详细方法见PERF_3C_NORMAL_LOAD_2026-10-05。准备完存档后运行，结果待。
