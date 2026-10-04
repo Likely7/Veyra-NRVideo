@@ -38,13 +38,13 @@
 | 3b | NR自动内部尺寸 | pending | 取决于E1、真实预算/画质证据 |
 | 1b | 内容帧率预算 | rejected-prerequisite | 1a画面不成立，完整求值仍按transport次数；实测成本构造预算反例，PERF_1B_CONTENT_BUDGET；无生产改动 |
 | 1c | 重复节奏预测 | rejected | 三种节奏单像素瞬态反例均漏第49帧且后续未检测；PERF_1C_CADENCE_REJECTION；无产品代码需回退 |
-| 3c | 队列分工/呈现优先级 | in-progress-correctness-passed | 单特性540帧及完整Graph24组2502输出/PTS均一致/debug0；HIGH12组2X P99退0.46%而3X升1.35%，拒绝默认HIGH；用户追问NR高耗时，已拉出27轮明细，下一轮先同EXE无竞争/有竞争对照排回归，再测完整compute实际性能；PERF_3C_QUEUES |
+| 3c | 队列分工/呈现优先级 | in-progress-correctness-passed | 单特性540帧及完整Graph24组2502输出/PTS均一致/debug0；HIGH12组2X P99退0.46%而3X升1.35%，拒绝默认HIGH；同压力EXE正常A/B八组已补，NR四轮中位7.3925→7.256ms，微小差异不计提速，异常另存R0；完整compute实际性能仍待；PERF_3C_QUEUES / PERF_3C_NORMAL_LOAD_2026-10-05 |
 | 5b | 文件/导出跨帧并行 | pending | 保留源帧/PTS/flow依赖，不扩大实时延迟 |
 | 4a | 多NR整链低分辨率调度 | pending | 保留每层残差参数；先测同尺寸与一致性 |
 | 4b | 先粗后细组合 | pending | 核对现有逐层尺寸；不新增强制预设 |
 | 5c | 暂停不重跑/残差重合成 | retained-pending-R0 | 残差7.461→0.766ms约89.74%；真实Qt自身暂停GPU三轮2.237→0.011%（off2.237%）；48完整呈现图像一致、四FG暂停/恢复/seek通过；PERF_5C_PAUSED_NR |
 | UI | 性能设置及状态 | pending | 只暴露保留实现，统一持久化/能力/翻译 |
-| R0 | 全产品回归与最终候选 | pending | 合同/Xbox/Qt/字幕/导出/兼容及源码存档 |
+| R0 | 全产品回归与最终候选 | pending | 合同/Xbox/Qt/字幕/导出/兼容及源码存档；正常负载A3控制/调度约2.95s断档、B3跳帧，A/B素材frame303/304约68–72ms图提交；根因待查、不宣称丝滑 |
 
 ## 当前可续接状态
 

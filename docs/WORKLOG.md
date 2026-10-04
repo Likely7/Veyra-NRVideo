@@ -1,5 +1,11 @@
 # Veyra 工作记录
 
+## 2026-10-05 正常负载八组收尾，数据与异常完整保留
+
+normal-load-20261005-v1三轮六组与v2-confirm一对均正常退出/效果/EXE/runtime/source身份通过，结束后两个manifest逐文件EXE/DLL/QML再次核对完全一致，无测试进程。全四轮NR中位A7.3925/B7.256ms，增强21.394/21.245ms；变化-1.85/-0.70%，不计持续播放提速，B先前普通2X压力11.367/27.653ms明显回落。确认A/B NR7.287/7.245、增强21.204/21.169、源跳帧0。原三轮和确认数据独立保留，不择优。
+
+A3控制/调度2946.789ms断档、提交max2843.883ms、源跳89；B3源跳13/过期生成14，连续性仍不通过。UI1s状态日志间隔约3.8s，而16ms Timer最大2729ms，分别记录；A3一行增强mean=-1是暂不可用，原统计不篡改。所有稳态样本active=false；其余六组均在source303/304附近约99–105ms engine周期（graphSubmit68–72ms），SDK/系统/调度根因待查，列入R0。数据E:/项目/Veyra/logs/perf-nr-20261004/normal-load-20261005-v1-summary/all-eight-review.json及all-eight.csv，含源receipt/所有帧统计路径、异常和GPU/前台状态。收尾guard/数据校验后docs标签3c-normal-load-docs、3c-normal-confirm-docs，源码bundle+patch收据同任务archives；不改产品，不merge/push/发布。
+
 ## 2026-10-05 正常负载六组完成，连续性异常另存确认
 
 normal-load-20261005-v1六组exit0/配置/EXE及运行库一致，测量不代表连续性全部通过。A NR7.480/7.305/8.846、B7.267/7.237/8.813ms；A3提交断档2843.883ms、稳态跳帧87/全日志89，engine controlAndSchedule2946.789ms而graphSubmit1.141；B3最大139.918ms、稳态跳帧12–13/生成过期12–14。根因未证明，原六组不删、不择优。before561ea60，确认driver增加显式confirm模式只一对B/A第4轮50秒，label normal-load-20261005-v2-confirm，数据另存。详细数值及边界PERF_3C_NORMAL_LOAD_2026-10-05。
