@@ -204,6 +204,9 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         uint64_t sourceCount=0,generatedCount=0,holdCount=0;int64_t outputIndex=0;bool error=false;std::shared_ptr<pipeline::FrameLease> lastReal;
         double previousPts=0;int64_t lastOutputUs=-1;
         uint64_t slowFrames=0;
+        // Directed export measurements exclude feature/encoder creation, but include final drain.
+        const auto pipelineStart=std::chrono::steady_clock::now();
+        double completionWaitMs=0;
         // Acceptance hook: VEYRA_TEST_EXPORT_SLOW_FRAME=<source index>:<ms> holds that frame's
         // completion back, standing in for a GPU that is slow but alive. Unset in normal use.
         int slowFrameIndex=-1,slowFrameMs=0;
@@ -264,7 +267,9 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             if(error||cancel)break;
-            if(const auto waited=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-readyStart).count();waited>1000){
+            const double waited=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-readyStart).count();
+            completionWaitMs+=waited;
+            if(waited>1000){
                 ++slowFrames;uint64_t budget=0,usage=0;ctx.videoMemoryInfo(budget,usage);
                 if(slowFrames<=20)veyra::log::warn("export",std::format("slow frame source={} gpuWaitMs={:.0f} vramMiB={} budgetMiB={}",sourceCount,waited,usage>>20,budget>>20));
             }
@@ -311,6 +316,8 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         veyra::log::info("export-counts",std::format("slowFrames={} source={} generated={} hold={} output={} multiplier={} repairedTimestamps={} backend={} vfgQuality={} encoder={} bitrateMbps={} note={} (holds are not generated frames)",slowFrames,sourceCount,generatedCount,holdCount,outputIndex,multiplier,repairedTimestamps,frameGenerationBackendName(options.settings.frameGenerationBackend),options.settings.vfgQuality,std::string(sink::encoderBackendName(encoder->backend())),options.settings.exportBitrateMbps,utf8(fgNote)));
         progress(.99,L"正在收尾：等待编码器输出剩余帧");
         if(!encoder->finish()){if(failureReason.empty())failureReason=L"编码器收尾失败，请查看编码器诊断";break;}
+        veyra::log::info("export-pipeline",std::format("source={} pipelineMs={:.3f} completionWaitMs={:.3f} mode=serial",
+            sourceCount,std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-pipelineStart).count(),completionWaitMs));
         const int64_t estimatedEnd=lastOutputUs+std::max<int64_t>(1,int64_t(std::llround(sourceInterval*1000000/multiplier)));
         const int64_t finalEnd=requestedEnd>0?std::min(estimatedEnd,int64_t(std::llround((requestedEnd-videoOriginSeconds)*1000000))):estimatedEnd;
         if(!flushVideo(finalEnd))break;

@@ -8290,3 +8290,9 @@ B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0�
 # 2026-10-05 4a正常计时完成并决定回退
 
 `nr-low-chain-normal.py B2d B4a-normal-v1 2-sr 3-sr`12/12成功，封存c2891b4 EXE、原DLL/QML全部SHA保持。完整增强两层18.319→18.120ms（1.09%）、三层25.029→24.873ms（0.62%）；最后残差约25%下降不代表整体。Present P99未改善，三层尾部on110–113ms，源跳过0。画面数值最大变化81/255，收益不足以承担语义/画质变化；明确拒绝产品候选，先封存完整计时证据再回退bd4c2ef生产实现。E:/项目/Veyra/logs/perf-nr-20261004/B4a-normal-v1-summary和各12原始目录；800PNG/质量HTML保留。R0定位最后NR snippet CPU108.279ms、GPU约6.7ms的长帧，未修复，不宣称丝滑。
+
+# 2026-10-05 4a回退完成、5b基线接点
+
+8dac9ec明确revert bd4c2ef产品和已退役native入口，冲突仅本轮新增文档/probe，保留当前完整WORKLOG/4a证据、删除退役fixture；Graph/header/CMake/notices与cefbaec逐文件diff空，存档checkpoint/perf-nr-4a-low-chain-rejected-20261004/bundle verify通过。README双语与CURRENT_STATUS更新真实进度，旧日期条目保留作历史。
+
+5b方案PERF_5B_CROSS_FRAME_2026-10-05.md。新增生产exportVideo定向probe与普通导出矩阵、只加completionWait/pipeline最终drain计时，不改串行语义；先测基线再实现默认关闭候选。不做GPU竞争/压力，不将去掉CPU等待说成已经重叠NVOF(N+1)。本轮所有新输出仍E:/项目/Veyra对应build/tests/logs/tmp/archive。

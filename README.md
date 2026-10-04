@@ -18,7 +18,7 @@ A Windows enhancement player for videos, images, capture cards and streaming. Su
 
 [Download 2.0.3 portable](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3) · [Full changelog: English / 中文](docs/RELEASE_NOTES_2.0.3.md) · [Issues](https://github.com/Likely7/Veyra-NRVideo/issues)
 
-**Local development, 2026-10-04:** this branch starts from the tested RTSS restart, custom playback rate, subtitle, UI refresh, Professional layout and fullscreen restoration repairs. Those later repairs are not in the public 2.0.3 assets. NR pipeline performance work is now tracked in [the execution record](docs/PERF_EXECUTION_NR_2026-10-04.md); measurements are pending. Severe background frame loss remains unresolved, and HDR/Dolby PRs remain deferred. [Current project status](docs/CURRENT_STATUS.md) distinguishes published, local and unverified work.
+**Local development, 2026-10-05:** this branch includes later RTSS restart, custom playback rate, subtitle, UI refresh, Professional layout and fullscreen restoration repairs; public 2.0.3 assets do not include them. Measured NR work has retained core reuse, single-NR caching, idle prewarming, paused-frame reuse and narrowly admitted compute queues. The low-resolution multi-NR chain was reverted after marginal whole-pipeline gains and image changes. [The execution record](docs/PERF_EXECUTION_NR_2026-10-04.md) lists measurements and remaining work. Severe background frame loss remains unresolved, and HDR/Dolby PRs remain deferred. [Current project status](docs/CURRENT_STATUS.md) distinguishes published, local and unverified work.
 
 ## Highlights
 

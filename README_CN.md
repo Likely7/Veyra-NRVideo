@@ -16,13 +16,15 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 [下载 2.0.3 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3) · [完整更新（English / 中文）](docs/RELEASE_NOTES_2.0.3.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
+**本地开发进度，2026-10-05：** 此分支另含RTSS重启、自定义倍速、字幕、UI刷新、专业布局和全屏恢复修复，公开2.0.3包尚未包含。NR优化已实测保留核心复用、单NR缓存、空闲预热、暂停复用与限定组合的COMPUTE队列；多层低分辨率整链因整体收益小并改变画面已回退。[执行账本](docs/PERF_EXECUTION_NR_2026-10-04.md)记录数据和剩余节点，严重后台掉帧仍未解决，HDR/杜比PR继续暂缓。
+
 ## 2.0.0 重点
 
 - **全新界面**：首页、极简、专业列表、节点、调色、导出和设置重新组织；支持简中、繁中、English、日本語。
 - **节点编辑与多层 NR**：连线编排处理顺序，NR/调色独立参数；列表与节点各自保存配置、会话和预设。
 - **PC / Xbox 串流**：Moonlight/Sunshine 协议 PC 串流、非官方实验 Xbox 接入，与 PS5、采集卡、屏幕捕获共用增强。
 - **导出页重做**：可编辑顺序队列、剪辑、MP4/MKV、多音轨/内嵌字幕、取消重试和完成提示音。
-- **增强与兼容**：NR 三版本（50 系 NVIDIA 原版、Lecram、SF-v2）、DLSS/XeSS/FSR 补帧入口、采集优化及带重启确认的 OBS 游戏采集开关。详细新功能与修复见 Release。
+- **增强与兼容**：NR 四版本（50 系 NVIDIA 原版、Lecram、SF-v2、AMD lmxxf）、DLSS/XeSS/FSR 补帧入口、采集优化及带重启确认的 OBS 游戏采集开关。详细新功能与修复见 Release。
 
 ## 2.0.3 新增与修复
 
