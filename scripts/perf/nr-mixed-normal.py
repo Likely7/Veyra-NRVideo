@@ -6,7 +6,7 @@ spec=importlib.util.spec_from_file_location('matrix',ROOT/'scripts/perf/nr-matri
 variant,label=sys.argv[1:3]
 folder=BASE/'logs'/TASK/(label+'-summary');folder.mkdir(parents=True,exist_ok=False)
 matrix.assert_gpu_tests_idle();app=matrix.stage(variant,label)
-payload={str(p.relative_to(app)):matrix.digest(p) for p in app.rglob('*') if p.is_file() and p.suffix.lower() in ('.exe','.dll','.qml')}
+payload={p.relative_to(app).as_posix():matrix.digest(p) for p in app.rglob('*') if p.is_file() and p.suffix.lower() in ('.exe','.dll','.qml')}
 (folder/'artifacts.json').write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')
 results=[]
 for count in (2,3):

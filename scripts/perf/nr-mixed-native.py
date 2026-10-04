@@ -9,7 +9,7 @@ variant,label=sys.argv[1:3];matrix.assert_gpu_tests_idle()
 folder=BASE/'logs'/TASK/(label+'-summary');folder.mkdir(parents=True,exist_ok=False)
 app=matrix.stage(variant,label);exe=app/'veyra_nr_mixed_resolution_experiment.exe'
 shutil.copy2(BASE/'build'/TASK/variant/exe.name,exe)
-identity={str(p.relative_to(app)):matrix.digest(p) for p in app.rglob('*') if p.is_file() and p.suffix.lower() in ('.exe','.dll','.qml')}
+identity={p.relative_to(app).as_posix():matrix.digest(p) for p in app.rglob('*') if p.is_file() and p.suffix.lower() in ('.exe','.dll','.qml')}
 (folder/'artifacts.json').write_text(json.dumps(identity,ensure_ascii=False,indent=2),encoding='utf-8')
 results=[];frameGroups={}
 for group in ('none','2-native','2-mixed','3-native','3-mixed'):

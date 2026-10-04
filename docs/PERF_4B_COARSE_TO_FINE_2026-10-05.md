@@ -17,3 +17,5 @@
 ## 存档与原始证据
 
 开工、夹具候选及结果分别 commit/tag/bundle。输出统一放 `E:/项目/Veyra/{build,tests,logs,tmp,archives}/perf-nr-20261004/`；结果、实际命令和失败记录补入本文及 WORKLOG。既有能力核验通过与新算法优化保留分开报告。
+
+`build-nr-mixed-v1` 当前源码构建通过（27步）。`B4b-native-v1` 无 NR 原生运行通过40帧/debug0，但 Python 收据阶段使用 Windows 路径分隔符生成清单键，再按斜线键读取，发生 KeyError；没有进入 NR 测量。统一清单键为 as_posix 后另用 v2 新目录完整运行，保留 v1 日志，不覆盖失败证据。
