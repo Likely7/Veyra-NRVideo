@@ -1,4 +1,5 @@
 #include "veyra/pipeline/ColorMetadata.h"
+#include "veyra/pipeline/DolbyVisionP5.h"
 #include "veyra/pipeline/HdrToneMap.h"
 // EnhanceGraph implementation - the real GPU chain migrated from
 // tools/player_probe main.cpp (R3.2). Ordering constraints preserved from the
@@ -1401,7 +1402,7 @@ bool EnhanceGraph::createComputePasses()
     // needs the FP32 side output. The extra UAV is part of the R5.3 contract
     // only for graphs that actually allocate preGradeRgba_.
     const UINT ingressUavCount = preGradeRgba_ ? 2u : 1u;
-    if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 12, 2, ingressUavCount, 12+kColorGradeConstantCount, 4)) return false;
+    if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 12, 2, ingressUavCount, 12+kColorGradeConstantCount+kDolbyVisionP5ConstantCount, 4)) return false;
     const char* rgbShader=desc_.packedInput?"PackedCaptureToLinear.dxil":desc_.yuy2Input?"Yuy2ToLinear.dxil":"RgbToLinear.dxil";
     if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,8+kColorGradeConstantCount,4)))return false;
     // Descriptor budget grows with the NR stack: encode needs one SRV+UAV pair
@@ -2075,12 +2076,16 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         rgbPass_.bind(list,c,gpuHandleOf(rgbPass_,gpuRgb?3+parity:0).ptr,gpuHandleOf(rgbPass_,1+uavSlot).ptr,gpuHandleOf(rgbPass_,8).ptr);
         list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);
     }else{
-        float constants[12+kColorGradeConstantCount] = { resolved.range==ColorRange::Full?0.0f:1.0f,
+        float constants[12+kColorGradeConstantCount+kDolbyVisionP5ConstantCount] = { resolved.range==ColorRange::Full?0.0f:1.0f,
             resolved.matrix==YuvMatrix::BT2020NCL?2.0f:resolved.matrix==YuvMatrix::BT601?0.0f:1.0f,
             resolved.transfer==TransferFunction::HLG?5.0f:resolved.transfer==TransferFunction::PQ?4.0f:float(workingTransferCode(resolved)), (nv12Texture?(nv12Texture->GetDesc().Format==DXGI_FORMAT_P010?1.0f:0.0f):(desc_.captureBitDepth==16?2.0f:desc_.wideYuvInput()?1.0f:0.0f)),
             uintBits(srcW_), uintBits(srcH_), uintBits((desc_.hdrWorking()?1u:0u)|(resolved.primaries==ColorPrimaries::BT2020?2u:0u)),
             uintBits(resolved.reconstructChroma?std::max(1u,unsigned(resolved.chromaLocation)):0u),toneMapPeakNits_,203.0f,0,0 };
         if(grade)packColorGradeConstants(colorTables_,constants+12);
+        // Dolby Vision profile 5: written on every frame because the enable flag
+        // lives inside the block, so switching source content back to ordinary
+        // video clears it without any extra graph state.
+        packDolbyVisionP5Constants(resolved.dolbyVisionP5,constants+12+kColorGradeConstantCount);
         yuvPass_.bind(list, constants, gpuHandleOf(yuvPass_, nv12Texture ? 3 + parity * 2 : 0).ptr, gpuHandleOf(yuvPass_, 2+uavSlot).ptr,gpuHandleOf(yuvPass_,8).ptr);
         list->Dispatch((srcW_ + 15) / 16, (srcH_ + 15) / 16, 1);
     }

@@ -32,6 +32,7 @@ int thunkReplacementFunction(int value) { ++thunkHookCalls; return thunkOriginal
 #include "veyra/sink/ArrivalClockMapping.h"
 #include "veyra/sink/CaptureSyncTarget.h"
 #include "veyra/source/DolbyVision.h"
+#include "veyra/source/DolbyVisionRpu.h"
 #include "veyra/source/AudioInputRecovery.h"
 #include "veyra/engine/Subtitles.h"
 #include "veyra/engine/PresentationSettings.h"
@@ -88,7 +89,13 @@ int main(){
         check(engine::disableFailedBackend(recovered,engine::FailedBackend::OpticalFlow)&&!recovered.nr&&recovered.sr&&recovered.multiplier==1,"flow failure disables dependent consumers while retaining spatial video SR");
         check(!engine::disableFailedBackend(recovered,engine::FailedBackend::OpticalFlow),"repeated failure cannot create an unbounded recovery loop");
         source::DolbyVisionInfo dv;dv.present=dv.baseLayer=true;dv.profile=5;dv.compatibility=1;
-        check(dv.route()==source::DolbyBaseLayer::Unsupported,"DV P5 cannot be relabelled as HDR10 even with a conflicting compatibility id");
+        check(dv.route()==source::DolbyBaseLayer::Hdr10,"DV P5 base layer is pinned to the routed HDR10 container so the RPU conversion can run");
+        check(dv.description().find(L"还没有可用的 RPU 转换参数")!=std::wstring::npos,
+              "DV P5 does not report an RPU conversion before its parameters are actually in effect");
+        dv.profile5Converted=true;
+        check(dv.description().find(L"IPT-PQ-C2")!=std::wstring::npos,
+              "DV P5 reports the IPT-PQ-C2 conversion once the RPU parameters are in effect");
+        dv.profile5Converted=false;
         dv.profile=8;
         check(dv.route()==source::DolbyBaseLayer::Hdr10,"DV P8.1 selects HDR10 base-layer compatibility");
         pipeline::ColorDescription color;color.transfer=pipeline::TransferFunction::PQ;color.matrix=pipeline::YuvMatrix::BT2020NCL;color.primaries=pipeline::ColorPrimaries::BT2020;
@@ -97,6 +104,69 @@ int main(){
         dv.compatibility=4;check(dv.route()==source::DolbyBaseLayer::Hlg,"DV P8.4 selects HLG base layer");
         dv.compatibility=2;check(dv.route()==source::DolbyBaseLayer::Sdr,"DV P8.2 selects SDR base layer");
         dv.baseLayer=false;check(dv.route()==source::DolbyBaseLayer::Unsupported,"missing DV base layer fails closed");
+        // Profile-5 RPU -> shader parameters. The builder must be a pure function
+        // of one frame's metadata (the sample carries flat/placeholder frames)
+        // and must never claim a conversion it cannot actually perform.
+        {
+            struct RpuBlob { AVDOVIMetadata meta{}; AVDOVIRpuDataHeader header{}; AVDOVIDataMapping mapping{}; AVDOVIColorMetadata color{}; };
+            const auto fill=[&](RpuBlob& blob,bool matrices,bool polynomial,bool shaped){
+                blob={};
+                blob.meta.header_offset=size_t(reinterpret_cast<uint8_t*>(&blob.header)-reinterpret_cast<uint8_t*>(&blob.meta));
+                blob.meta.mapping_offset=size_t(reinterpret_cast<uint8_t*>(&blob.mapping)-reinterpret_cast<uint8_t*>(&blob.meta));
+                blob.meta.color_offset=size_t(reinterpret_cast<uint8_t*>(&blob.color)-reinterpret_cast<uint8_t*>(&blob.meta));
+                blob.header.coef_log2_denom=20;blob.header.bl_bit_depth=10;
+                for(int i=0;i<9;++i){
+                    const AVRational value{matrices&&i%4==0?1:0,1};
+                    blob.color.ycc_to_rgb_matrix[i]=value;blob.color.rgb_to_lms_matrix[i]=value;
+                }
+                for(int c=0;c<3;++c){
+                    auto& curve=blob.mapping.curves[c];
+                    curve.num_pivots=2;curve.pivots[0]=0;curve.pivots[1]=1023;
+                    curve.mapping_idc[0]=polynomial?AV_DOVI_MAPPING_POLYNOMIAL:AV_DOVI_MAPPING_MMR;
+                    curve.poly_order[0]=1;
+                    curve.poly_coef[0][0]=shaped?int64_t(0.25*(1<<20)):0;
+                    curve.poly_coef[0][1]=shaped?int64_t(0.5*(1<<20)):0;
+                    curve.poly_coef[0][2]=0;
+                }
+            };
+            const auto sameState=[](const pipeline::DolbyVisionP5& a,const pipeline::DolbyVisionP5& b){
+                if(a.active!=b.active)return false;
+                for(int i=0;i<9;++i)if(a.yccToRgb[i]!=b.yccToRgb[i]||a.lmsToRgb[i]!=b.lmsToRgb[i])return false;
+                for(int c=0;c<3;++c)for(int k=0;k<3;++k)if(a.curve[c][k]!=b.curve[c][k])return false;
+                return true;
+            };
+            RpuBlob blob; pipeline::DolbyVisionP5 state;
+            fill(blob,true,true,true);
+            auto built=source::buildDolbyVisionP5(blob.meta,state);
+            check(built.ok&&built.usable&&state.active&&!built.placeholderMapping&&!built.unsupportedMapping&&
+                  std::abs(state.curve[0][2]-0.5f)<0.01f&&std::abs(state.curve[0][0]-0.25f)<0.01f,
+                  "DV P5 conversion uses the RPU matrices and the per-frame reshaping curve");
+            const auto shaped=state;
+            // A profile-5 RPU has to describe its base layer; without that block
+            // the caller refuses the frame instead of guessing a colour.
+            fill(blob,false,true,true);
+            built=source::buildDolbyVisionP5(blob.meta,state);
+            check(!built.ok&&!built.usable&&built.colorMetadataMissing&&!state.active,
+                  "DV P5 refuses an RPU whose colour block is empty");
+            // A reshaping method this decoder cannot reproduce must not be
+            // silently replaced by the identity either.
+            fill(blob,true,false,true);
+            built=source::buildDolbyVisionP5(blob.meta,state);
+            check(built.ok&&!built.usable&&built.unsupportedMapping,
+                  "DV P5 refuses a reshaping method it cannot reproduce instead of converting with the identity");
+            // Flat (placeholder) frames: identity for the affected components, and
+            // the result may not depend on what played before - this is the
+            // backward-seek case (a later scene, then a seek into the opening).
+            fill(blob,true,true,false);
+            pipeline::DolbyVisionP5 fresh;
+            const auto freshBuilt=source::buildDolbyVisionP5(blob.meta,fresh);
+            pipeline::DolbyVisionP5 sequential=shaped;
+            const auto sequentialBuilt=source::buildDolbyVisionP5(blob.meta,sequential);
+            check(freshBuilt.ok&&freshBuilt.usable&&freshBuilt.placeholderMapping&&
+                  sequentialBuilt.placeholderMapping&&sameState(fresh,sequential)&&
+                  fresh.curve[0][0]==0.0f&&fresh.curve[0][1]==0.0f&&fresh.curve[0][2]==1.0f,
+                  "DV P5 flat mappings convert to the identity regardless of playback history");
+        }
         diagnostics::GpuFrameTiming gpu;auto& first=gpu.gpu[size_t(diagnostics::GpuStage::Color)];first={diagnostics::SampleState::Measured,2,1000,3000,1000000};
         auto& last=gpu.gpu[size_t(diagnostics::GpuStage::FgBatch)];last={diagnostics::SampleState::Measured,3,10000,13000,1000000};
         gpu.gpu[size_t(diagnostics::GpuStage::Blit)]={diagnostics::SampleState::Measured,2,100000,102000,1000000};
