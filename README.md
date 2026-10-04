@@ -8,9 +8,11 @@
   </a>
 </p>
 
-English | [简体中文](README_CN.md)
+
 
 <p align="center"><img src="docs/images/2.0.0/professional-mode.png" alt="Veyra 2.0.0 professional mode" width="1200"></p>
+
+English | [简体中文](README_CN.md)
 
 A Windows enhancement player for videos, images, capture cards and streaming. Super-resolution, NR, colour grading, RTX Video HDR and frame generation share one engine. Community enhancements remain experimental.
 
