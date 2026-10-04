@@ -8286,3 +8286,7 @@ B4a-native-v1首组单NR关闭候选已求值、CSV输出一张有效完整SHA�
 # 2026-10-05 4a完整图20组/800图完成
 
 B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0，各帧实际Evaluate=层数，尺寸Desc通过，独立残差第10/20/30帧改变可达。单层720、单层SR4K、混合480→720和双时域开/关各40全同；适用多层六组全部40帧不同。nr-low-chain-quality.py逐图PNG解码SHA再验、alpha一致、保护中心全同；PSNR中位49.25–54.45dB，最大差81/255，不能据高PSNR自行标画质合格。E:/项目/Veyra/logs/perf-nr-20261004/B4a-native-v2-quality/review.html/comparison.json与原PNG可审查；源码仍默认关闭。将测正常Qt2/3层SR4K各三轮开/关12组，不加竞争或显存压力。
+
+# 2026-10-05 4a正常计时完成并决定回退
+
+`nr-low-chain-normal.py B2d B4a-normal-v1 2-sr 3-sr`12/12成功，封存c2891b4 EXE、原DLL/QML全部SHA保持。完整增强两层18.319→18.120ms（1.09%）、三层25.029→24.873ms（0.62%）；最后残差约25%下降不代表整体。Present P99未改善，三层尾部on110–113ms，源跳过0。画面数值最大变化81/255，收益不足以承担语义/画质变化；明确拒绝产品候选，先封存完整计时证据再回退bd4c2ef生产实现。E:/项目/Veyra/logs/perf-nr-20261004/B4a-normal-v1-summary和各12原始目录；800PNG/质量HTML保留。R0定位最后NR snippet CPU108.279ms、GPU约6.7ms的长帧，未修复，不宣称丝滑。
