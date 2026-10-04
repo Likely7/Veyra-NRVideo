@@ -302,7 +302,7 @@ foreach($f in $lock.files) {
     if args.release:
         manifest['correspondingSource'] = dict(
             application='https://github.com/Likely7/Veyra-NRVideo/archive/refs/tags/v' + version + '.zip',
-            dependencies='https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.0.0/Veyra-2.0.0-dependency-source.zip',
+            dependencies='https://github.com/Likely7/Veyra-NRVideo/releases/download/v' + version + '/Veyra-' + version + '-dependency-source.zip' if version == '2.0.3' else 'https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.0.0/Veyra-2.0.0-dependency-source.zip',
             instructions='docs/BUILD_' + version + '.md')
     if not args.no_archive:
         manifest['sourceSnapshot'] = source_snapshot(args.output, args.label, digest(stage / 'veyra_qml_ui.exe'))

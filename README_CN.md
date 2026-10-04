@@ -14,7 +14,7 @@
 
 Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
 
-[下载 2.0.2 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.2) · [完整更新（English / 中文）](docs/RELEASE_NOTES_2.0.2.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
+[下载 2.0.3 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3) · [完整更新（English / 中文）](docs/RELEASE_NOTES_2.0.3.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
 ## 2.0.0 重点
 
@@ -24,7 +24,12 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 - **导出页重做**：可编辑顺序队列、剪辑、MP4/MKV、多音轨/内嵌字幕、取消重试和完成提示音。
 - **增强与兼容**：NR 三版本（50 系 NVIDIA 原版、Lecram、SF-v2）、DLSS/XeSS/FSR 补帧入口、采集优化及带重启确认的 OBS 游戏采集开关。详细新功能与修复见 Release。
 
-## 2.0.2 新增与修复
+## 2.0.3 新增与修复
+
+- **显卡分包**：NVIDIA 包不带 AMD NR；AMD 包不带 NVIDIA NR/NGX/VFG/CUDA。按用户追加决定，两包都保留原有 FidelityFX 2.3.0 共用组件，FSR3.1/XeSS 可用，NVIDIA 的 FSR4 入口置灰。
+- **功能可见但禁用**：NR 四版本、超分、补帧、RTX HDR、光流与节点添加统一判断硬件/组件，并显示禁用原因。恢复旧配置关闭不可用效果，保留参数。
+- **VFG 与现场修复**：VFG 全部 2–8X、低/中/高；Xbox 音频启动与有界恢复；导出码率草稿/验证/worker 冻结；小飞机兼容背景不透明；移除 NVIDIA App 插件误判；修复极简右侧像素黑边。删除九个 VFG 不使用的 NPP 库。RX9000 推理和 Xbox 真机长稳仍待验，HDR/杜比 PR 暂缓。
+
 
 - 恢复 50 系 NVIDIA 原版 NR，与 Lecram、SF-v2 共三版切换，已有设置保留。
 - 设置可开启启动自动继续上次视频及进度，或按已保存的采集卡配置直接开始；启动页可选极简或专业。
@@ -33,7 +38,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 ## 下载、启动与升级
 
-1. 下载 **Veyra-2.0.2-win64-portable.zip**，完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需这一个下载包。
+1. 按 Veyra 实际使用的显卡下载 **Veyra-2.0.3-NVIDIA-win64-portable.7z** 或 **Veyra-2.0.3-AMD-win64-portable.7z**，用 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
 2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
 3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
 4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
@@ -51,7 +56,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 ### 列表模式
 
-列表与节点的 **NR 版本** 均可选 RTX 50 · NVIDIA 原版、RTX 50 · Lecram、RTX 20–50 · SF-v2，切换时全 NR 链同步，原有默认选择保留。[运行组件身份](docs/RUNTIME_COMPONENTS_2.0.2.md)。
+列表与节点的 **NR 版本** 均可选四项：RTX 50 · NVIDIA 原版、RTX 50 · Lecram、RTX 20–50 · SF-v2、RX9000 · lmxxf（实验）。不支持的版本保留置灰，支持的版本切换时全 NR 链同步。AMD NR 需要驱动 HIP 7，内部最高 1080p 像素预算，HDR/原生 1440p/4K NR 导出不支持。[运行组件身份](docs/RUNTIME_COMPONENTS_2.0.3.md)。
 
 顶部选 **列表**，按需开启超分、NR、RTX Video HDR。NR 最多四层，独立调整内部尺寸、强度等参数；总开关关闭全部 NR，重开恢复各层原状态。
 
@@ -70,7 +75,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 5. 光流在输入后计算并共享，超分为单实例；RTX Video HDR 在补帧前，补帧固定末端，DLSS/XeSS/FSR 选一个后端。不是任意分支混合图。
 6. 列表和节点分别保存参数、预设、会话。切回列表恢复原列表配置，节点链保留；切换重建处理链，可能短暂停顿。
 
-**2.0.2 节点模式不支持离线导出，也没有列表的 NR 全局保护区域。** 导出前切回列表并确认效果，不会自动转换节点链。
+**2.0.3 节点模式不支持离线导出，也没有列表的 NR 全局保护区域。** 导出前切回列表并确认效果，不会自动转换节点链。
 
 ### 采集与串流
 
@@ -125,7 +130,7 @@ QML 管界面，视频由原生 D3D12 呈现。列表/节点共用引擎，未�
 
 ## 开源与构建
 
-Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.0.2 构建与对应源码](docs/BUILD_2.0.2.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
+Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.0.3 构建与对应源码](docs/BUILD_2.0.3.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
 
 ## 支持与反馈
 

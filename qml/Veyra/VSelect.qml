@@ -43,7 +43,7 @@ Rectangle {
                 if (p instanceof VRow) return p.label
             return ""
         }
-        items: sel.options.map(o => ({ label: o.label, checked: o.label === sel.value, disabled: o.disabled === true }))
+        items: sel.options.map(o => ({ label: o.label, checked: o.label === sel.value, disabled: o.disabled === true, note: o.note || "" }))
         onPicked: (i, o) => sel.picked(sel.options[i].id)
     }
 }

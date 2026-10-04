@@ -463,6 +463,13 @@
    "ja": "AMD FSR のフレーム生成は最大 2X です。要求は適用されていません"
   },
   {
+   "zh": "AMD NR 最高 1080p 像素预算",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "AMD NR 最高 1080p 像素預算",
+   "en": "AMD NR has a maximum 1080p pixel budget",
+   "ja": "AMD NR の上限は 1080p の画素数です"
+  },
+  {
    "zh": "AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。HDR 尚未验收。",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "AMD NR（實驗）：需要 RX 9000 驅動及 lmxxf 執行元件，內部最高 1080p 像素預算。支援模型強度、殘差與保護；風格使用執行元件設定。HDR 尚未驗收。",
@@ -601,6 +608,13 @@
    "zh-TW": "F11 / Alt+Enter 也可以",
    "en": "F11 / Alt+Enter work too",
    "ja": "F11 / Alt+Enter でも可"
+  },
+  {
+   "zh": "FSR 3.1 / 4 · 自动兼容",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "FSR 3.1 / 4 · 自動相容",
+   "en": "FSR 3.1 / 4 · Automatic compatibility",
+   "ja": "FSR 3.1 / 4 · 自動互換"
   },
   {
    "zh": "FSR 3.1 帧生成未能启用，已恢复上一套参数",
@@ -5315,6 +5329,13 @@
    "ja": "オフ · 設定は保持されますが適用されません"
   },
   {
+   "zh": "已关闭当前硬件或包不支持的效果，参数仍保留：",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "已關閉目前硬體或套件不支援的效果，參數仍保留：",
+   "en": "Unavailable effects have been disabled; their parameters are preserved: ",
+   "ja": "非対応の効果を無効にしました。設定値は保持されています："
+  },
+  {
    "zh": "已关闭正在播放的内容，显卡全部留给导出",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已關閉正在播放的內容，顯示卡全部留給匯出",
@@ -6001,6 +6022,13 @@
    "ja": "現在のずれ"
   },
   {
+   "zh": "当前包缺少此功能的运行组件",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "目前套件缺少此功能的執行元件",
+   "en": "This package lacks the runtime components for this feature",
+   "ja": "このパッケージに必要なランタイムがありません"
+  },
+  {
    "zh": "当前导出设备不能执行所请求的 DLSS 补帧，未降低倍率",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "當前匯出裝置不能執行所請求的 DLSS 補幀，未降低倍率",
@@ -6055,6 +6083,13 @@
    "zh-TW": "當前片源沒有字幕",
    "en": "This source has no subtitles",
    "ja": "このソースには字幕がありません"
+  },
+  {
+   "zh": "当前硬件或包不支持所选效果，请查看组件页",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "目前硬體或套件不支援所選效果，請查看元件頁",
+   "en": "The hardware or package does not support this effect; check Components",
+   "ja": "選択した効果は現在の GPU またはパッケージに対応していません。コンポーネントを確認してください"
   },
   {
    "zh": "当前非 NVIDIA 适配器：NR、NVIDIA 超分与 DLSS 已禁用；可使用 XeSS 预览和 AMD 光流",
@@ -10979,6 +11014,13 @@
    "ja": "超解像 4K · NR 1 層 · フレーム生成 2X"
   },
   {
+   "zh": "超分算法",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "超解析演算法",
+   "en": "Upscaling algorithm",
+   "ja": "アップスケーリング方式"
+  },
+  {
    "zh": "超分辨率",
    "src": "qml/ProPage.qml",
    "zh-TW": "超解析度",
@@ -12288,6 +12330,48 @@
    "ja": "システムデコードが必要 · 遅延がやや大きい"
   },
   {
+   "zh": "需要 AMD HIP 7 驱动运行组件",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "需要 AMD HIP 7 驅動執行元件",
+   "en": "Requires the AMD HIP 7 driver runtime",
+   "ja": "AMD HIP 7 ドライバーランタイムが必要です"
+  },
+  {
+   "zh": "需要 AMD RX 9000",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "需要 AMD RX 9000",
+   "en": "Requires AMD RX 9000",
+   "ja": "AMD RX 9000 が必要です"
+  },
+  {
+   "zh": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
+   "en": "Requires NVIDIA RTX 40 / 50 (Ada / Blackwell)",
+   "ja": "NVIDIA RTX 40 / 50（Ada / Blackwell）が必要です"
+  },
+  {
+   "zh": "需要 NVIDIA RTX 50 / Blackwell",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "需要 NVIDIA RTX 50 / Blackwell",
+   "en": "Requires NVIDIA RTX 50 / Blackwell",
+   "ja": "NVIDIA RTX 50 / Blackwell が必要です"
+  },
+  {
+   "zh": "需要 NVIDIA RTX 显卡",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "需要 NVIDIA RTX 顯示卡",
+   "en": "Requires an NVIDIA RTX GPU",
+   "ja": "NVIDIA RTX GPU が必要です"
+  },
+  {
+   "zh": "需要 NVIDIA RTX 显卡及 NVOF 驱动",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "需要 NVIDIA RTX 顯示卡及 NVOF 驅動",
+   "en": "Requires an NVIDIA RTX GPU and the NVOF driver",
+   "ja": "NVIDIA RTX GPU と NVOF ドライバーが必要です"
+  },
+  {
    "zh": "需要主机显示器开启 HDR，且编码选 HEVC 或 AV1；本机需要硬件解码",
    "src": "qml/DialogHost.qml",
    "zh-TW": "需要主機顯示器開啟 HDR，且編碼選 HEVC 或 AV1；本機需要硬體解碼",
@@ -12307,6 +12391,13 @@
    "zh-TW": "需要光流；關掉則不做時域累積",
    "en": "Needs optical flow; when off there is no temporal accumulation",
    "ja": "オプティカルフローが必要です。オフにすると時間方向の累積を行いません"
+  },
+  {
+   "zh": "需要支持 DirectX 12 的硬件显卡",
+   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "zh-TW": "需要支援 DirectX 12 的硬體顯示卡",
+   "en": "Requires a hardware GPU with DirectX 12 support",
+   "ja": "DirectX 12 対応のハードウェア GPU が必要です"
   },
   {
    "zh": "需要系统显示事件才能测得真实值；取不到时显示未测",

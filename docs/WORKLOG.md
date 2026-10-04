@@ -1,5 +1,16 @@
 # Veyra 工作记录
 
+## 2026-10-04 2.0.3 分包、灰色入口与正式发布施工
+
+- 用户明确授权 NVIDIA/AMD 分包、AGENTS 长期规则、合并当前修复到 main 和 GitHub2.0.3；追加要求 FSR3.1/4 保留原共用组件。HDR/Dolby PR13/14仍暂缓，旧关机已执行，本轮不再关机，不派 Agent。
+- 先存档 checkpoint/pre-release-2.0.3-20261004、bundle verify（06A8A2EC…B0E93）、桌面 working patch/status；从cb9b89e开codex/release-2.0.3-20261004，沿用E盘field-upgrade worktree，保留远端712daf3 README变更，桌面用户修改不动。方案 RELEASE_2.0.3_PLAN_2026-10-04.md。
+- 建立实际高性能D3D12适配器+文件存在能力表，NR/SR/FG/HDR/flow列表节点与菜单一致置灰并给原因；设置和导出同样拒绝不支持请求；旧配置禁用效果但保留参数。新增FSR算法选择，AMD包无需NVIDIA库可运行FSR；发现Node补帧子菜单未复制disabled/note，已修复并实跑确认。
+- 新package-vendor-release.py按完整manifest分包和厂商边界审计，两包同EXE/QML/shaders；NV不含AMD NR，AMD不含NV专用库；FSR恢复原2.3 loader/upscaler/FG三文件，两包保留，NV的FSR4仍灰。原SDK/backend试改已撤下。逐运行文件来源/SHA/签名和许可在各包；不带驱动/SDK/日志/测试程序。
+- build-v8最终产品成功，EXE SHA998d4261…98154；unit-v1成功项+unit-v2修正harness后56硬件矩阵、331设置、QtQuick39、Xbox90、WASAPI float启动、AMD ABI GPU-copy62、多语言/preset通过。shared-native-v1原FSR39中间帧/18热切换774帧/debug0、VFG463/0；vfg-ui-v1包内2–8×三档/预设/worker High8冻结64帧240fps通过。
+- policy-nv-v3/policy-amd-v2真实灰色菜单、旧VFG会话恢复、实际FSR SR播放通过；AMD物理推理未测。production-rtss-v1真实RTSSHooks64注入，18VBR改选项/24CBR直接开始两份4K HEVC均24/24帧，背景alpha255，旧NVIDIA marker无误判；只关闭本轮自启RTSS。edge-v1六种DPI/软件实测rightGap=0。
+- AMD528身份/186weights/62kernels/ABI1布局审计通过；对应源码剔除上游测试截图/CSV/编译模型后6131记录约550MB，内嵌原依赖包byte-identical。archive source manifest允许直接从提供源码重建，amd-source-rebuild成功，发行DLL仍为原身份，未替换。stage-nv-v2/stage-amd-v1完整SHA与PE imports/delay闭包通过；支持二维码HEAD两图200。
+- 全部产物 E:/项目/Veyra/{build,tests,logs,tmp,releases,verify,archives}/release-2.0.3-20261004。具体命令、首次失败及修正、未测边界在 RELEASE_2.0.3_ACCEPTANCE_2026-10-04.md；本段写于最终合并/上传前，后续按实际回执另记完成，不能提前称发布。
+
 ## 2026-10-04 瘦身完整候选最终验收与关机准备
 
 - 当前产品commit2df6dd7 / checkpoint/runtime-size-code-20261004不变；随后只更新报告、修build脚本EOF空行、增加无损比较/独立CRC/最终索引验收recipe，不改产品源码、不重写模型。`git diff --check`与最终scope guard通过。

@@ -1,5 +1,5 @@
 """Build the pinned MIT runtime from its original checkout; no injection module."""
-import argparse, os, re, subprocess
+import argparse, hashlib, json, os, re, subprocess
 from pathlib import Path
 
 PIN = '78f548749e74824327b8458c57be31a1df78376a'
@@ -10,9 +10,24 @@ p.add_argument('--tmp', type=Path, required=True)
 p.add_argument('--log', type=Path, required=True)
 a = p.parse_args()
 source = a.source.resolve()
-head = subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip()
-if head != PIN or subprocess.check_output(['git','diff','--name-only','HEAD'],cwd=source):
-    raise SystemExit('Expected an unchanged pinned upstream checkout')
+if (source / '.git').exists():
+    head = subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip()
+    if head != PIN or subprocess.check_output(['git','diff','--name-only','HEAD'],cwd=source):
+        raise SystemExit('Expected an unchanged pinned upstream checkout')
+else:
+    # The corresponding-source archive deliberately omits weights, captures,
+    # compiled modules and Git metadata. Validate its supplied source manifest.
+    if (source / 'SOURCE_COMMIT.txt').read_text(encoding='utf8').splitlines()[0] != PIN:
+        raise SystemExit('Unexpected archived source commit')
+    records = json.loads((source.parent / 'source-manifest.json').read_text(encoding='utf8'))
+    prefix = source.name + '/'
+    selected = [r for r in records if r['path'].startswith(prefix)]
+    if not selected:
+        raise SystemExit('Missing archived source identities')
+    for row in selected:
+        file = (source.parent / row['path']).resolve()
+        if not file.is_relative_to(source) or file.stat().st_size != row['size'] or hashlib.sha256(file.read_bytes()).hexdigest() != row['sha256']:
+            raise SystemExit('Archived source changed: ' + row['path'])
 attributes = []
 for file in (source/'src').glob('*.h'):
     attributes += re.findall(r'__attribute__\(\(([^)]*)\)\)', file.read_text(encoding='utf8'))

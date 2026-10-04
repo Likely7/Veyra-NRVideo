@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.0.2 LANGUAGES CXX RC)
+project(veyra VERSION 2.0.3 LANGUAGES CXX RC)
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.0.2" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.0.3" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -1043,6 +1043,9 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_compile_definitions(veyra_vfg_settings_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_vfg_settings_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_vfg_settings_tests PRIVATE veyra_base)
+  add_executable(veyra_effect_availability_tests tests/unit/EffectAvailabilityTests.cpp)
+  target_compile_features(veyra_effect_availability_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_effect_availability_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
   add_executable(veyra_effect_chain_tests tests/unit/EffectChainTests.cpp src/engine/EffectChain.cpp)
   target_compile_features(veyra_effect_chain_tests PRIVATE cxx_std_20)

@@ -18,6 +18,7 @@ Rectangle {
     property string glyph: ""
     property color hue: Theme.accent
     property bool enabledSwitch: true
+    property bool switchAvailable: true
     property string switchObjectName: ""
     property bool on: true
     property bool open: false
@@ -165,6 +166,8 @@ Rectangle {
                 VSwitch {
                     objectName: acc.switchObjectName
                     visible: acc.enabledSwitch
+                    enabled: acc.switchAvailable || acc.on
+                    opacity: enabled ? 1 : 0.4
                     checked: acc.on
                     onToggled: checked => acc.toggled(checked)
                 }

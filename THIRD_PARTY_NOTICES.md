@@ -21,11 +21,12 @@ borrowed pixel ownership; no proprietary SDK struct or header is copied into Git
 The local runtime is the unmodified official `nvidia-vfx` 0.2.0.0 Windows wheel,
 `nvidia_vfx-0.2.0.0-cp311-cp311-win_amd64.whl`, 435809365 bytes, SHA-256
 `5aaf6a42bc6b6dbbf52fcb714194c994a6893cbbf7ada38bc2165a1f83e4a6fc`.
-Only the fourteen native VFG dependencies are used; Python and its extension
+Only the five VFG-required native dependencies are used; nine unrelated NPP libraries are omitted; Python and its extension
 are not a product dependency. This proprietary runtime is **not MIT**.
-The local candidate carries its NVIDIA software/AI/model terms and third-party
-notices with a separate `vfg-runtime-manifest.json`; public redistribution has
-not been authorized or established by this integration. CUDA driver headers
+The 2.0.3 NVIDIA package carries its NVIDIA software/AI/model terms and third-party
+notices with a separate `vfg-runtime-manifest.json`. The user explicitly authorized
+this experimental Release distribution; this is not vendor certification or a general
+redistribution grant, and the integration is not an independent legal audit. CUDA driver headers
 are an external build dependency only; the system `nvcuda.dll` is never bundled.
 DLLs remain unmodified, separately identified and outside source control;
 manifest identity does not lock user replacements. Hardware/format support and
@@ -260,7 +261,7 @@ Remote Play also depends on **OpenSSL, Opus, json-c, libevent, miniupnpc, curl, 
 <details>
 <summary>Deferred AMD NR research references</summary>
 
-[DLSS-NR-on-AMD](https://github.com/danielblnc/DLSS-NR-on-AMD), [dlss5-on-amd-9070xt-porting](https://github.com/lmxxf/dlss5-on-amd-9070xt-porting), [dlss5-image-enhancer-zluda](https://github.com/RedDukeDev/dlss5-image-enhancer-zluda) and its [ZLUDA fork](https://github.com/RedDukeDev/ZLUDA), [dlss5-neural-amd](https://github.com/zmodelerlover/dlss5-neural-amd), and [DLSS5-AMD-Video](https://github.com/eikkapine/DLSS5-AMD-Video). These informed feasibility and performance research. AMD NR is not available in the current release.
+[DLSS-NR-on-AMD](https://github.com/danielblnc/DLSS-NR-on-AMD), [dlss5-on-amd-9070xt-porting](https://github.com/lmxxf/dlss5-on-amd-9070xt-porting), [dlss5-image-enhancer-zluda](https://github.com/RedDukeDev/dlss5-image-enhancer-zluda) and its [ZLUDA fork](https://github.com/RedDukeDev/ZLUDA), [dlss5-neural-amd](https://github.com/zmodelerlover/dlss5-neural-amd), and [DLSS5-AMD-Video](https://github.com/eikkapine/DLSS5-AMD-Video). These informed feasibility and performance research. The 2.0.3 AMD package includes the lmxxf runtime and user-supplied 0.39 assets; actual RX9000 inference remains unverified.
 
 </details>
 
@@ -703,7 +704,7 @@ The user supplied `Magpie-DLSS5-AMD-0.39.zip` (SHA256
 `9ea84c665d270cd45e24184729b8272c152485df462a1528539ed778d41849f5`).
 Its NVIDIA-derived model weights are **not** MIT-licensed code. All weights,
 compiled HIP modules and runtime DLLs stay outside source Git; their use in this
-local candidate does not authorize a public release. HIP API license and the
+2.0.3 AMD package follows the user's explicit experimental distribution authorization; open-source code does not relicense these models. HIP API license and the
 runtime MIT notice accompany the local asset directory. No AMD driver DLL is
 copied from that package; an RX 9000 driver must provide `amdhip64_7.dll`.
 Hardware inference, image quality and stability remain unverified on RX 9000.

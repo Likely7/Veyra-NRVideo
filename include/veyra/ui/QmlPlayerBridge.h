@@ -111,6 +111,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString captureDeviceLabel READ captureDeviceLabel NOTIFY captureChanged)
     Q_PROPERTY(bool captureForceSdr READ captureForceSdr WRITE setCaptureForceSdr NOTIFY settingsChanged)
     Q_PROPERTY(bool amdNrGpu READ amdNrGpu CONSTANT)
+    Q_PROPERTY(QVariantMap effectCapabilities READ effectCapabilities NOTIFY fgChoicesChanged)
+    Q_PROPERTY(QVariantList nrRuntimeChoices READ nrRuntimeChoices NOTIFY fgChoicesChanged)
+    Q_PROPERTY(QVariantList srBackendChoices READ srBackendChoices NOTIFY fgChoicesChanged)
     Q_PROPERTY(bool captureFlipVertical READ captureFlipVertical WRITE setCaptureFlipVertical NOTIFY settingsChanged)
     // P4-e: the full capture connection, as the 1.4.4 panel: device details and
     // formats come from asynchronous DirectShow queries (never on the UI thread),
@@ -450,6 +453,10 @@ class QmlPlayerBridge : public QObject {
 
 public:
     bool amdNrGpu() const;
+    QVariantMap effectCapabilities() const;
+    QVariantList nrRuntimeChoices() const;
+    QVariantList srBackendChoices() const;
+    Q_INVOKABLE QVariantMap effectAvailability(const QString& id) const;
     // `engine` must outlive the bridge. `dataDirectory` holds ui-session.v1 and
     // the preset library; empty means the default user data directory.
     QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory = {},
