@@ -11,6 +11,7 @@ Item {
     property int pausedNr: 0
     property int edits: 0
     property int editedNr: 0
+    property bool expectedFg: group === "dlss" || group === "xess" || group === "fsr3" || group === "vfg"
     property double resumePosition: 0
     function require(ok, why) {if(!ok){console.log("PAUSED_UI_FAIL",why,veyra.diagnosticsReport());Qt.exit(3)}}
     function nrCount() {
@@ -33,11 +34,12 @@ Item {
                 probe.require(veyra.setNrLayerParameter(idx,"sizePolicy",1),"native NR")
                 probe.require(veyra.setNrLayerParameter(idx,"temporal",probe.group==="temporal"?1:0),"temporal")
                 if(probe.group==="srnr"){veyra.videoSrQuality=0;veyra.srTargetIndex=2;veyra.srEnabled=true}
+                if(probe.expectedFg){veyra.fgBackendName=probe.group;veyra.fgMultiplier=2;veyra.fgEnabled=true}
                 console.log("PAUSED_UI_CONFIG",JSON.stringify({group:probe.group,layers:veyra.nrLayers,sr:veyra.srEnabled,fg:veyra.fgEnabled}))
                 veyra.openPath(probe.media);probe.stage=1;return
             }
             if(probe.stage===1){
-                if(!veyra.running||veyra.position<5||!veyra.nrActive||veyra.applying)return
+                if(!veyra.running||veyra.position<5||!veyra.nrActive||veyra.applying||veyra.fgActive!==probe.expectedFg)return
                 veyra.togglePlayPause();probe.phaseAt=now;probe.stage=2;return
             }
             if(probe.stage===2){

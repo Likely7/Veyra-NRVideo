@@ -8189,3 +8189,12 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 - nr-paused-ui.py B5c B5c-paused-ui-v4 与 B5c-off B5c-paused-ui-v4-off 各三组真实Qt通过，30秒NR计数和位置不变，20残差编辑中途换模型、恢复播放、暂停seek2秒成功。B单NR19次复用/NR增2，Boff无复用/NR增20；SR与抗闪烁0复用。Windows PDH GPU Engine只记录本轮测试PID，Boff单NR24样本中位2.481%/max2.546%，所以普通暂停整软件GPU接近0门槛未通过，继续优化重复呈现；nvidia-smi整卡14–19%不能当进程GPU。
 - 原始日志/结果/完整截图：E:/项目/Veyra/logs/perf-nr-20261004/{A5c-paused-v1,B5c-paused-v4,B5c-paused-v4-off,B5c-paused-ui-v4,B5c-paused-ui-v4-off}*；comparison JSON同目录。软件节点仅残差缓存定向通过，5c整体及R0未完成。
 - 增加测试/构建串行guard，拒绝其他本轮GPU测试进程，不杀用户程序；目标保持active，不合并/推送/发布。
+
+
+## 2026-10-04 PERF 5c 暂停呈现/Qt动画保留
+
+本节点前存档74a6216/checkpoint/perf-nr-5c-present-before-20261004。build-paused-present-v1、build-paused-present-fixture-v1、build-paused-present-ui-v2均构建exit0，输出在E:/项目/Veyra/build/perf-nr-20261004/B5c，日志同任务logs。候选按生产者fence/帧/view/尺寸/visibility/monitor保留成功暂停flip buffer，保留resize/DPI/device检查；停止暂停性能球每秒600ms动画，数值仍更新。普通播放/导出不去重。
+
+命令：py -3.11 -B scripts/perf/nr-present.py B5c B5c-present-v1：开/关各三轮，300次同帧实际Present1/301，48完整图像SHA一致，debug0/device正常。py -3.11 -B scripts/perf/nr-paused-ui.py B5c B5c-paused-ui-v6 及 B5c-off ...-off：NR/SR/temporal30秒空闲、20次编辑含模型变更、恢复播放、暂停seek全通过；四实际DLSS/XeSS/FSR3/VFG 2X组...-v6-fg也全通过。单NR又跑r2/r3 A(B2a旧QML)/B/B-off，全九轮通过。过程各子进程≤299秒、无桌面点击，不关闭用户应用。
+
+数据：三轮单NR自身PDH最大引擎占用样本中位数再取三轮中位数A2.237185%(2.236872–2.360637)、B0.010999%(0.010828–0.011035)、off2.237174%(2.193295–2.287588)，每轮24样本；下降99.51%。此为进程引擎利用率，不是整卡/实屏刷新率。中间v5仅去重复Present仍2.261%，不算完整通过。残差native三轮10800全输出SHA与89.74%收益沿用74a已归档证据，详见PERF_5C_PAUSED_NR。最终UI EXE bf4952347424f500df45a29ab3f7289742e4ecae188ac66b71805b9743978568。保留5c，R0及余节点继续；无merge/push/Release。

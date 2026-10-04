@@ -27,6 +27,22 @@ v1/v2未产生收益：测试单层使用legacy平铺参数但保留数组，残
 
 `B5c-paused-ui-v4`三配置均通过。静止暂停30.0–30.5秒，真实NR计数不增长、媒体位置不漂；20次残差请求内第10次换模型，单NR计数162→164并记录19次缓存复用，恢复播放164→228，暂停跳转2秒后230。SR组合155→176、抗闪烁161→182，缓存命中均0，维持完整处理。实际GPU解码、公共Bridge、独立profile、无桌面自动点击。
 
-初始真实UI v3与v4未采集进程级GPU计数；整卡nvidia-smi暂停读数14–19%不能归因于本进程。新增只读取测试PID的Windows PDH GPU Engine计数器后补做A/B/B-off。暂停NR空闲与界面/呈现GPU占用分别记录，不据NR计数0宣称整个软件GPU占用0。此节点缓存有收益，最终保留及暂停占用结论在补测后记录；R0全产品回归仍待完成。
+初始真实UI v3与v4未采集进程级GPU计数；整卡nvidia-smi暂停读数14–19%不能归因于本进程。新增只读取测试PID的Windows PDH GPU Engine计数器后补做A/B/B-off。暂停NR空闲与界面/呈现GPU占用分别记录，不据NR计数0宣称整个软件GPU占用0。补测细节见下节；R0全产品回归仍待完成。
 
 计数器依据：[微软PdhGetFormattedCounterArrayW](https://learn.microsoft.com/en-us/windows/win32/api/pdh/nf-pdh-pdhgetformattedcounterarrayw)、[PDH_FMT_COUNTERVALUE](https://learn.microsoft.com/en-us/windows/win32/api/pdh/ns-pdh-pdh_fmt_countervalue)。读取结果只保留本轮测试PID实例，缺失计数器报告unavailable，不用0代替未测。
+
+## 呈现与界面空闲补测
+
+仅靠暂停NR不求值，自身GPU仍约2.3%，不能标验收通过。定位到两条实际开销：Engine每50ms重新Present相同输出；专业页性能球每秒数据变化触发600ms Canvas动画。暂停呈现现在按成功生产者fence、帧身份、slot、view、对比模式/分割、实际client与buffer尺寸、显示/隐藏、显示器判断保留；互动拖动/DPI与尚未落实resize不能命中，设备检查/失败缓存失效保持。仅明确暂停调用启用；普通播放、导出没有去重。暂停性能球仍每秒更新数值，取消数值动画，正常播放保持。
+
+`nr-present.py B5c B5c-present-v1`：真实产品Graph、VideoPresenter及本轮拥有的HWND，启用/关闭各三轮。300次相同暂停调用时实际Present分别1/301次；zoom、compare/split、resize、NR残差生产者变更、隐藏/恢复各迫使正确刷新。每轮八张完整RGBA8图像、对应启用/关闭共48张，全部SHA一致，debug错误0、设备正常。此项不是仅检查函数返回。
+
+真实Qt `B5c-paused-ui-v6` 与同EXE回退 `B5c-paused-ui-v6-off`：单NR、NR+DLSS SR、抗闪烁各一次，每次30秒暂停、稳定区24个PID专属PDH样本、20次含模型变更的残差编辑、恢复播放及暂停跳转全部通过。单NR/超分/抗闪烁进程最大引擎占用的稳定样本中位数：B为0.010828/0.011633/0.010752%，B-off为2.287588/2.318904/2.250025%；优化前A旧EXE+旧QML单NR为2.360637%。这些是进程GPU引擎利用率，不是整卡利用率、视频帧率或实屏刷新率。单NR三轮数据如下。
+
+取消重复Present但保留性能球动画的中间版本v5仍2.261%，没有把它算作完整暂停优化。v6单NR Qt真实frameSwapped每10秒约8–10次，A约1356–1734次；此计数只描述Qt渲染窗口。GPU解码、publicBridge、独立profile，没有桌面自动点击。`B5c-paused-ui-v6-fg` 的实际DLSS/XeSS/FSR3/VFG 2X四组30秒暂停、恢复、跳转均通过，未把后端初始化回退算通过；NR残差复用在这些组合保持关闭。
+
+同EXE关闭开关：`VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE`、`VEYRA_TEST_DISABLE_PAUSED_UI_IDLE`、`VEYRA_TEST_DISABLE_PAUSED_NR_RESIDUAL_REUSE`。产品EXE bf4952347424f500df45a29ab3f7289742e4ecae188ac66b71805b9743978568；原生呈现实验EXE 0184961e015605a919bf1cd6cfb4641d6f5db56ed6ddd49723afe57527478b75。原始证据均在 `E:/项目/Veyra/logs/perf-nr-20261004/` 对应标签目录。
+
+单NR最终三轮（每轮24个稳定样本）GPU最大引擎利用率的中位数再取三轮中位数：A 2.237185%（2.236872–2.360637），B 0.010999%（0.010828–0.011035），同EXE B-off 2.237174%（2.193295–2.287588）。B约为A的0.492%，下降99.51%；这是暂停软件自身GPU引擎占用的变化，不是GPU整卡空闲保证。九轮暂停/残差/模型/恢复/跳转全通过。A为本节点开工前已保留2a的B2a构建及旧QML，EXE b92c47b64a36036a9c708fc55b018512f90c7945606236c7f5aca4b5f213679b；最初全项目A便携包继续封存，未用新QML改写基线。JSON `B5c-paused-ui-v6-three-run-comparison.json`。四个实际FG后端暂停稳定区GPU样本中位数0.009983–0.010625%，各24样本；该四组各一轮，不扩大为三轮长稳。
+
+结论：暂停残差缓存与呈现/性能球空闲优化保留；首次暂停残差刷新和模型变更仍完整NR求值，随后纯残差编辑不求值。只对已测窄范围缓存NR，通用暂停呈现适用于已回归后端。R0仍需验证长期播放、导出及最终完整包，不宣称整个优化方案完成。

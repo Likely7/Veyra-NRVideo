@@ -1280,11 +1280,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 }
                     if(audioStarted)audioPipe.setPaused(true);wasPaused=true;
                     const bool referencesValid=hasOutput&&out.batch.count&&out.batch.frames[out.batch.count-1].lease&&out.batch.frames[out.batch.count-1].lease->referencesValid;
-                    if(hasOutput&&!presenter.present(ctx,ring,graph,out.videoSlot,false,referencesValid,comparisonMode_,comparisonBase_,comparisonSplit_,out.batch.identity,previewView())){if(recoverXessPresentation())continue;status(L"画面呈现失败",true);break;}
+                    if(hasOutput&&!presenter.present(ctx,ring,graph,out.videoSlot,false,referencesValid,comparisonMode_,comparisonBase_,comparisonSplit_,out.batch.identity,previewView(),-1,true)){if(recoverXessPresentation())continue;status(L"画面呈现失败",true);break;}
                     if(hasOutput&&graph.resolveGeneration(out))completeReset(out.batch.identity);
-                    // Paused: the swapchain already holds the frame; re-present
-                    // (present() handles resize and takes the view each call)
-                    // at 50 ms instead of 16 ms unless a parameter refresh is due.
+                    // Poll live view/size changes at 50 ms; unchanged flip
+                    // buffers are retained without commands or another Present.
                     std::this_thread::sleep_for(std::chrono::milliseconds(refreshPausedFrame_?1:50));continue;
                 }
                 if(wasPaused&&!paused_){holdFileAudio();audioRebuffering=false;if(audioStarted)audioPipe.setPaused(false);anchor=Clock::now();anchorMs=out.ptsMs;reset=true;pendingResetCause=pipeline::ResetReason::PauseResume;wasPaused=false;}
