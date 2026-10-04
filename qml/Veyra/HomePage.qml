@@ -261,26 +261,40 @@ VPage {
         // .recent: 692 wide, left-aligned, wrapping; "最近" in --v-t3 then 28px chips
         // with a film/image icon. Present only when there are recent files; a chip
         // whose file is gone is dimmed and does nothing (clicking it cannot open it).
-        Flow {
-            id: recent
+        // Custom: a "清空" action sits at the right edge of this block, so it lines up
+        // with 继续上次's "开始" button above it, and it wears the same primary button.
+        // Anchored Item rather than a layout: the chips' own width is what a layout
+        // would use for its implicit size, and the long file names then widened the
+        // whole column and pushed the button out of line.
+        // It confirms first, because the list is a convenience the user may still want.
+        Item {
+            id: recentBlock
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: srcGrid.width
+            implicitHeight: recent.height
+            Layout.preferredHeight: implicitHeight
             visible: veyra.recentFiles.length > 0
-            spacing: 8
-            Text {
-                height: 28
-                verticalAlignment: Text.AlignVCenter
-                text: qsTr("最近")
-                color: Theme.t3
-                font.family: Theme.fontUi
-                font.pixelSize: 12
-            }
-            Repeater {
-                model: veyra.recentFiles
-                delegate: Rectangle {
-                    id: chip
-                    required property var modelData
-                    readonly property bool isImage: /\.(png|jpe?g|bmp|webp|tiff?)$/i.test(modelData.path)
+            Flow {
+                id: recent
+                anchors.left: parent.left
+                anchors.right: clearRecent.left
+                anchors.rightMargin: 12
+                anchors.top: parent.top
+                spacing: 8
+                Text {
+                    height: 28
+                    verticalAlignment: Text.AlignVCenter
+                    text: qsTr("最近")
+                    color: Theme.t3
+                    font.family: Theme.fontUi
+                    font.pixelSize: 12
+                }
+                Repeater {
+                    model: veyra.recentFiles
+                    delegate: Rectangle {
+                        id: chip
+                        required property var modelData
+                        readonly property bool isImage: /\.(png|jpe?g|bmp|webp|tiff?)$/i.test(modelData.path)
                     width: chipRow.implicitWidth + 22
                     height: 28
                     radius: 99
@@ -313,6 +327,21 @@ VPage {
                     TapHandler { onTapped: if (modelData.exists) veyra.openPath(modelData.path) }
                 }
             }
+            }
+            VButton {
+                id: clearRecent
+                objectName: "home-clear-recent"
+                // Same right inset as the resume card's own row (10), so this button's
+                // right edge lands exactly on 开始's.
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                anchors.top: parent.top
+                text: qsTr("清空")
+                iconName: "trash"
+                primary: true
+                tip: qsTr("只清空这个列表，不会删除文件。")
+                onClicked: clearRecentConfirm.open()
+            }
         }
     }
 
@@ -321,4 +350,18 @@ VPage {
     VRise { target: hello; d: 1 }
     VRise { target: resume; d: 6 }
     VRise { target: recent; d: 7 }
+
+    // Custom: clearing the home page's recent list. It only drops the history (the
+    // files stay on disk), so the question says so, and the accept button repeats
+    // the action word from the button that opened it.
+    VConfirm {
+        id: clearRecentConfirm
+        objectName: "home-clear-recent-confirm"
+        glyph: "film"
+        title: qsTr("清空最近播放记录？")
+        text: qsTr("只清空这个列表，不会删除文件。")
+        acceptText: qsTr("清空")
+        rejectText: qsTr("取消")
+        onAccepted: veyra.clearRecentFiles()
+    }
 }

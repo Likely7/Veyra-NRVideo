@@ -3579,6 +3579,13 @@
    "ja": "接続の編集はノードモードでのみ使います"
   },
   {
+   "zh": "只清空这个列表，不会删除文件。",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "只清空這個列表，不會刪除檔案。",
+   "en": "Only clears this list; no file is deleted.",
+   "ja": "このリストだけを消去します。ファイルは削除されません。"
+  },
+  {
    "zh": "只用 DLSS / XeSS 补帧时：到 NVIDIA App 关闭 Smooth Motion。",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "只用 DLSS / XeSS 補幀時：到 NVIDIA App 關閉 Smooth Motion。",
@@ -8534,6 +8541,13 @@
    "zh-TW": "清空",
    "en": "Clear",
    "ja": "クリア"
+  },
+  {
+   "zh": "清空最近播放记录？",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "清空最近播放記錄？",
+   "en": "Clear the recent list?",
+   "ja": "最近再生した記録を消去しますか？"
   },
   {
    "zh": "清空等待",
