@@ -8,6 +8,8 @@
 
 ## 执行与保留规则
 
+- 2026-10-05用户续推并明确禁止压力测试：剩余节点只做正常负载匹配对照和必要功能/画质回归；不另起竞争程序、不人为满载或制造显存压力。原3a/3b压力要求被覆盖，历史数据保留；自动档在正常不同素材/配置下验收，压力边界不作已验承诺。
+
 - 所有新增 build/tests/logs/tmp/archives/test-packages 均放 `E:/项目/Veyra/` 对应 `perf-nr-20261004` 子目录；固定素材放 `tests/perf-matrix/media`，只创建本轮拥有的文件。
 - 文档对齐已提交 `37bc0c090918566f7ebebc9f5edb24ba60c5f5a3`，标签 `checkpoint/perf-nr-initial-docs-20261004`，完整 bundle 已验证。基线产品源码为起点；测试工具改动独立记录。
 - 每个实验/节点使用 before/candidate/accepted 或 rejected 标签、独立增量 bundle、patch、构建身份、设置、环境、原始日志、结果 JSON 和结论文档。负优化用明确的 revert 提交；不重写历史，不删失败证据。未达到收益或正确性门槛的候选不进保留实现。
