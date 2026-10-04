@@ -4,7 +4,7 @@ import importlib.util,json,os,re,shutil,subprocess,sys,time
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='perf-nr-20261004'
 spec=importlib.util.spec_from_file_location('matrix',ROOT/'scripts/perf/nr-matrix.py');matrix=importlib.util.module_from_spec(spec);spec.loader.exec_module(matrix)
 variant,label,mode=sys.argv[1:4];groups=sys.argv[4:] or ['none4k','nr','nr2','nrsr4k','sr8k']
-assert mode in ('serial','events','async','async-events','interleaved','all')
+assert mode in ('default','serial','events','async','async-events','interleaved','all')
 assert all(g in ('none4k','nr','nr2','sr4k','nrsr4k','sr8k','fg2') for g in groups)
 matrix.assert_gpu_tests_idle();app=BASE/'tests'/TASK/(label+'-app');assert not app.exists()
 shutil.copytree(BASE/'test-packages'/TASK/'Veyra-2.0.3-perf-baseline-A-NVIDIA-win64-portable',app,copy_function=matrix.copy_dependency)
@@ -25,6 +25,9 @@ for group in groups:
    for key in tuple(env):
     if key.upper().startswith('VEYRA_'):env.pop(key)
    env.update(TEMP=str(tmp),TMP=str(tmp))
+   if current=='serial':env['VEYRA_TEST_EXPORT_SERIAL']='1'
+   if current=='events':env['VEYRA_TEST_EXPORT_ASYNC']='0'
+   if current=='async':env['VEYRA_TEST_EXPORT_FENCE_EVENTS']='0'
    if current in ('async','async-events'):env['VEYRA_TEST_EXPORT_ASYNC']='1'
    if current in ('events','async-events'):env['VEYRA_TEST_EXPORT_FENCE_EVENTS']='1'
    command=[str(exe),str(source),str(dest),config,str(frames),str(out)]

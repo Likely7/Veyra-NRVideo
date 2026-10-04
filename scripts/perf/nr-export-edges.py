@@ -10,16 +10,17 @@ folder=BASE/'logs'/TASK/(label+'-summary');folder.mkdir(parents=True,exist_ok=Fa
 payload={str(p.relative_to(app)):matrix.digest(p) for p in app.rglob('*') if p.is_file() and p.suffix.lower() in ('.exe','.dll','.qml')}
 (folder/'artifacts.json').write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')
 active={'VEYRA_TEST_EXPORT_ASYNC':'1','VEYRA_TEST_EXPORT_FENCE_EVENTS':'1'}
+serial={'VEYRA_TEST_EXPORT_SERIAL':'1'}
 hdr=BASE/'tests/video-hdr-20260918/hdr-export.mp4'
-cases=[('single-off','none',1,{},False,None),('single-on','none',1,active,False,None),
- ('nr2-debug-off','nr2',24,{'VEYRA_TEST_EXPORT_DEBUG':'1'},False,None),('nr2-debug-on','nr2',24,{**active,'VEYRA_TEST_EXPORT_DEBUG':'1'},False,None),
- ('nrsr-debug-off','nrsr4k',24,{'VEYRA_TEST_EXPORT_DEBUG':'1'},False,None),('nrsr-debug-on','nrsr4k',24,{**active,'VEYRA_TEST_EXPORT_DEBUG':'1'},False,None),
- ('fg-off','fg2',40,{},False,None),('fg-on','fg2',40,active,False,None),
- ('cancel-off','nrsr4k',24,{},True,None),('cancel-on','nrsr4k',24,active,True,None),
- ('failure-reference','nr',32,{},False,None),
+cases=[('single-off','none',1,serial,False,None),('single-on','none',1,active,False,None),
+ ('nr2-debug-off','nr2',24,{**serial,'VEYRA_TEST_EXPORT_DEBUG':'1'},False,None),('nr2-debug-on','nr2',24,{**active,'VEYRA_TEST_EXPORT_DEBUG':'1'},False,None),
+ ('nrsr-debug-off','nrsr4k',24,{**serial,'VEYRA_TEST_EXPORT_DEBUG':'1'},False,None),('nrsr-debug-on','nrsr4k',24,{**active,'VEYRA_TEST_EXPORT_DEBUG':'1'},False,None),
+ ('fg-off','fg2',40,serial,False,None),('fg-on','fg2',40,active,False,None),
+ ('cancel-off','nrsr4k',24,serial,True,None),('cancel-on','nrsr4k',24,active,True,None),
+ ('failure-reference','nr',32,serial,False,None),
  ('event-create-failure','nr',32,{**active,'VEYRA_TEST_EXPORT_EVENT_CREATE_FAIL':'1'},False,None),
  ('event-register-failure','nr',32,{**active,'VEYRA_TEST_EXPORT_EVENT_REGISTER_FAIL':'1'},False,None),
- ('hdr-off','none',16,{'VEYRA_TEST_EXPORT_DEBUG':'1'},False,hdr),('hdr-on','none',16,{**active,'VEYRA_TEST_EXPORT_DEBUG':'1'},False,hdr)]
+ ('hdr-off','none',16,{**serial,'VEYRA_TEST_EXPORT_DEBUG':'1'},False,hdr),('hdr-on','none',16,{**active,'VEYRA_TEST_EXPORT_DEBUG':'1'},False,hdr)]
 results=[]
 for name,group,frames,flags,cancel,source in cases:
  matrix.assert_gpu_tests_idle();source=source or matrix.SOURCES['M1'];run=label+'-'+name;out=BASE/'logs'/TASK/run;tmp=BASE/'tmp'/TASK/run

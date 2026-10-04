@@ -220,11 +220,17 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         int removeDeviceIndex=-1;
         {wchar_t hook[16]{};if(resumeAttempt==0&&GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_REMOVE_DEVICE_AT",hook,16))removeDeviceIndex=_wtoi(hook);}
         bool deviceLost=false;uint32_t removedReason=0;
-        // Isolated 5b candidates. FG status still requires completed GPU readback;
-        // NVENC receives the existing conversion fence, never an unready pixel read.
-        const bool asyncNvenc=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_ASYNC",nullptr,0)>0&&
-            !options.fg&&encoder->backend()==sink::EncoderBackend::Nvenc&&slowFrameIndex<0;
-        bool fenceEvents=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_FENCE_EVENTS",nullptr,0)>0;
+        // Measured 5b default: bounded NVENC exports without generated-frame readback.
+        // Keep FG/MFT serial; NVENC retains the conversion input fence and its slots.
+        // Explicit test overrides preserve the serial and independent-component controls.
+        auto testFlag=[](const wchar_t* key,bool fallback){
+            wchar_t value[8]{};const DWORD n=GetEnvironmentVariableW(key,value,8);
+            return n&&n<8?_wtoi(value)!=0:fallback;
+        };
+        const bool serialOverride=testFlag(L"VEYRA_TEST_EXPORT_SERIAL",false);
+        const bool eligibleNvenc=!options.fg&&encoder->backend()==sink::EncoderBackend::Nvenc&&slowFrameIndex<0;
+        const bool asyncNvenc=!serialOverride&&eligibleNvenc&&testFlag(L"VEYRA_TEST_EXPORT_ASYNC",eligibleNvenc);
+        bool fenceEvents=!serialOverride&&testFlag(L"VEYRA_TEST_EXPORT_FENCE_EVENTS",eligibleNvenc);
         if(fenceEvents){
             const bool injected=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EVENT_CREATE_FAIL",nullptr,0)>0;
             if(!injected)completionEvent.value=CreateEventW(nullptr,FALSE,FALSE,nullptr);
