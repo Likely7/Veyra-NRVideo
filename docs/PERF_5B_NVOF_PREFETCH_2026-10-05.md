@@ -13,3 +13,7 @@
 候选按上述结构实现，`VEYRA_TEST_EXPORT_NVOF_PREFETCH=1`才创建辅助图；主图消费导入快照时维持GPU侧fence依赖，生产默认无快照/额外队列。准备过程复用实际EnhanceGraph，不复制颜色/光流算法。主图计数另记prefetchedFlowCount，辅助图实际NVOF execute仍有日志，不冒充主图常规execute。关闭辅助图先等各快照consumer，再drain/注销，原Graph reset仍按自己的真实luma/PTS分析并与快照描述匹配。下一步编译和真实输出/正常耗时证据；尚未声明通过。
 
 build-nvof-prefetch-v1失败，FlowPrefetch初始化误写不存在的nrLayers成员（正确并行数组为nrLayersExtent/Model等）；删除多余访问后进行有据的第二次构建，原失败日志保留。不将编译失败当成运行时/硬件失败。
+
+v2构建成功；B5b-prefetch-smoke-v1七个真实debug导出通过，单/双NR、NR+SR4K整文件SHA各自同off，取消清理通过，debug0/removed0；每个24帧组实际导入23个flow，原NVOF执行0，辅助图确有23次NVOF执行。raw目录同任务logs。此小样本的处理计时包含辅助图创建，尚不能用于稳态提速结论：下一构建将计时起点放在辅助图创建之后，整次导出仍包含创建。没有改写旧数据。
+
+追加独立trace开关，只在诊断组记录真实GPU Flow/NR/SR timestamp，按每个队列GetClockCalibration映射到QPC并保留调用耗时界限，禁止用裸跨队列计数相同直接证明重叠。依据[微软GetClockCalibration文档](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12commandqueue-getclockcalibration)；正常性能三轮trace关闭，以免日志干扰。最终是否保留仍需整次/稳态和额外显存的收益风险比较。
