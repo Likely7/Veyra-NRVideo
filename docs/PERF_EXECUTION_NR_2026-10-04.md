@@ -32,7 +32,7 @@
 | 5a | 黑边检测与有效区域处理 | pending | 防暗场误裁，先测准确性与重建收益 |
 | 3a | 进程GPU调度优先级 | in-progress | 九组交错Normal/High/Realtime，本轮三NR竞争Graph，Set/Get/P95/P99及对方吞吐；PERF_3A_GPU_PRIORITY |
 | 2a | 跨重建保留NGX核心 | retained-pending-R0 | v2三轮A/B/B-off完整输出0差异；暖创建减少75.83/71.23/64.58/72.04%；真实UI及SDK拒绝路径通过；导出待R0 |
-| 2c | 最近配置实例缓存 | pending | 有界预算/复用reset/压力回退 |
+| 2c | 最近配置实例缓存 | in-progress | 单NR↔全关严格key候选，有界显存/唯一adapter/历史reset，native50次与Qt压力待验；PERF_2C_RECENT_CACHE |
 | 2d | 空闲预热 | pending | 首帧收益与开关关闭时显存 |
 | 2b | 后台建图与帧边界切换 | pending | 取决于E2，不移除必要同步 |
 | 3b | NR自动内部尺寸 | pending | 取决于E1、真实预算/画质证据 |

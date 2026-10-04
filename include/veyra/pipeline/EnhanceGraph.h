@@ -408,6 +408,11 @@ public:
     // LUT the ingest shader samples. Without a LUT the strength stays 0.
     bool setColorLut(const float* rgb,unsigned size,unsigned instance=0);
     bool createViews();
+    // Re-activating an inactive graph must seed a new full paused evaluation;
+    // caller still passes reset=true to reset all temporal histories.
+    void invalidatePausedResidualCache() noexcept {
+        pausedNrCacheValid_=pausedNrResidualOnly_=false;pausedNrFrame_=nullptr;pausedNrSettings_.reset();
+    }
 
     struct FrameOutputs {
         FrameBatch batch;
