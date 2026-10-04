@@ -86,7 +86,7 @@ struct Feature {
         uint64_t r=0;uint32_t e=0;const auto start=nowMs();
         const bool safe=session.adapter.snippetCreateFeature(list,params,&handle,r,e);
         const bool ok=ngxOK(safe,r,e,"Create")&&handle;
-        const bool submitted=ring.submitAndSignal(slot)&&ring.waitIdle();
+        const bool submitted=ok?(ring.submitAndSignal(slot)&&ring.waitIdle()):ring.discardRecording();
         std::printf("CREATE width=%u height=%u cpuWithWaitMs=%.6f pass=%d\n",w,h,nowMs()-start,ok&&submitted);
         return ok&&submitted;
     }
@@ -140,6 +140,7 @@ struct Feature {
         states.transition(list,output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         uint64_t r=0;uint32_t e=0;const bool safe=session.adapter.snippetEvaluateFeature(list,handle,params,r,e);
         const bool ok=ngxOK(safe,r,e,"Evaluate");
+        if(!ok){ring.discardRecording();states.set(output.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);return false;}
         states.uavBarrier(list,output.Get());states.transition(list,output.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         return ring.submitAndSignal(slot)&&ring.waitIdle()&&ok;
     }
