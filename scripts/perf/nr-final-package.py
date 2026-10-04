@@ -8,12 +8,15 @@ import importlib.util, json, os, re, shutil, subprocess, sys, zipfile
 
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='perf-nr-20261004'
 spec=importlib.util.spec_from_file_location('matrix',ROOT/'scripts/perf/nr-matrix.py');matrix=importlib.util.module_from_spec(spec);spec.loader.exec_module(matrix)
-variant,label=sys.argv[1:3]
-assert label.replace('-','').isalnum()
+variant,label,exit_label=sys.argv[1:4]
+assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]*',label) and '..' not in label
+assert exit_label.replace('-','').isalnum()
 matrix.assert_gpu_tests_idle()
 subprocess.run([sys.executable,'-B',str(ROOT/'scripts/perf/nr-control.py'),'guard'],check=True)
 assert not subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain=v1']).strip(), 'Commit the tested source first'
 head=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD']).decode().strip()
+product_head=subprocess.check_output(['git','-C',str(ROOT),'log','-1','--format=%H','--',
+ 'src','include','apps','qml','shaders','CMakeLists.txt']).decode().strip()
 parent=BASE/'test-packages'/TASK
 package=parent/('Veyra-'+label+'-NVIDIA-win64-portable');assert not package.exists()
 source=BASE/'test-packages'/TASK/'Veyra-2.0.3-perf-baseline-A-NVIDIA-win64-portable'
@@ -21,7 +24,10 @@ shutil.copytree(source,package,copy_function=matrix.copy_dependency,
  ignore=shutil.ignore_patterns('*.log','logs','user-data*','*.dmp','*tests.exe','qml-tests','QtTest','Qt6Test.dll','Qt6QuickTest.dll','qoffscreen.dll'))
 build=BASE/'build'/TASK/variant
 shutil.copy2(build/'veyra_qml_ui.exe',package/'veyra_qml_ui.exe')
-tested=json.loads((BASE/'logs'/TASK/'R0-close-fixed-v1-summary/artifacts.json').read_text(encoding='utf-8'))
+exit_evidence=BASE/'logs'/TASK/(exit_label+'-summary')
+exit_summary=json.loads((exit_evidence/'summary.json').read_text(encoding='utf-8'))
+assert exit_summary['passed'] and len(exit_summary['runs'])==7 and all(row['passed'] for row in exit_summary['runs'])
+tested=json.loads((exit_evidence/'artifacts.json').read_text(encoding='utf-8'))
 assert matrix.digest(package/'veyra_qml_ui.exe')==tested['veyra_qml_ui.exe'], 'Package executable differs from exit regression'
 shutil.copytree(ROOT/'qml',package/'qml',dirs_exist_ok=True)
 build_shaders=build/'shaders'
@@ -29,7 +35,9 @@ if build_shaders.is_dir():shutil.copytree(build_shaders,package/'shaders',dirs_e
 assert not any(p.name.startswith('veyra_') and p.name.endswith('_tests.exe') for p in package.rglob('*.exe'))
 assert not any(value in (package/'qml/Veyra/Main.qml').read_text(encoding='utf-8') for value in ('PerfProbe.qml','CloseProbe.qml','ObsProbe.qml','test-loader'))
 assert not (package/'runtime_local/amd/nr').exists()
-deps={p.relative_to(source).as_posix():matrix.digest(p) for p in source.rglob('*.dll')}
+immutable_suffixes={'.dll','.hsaco','.ptx','.onnx','.f16','.bin','.cubin'}
+deps={p.relative_to(source).as_posix():matrix.digest(p) for p in source.rglob('*')
+ if p.is_file() and p.suffix.lower() in immutable_suffixes}
 assert all(matrix.digest(package/name)==sha for name,sha in deps.items() if (package/name).is_file())
 for path in ROOT.glob('docs/PERF_*.md'):
  dest=package/'docs'/path.name;dest.parent.mkdir(exist_ok=True);shutil.copy2(path,dest)
@@ -39,9 +47,11 @@ cache=(build/'CMakeCache.txt').read_text(encoding='utf-8')
 display=re.search(r'^VEYRA_DISPLAY_VERSION:STRING=(.+)$',cache,re.M).group(1)
 manifest=json.loads((package/'package-manifest.json').read_text(encoding='utf-8-sig'))
 manifest.update(candidate=label,displayVersion=display,baseCommit='8cdc612120cbf23ba116a33c3cb0a53e2043f718',
- productCodeCommit='04a0fc3e86f0fa200baa2581818c6e6bd9aff0ab',sourceArchiveCommit=head,worktreeDirty=False,
+ productCodeCommit=product_head,sourceArchiveCommit=head,worktreeDirty=False,
  releaseReady=False,localOnly=True,gpuPackage='NVIDIA',sourceZipSha256=matrix.digest(source_zip),
  validation='RTX5070/616.56 normal-load candidate; other GPUs, real consoles/capture and physical display latency unverified')
+manifest['exitRegressionEvidence']=str(exit_evidence)
+manifest['unchangedDependencyFiles']=len(deps)
 manifest['correspondingSource']['application']='../'+source_zip.name
 manifest['correspondingSource']['displayVersionOverride']='-DVEYRA_DISPLAY_VERSION='+display
 manifest['files']=[{'path':p.relative_to(package).as_posix(),'size':p.stat().st_size,'sha256':matrix.digest(p)}
