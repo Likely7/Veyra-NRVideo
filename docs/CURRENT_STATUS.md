@@ -4,7 +4,7 @@
 
 隔离分支 codex/rtss-restart-loop-20261004：查明并停止Agent旧测试遗漏的RTSS加载器；软件判活增加RTSS.exe存活条件，过滤孤立hook/残留映射。接受兼容重启携带本次启动意图，避免重复弹窗；用户关闭/强制渲染器/OBS选择保持。
 最终构建成功，真实用户安装RTSS7.3.5.28314，11启动/重启+33参数组合通过，OSD/NR/4K超分/四类补帧/暂停seek/全屏退窗实际验证。RTSS原配置逐字节恢复，测试进程及子加载器零遗留。此前RTSS7.3.7记录已纠正。
-RTX5070/616.56短测；VFG8High实时播放有调度降档，不能保证240fps。未新增AMD/OBS捕获/Xbox长稳验收。完整本地NVIDIA候选正在封存，未合main/推送/改远端2.0.3。证据和失败修正见WORKLOG与RTSS_RESTART_LOOP_PLAN_2026-10-04.md。
+RTX5070/616.56短测；VFG8High实时播放有调度降档，不能保证240fps。未新增AMD/OBS捕获/Xbox长稳验收。完整本地NVIDIA候选已封存，1537载荷/95PE依赖审计、对应Veyra源码ZIP与DELIVERY索引通过，产品commit c9d946e。未合main/推送/改远端2.0.3。证据和失败修正见WORKLOG与RTSS_RESTART_LOOP_PLAN_2026-10-04.md。
 
 ## 2026-10-04 2.0.3 已正式发布
 

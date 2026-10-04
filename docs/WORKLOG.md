@@ -15,6 +15,11 @@
 - installed-stress-v4最终恢复原Config/Global逐字节，SHA46e32581…c83/1e44c576…7ca；删除的只是本轮创建的Veyra测试profile。最终matrix-v3也恢复原配置，主RTSS和全部子加载器已退出、remainingOwnedHelpers=0，不停用户其它应用。测试TEMP/TMP仅子进程；全部新产物E:/项目/Veyra/{archives,build,deps,tests,logs,tmp,test-packages}/rtss-restart-loop-20261004。
 - 正在封存本地完整NVIDIA候选、独立逐文件manifest、对应Veyra源码ZIP/patch与交付索引，运行组件全部沿用发布原字节。无merge/push/Release/关机；本轮保存后另记包审计回执。
 
+
+- 封存回执：产品/测试本地commit c9d946e612f7d886714a42dc0269bbe0a4a0428a；`py -3.11 -B scripts/acceptance/rtss-restart-deliver.py` exit0。完整候选1537载荷/1,062,059,917 bytes、95PE依赖闭包、48运行组件来源与字节核验通过；原正式1535载荷全SHA保持，仅新目录中EXE/Main.qml/SettingsPage.qml与版本纠正报告改变，另加修复说明/方案。运行包无测试Loader/媒体/配置/日志。候选路径 E:/项目/Veyra/test-packages/rtss-restart-loop-20261004/Veyra-2.0.3-rtssfix-NVIDIA-win64-portable。
+- 对应Veyra源码ZIP已实际生成并逐记录SHA回读，源码commit c9d946e；SHAe8a80c8fba3727186ab515057eeb558cf86548cf2068e5c434d684ac89cc02b8。manifest SHA1af275e6065ba9be12ddaa7651931c079feaa102e73dc626db42577f9b1961a0，patch在archives/task/repair-source.patch，DELIVERY.json记录完整索引。依赖源码/运行组件沿用原2.0.3；localOnly=true、releaseReady=false，无新公开发布。
+- 收尾纠正隔离断言：原包主veyra-qml.log后来在12:44–12:45又追加两次会话，最初2341字节前缀完整、当前6700字节；其余两现场日志byte-identical。当前用户overlayCompat已为auto，最初存档off只是当时状态，不能强行恢复旧值或称所有日志逐字节未变。最初三日志SHA存档均完整；本轮矩阵/参数脚本使用独立profile，保留原目录现状。final-isolation.json如实记录追加4359字节/当前auto，RTSS原Config/Global逐字节恢复，RTSS/加载器/Veyra进程均0，RTSS原二进制不变、main仍354b1c6。
+- 必要首次失败与诊断证据留在本轮E盘，未清理用户文件或重复此前被拒的旧Release目录清理。后续只保存本轮文档回执与Git bundle/tag，产品源码和已测试EXE保持；不再扩大测试。
 ## 2026-10-04 2.0.3 正式发布完成
 
 - 当前用户授权的几项修复、AMD NR、VFG全档位与厂商分包已合入main，发布代码commit `f82f6499ff0db9c36953bcafb752b9be2d7fca4d` / tag `v2.0.3`，普通快进push至nrvideo。桌面64项status与258615-byte working patch逐字节保持；HDR/Dolby PR13/14仍OPEN、未合并。仅本条之后发布记录改变文档，不改变已测产品源树和tag。

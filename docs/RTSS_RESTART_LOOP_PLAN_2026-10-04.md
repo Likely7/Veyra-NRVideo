@@ -52,4 +52,4 @@
 
 本机RTX5070/616.56：VFG8High 2K30有实时调度降档，瞬时提交约30–31fps；VFG4在限60时也降档。软件稳定短测不代表稳定240fps、实屏刷新率/延迟、全部驱动或画质。未新增OBS捕获、AMD或Xbox实机测试。
 
-RTSS Config/Global逐字节恢复，SHA256 46e3258195f5784f99f152dfe7e1405f614d7b42f6609d95993cc19396b1ac83 / 1e44c57669402f4c49e519c8322613170b72f3ddd519f8f1a495d9cc828ee7ca，测试profile删除，主RTSS和加载器零遗留。原用户包overlayCompat=off及现场日志保持。最终包/源码/manifest将由rtss-restart-deliver.py生成并再次独立审计；不公开发布。
+RTSS Config/Global逐字节恢复，SHA256 46e3258195f5784f99f152dfe7e1405f614d7b42f6609d95993cc19396b1ac83 / 1e44c57669402f4c49e519c8322613170b72f3ddd519f8f1a495d9cc828ee7ca，测试profile删除，主RTSS和加载器零遗留。最初现场配置为off，但原包在12:44–12:45又运行两次并切为auto；保留当前值，不能回写最初off。主日志增加4359字节，最初2341字节前缀完整且三份原日志已完整存档，其余两日志byte-identical。最终本地完整NVIDIA包/源码/manifest已由rtss-restart-deliver.py生成并独立审计通过：1537载荷、95PE、48运行组件，产品commit c9d946e；索引在test-packages/task/DELIVERY.json。仅本地，不公开发布。
