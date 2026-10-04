@@ -17,3 +17,7 @@ build-export-baseline-v1 UI/probe构建成功，编译产品源码86e0458；只�
 串行总耗时三轮中位约普通4K2.484s、1080单NR4.306s、双NR4.544s、NR+SR4K6.341s、4K→8K的SR4.400s。除最后60帧，其余120帧。包含创建的总耗时和排除创建的pipeline计时必须分开，前者是实际用户等待。
 
 观察到多个配置pipeline每源帧约15.8ms、NR+SR4K约31.4ms，completionWait占比很高。当前等待是Sleep(1)轮询，尚未测其真实休眠时长，不能直接断言系统timer根因。候选将把fence事件等待和两帧在途作为独立开关/组，避免混淆等待精度与跨帧并行的收益。
+
+基线完整软件解码15/15、1620帧，三轮A-A全图/PTS/尺寸/轨道/时长完全一致；核实SR8K实际7680×4320，NR+SR实际3840×2160。review在E:/项目/Veyra/logs/perf-nr-20261004/B5b-serial-v2-decoded-review.json，framemd5每帧覆盖完整重建图。后续复用这些不可变源与已核验hash，避免无依据重复解码。
+
+候选实现：每个pending持有完整FrameOutputs/lease与NVENC转换consumerFence，最多两帧；在第3帧进入Graph前确认最旧producer+consumer完成并释放lease，末尾全部收齐再encoder.finish。Graph上传/allocator和NVENC4槽依赖不变。fence事件仅同一fence对象上的值取max，FG status仍完成后resolve；50ms有界wait、250ms健康检查和30s超时保留，事件注册失败记HRESULT并回退轮询。两个测试ENV分别启用，默认关闭，未测不标产品通过。

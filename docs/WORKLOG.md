@@ -8300,3 +8300,5 @@ B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0�
 5b build-export-baseline-v1构建UI/实际导出probe成功（21步）；基线EXE编译源码86e0458。serial-v1驱动启动前错误调用不存在matrix.gpu，未启动导出；改实际函数gpu_query，脚本HEAD字段明确为driverSourceHead而不是冒充编译HEAD。原staging/空运行目录保留，后续用serial-v2新标签；与当前产品源码diff仅脚本/本条文档。
 
 5b serial-v2五组各三轮15/15实际完成，最终帧数/encoder drain通过，payload SHA全同。总耗时中位普通4K2.484s、单NR4.306s、双NR4.544s、NR+SR4K6.341s、SR8K4.400s。pipeline多组15.8ms/帧与Sleep(1)轮询有关联但根因待验证；下一候选独立测fence事件、两帧在途和组合，不能将两者混算。原全部导出/日志及基线EXE在B5b-serial-v2对应E盘目录。新增导出后全decoded frame/PTS/mux核对工具，当前先执行A-A。
+
+5b基线A-A完整1620 decoded帧及PTS/尺寸/轨道/时长15/15全同，8K实为7680×4320，收据B5b-serial-v2-decoded-review.json。新增默认关闭候选：两帧pending lease/producer/consumer fence严格有界、复用前GPU完成、NVENC独立inputFence；独立fence事件等待、失败回轮询、取消/健康/30秒保留。源码审查修正std::move(out)之后取real.lease的潜在空指针，改先保存consumerFence再move，未构建/执行有缺陷版本。两个机制分组计时，尚未标收益。

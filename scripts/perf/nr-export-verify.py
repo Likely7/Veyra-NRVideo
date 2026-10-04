@@ -10,12 +10,19 @@ for label in labels:
  for run in summary['runs']:
   matrix.assert_gpu_tests_idle();out=BASE/'logs'/TASK/run['name'];source=Path(run['command'][2]);assert matrix.digest(source)==run['outputSha256']
   print('VERIFY',run['name'],flush=True);env=os.environ.copy();env.update(TEMP=str(BASE/'tmp'/TASK/run['name']),TMP=str(BASE/'tmp'/TASK/run['name']))
-  metadata=subprocess.run([ffprobe,'-v','error','-count_frames','-show_streams','-show_format','-of','json',str(source)],capture_output=True,env=env,timeout=180,check=True)
-  (out/'ffprobe.json').write_bytes(metadata.stdout);data=json.loads(metadata.stdout)
+  metadataFile=out/'ffprobe.json'
+  if not metadataFile.exists():
+   metadata=subprocess.run([ffprobe,'-v','error','-count_frames','-show_streams','-show_format','-of','json',str(source)],capture_output=True,env=env,timeout=180,check=True)
+   metadataFile.write_bytes(metadata.stdout)
+  data=json.loads(metadataFile.read_bytes())
   video=next(s for s in data['streams'] if s['codec_type']=='video');assert int(video['nb_read_frames'])==int(run['metrics']['encoded']),run['name']
-  hashfile=out/'decoded.framemd5';assert not hashfile.exists()
-  with (out/'decode-console.log').open('xb') as stream:
-   subprocess.run([ffmpeg,'-v','error','-threads','2','-i',str(source),'-map','0:v:0','-fps_mode','passthrough','-f','framemd5',str(hashfile)],stdout=stream,stderr=subprocess.STDOUT,env=env,timeout=180,check=True)
+  hashfile=out/'decoded.framemd5'
+  if hashfile.exists():
+   old=json.loads((BASE/'logs'/TASK/(label+'-decoded-review.json')).read_text(encoding='utf-8'))
+   receipt=next(r for r in old['runs'] if r['name']==run['name']);assert matrix.digest(hashfile)==receipt['framemd5Sha256']
+  else:
+   with (out/'decode-console.log').open('xb') as stream:
+    subprocess.run([ffmpeg,'-v','error','-threads','2','-i',str(source),'-map','0:v:0','-fps_mode','passthrough','-f','framemd5',str(hashfile)],stdout=stream,stderr=subprocess.STDOUT,env=env,timeout=180,check=True)
   hashes=[s for s in hashfile.read_text().splitlines() if s and not s.startswith('#')];assert len(hashes)==int(run['metrics']['encoded'])
   signature={'codec':video['codec_name'],'width':video['width'],'height':video['height'],'rate':video['avg_frame_rate'],'timeBase':video['time_base'],
    'audio':[{k:s.get(k) for k in ('codec_name','channels','sample_rate','start_time','duration')} for s in data['streams'] if s['codec_type']=='audio'],
