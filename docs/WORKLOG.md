@@ -1,5 +1,9 @@
 # Veyra 工作记录
 
+## 2026-10-05 用户授权正常负载匹配复测
+
+“测一波看看”：先封存before5782948，再准备nr-normal-load-compare.py。确认压力构建封存app-B2d EXE97dbccb…与旧receipt一致；当前build/B2d为重新链接的2e8d633…，明确拒绝混用。A封存app-A为b7081f…，M1/F95原字节、B产品QML与当前源码除测试Loader Main.qml外一致；无Veyra进程、空闲GPU快照2%/487MHz。六组A/B交错、50秒、同设置普通队列，不启动压力进程；详细方法见PERF_3C_NORMAL_LOAD_2026-10-05。准备完存档后运行，结果待。
+
 ## 2026-10-04 用户追问NR高耗时：拉出既有数据
 
 复核队列十二轮原始summary/player-timing，NR稳态每轮中位11.328–11.560ms，全部日志NR滚动P95最大11.972ms；原基线S4无自有竞争进程为7.188–7.212ms。明确本轮另跑自有三NR压力进程，竞争图完成约13–16/s；并非匹配负载的A/B，未排除源码回归。源码核对：公共Nr计时槽每层覆盖，仅保留最后一层；enhancementProcessingMs合并每层/其他增强跨度去重且日志输出滚动mean，纠正PERF_3C表头误写P95。27行派生CSV写入E:/项目/Veyra/logs/perf-nr-20261004/B3c-present-priority-v1-NR-readout.csv，既有JSON/log不变，缺失指标留空；无新GPU测试或产品修改。详PERF_3C_QUEUES NR耗时复核，下一轮先补同EXE无竞争/有竞争匹配对照再判回归。
