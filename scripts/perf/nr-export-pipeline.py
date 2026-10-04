@@ -27,18 +27,18 @@ for group in groups:
    env.update(TEMP=str(tmp),TMP=str(tmp))
    if current=='async':env['VEYRA_TEST_EXPORT_ASYNC']='1'
    command=[str(exe),str(source),str(dest),config,str(frames),str(out)]
-   before=matrix.gpu();print('START',name,flush=True);start=time.monotonic()
+   before=matrix.gpu_query();print('START',name,flush=True);start=time.monotonic()
    with (out/'console.log').open('xb') as stream:
     try:rc=subprocess.run(command,cwd=app,env=env,stdout=stream,stderr=subprocess.STDOUT,timeout=250).returncode
     except subprocess.TimeoutExpired:rc=124
-   elapsed=time.monotonic()-start;after=matrix.gpu()
+   elapsed=time.monotonic()-start;after=matrix.gpu_query()
    text=(out/'console.log').read_text(encoding='utf-8',errors='replace');line=next((s for s in text.splitlines() if s.startswith('EXPORT_PIPELINE_RESULT ')),'')
    metrics={k:float(v) for k,v in re.findall(r'(\w+)=(-?[\d.]+)',line)};log=(out/'engine.log').read_text(encoding='utf-8',errors='replace') if (out/'engine.log').exists() else ''
    pipeline=[s for s in log.splitlines() if '[export-pipeline]' in s];stages=[s for s in log.splitlines() if '[graph-contract]' in s or '[resolution]' in s or '[export-counts]' in s]
    result={'name':name,'group':group,'mode':current,'repeat':repeat,'command':command,'exitCode':rc,'metrics':metrics,'wallSeconds':elapsed,'beforeGpu':before,'afterGpu':after,
     'pipeline':pipeline,'stages':stages,'exeSha256':matrix.digest(exe),'runtimeSha256':matrix.digest(app/'runtime/experimental/nvngx_dlssnr.dll'),
     'sourceSha256':matrix.digest(source),'outputSha256':matrix.digest(dest) if dest.exists() else None,
-    'sourceHead':subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),
+    'driverSourceHead':subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),
     'passed':rc==0 and metrics.get('ok')==1 and metrics.get('source')==frames and metrics.get('encoded')==frames*(2 if group=='fg2' else 1) and bool(pipeline),
     'extraGpuLoad':False,'note':'Normal export includes enhancement and encoder drain; no artificial GPU load or memory pressure.'}
    (out/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');results.append(result)

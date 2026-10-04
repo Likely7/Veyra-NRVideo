@@ -8296,3 +8296,5 @@ B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0�
 8dac9ec明确revert bd4c2ef产品和已退役native入口，冲突仅本轮新增文档/probe，保留当前完整WORKLOG/4a证据、删除退役fixture；Graph/header/CMake/notices与cefbaec逐文件diff空，存档checkpoint/perf-nr-4a-low-chain-rejected-20261004/bundle verify通过。README双语与CURRENT_STATUS更新真实进度，旧日期条目保留作历史。
 
 5b方案PERF_5B_CROSS_FRAME_2026-10-05.md。新增生产exportVideo定向probe与普通导出矩阵、只加completionWait/pipeline最终drain计时，不改串行语义；先测基线再实现默认关闭候选。不做GPU竞争/压力，不将去掉CPU等待说成已经重叠NVOF(N+1)。本轮所有新输出仍E:/项目/Veyra对应build/tests/logs/tmp/archive。
+
+5b build-export-baseline-v1构建UI/实际导出probe成功（21步）；基线EXE编译源码86e0458。serial-v1驱动启动前错误调用不存在matrix.gpu，未启动导出；改实际函数gpu_query，脚本HEAD字段明确为driverSourceHead而不是冒充编译HEAD。原staging/空运行目录保留，后续用serial-v2新标签；与当前产品源码diff仅脚本/本条文档。
