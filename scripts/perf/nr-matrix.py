@@ -46,6 +46,20 @@ def gpu_query():
     values = [v.strip() for v in p.stdout.strip().split(',')]
     return dict(zip(('name','driver','gpuPercent','memoryMiB','memoryTotalMiB','graphicsMHz','memoryMHz','powerW'), values))
 
+def assert_gpu_tests_idle():
+    # Timing must never overlap another owned GPU test. A future competition
+    # test explicitly exempts only its own load process at its call site.
+    prefix=str(BASE/'tests'/TASK).replace('\\','/').lower()+'/'
+    active=[]
+    for proc in psutil.process_iter(['pid','name','exe']):
+        try:
+            exe=(proc.info['exe'] or '').replace('\\','/').lower()
+            if exe.startswith(prefix) and (proc.info['name'] or '').lower().startswith('veyra_'):
+                active.append({'pid':proc.pid,'exe':exe})
+        except psutil.Error:
+            continue
+    assert not active, f'Another owned GPU test is running: {active}'
+
 def stage(variant):
     path = BASE / 'tests' / TASK / ('app-' + variant)
     if path.exists():
@@ -68,6 +82,7 @@ def stage(variant):
     return path
 
 def run(variant, material, setting, label, seconds):
+    assert_gpu_tests_idle()
     subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/perf/nr-control.py'), 'guard'], check=True)
     app = stage(variant)
     media = SOURCES.get(material, BASE / 'tests/perf-matrix/media' / (material + '.mkv'))

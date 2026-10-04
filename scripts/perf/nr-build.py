@@ -1,12 +1,16 @@
 """Fresh/incremental production builds with the audited 2.0.3 dependencies."""
 from pathlib import Path
 import os
+import importlib.util
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = Path('E:/项目/Veyra')
 TASK = 'perf-nr-20261004'
+spec=importlib.util.spec_from_file_location('matrix',ROOT/'scripts/perf/nr-matrix.py')
+matrix=importlib.util.module_from_spec(spec);spec.loader.exec_module(matrix)
+matrix.assert_gpu_tests_idle()
 variant, label = sys.argv[1:3]
 assert variant.replace('-', '').isalnum() and label.replace('-', '').isalnum()
 BUILD = BASE / 'build' / TASK / variant

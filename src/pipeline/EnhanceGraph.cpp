@@ -1796,13 +1796,15 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // frame, after one complete reset evaluation under this configuration.
     const bool pausedEligible=pausedResidualRefresh&&reset&&context_.adapter().isNvidia&&nrEnabled_&&nrInstances_.size()==1&&
         !nrInstances_[0]->temporalEnabled&&!nrInstances_[0]->stabilised&&!lmxxfNr_&&
-        !srEnabled_&&!fgEnabled_&&!desc_.videoHdr.enabled&&!desc_.hdrWorking()&&
+        desc_.nrRuntime==engine::NrRuntime::Original&&!desc_.enableSr&&!desc_.enableFg&&
+        !srEnabled_&&!fgEnabled_&&!desc_.videoHdr.enabled&&!desc_.hdrInput&&!desc_.hdrOutput&&
         !colorGradeActive()&&!tailColorActiveCount_&&!preNrColorActiveCount_&&
         !preSrColorActiveCount_&&!interNrColorActiveCount_&&desc_.nrHoldStrength==0&&
         (!hardwareSurface||!hardwareSurface->present())&&
         !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_NR_RESIDUAL_REUSE",nullptr,0);
     const bool reusePausedNr=pausedEligible&&pausedNrCacheValid_&&pausedNrResidualOnly_&&
         frame==pausedNrFrame_&&sourceFrameId==pausedNrSourceId_&&ptsMs==pausedNrPts_;
+    if(pausedResidualRefresh&&realFrameIndex_<3)log::info("paused-nr-cache",std::format("event=eligibility eligible={} valid={} residualOnly={} sameFrame={} sameId={} samePts={} layers={} temporal={} stabilised={} sr={} fg={} color={} hdr={} hold={} applied={}",pausedEligible,pausedNrCacheValid_,pausedNrResidualOnly_,frame==pausedNrFrame_,sourceFrameId==pausedNrSourceId_,ptsMs==pausedNrPts_,nrInstances_.size(),nrInstances_.empty()?false:nrInstances_[0]->temporalEnabled,nrInstances_.empty()?false:nrInstances_[0]->stabilised,srEnabled_,fgEnabled_,colorGradeActive(),desc_.hdrWorking(),desc_.nrHoldStrength,bool(lastAppliedSettings_)));
     pausedNrCacheValid_=false; // Every failure path remains an invalid cache.
     diagnostics::CpuStallTrace cpuTrace("graph-cpu-stall",sourceFrameId,30.0);
     failedBackend_=engine::FailedBackend::Infrastructure;
@@ -3001,7 +3003,10 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(pausedNrSettings_){
         auto residualEdit=*pausedNrSettings_;residualEdit.revision=s.revision;
         residualEdit.residual=s.residual;
-        for(unsigned i=0;i<residualEdit.nrLayerCount;++i)residualEdit.nrLayers[i].residual=s.nrLayers[i].residual;
+        // Single-layer settings may use the flat legacy slot while preserving
+        // the array for later activation. Residual-only edits of those stored
+        // slots are also residual edits, never a model/topology change.
+        for(unsigned i=0;i<engine::kMaxNrInstances;++i)residualEdit.nrLayers[i].residual=s.nrLayers[i].residual;
         pausedNrResidualOnly_=residualEdit==s;
     }
     if(!pausedNrResidualOnly_)pausedNrCacheValid_=false;

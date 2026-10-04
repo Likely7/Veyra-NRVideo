@@ -8180,3 +8180,12 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 - 精确GPU比较仅测试：1080p变化CPU总路径三轮中位195.9us、4K306.7us，超过0.1ms门槛；shader自身9.1/30.4us。v1编译器cs5.1不支持、v2同进程窗口被产品保护拒绝，失败证据保留；cs5.0及拥有的子进程修订通过，未放宽产品限制。实卡信号未确认、未采卡。
 - 5c `nr-static.py B2a pause-reset-M1-v1 nr-reset srnr-reset` 六组通过：NR reset后300帧三轮0差异，SR组合各262差异。只对单NR暂停刷新制作窄范围候选，普通暂停不Evaluate已有。
 - 暂停编辑基线EXE SHA066ac43c…86045在 `tests/perf-nr-20261004/A5c-paused-v1-app/` 独立封存。`nr-paused.py B2a A5c-paused-v1` 四组各三轮12/12，通过300次编辑及第150次模型失效检查；A NR数300/300/300/600（每轮），无debug/设备错误。`build-paused-baseline-v1` 缺AVFrame/iostream头失败，补头后 `build-paused-duplicates-v3` 成功。5c产品候选尚待构建和对照，不记录未取得收益。
+
+
+## 2026-10-04 NR性能5c残差复用v4定向通过
+
+- 在本轮独立分支保留窄范围Lecram单NR暂停残差缓存；首编辑、模型/源/seek/普通播放/reset/失败失效，无SR/FG/HDR/多层推广，无像素回读。v1/v2 legacy残差分类未命中，日志保留；v3归一化全部保留残差槽，v4限制已测运行库与输入输出合同。
+- build-paused-B5c-v4 构建5步exit0。nr-paused.py A5c-paused-v1 / B5c-paused-v4 / B5c-paused-v4-off 各12组300次三轮，nr-paused-report.py配对共10800个SHA，A-A及全部A-B/Boff差异0，debug0/device健康。单NR7.46140→0.76570ms，Boff7.50225，求值300→2→300；SR/抗闪烁/两层完整求值不变。候选EXE cedd84884f9d83af09ab7ab54b78ee9a7421f95ec875fd21083c0a4878e803f6。
+- nr-paused-ui.py B5c B5c-paused-ui-v4 与 B5c-off B5c-paused-ui-v4-off 各三组真实Qt通过，30秒NR计数和位置不变，20残差编辑中途换模型、恢复播放、暂停seek2秒成功。B单NR19次复用/NR增2，Boff无复用/NR增20；SR与抗闪烁0复用。Windows PDH GPU Engine只记录本轮测试PID，Boff单NR24样本中位2.481%/max2.546%，所以普通暂停整软件GPU接近0门槛未通过，继续优化重复呈现；nvidia-smi整卡14–19%不能当进程GPU。
+- 原始日志/结果/完整截图：E:/项目/Veyra/logs/perf-nr-20261004/{A5c-paused-v1,B5c-paused-v4,B5c-paused-v4-off,B5c-paused-ui-v4,B5c-paused-ui-v4-off}*；comparison JSON同目录。软件节点仅残差缓存定向通过，5c整体及R0未完成。
+- 增加测试/构建串行guard，拒绝其他本轮GPU测试进程，不杀用户程序；目标保持active，不合并/推送/发布。

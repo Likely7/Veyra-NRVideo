@@ -17,6 +17,7 @@ exe=app/'veyra_duplicate_gpu_experiment.exe';shutil.copy2(BASE/'build'/TASK/vari
 shader=app/'DuplicateFrameCS.hlsl';shutil.copy2(ROOT/'tests/perf/DuplicateFrameCS.hlsl',shader)
 results=[]
 for mode,repeat in [('compare',1),('compare',2),('compare',3),('capture',1)]:
+    matrix.assert_gpu_tests_idle()
     name=f'{label}-{mode}-r{repeat}';out=BASE/'logs'/TASK/name;tmp=BASE/'tmp'/TASK/name
     for p in (out,tmp):p.mkdir(parents=True,exist_ok=False)
     env=os.environ.copy()

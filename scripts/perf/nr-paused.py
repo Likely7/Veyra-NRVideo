@@ -24,6 +24,7 @@ results=[]
 for mode in modes:
     assert mode in ('nr','srnr','temporal','layers')
     for repeat in range(1,4):
+        matrix.assert_gpu_tests_idle()
         name=f'{label}-{mode}-r{repeat}';out=BASE/'logs'/TASK/name;tmp=BASE/'tmp'/TASK/name
         for p in (out,tmp):p.mkdir(parents=True,exist_ok=False)
         env=os.environ.copy()
