@@ -39,3 +39,9 @@ build-export-baseline-v1 UI/probe构建成功，编译产品源码86e0458；只�
 `nr-export-verify.py B5b-serial-v2 B5b-candidate-v1`75/75通过、8100完整decoded帧与PTS/尺寸/轨道/时长全部一致；所有策略生成的整个封装文件SHA也与各自A一致。收据B5b-candidate-v1-decoded-review.json，各原始framemd5/ffprobe保留。该验证覆盖当前本机/运行库/素材，不代表其他GPU、HDR或直播通过。
 
 下一步单独验证GPU debug、取消、单帧、FG保持串行和事件API失败回退。只模拟API错误分支，不制造GPU压力或设备重置；候选继续默认关闭。
+
+## 边界检查已执行
+
+`nr-export-edges.py B2d B5b-edges-v1`15/15通过（编译产品f94d0bc，EXE SHA256 `0bd9993fda49d55210456764e09a790ca12e5ce72c5617925b1bec9fb2975359`）：单帧、双NR/NR+SR的debug层、DLSS2X保持串行、取消后无正式/owned partial、事件创建/注册错误回退、既有作者HDR720p/PQ/Main10导出。7组对照整个输出文件SHA相同；debug ERROR/CORRUPTION为0，removedReason=0。事件故障是逻辑注入ERROR_INVALID_HANDLE/E_FAIL，未制造真实内存不足、设备移除或GPU压力。
+
+原始日志和收据在`E:/项目/Veyra/logs/perf-nr-20261004/B5b-edges-v1-summary/summary.json`及15个case目录；HDR源SHA256 `05827c1b08f27a84be2074435365289a82e21ae435f39f4891cc26d921128e2d`，它是既有作者测试媒体，不冒充自然HDR影片或全效果HDR验收。候选仍默认关闭，下一步仅将已测无FG/NVENC路径启为默认，并以显式B-off保护复测产品worker生命周期。
