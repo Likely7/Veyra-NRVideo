@@ -120,7 +120,7 @@ def run():
     overrides = [arg.split('=',1)[1] for arg in sys.argv[3:] if arg.startswith('--milestone-exe=')]
     assert len(overrides) <= 1
     switches = {arg for arg in sys.argv[3:] if arg.startswith('--') and not arg.startswith('--milestone-exe=')}
-    assert switches <= {'--baseline-qml','--paused-present-off','--pre-exit-exe'}
+    assert switches <= {'--baseline-qml','--paused-present-off','--pre-exit-exe','--nr-residual-off'}
     modes = tuple(arg for arg in sys.argv[3:] if not arg.startswith('--')) or ('gpu','compat')
     assert len(set(modes)) == len(modes) and all(mode in ('gpu','compat') for mode in modes)
     assert label.replace('-', '').isalnum()
@@ -172,12 +172,14 @@ def run():
     identity = {'playerPayload':payload,'obsExeSha256':matrix.digest(portable/'bin/64bit/obs64.exe'),
                 'installedObsExeSha256':matrix.digest(installed/'bin/64bit/obs64.exe'),'userConfigBefore':user_config_before,
                 'sourceSha256':matrix.digest(matrix.SOURCES['M1']),'gpuCompetition':False,'baselineQml':baseline_qml,
-                'pausedPresentReuseDisabled':'--paused-present-off' in switches,'executableSource':str(executable),
+                'pausedPresentReuseDisabled':'--paused-present-off' in switches,'nrResidualReuseDisabled':'--nr-residual-off' in switches,
+                'executableSource':str(executable),
                 'recordingPurpose':'Game capture compatibility, not timing or pressure'}
     (logs/'artifacts.json').write_text(json.dumps(identity,ensure_ascii=False,indent=2),encoding='utf-8')
     env = {k:v for k,v in os.environ.items() if not k.upper().startswith(('VEYRA_','QT_','QSG_','OBS_'))}
     env.update(TEMP=str(tmp),TMP=str(tmp))
     if '--paused-present-off' in switches: env['VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE']='1'
+    if '--nr-residual-off' in switches: env['VEYRA_TEST_DISABLE_PAUSED_NR_RESIDUAL_REUSE']='1'
     obs, player, rpc = None,None,None
     rows = []
     try:
