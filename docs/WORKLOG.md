@@ -1,5 +1,15 @@
 # Veyra 工作记录
 
+## 2026-10-04 2.0.3 正式发布完成
+
+- 当前用户授权的几项修复、AMD NR、VFG全档位与厂商分包已合入main，发布代码commit `f82f6499ff0db9c36953bcafb752b9be2d7fca4d` / tag `v2.0.3`，普通快进push至nrvideo。桌面64项status与258615-byte working patch逐字节保持；HDR/Dolby PR13/14仍OPEN、未合并。仅本条之后发布记录改变文档，不改变已测产品源树和tag。
+- 正式Release https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3 于2026-10-04T04:05:20Z发布并标记latest，非draft/非prerelease。两运行包、应用源码、依赖源码和SHA256SUMS共5资产，GitHub计算digest与本地逐项相同，全部HEAD200；正文与已审核双语notes一致，赞助/交流群两图均width220、HTTP200。回执logs/release-2.0.3-20261004/release-published-verified.json；本地releases/release-2.0.3-20261004/DELIVERY.json与SHA256SUMS.txt。
+- NVIDIA最终标准7z：379293609 bytes（361.72MiB），SHA403376e8…484f2d。原生工具首轮570585477 bytes，已采用此前验证的plain LZMA2/256MiB字典、稳定文件顺序生成较小标准7z，实际脚本沿用tag内runtime-size-dense-archive.py的压缩算法（仅staging/输出路径不同）；429.813s属于归档，不是产品测试。用户随后表示正常压缩即可，未继续优化。独立官方7-Zip解压Everything is Ok、1536文件（1535payload+manifest），全SHA/厂商/PE闭包复核通过，模型/DLL字节不改。
+- AMD最终标准7z：208813697 bytes（199.14MiB），SHA66ede4ca…0cc7e；独立7-Zip解压CRC通过，2015文件（2014payload+manifest）逐SHA及闭包通过，186weights/62kernels全部保留。两包均保留原FSR2.3三组件，NV的FSR4灰色；AGENTS长期规则已入main。
+- 独立最终解压包在Windows-only PATH/no SDK override、GPU D3D12/软件UI各home/pro/node/exp/set/min六页，共24截图/alpha255/正常退出，运行前后全部payload SHA不变；clean-smoke-NVIDIA/AMD与extracted-nv-final/extracted-amd-final记录。同一EXE真实bridge读到2.0.3，version-check.log；全包EXE SHA998d4261…98154。
+- 对应应用源码ZIP69298818 bytes / SHA7ebd18f5…f3c3a3；最终依赖源码550177874 / SHA1a04192b…03420c。嵌入旧2.0.0 dependency ZIP字节身份不变，新lmxxf源码已独立manifest检查/编译成功，source/source SDK/runtime/model隔离检查通过。未把DLL、模型或SDK提交Git。
+- 本机RTX5070/616.56证据与未测边界保持：RX9000 HIP推理、RTX40、616.92、Xbox真机有声/长稳、屏幕物理延迟未验。不要把自动重连写成网络根治、把提交FPS写成屏幕FPS。本轮不执行关机。
+
 ## 2026-10-04 2.0.3 分包、灰色入口与正式发布施工
 
 - 用户明确授权 NVIDIA/AMD 分包、AGENTS 长期规则、合并当前修复到 main 和 GitHub2.0.3；追加要求 FSR3.1/4 保留原共用组件。HDR/Dolby PR13/14仍暂缓，旧关机已执行，本轮不再关机，不派 Agent。

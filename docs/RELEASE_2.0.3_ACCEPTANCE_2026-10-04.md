@@ -41,3 +41,7 @@ NR 保留四个版本入口，SR 保留三个算法入口，FG 保留五个后�
 合并后先核对最终 main 与已测构建的产品源树，finalize 写入干净源码 commit/版本/逐文件身份，生成两个7z、应用源码和依赖源码；独立新目录解压后再核对全部 payload/CRC/版本/厂商闭包。归档只做无损压缩，不改 DLL 或模型字节。
 
 发布资产清单与 SHA256 在 `E:/项目/Veyra/releases/release-2.0.3-20261004/SHA256SUMS.txt`；最终本机及远端回执在 `E:/项目/Veyra/logs/release-2.0.3-20261004/`，发布完成后追加 WORKLOG。Release 正文保留赞助与交流群图各 width220；本轮 HEAD 请求两个固定图片均 HTTP200，远端正文上传后再核对。只有完成实际上传和远端 digest/大小检查才报告发布完成。
+
+## 最终归档与发布追加证据
+
+2026-10-04 已实际完成上述步骤：最终 NVIDIA1535/AMD2014 payload 及manifest独立解压CRC/全SHA/PE闭包通过，两包GPU/软件各六页共24截图通过，真实bridge版本2.0.3。远端5资产均大小/digest匹配、下载HEAD200；两图width220/200，正式latest非prerelease。Release https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3；详细命令/大小/哈希和回执路径在WORKLOG最终发布条目。发布产品commit f82f6499ff0db9c36953bcafb752b9be2d7fca4d 不变，后续追加仅为文档记录。
