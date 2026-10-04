@@ -262,16 +262,17 @@ def run():
                 shots.append(observation)
                 (logs/(mode+'-observations.json')).write_text(json.dumps(shots,ensure_ascii=False,indent=2),encoding='utf-8')
                 assert not required or video_available, ('Capture lacks real picture',mode,stage,variation)
+            action('exit-resize'); player.wait(timeout=12)
             stopped = rpc.call('StopRecord')
             clip = Path(stopped['outputPath'])
             assert clip.resolve().is_relative_to((test/'recordings').resolve()) and clip.stat().st_size > 10000
             stats = rpc.call('GetStats')
             rpc.call('RemoveInput',{'inputName':input_name})
-            action('quit'); player.wait(timeout=12)
             text = (logs/(mode+'-player.log')).read_text(encoding='utf-8',errors='replace')
             assert player.returncode == 0 and 'OBS_UI_PASS' in text
             assert not any(value in text for value in ('OBS_UI_FAIL','[ERROR]','[FATAL]','ReferenceError:','TypeError:'))
-            row = {'mode':mode,'command':args,'recording':str(clip),'recordingSha256':matrix.digest(clip),'shots':shots,'obsStats':stats,'passed':True}
+            row = {'mode':mode,'command':args,'recording':str(clip),'recordingSha256':matrix.digest(clip),'shots':shots,'obsStats':stats,
+                   'exitDuringResize':True,'playerExitCode':player.returncode,'passed':True}
             rows.append(row); (logs/'completed.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
             print('R0_OBS_CAPTURE_PASS',mode,sum(shot['requiredVideoCapture'] for shot in shots),
                   'supported video stages;',len(shots),'observed stages',flush=True)

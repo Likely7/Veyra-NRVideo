@@ -8360,3 +8360,5 @@ R0-obs-candidate 92a181f/bundle708e4834c19078b50d33203ea0963255f3c1425fe9edae414
 R0-obs-resize-verified-v2严格复测GPU全屏仍失败（视频crop标准差1.22/1.22/1.70），250ms候选不可靠；cleanup全部true。封存A同一新夹具R0-obs-baseline-verified-v3全屏有实际视频（30.64/28.59/22.59），普通窗口旧限制保留。拒绝250ms方案并封存，然后明确恢复9a30cf8的VideoPresenter/header生产字节。OBS源码的全局选择发生在hook_present的RealPresent之前；下个最小实验仅在native resize恢复绘制后用一次公开DXGI_PRESENT_TEST探测（不输出帧）提前登记本交换链，记录HRESULT，不修改OBS/DLL、不计入成功呈现帧。未验证不能称修复。
 
 81301c5/build-r0-capture-prime-v1构建成功，但R0-obs-capture-prime-v1全屏仍为空白，TEST HRESULT=0不能当作抓取成功，严格crop仍1.22/1.22/1.70。真实resize占约22ms，期间Qt可能先选入OBS全局状态，事后TEST无法覆盖已选Qt链。拒绝此实验并回退。下一候选在Qt公开beforeFrameBegin/afterFrameEnd接点维护每窗口独立帧锁；native只在实际OBS注入且要resize时对全部Qt帧锁try_lock，忙则保留旧buffer下一帧再试，取得后覆盖resize和首次真实Present。没有native等待/固定sleep/额外GPU帧/运行库patch；软件UI不用锁，正常未注入不加锁。对主窗口及全屏控制窗一并处理，防止另一个Qt链在resize期间重选。需真实采集、正常resize、退出及CPU/GPU调度回归后才决定。
+
+cc7f5a3/build-r0-capture-gate-v1构建5步成功。R0-obs-capture-gate-v1 GPU全屏严格视频区域有真实图（已看原图），compat六阶段全部有真实视频，cleanup全部true。GPU窗口阶段仍为封存A也存在的限制，不作6/6视频通过。主/全屏控制两个Qt帧锁实际登记且resize日志qtWindows=2；仅实际OBS期间Qt帧锁，native不阻塞try_lock并在首次Present之后立即释放。下一最终构建还将实际OBS录制期间resize后50ms关闭作为退出边界；当前一轮不能替代重复与全回归。

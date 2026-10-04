@@ -5,6 +5,7 @@ Item {
     property string commandFile: ""
     property int sequence: -1
     property bool configured: false
+    Timer { id: exitResize; interval: 50; onTriggered: { console.log("OBS_UI_PASS"); Qt.quit() } }
     function require(ok, why) { if (!ok) { console.log("OBS_UI_FAIL", why); Qt.exit(3) } }
     Timer {
         interval: 500; running: true; repeat: true
@@ -34,6 +35,7 @@ Item {
                 if (c.action === "resize") { probe.appWindow.width = 1000; probe.appWindow.height = 700 }
                 if (c.action === "fullscreen" && !probe.appWindow.fullscreen) probe.appWindow.toggleFullscreen()
                 if (c.action === "windowed" && probe.appWindow.fullscreen) probe.appWindow.toggleFullscreen()
+                if (c.action === "exit-resize") { probe.appWindow.width = 1100; probe.appWindow.height = 750; exitResize.start() }
                 if (c.action === "quit") { console.log("OBS_UI_PASS"); Qt.quit() }
                 console.log("OBS_UI_ACTION", c.action, probe.sequence)
             }

@@ -283,6 +283,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const auto dxgiStart=std::chrono::steady_clock::now();
     reflex_.mark(reflexFrame_,3);reflex_.mark(reflexFrame_,4);
     const bool presented=sink_.present(st);
+    captureResizeHold.reset(); // release Qt immediately after the native Present
     reflex_.mark(reflexFrame_,5);reflexFrame_=0;
     const auto presentEnd=std::chrono::steady_clock::now();
     const auto ms=[](auto d){return std::chrono::duration<double,std::milli>(d).count();};
