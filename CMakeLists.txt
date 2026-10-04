@@ -643,6 +643,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   add_executable(veyra_repair_contract_tests tests/unit/RepairContractTests.cpp)
   add_executable(veyra_subtitle_loading_tests tests/integration/SubtitleLoadingTests.cpp)
+  add_executable(veyra_subtitle_text_tests tests/integration/SubtitleTextTests.cpp)
+  target_compile_features(veyra_subtitle_text_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_subtitle_text_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_subtitle_text_tests PRIVATE veyra_engine)
   add_executable(veyra_screenshot_combination_tests tests/integration/ScreenshotCombinationTests.cpp)
   target_link_libraries(veyra_screenshot_combination_tests PRIVATE veyra_engine)
   target_compile_features(veyra_screenshot_combination_tests PRIVATE cxx_std_20)

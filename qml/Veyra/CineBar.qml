@@ -25,7 +25,7 @@ Rectangle {
     // Set by FullscreenBar so upward menus stop above the playback pill.
     property real menuBottomLimit: -1
     // Any popover needs the owner window's full mask, not just the preset menu.
-    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible
+    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible || playbackRate.menuOpen
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     readonly property bool seekPreviewOpen: seekMouse.containsMouse && seekMouse.enabled
@@ -183,7 +183,7 @@ Rectangle {
 
                 CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
                 CBtn { glyph: "music"; onTapped: audioMenu.openAt(this, "up") }
-                PlaybackRateButton { objectName: "cine-playback-rate" }
+                PlaybackRateButton { id: playbackRate; objectName: "cine-playback-rate"; menuBottomLimit: bar.menuBottomLimit }
             }
 
             // .seekrow: mono times either side of the rail.

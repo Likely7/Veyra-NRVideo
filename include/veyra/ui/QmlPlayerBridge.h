@@ -69,7 +69,7 @@ class QmlPlayerBridge : public QObject {
     // --- frame generation settings ----------------------------------------
     Q_PROPERTY(QString fgBackendName READ fgBackendName WRITE setFgBackendName NOTIFY settingsChanged)
     Q_PROPERTY(int vfgQuality READ vfgQuality WRITE setVfgQuality NOTIFY settingsChanged)
-    Q_PROPERTY(QVariantList fgBackendChoices READ fgBackendChoices CONSTANT)
+    Q_PROPERTY(QVariantList fgBackendChoices READ fgBackendChoices NOTIFY effectCapabilitiesChanged)
     Q_PROPERTY(QString fgProviderText READ fgProviderText NOTIFY fgChoicesChanged)
     Q_PROPERTY(int fgMaxMultiplier READ fgMaxMultiplier NOTIFY snapshotChanged)
     Q_PROPERTY(bool fgEnabled READ fgEnabled WRITE setFgEnabled NOTIFY chainChanged)
@@ -111,9 +111,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString captureDeviceLabel READ captureDeviceLabel NOTIFY captureChanged)
     Q_PROPERTY(bool captureForceSdr READ captureForceSdr WRITE setCaptureForceSdr NOTIFY settingsChanged)
     Q_PROPERTY(bool amdNrGpu READ amdNrGpu CONSTANT)
-    Q_PROPERTY(QVariantMap effectCapabilities READ effectCapabilities NOTIFY fgChoicesChanged)
-    Q_PROPERTY(QVariantList nrRuntimeChoices READ nrRuntimeChoices NOTIFY fgChoicesChanged)
-    Q_PROPERTY(QVariantList srBackendChoices READ srBackendChoices NOTIFY fgChoicesChanged)
+    Q_PROPERTY(QVariantMap effectCapabilities READ effectCapabilities NOTIFY effectCapabilitiesChanged)
+    Q_PROPERTY(QVariantList nrRuntimeChoices READ nrRuntimeChoices NOTIFY effectCapabilitiesChanged)
+    Q_PROPERTY(QVariantList srBackendChoices READ srBackendChoices NOTIFY effectCapabilitiesChanged)
     Q_PROPERTY(bool captureFlipVertical READ captureFlipVertical WRITE setCaptureFlipVertical NOTIFY settingsChanged)
     // P4-e: the full capture connection, as the 1.4.4 panel: device details and
     // formats come from asynchronous DirectShow queries (never on the UI thread),
@@ -359,6 +359,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY snapshotChanged)
     Q_PROPERTY(double playbackSpeed READ playbackSpeed NOTIFY snapshotChanged)
     Q_PROPERTY(double playbackRate READ playbackRate WRITE setPlaybackRate NOTIFY snapshotChanged)
+    Q_PROPERTY(double minimumPlaybackRate READ minimumPlaybackRate CONSTANT)
+    Q_PROPERTY(double maximumPlaybackRate READ maximumPlaybackRate CONSTANT)
     // True while the engine has not yet applied what the UI asked for. The UI
     // shows the pending value and marks it, rather than lying about the state.
     Q_PROPERTY(bool applying READ applying NOTIFY snapshotChanged)
@@ -695,6 +697,8 @@ public:
     void setMuted(bool value);
     double playbackSpeed() const;
     double playbackRate() const;
+    double minimumPlaybackRate() const;
+    double maximumPlaybackRate() const;
     void setPlaybackRate(double rate);
 
     bool nrEnabled() const;
@@ -1044,6 +1048,7 @@ signals:
     void thumbnailSourceChanged(const QString& path);
     void settingsChanged();
     void fgChoicesChanged();
+    void effectCapabilitiesChanged();
     void chainChanged();
     void recentFilesChanged();
     void presetsChanged();

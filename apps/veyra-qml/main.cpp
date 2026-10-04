@@ -814,6 +814,21 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         });
     }
 
+    // Focus changes are diagnostic only: they never pause playback, change the
+    // selected effects, or reduce submission cadence. Keep the actual throughput
+    // and Windows process throttle state alongside field reports of background lag.
+    QObject::connect(window, &QWindow::activeChanged, &app, [window, &controller] {
+        const auto s=controller.snapshot();
+        PROCESS_POWER_THROTTLING_STATE throttle{};
+        throttle.Version=PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+        const bool known=GetProcessInformation(GetCurrentProcess(),ProcessPowerThrottling,&throttle,sizeof(throttle));
+        const DWORD error=known?0:GetLastError();
+        veyra::log::info("app-focus",std::format(
+            "active={} running={} transport={} sourceFps={:.2f} submitFps={:.2f} nr={} sr={} fg={} powerKnown={} control=0x{:X} state=0x{:X} err={}",
+            window->isActive(),s.running,int(s.transport),s.nominalSourceFps,s.submissionFps.value_or(-1),
+            s.nrActive,s.srActive,s.fgActive,known,throttle.ControlMask,throttle.StateMask,error));
+    });
+
     // Reparent the native window under the QML window and keep it in step. The
     // host item is looked up by objectName so the QML side owns the layout and
     // this side only follows it.

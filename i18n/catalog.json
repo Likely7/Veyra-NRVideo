@@ -13518,6 +13518,55 @@
    "zh-TW": "；本次匯出使用 AMD FSR 超解析",
    "en": "; this export uses AMD FSR super resolution",
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
+  },
+  {
+   "zh": "自定义…",
+   "src": "qml/Veyra/PlaybackRateButton.qml",
+   "zh-TW": "自訂…",
+   "en": "Custom…",
+   "ja": "カスタム…"
+  },
+  {
+   "zh": "自定义播放速度",
+   "src": "qml/Veyra/PlaybackRateDialog.qml",
+   "zh-TW": "自訂播放速度",
+   "en": "Custom playback speed",
+   "ja": "カスタム再生速度"
+  },
+  {
+   "zh": "播放倍速",
+   "src": "qml/Veyra/PlaybackRateDialog.qml",
+   "zh-TW": "播放倍速",
+   "en": "Playback speed",
+   "ja": "再生速度"
+  },
+  {
+   "zh": "范围 0.25～4.00 倍，保持原有音调",
+   "src": "qml/Veyra/PlaybackRateDialog.qml",
+   "zh-TW": "範圍 0.25～4.00 倍，保持原有音調",
+   "en": "Range 0.25–4.00×, preserving pitch",
+   "ja": "範囲 0.25～4.00 倍、音程を維持"
+  },
+  {
+   "zh": "请输入 0.25～4.00 之间的倍速",
+   "src": "qml/Veyra/PlaybackRateDialog.qml",
+   "zh-TW": "請輸入 0.25～4.00 之間的倍速",
+   "en": "Enter a speed between 0.25 and 4.00",
+   "ja": "0.25～4.00 の速度を入力してください"
+  },
+  {
+   "zh": "当前播放状态无法修改倍速",
+   "src": "qml/Veyra/PlaybackRateDialog.qml",
+   "zh-TW": "目前播放狀態無法修改倍速",
+   "en": "Playback speed cannot be changed in the current state",
+   "ja": "現在の再生状態では速度を変更できません"
+  },
+  {
+   "zh": "应用",
+   "src": "qml/Veyra/PlaybackRateDialog.qml",
+   "zh-TW": "套用",
+   "en": "Apply",
+   "ja": "適用"
   }
  ]
 }

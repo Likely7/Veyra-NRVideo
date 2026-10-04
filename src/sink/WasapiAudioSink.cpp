@@ -1,5 +1,6 @@
 #include "veyra/sink/AudioGain.h"
 #include "veyra/sink/WasapiAudioSink.h"
+#include "veyra/engine/PlaybackRate.h"
 #include <functiondiscoverykeys_devpkey.h>
 #include <propvarutil.h>
 #pragma comment(lib, "propsys.lib")
@@ -241,7 +242,7 @@ void AudioPipeline::videoPresented(double nextPtsMs)
 
 bool AudioPipeline::setPlaybackRate(double rate)
 {
-    if(rate!=1.0&&rate!=1.5&&rate!=2.0&&rate!=3.0)return false;
+    if(!engine::validPlaybackRate(rate))return false;
     requestedRate_=rate;return true;
 }
 

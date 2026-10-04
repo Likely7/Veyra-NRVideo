@@ -261,27 +261,16 @@ SubtitleTrack parseAss(const std::wstring& data,const std::wstring& name,bool ss
     return track;
 }
 
-// Matroska/MP4 sometimes hand us a whole ASS dialogue line (Layer,Start,End,
-// Style,...) instead of just the text; keep the text field only.
+// FFmpeg AVSubtitleRect::ass is ReadOrder,Layer,Style,Name,MarginL,MarginR,
+// MarginV,Effect,Text. Consume exactly the eight header separators: commas in
+// Text are authored punctuation, never another header field.
 std::wstring stripDialoguePrefix(const std::wstring& raw){
-    // Two shapes exist: the FFmpeg AVSubtitle ASS rectangle
-    // (Layer,Start,End,Style,Name,ML,MR,MV,Effect,Text) and the Matroska stored
-    // form (Layer,0,Style,Name,ML,MR,MV,Effect,Text - the times live in the
-    // block, so Start/End collapse into one zero). Both end with an empty
-    // Effect field, which is what makes the split unambiguous: subtitle text
-    // itself may contain commas.
-    std::vector<std::wstring> fields;
     size_t start=0;
-    for(size_t i=0;i<raw.size()&&fields.size()<10;++i){
-        if(raw[i]!=L',')continue;
-        fields.push_back(trim(raw.substr(start,i-start)));
-        start=i+1;
+    for(int field=0;field<8;++field){
+        const auto comma=raw.find(L',',start);
+        if(comma==std::wstring::npos)return raw;
+        start=comma+1;
     }
-    if(fields.size()<8)return raw;
-    auto numeric=[](const std::wstring& value){if(value.empty())return false;for(wchar_t c:value)if(c<L'0'||c>L'9')return false;return true;};
-    const bool matroskaShape=fields.size()>=8&&numeric(fields[0])&&numeric(fields[1])&&numeric(fields[4])&&numeric(fields[5])&&numeric(fields[6])&&fields[7].empty();
-    const bool dialogueShape=fields.size()>=9&&numeric(fields[0])&&fields[7].empty()&&fields[8].empty();
-    if(!matroskaShape&&!dialogueShape)return raw;
     return raw.substr(start);
 }
 
@@ -301,6 +290,7 @@ SubtitleTrack parseVtt(const std::wstring& data,const std::wstring& name){
         while(std::getline(lines,line)){
             if(line.find(L"-->")!=std::wstring::npos){std::wistringstream back(line);break;}
             if(trim(line).empty())break;
+            if(!line.empty()&&line.back()==L'\r')line.pop_back();
             if(!cue.text.empty())cue.text+=L'\n';
             cue.text+=line;
         }
@@ -528,7 +518,7 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
                 std::wstring text;
                 int alignOverride=0;double posX=-1,posY=-1;
                 const std::wstring raw=entry->ass&&*entry->ass?wide(entry->ass):(entry->text&&*entry->text?wide(entry->text):std::wstring{});
-                if(!raw.empty())text=cleanAssText(stripDialoguePrefix(raw),alignOverride,posX,posY);
+                if(!raw.empty())text=cleanAssText(entry->ass&&*entry->ass?stripDialoguePrefix(raw):raw,alignOverride,posX,posY);
                 if(text.empty())continue;
                 SubtitleCue cue;
                 cue.begin=packetSeconds+double(subtitle.start_display_time)/1000.0;

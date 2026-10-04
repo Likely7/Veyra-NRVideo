@@ -35,6 +35,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <limits>
 #include <optional>
 #include <span>
@@ -46,6 +47,7 @@
 #include "veyra/engine/ColorLookStore.h"
 #include "veyra/engine/ColorLut.h"
 #include "veyra/engine/Subtitles.h"
+#include "veyra/engine/PlaybackRate.h"
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/source/CaptureFormatSelection.h"
 #include "veyra/source/CaptureFormatRank.h"
@@ -151,7 +153,7 @@ bool exportFileClosed(const QString& path){
 }
 } // namespace
 
-static QVariantMap currentEffectCapabilities();
+static QVariantMap currentEffectCapabilities(bool refresh=false);
 static QString unavailableEffects(const engine::EnhancementSettings& settings);
 static QString disableUnavailableEffects(engine::ChainConfiguration& configuration);
 static ui::EffectGpu effectGpu();
@@ -818,7 +820,7 @@ static ui::EffectGpu effectGpu() {
     return gpu;
 }
 
-static QVariantMap currentEffectCapabilities() {
+static QVariantMap scanEffectCapabilities() {
     using H = ui::HardwareEffect;
     const auto gpu = effectGpu();
     const auto nr = runtime::localRuntimeDirectory();
@@ -853,6 +855,18 @@ static QVariantMap currentEffectCapabilities() {
     add("flow1", H::CrossVendor, true, QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     return out;
 }
+// All callers are on the bridge/UI thread. Snapshot reads must not perform
+// filesystem probes or rebuild capability maps. Refresh on actions, language
+// changes and a slow timer so user-replaced runtime files remain discoverable.
+static QVariantMap currentEffectCapabilities(bool refresh) {
+    static QVariantMap cached;
+    static QString language;
+    const auto currentLanguage=i18n::current();
+    if(refresh||cached.isEmpty()||language!=currentLanguage){
+        cached=scanEffectCapabilities();language=currentLanguage;
+    }
+    return cached;
+}
 static QString fgEffectId(engine::FrameGenerationBackend backend) {
     switch (backend) {
     case engine::FrameGenerationBackend::Dlss: return "dlss";
@@ -864,7 +878,7 @@ static QString fgEffectId(engine::FrameGenerationBackend backend) {
     return {};
 }
 static QString unavailableEffects(const engine::EnhancementSettings& settings) {
-    const auto caps = currentEffectCapabilities();
+    const auto caps = currentEffectCapabilities(true);
     QStringList requested;
     if (settings.nr) requested << "nr" + QString::number(int(engine::currentNrRuntime(settings.nrRuntime)));
     if (settings.sr) requested << "sr" + QString::number(settings.videoSrQuality);
@@ -945,8 +959,22 @@ QVariantList QmlPlayerBridge::srBackendChoices() const {
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
-    connect(this,&QmlPlayerBridge::snapshotChanged,this,&QmlPlayerBridge::fgChoicesChanged);
+    connect(this,&QmlPlayerBridge::snapshotChanged,this,
+        [this,ceiling=fgMaxMultiplier(),text=fgProviderText()]() mutable {
+            const auto nextCeiling=fgMaxMultiplier();const auto nextText=fgProviderText();
+            if(nextCeiling==ceiling&&nextText==text)return;
+            ceiling=nextCeiling;text=nextText;emit fgChoicesChanged();
+        });
     connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fgChoicesChanged);
+    auto* capabilityTimer=new QTimer(this);
+    connect(capabilityTimer,&QTimer::timeout,this,[this,reported=currentEffectCapabilities()]() mutable {
+        const auto next=currentEffectCapabilities(true);
+        // An action may have refreshed the cache before this tick. Compare with
+        // the last reported map so that QML still learns about that change.
+        if(next==reported)return;
+        reported=next;emit effectCapabilitiesChanged();emit fgChoicesChanged();
+    });
+    capabilityTimer->start(2000);
     impl_->loadPrefs();
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
     impl_->enumerateGpuAdapters();
@@ -1547,7 +1575,7 @@ QString QmlPlayerBridge::fgProviderText() const {
     const auto& s=impl_->snapshot;
     if(fgBackendName()==QLatin1String("vfg")){
         if(!vfgHardwarePossible())return tr("VFG 需要 NVIDIA Ada / Blackwell 显卡（RTX 40 / 50）");
-        if(!pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring()))return tr("未找到 VFG 运行组件，请在组件页核对路径");
+        if(!effectCapabilities().value("vfg").toMap().value("available").toBool())return tr("未找到 VFG 运行组件，请在组件页核对路径");
         return tr("VFG 支持 2X～8X 和低 / 中 / 高质量；6X～8X 为实验档，高倍高质量会增加处理时间");
     }
     if(engine::fsrFrameGeneration(s.applied.frameGenerationBackend)&&s.applied.multiplier>1&&!s.fsrProviderVersion.empty())
@@ -3989,6 +4017,8 @@ void QmlPlayerBridge::setMuted(bool value) {
 }
 double QmlPlayerBridge::playbackSpeed() const { return impl_->snapshot.playbackSpeed; }
 double QmlPlayerBridge::playbackRate() const { return impl_->snapshot.playbackRate; }
+double QmlPlayerBridge::minimumPlaybackRate() const { return engine::kMinPlaybackRate; }
+double QmlPlayerBridge::maximumPlaybackRate() const { return engine::kMaxPlaybackRate; }
 void QmlPlayerBridge::setPlaybackRate(double rate) {
     if(!impl_->engine.setPlaybackRate(rate))return;
     impl_->snapshot.playbackRate=rate;emit snapshotChanged();

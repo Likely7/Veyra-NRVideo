@@ -1,4 +1,5 @@
 #include "veyra/engine/EngineController.h"
+#include "veyra/engine/PlaybackRate.h"
 #include "veyra/engine/PreviewFrameReadiness.h"
 #include "veyra/engine/FgCompatibilityProbe.h"
 #include "veyra/engine/VideoPresenter.h"
@@ -76,7 +77,7 @@ void EngineController::dispatch(){
 void EngineController::post(std::function<void()> task){ {std::lock_guard lock(mutex_);stop_=true;pending_=std::move(task);}wake_.notify_one(); }
 bool EngineController::idle()const{std::lock_guard lock(mutex_);return !busy_&&!pending_;}
 bool EngineController::setPlaybackRate(double rate){
-    if(rate!=1.0&&rate!=1.5&&rate!=2.0&&rate!=3.0)return false;
+    if(!validPlaybackRate(rate))return false;
     std::lock_guard lock(mutex_);
     if(!snapshot_.running||snapshot_.capture||snapshot_.image)return false;
     if(requestedPlaybackRate_==rate)return true;

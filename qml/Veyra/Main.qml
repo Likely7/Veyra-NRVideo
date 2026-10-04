@@ -371,6 +371,7 @@ Window {
     // Set before the visibility changes: Windows resizes the window first, and the
     // cinema rule would otherwise snap that fullscreen size back to the film.
     property bool fullTarget: false
+    property int fullRestoreVisibility: Window.Windowed
     property bool fullLocked: false
     // Fullscreen quick-adjust panel (Home): the list mode's inspector on the left
     // of the picture, with the performance orbs. List mode only.
@@ -396,8 +397,14 @@ Window {
             return
         }
         fullLocked = false
-        fullTarget = !fullscreen
-        visibility = fullTarget ? Window.FullScreen : Window.Windowed
+        if (!fullscreen) {
+            fullRestoreVisibility = maximized ? Window.Maximized : Window.Windowed
+            fullTarget = true
+            visibility = Window.FullScreen
+        } else {
+            fullTarget = false
+            visibility = fullRestoreVisibility
+        }
         veyra.logUi("ui-fullscreen", "enabled=" + fullscreen)
     }
 

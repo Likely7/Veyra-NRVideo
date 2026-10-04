@@ -1,5 +1,6 @@
 module Veyra
 PlaybackRateButton 1.0 PlaybackRateButton.qml
+PlaybackRateDialog 1.0 PlaybackRateDialog.qml
 singleton Theme 1.0 Theme.qml
 VAccordion 1.0 VAccordion.qml
 VSubGroup 1.0 VSubGroup.qml

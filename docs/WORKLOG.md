@@ -1,5 +1,19 @@
 # Veyra 工作记录
 
+## 2026-10-04 自定义倍速、字幕、UI流畅度与专业布局/全屏恢复
+
+- 用户要求自定义倍速、修复#18、排查2.0.3相比2.0.2的UI卡顿与失焦掉帧，后追加倍速菜单遮挡、专业重复输入/输出标签及全屏检查。先从fb8e500开codex/playback-smoothness-20261004，checkpoint/pre-playback-smoothness-20261004；source-before.bundle verify/SHA7902EE2E…AF26，archive保存桌面/隔离区初始status。桌面64项修改不动，main仍354b1c6；当前只本地修复与包，无merge/push/Release/关机，无子Agent。方案 PLAYBACK_SMOOTHNESS_PLAN_2026-10-04.md，独立scope guard保护本轮接点。
+- 真实复现字幕：subtitle-before原外置SRT/ASS通过，VTT CRLF与两内嵌轨正文失败；旧stripDialoguePrefix继续扫描正文逗号，吞掉前句/多行。改为只对AVSubtitleRect.ass消费八头部分隔符，plain text原样，不压成一行；VTT去行末CR。`playback-smoothness-fixtures.py`造6作者cue（英中/多逗号/2–3行）+两内嵌轨；`playback-smoothness-tests.py`最终audio-rates-v3 18/18、subtitle-after-v2 5轨30cue逐字/时间、overlay-v3三行栅格/cache/style、i18n-v2、availability-v1 56/0均exit0。实际产品暂停seek9.5s输出完整三行正文。
+- 倍速两处共享0.25–4.00有限值判断，原1/1.5/2/3保留，加自定义两位小数窗口；实际PTS速度1.3/1.8/0.25/4/1，非法4.01/NaN及取消保持原值。声音18组测完整输出时长/PTS/连续性/0overrun，440Hz中段保音调；初次0.25测试把SoundTouch头尾静音计入零交叉造成436.7Hz误判，修正测量窗口且保留全时长断言，原audio-rates-v1失败日志保留。不能将它当产品音调错误。
+- UI热路径证据：2.0.2已有snapshot→fgChoices通知；2.0.3新增能力表/文件查询消费这个逐帧信号，造成反复磁盘探测/嵌套map/菜单重建。现改缓存+2s/操作/语言刷新，能力专用NOTIFY，FG ceiling/provider实际改变才通知。收尾修正动作先刷新缓存可能漏通知的边界：计时器比较上次报告map。`playback-smoothness-capability.py`在自己的stage移走/恢复未启用VFG组件，真实QML灰色菜单变更通过，DLL SHA270cf4…a795保持，原正式文件不动。
+- `playback-smoothness-baseline.py`独立profile同2K30对照：Timer16ms中位，2.0.2无效果后台16ms，旧2.0.3无效果后半段与初次编译重叠，不能公平引用最坏延迟。稳定候选无效果16ms；旧2.0.3软件UI DLSS6X后台p50 41.5/p95 60、180提交fps；候选软件UI p50 16/p95 23、180提交fps，稳定fgChoices通知0。候选GPU DLSS6X实际前/后台180，覆盖窗口最大化遮盖短测也保持；VFG4X中档后台p50 16/p95 22，中位115提交fps，有真实过期生成帧，不能说稳定120/240。12–140秒窗口（75秒样本止于75），计数/状态/原始日志见acceptance-summary.json，不将Timer间隔当渲染FPS。
+- 后台严重掉帧尚未复现；原始NR+RTX4K+DLSS2、DLSS6、软件UI前后台不能确认失焦根因，热初始化/少量前台样本需区分。Engine已有MMCSS与高精度等待，无盲目提高全局优先级/修改NVIDIA配置。main.cpp只增加app-focus事件的实际吞吐/效果和GetProcessInformation节流mask。`playback-smoothness-presentmon.py`仅过滤自己的PID且禁输入采集，PresentMon2.3.1 SHA364e5d…d30c，exit6/access denied/0rows，player正常exit0；不提权/改用户组/停止他人ETW会话，显示事件与物理延迟未测。
+- 用户Esc停止电脑自动操作之后不再调用Computer Use、不再自动点击窗口；后续Qt产品自测通过API检查自己的窗口。原先实际前后台点击证据保留，未将Qt自测冒充物理键鼠验收。GitHub所有11非PR Issues和各评论读回，#12是极简控制条/鼠标/尺寸/dropdown提议，未发现独立全屏故障描述；用户补充编号/症状问题保持待答，日志issues-fullscreen-audit.json。未发送GitHub评论/关Issue。
+- 专业模式重复底部源标签删除、输出badge移到顶部源格式旁（仍为只读实际输出），窄顶部两行，窄底栏进度/按钮两行。真实Qt 1280宽seek507px、720宽172px、1600宽827px；1280顶部32高、720顶部72高，输入输出相邻/按钮不越界。倍速菜单打开期间提示隐藏、CineBar计入menuOpen，浮条mask532px/菜单209..424px，关闭92px；Popup.Window+Basic.TextField真正取得焦点并应用1.3。先前native-style自定义警告已改Basic解决。
+- layout-fullscreen-v1实际失败：退出全屏丢失原最大化状态，720专业seek0；修复保存Windowed/Maximized并恢复、窄栏分行，v2/v3普通1280×800/最大化恢复、全屏整屏/自动隐藏/菜单保持/锁定退出通过（shell MarkFullscreenWindow hr0）。相关Main/Pro/CineBar接点扩展已先写guard/方案，不扩HDR/Dolby或NR/颜色算法。
+- 构建命令 `py -3.11 -B scripts/acceptance/playback-smoothness-build.py repair-build-v10.log veyra_qml_ui` exit0，沿用发布SDK/Qt6.8.3/patched FFmpeg配置，输出E盘、显示2.0.3-smoothfix。v5曾错误捕获QQmlApplicationEngine并调用snapshot，改捕获controller后v6通过；v7测试target拼错，v8用veyra_ui_i18n_tests通过；原失败构建日志不删除。extract.py --check缺翻译0/placeholder0，仅新增7条翻译。最终产品功能与全屏回归再次检查新bridge，随后封存候选。
+- 全部产物 E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages}/playback-smoothness-20261004；测试每进程≤300s、构建≤900s，TEMP/TMP只子进程。新运行组件/SDK/模型未入源码Git。本地候选目录/应用源码ZIP/patch及最终审计回执后续追加，不能把后台根因或未做实卡验收写成完成。
+
 ## 2026-10-04 RTSS 误提示、重启循环与真实安装参数验收
 
 - 用户反馈已发布 NVIDIA2.0.3 未开小飞机仍反复要求重启，并提供 E:/App/RivaTuner Statistics Server 要求真实启动/多参数测试。先从 main354b1c6 开 codex/rtss-restart-loop-20261004，checkpoint/pre-rtss-restart-loop-20261004，外部 source-before.bundle verify/SHA08679242…dd2；不改桌面旧工作树、原正式包、main 或用户 profile。方案 RTSS_RESTART_LOOP_PLAN_2026-10-04.md。
