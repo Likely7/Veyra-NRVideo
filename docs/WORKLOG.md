@@ -8308,3 +8308,7 @@ B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0�
 ## 2026-10-05 NR性能5b导出边界检查
 
 `py -3.11 -B scripts/perf/nr-export-edges.py B2d B5b-edges-v1` exit0，15/15真实生产exportVideo通过，7对输出整个SHA一致。单帧、debug双NR/NR+SR、FG保持串行、取消清理、逻辑事件故障回退和既有HDR Main10通过；debug0/removed0。日志`E:/项目/Veyra/logs/perf-nr-20261004/B5b-edges-v1-summary/summary.json`。未运行压力或设备重置；5b的NVOF未来帧准备尚未完成，不把导出两帧在途冒充该部分。
+
+## 2026-10-05 NR性能5b导出默认提升
+
+产品4fceda8构建`build-export-default-v1`成功；`nr-export-pipeline.py B2d B5b-default-v1 default-interleaved nr nrsr4k fg2`18/18默认/off通过，单NR整次4263.150→3242.470ms，NR+SR4K6325.810→5755.350ms，各组整文件SHA一致。FG两组保持原serial，未纳入默认异步。`nr-export-worker.py B2d B5b-worker-v1`5/5真实取消/回收/重试/队列/保存边界/MP4/MKV通过，所有载荷未变。日志同任务B5b-default-v1-summary/acceptance.json、B5b-worker-v1-summary/summary.json。首次边界commit带一处空格造成guard格式失败，4fceda8已显式纠正且全分支diff-check通过；没有隐藏失败或改旧存档。5b仅导出子项保留，NVOF前瞻尚未闭环。

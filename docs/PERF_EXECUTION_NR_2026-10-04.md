@@ -41,7 +41,7 @@
 | 1b | 内容帧率预算 | rejected-prerequisite | 1a画面不成立，完整求值仍按transport次数；实测成本构造预算反例，PERF_1B_CONTENT_BUDGET；无生产改动 |
 | 1c | 重复节奏预测 | rejected | 三种节奏单像素瞬态反例均漏第49帧且后续未检测；PERF_1C_CADENCE_REJECTION；无产品代码需回退 |
 | 3c | 队列分工/呈现优先级 | retained-limited-pending-R0 | 普通负载18组，增强21.386→19.477ms（2X）/23.330→21.542ms（3X）；准入仅已测5070双NR+SR4K+DLSS2/3文件图；9组往返1278全图/PTS一致/debug0、真实Qt FSR/XeSS/VFG/调色/时域回退通过；源跳过0但长帧仍在，HIGH拒绝默认；PERF_3C_GRAPH_NORMAL_2026-10-05 |
-| 5b | 文件/导出跨帧并行 | pending | 保留源帧/PTS/flow依赖，不扩大实时延迟 |
+| 5b | 文件/导出跨帧并行 | retained-export-part-in-progress | 无FG NVENC两帧/事件默认保留；60对照+75文件8100全图/PTS一致，15边界、18默认/off和5真实worker通过；NR+SR4K整次降6.41%，不把处理区间15.03%冒充整次；NVOF前瞻/文件播放待独立实验，PERF_5B_CROSS_FRAME |
 | 4a | 多NR整链低分辨率调度 | rejected-benefit-to-risk | 20组800图控制/debug通过但多层最大像素差81/255；12组普通播放整体仅降1.09%/0.62%，呈现P99无改善，拒绝替换产品路径并回退；完整PNG/HTML/候选源码保留，PERF_4A_LOW_CHAIN_2026-10-05 |
 | 4b | 先粗后细组合 | pending | 核对现有逐层尺寸；不新增强制预设 |
 | 5c | 暂停不重跑/残差重合成 | retained-pending-R0 | 残差7.461→0.766ms约89.74%；真实Qt自身暂停GPU三轮2.237→0.011%（off2.237%）；48完整呈现图像一致、四FG暂停/恢复/seek通过；PERF_5C_PAUSED_NR |

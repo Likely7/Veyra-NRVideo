@@ -47,3 +47,11 @@ build-export-baseline-v1 UI/probe构建成功，编译产品源码86e0458；只�
 原始日志和收据在`E:/项目/Veyra/logs/perf-nr-20261004/B5b-edges-v1-summary/summary.json`及15个case目录；HDR源SHA256 `05827c1b08f27a84be2074435365289a82e21ae435f39f4891cc26d921128e2d`，它是既有作者测试媒体，不冒充自然HDR影片或全效果HDR验收。候选仍默认关闭，下一步仅将已测无FG/NVENC路径启为默认，并以显式B-off保护复测产品worker生命周期。
 
 默认提升候选：仅NVENC且无FG、无slow-frame hook默认使用两帧/事件；FG/MFT保持串行。`VEYRA_TEST_EXPORT_SERIAL=1`明确关闭两者，独立ASYNC/FENCE_EVENTS测试开关支持0/1，不把无ENV的默认版误记为串行。原baseline/四策略原始EXE及数据不改写。边界存档前首次guard因WORKLOG空白行含一个空格失败，提交后工作区检查不再覆盖该提交；本次明确移除空格并在promotion前检查整个分支diff，不将这次格式错误隐藏为首次通过。
+
+## 无测试ENV的默认产品路径已保留
+
+`build-export-default-v1` UI/native/真实worker成功（产品4fceda8）。`nr-export-pipeline.py B2d B5b-default-v1 default-interleaved nr nrsr4k fg2`18/18通过，三轮无ENV默认与显式serial交错：单NR整次4263.150→3242.470ms，处理1885.012→864.259ms；NR+SR4K整次6325.810→5755.350ms，处理3778.987→3218.773ms。FG两组都实际serial/events=false/max1，输出119生成+1hold+120原帧，没有改变补帧吞吐承诺。每组6个完整文件SHA相同，前两组还与之前75文件/8100完整解码证明的文件SHA相同。无ENV的max2/events=true及serial-off实际日志已核对，acceptance.json保存中位和范围，不重做无依据的大矩阵。
+
+`nr-export-worker.py B2d B5b-worker-v1`5/5真实ExportJobManager/ExportQueue检查通过：创建中/暂停中/编码中取消并回收worker、同路径重试、最终保存前取消、无法删除partial位置报告、保存后退出前迟到取消保留成功、冻结批次顺序/追加项/缺失源、MP4/MKV剪辑。各进程≤250秒；无设备移除/压力。日志`E:/项目/Veyra/logs/perf-nr-20261004/B5b-worker-v1-summary/summary.json`，产物载荷前后SHA一致。
+
+保留这一导出子节点的默认行为。其他显卡/MFT保持原串行路径且未实卡验证；NVOF未来帧准备还需独立尝试，文件播放尚未改变，所以整个5b仍为in-progress。
