@@ -8268,3 +8268,6 @@ build-priority-load-v1 2步exit0。本轮三NR竞争fixture SHA a46c2923ab4b7a20
 2c build-recent-cache-v1因不存在plan.mode失败，改为runtimeNodeOrder后v2构建10步exit0。nr-feature-cache.py B5c B2c-native-v1 开/关三轮各50次，300完整SHA一致，且前20对封存B2a三个对照60项全一致；debug/device0。暖图off355.661ms/on0.156600ms，最终释放134.270/133.113MiB三轮稳定。实际nr-feature-cache-ui.py B3a B2c-ui-v1 首个UI组结束后解析on字段失败，修正nr字段并重跑v2。v2三轮每组20次公共UI请求，缓存每轮10命中，含Presenter create三轮中位off363.8505ms/on3.6020ms；pressure实际256MiB×12有界注入成功、预算压力evict、NR恢复；修改720尺寸严格key evict与源关闭evict通过。收窄单NR保留，SR隐含历史另核验，详PERF_2C_RECENT_CACHE。
 
 3a GpuSchedulingPriority只操作本进程，pending/实际Set/Get/状态拒绝日志、默认普通、即时偏好与性能组以及翻译接入。build-gpu-priority-product-v1 474步exit0。nr-priority-ui.py B3a B3a-product-ui-v1 两绘制模式20次切换各20个外部只读Get、保存/重启/非法值/暂停恢复通过，无设置重建。性能对照仍沿用18组封存5c版本，60Hz实时P99改善6.83%，拒绝默认High。extract --check零缺失/占位问题。所有证据/EXE身份/命令在同任务logs，下节点和R0继续，无发布。
+# 2026-10-05 3c完整图普通负载18组结束
+
+执行`py -3.11 -B scripts/perf/nr-graph-normal.py B2d B3c-graph-normal-v1`，18/18正常产品检查通过，无额外竞争/人工显存压力，测试前后全部产品payload SHA一致。2X DIRECT普通→COMPUTE普通增强21.386→19.477ms；3X23.330→21.542ms，三轮中位，约8.93%/7.66%。源跳过全0，3X生成过期DIRECT3→COMPUTE4/4/5；软件Present P99无明显改善，约70ms尾部与frame303/304图提交仍存在，不宣称卡顿根治。HIGH继续拒绝默认。数据/设置/身份/完整异常E:/项目/Veyra/logs/perf-nr-20261004/B3c-graph-normal-v1-summary和各18轮，详docs/PERF_3C_GRAPH_NORMAL_2026-10-05.md。guard 113路径通过；下一步生产队列迁移/回退与缓存兼容。
