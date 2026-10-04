@@ -8208,3 +8208,10 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 ## 2026-10-04 PERF 3a API时机反例
 
 build-priority-load-v1 2步exit0。本轮三NR竞争fixture SHA a46c2923ab4b7a200ad9028de442377d7b5e0214d473722be4dabb4681014e2b。nr-priority.py B5c 3a-competition-v1 的Set/Get全部0xC000000D/applied=false，不能作为Normal/High/Realtime比较。只读已运行的本轮两个GPU进程Get均0/class2；修正为实际GPU上下文就绪后设置，完整Get失败重试序列与最终读回记录。v1前三完整组证据保留，第四owned load经其stop文件正常停止，driver对方早停断言exit1；没有强关用户应用。下一轮3a-competition-v2重新交错九组。
+
+
+## 2026-10-04 PERF 3a有效18组与2c候选
+
+3a-competition-v2真30Hz与3a-competition-v3-60合成60Hz各九组exit0；三档实际读回2/4/5，全组无预览跳帧/debug/device异常。60Hz Realtime软件Present P99 18.9184→17.6260ms(-6.83%)，竞争Graph14.5448→15.2195完成/s(+4.64%)；30Hz max退化5.86%，不能称全尖峰改进。High无稳定收益，否决默认High，拟保留用户自选、默认Normal。原始日志/CSV/JSON/每秒环境均E:/项目/Veyra/logs/perf-nr-20261004/对应label。CPU-only nr-media.py生成M10/M2各60秒3600帧，前600无相邻重复，manifest/provenance/ffprobe/framemd5在authored-media-v1，明确合成而非实卡素材。没有GPU构建与计时重叠。
+
+2c候选修改Engine图所有权为unique_ptr，单NR→全关最多缓存一份完整Graph，严格key、DLLmtime/尺寸及WDDM预算；FXoff图不再初始化Core，命中完整reset，压力/恢复/退出先释放缓存。全部仍待构建和原生/Qt验证，未计收益。规则/取舍见PERF_2C_RECENT_CACHE，测试50开关含自然不同片段、所有输出完整SHA及关键像素。新增实际VRAM测试注入limit与HRESULT日志，默认行为不变。

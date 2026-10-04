@@ -21,7 +21,7 @@ def set_owned(proc,priority):
     before=ctypes.c_int(-1);after=ctypes.c_int(-1)
     a=get(int(proc._handle),ctypes.byref(before));b=set_priority(int(proc._handle),priority);c=get(int(proc._handle),ctypes.byref(after))
     return {'pid':proc.pid,'beforeStatus':hex(a&0xffffffff),'beforeClass':before.value,'setStatus':hex(b&0xffffffff),'afterStatus':hex(c&0xffffffff),'afterClass':after.value,'applied':a==b==c==0 and after.value==priority}
-variant,label=sys.argv[1:3];matrix.assert_gpu_tests_idle()
+variant,label=sys.argv[1:3];material=sys.argv[3] if len(sys.argv)>3 else 'M1';matrix.assert_gpu_tests_idle()
 app=BASE/'tests'/TASK/(label+'-load-app');assert not app.exists()
 shutil.copytree(BASE/'test-packages'/TASK/'Veyra-2.0.3-perf-baseline-A-NVIDIA-win64-portable',app,copy_function=matrix.copy_dependency)
 shutil.copy2(BASE/'build'/TASK/variant/'veyra_nr_gpu_competition_load.exe',app/'veyra_nr_gpu_competition_load.exe')
@@ -51,7 +51,7 @@ for repeat,order in enumerate(orders,1):
                 priority=set_owned(load,2)
                 assert priority['applied'], 'Owned GPU load priority was not actually applied'
                 target_begin=time.monotonic()
-                matrix.run(variant,'M1','S3',run_label,50,gpuPriority=classes[name],allowedGpuPids=(load.pid,))
+                matrix.run(variant,material,'S3',run_label,50,gpuPriority=classes[name],allowedGpuPids=(load.pid,))
                 target_end=time.monotonic()
                 assert load.poll() is None,'competition load ended before target'
                 (out/'stop').write_text('owned fixture completed',encoding='utf-8');rc=load.wait(timeout=20)
@@ -70,7 +70,7 @@ for repeat,order in enumerate(orders,1):
         with (out/'completed.csv').open(encoding='utf-8') as f:rows=list(csv.DictReader(f))
         ready_utc=int(re.search(r'NR_PERF_READY (\d+)',log).group(1))/1000
         stable=[float(row['completedFps']) for row in rows if ready_utc+10<float(row['wallUtc'])<ready_utc+45];assert len(stable)>15
-        result={'label':run_label,'priorityRequested':name,'loadPriority':priority,'targetPriority':receipt['gpuPriority'],
+        result={'label':run_label,'material':material,'priorityRequested':name,'loadPriority':priority,'targetPriority':receipt['gpuPriority'],
                 'loadExeSha256':matrix.digest(app/'veyra_nr_gpu_competition_load.exe'),'targetExeSha256':receipt['exeSha256'],
                 'loadCompletedFpsMedian':statistics.median(stable),'loadCompletedFpsRange':[min(stable),max(stable)],
                 'presentIntervalsMs':{'p50':percentile(intervals,.5),'p95':percentile(intervals,.95),'p99':percentile(intervals,.99),'max':max(intervals),'count':len(intervals)},
