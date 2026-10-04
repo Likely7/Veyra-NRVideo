@@ -30,7 +30,12 @@ for group in ('none','2-native','2-mixed','3-native','3-mixed'):
   (out/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf-8');results.append(receipt)
   (folder/'completed.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8');assert passValue,receipt
   with (out/'frames.csv').open(encoding='utf-8') as stream:frames=list(csv.DictReader(stream))
-  assert len(frames)==40 and {int(f['epoch']) for f in frames}=={1,2} and int(frames[20]['pts100ns'])>=100000000
+  assert len(frames)==40
+  firstEpoch={int(f['epoch']) for f in frames[:20]};seekEpoch={int(f['epoch']) for f in frames[20:]}
+  assert len(firstEpoch)==len(seekEpoch)==1 and min(seekEpoch)>max(firstEpoch)
+  assert int(frames[20]['pts100ns'])-int(frames[19]['pts100ns'])>10000000
+  receipt.update(seekRequestedSeconds=10,seekFirstPts100ns=int(frames[20]['pts100ns']),epochs=sorted(firstEpoch|seekEpoch))
+  (out/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf-8')
   if group in frameGroups:assert frames==frameGroups[group],'Same configuration re-run differs'
   else:frameGroups[group]=frames
 quality=BASE/'tests'/TASK/(label+'-quality');quality.mkdir(parents=True,exist_ok=False)
