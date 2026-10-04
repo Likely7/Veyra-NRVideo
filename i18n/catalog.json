@@ -4454,6 +4454,13 @@
    "ja": "マルチチャンネルのソースをステレオにまとめて出力（ヘッドホン向け）。オフ時はデバイスのチャンネル配置に従います"
   },
   {
+   "zh": "多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，导出仍按原生尺寸处理。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "多層 NR 可嘗試前層 720p、末層 1080p；三層可嘗試 480p / 720p / 1080p。降低前層解析度會改變畫面，匯出仍按原生尺寸處理。",
+   "en": "For multiple NR layers, try 720p first and 1080p last; for three layers, try 480p / 720p / 1080p. Lowering the earlier layers changes the image. Exports still use native dimensions.",
+   "ja": "複数の NR レイヤーでは前段を 720p、最終段を 1080p に、3 段では 480p / 720p / 1080p にする方法もあります。前段の解像度を下げると映像が変わります。書き出しは引き続きネイティブサイズで処理します。"
+  },
+  {
    "zh": "大",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "大",

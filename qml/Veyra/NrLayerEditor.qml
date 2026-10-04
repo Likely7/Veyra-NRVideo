@@ -104,6 +104,14 @@ ColumnLayout {
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
+    Text {
+        Layout.fillWidth: true
+        visible: !editor.amdNr && editor.layerCount > 1 &&
+                 (!editor.listControls || (veyra.nrLayers.length > 0 && editor.layerData.index === veyra.nrLayers[0].index))
+        text: qsTr("多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，导出仍按原生尺寸处理。")
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
+        wrapMode: Text.WordWrap
+    }
     NrValueRow {
         spec: ({key:"intensity",label:qsTr("模型强度"),min:0,max:1})
         enabled: Support.available(veyra, "nr" + editor.layerData.runtime)

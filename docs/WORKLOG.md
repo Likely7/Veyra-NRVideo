@@ -8318,3 +8318,11 @@ B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0�
 before347a184/candidate5edbf79，v1因不存在nrLayers成员构建失败，58f5845修正；v2/v3/v4构建成功，最终编译产品1efd344。七组debug输出/取消通过，随后24普通导出三轮交错整文件SHA与已解码baseline一致。单NR/NR+SR4K/双NR/4K→SR8K整次分别慢1.41/2.06/2.74/5.25%，暖处理分别仅降6.01/1.47/2.68/-0.16%，多占232/232/232/867MiB。独立两trace组各119对实际依赖区间重叠约1ms，区别NVOF完整依赖区间与硬件kernel，不混入正常性能数字。数据E:/项目/Veyra/logs/perf-nr-20261004/B5b-prefetch-{smoke,normal,8k,trace}-v1-*。决定存档后明确回退这个准备器/导入接口，不扩进文件播放；保留已测两帧NVENC优化。没有压力/设备移除/用户电源设置变更。
 
 明确revert484b425/b954b58/30cedcb完成；只保留发生冲突的当前完整事实文档，产品/CMake/driver与before347a184空diff，scope guard通过。新共享队列/快照导入/实验trace接口删除，已保留5b默认导出优化未丢失。准备4b时重新构建产品，不使用已回退候选的当前build EXE冒充基线。
+
+## 2026-10-05 NR性能4b既有逐层组合核验
+
+开工2446afc、夹具725a6c5，`nr-build.py B2d build-nr-mixed-v1 veyra_qml_ui veyra_nr_mixed_resolution_experiment`27步成功；native EXE 972e0d6a41db40a3bd9c0f1d9c26e3a21ac8a97e26a8606c7ca8634a07d6ee05。v1清单键分隔符、v2错误source epoch/精确seek预期导致Python断言失败，原生均pass；两问题按实际接口修正，v3完整9组360全RGBA/8个NR往返seek/debug0通过，相同配置两次输出无差异。不同组合6选帧2层PSNR40.68–42.62/最大161，3层34.51–35.97/最大193，未经用户画质确认，不设默认。
+
+`nr-mixed-normal.py B2d B4b-normal-v1`12普通播放三轮交错全部pass，无额外GPU/显存压力；2层全1080→720/1080增强区间14.644→11.461ms（-21.74%），3层全1080→480/720/1080为20.996→14.150ms（-32.61%）。同产品配置取舍，不是新算法收益；残差/呈现P99没有改善。2-native-r2保留2.791s实际提交间隙/84帧跳过，所有组合源303/304还存在67–115ms图提交长尾，R0继续查。日志/画质：E:/项目/Veyra/logs/perf-nr-20261004/B4b-{native-v3,normal-v1}-summary；E:/项目/Veyra/tests/perf-nr-20261004/B4b-native-v3-quality/review.html。
+
+共享NrLayerEditor只加多层可选组合和画面改变提示，不新增内置预设、不自动改参数，AMD未测不提示；extract新增1句，繁中/英/日补齐。下一节点3b先验证单adapter有界预建实际尺寸池与正常切换，原方案1b内容预算和2b并发Create已被反例拒绝，不能偷用。
