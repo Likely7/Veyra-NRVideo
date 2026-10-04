@@ -1,5 +1,9 @@
 # Veyra 工作记录
 
+## 2026-10-04 用户追问NR高耗时：拉出既有数据
+
+复核队列十二轮原始summary/player-timing，NR稳态每轮中位11.328–11.560ms，全部日志NR滚动P95最大11.972ms；原基线S4无自有竞争进程为7.188–7.212ms。明确本轮另跑自有三NR压力进程，竞争图完成约13–16/s；并非匹配负载的A/B，未排除源码回归。源码核对：公共Nr计时槽每层覆盖，仅保留最后一层；enhancementProcessingMs合并每层/其他增强跨度去重且日志输出滚动mean，纠正PERF_3C表头误写P95。27行派生CSV写入E:/项目/Veyra/logs/perf-nr-20261004/B3c-present-priority-v1-NR-readout.csv，既有JSON/log不变，缺失指标留空；无新GPU测试或产品修改。详PERF_3C_QUEUES NR耗时复核，下一轮先补同EXE无竞争/有竞争匹配对照再判回归。
+
 ## 2026-10-04 PERF本轮收尾汇报：3c正确性通过、提速未验收
 
 nr-queue-priority.py B2d B3c-present-priority-v1十二组全部exit0，实际HIGH100/Normal0读回；2X软件Present P99中位17.3202→17.4002ms/max63.1653→73.4092，3X P99 16.7883→16.5618/max78.4057→74.1415，拒绝默认HIGH。全环境/receipt/submit/竞争CSV与比较JSON已保存，详PERF_3C_QUEUES。

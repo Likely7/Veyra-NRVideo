@@ -38,7 +38,7 @@
 | 3b | NR自动内部尺寸 | pending | 取决于E1、真实预算/画质证据 |
 | 1b | 内容帧率预算 | rejected-prerequisite | 1a画面不成立，完整求值仍按transport次数；实测成本构造预算反例，PERF_1B_CONTENT_BUDGET；无生产改动 |
 | 1c | 重复节奏预测 | rejected | 三种节奏单像素瞬态反例均漏第49帧且后续未检测；PERF_1C_CADENCE_REJECTION；无产品代码需回退 |
-| 3c | 队列分工/呈现优先级 | in-progress-correctness-passed | 单特性540帧及完整Graph24组2502输出/PTS均一致/debug0；HIGH12组2X P99退0.46%而3X升1.35%，拒绝默认HIGH；完整compute实际性能下一轮；PERF_3C_QUEUES |
+| 3c | 队列分工/呈现优先级 | in-progress-correctness-passed | 单特性540帧及完整Graph24组2502输出/PTS均一致/debug0；HIGH12组2X P99退0.46%而3X升1.35%，拒绝默认HIGH；用户追问NR高耗时，已拉出27轮明细，下一轮先同EXE无竞争/有竞争对照排回归，再测完整compute实际性能；PERF_3C_QUEUES |
 | 5b | 文件/导出跨帧并行 | pending | 保留源帧/PTS/flow依赖，不扩大实时延迟 |
 | 4a | 多NR整链低分辨率调度 | pending | 保留每层残差参数；先测同尺寸与一致性 |
 | 4b | 先粗后细组合 | pending | 核对现有逐层尺寸；不新增强制预设 |

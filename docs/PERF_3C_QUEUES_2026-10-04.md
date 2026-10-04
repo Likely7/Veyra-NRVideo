@@ -14,7 +14,7 @@ RTX5070/616.56、原版E16及Lecram F95 NR各direct/compute三轮、DLSS SR dire
 
 独立FG DIRECT呈现队列，先CheckFeatureSupport再Create，读回GetDesc记录实际Priority。进程调度保持普通，两个NR+DLSS SR+DLSS2X/3X，另一个自有三NR满载进程；相同M1/尺寸/运行库/驱动，每档三轮Normal/HIGH交错，50秒稳态。nr-queue-priority.py B2d B3c-present-priority-v1十二组完成，所有请求实际读回0/100，无source preview skip/设备故障。
 
-| 设置 | 队列 | 软件Present P95 | P99 | 每轮max中位 | 处理时间滚动P95中位 | 竞争图完成/s |
+| 设置 | 队列 | 软件Present P95 | P99 | 每轮max中位 | 增强处理滚动均值的中位数 | 竞争图完成/s |
 |---|---|---:|---:|---:|---:|---:|
 | 2X | Normal | 17.1023 | 17.3202 | 63.1653 | 27.653 | 15.8293 |
 | 2X | HIGH | 17.0946 | 17.4002 | 73.4092 | 27.677 | 15.7525 |
@@ -30,3 +30,23 @@ RTX5070/616.56、原版E16及Lecram F95 NR各direct/compute三轮、DLSS SR dire
 build-graph-compute-v1构建产品UI、负载fixture及native fixture，exit0。nr-graph-queue.py B2d B3c-graph-native-v1四组（单NR、NR+SR、双NR+SR+DLSS2X/3X）各direct/compute三次，共24/24通过；M1真实自然视频60帧/进程，1440当前真实输出+1062全部生成输出=2502完整图像。2X每进程59生成帧，3X118，完整SHA、dimensions/subframe/PTS每行均一致，fresh A-A噪声0。所有D3D12 debug错误/设备移除0，Core关闭通过。该native测试因诊断读回串行等待，只验证完整图/NVOF/生成/时间戳正确性，不用于吞吐收益。
 
 CSV/全SHA/关键原始RGBA、身份/环境/命令均E:/项目/Veyra/logs/perf-nr-20261004/B3c-graph-native-v1-*与B3c-graph-native-v1-summary.json，build日志同目录。现阶段源码按checkpoint/perf-nr-3c-graph-candidate-20261004存档，校验收据E:/项目/Veyra/archives/perf-nr-20261004/3c-graph-candidate/checkpoint.json；下一轮需实际Qt在负载下DIRECT-normal/COMPUTE-normal/COMPUTE-HIGH三轮交错比较及独立B-off，收益不成立则revert该候选。用户要求当前轮结束汇报，尚未启动下一轮，R0仍待。
+
+## NR耗时复核（用户要求拉出测试数据）
+
+条件：RTX5070/616.56、M1 1920×1080/30、Lecram310.8.3.0，两层NR内部1080p、DLSS SR到4K及DLSS2X/3X，时域NR关闭。队列轮次明确同时运行自有三层原生1080p NR压力进程，尽快连续求值，并非单播放器空闲GPU场景；例如2X-normal-r1开始/结束nvidia-smi GPU使用率快照均93%。压力图稳态完成约13–16次/s，每次含三次NR求值。
+
+| 测试条件 | NR第1轮 | 第2轮 | 第3轮 | 增强处理三轮中位 |
+|---|---:|---:|---:|---:|
+| 原基线S4，2X，无自有竞争进程 | 7.212 | 7.188 | 7.202 | 21.192 |
+| 本轮2X，Normal，三NR竞争 | 11.365 | 11.367 | 11.374 | 27.653 |
+| 本轮2X，HIGH，三NR竞争 | 11.385 | 11.391 | 11.328 | 27.677 |
+| 本轮3X，Normal，三NR竞争 | 11.536 | 11.389 | 11.445 | 30.436 |
+| 本轮3X，HIGH，三NR竞争 | 11.518 | 11.426 | 11.560 | 30.587 |
+
+单位ms。每轮数值为稳态滚动日志读数的中位；gpuNrP95Ms是滚动P95，enhancementProcessingMs来自dashboard.enhancementProcessing.mean，是滚动均值，修正前表误写P95。两者不能相加或当成同一分位统计。GpuTimer::mark每层写同一个GpuStage::Nr槽，因此该NR字段只保留最后一层snippet求值区间；增强处理总计另合并Flow/SR/NR/per-layer/residual/FG时间区间去重，包含每层但不是端到端延迟或整图完成包络。多层总成本以这些完整指标判断，不能将NR列乘层数充当测量。
+
+十二轮全部player-timing行里的NR滚动P95最大读数11.972ms；这不是逐帧最大NR求值时间，稳态中位也不等于峰值。完整graph-native正确性fixture含诊断GPU等待/全图读回，不提供性能验收数据，不能用其进程墙钟反推NR耗时。
+
+NR高读数确实存在。GPU竞争是当前最明确的条件差异；A与B同时存在源码差异，尚无同一97dbccb…EXE卸掉压力的三轮匹配对照，不能据此断言所有升高都来自压力或排除性能回归。下一轮性能验收先补同EXE无竞争/有竞争与固定设置对照，再评估队列收益。此前核心复用/缓存/预热收益针对创建或切换，暂停收益针对暂停，不代表持续播放NR求值减少。
+
+数据导出：E:/项目/Veyra/logs/perf-nr-20261004/B3c-present-priority-v1-NR-readout.csv（基线15轮+队列12轮=27行，缺少的原始指标留空）；原始baseline-M1-summary.json、B3c-present-priority-v1-summary.json和各轮player.log/timing.csv保持原样。此次仅复核既有数据，无新GPU测试或产品改动。
