@@ -8,6 +8,7 @@
 - AMD最终标准7z：208813697 bytes（199.14MiB），SHA66ede4ca…0cc7e；独立7-Zip解压CRC通过，2015文件（2014payload+manifest）逐SHA及闭包通过，186weights/62kernels全部保留。两包均保留原FSR2.3三组件，NV的FSR4灰色；AGENTS长期规则已入main。
 - 独立最终解压包在Windows-only PATH/no SDK override、GPU D3D12/软件UI各home/pro/node/exp/set/min六页，共24截图/alpha255/正常退出，运行前后全部payload SHA不变；clean-smoke-NVIDIA/AMD与extracted-nv-final/extracted-amd-final记录。同一EXE真实bridge读到2.0.3，version-check.log；全包EXE SHA998d4261…98154。
 - 对应应用源码ZIP69298818 bytes / SHA7ebd18f5…f3c3a3；最终依赖源码550177874 / SHA1a04192b…03420c。嵌入旧2.0.0 dependency ZIP字节身份不变，新lmxxf源码已独立manifest检查/编译成功，source/source SDK/runtime/model隔离检查通过。未把DLL、模型或SDK提交Git。
+- 收尾清理本轮失败源码ZIP/混合staging/test APP/解压副本的PowerShell命令被自动审批CreateProcess拒绝，只有“blocked by policy”，未给具体原因。整个命令未执行，deleted=[]，未重试或绕过；E盘临时副本、截图和worker logs仍在原处。记录logs/release-2.0.3-20261004/cleanup.json。发布校验不依赖清理，最终包不包含这些中间文件。
 - 本机RTX5070/616.56证据与未测边界保持：RX9000 HIP推理、RTX40、616.92、Xbox真机有声/长稳、屏幕物理延迟未验。不要把自动重连写成网络根治、把提交FPS写成屏幕FPS。本轮不执行关机。
 
 ## 2026-10-04 2.0.3 分包、灰色入口与正式发布施工
