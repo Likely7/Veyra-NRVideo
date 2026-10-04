@@ -50,6 +50,10 @@ public:
     // (vendor 0x10DE, non-software) -> device at >= 12_0 -> direct queue ->
     // fence/event -> command slot ring. Every step logs its real result.
     bool initialize(const DeviceContextDesc& desc, Status& status);
+    // Independent bounded producer queue on the same device. Its own fence
+    // timeline must have exactly one CommandSlotRing signaler.
+    bool initializeSharedQueue(const D3D12DeviceContext& owner,
+                              D3D12_COMMAND_LIST_TYPE type,uint32_t slots,Status& status);
     void shutdown(); // reverse-order teardown
 
     bool initialized() const { return initialized_; }

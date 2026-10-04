@@ -448,10 +448,16 @@ public:
     // number of outputs changes, and it is reported as previewFgMultiplier.
     enum class FgDecision { Skip, Evaluate, Seed, Reduced };
     using FgAdmission=std::function<FgDecision(const FrameBatch&,bool warmingHistory)>;
+    struct PreparedFlow {
+        ComPtr<ID3D12Resource> flow,confidence;
+        ComPtr<ID3D12Fence> readyFence;
+        uint64_t readyValue=0,source=0,previous=0,settingsRevision=0;
+        double ptsMs=0;bool historyReset=false,valid=false;
+    };
     // `hardwareSurface` carries the decoded texture for paths whose surface
     // does not travel inside the AVFrame (D3D11VA). It must be provided exactly
     // when frame->format == AV_PIX_FMT_D3D11 and is unused otherwise.
-    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false);
+    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false, const PreparedFlow* preparedFlow = nullptr);
     bool nextFrameSlotAvailable()const {
         const unsigned slot=unsigned(realFrameIndex_%2);
         if(presentationFences_[slot]&&presentationFences_[slot]->GetCompletedValue()<presentationValues_[slot])return false;
@@ -486,6 +492,7 @@ public:
         uint64_t pausedNrResidualReuses = 0;
         uint64_t srEvaluateCount = 0;
         uint64_t nvofExecuteCount = 0;
+        uint64_t prefetchedFlowCount = 0;
         uint64_t amdOfExecuteCount = 0;
         uint64_t gpuDisExecuteCount = 0;
         uint64_t nvofFrameFailures = 0;

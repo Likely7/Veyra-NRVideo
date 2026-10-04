@@ -264,6 +264,28 @@ bool D3D12DeviceContext::initialize(const DeviceContextDesc& desc, Status& statu
     return true;
 }
 
+bool D3D12DeviceContext::initializeSharedQueue(const D3D12DeviceContext& owner,
+    D3D12_COMMAND_LIST_TYPE type,uint32_t slots,Status& status)
+{
+    if(this==&owner||!owner.initialized_||type!=D3D12_COMMAND_LIST_TYPE_COMPUTE||slots<2||slots>6){
+        status=Status::InvalidArgument;return false;
+    }
+    ComPtr<ID3D12CommandQueue> queue;ComPtr<ID3D12Fence> fence;
+    D3D12_COMMAND_QUEUE_DESC desc{};desc.Type=type;desc.Priority=D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+    HRESULT hr=owner.device_->CreateCommandQueue(&desc,IID_PPV_ARGS(&queue));
+    if(FAILED(hr)){status=Status::DeviceFailure;veyra::log::error("gfx-shared-queue",std::format("CreateCommandQueue hr=0x{:X}",unsigned(hr)));return false;}
+    hr=owner.device_->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence));
+    if(FAILED(hr)){status=Status::DeviceFailure;veyra::log::error("gfx-shared-queue",std::format("CreateFence hr=0x{:X}",unsigned(hr)));return false;}
+    HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+    if(!event){status=Status::DeviceFailure;veyra::log::error("gfx-shared-queue",std::format("CreateEvent error={}",GetLastError()));return false;}
+    // Creation failures above leave any live context intact.
+    shutdown();factory_=owner.factory_;adapter_=owner.adapter_;device_=owner.device_;
+    adapterInfo_=owner.adapterInfo_;featureLevel_=owner.featureLevel_;debugLayerEnabled_=owner.debugLayerEnabled_;
+    queue_=std::move(queue);fence_=std::move(fence);fenceEvent_=event;commandSlotCount_=slots;initialized_=true;
+    queue_->SetName(L"Veyra independent flow preparation queue");status=Status::Ok;
+    veyra::log::info("gfx-shared-queue",std::format("sameDevice=true type=COMPUTE slots={} independentFence=true",slots));return true;
+}
+
 void D3D12DeviceContext::shutdown()
 {
     if (!initialized_) {

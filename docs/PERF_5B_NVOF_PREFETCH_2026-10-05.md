@@ -9,3 +9,5 @@
 先用真实生产exportVideo测单NR与NR+SR4K，三个交错回合，B-off与已验证默认导出路径比较整次/处理区间；完整输出文件/decoded PTS不一致则不进入产品。核对debug层、reset/取消及有限资源重用，不做设备移除或真实资源压力。单进程≤250秒。该复用图会额外复制flow/conf且占显存，若成本大于隐去的NVOF等待，明确拒绝此实现；不能为微小收益重写整条source/color链或宣传达到原估计10%。
 
 初始源码检查：独立辅助图需要独立queue/fence但共享ID3D12Device，现D3D12DeviceContext只有新建device入口；新增仅供此候选的共享设备队列创建，事务式资源创建失败不破坏原context。原图NVOF input A/B仍正常更新，故关闭候选后可回原路径，生产默认图无附加GPU资源。
+
+候选按上述结构实现，`VEYRA_TEST_EXPORT_NVOF_PREFETCH=1`才创建辅助图；主图消费导入快照时维持GPU侧fence依赖，生产默认无快照/额外队列。准备过程复用实际EnhanceGraph，不复制颜色/光流算法。主图计数另记prefetchedFlowCount，辅助图实际NVOF execute仍有日志，不冒充主图常规execute。关闭辅助图先等各快照consumer，再drain/注销，原Graph reset仍按自己的真实luma/PTS分析并与快照描述匹配。下一步编译和真实输出/正常耗时证据；尚未声明通过。

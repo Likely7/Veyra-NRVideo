@@ -473,7 +473,7 @@ endif()
 # EnhanceGraph (the real GPU chain) needs the NGX + NVOF backends; wire it
 # into veyra_pipeline only when both exist so bare contract builds still work.
 if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
-  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/core/SceneCadenceAnalyzer.cpp)
+  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/FlowPrefetch.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/core/SceneCadenceAnalyzer.cpp)
   target_include_directories(veyra_pipeline PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_pipeline PRIVATE veyra_ngx veyra_nvof ${FFMPEG_LIBRARIES})
   add_dependencies(veyra_pipeline

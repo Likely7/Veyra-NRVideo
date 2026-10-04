@@ -1789,7 +1789,7 @@ bool EnhanceGraph::createViews()
 // ---------------------------------------------------------------------------
 // process: the per-frame chain (verbatim from the probe lambda).
 // ---------------------------------------------------------------------------
-bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh)
+bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh, const PreparedFlow* preparedFlow)
 {
     // Whole-chain duplicate reuse failed the unchanged-output experiment.
     // This narrower path only handles repeated edits of the SAME paused
@@ -2212,6 +2212,20 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // Guidance from original source-space color before SR/NR. Queue waits are GPU-side.
     bool haveFlow = false;
     const bool runMotion = nvofStandalone_ || (presentSinkFg()&&desc_.fgUsesFlow()) || (fgEnabled_&&desc_.fgUsesFlow()) || (srEnabled_&&desc_.srUsesFlow()&&(desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr));
+    if(preparedFlow){
+        auto matches=[&](ID3D12Resource* resource,DXGI_FORMAT format){
+            if(!resource)return false;const auto d=resource->GetDesc();ComPtr<ID3D12Device> device;
+            return SUCCEEDED(resource->GetDevice(IID_PPV_ARGS(&device)))&&device.Get()==context_.device()&&
+                d.Width==nvofW_&&d.Height==nvofH_&&d.Format==format&&d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        };
+        if(!runMotion||!nvof_||gpuDis_||amdOf_||!preparedFlow->readyFence||!preparedFlow->readyValue||
+            preparedFlow->source!=sourceFrameId||preparedFlow->previous!=previousSource_||
+            preparedFlow->ptsMs!=ptsMs||preparedFlow->settingsRevision!=desc_.settingsRevision||
+            preparedFlow->historyReset!=reset||preparedFlow->valid!=prevValid_||
+            !matches(preparedFlow->flow.Get(),DXGI_FORMAT_R16G16_FLOAT)||!matches(preparedFlow->confidence.Get(),DXGI_FORMAT_R8_UNORM)){
+            veyra::log::error("flow-prefetch","prepared guidance contract mismatch; refusing stale motion");return false;
+        }
+    }
     if (runMotion && (gpuDis_ || amdOf_ || (nvof_ && nvof_->initialized()))) {
         const float dims[8] = {uintBits(nvofW_),uintBits(nvofH_),uintBits(nvofW_),uintBits(nvofH_),0,0,0,0};
         if (prevValid_) {
@@ -2246,7 +2260,21 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             ++metrics_.gpuDisExecuteCount;haveFlow=true;
             gpuTimer_.mark(list,GpuStage::Flow,true);
         }
-        if (prevValid_ && !gpuDis_) {
+        if(preparedFlow&&prevValid_){
+            gpuTimer_.mark(list,GpuStage::Flow);
+            if(!submitGraph(slot))return false;
+            const HRESULT hr=ring_.queue()->Wait(preparedFlow->readyFence.Get(),preparedFlow->readyValue);
+            if(FAILED(hr)){veyra::log::error("flow-prefetch",std::format("consumer queue Wait hr=0x{:X}",unsigned(hr)));return false;}
+            list=ring_.acquireNext(slot,st);if(!list)return false;
+            auto copy=[&](ID3D12Resource* from,ID3D12Resource* to){
+                tracker_.transition(list,from,D3D12_RESOURCE_STATE_COPY_SOURCE);tracker_.transition(list,to,D3D12_RESOURCE_STATE_COPY_DEST);
+                list->CopyResource(to,from);tracker_.transition(list,from,D3D12_RESOURCE_STATE_COMMON);
+                tracker_.transition(list,to,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            };
+            copy(preparedFlow->flow.Get(),flowTex_.Get());copy(preparedFlow->confidence.Get(),confTex_.Get());
+            haveFlow=true;++metrics_.prefetchedFlowCount;gpuTimer_.mark(list,GpuStage::Flow,true);
+        }
+        if (prevValid_ && !gpuDis_ && !preparedFlow) {
             if(!amdOf_){
             gpuTimer_.mark(list,GpuStage::Flow);
             if(!submitGraph(slot))return false;

@@ -2,6 +2,7 @@
 #include "veyra/engine/ExportStreams.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/pipeline/EnhanceGraph.h"
+#include "veyra/pipeline/FlowPrefetch.h"
 #include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/sink/VideoEncoder.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
@@ -46,6 +47,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;source::MediaFileSource source;pipeline::EnhanceGraph graph(ctx,ring);
     struct CompletionEvent {HANDLE value=nullptr;~CompletionEvent(){if(value)CloseHandle(value);}} completionEvent;
     std::unique_ptr<sink::VideoEncoder> encoder;
+    std::unique_ptr<pipeline::FlowPrefetch> flowPrefetch;
     AVFormatContext* mux=nullptr;AVStream* videoStream=nullptr;ExportStreams streams;
     bool ok=false,headerWritten=false;int64_t written=0;double audioEndSeconds=0,videoOriginSeconds=0;
     uint64_t repairedTimestamps=0;
@@ -231,6 +233,13 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         const bool eligibleNvenc=!options.fg&&encoder->backend()==sink::EncoderBackend::Nvenc&&slowFrameIndex<0;
         const bool asyncNvenc=!serialOverride&&eligibleNvenc&&testFlag(L"VEYRA_TEST_EXPORT_ASYNC",eligibleNvenc);
         bool fenceEvents=!serialOverride&&testFlag(L"VEYRA_TEST_EXPORT_FENCE_EVENTS",eligibleNvenc);
+        if(testFlag(L"VEYRA_TEST_EXPORT_NVOF_PREFETCH",false)){
+            const bool allowed=asyncNvenc&&graph.nvofSessionInitialized()&&!gd.hdrInput&&!gd.hdrOutput&&
+                !gd.color.enabled&&!gd.additionalColorCount&&!gd.videoHdr.enabled&&gd.opticalFlowBackend==OpticalFlowBackend::Nvidia;
+            if(!allowed){failureReason=L"NVOF预取实验配置不受支持";veyra::log::error("flow-prefetch","experimental export admission refused");break;}
+            flowPrefetch=std::make_unique<pipeline::FlowPrefetch>();
+            if(!flowPrefetch->initialize(ctx,gd)){failureReason=L"NVOF预取实验初始化失败";break;}
+        }
         if(fenceEvents){
             const bool injected=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EVENT_CREATE_FAIL",nullptr,0)>0;
             if(!injected)completionEvent.value=CreateEventW(nullptr,FALSE,FALSE,nullptr);
@@ -313,7 +322,12 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
                 Microsoft::WRL::ComPtr<ID3D12Device5> device5;
                 if(SUCCEEDED(ctx.device()->QueryInterface(IID_PPV_ARGS(&device5)))){device5->RemoveDevice();veyra::log::warn("export","test hook: D3D12 device removed at this frame");}
             }
-            pipeline::EnhanceGraph::FrameOutputs out;if(!graph.process(frame,(pts+videoOriginSeconds)*1000,sourceCount==0||repairPts||pipeline::breaksHistory(packet.flags),out,packet.sequence,&packet.colorInfo,&packet.hardwareSurface,false)){error=true;break;}
+            const double framePtsMs=(pts+videoOriginSeconds)*1000;
+            const bool frameReset=sourceCount==0||repairPts||pipeline::breaksHistory(packet.flags);
+            pipeline::EnhanceGraph::PreparedFlow preparedFlow;
+            if(flowPrefetch&&!flowPrefetch->prepare(frame,framePtsMs,frameReset,packet.sequence,&packet.colorInfo,preparedFlow)){error=true;break;}
+            pipeline::EnhanceGraph::FrameOutputs out;
+            if(!graph.process(frame,framePtsMs,frameReset,out,packet.sequence,&packet.colorInfo,&packet.hardwareSurface,false,{},0,false,flowPrefetch?&preparedFlow:nullptr)){error=true;break;}
             const auto readyStart=std::chrono::steady_clock::now();
             if(!asyncNvenc&&!waitCompleted(out,readyStart,sourceCount))break;
             if(sourceCount>0&&options.fg){
@@ -329,6 +343,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             auto& real=out.batch.frames[out.batch.count-1];
             if(!encodeAt(real.lease->slot,false,pts)){error=true;break;}
             real.lease->consumerFence=ring.lastSignaledValue();lastReal=real.lease;
+            if(flowPrefetch)flowPrefetch->consumed(ctx.fence(),real.lease->consumerFence);
             if(asyncNvenc){
                 const uint64_t consumerFence=real.lease->consumerFence;
                 pendingFrames.push_back({std::move(out),consumerFence,sourceCount,readyStart});
@@ -367,6 +382,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         if(!encoder->finish()){if(failureReason.empty())failureReason=L"编码器收尾失败，请查看编码器诊断";break;}
         veyra::log::info("export-pipeline",std::format("source={} pipelineMs={:.3f} completionWaitMs={:.3f} mode={} fenceEvents={} maxInFlight={}",
             sourceCount,std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-pipelineStart).count(),completionWaitMs,asyncNvenc?"async":"serial",fenceEvents,maxInFlight));
+        if(flowPrefetch)veyra::log::info("flow-prefetch",std::format("source={} consumed={} normalMotionExecutes={}",sourceCount,graph.metrics().prefetchedFlowCount,graph.metrics().nvofExecuteCount));
         const int64_t estimatedEnd=lastOutputUs+std::max<int64_t>(1,int64_t(std::llround(sourceInterval*1000000/multiplier)));
         const int64_t finalEnd=requestedEnd>0?std::min(estimatedEnd,int64_t(std::llround((requestedEnd-videoOriginSeconds)*1000000))):estimatedEnd;
         if(!flushVideo(finalEnd))break;
@@ -377,7 +393,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         ok=written>0;if(counts)counts({sourceCount,generatedCount,holdCount,uint64_t(written)});
     }while(false); }catch(const std::exception& e){veyra::log::error("export",std::format("exception: {}",e.what()));failureReason=L"导出异常，请查看诊断";ok=false;}
     encoder.reset();if(mux){if(mux->pb){const int rc=avio_closep(&mux->pb);if(rc<0){failAv(L"刷新并关闭输出文件",rc);ok=false;}}avformat_free_context(mux);}
-    ring.drainQueue();graph.shutdown();source.close();ring.shutdown();
+    flowPrefetch.reset();ring.drainQueue();graph.shutdown();source.close();ring.shutdown();
     if(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_DEBUG",nullptr,0)>0&&ctx.device()){
         Microsoft::WRL::ComPtr<ID3D12InfoQueue> debug;const HRESULT hr=ctx.device()->QueryInterface(IID_PPV_ARGS(&debug));unsigned errors=0;
         if(FAILED(hr)){ok=false;veyra::log::error("export-debug",std::format("InfoQueue query failed hr=0x{:X}",unsigned(hr)));}

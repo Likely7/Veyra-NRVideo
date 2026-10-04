@@ -4,7 +4,7 @@ import importlib.util,json,os,re,shutil,subprocess,sys,time
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='perf-nr-20261004'
 spec=importlib.util.spec_from_file_location('matrix',ROOT/'scripts/perf/nr-matrix.py');matrix=importlib.util.module_from_spec(spec);spec.loader.exec_module(matrix)
 variant,label,mode=sys.argv[1:4];groups=sys.argv[4:] or ['none4k','nr','nr2','nrsr4k','sr8k']
-assert mode in ('default','serial','events','async','async-events','interleaved','default-interleaved','all')
+assert mode in ('default','serial','events','async','async-events','prefetch','interleaved','default-interleaved','prefetch-interleaved','all')
 assert all(g in ('none4k','nr','nr2','sr4k','nrsr4k','sr8k','fg2') for g in groups)
 matrix.assert_gpu_tests_idle();app=BASE/'tests'/TASK/(label+'-app');assert not app.exists()
 shutil.copytree(BASE/'test-packages'/TASK/'Veyra-2.0.3-perf-baseline-A-NVIDIA-win64-portable',app,copy_function=matrix.copy_dependency)
@@ -17,7 +17,7 @@ for group in groups:
  source=BASE/'tests/perf-matrix/media/M2.mkv' if group in ('none4k','sr8k') else matrix.SOURCES['M1']
  config='none' if group=='none4k' else group;frames=60 if group=='sr8k' else 120
  for repeat in range(1,4):
-  modes=(('serial','default') if repeat%2 else ('default','serial')) if mode=='default-interleaved' else (('serial','async') if repeat%2 else ('async','serial')) if mode=='interleaved' else (('serial','events','async','async-events') if repeat%2 else ('async-events','async','events','serial')) if mode=='all' else (mode,)
+  modes=(('default','prefetch') if repeat%2 else ('prefetch','default')) if mode=='prefetch-interleaved' else (('serial','default') if repeat%2 else ('default','serial')) if mode=='default-interleaved' else (('serial','async') if repeat%2 else ('async','serial')) if mode=='interleaved' else (('serial','events','async','async-events') if repeat%2 else ('async-events','async','events','serial')) if mode=='all' else (mode,)
   for current in modes:
    matrix.assert_gpu_tests_idle();name=f'{label}-{group}-{current}-r{repeat}';out=BASE/'logs'/TASK/name;tmp=BASE/'tmp'/TASK/name
    for p in (out,tmp):p.mkdir(parents=True,exist_ok=False)
@@ -28,6 +28,7 @@ for group in groups:
    if current=='serial':env['VEYRA_TEST_EXPORT_SERIAL']='1'
    if current=='events':env['VEYRA_TEST_EXPORT_ASYNC']='0'
    if current=='async':env['VEYRA_TEST_EXPORT_FENCE_EVENTS']='0'
+   if current=='prefetch':env['VEYRA_TEST_EXPORT_NVOF_PREFETCH']='1'
    if current in ('async','async-events'):env['VEYRA_TEST_EXPORT_ASYNC']='1'
    if current in ('events','async-events'):env['VEYRA_TEST_EXPORT_FENCE_EVENTS']='1'
    command=[str(exe),str(source),str(dest),config,str(frames),str(out)]
