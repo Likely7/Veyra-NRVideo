@@ -1034,6 +1034,13 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_compile_options(veyra_vfg_export_probe PRIVATE /utf-8)
   target_link_libraries(veyra_vfg_export_probe PRIVATE veyra_engine)
   add_executable(veyra_preset_library_tests tests/unit/PresetLibraryTests.cpp src/engine/PresetLibrary.cpp src/engine/EffectChain.cpp)
+target_link_options(veyra_preset_library_tests PRIVATE /STACK:33554432) # Preset apply recurses over 21 KB ChainConfiguration frames; the default 1 MB stack is too close to the edge.
+add_executable(veyra_hdr_tuning_tests tests/unit/HdrOutputTuningTests.cpp src/engine/PresetLibrary.cpp src/engine/EffectChain.cpp)
+target_compile_features(veyra_hdr_tuning_tests PRIVATE cxx_std_20)
+target_include_directories(veyra_hdr_tuning_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# veyra_base carries /utf-8 and NOMINMAX (PresetLibrary.cpp has Chinese literals and uses std::max).
+target_link_libraries(veyra_hdr_tuning_tests PRIVATE veyra_base)
+target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_features(veyra_preset_library_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_preset_library_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_preset_library_tests PRIVATE veyra_base)

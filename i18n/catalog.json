@@ -428,6 +428,20 @@
    "ja": "+  NR 層を追加"
   },
   {
+  "zh": "0 = 不做高光滚降",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "0 = 不做高光滾降",
+  "en": "0 = no highlight roll-off",
+  "ja": "0 = ハイライト壓縮なし"
+ },
+  {
+  "zh": "0 = 不限制",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "0 = 不限制",
+  "en": "0 = no limit",
+  "ja": "0 = 制限なし"
+ },
+  {
    "zh": "0 = 沿用所选格式；设备返回其他帧率会报错，不在软件中偷偷丢帧",
    "src": "qml/DialogHost.qml",
    "zh-TW": "0 = 沿用所選格式；裝置返回其他幀率會報錯，不在軟體中偷偷丟幀",
@@ -435,12 +449,40 @@
    "ja": "0 = 選択したフォーマットのまま。デバイスが別のフレームレートを返した場合はエラーになり、黙ってフレームを捨てることはしません"
   },
   {
+  "zh": "0 = 自动使用系统报告值",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "0 = 自动使用系统报告值",
+  "en": "0 = use the value the system reports",
+  "ja": "0 = use the value the system reports"
+ },
+  {
+  "zh": "0 = 跟随片源",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "0 = 跟隨片源",
+  "en": "0 = follow the source",
+  "ja": "0 = ソースに追従"
+ },
+  {
+  "zh": "0 = 跟随片源；报低通常整体变亮",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "0 = 跟隨片源；報低通常整體變亮",
+  "en": "0 = follow the source; a lower value usually brightens the picture",
+  "ja": "0 = ソースに追従。低く申告すると通常は全體が明るくなる"
+ },
+  {
    "zh": "1080p · 默认",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "1080p · 預設",
    "en": "1080p · default",
    "ja": "1080p · 既定"
   },
+  {
+  "zh": "203 = 中性；调高整体变亮，峰值不变",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "203 = 中性；調高整體變亮，峰值不變",
+  "en": "203 = neutral; higher brightens the picture with the peak unchanged",
+  "ja": "203 = 中性。上げると全體が明るくなるがピークは不變"
+ },
   {
    "zh": "2X 为原生路径，3X / 4X 为实验解锁；失败原因见诊断",
    "src": "src/ui/QmlPlayerBridge.cpp",
@@ -757,6 +799,20 @@
    "ja": "HDR → scRGB / 浮動小数点"
   },
   {
+  "zh": "HDR 亮度曲线",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "HDR 亮度曲線",
+  "en": "HDR brightness curve",
+  "ja": "HDR 輝度カーブ"
+ },
+  {
+  "zh": "HDR 元数据",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "HDR 中繼資料",
+  "en": "HDR metadata",
+  "ja": "HDR メタデータ"
+ },
+  {
    "zh": "HDR 片源也按 SDR 显示；与采集卡的“转为 SDR 显示”是同一设置",
    "src": "qml/ProPage.qml",
    "zh-TW": "HDR 片源也按 SDR 顯示；與擷取卡的“轉為 SDR 顯示”是同一設定",
@@ -924,6 +980,20 @@
    "en": "MP4 cannot keep this codec as is; choose MKV or exclude this track",
    "ja": "MP4 ではこのコーデックをそのまま保持できません。MKV を選ぶか、このトラックを除外してください"
   },
+  {
+  "zh": "MaxCLL (nit)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "MaxCLL (nit)",
+  "en": "MaxCLL (nit)",
+  "ja": "MaxCLL (nit)"
+ },
+  {
+  "zh": "MaxFALL (nit)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "MaxFALL (nit)",
+  "en": "MaxFALL (nit)",
+  "ja": "MaxFALL (nit)"
+ },
   {
    "zh": "NGX 核心",
    "src": "include/veyra/engine/BackendRecovery.h",
@@ -1828,6 +1898,13 @@
    "ja": "保持しない"
   },
   {
+  "zh": "不做任何改动，交给显示器和片源本身。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "不做任何改动，交给显示器和片源本身。",
+  "en": "Changes nothing; the display and the source decide.",
+  "ja": "Changes nothing; the display and the source decide."
+ },
+  {
    "zh": "不可用",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "不可用",
@@ -1967,6 +2044,13 @@
    "en": "Mid gray",
    "ja": "ミッドグレー"
   },
+  {
+  "zh": "中灰 (nit)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "中灰 (nit)",
+  "en": "Mid-gray (nit)",
+  "ja": "中間調 (nit)"
+ },
   {
    "zh": "中间调",
    "src": "qml/ColourPanel.qml",
@@ -3474,6 +3558,13 @@
    "ja": "ネイティブ HDR 入力。SDR→HDR 変換は不要です"
   },
   {
+   "zh": "原生 HDR 输入；「HDR 片源转换」未开启",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "原生 HDR 輸入；「HDR 片源轉換」未開啟",
+   "en": "Native HDR input; \"Convert HDR sources too\" is off",
+   "ja": "ネイティブ HDR 入力；「HDR ソースも変換」はオフです"
+  },
+  {
    "zh": "原生 · SDR",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "原生 · SDR",
@@ -3670,11 +3761,25 @@
    "ja": "この PC に保存したこのホストだけを削除します。次回は再ペアリングが必要です"
   },
   {
+  "zh": "只在这个亮度以下的暗部生效",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "只在這個亮度以下的暗部生效",
+  "en": "Only shadows below this level are lifted",
+  "ja": "この輝度以下の暗部にのみ効く"
+ },
+  {
    "zh": "只有节点模式使用编辑连接",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "只有節點模式使用編輯連接",
    "en": "Only node mode uses edit connections",
    "ja": "接続の編集はノードモードでのみ使います"
+  },
+  {
+   "zh": "只清空这个列表，不会删除文件。",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "只清空這個列表，不會刪除檔案。",
+   "en": "Only clears this list; no file is deleted.",
+   "ja": "このリストだけを消去します。ファイルは削除されません。"
   },
   {
    "zh": "只用 DLSS / XeSS 补帧时：到 NVIDIA App 关闭 Smooth Motion。",
@@ -4432,6 +4537,13 @@
    "en": "Mix multichannel sources down to stereo (headphones); when off, channels follow the device layout",
    "ja": "マルチチャンネルのソースをステレオにまとめて出力（ヘッドホン向け）。オフ時はデバイスのチャンネル配置に従います"
   },
+  {
+  "zh": "夜里关灯看：柔和一点，同时保留暗部细节。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "夜里关灯看：柔和一点，同时保留暗部细节。",
+  "en": "Watching at night with the lights off: softer overall while keeping shadow detail.",
+  "ja": "Watching at night with the lights off: softer overall while keeping shadow detail."
+ },
   {
    "zh": "大",
    "src": "qml/SettingsPage.qml",
@@ -5238,6 +5350,13 @@
    "ja": "ピーク "
   },
   {
+  "zh": "峰值上限 (nit)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "峰值上限 (nit)",
+  "en": "Peak cap (nit)",
+  "ja": "ピーク上限 (nit)"
+ },
+  {
    "zh": "峰值亮度 (nit)",
    "src": "qml/NodePage.qml",
    "zh-TW": "峰值亮度 (nit)",
@@ -5377,6 +5496,13 @@
    "en": "Wake request sent; connect once the PS5 has started.",
    "ja": "起動要求を送信しました。PS5 が起動してから接続します。"
   },
+  {
+  "zh": "已发送给显示器",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "已傳送給顯示器",
+  "en": "Sent to the display",
+  "ja": "表示機器へ送信中"
+ },
   {
    "zh": "已取消 · 可重新开始",
    "src": "qml/ExportPage.qml",
@@ -5952,6 +6078,20 @@
    "ja": "リニア PCM を強制"
   },
   {
+  "zh": "强化冲击",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "强化冲击",
+  "en": "More punch",
+  "ja": "More punch"
+ },
+  {
+  "zh": "强度",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "强度",
+  "en": "Strength",
+  "ja": "Strength"
+ },
+  {
    "zh": "强度 ",
    "src": "qml/DialogHost.qml",
    "zh-TW": "強度 ",
@@ -6505,6 +6645,20 @@
    "ja": "ウィンドウまたはディスプレイ全体をソースにする"
   },
   {
+  "zh": "把内容峰值告诉显示器",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "把內容峰值告訴顯示器",
+  "en": "Tells the display the content peak",
+  "ja": "コンテンツのピークを表示機器に傳える"
+ },
+  {
+  "zh": "把内容峰值告诉显示器，让它的动态色调映射有依据。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "把內容峰值告訴顯示器，讓它的動態色調映射有依據。",
+  "en": "Tells the display what the content peak is, so its dynamic tone mapping has something to work from.",
+  "ja": "コンテンツのピークを表示機器に傳え、動的トーンマッピングの判斷材料にする。"
+ },
+  {
    "zh": "把当前设置另存为预设…",
    "src": "qml/NodePage.qml",
    "zh-TW": "把當前設定另存為預設…",
@@ -6532,6 +6686,13 @@
    "en": "Anti-flicker level",
    "ja": "ちらつき防止のレベル"
   },
+  {
+  "zh": "抬升范围 (nit)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "抬升範圍 (nit)",
+  "en": "Lift range (nit)",
+  "ja": "持ち上げ範圍 (nit)"
+ },
   {
    "zh": "拉伸铺满",
    "src": "qml/ProPage.qml",
@@ -7199,6 +7360,13 @@
    "ja": "明るさ"
   },
   {
+  "zh": "明亮环境",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "明亮环境",
+  "en": "Bright room",
+  "ja": "Bright room"
+ },
+  {
    "zh": "明度变化",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "明度變化",
@@ -7374,6 +7542,13 @@
    "ja": "再生バーを表示"
   },
   {
+  "zh": "显示设备峰值 (nit)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "显示设备峰值 (nit)",
+  "en": "Display peak (nit)",
+  "ja": "Display peak (nit)"
+ },
+  {
    "zh": "显示队列控制不可用 · ",
    "src": "src/engine/VideoPresenter.cpp",
    "zh-TW": "顯示佇列控制不可用 · ",
@@ -7437,12 +7612,54 @@
    "ja": "カラープリセットはまだありません"
   },
   {
+  "zh": "暗亮双修",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "暗亮双修",
+  "en": "Dark + bright",
+  "ja": "Dark + bright"
+ },
+  {
    "zh": "暗化变化",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "暗化變化",
    "en": "Darkening change",
    "ja": "暗くなる変化"
   },
+  {
+  "zh": "暗场很暗、亮场又很亮的片子：两头都照顾。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "暗场很暗、亮场又很亮的片子：两头都照顾。",
+  "en": "Films that are dark in places and very bright in others: handles both ends.",
+  "ja": "Films that are dark in places and very bright in others: handles both ends."
+ },
+  {
+  "zh": "暗场提亮",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "暗场提亮",
+  "en": "Lift dark scenes",
+  "ja": "Lift dark scenes"
+ },
+  {
+  "zh": "暗室观影",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "暗室观影",
+  "en": "Dark room",
+  "ja": "Dark room"
+ },
+  {
+  "zh": "暗调片、夜景多的剧集：只抬暗部，亮部不受影响。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "暗调片、夜景多的剧集：只抬暗部，亮部不受影响。",
+  "en": "Dark films and night-heavy series: lifts the shadows only; the highlights are untouched.",
+  "ja": "Dark films and night-heavy series: lifts the shadows only; the highlights are untouched."
+ },
+  {
+  "zh": "暗部抬升 (0.01 EV)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "暗部抬升 (0.01 EV)",
+  "en": "Shadow lift (0.01 EV)",
+  "ja": "シャドウ持ち上げ (0.01 EV)"
+ },
   {
    "zh": "曝光（EV）",
    "src": "src/ui/QmlPlayerBridge.cpp",
@@ -8438,6 +8655,13 @@
    "ja": "残差"
   },
   {
+  "zh": "母版峰值 (nit)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "母版峰值 (nit)",
+  "en": "Mastering peak (nit)",
+  "ja": "マスタリングピーク (nit)"
+ },
+  {
    "zh": "比较源画面与上一帧：没有明显变化的像素沿用上一帧输出，明显变化的位置直接用新结果。",
    "src": "qml/ProPage.qml",
    "zh-TW": "比較源畫面與上一幀：沒有明顯變化的像素沿用上一幀輸出，明顯變化的位置直接用新結果。",
@@ -8655,6 +8879,13 @@
    "ja": "クリア"
   },
   {
+   "zh": "清空最近播放记录？",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "清空最近播放記錄？",
+   "en": "Clear the recent list?",
+   "ja": "最近再生した記録を消去しますか？"
+  },
+  {
    "zh": "清空等待",
    "src": "qml/ExportPage.qml",
    "zh-TW": "清空等待",
@@ -8752,6 +8983,13 @@
    "en": "Slider keyboard step",
    "ja": "スライダーのキー操作の刻み"
   },
+  {
+  "zh": "滚降强度 (%)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "滾降強度 (%)",
+  "en": "Roll-off strength (%)",
+  "ja": "壓縮の強さ (%)"
+ },
   {
    "zh": "点一下滑块后用 ← → 调整，每次的幅度；Esc 或单击画面交还方向键给快进快退",
    "src": "qml/SettingsPage.qml",
@@ -8921,6 +9159,13 @@
    "ja": "映像が途切れました。キーフレームを要求して復旧中…"
   },
   {
+  "zh": "画面偏灰、平淡的老片或转制片：提高对比观感。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "画面偏灰、平淡的老片或转制片：提高对比观感。",
+  "en": "Flat or washed-out older and remastered titles: adds contrast.",
+  "ja": "Flat or washed-out older and remastered titles: adds contrast."
+ },
+  {
    "zh": "画面呈现失败",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "畫面呈現失敗",
@@ -9074,6 +9319,13 @@
    "en": "Sign-in was refused.",
    "ja": "サインインが拒否されました。"
   },
+  {
+  "zh": "白天或亮环境看片：整体提亮一些。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "白天或亮环境看片：整体提亮一些。",
+  "en": "Watching in daylight or a bright room: brightens the picture overall.",
+  "ja": "Watching in daylight or a bright room: brightens the picture overall."
+ },
   {
    "zh": "白色",
    "src": "src/ui/QmlPlayerBridge.cpp",
@@ -9355,6 +9607,13 @@
    "ja": "出力テクスチャの解放待ちがタイムアウトしました"
   },
   {
+  "zh": "等比例缩放这一档的效果；100% = 档位原值",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "等比例缩放这一档的效果；100% = 档位原值",
+  "en": "Scales the whole preset; 100% = the preset as written",
+  "ja": "Scales the whole preset; 100% = the preset as written"
+ },
+  {
    "zh": "等线",
    "src": "qml/DialogHost.qml",
    "zh-TW": "等線",
@@ -9438,6 +9697,13 @@
    "en": "The system does not support Windows Graphics Capture",
    "ja": "このシステムは Windows Graphics Capture に対応していません"
   },
+  {
+  "zh": "系统报告：峰值 %1、全屏 %2、黑位 %3 nit",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "系统报告：峰值 %1、全屏 %2、黑位 %3 nit",
+  "en": "Reported: peak %1, full-frame %2, black %3 nit",
+  "ja": "Reported: peak %1, full-frame %2, black %3 nit"
+ },
   {
    "zh": "系统硬件编码 H.264（{}）",
    "src": "src/sink/MfVideoEncoder.cpp",
@@ -9816,6 +10082,13 @@
    "en": "Custom cap (FPS)",
    "ja": "カスタム上限（FPS）"
   },
+  {
+  "zh": "自定义：已用下面的滑块微调过。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "自定义：已用下面的滑块微调过。",
+  "en": "Custom: adjusted with the sliders below.",
+  "ja": "Custom: adjusted with the sliders below."
+ },
   {
    "zh": "自然饱和度",
    "src": "src/ui/QmlPlayerBridge.cpp",
@@ -12414,6 +12687,20 @@
    "ja": "再起動が必要です"
   },
   {
+  "zh": "静态曲线：抬暗部、定中灰、压高光",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "靜態曲線：抬暗部、定中灰、壓高光",
+  "en": "Static curve: shadows lifted, mid-gray set, highlights rolled off",
+  "ja": "靜的曲線：暗部を持ち上げ、中間調を決め、ハイライトを壓縮"
+ },
+  {
+  "zh": "静态曲线：抬暗部、定中灰、压高光。不随场景变化，不会呼吸。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "靜態曲線：抬暗部、定中灰、壓高光。不隨場景變化，不會呼吸。",
+  "en": "Static curve: lifts the shadows, sets the mid-gray, rolls off the highlights. It never follows the scene, so the picture cannot breathe.",
+  "ja": "靜的曲線：暗部を持ち上げ、中間調を決め、ハイライトを壓縮。シーンに追従しない。"
+ },
+  {
    "zh": "静态最稳、光流为默认、低频保留高频细节",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "靜態最穩、光流為預設、低頻保留高頻細節",
@@ -13239,6 +13526,27 @@
    "en": "Highlights",
    "ja": "ハイライト"
   },
+  {
+  "zh": "高光保护",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "高光保护",
+  "en": "Protect highlights",
+  "ja": "Protect highlights"
+ },
+  {
+  "zh": "高光很亮的片子（雪景/爆炸/演唱会）：压住顶部，暗部不动。",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "高光很亮的片子（雪景/爆炸/演唱会）：压住顶部，暗部不动。",
+  "en": "Films with very bright highlights (snow, explosions, concerts): rolls off the top end and leaves the shadows alone.",
+  "ja": "Films with very bright highlights (snow, explosions, concerts): rolls off the top end and leaves the shadows alone."
+ },
+  {
+  "zh": "高光起点 (nit)",
+  "src": "qml/Veyra/ProPage.qml",
+  "zh-TW": "高光起點 (nit)",
+  "en": "Highlight start (nit)",
+  "ja": "ハイライト開始點 (nit)"
+ },
   {
    "zh": "高延迟·需 CPU 拆包",
    "src": "include/veyra/source/CaptureFormatRank.h",

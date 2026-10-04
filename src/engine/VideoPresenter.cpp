@@ -60,7 +60,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     std::vector<uint8_t> vs,ps;
     // The output pool contains both parities of every generated subframe.
     // Comparison references follow it; derive offsets to cover VFG through 8X.
-    if(!pipeline::loadShaderBytes("PresentBlit_vs.dxil",vs)||!pipeline::loadShaderBytes("PresentBlit_ps.dxil",ps)||!pass_.create(ctx.device(),vs,ps,pipeline::kOutputPoolSlots+4,graph.outputFormat()))return false;
+    if(!pipeline::loadShaderBytes("PresentBlit_vs.dxil",vs)||!pipeline::loadShaderBytes("PresentBlit_ps.dxil",ps)||!pass_.create(ctx.device(),vs,ps,pipeline::kOutputPoolSlots+4,graph.outputFormat(),16))return false;
     if(sink_.xess()){
         std::vector<uint8_t> cs;
         if(!pipeline::loadShaderBytes("PresentMotion.dxil",cs)||!presentMotionPass_.create(ctx.device(),cs,4,1,1,16))return false;
@@ -80,7 +80,10 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     for(unsigned i=0;i<4;++i)pipeline::makeSrv(ctx.device(),i<2?graph.sourceReference(i):graph.baseReference(i-2),DXGI_FORMAT_R16G16B16A16_FLOAT,{pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i+pipeline::kOutputPoolSlots)*pass_.increment});
     return true;
 }
-void VideoPresenter::refresh(ID3D12Device* device){for(unsigned i=0;i<3;++i){Microsoft::WRL::ComPtr<ID3D12Resource> bb;if(SUCCEEDED(sink_.swapChain()->GetBuffer(i,IID_PPV_ARGS(&bb))))device->CreateRenderTargetView(bb.Get(),nullptr,{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i)*inc_});}}
+void VideoPresenter::refresh(ID3D12Device* device){
+    // The swap chain is rebuilt here (resize, monitor/HDR switch), so the new
+    // chain has never received the HDR metadata: ask for it to be sent again.
+    metadataSent_=false;for(unsigned i=0;i<3;++i){Microsoft::WRL::ComPtr<ID3D12Resource> bb;if(SUCCEEDED(sink_.swapChain()->GetBuffer(i,IID_PPV_ARGS(&bb))))device->CreateRenderTargetView(bb.Get(),nullptr,{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i)*inc_});}}
 bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& sharedRing,pipeline::EnhanceGraph& graph,unsigned slot,bool generated,bool referencesValid,int comparison,bool baseReference,float split,pipeline::FrameIdentity identity,PreviewView view,int64_t sourcePts100ns) {
     auto& ring=presentationQueue_?presentationRing_:sharedRing;
     auto* fence=presentationFence_?presentationFence_.Get():ctx.fence();
@@ -153,18 +156,34 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // PresentBlit uses a contain mapping. Cancel its fit so these dimensions
     // express the exact shared display transform, including stretch/SAR/fill.
     const float inverseFit=1.0f/std::min(float(rc.right)/renderW,float(rc.bottom)/renderH);
-    float dims[8]={renderW,renderH,samplingFlags,inverseFit,float(rc.right),float(rc.bottom),view.centerX,view.centerY};list->SetGraphicsRoot32BitConstants(0,8,dims,0);
+    // Custom: static HDR curve. The present blit applies it on absolute nits just
+    // before the PQ encode, so it never touches the exported or the graded frame.
+    const auto& hdrCurve=graph.hdrCurve();
+    float dims[16]={renderW,renderH,samplingFlags+((hdrCurve.enabled&&graph.hdrOutput())?16.0f:0.0f),inverseFit,float(rc.right),float(rc.bottom),view.centerX,view.centerY};
+    dims[8]=float(hdrCurve.shadowLiftEv100)/100.0f;
+    dims[9]=float(hdrCurve.shadowRangeNits);
+    dims[10]=float(hdrCurve.midGrayNits);
+    dims[11]=float(hdrCurve.highlightStartNits);
+    {
+        const float peak=hdrCurve.peakCapNits?float(hdrCurve.peakCapNits):1000.0f;
+        const float start=float(hdrCurve.highlightStartNits);
+        dims[12]=std::max(1.0f,peak-start)*float(hdrCurve.rollOffPercent)/100.0f;
+        dims[13]=float(hdrCurve.peakCapNits);
+    }
+    dims[14]=0.0f;dims[15]=0.0f;
+    list->SetGraphicsRoot32BitConstants(0,16,dims,0);
     list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+size_t(slot+(generated?2:0))*pass_.increment});
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);list->DrawInstanced(3,1,0,0);
     if(comparison&&!generated&&referencesValid){
         auto* reference=baseReference?graph.baseReference(slot):graph.sourceReference(slot);
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition.pResource=reference;b.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;b.Transition.StateBefore=D3D12_RESOURCE_STATE_COMMON;b.Transition.StateAfter=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;list->ResourceBarrier(1,&b);
-        dims[2]=samplingFlags+(graph.hdr10Output()?4:graph.hdrOutput()?0:1)+(graph.videoHdrActive()?8:0);list->SetGraphicsRoot32BitConstants(0,8,dims,0);list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+size_t(pipeline::kOutputPoolSlots+slot+(baseReference?2:0))*pass_.increment});
+        dims[2]=samplingFlags+((hdrCurve.enabled&&graph.hdrOutput())?16.0f:0.0f)+(graph.hdr10Output()?4:graph.hdrOutput()?0:1)+(graph.videoHdrActive()?8:0);list->SetGraphicsRoot32BitConstants(0,16,dims,0);list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+size_t(pipeline::kOutputPoolSlots+slot+(baseReference?2:0))*pass_.increment});
         if(comparison==2)rect.right=LONG(std::clamp((rc.right*.5f+(std::clamp(split,0.0f,1.0f)-view.centerX)*renderW)*sink_.bufferWidth()/rc.right,0.0f,float(sink_.bufferWidth())));list->RSSetScissorRects(1,&rect);list->DrawInstanced(3,1,0,0);
         std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
         if(veyra::log::verboseFrameLogs())veyra::log::info("comparison",std::format("real-frame source={} epoch={} revision={} reference={} mode={} split={} (same leased frame)",identity.sourceFrameId,identity.epoch,identity.settingsRevision,baseReference?"base":"input",comparison,split));
     }
     for(auto& b:barriers)std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(2,barriers);
+    applyHdrMetadata(graph);
     // Interpolation region for the XeSS present-sink FG backend.
     // It must follow the PresentBlit view mapping (contain * zoom, view
     // center) rather than assuming the default centered view: the previous
@@ -344,4 +363,47 @@ Microsoft::WRL::ComPtr<ID3D12Resource> VideoPresenter::presentedResourceForTest(
     if(hasPresented_&&sink_.swapChain())sink_.swapChain()->GetBuffer(lastBuffer_,IID_PPV_ARGS(&buffer));
     return buffer;
 }
+
+// Custom: HDR10 static metadata. The display runs its own dynamic tone mapping;
+// without metadata it has to guess the content peak, and reporting a lower
+// mastering peak makes many displays map the picture brighter overall - which is
+// the point of the manual override. Every field defaults to "follow the source".
+void VideoPresenter::applyHdrMetadata(pipeline::EnhanceGraph& graph) {
+    auto* chain=sink_.swapChain4();
+    if(!chain)return;
+    const auto& m=graph.hdrMetadata();
+    if(!m.enabled||!graph.hdr10Output()){
+        if(metadataSent_){chain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE,0,nullptr);metadataSent_=false;}
+        return;
+    }
+    const auto& src=graph.sourceColor();
+    DXGI_HDR_METADATA_HDR10 md{};
+    // BT.2020 primaries and D65 in DXGI's 1/50000 units.
+    md.RedPrimary[0]=35400;md.RedPrimary[1]=14600;
+    md.GreenPrimary[0]=8500;md.GreenPrimary[1]=39850;
+    md.BluePrimary[0]=6550;md.BluePrimary[1]=2300;
+    md.WhitePoint[0]=15635;md.WhitePoint[1]=16450;
+    const auto pick=[](unsigned manual,float fromSource,unsigned fallback){
+        if(manual)return manual;
+        if(std::isfinite(fromSource)&&fromSource>0.0f)return unsigned(std::lround(std::min(fromSource,10000.0f)));
+        return fallback;};
+    // Keep the last value the source actually provided: these fields are optional
+    // per frame, so reading them raw made the result alternate between the real
+    // value and the fallback and re-sent the metadata constantly.
+    if(std::isfinite(src.hdrMasteringPeakNits)&&src.hdrMasteringPeakNits>0.0f)stickyMasteringPeak_=src.hdrMasteringPeakNits;
+    if(std::isfinite(src.hdrMaxCllNits)&&src.hdrMaxCllNits>0.0f)stickyMaxCll_=src.hdrMaxCllNits;
+    if(std::isfinite(src.hdrMaxFallNits)&&src.hdrMaxFallNits>0.0f)stickyMaxFall_=src.hdrMaxFallNits;
+    md.MaxMasteringLuminance=pick(m.masteringPeakNits,stickyMasteringPeak_,1000);
+    md.MinMasteringLuminance=m.masteringMinNitsX10000;
+    md.MaxContentLightLevel=uint16_t(std::min(65535u,pick(m.maxCllNits,stickyMaxCll_,md.MaxMasteringLuminance)));
+    md.MaxFrameAverageLightLevel=uint16_t(std::min(65535u,pick(m.maxFallNits,stickyMaxFall_,md.MaxContentLightLevel)));
+    if(metadataSent_&&std::memcmp(&lastMetadata_,&md,sizeof(md))==0)return;
+    if(SUCCEEDED(chain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10,sizeof(md),&md))){
+        lastMetadata_=md;metadataSent_=true;
+        log::info("hdr-metadata",std::format("sent masteringPeak={} minX10000={} maxCLL={} maxFALL={} (source peak={:.0f} cll={:.0f} fall={:.0f})",
+            md.MaxMasteringLuminance,md.MinMasteringLuminance,md.MaxContentLightLevel,md.MaxFrameAverageLightLevel,
+            stickyMasteringPeak_,stickyMaxCll_,stickyMaxFall_));
+    }
+}
+
 }

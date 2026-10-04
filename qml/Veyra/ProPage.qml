@@ -1201,6 +1201,9 @@ VPage {
                             summary: !switchAvailable ? Support.reason(veyra, "video-hdr") : veyra.videoHdr ? (veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("已开启")) : qsTr("已关闭")
                             on: veyra.videoHdr
                             onToggled: on => veyra.videoHdr = on
+                            // RTX Video HDR is an SDR -> HDR stage: an HDR source
+                            // keeps the native HDR path (and the HDR brightness
+                            // management), so there is no "convert HDR sources" switch.
                             Repeater {
                                 model: [{key:"contrast",label:qsTr("对比度"),from:0,to:200,def:125},
                                         {key:"saturation",label:qsTr("饱和度"),from:0,to:200,def:75},
@@ -1211,7 +1214,13 @@ VPage {
                                     enabled: Support.available(veyra, "video-hdr")
                                     opacity: enabled ? 1 : 0.4
                                     label: modelData.label
-                                    value: String(veyra.videoHdrParams[modelData.key] ?? "—")
+                                    // modelData.scale turns an integer parameter into a
+                                    // readable number (exposure is 1/100 EV); the unit
+                                    // lives in the label, so every value stays short
+                                    // enough for the rows to line up.
+                                    value: modelData.scale
+                                        ? (Number(veyra.videoHdrParams[modelData.key] ?? modelData.def) / modelData.scale).toFixed(2)
+                                        : String(veyra.videoHdrParams[modelData.key] ?? "—")
                                     VSlider {
                                         objectName: "list-hdr-" + modelData.key
                                         implicitWidth: 120
@@ -1768,6 +1777,154 @@ VPage {
                                 hint: qsTr("补帧路径固定 HDR10；需要 Windows HDR 开启")
                                 VSeg { objectName: "display-hdr-output"; options: [{id:"0",label:"HDR10"},{id:"1",label:qsTr("scRGB 浮点")}]; current: String(veyra.hdrOutputMode); onPicked: id => veyra.hdrOutputMode = Number(id) }
                             }
+
+                        // HDR 亮度曲线: a static curve. Unlike a plain exposure the
+                        // highlights are protected by construction.
+                        VAccordion {
+                            objectName: "list-hdr-curve"
+                            Layout.fillWidth: true
+                            glyph: "sun"
+                            hue: "#F5C84B"
+                            title: qsTr("HDR 亮度曲线")
+                            summary: veyra.hdrCurve ? qsTr("已开启") : qsTr("已关闭")
+                            on: veyra.hdrCurve
+                            onToggled: on => veyra.hdrCurve = on
+                            // One-click presets: pick the one that matches the film.
+                            Flow {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: implicitHeight
+                                spacing: 6
+                                Repeater {
+                                    model: [{id:"standard",label:qsTr("标准")},
+                                            {id:"darkLift",label:qsTr("暗场提亮")},
+                                            {id:"highlightGuard",label:qsTr("高光保护")},
+                                            {id:"darkAndBright",label:qsTr("暗亮双修")},
+                                            {id:"brightRoom",label:qsTr("明亮环境")},
+                                            {id:"darkRoom",label:qsTr("暗室观影")},
+                                            {id:"punch",label:qsTr("强化冲击")}]
+                                    delegate: VButton {
+                                        required property var modelData
+                                        text: modelData.label
+                                        ghost: true
+                                        primary: veyra.hdrTuningPreset === modelData.id
+                                        onClicked: veyra.applyHdrTuningPreset(modelData.id)
+                                    }
+                                }
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: veyra.hdrTuningPreset === "darkLift" ? qsTr("暗调片、夜景多的剧集：只抬暗部，亮部不受影响。")
+                                    : veyra.hdrTuningPreset === "highlightGuard" ? qsTr("高光很亮的片子（雪景/爆炸/演唱会）：压住顶部，暗部不动。")
+                                    : veyra.hdrTuningPreset === "darkAndBright" ? qsTr("暗场很暗、亮场又很亮的片子：两头都照顾。")
+                                    : veyra.hdrTuningPreset === "brightRoom" ? qsTr("白天或亮环境看片：整体提亮一些。")
+                                    : veyra.hdrTuningPreset === "darkRoom" ? qsTr("夜里关灯看：柔和一点，同时保留暗部细节。")
+                                    : veyra.hdrTuningPreset === "punch" ? qsTr("画面偏灰、平淡的老片或转制片：提高对比观感。")
+                                    : veyra.hdrTuningPreset === "standard" ? qsTr("不做任何改动，交给显示器和片源本身。")
+                                    : qsTr("自定义：已用下面的滑块微调过。")
+                                wrapMode: Text.WordWrap
+                                color: Theme.t3
+                                font.family: Theme.fontUi; font.pixelSize: 11
+                            }
+                            // The two dials. Both scale the baseline the sliders below
+                            // edit, which is why moving either of them keeps the preset
+                            // above selected instead of falling back to "自定义".
+                            VRow {
+                                label: qsTr("强度")
+                                hint: qsTr("等比例缩放这一档的效果；100% = 档位原值")
+                                value: veyra.hdrCurveStrength + "%"
+                                VSlider {
+                                    objectName: "list-hdrcurve-strength"
+                                    implicitWidth: 120
+                                    valueFromModel: true
+                                    resettable: true; defaultValue: 100
+                                    from: 0; to: 200
+                                    value: veyra.hdrCurveStrength
+                                    onMoved: value => veyra.hdrCurveStrength = Math.round(value)
+                                }
+                            }
+                            VRow {
+                                label: qsTr("显示设备峰值 (nit)")
+                                hint: veyra.hdrDisplayInfo.valid
+                                    ? qsTr("系统报告：峰值 %1、全屏 %2、黑位 %3 nit")
+                                        .arg(veyra.hdrDisplayInfo.peakNits)
+                                        .arg(veyra.hdrDisplayInfo.fullFrameNits)
+                                        .arg(Number(veyra.hdrDisplayInfo.minNits).toFixed(3))
+                                    : qsTr("0 = 自动使用系统报告值")
+                                value: veyra.hdrDisplayPeakNits > 0
+                                    ? (veyra.hdrDisplayPeakNits + " nit") : qsTr("自动")
+                                VSlider {
+                                    objectName: "list-hdrcurve-displaypeak"
+                                    implicitWidth: 120
+                                    valueFromModel: true
+                                    resettable: true; defaultValue: 0
+                                    from: 0; to: 4000
+                                    value: veyra.hdrDisplayPeakNits
+                                    onMoved: value => veyra.hdrDisplayPeakNits = Math.round(value)
+                                }
+                            }
+                            Repeater {
+                                model: [{key:"shadowLiftEv100",label:qsTr("暗部抬升 (0.01 EV)"),from:-200,to:200,def:0},
+                                        {key:"shadowRangeNits",label:qsTr("抬升范围 (nit)"),from:1,to:100,def:10,hint:qsTr("只在这个亮度以下的暗部生效")},
+                                        {key:"midGrayNits",label:qsTr("中灰 (nit)"),from:100,to:500,def:203,hint:qsTr("203 = 中性；调高整体变亮，峰值不变")},
+                                        {key:"highlightStartNits",label:qsTr("高光起点 (nit)"),from:0,to:2000,def:0,hint:qsTr("0 = 不做高光滚降")},
+                                        {key:"rollOffPercent",label:qsTr("滚降强度 (%)"),from:10,to:200,def:100},
+                                        {key:"peakCapNits",label:qsTr("峰值上限 (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 不限制")}]
+                                delegate: VRow {
+                                    required property var modelData
+                                    label: modelData.label
+                                    hint: modelData.hint || ""
+                                    value: String(veyra.hdrCurveParams[modelData.key] ?? "—")
+                                    VSlider {
+                                        objectName: "list-hdrcurve-" + modelData.key
+                                        implicitWidth: 120
+                                        valueFromModel: true
+                                        resettable: true; defaultValue: modelData.def
+                                        from: modelData.from; to: modelData.to
+                                        value: veyra.hdrCurveParams[modelData.key] ?? modelData.def
+                                        onMoved: value => veyra.setHdrCurveParameter(modelData.key, Math.round(value))
+                                    }
+                                }
+                            }
+                        }
+                        // HDR 元数据: what the display is told about the content, which
+                        // is what its own dynamic tone mapping works from.
+                        VAccordion {
+                            objectName: "list-hdr-metadata"
+                            Layout.fillWidth: true
+                            glyph: "sun"
+                            hue: "#7FB2F5"
+                            title: qsTr("HDR 元数据")
+                            summary: veyra.hdrMetadataEnabled ? qsTr("已发送给显示器") : qsTr("已关闭")
+                            on: veyra.hdrMetadataEnabled
+                            onToggled: on => veyra.hdrMetadataEnabled = on
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("把内容峰值告诉显示器，让它的动态色调映射有依据。")
+                                wrapMode: Text.WordWrap
+                                color: Theme.t3
+                                font.family: Theme.fontUi; font.pixelSize: 11
+                            }
+                            Repeater {
+                                model: [{key:"masteringPeakNits",label:qsTr("母版峰值 (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源；报低通常整体变亮")},
+                                        {key:"maxCllNits",label:qsTr("MaxCLL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")},
+                                        {key:"maxFallNits",label:qsTr("MaxFALL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")}]
+                                delegate: VRow {
+                                    required property var modelData
+                                    label: modelData.label
+                                    hint: modelData.hint || ""
+                                    value: String(veyra.hdrMetadataParams[modelData.key] ?? "—")
+                                    VSlider {
+                                        objectName: "list-hdrmeta-" + modelData.key
+                                        implicitWidth: 120
+                                        valueFromModel: true
+                                        resettable: true; defaultValue: modelData.def
+                                        from: modelData.from; to: modelData.to
+                                        value: veyra.hdrMetadataParams[modelData.key] ?? modelData.def
+                                        onMoved: value => veyra.setHdrMetadataParameter(modelData.key, Math.round(value))
+                                    }
+                                }
+                            }
+                        }
                         }
                         VGroup {
                             VRow {

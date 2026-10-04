@@ -8,9 +8,36 @@ Texture2D<float4> sourceTex : register(t0);
 
 cbuffer PresentBlitConstants : register(b0)
 {
-    float4 srcDims; // x/y=content extent z=flags (1 encode, 2 fine sampling) w=zoom
+    float4 srcDims; // x/y=content extent z=flags (1 encode, 2 fine sampling, 4 PQ, 8 SDR white, 16 HDR curve) w=zoom
     float4 dstDims; // x/y=client extent z/w=view center
+    // Custom: static HDR brightness curve, applied on absolute nits before the PQ
+    // encode. See veyra/engine/HdrOutputTuning.h for the contract; every field is
+    // a no-op at its default (lift 0, mid 203, start 0, cap 0).
+    float4 curve0;  // x=shadow lift EV, y=shadow range nits, z=mid-gray nits, w=highlight start nits
+    float4 curve1;  // x=roll-off scale nits, y=peak cap nits (0 = off)
 };
+
+// Lift the shadows without touching the highlights, move the mid-gray reference
+// with the peak held fixed, then roll off and cap the top end.
+float3 HdrCurve(float3 nits, float4 c0, float4 c1)
+{
+    if (c0.x != 0.0 && c0.y > 0.0) {
+        const float w = saturate(1.0 - nits / c0.y);
+        nits *= 1.0 + w * w * (exp2(c0.x) - 1.0);
+    }
+    if (c0.z > 0.0 && abs(c0.z - 203.0) > 0.5) {
+        const float peak = c1.y > 0.0 ? c1.y : 1000.0;
+        if (peak > c0.z + 1.0) {
+            const float g = log(c0.z / peak) / log(203.0 / peak);
+            nits = peak * pow(max(nits / peak, 0.0), g);
+        }
+    }
+    if (c0.w > 0.0 && c1.x > 0.0 && nits.x > c0.w) nits.x = c0.w + (nits.x - c0.w) / (1.0 + (nits.x - c0.w) / c1.x);
+    if (c0.w > 0.0 && c1.x > 0.0 && nits.y > c0.w) nits.y = c0.w + (nits.y - c0.w) / (1.0 + (nits.y - c0.w) / c1.x);
+    if (c0.w > 0.0 && c1.x > 0.0 && nits.z > c0.w) nits.z = c0.w + (nits.z - c0.w) / (1.0 + (nits.z - c0.w) / c1.x);
+    if (c1.y > 0.0) nits = min(nits, c1.y);
+    return nits;
+}
 
 SamplerState linearClamp : register(s0);
 
@@ -76,6 +103,9 @@ float4 psMain(VSOut input) : SV_Target
     uint flags=uint(srcDims.z+0.5);
     float4 color=(flags&2)?FineSample(uv):sourceTex.SampleLevel(linearClamp,uv,0);
     if(flags&8)color.rgb*=203.0/80.0; // SDR comparison white in an HDR output.
+    // Custom: static HDR curve, on absolute nits (the working space is linear
+    // scRGB, 1.0 = 80 nits), before the transfer function is encoded.
+    if(flags&16)color.rgb=HdrCurve(max(color.rgb,0)*80.0,curve0,curve1)/80.0;
     if(flags&1){float3 c=max(color.rgb,0);color.rgb=lerp(1.055*pow(c,1.0/2.4)-0.055,c*12.92,step(c,0.0031308));}
     if(flags&4)color.rgb=HdrEncodePq(color.rgb);
     return color;

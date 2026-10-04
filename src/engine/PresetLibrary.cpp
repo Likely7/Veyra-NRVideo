@@ -13,8 +13,36 @@ namespace {
 // Six full grades per entry (plus the legacy first-grade field), up to 64
 // entries. Never remove the file-size guard as LUT names are external input.
 constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
-void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;}
-bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);if(vfg&&!(in>>g.vfgQuality))return false;EnhancementSettings s;g.apply(s);return s.validate().empty();}
+void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false,bool tuning=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;
+    // Custom: static HDR output tuning (curve + display metadata), library v10 /
+    // chain session v8. Ten numbers, written only from that version on.
+    if(tuning)out<<' '<<g.hdrCurve.shadowLiftEv100<<' '<<g.hdrCurve.shadowRangeNits<<' '<<g.hdrCurve.midGrayNits<<' '
+        <<g.hdrCurve.highlightStartNits<<' '<<g.hdrCurve.rollOffPercent<<' '<<g.hdrCurve.peakCapNits<<' '
+        <<g.hdrCurve.enabled<<' '<<(g.hdrMetadata.enabled?1:0)<<' '<<g.hdrMetadata.masteringPeakNits<<' '
+        <<g.hdrMetadata.maxCllNits<<' '<<g.hdrMetadata.maxFallNits<<' '<<g.hdrMetadata.masteringMinNitsX10000
+        <<' '<<g.hdrCurve.strengthPercent<<' '<<g.hdrCurve.displayPeakNits;}
+bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool extended=false,bool extendedTransition=false,bool tuning=false,bool tuningPlus=false){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);if(vfg&&!(in>>g.vfgQuality))return false;
+    // Files written while this fork carried per-scene HDR brightness hold four extra
+    // numbers here (plus the transition time). That feature is gone; the numbers are
+    // still consumed and range-checked so those files keep loading.
+    if(extended){int enabled,strength,peak,response;
+        if(!(in>>enabled>>strength>>peak>>response)||enabled<0||enabled>1)return false;}
+    if(extendedTransition){int transition;if(!(in>>transition)||transition<0||transition>2000)return false;}
+    if(tuning){int lift,range,mid,start,roll,cap,curveOn,metaOn,mpeak,mcll,mfall,mmin;
+        if(!(in>>lift>>range>>mid>>start>>roll>>cap>>curveOn>>metaOn>>mpeak>>mcll>>mfall>>mmin))return false;
+        g.hdrCurve.shadowLiftEv100=lift;g.hdrCurve.shadowRangeNits=unsigned(range);g.hdrCurve.midGrayNits=unsigned(mid);
+        g.hdrCurve.highlightStartNits=unsigned(start);g.hdrCurve.rollOffPercent=unsigned(roll);g.hdrCurve.peakCapNits=unsigned(cap);
+        g.hdrCurve.enabled=curveOn!=0;
+        g.hdrMetadata.enabled=metaOn!=0;g.hdrMetadata.masteringPeakNits=unsigned(mpeak);g.hdrMetadata.maxCllNits=unsigned(mcll);
+        g.hdrMetadata.maxFallNits=unsigned(mfall);g.hdrMetadata.masteringMinNitsX10000=unsigned(std::max(0,mmin));
+        if(!g.hdrCurve.valid()||!g.hdrMetadata.valid())return false;}
+    // v11 / v9 append the strength dial and the display peak; older files simply
+    // keep the defaults for both (100% and "ask the system").
+    if(tuningPlus){unsigned strength,displayPeak;
+        if(!(in>>strength>>displayPeak))return false;
+        g.hdrCurve.strengthPercent=std::min(200u,strength);g.hdrCurve.displayPeakNits=displayPeak;
+        if(!g.hdrCurve.valid())return false;}
+    EnhancementSettings s;g.apply(s);return s.validate().empty();}
 void applyRenderingPreset(const PresetEntry& e,EnhancementSettings& s){
     if(!e.globals)return;
     const auto fg=s.frameGenerationBackend;const auto fgMotion=s.fgMotion;const auto quality=s.vfgQuality;
@@ -176,7 +204,7 @@ bool PresetLibrary::save() {
     std::wstring checkedDefault;
     // Match PresetStore: never replace a valid file with one our reader rejects.
     if (!parse(data, checked, checkedDefault, error_)) return false;
-    if(data.starts_with("VEYRA_PRESET_LIBRARY 7")&&!path_.wstring().ends_with(L".vfg"))path_=std::filesystem::path(path_).concat(L".vfg");
+    if((data.starts_with("VEYRA_PRESET_LIBRARY 7")||data.starts_with("VEYRA_PRESET_LIBRARY 8")||data.starts_with("VEYRA_PRESET_LIBRARY 9")||data.starts_with("VEYRA_PRESET_LIBRARY 10")||data.starts_with("VEYRA_PRESET_LIBRARY 11"))&&!path_.wstring().ends_with(L".vfg"))path_=std::filesystem::path(path_).concat(L".vfg");
     if(!path_.wstring().ends_with(L".vfg")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 6")&&!path_.wstring().ends_with(L".field-render"))path_=std::filesystem::path(path_).concat(L".field-render");
     if (std::any_of(entries_.begin(), entries_.end(), [](const auto& e) { return e.nodeConfiguration.has_value(); }) &&
@@ -582,7 +610,15 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return c.fgBackend==FrameGenerationBackend::Vfg||c.vfgQuality!=1||
             (c.editor&&c.editor->globals&&(c.editor->globals->fgBackend==FrameGenerationBackend::Vfg||c.editor->globals->vfgQuality!=1));
     });
-    const int version=std::max(minimumVersion, vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    // Custom v10: static HDR output tuning (curve + display metadata).
+    const auto tuningOf=[](const PresetEntry& e)->bool{
+        if(e.globals&&(e.globals->hdrCurve!=HdrCurveSettings{}||e.globals->hdrMetadata!=HdrMetadataSettings{}))return true;
+        if(e.nodeConfiguration&&e.nodeConfiguration->editor&&e.nodeConfiguration->editor->globals){
+            const auto& g=*e.nodeConfiguration->editor->globals;
+            return g.hdrCurve!=HdrCurveSettings{}||g.hdrMetadata!=HdrMetadataSettings{};}
+        return false;};
+    const bool tuning=std::any_of(entries_.begin(),entries_.end(),tuningOf);
+    const int version=std::max(minimumVersion, tuning?11:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -625,7 +661,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         }
         if(version>=6){
             o<<' '<<e.globals.has_value();
-            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7);}
+            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=10);}
         }
         o << '\n';
     }
@@ -633,7 +669,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
 }
 
 bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out, std::wstring& def, std::wstring& error,
-                          bool* migrated, bool preserveLegacy) {
+                          bool* migrated, bool preserveLegacy, int maxVersion) {
     if (migrated) *migrated = false;
     if (data.size() > kMaxPresetBytes) { error = L"预设库超过 2 MiB"; return false; }
     std::istringstream in(data);
@@ -641,7 +677,10 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > 7) { error = L"预设库格式或版本不支持"; return false; }
+    // Custom: maxVersion 0 keeps this context's own cap; the chain session passes 9
+    // explicitly so an editor payload can carry the HDR brightness block.
+    const int allowedVersion = maxVersion > 0 ? maxVersion : (preserveLegacy ? 3 : 11);
+    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
     for (size_t i = 0; i < count; ++i) {
@@ -739,7 +778,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){ChainGlobalSettings g;int target,backend,flow,optical,half,policy;
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
-                if(!readRendering(in,g,version>=7))return false;e.globals=g;
+                if(!readRendering(in,g,version>=7,(version>=8&&version<=9),version==9,version>=10,version>=11))return false;e.globals=g;
             }
         }
         out.push_back(std::move(e));
@@ -757,7 +796,12 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const bool rendering=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return extended(c)||(c.editor&&c.editor->globals&&extended(*c.editor->globals));});
     const auto usesVfg=[](const ChainGlobalSettings& g){return g.fgBackend==FrameGenerationBackend::Vfg||g.vfgQuality!=1;};
     const bool vfg=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return usesVfg(c)||(c.editor&&c.editor->globals&&usesVfg(*c.editor->globals));});
-    const int version = vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    // Custom: session v8 carries the static HDR output tuning (curve + metadata).
+    const auto tuningCustom=[](const ChainConfiguration& c){
+        return c.hdrCurve!=HdrCurveSettings{} || c.hdrMetadata!=HdrMetadataSettings{} ||
+            (c.editor&&c.editor->globals&&(c.editor->globals->hdrCurve!=HdrCurveSettings{}||c.editor->globals->hdrMetadata!=HdrMetadataSettings{}));};
+    const bool tuning=std::any_of(session.configurations.begin(),session.configurations.end(),tuningCustom);
+    const int version = tuning?9:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -766,7 +810,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         out << int(c.srTarget) << ' ' << c.videoSrQuality << ' ' << int(c.fgBackend) << ' '
             << int(c.flow) << ' ' << int(c.opticalFlowBackend) << ' ' << c.amdFlowHalfResolution << ' '
             << int(c.nrPolicy) << ' ' << c.selectedNr << ' ' << c.selectedColour;
-        if(version>=4)writeRendering(out,c,version>=5);out<<'\n';
+        if(version>=4)writeRendering(out,c,version>=5,version>=8);out<<'\n';
         PresetEntry entry;
         entry.name = i == 0 ? L"list" : L"node";
         entry.kind = ChainMode(i); entry.chain = c.chain;
@@ -784,7 +828,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             const auto& g = *document.globals;
             out << int(g.srTarget) << ' ' << g.videoSrQuality << ' ' << int(g.fgBackend) << ' '
                 << int(g.flow) << ' ' << int(g.opticalFlowBackend) << ' ' << g.amdFlowHalfResolution << ' '
-                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5);out<<'\n';
+                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=8);out<<'\n';
         }
         out << graph.nextId << ' ' << graph.inputNext << ' ' << document.nodes.nodeCount << '\n';
         // The ordinary preset codec validates a linear runtime chain. Use a
@@ -811,7 +855,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 5) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 9) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -822,11 +866,11 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         c.srTarget = pipeline::SrTarget(target); c.fgBackend = FrameGenerationBackend(backend);
         c.flow = FlowQuality(flow); c.opticalFlowBackend = OpticalFlowBackend(optical);
         c.amdFlowHalfResolution = half != 0; c.nrPolicy = pipeline::NrSizePolicy(policy);
-        if(version>=4&&!readRendering(in,c,version>=5))return false;
+        if(version>=4&&!readRendering(in,c,version>=5,(version>=6&&version<=7),version==7,version>=8,version>=9))return false;
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 10) || entries.size() != 2 || !def.empty()) return false;
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
         parsed.configurations[i].chain = entries[i].chain;
@@ -847,7 +891,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
             g.srTarget = pipeline::SrTarget(target); g.fgBackend = FrameGenerationBackend(backend);
             g.flow = FlowQuality(flow); g.opticalFlowBackend = OpticalFlowBackend(optical);
             g.amdFlowHalfResolution = half != 0; g.nrPolicy = pipeline::NrSizePolicy(policy);
-            if(version>=4&&!readRendering(in,g,version>=5))return false;
+            if(version>=4&&!readRendering(in,g,version>=5,(version>=6&&version<=7),version==7,version>=8,version>=9))return false;
             editor->globals = g;
         }
         uint32_t count = 0;
@@ -860,7 +904,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         }
         if (!(in >> std::quoted(body))) return false;
         entries.clear(); def.clear(); error.clear();
-        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true) || entries.size() != 1 ||
+        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 10) || entries.size() != 1 ||
             !def.empty() || entries[0].kind != ChainMode::Node || entries[0].chain.nodeCount != count) return false;
         editor->nodes = std::move(entries[0].chain);
         for (uint32_t i = 0; i < count; ++i) {
@@ -923,7 +967,7 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
-    if(data.starts_with("VEYRA_CHAIN_SESSION 5")&&!path_.wstring().ends_with(L".vfg"))path_=std::filesystem::path(path_).concat(L".vfg");
+    if((data.starts_with("VEYRA_CHAIN_SESSION 5")||data.starts_with("VEYRA_CHAIN_SESSION 6")||data.starts_with("VEYRA_CHAIN_SESSION 7")||data.starts_with("VEYRA_CHAIN_SESSION 8")||data.starts_with("VEYRA_CHAIN_SESSION 9"))&&!path_.wstring().ends_with(L".vfg"))path_=std::filesystem::path(path_).concat(L".vfg");
     if(!path_.wstring().ends_with(L".vfg")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 4")&&!path_.wstring().ends_with(L".field-render"))path_=std::filesystem::path(path_).concat(L".field-render");
     // A v1 reader must never reinterpret or overwrite the new editor graph.

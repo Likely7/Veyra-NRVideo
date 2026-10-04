@@ -309,8 +309,12 @@ struct GraphicsPass {
     ComPtr<ID3D12DescriptorHeap> heap;
     UINT increment = 0;
 
+    // `constantCount` is the number of 32-bit root constants the pass declares at b0.
+    // It defaults to the historical 8; the present blit passes 16 because it also
+    // carries the static HDR curve (curve0/curve1).
     bool create(ID3D12Device* device, const std::vector<uint8_t>& vs,
-                const std::vector<uint8_t>& ps, UINT heapSlots, DXGI_FORMAT outputFormat=DXGI_FORMAT_R8G8B8A8_UNORM)
+                const std::vector<uint8_t>& ps, UINT heapSlots, DXGI_FORMAT outputFormat=DXGI_FORMAT_R8G8B8A8_UNORM,
+                UINT constantCount=8)
     {
         D3D12_DESCRIPTOR_RANGE1 srvRange{};
         srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -328,7 +332,7 @@ struct GraphicsPass {
         rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         rp[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
         rp[0].Constants.ShaderRegister = 0;
-        rp[0].Constants.Num32BitValues = 8;
+        rp[0].Constants.Num32BitValues = constantCount;
         rp[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         rp[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         rp[1].DescriptorTable.NumDescriptorRanges = 1;

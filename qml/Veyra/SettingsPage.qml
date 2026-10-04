@@ -382,6 +382,127 @@ VPage {
                             hint: qsTr("HDR10 默认；补帧固定 HDR10，需要 Windows HDR 开启")
                             VSeg { options: [{id:"0",label:"HDR10"},{id:"1",label:qsTr("scRGB 浮点")}]; current: String(veyra.hdrOutputMode); onPicked: id => veyra.hdrOutputMode = Number(id) }
                         }
+                        // HDR 亮度曲线: static, so the highlights are protected.
+                        // One-click presets (same ids as the list page).
+                        Flow {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: implicitHeight
+                            spacing: 6
+                            Repeater {
+                                model: [{id:"standard",label:qsTr("标准")},
+                                        {id:"darkLift",label:qsTr("暗场提亮")},
+                                        {id:"highlightGuard",label:qsTr("高光保护")},
+                                        {id:"darkAndBright",label:qsTr("暗亮双修")},
+                                        {id:"brightRoom",label:qsTr("明亮环境")},
+                                        {id:"darkRoom",label:qsTr("暗室观影")},
+                                        {id:"punch",label:qsTr("强化冲击")}]
+                                delegate: VButton {
+                                    required property var modelData
+                                    text: modelData.label
+                                    ghost: true
+                                    primary: veyra.hdrTuningPreset === modelData.id
+                                    onClicked: veyra.applyHdrTuningPreset(modelData.id)
+                                }
+                            }
+                        }
+                        VRow {
+                            label: qsTr("HDR 亮度曲线")
+                            hint: qsTr("静态曲线：抬暗部、定中灰、压高光")
+                            value: veyra.hdrCurve ? qsTr("已开启") : qsTr("已关闭")
+                            VSwitch {
+                                objectName: "hdrcurve-enabled"
+                                checked: veyra.hdrCurve
+                                onToggled: checked => veyra.hdrCurve = checked
+                            }
+                        }
+                        VRow {
+                            label: qsTr("强度")
+                            hint: qsTr("等比例缩放这一档的效果；100% = 档位原值")
+                            value: veyra.hdrCurveStrength + "%"
+                            VSlider {
+                                objectName: "hdrcurve-strength"
+                                implicitWidth: 120
+                                valueFromModel: true
+                                resettable: true; defaultValue: 100
+                                from: 0; to: 200
+                                value: veyra.hdrCurveStrength
+                                onMoved: value => veyra.hdrCurveStrength = Math.round(value)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("显示设备峰值 (nit)")
+                            hint: veyra.hdrDisplayInfo.valid
+                                ? qsTr("系统报告：峰值 %1、全屏 %2、黑位 %3 nit")
+                                    .arg(veyra.hdrDisplayInfo.peakNits)
+                                    .arg(veyra.hdrDisplayInfo.fullFrameNits)
+                                    .arg(Number(veyra.hdrDisplayInfo.minNits).toFixed(3))
+                                : qsTr("0 = 自动使用系统报告值")
+                            value: veyra.hdrDisplayPeakNits > 0
+                                ? (veyra.hdrDisplayPeakNits + " nit") : qsTr("自动")
+                            VSlider {
+                                objectName: "hdrcurve-displaypeak"
+                                implicitWidth: 120
+                                valueFromModel: true
+                                resettable: true; defaultValue: 0
+                                from: 0; to: 4000
+                                value: veyra.hdrDisplayPeakNits
+                                onMoved: value => veyra.hdrDisplayPeakNits = Math.round(value)
+                            }
+                        }
+                        Repeater {
+                            model: [{key:"shadowLiftEv100",label:qsTr("暗部抬升 (0.01 EV)"),from:-200,to:200,def:0},
+                                    {key:"shadowRangeNits",label:qsTr("抬升范围 (nit)"),from:1,to:100,def:10,hint:qsTr("只在这个亮度以下的暗部生效")},
+                                    {key:"midGrayNits",label:qsTr("中灰 (nit)"),from:100,to:500,def:203,hint:qsTr("203 = 中性；调高整体变亮，峰值不变")},
+                                    {key:"highlightStartNits",label:qsTr("高光起点 (nit)"),from:0,to:2000,def:0,hint:qsTr("0 = 不做高光滚降")},
+                                    {key:"rollOffPercent",label:qsTr("滚降强度 (%)"),from:10,to:200,def:100},
+                                    {key:"peakCapNits",label:qsTr("峰值上限 (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 不限制")}]
+                            delegate: VRow {
+                                required property var modelData
+                                label: modelData.label
+                                hint: modelData.hint || ""
+                                value: String(veyra.hdrCurveParams[modelData.key] ?? "—")
+                                VSlider {
+                                    objectName: "hdrcurve-" + modelData.key
+                                    implicitWidth: 150
+                                    valueFromModel: true
+                                    resettable: true; defaultValue: modelData.def
+                                    from: modelData.from; to: modelData.to
+                                    value: veyra.hdrCurveParams[modelData.key] ?? modelData.def
+                                    onMoved: value => veyra.setHdrCurveParameter(modelData.key, Math.round(value))
+                                }
+                            }
+                        }
+                        // HDR 元数据: what the display's own tone mapping works from.
+                        VRow {
+                            label: qsTr("HDR 元数据")
+                            hint: qsTr("把内容峰值告诉显示器")
+                            value: veyra.hdrMetadataEnabled ? qsTr("已发送给显示器") : qsTr("已关闭")
+                            VSwitch {
+                                objectName: "hdrmeta-enabled"
+                                checked: veyra.hdrMetadataEnabled
+                                onToggled: checked => veyra.hdrMetadataEnabled = checked
+                            }
+                        }
+                        Repeater {
+                            model: [{key:"masteringPeakNits",label:qsTr("母版峰值 (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源；报低通常整体变亮")},
+                                    {key:"maxCllNits",label:qsTr("MaxCLL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")},
+                                    {key:"maxFallNits",label:qsTr("MaxFALL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")}]
+                            delegate: VRow {
+                                required property var modelData
+                                label: modelData.label
+                                hint: modelData.hint || ""
+                                value: String(veyra.hdrMetadataParams[modelData.key] ?? "—")
+                                VSlider {
+                                    objectName: "hdrmeta-" + modelData.key
+                                    implicitWidth: 150
+                                    valueFromModel: true
+                                    resettable: true; defaultValue: modelData.def
+                                    from: modelData.from; to: modelData.to
+                                    value: veyra.hdrMetadataParams[modelData.key] ?? modelData.def
+                                    onMoved: value => veyra.setHdrMetadataParameter(modelData.key, Math.round(value))
+                                }
+                            }
+                        }
                         VRow {
                             label: qsTr("记住播放位置")
                             hint: qsTr("重新打开同一个文件时从上次位置继续")

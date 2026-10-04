@@ -267,6 +267,21 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double nrHoldTolerance READ nrHoldTolerance WRITE setNrHoldTolerance NOTIFY settingsChanged)
     Q_PROPERTY(bool videoHdr READ videoHdr WRITE setVideoHdr NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY chainChanged)
+    // Custom: static HDR output tuning (globals, every field live).
+    Q_PROPERTY(bool hdrCurve READ hdrCurve WRITE setHdrCurve NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap hdrCurveParams READ hdrCurveParams NOTIFY settingsChanged)
+    Q_PROPERTY(bool hdrMetadataEnabled READ hdrMetadataEnabled WRITE setHdrMetadataEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap hdrMetadataParams READ hdrMetadataParams NOTIFY settingsChanged)
+    // One-click tuning presets (see hdrTuningPresets); "custom" when the sliders
+    // no longer match any of them.
+    Q_PROPERTY(QString hdrTuningPreset READ hdrTuningPreset NOTIFY settingsChanged)
+    // One dial for the whole curve (0..200%, 100 = the preset as written) and the
+    // display's own peak brightness (0 = ask the system). Both live next to the
+    // baseline, so moving them never leaves the selected preset.
+    Q_PROPERTY(int hdrCurveStrength READ hdrCurveStrength WRITE setHdrCurveStrength NOTIFY settingsChanged)
+    Q_PROPERTY(int hdrDisplayPeakNits READ hdrDisplayPeakNits WRITE setHdrDisplayPeakNits NOTIFY settingsChanged)
+    // What the system reports about the display, for the peak field's reset button.
+    Q_PROPERTY(QVariantMap hdrDisplayInfo READ hdrDisplayInfo NOTIFY snapshotChanged)
     Q_PROPERTY(int nrStyle READ nrStyle WRITE setNrStyle NOTIFY settingsChanged)
     Q_PROPERTY(double nrIntensity READ nrIntensity WRITE setNrIntensity NOTIFY settingsChanged)
     Q_PROPERTY(double nrTone READ nrTone WRITE setNrTone NOTIFY settingsChanged)
@@ -717,6 +732,27 @@ public:
     void setNrHoldTolerance(double value);
     bool videoHdr() const;
     void setVideoHdr(bool value);
+    bool hdrCurve() const;
+    void setHdrCurve(bool enabled);
+    QVariantMap hdrCurveParams() const;
+    Q_INVOKABLE bool setHdrCurveParameter(const QString& key, double value);
+    bool hdrMetadataEnabled() const;
+    void setHdrMetadataEnabled(bool enabled);
+    QVariantMap hdrMetadataParams() const;
+    Q_INVOKABLE bool setHdrMetadataParameter(const QString& key, double value);
+    // Commit + re-assert the tuning in the places the session capture reads, so a
+    // change takes effect and survives a restart (the same trap the earlier
+    // per-scene brightness block hit: a plain commit left it out of the pending
+    // settings the session is written from).
+    bool commitHdrTuning(engine::EnhancementSettings settings);
+    QString hdrTuningPreset() const;
+    Q_INVOKABLE bool applyHdrTuningPreset(const QString& id);
+    // The strength dial and the display peak (stored next to the baseline).
+    int hdrCurveStrength() const;
+    void setHdrCurveStrength(int percent);
+    int hdrDisplayPeakNits() const;
+    void setHdrDisplayPeakNits(int nits);
+    QVariantMap hdrDisplayInfo() const;
     QVariantMap videoHdrParams() const;
     Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
     int nrStyle() const;
