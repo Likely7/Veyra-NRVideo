@@ -3089,6 +3089,7 @@ void EnhanceGraph::shutdown()
     for(auto& input:hardwareInputFrames_)input.reset();
     Status st = Status::Ok;
     if (nv12Ctx_ != nullptr) { sws_freeContext(nv12Ctx_); nv12Ctx_ = nullptr; }
+    bool featuresReleased=true;
 
     // Release every layer's handle before the session goes away. The snippet
     // requires release before Shutdown1, and each handle was created on this
@@ -3097,7 +3098,8 @@ void EnhanceGraph::shutdown()
         layer->amd.reset(); // drain HIP while the borrowed graph input/queue still exist
         if(layer->handle()==nullptr)continue;
         uint64_t layerResult=0;uint32_t layerSeh=0;
-        (void)nrAdapter_->snippetReleaseFeature(layer->handle(),layerResult,layerSeh);
+        const bool safe=nrAdapter_->snippetReleaseFeature(layer->handle(),layerResult,layerSeh);
+        featuresReleased=featuresReleased&&safe&&layerResult==uint64_t(NVSDK_NGX_Result_Success)&&layerSeh==0;
         layer->setHandle(nullptr);
     }
     gpuDis_.reset();
@@ -3109,10 +3111,11 @@ void EnhanceGraph::shutdown()
     upFsrSrDepth_.Reset();
     fsrFgBackend_.reset();
     vfgBackend_.reset();
-    if (fgBackend_) fgBackend_->release();
-    if(videoSrBackend_){videoSrBackend_->release();videoSrBackend_.reset();}
+    if (fgBackend_) featuresReleased=fgBackend_->release()&&featuresReleased;
+    if(videoSrBackend_){featuresReleased=videoSrBackend_->release()&&featuresReleased;videoSrBackend_.reset();}
+    if(videoHdrBackend_)featuresReleased=videoHdrBackend_->release()&&featuresReleased;
     videoHdrBackend_.reset();videoHdrInput_.Reset();videoHdrOutput_.Reset();
-    if (srBackend_) srBackend_->release();
+    if (srBackend_) featuresReleased=srBackend_->release()&&featuresReleased;
 
     // NVOF teardown in THREE phases (ownership rule proven by t10-L0-r2):
     // a. unregisterAll() while the textures are still alive;
@@ -3154,7 +3157,7 @@ void EnhanceGraph::shutdown()
         nrAdapter_->restoreCallerCompatibility();
         nrAdapter_->unload();
     }
-    const bool retainCore=coreCache_&&coreCache_->owns(coreHost_)&&initialized_&&
+    const bool retainCore=coreCache_&&coreCache_->owns(coreHost_)&&initialized_&&featuresReleased&&coreHost_->healthy()&&
         failedBackend_==engine::FailedBackend::None&&SUCCEEDED(context_.device()->GetDeviceRemovedReason())&&
         coreHost_->liveParameterBlockCount()==0;
     if(retainCore){
@@ -3165,6 +3168,10 @@ void EnhanceGraph::shutdown()
         if(coreCache_&&coreCache_->owns(coreHost_)){
             coreHost_.reset();(void)coreCache_->close("graph-failure-or-device-removed");
         }else coreHost_->shutdown();
+    }else if(coreCache_&&(!initialized_||failedBackend_!=engine::FailedBackend::None)){
+        // A failure before NGX initialization can still leave the previous
+        // clean core in this device session; do not carry it through recovery.
+        (void)coreCache_->close("graph-failed-before-core-borrow");
     }
     // Restore the DLSS-G runtime image only after the NGX core released the
     // feature (the unlock is process memory only; the file on disk is untouched).

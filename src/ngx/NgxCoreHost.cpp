@@ -135,6 +135,7 @@ bool NgxCoreHost::initialize(ID3D12Device* device,
     }
     device_ = device;
     initialized_ = true;
+    healthy_ = true;
     veyra::log::info("ngx", "core-host: initialized (single core session for this device)");
     return true;
 }
@@ -159,6 +160,7 @@ void NgxCoreHost::shutdown()
 
     device_ = nullptr;
     initialized_ = false;
+    healthy_ = false;
 }
 
 NVSDK_NGX_Parameter* NgxCoreHost::allocateParameters(Status& status)
@@ -169,6 +171,7 @@ NVSDK_NGX_Parameter* NgxCoreHost::allocateParameters(Status& status)
         return nullptr;
     }
     if (liveParameterBlockCount_ >= 64) {
+        healthy_ = false;
         status = Status::InvalidArgument;
         veyra::log::error("ngx", "core-host: parameter block tracking table full");
         return nullptr;
@@ -176,10 +179,11 @@ NVSDK_NGX_Parameter* NgxCoreHost::allocateParameters(Status& status)
     NVSDK_NGX_Parameter* parameters = nullptr;
     uint32_t allocSeh = 0;
     const NVSDK_NGX_Result result = CallAllocateParameters(&parameters, allocSeh);
-    if (result != NVSDK_NGX_Result_Success || parameters == nullptr) {
+    if (result != NVSDK_NGX_Result_Success || parameters == nullptr || allocSeh != 0) {
+        healthy_ = false;
         status = Status::DeviceFailure;
-        veyra::log::error("ngx", std::format("core-host: AllocateParameters result={}",
-            veyra::ngxResultString(static_cast<uint64_t>(result))));
+        veyra::log::error("ngx", std::format("core-host: AllocateParameters result={} seh={}",
+            veyra::ngxResultString(static_cast<uint64_t>(result)),allocSeh));
         return nullptr;
     }
     liveParameterBlocks_[liveParameterBlockCount_++] = parameters;
@@ -200,9 +204,15 @@ void NgxCoreHost::destroyParameters(NVSDK_NGX_Parameter* parameters)
         }
     }
     if (!tracked) {
+        healthy_ = false;
         veyra::log::warn("ngx", "core-host: destroyParameters for an untracked block");
     }
-    { uint32_t seh = 0; (void)CallDestroyParameters(parameters, seh); }
+    uint32_t seh = 0;
+    const auto result=CallDestroyParameters(parameters,seh);
+    if(result!=NVSDK_NGX_Result_Success||seh!=0){
+        healthy_=false;
+        log::error("ngx",std::format("core-host: DestroyParameters result={} seh={}",ngxResultString(uint64_t(result)),seh));
+    }
 }
 
 } // namespace veyra::ngx

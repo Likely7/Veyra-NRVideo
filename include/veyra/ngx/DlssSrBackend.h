@@ -52,7 +52,7 @@ public:
                 const CreateDesc& desc,
                 Status& status);
 
-    void release();
+    bool release();
 
     // Evaluates SR for one frame on the given command list.
     bool evaluate(ID3D12GraphicsCommandList* cmdList,

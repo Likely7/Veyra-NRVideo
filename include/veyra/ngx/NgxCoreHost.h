@@ -35,6 +35,7 @@ public:
     bool initialized() const { return initialized_; }
     uint64_t initResult() const { return initResult_; }
     uint32_t liveParameterBlockCount() const { return liveParameterBlockCount_; }
+    bool healthy() const { return initialized_ && healthy_; }
 
     // Parameter blocks are tracked; shutdown() destroys any still-live block
     // before core Shutdown1 (defense in depth; consumers should destroy them
@@ -44,6 +45,7 @@ public:
 
 private:
     bool initialized_ = false;
+    bool healthy_ = false;
     ID3D12Device* device_ = nullptr; // non-owning; consumer owns the device
     uint64_t initResult_ = 0;
     NVSDK_NGX_Parameter* liveParameterBlocks_[64] = {};

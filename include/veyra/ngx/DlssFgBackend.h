@@ -86,7 +86,7 @@ public:
                 const CreateDesc& desc,
                 Status& status);
 
-    void release();
+    bool release();
 
     // Evaluates DLSSG for one real frame on the given command list. With 2X,
     // the runtime writes the frame interpolated between the previous and the

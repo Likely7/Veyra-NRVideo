@@ -1,5 +1,11 @@
 # Veyra 工作记录
 
+## 2026-10-04 NR优化2a：三组实测有收益，补生命周期拒绝检查
+
+- fbaffeb候选全新build-B2a-v1 479步exit0。A/B/B-off四组各20×三轮，720次重建36/36 native有效；对A三轮暖创建中位：NR开1569.510→386.758ms（-75.36%），SR1409.580→415.158（-70.55%），层数1456.600→544.314（-62.63%），尺寸1348.730→403.039（-70.12%）。B-off分别1563.090/1580.430/1701.260/1596.630，后几组时钟未采不能解释慢于A，不用差额虚增收益。
+- `nr-rebuild-report.py A-rebuild-v1 B2a-rebuild-v1 B2a-off-rebuild-v1` exit0：候选及off每240张全像素与A一致，A自身0噪声。CoreInit每轮A/off10或20，B1；最终CoreShutdown1、无漏参数、debug0设备正常。v1首冷1.99–2.50sec，多层暖P95仍0.7–0.85sec，没有全体<0.6sec或无缝Present证明。SR核心保留约605MiB，旧A/off末周期约175MiB，不能隐藏缓存显存。
+- 增加Core参数释放healthy状态、各NGX功能release bool/SEH结果，失败不保留；初始化早期失败也清理旧Core。准备实际SDK64参数表边界/活动借用拒绝/早期失败重开检查及20UI请求驱动；诊断读回仅测试。另准备1a同自然像素300次实际NR/SR输出测量，尚未测或实施重复帧跳过。
+
 ## 2026-10-04 NR优化2a：设备会话核心缓存候选
 
 - A-baseline commit181e4ab/tag与增量bundle验证后，添加render线程限定NgxCoreCache、Graph可选借用和Engine设备会话生命周期。无缓存的所有现有Graph构造调用维持完整原流程。核心key含设备/规范绝对runtime/NR模块/补帧开关后端倍率；设备错误、失败、参数残留或key变化完整关闭。Ada/Ampere补丁型号主动不缓存。

@@ -97,5 +97,6 @@ int wmain(int argc,wchar_t** argv){
         if(m->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;std::cerr<<m->pDescription<<std::endl;}}
     const auto removed=ctx.device()->GetDeviceRemovedReason();
     std::cout<<"RESULT pass="<<(pass&&errors==0&&SUCCEEDED(removed))<<" debugErrors="<<errors<<" deviceRemoved="<<unsigned(removed)<<std::endl;
+    std::cout<<"MEMORY afterFinalCoreClose="<<usage()<<std::endl;
     return pass&&errors==0&&SUCCEEDED(removed)?0:1;
 }

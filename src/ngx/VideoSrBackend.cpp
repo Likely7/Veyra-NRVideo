@@ -34,8 +34,10 @@ bool VideoSrBackend::evaluate(ID3D12GraphicsCommandList* list,ID3D12Resource* in
     params_->Set("VSR.QualityLevel",quality);
     unsigned seh=0;auto r=invoke(1,list,params_,&handle_,seh);return result(1,r,seh);
 }
-void VideoSrBackend::release(){
-    if(handle_){unsigned seh=0;auto r=invoke(2,nullptr,params_,&handle_,seh);result(2,r,seh);handle_=nullptr;}
+bool VideoSrBackend::release(){
+    bool ok=true;
+    if(handle_){unsigned seh=0;auto r=invoke(2,nullptr,params_,&handle_,seh);ok=result(2,r,seh);handle_=nullptr;}
     if(params_&&core_)core_->destroyParameters(params_);params_=nullptr;core_=nullptr;
+    return ok;
 }
 }

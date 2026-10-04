@@ -32,7 +32,7 @@ bool NgxCoreCache::prepare(Key key, bool enabled) {
 
 std::shared_ptr<NgxCoreHost> NgxCoreCache::borrow() {
     if (!enabled_ || !core_) return {};
-    if (!core_->initialized() || core_->liveParameterBlockCount() != 0 ||
+    if (!core_->healthy() || core_->liveParameterBlockCount() != 0 ||
         !key_.device || FAILED(key_.device->GetDeviceRemovedReason())) {
         (void)close("invalid-core-or-parameters");
         return {};
@@ -42,7 +42,7 @@ std::shared_ptr<NgxCoreHost> NgxCoreCache::borrow() {
 }
 
 void NgxCoreCache::publish(const std::shared_ptr<NgxCoreHost>& core) {
-    if (!enabled_ || !core || !core->initialized()) return;
+    if (!enabled_ || !core || !core->healthy()) return;
     if (core_ && core_ != core) {
         log::error("ngx-core-cache", "event=refused-publish different core already retained");
         return;
