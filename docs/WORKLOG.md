@@ -8342,3 +8342,5 @@ R0合同14项+Qt Quick39项通过；真实Qt GPU/软件功能布局4/4、严格8
 `nr-r0-normal.py B2d R0-normal-v1`33/33正常负载交错通过：M1各五配置A/B三轮、S4同B DIRECT三轮，sourceSkipped全0。S4增强19.481→18.795ms（3.52%），同B DIRECT19.299→18.795（2.61%）；其余配置无稳定收益，单NR原生约6.1ms，软件Present P99几乎未变。最长成功Present110.209ms，CPU图提交长尾仍在；不宣称后台掉帧根治或NR内核提速。全部payload SHA原样。原日志/JSON/CSV在E:/项目/Veyra/logs/perf-nr-20261004/R0-normal-v1-summary及33原始目录。
 
 `nr-r0-close.py B2d R0-close-rebuild-v1`请求FSR后200ms退出实际C0000005；封存A的`R0-close-baseline-v1 fsr3`同样失败。初始化在Qt HWND销毁后继续，CreateSwapChainForHwnd 80070005后清理崩溃。源码确认PresentSink非拥有旧队列未清空，交换链失败前未赋新队列，随后VideoPresenter释放旧队列；重建缺取消检查/停止后仍回滚。先存档本候选和完整失败证据，再最小修复queue生命周期/长初始化取消。没有压力/GPU竞争/设备移除；OBS真实采集仍待，候选尚不可交付。
+
+R0-candidate eb8b1a2已存档，bundle da0440b9229a8bcbc4c6a918d1cdeac38b3372ae4c8eff3af358744424dc3e61。退出修复候选只改PresentSink提前绑定当前queue/拒绝失效HWND/清空借用句柄与指针、VideoPresenter验证目标窗口、EngineController NGX返回后的stop和退出不回滚。其他呈现重建统一经过同一取消检查，保留仅交换链恢复不重建views的旧语义。新增实际D3D12 debug生命周期测试：合法打开→释放旧队列→已关闭窗口初始化失败→重复关闭→新窗口重开，三轮；不造GPU负载/设备故障。待构建及真实退出回归，不提前标通过。

@@ -562,6 +562,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             std::wstring backendRecoveryWarning;
             bool nrAutoPoolUnavailable=false;
             std::wstring nrAutoStatus;
+            auto openPreparedPresenter=[&](const PlayerOptions& selected,bool createViews=true){
+                // NGX creation cannot be interrupted. Observe exit when it
+                // returns, before touching a UI-owned HWND or creating views.
+                return !stop_&&presenter.open(ctx,window,*graph,selected.settings.captureCompatible,!isCapture&&!isImage)&&
+                    !stop_&&(!createViews||graph->createViews());
+            };
             auto initializePreview=[&](pipeline::EnhanceGraphDesc& desc,PlayerOptions& selected,bool preserveWorkingFg=false,bool preserveWorkingNr=false){
                 backendRecoveryWarning.clear();
                 auto supported=selected.snapshot();
@@ -574,6 +580,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     veyra::log::warn("capability","normalized requested NVIDIA effects before graph creation; applied settings reflect actual disabled stages");
                 }
                 for(unsigned attempt=0;attempt<6;++attempt){
+                    if(stop_)return false;
                     desc.videoHdr=selected.settings.videoHdr;
                     desc.hdrOutput=selected.settings.useHdrPreview(desc.hdrInput,displayHdrActive());
                     // Auto is optional and preview-only; fixed/export policies
@@ -606,9 +613,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const bool adopted=gpu->adopt(selected.snapshot(),desc);
                     if(!adopted&&!gpu->configureQueue(desc,!isCapture&&!isImage))return false;
                     bool opened=adopted||graph->initialize(desc);
+                    if(stop_){veyra::log::info("engine","preview initialization cancelled after graph creation");return false;}
                     auto failure=graph->failedBackend();
                     if(opened){
-                        opened=presenter.open(ctx,window,*graph,selected.settings.captureCompatible,!isCapture&&!isImage)&&graph->createViews();
+                        opened=openPreparedPresenter(selected);
                         failure=FailedBackend::Infrastructure;
                         if(opened&&graph->xessEnabled()&&!presenter.xessActive()){opened=false;failure=FailedBackend::Fg;}
                         if(opened&&graph->fsrEnabled()&&!graph->fsrActive()){opened=false;failure=FailedBackend::Fg;}
@@ -617,6 +625,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         // to the plain scale path with a visible warning.
                         if(opened&&graph->fsrSrRequested()&&!graph->fsrSrEnabled()){opened=false;failure=FailedBackend::Sr;}
                     }
+                if(stop_)return false;
                 if(opened){
                     uint64_t afterBudget=0,afterUsage=0;
                     const auto newBytes=measuredBefore&&ctx.videoMemoryInfo(afterBudget,afterUsage)&&afterUsage>buildUsage?afterUsage-buildUsage:0;
@@ -704,6 +713,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             };
             const auto initialRequested=options.snapshot();
             const bool previewInitialized=initializePreview(gd,options);
+            if(stop_)break;
             publishFrameGenerationCapabilities();
             if(!previewInitialized){status(L"视频初始化失败，请查看对应组件的诊断日志",true);break;}
             if(!backendRecoveryWarning.empty()){
@@ -1266,6 +1276,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     bool accepted=ring.drainQueue();out={};hasOutput=false;
                     resetRecord->rebuilt=rebuild;
                     markResetStage(diagnostics::ResetStage::Drain);
+                    if(stop_)break;
                     if(!accepted){finishReset(diagnostics::ResetOutcome::Failed);status(L"设置切换排空失败，已停止",true);break;}
                     backendRecoveryWarning.clear();
                     const bool preserveWorkingFg=previous.multiplier>1&&requested.multiplier>1&&
@@ -1290,13 +1301,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             }
                         }
                         markResetStage(diagnostics::ResetStage::Destroy);
-                        accepted=reused?(graph->applySettings(requested)&&presenter.open(ctx,window,*graph,next.settings.captureCompatible,!isCapture&&!isImage)&&graph->createViews()):
+                        accepted=reused?(graph->applySettings(requested)&&openPreparedPresenter(next)):
                             initializePreview(nextDesc,next,preserveWorkingFg,preserveWorkingNr);
                         markResetStage(diagnostics::ResetStage::Create);
+                        if(stop_){veyra::log::info("engine","settings rebuild cancelled; skipping rollback on exit");break;}
                         if(!accepted){
                             presenter.close();graph->shutdown();recentGraphCache.evict("build-rollback");
                             graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;
-                            if(!gpu->configureQueue(gd,!isCapture&&!isImage)||!graph->initialize(gd)||!presenter.open(ctx,window,*graph,options.settings.captureCompatible,!isCapture&&!isImage)||!graph->createViews()){status(L"设置失败且旧资源恢复失败，已停止",true);break;}
+                            if(!gpu->configureQueue(gd,!isCapture&&!isImage)||!graph->initialize(gd)||!openPreparedPresenter(options)){if(!stop_)status(L"设置失败且旧资源恢复失败，已停止",true);break;}
                         }
                     }else if(accepted)accepted=graph->applySettings(requested);
                     if(rebuild)publishFrameGenerationCapabilities();
@@ -1552,7 +1564,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
                     presenter.close();graph->shutdown();recentGraphCache.evict("source-resize");
                     graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;out={};hasOutput=false;
-                    if(!graph->initialize(gd)||!presenter.open(ctx,window,*graph,options.settings.captureCompatible,!isCapture&&!isImage)||!graph->createViews()){status(L"串流尺寸切换失败",true);break;}
+                    if(!graph->initialize(gd)||!openPreparedPresenter(options)){if(!stop_)status(L"串流尺寸切换失败",true);break;}
                     reset=true;pendingResetCause=pipeline::ResetReason::Resize;
                 }
                 if(vramRecoverStep){
@@ -1565,7 +1577,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     presenter.close();
                     if(step==2){graph->shutdown();graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;out={};hasOutput=false;}
                     if(step==1&&testLeakReleases)testLeak.clear();
-                    if((step==2&&!graph->initialize(gd))||!presenter.open(ctx,window,*graph,options.settings.captureCompatible,!isCapture&&!isImage)||(step==2&&!graph->createViews())){status(L"显存回收后重建失败，请重新打开片源",true);break;}
+                    if((step==2&&!graph->initialize(gd))||!openPreparedPresenter(options,step==2)){if(!stop_)status(L"显存回收后重建失败，请重新打开片源",true);break;}
                     reset=true;pendingResetCause=pipeline::ResetReason::Resize;
                     vramRecoverDone=step;vramRecoverCheckAt=Clock::now()+std::chrono::seconds(3);
                 }
@@ -1851,7 +1863,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             {std::lock_guard lock(mutex_);reduced.revision=++nextRevision_;}
                             options=PlayerOptions::from(reduced,options.nodeOrder);
                             describeStages(stageRequest(options),options.snapshot(),gd);
-                            if(!initializePreview(gd,options)){status(L"增强故障后的基础图重建失败",true);break;}
+                            if(!initializePreview(gd,options)){if(!stop_)status(L"增强故障后的基础图重建失败",true);break;}
                             publishFrameGenerationCapabilities();
                             backendRecoveryWarning=std::wstring(backendFailureName(failedComponent))+L"运行失败，已关闭对应效果；错误码见日志"+(backendRecoveryWarning.empty()?L"":L"；"+backendRecoveryWarning);
                             {std::lock_guard lock(mutex_);desired_.rejectVideoRequest(attempted,options.snapshot());snapshot_.desired=desired_;snapshot_.applied=options.snapshot();snapshot_.rejectedRevision=attempted.revision;snapshot_.applying=desired_!=snapshot_.applied;snapshot_.backendWarning=backendRecoveryWarning;}
@@ -1865,11 +1877,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         ring.drainQueue();out={};presenter.close();graph->shutdown();recentGraphCache.evict("process-rollback");
                         graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;options=PlayerOptions::from(previous,previousOrder);
                         gd=previousDesc;
-                        if(graph->initialize(gd)&&presenter.open(ctx,window,*graph,options.settings.captureCompatible,!isCapture&&!isImage)&&graph->createViews()&&graph->process(frame,pts,true,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0)){
+                        if(graph->initialize(gd)&&openPreparedPresenter(options)&&graph->process(frame,pts,true,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0)){
                             publishFrameGenerationCapabilities();
                             finishReset(diagnostics::ResetOutcome::RolledBack);
                             std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=previous;snapshot_.status=L"参数执行失败，已整套回滚";transaction=false;
-                        }else{status(L"参数回滚失败，已停止",true);break;}
+                        }else{if(!stop_)status(L"参数回滚失败，已停止",true);break;}
                     }else{status(std::wstring(backendFailureName(failedComponent))+L"执行失败；请查看日志",true);break;}
                 }
                 if(transaction){std::lock_guard lock(mutex_);snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;snapshot_.status=std::format(L"输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.flowWidth,gd.flowHeight,gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）");veyra::log::info("display-color",std::format("hdrInput={} hdrOutput={} forceSdrPreview={}",gd.hdrInput,gd.hdrOutput,options.settings.forceSdrPreview));veyra::log::info("settings",std::format("Applied revision={} sourcePtsMs={} fgBackend={} flowBackend={} multiplier={} (source kept open)",options.settings.revision,pts,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend),options.snapshot().multiplier));}
