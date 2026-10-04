@@ -13,6 +13,7 @@ user.IsWindowVisible.argtypes=[W.HWND];user.GetWindowRect.argtypes=[W.HWND,ctype
 user.GetForegroundWindow.restype=W.HWND;user.SetForegroundWindow.argtypes=[W.HWND];user.SetForegroundWindow.restype=W.BOOL
 user.EnumWindows.argtypes=[CALLBACK,W.LPARAM];user.AttachThreadInput.argtypes=[W.DWORD,W.DWORD,W.BOOL]
 user.PostMessageW.argtypes=[W.HWND,W.UINT,W.WPARAM,W.LPARAM];user.IsWindow.argtypes=[W.HWND]
+user.PeekMessageW.argtypes=[ctypes.POINTER(W.MSG),W.HWND,W.UINT,W.UINT,W.UINT]
 kernel.GetCurrentThreadId.restype=W.DWORD
 
 def pid_of(hwnd):
@@ -30,6 +31,7 @@ def owned_window(pid):
 
 def focus(hwnd,expected_pid):
     assert hwnd and pid_of(hwnd)==expected_pid
+    message=W.MSG();user.PeekMessageW(ctypes.byref(message),None,0,0,0)
     previous=user.GetForegroundWindow();current=kernel.GetCurrentThreadId()
     foreground_thread=user.GetWindowThreadProcessId(previous,None) if previous else 0
     attached=foreground_thread!=current and foreground_thread!=0 and bool(user.AttachThreadInput(current,foreground_thread,True))
@@ -47,16 +49,16 @@ def run():
     old_foreground=user.GetForegroundWindow();helper=None;rows=[]
     helper_source=ROOT/'scripts/acceptance/playback-smoothness-background.py'
     try:
-        with (out/'helper.log').open('xb') as log:
-            helper=subprocess.Popen([sys.executable,'-B',str(helper_source)],cwd=tmp,env=env,stdout=log,stderr=subprocess.STDOUT)
-        deadline=time.monotonic()+15
-        while not owned_window(helper.pid):
-            assert helper.poll() is None and time.monotonic()<deadline,'Owned GDI window unavailable'
-            time.sleep(.1)
-        helper_window=owned_window(helper.pid)
         for repeat,order in enumerate((('A','B'),('B','A'),('A','B')),1):
             for mode in order:
                 events=[];done=set();name=f'{label}-{mode}-r{repeat}'
+                with (out/(name+'-helper.log')).open('xb') as helper_log:
+                    helper=subprocess.Popen([sys.executable,'-B',str(helper_source)],cwd=tmp,env=env,stdout=helper_log,stderr=subprocess.STDOUT)
+                deadline=time.monotonic()+15
+                while not owned_window(helper.pid):
+                    assert helper.poll() is None and time.monotonic()<deadline,'Owned GDI window unavailable'
+                    time.sleep(.1)
+                helper_window=owned_window(helper.pid)
                 def poll(player,path):
                     if not path.exists():return
                     text=path.read_text(encoding='utf-8',errors='replace')
@@ -97,6 +99,7 @@ def run():
                     'gpuCompetition':False,'passed':True}
                 rows.append(row);(out/'completed.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
                 print('R0_FOCUS_RESULT',name,json.dumps(phases),flush=True)
+                user.PostMessageW(helper_window,0x10,0,0);helper.wait(timeout=5);helper=None
         summary={mode:{phase:{'medianPresentP99Ms':statistics.median(r['phases'][phase]['softwarePresentP99Ms'] for r in rows if r['mode']==mode),
             'medianSubmitFps':statistics.median(r['phases'][phase]['uiSubmitFpsMedian'] for r in rows if r['mode']==mode)}
             for phase in ('foreground-before','background','foreground-after')} for mode in ('A','B')}
