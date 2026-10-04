@@ -1,5 +1,10 @@
 # Veyra 工作记录
 
+## 2026-10-04 NR优化1c：盲预测重复帧拒绝存档
+
+- 节点before标签checkpoint/perf-nr-1c-before-20261004，产品源码仍8cdc。`py -3.11 -B tests/perf/CadencePredictionCounterexample.py E:/项目/Veyra/logs/perf-nr-20261004/1c-counterexample-v1/result.json` exit0：准确已知30-in-60/24-in-60整帧2:3/40-in-120节奏，第49未抽查的重复位只改一个像素，候选三组都替换错这一帧，后续检测错误0；精确比较输出均0不同帧。
+- 证明每8帧抽查无法保证未检查帧，违反方案1帧恢复与逐帧一致验收；拒绝产品接入，保留原行为与反例证据，未写入不安全产品候选，因此没有产品改动需revert。1a精确比较及“跳过比较时仍完整处理”的安全动态策略继续。结论文档PERF_1C_CADENCE_REJECTION_2026-10-04.md，不将CPU证明冒充GPU性能数据。
+
 ## 2026-10-04 NR优化：文档归档与优化前真实GPU基线进行中
 
 - 文档对齐commit37bc0c090918566f7ebebc9f5edb24ba60c5f5a3，checkpoint/perf-nr-initial-docs-20261004；initial-docs/source.bundle verify成功，SHA34d888b290e094b4f3b9d7dd3aa01d6b34c5a568fe722ef3e18327f3e207e0fd，patch/commit/parent receipt在本轮archives。起点8cdc产品不变，原桌面/main保护guard持续通过。
