@@ -1187,6 +1187,9 @@ VPage {
                             summary: veyra.videoHdr ? (veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("已开启")) : qsTr("已关闭")
                             on: veyra.videoHdr
                             onToggled: on => veyra.videoHdr = on
+                            // RTX Video HDR is an SDR -> HDR stage: an HDR source
+                            // keeps the native HDR path (and the HDR brightness
+                            // management), so there is no "convert HDR sources" switch.
                             Repeater {
                                 model: [{key:"contrast",label:qsTr("对比度"),from:0,to:200,def:125},
                                         {key:"saturation",label:qsTr("饱和度"),from:0,to:200,def:75},
@@ -1195,9 +1198,16 @@ VPage {
                                 delegate: VRow {
                                     required property var modelData
                                     label: modelData.label
-                                    value: String(veyra.videoHdrParams[modelData.key] ?? "—")
+                                    // modelData.scale turns an integer parameter into a
+                                    // readable number (exposure is 1/100 EV); the unit
+                                    // lives in the label, so every value stays short
+                                    // enough for the rows to line up.
+                                    value: modelData.scale
+                                        ? (Number(veyra.videoHdrParams[modelData.key] ?? modelData.def) / modelData.scale).toFixed(2)
+                                        : String(veyra.videoHdrParams[modelData.key] ?? "—")
                                     VSlider {
                                         objectName: "list-hdr-" + modelData.key
+                                        keyStepValue: 1
                                         implicitWidth: 120
                                         valueFromModel: true
                                         resettable: true; defaultValue: modelData.def
@@ -1729,6 +1739,48 @@ VPage {
                                 label: qsTr("HDR 输出格式")
                                 hint: qsTr("补帧路径固定 HDR10；需要 Windows HDR 开启")
                                 VSeg { objectName: "display-hdr-output"; options: [{id:"0",label:"HDR10"},{id:"1",label:qsTr("scRGB 浮点")}]; current: String(veyra.hdrOutputMode); onPicked: id => veyra.hdrOutputMode = Number(id) }
+                            }
+                        }
+
+                        // HDR 亮度管理: per-scene brightness for HDR sources — dark scenes
+                        // are lifted, bright ones compressed. Same shape as list-video-hdr.
+                        VAccordion {
+                            objectName: "list-hdr-brightness"
+                            Layout.fillWidth: true
+                            glyph: "sun"
+                            hue: "#F5C84B"
+                            title: qsTr("HDR 亮度管理")
+                            summary: veyra.hdrBrightness ? (veyra.hdrBrightnessStatus.length > 0 ? veyra.hdrBrightnessStatus : qsTr("按场景自适应亮度")) : qsTr("已关闭")
+                            on: veyra.hdrBrightness
+                            onToggled: on => veyra.hdrBrightness = on
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("暗场景自动抬、亮场景自动压")
+                                wrapMode: Text.WordWrap
+                                color: Theme.t3
+                                font.family: Theme.fontUi; font.pixelSize: 11
+                            }
+                            Repeater {
+                                model: [{key:"strength",label:qsTr("强度 (%)"),from:0,to:100,def:50},
+                                        {key:"targetPeakNits",label:qsTr("目标峰值 (nit)"),from:400,to:4000,def:1000,hint:qsTr("填你显示器的峰值亮度")},
+                                        {key:"response",label:qsTr("响应速度 (%)"),from:0,to:100,def:0,hint:qsTr("0 = 只在场景切换时更新")},
+                    {key:"transitionMs",label:qsTr("过渡时间 (ms)"),from:0,to:2000,def:1000,hint:qsTr("0 = 立即切换")}]
+                                delegate: VRow {
+                                    required property var modelData
+                                    label: modelData.label
+                                    hint: modelData.hint || ""
+                                    value: String(veyra.hdrBrightnessParams[modelData.key] ?? "—")
+                                    VSlider {
+                                        objectName: "list-hdrbright-" + modelData.key
+                                        keyStepValue: 1
+                                        implicitWidth: 120
+                                        valueFromModel: true
+                                        resettable: true; defaultValue: modelData.def
+                                        from: modelData.from; to: modelData.to
+                                        value: veyra.hdrBrightnessParams[modelData.key] ?? modelData.def
+                                        onMoved: value => veyra.setHdrBrightnessParameter(modelData.key, Math.round(value))
+                                    }
+                                }
                             }
                         }
                         VGroup {

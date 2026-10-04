@@ -428,11 +428,25 @@
    "ja": "+  NR 層を追加"
   },
   {
+   "zh": "0 = 只在场景切换时更新",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "0 = 僅在場景切換時更新",
+   "en": "0 = update only on scene changes",
+   "ja": "0 = シーン切替時のみ更新"
+  },
+  {
    "zh": "0 = 沿用所选格式；设备返回其他帧率会报错，不在软件中偷偷丢帧",
    "src": "qml/DialogHost.qml",
    "zh-TW": "0 = 沿用所選格式；裝置返回其他幀率會報錯，不在軟體中偷偷丟幀",
    "en": "0 = use the selected format; a device that returns another frame rate reports an error instead of frames being dropped silently",
    "ja": "0 = 選択したフォーマットのまま。デバイスが別のフレームレートを返した場合はエラーになり、黙ってフレームを捨てることはしません"
+  },
+  {
+   "zh": "0 = 立即切换",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "0 = 立即切換",
+   "en": "0 = switch immediately",
+   "ja": "0 = 即座に切り替え"
   },
   {
    "zh": "1080p · 默认",
@@ -734,6 +748,13 @@
    "zh-TW": "HDR → scRGB / 浮點",
    "en": "HDR → scRGB / float",
    "ja": "HDR → scRGB / 浮動小数点"
+  },
+  {
+   "zh": "HDR 亮度管理",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "HDR 亮度管理",
+   "en": "HDR brightness management",
+   "ja": "HDR 輝度管理"
   },
   {
    "zh": "HDR 片源也按 SDR 显示；与采集卡的“转为 SDR 显示”是同一设置",
@@ -3376,6 +3397,13 @@
    "ja": "ネイティブ HDR 入力。SDR→HDR 変換は不要です"
   },
   {
+   "zh": "原生 HDR 输入；「HDR 片源转换」未开启",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "原生 HDR 輸入；「HDR 片源轉換」未開啟",
+   "en": "Native HDR input; \"Convert HDR sources too\" is off",
+   "ja": "ネイティブ HDR 入力；「HDR ソースも変換」はオフです"
+  },
+  {
    "zh": "原生 · SDR",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "原生 · SDR",
@@ -3761,6 +3789,13 @@
    "ja": "表示 CPU P95：%1 ms"
   },
   {
+   "zh": "响应速度 (%)",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "反應速度 (%)",
+   "en": "Response speed (%)",
+   "ja": "応答速度 (%)"
+  },
+  {
    "zh": "唤醒",
    "src": "qml/DialogHost.qml",
    "zh-TW": "喚醒",
@@ -4053,6 +4088,13 @@
    "zh-TW": "垂直同步 · 佇列深度 1 · ",
    "en": "VSync · queue depth 1 · ",
    "ja": "垂直同期 · キュー深さ 1 · "
+  },
+  {
+   "zh": "填你显示器的峰值亮度",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "填入螢幕的峰值亮度",
+   "en": "Enter your display's peak brightness",
+   "ja": "ディスプレイのピーク輝度を入力"
   },
   {
    "zh": "填充裁切",
@@ -5854,6 +5896,13 @@
    "ja": "強度 "
   },
   {
+   "zh": "强度 (%)",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "強度 (%)",
+   "en": "Strength (%)",
+   "ja": "強度 (%)"
+  },
+  {
    "zh": "强调色",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "強調色",
@@ -6461,6 +6510,13 @@
    "zh-TW": "按住看原圖",
    "en": "Hold for original",
    "ja": "押してオリジナル"
+  },
+  {
+   "zh": "按场景自适应亮度",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "依場景自適應亮度",
+   "en": "Adaptive brightness per scene",
+   "ja": "シーンごとの適応輝度"
   },
   {
    "zh": "按键可在 设置 → 快捷键 里改",
@@ -7323,6 +7379,13 @@
    "zh-TW": "暗化變化",
    "en": "Darkening change",
    "ja": "暗くなる変化"
+  },
+  {
+   "zh": "暗场景自动抬、亮场景自动压",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "暗場景自動抬高、亮場景自動壓低",
+   "en": "Dark scenes are lifted, bright scenes compressed",
+   "ja": "暗いシーンは持ち上げ、明るいシーンは圧縮します"
   },
   {
    "zh": "曝光（EV）",
@@ -8989,6 +9052,13 @@
    "zh-TW": "目標尺寸",
    "en": "Target size",
    "ja": "目標サイズ"
+  },
+  {
+   "zh": "目标峰值 (nit)",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "目標峰值 (nit)",
+   "en": "Target peak (nit)",
+   "ja": "目標ピーク (nit)"
   },
   {
    "zh": "目标已失效",
@@ -11285,6 +11355,13 @@
    "zh-TW": "輸出路徑過長",
    "en": "The output path is too long",
    "ja": "出力パスが長すぎます"
+  },
+  {
+   "zh": "过渡时间 (ms)",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "過渡時間 (ms)",
+   "en": "Transition time (ms)",
+   "ja": "遷移時間 (ms)"
   },
   {
    "zh": "运动估算质量",

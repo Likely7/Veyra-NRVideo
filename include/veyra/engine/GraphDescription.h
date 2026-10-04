@@ -94,6 +94,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.additionalColors=settings.additionalColors;
     desc.additionalColorCount=settings.additionalColorCount;
     desc.videoHdr=settings.videoHdr;
+    desc.hdrBrightness=settings.hdrBrightness;
     desc.hdrOutputMode=settings.hdrOutputMode;
     desc.fgMotion=settings.fgMotion;desc.srMotion=settings.srMotion;desc.nrMotion=settings.nrMotion;
     desc.settingsRevision=settings.revision;

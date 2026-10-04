@@ -915,10 +915,34 @@ static void testNodeInterNrProtectionDescription(){
           "unmigrated cross-SR Protection cannot enter production or inherit a list mask");
 }
 
+// persistSession() compares the captured session with the last saved one, so any
+// global that ChainConfiguration::operator== ignores is a change the UI applies
+// and never writes. The rendering choices are globals, not chain nodes: they have
+// to take part in that comparison.
+__declspec(noinline) void testConfigurationChangeDetection() {
+    const auto settings = populated();
+    const auto configuration = ChainConfiguration::capture(toChain(settings), settings);
+    auto changed = configuration;
+    changed.hdrOutputMode = HdrOutputMode::ScRgb;
+    check(!(configuration == changed), "change detection: an HDR output mode change is a change");
+    changed = configuration;
+    changed.fgMotion = MotionSource::Zero;
+    check(!(configuration == changed), "change detection: a frame-generation source change is a change");
+    changed = configuration;
+    changed.nrMotion = MotionSource::Zero;
+    check(!(configuration == changed), "change detection: an NR motion source change is a change");
+    changed = configuration;
+    changed.hdrBrightness.targetPeakNits = 1500;
+    check(!(configuration == changed), "change detection: a brightness change is a change");
+    check(configuration == ChainConfiguration::capture(toChain(settings), settings),
+          "change detection: an untouched configuration still compares equal");
+}
+
 int main() {
     std::setvbuf(stdout,nullptr,_IONBF,0);
     testNodeEditorGraph();
     testExistingChainContracts();
+    testConfigurationChangeDetection();
     testExecutionPlans();
     testGeneratedExecutionPlans();
     testLegacyPlanDimensions();

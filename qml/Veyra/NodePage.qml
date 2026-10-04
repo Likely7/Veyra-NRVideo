@@ -1389,6 +1389,8 @@ VPage {
                     text: veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("SDR → HDR，在补帧之前")
                     color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11; wrapMode: Text.WordWrap
                 }
+                // RTX Video HDR is an SDR -> HDR stage: an HDR source keeps the
+                // native HDR path, so there is no "convert HDR sources" switch here.
                 Repeater {
                     model: [{key:"contrast",label:qsTr("对比度"),from:0,to:200,def:125},
                             {key:"saturation",label:qsTr("饱和度"),from:0,to:200,def:75},
@@ -1397,9 +1399,12 @@ VPage {
                     delegate: VRow {
                         required property var modelData
                         label: modelData.label
-                        value: String(veyra.videoHdrParams[modelData.key] ?? "—")
+                        value: modelData.scale
+                            ? (Number(veyra.videoHdrParams[modelData.key] ?? modelData.def) / modelData.scale).toFixed(2)
+                            : String(veyra.videoHdrParams[modelData.key] ?? "—")
                         VSlider {
                             objectName: "node-hdr-" + modelData.key
+                            keyStepValue: 1
                             implicitWidth: 110
                             valueFromModel: true
                             resettable: true; defaultValue: modelData.def

@@ -508,12 +508,14 @@ ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     c.opticalFlowBackend = s.opticalFlowBackend; c.amdFlowHalfResolution = s.amdFlowHalfResolution;
     c.nrPolicy = s.nrPolicy;
     c.hdrOutputMode=s.hdrOutputMode;c.fgMotion=s.fgMotion;c.srMotion=s.srMotion;c.nrMotion=s.nrMotion;
+    c.hdrBrightness=s.hdrBrightness;
     return c;
 }
 
 void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.nrPolicy = nrPolicy;
     s.hdrOutputMode=hdrOutputMode;s.fgMotion=fgMotion;s.srMotion=srMotion;s.nrMotion=nrMotion;
+    s.hdrBrightness=hdrBrightness;
     s.srTarget = srTarget; s.videoSrQuality = videoSrQuality;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
     s.opticalFlowBackend = opticalFlowBackend; s.amdFlowHalfResolution = amdFlowHalfResolution;
@@ -536,7 +538,20 @@ bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
     return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality &&
         fgBackend == other.fgBackend && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&
+        // The author's own rendering globals had the same blind spot: a change to
+        // the HDR output mode or to a motion source compared equal, so
+        // persistSession() took its early return and the choice was lost on the
+        // next start (field report: those two never came back).
+        hdrOutputMode == other.hdrOutputMode && fgMotion == other.fgMotion &&
+        srMotion == other.srMotion && nrMotion == other.nrMotion &&
         selectedNr == other.selectedNr && selectedColour == other.selectedColour &&
+        // Custom: the globals are not compared by the original, so a change to one of
+        // them looked like "no change" and persistSession() skipped the write
+        // (field report: HDR brightness values were never remembered). Compare the
+        // block this fork added; the author's own globals have the same blind spot.
+        hdrBrightness.enabled == other.hdrBrightness.enabled && hdrBrightness.strength == other.hdrBrightness.strength &&
+        hdrBrightness.targetPeakNits == other.hdrBrightness.targetPeakNits && hdrBrightness.response == other.hdrBrightness.response &&
+        hdrBrightness.transitionMs == other.hdrBrightness.transitionMs &&
         ((!editor && !other.editor) || (editor && other.editor && *editor == *other.editor));
 }
 

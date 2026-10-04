@@ -604,7 +604,14 @@ struct QmlPlayerBridge::Impl {
             draftGlobals = engine::ChainGlobalSettings::capture(settings);
             // Non-node controls (e.g. audio) may still change while a wire is
             // incomplete. Keep runtime globals separate from that transaction.
+            // Custom: HDR brightness is one of those controls - it is not part of a
+            // node edit, so the restore below must not put the previous value back
+            // (field report: a new target peak took effect and then reverted on the
+            // next start, because this line overwrote it before the session was
+            // captured).
+            const auto brightness=settings.hdrBrightness;
             engine::ChainGlobalSettings::capture(previous).apply(settings);
+            settings.hdrBrightness=brightness;
             facade.setPending(settings);
             if (revalidate(true, &previous)) return true;
             draftGlobals = oldGlobals; facade.setPending(previous);
@@ -2511,11 +2518,15 @@ void QmlPlayerBridge::ps5PsnForget() {
 #endif
 }
 void QmlPlayerBridge::ps5SendLoginPin(const QString& pin) {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
     const auto text = pin.trimmed();
     if (text.isEmpty() || !std::all_of(text.begin(), text.end(), [](QChar c) { return c.isDigit(); })) {
         impl_->ps5Status = tr("登录 PIN 必须为数字。"); emit ps5Changed(); return;
     }
     impl_->engine.remotePlayLoginPin(text.toStdString());
+#else
+    (void)pin; // RemotePlay disabled: keep the QML-callable symbol but no backend.
+#endif
 }
 void QmlPlayerBridge::ps5Cancel() {
     if (impl_->ps5Busy && impl_->ps5Worker.joinable()) { impl_->ps5Worker.request_stop(); return; }
@@ -3553,11 +3564,12 @@ QVariantMap QmlPlayerBridge::videoHdrParams() const {
     return {};
 }
 bool QmlPlayerBridge::setVideoHdrParameter(const QString& key, double value) {
-    if (!std::isfinite(value) || value < 0) return false;
+    if (!std::isfinite(value)) return false;
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i) {
         auto& node = impl_->chain.nodes[i];
         if (node.type != engine::EffectType::VideoHdr) continue;
         const auto before = node;
+        if (value < 0) return false;
         const auto v = unsigned(std::lround(value));
         if (key == "contrast") node.videoHdr.contrast = v;
         else if (key == "saturation") node.videoHdr.saturation = v;
@@ -4006,6 +4018,7 @@ void QmlPlayerBridge::resumeCaptureSession() {
 
 QString QmlPlayerBridge::colorStatus() const { return uiText(impl_->snapshot.colorStatus); }
 QString QmlPlayerBridge::videoHdrStatus() const { return uiText(impl_->snapshot.videoHdrStatus); }
+QString QmlPlayerBridge::hdrBrightnessStatus() const { return uiText(impl_->snapshot.hdrBrightnessStatus); }
 
 // --- export -----------------------------------------------------------------
 // Poll the export job once per UI tick. Its snapshot is the source of the
@@ -5627,6 +5640,50 @@ bool QmlPlayerBridge::setProtectionFeather(double pixels) {
 
 // --- design gap A1-A5: flow, cadence, presentation ----------------------------
 int QmlPlayerBridge::hdrOutputMode()const{return int(settings().hdrOutputMode);}
+// Custom: per-scene HDR brightness. Globals, not chain nodes, and every field is
+// a live uniform, so committing one never rebuilds the graph.
+bool QmlPlayerBridge::hdrBrightness()const{return settings().hdrBrightness.enabled;}
+void QmlPlayerBridge::setHdrBrightness(bool enabled){
+    auto s=settings();if(s.hdrBrightness.enabled==enabled)return;s.hdrBrightness.enabled=enabled;
+    commitHdrBrightness(std::move(s));
+}
+QVariantMap QmlPlayerBridge::hdrBrightnessParams()const{
+    const auto& b=settings().hdrBrightness;
+    return {{"strength",int(b.strength)},{"targetPeakNits",int(b.targetPeakNits)},{"response",int(b.response)},{"transitionMs",int(b.transitionMs)}};
+}
+bool QmlPlayerBridge::setHdrBrightnessParameter(const QString& key,double value){
+    if(!std::isfinite(value)||value<0)return false;
+    auto s=settings();const auto v=unsigned(std::lround(value));
+    if(key=="strength")s.hdrBrightness.strength=v;
+    else if(key=="targetPeakNits")s.hdrBrightness.targetPeakNits=v;
+    else if(key=="response")s.hdrBrightness.response=v;
+    else if(key=="transitionMs")s.hdrBrightness.transitionMs=v;
+    else return false;
+    if(!s.hdrBrightness.valid())return false;
+    commitHdrBrightness(std::move(s));return true;
+}
+// The commit path deliberately re-derives the runtime globals from its own copy
+// (Impl::commit), and this block is not part of them, so a plain commit applies
+// the change to the engine but leaves it out of the pending settings the session is
+// captured from: it took effect and then reverted on the next start (field report:
+// target peak 1150 came back as an older value). Re-assert it afterwards, in both
+// places the session capture reads, and re-project.
+void QmlPlayerBridge::commitHdrBrightness(engine::EnhancementSettings settings){
+    const auto brightness=settings.hdrBrightness;
+    settings.hdrBrightness=brightness;
+    if(!impl_->commit(std::move(settings)))return;
+    auto after=impl_->facade.pendingSettings();
+    after.hdrBrightness=brightness;
+    impl_->facade.setPending(after);
+    impl_->draftGlobals.hdrBrightness=brightness;
+    impl_->revalidate(true);
+    // A global change has no other trigger that writes the session out: the capture
+    // runs once, at startup (instrumentation in currentSession showed exactly one
+    // line, with the old value), so a changed value took effect and was never
+    // stored. Ask for the write explicitly.
+    impl_->persistSession();
+    emit settingsChanged();emit chainChanged();
+}
 void QmlPlayerBridge::setHdrOutputMode(int value){if(value<0||value>1)return;auto s=settings();if(int(s.hdrOutputMode)==value)return;s.hdrOutputMode=engine::HdrOutputMode(value);if(impl_->commit(std::move(s)))emit settingsChanged();}
 int QmlPlayerBridge::fgMotionSource()const{return engine::motionUsesFlow(settings().fgMotion,settings().frameGenerationBackend)?1:0;}
 void QmlPlayerBridge::setFgMotionSource(int value){if(value<0||value>1)return;auto s=settings();s.fgMotion=engine::MotionSource(value);if(impl_->commit(std::move(s)))emit settingsChanged();}

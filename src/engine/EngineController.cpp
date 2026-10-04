@@ -528,6 +528,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 for(unsigned attempt=0;attempt<6;++attempt){
                     desc.videoHdr=selected.settings.videoHdr;
+                    desc.hdrBrightness=selected.settings.hdrBrightness;
                     desc.hdrOutput=selected.settings.useHdrPreview(desc.hdrInput,displayHdrActive());
                     bool opened=graph.initialize(desc);
                     auto failure=graph.failedBackend();
@@ -2042,10 +2043,20 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const double ageP95=liveScheduler?completed.ageP95:captureAges.p95(),waitP95=liveScheduler?completed.waitP95:scheduleWaits.p95(),presentP95=liveScheduler?completed.presentP95:presentTimes.p95();
                 ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.colorStatus=graph.videoHdrActive()?L"SDR → RTX Video HDR":options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph.hdr10Output()?L"HDR → HDR10 / PQ":L"HDR → scRGB / 浮点"):gd.hdrInput?L"HDR → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
                     snapshot_.videoHdrActive=graph.videoHdrActive();
+                    // RTX Video HDR is an SDR -> HDR stage: an HDR source keeps the
+                    // native HDR path, so the "not running" reasons are about the SDR
+                    // input side only.
                     snapshot_.videoHdrStatus=graph.videoHdrActive()?L"预览：SDR 转 HDR 已运行":
                         !options.settings.videoHdr.enabled?L"RTX Video HDR 已关闭":
-                        gd.hdrInput?L"原生 HDR 输入，无需 SDR 转 HDR":
+                        gd.hdrInput?L"原生 HDR 输入（RTX Video HDR 只处理 SDR 片源）":
                         L"当前为 SDR 预览，HDR 转换未运行";
+                    // Custom: per-scene HDR brightness readout. Doubles as the
+                    // field-visible evidence that the map follows the picture.
+                    snapshot_.hdrBrightnessStatus=!options.settings.hdrBrightness.enabled?L"HDR 亮度管理已关闭":
+                        !gd.hdrInput?L"仅 HDR 片源可用":
+                        !graph.hdrBrightnessMeasured()?L"HDR 亮度管理：等待场景测量…":
+                        std::format(L"HDR 亮度管理：本场景增益 ×{:.2f}，峰值 {:.0f} nit（目标 {} nit）",
+                            graph.hdrBrightnessGain(),graph.hdrBrightnessPeakNits(),options.settings.hdrBrightness.targetPeakNits);
                     // Measured playback speed: media-PTS advance per wall time
                     // over ~1s windows (1.0 = normal speed), resampled on seek.
                     // A rejected LUT input space must be visible, not only logged

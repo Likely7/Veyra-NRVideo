@@ -881,6 +881,56 @@ __declspec(noinline) void testRenderingChoices(){
     check(sw.save(*session),"rendering: v4 session with editor saves");
     ChainSessionStore nr(sessionPath);check(nr.load(*restored)&&*session==*restored,"rendering: v4 editor globals restore exactly");
 }
+// Field regressions around the editor payload. It is written by the same encoder
+// as the runtime payload, so it needs the same version cap when it is read back;
+// without it save() rejected its own output and nothing was ever stored. And a
+// brightness change made in the node editor's own globals has to raise the session
+// version, or the block is written nowhere and silently reverts.
+__declspec(noinline) void testEditorPayloadVersions() {
+    const auto path = scratch(L"editor-payload-version.v1.field-render");
+    auto session = std::make_unique<ChainSession>(ChainSession::initial(sample()));
+    check(session->select(ChainMode::Node), "payload version: initialize node session");
+    auto document = std::make_shared<NodeEditorDocument>();
+    document->nodes = session->configurations[1].chain;
+    check(document->layout.initialize(document->nodes).accepted, "payload version: initialize stable IDs");
+    bool movedHdr = false;
+    for (uint32_t i = 0; i < document->nodes.nodeCount; ++i)
+        if (document->nodes.nodes[i].type == EffectType::VideoHdr) movedHdr = true;
+    check(movedHdr, "payload version: sample chain carries RTX Video HDR");
+    session->configurations[1].editor = document;
+    ChainSessionStore writer(path);
+    check(writer.save(*session), "payload version: editor payload saves");
+    // The payload carries its own library header, so a reader can tell which
+    // blocks it may contain. (It used to be raised by an RTX Video HDR field that
+    // has since been removed; the session-level check below still covers the
+    // version actually moving.)
+    check(readBytes(path).find("VEYRA_PRESET_LIBRARY ") != std::string::npos,
+          "payload version: editor payload carries its own library header");
+    auto restored = std::make_unique<ChainSession>(ChainSession::initial({}));
+    ChainSessionStore reader(path);
+    check(reader.load(*restored) && *restored == *session,
+          "payload version: editor node parameters survive save and reload");
+    // Only the editor's globals copy is changed here; the runtime configuration
+    // keeps the defaults, which is exactly the case the version test used to miss.
+    document->globals = static_cast<const ChainGlobalSettings&>(session->configurations[1]);
+    document->globals->hdrBrightness.enabled = true;
+    document->globals->hdrBrightness.strength = 44;
+    document->globals->hdrBrightness.targetPeakNits = 1500;
+    document->globals->hdrBrightness.response = 12;
+    document->globals->hdrBrightness.transitionMs = 1200;
+    check(session->valid() && writer.save(*session), "payload version: editor-only brightness saves");
+    check(readBytes(path).starts_with("VEYRA_CHAIN_SESSION 6"),
+          "payload version: editor-only transition raises the session version");
+    auto reopened = std::make_unique<ChainSession>(ChainSession::initial({}));
+    ChainSessionStore rereader(path);
+    check(rereader.load(*reopened) && *reopened == *session,
+          "payload version: editor-only brightness survives reload");
+    check(reopened->configurations[1].editor && reopened->configurations[1].editor->globals &&
+          reopened->configurations[1].editor->globals->hdrBrightness == document->globals->hdrBrightness &&
+          reopened->configurations[1].hdrBrightness == session->configurations[1].hdrBrightness,
+          "payload version: the two globals copies stay separate and exact");
+}
+
 void testNrVariants() {
     for (const auto runtime : {NrRuntime::Original, NrRuntime::Ampere, NrRuntime::NvidiaOriginal}) {
         auto settings=sample(); settings.nrRuntime=runtime;
@@ -905,6 +955,7 @@ void testNrVariants() {
 int main() {
     testNrVariants();
     testRenderingChoices();
+    testEditorPayloadVersions();
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     testLegacyProtectionMigration();
     testNodeEditorSession();

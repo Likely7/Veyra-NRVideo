@@ -270,6 +270,8 @@ endif()
 
 # YUV→RGB shader is shared between the media pipeline and the harness.
 veyra_add_compute_shader(veyra_shader_yuv_to_rgb YuvToLinearRgb)
+# Custom: per-scene HDR brightness measurement (hardware-decode luma reduce).
+veyra_add_compute_shader(veyra_shader_hdr_scene_reduce HdrSceneReduce)
 veyra_add_compute_shader(veyra_shader_rgb_to_linear RgbToLinear)
 veyra_add_compute_shader(veyra_shader_color_grade ColorGradePass)
 # 纹理 / 清晰度 / 去朦胧: block statistics, blur, apply (ColorDetailPass).
@@ -457,6 +459,7 @@ if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
   target_link_libraries(veyra_pipeline PRIVATE veyra_ngx veyra_nvof ${FFMPEG_LIBRARIES})
   add_dependencies(veyra_pipeline
     veyra_shader_yuv_to_rgb veyra_shader_rgb_to_linear veyra_shader_parity_encode
+    veyra_shader_hdr_scene_reduce
     veyra_shader_parity_decode veyra_shader_scale_blit
     veyra_shader_nv12_upload veyra_shader_nvof_densify veyra_shader_packed_capture)
 endif()

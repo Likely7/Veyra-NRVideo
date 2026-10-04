@@ -382,6 +382,40 @@ VPage {
                             hint: qsTr("HDR10 默认；补帧固定 HDR10，需要 Windows HDR 开启")
                             VSeg { options: [{id:"0",label:"HDR10"},{id:"1",label:qsTr("scRGB 浮点")}]; current: String(veyra.hdrOutputMode); onPicked: id => veyra.hdrOutputMode = Number(id) }
                         }
+                        // HDR 亮度管理: per-scene brightness for HDR sources — dark scenes
+                        // are lifted, bright ones compressed.
+                        VRow {
+                            label: qsTr("HDR 亮度管理")
+                            hint: qsTr("暗场景自动抬、亮场景自动压")
+                            value: veyra.hdrBrightness ? (veyra.hdrBrightnessStatus.length > 0 ? veyra.hdrBrightnessStatus : qsTr("按场景自适应亮度")) : qsTr("已关闭")
+                            VSwitch {
+                                objectName: "hdrbright-enabled"
+                                checked: veyra.hdrBrightness
+                                onToggled: checked => veyra.hdrBrightness = checked
+                            }
+                        }
+                        Repeater {
+                            model: [{key:"strength",label:qsTr("强度 (%)"),from:0,to:100,def:50},
+                                    {key:"targetPeakNits",label:qsTr("目标峰值 (nit)"),from:400,to:4000,def:1000,hint:qsTr("填你显示器的峰值亮度")},
+                                    {key:"response",label:qsTr("响应速度 (%)"),from:0,to:100,def:0,hint:qsTr("0 = 只在场景切换时更新")},
+            {key:"transitionMs",label:qsTr("过渡时间 (ms)"),from:0,to:2000,def:1000,hint:qsTr("0 = 立即切换")}]
+                            delegate: VRow {
+                                required property var modelData
+                                label: modelData.label
+                                hint: modelData.hint || ""
+                                value: String(veyra.hdrBrightnessParams[modelData.key] ?? "—")
+                                VSlider {
+                                    keyStepValue: 1
+                                    objectName: "hdrbright-" + modelData.key
+                                    implicitWidth: 150
+                                    valueFromModel: true
+                                    resettable: true; defaultValue: modelData.def
+                                    from: modelData.from; to: modelData.to
+                                    value: veyra.hdrBrightnessParams[modelData.key] ?? modelData.def
+                                    onMoved: value => veyra.setHdrBrightnessParameter(modelData.key, Math.round(value))
+                                }
+                            }
+                        }
                         VRow {
                             label: qsTr("记住播放位置")
                             hint: qsTr("重新打开同一个文件时从上次位置继续")

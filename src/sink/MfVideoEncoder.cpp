@@ -58,6 +58,16 @@ constexpr GUID kPropForceKeyFrame{0x398c1b98,0x8353,0x475a,{0x9e,0xf2,0x8f,0x26,
 
 std::string hrName(HRESULT hr){return std::format("0x{:08X}",unsigned(hr));}
 
+// Wide -> UTF-8 for log lines only. The previous code truncated each wchar_t to
+// char via std::string(w.begin(),w.end()), which the current MSVC STL rejects.
+std::string narrowUtf8(const std::wstring& w){
+    if(w.empty()) return {};
+    const int len=WideCharToMultiByte(CP_UTF8,0,w.data(),static_cast<int>(w.size()),nullptr,0,nullptr,nullptr);
+    std::string out(len,'\0');
+    WideCharToMultiByte(CP_UTF8,0,w.data(),static_cast<int>(w.size()),out.data(),len,nullptr,nullptr);
+    return out;
+}
+
 std::atomic<int> gMfSessions{0};
 bool acquireMediaFoundation(){
     if(gMfSessions.fetch_add(1)==0){
@@ -117,7 +127,7 @@ bool listHardwareMfts(bool hevc,uint32_t adapterVendorId,std::vector<MftCandidat
     const auto keyword=vendorKeyword(adapterVendorId);
     for(UINT32 index=0;index<count;++index){
         const auto name=attributeString(activates[index],MFT_FRIENDLY_NAME_Attribute);
-        log::info("mf-encoder",std::format("candidate[{}] {} nv12->{} vendorMatch={}",index,std::string(name.begin(),name.end()),hevc?"HEVC":"H264",containsFold(name,keyword)));
+        log::info("mf-encoder",std::format("candidate[{}] {} nv12->{} vendorMatch={}",index,narrowUtf8(name),hevc?"HEVC":"H264",containsFold(name,keyword)));
         MftCandidate candidate;candidate.name=name;
         activates[index]->QueryInterface(IID_PPV_ARGS(&candidate.activate));
         if(candidate.activate)candidates.push_back(std::move(candidate));
@@ -175,7 +185,7 @@ private:
     std::vector<uint8_t> extradata_;
     std::wstring friendly_;
     std::wstring error_;
-    bool check(HRESULT hr,const wchar_t* stage){if(SUCCEEDED(hr))return true;error_=std::format(L"{} HRESULT=0x{:08X}",stage,unsigned(hr));log::error("mf-encoder",std::string(error_.begin(),error_.end()));return false;}
+    bool check(HRESULT hr,const wchar_t* stage){if(SUCCEEDED(hr))return true;error_=std::format(L"{} HRESULT=0x{:08X}",stage,unsigned(hr));log::error("mf-encoder",narrowUtf8(error_));return false;}
     bool hevc_=false;
     uint32_t bitrateMbps_=0;
     ExportRateControl rateControl_=ExportRateControl::Cq;
@@ -217,7 +227,7 @@ bool MfVideoEncoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& rin
     std::vector<MftCandidate> candidates;std::wstring detail;
     if(!listHardwareMfts(hevc_,config.adapterVendorId,candidates,detail)){
         error_=detail;
-        log::error("mf-encoder",std::format("no hardware MFT: {}",std::string(detail.begin(),detail.end())));
+        log::error("mf-encoder",std::format("no hardware MFT: {}",narrowUtf8(detail)));
         return false;
     }
     // Negotiate against the candidates in vendor-preference order: an MFT from
@@ -253,10 +263,10 @@ bool MfVideoEncoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& rin
             gopLength_=std::max<uint64_t>(1,uint64_t(std::max(1u,fpsNum_))*2/std::max(1u,fpsDen_));
             nextKeyframe_=0;
             log::info("mf-encoder",std::format("selected MFT {} codec={} extent={}x{} fps={}/{} bitrate={}Mbps",
-                std::string(friendly_.begin(),friendly_.end()),hevc_?"HEVC":"H264",width_,height_,fpsNum_,fpsDen_,bitrateMbps_));
+                narrowUtf8(friendly_),hevc_?"HEVC":"H264",width_,height_,fpsNum_,fpsDen_,bitrateMbps_));
             break;
         }
-        log::warn("mf-encoder",std::format("MFT {} refused the encoder contract; trying the next candidate",std::string(friendly_.begin(),friendly_.end())));
+        log::warn("mf-encoder",std::format("MFT {} refused the encoder contract; trying the next candidate",narrowUtf8(friendly_)));
         transform_.Reset();events_.Reset();codecApi_.Reset();friendly_.clear();
     }
     if(transform_==nullptr){

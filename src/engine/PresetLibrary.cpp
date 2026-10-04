@@ -13,8 +13,17 @@ namespace {
 // Six full grades per entry (plus the legacy first-grade field), up to 64
 // entries. Never remove the file-size guard as LUT names are external input.
 constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
-void writeRendering(std::ostream& out,const ChainGlobalSettings& g){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);}
-bool readRendering(std::istream& in,ChainGlobalSettings& g){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);EnhancementSettings s;g.apply(s);return s.validate().empty();}
+void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool extended=false,bool extendedTransition=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);
+    // Custom: per-scene HDR brightness, written from library v8 / chain session v5 on.
+    if(extended)out<<' '<<(g.hdrBrightness.enabled?1:0)<<' '<<g.hdrBrightness.strength<<' '<<g.hdrBrightness.targetPeakNits<<' '<<g.hdrBrightness.response;
+    if(extendedTransition)out<<' '<<g.hdrBrightness.transitionMs;}
+bool readRendering(std::istream& in,ChainGlobalSettings& g,bool extended=false,bool extendedTransition=false){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);
+    if(extended){int enabled,strength,peak,response;
+        if(!(in>>enabled>>strength>>peak>>response)||enabled<0||enabled>1)return false;
+        g.hdrBrightness.enabled=enabled!=0;g.hdrBrightness.strength=unsigned(strength);
+        g.hdrBrightness.targetPeakNits=unsigned(peak);g.hdrBrightness.response=unsigned(response);}
+    if(extendedTransition){int transition;if(!(in>>transition)||transition<0||transition>2000)return false;g.hdrBrightness.transitionMs=unsigned(transition);}
+    EnhancementSettings s;g.apply(s);return s.validate().empty();}
 void applyRenderingPreset(const PresetEntry& e,EnhancementSettings& s){
     if(!e.globals)return;
     const auto fg=s.frameGenerationBackend;const auto fgMotion=s.fgMotion;
@@ -564,7 +573,17 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
     });
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return e.globals.has_value();});
-    const int version=std::max(minimumVersion, rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    // Custom v8: per-scene HDR brightness rides in the globals block.
+    const auto brightOf=[](const PresetEntry& e)->HdrBrightnessSettings{
+        if(e.globals)return e.globals->hdrBrightness;
+        if(e.nodeConfiguration&&e.nodeConfiguration->editor&&e.nodeConfiguration->editor->globals)
+            return e.nodeConfiguration->editor->globals->hdrBrightness;
+        return {};
+    };
+    const bool hdrBright=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
+        return brightOf(e)!=HdrBrightnessSettings{};});
+    const bool hdrTransition=hdrBright&&std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){return brightOf(e).transitionMs!=1000;});
+    const int version=std::max(minimumVersion, hdrTransition?9:hdrBright?8:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -586,7 +605,8 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
             for (const auto& r : n.protection.regions)
                 o << ' ' << (r.ellipse ? r.right : r.left) << ' ' << r.top << ' ' << (r.ellipse ? r.left : r.right) << ' ' << r.bottom;
             o << ' ' << (n.videoHdr.enabled ? 1 : 0) << ' ' << n.videoHdr.contrast << ' ' << n.videoHdr.saturation << ' '
-              << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits << ' ';
+              << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits;
+            o << ' ';
             if(version>=3)o<<int(n.nr.sizePolicy)<<' ';
             if (version>=2 && n.type == EffectType::Color) {
                 writeColorSettings(o, n.color, utf8(n.color.lutNameString()));
@@ -606,7 +626,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         }
         if(version>=6){
             o<<' '<<e.globals.has_value();
-            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g);}
+            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=8,version>=9);}
         }
         o << '\n';
     }
@@ -614,7 +634,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
 }
 
 bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out, std::wstring& def, std::wstring& error,
-                          bool* migrated, bool preserveLegacy) {
+                          bool* migrated, bool preserveLegacy, int maxVersion) {
     if (migrated) *migrated = false;
     if (data.size() > kMaxPresetBytes) { error = L"预设库超过 2 MiB"; return false; }
     std::istringstream in(data);
@@ -622,7 +642,10 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > (preserveLegacy ? 3 : 6)) { error = L"预设库格式或版本不支持"; return false; }
+    // maxVersion 0 keeps the original per-context cap; the chain session passes 7
+    // explicitly so it can hold the HDR-source fields it writes itself.
+    const int allowedVersion = maxVersion > 0 ? maxVersion : (preserveLegacy ? 3 : 9);
+    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
     for (size_t i = 0; i < count; ++i) {
@@ -661,6 +684,16 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if (r.left > r.right) { std::swap(r.left, r.right); r.ellipse = true; }
             }
             if (!(in >> hdrEnabled >> node.videoHdr.contrast >> node.videoHdr.saturation >> node.videoHdr.middleGray >> node.videoHdr.peakNits)) { error = L"预设库 HDR 字段损坏"; return false; }
+            // Files written by the fork's v7 carry the retired RTX Video HDR
+            // tuning block (five numbers). It is read and validated so those files
+            // keep loading, then dropped: the row no longer exists and no version
+            // writes it any more.
+            if (version == 7) {
+                int retired = 0, srcPeak = 0, whiteNits = 203, ev = 0, shoulder = 100;
+                if (!(in >> retired >> srcPeak >> whiteNits >> ev >> shoulder)) { error = L"预设库 HDR 色调映射字段损坏"; return false; }
+                if (retired < 0 || retired > 1 || srcPeak < 0 || srcPeak > 4000 || whiteNits < 80 || whiteNits > 400 ||
+                    ev < -200 || ev > 200 || shoulder < 50 || shoulder > 150) { error = L"预设库 HDR 色调映射取值超出范围"; return false; }
+            }
             if (type < 0 || type >= int(EffectType::Count) || enabled < 0 || enabled > 1 || !validNrRuntime(static_cast<NrRuntime>(runtime)) ||
                 temporal < 0 || temporal > 1 || lowLatency < 0 || lowLatency > 1 || protEnabled < 0 || protEnabled > 1 || hdrEnabled < 0 || hdrEnabled > 1) {
                 error = L"预设库节点取值超出范围"; return false;
@@ -718,7 +751,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){ChainGlobalSettings g;int target,backend,flow,optical,half,policy;
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
-                if(!readRendering(in,g))return false;e.globals=g;
+                if(!readRendering(in,g,version>=8,version>=9))return false;e.globals=g;
             }
         }
         out.push_back(std::move(e));
@@ -734,7 +767,20 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const auto& editor = session.configurations[1].editor;
     const auto extended=[](const ChainGlobalSettings& g){return g.srTarget>pipeline::SrTarget::Uhd8K||g.hdrOutputMode!=HdrOutputMode::Hdr10||g.fgMotion!=MotionSource::Automatic||g.srMotion!=MotionSource::OpticalFlow||g.nrMotion!=MotionSource::OpticalFlow;};
     const bool rendering=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return extended(c)||(c.editor&&c.editor->globals&&extended(*c.editor->globals));});
-    const int version = rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    // Custom: the session's own version 5 carries the HDR brightness globals.
+    // Compare against the settings' own defaults: the old literals (60/50) came
+    // from defaults this fork changed, so every session looked customised.
+    // The node editor keeps its own globals copy, and that copy is written too,
+    // so either one being off-default has to raise the version.
+    const auto brightCustom=[](const ChainConfiguration& c){
+        return c.hdrBrightness!=HdrBrightnessSettings{} ||
+            (c.editor&&c.editor->globals&&c.editor->globals->hdrBrightness!=HdrBrightnessSettings{});};
+    const auto transitionCustom=[](const ChainConfiguration& c){
+        return c.hdrBrightness.transitionMs!=1000 ||
+            (c.editor&&c.editor->globals&&c.editor->globals->hdrBrightness.transitionMs!=1000);};
+    const bool hdrBright=std::any_of(session.configurations.begin(),session.configurations.end(),brightCustom);
+    const bool hdrTransition=hdrBright&&std::any_of(session.configurations.begin(),session.configurations.end(),transitionCustom);
+    const int version = hdrTransition?6:hdrBright?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -743,7 +789,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         out << int(c.srTarget) << ' ' << c.videoSrQuality << ' ' << int(c.fgBackend) << ' '
             << int(c.flow) << ' ' << int(c.opticalFlowBackend) << ' ' << c.amdFlowHalfResolution << ' '
             << int(c.nrPolicy) << ' ' << c.selectedNr << ' ' << c.selectedColour;
-        if(version>=4)writeRendering(out,c);out<<'\n';
+        if(version>=4)writeRendering(out,c,version>=5,version>=6);out<<'\n';
         PresetEntry entry;
         entry.name = i == 0 ? L"list" : L"node";
         entry.kind = ChainMode(i); entry.chain = c.chain;
@@ -761,7 +807,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             const auto& g = *document.globals;
             out << int(g.srTarget) << ' ' << g.videoSrQuality << ' ' << int(g.fgBackend) << ' '
                 << int(g.flow) << ' ' << int(g.opticalFlowBackend) << ' ' << g.amdFlowHalfResolution << ' '
-                << int(g.nrPolicy);if(version>=4)writeRendering(out,g);out<<'\n';
+                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6);out<<'\n';
         }
         out << graph.nextId << ' ' << graph.inputNext << ' ' << document.nodes.nodeCount << '\n';
         // The ordinary preset codec validates a linear runtime chain. Use a
@@ -787,7 +833,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 4) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 6) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -798,11 +844,11 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         c.srTarget = pipeline::SrTarget(target); c.fgBackend = FrameGenerationBackend(backend);
         c.flow = FlowQuality(flow); c.opticalFlowBackend = OpticalFlowBackend(optical);
         c.amdFlowHalfResolution = half != 0; c.nrPolicy = pipeline::NrSizePolicy(policy);
-        if(version>=4&&!readRendering(in,c))return false;
+        if(version>=4&&!readRendering(in,c,version>=5,version>=6))return false;
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 9) || entries.size() != 2 || !def.empty()) return false;
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
         parsed.configurations[i].chain = entries[i].chain;
@@ -823,7 +869,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
             g.srTarget = pipeline::SrTarget(target); g.fgBackend = FrameGenerationBackend(backend);
             g.flow = FlowQuality(flow); g.opticalFlowBackend = OpticalFlowBackend(optical);
             g.amdFlowHalfResolution = half != 0; g.nrPolicy = pipeline::NrSizePolicy(policy);
-            if(version>=4&&!readRendering(in,g))return false;
+            if(version>=4&&!readRendering(in,g,version>=5,version>=6))return false;
             editor->globals = g;
         }
         uint32_t count = 0;
@@ -836,7 +882,11 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         }
         if (!(in >> std::quoted(body))) return false;
         entries.clear(); def.clear(); error.clear();
-        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true) || entries.size() != 1 ||
+        // The editor payload is written by the same encoder as the runtime one,
+        // so it must be read with the same version cap. Leaving it at the
+        // legacy default (3) rejected every document whose payload needed a
+        // newer version, and save() then refused to write anything at all.
+        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 9) || entries.size() != 1 ||
             !def.empty() || entries[0].kind != ChainMode::Node || entries[0].chain.nodeCount != count) return false;
         editor->nodes = std::move(entries[0].chain);
         for (uint32_t i = 0; i < count; ++i) {

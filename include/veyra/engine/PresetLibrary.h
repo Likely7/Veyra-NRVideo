@@ -99,8 +99,12 @@ public:
     bool importLegacy(const std::vector<PresetEntry>& entries);
 private:
     friend class ChainSessionStore;
+    // `maxVersion` is separate from `preserveLegacy` on purpose: the chain session
+    // needs the legacy chain handling (no migration) but must still accept the
+    // library versions that carry settings the session itself writes. 0 keeps the
+    // original per-context cap.
     static bool parse(const std::string& data, std::vector<PresetEntry>& out, std::wstring& def, std::wstring& error,
-                      bool* migrated = nullptr, bool preserveLegacy = false);
+                      bool* migrated = nullptr, bool preserveLegacy = false, int maxVersion = 0);
     std::string serialize() const;
     static std::string encodeEntries(const std::vector<PresetEntry>& entries, const std::wstring& defaultName, int minimumVersion = 1);
     void addBuiltins();

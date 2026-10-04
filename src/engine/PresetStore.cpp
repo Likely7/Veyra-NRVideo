@@ -61,7 +61,7 @@ std::string PresetStore::serialize()const{
 }
 bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std::wstring& def){
     if(data.size()>kMaxPresetBytes)return false;std::istringstream in(data);in.imbue(std::locale::classic());std::string magic,d;int version=0;size_t count=0;
-    if(!(in>>magic>>version)||magic!="VEYRA_PRESETS"||(version<1||version>27)||!(in>>std::quoted(d)>>count)||count>64)return false;def=wide(d);if(!d.empty()&&def.empty())return false;
+    if(!(in>>magic>>version)||magic!="VEYRA_PRESETS"||(version<1||version>28)||!(in>>std::quoted(d)>>count)||count>64)return false;def=wide(d);if(!d.empty()&&def.empty())return false;
     for(size_t i=0;i<count;++i){UserPreset p;std::string n;int policy,flow,content,nr,sr;auto& s=p.settings;auto& m=s.model;auto& r=s.residual;
         if(!(in>>std::quoted(n)>>m.intensity>>m.tone>>m.structure>>m.skin>>m.style>>m.autoMask>>m.uiCorrection>>r.total>>r.darken>>r.brighten>>r.color>>r.luminance>>nr>>sr>>s.multiplier>>policy>>flow>>content))return false;
         if(version>=2){int enabled;if(!(in>>enabled>>s.protection.featherPixels)||enabled<0||enabled>1)return false;s.protection.enabled=enabled!=0;
@@ -122,6 +122,14 @@ bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std
             if(!std::isfinite(s.nrHoldTolerance)||s.nrHoldTolerance<0.0f||s.nrHoldTolerance>1.0f)return false;
         }
         if(version>=27){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;s.hdrOutputMode=HdrOutputMode(hdr);s.fgMotion=MotionSource(fg);s.srMotion=MotionSource(sr);s.nrMotion=MotionSource(nr);}
+        // Stores written by the fork's v28 carry the retired RTX Video HDR tuning
+        // block (five numbers). Read and validated so those stores keep loading,
+        // then dropped: no version writes it any more.
+        if(version==28){
+            int retired,srcPeak,whiteNits,ev,shoulder;
+            if(!(in>>retired>>srcPeak>>whiteNits>>ev>>shoulder))return false;
+            if(retired<0||retired>1||srcPeak<0||srcPeak>4000||whiteNits<80||whiteNits>400||ev<-200||ev>200||shoulder<50||shoulder>150)return false;
+        }
         p.name=wide(n);if(!nameOk(p.name)||std::any_of(out.begin(),out.end(),[&](auto& a){return a.name==p.name;})||nr<0||nr>1||sr<0||sr>1)return false;
         s.nr=nr;s.sr=sr;s.nrPolicy=static_cast<pipeline::NrSizePolicy>(policy);s.flow=static_cast<FlowQuality>(flow);s.content=static_cast<ContentRate>(content);
         if(!s.validate().empty())return false;out.push_back(std::move(p));

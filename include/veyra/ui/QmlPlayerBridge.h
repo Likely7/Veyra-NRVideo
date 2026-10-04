@@ -261,6 +261,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double nrHoldStrength READ nrHoldStrength WRITE setNrHoldStrength NOTIFY settingsChanged)
     Q_PROPERTY(double nrHoldTolerance READ nrHoldTolerance WRITE setNrHoldTolerance NOTIFY settingsChanged)
     Q_PROPERTY(bool videoHdr READ videoHdr WRITE setVideoHdr NOTIFY settingsChanged)
+    // Custom: per-scene HDR brightness management (globals, every field live).
+    Q_PROPERTY(bool hdrBrightness READ hdrBrightness WRITE setHdrBrightness NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap hdrBrightnessParams READ hdrBrightnessParams NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY chainChanged)
     Q_PROPERTY(int nrStyle READ nrStyle WRITE setNrStyle NOTIFY settingsChanged)
     Q_PROPERTY(double nrIntensity READ nrIntensity WRITE setNrIntensity NOTIFY settingsChanged)
@@ -383,6 +386,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString captureSessionSummary READ captureSessionSummary NOTIFY snapshotChanged)
     Q_PROPERTY(QString colorStatus READ colorStatus NOTIFY snapshotChanged)
     Q_PROPERTY(QString videoHdrStatus READ videoHdrStatus NOTIFY snapshotChanged)
+    Q_PROPERTY(QString hdrBrightnessStatus READ hdrBrightnessStatus NOTIFY snapshotChanged)
 
     // --- export ------------------------------------------------------------
     // Backed by the real ExportJobManager: state, progress and encoded counts come
@@ -706,6 +710,11 @@ public:
     bool videoHdr() const;
     void setVideoHdr(bool value);
     QVariantMap videoHdrParams() const;
+    bool hdrBrightness() const;
+    void setHdrBrightness(bool enabled);
+    QVariantMap hdrBrightnessParams() const;
+    Q_INVOKABLE bool setHdrBrightnessParameter(const QString& key, double value);
+    void commitHdrBrightness(engine::EnhancementSettings settings);
     Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
     int nrStyle() const;
     void setNrStyle(int value);
@@ -848,6 +857,7 @@ public:
     QString captureSessionSummary() const;
     QString colorStatus() const;
     QString videoHdrStatus() const;
+    QString hdrBrightnessStatus() const;
 
     bool exportRunning() const;
     bool exportPaused() const;
