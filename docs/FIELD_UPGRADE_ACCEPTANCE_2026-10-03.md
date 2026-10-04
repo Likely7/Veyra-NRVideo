@@ -1,5 +1,7 @@
 # 五项修复本地验收（2026-10-03）
 
+> 2026-10-04 纠正：按实际 RTSS.exe 的 FileVersion/ProductVersion 与 SHA256 核验，本文原先的 7.3.7 版本记录不准确；当前用户安装与此前测试副本均为 7.3.5.28314（84E6E439…6736）。本轮另外发现旧测试只退出主 RTSS 而漏收子加载器，导致用户误提示；详见 RTSS_RESTART_LOOP_PLAN_2026-10-04.md。本条纠正版本和清理记录，不宣称重新完成本文全部旧测试。
+
 分支 `codex/field-upgrade-20261003`，起点 main `66cd3e5`。先建立
 `checkpoint/pre-field-upgrade-20261003`、Git bundle/桌面修改存档及施工方案，
 再修改产品。未合并、推送或公开发布。
@@ -12,7 +14,7 @@
 | Xbox 断开 | 日志 16 持续约 17 分钟后收到 KickForServerShutdown。保留具体 reason，网络丢失/服务器关闭/过期最多 3 次重连，1/2/3 秒退避，可取消；30 秒连续解码才恢复额度，重连原子 reset 图历史。 | 本地 ICE/DTLS/SCTP/RTP peer 90 checks 通过；无 Xbox 长稳测试，不能阻止服务端关闭或保证 Wi-Fi 永不丢包。 |
 | AMD NR | MIT 独立 runtime、共享 NR 图及按 GPU 的 UI 接入；用户 0.39 包校验通过，186 权重/2 映射/62 HIP 核补齐，真实 DLL API 和模块布局验证通过。 | RTX5070 无 RX9000 HIP 推理/画质/性能/长稳实测；仅 1080p 像素预算，HDR/原生 4K AMD NR 导出未支持。 |
 | 导出码率 | 有效键入即时提交，草稿不受其他 exportChanged 覆盖，统一 1–300 Mbps，具体 validate 错误和冻结参数入日志。真实 bridge/worker/NVENC 的两种复现均通过。 | 本机驱动 616.56；用户 616.92 未直接测试。 |
-| RTSS 透明背景 | 软件绘制用 Rectangle/Image，Window 不透明；真实 RTSS 7.3.7 自动兼容，RTSSHooks64 已注入，截图深色 alpha=255。 | 未枚举全部 RTSS/OBS 版本、注入组合与显示配置。 |
+| RTSS 透明背景 | 软件绘制用 Rectangle/Image，Window 不透明；真实 RTSS 7.3.5.28314 自动兼容，RTSSHooks64 已注入，截图深色 alpha=255。 | 未枚举全部 RTSS/OBS 版本、注入组合与显示配置。 |
 | NVIDIA 插件误判 | 删除 nvppex/NvPresent 风险分类、检测与崩溃归因；旧 device/nvppex marker 不再触发 NVIDIA App 提示，真实 GPU 错误仍记录。 | 不宣称所有第三方插件安全；不再只凭模块存在判断崩溃。 |
 
 ## 自动测试与真实导出

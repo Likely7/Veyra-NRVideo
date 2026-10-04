@@ -9,6 +9,7 @@
 // DXGI swapchain and with DLSS frame generation.
 #include <windows.h>
 #include <psapi.h>
+#include <tlhelp32.h>
 #include <algorithm>
 #include <iterator>
 #include <string>
@@ -44,14 +45,30 @@ inline std::wstring riskyInjections() {
 // RivaTuner Statistics Server (MSI Afterburner's OSD, also used by HWiNFO, CapFrameX and
 // others) is running: its shared memory exists and is live. True before it has injected
 // RTSSHooks64.dll here, which it does to every process that creates windows.
+// An orphan RTSSHooksLoader64 or an already-injected DLL can outlive the server;
+// neither module presence nor the loader process alone means the OSD is active.
+// A force-terminated server can also leave a valid shared-memory signature in
+// clients that kept the mapping open. Require the server process as well.
 //
-// Why it matters (reproduced 2026-10-03, RTSS 7.3.7, RTX 5070): RTSS draws on a single
+// Why it matters (reproduced 2026-10-03, RTSS 7.3.5.28314, RTX 5070; version
+// corrected against the executable on 2026-10-04): RTSS draws on a single
 // Direct3D 12 swapchain at a time and rebuilds its renderer whenever a different one
 // presents. With the interface on D3D12 next to the video's own swapchain, the GPU device
 // was removed (DXGI_ERROR_ACCESS_DENIED) about half a second after a video started once its
 // OSD had something to draw. With the interface drawn without a swapchain, RTSS only sees
 // the video and draws its OSD there.
 inline bool rivaTunerRunning() {
+    const HANDLE raw = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (raw == INVALID_HANDLE_VALUE) return false;
+    struct Snapshot { HANDLE handle; ~Snapshot() { CloseHandle(handle); } } snapshot{raw};
+    PROCESSENTRY32W process{};
+    process.dwSize = sizeof(process);
+    bool server = false;
+    for (BOOL found = Process32FirstW(snapshot.handle, &process); found;
+         found = Process32NextW(snapshot.handle, &process)) {
+        if (_wcsicmp(process.szExeFile, L"RTSS.exe") == 0) { server = true; break; }
+    }
+    if (!server) return false;
     HANDLE map = OpenFileMappingW(FILE_MAP_READ, FALSE, L"RTSSSharedMemoryV2");
     if (!map) return false;
     bool live = false;

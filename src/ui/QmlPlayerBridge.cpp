@@ -1216,6 +1216,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             handled = true;
             veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({})",
                 hook->product, QString::fromWCharArray(hook->module).toStdString()));
+            if (GetModuleHandleW(L"RTSSHooks64.dll")) {
+                wchar_t path[32768]{};
+                GetModuleFileNameW(GetModuleHandleW(L"RTSSHooks64.dll"), path, DWORD(std::size(path)));
+                veyra::log::info("overlay-hooks", std::format("RTSS hook module: activeServer={} path={}",
+                    gfx::rivaTunerRunning(), QString::fromWCharArray(path).toStdString()));
+            }
         }
         // RivaTuner arrived after a start with the interface on the GPU (it was not running
         // then, see main.cpp). Its OSD stays out of this process (RTSSHooksProfileOverride),
@@ -1223,15 +1229,16 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // OSD on the video.
         static bool rivaTunerLate = false;
         if (!rivaTunerLate && !qApp->property("veyraSoftwareUi").toBool() && !qApp->property("veyraUiRendererForced").toBool()
-                && GetModuleHandleW(L"RTSSHooks64.dll")) {
+                && GetModuleHandleW(L"RTSSHooks64.dll") && gfx::rivaTunerRunning()) {
             rivaTunerLate = true;
             const bool automatic = impl_->prefString("overlayCompat") != QLatin1String("off");
             veyra::log::warn("overlay-hooks", std::format("RivaTuner injected into a run with a GPU interface; its OSD is off in this process ({})",
-                automatic ? "started after Veyra: restart suggested" : "monitoring compatibility off"));
+                automatic ? "active OSD server: compatibility restart suggested" : "monitoring compatibility off"));
             if (automatic) emit overlayRestartSuggested();
         }
         // RivaTuner's default hooking keeps OBS game capture from hooking any Direct3D 12
-        // program (2026-10-03, RTSS 7.3.7 + OBS 32.1.2, a bare D3D12 window included); its
+        // program (2026-10-03, RTSS 7.3.5.28314 + OBS 32.1.2, a bare D3D12 window included;
+        // RTSS version corrected against the executable on 2026-10-04); its
         // "Use Microsoft Detours API hooking" option lets both work. Said once, ever.
         static bool obsWithRivaTuner = false;
         if (!obsWithRivaTuner && GetModuleHandleW(L"graphics-hook64.dll") && GetModuleHandleW(L"RTSSHooks64.dll")) {
@@ -4935,11 +4942,18 @@ void QmlPlayerBridge::cancelExport() {
 }
 
 void QmlPlayerBridge::restartApplication() {
+    requestApplicationRestart(false);
+}
+void QmlPlayerBridge::restartForOverlayCompatibility() {
+    requestApplicationRestart(true);
+}
+void QmlPlayerBridge::requestApplicationRestart(bool overlayCompatibility) {
     if (exportRunning()) {
         emit notice(tr("设置已保存，请等待导出结束后重启软件"), true);
         return;
     }
     rememberPosition(true);
+    qApp->setProperty("veyraOverlayCompatRestart", overlayCompatibility);
     // main launches the replacement only after UI/engine owners unwind.
     QCoreApplication::exit(42);
 }

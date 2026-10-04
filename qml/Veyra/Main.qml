@@ -640,11 +640,11 @@ Window {
     VConfirm {
         id: overlayRestart
         objectName: "overlay-restart-confirm"
-        title: qsTr("检测到小飞机（RTSS）")
-        text: qsTr("小飞机在 Veyra 之后启动。为避免画面卡住，它的 OSD 暂不在 Veyra 里显示。重启后界面改用兼容绘制，OSD 只显示在视频上。现在重启吗？当前播放或串流将停止。")
+        title: qsTr("检测到 RTSS 屏显服务")
+        text: qsTr("检测到 RTSS 屏显服务正在运行。开启兼容绘制需重启 Veyra，重启后 OSD 仅显示在视频上。现在重启吗？当前播放或串流将停止。")
         acceptText: qsTr("重启")
         rejectText: qsTr("稍后")
-        onAccepted: veyra.restartApplication()
+        onAccepted: veyra.restartForOverlayCompatibility()
     }
 
     Connections {

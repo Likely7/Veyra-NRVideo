@@ -977,6 +977,7 @@ public:
     Q_INVOKABLE void pauseExport(bool paused);
     Q_INVOKABLE void quit();
     Q_INVOKABLE void restartApplication();
+    Q_INVOKABLE void restartForOverlayCompatibility();
     // Returns this page's controls to the engine defaults (the design's
     // "重置本页"); it does not touch presets or other pages.
     Q_INVOKABLE void resetCurrentPage();
@@ -1064,6 +1065,7 @@ private:
     // they can never disagree with each other.
     engine::EnhancementSettings settings() const;
     void startGpuSampler();
+    void requestApplicationRestart(bool overlayCompatibility);
     void updateRunStatus();
     void applyPresentation();
     void applyAspect(bool force);

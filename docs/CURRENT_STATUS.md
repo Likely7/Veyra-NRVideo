@@ -1,5 +1,11 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-04 RTSS 现场误提示与重启循环已修复（本地）
+
+隔离分支 codex/rtss-restart-loop-20261004：查明并停止Agent旧测试遗漏的RTSS加载器；软件判活增加RTSS.exe存活条件，过滤孤立hook/残留映射。接受兼容重启携带本次启动意图，避免重复弹窗；用户关闭/强制渲染器/OBS选择保持。
+最终构建成功，真实用户安装RTSS7.3.5.28314，11启动/重启+33参数组合通过，OSD/NR/4K超分/四类补帧/暂停seek/全屏退窗实际验证。RTSS原配置逐字节恢复，测试进程及子加载器零遗留。此前RTSS7.3.7记录已纠正。
+RTX5070/616.56短测；VFG8High实时播放有调度降档，不能保证240fps。未新增AMD/OBS捕获/Xbox长稳验收。完整本地NVIDIA候选正在封存，未合main/推送/改远端2.0.3。证据和失败修正见WORKLOG与RTSS_RESTART_LOOP_PLAN_2026-10-04.md。
+
 ## 2026-10-04 2.0.3 已正式发布
 
 已将本轮Xbox/码率/RTSS背景/误判/极简边缘、AMD NR、VFG全档位及分包能力合入main并发布 [v2.0.3](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3)。

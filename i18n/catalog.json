@@ -5126,11 +5126,11 @@
    "ja": "小"
   },
   {
-   "zh": "小飞机在 Veyra 之后启动。为避免画面卡住，它的 OSD 暂不在 Veyra 里显示。重启后界面改用兼容绘制，OSD 只显示在视频上。现在重启吗？当前播放或串流将停止。",
+   "zh": "检测到 RTSS 屏显服务正在运行。开启兼容绘制需重启 Veyra，重启后 OSD 仅显示在视频上。现在重启吗？当前播放或串流将停止。",
    "src": "qml/Main.qml",
-   "zh-TW": "小飛機在 Veyra 之後啟動。為避免畫面卡住，它的 OSD 暫不在 Veyra 中顯示。重新啟動後介面改用相容繪製，OSD 只顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
-   "en": "RivaTuner started after Veyra. To keep the picture from freezing, its OSD is not shown in Veyra for now. After a restart the interface uses compatible drawing and the OSD shows on the video only. Restart now? Current playback or streaming will stop.",
-   "ja": "RivaTuner が Veyra の後に起動しました。映像が止まらないよう、今は Veyra に OSD を表示しません。再起動するとインターフェースが互換描画になり、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
+   "zh-TW": "偵測到 RTSS 螢幕顯示服務正在執行。啟用相容繪製需重新啟動 Veyra，重新啟動後 OSD 僅顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
+   "en": "The RTSS on-screen display service is running. Restart Veyra to enable compatible rendering and show the OSD on the video only. Restart now? Current playback or streaming will stop.",
+   "ja": "RTSS オンスクリーン表示サービスが動作しています。互換描画を有効にするには Veyra を再起動してください。再起動後、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
   },
   {
    "zh": "尚无导出任务",
@@ -5567,11 +5567,11 @@
    "ja": "同じ名前のプリセットがあります。別の名前にすると保存できます"
   },
   {
-   "zh": "已检测到小飞机（RTSS）：界面软件绘制，OSD 只显示在视频上；部分阴影与模糊简化",
+   "zh": "监控兼容绘制已启用：OSD 只显示在视频上；部分阴影与模糊简化",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "已偵測到小飛機（RTSS）：介面軟體繪製，OSD 只顯示在影片上；部分陰影與模糊簡化",
-   "en": "RivaTuner (RTSS) detected: the interface is drawn in software and the OSD shows on the video only; some shadows and blur are simplified",
-   "ja": "RivaTuner（RTSS）を検出：インターフェースはソフトウェア描画、OSD は映像にだけ表示。一部の影とぼかしは簡略化されます"
+   "zh-TW": "監控相容繪製已啟用：OSD 只顯示在影片上；部分陰影與模糊簡化",
+   "en": "Monitoring compatibility rendering is enabled: the OSD shows on the video only; some shadows and blur are simplified",
+   "ja": "監視ソフト互換描画が有効です。OSD は映像にだけ表示されます。一部の影やぼかしは簡略化されます"
   },
   {
    "zh": "已登录",
@@ -7920,11 +7920,11 @@
    "ja": "RivaTuner（RTSS OSD）が Veyra に挿入されています。設定 → モニタリングソフト互換 を「自動」にし、RTSS の実行中に Veyra を再起動してください。インターフェースが互換描画になり、OSD は映像にだけ表示されます"
   },
   {
-   "zh": "检测到小飞机（RTSS）",
+   "zh": "检测到 RTSS 屏显服务",
    "src": "qml/Main.qml",
-   "zh-TW": "偵測到小飛機（RTSS）",
-   "en": "RivaTuner (RTSS) detected",
-   "ja": "RivaTuner（RTSS）を検出"
+   "zh-TW": "偵測到 RTSS 螢幕顯示服務",
+   "en": "RTSS on-screen display service detected",
+   "ja": "RTSS オンスクリーン表示サービスを検出"
   },
   {
    "zh": "检测异常增长时自动退出全屏；默认关闭",

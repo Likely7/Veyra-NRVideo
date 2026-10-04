@@ -252,7 +252,7 @@ VPage {
                                   : (automatic !== veyra.overlayCompatActive && (veyra.overlayCompatActive || veyra.rivaTunerRunning()))
                                     ? qsTr("重启后生效")
                                     : veyra.overlayCompatActive
-                                      ? qsTr("已检测到小飞机（RTSS）：界面软件绘制，OSD 只显示在视频上；部分阴影与模糊简化")
+                                      ? qsTr("监控兼容绘制已启用：OSD 只显示在视频上；部分阴影与模糊简化")
                                       : automatic
                                         ? qsTr("启动时检测到小飞机（RTSS）就改用软件绘制界面，OSD 只显示在视频上")
                                         : qsTr("界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示")

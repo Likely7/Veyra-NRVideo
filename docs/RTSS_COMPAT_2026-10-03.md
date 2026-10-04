@@ -1,8 +1,10 @@
 # 小飞机（RTSS / MSI Afterburner OSD）适配（2026-10-03）
 
+> 2026-10-04 纠正：按实际 RTSS.exe 的 FileVersion/ProductVersion 与 SHA256 核验，本文原先的 7.3.7 版本记录不准确；当前用户安装与此前测试副本均为 7.3.5.28314（84E6E439…6736）。本轮另外发现旧测试只退出主 RTSS 而漏收子加载器，导致用户误提示；详见 RTSS_RESTART_LOOP_PLAN_2026-10-04.md。本条纠正版本和清理记录，不宣称重新完成本文全部旧测试。
+
 用户要求：微星小飞机的 RTSS 监控叠加在 Veyra 上时必定闪退或显示异常；改界面为 D3D11 / D3D12 不解决问题（界面一个数值、播放窗口一个数值，界面不需要数值）；同时保证 OBS 采集与 OBS 兼容模式采集正常。
 
-分支 `claude/rtss-compat-20261003`（基于 Codex 的 2.0.1 候选 `15a0e39`），工作区 `E:/项目/Veyra/worktrees/rtss-compat-20261003`，构建 `build/rtss-compat-20261003`，测试证据 `tests/rtss-20261003`。本机 RTSS 7.3.7 + MSI Afterburner、OBS 32.1.2 便携副本（`tmp/obs-test/obs`，不碰用户 OBS 配置）、RTX 5070。
+分支 `claude/rtss-compat-20261003`（基于 Codex 的 2.0.1 候选 `15a0e39`），工作区 `E:/项目/Veyra/worktrees/rtss-compat-20261003`，构建 `build/rtss-compat-20261003`，测试证据 `tests/rtss-20261003`。本机 RTSS 7.3.5.28314 + MSI Afterburner、OBS 32.1.2 便携副本（`tmp/obs-test/obs`，不碰用户 OBS 配置）、RTX 5070。
 
 ## 复现与根因
 
@@ -40,7 +42,7 @@
 | 继承 `EnableOSD,0` 重启到软件绘制 | 变量被清，OSD 正常出现在视频上 |
 | OBS 窗口采集（WGC）+ 小飞机 | 6/6 帧有画面，含视频上的 OSD |
 | OBS 游戏采集，不受 RTSS 影响（`AppDetectionLevel,0`）：GPU 界面 / OBS 兼容模式 | 6/6、6/6 帧为视频画面 |
-| OBS 游戏采集 + 小飞机（默认挂钩） | 0/6；**最小 D3D12 窗口程序同样 0/4**，是 RTSS 7.3.7 与 OBS 32.1.2 在 D3D12 上的通用冲突，改动前的 2.0.1 候选也 0/6 |
+| OBS 游戏采集 + 小飞机（默认挂钩） | 0/6；**最小 D3D12 窗口程序同样 0/4**，是 RTSS 7.3.5.28314 与 OBS 32.1.2 在 D3D12 上的通用冲突，改动前的 2.0.1 候选也 0/6 |
 | 同上，RTSS 进程配置 `UseDetours=1`（临时文件，测后删除） | 最小程序 4/4；Veyra 6/6 帧为视频、无设备移除 |
 | 单测 | i18n、qml-data、ui-contract 通过；Qt Quick 29/29 |
 | CPU（播放 1080p30） | GPU 界面约 6–16%，软件界面约 6–13%；首页软件界面约 4–25%（首页动画由 CPU 重绘） |

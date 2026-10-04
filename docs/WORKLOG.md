@@ -1,5 +1,20 @@
 # Veyra 工作记录
 
+## 2026-10-04 RTSS 误提示、重启循环与真实安装参数验收
+
+- 用户反馈已发布 NVIDIA2.0.3 未开小飞机仍反复要求重启，并提供 E:/App/RivaTuner Statistics Server 要求真实启动/多参数测试。先从 main354b1c6 开 codex/rtss-restart-loop-20261004，checkpoint/pre-rtss-restart-loop-20261004，外部 source-before.bundle verify/SHA08679242…dd2；不改桌面旧工作树、原正式包、main 或用户 profile。方案 RTSS_RESTART_LOOP_PLAN_2026-10-04.md。
+- 现场三日志 startup running=false/injected=false，之后 RTSSHooks64 注入。查明 Agent 旧测试留下 PID13316/PPID11020 的 deps/rtss-overlay-20261002/RTSSHooksLoader64.exe；父 PID 与 release 的 rtss-test-pid.txt 一致。这是 Agent 清理遗漏，已明确告知用户并按身份停止。原正式 EXE 在独立 profile 复现；停此加载器后原 EXE 正常退出且无误提示。
+- 软件修复：启动/晚到检测要求 RTSS.exe 存活且共享内存有效，模块存在或孤立加载器不代表活动服务；晚到还需实际 hook。接受兼容重启用一次性 --overlay-compat-restart，普通设置重启不携带；off/显式RHI/OBS优先，导出重启阻止沿用。新增实际 hook 路径/活动状态日志，提示区分 RTSS 屏显服务与 Afterburner，软件背景不透明。没有改算法、串流、音频、导出、shader 或 proprietary DLL。
+- 真实反例：installed-matrix-v1 退出 RTSS/加载器后映射仍有 RTSS signature，导致共享内存单独判活无效；加入进程检查。matrix-v1 私有 loader 最初 Win740，改为普通完整性级别 RunAsInvoker，仅自身测试窗口，不提权。各首次失败原始记录保留。
+- 版本纠正：用户安装与旧测试副本 RTSS.exe 实际均7.3.5.28314，SHA84E6E439D313DCEE0BA9549D8248D3923D9DE6805D0380BE5EAB337446856736；RTSSHooks64 SHA68C496DE…2AD5。此前7.3.7记录不准确，本轮修正相关源码注释/验收文档并保留纠正说明，不将旧版本名称当作验证。未重做旧OBS捕获矩阵。
+- `py -3.11 -B scripts/acceptance/rtss-restart-build.py build-v1.log` fresh472步；build-v2.log加入服务器进程检查；build-v3.log版本注释纠正后的最终10步，均exit0。最终EXE17,342,976 bytes / SHAd4ab803562641ef16d7b917b4b27db51b7b379ebb7ea975d47d6b472598bf994；build-i18n-v1.log/i18n-test.log成功，i18n0failures。C4244既有警告保留。
+- `py -3.11 -B scripts/acceptance/rtss-restart-tests.py installed-matrix-v3 "E:/App/RivaTuner Statistics Server"` 最终EXE 11/11 pass：clean/orphan/liveAuto/off/forcedRHI/OBS/acceptedWithoutServer/acceptedOff/normalRestart/normalAfterAccepted/lateRealRestart。真实Qt按钮接受，观察实际第二进程和CLI，软件/GPU后端及不透明截图断言，不模拟DLL/服务。matrix-v2和私有matrix-v2早期成功保留。
+- `py -3.11 -B scripts/acceptance/rtss-restart-real.py installed-stress-v4` 使用用户真实RTSS.exe、官方Profile API、独立OSD槽，3×11=33/33 pass。三配置为低检测+橙OSD2倍+背景/统计；高检测+绿OSD3倍+无背景/统计；中检测+OSD关闭+60帧限制。各9项属性写入/读回，SDK offsetof验证本机布局，真实OSD计数/位置/缩放/颜色核对、33张原生视频+33张QtUI截图。11效果/操作：基础、NR四参数0.45/0.2/0.3/0.25、NR+最高RTX4K、NR+RTX+DLSS2、DLSS6、XeSS4、FSR3.1 2、VFG2Low/4Medium/8High、NR resize/暂停/seek2s/全屏/退窗。每个GUI约80秒、无ERROR/FATAL/循环弹窗/设备移除，背景alpha255；实际后端/进度而非请求值验收。
+- stress-v1不算通过：seek函数名错误与手算OSD字段偏移错4bytes；改用seekTo与实际SDKoffsetof（316/268/36）。stress-v2截图路径刚创建但PNG未写完，改加载完整后再记录。stress-v3固定1.4s断言碰上NR冷初始化/异步seek，改为等待实际参数/暂停/seek/窗口状态；installed-transport-v1单项先确认paused seek实际PTS2000ms/fullscreen/restore，再完整v4。失败原始目录均保留，不能引用其QML PASS当最终验收。
+- 性能边界：本机RTX5070/616.56、2K30测试视频。VFG8High明确有实时调度降档，截图瞬时提交约30–31fps；VFG4在RTSS60限制下也降档。兼容稳定通过不代表稳定240fps、物理刷新率、端到端延迟或画质验收。没有新增AMD实卡/OBS捕获/Xbox长稳测试。
+- installed-stress-v4最终恢复原Config/Global逐字节，SHA46e32581…c83/1e44c576…7ca；删除的只是本轮创建的Veyra测试profile。最终matrix-v3也恢复原配置，主RTSS和全部子加载器已退出、remainingOwnedHelpers=0，不停用户其它应用。测试TEMP/TMP仅子进程；全部新产物E:/项目/Veyra/{archives,build,deps,tests,logs,tmp,test-packages}/rtss-restart-loop-20261004。
+- 正在封存本地完整NVIDIA候选、独立逐文件manifest、对应Veyra源码ZIP/patch与交付索引，运行组件全部沿用发布原字节。无merge/push/Release/关机；本轮保存后另记包审计回执。
+
 ## 2026-10-04 2.0.3 正式发布完成
 
 - 当前用户授权的几项修复、AMD NR、VFG全档位与厂商分包已合入main，发布代码commit `f82f6499ff0db9c36953bcafb752b9be2d7fca4d` / tag `v2.0.3`，普通快进push至nrvideo。桌面64项status与258615-byte working patch逐字节保持；HDR/Dolby PR13/14仍OPEN、未合并。仅本条之后发布记录改变文档，不改变已测产品源树和tag。

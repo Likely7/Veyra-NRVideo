@@ -1,5 +1,7 @@
 # 2.0.3 显卡分包与现场修复验收
 
+> 2026-10-04 纠正：按实际 RTSS.exe 的 FileVersion/ProductVersion 与 SHA256 核验，本文原先的 7.3.7 版本记录不准确；当前用户安装与此前测试副本均为 7.3.5.28314（84E6E439…6736）。本轮另外发现旧测试只退出主 RTSS 而漏收子加载器，导致用户误提示；详见 RTSS_RESTART_LOOP_PLAN_2026-10-04.md。本条纠正版本和清理记录，不宣称重新完成本文全部旧测试。
+
 用户授权分别发布 NVIDIA/AMD 包、保留不可用功能的灰色入口、写入 AGENTS.md、合并当前已完成修复到 main 并发布 GitHub 2.0.3。追加决定保留现有 FSR3.1/4 共用组件；旧 SDK 分离试改已撤下。HDR/Dolby Vision PR #13/#14 不在本版施工范围。本轮不重复此前已经执行的关机。
 
 ## 源码与分包
@@ -22,7 +24,7 @@ NR 保留四个版本入口，SR 保留三个算法入口，FG 保留五个后�
 | 原 FSR2.3 组件 | 独立 FSR 39 samples/39 中间帧，meanError=0、GPU debug errors=0；18 次 DLSS/XeSS/FSR 热切换、774 生成帧、0 debug error，见 `shared-native-v1`。这些是保留原组件后的结果，旧 SDK 试验不算本版证据。 |
 | VFG | 本轮原生 720p 463 checks/0 failures；真实包内 GUI 所有 2–8X/三质量、DLSS6↔VFG8、seek/pause/resize、列表/节点预设与重启恢复通过；独立 worker 冻结 High 8X，输出 64 帧 HEVC/240fps，见 `shared-native-v1`、`vfg-ui-v1`。上一已存档瘦身阶段还验证过原生 4K，不能将本轮 720p 记作重复 4K 验收。 |
 | 灰色入口与兼容 | `policy-nv-v3`、`policy-amd-v2`：真实两份包、同一 RTX5070；四 NR/三 SR/五 FG 可见且状态正确，拒绝 FSR4 请求。AMD 包加载原 VFG 列表8X Medium/节点8X High配置，禁用 FG 并保留参数；两包实际 FSR SR 播放成功，0 provider failure。 |
-| 导出码率与 RTSS | `production-rtss-v1`：真实 RTSS7.3.7/RTSSHooks64 注入；2K30 MPEG-4 AVI→NR+最高 RTX SR→4K HEVC；18 Mbps VBR 后改其他选项、24 Mbps CBR 直接开始，两份均 24/24 帧。worker 使用冻结码率；输入值不是保证短片平均码率逐位相同。背景取样 alpha255，旧 NVIDIA marker 不触发误判。只关闭本轮启动的 RTSS，未改其配置。 |
+| 导出码率与 RTSS | `production-rtss-v1`：真实 RTSS7.3.5.28314/RTSSHooks64 注入；2K30 MPEG-4 AVI→NR+最高 RTX SR→4K HEVC；18 Mbps VBR 后改其他选项、24 Mbps CBR 直接开始，两份均 24/24 帧。worker 使用冻结码率；输入值不是保证短片平均码率逐位相同。背景取样 alpha255，旧 NVIDIA marker 不触发误判。只关闭本轮启动的 RTSS，未改其配置。 |
 | 极简右边缺口 | `edge-v1`：六个整数/分数 DPI 与软件绘制实际窗口测量，rightGap=0、bottomGap=0；没有用容器比例黑边冒充缺口。 |
 | AMD NR | `amd-runtime-audit.json`：528 份实际分发文件逐 SHA，186 权重/62 HIP 模块，真实 ABI1/144 bytes 与模块布局通过；caps.hip=0。没有运行 HIP 推理。 |
 | 对应源码可重建 | 源码包保留 byte-identical 2.0.0 依赖包，新增 lmxxf 源码和实际 recipe；排除权重/编译模块/截图/CSV/对话。从独立解压源码和 manifest 重建真实 AMD 宿主 DLL 成功，`amd-source-rebuild.log`；发布仍携带原已核验 DLL，不替换为重建件。 |
