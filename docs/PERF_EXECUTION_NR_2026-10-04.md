@@ -25,7 +25,7 @@
 |---|---|---|---|
 | D0 | 项目文档对齐与存档 | accepted | 37bc0c0 / initial-docs完整bundle verify，桌面/main保持 |
 | A0 | 当前版本基线及矩阵驱动 | in-progress | A完整包封存；M1五组各三轮15/15通过，PERF_BASELINE_NR；其余素材/切换基线在各节点前补齐 |
-| E1 | Feature18动态输入尺寸 | pending | 原版/Lecram分别测返回值、画面、历史 |
+| E1 | Feature18动态输入尺寸 | completed-conditional | 两运行库8组合API/区域/恢复正常，但缩小后与独立小实例不同；PERF_E1_DYNAMIC_SIZE，3b优先实际尺寸实例 |
 | E2 | 并行Evaluate/CreateFeature | pending | 独立command list、压力/反复切换 |
 | E3 | 真实来源精确重复比例 | pending | 屏幕/实卡可用性与合成节奏分开 |
 | 1a | 精确重复帧整链复用 | pending | 先验证时域模型重复Evaluate结果是否相同 |

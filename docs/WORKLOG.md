@@ -1,5 +1,12 @@
 # Veyra 工作记录
 
+## 2026-10-04 NR优化：M1基线封存及E1实验结论
+
+- M1五组各三轮共15/15实际产品PASS，nr-series.py A退出0；处理耗时三轮中位S1 7.7145ms、S2-720 4.6975、S3 NR+DLSS4K 11.3565、S4两NR+DLSS4K+FG2X 21.192、S5已有480/720/原生三层14.372。S5范围13.59–14.377，保留波动；这不是新优化。驱动616.56、NRLecram F95FEB原字节、EXE b7081f…0eb4。统计为滚动观测的三轮中位/范围，非总体P95，未测实屏。
+- nr-baseline-report.py exit0，完整A封存于test-packages/perf-nr-20261004/Veyra-2.0.3-perf-baseline-A-NVIDIA-win64-portable，1542载荷/QML逐文件匹配8cdc/无测试Loader；manifest与baseline-M1-summary.json含逐SHA。A0baseline标签eb47ed6/增量bundle验证；其余素材/切换暂停基线仍待补齐。
+- E1 before/candidate-v2/timing各存档，独立实验build-E1-v1/v2/v3均exit0。nr-e1.py E1-v1、E1-v2各8进程顺序完成；原版E16BCF与Lecram F95FEB，最大1920×1080实例Evaluate 85/70/55/40%：接口成功/全部活跃像素写出/区域外写入0/debug0/设备正常，回100%像素与独立实例相同。缩小后MAE0.376668–0.398506(0–255)且不同约45%RGBA字节，8组合相同，精确参照失败的exit1如实保留。v2 GPUtimestamp实际随尺寸降低，但短样本不当稳态收益。
+- 结论PERF_E1_DYNAMIC_SIZE_2026-10-04.md：单实例子区域可用≠现有小尺寸档位像素等价，3b优先实际尺寸创建的有界实例；未经4K/HDR/自然素材/其他GPU验收不外推。无产品路径改动，所有像素读回/同步仅实验。接续E2并发Create/Evaluate，独立fence/ring避免共享timeline重号。
+
 ## 2026-10-04 NR优化1c：盲预测重复帧拒绝存档
 
 - 节点before标签checkpoint/perf-nr-1c-before-20261004，产品源码仍8cdc。`py -3.11 -B tests/perf/CadencePredictionCounterexample.py E:/项目/Veyra/logs/perf-nr-20261004/1c-counterexample-v1/result.json` exit0：准确已知30-in-60/24-in-60整帧2:3/40-in-120节奏，第49未抽查的重复位只改一个像素，候选三组都替换错这一帧，后续检测错误0；精确比较输出均0不同帧。
