@@ -1789,8 +1789,21 @@ bool EnhanceGraph::createViews()
 // ---------------------------------------------------------------------------
 // process: the per-frame chain (verbatim from the probe lambda).
 // ---------------------------------------------------------------------------
-bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier)
+bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh)
 {
+    // Whole-chain duplicate reuse failed the unchanged-output experiment.
+    // This narrower path only handles repeated edits of the SAME paused
+    // frame, after one complete reset evaluation under this configuration.
+    const bool pausedEligible=pausedResidualRefresh&&reset&&context_.adapter().isNvidia&&nrEnabled_&&nrInstances_.size()==1&&
+        !nrInstances_[0]->temporalEnabled&&!nrInstances_[0]->stabilised&&!lmxxfNr_&&
+        !srEnabled_&&!fgEnabled_&&!desc_.videoHdr.enabled&&!desc_.hdrWorking()&&
+        !colorGradeActive()&&!tailColorActiveCount_&&!preNrColorActiveCount_&&
+        !preSrColorActiveCount_&&!interNrColorActiveCount_&&desc_.nrHoldStrength==0&&
+        (!hardwareSurface||!hardwareSurface->present())&&
+        !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_NR_RESIDUAL_REUSE",nullptr,0);
+    const bool reusePausedNr=pausedEligible&&pausedNrCacheValid_&&pausedNrResidualOnly_&&
+        frame==pausedNrFrame_&&sourceFrameId==pausedNrSourceId_&&ptsMs==pausedNrPts_;
+    pausedNrCacheValid_=false; // Every failure path remains an invalid cache.
     diagnostics::CpuStallTrace cpuTrace("graph-cpu-stall",sourceFrameId,30.0);
     failedBackend_=engine::FailedBackend::Infrastructure;
     out = FrameOutputs{};
@@ -2418,7 +2431,12 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // layer costs two lists: one for encode+decode prep, one for the evaluate
     // (the original single-layer code did exactly the same, hence the identical
     // output). The ring is drained by submission, never by a CPU wait.
-    if (nrEnabled_ && nrCreated()) {
+    if(reusePausedNr){
+        nrInstances_[0]->inputRevision=1;
+        ++metrics_.pausedNrResidualReuses;
+        log::info("paused-nr-cache",std::format("event=reuse source={} revision={} count={}",sourceFrameId,desc_.settingsRevision,metrics_.pausedNrResidualReuses));
+    }
+    if (nrEnabled_ && nrCreated()&&!reusePausedNr) {
         for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
             const bool preSrProtection=preSrProtectionRgba_&&layerIndex==desc_.nrBeforeSrLayerCount();
             const bool interNrProtection=interNrProtectionRgba_&&layerIndex==desc_.interNrProtectionTarget();
@@ -2873,6 +2891,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     out.videoSlot = parity;
     BatchFrame real;real.identity=out.batch.identity;real.pts100ns=out.batch.b100ns;real.lease=std::make_shared<FrameLease>();real.lease->texture=videoFrame_[parity];real.lease->sourceReference=sourceReferences_[parity];real.lease->baseReference=baseReferences_[parity];real.lease->slot=parity;real.lease->readyFence=out.videoFenceValue;real.lease->readyFenceObject=out.videoFenceObject;real.lease->referencesValid=retainReferences;realLeases_[parity]=real.lease;out.batch.append(std::move(real));
     if(veyra::log::verboseFrameLogs())veyra::log::info("frame-batch",std::format("batch={} epoch={} revision={} source={} a={} b={} count={} realSlot={} realFence={} genSlot={} genFence={}",out.batch.batchId,epoch_,out.batch.identity.settingsRevision,out.batch.identity.sourceFrameId,out.batch.a100ns,out.batch.b100ns,out.batch.count,parity,out.videoFenceValue,out.genSlot,out.genFenceValue));
+    if(pausedEligible&&lastAppliedSettings_){
+        pausedNrCacheValid_=true;pausedNrFrame_=frame;pausedNrSourceId_=sourceFrameId;pausedNrPts_=ptsMs;
+        pausedNrSettings_=lastAppliedSettings_;
+    }
     return true;
 }
 
@@ -2975,6 +2997,15 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     // Switching the referenced .cube re-stages a descriptor, which needs the
     // queue drained: treat it as a rebuild (parameters stay live).
     if(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace)return false;
+    pausedNrResidualOnly_=false;
+    if(pausedNrSettings_){
+        auto residualEdit=*pausedNrSettings_;residualEdit.revision=s.revision;
+        residualEdit.residual=s.residual;
+        for(unsigned i=0;i<residualEdit.nrLayerCount;++i)residualEdit.nrLayers[i].residual=s.nrLayers[i].residual;
+        pausedNrResidualOnly_=residualEdit==s;
+    }
+    if(!pausedNrResidualOnly_)pausedNrCacheValid_=false;
+    lastAppliedSettings_=s;
     desc_.videoHdr=s.videoHdr;
     if(!(s.color==desc_.color)){
         desc_.color=s.color;
@@ -3079,6 +3110,8 @@ ID3D12Resource* EnhanceGraph::generatedFrameResource(uint32_t slot) const
 // ---------------------------------------------------------------------------
 void EnhanceGraph::shutdown()
 {
+    pausedNrCacheValid_=pausedNrResidualOnly_=false;pausedNrFrame_=nullptr;
+    lastAppliedSettings_.reset();pausedNrSettings_.reset();
     if (!initialized_ && !coreHost_ && !nrAdapter_ && !nvof_ && !srcRgba_) return;
     for(unsigned i=0;i<2;++i)if(presentationFences_[i]){
         const HRESULT hr=context_.directQueue()->Wait(presentationFences_[i].Get(),presentationValues_[i]);

@@ -170,7 +170,7 @@ add_library(veyra_ngx STATIC
   target_link_libraries(veyra_ngx PRIVATE
     "$<IF:$<CONFIG:Debug>,${VEYRA_DLSS_SDK_ROOT}/lib/Windows_x86_64/x64/nvsdk_ngx_s_dbg.lib,${VEYRA_DLSS_SDK_ROOT}/lib/Windows_x86_64/x64/nvsdk_ngx_s.lib>")
   target_compile_definitions(veyra_ngx PUBLIC
-    VEYRA_EXPERIMENTAL_LOCAL_DLSSNR=1 VEYRA_HAS_NGX_CORE_CACHE=1)
+    VEYRA_EXPERIMENTAL_LOCAL_DLSSNR=1 VEYRA_HAS_NGX_CORE_CACHE=1 VEYRA_HAS_PAUSED_NR_RESIDUAL_REUSE=1)
 
   # Diagnostic: exercises the Ada multi-frame unlock against the local DLSS-G
   # runtime image without involving NGX (works on any NVIDIA adapter).
@@ -1018,6 +1018,14 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_compile_features(veyra_nr_static_input_experiment PRIVATE cxx_std_20)
   target_compile_options(veyra_nr_static_input_experiment PRIVATE /utf-8)
   target_link_libraries(veyra_nr_static_input_experiment PRIVATE veyra_engine bcrypt)
+  add_executable(veyra_duplicate_gpu_experiment tests/perf/DuplicateGpuExperiment.cpp)
+  target_compile_features(veyra_duplicate_gpu_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_duplicate_gpu_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_duplicate_gpu_experiment PRIVATE veyra_engine d3dcompiler)
+  add_executable(veyra_nr_paused_residual_experiment tests/perf/NrPausedResidualExperiment.cpp)
+  target_compile_features(veyra_nr_paused_residual_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_paused_residual_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_paused_residual_experiment PRIVATE veyra_engine bcrypt)
   add_executable(veyra_nr_core_cache_contract_tests tests/perf/NrCoreCacheContractTests.cpp)
   target_compile_features(veyra_nr_core_cache_contract_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_nr_core_cache_contract_tests PRIVATE /utf-8)

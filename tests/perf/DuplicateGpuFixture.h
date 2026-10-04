@@ -29,7 +29,7 @@ public:
     void invalidate(){valid_=false;}
     bool initialize(const std::filesystem::path& shader){
         pipeline::ComPtr<ID3DBlob> code,errors;
-        const auto hr=D3DCompileFromFile(shader.c_str(),nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
+        const auto hr=D3DCompileFromFile(shader.c_str(),nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
         if(FAILED(hr)){std::cerr<<"compile HRESULT="<<unsigned(hr)<<' '<<(errors?static_cast<const char*>(errors->GetBufferPointer()):"")<<std::endl;return false;}
         std::vector<uint8_t> bytes(static_cast<const uint8_t*>(code->GetBufferPointer()),static_cast<const uint8_t*>(code->GetBufferPointer())+code->GetBufferSize());
         if(!pass_.create(ctx_.device(),bytes,3,2,1,1)||!stager_.initialize(ctx_.device(),2))return false;

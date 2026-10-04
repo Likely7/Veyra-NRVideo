@@ -36,8 +36,9 @@ int wmain(int argc,wchar_t** argv){
     using namespace veyra;
     if(argc!=4)return 2;
     const std::wstring mode=argv[3];
-    if(mode!=L"nr"&&mode!=L"nr-temporal"&&mode!=L"srnr"&&mode!=L"sr"&&mode!=L"off")return 2;
-    const bool nr=mode!=L"off"&&mode!=L"sr",sr=mode==L"srnr"||mode==L"sr";
+    if(mode!=L"nr"&&mode!=L"nr-temporal"&&mode!=L"srnr"&&mode!=L"sr"&&mode!=L"off"&&mode!=L"nr-reset"&&mode!=L"srnr-reset")return 2;
+    const bool nr=mode!=L"off"&&mode!=L"sr",sr=mode==L"srnr"||mode==L"sr"||mode==L"srnr-reset";
+    const bool resetEveryFrame=mode==L"nr-reset"||mode==L"srnr-reset";
     const std::filesystem::path out=argv[2];std::filesystem::create_directories(out);
     Logger::instance().openFile((out/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
@@ -65,7 +66,7 @@ int wmain(int argc,wchar_t** argv){
     const unsigned snapshots[]={0,1,2,4,8,16,32,64,127,255,299};
     for(unsigned i=0;i<300&&pass;++i){
         pipeline::EnhanceGraph::FrameOutputs output;const auto start=std::chrono::steady_clock::now();
-        pass=graph.process(input,(i+1)*1000.0/60,i==0,output,i+1,&packet.colorInfo)&&ring.waitIdle();
+        pass=graph.process(input,(i+1)*1000.0/60,i==0||resetEveryFrame,output,i+1,&packet.colorInfo)&&ring.waitIdle();
         const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
         sink::RgbaImage image;if(pass)pass=sink::readRgba8(ctx,ring,graph.videoFrameResource(output.videoSlot),image);
         if(!pass)break;

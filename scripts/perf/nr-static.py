@@ -19,7 +19,7 @@ shutil.copytree(BASE/'test-packages'/TASK/'Veyra-2.0.3-perf-baseline-A-NVIDIA-wi
 exe=app/'veyra_nr_static_input_experiment.exe';shutil.copy2(BASE/'build'/TASK/variant/exe.name,exe)
 results=[]
 for mode in modes:
-    assert mode in ('nr','nr-temporal','srnr','sr','off')
+    assert mode in ('nr','nr-temporal','srnr','sr','off','nr-reset','srnr-reset')
     for repeat in range(1,4):
         name=f'{label}-{mode}-r{repeat}';out=BASE/'logs'/TASK/name;tmp=BASE/'tmp'/TASK/name
         for p in (out,tmp):p.mkdir(parents=True,exist_ok=False)

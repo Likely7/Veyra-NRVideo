@@ -446,7 +446,7 @@ public:
     // `hardwareSurface` carries the decoded texture for paths whose surface
     // does not travel inside the AVFrame (D3D11VA). It must be provided exactly
     // when frame->format == AV_PIX_FMT_D3D11 and is unused otherwise.
-    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0);
+    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false);
     bool nextFrameSlotAvailable()const {
         const unsigned slot=unsigned(realFrameIndex_%2);
         if(presentationFences_[slot]&&presentationFences_[slot]->GetCompletedValue()<presentationValues_[slot])return false;
@@ -478,6 +478,7 @@ public:
 
     struct Metrics {
         uint64_t nrEvaluateCount = 0;
+        uint64_t pausedNrResidualReuses = 0;
         uint64_t srEvaluateCount = 0;
         uint64_t nvofExecuteCount = 0;
         uint64_t amdOfExecuteCount = 0;
@@ -779,6 +780,14 @@ private:
 
     // Per-run state.
     uint64_t realFrameIndex_ = 0;
+    // Only a successful explicit paused/still-frame reset may seed this.
+    // Ordinary playback, source changes, failures and non-residual edits
+    // invalidate it. No cross-frame/duplicate-source reuse is performed.
+    bool pausedNrCacheValid_=false,pausedNrResidualOnly_=false;
+    const AVFrame* pausedNrFrame_=nullptr;
+    uint64_t pausedNrSourceId_=0;
+    double pausedNrPts_=0;
+    std::optional<engine::EnhancementSettings> lastAppliedSettings_,pausedNrSettings_;
     uint64_t epoch_ = 0;
     std::weak_ptr<FrameLease> realLeases_[2],generatedLeases_[kGeneratedPoolSlots];
     uint32_t nextListSlot_ = 0;

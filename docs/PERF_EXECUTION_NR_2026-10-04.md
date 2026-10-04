@@ -27,7 +27,7 @@
 | A0 | 当前版本基线及矩阵驱动 | in-progress | A完整包封存；M1五组各三轮15/15通过，PERF_BASELINE_NR；其余素材/切换基线在各节点前补齐 |
 | E1 | Feature18动态输入尺寸 | completed-conditional | 两运行库8组合API/区域/恢复正常，但缩小后与独立小实例不同；PERF_E1_DYNAMIC_SIZE，3b优先实际尺寸实例 |
 | E2 | 并行Evaluate/CreateFeature | completed-conditional | 单Core/adapter，三次240s累计12min及150次创建安全通过；间隔110–116ms，不能据此宣称2b无缝 |
-| E3 | 真实来源精确重复比例 | pending | 屏幕/实卡可用性与合成节奏分开 |
+| E3 | 真实来源精确重复比例 | completed-screen-awaiting-card | 真实WGC三阶段各60秒通过，静止99.932%/移动内容0.540%/窗口位置99.937%；PERF_E3_DUPLICATE_SOURCE；实卡待来源确认 |
 | 1a | 精确重复帧整链复用 | rejected-unchanged-output | 自然同像素300帧×五组×三轮，A-A噪声0；NR/SR复用299帧不同；PERF_1A_DUPLICATE_REUSE；无生产改动 |
 | 5a | 黑边检测与有效区域处理 | pending | 防暗场误裁，先测准确性与重建收益 |
 | 3a | 进程GPU调度优先级 | pending | 只改本进程，有竞争负载的实际A/B |
@@ -42,7 +42,7 @@
 | 5b | 文件/导出跨帧并行 | pending | 保留源帧/PTS/flow依赖，不扩大实时延迟 |
 | 4a | 多NR整链低分辨率调度 | pending | 保留每层残差参数；先测同尺寸与一致性 |
 | 4b | 先粗后细组合 | pending | 核对现有逐层尺寸；不新增强制预设 |
-| 5c | 暂停不重跑/残差重合成 | pending | 计数器/真实GPU占用与暂停编辑 |
+| 5c | 暂停不重跑/残差重合成 | in-progress | 暂停不Evaluate已有；显式reset单NR300帧一致、SR组合不一致；只限单层NR候选，A/B/B-off及真实UI待测 |
 | UI | 性能设置及状态 | pending | 只暴露保留实现，统一持久化/能力/翻译 |
 | R0 | 全产品回归与最终候选 | pending | 合同/Xbox/Qt/字幕/导出/兼容及源码存档 |
 

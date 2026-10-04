@@ -8174,3 +8174,9 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 - `nr-rebuild-series.py B2a B2a-rebuild-v2`、`nr-rebuild-report.py A-rebuild-v1 B2a-rebuild-v2 B2a-rebuild-v2-off` exit0；B与同EXE关闭组各12/12，240张完整输出分别对A零差异。四组暖创建1569.510→379.349、1409.580→405.504、1456.600→515.900、1348.730→377.124ms；原始日志 `E:/项目/Veyra/logs/perf-nr-20261004/B2a-rebuild-v2*`。
 - v3真实Qt界面六组20次请求通过；层数多个属性导致26次实际重建，FG/运行库仍完整重开。v2倍率属性自动启用FG，额外2X实验保留，纠正v3后才计非FG路径。
 - SDK核心容量/活跃借用/初始化失败注入exit0，64个真实参数最终清零；不是实测TDR。SR内部缓存关闭后本进程DXGI使用量141803520 bytes。所有核心复用收益仅暖重建，不冒充持续FPS或首启优化。2a保留，R0导出/全产品回归仍待做；详情PERF_2A_CORE_REUSE。
+# 2026-10-04 NR性能优化：E3真实屏幕与5c前置/候选
+
+- E3 `nr-duplicate.py B2a E3-own-window-v3` 4/4 exit0；三轮比较/真实WGC三阶段各60秒，静止1475/1476重复、移动内容8/1481、移动自有窗口位置1588/1589，无捕获丢帧/debug错误/设备移除。原始数据 `E:/项目/Veyra/logs/perf-nr-20261004/E3-own-window-v3-*`。
+- 精确GPU比较仅测试：1080p变化CPU总路径三轮中位195.9us、4K306.7us，超过0.1ms门槛；shader自身9.1/30.4us。v1编译器cs5.1不支持、v2同进程窗口被产品保护拒绝，失败证据保留；cs5.0及拥有的子进程修订通过，未放宽产品限制。实卡信号未确认、未采卡。
+- 5c `nr-static.py B2a pause-reset-M1-v1 nr-reset srnr-reset` 六组通过：NR reset后300帧三轮0差异，SR组合各262差异。只对单NR暂停刷新制作窄范围候选，普通暂停不Evaluate已有。
+- 暂停编辑基线EXE SHA066ac43c…86045在 `tests/perf-nr-20261004/A5c-paused-v1-app/` 独立封存。`nr-paused.py B2a A5c-paused-v1` 四组各三轮12/12，通过300次编辑及第150次模型失效检查；A NR数300/300/300/600（每轮），无debug/设备错误。`build-paused-baseline-v1` 缺AVFrame/iostream头失败，补头后 `build-paused-duplicates-v3` 成功。5c产品候选尚待构建和对照，不记录未取得收益。
