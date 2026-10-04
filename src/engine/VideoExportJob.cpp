@@ -236,8 +236,11 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             const bool allowed=asyncNvenc&&graph.nvofSessionInitialized()&&!gd.hdrInput&&!gd.hdrOutput&&
                 !gd.color.enabled&&!gd.additionalColorCount&&!gd.videoHdr.enabled&&gd.opticalFlowBackend==OpticalFlowBackend::Nvidia;
             if(!allowed){failureReason=L"NVOF预取实验配置不受支持";veyra::log::error("flow-prefetch","experimental export admission refused");break;}
+            uint64_t priorBudget=0,priorUsage=0;ctx.videoMemoryInfo(priorBudget,priorUsage);
             flowPrefetch=std::make_unique<pipeline::FlowPrefetch>();
             if(!flowPrefetch->initialize(ctx,gd)){failureReason=L"NVOF预取实验初始化失败";break;}
+            uint64_t budget=0,usage=0;ctx.videoMemoryInfo(budget,usage);
+            veyra::log::info("flow-prefetch-memory",std::format("beforeMiB={} afterMiB={} budgetMiB={}",priorUsage>>20,usage>>20,budget>>20));
         }
         if(fenceEvents){
             const bool injected=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EVENT_CREATE_FAIL",nullptr,0)>0;
