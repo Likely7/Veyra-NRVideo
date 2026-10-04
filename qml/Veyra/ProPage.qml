@@ -179,7 +179,9 @@ VPage {
         property real shown: known ? Math.min(1, Math.max(0, fraction)) : 0
         // Live data changes every second; animating it behind another page redrew the
         // window continuously (see VDot.qml), so only while shown.
-        Behavior on shown { enabled: orb.visible; NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
+        // Paused telemetry still updates, but it does not need a 600 ms canvas
+        // animation every second. Keep live playback and user edits responsive.
+        Behavior on shown { enabled: orb.visible && (!veyra.paused || (typeof vyTest !== "undefined" && vyTest.disablePausedUiIdle === true)); NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
         onShownChanged: ring.requestPaint()
         onToneChanged: ring.requestPaint()
         Canvas {
