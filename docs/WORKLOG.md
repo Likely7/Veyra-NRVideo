@@ -8198,3 +8198,8 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 命令：py -3.11 -B scripts/perf/nr-present.py B5c B5c-present-v1：开/关各三轮，300次同帧实际Present1/301，48完整图像SHA一致，debug0/device正常。py -3.11 -B scripts/perf/nr-paused-ui.py B5c B5c-paused-ui-v6 及 B5c-off ...-off：NR/SR/temporal30秒空闲、20次编辑含模型变更、恢复播放、暂停seek全通过；四实际DLSS/XeSS/FSR3/VFG 2X组...-v6-fg也全通过。单NR又跑r2/r3 A(B2a旧QML)/B/B-off，全九轮通过。过程各子进程≤299秒、无桌面点击，不关闭用户应用。
 
 数据：三轮单NR自身PDH最大引擎占用样本中位数再取三轮中位数A2.237185%(2.236872–2.360637)、B0.010999%(0.010828–0.011035)、off2.237174%(2.193295–2.287588)，每轮24样本；下降99.51%。此为进程引擎利用率，不是整卡/实屏刷新率。中间v5仅去重复Present仍2.261%，不算完整通过。残差native三轮10800全输出SHA与89.74%收益沿用74a已归档证据，详见PERF_5C_PAUSED_NR。最终UI EXE bf4952347424f500df45a29ab3f7289742e4ecae188ac66b71805b9743978568。保留5c，R0及余节点继续；无merge/push/Release。
+
+
+## 2026-10-04 PERF 1b 内容预算前提拒绝
+
+开工checkpoint/perf-nr-1b-before-20261004 c593679。运行ContentBudgetCounterexample.py exit0，以封存M1/S4滚动P95成本21.192ms构造300输入调度反例：真实60Hz安全预算13.333ms，原内容30Hz预算26.667ms错误放行。1a实际4500全输出图像已证明不能逐字节复用NR/SR，完整求值次数未减少。拒绝内容预算翻倍，未加入生产代码；3b按真实处理输入帧间隔。JSON在E:/项目/Veyra/logs/perf-nr-20261004/1b-budget-counterexample-v1.json，明确是构造模型而非新增60Hz GPU实测，详见PERF_1B_CONTENT_BUDGET。
