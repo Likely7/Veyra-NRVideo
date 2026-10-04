@@ -30,7 +30,7 @@
 | E3 | 真实来源精确重复比例 | completed-screen-awaiting-card | 真实WGC三阶段各60秒通过，静止99.932%/移动内容0.540%/窗口位置99.937%；PERF_E3_DUPLICATE_SOURCE；实卡待来源确认 |
 | 1a | 精确重复帧整链复用 | rejected-unchanged-output | 自然同像素300帧×五组×三轮，A-A噪声0；NR/SR复用299帧不同；PERF_1A_DUPLICATE_REUSE；无生产改动 |
 | 5a | 黑边检测与有效区域处理 | pending | 防暗场误裁，先测准确性与重建收益 |
-| 3a | 进程GPU调度优先级 | pending | 只改本进程，有竞争负载的实际A/B |
+| 3a | 进程GPU调度优先级 | in-progress | 九组交错Normal/High/Realtime，本轮三NR竞争Graph，Set/Get/P95/P99及对方吞吐；PERF_3A_GPU_PRIORITY |
 | 2a | 跨重建保留NGX核心 | retained-pending-R0 | v2三轮A/B/B-off完整输出0差异；暖创建减少75.83/71.23/64.58/72.04%；真实UI及SDK拒绝路径通过；导出待R0 |
 | 2c | 最近配置实例缓存 | pending | 有界预算/复用reset/压力回退 |
 | 2d | 空闲预热 | pending | 首帧收益与开关关闭时显存 |

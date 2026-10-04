@@ -46,23 +46,45 @@ def gpu_query():
     values = [v.strip() for v in p.stdout.strip().split(',')]
     return dict(zip(('name','driver','gpuPercent','memoryMiB','memoryTotalMiB','graphicsMHz','memoryMHz','powerW'), values))
 
-def assert_gpu_tests_idle():
+def assert_gpu_tests_idle(allowed_pids=()):
     # Timing must never overlap another owned GPU test. A future competition
     # test explicitly exempts only its own load process at its call site.
     prefix=str(BASE/'tests'/TASK).replace('\\','/').lower()+'/'
+    allowed=set(allowed_pids)
+    for pid in allowed:
+        owned=psutil.Process(pid)
+        exe=owned.exe().replace('\\','/').lower()
+        assert exe.startswith(prefix) and Path(exe).name=='veyra_nr_gpu_competition_load.exe', 'Only this task competition fixture may overlap'
     active=[]
     for proc in psutil.process_iter(['pid','name','exe']):
         try:
             exe=(proc.info['exe'] or '').replace('\\','/').lower()
-            if exe.startswith(prefix) and (proc.info['name'] or '').lower().startswith('veyra_'):
+            if proc.pid not in allowed and exe.startswith(prefix) and (proc.info['name'] or '').lower().startswith('veyra_'):
                 active.append({'pid':proc.pid,'exe':exe})
         except psutil.Error:
             continue
     assert not active, f'Another owned GPU test is running: {active}'
 
+def set_owned_gpu_priority(proc, priority):
+    # Native API changes only the child handle returned by our own Popen.
+    # No elevation, driver settings or other process priority changes.
+    import ctypes
+    from ctypes import wintypes
+    gdi=ctypes.WinDLL('gdi32',use_last_error=True)
+    get=gdi.D3DKMTGetProcessSchedulingPriorityClass
+    get.argtypes=[wintypes.HANDLE,ctypes.POINTER(ctypes.c_int)];get.restype=wintypes.LONG
+    set_value=gdi.D3DKMTSetProcessSchedulingPriorityClass
+    set_value.argtypes=[wintypes.HANDLE,ctypes.c_int];set_value.restype=wintypes.LONG
+    before=ctypes.c_int(-1);after=ctypes.c_int(-1)
+    a=get(int(proc._handle),ctypes.byref(before));b=set_value(int(proc._handle),priority);c=get(int(proc._handle),ctypes.byref(after))
+    return {'pid':proc.pid,'beforeStatus':hex(a&0xffffffff),'beforeClass':before.value,
+            'setStatus':hex(b&0xffffffff),'afterStatus':hex(c&0xffffffff),'afterClass':after.value,
+            'applied':a==b==c==0 and after.value==priority}
+
 def stage(variant):
     path = BASE / 'tests' / TASK / ('app-' + variant)
     if path.exists():
+        assert digest(path/'veyra_qml_ui.exe')==digest(BUILD/variant/'veyra_qml_ui.exe'), 'Existing stage executable is stale; use a fresh variant'
         return path
     shutil.copytree(PACKAGE, path, copy_function=copy_dependency,
                     ignore=shutil.ignore_patterns('*.log', 'logs', 'user-data-2.0.0', '*.dmp'))
@@ -81,8 +103,8 @@ def stage(variant):
     main.write_text(text, encoding='utf-8')
     return path
 
-def run(variant, material, setting, label, seconds):
-    assert_gpu_tests_idle()
+def run(variant, material, setting, label, seconds, gpuPriority=None, allowedGpuPids=()):
+    assert_gpu_tests_idle(allowedGpuPids)
     subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/perf/nr-control.py'), 'guard'], check=True)
     app = stage(variant)
     media = SOURCES.get(material, BASE / 'tests/perf-matrix/media' / (material + '.mkv'))
@@ -109,12 +131,14 @@ def run(variant, material, setting, label, seconds):
                'runtimeSha256': digest(app / 'runtime/experimental/nvngx_dlssnr.dll'),
                'beforeGpu': before, 'secondsRequested': seconds, 'measurement': 'GPU timestamps and CPU submission, not display scanout',
                'sourceCommit': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD']).decode().strip()}
-    start = time.monotonic()
+    start = time.monotonic();receipt['startUtc']=time.time()
     with (logs / 'console.log').open('xb') as out:
         proc = subprocess.Popen([str(app / 'veyra_qml_ui.exe'), '--data-dir', str(profile),
                                  '--page', 'pro', '--size', '1280x800', '--exit-after', '270000'],
                                 cwd=app, env=env, stdout=out, stderr=subprocess.STDOUT)
         receipt['pid'] = proc.pid
+        if gpuPriority is not None:
+            receipt['gpuPriority']=set_owned_gpu_priority(proc,gpuPriority)
         meter = psutil.Process(proc.pid); meter.cpu_percent(None)
         samples = []
         try:
