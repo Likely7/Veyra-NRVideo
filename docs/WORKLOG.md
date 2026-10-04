@@ -8168,3 +8168,9 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 - 判定：SF-v2在5070可用，速度和功耗均不如Lecram。建议5070保留Lecram；不能把单卡测试当作20/30/40/50统一支持验收。默认DLL没有替换，运行库/SDK/媒体没有进入源码Git，没有commit/tag/merge/push/Release。
 - 输出及复现证据：E:/项目/Veyra/logs/nr-sfv2-lecram-20260930/{REPORT.md,result.json,before.json,build.log,quality.json,warmup,nr,warmup-clean,nr-clean,nr-fg,nr-fg-rest}；测试APP、媒体与抽样像素在 E:/项目/Veyra/tests/nr-sfv2-lecram-20260930；执行脚本、诊断probe源码/构建在 E:/项目/Veyra/tmp/nr-sfv2-lecram-20260930。保留可复现测试环境和必要证据，没有新增压缩中间包。
 - 收尾：report.py 逐文件对比开工1096个源码；允许本次WORKLOG追加，其他源码无新增/修改；六个原beta/候选EXE与NR文件、两个下载原件及用户视频/测试段均重核SHA，未改变。scripts/acceptance/fg-fsr-xess-control.py guard结果与实际核验写入 final-scope-guard.log / result.json；若失败停止交付，不改基线洗白。
+# 2026-10-04 NR性能优化：2a修订版对照与真实UI
+
+- 工作树 `E:/项目/Veyra/worktrees/perf-nr-20261004`，产品修订3e28be0；不合并/推送/发布。
+- `nr-rebuild-series.py B2a B2a-rebuild-v2`、`nr-rebuild-report.py A-rebuild-v1 B2a-rebuild-v2 B2a-rebuild-v2-off` exit0；B与同EXE关闭组各12/12，240张完整输出分别对A零差异。四组暖创建1569.510→379.349、1409.580→405.504、1456.600→515.900、1348.730→377.124ms；原始日志 `E:/项目/Veyra/logs/perf-nr-20261004/B2a-rebuild-v2*`。
+- v3真实Qt界面六组20次请求通过；层数多个属性导致26次实际重建，FG/运行库仍完整重开。v2倍率属性自动启用FG，额外2X实验保留，纠正v3后才计非FG路径。
+- SDK核心容量/活跃借用/初始化失败注入exit0，64个真实参数最终清零；不是实测TDR。SR内部缓存关闭后本进程DXGI使用量141803520 bytes。所有核心复用收益仅暖重建，不冒充持续FPS或首启优化。2a保留，R0导出/全产品回归仍待做；详情PERF_2A_CORE_REUSE。

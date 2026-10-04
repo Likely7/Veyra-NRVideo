@@ -31,7 +31,7 @@
 | 1a | 精确重复帧整链复用 | rejected-unchanged-output | 自然同像素300帧×五组×三轮，A-A噪声0；NR/SR复用299帧不同；PERF_1A_DUPLICATE_REUSE；无生产改动 |
 | 5a | 黑边检测与有效区域处理 | pending | 防暗场误裁，先测准确性与重建收益 |
 | 3a | 进程GPU调度优先级 | pending | 只改本进程，有竞争负载的实际A/B |
-| 2a | 跨重建保留NGX核心 | in-progress | 四组20次×三轮A基线，240次重建/重复像素0差异；PERF_2A_CORE_REUSE；尚未产品候选 |
+| 2a | 跨重建保留NGX核心 | retained-pending-R0 | v2三轮A/B/B-off完整输出0差异；暖创建减少75.83/71.23/64.58/72.04%；真实UI及SDK拒绝路径通过；导出待R0 |
 | 2c | 最近配置实例缓存 | pending | 有界预算/复用reset/压力回退 |
 | 2d | 空闲预热 | pending | 首帧收益与开关关闭时显存 |
 | 2b | 后台建图与帧边界切换 | pending | 取决于E2，不移除必要同步 |
@@ -50,4 +50,6 @@
 
 已完成项目文档对齐、独立分支和开工存档。`py -3.11 -B scripts/perf/nr-build.py A build-A-v1 veyra_qml_ui veyra_nr_video_quality_probe veyra_export_probe` 全新构建476步、exit0；日志 `E:/项目/Veyra/logs/perf-nr-20261004/build-A-v1.log`。运行库沿用已验收完整NVIDIA包原字节，EXE/QML和各profile独立。
 
-基线驱动 `nr-series.py A` 串行运行M1/S1、S2-720、S3、S4、S5-existing各三轮、稳态50秒；每个产品进程和驱动有270/280/299秒上限。1280×800窗口、真实GPU timestamp及CPU提交统计，不将16ms UI Timer当渲染FPS。现有UI没有精确50%档位，S2明确为1280×720（1080p输入维度66.7%、像素44.4%）。多层先粗后细已有逐层尺寸参数，S5核对现有行为，不计为新收益。当前尚无产品性能改动或本轮前后收益。
+基线驱动 `nr-series.py A` 已完成M1/S1、S2-720、S3、S4、S5-existing各三轮、稳态50秒；每个产品进程和驱动有270/280/299秒上限。1280×800窗口、真实GPU timestamp及CPU提交统计，不将16ms UI Timer当渲染FPS。现有UI没有精确50%档位，S2明确为1280×720（1080p输入维度66.7%、像素44.4%）。多层先粗后细已有逐层尺寸参数，S5核对现有行为，不计为新收益。
+
+2a核心复用已实现并经修订版三轮A/B/B-off、真实UI、实际SDK容量与初始化失败检查，保留待R0最终回归。1a与1c有可复现画面反例，未加入产品。其余节点继续；不能用2a数据冒充持续播放或整个方案收益。
