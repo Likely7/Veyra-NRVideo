@@ -4,6 +4,7 @@
 #include <thread>
 #include <dxgi1_4.h>
 #include <d3d12sdklayers.h>
+#include "veyra/gfx/PresentSink.h"
 
 // E2. Foreground Feature18 Evaluate and background independent Feature18
 // Create/Evaluate/Release share one device, one queue and one snippet session.
@@ -11,7 +12,9 @@
 // CLI: runtime-dir output-dir duration-seconds create-count concurrent|serial
 int wmain(int argc,wchar_t** argv) {
     using namespace nrperf;
-    if(argc!=6)return 2;
+    if(argc!=6&&argc!=7)return 2;
+    const bool actualPresent=argc==7&&std::wstring_view(argv[6])==L"present";
+    if(argc==7&&!actualPresent)return 2;
     const unsigned seconds=unsigned(_wtoi(argv[3])),count=unsigned(_wtoi(argv[4]));
     const bool concurrent=std::wstring_view(argv[5])==L"concurrent";
     if(!seconds||seconds>240||!count||count>50)return 2;
@@ -27,6 +30,11 @@ int wmain(int argc,wchar_t** argv) {
     double maxForegroundGap=0;uint64_t after=0;
     std::ofstream csv(out/L"background.csv");csv<<"cycle,w,h,createMs,evaluateOK,releaseOK,vramLive,vramReleased\n";
     {
+        gfx::PresentSink sink;
+        if(actualPresent){gfx::PresentSink::Desc desc;desc.width=1920;desc.height=1080;
+            desc.vsync=false;desc.tearing=false;desc.title=L"Veyra owned concurrent NR experiment";Status status;
+            if(!sink.initialize(s.device.device(),s.device.directQueue(),desc,status))return 2;}
+        std::ofstream presentCsv;if(actualPresent){presentCsv.open(out/L"present.csv");presentCsv<<"sequence,presentCount,returnedMs,intervalMs,evalGpuMs\n";}
         Feature foreground(s),background(s); // Parameter tracking is mutated only on this thread.
         if(!foreground.create(s.ring,1920,1080)||!foreground.textures(s.ring,1920,1080,1920,1080))return 2;
         for(unsigned i=0;i<30;++i)if(!foreground.evaluate(s.ring,1920,1080,i==0))return 2;
@@ -57,14 +65,32 @@ int wmain(int argc,wchar_t** argv) {
         std::thread thread;
         if(concurrent)thread=std::thread(worker);else worker();
         auto next=nowMs(),previous=next;
-        while(!failed.load()&&nowMs()-start<double(seconds)*1000.0){
+        const auto foregroundStart=actualPresent?next:start;
+        while(!failed.load()&&nowMs()-foregroundStart<double(seconds)*1000.0){
             if(!foreground.evaluate(s.ring,1920,1080,false)){failed=true;break;}
+            if(actualPresent){
+                bool closed=false;if(!sink.processMessages(closed)||closed){failed=true;break;}
+                Status status;uint32_t slot;auto* list=s.ring.acquireNext(slot,status);
+                auto* buffer=sink.currentBackBuffer();
+                if(!list||!buffer){failed=true;break;}
+                foreground.states.transition(list,foreground.output.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
+                foreground.states.transition(list,buffer,D3D12_RESOURCE_STATE_COPY_DEST);
+                list->CopyResource(buffer,foreground.output.Get());
+                foreground.states.transition(list,foreground.output.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                foreground.states.transition(list,buffer,D3D12_RESOURCE_STATE_PRESENT);
+                if(!s.ring.submitAndSignal(slot)||!sink.present(status)){failed=true;break;}
+            }
             ++foregroundEvaluated;const auto current=nowMs();maxForegroundGap=std::max(maxForegroundGap,current-previous);previous=current;
+            if(actualPresent){
+                static double last=0;
+                presentCsv<<foregroundEvaluated<<','<<sink.presentCount()<<','<<current<<','<<(last?current-last:0)<<','<<foreground.lastGpuEvaluateMs<<'\n';presentCsv.flush();last=current;
+            }
             next+=1000.0/60.0;
             if(next>nowMs())std::this_thread::sleep_for(std::chrono::duration<double,std::milli>(next-nowMs()));
             else next=nowMs();
         }
         if(thread.joinable())thread.join();
+        if(actualPresent){s.ring.drainQueue();sink.shutdown();}
         const auto actual=foreground.read(s.ring);
         // Static input history is warmed for 30 frames before the worker.
         // Save actual and reference pixels even if the model keeps changing.

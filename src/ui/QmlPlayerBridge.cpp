@@ -981,6 +981,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     capabilityTimer->start(2000);
     impl_->loadPrefs();
     applyPreference(QStringLiteral("gpuPriority"));
+    applyPreference(QStringLiteral("prewarmEnhancement"));
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
@@ -1164,7 +1165,16 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     emit notice(tr("已从上次位置 %1 继续").arg(formatTime(at)), false);
                 }
             }
-            if (++impl_->positionTicks >= 120) { impl_->positionTicks = 0; rememberPosition(false); }
+            if (++impl_->positionTicks >= 120) {
+                impl_->positionTicks = 0; rememberPosition(false);
+                if(s.running&&!s.capture&&!s.image&&s.sourceWidth>=64&&s.sourceHeight>=64&&s.sourceWidth<=3840&&s.sourceHeight<=2160){
+                    const QVariantMap extent{{"width",s.sourceWidth},{"height",s.sourceHeight}};
+                    if(impl_->prefs.value(QStringLiteral("lastSourceExtent")).toMap()!=extent){
+                        impl_->prefs[QStringLiteral("lastSourceExtent")]=extent;
+                        if(!impl_->savePrefs())veyra::log::warn("ui-prefs","last source extent not saved");
+                    }
+                }
+            }
         }
         // Status light: 1.4.4 sampled its dashboard history every 250 ms.
         if (++impl_->historyTicks >= 16) {
@@ -4640,6 +4650,17 @@ QString QmlPlayerBridge::gpuPriorityStatus() const {
     if(status.state==gfx::GpuPriorityState::Rejected)return tr("系统未接受设置，当前：%1").arg(status.actual<0?tr("未知"):name(status.actual));
     return tr("已生效：%1").arg(name(status.actual));
 }
+bool QmlPlayerBridge::enhancementPrewarmAvailable() const {return effectGpu().vendor==0x10DE;}
+void QmlPlayerBridge::scheduleEnhancementPrewarm(){
+    QTimer::singleShot(2000,this,[this]{
+        if(!impl_->prefBool("prewarmEnhancement",true)||!enhancementPrewarmAvailable()||impl_->openingSource||impl_->snapshot.running||!impl_->engine.idle())return;
+        if(engine::runtimeOrder(impl_->activeRuntime()))return;
+        const auto saved=impl_->prefs.value(QStringLiteral("lastSourceExtent")).toMap();
+        const auto width=saved.value("width",1920).toUInt(),height=saved.value("height",1080).toUInt();
+        const bool valid=width>=64&&height>=64&&width<=3840&&height<=2160;
+        impl_->engine.prewarmEnhancement(impl_->facade.pendingSettings(),valid?width:1920,valid?height:1080);
+    });
+}
 void QmlPlayerBridge::rememberWindowSize(int width, int height) {
     // Only kept when the user chose "记住上次"; the key is internal.
     if (width < 400 || height < 200 || width > 16384 || height > 16384) return;
@@ -4664,7 +4685,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection"};
+                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -4742,6 +4763,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    if(key==QLatin1String("prewarmEnhancement")){
+        impl_->engine.setEnhancementPrewarmEnabled(impl_->prefBool("prewarmEnhancement",true));
+        if(impl_->prefBool("prewarmEnhancement",true))scheduleEnhancementPrewarm();
+    }
     if(key==QLatin1String("gpuPriority")){
         const auto value=impl_->prefString("gpuPriority");
         gfx::requestGpuPriority(value==QLatin1String("realtime")?gfx::GpuPriority::Realtime:

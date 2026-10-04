@@ -1,5 +1,11 @@
 # Veyra 工作记录
 
+## 2026-10-04 PERF 2d预热保留，2c-SR/2b反例归档中
+
+单owner PreviewGpuSession将device/ring/core/recent/graph从首页空闲预建交给普通文件播放；Engine dispatcher串行，无第二adapter/并行Init，首次full-reset，关闭/取消/预算/key/直播路径回退。性能开关、显卡能力与四语言接入。build-prewarm-v1因EffectChain.chain错误失败，v2修正13步exit0；native-v1 2步exit0。nr-prewarm-ui.py的v1 baseline属性冲突未打开，修正referenceBuild；A2d-ui-v1/B2d-ui-v2/B2d-ui-off-v1各NR/SRNR/SR三轮，27组全部通过，首次成功软件Present中位A1963/2000/1698ms、B100/107/92、off1942/2053/1733。5个lifecycle（预建中打开/退出/关闭、尺寸miss、全效果关闭）通过。nr-prewarm-native.py B2d B2d-native-v1十八进程54张完整输出SHA0差异、A-A噪声0，NR/SRNR匹配此前2a封存自然第三帧；debug/device0，预建Evaluate0。详PERF_2D_PREWARM，原始日志/身份/CSV/E盘路径均同任务label。保留待R0，不称全方案完成。
+
+2c-SR诊断与2b新鲜输出Present实验仅新增tests/perf、scripts/perf接点；生产SR缓存/后台创建未启用。SR/SRNR每轮21/50完整输出差异；并行50创建的Present P99三轮中位32.044→74.189ms。单独拒绝结论文档与节点存档随后的提交记录，原始失败证据不删。所有GPU测试与构建串行，不改用户桌面或配置。
+
 ## 2026-10-04 NR优化1a：真实链4500帧反例，拒绝默认整链复用
 
 - 1a-before标签3e28be0后，`nr-static.py B2a static-M1-v1` 五组各300帧×三轮15/15测量exit0，NR/SR实际Evaluate计数符合配置，debug0/设备正常。固定M1真实解码自然画面、PTS/序号增加，没有生产跳过，也没有注入Core缓存。EXE082bb45…ffb33，NR F95FEB/616.56。

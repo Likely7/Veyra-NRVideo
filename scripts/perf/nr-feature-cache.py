@@ -14,7 +14,8 @@ import time
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='perf-nr-20261004'
 spec=importlib.util.spec_from_file_location('matrix',ROOT/'scripts/perf/nr-matrix.py')
 matrix=importlib.util.module_from_spec(spec);spec.loader.exec_module(matrix)
-variant,label=sys.argv[1:3];app=BASE/'tests'/TASK/(label+'-app')
+variant,label=sys.argv[1:3];group=sys.argv[3] if len(sys.argv)>3 else 'nr';assert group in ('nr','sr','srnr')
+app=BASE/'tests'/TASK/(label+'-app')
 assert not app.exists();matrix.assert_gpu_tests_idle()
 shutil.copytree(BASE/'test-packages'/TASK/'Veyra-2.0.3-perf-baseline-A-NVIDIA-win64-portable',app,copy_function=matrix.copy_dependency)
 exe=app/'veyra_nr_recent_cache_experiment.exe'
@@ -30,7 +31,7 @@ for repeat in range(1,4):
             if key.upper().startswith('VEYRA_'):env.pop(key)
         env.update(TEMP=str(tmp),TMP=str(tmp))
         if disabled:env['VEYRA_TEST_DISABLE_RECENT_GRAPH_CACHE']='1'
-        command=[str(exe),str(matrix.SOURCES['M1']),str(out)];before=matrix.gpu_query();start=time.monotonic()
+        command=[str(exe),str(matrix.SOURCES['M1']),str(out),group];before=matrix.gpu_query();start=time.monotonic()
         print('START',name,flush=True)
         with (out/'console.log').open('xb') as f:
             try:rc=subprocess.run(command,cwd=app,env=env,stdout=f,stderr=subprocess.STDOUT,timeout=280).returncode
@@ -39,7 +40,7 @@ for repeat in range(1,4):
         rows=list(csv.DictReader((out/'cache.csv').open())) if (out/'cache.csv').exists() else []
         hits=sum(int(r['hit']) for r in rows)
         creates=[float(r['createMs']) for r in rows if int(r['nr']) and int(r['cycle'])>0]
-        result={'variant':variant,'label':label,'disabled':disabled,'repeat':repeat,'exeSha256':matrix.digest(exe),
+        result={'variant':variant,'label':label,'group':group,'disabled':disabled,'repeat':repeat,'exeSha256':matrix.digest(exe),
                 'runtimeSha256':matrix.digest(app/'runtime/experimental/nvngx_dlssnr.dll'),
                 'sourceSha256':matrix.digest(matrix.SOURCES['M1']),'beforeGpu':before,'afterGpu':matrix.gpu_query(),
                 'command':command,'exitCode':rc,'wallSeconds':time.monotonic()-start,'frameCount':len(rows),

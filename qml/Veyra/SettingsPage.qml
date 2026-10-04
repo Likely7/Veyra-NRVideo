@@ -281,6 +281,18 @@ VPage {
                                 onPicked: id => veyra.setPreference("gpuPriority", id)
                             }
                         }
+                        VRow {
+                            label: qsTr("启动时预热增强组件")
+                            hint: veyra.enhancementPrewarmAvailable
+                                  ? qsTr("首页空闲时准备已启用的单层 NR 或超分，首次打开更快")
+                                  : qsTr("当前仅支持 NVIDIA 显卡")
+                            VSwitch {
+                                objectName: "set-prewarm-enhancement"
+                                enabled: veyra.enhancementPrewarmAvailable
+                                checked: veyra.preferences.prewarmEnhancement !== false
+                                onToggled: v => veyra.setPreference("prewarmEnhancement", v)
+                            }
+                        }
                     }
                     VGroup {
                         VRow {

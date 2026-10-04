@@ -36,12 +36,12 @@
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/sink/ImageExportSink.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
-#include "veyra/gfx/GpuSchedulingPriority.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/gfx/PresentationHooks.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/engine/GraphDescription.h"
 #include "veyra/engine/RecentGraphCache.h"
+#include "veyra/engine/PreviewGpuSession.h"
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/PosterFrame.h"
 #include <avrt.h>
@@ -76,9 +76,33 @@ void EngineController::dispatch(){
         try{task();}catch(const std::exception&){status(L"任务异常，已停止；请查看诊断",true);}
         {std::lock_guard lock(mutex_);busy_=false;snapshot_.running=false;if(snapshot_.transport==TransportState::Stopping)snapshot_.transport=TransportState::Empty;}
     }
+    prewarmed_.reset();
 }
 void EngineController::post(std::function<void()> task){ {std::lock_guard lock(mutex_);stop_=true;pending_=std::move(task);}wake_.notify_one(); }
 bool EngineController::idle()const{std::lock_guard lock(mutex_);return !busy_&&!pending_;}
+bool EngineController::prewarmEnhancement(EnhancementSettings settings,unsigned width,unsigned height){
+    if(!prewarmEnabled_||!PreviewGpuSession::requestAllowed(settings))return false;
+    {
+        std::lock_guard lock(mutex_);if(shutdown_||busy_||pending_)return false;
+        pending_=[this,settings,width,height]{
+            if(!prewarmEnabled_)return;
+            CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+            auto candidate=std::make_unique<PreviewGpuSession>();prewarmed_.reset();
+            log::info("prewarm","event=begin owner=engine-dispatcher");
+            const bool ready=candidate->prepare(settings,width,height);
+            bool keep=false;{std::lock_guard lock(mutex_);keep=ready&&prewarmEnabled_&&!shutdown_&&(!stop_||bool(pending_));}
+            if(keep)prewarmed_=std::move(candidate);
+            else log::info("prewarm","event=discard reason=not-ready-disabled-or-cancelled");
+            candidate.reset();CoUninitialize();
+        };
+    }
+    wake_.notify_one();return true;
+}
+void EngineController::setEnhancementPrewarmEnabled(bool enabled){
+    prewarmEnabled_=enabled;
+    if(!enabled){std::lock_guard lock(mutex_);if(!busy_&&!pending_)pending_=[this]{prewarmed_.reset();log::info("prewarm","event=disabled released=true");};}
+    wake_.notify_one();
+}
 bool EngineController::setPlaybackRate(double rate){
     if(!validPlaybackRate(rate))return false;
     std::lock_guard lock(mutex_);
@@ -145,7 +169,11 @@ void EngineController::openXbox(HWND window,source::XboxConnectDesc desc,PlayerO
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"xbox:",opts,{},{},request);});
 }
 #endif
-void EngineController::stop(){std::lock_guard lock(mutex_);stop_=true;pending_={};snapshot_.transport=busy_?TransportState::Stopping:TransportState::Empty;}
+void EngineController::stop(){
+    {std::lock_guard lock(mutex_);stop_=true;pending_={};snapshot_.transport=busy_?TransportState::Stopping:TransportState::Empty;
+     if(!busy_)pending_=[this]{prewarmed_.reset();};}
+    wake_.notify_one();
+}
 void EngineController::pause(bool p){paused_=p;std::lock_guard lock(mutex_);if(snapshot_.running)snapshot_.transport=p?TransportState::Paused:TransportState::Playing;}
 void EngineController::setVolume(float gain,bool mute){if(!std::isfinite(gain))return;volume_=std::clamp(gain,0.0f,1.0f);muted_=mute;}
 bool EngineController::selectAudioTrack(uint64_t session,int streamIndex){
@@ -205,7 +233,7 @@ void EngineController::startExport(const std::wstring& input,const std::wstring&
         status(L"节点链尚未接入导出执行器，请切换列表模式后导出",false);return;
     }
     const auto frozen=opts.snapshot();const int audioStream=opts.audioStreamIndex;
-    post([this,input,output,frozen,audioStream,hevc]{CoInitializeEx(nullptr,COINIT_MULTITHREADED);auto options=PlayerOptions::from(frozen);options.audioStreamIndex=audioStream;bool ok=exportVideo(input,output,options,hevc,stop_,[this](double p,const std::wstring& s){std::lock_guard lock(mutex_);snapshot_.status=s;snapshot_.position=p;snapshot_.duration=1;snapshot_.running=true;});{std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.failed=!ok&&!stop_;}CoUninitialize();});
+    post([this,input,output,frozen,audioStream,hevc]{prewarmed_.reset();CoInitializeEx(nullptr,COINIT_MULTITHREADED);auto options=PlayerOptions::from(frozen);options.audioStreamIndex=audioStream;bool ok=exportVideo(input,output,options,hevc,stop_,[this](double p,const std::wstring& s){std::lock_guard lock(mutex_);snapshot_.status=s;snapshot_.position=p;snapshot_.duration=1;snapshot_.running=true;});{std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.failed=!ok&&!stop_;}CoUninitialize();});
 }
 void EngineController::requestPresentation(PresentationSettings settings){
     if(!settings.valid())return;
@@ -292,12 +320,16 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     MmcssScope mmcss(L"Pro Audio");
     status(L"正在初始化GPU与本地运行时…");
-    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;source::MediaFileSource source;
+    auto extension=std::filesystem::path(path).extension().wstring();for(auto& c:extension)c=towlower(c);
+    const bool ordinaryFile=!remoteRequest&&!moonlightRequest&&!xboxRequest&&
+        !path.starts_with(L"capture:")&&!path.starts_with(L"capture2:")&&!path.starts_with(L"screen:")&&
+        extension!=L".png"&&extension!=L".jpg"&&extension!=L".jpeg";
+    if(!prewarmEnabled_||!ordinaryFile)prewarmed_.reset();
+    auto gpu=prewarmed_?std::move(prewarmed_):std::make_unique<PreviewGpuSession>();
+    auto& ctx=gpu->context;auto& ring=gpu->ring;source::MediaFileSource source;
     sink::AudioPipeline audioPipe;sink::AudioRenderer audio;VideoPresenter presenter;
-    ngx::NgxCoreCache coreCache;
-    RecentGraphCache recentGraphCache(ctx);
-    auto graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);
-    uint64_t graphBytes=0;auto cacheBudgetPolledAt=Clock::now();
+    auto& coreCache=gpu->core;auto& recentGraphCache=gpu->recent;auto& graph=gpu->graph;
+    auto& graphBytes=gpu->graphBytes;auto cacheBudgetPolledAt=Clock::now();
     const bool recentCacheAllowed=!GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_RECENT_GRAPH_CACHE",nullptr,0);
     AVFrame* imageFrame=nullptr;AVFrame* cachedFrame=nullptr;pipeline::FramePacket cachedPacket;
    source::CaptureCardSource captureSource;const bool physicalCapture=path.starts_with(L"capture:")||path.starts_with(L"capture2:");
@@ -353,8 +385,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // MFG lists. Allocators must not stall the presentation owner.
             wchar_t testSlots[16]{};unsigned commandSlots=16;
             if(GetEnvironmentVariableW(L"VEYRA_TEST_COMMAND_SLOTS",testSlots,16))commandSlots=std::clamp(unsigned(_wtoi(testSlots)),6u,24u);
-            if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),commandSlots,st)){status(L"D3D12初始化失败，请查看诊断",true);break;}
-            gfx::applyRequestedGpuPriority();
+            if(!gpu->initialize(commandSlots)){status(L"D3D12初始化失败，请查看诊断",true);break;}
             auto ext=std::filesystem::path(path).extension().wstring();for(auto& c:ext)c=towlower(c);
             const bool isImage=ext==L".png"||ext==L".jpg"||ext==L".jpeg";
             sink::RgbaImage image;
@@ -548,7 +579,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);
                     }
                     uint64_t buildBudget=0,buildUsage=0;const bool measuredBefore=ctx.videoMemoryInfo(buildBudget,buildUsage);
-                    bool opened=graph->initialize(desc);
+                    const bool adopted=gpu->adopt(selected.snapshot(),desc);
+                    bool opened=adopted||graph->initialize(desc);
                     auto failure=graph->failedBackend();
                     if(opened){
                         opened=presenter.open(ctx,window,*graph,selected.settings.captureCompatible,!isCapture&&!isImage)&&graph->createViews();
@@ -562,7 +594,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                 if(opened){
                     uint64_t afterBudget=0,afterUsage=0;
-                    graphBytes=measuredBefore&&ctx.videoMemoryInfo(afterBudget,afterUsage)&&afterUsage>buildUsage?afterUsage-buildUsage:0;
+                    const auto newBytes=measuredBefore&&ctx.videoMemoryInfo(afterBudget,afterUsage)&&afterUsage>buildUsage?afterUsage-buildUsage:0;
+                    graphBytes=adopted?graphBytes+newBytes:newBytes;
                     return true;
                 }
                 // A live backend/multiplier switch must not turn a working FG
@@ -2220,7 +2253,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     veyra::log::info("engine","teardown: closing sources");
     captureSource.close();screenSource.close();source.close();av_frame_free(&cachedFrame);av_frame_free(&imageFrame);
     veyra::log::info("engine","teardown: sources closed");
-    ring.shutdown();ctx.shutdown();
+    gpu->shutdown();
     {std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.audioEndpointRecovering=false;snapshot_.audioRebuffering=false;}
     CoUninitialize();
 }

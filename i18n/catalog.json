@@ -3831,6 +3831,13 @@
    "ja": "起動時に RivaTuner（RTSS）を検出するとインターフェースをソフトウェア描画にし、OSD は映像にだけ表示します"
   },
   {
+   "zh": "启动时预热增强组件",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "啟動時預熱增強元件",
+   "en": "Prewarm enhancement components at startup",
+   "ja": "起動時に画質向上コンポーネントを準備"
+  },
+  {
    "zh": "启动窗口大小",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "啟動視窗大小",
@@ -6027,6 +6034,13 @@
    "zh-TW": "當前為 SDR 預覽，HDR 轉換未執行",
    "en": "SDR preview at the moment; HDR conversion is not running",
    "ja": "現在は SDR プレビューで、HDR 変換は動作していません"
+  },
+  {
+   "zh": "当前仅支持 NVIDIA 显卡",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "目前僅支援 NVIDIA 顯示卡",
+   "en": "Currently available on NVIDIA GPUs",
+   "ja": "現在は NVIDIA GPU のみ対応"
   },
   {
    "zh": "当前修改尚未保存：",
@@ -13301,6 +13315,13 @@
    "zh-TW": "首頁 = 選擇片源的頁面（點頂部 Logo 也能回到這裡）",
    "en": "Home = the page for choosing a source (clicking the logo at the top also returns here)",
    "ja": "ホーム = ソースを選ぶ画面（上部のロゴをクリックしても戻れます）"
+  },
+  {
+   "zh": "首页空闲时准备已启用的单层 NR 或超分，首次打开更快",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "首頁閒置時準備已啟用的單層 NR 或超解析，首次開啟更快",
+   "en": "Prepare enabled single-layer NR or upscaling while the home page is idle for a faster first open",
+   "ja": "ホーム画面の待機中に有効な単層 NR またはアップスケーリングを準備し、最初の起動を高速化"
   },
   {
    "zh": "驱动默认",

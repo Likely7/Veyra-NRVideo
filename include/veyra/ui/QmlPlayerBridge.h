@@ -180,6 +180,7 @@ class QmlPlayerBridge : public QObject {
     // validated key by key in setPreference(); anything unknown is refused.
     Q_PROPERTY(QVariantMap preferences READ preferences NOTIFY preferencesChanged)
     Q_PROPERTY(QString gpuPriorityStatus READ gpuPriorityStatus NOTIFY preferencesChanged)
+    Q_PROPERTY(bool enhancementPrewarmAvailable READ enhancementPrewarmAvailable CONSTANT)
     // The interface language in use (zh-CN / zh-TW / en / ja), after "auto" is resolved;
     // preferences.language holds the choice itself.
     Q_PROPERTY(QString uiLanguage READ uiLanguage NOTIFY preferencesChanged)
@@ -615,6 +616,7 @@ public:
 
     QVariantMap preferences() const;
     QString gpuPriorityStatus() const;
+    bool enhancementPrewarmAvailable() const;
     QString uiLanguage() const;
     // main.cpp hands over the QML engine so a language change retranslates the scene.
     void setQmlEngine(QQmlEngine* engine);
@@ -1089,6 +1091,7 @@ private:
     // Pushes a stored preference to whatever consumes it (subtitle overlay,
     // audio endpoint). Called after load and after every accepted change.
     void applyPreference(const QString& key);
+    void scheduleEnhancementPrewarm();
     // Hold-to-compare key (press/release), handled for the whole application.
     bool eventFilter(QObject* watched, QEvent* event) override;
     void rememberPosition(bool flush);

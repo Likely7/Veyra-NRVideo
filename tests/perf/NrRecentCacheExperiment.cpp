@@ -23,7 +23,10 @@ std::string sha(const std::vector<uint8_t>& pixels){BCRYPT_ALG_HANDLE alg=nullpt
 }
 int wmain(int argc,wchar_t** argv){
     using namespace veyra;using Clock=std::chrono::steady_clock;
-    if(argc!=3)return 2;const std::filesystem::path out=argv[2];std::filesystem::create_directories(out);
+    if(argc!=3&&argc!=4)return 2;
+    const std::wstring group=argc==4?argv[3]:L"nr";
+    if(group!=L"nr"&&group!=L"sr"&&group!=L"srnr")return 2;
+    const std::filesystem::path out=argv[2];std::filesystem::create_directories(out);
     Logger::instance().openFile((out/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
     gfx::DeviceContextDesc device;device.enableDebugLayer=true;
@@ -38,25 +41,30 @@ int wmain(int argc,wchar_t** argv){
     std::ofstream csv(out/L"cache.csv");csv<<"cycle,nr,hit,createMs,vramBefore,vramLive,graphBytes,nrEvaluations,sourceFrame,sha256\n";
     bool pass=true;unsigned hits=0;
     for(unsigned cycle=0;cycle<50&&pass;++cycle){
-        const bool nr=cycle%2==0;engine::EffectChain chain;chain.nodeCount=1;
+        const bool active=cycle%2==0,nr=active&&group!=L"sr",sr=active&&group!=L"nr";
+        engine::EffectChain chain;chain.nodeCount=1;
         chain.nodes[0].type=engine::EffectType::NrEnhance;chain.nodes[0].enabled=nr;
         chain.nodes[0].nr.temporal=false;chain.nodes[0].nr.sizePolicy=pipeline::NrSizePolicy::Realtime;
         engine::EnhancementSettings settings;engine::fromChain(chain,settings);settings.revision=cycle+1;settings.multiplier=1;
-        engine::StageRequest request;request.width=1920;request.height=1080;request.nr=nr;
+        settings.sr=sr;settings.videoSrQuality=0;settings.srTarget=pipeline::SrTarget::Uhd4K;
+        engine::StageRequest request;request.width=1920;request.height=1080;request.nr=nr;request.sr=sr;
         pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
         desc.enableNvofStandalone=nr;desc.enableFg=false;desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
         if(!ring.drainQueue())return 2;
         if(graph){
-            if(enabled&&engine::RecentGraphCache::eligible(priorDesc)&&engine::RecentGraphCache::effectsOff(desc)&&
+            // SR admission is experimental here; production remains single NR
+            // until fresh-vs-retained hidden history is proven pixel identical.
+            const bool mayRetain=group==L"nr"?engine::RecentGraphCache::eligible(priorDesc):prior.sr;
+            if(enabled&&mayRetain&&engine::RecentGraphCache::effectsOff(desc)&&
                 cache.retain(graph,engine::RecentGraphCache::key(prior,{},priorDesc),graphBytes)){}
             else{graph->shutdown();graph.reset();}
         }
         const auto cachedBytes=cache.bytes();bool hit=false;
         const auto before=memory();const auto start=Clock::now();
-        if(enabled&&nr)graph=cache.take(engine::RecentGraphCache::key(settings,{},desc));
+        if(enabled&&active)graph=cache.take(engine::RecentGraphCache::key(settings,{},desc));
         if(graph){hit=true;graphBytes=cachedBytes;pass=graph->applySettings(settings);++hits;}
         else{
-            if(nr)cache.evict("new-enhancement-key");
+            if(active)cache.evict("new-enhancement-key");
             graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,cache.hasCachedGraph()?nullptr:&core);
             pass=graph->initialize(desc);const auto after=memory();graphBytes=after>before?after-before:0;
         }
@@ -74,11 +82,12 @@ int wmain(int argc,wchar_t** argv){
             if(pass&&frame==2)pass=sink::readRgba8(ctx,ring,graph->videoFrameResource(output.videoSlot),image);
         }
         const auto nrDelta=graph->metrics().nrEvaluateCount-priorMetrics.nrEvaluateCount;
-        pass=pass&&nrDelta==unsigned(nr?3:0);
+        const auto srDelta=graph->metrics().srEvaluateCount-priorMetrics.srEvaluateCount;
+        pass=pass&&nrDelta==unsigned(nr?3:0)&&srDelta==unsigned(sr?3:0);
         const auto hash=sha(image.pixels);pass=pass&&!hash.empty();
         if(pass&&(cycle==0||cycle==1||cycle==2||cycle==18||cycle==20||cycle==30||cycle==48||cycle==49)){std::ofstream f(out/(L"frame-"+std::to_wstring(cycle)+L".rgba"),std::ios::binary);
             f.write(reinterpret_cast<const char*>(image.pixels.data()),std::streamsize(image.pixels.size()));}
-        csv<<cycle<<','<<nr<<','<<hit<<','<<createMs<<','<<before<<','<<live<<','<<graphBytes<<','<<nrDelta<<','<<sequence<<','<<hash<<'\n';csv.flush();
+        csv<<cycle<<','<<active<<','<<hit<<','<<createMs<<','<<before<<','<<live<<','<<graphBytes<<','<<nrDelta<<','<<sequence<<','<<hash<<'\n';csv.flush();
         std::cout<<"CACHE_CYCLE i="<<cycle<<" hit="<<hit<<" createMs="<<createMs<<" pass="<<pass<<std::endl;
         prior=settings;priorDesc=desc;
     }
