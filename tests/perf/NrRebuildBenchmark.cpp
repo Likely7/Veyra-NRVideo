@@ -7,6 +7,9 @@
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/Log.h"
+#ifdef VEYRA_HAS_NGX_CORE_CACHE
+#include "veyra/ngx/NgxCoreCache.h"
+#endif
 #include <dxgi1_4.h>
 #include <d3d12sdklayers.h>
 #include <chrono>
@@ -36,7 +39,12 @@ int wmain(int argc,wchar_t** argv){
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter;
     if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))||FAILED(factory->EnumAdapterByLuid(ctx.device()->GetAdapterLuid(),IID_PPV_ARGS(&adapter))))return 2;
     auto usage=[&](){DXGI_QUERY_VIDEO_MEMORY_INFO info{};return SUCCEEDED(adapter->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&info))?info.CurrentUsage:UINT64_MAX;};
+#ifdef VEYRA_HAS_NGX_CORE_CACHE
+    ngx::NgxCoreCache coreCache;
+    pipeline::EnhanceGraph graph(ctx,ring,&coreCache);
+#else
     pipeline::EnhanceGraph graph(ctx,ring);
+#endif
     std::ofstream csv(out/L"rebuild.csv");csv<<"cycle,nr,sr,layers,policy,destroyMs,createMs,totalMs,vramBefore,vramLive,vramAfter,nrEvaluations,srEvaluations,frameCount\n";
     bool pass=true;
     for(unsigned i=0;i<20&&pass;++i){
@@ -78,6 +86,9 @@ int wmain(int argc,wchar_t** argv){
         std::cout<<"CYCLE i="<<i<<" createMs="<<created-destroyed<<" destroyMs="<<releaseEnd-releaseStart<<" pass="<<pass<<std::endl;
     }
     ring.drainQueue();graph.shutdown();media.close();
+#ifdef VEYRA_HAS_NGX_CORE_CACHE
+    if(!coreCache.close("test-final-close"))pass=false;
+#endif
     Microsoft::WRL::ComPtr<ID3D12InfoQueue> debug;unsigned errors=0;
     if(FAILED(ctx.device()->QueryInterface(IID_PPV_ARGS(&debug))))return 2;
     for(UINT64 i=0;i<debug->GetNumStoredMessages();++i){SIZE_T size=0;debug->GetMessage(i,nullptr,&size);

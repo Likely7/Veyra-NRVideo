@@ -56,6 +56,7 @@ class FsrFgPresenter;
 
 namespace veyra::ngx {
 class NgxCoreHost;
+class NgxCoreCache;
 class DlssSrBackend;
 class VideoSrBackend;
 class TrueHdrBackend;
@@ -392,7 +393,8 @@ struct EnhanceGraphDesc {
 
 class EnhanceGraph {
 public:
-    EnhanceGraph(gfx::D3D12DeviceContext& context, gfx::CommandSlotRing& ring);
+    EnhanceGraph(gfx::D3D12DeviceContext& context, gfx::CommandSlotRing& ring,
+                 ngx::NgxCoreCache* coreCache = nullptr);
     ~EnhanceGraph();
 
     EnhanceGraph(const EnhanceGraph&) = delete;
@@ -619,6 +621,7 @@ private:
 
     gfx::D3D12DeviceContext& context_;
     gfx::CommandSlotRing& ring_;
+    ngx::NgxCoreCache* coreCache_ = nullptr; // non-owning; device session outlives graph
     EnhanceGraphDesc desc_{};
     bool initialized_ = false;
 
@@ -754,7 +757,7 @@ private:
     std::unique_ptr<ngx::NvOfSession> nvof_;
     ComPtr<ID3D12Fence> nvofOutFence_;
     HANDLE nvofOutEvent_ = nullptr;
-    std::unique_ptr<ngx::NgxCoreHost> coreHost_;
+    std::shared_ptr<ngx::NgxCoreHost> coreHost_;
     std::unique_ptr<ngx::DlssNrRuntimeAdapter> nrAdapter_;
     std::unique_ptr<ngx::DlssSrBackend> srBackend_;
     std::unique_ptr<guidance::AmdOpticalFlow> amdOf_;

@@ -39,6 +39,7 @@
 #include "veyra/ngx/VideoSrBackend.h"
 #include "veyra/ngx/TrueHdrBackend.h"
 #include "veyra/ngx/NgxCoreHost.h"
+#include "veyra/ngx/NgxCoreCache.h"
 #include "veyra/ngx/NgxParameters.h"
 #include "veyra/ngx/NvOfSession.h"
 #include "veyra/guidance/AmdOpticalFlow.h"
@@ -98,9 +99,11 @@ uint8_t packedIngressLuma(const uint8_t* data,ptrdiff_t linesize,uint32_t code,u
 
 } // namespace
 
-EnhanceGraph::EnhanceGraph(gfx::D3D12DeviceContext& context, gfx::CommandSlotRing& ring)
+EnhanceGraph::EnhanceGraph(gfx::D3D12DeviceContext& context, gfx::CommandSlotRing& ring,
+                           ngx::NgxCoreCache* coreCache)
     : context_(context)
     , ring_(ring)
+    , coreCache_(coreCache)
 {
 }
 
@@ -502,6 +505,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
 
     initialized_ = true;
     failedBackend_=engine::FailedBackend::None;
+    if(coreCache_)coreCache_->publish(coreHost_);
     veyra::log::info("graph", std::format("initialized src={}x{} work={}x{} sr={} nr={} fg={} nvof={}",
         srcW_, srcH_, workW_, workH_, srEnabled_ ? 1 : 0, nrEnabled_ ? 1 : 0,
         fgEnabled_ ? 1 : 0, (nvof_ && nvof_->initialized()) ? 1 : 0));
@@ -1048,6 +1052,19 @@ bool EnhanceGraph::initNgxFeatures()
 {
     Status st = Status::Ok;
     failedBackend_=engine::FailedBackend::NgxCore;
+    if(coreCache_){
+        ngx::NgxCoreCache::Key key;
+        key.device=context_.device();
+        key.runtimeDirectory=std::filesystem::absolute(desc_.runtimeAbsPath).lexically_normal().wstring();
+        key.nrRuntime=int(engine::currentNrRuntime(desc_.nrRuntime));
+        key.frameGeneration=desc_.enableFg;
+        key.fgBackend=int(desc_.frameGenerationBackend);key.fgMultiplier=desc_.fgMultiplier;
+        // Patched driver/provider state currently belongs to the graph. Keep
+        // its complete init/shutdown contract even when FG is temporarily off.
+        const bool enabled=!ngx::FgCompatibilitySession::requested(context_.adapter().vendorId,context_.adapter().deviceId)&&
+            !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_NGX_CORE_REUSE",nullptr,0);
+        if(!coreCache_->prepare(std::move(key),enabled))return false;
+    }
     if(desc_.convertVideoHdr()&&(desc_.noNgx||desc_.noFeatures)){failedBackend_=engine::FailedBackend::VideoHdr;return false;}
     if ((desc_.noNgx && !lmxxfNr_) || desc_.noFeatures || (!nrEnabled_&&!srEnabled_&&!fgEnabled_&&!desc_.convertVideoHdr())) {
         veyra::log::info("graph", "NGX core/features skipped by disabled-feature configuration");
@@ -1110,14 +1127,17 @@ bool EnhanceGraph::initNgxFeatures()
     }
 
     failedBackend_=engine::FailedBackend::NgxCore;
-    coreHost_ = std::make_unique<ngx::NgxCoreHost>();
+    coreHost_ = coreCache_?coreCache_->borrow():nullptr;
     Status st = Status::Ok;
+    if(!coreHost_){
+    coreHost_ = std::make_shared<ngx::NgxCoreHost>();
     if(fgCompatibility_&&!fgCompatibility_->beginInitialization())return false;
     const bool initialized=coreHost_->initialize(context_.device(), desc_.runtimeAbsPath.c_str(),
             projectId.c_str(), engineVersion.c_str(), st);
     const bool initRestored=!fgCompatibility_||fgCompatibility_->endInitialization(initialized);
     if (!initialized || !initRestored) {
         return false;
+    }
     }
 
     if(!vfgBackend_){fgCapsAvailable_ = false;fgMultiFrameMax_ = 0;}
@@ -3059,7 +3079,7 @@ ID3D12Resource* EnhanceGraph::generatedFrameResource(uint32_t slot) const
 // ---------------------------------------------------------------------------
 void EnhanceGraph::shutdown()
 {
-    if (!initialized_ && !nrAdapter_ && !nvof_ && !srcRgba_) return;
+    if (!initialized_ && !coreHost_ && !nrAdapter_ && !nvof_ && !srcRgba_) return;
     for(unsigned i=0;i<2;++i)if(presentationFences_[i]){
         const HRESULT hr=context_.directQueue()->Wait(presentationFences_[i].Get(),presentationValues_[i]);
         if(FAILED(hr))veyra::log::error("graph",std::format("presentation teardown wait hr=0x{:X}",unsigned(hr)));
@@ -3134,7 +3154,18 @@ void EnhanceGraph::shutdown()
         nrAdapter_->restoreCallerCompatibility();
         nrAdapter_->unload();
     }
-    if (coreHost_) coreHost_->shutdown();
+    const bool retainCore=coreCache_&&coreCache_->owns(coreHost_)&&initialized_&&
+        failedBackend_==engine::FailedBackend::None&&SUCCEEDED(context_.device()->GetDeviceRemovedReason())&&
+        coreHost_->liveParameterBlockCount()==0;
+    if(retainCore){
+        log::info("ngx-core-cache","event=retain liveParameters=0 featuresReleased=1");
+    }else if(coreHost_){
+        // Remove the graph's borrow before asking the session to close. On a
+        // failed graph it must not survive for a later rebuild.
+        if(coreCache_&&coreCache_->owns(coreHost_)){
+            coreHost_.reset();(void)coreCache_->close("graph-failure-or-device-removed");
+        }else coreHost_->shutdown();
+    }
     // Restore the DLSS-G runtime image only after the NGX core released the
     // feature (the unlock is process memory only; the file on disk is untouched).
     fgCompatibility_.reset();

@@ -17,7 +17,8 @@ variant,label=sys.argv[1:3];assert all(x.replace('-','').isalnum() for x in (var
 app=BASE/'tests'/TASK/(label+'-app');assert not app.exists()
 package=BASE/'test-packages'/TASK/'Veyra-2.0.3-perf-baseline-A-NVIDIA-win64-portable'
 shutil.copytree(package,app,copy_function=matrix.copy_dependency)
-exe=app/'veyra_nr_rebuild_benchmark.exe';shutil.copy2(BASE/'build'/TASK/variant/exe.name,exe)
+build_variant=variant.removesuffix('-off')
+exe=app/'veyra_nr_rebuild_benchmark.exe';shutil.copy2(BASE/'build'/TASK/build_variant/exe.name,exe)
 results=[]
 def percentile(values,p):
     values=sorted(values);at=(len(values)-1)*p/100;low=int(at);high=min(low+1,len(values)-1)

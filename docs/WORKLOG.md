@@ -1,5 +1,11 @@
 # Veyra 工作记录
 
+## 2026-10-04 NR优化2a：设备会话核心缓存候选
+
+- A-baseline commit181e4ab/tag与增量bundle验证后，添加render线程限定NgxCoreCache、Graph可选借用和Engine设备会话生命周期。无缓存的所有现有Graph构造调用维持完整原流程。核心key含设备/规范绝对runtime/NR模块/补帧开关后端倍率；设备错误、失败、参数残留或key变化完整关闭。Ada/Ampere补丁型号主动不缓存。
+- 功能/参数/适配器仍按原序释放，只有成功图、liveParameters=0和设备正常才保留核心；再次prepare时存在借用者就拒绝，不并行初始化第二核心。退出显式coreCache.close在device.shutdown前。B-off test env同一EXE禁用，无新增UI选项。
+- native测试仅在B编译宏接入缓存，A封存EXE不重编；nr-rebuild支持B-off引用同B构建路径。候选尚未构建和实测，不计为保留优化。
+
 ## 2026-10-04 NR优化2a：重建基线完整封存
 
 - `nr-rebuild.py A A-rebuild-v1` 12/12 exit0，四组20次×三轮，240次真实Graph重建/720源帧；debug0/设备正常/NR和SR计数符合请求。native EXE2d7177…5e27，runtime F95FEB/驱动616.56；图像读回在创建/释放计时段外，不含实际Present。

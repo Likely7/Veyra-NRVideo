@@ -34,6 +34,7 @@ public:
 
     bool initialized() const { return initialized_; }
     uint64_t initResult() const { return initResult_; }
+    uint32_t liveParameterBlockCount() const { return liveParameterBlockCount_; }
 
     // Parameter blocks are tracked; shutdown() destroys any still-live block
     // before core Shutdown1 (defense in depth; consumers should destroy them
