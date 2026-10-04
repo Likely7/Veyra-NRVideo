@@ -1,5 +1,9 @@
 # Veyra 工作记录
 
+## 2026-10-04 PERF 2c-SR拒绝扩大缓存
+
+nr-feature-cache.py B3a B2c-sr-native-v1 sr及B2c-srnr-native-v1 srnr各六组/300全帧：fresh A-A噪声0，每次on21/50不同，三轮重复；debug0/device0，24hits。尽管SR107.819→0.146ms、SRNR408.532→0.160ms，拒绝生产SR复用；已有单NR范围保持。完整Reset传递、jitter0/NVOF禁temporalHints已核对，原因未证明，不推断SDKbug。比较JSON/rawSHA/八张像素与完整路径详PERF_2C_SR_CACHE_REJECTION。拒绝节点归档本提交。
+
 ## 2026-10-04 PERF 2b拒绝后台创建
 
 nr-concurrent-present.py B3a B2b-fresh-present-v1 六组各60秒/50创建，新鲜Feature18 Evaluate逐次对应实际成功Present，安全exit0/debug0/device0。三轮中位P99 serial32.043627→concurrent74.188956ms；超过33.333ms次数3→55，最坏1033.39ms。未达到无缝门槛，未加入生产后台图路径；完整present.csv/meters/身份与反例保留，详PERF_2B_BACKGROUND_CREATE。前存档034c2d8，拒绝节点归档本提交。

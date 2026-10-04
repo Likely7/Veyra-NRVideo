@@ -32,7 +32,7 @@
 | 5a | 黑边检测与有效区域处理 | pending | 防暗场误裁，先测准确性与重建收益 |
 | 3a | 进程GPU调度优先级 | retained-pending-R0 | 18组交错实际三档；60Hz实时P99改善6.83%，High无稳定收益，普通默认；两绘制模式40次Set/Get及重启通过；PERF_3A_GPU_PRIORITY |
 | 2a | 跨重建保留NGX核心 | retained-pending-R0 | v2三轮A/B/B-off完整输出0差异；暖创建减少75.83/71.23/64.58/72.04%；真实UI及SDK拒绝路径通过；导出待R0 |
-| 2c | 最近配置实例缓存 | retained-single-NR-pending-R0 | 三轮native/Qt画面与生命周期通过；实际NR开create363.851→3.602ms，显存压力/key/关闭源失效通过；SR历史另核验；PERF_2C_RECENT_CACHE |
+| 2c | 最近配置实例缓存 | retained-single-NR-pending-R0 | 单NR actual create363.851→3.602ms及像素/压力通过；SR与SRNR每轮21/50输出不一致，拒绝扩大；PERF_2C_RECENT_CACHE / PERF_2C_SR_CACHE_REJECTION |
 | 2d | 空闲预热 | retained-pending-R0 | Qt27组A/B/off首次成功Present1942→100 / 2053→107 / 1733→92ms；54完整输出0差异、5生命周期通过；PERF_2D_PREWARM |
 | 2b | 后台建图与帧边界切换 | rejected-continuity | 6轮新鲜Evaluate输出实际Present、300创建安全，但P99 32.044→74.189ms、>33.333ms次数3→55，未满足连续性；PERF_2B_BACKGROUND_CREATE |
 | 3b | NR自动内部尺寸 | pending | 取决于E1、真实预算/画质证据 |
