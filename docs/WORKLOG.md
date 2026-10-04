@@ -1,5 +1,11 @@
 # Veyra 工作记录
 
+## 2026-10-04 NR优化2a：重建基线完整封存
+
+- `nr-rebuild.py A A-rebuild-v1` 12/12 exit0，四组20次×三轮，240次真实Graph重建/720源帧；debug0/设备正常/NR和SR计数符合请求。native EXE2d7177…5e27，runtime F95FEB/驱动616.56；图像读回在创建/释放计时段外，不含实际Present。
+- 创建耗时三轮中位：NR开1569.935ms，NR关39.020，SR切换1411.975，1/2/3层1462.380，原生/720/480尺寸1351.520。每组20张完整图r1/r2/r3对应hash相同，噪声底线0字节；原始CSV/像素/JSON位于logs/perf-nr-20261004/A-rebuild-v1-*，summary含EXE/素材/NR SHA。
+- `PERF_2A_CORE_REUSE_2026-10-04.md` 记录测量范围、三轮波动及候选生命周期设计。此时无产品优化代码，不能将上述基线写成收益；baseline独立commit/tag/bundle后开始核心缓存候选。
+
 ## 2026-10-04 NR优化E2：同会话并发创建安全通过，切换停顿尚未消除
 
 - `nr-build.py E1 build-E2-v1 veyra_nr_concurrent_create_experiment` exit0，`nr-e2.py E2-v1`5/5 native exit0：串行/并发12s各10Create/Eval/Release，三个独立240s并发长测各50/50/50，旧Feature实际Evaluate13614/13606/13607，debug0/SEH0/设备正常。测试≤280s；累计12分钟，非一次连续10min。runtimeLecram F95FEB原字节，EXE3a2c90…ee68b。
