@@ -9,7 +9,7 @@
 ## 执行与保留规则
 
 - 所有新增 build/tests/logs/tmp/archives/test-packages 均放 `E:/项目/Veyra/` 对应 `perf-nr-20261004` 子目录；固定素材放 `tests/perf-matrix/media`，只创建本轮拥有的文件。
-- 先完成文档对齐提交和 `checkpoint/perf-nr-docs-20261004`，归档 Git bundle/提交身份/原桌面状态，再开始产品改动。基线产品源码为起点；测试工具改动独立记录。
+- 文档对齐已提交 `37bc0c090918566f7ebebc9f5edb24ba60c5f5a3`，标签 `checkpoint/perf-nr-initial-docs-20261004`，完整 bundle 已验证。基线产品源码为起点；测试工具改动独立记录。
 - 每个实验/节点使用 before/candidate/accepted 或 rejected 标签、独立增量 bundle、patch、构建身份、设置、环境、原始日志、结果 JSON 和结论文档。负优化用明确的 revert 提交；不重写历史，不删失败证据。未达到收益或正确性门槛的候选不进保留实现。
 - A 为当前源码的全新生产构建和独立 staging；B 为节点候选；B-off 在同一候选关闭该节点。固定驱动/运行库/素材/尺寸/设置，三次运行报告中位数与范围。GPU任务串行，构建与计时测试不重叠，其他用户应用不强行关闭；记录负载干扰并排除受干扰样本。
 - 软件 Present/提交时间、GPU timestamp、CPU Timer、物理显示事件分别报告。没有 ETW/高速相机证据时不宣称实屏帧率或端到端延迟。
@@ -23,8 +23,8 @@
 
 | 节点 | 内容 | 状态 | 证据 / 下一步 |
 |---|---|---|---|
-| D0 | 项目文档对齐与存档 | in-progress | 新分支已创建，准备文档提交/存档 |
-| A0 | 当前版本基线及矩阵驱动 | pending | 全新构建、独立数据目录、固定素材/运行库 |
+| D0 | 项目文档对齐与存档 | accepted | 37bc0c0 / initial-docs完整bundle verify，桌面/main保持 |
+| A0 | 当前版本基线及矩阵驱动 | in-progress | A全新476步构建通过；M1五种现有设置各三轮真实播放器计时中 |
 | E1 | Feature18动态输入尺寸 | pending | 原版/Lecram分别测返回值、画面、历史 |
 | E2 | 并行Evaluate/CreateFeature | pending | 独立command list、压力/反复切换 |
 | E3 | 真实来源精确重复比例 | pending | 屏幕/实卡可用性与合成节奏分开 |
@@ -48,4 +48,6 @@
 
 ## 当前可续接状态
 
-已完成只读核对和新工作树创建；尚未开始产品性能改动、尚无本轮前后性能结果。下一步：保存文档对齐，创建可验证存档，然后构建并测量A。
+已完成项目文档对齐、独立分支和开工存档。`py -3.11 -B scripts/perf/nr-build.py A build-A-v1 veyra_qml_ui veyra_nr_video_quality_probe veyra_export_probe` 全新构建476步、exit0；日志 `E:/项目/Veyra/logs/perf-nr-20261004/build-A-v1.log`。运行库沿用已验收完整NVIDIA包原字节，EXE/QML和各profile独立。
+
+基线驱动 `nr-series.py A` 串行运行M1/S1、S2-720、S3、S4、S5-existing各三轮、稳态50秒；每个产品进程和驱动有270/280/299秒上限。1280×800窗口、真实GPU timestamp及CPU提交统计，不将16ms UI Timer当渲染FPS。现有UI没有精确50%档位，S2明确为1280×720（1080p输入维度66.7%、像素44.4%）。多层先粗后细已有逐层尺寸参数，S5核对现有行为，不计为新收益。当前尚无产品性能改动或本轮前后收益。

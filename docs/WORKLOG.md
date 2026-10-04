@@ -1,5 +1,12 @@
 # Veyra 工作记录
 
+## 2026-10-04 NR优化：文档归档与优化前真实GPU基线进行中
+
+- 文档对齐commit37bc0c090918566f7ebebc9f5edb24ba60c5f5a3，checkpoint/perf-nr-initial-docs-20261004；initial-docs/source.bundle verify成功，SHA34d888b290e094b4f3b9d7dd3aa01d6b34c5a568fe722ef3e18327f3e207e0fd，patch/commit/parent receipt在本轮archives。起点8cdc产品不变，原桌面/main保护guard持续通过。
+- `py -3.11 -B scripts/perf/nr-build.py A build-A-v1 veyra_qml_ui veyra_nr_video_quality_probe veyra_export_probe` 全新476步、exit0。build/perf-nr-20261004/A，日志logs/perf-nr-20261004/build-A-v1.log；Qt/SDK/patched FFmpeg沿用已发布配置，TEMP/TMP仅E盘子进程。没有与GPU计时重叠编译。
+- `nr-matrix.py`/`nr-probe.qml`/`nr-series.py`用于自身staging实际产品播放，M1/S1..S5各三轮，270s产品退出/280s driver/299s子测试上限；配置、生效状态、素材/EXE/NR SHA、GPU频率/显存/CPU、滚动player-timing原始CSV/JSON均独立。硬链接仅不可变依赖，EXE/QML/配置独立，不修改用户包或配置。
+- 目前只完成部分A基线，不能把现有720p比1080p快写成新优化。无精确50%原选项，记录720p实际维度；SAOG多层总残差与Veyra每层独立控制并不等价，需按合同验收。尚无产品改动；三轮完整数据和节点实验结论待追加。
+
 ## 2026-10-04 NR性能优化目标：进度对齐、分支与开工存档
 
 - 用户指定 `docs/PERF_PLAN_NR_2026-10-03.md`，要求文档/存档/当前基线先行，逐节点留档与实测，负优化回退，目标模式直至整份方案处理完毕。已创建active goal，没有预算上限。独立E盘worktree `perf-nr-20261004` / `codex/perf-nr-20261004` 从刚验收tip `8cdc612120cbf23ba116a33c3cb0a53e2043f718` 开出；旧修复分支、main354b1c6、Claude工作区、原桌面64项dirty和已发布/本地候选保持。
