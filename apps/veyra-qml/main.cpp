@@ -665,8 +665,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
     QVariantMap testOptions;
-    if(qEnvironmentVariableIsSet("VEYRA_TEST_DISABLE_PAUSED_UI_IDLE"))
-        testOptions.insert(QStringLiteral("disablePausedUiIdle"),true);
     QSize testSize;
     // --exit-after: see the switch table. 0 means "run until closed".
     int exitAfterMs = 0;

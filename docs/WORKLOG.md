@@ -8348,3 +8348,5 @@ R0-candidate eb8b1a2已存档，bundle da0440b9229a8bcbc4c6a918d1cdeac38b3372ae4
 退出修复04a0fc3构建v1因Agent填错未知target veyra_export_queue_worker失败，未编译产品；v2改真实veyra_export_workflow_tests，18步成功。新UI EXE c512b8782eb86f70c584a6c1bb87c918af648c0b3aee77cf04a2b0967a628464；R0-exit-contracts-v1 repair/真实PresentSink三轮failed-open/reopen重复清理2/2通过，debugErrors=0；R0-close-fixed-v1七个实际Qt退出（FSR/XeSS/VFG/SF-v2尺寸层数/停止）全exit0、六次真实长创建后取消，无泄漏/交换链错误。原before A/B崩溃日志与dmp不删。
 
 OBS正常功能R0发现阻塞：v1 API207未ready修正有界重试；v3软件兼容六场景通过/截图已看/用户OBS配置未变。GPU界面v2/v4均全屏黑图；基线A两轮通过且全屏原图有真实视频。paused-present-off、基线QML、退出修复前EXE均不能消除；B2d阶段失败、B2a核心阶段通过、B5c暂停空闲阶段resize失败。非压力/性能测试，所有阶段同M1/单NR/源码截图与录像/原用户配置不变。先存档本失败候选，再恢复5c旧呈现语义；NR残差复用独立保留，暂停0.011%旧数据暂不作为最终保留收益。详PERF_R0_ACCEPTANCE及E:/项目/Veyra/logs/perf-nr-20261004/R0-obs-*。
+
+R0-obs-candidate 92a181f/bundle708e4834c19078b50d33203ea0963255f3c1425fe9edae41413e93dba48d4f27已归档。最小恢复c593679暂停呈现生产部分：移除RetainedFrame/跳过Present/提前取view，回到resize后取view及50ms重复呈现；恢复ProPage旧动画并移除相关测试hook。退出取消/借用queue修复、限定3c、NR残差复用及Auto均保留。退役仅服务此候选的nr-present/PausedPresentExperiment和CMake target，完整源码可从c593679及既有before/candidate/accepted tags回放。此为待验证恢复候选，不提前把OBS标通过、不复用旧0.011%收益。

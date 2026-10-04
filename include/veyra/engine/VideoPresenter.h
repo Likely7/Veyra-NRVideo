@@ -8,7 +8,6 @@
 #include "veyra/engine/PresentationSettings.h"
 #include <chrono>
 #include <array>
-#include <optional>
 namespace veyra::gfx { class D3D12DeviceContext; class CommandSlotRing; }
 namespace veyra::pipeline { class EnhanceGraph; }
 namespace veyra::sink { struct RgbaImage; }
@@ -20,7 +19,7 @@ public:
     // source (file playback). Retained for diagnostics; XeLL low latency must
     // stay enabled or the provider refuses generation (result -15).
     bool open(gfx::D3D12DeviceContext&, HWND, pipeline::EnhanceGraph&, bool captureCompatible=false, bool mediaClockPaced=false);
-    bool present(gfx::D3D12DeviceContext&,gfx::CommandSlotRing&,pipeline::EnhanceGraph&,unsigned slot,bool generated,bool referencesValid=true,int comparison=0,bool baseReference=false,float split=.5f,pipeline::FrameIdentity identity={},PreviewView view={},int64_t sourcePts100ns=-1,bool retainUnchanged=false);
+    bool present(gfx::D3D12DeviceContext&,gfx::CommandSlotRing&,pipeline::EnhanceGraph&,unsigned slot,bool generated,bool referencesValid=true,int comparison=0,bool baseReference=false,float split=.5f,pipeline::FrameIdentity identity={},PreviewView view={},int64_t sourcePts100ns=-1);
     void close();
     // Present-sink providers (XeSS) block inside Present while pacing
     // their generated frames. A helper-thread Present was tried on
@@ -84,18 +83,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvs_;
     unsigned inc_=0;
     unsigned lastBuffer_=0;bool hasPresented_=false;
-    struct RetainedFrame {
-        ID3D12Fence* producer=nullptr;
-        uint64_t fence=0;
-        unsigned slot=0,width=0,height=0;
-        bool generated=false,referencesValid=false,baseReference=false,visible=false;
-        int comparison=0;float split=.5f;
-        PreviewView view{};
-        pipeline::FrameIdentity identity{};
-        HMONITOR monitor=nullptr;
-        bool operator==(const RetainedFrame&)const=default;
-    };
-    std::optional<RetainedFrame> retainedFrame_;
     HWND window_=nullptr;
     std::chrono::steady_clock::time_point lastResize_{};
     unsigned viewWidth_=0,viewHeight_=0;
