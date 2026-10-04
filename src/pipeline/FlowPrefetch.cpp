@@ -13,8 +13,6 @@ bool FlowPrefetch::initialize(gfx::D3D12DeviceContext& owner,const EnhanceGraphD
     desc.fixedExecutionPlan.reset();desc.fixedExecutionPlanError.clear();desc.runtimeNodeOrder=false;desc.additionalColorCount=0;
     graph_=std::make_unique<EnhanceGraph>(context_,ring_);
     if(!graph_->initialize(desc)||!graph_->createViews())return false;
-    traceEnabled_=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_PREFETCH_TIMESTAMPS",nullptr,0)>0;
-    if(traceEnabled_){trace_.initialize(ring_.queue(),"producer");graph_->recordGpuTimings();}
     for(auto& slot:slots_){
         slot.flow=makeTexture(context_.device(),graph_->flowWidth(),graph_->flowHeight(),DXGI_FORMAT_R16G16_FLOAT,false);
         slot.confidence=makeTexture(context_.device(),graph_->flowWidth(),graph_->flowHeight(),DXGI_FORMAT_R8_UNORM,false);
@@ -26,7 +24,6 @@ bool FlowPrefetch::initialize(gfx::D3D12DeviceContext& owner,const EnhanceGraphD
 bool FlowPrefetch::prepare(const AVFrame* frame,double pts,bool reset,uint64_t source,
     const ColorDescription* color,EnhanceGraph::PreparedFlow& output){
     output={};if(!graph_)return false;activeSlot_=unsigned(sequence_%2);auto& snapshot=slots_[activeSlot_];
-    if(traceEnabled_)for(const auto& timing:graph_->takeGpuTimings())trace_.emit(timing);
     if(snapshot.consumer&&snapshot.consumerValue){
         const HRESULT hr=ring_.queue()->Wait(snapshot.consumer.Get(),snapshot.consumerValue);
         if(FAILED(hr)){veyra::log::error("flow-prefetch",std::format("producer reuse Wait hr=0x{:X}",unsigned(hr)));return false;}
@@ -58,8 +55,7 @@ void FlowPrefetch::shutdown(){
         }
         ring_.drainQueue();
     }
-    if(graph_){if(traceEnabled_){for(const auto& timing:graph_->takeGpuTimings())trace_.emit(timing);trace_.calibrate();}graph_->shutdown();}
-    graph_.reset();slots_={};traceEnabled_=false;ring_.shutdown();context_.shutdown();
+    if(graph_)graph_->shutdown();graph_.reset();slots_={};ring_.shutdown();context_.shutdown();
     sequence_=previous_=revision_=0;activeSlot_=0;
 }
 }

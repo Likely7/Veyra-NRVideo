@@ -211,6 +211,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         double previousPts=0;int64_t lastOutputUs=-1;
         uint64_t slowFrames=0;
         // Directed export measurements exclude feature/encoder creation, but include final drain.
+        const auto pipelineStart=std::chrono::steady_clock::now();
         double completionWaitMs=0;
         // Acceptance hook: VEYRA_TEST_EXPORT_SLOW_FRAME=<source index>:<ms> holds that frame's
         // completion back, standing in for a GPU that is slow but alive. Unset in normal use.
@@ -236,20 +237,14 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             const bool allowed=asyncNvenc&&graph.nvofSessionInitialized()&&!gd.hdrInput&&!gd.hdrOutput&&
                 !gd.color.enabled&&!gd.additionalColorCount&&!gd.videoHdr.enabled&&gd.opticalFlowBackend==OpticalFlowBackend::Nvidia;
             if(!allowed){failureReason=L"NVOF预取实验配置不受支持";veyra::log::error("flow-prefetch","experimental export admission refused");break;}
-            uint64_t priorBudget=0,priorUsage=0;ctx.videoMemoryInfo(priorBudget,priorUsage);
             flowPrefetch=std::make_unique<pipeline::FlowPrefetch>();
             if(!flowPrefetch->initialize(ctx,gd)){failureReason=L"NVOF预取实验初始化失败";break;}
-            uint64_t budget=0,usage=0;ctx.videoMemoryInfo(budget,usage);
-            veyra::log::info("flow-prefetch-memory",std::format("beforeMiB={} afterMiB={} budgetMiB={}",priorUsage>>20,usage>>20,budget>>20));
         }
         if(fenceEvents){
             const bool injected=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EVENT_CREATE_FAIL",nullptr,0)>0;
             if(!injected)completionEvent.value=CreateEventW(nullptr,FALSE,FALSE,nullptr);
             if(!completionEvent.value){veyra::log::warn("export-pipeline",std::format("completion event create failed error={} injected={}; keeping polling",injected?ERROR_INVALID_HANDLE:GetLastError(),injected));fenceEvents=false;}
         }
-        diagnostics::GpuQueueTrace prefetchTrace;
-        const bool tracePrefetch=flowPrefetch&&testFlag(L"VEYRA_TEST_EXPORT_PREFETCH_TIMESTAMPS",false);
-        if(tracePrefetch){prefetchTrace.initialize(ring.queue(),"consumer");graph.recordGpuTimings();}
         struct PendingFrame {pipeline::EnhanceGraph::FrameOutputs output;uint64_t consumerFence=0,source=0;std::chrono::steady_clock::time_point submitted;};
         std::deque<PendingFrame> pendingFrames;unsigned maxInFlight=1;
         // Preserve the 30s alive-device contract, cancellation and slow-frame hook.
@@ -308,9 +303,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             timestamps.emplace_back(outputIndex,timeUs);lastOutputUs=timeUs;
             return encoder->encode(slot,generated,outputIndex++);
         };
-        const auto pipelineStart=std::chrono::steady_clock::now();
         while(!cancel){if(frameBoundary&&!frameBoundary()){error=true;break;}pipeline::FramePacket packet;const AVFrame* frame=nullptr;
-            if(tracePrefetch)for(const auto& timing:graph.takeGpuTimings())prefetchTrace.emit(timing);
             if(pendingFrames.size()>=2&&!finishOldest())break;
             source::SourceReadStatus rs;
             if(sourceCount==0){packet=firstPacket;frame=firstFrame;rs=source::SourceReadStatus::Frame;}
@@ -387,7 +380,6 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         veyra::log::info("export-counts",std::format("slowFrames={} source={} generated={} hold={} output={} multiplier={} repairedTimestamps={} backend={} vfgQuality={} encoder={} bitrateMbps={} note={} (holds are not generated frames)",slowFrames,sourceCount,generatedCount,holdCount,outputIndex,multiplier,repairedTimestamps,frameGenerationBackendName(options.settings.frameGenerationBackend),options.settings.vfgQuality,std::string(sink::encoderBackendName(encoder->backend())),options.settings.exportBitrateMbps,utf8(fgNote)));
         progress(.99,L"正在收尾：等待编码器输出剩余帧");
         if(!encoder->finish()){if(failureReason.empty())failureReason=L"编码器收尾失败，请查看编码器诊断";break;}
-        if(tracePrefetch){for(const auto& timing:graph.takeGpuTimings())prefetchTrace.emit(timing);prefetchTrace.calibrate();}
         veyra::log::info("export-pipeline",std::format("source={} pipelineMs={:.3f} completionWaitMs={:.3f} mode={} fenceEvents={} maxInFlight={}",
             sourceCount,std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-pipelineStart).count(),completionWaitMs,asyncNvenc?"async":"serial",fenceEvents,maxInFlight));
         if(flowPrefetch)veyra::log::info("flow-prefetch",std::format("source={} consumed={} normalMotionExecutes={}",sourceCount,graph.metrics().prefetchedFlowCount,graph.metrics().nvofExecuteCount));

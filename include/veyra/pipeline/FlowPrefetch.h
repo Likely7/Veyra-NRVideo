@@ -2,7 +2,6 @@
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
-#include "veyra/diagnostics/GpuQueueTrace.h"
 #include <array>
 
 namespace veyra::pipeline {
@@ -21,6 +20,5 @@ private:
     gfx::D3D12DeviceContext context_;gfx::CommandSlotRing ring_;
     std::unique_ptr<EnhanceGraph> graph_;std::array<Slot,2> slots_;
     uint64_t sequence_=0,previous_=0,revision_=0;unsigned activeSlot_=0;
-    diagnostics::GpuQueueTrace trace_;bool traceEnabled_=false;
 };
 }
