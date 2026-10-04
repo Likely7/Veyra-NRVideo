@@ -3,6 +3,7 @@
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
+#include "veyra/gfx/ObsQtFrameGate.h"
 #include "veyra/sink/ImageExportSink.h"
 namespace veyra::engine {
 bool VideoPresenter::beginSourceInput(){
@@ -137,7 +138,14 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         SUCCEEDED(ctx.device()->GetDeviceRemovedReason())&&
         !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE",nullptr,0))return true;
     retainedFrame_.reset(); // A failed present never seeds an idle cache.
-    if(!windowChanging&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)&&sink_.resizeDue()) {
+    bool resizeReady=!windowChanging&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)&&sink_.resizeDue();
+    std::optional<gfx::ObsNativeResizeHold> captureResizeHold;
+    if(resizeReady&&GetModuleHandleW(L"graphics-hook64.dll")){
+        captureResizeHold.emplace();resizeReady=captureResizeHold->ready();
+        if(!resizeReady)captureResizeHold.reset(); // no native wait; retry next frame
+        else veyra::log::info("capture-resize",std::format("exclusive native resize target={}x{} qtWindows={}",targetWidth,targetHeight,captureResizeHold->windows()));
+    }
+    if(resizeReady) {
         resized=true;
         if(!ring.drainQueue())return false;sink_.resize(targetWidth,targetHeight);
         // A capture hook may temporarily retain a DXGI buffer. Keep the old
