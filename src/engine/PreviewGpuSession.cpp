@@ -85,7 +85,7 @@ bool PreviewGpuSession::adopt(const EnhancementSettings& settings,const pipeline
     if(!prepared)return false;
     const auto requested=RecentGraphCache::key(settings,{},desc);
     uint64_t budget=0,usage=0;
-    const bool compatible=*prepared==requested&&context.videoMemoryInfo(budget,usage)&&
+    const bool compatible=!desc.nrAutoPoolLayer&&*prepared==requested&&context.videoMemoryInfo(budget,usage)&&
         RecentGraphCache::fits(budget,usage,graphBytes)&&SUCCEEDED(context.device()->GetDeviceRemovedReason());
     prepared.reset();
     if(compatible&&graph->applySettings(settings)){

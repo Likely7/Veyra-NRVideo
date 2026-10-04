@@ -21,3 +21,14 @@ E1 已证明最大实例动态子区域与按实际尺寸创建的 NR 不等价�
 3. 若基本池的正确性、切换或资源代价不成立，归档并回退，记录反例；否则才接“自动（按负载）”、持久化/灰态/状态行，并补真实 UI 与导出边界回归。
 
 所有构建、测试和日志在 `E:/项目/Veyra/*/perf-nr-20261004/`；每节点 clean commit/tag/bundle。画质档位变化没有人工确认时保持可选且默认不选。
+
+## 实际尺寸实例池初测
+
+候选 `81ad31e1098ac1d007b42a7399a2e933bb7420df`，`B3b-pool-native-v1` 共8组、720张完整RGBA。1/2层均依次100/85/70/55/40/100%，每档15帧；与同一1080p光流合同下独立创建的实际尺寸实例相比，全图、PTS、reset及重复运行0差异。D3D12 debug错误0、设备S_OK，所有5/6个参数块明确销毁。纯CPU控制器预算/滞回/一分钟四次上限/无效样本检查通过。
+
+- 五档池额外1697MiB（约1.66GiB），创建479.125–509.514ms。
+- 原生夹具已等待上一帧GPU后，切换API耗时0.122–0.298ms；此数不包含真实播放的呈现排空、首帧Evaluate及Present间隙，不能称为切换不卡顿。
+- 整个原生夹具比六次独立建图短，属于不同创建次数，不能当作持续播放提速。
+- 当前只接隔离测试描述字段，UI/默认配置未使用；下一步普通播放才能决定是否保留这个资源代价。
+
+证据：`E:/项目/Veyra/logs/perf-nr-20261004/B3b-pool-native-v1-summary/{artifacts,completed,summary}.json`，对应逐帧CSV/原图在`E:/项目/Veyra/tests/perf-nr-20261004/B3b-pool-native-v1-*`。EXE SHA256 `4b065caac8de8a115723743d655a0d53322e4e3fe66e44ed98227fce74019bec`；M1 SHA256 `03b2a0dc7f682a2c70ae65809d4db69c725a95f49e60116b6e9da2e2ae4610c8`；Lecram NR SHA256 `f95feb54137ea11979f9b4ec4f00afd84b5c98a5624d3388fbf6a87714a39fcc`（完整身份仍以manifest/实际文件为准）。控制器日志`E:/项目/Veyra/logs/perf-nr-20261004/nr-auto-controller-v1.log`。

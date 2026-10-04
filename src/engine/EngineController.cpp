@@ -13,6 +13,7 @@
 #include "veyra/engine/LivePresentationResetPolicy.h"
 #include "veyra/engine/TimingWindow.h"
 #include "veyra/engine/FrameFlowWindow.h"
+#include "veyra/engine/AutoNrController.h"
 #include "veyra/engine/LiveFgAdmission.h"
 #include "veyra/engine/FgRecoveryBudget.h"
 #include "veyra/engine/LivePairLatency.h"
@@ -572,6 +573,17 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 for(unsigned attempt=0;attempt<6;++attempt){
                     desc.videoHdr=selected.settings.videoHdr;
                     desc.hdrOutput=selected.settings.useHdrPreview(desc.hdrInput,displayHdrActive());
+                    // Experimental normal-playback driver only. A cached/prewarmed
+                    // graph has no pool; never adopt it for this request.
+                    desc.nrAutoPoolLayer.reset();
+                    if(GetEnvironmentVariableW(L"VEYRA_TEST_NR_AUTO_POOL",nullptr,0)>0&&
+                       !isCapture&&!isImage&&desc.enableNr&&!desc.enableSr&&!desc.enableFg&&
+                       !desc.hdrWorking()&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
+                       desc.nrRuntime==NrRuntime::Original&&desc.opticalFlowBackend==OpticalFlowBackend::Nvidia&&
+                       nvidiaAdapter&&ctx.adapter().deviceId==0x2f04&&desc.workWidth==1920&&desc.workHeight==1080&&
+                       !desc.nrLayersExtent.empty()&&desc.nrLayersExtent[0]==pipeline::Extent{1920,1080}&&
+                       std::none_of(desc.nrLayersTemporal.begin(),desc.nrLayersTemporal.end(),[](bool value){return value;}))
+                        desc.nrAutoPoolLayer=0;
                     // The only graph allowed beside an inactive NR adapter is
                     // effects-off. Evict before any other NGX initialization.
                     if(recentGraphCache.hasCachedGraph()&&!RecentGraphCache::effectsOff(desc)){
@@ -1071,6 +1083,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // capture the locals above by reference) is torn down before any of
             // those locals (sweep 2026-09-22 B1). Do not move declarations that
             // the lambdas reference below this line.
+            AutoNrController autoNrControl;autoNrControl.reset(host100ns());
+            uint64_t autoNrRevision=options.settings.revision;int64_t autoNrLogAt=0;
             OnExit stopPresentation{[&]{liveScheduler.reset();finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);std::lock_guard lock(mutex_);if(snapshot_.sessionId==runSessionId){if(frameFlow)snapshot_.metrics.flow=frameFlow->snapshot(host100ns());activeFlow_.reset();}}};
             while(!stop_){
                 if(Clock::now()-cacheBudgetPolledAt>=std::chrono::milliseconds(500)){
@@ -1391,6 +1405,43 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         std::lock_guard lock(mutex_);if(desired_.revision!=options.settings.revision)break;
                     }
                     if(stop_||seekSeconds_>=0||(paused_&&!seekPreviewPending)||liveScheduler->failed()||liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())continue;
+                }
+                if(graph->autoNrPoolReady()&&frameFlow&&!transaction&&!paused_){
+                    const auto now=host100ns();
+                    if(autoNrRevision!=options.settings.revision||autoNrControl.level()!=graph->autoNrLevel()){
+                        autoNrControl.reset(now);autoNrRevision=options.settings.revision;
+                    }
+                    if(reset)autoNrControl.discardObservations(now);
+                    const auto timing=frameFlow->snapshot(now).enhancementProcessing;
+                    const double transportFps=activeSource->info().averageFps*playbackRate;
+                    const double budget=std::isfinite(transportFps)&&transportFps>0?800.0/transportFps:0;
+                    const auto next=autoNrControl.observe(now,timing.p95,timing.samples,budget);
+                    if(now>=autoNrLogAt){
+                        veyra::log::info("nr-auto",std::format("level={} budgetMs={:.3f} p95Ms={:.3f} samples={} reason=observe",
+                            AutoNrController::percent(graph->autoNrLevel()),budget,timing.p95.value_or(0),timing.samples));
+                        autoNrLogAt=now+10000000;
+                    }
+                    if(next){
+                        const auto started=Clock::now();
+                        // Finish submitted pictures in order. Cancel would drop
+                        // real frames and conceal the switch gap.
+                        while(liveScheduler&&liveScheduler->occupancy()&&!stop_&&!paused_&&seekSeconds_<0&&!liveScheduler->failed()){
+                            advanceLive();if(liveScheduler->occupancy())waitLive();
+                        }
+                        if(stop_||paused_||seekSeconds_>=0)continue;
+                        if((liveScheduler&&liveScheduler->failed())||!ring.drainQueue()){
+                            status(L"自动NR切档排空失败",true);break;
+                        }
+                        pollCompletions();pendingCompletions.clear();out={};hasOutput=false;
+                        if(!graph->selectAutoNrLevel(*next)){
+                            veyra::log::error("nr-auto","normal playback switch refused after draining presentation leases");
+                            status(L"自动NR切档失败",true);break;
+                        }
+                        autoNrControl.discardObservations(host100ns());
+                        veyra::log::info("nr-auto",std::format("level={} budgetMs={:.3f} p95Ms={:.3f} reason={} boundaryMs={:.3f} cancelledJobs={}",
+                            AutoNrController::percent(*next),budget,timing.p95.value_or(0),timing.p95.value_or(0)>budget?"over-budget":"sustained-headroom",
+                            elapsedMs(started),presentationCancelledJobs.load()));
+                    }
                 }
                 // Wait before selecting the latest sample, not after enhancement.
                 if(!presenter.beginSourceInput()){status(L"XeSS input timing failed",true);break;}

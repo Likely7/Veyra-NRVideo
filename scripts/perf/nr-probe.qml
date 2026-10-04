@@ -18,7 +18,7 @@ Item {
     property var expectedPolicies: []
 
     function require(value, why) {
-        if (!value) { console.log("NR_PERF_FAIL", why); Qt.exit(3) }
+        if (!value) { console.log("NR_PERF_FAIL", why); Qt.exit(3); throw new Error(why) }
     }
     Connections {
         target: veyra
