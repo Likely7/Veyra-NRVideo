@@ -38,7 +38,7 @@
 | 3b | NR自动内部尺寸 | pending | 取决于E1、真实预算/画质证据 |
 | 1b | 内容帧率预算 | rejected-prerequisite | 1a画面不成立，完整求值仍按transport次数；实测成本构造预算反例，PERF_1B_CONTENT_BUDGET；无生产改动 |
 | 1c | 重复节奏预测 | rejected | 三种节奏单像素瞬态反例均漏第49帧且后续未检测；PERF_1C_CADENCE_REJECTION；无产品代码需回退 |
-| 3c | 队列分工/呈现优先级 | in-progress | NR两运行库及SR共540帧compute/direct完整SHA0差异/debug0；HIGH独立呈现2X/3X竞争12组在跑；PERF_3C_QUEUES |
+| 3c | 队列分工/呈现优先级 | in-progress-correctness-passed | 单特性540帧及完整Graph24组2502输出/PTS均一致/debug0；HIGH12组2X P99退0.46%而3X升1.35%，拒绝默认HIGH；完整compute实际性能下一轮；PERF_3C_QUEUES |
 | 5b | 文件/导出跨帧并行 | pending | 保留源帧/PTS/flow依赖，不扩大实时延迟 |
 | 4a | 多NR整链低分辨率调度 | pending | 保留每层残差参数；先测同尺寸与一致性 |
 | 4b | 先粗后细组合 | pending | 核对现有逐层尺寸；不新增强制预设 |
@@ -52,4 +52,4 @@
 
 基线驱动 `nr-series.py A` 已完成M1/S1、S2-720、S3、S4、S5-existing各三轮、稳态50秒；每个产品进程和驱动有270/280/299秒上限。1280×800窗口、真实GPU timestamp及CPU提交统计，不将16ms UI Timer当渲染FPS。现有UI没有精确50%档位，S2明确为1280×720（1080p输入维度66.7%、像素44.4%）。多层先粗后细已有逐层尺寸参数，S5核对现有行为，不计为新收益。
 
-2a核心复用已实现并经修订版三轮A/B/B-off、真实UI、实际SDK容量与初始化失败检查，保留待R0最终回归。1a与1c有可复现画面反例，未加入产品。其余节点继续；不能用2a数据冒充持续播放或整个方案收益。
+2a核心复用、2c单NR缓存、2d空闲预热、5c暂停复用已保留，3a提供用户可选进程优先级且普通默认，均待R0最终产品回归。1a/1c、依赖它们的1b、2b后台创建及SR缓存扩展均拒绝，证据保留。3c完整处理图正确性通过，但compute性能尚未验收，默认DIRECT；本轮候选源码存档checkpoint/perf-nr-3c-graph-candidate-20261004，收据E:/项目/Veyra/archives/perf-nr-20261004/3c-graph-candidate/checkpoint.json。当前轮测试结束先汇报，下一轮未启动；5a/3b/5b/4a/4b/UI/R0仍待，不能将局部耗时或暂停GPU改善冒充持续播放或整个方案收益。

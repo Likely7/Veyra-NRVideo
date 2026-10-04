@@ -542,6 +542,7 @@ public:
     bool presentMotionValid(uint32_t slot) const { return presentMotionValid_[slot%2]; }
     uint64_t motionPreviousSource(uint32_t slot) const { return motionPreviousSource_[slot%2]; }
     uint64_t lastNvofSignal() const;
+    bool usesComputeQueue() const;
 
     // Present-side access to the produced frame slots (probe sink path).
     ID3D12Resource* videoFrameResource(uint32_t slot) const;

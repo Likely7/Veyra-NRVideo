@@ -10,6 +10,23 @@ RTX5070/616.56、原版E16及Lecram F95 NR各direct/compute三轮、DLSS SR dire
 
 官方接口接收ID3D12GraphicsCommandList，不因此推断所有命令类型通用，兼容性由本轮实际调用验证：[NVIDIA接口定义](https://github.com/NVIDIA/DLSS/blob/main/include/nvsdk_ngx.h)。跨队列仍必须使用正确资源状态与fence：[Microsoft资源依赖说明](https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-resource-barriers-to-synchronize-resource-states-in-direct3d-12)。
 
-## HIGH呈现实测（进行中）
+## HIGH呈现实测（已完成，拒绝默认HIGH）
 
-独立FG DIRECT呈现队列，先CheckFeatureSupport再Create，读回GetDesc记录实际Priority。进程调度保持普通，两个NR+DLSS SR+DLSS2X/3X，另一个自有三NR满载进程；相同M1/尺寸/运行库/驱动，每档三轮Normal/HIGH交错，50秒稳态。记录新鲜原/生成帧成功Present间隔、GPU/掉帧、竞争进程实际完成率。nr-queue-priority.py B2d B3c-present-priority-v1正在执行；结果未完成前不判断收益，也不默认开启HIGH。后续完整compute路径根据实际兼容与尾部间隔再决定，R0仍待。
+独立FG DIRECT呈现队列，先CheckFeatureSupport再Create，读回GetDesc记录实际Priority。进程调度保持普通，两个NR+DLSS SR+DLSS2X/3X，另一个自有三NR满载进程；相同M1/尺寸/运行库/驱动，每档三轮Normal/HIGH交错，50秒稳态。nr-queue-priority.py B2d B3c-present-priority-v1十二组完成，所有请求实际读回0/100，无source preview skip/设备故障。
+
+| 设置 | 队列 | 软件Present P95 | P99 | 每轮max中位 | 处理时间滚动P95中位 | 竞争图完成/s |
+|---|---|---:|---:|---:|---:|---:|
+| 2X | Normal | 17.1023 | 17.3202 | 63.1653 | 27.653 | 15.8293 |
+| 2X | HIGH | 17.0946 | 17.4002 | 73.4092 | 27.677 | 15.7525 |
+| 3X | Normal | 11.5513 | 16.7883 | 78.4057 | 30.436 | 13.2248 |
+| 3X | HIGH | 11.5418 | 16.5618 | 74.1415 | 30.587 | 13.2990 |
+
+各列为三个运行统计量的中位数，ms（最后列除外），不是物理扫描；滚动P95观察的中位也不冒充全帧aggregate percentile。2X P99+0.46%、max+16.22%；3X P99-1.35%、max-5.44%，处理成本+0.50%。改善随倍率不稳定，拒绝默认HIGH，产品仍普通队列。测试ENV暂留用于尚未完成的compute组合对照，不当成可用性能功能或发布默认。三轮范围、每帧submit/负载/GPU环境/构建身份见同任务B3c-present-priority-v1-*、B3c-present-priority-v1-summary.json与B3c-present-priority-v1-comparison.json。
+
+## 完整处理图正确性（已完成，性能仍待）
+
+前存档0212db3 / checkpoint/perf-nr-3c-graph-before-20261004。单PreviewGpuSession增加仅测试ENV的COMPUTE生产队列，device/Core/adapter仍一个；ring作为该fence唯一signaler。EnhanceGraph的解码、输入、NVOF、GPU-DIS/AMD和呈现归还依赖均等待ring实际queue，GPU timer也查询实际queue。DIRECT绘制/Present保留独立ring/fence；生产输出交给DIRECT时既有COMMON→PIXEL→COMMON往返保持，等待/生命周期不删。测试默认关闭，尚未获保留结论。
+
+build-graph-compute-v1构建产品UI、负载fixture及native fixture，exit0。nr-graph-queue.py B2d B3c-graph-native-v1四组（单NR、NR+SR、双NR+SR+DLSS2X/3X）各direct/compute三次，共24/24通过；M1真实自然视频60帧/进程，1440当前真实输出+1062全部生成输出=2502完整图像。2X每进程59生成帧，3X118，完整SHA、dimensions/subframe/PTS每行均一致，fresh A-A噪声0。所有D3D12 debug错误/设备移除0，Core关闭通过。该native测试因诊断读回串行等待，只验证完整图/NVOF/生成/时间戳正确性，不用于吞吐收益。
+
+CSV/全SHA/关键原始RGBA、身份/环境/命令均E:/项目/Veyra/logs/perf-nr-20261004/B3c-graph-native-v1-*与B3c-graph-native-v1-summary.json，build日志同目录。现阶段源码按checkpoint/perf-nr-3c-graph-candidate-20261004存档，校验收据E:/项目/Veyra/archives/perf-nr-20261004/3c-graph-candidate/checkpoint.json；下一轮需实际Qt在负载下DIRECT-normal/COMPUTE-normal/COMPUTE-HIGH三轮交错比较及独立B-off，收益不成立则revert该候选。用户要求当前轮结束汇报，尚未启动下一轮，R0仍待。

@@ -8,6 +8,7 @@ namespace veyra::engine {
 // moves from idle prewarm to playback; no second device or snippet Init owner.
 struct PreviewGpuSession {
     gfx::D3D12DeviceContext context;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> executionQueue; // optional experimental compute producer
     gfx::CommandSlotRing ring;
     ngx::NgxCoreCache core;
     RecentGraphCache recent{context};

@@ -25,7 +25,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;
     ++generation_;
     Status st=Status::Ok;
-    if(graph.fgEnabled()&&!graph.xessEnabled()){
+    if((graph.fgEnabled()||graph.usesComputeQueue())&&!graph.xessEnabled()){
         D3D12_COMMAND_QUEUE_DESC desc{};desc.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;
         wchar_t requestedPriority[16]{};
         if(GetEnvironmentVariableW(L"VEYRA_TEST_PRESENT_QUEUE_PRIORITY",requestedPriority,16)&&std::wstring_view(requestedPriority)==L"high"){

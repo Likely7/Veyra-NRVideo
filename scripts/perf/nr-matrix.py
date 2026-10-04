@@ -88,8 +88,9 @@ def set_owned_gpu_priority(proc, priority):
             'setStatus':hex(b&0xffffffff),'afterStatus':hex(c&0xffffffff),'afterClass':after.value,'getAttempts':attempts,
             'applied':a==b==c==0 and after.value==priority}
 
-def stage(variant):
-    path = BASE / 'tests' / TASK / ('app-' + variant)
+def stage(variant,stageLabel=None):
+    assert stageLabel is None or stageLabel.replace('-','').isalnum()
+    path = BASE / 'tests' / TASK / ('app-' + variant+('-'+stageLabel if stageLabel else ''))
     if path.exists():
         assert digest(path/'veyra_qml_ui.exe')==digest(BUILD/variant/'veyra_qml_ui.exe'), 'Existing stage executable is stale; use a fresh variant'
         return path
@@ -110,10 +111,10 @@ def stage(variant):
     main.write_text(text, encoding='utf-8')
     return path
 
-def run(variant, material, setting, label, seconds, gpuPriority=None, allowedGpuPids=(),testEnv=None):
+def run(variant, material, setting, label, seconds, gpuPriority=None, allowedGpuPids=(),testEnv=None,stageLabel=None):
     assert_gpu_tests_idle(allowedGpuPids)
     subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/perf/nr-control.py'), 'guard'], check=True)
-    app = stage(variant)
+    app = stage(variant,stageLabel)
     media = SOURCES.get(material, BASE / 'tests/perf-matrix/media' / (material + '.mkv'))
     assert media.is_file(), media
     logs = BASE / 'logs' / TASK / label

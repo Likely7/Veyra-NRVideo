@@ -10,7 +10,14 @@ PreviewGpuSession::~PreviewGpuSession(){shutdown();}
 bool PreviewGpuSession::initialize(unsigned slots){
     if(context.initialized()&&ring.initialized())return true;
     Status status;gfx::DeviceContextDesc desc;desc.commandSlotCount=6;
-    if(!context.initialize(desc,status)||!ring.initialize(context.device(),context.directQueue(),context.fence(),context.fenceEvent(),slots,status))return false;
+    if(!context.initialize(desc,status))return false;
+    if(GetEnvironmentVariableW(L"VEYRA_TEST_GRAPH_COMPUTE",nullptr,0)){
+        D3D12_COMMAND_QUEUE_DESC queueDesc{};queueDesc.Type=D3D12_COMMAND_LIST_TYPE_COMPUTE;
+        const auto hr=context.device()->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&executionQueue));
+        log::info("graph-queue",std::format("requested=COMPUTE createHr=0x{:X}",unsigned(hr)));
+        if(FAILED(hr))return false;executionQueue->SetName(L"Veyra experimental compute producer");
+    }
+    if(!ring.initialize(context.device(),executionQueue?executionQueue.Get():context.directQueue(),context.fence(),context.fenceEvent(),slots,status))return false;
     gfx::applyRequestedGpuPriority();return true;
 }
 bool PreviewGpuSession::requestAllowed(const EnhancementSettings& settings){
@@ -52,6 +59,6 @@ bool PreviewGpuSession::adopt(const EnhancementSettings& settings,const pipeline
 void PreviewGpuSession::shutdown(){
     if(ring.initialized())ring.drainQueue();
     if(graph){graph->shutdown();graph.reset();}recent.evict("device-close");
-    core.close("device-close");ring.shutdown();context.shutdown();prepared.reset();graphBytes=0;
+    core.close("device-close");ring.shutdown();executionQueue.Reset();context.shutdown();prepared.reset();graphBytes=0;
 }
 }

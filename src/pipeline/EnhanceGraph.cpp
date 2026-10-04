@@ -488,7 +488,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const size_t dSize = dPitch_ * workH_;
     nv12Buf_.resize(lumaSize_ + chromaSize_);
 
-    if(!gpuTimer_.initialize(context_.device(),context_.directQueue()))veyra::log::warn("gpu-timestamp","GPU timing unavailable");
+    if(!gpuTimer_.initialize(context_.device(),ring_.queue()))veyra::log::warn("gpu-timestamp","GPU timing unavailable");
     if (!createResources()) return false;
     if (!initZeroAndDepthTextures()) return false;
     if (!initNvof()) { failedBackend_=engine::FailedBackend::OpticalFlow; return false; }
@@ -1265,7 +1265,7 @@ bool EnhanceGraph::initNgxFeatures()
                 if(desc_.hdrWorking()){veyra::log::error("amd-nr","HDR input is not yet validated for this adapter; NR disabled by backend fallback");return false;}
                 instance->amd=std::make_unique<LmxxfNrBackend>();
                 const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr";
-                if(!instance->amd->open(directory.lexically_normal(),context_.device(),context_.directQueue(),context_.adapter().vendorId) || !instance->amd->admits(extent.width,extent.height))return false;
+                if(!instance->amd->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId) || !instance->amd->admits(extent.width,extent.height))return false;
             }
             veyra::log::info("resolution",std::format("NR layer={} internal={}x{} composite={}x{} sharedMotion={}",
                 index+1,extent.width,extent.height,fullW,fullH,motion!=nullptr));
@@ -1883,7 +1883,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // Presentation returns the shared output to COMMON before this parity
     // can be written again. Direct graph callers also need the GPU dependency.
     if(presentationFences_[parity]){
-        const HRESULT hr=context_.directQueue()->Wait(presentationFences_[parity].Get(),presentationValues_[parity]);
+        const HRESULT hr=ring_.queue()->Wait(presentationFences_[parity].Get(),presentationValues_[parity]);
         if(FAILED(hr)){veyra::log::error("graph",std::format("presentation handoff wait hr=0x{:X}",unsigned(hr)));return false;}
     }
     hardwareInputFrames_[parity].reset();
@@ -1926,7 +1926,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if(gpuRgb){
         auto* texture=hardwareSurface->texture;const auto td=texture->GetDesc();
         if(td.Width!=srcW_||td.Height!=srcH_||(td.Format!=DXGI_FORMAT_B8G8R8A8_UNORM&&td.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))return false;
-        if(hardwareSurface->waitFence&&FAILED(context_.directQueue()->Wait(hardwareSurface->waitFence,hardwareSurface->waitValue)))return false;
+        if(hardwareSurface->waitFence&&FAILED(ring_.queue()->Wait(hardwareSurface->waitFence,hardwareSurface->waitValue)))return false;
         D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=td.Format;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
         srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
         stager_.stageSrv(texture,&srv,rgbPass_.heap.Get(),3+parity);
@@ -2004,7 +2004,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             waitValue = hardwareSurface->waitValue;
         }
         if (waitFence != nullptr) {
-            if (FAILED(context_.directQueue()->Wait(waitFence, waitValue))) {
+            if (FAILED(ring_.queue()->Wait(waitFence, waitValue))) {
                 veyra::log::error("graph", "nv12 fence wait");
                 return false;
             }
@@ -2240,7 +2240,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             tracker_.transition(list,confTex_.Get(),D3D12_RESOURCE_STATE_COMMON);
             // The next ring submission signals this value; the parity upload
             // fence above retires all uses before these descriptors are reused.
-            if(!gpuDis_->dispatch(list,context_.directQueue(),context_.fence(),ring_.lastSignaledValue()+1,parity,
+            if(!gpuDis_->dispatch(list,ring_.queue(),context_.fence(),ring_.lastSignaledValue()+1,parity,
                 nvofInA_.Get(),nvofInB_.Get(),flowTex_.Get(),confTex_.Get(),previousSource_,sourceFrameId))return false;
             tracker_.transition(list,flowTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             ++metrics_.gpuDisExecuteCount;haveFlow=true;
@@ -2258,7 +2258,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 ++metrics_.nvofExecuteCount;
                 auto waitForFlow=[&](){
                     const auto value=nvof_->nextOutValue()-1;
-                    const HRESULT hr=context_.directQueue()->Wait(nvofOutFence_.Get(),value);
+                    const HRESULT hr=ring_.queue()->Wait(nvofOutFence_.Get(),value);
                     if(FAILED(hr))veyra::log::error("graph",std::format("NVOF output queue wait value={} hr=0x{:X}",value,unsigned(hr)));
                     return SUCCEEDED(hr);
                 };
@@ -3088,6 +3088,8 @@ uint64_t EnhanceGraph::lastNvofSignal() const
     return (nvof_ && nvof_->initialized()) ? (nvof_->nextOutValue() - 1) : 0;
 }
 
+bool EnhanceGraph::usesComputeQueue() const {return ring_.queue()&&ring_.queue()->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_COMPUTE;}
+
 bool EnhanceGraph::nvofSessionInitialized() const
 {
     return nvof_ && nvof_->initialized();
@@ -3119,7 +3121,7 @@ void EnhanceGraph::shutdown()
     lastAppliedSettings_.reset();pausedNrSettings_.reset();
     if (!initialized_ && !coreHost_ && !nrAdapter_ && !nvof_ && !srcRgba_) return;
     for(unsigned i=0;i<2;++i)if(presentationFences_[i]){
-        const HRESULT hr=context_.directQueue()->Wait(presentationFences_[i].Get(),presentationValues_[i]);
+        const HRESULT hr=ring_.queue()->Wait(presentationFences_[i].Get(),presentationValues_[i]);
         if(FAILED(hr))veyra::log::error("graph",std::format("presentation teardown wait hr=0x{:X}",unsigned(hr)));
     }
     (void)ring_.drainQueue();(void)ring_.discardRecording();

@@ -1,5 +1,11 @@
 # Veyra 工作记录
 
+## 2026-10-04 PERF本轮收尾汇报：3c正确性通过、提速未验收
+
+nr-queue-priority.py B2d B3c-present-priority-v1十二组全部exit0，实际HIGH100/Normal0读回；2X软件Present P99中位17.3202→17.4002ms/max63.1653→73.4092，3X P99 16.7883→16.5618/max78.4057→74.1415，拒绝默认HIGH。全环境/receipt/submit/竞争CSV与比较JSON已保存，详PERF_3C_QUEUES。
+
+完整compute候选前存档0212db3，将原GPU依赖/计时指向实际ring queue，保留DIRECT呈现COMMON往返和消费者fence，默认关闭，仅VEYRA_TEST_GRAPH_COMPUTE。build-graph-compute-v1 UI/native/load构建exit0；nr-graph-queue.py B2d B3c-graph-native-v1二十四组（NR、SRNR、双NR+SR+DLSS2X/3X各direct/compute三次）exit0，1440当前原帧+1062全部生成帧完整SHA/PTS一致、A-A噪声0/debug0/device0/Core关闭。测试读回等待不用于吞吐收益。矩阵新增可审计TEST env和stageLabel避免重链接后复用旧EXE，后续完整compute交错性能驱动已准备但未启动。guard、diff-check、i18n1947项/零缺失通过。用户要求这轮跑完汇报进度，现无测试进程，Goal active未完成；本轮candidate归档后汇报，不merge/push/发布。收尾核对原始summary.json的24/24、2502输出、实际queueType与全部比较为0，Python AST通过；存档命令nr-control.py checkpoint 3c-graph candidate，标签checkpoint/perf-nr-3c-graph-candidate-20261004，收据E:/项目/Veyra/archives/perf-nr-20261004/3c-graph-candidate/checkpoint.json。
+
 ## 2026-10-04 PERF 3c候选与compute兼容
 
 CommandSlotRing匹配实际DIRECT/COMPUTE Type、频率用实际queue，HIGH独立呈现仅测试ENV/驱动查询/读回。build-compute-priority-v1 15步、v2 2步exit0。nr-compute.py B2d B3c-compute-v1 两NR DLL+SR各direct/compute三轮，18/18共540帧完整SHA一致/A-A噪声0，debug0/device0，正确RGBA16F SR输入；只证明API与作者图案兼容，不计速度收益。nr-queue-priority.py B2d B3c-present-priority-v1开始实际2X/3X竞争Normal/HIGH交错12组，结果仍待。完整日志/CSV/选帧像素/身份位于同任务label；详PERF_3C_QUEUES。
