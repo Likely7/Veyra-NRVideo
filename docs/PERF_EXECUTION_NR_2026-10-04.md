@@ -24,7 +24,7 @@
 | 节点 | 内容 | 状态 | 证据 / 下一步 |
 |---|---|---|---|
 | D0 | 项目文档对齐与存档 | accepted | 37bc0c0 / initial-docs完整bundle verify，桌面/main保持 |
-| A0 | 当前版本基线及矩阵驱动 | in-progress | A全新476步构建通过；M1五种现有设置各三轮真实播放器计时中 |
+| A0 | 当前版本基线及矩阵驱动 | in-progress | A完整包封存；M1五组各三轮15/15通过，PERF_BASELINE_NR；其余素材/切换基线在各节点前补齐 |
 | E1 | Feature18动态输入尺寸 | pending | 原版/Lecram分别测返回值、画面、历史 |
 | E2 | 并行Evaluate/CreateFeature | pending | 独立command list、压力/反复切换 |
 | E3 | 真实来源精确重复比例 | pending | 屏幕/实卡可用性与合成节奏分开 |
