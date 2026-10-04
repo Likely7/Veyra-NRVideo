@@ -43,6 +43,7 @@ for group in groups:
     settled=[json.loads(line.split('CORE_UI_SETTLED ',1)[1]) for line in text.splitlines() if 'CORE_UI_SETTLED ' in line]
     resets=[{k:float(v) for k,v in re.findall(r'(\w+)=(-?\d+(?:\.\d+)?)',line)} for line in text.splitlines() if '[reset-lifecycle]' in line]
     result={'variant':variant,'group':group,'exeSha256':matrix.digest(app/'veyra_qml_ui.exe'),
+            'testQmlSha256':matrix.digest(app/'qml/Veyra/NrCoreUiProbe.qml'),
             'nrSha256':matrix.digest(app/'runtime/experimental/nvngx_dlssnr.dll'),'command':command,'exitCode':rc,
             'wallSeconds':time.monotonic()-start,'gpuBefore':before,'gpuAfter':matrix.gpu_query(),
             'settledRequests':settled,'actualResetEvents':resets,'coreInitCalls':text.count('core-host: Init_with_ProjectID result='),

@@ -28,7 +28,7 @@
 | E1 | Feature18动态输入尺寸 | completed-conditional | 两运行库8组合API/区域/恢复正常，但缩小后与独立小实例不同；PERF_E1_DYNAMIC_SIZE，3b优先实际尺寸实例 |
 | E2 | 并行Evaluate/CreateFeature | completed-conditional | 单Core/adapter，三次240s累计12min及150次创建安全通过；间隔110–116ms，不能据此宣称2b无缝 |
 | E3 | 真实来源精确重复比例 | pending | 屏幕/实卡可用性与合成节奏分开 |
-| 1a | 精确重复帧整链复用 | pending | 先验证时域模型重复Evaluate结果是否相同 |
+| 1a | 精确重复帧整链复用 | rejected-unchanged-output | 自然同像素300帧×五组×三轮，A-A噪声0；NR/SR复用299帧不同；PERF_1A_DUPLICATE_REUSE；无生产改动 |
 | 5a | 黑边检测与有效区域处理 | pending | 防暗场误裁，先测准确性与重建收益 |
 | 3a | 进程GPU调度优先级 | pending | 只改本进程，有竞争负载的实际A/B |
 | 2a | 跨重建保留NGX核心 | in-progress | 四组20次×三轮A基线，240次重建/重复像素0差异；PERF_2A_CORE_REUSE；尚未产品候选 |

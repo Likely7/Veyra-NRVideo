@@ -60,6 +60,9 @@ Item {
                 veyra.nrEnabled = true; veyra.srEnabled = false; veyra.fgEnabled = false
                 veyra.videoHdr = false; veyra.colorEnabled = false; veyra.videoSrQuality = 0
                 veyra.srTargetIndex = 2; veyra.fgBackendName = "dlss"; veyra.fgMultiplier = 2
+                // Selecting a multiplier intentionally enables FG in the
+                // product bridge; reset it after configuring the saved level.
+                veyra.fgEnabled = false
                 while (veyra.nrLayers.length < (probe.group === "layers" ? 3 : 1))
                     require(veyra.duplicateNrLayer(veyra.nrLayers[0].index)>=0,"duplicate NR")
                 for (let i=0;i<veyra.nrLayers.length;++i) {
@@ -68,6 +71,8 @@ Item {
                     require(veyra.setEffectEnabled(veyra.nrLayers[i].index,i===0),"initial enable")
                 }
                 veyra.openPath(probe.media)
+                console.log("CORE_UI_INITIAL",JSON.stringify({group:probe.group,fg:veyra.fgEnabled,
+                    multiplier:veyra.fgMultiplier,sr:veyra.srEnabled,layers:veyra.nrLayers}))
                 return
             }
             if (!veyra.running || veyra.applying || veyra.position <= 0) return
