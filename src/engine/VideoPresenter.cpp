@@ -272,6 +272,14 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     gpuTimer_.mark(list,diagnostics::GpuStage::Blit,true);gpuTimer_.resolve(list);
     if(!ring.submitAndSignal(commandSlot))return false;gpuTimer_.submitted(ring.lastSignaledValue());lastBuffer_=backBufferIndex;hasPresented_=true;
     if(presentationQueue_)graph.presentationSubmitted(slot,fence,ring.lastSignaledValue());
+    if(resized&&!sink_.xess()&&GetModuleHandleW(L"graphics-hook64.dll")){
+        // OBS selects one process-wide swapchain on Present, including TEST.
+        // After resize, re-enter this native chain before its first real frame.
+        // TEST neither displays a frame nor advances our submission counters.
+        const HRESULT capturePrime=sink_.swapChain()->Present(0,DXGI_PRESENT_TEST);
+        veyra::log::info("capture-resize",std::format("native resize probe hr=0x{:X} target={}x{}",
+            unsigned(capturePrime),targetWidth,targetHeight));
+    }
     const auto dxgiStart=std::chrono::steady_clock::now();
     reflex_.mark(reflexFrame_,3);reflex_.mark(reflexFrame_,4);
     const bool presented=sink_.present(st);
