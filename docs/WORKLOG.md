@@ -8302,3 +8302,5 @@ B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0�
 5b serial-v2五组各三轮15/15实际完成，最终帧数/encoder drain通过，payload SHA全同。总耗时中位普通4K2.484s、单NR4.306s、双NR4.544s、NR+SR4K6.341s、SR8K4.400s。pipeline多组15.8ms/帧与Sleep(1)轮询有关联但根因待验证；下一候选独立测fence事件、两帧在途和组合，不能将两者混算。原全部导出/日志及基线EXE在B5b-serial-v2对应E盘目录。新增导出后全decoded frame/PTS/mux核对工具，当前先执行A-A。
 
 5b基线A-A完整1620 decoded帧及PTS/尺寸/轨道/时长15/15全同，8K实为7680×4320，收据B5b-serial-v2-decoded-review.json。新增默认关闭候选：两帧pending lease/producer/consumer fence严格有界、复用前GPU完成、NVENC独立inputFence；独立fence事件等待、失败回轮询、取消/健康/30秒保留。源码审查修正std::move(out)之后取real.lease的潜在空指针，改先保存consumerFence再move，未构建/执行有缺陷版本。两个机制分组计时，尚未标收益。
+
+5b build-export-candidate-v1通过；60组普通同EXE串行/事件/两帧/组合三轮通过，payload全SHA保持，源帧/最终编码足量，maxInFlight1/2及真实NR数核实。组合总耗时普通4K降44.37%、单NR23.60%、双NR14.20%、NR+SR4K6.41%、SR8K3.91%；处理区间各降57.66/54.24/16.85/15.03/10.45%，明确不混算。完整75文件/8100decoded帧/PTS/尺寸/轨道/时长全同，连整个文件SHA也全同。E:/项目/Veyra/logs/perf-nr-20261004/B5b-candidate-v1-summary/comparison.json及B5b-candidate-v1-decoded-review.json。报表初读日志遇运行库非UTF8字节，errors=replace仅解析ASCII字段，raw未改。下一步仅必要debug/取消/单帧/FG串行/事件失败回退，不造GPU压力/设备重置；测试hook默认关闭。

@@ -18,6 +18,7 @@
 #include <cstring>
 #include <vector>
 #include <wrl/client.h>
+#include <d3d12sdklayers.h>
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -60,6 +61,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
     if(partial.empty()){progress(0,failureReason);return false;}
     try { do {
         Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.commandSlotCount=6;
+        dd.enableDebugLayer=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_DEBUG",nullptr,0)>0;
         if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),6,st))break;
         // Export runs on every adapter now: NVIDIA uses NVENC (D3D12,
         // zero-copy) and everything else uses the driver's Media Foundation
@@ -224,8 +226,9 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             !options.fg&&encoder->backend()==sink::EncoderBackend::Nvenc&&slowFrameIndex<0;
         bool fenceEvents=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_FENCE_EVENTS",nullptr,0)>0;
         if(fenceEvents){
-            completionEvent.value=CreateEventW(nullptr,FALSE,FALSE,nullptr);
-            if(!completionEvent.value){veyra::log::warn("export-pipeline",std::format("completion event create failed error={}; keeping polling",GetLastError()));fenceEvents=false;}
+            const bool injected=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EVENT_CREATE_FAIL",nullptr,0)>0;
+            if(!injected)completionEvent.value=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+            if(!completionEvent.value){veyra::log::warn("export-pipeline",std::format("completion event create failed error={} injected={}; keeping polling",injected?ERROR_INVALID_HANDLE:GetLastError(),injected));fenceEvents=false;}
         }
         struct PendingFrame {pipeline::EnhanceGraph::FrameOutputs output;uint64_t consumerFence=0,source=0;std::chrono::steady_clock::time_point submitted;};
         std::deque<PendingFrame> pendingFrames;unsigned maxInFlight=1;
@@ -255,9 +258,10 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
                     veyra::log::error("export","frame GPU completion timed out after 30s");break;
                 }
                 if(fenceEvents&&commonFence&&!injectedStall&&!eventRegistered){
-                    const HRESULT hr=ctx.fence()->SetEventOnCompletion(waitFence,completionEvent.value);
+                    const bool injected=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EVENT_REGISTER_FAIL",nullptr,0)>0;
+                    const HRESULT hr=injected?E_FAIL:ctx.fence()->SetEventOnCompletion(waitFence,completionEvent.value);
                     if(SUCCEEDED(hr))eventRegistered=true;
-                    else {veyra::log::warn("export-pipeline",std::format("completion event registration failed hr=0x{:X}; keeping polling",unsigned(hr)));fenceEvents=false;}
+                    else {veyra::log::warn("export-pipeline",std::format("completion event registration failed hr=0x{:X} injected={}; keeping polling",unsigned(hr),injected));fenceEvents=false;}
                 }
                 if(eventRegistered){
                     const DWORD result=WaitForSingleObject(completionEvent.value,50);
@@ -367,7 +371,18 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         ok=written>0;if(counts)counts({sourceCount,generatedCount,holdCount,uint64_t(written)});
     }while(false); }catch(const std::exception& e){veyra::log::error("export",std::format("exception: {}",e.what()));failureReason=L"导出异常，请查看诊断";ok=false;}
     encoder.reset();if(mux){if(mux->pb){const int rc=avio_closep(&mux->pb);if(rc<0){failAv(L"刷新并关闭输出文件",rc);ok=false;}}avformat_free_context(mux);}
-    ring.drainQueue();graph.shutdown();source.close();ring.shutdown();ctx.shutdown();
+    ring.drainQueue();graph.shutdown();source.close();ring.shutdown();
+    if(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_DEBUG",nullptr,0)>0&&ctx.device()){
+        Microsoft::WRL::ComPtr<ID3D12InfoQueue> debug;const HRESULT hr=ctx.device()->QueryInterface(IID_PPV_ARGS(&debug));unsigned errors=0;
+        if(FAILED(hr)){ok=false;veyra::log::error("export-debug",std::format("InfoQueue query failed hr=0x{:X}",unsigned(hr)));}
+        else for(UINT64 i=0;i<debug->GetNumStoredMessages();++i){
+            SIZE_T bytes=0;debug->GetMessage(i,nullptr,&bytes);std::vector<unsigned char> storage(bytes);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+            if(FAILED(debug->GetMessage(i,message,&bytes))){ok=false;++errors;continue;}
+            if(message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;veyra::log::error("export-debug",message->pDescription);}
+        }
+        if(errors)ok=false;veyra::log::info("export-debug",std::format("errors={} removedReason=0x{:X}",errors,unsigned(ctx.device()->GetDeviceRemovedReason())));
+    }
+    ctx.shutdown();
     // Earlier processes of this job stopped at a GPU reset: join their parts and this
     // one into the output. The parts are removed only once the joined file is complete.
     std::wstring finished=partial;

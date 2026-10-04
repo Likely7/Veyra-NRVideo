@@ -21,3 +21,21 @@ build-export-baseline-v1 UI/probe构建成功，编译产品源码86e0458；只�
 基线完整软件解码15/15、1620帧，三轮A-A全图/PTS/尺寸/轨道/时长完全一致；核实SR8K实际7680×4320，NR+SR实际3840×2160。review在E:/项目/Veyra/logs/perf-nr-20261004/B5b-serial-v2-decoded-review.json，framemd5每帧覆盖完整重建图。后续复用这些不可变源与已核验hash，避免无依据重复解码。
 
 候选实现：每个pending持有完整FrameOutputs/lease与NVENC转换consumerFence，最多两帧；在第3帧进入Graph前确认最旧producer+consumer完成并释放lease，末尾全部收齐再encoder.finish。Graph上传/allocator和NVENC4槽依赖不变。fence事件仅同一fence对象上的值取max，FG status仍完成后resolve；50ms有界wait、250ms健康检查和30s超时保留，事件注册失败记HRESULT并回退轮询。两个测试ENV分别启用，默认关闭，未测不标产品通过。
+
+## 候选普通对照与完整输出
+
+`nr-export-pipeline.py B2d B5b-candidate-v1 all none4k nr nr2 nrsr4k sr8k`60/60实际导出通过，五配置×四策略×三轮交错，同EXE/组件载荷前后SHA一致，无压力。`nr-export-report.py`核实每组策略实际生效、maxInFlight1/2、NR真实创建数与无ERROR，再输出comparison.json；初次报表因运行库写入非UTF8字节读失败，改errors=replace（仅ASCII字段解析），未删改raw日志。
+
+| 三轮中位 | 串行总ms | 组合总ms | 总耗时降幅 | 串行处理ms | 组合处理ms | 处理降幅 |
+|---|---:|---:|---:|---:|---:|---:|
+| 普通4K / 120帧 | 2488.830 | 1384.420 | 44.37% | 1892.387 | 801.251 | 57.66% |
+| 自然1080单NR / 120帧 | 4338.210 | 3314.370 | 23.60% | 1881.085 | 860.843 | 54.24% |
+| 自然1080双NR / 120帧 | 5492.240 | 4712.150 | 14.20% | 1941.885 | 1614.626 | 16.85% |
+| NR+SR4K / 120帧 | 7189.020 | 6727.860 | 6.41% | 3796.911 | 3226.199 | 15.03% |
+| 4K→SR8K / 60帧 | 4649.890 | 4467.930 | 3.91% | 1901.832 | 1703.155 | 10.45% |
+
+总耗时含初始化/最终保存；处理区间不含创建但含encoder.finish，不能将后二列当作整次导出改善。双NR初始化波动较大，组合总耗时范围4648.730–5127.380ms，完整范围在comparison.json。多数普通4K改善来自改变等待方式：仅fence事件处理814.877ms，组合801.251ms；单NR仅事件946.126ms，组合860.843ms，可见两帧并行的额外收益。8K仅事件1704.953ms，组合1703.155ms，不能宣称8K跨帧本身明显收益。
+
+`nr-export-verify.py B5b-serial-v2 B5b-candidate-v1`75/75通过、8100完整decoded帧与PTS/尺寸/轨道/时长全部一致；所有策略生成的整个封装文件SHA也与各自A一致。收据B5b-candidate-v1-decoded-review.json，各原始framemd5/ffprobe保留。该验证覆盖当前本机/运行库/素材，不代表其他GPU、HDR或直播通过。
+
+下一步单独验证GPU debug、取消、单帧、FG保持串行和事件API失败回退。只模拟API错误分支，不制造GPU压力或设备重置；候选继续默认关闭。
