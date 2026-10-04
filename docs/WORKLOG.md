@@ -8274,3 +8274,6 @@ build-priority-load-v1 2步exit0。本轮三NR竞争fixture SHA a46c2923ab4b7a20
 # 2026-10-05 3c生产队列准入候选
 
 before 6bc2a33 / checkpoint/perf-nr-3c-queue-admission-before-20261004。PreviewGpuSession增加限定本机已验双NR+SR4K+DLSS2/3X文件图的自动COMPUTE，其余保留DIRECT；CommandSlotRing事务换队列保留递增fence、错误保留旧资源，最近缓存只在实际换队列时驱逐；所有呈现仍普通DIRECT。Engine重建/旧配置恢复接入，采集/图片禁自动。修正discardRecording错误恢复的list类型。build-queue-admission-v1/v3通过；v2测试枚举Fsr3笔误编译失败、改既有Fsr，失败证据保留E:/项目/Veyra/logs/perf-nr-20261004。将执行native9组往返/全图/PTS/错误回退和真实Qt后端切换，未执行不标验收通过。
+# 2026-10-05 3c限定准入保留
+
+native nr-queue-migration.py B2d B3c-migration-v1九组通过，1278完整输出/PTS一致，自动每进程四次往返、fence递增，debug/移除0，创建失败注入返回DIRECT保持效果。Qt真实FSR3.1、XeSS、VFG、调色、时域NR往返/停止均通过：E:/项目/Veyra/logs/perf-nr-20261004/B3c-queue-ui-v3-fsr3/phase-review.json、v4-xess/result.json、v5-vfg/result.json。脚本枚举、过早断言及固定队列次数误判均保留原失败收据并按实际稳定阶段修正；v1退出后脚本继续改设置触发退出崩溃列R0，不能宣称已修复。详PERF_3C_GRAPH_NORMAL_2026-10-05。限定本机已测文件组合保留自动COMPUTE约8%收益，HIGH不默认，R0及其他组合验证待；无压力/用户配置/主线修改。
