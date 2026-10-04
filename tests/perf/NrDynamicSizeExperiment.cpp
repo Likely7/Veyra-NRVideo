@@ -13,7 +13,7 @@ int wmain(int argc,wchar_t** argv) {
     Logger::instance().openFile((out/L"engine.log").wstring());
     Session s;if(!s.init(argv[1]))return 2;
     bool pass=true;std::ofstream csv(out/L"observations.csv");
-    csv<<"step,w,h,evaluateOK,changedActivePixels,unchangedSentinelPixels,outsideWrites,referenceDifferentBytes,referenceMeanAbsoluteError\n";
+    csv<<"step,w,h,evaluateOK,changedActivePixels,unchangedSentinelPixels,outsideWrites,referenceDifferentBytes,referenceMeanAbsoluteError,dynamicGpuMs,referenceGpuMs\n";
     {
         Feature dynamic(s);if(!dynamic.create(s.ring,1920,1080))return 2;
         const uint32_t widths[]={1920,1632,1344,1056,768,1920};
@@ -36,7 +36,7 @@ int wmain(int argc,wchar_t** argv) {
                 }
             }
             const double error=double(totalError)/(double(w)*h*4);
-            csv<<step<<','<<w<<','<<h<<','<<evaluated<<','<<changed<<','<<sentinel<<','<<outside<<','<<different<<','<<error<<'\n';csv.flush();
+            csv<<step<<','<<w<<','<<h<<','<<evaluated<<','<<changed<<','<<sentinel<<','<<outside<<','<<different<<','<<error<<','<<dynamic.lastGpuEvaluateMs<<','<<reference.lastGpuEvaluateMs<<'\n';csv.flush();
             auto dump=[&](const std::wstring& name,const auto& data){std::ofstream f(out/name,std::ios::binary);f.write(reinterpret_cast<const char*>(data.data()),std::streamsize(data.size()));};
             dump(L"dynamic-"+std::to_wstring(step)+L".rgba",actual);dump(L"reference-"+std::to_wstring(step)+L".rgba",expected);
             std::printf("STEP step=%u extent=%ux%u textures=%ux%u evaluated=%d reference=%d changed=%llu sentinel=%llu outside=%llu differentBytes=%llu mae=%.6f\n",

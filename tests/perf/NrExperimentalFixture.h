@@ -64,6 +64,9 @@ struct Feature {
     NVSDK_NGX_Parameter* params=nullptr;
     NVSDK_NGX_Handle* handle=nullptr;
     ComPtr<ID3D12Resource> color,output,motion,depth;
+    ComPtr<ID3D12QueryHeap> queries;
+    ComPtr<ID3D12Resource> queryReadback;
+    double lastGpuEvaluateMs=0;
     pipeline::StateTracker states;
     uint32_t textureWidth=0,textureHeight=0;
     explicit Feature(Session& s):session(s) {Status status;params=s.core.allocateParameters(status);}
@@ -123,6 +126,13 @@ struct Feature {
             upload(ring,motion.Get(),zero)&&upload(ring,depth.Get(),zero);
     }
     bool evaluate(gfx::CommandSlotRing& ring,uint32_t w,uint32_t h,bool reset,bool changeDimensions=false) {
+        if(!queries){D3D12_QUERY_HEAP_DESC q{};q.Type=D3D12_QUERY_HEAP_TYPE_TIMESTAMP;q.Count=2;
+            if(!hrOK(session.device.device()->CreateQueryHeap(&q,IID_PPV_ARGS(&queries)),"Timer.Create"))return false;
+            D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_READBACK;D3D12_RESOURCE_DESC d{};
+            d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=16;d.Height=1;d.DepthOrArraySize=1;
+            d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            if(!hrOK(session.device.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&d,
+                D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&queryReadback)),"Timer.Readback"))return false;}
         if(changeDimensions)dimensions(w,h);ngx::ParameterBlock b(params);
         b.setD3D12Resource(p::kColor,color.Get());b.setD3D12Resource(p::kOutput,output.Get());
         b.setD3D12Resource(p::kMVec,motion.Get());b.setD3D12Resource(p::kDepth,depth.Get());
@@ -138,11 +148,19 @@ struct Feature {
         Status s;uint32_t slot;auto* list=ring.acquireNext(slot,s);if(!list)return false;
         states.transition(list,color.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         states.transition(list,output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        list->EndQuery(queries.Get(),D3D12_QUERY_TYPE_TIMESTAMP,0);
         uint64_t r=0;uint32_t e=0;const bool safe=session.adapter.snippetEvaluateFeature(list,handle,params,r,e);
         const bool ok=ngxOK(safe,r,e,"Evaluate");
         if(!ok){ring.discardRecording();states.set(output.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);return false;}
+        list->EndQuery(queries.Get(),D3D12_QUERY_TYPE_TIMESTAMP,1);
+        list->ResolveQueryData(queries.Get(),D3D12_QUERY_TYPE_TIMESTAMP,0,2,queryReadback.Get(),0);
         states.uavBarrier(list,output.Get());states.transition(list,output.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        return ring.submitAndSignal(slot)&&ring.waitIdle()&&ok;
+        if(!ring.submitAndSignal(slot)||!ring.waitIdle())return false;
+        UINT64 frequency=0;if(!hrOK(session.device.directQueue()->GetTimestampFrequency(&frequency),"Timer.Frequency")||!frequency)return false;
+        void* data=nullptr;D3D12_RANGE range{0,16};if(!hrOK(queryReadback->Map(0,&range,&data),"Timer.Map"))return false;
+        UINT64 values[2]{};std::memcpy(values,data,16);D3D12_RANGE empty{};queryReadback->Unmap(0,&empty);
+        if(values[1]<values[0])return false;lastGpuEvaluateMs=double(values[1]-values[0])*1000.0/double(frequency);
+        return ok;
     }
     std::vector<uint8_t> read(gfx::CommandSlotRing& ring) {
         const auto desc=output->GetDesc();D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{};
