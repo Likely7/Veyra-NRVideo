@@ -21,6 +21,8 @@ shutil.copytree(source,package,copy_function=matrix.copy_dependency,
  ignore=shutil.ignore_patterns('*.log','logs','user-data*','*.dmp','*tests.exe','qml-tests','QtTest','Qt6Test.dll','Qt6QuickTest.dll','qoffscreen.dll'))
 build=BASE/'build'/TASK/variant
 shutil.copy2(build/'veyra_qml_ui.exe',package/'veyra_qml_ui.exe')
+tested=json.loads((BASE/'logs'/TASK/'R0-close-fixed-v1-summary/artifacts.json').read_text(encoding='utf-8'))
+assert matrix.digest(package/'veyra_qml_ui.exe')==tested['veyra_qml_ui.exe'], 'Package executable differs from exit regression'
 shutil.copytree(ROOT/'qml',package/'qml',dirs_exist_ok=True)
 build_shaders=build/'shaders'
 if build_shaders.is_dir():shutil.copytree(build_shaders,package/'shaders',dirs_exist_ok=True)
@@ -37,7 +39,7 @@ cache=(build/'CMakeCache.txt').read_text(encoding='utf-8')
 display=re.search(r'^VEYRA_DISPLAY_VERSION:STRING=(.+)$',cache,re.M).group(1)
 manifest=json.loads((package/'package-manifest.json').read_text(encoding='utf-8-sig'))
 manifest.update(candidate=label,displayVersion=display,baseCommit='8cdc612120cbf23ba116a33c3cb0a53e2043f718',
- productCodeCommit='e8f0bd1082293c88a3ca1db851667162e4cef7a9',sourceArchiveCommit=head,worktreeDirty=False,
+ productCodeCommit='04a0fc3e86f0fa200baa2581818c6e6bd9aff0ab',sourceArchiveCommit=head,worktreeDirty=False,
  releaseReady=False,localOnly=True,gpuPackage='NVIDIA',sourceZipSha256=matrix.digest(source_zip),
  validation='RTX5070/616.56 normal-load candidate; other GPUs, real consoles/capture and physical display latency unverified')
 manifest['correspondingSource']['application']='../'+source_zip.name

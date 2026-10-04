@@ -15,7 +15,9 @@ shutil.copy2(qt/'plugins/platforms/qoffscreen.dll',app/'platforms/qoffscreen.dll
 # Windows setting or unrelated process is changed.
 ctypes.windll.kernel32.SetErrorMode(0x0002)
 fixtures=BASE/'tests/playback-smoothness-20261004/fixtures';assert (fixtures/'tone.wav').is_file()
-cases=[('repair','veyra_repair_contract_tests',[]),('xbox','veyra_xbox_tests',[]),('effect-chain','veyra_effect_chain_tests',[]),
+cases=[('repair','veyra_repair_contract_tests',[]),
+ ('present-sink','veyra_present_sink_lifecycle_tests',[str(BASE/'logs'/TASK/label/'present-sink')]),
+ ('xbox','veyra_xbox_tests',[]),('effect-chain','veyra_effect_chain_tests',[]),
  ('preset','veyra_repair_preset_tests',[str(BASE/'tests'/TASK/label/'presets.v1')]),('availability','veyra_effect_availability_tests',[]),
  ('ui-contract','veyra_ui_contract_tests',[str(BASE/'tests'/TASK/label/'ui-contract')]),('vfg-settings','veyra_vfg_settings_tests',[str(BASE/'tests'/TASK/label/'vfg-settings')]),
  ('auto-controller','veyra_nr_auto_controller_tests',[]),('i18n','veyra_ui_i18n_tests',[]),

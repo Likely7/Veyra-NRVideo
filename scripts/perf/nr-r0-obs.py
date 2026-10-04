@@ -77,15 +77,20 @@ class ObsRpc:
             if a & 128: return json.loads(b''.join(chunks))
 
     def call(self, kind, data=None):
-        self.counter += 1
-        request_id = str(self.counter)
-        self.send({'op':6, 'd':{'requestId':request_id, 'requestType':kind, 'requestData':data or {}}})
+        deadline = time.monotonic()+15
         while True:
-            response = self.receive()
-            if response['op'] == 7 and response['d']['requestId'] == request_id:
-                result = response['d']
-                assert result['requestStatus']['result'], (kind, result['requestStatus'])
-                return result.get('responseData', {})
+            self.counter += 1
+            request_id = str(self.counter)
+            self.send({'op':6, 'd':{'requestId':request_id, 'requestType':kind, 'requestData':data or {}}})
+            while True:
+                response = self.receive()
+                if response['op'] == 7 and response['d']['requestId'] == request_id:
+                    result = response['d']; break
+            if result['requestStatus']['code'] == 207 and time.monotonic() < deadline:
+                # Websocket can identify before the portable profile is ready.
+                time.sleep(.25); continue
+            assert result['requestStatus']['result'], (kind, result['requestStatus'])
+            return result.get('responseData', {})
 
 def close_owned(process, expected):
     if process is None or process.poll() is not None: return
@@ -112,6 +117,12 @@ def config_manifest():
 
 def run():
     variant, label = sys.argv[1:3]
+    overrides = [arg.split('=',1)[1] for arg in sys.argv[3:] if arg.startswith('--milestone-exe=')]
+    assert len(overrides) <= 1
+    switches = {arg for arg in sys.argv[3:] if arg.startswith('--') and not arg.startswith('--milestone-exe=')}
+    assert switches <= {'--baseline-qml','--paused-present-off','--pre-exit-exe'}
+    modes = tuple(arg for arg in sys.argv[3:] if not arg.startswith('--')) or ('gpu','compat')
+    assert len(set(modes)) == len(modes) and all(mode in ('gpu','compat') for mode in modes)
     assert label.replace('-', '').isalnum()
     matrix.assert_gpu_tests_idle()
     assert not any((p.info['name'] or '').lower() == 'obs64.exe' for p in psutil.process_iter(['name'])), 'Existing OBS process; do not disturb it'
@@ -140,8 +151,17 @@ def run():
     ws_config.write_text(json.dumps(settings), encoding='utf-8')
     app = test/'veyra-app'
     shutil.copytree(BASE/'test-packages'/TASK/'Veyra-2.0.3-perf-baseline-A-NVIDIA-win64-portable', app, copy_function=matrix.copy_dependency)
-    shutil.copy2(BASE/'build'/TASK/variant/'veyra_qml_ui.exe', app/'veyra_qml_ui.exe')
-    shutil.copytree(ROOT/'qml', app/'qml', dirs_exist_ok=True)
+    executable = BASE/'build'/TASK/variant/'veyra_qml_ui.exe'
+    if '--pre-exit-exe' in switches:
+        executable = BASE/'tests'/TASK/'app-B2d-R0-normal-v1/veyra_qml_ui.exe'
+        assert matrix.digest(executable) == '8c2276d68d15c2e4466befcf367439b7efc42c68defd5ef93182398c9e8d8a03'
+    if overrides:
+        assert '--pre-exit-exe' not in switches
+        executable = Path(overrides[0]).resolve()
+        assert executable.is_relative_to((BASE/'tests'/TASK).resolve()) and executable.name == 'veyra_qml_ui.exe' and executable.is_file()
+    shutil.copy2(executable, app/'veyra_qml_ui.exe')
+    baseline_qml = variant == 'A' or '--baseline-qml' in switches
+    if not baseline_qml: shutil.copytree(ROOT/'qml', app/'qml', dirs_exist_ok=True)
     shutil.copy2(ROOT/'scripts/perf/nr-r0-obs.qml', app/'qml/Veyra/ObsProbe.qml')
     actions = test/'actions.json'
     main = app/'qml/Veyra/Main.qml'
@@ -151,10 +171,13 @@ def run():
     user_config_before = config_manifest()
     identity = {'playerPayload':payload,'obsExeSha256':matrix.digest(portable/'bin/64bit/obs64.exe'),
                 'installedObsExeSha256':matrix.digest(installed/'bin/64bit/obs64.exe'),'userConfigBefore':user_config_before,
-                'sourceSha256':matrix.digest(matrix.SOURCES['M1']),'gpuCompetition':False,'recordingPurpose':'Game capture compatibility, not timing or pressure'}
+                'sourceSha256':matrix.digest(matrix.SOURCES['M1']),'gpuCompetition':False,'baselineQml':baseline_qml,
+                'pausedPresentReuseDisabled':'--paused-present-off' in switches,'executableSource':str(executable),
+                'recordingPurpose':'Game capture compatibility, not timing or pressure'}
     (logs/'artifacts.json').write_text(json.dumps(identity,ensure_ascii=False,indent=2),encoding='utf-8')
     env = {k:v for k,v in os.environ.items() if not k.upper().startswith(('VEYRA_','QT_','QSG_','OBS_'))}
     env.update(TEMP=str(tmp),TMP=str(tmp))
+    if '--paused-present-off' in switches: env['VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE']='1'
     obs, player, rpc = None,None,None
     rows = []
     try:
@@ -178,7 +201,7 @@ def run():
         rpc.call('SetRecordDirectory', {'recordDirectory':str(test/'recordings')})
         rpc.call('CreateScene',{'sceneName':'VeyraR0'})
         rpc.call('SetCurrentProgramScene',{'sceneName':'VeyraR0'})
-        for mode in ('gpu','compat'):
+        for mode in modes:
             title = f'Veyra R0 OBS {label} {mode}'
             command = {'sequence':0,'action':'start','title':title,'media':str(matrix.SOURCES['M1']).replace('\\','/')}
             def action(value):
@@ -192,8 +215,17 @@ def run():
             if mode == 'compat': args.append('--obs-game-capture')
             with (logs/(mode+'-console.log')).open('xb') as console:
                 player = subprocess.Popen(args,cwd=app,env=player_env,stdout=console,stderr=subprocess.STDOUT)
-            time.sleep(7)
-            assert player.poll() is None
+            deadline = time.monotonic()+35
+            while True:
+                assert player.poll() is None, 'Owned player exited before NR playback'
+                log_file = logs/(mode+'-player.log')
+                samples = [line.split('OBS_UI_SAMPLE ',1)[1] for line in log_file.read_text(encoding='utf-8',errors='replace').splitlines()
+                    if 'OBS_UI_SAMPLE ' in line] if log_file.exists() else []
+                if samples:
+                    latest = json.loads(samples[-1])
+                    if latest['nr'] and latest['position'] > 1 and not latest['paused'] and not latest['failed']: break
+                assert time.monotonic() < deadline, 'Actual enhanced playback did not become ready'
+                time.sleep(.25)
             input_name = 'VeyraOwned-'+mode
             rpc.call('CreateInput',{'sceneName':'VeyraR0','inputName':input_name,'inputKind':'game_capture','inputSettings':{'capture_mode':'window','capture_cursor':False,'capture_overlays':True,'allow_transparency':False},'sceneItemEnabled':True})
             items = rpc.call('GetInputPropertiesListPropertyItems',{'inputName':input_name,'propertyName':'window'})['propertyItems']

@@ -8344,3 +8344,7 @@ R0合同14项+Qt Quick39项通过；真实Qt GPU/软件功能布局4/4、严格8
 `nr-r0-close.py B2d R0-close-rebuild-v1`请求FSR后200ms退出实际C0000005；封存A的`R0-close-baseline-v1 fsr3`同样失败。初始化在Qt HWND销毁后继续，CreateSwapChainForHwnd 80070005后清理崩溃。源码确认PresentSink非拥有旧队列未清空，交换链失败前未赋新队列，随后VideoPresenter释放旧队列；重建缺取消检查/停止后仍回滚。先存档本候选和完整失败证据，再最小修复queue生命周期/长初始化取消。没有压力/GPU竞争/设备移除；OBS真实采集仍待，候选尚不可交付。
 
 R0-candidate eb8b1a2已存档，bundle da0440b9229a8bcbc4c6a918d1cdeac38b3372ae4c8eff3af358744424dc3e61。退出修复候选只改PresentSink提前绑定当前queue/拒绝失效HWND/清空借用句柄与指针、VideoPresenter验证目标窗口、EngineController NGX返回后的stop和退出不回滚。其他呈现重建统一经过同一取消检查，保留仅交换链恢复不重建views的旧语义。新增实际D3D12 debug生命周期测试：合法打开→释放旧队列→已关闭窗口初始化失败→重复关闭→新窗口重开，三轮；不造GPU负载/设备故障。待构建及真实退出回归，不提前标通过。
+
+退出修复04a0fc3构建v1因Agent填错未知target veyra_export_queue_worker失败，未编译产品；v2改真实veyra_export_workflow_tests，18步成功。新UI EXE c512b8782eb86f70c584a6c1bb87c918af648c0b3aee77cf04a2b0967a628464；R0-exit-contracts-v1 repair/真实PresentSink三轮failed-open/reopen重复清理2/2通过，debugErrors=0；R0-close-fixed-v1七个实际Qt退出（FSR/XeSS/VFG/SF-v2尺寸层数/停止）全exit0、六次真实长创建后取消，无泄漏/交换链错误。原before A/B崩溃日志与dmp不删。
+
+OBS正常功能R0发现阻塞：v1 API207未ready修正有界重试；v3软件兼容六场景通过/截图已看/用户OBS配置未变。GPU界面v2/v4均全屏黑图；基线A两轮通过且全屏原图有真实视频。paused-present-off、基线QML、退出修复前EXE均不能消除；B2d阶段失败、B2a核心阶段通过、B5c暂停空闲阶段resize失败。非压力/性能测试，所有阶段同M1/单NR/源码截图与录像/原用户配置不变。先存档本失败候选，再恢复5c旧呈现语义；NR残差复用独立保留，暂停0.011%旧数据暂不作为最终保留收益。详PERF_R0_ACCEPTANCE及E:/项目/Veyra/logs/perf-nr-20261004/R0-obs-*。
