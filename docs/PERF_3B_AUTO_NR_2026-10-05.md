@@ -32,3 +32,23 @@ E1 已证明最大实例动态子区域与按实际尺寸创建的 NR 不等价�
 - 当前只接隔离测试描述字段，UI/默认配置未使用；下一步普通播放才能决定是否保留这个资源代价。
 
 证据：`E:/项目/Veyra/logs/perf-nr-20261004/B3b-pool-native-v1-summary/{artifacts,completed,summary}.json`，对应逐帧CSV/原图在`E:/项目/Veyra/tests/perf-nr-20261004/B3b-pool-native-v1-*`。EXE SHA256 `4b065caac8de8a115723743d655a0d53322e4e3fe66e44ed98227fce74019bec`；M1 SHA256 `03b2a0dc7f682a2c70ae65809d4db69c725a95f49e60116b6e9da2e2ae4610c8`；Lecram NR SHA256 `f95feb54137ea11979f9b4ec4f00afd84b5c98a5624d3388fbf6a87714a39fcc`（完整身份仍以manifest/实际文件为准）。控制器日志`E:/项目/Veyra/logs/perf-nr-20261004/nr-auto-controller-v1.log`。
+
+## 普通播放：12组交错对照
+
+`B3b-normal-v1`，同一真实QML/NR运行库，Normal优先级，双NR1080p、无SR/FG/时域，M1与M10各off/auto三次交错。额外GPU竞争进程0，全部正常退出、载荷manifest前后一致。构建`build-nr-auto-host-v1`来自`47e8dbf`；驱动`54fd585`，后续同时只新增5a文档/诊断源码，测试EXE没有重建或替换。
+
+| 素材/指标（三轮中位） | off | auto | 结论 |
+|---|---:|---:|---|
+| M1 30fps 增强均值ms | 14.558（14.485–14.654） | 14.472（14.406–14.682） | 保持100%，范围重叠，不计持续提速 |
+| M1 Present间隔P99 ms | 34.0081 | 34.0277 | 没有改善 |
+| M10 60fps 增强均值ms | 14.526（14.474–14.557） | 11.763（11.734–11.820） | 降到70%，减少19.02%，以画面尺寸为代价 |
+| M10 最后一层NR P95 ms | 7.261 | 7.283 | 该固定层没有变快 |
+| M10 GPU完成等待P95 ms | 16.3285 | 13.686 | 包含排队/观察，不等同屏幕延迟 |
+| M10 Present间隔P99 ms | 17.6673 | 17.6552 | 差异很小，不称流畅度根治 |
+| M10 预览跳过源帧 | 每轮1 | 每轮1 | 原10秒附近长帧仍存在 |
+
+三个M10运行均100→85→70%，每轮两次切档后稳定；六次真实切换前后成功Present间隔15.718–17.4351ms，边界排空16.662–17.341ms，cancelledJobs=0。M1六组源跳0、无切档。M10最大Present间隔off66.991–70.740ms/auto69.485–75.942ms，保留所有长帧，不选择性抹掉。
+
+候选值得作为明确可选档继续接入，默认不选。不能将一层缩小的收益称为NR内核优化。显存额外约1697MiB、池创建约半秒仍是代价；准入保持本机已测RTX5070/Original/1080p SDR文件、列表第一层、1/2层无SR/FG/时域/NrHold及NVIDIA光流，其他配置保留1080p并显示未激活原因。接口、持久化、灰态、切换画质和导出边界仍待产品回归。
+
+原始证据：`E:/项目/Veyra/logs/perf-nr-20261004/B3b-normal-v1-summary/{artifacts,completed,summary}.json`及12组`player.log`/`result.json`/`meters.json`；两组pilot单独保留，不并入三轮统计。
