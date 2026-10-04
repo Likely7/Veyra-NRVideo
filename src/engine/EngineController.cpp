@@ -580,6 +580,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                     uint64_t buildBudget=0,buildUsage=0;const bool measuredBefore=ctx.videoMemoryInfo(buildBudget,buildUsage);
                     const bool adopted=gpu->adopt(selected.snapshot(),desc);
+                    if(!adopted&&!gpu->configureQueue(desc,!isCapture&&!isImage))return false;
                     bool opened=adopted||graph->initialize(desc);
                     auto failure=graph->failedBackend();
                     if(opened){
@@ -1262,7 +1263,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if(!accepted){
                             presenter.close();graph->shutdown();recentGraphCache.evict("build-rollback");
                             graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;
-                            if(!graph->initialize(gd)||!presenter.open(ctx,window,*graph,options.settings.captureCompatible,!isCapture&&!isImage)||!graph->createViews()){status(L"设置失败且旧资源恢复失败，已停止",true);break;}
+                            if(!gpu->configureQueue(gd,!isCapture&&!isImage)||!graph->initialize(gd)||!presenter.open(ctx,window,*graph,options.settings.captureCompatible,!isCapture&&!isImage)||!graph->createViews()){status(L"设置失败且旧资源恢复失败，已停止",true);break;}
                         }
                     }else if(accepted)accepted=graph->applySettings(requested);
                     if(rebuild)publishFrameGenerationCapabilities();

@@ -8271,3 +8271,6 @@ build-priority-load-v1 2步exit0。本轮三NR竞争fixture SHA a46c2923ab4b7a20
 # 2026-10-05 3c完整图普通负载18组结束
 
 执行`py -3.11 -B scripts/perf/nr-graph-normal.py B2d B3c-graph-normal-v1`，18/18正常产品检查通过，无额外竞争/人工显存压力，测试前后全部产品payload SHA一致。2X DIRECT普通→COMPUTE普通增强21.386→19.477ms；3X23.330→21.542ms，三轮中位，约8.93%/7.66%。源跳过全0，3X生成过期DIRECT3→COMPUTE4/4/5；软件Present P99无明显改善，约70ms尾部与frame303/304图提交仍存在，不宣称卡顿根治。HIGH继续拒绝默认。数据/设置/身份/完整异常E:/项目/Veyra/logs/perf-nr-20261004/B3c-graph-normal-v1-summary和各18轮，详docs/PERF_3C_GRAPH_NORMAL_2026-10-05.md。guard 113路径通过；下一步生产队列迁移/回退与缓存兼容。
+# 2026-10-05 3c生产队列准入候选
+
+before 6bc2a33 / checkpoint/perf-nr-3c-queue-admission-before-20261004。PreviewGpuSession增加限定本机已验双NR+SR4K+DLSS2/3X文件图的自动COMPUTE，其余保留DIRECT；CommandSlotRing事务换队列保留递增fence、错误保留旧资源，最近缓存只在实际换队列时驱逐；所有呈现仍普通DIRECT。Engine重建/旧配置恢复接入，采集/图片禁自动。修正discardRecording错误恢复的list类型。build-queue-admission-v1/v3通过；v2测试枚举Fsr3笔误编译失败、改既有Fsr，失败证据保留E:/项目/Veyra/logs/perf-nr-20261004。将执行native9组往返/全图/PTS/错误回退和真实Qt后端切换，未执行不标验收通过。
