@@ -111,7 +111,7 @@ def stage(variant,stageLabel=None):
     main.write_text(text, encoding='utf-8')
     return path
 
-def run(variant, material, setting, label, seconds, gpuPriority=None, allowedGpuPids=(),testEnv=None,stageLabel=None):
+def run(variant, material, setting, label, seconds, gpuPriority=None, allowedGpuPids=(),testEnv=None,stageLabel=None,onPoll=None):
     assert_gpu_tests_idle(allowedGpuPids)
     subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/perf/nr-control.py'), 'guard'], check=True)
     app = stage(variant,stageLabel)
@@ -155,6 +155,7 @@ def run(variant, material, setting, label, seconds, gpuPriority=None, allowedGpu
         samples = []
         try:
             while proc.poll() is None and time.monotonic()-start < 280:
+                if onPoll is not None:onPoll(proc,logs/'player.log')
                 try:
                     cpu, rss = meter.cpu_percent(None), meter.memory_info().rss
                 except psutil.Error:
