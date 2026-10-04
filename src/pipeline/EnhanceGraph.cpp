@@ -1277,38 +1277,9 @@ bool EnhanceGraph::initNgxFeatures()
     // NR feature create (8.5 create parameter contract), one handle per layer.
     for (size_t layerIndex = 0; nrEnabled_ && !lmxxfNr_ && layerIndex < nrInstances_.size(); ++layerIndex) {
         auto* layer = nrInstances_[layerIndex].get();
-        const uint32_t nrW=layer->width(),nrH=layer->height();
-        namespace p = ngx::dlssnr;
-        ngx::ParameterBlock pb(ngxParams_);
-        pb.setU32(p::kWidth, nrW); pb.setU32(p::kHeight, nrH);
-        pb.setU32(p::kInputWidth, nrW); pb.setU32(p::kInputHeight, nrH);
-        pb.setU32(p::kOutputWidth, nrW); pb.setU32(p::kOutputHeight, nrH);
-        pb.setU32(p::kOutputDotWidth, nrW); pb.setU32(p::kOutputDotHeight, nrH);
-        pb.setU32(p::kUpscaling, 0);
-        pb.setF32(p::kScale, 1.0f); pb.setF32(p::kScalingRatio, 1.0f);
-        pb.setVoid(p::kComputeScalingRatioCallback,
-            reinterpret_cast<void*>(&ngx::DlssNrRuntimeAdapter::scalingRatioCallback));
-        pb.setI32(p::kHintRenderPreset, 0);
-        pb.setU32(p::kStdWidth, nrW); pb.setU32(p::kStdHeight, nrH);
-        pb.setI32(p::kPerfQualityValue, 1);
-        pb.setU32(p::kCreationNodeMask, 1); pb.setU32(p::kVisibilityNodeMask, 1);
-        ID3D12GraphicsCommandList* list = ring_.acquire(0, st);
-        if (list == nullptr) { failedBackend_=engine::FailedBackend::Infrastructure; return false; }
-        failedBackend_=engine::FailedBackend::Nr;
-        // One parameter block per layer: the block carries the feature's create
-        // contract, and Magpie's evidence is that each pass needs its own.
-        layer->setParameters(coreHost_->allocateParameters(st));
-        if (layer->parameters() == nullptr) return false;
-        NVSDK_NGX_Handle* created = nullptr;
-        if (!nrAdapter_->snippetCreateFeature(list, ngxParams_, &created, nrResult_, nrSeh_) ||
-            nrResult_ != static_cast<uint64_t>(NVSDK_NGX_Result_Success) || created == nullptr) {
-            veyra::log::error("graph", std::format("NR layer {} create failed 0x{:X}", layerIndex + 1, nrResult_));
-            return false;
-        }
-        layer->setHandle(created);
-        failedBackend_=engine::FailedBackend::Infrastructure;
-        if(!ring_.submitAndSignal(0)||!ring_.waitIdle())return false;
+        if(!createNrFeature(*layer))return false;
     }
+    if(desc_.nrAutoPoolLayer&&!createAutoNrPool())return false;
 
     if (srEnabled_ && !desc_.noFeatures && desc_.videoSrQuality!=engine::kVideoSrFsr) {
         ngx::DlssSrBackend::CreateDesc sd{};
@@ -1397,6 +1368,89 @@ bool EnhanceGraph::initNgxFeatures()
 // into residualRgba_. Copying back is deliberate: every downstream reader
 // (SR, FG, tail colour, diagnostic views) keeps binding the same texture, so
 // enabling the stabiliser cannot silently mis-bind a consumer.
+bool EnhanceGraph::createNrFeature(NrInstance& layer) {
+    Status st=Status::Ok;const uint32_t nrW=layer.width(),nrH=layer.height();
+    namespace p=ngx::dlssnr;ngx::ParameterBlock pb(ngxParams_);
+    pb.setU32(p::kWidth,nrW);pb.setU32(p::kHeight,nrH);
+    pb.setU32(p::kInputWidth,nrW);pb.setU32(p::kInputHeight,nrH);
+    pb.setU32(p::kOutputWidth,nrW);pb.setU32(p::kOutputHeight,nrH);
+    pb.setU32(p::kOutputDotWidth,nrW);pb.setU32(p::kOutputDotHeight,nrH);
+    pb.setU32(p::kUpscaling,0);pb.setF32(p::kScale,1.0f);pb.setF32(p::kScalingRatio,1.0f);
+    pb.setVoid(p::kComputeScalingRatioCallback,reinterpret_cast<void*>(&ngx::DlssNrRuntimeAdapter::scalingRatioCallback));
+    pb.setI32(p::kHintRenderPreset,0);pb.setU32(p::kStdWidth,nrW);pb.setU32(p::kStdHeight,nrH);
+    pb.setI32(p::kPerfQualityValue,1);pb.setU32(p::kCreationNodeMask,1);pb.setU32(p::kVisibilityNodeMask,1);
+    auto* list=ring_.acquire(0,st);
+    if(!list){failedBackend_=engine::FailedBackend::Infrastructure;return false;}
+    failedBackend_=engine::FailedBackend::Nr;
+    layer.setParameters(coreHost_->allocateParameters(st));if(!layer.parameters())return false;
+    NVSDK_NGX_Handle* created=nullptr;
+    if(!nrAdapter_->snippetCreateFeature(list,ngxParams_,&created,nrResult_,nrSeh_)||
+       nrResult_!=uint64_t(NVSDK_NGX_Result_Success)||!created){
+        log::error("graph",std::format("NR {}x{} create failed 0x{:X} seh={}",nrW,nrH,nrResult_,nrSeh_));return false;
+    }
+    layer.setHandle(created);failedBackend_=engine::FailedBackend::Infrastructure;
+    return ring_.submitAndSignal(0)&&ring_.waitIdle();
+}
+
+bool EnhanceGraph::createAutoNrPool() {
+    const auto index=*desc_.nrAutoPoolLayer;
+    const bool admitted=nrEnabled_&&!srEnabled_&&!fgEnabled_&&!lmxxfNr_&&!desc_.hdrWorking()&&!desc_.stillImage&&
+        !desc_.noFeatures&&!desc_.noNgx&&!desc_.runtimeNodeOrder&&!desc_.nrTemporal&&desc_.nrHoldStrength==0&&
+        desc_.nrRuntime==engine::NrRuntime::Original&&desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia&&
+        context_.adapter().deviceId==0x2f04&&context_.adapter().isNvidia&&index<nrInstances_.size()&&nrInstances_.size()+4<=8&&
+        workW_==1920&&workH_==1080&&desc_.nrLayersExtent[index]==Extent{1920,1080}&&
+        std::none_of(nrInstances_.begin(),nrInstances_.end(),[](const auto& layer){return layer->temporalEnabled;});
+    if(!admitted){failedBackend_=engine::FailedBackend::Nr;log::error("nr-auto-pool","experimental admission refused; product entry points do not request this pool");return false;}
+    uint64_t budget=0,usage=0;const auto start=std::chrono::steady_clock::now();
+    const auto& initial=*nrInstances_[index];
+    constexpr unsigned percents[5]={100,85,70,55,40};
+    uint64_t extraTextureBytes=0;
+    for(unsigned level=1;level<5;++level){const uint32_t w=(1920*percents[level]/100)&~1u,h=(1080*percents[level]/100)&~1u;
+        extraTextureBytes+=uint64_t(w)*h*36+uint64_t(workW_)*workH_*8;}
+    if(!context_.videoMemoryInfo(budget,usage)||budget<=usage||extraTextureBytes>(budget-usage)/2||usage+extraTextureBytes>=budget/3){
+        failedBackend_=engine::FailedBackend::Nr;log::error("nr-auto-pool","insufficient measured headroom; refusing extra pool");return false;}
+    const auto beforeUsage=usage;
+    for(unsigned level=1;level<5;++level) {
+        const uint32_t w=(1920*percents[level]/100)&~1u,h=(1080*percents[level]/100)&~1u;
+        auto layer=std::make_unique<NrInstance>();
+        if(!layer->create(context_.device(),w,h,workW_,workH_,nrZeroMotion_.Get(),nrZeroDepth_.Get()))return false;
+        layer->model=initial.model;layer->residualSettings=initial.residualSettings;layer->protection=initial.protection;
+        nrAutoPool_[level]=std::move(layer);if(!createNrFeature(*nrAutoPool_[level]))return false;
+        if(!context_.videoMemoryInfo(budget,usage)||budget<=usage||usage>=budget/3){
+            failedBackend_=engine::FailedBackend::Nr;log::error("nr-auto-pool","SDK pool exceeds conservative measured headroom; refusing activation");return false;}
+        log::info("nr-auto-pool",std::format("event=created level={} internal={}x{} usageMiB={}",level,w,h,usage>>20));
+    }
+    nrAutoLevel_=0;nrAutoPoolReady_=true;
+    log::info("nr-auto-pool",std::format("event=ready layer={} handles={} createMs={:.3f} extraMiB={}",index,nrInstances_.size()+4,
+        std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count(),(usage-beforeUsage)>>20));
+    return true;
+}
+
+bool EnhanceGraph::selectAutoNrLevel(unsigned level) {
+    if(!nrAutoPoolReady_||!desc_.nrAutoPoolLayer||level>=nrAutoPool_.size())return false;
+    if(level==nrAutoLevel_)return true;
+    // The host must retire every presentation/CPU lease at this boundary.
+    if(!realLeases_[0].expired()||!realLeases_[1].expired()||!nrAutoPool_[level])return false;
+    const auto start=std::chrono::steady_clock::now();
+    if(!ring_.drainQueue()||!ring_.discardRecording())return false;
+    const auto index=*desc_.nrAutoPoolLayer,prior=nrAutoLevel_;const auto previousDesc=desc_;
+    auto& old=*nrInstances_[index];auto& next=*nrAutoPool_[level];
+    next.model=old.model;next.residualSettings=old.residualSettings;next.protection=old.protection;next.enabled=old.enabled;
+    nrAutoPool_[prior]=std::move(nrInstances_[index]);nrInstances_[index]=std::move(nrAutoPool_[level]);
+    const Extent extent{next.width(),next.height()};desc_.nrLayersExtent[index]=extent;
+    if(desc_.fixedExecutionPlan)for(unsigned i=0;i<desc_.fixedExecutionPlan->stepCount;++i){auto& step=desc_.fixedExecutionPlan->steps[i];
+        if(step.type==engine::EffectType::NrEnhance&&step.resourceIndex==index)step.processing=extent;}
+    if(!createViews()){
+        nrAutoPool_[level]=std::move(nrInstances_[index]);nrInstances_[index]=std::move(nrAutoPool_[prior]);desc_=previousDesc;
+        const bool restored=createViews();log::error("nr-auto-pool",std::format("descriptor switch failed restored={}",restored));return false;
+    }
+    nrAutoLevel_=level;nrAutoResetPending_=true;invalidatePausedResidualCache();
+    for(auto& layer:nrInstances_){layer->historyValid=false;layer->inputRevision=1;}
+    log::info("nr-auto-pool",std::format("event=switch from={} to={} internal={}x{} switchMs={:.3f} reset=true",prior,level,extent.width,extent.height,
+        std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()));
+    return true;
+}
+
 bool EnhanceGraph::createNrHoldPass()
 {
     nrHoldPass_.reset();
@@ -1791,6 +1845,7 @@ bool EnhanceGraph::createViews()
 // ---------------------------------------------------------------------------
 bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh)
 {
+    reset=reset||nrAutoResetPending_;nrAutoResetPending_=false;
     // Whole-chain duplicate reuse failed the unchanged-output experiment.
     // This narrower path only handles repeated edits of the SAME paused
     // frame, after one complete reset evaluation under this configuration.
@@ -3142,6 +3197,10 @@ void EnhanceGraph::shutdown()
         featuresReleased=featuresReleased&&safe&&layerResult==uint64_t(NVSDK_NGX_Result_Success)&&layerSeh==0;
         layer->setHandle(nullptr);
     }
+    for(auto& layer:nrAutoPool_)if(layer&&layer->handle()){
+        uint64_t result=0;uint32_t seh=0;const bool safe=nrAdapter_->snippetReleaseFeature(layer->handle(),result,seh);
+        featuresReleased=featuresReleased&&safe&&result==uint64_t(NVSDK_NGX_Result_Success)&&seh==0;layer->setHandle(nullptr);
+    }
     gpuDis_.reset();
     amdOf_.reset();
     for(auto& motion:presentMotion_)motion.Reset();
@@ -3179,6 +3238,9 @@ void EnhanceGraph::shutdown()
     // core is still alive, rather than relying on its shutdown leak fallback.
     if (coreHost_ && coreHost_->initialized()) {
         unsigned releasedNrParameters = 0;
+        for(auto layer=nrAutoPool_.rbegin();layer!=nrAutoPool_.rend();++layer)if(*layer&&(*layer)->parameters()){
+            coreHost_->destroyParameters((*layer)->parameters());(*layer)->setParameters(nullptr);++releasedNrParameters;
+        }
         for (auto layer = nrInstances_.rbegin(); layer != nrInstances_.rend(); ++layer) {
             if ((*layer)->parameters() == nullptr) continue;
             coreHost_->destroyParameters((*layer)->parameters());
@@ -3225,6 +3287,7 @@ void EnhanceGraph::shutdown()
     downsamplePass_={};residualPass_={};stackProtectionPass_={};flowAdaptPass_={};
     for(auto& layer:nrInstances_)layer->close();
     nrInstances_.clear();
+    for(auto& layer:nrAutoPool_)layer.reset();nrAutoLevel_=0;nrAutoPoolReady_=nrAutoResetPending_=false;
     residualRgba_.Reset();preSrProtectionRgba_.Reset();interNrProtectionRgba_.Reset();nrFlow_.Reset();baseFlow_.Reset();
     for(unsigned i=0;i<kGeneratedPoolSlots;++i){if(fgDisableMapped_[i]&&fgDisableReadback_[i]){D3D12_RANGE written{0,0};fgDisableReadback_[i]->Unmap(0,&written);}fgDisableMapped_[i]=nullptr;fgDisable_[i].Reset();fgDisableReadback_[i].Reset();generatedLeases_[i].reset();genFrame_[i].Reset();}for(auto& lease:realLeases_)lease.reset();fgDisableInit_.Reset();
     encPass_ = ComputePass{};

@@ -389,6 +389,9 @@ struct EnhanceGraphDesc {
     ID3D12Resource* srMotionProbe = nullptr;
     // Same borrowed diagnostic contract as srMotionProbe, for FG only.
     ID3D12Resource* fgMotionProbe = nullptr;
+    // Isolated 3b experiment: one layer owns a bounded pool on this same
+    // snippet session. Not set by any product entry point until proven.
+    std::optional<uint32_t> nrAutoPoolLayer;
 };
 
 class EnhanceGraph {
@@ -474,6 +477,9 @@ public:
     // Full-batch consumers (export/file accounting) still use resolveGeneration.
     bool resolveFrame(FrameOutputs& out,uint32_t index);
     bool applySettings(const engine::EnhancementSettings&);
+    bool selectAutoNrLevel(unsigned level);
+    bool autoNrPoolReady()const{return nrAutoPoolReady_;}
+    unsigned autoNrLevel()const{return nrAutoLevel_;}
 
     // s10 ownership-order teardown: NVOF fence drain must happen BEFORE this
     // call (it needs the ring and out-fence alive). Releases features, NVOF
@@ -662,6 +668,11 @@ private:
     // NR layers. One entry means the single-layer product path; the probe in
     // tools/nr_probe verified several handles coexist on one snippet session.
     std::vector<std::unique_ptr<NrInstance>> nrInstances_;
+    std::array<std::unique_ptr<NrInstance>,5> nrAutoPool_;
+    unsigned nrAutoLevel_=0;
+    bool nrAutoPoolReady_=false,nrAutoResetPending_=false;
+    bool createNrFeature(NrInstance& layer);
+    bool createAutoNrPool();
     bool lmxxfNr_ = false;
     bool submitGraph(uint32_t slot);
     // The layer count the current graph was built with, so a settings change
