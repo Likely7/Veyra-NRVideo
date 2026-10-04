@@ -1,5 +1,13 @@
 # Veyra 工作记录
 
+## 2026-10-04 NR性能优化目标：进度对齐、分支与开工存档
+
+- 用户指定 `docs/PERF_PLAN_NR_2026-10-03.md`，要求文档/存档/当前基线先行，逐节点留档与实测，负优化回退，目标模式直至整份方案处理完毕。已创建active goal，没有预算上限。独立E盘worktree `perf-nr-20261004` / `codex/perf-nr-20261004` 从刚验收tip `8cdc612120cbf23ba116a33c3cb0a53e2043f718` 开出；旧修复分支、main354b1c6、Claude工作区、原桌面64项dirty和已发布/本地候选保持。
+- 只读完整核对当前AGENTS、README、V1产品规格、竞品历史审计、当前施工WORKLOG节及Claude原性能方案。原方案仅在 `E:/项目/Veyra/worktrees/rtss-compat-20261003/docs/PERF_PLAN_NR_2026-10-03.md`，已逐字节复制到本分支；原件、SHA、桌面status、main/起点/工作树清单在 `E:/项目/Veyra/archives/perf-nr-20261004/start.json`，tag `checkpoint/pre-perf-nr-20261004`。不修改Claude工作区。方案的2.0.1/未合RTSS/启动冲突已过时，按当前2.0.3+后续本地修复重基线。
+- 当前进度对齐已写AGENTS、CURRENT_STATUS、README、V1规格和竞品审计日期说明；公开2.0.3与本地smoothfix分开，严重后台掉帧/AMD推理/Xbox长稳/RTX30/40/616.92/实屏测量未验边界保留，HDR/Dolby13/14暂缓。执行账本 `PERF_EXECUTION_NR_2026-10-04.md` 列出全部实验/节点，尚无本轮优化数据，不用原方案估算收益。
+- `py -3.11 -B scripts/perf/nr-control.py init` exit0，source8cdc/main/原桌面status和8个授权文档/脚本路径检查pass。每节点clean commit/tag、增量bundle verify与SHA/patch/receipt，负优化用revert保留历史；新baseline/guard不修改旧迁移guard或旧archive。
+- 新产物统一 `E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages}/perf-nr-20261004`；固定媒体 `tests/perf-matrix/media`。本轮不用Computer Use，不派Agent，不关用户应用/改配置/驱动；测试≤300s、构建≤900s，TEMP/TMP只子进程。下一步文档提交和完整初始bundle，随后全新A构建/同源三次基准，再E1/E2/E3。没有开始产品性能改动。
+
 ## 2026-10-04 自定义倍速、字幕、UI流畅度与专业布局/全屏恢复
 
 - 用户要求自定义倍速、修复#18、排查2.0.3相比2.0.2的UI卡顿与失焦掉帧，后追加倍速菜单遮挡、专业重复输入/输出标签及全屏检查。先从fb8e500开codex/playback-smoothness-20261004，checkpoint/pre-playback-smoothness-20261004；source-before.bundle verify/SHA7902EE2E…AF26，archive保存桌面/隔离区初始status。桌面64项修改不动，main仍354b1c6；当前只本地修复与包，无merge/push/Release/关机，无子Agent。方案 PLAYBACK_SMOOTHNESS_PLAN_2026-10-04.md，独立scope guard保护本轮接点。
