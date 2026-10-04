@@ -28,7 +28,6 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         return false;
     }
     viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;
-    captureResizeAfter_={};captureResizeWidth_=captureResizeHeight_=0;
     ++generation_;
     Status st=Status::Ok;
     if((graph.fgEnabled()||graph.usesComputeQueue())&&!graph.xessEnabled()){
@@ -126,19 +125,6 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // stretch current buffers there instead of repeatedly draining the GPU
     // and rebuilding provider resources at monitor/DPI boundaries.
     const bool windowChanging=GetPropW(window_,L"Veyra.InteractiveMove")||GetPropW(window_,L"Veyra.DpiTransition");
-    bool captureResizeDeferred=false;
-    if((targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetModuleHandleW(L"graphics-hook64.dll")){
-        // OBS 32.1.2 resets one process-wide capture on any ResizeBuffers.
-        // Rebuild the video after Qt has resized its UI swapchain, retaining
-        // the old video buffers meanwhile instead of selecting the UI surface.
-        // Source: obsproject/obs-studio 32.1.2 graphics-hook/dxgi-capture.cpp.
-        if(captureResizeWidth_!=targetWidth||captureResizeHeight_!=targetHeight){
-            captureResizeWidth_=targetWidth;captureResizeHeight_=targetHeight;
-            captureResizeAfter_=now+std::chrono::milliseconds(250);
-            veyra::log::info("capture-resize",std::format("defer video buffer resize target={}x{} delayMs=250 activeObsHook=true",targetWidth,targetHeight));
-        }
-        captureResizeDeferred=now<captureResizeAfter_;
-    }else{captureResizeWidth_=captureResizeHeight_=0;captureResizeAfter_={};}
     view=filmPixelAlignedView(window_,rc.right,rc.bottom,graph.workWidth(),graph.workHeight(),view);
     const RetainedFrame retained{graph.presentationReadyFenceObject(slot,generated),graph.presentationReadyFence(slot,generated),
         slot,unsigned(rc.right),unsigned(rc.bottom),generated,referencesValid,baseReference,IsWindowVisible(window_)!=FALSE,
@@ -151,7 +137,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         SUCCEEDED(ctx.device()->GetDeviceRemovedReason())&&
         !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE",nullptr,0))return true;
     retainedFrame_.reset(); // A failed present never seeds an idle cache.
-    if(!windowChanging&&!captureResizeDeferred&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)&&sink_.resizeDue()) {
+    if(!windowChanging&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)&&sink_.resizeDue()) {
         resized=true;
         if(!ring.drainQueue())return false;sink_.resize(targetWidth,targetHeight);
         // A capture hook may temporarily retain a DXGI buffer. Keep the old
@@ -318,7 +304,6 @@ bool VideoPresenter::readPresentedFrameForTest(gfx::D3D12DeviceContext& ctx,gfx:
 }
 void VideoPresenter::close(){
     retainedFrame_.reset();
-    captureResizeWidth_=captureResizeHeight_=0;captureResizeAfter_={};
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
     if(presentationRing_.initialized())presentationRing_.drainQueue();
