@@ -443,6 +443,20 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if(context_.adapter().vendorId==0x1002 && desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia)
         desc_.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
     nrEnabled_ = desc.enableNr && !desc.noFeatures && (!desc.noNgx || lmxxfNr_);
+    // Adapted chain topology from SAOG0721/Magpie, GPL-3.0,
+    // 27c5df91177a29b33be612e98274169f3d2fca49 / DLSSNRFilter::InitializeChain.
+    // Veyra keeps independent residual controls at EACH low-resolution layer,
+    // then lifts LN-L0 once. Upstream applies one shared residual group instead.
+    // Mixed sizes, temporal/Node/HDR/AMD and single NR retain the existing path.
+    lowResolutionNrChain_=GetEnvironmentVariableW(L"VEYRA_TEST_NR_LOW_CHAIN",nullptr,0)&&nrEnabled_&&!lmxxfNr_&&
+        (nrLayerCount_==2||nrLayerCount_==3)&&!desc_.runtimeNodeOrder&&!desc_.nrBeforeSr&&!desc_.hdrInput&&!desc_.hdrOutput&&
+        !desc_.videoHdr.enabled&&!desc_.color.enabled&&!desc_.additionalColorCount&&!desc_.nrTemporal&&!desc_.nrHoldStrength&&
+        std::none_of(desc_.nrLayersTemporal.begin(),desc_.nrLayersTemporal.end(),[](bool enabled){return enabled;})&&
+        std::all_of(desc_.nrLayersExtent.begin(),desc_.nrLayersExtent.end(),[&](Extent extent){return extent==desc_.nrLayersExtent.front();})&&
+        desc_.nrLayersExtent.front().width>=64&&desc_.nrLayersExtent.front().height>=64&&
+        desc_.nrLayersExtent.front()!=desc_.nrFullExtent(0);
+    if(GetEnvironmentVariableW(L"VEYRA_TEST_NR_LOW_CHAIN",nullptr,0))
+        log::info("nr-chain",std::format("lowResolution={} layers={} internal={}x{} output={}x{} perLayerResidual=true",lowResolutionNrChain_,nrLayerCount_,nrW_,nrH_,workW_,workH_));
     fgEnabled_ = desc.enableFg && !desc.noFeatures && !desc.stillImage &&
         desc.frameGenerationBackend != engine::FrameGenerationBackend::XeSS &&
         (!desc.noNgx || engine::fsrFrameGeneration(desc.frameGenerationBackend)||desc.frameGenerationBackend==engine::FrameGenerationBackend::Vfg);
@@ -1234,13 +1248,14 @@ bool EnhanceGraph::initNgxFeatures()
         for (size_t index = 0; index < layers; ++index) {
             auto instance = std::make_unique<NrInstance>();
             const auto extent=desc_.nrLayersExtent[index];
-            const auto full=desc_.nrFullExtent(index);
+            const auto full=lowResolutionNrChain_?extent:desc_.nrFullExtent(index);
             const uint32_t fullW=full.width,fullH=full.height;
             // Only a single layer may alias the graph's stage input, and only
             // when the extents already match: that is what the original graph
             // did, and the path has to stay byte-identical. Extra layers read
             // the previous layer's output, which the downsample produces.
             ID3D12Resource* borrowed = nullptr;
+            if(lowResolutionNrChain_&&index)borrowed=nrInstances_.back()->outputFull();
             if (layers == 1) {
                 const bool sameExtent = extent.width==fullW&&extent.height==fullH;
                 if (sameExtent) borrowed = nrBaseInput();
@@ -1586,7 +1601,7 @@ bool EnhanceGraph::createViews()
         const UINT k=UINT(layerIndex);
         // The shader reads base (t0), the NR-extent input (t1) and the neural
         // result (t2); the heap keeps those three per layer, in order.
-        ID3D12Resource* base=nrLayerBase(layerIndex);
+        ID3D12Resource* base=lowResolutionNrChain_&&layerIndex==0?nrInstances_[0]->input():nrLayerBase(layerIndex);
         stagedSrv(base,DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+0);
         stagedSrv(nrInstances_[layerIndex]->input(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+1);
         stagedSrv(nrInstances_[layerIndex]->finalRgba(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+2);
@@ -1625,7 +1640,7 @@ bool EnhanceGraph::createViews()
     if(nrInstances_.size()>1){
         auto* original=nrBaseInput();
         stagedSrv(original,DXGI_FORMAT_R16G16B16A16_FLOAT,stackProtectionPass_,0);
-        stagedSrv(original,DXGI_FORMAT_R16G16B16A16_FLOAT,stackProtectionPass_,1);
+        stagedSrv(lowResolutionNrChain_?nrInstances_[0]->input():original,DXGI_FORMAT_R16G16B16A16_FLOAT,stackProtectionPass_,1);
         auto* protectedInput=interNrProtectionRgba_?nrInstances_[desc_.interNrProtectionTarget()-1]->fullTarget():
             (preSrProtectionRgba_?nrInstances_[desc_.nrBeforeSrLayerCount()-1]->fullTarget():nrInstances_.back()->fullTarget());
         stagedSrv(protectedInput,DXGI_FORMAT_R16G16B16A16_FLOAT,stackProtectionPass_,2);
@@ -2464,7 +2479,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 if(!runBoundaryColor(true)||!runSr()||!runBoundaryColor(false))return false;
             }
             auto* layer = nrInstances_[layerIndex].get();
-            const uint32_t sourceW=layer->fullWidth(),sourceH=layer->fullHeight();
+            const auto sourceExtent=lowResolutionNrChain_&&layerIndex==0?desc_.nrFullExtent(0):Extent{layer->fullWidth(),layer->fullHeight()};
+            const uint32_t sourceW=sourceExtent.width,sourceH=sourceExtent.height;
             if ((layer->handle() == nullptr && !layer->amd) || !layer->enabled) continue;
             if(interNrColorActiveCount_){
                 const auto& plan=*desc_.fixedExecutionPlan;
@@ -2634,7 +2650,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         if(!nrInstances_.empty())compositeNrLayer(nrInstances_.size()-1);
         if(nrInstances_.size()>1){
             auto* final=nrInstances_.back()->fullTarget();
-            if(desc_.protection.enabled&&!preSrProtectionRgba_&&!interNrProtectionRgba_){
+            if(lowResolutionNrChain_||(desc_.protection.enabled&&!preSrProtectionRgba_&&!interNrProtectionRgba_)){
                 auto* original=nrBaseInput();
                 tracker_.transition(list,original,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 tracker_.transition(list,final,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -2642,7 +2658,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 // Each layer already applies its own SDR/HDR residual policy.
                 // This final exclusion mask must preserve the stack's signed
                 // temporal output, including pixels outside protected regions.
-                float c[24]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
+                float c[24]={1,1,1,1,1,desc_.protection.enabled?1.f:0.f,desc_.protection.featherPixels,1.f};
                 for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(desc_.protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
                 stackProtectionPass_.bind(list,c,gpuHandleOf(stackProtectionPass_,0).ptr,gpuHandleOf(stackProtectionPass_,3).ptr);
                 list->Dispatch(((desc_.nrBeforeSr?srcW_:workW_)+15)/16,((desc_.nrBeforeSr?srcH_:workH_)+15)/16,1);
@@ -3117,6 +3133,7 @@ ID3D12Resource* EnhanceGraph::generatedFrameResource(uint32_t slot) const
 // ---------------------------------------------------------------------------
 void EnhanceGraph::shutdown()
 {
+    lowResolutionNrChain_=false;
     pausedNrCacheValid_=pausedNrResidualOnly_=false;pausedNrFrame_=nullptr;
     lastAppliedSettings_.reset();pausedNrSettings_.reset();
     if (!initialized_ && !coreHost_ && !nrAdapter_ && !nvof_ && !srcRgba_) return;
