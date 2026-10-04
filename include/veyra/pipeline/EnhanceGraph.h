@@ -563,7 +563,6 @@ public:
     ID3D12Resource* diagnosticVideoSrOutput() const { return videoSrOutput_.Get(); }
     ID3D12Resource* diagnosticNrLayerInput(size_t index) const { return index < nrInstances_.size() ? nrInstances_[index]->input() : nullptr; }
     ID3D12Resource* diagnosticNrLayerOutput(size_t index) const { return index < nrInstances_.size() ? nrInstances_[index]->fullTarget() : nullptr; }
-    bool diagnosticLowResolutionNrChain()const{return lowResolutionNrChain_;}
     engine::NrLayerSettings diagnosticNrLayerSettings(size_t index) const {
         if(index>=nrInstances_.size())return {};
         const auto& n=*nrInstances_[index];
@@ -664,7 +663,6 @@ private:
     // tools/nr_probe verified several handles coexist on one snippet session.
     std::vector<std::unique_ptr<NrInstance>> nrInstances_;
     bool lmxxfNr_ = false;
-    bool lowResolutionNrChain_=false; // isolated 4a candidate; single-layer path unchanged
     bool submitGraph(uint32_t slot);
     // The layer count the current graph was built with, so a settings change
     // that adds or removes a layer is detected as a rebuild.

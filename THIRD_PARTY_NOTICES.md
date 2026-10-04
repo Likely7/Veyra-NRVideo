@@ -711,20 +711,3 @@ Hardware inference, image quality and stability remain unverified on RX 9000.
 # Performance experiments (2026-10-04)
 
 `tests/perf/DuplicateFrameCS.hlsl` adapts `src/Magpie.Core/shaders/DuplicateFrameCS.hlsl` from [SAOG0721/Magpie](https://github.com/SAOG0721/Magpie/tree/27c5df91177a29b33be612e98274169f3d2fca49), fixed commit `27c5df91177a29b33be612e98274169f3d2fca49` / `v0.6.9-experimental`, GPL-3.0. Original shader SHA256 `39fe0acfcf499083c1380aa4a5dc0ad8e0b6632537efda61342e068d9eac2275` matches the local research copy byte-for-byte. Adaptations retain group reduction and atomic publication, replace sampler Gather with four bounded texture loads for D3D12/odd extents, add typed textures and provenance. This is an isolated measurement fixture; no production duplicate-skip behavior is implied.
-### NR low-resolution chain candidate (2026-10-05)
-
-The chain topology in `src/pipeline/EnhanceGraph.cpp` adapts
-`DLSSNRFilter::InitializeChain` in `src/Magpie.Core/DLSSNRFilter.cpp` and
-`src/Magpie.Core/DLSSNRMultiPass.h` from
-[SAOG0721/Magpie](https://github.com/SAOG0721/Magpie/tree/27c5df91177a29b33be612e98274169f3d2fca49),
-fixed commit `27c5df91177a29b33be612e98274169f3d2fca49`, GPL-3.0.
-The exact upstream files have SHA256 `46c75e125e172c1c0bffc811a7bb9e9cbb8ebeb6627dd80cafaa7ca374937712`
-and `98df10cc69fc0224ea5383aac343f7ab227577eb3e1907da09c1d5a8e5133982`;
-the repository license is GPL-3.0, compatible with Veyra's GPL-3.0 license.
-Adaptations use the existing D3D12 ring/state tracker/parity encode/Feature-18
-instances, downsample once, borrow each previous low-resolution result, preserve
-Veyra's five independent residual controls per layer, and lift the final residual
-once with the existing bilateral composite and full-resolution protection mask.
-Upstream's D3D11 interop, one shared residual group and single-list Evaluate
-batching are not copied. Initially test-only and off by default; this attribution
-does not imply identical image quality or completion of product acceptance.
