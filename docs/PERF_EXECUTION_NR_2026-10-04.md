@@ -42,7 +42,7 @@
 | 1c | 重复节奏预测 | rejected | 三种节奏单像素瞬态反例均漏第49帧且后续未检测；PERF_1C_CADENCE_REJECTION；无产品代码需回退 |
 | 3c | 队列分工/呈现优先级 | retained-limited-pending-R0 | 普通负载18组，增强21.386→19.477ms（2X）/23.330→21.542ms（3X）；准入仅已测5070双NR+SR4K+DLSS2/3文件图；9组往返1278全图/PTS一致/debug0、真实Qt FSR/XeSS/VFG/调色/时域回退通过；源跳过0但长帧仍在，HIGH拒绝默认；PERF_3C_GRAPH_NORMAL_2026-10-05 |
 | 5b | 文件/导出跨帧并行 | pending | 保留源帧/PTS/flow依赖，不扩大实时延迟 |
-| 4a | 多NR整链低分辨率调度 | pending | 保留每层残差参数；先测同尺寸与一致性 |
+| 4a | 多NR整链低分辨率调度 | in-progress-default-off | 20组合800图/PTS/debug/次数及独立残差通过；单层/异尺寸/时域40帧各全同，适用多层图有数值变化PSNR49–54dB、最大81/255，不标画质通过；原图与HTML备查，普通计时待；PERF_4A_LOW_CHAIN_2026-10-05 |
 | 4b | 先粗后细组合 | pending | 核对现有逐层尺寸；不新增强制预设 |
 | 5c | 暂停不重跑/残差重合成 | retained-pending-R0 | 残差7.461→0.766ms约89.74%；真实Qt自身暂停GPU三轮2.237→0.011%（off2.237%）；48完整呈现图像一致、四FG暂停/恢复/seek通过；PERF_5C_PAUSED_NR |
 | UI | 性能设置及状态 | pending | 只暴露保留实现，统一持久化/能力/翻译 |

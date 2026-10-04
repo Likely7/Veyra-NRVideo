@@ -8283,3 +8283,6 @@ before cefbaec / checkpoint/perf-nr-4a-low-chain-before-20261004。按固定SAOG
 # 2026-10-05 4a native图像导出fixture修正
 
 B4a-native-v1首组单NR关闭候选已求值、CSV输出一张有效完整SHA且debug0，但PNG保存失败（completed0）；测试main未初始化COM，WIC factory需要CoInitializeEx。修正仅fixture初始化/RAII析构与HRESULT记录，不改产品；保留E:/项目/Veyra/logs/perf-nr-20261004/B4a-native-v1-single-off原证据，下一轮使用新标签。不能把该PNG fixture错误解释为NR失效。
+# 2026-10-05 4a完整图20组/800图完成
+
+B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0，各帧实际Evaluate=层数，尺寸Desc通过，独立残差第10/20/30帧改变可达。单层720、单层SR4K、混合480→720和双时域开/关各40全同；适用多层六组全部40帧不同。nr-low-chain-quality.py逐图PNG解码SHA再验、alpha一致、保护中心全同；PSNR中位49.25–54.45dB，最大差81/255，不能据高PSNR自行标画质合格。E:/项目/Veyra/logs/perf-nr-20261004/B4a-native-v2-quality/review.html/comparison.json与原PNG可审查；源码仍默认关闭。将测正常Qt2/3层SR4K各三轮开/关12组，不加竞争或显存压力。
