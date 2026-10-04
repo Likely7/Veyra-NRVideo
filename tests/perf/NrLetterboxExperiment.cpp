@@ -30,7 +30,9 @@ int wmain(int argc,wchar_t** argv){
     pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
     engine::PreviewGpuSession session;if(!session.initialize()||!session.graph->initialize(desc)||!session.graph->createViews())return 2;
     session.graph->recordGpuTimings();
-    pipeline::EnhanceGraph base(session.context,session.ring,&session.core);
+    // Effects-off diagnostic base has no NGX borrower. Sharing the active
+    // cache here correctly refuses a second graph; no second snippet owner.
+    pipeline::EnhanceGraph base(session.context,session.ring);
     if(crop){auto off=settings;off.nr=false;request.nr=false;request.width=1920;request.height=1080;
         pipeline::EnhanceGraphDesc plain;engine::describeStages(request,off,plain);plain.noNgx=true;plain.noFeatures=true;
         if(!base.initialize(plain)||!base.createViews())return 2;}
