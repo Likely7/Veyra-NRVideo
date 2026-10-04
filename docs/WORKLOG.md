@@ -8280,3 +8280,6 @@ native nr-queue-migration.py B2d B3c-migration-v1九组通过，1278完整输出
 # 2026-10-05 4a低分辨率链候选构建
 
 before cefbaec / checkpoint/perf-nr-4a-low-chain-before-20261004。按固定SAOG27c5df9/GPL3拓扑移植，明确保留每层五项残差控制，仅2/3层同尺寸非时域SDR列表图，L0一次降采样、LN-L0一次全尺寸叠回/保护；fresh-list、NVOF单位、单层及其他拓扑保持。默认关闭且只测试ENV入口，源码/THIRD_PARTY_NOTICES注明来源及改动，方案PERF_4A_LOW_CHAIN_2026-10-05。build-low-chain-v1/v2通过（UI+native），E:/项目/Veyra/logs/perf-nr-20261004；将执行10组合各off/on共800全图及独立控制/回退验证，再普通Qt计时。没有创建竞争/显存压力，未标画质或性能通过。
+# 2026-10-05 4a native图像导出fixture修正
+
+B4a-native-v1首组单NR关闭候选已求值、CSV输出一张有效完整SHA且debug0，但PNG保存失败（completed0）；测试main未初始化COM，WIC factory需要CoInitializeEx。修正仅fixture初始化/RAII析构与HRESULT记录，不改产品；保留E:/项目/Veyra/logs/perf-nr-20261004/B4a-native-v1-single-off原证据，下一轮使用新标签。不能把该PNG fixture错误解释为NR失效。

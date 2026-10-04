@@ -7,6 +7,7 @@
 #include <d3d12sdklayers.h>
 #include <fstream>
 #include <iostream>
+#include <objbase.h>
 
 int wmain(int argc,wchar_t** argv){
     using namespace veyra;if(argc!=4)return 2;const std::wstring group=argv[3];
@@ -16,6 +17,8 @@ int wmain(int argc,wchar_t** argv){
     if(group!=L"2"&&!sr&&!single&&!triple&&!mixed&&!temporal&&!protectedGroup&&!edits)return 2;
     const unsigned layers=single?1:triple?3:2;
     const std::filesystem::path out=argv[2];std::filesystem::create_directories(out);Logger::instance().openFile((out/L"engine.log").wstring());
+    const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);log::info("low-chain-test",std::format("COM init hr=0x{:X}",unsigned(com)));if(FAILED(com))return 2;
+    struct Apartment {~Apartment(){CoUninitialize();}} apartment;
     Microsoft::WRL::ComPtr<ID3D12Debug> layer;if(FAILED(D3D12GetDebugInterface(IID_PPV_ARGS(&layer))))return 2;layer->EnableDebugLayer();
     engine::EffectChain chain;chain.nodeCount=layers;
     for(unsigned i=0;i<layers;++i){chain.nodes[i].type=engine::EffectType::NrEnhance;chain.nodes[i].enabled=true;
