@@ -8326,3 +8326,11 @@ before347a184/candidate5edbf79，v1因不存在nrLayers成员构建失败，58f5
 `nr-mixed-normal.py B2d B4b-normal-v1`12普通播放三轮交错全部pass，无额外GPU/显存压力；2层全1080→720/1080增强区间14.644→11.461ms（-21.74%），3层全1080→480/720/1080为20.996→14.150ms（-32.61%）。同产品配置取舍，不是新算法收益；残差/呈现P99没有改善。2-native-r2保留2.791s实际提交间隙/84帧跳过，所有组合源303/304还存在67–115ms图提交长尾，R0继续查。日志/画质：E:/项目/Veyra/logs/perf-nr-20261004/B4b-{native-v3,normal-v1}-summary；E:/项目/Veyra/tests/perf-nr-20261004/B4b-native-v3-quality/review.html。
 
 共享NrLayerEditor只加多层可选组合和画面改变提示，不新增内置预设、不自动改参数，AMD未测不提示；extract新增1句，繁中/英/日补齐。下一节点3b先验证单adapter有界预建实际尺寸池与正常切换，原方案1b内容预算和2b并发Create已被反例拒绝，不能偷用。
+
+## 2026-10-05 NR性能3b可选自动档与5a拒绝
+
+3b产品e8f0bd1/build-nr-auto-product-v1 114步通过，policy6保留旧ID、首层实际五尺寸有界池/真实transport预算/四次每分钟限制/导出原生/默认不选。B3b-normal-v1 12普通组30fps不切档无稳定收益，60fps降70%增强14.526→11.763ms（19.02%），最后NR不变、Present P99几乎不变、10秒长帧未解决；池额外1697MiB及约半秒启动。B3b-product-ui-v1夹具将float0.699999988与JS0.7严格相等错误失败，改精度后v2三真实进程通过首层选择/末层灰态、降升档、暂停seek/倍速、uniform、关开、调色时域fallback、保存重启及逻辑API拒绝保NR。没有压力、设备移除或用户配置改写。
+
+`nr-auto-final.py B2d B3b-product-native-v1`10/10通过，470原生全帧/PTS/history，包括200默认off与旧B4b完整CSV一致；120帧×2的实际NVENC/mux Auto与固定原生整文件SHA相同，`nr-quality-review.py`完整240解码MD5/PTS/元数据一致。12对PNG+SSIM+PSNR存B3b-product-native-v1-quality/review.html；低档改变画面，不冒充主观批准。Auto控制器当前构建CPU运行通过；策略/preset合同扩展到policy6待R0构建。证据E:/项目/Veyra/logs/perf-nr-20261004/B3b-{normal-v1,product-ui-v2,product-native-v1}-summary。
+
+5a保存原方案检测填黑反例：18/255暗边误判抹529920像素、后出现字幕滞回抹2640像素。B5a-native-v1 base错误借同Core触发refused-prepare，改无NGX base后v2十二组480完整RGBA重复无差异/debug0、ROI外保原图为0差异。实际ROI GPU区间减少17.44/19.69%，但有效区PSNR31.64–35.03/最大55，成本不含额外base及回读，不能视为产品收益。已查看生成对照；没有真实电影/采集验收。拒绝默认检测/ROI/填黑，产品从未接入，无生产改动需回退；独立实验/失败原图保留。文档PERF_5A_LETTERBOX及B5a-native-v2-summary。

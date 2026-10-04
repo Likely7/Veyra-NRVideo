@@ -31,19 +31,19 @@
 | E2 | 并行Evaluate/CreateFeature | completed-conditional | 单Core/adapter，三次240s累计12min及150次创建安全通过；间隔110–116ms，不能据此宣称2b无缝 |
 | E3 | 真实来源精确重复比例 | completed-screen-awaiting-card | 真实WGC三阶段各60秒通过，静止99.932%/移动内容0.540%/窗口位置99.937%；PERF_E3_DUPLICATE_SOURCE；实卡待来源确认 |
 | 1a | 精确重复帧整链复用 | rejected-unchanged-output | 自然同像素300帧×五组×三轮，A-A噪声0；NR/SR复用299帧不同；PERF_1A_DUPLICATE_REUSE；无生产改动 |
-| 5a | 黑边检测与有效区域处理 | pending | 防暗场误裁，先测准确性与重建收益 |
+| 5a | 黑边检测与有效区域处理 | rejected-correctness | 暗边18/255误判/529920非黑像素丢失，后出现字幕滞回丢2640像素；12原生诊断480图同配置一致、外部保原图，但有效区PSNR31.64–35.03且区间17.44–19.69%不含额外base/回读；不进生产/不加默认开关，PERF_5A_LETTERBOX |
 | 3a | 进程GPU调度优先级 | retained-pending-R0 | 18组交错实际三档；60Hz实时P99改善6.83%，High无稳定收益，普通默认；两绘制模式40次Set/Get及重启通过；PERF_3A_GPU_PRIORITY |
 | 2a | 跨重建保留NGX核心 | retained-pending-R0 | v2三轮A/B/B-off完整输出0差异；暖创建减少75.83/71.23/64.58/72.04%；真实UI及SDK拒绝路径通过；导出待R0 |
 | 2c | 最近配置实例缓存 | retained-single-NR-pending-R0 | 单NR actual create363.851→3.602ms及像素/压力通过；SR与SRNR每轮21/50输出不一致，拒绝扩大；PERF_2C_RECENT_CACHE / PERF_2C_SR_CACHE_REJECTION |
 | 2d | 空闲预热 | retained-pending-R0 | Qt27组A/B/off首次成功Present1942→100 / 2053→107 / 1733→92ms；54完整输出0差异、5生命周期通过；PERF_2D_PREWARM |
 | 2b | 后台建图与帧边界切换 | rejected-continuity | 6轮新鲜Evaluate输出实际Present、300创建安全，但P99 32.044→74.189ms、>33.333ms次数3→55，未满足连续性；PERF_2B_BACKGROUND_CREATE |
-| 3b | NR自动内部尺寸 | pending | 取决于E1、真实预算/画质证据 |
+| 3b | NR自动内部尺寸 | retained-optional-pending-R0 | 正常12组M10首层70%增强减少19.02%，六切换Present15.718–17.4351ms且未取消帧；原生470图/Auto-off一致、240完整解码导出一致、真实UI保存/回退通过；多1697MiB、低档改画面，默认不选，5070/1080 SDR/1–2NR窄准入；PERF_3B_AUTO_NR |
 | 1b | 内容帧率预算 | rejected-prerequisite | 1a画面不成立，完整求值仍按transport次数；实测成本构造预算反例，PERF_1B_CONTENT_BUDGET；无生产改动 |
 | 1c | 重复节奏预测 | rejected | 三种节奏单像素瞬态反例均漏第49帧且后续未检测；PERF_1C_CADENCE_REJECTION；无产品代码需回退 |
 | 3c | 队列分工/呈现优先级 | retained-limited-pending-R0 | 普通负载18组，增强21.386→19.477ms（2X）/23.330→21.542ms（3X）；准入仅已测5070双NR+SR4K+DLSS2/3文件图；9组往返1278全图/PTS一致/debug0、真实Qt FSR/XeSS/VFG/调色/时域回退通过；源跳过0但长帧仍在，HIGH拒绝默认；PERF_3C_GRAPH_NORMAL_2026-10-05 |
 | 5b | 文件/导出跨帧并行 | retained-export-rejected-prefetch | 无FG NVENC两帧/事件默认保留，75文件8100图一致/15边界/18默认-off/5worker；NVOF准备器24普通导出输出一致但整次慢1.41–5.25%、多232–867MiB，独立trace实际依赖区间重叠约1ms，拒绝并回退；不扩文件/采集/串流，PERF_5B_CROSS_FRAME / PERF_5B_NVOF_PREFETCH |
 | 4a | 多NR整链低分辨率调度 | rejected-benefit-to-risk | 20组800图控制/debug通过但多层最大像素差81/255；12组普通播放整体仅降1.09%/0.62%，呈现P99无改善，拒绝替换产品路径并回退；完整PNG/HTML/候选源码保留，PERF_4A_LOW_CHAIN_2026-10-05 |
-| 4b | 先粗后细组合 | verified-existing-pending-UI | 9组360全图同配置一致/debug0；12普通播放先粗后细增强区间两层节省21.74%、三层32.61%，画面明显变化/呈现P99未改善；仅可选提示，不改默认或新增预设，PERF_4B_COARSE_TO_FINE |
+| 4b | 先粗后细组合 | verified-existing-pending-R0 | 9组360全图同配置一致/debug0；12普通播放先粗后细增强区间两层节省21.74%、三层32.61%，画面明显变化/呈现P99未改善；共享编辑器仅可选提示，三种翻译齐全，不改默认或新增预设，PERF_4B_COARSE_TO_FINE |
 | 5c | 暂停不重跑/残差重合成 | retained-pending-R0 | 残差7.461→0.766ms约89.74%；真实Qt自身暂停GPU三轮2.237→0.011%（off2.237%）；48完整呈现图像一致、四FG暂停/恢复/seek通过；PERF_5C_PAUSED_NR |
 | UI | 性能设置及状态 | pending | 只暴露保留实现，统一持久化/能力/翻译 |
 | R0 | 全产品回归与最终候选 | pending | 合同/Xbox/Qt/字幕/导出/兼容及源码存档；正常负载A3控制/调度约2.95s断档、B3跳帧，A/B素材frame303/304约68–72ms图提交；根因待查、不宣称丝滑 |
