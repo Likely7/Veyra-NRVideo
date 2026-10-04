@@ -8334,3 +8334,11 @@ before347a184/candidate5edbf79，v1因不存在nrLayers成员构建失败，58f5
 `nr-auto-final.py B2d B3b-product-native-v1`10/10通过，470原生全帧/PTS/history，包括200默认off与旧B4b完整CSV一致；120帧×2的实际NVENC/mux Auto与固定原生整文件SHA相同，`nr-quality-review.py`完整240解码MD5/PTS/元数据一致。12对PNG+SSIM+PSNR存B3b-product-native-v1-quality/review.html；低档改变画面，不冒充主观批准。Auto控制器当前构建CPU运行通过；策略/preset合同扩展到policy6待R0构建。证据E:/项目/Veyra/logs/perf-nr-20261004/B3b-{normal-v1,product-ui-v2,product-native-v1}-summary。
 
 5a保存原方案检测填黑反例：18/255暗边误判抹529920像素、后出现字幕滞回抹2640像素。B5a-native-v1 base错误借同Core触发refused-prepare，改无NGX base后v2十二组480完整RGBA重复无差异/debug0、ROI外保原图为0差异。实际ROI GPU区间减少17.44/19.69%，但有效区PSNR31.64–35.03/最大55，成本不含额外base及回读，不能视为产品收益。已查看生成对照；没有真实电影/采集验收。拒绝默认检测/ROI/填黑，产品从未接入，无生产改动需回退；独立实验/失败原图保留。文档PERF_5A_LETTERBOX及B5a-native-v2-summary。
+
+## 2026-10-05 R0普通回归及退出崩溃存档
+
+R0合同14项+Qt Quick39项通过；真实Qt GPU/软件功能布局4/4、严格8页启动8/8、实际RTSS两OSD×三正常场景6/6且用户Profiles恢复、当前导出worker5/5通过。夹具过时组合数量/第七策略、inline context、accordion动画、子PowerShell模块/参数/QtTest依赖失败已保存并定向修正；不改产品迁就测试。证据详PERF_R0_ACCEPTANCE_2026-10-05及同名E盘logs。
+
+`nr-r0-normal.py B2d R0-normal-v1`33/33正常负载交错通过：M1各五配置A/B三轮、S4同B DIRECT三轮，sourceSkipped全0。S4增强19.481→18.795ms（3.52%），同B DIRECT19.299→18.795（2.61%）；其余配置无稳定收益，单NR原生约6.1ms，软件Present P99几乎未变。最长成功Present110.209ms，CPU图提交长尾仍在；不宣称后台掉帧根治或NR内核提速。全部payload SHA原样。原日志/JSON/CSV在E:/项目/Veyra/logs/perf-nr-20261004/R0-normal-v1-summary及33原始目录。
+
+`nr-r0-close.py B2d R0-close-rebuild-v1`请求FSR后200ms退出实际C0000005；封存A的`R0-close-baseline-v1 fsr3`同样失败。初始化在Qt HWND销毁后继续，CreateSwapChainForHwnd 80070005后清理崩溃。源码确认PresentSink非拥有旧队列未清空，交换链失败前未赋新队列，随后VideoPresenter释放旧队列；重建缺取消检查/停止后仍回滚。先存档本候选和完整失败证据，再最小修复queue生命周期/长初始化取消。没有压力/GPU竞争/设备移除；OBS真实采集仍待，候选尚不可交付。

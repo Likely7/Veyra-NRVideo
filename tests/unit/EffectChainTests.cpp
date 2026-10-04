@@ -592,7 +592,7 @@ void testLegacyPlanDimensions() {
             cases, source.width, source.height, sr, first, context, policy, target);
     }
     std::printf("legacy dimension parity: %u cases (CPU descriptions only)\n", cases);
-    check(all && cases == 864, "production fixed plans match independent legacy formulas across 864 dimension/context combinations");
+    check(all && cases == 1008, "production fixed plans match independent legacy formulas across 1008 dimension/context combinations");
 }
 
 void testProductionFixedPlanDescription() {
