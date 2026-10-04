@@ -137,6 +137,8 @@ Original code: GPL-3.0. The combined Chiaki streaming application is also subjec
 
 ## Support
 
+[Join the Discord community](https://discord.gg/j5TQbFJ7F)
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
