@@ -248,6 +248,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double lateP95Ms READ lateP95Ms NOTIFY snapshotChanged)
     Q_PROPERTY(QString metricsSummary READ metricsSummary NOTIFY snapshotChanged)
     Q_PROPERTY(bool nrActive READ nrActive NOTIFY snapshotChanged)
+    Q_PROPERTY(bool nrAutoActive READ nrAutoActive NOTIFY snapshotChanged)
+    Q_PROPERTY(int nrAutoPercent READ nrAutoPercent NOTIFY snapshotChanged)
+    Q_PROPERTY(QString nrAutoStatus READ nrAutoStatus NOTIFY snapshotChanged)
     Q_PROPERTY(bool srActive READ srActive NOTIFY snapshotChanged)
     Q_PROPERTY(bool fgActive READ fgActive NOTIFY snapshotChanged)
     Q_PROPERTY(bool captureRecovering READ captureRecovering NOTIFY snapshotChanged)
@@ -687,6 +690,9 @@ public:
     double lateP95Ms() const;
     QString metricsSummary() const;
     bool nrActive() const;
+    bool nrAutoActive() const;
+    int nrAutoPercent() const;
+    QString nrAutoStatus() const;
     bool srActive() const;
     bool fgActive() const;
     bool captureRecovering() const;
@@ -852,6 +858,7 @@ public:
     QVariantList nodeConnections() const;
     QVariantList nrLayers() const;
     Q_INVOKABLE bool setNrLayerParameter(int index, const QString& key, double value);
+    Q_INVOKABLE QString nrAutoSelectionReason(int index) const;
     QVariantList effectCatalog() const;
     QString chainError() const;
     bool chainValid() const;

@@ -9,6 +9,7 @@ enum class HardwareEffect { Nvidia, NvidiaNr50, NvidiaNrSf, Vfg, AmdNr, Fsr4, Cr
 struct EffectGpu {
     uint32_t vendor = 0;
     bool rtx = false, blackwell = false, ada = false, rx9000 = false;
+    uint32_t deviceId = 0;
 };
 constexpr bool hardwareSupports(HardwareEffect effect, EffectGpu gpu) {
     switch (effect) {

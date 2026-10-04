@@ -21,18 +21,19 @@ int wmain(int argc,wchar_t** argv){
     struct Apartment {~Apartment(){CoUninitialize();}} apartment;
     engine::EnhancementSettings settings;settings.exportBitrateMbps=30;
     settings.nrPolicy=pipeline::NrSizePolicy::Native;
-    if(group==L"nr"||group==L"nr2"||group==L"nrsr4k")settings.nr=true;
+    if(group==L"nr"||group==L"nr2"||group==L"nr2-auto"||group==L"nrsr4k")settings.nr=true;
     if(group==L"sr4k"||group==L"sr8k"||group==L"nrsr4k"){
         settings.sr=true;settings.videoSrQuality=0;
         settings.srTarget=group==L"sr8k"?pipeline::SrTarget::Uhd8K:pipeline::SrTarget::Uhd4K;
     }
-    if(group==L"nr2"){
+    if(group==L"nr2"||group==L"nr2-auto"){
         engine::EffectChain chain;chain.nodeCount=2;
         for(unsigned i=0;i<2;++i){chain.nodes[i].enabled=true;chain.nodes[i].type=engine::EffectType::NrEnhance;chain.nodes[i].nr.sizePolicy=pipeline::NrSizePolicy::Native;}
+        if(group==L"nr2-auto")chain.nodes[0].nr.sizePolicy=pipeline::NrSizePolicy::Auto;
         engine::fromChain(chain,settings);
     }
     if(group==L"fg2")settings.multiplier=2;
-    if(group!=L"none"&&group!=L"nr"&&group!=L"nr2"&&group!=L"sr4k"&&group!=L"nrsr4k"&&group!=L"sr8k"&&group!=L"fg2")return 2;
+    if(group!=L"none"&&group!=L"nr"&&group!=L"nr2"&&group!=L"nr2-auto"&&group!=L"sr4k"&&group!=L"nrsr4k"&&group!=L"sr8k"&&group!=L"fg2")return 2;
     settings.nrPolicy=pipeline::NrSizePolicy::Native;settings.exportBitrateMbps=30;
     auto options=engine::PlayerOptions::from(settings);options.exportRateControl=sink::ExportRateControl::Vbr;
     const bool cancelTest=argc==7&&std::wstring(argv[6])==L"--cancel";

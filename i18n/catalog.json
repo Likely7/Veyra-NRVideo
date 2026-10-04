@@ -1037,6 +1037,13 @@
    "ja": "NR 第 4 層"
   },
   {
+   "zh": "NR 自动 %1% · %2×%3",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "NR 自動 %1% · %2×%3",
+   "en": "Auto NR %1% · %2×%3",
+   "ja": "NR 自動 %1% · %2×%3"
+  },
+  {
    "zh": "NR 运动来源",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "NR 運動來源",
@@ -6141,6 +6148,20 @@
    "ja": "選択した効果は現在の GPU またはパッケージに対応していません。コンポーネントを確認してください"
   },
   {
+   "zh": "当前配置未启用自动 NR，保留固定 1080p 档",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前設定未啟用自動 NR，保留固定 1080p 檔",
+   "en": "Auto NR is inactive for this configuration; keeping the fixed 1080p policy",
+   "ja": "現在の設定では自動 NR は無効です。固定 1080p 設定を維持します"
+  },
+  {
+   "zh": "当前配置未启用自动NR，保留1080p NR",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "目前設定未啟用自動 NR，保留 1080p NR",
+   "en": "Auto NR is inactive for this configuration; keeping 1080p NR",
+   "ja": "現在の設定では自動 NR は無効です。1080p NR を維持します"
+  },
+  {
    "zh": "当前非 NVIDIA 适配器：NR、NVIDIA 超分与 DLSS 已禁用；可使用 XeSS 预览和 AMD 光流",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "當前非 NVIDIA 適配器：NR、NVIDIA 超解析與 DLSS 已停用；可使用 XeSS 預覽和 AMD 光流",
@@ -9775,11 +9796,53 @@
    "ja": "自動 = Windows の表示スケールに合わせる"
   },
   {
+   "zh": "自动 NR 仅支持一至两层列表的第一层",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "自動 NR 僅支援一至兩層列表的第一層",
+   "en": "Auto NR supports the first layer of a one- or two-layer list",
+   "ja": "自動 NR は 1～2 層のリストの最初の層に対応します"
+  },
+  {
+   "zh": "自动 NR 实例池不可用，保留固定 1080p 档",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "自動 NR 執行個體池無法使用，保留固定 1080p 檔",
+   "en": "Auto NR instance pool unavailable; keeping the fixed 1080p policy",
+   "ja": "自動 NR のインスタンスプールを使用できません。固定 1080p 設定を維持します"
+  },
+  {
+   "zh": "自动 NR 当前仅验证 RTX 5070",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "自動 NR 目前僅驗證 RTX 5070",
+   "en": "Auto NR is currently verified only on RTX 5070",
+   "ja": "自動 NR は現在 RTX 5070 のみで検証済みです"
+  },
+  {
    "zh": "自动 · 恒定质量",
    "src": "include/veyra/engine/EnhancementSettings.h",
    "zh-TW": "自動 · 恒定品質",
    "en": "Auto · constant quality",
    "ja": "自動 · 固定品質"
+  },
+  {
+   "zh": "自动NR切档失败",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "自動 NR 切換檔位失敗",
+   "en": "Auto NR level switch failed",
+   "ja": "自動 NR のレベル切り替えに失敗しました"
+  },
+  {
+   "zh": "自动NR切档排空失败",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "自動 NR 切換前排空失敗",
+   "en": "Failed to drain pending work for an Auto NR switch",
+   "ja": "自動 NR 切り替え前の処理完了待機に失敗しました"
+  },
+  {
+   "zh": "自动NR实例池不可用，保留1080p NR",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "自動 NR 執行個體池無法使用，保留 1080p NR",
+   "en": "Auto NR instance pool unavailable; keeping 1080p NR",
+   "ja": "自動 NR のインスタンスプールを使用できません。1080p NR を維持します"
   },
   {
    "zh": "自动估算",
@@ -9824,6 +9887,13 @@
    "ja": "キーボードとマウスを自動でキャプチャー"
   },
   {
+   "zh": "自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。导出按原生尺寸处理。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "自動檔在預覽中依增強耗時調整 100%–40%；預建執行個體約增加 1.7GB 顯示記憶體及半秒啟動時間。匯出依原生尺寸處理。",
+   "en": "Auto adjusts preview processing from 100% to 40% using enhancement time. Prebuilt instances add about 1.7GB of VRAM and half a second of startup time. Export uses native dimensions.",
+   "ja": "自動設定は強化処理時間に応じてプレビューを 100%～40% に調整します。事前生成したインスタンスは約 1.7GB の VRAM と約 0.5 秒の起動時間を追加します。書き出しは元の解像度で処理します。"
+  },
+  {
    "zh": "自动识别内容节奏",
    "src": "qml/NodePage.qml",
    "zh-TW": "自動識別內容節奏",
@@ -9857,6 +9927,13 @@
    "zh-TW": "自動（按解析度）",
    "en": "Auto (by resolution)",
    "ja": "自動（解像度に応じて）"
+  },
+  {
+   "zh": "自动（按负载）",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "自動（依負載）",
+   "en": "Auto (by load)",
+   "ja": "自動（負荷に応じて）"
   },
   {
    "zh": "自动（独立显卡）",
@@ -12426,6 +12503,13 @@
    "zh-TW": "零運動會限制時序重建；RTX 影片超解析不使用此輸入",
    "en": "Zero motion limits temporal reconstruction; RTX Video Super Resolution does not use this input",
    "ja": "ゼロモーションは時間方向の再構成を制限します。RTX ビデオ超解像はこの入力を使いません"
+  },
+  {
+   "zh": "需 1080p SDR 文件、Lecram 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "需 1080p SDR 檔案、Lecram 與 NVIDIA 光流；關閉超解析度、補幀、抗閃爍、調色及 HDR",
+   "en": "Requires 1080p SDR files, Lecram and NVIDIA optical flow; disable upscaling, frame generation, temporal stabilization, color adjustments and HDR",
+   "ja": "1080p SDR ファイル、Lecram、NVIDIA オプティカルフローが必要です。超解像、フレーム生成、ちらつき抑制、色調整、HDR を無効にしてください"
   },
   {
    "zh": "需系统解码/转换",

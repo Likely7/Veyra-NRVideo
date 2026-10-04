@@ -10,7 +10,7 @@ namespace veyra::engine {
 // until the source/settings session itself changes.
 class AutoNrController {
 public:
-    void reset(int64_t now100ns) {level_=0;switches_.clear();lowSince_.reset();next_=now100ns+5000000;lastSwitch_=now100ns-30000000;}
+    void reset(int64_t now100ns,unsigned initialLevel=0) {level_=initialLevel<5?initialLevel:0;switches_.clear();lowSince_.reset();next_=now100ns+5000000;lastSwitch_=now100ns-30000000;}
     std::optional<unsigned> observe(int64_t now100ns,std::optional<double> p95Ms,uint64_t samples,double budgetMs) {
         if(now100ns<next_)return {};
         next_=now100ns+5000000;

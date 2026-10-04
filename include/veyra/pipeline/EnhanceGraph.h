@@ -389,8 +389,8 @@ struct EnhanceGraphDesc {
     ID3D12Resource* srMotionProbe = nullptr;
     // Same borrowed diagnostic contract as srMotionProbe, for FG only.
     ID3D12Resource* fgMotionProbe = nullptr;
-    // Isolated 3b experiment: one layer owns a bounded pool on this same
-    // snippet session. Not set by any product entry point until proven.
+    // Optional preview-only, bounded actual-size pool on this same snippet
+    // session. Admission stays at the normal-load configurations measured.
     std::optional<uint32_t> nrAutoPoolLayer;
 };
 
@@ -480,6 +480,7 @@ public:
     bool selectAutoNrLevel(unsigned level);
     bool autoNrPoolReady()const{return nrAutoPoolReady_;}
     unsigned autoNrLevel()const{return nrAutoLevel_;}
+    Extent autoNrExtent()const{return nrAutoPoolReady_&&desc_.nrAutoPoolLayer?desc_.nrLayersExtent[*desc_.nrAutoPoolLayer]:Extent{};}
 
     // s10 ownership-order teardown: NVOF fence drain must happen BEFORE this
     // call (it needs the ring and out-fence alive). Releases features, NVOF

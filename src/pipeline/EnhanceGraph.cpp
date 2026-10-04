@@ -1393,6 +1393,9 @@ bool EnhanceGraph::createNrFeature(NrInstance& layer) {
 }
 
 bool EnhanceGraph::createAutoNrPool() {
+    if(GetEnvironmentVariableW(L"VEYRA_TEST_NR_AUTO_POOL_REFUSE",nullptr,0)>0){
+        failedBackend_=engine::FailedBackend::Nr;log::warn("nr-auto-pool","test-only API refusal; no allocation or pressure injected");return false;
+    }
     const auto index=*desc_.nrAutoPoolLayer;
     const bool admitted=nrEnabled_&&!srEnabled_&&!fgEnabled_&&!lmxxfNr_&&!desc_.hdrWorking()&&!desc_.stillImage&&
         !desc_.noFeatures&&!desc_.noNgx&&!desc_.runtimeNodeOrder&&!desc_.nrTemporal&&desc_.nrHoldStrength==0&&

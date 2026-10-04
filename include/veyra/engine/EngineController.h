@@ -65,6 +65,9 @@ struct PlayerSnapshot {
     std::wstring status=L"请打开视频或图片";
     EnhancementSettings desired,applied;bool applying=false;
     bool nrActive=false,srActive=false,fgActive=false;
+    bool nrAutoActive=false;
+    uint32_t nrAutoPercent=0,nrAutoWidth=0,nrAutoHeight=0;
+    std::wstring nrAutoStatus;
     bool videoHdrActive=false; // TrueHDR actually running this graph (needs an HDR display path)
     std::wstring backendWarning;
     std::wstring sourceNotice;
@@ -83,6 +86,7 @@ struct PlayerSnapshot {
     // Source geometry for the UI: coded size and the container's display aspect
     // ratio (0 = use coded size). Known at open time, before the first frame.
     uint32_t sourceWidth=0,sourceHeight=0;
+    bool sourceHdr=false;
     double sourceDisplayAspect=0.0;
     int sourceRotationDegrees=0;
     // Poster frame for the minimal-mode bar, as a small RGBA8 image. Empty when

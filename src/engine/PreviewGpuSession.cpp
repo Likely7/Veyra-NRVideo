@@ -23,7 +23,7 @@ bool PreviewGpuSession::initialize(unsigned slots){
 }
 bool PreviewGpuSession::requestAllowed(const EnhancementSettings& settings){
     return settings.validate().empty()&&(settings.nr||settings.sr)&&settings.multiplier==1&&
-        settings.nrRuntime==NrRuntime::Original&&settings.activeNrLayerCount()<=1&&
+        settings.nrRuntime==NrRuntime::Original&&settings.activeNrLayerCount()<=1&&!settings.activeAutoNrLayerCount()&&
         !settings.videoHdr.enabled&&!settings.color.enabled&&settings.additionalColorCount==0&&
         (settings.videoSrQuality==0||settings.videoSrQuality==4);
 }

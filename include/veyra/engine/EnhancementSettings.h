@@ -200,6 +200,14 @@ struct EnhancementSettings {
         for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i)if(nrLayers[i].enabled)++count;
         return count;
     }
+    uint32_t activeAutoNrLayerCount() const {
+        if(!nr)return 0;
+        if(!nrLayerCount)return nrPolicy==pipeline::NrSizePolicy::Auto?1:0;
+        uint32_t count=0;
+        for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i)
+            count+=nrLayers[i].enabled&&nrLayers[i].sizePolicy==pipeline::NrSizePolicy::Auto;
+        return count;
+    }
     bool sameNrTopology(const EnhancementSettings& other) const {
         if(nrLayerCount!=other.nrLayerCount)return false;
         for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i){

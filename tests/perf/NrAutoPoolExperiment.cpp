@@ -12,7 +12,8 @@
 
 int wmain(int argc,wchar_t** argv) {
     using namespace veyra;if(argc!=5)return 2;
-    const bool pooled=std::wstring(argv[3])==L"pool";if(!pooled&&std::wstring(argv[3])!=L"reference")return 2;
+    const bool pooled=std::wstring(argv[3])==L"pool",fixed=std::wstring(argv[3])==L"fixed";
+    if(!pooled&&!fixed&&std::wstring(argv[3])!=L"reference")return 2;
     const unsigned count=_wtoi(argv[4]);if(count<1||count>2)return 2;
     const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);if(FAILED(com))return 2;
     struct ComLifetime{~ComLifetime(){CoUninitialize();}} comLifetime;
@@ -33,7 +34,7 @@ int wmain(int argc,wchar_t** argv) {
     constexpr unsigned levels[6]={0,1,2,3,4,0};
     std::ofstream frames(out/L"frames.csv");frames<<"frame,level,pts100ns,width,height,historyReset,sha256\n";
     bool pass=true;unsigned completed=0;
-    for(unsigned segment=0;segment<6&&pass;++segment){const auto level=levels[segment];
+    for(unsigned segment=0;segment<6&&pass;++segment){const auto level=fixed?0:levels[segment];
         if(pooled)pass=session.graph->selectAutoNrLevel(level);
         else{session.graph->shutdown();pass=session.graph->initialize(makeDesc(level))&&session.graph->createViews();}
         for(unsigned j=0;j<15&&pass;++j){const unsigned frame=segment*15+j;

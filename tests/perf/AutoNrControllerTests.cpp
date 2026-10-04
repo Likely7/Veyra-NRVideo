@@ -21,6 +21,8 @@ int main() {
        c.observe(715000000,std::numeric_limits<double>::quiet_NaN(),30,10)||c.observe(720000000,20,30,0))return 1;
     if(c.observe(725000000,11,30,10)!=1)return 1;
     if(c.observe(755000000,7.5,30,10)||c.observe(785000000,7.5,30,10))return 1; // hysteresis band
+    c.reset(800000000,2);
+    if(c.level()!=2||c.observe(805000000,20,30,10)!=3)return 1; // a retained graph's current level survives parameter revision
     std::cout<<"AUTO_NR_CONTROLLER_PASS transportBudget=1 dwell=1 hysteresis=1 cap=1 floor=1 invalidTiming=1 reset=1"<<std::endl;
     return 0;
 }

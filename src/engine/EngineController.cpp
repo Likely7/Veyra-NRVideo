@@ -540,6 +540,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 return active;
             };
             pipeline::EnhanceGraphDesc gd;gd.sourceWidth=width;gd.sourceHeight=height;gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();
+            {std::lock_guard lock(mutex_);snapshot_.sourceHdr=gd.hdrInput;}
             gd.highQualityPresentation=isRemote&&activeSource->info().color.reconstructChroma;
             gd.rgbInput=isImage||isScreen||(isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Bgra8);
             gd.captureBitDepth=activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::P010?10:activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::P016?16:8;
@@ -559,6 +560,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
             gd.compatibilityPreflight=[this](const auto& desc,const auto& device){return checkFgCompatibility(desc,device,stop_);};
             std::wstring backendRecoveryWarning;
+            bool nrAutoPoolUnavailable=false;
+            std::wstring nrAutoStatus;
             auto initializePreview=[&](pipeline::EnhanceGraphDesc& desc,PlayerOptions& selected,bool preserveWorkingFg=false,bool preserveWorkingNr=false){
                 backendRecoveryWarning.clear();
                 auto supported=selected.snapshot();
@@ -573,17 +576,26 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 for(unsigned attempt=0;attempt<6;++attempt){
                     desc.videoHdr=selected.settings.videoHdr;
                     desc.hdrOutput=selected.settings.useHdrPreview(desc.hdrInput,displayHdrActive());
-                    // Experimental normal-playback driver only. A cached/prewarmed
-                    // graph has no pool; never adopt it for this request.
+                    // Auto is optional and preview-only; fixed/export policies
+                    // retain their existing contract. A prewarmed graph has no pool.
                     desc.nrAutoPoolLayer.reset();
-                    if(GetEnvironmentVariableW(L"VEYRA_TEST_NR_AUTO_POOL",nullptr,0)>0&&
+                    const auto automatic=std::find(desc.nrLayersSizePolicy.begin(),desc.nrLayersSizePolicy.end(),pipeline::NrSizePolicy::Auto);
+                    const bool autoRequested=selected.nr&&automatic!=desc.nrLayersSizePolicy.end();
+                    const bool tested=GetEnvironmentVariableW(L"VEYRA_TEST_NR_AUTO_POOL",nullptr,0)>0;
+                    const bool admitted=(tested||(autoRequested&&automatic==desc.nrLayersSizePolicy.begin()&&selected.settings.activeAutoNrLayerCount()==1))&&
+                       !nrAutoPoolUnavailable&&selected.settings.activeNrLayerCount()<=2&&
                        !isCapture&&!isImage&&desc.enableNr&&!desc.enableSr&&!desc.enableFg&&
-                       !desc.hdrWorking()&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
+                       !desc.hdrWorking()&&!desc.videoHdr.enabled&&!desc.color.enabled&&!desc.additionalColorCount&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
                        desc.nrRuntime==NrRuntime::Original&&desc.opticalFlowBackend==OpticalFlowBackend::Nvidia&&
+                       desc.nrMotion==MotionSource::OpticalFlow&&
                        nvidiaAdapter&&ctx.adapter().deviceId==0x2f04&&desc.workWidth==1920&&desc.workHeight==1080&&
+                       desc.sourceWidth==1920&&desc.sourceHeight==1080&&
                        !desc.nrLayersExtent.empty()&&desc.nrLayersExtent[0]==pipeline::Extent{1920,1080}&&
-                       std::none_of(desc.nrLayersTemporal.begin(),desc.nrLayersTemporal.end(),[](bool value){return value;}))
-                        desc.nrAutoPoolLayer=0;
+                       std::none_of(desc.nrLayersTemporal.begin(),desc.nrLayersTemporal.end(),[](bool value){return value;});
+                    nrAutoStatus.clear();
+                    if(admitted)desc.nrAutoPoolLayer=0;
+                    else if(autoRequested)nrAutoStatus=nrAutoPoolUnavailable?
+                        L"自动NR实例池不可用，保留1080p NR":L"当前配置未启用自动NR，保留1080p NR";
                     // The only graph allowed beside an inactive NR adapter is
                     // effects-off. Evict before any other NGX initialization.
                     if(recentGraphCache.hasCachedGraph()&&!RecentGraphCache::effectsOff(desc)){
@@ -609,7 +621,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     uint64_t afterBudget=0,afterUsage=0;
                     const auto newBytes=measuredBefore&&ctx.videoMemoryInfo(afterBudget,afterUsage)&&afterUsage>buildUsage?afterUsage-buildUsage:0;
                     graphBytes=adopted?graphBytes+newBytes:newBytes;
+                    {std::lock_guard lock(mutex_);snapshot_.nrAutoStatus=nrAutoStatus;snapshot_.nrAutoActive=false;
+                     snapshot_.nrAutoPercent=snapshot_.nrAutoWidth=snapshot_.nrAutoHeight=0;}
                     return true;
+                }
+                if(desc.nrAutoPoolLayer&&failure==FailedBackend::Nr&&SUCCEEDED(ctx.device()->GetDeviceRemovedReason())){
+                    nrAutoPoolUnavailable=true;graph->shutdown();
+                    veyra::log::warn("nr-auto","pool initialization unavailable; retrying the same NR settings at fixed 1080p");
+                    continue;
                 }
                 // A live backend/multiplier switch must not turn a working FG
                 // session into effects-off playback when the new provider fails.
@@ -1409,7 +1428,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(graph->autoNrPoolReady()&&frameFlow&&!transaction&&!paused_){
                     const auto now=host100ns();
                     if(autoNrRevision!=options.settings.revision||autoNrControl.level()!=graph->autoNrLevel()){
-                        autoNrControl.reset(now);autoNrRevision=options.settings.revision;
+                        autoNrControl.reset(now,graph->autoNrLevel());autoNrRevision=options.settings.revision;
                     }
                     if(reset)autoNrControl.discardObservations(now);
                     const auto timing=frameFlow->snapshot(now).enhancementProcessing;
@@ -2244,6 +2263,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.fgBudgetLimited=measured.flow.lastFgRejected100ns>0&&host100ns()-measured.flow.lastFgRejected100ns<10000000;
                     snapshot_.xessGenerationSuppressed=graph->xessEnabled()&&presenter.xessGenerationSuppressed();
                     snapshot_.nrActive=graph->nrEnabled()&&graphStats.nrEvaluateCount>0;
+                    snapshot_.nrAutoActive=graph->autoNrPoolReady();
+                    snapshot_.nrAutoPercent=graph->autoNrPoolReady()?AutoNrController::percent(graph->autoNrLevel()):0;
+                    const auto autoExtent=graph->autoNrExtent();snapshot_.nrAutoWidth=autoExtent.width;snapshot_.nrAutoHeight=autoExtent.height;
+                    snapshot_.nrAutoStatus=nrAutoStatus;
                     snapshot_.audioRebuffering=audioRebuffering;
                     snapshot_.audioVideoWaits=audioPipe.videoWaitCount();
                     snapshot_.srActive=gd.enableSr&&graphStats.srEvaluateCount>0;

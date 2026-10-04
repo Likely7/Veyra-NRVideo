@@ -810,6 +810,7 @@ static ui::EffectGpu effectGpu() {
                 FAILED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), nullptr))) continue;
             const auto name = QString::fromWCharArray(d.Description);
             result.vendor = d.VendorId;
+            result.deviceId = d.DeviceId;
             result.rtx = name.contains("RTX", Qt::CaseInsensitive);
             result.blackwell = name.contains("RTX 50", Qt::CaseInsensitive) || name.contains("Blackwell", Qt::CaseInsensitive);
             result.ada = name.contains("RTX 40", Qt::CaseInsensitive) || name.contains("Ada", Qt::CaseInsensitive);
@@ -835,6 +836,8 @@ static QVariantMap scanEffectCapabilities() {
         out[id] = QVariantMap{{"available", supported && files}, {"reason", !supported ? requirement : !files ? QObject::tr("当前包缺少此功能的运行组件") : QString{}}};
     };
     add("nr0", H::NvidiaNr50, exists(nr / "nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 50 / Blackwell"));
+    out["nrAuto"]=QVariantMap{{"available",gpu.vendor==0x10DE&&gpu.deviceId==0x2f04&&out.value("nr0").toMap().value("available").toBool()},
+        {"reason",gpu.deviceId!=0x2f04?QObject::tr("自动 NR 当前仅验证 RTX 5070"):!out.value("nr0").toMap().value("available").toBool()?QObject::tr("当前包缺少此功能的运行组件"):QString{}}};
     add("nr2", H::NvidiaNrSf, exists(nr / "nr-ampere/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("nr3", H::NvidiaNr50, exists(nr / "nr-original/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 50 / Blackwell"));
     add("nr4", H::AmdNr, exists(nr / "../amd-nr/LmxxfNrRuntime.dll"), QObject::tr("需要 AMD RX 9000"));
@@ -3757,6 +3760,15 @@ QString QmlPlayerBridge::metricsSummary() const {
     return tr("提交 %1").arg(*s.submissionFps, 0, 'f', 1);
 }
 bool QmlPlayerBridge::nrActive() const { return impl_->snapshot.nrActive; }
+bool QmlPlayerBridge::nrAutoActive() const {return impl_->snapshot.nrAutoActive;}
+int QmlPlayerBridge::nrAutoPercent() const {return int(impl_->snapshot.nrAutoPercent);}
+QString QmlPlayerBridge::nrAutoStatus() const {
+    const auto& s=impl_->snapshot;
+    if(s.nrAutoActive)return tr("NR 自动 %1% · %2×%3").arg(s.nrAutoPercent).arg(s.nrAutoWidth).arg(s.nrAutoHeight);
+    if(s.nrAutoStatus==L"自动NR实例池不可用，保留1080p NR")return tr("自动 NR 实例池不可用，保留固定 1080p 档");
+    if(!s.nrAutoStatus.empty())return tr("当前配置未启用自动 NR，保留固定 1080p 档");
+    return {};
+}
 bool QmlPlayerBridge::srActive() const { return impl_->snapshot.srActive; }
 bool QmlPlayerBridge::fgActive() const { return impl_->snapshot.fgActive; }
 bool QmlPlayerBridge::captureRecovering() const { return impl_->snapshot.captureRecovering; }
@@ -4094,6 +4106,26 @@ QVariantList QmlPlayerBridge::nrLayers() const {
     return out;
 }
 
+QString QmlPlayerBridge::nrAutoSelectionReason(int index) const {
+    const auto cap=effectCapabilities().value("nrAuto").toMap();
+    if(!cap.value("available").toBool())return cap.value("reason").toString();
+    const auto& s=settings();const auto& snapshot=impl_->snapshot;
+    int first=-1;unsigned count=0;bool temporal=false,otherAuto=false;
+    for(uint32_t i=0;i<impl_->chain.nodeCount;++i){const auto& node=impl_->chain.nodes[i];
+        if(node.type!=engine::EffectType::NrEnhance)continue;
+        if(first<0)first=int(i);
+        ++count;temporal|=node.enabled&&node.nr.temporal;
+        otherAuto|=int(i)!=index&&node.enabled&&node.nr.sizePolicy==pipeline::NrSizePolicy::Auto;
+    }
+    if(first!=index||count>2||otherAuto)return tr("自动 NR 仅支持一至两层列表的第一层");
+    if(impl_->chain.mode!=engine::ChainMode::List||s.nrRuntime!=engine::NrRuntime::Original||s.sr||s.multiplier>1||temporal||
+       s.nrHoldStrength>0||s.color.enabled||s.additionalColorCount||s.videoHdr.enabled||
+       s.opticalFlowBackend!=engine::OpticalFlowBackend::Nvidia||s.nrMotion!=engine::MotionSource::OpticalFlow||snapshot.capture||snapshot.image||snapshot.sourceHdr||
+       (snapshot.sourceWidth&& (snapshot.sourceWidth!=1920||snapshot.sourceHeight!=1080)))
+        return tr("需 1080p SDR 文件、Lecram 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR");
+    return {};
+}
+
 bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double value){
     if(index<0||uint32_t(index)>=impl_->chain.nodeCount||
        impl_->chain.nodes[index].type!=engine::EffectType::NrEnhance||!std::isfinite(value))return false;
@@ -4120,8 +4152,11 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     else if(key=="color")n.residual.color=float(value);
     else if(key=="luminance")n.residual.luminance=float(value);
     else {
-        if(value!=std::floor(value)||value<0||value>5)return false;
-        if(key=="sizePolicy")n.sizePolicy=static_cast<pipeline::NrSizePolicy>(int(value));
+        if(value!=std::floor(value)||value<0||value>6)return false;
+        if(key=="sizePolicy"){
+            if(value==6){const auto reason=nrAutoSelectionReason(index);if(!reason.isEmpty()){emit notice(reason,true);return false;}}
+            n.sizePolicy=static_cast<pipeline::NrSizePolicy>(int(value));
+        }
         else if(key=="style"&&value<=2)n.model.style=int(value);
         else if(key=="autoMask"&&value<=1)n.model.autoMask=int(value);
         else if(key=="uiCorrection"&&value<=1)n.model.uiCorrection=int(value);
@@ -5809,6 +5844,7 @@ void QmlPlayerBridge::updateRunStatus() {
         if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
         else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed)) detail << tr("调度降档");
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);
+        const auto autoState=nrAutoStatus();if(!autoState.isEmpty())detail<<autoState;
     }
     // 1.4.4 DashboardHistory: target = source x multiplier (half-rate capture
     // halves it); actual = what reached present (XeSS: its SDK submit rate).
