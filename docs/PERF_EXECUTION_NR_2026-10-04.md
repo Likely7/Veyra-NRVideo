@@ -30,9 +30,9 @@
 | E3 | 真实来源精确重复比例 | completed-screen-awaiting-card | 真实WGC三阶段各60秒通过，静止99.932%/移动内容0.540%/窗口位置99.937%；PERF_E3_DUPLICATE_SOURCE；实卡待来源确认 |
 | 1a | 精确重复帧整链复用 | rejected-unchanged-output | 自然同像素300帧×五组×三轮，A-A噪声0；NR/SR复用299帧不同；PERF_1A_DUPLICATE_REUSE；无生产改动 |
 | 5a | 黑边检测与有效区域处理 | pending | 防暗场误裁，先测准确性与重建收益 |
-| 3a | 进程GPU调度优先级 | in-progress | 九组交错Normal/High/Realtime，本轮三NR竞争Graph，Set/Get/P95/P99及对方吞吐；PERF_3A_GPU_PRIORITY |
+| 3a | 进程GPU调度优先级 | retained-pending-R0 | 18组交错实际三档；60Hz实时P99改善6.83%，High无稳定收益，普通默认；两绘制模式40次Set/Get及重启通过；PERF_3A_GPU_PRIORITY |
 | 2a | 跨重建保留NGX核心 | retained-pending-R0 | v2三轮A/B/B-off完整输出0差异；暖创建减少75.83/71.23/64.58/72.04%；真实UI及SDK拒绝路径通过；导出待R0 |
-| 2c | 最近配置实例缓存 | in-progress | 单NR↔全关严格key候选，有界显存/唯一adapter/历史reset，native50次与Qt压力待验；PERF_2C_RECENT_CACHE |
+| 2c | 最近配置实例缓存 | retained-single-NR-pending-R0 | 三轮native/Qt画面与生命周期通过；实际NR开create363.851→3.602ms，显存压力/key/关闭源失效通过；SR历史另核验；PERF_2C_RECENT_CACHE |
 | 2d | 空闲预热 | pending | 首帧收益与开关关闭时显存 |
 | 2b | 后台建图与帧边界切换 | pending | 取决于E2，不移除必要同步 |
 | 3b | NR自动内部尺寸 | pending | 取决于E1、真实预算/画质证据 |

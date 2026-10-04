@@ -108,6 +108,7 @@ target_include_directories(veyra_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 target_link_libraries(veyra_base PUBLIC bcrypt wintrust crypt32 version)
 
 add_library(veyra_gfx STATIC
+  src/gfx/GpuSchedulingPriority.cpp
   src/gfx/D3D12DeviceContext.cpp
   src/gfx/CommandSlotRing.cpp
   src/gfx/PresentSink.cpp

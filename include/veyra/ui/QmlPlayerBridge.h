@@ -179,6 +179,7 @@ class QmlPlayerBridge : public QObject {
     // subtitle look, audio output. Stored in <data>/qml-preferences.v1.json and
     // validated key by key in setPreference(); anything unknown is refused.
     Q_PROPERTY(QVariantMap preferences READ preferences NOTIFY preferencesChanged)
+    Q_PROPERTY(QString gpuPriorityStatus READ gpuPriorityStatus NOTIFY preferencesChanged)
     // The interface language in use (zh-CN / zh-TW / en / ja), after "auto" is resolved;
     // preferences.language holds the choice itself.
     Q_PROPERTY(QString uiLanguage READ uiLanguage NOTIFY preferencesChanged)
@@ -613,6 +614,7 @@ public:
     void setRemotePlayPin(const QString& value);
 
     QVariantMap preferences() const;
+    QString gpuPriorityStatus() const;
     QString uiLanguage() const;
     // main.cpp hands over the QML engine so a language change retranslates the scene.
     void setQmlEngine(QQmlEngine* engine);

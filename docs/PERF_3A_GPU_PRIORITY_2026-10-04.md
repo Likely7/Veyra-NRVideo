@@ -28,3 +28,10 @@ v2 M1真30帧自然视频与v3-60 M10合成1080p60，各Normal/High/Realtime三�
 Realtime对M10 P99改善6.83%、GPU就绪估计减少62.28%，竞争Graph吞吐增加4.64%；M1的极端max增加5.86%，不能据平均/就绪收益宣称所有尖峰改善。High M10 P99反而增加0.46%，M1就绪增加约1%，无足以改默认的稳定收益。因此拒绝原计划“默认High”，维持Normal，保留供用户自选的优先级能力，Realtime不默认。全部是软件Present返回和GPU时间戳估计，不是物理面板帧率/端到端延迟。CPU/GPU频率/整卡占用仍在每秒meters中，未锁频。
 
 M10由现有10秒合成translation素材重定时循环生成60秒，3600帧、60/1，前600帧无相邻重复，SHA4f588d4c8eb4945f83986b5a9710b630b25327375570c85c2e68561f9bef40f1；M2同方法为4K60，SHA19482f441ee53f8ed35b2b95da343b18d2fce5764181aefb45bb4c32c46fa943。它们不是真实主机或电影素材，来源/编码命令/framemd5/ffprobe在authored-media-v1 manifest。缓存/其他待建产品源码未用于18组计时：测试使用封存5c EXE bf4952347424f500df45a29ab3f7289742e4ecae188ac66b71805b9743978568。产品首选项/实际生效/画面导出回归仍待。
+
+
+## 产品接入与真实桥接验收
+
+GpuSchedulingPriority 只针对 GetCurrentProcess，gdi32 从系统目录加载，Set 后立即 Get 验证；请求在首个WDDM会话前为pending，不冒充生效。引擎创建设备后重试，界面已有2秒能力定时器只在pending时补试，状态变化才发通知；不创建额外设备、不改CPU优先级或其他进程、不提权。settings白名单严格normal/high/realtime、保存失败不改变请求；旧/非法保存值按普通处理。性能分组放在监控软件兼容后，普通默认。Qt和日志分别显示实际生效/等待/拒绝/不支持，四语言已补齐并extract --check通过。
+
+build-gpu-priority-product-v1 474步exit0。B3a-product-ui-v1 硬件绘制和obsGameCapture软件绘制隔离profile重启两组，每组20次公共QML请求，外部只读本轮进程Get各20次全部读回对应2/4/5，最后保存realtime、软件绘制重启确认恢复，invalid请求拒绝。播放及暂停中都可切换；日志只出现起始reset reason1和恢复播放reason7，优先级请求不重建图。二者均正常退出，无ERROR、参数块泄漏或QML错误。原始请求、Set/Get日志、独立外部Get、EXE/DLL身份及命令在B3a-product-ui-v1-* receipt。18组计时使用此前封存EXE，不用这两组功能测试替换性能对照；保留用户可选优先级，整产品画面/导出回归仍交R0。

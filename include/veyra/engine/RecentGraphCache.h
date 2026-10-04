@@ -44,7 +44,7 @@ public:
             desc.nrHoldStrength==0&&!desc.noFeatures&&!desc.noNgx&&!desc.stillImage&&
             desc.nrRuntime==NrRuntime::Original&&!desc.nrTemporal&&desc.nrLayersModel.size()<=1&&
             std::none_of(desc.nrLayersTemporal.begin(),desc.nrLayersTemporal.end(),[](bool value){return value;})&&
-            (!desc.fixedExecutionPlan||(desc.fixedExecutionPlan->mode==ChainMode::List&&
+            !desc.runtimeNodeOrder&&(!desc.fixedExecutionPlan||(
                 desc.fixedExecutionPlan->stepCount==1&&desc.fixedExecutionPlan->steps[0].type==EffectType::NrEnhance));
     }
     static bool effectsOff(const pipeline::EnhanceGraphDesc& desc){

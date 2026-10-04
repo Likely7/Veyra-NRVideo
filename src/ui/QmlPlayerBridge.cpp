@@ -44,6 +44,7 @@
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/pipeline/VfgBackend.h"
+#include "veyra/gfx/GpuSchedulingPriority.h"
 #include "veyra/engine/ColorLookStore.h"
 #include "veyra/engine/ColorLut.h"
 #include "veyra/engine/Subtitles.h"
@@ -967,7 +968,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         });
     connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fgChoicesChanged);
     auto* capabilityTimer=new QTimer(this);
-    connect(capabilityTimer,&QTimer::timeout,this,[this,reported=currentEffectCapabilities()]() mutable {
+    connect(capabilityTimer,&QTimer::timeout,this,[this,reported=currentEffectCapabilities(),priorityRevision=uint64_t(-1)]() mutable {
+        if(gfx::gpuPriorityStatus().state==gfx::GpuPriorityState::Pending)gfx::applyRequestedGpuPriority();
+        const auto priority=gfx::gpuPriorityStatus();
+        if(priority.revision!=priorityRevision){priorityRevision=priority.revision;emit preferencesChanged();}
         const auto next=currentEffectCapabilities(true);
         // An action may have refreshed the cache before this tick. Compare with
         // the last reported map so that QML still learns about that change.
@@ -976,6 +980,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     });
     capabilityTimer->start(2000);
     impl_->loadPrefs();
+    applyPreference(QStringLiteral("gpuPriority"));
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
@@ -4627,6 +4632,14 @@ void QmlPlayerBridge::takeScreenshot() {
 
 // --- shell preferences (P4-f / P4-c / P4-d) --------------------------------
 QVariantMap QmlPlayerBridge::preferences() const { return impl_->prefs; }
+QString QmlPlayerBridge::gpuPriorityStatus() const {
+    const auto status=gfx::gpuPriorityStatus();
+    const auto name=[](int priority){return priority==5?tr("实时"):priority==4?tr("高"):tr("普通");};
+    if(status.state==gfx::GpuPriorityState::Pending)return tr("创建显卡会话后生效");
+    if(status.state==gfx::GpuPriorityState::Unavailable)return tr("系统不支持调整 GPU 优先级");
+    if(status.state==gfx::GpuPriorityState::Rejected)return tr("系统未接受设置，当前：%1").arg(status.actual<0?tr("未知"):name(status.actual));
+    return tr("已生效：%1").arg(name(status.actual));
+}
 void QmlPlayerBridge::rememberWindowSize(int width, int height) {
     // Only kept when the user chose "记住上次"; the key is internal.
     if (width < 400 || height < 200 || width > 16384 || height > 16384) return;
@@ -4688,6 +4701,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         const QString v = value.toString();
         if (v != QLatin1String("auto") && v != QLatin1String("off")) return false;
         stored = v;
+    } else if (key == QLatin1String("gpuPriority")) {
+        const QString v=value.toString();
+        if(v!=QLatin1String("normal")&&v!=QLatin1String("high")&&v!=QLatin1String("realtime"))return false;
+        stored=v;
     } else if (key == QLatin1String("decode")) {
         const QString v = value.toString();
         if (v != QLatin1String("auto") && v != QLatin1String("software") && v != QLatin1String("hardware")) return false;
@@ -4725,6 +4742,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    if(key==QLatin1String("gpuPriority")){
+        const auto value=impl_->prefString("gpuPriority");
+        gfx::requestGpuPriority(value==QLatin1String("realtime")?gfx::GpuPriority::Realtime:
+                                value==QLatin1String("high")?gfx::GpuPriority::High:gfx::GpuPriority::Normal);
+    }
     if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));

@@ -464,7 +464,7 @@
   },
   {
    "zh": "AMD NR 最高 1080p 像素预算",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "qml/NrLayerEditor.qml",
    "zh-TW": "AMD NR 最高 1080p 像素預算",
    "en": "AMD NR has a maximum 1080p pixel budget",
    "ja": "AMD NR の上限は 1080p の画素数です"
@@ -611,7 +611,7 @@
   },
   {
    "zh": "FSR 3.1 / 4 · 自动兼容",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "FSR 3.1 / 4 · 自動相容",
    "en": "FSR 3.1 / 4 · Automatic compatibility",
    "ja": "FSR 3.1 / 4 · 自動互換"
@@ -685,6 +685,13 @@
    "zh-TW": "GPU DIS 已移除，請重選",
    "en": "GPU DIS has been removed; choose again",
    "ja": "GPU DIS は削除されました。選び直してください"
+  },
+  {
+   "zh": "GPU 优先级",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "GPU 優先級",
+   "en": "GPU priority",
+   "ja": "GPU 優先度"
   },
   {
    "zh": "GPU 光流",
@@ -3187,6 +3194,13 @@
    "ja": "フォント添付の作成"
   },
   {
+   "zh": "创建显卡会话后生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "建立顯示卡工作階段後生效",
+   "en": "Applies when a GPU session is created",
+   "ja": "GPU セッションの作成後に適用"
+  },
+  {
    "zh": "创建轨道读取器",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "建立軌道讀取器",
@@ -4713,6 +4727,13 @@
    "ja": "設定の完全なコピー。脇に置いて未接続"
   },
   {
+   "zh": "实时",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "即時",
+   "en": "Realtime",
+   "ja": "リアルタイム"
+  },
+  {
    "zh": "实时内部处理并回填",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "即時內部處理並回填",
@@ -5126,13 +5147,6 @@
    "ja": "小"
   },
   {
-   "zh": "检测到 RTSS 屏显服务正在运行。开启兼容绘制需重启 Veyra，重启后 OSD 仅显示在视频上。现在重启吗？当前播放或串流将停止。",
-   "src": "qml/Main.qml",
-   "zh-TW": "偵測到 RTSS 螢幕顯示服務正在執行。啟用相容繪製需重新啟動 Veyra，重新啟動後 OSD 僅顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
-   "en": "The RTSS on-screen display service is running. Restart Veyra to enable compatible rendering and show the OSD on the video only. Restart now? Current playback or streaming will stop.",
-   "ja": "RTSS オンスクリーン表示サービスが動作しています。互換描画を有効にするには Veyra を再起動してください。再起動後、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
-  },
-  {
    "zh": "尚无导出任务",
    "src": "src/engine/ExportJobManager.cpp",
    "zh-TW": "尚無匯出任務",
@@ -5330,7 +5344,7 @@
   },
   {
    "zh": "已关闭当前硬件或包不支持的效果，参数仍保留：",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已關閉目前硬體或套件不支援的效果，參數仍保留：",
    "en": "Unavailable effects have been disabled; their parameters are preserved: ",
    "ja": "非対応の効果を無効にしました。設定値は保持されています："
@@ -5567,11 +5581,11 @@
    "ja": "同じ名前のプリセットがあります。別の名前にすると保存できます"
   },
   {
-   "zh": "监控兼容绘制已启用：OSD 只显示在视频上；部分阴影与模糊简化",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "監控相容繪製已啟用：OSD 只顯示在影片上；部分陰影與模糊簡化",
-   "en": "Monitoring compatibility rendering is enabled: the OSD shows on the video only; some shadows and blur are simplified",
-   "ja": "監視ソフト互換描画が有効です。OSD は映像にだけ表示されます。一部の影やぼかしは簡略化されます"
+   "zh": "已生效：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已生效：%1",
+   "en": "Active: %1",
+   "ja": "適用済み：%1"
   },
   {
    "zh": "已登录",
@@ -5768,6 +5782,13 @@
    "zh-TW": "並入輸入",
    "en": "Merge into input",
    "ja": "入力に統合"
+  },
+  {
+   "zh": "应用",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "套用",
+   "en": "Apply",
+   "ja": "適用"
   },
   {
    "zh": "应用设置并重连",
@@ -6023,7 +6044,7 @@
   },
   {
    "zh": "当前包缺少此功能的运行组件",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "目前套件缺少此功能的執行元件",
    "en": "This package lacks the runtime components for this feature",
    "ja": "このパッケージに必要なランタイムがありません"
@@ -6041,6 +6062,13 @@
    "zh-TW": "當前執行器尚不支援此節點順序，原設定保持不變",
    "en": "The executor does not support this node order yet; the configuration is unchanged",
    "ja": "現在の実行エンジンはこのノード順序にまだ対応していません。構成は変更していません"
+  },
+  {
+   "zh": "当前播放状态无法修改倍速",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "目前播放狀態無法修改倍速",
+   "en": "Playback speed cannot be changed in the current state",
+   "ja": "現在の再生状態では速度を変更できません"
   },
   {
    "zh": "当前播放设置",
@@ -6086,7 +6114,7 @@
   },
   {
    "zh": "当前硬件或包不支持所选效果，请查看组件页",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "目前硬體或套件不支援所選效果，請查看元件頁",
    "en": "The hardware or package does not support this effect; check Components",
    "ja": "選択した効果は現在の GPU またはパッケージに対応していません。コンポーネントを確認してください"
@@ -6707,6 +6735,13 @@
    "zh-TW": "播放 / 暫停（播放檔案時）",
    "en": "Play / pause (when playing a file)",
    "ja": "再生 / 一時停止（ファイル再生時）"
+  },
+  {
+   "zh": "播放倍速",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "播放倍速",
+   "en": "Playback speed",
+   "ja": "再生速度"
   },
   {
    "zh": "播放条已显示",
@@ -7409,6 +7444,13 @@
    "ja": "遅延：現在 %1 ms / P95 %2 ms"
   },
   {
+   "zh": "普通",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "一般",
+   "en": "Normal",
+   "ja": "通常"
+  },
+  {
    "zh": "暂不支持此字幕格式",
    "src": "src/engine/Subtitles.cpp",
    "zh-TW": "暫不支援此字幕格式",
@@ -7913,18 +7955,25 @@
    "ja": "OBS ゲームキャプチャと RivaTuner（RTSS）が両方とも Veyra に挿入されています。既定のフック方式が競合し、OBS ゲームキャプチャで映像が取れないことがあります（D3D12 のプログラムすべてで同じです）。RTSS に veyra_qml_ui.exe を追加して設定で「Use Microsoft Detours API hooking」をオンにするか、OBS でウィンドウキャプチャ（Windows 10 1903+）を使ってください"
   },
   {
-   "zh": "检测到 RivaTuner（小飞机 OSD）注入了 Veyra。请把 设置 → 监控软件兼容 设为“自动”并在小飞机运行时重启 Veyra：界面改用兼容绘制，OSD 只显示在视频上",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "偵測到 RivaTuner（小飛機 OSD）注入了 Veyra。請把 設定 → 監控軟體相容 設為「自動」，並在小飛機執行時重新啟動 Veyra：介面改用相容繪製，OSD 只顯示在影片上",
-   "en": "RivaTuner (RTSS OSD) is injected into Veyra. Set Settings → Monitoring overlay compatibility to Auto and restart Veyra while RTSS is running: the interface uses compatible drawing and the OSD shows on the video only",
-   "ja": "RivaTuner（RTSS OSD）が Veyra に挿入されています。設定 → モニタリングソフト互換 を「自動」にし、RTSS の実行中に Veyra を再起動してください。インターフェースが互換描画になり、OSD は映像にだけ表示されます"
-  },
-  {
    "zh": "检测到 RTSS 屏显服务",
    "src": "qml/Main.qml",
    "zh-TW": "偵測到 RTSS 螢幕顯示服務",
    "en": "RTSS on-screen display service detected",
    "ja": "RTSS オンスクリーン表示サービスを検出"
+  },
+  {
+   "zh": "检测到 RTSS 屏显服务正在运行。开启兼容绘制需重启 Veyra，重启后 OSD 仅显示在视频上。现在重启吗？当前播放或串流将停止。",
+   "src": "qml/Main.qml",
+   "zh-TW": "偵測到 RTSS 螢幕顯示服務正在執行。啟用相容繪製需重新啟動 Veyra，重新啟動後 OSD 僅顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
+   "en": "The RTSS on-screen display service is running. Restart Veyra to enable compatible rendering and show the OSD on the video only. Restart now? Current playback or streaming will stop.",
+   "ja": "RTSS オンスクリーン表示サービスが動作しています。互換描画を有効にするには Veyra を再起動してください。再起動後、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
+  },
+  {
+   "zh": "检测到 RivaTuner（小飞机 OSD）注入了 Veyra。请把 设置 → 监控软件兼容 设为“自动”并在小飞机运行时重启 Veyra：界面改用兼容绘制，OSD 只显示在视频上",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到 RivaTuner（小飛機 OSD）注入了 Veyra。請把 設定 → 監控軟體相容 設為「自動」，並在小飛機執行時重新啟動 Veyra：介面改用相容繪製，OSD 只顯示在影片上",
+   "en": "RivaTuner (RTSS OSD) is injected into Veyra. Set Settings → Monitoring overlay compatibility to Auto and restart Veyra while RTSS is running: the interface uses compatible drawing and the OSD shows on the video only",
+   "ja": "RivaTuner（RTSS OSD）が Veyra に挿入されています。設定 → モニタリングソフト互換 を「自動」にし、RTSS の実行中に Veyra を再起動してください。インターフェースが互換描画になり、OSD は映像にだけ表示されます"
   },
   {
    "zh": "检测异常增长时自动退出全屏；默认关闭",
@@ -8683,13 +8732,6 @@
    "ja": "ゲームとプログラム · "
   },
   {
-   "zh": "源 ",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "源 ",
-   "en": "Source ",
-   "ja": "ソース "
-  },
-  {
    "zh": "源 %1 fps",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "源 %1 fps",
@@ -9089,6 +9131,13 @@
    "ja": "白い光彩"
   },
   {
+   "zh": "监控兼容绘制已启用：OSD 只显示在视频上；部分阴影与模糊简化",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "監控相容繪製已啟用：OSD 只顯示在影片上；部分陰影與模糊簡化",
+   "en": "Monitoring compatibility rendering is enabled: the OSD shows on the video only; some shadows and blur are simplified",
+   "ja": "監視ソフト互換描画が有効です。OSD は映像にだけ表示されます。一部の影やぼかしは簡略化されます"
+  },
+  {
    "zh": "监控软件兼容",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "監控軟體相容",
@@ -9437,6 +9486,20 @@
    "zh-TW": "系統不支援 Windows Graphics Capture",
    "en": "The system does not support Windows Graphics Capture",
    "ja": "このシステムは Windows Graphics Capture に対応していません"
+  },
+  {
+   "zh": "系统不支持调整 GPU 优先级",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "系統不支援調整 GPU 優先級",
+   "en": "GPU priority adjustment is unavailable",
+   "ja": "GPU 優先度の変更は利用できません"
+  },
+  {
+   "zh": "系统未接受设置，当前：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "系統未接受設定，目前：%1",
+   "en": "Setting was not accepted; current: %1",
+   "ja": "設定が受理されませんでした。現在：%1"
   },
   {
    "zh": "系统硬件编码 H.264（{}）",
@@ -9803,6 +9866,13 @@
    "ja": "カスタム"
   },
   {
+   "zh": "自定义…",
+   "src": "qml/PlaybackRateButton.qml",
+   "zh-TW": "自訂…",
+   "en": "Custom…",
+   "ja": "カスタム…"
+  },
+  {
    "zh": "自定义上限",
    "src": "qml/ProPage.qml",
    "zh-TW": "自定義上限",
@@ -9815,6 +9885,13 @@
    "zh-TW": "自定義上限（FPS）",
    "en": "Custom cap (FPS)",
    "ja": "カスタム上限（FPS）"
+  },
+  {
+   "zh": "自定义播放速度",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "自訂播放速度",
+   "en": "Custom playback speed",
+   "ja": "カスタム再生速度"
   },
   {
    "zh": "自然饱和度",
@@ -10109,6 +10186,13 @@
    "zh-TW": "節點預設：",
    "en": "Node preset: ",
    "ja": "ノードのプリセット："
+  },
+  {
+   "zh": "范围 0.25～4.00 倍，保持原有音调",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "範圍 0.25～4.00 倍，保持原有音調",
+   "en": "Range 0.25–4.00×, preserving pitch",
+   "ja": "範囲 0.25～4.00 倍、音程を維持"
   },
   {
    "zh": "草稿未运行",
@@ -10797,6 +10881,13 @@
    "ja": "現在の画像の書き出しが終わるまでお待ちください"
   },
   {
+   "zh": "请输入 0.25～4.00 之间的倍速",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "請輸入 0.25～4.00 之間的倍速",
+   "en": "Enter a speed between 0.25 and 4.00",
+   "ja": "0.25～4.00 の速度を入力してください"
+  },
+  {
    "zh": "请选择",
    "src": "qml/DialogHost.qml",
    "zh-TW": "請選擇",
@@ -11015,7 +11106,7 @@
   },
   {
    "zh": "超分算法",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "qml/NodePage.qml",
    "zh-TW": "超解析演算法",
    "en": "Upscaling algorithm",
    "ja": "アップスケーリング方式"
@@ -12331,42 +12422,42 @@
   },
   {
    "zh": "需要 AMD HIP 7 驱动运行组件",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 AMD HIP 7 驅動執行元件",
    "en": "Requires the AMD HIP 7 driver runtime",
    "ja": "AMD HIP 7 ドライバーランタイムが必要です"
   },
   {
    "zh": "需要 AMD RX 9000",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 AMD RX 9000",
    "en": "Requires AMD RX 9000",
    "ja": "AMD RX 9000 が必要です"
   },
   {
    "zh": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
    "en": "Requires NVIDIA RTX 40 / 50 (Ada / Blackwell)",
    "ja": "NVIDIA RTX 40 / 50（Ada / Blackwell）が必要です"
   },
   {
    "zh": "需要 NVIDIA RTX 50 / Blackwell",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 NVIDIA RTX 50 / Blackwell",
    "en": "Requires NVIDIA RTX 50 / Blackwell",
    "ja": "NVIDIA RTX 50 / Blackwell が必要です"
   },
   {
    "zh": "需要 NVIDIA RTX 显卡",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 NVIDIA RTX 顯示卡",
    "en": "Requires an NVIDIA RTX GPU",
    "ja": "NVIDIA RTX GPU が必要です"
   },
   {
    "zh": "需要 NVIDIA RTX 显卡及 NVOF 驱动",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 NVIDIA RTX 顯示卡及 NVOF 驅動",
    "en": "Requires an NVIDIA RTX GPU and the NVOF driver",
    "ja": "NVIDIA RTX GPU と NVOF ドライバーが必要です"
@@ -12394,7 +12485,7 @@
   },
   {
    "zh": "需要支持 DirectX 12 的硬件显卡",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要支援 DirectX 12 的硬體顯示卡",
    "en": "Requires a hardware GPU with DirectX 12 support",
    "ja": "DirectX 12 対応のハードウェア GPU が必要です"
@@ -13518,55 +13609,6 @@
    "zh-TW": "；本次匯出使用 AMD FSR 超解析",
    "en": "; this export uses AMD FSR super resolution",
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
-  },
-  {
-   "zh": "自定义…",
-   "src": "qml/Veyra/PlaybackRateButton.qml",
-   "zh-TW": "自訂…",
-   "en": "Custom…",
-   "ja": "カスタム…"
-  },
-  {
-   "zh": "自定义播放速度",
-   "src": "qml/Veyra/PlaybackRateDialog.qml",
-   "zh-TW": "自訂播放速度",
-   "en": "Custom playback speed",
-   "ja": "カスタム再生速度"
-  },
-  {
-   "zh": "播放倍速",
-   "src": "qml/Veyra/PlaybackRateDialog.qml",
-   "zh-TW": "播放倍速",
-   "en": "Playback speed",
-   "ja": "再生速度"
-  },
-  {
-   "zh": "范围 0.25～4.00 倍，保持原有音调",
-   "src": "qml/Veyra/PlaybackRateDialog.qml",
-   "zh-TW": "範圍 0.25～4.00 倍，保持原有音調",
-   "en": "Range 0.25–4.00×, preserving pitch",
-   "ja": "範囲 0.25～4.00 倍、音程を維持"
-  },
-  {
-   "zh": "请输入 0.25～4.00 之间的倍速",
-   "src": "qml/Veyra/PlaybackRateDialog.qml",
-   "zh-TW": "請輸入 0.25～4.00 之間的倍速",
-   "en": "Enter a speed between 0.25 and 4.00",
-   "ja": "0.25～4.00 の速度を入力してください"
-  },
-  {
-   "zh": "当前播放状态无法修改倍速",
-   "src": "qml/Veyra/PlaybackRateDialog.qml",
-   "zh-TW": "目前播放狀態無法修改倍速",
-   "en": "Playback speed cannot be changed in the current state",
-   "ja": "現在の再生状態では速度を変更できません"
-  },
-  {
-   "zh": "应用",
-   "src": "qml/Veyra/PlaybackRateDialog.qml",
-   "zh-TW": "套用",
-   "en": "Apply",
-   "ja": "適用"
   }
  ]
 }

@@ -36,6 +36,7 @@
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/sink/ImageExportSink.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
+#include "veyra/gfx/GpuSchedulingPriority.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/gfx/PresentationHooks.h"
 #include "veyra/RuntimePaths.h"
@@ -353,6 +354,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             wchar_t testSlots[16]{};unsigned commandSlots=16;
             if(GetEnvironmentVariableW(L"VEYRA_TEST_COMMAND_SLOTS",testSlots,16))commandSlots=std::clamp(unsigned(_wtoi(testSlots)),6u,24u);
             if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),commandSlots,st)){status(L"D3D12初始化失败，请查看诊断",true);break;}
+            gfx::applyRequestedGpuPriority();
             auto ext=std::filesystem::path(path).extension().wstring();for(auto& c:ext)c=towlower(c);
             const bool isImage=ext==L".png"||ext==L".jpg"||ext==L".jpeg";
             sink::RgbaImage image;

@@ -268,6 +268,21 @@ VPage {
                                 }
                             }
                         }
+                    }
+                    VH2 { text: qsTr("性能"); Layout.topMargin: 10 }
+                    VGroup {
+                        VRow {
+                            label: qsTr("GPU 优先级")
+                            hint: veyra.gpuPriorityStatus
+                            VSeg {
+                                objectName: "set-gpu-priority"
+                                options: [{ id: "normal", label: qsTr("普通") }, { id: "high", label: qsTr("高") }, { id: "realtime", label: qsTr("实时") }]
+                                current: veyra.preferences.gpuPriority || "normal"
+                                onPicked: id => veyra.setPreference("gpuPriority", id)
+                            }
+                        }
+                    }
+                    VGroup {
                         VRow {
                             label: qsTr("启动窗口大小")
                             hint: qsTr("下次启动生效；超过屏幕时按屏幕缩小并居中")
