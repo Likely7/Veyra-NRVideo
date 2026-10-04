@@ -34,3 +34,5 @@ v2构建成功；B5b-prefetch-smoke-v1七个真实debug导出通过，单/双NR�
 `... B5b-prefetch-trace-v1 prefetch-trace nr nrsr4k`2个独立诊断组、各119个(N+1 flow/N NR+SR)匹配对；`nr-prefetch-report.py B5b-prefetch-trace-v1`记录依赖区间重叠中位1.028/1.068ms，119/119超过估计校准界限0.076/0.226ms，前后校准drift约0.024/0.095ms。该Flow区间包含API/提交/queue-wait空隙，不是独立NVOF硬件kernel耗时；不把trace组wall time混入正常三轮。[D3D12 timing说明](https://learn.microsoft.com/en-us/windows/win32/direct3d12/timing)提示空闲可能使校准漂移，本次记录漂移而未改变稳定电源/用户驱动设置。
 
 决定拒绝并明确回退本准备器、共享队列入口和导入接口。模型画面与debug并无错误，拒绝原因是整次负收益、处理降幅不足目标10%及额外显存/生命周期复杂度；不是声称NVOF理论上不能并行。当前helper重复一部分源颜色与输出工作，更轻的源准备需要另一次有数据支撑的设计，不在这个负候选里无限重构。该负候选不扩进文件播放，文件/采集/串流保持原图；不宣称文件播放或8K NR验收。前面已保留的两帧NVENC/事件优化不回退，继续后续节点。
+
+回退已完成：`git revert --no-commit 1efd344 f07f6c3 58f5845 5edbf79`在历史文档发生冲突，保留当前完整实测文档后继续；Git产生484b425/b954b58/30cedcb三个明确revert提交。检查CMake、gfx context、Graph头/实现、VideoExportJob及主driver与before347a184的diff完全为空；新FlowPrefetch/GpuQueueTrace产品文件已删除。原测试EXE/载荷、源码bundle、debug/普通/trace数据及报表脚本保留。不把格式冲突解决写成新的性能测试，R0仍待。

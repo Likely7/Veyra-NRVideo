@@ -8316,3 +8316,5 @@ B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0�
 ## 2026-10-05 NR性能5b NVOF预取负收益
 
 before347a184/candidate5edbf79，v1因不存在nrLayers成员构建失败，58f5845修正；v2/v3/v4构建成功，最终编译产品1efd344。七组debug输出/取消通过，随后24普通导出三轮交错整文件SHA与已解码baseline一致。单NR/NR+SR4K/双NR/4K→SR8K整次分别慢1.41/2.06/2.74/5.25%，暖处理分别仅降6.01/1.47/2.68/-0.16%，多占232/232/232/867MiB。独立两trace组各119对实际依赖区间重叠约1ms，区别NVOF完整依赖区间与硬件kernel，不混入正常性能数字。数据E:/项目/Veyra/logs/perf-nr-20261004/B5b-prefetch-{smoke,normal,8k,trace}-v1-*。决定存档后明确回退这个准备器/导入接口，不扩进文件播放；保留已测两帧NVENC优化。没有压力/设备移除/用户电源设置变更。
+
+明确revert484b425/b954b58/30cedcb完成；只保留发生冲突的当前完整事实文档，产品/CMake/driver与before347a184空diff，scope guard通过。新共享队列/快照导入/实验trace接口删除，已保留5b默认导出优化未丢失。准备4b时重新构建产品，不使用已回退候选的当前build EXE冒充基线。
