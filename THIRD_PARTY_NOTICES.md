@@ -2,6 +2,43 @@
 
 NVIDIA SDKs and runtimes are excluded from source control. The publisher-authorized experimental Release package contains only selected runtime DLLs and applicable notices, as documented in `docs/RUNTIME_COMPONENTS_0.0.2.md`. This is not vendor endorsement or a general redistribution grant. ReShade/RenoDX add-ons are not loaded or distributed by the product.
 
+## NVIDIA Video Frame Generation (local integration, 2026-10-03)
+
+`src/pipeline/VfgBackend.cpp` and `include/veyra/pipeline/VfgBackend.h` implement
+the public native Video Effects SDK 1.3.0 and NvCVImage C APIs. Effect setup,
+`VideoFrameGeneration` selectors, multiplier/frame-index sequencing and quality
+modes were cross-checked against [NVIDIA-Maxine/VFX-SDK-Samples](https://github.com/NVIDIA-Maxine/VFX-SDK-Samples/tree/52011f89c1741d06b40ea312af1f20be8be9ec62),
+fixed commit `52011f89c1741d06b40ea312af1f20be8be9ec62`,
+`apps/VideoFrameGenerationEffectApp/VideoFrameGenerationEffectApp.cpp` and its README (MIT,
+Copyright NVIDIA Corporation). The sample remains in external dependencies;
+its CLI, OpenCV/CPU image transfer and implementation are not vendored.
+Veyra adds its own D3D12/CUDA external-buffer/fence bridge, opaque descriptors
+allocated by NvCVImage, exact adapter-LUID selection, asynchronous native calls,
+bounded output leases, shared preview/export integration, reset and diagnostics.
+The public NvCVImage documentation is authoritative for void destruction and
+borrowed pixel ownership; no proprietary SDK struct or header is copied into Git.
+
+The local runtime is the unmodified official `nvidia-vfx` 0.2.0.0 Windows wheel,
+`nvidia_vfx-0.2.0.0-cp311-cp311-win_amd64.whl`, 435809365 bytes, SHA-256
+`5aaf6a42bc6b6dbbf52fcb714194c994a6893cbbf7ada38bc2165a1f83e4a6fc`.
+Only the five VFG-required native dependencies are used; nine unrelated NPP libraries are omitted; Python and its extension
+are not a product dependency. This proprietary runtime is **not MIT**.
+The 2.0.3 NVIDIA package carries its NVIDIA software/AI/model terms and third-party
+notices with a separate `vfg-runtime-manifest.json`. The user explicitly authorized
+this experimental Release distribution; this is not vendor certification or a general
+redistribution grant, and the integration is not an independent legal audit. CUDA driver headers
+are an external build dependency only; the system `nvcuda.dll` is never bundled.
+DLLs remain unmodified, separately identified and outside source control;
+manifest identity does not lock user replacements. Hardware/format support and
+initialization failures are reported by the native backend.
+
+Shared graph/pool, presenter, worker, settings/preset/session and QML modifications
+are Veyra code. The SDK provides frame inference; the local RTX 5070 tests do
+not establish RTX 40 hardware results, physical display latency, universal HDR
+color accuracy or official NVIDIA certification. Provenance and measurements:
+`docs/VFG_RESEARCH_AND_INTEGRATION_PLAN_2026-10-03.md` and
+`docs/VFG_INTEGRATION_ACCEPTANCE_2026-10-03.md`.
+
 ## AVerMedia capture HDR-to-SDR control
 
 The AVerMedia hardware HDR-to-SDR property request in
@@ -224,7 +261,7 @@ Remote Play also depends on **OpenSSL, Opus, json-c, libevent, miniupnpc, curl, 
 <details>
 <summary>Deferred AMD NR research references</summary>
 
-[DLSS-NR-on-AMD](https://github.com/danielblnc/DLSS-NR-on-AMD), [dlss5-on-amd-9070xt-porting](https://github.com/lmxxf/dlss5-on-amd-9070xt-porting), [dlss5-image-enhancer-zluda](https://github.com/RedDukeDev/dlss5-image-enhancer-zluda) and its [ZLUDA fork](https://github.com/RedDukeDev/ZLUDA), [dlss5-neural-amd](https://github.com/zmodelerlover/dlss5-neural-amd), and [DLSS5-AMD-Video](https://github.com/eikkapine/DLSS5-AMD-Video). These informed feasibility and performance research. AMD NR is not available in the current release.
+[DLSS-NR-on-AMD](https://github.com/danielblnc/DLSS-NR-on-AMD), [dlss5-on-amd-9070xt-porting](https://github.com/lmxxf/dlss5-on-amd-9070xt-porting), [dlss5-image-enhancer-zluda](https://github.com/RedDukeDev/dlss5-image-enhancer-zluda) and its [ZLUDA fork](https://github.com/RedDukeDev/ZLUDA), [dlss5-neural-amd](https://github.com/zmodelerlover/dlss5-neural-amd), and [DLSS5-AMD-Video](https://github.com/eikkapine/DLSS5-AMD-Video). These informed feasibility and performance research. The 2.0.3 AMD package includes the lmxxf runtime and user-supplied 0.39 assets; actual RX9000 inference remains unverified.
 
 </details>
 
@@ -652,3 +689,22 @@ an unbounded metadata queue. These CPU timestamps do not claim physical scanout.
 ## NVIDIA original NR restored in 2.0.2
 
 The user-approved, unmodified NVIDIA-signed 310.8.0.0 NR (SHA256 E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E) is distributed only as a release runtime at runtime/experimental/nr-original/nvngx_dlssnr.dll. Existing community Lecram/SF-v2 choices and notices remain. See docs/RUNTIME_COMPONENTS_2.0.2.md and the publisher manifest. This experimental integration is not NVIDIA certification or complete official DLSS 5 support. No proprietary binary has been added to source Git.
+
+## lmxxf AMD NR local integration (2026-10-03)
+
+Veyra calls the independent MIT C ABI from
+[lmxxf/dlss5-on-amd-9070xt-porting](https://github.com/lmxxf/dlss5-on-amd-9070xt-porting),
+fixed commit `78f548749e74824327b8458c57be31a1df78376a`, Copyright (c) 2026 Kien.
+The unchanged public header, original MIT license and adaptation details are in
+`third_party/lmxxf/`. The runtime build uses upstream codec/network code directly;
+Veyra's GPL host adapter records producers/consumers on the existing D3D12 queue.
+It does not load a ReShade add-on or copy Magpie's player/loop.
+
+The user supplied `Magpie-DLSS5-AMD-0.39.zip` (SHA256
+`9ea84c665d270cd45e24184729b8272c152485df462a1528539ed778d41849f5`).
+Its NVIDIA-derived model weights are **not** MIT-licensed code. All weights,
+compiled HIP modules and runtime DLLs stay outside source Git; their use in this
+2.0.3 AMD package follows the user's explicit experimental distribution authorization; open-source code does not relicense these models. HIP API license and the
+runtime MIT notice accompany the local asset directory. No AMD driver DLL is
+copied from that package; an RX 9000 driver must provide `amdhip64_7.dll`.
+Hardware inference, image quality and stability remain unverified on RX 9000.

@@ -29,7 +29,7 @@ struct Shared {
     // chain is fixed-capacity and trivially copyable, so it can cross the
     // process boundary; a worker that sees another version refuses the job
     // instead of reading a mismatched layout.
-    DWORD signature=magic,version=7,bytes=sizeof(Shared); // 7: resume after a GPU reset
+    DWORD signature=magic,version=8,bytes=sizeof(Shared); // 8: VFG quality in the immutable settings snapshot
     EnhancementSettings settings;
     EffectChain chain;
     wchar_t input[32768]{},output[32768]{},temporary[32768]{};
@@ -245,7 +245,7 @@ ExportJobSnapshot ExportJobManager::poll(){
 }
 int runExportWorker(HANDLE mapping){
     auto s=static_cast<Shared*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!s)return 1;
-    if(s->signature!=magic||s->version!=7||s->bytes!=sizeof(Shared)||!s->media.valid()||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]||s->temporary[32767]||!s->temporary[0]||s->priorCount>=kMaxExportParts){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
+    if(s->signature!=magic||s->version!=8||s->bytes!=sizeof(Shared)||!s->media.valid()||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]||s->temporary[32767]||!s->temporary[0]||s->priorCount>=kMaxExportParts){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
     Logger::instance().openFile((runtime::logsDirectory()/std::format("export-worker-{}.log",GetCurrentProcessId())).wstring());
     ExportStreams::enableWorkerLogging(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_FFMPEG_DEBUG",nullptr,0)>0);
     // The chain is the description of record for this job; the settings struct

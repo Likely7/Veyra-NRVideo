@@ -74,6 +74,7 @@ Rectangle {
             fixture.width=1280;fixture.height=720;page.compactTab=0
             fixture.Window.window.width=1280;fixture.Window.window.height=720
             queue.clear();queue.selectedId=0;backend.starts=0;backend.additions=0
+            backend.exportRateControl=2;backend.exportBitrateMbps=24
             for(let i=0;i<20;++i)queue.append({itemId:i+1,name:"clip-"+i+".mkv",input:"clip-"+i,output:"",state:"ready",note:"",duration:120,progress:0,current:false,locked:false,inspecting:false})
             waitForPolish(fixture.Window.window)
         }
@@ -109,6 +110,27 @@ Rectangle {
             compare(queue.get(2).itemId,2)
             mouseClick(findChild(page,"export-start"));compare(backend.starts,1)
             mouseClick(findChild(page,"export-clear-queue"));compare(queue.count,0)
+        }
+        function test_bitrate_committed_before_start(){
+            backend.exportRateControl=1
+            const field=findChild(page,"export-bitrate-field")
+            field.forceActiveFocus();field.selectAll();keyClick(Qt.Key_1);keyClick(Qt.Key_8)
+            compare(backend.exportBitrateMbps,18)
+            backend.exportHevc=true;backend.exportSrTargetIndex=2;backend.exportContainer=1
+            compare(field.text,"18");compare(backend.exportBitrateMbps,18)
+            mouseClick(findChild(page,"export-start"));compare(backend.starts,1)
+            compare(backend.exportBitrateMbps,18)
+        }
+        function test_bitrate_invalid_draft_blocks_start(){
+            backend.exportRateControl=0
+            const field=findChild(page,"export-bitrate-field"),start=findChild(page,"export-start")
+            field.forceActiveFocus();field.selectAll();keyClick(Qt.Key_Backspace)
+            compare(field.text,"");compare(start.enabled,false);compare(backend.exportBitrateMbps,24)
+            keyClick(Qt.Key_3);keyClick(Qt.Key_0);keyClick(Qt.Key_0)
+            compare(backend.exportBitrateMbps,300);compare(start.enabled,true)
+            field.selectAll();keyClick(Qt.Key_0)
+            compare(start.enabled,false);compare(backend.exportBitrateMbps,300)
+            backend.exportRateControl=2;compare(start.enabled,true)
         }
         function test_resolution_menu_fits_short_window(){
             fixture.width=720;fixture.height=260;page.compactTab=2

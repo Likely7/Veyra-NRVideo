@@ -8,13 +8,15 @@
   </a>
 </p>
 
-English | [简体中文](README_CN.md)
+
 
 <p align="center"><img src="docs/images/2.0.0/professional-mode.png" alt="Veyra 2.0.0 professional mode" width="1200"></p>
 
+English | [简体中文](README_CN.md)
+
 A Windows enhancement player for videos, images, capture cards and streaming. Super-resolution, NR, colour grading, RTX Video HDR and frame generation share one engine. Community enhancements remain experimental.
 
-[Download 2.0.2 portable](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.2) · [Full changelog: English / 中文](docs/RELEASE_NOTES_2.0.2.md) · [Issues](https://github.com/Likely7/Veyra-NRVideo/issues)
+[Download 2.0.3 portable](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3) · [Full changelog: English / 中文](docs/RELEASE_NOTES_2.0.3.md) · [Issues](https://github.com/Likely7/Veyra-NRVideo/issues)
 
 ## Highlights
 
@@ -22,9 +24,14 @@ A Windows enhancement player for videos, images, capture cards and streaming. Su
 - **Node editing and layered NR:** executable connections, independent NR/colour parameters, separate List/Node configurations, sessions and presets.
 - **PC / Xbox streaming:** Moonlight/Sunshine-compatible PC streaming and unofficial experimental Xbox support, alongside PS5, capture cards and screen capture.
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
-- **Enhancement and compatibility:** three NR runtime choices (NVIDIA original for RTX 50, Lecram and SF-v2), DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
+- **Enhancement and compatibility:** four NR runtime choices (NVIDIA original for RTX 50, Lecram, SF-v2 and AMD lmxxf), DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-## New in 2.0.2
+## New in 2.0.3
+
+- **GPU packages:** choose NVIDIA or AMD. AMD NR assets and NVIDIA-only NR/NGX/VFG/CUDA components are separated. Both keep the existing shared FidelityFX 2.3.0 components and cross-vendor FSR3.1/XeSS; FSR4 stays gray on NVIDIA.
+- **Visible compatibility:** four NR versions, SR backends, FG backends, RTX HDR and optical flow retain unsupported entries with a disabled reason in List/Node mode. Restoring old configurations disables unavailable stages and preserves their parameters.
+- **VFG and field fixes:** all 2–8X multipliers and Low/Medium/High; Xbox audio startup and bounded recovery; bitrate draft/validation/frozen exports; opaque RTSS-compatible UI; removed false NVIDIA App crash detection; fixed the minimal window's right-edge gap. Nine unrelated VFG NPP libraries are omitted. RX9000 inference and Xbox hardware long sessions remain unverified; HDR/Dolby PRs are deferred.
+
 
 - Restore NVIDIA original NR as a third choice; existing Lecram/SF-v2 settings remain valid.
 - Optional startup resume reopens the last movie at its saved position or starts the saved capture card configuration. Choose Cinema or Professional as your startup page.
@@ -33,7 +40,7 @@ A Windows enhancement player for videos, images, capture cards and streaming. Su
 
 ## Install and upgrade
 
-Download **Veyra-2.0.2-win64-portable.zip**, extract into a new writable folder and run **veyra_qml_ui.exe**. This is the only release asset you need to run the application. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.0.3-NVIDIA-win64-portable.7z** or **Veyra-2.0.3-AMD-win64-portable.7z** for Veyra's active GPU. Extract with 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -52,7 +59,7 @@ Home offers files, capture card, PS5, PC, Xbox and screen capture. Files/images 
 
 ### List mode
 
-The NR version selector offers RTX 50 · NVIDIA original, RTX 50 · Lecram and RTX 20–50 · SF-v2 in both List and Node mode. It switches the entire NR chain, retaining the existing default. See [runtime identities](docs/RUNTIME_COMPONENTS_2.0.2.md).
+The NR version selector offers RTX 50 · NVIDIA original, RTX 50 · Lecram, RTX 20–50 · SF-v2 and RX9000 · lmxxf (experimental) in both List and Node mode. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7 and is limited to its 1080p pixel budget; HDR/native 1440p or 4K NR export is unavailable. See [runtime identities](docs/RUNTIME_COMPONENTS_2.0.3.md).
 
 Select List at the top of Professional. Enable SR, NR or RTX Video HDR as needed. Up to four NR layers have independent internal resolution, strength and parameters. The master switch disables all layers and restores their previous enabled states.
 
@@ -71,7 +78,7 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 5. Optical flow is shared after input; SR is a single instance. RTX Video HDR stays before final FG; select one DLSS/XeSS/FSR backend. This is not an arbitrary branching/mixing graph.
 6. List and Node settings, presets and sessions are separate. Returning to List restores its settings and retains the node graph. Switching rebuilds processing and may briefly pause the picture.
 
-**2.0.2 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
+**2.0.3 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
 
 ### Capture and streaming
 
@@ -126,7 +133,7 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 ## Source and build
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.2 build/source](docs/BUILD_2.0.2.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.3 build/source](docs/BUILD_2.0.3.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 

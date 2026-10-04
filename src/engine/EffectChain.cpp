@@ -505,6 +505,7 @@ ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     ChainGlobalSettings c;
     c.srTarget = s.srTarget; c.videoSrQuality = s.videoSrQuality;
     c.fgBackend = s.frameGenerationBackend; c.flow = s.flow;
+    c.vfgQuality=s.vfgQuality;
     c.opticalFlowBackend = s.opticalFlowBackend; c.amdFlowHalfResolution = s.amdFlowHalfResolution;
     c.nrPolicy = s.nrPolicy;
     c.hdrOutputMode=s.hdrOutputMode;c.fgMotion=s.fgMotion;c.srMotion=s.srMotion;c.nrMotion=s.nrMotion;
@@ -516,6 +517,7 @@ void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.hdrOutputMode=hdrOutputMode;s.fgMotion=fgMotion;s.srMotion=srMotion;s.nrMotion=nrMotion;
     s.srTarget = srTarget; s.videoSrQuality = videoSrQuality;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
+    s.vfgQuality=vfgQuality;
     s.opticalFlowBackend = opticalFlowBackend; s.amdFlowHalfResolution = amdFlowHalfResolution;
 }
 
@@ -534,7 +536,7 @@ void ChainConfiguration::apply(EnhancementSettings& s) const {
 
 bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
     return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality &&
-        fgBackend == other.fgBackend && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
+        fgBackend == other.fgBackend && vfgQuality == other.vfgQuality && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&
         selectedNr == other.selectedNr && selectedColour == other.selectedColour &&
         ((!editor && !other.editor) || (editor && other.editor && *editor == *other.editor));
@@ -561,7 +563,7 @@ bool ChainConfiguration::valid() const {
             if (!parameters->validate().empty()) return false;
         }
     }
-    if (!validateChain(chain).accepted || chain.fgMultiplier < 2 || chain.fgMultiplier > 6 ||
+    if (!validateChain(chain).accepted || chain.fgMultiplier < 2 || chain.fgMultiplier > (fgBackend==FrameGenerationBackend::Vfg?8u:6u) ||
         !pipeline::validNrSizePolicy(nrPolicy)) return false;
     const auto& selectable = editor ? editor->nodes : chain;
     const auto selectionOk = [&](int index, EffectType type) {
@@ -625,6 +627,7 @@ bool requiresGraphRebuild(const EnhancementSettings& previous, const Enhancement
     if (previous.nrPolicy != next.nrPolicy) return true;
     if (previous.srTarget != next.srTarget) return true;
     if (previous.frameGenerationBackend != next.frameGenerationBackend) return true;
+    if (previous.vfgQuality != next.vfgQuality) return true;
     if (previous.opticalFlowBackend != next.opticalFlowBackend) return true;
     if (previous.amdFlowHalfResolution != next.amdFlowHalfResolution) return true;
     if (previous.flow != next.flow) return true;

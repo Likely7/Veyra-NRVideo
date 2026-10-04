@@ -12,6 +12,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
+import "EffectSupport.js" as Support
 import QtQuick.Shapes
 import QtQuick.Effects
 
@@ -1132,13 +1133,23 @@ VPage {
                             glyph: "sparkles"
                             hue: "#4F7BFF"
                             title: qsTr("超分辨率")
-                            summary: (veyra.srEnabled ? qsTr("RTX 视频超分") : qsTr("已关闭"))
+                            switchAvailable: Support.available(veyra, "sr")
+                            summary: !switchAvailable ? Support.reason(veyra, "sr") : (veyra.srEnabled ? (veyra.srBackendChoices?.find(o => o.id === String(veyra.videoSrQuality === 0 || veyra.videoSrQuality === 5 ? veyra.videoSrQuality : 4))?.label || qsTr("RTX 视频超分")) : qsTr("已关闭"))
                                      + " · " + veyra.srTargetLabel
                                      + (veyra.videoSrQuality > 0 ? qsTr(" · 质量 ") + veyra.videoSrQuality : "")
                             on: veyra.srEnabled
                             open: true
                             onToggled: on => veyra.srEnabled = on
 
+                            VRow {
+                                label: qsTr("超分算法")
+                                VSelect {
+                                    objectName: "list-sr-backend"
+                                    options: veyra.srBackendChoices || []
+                                    value: options.find(o => o.id === String(veyra.videoSrQuality === 0 || veyra.videoSrQuality === 5 ? veyra.videoSrQuality : 4))?.label || ""
+                                    onPicked: id => veyra.videoSrQuality = Number(id)
+                                }
+                            }
                             VRow {
                                 label: qsTr("目标尺寸")
                                 hint: qsTr("决定输出分辨率")
@@ -1163,6 +1174,8 @@ VPage {
                             VRow {
                                 label: qsTr("质量")
                                 hint: qsTr("RTX 视频超分档位")
+                                enabled: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4 && Support.available(veyra, "sr")
+                                opacity: enabled ? 1 : 0.4
                                 VSeg {
                                     options: [
                                         { id: "1", label: "1" },
@@ -1184,7 +1197,8 @@ VPage {
                             glyph: "sun"
                             hue: "#E58BD9"
                             title: "RTX Video HDR"
-                            summary: veyra.videoHdr ? (veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("已开启")) : qsTr("已关闭")
+                            switchAvailable: Support.available(veyra, "video-hdr")
+                            summary: !switchAvailable ? Support.reason(veyra, "video-hdr") : veyra.videoHdr ? (veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("已开启")) : qsTr("已关闭")
                             on: veyra.videoHdr
                             onToggled: on => veyra.videoHdr = on
                             Repeater {
@@ -1194,6 +1208,8 @@ VPage {
                                         {key:"peakNits",label:qsTr("峰值亮度 (nit)"),from:400,to:2000,def:1000}]
                                 delegate: VRow {
                                     required property var modelData
+                                    enabled: Support.available(veyra, "video-hdr")
+                                    opacity: enabled ? 1 : 0.4
                                     label: modelData.label
                                     value: String(veyra.videoHdrParams[modelData.key] ?? "—")
                                     VSlider {
@@ -1223,6 +1239,7 @@ VPage {
                             // Master switch (field request 2026-10-02): every layer off
                             // at once; on again brings back the layers that were on.
                             enabledSwitch: veyra.nrLayers.length > 0
+                            switchAvailable: Support.available(veyra, "nr")
                             switchObjectName: "list-nr-master"
                             on: veyra.nrAnyEnabled
                             bypassed: veyra.nrLayers.length > 0 && !veyra.nrAnyEnabled
@@ -1466,6 +1483,7 @@ VPage {
                                      ? " · " + veyra.fgMultiplier + "X " + (veyra.fgBackendChoices.find(o => o.id === veyra.fgBackendName) || {}).label
                                      : qsTr(" · 已关闭"))
                             switchObjectName: "list-fg-enabled"
+                            switchAvailable: Support.available(veyra, "frame-generation")
                             on: veyra.fgEnabled
                             onToggled: on => veyra.fgEnabled = on
                             open: true
@@ -1484,6 +1502,7 @@ VPage {
                             }
                             VRow {
                                 label: qsTr("补帧运动来源")
+                                visible: veyra.fgBackendName !== "vfg"
                                 hint: qsTr("XeSS 默认零运动；FSR 仍有自身的光流计算")
                                 VSeg { objectName: "list-fg-motion"; options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.fgMotionSource); onPicked: id => veyra.fgMotionSource = Number(id) }
                             }
@@ -1491,9 +1510,28 @@ VPage {
                                 label: qsTr("倍率")
                                 hint: veyra.fgMaxMultiplier + qsTr("X 为上限")
                                 VSeg {
+                                    visible: veyra.fgBackendName !== "vfg"
                                     options: veyra.fgMultiplierChoices
                                     current: String(veyra.fgMultiplier)
                                     onPicked: id => veyra.fgMultiplier = parseInt(id)
+                                }
+                                VSelect {
+                                    objectName: "list-vfg-multiplier"
+                                    visible: veyra.fgBackendName === "vfg"
+                                    options: veyra.fgMultiplierChoices
+                                    value: String(veyra.fgMultiplier) + "X"
+                                    onPicked: id => veyra.fgMultiplier = Number(id)
+                                }
+                            }
+                            VRow {
+                                label: qsTr("VFG 质量")
+                                visible: veyra.fgBackendName === "vfg"
+                                hint: qsTr("高质量需要更多处理时间")
+                                VSelect {
+                                    objectName: "list-vfg-quality"
+                                    options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")}]
+                                    value: options[veyra.vfgQuality].label
+                                    onPicked: id => veyra.vfgQuality = Number(id)
                                 }
                             }
                             VRow {
@@ -1516,7 +1554,7 @@ VPage {
                                     hint: qsTr("补帧与 NR 共用 · 输入后计算一次")
                                     VSelect {
                                         objectName: "list-flow-choice"
-                                        options: [{id:"0",label:"NVIDIA NVOF"},{id:"1",label:"AMD FidelityFX"}]
+                                        options: [Support.option(veyra,"0","NVIDIA NVOF","flow0"),Support.option(veyra,"1","AMD FidelityFX","flow1")]
                                         value: options[veyra.opticalFlowChoice]?.label ?? (veyra.opticalFlowChoice === 2 ? qsTr("GPU DIS 已移除，请重选") : qsTr("未知配置"))
                                         onPicked: id => veyra.setOpticalFlowChoice(Number(id))
                                     }

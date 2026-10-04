@@ -7,11 +7,11 @@
 namespace veyra::diagnostics {
 // NrLayer*/ColorNode* are per-instance node spans nested inside the stage
 // spans above; they are never merged into enhancementProcessingMs.
-enum class GpuStage { Color, Sr, Flow, Nr, Residual, Fg1, Fg2, Fg3, Fg4, Fg5, FgBatch, Blit, VideoHdr,
+enum class GpuStage { Color, Sr, Flow, Nr, Residual, Fg1, Fg2, Fg3, Fg4, Fg5, Fg6, Fg7, FgBatch, Blit, VideoHdr,
     NrLayer0, NrLayer1, NrLayer2, NrLayer3,
     ColorNode0, ColorNode1, ColorNode2, ColorNode3, ColorNode4, ColorNode5, Count };
 static_assert(unsigned(GpuStage::Fg5)-unsigned(GpuStage::Fg1)==4);
-static_assert(unsigned(GpuStage::FgBatch)>unsigned(GpuStage::Fg5));
+static_assert(unsigned(GpuStage::FgBatch)>unsigned(GpuStage::Fg7));
 static_assert(unsigned(GpuStage::Count)<=32,"GpuTimer keeps one mask bit per stage");
 inline constexpr unsigned kTimedNrLayers=4,kTimedColorNodes=6;
 // NR layers are indexed among EXECUTING layers; Color by parameter ordinal.

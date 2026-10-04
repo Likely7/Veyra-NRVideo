@@ -1,6 +1,132 @@
 # Veyra 工作记录
 
+## 2026-10-04 2.0.3 分包、灰色入口与正式发布施工
+
+- 用户明确授权 NVIDIA/AMD 分包、AGENTS 长期规则、合并当前修复到 main 和 GitHub2.0.3；追加要求 FSR3.1/4 保留原共用组件。HDR/Dolby PR13/14仍暂缓，旧关机已执行，本轮不再关机，不派 Agent。
+- 先存档 checkpoint/pre-release-2.0.3-20261004、bundle verify（06A8A2EC…B0E93）、桌面 working patch/status；从cb9b89e开codex/release-2.0.3-20261004，沿用E盘field-upgrade worktree，保留远端712daf3 README变更，桌面用户修改不动。方案 RELEASE_2.0.3_PLAN_2026-10-04.md。
+- 建立实际高性能D3D12适配器+文件存在能力表，NR/SR/FG/HDR/flow列表节点与菜单一致置灰并给原因；设置和导出同样拒绝不支持请求；旧配置禁用效果但保留参数。新增FSR算法选择，AMD包无需NVIDIA库可运行FSR；发现Node补帧子菜单未复制disabled/note，已修复并实跑确认。
+- 新package-vendor-release.py按完整manifest分包和厂商边界审计，两包同EXE/QML/shaders；NV不含AMD NR，AMD不含NV专用库；FSR恢复原2.3 loader/upscaler/FG三文件，两包保留，NV的FSR4仍灰。原SDK/backend试改已撤下。逐运行文件来源/SHA/签名和许可在各包；不带驱动/SDK/日志/测试程序。
+- build-v8最终产品成功，EXE SHA998d4261…98154；unit-v1成功项+unit-v2修正harness后56硬件矩阵、331设置、QtQuick39、Xbox90、WASAPI float启动、AMD ABI GPU-copy62、多语言/preset通过。shared-native-v1原FSR39中间帧/18热切换774帧/debug0、VFG463/0；vfg-ui-v1包内2–8×三档/预设/worker High8冻结64帧240fps通过。
+- policy-nv-v3/policy-amd-v2真实灰色菜单、旧VFG会话恢复、实际FSR SR播放通过；AMD物理推理未测。production-rtss-v1真实RTSSHooks64注入，18VBR改选项/24CBR直接开始两份4K HEVC均24/24帧，背景alpha255，旧NVIDIA marker无误判；只关闭本轮自启RTSS。edge-v1六种DPI/软件实测rightGap=0。
+- AMD528身份/186weights/62kernels/ABI1布局审计通过；对应源码剔除上游测试截图/CSV/编译模型后6131记录约550MB，内嵌原依赖包byte-identical。archive source manifest允许直接从提供源码重建，amd-source-rebuild成功，发行DLL仍为原身份，未替换。stage-nv-v2/stage-amd-v1完整SHA与PE imports/delay闭包通过；支持二维码HEAD两图200。
+- 全部产物 E:/项目/Veyra/{build,tests,logs,tmp,releases,verify,archives}/release-2.0.3-20261004。具体命令、首次失败及修正、未测边界在 RELEASE_2.0.3_ACCEPTANCE_2026-10-04.md；本段写于最终合并/上传前，后续按实际回执另记完成，不能提前称发布。
+
+## 2026-10-04 瘦身完整候选最终验收与关机准备
+
+- 当前产品commit2df6dd7 / checkpoint/runtime-size-code-20261004不变；随后只更新报告、修build脚本EOF空行、增加无损比较/独立CRC/最终索引验收recipe，不改产品源码、不重写模型。`git diff --check`与最终scope guard通过。
+- `runtime-size-archive.py archive`：ZIP9 943265095 bytes /SHA40b44bfe…c4b98（240.204s）；7z32MiB 728771789 /SHA5bb973da…1b78（705.671s），各2076载荷逐SHA/manifest通过。压缩不是单次产品测试；所有产品子进程仍≤300秒。
+- `runtime-size-dense-archive.py`：LZMA2/preset5/256MiB字典，523327604 bytes /SHAdcb38d16…5d94f，843.531s含新空目录独立解压和全文件SHA；499.08MiB，比原1098.25MiB ZIP少54.56%，比7z32进一步省205444185 bytes。仅压缩包装，不改运行内存/文件字节；原AMD586.54MiB保持。两份NR DLL的对齐chunk88.62%相同，跨文件复用有依据。已将较小dense改为正式本地候选同名.7z，原32MiB移tmp作对比，Windows native Move之前检查绝对task边界/普通文件与SHA。
+- 官方7zip26.03 extra/7zr从7-zip.org下载页指向ip7z/7zip固定tag；GitHub release asset digest核验，工具只在E:/项目/Veyra/deps/7zip-26.03-runtime-size-20261004，不进软件/源码。初次用py7zr解官方extra遇BCJ2不支持，改用作者7zr解出x64/7za，不涉及Veyra LZMA2包。`runtime-size-native-archive-check.py ... native-archive32-v1`和`native-archive-final-v1`各exit0、Everything is Ok，2077文件，解压1678742422 bytes，方法LZMA2:25/28；CLI SHA与来源在7zip-tool-provenance/native-archive JSON。
+- `runtime-size-clean-smoke.py verify/.../dense/Veyra-...` exit0：最终所选256MiB字典7z独立解压，Windows-only PATH、无SDK override，真实包内VFG run/restore/missing与High8冻结worker输出64HEVC帧/240fps+AAC通过；GPU和软件各六页alpha255/dark背景/正常退出，运行前后2076载荷全SHA不变。12截图在verify/task/dense/gpu-evidence、software-evidence；日志clean-smoke/ui-package-final；未捕获其它程序内容。
+- 收尾 `runtime-size-isolation.py audit` exit0：桌面status规范化、working/index二进制patch与11个未跟踪源码hash、main66cd3e5、原2077载荷与原EXE全部保持。新软件/源码/runtime分离，HDRPR未施工、未merge/push/Release，没有Agent。
+- 按目录规则清理自有中间包/两个解压APP/tests APP：单一PowerShell全程、每一绝对源/目标先验证仅在本轮task roots、普通路径/无reparse后Move/Remove。工具CreateProcess直接拒绝，只有blocked by policy无具体原因，整个命令未执行，未重试或绕过；cleanup.json记录deleted=[]，E盘副本仍保留，不能说已清理。最终交付不依赖清理。
+- 交付目录E:/项目/Veyra/test-packages/runtime-size-20261004保留完整stage、最终7z+ZIP、项目源码ZIP、DELIVERY.md/json、HDR_DOVI_PR_REVIEW；最终完整git bundle在archives/task并verify。源码包含后续报告/验收recipe，compiledCodeCommit与SOURCE对照严格无产品改动。对应各SHA记录在索引，避免源包自身哈希循环。
+- 用户明确要求完成后关机；所有本轮测试/build子进程已退出，保存最终索引/源码/bundle后才安排隐藏30秒helper调用shutdown /s /t0，不使用/f（官方/t>0会隐含/f）。运行结果将写logs/task/shutdown*.json；本条是关机准备，不冒充电脑已关闭。无全局TEMP修改，不杀用户其它应用。
+
+## 2026-10-04 VFG / AMD NR 瘦身（组包前）
+
+- 用户要求稳定性优先、尽量瘦身、完整本地测试包、HDR PR计划、完成保存后关机。按前文将VSF理解为VFG；不开Agent。分支codex/runtime-size-20261004、基线fc2ca716、tag checkpoint/pre-runtime-size-20261004，bundle verify，SHA256 6d2b64b471cb84effd84670a07f3079b5f71f630940926338052099e4cbfd694；先写RUNTIME_SIZE_PLAN后修改最小依赖加载。
+- Python311 -B `runtime-size-audit.py`：PE import/delay-import、字符串和旧ZIP贡献统计；没有NPP直接/延迟依赖，factory保留老效果名称不当作当前VFG需要。只修改VfgBackend.cpp preload15→5；原插件/CUDA/NVCV/NVNGX/core字节不改，移除287,106,032 bytes九NPP。两个生产AMD表确有native_game_frame/native_game_oneshot引用，权重/flags可回退，未为名字/默认skip删文件。
+- `runtime-size-build.py build-v1.log` exit0，fresh481步，QML/nativeGPU/NVENCprobe/settings；已有C4244。`runtime-size-stage.py stage` owned完整新便携copy，原2077载荷逐hash核验，tests仅对不可变runtime硬链接复用，新EXE SHA88597f61…41bfc；原包不覆写。
+- `runtime-size-native-tests.py native-720-v1 1280 720`与`native-4k-v1 3840 2160`各463/0、exit0；Windows-only PATH，2–8X×三档、RGBA8/RGB10A2、切镜、invalid/device/debug检查；EnumProcessModules仅观察本轮自身PID，五个VFG DLL都来自精简目录、未加载NPP。
+- settings-v1.log：331/0；`runtime-size-export-tests.py export-all-v1`：21种D3D12 NVENC HEVC+AAC，16–64帧/60–240fps、时长、音轨/后端日志通过。`runtime-size-combination-tests.py combinations-v1`：2K30AVI+最高SR4K+原生4KNR+VFG8、24/60输入、取消、缺runtime均通过；missing-cudart-only / partial-missing-v1预期exit1无输出、LoadLibrary win32=126，不把报错当成功导出。
+- `runtime-size-ui.py ui-slim-v1 package tests/.../app` run/restore/missing exit0；专业列表/节点全部倍率质量，真实DLSS6↔VFG8、seek/resize/暂停、预设重启；High8独立worker冻结输出64帧/240fps且保留音轨。`runtime-size-amd-audit.py`529原记录逐SHA、186weights/62kernels、真实ABI1/144bytes与layout通过，caps.hip=0；无HIP推理。
+- 压缩样本原450,593,392 bytes；ZIP9 277,853,065 / 7z-solid-LZMA2-32MiB 166,108,485，约40.2%样本收益。仅包装压缩、不改运行字节；原AMD目录615,032,656 bytes保持。完整包与独立解压验收尚待完成，数据不外推。新版SOURCE/7z/ZIP/manifest和最后交付索引将单独保存。
+- 再查PR13/14远端head分别f08934b8/57f2541b，与固定审查版本一致，OPEN/noCI；无PR评论/作者代码执行/HDR实施。推荐P5精确转换→亮度统计/reset→保存/worker兼容→同源列表/节点UI与输出校准→颜色/实机矩阵后经批准合并，详HDR_DOVI_PR_REVIEW。
+- `runtime-size-edge-tests.py edges-v1 after`6例通过：5种Qt模拟scale factor GPU与125%软件模式，当前新EXE实际native client右/底gap0，右侧/内侧/中心cyan一致。初始黑边分支30+12+2验收仍保留。本轮不是新的30例或实显示器跨DPI认证。
+- 本地产品代码存档2df6dd729b9fe7d32ed41753ab3422e5cc7eda0c / checkpoint/runtime-size-code-20261004，完整stage2076载荷；首轮cached diff-check指出生成build脚本EOF多余空行，已清理。后续source ZIP收最终报告/验收recipe，并严格只允许docs/runtime-size验收脚本变化，compiledCodeCommit保留，不能将产品改动混入未重构建的包。
+- 所有新产物为E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/runtime-size-20261004；单测试进程≤300s、构建≤900s，TEMP/TMP/CUDA cache仅子进程E盘。RTX5070/616.56短测；RX9000/Xbox真机/RTX40/616.92/HDR色度/实屏DPI/物理节奏/长稳未验仍明确保留。待最后桌面/main/旧包隔离复核与保存后才执行关机。
+
+## 2026-10-04 极简右侧像素缺口与HDR PR静态审查
+
+- 按用户“黑边修掉，HDR先研究/UI方案等通过”分开处理；`a927f92`开`codex/minimal-edge-hdr-review-20261004`，先tag `checkpoint/pre-minimal-edge-hdr-review-20261004`、bundle verify。E盘archives/task/source-before.bundle SHA256 `417c6d03f90e0bd7b518af2f1ea50b9edd8515c91cda340983aa5eb6d6116a94`。开工方案与复现后最小PresentationGeometry/VideoPresenter范围先记录，不扩改HDR/增强链。
+- 125%复现root803×451、child802×451，150%965×543/964×543，175%右/底各少1；`before-v3`使用原包EXE与无遮挡自有cyan fixture重测。几何第一版虽client铺满，contain内容仍有一列黑，因此继续修正默认极简窗口的有界完整源映射，不拿尺寸断言冒充视觉通过。普通partial viewport仍floor，region按child实际client；当前/previous XeSS view几何同源，shader/颜色/图/音频/导出不改。
+- 构建 `python -B scripts/acceptance/minimal-edge-build.py build-v1.log veyra_qml_ui` 完整472步骤、`build-v2.log`增量5步骤，exit0；已有C4244记录保留。最终EXE17,299,968 bytes，SHA256 `8a2197ccd9b1716df1dad21169b49611c60ae65461c16171d580995da34922b0`。
+- `minimal-edge-tests.py after-v2 after full`30个独立GUI用例通过：5种Qt scale factor×3奇偶宽×GPU/软件，右/底native gap0，最右/内侧/中心cyan `[0,231,255]`，exit0。`behaviors-v1 after behaviors`12例resize/page/menu/native/fullscreen/pro回归通过，故意的黑边保留。`page-cycle-v3 after page-cycle`补2例最终803×451贴合通过；v2因同一JS回调跨页/改宽读取旧pictureHeight而506高失败，测试改下一tick+显式计算尺寸，产品布局不为断言改动。before-v1尺寸覆写、早期控件遮挡、after-v1尺寸-only不足均留证，不计入最终通过。
+- 仅截本测试进程自身无遮挡client，采样位置先验PID；独立profile/TEMP/TMP/CUDA cache为E盘task，未修改用户程序和全局Windows缩放。实际RTX5070/616.56；Qt分数DPR模拟不外推跨物理显示器DPI/FG新画质/HDR/AMD/Xbox验收。GUI每个子进程有短时限，不是长稳测试。
+- `hdr-pr-snapshot.py`固定PR13 f08934b8、PR14 57f2541b，保存Git blob/diff/SHA；再查远端head不变、OPEN、无CI。`hdr-pr-review.py`静态检查/独立ST2084反例exit0。发现PR14缺失DolbyVisionP5.h却引用接口，未构建/执行贡献者代码；当前标题中HDR→SDR→TrueHDR已撤回。Offset/拟合/flat映射、范围归一化/array SRV/回读延迟与reset、版本分叉等见`HDR_DOVI_PR_REVIEW_2026-10-04.md`，区分作者实测与本轮静态证据。HDR产品/UI未实施，未合并/评论PR，等待用户审批。
+- `minimal-edge-delivery.py audit`复核status含branch的规范化文本、working/index patch逐字节、11份未跟踪源码hash、main66cd3e5、原包2077载荷hash全部一致。初次audit遗漏原status的branch行而fail，补相同`--branch`再验通过，不洗白真实改动。输出`logs/minimal-edge-hdr-review-20261004/source-isolation.json`。
+- 所有新build/tests/logs/tmp/downloads/archives/test-packages在E:/项目/Veyra/task用途目录；模型/DLL只读硬链接复用，不进Git，不复写已验VFG包。源码/文档本地存档后制作小EXE补丁，基包/CRC/SHA/sourcecommit记录在`test-packages/minimal-edge-hdr-review-20261004/DELIVERY.json`；不是其他版本补丁。没有merge/push/Release，没有派Agent，没有重试已被拒的清理。
+
+## 2026-10-04 VFG 全档位本地交付完成
+
+- `python -B scripts/acceptance/vfg-package.py archive` exit0，最终 `E:/项目/Veyra/test-packages/vfg-integration-20261003/Veyra-2.0.2-vfg-20261003-win64-portable.zip`，1151602649 bytes，SHA256 `8efb3189ff47f00f63672c6d5259a6be4ca004a638432a116f27db6850426ee2`，2077个载荷。应用SHA256 `be4da2ff173aa74de8e2e1d5ecc73d40a23584ba8898ffd534e636a8793b3d6b`；单独源码ZIP SHA256 `5e575a74e9927ab27b520c00fabd005e0310070ad2a51c736ea52d211721e7cf`，源码快照003f897，产品代码仍0d891731。审计 `logs/vfg-integration-20261003/candidate-package-audit.json`。
+- `python -B scripts/acceptance/vfg-clean-smoke.py` exit0，最终ZIP独立解压、PATH仅Windows/无VFG环境变量，实际包内native VFG全部档位、真正DLSS6↔VFG8、run/restore/missing通过。High8导出worker保持quality=2且输出64帧/240fps/保留音轨，父进程改Low2无影响。`ui-package-final/summary.json`与worker日志留在logs。
+- GPU/软件UI各六页home/pro/node/exp/set/min的截图、背景alpha255及退出通过；测试运行前后全部2077个载荷哈希一致。结果 `logs/vfg-integration-20261003/clean-smoke/summary.json`，12张页面截图在 `verify/vfg-integration-20261003/{gpu,software}-evidence`；VFG列表/节点控件截图在tests/ui-package-final，仅证明设置与UI，独立原生视频窗口不由Qt截图捕获。
+- 同目录交付索引 `Veyra-2.0.2-vfg-20261003-delivery.json` / `DELIVERY.md` 记录最终包验证；ZIP内部报告是组包前快照，最终证据写回源码报告而不为自身哈希反复改包。2X–8X×三质量、预览、导出、节点/列表/预设/重启完整接入。RTX5070/616.56短测，8X High实时降档；RTX40/616.92/主机/采集VFG/影片画质AB/HDR色度/物理节奏/长稳未验不宣称通过。
+- 桌面隔离检查 `source-isolation.json`：status规范化编码/换行后相同（非原始字节相同），working patch258615 bytes和index patch0 bytes逐字节相同，11份未跟踪源码哈希相同；main保持66cd3e5。没有派Agent、合并main、推送或Release。旧legacy delivery gate不冒充QML验收，执行本任务native/UI/导出检查与scope guard。
+- 产物仍统一E盘task目录，TEMP/TMP只设子进程；保留当前构建、最终可用便携目录/ZIP、源码与证据。删除本轮自有tests/app、verify内解压产品前，单独检查固定绝对路径、0个嵌套reparse，worker日志先转存logs/retained-app-worker，截图位于删除目标外。删除工具调用在CreateProcess前被自动审批拒绝，只返回blocked by policy，无具体理由，检查/删除命令均未执行；副本暂留，未绕过或重试旧field被拒目录。
+- 收尾 `python -B E:/项目/Veyra/tmp/vfg-integration-20261003/finalize-delivery.py` exit0，基于实际JSON/worker日志生成交付索引；`git diff --check`通过，`vfg-control.py`输出46 paths/no SDK/runtime/model assets。`git diff --name-only 0d891731 -- src include qml shaders CMakeLists.txt i18n tests`为空，最终代码与已编译/实跑产品存档相同。
+
+## 2026-10-03 VFG 本地便携 staging
+
+- 已存档产品 `0d891731ba6556c47563a090c5746bac803cabe4` / checkpoint/vfg-code-20261003。后续改动仅docs/acceptance脚本，产品源文件未变。`vfg-package.py stage` 完成现有43原件/FFmpeg/Qt组包，VFG附加审计最初失败三次：继承PSMODULEPATH大小写导致Security模块导入错、PowerShell5 JSON数组管道嵌套、Python误写utf8-sig codec；分别修环境key筛除/foreach/utf-8-sig，`finish-stage` exit0。失败由工具stdout记录，不宣称签名检查未运行时已经通过。
+- 初次 `vfg-ui.py ui-package-stage package <candidate>` exit1，“未找到VFG运行组件”；实际现有runtime root是runtime/experimental，runtime/nvidia/vfg不能自动发现。仅在本候选已核对的绝对路径间Move-Item迁到runtime/nvidia-vfg（原件SHA未变），修manifest/打包recipe后`finish-stage` exit0。
+- `vfg-ui.py ui-package-stage-v3 package <candidate>` exit0，PATH仅Windows、无VEYRA_VFG_RUNTIME，全倍率/三质量/保存恢复/缺失库回退通过。实际DLSS6↔VFG8切换通过，15:45:05.853运行标签“补帧6X·DLSS”，不是只看pending选择。High8导出后父进程改Low2，worker export-worker-29212.log SDK quality=2、64输出/vfgQuality=2，真实非默认质量冻结验证通过；日志移动至本任务logs，不携带进用户包。
+- staging十四VFG DLL SHA/版本/Valid NVIDIA签名核验通过；无Python扩展/SDK头文件/系统nvcuda进入包或源码Git。原五项候选的模型/HIP与MITruntime在runtime/amd-nr独立保留；AMD/主机硬件未验没有扩展为通过。最终ZIP核验/清洁解压检查在进行。
+
+## 2026-10-03 VFG 全倍率产品闭环（最终组包前）
+
+- 产品 native/graph/pool/presenter/NVENC、backend ID4与三质量、旧格式迁移、列表/节点预设/会话、worker ABI8、QML全部倍率控件完成。原生463 checks各720p/4K与实际21种导出通过；详情 `docs/VFG_INTEGRATION_ACCEPTANCE_2026-10-03.md`，此前“产品仍在进行”条目是早期状态。
+- 命令统一 Python311 `-B scripts/acceptance/...`：`vfg-build.py build-product-v4.log veyra_qml_ui veyra_vfg_export_probe veyra_vfg_gpu_tests veyra_vfg_settings_tests veyra_preset_library_tests veyra_repair_preset_tests veyra_repair_contract_tests veyra_effect_chain_tests veyra_qml_quick_tests` exit0，51步；`vfg-product-tests.py unit-v4 unit` exit0，331 settings/旧预设/合同/EffectChain/QML39；`vfg-ui.py ui-v4` exit0，run/restore/missing全部通过。输出统一 E:/项目/Veyra/logs/vfg-integration-20261003，与tests/tmp对应子目录。
+- `vfg-product-tests.py export-all-v2 export` exit0，30fps720p全部21组合，HEVC/NVENC，16..64帧和60..240fps/时长/音轨核验。首轮 runner 因 fps 微秒舍入和CLI日志读取失败，产品导出本身成功；修正断言及读实际stdout，不掩盖首轮失败。
+- `vfg-combination-tests.py combinations-v4` exit0：真实2560x1440/30fps AVI+SR最高档至4K+3840x2160原生NR+VFG8 Medium，24源/161生成/7尾hold/192输出；24→192与60→480fps；取消无最终文件；缺失SDK导出exit1是预期失败而非成功导出。
+- 缺失组件实际 UI bug 留证 ui-missing-diagnostic：active=false、enabled=true、position9.2、multiplier8；修复 EngineController recovery rejection revision 与 facade后端/倍率/质量对账，较新请求受保护，ui-v4验为enabled=false/multiplier1、9.1667s基础播放。外部光流策略对VFG完全关闭，NR/SR仍保留；runtime路径探测改error_code。
+- ui-v1 与QtQuick并行时进入Paused而GPU正常排空，不能称GPU卡死；干扰原因是推断。此后串行ui-v2/v4热切换正常，最终使用v4完整结果。8X Low约241次/秒提交，High约60且调度降档，不称240fps稳定显示或物理延迟下降。
+- 来源/固定MIT样例/原生API改造已写 THIRD_PARTY_NOTICES。源码Git没有新DLL/SDK/模型；最终包尚待组包/干净运行。无merge/push/Release，main/桌面状态待最后再次核对。
+
+## 2026-10-03 VFG 原生接入施工
+
+- 用户追加授权 VFG 2X–8X 全倍率及 Low/Medium/High 全质量；新分支 codex/vfg-integration-20261003，起点 1802f43565e07f3c3040d3fe745ca2e939aab00f，tag checkpoint/pre-vfg-integration-20261003。E:/项目/Veyra/archives/vfg-integration-20261003-start/source-before.bundle 验证通过，SHA256 1F3154049591C069B6CD63D266FC4447A153480D41608086BEB1422092E8D6F0。先存档/写 docs/VFG_INTEGRATION_EXECUTION_2026-10-03.md 后施工，桌面工作区/main 保留。
+- 原生 C++ 直接动态调用官方 Video Effects 1.3.0，外部 CUDA driver headers 仅编译依赖。NVCV 自行分配 opaque descriptor，D3D12 shared buffer + producer/completion fence 与 CUDA stream 互操作；逐帧无 CPU 像素读回/CPU fence wait，不引入 Python、Streamline、ReShade 产品依赖。shader/output 编码保持现有边界。
+- `python -B scripts/acceptance/vfg-build.py build-native-tests-v3.log veyra_vfg_gpu_tests` exit0；前次缺失 readback helper 编译失败已修复。`python -B scripts/acceptance/vfg-native-tests.py native-720-v2` exit0，463 checks/0 failures，RTX5070 616.56，RGBA8 与 RGB10A2，全部 2X–8X/三质量，8X 七张独立哈希/中间位置、manual cut 与当前帧一致、D3D12 debug errors 0。CPU readback 仅诊断测试。
+- native-720-v1 全测失败：SDK FromD3DFormat 不接受 RGB10A2，且参考声明误写 DestroyEffect 返回值。根据官方 void API 修复销毁，SDK packed format capability 实测确定 RGB10A2=13/P32=11，留证 packed-format-capabilities.json；v2 验证 10-bit 顺序/切镜精确拷贝通过。不能把首轮 SDR 部分通过当全测通过。
+- 高质量 720p 8X 约104–107ms/组（包含测试 CPU 提交、GPU copy 和同步），不证明实时 30fps；三质量/高倍允许离线完整生成，实时仍按现有预算/PTS调度记录实际跳帧。本轮物理屏幕节奏、RTX40、HDR 色度及组合性能尚待测。
+- 已扩 FrameBatch=8 / 生成池14 / 输出池16，present descriptor 改由池尺寸推导，保留 DLSS compatibility 原十张全尺寸绑定；新增 FG6/FG7 计时、专用 ID4 与 vfgQuality，预设/会话迁移和 worker ABI8。产品图/GUI/NVENC 完整构建与真实验证仍在进行，不宣称已交付。
+- 产物统一 E:/项目/Veyra/{build,tests,logs,tmp,test-packages}/vfg-integration-20261003，运行时 E:/项目/Veyra/deps/vfg-python-20261003，源码 Git 未新增 DLL/SDK/model。无 merge/push/Release。
+
+## 2026-10-03 五项修复：代码与本机验收
+
+- 最终本地包 E:/项目/Veyra/test-packages/field-upgrade-20261003/Veyra-2.0.2-field-20261003-win64-portable.zip，766558374 bytes，SHA256 099751e596b4a7de814ddc2af9cdaa527817d1a422861cdcee5a6be77877c679，2054 payload 文件；审计 E:/项目/Veyra/logs/field-upgrade-20261003/candidate-package-audit.json。应用 SHA256 2d708d65aff3f61950243d4743397d1869aca2ec2e4b56311fcd63aa3abfbcd3；source ZIP 单独提供，代码存档 c80662f344032ca3adac42277b1ab6726609cde6 / checkpoint/field-upgrade-code-20261003，runtime/模型与源码分离。
+- `python -B scripts/acceptance/field-upgrade-package.py` exit0；未使用 --release、未上传。`python -B scripts/acceptance/field-upgrade-clean-smoke.py` exit0：最终 ZIP 干净解压 2054 文件全部哈希匹配，GPU D3D12 和软件模式各六页 home/pro/node/exp/set/min 截图/背景像素/正常退出通过；E:/项目/Veyra/logs/field-upgrade-20261003/clean-smoke/summary.json。
+- 收尾桌面 status --short --branch、working binary patch（258615 bytes）和 index patch（0 bytes）与开工存档一致；main 仍 66cd3e50590766e5a654528ab61e491dc4d30c83。公开 ABI header 与固定上游逐字节相同；源码 Git 未含 DLL/EXE/f16/f32/hsaco/ONNX/addon64，候选不含 identity/fake runtime 或用户配置。
+- 整理保留最终可运行候选目录/ZIP、单独源码 ZIP、当前编译、上游源码、AMD 可用依赖与必要证据。worker 日志转存 production-rtss/worker，12 张干净解压截图转存 tests/field-upgrade-20261003/clean-candidate。删除自有重复 tests/app、verify 下解压产品、tmp 的组合命令被自动审查拦截；核对固定绝对路径且确认非 reparse 后，以 LiteralPath 再试仍被拒绝，工具只返回 blocked by policy，无具体理由。未绕过审查或改用其它删除工具，三个目录暂保留；原始用户文件及其它任务产物未删。
+
+- 补充回归 `python -B scripts/acceptance/field-upgrade-tests.py ui-final qml-software ui-i18n nr-preset-persistence` exit0（build-localized-candidate.log 成功）；含 AMD ID4 list/node/session/preset 重启持久化，四语言 catalog 与最终软件背景。证据 E:/项目/Veyra/tests/field-upgrade-20261003/ui-final。候选脚本 scripts/acceptance/field-upgrade-package.py 仅本地组包，使用既有 43 原件与独立 AMD manifest，source zip 与模型/运行库分离。
+
+- 工作树 E:/项目/Veyra/worktrees/field-upgrade-20261003，分支 codex/field-upgrade-20261003，base 66cd3e5；先存档写方案，未改桌面用户工作区/main，未 push/Release。
+- 导出：有效键入即时提交，草稿不受无关 exportChanged 覆盖，1–300 Mbps 与后端统一；具体 validate 原因、冻结 bitrate/rateControl 入日志。两种真实复现均通过，不把目标当实际平均保证。
+- Xbox：configure float 后补 start；保留具体服务端断流原因，网络/服务器关闭/过期最多三次重连，1/2/3s 退避可取消，连续解码 30s 恢复额度，首帧后 reset 全图。404 不覆盖已收到的踢出原因；未知踢出不重连。没有真实主机有声/长稳证据。
+- RTSS：Window 软件模式不透明，VBackdrop 用 Rectangle/Image。RTSS 7.3.7 当前用户副本实际注入 RTSSHooks64，自动兼容截图 alpha=255；普通启动需提升，改以 RunAsInvoker 当前用户启动，结束只关闭自己 PID 35124，未编辑 RTSS/OBS 配置。删除 nvppex/NvPresent 检测与 NVIDIA App 归因；旧 marker 无误判提示。
+- AMD：固定 lmxxf 78f548749e74824327b8458c57be31a1df78376a / MIT，独立 C ABI、共享 NrInstance、同队列 producer/HIP/consumer/retire，退出先放 runtime 再放借用资源。ID4，AMD 光流/FSR SR 默认，未支持控件隐藏，1080p 预算/4K native export/HDR 边界明确。MSVC recipe 成功，E:/项目/Veyra/logs/field-upgrade-20261003/lmxxf-recipe.log；最初 st scope/GNU annotation/min-max/user32 问题已修复。
+- 用户 zip C:/Users/123/Downloads/Magpie-DLSS5-AMD-0.39.zip，SHA256 9ea84c665d270cd45e24184729b8272c152485df462a1528539ed778d41849f5；739 文件 hashes 匹配，186 权重/2 映射/62 HIP 模块。原解压 E:/项目/Veyra/deps/magpie-amd-039-20261003，宿主资源 E:/项目/Veyra/deps/veyra-amd-nr-039-20261003，逐文件 manifest 随目录。真实 DLL API/capabilities/module layout 通过，不加载 Magpie/ReShade。0.40 下载空缺已用本地资源解决；无 RX9000/amdhip64_7.dll，不称推理已验。
+- `python -B scripts/acceptance/field-upgrade-build.py build-final-contracts.log veyra_qml_ui veyra_xbox_tests veyra_capture_audio_tests veyra_qml_quick_tests veyra_export_probe veyra_lmxxf_nr_tests veyra_lmxxf_fake_runtime` exit0；fresh build E:/项目/Veyra/build/field-upgrade-20261003，logs/tmp 同任务目录。
+- `python -B scripts/acceptance/field-upgrade-tests.py final` exit0：Qt Quick39、Xbox90、本机 gain0 WASAPI 250×20ms float、AMD ABI identity GPU-copy62 均 0 failure。E:/项目/Veyra/tests/field-upgrade-20261003/final/summary.json；之前 executable/argv0/plugin 失败已修复，最终通过才算验收。
+- `python -B scripts/acceptance/field-upgrade-ui.py rtss --rtss` exit0：2K30 AVI→NR+最高档 SR→4K HEVC；VBR18 编辑其他选项与 CBR24 直接开始均完成，UI 后改7/8 不污染冻结参数。24/24帧，ffprobe 平均约20.745/27.311Mbps，NVENC D3D12。本机 RTX5070 616.56，不冒称用户616.92；logs E:/项目/Veyra/logs/field-upgrade-20261003/production-rtss，截图/媒体 E:/项目/Veyra/tests/field-upgrade-20261003/production-rtss。
+- 新文本 en/zh-TW/ja 补齐，AMD ID4 的 preset/list/node session 持久化纳入现有测试。构建 build-localized-candidate.log，测试/候选最终结果继续补记。git diff --check 与 source guard 通过，禁止 DLL/SDK/f16/f32/i32/hsaco 入 Git。旧 delivery.ps1 仅 legacy，不当作 QML 验收。
+- 详细报告 docs/FIELD_UPGRADE_ACCEPTANCE_2026-10-03.md、docs/AMD_NR_INTEGRATION_2026-10-03.md。
+
+## 2026-10-03 现场五项修复接管、开工存档与方案
+
+- 当前用户要求先存档、写方案、新分支修复 Xbox 音频/断开、AMD RX 9000 lmxxf NR、导出码率、RTSS 背景透明和 NVIDIA App 检测。桌面 checkout 仍为旧 UI migration 脏工作树，最新 2.0.2 main 在 E 盘，故基于干净 `66cd3e50590766e5a654528ab61e491dc4d30c83` 创建 `codex/field-upgrade-20261003` / `E:/项目/Veyra/worktrees/field-upgrade-20261003`。
+- `git bundle create E:/项目/Veyra/archives/field-upgrade-20261003-start/repository-before.bundle --all`、`git bundle verify` 成功，bundle 71223867 bytes。桌面 working binary diff 258615 bytes、index diff 0 bytes，未跟踪源码与 SHA 清单一起存档；不 stash/reset/切换桌面分支。首次 `--output=(Join-Path ...)` 被 PowerShell 错误解析，已改变量 `"--output=$taskPatch"` 并检查退出码后重生成 manifest。
+- 标签 `checkpoint/pre-field-upgrade-20261003` 指向上述 main；输入日志复制至 `E:/项目/Veyra/logs/field-upgrade-20261003/inputs`，原始文件未改。官方 lmxxf 源码获取目录 `E:/项目/Veyra/deps/lmxxf-nr-20261003`，尚未推理或添加模型。
+- 开工方案 `docs/FIELD_UPGRADE_PLAN_2026-10-03.md` 已在产品修改前落地。明确本轮授权覆盖对应历史冻结，保留源码/Runtime/模型隔离、硬件未验边界，不派 Agent、不合并/推送/发布。
+- 当前静态证据：导出 UI/bridge 2000 Mbps 上限与后端 300 不一致；字段只在 editingFinished 提交；透明主窗口依赖 Shape 背景而 RTSS 模式为软件绘制；Xbox 音频/视频时钟域待验证。尚未标任何产品问题通过。
+
 ## 2026-10-03 2.0.2 正式发布完成
+
+## 2026-10-03 VFG 官方开放与本机可行性调研
+
+- 用户请求“研究一下有没有 VFG……能不能接入，好像官方开放了”。只做调研、独立 SDK 调用和接入方案，产品引擎/QML/CMake 未改；没有将 VFG 加入当前便携包。详见 `docs/VFG_RESEARCH_AND_INTEGRATION_PLAN_2026-10-03.md`。
+- 产品源码改动前先存档 HEAD `a93af429930fd83563e0e4f1ae4e3c6a24623b25`，`E:/项目/Veyra/archives/vfg-research-20261003/source-before-vfg.bundle` 完整历史 verify pass / SHA256 C5C5A64A401A3BC880B4715285313FF4327CD9A736BCB6ABFD31675A340AAFE2；tag `checkpoint/pre-vfg-research-20261003`，新分支 `codex/vfg-research-20261003`（复用 E 盘 field-upgrade 工作树）。独立探针先于源码存档执行，期间产品源码未改；不声称先写方案再执行探针。field-upgrade 分支 a93、main 和桌面状态不写入。
+- 官方样例 MIT，固定 `52011f89c1741d06b40ea312af1f20be8be9ec62`，相关 4 文件保存在 `E:/项目/Veyra/deps/vfg-samples-20261003`，来源/哈希 `logs/vfg-research-20261003/official-samples.json`。官方 wheel 0.2.0.0 / VFX SDK 1.3.0.0，下载 435809365 bytes，SHA256 `5aaf6a42bc6b6dbbf52fcb714194c994a6893cbbf7ada38bc2165a1f83e4a6fc` 与 NVIDIA index 一致；新 deps `E:/项目/Veyra/deps/vfg-python-20261003`，旧 1.2.0 审计原件保持。
+- API/Core 正确匿名 URL 返回 401（旧 URL 曾 404）；官方 Python wheel 可匿名下载，包含真实 `nvVFXVideoFrameGeneration.dll` 207321712 bytes / Valid NVIDIA / SHA256 270CF4FFF9329908F9770D306CB51B910EE04323AF5520CD02A98A2E22ABA795。没有要求用户提供 API key、没有绕过访问控制；没 patch、没进 Git/发布包。
+- 实际执行 `first-probe.py` / `benchmark.py` / `benchmark-varying.py` 的外部 subprocess runner：超时分别 120/240/180秒，全部 exit0。命令 Python311 `-B`，输入为移动图块，RTX5070 / 驱动616.56。脚本在 `E:/项目/Veyra/tests/vfg-research-20261003`，JSON/log/npy 在 `E:/项目/Veyra/logs/vfg-research-20261003`；进程 TEMP/TMP、CUDA/CuPy cache 指向 `E:/项目/Veyra/tmp/vfg-research-20261003`，下载在 `E:/项目/Veyra/downloads/vfg-research-20261003`。
+- 720p首调用真实输出/手动切镜头旁路正常；720/1080/4K、中低高模型、10bit打包输入、任意t=.4与6/8X试调用通过。轮换3套帧对（每档12组）Medium 1080p 2X/4X 中位数 2.89/8.46ms，4K 3.88/11.97ms；High 1080p 14.59/44.05ms。4X 数字为三张生成帧总耗时；包含 Python 转换/提交、CUDA完成等待，不冒称纯推理/产品/屏幕延迟。初次报告 allocatedCudaBytes 字段实际为 free/total，轮换报告已准确命名，方案说明该旧字段不可当分配量。
+- 失败记录：初次探针 exec cwd 在目录创建前选择，CreateProcess 报无效目录，未运行代码；改为从现有工作树启动、先创建 E 盘测试目录后通过。CuPy 报未识别 CUDA_PATH 的警告，但运行和输出正常，不添加全局环境设置。所有成功和早期失败记录保留。
+- 接入方案分 P1 原生 SDK/GPU buffer+fence bridge、P2 共享图/列表节点2X4X、P3原 NVENC 导出、P4同素材/实时节奏/延迟/长稳。官方 Windows VFG 范围 RTX40/50；20/30及AMD/Intel无官方VFG支持。样例MIT不等于闭源runtime许可，商用/便携分发条件需依实际包核对。
+- 尚未验：C++头文件/Core取得、D3D12/CUDA互操作、Veyra NR/SR叠加、真实影片画质AB、HDR颜色、实际屏幕与手柄延迟、长稳、40系/616.92。6/8X虽可短调用，官方仍标实验，产品 FrameBatch容量6也需改。只给接入可行性和优先级，不宣称“画质必胜”或“完整4K链路已支持”。
 
 - 发布地址 https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.2 ，2026-10-02 18:40:18 UTC（台北 10-03 02:40:18）公开并设为 latest，非 draft / 非 prerelease。源码 tag v2.0.2 指向 `0dafc57e7ad54880b1748e7046970ddc825e7e46`；该提交同时包含 Claude `28a440b` 与 Codex `bfafbea`。主分支从 `8f42fd5` 干净 fast-forward 后用 `git push --atomic nrvideo main refs/tags/v2.0.2` 推送，未动 origin。
 - `python -B scripts/package-qml-release.py --build E:/项目/Veyra/build/release-2.0.2-20261003 --runtime-source E:/项目/Veyra/releases/2.0.1-20261002/Veyra-2.0.1-win64-portable --original-nr <已批准桌面原件> --legacy-licenses E:/项目/Veyra/releases/1.4.4/final/Veyra-1.4.4-win64-portable/licenses --qt C:/veyra-deps/qt-veyra/6.8.3/msvc2022_64 --qt-licenses E:/项目/Veyra/deps/qt-licenses-6.8.3 --output E:/项目/Veyra/releases/2.0.2 --label 2.0.2 --release` 退出 0。43 个 runtime 哈希/数字版本/签名、patched FFmpeg provenance、1520 个载荷文件审核通过；manifest 的源码树 clean、releaseReady=true。

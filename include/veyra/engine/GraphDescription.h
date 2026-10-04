@@ -90,6 +90,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.videoSrQuality=settings.videoSrQuality;
     describeNrLayers(settings,desc);
     desc.frameGenerationBackend=settings.frameGenerationBackend;
+    desc.vfgQuality=settings.vfgQuality;
     desc.color=settings.color;
     desc.additionalColors=settings.additionalColors;
     desc.additionalColorCount=settings.additionalColorCount;

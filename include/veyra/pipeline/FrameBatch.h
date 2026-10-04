@@ -39,11 +39,11 @@ struct BatchFrame {
     std::shared_ptr<FrameLease> lease;
 };
 struct FrameBatch {
-    static constexpr uint32_t Capacity=6;
+    static constexpr uint32_t Capacity=8;
     uint64_t batchId=0;
     FrameIdentity identity;
     int64_t a100ns=0,b100ns=0;
-    // 6X multi-frame generation needs one real frame plus up to five generated
+    // 8X multi-frame generation needs one real frame plus up to seven generated
     // frames in a single batch.
     std::array<BatchFrame,Capacity> frames{};
     uint32_t count=0;

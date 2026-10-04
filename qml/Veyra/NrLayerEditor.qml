@@ -3,6 +3,7 @@
 // bridge calls (user decision 2026-09-28: node parameters equal to the list).
 import QtQuick
 import QtQuick.Layouts
+import "EffectSupport.js" as Support
 
 ColumnLayout {
     id: editor
@@ -16,9 +17,10 @@ ColumnLayout {
     signal duplicateRequested(int nodeIndex)
     signal removeRequested(int nodeIndex)
     signal orderEdited(bool enabled)
+    readonly property bool amdNr: layerData.runtime === 4
     readonly property var sizeChoices: [
         {id:"2",label:"480p"}, {id:"3",label:"720p"}, {id:"4",label:"900p"},
-        {id:"0",label:qsTr("1080p · 默认")}, {id:"5",label:"1440p"}, {id:"1",label:qsTr("原生")}
+        {id:"0",label:qsTr("1080p · 默认")}, {id:"5",label:"1440p",disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""}, {id:"1",label:qsTr("原生"),disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""}
     ]
     readonly property string sizeLabel: sizeChoices.find(o => Number(o.id) === layerData.sizePolicy)?.label ?? qsTr("未知")
     spacing: 6
@@ -65,15 +67,17 @@ ColumnLayout {
         hint: qsTr("全链共享 · 切换会重建 NR 管线")
         VSelect {
             objectName: "nr-runtime"
-            value: editor.layerData.runtime === 3 ? qsTr("RTX 50 · NVIDIA 原版")
+            value: editor.layerData.runtime === 4 ? qsTr("RX 9000 · lmxxf（实验）")
+                   : editor.layerData.runtime === 3 ? qsTr("RTX 50 · NVIDIA 原版")
                    : editor.layerData.runtime === 2 ? "RTX 20–50 · SF-v2" : "RTX 50 · Lecram"
-            options: [{id:"0",label:"RTX 50 · Lecram"},{id:"2",label:"RTX 20–50 · SF-v2"},
-                      {id:"3",label:qsTr("RTX 50 · NVIDIA 原版")}]
+            options: veyra.nrRuntimeChoices || [{id:"0",label:"RTX 50 · Lecram"},{id:"2",label:"RTX 20–50 · SF-v2"},{id:"3",label:qsTr("RTX 50 · NVIDIA 原版")},{id:"4",label:qsTr("RX 9000 · lmxxf（实验）")}]
             onPicked: id => editor.edited(editor.layerData.index, "runtime", Number(id))
         }
     }
     VRow {
         label: qsTr("NR 运动来源")
+        enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
+        opacity: enabled ? 1 : 0.4
         hint: qsTr("全链共享；抗闪烁开启时仍需估算光流")
         VSeg {
             objectName: "nr-motion-source"
@@ -84,6 +88,8 @@ ColumnLayout {
     }
     VRow {
         label: qsTr("内部处理分辨率")
+        enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
+        opacity: enabled ? 1 : 0.4
         hint: qsTr("内部降采样 · 不改变输出尺寸")
         VSelect {
             objectName: "nr-resolution"
@@ -93,17 +99,28 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
-        text: qsTr("预览保留比例且不放大小输入；图片/视频导出仍完整处理。")
+        text: editor.amdNr ? qsTr("预览可降采样到 1080p。AMD NR 图片/视频导出仅接受预算内原生尺寸，暂不支持 4K NR 导出。")
+                          : qsTr("预览保留比例且不放大小输入；图片/视频导出仍完整处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
     NrValueRow {
         spec: ({key:"intensity",label:qsTr("模型强度"),min:0,max:1})
+        enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
+        opacity: enabled ? 1 : 0.4
         amount: editor.layerData.intensity
         onEdited: amount => editor.edited(editor.layerData.index, "intensity", amount)
     }
+    Text {
+        Layout.fillWidth: true
+        visible: editor.amdNr || !Support.available(veyra, "nr" + editor.layerData.runtime)
+        text: !Support.available(veyra, "nr" + editor.layerData.runtime) ? Support.reason(veyra, "nr" + editor.layerData.runtime) : qsTr("AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。HDR 尚未验收。")
+        color: Theme.t3; font.pixelSize: 11; wrapMode: Text.WordWrap
+    }
     VSubGroup {
         objectName: "nr-model-group"
+        enabled: !editor.amdNr && Support.available(veyra, "nr" + editor.layerData.runtime)
+        opacity: enabled ? 1 : 0.4
         Layout.fillWidth: true
         label: qsTr("模型参数"); count: 6
         Repeater {

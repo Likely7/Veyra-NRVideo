@@ -30,7 +30,7 @@ inline bool validNrAntiFlicker(NrAntiFlicker v) {
 }
 // Preserve persisted values 0/1/2; the old Fsr value now explicitly selects
 // the 3.1 provider. Fsr4 requires a real ML provider, never an auto fallback.
-enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3 };
+enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4 };
 constexpr bool fsrFrameGeneration(FrameGenerationBackend backend) {
     return backend == FrameGenerationBackend::Fsr || backend == FrameGenerationBackend::Fsr4;
 }
@@ -45,6 +45,7 @@ constexpr bool presentSinkFrameGeneration(FrameGenerationBackend backend) {
 // Multipliers the UI offers. 5X is intentionally absent: the DLSS runtime
 // exposes 2/3/4/6 and MFG buyers pick from those; 1 = generation off.
 inline constexpr uint32_t kFgMultiplierChoices[]={1,2,3,4,6};
+inline constexpr uint32_t kVfgMultiplierChoices[]={1,2,3,4,5,6,7,8};
 inline constexpr size_t kFgMultiplierChoiceCount=sizeof(kFgMultiplierChoices)/sizeof(kFgMultiplierChoices[0]);
 // Export bitrate presets in Mbps; index 0 keeps the encoder's constant-quality
 // default. Labels are the UI strings for the same order.
@@ -70,10 +71,10 @@ constexpr std::wstring_view captureAudioIngressName(CaptureAudioIngress mode) {
 }
 // The original slot (0) became Lecram in 2.0.0. Give the restored NVIDIA
 // binary a new value so existing presets keep selecting the same DLL.
-enum class NrRuntime { Original = 0, Community = 1, Ampere = 2, NvidiaOriginal = 3 };
+enum class NrRuntime { Original = 0, Community = 1, Ampere = 2, NvidiaOriginal = 3, LmxxfAmd = 4 };
 constexpr bool validNrRuntime(NrRuntime runtime) {
     return runtime == NrRuntime::Original || runtime == NrRuntime::Community ||
-           runtime == NrRuntime::Ampere || runtime == NrRuntime::NvidiaOriginal;
+           runtime == NrRuntime::Ampere || runtime == NrRuntime::NvidiaOriginal || runtime == NrRuntime::LmxxfAmd;
 }
 // Persisted value 1 selected the retired RTX40 DLL. Never load that DLL in
 // current builds; preserve 0 (Lecram) and 2 (SF-v2) as explicit user choices.
@@ -86,6 +87,7 @@ constexpr std::string_view nrRuntimeName(NrRuntime runtime) {
     case NrRuntime::Community:return "community-SF-v2-RTX20-RTX50-legacy40";
     case NrRuntime::Ampere:return "community-SF-v2-RTX20-RTX50";
     case NrRuntime::NvidiaOriginal:return "NVIDIA-original-RTX50-310.8.0";
+    case NrRuntime::LmxxfAmd:return "lmxxf-AMD-RDNA4";
     }
     return "unknown";
 }
@@ -96,7 +98,8 @@ enum class AudioSyncMode { Automatic, Manual, Off };
 enum class HdrOutputMode { Hdr10, ScRgb };
 enum class MotionSource { Zero, OpticalFlow, Automatic };
 constexpr bool motionUsesFlow(MotionSource source,FrameGenerationBackend backend=FrameGenerationBackend::Dlss) {
-    return source==MotionSource::OpticalFlow||(source==MotionSource::Automatic&&backend!=FrameGenerationBackend::XeSS);
+    return backend!=FrameGenerationBackend::Vfg&&
+        (source==MotionSource::OpticalFlow||(source==MotionSource::Automatic&&backend!=FrameGenerationBackend::XeSS));
 }
 constexpr std::string_view frameGenerationBackendName(FrameGenerationBackend backend) {
     switch(backend) {
@@ -104,6 +107,7 @@ constexpr std::string_view frameGenerationBackendName(FrameGenerationBackend bac
     case FrameGenerationBackend::XeSS: return "XeSS";
     case FrameGenerationBackend::Fsr: return "AMD-FSR";
     case FrameGenerationBackend::Fsr4: return "AMD-FSR4-ML";
+    case FrameGenerationBackend::Vfg: return "NVIDIA-VFG";
     }
     return "unknown";
 }
@@ -240,6 +244,7 @@ struct EnhancementSettings {
     uint32_t videoSrQuality=0; // 0 DLSS SR; 1–4 RTX Video SR
     uint32_t multiplier=1;
     FrameGenerationBackend frameGenerationBackend=FrameGenerationBackend::Dlss;
+    uint32_t vfgQuality=1; // NvVFX Mode: Low=0, Medium=1 (default), High=2
     // Export target bitrate in Mbps; 0 keeps the encoder's constant-quality
     // default (NVENC CONSTQP / MFT quality mode). Only the export job consumes
     // it: preview never re-encodes.
@@ -337,7 +342,8 @@ struct EnhancementSettings {
                 return "active NR layers must share runtime and NR/SR order";
         }
         if(nr&&nrLayerCount&&!activeNrLayerCount())return "enabled NR stack has no active layer";
-        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::Fsr4)return "invalid frame generation backend";
+        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::Vfg)return "invalid frame generation backend";
+        if(vfgQuality>2)return "invalid VFG quality";
         // The XeSS provider reports its own generated-frame ceiling at session
         // start; the engine clamps/rejects above it, so validation only guards
         // the absolute API range here.
@@ -348,7 +354,7 @@ struct EnhancementSettings {
         if(videoSrQuality>kVideoSrFsr)return "invalid video SR quality";
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";
         if(opticalFlowBackend!=OpticalFlowBackend::Nvidia&&opticalFlowBackend!=OpticalFlowBackend::AmdFidelityFx&&opticalFlowBackend!=OpticalFlowBackend::GpuDis)return "invalid optical flow backend";
-        if(multiplier<1||multiplier>6)return "unsupported multiplier";
+        if(multiplier<1||multiplier>(frameGenerationBackend==FrameGenerationBackend::Vfg?8u:6u))return "unsupported multiplier";
         // 0 = auto quality; explicit values are capped at 300 Mbps so a typo
         // cannot ask a driver for a nonsense rate.
         if(exportBitrateMbps>300)return "export bitrate out of range";

@@ -68,6 +68,7 @@ class QmlPlayerBridge : public QObject {
 
     // --- frame generation settings ----------------------------------------
     Q_PROPERTY(QString fgBackendName READ fgBackendName WRITE setFgBackendName NOTIFY settingsChanged)
+    Q_PROPERTY(int vfgQuality READ vfgQuality WRITE setVfgQuality NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList fgBackendChoices READ fgBackendChoices CONSTANT)
     Q_PROPERTY(QString fgProviderText READ fgProviderText NOTIFY fgChoicesChanged)
     Q_PROPERTY(int fgMaxMultiplier READ fgMaxMultiplier NOTIFY snapshotChanged)
@@ -109,6 +110,10 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString captureDeviceId READ captureDeviceId WRITE setCaptureDeviceId NOTIFY captureChanged)
     Q_PROPERTY(QString captureDeviceLabel READ captureDeviceLabel NOTIFY captureChanged)
     Q_PROPERTY(bool captureForceSdr READ captureForceSdr WRITE setCaptureForceSdr NOTIFY settingsChanged)
+    Q_PROPERTY(bool amdNrGpu READ amdNrGpu CONSTANT)
+    Q_PROPERTY(QVariantMap effectCapabilities READ effectCapabilities NOTIFY fgChoicesChanged)
+    Q_PROPERTY(QVariantList nrRuntimeChoices READ nrRuntimeChoices NOTIFY fgChoicesChanged)
+    Q_PROPERTY(QVariantList srBackendChoices READ srBackendChoices NOTIFY fgChoicesChanged)
     Q_PROPERTY(bool captureFlipVertical READ captureFlipVertical WRITE setCaptureFlipVertical NOTIFY settingsChanged)
     // P4-e: the full capture connection, as the 1.4.4 panel: device details and
     // formats come from asynchronous DirectShow queries (never on the UI thread),
@@ -447,6 +452,11 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantList colourLooks READ colourLooks NOTIFY colourLibraryChanged)
 
 public:
+    bool amdNrGpu() const;
+    QVariantMap effectCapabilities() const;
+    QVariantList nrRuntimeChoices() const;
+    QVariantList srBackendChoices() const;
+    Q_INVOKABLE QVariantMap effectAvailability(const QString& id) const;
     // `engine` must outlive the bridge. `dataDirectory` holds ui-session.v1 and
     // the preset library; empty means the default user data directory.
     QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory = {},
@@ -476,6 +486,8 @@ public:
     QVariantList fgBackendChoices() const;
     QString fgProviderText() const;
     void setFgBackendName(const QString& value);
+    int vfgQuality() const;
+    void setVfgQuality(int value);
     int fgMaxMultiplier() const;
     bool fgEnabled() const;
     void setFgEnabled(bool enabled);

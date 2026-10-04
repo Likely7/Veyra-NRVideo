@@ -308,7 +308,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         if(error||cancel)break;
         if(options.fg&&lastReal)for(uint32_t j=1;j<multiplier;++j){if(!encodeAt(lastReal->slot,false,previousPts+sourceInterval*j/multiplier)){error=true;break;}++holdCount;}
         if(error)break;
-        veyra::log::info("export-counts",std::format("slowFrames={} source={} generated={} hold={} output={} multiplier={} repairedTimestamps={} backend={} encoder={} bitrateMbps={} note={} (holds are not DLSSG)",slowFrames,sourceCount,generatedCount,holdCount,outputIndex,multiplier,repairedTimestamps,frameGenerationBackendName(options.settings.frameGenerationBackend),std::string(sink::encoderBackendName(encoder->backend())),options.settings.exportBitrateMbps,utf8(fgNote)));
+        veyra::log::info("export-counts",std::format("slowFrames={} source={} generated={} hold={} output={} multiplier={} repairedTimestamps={} backend={} vfgQuality={} encoder={} bitrateMbps={} note={} (holds are not generated frames)",slowFrames,sourceCount,generatedCount,holdCount,outputIndex,multiplier,repairedTimestamps,frameGenerationBackendName(options.settings.frameGenerationBackend),options.settings.vfgQuality,std::string(sink::encoderBackendName(encoder->backend())),options.settings.exportBitrateMbps,utf8(fgNote)));
         progress(.99,L"正在收尾：等待编码器输出剩余帧");
         if(!encoder->finish()){if(failureReason.empty())failureReason=L"编码器收尾失败，请查看编码器诊断";break;}
         const int64_t estimatedEnd=lastOutputUs+std::max<int64_t>(1,int64_t(std::llround(sourceInterval*1000000/multiplier)));

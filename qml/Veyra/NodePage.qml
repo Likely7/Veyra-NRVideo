@@ -11,6 +11,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "EffectSupport.js" as Support
 import QtQuick.Shapes
 
 VPage {
@@ -68,7 +69,7 @@ VPage {
         case "nr": return "#FF8A3D"
         case "protection": return "#8A8A96"
         case "video-hdr": return "#FFB547"
-        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": return "#3DDC84"
+        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": return "#3DDC84"
         }
         return "#55555C"
     }
@@ -604,7 +605,7 @@ VPage {
                             objectName: "node-flow-choice"
                             Layout.fillWidth: true
                             title: qsTr("光流算法")
-                            options: [{id:"0",label:"NVIDIA NVOF"},{id:"1",label:"AMD FidelityFX"}]
+                            options: [Support.option(veyra,"0","NVIDIA NVOF","flow0"),Support.option(veyra,"1","AMD FidelityFX","flow1")]
                             value: options[veyra.opticalFlowChoice]?.label ?? (veyra.opticalFlowChoice === 2 ? qsTr("GPU DIS 已移除，请重选") : qsTr("未知配置"))
                             onPicked: id => veyra.setOpticalFlowChoice(Number(id))
                         }
@@ -1309,6 +1310,8 @@ VPage {
                     VSwitch {
                         objectName: "node-enable-" + card.node.id
                         checked: card.node.enabled === true
+                        enabled: card.node.enabled === true || Support.available(veyra, card.node.type)
+                        opacity: enabled ? 1 : 0.4
                         onToggled: checked => veyra.setEffectEnabled(card.node.index, checked)
                     }
                     VButton {
@@ -1355,6 +1358,15 @@ VPage {
                 objectName: "node-sr-editor-" + card.node.id
                 spacing: 6
                 VRow {
+                    label: qsTr("超分算法")
+                    VSelect {
+                        objectName: "node-sr-backend"
+                        options: veyra.srBackendChoices || []
+                        value: options.find(o => o.id === String(veyra.videoSrQuality === 0 || veyra.videoSrQuality === 5 ? veyra.videoSrQuality : 4))?.label || ""
+                        onPicked: id => veyra.videoSrQuality = Number(id)
+                    }
+                }
+                VRow {
                     label: qsTr("目标尺寸")
                     hint: qsTr("决定输出分辨率")
                     VSeg {
@@ -1371,6 +1383,8 @@ VPage {
                 VRow {
                     label: qsTr("质量")
                     hint: qsTr("RTX 视频超分档位")
+                    enabled: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4 && Support.available(veyra, "sr")
+                    opacity: enabled ? 1 : 0.4
                     VSeg {
                         options: [{ id: "1", label: "1" }, { id: "2", label: "2" }, { id: "3", label: "3" }, { id: "4", label: "4" }]
                         current: String(veyra.videoSrQuality)
@@ -1384,6 +1398,8 @@ VPage {
             ColumnLayout {
                 objectName: "node-hdr-editor-" + card.node.id
                 spacing: 4
+                enabled: Support.available(veyra, "video-hdr")
+                opacity: enabled ? 1 : 0.4
                 Text {
                     Layout.fillWidth: true
                     text: veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("SDR → HDR，在补帧之前")
@@ -1436,13 +1452,33 @@ VPage {
                     hint: veyra.fgMaxMultiplier + qsTr("X 为上限")
                     VSeg {
                         objectName: "node-fg-multiplier"
+                        visible: veyra.fgBackendName !== "vfg"
                         options: veyra.fgMultiplierChoices
                         current: String(veyra.fgMultiplier)
                         onPicked: id => veyra.fgMultiplier = parseInt(id)
                     }
+                    VSelect {
+                        objectName: "node-vfg-multiplier"
+                        visible: veyra.fgBackendName === "vfg"
+                        options: veyra.fgMultiplierChoices
+                        value: String(veyra.fgMultiplier) + "X"
+                        onPicked: id => veyra.fgMultiplier = Number(id)
+                    }
+                }
+                VRow {
+                    label: qsTr("VFG 质量")
+                    visible: veyra.fgBackendName === "vfg"
+                    hint: qsTr("高质量需要更多处理时间")
+                    VSelect {
+                        objectName: "node-vfg-quality"
+                        options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")}]
+                        value: options[veyra.vfgQuality].label
+                        onPicked: id => veyra.vfgQuality = Number(id)
+                    }
                 }
                 VRow {
                     label: qsTr("补帧运动来源")
+                    visible: veyra.fgBackendName !== "vfg"
                     hint: qsTr("XeSS 默认零运动；FSR 仍有自身的光流计算")
                     VSeg { objectName: "node-fg-motion"; options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.fgMotionSource); onPicked: id => veyra.fgMotionSource = Number(id) }
                 }
@@ -1543,7 +1579,7 @@ VPage {
         id: addMenu
         objectName: "node-add-menu"
         title: qsTr("添加节点")
-        items: veyra.effectCatalog.map(e => ({ label: e.label, id: e.id, tag: e.experimental ? qsTr("实验") : "", tagKind: e.experimental ? "warn" : "" }))
+        items: veyra.effectCatalog.map(e => ({ label: e.label, id: e.id, disabled: e.disabled === true, note: e.note || "", tag: e.experimental ? qsTr("实验") : "", tagKind: e.experimental ? "warn" : "" }))
         onPicked: (i, o) => {
             // The new card's id is only known after it exists; the next id the
             // chain will hand out is one past the largest.

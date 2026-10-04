@@ -13,14 +13,14 @@ namespace {
 // Six full grades per entry (plus the legacy first-grade field), up to 64
 // entries. Never remove the file-size guard as LUT names are external input.
 constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
-void writeRendering(std::ostream& out,const ChainGlobalSettings& g){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);}
-bool readRendering(std::istream& in,ChainGlobalSettings& g){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);EnhancementSettings s;g.apply(s);return s.validate().empty();}
+void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;}
+bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);if(vfg&&!(in>>g.vfgQuality))return false;EnhancementSettings s;g.apply(s);return s.validate().empty();}
 void applyRenderingPreset(const PresetEntry& e,EnhancementSettings& s){
     if(!e.globals)return;
-    const auto fg=s.frameGenerationBackend;const auto fgMotion=s.fgMotion;
+    const auto fg=s.frameGenerationBackend;const auto fgMotion=s.fgMotion;const auto quality=s.vfgQuality;
     if(e.contents&presetContentMask(PresetContent::Chain))e.globals->apply(s);
     if(e.contents&presetContentMask(PresetContent::FrameGeneration))s.fgMotion=e.globals->fgMotion;
-    else{s.frameGenerationBackend=fg;s.fgMotion=fgMotion;}
+    else{s.frameGenerationBackend=fg;s.fgMotion=fgMotion;s.vfgQuality=quality;}
 }
 std::string utf8(const std::wstring& s) {
     if (s.empty()) return {};
@@ -68,6 +68,8 @@ void PresetLibrary::addBuiltins() {
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto rootVfg=std::filesystem::path(path_).concat(L".vfg");
+    if(std::filesystem::exists(rootVfg))path_=rootVfg;
     const auto rootRendering=std::filesystem::path(path_).concat(L".field-render");
     if(std::filesystem::exists(rootRendering))path_=rootRendering;
     const auto migratedPath = std::filesystem::path(path_).concat(L".p3-node");
@@ -79,6 +81,8 @@ bool PresetLibrary::load() {
     if (std::filesystem::exists(globalsPath)) path_ = globalsPath;
     const auto renderingPath=std::filesystem::path(path_).concat(L".field-render");
     if(std::filesystem::exists(renderingPath))path_=renderingPath;
+    const auto vfgPath=std::filesystem::path(path_).concat(L".vfg");
+    if(std::filesystem::exists(vfgPath))path_=vfgPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -172,6 +176,8 @@ bool PresetLibrary::save() {
     std::wstring checkedDefault;
     // Match PresetStore: never replace a valid file with one our reader rejects.
     if (!parse(data, checked, checkedDefault, error_)) return false;
+    if(data.starts_with("VEYRA_PRESET_LIBRARY 7")&&!path_.wstring().ends_with(L".vfg"))path_=std::filesystem::path(path_).concat(L".vfg");
+    if(!path_.wstring().ends_with(L".vfg")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 6")&&!path_.wstring().ends_with(L".field-render"))path_=std::filesystem::path(path_).concat(L".field-render");
     if (std::any_of(entries_.begin(), entries_.end(), [](const auto& e) { return e.nodeConfiguration.has_value(); }) &&
         !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-editor") && !path_.wstring().ends_with(L".p3-globals"))
@@ -180,6 +186,7 @@ bool PresetLibrary::save() {
             return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
         }) && !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     std::error_code ec;
     std::filesystem::create_directories(path_.parent_path(), ec);
     const auto temporary = std::filesystem::path(path_).concat(L".tmp");
@@ -283,6 +290,7 @@ void PresetLibrary::apply(const PresetEntry& entry, EnhancementSettings& setting
     const auto keepAdditionalColorCount = settings.additionalColorCount;
     const auto keepMultiplier = settings.multiplier;
     const auto keepBackend = settings.frameGenerationBackend;
+    const auto keepQuality = settings.vfgQuality;
     applyRenderingPreset(entry,settings);
     const auto keepAudioSync = settings.audioSync;
     const auto keepAudioOffset = settings.audioOffsetMs;
@@ -301,9 +309,11 @@ void PresetLibrary::apply(const PresetEntry& entry, EnhancementSettings& setting
     if (entry.contents & presetContentMask(PresetContent::FrameGeneration)) {
         settings.multiplier = std::max(1u, entry.fg.multiplier);
         settings.frameGenerationBackend = entry.fg.backend;
+        settings.vfgQuality = entry.fg.vfgQuality;
     } else {
         settings.multiplier = keepMultiplier;
         settings.frameGenerationBackend = keepBackend;
+        settings.vfgQuality = keepQuality;
     }
     if (entry.contents & presetContentMask(PresetContent::Audio)) {
         settings.audioSync = entry.audioSync;
@@ -426,7 +436,7 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
             PresetEntry keep; keep.kind = ChainMode::Node; keep.chain.mode = ChainMode::Node;
             keep.contents = presetContentMask(PresetContent::FrameGeneration);
             const auto* old = document.nodes.firstOf(EffectType::FrameGeneration);
-            keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, settings.frameGenerationBackend};
+            keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, settings.frameGenerationBackend, settings.vfgQuality};
             if (auto v = applyToEditor(keep, *next, values); !v.accepted) return v;
             nodes.fgStrictAdmission = document.nodes.fgStrictAdmission;
         }
@@ -502,6 +512,7 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
             if (node) node->enabled = entry.fg.multiplier > 1;
             if (entry.fg.multiplier > 1) nodes.fgMultiplier = entry.fg.multiplier;
             values.frameGenerationBackend = entry.fg.backend;
+            values.vfgQuality = entry.fg.vfgQuality;
         }
         if (entry.contents & presetContentMask(PresetContent::Audio)) {
             values.audioSync = entry.audioSync; values.audioOffsetMs = entry.audioOffsetMs;
@@ -564,7 +575,14 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
     });
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return e.globals.has_value();});
-    const int version=std::max(minimumVersion, rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const bool vfg=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        if(e.fg.backend==FrameGenerationBackend::Vfg||e.fg.vfgQuality!=1||
+           (e.globals&&(e.globals->fgBackend==FrameGenerationBackend::Vfg||e.globals->vfgQuality!=1)))return true;
+        if(!e.nodeConfiguration)return false;const auto& c=*e.nodeConfiguration;
+        return c.fgBackend==FrameGenerationBackend::Vfg||c.vfgQuality!=1||
+            (c.editor&&c.editor->globals&&(c.editor->globals->fgBackend==FrameGenerationBackend::Vfg||c.editor->globals->vfgQuality!=1));
+    });
+    const int version=std::max(minimumVersion, vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -572,6 +590,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
           << e.fg.multiplier << ' ' << int(e.fg.backend) << ' ' << int(e.audioSync) << ' ' << e.audioOffsetMs << ' '
           << e.chain.nodeCount << ' ' << int(e.chain.mode) << ' ' << e.chain.fgMultiplier << ' '
           << (e.chain.fgStrictAdmission ? 1 : 0) << ' ';
+        if(version>=7)o<<e.fg.vfgQuality<<' ';
         for (uint32_t i = 0; i < e.chain.nodeCount; ++i) {
             const auto& n = e.chain.nodes[i];
             o << int(n.type) << ' ' << (n.enabled ? 1 : 0) << ' ' << n.viewX << ' ' << n.viewY << ' '
@@ -606,7 +625,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         }
         if(version>=6){
             o<<' '<<e.globals.has_value();
-            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g);}
+            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7);}
         }
         o << '\n';
     }
@@ -622,7 +641,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > (preserveLegacy ? 3 : 6)) { error = L"预设库格式或版本不支持"; return false; }
+    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > 7) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
     for (size_t i = 0; i < count; ++i) {
@@ -632,14 +651,16 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
         uint32_t nodeCount = 0;
         if (!(in >> std::quoted(name) >> std::quoted(note) >> kind >> builtin >> e.contents >> e.fg.multiplier >> fgBackend >> audioSync >> e.audioOffsetMs >> nodeCount >> chainMode >> e.chain.fgMultiplier >> strict)) { error = L"预设库头部字段损坏"; return false; }
         if (kind < 0 || kind > 1 || chainMode < 0 || chainMode > 1 || strict < 0 || strict > 1 ||
-            nodeCount > kMaxChainNodes || e.fg.multiplier < 1 || e.fg.multiplier > 6) { error = L"预设库字段超出范围"; return false; }
+            nodeCount > kMaxChainNodes || e.fg.multiplier < 1 || e.fg.multiplier > (version>=7?8u:6u)) { error = L"预设库字段超出范围"; return false; }
+        if(version>=7&&!(in>>e.fg.vfgQuality)){error=L"预设库 VFG 质量字段损坏";return false;}
+        if(fgBackend<0||fgBackend>(version>=7?4:3)){error=L"预设库补帧后端无效";return false;}
         e.name = wide(name);
         e.note = wide(note);
         e.kind = static_cast<ChainMode>(kind);
         e.builtin = builtin != 0;
         e.fg.backend = static_cast<FrameGenerationBackend>(fgBackend);
         EnhancementSettings fgContract;
-        fgContract.multiplier=e.fg.multiplier;fgContract.frameGenerationBackend=e.fg.backend;
+        fgContract.multiplier=e.fg.multiplier;fgContract.frameGenerationBackend=e.fg.backend;fgContract.vfgQuality=e.fg.vfgQuality;
         if(!fgContract.validate().empty()){error=L"预设库补帧后端或倍率无效";return false;}
         e.audioSync = static_cast<AudioSyncMode>(audioSync);
         e.chain.nodeCount = nodeCount;
@@ -718,7 +739,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){ChainGlobalSettings g;int target,backend,flow,optical,half,policy;
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
-                if(!readRendering(in,g))return false;e.globals=g;
+                if(!readRendering(in,g,version>=7))return false;e.globals=g;
             }
         }
         out.push_back(std::move(e));
@@ -734,7 +755,9 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const auto& editor = session.configurations[1].editor;
     const auto extended=[](const ChainGlobalSettings& g){return g.srTarget>pipeline::SrTarget::Uhd8K||g.hdrOutputMode!=HdrOutputMode::Hdr10||g.fgMotion!=MotionSource::Automatic||g.srMotion!=MotionSource::OpticalFlow||g.nrMotion!=MotionSource::OpticalFlow;};
     const bool rendering=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return extended(c)||(c.editor&&c.editor->globals&&extended(*c.editor->globals));});
-    const int version = rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const auto usesVfg=[](const ChainGlobalSettings& g){return g.fgBackend==FrameGenerationBackend::Vfg||g.vfgQuality!=1;};
+    const bool vfg=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return usesVfg(c)||(c.editor&&c.editor->globals&&usesVfg(*c.editor->globals));});
+    const int version = vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -743,11 +766,11 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         out << int(c.srTarget) << ' ' << c.videoSrQuality << ' ' << int(c.fgBackend) << ' '
             << int(c.flow) << ' ' << int(c.opticalFlowBackend) << ' ' << c.amdFlowHalfResolution << ' '
             << int(c.nrPolicy) << ' ' << c.selectedNr << ' ' << c.selectedColour;
-        if(version>=4)writeRendering(out,c);out<<'\n';
+        if(version>=4)writeRendering(out,c,version>=5);out<<'\n';
         PresetEntry entry;
         entry.name = i == 0 ? L"list" : L"node";
         entry.kind = ChainMode(i); entry.chain = c.chain;
-        entry.fg = {c.chain.fgMultiplier, c.fgBackend};
+        entry.fg = {c.chain.fgMultiplier, c.fgBackend, c.vfgQuality};
         if (const auto color = c.chain.firstOf(EffectType::Color)) entry.color = color->color;
         entries.push_back(std::move(entry));
     }
@@ -761,7 +784,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             const auto& g = *document.globals;
             out << int(g.srTarget) << ' ' << g.videoSrQuality << ' ' << int(g.fgBackend) << ' '
                 << int(g.flow) << ' ' << int(g.opticalFlowBackend) << ' ' << g.amdFlowHalfResolution << ' '
-                << int(g.nrPolicy);if(version>=4)writeRendering(out,g);out<<'\n';
+                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5);out<<'\n';
         }
         out << graph.nextId << ' ' << graph.inputNext << ' ' << document.nodes.nodeCount << '\n';
         // The ordinary preset codec validates a linear runtime chain. Use a
@@ -770,7 +793,8 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         // This does not weaken ordinary preset import or runtime validation.
         auto entry = std::make_unique<PresetEntry>();
         entry->name = L"editor"; entry->kind = ChainMode::Node; entry->chain = document.nodes;
-        entry->fg = {document.nodes.fgMultiplier, session.configurations[1].fgBackend};
+        const auto& editorGlobals=document.globals?*document.globals:static_cast<const ChainGlobalSettings&>(session.configurations[1]);
+        entry->fg = {document.nodes.fgMultiplier, editorGlobals.fgBackend, editorGlobals.vfgQuality};
         for (uint32_t i = 0; i < document.nodes.nodeCount; ++i) {
             out << graph.ids[i] << ' ' << graph.next[i] << ' ' << document.nodes.nodes[i].enabled << '\n';
             entry->chain.nodes[i].enabled = false;
@@ -787,7 +811,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 4) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 5) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -798,7 +822,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         c.srTarget = pipeline::SrTarget(target); c.fgBackend = FrameGenerationBackend(backend);
         c.flow = FlowQuality(flow); c.opticalFlowBackend = OpticalFlowBackend(optical);
         c.amdFlowHalfResolution = half != 0; c.nrPolicy = pipeline::NrSizePolicy(policy);
-        if(version>=4&&!readRendering(in,c))return false;
+        if(version>=4&&!readRendering(in,c,version>=5))return false;
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
@@ -823,7 +847,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
             g.srTarget = pipeline::SrTarget(target); g.fgBackend = FrameGenerationBackend(backend);
             g.flow = FlowQuality(flow); g.opticalFlowBackend = OpticalFlowBackend(optical);
             g.amdFlowHalfResolution = half != 0; g.nrPolicy = pipeline::NrSizePolicy(policy);
-            if(version>=4&&!readRendering(in,g))return false;
+            if(version>=4&&!readRendering(in,g,version>=5))return false;
             editor->globals = g;
         }
         uint32_t count = 0;
@@ -855,6 +879,8 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
 bool ChainSessionStore::load(ChainSession& session) {
     error_.clear();
     std::error_code ec;
+    const auto rootVfg=std::filesystem::path(path_).concat(L".vfg");
+    if(std::filesystem::exists(rootVfg,ec))path_=rootVfg;
     const auto rootRendering=std::filesystem::path(path_).concat(L".field-render");
     if(std::filesystem::exists(rootRendering,ec))path_=rootRendering;
     const auto migratedPath = std::filesystem::path(path_).concat(L".p3-node");
@@ -866,6 +892,8 @@ bool ChainSessionStore::load(ChainSession& session) {
     if (std::filesystem::exists(globalsPath, ec)) path_ = globalsPath;
     const auto renderingPath=std::filesystem::path(path_).concat(L".field-render");
     if(std::filesystem::exists(renderingPath,ec))path_=renderingPath;
+    const auto vfgPath=std::filesystem::path(path_).concat(L".vfg");
+    if(std::filesystem::exists(vfgPath,ec))path_=vfgPath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -895,6 +923,8 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    if(data.starts_with("VEYRA_CHAIN_SESSION 5")&&!path_.wstring().ends_with(L".vfg"))path_=std::filesystem::path(path_).concat(L".vfg");
+    if(!path_.wstring().ends_with(L".vfg")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 4")&&!path_.wstring().ends_with(L".field-render"))path_=std::filesystem::path(path_).concat(L".field-render");
     // A v1 reader must never reinterpret or overwrite the new editor graph.
     // Preserve the original session as a rollback point during this opt-in.
@@ -904,6 +934,7 @@ bool ChainSessionStore::save(const ChainSession& session) {
     if (session.configurations[1].editor && session.configurations[1].editor->globals &&
         !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     std::error_code ec;
     if (!path_.parent_path().empty()) std::filesystem::create_directories(path_.parent_path(), ec);
     if (ec) { error_ = L"模式会话目录无法创建"; return false; }

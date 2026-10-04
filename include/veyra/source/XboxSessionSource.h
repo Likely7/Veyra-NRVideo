@@ -34,12 +34,15 @@ struct XboxConnectDesc {
     std::string locale = "zh-CN";
     std::shared_ptr<ID3D12Device> decodeDevice;
     std::shared_ptr<ID3D12CommandQueue> decodeQueue;
+    const std::atomic<bool>* stopRequested = nullptr; // engine owner outlives the source
 };
 
 struct XboxStats {
     enum class State : uint8_t { Idle, Starting, Connecting, Streaming, Ended, Failed };
     State state = State::Idle;
     std::wstring message;           // progress while starting; the reason when Ended or Failed
+    std::string disconnectReason;
+    bool reconnectable = false;
     uint32_t width = 0, height = 0;
     bool hardwareDecode = false;
     uint64_t units = 0, decoded = 0, dropped = 0, decodeErrors = 0, keyframeRequests = 0;

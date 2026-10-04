@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Session flow after Greenlight's streammanager.ts / stream page (unknownskl/greenlight, MIT).
 #include "veyra/source/XboxSessionSource.h"
+#include "veyra/xbox/DisconnectPolicy.h"
 
 #include <windows.h>
 #include <mmreg.h>
@@ -124,6 +125,7 @@ struct XboxSessionSource::Impl {
     xbox::WebRtcSession rtc;
     std::atomic<bool> streaming{false}, ended{false};
     std::wstring endReason;
+    std::string disconnectReason;
     std::mutex endMutex;
 
     // Video: the WebRTC thread queues access units; the decode thread drains them.
@@ -223,7 +225,7 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         started_ = false;
         ready_.notify_all();
     };
-    const auto cancelled = [&] { return cancel_.load(); };
+    const auto cancelled = [&] { return cancel_.load() || (p.desc.stopRequested && p.desc.stopRequested->load()); };
 
     try {
         if (!p.desc.account || !p.desc.account->signedIn()) { fail(L"请先登录 Xbox 账号。"); return; }
@@ -277,7 +279,8 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
             const int frames = opus_decode_float(q.opus, data, opus_int32(size), q.pcm.data(), 5760, 0);
             if (frames <= 0) { q.audioDiscontinuity = true; return; }
             const double ptsMs = double(q.audioSamples) * 1000.0 / 48000.0;
-            audio_.push(q.pcm.data(), size_t(frames) * 2 * sizeof(float), ptsMs, q.audioDiscontinuity);
+            const bool accepted = audio_.push(q.pcm.data(), size_t(frames) * 2 * sizeof(float), ptsMs, q.audioDiscontinuity);
+            if (!q.audioSamples) log::info("xbox-audio", std::format("first Opus block samples={} accepted={}", frames, accepted));
             q.audioDiscontinuity = false;
             q.audioSamples += uint64_t(frames);
         };
@@ -300,7 +303,11 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         callbacks.ended = [this](const std::string& reason) {
             auto& q = *p_;
             std::lock_guard lock(q.endMutex);
-            q.endReason = reason == "the console ended the stream" ? L"主机结束了串流。" : L"与主机的连接中断了。";
+            if (q.ended.load()) return; // preserve the server's first, specific reason
+            q.disconnectReason = reason;
+            q.endReason = reason == "connection lost" ? L"与主机的连接中断了。"
+                : L"Xbox 服务结束了串流（" + widen(reason) + L"）。";
+            log::warn("xbox-disconnect", std::format("reason={} reconnectable={}", reason, xbox::reconnectableDisconnect(reason)));
             q.ended = true;
         };
         p.rtc.setCallbacks(std::move(callbacks));
@@ -314,8 +321,11 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
             layout.channels = 2;
             layout.mask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
             const WAVEFORMATEXTENSIBLE wave = sink::floatWave(layout);
-            p.audioReady = audio_.configure(wave.Format, sizeof(wave));
-            if (!p.audioReady) log::warn("xbox-audio", "the audio output could not be configured; the stream continues without sound");
+            p.audioReady = audio_.configure(wave.Format, sizeof(wave)) && audio_.start();
+            if (!p.audioReady) log::warn("xbox-audio", "the audio output could not be started; the stream continues without sound");
+            else log::info("xbox-audio", "Opus stereo 48000 Hz: output worker started");
+        } else {
+            log::error("xbox-audio", std::format("Opus decoder creation failed code={}", opusError));
         }
 
         ApiSignaling signaling(*p.api, p.sessionId);
@@ -342,7 +352,13 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
                     q.api->keepalive(q.sessionId);
                 } catch (const xbox::ServiceError& e) {
                     log::warn("xbox", std::format("keepalive HTTP {}", e.status));
-                    if (e.status == 404) { std::lock_guard lock(q.endMutex); q.endReason = L"串流会话已在服务器端结束。"; q.ended = true; }
+                    if (e.status == 404) {
+                        std::lock_guard lock(q.endMutex);
+                        if(!q.ended.load()){
+                            q.endReason = L"串流会话已在服务器端结束。";
+                            q.disconnectReason = "session expired"; q.ended = true;
+                        }
+                    }
                 } catch (const std::exception& e) {
                     log::warn("xbox", std::string("keepalive: ") + e.what());
                 }
@@ -375,11 +391,14 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         }
         ready_.notify_all();
         log::info("xbox", "streaming");
-        while (!cancel_.load() && !p.ended.load()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        while (!cancelled() && !p.ended.load()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if (p.ended.load()) {
             std::wstring reason;
-            { std::lock_guard lock(p.endMutex); reason = p.endReason; }
-            setState(XboxStats::State::Ended, reason);
+            std::string code;
+            { std::lock_guard lock(p.endMutex); reason = p.endReason; code = p.disconnectReason; }
+            { std::lock_guard lock(mutex_); stats_.state = XboxStats::State::Ended;
+              stats_.message = std::move(reason); stats_.disconnectReason = code;
+              stats_.reconnectable = xbox::reconnectableDisconnect(code); }
         }
     } catch (const xbox::ServiceError& e) {
         log::error("xbox", std::format("service error {} {}", e.status, e.what()));

@@ -1,5 +1,60 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-04 2.0.3 显卡分包发布施工
+
+当前用户授权合并已完成修复到main并发布2.0.3；HDR/Dolby PR13/14暂缓。先存档/方案/新分支，桌面原修改保持。
+NVIDIA/AMD两个完整包使用同EXE；分别排除AMD NR和NV专用库。按用户追加决定，两包保留原FSR3.1/4共用2.3组件，NV只开放FSR3.1，FSR4可见置灰。
+四NR/三SR/五FG入口、列表/节点菜单及直接设置统一硬件/组件能力；旧不可用配置禁用效果并保留参数。
+实际FSR/VFG/bitrate导出/RTSS透明背景/极简DPI/软件UI和AMD宿主布局、源码独立重建通过，详细证据见 RELEASE_2.0.3_ACCEPTANCE_2026-10-04.md。
+当前仍在最终合并、压缩和上传阶段；本机5070/616.56不能替代RX9000、RTX40、616.92或Xbox真实长稳验收。最终回执完成后追加本文件/WORKLOG。
+
+## 2026-10-04 VFG / AMD NR 瘦身候选
+
+`codex/runtime-size-20261004` 以黑边已验修复fc2ca716为基线，先存档/写方案。
+VFG移除九个当前路径未用NPP，目录497,894,432→210,788,400 bytes；全部档位和插件原字节保持。
+720p/4K各463 native checks、331 settings、21 NVENC导出、组合/缺库/GUI/worker冻结通过。
+AMD生产噪声/reciprocal表、权重与62 HIP kernel保持；仅ABI/布局/哈希验证，不称实卡推理通过。
+最终完整7z523327604 bytes /499.08MiB，备用ZIP943265095 /899.57MiB；比原1098.25MiB ZIP减54.56%。
+2076载荷+manifest独立解压SHA、官方7-Zip CRC、包内VFG热切换/预设/High8冻结worker和GPU/软件六页通过。
+极简新EXE6个DPR用例通过；本机5070/616.56短测边界保持，原桌面/main/2077旧载荷复核一致。
+源码/完整bundle及HDR PR计划、最终索引在E:/项目/Veyra/test-packages/runtime-size-20261004；代码存档2df6dd7。
+临时/解压副本清理遭自动审批拒绝（无具体原因），未重试/绕过，E盘副本保留。HDR仍等审批，未merge/push/Release。
+完成存档/索引后按用户明确要求安排正常关机，使用延迟helper后shutdown /s /t0，操作结果另记E盘日志。
+
+## 2026-10-04 极简像素缺口已修；HDR PR 等审批
+
+独立分支 `codex/minimal-edge-hdr-review-20261004` 从已验VFG候选存档开工。
+修复分数DPI时native child/region少一列与默认极简窗口contain取整黑线，完整输入映射到整数client，保留真实比例/原始像素/全屏黑边。
+完整/增量构建通过；30个尺寸/DPR/渲染模式真实GUI用例、12个行为回归、2个确定性跨页回归通过。
+RTX5070/616.56，Qt scale factor模拟，未宣称实显示器DPI移动或新HDR/FG画质通过。
+只制作基于`2.0.2-vfg-20261003`的EXE小补丁，记录见 `docs/MINIMAL_EDGE_ACCEPTANCE_2026-10-04.md`。
+
+PR #13/#14固定head静态审查完成：P5 offset/拟合/flat映射、#14缺失头文件/半套P5、HDR统计range/array/延迟/reset等问题和当前VFG持久化格式分叉均已记录。
+`docs/HDR_DOVI_PR_REVIEW_2026-10-04.md` 提供分拆适配、验收及“输入/处理/输出”界面编排；**HDR产品代码未施工，等用户通过后再修复并入**。
+桌面patch/11份未跟踪源码、main、原2077个便携载荷复核一致；未merge/push/Release。
+
+## 2026-10-04 VFG 全档位：独立本地交付
+
+`codex/vfg-integration-20261003` 已接原生 NVIDIA VFG 2X–8X、Low/Medium/High，
+共享图、实际预览/NVENC导出、列表/节点、预设/会话和worker冻结均接入。720p/4K
+8/10-bit全部21组合、21种真实导出、2K30AVI+最高SR4K+原生NR+VFG8、24/60fps、
+取消/缺失SDK、GUI热切换/重启和旧格式回归通过；缺失组件UI仍显示8X的错误已修复。
+RTX5070/616.56短测，不代表40系/616.92/HDR色度/物理显示/长稳通过。高档8X实时会降档。
+最终本地便携包完成并通过独立解压实跑：2077载荷哈希、包内VFG全GUI/High8 worker、
+GPU与软件各六页检查通过。交付在 `E:/项目/Veyra/test-packages/vfg-integration-20261003`，
+公开2.0.2保持原状；详情 `VFG_INTEGRATION_ACCEPTANCE_2026-10-03.md`。
+
+## 2026-10-03 五项问题修复：独立本地候选
+
+分支 codex/field-upgrade-20261003，已先存档写方案。修复 Xbox 音频输出线程未
+启动，加入按原因的有界重连；修复码率提交/回跳与范围；修复软件 UI 背景透明；
+删除 NVIDIA App 模块存在性误判。AMD RX9000 NR 的独立 MIT runtime 接入共享
+图，用户 0.39 模型/HIP 完整资产已补齐。真实 RTX5070 NVENC 导出、RTSS 下软件
+背景、39 项 QML、本地 Xbox/音频、AMD C ABI 测试通过。真实 Xbox 有声/长稳、
+RX9000 推理未验；AMD 当前限 1080p 像素预算，HDR/原生 4K NR 导出未支持。
+详见 FIELD_UPGRADE_ACCEPTANCE_2026-10-03.md。未合并 main、推送或发布，
+下面 2.0.2 已发布记录仍是公开版本事实。
+
 ## 2026-10-03 2.0.2 已发布（最新）
 
 [正式 Release](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.2)，tag/source `0dafc57`，已合并并推送 nrvideo/main，latest/公开/一个便携 ZIP。三版 NR、Claude RTSS 兼容、Codex Xbox/VRR/倍速/启动恢复全部包含；英文首页、中文切换、双语 Release 与支持二维码已远端核对。最终包 1520 文件审计、干净解压实跑和远端 SHA256 一致。完整身份与验证在 WORKLOG 最新节；以下准备/未发布状态均为历史。用户现场显存根因与 Xbox/VRR 实卡边界没有冒称通过。

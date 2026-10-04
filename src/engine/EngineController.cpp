@@ -20,6 +20,7 @@
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/ScreenCaptureSource.h"
+#include "veyra/xbox/DisconnectPolicy.h"
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 #include "veyra/source/RemotePlaySessionSource.h"
 #endif
@@ -312,6 +313,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #endif
 #ifdef VEYRA_ENABLE_XBOX
     auto xb=xboxRequest?std::make_shared<source::XboxSessionSource>():nullptr;
+    xbox::ReconnectBudget xboxReconnectBudget;
     const bool isXbox=bool(xb);
     {std::lock_guard lock(mutex_);activeXbox_=xb;}
 #else
@@ -414,8 +416,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     status(L"正在连接 Xbox…");
                     ctx.device()->AddRef();xboxRequest->decodeDevice=std::shared_ptr<ID3D12Device>(ctx.device(),[](ID3D12Device* device){device->Release();});
                     ctx.directQueue()->AddRef();xboxRequest->decodeQueue=std::shared_ptr<ID3D12CommandQueue>(ctx.directQueue(),[](ID3D12CommandQueue* queue){queue->Release();});
-                    if(!xb->connect(std::move(*xboxRequest))){const auto message=xb->stats().message;status(message.empty()?L"Xbox 串流连接失败，请查看诊断":message,true);break;}
-                    xboxRequest.reset();
+                    xboxRequest->stopRequested=&stop_;
+                    if(!xb->connect(*xboxRequest)){const auto message=xb->stats().message;status(message.empty()?L"Xbox 串流连接失败，请查看诊断":message,true);break;}
                     const auto firstFrameDeadline=Clock::now()+std::chrono::seconds(20);
                     while(!stop_){
                         const AVFrame* first=nullptr;const auto result=xb->read(cachedPacket,&first);
@@ -576,7 +578,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     veyra::log::warn("backend-recovery",std::format("initialization failed component={} attempt={} revision={} -> nr={} sr={} multiplier={}; original SDK error above",unsigned(failure),attempt+1,reduced.revision,reduced.nr,reduced.sr,reduced.multiplier));
                     if(!backendRecoveryWarning.empty())backendRecoveryWarning+=L"；";
                     const uint32_t ngxResult=uint32_t(graph.failedNgxResult());
-                    if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4&&failure==FailedBackend::Fg)
+                    if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&failure==FailedBackend::Fg)
+                        backendRecoveryWarning+=L"NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志";
+                    else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4&&failure==FailedBackend::Fg)
                         backendRecoveryWarning+=L"FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已关闭补帧；原因见日志";
                     else if((ngxResult&0xFFF00000u)==0xBAD00000u)
                         backendRecoveryWarning+=std::wstring(backendFailureName(failure))+L"："+ngxFailureHint(ngxResult)+std::format(L"（NGX 0x{:08X}，驱动 {}），已关闭依赖效果",ngxResult,ctx.adapter().driverVersion);
@@ -617,7 +621,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             publishFrameGenerationCapabilities();
             if(!previewInitialized){status(L"视频初始化失败，请查看对应组件的诊断日志",true);break;}
             if(!backendRecoveryWarning.empty()){
-                std::lock_guard lock(mutex_);desired_.rejectVideoRequest(initialRequested,options.snapshot());snapshot_.desired=desired_;snapshot_.backendWarning=backendRecoveryWarning;
+                std::lock_guard lock(mutex_);desired_.rejectVideoRequest(initialRequested,options.snapshot());snapshot_.desired=desired_;snapshot_.rejectedRevision=initialRequested.revision;snapshot_.backendWarning=backendRecoveryWarning;
             }
             if(!nvidiaAdapter&&(options.nr||options.sr||(options.fg&&!xessFg))){
                 veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested features: nr={} sr={} fgBackend={} flowBackend={}",options.nr,options.sr,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend)));
@@ -1170,7 +1174,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(!accepted){finishReset(diagnostics::ResetOutcome::Failed);status(L"设置切换排空失败，已停止",true);break;}
                     backendRecoveryWarning.clear();
                     const bool preserveWorkingFg=previous.multiplier>1&&requested.multiplier>1&&
-                        (previous.frameGenerationBackend!=requested.frameGenerationBackend||previous.multiplier!=requested.multiplier);
+                        (previous.frameGenerationBackend!=requested.frameGenerationBackend||previous.multiplier!=requested.multiplier||previous.vfgQuality!=requested.vfgQuality);
                     const bool preserveWorkingNr=previous.nr&&requested.nr&&previous.nrRuntime!=requested.nrRuntime;
                     if(accepted&&rebuild){presenter.close();graph.shutdown();markResetStage(diagnostics::ResetStage::Destroy);accepted=initializePreview(nextDesc,next,preserveWorkingFg,preserveWorkingNr);
                         markResetStage(diagnostics::ResetStage::Create);
@@ -1180,7 +1184,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(accepted){
                         if(xessPresentationRecovery){backendRecoveryWarning=L"XeSS 呈现失败，已关闭补帧并恢复播放；错误码见日志";xessPresentationRecovery=false;}
                         if(!backendRecoveryWarning.empty()){
-                            std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,next.snapshot());snapshot_.desired=desired_;snapshot_.backendWarning=backendRecoveryWarning;
+                            std::lock_guard lock(mutex_);desired_.rejectVideoRequest(requested,next.snapshot());snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.backendWarning=backendRecoveryWarning;
                         }
                         options=next;gd=nextDesc;transaction=true;reset=true;
                         resetRecord->epoch=0;
@@ -1346,7 +1350,42 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if(moon){const auto message=moon->stats().message;status(message.empty()?L"串流中断，请检查主机和网络后重新连接。":message,true);break;}
 #endif
 #ifdef VEYRA_ENABLE_XBOX
-                        if(xb){const auto message=xb->stats().message;status(message.empty()?L"Xbox 串流中断，请重新连接。":message,true);break;}
+                        if(xb){
+                            const auto failure=xb->stats();
+                            if(failure.reconnectable && xboxRequest && !stop_){
+                                xboxReconnectBudget.disconnected();
+                                drainLivePresentation();
+                                if(!ring.drainQueue()){status(L"Xbox 重连时 GPU 排空失败",true);break;}
+                                xb->videoReset();av_frame_free(&cachedFrame);out={};hasOutput=false;
+                                bool recovered=false;
+                                while(!stop_ && xboxReconnectBudget.take()){
+                                    const auto attempt=xboxReconnectBudget.attempts();
+                                    status(std::format(L"Xbox 串流中断（{}），正在重连 {}/3…",std::wstring(failure.disconnectReason.begin(),failure.disconnectReason.end()),attempt));
+                                    veyra::log::warn("xbox-reconnect",std::format("attempt={} reason={}",attempt,failure.disconnectReason));
+                                    for(unsigned wait=0;wait<attempt*10&&!stop_;++wait)std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                                    if(stop_)break;
+                                    if(!xb->connect(*xboxRequest))continue;
+                                    const auto deadline=Clock::now()+std::chrono::seconds(20);
+                                    while(!stop_&&Clock::now()<deadline){
+                                        const AVFrame* first=nullptr;
+                                        const auto result=xb->read(cachedPacket,&first);
+                                        if(result==source::SourceReadStatus::Frame){cachedFrame=av_frame_clone(first);recovered=cachedFrame!=nullptr;break;}
+                                        if(result==source::SourceReadStatus::Error)break;
+                                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                                    }
+                                    if(recovered)break;
+                                    xb->close();
+                                }
+                                if(recovered){
+                                    initialRemoteFramePending=true;reset=true;pendingResetCause=pipeline::ResetReason::SourceSwitch;
+                                    status(L"Xbox 已重新连接");veyra::log::info("xbox-reconnect","first decoded frame received; reset all graph history");
+                                    continue;
+                                }
+                                if(stop_)break;
+                                status(L"Xbox 重连失败："+xb->stats().message,true);break;
+                            }
+                            status(failure.message.empty()?L"Xbox 串流中断，请重新连接。":failure.message,true);break;
+                        }
 #endif
                         status(isScreen?screenSource.status():isCapture?L"采集信号中断，请检查设备连接或格式":source.errorMessage().empty()?L"视频解码或时间戳错误":source.errorMessage(),true);break;}
                 }
@@ -1387,6 +1426,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 if(!halfRate)captureSampler.reset();
                 if(isImage)pkt.sequence=1;
+#ifdef VEYRA_ENABLE_XBOX
+                if(xb&&!rereadCached)xboxReconnectBudget.decoded(monotonic100ns());
+#endif
                 if(!rereadCached)++sourceFrames;
                 const double decodeMs=elapsedMs(decodeStart);decodeTimes.add(decodeMs);
                 loopTrace.mark("read");
@@ -1655,7 +1697,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             if(!initializePreview(gd,options)){status(L"增强故障后的基础图重建失败",true);break;}
                             publishFrameGenerationCapabilities();
                             backendRecoveryWarning=std::wstring(backendFailureName(failedComponent))+L"运行失败，已关闭对应效果；错误码见日志"+(backendRecoveryWarning.empty()?L"":L"；"+backendRecoveryWarning);
-                            {std::lock_guard lock(mutex_);desired_.rejectVideoRequest(attempted,options.snapshot());snapshot_.desired=desired_;snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;snapshot_.backendWarning=backendRecoveryWarning;}
+                            {std::lock_guard lock(mutex_);desired_.rejectVideoRequest(attempted,options.snapshot());snapshot_.desired=desired_;snapshot_.applied=options.snapshot();snapshot_.rejectedRevision=attempted.revision;snapshot_.applying=desired_!=snapshot_.applied;snapshot_.backendWarning=backendRecoveryWarning;}
                             veyra::log::warn("backend-recovery",std::format("runtime component={} disabled; rebuilt revision={} nr={} sr={} multiplier={}; retry next source frame",unsigned(failedComponent),options.settings.revision,options.nr,options.sr,options.snapshot().multiplier));
                             finishReset(diagnostics::ResetOutcome::Failed);reset=true;pendingResetCause=pipeline::ResetReason::Settings;
                             holdFileAudio();fileAudioAlignPending=true;

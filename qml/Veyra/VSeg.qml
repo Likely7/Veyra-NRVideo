@@ -73,6 +73,8 @@ Rectangle {
             model: seg.options
             delegate: Item {
                 required property var modelData
+                enabled: modelData.disabled !== true
+                opacity: enabled ? 1 : 0.4
                 implicitWidth: segContent.implicitWidth + 20
                 implicitHeight: 24
                 // { id, label, icon? }: the design's 列表 / 节点 toggle carries icons.
@@ -99,7 +101,7 @@ Rectangle {
                     }
                 }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
-                TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: seg.picked(modelData.id) }
+                TapHandler { enabled: parent.enabled; gesturePolicy: TapHandler.WithinBounds; onTapped: seg.picked(modelData.id) }
             }
         }
     }

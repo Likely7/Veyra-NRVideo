@@ -21,6 +21,26 @@ int main(int argc,char** argv){
             else std::this_thread::sleep_until(due);
         }
     } pacer;
+    if(argc>=2&&std::string_view(argv[1])=="--xbox-float-rtp"){
+        // Xbox's stereo float PCM and independent audio/video RTP origins,
+        // through the real shared resampler and muted WASAPI endpoint.
+        CaptureAudioSession output;
+        const auto wave=floatWave({2,SPEAKER_FRONT_LEFT|SPEAKER_FRONT_RIGHT});
+        if(!output.configure(wave.Format,sizeof(wave))||!output.start())return 2;
+        output.setGain(0);std::vector<float> block(960*2);
+        for(size_t i=0;i<block.size();++i)block[i]=float(0.1*std::sin(i*0.025));
+        const auto begin=Clock::now();
+        for(unsigned i=0;i<250;++i){
+            pacer.until(begin+std::chrono::milliseconds(i*20));
+            if(!output.push(block.data(),block.size()*sizeof(float),i*20.0,i==0))return 3;
+            const auto host=std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;
+            output.videoPresented(456789.0+i*20,host,host-350000);
+        }
+        const auto s=output.snapshot();output.stop();
+        const bool pass=s.running&&s.inputFloating&&s.inputSampleRate==48000&&s.inputBlocks==250&&s.nonFiniteSamples==0&&s.bufferedMs<200&&s.compensationMs<100&&s.syncClockFallback;
+        std::cout<<(pass?"PASS ":"FAIL ")<<"Xbox float/independent RTP origins: running="<<s.running<<" blocks="<<s.inputBlocks<<" bufferedMs="<<s.bufferedMs<<" compensationMs="<<s.compensationMs<<" fallback="<<s.syncClockFallback<<'\n';
+        return pass?0:1;
+    }
     const bool longOutage=argc>=2&&std::string_view(argv[1])=="--long-endpoint-loss";
     const bool endpointTest=longOutage||(argc>=2&&std::string_view(argv[1])=="--endpoint-loss");
     if(longOutage)SetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_LONG_OUTAGE",L"1");

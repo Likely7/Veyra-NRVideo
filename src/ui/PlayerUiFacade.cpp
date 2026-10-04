@@ -82,11 +82,22 @@ PlayerUiFacade::Frame PlayerUiFacade::poll() {
     }
     // A GPU/provider failure arrives after command admission. Match the exact
     // accepted revision so a stale rejection cannot overwrite a newer choice.
-    // Reconcile only the FG pair; unrelated editable controls stay untouched.
-    if(pendingFgRevision_&&snapshot.rejectedRevision==pendingFgRevision_&&
-       pending_.frameGenerationBackend==requestedFgBackend_&&pending_.multiplier==requestedFgMultiplier_){
+    // Opening a source assigns a new revision to the already accepted request.
+    // VFG startup/runtime recovery keeps that revision and disables only FG.
+    // Never reconcile a rejection older than the UI's latest accepted edit.
+    const bool recoveredVfg=snapshot.rejectedRevision>=pendingFgRevision_&&
+        snapshot.desired.revision==snapshot.rejectedRevision&&
+        requestedFgBackend_==veyra::engine::FrameGenerationBackend::Vfg&&
+        snapshot.desired.frameGenerationBackend==requestedFgBackend_&&
+        snapshot.desired.vfgQuality==requestedVfgQuality_&&
+        requestedFgMultiplier_>1&&snapshot.desired.multiplier==1&&
+        !snapshot.backendWarning.empty();
+    if(pendingFgRevision_&&(snapshot.rejectedRevision==pendingFgRevision_||recoveredVfg)&&
+       pending_.frameGenerationBackend==requestedFgBackend_&&pending_.multiplier==requestedFgMultiplier_&&
+       pending_.vfgQuality==requestedVfgQuality_){
         pending_.frameGenerationBackend=snapshot.desired.frameGenerationBackend;
-        pending_.multiplier=snapshot.desired.multiplier;pendingFgRevision_=0;
+        pending_.multiplier=snapshot.desired.multiplier;
+        pending_.vfgQuality=snapshot.desired.vfgQuality;pendingFgRevision_=0;
         veyra::log::info("ui-fg-rollback",std::format("rejectedRevision={} restoredBackend={} restoredMultiplier={}",
             snapshot.rejectedRevision,int(pending_.frameGenerationBackend),pending_.multiplier));
     }
@@ -113,6 +124,7 @@ bool PlayerUiFacade::applySettings(const veyra::engine::EnhancementSettings& set
     pendingFgRevision_=acceptedRevision;
     pendingNrRevision_=acceptedRevision;requestedNrRuntime_=settings.nrRuntime;
     requestedFgBackend_=settings.frameGenerationBackend;requestedFgMultiplier_=settings.multiplier;
+    requestedVfgQuality_=settings.vfgQuality;
     return true;
 }
 

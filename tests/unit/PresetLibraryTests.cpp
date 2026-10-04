@@ -882,7 +882,7 @@ __declspec(noinline) void testRenderingChoices(){
     ChainSessionStore nr(sessionPath);check(nr.load(*restored)&&*session==*restored,"rendering: v4 editor globals restore exactly");
 }
 void testNrVariants() {
-    for (const auto runtime : {NrRuntime::Original, NrRuntime::Ampere, NrRuntime::NvidiaOriginal}) {
+    for (const auto runtime : {NrRuntime::Original, NrRuntime::Ampere, NrRuntime::NvidiaOriginal, NrRuntime::LmxxfAmd}) {
         auto settings=sample(); settings.nrRuntime=runtime;
         const auto path=scratch((L"nr-"+std::to_wstring(int(runtime))+L".v1").c_str());
         PresetLibrary writer(path); writer.setIncludeBuiltins(false);
