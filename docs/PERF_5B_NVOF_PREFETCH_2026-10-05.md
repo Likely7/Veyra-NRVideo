@@ -17,3 +17,20 @@ build-nvof-prefetch-v1失败，FlowPrefetch初始化误写不存在的nrLayers�
 v2构建成功；B5b-prefetch-smoke-v1七个真实debug导出通过，单/双NR、NR+SR4K整文件SHA各自同off，取消清理通过，debug0/removed0；每个24帧组实际导入23个flow，原NVOF执行0，辅助图确有23次NVOF执行。raw目录同任务logs。此小样本的处理计时包含辅助图创建，尚不能用于稳态提速结论：下一构建将计时起点放在辅助图创建之后，整次导出仍包含创建。没有改写旧数据。
 
 追加独立trace开关，只在诊断组记录真实GPU Flow/NR/SR timestamp，按每个队列GetClockCalibration映射到QPC并保留调用耗时界限，禁止用裸跨队列计数相同直接证明重叠。依据[微软GetClockCalibration文档](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12commandqueue-getclockcalibration)；正常性能三轮trace关闭，以免日志干扰。最终是否保留仍需整次/稳态和额外显存的收益风险比较。
+
+## 普通负载结果与拒绝
+
+产品编译1efd344，build-nvof-prefetch-v4成功。`nr-export-pipeline.py B2d B5b-prefetch-normal-v1 prefetch-interleaved nr nrsr4k nr2`18/18及`... B5b-prefetch-8k-v1 prefetch-interleaved sr8k`6/6真实导出通过；正常GPU优先级，三轮同EXE交错，无竞争/显存压力，trace关闭。4K/8K是实际导出尺寸；8K为4K→8K SR，不冒充8K NR。各组6个完整文件SHA与此前75文件/8100帧完整decoded证明相同，因此像素/PTS/轨道/封装一致；不声称重新解码了这些新文件。
+
+| 三轮中位，ms | 原默认整次 | 预取整次 | 整次变化 | 原默认处理 | 预取处理 | 处理降幅 | 额外显存MiB |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 单NR / 120源帧 | 3297.120 | 3343.480 | +1.41% | 862.045 | 810.269 | 6.01% | 232 |
+| NR+SR4K / 120源帧 | 5804.920 | 5924.600 | +2.06% | 3214.290 | 3167.120 | 1.47% | 232 |
+| 双NR / 120源帧 | 4273.270 | 4390.320 | +2.74% | 1609.029 | 1565.907 | 2.68% | 232 |
+| 4K→SR8K / 60源帧 | 4203.130 | 4423.780 | +5.25% | 1692.796 | 1695.573 | -0.16% | 867 |
+
+完整范围、日志、GPU快照、载荷前后SHA及比较JSON在`E:/项目/Veyra/logs/perf-nr-20261004/B5b-prefetch-normal-v1-summary/`、`B5b-prefetch-8k-v1-summary/`。120帧组actual imported119个flow、8K60帧组59，主图常规NVOF execute=0，辅助图真实执行相应次数；没有靠少做原帧/降低尺寸取得数字。
+
+`... B5b-prefetch-trace-v1 prefetch-trace nr nrsr4k`2个独立诊断组、各119个(N+1 flow/N NR+SR)匹配对；`nr-prefetch-report.py B5b-prefetch-trace-v1`记录依赖区间重叠中位1.028/1.068ms，119/119超过估计校准界限0.076/0.226ms，前后校准drift约0.024/0.095ms。该Flow区间包含API/提交/queue-wait空隙，不是独立NVOF硬件kernel耗时；不把trace组wall time混入正常三轮。[D3D12 timing说明](https://learn.microsoft.com/en-us/windows/win32/direct3d12/timing)提示空闲可能使校准漂移，本次记录漂移而未改变稳定电源/用户驱动设置。
+
+决定拒绝并明确回退本准备器、共享队列入口和导入接口。模型画面与debug并无错误，拒绝原因是整次负收益、处理降幅不足目标10%及额外显存/生命周期复杂度；不是声称NVOF理论上不能并行。当前helper重复一部分源颜色与输出工作，更轻的源准备需要另一次有数据支撑的设计，不在这个负候选里无限重构。该负候选不扩进文件播放，文件/采集/串流保持原图；不宣称文件播放或8K NR验收。前面已保留的两帧NVENC/事件优化不回退，继续后续节点。

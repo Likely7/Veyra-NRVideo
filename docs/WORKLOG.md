@@ -8312,3 +8312,7 @@ B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0�
 ## 2026-10-05 NR性能5b导出默认提升
 
 产品4fceda8构建`build-export-default-v1`成功；`nr-export-pipeline.py B2d B5b-default-v1 default-interleaved nr nrsr4k fg2`18/18默认/off通过，单NR整次4263.150→3242.470ms，NR+SR4K6325.810→5755.350ms，各组整文件SHA一致。FG两组保持原serial，未纳入默认异步。`nr-export-worker.py B2d B5b-worker-v1`5/5真实取消/回收/重试/队列/保存边界/MP4/MKV通过，所有载荷未变。日志同任务B5b-default-v1-summary/acceptance.json、B5b-worker-v1-summary/summary.json。首次边界commit带一处空格造成guard格式失败，4fceda8已显式纠正且全分支diff-check通过；没有隐藏失败或改旧存档。5b仅导出子项保留，NVOF前瞻尚未闭环。
+
+## 2026-10-05 NR性能5b NVOF预取负收益
+
+before347a184/candidate5edbf79，v1因不存在nrLayers成员构建失败，58f5845修正；v2/v3/v4构建成功，最终编译产品1efd344。七组debug输出/取消通过，随后24普通导出三轮交错整文件SHA与已解码baseline一致。单NR/NR+SR4K/双NR/4K→SR8K整次分别慢1.41/2.06/2.74/5.25%，暖处理分别仅降6.01/1.47/2.68/-0.16%，多占232/232/232/867MiB。独立两trace组各119对实际依赖区间重叠约1ms，区别NVOF完整依赖区间与硬件kernel，不混入正常性能数字。数据E:/项目/Veyra/logs/perf-nr-20261004/B5b-prefetch-{smoke,normal,8k,trace}-v1-*。决定存档后明确回退这个准备器/导入接口，不扩进文件播放；保留已测两帧NVENC优化。没有压力/设备移除/用户电源设置变更。

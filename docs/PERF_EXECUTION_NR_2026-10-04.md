@@ -41,7 +41,7 @@
 | 1b | 内容帧率预算 | rejected-prerequisite | 1a画面不成立，完整求值仍按transport次数；实测成本构造预算反例，PERF_1B_CONTENT_BUDGET；无生产改动 |
 | 1c | 重复节奏预测 | rejected | 三种节奏单像素瞬态反例均漏第49帧且后续未检测；PERF_1C_CADENCE_REJECTION；无产品代码需回退 |
 | 3c | 队列分工/呈现优先级 | retained-limited-pending-R0 | 普通负载18组，增强21.386→19.477ms（2X）/23.330→21.542ms（3X）；准入仅已测5070双NR+SR4K+DLSS2/3文件图；9组往返1278全图/PTS一致/debug0、真实Qt FSR/XeSS/VFG/调色/时域回退通过；源跳过0但长帧仍在，HIGH拒绝默认；PERF_3C_GRAPH_NORMAL_2026-10-05 |
-| 5b | 文件/导出跨帧并行 | retained-export-part-in-progress | 无FG NVENC两帧/事件默认保留；60对照+75文件8100全图/PTS一致，15边界、18默认/off和5真实worker通过；NR+SR4K整次降6.41%，不把处理区间15.03%冒充整次；NVOF前瞻/文件播放待独立实验，PERF_5B_CROSS_FRAME |
+| 5b | 文件/导出跨帧并行 | retained-export-rejected-prefetch | 无FG NVENC两帧/事件默认保留，75文件8100图一致/15边界/18默认-off/5worker；NVOF准备器24普通导出输出一致但整次慢1.41–5.25%、多232–867MiB，独立trace实际依赖区间重叠约1ms，拒绝并回退；不扩文件/采集/串流，PERF_5B_CROSS_FRAME / PERF_5B_NVOF_PREFETCH |
 | 4a | 多NR整链低分辨率调度 | rejected-benefit-to-risk | 20组800图控制/debug通过但多层最大像素差81/255；12组普通播放整体仅降1.09%/0.62%，呈现P99无改善，拒绝替换产品路径并回退；完整PNG/HTML/候选源码保留，PERF_4A_LOW_CHAIN_2026-10-05 |
 | 4b | 先粗后细组合 | pending | 核对现有逐层尺寸；不新增强制预设 |
 | 5c | 暂停不重跑/残差重合成 | retained-pending-R0 | 残差7.461→0.766ms约89.74%；真实Qt自身暂停GPU三轮2.237→0.011%（off2.237%）；48完整呈现图像一致、四FG暂停/恢复/seek通过；PERF_5C_PAUSED_NR |
@@ -54,4 +54,4 @@
 
 基线驱动 `nr-series.py A` 已完成M1/S1、S2-720、S3、S4、S5-existing各三轮、稳态50秒；每个产品进程和驱动有270/280/299秒上限。1280×800窗口、真实GPU timestamp及CPU提交统计，不将16ms UI Timer当渲染FPS。现有UI没有精确50%档位，S2明确为1280×720（1080p输入维度66.7%、像素44.4%）。多层先粗后细已有逐层尺寸参数，S5核对现有行为，不计为新收益。
 
-2a核心复用、2c单NR缓存、2d空闲预热、5c暂停复用已保留，3a提供用户可选进程优先级且普通默认，均待R0最终产品回归。1a/1c、依赖它们的1b、2b后台创建、SR缓存扩展及4a低尺寸整链候选均拒绝，证据保留。3c已保留限定准入的自动COMPUTE，18组普通负载约8%增强区间收益、9组迁移完整画面及真实三provider切换回归通过；其他组合DIRECT，HIGH不默认。5a/3b/5b/4b/UI/R0仍待，不能将局部耗时或暂停GPU改善冒充整个方案收益。
+2a核心复用、2c单NR缓存、2d空闲预热、5c暂停复用已保留，3a提供用户可选进程优先级且普通默认，均待R0最终产品回归。1a/1c、依赖它们的1b、2b后台创建、SR缓存扩展及4a低尺寸整链候选均拒绝，证据保留。3c已保留限定准入的自动COMPUTE，18组普通负载约8%增强区间收益、9组迁移完整画面及真实三provider切换回归通过；其他组合DIRECT，HIGH不默认。5b保留无FG NVENC两帧/事件，另一个NVOF准备器完整导出负收益，回退且不扩入文件播放。5a/3b/4b/UI/R0仍待，不能将局部耗时或暂停GPU改善冒充整个方案收益。
