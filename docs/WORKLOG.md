@@ -1,5 +1,12 @@
 # Veyra 工作记录
 
+## 2026-10-04 NR优化E2：同会话并发创建安全通过，切换停顿尚未消除
+
+- `nr-build.py E1 build-E2-v1 veyra_nr_concurrent_create_experiment` exit0，`nr-e2.py E2-v1`5/5 native exit0：串行/并发12s各10Create/Eval/Release，三个独立240s并发长测各50/50/50，旧Feature实际Evaluate13614/13606/13607，debug0/SEH0/设备正常。测试≤280s；累计12分钟，非一次连续10min。runtimeLecram F95FEB原字节，EXE3a2c90…ee68b。
+- 共享单NGX核心/NR适配器/IAT，每线程独立命令ring和fence/event；参数块在创建线程前分配，未声称CoreHost跟踪数组线程安全。释放后每运行VRAM92,545,024bytes，相同起点35,815,424，50次无随次数增长；未将差额冒充全部释放或泄漏。
+- 最大前台Evaluate完成间隔串行66.9154ms、并发108.7962、三长测110.5127/110.4173/115.9049；这是诊断等待路径，不是实际Present，也不是2b无缝验收。static输入30次预热SHA各轮相同、不同历史长度后输出变化，需1a固定次数A-A/复用对照，不预判并发污染。PERF_E2_CONCURRENT_CREATE_2026-10-04.md含路径/边界。
+- 已准备2a改动前四组20次×三轮真实graph基准及输出像素，尚未改产品。阶段0E3只读枚举看到KUHAIMI27P/OBS虚拟设备，当前真实输入内容未确认，已异步询问信号来源，其余任务继续；不把合成节奏当主机实卡。
+
 ## 2026-10-04 NR优化：M1基线封存及E1实验结论
 
 - M1五组各三轮共15/15实际产品PASS，nr-series.py A退出0；处理耗时三轮中位S1 7.7145ms、S2-720 4.6975、S3 NR+DLSS4K 11.3565、S4两NR+DLSS4K+FG2X 21.192、S5已有480/720/原生三层14.372。S5范围13.59–14.377，保留波动；这不是新优化。驱动616.56、NRLecram F95FEB原字节、EXE b7081f…0eb4。统计为滚动观测的三轮中位/范围，非总体P95，未测实屏。
