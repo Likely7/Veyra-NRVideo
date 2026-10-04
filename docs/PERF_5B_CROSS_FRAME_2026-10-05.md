@@ -9,3 +9,11 @@
 此候选不代表NVOF(N+1)与NR(N)已重叠。原计划这一部分需要分离源颜色、两份flow/conf及各自producer/consumer fence，当前共用纹理和DIRECT顺序不满足。先测实际剩余瓶颈，再独立实验，不凭代码结构宣称已实现。直播/采集路径不进入此导出候选。
 
 基线以真实exportVideo生产接口构建定向probe；普通4K导出、自然1080源单/双NR、NR+SR4K和无NR的SR8K分开报告。8K高负载NR/其他GPU/设备移除边界不强行测试，不扩展实卡通过范围。每个进程有250秒上限，构建与GPU计时不重叠，导出后软件解码核对在计时波次结束才执行。
+
+## 串行基线已执行
+
+build-export-baseline-v1 UI/probe构建成功，编译产品源码86e0458；只修正驱动gpu_query拼写后以b71fa96脚本跑`nr-export-pipeline.py B2d B5b-serial-v2 serial none4k nr nr2 nrsr4k sr8k`，15/15导出完成、帧数足量、最终编码drain完成、全部载荷SHA保持。M2是4K60作者测试媒体，M1是自然1080p30；三轮baseline输出留待完整软件解码A-A检查。
+
+串行总耗时三轮中位约普通4K2.484s、1080单NR4.306s、双NR4.544s、NR+SR4K6.341s、4K→8K的SR4.400s。除最后60帧，其余120帧。包含创建的总耗时和排除创建的pipeline计时必须分开，前者是实际用户等待。
+
+观察到多个配置pipeline每源帧约15.8ms、NR+SR4K约31.4ms，completionWait占比很高。当前等待是Sleep(1)轮询，尚未测其真实休眠时长，不能直接断言系统timer根因。候选将把fence事件等待和两帧在途作为独立开关/组，避免混淆等待精度与跨帧并行的收益。

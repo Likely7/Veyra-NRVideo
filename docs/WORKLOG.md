@@ -8298,3 +8298,5 @@ B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0�
 5b方案PERF_5B_CROSS_FRAME_2026-10-05.md。新增生产exportVideo定向probe与普通导出矩阵、只加completionWait/pipeline最终drain计时，不改串行语义；先测基线再实现默认关闭候选。不做GPU竞争/压力，不将去掉CPU等待说成已经重叠NVOF(N+1)。本轮所有新输出仍E:/项目/Veyra对应build/tests/logs/tmp/archive。
 
 5b build-export-baseline-v1构建UI/实际导出probe成功（21步）；基线EXE编译源码86e0458。serial-v1驱动启动前错误调用不存在matrix.gpu，未启动导出；改实际函数gpu_query，脚本HEAD字段明确为driverSourceHead而不是冒充编译HEAD。原staging/空运行目录保留，后续用serial-v2新标签；与当前产品源码diff仅脚本/本条文档。
+
+5b serial-v2五组各三轮15/15实际完成，最终帧数/encoder drain通过，payload SHA全同。总耗时中位普通4K2.484s、单NR4.306s、双NR4.544s、NR+SR4K6.341s、SR8K4.400s。pipeline多组15.8ms/帧与Sleep(1)轮询有关联但根因待验证；下一候选独立测fence事件、两帧在途和组合，不能将两者混算。原全部导出/日志及基线EXE在B5b-serial-v2对应E盘目录。新增导出后全decoded frame/PTS/mux核对工具，当前先执行A-A。
