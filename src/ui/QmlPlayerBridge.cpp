@@ -2743,11 +2743,15 @@ void QmlPlayerBridge::ps5PsnForget() {
 #endif
 }
 void QmlPlayerBridge::ps5SendLoginPin(const QString& pin) {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
     const auto text = pin.trimmed();
     if (text.isEmpty() || !std::all_of(text.begin(), text.end(), [](QChar c) { return c.isDigit(); })) {
         impl_->ps5Status = tr("登录 PIN 必须为数字。"); emit ps5Changed(); return;
     }
     impl_->engine.remotePlayLoginPin(text.toStdString());
+#else
+    (void)pin; // RemotePlay disabled: keep the QML-callable symbol but no backend.
+#endif
 }
 void QmlPlayerBridge::ps5Cancel() {
     if (impl_->ps5Busy && impl_->ps5Worker.joinable()) { impl_->ps5Worker.request_stop(); return; }
