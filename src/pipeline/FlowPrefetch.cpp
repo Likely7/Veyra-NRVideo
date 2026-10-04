@@ -8,7 +8,7 @@ bool FlowPrefetch::initialize(gfx::D3D12DeviceContext& owner,const EnhanceGraphD
         !ring_.initialize(context_.device(),context_.directQueue(),context_.fence(),context_.fenceEvent(),4,status))return false;
     auto desc=input;desc.noFeatures=false;desc.noNgx=true;desc.enableSr=desc.enableNr=desc.enableFg=false;desc.enableNvofStandalone=true;
     desc.nrBeforeSr=false;desc.workWidth=desc.nrWidth=desc.sourceWidth;desc.workHeight=desc.nrHeight=desc.sourceHeight;
-    desc.nrLayers.clear();desc.nrLayersExtent.clear();desc.nrLayersModel.clear();desc.nrLayersSizePolicy.clear();
+    desc.nrLayersExtent.clear();desc.nrLayersModel.clear();desc.nrLayersSizePolicy.clear();
     desc.nrLayersResidual.clear();desc.nrLayersTemporal.clear();desc.nrLayersAntiFlicker.clear();desc.nrLayersProtection.clear();
     desc.fixedExecutionPlan.reset();desc.fixedExecutionPlanError.clear();desc.runtimeNodeOrder=false;desc.additionalColorCount=0;
     graph_=std::make_unique<EnhanceGraph>(context_,ring_);

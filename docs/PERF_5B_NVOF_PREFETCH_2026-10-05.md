@@ -11,3 +11,5 @@
 初始源码检查：独立辅助图需要独立queue/fence但共享ID3D12Device，现D3D12DeviceContext只有新建device入口；新增仅供此候选的共享设备队列创建，事务式资源创建失败不破坏原context。原图NVOF input A/B仍正常更新，故关闭候选后可回原路径，生产默认图无附加GPU资源。
 
 候选按上述结构实现，`VEYRA_TEST_EXPORT_NVOF_PREFETCH=1`才创建辅助图；主图消费导入快照时维持GPU侧fence依赖，生产默认无快照/额外队列。准备过程复用实际EnhanceGraph，不复制颜色/光流算法。主图计数另记prefetchedFlowCount，辅助图实际NVOF execute仍有日志，不冒充主图常规execute。关闭辅助图先等各快照consumer，再drain/注销，原Graph reset仍按自己的真实luma/PTS分析并与快照描述匹配。下一步编译和真实输出/正常耗时证据；尚未声明通过。
+
+build-nvof-prefetch-v1失败，FlowPrefetch初始化误写不存在的nrLayers成员（正确并行数组为nrLayersExtent/Model等）；删除多余访问后进行有据的第二次构建，原失败日志保留。不将编译失败当成运行时/硬件失败。
