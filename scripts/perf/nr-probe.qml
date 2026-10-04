@@ -59,7 +59,7 @@ Item {
                 }
                 probe.expectFg = Boolean(probe.config.fg)
                 if (probe.expectFg) {
-                    veyra.fgBackendName = "dlss"; veyra.fgMultiplier = 2; veyra.fgEnabled = true
+                    veyra.fgBackendName = "dlss"; veyra.fgMultiplier = probe.config.multiplier || 2; veyra.fgEnabled = true
                 }
                 console.log("NR_PERF_CONFIG", JSON.stringify({config:probe.config, layers:veyra.nrLayers,
                     sr:veyra.srEnabled, srQuality:veyra.videoSrQuality, srTarget:veyra.srTargetIndex,

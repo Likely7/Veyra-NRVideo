@@ -110,7 +110,7 @@ def stage(variant):
     main.write_text(text, encoding='utf-8')
     return path
 
-def run(variant, material, setting, label, seconds, gpuPriority=None, allowedGpuPids=()):
+def run(variant, material, setting, label, seconds, gpuPriority=None, allowedGpuPids=(),testEnv=None):
     assert_gpu_tests_idle(allowedGpuPids)
     subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/perf/nr-control.py'), 'guard'], check=True)
     app = stage(variant)
@@ -132,8 +132,12 @@ def run(variant, material, setting, label, seconds, gpuPriority=None, allowedGpu
     env.update(TEMP=str(tmp), TMP=str(tmp), VEYRA_LOG_FILE=str(logs / 'player.log'),
                QML_DISABLE_DISK_CACHE='1', QT_FORCE_STDERR_LOGGING='1', QML_XHR_ALLOW_FILE_READ='1',
                VEYRA_VERBOSE_FRAME_LOGS='1')
+    if testEnv:
+        assert all(key.startswith('VEYRA_TEST_') for key in testEnv)
+        env.update(testEnv)
     before = gpu_query()
     receipt = {'variant': variant, 'material': material, 'setting': setting, 'config': config,
+               'testEnv':testEnv or {},
                'sourceSha256': digest(media), 'exeSha256': digest(app / 'veyra_qml_ui.exe'),
                'runtimeSha256': digest(app / 'runtime/experimental/nvngx_dlssnr.dll'),
                'beforeGpu': before, 'secondsRequested': seconds, 'measurement': 'GPU timestamps and CPU submission, not display scanout',

@@ -1,5 +1,9 @@
 # Veyra 工作记录
 
+## 2026-10-04 PERF 3c候选与compute兼容
+
+CommandSlotRing匹配实际DIRECT/COMPUTE Type、频率用实际queue，HIGH独立呈现仅测试ENV/驱动查询/读回。build-compute-priority-v1 15步、v2 2步exit0。nr-compute.py B2d B3c-compute-v1 两NR DLL+SR各direct/compute三轮，18/18共540帧完整SHA一致/A-A噪声0，debug0/device0，正确RGBA16F SR输入；只证明API与作者图案兼容，不计速度收益。nr-queue-priority.py B2d B3c-present-priority-v1开始实际2X/3X竞争Normal/HIGH交错12组，结果仍待。完整日志/CSV/选帧像素/身份位于同任务label；详PERF_3C_QUEUES。
+
 ## 2026-10-04 PERF 2c-SR拒绝扩大缓存
 
 nr-feature-cache.py B3a B2c-sr-native-v1 sr及B2c-srnr-native-v1 srnr各六组/300全帧：fresh A-A噪声0，每次on21/50不同，三轮重复；debug0/device0，24hits。尽管SR107.819→0.146ms、SRNR408.532→0.160ms，拒绝生产SR复用；已有单NR范围保持。完整Reset传递、jitter0/NVOF禁temporalHints已核对，原因未证明，不推断SDKbug。比较JSON/rawSHA/八张像素与完整路径详PERF_2C_SR_CACHE_REJECTION。拒绝节点归档本提交。

@@ -58,14 +58,18 @@ bool CommandSlotRing::initialize(ID3D12Device* device,
         slotCount_, timestampHeapDesc.Count, frequency, veyra::hresultString(freqResult)));
 
     slots_.resize(slotCount_);
+    const auto commandType=queue_->GetDesc().Type;
+    if(commandType!=D3D12_COMMAND_LIST_TYPE_DIRECT&&commandType!=D3D12_COMMAND_LIST_TYPE_COMPUTE){
+        status=Status::InvalidArgument;veyra::log::error("gfx","slot-ring: unsupported queue type");return false;
+    }
     for (uint32_t i = 0; i < slotCount_; ++i) {
-        HRESULT result = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&slots_[i].allocator));
+        HRESULT result = device_->CreateCommandAllocator(commandType, IID_PPV_ARGS(&slots_[i].allocator));
         if (FAILED(result)) {
             status = Status::DeviceFailure;
             veyra::log::error("gfx", std::format("slot-ring: CreateCommandAllocator slot={} failed hr={}", i, veyra::hresultString(result)));
             return false;
         }
-        result = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, slots_[i].allocator.Get(), nullptr, IID_PPV_ARGS(&slots_[i].list));
+        result = device_->CreateCommandList(0, commandType, slots_[i].allocator.Get(), nullptr, IID_PPV_ARGS(&slots_[i].list));
         if (SUCCEEDED(result)) slots_[i].list->SetName(std::format(L"Veyra slot {}", i).c_str());
         if (FAILED(result)) {
             status = Status::DeviceFailure;

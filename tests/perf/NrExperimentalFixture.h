@@ -67,6 +67,7 @@ struct Feature {
     ComPtr<ID3D12QueryHeap> queries;
     ComPtr<ID3D12Resource> queryReadback;
     double lastGpuEvaluateMs=0;
+    uint64_t timestampFrequencyOverride=0; // Actual experimental queue frequency.
     pipeline::StateTracker states;
     uint32_t textureWidth=0,textureHeight=0;
     explicit Feature(Session& s):session(s) {Status status;params=s.core.allocateParameters(status);}
@@ -156,7 +157,8 @@ struct Feature {
         list->ResolveQueryData(queries.Get(),D3D12_QUERY_TYPE_TIMESTAMP,0,2,queryReadback.Get(),0);
         states.uavBarrier(list,output.Get());states.transition(list,output.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         if(!ring.submitAndSignal(slot)||!ring.waitIdle())return false;
-        UINT64 frequency=0;if(!hrOK(session.device.directQueue()->GetTimestampFrequency(&frequency),"Timer.Frequency")||!frequency)return false;
+        UINT64 frequency=timestampFrequencyOverride;
+        if(!frequency&&(!hrOK(session.device.directQueue()->GetTimestampFrequency(&frequency),"Timer.Frequency")||!frequency))return false;
         void* data=nullptr;D3D12_RANGE range{0,16};if(!hrOK(queryReadback->Map(0,&range,&data),"Timer.Map"))return false;
         UINT64 values[2]{};std::memcpy(values,data,16);D3D12_RANGE empty{};queryReadback->Unmap(0,&empty);
         if(values[1]<values[0])return false;lastGpuEvaluateMs=double(values[1]-values[0])*1000.0/double(frequency);

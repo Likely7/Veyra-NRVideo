@@ -27,7 +27,17 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     Status st=Status::Ok;
     if(graph.fgEnabled()&&!graph.xessEnabled()){
         D3D12_COMMAND_QUEUE_DESC desc{};desc.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;
+        wchar_t requestedPriority[16]{};
+        if(GetEnvironmentVariableW(L"VEYRA_TEST_PRESENT_QUEUE_PRIORITY",requestedPriority,16)&&std::wstring_view(requestedPriority)==L"high"){
+            D3D12_FEATURE_DATA_COMMAND_QUEUE_PRIORITY support{desc.Type,D3D12_COMMAND_QUEUE_PRIORITY_HIGH,FALSE};
+            const HRESULT queried=ctx.device()->CheckFeatureSupport(D3D12_FEATURE_COMMAND_QUEUE_PRIORITY,&support,sizeof(support));
+            if(SUCCEEDED(queried)&&support.PriorityForTypeIsSupported)desc.Priority=D3D12_COMMAND_QUEUE_PRIORITY_HIGH;
+            veyra::log::info("present-priority",std::format("requested=HIGH supported={} queryHr=0x{:X} selected={}",
+                support.PriorityForTypeIsSupported,unsigned(queried),desc.Priority));
+        }
         HRESULT hr=ctx.device()->CreateCommandQueue(&desc,IID_PPV_ARGS(&presentationQueue_));
+        if(SUCCEEDED(hr))veyra::log::info("present-priority",std::format("actualType={} actualPriority={}",
+            unsigned(presentationQueue_->GetDesc().Type),presentationQueue_->GetDesc().Priority));
         if(SUCCEEDED(hr))hr=ctx.device()->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&presentationFence_));
         if(FAILED(hr)){veyra::log::error("present",std::format("application frame-generation presentation queue/fence hr=0x{:X}",unsigned(hr)));close();return false;}
         presentationEvent_=CreateEventW(nullptr,FALSE,FALSE,nullptr);
