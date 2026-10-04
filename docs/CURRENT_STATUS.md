@@ -6,7 +6,7 @@
 专业模式输入信息只放顶部，输出分辨率紧邻；底部移除重复标签，窄窗口进度与按钮分行。倍速菜单的窗口 mask、上方边界、提示覆盖与非激活浮条输入焦点已修复。实际发现并修复最大化→全屏→退出丢失最大化状态；普通窗口尺寸、全屏控制条隐藏/菜单保留/锁定回归通过。
 产品 Release 构建成功；音频18组、外置/内嵌5字幕轨30作者cue、三行overlay、硬件能力56组及真实Qt倍速/菜单/720–1600宽度回归通过。组件临时缺失/恢复时灰色菜单更新通过，原运行库字节恢复。本机RTX5070/616.56：软件UI后台DLSS6X提交180fps、16ms Timer采样中位16ms（旧2.0.3约41.5ms）；VFG4X中位115提交fps，不保证120。
 **严重后台掉帧仍未复现、根因未确认。** 原始前后台样本不支持宣称因失焦大幅下降；PresentMon ETW采集被Windows权限拒绝，未取得显示事件，软件提交FPS不能冒充实屏结果。增加焦点/实际吞吐/进程节流状态日志，未改驱动/系统调度设置，未新增AMD实卡验收。所有11条非PR Issue及评论重新核对，未找到单独全屏故障描述，具体编号/现象待用户补充。
-本地完整NVIDIA候选将在 `E:/项目/Veyra/test-packages/playback-smoothness-20261004/` 封存；产品显示 `2.0.3-smoothfix`，源码/逐文件manifest/验收索引独立。未合入main或替换GitHub2.0.3，桌面原修改保留。方案、命令和失败修正见 WORKLOG 与 PLAYBACK_SMOOTHNESS_PLAN_2026-10-04.md。
+本地完整NVIDIA候选已在 `E:/项目/Veyra/test-packages/playback-smoothness-20261004/` 封存；产品显示 `2.0.3-smoothfix`，1541载荷/95PE依赖闭包/48运行组件身份通过，GPU与软件UI在Windows-only PATH、外部独立数据目录下干净启动及纯内嵌字幕显示通过、正常退出，运行前后全部载荷SHA保持。源码ZIP、逐文件manifest与DELIVERY.json独立，EXE SHA `c86b38de206c4f4e5853eee510295d44890cf84b798eff8d84e1d04c17d3c055`。未合入main或替换GitHub2.0.3，桌面原修改保留。方案、命令和失败修正见 WORKLOG 与 PLAYBACK_SMOOTHNESS_PLAN_2026-10-04.md。
 
 ## 2026-10-04 RTSS 现场误提示与重启循环已修复（本地）
 

@@ -14,6 +14,10 @@
 - 构建命令 `py -3.11 -B scripts/acceptance/playback-smoothness-build.py repair-build-v10.log veyra_qml_ui` exit0，沿用发布SDK/Qt6.8.3/patched FFmpeg配置，输出E盘、显示2.0.3-smoothfix。v5曾错误捕获QQmlApplicationEngine并调用snapshot，改捕获controller后v6通过；v7测试target拼错，v8用veyra_ui_i18n_tests通过；原失败构建日志不删除。extract.py --check缺翻译0/placeholder0，仅新增7条翻译。最终产品功能与全屏回归再次检查新bridge，随后封存候选。
 - 全部产物 E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages}/playback-smoothness-20261004；测试每进程≤300s、构建≤900s，TEMP/TMP只子进程。新运行组件/SDK/模型未入源码Git。本地候选目录/应用源码ZIP/patch及最终审计回执后续追加，不能把后台根因或未做实卡验收写成完成。
 
+- 封存回执：产品/直接回归存档commit `e6aa7839b28a97190503380a48daf2c52c43110a`，checkpoint/playback-smoothness-code-20261004；functional-v5-final、layout-fullscreen-v4-final及capability-v1均实际产品exit0/PASS。`playback-smoothness-deliver.py` exit0，1541载荷/1,062,087,627bytes/95PE闭包/48运行组件来源和字节核验通过，原正式1535载荷全SHA保持。新目录只改变EXE及六项产品QML/qmldir（含前轮Settings修复），另有新自定义对话框/说明/四文档，无测试Loader、SDK、媒体、个人配置和日志。
+- 干净包验证首次sealed-gpu产品已正常exit0，无ERROR；检查脚本错误要求启动日志含版本号，实际启动日志不打印版本。修正为包manifest/已测试build EXE身份核对，不修改产品；同时改用独立名称的MKV硬链接，避免同名外置SRT抢先被选，确认实际内嵌轨（tracks=2/primary0/全部embedded1）。`playback-smoothness-package-smoke.py sealed-v2` GPU/软件均exit0/PASS，12秒播放完整第一句/三行字幕，Windows-only PATH/无SDK override，1541载荷运行前后逐SHA保持。
+- 候选目录 `E:/项目/Veyra/test-packages/playback-smoothness-20261004/Veyra-2.0.3-smoothfix-NVIDIA-win64-portable`；EXE SHA `c86b38de206c4f4e5853eee510295d44890cf84b798eff8d84e1d04c17d3c055`。源码ZIP和DELIVERY.json在上级，依赖来源仍为正式2.0.3资产。随后仅保存修正验收脚本/报告并刷新源码/manifest提交身份，EXE/QML/运行库不再改动；初版源码快照移到本轮tmp保留，最终审计另记JSON。严重后台掉帧仍未确诊，ETW0rows/access denied明确保留。
+
 ## 2026-10-04 RTSS 误提示、重启循环与真实安装参数验收
 
 - 用户反馈已发布 NVIDIA2.0.3 未开小飞机仍反复要求重启，并提供 E:/App/RivaTuner Statistics Server 要求真实启动/多参数测试。先从 main354b1c6 开 codex/rtss-restart-loop-20261004，checkpoint/pre-rtss-restart-loop-20261004，外部 source-before.bundle verify/SHA08679242…dd2；不改桌面旧工作树、原正式包、main 或用户 profile。方案 RTSS_RESTART_LOOP_PLAN_2026-10-04.md。
