@@ -32,8 +32,18 @@ void applyLocked(){
         // WDDM has no process scheduling record before the first GPU context.
         publish(uint32_t(query)==0xC000000Du?GpuPriorityState::Pending:GpuPriorityState::Rejected,-1,uint32_t(query));return;
     }
-    const auto set=api.set(GetCurrentProcess(),int(current.requested));
-    const auto verify=api.get(GetCurrentProcess(),&after);
+    auto set=api.set(GetCurrentProcess(),int(current.requested));
+    auto verify=api.get(GetCurrentProcess(),&after);
+    // Realtime is the default (field request 2026-10-05). Where Windows refuses it
+    // for this process, High is the closest class it may still grant; the status
+    // then reports Rejected with High as the actual class.
+    if(current.requested==GpuPriority::Realtime&&(set<0||verify<0||after!=int(current.requested))){
+        const auto refused=set<0?set:verify;
+        set=api.set(GetCurrentProcess(),int(GpuPriority::High));
+        verify=api.get(GetCurrentProcess(),&after);
+        publish(GpuPriorityState::Rejected,verify>=0?after:before,uint32_t(refused));
+        return;
+    }
     publish(set>=0&&verify>=0&&after==int(current.requested)?GpuPriorityState::Applied:GpuPriorityState::Rejected,
         verify>=0?after:before,uint32_t(set<0?set:verify));
 }

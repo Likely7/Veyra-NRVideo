@@ -676,12 +676,13 @@ VPage {
                             Layout.fillWidth: true; spacing: 6
                             VIcon { name: "vol"; size: 14; color: Theme.t2 }
                             VSlider {
+                                id: nodeVolume
                                 objectName: "node-out-volume"
                                 Layout.fillWidth: true
                                 from: 0; to: 1; value: veyra.volume; inputScale: 100
                                 onMoved: value => veyra.volume = value
                             }
-                            Text { text: Math.round(veyra.volume * 100) + "%"; color: Theme.t2; font.family: Theme.fontMono; font.pixelSize: 10 }
+                            VSliderValue { slider: nodeVolume; text: Math.round(veyra.volume * 100) + "%"; color: Theme.t2; pixelSize: 10 }
                             VSwitch { objectName: "node-out-mute"; checked: !veyra.muted; onToggled: checked => veyra.muted = !checked }
                         }
                         VSeg {
@@ -696,12 +697,13 @@ VPage {
                             visible: veyra.audioSyncMode === 1
                             Text { text: qsTr("偏移"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10 }
                             VSlider {
+                                id: nodeOffset
                                 Layout.fillWidth: true
                                 center: true
                                 from: -250; to: 250; value: veyra.audioOffsetMs
                                 onMoved: value => veyra.audioOffsetMs = Math.round(value)
                             }
-                            Text { text: veyra.audioOffsetMs + " ms"; color: Theme.t2; font.family: Theme.fontMono; font.pixelSize: 10 }
+                            VSliderValue { slider: nodeOffset; text: veyra.audioOffsetMs + " ms"; color: Theme.t2; pixelSize: 10 }
                         }
                         Text {
                             Layout.fillWidth: true
@@ -764,16 +766,18 @@ VPage {
                                 onToggled: checked => veyra.nrHoldStrength = checked ? 0.8 : 0
                             }
                             VSlider {
+                                id: nodeHoldStrength
                                 objectName: "node-out-hold-strength"
                                 Layout.fillWidth: true
                                 visible: veyra.nrHoldStrength > 0
-                                from: 0.1; to: 1.0; value: veyra.nrHoldStrength
+                                from: 0.1; to: 1.0; value: veyra.nrHoldStrength; inputScale: 100
                                 onMoved: value => veyra.nrHoldStrength = value
                             }
-                            Text {
+                            VSliderValue {
                                 visible: veyra.nrHoldStrength > 0
+                                slider: nodeHoldStrength
                                 text: Math.round(veyra.nrHoldStrength * 100) + "%"
-                                color: Theme.t2; font.family: Theme.fontMono; font.pixelSize: 10
+                                color: Theme.t2; pixelSize: 10
                             }
                         }
                     }

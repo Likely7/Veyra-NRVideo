@@ -22,7 +22,21 @@ Rectangle {
     color: Theme.card2
     border.width: 1
     border.color: Theme.stroke
-    implicitHeight: inner2.height + 6
+    // Rows carry their own vertical padding. A note, button or plain layout at
+    // either end of the card does not, and sat on its border (导出 音轨 card,
+    // field report 2026-10-05), so those ends get the padding a row would have.
+    function edgeIsRow(last) {
+        const kids = inner2.children
+        for (let n = 0; n < kids.length; ++n) {
+            const c = kids[last ? kids.length - 1 - n : n]
+            if (c instanceof Repeater || !c.visible) continue
+            return c instanceof VRow
+        }
+        return true
+    }
+    readonly property int topPad: edgeIsRow(false) ? 3 : 10
+    readonly property int bottomPad: edgeIsRow(true) ? 3 : 10
+    implicitHeight: inner2.height + topPad + bottomPad
 
     ColumnLayout {
         id: inner2
@@ -31,7 +45,7 @@ Rectangle {
         anchors.leftMargin: 14
         anchors.rightMargin: 14
         anchors.top: parent.top
-        anchors.topMargin: 3
+        anchors.topMargin: group.topPad
         spacing: 0
     }
 }

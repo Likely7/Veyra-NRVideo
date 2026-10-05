@@ -862,12 +862,11 @@ Item {
                         value: mlDialog.cfg.bitrate || 150
                         onMoved: v => mlDialog.ml.set("bitrate", Math.max(5, Math.round(v / 5) * 5))
                     }
-                    Text {
+                    VSliderValue {
                         Layout.preferredWidth: 72
+                        slider: bitrateSlider
+                        horizontalAlignment: Text.AlignLeft
                         text: Math.max(5, Math.round((bitrateSlider.dragging ? bitrateSlider.dragValue : bitrateSlider.value) / 5) * 5) + " Mbps"
-                        color: Theme.t1
-                        font.family: Theme.fontMono
-                        font.pixelSize: Theme.fsSmall
                     }
                 }
             }

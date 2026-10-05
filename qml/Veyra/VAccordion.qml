@@ -86,7 +86,11 @@ Rectangle {
     property bool bypassed: false
 
     readonly property int headerHeight: compactHeader ? 42 : 48
-    implicitHeight: headerHeight + (open ? body.implicitHeight + 8 : 0)
+    // Space between the header's hairline and the first body row: a body that
+    // starts with buttons or text (NR 层's 复制此层 row) sat on the line itself
+    // (field report 2026-10-05).
+    readonly property int bodyTopGap: 8
+    implicitHeight: headerHeight + (open ? body.implicitHeight + bodyTopGap + 8 : 0)
     radius: 12
     color: Theme.card2
     border.width: 1
@@ -198,6 +202,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.leftMargin: 12 + (acc.compactHeader ? acc.border.width : 0)
             Layout.rightMargin: 12 + (acc.compactHeader ? acc.border.width : 0)
+            Layout.topMargin: acc.bodyTopGap
             Layout.bottomMargin: 10
             spacing: 2
             visible: acc.open || acc.height > acc.headerHeight

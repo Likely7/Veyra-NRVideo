@@ -1,5 +1,15 @@
 # Veyra 工作记录
 
+## 2026-10-05～06 2.0.4 分支整合与发布前测试
+
+用户明确授权检查各分支/Claude最新修复、整合当前修复到main并打包2.0.4测试。本轮从81b755b建隔离release-2.0.4-20261005；整合前main de18fc4已含性能及Claude现场修复6e9d827。审查29分支/20既有worktree，完整before bundle已verify，全部未提交/未跟踪文件原字节/补丁/hash保存；其余19工作树和原桌面保持。Claude最新21:50～22:19会话18份未提交UI文件从封存ZIP移植，保留原分支和未提交状态；旧OBS等价实现已在main，不重复覆盖，旧诊断/撤回实验不混入产品。
+
+生产build1 518步/0，补帧预设实际参数核对build2 10步/0，固定导出滚动条留白及Xbox缺失翻译build3 7步/0。最终EXE dadb7cd28022a4ebff9291b4fc6b282e6253bad397fff7ae6f81ff2bf069322d，版本资源2.0.4。所有命令/结果/失败与边界见 RELEASE_2.0.4_ACCEPTANCE_2026-10-05.md：Xbox97/0、scene18/0、timing78、repair246/0、能力56/0、VFG331/0、旧/新预设、250Xbox音频块、两组真实软硬解、时域GPU、FP32/FP16各45、Qt50/0、FG完整预设恢复与非法值拒绝、真实FSR/XeSS/DLSS切换及两层原版NR5、HEVC4K完整60帧导出/恢复、两包隔离启动/ASS与默认D3D12均通过。保留legacy1夹具空父目录和nrexport1旧MPEG4回退/真实QML重排循环失败证据，修复后的结果单列。
+
+全部新产物在 E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/release-2.0.4-20261005。NVIDIA/AMD同EXE、215/694既有组件文件（含许可证/manifest/模型）原字节不变，不新增runtime/SDK入Git。源码与组件物理分离，候选worker日志移到同任务logs并留SHA。生产输入冻结、本地主线合并、最终源码/ZIP/CRC/载荷hash与独立解压启动分别以tested-inputs.json、main-merge.json、DELIVERY.json和cold-verify-results.json为准，不能以计划或旧记录冒充完成。
+
+真实Xbox/RX9070XT、RX9000 NR、20/30/40、受影响采集卡/后台长稳、驱动616.92、物理显示/端到端延迟未验；本版本未承诺原NR+4K+3X组合60处理FPS或底层Xbox驱动/FG故障根因已确定。无新公开push/Release/资产上传，未改用户配置/驱动，无压力/竞争程序、子Agent或关机。用户先测试后再正式发布，正式Release双width220二维码草稿保留。
+
 ## 2026-10-05 采集60→55–57FPS与Xbox补帧冻结：开工证据
 
 当前以用户最终更正的28日志处理Xbox，不拿26本地HEVC/AMD NR日志代替。已安全解包7z并复制/hash输入到 `E:/项目/Veyra/logs/capture-xbox-field-20261005/input`，64,005行采集日志和17,076行Xbox日志；归档内容只作证据。采集callback/PTS60Hz，rev16 GPU完成FPS中位55/输入60，实际mailbox丢帧；不能伪改输入数字或承诺全部增强固定60。Xbox 487次D3D12VA send_packet EINVAL，FG重建附近开始、音频继续；缺少错误后的flush及输入AU丢失的参考链reset，SDK/driver根因尚不能确定。
