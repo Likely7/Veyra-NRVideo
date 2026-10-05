@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" width="100%" height="auto">
+  
+    <style>
+      .bg { fill: #ffffff; }
+      .text { fill: #333333; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; }
+      .grid { stroke: #e1e4e8; stroke-width: 1; stroke-dasharray: 4; }
+      .line-anim {
+        stroke-dasharray: 2000;
+        stroke-dashoffset: 2000;
+        animation: draw 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      }
+      .dot {
+        transition: transform 0.2s ease, r 0.2s ease;
+        cursor: pointer;
+      }
+      .dot:hover {
+        r: 6px;
+      }
+      @keyframes draw {
+        to { stroke-dashoffset: 0; }
+      }
+      @media (prefers-color-scheme: dark) {
+        .bg { fill: #0d1117; }
+        .text { fill: #c9d1d9; }
+        .grid { stroke: #30363d; }
+      }
+    </style>
+  
+  <rect width="100%" height="100%" class="bg" />
+  
+  <g class="grids">
+      <line x1="60" y1="340" x2="760" y2="340" class="grid" />
+      <text x="50" y="344" class="text" text-anchor="end">0</text>
+    
+      <line x1="60" y1="310" x2="760" y2="310" class="grid" />
+      <text x="50" y="314" class="text" text-anchor="end">50</text>
+    
+      <line x1="60" y1="280" x2="760" y2="280" class="grid" />
+      <text x="50" y="284" class="text" text-anchor="end">100</text>
+    
+      <line x1="60" y1="250" x2="760" y2="250" class="grid" />
+      <text x="50" y="254" class="text" text-anchor="end">150</text>
+    
+      <line x1="60" y1="220" x2="760" y2="220" class="grid" />
+      <text x="50" y="224" class="text" text-anchor="end">200</text>
+    
+      <line x1="60" y1="190" x2="760" y2="190" class="grid" />
+      <text x="50" y="194" class="text" text-anchor="end">250</text>
+    
+      <line x1="60" y1="160" x2="760" y2="160" class="grid" />
+      <text x="50" y="164" class="text" text-anchor="end">300</text>
+    
+      <line x1="60" y1="130" x2="760" y2="130" class="grid" />
+      <text x="50" y="134" class="text" text-anchor="end">350</text>
+    
+      <line x1="60" y1="100" x2="760" y2="100" class="grid" />
+      <text x="50" y="104" class="text" text-anchor="end">400</text>
+    
+      <line x1="60" y1="70" x2="760" y2="70" class="grid" />
+      <text x="50" y="74" class="text" text-anchor="end">450</text>
+    
+      <line x1="60" y1="40" x2="760" y2="40" class="grid" />
+      <text x="50" y="44" class="text" text-anchor="end">500</text>
+    </g>
+  <g class="labels"><text x="60" y="380" class="text" text-anchor="middle">2026-09-13</text><text x="760" y="380" class="text" text-anchor="middle">2026-10-05</text></g>
+  
+      <g class="series-group series-0">
+        <path d="M 60 337 L 91.81818181818181 292.6 L 123.63636363636364 267.4 L 155.45454545454544 247.6 L 187.27272727272728 227.8 L 219.0909090909091 206.2 L 250.9090909090909 194.8 L 282.72727272727275 181 L 314.54545454545456 169.60000000000002 L 346.3636363636364 158.20000000000002 L 378.1818181818182 151.6 L 410 143.2 L 441.8181818181818 139.6 L 473.6363636363637 135.39999999999998 L 505.45454545454544 126.4 L 537.2727272727273 116.80000000000001 L 569.0909090909091 111.4 L 600.9090909090909 109 L 632.7272727272727 101.19999999999999 L 664.5454545454545 93.4 L 696.3636363636364 86.80000000000001 L 728.1818181818182 73.60000000000002 L 760 65.80000000000001 L 760 340 L 60 340 Z" fill="#0366d6" fill-opacity="0.08" class="area" />
+        <path d="M 60 337 L 91.81818181818181 292.6 L 123.63636363636364 267.4 L 155.45454545454544 247.6 L 187.27272727272728 227.8 L 219.0909090909091 206.2 L 250.9090909090909 194.8 L 282.72727272727275 181 L 314.54545454545456 169.60000000000002 L 346.3636363636364 158.20000000000002 L 378.1818181818182 151.6 L 410 143.2 L 441.8181818181818 139.6 L 473.6363636363637 135.39999999999998 L 505.45454545454544 126.4 L 537.2727272727273 116.80000000000001 L 569.0909090909091 111.4 L 600.9090909090909 109 L 632.7272727272727 101.19999999999999 L 664.5454545454545 93.4 L 696.3636363636364 86.80000000000001 L 728.1818181818182 73.60000000000002 L 760 65.80000000000001" stroke="#0366d6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" class="line line-anim" />
+        <g class="dots"><circle cx="60" cy="337" r="3" fill="#0366d6" class="dot" /><circle cx="91.81818181818181" cy="292.6" r="3" fill="#0366d6" class="dot" /><circle cx="123.63636363636364" cy="267.4" r="3" fill="#0366d6" class="dot" /><circle cx="155.45454545454544" cy="247.6" r="3" fill="#0366d6" class="dot" /><circle cx="187.27272727272728" cy="227.8" r="3" fill="#0366d6" class="dot" /><circle cx="219.0909090909091" cy="206.2" r="3" fill="#0366d6" class="dot" /><circle cx="250.9090909090909" cy="194.8" r="3" fill="#0366d6" class="dot" /><circle cx="282.72727272727275" cy="181" r="3" fill="#0366d6" class="dot" /><circle cx="314.54545454545456" cy="169.60000000000002" r="3" fill="#0366d6" class="dot" /><circle cx="346.3636363636364" cy="158.20000000000002" r="3" fill="#0366d6" class="dot" /><circle cx="378.1818181818182" cy="151.6" r="3" fill="#0366d6" class="dot" /><circle cx="410" cy="143.2" r="3" fill="#0366d6" class="dot" /><circle cx="441.8181818181818" cy="139.6" r="3" fill="#0366d6" class="dot" /><circle cx="473.6363636363637" cy="135.39999999999998" r="3" fill="#0366d6" class="dot" /><circle cx="505.45454545454544" cy="126.4" r="3" fill="#0366d6" class="dot" /><circle cx="537.2727272727273" cy="116.80000000000001" r="3" fill="#0366d6" class="dot" /><circle cx="569.0909090909091" cy="111.4" r="3" fill="#0366d6" class="dot" /><circle cx="600.9090909090909" cy="109" r="3" fill="#0366d6" class="dot" /><circle cx="632.7272727272727" cy="101.19999999999999" r="3" fill="#0366d6" class="dot" /><circle cx="664.5454545454545" cy="93.4" r="3" fill="#0366d6" class="dot" /><circle cx="696.3636363636364" cy="86.80000000000001" r="3" fill="#0366d6" class="dot" /><circle cx="728.1818181818182" cy="73.60000000000002" r="3" fill="#0366d6" class="dot" /><circle cx="760" cy="65.80000000000001" r="3" fill="#0366d6" class="dot" /></g>
+      </g>
+    
+</svg>
