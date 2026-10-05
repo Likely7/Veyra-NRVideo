@@ -26,27 +26,27 @@
 | 节点 | 内容 | 状态 | 证据 / 下一步 |
 |---|---|---|---|
 | D0 | 项目文档对齐与存档 | accepted | 37bc0c0 / initial-docs完整bundle verify，桌面/main保持 |
-| A0 | 当前版本基线及矩阵驱动 | in-progress | A完整包封存；M1五组各三轮15/15通过，PERF_BASELINE_NR；其余素材/切换基线在各节点前补齐 |
+| A0 | 当前版本基线及矩阵驱动 | completed-local | A完整包封存；M1五组各三轮15/15、各节点切换/暂停/4K/8K基线分别记录，R0正常33组同源对照；真实来源/其他GPU/外部C边界见R0 |
 | E1 | Feature18动态输入尺寸 | completed-conditional | 两运行库8组合API/区域/恢复正常，但缩小后与独立小实例不同；PERF_E1_DYNAMIC_SIZE，3b优先实际尺寸实例 |
 | E2 | 并行Evaluate/CreateFeature | completed-conditional | 单Core/adapter，三次240s累计12min及150次创建安全通过；间隔110–116ms，不能据此宣称2b无缝 |
 | E3 | 真实来源精确重复比例 | completed-screen-awaiting-card | 真实WGC三阶段各60秒通过，静止99.932%/移动内容0.540%/窗口位置99.937%；PERF_E3_DUPLICATE_SOURCE；实卡待来源确认 |
 | 1a | 精确重复帧整链复用 | rejected-unchanged-output | 自然同像素300帧×五组×三轮，A-A噪声0；NR/SR复用299帧不同；PERF_1A_DUPLICATE_REUSE；无生产改动 |
 | 5a | 黑边检测与有效区域处理 | rejected-correctness | 暗边18/255误判/529920非黑像素丢失，后出现字幕滞回丢2640像素；12原生诊断480图同配置一致、外部保原图，但有效区PSNR31.64–35.03且区间17.44–19.69%不含额外base/回读；不进生产/不加默认开关，PERF_5A_LETTERBOX |
-| 3a | 进程GPU调度优先级 | retained-pending-R0 | 18组交错实际三档；60Hz实时P99改善6.83%，High无稳定收益，普通默认；两绘制模式40次Set/Get及重启通过；PERF_3A_GPU_PRIORITY |
-| 2a | 跨重建保留NGX核心 | retained-pending-R0 | v2三轮A/B/B-off完整输出0差异；暖创建减少75.83/71.23/64.58/72.04%；真实UI及SDK拒绝路径通过；导出待R0 |
-| 2c | 最近配置实例缓存 | retained-single-NR-pending-R0 | 单NR actual create363.851→3.602ms及像素/压力通过；SR与SRNR每轮21/50输出不一致，拒绝扩大；PERF_2C_RECENT_CACHE / PERF_2C_SR_CACHE_REJECTION |
-| 2d | 空闲预热 | retained-pending-R0 | Qt27组A/B/off首次成功Present1942→100 / 2053→107 / 1733→92ms；54完整输出0差异、5生命周期通过；PERF_2D_PREWARM |
+| 3a | 进程GPU调度优先级 | retained-normal-default | 历史18组三档与40次Set/Get/重启；High无稳定收益，普通默认，不重跑压力、不将旧竞争收益当正常收益；PERF_3A_GPU_PRIORITY、UI最终回归通过 |
+| 2a | 跨重建保留NGX核心 | retained | v2三轮A/B/B-off完整输出0差异；暖创建减少75.83/71.23/64.58/72.04%；真实UI及SDK拒绝通过，最终退出7/7与worker5/5；冷启动未变快 |
+| 2c | 最近配置实例缓存 | retained-single-NR | 单NR actual create363.851→3.602ms及完整像素通过；压力失效仅旧证据、不重跑；SR/SRNR每轮21/50输出不一致，拒绝扩大；最终UI/原生/导出通过 |
+| 2d | 空闲预热 | retained | Qt27组A/B/off首次成功Present1942→100 / 2053→107 / 1733→92ms；54完整输出0差异、5生命周期与最终回归通过；成本移到首页空闲 |
 | 2b | 后台建图与帧边界切换 | rejected-continuity | 6轮新鲜Evaluate输出实际Present、300创建安全，但P99 32.044→74.189ms、>33.333ms次数3→55，未满足连续性；PERF_2B_BACKGROUND_CREATE |
-| 3b | NR自动内部尺寸 | retained-optional-pending-R0 | 正常12组M10首层70%增强减少19.02%，六切换Present15.718–17.4351ms且未取消帧；原生470图/Auto-off一致、240完整解码导出一致、真实UI保存/回退通过；多1697MiB、低档改画面，默认不选，5070/1080 SDR/1–2NR窄准入；PERF_3B_AUTO_NR |
+| 3b | NR自动内部尺寸 | retained-optional-quality-unapproved | 正常12组M10首层70%增强减少19.02%，六切换Present15.718–17.4351ms且未取消帧；原生470图/Auto-off一致、240完整解码导出一致、真实UI保存/回退与最终10组原生通过；多1697MiB、低档改画面，默认不选，5070/1080 SDR/1–2NR窄准入；PERF_3B_AUTO_NR |
 | 1b | 内容帧率预算 | rejected-prerequisite | 1a画面不成立，完整求值仍按transport次数；实测成本构造预算反例，PERF_1B_CONTENT_BUDGET；无生产改动 |
 | 1c | 重复节奏预测 | rejected | 三种节奏单像素瞬态反例均漏第49帧且后续未检测；PERF_1C_CADENCE_REJECTION；无产品代码需回退 |
-| 3c | 队列分工/呈现优先级 | retained-limited-pending-R0 | 普通负载18组，增强21.386→19.477ms（2X）/23.330→21.542ms（3X）；准入仅已测5070双NR+SR4K+DLSS2/3文件图；9组往返1278全图/PTS一致/debug0、真实Qt FSR/XeSS/VFG/调色/时域回退通过；源跳过0但长帧仍在，HIGH拒绝默认；PERF_3C_GRAPH_NORMAL_2026-10-05 |
+| 3c | 队列分工/呈现优先级 | retained-limited | 节点18正常组增强区间减少8.93%/7.66%；最终33组S4完整B对A减少3.52%、同B DIRECT关闭对照减少2.61%，Present P99无明显改善；限定5070双NR1080+SR4K+DLSS2/3文件，其余DIRECT，HIGH不默认；1278全图/PTS与provider回退通过 |
 | 5b | 文件/导出跨帧并行 | retained-export-rejected-prefetch | 无FG NVENC两帧/事件默认保留，75文件8100图一致/15边界/18默认-off/5worker；NVOF准备器24普通导出输出一致但整次慢1.41–5.25%、多232–867MiB，独立trace实际依赖区间重叠约1ms，拒绝并回退；不扩文件/采集/串流，PERF_5B_CROSS_FRAME / PERF_5B_NVOF_PREFETCH |
 | 4a | 多NR整链低分辨率调度 | rejected-benefit-to-risk | 20组800图控制/debug通过但多层最大像素差81/255；12组普通播放整体仅降1.09%/0.62%，呈现P99无改善，拒绝替换产品路径并回退；完整PNG/HTML/候选源码保留，PERF_4A_LOW_CHAIN_2026-10-05 |
-| 4b | 先粗后细组合 | verified-existing-pending-R0 | 9组360全图同配置一致/debug0；12普通播放先粗后细增强区间两层节省21.74%、三层32.61%，画面明显变化/呈现P99未改善；共享编辑器仅可选提示，三种翻译齐全，不改默认或新增预设，PERF_4B_COARSE_TO_FINE |
-| 5c | 暂停不重跑/残差重合成 | retained-pending-R0 | 残差7.461→0.766ms约89.74%；真实Qt自身暂停GPU三轮2.237→0.011%（off2.237%）；48完整呈现图像一致、四FG暂停/恢复/seek通过；PERF_5C_PAUSED_NR |
-| UI | 性能设置及状态 | pending | 只暴露保留实现，统一持久化/能力/翻译 |
-| R0 | 全产品回归与最终候选 | pending | 合同/Xbox/Qt/字幕/导出/兼容及源码存档；正常负载A3控制/调度约2.95s断档、B3跳帧，A/B素材frame303/304约68–72ms图提交；根因待查、不宣称丝滑 |
+| 4b | 先粗后细组合 | verified-existing-optional | 9组360全图同配置一致/debug0；12普通组增强两层节省21.74%、三层32.61%，画面变化/Present P99未改善；共享编辑器仅可选提示，最终UI和三语通过，不改默认或新增预设 |
+| 5c | 暂停不重跑/残差重合成 | retained | 残差7.461→0.766ms（89.74%）；自身暂停GPU2.237→0.011%三轮，48完整呈现0差异、四FG暂停/恢复/seek；诊断恢复未解决OBS且已拒绝，最终保留原验证实现，OBS限制另列 |
+| UI | 性能设置及状态 | completed-local | 设置普通默认/预热、Auto首层可选/灰态及多层提示；三语1960/缺失0，最终Quick39+实际两绘制模式4+严格8页通过；PERF_UI_FINAL_2026-10-05 |
+| R0 | 全产品回归与最终候选 | local-regression-passed-packaging | 最终构建9403521：7退出/16合同/4实际UI/5 worker/10原生470图+两完整导出/8页通过；OBS软件兼容真实六场景通过，GPU UI全屏在封存A也不可靠、未修；焦点与整包验收另续记录 |
 
 ## 当前可续接状态
 
@@ -54,4 +54,8 @@
 
 基线驱动 `nr-series.py A` 已完成M1/S1、S2-720、S3、S4、S5-existing各三轮、稳态50秒；每个产品进程和驱动有270/280/299秒上限。1280×800窗口、真实GPU timestamp及CPU提交统计，不将16ms UI Timer当渲染FPS。现有UI没有精确50%档位，S2明确为1280×720（1080p输入维度66.7%、像素44.4%）。多层先粗后细已有逐层尺寸参数，S5核对现有行为，不计为新收益。
 
-2a核心复用、2c单NR缓存、2d空闲预热、5c暂停复用已保留，3a提供用户可选进程优先级且普通默认，均待R0最终产品回归。1a/1c、依赖它们的1b、2b后台创建、SR缓存扩展及4a低尺寸整链候选均拒绝，证据保留。3c已保留限定准入的自动COMPUTE，18组普通负载约8%增强区间收益、9组迁移完整画面及真实三provider切换回归通过；其他组合DIRECT，HIGH不默认。5b保留无FG NVENC两帧/事件，另一个NVOF准备器完整导出负收益，回退且不扩入文件播放。4b既有逐层尺寸核验完成：正常配置取舍可节省21.74%/32.61%增强区间，但改变画面，保留可选提示；两层原生还复现一次2.79s提交间隙和84帧预览跳过。5a/3b/UI/R0仍待，不能将局部耗时或暂停GPU改善冒充整个方案收益。
+全部优化节点已有保留、可选、既有合同或拒绝/回退处置；最终构建及正常33组数据见R0。5b无FG NVENC两帧/事件保留，NVOF预取整个导出负收益1.41–5.25%且额外232–867MiB，已明确回退，不扩到播放/采集/串流。8K整次收益3.91%没有达到原方案10%目标，不能只取处理区间10.45%宣称整次达标。Auto和先粗后细未经主观画质确认，保持可选，默认NR尺寸不变；拒绝项目不放无效开关。
+
+最终7退出/16合同/4真实UI/5worker/10原生与严格8页已通过，OBS软件兼容六场景有真实视频；GPU UI游戏采集在封存A亦发生全屏黑背景，所有无效交换链实验已撤回，不能宣称已修。正常33组未复现旧2.79–2.84s断档，不等于根治，仍有约110ms CPU图提交长尾，严重后台掉帧未确认根因。前后台匹配对照和最终整包审核另续记录，不能提前通过。
+
+外部验收边界：M3/M4真实电影/游戏、M5/M6用户主机30/40/60实卡信号、AMD/Intel/RTX30/40/用户616.92、物理显示事件/端到端延迟与Auto/先粗后细主观画质未验。C外部Magpie仅有固定源码/发行说明研究记录，未运行一份经本轮相同运行组件身份和独立配置验证的参考包，未填C收益；它不能替代Veyra A/B/B-off证据。压力项按用户最新要求不再执行。以上均不伪装为全部硬件或原草案全部目标已经达成。
