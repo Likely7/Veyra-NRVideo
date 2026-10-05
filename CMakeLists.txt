@@ -940,9 +940,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   qt_add_resources(veyra_qml_ui "veyra_i18n" PREFIX "/i18n" BASE "${CMAKE_CURRENT_SOURCE_DIR}/i18n" FILES i18n/catalog.json)
   target_compile_features(veyra_qml_ui PRIVATE cxx_std_20)
   # Qt6::CorePrivate only for QUnifiedTimer's slow mode behind --slow-animations.
-  # GuiPrivate exposes QRhiSwapChain::currentPixelSize for OBS resize ordering;
-  # this uses the same pinned Qt 6.8.3 Gui runtime already in the portable pack.
-  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine Qt6::CorePrivate Qt6::GuiPrivate dbghelp ole32)
+  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine Qt6::CorePrivate dbghelp ole32)
 
   add_executable(veyra_qml_data_tests tests/unit/QmlDataDirectoryTests.cpp src/ui/QmlDataDirectory.cpp)
   target_compile_features(veyra_qml_data_tests PRIVATE cxx_std_20)

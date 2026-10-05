@@ -20,8 +20,6 @@
 #include <QQmlContext>
 #include <QQuickItem>
 #include <QQuickWindow>
-#include "veyra/gfx/ObsQtFrameGate.h"
-#include <rhi/qrhi.h>
 #include <QSGRendererInterface>
 #include <QKeyEvent>
 #include <QTimer>
@@ -758,24 +756,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         return 1;
     }
     if (testSize.isValid()) window->resize(testSize);
-    if(!softwareUi){
-        auto windows=window->findChildren<QQuickWindow*>();windows.prepend(window);
-        for(auto* quick:windows){
-            auto gate=veyra::gfx::registerObsQtFrameGate(reinterpret_cast<HWND>(quick->winId()));
-            QObject::connect(quick,&QQuickWindow::beforeFrameBegin,quick,[gate]{
-                gate->beginFrame(GetModuleHandleW(L"graphics-hook64.dll")!=nullptr);
-            },Qt::DirectConnection);
-            QObject::connect(quick,&QQuickWindow::frameSwapped,quick,[gate,quick]{
-                if(auto* chain=quick->swapChain()){
-                    const auto actual=chain->currentPixelSize();
-                    if(actual.width()>0&&actual.height()>0)gate->presented(unsigned(actual.width()),unsigned(actual.height()));
-                }
-            },Qt::DirectConnection);
-            QObject::connect(quick,&QQuickWindow::afterFrameEnd,quick,[gate]{gate->endFrame();},Qt::DirectConnection);
-            QObject::connect(quick,&QQuickWindow::sceneGraphInvalidated,quick,[gate]{gate->abortFrame();},Qt::DirectConnection);
-        }
-        veyra::log::info("qml-window",std::format("OBS resize frame gates registered windows={}",windows.size()));
-    }
 
     // Fullscreen must own the whole monitor. Without telling the shell, the taskbar
     // stayed above the fullscreen picture on some systems (field report with the
