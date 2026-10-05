@@ -76,3 +76,41 @@ GPU界面模式两次当前候选（v2/v4）均在fullscreen抓到Qt暗背景、
 `nr-r0-obs.py A R0-obs-baseline-strict-r1 gpu --baseline-qml`使用原封存A EXE/QML、同M1/1280×800/普通单NR，第一轮fullscreen同样失败（视频std1.2199/1.2199/1.6957）；已查看原PNG，确是Qt背景而无视频，cleanup四项全部true。原A两轮全屏有视频也是真实记录；新失败证明既有GPU UI多交换链游戏采集**会不稳定**。不能再说“基线始终通过/优化导致黑屏”，也不能宣称问题已修复。OBS32.1.2源码的单进程全局交换链选择与此现象一致，但源码推断不等于全部根因已证明。
 
 该限制列为未解决的既有采集问题；完整窗口游戏采集回归继续走软件现有`--obs-game-capture`兼容路径，GPU模式失败保持单独记录。后续最终构建、功能和录像结果分别记入下节，不用兼容模式通过冒充GPU模式通过。
+
+## 最终生产身份与正常回归
+
+最终生产改动提交`9403521cc4d0b24390a6c5891cef555c00de295f`，其后是测试/文档。`build-r0-final-v4`构建成功，UI SHA256 `06fc3703b0007df8467a7dd08e1e7acba25d21d539fb44ba42292d32e7b256e3`，显示版本`2.0.3-perf-B2d`；实际NR/驱动仍为上文固定Lecram/616.56。新增OBS gate/GuiPrivate依赖已移除，最终四个生产文件与432f7ff一致。不得沿用早期8c2276…的EXE作为最终身份。
+
+| 当前构建检查 | 结果 / 原始记录 |
+|---|---|
+| 重建中退出 | `R0-close-final-v2-summary`7/7：FSR3.1/XeSS/VFG/SF-v2/尺寸/层数/停止，全部正常退出，无交换链错误/漏参数；含真实长创建返回后取消 |
+| 合同/回归 | `R0-contracts-final-v6`16/16：repair、实际D3D12 PresentSink三轮failed-open/reopen重复关闭（debugErrors=0）、Xbox软件合同、1008链组合/原生导出/图片边界、preset/能力/UI/VFG/Auto/i18n/qml-data/easing/Quick/音频倍速/字幕文本合成；Quick39通过、0失败/跳过 |
+| 实际产品界面 | `R0-product-ui-final-v2-summary`GPU与OBS软件各功能/布局，4/4；字幕逗号/三行、自定义及非法倍速、720/1280/1600布局、全屏菜单/锁定/最大化恢复、能力灰态，无产品QML错误 |
+| 实际导出worker | `R0-export-worker-final-v2-summary`5/5 lifecycle/保存取消边界/顺序队列/HEVC MP4/MKV；队列四个完整文件SHA同。worker SHA256 `7486047c854937778ed27729b6951453127cd8c22e1e96c78493b8e359721871` |
+| 原生/Auto-off | `R0-native-final-v2-summary`10/10、470完整原生RGBA/PTS/history。Auto池与独立同尺寸参考一致，默认off五配置200图与B4b基线CSV完全相同，debug0；两120帧Auto/固定原生NVENC封装文件SHA同，无池创建 |
+| 全文件解码与画质 | `R0-native-final-v2-quality/review.json`完整240解码MD5/PTS/时长/音轨/尺寸差异0，12配对图PSNR/SSIM与早期3b一致，100%切回逐像素相同；低档改画面、主观未批准 |
+| 无测试Loader的页面启动 | `R0-qml-smoke-final-v5/run-20261005T003229757Z-6da97867/result.json`8/8、0跳过，实际home/minimal/pro/node/export/settings/capture-dialog/playback各3500ms正常退出 |
+
+这些是软件和本机正常负载回归，未扩大到Xbox长稳、AMD推理、实卡、其他RTX/驱动或物理显示。RTSS早期R0的6正常场景证据已记录真实原件/profile恢复；退出取消和撤回的OBS实验未改该功能，未冒充它由新EXE重跑。最后正常33组属于e8f0bd1那轮稳态实现，新生产差异为退出边界修复；下面新6组验证最终同样配置的真实焦点状态，不能混合两批不同时间的滚动读数宣传额外NR收益。
+
+## 真实前台/后台/再前台对照
+
+`nr-r0-focus.py B2d R0-focus-normal-v4 --resume`最终6/6：M1、S4、50秒、1280×800，A/B、B/A、A/B三轮交错；一个本轮拥有的空GDI小窗用于失焦，无额外GPU工作。每轮18次总激活均保存Win32 API返回/前台PID，与真实Qt active一致。只连接/解除本轮测试的输入队列，不改系统焦点锁、不发键鼠输入/关闭用户窗口，cleanup本轮helper结束、原焦点恢复true、用户设置不变。
+
+| 三轮中位 | A软件提交FPS | B软件提交FPS | A软件Present P99 ms | B软件Present P99 ms |
+|---|---:|---:|---:|---:|
+| 前台13–23秒 | 60 | 60 | 17.2609 | 17.1828 |
+| 后台28–38秒 | 60 | 60 | 17.2227 | 17.2788 |
+| 再前台43–48秒 | 60 | 60 | 17.2402 | 17.1764 |
+
+各段每轮600/600/300个实际提交区间、10/10/5个真实Qt样本，sourceSkipped全0，当前六组没有严重失焦掉帧；B后台最长18.0828ms。此结论只限普通空窗口失焦，本机没有物理显示事件，不证明用户涉及其他窗口负载的现象已根治；33组约110ms CPU提交长尾仍保留。
+
+夹具v1/v2激活失败、v3错用不存在的[pacing-submit]格式、v4初次错把无返回值的matrix.run当receipt，全部失败数据保留。两输入队列实际连接后v3激活已成功；格式改为既有[submit]。v4第一A完整播放/事件/焦点均有效，只汇总失败；resume严格核对passed/S4/50秒/EXE和源SHA/真实前台事件，复用这组不可变数据后重做分析并继续其余5组，不以重试直到好看替换性能样本。前台流程依据微软[SetForegroundWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow)，始终按实际前台PID判定。
+
+## 存档、交付与未验证边界
+
+所有节点before/candidate/accepted/rejected源码标签、增量bundle/patch/receipt在`E:/项目/Veyra/archives/perf-nr-20261004/`，失败证据不覆盖。3b可选、UI、退出修复已有最终accepted标签；有画面反例或整次负收益的生产候选均明确撤回。自查了核心借用/最近实例/预热的单设备与关闭顺序、尺寸/运行库key、队列迁移失效及PresentSink失败打开清理；不是独立Reviewer验收。
+
+完整本地NVIDIA包由`nr-final-package.py`从同一最终EXE/受控QML/不可变组件生成：普通ZIP、逐文件manifest、独立源码ZIP、干净解压SHA及退出回归身份；`nr-final-audit.py`另验PE imports/delay-imports、FSR分包例外、VFG闭包、驱动/SDK排除、源码隔离、Windows-only PATH下GPU/软件启动及全载荷保持。真正执行结果和源码快照commit写入E盘独立交付回执，未产生前不提前标通过。
+
+方案全部本机优化节点已有实验及处置，不代表草案每个数值目标达成：8K整次3.91%未达10%，1a等正确性反例直接拒绝，Auto及先粗后细主观画质未批、额外显存等代价不隐藏。外部C Magpie参考计时、真实M3/M4/M5/M6/主机30/40/60、AMD/Intel/其他RTX/616.92、TDR/真实设备恢复、物理显示/端到端延迟未验。压力按用户最新要求不再执行。严重后台掉帧及偶发约2.8s/110ms长尾、GPU UI OBS游戏采集不可靠仍是未解决项；本轮保留局部优化不能宣传这些问题全部修复。
