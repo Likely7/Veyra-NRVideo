@@ -69,6 +69,7 @@ void PresetLibrary::addBuiltins() {
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto directFlow=std::filesystem::path(path_).concat(L".flow");
     const auto rootVfg=std::filesystem::path(path_).concat(L".vfg");
     if(std::filesystem::exists(rootVfg))path_=rootVfg;
     const auto rootRendering=std::filesystem::path(path_).concat(L".field-render");
@@ -84,6 +85,9 @@ bool PresetLibrary::load() {
     if(std::filesystem::exists(renderingPath))path_=renderingPath;
     const auto vfgPath=std::filesystem::path(path_).concat(L".vfg");
     if(std::filesystem::exists(vfgPath))path_=vfgPath;
+    const auto flowPath=std::filesystem::path(path_).concat(L".flow");
+    if(std::filesystem::exists(directFlow))path_=directFlow;
+    else if(std::filesystem::exists(flowPath))path_=flowPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -177,8 +181,9 @@ bool PresetLibrary::save() {
     std::wstring checkedDefault;
     // Match PresetStore: never replace a valid file with one our reader rejects.
     if (!parse(data, checked, checkedDefault, error_)) return false;
-    if(data.starts_with("VEYRA_PRESET_LIBRARY 7")&&!path_.wstring().ends_with(L".vfg"))path_=std::filesystem::path(path_).concat(L".vfg");
-    if(!path_.wstring().ends_with(L".vfg")){
+    if(data.starts_with("VEYRA_PRESET_LIBRARY 10")&&!path_.wstring().ends_with(L".flow"))path_=std::filesystem::path(path_).concat(L".flow");
+    if(data.starts_with("VEYRA_PRESET_LIBRARY 7")&&!path_.wstring().ends_with(L".vfg")&&!path_.wstring().ends_with(L".flow"))path_=std::filesystem::path(path_).concat(L".vfg");
+    if(!path_.wstring().ends_with(L".vfg")&&!path_.wstring().ends_with(L".flow")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 6")&&!path_.wstring().ends_with(L".field-render"))path_=std::filesystem::path(path_).concat(L".field-render");
     if (std::any_of(entries_.begin(), entries_.end(), [](const auto& e) { return e.nodeConfiguration.has_value(); }) &&
         !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-editor") && !path_.wstring().ends_with(L".p3-globals"))
@@ -282,6 +287,7 @@ const std::optional<size_t> PresetLibrary::defaultIndex() const {
 }
 
 void PresetLibrary::apply(const PresetEntry& entry, EnhancementSettings& settings) {
+    const auto keepFlow = PresetFlowSettings::capture(settings);
     // fromChain() rewrites every stage field, including the ones this preset
     // does not claim (a colour grade travels inside the chain because the
     // colour stage is part of it). Keep the unclaimed parts exactly as the
@@ -322,6 +328,10 @@ void PresetLibrary::apply(const PresetEntry& entry, EnhancementSettings& setting
     } else {
         settings.audioSync = keepAudioSync;
         settings.audioOffsetMs = keepAudioOffset;
+    }
+    if (entry.flow) {
+        if (entry.contents & presetContentMask(PresetContent::Flow)) entry.flow->apply(settings);
+        else keepFlow.apply(settings);
     }
 }
 
@@ -412,6 +422,7 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
     auto& nodes = next->nodes; auto& layout = next->layout;
     auto values = settings;
     if (document.globals) document.globals->apply(values);
+    const auto keepFlow = PresetFlowSettings::capture(values);
     if ((entry.contents & presetContentMask(PresetContent::Chain)) && entry.nodeConfiguration) {
         const auto& saved = *entry.nodeConfiguration;
         if (saved.editor) *next = *saved.editor;
@@ -529,6 +540,10 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
         if (end != NodeGraphLayout::Input) return projected;
     }
     applyRenderingPreset(entry,values);
+    if (entry.flow) {
+        if (entry.contents & presetContentMask(PresetContent::Flow)) entry.flow->apply(values);
+        else keepFlow.apply(values);
+    }
     if (next->globals || ChainGlobalSettings::capture(values) != ChainGlobalSettings::capture(settings))
         next->globals = ChainGlobalSettings::capture(values);
     auto contract = std::make_unique<ChainConfiguration>(ChainConfiguration::capture(*runtime, values));
@@ -589,7 +604,8 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
     const bool correctionExtended=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
         for(unsigned i=0;i<e.chain.nodeCount;++i)if(e.chain.nodes[i].nr.residual.correction.extendedControls())return true;
         return false;});
-    const int version=std::max(minimumVersion, correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const bool flow=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return e.flow.has_value()||(e.contents&presetContentMask(PresetContent::Flow));});
+    const int version=std::max(minimumVersion, flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -635,6 +651,10 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
             o<<' '<<e.globals.has_value();
             if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7);}
         }
+        if(version>=10){
+            o<<' '<<e.flow.has_value();
+            if(e.flow){const auto& f=*e.flow;o<<' '<<int(f.backend)<<' '<<int(f.quality)<<' '<<f.amdHalfResolution<<' '<<int(f.content);}
+        }
         o << '\n';
     }
     return o.str();
@@ -649,7 +669,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > 9) { error = L"预设库格式或版本不支持"; return false; }
+    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > 10) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
     for (size_t i = 0; i < count; ++i) {
@@ -659,6 +679,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
         uint32_t nodeCount = 0;
         if (!(in >> std::quoted(name) >> std::quoted(note) >> kind >> builtin >> e.contents >> e.fg.multiplier >> fgBackend >> audioSync >> e.audioOffsetMs >> nodeCount >> chainMode >> e.chain.fgMultiplier >> strict)) { error = L"预设库头部字段损坏"; return false; }
         if (kind < 0 || kind > 1 || chainMode < 0 || chainMode > 1 || strict < 0 || strict > 1 ||
+            (e.contents & ~(version>=10?kPresetAllContent:kPresetLegacyContent)) ||
             nodeCount > kMaxChainNodes || e.fg.multiplier < 1 || e.fg.multiplier > (version>=7?8u:6u)) { error = L"预设库字段超出范围"; return false; }
         if(version>=7&&!(in>>e.fg.vfgQuality)){error=L"预设库 VFG 质量字段损坏";return false;}
         if(fgBackend<0||fgBackend>(version>=7?4:3)){error=L"预设库补帧后端无效";return false;}
@@ -749,6 +770,18 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
                 if(!readRendering(in,g,version>=7))return false;e.globals=g;
+            }
+        }
+        if(version>=10){
+            int present=0;
+            if(!(in>>present)||present<0||present>1){error=L"预设光流字段损坏";return false;}
+            if(present){
+                int backend,quality,half,content;
+                if(!(in>>backend>>quality>>half>>content)||half<0||half>1){error=L"预设光流字段损坏";return false;}
+                PresetFlowSettings f{OpticalFlowBackend(backend),FlowQuality(quality),half!=0,ContentRate(content)};
+                EnhancementSettings contract;f.apply(contract);
+                if(!contract.validate().empty()){error=L"预设光流或内容节奏无效";return false;}
+                e.flow=f;
             }
         }
         out.push_back(std::move(e));

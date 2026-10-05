@@ -491,6 +491,13 @@
    "ja": "AMD NR（実験）：RX 9000 ドライバーと lmxxf ランタイムが必要です。内部処理の画素数は最大 1080p 相当です。モデル強度・残差・保護に対応し、スタイルはランタイム設定を使います。HDR は未検証です。"
   },
   {
+   "zh": "AMD 光流",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "AMD 光流",
+   "en": "AMD optical flow",
+   "ja": "AMD オプティカルフロー"
+  },
+  {
    "zh": "AMD 性能档",
    "src": "qml/ProPage.qml",
    "zh-TW": "AMD 性能檔",
@@ -1625,18 +1632,18 @@
    "ja": "Xbox からデコード可能な映像が届きません。再接続してください。"
   },
   {
-   "zh": "Xbox 视频解码连续失败，恢复后仍无法出画。请重连，并保留日志。",
-   "src": "src/source/XboxSessionSource.cpp",
-   "zh-TW": "Xbox 影片解碼連續失敗，恢復後仍無法顯示畫面。請重新連線，並保留日誌。",
-   "en": "Xbox video decoding failed repeatedly and could not recover a picture. Reconnect and keep the logs.",
-   "ja": "Xbox の映像デコードが連続して失敗し、復旧後も映像を表示できませんでした。再接続し、ログを保存してください。"
-  },
-  {
    "zh": "Xbox 登录已失效，请重新登录。",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "Xbox 登入已失效，請重新登入。",
    "en": "Xbox sign-in has expired; sign in again.",
    "ja": "Xbox のサインインの有効期限が切れました。再度サインインしてください。"
+  },
+  {
+   "zh": "Xbox 视频解码连续失败，恢复后仍无法出画。请重连，并保留日志。",
+   "src": "src/source/XboxSessionSource.cpp",
+   "zh-TW": "Xbox 影片解碼連續失敗，恢復後仍無法顯示畫面。請重新連線，並保留日誌。",
+   "en": "Xbox video decoding failed repeatedly and could not recover a picture. Reconnect and keep the logs.",
+   "ja": "Xbox の映像デコードが連続して失敗し、復旧後も映像を表示できませんでした。再接続し、ログを保存してください。"
   },
   {
    "zh": "Xbox 连接失败：",
@@ -2626,13 +2633,6 @@
    "ja": "保存したキャプチャーフォーマットは使用できません。解像度、フレームレート、ピクセル形式を選び直してください。"
   },
   {
-   "zh": "保存补帧页全部设置",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "儲存補幀頁全部設定",
-   "en": "Saves every setting on the Frame Gen tab",
-   "ja": "フレーム生成タブの設定をすべて保存します"
-  },
-  {
    "zh": "保存超时",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "儲存超時",
@@ -2757,6 +2757,13 @@
    "zh-TW": "光流 · 運動估算",
    "en": "Optical flow · motion estimation",
    "ja": "オプティカルフロー · 動き推定"
+  },
+  {
+   "zh": "光流与内容节奏",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "光流與內容節奏",
+   "en": "Optical flow and content cadence",
+   "ja": "オプティカルフローとコンテンツのフレームレート"
   },
   {
    "zh": "光流宽高减半，更省但更糙",
@@ -3362,13 +3369,6 @@
    "ja": "ノードを削除"
   },
   {
-   "zh": "删除补帧预设失败",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "刪除補幀預設失敗",
-   "en": "Could not delete the frame generation preset",
-   "ja": "フレーム生成プリセットを削除できませんでした"
-  },
-  {
    "zh": "删除这一层",
    "src": "qml/ProPage.qml",
    "zh-TW": "刪除這一層",
@@ -3514,6 +3514,13 @@
    "zh-TW": "區域內排除所有 NR 層 · 僅列表模式",
    "en": "Excludes the area from every NR layer · list mode only",
    "ja": "領域内をすべての NR 層から除外 · リストモードのみ"
+  },
+  {
+   "zh": "半分辨率",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "半解析度",
+   "en": "Half resolution",
+   "ja": "半解像度"
   },
   {
    "zh": "单例节点或数量已达上限",
@@ -5469,13 +5476,6 @@
    "ja": "保存済みのデバイス（未接続）"
   },
   {
-   "zh": "已保存补帧预设：%1",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "已儲存補幀預設：%1",
-   "en": "Frame generation preset saved: %1",
-   "ja": "フレーム生成プリセットを保存しました：%1"
-  },
-  {
    "zh": "已保存颜色预设：%1",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已儲存顏色預設：%1",
@@ -5644,13 +5644,6 @@
    "ja": "カラー設定をコピーしました"
   },
   {
-   "zh": "已存在同名补帧预设",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "已存在同名補幀預設",
-   "en": "A frame generation preset with this name already exists",
-   "ja": "同じ名前のフレーム生成プリセットがすでにあります"
-  },
-  {
    "zh": "已存在同名颜色预设",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已存在同名顏色預設",
@@ -5698,20 +5691,6 @@
    "zh-TW": "已匯出顏色預設",
    "en": "Color preset exported",
    "ja": "カラープリセットを書き出しました"
-  },
-  {
-   "zh": "部分补帧设置未被当前显卡或组件接受：%1",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "部分補幀設定未被目前顯卡或元件接受：%1",
-   "en": "Some frame generation settings were not accepted by the current GPU or components: %1",
-   "ja": "現在のGPUまたはコンポーネントで一部のフレーム生成設定を適用できませんでした：%1"
-  },
-  {
-   "zh": "已应用补帧预设：%1",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "已應用補幀預設：%1",
-   "en": "Frame generation preset applied: %1",
-   "ja": "フレーム生成プリセットを適用しました：%1"
   },
   {
    "zh": "已开启",
@@ -7729,13 +7708,6 @@
    "zh-TW": "暫無本節點計時",
    "en": "No timing for this node yet",
    "ja": "このノードの計測はまだありません"
-  },
-  {
-   "zh": "暂无补帧预设",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "暫無補幀預設",
-   "en": "No frame generation presets yet",
-   "ja": "フレーム生成プリセットはまだありません"
   },
   {
    "zh": "暂无颜色预设",
@@ -10643,13 +10615,6 @@
    "ja": "フレーム生成オフ"
   },
   {
-   "zh": "补帧关闭",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "補幀關閉",
-   "en": "Frame generation off",
-   "ja": "フレーム生成オフ"
-  },
-  {
    "zh": "补帧只能放在链路最后",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "補幀只能放在鏈路最後",
@@ -10732,41 +10697,6 @@
    "zh-TW": "補幀選擇未被接受，保留原設定；請檢查倍率和後端能力",
    "en": "The frame generation choice was not accepted; previous setting kept. Check the multiplier and backend capability",
    "ja": "フレーム生成の選択が受け付けられなかったため、元の設定のままです。倍率と方式の対応範囲を確認してください"
-  },
-  {
-   "zh": "补帧预设",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "補幀預設",
-   "en": "Frame generation presets",
-   "ja": "フレーム生成プリセット"
-  },
-  {
-   "zh": "补帧预设不存在",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "補幀預設不存在",
-   "en": "The frame generation preset does not exist",
-   "ja": "フレーム生成プリセットが存在しません"
-  },
-  {
-   "zh": "补帧预设保存失败",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "補幀預設儲存失敗",
-   "en": "Could not save the frame generation preset",
-   "ja": "フレーム生成プリセットを保存できませんでした"
-  },
-  {
-   "zh": "补帧预设名称需为 1–48 个字符",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "補幀預設名稱需為 1–48 個字符",
-   "en": "Frame generation preset names must be 1–48 characters",
-   "ja": "フレーム生成プリセット名は 1–48 文字にしてください"
-  },
-  {
-   "zh": "补帧预设最多保存 32 个",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "補幀預設最多儲存 32 個",
-   "en": "Up to 32 frame generation presets can be saved",
-   "ja": "フレーム生成プリセットは 32 個まで保存できます"
   },
   {
    "zh": "裁剪范围超出画面",
@@ -13238,6 +13168,20 @@
    "zh-TW": "預設不存在",
    "en": "The preset does not exist",
    "ja": "プリセットが存在しません"
+  },
+  {
+   "zh": "预设光流字段损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設光流欄位損壞",
+   "en": "Preset optical-flow fields are damaged",
+   "ja": "プリセットのオプティカルフロー設定が破損しています"
+  },
+  {
+   "zh": "预设光流或内容节奏无效",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設光流或內容節奏無效",
+   "en": "Invalid preset optical flow or content cadence",
+   "ja": "プリセットのオプティカルフローまたはコンテンツのフレームレートが無効です"
   },
   {
    "zh": "预设内容类型无效",

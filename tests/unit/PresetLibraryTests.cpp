@@ -291,7 +291,7 @@ __declspec(noinline) int testExistingPresets() {
         entry.audioSync = AudioSyncMode::Manual; entry.audioOffsetMs = 73;
         for (uint32_t i = 0; i < entry.chain.nodeCount; ++i) entry.chain.nodes[i].viewX = 800 + i * 31.0f;
         bool masks = true, geometry = true, unrelated = true;
-        for (uint32_t mask = 0; mask <= kPresetAllContent; ++mask) {
+        for (uint32_t mask = 0; mask <= kPresetLegacyContent; ++mask) {
             entry.contents = mask; auto chain = base; auto settings = baseSettings;
             auto expected = settings; PresetLibrary::apply(entry, expected);
             const auto result = PresetLibrary::applyToChain(entry, chain, settings);
@@ -341,7 +341,7 @@ __declspec(noinline) int testExistingPresets() {
               settings.additionalColors == baseSettings.additionalColors,
               "chain-only keeps every current grade even when saved topology has fewer slots");
 
-        entry.contents = kPresetAllContent; entry.kind = ChainMode::List;
+        entry.contents = kPresetLegacyContent; entry.kind = ChainMode::List;
         chain = base; settings = baseSettings;
         check(!PresetLibrary::applyToChain(entry, chain, settings).accepted && chain == base && settings == baseSettings,
               "wrong preset mode rejects without mutation");
@@ -432,7 +432,7 @@ __declspec(noinline) int testExistingPresets() {
         entry.name = L"全部";
         entry.note = L"测试";
         entry.kind = ChainMode::Node;
-        entry.contents = kPresetAllContent;
+        entry.contents = kPresetLegacyContent;
         entry.chain = toChain(settings);
         entry.chain.mode = ChainMode::Node;
         removeLegacyNodeProtection(entry.chain);
@@ -447,7 +447,7 @@ __declspec(noinline) int testExistingPresets() {
         const auto& loaded = library.entries().back();
         check(loaded.name == L"全部" && loaded.note == L"测试", "name and note survive");
         check(loaded.kind == ChainMode::Node && loaded.chain.mode == ChainMode::Node, "the kind survives");
-        check(loaded.contents == kPresetAllContent, "the content mask survives");
+        check(loaded.contents == kPresetLegacyContent, "the content mask survives");
         check(loaded.chain.nodeCount == entry.chain.nodeCount, "the node count survives");
         check(loaded.chain.nodes[2].nr.model.style == 2 && loaded.chain.nodes[2].nr.temporal,
               "per-layer NR parameters survive");
@@ -610,7 +610,7 @@ __declspec(noinline) int testExistingPresets() {
         auto s=sample();s.nrLayerCount=4;s.additionalColorCount=1;s.additionalColors[0].exposure=.7f;
         for(unsigned i=0;i<4;++i){auto& n=s.nrLayers[i];n.enabled=i!=1;
             n.sizePolicy=static_cast<veyra::pipeline::NrSizePolicy>(i);n.model.tone=.2f*float(i+1);}
-        PresetEntry entry;entry.name=L"NR四层尺寸";entry.contents=kPresetAllContent;entry.chain=toChain(s);entry.color=s.color;
+        PresetEntry entry;entry.name=L"NR四层尺寸";entry.contents=kPresetLegacyContent;entry.chain=toChain(s);entry.color=s.color;
         PresetLibrary library(scratch(L"nr-size.v3"));
         check(library.load()&&library.put(entry)&&library.load(),"NR per-instance library v3 reloads");
         check(library.entries().back().chain==entry.chain,"v3 preserves every node including multiple grades");
@@ -741,7 +741,7 @@ void testEditorPresetParts() {
     check(!PresetLibrary::applyToEditor(fg, *document, values).accepted && *document == *beforeBad && values == accepted,
           "editor preset: invalid detached FG multiplier rolls back");
     PresetEntry whole; whole.kind = ChainMode::Node; whole.chain = original->nodes;
-    --whole.chain.nodeCount; whole.contents = kPresetAllContent; whole.color = accepted.color;
+    --whole.chain.nodeCount; whole.contents = kPresetLegacyContent; whole.color = accepted.color;
     whole.fg.multiplier = accepted.multiplier;
     check(PresetLibrary::applyToEditor(whole, *document, values).accepted &&
           document->layout.project(document->nodes, *runtime).accepted, "editor preset: full replacement accepts incomplete prior editor");
@@ -794,7 +794,7 @@ __declspec(noinline) void testEditorGlobalSettings() {
     check(!session->valid(), "globals: XeSS draft rejects six times even while disconnected");
     document->nodes.fgMultiplier = 4;
     auto entry = std::make_unique<PresetEntry>();
-    entry->name = L"globals"; entry->kind = ChainMode::Node; entry->contents = kPresetAllContent;
+    entry->name = L"globals"; entry->kind = ChainMode::Node; entry->contents = kPresetLegacyContent;
     entry->chain = c.chain; entry->nodeConfiguration = c; entry->fg = {4, FrameGenerationBackend::XeSS};
     const auto presetPath = scratch(L"editor-global-preset.v1");
     const auto presetEditor = std::filesystem::path(presetPath).concat(L".p3-editor");
@@ -944,7 +944,104 @@ void testNrCorrectionStorage() {
     invalid.residual.correction={};invalid.residual.correction.autoAmount=-.1f;
     check(!invalid.validate().empty(),"NR correction: automatic amount range enforced");
 }
+__declspec(noinline) void testFlowStorage() {
+    const auto path=scratch(L"shared-flow.v1");
+    const auto sidecar=std::filesystem::path(path).concat(L".flow");
+    std::filesystem::remove(sidecar);
+    PresetLibrary writer(path);writer.setIncludeBuiltins(false);
+    PresetEntry old;old.name=L"old chain";old.chain=toChain(sample());
+    check(writer.load()&&writer.put(old),"flow storage: seed original legacy library");
+    const auto original=readBytes(path);
+    PresetEntry entry;entry.name=L"shared flow";entry.chain=toChain(sample());
+    entry.contents=presetContentMask(PresetContent::Flow);
+    entry.flow=PresetFlowSettings{OpticalFlowBackend::AmdFidelityFx,FlowQuality::Quality,true,ContentRate::Capture60To30};
+    check(writer.put(entry),"flow storage: save into unified preset library");
+    check(readBytes(path)==original&&readBytes(sidecar).starts_with("VEYRA_PRESET_LIBRARY 10\n"),
+          "flow storage: v10 sidecar preserves original library bytes");
+    PresetLibrary reader(path);reader.setIncludeBuiltins(false);
+    check(reader.load()&&reader.entries().size()==2&&reader.entries()[0]==old&&reader.entries()[1]==entry,
+          "flow storage: legacy and shared-flow entries reload together");
+    const auto exported=scratch(L"shared-flow-export.v10");
+    check(reader.exportEntry(1,exported),"flow storage: export unified preset");
+    std::wstring imported;
+    check(reader.importFile(exported,imported)&&reader.entries().back().flow==entry.flow&&imported!=entry.name,
+          "flow storage: import retains all shared fields and avoids name collision");
+    const auto good=readBytes(sidecar);
+    auto invalid=entry;invalid.flow->content=ContentRate(99);
+    check(!reader.put(invalid,true)&&readBytes(sidecar)==good,"flow storage: invalid cadence cannot overwrite library");
+    invalid=entry;invalid.flow->backend=OpticalFlowBackend(99);
+    check(!reader.put(invalid,true)&&readBytes(sidecar)==good,"flow storage: invalid backend cannot overwrite library");
+    invalid=entry;invalid.flow->quality=FlowQuality(99);
+    check(!reader.put(invalid,true)&&readBytes(sidecar)==good,"flow storage: invalid quality cannot overwrite library");
+    std::string truncated=readBytes(exported);truncated.erase(truncated.find_last_of(' '));
+    {std::ofstream f(exported,std::ios::binary|std::ios::trunc);f<<truncated;}
+    check(!reader.importFile(exported,imported)&&readBytes(sidecar)==good,"flow storage: truncated flow tail is rejected");
+    check(reader.setDefault(1),"flow storage: default points at shared preset");
+    PresetLibrary reload(path);reload.setIncludeBuiltins(false);
+    check(reload.load()&&reload.defaultIndex()==1&&reload.entries()[1]==entry,"flow storage: default and fields survive fresh reader");
+    for(unsigned variant=0;variant<2;++variant){
+        const auto base=scratch((L"flow-migrate-"+std::to_wstring(6+variant)+L".v1").c_str());
+        const auto legacyPath=std::filesystem::path(base).concat(variant?L".vfg":L".field-render");
+        const auto upgraded=std::filesystem::path(legacyPath).concat(L".flow");
+        std::filesystem::remove(legacyPath);std::filesystem::remove(upgraded);
+        auto legacy=std::make_unique<PresetEntry>(old);legacy->globals=ChainGlobalSettings{};
+        if(variant){legacy->fg={2,FrameGenerationBackend::Vfg,1};legacy->globals->fgBackend=FrameGenerationBackend::Vfg;}
+        PresetLibrary prior(base);prior.setIncludeBuiltins(false);
+        check(prior.load()&&prior.put(*legacy),"flow migration: create actual v6/v7 sidecar library");
+        const auto originalBytes=readBytes(legacyPath);
+        check(!originalBytes.empty()&&prior.put(entry)&&readBytes(legacyPath)==originalBytes,
+              "flow migration: new shared snapshot preserves v6/v7 sidecar bytes");
+        PresetLibrary fresh(base);fresh.setIncludeBuiltins(false);
+        check(fresh.load()&&fresh.entries().size()==2&&fresh.entries()[0]==*legacy&&fresh.entries()[1]==entry,
+              "flow migration: fresh base-path reader finds upgraded rendering/VFG library");
+    }
+}
+__declspec(noinline) void testFlowApplication() {
+    auto source=sample();source.flow=FlowQuality::Quality;source.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
+    source.amdFlowHalfResolution=true;source.content=ContentRate::Capture60To30;
+    PresetEntry entry;entry.name=L"shared flow";entry.chain=toChain(source);
+    entry.color=source.color;entry.globals=ChainGlobalSettings::capture(source);entry.fg={4,FrameGenerationBackend::Dlss,1};
+    entry.audioSync=source.audioSync;entry.audioOffsetMs=source.audioOffsetMs;entry.flow=PresetFlowSettings::capture(source);
+    for(uint32_t mask=0;mask<=kPresetAllContent;++mask){
+        auto target=sample();target.flow=FlowQuality::Performance;target.content=ContentRate::Fps50;
+        target.opticalFlowBackend=OpticalFlowBackend::GpuDis;target.amdFlowHalfResolution=false;
+        const auto before=PresetFlowSettings::capture(target);entry.contents=mask;
+        auto chain=toChain(target);const auto result=PresetLibrary::applyToChain(entry,chain,target);
+        check(result.accepted&&PresetFlowSettings::capture(target)==((mask&16)?*entry.flow:before),
+              "flow apply: independent scope across all 32 list content masks");
+        check(target.exportBitrateMbps==77&&target.captureCompatible,"flow apply: source/export preferences stay intact");
+    }
+    entry.contents=16;
+    for(int backend=0;backend<3;++backend)for(int quality=0;quality<3;++quality)for(int cadence=0;cadence<6;++cadence){
+        entry.flow=PresetFlowSettings{OpticalFlowBackend(backend),FlowQuality(quality),backend==1,ContentRate(cadence)};
+        auto target=sample();auto expected=target;entry.flow->apply(expected);
+        auto chain=toChain(target);const auto originalChain=chain;
+        check(PresetLibrary::applyToChain(entry,chain,target).accepted&&target==expected&&chain==originalChain,
+              "flow apply: every backend/quality/cadence restores without changing other settings");
+    }
+    entry.kind=ChainMode::Node;entry.chain.mode=ChainMode::Node;
+    removeLegacyNodeProtection(entry.chain);
+    entry.flow=PresetFlowSettings::capture(source);
+    for(uint32_t mask=0;mask<=kPresetAllContent;++mask){
+        auto target=sample();target.flow=FlowQuality::Performance;target.content=ContentRate::Fps50;
+        target.opticalFlowBackend=OpticalFlowBackend::GpuDis;
+        auto doc=std::make_unique<NodeEditorDocument>();doc->nodes=toChain(target);doc->nodes.mode=ChainMode::Node;
+        removeLegacyNodeProtection(doc->nodes);
+        check(doc->layout.initialize(doc->nodes).accepted,"flow editor: initialize stable IDs");
+        doc->globals=ChainGlobalSettings::capture(target);const auto before=PresetFlowSettings::capture(target);entry.contents=mask;
+        check(PresetLibrary::applyToEditor(entry,*doc,target).accepted&&
+              PresetFlowSettings::capture(target)==((mask&16)?*entry.flow:before)&&
+              doc->globals->flow==target.flow&&doc->globals->opticalFlowBackend==target.opticalFlowBackend,
+              "flow editor: independent scope across all 32 node content masks");
+    }
+    entry.kind=ChainMode::List;entry.chain.mode=ChainMode::List;entry.contents=1;entry.flow.reset();
+    auto legacy=sample();PresetLibrary::apply(entry,legacy);
+    check(legacy.flow==source.flow&&legacy.opticalFlowBackend==source.opticalFlowBackend&&legacy.content==ContentRate::Transport,
+          "flow apply: v1-v9 chain globals retain existing behavior");
+}
 int main() {
+    testFlowStorage();
+    testFlowApplication();
     testNrCorrectionStorage();
     testNrVariants();
     testRenderingChoices();

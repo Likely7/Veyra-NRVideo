@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-06 列表预设纠偏**：用户明确不要独立补帧预设，要求图示光流/估算质量/内容节奏进入已有列表预设，并重新打包2.0.4。按docs/LIST_PRESET_FLOW_PLAN_2026-10-06.md在E盘codex/list-preset-flow-20261006实施必要PresetLibrary/bridge/QML/翻译/定向测试/本地main续修与打包；保留旧包/原工作区及用户配置，不替换运行库。新guard list-preset-flow-control.py使用独立不可变基线。此具体修复覆盖这些接点历史冻结；不推送/公开发布，不派Agent/压力测试/关机，沿用≤300秒测试与≤900秒构建。
+
 > **2026-10-05 2.0.4 整合与测试包授权**：用户要求检查其他分支及 Claude 刚完成的修复，与 NR 强度/三风格画面调控、采集/Xbox 修复整合到本地 main，打包 2.0.4 给用户测试并准备正式发布。工作树 `E:/项目/Veyra/worktrees/release-2.0.4-20261005`，分支 `codex/release-2.0.4-20261005`；按 `docs/RELEASE_2.0.4_PLAN_2026-10-05.md` 执行。本轮允许存档、提交、标签、本地 main 合并、必要版本/打包/翻译/定向验收及发现的整合缺陷修复；仅合入已审查的产品改动，不复活历史撤回实验。Claude UI 工作树的 18 份未提交文件已逐字节封存并复制，原工作区/桌面/用户配置保持。新 guard 为 `scripts/acceptance/release-2.0.4-control.py`，不可变 start 与全引用 bundle 在本轮 E 盘 archives。继续 NVIDIA/AMD 同源码分包，保留 patched FFmpeg、libass、原组件身份；不派 Agent、不跑压力或竞争负载。测试每进程≤300秒、构建≤900秒。此次是本地测试交付及发布准备，未请求新的 push/GitHub Release/上传或关机；HDR/Dolby PR13/14仍暂缓。本条覆盖此次整合所需的旧 main/分支冻结，不扩大无关算法或运行库改动范围。
 
 > **2026-10-05 当前采集/Xbox现场反馈**：用户提交 `logs(4).7z`，最后明确 `veyra-qml(28).log` 为“xbox问题”。按 `docs/CAPTURE_XBOX_FIELD_PLAN_2026-10-05.md` 在 E 盘 `capture-xbox-field-20261005` / `codex/capture-xbox-field-20261005` 从 `33d6685` 隔离排查修复。这次仅涉及 Xbox 视频错误/丢AU后的关键帧恢复、有界硬解重开与必要软件回退、采集时间线诊断标签、定向测试/文档/本地候选；覆盖这些接点的历史冻结，不改 NR/颜色/补帧算法或串流协议。每轮先运行 `py -3.11 -B scripts/acceptance/capture-xbox-control.py`，不可变基线独立于旧 guards；main、其它 18 个工作区、用户配置和已有包保留。无新 merge/push/Release、压力测试、关机或子 Agent 授权；所有产物 E 盘，真实 Xbox/AMD 效果未实测不得称通过。

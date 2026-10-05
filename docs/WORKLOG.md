@@ -1,5 +1,14 @@
 # Veyra 工作记录
 
+## 2026-10-06 2.0.4预设纠偏
+
+用户截图说明不要独立补帧预设，而是把共享光流·运动估算区块纳入既有列表预设。分支codex/list-preset-flow-20261006从main d2e589a隔离施工；before全引用bundle、21工作树原字节/patch及旧2.0.4 ZIP/manifest SHA封存。移除独立FG UI/API，旧fgPresets数据不删除；统一库Flow可选范围含后端/质量/AMD半分辨率/内容节奏，默认启动节奏优先级同步修复。v10另存.flow、v1–9行为保留，新未勾选项不被ChainGlobalSettings覆盖。新增checkbox/完整摘要，四语言词条齐全。
+
+实际命令、输出路径、失败与修复详 LIST_PRESET_FLOW_ACCEPTANCE_2026-10-06.md：生产496步及增量构建均0；482预设/236效果链/246修复/旧存储/i18n通过；Qt50/0，生产弹窗及重启/导入导出/部分范围，FSR/XeSS/DLSS切换、原版双NR5、4K HEVC完整60帧且导出worker明确flow=0/content=3，两个包ASS及默认D3D12启动通过。EXE d01329aa6d9fbd6ac2d1eee294782f4cb9d233490595ed2e3e1a9ea12c16b2d6，File/Product2.0.4。preset1旧保护节点夹具、ui1隐藏弹窗定位、nrexport1变量重名失败保留；更正后重测通过。
+
+新产物全部 E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/list-preset-flow-20261006，AMD/NVIDIA分别694/215既有组件文件原字节保持。20个其它工作区、原2.0.4包与Claude修改不变，无SDK/runtime进Git。当前准备本地main延续合并及最终封包，独立解压启动完成后交付；无新push/Release，不扩大Xbox/AMD/20–40/采集/物理延迟通过范围。
+
+
 ## 2026-10-05～06 2.0.4 分支整合与发布前测试
 
 用户明确授权检查各分支/Claude最新修复、整合当前修复到main并打包2.0.4测试。本轮从81b755b建隔离release-2.0.4-20261005；整合前main de18fc4已含性能及Claude现场修复6e9d827。审查29分支/20既有worktree，完整before bundle已verify，全部未提交/未跟踪文件原字节/补丁/hash保存；其余19工作树和原桌面保持。Claude最新21:50～22:19会话18份未提交UI文件从封存ZIP移植，保留原分支和未提交状态；旧OBS等价实现已在main，不重复覆盖，旧诊断/撤回实验不混入产品。

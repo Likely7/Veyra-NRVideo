@@ -22,11 +22,28 @@ enum class PresetContent : uint32_t {
     Color = 1u << 1,          // colour grade
     FrameGeneration = 1u << 2, // multiplier and backend
     Audio = 1u << 3,          // sync mode and offset
+    Flow = 1u << 4,           // shared optical flow and content cadence
 };
 constexpr uint32_t presetContentMask(PresetContent value) { return uint32_t(value); }
-inline constexpr uint32_t kPresetAllContent =
+inline constexpr uint32_t kPresetLegacyContent =
     presetContentMask(PresetContent::Chain) | presetContentMask(PresetContent::Color) |
     presetContentMask(PresetContent::FrameGeneration) | presetContentMask(PresetContent::Audio);
+inline constexpr uint32_t kPresetAllContent = kPresetLegacyContent | presetContentMask(PresetContent::Flow);
+
+struct PresetFlowSettings {
+    OpticalFlowBackend backend = OpticalFlowBackend::Nvidia;
+    FlowQuality quality = FlowQuality::Balanced;
+    bool amdHalfResolution = false;
+    ContentRate content = ContentRate::Transport;
+    static PresetFlowSettings capture(const EnhancementSettings& s) {
+        return {s.opticalFlowBackend, s.flow, s.amdFlowHalfResolution, s.content};
+    }
+    void apply(EnhancementSettings& s) const {
+        s.opticalFlowBackend = backend; s.flow = quality;
+        s.amdFlowHalfResolution = amdHalfResolution; s.content = content;
+    }
+    bool operator==(const PresetFlowSettings&) const = default;
+};
 
 // The frame-generation pair a preset can carry. Deliberately smaller than the
 // full EnhancementSettings: a preset must never smuggle in capture or export
@@ -43,7 +60,7 @@ struct PresetEntry {
     std::wstring note;
     ChainMode kind = ChainMode::List;
     bool builtin = false;        // read-only: can be copied, never renamed or erased
-    uint32_t contents = kPresetAllContent;
+    uint32_t contents = kPresetLegacyContent;
     EffectChain chain{};
     ColorSettings color{};
     PresetFrameGeneration fg{};
@@ -55,6 +72,9 @@ struct PresetEntry {
     // v6: chain rendering choices also travel with list presets. No capture,
     // audio or export configuration is carried by this optional snapshot.
     std::optional<ChainGlobalSettings> globals;
+    // v10 explicitly scopes shared flow, including when its checkbox is off.
+    // Absent on v1-v9 entries, which retain their existing chain semantics.
+    std::optional<PresetFlowSettings> flow;
     bool operator==(const PresetEntry&) const = default;
 };
 
