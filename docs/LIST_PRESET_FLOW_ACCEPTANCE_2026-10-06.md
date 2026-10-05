@@ -24,7 +24,7 @@
 
 失败没有抹掉：preset1新增节点夹具未移除旧保护节点而64项失败，修正夹具后preset2/preset3通过，旧存储语义的回归仍使用legacy mask15；ui1找不到已脱离父节点的隐藏弹窗，改为由生产DialogHost先打开后ui2通过，ui3实际点击开关并滚动复核；nrexport1脚本重用了original变量，在应用启动前AttributeError退出，修正为save_call后nrexport2通过。日志/旧临时夹具保留，失败不算产品通过。
 
-本地main合并、源码ZIP、最终ZIP全CRC/载荷SHA和独立解压启动为下一阶段；结果以同任务archives/main-merge.json、logs/tested-inputs.json、test-packages/DELIVERY.json、logs/cold-verify-results.json为准，不用计划当完成证据。
+本地main已 --no-ff合并 8cb55b8f83df3c045cd6c82caa25888ae888fc4a（来源1b0f576775419620ab8283d8e67f48b327ea9136），无冲突，Git树与实测树一致；随后只补充此合并记录。源码ZIP、最终ZIP全CRC/载荷SHA和独立解压启动为封包阶段；结果以同任务archives/main-merge.json、logs/tested-inputs.json、test-packages/DELIVERY.json、logs/cold-verify-results.json为准，不用计划当完成证据。
 
 新产物统一在 E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/list-preset-flow-20261006；所有子进程临时目录只覆盖本进程及子进程。使用原Qt、patched FFmpeg、libass与SDK；不引入新组件或驱动。每阶段list-preset-flow-control.py核查20个其它工作区及旧包不变。
 

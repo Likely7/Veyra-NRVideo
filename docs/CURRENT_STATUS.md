@@ -6,7 +6,7 @@
 
 实际命令、输出路径、失败与修复详 LIST_PRESET_FLOW_ACCEPTANCE_2026-10-06.md：生产496步及增量构建均0；482预设/236效果链/246修复/旧存储/i18n通过；Qt50/0，生产弹窗及重启/导入导出/部分范围，FSR/XeSS/DLSS切换、原版双NR5、4K HEVC完整60帧且导出worker明确flow=0/content=3，两个包ASS及默认D3D12启动通过。EXE d01329aa6d9fbd6ac2d1eee294782f4cb9d233490595ed2e3e1a9ea12c16b2d6，File/Product2.0.4。preset1旧保护节点夹具、ui1隐藏弹窗定位、nrexport1变量重名失败保留；更正后重测通过。
 
-新产物全部 E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/list-preset-flow-20261006，AMD/NVIDIA分别694/215既有组件文件原字节保持。20个其它工作区、原2.0.4包与Claude修改不变，无SDK/runtime进Git。当前准备本地main延续合并及最终封包，独立解压启动完成后交付；无新push/Release，不扩大Xbox/AMD/20–40/采集/物理延迟通过范围。
+新产物全部 E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/list-preset-flow-20261006，AMD/NVIDIA分别694/215既有组件文件原字节保持。20个其它工作区、原2.0.4包与Claude修改不变，无SDK/runtime进Git。已完成本地main --no-ff合并 8cb55b8（来源1b0f576），无冲突、合并树与实测源树完全相同；最终封包和独立解压启动以DELIVERY/cold收据为准；无新push/Release，不扩大Xbox/AMD/20–40/采集/物理延迟通过范围。
 
 
 ## 2026-10-06 2.0.4 本地整合与发布准备
