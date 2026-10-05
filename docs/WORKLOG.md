@@ -8378,3 +8378,7 @@ R0-focus-normal-v2加2秒等待仍不能激活A。只读核验PID40068是06:32:5
 R0-focus-normal-v3 A三次Win32激活真实成功（API/error和前台PID已记录），实际Qt active前/后台状态匹配，普通完整播放exit0/sourceSkipped0；随后解析器错用不存在的[pacing-submit]事件而无法计算间隔。实际产品格式为既有R0-normal使用的[submit] pts100ns/host100ns，修正解析并逐次保存focus-events；未降低必须有真实焦点和100个区间的断言，原失败数据保留。cleanup原焦点恢复返回false如实记录，具体窗口状态/系统激活条件未核实，不能推断窗口已关闭；未向PickerHost发关闭消息或修改配置。
 
 R0-focus-normal-v4的A首轮实际激活/Qt状态/三段真实提交均满足，但driver把matrix.run（只写result.json不返回值）当作receipt对象，结果汇总失败。修正为读实际result并增加--resume：只有完整passed、S4/50秒、EXE/源SHA和真实焦点事件全部匹配才复用已完成运行，重做分析但不重跑GPU；首次A原数据/事件不覆盖，继续交错余下B/A/B/A/B。此为夹具修正，不改产品或降低前后台断言，不把之前driver失败改写为当时成功。
+
+`R0-focus-normal-v4 --resume`最终6/6普通50秒通过，18次Win32前台PID与真实Qt active变化吻合；三阶段提交FPS三轮中位A/B均60、源跳过全部0，P99分别A17.2609/17.2227/17.2402ms，B17.1828/17.2788/17.1764ms（前台/后台/再前台），无严重失焦下降，不外推其他窗口负载或物理显示。cleanup自有GDI退出/原焦点恢复true、用户设置未变。原v1–v4夹具失败过程仍保留。
+
+`nr-quality-review.py R0-native-final-v2`完整240解码MD5/PTS/轨道/尺寸/时长0差异及12配对图/SSIM通过。`nr-r0-recordings.py R0-obs-compat-final-v2`在解码前发现MKV最终SHA与StopRecord返回当刻不同：原b38ba563…cde5，最终9c99037e…efea。OBS私有日志证明muxer08:27:40.628才结束，早于此就曾记录hash，属于夹具过早封存；旧receipt/失败review目录保留，不篡改为通过。修正OBS驱动只在本轮OBS停止后封存最终字节并重复检查稳定，StopReply早期hash独立保留，再做一轮正常六场景及全录像解码。没有修改产品/OBS配置/运行库，所有GPU计时已结束。

@@ -278,7 +278,6 @@ def run():
                   'supported video stages;',len(shots),'observed stages',flush=True)
             player = None
         assert all(matrix.digest(app/name)==sha for name,sha in payload.items())
-        (logs/'summary.json').write_text(json.dumps({'identity':identity,'runs':rows,'passed':True,'pressure':False},ensure_ascii=False,indent=2),encoding='utf-8')
     finally:
         if rpc:
             try:
@@ -294,6 +293,19 @@ def run():
         (logs/'cleanup.json').write_text(json.dumps({'userConfigUnchanged':unchanged,'ownedObsStopped':obs is None or obs.poll() is not None,
             'ownedPlayerStopped':player is None or player.poll() is not None,'ephemeralServerDisabled':True},indent=2),encoding='utf-8')
         assert unchanged, 'User OBS config changed unexpectedly'
+    # StopRecord replies before the ffmpeg muxer has necessarily closed its
+    # output. Seal bytes only after the owned OBS teardown, preserving the
+    # earlier observation instead of silently rewriting its meaning.
+    for row in rows:
+        clip=Path(row['recording'])
+        row['recordingSha256AtStopReply']=row['recordingSha256']
+        row['recordingSha256']=matrix.digest(clip)
+        row['recordingBytes']=clip.stat().st_size
+        time.sleep(.25)
+        assert matrix.digest(clip)==row['recordingSha256'] and clip.stat().st_size==row['recordingBytes']
+        row['recordingSealedAfterObsStopped']=True
+    (logs/'completed.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
+    (logs/'summary.json').write_text(json.dumps({'identity':identity,'runs':rows,'passed':True,'pressure':False},ensure_ascii=False,indent=2),encoding='utf-8')
     matrix.assert_gpu_tests_idle()
     print('R0_OBS_COMPLETE',len(rows),flush=True)
 
