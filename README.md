@@ -1,22 +1,75 @@
+<div align="center">
+
+<img src="assets/veyra-app-icon.png" alt="Veyra" width="140">
+
 # Veyra
 
-<p align="center"><img src="assets/veyra-app-icon.png" alt="Veyra" width="160"></p>
+### Real-time GPU Video Enhancement for Windows
+
+**Super Resolution · Denoising · HDR · Frame Generation · Capture · PS5 / Xbox / PC Streaming**
+
+Turn local video, capture cards and game streaming into one real-time GPU enhancement pipeline.
+
+<br>
+
+[![GitHub Stars](https://img.shields.io/github/stars/Likely7/Veyra-NRVideo?style=for-the-badge&logo=github&label=Stars)](https://github.com/Likely7/Veyra-NRVideo/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/Likely7/Veyra-NRVideo?style=for-the-badge&logo=github&label=Forks)](https://github.com/Likely7/Veyra-NRVideo/network/members)
+[![Latest Release](https://img.shields.io/github/v/release/Likely7/Veyra-NRVideo?style=for-the-badge&logo=github&label=Release)](https://github.com/Likely7/Veyra-NRVideo/releases/latest)
+[![License](https://img.shields.io/github/license/Likely7/Veyra-NRVideo?style=for-the-badge&label=License)](LICENSE)
+
+<br>
+
+**13K+ application downloads in the first month**
+
+<br>
+
+[**⬇ Download Latest Release**](https://github.com/Likely7/Veyra-NRVideo/releases/latest)
+&nbsp;&nbsp;·&nbsp;&nbsp;
+[**🇨🇳 简体中文**](README_CN.md)
+&nbsp;&nbsp;·&nbsp;&nbsp;
+[**🐛 Report an Issue**](https://github.com/Likely7/Veyra-NRVideo/issues)
+
+</div>
+
+<br>
 
 <p align="center">
   <a href="https://github.com/Likely7/Veyra-NRVideo/blob/main/assets/veyra-2.0.0-promo.mp4">
-    <img src="assets/veyra-2.0.0-promo.webp" alt="Veyra 2.0 promo (click to play the video)" width="960">
+    <img src="assets/veyra-2.0.0-promo.webp" alt="Veyra 2.0 promo — click to play" width="100%">
   </a>
 </p>
 
+<p align="center"><i>One engine. Any source. Real-time enhancement.</i></p>
 
+<br>
 
-<p align="center"><img src="docs/images/2.0.0/professional-mode.png" alt="Veyra 2.0.0 professional mode" width="1200"></p>
+<p align="center">
+  <img src="docs/images/2.0.0/professional-mode.png" alt="Veyra Professional Mode" width="100%">
+</p>
 
-English | [简体中文](README_CN.md)
+<br>
 
-A Windows enhancement player for videos, images, capture cards and streaming. Super-resolution, NR, colour grading, RTX Video HDR and frame generation share one engine. Community enhancements remain experimental.
+<h2 align="center">⭐ Star History</h2>
 
-[Download 2.0.3 portable](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3) · [Full changelog: English / 中文](docs/RELEASE_NOTES_2.0.3.md) · [Issues](https://github.com/Likely7/Veyra-NRVideo/issues)
+<p align="center">
+  <a href="https://www.star-history.com/?repos=Likely7%2FVeyra-NRVideo&type=date&legend=top-left">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/badge?repo=Likely7/Veyra-NRVideo&type=rank&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/badge?repo=Likely7/Veyra-NRVideo&type=rank" />
+      <img alt="Veyra Star History Rank" src="https://api.star-history.com/badge?repo=Likely7/Veyra-NRVideo&type=rank" />
+    </picture>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.star-history.com/?repos=Likely7%2FVeyra-NRVideo&type=date&legend=top-left"><b>View the full star growth chart →</b></a>
+</p>
+
+<p align="center">
+  <sub>Open source · GPL-3.0 · Windows 11 · C++ · DirectX 12 · NVIDIA & AMD</sub>
+</p>
+
+---
 
 ## Highlights
 
