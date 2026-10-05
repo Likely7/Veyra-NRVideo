@@ -52,17 +52,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 <h2 align="center">⭐ Star History</h2>
 
 <p align="center">
-  <a href="https://www.star-history.com/?repos=Likely7%2FVeyra-NRVideo&type=date&legend=top-left">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/badge?repo=Likely7/Veyra-NRVideo&type=rank&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/badge?repo=Likely7/Veyra-NRVideo&type=rank" />
-      <img alt="Veyra Star History Rank" src="https://api.star-history.com/badge?repo=Likely7/Veyra-NRVideo&type=rank" />
-    </picture>
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://www.star-history.com/?repos=Likely7%2FVeyra-NRVideo&type=date&legend=top-left"><b>View the full star growth chart →</b></a>
+  <img src="assets/star-history.svg" alt="Veyra Star History" width="900">
 </p>
 
 <p align="center">
