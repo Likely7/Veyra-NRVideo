@@ -90,6 +90,7 @@ GPU界面模式两次当前候选（v2/v4）均在fullscreen抓到Qt暗背景、
 | 原生/Auto-off | `R0-native-final-v2-summary`10/10、470完整原生RGBA/PTS/history。Auto池与独立同尺寸参考一致，默认off五配置200图与B4b基线CSV完全相同，debug0；两120帧Auto/固定原生NVENC封装文件SHA同，无池创建 |
 | 全文件解码与画质 | `R0-native-final-v2-quality/review.json`完整240解码MD5/PTS/时长/音轨/尺寸差异0，12配对图PSNR/SSIM与早期3b一致，100%切回逐像素相同；低档改画面、主观未批准 |
 | 无测试Loader的页面启动 | `R0-qml-smoke-final-v5/run-20261005T003229757Z-6da97867/result.json`8/8、0跳过，实际home/minimal/pro/node/export/settings/capture-dialog/playback各3500ms正常退出 |
+| 实际OBS兼容采集/录制 | `R0-obs-compat-final-v3`正常播放/暂停/恢复/resize/全屏/退窗六场景有真实视频、录制中resize后50ms退出0；用户OBS配置SHA不变、临时服务停用、仅本轮OBS/播放器退出。`record-review-scenes-v2/review.json`783帧全解码与ffprobe计数同，六对应录像取帧有视频、全屏连续图实际变化；已查看全屏/退窗原录像图。MKV封存SHA `f2b5f3cf1bc537995737b317c13eea0e6671940137fcaf89a2bb3f3f698dd51a` |
 
 这些是软件和本机正常负载回归，未扩大到Xbox长稳、AMD推理、实卡、其他RTX/驱动或物理显示。RTSS早期R0的6正常场景证据已记录真实原件/profile恢复；退出取消和撤回的OBS实验未改该功能，未冒充它由新EXE重跑。最后正常33组属于e8f0bd1那轮稳态实现，新生产差异为退出边界修复；下面新6组验证最终同样配置的真实焦点状态，不能混合两批不同时间的滚动读数宣传额外NR收益。
 
@@ -106,6 +107,8 @@ GPU界面模式两次当前候选（v2/v4）均在fullscreen抓到Qt暗背景、
 各段每轮600/600/300个实际提交区间、10/10/5个真实Qt样本，sourceSkipped全0，当前六组没有严重失焦掉帧；B后台最长18.0828ms。此结论只限普通空窗口失焦，本机没有物理显示事件，不证明用户涉及其他窗口负载的现象已根治；33组约110ms CPU提交长尾仍保留。
 
 夹具v1/v2激活失败、v3错用不存在的[pacing-submit]格式、v4初次错把无返回值的matrix.run当receipt，全部失败数据保留。两输入队列实际连接后v3激活已成功；格式改为既有[submit]。v4第一A完整播放/事件/焦点均有效，只汇总失败；resume严格核对passed/S4/50秒/EXE和源SHA/真实前台事件，复用这组不可变数据后重做分析并继续其余5组，不以重试直到好看替换性能样本。前台流程依据微软[SetForegroundWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow)，始终按实际前台PID判定。
+
+录像夹具也保留两次失败：v2在StopRecord回复就记MKV hash，muxer尚未结束，完整后处理发现变化；修正为OBS进程停止后封存，独立保留StopReply hash。v3完整解码后固定2秒帧仍为空，因为捕获尚未完成初始化；六完成截图实际在4.229/8.492/12.752/16.984/21.307/25.519秒。CPU reviewer按该轮OBS Writing file日志与原截图mtime对应取帧（近似阶段对齐，非物理时间测量），不删初始帧、不替换录像；全783帧仍纳入完整解码。新review全屏内三取帧RGB变化均值约5.85–7.51，确认真实录像在推进。旧黑帧、失败目录和receipt全保留，不冒充原review通过。
 
 ## 存档、交付与未验证边界
 

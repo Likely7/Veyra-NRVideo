@@ -8384,3 +8384,5 @@ R0-focus-normal-v4的A首轮实际激活/Qt状态/三段真实提交均满足，
 `nr-quality-review.py R0-native-final-v2`完整240解码MD5/PTS/轨道/尺寸/时长0差异及12配对图/SSIM通过。`nr-r0-recordings.py R0-obs-compat-final-v2`在解码前发现MKV最终SHA与StopRecord返回当刻不同：原b38ba563…cde5，最终9c99037e…efea。OBS私有日志证明muxer08:27:40.628才结束，早于此就曾记录hash，属于夹具过早封存；旧receipt/失败review目录保留，不篡改为通过。修正OBS驱动只在本轮OBS停止后封存最终字节并重复检查稳定，StopReply早期hash独立保留，再做一轮正常六场景及全录像解码。没有修改产品/OBS配置/运行库，所有GPU计时已结束。
 
 R0-obs-compat-final-v3六实际视频场景/resize退出通过，MKV在OBS停止后SHA稳定、原StopReply观察独立保存。录像review全解码通过后在硬编码2秒帧失败：此时OBS仍在初始化捕获，第一完成playing截图实际在4.229秒。修正review按该轮OBS Writing file精确启动日志与六完成截图mtime对应取帧，原2秒黑帧和全文件MD5仍保留，不删初始帧或更换录像；只改CPU后处理的阶段对齐，不再跑GPU。额外取全屏内三时刻验证真实录制在推进，不用原输入截图替代录像图。
+
+`nr-r0-recordings.py R0-obs-compat-final-v3 scenes-v2`通过：783全解码帧与ffprobe计数同，六完成场景录像取帧真实视频，全屏三时刻差异非0、持续推进；已看21.307全屏和25.519退窗录像原图。最终MKV SHA f2b5f3cf1bc537995737b317c13eea0e6671940137fcaf89a2bb3f3f698dd51a，用户OBS配置及全部cleanup通过。最终原生Auto12配对图也已查看，低尺寸画面变化不冒充主观批准。所有本机优化节点已处置，普通功能/焦点/全解码回归完成；开始生成独立完整本地NVIDIA ZIP+源码ZIP，依赖原字节、最终退出EXE身份、干净解压及独立PE/Windows-only PATH两绘制模式审核，未跑前不记通过。
