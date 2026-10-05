@@ -8371,4 +8371,6 @@ d0984e0/build-r0-final-v3构建成功，但R0-obs-rhi-extent-v1第一轮GPU全�
 
 9403521明确回退无效RHI gate，build-r0-final-v4 18步成功。`R0-obs-baseline-strict-r1 gpu --baseline-qml`在封存A也首次fullscreen失败，strict crop std1.2199/1.2199/1.6957，原PNG已看是Qt空背景；cleanup全部true。之前A有真实全屏视频的轮次保留，新结果证明GPU UI游戏采集既有不稳定，不能再称基线始终稳定或5c导致。停止猜测式交换链实验，保留全部拒绝存档/失败录像；最终产品兼容采集、退出、合同/UI/导出/前后台匹配回归继续。此分类不等于GPU OBS已修好。
 
-最终构建UI SHA06fc3703b0007df8467a7dd08e1e7acba25d21d539fb44ba42292d32e7b256e3，R0-obs-compat-final-v2实际六场景有视频及resize后50ms退出0，7退出/16合同（Quick39、D3D debug0）/4真实UI/5 worker/10原生470全帧与240编码输出/8页严格启动全通过。R0-focus-normal-v1的第一A运行在10秒申请激活后立即读Foreground仍为本轮GDI helper，夹具停止，不能作为前后台有效数据；本轮播放器/helper均已退出、原焦点恢复，原日志保留。GetForegroundWindow真实完成验证增加最多2秒观察，不改系统焦点锁定或用户设置，不以Qt变量伪造焦点；新对照仍需全部实际Qt active与Win32前台PID一致才接受。
+最终构建UI SHA06fc3703b0007df8467a7dd08e1e7acba25d21d539fb44ba42292d32e7b256e3，R0-obs-compat-final-v2实际六场景有视频及resize后50ms退出0，7退出/16合同（Quick39、D3D debug0）/4真实UI/5 worker/10原生470全帧与240编码输出/8页严格启动全通过。R0-focus-normal-v1的第一A运行在10秒申请激活后立即读Foreground仍为PID40068，夹具停止，不能作为前后台有效数据；本轮播放器/helper均已退出、原焦点恢复，原日志保留。GetForegroundWindow真实完成验证增加最多2秒观察，不改系统焦点锁定或用户设置，不以Qt变量伪造焦点；新对照仍需全部实际Qt active与Win32前台PID一致才接受。
+
+R0-focus-normal-v2加2秒等待仍不能激活A。只读核验PID40068是06:32:59启动的Windows PickerHost（父svchost），不是本轮GDI helper，前述未核验身份推断已更正；未关闭该系统窗口。下一夹具记录API返回/error，临时对当前/前台/目标输入队列连接并在调用后立即解除，只BringWindowToTop本轮目标，不发键盘鼠标输入、不改全局焦点锁，不碰PickerHost配置或结束其进程。无实际焦点变化仍判夹具失败，不能用无效A/B数据称后台问题修复。

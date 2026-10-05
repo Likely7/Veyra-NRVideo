@@ -14,6 +14,7 @@ user.GetForegroundWindow.restype=W.HWND;user.SetForegroundWindow.argtypes=[W.HWN
 user.EnumWindows.argtypes=[CALLBACK,W.LPARAM];user.AttachThreadInput.argtypes=[W.DWORD,W.DWORD,W.BOOL]
 user.PostMessageW.argtypes=[W.HWND,W.UINT,W.WPARAM,W.LPARAM];user.IsWindow.argtypes=[W.HWND]
 user.PeekMessageW.argtypes=[ctypes.POINTER(W.MSG),W.HWND,W.UINT,W.UINT,W.UINT]
+user.BringWindowToTop.argtypes=[W.HWND];user.BringWindowToTop.restype=W.BOOL
 kernel.GetCurrentThreadId.restype=W.DWORD
 
 def pid_of(hwnd):
@@ -34,16 +35,27 @@ def focus(hwnd,expected_pid):
     message=W.MSG();user.PeekMessageW(ctypes.byref(message),None,0,0,0)
     previous=user.GetForegroundWindow();current=kernel.GetCurrentThreadId()
     foreground_thread=user.GetWindowThreadProcessId(previous,None) if previous else 0
-    attached=foreground_thread!=current and foreground_thread!=0 and bool(user.AttachThreadInput(current,foreground_thread,True))
-    try:user.SetForegroundWindow(hwnd)
+    target_thread=user.GetWindowThreadProcessId(hwnd,None)
+    attached=[];attempts=[]
+    for thread in dict.fromkeys((foreground_thread,target_thread)):
+        if not thread or thread==current:continue
+        ctypes.set_last_error(0)
+        ok=bool(user.AttachThreadInput(current,thread,True))
+        attempts.append({'threadId':thread,'attached':ok,'error':ctypes.get_last_error()})
+        if ok:attached.append(thread)
+    ctypes.set_last_error(0)
+    try:
+        user.BringWindowToTop(hwnd)
+        requested=bool(user.SetForegroundWindow(hwnd));error=ctypes.get_last_error()
     finally:
-        if attached:user.AttachThreadInput(current,foreground_thread,False)
+        for thread in reversed(attached):user.AttachThreadInput(current,thread,False)
     # Activation can be dispatched to the other UI thread. Verify completion,
     # rather than treating the immediately preceding HWND as a denied request.
     deadline=time.monotonic()+2
     while user.GetForegroundWindow()!=hwnd and time.monotonic()<deadline:
         time.sleep(.02)
-    return user.GetForegroundWindow()==hwnd
+    return {'applied':user.GetForegroundWindow()==hwnd,'apiReturned':requested,'apiError':error,
+            'inputQueueAttempts':attempts,'initialForegroundPid':pid_of(previous)}
 
 def run():
     variant,label=sys.argv[1:3];assert label.replace('-','').isalnum();matrix.assert_gpu_tests_idle()
@@ -74,8 +86,9 @@ def run():
                         if position>=start and start not in done:
                             hwnd=owned_window(player.pid) if active else helper_window
                             pid=player.pid if active else helper.pid
-                            ok=focus(hwnd,pid)
+                            focus_info=focus(hwnd,pid);ok=focus_info['applied']
                             event={'position':position,'activeRequested':active,'targetPid':pid,'foregroundPid':pid_of(user.GetForegroundWindow()),'applied':ok}
+                            event['activation']=focus_info
                             events.append(event);done.add(start)
                             print('R0_FOCUS_ACTION',name,json.dumps(event),flush=True)
                             assert ok,'Foreground request failed; fixture cannot establish comparison'
