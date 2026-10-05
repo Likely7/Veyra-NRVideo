@@ -8376,3 +8376,5 @@ d0984e0/build-r0-final-v3构建成功，但R0-obs-rhi-extent-v1第一轮GPU全�
 R0-focus-normal-v2加2秒等待仍不能激活A。只读核验PID40068是06:32:59启动的Windows PickerHost（父svchost），不是本轮GDI helper，前述未核验身份推断已更正；未关闭该系统窗口。下一夹具记录API返回/error，临时对当前/前台/目标输入队列连接并在调用后立即解除，只BringWindowToTop本轮目标，不发键盘鼠标输入、不改全局焦点锁，不碰PickerHost配置或结束其进程。无实际焦点变化仍判夹具失败，不能用无效A/B数据称后台问题修复。
 
 R0-focus-normal-v3 A三次Win32激活真实成功（API/error和前台PID已记录），实际Qt active前/后台状态匹配，普通完整播放exit0/sourceSkipped0；随后解析器错用不存在的[pacing-submit]事件而无法计算间隔。实际产品格式为既有R0-normal使用的[submit] pts100ns/host100ns，修正解析并逐次保存focus-events；未降低必须有真实焦点和100个区间的断言，原失败数据保留。cleanup原焦点恢复返回false如实记录，具体窗口状态/系统激活条件未核实，不能推断窗口已关闭；未向PickerHost发关闭消息或修改配置。
+
+R0-focus-normal-v4的A首轮实际激活/Qt状态/三段真实提交均满足，但driver把matrix.run（只写result.json不返回值）当作receipt对象，结果汇总失败。修正为读实际result并增加--resume：只有完整passed、S4/50秒、EXE/源SHA和真实焦点事件全部匹配才复用已完成运行，重做分析但不重跑GPU；首次A原数据/事件不覆盖，继续交错余下B/A/B/A/B。此为夹具修正，不改产品或降低前后台断言，不把之前driver失败改写为当时成功。

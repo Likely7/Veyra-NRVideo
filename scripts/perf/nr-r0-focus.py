@@ -59,8 +59,9 @@ def focus(hwnd,expected_pid):
 
 def run():
     variant,label=sys.argv[1:3];assert label.replace('-','').isalnum();matrix.assert_gpu_tests_idle()
-    out=BASE/'logs'/TASK/(label+'-summary');out.mkdir(exist_ok=False)
-    tmp=BASE/'tmp'/TASK/label;tmp.mkdir(exist_ok=False)
+    resume=sys.argv[3:]==['--resume'];assert not sys.argv[3:] or resume
+    out=BASE/'logs'/TASK/(label+'-summary');out.mkdir(exist_ok=resume)
+    tmp=BASE/'tmp'/TASK/label;tmp.mkdir(exist_ok=resume)
     env={k:v for k,v in os.environ.items() if not k.upper().startswith(('VEYRA_','QT_','QSG_'))}
     env.update(TEMP=str(tmp),TMP=str(tmp))
     old_foreground=user.GetForegroundWindow();helper=None;rows=[]
@@ -69,13 +70,17 @@ def run():
         for repeat,order in enumerate((('A','B'),('B','A'),('A','B')),1):
             for mode in order:
                 events=[];done=set();name=f'{label}-{mode}-r{repeat}'
-                with (out/(name+'-helper.log')).open('xb') as helper_log:
-                    helper=subprocess.Popen([sys.executable,'-B',str(helper_source)],cwd=tmp,env=env,stdout=helper_log,stderr=subprocess.STDOUT)
-                deadline=time.monotonic()+15
-                while not owned_window(helper.pid):
-                    assert helper.poll() is None and time.monotonic()<deadline,'Owned GDI window unavailable'
-                    time.sleep(.1)
-                helper_window=owned_window(helper.pid)
+                result_path=BASE/'logs'/TASK/name/'result.json'
+                event_path=out/(name+'-focus-events.json')
+                reused=resume and result_path.is_file() and event_path.is_file()
+                if not reused:
+                    with (out/(name+'-helper.log')).open('xb') as helper_log:
+                        helper=subprocess.Popen([sys.executable,'-B',str(helper_source)],cwd=tmp,env=env,stdout=helper_log,stderr=subprocess.STDOUT)
+                    deadline=time.monotonic()+15
+                    while not owned_window(helper.pid):
+                        assert helper.poll() is None and time.monotonic()<deadline,'Owned GDI window unavailable'
+                        time.sleep(.1)
+                    helper_window=owned_window(helper.pid)
                 def poll(player,path):
                     if not path.exists():return
                     text=path.read_text(encoding='utf-8',errors='replace')
@@ -94,7 +99,16 @@ def run():
                             print('R0_FOCUS_ACTION',name,json.dumps(event),flush=True)
                             assert ok,'Foreground request failed; fixture cannot establish comparison'
                 actual='A' if mode=='A' else variant
-                receipt=matrix.run(actual,'M1','S4',name,50,stageLabel=label,onPoll=poll)
+                if reused:
+                    events=json.loads(event_path.read_text(encoding='utf-8'))
+                else:
+                    matrix.run(actual,'M1','S4',name,50,stageLabel=label,onPoll=poll)
+                # matrix.run writes a receipt; it does not return one.
+                receipt=json.loads(result_path.read_text(encoding='utf-8'))
+                assert receipt['passed'] and receipt['config']==matrix.CONFIGS['S4'] and receipt['secondsRequested']==50
+                assert receipt['exeSha256']==matrix.digest(BASE/'build'/TASK/actual/'veyra_qml_ui.exe')
+                assert receipt['sourceSha256']==matrix.digest(matrix.SOURCES['M1'])
+                assert all(e['applied'] and e['targetPid']==e['foregroundPid'] for e in events)
                 log=(BASE/'logs'/TASK/name/'player.log').read_text(encoding='utf-8',errors='replace')
                 assert len(events)==3
                 samples=[json.loads(line.split('NR_PERF_SAMPLE ',1)[1]) for line in log.splitlines() if 'NR_PERF_SAMPLE ' in line]
@@ -115,10 +129,11 @@ def run():
                 row={'name':name,'mode':mode,'repeat':repeat,'exeSha256':receipt['exeSha256'],'sourceSha256':receipt['sourceSha256'],
                     'events':events,'phases':phases,'receipt':str(BASE/'logs'/TASK/name/'result.json'),
                     'maxLoggedPreviewSkipped':max([int(x) for x in re.findall(r'previewSkipped=(\d+)',log)],default=0),
-                    'gpuCompetition':False,'passed':True}
+                    'gpuCompetition':False,'passed':True,'reusedCompletedRunAfterParserRepair':reused}
                 rows.append(row);(out/'completed.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
                 print('R0_FOCUS_RESULT',name,json.dumps(phases),flush=True)
-                user.PostMessageW(helper_window,0x10,0,0);helper.wait(timeout=5);helper=None
+                if helper:
+                    user.PostMessageW(helper_window,0x10,0,0);helper.wait(timeout=5);helper=None
         summary={mode:{phase:{'medianPresentP99Ms':statistics.median(r['phases'][phase]['softwarePresentP99Ms'] for r in rows if r['mode']==mode),
             'medianSubmitFps':statistics.median(r['phases'][phase]['uiSubmitFpsMedian'] for r in rows if r['mode']==mode)}
             for phase in ('foreground-before','background','foreground-after')} for mode in ('A','B')}
