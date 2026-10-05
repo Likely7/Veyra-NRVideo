@@ -3,7 +3,6 @@
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
-#include "veyra/gfx/ObsQtFrameGate.h"
 #include "veyra/sink/ImageExportSink.h"
 namespace veyra::engine {
 bool VideoPresenter::beginSourceInput(){
@@ -138,14 +137,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         SUCCEEDED(ctx.device()->GetDeviceRemovedReason())&&
         !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE",nullptr,0))return true;
     retainedFrame_.reset(); // A failed present never seeds an idle cache.
-    bool resizeReady=!windowChanging&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)&&sink_.resizeDue();
-    std::optional<gfx::ObsNativeResizeHold> captureResizeHold;
-    if(resizeReady&&GetModuleHandleW(L"graphics-hook64.dll")){
-        captureResizeHold.emplace();resizeReady=captureResizeHold->ready();
-        if(!resizeReady)captureResizeHold.reset(); // no native wait; retry next frame
-        else veyra::log::info("capture-resize",std::format("exclusive native resize target={}x{} qtWindows={}",targetWidth,targetHeight,captureResizeHold->windows()));
-    }
-    if(resizeReady) {
+    if(!windowChanging&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)&&sink_.resizeDue()) {
         resized=true;
         if(!ring.drainQueue())return false;sink_.resize(targetWidth,targetHeight);
         // A capture hook may temporarily retain a DXGI buffer. Keep the old
@@ -283,7 +275,6 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const auto dxgiStart=std::chrono::steady_clock::now();
     reflex_.mark(reflexFrame_,3);reflex_.mark(reflexFrame_,4);
     const bool presented=sink_.present(st);
-    captureResizeHold.reset(); // release Qt immediately after the native Present
     reflex_.mark(reflexFrame_,5);reflexFrame_=0;
     const auto presentEnd=std::chrono::steady_clock::now();
     const auto ms=[](auto d){return std::chrono::duration<double,std::milli>(d).count();};
