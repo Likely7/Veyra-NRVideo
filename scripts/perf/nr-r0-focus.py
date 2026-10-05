@@ -90,6 +90,7 @@ def run():
                             event={'position':position,'activeRequested':active,'targetPid':pid,'foregroundPid':pid_of(user.GetForegroundWindow()),'applied':ok}
                             event['activation']=focus_info
                             events.append(event);done.add(start)
+                            (out/(name+'-focus-events.json')).write_text(json.dumps(events,ensure_ascii=False,indent=2),encoding='utf-8')
                             print('R0_FOCUS_ACTION',name,json.dumps(event),flush=True)
                             assert ok,'Foreground request failed; fixture cannot establish comparison'
                 actual='A' if mode=='A' else variant
@@ -99,7 +100,7 @@ def run():
                 samples=[json.loads(line.split('NR_PERF_SAMPLE ',1)[1]) for line in log.splitlines() if 'NR_PERF_SAMPLE ' in line]
                 submitted=[]
                 for line in log.splitlines():
-                    if '[pacing-submit]' in line and 'event=submitted' in line:
+                    if '[submit]' in line:
                         submitted.append({k:int(v) for k,v in re.findall(r'(\w+)=(-?\d+)',line)})
                 phases={}
                 for phase,lo,hi,active in (('foreground-before',13,23,True),('background',28,38,False),('foreground-after',43,48,True)):
