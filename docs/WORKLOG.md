@@ -1,5 +1,21 @@
 # Veyra 工作记录
 
+## 2026-10-05 采集60→55–57FPS与Xbox补帧冻结：开工证据
+
+当前以用户最终更正的28日志处理Xbox，不拿26本地HEVC/AMD NR日志代替。已安全解包7z并复制/hash输入到 `E:/项目/Veyra/logs/capture-xbox-field-20261005/input`，64,005行采集日志和17,076行Xbox日志；归档内容只作证据。采集callback/PTS60Hz，rev16 GPU完成FPS中位55/输入60，实际mailbox丢帧；不能伪改输入数字或承诺全部增强固定60。Xbox 487次D3D12VA send_packet EINVAL，FG重建附近开始、音频继续；缺少错误后的flush及输入AU丢失的参考链reset，SDK/driver根因尚不能确定。
+
+从已验NR新功能 `33d6685` 创建 `codex/capture-xbox-field-20261005` / E盘worktree；开工tag、verify后的bundle（SHA6169096d…a81f51）及18个其它worktree的不可变状态/hash在archives同任务目录，计划 `CAPTURE_XBOX_FIELD_PLAN_2026-10-05.md`。只做必要Xbox恢复及采集诊断、测试/本地包，不改NR/SR/FG算法、不连用户主机、不派Agent/压力测试/merge/push/Release。此节仅记录证据与开工，不声称产品修复或实机通过。
+
+### Xbox 恢复实施及本机验收
+
+已补硬错误/丢AU后的flush、关键帧等待和首个恢复帧Discontinuity；三个连续硬错误才允许每连接一次硬解重开，必要时一次软件回退，NeedInput不当错误，成功出帧不补充重开预算。终止时保留Failed和具体原因，ready/end更新不再抹去解码失败；stats改读原子硬解状态，避免close/open并发访问decoder。采集只修正pacing诊断条件，无新FPS/画质策略。
+
+最终 `capture-xbox-build.py build7` 五目标退出0，保留patched FFmpeg+dav1d和静态libass；EXE SHA256 `0450db056d0611cb416d5594981fa1ac6e28128fc5b0e4ef5e1f14b96e1c0ddb`。`capture-xbox-tests.py`：xbox1为97/0、本地loopback无远端账号；scene1为18/0；timing1为78 PASS；codec10/11无B/B2均ALL PASS 0，真实软/硬解、EAGAIN、丢包像素/PTS、坏包flush、硬解重开/软件替换和旧D3D12帧lease有效。smoke-AMD3/NVIDIA3干净PATH/独立profile均PASS，真实libass内嵌字体和5事件字幕；hot-NVIDIA3为43.828s/PASS，FSR3.1→XeSS→DLSS→FSR3.1→关闭后两层原版NR强度5、风格1自动/2手动继续播放及PNG。实际命令、失败（ANSI夹具、B重排序、NeedInput注入误判、首次DLSS创建约9s误判）和证据见 `docs/CAPTURE_XBOX_FIELD_EXECUTION_2026-10-05.md`，不把失败抹为通过。
+
+候选 `E:/项目/Veyra/test-packages/capture-xbox-field-20261005/Veyra-2.0.3-streamfix1-{AMD,NVIDIA}-win64-portable`，相应source ZIP、bundle、ZIP/逐文件hash与最终交付摘要在该任务的test-packages/archives/logs。NVIDIA 215项、AMD 686项已批准组件原字节保留；AMD补同EXE需要的8份libass依赖版权通知，无新运行二进制。只复制旧manifest payload并排除旧包后生成的用户配置，误继承副本隔离到本任务logs，原包/用户配置不改。14文件guard保持其余18工作树/main/桌面身份不变；本地commit/tag存档，无新merge/push/Release或关机。
+
+RX9070XT+真实Xbox、现场耗尽恢复的结束/UI提示、实卡采集与长稳未执行。软件回退可能增加CPU/解码耗时；487次EINVAL的底层触发器未确定。本次不是AMD NR无效果修复，也没有证明采集原增强组合已到60FPS；现场counter证明输入60.009/s、处理54.453/s。下一步仅受影响用户用新AMD候选复测原FSR/XeSS切换并保留新恢复日志。
+
 ## 2026-10-05 NR 风格 1/2 色偏与调控参数续修
 
 用户反馈原版 NR 强度 5 的风格 1/2 色偏较大、旧手动控制主要局部压缩明显；接续已验首轮 `9eb3b1c`，原包保留。tag `checkpoint/pre-nr-style-controls-20261005` 与续修前 bundle `E:/项目/Veyra/archives/nr-strength-protection-20261005/style-controls/source-before.bundle`（SHA256 `19703EFD383E2B012AF6FFDE0663395CB2276D0A9FCA3D524DD6AE16D2EBF42C`）已核验。三个风格原本均已接入，问题是共用规则遗漏低色度染色及亮度变化后的饱和度，已分别设置自动参数。

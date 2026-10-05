@@ -29,6 +29,7 @@
 #include "veyra/xbox/StreamApi.h"
 #include "veyra/xbox/WebRtcSession.h"
 #include "veyra/xbox/DisconnectPolicy.h"
+#include "veyra/xbox/VideoDecodeRecovery.h"
 
 using namespace veyra::xbox;
 using json = nlohmann::json;
@@ -539,6 +540,36 @@ void webrtcTests() {
 } // namespace
 
 int main(int argc, char** argv) {
+    {
+        VideoDecodeRecovery recovery;
+        check(recovery.failed(true)==VideoDecodeRecoveryAction::ResetHistory,
+              "one decode error resets references without replacing hardware");
+        recovery.picture();
+        check(recovery.failed(true)==VideoDecodeRecoveryAction::ResetHistory&&
+              recovery.failed(true)==VideoDecodeRecoveryAction::ResetHistory&&
+              recovery.failed(true)==VideoDecodeRecoveryAction::ReopenHardware,
+              "three consecutive hard errors permit one hardware reopen");
+        recovery.picture();
+        check(recovery.failed(true)==VideoDecodeRecoveryAction::ResetHistory&&
+              recovery.failed(true)==VideoDecodeRecoveryAction::ResetHistory&&
+              recovery.failed(true)==VideoDecodeRecoveryAction::UseSoftware,
+              "a recovered picture does not refill the hardware reopen budget");
+        check(recovery.failed(false)==VideoDecodeRecoveryAction::ResetHistory&&
+              recovery.failed(false)==VideoDecodeRecoveryAction::ResetHistory&&
+              recovery.failed(false)==VideoDecodeRecoveryAction::Stop,
+              "persistent failure after software fallback ends explicitly");
+        struct Unit { unsigned id; bool inputLoss=false; };
+        std::deque<Unit> queue;
+        for(unsigned i=0;i<8;++i)queue.push_back({i});
+        check(trimVideoInputs(queue,8)==1&&queue.size()==7&&queue.front().id==1&&queue.front().inputLoss,
+              "dropped compressed AU marks the first survivor for reference reset");
+        queue.push_back({8});
+        check(trimVideoInputs(queue,8)==1&&queue.front().id==2&&queue.front().inputLoss,
+              "repeated queue overflow propagates the lost-chain boundary");
+        queue.pop_front();
+        check(trimVideoInputs(queue,8)==0&&!queue.front().inputLoss,
+              "continuous queued units do not invent extra resets");
+    }
     check(reconnectableDisconnect("KickForServerShutdown"), "server service restart is recoverable");
     check(reconnectableDisconnect("connection lost"), "transport loss is recoverable");
     check(!reconnectableDisconnect("KickForStreamingClientDisconnect") && !reconnectableDisconnect("unknown server disconnect"), "unknown kicks and takeover are not retried");

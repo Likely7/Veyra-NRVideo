@@ -223,6 +223,109 @@ bool packetRetryTest(const char* path,gfx::D3D12DeviceContext& device) {
     return ok;
 }
 
+// Exercise the real codec's hard-error/reset boundary used by Xbox. This is
+// a local H.264 replay, not a real Xbox/RX9000 driver reproduction.
+bool hardErrorRecovery(ElementaryStream& stream, ID3D12Device* device, ID3D12CommandQueue* queue) {
+    if(stream.codec!=source::CaptureCodec::H264)return true;
+    source::CaptureCompressedDecoder decoder;
+    decoder.setStreamProfile(true);
+    if(!decoder.open(stream.codec,unsigned(stream.width),unsigned(stream.height),nullptr,0,device,queue))return false;
+    AVFrame* target=av_frame_alloc();
+    if(!target)return false;
+    target->format=AV_PIX_FMT_NV12;target->width=stream.width;target->height=stream.height;
+    if(av_frame_get_buffer(target,32)<0){av_frame_free(&target);return false;}
+    AVFrame* output=nullptr;bool hardware=false;size_t at=0;unsigned warm=0;
+    for(;at<stream.accessUnits.size()&&warm<8;++at){
+        const auto& unit=stream.accessUnits[at];
+        if(decoder.decode(unit.data(),unit.size(),stream.pts[at],target,&output,hardware))++warm;
+        else if(!decoder.waitingForInput()){av_frame_free(&target);return false;}
+    }
+    if(warm!=8||at==0){av_frame_free(&target);return false;}
+    const auto isIdr=[](const std::vector<uint8_t>& unit){
+        for(size_t i=0;i+3<unit.size();++i)
+            if(unit[i]==0&&unit[i+1]==0&&unit[i+2]==1&&(unit[i+3]&31)==5)return true;
+        return false;
+    };
+    int64_t recoveryPts=AV_NOPTS_VALUE;
+    for(size_t next=at;next<stream.accessUnits.size();++next)
+        if(isIdr(stream.accessUnits[next])){recoveryPts=stream.pts[next];break;}
+    if(recoveryPts==AV_NOPTS_VALUE){
+        std::cout<<"FAIL recovery fixture has no future IDR\n";
+        av_frame_free(&target);return false;
+    }
+    const uint8_t invalid[]={0,0,0,1,0x80}; // forbidden_zero_bit, no valid slice
+    const bool badProduced=decoder.decode(invalid,sizeof(invalid),stream.pts[at-1]+1,target,&output,hardware);
+    bool ok=warm==8&&!badProduced&&!decoder.waitingForInput();
+    decoder.recoverAtKeyframe();
+    ok=ok&&!decoder.decode(nullptr,0,0,target,&output,hardware)&&decoder.waitingForInput();
+    bool restored=false;
+    // Feed dependent packets too: reset must withhold them rather than expose
+    // stale/broken references. The next real IDR restores original timestamps.
+    for(;ok&&at<stream.accessUnits.size()&&!restored;++at){
+        const auto& unit=stream.accessUnits[at];
+        const bool produced=decoder.decode(unit.data(),unit.size(),stream.pts[at],target,&output,hardware);
+        if(produced){
+            // A B-frame stream can emit the IDR after later packets. Its PTS
+            // must belong to the first new IDR, not to the packet sent today.
+            restored=output&&(output->flags&AV_FRAME_FLAG_KEY)&&output->pts==recoveryPts;
+            ok=restored;
+        }else ok=decoder.waitingForInput();
+    }
+    std::cout<<((ok&&restored)?"PASS ":"FAIL ")<<"hard H.264 error -> flush -> keyframe recovery backend="
+        <<decoder.backendName()<<" warm="<<warm<<" restored="<<restored<<" expectedPts="<<recoveryPts<<'\n';
+    av_frame_free(&target);return ok&&restored;
+}
+
+// Hold an old hardware frame across context replacement, as the player's
+// mailbox/graph can do, and verify actual reopen + software fallback output.
+bool decoderReplacement(ElementaryStream& stream, gfx::D3D12DeviceContext& device) {
+    source::CaptureCompressedDecoder decoder;
+    decoder.setStreamProfile(true);
+    AVFrame* target=av_frame_alloc();
+    if(!target)return false;
+    target->format=AV_PIX_FMT_NV12;target->width=stream.width;target->height=stream.height;
+    if(av_frame_get_buffer(target,32)<0){av_frame_free(&target);return false;}
+    AVFrame* output=nullptr;AVFrame* held=nullptr;bool hardware=false;size_t at=0;
+    bool ok=decoder.open(stream.codec,unsigned(stream.width),unsigned(stream.height),nullptr,0,device.device(),device.directQueue());
+    const auto isIdr=[](const std::vector<uint8_t>& unit){
+        for(size_t i=0;i+3<unit.size();++i)
+            if(unit[i]==0&&unit[i+1]==0&&unit[i+2]==1&&(unit[i+3]&31)==5)return true;
+        return false;
+    };
+    const auto prime=[&](unsigned count,bool seekIdr,bool expectHardware){
+        if(seekIdr)while(at<stream.accessUnits.size()&&!isIdr(stream.accessUnits[at]))++at;
+        if(at>=stream.accessUnits.size())return false;
+        const int64_t keyPts=stream.pts[at];unsigned pictures=0;
+        for(;at<stream.accessUnits.size()&&pictures<count;++at){
+            const auto& unit=stream.accessUnits[at];
+            if(decoder.decode(unit.data(),unit.size(),stream.pts[at],target,&output,hardware)){
+                if(hardware!=expectHardware)return false;
+                if(seekIdr&&pictures==0&&(!(output->flags&AV_FRAME_FLAG_KEY)||output->pts!=keyPts))return false;
+                ++pictures;
+            }else if(!decoder.waitingForInput())return false;
+        }
+        return pictures==count;
+    };
+    ok=ok&&prime(8,false,true);
+    if(ok)held=av_frame_clone(output);
+    ok=ok&&held&&held->format==AV_PIX_FMT_D3D12;
+    unsigned reopened=0,software=0;
+    // The CPU Xbox suite verifies the bounded error decisions. Here verify
+    // their resource/codec effects; a malformed AU can legitimately become
+    // NeedInput under NONKEY discard, so it cannot fake consecutive errors.
+    for(unsigned phase=0;ok&&phase<2;++phase){
+        decoder.close();
+        ok=decoder.open(stream.codec,unsigned(stream.width),unsigned(stream.height),nullptr,0,
+            phase==0?device.device():nullptr,phase==0?device.directQueue():nullptr);
+        if(phase==0)++reopened;else ++software;
+        ok=ok&&prime(1,true,phase==0);
+    }
+    ok=ok&&reopened==1&&software==1&&held&&held->data[0]&&held->buf[0];
+    std::cout<<(ok?"PASS ":"FAIL ")<<"decoder replacement with a leased old D3D12 frame; hardwareReopens="
+        <<reopened<<" softwareFallbacks="<<software<<'\n';
+    decoder.close();av_frame_free(&held);av_frame_free(&target);return ok;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -263,6 +366,9 @@ int main(int argc, char** argv)
     check(software.failures == 0 && software.frames > 0, "software decode produces frames without errors");
     bool samePixels=true;for(const auto& [pts,pixels]:recovery.pixels){auto found=software.pixels.find(pts);samePixels=samePixels&&found!=software.pixels.end()&&found->second==pixels;}
     check(recovery.recovered&&recovery.failures==0&&samePixels,"packet loss resumes at keyframe with reference-identical pixels and PTS");
+    check(hardErrorRecovery(stream,nullptr,nullptr),"Xbox hard-error boundary recovers on the software codec");
+    check(hardErrorRecovery(stream,context.device(),context.directQueue()),"Xbox hard-error boundary recovers on D3D12VA");
+    check(decoderReplacement(stream,context),"Xbox decoder replacement preserves output PTS and old-frame lifetime");
     // B-frame reordering may emit a slightly different count on the software
     // path; the hardware and software backends must stay within one frame.
     const uint64_t difference = hardware.frames > software.frames ? hardware.frames - software.frames : software.frames - hardware.frames;

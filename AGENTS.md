@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-05 当前采集/Xbox现场反馈**：用户提交 `logs(4).7z`，最后明确 `veyra-qml(28).log` 为“xbox问题”。按 `docs/CAPTURE_XBOX_FIELD_PLAN_2026-10-05.md` 在 E 盘 `capture-xbox-field-20261005` / `codex/capture-xbox-field-20261005` 从 `33d6685` 隔离排查修复。这次仅涉及 Xbox 视频错误/丢AU后的关键帧恢复、有界硬解重开与必要软件回退、采集时间线诊断标签、定向测试/文档/本地候选；覆盖这些接点的历史冻结，不改 NR/颜色/补帧算法或串流协议。每轮先运行 `py -3.11 -B scripts/acceptance/capture-xbox-control.py`，不可变基线独立于旧 guards；main、其它 18 个工作区、用户配置和已有包保留。无新 merge/push/Release、压力测试、关机或子 Agent 授权；所有产物 E 盘，真实 Xbox/AMD 效果未实测不得称通过。
+
 > **2026-10-05 NR 强度与画面调控授权**：用户明确要求“自动调控做为开关，在NR里，也可以选择手动调节，然后保留原版的强度5，开始吧搞定他”。仅在 `E:/项目/Veyra/worktrees/nr-strength-protection-20261005` / `codex/nr-strength-protection-20261005` 从本地 main `de18fc4` 隔离实施。按 `docs/NR_STRENGTH_PROTECTION_PLAN_2026-10-05.md` 修改共享 NR settings/预设/会话、graph/时域接点、残差 shader、QML bridge/逐层面板、翻译、来源 notice、必要 CMake/定向测试与本地打包；此明确范围覆盖历史 UI-only 冻结。默认调控关闭，保留原有路径及总变化量 0–5；自动和手动设置分别保存，不更换、修改或下载 NR DLL，不改采集/解码/音频/补帧/旧 Win32。允许本轮必要 commit/tag/源码 bundle 存档和完整本地候选交付，不包含新 merge/push/Release/关机，不派 Agent。所有产物 E 盘，测试每进程≤300秒、构建≤900秒，不制造 GPU 压力。每轮先运行 `py -3.11 -B scripts/acceptance/nr-protection-control.py guard`；旧 guard/baseline 保留，当前不可变基线独立保存。
 
 > **2026-10-05 本地 main 合并授权**：用户在 Codex 接管 Claude 最新验收和现场修复后明确要求“先合并到main，然后有其他修复等你做”。本次允许提交继承的未提交修复、存档、打标签和本地合并；已将 NR 性能分支及 `claude/field-fixes-20261005` 修复提交 `6e9d827` 合入本地 `main`，合并提交 `f7ced91`。此条覆盖这批工作的历史“不 merge”限制；不包含新的 push/Release、旧 UI 删除或剩余修复实施授权。合并记录见 `docs/MERGE_MAIN_2026-10-05.md`，后续新修复按用户下一条具体要求处理。来源分支和其他工作树保留，桌面旧工作区与用户配置不改，运行库/SDK/模型不得进入源码 Git。
