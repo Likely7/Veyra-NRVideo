@@ -61,7 +61,9 @@ source_zip=BASE/'test-packages'/TASK/Path(manifest['correspondingSource']['appli
 assert matrix.digest(source_zip)==manifest['sourceZipSha256']
 with zipfile.ZipFile(source_zip) as source:
     assert not any(Path(name).suffix.lower() in immutable|{'.lib','.pdb','.addon64'} for name in source.namelist())
-    assert source.read('qml/Veyra/Main.qml')==(ROOT/'qml/Veyra/Main.qml').read_bytes()
+    main_source=source.read('qml/Veyra/Main.qml')
+    assert main_source==subprocess.check_output(['git','-C',str(ROOT),'show',manifest['sourceArchiveCommit']+':qml/Veyra/Main.qml'])
+    assert main_source.decode('utf-8').splitlines()==(app/'qml/Veyra/Main.qml').read_text(encoding='utf-8').splitlines()
     assert source.read('src/engine/VideoPresenter.cpp')==subprocess.check_output(['git','-C',str(ROOT),'show',manifest['sourceArchiveCommit']+':src/engine/VideoPresenter.cpp'])
 runs=[]
 for mode in ('gpu','obs-compat'):
