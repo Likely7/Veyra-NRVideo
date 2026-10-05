@@ -9,6 +9,10 @@
 新产物全部 E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/list-preset-flow-20261006，AMD/NVIDIA分别694/215既有组件文件原字节保持。20个其它工作区、原2.0.4包与Claude修改不变，无SDK/runtime进Git。已完成本地main --no-ff合并 8cb55b8（来源1b0f576），无冲突、合并树与实测源树完全相同；最终封包和独立解压启动以DELIVERY/cold收据为准；无新push/Release，不扩大Xbox/AMD/20–40/采集/物理延迟通过范围。
 
 
+最终封包执行 list-preset-flow-package.py refresh refresh1 / finalize final3：AMD 355097760 bytes，SHA256 fbca93300e43e382441d62ede3fb7e18586dbcc397a9d81c72b1fbcbb9880436；NVIDIA 714156331 bytes，SHA256 a24141d31fc7de87665b3fc45ec5eea1a6ef6a62bda773c32274ba37c2576472。源码ZIP 69900970 bytes，SHA256 debd6f5ee456d9b4fa0b729a94bd71941ca62ee9748bf0a6281c6e6d7d5f701f。两包全部载荷CRC/SHA/PE依赖闭合通过，NVIDIA/AMD 215/694组件原字节不变；list-preset-flow-cold.py从最终ZIP独立解压，在移除开发PATH的环境中各加载26个自身Qt/FFmpeg模块，默认效果关闭的ASS播放/退出均通过。DELIVERY、tested-inputs、cold-verify-results和FINAL_ACCEPTANCE收据保留，构建/候选目录/最终ZIP/必要测试证据保留，验证解压副本与重试重复bundle在确认边界后清理。
+
+final1遗漏候选说明刷新，人工审核拒绝并中止，不作交付；已封完的旧AMD和未封完NVIDIA中间ZIP原大小/SHA记在final1-review-rejected.json后删除。refresh1同步了实际提交说明；final2在生成便携ZIP前因首轮独占source-final-verify.log文件碰撞退出，保留失败收据/首轮日志，重新命名后final3完整通过。生产EXE和测试结果从始至终不变。包/source-final.bundle对应85ec414，此后仅补充这段交付记录到main；Git差异必须只含三个记录文档，473个生产输入与实测冻结SHA完全一致，不重新编译或冒充源码包包含稍后的文档记录。未push/Release。
+
 ## 2026-10-05～06 2.0.4 分支整合与发布前测试
 
 用户明确授权检查各分支/Claude最新修复、整合当前修复到main并打包2.0.4测试。本轮从81b755b建隔离release-2.0.4-20261005；整合前main de18fc4已含性能及Claude现场修复6e9d827。审查29分支/20既有worktree，完整before bundle已verify，全部未提交/未跟踪文件原字节/补丁/hash保存；其余19工作树和原桌面保持。Claude最新21:50～22:19会话18份未提交UI文件从封存ZIP移植，保留原分支和未提交状态；旧OBS等价实现已在main，不重复覆盖，旧诊断/撤回实验不混入产品。
