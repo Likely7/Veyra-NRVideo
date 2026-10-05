@@ -8368,3 +8368,5 @@ cc7f5a3/build-r0-capture-gate-v1构建5步成功。R0-obs-capture-gate-v1 GPU全
 2a8bed2/build-r0-final-v2 12步成功；R0-obs-frame-extent-v1 GPU全屏及compat六阶段、v2 GPU全屏通过并正常resize退出，但v3 GPU全屏失败，cleanup均true，批次停止。GetClientRect是窗口最新尺寸，不是Qt当前buffer尺寸，不能证明createOrResize已完成；Qt渲染线程缓存的proxy/windowSize可能滞后。拒绝此窗口尺寸代理并回退。下一候选改用Qt6.8.3 QQuickWindow::swapChain()->currentPixelSize()在实际frameSwapped接点记录真正的RHI buffer尺寸，使用本机已有Qt6::GuiPrivate头文件接口，不拷SDK或新增DLL；帧锁与native try_lock的边界仍保持，未验不称成功。
 
 d0984e0/build-r0-final-v3构建成功，但R0-obs-rhi-extent-v1第一轮GPU全屏仍抓到Qt背景（严格视频std1.22/1.22/1.70），用户配置未变、仅本轮进程退出；后续批次未执行。实际RHI尺寸与帧锁也不能保证OBS单进程多交换链的选择，拒绝并封存；明确恢复432f7ff生产文件，去掉新增GuiPrivate依赖/帧锁，不保留无效采集修复。暂停/残差恢复实验同样没有修复此现象，不能据阶段相关性拒绝已有5c。接下来对封存A作相同严格普通采集观察，确定已知兼容边界；完整窗口采集以既有OBS软件界面兼容模式作必要回归，不把未测或失败GPU模式声称通过。继续退出/合同/真实UI/导出/焦点回归，无压力测试。
+
+9403521明确回退无效RHI gate，build-r0-final-v4 18步成功。`R0-obs-baseline-strict-r1 gpu --baseline-qml`在封存A也首次fullscreen失败，strict crop std1.2199/1.2199/1.6957，原PNG已看是Qt空背景；cleanup全部true。之前A有真实全屏视频的轮次保留，新结果证明GPU UI游戏采集既有不稳定，不能再称基线始终稳定或5c导致。停止猜测式交换链实验，保留全部拒绝存档/失败录像；最终产品兼容采集、退出、合同/UI/导出/前后台匹配回归继续。此分类不等于GPU OBS已修好。
