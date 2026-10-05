@@ -55,3 +55,9 @@ build-export-baseline-v1 UI/probe构建成功，编译产品源码86e0458；只�
 `nr-export-worker.py B2d B5b-worker-v1`5/5真实ExportJobManager/ExportQueue检查通过：创建中/暂停中/编码中取消并回收worker、同路径重试、最终保存前取消、无法删除partial位置报告、保存后退出前迟到取消保留成功、冻结批次顺序/追加项/缺失源、MP4/MKV剪辑。各进程≤250秒；无设备移除/压力。日志`E:/项目/Veyra/logs/perf-nr-20261004/B5b-worker-v1-summary/summary.json`，产物载荷前后SHA一致。
 
 保留这一导出子节点的默认行为。其他显卡/MFT保持原串行路径且未实卡验证；NVOF未来帧准备还需独立尝试，文件播放尚未改变，所以整个5b仍为in-progress。
+
+## 收尾决定
+
+后续NVOF准备器已独立实测24个普通导出：完整输出相同但整次慢1.41–5.25%、额外232–867MiB，明确拒绝并回退，详`PERF_5B_NVOF_PREFETCH_2026-10-05.md`。因此5b处置完成：只保留已测无FG NVENC两帧/事件，FG/MFT原串行，不扩到文件播放/采集/串流。8K整次仅减少3.91%，未达到草案10%，不得拿10.45%处理区间代替整次收益。
+
+最终构建`R0-export-worker-final-v2`5/5通过（真实队列四个完整文件SHA同），`R0-native-final-v2`两个120帧Auto/固定原生完整文件SHA同。最终原生全解码、退出及完整包证据见`PERF_R0_ACCEPTANCE_2026-10-05.md`；上文“in-progress/待尝试”保留为当时过程，不覆盖最终处置。
