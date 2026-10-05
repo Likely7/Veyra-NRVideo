@@ -547,9 +547,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             gd.yuy2Input=isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Yuy2;gd.stillImage=isImage;
             gd.packedInput=isCapture?pipeline::packedInputCode(activeSource->info().color.pixelFormat):0;
             const bool nvidiaAdapter=ctx.adapter().isNvidia;
+            // AMD adapters run NR on the lmxxf runtime. Both the normalization
+            // and the stage description used to drop NR on every non-NVIDIA
+            // adapter, so AMD NR never ran in the product (field log 2026-10-05,
+            // RX 9070 XT: "normalized ... nr=false").
+            const bool amdNrAdapter=ctx.adapter().vendorId==0x1002;
             auto stageRequest=[&](const PlayerOptions& o){
                 StageRequest r;r.nr=o.nr;r.sr=o.sr;r.fg=o.fg;r.fgMultiplier=o.fgMultiplier;
-                r.width=width;r.height=height;r.stillImage=isImage;r.nvidiaAdapter=nvidiaAdapter;
+                r.width=width;r.height=height;r.stillImage=isImage;r.nvidiaAdapter=nvidiaAdapter;r.amdNr=amdNrAdapter;
                 r.nodeOrder=o.nodeOrder?&*o.nodeOrder:nullptr;return r;
             };
             describeStages(stageRequest(options),options.snapshot(),gd);
@@ -571,12 +576,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             auto initializePreview=[&](pipeline::EnhanceGraphDesc& desc,PlayerOptions& selected,bool preserveWorkingFg=false,bool preserveWorkingNr=false){
                 backendRecoveryWarning.clear();
                 auto supported=selected.snapshot();
-                if(disableUnsupportedNvidiaEffects(supported,nvidiaAdapter)){
+                if(disableUnsupportedNvidiaEffects(supported,nvidiaAdapter,amdNrAdapter)){
                     selected=PlayerOptions::from(supported,selected.nodeOrder);
                     // Same stage rules as every other build: AMD FSR upscaling
                     // survives the normalization, it used to be dropped here.
                     describeStages(stageRequest(selected),selected.snapshot(),desc);
-                    backendRecoveryWarning=L"当前 GPU 不支持 NVIDIA 增强；NR、超分及 DLSS 已关闭，XeSS选择保留";
+                    backendRecoveryWarning=amdNrAdapter?L"当前 GPU 不支持 NVIDIA 增强；超分及 DLSS 已关闭，NR 使用 AMD 运行库，XeSS选择保留":
+                        L"当前 GPU 不支持 NVIDIA 增强；NR、超分及 DLSS 已关闭，XeSS选择保留";
                     veyra::log::warn("capability","normalized requested NVIDIA effects before graph creation; applied settings reflect actual disabled stages");
                 }
                 for(unsigned attempt=0;attempt<6;++attempt){
@@ -719,7 +725,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(!backendRecoveryWarning.empty()){
                 std::lock_guard lock(mutex_);desired_.rejectVideoRequest(initialRequested,options.snapshot());snapshot_.desired=desired_;snapshot_.rejectedRevision=initialRequested.revision;snapshot_.backendWarning=backendRecoveryWarning;
             }
-            if(!nvidiaAdapter&&(options.nr||options.sr||(options.fg&&!xessFg))){
+            if(!nvidiaAdapter&&((options.nr&&!amdNrAdapter)||options.sr||(options.fg&&!xessFg))){
                 veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested features: nr={} sr={} fgBackend={} flowBackend={}",options.nr,options.sr,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend)));
                 status(L"当前非 NVIDIA 适配器：NR、NVIDIA 超分与 DLSS 已禁用；可使用 XeSS 预览和 AMD 光流",false);
             }
@@ -727,7 +733,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(graph->xessEnabled()&&!presenter.xessActive())status(L"XeSS 未启用：运行时或设备不兼容；当前为普通呈现",false);
             {
                 std::lock_guard lock(mutex_);
-                if(!nvidiaAdapter&&(options.nr||options.sr||(options.fg&&!xessFg)))snapshot_.backendWarning=L"当前 GPU 不支持所选 NVIDIA 增强";
+                if(!nvidiaAdapter&&((options.nr&&!amdNrAdapter)||options.sr||(options.fg&&!xessFg)))snapshot_.backendWarning=L"当前 GPU 不支持所选 NVIDIA 增强";
                 if(graph->xessEnabled()&&!presenter.xessActive())snapshot_.backendWarning=L"XeSS 初始化失败；当前为普通呈现";
             }
             captureSource.setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
@@ -974,6 +980,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         }
                     }
                 };
+                // The graph object is replaced on rebuilds (core reuse, recent-graph
+                // cache, prewarm adoption). Re-arm recording on whichever graph is
+                // current; arming only the first one left every later graph
+                // unmeasured ("未测量" after any effect change, 2026-10-05).
+                graph->recordGpuTimings();
                 for(const auto& sample:graph->takeGpuTimings())record(sample);
                 for(const auto& sample:presenter.takeGpuTimings(ctx.fence()))record(sample);
             };
@@ -1267,7 +1278,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     //    settings record.
                     bool rebuild=engine::requiresGraphRebuild(previous,requested)||previousOrder!=requestedOrder;
                     if(gd.hdrOutput!=nextDesc.hdrOutput||
-                       (!nvidiaAdapter&&(next.nr||next.sr||(next.fg&&!xessFg)))||
+                       (!nvidiaAdapter&&((next.nr&&!amdNrAdapter)||next.sr||(next.fg&&!xessFg)))||
                        gd.enableNr!=nextDesc.enableNr||gd.enableFg!=nextDesc.enableFg||
                        gd.nrBeforeSr!=nextDesc.nrBeforeSr||
                        gd.workWidth!=nextDesc.workWidth||gd.workHeight!=nextDesc.workHeight||
@@ -1319,7 +1330,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         }
                         options=next;gd=nextDesc;transaction=true;reset=true;
                         resetRecord->epoch=0;
-                        if(!nvidiaAdapter&&(next.nr||next.sr||(next.fg&&!xessFg)))veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested settings revision={} nr={} sr={} fgBackend={} flowBackend={}",requested.revision,next.nr,next.sr,frameGenerationBackendName(requested.frameGenerationBackend),opticalFlowBackendName(requested.opticalFlowBackend)));
+                        if(!nvidiaAdapter&&((next.nr&&!amdNrAdapter)||next.sr||(next.fg&&!xessFg)))veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested settings revision={} nr={} sr={} fgBackend={} flowBackend={}",requested.revision,next.nr,next.sr,frameGenerationBackendName(requested.frameGenerationBackend),opticalFlowBackendName(requested.opticalFlowBackend)));
                     }
                     else {
                         finishReset(diagnostics::ResetOutcome::RolledBack);
@@ -1739,7 +1750,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 {std::lock_guard lock(mutex_);snapshot_.previewFgMultiplier=previewFgMultiplier;}
                 const auto liveInterval=physicalCapture?
-                    capturePairInterval100ns(pkt.duration,activeSource->info().averageFps,lastProcessedPtsMs,pts,historyReset):
+                    // A span across frames WE skipped is not the source cadence. Using it
+                    // stretched the next pair's presentation over the gap, which made
+                    // the mailbox drop again: one background hiccup locked live capture
+                    // at ~10 pairs/s (field log 2026-10-04, 60 -> 22 fps until refocus).
+                    capturePairInterval100ns(pkt.duration,activeSource->info().averageFps,lastProcessedPtsMs,pts,historyReset||gapCandidate):
                     livePhaseInterval100ns(pkt.duration,activeSource->info().averageFps/(isScreen&&halfRate?2:1),isScreen);
                 const auto processingAllowance=isCapture&&options.fg&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)?
                     fgBudget.processingAllowance(host100ns(),liveInterval):0;

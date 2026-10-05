@@ -8398,3 +8398,17 @@ R0-obs-compat-final-v3六实际视频场景/resize退出通过，MKV在OBS停止
 全部本机优化节点已存档处置：有效实现保留、负优化与无效OBS候选明确撤回；外部C/真实主机实卡/其他GPU/物理显示/主观画质缺口、约110ms/旧2.8s长尾及GPU UI OBS限制均在R0及DELIVERY列明。最终按guard、全分支diff-check、源码二进制隔离和主线/桌面/修复工作区保持检查收尾，再commit与R0-delivery accepted增量bundle/patch/receipt。没有新增压力/竞争程序，没有merge/push/Release/关机。本轮为本地候选交付，不能说原草案全部性能目标或所有硬件验收已达成。
 
 `R0-final-scope-v2/summary.json`最终检查通过：guard177路径、全分支diff-check、源代码自最终构建无变化、114既有节点checkpoint、GPU测试已退出；main354b1c6、桌面原状态、field-upgrade干净8cdc612保持。首版手工check把历史公开推广视频REAMDE MP4.mp4及assets/veyra-2.0.0-promo.mp4也视为违规，范围误用；两者Git blob与开工点完全相同，不删除用户既有资源。校正为严格禁止全部tracked proprietary运行库/SDK/模型，以及本轮任何新增或改动测试媒体，均无违规；该记录不隐藏原断言失败，不放开运行组件规则。
+
+## 2026-10-05 Claude 现场修复（claude/field-fixes-20261005，基于 2dbf26c，未提交）
+
+预热默认关闭并按显卡置灰；设置页拆为 10 类；后台卡顿的“跳帧→节奏中断重置→补帧相位拉长→再丢帧”自我放大链路修复，并在播放期间退出 Windows 电源节流；AMD NR 被非 NVIDIA 规范化/图描述关掉的问题修复（预览与 1080p 内导出）；引入 libass 0.17.5 静态库支持 ASS 特效字幕与 MKV 内嵌字体。详见 `docs/FIELD_FIXES_2026-10-05.md`。构建 `build/field-fixes-20261005/B`，日志与截图 `logs/field-fixes-20261005/`。单元/合同测试与本机实际运行截图通过；用户系统的后台卡顿、RX 9000 实卡 AMD NR 未验证。
+
+## 2026-10-05 Codex 接管 Claude 最新验收及现场修复
+
+读取 Claude 最新原始会话 `C:/Users/123/.claude/projects/E-----Veyra/b667394c-e878-4628-ae05-663760b1a66b.jsonl`、独立 ACCEPTANCE_REPORT 与现场记录，确认最后的计时修复、build-6 和第二版打包均已完成，仅交接消息因额度中断未发。继续 E:/项目/Veyra/worktrees/field-fixes-20261005 / claude/field-fixes-20261005，HEAD 2dbf26c；保全全部未提交源码，本轮只更新 FIELD_FIXES/CURRENT_STATUS/WORKLOG。原性能验收仍为有条件通过，未验 AMD/用户后台卡顿/暂停后新接 OBS/其他 RTX 不能写通过。
+
+Run takeover-20261005T061823Z-1ad4ac；logs/tests/tmp/archives 全在 E:/项目/Veyra 对应 claude-handoff-20261005 子目录。开始状态和1605文件 SHA 保存在 archives/.../takeover-before.json，原现场文档另存 inherited-field-fixes.md。`py -3.11 -B E:/项目/Veyra/tmp/claude-handoff-20261005/takeover-20261005T061823Z-1ad4ac/handoff-check.py takeover-20261005T061823Z-1ad4ac audit` 通过 ZIP CRC/1578载荷 SHA/1605源码原字节/123不变运行组件；第二版ZIP SHA85c8da0203abe79d07715a3afe08f1f377f278f5743aceaf16148235c84b75c6，EXE09b439d8faf4df121a0749b6eaaccf71de0b8c344d144feb1ea743cc7d973a14与原build-6一致。包修订号05b，编译显示标签仍05，明确记录而不重打历史包。
+
+同夹具 `units` 五测试全exit0（scene18/18、repair246/246、live timing/effect chain/i18n通过）；`timing` 独立包副本约45秒真实播放七阶段通过：关效果→开NR→关NR→缓存恢复NR→DLSS SR→DLSS2X→第二NR层。feature-cache真实命中，当前GPU阶段与节点均measured且samples>0，合计约7.22/7.07/8.18/10.43/16.85ms；退出0，无产品/QML错误。不是A/B收益或物理延迟测量，不外推未测组合。测试QML仅在本轮副本，所有测试进程已退出。
+
+更正文档中“卡顿消失确认外部负载”过强归因为未确认根因，保留原日志；AMD所查会话无效不泛化成所有历史会话从未执行。本轮未新构建、未改产品/运行库、未commit/merge/push/Release/关机、无压力/竞争程序。下一项本机工作为隔离OBS兼容模式先暂停后新挂钩实录；用户采集卡后台和RX9000实卡仍待真实反馈。详FIELD_FIXES第6节和本轮JSON。

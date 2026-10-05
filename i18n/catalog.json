@@ -463,6 +463,13 @@
    "ja": "AMD FSR のフレーム生成は最大 2X です。要求は適用されていません"
   },
   {
+   "zh": "AMD NR 导出只支持 1080p 以内的片源，本次导出关闭 NR",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "AMD NR 匯出只支援 1080p 以內的片源，本次匯出關閉 NR",
+   "en": "AMD NR export supports sources up to 1080p only; NR is off for this export",
+   "ja": "AMD NR の書き出しは 1080p 以下のソースのみ対応のため、今回の書き出しでは NR をオフにします"
+  },
+  {
    "zh": "AMD NR 最高 1080p 像素预算",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "AMD NR 最高 1080p 像素預算",
@@ -1910,6 +1917,13 @@
    "zh-TW": "不重投影、不用光流，所以運動區域不會拖影。放在最後一層 NR 之後、超解析與補幀之前。",
    "en": "No reprojection and no optical flow, so moving areas do not smear. Runs after the last NR layer, before super resolution and frame generation.",
    "ja": "再投影もオプティカルフローも使わないため、動く部分に残像が出ません。最後の NR 層の後、超解像とフレーム生成の前に実行します。"
+  },
+  {
+   "zh": "与 OBS、监控软件（小飞机 / RTSS）同时使用时的设置；修改后需要重启。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "與 OBS、監控軟體（小飛機 / RTSS）同時使用時的設定；修改後需要重新啟動。",
+   "en": "Settings for running alongside OBS and monitoring tools (Afterburner / RTSS); changes need a restart.",
+   "ja": "OBS や監視ソフト（Afterburner / RTSS）と同時に使うときの設定です。変更後は再起動が必要です。"
   },
   {
    "zh": "与主机的加密连接失败，主机的证书可能已改变，请重新配对。",
@@ -3824,6 +3838,13 @@
    "ja": "いいえ"
   },
   {
+   "zh": "启动与窗口",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "啟動與視窗",
+   "en": "Startup & window",
+   "ja": "起動とウィンドウ"
+  },
+  {
    "zh": "启动后自动继续上次内容",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "啟動後自動繼續上次內容",
@@ -4293,6 +4314,13 @@
    "ja": "音声の同期"
   },
   {
+   "zh": "声音同步、音量与输出设备。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "聲音同步、音量與輸出裝置。",
+   "en": "Audio sync, volume and output device.",
+   "ja": "音声同期、音量、出力デバイス。"
+  },
+  {
    "zh": "处理 CPU P95: %1 ms",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "處理 CPU P95: %1 ms",
@@ -4452,6 +4480,13 @@
    "zh-TW": "外掛字幕",
    "en": "External subtitles",
    "ja": "外部字幕"
+  },
+  {
+   "zh": "外观",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "外觀",
+   "en": "Appearance",
+   "ja": "外観"
   },
   {
    "zh": "多声道片源混成双声道再输出（耳机）；关闭时按设备声道布局映射",
@@ -6022,6 +6057,13 @@
    "ja": "この GPU は NVIDIA の補正機能に非対応です。NR、超解像、DLSS をオフにしました。XeSS の選択は保持します"
   },
   {
+   "zh": "当前 GPU 不支持 NVIDIA 增强；超分及 DLSS 已关闭，NR 使用 AMD 运行库，XeSS选择保留",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "目前 GPU 不支援 NVIDIA 增強；超解析及 DLSS 已關閉，NR 使用 AMD 執行庫，XeSS 選擇保留",
+   "en": "This GPU does not support NVIDIA enhancements; upscaling and DLSS are off, NR uses the AMD runtime, and the XeSS choice is kept",
+   "ja": "この GPU は NVIDIA 拡張に対応していません。超解像と DLSS はオフ、NR は AMD ランタイムを使用し、XeSS の選択は維持します"
+  },
+  {
    "zh": "当前 GPU 不支持所选 NVIDIA 增强",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "當前 GPU 不支援所選 NVIDIA 增強",
@@ -6048,13 +6090,6 @@
    "zh-TW": "當前為 SDR 預覽，HDR 轉換未執行",
    "en": "SDR preview at the moment; HDR conversion is not running",
    "ja": "現在は SDR プレビューで、HDR 変換は動作していません"
-  },
-  {
-   "zh": "当前仅支持 NVIDIA 显卡",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "目前僅支援 NVIDIA 顯示卡",
-   "en": "Currently available on NVIDIA GPUs",
-   "ja": "現在は NVIDIA GPU のみ対応"
   },
   {
    "zh": "当前修改尚未保存：",
@@ -6104,6 +6139,13 @@
    "zh-TW": "當前播放設定",
    "en": "Current playback settings",
    "ja": "現在の再生設定"
+  },
+  {
+   "zh": "当前显卡不支持预热",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "目前顯示卡不支援預熱",
+   "en": "Prewarming is not available on this GPU",
+   "ja": "この GPU ではプリウォームを使用できません"
   },
   {
    "zh": "当前显卡不能使用 DLSS NR，本次导出自动关闭 NR",
@@ -6933,11 +6975,11 @@
    "ja": "ファイルがもう存在しません"
   },
   {
-   "zh": "文件播放与字幕的默认行为。",
+   "zh": "文件播放、字幕与截图的默认行为。",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "檔案播放與字幕的預設行為。",
-   "en": "Default behavior for file playback and subtitles.",
-   "ja": "ファイル再生と字幕の既定の動作。"
+   "zh-TW": "檔案播放、字幕與截圖的預設行為。",
+   "en": "Defaults for file playback, subtitles and screenshots.",
+   "ja": "ファイル再生、字幕、スクリーンショットの既定動作。"
   },
   {
    "zh": "断开",
@@ -7309,6 +7351,13 @@
    "zh-TW": "顯示卡在第 {} 幀被系統重置；前 {:.1f} 秒已儲存，接著匯出剩餘部分",
    "en": "The GPU was reset at frame {}; the first {:.1f} s are saved, exporting the rest",
    "ja": "{} フレーム目で GPU がリセットされました。最初の {:.1f} 秒は保存済みで、残りを書き出します"
+  },
+  {
+   "zh": "显卡调度、预热与资源监控。默认设置适合大多数机器。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "顯示卡排程、預熱與資源監控。預設值適合大多數電腦。",
+   "en": "GPU scheduling, prewarming and resource monitoring. The defaults suit most PCs.",
+   "ja": "GPU スケジューリング、プリウォーム、リソース監視。既定値でほとんどの PC に適しています。"
   },
   {
    "zh": "显卡重置前后两段的编码参数不一致，无法无损拼接",
@@ -9318,6 +9367,13 @@
    "zh-TW": "離線",
    "en": "Offline",
    "ja": "オフライン"
+  },
+  {
+   "zh": "程序启动时的页面、窗口和恢复行为。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "程式啟動時的頁面、視窗與恢復行為。",
+   "en": "Page, window and resume behaviour at startup.",
+   "ja": "起動時のページ、ウィンドウ、再開の動作。"
   },
   {
    "zh": "稍后",
@@ -12022,13 +12078,6 @@
    "ja": "オプション"
   },
   {
-   "zh": "通用与外观",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "通用與外觀",
-   "en": "General and appearance",
-   "ja": "全般と外観"
-  },
-  {
    "zh": "部分轨道当前封装装不下，未保留（详见队列说明）",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "部分軌道當前封裝裝不下，未保留（詳見佇列說明）",
@@ -13408,13 +13457,6 @@
    "ja": "ホーム = ソースを選ぶ画面（上部のロゴをクリックしても戻れます）"
   },
   {
-   "zh": "首页空闲时准备已启用的单层 NR 或超分，首次打开更快",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "首頁閒置時準備已啟用的單層 NR 或超解析，首次開啟更快",
-   "en": "Prepare enabled single-layer NR or upscaling while the home page is idle for a faster first open",
-   "ja": "ホーム画面の待機中に有効な単層 NR またはアップスケーリングを準備し、最初の起動を高速化"
-  },
-  {
    "zh": "驱动默认",
    "src": "qml/DialogHost.qml",
    "zh-TW": "驅動預設",
@@ -13518,6 +13560,13 @@
    "zh-TW": "預設關閉 · 只穩住沒變化的畫面，動的地方不拖影",
    "en": "Off by default · only steadies parts of the picture that do not change; moving parts do not smear",
    "ja": "既定はオフ · 変化していない部分だけを安定させ、動く部分に残像は出ません"
+  },
+  {
+   "zh": "默认关闭。开启后首页空闲时预先准备已启用的单层 NR 或超分，首次打开约快 2 秒；准备好后会一直占用约 0.8–1.8 GB 显存，直到打开视频",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "預設關閉。開啟後首頁閒置時預先準備已啟用的單層 NR 或超解析，首次開啟約快 2 秒；準備好後會一直佔用約 0.8–1.8 GB 顯示記憶體，直到開啟影片",
+   "en": "Off by default. When on, the enabled single NR layer or upscaler is prepared while the home page is idle, so the first open is about 2 s faster; once ready it keeps about 0.8–1.8 GB of video memory until a video opens",
+   "ja": "既定ではオフ。オンにするとホーム画面の待機中に有効な単層 NR または超解像を準備し、最初のオープンが約 2 秒速くなります。準備後は動画を開くまで約 0.8～1.8 GB の VRAM を使用し続けます"
   },
   {
    "zh": "默认只在本机出声",
@@ -13681,6 +13730,13 @@
    "ja": "；一時ファイルを保持しました："
   },
   {
+   "zh": "；切到后台卡顿时可试“高”，“实时”可能拖慢其他程序",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "；切到背景卡頓時可試「高」，「即時」可能拖慢其他程式",
+   "en": "; if playback stutters in the background try \"High\"; \"Realtime\" can slow other apps",
+   "ja": "；バックグラウンドでカクつく場合は「高」を試してください。「リアルタイム」は他のアプリを遅くすることがあります"
+  },
+  {
    "zh": "；各段文件已保留：",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "；各段檔案已保留：",
@@ -13693,13 +13749,6 @@
    "zh-TW": "；已匯出的部分保留在：",
    "en": "; the exported parts are kept at: ",
    "ja": "。書き出し済みの部分は次の場所にあります："
-  },
-  {
-   "zh": "；当前显卡不能使用 DLSS NR，本次导出自动关闭 NR",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "；當前顯示卡不能使用 DLSS NR，本次匯出自動關閉 NR",
-   "en": "; this GPU cannot use DLSS NR, NR is turned off for this export",
-   "ja": "；この GPU では DLSS NR を使えないため、今回の書き出しでは NR をオフにします"
   },
   {
    "zh": "；当前显卡不能使用所选超分，本次导出关闭超分",

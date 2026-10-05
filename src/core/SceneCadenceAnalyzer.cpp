@@ -18,7 +18,8 @@ double SceneCadenceAnalyzer::histogramDistance(const std::vector<double>& a,
 SceneAnalysisResult SceneCadenceAnalyzer::analyze(uint64_t frameId,
                                                     const std::vector<double>& histogram,
                                                     double sad,
-                                                    uint64_t ptsUs) {
+                                                    uint64_t ptsUs,
+                                                    uint64_t sourceStep) {
     SceneAnalysisResult result;
     result.frameId = frameId;
     result.sadScore = sad;
@@ -63,12 +64,15 @@ SceneAnalysisResult SceneCadenceAnalyzer::analyze(uint64_t frameId,
         ++sceneCutCount_;
     }
 
-    // Cadence break: PTS irregularity (beyond expected jitter).
+    // Cadence break: PTS irregularity (beyond expected jitter), measured per
+    // source frame so that skipped/dropped frames do not count as a break.
+    double cadenceDeltaUs = 0;
     if (result.ptsDeltaUs > 0 && result.ptsDeltaUs < 1e15) {
+        cadenceDeltaUs = result.ptsDeltaUs / double(sourceStep ? sourceStep : 1);
         // Check against expected cadence (simplified: if delta is 3x the
         // previous delta, consider it a break)
-        if (lastResult_.ptsDeltaUs > 0 &&
-            result.ptsDeltaUs > lastResult_.ptsDeltaUs * 3.0 + config_.cadenceBreakPtsJitterUs) {
+        if (lastCadenceDeltaUs_ > 0 &&
+            cadenceDeltaUs > lastCadenceDeltaUs_ * 3.0 + config_.cadenceBreakPtsJitterUs) {
             result.isCadenceBreak = true;
         }
     }
@@ -79,6 +83,7 @@ SceneAnalysisResult SceneCadenceAnalyzer::analyze(uint64_t frameId,
         prevPtsUs_ = ptsUs;
     }
 
+    if (cadenceDeltaUs > 0 && !result.isDuplicate) lastCadenceDeltaUs_ = cadenceDeltaUs;
     lastResult_ = result;
     return result;
 }

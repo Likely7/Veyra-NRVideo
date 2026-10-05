@@ -630,6 +630,12 @@ void testProductionFixedPlanDescription() {
           desc.fixedExecutionPlan&&desc.fixedExecutionPlan->resourceCounts[size_t(EffectType::NrEnhance)]==0&&
           desc.fixedExecutionPlan->output==Extent{3840,2160},
         "non-NVIDIA fallback retains ordinary resize extent without NR resources");
+    // As the engine sends it after AMD normalization: DLSS SR removed, NR kept.
+    request.amdNr=true;request.sr=false;describeStages(request,s,desc);
+    check(desc.validateFixedExecutionPlan().empty()&&desc.enableNr&&!desc.enableSr&&desc.fixedExecutionPlan&&
+          desc.fixedExecutionPlan->resourceCounts[size_t(EffectType::NrEnhance)]==2,
+        "AMD adapter description keeps NR layers for the lmxxf runtime");
+    request.amdNr=false;request.sr=true;
     request.nvidiaAdapter=true;request.nr=false;describeStages(request,s,desc);
     check(desc.validateFixedExecutionPlan().empty()&&!desc.enableNr&&desc.fixedExecutionPlan&&
           desc.fixedExecutionPlan->resourceCounts[size_t(EffectType::NrEnhance)]==0,

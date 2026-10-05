@@ -918,6 +918,23 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # VEYRA_DISPLAY_VERSION is the human-readable version the app reports; it is
   # the same value the resource file uses, so the UI cannot drift from it.
   target_compile_definitions(veyra_qml_bridge PRIVATE VEYRA_DISPLAY_VERSION="${VEYRA_DISPLAY_VERSION}")
+  # libass (ISC) + FreeType/FriBidi/HarfBuzz, static, for full ASS/SSA effect
+  # subtitles. Local prebuilt tree only (vcpkg x64-windows-static-md); never in
+  # source Git. Without it ASS tracks fall back to the built-in styled renderer.
+  set(VEYRA_LIBASS_ROOT "" CACHE PATH "libass static install prefix (include/ass/ass.h, lib/ass.lib)")
+  if(VEYRA_LIBASS_ROOT AND EXISTS "${VEYRA_LIBASS_ROOT}/include/ass/ass.h")
+    target_sources(veyra_qml_bridge PRIVATE apps/veyra/ui/AssSubtitleRenderer.cpp apps/veyra/ui/AssSubtitleRenderer.h)
+    set_source_files_properties(apps/veyra/ui/AssSubtitleRenderer.cpp PROPERTIES COMPILE_OPTIONS /utf-8)
+    target_include_directories(veyra_qml_bridge PRIVATE "${VEYRA_LIBASS_ROOT}/include")
+    target_compile_definitions(veyra_qml_bridge PRIVATE VEYRA_HAS_LIBASS=1)
+    foreach(lib ass harfbuzz fribidi freetype libpng16 zs bz2 brotlidec brotlicommon)
+      target_link_libraries(veyra_qml_bridge PRIVATE "${VEYRA_LIBASS_ROOT}/lib/${lib}.lib")
+    endforeach()
+    target_link_libraries(veyra_qml_bridge PRIVATE gdi32 dwrite)
+    message(STATUS "libass: ${VEYRA_LIBASS_ROOT}")
+  else()
+    message(STATUS "libass: not configured; ASS effects use the built-in styled renderer")
+  endif()
 
   # The QML module is deployed as plain files next to the executable rather
   # than compiled into a resource: the qmldir-based module keeps the .qml

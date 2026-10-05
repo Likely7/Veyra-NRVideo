@@ -47,8 +47,23 @@ struct SubtitleCue {
     std::shared_ptr<const SubtitleBitmapFrame> bitmap;
 };
 
+// Original ASS/SSA script for full-fidelity rendering (libass): animation,
+// karaoke, \move/	/\clip/lur, drawings and container fonts. The parsed
+// cues below stay as the plain-text fallback and for diagnostics.
+struct SubtitleAssData {
+    std::string script;                 // complete external .ass/.ssa (UTF-8)
+    std::string header;                 // embedded track: codec private ASS header (UTF-8)
+    struct Event { int64_t startMs=0,durationMs=0; std::string chunk; }; // "ReadOrder,Layer,Style,...,Text"
+    std::vector<Event> events;          // embedded track: decoded in file order
+    struct Font { std::string name; std::vector<char> data; };
+    std::vector<Font> fonts;            // container attachments (Matroska fonts)
+    std::wstring source;                // identity of the script source (path + stream)
+};
+
 struct SubtitleTrack {
     std::wstring name,language,codec,note;
+    // Set for ASS/SSA tracks; snapshots are immutable once published.
+    std::shared_ptr<const SubtitleAssData> ass;
     bool embedded=false;
     int streamIndex=-1;
     std::vector<SubtitleStyle> styles;

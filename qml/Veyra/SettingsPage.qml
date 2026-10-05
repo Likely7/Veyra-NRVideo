@@ -1,7 +1,8 @@
 // 设置, rebuilt from the design (pages-b.js PAGES.set + pages.css .set).
 //
-// Design: a 220px nav column with six sections (通用与外观 / 播放 / PS5 串流 /
-// 快捷键 / 组件与许可 / 关于) and a large body. The design deliberately has NO
+// Design: a 220px nav column (外观 / 启动与窗口 / 播放 / 音频 / 性能 / 兼容 /
+// PS5 串流 / 快捷键 / 组件与许可 / 关于; split 2026-10-05 because one page held
+// almost every setting) and a large body. The design deliberately has NO
 // capture-card section here: capture settings live in the capture dialog.
 //
 // Rows that would need engine support this build does not have say so, rather than
@@ -24,7 +25,7 @@ VPage {
         // render(true): 480 ms, i*40 ms, y 12).
         Qt.callLater(() => stagger(sectionColumns[section] || null))
     }
-    readonly property var sectionColumns: ({ look: secLook, play: secPlay, ps5: secPs5, keys: secKeys, comp: secComp, about: secAbout })
+    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, keys: secKeys, comp: secComp, about: secAbout })
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col) {
         if (Theme.reduced || !col) return
@@ -38,8 +39,12 @@ VPage {
     }
 
     readonly property var sections: [
-        { id: "look",  label: qsTr("通用与外观"), icon: "home" },
-        { id: "play",  label: qsTr("播放", "section"), icon: "play" },
+        { id: "look",   label: qsTr("外观"), icon: "palette" },
+        { id: "window", label: qsTr("启动与窗口"), icon: "appwin" },
+        { id: "play",   label: qsTr("播放", "section"), icon: "play" },
+        { id: "audio",  label: qsTr("音频"), icon: "vol" },
+        { id: "perf",   label: qsTr("性能"), icon: "gauge" },
+        { id: "compat", label: qsTr("兼容"), icon: "monitor" },
         { id: "ps5",   label: qsTr("PS5 串流"), icon: "gamepad" },
         { id: "keys",  label: qsTr("快捷键"), icon: "zap" },
         { id: "comp",  label: qsTr("组件与许可"), icon: "box" },
@@ -138,18 +143,20 @@ VPage {
                 width: Math.min(parent.width - 52, 720)
                 spacing: 12
 
-                // --- 通用与外观 ------------------------------------------
+                // --- 外观 ---
                 ColumnLayout {
                     id: secLook
                     Layout.fillWidth: true
                     spacing: 12
                     visible: root.section === "look"
-                    VH1 { text: qsTr("通用与外观") }
+                    VH1 { text: qsTr("外观") }
                     Text {
                         text: qsTr("界面随时可调，不影响播放和增强设置。")
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
                     }
                     VGroup {
                         VRow {
@@ -228,136 +235,6 @@ VPage {
                             }
                         }
                         VRow {
-                            label: qsTr("OBS 游戏采集兼容")
-                            hint: (!!veyra.preferences.obsGameCapture !== veyra.obsGameCaptureActive)
-                                  ? qsTr("重启后生效")
-                                  : qsTr("仅采集视频；界面软件绘制，部分阴影与模糊简化")
-                            VSwitch {
-                                objectName: "set-obs-game-capture"
-                                checked: !!veyra.preferences.obsGameCapture
-                                onToggled: v => {
-                                    if (veyra.setPreference("obsGameCapture", v)
-                                            && v !== veyra.obsGameCaptureActive)
-                                        obsRestart.open()
-                                }
-                            }
-                        }
-                        VRow {
-                            // RivaTuner (MSI Afterburner's OSD): see main.cpp. Auto draws the interface in
-                            // software when RTSS runs at start, so its OSD only sits on the video.
-                            readonly property bool automatic: (veyra.preferences.overlayCompat || "auto") === "auto"
-                            label: qsTr("监控软件兼容")
-                            hint: veyra.obsGameCaptureActive
-                                  ? qsTr("OBS 游戏采集兼容已让界面软件绘制，小飞机 OSD 只显示在视频上")
-                                  : (automatic !== veyra.overlayCompatActive && (veyra.overlayCompatActive || veyra.rivaTunerRunning()))
-                                    ? qsTr("重启后生效")
-                                    : veyra.overlayCompatActive
-                                      ? qsTr("监控兼容绘制已启用：OSD 只显示在视频上；部分阴影与模糊简化")
-                                      : automatic
-                                        ? qsTr("启动时检测到小飞机（RTSS）就改用软件绘制界面，OSD 只显示在视频上")
-                                        : qsTr("界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示")
-                            VSeg {
-                                objectName: "set-overlay-compat"
-                                options: [{ id: "auto", label: qsTr("自动") }, { id: "off", label: qsTr("关闭") }]
-                                current: veyra.preferences.overlayCompat || "auto"
-                                onPicked: id => {
-                                    if (veyra.setPreference("overlayCompat", id) && !veyra.obsGameCaptureActive
-                                            && (id === "auto") !== veyra.overlayCompatActive
-                                            && (veyra.overlayCompatActive || veyra.rivaTunerRunning()))
-                                        obsRestart.open()
-                                }
-                            }
-                        }
-                    }
-                    VH2 { text: qsTr("性能"); Layout.topMargin: 10 }
-                    VGroup {
-                        VRow {
-                            label: qsTr("GPU 优先级")
-                            hint: veyra.gpuPriorityStatus
-                            VSeg {
-                                objectName: "set-gpu-priority"
-                                options: [{ id: "normal", label: qsTr("普通") }, { id: "high", label: qsTr("高") }, { id: "realtime", label: qsTr("实时") }]
-                                current: veyra.preferences.gpuPriority || "normal"
-                                onPicked: id => veyra.setPreference("gpuPriority", id)
-                            }
-                        }
-                        VRow {
-                            label: qsTr("启动时预热增强组件")
-                            hint: veyra.enhancementPrewarmAvailable
-                                  ? qsTr("首页空闲时准备已启用的单层 NR 或超分，首次打开更快")
-                                  : qsTr("当前仅支持 NVIDIA 显卡")
-                            VSwitch {
-                                objectName: "set-prewarm-enhancement"
-                                enabled: veyra.enhancementPrewarmAvailable
-                                checked: veyra.preferences.prewarmEnhancement !== false
-                                onToggled: v => veyra.setPreference("prewarmEnhancement", v)
-                            }
-                        }
-                    }
-                    VGroup {
-                        VRow {
-                            label: qsTr("启动窗口大小")
-                            hint: qsTr("下次启动生效；超过屏幕时按屏幕缩小并居中")
-                            VSelect {
-                                objectName: "set-window-size"
-                                readonly property var sizes: [
-                                    { id: "1280x800", label: "1280 × 800" },
-                                    { id: "1600x1000", label: "1600 × 1000" },
-                                    { id: "1920x1200", label: "1920 × 1200" },
-                                    { id: "last", label: qsTr("记住上次大小") }
-                                ]
-                                options: sizes
-                                value: (sizes.find(o => o.id === (veyra.preferences.windowSize || "1280x800")) || sizes[0]).label
-                                onPicked: id => veyra.setPreference("windowSize", id)
-                            }
-                        }
-                        VRow {
-                            label: qsTr("GPU 占用监控")
-                            hint: qsTr("专业页「GPU 占用」只统计这一块显卡") + (veyra.gpuMonitorName ? qsTr("；当前：") + veyra.gpuMonitorName : "")
-                            VSelect {
-                                objectName: "set-monitor-gpu"
-                                implicitWidth: 230
-                                options: veyra.gpuMonitorChoices
-                                value: (options.find(o => o.id === (veyra.preferences.monitorGpu || "")) || options[0] || { label: "—" }).label
-                                onPicked: id => veyra.setPreference("monitorGpu", id)
-                            }
-                        }
-                    }
-                    VGroup {
-                        VRow {
-                            label: qsTr("启动后自动继续上次内容")
-                            hint: qsTr("视频恢复上次进度；采集卡沿用上次设备与设置")
-                            VSwitch {
-                                objectName: "set-auto-resume"
-                                checked: !!veyra.preferences.autoResume
-                                onToggled: v => veyra.setPreference("autoResume", v)
-                            }
-                        }
-                        VRow {
-                            label: qsTr("全屏显存增长保护")
-                            hint: qsTr("检测异常增长时自动退出全屏；默认关闭")
-                            VSwitch {
-                                objectName: "set-fullscreen-memory-protection"
-                                checked: !!veyra.preferences.fullscreenMemoryProtection
-                                onToggled: v => veyra.setPreference("fullscreenMemoryProtection", v)
-                            }
-                        }
-                        VRow {
-                            label: qsTr("打开时的默认页面")
-                            hint: qsTr("首页 = 选择片源的页面（点顶部 Logo 也能回到这里）")
-                            VSeg {
-                                objectName: "set-default-page"
-                                options: [
-                                    { id: "home", label: qsTr("首页") },
-                                    { id: "min", label: qsTr("极简模式") },
-                                    { id: "pro", label: qsTr("专业模式") },
-                                    { id: "last", label: qsTr("上次") }
-                                ]
-                                current: veyra.defaultPage
-                                onPicked: id => veyra.defaultPage = id
-                            }
-                        }
-                        VRow {
                             label: qsTr("界面语言")
                             hint: qsTr("立即生效；日志保持中文，方便反馈问题")
                             VSelect {
@@ -378,7 +255,75 @@ VPage {
                     }
                 }
 
-                // --- 播放 ------------------------------------------------
+                // --- 启动与窗口 ---
+                ColumnLayout {
+                    id: secWindow
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "window"
+                    VH1 { text: qsTr("启动与窗口") }
+                    Text {
+                        text: qsTr("程序启动时的页面、窗口和恢复行为。")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    VGroup {
+                        VRow {
+                            label: qsTr("打开时的默认页面")
+                            hint: qsTr("首页 = 选择片源的页面（点顶部 Logo 也能回到这里）")
+                            VSeg {
+                                objectName: "set-default-page"
+                                options: [
+                                    { id: "home", label: qsTr("首页") },
+                                    { id: "min", label: qsTr("极简模式") },
+                                    { id: "pro", label: qsTr("专业模式") },
+                                    { id: "last", label: qsTr("上次") }
+                                ]
+                                current: veyra.defaultPage
+                                onPicked: id => veyra.defaultPage = id
+                            }
+                        }
+                        VRow {
+                            label: qsTr("启动窗口大小")
+                            hint: qsTr("下次启动生效；超过屏幕时按屏幕缩小并居中")
+                            VSelect {
+                                objectName: "set-window-size"
+                                readonly property var sizes: [
+                                    { id: "1280x800", label: "1280 × 800" },
+                                    { id: "1600x1000", label: "1600 × 1000" },
+                                    { id: "1920x1200", label: "1920 × 1200" },
+                                    { id: "last", label: qsTr("记住上次大小") }
+                                ]
+                                options: sizes
+                                value: (sizes.find(o => o.id === (veyra.preferences.windowSize || "1280x800")) || sizes[0]).label
+                                onPicked: id => veyra.setPreference("windowSize", id)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("启动后自动继续上次内容")
+                            hint: qsTr("视频恢复上次进度；采集卡沿用上次设备与设置")
+                            VSwitch {
+                                objectName: "set-auto-resume"
+                                checked: !!veyra.preferences.autoResume
+                                onToggled: v => veyra.setPreference("autoResume", v)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("记住播放位置")
+                            hint: qsTr("重新打开同一个文件时从上次位置继续")
+                            VSwitch {
+                                objectName: "set-resume"
+                                checked: veyra.preferences.rememberPosition !== false
+                                onToggled: checked => veyra.setPreference("rememberPosition", checked)
+                            }
+                        }
+                    }
+                }
+
+                // --- 播放 ---
                 ColumnLayout {
                     id: secPlay
                     Layout.fillWidth: true
@@ -386,10 +331,12 @@ VPage {
                     visible: root.section === "play"
                     VH1 { text: qsTr("播放", "section") }
                     Text {
-                        text: qsTr("文件播放与字幕的默认行为。")
+                        text: qsTr("文件播放、字幕与截图的默认行为。")
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
                     }
                     VGroup {
                         VRow {
@@ -408,15 +355,6 @@ VPage {
                             label: qsTr("HDR 输出格式")
                             hint: qsTr("HDR10 默认；补帧固定 HDR10，需要 Windows HDR 开启")
                             VSeg { options: [{id:"0",label:"HDR10"},{id:"1",label:qsTr("scRGB 浮点")}]; current: String(veyra.hdrOutputMode); onPicked: id => veyra.hdrOutputMode = Number(id) }
-                        }
-                        VRow {
-                            label: qsTr("记住播放位置")
-                            hint: qsTr("重新打开同一个文件时从上次位置继续")
-                            VSwitch {
-                                objectName: "set-resume"
-                                checked: veyra.preferences.rememberPosition !== false
-                                onToggled: checked => veyra.setPreference("rememberPosition", checked)
-                            }
                         }
                         VRow {
                             label: qsTr("字幕默认字号")
@@ -439,7 +377,6 @@ VPage {
                             }
                         }
                     }
-                    // 补帧说明 (moved here from the 补帧 page, user decision 2026-09-29).
                     VGroup {
                         objectName: "set-smooth-motion"
                         VRow {
@@ -465,6 +402,23 @@ VPage {
                             wrapMode: Text.WordWrap
                             lineHeight: 1.3
                         }
+                    }
+                }
+
+                // --- 音频 ---
+                ColumnLayout {
+                    id: secAudio
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "audio"
+                    VH1 { text: qsTr("音频") }
+                    Text {
+                        text: qsTr("声音同步、音量与输出设备。")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
                     }
                     VGroup {
                         VRow {
@@ -504,6 +458,127 @@ VPage {
                             label: qsTr("输出设备与下混")
                             hint: veyra.audioOutputStatus
                             VButton { text: qsTr("音频设置…"); onClicked: veyra.openAudioDialog() }
+                        }
+                    }
+                }
+
+                // --- 性能 ---
+                ColumnLayout {
+                    id: secPerf
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "perf"
+                    VH1 { text: qsTr("性能") }
+                    Text {
+                        text: qsTr("显卡调度、预热与资源监控。默认设置适合大多数机器。")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    VGroup {
+                        VRow {
+                            label: qsTr("GPU 优先级")
+                            hint: veyra.gpuPriorityStatus + qsTr("；切到后台卡顿时可试“高”，“实时”可能拖慢其他程序")
+                            VSeg {
+                                objectName: "set-gpu-priority"
+                                options: [{ id: "normal", label: qsTr("普通") }, { id: "high", label: qsTr("高") }, { id: "realtime", label: qsTr("实时") }]
+                                current: veyra.preferences.gpuPriority || "normal"
+                                onPicked: id => veyra.setPreference("gpuPriority", id)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("启动时预热增强组件")
+                            hint: !veyra.enhancementPrewarmAvailable
+                                  ? qsTr("当前显卡不支持预热")
+                                  : qsTr("默认关闭。开启后首页空闲时预先准备已启用的单层 NR 或超分，首次打开约快 2 秒；准备好后会一直占用约 0.8–1.8 GB 显存，直到打开视频")
+                            VSwitch {
+                                objectName: "set-prewarm-enhancement"
+                                enabled: veyra.enhancementPrewarmAvailable
+                                checked: veyra.preferences.prewarmEnhancement === true
+                                onToggled: v => veyra.setPreference("prewarmEnhancement", v)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("GPU 占用监控")
+                            hint: qsTr("专业页「GPU 占用」只统计这一块显卡") + (veyra.gpuMonitorName ? qsTr("；当前：") + veyra.gpuMonitorName : "")
+                            VSelect {
+                                objectName: "set-monitor-gpu"
+                                implicitWidth: 230
+                                options: veyra.gpuMonitorChoices
+                                value: (options.find(o => o.id === (veyra.preferences.monitorGpu || "")) || options[0] || { label: "—" }).label
+                                onPicked: id => veyra.setPreference("monitorGpu", id)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("全屏显存增长保护")
+                            hint: qsTr("检测异常增长时自动退出全屏；默认关闭")
+                            VSwitch {
+                                objectName: "set-fullscreen-memory-protection"
+                                checked: !!veyra.preferences.fullscreenMemoryProtection
+                                onToggled: v => veyra.setPreference("fullscreenMemoryProtection", v)
+                            }
+                        }
+                    }
+                }
+
+                // --- 兼容 ---
+                ColumnLayout {
+                    id: secCompat
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "compat"
+                    VH1 { text: qsTr("兼容") }
+                    Text {
+                        text: qsTr("与 OBS、监控软件（小飞机 / RTSS）同时使用时的设置；修改后需要重启。")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    VGroup {
+                        VRow {
+                            label: qsTr("OBS 游戏采集兼容")
+                            hint: (!!veyra.preferences.obsGameCapture !== veyra.obsGameCaptureActive)
+                                  ? qsTr("重启后生效")
+                                  : qsTr("仅采集视频；界面软件绘制，部分阴影与模糊简化")
+                            VSwitch {
+                                objectName: "set-obs-game-capture"
+                                checked: !!veyra.preferences.obsGameCapture
+                                onToggled: v => {
+                                    if (veyra.setPreference("obsGameCapture", v)
+                                            && v !== veyra.obsGameCaptureActive)
+                                        obsRestart.open()
+                                }
+                            }
+                        }
+                        VRow {
+                            // RivaTuner (MSI Afterburner's OSD): see main.cpp. Auto draws the interface in
+                            // software when RTSS runs at start, so its OSD only sits on the video.
+                            readonly property bool automatic: (veyra.preferences.overlayCompat || "auto") === "auto"
+                            label: qsTr("监控软件兼容")
+                            hint: veyra.obsGameCaptureActive
+                                  ? qsTr("OBS 游戏采集兼容已让界面软件绘制，小飞机 OSD 只显示在视频上")
+                                  : (automatic !== veyra.overlayCompatActive && (veyra.overlayCompatActive || veyra.rivaTunerRunning()))
+                                    ? qsTr("重启后生效")
+                                    : veyra.overlayCompatActive
+                                      ? qsTr("监控兼容绘制已启用：OSD 只显示在视频上；部分阴影与模糊简化")
+                                      : automatic
+                                        ? qsTr("启动时检测到小飞机（RTSS）就改用软件绘制界面，OSD 只显示在视频上")
+                                        : qsTr("界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示")
+                            VSeg {
+                                objectName: "set-overlay-compat"
+                                options: [{ id: "auto", label: qsTr("自动") }, { id: "off", label: qsTr("关闭") }]
+                                current: veyra.preferences.overlayCompat || "auto"
+                                onPicked: id => {
+                                    if (veyra.setPreference("overlayCompat", id) && !veyra.obsGameCaptureActive
+                                            && (id === "auto") !== veyra.overlayCompatActive
+                                            && (veyra.overlayCompatActive || veyra.rivaTunerRunning()))
+                                        obsRestart.open()
+                                }
+                            }
                         }
                     }
                 }

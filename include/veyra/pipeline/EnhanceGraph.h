@@ -798,6 +798,7 @@ private:
 
     // Per-run state.
     uint64_t realFrameIndex_ = 0;
+    uint64_t sceneLastSourceId_ = 0; // source id of the last scene-analysed frame
     // Only a successful explicit paused/still-frame reset may seed this.
     // Ordinary playback, source changes, failures and non-residual edits
     // invalidate it. No cross-frame/duplicate-source reuse is performed.

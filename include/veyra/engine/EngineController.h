@@ -205,7 +205,7 @@ private:
     std::wstring savePath_;
     std::thread worker_;
     std::unique_ptr<PreviewGpuSession> prewarmed_; // engine dispatcher only
-    std::atomic<bool> prewarmEnabled_{true};
+    std::atomic<bool> prewarmEnabled_{false}; // off until the saved preference enables it (default off since 2026-10-05)
     std::condition_variable wake_;std::function<void()> pending_;bool shutdown_=false,busy_=false;
     EnhancementSettings desired_;uint64_t nextRevision_=1;
     std::optional<ChainRuntimeOrder> desiredNodeOrder_; // protected by mutex_, paired with desired_

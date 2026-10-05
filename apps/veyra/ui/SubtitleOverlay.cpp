@@ -3,6 +3,11 @@
 #include "Theme.h"
 #include "veyra/Log.h"
 
+#ifdef VEYRA_HAS_LIBASS
+#include "AssSubtitleRenderer.h"
+#include <array>
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <format>
@@ -34,7 +39,7 @@ std::wstring signatureOf(const std::vector<SubtitleLine>& lines,const SubtitleVi
     for(const auto& line:lines){
         signature+=std::format(L"{}:{}|{:08X}|{:08X}|{}:{}|{}|{}|{}|{}|",line.text.size(),line.text,line.style.primary,line.style.outline,line.style.font.size(),line.style.font,
             line.style.size,line.style.alignment,line.alignOverride,line.secondary?1:0);
-        signature+=std::format(L"{}:{}:{}|",reinterpret_cast<uintptr_t>(line.bitmap.get()),line.posX,line.posY);
+        signature+=std::format(L"{}:{}:{}:{}|",reinterpret_cast<uintptr_t>(line.bitmap.get()),reinterpret_cast<uintptr_t>(line.ass.get()),line.posX,line.posY);
         const auto& s=line.style;
         signature+=std::format(L"{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|",s.back,s.outlineWidth,s.shadow,s.marginL,s.marginR,s.marginV,s.bold,s.italic,s.background,s.font.size());
     }
@@ -65,9 +70,31 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
     static thread_local std::vector<std::shared_ptr<const engine::SubtitleBitmapFrame>> lastBitmaps;
     if(h!=lastWindow){lastSignature.clear();lastBitmaps.clear();lastWindow=h;}
     if(lines.empty()||rect.right<1||rect.bottom<1){lastSignature.clear();lastBitmaps.clear();ShowWindow(h,SW_HIDE);SetWindowTextW(h,L"");return;}
-    const auto signature=signatureOf(lines,view,rect)+std::format(L"/dpi{}",GetDpiForWindow(h));
-    if(lastSignature==signature){ShowWindow(h,SW_SHOWNOACTIVATE);return;}
     const int width=rect.right,height=rect.bottom;
+    auto signature=signatureOf(lines,view,rect)+std::format(L"/dpi{}",GetDpiForWindow(h));
+#ifdef VEYRA_HAS_LIBASS
+    // libass decides whether its frame changed (animation, karaoke, new
+    // events); the rest of the signature covers geometry and other lines.
+    static thread_local std::array<std::unique_ptr<AssSubtitleRenderer>,2> assRenderers;
+    static thread_local uint64_t assGeneration=0;
+    struct AssPlacement {AssSubtitleRenderer* renderer=nullptr;int x=0,y=0;};
+    std::vector<AssPlacement> assPlaced;
+    for(const auto& line:lines){
+        if(!line.ass)continue;
+        auto& renderer=assRenderers[line.secondary?1:0];
+        if(!renderer)renderer=std::make_unique<AssSubtitleRenderer>();
+        if(!renderer->prepare(line.ass))continue;
+        const double vw=view.videoWidth>0?view.videoWidth:width,vh=view.videoHeight>0?view.videoHeight:height;
+        const double fit=std::min(width/vw,height/vh)*view.preview.zoom;
+        const int frameW=int(std::lround(vw*fit)),frameH=int(std::lround(vh*fit));
+        const int ox=int(std::lround(width*.5-view.preview.centerX*vw*fit)),oy=int(std::lround(height*.5-view.preview.centerY*vh*fit));
+        const int change=renderer->render(int64_t(std::llround(line.assTimeMs)),frameW,frameH,int(vw),int(vh),view.scale);
+        if(change>0)++assGeneration;
+        signature+=std::format(L"/ass{}:{}:{}x{}@{},{}#{}",line.secondary?1:0,change>=0,frameW,frameH,ox,oy,assGeneration);
+        if(change>=0)assPlaced.push_back({renderer.get(),ox,oy});
+    }
+#endif
+    if(lastSignature==signature){ShowWindow(h,SW_SHOWNOACTIVATE);return;}
     // The DIB is reused while the overlay size is unchanged; zoom/drag only
     // re-renders into it (a 4K DIB is ~33 MB, re-allocating it per tick stalled
     // middle-button drags).
@@ -96,6 +123,7 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
         std::vector<Line> laid;
         laid.reserve(lines.size());
         for(const auto& line:lines){
+            if(line.ass)continue;   // drawn by libass below (or skipped in builds without it)
             if(line.bitmap){
                 const auto& frame=*line.bitmap;
                 const double vw=view.videoWidth>0?view.videoWidth:frame.width,vh=view.videoHeight>0?view.videoHeight:frame.height;
@@ -221,11 +249,16 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
             SolidBrush fill(primary);
             graphics.FillPath(&fill,entry.path.get());
         }
+        graphics.Flush(FlushIntentionSync);
         lastSignature=signature;
         // Retain the identities used by the cache until its signature changes.
         lastBitmaps.clear();
         for(const auto& line:lines)if(line.bitmap)lastBitmaps.push_back(line.bitmap);
     }
+#ifdef VEYRA_HAS_LIBASS
+    // After GDI+ released the DIB: other subtitle lines are composed already.
+    for(const auto& placed:assPlaced)placed.renderer->composite(static_cast<uint32_t*>(bits),width,height,placed.x,placed.y);
+#endif
     SIZE dimensions{width,height};POINT origin{};BLENDFUNCTION blend{AC_SRC_OVER,0,255,AC_SRC_ALPHA};
     if(UpdateLayeredWindow(h,screen,nullptr,&dimensions,memory,&origin,0,&blend,ULW_ALPHA)){
         SetWindowTextW(h,L"subtitle");

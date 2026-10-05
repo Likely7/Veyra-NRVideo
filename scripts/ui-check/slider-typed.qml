@@ -14,7 +14,7 @@
         property var s: null
         onTriggered: {
             ++ticks
-            if (ticks === 2) { veyra.volume = 0.8; root.goPage("set"); settingsPage.section = "play" }
+            if (ticks === 2) { veyra.volume = 0.8; root.goPage("set"); settingsPage.section = "audio" }
             if (ticks === 4) {
                 s = uitestFind(root.contentItem, "settings-volume")
                 if (!s) { veyra.logUi("uitest", "UITEST_FAIL no slider"); running = false; return }

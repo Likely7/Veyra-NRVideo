@@ -105,14 +105,22 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         // upscaling is the only vendor-neutral video SR we ship. Requesting an
         // unavailable feature must degrade the export, never fail it.
         const bool nvidiaFeatures=nvidiaAdapter;
+        // AMD adapters run NR on the lmxxf runtime. Export keeps native size,
+        // and that runtime only admits <=1920x1080 pixels (height <=1080).
+        const bool amdAdapter=ctx.adapter().vendorId==0x1002;
+        const bool amdNrExport=amdAdapter&&info.width<=2560&&info.height<=1080&&uint64_t(info.width)*info.height<=1920ull*1080ull;
         // One description for the whole job: the stage rules (which SR runs,
         // whether NR/FG are available) come from the same place the preview uses.
         StageRequest stages;stages.nr=options.nr;stages.sr=options.sr;stages.fg=options.fg;stages.fgMultiplier=options.fgMultiplier;
-        stages.width=info.width;stages.height=info.height;stages.exportJob=true;stages.nvidiaAdapter=nvidiaAdapter;
+        stages.width=info.width;stages.height=info.height;stages.exportJob=true;stages.nvidiaAdapter=nvidiaAdapter;stages.amdNr=amdNrExport;
         const auto plan=describeStages(stages,options.snapshot(),gd);
+        if(amdNrExport&&gd.enableNr&&gd.opticalFlowBackend==OpticalFlowBackend::Nvidia)gd.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
         const auto resolution=plan;
         const bool srAvailable=plan.srApplied&&(nvidiaFeatures||options.settings.videoSrQuality==kVideoSrFsr);
-        if(options.nr&&!nvidiaFeatures)fgNote+=fgNote.empty()?L"当前显卡不能使用 DLSS NR，本次导出自动关闭 NR":L"；当前显卡不能使用 DLSS NR，本次导出自动关闭 NR";
+        if(options.nr&&!nvidiaFeatures&&!amdNrExport){
+            const wchar_t* note=amdAdapter?L"AMD NR 导出只支持 1080p 以内的片源，本次导出关闭 NR":L"当前显卡不能使用 DLSS NR，本次导出自动关闭 NR";
+            fgNote+=fgNote.empty()?std::wstring(note):std::wstring(L"；")+note;
+        }
         if(options.sr&&!srAvailable)fgNote+=fgNote.empty()?L"当前显卡不能使用所选超分，本次导出关闭超分":L"；当前显卡不能使用所选超分，本次导出关闭超分";
         if(!nvidiaFeatures&&srAvailable)fgNote+=fgNote.empty()?L"本次导出使用 AMD FSR 超分":L"；本次导出使用 AMD FSR 超分";
         gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();

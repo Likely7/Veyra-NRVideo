@@ -106,6 +106,7 @@ namespace Gdiplus { using std::min; using std::max; }
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include "veyra/ngx/NrArchitecturePolicy.h"
+#include "veyra/ngx/FgCompatibilitySession.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/ScreenCaptureSource.h"
 
@@ -3505,6 +3506,17 @@ void QmlPlayerBridge::tickSubtitles() {
             const auto& track = i.subTracks[size_t(index)];
             if (!track.usable()) return;
             const double at = s.position + double(track.offsetMs) / 1000.0;
+#ifdef VEYRA_HAS_LIBASS
+            if (track.ass) {
+                // ASS/SSA: libass draws the whole script (effects, karaoke,
+                // container fonts). The parsed text only feeds diagnostics.
+                SubtitleLine line;
+                line.ass = track.ass; line.assTimeMs = at * 1000.0; line.secondary = secondary;
+                line.text = engine::textAt(track, at);
+                draw.push_back(std::move(line));
+                return;
+            }
+#endif
             for (const auto* cue : engine::cuesAt(track, at, 3)) {
                 SubtitleLine line;
                 line.text = cue->text; line.bitmap = cue->bitmap;
@@ -3540,7 +3552,7 @@ void QmlPlayerBridge::tickSubtitles() {
     view.videoHeight = s.metrics.resolution.output.height;
     updateSubtitleOverlay(i.subOverlay, draw, view);
     QString joined;
-    for (const auto& line : draw) { if (!joined.isEmpty()) joined += QStringLiteral(" | "); joined += QString::fromStdWString(line.text); }
+    for (const auto& line : draw) { if (line.text.empty()) continue; if (!joined.isEmpty()) joined += QStringLiteral(" | "); joined += QString::fromStdWString(line.text); }
     if (joined != i.subText) {
         i.subText = joined;
         if (!joined.isEmpty()) veyra::log::info("subtitle-overlay", "text=" + joined.toStdString());
@@ -4685,10 +4697,15 @@ QString QmlPlayerBridge::gpuPriorityStatus() const {
     if(status.state==gfx::GpuPriorityState::Rejected)return tr("系统未接受设置，当前：%1").arg(status.actual<0?tr("未知"):name(status.actual));
     return tr("已生效：%1").arg(name(status.actual));
 }
-bool QmlPlayerBridge::enhancementPrewarmAvailable() const {return effectGpu().vendor==0x10DE;}
+bool QmlPlayerBridge::enhancementPrewarmAvailable() const {
+    // PreviewGpuSession::prepare refuses RTX 30/40 (patched FG sessions keep the
+    // full NGX lifetime), so the switch must not look usable there either.
+    const auto gpu=effectGpu();
+    return gpu.vendor==0x10DE&&!ngx::FgCompatibilitySession::requested(gpu.vendor,gpu.deviceId);
+}
 void QmlPlayerBridge::scheduleEnhancementPrewarm(){
     QTimer::singleShot(2000,this,[this]{
-        if(!impl_->prefBool("prewarmEnhancement",true)||!enhancementPrewarmAvailable()||impl_->openingSource||impl_->snapshot.running||!impl_->engine.idle())return;
+        if(!impl_->prefBool("prewarmEnhancement",false)||!enhancementPrewarmAvailable()||impl_->openingSource||impl_->snapshot.running||!impl_->engine.idle())return;
         if(engine::runtimeOrder(impl_->activeRuntime()))return;
         const auto saved=impl_->prefs.value(QStringLiteral("lastSourceExtent")).toMap();
         const auto width=saved.value("width",1920).toUInt(),height=saved.value("height",1080).toUInt();
@@ -4799,8 +4816,8 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
     if(key==QLatin1String("prewarmEnhancement")){
-        impl_->engine.setEnhancementPrewarmEnabled(impl_->prefBool("prewarmEnhancement",true));
-        if(impl_->prefBool("prewarmEnhancement",true))scheduleEnhancementPrewarm();
+        impl_->engine.setEnhancementPrewarmEnabled(impl_->prefBool("prewarmEnhancement",false));
+        if(impl_->prefBool("prewarmEnhancement",false))scheduleEnhancementPrewarm();
     }
     if(key==QLatin1String("gpuPriority")){
         const auto value=impl_->prefString("gpuPriority");

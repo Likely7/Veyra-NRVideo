@@ -44,13 +44,18 @@ public:
     // `histogram` is a 256-bin luma histogram (normalized to [0,1]).
     // `sad` is the normalized SAD score in [0,1].
     // `ptsUs` is this frame's PTS.
+    // `sourceStep` is how many source frames advanced since the previous
+    // analysed frame (>1 when the player skipped or the capture mailbox
+    // dropped frames). The cadence check uses the per-source-frame interval,
+    // so a gap the player created itself is not reported as a source break.
     SceneAnalysisResult analyze(uint64_t frameId,
                                 const std::vector<double>& histogram,
                                 double sad,
-                                uint64_t ptsUs);
+                                uint64_t ptsUs,
+                                uint64_t sourceStep = 1);
 
     // Reset baseline (called on seek/source switch/etc).
-    void reset() { hasBaseline_ = false; prevHistogram_.clear(); }
+    void reset() { hasBaseline_ = false; prevHistogram_.clear(); lastCadenceDeltaUs_ = 0; }
 
     const SceneAnalysisResult& lastResult() const { return lastResult_; }
     uint64_t sceneCutCount() const { return sceneCutCount_; }
@@ -66,6 +71,7 @@ private:
     uint64_t flashCount_ = 0;
     uint64_t duplicateCount_ = 0;
     SceneAnalysisResult lastResult_;
+    double lastCadenceDeltaUs_ = 0; // per-source-frame PTS interval of the previous frame
 
     double histogramDistance(const std::vector<double>& a, const std::vector<double>& b) const;
 };

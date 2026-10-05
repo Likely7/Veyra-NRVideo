@@ -405,7 +405,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         }
         veyra::log::info("graph","diagnostic SR motion override active; no product entry point enables this");
     }
-    desc_ = desc;tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();previousLuma_.clear();
+    desc_ = desc;tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
     if(desc.videoSrQuality>engine::kVideoSrFsr){veyra::log::error("graph",std::format("invalid video SR quality value={}",desc.videoSrQuality));return false;}
     srcW_ = desc.sourceWidth;
     srcH_ = desc.sourceHeight;
@@ -1919,7 +1919,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         out.detectedReset=ResetReason::PtsDiscontinuity;
         reset=true;veyra::log::info("timeline","non-monotonic or discontinuous PTS; atomic history reset");
     }
-    if (reset) { prevValid_ = false; scene_.reset(); previousLuma_.clear();cadence_.reset(); }
+    if (reset) { prevValid_ = false; scene_.reset(); sceneLastSourceId_=0; previousLuma_.clear();cadence_.reset(); }
 
     const uint32_t parity = static_cast<uint32_t>(realFrameIndex_ % 2);
     if(!realLeases_[parity].expired()||!generatedLeases_[parity].expired()){
@@ -1971,7 +1971,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         out.measuredContentRate=cadence_.confirmedRate(desc_.contentRate);
         if(cadence_.conflicts(desc_.contentRate)&&realFrameIndex_%60==0)veyra::log::warn("cadence","requested content-rate identification conflicts with observed motion; preserving source timestamps");
         out.contentDuplicate=desc_.contentRate!=engine::ContentRate::Transport&&previousLuma_.size()==sample.size()&&sad<0.0001;
-        const auto analysis=scene_.analyze(realFrameIndex_,hist,sad,static_cast<uint64_t>(std::max(0.0,ptsMs)*1000));
+        // Source ids advance per received/decoded frame, including frames the
+        // engine skipped or the capture mailbox replaced; normalise by that step.
+        const uint64_t sourceStep=sceneLastSourceId_&&sourceFrameId>sceneLastSourceId_?sourceFrameId-sceneLastSourceId_:1;
+        sceneLastSourceId_=sourceFrameId;
+        const auto analysis=scene_.analyze(realFrameIndex_,hist,sad,static_cast<uint64_t>(std::max(0.0,ptsMs)*1000),sourceStep);
         if(analysis.isSceneCut||analysis.isCadenceBreak){
             if(out.detectedReset==ResetReason::None)out.detectedReset=analysis.isSceneCut?ResetReason::SceneCut:ResetReason::CadenceBreak;
             reset=true;prevValid_=false;if(analysis.isSceneCut)++metrics_.sceneCutCount;
