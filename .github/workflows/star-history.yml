@@ -1,0 +1,34 @@
+name: Generate Star History
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/star-history.yml"
+  schedule:
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  star-history:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Generate Star History
+        uses: kitswas/generate-star-history@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          output-path: "assets/star-history.svg"
+          theme: "auto"
+
+      - name: Commit chart
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/star-history.svg
+          git diff --staged --quiet || git commit -m "chore: update star history chart [skip ci]"
+          git push
