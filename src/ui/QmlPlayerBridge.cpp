@@ -757,6 +757,7 @@ bool prepareStartupPreset(const engine::PresetEntry& entry, engine::ChainSession
         }
         settings.audioSync = draftSettings.audioSync;
         settings.audioOffsetMs = draftSettings.audioOffsetMs;
+        settings.content = draftSettings.content;
         configuration = engine::ChainConfiguration::capture(runtime, settings);
         configuration.editor = std::make_shared<engine::NodeEditorDocument>(std::move(document));
     }
@@ -1044,6 +1045,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             restoreError = tr("模式会话未被引擎接受，保留初始状态");
         }
     }
+    bool defaultFlowApplied = false;
     if (!restoreError.isEmpty()) {
         veyra::log::error("ui-session", restoreError.toStdString());
         QTimer::singleShot(0, this, [this, restoreError] { emit notice(restoreError, true); });
@@ -1070,6 +1072,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 impl_->restoreConfiguration(candidate.configurations[size_t(candidate.active)]);
                 impl_->revalidate();
                 impl_->options = engine::PlayerOptions::from(settings, engine::runtimeOrder(impl_->activeRuntime()));
+                defaultFlowApplied = entry.flow.has_value() &&
+                    (entry.contents & engine::presetContentMask(engine::PresetContent::Flow));
+                if (defaultFlowApplied) {
+                    impl_->prefs[QStringLiteral("contentRate")] = int(settings.content);
+                    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "default preset content cadence not saved");
+                }
                 if (candidate != before && !impl_->facade.saveChainSession(candidate))
                     error = tr("默认预设已应用，但会话保存失败：") + uiText(impl_->facade.error());
                 else impl_->savedSession = candidate;
@@ -1093,7 +1101,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const int ms = p.value(QStringLiteral("audioOffsetMs")).toInt();
             if (ms >= -250 && ms <= 250 && s.audioOffsetMs != ms) { s.audioOffsetMs = ms; changed = true; }
         }
-        if (p.contains(QStringLiteral("contentRate"))) {
+        if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
             if (rate >= 0 && rate <= int(engine::ContentRate::Capture60To30) && int(s.content) != rate) { s.content = static_cast<engine::ContentRate>(rate); changed = true; }
         }
@@ -5622,6 +5630,10 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
     }
     impl_->selectedNr = selectedNr;
     impl_->selectedColour = selectedColour;
+    if (entry.flow && (entry.contents & engine::presetContentMask(engine::PresetContent::Flow))) {
+        impl_->prefs[QStringLiteral("contentRate")] = int(this->settings().content);
+        if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "preset content cadence not saved");
+    }
     emit settingsChanged();
     emit chainChanged();
     return true;
@@ -5683,6 +5695,7 @@ bool QmlPlayerBridge::savePresetAs(const QString& name, int contentsMask, bool n
         entry.fg.vfgQuality = impl_->draftGlobals.vfgQuality;
         entry.globals=impl_->draftGlobals;
     }
+    entry.flow = engine::PresetFlowSettings::capture(settings());
     const bool ok = impl_->facade.savePreset(entry, false);
     if (ok) emit presetsChanged();
     else emit notice(tr("保存预设失败: %1").arg(uiText(impl_->facade.error())), true);
@@ -5740,6 +5753,16 @@ QVariantList QmlPlayerBridge::presetSaveParts() const {
     add("audio", tr("声音"),
         s.audioOffsetMs != 0 ? tr("偏移 %1 ms").arg(s.audioOffsetMs) : tr("默认"),
         s.audioOffsetMs != 0);
+    const QStringList flowNames{QStringLiteral("NVIDIA NVOF"), tr("AMD 光流"), QStringLiteral("GPU DIS")};
+    const QStringList qualityNames{tr("性能"), tr("平衡"), tr("质量")};
+    const QStringList cadenceNames{tr("采用源时间戳"), tr("自动识别内容节奏"), tr("识别 30fps 内容"),
+        tr("识别 50fps 内容"), tr("识别 60fps 内容"), tr("采集 60→30（PS5 30 帧）")};
+    QString flowSummary = flowNames.value(int(s.opticalFlowBackend)) + QStringLiteral(" · ") +
+        qualityNames.value(int(s.flow)) + QStringLiteral(" · ") + cadenceNames.value(int(s.content));
+    if (s.opticalFlowBackend == engine::OpticalFlowBackend::AmdFidelityFx && s.amdFlowHalfResolution)
+        flowSummary += QStringLiteral(" · ") + tr("半分辨率");
+    add("flow", tr("光流与内容节奏"), flowSummary,
+        engine::PresetFlowSettings::capture(s) != engine::PresetFlowSettings{});
     return out;
 }
 
@@ -6086,115 +6109,10 @@ void QmlPlayerBridge::setContentRate(int value) {
     if (int(s.content) == value) return;
     s.content = static_cast<engine::ContentRate>(value);
     if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受内容节奏，原设置保留"), true); return; }
-    // A player setting, not part of either chain: kept in the shell preferences.
+    // Shared cadence stays in shell preferences and can be included in presets.
     impl_->prefs[QStringLiteral("contentRate")] = value;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "content cadence not saved");
     emit settingsChanged();
-}
-
-// --- 补帧预设 ------------------------------------------------------------------
-// The 补帧 tab saved by name in the shell preferences (field request 2026-10-05),
-// apart from the whole-chain presets. Applying one goes through the tab's own
-// setters, so every value meets the same availability checks and notices as a
-// click on that control would.
-QVariantList QmlPlayerBridge::fgPresets() const {
-    QVariantList out;
-    const auto saved=impl_->prefs.value(QStringLiteral("fgPresets")).toList();
-    const auto backends=fgBackendChoices();
-    for(int i=0;i<saved.size();++i){
-        const auto entry=saved[i].toMap();
-        const int multiplier=entry.value(QStringLiteral("multiplier"),1).toInt();
-        QString backend=entry.value(QStringLiteral("backend")).toString();
-        for(const auto& choice:backends)
-            if(choice.toMap().value(QStringLiteral("id")).toString()==backend)backend=choice.toMap().value(QStringLiteral("label")).toString();
-        out<<QVariantMap{{"index",i},{"name",entry.value(QStringLiteral("name")).toString()},
-                         {"note",multiplier>1?QStringLiteral("%1X · %2").arg(multiplier).arg(backend):tr("补帧关闭")}};
-    }
-    return out;
-}
-bool QmlPlayerBridge::saveFgPreset(const QString& name, bool replace) {
-    const QString trimmed=name.trimmed();
-    if(trimmed.isEmpty()||trimmed.size()>48){emit notice(tr("补帧预设名称需为 1–48 个字符"),true);return false;}
-    auto saved=impl_->prefs.value(QStringLiteral("fgPresets")).toList();
-    int existing=-1;
-    for(int i=0;i<saved.size();++i)if(saved[i].toMap().value(QStringLiteral("name")).toString()==trimmed)existing=i;
-    if(existing>=0&&!replace){emit notice(tr("已存在同名补帧预设"),true);return false;}
-    if(existing<0&&saved.size()>=32){emit notice(tr("补帧预设最多保存 32 个"),true);return false;}
-    const auto s=settings();
-    const QVariantMap entry{{"name",trimmed},{"backend",fgBackendName()},{"multiplier",fgMultiplier()},
-        {"vfgQuality",int(s.vfgQuality)},{"motion",int(s.fgMotion)},{"opticalFlow",int(s.opticalFlowBackend)},
-        {"amdHalf",s.amdFlowHalfResolution},{"flowQuality",int(s.flow)},{"contentRate",int(s.content)},
-        {"strict",fgStrict()},{"lowQueue",fgLowQueue()}};
-    if(existing>=0)saved[existing]=entry;else saved<<entry;
-    const auto previous=impl_->prefs;
-    impl_->prefs[QStringLiteral("fgPresets")]=saved;
-    if(!impl_->savePrefs()){impl_->prefs=previous;emit notice(tr("补帧预设保存失败"),true);return false;}
-    veyra::log::info("ui-fg-preset",std::format("saved name={} backend={} multiplier={} flow={} content={}",trimmed.toStdString(),
-        fgBackendName().toStdString(),fgMultiplier(),int(s.opticalFlowBackend),int(s.content)));
-    emit fgPresetsChanged();
-    emit notice(tr("已保存补帧预设：%1").arg(trimmed),false);
-    return true;
-}
-bool QmlPlayerBridge::applyFgPreset(int index) {
-    const auto saved=impl_->prefs.value(QStringLiteral("fgPresets")).toList();
-    if(index<0||index>=saved.size()){emit notice(tr("补帧预设不存在"),true);return false;}
-    const auto p=saved[index].toMap();
-    const QString backend=p.value(QStringLiteral("backend")).toString();
-    if(!backend.isEmpty()&&backend!=fgBackendName())setFgBackendName(backend);
-    const bool backendApplied=backend.isEmpty()||backend==fgBackendName();
-    if(p.contains(QStringLiteral("vfgQuality")))setVfgQuality(p.value(QStringLiteral("vfgQuality")).toInt());
-    // A multiplier saved for another backend only follows when that backend did.
-    const int multiplier=p.value(QStringLiteral("multiplier"),1).toInt();
-    if(backendApplied){
-        if(multiplier>1){if(multiplier!=fgMultiplier())setFgMultiplier(std::min(multiplier,fgMaxMultiplier()));}
-        else if(fgEnabled())setFgEnabled(false);
-    }
-    if(p.contains(QStringLiteral("motion"))){
-        const int motion=p.value(QStringLiteral("motion")).toInt();
-        auto s=settings();
-        if(motion>=0&&motion<=int(engine::MotionSource::Automatic)&&int(s.fgMotion)!=motion){
-            s.fgMotion=engine::MotionSource(motion);
-            if(impl_->commit(std::move(s)))emit settingsChanged();
-        }
-    }
-    if(p.contains(QStringLiteral("opticalFlow")))setOpticalFlowChoice(p.value(QStringLiteral("opticalFlow")).toInt());
-    if(p.contains(QStringLiteral("amdHalf")))setAmdFlowHalf(p.value(QStringLiteral("amdHalf")).toBool());
-    if(p.contains(QStringLiteral("flowQuality")))setFlowQuality(p.value(QStringLiteral("flowQuality")).toInt());
-    if(p.contains(QStringLiteral("contentRate")))setContentRate(p.value(QStringLiteral("contentRate")).toInt());
-    if(p.contains(QStringLiteral("strict")))setFgStrict(p.value(QStringLiteral("strict")).toBool());
-    if(p.contains(QStringLiteral("lowQueue")))setFgLowQueue(p.value(QStringLiteral("lowQueue")).toBool());
-    // A setter can reject an unavailable or invalid field while the backend
-    // itself succeeds. Report the resulting state, rather than claiming the
-    // complete preset was applied solely because its backend was accepted.
-    const auto applied=settings();
-    bool complete=backendApplied&&fgMultiplier()==multiplier;
-    const auto matchesInt=[&](const char* key,int actual){
-        const auto name=QString::fromLatin1(key);
-        return !p.contains(name)||p.value(name).toInt()==actual;
-    };
-    const auto matchesBool=[&](const char* key,bool actual){
-        const auto name=QString::fromLatin1(key);
-        return !p.contains(name)||p.value(name).toBool()==actual;
-    };
-    complete=complete&&matchesInt("vfgQuality",int(applied.vfgQuality))
-        &&matchesInt("motion",int(applied.fgMotion))&&matchesInt("opticalFlow",int(applied.opticalFlowBackend))
-        &&matchesInt("flowQuality",int(applied.flow))&&matchesInt("contentRate",int(applied.content))
-        &&matchesBool("amdHalf",applied.amdFlowHalfResolution)&&matchesBool("strict",fgStrict())&&matchesBool("lowQueue",fgLowQueue());
-    const QString name=p.value(QStringLiteral("name")).toString();
-    veyra::log::info("ui-fg-preset",std::format("applied name={} backend={} backendApplied={} complete={}",name.toStdString(),backend.toStdString(),backendApplied,complete));
-    if(complete)emit notice(tr("已应用补帧预设：%1").arg(name),false);
-    else emit notice(tr("部分补帧设置未被当前显卡或组件接受：%1").arg(name),true);
-    return complete;
-}
-bool QmlPlayerBridge::deleteFgPreset(int index) {
-    auto saved=impl_->prefs.value(QStringLiteral("fgPresets")).toList();
-    if(index<0||index>=saved.size())return false;
-    saved.removeAt(index);
-    const auto previous=impl_->prefs;
-    impl_->prefs[QStringLiteral("fgPresets")]=saved;
-    if(!impl_->savePrefs()){impl_->prefs=previous;emit notice(tr("删除补帧预设失败"),true);return false;}
-    emit fgPresetsChanged();
-    return true;
 }
 
 int QmlPlayerBridge::displaySync() const { return int(impl_->presentation.display); }

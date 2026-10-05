@@ -1600,7 +1600,7 @@ Item {
             const name = presetNameField.text.trim()
             if (name.length === 0) { saveNote.text = qsTr("预设需要一个名字"); return }
             let mask = 0
-            const ids = ["chain", "color", "fg", "audio"]
+            const ids = ["chain", "color", "fg", "audio", "flow"]
             for (const part of parts) {
                 const bit = ids.indexOf(part.id)
                 if (bit >= 0 && chosen[part.id] === true) mask |= (1 << bit)

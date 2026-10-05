@@ -1588,57 +1588,6 @@ VPage {
                         visible: root.tab === "fg"
                         objectName: "list-fg-group"
 
-                        // 补帧预设 (field request 2026-10-05): this whole tab by name - 补帧方式,
-                        // 倍率, 运动来源, 光流算法, 运动估算质量, 内容节奏, 严格节奏 and
-                        // 低延迟队列 - beside the whole-chain presets, as 颜色预设 is on 色彩.
-                        VGroup {
-                            objectName: "list-fg-presets"
-                            VRow {
-                                label: qsTr("补帧预设")
-                                hint: qsTr("保存补帧页全部设置")
-                                VSelect {
-                                    objectName: "fg-preset-select"
-                                    implicitWidth: 170
-                                    value: veyra.fgPresets.length ? qsTr("应用预设…") : qsTr("暂无补帧预设")
-                                    options: veyra.fgPresets.map(p => ({ id: String(p.index), label: p.name, note: p.note }))
-                                    onPicked: id => veyra.applyFgPreset(Number(id))
-                                }
-                            }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 6
-                                DialogHost.VTextField {
-                                    id: fgPresetName
-                                    objectName: "fg-preset-name"
-                                    Layout.fillWidth: true
-                                    placeholder: qsTr("新预设名称")
-                                }
-                                VButton {
-                                    objectName: "fg-preset-save"
-                                    text: qsTr("保存")
-                                    enabled: fgPresetName.text.trim().length > 0
-                                    onClicked: {
-                                        const name = fgPresetName.text.trim()
-                                        const exists = veyra.fgPresets.some(p => p.name === name)
-                                        if (veyra.saveFgPreset(name, exists)) fgPresetName.text = ""
-                                    }
-                                }
-                                VButton {
-                                    id: fgPresetMore
-                                    objectName: "fg-preset-more"
-                                    text: qsTr("管理"); ghost: true
-                                    enabled: veyra.fgPresets.length > 0
-                                    onClicked: fgPresetMenu.openAt(fgPresetMore, "down")
-                                }
-                                VMenu {
-                                    id: fgPresetMenu
-                                    title: qsTr("补帧预设")
-                                    items: veyra.fgPresets.map(p => ({ act: "delete", index: p.index, label: qsTr("删除「") + p.name + "」", note: p.note, icon: "trash" }))
-                                    onPicked: (i, item) => veyra.deleteFgPreset(item.index)
-                                }
-                            }
-                        }
-
                         VAccordion {
                             id: fgCard
                             objectName: "list-fg-card"
