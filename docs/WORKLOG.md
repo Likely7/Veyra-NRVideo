@@ -8412,3 +8412,13 @@ Run takeover-20261005T061823Z-1ad4ac；logs/tests/tmp/archives 全在 E:/项目/
 同夹具 `units` 五测试全exit0（scene18/18、repair246/246、live timing/effect chain/i18n通过）；`timing` 独立包副本约45秒真实播放七阶段通过：关效果→开NR→关NR→缓存恢复NR→DLSS SR→DLSS2X→第二NR层。feature-cache真实命中，当前GPU阶段与节点均measured且samples>0，合计约7.22/7.07/8.18/10.43/16.85ms；退出0，无产品/QML错误。不是A/B收益或物理延迟测量，不外推未测组合。测试QML仅在本轮副本，所有测试进程已退出。
 
 更正文档中“卡顿消失确认外部负载”过强归因为未确认根因，保留原日志；AMD所查会话无效不泛化成所有历史会话从未执行。本轮未新构建、未改产品/运行库、未commit/merge/push/Release/关机、无压力/竞争程序。下一项本机工作为隔离OBS兼容模式先暂停后新挂钩实录；用户采集卡后台和RX9000实卡仍待真实反馈。详FIELD_FIXES第6节和本轮JSON。
+
+## 2026-10-05 按用户追加要求合入本地 main
+
+用户“先合并到main，然后有其他修复等你做”；仅处理本地提交、合并、存档与文档，不推进新的修复。Run merge-20261005T063850Z-1b5fef，archives/logs/tmp 分别在 E:/项目/Veyra 对应 merge-main-20261005 子目录。开始保存 main354b1c6/来源2dbf26c、29个未提交文件原字节ZIP与binary/index patch、全部相关Git历史bundle、工作树状态和SHA；before.bundle SHA15b44fccbd73f090d05c894b62035a34560ae0113059fdc6bc2660fc8a6f984b，bundle verify通过。传入main的新增/改动文件未包含proprietary runtime/SDK/模型。
+
+`py -3.11 -B <本轮tmp>/merge-local.py commit-source` 验证待提交路径与归档完全一致，git diff --cached --check通过，Claude修复和接管文档提交6e9d827；`merge` 在 E:/项目/Veyra/worktrees/main-merge-20261002 执行 --no-ff合并，无冲突，合并提交f7ced91，两父为354b1c6和6e9d827，Git树b35201b与已复测来源完全相同。`tag-merge` 完成合并后标签；pre-merge/source-tip/merged三个checkpoint见MERGE_MAIN_2026-10-05.md，来源及性能分支保留。
+
+`verify-merge.py pre-docs` 初次失败仅因桌面status默认折叠两个未追踪目录，而归档采用逐文件枚举；原失败JSON保留。修正为同样 --untracked-files=all后，`pre-docs-v2` exit0，两个目标工作树清洁，桌面HEAD/状态/未提交字节及其余14个工作树HEAD/状态/全部逐文件SHA保持。没有删除、移动或改变桌面文件。
+
+main后续仅更新AGENTS/CURRENT_STATUS/FIELD_FIXES/WORKLOG/本轮合并记录并提交，最后执行 `verify-merge.py final` 和合并后增量bundle核验，结果/最终main提交写入本轮logs与archives JSON。没有新产品改动或重新构建；依据刚才接管时实际通过的build-6、五测试、1578包载荷及七阶段真实播放计时，合并保持同一产品Git源码。没有push/Release/压力测试/用户配置变更/分支删除/旧UI删除；AMD/用户后台卡顿/暂停后新接OBS/其他RTX与主观画质缺口仍保留，等用户后续具体修复要求。
