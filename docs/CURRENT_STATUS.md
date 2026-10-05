@@ -4,7 +4,7 @@
 
 已审查其他分支及Claude最新18份未提交UI修复，纳入当前NR强度5/三风格九参数调控、Xbox解码恢复，并保留main已有性能/计时/AMD NR/字幕/RTSS/倍速/布局修复。原桌面、Claude与其他工作区修改均完整保留；不把旧诊断/撤回实验重新合入。生产版本2.0.4构建与针对性回归通过，实际补帧切换、完整预设恢复/非法值拒绝、两层NR及HEVC4K60帧导出、Qt50项、两包独立启动/ASS和默认D3D12通过。最终EXE SHA dadb7cd28022a4ebff9291b4fc6b282e6253bad397fff7ae6f81ff2bf069322d。
 
-本地main合并与完整NVIDIA/AMD测试包封存按 [2.0.4验收](RELEASE_2.0.4_ACCEPTANCE_2026-10-05.md) 执行；最终commit、包大小/CRC/SHA与干净解压启动结果以E:/项目/Veyra同任务archives/main-merge.json、test-packages/DELIVERY.json、logs/cold-verify-results.json为准。公开版本仍2.0.3，未执行新push/Release。受影响Xbox/RX9070XT、RX9000 NR、RTX20/30/40、采集后台长稳与物理显示仍待对应用户实测；HDR/Dolby PR13/14继续暂缓。以下为历史阶段记录，不覆盖本轮事实。
+本地main已于00:13完成 `--no-ff` 合并，merge **2a39a8b**（来源270aaaa），无冲突，Git树与实测整合树完全相同；随后仅补充合并记录。完整NVIDIA/AMD测试包封存按 [2.0.4验收](RELEASE_2.0.4_ACCEPTANCE_2026-10-05.md) 执行；最终commit、包大小/CRC/SHA与干净解压启动结果以E:/项目/Veyra同任务archives/main-merge.json、test-packages/DELIVERY.json、logs/cold-verify-results.json为准。公开版本仍2.0.3，未执行新push/Release。受影响Xbox/RX9070XT、RX9000 NR、RTX20/30/40、采集后台长稳与物理显示仍待对应用户实测；HDR/Dolby PR13/14继续暂缓。以下为历史阶段记录，不覆盖本轮事实。
 
 ## 2026-10-05 性能优化及 Claude 现场修复已合入本地 main
 

@@ -53,7 +53,9 @@ codec1/2 使用 `E:/项目/Veyra/tests/capture-xbox-field-20261005/media` 下无
 
 NVIDIA/AMD 使用同一最终 EXE；stage/refresh 的逐文件SHA、PE直接/delay imports与依赖闭包、厂商边界均通过。NVIDIA 215项、AMD 694项既有组件文件原字节保持（计数含许可证/manifest/模型，非DLL数量）。AMD包括此前补齐的8份libass许可证；不新增/修改运行二进制，不混入SDK/驱动、配置、测试媒体、日志/PDB/LIB。
 
-生产回归通过后才做本地 main 合并与封存。最终 sourceCommit、mainAfter/mainMerge、Git树一致性与 before/after 信息以 `archives/.../main-merge.json` 为准；源码ZIP仅含受版本控制的应用源码，最终 bundle 单独 verify。封存时要求源树/main干净，所有必要结果passed且app用例EXE SHA与最终EXE一致。
+生产回归通过后，于2026-10-06 00:13 Asia/Taipei完成本地 `main --no-ff` 合并：main从 `de18fc4` 合并实测整合提交 `270aaaa`，merge为 **`2a39a8bc9a626b084edc96c5edd398d4c596237f`**。无冲突，合并Git树与实测源树完全相同，main干净，checkpoint标签已建立；随后仅补充这份合并记录，产品输入与最终EXE不变。
+
+最终 sourceCommit、mainAfter/mainMerge、Git树一致性与 before/after 信息以 `archives/.../main-merge.json` 为准；源码ZIP仅含受版本控制的应用源码，最终 bundle 单独 verify。封存时要求源树/main干净，所有必要结果passed且app用例EXE SHA与最终EXE一致。
 
 ZIP大小/全SHA/CRC与每项载荷哈希的实际结论见 `test-packages/.../DELIVERY.json`（zipCrcAndAllPayloadHashesPassed）；独立干净解压启动见 `logs/.../cold-verify-results.json`（两个passed）。后者仅用Windows系统PATH，并逐个核对实际加载Qt/FFmpeg模块来自刚解压目录，不依赖研发环境PATH。只有对应实际回执才构成封存验收，不能用本文件替代未执行的最后步骤。
 

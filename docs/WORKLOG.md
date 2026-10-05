@@ -10,6 +10,8 @@
 
 真实Xbox/RX9070XT、RX9000 NR、20/30/40、受影响采集卡/后台长稳、驱动616.92、物理显示/端到端延迟未验；本版本未承诺原NR+4K+3X组合60处理FPS或底层Xbox驱动/FG故障根因已确定。无新公开push/Release/资产上传，未改用户配置/驱动，无压力/竞争程序、子Agent或关机。用户先测试后再正式发布，正式Release双width220二维码草稿保留。
 
+2026-10-06 00:13本地main合并已完成：de18fc4 + 270aaaa → 2a39a8bc9a626b084edc96c5edd398d4c596237f（--no-ff），无冲突，main树与实测源树完全相同/干净；before/tested/merged三处checkpoint及main-merge-initial.json记录已保存。随后仅更新此合并事实，再冻结对应源码和两包；最终mainAfter见main-merge.json。其他19工作区守卫复核通过，无远端推送。
+
 ## 2026-10-05 采集60→55–57FPS与Xbox补帧冻结：开工证据
 
 当前以用户最终更正的28日志处理Xbox，不拿26本地HEVC/AMD NR日志代替。已安全解包7z并复制/hash输入到 `E:/项目/Veyra/logs/capture-xbox-field-20261005/input`，64,005行采集日志和17,076行Xbox日志；归档内容只作证据。采集callback/PTS60Hz，rev16 GPU完成FPS中位55/输入60，实际mailbox丢帧；不能伪改输入数字或承诺全部增强固定60。Xbox 487次D3D12VA send_packet EINVAL，FG重建附近开始、音频继续；缺少错误后的flush及输入AU丢失的参考链reset，SDK/driver根因尚不能确定。
