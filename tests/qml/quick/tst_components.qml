@@ -8,7 +8,7 @@ import VeyraTest 1.0
 Item {
     id: root
     width: 1480
-    height: 900
+    height: 1500
 
     VSwitch { id: sw; x: 10; y: 10 }
     SignalSpy { id: swSpy; target: sw; signalName: "toggled" }
@@ -67,7 +67,7 @@ Item {
         id: nrFixture
         Item {
             id: fixture
-            width: 1480; height: 900; z: 20
+            width: 1480; height: 1500; z: 20
             property int lastIndex: -1
             property string lastKey: ""
             property var rows: [0,1,2,3].map(i => ({
@@ -77,7 +77,9 @@ Item {
                 color: 1, luminance: 1, temporal: false, antiFlicker: 2,
                 correctionEnabled: false, correctionAuto: true,
                 hueProtection: 1, chromaProtection: 0.75, highlightProtection: 1,
-                localCompression: 0.75, temporalStability: 0.8
+                localCompression: 0.75, temporalStability: 0.8,
+                neutralProtection: 0, colorRetention: 0, luminanceRetention: 0,
+                shadowProtection: 0, correctionAmount: 1
             }))
             function edit(nodeIndex,key,amount) {
                 lastIndex=nodeIndex; lastKey=key
@@ -451,11 +453,14 @@ Item {
             compare(fixture.rows[0].correctionEnabled,true)
             const mode=findChild(card,"nr-correctionAuto")
             compare(mode.current,"1")
+            const amount=findChild(card,"nr-correctionAmount")
+            verify(amount.visible);mouseClick(amount,amount.trackWidth*0.65,amount.height/2)
+            fuzzyCompare(fixture.rows[0].correctionAmount,0.65,0.015)
             verify(!findChild(card,"nr-temporal").enabled)
             mouseClick(mode,mode.width-15,mode.height/2)
             compare(fixture.rows[0].correctionAuto,false)
             verify(waitForPolish(root.Window.window));wait(550)
-            for(const key of ["hueProtection","chromaProtection","highlightProtection","localCompression","temporalStability"]){
+            for(const key of ["hueProtection","chromaProtection","neutralProtection","colorRetention","luminanceRetention","shadowProtection","highlightProtection","localCompression","temporalStability"]){
                 const control=findChild(card,"nr-"+key)
                 verify(control.visible)
                 mouseClick(control,control.trackWidth*0.35,control.height/2)
@@ -465,6 +470,8 @@ Item {
             compare(fixture.rows[0].correctionAuto,true)
             compare(findChild(card,"nr-hueProtection").visible,false)
             fuzzyCompare(fixture.rows[0].hueProtection,0.35,0.015)
+            fuzzyCompare(fixture.rows[0].colorRetention,0.35,0.015)
+            fuzzyCompare(fixture.rows[0].correctionAmount,0.65,0.015)
             mouseClick(enabled)
             compare(fixture.rows[0].correctionEnabled,false)
             verify(findChild(card,"nr-temporal").enabled)

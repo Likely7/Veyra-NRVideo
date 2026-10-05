@@ -4117,7 +4117,10 @@ QVariantList QmlPlayerBridge::nrLayers() const {
             {"correctionEnabled",n.residual.correction.enabled},{"correctionAuto",n.residual.correction.automatic},
             {"hueProtection",n.residual.correction.hue},{"chromaProtection",n.residual.correction.chroma},
             {"highlightProtection",n.residual.correction.highlight},{"localCompression",n.residual.correction.compression},
-            {"temporalStability",n.residual.correction.stability}};
+            {"temporalStability",n.residual.correction.stability},
+            {"neutralProtection",n.residual.correction.neutral},{"colorRetention",n.residual.correction.colorKeep},
+            {"luminanceRetention",n.residual.correction.lumaKeep},{"shadowProtection",n.residual.correction.shadow},
+            {"correctionAmount",n.residual.correction.autoAmount}};
     }
     return out;
 }
@@ -4173,6 +4176,11 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     else if(key=="highlightProtection")n.residual.correction.highlight=float(value);
     else if(key=="localCompression")n.residual.correction.compression=float(value);
     else if(key=="temporalStability")n.residual.correction.stability=float(value);
+    else if(key=="neutralProtection")n.residual.correction.neutral=float(value);
+    else if(key=="colorRetention")n.residual.correction.colorKeep=float(value);
+    else if(key=="luminanceRetention")n.residual.correction.lumaKeep=float(value);
+    else if(key=="shadowProtection")n.residual.correction.shadow=float(value);
+    else if(key=="correctionAmount")n.residual.correction.autoAmount=float(value);
     else {
         if(value!=std::floor(value)||value<0||value>6)return false;
         if(key=="sizePolicy"){
@@ -4185,6 +4193,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
         else if(key=="temporal"&&value<=1)n.temporal=value!=0;
         else if(key=="correctionEnabled"&&value<=1)n.residual.correction.enabled=value!=0;
         else if(key=="correctionAuto"&&value<=1)n.residual.correction.automatic=value!=0;
+        else if(key=="correctionUseAuto"&&value==1)n.residual.correction.useAutomaticValues(n.model.style);
         else if(key=="antiFlicker"&&validNrAntiFlicker(engine::NrAntiFlicker(int(value))))n.antiFlicker=static_cast<engine::NrAntiFlicker>(int(value));
         else return false;
     }

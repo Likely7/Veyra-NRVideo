@@ -4,6 +4,9 @@ import hashlib,json,os,subprocess,sys
 ROOT=Path(__file__).resolve().parents[2]
 BASE=Path('E:/项目/Veyra');TASK='nr-strength-protection-20261005'
 APP=BASE/'test-packages'/TASK/'Veyra-2.0.3-nr-controls-NVIDIA-win64-portable'
+styles='--styles' in sys.argv
+if styles:
+    sys.argv.remove('--styles');APP=APP.with_name('Veyra-2.0.3-nr-controls2-NVIDIA-win64-portable')
 mode=sys.argv[1];assert mode in ('first','restore','multi','visual')
 label=sys.argv[2] if len(sys.argv)>2 else mode
 assert label.replace('-','').isalnum()
@@ -18,14 +21,14 @@ for key in ('QT_QPA_PLATFORM','QT_QUICK_BACKEND','VEYRA_UI_RHI','VEYRA_TEST_IGNO
 if mode=='first' and not media.exists():
     with (LOG/'fixture.log').open('xb') as log:
         subprocess.run(['ffmpeg','-v','warning','-n','-f','lavfi','-i','testsrc2=size=1280x720:rate=30','-t','2','-c:v','mpeg4','-q:v','3','-threads','2',str(media)],env=env,stdout=log,stderr=subprocess.STDOUT,timeout=60,check=True)
-receipt=BASE/'logs'/TASK/'production-profile.json'
+receipt=BASE/'logs'/TASK/('production-styles-profile.json' if styles else 'production-profile.json')
 if mode=='first':
     profile=OUT/'profile'
     receipt.write_text(json.dumps({'profile':str(profile)}),encoding='utf8')
 elif mode=='restore':profile=Path(json.loads(receipt.read_text(encoding='utf8'))['profile'])
 else:profile=OUT/'profile'
 main=APP/'qml/Veyra/Main.qml';original=main.read_bytes();source=original.decode('utf8')
-loader='\nLoader { anchors.fill: parent; source: '+json.dumps((ROOT/'scripts/acceptance/nr-protection-ui.qml').as_uri())+'; onLoaded: { item.media='+json.dumps(str(media))+'; item.evidence='+json.dumps(str(OUT))+'; item.resume='+str(mode=='restore').lower()+'; item.multi='+str(mode=='multi').lower()+'; item.visual='+str(mode=='visual').lower()+' } }\n'
+loader='\nLoader { anchors.fill: parent; source: '+json.dumps((ROOT/'scripts/acceptance/nr-protection-ui.qml').as_uri())+'; onLoaded: { item.media='+json.dumps(str(media))+'; item.evidence='+json.dumps(str(OUT))+'; item.resume='+str(mode=='restore').lower()+'; item.multi='+str(mode=='multi').lower()+'; item.visual='+str(mode=='visual').lower()+'; item.styleFollowup='+str(styles).lower()+' } }\n'
 args=[str(APP/'veyra_qml_ui.exe'),'--page','pro','--size','1280x900','--reduced-motion','--obs-game-capture','--export-out',str(OUT/'outputs'),'--data-dir',str(profile),'--exit-after','250000']
 try:
     at=source.rfind('}');main.write_text(source[:at]+loader+source[at:],encoding='utf8')

@@ -74,8 +74,9 @@ float NrHighlightShoulder(float target,float original,float limit){
     return span>1e-7?knee+span*(1-exp(-(target-knee)/span)):start;
 }
 float3 NrApplyCorrection(float3 original,float3 candidate,bool hdr,
-                         float hue,float chroma,float highlight,float compression){
-    if(hue+chroma+highlight+compression==0||all(original==candidate))return candidate;
+                         float hue,float chroma,float highlight,float compression,
+                         float neutral,float colorKeep,float lumaKeep,float shadow){
+    if(hue+chroma+highlight+compression+neutral+colorKeep+lumaKeep+shadow==0||all(original==candidate))return candidate;
     if(!all(isfinite(candidate)))return original;
     float unit=NrUnit(hdr),ceiling=NrCeiling(original,hdr);
     float3 o=NrLinearToLab(original/unit),d=NrLinearToLab(candidate/unit)-o;
@@ -98,6 +99,29 @@ float3 NrApplyCorrection(float3 original,float3 candidate,bool hdr,
         // gets the shoulder. Classification always uses the original base.
         if(d.x>0)d.x=lerp(target,NrHighlightShoulder(target,o.x,pow(ceiling,1.0/3.0)),highlight)-o.x;
     }
+    // Lightness is independent of chromaticity. A manual value of one keeps
+    // original lightness; shadow protection only restores excessive darkening
+    // in source shadows, so positive shadow detail does not get suppressed.
+    d.x*=1-lumaKeep;
+    if(d.x<0)d.x*=1-shadow*(1-smoothstep(.12,.5,o.x));
+    // Rebase source chroma to CURRENT lightness. Holding raw Lab a/b while
+    // changing L changes saturation and can make styles 1/2 look color-shifted.
+    // This preserves original RGB ratios at full retention, not a gray overlay.
+    float2 prospectiveChroma=o.yz*((o.x+d.x)/max(o.x,1e-6));
+    // Ignore tiny chromaticity noise from proxy/FP16 quantization. Source
+    // color retention remains explicit; the neutral guard only repairs tint.
+    float tintRisk=smoothstep(.001,.004,length(o.yz+d.yz-prospectiveChroma));
+    float keep=1-(1-colorKeep)*(1-neutral*tintRisk*(1-smoothstep(.04,.14,c/max(o.x,.02))));
+    // A source-color ray can hit the gamut ceiling before the gray axis does.
+    // Respect that ray's lightness bound; otherwise the final gamut mapper
+    // would desaturate a "fully retained" color near white.
+    if(keep>0){
+        float sourcePeak=NrMaximum(hdr?NrTo2020(original/unit):original/unit);
+        float sourceLimit=o.x*pow(ceiling/max(sourcePeak,1e-9),1.0/3.0);
+        d.x=lerp(o.x+d.x,min(o.x+d.x,sourceLimit),keep)-o.x;
+    }
+    float2 sourceChroma=o.yz*((o.x+d.x)/max(o.x,1e-6));
+    d.yz=lerp(o.yz+d.yz,sourceChroma,keep)-o.yz;
     return NrMapLab(o+d,ceiling,hdr)*unit;
 }
 float3 NrTemporalSafety(float3 base,float3 candidate,bool hdr,bool spatial){

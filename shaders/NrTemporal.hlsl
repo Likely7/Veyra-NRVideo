@@ -32,6 +32,8 @@ cbuffer Settings:register(b0){
     uint Route;float2 LowSize;float RoutePad;
     float CorrectionEnabled;float HueProtection;float ChromaProtection;float HighlightProtection;
     float LocalCompression;float TemporalStability;float CorrectionAutomatic;float CorrectionHdr;
+    float NeutralProtection;float ColorRetention;float LuminanceRetention;float ShadowProtection;
+    float4 CorrectionReserved;
 }
 float GuideChannel(float c){
     // The matching tolerance must distinguish visible changes in shadows,
@@ -240,7 +242,7 @@ groupshared float TileError[100];
     float3 composited=resolved+detail;
     if(CorrectionEnabled>0.5){
         composited=NrTemporalSafety(base.rgb,composited,CorrectionHdr>0.5,
-            HueProtection+ChromaProtection+HighlightProtection+LocalCompression>0);
+            HueProtection+ChromaProtection+HighlightProtection+LocalCompression+NeutralProtection+ColorRetention+LuminanceRetention+ShadowProtection>0);
         resolved=composited-detail;
     }
     NextHistory[p]=float4(clamp(resolved-base.rgb,-65504,65504),Route==3?1+support:1);

@@ -35,8 +35,8 @@ bool NrTemporalPass::initialize(ID3D12Device* device,ID3D12Resource* base,ID3D12
     for(unsigned i=0;i<2;++i){history_[i]=makeTexture(device,width_,height_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);guide_[i]=makeTexture(device,width_,height_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);if(!history_[i]||!guide_[i])return false;}
     std::vector<uint8_t> shader;
     // 7 SRVs (base, raw, history, guide, motion, low residual, low guide), 3 UAVs,
-    // 36 constants: original 24, Route/LowSize/pad, optional correction block.
-    if(!raw_||!pass_.loadShader("NrTemporal.dxil",shader)||!pass_.create(device,shader,20,7,3,36))return false;
+    // 44 constants: original 24, Route/LowSize/pad, optional 16-float correction.
+    if(!raw_||!pass_.loadShader("NrTemporal.dxil",shader)||!pass_.create(device,shader,20,7,3,44))return false;
     if(lowFrequency){
         std::vector<uint8_t> reduce;
         // 3 SRVs + 2 UAVs = 5 slots per phase, two phases.
@@ -76,7 +76,7 @@ void NrTemporalPass::run(ID3D12GraphicsCommandList* list,StateTracker& tracker,b
     if(!intervalSane&&valid_)valid_=false;
     const bool useHistory=valid_&&!reset&&haveMotion&&intervalSane;
     // 80 ms past-history EMA; no future frames or presentation holdback.
-    const float stability=correction.enabled?(correction.automatic?1.f:correction.stability):1.f;
+    const float stability=correction.enabled?(correction.automatic?correction.autoAmount:correction.stability):1.f;
     const float weight=useHistory?float(std::exp(-frameMs/80.0))*stability:0.f;
     const unsigned route=routeOf(tier_);
     if(route==4){
@@ -98,7 +98,7 @@ void NrTemporalPass::run(ID3D12GraphicsCommandList* list,StateTracker& tracker,b
     tracker.transition(list,history_[1-i].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     tracker.transition(list,guide_[1-i].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     for(auto* r:{output_,history_[i].Get(),guide_[i].Get()})tracker.transition(list,r,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    float c[36]={std::bit_cast<float>(width_),std::bit_cast<float>(height_),weight,total,protection.enabled?1.f:0.f,protection.featherPixels,0,0};
+    float c[44]={std::bit_cast<float>(width_),std::bit_cast<float>(height_),weight,total,protection.enabled?1.f:0.f,protection.featherPixels,0,0};
     for(unsigned n=0;n<4;++n){const auto r=engine::protectionConstants(protection.regions[n]);c[8+n*4]=r[0];c[9+n*4]=r[1];c[10+n*4]=r[2];c[11+n*4]=r[3];}
     // Route and the low-frequency extent follow the region block. The shader
     // reads LowSize only on route 4 and the pad is never read: they exist to

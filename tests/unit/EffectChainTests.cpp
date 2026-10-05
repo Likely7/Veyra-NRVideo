@@ -934,6 +934,18 @@ void testNrCorrectionDescription(){
     check(requiresGraphRebuild(s,corrected),"NR correction switch rebuilds history topology");
     describeStages(request,corrected,d);
     check(d.nrTemporal&&d.enableNvofStandalone,"NR auto requests real flow even with zero model motion");
+    auto noAmount=corrected;noAmount.residual.correction.autoAmount=0;
+    check(requiresGraphRebuild(corrected,noAmount),"zero automatic amount releases corrected history");
+    describeStages(request,noAmount,d);
+    check(!d.nrTemporal&&!d.enableNvofStandalone,"zero automatic amount has no correction history");
+    auto halfAmount=corrected;halfAmount.residual.correction.autoAmount=.5f;
+    check(!requiresGraphRebuild(corrected,halfAmount),"nonzero automatic amount changes live without new history");
+    for(int style:{0,1,2}){
+        NrCorrectionSettings automatic;automatic.enabled=true;automatic.autoAmount=.6f;
+        const auto a=automatic.constants(false,style);automatic.useAutomaticValues(style);const auto b=automatic.constants(false,style);
+        bool same=true;for(unsigned i=0;i<a.size();++i)if(i!=6)same&=a[i]==b[i];
+        check(same&&!automatic.automatic,"copy automatic profile into manual preserves effective values");
+    }
     auto manual=corrected;manual.residual.correction.automatic=false;manual.residual.correction.stability=.5f;
     check(!requiresGraphRebuild(corrected,manual),"NR manual/auto with history is a live parameter update");
     manual.residual.correction.stability=0;

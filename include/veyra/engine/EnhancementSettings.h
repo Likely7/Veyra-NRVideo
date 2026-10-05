@@ -128,17 +128,35 @@ struct NrCorrectionSettings {
     bool enabled=false,automatic=true;
     // Manual values survive switching automatic control on and off.
     float hue=1,chroma=.75f,highlight=1,compression=.75f,stability=.8f;
+    // New manual protections default to zero so schema29/schema8 keep their
+    // original five-control meaning. Auto presets are explicit per style.
+    float neutral=0,colorKeep=0,lumaKeep=0,shadow=0,autoAmount=1;
     bool operator==(const NrCorrectionSettings&) const = default;
     bool valid() const {
-        for(float v:{hue,chroma,highlight,compression,stability})
+        for(float v:{hue,chroma,highlight,compression,stability,neutral,colorKeep,lumaKeep,shadow,autoAmount})
             if(!std::isfinite(v)||v<0||v>1)return false;
         return true;
     }
-    bool usesHistory() const {return enabled&&(automatic||stability>0);}
-    std::array<float,8> constants(bool hdr=false) const {
-        return {enabled?1.f:0.f,automatic?1.f:hue,automatic?1.f:chroma,
-                automatic?1.f:highlight,automatic?1.f:compression,automatic?1.f:stability,
-                automatic?1.f:0.f,hdr?1.f:0.f};
+    bool usesHistory() const {return enabled&&(automatic?autoAmount>0:stability>0);}
+    bool extendedControls() const {return neutral!=0||colorKeep!=0||lumaKeep!=0||shadow!=0||autoAmount!=1;}
+    static std::array<float,9> automaticValues(int32_t style) {
+        // Style 1 changes contrast/neutral saturation more; style 2 leaves
+        // larger colored-area drift. Preserve source chromaticity separately
+        // from texture/lightness; never replace the requested model style.
+        if(style==1)return {1,1,1,1,1,1,.9f,.25f,.55f};
+        if(style==2)return {1,1,1,1,1,1,.95f,.2f,.4f};
+        return {1,1,1,1,1,1,0,0,0};
+    }
+    void useAutomaticValues(int32_t style) {
+        auto v=automaticValues(style);for(auto& value:v)value*=autoAmount;
+        hue=v[0];chroma=v[1];highlight=v[2];compression=v[3];stability=v[4];
+        neutral=v[5];colorKeep=v[6];lumaKeep=v[7];shadow=v[8];automatic=false;
+    }
+    std::array<float,16> constants(bool hdr=false,int32_t style=0) const {
+        auto v=automatic?automaticValues(style):std::array<float,9>{hue,chroma,highlight,compression,stability,neutral,colorKeep,lumaKeep,shadow};
+        if(automatic)for(auto& value:v)value*=autoAmount;
+        return {enabled?1.f:0.f,v[0],v[1],v[2],v[3],v[4],automatic?1.f:0.f,hdr?1.f:0.f,
+                v[5],v[6],v[7],v[8],0,0,0,0};
     }
 };
 struct ResidualSettings {

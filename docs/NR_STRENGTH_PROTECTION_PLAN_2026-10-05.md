@@ -29,3 +29,9 @@
 - 已建隔离工作树、tag 与已验证源码 bundle。
 - README 范围包含中英文入口 `README.md`、`README_CN.md`、`README_EN.md`；仅补充本地功能状态及使用方法，已同步本轮 guard 白名单，不改历史基线。
 - 实施与验收记录：`docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md`。
+
+## 真人反馈续修：风格 1/2 色偏与手动参数（2026-10-05）
+
+用户在首轮候选 `9eb3b1c` 反馈 NVIDIA 原版、强度 5，风格 1/2 色偏比风格 0 明显；需要更丰富且可见生效的调控参数。继续同一隔离分支，首轮完整包不覆盖；存档 tag `checkpoint/pre-nr-style-controls-20261005`。三个风格当前都调用同一纠偏 shader，接近灰轴的色相保护与固定色度预算存在遗漏风险，先以原版 runtime=3 做同帧 source/raw/auto 对照再决定自动策略。新增参数必须具有独立作用、真实 GPU 响应与列表/节点/预设/会话/导出贯通；旧 v29/v8 的五项手动配置可读，新增手动参数默认关闭以保持旧配置含义。沿用本方案文件范围与不可变 guard，不改 DLL、main、其他分支、发布包。
+
+续修合同：自动按模型风格分别选择保护系数，不替换模型风格、不降低保存的总强度 5。新增中性色保护、原图色彩保留（保持亮度变化后的源色相/饱和度）、亮度保持和暗部保护；手动共九项，明确各项适用条件。自动力度 0–1 保存，0 无时域历史且保留原始残差，非零力度可实时调整。手动可显式采用当前风格的自动数值（含已选力度），自动／手动正常切换保留各自保存值。v29/v8 原五项手动配置读取时新字段为 0、自动力度为 1；仅新增字段非默认才写 v30/v9。新完整本地候选 `Veyra-2.0.3-nr-controls2-NVIDIA-win64-portable`；来源与运行库沿用，重验 libass 和实际 NVENC。续修前 bundle `archives/nr-strength-protection-20261005/style-controls/source-before.bundle`，SHA256 `19703EFD383E2B012AF6FFDE0663395CB2276D0A9FCA3D524DD6AE16D2EBF42C`。

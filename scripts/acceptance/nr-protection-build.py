@@ -8,6 +8,9 @@ ROOT = Path(__file__).resolve().parents[2]
 BASE = Path('E:/项目/Veyra')
 TASK = 'nr-strength-protection-20261005'
 label = sys.argv[1]
+display='2.0.3-nr-controls'
+if '--styles' in sys.argv:
+    sys.argv.remove('--styles');display='2.0.3-nr-controls2'
 assert label.replace('-', '').isalnum()
 BUILD = BASE / 'build' / TASK
 TMP = BASE / 'tmp' / TASK / 'build'
@@ -34,7 +37,7 @@ for line in cache.read_text(encoding='utf-8').splitlines():
         if key == 'VEYRA_LIBASS_ROOT':
             assert (Path(value) / 'include/ass/ass.h').is_file(), 'Accepted libass SDK is unavailable'
         settings.append(f'set({key} [[{value}]] CACHE {kind} "Audited field-fix dependency" FORCE)')
-settings.append('set(VEYRA_DISPLAY_VERSION [[2.0.3-nr-controls]] CACHE STRING "Local NR controls candidate" FORCE)')
+settings.append(f'set(VEYRA_DISPLAY_VERSION [[{display}]] CACHE STRING "Local NR controls candidate" FORCE)')
 (TMP / 'dependencies.cmake').write_text('\n'.join(settings), encoding='utf-8')
 targets = sys.argv[2:] or ['veyra_qml_ui']
 assert all(t.replace('_', '').isalnum() for t in targets)

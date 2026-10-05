@@ -46,3 +46,41 @@
 目录：`E:/项目/Veyra/test-packages/nr-strength-protection-20261005/Veyra-2.0.3-nr-controls-NVIDIA-win64-portable/`。
 同级便携 ZIP、对应源码 ZIP、最终逐文件 manifest 及 `DELIVERY.json` 由 `nr-protection-package.py finalize` 在本地源码提交后生成和核验；最终包摘要以 `DELIVERY.json` 为准（不自引用包 hash）。开工与最终源码 Git bundle 保留在 `archives/nr-strength-protection-20261005/`。
 运行库／许可证继承已验收的 field-20261005b NVIDIA 包；本轮 export-worker 诊断移到任务 logs，不随包提供。主线、桌面旧工作树、其他工作区和用户配置保留；本功能没有合并、推送或发布。
+
+## 风格 1/2 色偏与调控参数续修（2026-10-05）
+
+用户明确反馈 NVIDIA 原版、总变化强度 5，风格 1/2 有明显色偏，风格 0 较自然，手动只有局部压缩明显。起点为首轮已交付 `9eb3b1cf4431362738081442e3f0e071a19962e5`；tag `checkpoint/pre-nr-style-controls-20261005`，续修前 bundle 已验证，SHA256 `19703EFD383E2B012AF6FFDE0663395CB2276D0A9FCA3D524DD6AE16D2EBF42C`。原包与原 `DELIVERY.json` 不覆盖。
+
+审查和原版 runtime=3 的真实调用确认：三个风格原来都接入同一 shader，并非漏掉风格 1/2。旧自动规则没有分风格的颜色保留约束，灰轴处色相投影减弱，且仅约束绝对 Lab 色度仍会因亮度改变而改变饱和度。原五项多是超过阈值才生效，暂停画面不体现时域稳定。这些是保护策略和可调性缺口，不能称模型风格未接入。
+
+续修保留原模型风格和总强度 5。自动分别设置中性色／原图色彩／亮度／暗部保护，风格 1 为 `1/.9/.25/.55`，风格 2 为 `1/.95/.2/.4`，风格 0 为 `1/0/0/0`（原来五项自动值仍为 1）。保持随当前亮度缩放的源色度而非把图像调成灰色，源色彩射线接近色域上限时约束亮度，避免最终色域映射再次脱色；灰区染色判断使用平滑风险门限，保留 FP16／proxy 的微小量化变化。无新的 NR Evaluate、全局逐帧白平衡／曝光、未来帧或 CPU 像素回读。
+
+手动增加“中性色保护、原图色彩保留、亮度保持、暗部保护”，合计九项，各有适用说明；可显式采用当前风格自动值作为起点。自动力度 0–1，0 保留原始输出且不分配调控时域历史。自动、手动值分别保存。新参数仅非默认时写 PresetStore v30／PresetLibrary v9；旧 v29／v8 手动配置读取时新四项为 0、自动力度为 1，保留其原含义。残差／全栈保护／oracle 根常量统一 40，时域 44；公共 shared-memory settings 与同一个生产 EXE 内导出 worker 一起构建。
+
+### 续修实际验证
+
+下列路径均相对于 `E:/项目/Veyra/`，测试每进程≤300s、构建≤900s，串行正常负载，无压力程序。
+
+| 检查 | 命令、结果与证据 |
+|---|---|
+| 生产构建 | `nr-protection-build.py style-build1 --styles veyra_qml_ui veyra_preset_library_tests veyra_repair_preset_tests veyra_effect_chain_tests veyra_nr_antiflicker_tests veyra_nr_correction_gpu_tests veyra_repair_shader_tests veyra_nr_temporal_gpu_tests veyra_qml_quick_tests`；修复量化风险后 `style-build2 --styles veyra_qml_ui`，均退出 0；`logs/nr-strength-protection-20261005/style-build*.log`。新增声明对应 `veyra_nr_video_quality_probe` 另构建通过（`style-probe-build.log`），未将其未执行的实卡场景记为通过。仍继承 field-fixes/B 的 libass 与 patched FFmpeg 路径。 |
+| 预设、会话与链 | `nr-protection-tests.py style-cpu preset-library preset-legacy effect-chain nr-tiers` 全过；原 v29/v8 和新增 v30/v9，隐藏手动数值、两模式／多层／节点 editor、自动力度 0 的拓扑与自动值转手动等均检查。`logs/nr-strength-protection-20261005/style-cpu/results.json`。 |
+| GPU 与时域 | `nr-protection-tests.py style-gpu2 legacy-shader temporal correction correction-fp16` 全过。FP32/FP16 各 45 checks、2048 像素，关调控 0/1/2/5 与冻结旧 shader 逐位一致；自动力度 0、四项独立响应、源色彩比率、亮度／暗部、signed HDR、零残差、全栈保护与既有运动／切镜／reset 检查；两种精度 D3D12 errors/warnings 均 0。`logs/nr-strength-protection-20261005/style-gpu2/`。 |
+| 真鼠标 QML | `nr-protection-quick.py style-mouse1`，40 passed/0 failed；新增力度和全部九项滑块真实鼠标响应，模式往返保存值；`logs/nr-strength-protection-20261005/qml-style-mouse1/result.json`。夹具画布 1500 高，覆盖展开后的九行说明；不改生产窗口尺寸。 |
+| 原版实际视频／保存／导出 | `nr-protection-ui.py first style-ui1 --styles`，原版风格 2 强度 5，自动值转手动、九项编辑、复制／重置／预设、节点与列表贯通，实际 4K HEVC NVENC 导出 60 帧。随后 `restore style-restore1 --styles` 在第二进程恢复新增参数；`logs/nr-strength-protection-20261005/production-style-*/` 与 export-probe.json。 |
+| 不同风格多层 | `nr-protection-ui.py multi style-multi1 --styles` 原版两层强度 5，第一层风格 1 自动、第二层风格 2 手动，真实创建／播放／全栈保护及 PNG 成功；`production-style-multi1/`。 |
+| 真实视频三个风格 | `nr-protection-styles.py original-fixed --app <新候选> --media E:/项目/Veyra/tests/hotfix-2.0.0-20261002/media/gta6-1080p30-12s-audio.mp4` 以及 `original-fixed2 --manual` 均通过；原版 runtime=3，三风格 raw/auto、独立四项与自动 0 实际 PNG 输出。第一次新旧视频 run 分别停在 0.8/0.8333s，因此不拿它们计算严格跨版本同帧收益。 |
+| 严格同源对照 | `nr-protection-styles.py original-baseline3 --app <首轮包> --media <固定 source.png>` 与 `original-fixed3 --manual --app <新候选> --media <同一 source.png>` 均过；源 PNG SHA256 `1a620d8bdfaaaccb03d139038861156b93399ed2a429e38d586d79e308ccf025` 相同，三个风格的 raw 输出也分别逐位相同。`nr-protection-image-metrics.py` 两次测量后，`nr-protection-style-audit.py` 通过；`logs/nr-strength-protection-20261005/style-picture-comparison.json`。 |
+| 字幕与翻译 | `nr-protection-smoke.py style-inherited1 <新候选>`，真实 MKV ASS 和内嵌字体启用通过；`smoke-style-inherited1/result.json`。`scripts/i18n/extract.py --check`：1995 entries，繁中／英文／日文 missing=0，placeholder problems=0。 |
+
+固定输入的源相对平均色彩距离：风格 1 从旧自动 `0.0100369` 降到 `0.00113989`，风格 2 从 `0.0125284` 降到 `0.00101397`。这只是该 SDR 帧的颜色变化数值，不是所有素材的画质评分。四项新手动控制的独立结果不同：原图色彩保留 1 时颜色距离 `0.0009387` 而亮度变化仍 `0.0590955`；亮度保持 1 时亮度变化 `0.0007461` 而颜色变化仍 `0.0178619`；暗部保护 1 时暗部进一步压黑从 `0.0140620` 降至 `0.0024489`；中性色保护 1 时灰区颜色距离从 `0.0230654` 降至 `0.0052643`。同一固定输入下，所有手动项为 0／自动力度为 0 的 PNG 与风格 1 原始强度 5 完全同 hash。
+
+### 续修失败与边界
+
+- `style-gpu` 首次 FP16 的“安全比例细节保留 5”失败，中性色规则把微小量化色差也当染色修复。加入平滑 tint-risk 下界后 `style-gpu2` 两精度全部通过，未放宽原检查阈值。失败日志保留。
+- 视频 `original-baseline2` 夹具同 tick 暂停／关闭 NR／seek 的严格位置检查仍读到 0.8s，未取得要求的 0.8333s；没有据此修改播放／seek 引擎。另一次 `original-fixed2` 视频 seek 对照成功。严格跨版本对照改用同一固定 PNG，并审计源图与 raw 输出字节相同；失败不计为通过，不以相邻帧差异冒充纠偏收益。
+- 首轮本地 native HDR 的 8 项基线失败、RTX 20/30/40／AMD／真实 HDR／长时运动拖影与主观质量未验边界仍存在。续修重点核验本机 RTX 5070 的 NVIDIA 原版，未替换或修改任何运行库。不宣称模型重造纹理／几何错误可被色彩调控完全修复。
+
+### 续修本地交付
+
+新目录 `E:/项目/Veyra/test-packages/nr-strength-protection-20261005/Veyra-2.0.3-nr-controls2-NVIDIA-win64-portable/`，同级新便携 ZIP 和源码 ZIP，`DELIVERY-styles2.json` 记录最终源码提交、逐文件清单和包 hash；续修源码 bundle 在 `archives/nr-strength-protection-20261005/style-controls/`。最终以 `nr-protection-package.py finalize --styles` 核验、生成，不覆盖首轮产物。仍无 merge／push／Release。

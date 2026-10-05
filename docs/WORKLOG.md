@@ -1,5 +1,13 @@
 # Veyra 工作记录
 
+## 2026-10-05 NR 风格 1/2 色偏与调控参数续修
+
+用户反馈原版 NR 强度 5 的风格 1/2 色偏较大、旧手动控制主要局部压缩明显；接续已验首轮 `9eb3b1c`，原包保留。tag `checkpoint/pre-nr-style-controls-20261005` 与续修前 bundle `E:/项目/Veyra/archives/nr-strength-protection-20261005/style-controls/source-before.bundle`（SHA256 `19703EFD383E2B012AF6FFDE0663395CB2276D0A9FCA3D524DD6AE16D2EBF42C`）已核验。三个风格原本均已接入，问题是共用规则遗漏低色度染色及亮度变化后的饱和度，已分别设置自动参数。
+
+新增中性色保护、原图色彩保留、亮度保持、暗部保护，手动共九项；自动力度 0–1 和采用当前风格自动值按钮。旧手动 v29/v8 保持含义，只有新增参数非默认才写 v30/v9；原始强度 5、关调控和自动 0 的输出保留。已完成生产构建、四组 CPU、FP32/FP16 各 45 项 GPU、时域回归、40 项真实鼠标 QML、原版三风格严格同图及每项独立响应、两层风格 1/2 与全栈保护、预设/会话第二进程恢复、4K HEVC NVENC 60 帧和真实 libass 字幕。失败（FP16 量化误判、视频夹具 seek 位置不一致）、修复、所有命令与证据见 `docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md` 续修段，不将单帧颜色距离冒充全内容画质/闪烁验收。
+
+本轮产物在 `E:/项目/Veyra/{build,tests,logs,tmp,test-packages,archives}/nr-strength-protection-20261005/`，新候选 `Veyra-2.0.3-nr-controls2-NVIDIA-win64-portable`，续修归档在 `archives/.../style-controls`。继承原组件、patched FFmpeg 和 Claude libass；不改 DLL、不制造压力负载、不改其他工作树、main 或用户配置，无新 merge/push/Release。新交付摘要见 `test-packages/.../DELIVERY-styles2.json`，旧摘要不覆盖。
+
 ## 2026-10-05 NR 强度 5 与自动/手动调控开工
 
 用户明确授权本功能实施。已从本地 main `de18fc4` 建 `codex/nr-strength-protection-20261005`，工作树 `E:/项目/Veyra/worktrees/nr-strength-protection-20261005`；开工 tag 和已验证 `source-before.bundle` 在 `E:/项目/Veyra/archives/nr-strength-protection-20261005`。方案 `docs/NR_STRENGTH_PROTECTION_PLAN_2026-10-05.md`；独立不可变 `start.json` SHA256 `909bdde5eb460e4b69c5548cc5e504c90d8dbd7e8001e2e47dfe9260d60fd46e`。`py -3.11 -B scripts/acceptance/nr-protection-control.py guard` 通过，其他工作树 HEAD/status 不变。全部新产物按用途写入 E 盘同任务目录；禁止压力测试、不换运行库、不合并/推送/发布。此条仅记录开工，验收结果待实际执行。

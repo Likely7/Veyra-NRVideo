@@ -745,3 +745,9 @@ safety. `NrResidualComposite.hlsl` and `NrTemporal.hlsl` call that shared helper
 Automatic/manual UI, settings persistence and graph controls are Veyra code.
 Temporal filtering reuses Veyra's already attributed Magpie motion route;
 no additional neural model or proprietary runtime is copied or modified here.
+
+The style-protection follow-up adds Veyra's source-chromaticity retention,
+quantization-aware neutral-tint guard, source-color gamut-ray lightness bound,
+independent lightness/shadow controls, style-specific automatic coefficients
+and an automatic amount slider. These additions are Veyra code; the upstream
+port and public-domain matrix attribution above remain unchanged.

@@ -58,9 +58,9 @@ struct Fixture{
         bd.Height=1;bd.DepthOrArraySize=1;bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         if(FAILED(ctx.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback))))return false;
         std::vector<uint8_t> shader;
-        if(!pass.loadShader("NrResidualComposite.dxil",shader)||!pass.create(ctx.device(),shader,4,3,1,32))return false;
+        if(!pass.loadShader("NrResidualComposite.dxil",shader)||!pass.create(ctx.device(),shader,4,3,1,40))return false;
         std::ifstream f(archived,std::ios::binary);std::vector<uint8_t> old((std::istreambuf_iterator<char>(f)),{});
-        if(!f||old.empty()||!legacy.create(ctx.device(),old,4,3,1,32))return false;
+        if(!f||old.empty()||!legacy.create(ctx.device(),old,4,3,1,40))return false;
         for(auto* p:{&pass,&legacy}){
             makeSrv(ctx.device(),base.Get(),format,cpuHandleOf(*p,0));
             makeSrv(ctx.device(),base.Get(),format,cpuHandleOf(*p,1));
@@ -84,7 +84,7 @@ struct Fixture{
         list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
         return ring.submitAndSignal(slot)&&ring.waitIdle();
     }
-    std::vector<Pixel> render(const std::array<float,32>& c,bool old=false){
+    std::vector<Pixel> render(const std::array<float,40>& c,bool old=false){
         unsigned slot;auto* list=ring.acquireNext(slot,status);if(!list)return {};
         for(auto* tex:{base.Get(),neural.Get()})states.transition(list,tex,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         states.transition(list,output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -122,7 +122,7 @@ int wmain(int argc,wchar_t** argv){
     for(unsigned i=32;i<128;++i){const float e=(float(i)-80)*1e-7f;base[i]={.2f+e,.2f,.2f-e,.7f};nr[i]={.9f,.05f,.3f,1};}
     if(fp16){quantize(base);quantize(nr);}
     if(!f.fill(f.base.Get(),base)||!f.fill(f.neural.Get(),nr))return 2;
-    std::array<float,32> c{};c[0]=c[1]=c[2]=c[3]=c[4]=1;
+    std::array<float,40> c{};c[0]=c[1]=c[2]=c[3]=c[4]=1;
     for(float gain:{0.f,1.f,2.f,5.f}){
         c[0]=gain;auto old=f.render(c,true),now=f.render(c);
         if(old.size()!=Count||now.size()!=Count)return 2;
@@ -171,6 +171,35 @@ int wmain(int argc,wchar_t** argv){
     c[0]=5;std::fill(c.begin()+24,c.end(),0);c[24]=1;auto zero=f.render(c),off=f.render(c,true);
     bool identical=true;for(unsigned i=0;i<Count;++i)identical&=distance(zero[i],off[i])==0;
     check("all manual protections zero retains raw gain five",identical);
+    // Style-specific auto and each extra manual control through production
+    // constants, measured independently in double precision.
+    auto chromaError=[&](const std::vector<Pixel>& values){
+        double error=0;for(unsigned i=0;i<Count;++i){auto a=lab(base[i]),b=lab(values[i]);
+            error+=std::hypot(b[1]-a[1]*b[0]/std::max(a[0],1e-6),b[2]-a[2]*b[0]/std::max(a[0],1e-6));}
+        return error/Count;
+    };
+    std::copy(controls.begin(),controls.end(),c.begin()+24);auto style0=f.render(c);double originalError=chromaError(style0);
+    for(int style:{1,2}){
+        auto profile=control.constants(false,style);std::copy(profile.begin(),profile.end(),c.begin()+24);
+        auto result=f.render(c);double error=chromaError(result);bool legal=true;
+        for(auto p:result)legal&=finite(p)&&std::min({p.r,p.g,p.b})>=0&&std::max({p.r,p.g,p.b})<=1;
+        std::cout<<"auto style="<<style<<" source-relative color error="<<error<<" style0="<<originalError<<std::endl;
+        check("styles 1/2 preserve more source color without disabling NR",legal&&error<originalError*.4&&distance(result[0],base[0])>0);
+    }
+    for(unsigned field=32;field<=35;++field){auto raw=c;std::fill(raw.begin()+24,raw.end(),0);raw[24]=1;
+        auto isolated=raw;isolated[field]=1;auto before=f.render(raw),after=f.render(isolated);float response=0;
+        for(unsigned i=0;i<Count;++i)response=std::max(response,distance(before[i],after[i]));
+        check("extra manual spatial control has independent response",response>.0001f);
+        if(field==32){auto o=lab(base[80]),p=lab(after[80]);
+            check("neutral protection repairs gray tint without hue direction",std::hypot(p[1],p[2])<(fp16?.001:.00001)&&p[0]>0);}
+        if(field==33)check("full color retention preserves source RGB ratios",chromaError(after)<(fp16?.0003:.000003));
+        if(field==34){double error=0;for(unsigned i=0;i<Count;++i)error=std::max(error,std::abs(lab(after[i])[0]-lab(base[i])[0]));
+            check("full lightness retention keeps source lightness independently",error<(fp16?.0008:.00001));}
+        if(field==35)check("shadow control restores dark detail",lab(after[3])[0]>lab(before[3])[0]);
+    }
+    control.autoAmount=0;auto none=control.constants();std::copy(none.begin(),none.end(),c.begin()+24);
+    auto amountZero=f.render(c);identical=true;for(unsigned i=0;i<Count;++i)identical&=distance(amountZero[i],off[i])==0;
+    check("automatic amount zero retains exact original gain five",identical);control.autoAmount=1;
     // A full user exclusion bypasses every colour control.
     std::copy(controls.begin(),controls.end(),c.begin()+24);c[5]=1;c[6]=0;c[8]=0;c[9]=0;c[10]=1;c[11]=1;
     auto protectedFrame=f.render(c);identical=true;

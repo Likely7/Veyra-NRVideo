@@ -233,7 +233,7 @@ int wmain(int argc,wchar_t** argv){
     if(featherStack){
         std::vector<uint8_t> shader;
         protectionExpected=pipeline::makeTexture(ctx.device(),info.width,info.height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
-        if(!protectionExpected||!protectionOracle.loadShader("NrResidualComposite.dxil",shader)||!protectionOracle.create(ctx.device(),shader,4,3,1,32))return 2;
+        if(!protectionExpected||!protectionOracle.loadShader("NrResidualComposite.dxil",shader)||!protectionOracle.create(ctx.device(),shader,4,3,1,40))return 2;
         pipeline::DescriptorStager staging;if(!staging.initialize(ctx.device(),3))return 2;
         staging.stageSrv(graph.diagnosticNrBase(),nullptr,protectionOracle.heap.Get(),0);
         staging.stageSrv(graph.diagnosticNrBase(),nullptr,protectionOracle.heap.Get(),1);
@@ -282,7 +282,7 @@ int wmain(int argc,wchar_t** argv){
             unsigned slot=0;auto* list=ring.acquireNext(slot,status);if(!list)return 2;
             expectedStates.transition(list,protectionExpected.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             // Protect the complete stack, preserving signed residuals outside it.
-            float constants[32]={1,1,1,1,1,1,32,1};
+            float constants[40]={1,1,1,1,1,1,32,1};
             constants[8]=.45f;constants[9]=.3f;constants[10]=.8f;constants[11]=.7f;
             protectionOracle.bind(list,constants,pipeline::gpuHandleOf(protectionOracle,0).ptr,pipeline::gpuHandleOf(protectionOracle,3).ptr);
             list->Dispatch((info.width+15)/16,(info.height+15)/16,1);

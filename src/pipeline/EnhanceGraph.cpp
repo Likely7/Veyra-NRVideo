@@ -1259,9 +1259,11 @@ bool EnhanceGraph::initNgxFeatures()
             instance->protection = index < desc_.nrLayersProtection.size() ? desc_.nrLayersProtection[index] : desc_.protection;
             instance->temporalEnabled = index < desc_.nrLayersTemporal.size() ? desc_.nrLayersTemporal[index] : desc_.nrTemporal;
             const auto& correction=instance->residualSettings.correction;
-            veyra::log::info("nr-correction",std::format("build layer={} gain={} mode={} temporal={} hdr={} manual={}/{}/{}/{}/{}",
+            veyra::log::info("nr-correction",std::format("build layer={} gain={} mode={} temporal={} hdr={} style={} amount={} manual={}/{}/{}/{}/{}/{}/{}/{}/{}",
                 index+1,instance->residualSettings.total,correction.enabled?(correction.automatic?"auto":"manual"):"off",
-                instance->temporalEnabled,desc_.hdrWorking(),correction.hue,correction.chroma,correction.highlight,correction.compression,correction.stability));
+                instance->temporalEnabled,desc_.hdrWorking(),instance->model.style,correction.autoAmount,
+                correction.hue,correction.chroma,correction.highlight,correction.compression,correction.stability,
+                correction.neutral,correction.colorKeep,correction.lumaKeep,correction.shadow));
             if(lmxxfNr_){
                 failedBackend_=engine::FailedBackend::Nr;
                 // The upstream ABI owns encode/network/decode; feed the stable
@@ -1496,10 +1498,10 @@ bool EnhanceGraph::createComputePasses()
     {
         const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
         if(!residualPass_.loadShader("NrResidualComposite.dxil",cs)||
-           !residualPass_.create(context_.device(),cs,4*residualLayers,3*residualLayers,residualLayers,32))return false;
+           !residualPass_.create(context_.device(),cs,4*residualLayers,3*residualLayers,residualLayers,40))return false;
         // The existing residual shader can mask the complete stack against its
         // original base. No extra texture: the final layer owns outputFull().
-        if(nrInstances_.size()>1&&!stackProtectionPass_.create(context_.device(),cs,4,3,1,32))return false;
+        if(nrInstances_.size()>1&&!stackProtectionPass_.create(context_.device(),cs,4,3,1,40))return false;
     }
     if(!flowAdaptPass_.loadShader("FlowAdapt.dxil",cs)||!flowAdaptPass_.create(context_.device(),cs,3+UINT(nrInstances_.size()),1,1))return false;
     // Stage-5 output stabiliser. Only allocated when the setting is non-zero:
@@ -2478,9 +2480,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // last layer's delta. Keep unmasked per-layer histories in a stack.
         const auto protection=nrInstances_.size()>1?engine::ProtectionSettings{}:layer->protection;
         tracker_.transition(list,destination,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        float c[32]={r.total,r.darken,r.brighten,r.color,r.luminance,protection.enabled?1.0f:0.0f,protection.featherPixels,desc_.hdrWorking()?1.0f:0.0f};
+        float c[40]={r.total,r.darken,r.brighten,r.color,r.luminance,protection.enabled?1.0f:0.0f,protection.featherPixels,desc_.hdrWorking()?1.0f:0.0f};
         for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
-        const auto controls=r.correction.constants(desc_.hdrWorking());
+        const auto controls=r.correction.constants(desc_.hdrWorking(),layer->model.style);
         std::copy(controls.begin(),controls.end(),c+24);
         const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
         residualPass_.bind(list,c,gpuHandleOf(residualPass_,3u*UINT(layerIndex)).ptr,
@@ -2520,7 +2522,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                     tracker_.transition(list,output,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                     // The original and upstream stack share this boundary's
                     // extent. Later NR layers consume the masked result.
-                    float c[32]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
+                    float c[40]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
                     for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(desc_.protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
                     stackProtectionPass_.bind(list,c,gpuHandleOf(stackProtectionPass_,0).ptr,gpuHandleOf(stackProtectionPass_,3).ptr);
                     list->Dispatch((extent.width+15)/16,(extent.height+15)/16,1);
@@ -2710,7 +2712,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 // Each layer already applies its own SDR/HDR residual policy.
                 // This final exclusion mask must preserve the stack's signed
                 // temporal output, including pixels outside protected regions.
-                float c[32]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
+                float c[40]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
                 for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(desc_.protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
                 stackProtectionPass_.bind(list,c,gpuHandleOf(stackProtectionPass_,0).ptr,gpuHandleOf(stackProtectionPass_,3).ptr);
                 list->Dispatch(((desc_.nrBeforeSr?srcW_:workW_)+15)/16,((desc_.nrBeforeSr?srcH_:workH_)+15)/16,1);
@@ -3106,9 +3108,11 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
             layer.model=i<desc_.nrLayersModel.size()?desc_.nrLayersModel[i]:s.model;
             layer.residualSettings=i<desc_.nrLayersResidual.size()?desc_.nrLayersResidual[i]:s.residual;
             const auto& correction=layer.residualSettings.correction;
-            veyra::log::info("nr-correction",std::format("live revision={} layer={} gain={} mode={} temporal={} manual={}/{}/{}/{}/{}",
+            veyra::log::info("nr-correction",std::format("live revision={} layer={} gain={} mode={} temporal={} style={} amount={} manual={}/{}/{}/{}/{}/{}/{}/{}/{}",
                 s.revision,i+1,layer.residualSettings.total,correction.enabled?(correction.automatic?"auto":"manual"):"off",
-                layer.temporalEnabled,correction.hue,correction.chroma,correction.highlight,correction.compression,correction.stability));
+                layer.temporalEnabled,layer.model.style,correction.autoAmount,
+                correction.hue,correction.chroma,correction.highlight,correction.compression,correction.stability,
+                correction.neutral,correction.colorKeep,correction.lumaKeep,correction.shadow));
             layer.protection=i<desc_.nrLayersProtection.size()?desc_.nrLayersProtection[i]:s.protection;
         }
         layer.temporal().reset();

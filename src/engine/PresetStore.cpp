@@ -41,8 +41,12 @@ std::string PresetStore::serialize()const{
         for(unsigned i=0;i<p.settings.nrLayerCount;++i)if(p.settings.nrLayers[i].residual.extendedSchema())return true;
         return false;});
     const bool fullSchema=fsr4||higher||rendering||vfg||correction;
+    const bool correctionExtended=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
+        if(p.settings.residual.correction.extendedControls())return true;
+        for(unsigned i=0;i<p.settings.nrLayerCount;++i)if(p.settings.nrLayers[i].residual.correction.extendedControls())return true;
+        return false;});
     // v26 introduces appended resolution IDs; old readers reject this schema.
-    std::ostringstream o;o.imbue(std::locale::classic());o<<std::setprecision(std::numeric_limits<float>::max_digits10)<<"VEYRA_PRESETS "<<(correction?29:vfg?28:rendering?27:higher?26:fsr4?25:hold?24:stack?23:multi?22:21)<<'\n'<<std::quoted(utf8(default_))<<' '<<entries_.size()<<'\n';
+    std::ostringstream o;o.imbue(std::locale::classic());o<<std::setprecision(std::numeric_limits<float>::max_digits10)<<"VEYRA_PRESETS "<<(correctionExtended?30:correction?29:vfg?28:rendering?27:higher?26:fsr4?25:hold?24:stack?23:multi?22:21)<<'\n'<<std::quoted(utf8(default_))<<' '<<entries_.size()<<'\n';
     for(auto& p:entries_){const auto& s=p.settings;const auto& m=s.model;const auto& r=s.residual;o<<std::quoted(utf8(p.name))<<' '<<m.intensity<<' '<<m.tone<<' '<<m.structure<<' '<<m.skin<<' '<<m.style<<' '<<m.autoMask<<' '<<m.uiCorrection<<' '<<r.total<<' '<<r.darken<<' '<<r.brighten<<' '<<r.color<<' '<<r.luminance<<' '<<s.nr<<' '<<s.sr<<' '<<s.multiplier<<' '<<int(s.nrPolicy)<<' '<<int(s.flow)<<' '<<int(s.content)<<' '<<s.protection.enabled<<' '<<s.protection.featherPixels;for(auto q:s.protection.regions)o<<' '<<q.left<<' '<<q.top<<' '<<q.right<<' '<<q.bottom;o<<' '<<s.videoSrQuality<<' '<<int(s.frameGenerationBackend)<<' '<<int(s.srTarget)<<' '<<int(s.opticalFlowBackend)<<' '<<s.amdFlowHalfResolution<<' '<<int(s.audioSync)<<' '<<s.audioOffsetMs<<' '<<int(s.nrRuntime)<<' '<<s.captureCompatible<<' '<<s.lowLatency<<' '<<s.forceSdrPreview<<' '<<int(s.captureAudio)<<' '<<s.exportBitrateMbps<<' '<<s.captureFlipVertical<<' '<<int(s.captureBuffer)<<' ';writeColorSettings(o,s.color,utf8(s.color.lutNameString()));o<<' '<<s.videoHdr.enabled<<' '<<s.videoHdr.contrast<<' '<<s.videoHdr.saturation<<' '<<s.videoHdr.middleGray<<' '<<s.videoHdr.peakNits<<' '<<s.nrTemporal;
         if(multi||fullSchema){o<<' '<<s.additionalColorCount;for(unsigned i=0;i<s.additionalColorCount;++i){o<<' ';writeColorSettings(o,s.additionalColors[i],utf8(s.additionalColors[i].lutNameString()));}}
         if(stack||fullSchema){
@@ -64,15 +68,15 @@ std::string PresetStore::serialize()const{
         if(rendering||vfg||correction)o<<' '<<int(s.hdrOutputMode)<<' '<<int(s.fgMotion)<<' '<<int(s.srMotion)<<' '<<int(s.nrMotion);
         if(vfg||correction)o<<' '<<s.vfgQuality;
         if(correction){
-            o<<' ';writeNrCorrection(o,s.residual.correction);
-            for(unsigned i=0;i<s.nrLayerCount;++i){o<<' ';writeNrCorrection(o,s.nrLayers[i].residual.correction);}
+            o<<' ';writeNrCorrection(o,s.residual.correction,correctionExtended);
+            for(unsigned i=0;i<s.nrLayerCount;++i){o<<' ';writeNrCorrection(o,s.nrLayers[i].residual.correction,correctionExtended);}
         }
         o<<'\n';
     }return o.str();
 }
 bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std::wstring& def){
     if(data.size()>kMaxPresetBytes)return false;std::istringstream in(data);in.imbue(std::locale::classic());std::string magic,d;int version=0;size_t count=0;
-    if(!(in>>magic>>version)||magic!="VEYRA_PRESETS"||(version<1||version>29)||!(in>>std::quoted(d)>>count)||count>64)return false;def=wide(d);if(!d.empty()&&def.empty())return false;
+    if(!(in>>magic>>version)||magic!="VEYRA_PRESETS"||(version<1||version>30)||!(in>>std::quoted(d)>>count)||count>64)return false;def=wide(d);if(!d.empty()&&def.empty())return false;
     for(size_t i=0;i<count;++i){UserPreset p;std::string n;int policy,flow,content,nr,sr;auto& s=p.settings;auto& m=s.model;auto& r=s.residual;
         if(!(in>>std::quoted(n)>>m.intensity>>m.tone>>m.structure>>m.skin>>m.style>>m.autoMask>>m.uiCorrection>>r.total>>r.darken>>r.brighten>>r.color>>r.luminance>>nr>>sr>>s.multiplier>>policy>>flow>>content))return false;
         if(version>=2){int enabled;if(!(in>>enabled>>s.protection.featherPixels)||enabled<0||enabled>1)return false;s.protection.enabled=enabled!=0;
@@ -135,8 +139,8 @@ bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std
         if(version>=27){int hdr,fg,sr,nr;if(!(in>>hdr>>fg>>sr>>nr))return false;s.hdrOutputMode=HdrOutputMode(hdr);s.fgMotion=MotionSource(fg);s.srMotion=MotionSource(sr);s.nrMotion=MotionSource(nr);}
         if(version>=28&&!(in>>s.vfgQuality))return false;
         if(version>=29){
-            if(!readNrCorrection(in,s.residual.correction))return false;
-            for(unsigned j=0;j<s.nrLayerCount;++j)if(!readNrCorrection(in,s.nrLayers[j].residual.correction))return false;
+            if(!readNrCorrection(in,s.residual.correction,version>=30))return false;
+            for(unsigned j=0;j<s.nrLayerCount;++j)if(!readNrCorrection(in,s.nrLayers[j].residual.correction,version>=30))return false;
         }
         p.name=wide(n);if(!nameOk(p.name)||std::any_of(out.begin(),out.end(),[&](auto& a){return a.name==p.name;})||nr<0||nr>1||sr<0||sr>1)return false;
         s.nr=nr;s.sr=sr;s.nrPolicy=static_cast<pipeline::NrSizePolicy>(policy);s.flow=static_cast<FlowQuality>(flow);s.content=static_cast<ContentRate>(content);
