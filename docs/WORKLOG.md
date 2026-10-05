@@ -8386,3 +8386,15 @@ R0-focus-normal-v4的A首轮实际激活/Qt状态/三段真实提交均满足，
 R0-obs-compat-final-v3六实际视频场景/resize退出通过，MKV在OBS停止后SHA稳定、原StopReply观察独立保存。录像review全解码通过后在硬编码2秒帧失败：此时OBS仍在初始化捕获，第一完成playing截图实际在4.229秒。修正review按该轮OBS Writing file精确启动日志与六完成截图mtime对应取帧，原2秒黑帧和全文件MD5仍保留，不删初始帧或更换录像；只改CPU后处理的阶段对齐，不再跑GPU。额外取全屏内三时刻验证真实录制在推进，不用原输入截图替代录像图。
 
 `nr-r0-recordings.py R0-obs-compat-final-v3 scenes-v2`通过：783全解码帧与ffprobe计数同，六完成场景录像取帧真实视频，全屏三时刻差异非0、持续推进；已看21.307全屏和25.519退窗录像原图。最终MKV SHA f2b5f3cf1bc537995737b317c13eea0e6671940137fcaf89a2bb3f3f698dd51a，用户OBS配置及全部cleanup通过。最终原生Auto12配对图也已查看，低尺寸画面变化不冒充主观批准。所有本机优化节点已处置，普通功能/焦点/全解码回归完成；开始生成独立完整本地NVIDIA ZIP+源码ZIP，依赖原字节、最终退出EXE身份、干净解压及独立PE/Windows-only PATH两绘制模式审核，未跑前不记通过。
+
+## 2026-10-05 优化候选完整包、本地交付与最终存档
+
+`py -3.11 -B scripts/perf/nr-final-package.py B2d 2.0.3-perf-20261005 R0-close-final-v2`通过：最终UI EXE与退出7例身份一致，源码快照cd65cb787f089cc44be89df78b33577685ea2e4d，生产代码9403521cc4d0b24390a6c5891cef555c00de295f，显示2.0.3-perf-B2d。完整目录/ZIP/对应源码ZIP在E:/项目/Veyra/test-packages/perf-nr-20261004；普通ZIP 713088417 bytes、SHA bc2e95ae1d543d3fe6865c027310bb2af74e364e8c142250d03683773639191e，源码SHA a2c97c4a2ab327b9cc984f05f1514199b0abff8a2b381d46891f6ded73b2dabf。1569载荷干净解压逐文件SHA、真实7秒基础播放/退出0通过，result在logs/perf-nr-20261004/2.0.3-perf-20261005-package。
+
+`nr-final-audit.py <E盘本轮解压目录> R0-final-package-audit-v1`在源码ZIP vs Git blob Main.qml原字节断言失败；读出779 CRLF/原blob0CRLF，仅换行转换，其余内容一致。原失败记录/imports原件保留；改为确切commit的LF参考Git ZIP比全1602文件，只允许UTF-8文本CRLF转换，禁止其他差异。v2独立审核通过1569载荷/95PE依赖/48运行组件/123不可变依赖/1602源码，其中1543仅CRLF变化；Windows-only PATH GPU与软件各7秒播放/退出0，无产品错误、全载荷未变。两次基本启动默认效果关闭，不借此声称增强或实际OBS采集通过。脚本修复不改产品/原ZIP/manifest。`R0-final-stage-check-v1`再次核交付目录/两个ZIP SHA及生产源文件vs9403521无差异；用户包只有当前veyra_qml_ui.exe，实际worker用同EXE的--export-worker，测试EXE没有混入包。
+
+末轮整理只拟删除可重建的干净解压验证副本，final目录/ZIP/源码/失败数据不动。工具自动审批在进程启动前拒绝递归删除，原因仅blocked by policy，未给具体原因；未绕过重试，副本1570文件/1062961255字节仍在，原命令未生成planned.json，另写R0-cleanup-preserved-v1/summary.json记录保留。临时目录内日志/配置恢复证据继续保留。DELIVERY首版汇总错假设所有summary都有顶层passed；native实为10/10每run通过，470图/整导出SHA同。CPU汇总失败单独R0-delivery-fixture-v1保存，按真实schema逐例核对后生成E:/项目/Veyra/test-packages/perf-nr-20261004/DELIVERY.json，没有修改原测试或重跑GPU。
+
+全部本机优化节点已存档处置：有效实现保留、负优化与无效OBS候选明确撤回；外部C/真实主机实卡/其他GPU/物理显示/主观画质缺口、约110ms/旧2.8s长尾及GPU UI OBS限制均在R0及DELIVERY列明。最终按guard、全分支diff-check、源码二进制隔离和主线/桌面/修复工作区保持检查收尾，再commit与R0-delivery accepted增量bundle/patch/receipt。没有新增压力/竞争程序，没有merge/push/Release/关机。本轮为本地候选交付，不能说原草案全部性能目标或所有硬件验收已达成。
+
+`R0-final-scope-v2/summary.json`最终检查通过：guard177路径、全分支diff-check、源代码自最终构建无变化、114既有节点checkpoint、GPU测试已退出；main354b1c6、桌面原状态、field-upgrade干净8cdc612保持。首版手工check把历史公开推广视频REAMDE MP4.mp4及assets/veyra-2.0.0-promo.mp4也视为违规，范围误用；两者Git blob与开工点完全相同，不删除用户既有资源。校正为严格禁止全部tracked proprietary运行库/SDK/模型，以及本轮任何新增或改动测试媒体，均无违规；该记录不隐藏原断言失败，不放开运行组件规则。

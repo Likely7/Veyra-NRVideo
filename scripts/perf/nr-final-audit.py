@@ -4,7 +4,7 @@ The checks concern package closure and unchanged dependency bytes. They do not
 replace the separately recorded NR/FG/worker or hardware acceptance runs.
 """
 from pathlib import Path
-import hashlib, importlib.util, json, os, subprocess, sys, zipfile
+import hashlib, importlib.util, io, json, os, subprocess, sys, zipfile
 import pefile
 
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='perf-nr-20261004'
@@ -59,12 +59,25 @@ assert not missing,missing
 (out/'imports.json').write_text(json.dumps(imports,ensure_ascii=False,indent=2),encoding='utf-8')
 source_zip=BASE/'test-packages'/TASK/Path(manifest['correspondingSource']['application']).name
 assert matrix.digest(source_zip)==manifest['sourceZipSha256']
-with zipfile.ZipFile(source_zip) as source:
+git_archive=subprocess.check_output(['git','-C',str(ROOT),'-c','core.autocrlf=false',
+    'archive','--format=zip',manifest['sourceArchiveCommit']])
+source_newlines=[]
+with zipfile.ZipFile(source_zip) as source, zipfile.ZipFile(io.BytesIO(git_archive)) as reference:
     assert not any(Path(name).suffix.lower() in immutable|{'.lib','.pdb','.addon64'} for name in source.namelist())
+    assert len(source.namelist())==len(set(source.namelist()))
+    assert set(source.namelist())==set(reference.namelist())
+    for name in reference.namelist():
+        actual=source.read(name);expected=reference.read(name)
+        if actual==expected:continue
+        # Git for Windows archive applies checkout CRLF conversion. Allow only
+        # that conversion in UTF-8 text; every other byte must match this commit.
+        assert b'\x00' not in actual+expected,name
+        actual.decode('utf-8');expected.decode('utf-8')
+        assert actual.replace(b'\r\n',b'\n')==expected,name
+        source_newlines.append(name)
+    source_file_count=sum(not name.endswith('/') for name in source.namelist())
     main_source=source.read('qml/Veyra/Main.qml')
-    assert main_source==subprocess.check_output(['git','-C',str(ROOT),'show',manifest['sourceArchiveCommit']+':qml/Veyra/Main.qml'])
-    assert main_source.decode('utf-8').splitlines()==(app/'qml/Veyra/Main.qml').read_text(encoding='utf-8').splitlines()
-    assert source.read('src/engine/VideoPresenter.cpp')==subprocess.check_output(['git','-C',str(ROOT),'show',manifest['sourceArchiveCommit']+':src/engine/VideoPresenter.cpp'])
+    assert main_source.replace(b'\r\n',b'\n')==(app/'qml/Veyra/Main.qml').read_bytes().replace(b'\r\n',b'\n')
 runs=[]
 for mode in ('gpu','obs-compat'):
     matrix.assert_gpu_tests_idle()
@@ -90,6 +103,8 @@ for mode in ('gpu','obs-compat'):
     print('FINAL_PACKAGE_START_PASS',mode,flush=True)
 result={'app':str(app),'payloadFiles':len(manifest['files']),'peFiles':len(imports),'runtimeFiles':len(runtime['files']),
         'unchangedDependencyFiles':len(dependencies),'importsMissing':missing,'sourceSha256':matrix.digest(source_zip),
+        'sourceFilesMatchedToCommit':source_file_count,'sourceArchiveCommit':manifest['sourceArchiveCommit'],
+        'sourceArchiveCRLFOnlyDifferences':source_newlines,
         'runs':runs,'passed':True,'localOnly':True,'newHardwareAcceptance':False}
 (out/'summary.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
 matrix.assert_gpu_tests_idle();print('FINAL_PACKAGE_AUDIT_PASS',len(manifest['files']),len(imports),flush=True)

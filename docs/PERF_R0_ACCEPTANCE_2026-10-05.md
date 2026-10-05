@@ -117,3 +117,13 @@ GPU界面模式两次当前候选（v2/v4）均在fullscreen抓到Qt暗背景、
 完整本地NVIDIA包由`nr-final-package.py`从同一最终EXE/受控QML/不可变组件生成：普通ZIP、逐文件manifest、独立源码ZIP、干净解压SHA及退出回归身份；`nr-final-audit.py`另验PE imports/delay-imports、FSR分包例外、VFG闭包、驱动/SDK排除、源码隔离、Windows-only PATH下GPU/软件启动及全载荷保持。真正执行结果和源码快照commit写入E盘独立交付回执，未产生前不提前标通过。
 
 方案全部本机优化节点已有实验及处置，不代表草案每个数值目标达成：8K整次3.91%未达10%，1a等正确性反例直接拒绝，Auto及先粗后细主观画质未批、额外显存等代价不隐藏。外部C Magpie参考计时、真实M3/M4/M5/M6/主机30/40/60、AMD/Intel/其他RTX/616.92、TDR/真实设备恢复、物理显示/端到端延迟未验。压力按用户最新要求不再执行。严重后台掉帧及偶发约2.8s/110ms长尾、GPU UI OBS游戏采集不可靠仍是未解决项；本轮保留局部优化不能宣传这些问题全部修复。
+
+## 最终本地包审核与交付回执
+
+完整包目录`E:/项目/Veyra/test-packages/perf-nr-20261004/Veyra-2.0.3-perf-20261005-NVIDIA-win64-portable`，同名普通ZIP 713088417 bytes（680.05 MiB）。包SHA256 `bc2e95ae1d543d3fe6865c027310bb2af74e364e8c142250d03683773639191e`，源码ZIP `Veyra-2.0.3-perf-20261005-veyra-source.zip` SHA256 `a2c97c4a2ab327b9cc984f05f1514199b0abff8a2b381d46891f6ded73b2dabf`；源码快照为`cd65cb787f089cc44be89df78b33577685ea2e4d`，生产代码9403521及UI EXE身份不变。其后只改最终审核夹具/交付文档；原ZIP与manifest不重写。
+
+`nr-final-package.py B2d 2.0.3-perf-20261005 R0-close-final-v2`生成、全文件干净解压SHA检查及真实7秒基本播放/退出通过。`nr-final-audit.py <解压完整目录> R0-final-package-audit-v2`独立审核1569载荷、95 PE imports/delay-imports闭包、48运行组件、123与封存A完全相同的依赖；源码包1602个文件逐一匹配同一Git快照，Windows-only PATH下GPU/OBS软件各7秒基本播放退出且所有载荷SHA保持。两次启动默认效果关闭，不把它们计作NR或实际OBS录制验证；这些分别由上文同EXE回归和实际录像证明。生产导出worker由同一`veyra_qml_ui.exe --export-worker`启动，独立`veyra_export_workflow_tests.exe`仅为五例共享导出库回归夹具，不进入用户包。原组件、FSR共享三DLL例外、VFG闭包保留；没有AMD NR、驱动文件、SDK开发文件或测试Loader。
+
+审核v1在Main.qml源码原字节断言失败：Windows `git archive`按checkout设置把779个LF转成CRLF，与Git blob内容一致。原失败与imports原件保留于`R0-final-package-audit-v1/failure.json`，没有改源码包或产品迁就审核。v2改为从确切commit生成LF参考ZIP，逐文件只允许UTF-8文本的CRLF→LF转换，其余每个字节和目录成员必须相同；1543文本存在该转换，其余原字节一致。`R0-final-stage-check-v1`再核交付目录全载荷/两个ZIP SHA、唯一用户EXE及生产源代码无测试后差异。交付回执首版误以为native summary有顶层passed，实际上10个run各passed=true；该CPU汇总失败保存`R0-delivery-fixture-v1`，按每例与470全图/导出全SHA检查后生成，不改原回归记录、不重跑GPU。
+
+完整交付索引`E:/项目/Veyra/test-packages/perf-nr-20261004/DELIVERY.json`；存档根`E:/项目/Veyra/archives/perf-nr-20261004/`，最终源码文档用`R0-delivery-accepted`单独存档。尝试只删除已审核的干净解压副本时，工具在进程启动前被自动审批拒绝，返回原因仅`blocked by policy`，未提供细节；未通过其他方式重试，`R0-cleanup-preserved-v1/summary.json`记录约1.06GB副本仍存在。最终完整目录、两个ZIP、全部基线/失败证据和当前可用构建均保留。
