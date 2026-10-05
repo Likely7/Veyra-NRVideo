@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-05 NR 强度与画面调控授权**：用户明确要求“自动调控做为开关，在NR里，也可以选择手动调节，然后保留原版的强度5，开始吧搞定他”。仅在 `E:/项目/Veyra/worktrees/nr-strength-protection-20261005` / `codex/nr-strength-protection-20261005` 从本地 main `de18fc4` 隔离实施。按 `docs/NR_STRENGTH_PROTECTION_PLAN_2026-10-05.md` 修改共享 NR settings/预设/会话、graph/时域接点、残差 shader、QML bridge/逐层面板、翻译、来源 notice、必要 CMake/定向测试与本地打包；此明确范围覆盖历史 UI-only 冻结。默认调控关闭，保留原有路径及总变化量 0–5；自动和手动设置分别保存，不更换、修改或下载 NR DLL，不改采集/解码/音频/补帧/旧 Win32。允许本轮必要 commit/tag/源码 bundle 存档和完整本地候选交付，不包含新 merge/push/Release/关机，不派 Agent。所有产物 E 盘，测试每进程≤300秒、构建≤900秒，不制造 GPU 压力。每轮先运行 `py -3.11 -B scripts/acceptance/nr-protection-control.py guard`；旧 guard/baseline 保留，当前不可变基线独立保存。
+
 > **2026-10-05 本地 main 合并授权**：用户在 Codex 接管 Claude 最新验收和现场修复后明确要求“先合并到main，然后有其他修复等你做”。本次允许提交继承的未提交修复、存档、打标签和本地合并；已将 NR 性能分支及 `claude/field-fixes-20261005` 修复提交 `6e9d827` 合入本地 `main`，合并提交 `f7ced91`。此条覆盖这批工作的历史“不 merge”限制；不包含新的 push/Release、旧 UI 删除或剩余修复实施授权。合并记录见 `docs/MERGE_MAIN_2026-10-05.md`，后续新修复按用户下一条具体要求处理。来源分支和其他工作树保留，桌面旧工作区与用户配置不改，运行库/SDK/模型不得进入源码 Git。
 
 > **2026-10-05 性能优化续推约束**：用户明确“继续做吧，我睡了，不要做什么压力测试了”。继续当前NR优化分支与逐节点存档；后续只做正常负载的匹配A/B/B-off和必要功能/画质回归，不启动额外GPU竞争程序、不人为满载或制造显存压力，不改用户其他应用/驱动/配置。该约束覆盖原方案3a/3b等的压力测试要求；动态档以真实播放负载与可控正常素材验证，未测压力边界如实记录。原压力数据仅保留作历史证据，不再执行其驱动。没有新增merge/push/Release/关机授权。

@@ -1007,6 +1007,10 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_link_libraries(veyra_motion_validation_tests PRIVATE veyra_pipeline)
   add_executable(veyra_repair_shader_tests tests/integration/RepairShaderTests.cpp)
   add_executable(veyra_nr_temporal_gpu_tests tests/integration/NrTemporalGpuTests.cpp)
+  add_executable(veyra_nr_correction_gpu_tests tests/integration/NrCorrectionGpuTests.cpp)
+  target_compile_features(veyra_nr_correction_gpu_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_correction_gpu_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_correction_gpu_tests PRIVATE veyra_pipeline)
   # Stage-4 defect-audit assertions: GPU-free checks on the architecture-spoof
   # scope and the Ampere re-label policy (see docs/NR_FG_OPTIMIZATION_PLAN_2026-09-29.md).
   # Stage-6 anti-flicker tier assertions (GPU-free: enum narrowing, flat/list

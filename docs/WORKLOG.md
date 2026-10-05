@@ -1,5 +1,17 @@
 # Veyra 工作记录
 
+## 2026-10-05 NR 强度 5 与自动/手动调控开工
+
+用户明确授权本功能实施。已从本地 main `de18fc4` 建 `codex/nr-strength-protection-20261005`，工作树 `E:/项目/Veyra/worktrees/nr-strength-protection-20261005`；开工 tag 和已验证 `source-before.bundle` 在 `E:/项目/Veyra/archives/nr-strength-protection-20261005`。方案 `docs/NR_STRENGTH_PROTECTION_PLAN_2026-10-05.md`；独立不可变 `start.json` SHA256 `909bdde5eb460e4b69c5548cc5e504c90d8dbd7e8001e2e47dfe9260d60fd46e`。`py -3.11 -B scripts/acceptance/nr-protection-control.py guard` 通过，其他工作树 HEAD/status 不变。全部新产物按用途写入 E 盘同任务目录；禁止压力测试、不换运行库、不合并/推送/发布。此条仅记录开工，验收结果待实际执行。
+
+### 本轮实施与验收
+
+总变化强度 0–5，逐层默认关闭的自动／手动画面调控，五个手动保护项；线性 Oklab 色相／灰轴、局部压缩／色度预算／高光／signed HDR 色域保护，复用原光流和有界历史，无额外 NR 推理、未来帧或 CPU 像素回读。预设／会话 schema 29/8、列表／节点、复制／重置和导出一致。对抗审查补齐多层全栈保护的 32 常量，修正构建依赖以保留 Claude 的静态 libass。来源、全部命令／失败与边界见 `docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md`。
+
+生产构建 `stack-root-build.log` 退出 0，EXE `599fd89057a645540cf51e1afa3f93534297ee2de5a95ec1073f346b50149174`。`nr-protection-tests.py final-cpu ...` 五项通过；`final-gpu temporal correction correction-fp16` 三项通过，FP32/FP16 各 34 检查、2048 像素，0/1/2/5 关闭时逐位匹配起点 shader，D3D12 error/warning=0；48 帧交替色度范围 0.12→0.03125。QuickTest `mouse4` 40/0；翻译 `extract.py --check` missing=0。实际 UI `first final1` 通过原始／自动／手动与 PNG、预设／复制，NVENC D3D12 HEVC 4K 60 源帧／60 编码帧无 hold；`restore finalrestore1` 重启恢复、`multi multilayer1` 两层带保护、`visual realvideo1` 游戏静帧对照、`smoke inherited2` MKV 特效字幕／字体均通过。
+
+全局 native HDR 8 项旧失败在原 main 单独复现且数值相同（`hdr-baseline-comparison.json`），不能说 HDR suite 全过；20/30/40/AMD、真实 HDR／采集／长时质量未验。初始编译、预设路径、UI 夹具与 QuickTest 布局／依赖问题均已修复，MPEG4 人工素材使用既有软件解码回退，失败证据保留。实际输出均在 `E:/项目/Veyra/{build,tests,logs,tmp,test-packages,archives}/nr-strength-protection-20261005/`，最终包／源码／manifest 以同级 `DELIVERY.json` 为准；测试进程均有上限，无压力测试。保留当前构建、最终候选与必要失败／基线证据；主线和其他工作树不变，本功能未 merge/push/Release。
+
 ## 2026-10-05 继续剩余节点，禁止追加压力测试
 
 用户睡前要求继续且不要压力测试。Goal已恢复active，当前c4ea7d8/干净分支，nr-control guard通过（112路径）；保持原主线/桌面/运行组件与用户配置。先存档3c-graph-normal-before，再准备正常播放DIRECT/COMPUTE及普通/HIGH呈现对照，不启动旧competition驱动。所有新证据仍在E:/项目/Veyra/{logs,tests,tmp,archives}/perf-nr-20261004。随后多NR/跨帧/黑边/自动尺寸逐节点尝试；无收益或画面不满足保留门槛的实现回退，不能将API通过冒充性能收益，画质需人工确认的部分默认不启用。

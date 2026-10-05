@@ -22,6 +22,8 @@ A Windows enhancement player for videos, images, capture cards and streaming. Su
 
 ## Highlights
 
+**Local NR controls, 2026-10-05:** each NR layer's **Enhancement delta → Total strength** now reaches 5. **Picture control** defaults off; enable it and select Automatic or Manual. Manual controls cover hue, chroma, highlights, local compression and temporal stability. Automatic control preserves the source's colour direction and limits unsafe local changes; switching modes keeps the manual values. Turning control off preserves the original residual algorithm and strength. Five extrapolates one inference's residual; protection reduces gain in risky pixels, so it cannot promise full gain five with no artifacts on every video. Presets, List/Node sessions, PNGs and video exports share the settings. [Local validation and known limits](docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md); public 2.0.3 assets do not include this feature.
+
 - **Rebuilt interface:** Home, Cinema, Professional List, Nodes, Colour, Export and Settings; Simplified/Traditional Chinese, English and Japanese.
 - **Node editing and layered NR:** executable connections, independent NR/colour parameters, separate List/Node configurations, sessions and presets.
 - **PC / Xbox streaming:** Moonlight/Sunshine-compatible PC streaming and unofficial experimental Xbox support, alongside PS5, capture cards and screen capture.

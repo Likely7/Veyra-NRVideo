@@ -726,3 +726,22 @@ library can be relinked), HarfBuzz 14.4.0 (MIT), libpng (libpng license), zlib
 `share/<port>/copyright` files of that vcpkg install and must accompany every
 package that contains this build. No source of these libraries is committed to
 Veyra's Git. Builds without `VEYRA_LIBASS_ROOT` keep the built-in styled renderer.
+
+## Optional NR image correction (2026-10-05)
+
+`shaders/NrCorrection.hlsli` ports the Oklab transforms, gray-axis-continuous
+hue projection, residual soft knee and fixed-lightness/hue gamut-ray mapping
+from [SAOG0721/Magpie](https://github.com/SAOG0721/Magpie), commit
+`27c5df91177a29b33be612e98274169f3d2fca49` (GPL-3.0),
+`src/Magpie.Core/DLSSNRColorShader.h` and `DLSSNRDetailShader.h`.
+The Oklab matrices by Bjorn Ottosson are public domain:
+<https://bottosson.github.io/posts/oklab/> (2021-01-25 matrices).
+
+Veyra changes: operate directly on linear FP16 instead of stored SDR/sRGB;
+retain the existing residual controls and opt-out path; extend total gain to 5;
+add a chroma-delta budget, a source-anchored highlight shoulder, a 16-iteration
+FP16-oriented gamut search, signed scRGB/BT.2020 HDR bounds and final temporal
+safety. `NrResidualComposite.hlsl` and `NrTemporal.hlsl` call that shared helper.
+Automatic/manual UI, settings persistence and graph controls are Veyra code.
+Temporal filtering reuses Veyra's already attributed Magpie motion route;
+no additional neural model or proprietary runtime is copied or modified here.

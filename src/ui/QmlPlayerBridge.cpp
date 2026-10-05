@@ -4113,7 +4113,11 @@ QVariantList QmlPlayerBridge::nrLayers() const {
             {"uiCorrection",bool(n.model.uiCorrection)},{"total",n.residual.total},
             {"darken",n.residual.darken},{"brighten",n.residual.brighten},
             {"color",n.residual.color},{"luminance",n.residual.luminance},{"temporal",n.temporal},
-            {"antiFlicker",int(n.antiFlicker)}};
+            {"antiFlicker",int(n.antiFlicker)},
+            {"correctionEnabled",n.residual.correction.enabled},{"correctionAuto",n.residual.correction.automatic},
+            {"hueProtection",n.residual.correction.hue},{"chromaProtection",n.residual.correction.chroma},
+            {"highlightProtection",n.residual.correction.highlight},{"localCompression",n.residual.correction.compression},
+            {"temporalStability",n.residual.correction.stability}};
     }
     return out;
 }
@@ -4126,7 +4130,8 @@ QString QmlPlayerBridge::nrAutoSelectionReason(int index) const {
     for(uint32_t i=0;i<impl_->chain.nodeCount;++i){const auto& node=impl_->chain.nodes[i];
         if(node.type!=engine::EffectType::NrEnhance)continue;
         if(first<0)first=int(i);
-        ++count;temporal|=node.enabled&&node.nr.temporal;
+        ++count;temporal|=node.enabled&&(node.nr.residual.correction.enabled?
+            node.nr.residual.correction.usesHistory():node.nr.temporal);
         otherAuto|=int(i)!=index&&node.enabled&&node.nr.sizePolicy==pipeline::NrSizePolicy::Auto;
     }
     if(first!=index||count>2||otherAuto)return tr("自动 NR 仅支持一至两层列表的第一层");
@@ -4163,6 +4168,11 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     else if(key=="brighten")n.residual.brighten=float(value);
     else if(key=="color")n.residual.color=float(value);
     else if(key=="luminance")n.residual.luminance=float(value);
+    else if(key=="hueProtection")n.residual.correction.hue=float(value);
+    else if(key=="chromaProtection")n.residual.correction.chroma=float(value);
+    else if(key=="highlightProtection")n.residual.correction.highlight=float(value);
+    else if(key=="localCompression")n.residual.correction.compression=float(value);
+    else if(key=="temporalStability")n.residual.correction.stability=float(value);
     else {
         if(value!=std::floor(value)||value<0||value>6)return false;
         if(key=="sizePolicy"){
@@ -4173,6 +4183,8 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
         else if(key=="autoMask"&&value<=1)n.model.autoMask=int(value);
         else if(key=="uiCorrection"&&value<=1)n.model.uiCorrection=int(value);
         else if(key=="temporal"&&value<=1)n.temporal=value!=0;
+        else if(key=="correctionEnabled"&&value<=1)n.residual.correction.enabled=value!=0;
+        else if(key=="correctionAuto"&&value<=1)n.residual.correction.automatic=value!=0;
         else if(key=="antiFlicker"&&validNrAntiFlicker(engine::NrAntiFlicker(int(value))))n.antiFlicker=static_cast<engine::NrAntiFlicker>(int(value));
         else return false;
     }

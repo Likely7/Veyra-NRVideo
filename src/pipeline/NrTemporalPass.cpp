@@ -35,8 +35,8 @@ bool NrTemporalPass::initialize(ID3D12Device* device,ID3D12Resource* base,ID3D12
     for(unsigned i=0;i<2;++i){history_[i]=makeTexture(device,width_,height_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);guide_[i]=makeTexture(device,width_,height_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);if(!history_[i]||!guide_[i])return false;}
     std::vector<uint8_t> shader;
     // 7 SRVs (base, raw, history, guide, motion, low residual, low guide), 3 UAVs,
-    // 28 constants: the original 24 plus Route, LowSize and a pad.
-    if(!raw_||!pass_.loadShader("NrTemporal.dxil",shader)||!pass_.create(device,shader,20,7,3,28))return false;
+    // 36 constants: original 24, Route/LowSize/pad, optional correction block.
+    if(!raw_||!pass_.loadShader("NrTemporal.dxil",shader)||!pass_.create(device,shader,20,7,3,36))return false;
     if(lowFrequency){
         std::vector<uint8_t> reduce;
         // 3 SRVs + 2 UAVs = 5 slots per phase, two phases.
@@ -64,7 +64,8 @@ bool NrTemporalPass::initialize(ID3D12Device* device,ID3D12Resource* base,ID3D12
     return true;
 }
 void NrTemporalPass::run(ID3D12GraphicsCommandList* list,StateTracker& tracker,bool reset,bool haveMotion,double frameMs,
-                         float total,const engine::ProtectionSettings& protection){
+                         float total,const engine::ProtectionSettings& protection,
+                         const engine::NrCorrectionSettings& correction,bool hdr){
     const auto i=index_;
     // An interval outside the window is not a normal step: the history chain was
     // built on a different cadence, so it must not be blended across. Judging it
@@ -75,7 +76,8 @@ void NrTemporalPass::run(ID3D12GraphicsCommandList* list,StateTracker& tracker,b
     if(!intervalSane&&valid_)valid_=false;
     const bool useHistory=valid_&&!reset&&haveMotion&&intervalSane;
     // 80 ms past-history EMA; no future frames or presentation holdback.
-    const float weight=useHistory?float(std::exp(-frameMs/80.0)):0.f;
+    const float stability=correction.enabled?(correction.automatic?1.f:correction.stability):1.f;
+    const float weight=useHistory?float(std::exp(-frameMs/80.0))*stability:0.f;
     const unsigned route=routeOf(tier_);
     if(route==4){
         // The reduce pass writes the *other* phase's half-resolution pair, which
@@ -96,7 +98,7 @@ void NrTemporalPass::run(ID3D12GraphicsCommandList* list,StateTracker& tracker,b
     tracker.transition(list,history_[1-i].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     tracker.transition(list,guide_[1-i].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     for(auto* r:{output_,history_[i].Get(),guide_[i].Get()})tracker.transition(list,r,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    float c[28]={std::bit_cast<float>(width_),std::bit_cast<float>(height_),weight,total,protection.enabled?1.f:0.f,protection.featherPixels,0,0};
+    float c[36]={std::bit_cast<float>(width_),std::bit_cast<float>(height_),weight,total,protection.enabled?1.f:0.f,protection.featherPixels,0,0};
     for(unsigned n=0;n<4;++n){const auto r=engine::protectionConstants(protection.regions[n]);c[8+n*4]=r[0];c[9+n*4]=r[1];c[10+n*4]=r[2];c[11+n*4]=r[3];}
     // Route and the low-frequency extent follow the region block. The shader
     // reads LowSize only on route 4 and the pad is never read: they exist to
@@ -105,6 +107,8 @@ void NrTemporalPass::run(ID3D12GraphicsCommandList* list,StateTracker& tracker,b
     c[25]=std::bit_cast<float>(lowWidth_);
     c[26]=std::bit_cast<float>(lowHeight_);
     c[27]=0.f;
+    const auto controls=correction.constants(hdr);
+    std::copy(controls.begin(),controls.end(),c+28);
     pass_.bind(list,c,gpuHandleOf(pass_,i*10).ptr,gpuHandleOf(pass_,i*10+7).ptr);
     list->Dispatch((width_+7)/8,(height_+7)/8,1);
     for(auto* r:{output_,history_[i].Get(),guide_[i].Get()}){tracker.uavBarrier(list,r);tracker.transition(list,r,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);}

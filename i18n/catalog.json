@@ -2865,6 +2865,13 @@
    "ja": "オフのとき、ホストは自身の解像度のままで映像をスケーリングします"
   },
   {
+   "zh": "关闭时保留原始变化量，最高 5",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "關閉時保留原始變化量，最高 5",
+   "en": "Off preserves the original residual gain up to 5",
+   "ja": "オフでは元の変化量を保持（最大 5）"
+  },
+  {
    "zh": "关闭时这条链路不存在，零开销",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "關閉時這條鏈路不存在，零開銷",
@@ -5238,6 +5245,13 @@
    "ja": "LAN ストリーミング"
   },
   {
+   "zh": "局部压缩",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "局部壓縮",
+   "en": "Local compression",
+   "ja": "局所圧縮"
+  },
+  {
    "zh": "局部明暗",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "局部明暗",
@@ -5873,6 +5887,13 @@
    "zh-TW": "開關、進度、選中狀態",
    "en": "Switches, progress, selected state",
    "ja": "スイッチ、進行状況、選択状態"
+  },
+  {
+   "zh": "开启调控",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "開啟調控",
+   "en": "Enable correction",
+   "ja": "調整を有効化"
   },
   {
    "zh": "开始",
@@ -6694,6 +6715,13 @@
    "ja": "押してオリジナル"
   },
   {
+   "zh": "按原图约束色偏、高光和过强变化；风险区域会降低局部变化量。时域稳定复用光流，快速运动或切镜时拒绝历史。切换自动／手动保留手动数值。",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "按原圖約束色偏、高光和過強變化；風險區域會降低局部變化量。時域穩定重用光流，快速運動或切鏡時拒絕歷史。切換自動／手動保留手動數值。",
+   "en": "Uses the original image to constrain hue shifts, highlights and excessive changes. Risky regions receive less gain. Temporal stability reuses optical flow and rejects history during fast motion or cuts. Switching Auto/Manual retains manual values.",
+   "ja": "元画像を基準に色相ずれ、ハイライト、過剰な変化を抑えます。問題のある領域では局所的に強度を下げます。時間方向の安定化は光学フローを再利用し、速い動きやカットでは履歴を破棄します。自動／手動の切り替え後も手動値を保持します。"
+  },
+  {
    "zh": "按键可在 设置 → 快捷键 里改",
    "src": "qml/ProPage.qml",
    "zh-TW": "按鍵可在 設定 → 快速鍵 裡改",
@@ -7295,6 +7323,13 @@
    "zh-TW": "舊節點預設的 NR 保護區域已移除；其餘參數保留，後續儲存到 .p3-node 檔案，原檔案不覆蓋",
    "en": "NR protected areas from the old node preset were removed; other settings are kept and saved to a .p3-node file from now on; the original file is not overwritten",
    "ja": "旧ノードプリセットの NR 保護領域を削除しました。その他の設定は保持し、今後は .p3-node ファイルに保存します。元のファイルは上書きしません"
+  },
+  {
+   "zh": "时域稳定",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "時域穩定",
+   "en": "Temporal stability",
+   "ja": "時間方向の安定化"
   },
   {
    "zh": "时间",
@@ -9075,6 +9110,20 @@
    "ja": "アスペクト比"
   },
   {
+   "zh": "画面调控",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "畫面調控",
+   "en": "Image correction",
+   "ja": "画質調整"
+  },
+  {
+   "zh": "画面调控已接管时域稳定；关闭调控后恢复此设置",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "畫面調控已接管時域穩定；關閉調控後恢復此設定",
+   "en": "Image correction controls temporal stability; this setting returns when correction is off",
+   "ja": "画質調整が時間方向の安定化を制御中。オフにするとこの設定に戻ります。"
+  },
+  {
    "zh": "界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "介面始終用顯示卡繪製；為避免衝突，小飛機 OSD 不在 Veyra 中顯示",
@@ -10069,6 +10118,13 @@
    "ja": "少なくとも 1 項目を選んでください"
   },
   {
+   "zh": "色度保护",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "色度保護",
+   "en": "Chroma protection",
+   "ja": "彩度保護"
+  },
+  {
    "zh": "色彩",
    "src": "qml/ProPage.qml",
    "zh-TW": "色彩",
@@ -10172,6 +10228,13 @@
    "zh-TW": "色相",
    "en": "Hue",
    "ja": "色相"
+  },
+  {
+   "zh": "色相保护",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "色相保護",
+   "en": "Hue protection",
+   "ja": "色相保護"
   },
   {
    "zh": "色调",
@@ -11131,6 +11194,13 @@
    "zh-TW": "調度降檔",
    "en": "Scheduling stepped down",
    "ja": "スケジュールを段階的に下げました"
+  },
+  {
+   "zh": "调控方式",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "調控方式",
+   "en": "Correction mode",
+   "ja": "調整モード"
   },
   {
    "zh": "调整中",
@@ -13079,6 +13149,13 @@
    "ja": "プリセットライブラリの NR 解像度が不正です"
   },
   {
+   "zh": "预设库 NR 调控参数损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫 NR 調控參數損壞",
+   "en": "Preset library NR correction parameters are invalid",
+   "ja": "プリセットの NR 調整パラメーターが無効です"
+  },
+  {
    "zh": "预设库 VFG 质量字段损坏",
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "預設庫 VFG 品質字段損壞",
@@ -13483,6 +13560,13 @@
    "zh-TW": "高光",
    "en": "Highlights",
    "ja": "ハイライト"
+  },
+  {
+   "zh": "高光保护",
+   "src": "qml/Veyra/NrLayerEditor.qml",
+   "zh-TW": "高光保護",
+   "en": "Highlight protection",
+   "ja": "ハイライト保護"
   },
   {
    "zh": "高延迟·需 CPU 拆包",

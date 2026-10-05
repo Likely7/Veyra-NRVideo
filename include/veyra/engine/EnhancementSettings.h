@@ -124,9 +124,28 @@ struct NrSettings {
     int32_t style=0,autoMask=0,uiCorrection=0;
     bool operator==(const NrSettings&) const = default;
 };
+struct NrCorrectionSettings {
+    bool enabled=false,automatic=true;
+    // Manual values survive switching automatic control on and off.
+    float hue=1,chroma=.75f,highlight=1,compression=.75f,stability=.8f;
+    bool operator==(const NrCorrectionSettings&) const = default;
+    bool valid() const {
+        for(float v:{hue,chroma,highlight,compression,stability})
+            if(!std::isfinite(v)||v<0||v>1)return false;
+        return true;
+    }
+    bool usesHistory() const {return enabled&&(automatic||stability>0);}
+    std::array<float,8> constants(bool hdr=false) const {
+        return {enabled?1.f:0.f,automatic?1.f:hue,automatic?1.f:chroma,
+                automatic?1.f:highlight,automatic?1.f:compression,automatic?1.f:stability,
+                automatic?1.f:0.f,hdr?1.f:0.f};
+    }
+};
 struct ResidualSettings {
     float total=1,darken=1,brighten=1,color=1,luminance=1;
+    NrCorrectionSettings correction{};
     bool operator==(const ResidualSettings&) const = default;
+    bool extendedSchema() const {return total>2||correction!=NrCorrectionSettings{};}
 };
 // Fixed storage: settings also cross the export worker's shared-memory POD.
 // Runtime and NR/SR order are shared by active instances, not separate adapters.
@@ -141,6 +160,7 @@ struct NrLayerSettings {
     NrAntiFlicker antiFlicker=NrAntiFlicker::Flow;
     pipeline::NrSizePolicy sizePolicy=pipeline::NrSizePolicy::Realtime;
     bool operator==(const NrLayerSettings&) const = default;
+    bool usesTemporal() const {return residual.correction.enabled?residual.correction.usesHistory():temporal;}
 };
 struct ProtectionRect {
     float left=0,top=0,right=0,bottom=0;
@@ -189,6 +209,12 @@ struct EnhancementSettings {
     // enabled layer (or the first node when every layer is bypassed).
     std::array<NrLayerSettings,kMaxNrInstances> nrLayers{};
     uint32_t nrLayerCount=0;
+    bool usesNrTemporal() const {
+        if(!nrLayerCount)return residual.correction.enabled?residual.correction.usesHistory():nrTemporal;
+        for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i)
+            if(nrLayers[i].enabled&&nrLayers[i].usesTemporal())return true;
+        return false;
+    }
     NrLayerSettings nrLayer(uint32_t index) const {
         if(nrLayerCount&&index<nrLayers.size())return nrLayers[index];
         return {model,residual,nrRuntime,nrTemporal,lowLatency,nr,nrAntiFlicker,nrPolicy};
@@ -210,9 +236,11 @@ struct EnhancementSettings {
     }
     bool sameNrTopology(const EnhancementSettings& other) const {
         if(nrLayerCount!=other.nrLayerCount)return false;
+        if(residual.correction.enabled!=other.residual.correction.enabled||usesNrTemporal()!=other.usesNrTemporal())return false;
         for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i){
             const auto& a=nrLayers[i]; const auto& b=other.nrLayers[i];
-            if(a.enabled!=b.enabled||a.temporal!=b.temporal||a.runtime!=b.runtime||
+            if(a.enabled!=b.enabled||a.temporal!=b.temporal||a.usesTemporal()!=b.usesTemporal()||
+               a.residual.correction.enabled!=b.residual.correction.enabled||a.runtime!=b.runtime||
                a.lowLatencyPairing!=b.lowLatencyPairing||a.sizePolicy!=b.sizePolicy)return false;
         }
         return true;
@@ -333,7 +361,8 @@ struct EnhancementSettings {
         if(!range(model.intensity,1)||!range(model.tone,1)||!range(model.structure,1))return "model parameter out of range";
         if(model.skin!=-1&&!range(model.skin,2))return "skin parameter out of range";
         if(model.style<0||model.style>2||model.autoMask<0||model.autoMask>1||model.uiCorrection<0||model.uiCorrection>1)return "invalid experimental parameter";
-        for(float v:{residual.total,residual.darken,residual.brighten,residual.color,residual.luminance})if(!range(v,2))return "residual parameter out of range";
+        if(!range(residual.total,5)||!residual.correction.valid())return "NR residual/correction parameter out of range";
+        for(float v:{residual.darken,residual.brighten,residual.color,residual.luminance})if(!range(v,2))return "residual parameter out of range";
         if(nrLayerCount>nrLayers.size())return "too many NR instances";
         for(uint32_t i=0;i<nrLayerCount;++i){
             const auto& n=nrLayers[i];
@@ -342,7 +371,8 @@ struct EnhancementSettings {
                (n.model.skin!=-1&&!range(n.model.skin,2)))return "NR layer model parameter out of range";
             if(n.model.style<0||n.model.style>2||n.model.autoMask<0||n.model.autoMask>1||
                n.model.uiCorrection<0||n.model.uiCorrection>1)return "invalid NR layer experimental parameter";
-            for(float v:{n.residual.total,n.residual.darken,n.residual.brighten,n.residual.color,n.residual.luminance})
+            if(!range(n.residual.total,5)||!n.residual.correction.valid())return "NR layer residual/correction parameter out of range";
+            for(float v:{n.residual.darken,n.residual.brighten,n.residual.color,n.residual.luminance})
                 if(!range(v,2))return "NR layer residual parameter out of range";
             if(!validNrRuntime(n.runtime))
                 return "invalid NR layer runtime";
