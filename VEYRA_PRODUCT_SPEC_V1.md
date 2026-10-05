@@ -1,5 +1,7 @@
 # Veyra V1 产品与技术规格
 
+> **2026-10-04 项目对齐**：本文为V1历史技术合同，不能将下面旧Win32/2X/SDR/禁止分发等历史范围替代后续用户授权。当前公开版2.0.3为Qt/QML新界面，具备PC/Xbox/PS5串流、分层NR、最高VFG8X和AMD/NVIDIA分包；具体支持与未验边界见 `docs/CURRENT_STATUS.md` 和2.0.3验收文档。当前仅本地NR性能优化，执行记录 `docs/PERF_EXECUTION_NR_2026-10-04.md`；已有倍速/字幕/RTSS/UI/全屏修复保留，不擅自推进HDR/Dolby PR。共享图、真实PTS/源帧、reset、颜色、必要同步、源码/二进制隔离继续适用。
+
 > 2026-09-18：本文保留 V1 历史基线。当前发布能力、HDR/多声道扩展、最高 6X 及新功能状态见 [CURRENT_STATUS](docs/CURRENT_STATUS.md)。当前任务按[可关闭帧同步方案](docs/FRAME_PACING_EXECUTION_PLAN_2026-09-18.md)与[实际验收报告](docs/FRAME_PACING_ACCEPTANCE_2026-09-18.md)执行；NVIDIA FSR4 实验已由用户终止并回退。下文旧 SDR 限制、2X 范围和门禁不撤销后续已授权实现。单次测试最多 300 秒，未实测项明确报告。
 
 版本：Launch V1.3（2026-09-06 接管重基线）

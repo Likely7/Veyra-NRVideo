@@ -69,7 +69,7 @@ class QmlPlayerBridge : public QObject {
     // --- frame generation settings ----------------------------------------
     Q_PROPERTY(QString fgBackendName READ fgBackendName WRITE setFgBackendName NOTIFY settingsChanged)
     Q_PROPERTY(int vfgQuality READ vfgQuality WRITE setVfgQuality NOTIFY settingsChanged)
-    Q_PROPERTY(QVariantList fgBackendChoices READ fgBackendChoices CONSTANT)
+    Q_PROPERTY(QVariantList fgBackendChoices READ fgBackendChoices NOTIFY effectCapabilitiesChanged)
     Q_PROPERTY(QString fgProviderText READ fgProviderText NOTIFY fgChoicesChanged)
     Q_PROPERTY(int fgMaxMultiplier READ fgMaxMultiplier NOTIFY snapshotChanged)
     Q_PROPERTY(bool fgEnabled READ fgEnabled WRITE setFgEnabled NOTIFY chainChanged)
@@ -111,9 +111,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString captureDeviceLabel READ captureDeviceLabel NOTIFY captureChanged)
     Q_PROPERTY(bool captureForceSdr READ captureForceSdr WRITE setCaptureForceSdr NOTIFY settingsChanged)
     Q_PROPERTY(bool amdNrGpu READ amdNrGpu CONSTANT)
-    Q_PROPERTY(QVariantMap effectCapabilities READ effectCapabilities NOTIFY fgChoicesChanged)
-    Q_PROPERTY(QVariantList nrRuntimeChoices READ nrRuntimeChoices NOTIFY fgChoicesChanged)
-    Q_PROPERTY(QVariantList srBackendChoices READ srBackendChoices NOTIFY fgChoicesChanged)
+    Q_PROPERTY(QVariantMap effectCapabilities READ effectCapabilities NOTIFY effectCapabilitiesChanged)
+    Q_PROPERTY(QVariantList nrRuntimeChoices READ nrRuntimeChoices NOTIFY effectCapabilitiesChanged)
+    Q_PROPERTY(QVariantList srBackendChoices READ srBackendChoices NOTIFY effectCapabilitiesChanged)
     Q_PROPERTY(bool captureFlipVertical READ captureFlipVertical WRITE setCaptureFlipVertical NOTIFY settingsChanged)
     // P4-e: the full capture connection, as the 1.4.4 panel: device details and
     // formats come from asynchronous DirectShow queries (never on the UI thread),
@@ -179,6 +179,8 @@ class QmlPlayerBridge : public QObject {
     // subtitle look, audio output. Stored in <data>/qml-preferences.v1.json and
     // validated key by key in setPreference(); anything unknown is refused.
     Q_PROPERTY(QVariantMap preferences READ preferences NOTIFY preferencesChanged)
+    Q_PROPERTY(QString gpuPriorityStatus READ gpuPriorityStatus NOTIFY preferencesChanged)
+    Q_PROPERTY(bool enhancementPrewarmAvailable READ enhancementPrewarmAvailable CONSTANT)
     // The interface language in use (zh-CN / zh-TW / en / ja), after "auto" is resolved;
     // preferences.language holds the choice itself.
     Q_PROPERTY(QString uiLanguage READ uiLanguage NOTIFY preferencesChanged)
@@ -246,6 +248,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double lateP95Ms READ lateP95Ms NOTIFY snapshotChanged)
     Q_PROPERTY(QString metricsSummary READ metricsSummary NOTIFY snapshotChanged)
     Q_PROPERTY(bool nrActive READ nrActive NOTIFY snapshotChanged)
+    Q_PROPERTY(bool nrAutoActive READ nrAutoActive NOTIFY snapshotChanged)
+    Q_PROPERTY(int nrAutoPercent READ nrAutoPercent NOTIFY snapshotChanged)
+    Q_PROPERTY(QString nrAutoStatus READ nrAutoStatus NOTIFY snapshotChanged)
     Q_PROPERTY(bool srActive READ srActive NOTIFY snapshotChanged)
     Q_PROPERTY(bool fgActive READ fgActive NOTIFY snapshotChanged)
     Q_PROPERTY(bool captureRecovering READ captureRecovering NOTIFY snapshotChanged)
@@ -359,6 +364,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY snapshotChanged)
     Q_PROPERTY(double playbackSpeed READ playbackSpeed NOTIFY snapshotChanged)
     Q_PROPERTY(double playbackRate READ playbackRate WRITE setPlaybackRate NOTIFY snapshotChanged)
+    Q_PROPERTY(double minimumPlaybackRate READ minimumPlaybackRate CONSTANT)
+    Q_PROPERTY(double maximumPlaybackRate READ maximumPlaybackRate CONSTANT)
     // True while the engine has not yet applied what the UI asked for. The UI
     // shows the pending value and marks it, rather than lying about the state.
     Q_PROPERTY(bool applying READ applying NOTIFY snapshotChanged)
@@ -611,6 +618,8 @@ public:
     void setRemotePlayPin(const QString& value);
 
     QVariantMap preferences() const;
+    QString gpuPriorityStatus() const;
+    bool enhancementPrewarmAvailable() const;
     QString uiLanguage() const;
     // main.cpp hands over the QML engine so a language change retranslates the scene.
     void setQmlEngine(QQmlEngine* engine);
@@ -681,6 +690,9 @@ public:
     double lateP95Ms() const;
     QString metricsSummary() const;
     bool nrActive() const;
+    bool nrAutoActive() const;
+    int nrAutoPercent() const;
+    QString nrAutoStatus() const;
     bool srActive() const;
     bool fgActive() const;
     bool captureRecovering() const;
@@ -695,6 +707,8 @@ public:
     void setMuted(bool value);
     double playbackSpeed() const;
     double playbackRate() const;
+    double minimumPlaybackRate() const;
+    double maximumPlaybackRate() const;
     void setPlaybackRate(double rate);
 
     bool nrEnabled() const;
@@ -844,6 +858,7 @@ public:
     QVariantList nodeConnections() const;
     QVariantList nrLayers() const;
     Q_INVOKABLE bool setNrLayerParameter(int index, const QString& key, double value);
+    Q_INVOKABLE QString nrAutoSelectionReason(int index) const;
     QVariantList effectCatalog() const;
     QString chainError() const;
     bool chainValid() const;
@@ -977,6 +992,7 @@ public:
     Q_INVOKABLE void pauseExport(bool paused);
     Q_INVOKABLE void quit();
     Q_INVOKABLE void restartApplication();
+    Q_INVOKABLE void restartForOverlayCompatibility();
     // Returns this page's controls to the engine defaults (the design's
     // "重置本页"); it does not touch presets or other pages.
     Q_INVOKABLE void resetCurrentPage();
@@ -1043,6 +1059,7 @@ signals:
     void thumbnailSourceChanged(const QString& path);
     void settingsChanged();
     void fgChoicesChanged();
+    void effectCapabilitiesChanged();
     void chainChanged();
     void recentFilesChanged();
     void presetsChanged();
@@ -1064,6 +1081,7 @@ private:
     // they can never disagree with each other.
     engine::EnhancementSettings settings() const;
     void startGpuSampler();
+    void requestApplicationRestart(bool overlayCompatibility);
     void updateRunStatus();
     void applyPresentation();
     void applyAspect(bool force);
@@ -1080,6 +1098,7 @@ private:
     // Pushes a stored preference to whatever consumes it (subtitle overlay,
     // audio endpoint). Called after load and after every accepted change.
     void applyPreference(const QString& key);
+    void scheduleEnhancementPrewarm();
     // Hold-to-compare key (press/release), handled for the whole application.
     bool eventFilter(QObject* watched, QEvent* event) override;
     void rememberPosition(bool flush);

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -261,27 +262,16 @@ SubtitleTrack parseAss(const std::wstring& data,const std::wstring& name,bool ss
     return track;
 }
 
-// Matroska/MP4 sometimes hand us a whole ASS dialogue line (Layer,Start,End,
-// Style,...) instead of just the text; keep the text field only.
+// FFmpeg AVSubtitleRect::ass is ReadOrder,Layer,Style,Name,MarginL,MarginR,
+// MarginV,Effect,Text. Consume exactly the eight header separators: commas in
+// Text are authored punctuation, never another header field.
 std::wstring stripDialoguePrefix(const std::wstring& raw){
-    // Two shapes exist: the FFmpeg AVSubtitle ASS rectangle
-    // (Layer,Start,End,Style,Name,ML,MR,MV,Effect,Text) and the Matroska stored
-    // form (Layer,0,Style,Name,ML,MR,MV,Effect,Text - the times live in the
-    // block, so Start/End collapse into one zero). Both end with an empty
-    // Effect field, which is what makes the split unambiguous: subtitle text
-    // itself may contain commas.
-    std::vector<std::wstring> fields;
     size_t start=0;
-    for(size_t i=0;i<raw.size()&&fields.size()<10;++i){
-        if(raw[i]!=L',')continue;
-        fields.push_back(trim(raw.substr(start,i-start)));
-        start=i+1;
+    for(int field=0;field<8;++field){
+        const auto comma=raw.find(L',',start);
+        if(comma==std::wstring::npos)return raw;
+        start=comma+1;
     }
-    if(fields.size()<8)return raw;
-    auto numeric=[](const std::wstring& value){if(value.empty())return false;for(wchar_t c:value)if(c<L'0'||c>L'9')return false;return true;};
-    const bool matroskaShape=fields.size()>=8&&numeric(fields[0])&&numeric(fields[1])&&numeric(fields[4])&&numeric(fields[5])&&numeric(fields[6])&&fields[7].empty();
-    const bool dialogueShape=fields.size()>=9&&numeric(fields[0])&&fields[7].empty()&&fields[8].empty();
-    if(!matroskaShape&&!dialogueShape)return raw;
     return raw.substr(start);
 }
 
@@ -301,6 +291,7 @@ SubtitleTrack parseVtt(const std::wstring& data,const std::wstring& name){
         while(std::getline(lines,line)){
             if(line.find(L"-->")!=std::wstring::npos){std::wistringstream back(line);break;}
             if(trim(line).empty())break;
+            if(!line.empty()&&line.back()==L'\r')line.pop_back();
             if(!cue.text.empty())cue.text+=L'\n';
             cue.text+=line;
         }
@@ -345,6 +336,11 @@ SubtitleTrack loadSubtitleFile(const std::wstring& path){
     else if(extension==L".vtt"||headLower.find(L"webvtt")!=std::wstring::npos)track=parseVtt(data,name);
     else if(headLower.find(L"[script info]")!=std::wstring::npos||headLower.find(L"dialogue:")!=std::wstring::npos)track=parseAss(data,name,false);
     else track=parseSrt(data,name);
+    if(extension==L".ass"||extension==L".ssa"||headLower.find(L"[script info]")!=std::wstring::npos){
+        auto ass=std::make_shared<SubtitleAssData>();
+        ass->script=utf8(data);ass->source=L"file:"+path;
+        track.ass=std::move(ass);
+    }
     track.rebuildIndex();   // cue lookup is binary searched, so it needs the index
     return track;
 }
@@ -421,6 +417,24 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
     struct DecoderCleanup {void operator()(AVCodecContext* context)const{avcodec_free_context(&context);}};
     std::vector<std::unique_ptr<AVCodecContext,DecoderCleanup>> decoders;
     std::vector<int> streamToTrack(input->nb_streams,-1);
+    // Matroska font attachments: ASS effect subtitles usually depend on them.
+    std::vector<SubtitleAssData::Font> attachedFonts;size_t attachedFontBytes=0;
+    for(unsigned streamIndex=0;streamIndex<input->nb_streams;++streamIndex){
+        const AVStream* stream=input->streams[streamIndex];
+        if(stream->codecpar->codec_type!=AVMEDIA_TYPE_ATTACHMENT||!stream->codecpar->extradata||stream->codecpar->extradata_size<=0)continue;
+        const AVDictionaryEntry* mime=stream->metadata?av_dict_get(stream->metadata,"mimetype",nullptr,0):nullptr;
+        const AVDictionaryEntry* file=stream->metadata?av_dict_get(stream->metadata,"filename",nullptr,0):nullptr;
+        const std::string mimeType=mime&&mime->value?mime->value:"";std::string fileName=file&&file->value?file->value:"";
+        std::string lowerName=fileName;for(auto& c:lowerName)c=char(std::tolower(static_cast<unsigned char>(c)));
+        const bool font=mimeType.find("font")!=std::string::npos||mimeType=="application/x-truetype-font"||mimeType=="application/vnd.ms-opentype"||
+            lowerName.ends_with(".ttf")||lowerName.ends_with(".otf")||lowerName.ends_with(".ttc");
+        const size_t size=size_t(stream->codecpar->extradata_size);
+        if(!font||size>64u*1024u*1024u||attachedFontBytes+size>256u*1024u*1024u)continue;
+        attachedFontBytes+=size;
+        attachedFonts.push_back({fileName,std::vector<char>(reinterpret_cast<const char*>(stream->codecpar->extradata),reinterpret_cast<const char*>(stream->codecpar->extradata)+size)});
+    }
+    if(!attachedFonts.empty())log::info("subtitle",std::format("container fonts attached={} bytes={}",attachedFonts.size(),attachedFontBytes));
+    std::vector<std::shared_ptr<SubtitleAssData>> assWork;
     for(unsigned streamIndex=0;streamIndex<input->nb_streams;++streamIndex){
         if(stop.stop_requested())return {};
         AVStream* stream=input->streams[streamIndex];
@@ -455,8 +469,19 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
             continue;
         }
         decoders.back().reset(context);
+        if((codec==AV_CODEC_ID_ASS||codec==AV_CODEC_ID_SSA)&&context->subtitle_header&&context->subtitle_header_size>0){
+            auto ass=std::make_shared<SubtitleAssData>();
+            ass->header.assign(reinterpret_cast<const char*>(context->subtitle_header),size_t(context->subtitle_header_size));
+            ass->fonts=attachedFonts;ass->source=std::format(L"embedded:{}#{}",path,streamIndex);
+            if(assWork.size()<=tracks.size())assWork.resize(tracks.size()+1);
+            assWork[tracks.size()]=ass;track.ass=ass;
+        }
         tracks.push_back(std::move(track));
     }
+    assWork.resize(tracks.size());
+    // Published copies must never alias the vectors this loop still appends to.
+    auto snapshotAss=[&]{for(size_t i=0;i<tracks.size();++i)if(assWork[i])tracks[i].ass=std::make_shared<const SubtitleAssData>(*assWork[i]);};
+    snapshotAss();
     if(metadata&&!stop.stop_requested())metadata(tracks);
     if(std::none_of(decoders.begin(),decoders.end(),[](const auto& decoder){return bool(decoder);}))return tracks;
     AVPacket* packet=av_packet_alloc();
@@ -527,8 +552,16 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
                 if(!entry)continue;
                 std::wstring text;
                 int alignOverride=0;double posX=-1,posY=-1;
+                if(assWork[index]&&entry->ass&&*entry->ass&&subtitle.end_display_time>subtitle.start_display_time){
+                    const size_t bytes=std::strlen(entry->ass);
+                    if(bytes<=maxCacheBytes-cacheBytes){
+                        cacheBytes+=bytes;
+                        assWork[index]->events.push_back({int64_t(std::llround(packetSeconds*1000.0))+int64_t(subtitle.start_display_time),
+                            int64_t(subtitle.end_display_time-subtitle.start_display_time),std::string(entry->ass,bytes)});
+                    }
+                }
                 const std::wstring raw=entry->ass&&*entry->ass?wide(entry->ass):(entry->text&&*entry->text?wide(entry->text):std::wstring{});
-                if(!raw.empty())text=cleanAssText(stripDialoguePrefix(raw),alignOverride,posX,posY);
+                if(!raw.empty())text=cleanAssText(entry->ass&&*entry->ass?stripDialoguePrefix(raw):raw,alignOverride,posX,posY);
                 if(text.empty())continue;
                 SubtitleCue cue;
                 cue.begin=packetSeconds+double(subtitle.start_display_time)/1000.0;
@@ -545,11 +578,13 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
             av_packet_unref(packet);
             if(metadata&&std::chrono::steady_clock::now()>=nextPublish){
                 for(auto& t:tracks)t.rebuildIndex();
+                snapshotAss();
                 metadata(tracks);
                 nextPublish=std::chrono::steady_clock::now()+std::chrono::seconds(1);
             }
     }
     if(stop.stop_requested())return {};
+    snapshotAss();
     for(auto& track:tracks){
         track.rebuildIndex();
         log::info("subtitle",std::format("embedded track {} codec={} cues={}",track.streamIndex,utf8(track.codec),track.cues.size()));

@@ -11,7 +11,7 @@ public:
     ~TrueHdrBackend(){release();}
     bool create(NgxCoreHost&,ID3D12GraphicsCommandList*,const std::wstring& runtimeDirectory);
     bool evaluate(ID3D12GraphicsCommandList*,ID3D12Resource* sdr,ID3D12Resource* scrgb,const engine::VideoHdrSettings&);
-    void release();
+    bool release();
 private:
     NgxCoreHost* core_=nullptr;
     NVSDK_NGX_Parameter* params_=nullptr;

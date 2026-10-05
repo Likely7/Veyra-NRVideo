@@ -20,6 +20,10 @@ struct SubtitleLine {
     double posX=-1,posY=-1;            // {\pos(x,y)} normalised to 0..1 (or -1)
     bool secondary=false;
     std::shared_ptr<const engine::SubtitleBitmapFrame> bitmap;
+    // ASS/SSA track drawn by libass (builds that link it): the whole script is
+    // rendered at assTimeMs inside the video area; `text` is only diagnostics.
+    std::shared_ptr<const engine::SubtitleAssData> ass;
+    double assTimeMs=0;
 };
 struct SubtitleView {
     double scale=1.0;                  // viewer size multiplier

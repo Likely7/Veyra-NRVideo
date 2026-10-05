@@ -463,8 +463,15 @@
    "ja": "AMD FSR のフレーム生成は最大 2X です。要求は適用されていません"
   },
   {
+   "zh": "AMD NR 导出只支持 1080p 以内的片源，本次导出关闭 NR",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "AMD NR 匯出只支援 1080p 以內的片源，本次匯出關閉 NR",
+   "en": "AMD NR export supports sources up to 1080p only; NR is off for this export",
+   "ja": "AMD NR の書き出しは 1080p 以下のソースのみ対応のため、今回の書き出しでは NR をオフにします"
+  },
+  {
    "zh": "AMD NR 最高 1080p 像素预算",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "qml/NrLayerEditor.qml",
    "zh-TW": "AMD NR 最高 1080p 像素預算",
    "en": "AMD NR has a maximum 1080p pixel budget",
    "ja": "AMD NR の上限は 1080p の画素数です"
@@ -611,7 +618,7 @@
   },
   {
    "zh": "FSR 3.1 / 4 · 自动兼容",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "FSR 3.1 / 4 · 自動相容",
    "en": "FSR 3.1 / 4 · Automatic compatibility",
    "ja": "FSR 3.1 / 4 · 自動互換"
@@ -685,6 +692,13 @@
    "zh-TW": "GPU DIS 已移除，請重選",
    "en": "GPU DIS has been removed; choose again",
    "ja": "GPU DIS は削除されました。選び直してください"
+  },
+  {
+   "zh": "GPU 优先级",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "GPU 優先級",
+   "en": "GPU priority",
+   "ja": "GPU 優先度"
   },
   {
    "zh": "GPU 光流",
@@ -1028,6 +1042,13 @@
    "zh-TW": "NR 第4層",
    "en": "NR layer 4",
    "ja": "NR 第 4 層"
+  },
+  {
+   "zh": "NR 自动 %1% · %2×%3",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "NR 自動 %1% · %2×%3",
+   "en": "Auto NR %1% · %2×%3",
+   "ja": "NR 自動 %1% · %2×%3"
   },
   {
    "zh": "NR 运动来源",
@@ -1896,6 +1917,13 @@
    "zh-TW": "不重投影、不用光流，所以運動區域不會拖影。放在最後一層 NR 之後、超解析與補幀之前。",
    "en": "No reprojection and no optical flow, so moving areas do not smear. Runs after the last NR layer, before super resolution and frame generation.",
    "ja": "再投影もオプティカルフローも使わないため、動く部分に残像が出ません。最後の NR 層の後、超解像とフレーム生成の前に実行します。"
+  },
+  {
+   "zh": "与 OBS、监控软件（小飞机 / RTSS）同时使用时的设置；修改后需要重启。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "與 OBS、監控軟體（小飛機 / RTSS）同時使用時的設定；修改後需要重新啟動。",
+   "en": "Settings for running alongside OBS and monitoring tools (Afterburner / RTSS); changes need a restart.",
+   "ja": "OBS や監視ソフト（Afterburner / RTSS）と同時に使うときの設定です。変更後は再起動が必要です。"
   },
   {
    "zh": "与主机的加密连接失败，主机的证书可能已改变，请重新配对。",
@@ -3187,6 +3215,13 @@
    "ja": "フォント添付の作成"
   },
   {
+   "zh": "创建显卡会话后生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "建立顯示卡工作階段後生效",
+   "en": "Applies when a GPU session is created",
+   "ja": "GPU セッションの作成後に適用"
+  },
+  {
    "zh": "创建轨道读取器",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "建立軌道讀取器",
@@ -3803,6 +3838,13 @@
    "ja": "いいえ"
   },
   {
+   "zh": "启动与窗口",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "啟動與視窗",
+   "en": "Startup & window",
+   "ja": "起動とウィンドウ"
+  },
+  {
    "zh": "启动后自动继续上次内容",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "啟動後自動繼續上次內容",
@@ -3815,6 +3857,13 @@
    "zh-TW": "啟動時偵測到小飛機（RTSS）就改用軟體繪製介面，OSD 只顯示在影片上",
    "en": "When RivaTuner (RTSS) is running at start, the interface is drawn in software and the OSD shows on the video only",
    "ja": "起動時に RivaTuner（RTSS）を検出するとインターフェースをソフトウェア描画にし、OSD は映像にだけ表示します"
+  },
+  {
+   "zh": "启动时预热增强组件",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "啟動時預熱增強元件",
+   "en": "Prewarm enhancement components at startup",
+   "ja": "起動時に画質向上コンポーネントを準備"
   },
   {
    "zh": "启动窗口大小",
@@ -4265,6 +4314,13 @@
    "ja": "音声の同期"
   },
   {
+   "zh": "声音同步、音量与输出设备。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "聲音同步、音量與輸出裝置。",
+   "en": "Audio sync, volume and output device.",
+   "ja": "音声同期、音量、出力デバイス。"
+  },
+  {
    "zh": "处理 CPU P95: %1 ms",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "處理 CPU P95: %1 ms",
@@ -4426,11 +4482,25 @@
    "ja": "外部字幕"
   },
   {
+   "zh": "外观",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "外觀",
+   "en": "Appearance",
+   "ja": "外観"
+  },
+  {
    "zh": "多声道片源混成双声道再输出（耳机）；关闭时按设备声道布局映射",
    "src": "qml/DialogHost.qml",
    "zh-TW": "多聲道片源混成雙聲道再輸出（耳機）；關閉時按裝置聲道布局映射",
    "en": "Mix multichannel sources down to stereo (headphones); when off, channels follow the device layout",
    "ja": "マルチチャンネルのソースをステレオにまとめて出力（ヘッドホン向け）。オフ時はデバイスのチャンネル配置に従います"
+  },
+  {
+   "zh": "多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，导出仍按原生尺寸处理。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "多層 NR 可嘗試前層 720p、末層 1080p；三層可嘗試 480p / 720p / 1080p。降低前層解析度會改變畫面，匯出仍按原生尺寸處理。",
+   "en": "For multiple NR layers, try 720p first and 1080p last; for three layers, try 480p / 720p / 1080p. Lowering the earlier layers changes the image. Exports still use native dimensions.",
+   "ja": "複数の NR レイヤーでは前段を 720p、最終段を 1080p に、3 段では 480p / 720p / 1080p にする方法もあります。前段の解像度を下げると映像が変わります。書き出しは引き続きネイティブサイズで処理します。"
   },
   {
    "zh": "大",
@@ -4711,6 +4781,13 @@
    "zh-TW": "完整參數副本，旁置未連接",
    "en": "Full copy of the settings, placed aside, not connected",
    "ja": "設定の完全なコピー。脇に置いて未接続"
+  },
+  {
+   "zh": "实时",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "即時",
+   "en": "Realtime",
+   "ja": "リアルタイム"
   },
   {
    "zh": "实时内部处理并回填",
@@ -5126,13 +5203,6 @@
    "ja": "小"
   },
   {
-   "zh": "小飞机在 Veyra 之后启动。为避免画面卡住，它的 OSD 暂不在 Veyra 里显示。重启后界面改用兼容绘制，OSD 只显示在视频上。现在重启吗？当前播放或串流将停止。",
-   "src": "qml/Main.qml",
-   "zh-TW": "小飛機在 Veyra 之後啟動。為避免畫面卡住，它的 OSD 暫不在 Veyra 中顯示。重新啟動後介面改用相容繪製，OSD 只顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
-   "en": "RivaTuner started after Veyra. To keep the picture from freezing, its OSD is not shown in Veyra for now. After a restart the interface uses compatible drawing and the OSD shows on the video only. Restart now? Current playback or streaming will stop.",
-   "ja": "RivaTuner が Veyra の後に起動しました。映像が止まらないよう、今は Veyra に OSD を表示しません。再起動するとインターフェースが互換描画になり、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
-  },
-  {
    "zh": "尚无导出任务",
    "src": "src/engine/ExportJobManager.cpp",
    "zh-TW": "尚無匯出任務",
@@ -5330,7 +5400,7 @@
   },
   {
    "zh": "已关闭当前硬件或包不支持的效果，参数仍保留：",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已關閉目前硬體或套件不支援的效果，參數仍保留：",
    "en": "Unavailable effects have been disabled; their parameters are preserved: ",
    "ja": "非対応の効果を無効にしました。設定値は保持されています："
@@ -5567,11 +5637,11 @@
    "ja": "同じ名前のプリセットがあります。別の名前にすると保存できます"
   },
   {
-   "zh": "已检测到小飞机（RTSS）：界面软件绘制，OSD 只显示在视频上；部分阴影与模糊简化",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "已偵測到小飛機（RTSS）：介面軟體繪製，OSD 只顯示在影片上；部分陰影與模糊簡化",
-   "en": "RivaTuner (RTSS) detected: the interface is drawn in software and the OSD shows on the video only; some shadows and blur are simplified",
-   "ja": "RivaTuner（RTSS）を検出：インターフェースはソフトウェア描画、OSD は映像にだけ表示。一部の影とぼかしは簡略化されます"
+   "zh": "已生效：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已生效：%1",
+   "en": "Active: %1",
+   "ja": "適用済み：%1"
   },
   {
    "zh": "已登录",
@@ -5768,6 +5838,13 @@
    "zh-TW": "並入輸入",
    "en": "Merge into input",
    "ja": "入力に統合"
+  },
+  {
+   "zh": "应用",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "套用",
+   "en": "Apply",
+   "ja": "適用"
   },
   {
    "zh": "应用设置并重连",
@@ -5980,6 +6057,13 @@
    "ja": "この GPU は NVIDIA の補正機能に非対応です。NR、超解像、DLSS をオフにしました。XeSS の選択は保持します"
   },
   {
+   "zh": "当前 GPU 不支持 NVIDIA 增强；超分及 DLSS 已关闭，NR 使用 AMD 运行库，XeSS选择保留",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "目前 GPU 不支援 NVIDIA 增強；超解析及 DLSS 已關閉，NR 使用 AMD 執行庫，XeSS 選擇保留",
+   "en": "This GPU does not support NVIDIA enhancements; upscaling and DLSS are off, NR uses the AMD runtime, and the XeSS choice is kept",
+   "ja": "この GPU は NVIDIA 拡張に対応していません。超解像と DLSS はオフ、NR は AMD ランタイムを使用し、XeSS の選択は維持します"
+  },
+  {
    "zh": "当前 GPU 不支持所选 NVIDIA 增强",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "當前 GPU 不支援所選 NVIDIA 增強",
@@ -6023,7 +6107,7 @@
   },
   {
    "zh": "当前包缺少此功能的运行组件",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "目前套件缺少此功能的執行元件",
    "en": "This package lacks the runtime components for this feature",
    "ja": "このパッケージに必要なランタイムがありません"
@@ -6043,11 +6127,25 @@
    "ja": "現在の実行エンジンはこのノード順序にまだ対応していません。構成は変更していません"
   },
   {
+   "zh": "当前播放状态无法修改倍速",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "目前播放狀態無法修改倍速",
+   "en": "Playback speed cannot be changed in the current state",
+   "ja": "現在の再生状態では速度を変更できません"
+  },
+  {
    "zh": "当前播放设置",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "當前播放設定",
    "en": "Current playback settings",
    "ja": "現在の再生設定"
+  },
+  {
+   "zh": "当前显卡不支持预热",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "目前顯示卡不支援預熱",
+   "en": "Prewarming is not available on this GPU",
+   "ja": "この GPU ではプリウォームを使用できません"
   },
   {
    "zh": "当前显卡不能使用 DLSS NR，本次导出自动关闭 NR",
@@ -6086,10 +6184,24 @@
   },
   {
    "zh": "当前硬件或包不支持所选效果，请查看组件页",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "目前硬體或套件不支援所選效果，請查看元件頁",
    "en": "The hardware or package does not support this effect; check Components",
    "ja": "選択した効果は現在の GPU またはパッケージに対応していません。コンポーネントを確認してください"
+  },
+  {
+   "zh": "当前配置未启用自动 NR，保留固定 1080p 档",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前設定未啟用自動 NR，保留固定 1080p 檔",
+   "en": "Auto NR is inactive for this configuration; keeping the fixed 1080p policy",
+   "ja": "現在の設定では自動 NR は無効です。固定 1080p 設定を維持します"
+  },
+  {
+   "zh": "当前配置未启用自动NR，保留1080p NR",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "目前設定未啟用自動 NR，保留 1080p NR",
+   "en": "Auto NR is inactive for this configuration; keeping 1080p NR",
+   "ja": "現在の設定では自動 NR は無効です。1080p NR を維持します"
   },
   {
    "zh": "当前非 NVIDIA 适配器：NR、NVIDIA 超分与 DLSS 已禁用；可使用 XeSS 预览和 AMD 光流",
@@ -6709,6 +6821,13 @@
    "ja": "再生 / 一時停止（ファイル再生時）"
   },
   {
+   "zh": "播放倍速",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "播放倍速",
+   "en": "Playback speed",
+   "ja": "再生速度"
+  },
+  {
    "zh": "播放条已显示",
    "src": "qml/Main.qml",
    "zh-TW": "播放條已顯示",
@@ -6856,11 +6975,11 @@
    "ja": "ファイルがもう存在しません"
   },
   {
-   "zh": "文件播放与字幕的默认行为。",
+   "zh": "文件播放、字幕与截图的默认行为。",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "檔案播放與字幕的預設行為。",
-   "en": "Default behavior for file playback and subtitles.",
-   "ja": "ファイル再生と字幕の既定の動作。"
+   "zh-TW": "檔案播放、字幕與截圖的預設行為。",
+   "en": "Defaults for file playback, subtitles and screenshots.",
+   "ja": "ファイル再生、字幕、スクリーンショットの既定動作。"
   },
   {
    "zh": "断开",
@@ -7234,6 +7353,13 @@
    "ja": "{} フレーム目で GPU がリセットされました。最初の {:.1f} 秒は保存済みで、残りを書き出します"
   },
   {
+   "zh": "显卡调度、预热与资源监控。默认设置适合大多数机器。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "顯示卡排程、預熱與資源監控。預設值適合大多數電腦。",
+   "en": "GPU scheduling, prewarming and resource monitoring. The defaults suit most PCs.",
+   "ja": "GPU スケジューリング、プリウォーム、リソース監視。既定値でほとんどの PC に適しています。"
+  },
+  {
    "zh": "显卡重置前后两段的编码参数不一致，无法无损拼接",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "顯示卡重置前後兩段的編碼參數不一致，無法無損拼接",
@@ -7407,6 +7533,13 @@
    "zh-TW": "晚點: 當前 %1 ms / P95 %2 ms",
    "en": "Late: now %1 ms / P95 %2 ms",
    "ja": "遅延：現在 %1 ms / P95 %2 ms"
+  },
+  {
+   "zh": "普通",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "一般",
+   "en": "Normal",
+   "ja": "通常"
   },
   {
    "zh": "暂不支持此字幕格式",
@@ -7913,18 +8046,25 @@
    "ja": "OBS ゲームキャプチャと RivaTuner（RTSS）が両方とも Veyra に挿入されています。既定のフック方式が競合し、OBS ゲームキャプチャで映像が取れないことがあります（D3D12 のプログラムすべてで同じです）。RTSS に veyra_qml_ui.exe を追加して設定で「Use Microsoft Detours API hooking」をオンにするか、OBS でウィンドウキャプチャ（Windows 10 1903+）を使ってください"
   },
   {
+   "zh": "检测到 RTSS 屏显服务",
+   "src": "qml/Main.qml",
+   "zh-TW": "偵測到 RTSS 螢幕顯示服務",
+   "en": "RTSS on-screen display service detected",
+   "ja": "RTSS オンスクリーン表示サービスを検出"
+  },
+  {
+   "zh": "检测到 RTSS 屏显服务正在运行。开启兼容绘制需重启 Veyra，重启后 OSD 仅显示在视频上。现在重启吗？当前播放或串流将停止。",
+   "src": "qml/Main.qml",
+   "zh-TW": "偵測到 RTSS 螢幕顯示服務正在執行。啟用相容繪製需重新啟動 Veyra，重新啟動後 OSD 僅顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
+   "en": "The RTSS on-screen display service is running. Restart Veyra to enable compatible rendering and show the OSD on the video only. Restart now? Current playback or streaming will stop.",
+   "ja": "RTSS オンスクリーン表示サービスが動作しています。互換描画を有効にするには Veyra を再起動してください。再起動後、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
+  },
+  {
    "zh": "检测到 RivaTuner（小飞机 OSD）注入了 Veyra。请把 设置 → 监控软件兼容 设为“自动”并在小飞机运行时重启 Veyra：界面改用兼容绘制，OSD 只显示在视频上",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "偵測到 RivaTuner（小飛機 OSD）注入了 Veyra。請把 設定 → 監控軟體相容 設為「自動」，並在小飛機執行時重新啟動 Veyra：介面改用相容繪製，OSD 只顯示在影片上",
    "en": "RivaTuner (RTSS OSD) is injected into Veyra. Set Settings → Monitoring overlay compatibility to Auto and restart Veyra while RTSS is running: the interface uses compatible drawing and the OSD shows on the video only",
    "ja": "RivaTuner（RTSS OSD）が Veyra に挿入されています。設定 → モニタリングソフト互換 を「自動」にし、RTSS の実行中に Veyra を再起動してください。インターフェースが互換描画になり、OSD は映像にだけ表示されます"
-  },
-  {
-   "zh": "检测到小飞机（RTSS）",
-   "src": "qml/Main.qml",
-   "zh-TW": "偵測到小飛機（RTSS）",
-   "en": "RivaTuner (RTSS) detected",
-   "ja": "RivaTuner（RTSS）を検出"
   },
   {
    "zh": "检测异常增长时自动退出全屏；默认关闭",
@@ -8683,13 +8823,6 @@
    "ja": "ゲームとプログラム · "
   },
   {
-   "zh": "源 ",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "源 ",
-   "en": "Source ",
-   "ja": "ソース "
-  },
-  {
    "zh": "源 %1 fps",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "源 %1 fps",
@@ -9089,6 +9222,13 @@
    "ja": "白い光彩"
   },
   {
+   "zh": "监控兼容绘制已启用：OSD 只显示在视频上；部分阴影与模糊简化",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "監控相容繪製已啟用：OSD 只顯示在影片上；部分陰影與模糊簡化",
+   "en": "Monitoring compatibility rendering is enabled: the OSD shows on the video only; some shadows and blur are simplified",
+   "ja": "監視ソフト互換描画が有効です。OSD は映像にだけ表示されます。一部の影やぼかしは簡略化されます"
+  },
+  {
    "zh": "监控软件兼容",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "監控軟體相容",
@@ -9227,6 +9367,13 @@
    "zh-TW": "離線",
    "en": "Offline",
    "ja": "オフライン"
+  },
+  {
+   "zh": "程序启动时的页面、窗口和恢复行为。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "程式啟動時的頁面、視窗與恢復行為。",
+   "en": "Page, window and resume behaviour at startup.",
+   "ja": "起動時のページ、ウィンドウ、再開の動作。"
   },
   {
    "zh": "稍后",
@@ -9437,6 +9584,20 @@
    "zh-TW": "系統不支援 Windows Graphics Capture",
    "en": "The system does not support Windows Graphics Capture",
    "ja": "このシステムは Windows Graphics Capture に対応していません"
+  },
+  {
+   "zh": "系统不支持调整 GPU 优先级",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "系統不支援調整 GPU 優先級",
+   "en": "GPU priority adjustment is unavailable",
+   "ja": "GPU 優先度の変更は利用できません"
+  },
+  {
+   "zh": "系统未接受设置，当前：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "系統未接受設定，目前：%1",
+   "en": "Setting was not accepted; current: %1",
+   "ja": "設定が受理されませんでした。現在：%1"
   },
   {
    "zh": "系统硬件编码 H.264（{}）",
@@ -9691,11 +9852,53 @@
    "ja": "自動 = Windows の表示スケールに合わせる"
   },
   {
+   "zh": "自动 NR 仅支持一至两层列表的第一层",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "自動 NR 僅支援一至兩層列表的第一層",
+   "en": "Auto NR supports the first layer of a one- or two-layer list",
+   "ja": "自動 NR は 1～2 層のリストの最初の層に対応します"
+  },
+  {
+   "zh": "自动 NR 实例池不可用，保留固定 1080p 档",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "自動 NR 執行個體池無法使用，保留固定 1080p 檔",
+   "en": "Auto NR instance pool unavailable; keeping the fixed 1080p policy",
+   "ja": "自動 NR のインスタンスプールを使用できません。固定 1080p 設定を維持します"
+  },
+  {
+   "zh": "自动 NR 当前仅验证 RTX 5070",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "自動 NR 目前僅驗證 RTX 5070",
+   "en": "Auto NR is currently verified only on RTX 5070",
+   "ja": "自動 NR は現在 RTX 5070 のみで検証済みです"
+  },
+  {
    "zh": "自动 · 恒定质量",
    "src": "include/veyra/engine/EnhancementSettings.h",
    "zh-TW": "自動 · 恒定品質",
    "en": "Auto · constant quality",
    "ja": "自動 · 固定品質"
+  },
+  {
+   "zh": "自动NR切档失败",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "自動 NR 切換檔位失敗",
+   "en": "Auto NR level switch failed",
+   "ja": "自動 NR のレベル切り替えに失敗しました"
+  },
+  {
+   "zh": "自动NR切档排空失败",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "自動 NR 切換前排空失敗",
+   "en": "Failed to drain pending work for an Auto NR switch",
+   "ja": "自動 NR 切り替え前の処理完了待機に失敗しました"
+  },
+  {
+   "zh": "自动NR实例池不可用，保留1080p NR",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "自動 NR 執行個體池無法使用，保留 1080p NR",
+   "en": "Auto NR instance pool unavailable; keeping 1080p NR",
+   "ja": "自動 NR のインスタンスプールを使用できません。1080p NR を維持します"
   },
   {
    "zh": "自动估算",
@@ -9740,6 +9943,13 @@
    "ja": "キーボードとマウスを自動でキャプチャー"
   },
   {
+   "zh": "自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。导出按原生尺寸处理。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "自動檔在預覽中依增強耗時調整 100%–40%；預建執行個體約增加 1.7GB 顯示記憶體及半秒啟動時間。匯出依原生尺寸處理。",
+   "en": "Auto adjusts preview processing from 100% to 40% using enhancement time. Prebuilt instances add about 1.7GB of VRAM and half a second of startup time. Export uses native dimensions.",
+   "ja": "自動設定は強化処理時間に応じてプレビューを 100%～40% に調整します。事前生成したインスタンスは約 1.7GB の VRAM と約 0.5 秒の起動時間を追加します。書き出しは元の解像度で処理します。"
+  },
+  {
    "zh": "自动识别内容节奏",
    "src": "qml/NodePage.qml",
    "zh-TW": "自動識別內容節奏",
@@ -9775,6 +9985,13 @@
    "ja": "自動（解像度に応じて）"
   },
   {
+   "zh": "自动（按负载）",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "自動（依負載）",
+   "en": "Auto (by load)",
+   "ja": "自動（負荷に応じて）"
+  },
+  {
    "zh": "自动（独立显卡）",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "自動（獨立顯示卡）",
@@ -9803,6 +10020,13 @@
    "ja": "カスタム"
   },
   {
+   "zh": "自定义…",
+   "src": "qml/PlaybackRateButton.qml",
+   "zh-TW": "自訂…",
+   "en": "Custom…",
+   "ja": "カスタム…"
+  },
+  {
    "zh": "自定义上限",
    "src": "qml/ProPage.qml",
    "zh-TW": "自定義上限",
@@ -9815,6 +10039,13 @@
    "zh-TW": "自定義上限（FPS）",
    "en": "Custom cap (FPS)",
    "ja": "カスタム上限（FPS）"
+  },
+  {
+   "zh": "自定义播放速度",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "自訂播放速度",
+   "en": "Custom playback speed",
+   "ja": "カスタム再生速度"
   },
   {
    "zh": "自然饱和度",
@@ -10109,6 +10340,13 @@
    "zh-TW": "節點預設：",
    "en": "Node preset: ",
    "ja": "ノードのプリセット："
+  },
+  {
+   "zh": "范围 0.25～4.00 倍，保持原有音调",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "範圍 0.25～4.00 倍，保持原有音調",
+   "en": "Range 0.25–4.00×, preserving pitch",
+   "ja": "範囲 0.25～4.00 倍、音程を維持"
   },
   {
    "zh": "草稿未运行",
@@ -10797,6 +11035,13 @@
    "ja": "現在の画像の書き出しが終わるまでお待ちください"
   },
   {
+   "zh": "请输入 0.25～4.00 之间的倍速",
+   "src": "qml/PlaybackRateDialog.qml",
+   "zh-TW": "請輸入 0.25～4.00 之間的倍速",
+   "en": "Enter a speed between 0.25 and 4.00",
+   "ja": "0.25～4.00 の速度を入力してください"
+  },
+  {
    "zh": "请选择",
    "src": "qml/DialogHost.qml",
    "zh-TW": "請選擇",
@@ -11015,7 +11260,7 @@
   },
   {
    "zh": "超分算法",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "qml/NodePage.qml",
    "zh-TW": "超解析演算法",
    "en": "Upscaling algorithm",
    "ja": "アップスケーリング方式"
@@ -11833,13 +12078,6 @@
    "ja": "オプション"
   },
   {
-   "zh": "通用与外观",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "通用與外觀",
-   "en": "General and appearance",
-   "ja": "全般と外観"
-  },
-  {
    "zh": "部分轨道当前封装装不下，未保留（详见队列说明）",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "部分軌道當前封裝裝不下，未保留（詳見佇列說明）",
@@ -12316,6 +12554,13 @@
    "ja": "ゼロモーションは時間方向の再構成を制限します。RTX ビデオ超解像はこの入力を使いません"
   },
   {
+   "zh": "需 1080p SDR 文件、Lecram 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "需 1080p SDR 檔案、Lecram 與 NVIDIA 光流；關閉超解析度、補幀、抗閃爍、調色及 HDR",
+   "en": "Requires 1080p SDR files, Lecram and NVIDIA optical flow; disable upscaling, frame generation, temporal stabilization, color adjustments and HDR",
+   "ja": "1080p SDR ファイル、Lecram、NVIDIA オプティカルフローが必要です。超解像、フレーム生成、ちらつき抑制、色調整、HDR を無効にしてください"
+  },
+  {
    "zh": "需系统解码/转换",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "需系統解碼/轉換",
@@ -12331,42 +12576,42 @@
   },
   {
    "zh": "需要 AMD HIP 7 驱动运行组件",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 AMD HIP 7 驅動執行元件",
    "en": "Requires the AMD HIP 7 driver runtime",
    "ja": "AMD HIP 7 ドライバーランタイムが必要です"
   },
   {
    "zh": "需要 AMD RX 9000",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 AMD RX 9000",
    "en": "Requires AMD RX 9000",
    "ja": "AMD RX 9000 が必要です"
   },
   {
    "zh": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
    "en": "Requires NVIDIA RTX 40 / 50 (Ada / Blackwell)",
    "ja": "NVIDIA RTX 40 / 50（Ada / Blackwell）が必要です"
   },
   {
    "zh": "需要 NVIDIA RTX 50 / Blackwell",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 NVIDIA RTX 50 / Blackwell",
    "en": "Requires NVIDIA RTX 50 / Blackwell",
    "ja": "NVIDIA RTX 50 / Blackwell が必要です"
   },
   {
    "zh": "需要 NVIDIA RTX 显卡",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 NVIDIA RTX 顯示卡",
    "en": "Requires an NVIDIA RTX GPU",
    "ja": "NVIDIA RTX GPU が必要です"
   },
   {
    "zh": "需要 NVIDIA RTX 显卡及 NVOF 驱动",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要 NVIDIA RTX 顯示卡及 NVOF 驅動",
    "en": "Requires an NVIDIA RTX GPU and the NVOF driver",
    "ja": "NVIDIA RTX GPU と NVOF ドライバーが必要です"
@@ -12394,7 +12639,7 @@
   },
   {
    "zh": "需要支持 DirectX 12 的硬件显卡",
-   "src": "src/ui/QmlPlayerBridge.cpp; qml/Veyra",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "需要支援 DirectX 12 的硬體顯示卡",
    "en": "Requires a hardware GPU with DirectX 12 support",
    "ja": "DirectX 12 対応のハードウェア GPU が必要です"
@@ -13317,6 +13562,13 @@
    "ja": "既定はオフ · 変化していない部分だけを安定させ、動く部分に残像は出ません"
   },
   {
+   "zh": "默认关闭。开启后首页空闲时预先准备已启用的单层 NR 或超分，首次打开约快 2 秒；准备好后会一直占用约 0.8–1.8 GB 显存，直到打开视频",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "預設關閉。開啟後首頁閒置時預先準備已啟用的單層 NR 或超解析，首次開啟約快 2 秒；準備好後會一直佔用約 0.8–1.8 GB 顯示記憶體，直到開啟影片",
+   "en": "Off by default. When on, the enabled single NR layer or upscaler is prepared while the home page is idle, so the first open is about 2 s faster; once ready it keeps about 0.8–1.8 GB of video memory until a video opens",
+   "ja": "既定ではオフ。オンにするとホーム画面の待機中に有効な単層 NR または超解像を準備し、最初のオープンが約 2 秒速くなります。準備後は動画を開くまで約 0.8～1.8 GB の VRAM を使用し続けます"
+  },
+  {
    "zh": "默认只在本机出声",
    "src": "qml/DialogHost.qml",
    "zh-TW": "預設只在本機出聲",
@@ -13478,6 +13730,13 @@
    "ja": "；一時ファイルを保持しました："
   },
   {
+   "zh": "；切到后台卡顿时可试“高”，“实时”可能拖慢其他程序",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "；切到背景卡頓時可試「高」，「即時」可能拖慢其他程式",
+   "en": "; if playback stutters in the background try \"High\"; \"Realtime\" can slow other apps",
+   "ja": "；バックグラウンドでカクつく場合は「高」を試してください。「リアルタイム」は他のアプリを遅くすることがあります"
+  },
+  {
    "zh": "；各段文件已保留：",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "；各段檔案已保留：",
@@ -13490,13 +13749,6 @@
    "zh-TW": "；已匯出的部分保留在：",
    "en": "; the exported parts are kept at: ",
    "ja": "。書き出し済みの部分は次の場所にあります："
-  },
-  {
-   "zh": "；当前显卡不能使用 DLSS NR，本次导出自动关闭 NR",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "；當前顯示卡不能使用 DLSS NR，本次匯出自動關閉 NR",
-   "en": "; this GPU cannot use DLSS NR, NR is turned off for this export",
-   "ja": "；この GPU では DLSS NR を使えないため、今回の書き出しでは NR をオフにします"
   },
   {
    "zh": "；当前显卡不能使用所选超分，本次导出关闭超分",

@@ -449,6 +449,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     int uiScale = 0;
     bool obsGameCapture = false;
     bool overlayCompatAuto = true;   // 设置 → 监控软件兼容: "auto" (default) or "off"
+    bool overlayCompatRestart = false;
     {
         int count = 0;
         LPWSTR* args = CommandLineToArgvW(GetCommandLineW(), &count);
@@ -457,6 +458,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         for (int i = 1; args && i < count; ++i) {
             if (std::wstring(args[i]) == L"--data-dir" && i + 1 < count) dir = args[++i];
             else if (std::wstring(args[i]) == L"--obs-game-capture") obsGameCaptureArg = true;
+            else if (std::wstring(args[i]) == L"--overlay-compat-restart") overlayCompatRestart = true;
         }
         if (args) LocalFree(args);
         QFile prefs(QString::fromStdWString((dir / L"qml-preferences.v1.json").wstring()));
@@ -490,16 +492,22 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     wchar_t forcedRenderer[16]{};
     GetEnvironmentVariableW(L"VEYRA_UI_RHI", forcedRenderer, 16);
     // VEYRA_TEST_IGNORE_RTSS=1 starts as if RivaTuner were not running (its late-start path).
+    // An orphan hooks loader can inject the DLL after RTSS itself has exited.
+    // Module presence does not prove an active OSD server. A user-accepted
+    // compatibility restart carries its intent for this launch only, so timing
+    // changes in server detection cannot turn that restart into another prompt.
     const bool rivaTuner = !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_RTSS", nullptr, 0)
-                           && (veyra::gfx::rivaTunerRunning() || GetModuleHandleW(L"RTSSHooks64.dll"));
-    const bool overlayCompat = !obsGameCapture && overlayCompatAuto && rivaTuner && !forcedRenderer[0];
+                           && veyra::gfx::rivaTunerRunning();
+    const bool overlayCompat = !obsGameCapture && overlayCompatAuto
+                               && (rivaTuner || overlayCompatRestart) && !forcedRenderer[0];
     const bool softwareUi = obsGameCapture || overlayCompat;
     if (obsGameCapture) {
         QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
         veyra::log::info("app", "OBS game capture compatibility: software UI; native D3D12 video unchanged");
     } else if (overlayCompat) {
         QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
-        veyra::log::info("app", "RivaTuner Statistics Server is running: software UI so its OSD draws on the video only; native D3D12 video unchanged");
+        veyra::log::info("app", std::format("RTSS compatibility: software UI; activeServer={} acceptedRestart={}; native D3D12 video unchanged",
+                                          rivaTuner, overlayCompatRestart));
     }
     {
         // A GPU interface keeps RTSS from drawing in this process at all, so a RivaTuner
@@ -657,6 +665,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
     QVariantMap testOptions;
+    if(qEnvironmentVariableIsSet("VEYRA_TEST_DISABLE_PAUSED_UI_IDLE"))
+        testOptions.insert(QStringLiteral("disablePausedUiIdle"),true);
     QSize testSize;
     // --exit-after: see the switch table. 0 means "run until closed".
     int exitAfterMs = 0;
@@ -806,6 +816,21 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         });
     }
 
+    // Focus changes are diagnostic only: they never pause playback, change the
+    // selected effects, or reduce submission cadence. Keep the actual throughput
+    // and Windows process throttle state alongside field reports of background lag.
+    QObject::connect(window, &QWindow::activeChanged, &app, [window, &controller] {
+        const auto s=controller.snapshot();
+        PROCESS_POWER_THROTTLING_STATE throttle{};
+        throttle.Version=PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+        const bool known=GetProcessInformation(GetCurrentProcess(),ProcessPowerThrottling,&throttle,sizeof(throttle));
+        const DWORD error=known?0:GetLastError();
+        veyra::log::info("app-focus",std::format(
+            "active={} running={} transport={} sourceFps={:.2f} submitFps={:.2f} nr={} sr={} fg={} powerKnown={} control=0x{:X} state=0x{:X} err={}",
+            window->isActive(),s.running,int(s.transport),s.nominalSourceFps,s.submissionFps.value_or(-1),
+            s.nrActive,s.srActive,s.fgActive,known,throttle.ControlMask,throttle.StateMask,error));
+    });
+
     // Reparent the native window under the QML window and keep it in step. The
     // host item is looked up by objectName so the QML side owns the layout and
     // this side only follows it.
@@ -950,6 +975,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                 ++i;
             }
         }
+        if (app.property("veyraOverlayCompatRestart").toBool())
+            restartArgs << QStringLiteral("--overlay-compat-restart");
         restartArgs << QStringLiteral("--page") << QStringLiteral("set");
     }
     if (g_video) { DestroyWindow(g_video); g_video = nullptr; }

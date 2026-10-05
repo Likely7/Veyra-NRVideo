@@ -1,5 +1,9 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-05 性能优化续推约束**：用户明确“继续做吧，我睡了，不要做什么压力测试了”。继续当前NR优化分支与逐节点存档；后续只做正常负载的匹配A/B/B-off和必要功能/画质回归，不启动额外GPU竞争程序、不人为满载或制造显存压力，不改用户其他应用/驱动/配置。该约束覆盖原方案3a/3b等的压力测试要求；动态档以真实播放负载与可控正常素材验证，未测压力边界如实记录。原压力数据仅保留作历史证据，不再执行其驱动。没有新增merge/push/Release/关机授权。
+
+> **2026-10-04 NR性能优化目标授权**：用户要求按 `docs/PERF_PLAN_NR_2026-10-03.md` 完成优化，先更新进度文档、创建新分支/存档、记录当前版本基线，每节点存档，负优化回退并记录，有效优化保留实测。工作树 `E:/项目/Veyra/worktrees/perf-nr-20261004`，分支 `codex/perf-nr-20261004`，起点 `8cdc612`（保留本地RTSS重启/字幕/自定义倍速/UI/布局/全屏修复），执行记录 `docs/PERF_EXECUTION_NR_2026-10-04.md`。本方案必需graph/NGX/device/engine/presenter/export调度/性能设置/bridge/QML/diagnostic/shader/CMake及定向测试接点获当前授权，覆盖这些接点的历史冻结；不扩改解码/音频/串流协议或旧Win32。允许逐节点commit/tag和源码bundle存档；不merge/push/Release/关机，不派子Agent，不改桌面旧工作树、其他工作区、用户配置或驱动。所有产物E盘；运行库/SDK/模型不进源码Git且不改原件。每轮运行 `py -3.11 -B scripts/perf/nr-control.py guard`，不可变启动记录与逐节点证据在E盘archives/logs。未验证/外部条件缺口与负优化如实记，不把原方案估算当收益。
+
 > **2026-10-04 2.0.3 发布授权**：用户明确要求将当前 Xbox/导出码率/RTSS 背景/NVIDIA 插件误判/极简像素缺口修复、AMD NR 与全档 VFG 整合到 `main` 并发布 GitHub `Likely7/Veyra-NRVideo` 2.0.3；另将便携包拆成 NVIDIA / AMD 两份，软件内不支持的功能保留显示并置灰。按 `docs/RELEASE_2.0.3_PLAN_2026-10-04.md` 在现有 E 盘隔离工作树的 `codex/release-2.0.3-20261004` 执行，允许必要能力判断/QML/打包/版本/验收接点和本轮 commit、tag、merge、push、Release 及已审计运行组件上传。本条覆盖此前本轮仅本地候选的限制；HDR/Dolby Vision PR #13/#14 用户明确暂缓，不适配、不并入。本次没有新的关机要求；不派 Agent、不改桌面旧工作树或用户配置。仍禁止 SDK/运行库/模型进源码 Git。
 
 ## 显卡分包规则（2026-10-04 起）

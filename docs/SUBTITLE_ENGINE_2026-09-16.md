@@ -14,9 +14,12 @@
   粗斜体、描边、阴影、对齐、边距）、`[Events]`（时间、样式索引、`\N`/`\n` 换行、
   `{\...}` 覆盖块剥离、`\an` 与 `\pos` 提取）。注释行（`Comment:`）跳过。
 - **内嵌字幕轨**（Matroska/MP4…）：`loadEmbeddedSubtitleTracks()` 用 FFmpeg 逐轨解码
-  （subrip/ass/ssa/mov_text/webvtt）。实测 FFmpeg 在 Matroska 里给的是
-  `Layer,0,Style,Name,ML,MR,MV,Effect,Text` 形态（时间在 block 上），也兼容标准 ASS rect
-  形态——两种前缀都会被正确剥离，且不会吃掉字幕正文里的逗号。
+  （subrip/ass/ssa/mov_text/webvtt）。2026-10-04 修正旧记录：FFmpeg 的 `AVSubtitleRect.ass`
+  是 `ReadOrder,Layer,Style,Name,ML,MR,MV,Effect,Text`，固定八个头部分隔符；旧实现把
+  正文逗号继续当头部分隔符，Issue #18 的逗号截断/多行丢失确实存在。现在只剥离
+  ASS rectangle 的八字段头部，plain text 不剥头，正文逗号及换行保留。五条真实
+  外置/内嵌 SRT/ASS/VTT 轨道的 30 个作者 cue 逐字及时间比对通过，三行 overlay
+  栅格/实际播放器字幕通过；证据见 PLAYBACK_SMOOTHNESS_PLAN_2026-10-04.md。
   图形字幕（PGS/DVB）本构建**没有解码器**：轨道照样列出并标注"不支持"，不静默消失。
 - **索引查找**：`rebuildIndex()` 建立按开始时间排序的数组，`cuesAt()` 二分 + 回扫，
   取代原来的"每帧线性扫描全部 cue"（长字幕文件不再白烧 CPU）；同一时刻多条 cue

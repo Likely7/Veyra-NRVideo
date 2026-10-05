@@ -9,6 +9,7 @@
 #include "veyra/RuntimePaths.h"
 #include "veyra/engine/GraphDescription.h"
 #include <filesystem>
+#include <algorithm>
 #include <format>
 #include <thread>
 #include <chrono>
@@ -17,6 +18,7 @@
 #include <cstring>
 #include <vector>
 #include <wrl/client.h>
+#include <d3d12sdklayers.h>
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -42,6 +44,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         options.settings.frameGenerationBackend=FrameGenerationBackend::Dlss;
     }
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;source::MediaFileSource source;pipeline::EnhanceGraph graph(ctx,ring);
+    struct CompletionEvent {HANDLE value=nullptr;~CompletionEvent(){if(value)CloseHandle(value);}} completionEvent;
     std::unique_ptr<sink::VideoEncoder> encoder;
     AVFormatContext* mux=nullptr;AVStream* videoStream=nullptr;ExportStreams streams;
     bool ok=false,headerWritten=false;int64_t written=0;double audioEndSeconds=0,videoOriginSeconds=0;
@@ -58,6 +61,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
     if(partial.empty()){progress(0,failureReason);return false;}
     try { do {
         Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.commandSlotCount=6;
+        dd.enableDebugLayer=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_DEBUG",nullptr,0)>0;
         if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),6,st))break;
         // Export runs on every adapter now: NVIDIA uses NVENC (D3D12,
         // zero-copy) and everything else uses the driver's Media Foundation
@@ -101,14 +105,22 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         // upscaling is the only vendor-neutral video SR we ship. Requesting an
         // unavailable feature must degrade the export, never fail it.
         const bool nvidiaFeatures=nvidiaAdapter;
+        // AMD adapters run NR on the lmxxf runtime. Export keeps native size,
+        // and that runtime only admits <=1920x1080 pixels (height <=1080).
+        const bool amdAdapter=ctx.adapter().vendorId==0x1002;
+        const bool amdNrExport=amdAdapter&&info.width<=2560&&info.height<=1080&&uint64_t(info.width)*info.height<=1920ull*1080ull;
         // One description for the whole job: the stage rules (which SR runs,
         // whether NR/FG are available) come from the same place the preview uses.
         StageRequest stages;stages.nr=options.nr;stages.sr=options.sr;stages.fg=options.fg;stages.fgMultiplier=options.fgMultiplier;
-        stages.width=info.width;stages.height=info.height;stages.exportJob=true;stages.nvidiaAdapter=nvidiaAdapter;
+        stages.width=info.width;stages.height=info.height;stages.exportJob=true;stages.nvidiaAdapter=nvidiaAdapter;stages.amdNr=amdNrExport;
         const auto plan=describeStages(stages,options.snapshot(),gd);
+        if(amdNrExport&&gd.enableNr&&gd.opticalFlowBackend==OpticalFlowBackend::Nvidia)gd.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
         const auto resolution=plan;
         const bool srAvailable=plan.srApplied&&(nvidiaFeatures||options.settings.videoSrQuality==kVideoSrFsr);
-        if(options.nr&&!nvidiaFeatures)fgNote+=fgNote.empty()?L"当前显卡不能使用 DLSS NR，本次导出自动关闭 NR":L"；当前显卡不能使用 DLSS NR，本次导出自动关闭 NR";
+        if(options.nr&&!nvidiaFeatures&&!amdNrExport){
+            const wchar_t* note=amdAdapter?L"AMD NR 导出只支持 1080p 以内的片源，本次导出关闭 NR":L"当前显卡不能使用 DLSS NR，本次导出自动关闭 NR";
+            fgNote+=fgNote.empty()?std::wstring(note):std::wstring(L"；")+note;
+        }
         if(options.sr&&!srAvailable)fgNote+=fgNote.empty()?L"当前显卡不能使用所选超分，本次导出关闭超分":L"；当前显卡不能使用所选超分，本次导出关闭超分";
         if(!nvidiaFeatures&&srAvailable)fgNote+=fgNote.empty()?L"本次导出使用 AMD FSR 超分":L"；本次导出使用 AMD FSR 超分";
         gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
@@ -204,6 +216,9 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         uint64_t sourceCount=0,generatedCount=0,holdCount=0;int64_t outputIndex=0;bool error=false;std::shared_ptr<pipeline::FrameLease> lastReal;
         double previousPts=0;int64_t lastOutputUs=-1;
         uint64_t slowFrames=0;
+        // Directed export measurements exclude feature/encoder creation, but include final drain.
+        const auto pipelineStart=std::chrono::steady_clock::now();
+        double completionWaitMs=0;
         // Acceptance hook: VEYRA_TEST_EXPORT_SLOW_FRAME=<source index>:<ms> holds that frame's
         // completion back, standing in for a GPU that is slow but alive. Unset in normal use.
         int slowFrameIndex=-1,slowFrameMs=0;
@@ -213,6 +228,74 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         int removeDeviceIndex=-1;
         {wchar_t hook[16]{};if(resumeAttempt==0&&GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_REMOVE_DEVICE_AT",hook,16))removeDeviceIndex=_wtoi(hook);}
         bool deviceLost=false;uint32_t removedReason=0;
+        // Measured 5b default: bounded NVENC exports without generated-frame readback.
+        // Keep FG/MFT serial; NVENC retains the conversion input fence and its slots.
+        // Explicit test overrides preserve the serial and independent-component controls.
+        auto testFlag=[](const wchar_t* key,bool fallback){
+            wchar_t value[8]{};const DWORD n=GetEnvironmentVariableW(key,value,8);
+            return n&&n<8?_wtoi(value)!=0:fallback;
+        };
+        const bool serialOverride=testFlag(L"VEYRA_TEST_EXPORT_SERIAL",false);
+        const bool eligibleNvenc=!options.fg&&encoder->backend()==sink::EncoderBackend::Nvenc&&slowFrameIndex<0;
+        const bool asyncNvenc=!serialOverride&&eligibleNvenc&&testFlag(L"VEYRA_TEST_EXPORT_ASYNC",eligibleNvenc);
+        bool fenceEvents=!serialOverride&&testFlag(L"VEYRA_TEST_EXPORT_FENCE_EVENTS",eligibleNvenc);
+        if(fenceEvents){
+            const bool injected=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EVENT_CREATE_FAIL",nullptr,0)>0;
+            if(!injected)completionEvent.value=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+            if(!completionEvent.value){veyra::log::warn("export-pipeline",std::format("completion event create failed error={} injected={}; keeping polling",injected?ERROR_INVALID_HANDLE:GetLastError(),injected));fenceEvents=false;}
+        }
+        struct PendingFrame {pipeline::EnhanceGraph::FrameOutputs output;uint64_t consumerFence=0,source=0;std::chrono::steady_clock::time_point submitted;};
+        std::deque<PendingFrame> pendingFrames;unsigned maxInFlight=1;
+        // Preserve the 30s alive-device contract, cancellation and slow-frame hook.
+        // With two frames in flight this waits only before a pool slot is reused.
+        auto waitCompleted=[&](pipeline::EnhanceGraph::FrameOutputs& out,std::chrono::steady_clock::time_point submitted,uint64_t sourceIndex,uint64_t consumerFence=0){
+            const auto waitStart=std::chrono::steady_clock::now();
+            auto nextHealthCheck=submitted+std::chrono::milliseconds(250);
+            const bool injectedStall=slowFrameIndex>=0&&sourceIndex==uint64_t(slowFrameIndex);
+            const bool commonFence=(!out.videoFenceValue||out.videoFenceObject.Get()==ctx.fence())&&
+                (!out.genFenceValue||out.genFenceObject.Get()==ctx.fence());
+            const uint64_t waitFence=std::max({out.videoFenceValue,out.genFenceValue,consumerFence});
+            bool eventRegistered=false;
+            while(!cancel&&((injectedStall&&std::chrono::steady_clock::now()-submitted<std::chrono::milliseconds(slowFrameMs))||
+                    !graph.resolveGeneration(out)||!pipeline::fenceComplete(ctx.fence(),consumerFence))){
+                const auto now=std::chrono::steady_clock::now();
+                if(now>=nextHealthCheck){
+                    nextHealthCheck=now+std::chrono::milliseconds(250);
+                    if(!ctx.checkDeviceAlive(removedReason)){
+                        ctx.reportDeviceFailure("export-frame",ring.lastSignaledValue());deviceLost=true;error=true;
+                        failureReason=std::format(L"显卡驱动在第 {} 帧卡死并被系统重置（0x{:X}）。40 系显卡开社区版 NR 时偶发；可关闭 NR、把 NR 内部分辨率调低或换光流后重试",sourceIndex+1,removedReason);break;
+                    }
+                }
+                if(now-submitted>std::chrono::seconds(30)){
+                    ctx.reportDeviceFailure("export-frame-timeout",ring.lastSignaledValue());error=true;
+                    failureReason=std::format(L"GPU 30 秒内未完成第 {} 帧的增强（显卡未报告重置）；可降低 NR / 超分分辨率后重试",sourceIndex+1);
+                    veyra::log::error("export","frame GPU completion timed out after 30s");break;
+                }
+                if(fenceEvents&&commonFence&&!injectedStall&&!eventRegistered){
+                    const bool injected=GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_EVENT_REGISTER_FAIL",nullptr,0)>0;
+                    const HRESULT hr=injected?E_FAIL:ctx.fence()->SetEventOnCompletion(waitFence,completionEvent.value);
+                    if(SUCCEEDED(hr))eventRegistered=true;
+                    else {veyra::log::warn("export-pipeline",std::format("completion event registration failed hr=0x{:X} injected={}; keeping polling",unsigned(hr),injected));fenceEvents=false;}
+                }
+                if(eventRegistered){
+                    const DWORD result=WaitForSingleObject(completionEvent.value,50);
+                    if(result!=WAIT_OBJECT_0&&result!=WAIT_TIMEOUT){veyra::log::warn("export-pipeline",std::format("completion event wait failed result={} error={}; keeping polling",result,GetLastError()));fenceEvents=false;eventRegistered=false;}
+                }else std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            completionWaitMs+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-waitStart).count();
+            if(error||cancel)return false;
+            const double latency=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-submitted).count();
+            if(latency>1000){
+                ++slowFrames;uint64_t budget=0,usage=0;ctx.videoMemoryInfo(budget,usage);
+                if(slowFrames<=20)veyra::log::warn("export",std::format("slow frame source={} gpuWaitMs={:.0f} vramMiB={} budgetMiB={}",sourceIndex,latency,usage>>20,budget>>20));
+            }
+            return true;
+        };
+        auto finishOldest=[&](){
+            auto& old=pendingFrames.front();
+            if(!waitCompleted(old.output,old.submitted,old.source,old.consumerFence))return false;
+            pendingFrames.pop_front();return true;
+        };
         const uint32_t multiplier=options.fg?options.fgMultiplier:1u;
         auto encodeAt=[&](unsigned slot,bool generated,double seconds){
             const int64_t timeUs=std::max(lastOutputUs+1,int64_t(std::llround(seconds*1000000)));
@@ -220,6 +303,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             return encoder->encode(slot,generated,outputIndex++);
         };
         while(!cancel){if(frameBoundary&&!frameBoundary()){error=true;break;}pipeline::FramePacket packet;const AVFrame* frame=nullptr;
+            if(pendingFrames.size()>=2&&!finishOldest())break;
             source::SourceReadStatus rs;
             if(sourceCount==0){packet=firstPacket;frame=firstFrame;rs=source::SourceReadStatus::Frame;}
             else rs=source.read(packet,&frame);
@@ -238,36 +322,8 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
                 if(SUCCEEDED(ctx.device()->QueryInterface(IID_PPV_ARGS(&device5)))){device5->RemoveDevice();veyra::log::warn("export","test hook: D3D12 device removed at this frame");}
             }
             pipeline::EnhanceGraph::FrameOutputs out;if(!graph.process(frame,(pts+videoOriginSeconds)*1000,sourceCount==0||repairPts||pipeline::breaksHistory(packet.flags),out,packet.sequence,&packet.colorInfo,&packet.hardwareSurface,false)){error=true;break;}
-            // One frame's GPU work. A fixed 2 s limit failed whole exports on a frame that
-            // was only slow (8K NR + optical flow + NVENC near the VRAM budget; field log
-            // 2026-10-02, RTX 4070 Ti SUPER, 8K VR). Wait up to 30 s while the device is
-            // alive; a device Windows reset after a hang fails at once, with its reason.
             const auto readyStart=std::chrono::steady_clock::now();
-            auto nextHealthCheck=readyStart+std::chrono::milliseconds(250);
-            const bool injectedStall=slowFrameIndex>=0&&sourceCount==uint64_t(slowFrameIndex);
-            while(!cancel&&((injectedStall&&std::chrono::steady_clock::now()-readyStart<std::chrono::milliseconds(slowFrameMs))||!graph.resolveGeneration(out))){
-                const auto now=std::chrono::steady_clock::now();
-                if(now>=nextHealthCheck){
-                    nextHealthCheck=now+std::chrono::milliseconds(250);
-                    if(!ctx.checkDeviceAlive(removedReason)){
-                        ctx.reportDeviceFailure("export-frame",ring.lastSignaledValue());
-                        deviceLost=true;
-                        error=true;failureReason=std::format(L"显卡驱动在第 {} 帧卡死并被系统重置（0x{:X}）。40 系显卡开社区版 NR 时偶发；可关闭 NR、把 NR 内部分辨率调低或换光流后重试",sourceCount+1,removedReason);
-                        break;
-                    }
-                }
-                if(now-readyStart>std::chrono::seconds(30)){
-                    ctx.reportDeviceFailure("export-frame-timeout",ring.lastSignaledValue());
-                    error=true;failureReason=std::format(L"GPU 30 秒内未完成第 {} 帧的增强（显卡未报告重置）；可降低 NR / 超分分辨率后重试",sourceCount+1);
-                    veyra::log::error("export","frame GPU completion timed out after 30s");break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-            if(error||cancel)break;
-            if(const auto waited=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-readyStart).count();waited>1000){
-                ++slowFrames;uint64_t budget=0,usage=0;ctx.videoMemoryInfo(budget,usage);
-                if(slowFrames<=20)veyra::log::warn("export",std::format("slow frame source={} gpuWaitMs={:.0f} vramMiB={} budgetMiB={}",sourceCount,waited,usage>>20,budget>>20));
-            }
+            if(!asyncNvenc&&!waitCompleted(out,readyStart,sourceCount))break;
             if(sourceCount>0&&options.fg){
                 for(uint32_t j=1;j<options.fgMultiplier;++j){
                     pipeline::BatchFrame* item=nullptr;
@@ -281,10 +337,16 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             auto& real=out.batch.frames[out.batch.count-1];
             if(!encodeAt(real.lease->slot,false,pts)){error=true;break;}
             real.lease->consumerFence=ring.lastSignaledValue();lastReal=real.lease;
+            if(asyncNvenc){
+                const uint64_t consumerFence=real.lease->consumerFence;
+                pendingFrames.push_back({std::move(out),consumerFence,sourceCount,readyStart});
+                maxInFlight=std::max(maxInFlight,unsigned(pendingFrames.size()));
+            }
             previousPts=pts;
             ++sourceCount;if(counts)counts({sourceCount,generatedCount,holdCount,uint64_t(written)});const double clipDuration=requestedEnd>0?requestedEnd-requestedStart:std::max(0.001,info.duration.toDouble()-videoOriginSeconds);progress(clipDuration>0?std::clamp(pts/clipDuration,0.0,.99):0,std::format(L"正在导出：{}张源帧 / {}张编码帧（{}）",sourceCount,outputIndex,encoderName));
             if(maxFrames&&sourceCount>=maxFrames)break;
         }
+        while(!pendingFrames.empty()&&!error&&!cancel)if(!finishOldest())break;
         // Submission or encoding can also be the first call to see the reset.
         if(error&&!cancel&&!deviceLost&&!ctx.checkDeviceAlive(removedReason)){
             ctx.reportDeviceFailure("export-frame",ring.lastSignaledValue());
@@ -311,6 +373,8 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         veyra::log::info("export-counts",std::format("slowFrames={} source={} generated={} hold={} output={} multiplier={} repairedTimestamps={} backend={} vfgQuality={} encoder={} bitrateMbps={} note={} (holds are not generated frames)",slowFrames,sourceCount,generatedCount,holdCount,outputIndex,multiplier,repairedTimestamps,frameGenerationBackendName(options.settings.frameGenerationBackend),options.settings.vfgQuality,std::string(sink::encoderBackendName(encoder->backend())),options.settings.exportBitrateMbps,utf8(fgNote)));
         progress(.99,L"正在收尾：等待编码器输出剩余帧");
         if(!encoder->finish()){if(failureReason.empty())failureReason=L"编码器收尾失败，请查看编码器诊断";break;}
+        veyra::log::info("export-pipeline",std::format("source={} pipelineMs={:.3f} completionWaitMs={:.3f} mode={} fenceEvents={} maxInFlight={}",
+            sourceCount,std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-pipelineStart).count(),completionWaitMs,asyncNvenc?"async":"serial",fenceEvents,maxInFlight));
         const int64_t estimatedEnd=lastOutputUs+std::max<int64_t>(1,int64_t(std::llround(sourceInterval*1000000/multiplier)));
         const int64_t finalEnd=requestedEnd>0?std::min(estimatedEnd,int64_t(std::llround((requestedEnd-videoOriginSeconds)*1000000))):estimatedEnd;
         if(!flushVideo(finalEnd))break;
@@ -321,7 +385,18 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         ok=written>0;if(counts)counts({sourceCount,generatedCount,holdCount,uint64_t(written)});
     }while(false); }catch(const std::exception& e){veyra::log::error("export",std::format("exception: {}",e.what()));failureReason=L"导出异常，请查看诊断";ok=false;}
     encoder.reset();if(mux){if(mux->pb){const int rc=avio_closep(&mux->pb);if(rc<0){failAv(L"刷新并关闭输出文件",rc);ok=false;}}avformat_free_context(mux);}
-    ring.drainQueue();graph.shutdown();source.close();ring.shutdown();ctx.shutdown();
+    ring.drainQueue();graph.shutdown();source.close();ring.shutdown();
+    if(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_DEBUG",nullptr,0)>0&&ctx.device()){
+        Microsoft::WRL::ComPtr<ID3D12InfoQueue> debug;const HRESULT hr=ctx.device()->QueryInterface(IID_PPV_ARGS(&debug));unsigned errors=0;
+        if(FAILED(hr)){ok=false;veyra::log::error("export-debug",std::format("InfoQueue query failed hr=0x{:X}",unsigned(hr)));}
+        else for(UINT64 i=0;i<debug->GetNumStoredMessages();++i){
+            SIZE_T bytes=0;debug->GetMessage(i,nullptr,&bytes);std::vector<unsigned char> storage(bytes);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+            if(FAILED(debug->GetMessage(i,message,&bytes))){ok=false;++errors;continue;}
+            if(message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;veyra::log::error("export-debug",message->pDescription);}
+        }
+        if(errors)ok=false;veyra::log::info("export-debug",std::format("errors={} removedReason=0x{:X}",errors,unsigned(ctx.device()->GetDeviceRemovedReason())));
+    }
+    ctx.shutdown();
     // Earlier processes of this job stopped at a GPU reset: join their parts and this
     // one into the output. The parts are removed only once the joined file is complete.
     std::wstring finished=partial;

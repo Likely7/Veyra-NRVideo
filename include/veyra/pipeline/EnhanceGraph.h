@@ -56,6 +56,7 @@ class FsrFgPresenter;
 
 namespace veyra::ngx {
 class NgxCoreHost;
+class NgxCoreCache;
 class DlssSrBackend;
 class VideoSrBackend;
 class TrueHdrBackend;
@@ -388,11 +389,15 @@ struct EnhanceGraphDesc {
     ID3D12Resource* srMotionProbe = nullptr;
     // Same borrowed diagnostic contract as srMotionProbe, for FG only.
     ID3D12Resource* fgMotionProbe = nullptr;
+    // Optional preview-only, bounded actual-size pool on this same snippet
+    // session. Admission stays at the normal-load configurations measured.
+    std::optional<uint32_t> nrAutoPoolLayer;
 };
 
 class EnhanceGraph {
 public:
-    EnhanceGraph(gfx::D3D12DeviceContext& context, gfx::CommandSlotRing& ring);
+    EnhanceGraph(gfx::D3D12DeviceContext& context, gfx::CommandSlotRing& ring,
+                 ngx::NgxCoreCache* coreCache = nullptr);
     ~EnhanceGraph();
 
     EnhanceGraph(const EnhanceGraph&) = delete;
@@ -406,6 +411,11 @@ public:
     // LUT the ingest shader samples. Without a LUT the strength stays 0.
     bool setColorLut(const float* rgb,unsigned size,unsigned instance=0);
     bool createViews();
+    // Re-activating an inactive graph must seed a new full paused evaluation;
+    // caller still passes reset=true to reset all temporal histories.
+    void invalidatePausedResidualCache() noexcept {
+        pausedNrCacheValid_=pausedNrResidualOnly_=false;pausedNrFrame_=nullptr;pausedNrSettings_.reset();
+    }
 
     struct FrameOutputs {
         FrameBatch batch;
@@ -444,7 +454,7 @@ public:
     // `hardwareSurface` carries the decoded texture for paths whose surface
     // does not travel inside the AVFrame (D3D11VA). It must be provided exactly
     // when frame->format == AV_PIX_FMT_D3D11 and is unused otherwise.
-    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0);
+    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false);
     bool nextFrameSlotAvailable()const {
         const unsigned slot=unsigned(realFrameIndex_%2);
         if(presentationFences_[slot]&&presentationFences_[slot]->GetCompletedValue()<presentationValues_[slot])return false;
@@ -467,6 +477,10 @@ public:
     // Full-batch consumers (export/file accounting) still use resolveGeneration.
     bool resolveFrame(FrameOutputs& out,uint32_t index);
     bool applySettings(const engine::EnhancementSettings&);
+    bool selectAutoNrLevel(unsigned level);
+    bool autoNrPoolReady()const{return nrAutoPoolReady_;}
+    unsigned autoNrLevel()const{return nrAutoLevel_;}
+    Extent autoNrExtent()const{return nrAutoPoolReady_&&desc_.nrAutoPoolLayer?desc_.nrLayersExtent[*desc_.nrAutoPoolLayer]:Extent{};}
 
     // s10 ownership-order teardown: NVOF fence drain must happen BEFORE this
     // call (it needs the ring and out-fence alive). Releases features, NVOF
@@ -476,6 +490,7 @@ public:
 
     struct Metrics {
         uint64_t nrEvaluateCount = 0;
+        uint64_t pausedNrResidualReuses = 0;
         uint64_t srEvaluateCount = 0;
         uint64_t nvofExecuteCount = 0;
         uint64_t amdOfExecuteCount = 0;
@@ -534,6 +549,7 @@ public:
     bool presentMotionValid(uint32_t slot) const { return presentMotionValid_[slot%2]; }
     uint64_t motionPreviousSource(uint32_t slot) const { return motionPreviousSource_[slot%2]; }
     uint64_t lastNvofSignal() const;
+    bool usesComputeQueue() const;
 
     // Present-side access to the produced frame slots (probe sink path).
     ID3D12Resource* videoFrameResource(uint32_t slot) const;
@@ -619,6 +635,7 @@ private:
 
     gfx::D3D12DeviceContext& context_;
     gfx::CommandSlotRing& ring_;
+    ngx::NgxCoreCache* coreCache_ = nullptr; // non-owning; device session outlives graph
     EnhanceGraphDesc desc_{};
     bool initialized_ = false;
 
@@ -652,6 +669,11 @@ private:
     // NR layers. One entry means the single-layer product path; the probe in
     // tools/nr_probe verified several handles coexist on one snippet session.
     std::vector<std::unique_ptr<NrInstance>> nrInstances_;
+    std::array<std::unique_ptr<NrInstance>,5> nrAutoPool_;
+    unsigned nrAutoLevel_=0;
+    bool nrAutoPoolReady_=false,nrAutoResetPending_=false;
+    bool createNrFeature(NrInstance& layer);
+    bool createAutoNrPool();
     bool lmxxfNr_ = false;
     bool submitGraph(uint32_t slot);
     // The layer count the current graph was built with, so a settings change
@@ -754,7 +776,7 @@ private:
     std::unique_ptr<ngx::NvOfSession> nvof_;
     ComPtr<ID3D12Fence> nvofOutFence_;
     HANDLE nvofOutEvent_ = nullptr;
-    std::unique_ptr<ngx::NgxCoreHost> coreHost_;
+    std::shared_ptr<ngx::NgxCoreHost> coreHost_;
     std::unique_ptr<ngx::DlssNrRuntimeAdapter> nrAdapter_;
     std::unique_ptr<ngx::DlssSrBackend> srBackend_;
     std::unique_ptr<guidance::AmdOpticalFlow> amdOf_;
@@ -776,6 +798,15 @@ private:
 
     // Per-run state.
     uint64_t realFrameIndex_ = 0;
+    uint64_t sceneLastSourceId_ = 0; // source id of the last scene-analysed frame
+    // Only a successful explicit paused/still-frame reset may seed this.
+    // Ordinary playback, source changes, failures and non-residual edits
+    // invalidate it. No cross-frame/duplicate-source reuse is performed.
+    bool pausedNrCacheValid_=false,pausedNrResidualOnly_=false;
+    const AVFrame* pausedNrFrame_=nullptr;
+    uint64_t pausedNrSourceId_=0;
+    double pausedNrPts_=0;
+    std::optional<engine::EnhancementSettings> lastAppliedSettings_,pausedNrSettings_;
     uint64_t epoch_ = 0;
     std::weak_ptr<FrameLease> realLeases_[2],generatedLeases_[kGeneratedPoolSlots];
     uint32_t nextListSlot_ = 0;

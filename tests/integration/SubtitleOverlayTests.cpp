@@ -48,6 +48,10 @@ int main(){
     updateSubtitleOverlay(overlay,{stable},view);const auto one=inkBands();
     stable.text=L"HHHH\nHHHH";updateSubtitleOverlay(overlay,{stable},view);const auto two=inkBands();
     check(one.size()==1&&two.size()==2&&std::abs(one[0]-two[0])<=1&&std::abs(one[0]-two[1])<=1,"two-line cue preserves one-line glyph size even with target one");
+    stable.text=L"HHHH, HHHH\nHHHH, HHHH\nHHHH, HHHH";
+    updateSubtitleOverlay(overlay,{stable},view);
+    check(inkBands().size()==3,"three authored lines with commas survive the real glyph renderer");
+    stable.text=L"HHHH\nHHHH";
     view.fitToLines=true;updateSubtitleOverlay(overlay,{stable},view);const auto fitted=inkBands();
     check(fitted.size()==2&&fitted[0]<two[0],"explicit fit-to-lines still shrinks text");
     view.fitToLines=false;

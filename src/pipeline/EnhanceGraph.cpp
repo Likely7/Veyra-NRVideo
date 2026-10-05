@@ -39,6 +39,7 @@
 #include "veyra/ngx/VideoSrBackend.h"
 #include "veyra/ngx/TrueHdrBackend.h"
 #include "veyra/ngx/NgxCoreHost.h"
+#include "veyra/ngx/NgxCoreCache.h"
 #include "veyra/ngx/NgxParameters.h"
 #include "veyra/ngx/NvOfSession.h"
 #include "veyra/guidance/AmdOpticalFlow.h"
@@ -98,9 +99,11 @@ uint8_t packedIngressLuma(const uint8_t* data,ptrdiff_t linesize,uint32_t code,u
 
 } // namespace
 
-EnhanceGraph::EnhanceGraph(gfx::D3D12DeviceContext& context, gfx::CommandSlotRing& ring)
+EnhanceGraph::EnhanceGraph(gfx::D3D12DeviceContext& context, gfx::CommandSlotRing& ring,
+                           ngx::NgxCoreCache* coreCache)
     : context_(context)
     , ring_(ring)
+    , coreCache_(coreCache)
 {
 }
 
@@ -402,7 +405,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         }
         veyra::log::info("graph","diagnostic SR motion override active; no product entry point enables this");
     }
-    desc_ = desc;tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();previousLuma_.clear();
+    desc_ = desc;tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
     if(desc.videoSrQuality>engine::kVideoSrFsr){veyra::log::error("graph",std::format("invalid video SR quality value={}",desc.videoSrQuality));return false;}
     srcW_ = desc.sourceWidth;
     srcH_ = desc.sourceHeight;
@@ -485,7 +488,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const size_t dSize = dPitch_ * workH_;
     nv12Buf_.resize(lumaSize_ + chromaSize_);
 
-    if(!gpuTimer_.initialize(context_.device(),context_.directQueue()))veyra::log::warn("gpu-timestamp","GPU timing unavailable");
+    if(!gpuTimer_.initialize(context_.device(),ring_.queue()))veyra::log::warn("gpu-timestamp","GPU timing unavailable");
     if (!createResources()) return false;
     if (!initZeroAndDepthTextures()) return false;
     if (!initNvof()) { failedBackend_=engine::FailedBackend::OpticalFlow; return false; }
@@ -502,6 +505,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
 
     initialized_ = true;
     failedBackend_=engine::FailedBackend::None;
+    if(coreCache_)coreCache_->publish(coreHost_);
     veyra::log::info("graph", std::format("initialized src={}x{} work={}x{} sr={} nr={} fg={} nvof={}",
         srcW_, srcH_, workW_, workH_, srEnabled_ ? 1 : 0, nrEnabled_ ? 1 : 0,
         fgEnabled_ ? 1 : 0, (nvof_ && nvof_->initialized()) ? 1 : 0));
@@ -1048,6 +1052,19 @@ bool EnhanceGraph::initNgxFeatures()
 {
     Status st = Status::Ok;
     failedBackend_=engine::FailedBackend::NgxCore;
+    if(coreCache_){
+        ngx::NgxCoreCache::Key key;
+        key.device=context_.device();
+        key.runtimeDirectory=std::filesystem::absolute(desc_.runtimeAbsPath).lexically_normal().wstring();
+        key.nrRuntime=int(engine::currentNrRuntime(desc_.nrRuntime));
+        key.frameGeneration=desc_.enableFg;
+        key.fgBackend=int(desc_.frameGenerationBackend);key.fgMultiplier=desc_.fgMultiplier;
+        // Patched driver/provider state currently belongs to the graph. Keep
+        // its complete init/shutdown contract even when FG is temporarily off.
+        const bool enabled=!ngx::FgCompatibilitySession::requested(context_.adapter().vendorId,context_.adapter().deviceId)&&
+            !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_NGX_CORE_REUSE",nullptr,0);
+        if(!coreCache_->prepare(std::move(key),enabled))return false;
+    }
     if(desc_.convertVideoHdr()&&(desc_.noNgx||desc_.noFeatures)){failedBackend_=engine::FailedBackend::VideoHdr;return false;}
     if ((desc_.noNgx && !lmxxfNr_) || desc_.noFeatures || (!nrEnabled_&&!srEnabled_&&!fgEnabled_&&!desc_.convertVideoHdr())) {
         veyra::log::info("graph", "NGX core/features skipped by disabled-feature configuration");
@@ -1110,14 +1127,17 @@ bool EnhanceGraph::initNgxFeatures()
     }
 
     failedBackend_=engine::FailedBackend::NgxCore;
-    coreHost_ = std::make_unique<ngx::NgxCoreHost>();
+    coreHost_ = coreCache_?coreCache_->borrow():nullptr;
     Status st = Status::Ok;
+    if(!coreHost_){
+    coreHost_ = std::make_shared<ngx::NgxCoreHost>();
     if(fgCompatibility_&&!fgCompatibility_->beginInitialization())return false;
     const bool initialized=coreHost_->initialize(context_.device(), desc_.runtimeAbsPath.c_str(),
             projectId.c_str(), engineVersion.c_str(), st);
     const bool initRestored=!fgCompatibility_||fgCompatibility_->endInitialization(initialized);
     if (!initialized || !initRestored) {
         return false;
+    }
     }
 
     if(!vfgBackend_){fgCapsAvailable_ = false;fgMultiFrameMax_ = 0;}
@@ -1245,7 +1265,7 @@ bool EnhanceGraph::initNgxFeatures()
                 if(desc_.hdrWorking()){veyra::log::error("amd-nr","HDR input is not yet validated for this adapter; NR disabled by backend fallback");return false;}
                 instance->amd=std::make_unique<LmxxfNrBackend>();
                 const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr";
-                if(!instance->amd->open(directory.lexically_normal(),context_.device(),context_.directQueue(),context_.adapter().vendorId) || !instance->amd->admits(extent.width,extent.height))return false;
+                if(!instance->amd->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId) || !instance->amd->admits(extent.width,extent.height))return false;
             }
             veyra::log::info("resolution",std::format("NR layer={} internal={}x{} composite={}x{} sharedMotion={}",
                 index+1,extent.width,extent.height,fullW,fullH,motion!=nullptr));
@@ -1257,38 +1277,9 @@ bool EnhanceGraph::initNgxFeatures()
     // NR feature create (8.5 create parameter contract), one handle per layer.
     for (size_t layerIndex = 0; nrEnabled_ && !lmxxfNr_ && layerIndex < nrInstances_.size(); ++layerIndex) {
         auto* layer = nrInstances_[layerIndex].get();
-        const uint32_t nrW=layer->width(),nrH=layer->height();
-        namespace p = ngx::dlssnr;
-        ngx::ParameterBlock pb(ngxParams_);
-        pb.setU32(p::kWidth, nrW); pb.setU32(p::kHeight, nrH);
-        pb.setU32(p::kInputWidth, nrW); pb.setU32(p::kInputHeight, nrH);
-        pb.setU32(p::kOutputWidth, nrW); pb.setU32(p::kOutputHeight, nrH);
-        pb.setU32(p::kOutputDotWidth, nrW); pb.setU32(p::kOutputDotHeight, nrH);
-        pb.setU32(p::kUpscaling, 0);
-        pb.setF32(p::kScale, 1.0f); pb.setF32(p::kScalingRatio, 1.0f);
-        pb.setVoid(p::kComputeScalingRatioCallback,
-            reinterpret_cast<void*>(&ngx::DlssNrRuntimeAdapter::scalingRatioCallback));
-        pb.setI32(p::kHintRenderPreset, 0);
-        pb.setU32(p::kStdWidth, nrW); pb.setU32(p::kStdHeight, nrH);
-        pb.setI32(p::kPerfQualityValue, 1);
-        pb.setU32(p::kCreationNodeMask, 1); pb.setU32(p::kVisibilityNodeMask, 1);
-        ID3D12GraphicsCommandList* list = ring_.acquire(0, st);
-        if (list == nullptr) { failedBackend_=engine::FailedBackend::Infrastructure; return false; }
-        failedBackend_=engine::FailedBackend::Nr;
-        // One parameter block per layer: the block carries the feature's create
-        // contract, and Magpie's evidence is that each pass needs its own.
-        layer->setParameters(coreHost_->allocateParameters(st));
-        if (layer->parameters() == nullptr) return false;
-        NVSDK_NGX_Handle* created = nullptr;
-        if (!nrAdapter_->snippetCreateFeature(list, ngxParams_, &created, nrResult_, nrSeh_) ||
-            nrResult_ != static_cast<uint64_t>(NVSDK_NGX_Result_Success) || created == nullptr) {
-            veyra::log::error("graph", std::format("NR layer {} create failed 0x{:X}", layerIndex + 1, nrResult_));
-            return false;
-        }
-        layer->setHandle(created);
-        failedBackend_=engine::FailedBackend::Infrastructure;
-        if(!ring_.submitAndSignal(0)||!ring_.waitIdle())return false;
+        if(!createNrFeature(*layer))return false;
     }
+    if(desc_.nrAutoPoolLayer&&!createAutoNrPool())return false;
 
     if (srEnabled_ && !desc_.noFeatures && desc_.videoSrQuality!=engine::kVideoSrFsr) {
         ngx::DlssSrBackend::CreateDesc sd{};
@@ -1377,6 +1368,92 @@ bool EnhanceGraph::initNgxFeatures()
 // into residualRgba_. Copying back is deliberate: every downstream reader
 // (SR, FG, tail colour, diagnostic views) keeps binding the same texture, so
 // enabling the stabiliser cannot silently mis-bind a consumer.
+bool EnhanceGraph::createNrFeature(NrInstance& layer) {
+    Status st=Status::Ok;const uint32_t nrW=layer.width(),nrH=layer.height();
+    namespace p=ngx::dlssnr;ngx::ParameterBlock pb(ngxParams_);
+    pb.setU32(p::kWidth,nrW);pb.setU32(p::kHeight,nrH);
+    pb.setU32(p::kInputWidth,nrW);pb.setU32(p::kInputHeight,nrH);
+    pb.setU32(p::kOutputWidth,nrW);pb.setU32(p::kOutputHeight,nrH);
+    pb.setU32(p::kOutputDotWidth,nrW);pb.setU32(p::kOutputDotHeight,nrH);
+    pb.setU32(p::kUpscaling,0);pb.setF32(p::kScale,1.0f);pb.setF32(p::kScalingRatio,1.0f);
+    pb.setVoid(p::kComputeScalingRatioCallback,reinterpret_cast<void*>(&ngx::DlssNrRuntimeAdapter::scalingRatioCallback));
+    pb.setI32(p::kHintRenderPreset,0);pb.setU32(p::kStdWidth,nrW);pb.setU32(p::kStdHeight,nrH);
+    pb.setI32(p::kPerfQualityValue,1);pb.setU32(p::kCreationNodeMask,1);pb.setU32(p::kVisibilityNodeMask,1);
+    auto* list=ring_.acquire(0,st);
+    if(!list){failedBackend_=engine::FailedBackend::Infrastructure;return false;}
+    failedBackend_=engine::FailedBackend::Nr;
+    layer.setParameters(coreHost_->allocateParameters(st));if(!layer.parameters())return false;
+    NVSDK_NGX_Handle* created=nullptr;
+    if(!nrAdapter_->snippetCreateFeature(list,ngxParams_,&created,nrResult_,nrSeh_)||
+       nrResult_!=uint64_t(NVSDK_NGX_Result_Success)||!created){
+        log::error("graph",std::format("NR {}x{} create failed 0x{:X} seh={}",nrW,nrH,nrResult_,nrSeh_));return false;
+    }
+    layer.setHandle(created);failedBackend_=engine::FailedBackend::Infrastructure;
+    return ring_.submitAndSignal(0)&&ring_.waitIdle();
+}
+
+bool EnhanceGraph::createAutoNrPool() {
+    if(GetEnvironmentVariableW(L"VEYRA_TEST_NR_AUTO_POOL_REFUSE",nullptr,0)>0){
+        failedBackend_=engine::FailedBackend::Nr;log::warn("nr-auto-pool","test-only API refusal; no allocation or pressure injected");return false;
+    }
+    const auto index=*desc_.nrAutoPoolLayer;
+    const bool admitted=nrEnabled_&&!srEnabled_&&!fgEnabled_&&!lmxxfNr_&&!desc_.hdrWorking()&&!desc_.stillImage&&
+        !desc_.noFeatures&&!desc_.noNgx&&!desc_.runtimeNodeOrder&&!desc_.nrTemporal&&desc_.nrHoldStrength==0&&
+        desc_.nrRuntime==engine::NrRuntime::Original&&desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia&&
+        context_.adapter().deviceId==0x2f04&&context_.adapter().isNvidia&&index<nrInstances_.size()&&nrInstances_.size()+4<=8&&
+        workW_==1920&&workH_==1080&&desc_.nrLayersExtent[index]==Extent{1920,1080}&&
+        std::none_of(nrInstances_.begin(),nrInstances_.end(),[](const auto& layer){return layer->temporalEnabled;});
+    if(!admitted){failedBackend_=engine::FailedBackend::Nr;log::error("nr-auto-pool","experimental admission refused; product entry points do not request this pool");return false;}
+    uint64_t budget=0,usage=0;const auto start=std::chrono::steady_clock::now();
+    const auto& initial=*nrInstances_[index];
+    constexpr unsigned percents[5]={100,85,70,55,40};
+    uint64_t extraTextureBytes=0;
+    for(unsigned level=1;level<5;++level){const uint32_t w=(1920*percents[level]/100)&~1u,h=(1080*percents[level]/100)&~1u;
+        extraTextureBytes+=uint64_t(w)*h*36+uint64_t(workW_)*workH_*8;}
+    if(!context_.videoMemoryInfo(budget,usage)||budget<=usage||extraTextureBytes>(budget-usage)/2||usage+extraTextureBytes>=budget/3){
+        failedBackend_=engine::FailedBackend::Nr;log::error("nr-auto-pool","insufficient measured headroom; refusing extra pool");return false;}
+    const auto beforeUsage=usage;
+    for(unsigned level=1;level<5;++level) {
+        const uint32_t w=(1920*percents[level]/100)&~1u,h=(1080*percents[level]/100)&~1u;
+        auto layer=std::make_unique<NrInstance>();
+        if(!layer->create(context_.device(),w,h,workW_,workH_,nrZeroMotion_.Get(),nrZeroDepth_.Get()))return false;
+        layer->model=initial.model;layer->residualSettings=initial.residualSettings;layer->protection=initial.protection;
+        nrAutoPool_[level]=std::move(layer);if(!createNrFeature(*nrAutoPool_[level]))return false;
+        if(!context_.videoMemoryInfo(budget,usage)||budget<=usage||usage>=budget/3){
+            failedBackend_=engine::FailedBackend::Nr;log::error("nr-auto-pool","SDK pool exceeds conservative measured headroom; refusing activation");return false;}
+        log::info("nr-auto-pool",std::format("event=created level={} internal={}x{} usageMiB={}",level,w,h,usage>>20));
+    }
+    nrAutoLevel_=0;nrAutoPoolReady_=true;
+    log::info("nr-auto-pool",std::format("event=ready layer={} handles={} createMs={:.3f} extraMiB={}",index,nrInstances_.size()+4,
+        std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count(),(usage-beforeUsage)>>20));
+    return true;
+}
+
+bool EnhanceGraph::selectAutoNrLevel(unsigned level) {
+    if(!nrAutoPoolReady_||!desc_.nrAutoPoolLayer||level>=nrAutoPool_.size())return false;
+    if(level==nrAutoLevel_)return true;
+    // The host must retire every presentation/CPU lease at this boundary.
+    if(!realLeases_[0].expired()||!realLeases_[1].expired()||!nrAutoPool_[level])return false;
+    const auto start=std::chrono::steady_clock::now();
+    if(!ring_.drainQueue()||!ring_.discardRecording())return false;
+    const auto index=*desc_.nrAutoPoolLayer,prior=nrAutoLevel_;const auto previousDesc=desc_;
+    auto& old=*nrInstances_[index];auto& next=*nrAutoPool_[level];
+    next.model=old.model;next.residualSettings=old.residualSettings;next.protection=old.protection;next.enabled=old.enabled;
+    nrAutoPool_[prior]=std::move(nrInstances_[index]);nrInstances_[index]=std::move(nrAutoPool_[level]);
+    const Extent extent{next.width(),next.height()};desc_.nrLayersExtent[index]=extent;
+    if(desc_.fixedExecutionPlan)for(unsigned i=0;i<desc_.fixedExecutionPlan->stepCount;++i){auto& step=desc_.fixedExecutionPlan->steps[i];
+        if(step.type==engine::EffectType::NrEnhance&&step.resourceIndex==index)step.processing=extent;}
+    if(!createViews()){
+        nrAutoPool_[level]=std::move(nrInstances_[index]);nrInstances_[index]=std::move(nrAutoPool_[prior]);desc_=previousDesc;
+        const bool restored=createViews();log::error("nr-auto-pool",std::format("descriptor switch failed restored={}",restored));return false;
+    }
+    nrAutoLevel_=level;nrAutoResetPending_=true;invalidatePausedResidualCache();
+    for(auto& layer:nrInstances_){layer->historyValid=false;layer->inputRevision=1;}
+    log::info("nr-auto-pool",std::format("event=switch from={} to={} internal={}x{} switchMs={:.3f} reset=true",prior,level,extent.width,extent.height,
+        std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()));
+    return true;
+}
+
 bool EnhanceGraph::createNrHoldPass()
 {
     nrHoldPass_.reset();
@@ -1769,8 +1846,24 @@ bool EnhanceGraph::createViews()
 // ---------------------------------------------------------------------------
 // process: the per-frame chain (verbatim from the probe lambda).
 // ---------------------------------------------------------------------------
-bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier)
+bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh)
 {
+    reset=reset||nrAutoResetPending_;nrAutoResetPending_=false;
+    // Whole-chain duplicate reuse failed the unchanged-output experiment.
+    // This narrower path only handles repeated edits of the SAME paused
+    // frame, after one complete reset evaluation under this configuration.
+    const bool pausedEligible=pausedResidualRefresh&&reset&&context_.adapter().isNvidia&&nrEnabled_&&nrInstances_.size()==1&&
+        !nrInstances_[0]->temporalEnabled&&!nrInstances_[0]->stabilised&&!lmxxfNr_&&
+        desc_.nrRuntime==engine::NrRuntime::Original&&!desc_.enableSr&&!desc_.enableFg&&
+        !srEnabled_&&!fgEnabled_&&!desc_.videoHdr.enabled&&!desc_.hdrInput&&!desc_.hdrOutput&&
+        !colorGradeActive()&&!tailColorActiveCount_&&!preNrColorActiveCount_&&
+        !preSrColorActiveCount_&&!interNrColorActiveCount_&&desc_.nrHoldStrength==0&&
+        (!hardwareSurface||!hardwareSurface->present())&&
+        !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_NR_RESIDUAL_REUSE",nullptr,0);
+    const bool reusePausedNr=pausedEligible&&pausedNrCacheValid_&&pausedNrResidualOnly_&&
+        frame==pausedNrFrame_&&sourceFrameId==pausedNrSourceId_&&ptsMs==pausedNrPts_;
+    if(pausedResidualRefresh&&realFrameIndex_<3)log::info("paused-nr-cache",std::format("event=eligibility eligible={} valid={} residualOnly={} sameFrame={} sameId={} samePts={} layers={} temporal={} stabilised={} sr={} fg={} color={} hdr={} hold={} applied={}",pausedEligible,pausedNrCacheValid_,pausedNrResidualOnly_,frame==pausedNrFrame_,sourceFrameId==pausedNrSourceId_,ptsMs==pausedNrPts_,nrInstances_.size(),nrInstances_.empty()?false:nrInstances_[0]->temporalEnabled,nrInstances_.empty()?false:nrInstances_[0]->stabilised,srEnabled_,fgEnabled_,colorGradeActive(),desc_.hdrWorking(),desc_.nrHoldStrength,bool(lastAppliedSettings_)));
+    pausedNrCacheValid_=false; // Every failure path remains an invalid cache.
     diagnostics::CpuStallTrace cpuTrace("graph-cpu-stall",sourceFrameId,30.0);
     failedBackend_=engine::FailedBackend::Infrastructure;
     out = FrameOutputs{};
@@ -1826,7 +1919,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         out.detectedReset=ResetReason::PtsDiscontinuity;
         reset=true;veyra::log::info("timeline","non-monotonic or discontinuous PTS; atomic history reset");
     }
-    if (reset) { prevValid_ = false; scene_.reset(); previousLuma_.clear();cadence_.reset(); }
+    if (reset) { prevValid_ = false; scene_.reset(); sceneLastSourceId_=0; previousLuma_.clear();cadence_.reset(); }
 
     const uint32_t parity = static_cast<uint32_t>(realFrameIndex_ % 2);
     if(!realLeases_[parity].expired()||!generatedLeases_[parity].expired()){
@@ -1848,7 +1941,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // Presentation returns the shared output to COMMON before this parity
     // can be written again. Direct graph callers also need the GPU dependency.
     if(presentationFences_[parity]){
-        const HRESULT hr=context_.directQueue()->Wait(presentationFences_[parity].Get(),presentationValues_[parity]);
+        const HRESULT hr=ring_.queue()->Wait(presentationFences_[parity].Get(),presentationValues_[parity]);
         if(FAILED(hr)){veyra::log::error("graph",std::format("presentation handoff wait hr=0x{:X}",unsigned(hr)));return false;}
     }
     hardwareInputFrames_[parity].reset();
@@ -1878,7 +1971,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         out.measuredContentRate=cadence_.confirmedRate(desc_.contentRate);
         if(cadence_.conflicts(desc_.contentRate)&&realFrameIndex_%60==0)veyra::log::warn("cadence","requested content-rate identification conflicts with observed motion; preserving source timestamps");
         out.contentDuplicate=desc_.contentRate!=engine::ContentRate::Transport&&previousLuma_.size()==sample.size()&&sad<0.0001;
-        const auto analysis=scene_.analyze(realFrameIndex_,hist,sad,static_cast<uint64_t>(std::max(0.0,ptsMs)*1000));
+        // Source ids advance per received/decoded frame, including frames the
+        // engine skipped or the capture mailbox replaced; normalise by that step.
+        const uint64_t sourceStep=sceneLastSourceId_&&sourceFrameId>sceneLastSourceId_?sourceFrameId-sceneLastSourceId_:1;
+        sceneLastSourceId_=sourceFrameId;
+        const auto analysis=scene_.analyze(realFrameIndex_,hist,sad,static_cast<uint64_t>(std::max(0.0,ptsMs)*1000),sourceStep);
         if(analysis.isSceneCut||analysis.isCadenceBreak){
             if(out.detectedReset==ResetReason::None)out.detectedReset=analysis.isSceneCut?ResetReason::SceneCut:ResetReason::CadenceBreak;
             reset=true;prevValid_=false;if(analysis.isSceneCut)++metrics_.sceneCutCount;
@@ -1891,7 +1988,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if(gpuRgb){
         auto* texture=hardwareSurface->texture;const auto td=texture->GetDesc();
         if(td.Width!=srcW_||td.Height!=srcH_||(td.Format!=DXGI_FORMAT_B8G8R8A8_UNORM&&td.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))return false;
-        if(hardwareSurface->waitFence&&FAILED(context_.directQueue()->Wait(hardwareSurface->waitFence,hardwareSurface->waitValue)))return false;
+        if(hardwareSurface->waitFence&&FAILED(ring_.queue()->Wait(hardwareSurface->waitFence,hardwareSurface->waitValue)))return false;
         D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=td.Format;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
         srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
         stager_.stageSrv(texture,&srv,rgbPass_.heap.Get(),3+parity);
@@ -1969,7 +2066,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             waitValue = hardwareSurface->waitValue;
         }
         if (waitFence != nullptr) {
-            if (FAILED(context_.directQueue()->Wait(waitFence, waitValue))) {
+            if (FAILED(ring_.queue()->Wait(waitFence, waitValue))) {
                 veyra::log::error("graph", "nv12 fence wait");
                 return false;
             }
@@ -2205,7 +2302,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             tracker_.transition(list,confTex_.Get(),D3D12_RESOURCE_STATE_COMMON);
             // The next ring submission signals this value; the parity upload
             // fence above retires all uses before these descriptors are reused.
-            if(!gpuDis_->dispatch(list,context_.directQueue(),context_.fence(),ring_.lastSignaledValue()+1,parity,
+            if(!gpuDis_->dispatch(list,ring_.queue(),context_.fence(),ring_.lastSignaledValue()+1,parity,
                 nvofInA_.Get(),nvofInB_.Get(),flowTex_.Get(),confTex_.Get(),previousSource_,sourceFrameId))return false;
             tracker_.transition(list,flowTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             ++metrics_.gpuDisExecuteCount;haveFlow=true;
@@ -2223,7 +2320,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 ++metrics_.nvofExecuteCount;
                 auto waitForFlow=[&](){
                     const auto value=nvof_->nextOutValue()-1;
-                    const HRESULT hr=context_.directQueue()->Wait(nvofOutFence_.Get(),value);
+                    const HRESULT hr=ring_.queue()->Wait(nvofOutFence_.Get(),value);
                     if(FAILED(hr))veyra::log::error("graph",std::format("NVOF output queue wait value={} hr=0x{:X}",value,unsigned(hr)));
                     return SUCCEEDED(hr);
                 };
@@ -2398,7 +2495,12 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // layer costs two lists: one for encode+decode prep, one for the evaluate
     // (the original single-layer code did exactly the same, hence the identical
     // output). The ring is drained by submission, never by a CPU wait.
-    if (nrEnabled_ && nrCreated()) {
+    if(reusePausedNr){
+        nrInstances_[0]->inputRevision=1;
+        ++metrics_.pausedNrResidualReuses;
+        log::info("paused-nr-cache",std::format("event=reuse source={} revision={} count={}",sourceFrameId,desc_.settingsRevision,metrics_.pausedNrResidualReuses));
+    }
+    if (nrEnabled_ && nrCreated()&&!reusePausedNr) {
         for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
             const bool preSrProtection=preSrProtectionRgba_&&layerIndex==desc_.nrBeforeSrLayerCount();
             const bool interNrProtection=interNrProtectionRgba_&&layerIndex==desc_.interNrProtectionTarget();
@@ -2853,6 +2955,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     out.videoSlot = parity;
     BatchFrame real;real.identity=out.batch.identity;real.pts100ns=out.batch.b100ns;real.lease=std::make_shared<FrameLease>();real.lease->texture=videoFrame_[parity];real.lease->sourceReference=sourceReferences_[parity];real.lease->baseReference=baseReferences_[parity];real.lease->slot=parity;real.lease->readyFence=out.videoFenceValue;real.lease->readyFenceObject=out.videoFenceObject;real.lease->referencesValid=retainReferences;realLeases_[parity]=real.lease;out.batch.append(std::move(real));
     if(veyra::log::verboseFrameLogs())veyra::log::info("frame-batch",std::format("batch={} epoch={} revision={} source={} a={} b={} count={} realSlot={} realFence={} genSlot={} genFence={}",out.batch.batchId,epoch_,out.batch.identity.settingsRevision,out.batch.identity.sourceFrameId,out.batch.a100ns,out.batch.b100ns,out.batch.count,parity,out.videoFenceValue,out.genSlot,out.genFenceValue));
+    if(pausedEligible&&lastAppliedSettings_){
+        pausedNrCacheValid_=true;pausedNrFrame_=frame;pausedNrSourceId_=sourceFrameId;pausedNrPts_=ptsMs;
+        pausedNrSettings_=lastAppliedSettings_;
+    }
     return true;
 }
 
@@ -2955,6 +3061,18 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     // Switching the referenced .cube re-stages a descriptor, which needs the
     // queue drained: treat it as a rebuild (parameters stay live).
     if(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace)return false;
+    pausedNrResidualOnly_=false;
+    if(pausedNrSettings_){
+        auto residualEdit=*pausedNrSettings_;residualEdit.revision=s.revision;
+        residualEdit.residual=s.residual;
+        // Single-layer settings may use the flat legacy slot while preserving
+        // the array for later activation. Residual-only edits of those stored
+        // slots are also residual edits, never a model/topology change.
+        for(unsigned i=0;i<engine::kMaxNrInstances;++i)residualEdit.nrLayers[i].residual=s.nrLayers[i].residual;
+        pausedNrResidualOnly_=residualEdit==s;
+    }
+    if(!pausedNrResidualOnly_)pausedNrCacheValid_=false;
+    lastAppliedSettings_=s;
     desc_.videoHdr=s.videoHdr;
     if(!(s.color==desc_.color)){
         desc_.color=s.color;
@@ -3032,6 +3150,8 @@ uint64_t EnhanceGraph::lastNvofSignal() const
     return (nvof_ && nvof_->initialized()) ? (nvof_->nextOutValue() - 1) : 0;
 }
 
+bool EnhanceGraph::usesComputeQueue() const {return ring_.queue()&&ring_.queue()->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_COMPUTE;}
+
 bool EnhanceGraph::nvofSessionInitialized() const
 {
     return nvof_ && nvof_->initialized();
@@ -3059,9 +3179,11 @@ ID3D12Resource* EnhanceGraph::generatedFrameResource(uint32_t slot) const
 // ---------------------------------------------------------------------------
 void EnhanceGraph::shutdown()
 {
-    if (!initialized_ && !nrAdapter_ && !nvof_ && !srcRgba_) return;
+    pausedNrCacheValid_=pausedNrResidualOnly_=false;pausedNrFrame_=nullptr;
+    lastAppliedSettings_.reset();pausedNrSettings_.reset();
+    if (!initialized_ && !coreHost_ && !nrAdapter_ && !nvof_ && !srcRgba_) return;
     for(unsigned i=0;i<2;++i)if(presentationFences_[i]){
-        const HRESULT hr=context_.directQueue()->Wait(presentationFences_[i].Get(),presentationValues_[i]);
+        const HRESULT hr=ring_.queue()->Wait(presentationFences_[i].Get(),presentationValues_[i]);
         if(FAILED(hr))veyra::log::error("graph",std::format("presentation teardown wait hr=0x{:X}",unsigned(hr)));
     }
     (void)ring_.drainQueue();(void)ring_.discardRecording();
@@ -3069,6 +3191,7 @@ void EnhanceGraph::shutdown()
     for(auto& input:hardwareInputFrames_)input.reset();
     Status st = Status::Ok;
     if (nv12Ctx_ != nullptr) { sws_freeContext(nv12Ctx_); nv12Ctx_ = nullptr; }
+    bool featuresReleased=true;
 
     // Release every layer's handle before the session goes away. The snippet
     // requires release before Shutdown1, and each handle was created on this
@@ -3077,8 +3200,13 @@ void EnhanceGraph::shutdown()
         layer->amd.reset(); // drain HIP while the borrowed graph input/queue still exist
         if(layer->handle()==nullptr)continue;
         uint64_t layerResult=0;uint32_t layerSeh=0;
-        (void)nrAdapter_->snippetReleaseFeature(layer->handle(),layerResult,layerSeh);
+        const bool safe=nrAdapter_->snippetReleaseFeature(layer->handle(),layerResult,layerSeh);
+        featuresReleased=featuresReleased&&safe&&layerResult==uint64_t(NVSDK_NGX_Result_Success)&&layerSeh==0;
         layer->setHandle(nullptr);
+    }
+    for(auto& layer:nrAutoPool_)if(layer&&layer->handle()){
+        uint64_t result=0;uint32_t seh=0;const bool safe=nrAdapter_->snippetReleaseFeature(layer->handle(),result,seh);
+        featuresReleased=featuresReleased&&safe&&result==uint64_t(NVSDK_NGX_Result_Success)&&seh==0;layer->setHandle(nullptr);
     }
     gpuDis_.reset();
     amdOf_.reset();
@@ -3089,10 +3217,11 @@ void EnhanceGraph::shutdown()
     upFsrSrDepth_.Reset();
     fsrFgBackend_.reset();
     vfgBackend_.reset();
-    if (fgBackend_) fgBackend_->release();
-    if(videoSrBackend_){videoSrBackend_->release();videoSrBackend_.reset();}
+    if (fgBackend_) featuresReleased=fgBackend_->release()&&featuresReleased;
+    if(videoSrBackend_){featuresReleased=videoSrBackend_->release()&&featuresReleased;videoSrBackend_.reset();}
+    if(videoHdrBackend_)featuresReleased=videoHdrBackend_->release()&&featuresReleased;
     videoHdrBackend_.reset();videoHdrInput_.Reset();videoHdrOutput_.Reset();
-    if (srBackend_) srBackend_->release();
+    if (srBackend_) featuresReleased=srBackend_->release()&&featuresReleased;
 
     // NVOF teardown in THREE phases (ownership rule proven by t10-L0-r2):
     // a. unregisterAll() while the textures are still alive;
@@ -3116,6 +3245,9 @@ void EnhanceGraph::shutdown()
     // core is still alive, rather than relying on its shutdown leak fallback.
     if (coreHost_ && coreHost_->initialized()) {
         unsigned releasedNrParameters = 0;
+        for(auto layer=nrAutoPool_.rbegin();layer!=nrAutoPool_.rend();++layer)if(*layer&&(*layer)->parameters()){
+            coreHost_->destroyParameters((*layer)->parameters());(*layer)->setParameters(nullptr);++releasedNrParameters;
+        }
         for (auto layer = nrInstances_.rbegin(); layer != nrInstances_.rend(); ++layer) {
             if ((*layer)->parameters() == nullptr) continue;
             coreHost_->destroyParameters((*layer)->parameters());
@@ -3134,7 +3266,22 @@ void EnhanceGraph::shutdown()
         nrAdapter_->restoreCallerCompatibility();
         nrAdapter_->unload();
     }
-    if (coreHost_) coreHost_->shutdown();
+    const bool retainCore=coreCache_&&coreCache_->owns(coreHost_)&&initialized_&&featuresReleased&&coreHost_->healthy()&&
+        failedBackend_==engine::FailedBackend::None&&SUCCEEDED(context_.device()->GetDeviceRemovedReason())&&
+        coreHost_->liveParameterBlockCount()==0;
+    if(retainCore){
+        log::info("ngx-core-cache","event=retain liveParameters=0 featuresReleased=1");
+    }else if(coreHost_){
+        // Remove the graph's borrow before asking the session to close. On a
+        // failed graph it must not survive for a later rebuild.
+        if(coreCache_&&coreCache_->owns(coreHost_)){
+            coreHost_.reset();(void)coreCache_->close("graph-failure-or-device-removed");
+        }else coreHost_->shutdown();
+    }else if(coreCache_&&(!initialized_||failedBackend_!=engine::FailedBackend::None)){
+        // A failure before NGX initialization can still leave the previous
+        // clean core in this device session; do not carry it through recovery.
+        (void)coreCache_->close("graph-failed-before-core-borrow");
+    }
     // Restore the DLSS-G runtime image only after the NGX core released the
     // feature (the unlock is process memory only; the file on disk is untouched).
     fgCompatibility_.reset();
@@ -3147,6 +3294,7 @@ void EnhanceGraph::shutdown()
     downsamplePass_={};residualPass_={};stackProtectionPass_={};flowAdaptPass_={};
     for(auto& layer:nrInstances_)layer->close();
     nrInstances_.clear();
+    for(auto& layer:nrAutoPool_)layer.reset();nrAutoLevel_=0;nrAutoPoolReady_=nrAutoResetPending_=false;
     residualRgba_.Reset();preSrProtectionRgba_.Reset();interNrProtectionRgba_.Reset();nrFlow_.Reset();baseFlow_.Reset();
     for(unsigned i=0;i<kGeneratedPoolSlots;++i){if(fgDisableMapped_[i]&&fgDisableReadback_[i]){D3D12_RANGE written{0,0};fgDisableReadback_[i]->Unmap(0,&written);}fgDisableMapped_[i]=nullptr;fgDisable_[i].Reset();fgDisableReadback_[i].Reset();generatedLeases_[i].reset();genFrame_[i].Reset();}for(auto& lease:realLeases_)lease.reset();fgDisableInit_.Reset();
     encPass_ = ComputePass{};

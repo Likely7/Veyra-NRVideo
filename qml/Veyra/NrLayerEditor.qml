@@ -18,9 +18,21 @@ ColumnLayout {
     signal removeRequested(int nodeIndex)
     signal orderEdited(bool enabled)
     readonly property bool amdNr: layerData.runtime === 4
+    property string autoReason: ""
+    function updateAutoReason() { autoReason = veyra.nrAutoSelectionReason(layerData.index) }
+    Component.onCompleted: updateAutoReason()
+    onLayerDataChanged: updateAutoReason()
+    Connections {
+        target: veyra
+        function onSettingsChanged() { editor.updateAutoReason() }
+        function onChainChanged() { editor.updateAutoReason() }
+        function onSnapshotChanged() { editor.updateAutoReason() }
+        function onEffectCapabilitiesChanged() { editor.updateAutoReason() }
+    }
     readonly property var sizeChoices: [
         {id:"2",label:"480p"}, {id:"3",label:"720p"}, {id:"4",label:"900p"},
-        {id:"0",label:qsTr("1080p · 默认")}, {id:"5",label:"1440p",disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""}, {id:"1",label:qsTr("原生"),disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""}
+        {id:"0",label:qsTr("1080p · 默认")}, {id:"5",label:"1440p",disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""}, {id:"1",label:qsTr("原生"),disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""},
+        {id:"6",label:qsTr("自动（按负载）"),disabled:autoReason.length>0,note:autoReason}
     ]
     readonly property string sizeLabel: sizeChoices.find(o => Number(o.id) === layerData.sizePolicy)?.label ?? qsTr("未知")
     spacing: 6
@@ -99,8 +111,24 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
+        visible: editor.layerData.sizePolicy === 6
+        text: qsTr("自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。导出按原生尺寸处理。") +
+              (veyra.nrAutoStatus.length > 0 ? "\n" + veyra.nrAutoStatus : "")
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
+        wrapMode: Text.WordWrap
+    }
+    Text {
+        Layout.fillWidth: true
         text: editor.amdNr ? qsTr("预览可降采样到 1080p。AMD NR 图片/视频导出仅接受预算内原生尺寸，暂不支持 4K NR 导出。")
                           : qsTr("预览保留比例且不放大小输入；图片/视频导出仍完整处理。")
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
+        wrapMode: Text.WordWrap
+    }
+    Text {
+        Layout.fillWidth: true
+        visible: !editor.amdNr && editor.layerCount > 1 &&
+                 (!editor.listControls || (veyra.nrLayers.length > 0 && editor.layerData.index === veyra.nrLayers[0].index))
+        text: qsTr("多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，导出仍按原生尺寸处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }

@@ -22,12 +22,27 @@ void VideoPresenter::sourceProcessed(pipeline::FrameIdentity identity){
 }
 bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::EnhanceGraph& graph,bool captureCompatible,bool mediaClockPaced) {
     close();
+    RECT rc{};
+    if(!IsWindow(window)||!GetClientRect(window,&rc)){
+        veyra::log::warn("present","presentation creation cancelled: target window is no longer available");
+        return false;
+    }
     viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;
     ++generation_;
     Status st=Status::Ok;
-    if(graph.fgEnabled()&&!graph.xessEnabled()){
+    if((graph.fgEnabled()||graph.usesComputeQueue())&&!graph.xessEnabled()){
         D3D12_COMMAND_QUEUE_DESC desc{};desc.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;
+        wchar_t requestedPriority[16]{};
+        if(GetEnvironmentVariableW(L"VEYRA_TEST_PRESENT_QUEUE_PRIORITY",requestedPriority,16)&&std::wstring_view(requestedPriority)==L"high"){
+            D3D12_FEATURE_DATA_COMMAND_QUEUE_PRIORITY support{desc.Type,D3D12_COMMAND_QUEUE_PRIORITY_HIGH,FALSE};
+            const HRESULT queried=ctx.device()->CheckFeatureSupport(D3D12_FEATURE_COMMAND_QUEUE_PRIORITY,&support,sizeof(support));
+            if(SUCCEEDED(queried)&&support.PriorityForTypeIsSupported)desc.Priority=D3D12_COMMAND_QUEUE_PRIORITY_HIGH;
+            veyra::log::info("present-priority",std::format("requested=HIGH supported={} queryHr=0x{:X} selected={}",
+                support.PriorityForTypeIsSupported,unsigned(queried),desc.Priority));
+        }
         HRESULT hr=ctx.device()->CreateCommandQueue(&desc,IID_PPV_ARGS(&presentationQueue_));
+        if(SUCCEEDED(hr))veyra::log::info("present-priority",std::format("actualType={} actualPriority={}",
+            unsigned(presentationQueue_->GetDesc().Type),presentationQueue_->GetDesc().Priority));
         if(SUCCEEDED(hr))hr=ctx.device()->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&presentationFence_));
         if(FAILED(hr)){veyra::log::error("present",std::format("application frame-generation presentation queue/fence hr=0x{:X}",unsigned(hr)));close();return false;}
         presentationEvent_=CreateEventW(nullptr,FALSE,FALSE,nullptr);
@@ -35,7 +50,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         veyra::log::info("present","application frame-generation presentation uses independent queue/fence, 3 command slots; shared textures use producer/consumer GPU fences");
     }
     auto* queue=presentationQueue_?presentationQueue_.Get():ctx.directQueue();
-    gpuTimer_.initialize(ctx.device(),queue);window_=window;RECT rc{};GetClientRect(window,&rc);
+    gpuTimer_.initialize(ctx.device(),queue);window_=window;
     gfx::PresentSink::Desc d;d.targetWindow=window;d.width=std::max(1L,rc.right);d.height=std::max(1L,rc.bottom);d.vsync=false;d.tearing=false;
     d.waitable=!GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_SWAPCHAIN",nullptr,0);
     d.hdr=graph.hdrOutput();d.hdr10=graph.hdr10Output();d.xess=graph.xessEnabled();d.captureCompatible=captureCompatible;d.fgMultiplier=graph.fgMultiplier();
@@ -81,7 +96,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     return true;
 }
 void VideoPresenter::refresh(ID3D12Device* device){for(unsigned i=0;i<3;++i){Microsoft::WRL::ComPtr<ID3D12Resource> bb;if(SUCCEEDED(sink_.swapChain()->GetBuffer(i,IID_PPV_ARGS(&bb))))device->CreateRenderTargetView(bb.Get(),nullptr,{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i)*inc_});}}
-bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& sharedRing,pipeline::EnhanceGraph& graph,unsigned slot,bool generated,bool referencesValid,int comparison,bool baseReference,float split,pipeline::FrameIdentity identity,PreviewView view,int64_t sourcePts100ns) {
+bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& sharedRing,pipeline::EnhanceGraph& graph,unsigned slot,bool generated,bool referencesValid,int comparison,bool baseReference,float split,pipeline::FrameIdentity identity,PreviewView view,int64_t sourcePts100ns,bool retainUnchanged) {
     auto& ring=presentationQueue_?presentationRing_:sharedRing;
     auto* fence=presentationFence_?presentationFence_.Get():ctx.fence();
     const auto presentStart=std::chrono::steady_clock::now();
@@ -110,6 +125,18 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // stretch current buffers there instead of repeatedly draining the GPU
     // and rebuilding provider resources at monitor/DPI boundaries.
     const bool windowChanging=GetPropW(window_,L"Veyra.InteractiveMove")||GetPropW(window_,L"Veyra.DpiTransition");
+    view=filmPixelAlignedView(window_,rc.right,rc.bottom,graph.workWidth(),graph.workHeight(),view);
+    const RetainedFrame retained{graph.presentationReadyFenceObject(slot,generated),graph.presentationReadyFence(slot,generated),
+        slot,unsigned(rc.right),unsigned(rc.bottom),generated,referencesValid,baseReference,IsWindowVisible(window_)!=FALSE,
+        comparison,split,view,identity,MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST)};
+    // Pausing keeps the last flip-model buffer visible. Re-submit only when
+    // its producer fence, view, comparison, visibility, monitor or size changes.
+    // Deferred resize must keep polling until the actual buffers match.
+    if(retainUnchanged&&retained.producer&&retained.fence&&retainedFrame_&&*retainedFrame_==retained&&
+        !windowChanging&&targetWidth==sink_.width()&&targetHeight==sink_.height()&&
+        SUCCEEDED(ctx.device()->GetDeviceRemovedReason())&&
+        !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE",nullptr,0))return true;
+    retainedFrame_.reset(); // A failed present never seeds an idle cache.
     if(!windowChanging&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)&&sink_.resizeDue()) {
         resized=true;
         if(!ring.drainQueue())return false;sink_.resize(targetWidth,targetHeight);
@@ -144,7 +171,6 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // DXGI stretches the retained buffer while the native workspace unfolds.
     // Compute contain in CURRENT client coordinates, then map back to buffer
     // coordinates so that the onscreen image keeps its aspect throughout.
-    view=filmPixelAlignedView(window_,rc.right,rc.bottom,graph.workWidth(),graph.workHeight(),view);
     const auto [renderW,renderH]=view.renderedSize(float(rc.right),float(rc.bottom),float(graph.workWidth()),float(graph.workHeight()));
     D3D12_VIEWPORT viewport{0,0,float(sink_.bufferWidth()),float(sink_.bufferHeight()),0,1};
     D3D12_RECT rect{0,0,LONG(sink_.bufferWidth()),LONG(sink_.bufferHeight())};list->RSSetViewports(1,&viewport);list->RSSetScissorRects(1,&rect);
@@ -268,7 +294,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             ms(presentEnd-dxgiStart),slow,identity.sourceFrameId,identity.epoch,sink_.xess()?"XeSS":"DXGI",resized,
             ms(resizeEnd-presentStart),ms(beginEnd-resizeEnd),ms(dxgiStart-beginEnd),timing.beforeMs,timing.callMs,timing.bufferMs,timing.afterMs,unsigned(timing.result)));
     }
-    xessFailed_=sink_.xessFailed();return presented;
+    xessFailed_=sink_.xessFailed();if(presented)retainedFrame_=retained;return presented;
 }
 bool VideoPresenter::readPresentedFrameForTest(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,sink::RgbaImage& image){
     if(presentationQueue_&&!presentationRing_.drainQueue())return false;
@@ -277,6 +303,7 @@ bool VideoPresenter::readPresentedFrameForTest(gfx::D3D12DeviceContext& ctx,gfx:
     return SUCCEEDED(sink_.swapChain()->GetBuffer(lastBuffer_,IID_PPV_ARGS(&buffer)))&&sink::readRgba8(ctx,ring,buffer.Get(),image);
 }
 void VideoPresenter::close(){
+    retainedFrame_.reset();
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
     if(presentationRing_.initialized())presentationRing_.drainQueue();

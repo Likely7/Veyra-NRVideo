@@ -17,6 +17,12 @@ namespace veyra::ngx {
 
 namespace {
 
+__declspec(noinline) NVSDK_NGX_Result CallReleaseDlss(NVSDK_NGX_Handle* handle,uint32_t& sehCode){
+    sehCode=0;
+    __try{return NVSDK_NGX_D3D12_ReleaseFeature(handle);}
+    __except(EXCEPTION_EXECUTE_HANDLER){sehCode=uint32_t(GetExceptionCode());return NVSDK_NGX_Result_FAIL_PlatformError;}
+}
+
 __declspec(noinline) NVSDK_NGX_Result CallCreateDlss(
     ID3D12GraphicsCommandList* cmdList,
     unsigned int creationNodeMask,
@@ -123,14 +129,17 @@ bool DlssSrBackend::create(NgxCoreHost& coreHost,
     return true;
 }
 
-void DlssSrBackend::release()
+bool DlssSrBackend::release()
 {
+    bool ok=true;
     if (handle_ != nullptr) {
         // SR is a core NGX feature; release through the core API.
-        const NVSDK_NGX_Result result = NVSDK_NGX_D3D12_ReleaseFeature(handle_);
-        (result == NVSDK_NGX_Result_Success ? log::info : log::error)("ngx", std::format("sr-backend: ReleaseFeature result={}", ngxResultString(static_cast<uint64_t>(result))));
+        uint32_t seh=0;const auto result=CallReleaseDlss(handle_,seh);
+        ok=result==NVSDK_NGX_Result_Success&&seh==0;
+        (ok ? log::info : log::error)("ngx", std::format("sr-backend: ReleaseFeature result={} seh={}", ngxResultString(static_cast<uint64_t>(result)),seh));
         handle_ = nullptr;
     }
+    return ok;
 }
 
 bool DlssSrBackend::evaluate(ID3D12GraphicsCommandList* cmdList,

@@ -179,7 +179,9 @@ VPage {
         property real shown: known ? Math.min(1, Math.max(0, fraction)) : 0
         // Live data changes every second; animating it behind another page redrew the
         // window continuously (see VDot.qml), so only while shown.
-        Behavior on shown { enabled: orb.visible; NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
+        // Paused telemetry still updates, but it does not need a 600 ms canvas
+        // animation every second. Keep live playback and user edits responsive.
+        Behavior on shown { enabled: orb.visible && (!veyra.paused || (typeof vyTest !== "undefined" && vyTest.disablePausedUiIdle === true)); NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
         onShownChanged: ring.requestPaint()
         onToneChanged: ring.requestPaint()
         Canvas {
@@ -359,55 +361,84 @@ VPage {
         }
     }
 
-    // --- header (32px) ----------------------------------------------------
-    RowLayout {
+    // Source and output belong together; the transport stays clear for seeking.
+    Item {
         id: head
+        objectName: "pro-header"
         visible: !root.overlay
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: 14
-        height: 32
-        spacing: 8
+        readonly property bool compact: width < 972
+        height: compact ? 72 : 32
 
-        // pages-pro.js data-srcbtn: what is playing, with a chevron for the menu.
-        VButton {
-            id: sourceBtn
-            objectName: "pro-source-button"
-            iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
-                    : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
-            text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
-            maxTextWidth: 260
-            trailingIcon: "down"
-            onClicked: sourceMenu.openAt(this, "down")
-        }
-        // "1080p60 · YUY2 · SDR": reported values only.
-        VTag {
-            objectName: "pro-format-tag"
-            text: veyra.sourceFormatText.length > 0 ? veyra.sourceFormatText : qsTr("未打开")
-        }
-        Item { Layout.fillWidth: true }
+        RowLayout {
+            id: sourceInfo
+            objectName: "pro-source-info"
+            anchors.left: parent.left
+            anchors.top: parent.top
+            width: head.compact ? head.width : Math.max(0, head.width - headActions.width - 16)
+            height: 32
+            spacing: 8
 
-        // View toggle. Choosing 节点 asks first, because switching rebuilds the
-        // whole processing chain (design note: 切换需要确认，会重建处理链).
-        VSeg {
-            objectName: "pro-mode-switch"
-            options: [{ id: "list", label: qsTr("列表"), icon: "list" }, { id: "node", label: qsTr("节点"), icon: "nodes" }]
-            current: veyra.nodeMode === 1 ? "node" : "list"
-            onPicked: id => {
-                const target = id === "node" ? 1 : 0
-                if (target === veyra.nodeMode) { if (target === 1) root.requestPage("node"); return }
-                switchDialog.targetMode = target
-                switchDialog.open()
+            // pages-pro.js data-srcbtn: what is playing, with a chevron for the menu.
+            VButton {
+                id: sourceBtn
+                objectName: "pro-source-button"
+                iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
+                        : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
+                text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
+                maxTextWidth: Math.max(36, Math.min(260, sourceInfo.width - formatTag.implicitWidth
+                                                  - (outputTag.visible ? outputTag.implicitWidth + 8 : 0) - 74))
+                trailingIcon: "down"
+                onClicked: sourceMenu.openAt(this, "down")
             }
+            // "1080p60 · YUY2 · SDR": reported values only.
+            VTag {
+                id: formatTag
+                objectName: "pro-format-tag"
+                text: veyra.sourceFormatText.length > 0 ? veyra.sourceFormatText : qsTr("未打开")
+            }
+            VTag {
+                id: outputTag
+                objectName: "pro-output-summary"
+                visible: veyra.outputSummary.length > 0
+                text: qsTr("输出 ") + veyra.outputSummary.replace("x", "×")
+            }
+            Item { Layout.fillWidth: true }
         }
-        VButton { iconName: "camera"; text: qsTr("截图"); onClicked: veyra.takeScreenshot() }
-        VButton {
-            id: presetBtn
-            iconName: "layers"
-            trailingIcon: "down"
-            text: qsTr("预设：") + veyra.currentPresetName
-            onClicked: presetMenu.openAt(this, "down")
+
+        RowLayout {
+            id: headActions
+            objectName: "pro-header-actions"
+            anchors.right: parent.right
+            y: head.compact ? 40 : 0
+            height: 32
+            spacing: 8
+
+            // View toggle. Choosing 节点 asks first, because switching rebuilds the
+            // whole processing chain (design note: 切换需要确认，会重建处理链).
+            VSeg {
+                objectName: "pro-mode-switch"
+                options: [{ id: "list", label: qsTr("列表"), icon: "list" }, { id: "node", label: qsTr("节点"), icon: "nodes" }]
+                current: veyra.nodeMode === 1 ? "node" : "list"
+                onPicked: id => {
+                    const target = id === "node" ? 1 : 0
+                    if (target === veyra.nodeMode) { if (target === 1) root.requestPage("node"); return }
+                    switchDialog.targetMode = target
+                    switchDialog.open()
+                }
+            }
+            VButton { iconName: "camera"; text: qsTr("截图"); onClicked: veyra.takeScreenshot() }
+            VButton {
+                id: presetBtn
+                iconName: "layers"
+                trailingIcon: "down"
+                text: qsTr("预设：") + veyra.currentPresetName
+                maxTextWidth: 180
+                onClicked: presetMenu.openAt(this, "down")
+            }
         }
     }
 
@@ -420,7 +451,7 @@ VPage {
         anchors.top: head.bottom
         anchors.topMargin: 10
         width: root.width - 376 - 14 * 2 - 10
-        height: root.height - 14 - 32 - 10 - 172 - 10 - 14
+        height: root.height - 14 - head.height - 10 - 172 - 10 - 14
         radius: Theme.rCard
         color: Theme.card
         border.width: 1
@@ -434,7 +465,7 @@ VPage {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            height: parent.height - 34
+            height: parent.height - transport.height
             // Drawing an NR protection region: the native video window lets the
             // pointer through, so this catches the drag; the outline itself is
             // drawn by the bridge on a layered child of the video window.
@@ -494,143 +525,158 @@ VPage {
             }
         }
 
-        // .vbar: mono transport row with source/output tags.
-        RowLayout {
+        // Transport controls; source/output details are in the header.
+        Item {
+            id: transport
+            objectName: "pro-transport"
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
-            height: 34
+            readonly property bool compact: width < 520
+            height: compact ? 68 : 34
             anchors.leftMargin: 10
             anchors.rightMargin: 10
-            spacing: 10
-            Item {
-                implicitWidth: 28; implicitHeight: 28
-                VIcon {
-                    anchors.centerIn: parent
-                    name: (veyra.running && !veyra.paused) ? "pause" : "play"
+            RowLayout {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.rightMargin: transport.compact ? 0 : playbackActions.width + 10
+                height: 34
+                spacing: 10
+                Item {
+                    implicitWidth: 28; implicitHeight: 28
+                    VIcon {
+                        anchors.centerIn: parent
+                        name: (veyra.running && !veyra.paused) ? "pause" : "play"
+                        color: Theme.t2
+                    }
+                    HoverHandler { cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: veyra.togglePlayPause() }
+                }
+                Text {
+                    text: veyra.positionText
                     color: Theme.t2
+                    font.family: Theme.fontMono
+                    font.pixelSize: Theme.fsSmall
                 }
-                HoverHandler { cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: veyra.togglePlayPause() }
-            }
-            Text {
-                text: veyra.positionText
-                color: Theme.t2
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsSmall
-            }
-            Item {
-                id: proSeekArea
-                objectName: "pro-seek"
-                Layout.fillWidth: true
-                implicitHeight: 14
-                Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width
-                    height: 3
-                    radius: 9
-                    color: Qt.rgba(1, 1, 1, 0.14)
+                Item {
+                    id: proSeekArea
+                    objectName: "pro-seek"
+                    Layout.fillWidth: true
+                    implicitHeight: 14
                     Rectangle {
-                        width: parent.width * proSeekArea.frac
-                        height: parent.height
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        height: 3
                         radius: 9
+                        color: Qt.rgba(1, 1, 1, 0.14)
+                        Rectangle {
+                            width: parent.width * proSeekArea.frac
+                            height: parent.height
+                            radius: 9
+                            color: "#FFFFFF"
+                        }
+                    }
+                    // Press or drag anywhere on the rail: the picture follows the
+                    // pointer (a seek every 120 ms) and lands on release.
+                    property bool scrubbing: false
+                    property real scrubFrac: 0
+                    readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, veyra.progress))
+                    Rectangle {
+                        width: 11; height: 11; radius: 5.5
                         color: "#FFFFFF"
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: proSeekArea.frac * proSeekArea.width - width / 2
+                        visible: proSeekMouse.containsMouse || proSeekArea.scrubbing
+                    }
+                    Timer {
+                        id: proScrubSeek
+                        interval: 120
+                        onTriggered: if (proSeekArea.scrubbing) veyra.seekTo(proSeekArea.scrubFrac * veyra.duration)
+                    }
+                    MouseArea {
+                        id: proSeekMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        enabled: veyra.duration > 0 && !veyra.isCapture
+                        cursorShape: Qt.PointingHandCursor
+                        preventStealing: true
+                        function fracAt(x) { return Math.max(0, Math.min(1, x / Math.max(1, proSeekArea.width))) }
+                        onPressed: mouse => { proSeekArea.scrubFrac = fracAt(mouse.x); proSeekArea.scrubbing = true; proScrubSeek.start() }
+                        onPositionChanged: mouse => {
+                            if (!proSeekArea.scrubbing) return
+                            proSeekArea.scrubFrac = fracAt(mouse.x)
+                            if (!proScrubSeek.running) proScrubSeek.start()
+                        }
+                        onReleased: mouse => {
+                            proScrubSeek.stop()
+                            const target = fracAt(mouse.x) * veyra.duration
+                            proSeekArea.scrubbing = false
+                            veyra.seekTo(target)
+                        }
+                        onCanceled: { proScrubSeek.stop(); proSeekArea.scrubbing = false }
                     }
                 }
-                // Press or drag anywhere on the rail: the picture follows the
-                // pointer (a seek every 120 ms) and lands on release.
-                property bool scrubbing: false
-                property real scrubFrac: 0
-                readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, veyra.progress))
-                Rectangle {
-                    width: 11; height: 11; radius: 5.5
-                    color: "#FFFFFF"
-                    anchors.verticalCenter: parent.verticalCenter
-                    x: proSeekArea.frac * proSeekArea.width - width / 2
-                    visible: proSeekMouse.containsMouse || proSeekArea.scrubbing
-                }
-                Timer {
-                    id: proScrubSeek
-                    interval: 120
-                    onTriggered: if (proSeekArea.scrubbing) veyra.seekTo(proSeekArea.scrubFrac * veyra.duration)
-                }
-                MouseArea {
-                    id: proSeekMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    enabled: veyra.duration > 0 && !veyra.isCapture
-                    cursorShape: Qt.PointingHandCursor
-                    preventStealing: true
-                    function fracAt(x) { return Math.max(0, Math.min(1, x / Math.max(1, proSeekArea.width))) }
-                    onPressed: mouse => { proSeekArea.scrubFrac = fracAt(mouse.x); proSeekArea.scrubbing = true; proScrubSeek.start() }
-                    onPositionChanged: mouse => {
-                        if (!proSeekArea.scrubbing) return
-                        proSeekArea.scrubFrac = fracAt(mouse.x)
-                        if (!proScrubSeek.running) proScrubSeek.start()
-                    }
-                    onReleased: mouse => {
-                        proScrubSeek.stop()
-                        const target = fracAt(mouse.x) * veyra.duration
-                        proSeekArea.scrubbing = false
-                        veyra.seekTo(target)
-                    }
-                    onCanceled: { proScrubSeek.stop(); proSeekArea.scrubbing = false }
+                Text {
+                    text: veyra.durationText
+                    color: Theme.t2
+                    font.family: Theme.fontMono
+                    font.pixelSize: Theme.fsSmall
                 }
             }
-            Text {
-                text: veyra.durationText
-                color: Theme.t2
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsSmall
-            }
-            VTag { visible: veyra.sourceRateText.length > 0; text: qsTr("源 ") + veyra.sourceRateText }
-            PlaybackRateButton { objectName: "pro-playback-rate" }
-            VTag { visible: veyra.outputSummary.length > 0; text: qsTr("输出 ") + veyra.outputSummary.replace("x", "×") }
-            VTag {
-                objectName: "pro-fg-tag"
-                visible: veyra.hasSource
-                kind: veyra.fgEnabled ? "acc" : ""
-                text: veyra.fgEnabled ? veyra.fgMultiplier + "X" : qsTr("补帧关")
-            }
-            // Subtitle and audio-track menus (field request 2026-10-01), the same menus as the
-            // 极简 pill's, beside the fullscreen button.
-            component BarButton: Item {
-                id: barBtn
-                property string glyph: ""
-                property string tip: ""
-                signal tapped()
-                implicitWidth: 28; implicitHeight: 28
-                VIcon { anchors.centerIn: parent; name: barBtn.glyph; color: barHover.hovered ? Theme.t1 : Theme.t2 }
-                HoverHandler { id: barHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: barBtn.tapped() }
-                ToolTip.visible: barHover.hovered
-                ToolTip.text: barBtn.tip
-            }
-            BarButton {
-                id: proCcButton
-                objectName: "pro-subtitles"
-                glyph: "cc"
-                tip: qsTr("字幕")
-                visible: veyra.hasSource && !veyra.isCapture
-                onTapped: proCcMenu.openAt(proCcButton, "up")
-            }
-            BarButton {
-                id: proAudioButton
-                objectName: "pro-audio-tracks"
-                glyph: "music"
-                tip: qsTr("音轨")
-                visible: veyra.hasSource && !veyra.isCapture
-                onTapped: proAudioMenu.openAt(proAudioButton, "up")
-            }
-            // Fullscreen, at the picture's bottom-right corner where players put it.
-            Item {
-                objectName: "pro-fullscreen"
-                implicitWidth: 28; implicitHeight: 28
-                VIcon { anchors.centerIn: parent; name: "max"; color: fullHover.hovered ? Theme.t1 : Theme.t2 }
-                HoverHandler { id: fullHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: root.requestFullscreen() }
-                ToolTip.visible: fullHover.hovered
-                ToolTip.text: qsTr("全屏（双击画面 / F11）· 全屏后按 Home 打开快速调节")
+            RowLayout {
+                id: playbackActions
+                objectName: "pro-transport-actions"
+                anchors.right: parent.right
+                y: transport.compact ? 34 : 0
+                height: 34
+                spacing: 10
+                PlaybackRateButton { objectName: "pro-playback-rate" }
+                VTag {
+                    objectName: "pro-fg-tag"
+                    visible: veyra.hasSource
+                    kind: veyra.fgEnabled ? "acc" : ""
+                    text: veyra.fgEnabled ? veyra.fgMultiplier + "X" : qsTr("补帧关")
+                }
+                // Subtitle and audio-track menus (field request 2026-10-01), the same menus as the
+                // 极简 pill's, beside the fullscreen button.
+                component BarButton: Item {
+                    id: barBtn
+                    property string glyph: ""
+                    property string tip: ""
+                    signal tapped()
+                    implicitWidth: 28; implicitHeight: 28
+                    VIcon { anchors.centerIn: parent; name: barBtn.glyph; color: barHover.hovered ? Theme.t1 : Theme.t2 }
+                    HoverHandler { id: barHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: barBtn.tapped() }
+                    ToolTip.visible: barHover.hovered
+                    ToolTip.text: barBtn.tip
+                }
+                BarButton {
+                    id: proCcButton
+                    objectName: "pro-subtitles"
+                    glyph: "cc"
+                    tip: qsTr("字幕")
+                    visible: veyra.hasSource && !veyra.isCapture
+                    onTapped: proCcMenu.openAt(proCcButton, "up")
+                }
+                BarButton {
+                    id: proAudioButton
+                    objectName: "pro-audio-tracks"
+                    glyph: "music"
+                    tip: qsTr("音轨")
+                    visible: veyra.hasSource && !veyra.isCapture
+                    onTapped: proAudioMenu.openAt(proAudioButton, "up")
+                }
+                // Fullscreen, at the picture's bottom-right corner where players put it.
+                Item {
+                    objectName: "pro-fullscreen"
+                    implicitWidth: 28; implicitHeight: 28
+                    VIcon { anchors.centerIn: parent; name: "max"; color: fullHover.hovered ? Theme.t1 : Theme.t2 }
+                    HoverHandler { id: fullHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: root.requestFullscreen() }
+                    ToolTip.visible: fullHover.hovered
+                    ToolTip.text: qsTr("全屏（双击画面 / F11）· 全屏后按 Home 打开快速调节")
+                }
             }
         }
     }

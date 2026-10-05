@@ -113,6 +113,32 @@ int main() {
         check("scene:cadence-break", r.isCadenceBreak, "large PTS gap = cadence break");
     }
 
+    // Frames the player skipped (capture mailbox drop / preview skip) are not a
+    // source cadence break: a 100 ms gap over 6 source frames is 16.7 ms each.
+    // Field log 2026-10-04: treating it as a break reset every ~100 ms and held
+    // live capture at ~22 fps after the window lost focus.
+    {
+        SceneCadenceAnalyzer a;
+        (void)a.analyze(1, makeHistogram(0.5), 0.0, 0, 1);
+        (void)a.analyze(2, makeHistogram(0.5), 0.01, 16667, 1);
+        auto skipped = a.analyze(3, makeHistogram(0.5), 0.01, 16667 + 100000, 6);
+        check("scene:skip-not-break", !skipped.isCadenceBreak, "100 ms over 6 source frames keeps cadence");
+        auto next = a.analyze(4, makeHistogram(0.5), 0.01, 16667 + 100000 + 16667, 1);
+        check("scene:after-skip-normal", !next.isCadenceBreak, "normal frame after a skip keeps cadence");
+        auto jump = a.analyze(5, makeHistogram(0.5), 0.01, 16667 + 100000 + 16667 + 400000, 1);
+        check("scene:real-gap-still-breaks", jump.isCadenceBreak, "a real 400 ms source gap still breaks cadence");
+    }
+    // A duplicate (sub-millisecond PTS delta) must not make the next normal
+    // interval look like a 3x jump.
+    {
+        SceneCadenceAnalyzer a;
+        (void)a.analyze(1, makeHistogram(0.5), 0.0, 0);
+        (void)a.analyze(2, makeHistogram(0.5), 0.01, 16667);
+        (void)a.analyze(3, makeHistogram(0.5), 0.0001, 16667 + 500);
+        auto r = a.analyze(4, makeHistogram(0.5), 0.01, 33334);
+        check("scene:duplicate-no-false-break", !r.isCadenceBreak, "interval after a duplicate compares with the last real interval");
+    }
+
     // Reset clears baseline.
     {
         SceneCadenceAnalyzer a;

@@ -10,7 +10,7 @@ public:
     ~VideoSrBackend(){release();}
     bool create(NgxCoreHost&,ID3D12GraphicsCommandList*);
     bool evaluate(ID3D12GraphicsCommandList*,ID3D12Resource*,ID3D12Resource*,unsigned);
-    void release();
+    bool release();
 private:
     NgxCoreHost* core_=nullptr;
     NVSDK_NGX_Parameter* params_=nullptr;

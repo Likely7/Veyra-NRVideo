@@ -71,7 +71,7 @@ Item {
             property int lastIndex: -1
             property string lastKey: ""
             property var rows: [0,1,2,3].map(i => ({
-                index: 2*i+1, enabled: true, sizePolicy: 0, intensity: 1,
+                index: 2*i+1, enabled: true, runtime: 0, sizePolicy: 0, intensity: 1,
                 tone: 1, structure: 1, skin: -1, style: 0, autoMask: false,
                 uiCorrection: false, total: 1, darken: 1, brighten: 1,
                 color: 1, luminance: 1, temporal: false
@@ -373,6 +373,10 @@ Item {
 
         function pickOption(select,index) {
             verify(select.width>20 && select.height>10)
+            const position=select.mapToItem(root,0,0)
+            console.log("SELECT_REAL_HIT",JSON.stringify({name:select.objectName,index:index,x:position.x,y:position.y,w:select.width,h:select.height,enabled:select.enabled,visible:select.visible,windowWidth:root.Window.window.width,windowHeight:root.Window.window.height}))
+            verify(waitForPolish(root.Window.window))
+            wait(550) // finish the real accordion's opening/clipping transition
             mouseClick(select)
             const popup=popupFor(select)
             tryCompare(popup,"opened",true)
@@ -398,7 +402,10 @@ Item {
                 mouseClick(card,40,24)
                 tryCompare(card,"open",true)
                 const resolution=findChild(card,"nr-resolution")
-                compare(resolution.options.map(o=>o.label).join(","),"480p,720p,900p,1080p · 默认,1440p,原生")
+                compare(resolution.options.slice(0,6).map(o=>o.label).join(","),"480p,720p,900p,1080p · 默认,1440p,原生")
+                compare(resolution.options.length,7)
+                compare(resolution.options[6].id,"6")
+                compare(resolution.options[6].disabled,true)
                 pickOption(resolution,optionIndices[i])
                 compare(fixture.rows[i].sizePolicy,policies[i])
                 const intensity=findChild(card,"nr-intensity")

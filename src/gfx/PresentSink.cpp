@@ -112,10 +112,18 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
                              const Desc& desc, Status& status)
 {
     device_ = device;
+    // These are borrowed until shutdown. Bind the current queue before any
+    // fallible creation: a failed reopen must never signal the previous queue.
+    queue_ = queue;
     shutdownCalled_ = false;
     desc_ = desc;
     width_ = desc.width;
     height_ = desc.height;
+    if (!device_ || !queue_ || (desc.targetWindow && !IsWindow(desc.targetWindow))) {
+        log::warn("present", "sink initialization refused invalid device, queue or target window");
+        status = Status::WindowFailure;
+        return false;
+    }
 
     // Register a window class once per process.
     HINSTANCE instance = GetModuleHandleW(nullptr);
@@ -247,8 +255,6 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     log::info("present",desc.hdr10?"output=HDR10 RGB10 PQ/BT2020":desc.hdr?"output=scRGB FP16 (1=80 nits)":"output=SDR RGB G22");
     // Block ALT+ENTER; the engine owns mode changes.
     (void)factory_->MakeWindowAssociation(hwnd_, DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER);
-    queue_ = queue;
-
     if (!refetchBackBuffers()) {
         status = Status::WindowFailure;
         return false;
@@ -551,6 +557,8 @@ void PresentSink::shutdown()
     log::info("present", "sink-shutdown: sub-step factory-release");
     factory_.Reset();
 
+    hwnd_ = nullptr; // borrowed HWNDs are cleared too, never destroyed here
+    queue_ = nullptr; // owner may release its queue immediately after shutdown
     device_ = nullptr;
     log::info("present", "sink-shutdown: complete");
 }

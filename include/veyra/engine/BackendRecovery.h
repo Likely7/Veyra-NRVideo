@@ -12,10 +12,16 @@ constexpr const wchar_t* ngxFailureHint(uint64_t result) {
     default:return L"初始化失败；详细原因见诊断日志";
     }
 }
-inline bool disableUnsupportedNvidiaEffects(EnhancementSettings& settings,bool nvidia){
+// amdNr: the adapter is AMD, where NR runs on the lmxxf runtime (the graph
+// selects it for every NR layer; an unsupported RX model fails in its own
+// open/admits and is reported like any other NR backend failure).
+inline bool disableUnsupportedNvidiaEffects(EnhancementSettings& settings,bool nvidia,bool amdNr=false){
     if(nvidia)return false;
     const auto before=settings;
-    settings.nr=false;
+    if(!amdNr)settings.nr=false;
+    // NVOF does not exist on these adapters; NR motion uses AMD FidelityFX flow.
+    if(amdNr&&settings.nr&&settings.opticalFlowBackend==OpticalFlowBackend::Nvidia)
+        settings.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
     settings.videoHdr.enabled=false;
     // AMD FSR upscaling is vendor neutral and must survive the NVIDIA-only
     // normalization; every other SR backend is NGX-only.

@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <thread>
 #include <vector>
 
@@ -12,9 +13,11 @@ int wmain(int argc,wchar_t** argv){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     using Clock=std::chrono::steady_clock;
     bool all=true;
-    for(double rate:{1.,1.5,2.,3.})for(double start:{0.,1200.}){
+    for(double rate:{.25,.5,1.,1.3,1.5,1.8,2.,3.,4.})for(double start:{0.,1200.}){
         veyra::sink::AudioPipeline audio;
         if(!audio.open(argv[1])||!audio.setPlaybackRate(rate))return 1;
+        for(double invalid:{0.,-.5,.249,4.001,std::numeric_limits<double>::infinity(),std::numeric_limits<double>::quiet_NaN()})
+            if(audio.setPlaybackRate(invalid))return 1;
         audio.setPaused(false);audio.startThread(nullptr,false,start);
         const unsigned channels=audio.pcmFormat().channels;
         std::vector<float> block(997*channels),pcm;
@@ -32,8 +35,14 @@ int wmain(int argc,wchar_t** argv){
         }
         audio.stopThread();
         unsigned crossings=0;double energy=0;
-        for(size_t i=1;i<pcm.size();++i){if(pcm[i]>=0&&pcm[i-1]<0)++crossings;energy+=pcm[i]*pcm[i];}
-        const double hz=pcm.empty()?0:48000.*crossings/pcm.size();
+        // SoundTouch's beginning/end overlap includes silence. Measure pitch
+        // over the middle half, while duration/PTS still cover every sample.
+        const size_t begin=pcm.size()/4,end=pcm.size()*3/4;
+        for(size_t i=1;i<pcm.size();++i){
+            if(i>begin&&i<end&&pcm[i]>=0&&pcm[i-1]<0)++crossings;
+            energy+=pcm[i]*pcm[i];
+        }
+        const double hz=end>begin?48000.*crossings/(end-begin):0;
         const double duration=1000.*pcm.size()/48000.;
         const bool ok=audio.decodingComplete()&&audio.overruns()==0&&continuous&&
             std::abs(first-start)<1&&std::abs(last-5000)<2&&

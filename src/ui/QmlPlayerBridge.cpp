@@ -35,6 +35,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <limits>
 #include <optional>
 #include <span>
@@ -43,9 +44,11 @@
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/pipeline/VfgBackend.h"
+#include "veyra/gfx/GpuSchedulingPriority.h"
 #include "veyra/engine/ColorLookStore.h"
 #include "veyra/engine/ColorLut.h"
 #include "veyra/engine/Subtitles.h"
+#include "veyra/engine/PlaybackRate.h"
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/source/CaptureFormatSelection.h"
 #include "veyra/source/CaptureFormatRank.h"
@@ -103,6 +106,7 @@ namespace Gdiplus { using std::min; using std::max; }
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include "veyra/ngx/NrArchitecturePolicy.h"
+#include "veyra/ngx/FgCompatibilitySession.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/ScreenCaptureSource.h"
 
@@ -151,7 +155,7 @@ bool exportFileClosed(const QString& path){
 }
 } // namespace
 
-static QVariantMap currentEffectCapabilities();
+static QVariantMap currentEffectCapabilities(bool refresh=false);
 static QString unavailableEffects(const engine::EnhancementSettings& settings);
 static QString disableUnavailableEffects(engine::ChainConfiguration& configuration);
 static ui::EffectGpu effectGpu();
@@ -807,6 +811,7 @@ static ui::EffectGpu effectGpu() {
                 FAILED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), nullptr))) continue;
             const auto name = QString::fromWCharArray(d.Description);
             result.vendor = d.VendorId;
+            result.deviceId = d.DeviceId;
             result.rtx = name.contains("RTX", Qt::CaseInsensitive);
             result.blackwell = name.contains("RTX 50", Qt::CaseInsensitive) || name.contains("Blackwell", Qt::CaseInsensitive);
             result.ada = name.contains("RTX 40", Qt::CaseInsensitive) || name.contains("Ada", Qt::CaseInsensitive);
@@ -818,7 +823,7 @@ static ui::EffectGpu effectGpu() {
     return gpu;
 }
 
-static QVariantMap currentEffectCapabilities() {
+static QVariantMap scanEffectCapabilities() {
     using H = ui::HardwareEffect;
     const auto gpu = effectGpu();
     const auto nr = runtime::localRuntimeDirectory();
@@ -832,6 +837,8 @@ static QVariantMap currentEffectCapabilities() {
         out[id] = QVariantMap{{"available", supported && files}, {"reason", !supported ? requirement : !files ? QObject::tr("当前包缺少此功能的运行组件") : QString{}}};
     };
     add("nr0", H::NvidiaNr50, exists(nr / "nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 50 / Blackwell"));
+    out["nrAuto"]=QVariantMap{{"available",gpu.vendor==0x10DE&&gpu.deviceId==0x2f04&&out.value("nr0").toMap().value("available").toBool()},
+        {"reason",gpu.deviceId!=0x2f04?QObject::tr("自动 NR 当前仅验证 RTX 5070"):!out.value("nr0").toMap().value("available").toBool()?QObject::tr("当前包缺少此功能的运行组件"):QString{}}};
     add("nr2", H::NvidiaNrSf, exists(nr / "nr-ampere/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("nr3", H::NvidiaNr50, exists(nr / "nr-original/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 50 / Blackwell"));
     add("nr4", H::AmdNr, exists(nr / "../amd-nr/LmxxfNrRuntime.dll"), QObject::tr("需要 AMD RX 9000"));
@@ -853,6 +860,18 @@ static QVariantMap currentEffectCapabilities() {
     add("flow1", H::CrossVendor, true, QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     return out;
 }
+// All callers are on the bridge/UI thread. Snapshot reads must not perform
+// filesystem probes or rebuild capability maps. Refresh on actions, language
+// changes and a slow timer so user-replaced runtime files remain discoverable.
+static QVariantMap currentEffectCapabilities(bool refresh) {
+    static QVariantMap cached;
+    static QString language;
+    const auto currentLanguage=i18n::current();
+    if(refresh||cached.isEmpty()||language!=currentLanguage){
+        cached=scanEffectCapabilities();language=currentLanguage;
+    }
+    return cached;
+}
 static QString fgEffectId(engine::FrameGenerationBackend backend) {
     switch (backend) {
     case engine::FrameGenerationBackend::Dlss: return "dlss";
@@ -864,7 +883,7 @@ static QString fgEffectId(engine::FrameGenerationBackend backend) {
     return {};
 }
 static QString unavailableEffects(const engine::EnhancementSettings& settings) {
-    const auto caps = currentEffectCapabilities();
+    const auto caps = currentEffectCapabilities(true);
     QStringList requested;
     if (settings.nr) requested << "nr" + QString::number(int(engine::currentNrRuntime(settings.nrRuntime)));
     if (settings.sr) requested << "sr" + QString::number(settings.videoSrQuality);
@@ -945,9 +964,28 @@ QVariantList QmlPlayerBridge::srBackendChoices() const {
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
-    connect(this,&QmlPlayerBridge::snapshotChanged,this,&QmlPlayerBridge::fgChoicesChanged);
+    connect(this,&QmlPlayerBridge::snapshotChanged,this,
+        [this,ceiling=fgMaxMultiplier(),text=fgProviderText()]() mutable {
+            const auto nextCeiling=fgMaxMultiplier();const auto nextText=fgProviderText();
+            if(nextCeiling==ceiling&&nextText==text)return;
+            ceiling=nextCeiling;text=nextText;emit fgChoicesChanged();
+        });
     connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fgChoicesChanged);
+    auto* capabilityTimer=new QTimer(this);
+    connect(capabilityTimer,&QTimer::timeout,this,[this,reported=currentEffectCapabilities(),priorityRevision=uint64_t(-1)]() mutable {
+        if(gfx::gpuPriorityStatus().state==gfx::GpuPriorityState::Pending)gfx::applyRequestedGpuPriority();
+        const auto priority=gfx::gpuPriorityStatus();
+        if(priority.revision!=priorityRevision){priorityRevision=priority.revision;emit preferencesChanged();}
+        const auto next=currentEffectCapabilities(true);
+        // An action may have refreshed the cache before this tick. Compare with
+        // the last reported map so that QML still learns about that change.
+        if(next==reported)return;
+        reported=next;emit effectCapabilitiesChanged();emit fgChoicesChanged();
+    });
+    capabilityTimer->start(2000);
     impl_->loadPrefs();
+    applyPreference(QStringLiteral("gpuPriority"));
+    applyPreference(QStringLiteral("prewarmEnhancement"));
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
@@ -1131,7 +1169,16 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     emit notice(tr("已从上次位置 %1 继续").arg(formatTime(at)), false);
                 }
             }
-            if (++impl_->positionTicks >= 120) { impl_->positionTicks = 0; rememberPosition(false); }
+            if (++impl_->positionTicks >= 120) {
+                impl_->positionTicks = 0; rememberPosition(false);
+                if(s.running&&!s.capture&&!s.image&&s.sourceWidth>=64&&s.sourceHeight>=64&&s.sourceWidth<=3840&&s.sourceHeight<=2160){
+                    const QVariantMap extent{{"width",s.sourceWidth},{"height",s.sourceHeight}};
+                    if(impl_->prefs.value(QStringLiteral("lastSourceExtent")).toMap()!=extent){
+                        impl_->prefs[QStringLiteral("lastSourceExtent")]=extent;
+                        if(!impl_->savePrefs())veyra::log::warn("ui-prefs","last source extent not saved");
+                    }
+                }
+            }
         }
         // Status light: 1.4.4 sampled its dashboard history every 250 ms.
         if (++impl_->historyTicks >= 16) {
@@ -1216,6 +1263,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             handled = true;
             veyra::log::warn("overlay-hooks", std::format("{} is injected into this process ({})",
                 hook->product, QString::fromWCharArray(hook->module).toStdString()));
+            if (GetModuleHandleW(L"RTSSHooks64.dll")) {
+                wchar_t path[32768]{};
+                GetModuleFileNameW(GetModuleHandleW(L"RTSSHooks64.dll"), path, DWORD(std::size(path)));
+                veyra::log::info("overlay-hooks", std::format("RTSS hook module: activeServer={} path={}",
+                    gfx::rivaTunerRunning(), QString::fromWCharArray(path).toStdString()));
+            }
         }
         // RivaTuner arrived after a start with the interface on the GPU (it was not running
         // then, see main.cpp). Its OSD stays out of this process (RTSSHooksProfileOverride),
@@ -1223,15 +1276,16 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // OSD on the video.
         static bool rivaTunerLate = false;
         if (!rivaTunerLate && !qApp->property("veyraSoftwareUi").toBool() && !qApp->property("veyraUiRendererForced").toBool()
-                && GetModuleHandleW(L"RTSSHooks64.dll")) {
+                && GetModuleHandleW(L"RTSSHooks64.dll") && gfx::rivaTunerRunning()) {
             rivaTunerLate = true;
             const bool automatic = impl_->prefString("overlayCompat") != QLatin1String("off");
             veyra::log::warn("overlay-hooks", std::format("RivaTuner injected into a run with a GPU interface; its OSD is off in this process ({})",
-                automatic ? "started after Veyra: restart suggested" : "monitoring compatibility off"));
+                automatic ? "active OSD server: compatibility restart suggested" : "monitoring compatibility off"));
             if (automatic) emit overlayRestartSuggested();
         }
         // RivaTuner's default hooking keeps OBS game capture from hooking any Direct3D 12
-        // program (2026-10-03, RTSS 7.3.7 + OBS 32.1.2, a bare D3D12 window included); its
+        // program (2026-10-03, RTSS 7.3.5.28314 + OBS 32.1.2, a bare D3D12 window included;
+        // RTSS version corrected against the executable on 2026-10-04); its
         // "Use Microsoft Detours API hooking" option lets both work. Said once, ever.
         static bool obsWithRivaTuner = false;
         if (!obsWithRivaTuner && GetModuleHandleW(L"graphics-hook64.dll") && GetModuleHandleW(L"RTSSHooks64.dll")) {
@@ -1540,7 +1594,7 @@ QString QmlPlayerBridge::fgProviderText() const {
     const auto& s=impl_->snapshot;
     if(fgBackendName()==QLatin1String("vfg")){
         if(!vfgHardwarePossible())return tr("VFG 需要 NVIDIA Ada / Blackwell 显卡（RTX 40 / 50）");
-        if(!pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring()))return tr("未找到 VFG 运行组件，请在组件页核对路径");
+        if(!effectCapabilities().value("vfg").toMap().value("available").toBool())return tr("未找到 VFG 运行组件，请在组件页核对路径");
         return tr("VFG 支持 2X～8X 和低 / 中 / 高质量；6X～8X 为实验档，高倍高质量会增加处理时间");
     }
     if(engine::fsrFrameGeneration(s.applied.frameGenerationBackend)&&s.applied.multiplier>1&&!s.fsrProviderVersion.empty())
@@ -3452,6 +3506,17 @@ void QmlPlayerBridge::tickSubtitles() {
             const auto& track = i.subTracks[size_t(index)];
             if (!track.usable()) return;
             const double at = s.position + double(track.offsetMs) / 1000.0;
+#ifdef VEYRA_HAS_LIBASS
+            if (track.ass) {
+                // ASS/SSA: libass draws the whole script (effects, karaoke,
+                // container fonts). The parsed text only feeds diagnostics.
+                SubtitleLine line;
+                line.ass = track.ass; line.assTimeMs = at * 1000.0; line.secondary = secondary;
+                line.text = engine::textAt(track, at);
+                draw.push_back(std::move(line));
+                return;
+            }
+#endif
             for (const auto* cue : engine::cuesAt(track, at, 3)) {
                 SubtitleLine line;
                 line.text = cue->text; line.bitmap = cue->bitmap;
@@ -3487,7 +3552,7 @@ void QmlPlayerBridge::tickSubtitles() {
     view.videoHeight = s.metrics.resolution.output.height;
     updateSubtitleOverlay(i.subOverlay, draw, view);
     QString joined;
-    for (const auto& line : draw) { if (!joined.isEmpty()) joined += QStringLiteral(" | "); joined += QString::fromStdWString(line.text); }
+    for (const auto& line : draw) { if (line.text.empty()) continue; if (!joined.isEmpty()) joined += QStringLiteral(" | "); joined += QString::fromStdWString(line.text); }
     if (joined != i.subText) {
         i.subText = joined;
         if (!joined.isEmpty()) veyra::log::info("subtitle-overlay", "text=" + joined.toStdString());
@@ -3707,6 +3772,15 @@ QString QmlPlayerBridge::metricsSummary() const {
     return tr("提交 %1").arg(*s.submissionFps, 0, 'f', 1);
 }
 bool QmlPlayerBridge::nrActive() const { return impl_->snapshot.nrActive; }
+bool QmlPlayerBridge::nrAutoActive() const {return impl_->snapshot.nrAutoActive;}
+int QmlPlayerBridge::nrAutoPercent() const {return int(impl_->snapshot.nrAutoPercent);}
+QString QmlPlayerBridge::nrAutoStatus() const {
+    const auto& s=impl_->snapshot;
+    if(s.nrAutoActive)return tr("NR 自动 %1% · %2×%3").arg(s.nrAutoPercent).arg(s.nrAutoWidth).arg(s.nrAutoHeight);
+    if(s.nrAutoStatus==L"自动NR实例池不可用，保留1080p NR")return tr("自动 NR 实例池不可用，保留固定 1080p 档");
+    if(!s.nrAutoStatus.empty())return tr("当前配置未启用自动 NR，保留固定 1080p 档");
+    return {};
+}
 bool QmlPlayerBridge::srActive() const { return impl_->snapshot.srActive; }
 bool QmlPlayerBridge::fgActive() const { return impl_->snapshot.fgActive; }
 bool QmlPlayerBridge::captureRecovering() const { return impl_->snapshot.captureRecovering; }
@@ -3982,6 +4056,8 @@ void QmlPlayerBridge::setMuted(bool value) {
 }
 double QmlPlayerBridge::playbackSpeed() const { return impl_->snapshot.playbackSpeed; }
 double QmlPlayerBridge::playbackRate() const { return impl_->snapshot.playbackRate; }
+double QmlPlayerBridge::minimumPlaybackRate() const { return engine::kMinPlaybackRate; }
+double QmlPlayerBridge::maximumPlaybackRate() const { return engine::kMaxPlaybackRate; }
 void QmlPlayerBridge::setPlaybackRate(double rate) {
     if(!impl_->engine.setPlaybackRate(rate))return;
     impl_->snapshot.playbackRate=rate;emit snapshotChanged();
@@ -4042,6 +4118,26 @@ QVariantList QmlPlayerBridge::nrLayers() const {
     return out;
 }
 
+QString QmlPlayerBridge::nrAutoSelectionReason(int index) const {
+    const auto cap=effectCapabilities().value("nrAuto").toMap();
+    if(!cap.value("available").toBool())return cap.value("reason").toString();
+    const auto& s=settings();const auto& snapshot=impl_->snapshot;
+    int first=-1;unsigned count=0;bool temporal=false,otherAuto=false;
+    for(uint32_t i=0;i<impl_->chain.nodeCount;++i){const auto& node=impl_->chain.nodes[i];
+        if(node.type!=engine::EffectType::NrEnhance)continue;
+        if(first<0)first=int(i);
+        ++count;temporal|=node.enabled&&node.nr.temporal;
+        otherAuto|=int(i)!=index&&node.enabled&&node.nr.sizePolicy==pipeline::NrSizePolicy::Auto;
+    }
+    if(first!=index||count>2||otherAuto)return tr("自动 NR 仅支持一至两层列表的第一层");
+    if(impl_->chain.mode!=engine::ChainMode::List||s.nrRuntime!=engine::NrRuntime::Original||s.sr||s.multiplier>1||temporal||
+       s.nrHoldStrength>0||s.color.enabled||s.additionalColorCount||s.videoHdr.enabled||
+       s.opticalFlowBackend!=engine::OpticalFlowBackend::Nvidia||s.nrMotion!=engine::MotionSource::OpticalFlow||snapshot.capture||snapshot.image||snapshot.sourceHdr||
+       (snapshot.sourceWidth&& (snapshot.sourceWidth!=1920||snapshot.sourceHeight!=1080)))
+        return tr("需 1080p SDR 文件、Lecram 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR");
+    return {};
+}
+
 bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double value){
     if(index<0||uint32_t(index)>=impl_->chain.nodeCount||
        impl_->chain.nodes[index].type!=engine::EffectType::NrEnhance||!std::isfinite(value))return false;
@@ -4068,8 +4164,11 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     else if(key=="color")n.residual.color=float(value);
     else if(key=="luminance")n.residual.luminance=float(value);
     else {
-        if(value!=std::floor(value)||value<0||value>5)return false;
-        if(key=="sizePolicy")n.sizePolicy=static_cast<pipeline::NrSizePolicy>(int(value));
+        if(value!=std::floor(value)||value<0||value>6)return false;
+        if(key=="sizePolicy"){
+            if(value==6){const auto reason=nrAutoSelectionReason(index);if(!reason.isEmpty()){emit notice(reason,true);return false;}}
+            n.sizePolicy=static_cast<pipeline::NrSizePolicy>(int(value));
+        }
         else if(key=="style"&&value<=2)n.model.style=int(value);
         else if(key=="autoMask"&&value<=1)n.model.autoMask=int(value);
         else if(key=="uiCorrection"&&value<=1)n.model.uiCorrection=int(value);
@@ -4590,6 +4689,30 @@ void QmlPlayerBridge::takeScreenshot() {
 
 // --- shell preferences (P4-f / P4-c / P4-d) --------------------------------
 QVariantMap QmlPlayerBridge::preferences() const { return impl_->prefs; }
+QString QmlPlayerBridge::gpuPriorityStatus() const {
+    const auto status=gfx::gpuPriorityStatus();
+    const auto name=[](int priority){return priority==5?tr("实时"):priority==4?tr("高"):tr("普通");};
+    if(status.state==gfx::GpuPriorityState::Pending)return tr("创建显卡会话后生效");
+    if(status.state==gfx::GpuPriorityState::Unavailable)return tr("系统不支持调整 GPU 优先级");
+    if(status.state==gfx::GpuPriorityState::Rejected)return tr("系统未接受设置，当前：%1").arg(status.actual<0?tr("未知"):name(status.actual));
+    return tr("已生效：%1").arg(name(status.actual));
+}
+bool QmlPlayerBridge::enhancementPrewarmAvailable() const {
+    // PreviewGpuSession::prepare refuses RTX 30/40 (patched FG sessions keep the
+    // full NGX lifetime), so the switch must not look usable there either.
+    const auto gpu=effectGpu();
+    return gpu.vendor==0x10DE&&!ngx::FgCompatibilitySession::requested(gpu.vendor,gpu.deviceId);
+}
+void QmlPlayerBridge::scheduleEnhancementPrewarm(){
+    QTimer::singleShot(2000,this,[this]{
+        if(!impl_->prefBool("prewarmEnhancement",false)||!enhancementPrewarmAvailable()||impl_->openingSource||impl_->snapshot.running||!impl_->engine.idle())return;
+        if(engine::runtimeOrder(impl_->activeRuntime()))return;
+        const auto saved=impl_->prefs.value(QStringLiteral("lastSourceExtent")).toMap();
+        const auto width=saved.value("width",1920).toUInt(),height=saved.value("height",1080).toUInt();
+        const bool valid=width>=64&&height>=64&&width<=3840&&height<=2160;
+        impl_->engine.prewarmEnhancement(impl_->facade.pendingSettings(),valid?width:1920,valid?height:1080);
+    });
+}
 void QmlPlayerBridge::rememberWindowSize(int width, int height) {
     // Only kept when the user chose "记住上次"; the key is internal.
     if (width < 400 || height < 200 || width > 16384 || height > 16384) return;
@@ -4614,7 +4737,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection"};
+                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -4651,6 +4774,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         const QString v = value.toString();
         if (v != QLatin1String("auto") && v != QLatin1String("off")) return false;
         stored = v;
+    } else if (key == QLatin1String("gpuPriority")) {
+        const QString v=value.toString();
+        if(v!=QLatin1String("normal")&&v!=QLatin1String("high")&&v!=QLatin1String("realtime"))return false;
+        stored=v;
     } else if (key == QLatin1String("decode")) {
         const QString v = value.toString();
         if (v != QLatin1String("auto") && v != QLatin1String("software") && v != QLatin1String("hardware")) return false;
@@ -4688,6 +4815,15 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    if(key==QLatin1String("prewarmEnhancement")){
+        impl_->engine.setEnhancementPrewarmEnabled(impl_->prefBool("prewarmEnhancement",false));
+        if(impl_->prefBool("prewarmEnhancement",false))scheduleEnhancementPrewarm();
+    }
+    if(key==QLatin1String("gpuPriority")){
+        const auto value=impl_->prefString("gpuPriority");
+        gfx::requestGpuPriority(value==QLatin1String("realtime")?gfx::GpuPriority::Realtime:
+                                value==QLatin1String("high")?gfx::GpuPriority::High:gfx::GpuPriority::Normal);
+    }
     if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
@@ -4935,11 +5071,18 @@ void QmlPlayerBridge::cancelExport() {
 }
 
 void QmlPlayerBridge::restartApplication() {
+    requestApplicationRestart(false);
+}
+void QmlPlayerBridge::restartForOverlayCompatibility() {
+    requestApplicationRestart(true);
+}
+void QmlPlayerBridge::requestApplicationRestart(bool overlayCompatibility) {
     if (exportRunning()) {
         emit notice(tr("设置已保存，请等待导出结束后重启软件"), true);
         return;
     }
     rememberPosition(true);
+    qApp->setProperty("veyraOverlayCompatRestart", overlayCompatibility);
     // main launches the replacement only after UI/engine owners unwind.
     QCoreApplication::exit(42);
 }
@@ -5718,6 +5861,7 @@ void QmlPlayerBridge::updateRunStatus() {
         if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
         else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed)) detail << tr("调度降档");
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);
+        const auto autoState=nrAutoStatus();if(!autoState.isEmpty())detail<<autoState;
     }
     // 1.4.4 DashboardHistory: target = source x multiplier (half-rate capture
     // halves it); actual = what reached present (XeSS: its SDK submit rate).

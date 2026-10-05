@@ -83,9 +83,11 @@ bool TrueHdrBackend::evaluate(ID3D12GraphicsCommandList* list,ID3D12Resource* in
     unsigned seh=0;const auto result=invoke(1,list,params_,&handle_,seh);
     const bool ok=report(1,result,seh,first_);first_=false;return ok;
 }
-void TrueHdrBackend::release(){
-    if(handle_){unsigned seh=0;const auto r=invoke(2,nullptr,params_,&handle_,seh);report(2,r,seh);handle_=nullptr;}
+bool TrueHdrBackend::release(){
+    bool ok=true;
+    if(handle_){unsigned seh=0;const auto r=invoke(2,nullptr,params_,&handle_,seh);ok=report(2,r,seh);handle_=nullptr;}
     if(params_&&core_)core_->destroyParameters(params_);params_=nullptr;core_=nullptr;
     if(module_)FreeLibrary(module_);module_=nullptr;first_=true;
+    return ok;
 }
 }

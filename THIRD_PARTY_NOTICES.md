@@ -708,3 +708,21 @@ compiled HIP modules and runtime DLLs stay outside source Git; their use in this
 runtime MIT notice accompany the local asset directory. No AMD driver DLL is
 copied from that package; an RX 9000 driver must provide `amdhip64_7.dll`.
 Hardware inference, image quality and stability remain unverified on RX 9000.
+# Performance experiments (2026-10-04)
+
+`tests/perf/DuplicateFrameCS.hlsl` adapts `src/Magpie.Core/shaders/DuplicateFrameCS.hlsl` from [SAOG0721/Magpie](https://github.com/SAOG0721/Magpie/tree/27c5df91177a29b33be612e98274169f3d2fca49), fixed commit `27c5df91177a29b33be612e98274169f3d2fca49` / `v0.6.9-experimental`, GPL-3.0. Original shader SHA256 `39fe0acfcf499083c1380aa4a5dc0ad8e0b6632537efda61342e068d9eac2275` matches the local research copy byte-for-byte. Adaptations retain group reduction and atomic publication, replace sampler Gather with four bounded texture loads for D3D12/odd extents, add typed textures and provenance. This is an isolated measurement fixture; no production duplicate-skip behavior is implied.
+
+## libass ASS/SSA subtitle renderer (2026-10-05)
+
+Full ASS/SSA effect subtitles (karaoke, `\move`, `\fad`, `\t`, `\clip`, blur,
+vector drawings, Matroska font attachments) are rendered with
+[libass](https://github.com/libass/libass) 0.17.5 (ISC), statically linked into
+`veyra_qml_ui.exe` together with its dependencies, all built unmodified by vcpkg
+(`C:/veyra-deps/vcpkg`, commit `30ef65cad9`, triplet `x64-windows-static`):
+FreeType 2.14.3 (used under the FreeType License, FTL), FriBidi 1.0.16
+(LGPL-2.1-or-later; Veyra's complete corresponding source is published, so the
+library can be relinked), HarfBuzz 14.4.0 (MIT), libpng (libpng license), zlib
+(zlib license), bzip2 (bzip2 license) and Brotli (MIT). The license texts are the
+`share/<port>/copyright` files of that vcpkg install and must accompany every
+package that contains this build. No source of these libraries is committed to
+Veyra's Git. Builds without `VEYRA_LIBASS_ROOT` keep the built-in styled renderer.

@@ -361,16 +361,20 @@ void testExistingChainContracts() {
         using namespace veyra::pipeline;
         check(ChainNrParams{}.sizePolicy==NrSizePolicy::Realtime,"new NR instances default to 1080p");
         const NrSizePolicy policies[]={NrSizePolicy::Realtime,NrSizePolicy::Native,NrSizePolicy::P480,
-            NrSizePolicy::P720,NrSizePolicy::P900,NrSizePolicy::P1440};
-        const unsigned heights[]={1080,2160,480,720,900,1440};
-        for(unsigned i=0;i<6;++i){
+            NrSizePolicy::P720,NrSizePolicy::P900,NrSizePolicy::P1440,NrSizePolicy::Auto};
+        const unsigned heights[]={1080,2160,480,720,900,1440,1080};
+        for(unsigned i=0;i<7;++i){
             EnhancementSettings s;s.nr=true;s.nrPolicy=policies[i];
             auto c=toChain(s);EnhancementSettings restored;fromChain(c,restored);
             check(restored.nrPolicy==policies[i],"legacy flat policy survives chain conversion");
             StageRequest request;request.nr=true;request.width=3840;request.height=2160;
             EnhanceGraphDesc d;describeStages(request,restored,d);
             check(d.nrLayersExtent.size()==1&&d.nrLayersExtent[0].height==heights[i]&&
-                  d.workWidth==3840&&d.workHeight==2160,"six NR policies preserve full output extent");
+                  d.workWidth==3840&&d.workHeight==2160,"fixed and Auto fallback policies preserve full output extent");
+            request.exportJob=true;describeStages(request,restored,d);
+            check(d.nrLayersExtent[0]==Extent{3840,2160}&&!d.nrAutoPoolLayer,"export ignores preview policies and Auto pool");
+            request.exportJob=false;request.stillImage=true;describeStages(request,restored,d);
+            check(d.nrLayersExtent[0]==Extent{3840,2160}&&!d.nrAutoPoolLayer,"image ignores preview policies and Auto pool");
         }
         EffectChain c;c.nodeCount=4;
         for(unsigned i=0;i<4;++i){c.nodes[i].type=EffectType::NrEnhance;c.nodes[i].enabled=true;
@@ -547,7 +551,7 @@ void testLegacyPlanDimensions() {
     for (uint32_t sr = 0; sr < 2; ++sr)
     for (uint32_t first = 0; first < 2; ++first)
     for (uint32_t context = 0; context < 3; ++context)
-    for (uint32_t policy = 0; policy < 6; ++policy)
+    for (uint32_t policy = 0; policy < 7; ++policy)
     for (uint32_t target = 0; target < 3; ++target) {
         auto s = populated();
         s.sr = sr != 0; s.lowLatency = first != 0;
@@ -588,7 +592,7 @@ void testLegacyPlanDimensions() {
             cases, source.width, source.height, sr, first, context, policy, target);
     }
     std::printf("legacy dimension parity: %u cases (CPU descriptions only)\n", cases);
-    check(all && cases == 864, "production fixed plans match independent legacy formulas across 864 dimension/context combinations");
+    check(all && cases == 1008, "production fixed plans match independent legacy formulas across 1008 dimension/context combinations");
 }
 
 void testProductionFixedPlanDescription() {
@@ -626,6 +630,12 @@ void testProductionFixedPlanDescription() {
           desc.fixedExecutionPlan&&desc.fixedExecutionPlan->resourceCounts[size_t(EffectType::NrEnhance)]==0&&
           desc.fixedExecutionPlan->output==Extent{3840,2160},
         "non-NVIDIA fallback retains ordinary resize extent without NR resources");
+    // As the engine sends it after AMD normalization: DLSS SR removed, NR kept.
+    request.amdNr=true;request.sr=false;describeStages(request,s,desc);
+    check(desc.validateFixedExecutionPlan().empty()&&desc.enableNr&&!desc.enableSr&&desc.fixedExecutionPlan&&
+          desc.fixedExecutionPlan->resourceCounts[size_t(EffectType::NrEnhance)]==2,
+        "AMD adapter description keeps NR layers for the lmxxf runtime");
+    request.amdNr=false;request.sr=true;
     request.nvidiaAdapter=true;request.nr=false;describeStages(request,s,desc);
     check(desc.validateFixedExecutionPlan().empty()&&!desc.enableNr&&desc.fixedExecutionPlan&&
           desc.fixedExecutionPlan->resourceCounts[size_t(EffectType::NrEnhance)]==0,

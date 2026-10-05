@@ -101,6 +101,9 @@ int main(){
     check(driverFlag.observe(true,true,true,true,.02,.09,120),"VRR does not hide source/arrival disagreement");
     check(veyra::source::captureClockBreak(1,.9,120),"VRR preserves backward-clock reset");
     check(veyra::engine::capturePairInterval100ns({83333,10000000},120,0,20,true)==83333,"reset does not reuse stale A/B interval");
+    // Caller passes reset||skipped: a span across frames the player dropped is
+    // not the source cadence (60 Hz capture, 100 ms gap -> keep 16.7 ms phase).
+    check(veyra::engine::capturePairInterval100ns({166667,10000000},60,1000,1100,true)==166667,"skip gap does not stretch the presentation phase");
     constexpr auto drop=static_cast<veyra::pipeline::FrameFlags>(veyra::pipeline::FrameFlagBits::Drop);
     constexpr auto resize=static_cast<veyra::pipeline::FrameFlags>(veyra::pipeline::FrameFlagBits::Resize);
     check(veyra::pipeline::breaksHistory(drop),"mailbox overwrite resets temporal history");

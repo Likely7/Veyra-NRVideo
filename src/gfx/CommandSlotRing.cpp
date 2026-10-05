@@ -58,14 +58,18 @@ bool CommandSlotRing::initialize(ID3D12Device* device,
         slotCount_, timestampHeapDesc.Count, frequency, veyra::hresultString(freqResult)));
 
     slots_.resize(slotCount_);
+    const auto commandType=queue_->GetDesc().Type;
+    if(commandType!=D3D12_COMMAND_LIST_TYPE_DIRECT&&commandType!=D3D12_COMMAND_LIST_TYPE_COMPUTE){
+        status=Status::InvalidArgument;veyra::log::error("gfx","slot-ring: unsupported queue type");return false;
+    }
     for (uint32_t i = 0; i < slotCount_; ++i) {
-        HRESULT result = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&slots_[i].allocator));
+        HRESULT result = device_->CreateCommandAllocator(commandType, IID_PPV_ARGS(&slots_[i].allocator));
         if (FAILED(result)) {
             status = Status::DeviceFailure;
             veyra::log::error("gfx", std::format("slot-ring: CreateCommandAllocator slot={} failed hr={}", i, veyra::hresultString(result)));
             return false;
         }
-        result = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, slots_[i].allocator.Get(), nullptr, IID_PPV_ARGS(&slots_[i].list));
+        result = device_->CreateCommandList(0, commandType, slots_[i].allocator.Get(), nullptr, IID_PPV_ARGS(&slots_[i].list));
         if (SUCCEEDED(result)) slots_[i].list->SetName(std::format(L"Veyra slot {}", i).c_str());
         if (FAILED(result)) {
             status = Status::DeviceFailure;
@@ -100,6 +104,38 @@ void CommandSlotRing::shutdown()
     cpuWaitCount_=0;cpuWaitMilliseconds_=0;submitCount_=0;
     initialized_ = false;
     veyra::log::info("gfx", "slot-ring: shutdown complete");
+}
+
+bool CommandSlotRing::rebindQueue(ID3D12CommandQueue* queue,Status& status){
+    if(!initialized_||!queue){status=Status::InvalidArgument;return false;}
+    if(queue==queue_)return true;
+    const auto type=queue->GetDesc().Type;
+    if(type!=D3D12_COMMAND_LIST_TYPE_DIRECT&&type!=D3D12_COMMAND_LIST_TYPE_COMPUTE){status=Status::InvalidArgument;return false;}
+    for(const auto& slot:slots_)if(slot.recording){status=Status::InvalidArgument;log::error("gfx","queue-rebind rejected: command list still recording");return false;}
+    // Local replacements leave the currently working ring intact on failure.
+    std::vector<Slot> replacement(slotCount_);
+    for(uint32_t i=0;i<slotCount_;++i){
+        HRESULT hr=device_->CreateCommandAllocator(type,IID_PPV_ARGS(&replacement[i].allocator));
+        if(SUCCEEDED(hr))hr=device_->CreateCommandList(0,type,replacement[i].allocator.Get(),nullptr,IID_PPV_ARGS(&replacement[i].list));
+        if(SUCCEEDED(hr))hr=replacement[i].list->Close();
+        if(FAILED(hr)){status=Status::DeviceFailure;log::error("gfx",std::format("queue-rebind lists slot={} hr=0x{:X}",i,unsigned(hr)));return false;}
+        replacement[i].list->SetName(std::format(L"Veyra rebound slot {}",i).c_str());
+    }
+    ComPtr<ID3D12QueryHeap> heap;ComPtr<ID3D12Resource> readback;
+    D3D12_QUERY_HEAP_DESC query{};query.Type=D3D12_QUERY_HEAP_TYPE_TIMESTAMP;query.Count=slotCount_*2;
+    UINT64 frequency=0;HRESULT hr=queue->GetTimestampFrequency(&frequency);
+    if(SUCCEEDED(hr)&&frequency)hr=device_->CreateQueryHeap(&query,IID_PPV_ARGS(&heap));
+    else if(SUCCEEDED(hr))hr=E_FAIL;
+    D3D12_HEAP_PROPERTIES props{};props.Type=D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=slotCount_*2*sizeof(uint64_t);
+    desc.Height=1;desc.DepthOrArraySize=1;desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    if(SUCCEEDED(hr))hr=device_->CreateCommittedResource(&props,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback));
+    if(FAILED(hr)){status=Status::DeviceFailure;log::error("gfx",std::format("queue-rebind timestamps hr=0x{:X}",unsigned(hr)));return false;}
+    if(!drainQueue()){status=Status::DeviceFailure;return false;}
+    queue_=queue;slots_.swap(replacement);timestampHeap_=std::move(heap);timingReadback_=std::move(readback);
+    timestampFrequency_=frequency;nextSlot_=0;gpuCommandTimesMs_.clear();gpuCommandTimesCursor_=0;
+    status=Status::Ok;log::info("gfx",std::format("queue-rebind type={} frequencyHz={} nextFence={} slots={}",unsigned(type),frequency,nextFenceValue_,slotCount_));
+    return true;
 }
 
 ID3D12GraphicsCommandList* CommandSlotRing::acquire(uint32_t slot, Status& status)
@@ -204,7 +240,7 @@ uint32_t CommandSlotRing::inFlightCount() const
 }
 
 bool CommandSlotRing::discardRecording(){
-    bool ok=true;for(uint32_t i=0;i<slots_.size();++i){auto& s=slots_[i];if(s.recording){const HRESULT hr=s.list->Close();s.recording=false;s.timed=false;s.label.clear();veyra::log::info("gfx",std::format("discard unsubmitted command list slot={} hr=0x{:X}",i,unsigned(hr)));if(FAILED(hr)){s.list.Reset();const HRESULT created=device_->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,s.allocator.Get(),nullptr,IID_PPV_ARGS(&s.list));if(FAILED(created)||FAILED(s.list->Close()))ok=false;}}}return ok;
+    bool ok=true;for(uint32_t i=0;i<slots_.size();++i){auto& s=slots_[i];if(s.recording){const HRESULT hr=s.list->Close();s.recording=false;s.timed=false;s.label.clear();veyra::log::info("gfx",std::format("discard unsubmitted command list slot={} hr=0x{:X}",i,unsigned(hr)));if(FAILED(hr)){s.list.Reset();const HRESULT created=device_->CreateCommandList(0,queue_->GetDesc().Type,s.allocator.Get(),nullptr,IID_PPV_ARGS(&s.list));if(FAILED(created)||FAILED(s.list->Close()))ok=false;}}}return ok;
 }
 bool CommandSlotRing::drainQueue()
 {

@@ -266,11 +266,13 @@ bool DlssFgBackend::create(NgxCoreHost& coreHost,
     return true;
 }
 
-void DlssFgBackend::release()
+bool DlssFgBackend::release()
 {
+    bool ok=true;
     if (handle_ != nullptr) {
         uint32_t sehCode = 0;
         const NVSDK_NGX_Result result = CallReleaseDlssg(handle_, sehCode);
+        ok=result==NVSDK_NGX_Result_Success&&sehCode==0;
         (result == NVSDK_NGX_Result_Success ? log::info : log::error)("ngx", std::format("fg-backend: ReleaseFeature result={} evaluates={} resets={}",
             ngxResultString(static_cast<uint64_t>(result)), evaluateCount_, resetCount_));
         if (sehCode != 0) {
@@ -278,6 +280,7 @@ void DlssFgBackend::release()
         }
         handle_ = nullptr;
     }
+    return ok;
 }
 
 bool DlssFgBackend::evaluate(ID3D12GraphicsCommandList* cmdList,

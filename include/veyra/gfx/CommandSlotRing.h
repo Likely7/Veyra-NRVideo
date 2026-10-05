@@ -39,9 +39,13 @@ public:
                     uint32_t slotCount,
                     Status& status);
     void shutdown();
+    // Graph rebuild only: create replacements first, drain the old queue, then
+    // swap lists without restarting this fence's strictly monotonic timeline.
+    bool rebindQueue(ID3D12CommandQueue* queue,Status& status);
 
     uint32_t slotCount() const { return slotCount_; }
     bool initialized() const { return initialized_; }
+    ID3D12CommandQueue* queue() const {return queue_;}
 
     // Waits for this slot's outstanding fence value (if any), then resets the
     // allocator and command list. Returns the recycled list ready for record.

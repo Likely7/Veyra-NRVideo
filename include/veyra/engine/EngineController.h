@@ -6,6 +6,7 @@
 #include <thread>
 #include <condition_variable>
 #include <functional>
+#include <memory>
 #include "veyra/engine/EnhancementSettings.h"
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/PresentationSettings.h"
@@ -28,6 +29,7 @@ namespace veyra::sink { struct RgbaImage; }
 namespace veyra::gfx { class D3D12DeviceContext; class CommandSlotRing; }
 namespace veyra::engine {
 class FrameFlowWindow;
+struct PreviewGpuSession;
 struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t fgMultiplier=2; EnhancementSettings settings;
     std::optional<ChainRuntimeOrder> nodeOrder; // in-process only; not export shared memory
     int audioStreamIndex=-1; // export selection; -1 selects the container default
@@ -63,6 +65,9 @@ struct PlayerSnapshot {
     std::wstring status=L"请打开视频或图片";
     EnhancementSettings desired,applied;bool applying=false;
     bool nrActive=false,srActive=false,fgActive=false;
+    bool nrAutoActive=false;
+    uint32_t nrAutoPercent=0,nrAutoWidth=0,nrAutoHeight=0;
+    std::wstring nrAutoStatus;
     bool videoHdrActive=false; // TrueHDR actually running this graph (needs an HDR display path)
     std::wstring backendWarning;
     std::wstring sourceNotice;
@@ -81,6 +86,7 @@ struct PlayerSnapshot {
     // Source geometry for the UI: coded size and the container's display aspect
     // ratio (0 = use coded size). Known at open time, before the first frame.
     uint32_t sourceWidth=0,sourceHeight=0;
+    bool sourceHdr=false;
     double sourceDisplayAspect=0.0;
     int sourceRotationDegrees=0;
     // Poster frame for the minimal-mode bar, as a small RGBA8 image. Empty when
@@ -140,6 +146,8 @@ public:
     EngineController();
     ~EngineController();
     bool idle()const;
+    bool prewarmEnhancement(EnhancementSettings,unsigned width=1920,unsigned height=1080);
+    void setEnhancementPrewarmEnabled(bool);
     bool requestSettings(EnhancementSettings,std::optional<ChainRuntimeOrder> = std::nullopt,uint64_t* acceptedRevision=nullptr);
     void requestPresentation(PresentationSettings);
     void open(HWND video,const std::wstring& path,PlayerOptions options);
@@ -196,6 +204,8 @@ private:
     PreviewView previewView_;
     std::wstring savePath_;
     std::thread worker_;
+    std::unique_ptr<PreviewGpuSession> prewarmed_; // engine dispatcher only
+    std::atomic<bool> prewarmEnabled_{false}; // off until the saved preference enables it (default off since 2026-10-05)
     std::condition_variable wake_;std::function<void()> pending_;bool shutdown_=false,busy_=false;
     EnhancementSettings desired_;uint64_t nextRevision_=1;
     std::optional<ChainRuntimeOrder> desiredNodeOrder_; // protected by mutex_, paired with desired_

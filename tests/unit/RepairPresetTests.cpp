@@ -277,6 +277,11 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
   bool roundtrip=stack.load()&&stack.put(L"four-independent-NR",layers);
   PresetStore loaded(stackPath);roundtrip=roundtrip&&loaded.load()&&loaded.entries().back().settings==layers;
   std::cout<<"NR v23 four layers mixed sizes bypass/model/residual/color roundtrip="<<roundtrip<<'\n';ok=roundtrip&&ok;
+  auto autoPath=p;autoPath+=L".nr-auto";PresetStore automatic(autoPath);
+  auto autoSettings=layers;autoSettings.nrLayers[0].sizePolicy=veyra::pipeline::NrSizePolicy::Auto;
+  const bool autoSaved=automatic.load()&&automatic.put(L"optional-auto-NR",autoSettings);
+  PresetStore autoLoaded(autoPath);const bool autoRoundtrip=autoSaved&&autoLoaded.load()&&autoLoaded.entries().size()==1&&autoLoaded.entries()[0].settings==autoSettings;
+  std::cout<<"NR Auto integer policy preserves independent layers in preset="<<autoRoundtrip<<'\n';ok=autoRoundtrip&&ok;
   // v24: per-layer tiers and the stabiliser pair, stored beside a default entry
   // in the same file (every row must then carry the v24 fields consistently).
   auto tierPath=p;tierPath+=L".nr-stack-v24";PresetStore tiers(tierPath);

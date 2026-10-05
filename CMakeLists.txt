@@ -108,6 +108,7 @@ target_include_directories(veyra_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 target_link_libraries(veyra_base PUBLIC bcrypt wintrust crypt32 version)
 
 add_library(veyra_gfx STATIC
+  src/gfx/GpuSchedulingPriority.cpp
   src/gfx/D3D12DeviceContext.cpp
   src/gfx/CommandSlotRing.cpp
   src/gfx/PresentSink.cpp
@@ -146,6 +147,7 @@ if(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR)
   endif()
 add_library(veyra_ngx STATIC
   src/ngx/NgxCoreHost.cpp
+  src/ngx/NgxCoreCache.cpp
   src/ngx/DlssNrRuntimeAdapter.cpp
   src/ngx/DlssSrBackend.cpp
     src/ngx/VideoSrBackend.cpp
@@ -169,7 +171,7 @@ add_library(veyra_ngx STATIC
   target_link_libraries(veyra_ngx PRIVATE
     "$<IF:$<CONFIG:Debug>,${VEYRA_DLSS_SDK_ROOT}/lib/Windows_x86_64/x64/nvsdk_ngx_s_dbg.lib,${VEYRA_DLSS_SDK_ROOT}/lib/Windows_x86_64/x64/nvsdk_ngx_s.lib>")
   target_compile_definitions(veyra_ngx PUBLIC
-    VEYRA_EXPERIMENTAL_LOCAL_DLSSNR=1)
+    VEYRA_EXPERIMENTAL_LOCAL_DLSSNR=1 VEYRA_HAS_NGX_CORE_CACHE=1 VEYRA_HAS_PAUSED_NR_RESIDUAL_REUSE=1)
 
   # Diagnostic: exercises the Ada multi-frame unlock against the local DLSS-G
   # runtime image without involving NGX (works on any NVIDIA adapter).
@@ -643,6 +645,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   add_executable(veyra_repair_contract_tests tests/unit/RepairContractTests.cpp)
   add_executable(veyra_subtitle_loading_tests tests/integration/SubtitleLoadingTests.cpp)
+  add_executable(veyra_subtitle_text_tests tests/integration/SubtitleTextTests.cpp)
+  target_compile_features(veyra_subtitle_text_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_subtitle_text_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_subtitle_text_tests PRIVATE veyra_engine)
   add_executable(veyra_screenshot_combination_tests tests/integration/ScreenshotCombinationTests.cpp)
   target_link_libraries(veyra_screenshot_combination_tests PRIVATE veyra_engine)
   target_compile_features(veyra_screenshot_combination_tests PRIVATE cxx_std_20)
@@ -764,6 +770,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_definitions(veyra_image_dimension_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
   target_link_libraries(veyra_image_dimension_tests PRIVATE veyra_engine)
   add_executable(veyra_preview_geometry_tests tests/integration/PreviewGeometryTests.cpp)
+  add_executable(veyra_present_sink_lifecycle_tests tests/perf/PresentSinkLifecycleTests.cpp)
+  target_compile_features(veyra_present_sink_lifecycle_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_present_sink_lifecycle_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_present_sink_lifecycle_tests PRIVATE veyra_gfx user32)
   add_executable(veyra_experimental_backend_tests tests/integration/ExperimentalBackendTests.cpp)
   target_compile_features(veyra_experimental_backend_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_experimental_backend_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
@@ -908,6 +918,23 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # VEYRA_DISPLAY_VERSION is the human-readable version the app reports; it is
   # the same value the resource file uses, so the UI cannot drift from it.
   target_compile_definitions(veyra_qml_bridge PRIVATE VEYRA_DISPLAY_VERSION="${VEYRA_DISPLAY_VERSION}")
+  # libass (ISC) + FreeType/FriBidi/HarfBuzz, static, for full ASS/SSA effect
+  # subtitles. Local prebuilt tree only (vcpkg x64-windows-static-md); never in
+  # source Git. Without it ASS tracks fall back to the built-in styled renderer.
+  set(VEYRA_LIBASS_ROOT "" CACHE PATH "libass static install prefix (include/ass/ass.h, lib/ass.lib)")
+  if(VEYRA_LIBASS_ROOT AND EXISTS "${VEYRA_LIBASS_ROOT}/include/ass/ass.h")
+    target_sources(veyra_qml_bridge PRIVATE apps/veyra/ui/AssSubtitleRenderer.cpp apps/veyra/ui/AssSubtitleRenderer.h)
+    set_source_files_properties(apps/veyra/ui/AssSubtitleRenderer.cpp PROPERTIES COMPILE_OPTIONS /utf-8)
+    target_include_directories(veyra_qml_bridge PRIVATE "${VEYRA_LIBASS_ROOT}/include")
+    target_compile_definitions(veyra_qml_bridge PRIVATE VEYRA_HAS_LIBASS=1)
+    foreach(lib ass harfbuzz fribidi freetype libpng16 zs bz2 brotlidec brotlicommon)
+      target_link_libraries(veyra_qml_bridge PRIVATE "${VEYRA_LIBASS_ROOT}/lib/${lib}.lib")
+    endforeach()
+    target_link_libraries(veyra_qml_bridge PRIVATE gdi32 dwrite)
+    message(STATUS "libass: ${VEYRA_LIBASS_ROOT}")
+  else()
+    message(STATUS "libass: not configured; ASS effects use the built-in styled renderer")
+  endif()
 
   # The QML module is deployed as plain files next to the executable rather
   # than compiled into a resource: the qmldir-based module keeps the .qml
@@ -997,6 +1024,81 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   add_executable(veyra_nr_video_quality_probe tests/integration/NrVideoQualityProbe.cpp)
   target_compile_features(veyra_nr_video_quality_probe PRIVATE cxx_std_20)
   target_link_libraries(veyra_nr_video_quality_probe PRIVATE veyra_engine)
+  add_executable(veyra_nr_dynamic_size_experiment tests/perf/NrDynamicSizeExperiment.cpp)
+  target_compile_features(veyra_nr_dynamic_size_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_dynamic_size_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_dynamic_size_experiment PRIVATE veyra_ngx)
+  add_executable(veyra_nr_concurrent_create_experiment tests/perf/NrConcurrentCreateExperiment.cpp)
+  target_compile_features(veyra_nr_concurrent_create_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_concurrent_create_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_concurrent_create_experiment PRIVATE veyra_ngx)
+  add_executable(veyra_nr_rebuild_benchmark tests/perf/NrRebuildBenchmark.cpp)
+  target_compile_features(veyra_nr_rebuild_benchmark PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_rebuild_benchmark PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_rebuild_benchmark PRIVATE veyra_engine)
+  add_executable(veyra_nr_static_input_experiment tests/perf/NrStaticInputExperiment.cpp)
+  target_compile_features(veyra_nr_static_input_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_static_input_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_static_input_experiment PRIVATE veyra_engine bcrypt)
+  add_executable(veyra_duplicate_gpu_experiment tests/perf/DuplicateGpuExperiment.cpp)
+  target_compile_features(veyra_duplicate_gpu_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_duplicate_gpu_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_duplicate_gpu_experiment PRIVATE veyra_engine d3dcompiler)
+  add_executable(veyra_nr_paused_residual_experiment tests/perf/NrPausedResidualExperiment.cpp)
+  target_compile_features(veyra_nr_paused_residual_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_paused_residual_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_paused_residual_experiment PRIVATE veyra_engine bcrypt)
+  add_executable(veyra_paused_present_experiment tests/perf/PausedPresentExperiment.cpp)
+  target_compile_features(veyra_paused_present_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_paused_present_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_paused_present_experiment PRIVATE veyra_engine)
+  add_executable(veyra_nr_gpu_competition_load tests/perf/NrGpuCompetitionLoad.cpp)
+  target_compile_features(veyra_nr_gpu_competition_load PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_gpu_competition_load PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_gpu_competition_load PRIVATE veyra_engine)
+  add_executable(veyra_nr_recent_cache_experiment tests/perf/NrRecentCacheExperiment.cpp)
+  add_executable(veyra_nr_prewarm_experiment tests/perf/NrPrewarmExperiment.cpp)
+  target_compile_features(veyra_nr_prewarm_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_prewarm_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_prewarm_experiment PRIVATE veyra_engine)
+  add_executable(veyra_ngx_compute_queue_experiment tests/perf/NgxComputeQueueExperiment.cpp)
+  target_compile_features(veyra_ngx_compute_queue_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_ngx_compute_queue_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_ngx_compute_queue_experiment PRIVATE veyra_engine)
+  add_executable(veyra_nr_graph_queue_experiment tests/perf/NrGraphQueueExperiment.cpp)
+  target_compile_features(veyra_nr_graph_queue_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_graph_queue_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_graph_queue_experiment PRIVATE veyra_engine)
+  add_executable(veyra_nr_mixed_resolution_experiment tests/perf/NrMixedResolutionExperiment.cpp)
+  target_compile_features(veyra_nr_mixed_resolution_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_mixed_resolution_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_mixed_resolution_experiment PRIVATE veyra_engine)
+  add_executable(veyra_nr_auto_controller_tests tests/perf/AutoNrControllerTests.cpp)
+  target_compile_features(veyra_nr_auto_controller_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_nr_auto_controller_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  add_executable(veyra_nr_auto_pool_experiment tests/perf/NrAutoPoolExperiment.cpp)
+  target_compile_features(veyra_nr_auto_pool_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_auto_pool_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_auto_pool_experiment PRIVATE veyra_engine)
+  add_executable(veyra_nr_letterbox_experiment tests/perf/NrLetterboxExperiment.cpp)
+  target_compile_features(veyra_nr_letterbox_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_letterbox_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_letterbox_experiment PRIVATE veyra_engine)
+  add_executable(veyra_nr_queue_migration_experiment tests/perf/NrQueueMigrationExperiment.cpp)
+  target_compile_features(veyra_nr_queue_migration_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_queue_migration_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_queue_migration_experiment PRIVATE veyra_engine)
+  add_executable(veyra_nr_export_pipeline_experiment tests/perf/NrExportPipelineExperiment.cpp)
+  target_compile_features(veyra_nr_export_pipeline_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_export_pipeline_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_export_pipeline_experiment PRIVATE veyra_engine)
+  target_compile_features(veyra_nr_recent_cache_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_recent_cache_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_recent_cache_experiment PRIVATE veyra_engine bcrypt)
+  add_executable(veyra_nr_core_cache_contract_tests tests/perf/NrCoreCacheContractTests.cpp)
+  target_compile_features(veyra_nr_core_cache_contract_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_core_cache_contract_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_core_cache_contract_tests PRIVATE veyra_engine)
   target_compile_features(veyra_nr_temporal_gpu_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_nr_temporal_gpu_tests PRIVATE veyra_pipeline)
   add_executable(veyra_gpu_timing_tests tests/integration/GpuTimingTests.cpp)
@@ -1010,7 +1112,7 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_link_libraries(veyra_repair_fg_tests PRIVATE veyra_pipeline veyra_sinks veyra_nvof)
 
   # Headless quality-core runner (Playbook R3.3): the phase5 gate's quality
-  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/VideoExportJob.cpp src/engine/ExportStreams.cpp src/engine/ExportQueue.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp)
+  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/PreviewGpuSession.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/VideoExportJob.cpp src/engine/ExportStreams.cpp src/engine/ExportQueue.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp)
   target_sources(veyra_pipeline PRIVATE src/guidance/AmdOpticalFlow.cpp
     src/guidance/GpuDisOpticalFlow.cpp third_party/gpu-dis/src/gpu/native_strict_dis_provider.cpp)
   target_include_directories(veyra_pipeline PRIVATE third_party/gpu-dis/src/gpu)

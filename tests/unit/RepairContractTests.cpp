@@ -76,6 +76,12 @@ int main(){
         s.nr=s.sr=true;s.multiplier=2;s.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;
         check(engine::disableUnsupportedNvidiaEffects(s,false)&&!s.nr&&!s.sr&&s.multiplier==2,"non-NVIDIA normalization retains independently selected XeSS");
         s.nr=true;check(!engine::disableUnsupportedNvidiaEffects(s,true)&&s.nr,"NVIDIA capability normalization retains supported effects");
+        // AMD adapters keep NR (lmxxf runtime) and move NR motion to AMD flow;
+        // DLSS SR/FG are still removed. Field log 2026-10-05 (RX 9070 XT): NR
+        // was silently normalized off and AMD NR never ran.
+        s=engine::EnhancementSettings{};s.nr=s.sr=true;s.multiplier=2;s.nrRuntime=engine::NrRuntime::LmxxfAmd;
+        check(engine::disableUnsupportedNvidiaEffects(s,false,true)&&s.nr&&!s.sr&&s.multiplier==1&&
+              s.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx,"AMD normalization keeps NR on the AMD runtime with AMD flow");
     }
     {
         engine::EnhancementSettings requested;requested.nr=requested.sr=true;requested.multiplier=2;requested.audioOffsetMs=37;

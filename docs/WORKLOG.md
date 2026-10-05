@@ -1,5 +1,150 @@
 # Veyra 工作记录
 
+## 2026-10-05 继续剩余节点，禁止追加压力测试
+
+用户睡前要求继续且不要压力测试。Goal已恢复active，当前c4ea7d8/干净分支，nr-control guard通过（112路径）；保持原主线/桌面/运行组件与用户配置。先存档3c-graph-normal-before，再准备正常播放DIRECT/COMPUTE及普通/HIGH呈现对照，不启动旧competition驱动。所有新证据仍在E:/项目/Veyra/{logs,tests,tmp,archives}/perf-nr-20261004。随后多NR/跨帧/黑边/自动尺寸逐节点尝试；无收益或画面不满足保留门槛的实现回退，不能将API通过冒充性能收益，画质需人工确认的部分默认不启用。
+
+## 2026-10-05 正常负载八组收尾，数据与异常完整保留
+
+normal-load-20261005-v1三轮六组与v2-confirm一对均正常退出/效果/EXE/runtime/source身份通过，结束后两个manifest逐文件EXE/DLL/QML再次核对完全一致，无测试进程。全四轮NR中位A7.3925/B7.256ms，增强21.394/21.245ms；变化-1.85/-0.70%，不计持续播放提速，B先前普通2X压力11.367/27.653ms明显回落。确认A/B NR7.287/7.245、增强21.204/21.169、源跳帧0。原三轮和确认数据独立保留，不择优。
+
+A3控制/调度2946.789ms断档、提交max2843.883ms、源跳89；B3源跳13/过期生成14，连续性仍不通过。UI1s状态日志间隔约3.8s，而16ms Timer最大2729ms，分别记录；A3一行增强mean=-1是暂不可用，原统计不篡改。所有稳态样本active=false；其余六组均在source303/304附近约99–105ms engine周期（graphSubmit68–72ms），SDK/系统/调度根因待查，列入R0。数据E:/项目/Veyra/logs/perf-nr-20261004/normal-load-20261005-v1-summary/all-eight-review.json及all-eight.csv，含源receipt/所有帧统计路径、异常和GPU/前台状态。收尾guard/数据校验后docs标签3c-normal-load-docs、3c-normal-confirm-docs，源码bundle+patch收据同任务archives；不改产品，不merge/push/发布。
+
+## 2026-10-05 正常负载六组完成，连续性异常另存确认
+
+normal-load-20261005-v1六组exit0/配置/EXE及运行库一致，测量不代表连续性全部通过。A NR7.480/7.305/8.846、B7.267/7.237/8.813ms；A3提交断档2843.883ms、稳态跳帧87/全日志89，engine controlAndSchedule2946.789ms而graphSubmit1.141；B3最大139.918ms、稳态跳帧12–13/生成过期12–14。根因未证明，原六组不删、不择优。before561ea60，确认driver增加显式confirm模式只一对B/A第4轮50秒，label normal-load-20261005-v2-confirm，数据另存。详细数值及边界PERF_3C_NORMAL_LOAD_2026-10-05。
+
+## 2026-10-05 用户授权正常负载匹配复测
+
+“测一波看看”：先封存before5782948，再准备nr-normal-load-compare.py。确认压力构建封存app-B2d EXE97dbccb…与旧receipt一致；当前build/B2d为重新链接的2e8d633…，明确拒绝混用。A封存app-A为b7081f…，M1/F95原字节、B产品QML与当前源码除测试Loader Main.qml外一致；无Veyra进程、空闲GPU快照2%/487MHz。六组A/B交错、50秒、同设置普通队列，不启动压力进程；详细方法见PERF_3C_NORMAL_LOAD_2026-10-05。准备完存档后运行，结果待。
+
+## 2026-10-04 用户追问NR高耗时：拉出既有数据
+
+复核队列十二轮原始summary/player-timing，NR稳态每轮中位11.328–11.560ms，全部日志NR滚动P95最大11.972ms；原基线S4无自有竞争进程为7.188–7.212ms。明确本轮另跑自有三NR压力进程，竞争图完成约13–16/s；并非匹配负载的A/B，未排除源码回归。源码核对：公共Nr计时槽每层覆盖，仅保留最后一层；enhancementProcessingMs合并每层/其他增强跨度去重且日志输出滚动mean，纠正PERF_3C表头误写P95。27行派生CSV写入E:/项目/Veyra/logs/perf-nr-20261004/B3c-present-priority-v1-NR-readout.csv，既有JSON/log不变，缺失指标留空；无新GPU测试或产品修改。详PERF_3C_QUEUES NR耗时复核，下一轮先补同EXE无竞争/有竞争匹配对照再判回归。
+
+## 2026-10-04 PERF本轮收尾汇报：3c正确性通过、提速未验收
+
+nr-queue-priority.py B2d B3c-present-priority-v1十二组全部exit0，实际HIGH100/Normal0读回；2X软件Present P99中位17.3202→17.4002ms/max63.1653→73.4092，3X P99 16.7883→16.5618/max78.4057→74.1415，拒绝默认HIGH。全环境/receipt/submit/竞争CSV与比较JSON已保存，详PERF_3C_QUEUES。
+
+完整compute候选前存档0212db3，将原GPU依赖/计时指向实际ring queue，保留DIRECT呈现COMMON往返和消费者fence，默认关闭，仅VEYRA_TEST_GRAPH_COMPUTE。build-graph-compute-v1 UI/native/load构建exit0；nr-graph-queue.py B2d B3c-graph-native-v1二十四组（NR、SRNR、双NR+SR+DLSS2X/3X各direct/compute三次）exit0，1440当前原帧+1062全部生成帧完整SHA/PTS一致、A-A噪声0/debug0/device0/Core关闭。测试读回等待不用于吞吐收益。矩阵新增可审计TEST env和stageLabel避免重链接后复用旧EXE，后续完整compute交错性能驱动已准备但未启动。guard、diff-check、i18n1947项/零缺失通过。用户要求这轮跑完汇报进度，现无测试进程，Goal active未完成；本轮candidate归档后汇报，不merge/push/发布。收尾核对原始summary.json的24/24、2502输出、实际queueType与全部比较为0，Python AST通过；存档命令nr-control.py checkpoint 3c-graph candidate，标签checkpoint/perf-nr-3c-graph-candidate-20261004，收据E:/项目/Veyra/archives/perf-nr-20261004/3c-graph-candidate/checkpoint.json。
+
+## 2026-10-04 PERF 3c候选与compute兼容
+
+CommandSlotRing匹配实际DIRECT/COMPUTE Type、频率用实际queue，HIGH独立呈现仅测试ENV/驱动查询/读回。build-compute-priority-v1 15步、v2 2步exit0。nr-compute.py B2d B3c-compute-v1 两NR DLL+SR各direct/compute三轮，18/18共540帧完整SHA一致/A-A噪声0，debug0/device0，正确RGBA16F SR输入；只证明API与作者图案兼容，不计速度收益。nr-queue-priority.py B2d B3c-present-priority-v1开始实际2X/3X竞争Normal/HIGH交错12组，结果仍待。完整日志/CSV/选帧像素/身份位于同任务label；详PERF_3C_QUEUES。
+
+## 2026-10-04 PERF 2c-SR拒绝扩大缓存
+
+nr-feature-cache.py B3a B2c-sr-native-v1 sr及B2c-srnr-native-v1 srnr各六组/300全帧：fresh A-A噪声0，每次on21/50不同，三轮重复；debug0/device0，24hits。尽管SR107.819→0.146ms、SRNR408.532→0.160ms，拒绝生产SR复用；已有单NR范围保持。完整Reset传递、jitter0/NVOF禁temporalHints已核对，原因未证明，不推断SDKbug。比较JSON/rawSHA/八张像素与完整路径详PERF_2C_SR_CACHE_REJECTION。拒绝节点归档本提交。
+
+## 2026-10-04 PERF 2b拒绝后台创建
+
+nr-concurrent-present.py B3a B2b-fresh-present-v1 六组各60秒/50创建，新鲜Feature18 Evaluate逐次对应实际成功Present，安全exit0/debug0/device0。三轮中位P99 serial32.043627→concurrent74.188956ms；超过33.333ms次数3→55，最坏1033.39ms。未达到无缝门槛，未加入生产后台图路径；完整present.csv/meters/身份与反例保留，详PERF_2B_BACKGROUND_CREATE。前存档034c2d8，拒绝节点归档本提交。
+
+## 2026-10-04 PERF 2d预热保留，2c-SR/2b反例归档中
+
+单owner PreviewGpuSession将device/ring/core/recent/graph从首页空闲预建交给普通文件播放；Engine dispatcher串行，无第二adapter/并行Init，首次full-reset，关闭/取消/预算/key/直播路径回退。性能开关、显卡能力与四语言接入。build-prewarm-v1因EffectChain.chain错误失败，v2修正13步exit0；native-v1 2步exit0。nr-prewarm-ui.py的v1 baseline属性冲突未打开，修正referenceBuild；A2d-ui-v1/B2d-ui-v2/B2d-ui-off-v1各NR/SRNR/SR三轮，27组全部通过，首次成功软件Present中位A1963/2000/1698ms、B100/107/92、off1942/2053/1733。5个lifecycle（预建中打开/退出/关闭、尺寸miss、全效果关闭）通过。nr-prewarm-native.py B2d B2d-native-v1十八进程54张完整输出SHA0差异、A-A噪声0，NR/SRNR匹配此前2a封存自然第三帧；debug/device0，预建Evaluate0。详PERF_2D_PREWARM，原始日志/身份/CSV/E盘路径均同任务label。保留待R0，不称全方案完成。
+
+2c-SR诊断与2b新鲜输出Present实验仅新增tests/perf、scripts/perf接点；生产SR缓存/后台创建未启用。SR/SRNR每轮21/50完整输出差异；并行50创建的Present P99三轮中位32.044→74.189ms。单独拒绝结论文档与节点存档随后的提交记录，原始失败证据不删。所有GPU测试与构建串行，不改用户桌面或配置。
+
+## 2026-10-04 NR优化1a：真实链4500帧反例，拒绝默认整链复用
+
+- 1a-before标签3e28be0后，`nr-static.py B2a static-M1-v1` 五组各300帧×三轮15/15测量exit0，NR/SR实际Evaluate计数符合配置，debug0/设备正常。固定M1真实解码自然画面、PTS/序号增加，没有生产跳过，也没有注入Core缓存。EXE082bb45…ffb33，NR F95FEB/616.56。
+- `nr-static-report.py static-M1-v1`：每组A-A输出序列0差异；NR（抗闪烁关/开）/NR+DLSSSR/仅DLSSSR复用首帧对A每轮299/300帧不同，预热后最后100帧全部继续变化；只有效果全关0不同。MAE中位0.560520/0.555252/0.609764/0.166118（byte0–255）。全部原始300行/11张全RGBA/日志/JSON在logs/perf-nr-20261004/static-M1-v1-*。
+- 拒绝方案“不改画面”的默认整链重复跳过，不以NN非确定性豁免，因为三轮A-A噪声0；未写生产候选，无生产revert。PERF_1A_DUPLICATE_REUSE记录边界，1b预算不能在仍处理60transport帧时假定工作量30；5c显式暂停reset另测。
+- CoreUI修正后v3六组各20请求全部exit0，无FG的NR/SR/层数/尺寸仅Init1/Shutdown1；FG开关和NR模块变化Init21/Shutdown21，按完整流程。层数20请求实际26次重建，逐setter有中间状态，诚实保留。v2脚本设置倍率自动打开FG，作为带DLSS2X额外组合，不冒充无FG对照。Core64参数表边界/活动借用拒绝/初始化早期失败真实SDK检查exit0；预期拒绝日志不是设备故障。
+
+## 2026-10-04 NR优化2a：三组实测有收益，补生命周期拒绝检查
+
+- fbaffeb候选全新build-B2a-v1 479步exit0。A/B/B-off四组各20×三轮，720次重建36/36 native有效；对A三轮暖创建中位：NR开1569.510→386.758ms（-75.36%），SR1409.580→415.158（-70.55%），层数1456.600→544.314（-62.63%），尺寸1348.730→403.039（-70.12%）。B-off分别1563.090/1580.430/1701.260/1596.630，后几组时钟未采不能解释慢于A，不用差额虚增收益。
+- `nr-rebuild-report.py A-rebuild-v1 B2a-rebuild-v1 B2a-off-rebuild-v1` exit0：候选及off每240张全像素与A一致，A自身0噪声。CoreInit每轮A/off10或20，B1；最终CoreShutdown1、无漏参数、debug0设备正常。v1首冷1.99–2.50sec，多层暖P95仍0.7–0.85sec，没有全体<0.6sec或无缝Present证明。SR核心保留约605MiB，旧A/off末周期约175MiB，不能隐藏缓存显存。
+- 增加Core参数释放healthy状态、各NGX功能release bool/SEH结果，失败不保留；初始化早期失败也清理旧Core。准备实际SDK64参数表边界/活动借用拒绝/早期失败重开检查及20UI请求驱动；诊断读回仅测试。另准备1a同自然像素300次实际NR/SR输出测量，尚未测或实施重复帧跳过。
+
+## 2026-10-04 NR优化2a：设备会话核心缓存候选
+
+- A-baseline commit181e4ab/tag与增量bundle验证后，添加render线程限定NgxCoreCache、Graph可选借用和Engine设备会话生命周期。无缓存的所有现有Graph构造调用维持完整原流程。核心key含设备/规范绝对runtime/NR模块/补帧开关后端倍率；设备错误、失败、参数残留或key变化完整关闭。Ada/Ampere补丁型号主动不缓存。
+- 功能/参数/适配器仍按原序释放，只有成功图、liveParameters=0和设备正常才保留核心；再次prepare时存在借用者就拒绝，不并行初始化第二核心。退出显式coreCache.close在device.shutdown前。B-off test env同一EXE禁用，无新增UI选项。
+- native测试仅在B编译宏接入缓存，A封存EXE不重编；nr-rebuild支持B-off引用同B构建路径。候选尚未构建和实测，不计为保留优化。
+
+## 2026-10-04 NR优化2a：重建基线完整封存
+
+- `nr-rebuild.py A A-rebuild-v1` 12/12 exit0，四组20次×三轮，240次真实Graph重建/720源帧；debug0/设备正常/NR和SR计数符合请求。native EXE2d7177…5e27，runtime F95FEB/驱动616.56；图像读回在创建/释放计时段外，不含实际Present。
+- 创建耗时三轮中位：NR开1569.935ms，NR关39.020，SR切换1411.975，1/2/3层1462.380，原生/720/480尺寸1351.520。每组20张完整图r1/r2/r3对应hash相同，噪声底线0字节；原始CSV/像素/JSON位于logs/perf-nr-20261004/A-rebuild-v1-*，summary含EXE/素材/NR SHA。
+- `PERF_2A_CORE_REUSE_2026-10-04.md` 记录测量范围、三轮波动及候选生命周期设计。此时无产品优化代码，不能将上述基线写成收益；baseline独立commit/tag/bundle后开始核心缓存候选。
+
+## 2026-10-04 NR优化E2：同会话并发创建安全通过，切换停顿尚未消除
+
+- `nr-build.py E1 build-E2-v1 veyra_nr_concurrent_create_experiment` exit0，`nr-e2.py E2-v1`5/5 native exit0：串行/并发12s各10Create/Eval/Release，三个独立240s并发长测各50/50/50，旧Feature实际Evaluate13614/13606/13607，debug0/SEH0/设备正常。测试≤280s；累计12分钟，非一次连续10min。runtimeLecram F95FEB原字节，EXE3a2c90…ee68b。
+- 共享单NGX核心/NR适配器/IAT，每线程独立命令ring和fence/event；参数块在创建线程前分配，未声称CoreHost跟踪数组线程安全。释放后每运行VRAM92,545,024bytes，相同起点35,815,424，50次无随次数增长；未将差额冒充全部释放或泄漏。
+- 最大前台Evaluate完成间隔串行66.9154ms、并发108.7962、三长测110.5127/110.4173/115.9049；这是诊断等待路径，不是实际Present，也不是2b无缝验收。static输入30次预热SHA各轮相同、不同历史长度后输出变化，需1a固定次数A-A/复用对照，不预判并发污染。PERF_E2_CONCURRENT_CREATE_2026-10-04.md含路径/边界。
+- 已准备2a改动前四组20次×三轮真实graph基准及输出像素，尚未改产品。阶段0E3只读枚举看到KUHAIMI27P/OBS虚拟设备，当前真实输入内容未确认，已异步询问信号来源，其余任务继续；不把合成节奏当主机实卡。
+
+## 2026-10-04 NR优化：M1基线封存及E1实验结论
+
+- M1五组各三轮共15/15实际产品PASS，nr-series.py A退出0；处理耗时三轮中位S1 7.7145ms、S2-720 4.6975、S3 NR+DLSS4K 11.3565、S4两NR+DLSS4K+FG2X 21.192、S5已有480/720/原生三层14.372。S5范围13.59–14.377，保留波动；这不是新优化。驱动616.56、NRLecram F95FEB原字节、EXE b7081f…0eb4。统计为滚动观测的三轮中位/范围，非总体P95，未测实屏。
+- nr-baseline-report.py exit0，完整A封存于test-packages/perf-nr-20261004/Veyra-2.0.3-perf-baseline-A-NVIDIA-win64-portable，1542载荷/QML逐文件匹配8cdc/无测试Loader；manifest与baseline-M1-summary.json含逐SHA。A0baseline标签eb47ed6/增量bundle验证；其余素材/切换暂停基线仍待补齐。
+- E1 before/candidate-v2/timing各存档，独立实验build-E1-v1/v2/v3均exit0。nr-e1.py E1-v1、E1-v2各8进程顺序完成；原版E16BCF与Lecram F95FEB，最大1920×1080实例Evaluate 85/70/55/40%：接口成功/全部活跃像素写出/区域外写入0/debug0/设备正常，回100%像素与独立实例相同。缩小后MAE0.376668–0.398506(0–255)且不同约45%RGBA字节，8组合相同，精确参照失败的exit1如实保留。v2 GPUtimestamp实际随尺寸降低，但短样本不当稳态收益。
+- 结论PERF_E1_DYNAMIC_SIZE_2026-10-04.md：单实例子区域可用≠现有小尺寸档位像素等价，3b优先实际尺寸创建的有界实例；未经4K/HDR/自然素材/其他GPU验收不外推。无产品路径改动，所有像素读回/同步仅实验。接续E2并发Create/Evaluate，独立fence/ring避免共享timeline重号。
+
+## 2026-10-04 NR优化1c：盲预测重复帧拒绝存档
+
+- 节点before标签checkpoint/perf-nr-1c-before-20261004，产品源码仍8cdc。`py -3.11 -B tests/perf/CadencePredictionCounterexample.py E:/项目/Veyra/logs/perf-nr-20261004/1c-counterexample-v1/result.json` exit0：准确已知30-in-60/24-in-60整帧2:3/40-in-120节奏，第49未抽查的重复位只改一个像素，候选三组都替换错这一帧，后续检测错误0；精确比较输出均0不同帧。
+- 证明每8帧抽查无法保证未检查帧，违反方案1帧恢复与逐帧一致验收；拒绝产品接入，保留原行为与反例证据，未写入不安全产品候选，因此没有产品改动需revert。1a精确比较及“跳过比较时仍完整处理”的安全动态策略继续。结论文档PERF_1C_CADENCE_REJECTION_2026-10-04.md，不将CPU证明冒充GPU性能数据。
+
+## 2026-10-04 NR优化：文档归档与优化前真实GPU基线进行中
+
+- 文档对齐commit37bc0c090918566f7ebebc9f5edb24ba60c5f5a3，checkpoint/perf-nr-initial-docs-20261004；initial-docs/source.bundle verify成功，SHA34d888b290e094b4f3b9d7dd3aa01d6b34c5a568fe722ef3e18327f3e207e0fd，patch/commit/parent receipt在本轮archives。起点8cdc产品不变，原桌面/main保护guard持续通过。
+- `py -3.11 -B scripts/perf/nr-build.py A build-A-v1 veyra_qml_ui veyra_nr_video_quality_probe veyra_export_probe` 全新476步、exit0。build/perf-nr-20261004/A，日志logs/perf-nr-20261004/build-A-v1.log；Qt/SDK/patched FFmpeg沿用已发布配置，TEMP/TMP仅E盘子进程。没有与GPU计时重叠编译。
+- `nr-matrix.py`/`nr-probe.qml`/`nr-series.py`用于自身staging实际产品播放，M1/S1..S5各三轮，270s产品退出/280s driver/299s子测试上限；配置、生效状态、素材/EXE/NR SHA、GPU频率/显存/CPU、滚动player-timing原始CSV/JSON均独立。硬链接仅不可变依赖，EXE/QML/配置独立，不修改用户包或配置。
+- 目前只完成部分A基线，不能把现有720p比1080p快写成新优化。无精确50%原选项，记录720p实际维度；SAOG多层总残差与Veyra每层独立控制并不等价，需按合同验收。尚无产品改动；三轮完整数据和节点实验结论待追加。
+
+## 2026-10-04 NR性能优化目标：进度对齐、分支与开工存档
+
+- 用户指定 `docs/PERF_PLAN_NR_2026-10-03.md`，要求文档/存档/当前基线先行，逐节点留档与实测，负优化回退，目标模式直至整份方案处理完毕。已创建active goal，没有预算上限。独立E盘worktree `perf-nr-20261004` / `codex/perf-nr-20261004` 从刚验收tip `8cdc612120cbf23ba116a33c3cb0a53e2043f718` 开出；旧修复分支、main354b1c6、Claude工作区、原桌面64项dirty和已发布/本地候选保持。
+- 只读完整核对当前AGENTS、README、V1产品规格、竞品历史审计、当前施工WORKLOG节及Claude原性能方案。原方案仅在 `E:/项目/Veyra/worktrees/rtss-compat-20261003/docs/PERF_PLAN_NR_2026-10-03.md`，已逐字节复制到本分支；原件、SHA、桌面status、main/起点/工作树清单在 `E:/项目/Veyra/archives/perf-nr-20261004/start.json`，tag `checkpoint/pre-perf-nr-20261004`。不修改Claude工作区。方案的2.0.1/未合RTSS/启动冲突已过时，按当前2.0.3+后续本地修复重基线。
+- 当前进度对齐已写AGENTS、CURRENT_STATUS、README、V1规格和竞品审计日期说明；公开2.0.3与本地smoothfix分开，严重后台掉帧/AMD推理/Xbox长稳/RTX30/40/616.92/实屏测量未验边界保留，HDR/Dolby13/14暂缓。执行账本 `PERF_EXECUTION_NR_2026-10-04.md` 列出全部实验/节点，尚无本轮优化数据，不用原方案估算收益。
+- `py -3.11 -B scripts/perf/nr-control.py init` exit0，source8cdc/main/原桌面status和8个授权文档/脚本路径检查pass。每节点clean commit/tag、增量bundle verify与SHA/patch/receipt，负优化用revert保留历史；新baseline/guard不修改旧迁移guard或旧archive。
+- 新产物统一 `E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages}/perf-nr-20261004`；固定媒体 `tests/perf-matrix/media`。本轮不用Computer Use，不派Agent，不关用户应用/改配置/驱动；测试≤300s、构建≤900s，TEMP/TMP只子进程。下一步文档提交和完整初始bundle，随后全新A构建/同源三次基准，再E1/E2/E3。没有开始产品性能改动。
+
+## 2026-10-04 自定义倍速、字幕、UI流畅度与专业布局/全屏恢复
+
+- 用户要求自定义倍速、修复#18、排查2.0.3相比2.0.2的UI卡顿与失焦掉帧，后追加倍速菜单遮挡、专业重复输入/输出标签及全屏检查。先从fb8e500开codex/playback-smoothness-20261004，checkpoint/pre-playback-smoothness-20261004；source-before.bundle verify/SHA7902EE2E…AF26，archive保存桌面/隔离区初始status。桌面64项修改不动，main仍354b1c6；当前只本地修复与包，无merge/push/Release/关机，无子Agent。方案 PLAYBACK_SMOOTHNESS_PLAN_2026-10-04.md，独立scope guard保护本轮接点。
+- 真实复现字幕：subtitle-before原外置SRT/ASS通过，VTT CRLF与两内嵌轨正文失败；旧stripDialoguePrefix继续扫描正文逗号，吞掉前句/多行。改为只对AVSubtitleRect.ass消费八头部分隔符，plain text原样，不压成一行；VTT去行末CR。`playback-smoothness-fixtures.py`造6作者cue（英中/多逗号/2–3行）+两内嵌轨；`playback-smoothness-tests.py`最终audio-rates-v3 18/18、subtitle-after-v2 5轨30cue逐字/时间、overlay-v3三行栅格/cache/style、i18n-v2、availability-v1 56/0均exit0。实际产品暂停seek9.5s输出完整三行正文。
+- 倍速两处共享0.25–4.00有限值判断，原1/1.5/2/3保留，加自定义两位小数窗口；实际PTS速度1.3/1.8/0.25/4/1，非法4.01/NaN及取消保持原值。声音18组测完整输出时长/PTS/连续性/0overrun，440Hz中段保音调；初次0.25测试把SoundTouch头尾静音计入零交叉造成436.7Hz误判，修正测量窗口且保留全时长断言，原audio-rates-v1失败日志保留。不能将它当产品音调错误。
+- UI热路径证据：2.0.2已有snapshot→fgChoices通知；2.0.3新增能力表/文件查询消费这个逐帧信号，造成反复磁盘探测/嵌套map/菜单重建。现改缓存+2s/操作/语言刷新，能力专用NOTIFY，FG ceiling/provider实际改变才通知。收尾修正动作先刷新缓存可能漏通知的边界：计时器比较上次报告map。`playback-smoothness-capability.py`在自己的stage移走/恢复未启用VFG组件，真实QML灰色菜单变更通过，DLL SHA270cf4…a795保持，原正式文件不动。
+- `playback-smoothness-baseline.py`独立profile同2K30对照：Timer16ms中位，2.0.2无效果后台16ms，旧2.0.3无效果后半段与初次编译重叠，不能公平引用最坏延迟。稳定候选无效果16ms；旧2.0.3软件UI DLSS6X后台p50 41.5/p95 60、180提交fps；候选软件UI p50 16/p95 23、180提交fps，稳定fgChoices通知0。候选GPU DLSS6X实际前/后台180，覆盖窗口最大化遮盖短测也保持；VFG4X中档后台p50 16/p95 22，中位115提交fps，有真实过期生成帧，不能说稳定120/240。12–140秒窗口（75秒样本止于75），计数/状态/原始日志见acceptance-summary.json，不将Timer间隔当渲染FPS。
+- 后台严重掉帧尚未复现；原始NR+RTX4K+DLSS2、DLSS6、软件UI前后台不能确认失焦根因，热初始化/少量前台样本需区分。Engine已有MMCSS与高精度等待，无盲目提高全局优先级/修改NVIDIA配置。main.cpp只增加app-focus事件的实际吞吐/效果和GetProcessInformation节流mask。`playback-smoothness-presentmon.py`仅过滤自己的PID且禁输入采集，PresentMon2.3.1 SHA364e5d…d30c，exit6/access denied/0rows，player正常exit0；不提权/改用户组/停止他人ETW会话，显示事件与物理延迟未测。
+- 用户Esc停止电脑自动操作之后不再调用Computer Use、不再自动点击窗口；后续Qt产品自测通过API检查自己的窗口。原先实际前后台点击证据保留，未将Qt自测冒充物理键鼠验收。GitHub所有11非PR Issues和各评论读回，#12是极简控制条/鼠标/尺寸/dropdown提议，未发现独立全屏故障描述；用户补充编号/症状问题保持待答，日志issues-fullscreen-audit.json。未发送GitHub评论/关Issue。
+- 专业模式重复底部源标签删除、输出badge移到顶部源格式旁（仍为只读实际输出），窄顶部两行，窄底栏进度/按钮两行。真实Qt 1280宽seek507px、720宽172px、1600宽827px；1280顶部32高、720顶部72高，输入输出相邻/按钮不越界。倍速菜单打开期间提示隐藏、CineBar计入menuOpen，浮条mask532px/菜单209..424px，关闭92px；Popup.Window+Basic.TextField真正取得焦点并应用1.3。先前native-style自定义警告已改Basic解决。
+- layout-fullscreen-v1实际失败：退出全屏丢失原最大化状态，720专业seek0；修复保存Windowed/Maximized并恢复、窄栏分行，v2/v3普通1280×800/最大化恢复、全屏整屏/自动隐藏/菜单保持/锁定退出通过（shell MarkFullscreenWindow hr0）。相关Main/Pro/CineBar接点扩展已先写guard/方案，不扩HDR/Dolby或NR/颜色算法。
+- 构建命令 `py -3.11 -B scripts/acceptance/playback-smoothness-build.py repair-build-v10.log veyra_qml_ui` exit0，沿用发布SDK/Qt6.8.3/patched FFmpeg配置，输出E盘、显示2.0.3-smoothfix。v5曾错误捕获QQmlApplicationEngine并调用snapshot，改捕获controller后v6通过；v7测试target拼错，v8用veyra_ui_i18n_tests通过；原失败构建日志不删除。extract.py --check缺翻译0/placeholder0，仅新增7条翻译。最终产品功能与全屏回归再次检查新bridge，随后封存候选。
+- 全部产物 E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages}/playback-smoothness-20261004；测试每进程≤300s、构建≤900s，TEMP/TMP只子进程。新运行组件/SDK/模型未入源码Git。本地候选目录/应用源码ZIP/patch及最终审计回执后续追加，不能把后台根因或未做实卡验收写成完成。
+
+- 封存回执：产品/直接回归存档commit `e6aa7839b28a97190503380a48daf2c52c43110a`，checkpoint/playback-smoothness-code-20261004；functional-v5-final、layout-fullscreen-v4-final及capability-v1均实际产品exit0/PASS。`playback-smoothness-deliver.py` exit0，1541载荷/1,062,087,627bytes/95PE闭包/48运行组件来源和字节核验通过，原正式1535载荷全SHA保持。新目录只改变EXE及六项产品QML/qmldir（含前轮Settings修复），另有新自定义对话框/说明/四文档，无测试Loader、SDK、媒体、个人配置和日志。
+- 干净包验证首次sealed-gpu产品已正常exit0，无ERROR；检查脚本错误要求启动日志含版本号，实际启动日志不打印版本。修正为包manifest/已测试build EXE身份核对，不修改产品；同时改用独立名称的MKV硬链接，避免同名外置SRT抢先被选，确认实际内嵌轨（tracks=2/primary0/全部embedded1）。`playback-smoothness-package-smoke.py sealed-v2` GPU/软件均exit0/PASS，12秒播放完整第一句/三行字幕，Windows-only PATH/无SDK override，1541载荷运行前后逐SHA保持。
+- 候选目录 `E:/项目/Veyra/test-packages/playback-smoothness-20261004/Veyra-2.0.3-smoothfix-NVIDIA-win64-portable`；EXE SHA `c86b38de206c4f4e5853eee510295d44890cf84b798eff8d84e1d04c17d3c055`。源码ZIP和DELIVERY.json在上级，依赖来源仍为正式2.0.3资产。随后仅保存修正验收脚本/报告并刷新源码/manifest提交身份，EXE/QML/运行库不再改动；初版源码快照移到本轮tmp保留，最终审计另记JSON。严重后台掉帧仍未确诊，ETW0rows/access denied明确保留。
+- 最终回执：源码/验收commit `8bd8bb5538298b5148ddef12755dddac92511c86` / checkpoint/playback-smoothness-verified-20261004。`playback-smoothness-refresh.py`只刷新源码/提交身份，EXE/QML/运行库及1541载荷字节保持；Source ZIP SHA `ed306c3a7f1f9fe10f2ab600c6afda5b1c353d8e88c84e0677bf9b239e50953a`，local-package-audit-final exit0/95PE/48runtime通过。完整source-after.bundle verify成功，SHA `31AF10C46C8EC49F805A44DBF3607FC76C819B0FB89A5C626F888B75B24D515C`。包源码对应8bd8bb；此行后的存档只改工作记录，不改产品/验收配方。
+- 本轮清理命令已先核对每个launch.json指定的E/tests/task/label/app绝对路径、排除junction并检查原测试PID身份，再请求原生PowerShell删除自身测试stage及停止记录的自身helper。自动审批在CreateProcess阶段拒绝整个命令，只返回blocked by policy、无具体原因；未执行任何删除/停止，不重试或换工具绕过。cleanup.json如实deleted=[]，所有临时副本保留；最终交付/已测产品不依赖清理。末尾只读核对进程及桌面status、main，不关闭用户应用。
+
+## 2026-10-04 RTSS 误提示、重启循环与真实安装参数验收
+
+- 用户反馈已发布 NVIDIA2.0.3 未开小飞机仍反复要求重启，并提供 E:/App/RivaTuner Statistics Server 要求真实启动/多参数测试。先从 main354b1c6 开 codex/rtss-restart-loop-20261004，checkpoint/pre-rtss-restart-loop-20261004，外部 source-before.bundle verify/SHA08679242…dd2；不改桌面旧工作树、原正式包、main 或用户 profile。方案 RTSS_RESTART_LOOP_PLAN_2026-10-04.md。
+- 现场三日志 startup running=false/injected=false，之后 RTSSHooks64 注入。查明 Agent 旧测试留下 PID13316/PPID11020 的 deps/rtss-overlay-20261002/RTSSHooksLoader64.exe；父 PID 与 release 的 rtss-test-pid.txt 一致。这是 Agent 清理遗漏，已明确告知用户并按身份停止。原正式 EXE 在独立 profile 复现；停此加载器后原 EXE 正常退出且无误提示。
+- 软件修复：启动/晚到检测要求 RTSS.exe 存活且共享内存有效，模块存在或孤立加载器不代表活动服务；晚到还需实际 hook。接受兼容重启用一次性 --overlay-compat-restart，普通设置重启不携带；off/显式RHI/OBS优先，导出重启阻止沿用。新增实际 hook 路径/活动状态日志，提示区分 RTSS 屏显服务与 Afterburner，软件背景不透明。没有改算法、串流、音频、导出、shader 或 proprietary DLL。
+- 真实反例：installed-matrix-v1 退出 RTSS/加载器后映射仍有 RTSS signature，导致共享内存单独判活无效；加入进程检查。matrix-v1 私有 loader 最初 Win740，改为普通完整性级别 RunAsInvoker，仅自身测试窗口，不提权。各首次失败原始记录保留。
+- 版本纠正：用户安装与旧测试副本 RTSS.exe 实际均7.3.5.28314，SHA84E6E439D313DCEE0BA9549D8248D3923D9DE6805D0380BE5EAB337446856736；RTSSHooks64 SHA68C496DE…2AD5。此前7.3.7记录不准确，本轮修正相关源码注释/验收文档并保留纠正说明，不将旧版本名称当作验证。未重做旧OBS捕获矩阵。
+- `py -3.11 -B scripts/acceptance/rtss-restart-build.py build-v1.log` fresh472步；build-v2.log加入服务器进程检查；build-v3.log版本注释纠正后的最终10步，均exit0。最终EXE17,342,976 bytes / SHAd4ab803562641ef16d7b917b4b27db51b7b379ebb7ea975d47d6b472598bf994；build-i18n-v1.log/i18n-test.log成功，i18n0failures。C4244既有警告保留。
+- `py -3.11 -B scripts/acceptance/rtss-restart-tests.py installed-matrix-v3 "E:/App/RivaTuner Statistics Server"` 最终EXE 11/11 pass：clean/orphan/liveAuto/off/forcedRHI/OBS/acceptedWithoutServer/acceptedOff/normalRestart/normalAfterAccepted/lateRealRestart。真实Qt按钮接受，观察实际第二进程和CLI，软件/GPU后端及不透明截图断言，不模拟DLL/服务。matrix-v2和私有matrix-v2早期成功保留。
+- `py -3.11 -B scripts/acceptance/rtss-restart-real.py installed-stress-v4` 使用用户真实RTSS.exe、官方Profile API、独立OSD槽，3×11=33/33 pass。三配置为低检测+橙OSD2倍+背景/统计；高检测+绿OSD3倍+无背景/统计；中检测+OSD关闭+60帧限制。各9项属性写入/读回，SDK offsetof验证本机布局，真实OSD计数/位置/缩放/颜色核对、33张原生视频+33张QtUI截图。11效果/操作：基础、NR四参数0.45/0.2/0.3/0.25、NR+最高RTX4K、NR+RTX+DLSS2、DLSS6、XeSS4、FSR3.1 2、VFG2Low/4Medium/8High、NR resize/暂停/seek2s/全屏/退窗。每个GUI约80秒、无ERROR/FATAL/循环弹窗/设备移除，背景alpha255；实际后端/进度而非请求值验收。
+- stress-v1不算通过：seek函数名错误与手算OSD字段偏移错4bytes；改用seekTo与实际SDKoffsetof（316/268/36）。stress-v2截图路径刚创建但PNG未写完，改加载完整后再记录。stress-v3固定1.4s断言碰上NR冷初始化/异步seek，改为等待实际参数/暂停/seek/窗口状态；installed-transport-v1单项先确认paused seek实际PTS2000ms/fullscreen/restore，再完整v4。失败原始目录均保留，不能引用其QML PASS当最终验收。
+- 性能边界：本机RTX5070/616.56、2K30测试视频。VFG8High明确有实时调度降档，截图瞬时提交约30–31fps；VFG4在RTSS60限制下也降档。兼容稳定通过不代表稳定240fps、物理刷新率、端到端延迟或画质验收。没有新增AMD实卡/OBS捕获/Xbox长稳测试。
+- installed-stress-v4最终恢复原Config/Global逐字节，SHA46e32581…c83/1e44c576…7ca；删除的只是本轮创建的Veyra测试profile。最终matrix-v3也恢复原配置，主RTSS和全部子加载器已退出、remainingOwnedHelpers=0，不停用户其它应用。测试TEMP/TMP仅子进程；全部新产物E:/项目/Veyra/{archives,build,deps,tests,logs,tmp,test-packages}/rtss-restart-loop-20261004。
+- 正在封存本地完整NVIDIA候选、独立逐文件manifest、对应Veyra源码ZIP/patch与交付索引，运行组件全部沿用发布原字节。无merge/push/Release/关机；本轮保存后另记包审计回执。
+
+
+- 封存回执：产品/测试本地commit c9d946e612f7d886714a42dc0269bbe0a4a0428a；`py -3.11 -B scripts/acceptance/rtss-restart-deliver.py` exit0。完整候选1537载荷/1,062,059,917 bytes、95PE依赖闭包、48运行组件来源与字节核验通过；原正式1535载荷全SHA保持，仅新目录中EXE/Main.qml/SettingsPage.qml与版本纠正报告改变，另加修复说明/方案。运行包无测试Loader/媒体/配置/日志。候选路径 E:/项目/Veyra/test-packages/rtss-restart-loop-20261004/Veyra-2.0.3-rtssfix-NVIDIA-win64-portable。
+- 对应Veyra源码ZIP已实际生成并逐记录SHA回读，源码commit c9d946e；SHAe8a80c8fba3727186ab515057eeb558cf86548cf2068e5c434d684ac89cc02b8。manifest SHA1af275e6065ba9be12ddaa7651931c079feaa102e73dc626db42577f9b1961a0，patch在archives/task/repair-source.patch，DELIVERY.json记录完整索引。依赖源码/运行组件沿用原2.0.3；localOnly=true、releaseReady=false，无新公开发布。
+- 收尾纠正隔离断言：原包主veyra-qml.log后来在12:44–12:45又追加两次会话，最初2341字节前缀完整、当前6700字节；其余两现场日志byte-identical。当前用户overlayCompat已为auto，最初存档off只是当时状态，不能强行恢复旧值或称所有日志逐字节未变。最初三日志SHA存档均完整；本轮矩阵/参数脚本使用独立profile，保留原目录现状。final-isolation.json如实记录追加4359字节/当前auto，RTSS原Config/Global逐字节恢复，RTSS/加载器/Veyra进程均0，RTSS原二进制不变、main仍354b1c6。
+- 必要首次失败与诊断证据留在本轮E盘，未清理用户文件或重复此前被拒的旧Release目录清理。后续只保存本轮文档回执与Git bundle/tag，产品源码和已测试EXE保持；不再扩大测试。
 ## 2026-10-04 2.0.3 正式发布完成
 
 - 当前用户授权的几项修复、AMD NR、VFG全档位与厂商分包已合入main，发布代码commit `f82f6499ff0db9c36953bcafb752b9be2d7fca4d` / tag `v2.0.3`，普通快进push至nrvideo。桌面64项status与258615-byte working patch逐字节保持；HDR/Dolby PR13/14仍OPEN、未合并。仅本条之后发布记录改变文档，不改变已测产品源树和tag。
@@ -8069,3 +8214,201 @@ release. 5090 live acceptance, 15-second hitch and user flicker remain unresolve
 - 判定：SF-v2在5070可用，速度和功耗均不如Lecram。建议5070保留Lecram；不能把单卡测试当作20/30/40/50统一支持验收。默认DLL没有替换，运行库/SDK/媒体没有进入源码Git，没有commit/tag/merge/push/Release。
 - 输出及复现证据：E:/项目/Veyra/logs/nr-sfv2-lecram-20260930/{REPORT.md,result.json,before.json,build.log,quality.json,warmup,nr,warmup-clean,nr-clean,nr-fg,nr-fg-rest}；测试APP、媒体与抽样像素在 E:/项目/Veyra/tests/nr-sfv2-lecram-20260930；执行脚本、诊断probe源码/构建在 E:/项目/Veyra/tmp/nr-sfv2-lecram-20260930。保留可复现测试环境和必要证据，没有新增压缩中间包。
 - 收尾：report.py 逐文件对比开工1096个源码；允许本次WORKLOG追加，其他源码无新增/修改；六个原beta/候选EXE与NR文件、两个下载原件及用户视频/测试段均重核SHA，未改变。scripts/acceptance/fg-fsr-xess-control.py guard结果与实际核验写入 final-scope-guard.log / result.json；若失败停止交付，不改基线洗白。
+# 2026-10-04 NR性能优化：2a修订版对照与真实UI
+
+- 工作树 `E:/项目/Veyra/worktrees/perf-nr-20261004`，产品修订3e28be0；不合并/推送/发布。
+- `nr-rebuild-series.py B2a B2a-rebuild-v2`、`nr-rebuild-report.py A-rebuild-v1 B2a-rebuild-v2 B2a-rebuild-v2-off` exit0；B与同EXE关闭组各12/12，240张完整输出分别对A零差异。四组暖创建1569.510→379.349、1409.580→405.504、1456.600→515.900、1348.730→377.124ms；原始日志 `E:/项目/Veyra/logs/perf-nr-20261004/B2a-rebuild-v2*`。
+- v3真实Qt界面六组20次请求通过；层数多个属性导致26次实际重建，FG/运行库仍完整重开。v2倍率属性自动启用FG，额外2X实验保留，纠正v3后才计非FG路径。
+- SDK核心容量/活跃借用/初始化失败注入exit0，64个真实参数最终清零；不是实测TDR。SR内部缓存关闭后本进程DXGI使用量141803520 bytes。所有核心复用收益仅暖重建，不冒充持续FPS或首启优化。2a保留，R0导出/全产品回归仍待做；详情PERF_2A_CORE_REUSE。
+# 2026-10-04 NR性能优化：E3真实屏幕与5c前置/候选
+
+- E3 `nr-duplicate.py B2a E3-own-window-v3` 4/4 exit0；三轮比较/真实WGC三阶段各60秒，静止1475/1476重复、移动内容8/1481、移动自有窗口位置1588/1589，无捕获丢帧/debug错误/设备移除。原始数据 `E:/项目/Veyra/logs/perf-nr-20261004/E3-own-window-v3-*`。
+- 精确GPU比较仅测试：1080p变化CPU总路径三轮中位195.9us、4K306.7us，超过0.1ms门槛；shader自身9.1/30.4us。v1编译器cs5.1不支持、v2同进程窗口被产品保护拒绝，失败证据保留；cs5.0及拥有的子进程修订通过，未放宽产品限制。实卡信号未确认、未采卡。
+- 5c `nr-static.py B2a pause-reset-M1-v1 nr-reset srnr-reset` 六组通过：NR reset后300帧三轮0差异，SR组合各262差异。只对单NR暂停刷新制作窄范围候选，普通暂停不Evaluate已有。
+- 暂停编辑基线EXE SHA066ac43c…86045在 `tests/perf-nr-20261004/A5c-paused-v1-app/` 独立封存。`nr-paused.py B2a A5c-paused-v1` 四组各三轮12/12，通过300次编辑及第150次模型失效检查；A NR数300/300/300/600（每轮），无debug/设备错误。`build-paused-baseline-v1` 缺AVFrame/iostream头失败，补头后 `build-paused-duplicates-v3` 成功。5c产品候选尚待构建和对照，不记录未取得收益。
+
+
+## 2026-10-04 NR性能5c残差复用v4定向通过
+
+- 在本轮独立分支保留窄范围Lecram单NR暂停残差缓存；首编辑、模型/源/seek/普通播放/reset/失败失效，无SR/FG/HDR/多层推广，无像素回读。v1/v2 legacy残差分类未命中，日志保留；v3归一化全部保留残差槽，v4限制已测运行库与输入输出合同。
+- build-paused-B5c-v4 构建5步exit0。nr-paused.py A5c-paused-v1 / B5c-paused-v4 / B5c-paused-v4-off 各12组300次三轮，nr-paused-report.py配对共10800个SHA，A-A及全部A-B/Boff差异0，debug0/device健康。单NR7.46140→0.76570ms，Boff7.50225，求值300→2→300；SR/抗闪烁/两层完整求值不变。候选EXE cedd84884f9d83af09ab7ab54b78ee9a7421f95ec875fd21083c0a4878e803f6。
+- nr-paused-ui.py B5c B5c-paused-ui-v4 与 B5c-off B5c-paused-ui-v4-off 各三组真实Qt通过，30秒NR计数和位置不变，20残差编辑中途换模型、恢复播放、暂停seek2秒成功。B单NR19次复用/NR增2，Boff无复用/NR增20；SR与抗闪烁0复用。Windows PDH GPU Engine只记录本轮测试PID，Boff单NR24样本中位2.481%/max2.546%，所以普通暂停整软件GPU接近0门槛未通过，继续优化重复呈现；nvidia-smi整卡14–19%不能当进程GPU。
+- 原始日志/结果/完整截图：E:/项目/Veyra/logs/perf-nr-20261004/{A5c-paused-v1,B5c-paused-v4,B5c-paused-v4-off,B5c-paused-ui-v4,B5c-paused-ui-v4-off}*；comparison JSON同目录。软件节点仅残差缓存定向通过，5c整体及R0未完成。
+- 增加测试/构建串行guard，拒绝其他本轮GPU测试进程，不杀用户程序；目标保持active，不合并/推送/发布。
+
+
+## 2026-10-04 PERF 5c 暂停呈现/Qt动画保留
+
+本节点前存档74a6216/checkpoint/perf-nr-5c-present-before-20261004。build-paused-present-v1、build-paused-present-fixture-v1、build-paused-present-ui-v2均构建exit0，输出在E:/项目/Veyra/build/perf-nr-20261004/B5c，日志同任务logs。候选按生产者fence/帧/view/尺寸/visibility/monitor保留成功暂停flip buffer，保留resize/DPI/device检查；停止暂停性能球每秒600ms动画，数值仍更新。普通播放/导出不去重。
+
+命令：py -3.11 -B scripts/perf/nr-present.py B5c B5c-present-v1：开/关各三轮，300次同帧实际Present1/301，48完整图像SHA一致，debug0/device正常。py -3.11 -B scripts/perf/nr-paused-ui.py B5c B5c-paused-ui-v6 及 B5c-off ...-off：NR/SR/temporal30秒空闲、20次编辑含模型变更、恢复播放、暂停seek全通过；四实际DLSS/XeSS/FSR3/VFG 2X组...-v6-fg也全通过。单NR又跑r2/r3 A(B2a旧QML)/B/B-off，全九轮通过。过程各子进程≤299秒、无桌面点击，不关闭用户应用。
+
+数据：三轮单NR自身PDH最大引擎占用样本中位数再取三轮中位数A2.237185%(2.236872–2.360637)、B0.010999%(0.010828–0.011035)、off2.237174%(2.193295–2.287588)，每轮24样本；下降99.51%。此为进程引擎利用率，不是整卡/实屏刷新率。中间v5仅去重复Present仍2.261%，不算完整通过。残差native三轮10800全输出SHA与89.74%收益沿用74a已归档证据，详见PERF_5C_PAUSED_NR。最终UI EXE bf4952347424f500df45a29ab3f7289742e4ecae188ac66b71805b9743978568。保留5c，R0及余节点继续；无merge/push/Release。
+
+
+## 2026-10-04 PERF 1b 内容预算前提拒绝
+
+开工checkpoint/perf-nr-1b-before-20261004 c593679。运行ContentBudgetCounterexample.py exit0，以封存M1/S4滚动P95成本21.192ms构造300输入调度反例：真实60Hz安全预算13.333ms，原内容30Hz预算26.667ms错误放行。1a实际4500全输出图像已证明不能逐字节复用NR/SR，完整求值次数未减少。拒绝内容预算翻倍，未加入生产代码；3b按真实处理输入帧间隔。JSON在E:/项目/Veyra/logs/perf-nr-20261004/1b-budget-counterexample-v1.json，明确是构造模型而非新增60Hz GPU实测，详见PERF_1B_CONTENT_BUDGET。
+
+
+## 2026-10-04 PERF 3a API时机反例
+
+build-priority-load-v1 2步exit0。本轮三NR竞争fixture SHA a46c2923ab4b7a200ad9028de442377d7b5e0214d473722be4dabb4681014e2b。nr-priority.py B5c 3a-competition-v1 的Set/Get全部0xC000000D/applied=false，不能作为Normal/High/Realtime比较。只读已运行的本轮两个GPU进程Get均0/class2；修正为实际GPU上下文就绪后设置，完整Get失败重试序列与最终读回记录。v1前三完整组证据保留，第四owned load经其stop文件正常停止，driver对方早停断言exit1；没有强关用户应用。下一轮3a-competition-v2重新交错九组。
+
+
+## 2026-10-04 PERF 3a有效18组与2c候选
+
+3a-competition-v2真30Hz与3a-competition-v3-60合成60Hz各九组exit0；三档实际读回2/4/5，全组无预览跳帧/debug/device异常。60Hz Realtime软件Present P99 18.9184→17.6260ms(-6.83%)，竞争Graph14.5448→15.2195完成/s(+4.64%)；30Hz max退化5.86%，不能称全尖峰改进。High无稳定收益，否决默认High，拟保留用户自选、默认Normal。原始日志/CSV/JSON/每秒环境均E:/项目/Veyra/logs/perf-nr-20261004/对应label。CPU-only nr-media.py生成M10/M2各60秒3600帧，前600无相邻重复，manifest/provenance/ffprobe/framemd5在authored-media-v1，明确合成而非实卡素材。没有GPU构建与计时重叠。
+
+2c候选修改Engine图所有权为unique_ptr，单NR→全关最多缓存一份完整Graph，严格key、DLLmtime/尺寸及WDDM预算；FXoff图不再初始化Core，命中完整reset，压力/恢复/退出先释放缓存。全部仍待构建和原生/Qt验证，未计收益。规则/取舍见PERF_2C_RECENT_CACHE，测试50开关含自然不同片段、所有输出完整SHA及关键像素。新增实际VRAM测试注入limit与HRESULT日志，默认行为不变。
+
+
+## 2026-10-04 PERF 2c与3a保留节点
+
+2c build-recent-cache-v1因不存在plan.mode失败，改为runtimeNodeOrder后v2构建10步exit0。nr-feature-cache.py B5c B2c-native-v1 开/关三轮各50次，300完整SHA一致，且前20对封存B2a三个对照60项全一致；debug/device0。暖图off355.661ms/on0.156600ms，最终释放134.270/133.113MiB三轮稳定。实际nr-feature-cache-ui.py B3a B2c-ui-v1 首个UI组结束后解析on字段失败，修正nr字段并重跑v2。v2三轮每组20次公共UI请求，缓存每轮10命中，含Presenter create三轮中位off363.8505ms/on3.6020ms；pressure实际256MiB×12有界注入成功、预算压力evict、NR恢复；修改720尺寸严格key evict与源关闭evict通过。收窄单NR保留，SR隐含历史另核验，详PERF_2C_RECENT_CACHE。
+
+3a GpuSchedulingPriority只操作本进程，pending/实际Set/Get/状态拒绝日志、默认普通、即时偏好与性能组以及翻译接入。build-gpu-priority-product-v1 474步exit0。nr-priority-ui.py B3a B3a-product-ui-v1 两绘制模式20次切换各20个外部只读Get、保存/重启/非法值/暂停恢复通过，无设置重建。性能对照仍沿用18组封存5c版本，60Hz实时P99改善6.83%，拒绝默认High。extract --check零缺失/占位问题。所有证据/EXE身份/命令在同任务logs，下节点和R0继续，无发布。
+# 2026-10-05 3c完整图普通负载18组结束
+
+执行`py -3.11 -B scripts/perf/nr-graph-normal.py B2d B3c-graph-normal-v1`，18/18正常产品检查通过，无额外竞争/人工显存压力，测试前后全部产品payload SHA一致。2X DIRECT普通→COMPUTE普通增强21.386→19.477ms；3X23.330→21.542ms，三轮中位，约8.93%/7.66%。源跳过全0，3X生成过期DIRECT3→COMPUTE4/4/5；软件Present P99无明显改善，约70ms尾部与frame303/304图提交仍存在，不宣称卡顿根治。HIGH继续拒绝默认。数据/设置/身份/完整异常E:/项目/Veyra/logs/perf-nr-20261004/B3c-graph-normal-v1-summary和各18轮，详docs/PERF_3C_GRAPH_NORMAL_2026-10-05.md。guard 113路径通过；下一步生产队列迁移/回退与缓存兼容。
+# 2026-10-05 3c生产队列准入候选
+
+before 6bc2a33 / checkpoint/perf-nr-3c-queue-admission-before-20261004。PreviewGpuSession增加限定本机已验双NR+SR4K+DLSS2/3X文件图的自动COMPUTE，其余保留DIRECT；CommandSlotRing事务换队列保留递增fence、错误保留旧资源，最近缓存只在实际换队列时驱逐；所有呈现仍普通DIRECT。Engine重建/旧配置恢复接入，采集/图片禁自动。修正discardRecording错误恢复的list类型。build-queue-admission-v1/v3通过；v2测试枚举Fsr3笔误编译失败、改既有Fsr，失败证据保留E:/项目/Veyra/logs/perf-nr-20261004。将执行native9组往返/全图/PTS/错误回退和真实Qt后端切换，未执行不标验收通过。
+# 2026-10-05 3c限定准入保留
+
+native nr-queue-migration.py B2d B3c-migration-v1九组通过，1278完整输出/PTS一致，自动每进程四次往返、fence递增，debug/移除0，创建失败注入返回DIRECT保持效果。Qt真实FSR3.1、XeSS、VFG、调色、时域NR往返/停止均通过：E:/项目/Veyra/logs/perf-nr-20261004/B3c-queue-ui-v3-fsr3/phase-review.json、v4-xess/result.json、v5-vfg/result.json。脚本枚举、过早断言及固定队列次数误判均保留原失败收据并按实际稳定阶段修正；v1退出后脚本继续改设置触发退出崩溃列R0，不能宣称已修复。详PERF_3C_GRAPH_NORMAL_2026-10-05。限定本机已测文件组合保留自动COMPUTE约8%收益，HIGH不默认，R0及其他组合验证待；无压力/用户配置/主线修改。
+# 2026-10-05 4a低分辨率链候选构建
+
+before cefbaec / checkpoint/perf-nr-4a-low-chain-before-20261004。按固定SAOG27c5df9/GPL3拓扑移植，明确保留每层五项残差控制，仅2/3层同尺寸非时域SDR列表图，L0一次降采样、LN-L0一次全尺寸叠回/保护；fresh-list、NVOF单位、单层及其他拓扑保持。默认关闭且只测试ENV入口，源码/THIRD_PARTY_NOTICES注明来源及改动，方案PERF_4A_LOW_CHAIN_2026-10-05。build-low-chain-v1/v2通过（UI+native），E:/项目/Veyra/logs/perf-nr-20261004；将执行10组合各off/on共800全图及独立控制/回退验证，再普通Qt计时。没有创建竞争/显存压力，未标画质或性能通过。
+# 2026-10-05 4a native图像导出fixture修正
+
+B4a-native-v1首组单NR关闭候选已求值、CSV输出一张有效完整SHA且debug0，但PNG保存失败（completed0）；测试main未初始化COM，WIC factory需要CoInitializeEx。修正仅fixture初始化/RAII析构与HRESULT记录，不改产品；保留E:/项目/Veyra/logs/perf-nr-20261004/B4a-native-v1-single-off原证据，下一轮使用新标签。不能把该PNG fixture错误解释为NR失效。
+# 2026-10-05 4a完整图20组/800图完成
+
+B4a-native-v2 20/20通过、800 PNG及逐图SHA/PTS保留；debug/设备移除0，各帧实际Evaluate=层数，尺寸Desc通过，独立残差第10/20/30帧改变可达。单层720、单层SR4K、混合480→720和双时域开/关各40全同；适用多层六组全部40帧不同。nr-low-chain-quality.py逐图PNG解码SHA再验、alpha一致、保护中心全同；PSNR中位49.25–54.45dB，最大差81/255，不能据高PSNR自行标画质合格。E:/项目/Veyra/logs/perf-nr-20261004/B4a-native-v2-quality/review.html/comparison.json与原PNG可审查；源码仍默认关闭。将测正常Qt2/3层SR4K各三轮开/关12组，不加竞争或显存压力。
+
+# 2026-10-05 4a正常计时完成并决定回退
+
+`nr-low-chain-normal.py B2d B4a-normal-v1 2-sr 3-sr`12/12成功，封存c2891b4 EXE、原DLL/QML全部SHA保持。完整增强两层18.319→18.120ms（1.09%）、三层25.029→24.873ms（0.62%）；最后残差约25%下降不代表整体。Present P99未改善，三层尾部on110–113ms，源跳过0。画面数值最大变化81/255，收益不足以承担语义/画质变化；明确拒绝产品候选，先封存完整计时证据再回退bd4c2ef生产实现。E:/项目/Veyra/logs/perf-nr-20261004/B4a-normal-v1-summary和各12原始目录；800PNG/质量HTML保留。R0定位最后NR snippet CPU108.279ms、GPU约6.7ms的长帧，未修复，不宣称丝滑。
+
+# 2026-10-05 4a回退完成、5b基线接点
+
+8dac9ec明确revert bd4c2ef产品和已退役native入口，冲突仅本轮新增文档/probe，保留当前完整WORKLOG/4a证据、删除退役fixture；Graph/header/CMake/notices与cefbaec逐文件diff空，存档checkpoint/perf-nr-4a-low-chain-rejected-20261004/bundle verify通过。README双语与CURRENT_STATUS更新真实进度，旧日期条目保留作历史。
+
+5b方案PERF_5B_CROSS_FRAME_2026-10-05.md。新增生产exportVideo定向probe与普通导出矩阵、只加completionWait/pipeline最终drain计时，不改串行语义；先测基线再实现默认关闭候选。不做GPU竞争/压力，不将去掉CPU等待说成已经重叠NVOF(N+1)。本轮所有新输出仍E:/项目/Veyra对应build/tests/logs/tmp/archive。
+
+5b build-export-baseline-v1构建UI/实际导出probe成功（21步）；基线EXE编译源码86e0458。serial-v1驱动启动前错误调用不存在matrix.gpu，未启动导出；改实际函数gpu_query，脚本HEAD字段明确为driverSourceHead而不是冒充编译HEAD。原staging/空运行目录保留，后续用serial-v2新标签；与当前产品源码diff仅脚本/本条文档。
+
+5b serial-v2五组各三轮15/15实际完成，最终帧数/encoder drain通过，payload SHA全同。总耗时中位普通4K2.484s、单NR4.306s、双NR4.544s、NR+SR4K6.341s、SR8K4.400s。pipeline多组15.8ms/帧与Sleep(1)轮询有关联但根因待验证；下一候选独立测fence事件、两帧在途和组合，不能将两者混算。原全部导出/日志及基线EXE在B5b-serial-v2对应E盘目录。新增导出后全decoded frame/PTS/mux核对工具，当前先执行A-A。
+
+5b基线A-A完整1620 decoded帧及PTS/尺寸/轨道/时长15/15全同，8K实为7680×4320，收据B5b-serial-v2-decoded-review.json。新增默认关闭候选：两帧pending lease/producer/consumer fence严格有界、复用前GPU完成、NVENC独立inputFence；独立fence事件等待、失败回轮询、取消/健康/30秒保留。源码审查修正std::move(out)之后取real.lease的潜在空指针，改先保存consumerFence再move，未构建/执行有缺陷版本。两个机制分组计时，尚未标收益。
+
+5b build-export-candidate-v1通过；60组普通同EXE串行/事件/两帧/组合三轮通过，payload全SHA保持，源帧/最终编码足量，maxInFlight1/2及真实NR数核实。组合总耗时普通4K降44.37%、单NR23.60%、双NR14.20%、NR+SR4K6.41%、SR8K3.91%；处理区间各降57.66/54.24/16.85/15.03/10.45%，明确不混算。完整75文件/8100decoded帧/PTS/尺寸/轨道/时长全同，连整个文件SHA也全同。E:/项目/Veyra/logs/perf-nr-20261004/B5b-candidate-v1-summary/comparison.json及B5b-candidate-v1-decoded-review.json。报表初读日志遇运行库非UTF8字节，errors=replace仅解析ASCII字段，raw未改。下一步仅必要debug/取消/单帧/FG串行/事件失败回退，不造GPU压力/设备重置；测试hook默认关闭。
+
+## 2026-10-05 NR性能5b导出边界检查
+
+`py -3.11 -B scripts/perf/nr-export-edges.py B2d B5b-edges-v1` exit0，15/15真实生产exportVideo通过，7对输出整个SHA一致。单帧、debug双NR/NR+SR、FG保持串行、取消清理、逻辑事件故障回退和既有HDR Main10通过；debug0/removed0。日志`E:/项目/Veyra/logs/perf-nr-20261004/B5b-edges-v1-summary/summary.json`。未运行压力或设备重置；5b的NVOF未来帧准备尚未完成，不把导出两帧在途冒充该部分。
+
+## 2026-10-05 NR性能5b导出默认提升
+
+产品4fceda8构建`build-export-default-v1`成功；`nr-export-pipeline.py B2d B5b-default-v1 default-interleaved nr nrsr4k fg2`18/18默认/off通过，单NR整次4263.150→3242.470ms，NR+SR4K6325.810→5755.350ms，各组整文件SHA一致。FG两组保持原serial，未纳入默认异步。`nr-export-worker.py B2d B5b-worker-v1`5/5真实取消/回收/重试/队列/保存边界/MP4/MKV通过，所有载荷未变。日志同任务B5b-default-v1-summary/acceptance.json、B5b-worker-v1-summary/summary.json。首次边界commit带一处空格造成guard格式失败，4fceda8已显式纠正且全分支diff-check通过；没有隐藏失败或改旧存档。5b仅导出子项保留，NVOF前瞻尚未闭环。
+
+## 2026-10-05 NR性能5b NVOF预取负收益
+
+before347a184/candidate5edbf79，v1因不存在nrLayers成员构建失败，58f5845修正；v2/v3/v4构建成功，最终编译产品1efd344。七组debug输出/取消通过，随后24普通导出三轮交错整文件SHA与已解码baseline一致。单NR/NR+SR4K/双NR/4K→SR8K整次分别慢1.41/2.06/2.74/5.25%，暖处理分别仅降6.01/1.47/2.68/-0.16%，多占232/232/232/867MiB。独立两trace组各119对实际依赖区间重叠约1ms，区别NVOF完整依赖区间与硬件kernel，不混入正常性能数字。数据E:/项目/Veyra/logs/perf-nr-20261004/B5b-prefetch-{smoke,normal,8k,trace}-v1-*。决定存档后明确回退这个准备器/导入接口，不扩进文件播放；保留已测两帧NVENC优化。没有压力/设备移除/用户电源设置变更。
+
+明确revert484b425/b954b58/30cedcb完成；只保留发生冲突的当前完整事实文档，产品/CMake/driver与before347a184空diff，scope guard通过。新共享队列/快照导入/实验trace接口删除，已保留5b默认导出优化未丢失。准备4b时重新构建产品，不使用已回退候选的当前build EXE冒充基线。
+
+## 2026-10-05 NR性能4b既有逐层组合核验
+
+开工2446afc、夹具725a6c5，`nr-build.py B2d build-nr-mixed-v1 veyra_qml_ui veyra_nr_mixed_resolution_experiment`27步成功；native EXE 972e0d6a41db40a3bd9c0f1d9c26e3a21ac8a97e26a8606c7ca8634a07d6ee05。v1清单键分隔符、v2错误source epoch/精确seek预期导致Python断言失败，原生均pass；两问题按实际接口修正，v3完整9组360全RGBA/8个NR往返seek/debug0通过，相同配置两次输出无差异。不同组合6选帧2层PSNR40.68–42.62/最大161，3层34.51–35.97/最大193，未经用户画质确认，不设默认。
+
+`nr-mixed-normal.py B2d B4b-normal-v1`12普通播放三轮交错全部pass，无额外GPU/显存压力；2层全1080→720/1080增强区间14.644→11.461ms（-21.74%），3层全1080→480/720/1080为20.996→14.150ms（-32.61%）。同产品配置取舍，不是新算法收益；残差/呈现P99没有改善。2-native-r2保留2.791s实际提交间隙/84帧跳过，所有组合源303/304还存在67–115ms图提交长尾，R0继续查。日志/画质：E:/项目/Veyra/logs/perf-nr-20261004/B4b-{native-v3,normal-v1}-summary；E:/项目/Veyra/tests/perf-nr-20261004/B4b-native-v3-quality/review.html。
+
+共享NrLayerEditor只加多层可选组合和画面改变提示，不新增内置预设、不自动改参数，AMD未测不提示；extract新增1句，繁中/英/日补齐。下一节点3b先验证单adapter有界预建实际尺寸池与正常切换，原方案1b内容预算和2b并发Create已被反例拒绝，不能偷用。
+
+## 2026-10-05 NR性能3b可选自动档与5a拒绝
+
+3b产品e8f0bd1/build-nr-auto-product-v1 114步通过，policy6保留旧ID、首层实际五尺寸有界池/真实transport预算/四次每分钟限制/导出原生/默认不选。B3b-normal-v1 12普通组30fps不切档无稳定收益，60fps降70%增强14.526→11.763ms（19.02%），最后NR不变、Present P99几乎不变、10秒长帧未解决；池额外1697MiB及约半秒启动。B3b-product-ui-v1夹具将float0.699999988与JS0.7严格相等错误失败，改精度后v2三真实进程通过首层选择/末层灰态、降升档、暂停seek/倍速、uniform、关开、调色时域fallback、保存重启及逻辑API拒绝保NR。没有压力、设备移除或用户配置改写。
+
+`nr-auto-final.py B2d B3b-product-native-v1`10/10通过，470原生全帧/PTS/history，包括200默认off与旧B4b完整CSV一致；120帧×2的实际NVENC/mux Auto与固定原生整文件SHA相同，`nr-quality-review.py`完整240解码MD5/PTS/元数据一致。12对PNG+SSIM+PSNR存B3b-product-native-v1-quality/review.html；低档改变画面，不冒充主观批准。Auto控制器当前构建CPU运行通过；策略/preset合同扩展到policy6待R0构建。证据E:/项目/Veyra/logs/perf-nr-20261004/B3b-{normal-v1,product-ui-v2,product-native-v1}-summary。
+
+5a保存原方案检测填黑反例：18/255暗边误判抹529920像素、后出现字幕滞回抹2640像素。B5a-native-v1 base错误借同Core触发refused-prepare，改无NGX base后v2十二组480完整RGBA重复无差异/debug0、ROI外保原图为0差异。实际ROI GPU区间减少17.44/19.69%，但有效区PSNR31.64–35.03/最大55，成本不含额外base及回读，不能视为产品收益。已查看生成对照；没有真实电影/采集验收。拒绝默认检测/ROI/填黑，产品从未接入，无生产改动需回退；独立实验/失败原图保留。文档PERF_5A_LETTERBOX及B5a-native-v2-summary。
+
+## 2026-10-05 R0普通回归及退出崩溃存档
+
+R0合同14项+Qt Quick39项通过；真实Qt GPU/软件功能布局4/4、严格8页启动8/8、实际RTSS两OSD×三正常场景6/6且用户Profiles恢复、当前导出worker5/5通过。夹具过时组合数量/第七策略、inline context、accordion动画、子PowerShell模块/参数/QtTest依赖失败已保存并定向修正；不改产品迁就测试。证据详PERF_R0_ACCEPTANCE_2026-10-05及同名E盘logs。
+
+`nr-r0-normal.py B2d R0-normal-v1`33/33正常负载交错通过：M1各五配置A/B三轮、S4同B DIRECT三轮，sourceSkipped全0。S4增强19.481→18.795ms（3.52%），同B DIRECT19.299→18.795（2.61%）；其余配置无稳定收益，单NR原生约6.1ms，软件Present P99几乎未变。最长成功Present110.209ms，CPU图提交长尾仍在；不宣称后台掉帧根治或NR内核提速。全部payload SHA原样。原日志/JSON/CSV在E:/项目/Veyra/logs/perf-nr-20261004/R0-normal-v1-summary及33原始目录。
+
+`nr-r0-close.py B2d R0-close-rebuild-v1`请求FSR后200ms退出实际C0000005；封存A的`R0-close-baseline-v1 fsr3`同样失败。初始化在Qt HWND销毁后继续，CreateSwapChainForHwnd 80070005后清理崩溃。源码确认PresentSink非拥有旧队列未清空，交换链失败前未赋新队列，随后VideoPresenter释放旧队列；重建缺取消检查/停止后仍回滚。先存档本候选和完整失败证据，再最小修复queue生命周期/长初始化取消。没有压力/GPU竞争/设备移除；OBS真实采集仍待，候选尚不可交付。
+
+R0-candidate eb8b1a2已存档，bundle da0440b9229a8bcbc4c6a918d1cdeac38b3372ae4c8eff3af358744424dc3e61。退出修复候选只改PresentSink提前绑定当前queue/拒绝失效HWND/清空借用句柄与指针、VideoPresenter验证目标窗口、EngineController NGX返回后的stop和退出不回滚。其他呈现重建统一经过同一取消检查，保留仅交换链恢复不重建views的旧语义。新增实际D3D12 debug生命周期测试：合法打开→释放旧队列→已关闭窗口初始化失败→重复关闭→新窗口重开，三轮；不造GPU负载/设备故障。待构建及真实退出回归，不提前标通过。
+
+退出修复04a0fc3构建v1因Agent填错未知target veyra_export_queue_worker失败，未编译产品；v2改真实veyra_export_workflow_tests，18步成功。新UI EXE c512b8782eb86f70c584a6c1bb87c918af648c0b3aee77cf04a2b0967a628464；R0-exit-contracts-v1 repair/真实PresentSink三轮failed-open/reopen重复清理2/2通过，debugErrors=0；R0-close-fixed-v1七个实际Qt退出（FSR/XeSS/VFG/SF-v2尺寸层数/停止）全exit0、六次真实长创建后取消，无泄漏/交换链错误。原before A/B崩溃日志与dmp不删。
+
+OBS正常功能R0发现阻塞：v1 API207未ready修正有界重试；v3软件兼容六场景通过/截图已看/用户OBS配置未变。GPU界面v2/v4均全屏黑图；基线A两轮通过且全屏原图有真实视频。paused-present-off、基线QML、退出修复前EXE均不能消除；B2d阶段失败、B2a核心阶段通过、B5c暂停空闲阶段resize失败。非压力/性能测试，所有阶段同M1/单NR/源码截图与录像/原用户配置不变。先存档本失败候选，再恢复5c旧呈现语义；NR残差复用独立保留，暂停0.011%旧数据暂不作为最终保留收益。详PERF_R0_ACCEPTANCE及E:/项目/Veyra/logs/perf-nr-20261004/R0-obs-*。
+
+R0-obs-candidate 92a181f/bundle708e4834c19078b50d33203ea0963255f3c1425fe9edae41413e93dba48d4f27已归档。最小恢复c593679暂停呈现生产部分：移除RetainedFrame/跳过Present/提前取view，回到resize后取view及50ms重复呈现；恢复ProPage旧动画并移除相关测试hook。退出取消/借用queue修复、限定3c、NR残差复用及Auto均保留。退役仅服务此候选的nr-present/PausedPresentExperiment和CMake target，完整源码可从c593679及既有before/candidate/accepted tags回放。此为待验证恢复候选，不提前把OBS标通过、不复用旧0.011%收益。
+
+5ede7f6恢复候选build-r0-idle-revert-v1成功12步，但R0-obs-idle-revert-v1仍GPU全屏黑，R0-obs-residual-off-v1明确关闭NR残差复用亦失败。因此不能说暂停呈现/NR残差缓存已经被证实为根因，恢复候选无效，先拒绝封存后恢复92a181f生产部分（保留完整回退记录）。官方OBS32.1.2 dxgi-capture.cpp源码确认单进程全局data.swap，任意ResizeBuffers会清空它并由随后首次Present重选；16连续不匹配才再择。当前日志resize后捕获到Qt暗背景，多DIRECT队列被记入同一采集候选。两交换链重建次序是新定位方向（推断，待实验），不改OBS或运行库。下一最小候选仅在实际graphics-hook64.dll存在、视频目标尺寸变更时先保留旧buffer伸展，让UI resize完成后视频再resize；普通播放/未注入保持原行为。
+
+恢复9a30cf8/bundle8f5d35dd7c8e1a3531bb9b49389c15d7e82e6a21ed29fb8b9df192fe6f135a86。新最小候选仅VideoPresenter在实际OBS graphics-hook64.dll已加载且目标尺寸变更时记录250ms截止，期间沿用已有buffer伸展，随后视频resize在Qt resize之后执行；每个新尺寸只设一次截止，失败重试保留旧backoff，close清空。未注入/尺寸不变没有额外等待，无CPU sleep/fence增加，无自动配置或重启提示。仍待真实OBS对照，不先称修复。
+
+89ba070/build-r0-resize-v1构建12步成功，新UI SHA f97e8c60f7de599765dab02e4db883318e3d5203828b77b65e64a32773bc514d。R0-obs-resize-delay-v1驱动打印GPU/compat各6通过，但人工查看原图揭示GPU窗口视频实际空白：旧crop包含侧栏/底部统计，判定过宽。这项6/6不能引用为GPU视频通过。封存A的baseline-v2 playing/resize/windowed也空白，resume一次有视频，说明GPU窗口模式是既有不可靠限制；compat各6张均有真实视频，当前与A的fullscreen有真实视频。只在严格视频区域220,180,660,430判定，窗口GPU仅记录观察、不冒充支持；既有OBS兼容模式仍为完整窗口采集路径。修正夹具并为录像添加保比例画布边界，不改用户OBS或产品渲染选项。旧原日志及错误summary保留，另用新版本对照/复测记录更正结论。
+
+R0-obs-resize-verified-v2严格复测GPU全屏仍失败（视频crop标准差1.22/1.22/1.70），250ms候选不可靠；cleanup全部true。封存A同一新夹具R0-obs-baseline-verified-v3全屏有实际视频（30.64/28.59/22.59），普通窗口旧限制保留。拒绝250ms方案并封存，然后明确恢复9a30cf8的VideoPresenter/header生产字节。OBS源码的全局选择发生在hook_present的RealPresent之前；下个最小实验仅在native resize恢复绘制后用一次公开DXGI_PRESENT_TEST探测（不输出帧）提前登记本交换链，记录HRESULT，不修改OBS/DLL、不计入成功呈现帧。未验证不能称修复。
+
+81301c5/build-r0-capture-prime-v1构建成功，但R0-obs-capture-prime-v1全屏仍为空白，TEST HRESULT=0不能当作抓取成功，严格crop仍1.22/1.22/1.70。真实resize占约22ms，期间Qt可能先选入OBS全局状态，事后TEST无法覆盖已选Qt链。拒绝此实验并回退。下一候选在Qt公开beforeFrameBegin/afterFrameEnd接点维护每窗口独立帧锁；native只在实际OBS注入且要resize时对全部Qt帧锁try_lock，忙则保留旧buffer下一帧再试，取得后覆盖resize和首次真实Present。没有native等待/固定sleep/额外GPU帧/运行库patch；软件UI不用锁，正常未注入不加锁。对主窗口及全屏控制窗一并处理，防止另一个Qt链在resize期间重选。需真实采集、正常resize、退出及CPU/GPU调度回归后才决定。
+
+cc7f5a3/build-r0-capture-gate-v1构建5步成功。R0-obs-capture-gate-v1 GPU全屏严格视频区域有真实图（已看原图），compat六阶段全部有真实视频，cleanup全部true。GPU窗口阶段仍为封存A也存在的限制，不作6/6视频通过。主/全屏控制两个Qt帧锁实际登记且resize日志qtWindows=2；仅实际OBS期间Qt帧锁，native不阻塞try_lock并在首次Present之后立即释放。下一最终构建还将实际OBS录制期间resize后50ms关闭作为退出边界；当前一轮不能替代重复与全回归。
+
+62cd49b/build-r0-final-v1 13步构建成功，但R0-obs-capture-gate-v2 GPU全屏再次失败，严格视频std1.22/1.22/1.70，cleanup全部true；批次在失败处停止，后续退出/合同/UI/导出未执行。官方Qt v6.8.3 qsgthreadedrenderloop.cpp 604–641确认createOrResize发生在beforeFrameBegin信号之前，所以帧锁候选不能排除Qt稍后的ResizeBuffers，拒绝并回退。下一候选除了每Qt窗口独立锁外，还记录实际hook期间完成帧的窗口像素尺寸；native只有全部可见Qt窗口已完成当前尺寸帧且全部try_lock成功才能resize，否则沿用旧视频buffer下一帧再试。Qt帧中不锁其他Qt窗口、native不等待、无固定延迟。旧失败及曾通过的原图/录像保留，不重写为通过。
+
+2a8bed2/build-r0-final-v2 12步成功；R0-obs-frame-extent-v1 GPU全屏及compat六阶段、v2 GPU全屏通过并正常resize退出，但v3 GPU全屏失败，cleanup均true，批次停止。GetClientRect是窗口最新尺寸，不是Qt当前buffer尺寸，不能证明createOrResize已完成；Qt渲染线程缓存的proxy/windowSize可能滞后。拒绝此窗口尺寸代理并回退。下一候选改用Qt6.8.3 QQuickWindow::swapChain()->currentPixelSize()在实际frameSwapped接点记录真正的RHI buffer尺寸，使用本机已有Qt6::GuiPrivate头文件接口，不拷SDK或新增DLL；帧锁与native try_lock的边界仍保持，未验不称成功。
+
+d0984e0/build-r0-final-v3构建成功，但R0-obs-rhi-extent-v1第一轮GPU全屏仍抓到Qt背景（严格视频std1.22/1.22/1.70），用户配置未变、仅本轮进程退出；后续批次未执行。实际RHI尺寸与帧锁也不能保证OBS单进程多交换链的选择，拒绝并封存；明确恢复432f7ff生产文件，去掉新增GuiPrivate依赖/帧锁，不保留无效采集修复。暂停/残差恢复实验同样没有修复此现象，不能据阶段相关性拒绝已有5c。接下来对封存A作相同严格普通采集观察，确定已知兼容边界；完整窗口采集以既有OBS软件界面兼容模式作必要回归，不把未测或失败GPU模式声称通过。继续退出/合同/真实UI/导出/焦点回归，无压力测试。
+
+9403521明确回退无效RHI gate，build-r0-final-v4 18步成功。`R0-obs-baseline-strict-r1 gpu --baseline-qml`在封存A也首次fullscreen失败，strict crop std1.2199/1.2199/1.6957，原PNG已看是Qt空背景；cleanup全部true。之前A有真实全屏视频的轮次保留，新结果证明GPU UI游戏采集既有不稳定，不能再称基线始终稳定或5c导致。停止猜测式交换链实验，保留全部拒绝存档/失败录像；最终产品兼容采集、退出、合同/UI/导出/前后台匹配回归继续。此分类不等于GPU OBS已修好。
+
+最终构建UI SHA06fc3703b0007df8467a7dd08e1e7acba25d21d539fb44ba42292d32e7b256e3，R0-obs-compat-final-v2实际六场景有视频及resize后50ms退出0，7退出/16合同（Quick39、D3D debug0）/4真实UI/5 worker/10原生470全帧与240编码输出/8页严格启动全通过。R0-focus-normal-v1的第一A运行在10秒申请激活后立即读Foreground仍为PID40068，夹具停止，不能作为前后台有效数据；本轮播放器/helper均已退出、原焦点恢复，原日志保留。GetForegroundWindow真实完成验证增加最多2秒观察，不改系统焦点锁定或用户设置，不以Qt变量伪造焦点；新对照仍需全部实际Qt active与Win32前台PID一致才接受。
+
+R0-focus-normal-v2加2秒等待仍不能激活A。只读核验PID40068是06:32:59启动的Windows PickerHost（父svchost），不是本轮GDI helper，前述未核验身份推断已更正；未关闭该系统窗口。下一夹具记录API返回/error，临时对当前/前台/目标输入队列连接并在调用后立即解除，只BringWindowToTop本轮目标，不发键盘鼠标输入、不改全局焦点锁，不碰PickerHost配置或结束其进程。无实际焦点变化仍判夹具失败，不能用无效A/B数据称后台问题修复。
+
+R0-focus-normal-v3 A三次Win32激活真实成功（API/error和前台PID已记录），实际Qt active前/后台状态匹配，普通完整播放exit0/sourceSkipped0；随后解析器错用不存在的[pacing-submit]事件而无法计算间隔。实际产品格式为既有R0-normal使用的[submit] pts100ns/host100ns，修正解析并逐次保存focus-events；未降低必须有真实焦点和100个区间的断言，原失败数据保留。cleanup原焦点恢复返回false如实记录，具体窗口状态/系统激活条件未核实，不能推断窗口已关闭；未向PickerHost发关闭消息或修改配置。
+
+R0-focus-normal-v4的A首轮实际激活/Qt状态/三段真实提交均满足，但driver把matrix.run（只写result.json不返回值）当作receipt对象，结果汇总失败。修正为读实际result并增加--resume：只有完整passed、S4/50秒、EXE/源SHA和真实焦点事件全部匹配才复用已完成运行，重做分析但不重跑GPU；首次A原数据/事件不覆盖，继续交错余下B/A/B/A/B。此为夹具修正，不改产品或降低前后台断言，不把之前driver失败改写为当时成功。
+
+`R0-focus-normal-v4 --resume`最终6/6普通50秒通过，18次Win32前台PID与真实Qt active变化吻合；三阶段提交FPS三轮中位A/B均60、源跳过全部0，P99分别A17.2609/17.2227/17.2402ms，B17.1828/17.2788/17.1764ms（前台/后台/再前台），无严重失焦下降，不外推其他窗口负载或物理显示。cleanup自有GDI退出/原焦点恢复true、用户设置未变。原v1–v4夹具失败过程仍保留。
+
+`nr-quality-review.py R0-native-final-v2`完整240解码MD5/PTS/轨道/尺寸/时长0差异及12配对图/SSIM通过。`nr-r0-recordings.py R0-obs-compat-final-v2`在解码前发现MKV最终SHA与StopRecord返回当刻不同：原b38ba563…cde5，最终9c99037e…efea。OBS私有日志证明muxer08:27:40.628才结束，早于此就曾记录hash，属于夹具过早封存；旧receipt/失败review目录保留，不篡改为通过。修正OBS驱动只在本轮OBS停止后封存最终字节并重复检查稳定，StopReply早期hash独立保留，再做一轮正常六场景及全录像解码。没有修改产品/OBS配置/运行库，所有GPU计时已结束。
+
+R0-obs-compat-final-v3六实际视频场景/resize退出通过，MKV在OBS停止后SHA稳定、原StopReply观察独立保存。录像review全解码通过后在硬编码2秒帧失败：此时OBS仍在初始化捕获，第一完成playing截图实际在4.229秒。修正review按该轮OBS Writing file精确启动日志与六完成截图mtime对应取帧，原2秒黑帧和全文件MD5仍保留，不删初始帧或更换录像；只改CPU后处理的阶段对齐，不再跑GPU。额外取全屏内三时刻验证真实录制在推进，不用原输入截图替代录像图。
+
+`nr-r0-recordings.py R0-obs-compat-final-v3 scenes-v2`通过：783全解码帧与ffprobe计数同，六完成场景录像取帧真实视频，全屏三时刻差异非0、持续推进；已看21.307全屏和25.519退窗录像原图。最终MKV SHA f2b5f3cf1bc537995737b317c13eea0e6671940137fcaf89a2bb3f3f698dd51a，用户OBS配置及全部cleanup通过。最终原生Auto12配对图也已查看，低尺寸画面变化不冒充主观批准。所有本机优化节点已处置，普通功能/焦点/全解码回归完成；开始生成独立完整本地NVIDIA ZIP+源码ZIP，依赖原字节、最终退出EXE身份、干净解压及独立PE/Windows-only PATH两绘制模式审核，未跑前不记通过。
+
+## 2026-10-05 优化候选完整包、本地交付与最终存档
+
+`py -3.11 -B scripts/perf/nr-final-package.py B2d 2.0.3-perf-20261005 R0-close-final-v2`通过：最终UI EXE与退出7例身份一致，源码快照cd65cb787f089cc44be89df78b33577685ea2e4d，生产代码9403521cc4d0b24390a6c5891cef555c00de295f，显示2.0.3-perf-B2d。完整目录/ZIP/对应源码ZIP在E:/项目/Veyra/test-packages/perf-nr-20261004；普通ZIP 713088417 bytes、SHA bc2e95ae1d543d3fe6865c027310bb2af74e364e8c142250d03683773639191e，源码SHA a2c97c4a2ab327b9cc984f05f1514199b0abff8a2b381d46891f6ded73b2dabf。1569载荷干净解压逐文件SHA、真实7秒基础播放/退出0通过，result在logs/perf-nr-20261004/2.0.3-perf-20261005-package。
+
+`nr-final-audit.py <E盘本轮解压目录> R0-final-package-audit-v1`在源码ZIP vs Git blob Main.qml原字节断言失败；读出779 CRLF/原blob0CRLF，仅换行转换，其余内容一致。原失败记录/imports原件保留；改为确切commit的LF参考Git ZIP比全1602文件，只允许UTF-8文本CRLF转换，禁止其他差异。v2独立审核通过1569载荷/95PE依赖/48运行组件/123不可变依赖/1602源码，其中1543仅CRLF变化；Windows-only PATH GPU与软件各7秒播放/退出0，无产品错误、全载荷未变。两次基本启动默认效果关闭，不借此声称增强或实际OBS采集通过。脚本修复不改产品/原ZIP/manifest。`R0-final-stage-check-v1`再次核交付目录/两个ZIP SHA及生产源文件vs9403521无差异；用户包只有当前veyra_qml_ui.exe，实际worker用同EXE的--export-worker，测试EXE没有混入包。
+
+末轮整理只拟删除可重建的干净解压验证副本，final目录/ZIP/源码/失败数据不动。工具自动审批在进程启动前拒绝递归删除，原因仅blocked by policy，未给具体原因；未绕过重试，副本1570文件/1062961255字节仍在，原命令未生成planned.json，另写R0-cleanup-preserved-v1/summary.json记录保留。临时目录内日志/配置恢复证据继续保留。DELIVERY首版汇总错假设所有summary都有顶层passed；native实为10/10每run通过，470图/整导出SHA同。CPU汇总失败单独R0-delivery-fixture-v1保存，按真实schema逐例核对后生成E:/项目/Veyra/test-packages/perf-nr-20261004/DELIVERY.json，没有修改原测试或重跑GPU。
+
+全部本机优化节点已存档处置：有效实现保留、负优化与无效OBS候选明确撤回；外部C/真实主机实卡/其他GPU/物理显示/主观画质缺口、约110ms/旧2.8s长尾及GPU UI OBS限制均在R0及DELIVERY列明。最终按guard、全分支diff-check、源码二进制隔离和主线/桌面/修复工作区保持检查收尾，再commit与R0-delivery accepted增量bundle/patch/receipt。没有新增压力/竞争程序，没有merge/push/Release/关机。本轮为本地候选交付，不能说原草案全部性能目标或所有硬件验收已达成。
+
+`R0-final-scope-v2/summary.json`最终检查通过：guard177路径、全分支diff-check、源代码自最终构建无变化、114既有节点checkpoint、GPU测试已退出；main354b1c6、桌面原状态、field-upgrade干净8cdc612保持。首版手工check把历史公开推广视频REAMDE MP4.mp4及assets/veyra-2.0.0-promo.mp4也视为违规，范围误用；两者Git blob与开工点完全相同，不删除用户既有资源。校正为严格禁止全部tracked proprietary运行库/SDK/模型，以及本轮任何新增或改动测试媒体，均无违规；该记录不隐藏原断言失败，不放开运行组件规则。
+
+## 2026-10-05 Claude 现场修复（claude/field-fixes-20261005，基于 2dbf26c，未提交）
+
+预热默认关闭并按显卡置灰；设置页拆为 10 类；后台卡顿的“跳帧→节奏中断重置→补帧相位拉长→再丢帧”自我放大链路修复，并在播放期间退出 Windows 电源节流；AMD NR 被非 NVIDIA 规范化/图描述关掉的问题修复（预览与 1080p 内导出）；引入 libass 0.17.5 静态库支持 ASS 特效字幕与 MKV 内嵌字体。详见 `docs/FIELD_FIXES_2026-10-05.md`。构建 `build/field-fixes-20261005/B`，日志与截图 `logs/field-fixes-20261005/`。单元/合同测试与本机实际运行截图通过；用户系统的后台卡顿、RX 9000 实卡 AMD NR 未验证。
+
+## 2026-10-05 Codex 接管 Claude 最新验收及现场修复
+
+读取 Claude 最新原始会话 `C:/Users/123/.claude/projects/E-----Veyra/b667394c-e878-4628-ae05-663760b1a66b.jsonl`、独立 ACCEPTANCE_REPORT 与现场记录，确认最后的计时修复、build-6 和第二版打包均已完成，仅交接消息因额度中断未发。继续 E:/项目/Veyra/worktrees/field-fixes-20261005 / claude/field-fixes-20261005，HEAD 2dbf26c；保全全部未提交源码，本轮只更新 FIELD_FIXES/CURRENT_STATUS/WORKLOG。原性能验收仍为有条件通过，未验 AMD/用户后台卡顿/暂停后新接 OBS/其他 RTX 不能写通过。
+
+Run takeover-20261005T061823Z-1ad4ac；logs/tests/tmp/archives 全在 E:/项目/Veyra 对应 claude-handoff-20261005 子目录。开始状态和1605文件 SHA 保存在 archives/.../takeover-before.json，原现场文档另存 inherited-field-fixes.md。`py -3.11 -B E:/项目/Veyra/tmp/claude-handoff-20261005/takeover-20261005T061823Z-1ad4ac/handoff-check.py takeover-20261005T061823Z-1ad4ac audit` 通过 ZIP CRC/1578载荷 SHA/1605源码原字节/123不变运行组件；第二版ZIP SHA85c8da0203abe79d07715a3afe08f1f377f278f5743aceaf16148235c84b75c6，EXE09b439d8faf4df121a0749b6eaaccf71de0b8c344d144feb1ea743cc7d973a14与原build-6一致。包修订号05b，编译显示标签仍05，明确记录而不重打历史包。
+
+同夹具 `units` 五测试全exit0（scene18/18、repair246/246、live timing/effect chain/i18n通过）；`timing` 独立包副本约45秒真实播放七阶段通过：关效果→开NR→关NR→缓存恢复NR→DLSS SR→DLSS2X→第二NR层。feature-cache真实命中，当前GPU阶段与节点均measured且samples>0，合计约7.22/7.07/8.18/10.43/16.85ms；退出0，无产品/QML错误。不是A/B收益或物理延迟测量，不外推未测组合。测试QML仅在本轮副本，所有测试进程已退出。
+
+更正文档中“卡顿消失确认外部负载”过强归因为未确认根因，保留原日志；AMD所查会话无效不泛化成所有历史会话从未执行。本轮未新构建、未改产品/运行库、未commit/merge/push/Release/关机、无压力/竞争程序。下一项本机工作为隔离OBS兼容模式先暂停后新挂钩实录；用户采集卡后台和RX9000实卡仍待真实反馈。详FIELD_FIXES第6节和本轮JSON。

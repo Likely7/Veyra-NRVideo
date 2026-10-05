@@ -9,10 +9,10 @@ struct Extent {
     // D3D12 texture extent, not a product aspect-ratio or video-format policy.
     bool valid() const {return width>=1&&height>=1&&width<=16384&&height<=16384;}
 };
-enum class NrSizePolicy { Realtime, Native, P480, P720, P900, P1440 };
-constexpr bool validNrSizePolicy(NrSizePolicy policy){return policy>=NrSizePolicy::Realtime&&policy<=NrSizePolicy::P1440;}
+enum class NrSizePolicy { Realtime, Native, P480, P720, P900, P1440, Auto };
+constexpr bool validNrSizePolicy(NrSizePolicy policy){return policy>=NrSizePolicy::Realtime&&policy<=NrSizePolicy::Auto;}
 constexpr unsigned nrHeightLimit(NrSizePolicy policy){
-    switch(policy){case NrSizePolicy::Realtime:return 1080;case NrSizePolicy::P480:return 480;case NrSizePolicy::P720:return 720;case NrSizePolicy::P900:return 900;case NrSizePolicy::P1440:return 1440;default:return 0;}
+    switch(policy){case NrSizePolicy::Realtime:case NrSizePolicy::Auto:return 1080;case NrSizePolicy::P480:return 480;case NrSizePolicy::P720:return 720;case NrSizePolicy::P900:return 900;case NrSizePolicy::P1440:return 1440;default:return 0;}
 }
 // Preserve the existing 0/1/2 preset IDs. New choices are appended.
 enum class SrTarget : uint32_t { Qhd, Uhd4K, Uhd8K, Uhd5K, Uhd6K, Uhd7K };
