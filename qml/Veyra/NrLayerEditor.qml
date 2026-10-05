@@ -43,11 +43,12 @@ ColumnLayout {
         required property double amount
         signal edited(double amount)
         label: spec.label
+        hint: spec.hint ?? ""
         value: amount.toFixed(2)
         VSlider {
             objectName: "nr-" + valueRow.spec.key
             valueFromModel: true
-            resettable: true; defaultValue: valueRow.spec.key === "skin" ? -1 : 1
+            resettable: true; defaultValue: valueRow.spec.defaultValue ?? (valueRow.spec.key === "skin" ? -1 : 1)
             implicitWidth: 110
             from: valueRow.spec.min; to: valueRow.spec.max
             value: valueRow.amount
@@ -206,7 +207,7 @@ ColumnLayout {
         Layout.fillWidth: true
         label: qsTr("增强变化量"); count: 5
         Repeater {
-            model: [{key:"total",label:qsTr("总变化强度"),min:0,max:2},
+            model: [{key:"total",label:qsTr("总变化强度"),min:0,max:5},
                     {key:"darken",label:qsTr("暗化变化"),min:0,max:2},
                     {key:"brighten",label:qsTr("亮化变化"),min:0,max:2},
                     {key:"color",label:qsTr("色彩变化"),min:0,max:2},
@@ -219,15 +220,75 @@ ColumnLayout {
         }
     }
     VSubGroup {
+        objectName: "nr-correction-group"
+        Layout.fillWidth: true
+        label: qsTr("画面调控"); count: editor.layerData.correctionEnabled ? (editor.layerData.correctionAuto ? 3 : 12) : 1
+        VRow {
+            label: qsTr("开启调控")
+            hint: qsTr("关闭时保留原始变化量，最高 5")
+            VSwitch {
+                objectName: "nr-correctionEnabled"
+                checked: editor.layerData.correctionEnabled ?? false
+                onToggled: checked => editor.edited(editor.layerData.index,"correctionEnabled",checked?1:0)
+            }
+        }
+        VRow {
+            visible: editor.layerData.correctionEnabled ?? false
+            label: qsTr("调控方式")
+            VSeg {
+                objectName: "nr-correctionAuto"
+                options: [{id:"1",label:qsTr("自动")},{id:"0",label:qsTr("手动")}]
+                current: (editor.layerData.correctionAuto ?? true) ? "1" : "0"
+                onPicked: id => editor.edited(editor.layerData.index,"correctionAuto",Number(id))
+            }
+        }
+        Repeater {
+            model: [{key:"hueProtection",label:qsTr("色相保护"),hint:qsTr("保留原图色相；没有色相偏移时变化较小"),min:0,max:1,defaultValue:1},
+                    {key:"chromaProtection",label:qsTr("色度保护"),hint:qsTr("软化过量色度变化；小幅变化保留"),min:0,max:1,defaultValue:0.75},
+                    {key:"neutralProtection",label:qsTr("中性色保护"),hint:qsTr("抑制白墙、云和灰色区域的额外染色"),min:0,max:1,defaultValue:0},
+                    {key:"colorRetention",label:qsTr("原图色彩保留"),hint:qsTr("保留原图色相与饱和度；1 为完全保留色彩"),min:0,max:1,defaultValue:0},
+                    {key:"luminanceRetention",label:qsTr("亮度保持"),hint:qsTr("减少 NR 明暗改动；1 为保留原图亮度"),min:0,max:1,defaultValue:0},
+                    {key:"shadowProtection",label:qsTr("暗部保护"),hint:qsTr("减少暗部被进一步压黑，保留提亮细节"),min:0,max:1,defaultValue:0},
+                    {key:"highlightProtection",label:qsTr("高光保护"),hint:qsTr("只压缩向白色溢出的变化，保留高光回暗"),min:0,max:1,defaultValue:1},
+                    {key:"localCompression",label:qsTr("局部压缩"),hint:qsTr("同时软化过大的亮度和颜色变化"),min:0,max:1,defaultValue:0.75},
+                    {key:"temporalStability",label:qsTr("时域稳定"),hint:qsTr("播放时减闪；暂停单帧不体现时域效果"),min:0,max:1,defaultValue:0.8}]
+            delegate: NrValueRow {
+                required property var modelData
+                visible: (editor.layerData.correctionEnabled ?? false) && !(editor.layerData.correctionAuto ?? true)
+                spec: modelData; amount: editor.layerData[modelData.key] ?? modelData.defaultValue
+                onEdited: amount => editor.edited(editor.layerData.index,modelData.key,amount)
+            }
+        }
+        NrValueRow {
+            visible: (editor.layerData.correctionEnabled ?? false) && (editor.layerData.correctionAuto ?? true)
+            spec: ({key:"correctionAmount",label:qsTr("自动调控力度"),hint:qsTr("0 保留原始变化；1 按当前风格完整纠偏"),min:0,max:1,defaultValue:1})
+            amount: editor.layerData.correctionAmount ?? 1
+            onEdited: amount => editor.edited(editor.layerData.index,"correctionAmount",amount)
+        }
+        VButton {
+            objectName: "nr-use-auto-defaults"
+            visible: (editor.layerData.correctionEnabled ?? false) && !(editor.layerData.correctionAuto ?? true)
+            text: qsTr("采用当前风格的自动参数"); ghost: true
+            onClicked: editor.edited(editor.layerData.index,"correctionUseAuto",1)
+        }
+        Text {
+            Layout.fillWidth: true
+            visible: editor.layerData.correctionEnabled ?? false
+            text: qsTr("自动参数分别适配风格 0／1／2。手动可独立保留颜色、亮度和暗部；保护会降低对应变化量。时域稳定复用光流，切换方式保留手动数值。")
+            color: Theme.t3; font.pixelSize: 11; wrapMode: Text.WordWrap
+        }
+    }
+    VSubGroup {
         objectName: "nr-experimental-group"
         Layout.fillWidth: true
         label: qsTr("实验"); count: editor.layerData.temporal ? 3 : 2
         VRow {
             label: qsTr("时间域防闪烁")
-            hint: qsTr("需要光流；关掉则不做时域累积")
+            hint: editor.layerData.correctionEnabled ? qsTr("画面调控已接管时域稳定；关闭调控后恢复此设置") : qsTr("需要光流；关掉则不做时域累积")
             VSwitch {
                 objectName: "nr-temporal"
                 checked: editor.layerData.temporal
+                enabled: !(editor.layerData.correctionEnabled ?? false)
                 onToggled: checked => editor.edited(editor.layerData.index,"temporal",checked?1:0)
             }
         }
@@ -240,6 +301,7 @@ ColumnLayout {
             hint: qsTr("静态最稳、光流为默认、低频保留高频细节")
             VSelect {
                 objectName: "nr-antiflicker"
+                enabled: !(editor.layerData.correctionEnabled ?? false)
                 options: [
                     {id:"1",label:qsTr("静态累积")},
                     {id:"2",label:qsTr("光流累积 · 默认")},

@@ -8,7 +8,7 @@ import VeyraTest 1.0
 Item {
     id: root
     width: 1480
-    height: 900
+    height: 1500
 
     VSwitch { id: sw; x: 10; y: 10 }
     SignalSpy { id: swSpy; target: sw; signalName: "toggled" }
@@ -67,18 +67,24 @@ Item {
         id: nrFixture
         Item {
             id: fixture
-            width: 1480; height: 900; z: 20
+            width: 1480; height: 1500; z: 20
             property int lastIndex: -1
             property string lastKey: ""
             property var rows: [0,1,2,3].map(i => ({
                 index: 2*i+1, enabled: true, runtime: 0, sizePolicy: 0, intensity: 1,
                 tone: 1, structure: 1, skin: -1, style: 0, autoMask: false,
                 uiCorrection: false, total: 1, darken: 1, brighten: 1,
-                color: 1, luminance: 1, temporal: false
+                color: 1, luminance: 1, temporal: false, antiFlicker: 2,
+                correctionEnabled: false, correctionAuto: true,
+                hueProtection: 1, chromaProtection: 0.75, highlightProtection: 1,
+                localCompression: 0.75, temporalStability: 0.8,
+                neutralProtection: 0, colorRetention: 0, luminanceRetention: 0,
+                shadowProtection: 0, correctionAmount: 1
             }))
             function edit(nodeIndex,key,amount) {
                 lastIndex=nodeIndex; lastKey=key
                 const next=rows.map(r => Object.assign({},r))
+                if(key==="correctionEnabled"||key==="correctionAuto")amount=Boolean(amount)
                 next.find(r => r.index===nodeIndex)[key]=amount
                 rows=next
             }
@@ -424,6 +430,55 @@ Item {
             }
         }
 
+        function test_nr_correction_mouse_controls() {
+            const fixture=createTemporaryObject(nrFixture,root)
+            verify(waitForPolish(root.Window.window))
+            const card=findChild(fixture,"nr-card-1")
+            mouseClick(card,40,24);tryCompare(card,"open",true)
+            const residual=findChild(card,"nr-residual-group")
+            mouseClick(residual,40,15);tryCompare(residual,"expanded",true)
+            verify(waitForPolish(root.Window.window));wait(550)
+            const strength=findChild(card,"nr-total")
+            compare(strength.to,5)
+            mouseClick(strength,strength.trackWidth-1,strength.height/2)
+            verify(fixture.rows[0].total>4.9)
+            keyClick(Qt.Key_Right)
+            compare(fixture.rows[0].total,5)
+            mouseClick(residual,40,15);tryCompare(residual,"expanded",false)
+            const group=findChild(card,"nr-correction-group")
+            mouseClick(group,40,15);tryCompare(group,"expanded",true)
+            verify(waitForPolish(root.Window.window));wait(550)
+            const enabled=findChild(card,"nr-correctionEnabled")
+            compare(enabled.checked,false);mouseClick(enabled)
+            compare(fixture.rows[0].correctionEnabled,true)
+            const mode=findChild(card,"nr-correctionAuto")
+            compare(mode.current,"1")
+            const amount=findChild(card,"nr-correctionAmount")
+            verify(amount.visible);mouseClick(amount,amount.trackWidth*0.65,amount.height/2)
+            fuzzyCompare(fixture.rows[0].correctionAmount,0.65,0.015)
+            verify(!findChild(card,"nr-temporal").enabled)
+            mouseClick(mode,mode.width-15,mode.height/2)
+            compare(fixture.rows[0].correctionAuto,false)
+            verify(waitForPolish(root.Window.window));wait(550)
+            for(const key of ["hueProtection","chromaProtection","neutralProtection","colorRetention","luminanceRetention","shadowProtection","highlightProtection","localCompression","temporalStability"]){
+                const control=findChild(card,"nr-"+key)
+                verify(control.visible)
+                mouseClick(control,control.trackWidth*0.35,control.height/2)
+                fuzzyCompare(fixture.rows[0][key],0.35,0.015)
+            }
+            mouseClick(mode,15,mode.height/2)
+            compare(fixture.rows[0].correctionAuto,true)
+            compare(findChild(card,"nr-hueProtection").visible,false)
+            fuzzyCompare(fixture.rows[0].hueProtection,0.35,0.015)
+            fuzzyCompare(fixture.rows[0].colorRetention,0.35,0.015)
+            fuzzyCompare(fixture.rows[0].correctionAmount,0.65,0.015)
+            mouseClick(enabled)
+            compare(fixture.rows[0].correctionEnabled,false)
+            verify(findChild(card,"nr-temporal").enabled)
+            fuzzyCompare(fixture.rows[0].total,5,0.03)
+            compare(fixture.rows[1].correctionEnabled,false)
+        }
+
         function test_nr_complete_parameters_and_skin_range() {
             const fixture=createTemporaryObject(nrFixture,root)
             verify(waitForPolish(root.Window.window))
@@ -451,6 +506,7 @@ Item {
             compare(fixture.rows[1].skin,-1)
             pickOption(findChild(card,"nr-skin-mode"),1)
             compare(fixture.rows[1].skin,0)
+            wait(100);verify(waitForPolish(root.Window.window))
             const skin=findChild(card,"nr-skin")
             compare(skin.from,0); compare(skin.to,2)
             mouseClick(skin,skin.trackWidth/4,skin.height/2)
@@ -472,11 +528,12 @@ Item {
             mouseClick(residual,40,15)
             tryCompare(residual,"expanded",true)
             verify(waitForPolish(root.Window.window))
+            wait(550)
             for(const key of ["total","darken","brighten","color","luminance"]) {
                 const control=findChild(card,"nr-"+key)
                 verify(control.width>50)
                 mouseClick(control,control.trackWidth/4,control.height/2)
-                fuzzyCompare(fixture.rows[1][key],0.5,0.02)
+                fuzzyCompare(fixture.rows[1][key],key==="total"?1.25:0.5,0.035)
                 const reset=findChild(control,"vslider-reset")
                 mouseClick(reset,reset.width/2,reset.height/2)
                 compare(fixture.rows[1][key],1)

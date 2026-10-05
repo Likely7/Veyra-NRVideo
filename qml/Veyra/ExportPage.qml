@@ -227,10 +227,20 @@ VPage {
             anchors.fill: parent; anchors.margins: 12
             contentWidth: availableWidth
             clip: true
-            ScrollBar.vertical: ExportScrollBar {}
+            // A ScrollView's own bar is placed by the style; a replacement must place
+            // itself, or it sits at the top-left corner under 输出设置 (2026-10-05).
+            ScrollBar.vertical: ExportScrollBar {
+                id: settingsBar
+                parent: settingsScroll
+                x: settingsScroll.mirrored ? 0 : settingsScroll.width - width
+                y: settingsScroll.topPadding
+                height: settingsScroll.availableHeight
+            }
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             ColumnLayout {
-                width: settingsScroll.availableWidth
+                // Keep a stable gutter: changing width with the bar's visibility
+                // changes wrapped height and can toggle the bar in a polish loop.
+                width: Math.max(1, settingsScroll.availableWidth - settingsBar.width - 2)
                 spacing: 10
                 VH2 { text: qsTr("输出设置"); font.pixelSize: 14 }
                 VRow { label: qsTr("类型"); VSeg { options: [{id: "video", label: qsTr("视频")}, {id: "image", label: qsTr("图片")}]; current: root.exportKind; onPicked: id => root.exportKind = id } }

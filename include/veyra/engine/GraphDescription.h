@@ -7,19 +7,26 @@ namespace veyra::engine {
 // Shared by graph creation and drained live-parameter updates. Disabled list
 // nodes stay in settings, but never allocate or evaluate an NR feature.
 inline void describeNrLayers(const EnhancementSettings& settings,pipeline::EnhanceGraphDesc& desc){
-    desc.nrRuntime=settings.nrRuntime;desc.nrTemporal=settings.nrTemporal;desc.nrAntiFlicker=settings.nrAntiFlicker;
+    desc.nrRuntime=settings.nrRuntime;
+    desc.nrTemporal=settings.residual.correction.enabled?settings.residual.correction.usesHistory():settings.nrTemporal;
+    desc.nrAntiFlicker=settings.residual.correction.enabled?NrAntiFlicker::Flow:settings.nrAntiFlicker;
     desc.model=settings.model;desc.residual=settings.residual;desc.protection=settings.protection;
     desc.nrHoldStrength=settings.nrHoldStrength;desc.nrHoldTolerance=settings.nrHoldTolerance;
     desc.nrLayersModel.clear();desc.nrLayersResidual.clear();
-    desc.nrLayersTemporal.clear();desc.nrLayersProtection.clear();
+    desc.nrLayersTemporal.clear();desc.nrLayersAntiFlicker.clear();desc.nrLayersProtection.clear();
     desc.nrLayersSizePolicy={settings.nrPolicy};
     if(!settings.nrLayerCount||!settings.nr)return;
+    const bool corrected=std::any_of(settings.nrLayers.begin(),settings.nrLayers.begin()+settings.nrLayerCount,
+        [](const auto& n){return n.enabled&&n.residual.correction.enabled;});
     desc.nrLayersSizePolicy.clear();
     for(uint32_t i=0;i<settings.nrLayerCount&&i<kMaxNrInstances;++i){
         const auto& n=settings.nrLayers[i];
         if(!n.enabled)continue;
         desc.nrLayersModel.push_back(n.model);desc.nrLayersResidual.push_back(n.residual);
-        desc.nrLayersTemporal.push_back(n.temporal);
+        desc.nrLayersTemporal.push_back(n.usesTemporal());
+        // Untouched stacks retain the previous global-tier contract exactly.
+        // Controlled layers use Flow independently of the saved legacy tier.
+        if(corrected)desc.nrLayersAntiFlicker.push_back(n.residual.correction.enabled?NrAntiFlicker::Flow:n.antiFlicker);
         desc.nrLayersSizePolicy.push_back(n.sizePolicy);
         desc.nrLayersProtection.push_back(ProtectionSettings{});
     }
@@ -84,7 +91,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);
     desc.nrBeforeSr=!request.stillImage&&!request.exportJob&&lowLatency&&desc.enableNr&&desc.enableSr;
     desc.enableNvofStandalone=desc.enableNr;
-    const bool temporalMotion=settings.nrTemporal||std::any_of(settings.nrLayers.begin(),settings.nrLayers.begin()+settings.nrLayerCount,[](const auto& n){return n.enabled&&n.temporal;});
+    const bool temporalMotion=settings.usesNrTemporal();
     desc.enableNvofStandalone=desc.enableNr&&(motionUsesFlow(settings.nrMotion)||temporalMotion);
     desc.enableFg=request.fg&&(request.nvidiaAdapter||(!request.exportJob&&crossVendorFrameGeneration(settings.frameGenerationBackend)));
     desc.fgMultiplier=request.fgMultiplier;

@@ -1,9 +1,16 @@
 #include "NrProtection.hlsli"
+#include "NrCorrection.hlsli"
 Texture2D<float4> baseTex:register(t0);
 Texture2D<float4> nrInput:register(t1);
 Texture2D<float4> nrFinal:register(t2);
 RWTexture2D<float4> outputTex:register(u0);
-cbuffer Params:register(b0){float total;float darken;float brighten;float color;float luminance;float protectionEnabled;float featherPixels;float unused;float4 regions[4];}
+cbuffer Params:register(b0){
+    float total;float darken;float brighten;float color;float luminance;float protectionEnabled;float featherPixels;float unused;float4 regions[4];
+    float correctionEnabled;float hueProtection;float chromaProtection;float highlightProtection;
+    float localCompression;float temporalStability;float correctionAutomatic;float correctionPad;
+    float neutralProtection;float colorRetention;float luminanceRetention;float shadowProtection;
+    float4 correctionReserved;
+}
 // Extrapolating a negative linear-light residual can cross zero even when
 // both input images contain shadow detail. Continue below the unboosted
 // endpoint with a positive, tangent-matched curve instead of hard clipping.
@@ -41,5 +48,8 @@ float shadowSafe(float base,float rawDelta,float requestedDelta){
     float3 result=float3(shadowSafe(base.r,rawDelta.r,delta.r),
                          shadowSafe(base.g,rawDelta.g,delta.g),
                          shadowSafe(base.b,rawDelta.b,delta.b));
+    if(correctionEnabled>0.5)
+        result=NrApplyCorrection(base.rgb,result,unused>0.5,hueProtection,chromaProtection,highlightProtection,localCompression,
+            neutralProtection,colorRetention,luminanceRetention,shadowProtection);
     outputTex[id.xy]=float4(unused>0.5?result:max(0,result),base.a);
 }

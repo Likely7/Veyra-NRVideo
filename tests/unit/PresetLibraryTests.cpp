@@ -902,7 +902,50 @@ void testNrVariants() {
               "NR variant: list and node sessions retain exact DLL selection");
     }
 }
+void testNrCorrectionStorage() {
+    // Exercise the public store/session/chain paths, including hidden manual
+    // values while the switch is off. Never rely on serialising a test struct.
+    for(unsigned mode=0;mode<3;++mode)for(bool extended:{false,true}){
+        EnhancementSettings s;s.nr=true;s.nrLayerCount=2;
+        for(unsigned i=0;i<s.nrLayerCount;++i){auto& n=s.nrLayers[i];
+            n.enabled=true;n.residual.total=5-float(i);
+            n.residual.correction={mode!=0,mode!=2,.35f+float(i)*.1f,.2f,.7f,.5f,.65f};
+            if(extended){auto& c=n.residual.correction;c.neutral=.8f-float(i)*.1f;c.colorKeep=.7f;c.lumaKeep=.3f;c.shadow=.6f;c.autoAmount=.75f;}
+        }
+        s.residual=s.nrLayers[0].residual;
+        const auto suffix=extended?L"-extended":L"";
+        const auto path=scratch((L"nr-correction-"+std::to_wstring(mode)+suffix+L".v1").c_str());
+        PresetLibrary writer(path);writer.setIncludeBuiltins(false);
+        PresetEntry entry;entry.name=L"strength five";entry.chain=toChain(s);
+        check(writer.load()&&writer.put(entry),"NR correction: preset save");
+        check(readBytes(path).starts_with(extended?"VEYRA_PRESET_LIBRARY 9\n":"VEYRA_PRESET_LIBRARY 8\n"),"NR correction: lowest compatible schema");
+        PresetLibrary reader(path);reader.setIncludeBuiltins(false);
+        check(reader.load()&&reader.entries().size()==1&&reader.entries()[0]==entry,
+              "NR correction: enabled/mode/manual values survive reload");
+        auto session=std::make_unique<ChainSession>(ChainSession::initial(s));
+        check(session->select(ChainMode::Node),"NR correction: node session initializes");
+        ChainSessionStore store(scratch((L"nr-correction-session-"+std::to_wstring(mode)+suffix+L".v1").c_str()));
+        auto restored=std::make_unique<ChainSession>(ChainSession::initial({}));
+        check(store.save(*session)&&store.load(*restored)&&*restored==*session,
+              "NR correction: list/node and editor session roundtrip");
+        auto actual=std::make_unique<EnhancementSettings>();
+        fromChain(entry.chain,*actual);
+        check(actual->validate().empty()&&actual->nrLayers[0].residual==s.nrLayers[0].residual&&
+              actual->nrLayers[1].residual==s.nrLayers[1].residual,"NR correction: shared settings carry both layers");
+    }
+    EnhancementSettings invalid;invalid.residual.total=5.001f;
+    check(!invalid.validate().empty(),"NR correction: above five rejected");
+    invalid.residual.total=5;invalid.residual.color=2.001f;
+    check(!invalid.validate().empty(),"NR correction: component gain retains old limit");
+    invalid.residual.color=1;invalid.residual.correction.highlight=1.01f;
+    check(!invalid.validate().empty(),"NR correction: invalid protection rejected even while disabled");
+    invalid.residual.correction={};invalid.residual.correction.neutral=1.001f;
+    check(!invalid.validate().empty(),"NR correction: neutral value range enforced");
+    invalid.residual.correction={};invalid.residual.correction.autoAmount=-.1f;
+    check(!invalid.validate().empty(),"NR correction: automatic amount range enforced");
+}
 int main() {
+    testNrCorrectionStorage();
     testNrVariants();
     testRenderingChoices();
     std::setvbuf(stdout, nullptr, _IONBF, 0);

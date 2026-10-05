@@ -16,6 +16,7 @@
 // Route 2 is byte-for-byte the behaviour that existed before the tiers, so a
 // preset that only ever knew "temporal on" keeps producing what it produced.
 #include "NrProtection.hlsli"
+#include "NrCorrection.hlsli"
 Texture2D<float4> Base:register(t0);
 Texture2D<float4> Raw:register(t1);
 Texture2D<float4> History:register(t2);
@@ -29,6 +30,10 @@ RWTexture2D<float4> NextGuide:register(u2);
 cbuffer Settings:register(b0){
     uint2 Size;float HistoryWeight;float Total;float ProtectionEnabled;float Feather;float2 reserved;float4 Regions[4];
     uint Route;float2 LowSize;float RoutePad;
+    float CorrectionEnabled;float HueProtection;float ChromaProtection;float HighlightProtection;
+    float LocalCompression;float TemporalStability;float CorrectionAutomatic;float CorrectionHdr;
+    float NeutralProtection;float ColorRetention;float LuminanceRetention;float ShadowProtection;
+    float4 CorrectionReserved;
 }
 float GuideChannel(float c){
     // The matching tolerance must distinguish visible changes in shadows,
@@ -142,6 +147,9 @@ groupshared float TileError[100];
     float4 base=Base[p],raw=Raw[p];bool finite=all(isfinite(base))&&all(isfinite(raw));
     NextGuide[p]=all(isfinite(base))?float4(Guide(base.rgb),1):0;
     if(!finite){NextHistory[p]=0;Output[p]=all(isfinite(base))?base:float4(0,0,0,1);return;}
+    // Optional control must not keep an old correction after the current NR
+    // produces an exact identity. The original temporal path stays unchanged.
+    if(CorrectionEnabled>0.5&&all(raw.rgb==base.rgb)){NextHistory[p]=0;Output[p]=raw;return;}
     // Route 4 splits the observation: the accumulated signal is the
     // low-frequency component and `detail` carries this frame's exact
     // high-frequency complement through untouched.
@@ -230,9 +238,14 @@ groupshared float TileError[100];
     // correction; otherwise the next frame reuses the same invalid shadow.
     // Route 3 stores 1+support in alpha: the support channel rides along with
     // the observation rather than in a separate texture.
-    NextHistory[p]=float4(clamp(resolved-base.rgb,-65504,65504),Route==3?1+support:1);
     // Route 4 restores this frame's high frequency after the temporal filter.
     float3 composited=resolved+detail;
+    if(CorrectionEnabled>0.5){
+        composited=NrTemporalSafety(base.rgb,composited,CorrectionHdr>0.5,
+            HueProtection+ChromaProtection+HighlightProtection+LocalCompression+NeutralProtection+ColorRetention+LuminanceRetention+ShadowProtection>0);
+        resolved=composited-detail;
+    }
+    NextHistory[p]=float4(clamp(resolved-base.rgb,-65504,65504),Route==3?1+support:1);
     // Preserve signed wide-gamut/HDR working components (no SDR saturate).
     Output[p]=float4(clamp(composited,-65504,65504),raw.a);
 }

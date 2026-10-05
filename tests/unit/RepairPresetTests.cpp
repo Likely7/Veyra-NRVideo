@@ -303,4 +303,18 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
  ok=ok&&!corruptLoaded&&!corruptPut&&corruptPreserved;
  f.close();ok=legacyBackends(p)&&ok;ok=retiredSrMode(p)&&ok;ok=schemaVersions(p)&&ok;
  
+ for(unsigned mode=0;mode<3;++mode)for(bool extended:{false,true}){
+  EnhancementSettings corrected;corrected.nr=true;corrected.residual.total=5;
+  corrected.residual.correction={mode!=0,mode!=2,.35f,.25f,.8f,.7f,.5f};
+  if(extended){auto& c=corrected.residual.correction;c.neutral=.65f;c.colorKeep=.75f;c.lumaKeep=.2f;c.shadow=.6f;c.autoAmount=.85f;}
+  corrected.nrLayerCount=2;
+  for(unsigned i=0;i<2;++i){auto& n=corrected.nrLayers[i];n.enabled=true;n.residual=corrected.residual;n.residual.correction.hue+=float(i)*.1f;}
+  auto path=p;path+=L"-nr-correction-"+std::to_wstring(mode);
+  if(extended)path+=L"-extended";
+  std::error_code ec;std::filesystem::remove(path,ec);
+  PresetStore writer(path);bool roundtrip=writer.load()&&writer.put(L"strength five",corrected);
+  PresetStore reload(path);roundtrip=roundtrip&&reload.load()&&reload.entries().size()==1&&reload.entries()[0].settings==corrected;
+  std::ifstream header(path);std::string magic;unsigned version=0;roundtrip=roundtrip&&bool(header>>magic>>version)&&version==(extended?30:29);
+  ok&=roundtrip;std::cout<<"strength five correction mode "<<mode<<" schema="<<version<<" roundtrip="<<roundtrip<<'\n';
+ }
  std::cout<<"preset roundtrip, all fields, duplicate, rename-default, delete, validation, unknown schema, corrupt-preservation="<<ok<<'\n';return ok?0:1;}

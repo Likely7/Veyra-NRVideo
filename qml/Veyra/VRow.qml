@@ -10,6 +10,14 @@ Item {
     // whole row instead of being squeezed beside the control.
     property bool hintBelow: false
     default property alias control: slot.data
+    // The row's slider, when its control is one (typed values beside the number).
+    readonly property Item valueSlider: {
+        for (let i = 0; i < slot.children.length; ++i) {
+            const c = slot.children[i]
+            if (c && c.commitValue !== undefined && c.inputDecimals !== undefined) return c
+        }
+        return null
+    }
 
     // The layout reads Layout.preferredHeight. `height` is deliberately NOT set: a
     // layout-managed item that sets its own height is undefined behaviour, and this
@@ -54,14 +62,12 @@ Item {
             Layout.preferredWidth: childrenRect.width
             Layout.preferredHeight: childrenRect.height
         }
-        Text {
+        // A row whose control is a slider: its number can be clicked and typed.
+        VSliderValue {
             visible: row.value.length > 0
             text: row.value
-            color: Theme.t1
-            font.family: Theme.fontMono
-            font.pixelSize: Theme.fsSmall
+            slider: row.valueSlider
             Layout.minimumWidth: 40
-            horizontalAlignment: Text.AlignRight
         }
     }
     Text {

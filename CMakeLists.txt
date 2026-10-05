@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.0.3 LANGUAGES CXX RC)
+project(veyra VERSION 2.0.4 LANGUAGES CXX RC)
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.0.3" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.0.4" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -1007,6 +1007,10 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_link_libraries(veyra_motion_validation_tests PRIVATE veyra_pipeline)
   add_executable(veyra_repair_shader_tests tests/integration/RepairShaderTests.cpp)
   add_executable(veyra_nr_temporal_gpu_tests tests/integration/NrTemporalGpuTests.cpp)
+  add_executable(veyra_nr_correction_gpu_tests tests/integration/NrCorrectionGpuTests.cpp)
+  target_compile_features(veyra_nr_correction_gpu_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_correction_gpu_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_correction_gpu_tests PRIVATE veyra_pipeline)
   # Stage-4 defect-audit assertions: GPU-free checks on the architecture-spoof
   # scope and the Ampere re-label policy (see docs/NR_FG_OPTIMIZATION_PLAN_2026-09-29.md).
   # Stage-6 anti-flicker tier assertions (GPU-free: enum narrowing, flat/list

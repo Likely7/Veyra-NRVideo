@@ -64,6 +64,7 @@ ColumnLayout {
                 elide:Text.ElideRight
             }
             VSlider {
+                id:mixerSlider
                 resettable:true;defaultValue:0
                 valueFromModel:true
                 objectName:"colour-mixer-"+modelData.key
@@ -74,13 +75,12 @@ ColumnLayout {
                 value:root.state[modelData.key][root.band]
                 onMoved:value=>root.edited(modelData.key+"."+root.band,Math.round(value))
             }
-            Text {
+            VSliderValue {
                 objectName:"colour-mixer-value-"+modelData.key
                 Layout.minimumWidth:40;Layout.maximumWidth:40;Layout.preferredWidth:40
+                slider:mixerSlider
                 readonly property int amount:Math.round(root.state[modelData.key][root.band])
-                text:(amount>0?"+":"")+String(amount);color:Theme.t1
-                font.family:Theme.fontMono;font.pixelSize:Theme.fsSmall
-                horizontalAlignment:Text.AlignRight
+                text:(amount>0?"+":"")+String(amount)
             }
         }
     }

@@ -435,6 +435,13 @@
    "ja": "0 = 選択したフォーマットのまま。デバイスが別のフレームレートを返した場合はエラーになり、黙ってフレームを捨てることはしません"
   },
   {
+   "zh": "0 保留原始变化；1 按当前风格完整纠偏",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "0 保留原始變化；1 按目前風格完整糾偏",
+   "en": "0 retains raw changes; 1 applies this style’s full correction",
+   "ja": "0 は元の変化を保持、1 は現在のスタイルの補正を完全に適用"
+  },
+  {
    "zh": "1080p · 默认",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "1080p · 預設",
@@ -1618,6 +1625,13 @@
    "ja": "Xbox からデコード可能な映像が届きません。再接続してください。"
   },
   {
+   "zh": "Xbox 视频解码连续失败，恢复后仍无法出画。请重连，并保留日志。",
+   "src": "src/source/XboxSessionSource.cpp",
+   "zh-TW": "Xbox 影片解碼連續失敗，恢復後仍無法顯示畫面。請重新連線，並保留日誌。",
+   "en": "Xbox video decoding failed repeatedly and could not recover a picture. Reconnect and keep the logs.",
+   "ja": "Xbox の映像デコードが連続して失敗し、復旧後も映像を表示できませんでした。再接続し、ログを保存してください。"
+  },
+  {
    "zh": "Xbox 登录已失效，请重新登录。",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "Xbox 登入已失效，請重新登入。",
@@ -1987,6 +2001,13 @@
    "zh-TW": "中延遲",
    "en": "medium latency",
    "ja": "中遅延"
+  },
+  {
+   "zh": "中性色保护",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "中性色保護",
+   "en": "Neutral color protection",
+   "ja": "無彩色保護"
   },
   {
    "zh": "中灰",
@@ -2381,6 +2402,13 @@
    "ja": "明るさの変化"
   },
   {
+   "zh": "亮度保持",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "亮度保持",
+   "en": "Lightness retention",
+   "ja": "明度を保持"
+  },
+  {
    "zh": "仅美乐威 Pro Capture（PCIe 内置卡）可用；USB Capture 系列不支持",
    "src": "qml/DialogHost.qml",
    "zh-TW": "僅美樂威 Pro Capture（PCIe 內建卡）可用；USB Capture 系列不支援",
@@ -2598,6 +2626,13 @@
    "ja": "保存したキャプチャーフォーマットは使用できません。解像度、フレームレート、ピクセル形式を選び直してください。"
   },
   {
+   "zh": "保存补帧页全部设置",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "儲存補幀頁全部設定",
+   "en": "Saves every setting on the Frame Gen tab",
+   "ja": "フレーム生成タブの設定をすべて保存します"
+  },
+  {
    "zh": "保存超时",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "儲存超時",
@@ -2631,6 +2666,20 @@
    "zh-TW": "保留全部",
    "en": "Keep all",
    "ja": "すべて保持"
+  },
+  {
+   "zh": "保留原图色相与饱和度；1 为完全保留色彩",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "保留原圖色相與飽和度；1 為完全保留色彩",
+   "en": "Retain source hue and saturation; 1 fully retains color",
+   "ja": "元の色相と彩度を保持。1 で色を完全に保持します"
+  },
+  {
+   "zh": "保留原图色相；没有色相偏移时变化较小",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "保留原圖色相；沒有色相偏移時變化較小",
+   "en": "Retain source hue; little change when hue already matches",
+   "ja": "元の色相を保持。色相ずれがない場合は変化が小さくなります"
   },
   {
    "zh": "信号",
@@ -2865,6 +2914,13 @@
    "ja": "オフのとき、ホストは自身の解像度のままで映像をスケーリングします"
   },
   {
+   "zh": "关闭时保留原始变化量，最高 5",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "關閉時保留原始變化量，最高 5",
+   "en": "Off preserves the original residual gain up to 5",
+   "ja": "オフでは元の変化量を保持（最大 5）"
+  },
+  {
    "zh": "关闭时这条链路不存在，零开销",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "關閉時這條鏈路不存在，零開銷",
@@ -3005,6 +3061,13 @@
    "ja": "出力解像度を決めます"
   },
   {
+   "zh": "减少 NR 明暗改动；1 为保留原图亮度",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "減少 NR 明暗改動；1 為保留原圖亮度",
+   "en": "Reduce NR lightness changes; 1 retains source lightness",
+   "ja": "NR の明暗変化を減らします。1 で元の明度を保持します"
+  },
+  {
    "zh": "减少动画",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "減少動畫",
@@ -3017,6 +3080,13 @@
    "zh-TW": "減少排隊；不宣稱延遲下降",
    "en": "Less queuing; no claim of lower latency",
    "ja": "キューを減らします。遅延が下がるとは限りません"
+  },
+  {
+   "zh": "减少暗部被进一步压黑，保留提亮细节",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "減少暗部被進一步壓黑，保留提亮細節",
+   "en": "Reduce further shadow darkening while retaining brighter detail",
+   "ja": "暗部のさらなる黒つぶれを抑え、明るくなる細部は保持します"
   },
   {
    "zh": "减少软件排队；屏幕延迟需要实测",
@@ -3292,6 +3362,13 @@
    "ja": "ノードを削除"
   },
   {
+   "zh": "删除补帧预设失败",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "刪除補幀預設失敗",
+   "en": "Could not delete the frame generation preset",
+   "ja": "フレーム生成プリセットを削除できませんでした"
+  },
+  {
    "zh": "删除这一层",
    "src": "qml/ProPage.qml",
    "zh-TW": "刪除這一層",
@@ -3472,6 +3549,13 @@
    "zh-TW": "壓縮擷取使用碼流顏色資訊；手動顏色和範圍請選擇原生擷取格式。",
    "en": "Compressed capture uses the stream's color information; for manual color and range choose a native capture format.",
    "ja": "圧縮キャプチャーはストリームの色情報を使います。手動の色や範囲を使うにはネイティブのキャプチャーフォーマットを選んでください。"
+  },
+  {
+   "zh": "原图色彩保留",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "原圖色彩保留",
+   "en": "Source color retention",
+   "ja": "元の色を保持"
   },
   {
    "zh": "原始 = 一个输出像素对一个屏幕像素",
@@ -3705,6 +3789,13 @@
    "ja": "この PC に保存したこのホストだけを削除します。次回は再ペアリングが必要です"
   },
   {
+   "zh": "只压缩向白色溢出的变化，保留高光回暗",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "只壓縮向白色溢出的變化，保留高光回暗",
+   "en": "Compress changes toward blown whites; retain highlight darkening",
+   "ja": "白飛びする変化だけを圧縮し、ハイライトの減光は保持します"
+  },
+  {
    "zh": "只有节点模式使用编辑连接",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "只有節點模式使用編輯連接",
@@ -3794,6 +3885,13 @@
    "zh-TW": "同名預設已存在",
    "en": "A preset with this name already exists",
    "ja": "同じ名前のプリセットがすでにあります"
+  },
+  {
+   "zh": "同时软化过大的亮度和颜色变化",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "同時柔化過大的亮度和顏色變化",
+   "en": "Soften excessive lightness and color changes together",
+   "ja": "過大な明度と色の変化を同時に抑えます"
   },
   {
    "zh": "名称会显示在极简模式和导出页的预设菜单里",
@@ -5238,6 +5336,13 @@
    "ja": "LAN ストリーミング"
   },
   {
+   "zh": "局部压缩",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "局部壓縮",
+   "en": "Local compression",
+   "ja": "局所圧縮"
+  },
+  {
    "zh": "局部明暗",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "局部明暗",
@@ -5362,6 +5467,13 @@
    "zh-TW": "已儲存的裝置（未連接）",
    "en": "Saved device (not connected)",
    "ja": "保存済みのデバイス（未接続）"
+  },
+  {
+   "zh": "已保存补帧预设：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已儲存補幀預設：%1",
+   "en": "Frame generation preset saved: %1",
+   "ja": "フレーム生成プリセットを保存しました：%1"
   },
   {
    "zh": "已保存颜色预设：%1",
@@ -5532,6 +5644,13 @@
    "ja": "カラー設定をコピーしました"
   },
   {
+   "zh": "已存在同名补帧预设",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已存在同名補幀預設",
+   "en": "A frame generation preset with this name already exists",
+   "ja": "同じ名前のフレーム生成プリセットがすでにあります"
+  },
+  {
    "zh": "已存在同名颜色预设",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已存在同名顏色預設",
@@ -5579,6 +5698,20 @@
    "zh-TW": "已匯出顏色預設",
    "en": "Color preset exported",
    "ja": "カラープリセットを書き出しました"
+  },
+  {
+   "zh": "部分补帧设置未被当前显卡或组件接受：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "部分補幀設定未被目前顯卡或元件接受：%1",
+   "en": "Some frame generation settings were not accepted by the current GPU or components: %1",
+   "ja": "現在のGPUまたはコンポーネントで一部のフレーム生成設定を適用できませんでした：%1"
+  },
+  {
+   "zh": "已应用补帧预设：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已應用補幀預設：%1",
+   "en": "Frame generation preset applied: %1",
+   "ja": "フレーム生成プリセットを適用しました：%1"
   },
   {
    "zh": "已开启",
@@ -5873,6 +6006,13 @@
    "zh-TW": "開關、進度、選中狀態",
    "en": "Switches, progress, selected state",
    "ja": "スイッチ、進行状況、選択状態"
+  },
+  {
+   "zh": "开启调控",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "開啟調控",
+   "en": "Enable correction",
+   "ja": "調整を有効化"
   },
   {
    "zh": "开始",
@@ -6638,6 +6778,13 @@
    "ja": "この PC のコントローラーを本体のコントローラーとして使う"
   },
   {
+   "zh": "抑制白墙、云和灰色区域的额外染色",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "抑制白牆、雲和灰色區域的額外染色",
+   "en": "Suppress added tint on white walls, clouds and gray areas",
+   "ja": "白い壁、雲、灰色領域への余計な着色を抑えます"
+  },
+  {
    "zh": "抗闪烁档位",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "抗閃爍檔位",
@@ -6657,6 +6804,13 @@
    "zh-TW": "拖到輸入端口連接，或點擊後再點輸入端口；右鍵斷開",
    "en": "Drag to an input port to connect, or click and then click an input port; right-click to disconnect",
    "ja": "入力ポートへドラッグして接続、またはクリック後に入力ポートをクリック。右クリックで切断"
+  },
+  {
+   "zh": "拖动调整参数面板宽度 · 双击还原",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "拖曳調整參數面板寬度 · 雙擊還原",
+   "en": "Drag to resize the settings panel · double-click to reset",
+   "ja": "ドラッグで設定パネルの幅を変更 · ダブルクリックで元に戻す"
   },
   {
    "zh": "按下新按键…",
@@ -6826,6 +6980,13 @@
    "zh-TW": "播放倍速",
    "en": "Playback speed",
    "ja": "再生速度"
+  },
+  {
+   "zh": "播放时减闪；暂停单帧不体现时域效果",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "播放時減閃；暫停單幀不體現時域效果",
+   "en": "Reduce flicker during playback; a paused frame does not show temporal effects",
+   "ja": "再生時のちらつきを抑えます。一時停止の1フレームでは時間的効果は見えません"
   },
   {
    "zh": "播放条已显示",
@@ -7297,6 +7458,13 @@
    "ja": "旧ノードプリセットの NR 保護領域を削除しました。その他の設定は保持し、今後は .p3-node ファイルに保存します。元のファイルは上書きしません"
   },
   {
+   "zh": "时域稳定",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "時域穩定",
+   "en": "Temporal stability",
+   "ja": "時間方向の安定化"
+  },
+  {
    "zh": "时间",
    "src": "qml/DialogHost.qml",
    "zh-TW": "時間",
@@ -7563,6 +7731,13 @@
    "ja": "このノードの計測はまだありません"
   },
   {
+   "zh": "暂无补帧预设",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "暫無補幀預設",
+   "en": "No frame generation presets yet",
+   "ja": "フレーム生成プリセットはまだありません"
+  },
+  {
    "zh": "暂无颜色预设",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "暫無顏色預設",
@@ -7575,6 +7750,13 @@
    "zh-TW": "暗化變化",
    "en": "Darkening change",
    "ja": "暗くなる変化"
+  },
+  {
+   "zh": "暗部保护",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "暗部保護",
+   "en": "Shadow protection",
+   "ja": "暗部保護"
   },
   {
    "zh": "曝光（EV）",
@@ -9075,6 +9257,20 @@
    "ja": "アスペクト比"
   },
   {
+   "zh": "画面调控",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "畫面調控",
+   "en": "Image correction",
+   "ja": "画質調整"
+  },
+  {
+   "zh": "画面调控已接管时域稳定；关闭调控后恢复此设置",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "畫面調控已接管時域穩定；關閉調控後恢復此設定",
+   "en": "Image correction controls temporal stability; this setting returns when correction is off",
+   "ja": "画質調整が時間方向の安定化を制御中。オフにするとこの設定に戻ります。"
+  },
+  {
    "zh": "界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "介面始終用顯示卡繪製；為避免衝突，小飛機 OSD 不在 Veyra 中顯示",
@@ -9922,6 +10118,13 @@
    "ja": "自動推定：キャプチャーカード / PS5 のライブ入力時に有効"
   },
   {
+   "zh": "自动参数分别适配风格 0／1／2。手动可独立保留颜色、亮度和暗部；保护会降低对应变化量。时域稳定复用光流，切换方式保留手动数值。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "自動參數分別適配風格 0／1／2。手動可獨立保留顏色、亮度和暗部；保護會降低對應變化量。時域穩定重用光流，切換方式保留手動數值。",
+   "en": "Automatic values are tuned for styles 0/1/2. Manual controls independently retain color, lightness and shadows, reducing the corresponding changes. Temporal stability uses optical flow; switching modes preserves manual values.",
+   "ja": "スタイル 0／1／2 ごとに自動値を調整します。手動では色、明度、暗部を個別に保持し、対応する変化を抑えられます。時間的安定化はオプティカルフローを使い、モードを切り替えても手動値を保持します。"
+  },
+  {
    "zh": "自动对齐",
    "src": "qml/DialogHost.qml",
    "zh-TW": "自動對齊",
@@ -9955,6 +10158,13 @@
    "zh-TW": "自動識別內容節奏",
    "en": "Detect content pacing automatically",
    "ja": "コンテンツのペーシングを自動判別"
+  },
+  {
+   "zh": "自动调控力度",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "自動調控力度",
+   "en": "Automatic control amount",
+   "ja": "自動調整の強度"
   },
   {
    "zh": "自动遮罩 · 实验",
@@ -10069,6 +10279,13 @@
    "ja": "少なくとも 1 項目を選んでください"
   },
   {
+   "zh": "色度保护",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "色度保護",
+   "en": "Chroma protection",
+   "ja": "彩度保護"
+  },
+  {
    "zh": "色彩",
    "src": "qml/ProPage.qml",
    "zh-TW": "色彩",
@@ -10172,6 +10389,13 @@
    "zh-TW": "色相",
    "en": "Hue",
    "ja": "色相"
+  },
+  {
+   "zh": "色相保护",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "色相保護",
+   "en": "Hue protection",
+   "ja": "色相保護"
   },
   {
    "zh": "色调",
@@ -10419,6 +10643,13 @@
    "ja": "フレーム生成オフ"
   },
   {
+   "zh": "补帧关闭",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "補幀關閉",
+   "en": "Frame generation off",
+   "ja": "フレーム生成オフ"
+  },
+  {
    "zh": "补帧只能放在链路最后",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "補幀只能放在鏈路最後",
@@ -10501,6 +10732,41 @@
    "zh-TW": "補幀選擇未被接受，保留原設定；請檢查倍率和後端能力",
    "en": "The frame generation choice was not accepted; previous setting kept. Check the multiplier and backend capability",
    "ja": "フレーム生成の選択が受け付けられなかったため、元の設定のままです。倍率と方式の対応範囲を確認してください"
+  },
+  {
+   "zh": "补帧预设",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "補幀預設",
+   "en": "Frame generation presets",
+   "ja": "フレーム生成プリセット"
+  },
+  {
+   "zh": "补帧预设不存在",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "補幀預設不存在",
+   "en": "The frame generation preset does not exist",
+   "ja": "フレーム生成プリセットが存在しません"
+  },
+  {
+   "zh": "补帧预设保存失败",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "補幀預設儲存失敗",
+   "en": "Could not save the frame generation preset",
+   "ja": "フレーム生成プリセットを保存できませんでした"
+  },
+  {
+   "zh": "补帧预设名称需为 1–48 个字符",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "補幀預設名稱需為 1–48 個字符",
+   "en": "Frame generation preset names must be 1–48 characters",
+   "ja": "フレーム生成プリセット名は 1–48 文字にしてください"
+  },
+  {
+   "zh": "补帧预设最多保存 32 个",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "補幀預設最多儲存 32 個",
+   "en": "Up to 32 frame generation presets can be saved",
+   "ja": "フレーム生成プリセットは 32 個まで保存できます"
   },
   {
    "zh": "裁剪范围超出画面",
@@ -11133,6 +11399,13 @@
    "ja": "スケジュールを段階的に下げました"
   },
   {
+   "zh": "调控方式",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "調控方式",
+   "en": "Correction mode",
+   "ja": "調整モード"
+  },
+  {
    "zh": "调整中",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "調整中",
@@ -11425,6 +11698,13 @@
    "zh-TW": "軟體解碼",
    "en": "Software decoding",
    "ja": "ソフトウェアデコード"
+  },
+  {
+   "zh": "软化过量色度变化；小幅变化保留",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "柔化過量色度變化；小幅變化保留",
+   "en": "Soften excessive chroma changes; retain small changes",
+   "ja": "過剰な色度変化を抑え、小さな変化は保持します"
   },
   {
    "zh": "软解",
@@ -12167,6 +12447,13 @@
    "zh-TW": "取樣中",
    "en": "Sampling",
    "ja": "サンプリング中"
+  },
+  {
+   "zh": "采用当前风格的自动参数",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "採用目前風格的自動參數",
+   "en": "Use this style’s automatic values",
+   "ja": "現在のスタイルの自動値を使う"
   },
   {
    "zh": "采用源时间戳",
@@ -13079,6 +13366,13 @@
    "ja": "プリセットライブラリの NR 解像度が不正です"
   },
   {
+   "zh": "预设库 NR 调控参数损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫 NR 調控參數損壞",
+   "en": "Preset library NR correction parameters are invalid",
+   "ja": "プリセットの NR 調整パラメーターが無効です"
+  },
+  {
    "zh": "预设库 VFG 质量字段损坏",
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "預設庫 VFG 品質字段損壞",
@@ -13485,6 +13779,13 @@
    "ja": "ハイライト"
   },
   {
+   "zh": "高光保护",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "高光保護",
+   "en": "Highlight protection",
+   "ja": "ハイライト保護"
+  },
+  {
    "zh": "高延迟·需 CPU 拆包",
    "src": "include/veyra/source/CaptureFormatRank.h",
    "zh-TW": "高延遲·需 CPU 拆包",
@@ -13730,13 +14031,6 @@
    "ja": "；一時ファイルを保持しました："
   },
   {
-   "zh": "；切到后台卡顿时可试“高”，“实时”可能拖慢其他程序",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "；切到背景卡頓時可試「高」，「即時」可能拖慢其他程式",
-   "en": "; if playback stutters in the background try \"High\"; \"Realtime\" can slow other apps",
-   "ja": "；バックグラウンドでカクつく場合は「高」を試してください。「リアルタイム」は他のアプリを遅くすることがあります"
-  },
-  {
    "zh": "；各段文件已保留：",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "；各段檔案已保留：",
@@ -13770,6 +14064,13 @@
    "zh-TW": "；本次匯出使用 AMD FSR 超解析",
    "en": "; this export uses AMD FSR super resolution",
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
+  },
+  {
+   "zh": "；默认“实时”，同时运行游戏或其他重负载程序变慢时可改为“高”或“普通”",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "；預設“即時”，同時執行遊戲或其他重負載程式變慢時可改為“高”或“普通”",
+   "en": "; Realtime by default. If a game or other heavy program running alongside slows down, choose High or Normal",
+   "ja": "；既定は「リアルタイム」。同時に動かすゲームや重い処理が遅くなる場合は「高」か「通常」に変更してください"
   }
  ]
 }

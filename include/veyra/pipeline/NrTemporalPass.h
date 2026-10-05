@@ -18,7 +18,8 @@ public:
                     engine::NrAntiFlicker tier=engine::NrAntiFlicker::Flow);
     ID3D12Resource* raw()const{return raw_.Get();}
     void run(ID3D12GraphicsCommandList*,StateTracker&,bool reset,bool haveMotion,double frameMs,
-             float total,const engine::ProtectionSettings& protection);
+             float total,const engine::ProtectionSettings& protection,
+             const engine::NrCorrectionSettings& correction={},bool hdr=false);
     void reset(){valid_=false;}
     void close();
 private:

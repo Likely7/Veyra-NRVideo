@@ -2,6 +2,7 @@
 // Session flow after Greenlight's streammanager.ts / stream page (unknownskl/greenlight, MIT).
 #include "veyra/source/XboxSessionSource.h"
 #include "veyra/xbox/DisconnectPolicy.h"
+#include "veyra/xbox/VideoDecodeRecovery.h"
 
 #include <windows.h>
 #include <mmreg.h>
@@ -129,7 +130,7 @@ struct XboxSessionSource::Impl {
     std::mutex endMutex;
 
     // Video: the WebRTC thread queues access units; the decode thread drains them.
-    struct Unit { std::vector<uint8_t> data; uint32_t rtp; int64_t arrival; };
+    struct Unit { std::vector<uint8_t> data; uint32_t rtp; int64_t arrival; bool inputLoss=false; };
     std::mutex queueMutex;
     std::condition_variable queueCv;
     std::deque<Unit> queue;
@@ -137,6 +138,7 @@ struct XboxSessionSource::Impl {
     std::thread decodeThread, keepaliveThread;
     CaptureCompressedDecoder decoder;
     bool decoderOpen = false;
+    std::atomic<bool> hardwareDecodeStatus{false}; // stats never inspect the worker-owned decoder
     AVFrame* dummyTarget = nullptr;
     unsigned width = 1920, height = 1080;
     Clock::time_point lastKeyframeRequest{};
@@ -269,8 +271,9 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
             ++q.units;
             std::lock_guard lock(q.queueMutex);
             // Latency first: keep only a short backlog; a decoder that falls behind drops the oldest.
-            while (q.queue.size() >= 8) { q.queue.pop_front(); ++q.dropped; }
-            q.queue.push_back({std::move(unit), rtp, arrival});
+            const auto lost = xbox::trimVideoInputs(q.queue, 8);
+            q.dropped += lost;
+            q.queue.push_back({std::move(unit), rtp, arrival, lost>0&&q.queue.empty()});
             q.queueCv.notify_one();
         };
         callbacks.audio = [this](const uint8_t* data, size_t size, uint32_t) {
@@ -370,8 +373,12 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         }
         {
             std::lock_guard lock(mutex_);
-            stats_.state = XboxStats::State::Streaming;
-            stats_.message.clear();
+            // A decoder startup failure can race this session-ready update.
+            // Preserve the failure and its reason instead of reviving it.
+            if (stats_.state != XboxStats::State::Failed) {
+                stats_.state = XboxStats::State::Streaming;
+                stats_.message.clear();
+            }
             publishedInfo_ = info_;
             publishedInfo_.opened = true;
             publishedInfo_.kind = pipeline::SourceKind::Xbox;
@@ -390,15 +397,20 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
             started_ = true;
         }
         ready_.notify_all();
-        log::info("xbox", "streaming");
+        if (!p.ended.load()) log::info("xbox", "streaming");
         while (!cancelled() && !p.ended.load()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if (p.ended.load()) {
             std::wstring reason;
             std::string code;
             { std::lock_guard lock(p.endMutex); reason = p.endReason; code = p.disconnectReason; }
-            { std::lock_guard lock(mutex_); stats_.state = XboxStats::State::Ended;
-              stats_.message = std::move(reason); stats_.disconnectReason = code;
-              stats_.reconnectable = xbox::reconnectableDisconnect(code); }
+            { std::lock_guard lock(mutex_);
+              // Decode recovery can explicitly fail while the transport is
+              // still connected. Do not erase that error with an empty end.
+              if (stats_.state != XboxStats::State::Failed) {
+                  stats_.state = XboxStats::State::Ended;
+                  stats_.message = std::move(reason); stats_.disconnectReason = code;
+                  stats_.reconnectable = xbox::reconnectableDisconnect(code);
+              } }
         }
     } catch (const xbox::ServiceError& e) {
         log::error("xbox", std::format("service error {} {}", e.status, e.what()));
@@ -423,7 +435,8 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
 
 void XboxSessionSource::decodeLoop() {
     auto& p = *p_;
-    bool seenKeyframe = false, recovering = false;
+    bool seenKeyframe = false, recovering = false, forceSoftware = false;
+    xbox::VideoDecodeRecovery recovery;
     int64_t lastPts = -1;
     uint32_t lastRtp = 0;
     int64_t rtpHigh = 0;
@@ -445,16 +458,30 @@ void XboxSessionSource::decodeLoop() {
             unit = std::move(p.queue.front());
             p.queue.pop_front();
         }
+        if (unit.inputLoss) {
+            // A missing compressed AU invalidates H.264's reference chain.
+            // An IDR request alone does not repair an already broken decode
+            // context. The field log shows sustained errors after FG rebuilds.
+            if (p.decoderOpen) p.decoder.recoverAtKeyframe();
+            seenKeyframe = false;
+            recovering = true;
+            metas.clear();
+            requestKeyframe();
+            log::warn("xbox-decode-recovery", "input queue lost access units; history reset, waiting for keyframe");
+        }
         if (!seenKeyframe && !startsDecoding(unit.data)) { ++p.dropped; requestKeyframe(); continue; }
         if (!p.decoderOpen) {
             p.decoder.setStreamProfile(true);
-            if (!p.decoder.open(CaptureCodec::H264, p.width, p.height, nullptr, 0, p.desc.decodeDevice.get(), p.desc.decodeQueue.get())) {
+            if (!p.decoder.open(CaptureCodec::H264, p.width, p.height, nullptr, 0,
+                                forceSoftware ? nullptr : p.desc.decodeDevice.get(),
+                                forceSoftware ? nullptr : p.desc.decodeQueue.get())) {
                 log::error("xbox", "no usable H.264 decoder");
                 setState(XboxStats::State::Failed, L"没有可用的 H.264 解码器。");
                 p.ended = true;
                 break;
             }
             p.decoderOpen = true;
+            p.hardwareDecodeStatus.store(p.decoder.hardwareActive(), std::memory_order_relaxed);
             if (!p.dummyTarget) p.dummyTarget = allocNv12(16, 16);
             log::info("xbox", std::string("decoder ") + p.decoder.backendName());
         }
@@ -474,6 +501,7 @@ void XboxSessionSource::decodeLoop() {
         AVFrame* out = nullptr;
         bool hardware = false;
         const bool produced = target && p.decoder.decode(unit.data.data(), unit.data.size(), pts, target, &out, hardware);
+        p.hardwareDecodeStatus.store(p.decoder.hardwareActive(), std::memory_order_relaxed);
         const double decodeMs = std::chrono::duration<double, std::milli>(Clock::now() - begin).count();
         if (!produced) {
             if (needsTarget && target) av_frame_free(&target);
@@ -481,6 +509,27 @@ void XboxSessionSource::decodeLoop() {
                 ++p.errors;
                 seenKeyframe = false;
                 recovering = true;
+                metas.clear();
+                const std::string error = p.decoder.lastError();
+                const bool wasHardware = p.decoder.hardwareActive();
+                const auto action = recovery.failed(wasHardware);
+                const char* name = action == xbox::VideoDecodeRecoveryAction::ResetHistory ? "reset-history" :
+                    action == xbox::VideoDecodeRecoveryAction::ReopenHardware ? "reopen-hardware" :
+                    action == xbox::VideoDecodeRecoveryAction::UseSoftware ? "use-software" : "stop";
+                log::warn("xbox-decode-recovery", std::format("action={} backend={} errors={} detail={}",
+                    name, p.decoder.backendName(), p.errors.load(), error));
+                if (action == xbox::VideoDecodeRecoveryAction::Stop) {
+                    setState(XboxStats::State::Failed, L"Xbox 视频解码连续失败，恢复后仍无法出画。请重连，并保留日志。");
+                    p.ended = true;
+                    break;
+                }
+                if (action == xbox::VideoDecodeRecoveryAction::ResetHistory) p.decoder.recoverAtKeyframe();
+                else {
+                    p.hardwareDecodeStatus.store(false, std::memory_order_relaxed);
+                    p.decoder.close();
+                    p.decoderOpen = false;
+                    if (action == xbox::VideoDecodeRecoveryAction::UseSoftware) forceSoftware = true;
+                }
                 requestKeyframe();
             }
             continue;
@@ -494,6 +543,7 @@ void XboxSessionSource::decodeLoop() {
             frame.reset(target, [](AVFrame* f) { av_frame_free(&f); });
         }
         if (!frame) { ++p.errors; continue; }
+        recovery.picture();
         seenKeyframe = true;
         if (unsigned(frame->width) != p.width || unsigned(frame->height) != p.height) {
             p.width = unsigned(frame->width);
@@ -512,7 +562,12 @@ void XboxSessionSource::decodeLoop() {
         packet.duration = pipeline::Rational{166667, 10000000};
         packet.arrivalHost100ns = arrival;
         packet.decodedHost100ns = host100ns();
-        if (recovering) { packet.flags |= static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Discontinuity); recovering = false; }
+        if (recovering) {
+            packet.flags |= static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Discontinuity);
+            log::info("xbox-decode-recovery", std::format("picture restored backend={} pts100ns={} errors={}",
+                p.decoder.backendName(), framePts, p.errors.load()));
+            recovering = false;
+        }
         auto fallback = fallbackColor();
         packet.colorInfo = pipeline::resolveFrameColor(*frame, fallback);
         packet.colorInfo.pixelFormat = pixelFormatOf(*frame);
@@ -637,7 +692,7 @@ XboxStats XboxSessionSource::stats() const {
     s.decoded = p.decoded.load();
     s.dropped = p.dropped.load() + skipped();
     s.decodeErrors = p.errors.load();
-    s.hardwareDecode = p.decoderOpen && p.decoder.hardwareActive();
+    s.hardwareDecode = p.hardwareDecodeStatus.load(std::memory_order_relaxed);
     const xbox::WebRtcStats r = p.rtc.stats();
     s.keyframeRequests = r.keyframeRequests;
     s.rttMs = r.rttMs;
@@ -684,6 +739,7 @@ void XboxSessionSource::close() noexcept {
         if (p.decodeThread.joinable()) p.decodeThread.join();
         if (p.keepaliveThread.joinable()) p.keepaliveThread.join();
         p.rtc.close();
+        p.hardwareDecodeStatus.store(false, std::memory_order_relaxed);
         if (p.decoderOpen) { p.decoder.close(); p.decoderOpen = false; }
         // End the console session so the next start does not find it busy (best effort, short timeout).
         // The session's own transport is cancelled by now, and teardown must not wait on the network:

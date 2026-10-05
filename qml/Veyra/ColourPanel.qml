@@ -106,6 +106,7 @@ ColumnLayout {
                     elide:Text.ElideRight
                 }
                 VSlider {
+                    id:paramSlider
                     objectName:"colour-param-"+key
                     valueFromModel:true
                     resettable:true;defaultValue:spec.defaultValue
@@ -119,11 +120,10 @@ ColumnLayout {
                         key==="calibrationHue.1"?greenCalibrationTrack:key==="calibrationHue.2"?blueCalibrationTrack:null
                     onMoved:value=>panel.api.setColourParameter(key,Math.round(value/spec.step)*spec.step)
                 }
-                Text {
+                VSliderValue {
                     Layout.minimumWidth:40;Layout.maximumWidth:40;Layout.preferredWidth:40
-                    text:panel.valueFor(key).toFixed(spec.step<1?2:0);color:Theme.t1
-                    font.family:Theme.fontMono;font.pixelSize:Theme.fsSmall
-                    horizontalAlignment:Text.AlignRight
+                    slider:paramSlider
+                    text:panel.valueFor(key).toFixed(spec.step<1?2:0)
                 }
             }
         }
@@ -142,6 +142,13 @@ ColumnLayout {
         border.color:Theme.stroke
         property real motionDy:0
         transform:Translate {y:colourTop.motionDy}
+        // The tool row at its full labels. A layout whose children need more than
+        // its width grows past its anchors, which pushed the 调色 switch out of the
+        // card once the inspector scrollbar took its gutter (field report 2026-10-05,
+        // 125-150 % scale); narrower than this, 一键还原 keeps only its icon.
+        TextMetrics {id:holdMetrics;font.family:Theme.fontUi;font.pixelSize:Theme.fsBody;font.weight:Font.Medium;text:qsTr("按住看原图")}
+        TextMetrics {id:resetMetrics;font.family:Theme.fontUi;font.pixelSize:Theme.fsBody;font.weight:Font.Medium;text:qsTr("一键还原")}
+        readonly property bool compactTools:topCol.width<4*28+5*2+holdMetrics.advanceWidth+resetMetrics.advanceWidth+2*47+8
         ColumnLayout {
             id:topCol
             anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top
@@ -215,7 +222,11 @@ ColumnLayout {
                 VButton {
                     objectName:"colour-reset-all"
                     implicitHeight:28
-                    ghost:true;iconName:"reset";text:qsTr("一键还原")
+                    ghost:true;iconName:"reset"
+                    icon:colourTop.compactTools
+                    text:icon?"":qsTr("一键还原")
+                    tip:icon?qsTr("一键还原"):""
+                    Accessible.name:qsTr("一键还原")
                     onClicked:panel.api.resetColourGroup(-1)
                 }
             }

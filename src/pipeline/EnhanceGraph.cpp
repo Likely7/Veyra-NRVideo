@@ -1258,6 +1258,12 @@ bool EnhanceGraph::initNgxFeatures()
             instance->residualSettings = index < desc_.nrLayersResidual.size() ? desc_.nrLayersResidual[index] : desc_.residual;
             instance->protection = index < desc_.nrLayersProtection.size() ? desc_.nrLayersProtection[index] : desc_.protection;
             instance->temporalEnabled = index < desc_.nrLayersTemporal.size() ? desc_.nrLayersTemporal[index] : desc_.nrTemporal;
+            const auto& correction=instance->residualSettings.correction;
+            veyra::log::info("nr-correction",std::format("build layer={} gain={} mode={} temporal={} hdr={} style={} amount={} manual={}/{}/{}/{}/{}/{}/{}/{}/{}",
+                index+1,instance->residualSettings.total,correction.enabled?(correction.automatic?"auto":"manual"):"off",
+                instance->temporalEnabled,desc_.hdrWorking(),instance->model.style,correction.autoAmount,
+                correction.hue,correction.chroma,correction.highlight,correction.compression,correction.stability,
+                correction.neutral,correction.colorKeep,correction.lumaKeep,correction.shadow));
             if(lmxxfNr_){
                 failedBackend_=engine::FailedBackend::Nr;
                 // The upstream ABI owns encode/network/decode; feed the stable
@@ -1492,10 +1498,10 @@ bool EnhanceGraph::createComputePasses()
     {
         const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
         if(!residualPass_.loadShader("NrResidualComposite.dxil",cs)||
-           !residualPass_.create(context_.device(),cs,4*residualLayers,3*residualLayers,residualLayers,24))return false;
+           !residualPass_.create(context_.device(),cs,4*residualLayers,3*residualLayers,residualLayers,40))return false;
         // The existing residual shader can mask the complete stack against its
         // original base. No extra texture: the final layer owns outputFull().
-        if(nrInstances_.size()>1&&!stackProtectionPass_.create(context_.device(),cs,4,3,1,24))return false;
+        if(nrInstances_.size()>1&&!stackProtectionPass_.create(context_.device(),cs,4,3,1,40))return false;
     }
     if(!flowAdaptPass_.loadShader("FlowAdapt.dxil",cs)||!flowAdaptPass_.create(context_.device(),cs,3+UINT(nrInstances_.size()),1,1))return false;
     // Stage-5 output stabiliser. Only allocated when the setting is non-zero:
@@ -2474,15 +2480,17 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // last layer's delta. Keep unmasked per-layer histories in a stack.
         const auto protection=nrInstances_.size()>1?engine::ProtectionSettings{}:layer->protection;
         tracker_.transition(list,destination,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        float c[24]={r.total,r.darken,r.brighten,r.color,r.luminance,protection.enabled?1.0f:0.0f,protection.featherPixels,desc_.hdrWorking()?1.0f:0.0f};
+        float c[40]={r.total,r.darken,r.brighten,r.color,r.luminance,protection.enabled?1.0f:0.0f,protection.featherPixels,desc_.hdrWorking()?1.0f:0.0f};
         for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
+        const auto controls=r.correction.constants(desc_.hdrWorking(),layer->model.style);
+        std::copy(controls.begin(),controls.end(),c+24);
         const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
         residualPass_.bind(list,c,gpuHandleOf(residualPass_,3u*UINT(layerIndex)).ptr,
                            gpuHandleOf(residualPass_,3u*residualLayers+UINT(layerIndex)).ptr);
         list->Dispatch((layer->fullWidth()+15)/16,(layer->fullHeight()+15)/16,1);
         tracker_.uavBarrier(list,destination);
         tracker_.transition(list,destination,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        if(temporallyStabilised)layer->temporal().run(list,tracker_,reset,haveFlow,ptsMs-prevPtsMs_,r.total,protection);
+        if(temporallyStabilised)layer->temporal().run(list,tracker_,reset,haveFlow,ptsMs-prevPtsMs_,r.total,protection,r.correction,desc_.hdrWorking());
     };
 
     // 4. NR layers, in order. Each layer encodes its input to the 8-bit parity
@@ -2514,7 +2522,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                     tracker_.transition(list,output,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                     // The original and upstream stack share this boundary's
                     // extent. Later NR layers consume the masked result.
-                    float c[24]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
+                    float c[40]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
                     for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(desc_.protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
                     stackProtectionPass_.bind(list,c,gpuHandleOf(stackProtectionPass_,0).ptr,gpuHandleOf(stackProtectionPass_,3).ptr);
                     list->Dispatch((extent.width+15)/16,(extent.height+15)/16,1);
@@ -2704,7 +2712,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 // Each layer already applies its own SDR/HDR residual policy.
                 // This final exclusion mask must preserve the stack's signed
                 // temporal output, including pixels outside protected regions.
-                float c[24]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
+                float c[40]={1,1,1,1,1,1,desc_.protection.featherPixels,1.f};
                 for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(desc_.protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
                 stackProtectionPass_.bind(list,c,gpuHandleOf(stackProtectionPass_,0).ptr,gpuHandleOf(stackProtectionPass_,3).ptr);
                 list->Dispatch(((desc_.nrBeforeSr?srcW_:workW_)+15)/16,((desc_.nrBeforeSr?srcH_:workH_)+15)/16,1);
@@ -3026,12 +3034,15 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
        (s.protection.enabled&&!desc_.protectionBeforeSr()&&!interNrProtectionRgba_)))return false;
     auto nextNr=desc_;engine::describeNrLayers(s,nextNr);
     if(!desc_.nrLayersSizePolicy.empty()&&nextNr.nrLayersSizePolicy!=desc_.nrLayersSizePolicy)return false;
-    if(s.nrTemporal!=desc_.nrTemporal)return false;
+    if(nextNr.nrTemporal!=desc_.nrTemporal||nextNr.nrAntiFlicker!=desc_.nrAntiFlicker)return false;
     if(s.nr&&desc_.enableNr){
         if(s.activeNrLayerCount()!=nrInstances_.size())return false;
         for(size_t i=0;i<nrInstances_.size();++i){
-            const bool temporal=i<nextNr.nrLayersTemporal.size()?nextNr.nrLayersTemporal[i]:s.nrTemporal;
+            const bool temporal=i<nextNr.nrLayersTemporal.size()?nextNr.nrLayersTemporal[i]:nextNr.nrTemporal;
             if(temporal!=nrInstances_[i]->temporalEnabled)return false;
+            const auto tier=i<nextNr.nrLayersAntiFlicker.size()?nextNr.nrLayersAntiFlicker[i]:nextNr.nrAntiFlicker;
+            const auto previousTier=i<desc_.nrLayersAntiFlicker.size()?desc_.nrLayersAntiFlicker[i]:desc_.nrAntiFlicker;
+            if(tier!=previousTier)return false;
         }
     }
     // A non-NVIDIA adapter keeps the user's requested NR setting in the UI
@@ -3089,12 +3100,19 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     desc_.nrLayersModel=std::move(nextNr.nrLayersModel);
     desc_.nrLayersResidual=std::move(nextNr.nrLayersResidual);
     desc_.nrLayersTemporal=std::move(nextNr.nrLayersTemporal);
+    desc_.nrLayersAntiFlicker=std::move(nextNr.nrLayersAntiFlicker);
     desc_.nrLayersProtection=std::move(nextNr.nrLayersProtection);
     for(size_t i=0;i<nrInstances_.size();++i){
         auto& layer=*nrInstances_[i];
         if(s.nr){
             layer.model=i<desc_.nrLayersModel.size()?desc_.nrLayersModel[i]:s.model;
             layer.residualSettings=i<desc_.nrLayersResidual.size()?desc_.nrLayersResidual[i]:s.residual;
+            const auto& correction=layer.residualSettings.correction;
+            veyra::log::info("nr-correction",std::format("live revision={} layer={} gain={} mode={} temporal={} style={} amount={} manual={}/{}/{}/{}/{}/{}/{}/{}/{}",
+                s.revision,i+1,layer.residualSettings.total,correction.enabled?(correction.automatic?"auto":"manual"):"off",
+                layer.temporalEnabled,layer.model.style,correction.autoAmount,
+                correction.hue,correction.chroma,correction.highlight,correction.compression,correction.stability,
+                correction.neutral,correction.colorKeep,correction.lumaKeep,correction.shadow));
             layer.protection=i<desc_.nrLayersProtection.size()?desc_.nrLayersProtection[i]:s.protection;
         }
         layer.temporal().reset();
@@ -3104,7 +3122,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
         ++layer.inputRevision;
     }
     desc_.fgMultiplier=std::max(2u,s.multiplier);
-    const bool temporalMotion=s.nrTemporal||std::any_of(s.nrLayers.begin(),s.nrLayers.begin()+s.nrLayerCount,[](const auto& n){return n.enabled&&n.temporal;});
+    const bool temporalMotion=s.usesNrTemporal();
     desc_.enableNvofStandalone=s.nr&&!desc_.stillImage&&(desc_.nrUsesFlow()||temporalMotion);nvofStandalone_=desc_.enableNvofStandalone;
     setNrEnabled(s.nr);setFgEnabled(s.multiplier>1&&!engine::presentSinkFrameGeneration(s.frameGenerationBackend));
     veyra::log::info("settings",std::format("requested revision={} intensity={} tone={} structure={} skin={} style={} autoMask={} UI={} residual={}/{}/{}/{}/{} multiplier={}",s.revision,s.model.intensity,s.model.tone,s.model.structure,s.model.skin,s.model.style,s.model.autoMask,s.model.uiCorrection,s.residual.total,s.residual.darken,s.residual.brighten,s.residual.color,s.residual.luminance,s.multiplier));

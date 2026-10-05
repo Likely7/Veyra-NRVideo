@@ -925,7 +925,45 @@ static void testNodeInterNrProtectionDescription(){
           "unmigrated cross-SR Protection cannot enter production or inherit a list mask");
 }
 
+void testNrCorrectionDescription(){
+    EnhancementSettings s;s.nr=true;s.nrMotion=MotionSource::Zero;
+    veyra::pipeline::EnhanceGraphDesc d;StageRequest request;request.nr=true;request.width=1280;request.height=720;
+    describeStages(request,s,d);
+    check(!d.nrTemporal&&!d.enableNvofStandalone,"NR correction off retains zero-motion/no-history topology");
+    auto corrected=s;corrected.residual.correction.enabled=true;
+    check(requiresGraphRebuild(s,corrected),"NR correction switch rebuilds history topology");
+    describeStages(request,corrected,d);
+    check(d.nrTemporal&&d.enableNvofStandalone,"NR auto requests real flow even with zero model motion");
+    auto noAmount=corrected;noAmount.residual.correction.autoAmount=0;
+    check(requiresGraphRebuild(corrected,noAmount),"zero automatic amount releases corrected history");
+    describeStages(request,noAmount,d);
+    check(!d.nrTemporal&&!d.enableNvofStandalone,"zero automatic amount has no correction history");
+    auto halfAmount=corrected;halfAmount.residual.correction.autoAmount=.5f;
+    check(!requiresGraphRebuild(corrected,halfAmount),"nonzero automatic amount changes live without new history");
+    for(int style:{0,1,2}){
+        NrCorrectionSettings automatic;automatic.enabled=true;automatic.autoAmount=.6f;
+        const auto a=automatic.constants(false,style);automatic.useAutomaticValues(style);const auto b=automatic.constants(false,style);
+        bool same=true;for(unsigned i=0;i<a.size();++i)if(i!=6)same&=a[i]==b[i];
+        check(same&&!automatic.automatic,"copy automatic profile into manual preserves effective values");
+    }
+    auto manual=corrected;manual.residual.correction.automatic=false;manual.residual.correction.stability=.5f;
+    check(!requiresGraphRebuild(corrected,manual),"NR manual/auto with history is a live parameter update");
+    manual.residual.correction.stability=0;
+    check(requiresGraphRebuild(corrected,manual),"NR stability zero releases history via rebuild");
+    describeStages(request,manual,d);
+    check(!d.nrTemporal&&!d.enableNvofStandalone,"NR manual stability zero needs no history or flow");
+    manual.nrTemporal=true;describeStages(request,manual,d);
+    check(!d.nrTemporal,"manual correction owns temporal setting while enabled");
+    manual.residual.correction.enabled=false;describeStages(request,manual,d);
+    check(d.nrTemporal,"switch off restores saved legacy temporal option");
+    manual.nrLayerCount=2;manual.nrLayers[0].enabled=true;manual.nrLayers[1].enabled=true;
+    manual.nrLayers[1].residual.correction.enabled=true;
+    describeStages(request,manual,d);
+    check(d.nrLayersTemporal.size()==2&&!d.nrLayersTemporal[0]&&d.nrLayersTemporal[1],
+          "controlled history is allocated per active layer");
+}
 int main() {
+    testNrCorrectionDescription();
     std::setvbuf(stdout,nullptr,_IONBF,0);
     testNodeEditorGraph();
     testExistingChainContracts();

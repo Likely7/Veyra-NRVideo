@@ -33,11 +33,13 @@ int main() {
     if(FAILED(ctx.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback))))return 2;
     StateTracker states;
     bool patterned=false;
+    std::array<float,3> rawOffset{};
     auto fill=[&](ID3D12Resource* texture,float value,bool flow=false){
         void* data=nullptr;if(FAILED(upload->Map(0,nullptr,&data)))return false;
         auto* pixels=static_cast<HALF*>(data);
         for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)for(unsigned c=0;c<(flow?2u:4u);++c)
-            pixels[y*pitch/2+x*(flow?2:4)+c]=XMConvertFloatToHalf(c==3?1.f:value+(patterned&&!flow?float((x*13+y*7+c*3)%19)*.013f:0.f));
+            pixels[y*pitch/2+x*(flow?2:4)+c]=XMConvertFloatToHalf(c==3?1.f:value+
+                (texture==pass.raw()?rawOffset[c]:0.f)+(patterned&&!flow?float((x*13+y*7+c*3)%19)*.013f:0.f));
         upload->Unmap(0,nullptr);
         unsigned slot;auto* list=ring.acquireNext(slot,status);if(!list)return false;
         states.transition(list,texture,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -47,17 +49,20 @@ int main() {
         return ring.submitAndSignal(slot)&&ring.waitIdle();
     };
     engine::ProtectionSettings protection;
+    engine::NrCorrectionSettings correction;
     float outputMinimum=0.f;
+    float outputChroma=0.f;
     auto run=[&](float raw,bool reset,double ms=16.6667,bool haveMotion=true,float total=1.f){
         if(!fill(pass.raw(),raw))return std::numeric_limits<float>::quiet_NaN();
         unsigned slot;auto* list=ring.acquireNext(slot,status);
-        pass.run(list,states,reset,haveMotion,ms,total,protection);
+        pass.run(list,states,reset,haveMotion,ms,total,protection,correction);
         states.transition(list,output.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         D3D12_TEXTURE_COPY_LOCATION dst{},src{};src.pResource=output.Get();src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;dst.pResource=readback.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint.Footprint={DXGI_FORMAT_R16G16B16A16_FLOAT,width,height,1,pitch};
         list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
         if(!ring.submitAndSignal(slot)||!ring.waitIdle())return std::numeric_limits<float>::quiet_NaN();
         void* data=nullptr;D3D12_RANGE range{0,pitch*height};readback->Map(0,&range,&data);
         float result=XMConvertHalfToFloat(static_cast<HALF*>(data)[6*pitch/2+8*4]);
+        outputChroma=result-XMConvertHalfToFloat(static_cast<HALF*>(data)[6*pitch/2+8*4+1]);
         uint64_t fingerprint=14695981039346656037ull;
         outputMinimum=std::numeric_limits<float>::infinity();
         for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width*4;++x){
@@ -211,6 +216,27 @@ int main() {
         const float value=.25f+float(int(frame%5)-2)*.04f;
         check("patterned finite",std::isfinite(run(value,frame==0||frame==9)));
     }
+    patterned=false;correction.enabled=true;fill(base.Get(),.5f);fill(motion.Get(),0,true);
+    float lo=1,hi=0;
+    for(unsigned i=0;i<48;++i){const float value=run(i%2?.53f:.47f,i==0);
+        if(i>12){lo=std::min(lo,value);hi=std::max(hi,value);}}
+    check("controlled alternating luma flicker reduced",hi-lo<.02f);
+    float chromaLo=1,chromaHi=-1;
+    for(unsigned i=0;i<48;++i){
+        const float delta=i%2?.03f:-.03f;
+        rawOffset={0,-2*delta,-delta};run(.5f+delta,i==0);
+        if(i>12){chromaLo=std::min(chromaLo,outputChroma);chromaHi=std::max(chromaHi,outputChroma);}
+    }
+    std::cout<<"alternating chroma rawRange=0.12 filteredRange="<<chromaHi-chromaLo<<std::endl;
+    check("controlled alternating chroma flicker reduced",chromaHi-chromaLo<.04f);
+    rawOffset={};
+    check("controlled zero correction immediately clears history",run(.5f,false)==.5f);
+    check("controlled next observation after identity is fresh",run(.53f,false)==XMConvertHalfToFloat(XMConvertFloatToHalf(.53f)));
+    fill(base.Get(),.8f);
+    check("controlled scene/source change rejects history",run(.83f,false)==XMConvertHalfToFloat(XMConvertFloatToHalf(.83f)));
+    check("controlled missing flow rejects history",run(.77f,false,16.6667,false)==XMConvertHalfToFloat(XMConvertFloatToHalf(.77f)));
+    correction.automatic=false;correction.stability=0;
+    check("manual temporal zero publishes current observation",run(.74f,false)==XMConvertHalfToFloat(XMConvertFloatToHalf(.74f)));
     ring.drainQueue();
     ComPtr<ID3D12InfoQueue> info;
     if(FAILED(ctx.device()->QueryInterface(IID_PPV_ARGS(&info))))return 2;

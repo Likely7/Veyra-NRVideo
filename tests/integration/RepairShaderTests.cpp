@@ -15,7 +15,7 @@ int main(){
     D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_READBACK;D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=16*256;bd.Height=1;bd.DepthOrArraySize=1;bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;ComPtr<ID3D12Resource> readback;
     if(FAILED(ctx.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback))))return 2;
     ComputePass down,residual;std::vector<uint8_t> cs;
-    if(!down.loadShader("NrDownsample.dxil",cs)||!down.create(ctx.device(),cs,2,1,1)||!residual.loadShader("NrResidualComposite.dxil",cs)||!residual.create(ctx.device(),cs,4,3,1,24))return 2;
+    if(!down.loadShader("NrDownsample.dxil",cs)||!down.create(ctx.device(),cs,2,1,1)||!residual.loadShader("NrResidualComposite.dxil",cs)||!residual.create(ctx.device(),cs,4,3,1,40))return 2;
     makeSrv(ctx.device(),base.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(down,0));makeUav(ctx.device(),low.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(down,1));
     makeSrv(ctx.device(),base.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(residual,0));makeSrv(ctx.device(),low.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(residual,1));makeSrv(ctx.device(),low.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(residual,2));makeUav(ctx.device(),result.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(residual,3));
     StateTracker states;uint32_t slot;auto* list=ring.acquireNext(slot,status);states.transition(list,base.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
@@ -27,7 +27,7 @@ int main(){
     std::cout<<"area downsample checkerboard mean="<<ok<<std::endl;
     for(float strength:{0.0f,1.0f,2.0f}){
         list=ring.acquireNext(slot,status);states.transition(list,low.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);states.transition(list,result.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        float c[24]={strength,0.5f,1.5f,2,0,0,0,0};residual.bind(list,c,gpuHandleOf(residual,0).ptr,gpuHandleOf(residual,3).ptr);list->Dispatch(1,1,1);states.uavBarrier(list,result.Get());states.transition(list,result.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);copy(result.Get(),16,16);if(!ring.submitAndSignal(slot)||!ring.waitIdle())return 2;
+        float c[40]={strength,0.5f,1.5f,2,0,0,0,0};residual.bind(list,c,gpuHandleOf(residual,0).ptr,gpuHandleOf(residual,3).ptr);list->Dispatch(1,1,1);states.uavBarrier(list,result.Get());states.transition(list,result.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);copy(result.Get(),16,16);if(!ring.submitAndSignal(slot)||!ring.waitIdle())return 2;
         readback->Map(0,&range,&data);values=static_cast<float*>(data);bool identity=true;for(int y=0;y<16;++y)for(int x=0;x<16;++x)identity=identity&&values[y*64+x*4]==(((x+y)%2)?0.75f:0.25f);readback->Unmap(0,&written);ok=ok&&identity;std::cout<<"zero residual strength="<<strength<<" base identity="<<identity<<std::endl;
     }
     auto neural=makeTexture(ctx.device(),8,8,DXGI_FORMAT_R32G32B32A32_FLOAT,true);
@@ -45,7 +45,7 @@ int main(){
     // .10 + 2*(.04-.10) negative, destroying all of this patch's detail.
     ok=ok&&fill(base.Get(),16,16,.10f,.10f,.10f)&&fill(low.Get(),8,8,.10f,.10f,.10f)&&fill(neural.Get(),8,8,.04f,.04f,.04f);
     for(unsigned control=0;control<5;++control)for(float strength:{0.f,.5f,1.f,2.f}){
-        float c[24]={1,1,1,1,1,0,0,0};c[control]=strength;
+        float c[40]={1,1,1,1,1,0,0,0};c[control]=strength;
         list=ring.acquireNext(slot,status);states.transition(list,result.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         residual.bind(list,c,gpuHandleOf(residual,0).ptr,gpuHandleOf(residual,3).ptr);list->Dispatch(1,1,1);
         states.uavBarrier(list,result.Get());states.transition(list,result.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);copy(result.Get(),16,16);
@@ -64,7 +64,7 @@ int main(){
     // highlights. Default residual settings must not clamp either boundary.
     ok=ok&&fill(base.Get(),16,16,-.1f,2.f,.5f)&&fill(low.Get(),8,8,-.1f,2.f,.5f)&&fill(neural.Get(),8,8,-.2f,3.f,.75f);
     list=ring.acquireNext(slot,status);states.transition(list,result.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    float hdr[24]={1,1,1,1,1,0,0,1};residual.bind(list,hdr,gpuHandleOf(residual,0).ptr,gpuHandleOf(residual,3).ptr);list->Dispatch(1,1,1);
+    float hdr[40]={1,1,1,1,1,0,0,1};residual.bind(list,hdr,gpuHandleOf(residual,0).ptr,gpuHandleOf(residual,3).ptr);list->Dispatch(1,1,1);
     states.uavBarrier(list,result.Get());states.transition(list,result.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);copy(result.Get(),16,16);
     if(!ring.submitAndSignal(slot)||!ring.waitIdle())return 2;
     readback->Map(0,&range,&data);values=static_cast<float*>(data);

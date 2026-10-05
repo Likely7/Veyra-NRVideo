@@ -457,6 +457,11 @@ class QmlPlayerBridge : public QObject {
     // node's settings, separate from the whole-chain presets.
     Q_PROPERTY(QVariantList lutLibrary READ lutLibrary NOTIFY colourLibraryChanged)
     Q_PROPERTY(QVariantList colourLooks READ colourLooks NOTIFY colourLibraryChanged)
+    // 补帧预设 (field request 2026-10-05): the whole 补帧 tab - backend, multiplier,
+    // motion source, optical flow, flow quality, content cadence, strict pacing and
+    // the low-latency queue - kept in the shell preferences, apart from the
+    // whole-chain presets (which carry only the multiplier and backend).
+    Q_PROPERTY(QVariantList fgPresets READ fgPresets NOTIFY fgPresetsChanged)
 
 public:
     bool amdNrGpu() const;
@@ -941,6 +946,10 @@ public:
     Q_INVOKABLE bool importColourLook(const QString& path);
     Q_INVOKABLE void exportColourLookDialog(int index);
     Q_INVOKABLE bool exportColourLook(int index, const QString& path);
+    QVariantList fgPresets() const;
+    Q_INVOKABLE bool saveFgPreset(const QString& name, bool replace);
+    Q_INVOKABLE bool applyFgPreset(int index);
+    Q_INVOKABLE bool deleteFgPreset(int index);
 
     // The native HWND the engine presents into. The UI creates it as a child
     // window of the QML window and hands it over; the bridge never draws QML
@@ -1048,6 +1057,7 @@ signals:
     void subtitleTextChanged();
     void preferencesChanged();
     void colourLibraryChanged();
+    void fgPresetsChanged();
     // Emitted only when the underlying snapshot actually changed, so QML
     // bindings do not re-evaluate 60 times a second for nothing.
     void snapshotChanged();

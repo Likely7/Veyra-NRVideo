@@ -450,7 +450,7 @@ VPage {
         anchors.leftMargin: 14
         anchors.top: head.bottom
         anchors.topMargin: 10
-        width: root.width - 376 - 14 * 2 - 10
+        width: root.width - insp.width - 14 * 2 - 10
         height: root.height - 14 - head.height - 10 - 172 - 10 - 14
         radius: Theme.rCard
         color: Theme.card
@@ -694,8 +694,11 @@ VPage {
         spacing: 10
 
         // Card 1: signal chain. Reported values only.
+        // A narrow picture column (wide inspector, small window) drops this card
+        // first, so the stage timings beside it keep room to read.
         Rectangle {
             id: meter1
+            visible: meters.width >= 760
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: 1.05
@@ -754,6 +757,9 @@ VPage {
         Rectangle {
             id: meter2
             objectName: "pro-meter-stages"
+            // Too narrow for label, bar and value side by side in two columns: the
+            // bars and the budget note go, the values stay.
+            readonly property bool narrow: width < 380
             clip: true
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -770,6 +776,7 @@ VPage {
                     Layout.fillWidth: true
                     VEyebrow { text: qsTr("GPU 阶段耗时 · 最近一秒平均"); Layout.fillWidth: true }
                     Text {
+                        visible: !meter2.narrow
                         text: qsTr("预算 ") + veyra.stageBudgetMs.toFixed(1) + qsTr(" ms / 源帧")
                         color: Theme.t3
                         font.family: Theme.fontMono
@@ -816,6 +823,7 @@ VPage {
                         }
                         Item {
                             Layout.fillWidth: true
+                            visible: !meter2.narrow
                             implicitHeight: 5
                             Rectangle {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -837,6 +845,7 @@ VPage {
                         }
                         Text {
                             Layout.preferredWidth: 48
+                            Layout.fillWidth: meter2.narrow
                             text: modelData.measured ? modelData.ms.toFixed(1) + " ms" : qsTr("未测量")
                             HoverHandler { id: stageValueHover }
                             ToolTip.visible: stageValueHover.hovered && modelData.measured
@@ -965,7 +974,63 @@ VPage {
         }
     }
 
-    // --- inspector (376px, rows 2-3) --------------------------------------
+    // --- inspector (376px by default, rows 2-3) ----------------------------
+    // The panel can be widened by dragging the gap between it and the picture
+    // (field request 2026-10-05); the width is remembered, a double click on the
+    // gap returns to the design's 376px. It never goes narrower than that, and
+    // the picture keeps at least 640px, where the meters under it still read.
+    readonly property real inspectorMax: Math.max(376, root.width - 14 * 2 - 10 - 640)
+    property real inspectorDrag: -1
+    readonly property real inspectorWidth: Math.max(376, Math.min(inspectorMax,
+        inspectorDrag >= 0 ? inspectorDrag : Number(veyra.preferences.listInspectorWidth || 376)))
+    MouseArea {
+        id: inspectorSplit
+        objectName: "pro-inspector-split"
+        visible: !root.overlay
+        x: insp.x - 10
+        y: insp.y
+        width: 10
+        height: insp.height
+        cursorShape: Qt.SplitHCursor
+        hoverEnabled: true
+        preventStealing: true
+        property real pressX: 0
+        property real pressWidth: 0
+        onPressed: mouse => {
+            pressX = mapToItem(root, mouse.x, 0).x
+            pressWidth = root.inspectorWidth
+            root.inspectorDrag = pressWidth
+        }
+        onPositionChanged: mouse => {
+            if (!pressed) return
+            root.inspectorDrag = Math.max(376, Math.min(root.inspectorMax, pressWidth - (mapToItem(root, mouse.x, 0).x - pressX)))
+        }
+        onReleased: {
+            const width = Math.round(root.inspectorWidth)
+            root.inspectorDrag = -1
+            veyra.setPreference("listInspectorWidth", width)
+        }
+        onCanceled: root.inspectorDrag = -1
+        onDoubleClicked: veyra.setPreference("listInspectorWidth", 376)
+        // A hairline handle while the pointer is on the gap.
+        Rectangle {
+            anchors.centerIn: parent
+            width: 3
+            height: 36
+            radius: 1.5
+            color: inspectorSplit.pressed ? Theme.accent : Qt.rgba(1, 1, 1, 0.28)
+            opacity: inspectorSplit.containsMouse || inspectorSplit.pressed ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
+        }
+        // Beside the pointer: the attached tip sat at the top of this full-height strip.
+        ToolTip {
+            visible: inspectorSplit.containsMouse && !inspectorSplit.pressed
+            delay: 600
+            x: -implicitWidth - 6
+            y: inspectorSplit.mouseY + 16
+            text: qsTr("拖动调整参数面板宽度 · 双击还原")
+        }
+    }
     // Performance orbs beside the quick-adjust panel (fullscreen only).
     Rectangle {
         id: quickOrbs
@@ -1006,7 +1071,7 @@ VPage {
         anchors.topMargin: 10
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 14
-        width: 376
+        width: root.overlay ? 376 : root.inspectorWidth
         radius: Theme.rCard
         color: Theme.card
         border.width: 1
@@ -1406,9 +1471,11 @@ VPage {
                                 label: qsTr("稳定强度")
                                 hint: qsTr("越高越稳，过高会显得发闷")
                                 visible: veyra.nrHoldStrength > 0
+                                value: Math.round(veyra.nrHoldStrength * 100) + "%"
                                 VSlider {
                                     objectName: "list-hold-strength"
-                                    from: 0.1; to: 1.0
+                                    implicitWidth: 110
+                                    from: 0.1; to: 1.0; inputScale: 100
                                     value: veyra.nrHoldStrength
                                     onMoved: value => veyra.nrHoldStrength = value
                                 }
@@ -1417,8 +1484,11 @@ VPage {
                                 label: qsTr("变化容差")
                                 hint: qsTr("越小越敏感，越大稳得越多")
                                 visible: veyra.nrHoldStrength > 0
+                                value: Number(veyra.nrHoldTolerance).toFixed(3)
                                 VSlider {
                                     objectName: "list-hold-tolerance"
+                                    implicitWidth: 110
+                                    inputDecimals: 3
                                     from: 0.005; to: 0.10
                                     value: veyra.nrHoldTolerance
                                     onMoved: value => veyra.nrHoldTolerance = value
@@ -1517,6 +1587,57 @@ VPage {
                         spacing: 6
                         visible: root.tab === "fg"
                         objectName: "list-fg-group"
+
+                        // 补帧预设 (field request 2026-10-05): this whole tab by name - 补帧方式,
+                        // 倍率, 运动来源, 光流算法, 运动估算质量, 内容节奏, 严格节奏 and
+                        // 低延迟队列 - beside the whole-chain presets, as 颜色预设 is on 色彩.
+                        VGroup {
+                            objectName: "list-fg-presets"
+                            VRow {
+                                label: qsTr("补帧预设")
+                                hint: qsTr("保存补帧页全部设置")
+                                VSelect {
+                                    objectName: "fg-preset-select"
+                                    implicitWidth: 170
+                                    value: veyra.fgPresets.length ? qsTr("应用预设…") : qsTr("暂无补帧预设")
+                                    options: veyra.fgPresets.map(p => ({ id: String(p.index), label: p.name, note: p.note }))
+                                    onPicked: id => veyra.applyFgPreset(Number(id))
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                DialogHost.VTextField {
+                                    id: fgPresetName
+                                    objectName: "fg-preset-name"
+                                    Layout.fillWidth: true
+                                    placeholder: qsTr("新预设名称")
+                                }
+                                VButton {
+                                    objectName: "fg-preset-save"
+                                    text: qsTr("保存")
+                                    enabled: fgPresetName.text.trim().length > 0
+                                    onClicked: {
+                                        const name = fgPresetName.text.trim()
+                                        const exists = veyra.fgPresets.some(p => p.name === name)
+                                        if (veyra.saveFgPreset(name, exists)) fgPresetName.text = ""
+                                    }
+                                }
+                                VButton {
+                                    id: fgPresetMore
+                                    objectName: "fg-preset-more"
+                                    text: qsTr("管理"); ghost: true
+                                    enabled: veyra.fgPresets.length > 0
+                                    onClicked: fgPresetMenu.openAt(fgPresetMore, "down")
+                                }
+                                VMenu {
+                                    id: fgPresetMenu
+                                    title: qsTr("补帧预设")
+                                    items: veyra.fgPresets.map(p => ({ act: "delete", index: p.index, label: qsTr("删除「") + p.name + "」", note: p.note, icon: "trash" }))
+                                    onPicked: (i, item) => veyra.deleteFgPreset(item.index)
+                                }
+                            }
+                        }
 
                         VAccordion {
                             id: fgCard

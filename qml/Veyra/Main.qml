@@ -219,9 +219,10 @@ Window {
             // .pro grid: 1fr 376px, gap 10, padding 14. The video wrap is column
             // 1 row 2; .meters below it is a fixed 172px; .pro-head is 32; and the
             // card's own .vbar is 36px at its foot, which the picture must not cover.
+            // The inspector column can be widened by its splitter (inspectorWidth).
             return { x: 14,
                      y: 14 + 32 + 10,
-                     width: Math.max(1, width - 376 - 14 * 2 - 10 - 14),
+                     width: Math.max(1, width - proPage.inspectorWidth - 14 * 2 - 10 - 14),
                      height: Math.max(1, height - 14 * 2 - 32 - 10 - 172 - 10 - 36) }
         case "node":
             // .nodeview padding 14; .nv-top (330px by default, the splitter under
@@ -258,6 +259,8 @@ Window {
         ProPage {
             id: proPage
             pageId: "pro"
+            // The splitter moves the picture's right edge with it.
+            onInspectorWidthChanged: if (root.page === "pro" && !root.fullscreen) videoHost.syncRect()
             home: pages
             overlay: root.quickPanelShown
             onRequestFullscreen: root.toggleFullscreen()
@@ -465,11 +468,31 @@ Window {
         return p.x >= videoHost.x && p.y >= videoHost.y && p.x <= videoHost.x + videoHost.width
             && p.y <= videoHost.y + videoHost.height
     }
+    // Anything floating over the picture is cut out of the video window (videoCover:
+    // the dock, popovers, tips). A click on it belongs to it, never to the picture:
+    // the window-wide handlers below used to see the dock's 专业模式 click too, so
+    // leaving 极简 also paused or resumed the film (field report 2026-10-05).
+    function overVideoCover(scenePoint) {
+        const visit = item => {
+            if (!item || !item.visible || item.opacity <= 0) return false
+            if (item.objectName === "videoCover" || item.videoCover === true) {
+                const q = item.mapFromItem(null, scenePoint.x, scenePoint.y)
+                if (q.x >= 0 && q.y >= 0 && q.x <= item.width && q.y <= item.height) return true
+            }
+            for (let i = 0; i < item.children.length; ++i) if (visit(item.children[i])) return true
+            return false
+        }
+        return visit(root.contentItem.parent ? root.contentItem.parent : root.contentItem)
+    }
     TapHandler {
         id: pictureTap
         enabled: !root.fullLocked
+        // Judged where the press landed: by the release the page may already have changed.
+        property bool pressOnCover: false
+        onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
         onTapped: (eventPoint, button) => {
             const p = eventPoint.position
+            if (pressOnCover) return
             if (root.page !== "min" && root.page !== "pro" && root.page !== "node" && !root.fullscreen) return
             if (dialogs.dialog !== "" || !veyra.hasSource) return
             if (root.fullscreen && root.quickPanelShown && proPage.overlayContains(p.x, p.y)) return
@@ -482,8 +505,11 @@ Window {
     }
     TapHandler {
         enabled: !root.fullLocked
+        property bool pressOnCover: false
+        onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
         onDoubleTapped: (eventPoint, button) => {
             const p = eventPoint.position
+            if (pressOnCover) return
             if (root.fullscreen) {
                 if (root.quickPanelShown && proPage.overlayContains(p.x, p.y)) return
                 root.toggleFullscreen()
@@ -501,8 +527,11 @@ Window {
     // (Ctrl+Alt+Shift+Z). While captured the clicks belong to the host and never get here.
     TapHandler {
         enabled: veyra.moonlight && veyra.moonlight.state.streaming === true && !veyra.moonlightCaptured && dialogs.dialog === ""
+        property bool pressOnCover: false
+        onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
         onTapped: eventPoint => {
             const p = eventPoint.position
+            if (pressOnCover) return
             if (root.page !== "min" && root.page !== "pro" && root.page !== "node") return
             if (p.x < videoHost.x || p.y < videoHost.y || p.x > videoHost.x + videoHost.width
                 || p.y > videoHost.y + videoHost.height) return

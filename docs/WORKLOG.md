@@ -1,5 +1,51 @@
 # Veyra 工作记录
 
+## 2026-10-05～06 2.0.4 分支整合与发布前测试
+
+用户明确授权检查各分支/Claude最新修复、整合当前修复到main并打包2.0.4测试。本轮从81b755b建隔离release-2.0.4-20261005；整合前main de18fc4已含性能及Claude现场修复6e9d827。审查29分支/20既有worktree，完整before bundle已verify，全部未提交/未跟踪文件原字节/补丁/hash保存；其余19工作树和原桌面保持。Claude最新21:50～22:19会话18份未提交UI文件从封存ZIP移植，保留原分支和未提交状态；旧OBS等价实现已在main，不重复覆盖，旧诊断/撤回实验不混入产品。
+
+生产build1 518步/0，补帧预设实际参数核对build2 10步/0，固定导出滚动条留白及Xbox缺失翻译build3 7步/0。最终EXE dadb7cd28022a4ebff9291b4fc6b282e6253bad397fff7ae6f81ff2bf069322d，版本资源2.0.4。所有命令/结果/失败与边界见 RELEASE_2.0.4_ACCEPTANCE_2026-10-05.md：Xbox97/0、scene18/0、timing78、repair246/0、能力56/0、VFG331/0、旧/新预设、250Xbox音频块、两组真实软硬解、时域GPU、FP32/FP16各45、Qt50/0、FG完整预设恢复与非法值拒绝、真实FSR/XeSS/DLSS切换及两层原版NR5、HEVC4K完整60帧导出/恢复、两包隔离启动/ASS与默认D3D12均通过。保留legacy1夹具空父目录和nrexport1旧MPEG4回退/真实QML重排循环失败证据，修复后的结果单列。
+
+全部新产物在 E:/项目/Veyra/{build,tests,logs,tmp,test-packages,verify,archives}/release-2.0.4-20261005。NVIDIA/AMD同EXE、215/694既有组件文件（含许可证/manifest/模型）原字节不变，不新增runtime/SDK入Git。源码与组件物理分离，候选worker日志移到同任务logs并留SHA。生产输入冻结、本地主线合并、最终源码/ZIP/CRC/载荷hash与独立解压启动分别以tested-inputs.json、main-merge.json、DELIVERY.json和cold-verify-results.json为准，不能以计划或旧记录冒充完成。
+
+真实Xbox/RX9070XT、RX9000 NR、20/30/40、受影响采集卡/后台长稳、驱动616.92、物理显示/端到端延迟未验；本版本未承诺原NR+4K+3X组合60处理FPS或底层Xbox驱动/FG故障根因已确定。无新公开push/Release/资产上传，未改用户配置/驱动，无压力/竞争程序、子Agent或关机。用户先测试后再正式发布，正式Release双width220二维码草稿保留。
+
+## 2026-10-05 采集60→55–57FPS与Xbox补帧冻结：开工证据
+
+当前以用户最终更正的28日志处理Xbox，不拿26本地HEVC/AMD NR日志代替。已安全解包7z并复制/hash输入到 `E:/项目/Veyra/logs/capture-xbox-field-20261005/input`，64,005行采集日志和17,076行Xbox日志；归档内容只作证据。采集callback/PTS60Hz，rev16 GPU完成FPS中位55/输入60，实际mailbox丢帧；不能伪改输入数字或承诺全部增强固定60。Xbox 487次D3D12VA send_packet EINVAL，FG重建附近开始、音频继续；缺少错误后的flush及输入AU丢失的参考链reset，SDK/driver根因尚不能确定。
+
+从已验NR新功能 `33d6685` 创建 `codex/capture-xbox-field-20261005` / E盘worktree；开工tag、verify后的bundle（SHA6169096d…a81f51）及18个其它worktree的不可变状态/hash在archives同任务目录，计划 `CAPTURE_XBOX_FIELD_PLAN_2026-10-05.md`。只做必要Xbox恢复及采集诊断、测试/本地包，不改NR/SR/FG算法、不连用户主机、不派Agent/压力测试/merge/push/Release。此节仅记录证据与开工，不声称产品修复或实机通过。
+
+### Xbox 恢复实施及本机验收
+
+已补硬错误/丢AU后的flush、关键帧等待和首个恢复帧Discontinuity；三个连续硬错误才允许每连接一次硬解重开，必要时一次软件回退，NeedInput不当错误，成功出帧不补充重开预算。终止时保留Failed和具体原因，ready/end更新不再抹去解码失败；stats改读原子硬解状态，避免close/open并发访问decoder。采集只修正pacing诊断条件，无新FPS/画质策略。
+
+最终 `capture-xbox-build.py build7` 五目标退出0，保留patched FFmpeg+dav1d和静态libass；EXE SHA256 `0450db056d0611cb416d5594981fa1ac6e28128fc5b0e4ef5e1f14b96e1c0ddb`。`capture-xbox-tests.py`：xbox1为97/0、本地loopback无远端账号；scene1为18/0；timing1为78 PASS；codec10/11无B/B2均ALL PASS 0，真实软/硬解、EAGAIN、丢包像素/PTS、坏包flush、硬解重开/软件替换和旧D3D12帧lease有效。smoke-AMD3/NVIDIA3干净PATH/独立profile均PASS，真实libass内嵌字体和5事件字幕；hot-NVIDIA3为43.828s/PASS，FSR3.1→XeSS→DLSS→FSR3.1→关闭后两层原版NR强度5、风格1自动/2手动继续播放及PNG。实际命令、失败（ANSI夹具、B重排序、NeedInput注入误判、首次DLSS创建约9s误判）和证据见 `docs/CAPTURE_XBOX_FIELD_EXECUTION_2026-10-05.md`，不把失败抹为通过。
+
+候选 `E:/项目/Veyra/test-packages/capture-xbox-field-20261005/Veyra-2.0.3-streamfix1-{AMD,NVIDIA}-win64-portable`，相应source ZIP、bundle、ZIP/逐文件hash与最终交付摘要在该任务的test-packages/archives/logs。NVIDIA 215项、AMD 686项已批准组件原字节保留；AMD补同EXE需要的8份libass依赖版权通知，无新运行二进制。只复制旧manifest payload并排除旧包后生成的用户配置，误继承副本隔离到本任务logs，原包/用户配置不改。14文件guard保持其余18工作树/main/桌面身份不变；本地commit/tag存档，无新merge/push/Release或关机。
+
+RX9070XT+真实Xbox、现场耗尽恢复的结束/UI提示、实卡采集与长稳未执行。软件回退可能增加CPU/解码耗时；487次EINVAL的底层触发器未确定。本次不是AMD NR无效果修复，也没有证明采集原增强组合已到60FPS；现场counter证明输入60.009/s、处理54.453/s。下一步仅受影响用户用新AMD候选复测原FSR/XeSS切换并保留新恢复日志。
+
+## 2026-10-05 NR 风格 1/2 色偏与调控参数续修
+
+用户反馈原版 NR 强度 5 的风格 1/2 色偏较大、旧手动控制主要局部压缩明显；接续已验首轮 `9eb3b1c`，原包保留。tag `checkpoint/pre-nr-style-controls-20261005` 与续修前 bundle `E:/项目/Veyra/archives/nr-strength-protection-20261005/style-controls/source-before.bundle`（SHA256 `19703EFD383E2B012AF6FFDE0663395CB2276D0A9FCA3D524DD6AE16D2EBF42C`）已核验。三个风格原本均已接入，问题是共用规则遗漏低色度染色及亮度变化后的饱和度，已分别设置自动参数。
+
+新增中性色保护、原图色彩保留、亮度保持、暗部保护，手动共九项；自动力度 0–1 和采用当前风格自动值按钮。旧手动 v29/v8 保持含义，只有新增参数非默认才写 v30/v9；原始强度 5、关调控和自动 0 的输出保留。已完成生产构建、四组 CPU、FP32/FP16 各 45 项 GPU、时域回归、40 项真实鼠标 QML、原版三风格严格同图及每项独立响应、两层风格 1/2 与全栈保护、预设/会话第二进程恢复、4K HEVC NVENC 60 帧和真实 libass 字幕。失败（FP16 量化误判、视频夹具 seek 位置不一致）、修复、所有命令与证据见 `docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md` 续修段，不将单帧颜色距离冒充全内容画质/闪烁验收。
+
+本轮产物在 `E:/项目/Veyra/{build,tests,logs,tmp,test-packages,archives}/nr-strength-protection-20261005/`，新候选 `Veyra-2.0.3-nr-controls2-NVIDIA-win64-portable`，续修归档在 `archives/.../style-controls`。继承原组件、patched FFmpeg 和 Claude libass；不改 DLL、不制造压力负载、不改其他工作树、main 或用户配置，无新 merge/push/Release。新交付摘要见 `test-packages/.../DELIVERY-styles2.json`，旧摘要不覆盖。
+
+## 2026-10-05 NR 强度 5 与自动/手动调控开工
+
+用户明确授权本功能实施。已从本地 main `de18fc4` 建 `codex/nr-strength-protection-20261005`，工作树 `E:/项目/Veyra/worktrees/nr-strength-protection-20261005`；开工 tag 和已验证 `source-before.bundle` 在 `E:/项目/Veyra/archives/nr-strength-protection-20261005`。方案 `docs/NR_STRENGTH_PROTECTION_PLAN_2026-10-05.md`；独立不可变 `start.json` SHA256 `909bdde5eb460e4b69c5548cc5e504c90d8dbd7e8001e2e47dfe9260d60fd46e`。`py -3.11 -B scripts/acceptance/nr-protection-control.py guard` 通过，其他工作树 HEAD/status 不变。全部新产物按用途写入 E 盘同任务目录；禁止压力测试、不换运行库、不合并/推送/发布。此条仅记录开工，验收结果待实际执行。
+
+### 本轮实施与验收
+
+总变化强度 0–5，逐层默认关闭的自动／手动画面调控，五个手动保护项；线性 Oklab 色相／灰轴、局部压缩／色度预算／高光／signed HDR 色域保护，复用原光流和有界历史，无额外 NR 推理、未来帧或 CPU 像素回读。预设／会话 schema 29/8、列表／节点、复制／重置和导出一致。对抗审查补齐多层全栈保护的 32 常量，修正构建依赖以保留 Claude 的静态 libass。来源、全部命令／失败与边界见 `docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md`。
+
+生产构建 `stack-root-build.log` 退出 0，EXE `599fd89057a645540cf51e1afa3f93534297ee2de5a95ec1073f346b50149174`。`nr-protection-tests.py final-cpu ...` 五项通过；`final-gpu temporal correction correction-fp16` 三项通过，FP32/FP16 各 34 检查、2048 像素，0/1/2/5 关闭时逐位匹配起点 shader，D3D12 error/warning=0；48 帧交替色度范围 0.12→0.03125。QuickTest `mouse4` 40/0；翻译 `extract.py --check` missing=0。实际 UI `first final1` 通过原始／自动／手动与 PNG、预设／复制，NVENC D3D12 HEVC 4K 60 源帧／60 编码帧无 hold；`restore finalrestore1` 重启恢复、`multi multilayer1` 两层带保护、`visual realvideo1` 游戏静帧对照、`smoke inherited2` MKV 特效字幕／字体均通过。
+
+全局 native HDR 8 项旧失败在原 main 单独复现且数值相同（`hdr-baseline-comparison.json`），不能说 HDR suite 全过；20/30/40/AMD、真实 HDR／采集／长时质量未验。初始编译、预设路径、UI 夹具与 QuickTest 布局／依赖问题均已修复，MPEG4 人工素材使用既有软件解码回退，失败证据保留。实际输出均在 `E:/项目/Veyra/{build,tests,logs,tmp,test-packages,archives}/nr-strength-protection-20261005/`，最终包／源码／manifest 以同级 `DELIVERY.json` 为准；测试进程均有上限，无压力测试。保留当前构建、最终候选与必要失败／基线证据；主线和其他工作树不变，本功能未 merge/push/Release。
+
 ## 2026-10-05 继续剩余节点，禁止追加压力测试
 
 用户睡前要求继续且不要压力测试。Goal已恢复active，当前c4ea7d8/干净分支，nr-control guard通过（112路径）；保持原主线/桌面/运行组件与用户配置。先存档3c-graph-normal-before，再准备正常播放DIRECT/COMPUTE及普通/HIGH呈现对照，不启动旧competition驱动。所有新证据仍在E:/项目/Veyra/{logs,tests,tmp,archives}/perf-nr-20261004。随后多NR/跨帧/黑边/自动尺寸逐节点尝试；无收益或画面不满足保留门槛的实现回退，不能将API通过冒充性能收益，画质需人工确认的部分默认不启用。

@@ -21,6 +21,7 @@ VRow 1.0 VRow.qml
 VSeg 1.0 VSeg.qml
 VSelect 1.0 VSelect.qml
 VSlider 1.0 VSlider.qml
+VSliderValue 1.0 VSliderValue.qml
 VSwitch 1.0 VSwitch.qml
 VTag 1.0 VTag.qml
 Main 1.0 Main.qml

@@ -1,4 +1,5 @@
 #include "veyra/engine/PresetLibrary.h"
+#include "veyra/engine/NrCorrectionCodec.h"
 
 #include <windows.h>
 
@@ -582,7 +583,13 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return c.fgBackend==FrameGenerationBackend::Vfg||c.vfgQuality!=1||
             (c.editor&&c.editor->globals&&(c.editor->globals->fgBackend==FrameGenerationBackend::Vfg||c.editor->globals->vfgQuality!=1));
     });
-    const int version=std::max(minimumVersion, vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const bool correction=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        for(unsigned i=0;i<e.chain.nodeCount;++i)if(e.chain.nodes[i].nr.residual.extendedSchema())return true;
+        return false;});
+    const bool correctionExtended=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        for(unsigned i=0;i<e.chain.nodeCount;++i)if(e.chain.nodes[i].nr.residual.correction.extendedControls())return true;
+        return false;});
+    const int version=std::max(minimumVersion, correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -607,6 +614,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
             o << ' ' << (n.videoHdr.enabled ? 1 : 0) << ' ' << n.videoHdr.contrast << ' ' << n.videoHdr.saturation << ' '
               << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits << ' ';
             if(version>=3)o<<int(n.nr.sizePolicy)<<' ';
+            if(version>=8){writeNrCorrection(o,n.nr.residual.correction,version>=9);o<<' ';}
             if (version>=2 && n.type == EffectType::Color) {
                 writeColorSettings(o, n.color, utf8(n.color.lutNameString()));
                 o << ' ';
@@ -641,7 +649,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > 7) { error = L"预设库格式或版本不支持"; return false; }
+    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > 9) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
     for (size_t i = 0; i < count; ++i) {
@@ -697,6 +705,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if(!(in>>size)||!pipeline::validNrSizePolicy(static_cast<pipeline::NrSizePolicy>(size))){error=L"预设库 NR 分辨率非法";return false;}
                 node.nr.sizePolicy=static_cast<pipeline::NrSizePolicy>(size);
             }
+            if(version>=8&&!readNrCorrection(in,node.nr.residual.correction,version>=9)){error=L"预设库 NR 调控参数损坏";return false;}
             if (version >= 2 && node.type == EffectType::Color) {
                 std::string lut;
                 if (!readColorSettings(in, node.color, lut, 19) ||
