@@ -16,7 +16,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 [下载 2.0.3 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3) · [完整更新（English / 中文）](docs/RELEASE_NOTES_2.0.3.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
-**本地开发进度，2026-10-05：** 此分支另含RTSS重启、自定义倍速、字幕、UI刷新、专业布局和全屏恢复修复，公开2.0.3包尚未包含。NR优化已实测保留核心复用、单NR缓存、空闲预热、暂停复用与限定组合的COMPUTE队列；多层低分辨率整链因整体收益小并改变画面已回退。[执行账本](docs/PERF_EXECUTION_NR_2026-10-04.md)记录数据和剩余节点，严重后台掉帧仍未解决，HDR/杜比PR继续暂缓。
+**本地开发进度，2026-10-05：** 此分支另含RTSS重启、自定义倍速、字幕、UI刷新、专业布局和全屏恢复修复，公开2.0.3包尚未包含。本机全部NR优化节点已有实测保留/拒绝处置：保留核心复用、单NR缓存、空闲预热、暂停复用、限定COMPUTE和NVENC导出调度；自动NR及先粗后细会改画面，只作可选。正常匹配对照单层原生NR约6.1ms，双NR+SR4K+DLSS2X整链减少3.52%，软件提交P99几乎未变。[执行账本](docs/PERF_EXECUTION_NR_2026-10-04.md)和[最终回归记录](docs/PERF_R0_ACCEPTANCE_2026-10-05.md)列明数据与限制。严重后台掉帧仍未确认根因；OBS游戏采集使用现有兼容模式，GPU界面捕获在封存基线也不稳定。HDR/杜比PR继续暂缓。
 
 ## 2.0.0 重点
 
