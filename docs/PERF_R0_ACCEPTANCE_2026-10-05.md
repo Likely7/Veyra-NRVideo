@@ -14,9 +14,9 @@
 
 尚未运行的检查不能提前标通过。可运行测试失败先保留证据并修复；不可通过的软件候选要回退。需要用户真实来源或主观画质的缺口单独列明。
 
-## 当前产品及已执行的功能回归
+## 早期R0产品及已执行的功能回归（按阶段记录，最新身份见文末）
 
-产品源码仍是 `e8f0bd1082293c88a3ca1db851667162e4cef7a9`，其后的提交只补文档/测试；当前 `B2d/veyra_qml_ui.exe` SHA256 `8c2276d68d15c2e4466befcf367439b7efc42c68defd5ef93182398c9e8d8a03`。实际NR原件 SHA256 `f95feb54137ea11979f9b4ec4f00afd84b5c98a5624d3388fbf6a87714a39fcc`，Lecram 310.8.3.0 / HashMismatch；不改字节、不冒充官方签名。Qt/FFmpeg/其他增强组件来自封存完整NVIDIA依赖。所有测试独立目录，末尾校验EXE/DLL/QML未改，未写入用户profile。
+该轮产品源码是 `e8f0bd1082293c88a3ca1db851667162e4cef7a9`，当时后续提交只补文档/测试；该轮 `B2d/veyra_qml_ui.exe` SHA256 `8c2276d68d15c2e4466befcf367439b7efc42c68defd5ef93182398c9e8d8a03`。实际NR原件 SHA256 `f95feb54137ea11979f9b4ec4f00afd84b5c98a5624d3388fbf6a87714a39fcc`，Lecram 310.8.3.0 / HashMismatch；不改字节、不冒充官方签名。Qt/FFmpeg/其他增强组件来自封存完整NVIDIA依赖。所有测试独立目录，末尾校验EXE/DLL/QML未改，未写入用户profile。
 
 | 检查 | 实际结果与证据 |
 |---|---|
@@ -55,7 +55,7 @@ S4完整候选对基线增强区间下降3.52%；同一B的DIRECT增强19.299ms�
 
 源码根因：PresentSink::shutdown未清空非拥有queue_；VideoPresenter随后释放该队列。下次initialize在交换链成功后才赋新queue_，中途失败导致shutdown向悬空旧queue_调用Signal。EngineController初始化及失败回滚缺停止检查，退出仍尝试向失效窗口建图。先封存当前回归工具/数据说明，再最小修复PresentSink清理及初始化失败、EngineController长调用返回后的取消检查；不修改NR算法、运行库或稳态调度。候选此时不可交付；所有退出场景和真实OBS检查尚待修复后验证。
 
-## OBS（尚待执行）
+## OBS执行起点（历史记录）
 
 OBS按官方32.1.2源码的portable配置及obs-websocket RPC1另写隔离驱动；只复制只读安装payload、临时认证服务，只选择本轮唯一标题的Veyra窗口，禁用桌面/麦克风输入和网络推流。仅待普通计时结束后执行正常录制、暂停恢复/缩放/全屏功能；未执行前无通过结论。
 
