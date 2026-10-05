@@ -38,6 +38,11 @@ def focus(hwnd,expected_pid):
     try:user.SetForegroundWindow(hwnd)
     finally:
         if attached:user.AttachThreadInput(current,foreground_thread,False)
+    # Activation can be dispatched to the other UI thread. Verify completion,
+    # rather than treating the immediately preceding HWND as a denied request.
+    deadline=time.monotonic()+2
+    while user.GetForegroundWindow()!=hwnd and time.monotonic()<deadline:
+        time.sleep(.02)
     return user.GetForegroundWindow()==hwnd
 
 def run():
