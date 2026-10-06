@@ -1,5 +1,6 @@
 #pragma once
 #include "veyra/engine/VideoHdrSettings.h"
+#include "veyra/engine/HdrOutputTuning.h"
 #include <cmath>
 #include <array>
 #include <cstdint>
@@ -293,6 +294,10 @@ struct EnhancementSettings {
     MotionSource srMotion=MotionSource::OpticalFlow;
     MotionSource nrMotion=MotionSource::OpticalFlow;
     VideoHdrSettings videoHdr;
+    // Custom: static HDR output tuning (see HdrOutputTuning.h). Both blocks are
+    // live: the curve reaches the present blit and the metadata the display.
+    HdrCurveSettings hdrCurve;
+    HdrMetadataSettings hdrMetadata;
     bool useHdrPreview(bool hdrInput,bool hdrDisplayActive)const{return (hdrInput||videoHdr.enabled)&&hdrDisplayActive&&!forceSdrPreview;}
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
     uint32_t videoSrQuality=0; // 0 DLSS SR; 1–4 RTX Video SR
@@ -365,6 +370,8 @@ struct EnhancementSettings {
         if(hdrOutputMode<HdrOutputMode::Hdr10||hdrOutputMode>HdrOutputMode::ScRgb)return "invalid HDR output mode";
         for(auto source:{fgMotion,srMotion,nrMotion})if(source<MotionSource::Zero||source>MotionSource::Automatic)return "invalid motion source";
         if(!videoHdr.valid())return "invalid RTX Video HDR parameters";
+        if(!hdrCurve.valid())return "invalid HDR curve parameters";
+        if(!hdrMetadata.valid())return "invalid HDR metadata parameters";
         auto range=[](float v,float hi){return std::isfinite(v)&&v>=0&&v<=hi;};
         if(auto error=protection.validate();!error.empty())return error;
         if(!revision)return "settingsRevision must be nonzero";

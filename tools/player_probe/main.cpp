@@ -725,14 +725,14 @@ int main(int argc, char** argv)
                 const bool clearPresent = GetEnvironmentVariableW(L"VEYRA_CLEAR_PRESENT", nullptr, 0) != 0;
                 if (!clearPresent) {
                     const UINT srvSlot = item.kind == 1 ? 0 : (1 + item.textureSlot);
-                    const float constants[8] = {
+                    const float constants[16] = {
                         static_cast<float>(workW), static_cast<float>(workH), 0, 0,
                         static_cast<float>(sink.width()), static_cast<float>(sink.height()), 0, 0 };
                     ID3D12DescriptorHeap* heaps[] = { presentPass.heap.Get() };
                     list->SetDescriptorHeaps(1, heaps);
                     list->SetGraphicsRootSignature(presentPass.rootSig.Get());
                     list->SetPipelineState(presentPass.pso.Get());
-                    list->SetGraphicsRoot32BitConstants(0, 8, constants, 0);
+                    list->SetGraphicsRoot32BitConstants(0, 16, constants, 0);
                     list->SetGraphicsRootDescriptorTable(1,
                         { presentPass.heap->GetGPUDescriptorHandleForHeapStart().ptr + srvSlot * presentPass.increment });
                     D3D12_VIEWPORT vp{ 0.0f, 0.0f,

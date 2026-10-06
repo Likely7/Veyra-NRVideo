@@ -8,6 +8,7 @@
 #include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/pipeline/NrTemporalPass.h"
 #include "veyra/pipeline/NrHoldPass.h"
+#include "veyra/pipeline/FramePacket.h" // ColorDescription, for the HDR display metadata
 
 // EnhanceGraph - the real unified processing graph (Playbook R3.2).
 // Chains, per real frame:
@@ -103,8 +104,15 @@ struct EnhanceGraphDesc {
     bool srUsesFlow()const{return engine::motionUsesFlow(srMotion);}
     bool nrUsesFlow()const{return engine::motionUsesFlow(nrMotion);}
     engine::VideoHdrSettings videoHdr;
+    // Custom: static HDR output tuning (see HdrOutputTuning.h). Both blocks are
+    // live: the curve reaches the present blit, the metadata the display.
+    engine::HdrCurveSettings hdrCurve;
+    engine::HdrMetadataSettings hdrMetadata;
+    // RTX Video HDR is an SDR -> HDR stage: it only ever runs for an SDR input,
+    // and an HDR source keeps the native HDR path (HDR10 / Dolby Vision) instead of
+    // being tone-mapped down first.
     bool hdrWorking() const {return hdrInput&&hdrOutput;}
-    bool convertVideoHdr() const {return videoHdr.enabled&&!hdrInput&&hdrOutput;}
+    bool convertVideoHdr() const {return videoHdr.enabled&&hdrOutput&&!hdrInput;}
     bool highQualityPresentation = false; // PS5 ordinary scaling, no AI SR
     bool rgbInput = false;       // allocate direct RGBA ingestion before NGX creation
     bool yuy2Input = false;      // packed Y0 U Y1 V -> linear FP16; never subsample to NV12
@@ -526,6 +534,13 @@ public:
     bool fgEnabled() const { return fgEnabled_; }
     bool hdrOutput() const { return desc_.hdrOutput; }
     bool videoHdrActive() const {return desc_.convertVideoHdr();}
+    // Custom: static HDR output tuning. The curve is read by the present blit,
+    // the metadata is sent to the display.
+    const engine::HdrCurveSettings& hdrCurve() const {return desc_.hdrCurve;}
+    const engine::HdrMetadataSettings& hdrMetadata() const {return desc_.hdrMetadata;}
+    // Colour description of the frame in flight, so the display metadata can fall
+    // back to the source's own MaxCLL / MaxFALL / mastering peak.
+    const pipeline::ColorDescription& sourceColor() const {return lastSourceColor_;}
     bool hdr10Output() const { return desc_.hdrOutput && (desc_.enableFg||desc_.hdrOutputMode==engine::HdrOutputMode::Hdr10); }
     DXGI_FORMAT outputFormat() const { return hdr10Output()?DXGI_FORMAT_R10G10B10A2_UNORM:desc_.hdrOutput?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM; }
     bool highQualityPresentation() const { return desc_.highQualityPresentation; }
@@ -824,6 +839,7 @@ private:
     uint32_t diagnosticFlowPerf_=~0u;
     std::vector<uint8_t> lumaSample_;
     std::vector<double> lumaHistogram_=std::vector<double>(256,0.0);
+    pipeline::ColorDescription lastSourceColor_{};
     double prevPtsMs_ = -1.0;
     bool prevValid_ = false;
     bool fgHistorySkipped_ = false;

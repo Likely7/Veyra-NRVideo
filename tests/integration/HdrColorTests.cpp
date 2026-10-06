@@ -41,6 +41,7 @@ int wmain(int argc,wchar_t** argv){
  for(bool hlg:{false,true})for(bool native:{false,true})for(bool planar:{false,true})for(bool full:{false,true}){
   pipeline::EnhanceGraph graph(ctx,ring);pipeline::EnhanceGraphDesc gd;
   gd.sourceWidth=gd.workWidth=64;gd.sourceHeight=gd.workHeight=32;gd.enableNr=gd.enableFg=gd.enableSr=false;gd.noFeatures=true;gd.hdrInput=true;gd.hdrOutput=native;
+  gd.hdrOutputMode=engine::HdrOutputMode::ScRgb; // this case reads linear FP16; HDR10 is checked separately above
   if(!graph.initialize(gd)||!graph.createViews())return 3;
   AVFrame* f=av_frame_alloc();f->width=64;f->height=32;f->format=planar?AV_PIX_FMT_YUV420P10LE:AV_PIX_FMT_P010;f->color_range=full?AVCOL_RANGE_JPEG:AVCOL_RANGE_MPEG;f->colorspace=AVCOL_SPC_BT2020_NCL;f->color_trc=hlg?AVCOL_TRC_ARIB_STD_B67:AVCOL_TRC_SMPTE2084;f->color_primaries=AVCOL_PRI_BT2020;
   if(av_frame_get_buffer(f,32)<0)return 4;

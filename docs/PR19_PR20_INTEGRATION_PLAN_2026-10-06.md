@@ -25,4 +25,36 @@
 
 ## 实际进度
 
-开工保全已完成，guard和计划已建立。产品审查、适配及本轮构建/测试尚未完成。
+开工保全已完成，guard和计划已建立。PR20已在隔离分支按原head合并；PR19合并待验证提交。原19有三项内容冲突（catalog、PresetLibrary、VideoPresenter），已保留主线NR/Flow格式和暂停缓存接口逐项解决。新增HDR为library v11 / session v6，旧v8/9 NR及v10 Flow不变；新HDR另存.hdr-output兄弟文件，旧配置原字节保留。
+
+HDR10图输出是已经编码的PQ BT.2020，原PR却当线性scRGB处理。已改为仅调优时解PQ到线性nits、按亮度映射并保持signed RGB比例、再编码PQ；scRGB直接在线性域处理。强度/显示峰值只在最终presenter解析一次，初始化与live更新一致；自动峰值按当前输出monitor缓存/刷新，SDR和默认关闭路径不查询峰值或发送新metadata。metadata和曲线默认关闭，标准档保持原样，避免新hint让旧HDR用户的显示器行为改变。可选HDR10 hint不保证Windows转发或显示器使用，界面改为真实启用状态。
+
+修复metadata按source epoch/SDR/close清空、同epoch保留可选源字段、合法MaxFALL≤MaxCLL与DXGI亮度单位、失败限频并记录HRESULT、resize重发。暂停保留帧cache加入实际显示曲线，live编辑能立即重绘；旧player_probe的PresentBlit常量补满16，防未初始化范围。额外测试接点仅HdrColorTests/HdrNativeRoundTripCases的显式输出格式，避免把现行默认HDR10当FP16读回，产品的默认格式没有为测试改变。
+
+build-review-v1因新增metadata状态缺显式HdrOutputTuning include失败，修正后v2/v3标准构建通过。units-review-v1的翻译上下文合并遗漏off/play ctx，旧关闭被翻成Close；按(zh,ctx)重合并后units-review-v2四目标全通过。hdr-review-v1的新真实HDR输出检查通过，旧HDR色彩夹具16例失败，日志证明其“FP16”分支却实际请求默认HDR10；补显式ScRgb后hdr-review-v2两目标全通过，原失败日志不改。
+
+RemotePlay-off-v1在CMake生成阶段失败：Moonlight/Xbox独立使用C源码，但C语言原来只在PS5依赖启用时初始化。将project语言显式声明C/CXX/RC后v2全构建通过。末次自审发现ResizeBuffers保留swapchain对象，而原refresh把metadataSent清零，紧接着关metadata时无法清除旧hint；改成dirty状态请求重发、保留已发送状态，增加真实DXGI resize→disable用例，接受/清除HRESULT均0。这个问题在合并前修复并重新构建/验证，不称未经执行的旧版对比通过。
+
+## 最终定向验证
+
+统一前缀 E:/项目/Veyra；日志均在logs/pr19-pr20-20261006，逐命令收据包含exit、时间及实际EXE SHA。GPU场景顺序执行、无压力负载；每测试进程≤300秒，构建≤900秒。
+
+| 实际命令（python -B scripts/acceptance/ 前缀） | 结果与证据 |
+| --- | --- |
+| pr19-pr20-build.py build-final-v6 +11目标 | 生产QML、HDR/预设/链/i18n、导出、AMD图/ABI及player_probe通过 |
+| pr19-pr20-build.py build-hdr-resize-v8 veyra_hdr_output_tuning_gpu_tests | 最终resize诊断补充目标通过；生产输入不变 |
+| pr19-pr20-build.py build-remote-off-v3 --remote-off | RemotePlay关闭的真实生产QML构建通过，Moonlight/Xbox保留 |
+| pr19-pr20-tests.py units-final-v4 units | HDR124、效果链239、预设482项PASS；i18n 0 failures |
+| pr19-pr20-tests.py hdr-final-v4 hdr | 新HDR GPU23项及现有HDR色彩目标通过；无D3D12 ERROR/CORRUPTION |
+| pr19-pr20-tests.py graph-final-v1 graph | 7例AMD共享合成器identity回归通过，四层/temporal最大码值差0；不是HIP推理 |
+| pr19-pr20-tests.py abi-final-v1 abi | lmxxf ABI/identity 62项通过；拒绝输入夹具的ERROR日志是预期结果 |
+| pr19-pr20-tests.py worker-stack-final-v1 field-stack-hevc | 真子进程双层NR+HEVC完成source=encoded=60，ffprobe60帧 |
+| pr19-pr20-ui.py gui-export-final-v1 export | 生产QML NR关闭/单层/双层风格1+2/NR+4K四导出均60帧，ffprobe核对；30.375秒 |
+| pr19-pr20-ui.py hdr-ui-final-v2 hdr hdr-final-profile | 七档HDR、手动/非法值、NR5风格2自动调控、Chain+Flow/Chain-only及节点预设保存；ProPage与SettingsPage绑定通过，14.375秒 |
+| pr19-pr20-ui.py hdr-ui-restart-final-v2 restore hdr-final-profile | 真进程重启、列表/节点独立恢复、预设应用、未勾选节奏保留及两页绑定通过，13.937秒 |
+
+最终生产EXE SHA256 `d8803feb58a60a3cecc32641c3851b03c3e56059f1eef28dd13a1ad169e1a701`。标准/RemotePlay-off构建、测试依赖均沿用已验Qt6.8.3/MSVC14.44/带PS5 slice补丁FFmpeg，不引入新SDK或运行库。真实UI为自有ui-app及新profile，加载当前源码QML；测试Loader在finally恢复，不改用户配置。旧GUI回执、全部失败回执及子进程日志保留。
+
+新HDR灰阶knee误差scRGB0.0779% / HDR10 0.4415%，保持单调、有界，关闭/0%原像素精确一致，图/导出surface原字节不变。BT.2020色块归一化RGB误差scRGB0.00013806 / HDR10 0.00101177，负scRGB分量保留。上述是GPU/DXGI像素回读，不是物理显示器亮度/色差测量。系统报告240nit只显示为系统信息，不作为真实峰值仪器验收。HDR10 metadata接口可接受不证明Windows转发/屏幕应用；Microsoft明确提示其可能被忽略，见[SetHDRMetaData](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_5/nf-dxgi1_5-idxgiswapchain4-sethdrmetadata)及[HDR10单位](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10)。
+
+本轮自审结论：两PR可在上述适配后整合；保留PR19/20作者原始head作main祖先，不对贡献者分支force push。先前OBS repaint、Native多层导出、AMD上下文合成修复保留；RX9000实卡可用性来自用户本轮反馈，本机是RTX5070/诊断identity，未重新进行AMD HIP/全部RX9000或物理HDR/其他显卡验证。既有PR13/14仍暂缓，无新Release或v2.0.4资产改动。最终源码/证据冻结及main/远端状态以logs/.../tested-inputs.json、main-advance.json、remote-after.json为准；下方记录实际合并结果。

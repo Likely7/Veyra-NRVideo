@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.0.4 LANGUAGES CXX RC)
+project(veyra VERSION 2.0.4 LANGUAGES C CXX RC)
+# Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
 set(VEYRA_DISPLAY_VERSION "2.0.4" CACHE STRING "Human-readable version string")
@@ -1156,6 +1157,13 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_compile_options(veyra_vfg_export_probe PRIVATE /utf-8)
   target_link_libraries(veyra_vfg_export_probe PRIVATE veyra_engine)
   add_executable(veyra_preset_library_tests tests/unit/PresetLibraryTests.cpp src/engine/PresetLibrary.cpp src/engine/EffectChain.cpp)
+target_link_options(veyra_preset_library_tests PRIVATE /STACK:33554432) # Preset apply recurses over 21 KB ChainConfiguration frames; the default 1 MB stack is too close to the edge.
+add_executable(veyra_hdr_tuning_tests tests/unit/HdrOutputTuningTests.cpp src/engine/PresetLibrary.cpp src/engine/EffectChain.cpp)
+target_compile_features(veyra_hdr_tuning_tests PRIVATE cxx_std_20)
+target_include_directories(veyra_hdr_tuning_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# veyra_base carries /utf-8 and NOMINMAX (PresetLibrary.cpp has Chinese literals and uses std::max).
+target_link_libraries(veyra_hdr_tuning_tests PRIVATE veyra_base)
+target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_features(veyra_preset_library_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_preset_library_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_preset_library_tests PRIVATE veyra_base)
@@ -1231,6 +1239,10 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_link_libraries(veyra_popup_selector_tests PRIVATE veyra_base comctl32)
   add_dependencies(veyra_engine veyra_shader_hdr_video_sr veyra_shader_present_motion veyra_shader_present_blit)
   add_executable(veyra_hdr_color_tests tests/integration/HdrColorTests.cpp)
+  add_executable(veyra_hdr_output_tuning_gpu_tests tests/integration/HdrOutputTuningGpuTests.cpp)
+  target_compile_features(veyra_hdr_output_tuning_gpu_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_hdr_output_tuning_gpu_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_hdr_output_tuning_gpu_tests PRIVATE veyra_engine)
   add_executable(veyra_cpu_yuv_upload_tests tests/integration/CpuYuvUploadTests.cpp)
   target_compile_features(veyra_cpu_yuv_upload_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_cpu_yuv_upload_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

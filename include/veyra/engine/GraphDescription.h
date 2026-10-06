@@ -103,6 +103,9 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.additionalColors=settings.additionalColors;
     desc.additionalColorCount=settings.additionalColorCount;
     desc.videoHdr=settings.videoHdr;
+    // Custom: static HDR output tuning (present blit curve + display metadata).
+    desc.hdrCurve=settings.hdrCurve;
+    desc.hdrMetadata=settings.hdrMetadata;
     desc.hdrOutputMode=settings.hdrOutputMode;
     desc.fgMotion=settings.fgMotion;desc.srMotion=settings.srMotion;desc.nrMotion=settings.nrMotion;
     desc.settingsRevision=settings.revision;

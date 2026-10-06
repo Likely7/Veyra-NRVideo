@@ -511,12 +511,14 @@ ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     c.opticalFlowBackend = s.opticalFlowBackend; c.amdFlowHalfResolution = s.amdFlowHalfResolution;
     c.nrPolicy = s.nrPolicy;
     c.hdrOutputMode=s.hdrOutputMode;c.fgMotion=s.fgMotion;c.srMotion=s.srMotion;c.nrMotion=s.nrMotion;
+    c.hdrCurve=s.hdrCurve;c.hdrMetadata=s.hdrMetadata;
     return c;
 }
 
 void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.nrPolicy = nrPolicy;
     s.hdrOutputMode=hdrOutputMode;s.fgMotion=fgMotion;s.srMotion=srMotion;s.nrMotion=nrMotion;
+    s.hdrCurve=hdrCurve;s.hdrMetadata=hdrMetadata;
     s.srTarget = srTarget; s.videoSrQuality = videoSrQuality;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
     s.vfgQuality=vfgQuality;
@@ -540,7 +542,14 @@ bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
     return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality &&
         fgBackend == other.fgBackend && vfgQuality == other.vfgQuality && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&
+        // The author's own rendering globals had the same blind spot: a change to
+        // the HDR output mode or to a motion source compared equal, so
+        // persistSession() took its early return and the choice was lost on the
+        // next start (field report: those two never came back).
+        hdrOutputMode == other.hdrOutputMode && fgMotion == other.fgMotion &&
+        srMotion == other.srMotion && nrMotion == other.nrMotion &&
         selectedNr == other.selectedNr && selectedColour == other.selectedColour &&
+        hdrCurve == other.hdrCurve && hdrMetadata == other.hdrMetadata &&
         ((!editor && !other.editor) || (editor && other.editor && *editor == *other.editor));
 }
 

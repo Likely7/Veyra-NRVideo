@@ -405,7 +405,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         }
         veyra::log::info("graph","diagnostic SR motion override active; no product entry point enables this");
     }
-    desc_ = desc;tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
+    desc_ = desc;lastSourceColor_={};tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
     if(desc.videoSrQuality>engine::kVideoSrFsr){veyra::log::error("graph",std::format("invalid video SR quality value={}",desc.videoSrQuality));return false;}
     srcW_ = desc.sourceWidth;
     srcH_ = desc.sourceHeight;
@@ -1895,6 +1895,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         return false;
     }
     const auto resolved=resolveFrameColor(*frame,color?*color:ColorDescription{});
+    lastSourceColor_=resolved;
     if(resolved.isHdrPath()&&!desc_.hdrOutput&&!toneMapPeakNits_){
         const auto peak=hdrToneMapPeak(resolved);toneMapPeakNits_=peak.nits;
         log::info("hdr-tone-map",std::format("method=BT2390-luminance sourcePeakNits={} peakSource={} targetPeakNits=203 blackNits=0 gamut=neutral-ray-soft-knee staticPerGraph=1",peak.nits,peak.source));
@@ -3089,6 +3090,12 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(!pausedNrResidualOnly_)pausedNrCacheValid_=false;
     lastAppliedSettings_=s;
     desc_.videoHdr=s.videoHdr;
+    // The static HDR output tuning is live - the present blit reads the curve and
+    // the presenter sends the metadata - so a change has to reach desc_ here. It is
+    // not part of the rebuild decision.
+    // Keep the same baseline at initialization and live updates. Resolution
+    // happens once in VideoPresenter, which knows the actual output monitor.
+    desc_.hdrCurve=s.hdrCurve;desc_.hdrMetadata=s.hdrMetadata;
     if(!(s.color==desc_.color)){
         desc_.color=s.color;
         if(nodeColorInstances_[0])nodeColorInstances_[0]->refresh(s.color);

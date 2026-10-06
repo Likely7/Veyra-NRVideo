@@ -22,6 +22,7 @@
 #include <cstring>
 #include <cmath>
 #include <format>
+#include <limits>
 #include <thread>
 #include <vector>
 
@@ -62,9 +63,12 @@ std::string hrName(HRESULT hr){return std::format("0x{:08X}",unsigned(hr));}
 // char via std::string(w.begin(),w.end()), which the current MSVC STL rejects.
 std::string narrowUtf8(const std::wstring& w){
     if(w.empty()) return {};
+    if(w.size()>size_t(std::numeric_limits<int>::max()))return "[log text exceeds Win32 length limit]";
     const int len=WideCharToMultiByte(CP_UTF8,0,w.data(),static_cast<int>(w.size()),nullptr,0,nullptr,nullptr);
+    if(len<=0)return "[UTF-8 conversion failed]";
     std::string out(len,'\0');
-    WideCharToMultiByte(CP_UTF8,0,w.data(),static_cast<int>(w.size()),out.data(),len,nullptr,nullptr);
+    if(WideCharToMultiByte(CP_UTF8,0,w.data(),static_cast<int>(w.size()),out.data(),len,nullptr,nullptr)!=len)
+        return "[UTF-8 conversion failed]";
     return out;
 }
 

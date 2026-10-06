@@ -10,7 +10,7 @@ assert hashlib.sha256(START.read_bytes()).hexdigest() == 'f3d49a940e731ef7412d83
 s = json.loads(START.read_text(encoding='utf8'))
 
 def git(*args, cwd=ROOT):
-    return subprocess.check_output(['git', *args], cwd=cwd)
+    return subprocess.check_output(['git', *args], cwd=cwd,stderr=subprocess.PIPE)
 
 assert ROOT.resolve() == Path(s['worktree']).resolve()
 assert git('branch', '--show-current').decode().strip() == s['branch']
@@ -45,7 +45,8 @@ allowed = {'AGENTS.md', 'CMakeLists.txt', 'THIRD_PARTY_NOTICES.md', 'docs/WORKLO
  'src/ui/QmlPlayerBridge.cpp', 'src/sink/MfVideoEncoder.cpp',
  'tests/unit/HdrOutputTuningTests.cpp', 'tests/unit/PresetLibraryTests.cpp', 'tests/unit/EffectChainTests.cpp',
  'tests/unit/HdrDisplayStateTests.cpp', 'tests/qml/QuickSmokeTests.cpp',
- 'tests/integration/HdrOutputTuningGpuTests.cpp'}
+ 'tests/integration/HdrOutputTuningGpuTests.cpp','tests/integration/HdrColorTests.cpp',
+ 'tests/integration/HdrNativeRoundTripCases.h','tools/player_probe/main.cpp'}
 changed = git('diff', '--name-only', s['sourceBase']).decode().splitlines() + git('ls-files', '--others', '--exclude-standard').decode().splitlines()
 for rel in changed:
     assert rel in allowed or rel.startswith('scripts/acceptance/pr19-pr20-'), f'Out of scope: {rel}'

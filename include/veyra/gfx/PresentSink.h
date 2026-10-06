@@ -32,6 +32,16 @@ public:
     // on the graph owner every 2 s under HDR (sweep 2026-09-22 A1).
     static std::optional<bool> queryHdrDisplayActive(HWND,HMONITOR* queriedMonitor=nullptr);
     static double displayRefreshFps(HWND);
+    // Custom: what the panel itself reports through DXGI. Used to default the HDR
+    // tuning's display peak ("0 = ask the system") and to show the user the values
+    // the system claims, so a wrong guess can be corrected by hand.
+    struct DisplayPeakInfo {
+        unsigned peakNits = 0;        // small-area peak
+        unsigned fullFrameNits = 0;   // sustained full-screen
+        double minNits = 0.0;         // black level
+        bool valid = false;
+    };
+    static DisplayPeakInfo queryDisplayPeak(HWND);
     PresentSink() = default;
     ~PresentSink();
 
@@ -120,6 +130,9 @@ public:
     bool tearingSupported() const { return tearingSupported_; }
     HWND hwnd() const { return hwnd_; }
     IDXGISwapChain3* swapChain() const { return swapChain_.Get(); }
+    // Custom: HDR10 static metadata lives on IDXGISwapChain4. Queried lazily and
+    // re-queried whenever the swap chain is recreated; null when unsupported.
+    IDXGISwapChain4* swapChain4();
     XessPresenter* xess() const { return xess_.get(); }
     bool xessFailed() const { return xessFailed_; }
 
@@ -159,6 +172,7 @@ private:
     ID3D12CommandQueue* queue_ = nullptr;
     ComPtr<IDXGIFactory2> factory_;
     ComPtr<IDXGISwapChain3> swapChain_;
+    ComPtr<IDXGISwapChain4> swapChain4_; // custom: cached QI for SetHDRMetaData
     std::unique_ptr<XessPresenter> xess_;
     ComPtr<ID3D12Resource> backBuffers_[3];
     UINT backBufferIndex_ = 0;

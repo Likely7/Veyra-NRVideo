@@ -52,6 +52,8 @@ inline int run(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlotRing& 
         }
         pipeline::EnhanceGraph graph(ctx,ring);pipeline::EnhanceGraphDesc gd;gd.sourceWidth=gd.workWidth=64;gd.sourceHeight=gd.workHeight=16;
         gd.hdrInput=gd.hdrOutput=true;gd.noFeatures=gd.noNgx=true;gd.enableNr=gd.enableSr=false;gd.enableFg=packed;
+        // Packing is an explicit output contract since HdrOutputMode was added.
+        gd.hdrOutputMode=packed?engine::HdrOutputMode::Hdr10:engine::HdrOutputMode::ScRgb;
         pipeline::EnhanceGraph::FrameOutputs out;std::vector<float> output;
         bool ok=graph.initialize(gd)&&graph.createViews()&&graph.process(f,0,true,out,1)&&read(ctx,ring,graph.videoFrameResource(out.videoSlot),output);
         if(ok&&!planar){

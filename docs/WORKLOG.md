@@ -1,6 +1,18 @@
 # Veyra 工作记录
 
+## 2026-10-06 PR19/20 最终适配验收
+
+已完成两个PR原head审查和必要适配；最终生产11目标build-final-v6与RemotePlay-off-v3全部exit0，补resize夹具目标v8 exit0。units-final-v4：HDR124/EffectChain239/PresetLibrary482 PASS及i18n0 failures；hdr-final-v4：真实呈现23检查与现有HDR颜色目标全部0 failures、无D3D12 ERROR/CORRUPTION，knee最大误差scRGB0.0779% / HDR10 0.4415%，保色/负scRGB/关闭及强度0精确恒等/暂停live重绘/导出surface不变通过。新增DXGI resize→disable已实际resize到96像素buffer、SetHDRMetaData与NONE清除均HRESULT0，不冒充显示器使用。
+
+RemotePlay-off-v1 CMake生成失败，C语言原来只随PS5依赖初始化，但Moonlight/Xbox独立有C源码；显式project C/CXX/RC后v2、最终v3全生产构建通过。末次自审修复metadataSent在ResizeBuffers被清零导致旧hint无法清除的问题，保留已发送状态并用metadataDirty要求重发；build-final-v6及hdr-final-v4验证。其余v1编译/翻译ctx/旧HDR夹具失败按上条保留；一次文档apply_patch错误锚点原子失败、rg Windows通配路径查询失败，均更正后重新执行，未计作产品通过或改旧证据。
+
+graph-final-v1：AMD共享合成7例最大码值差0；abi-final-v1：62检查0失败，均RTX identity诊断，不是HIP。worker-stack-final-v1实际Native双层NR+HEVC source=encoded=60。gui-export-final-v1实际QML四次NR关闭/单层/风格1+2双层/NR+4K H264全部60帧，ffprobe核对，30.375秒；export-worker逐层Native与自动调控日志保留。hdr-ui-final-v2及restart-final-v2实际ProPage/SettingsPage、七档、手动/非法值、NR5风格2自动调控、Flow节奏、部分范围及列表/节点独立保存/重启恢复全部通过，14.375/13.937秒。所有测试进程≤300秒，GPU场景顺序执行；没有压力或竞争负载。
+
+EXE SHA d8803feb58a60a3cecc32641c3851b03c3e56059f1eef28dd13a1ad169e1a701，运行组件/Qt/MSVC/带PS5 slice补丁FFmpeg沿用；源码及SDK隔离。完整命令、失败、固定PR heads、Microsoft依据及限制见PR19_PR20_INTEGRATION_PLAN_2026-10-06.md；工作树和archives/build/tests/logs/tmp/verify均E:/项目/Veyra下pr19-pr20-20261006，用户profile/24旧工作树/4旧发布ZIP保留。用户确认9000系NR有效，本机未另做AMD HIP或物理HDR验收，不外推型号。新HDR曲线/metadata默认关闭。本次不发Release/改v2.0.4资产、不代发消息、不关机；最终source/证据冻结、main合并与远端状态以同任务tested-inputs/main-advance/remote-after收据及后续合并记录为准。
+
 ## 2026-10-06 PR19/20 审查与适配开工
+
+隔离分支0797888记录开工规则，随后PR20原head合并；PR19的catalog/PresetLibrary/VideoPresenter冲突按本轮方案解决，尚未合并main。build-review-v1因为我新增metadata状态忘记明确include失败，已补include；v2/v3生产构建exit0。units-review-v1翻译上下文合并遗漏ctx导致Off→Close，重新按(zh,ctx)合并后v2的HDR/EffectChain/PresetLibrary/i18n四测试全exit0。hdr-review-v1的新实际presenter像素测试通过，旧HDR夹具错误把现行默认HDR10读作FP16，16例失败；仅为其FP16场景补显式ScRgb后hdr-review-v2两GPU目标全部exit0。失败回执/日志原字节保留，未把修夹具冒充产品HDR修复。源switch/metadata/初始与live解析/暂停cache/16常量及默认opt-in适配详PR19_PR20方案，最终构建/RemotePlay关闭/GUI与NR回归未完成。
 
 用户确认测试的9000系NR正常，授权检查PR19/20并适配合并；从已交付63ce396开E盘pr19-pr20-20261006工作树，保留OBS/多NR导出/AMD共享合成修复。只推进这两个PR，不复活暂缓PR13/14；无新Release/贡献者消息/关机请求。bootstrap保存24原工作树、四原发布ZIP身份、两PR固定head及原diff/元数据，source-before.bundle已verify；不可变start SHA f3d49a940e731ef7412d83666525cc37f08464f7a48ad226b9f9a286e947c771。guard与本轮方案新建，旧baseline不改。本轮archives/build/tests/logs/tmp/verify/test-packages均E:/项目/Veyra下pr19-pr20-20261006；产品审查与测试尚未完成。首轮apply_patch因WORKLOG标题不匹配原子失败，未改变文件；更正锚点后继续。
 

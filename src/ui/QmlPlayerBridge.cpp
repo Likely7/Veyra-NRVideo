@@ -1,4 +1,6 @@
 #include "veyra/ui/QmlPlayerBridge.h"
+#include "veyra/gfx/PresentSink.h"
+#include <QElapsedTimer>
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/ui/QmlExportQueueModel.h"
 #include "veyra/ui/UiLanguage.h"
@@ -563,6 +565,12 @@ struct QmlPlayerBridge::Impl {
         current.initialized[size_t(chain.mode)] = true;
         current.configurations[size_t(chain.mode)] = engine::ChainConfiguration::capture(
             activeRuntime(), facade.pendingSettings(), nrIndex(), colourIndex());
+        // Custom: the static HDR output tuning does not travel through the runtime
+        // configuration yet, so take it straight from the draft globals at the point
+        // the session is built. Without this the values took effect and then came
+        // back as defaults on the next start.
+        current.configurations[size_t(chain.mode)].hdrCurve = draftGlobals.hdrCurve;
+        current.configurations[size_t(chain.mode)].hdrMetadata = draftGlobals.hdrMetadata;
         if (chain.mode == engine::ChainMode::Node) {
             auto document = std::make_shared<engine::NodeEditorDocument>();
             document->nodes = chain; document->layout = layout; document->globals = draftGlobals;
@@ -615,13 +623,24 @@ struct QmlPlayerBridge::Impl {
     // The chain is the source of truth for the stage settings; every commit
     // writes it back over the struct so the two can never disagree.
     bool commit(engine::EnhancementSettings settings) {
+        // Custom: the static HDR output tuning belongs to neither transaction, so
+        // keep the draft globals in sync in BOTH modes. Only the node branch below
+        // refreshed them, which is why a change made in list mode took effect and
+        // then came back as a default after a restart (the session capture reads the
+        // tuning from the draft globals).
+        draftGlobals.hdrCurve = settings.hdrCurve;
+        draftGlobals.hdrMetadata = settings.hdrMetadata;
         if (chain.mode == engine::ChainMode::Node) {
             const auto previous = facade.pendingSettings();
             const auto oldGlobals = draftGlobals;
             draftGlobals = engine::ChainGlobalSettings::capture(settings);
             // Non-node controls (e.g. audio) may still change while a wire is
             // incomplete. Keep runtime globals separate from that transaction.
-            engine::ChainGlobalSettings::capture(previous).apply(settings);
+            // Custom: HDR brightness is one of those controls - it is not part of a
+            // node edit, so the restore below must not put the previous value back
+            // (field report: a new target peak took effect and then reverted on the
+            // next start, because this line overwrote it before the session was
+            // captured).
             facade.setPending(settings);
             if (revalidate(true, &previous)) return true;
             draftGlobals = oldGlobals; facade.setPending(previous);
@@ -3861,6 +3880,131 @@ bool QmlPlayerBridge::videoHdr() const {
     const auto* node = impl_->chain.firstOf(engine::EffectType::VideoHdr);
     return node && node->enabled;
 }
+// Custom: static HDR output tuning. Globals, not chain nodes, and every field is
+// live (the curve is read by the present blit, the metadata sent to the display),
+// so a change never rebuilds the graph - but it does have to reach the session
+// file, which has no other trigger for a global change.
+int QmlPlayerBridge::hdrCurveStrength()const{return int(settings().hdrCurve.strengthPercent);}
+void QmlPlayerBridge::setHdrCurveStrength(int percent){
+    auto s=settings();
+    const unsigned clamped=unsigned(std::clamp(percent,0,200));
+    if(s.hdrCurve.strengthPercent==clamped)return;
+    s.hdrCurve.strengthPercent=clamped;
+    commitHdrTuning(std::move(s));
+}
+int QmlPlayerBridge::hdrDisplayPeakNits()const{return int(settings().hdrCurve.displayPeakNits);}
+void QmlPlayerBridge::setHdrDisplayPeakNits(int nits){
+    auto s=settings();
+    // 0 = ask the system; anything else has to be a plausible panel peak.
+    const int clamped=nits<=0?0:std::clamp(nits,100,10000);
+    if(s.hdrCurve.displayPeakNits==unsigned(clamped))return;
+    s.hdrCurve.displayPeakNits=unsigned(clamped);
+    commitHdrTuning(std::move(s));
+}
+QVariantMap QmlPlayerBridge::hdrDisplayInfo()const{
+    // This is read from QML bindings (the peak row's hint text), so it must not do
+    // real work per call: building a DXGI factory and enumerating every adapter and
+    // output is far too heavy for something the snapshot signal can re-evaluate
+    // every frame. Cache it for a few seconds instead.
+    static QElapsedTimer cacheTimer;
+    static gfx::PresentSink::DisplayPeakInfo cached;
+    static HMONITOR cachedMonitor=nullptr;
+    HWND window=impl_->videoWindow;
+    if(!IsWindow(window)){
+        if(auto* focused=QGuiApplication::focusWindow())window=reinterpret_cast<HWND>(focused->winId());
+        else window=nullptr;
+    }
+    const auto monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST):MonitorFromPoint(POINT{0,0},MONITOR_DEFAULTTOPRIMARY);
+    if(!cacheTimer.isValid()||cacheTimer.elapsed()>5000||cachedMonitor!=monitor){
+        cached=gfx::PresentSink::queryDisplayPeak(window);cachedMonitor=monitor;
+        cacheTimer.restart();
+    }
+    return {{"valid",cached.valid},{"peakNits",int(cached.peakNits)},
+            {"fullFrameNits",int(cached.fullFrameNits)},{"minNits",cached.minNits}};
+}
+bool QmlPlayerBridge::hdrCurve()const{return settings().hdrCurve.enabled;}
+void QmlPlayerBridge::setHdrCurve(bool enabled){
+    auto s=settings();if(s.hdrCurve.enabled==enabled)return;s.hdrCurve.enabled=enabled;
+    commitHdrTuning(std::move(s));
+}
+QVariantMap QmlPlayerBridge::hdrCurveParams()const{
+    const auto& c=settings().hdrCurve;
+    return {{"shadowLiftEv100",int(c.shadowLiftEv100)},{"shadowRangeNits",int(c.shadowRangeNits)},
+            {"midGrayNits",int(c.midGrayNits)},{"highlightStartNits",int(c.highlightStartNits)},
+            {"rollOffPercent",int(c.rollOffPercent)},{"peakCapNits",int(c.peakCapNits)}};
+}
+bool QmlPlayerBridge::setHdrCurveParameter(const QString& key,double value){
+    if(!std::isfinite(value)||value<-10001||value>10001)return false;
+    auto s=settings();const auto v=int(std::lround(value));
+    if(key=="shadowLiftEv100"){if(v<-200||v>200)return false;s.hdrCurve.shadowLiftEv100=v;}
+    else if(key=="shadowRangeNits"){if(v<1||v>100)return false;s.hdrCurve.shadowRangeNits=unsigned(v);}
+    else if(key=="midGrayNits"){if(v<100||v>500)return false;s.hdrCurve.midGrayNits=unsigned(v);}
+    else if(key=="highlightStartNits"){if(v<0||v>2000)return false;s.hdrCurve.highlightStartNits=unsigned(v);}
+    else if(key=="rollOffPercent"){if(v<10||v>200)return false;s.hdrCurve.rollOffPercent=unsigned(v);}
+    else if(key=="peakCapNits"){if(v<0||v>4000)return false;s.hdrCurve.peakCapNits=unsigned(v);}
+    else return false;
+    if(!s.hdrCurve.valid())return false;
+    return commitHdrTuning(std::move(s));
+}
+bool QmlPlayerBridge::commitHdrTuning(engine::EnhancementSettings settings){
+    const auto curve=settings.hdrCurve;
+    const auto metadata=settings.hdrMetadata;
+    if(!impl_->commit(std::move(settings)))return false;
+    // Re-project first, then re-assert both copies the session capture reads:
+    // revalidate() rewrites the pending settings and the draft globals from the
+    // runtime configuration, which does not carry this block yet.
+    impl_->revalidate(true);
+    auto after=impl_->facade.pendingSettings();
+    after.hdrCurve=curve;after.hdrMetadata=metadata;
+    impl_->facade.setPending(after);
+    impl_->draftGlobals.hdrCurve=curve;impl_->draftGlobals.hdrMetadata=metadata;
+    impl_->persistSession();
+    emit settingsChanged();emit chainChanged();return true;
+}
+QString QmlPlayerBridge::hdrTuningPreset() const {
+    const auto& s=settings();
+    // hdrPresetMatches deliberately ignores the strength dial and the display peak:
+    // they only scale the baseline, so turning them keeps you on the same preset.
+    for(const auto& p:engine::kHdrTuningPresets)
+        if(engine::hdrPresetMatches(s.hdrCurve,s.hdrMetadata,p))return QString::fromLatin1(p.id);
+    return QStringLiteral("custom");
+}
+bool QmlPlayerBridge::applyHdrTuningPreset(const QString& id){
+    for(const auto& p:engine::kHdrTuningPresets){
+        if(id!=QLatin1String(p.id))continue;
+        auto s=settings();
+        // Picking a preset replaces the baseline, not the two dials: how hard the
+        // user turned it (and which panel they told us about) must survive.
+        const auto strength=s.hdrCurve.strengthPercent;
+        const auto displayPeak=s.hdrCurve.displayPeakNits;
+        s.hdrCurve=p.curve;s.hdrMetadata=p.metadata;
+        s.hdrCurve.strengthPercent=strength;s.hdrCurve.displayPeakNits=displayPeak;
+        if(!s.hdrCurve.valid()||!s.hdrMetadata.valid())return false;
+        return commitHdrTuning(std::move(s));
+    }
+    return false;
+}
+bool QmlPlayerBridge::hdrMetadataEnabled()const{return settings().hdrMetadata.enabled;}
+void QmlPlayerBridge::setHdrMetadataEnabled(bool enabled){
+    auto s=settings();if(s.hdrMetadata.enabled==enabled)return;s.hdrMetadata.enabled=enabled;
+    commitHdrTuning(std::move(s));
+}
+QVariantMap QmlPlayerBridge::hdrMetadataParams()const{
+    const auto& m=settings().hdrMetadata;
+    return {{"masteringPeakNits",int(m.masteringPeakNits)},{"maxCllNits",int(m.maxCllNits)},
+            {"maxFallNits",int(m.maxFallNits)}};
+}
+bool QmlPlayerBridge::setHdrMetadataParameter(const QString& key,double value){
+    if(!std::isfinite(value)||value<0||value>10000)return false;
+    auto s=settings();const auto v=int(std::lround(value));
+    if(v<0||v>10000)return false;
+    if(key=="masteringPeakNits")s.hdrMetadata.masteringPeakNits=unsigned(v);
+    else if(key=="maxCllNits")s.hdrMetadata.maxCllNits=unsigned(v);
+    else if(key=="maxFallNits")s.hdrMetadata.maxFallNits=unsigned(v);
+    else return false;
+    if(!s.hdrMetadata.valid())return false;
+    return commitHdrTuning(std::move(s));
+}
 void QmlPlayerBridge::setVideoHdr(bool enabled) {
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
         if (impl_->chain.nodes[i].type == engine::EffectType::VideoHdr) {
@@ -3880,11 +4024,12 @@ QVariantMap QmlPlayerBridge::videoHdrParams() const {
     return {};
 }
 bool QmlPlayerBridge::setVideoHdrParameter(const QString& key, double value) {
-    if (!std::isfinite(value) || value < 0) return false;
+    if (!std::isfinite(value)) return false;
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i) {
         auto& node = impl_->chain.nodes[i];
         if (node.type != engine::EffectType::VideoHdr) continue;
         const auto before = node;
+        if (value < 0) return false;
         const auto v = unsigned(std::lround(value));
         if (key == "contrast") node.videoHdr.contrast = v;
         else if (key == "saturation") node.videoHdr.saturation = v;
@@ -5595,7 +5740,12 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
         // Keep the facade on accepted values until revalidate projects the new
         // document. Audio/non-chain preset fields are retained in this copy.
         engine::fromChain(impl_->activeRuntime(), settings);
+        // Custom: the static HDR output tuning rides in the globals block this call
+        // re-derives, so preserve the values this commit is carrying.
+        const auto keepCurve = settings.hdrCurve;
+        const auto keepMetadata = settings.hdrMetadata;
         engine::ChainGlobalSettings::capture(previous).apply(settings);
+        settings.hdrCurve = keepCurve; settings.hdrMetadata = keepMetadata;
     } else validation = engine::PresetLibrary::applyToChain(entry, candidate, settings);
     if (!validation.accepted) { emit notice(uiText(validation.message), true); return false; }
     if (const auto error = settings.validate(); !error.empty()) {

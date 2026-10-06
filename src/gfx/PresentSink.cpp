@@ -67,6 +67,47 @@ std::optional<bool> PresentSink::queryHdrDisplayActive(HWND window,HMONITOR* que
     return std::nullopt;
 }
 
+PresentSink::DisplayPeakInfo PresentSink::queryDisplayPeak(HWND window){
+    DisplayPeakInfo info{};
+    // Without a window (the UI asking before playback starts) answer about the
+    // primary monitor, which is what a fresh install would be showing on.
+    HMONITOR monitor=nullptr;
+    if(window){
+        MONITORINFOEXW mi{};mi.cbSize=sizeof(mi);
+        monitor=MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST);
+        if(!monitor||!GetMonitorInfoW(monitor,&mi))return info;
+    }else{
+        monitor=MonitorFromPoint(POINT{0,0},MONITOR_DEFAULTTOPRIMARY);
+    }
+    if(!monitor)return info;
+    // Called on demand (the user asking for the system value), so a fresh factory is
+    // fine here - no need to join the cached one the 2 s HDR poll uses.
+    ComPtr<IDXGIFactory1> factory;
+    if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))||!factory)return info;
+    for(UINT a=0;;++a){
+        ComPtr<IDXGIAdapter1> adapter;
+        if(factory->EnumAdapters1(a,&adapter)==DXGI_ERROR_NOT_FOUND)break;
+        if(!adapter)break;
+        for(UINT i=0;;++i){
+            ComPtr<IDXGIOutput> output;
+            if(adapter->EnumOutputs(i,&output)==DXGI_ERROR_NOT_FOUND)break;
+            if(!output)break;
+            DXGI_OUTPUT_DESC basic{};if(FAILED(output->GetDesc(&basic)))continue;
+            if(basic.Monitor!=monitor)continue;
+            ComPtr<IDXGIOutput6> advanced;if(FAILED(output.As(&advanced)))return info;
+            DXGI_OUTPUT_DESC1 desc{};if(FAILED(advanced->GetDesc1(&desc)))return info;
+            if(!std::isfinite(desc.MaxLuminance)||desc.MaxLuminance<100.0f||desc.MaxLuminance>10000.0f)return info;
+            info.peakNits=unsigned(std::lround(desc.MaxLuminance));
+            info.fullFrameNits=std::isfinite(desc.MaxFullFrameLuminance)&&desc.MaxFullFrameLuminance>0
+                ?unsigned(std::lround(std::min(desc.MaxFullFrameLuminance,10000.0f))):0;
+            info.minNits=std::isfinite(desc.MinLuminance)&&desc.MinLuminance>=0?desc.MinLuminance:0;
+            info.valid=info.peakNits>0;
+            return info;
+        }
+    }
+    return info;
+}
+
 double PresentSink::displayRefreshFps(HWND window){
     MONITORINFOEXW mi{};mi.cbSize=sizeof(mi);
     const auto monitor=MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST);
@@ -201,17 +242,17 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
             // Re-initializing the same backend (a settings change): the old
             // wrapper owns the window's swapchain slot until it is destroyed.
             for(auto& b:backBuffers_)b.Reset();
-            swapChain_.Reset();
+            swapChain_.Reset();swapChain4_.Reset();
             xess_.reset();
         }
         for(auto& b:backBuffers_)b.Reset();
-        swapChain_.Reset();
+        swapChain_.Reset();swapChain4_.Reset();
         xess_=std::make_unique<XessPresenter>();
         if(!xess_->initialize(device,queue,factory_.Get(),hwnd_,scd,swapChain_.GetAddressOf(),desc.fgMultiplier,desc.xessLowLatencySleep)){
             // XeSS is an optional experimental presenter. A missing or
             // incompatible local runtime must not prevent basic playback.
             log::warn("present", "XeSS FG initialization failed; falling back to native presentation");
-            swapChain_.Reset();
+            swapChain_.Reset();swapChain4_.Reset();
             xess_.reset();
         }
     }
@@ -299,6 +340,12 @@ bool PresentSink::refetchBackBuffers()
     }
     backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
     return true;
+}
+
+IDXGISwapChain4* PresentSink::swapChain4(){
+    if(!swapChain_){swapChain4_.Reset();return nullptr;}
+    if(!swapChain4_&&FAILED(swapChain_.As(&swapChain4_)))swapChain4_.Reset();
+    return swapChain4_.Get();
 }
 
 void PresentSink::recreateSwapChain(UINT flags)
@@ -543,7 +590,7 @@ void PresentSink::shutdown()
         const ULONG rc = swapChain_->Release();
         log::info("present", std::format("sink-shutdown: swapchain pre-release refcount={} (2 = only our ComPtr + probe)", rc));
     }
-    swapChain_.Reset();
+    swapChain_.Reset();swapChain4_.Reset();
     xess_.reset();
     log::info("present", "sink-shutdown: sub-step window-destroy-last");
     if (hwnd_ != nullptr && !desc_.targetWindow) {
