@@ -597,4 +597,4 @@ RTX Video HDR 独立改动保留。用户已明确终止 NVIDIA FSR 4.1 实验�
 - 用户授权本地 `1.4.2beta` 内测群包，新增已核验的官方 TrueHDR 原件；未授权 GitHub push/Release 或 Agent 代发。便携包路径、哈希及解压后实测见 WORKLOG。实际 HDR 屏幕和 RTX30/40 HDR 仍待内测。
 
 所有新产物放 `E:/项目/Veyra/`，源码/文档留在隔离工作区；逐项结果以 [WORKLOG](WORKLOG.md) 为准。
-> 2026-10-06正式发布准备：用户已授权2.0.4公开发布、Discord/Ko-fi和原双QR、实测报告/群公告及发布核实后关机。当前工作树E:/项目/Veyra/worktrees/publish-2.0.4-20261006，473生产输入/已测EXE保持，远端README页头/Star History已合并。发布准备和实际远端结果以docs/PUBLISH_2.0.4_PLAN_2026-10-06.md及WORKLOG最新条目为准；此时尚未上传或正式发布。
+> 2026-10-06 2.0.4已正式发布：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.4 ，2026-10-06 09:58:03 Asia/Taipei（01:58:03Z），Release404229374为latest、非draft/prerelease。源码/tag为67b6dd63be6b797ca445ba810dad0227c890a98c；其后main只补发布回执。5项远端资产大小/SHA与本地一致，公开下载均HTTP206，SHA256SUMS全文一致；两包干净解压启动通过，473生产输入/已测EXE及原组件保持。README保留远端页头/Star History和原两个220宽QR，新增Discord及Ko-fi咖啡按钮。公告最终596字符；用户授权发布完成后关机。实际证据在E:/项目/Veyra/logs/publish-2.0.4-20261006/，详PUBLISH_2.0.4_PLAN与WORKLOG；真实Xbox/AMD/受影响采集卡等未验边界继续保留。

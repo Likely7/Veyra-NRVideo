@@ -8483,6 +8483,14 @@ Run takeover-20261005T061823Z-1ad4ac；logs/tests/tmp/archives 全在 E:/项目/
 `verify-merge.py pre-docs` 初次失败仅因桌面status默认折叠两个未追踪目录，而归档采用逐文件枚举；原失败JSON保留。修正为同样 --untracked-files=all后，`pre-docs-v2` exit0，两个目标工作树清洁，桌面HEAD/状态/未提交字节及其余14个工作树HEAD/状态/全部逐文件SHA保持。没有删除、移动或改变桌面文件。
 
 main后续仅更新AGENTS/CURRENT_STATUS/FIELD_FIXES/WORKLOG/本轮合并记录并提交，最后执行 `verify-merge.py final` 和合并后增量bundle核验，结果/最终main提交写入本轮logs与archives JSON。没有新产品改动或重新构建；依据刚才接管时实际通过的build-6、五测试、1578包载荷及七阶段真实播放计时，合并保持同一产品Git源码。没有push/Release/压力测试/用户配置变更/分支删除/旧UI删除；AMD/用户后台卡顿/暂停后新接OBS/其他RTX与主观画质缺口仍保留，等用户后续具体修复要求。
+## 2026-10-06 2.0.4 正式发布完成
+
+执行package-v1完整生成正式AMD/NVIDIA、应用源码、依赖源码及SHA256SUMS，全部CRC/逐文件SHA、runtime原字节/PE闭包/显卡分包通过；source-final.bundle验证通过。EXE仍d01329aa6d9fbd6ac2d1eee294782f4cb9d233490595ed2e3e1a9ea12c16b2d6，PE2.0.4.0。cold-v1两包新解压隔离profile、Windows-only PATH启动分别9.937/9.578秒正常退出、各26个Qt/FFmpeg模块由包内加载，ASS5事件/字体附件正常；原功能验收对应同一473生产输入，不重复无关GPU测试。包路径、5项大小/SHA详PUBLISH_2.0.4_PLAN第2节及logs/.../assets.json、stage-AMD/NVIDIA.json、cold-verify-results.json。
+
+main从0a4e761快进至67b6dd63be6b797ca445ba810dad0227c890a98c，v2.0.4指向同一发布源码，推送到nrvideo成功。gh release create --draft/5资产上传完成后，verify-release.py draft核对所有资产大小/服务器SHA、标签/main、README和正文通过，继而gh release edit --draft=false --latest。Release404229374于2026-10-06T01:58:03Z（Asia/Taipei09:58:03）正式发布为latest/non-prerelease：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.4 。public校验5项HTTP206/ZIP头与全SHA256SUMS、远端manifest digest和正文一致。草稿按tag的REST查询404，改为实际release ID读取，未误判发布失败或上传重复资产。
+
+GitHub markdown渲染/远端正文及两个README核对通过：远端页头/Star History保留、原两QR地址及各width=220保留、新Discord c9aREyMj8与官方Ko-fi咖啡按钮存在。最终公告596字符，完整文本releases/.../GROUP_ANNOUNCEMENT.txt，未代发任何群。末次guard保护其它工作区和原测试ZIP/14验收receipt，473输入保持；该回执只修改CURRENT_STATUS/WORKLOG/PUBLISH_PLAN并续推main，不修改v2.0.4/tagged source或已发布资产。关机在远端最终回执核查后安排，记录logs/.../shutdown.json；不声称尚未发生的断电已经完成。
+
 ## 2026-10-06 2.0.4 正式发布准备
 
 用户授权正式发布、Discord/Ko-fi及保留二维码、1000字内公告和发布后关机。本轮E盘路径为worktrees/releases/logs/tmp/verify/archives/tests下publish-2.0.4-20261006。未启动竞争/压力负载，不派子Agent；旧工作区、测试ZIP和运行组件保持。nrvideo远端main f652c93新增README页头/Star History，隔离分支merge7630268接入并保留；发布尚未进行，后续记录实际结果。
