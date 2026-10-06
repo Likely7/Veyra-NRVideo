@@ -801,7 +801,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/amd-nr-graph-test")
   file(WRITE "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp" "${_amd_nr_graph}")
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${VEYRA_AMD_NR_TEST_GRAPH_SOURCE}")
-  add_executable(veyra_amd_nr_graph_tests tests/integration/LmxxfNrGraphTests.cpp "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp")
+  add_executable(veyra_amd_nr_graph_tests tests/integration/LmxxfNrGraphTests.cpp src/engine/EffectChain.cpp "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp")
   target_compile_features(veyra_amd_nr_graph_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_amd_nr_graph_tests PRIVATE $<TARGET_PROPERTY:veyra_pipeline,INCLUDE_DIRECTORIES>)
   target_compile_definitions(veyra_amd_nr_graph_tests PRIVATE $<TARGET_PROPERTY:veyra_pipeline,COMPILE_DEFINITIONS>)

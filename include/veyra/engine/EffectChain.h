@@ -164,6 +164,7 @@ struct ChainExecutionRequest {
     pipeline::SrTarget srTarget = pipeline::SrTarget::Uhd4K;
     bool stillImage = false;
     bool exportJob = false;
+    bool amdNrExport = false; // bounded internal model input, full-size output
 };
 struct ChainExecutionStep {
     EffectType type = EffectType::NrEnhance;

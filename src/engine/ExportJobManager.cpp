@@ -1,4 +1,5 @@
 #include "veyra/engine/ExportJobManager.h"
+#include "veyra/engine/ExportFeaturePolicy.h"
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/VideoExportJob.h"
 #include "veyra/engine/ExportStreams.h"
@@ -135,12 +136,9 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     if(!p_->mapping)return fail(L"无法创建导出通信资源");
     p_->shared=static_cast<Shared*>(MapViewOfFile(p_->mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!p_->shared)return fail(L"无法映射导出通信资源");
     if(!std::isfinite(trimStartSeconds)||!std::isfinite(trimEndSeconds)||trimStartSeconds<0||trimEndSeconds<0||(trimEndSeconds>0&&trimEndSeconds<=trimStartSeconds))return fail(L"导出剪辑范围无效");
-    new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=settings;
-    // Export executes every NR at native resolution. The list UI keeps explicit
-    // layers even for a single NR, and its legacy summary may be stale. Freeze
-    // both representations from the same native chain before crossing processes.
-    s.settings.nrPolicy=pipeline::NrSizePolicy::Native;
-    for(uint32_t i=0;i<s.settings.nrLayerCount;++i)s.settings.nrLayers[i].sizePolicy=pipeline::NrSizePolicy::Native;
+    new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=freezeExportSettings(settings);
+    // Normalize once before crossing processes. Source/encoder size is unchanged;
+    // only the lmxxf model input has its real 1080p budget.
     s.chain=toChain(s.settings);fromChain(s.chain,s.settings);
     s.hevc=hevc;s.maxFrames=maxFrames;s.rateControl=uint32_t(rateControl);
     s.audioStreamIndex=audioStreamIndex;
@@ -167,7 +165,7 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     p_->snapshot.state=ExportState::Preparing;p_->snapshot.output=output;p_->snapshot.jobId=(GetTickCount64()<<16)^pi.dwProcessId;p_->snapshot.frozenRevision=settings.revision;p_->snapshot.frozen=s.settings;p_->startTick=GetTickCount64();p_->pausedAt=p_->pausedTotal=0;
     p_->snapshot.workerPid=pi.dwProcessId;
     p_->snapshot.workerLog=std::filesystem::absolute(runtime::logsDirectory()/std::format("export-worker-{}.log",pi.dwProcessId)).wstring();
-    log::info("export-worker",std::format("started jobId={} pid={} frozenRevision={} nativeNR=true independentPlayback=true log={}",p_->snapshot.jobId,pi.dwProcessId,settings.revision,std::filesystem::path(p_->snapshot.workerLog).string()));return true;
+    log::info("export-worker",std::format("started jobId={} pid={} frozenRevision={} nrRuntime={} nrPolicy={} backend={} independentPlayback=true log={}",p_->snapshot.jobId,pi.dwProcessId,settings.revision,nrRuntimeName(s.settings.nrRuntime),int(s.settings.nrPolicy),frameGenerationBackendName(s.settings.frameGenerationBackend),std::filesystem::path(p_->snapshot.workerLog).string()));return true;
 }
 bool ExportJobManager::enqueue(const std::wstring& input,const std::wstring& output,EnhancementSettings settings,bool hevc,unsigned maxFrames,int audioStreamIndex,double trimStartSeconds,double trimEndSeconds,sink::ExportRateControl rateControl){
     if(poll().active()||!p_->queue.empty()){p_->queue.push_back({input,output,settings,hevc,maxFrames,audioStreamIndex,trimStartSeconds,trimEndSeconds,rateControl});return true;}
@@ -277,7 +275,7 @@ int runExportWorker(HANDLE mapping){
     // Re-deriving one from the other must agree, otherwise the job is refused.
     {auto fromChainSettings=s->settings;fromChain(s->chain,fromChainSettings);
      if(fromChainSettings!=s->settings)return reject(L"导出任务的效果链与冻结参数不一致");}
-    const auto settings=s->settings;log::info("export-frozen",std::format("revision={} nr={} sr={} multiplier={} intensity={} tone={} structure={} skin={} style={} autoMask={} ui={} total={} darken={} brighten={} color={} luminance={} flow={} content={} nativeNR=true",settings.revision,settings.nr,settings.sr,settings.multiplier,settings.model.intensity,settings.model.tone,settings.model.structure,settings.model.skin,settings.model.style,settings.model.autoMask,settings.model.uiCorrection,settings.residual.total,settings.residual.darken,settings.residual.brighten,settings.residual.color,settings.residual.luminance,int(settings.flow),int(settings.content)));std::atomic<bool> cancel=false,done=false;
+    const auto settings=s->settings;log::info("export-frozen",std::format("revision={} nr={} sr={} multiplier={} intensity={} tone={} structure={} skin={} style={} autoMask={} ui={} total={} darken={} brighten={} color={} luminance={} flow={} content={} nrRuntime={} nrPolicy={} backend={}",settings.revision,settings.nr,settings.sr,settings.multiplier,settings.model.intensity,settings.model.tone,settings.model.structure,settings.model.skin,settings.model.style,settings.model.autoMask,settings.model.uiCorrection,settings.residual.total,settings.residual.darken,settings.residual.brighten,settings.residual.color,settings.residual.luminance,int(settings.flow),int(settings.content),int(settings.nrRuntime),int(settings.nrPolicy),frameGenerationBackendName(settings.frameGenerationBackend)));std::atomic<bool> cancel=false,done=false;
     std::thread monitor([&]{while(!done){if(InterlockedCompareExchange(&s->cancel,0,0))cancel=true;std::this_thread::sleep_for(std::chrono::milliseconds(10));}});
     auto frameBoundary=[&]{
         while(!cancel&&InterlockedCompareExchange(&s->pause,0,0)){InterlockedExchange(&s->state,LONG(ExportState::Paused));std::this_thread::sleep_for(std::chrono::milliseconds(20));}

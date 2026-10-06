@@ -35,6 +35,15 @@ int wmain(int argc,wchar_t** argv){
         media.container=mode.find(L"mkv")!=std::wstring::npos?ExportContainer::Matroska:ExportContainer::Mp4;
         media.audio.policy=ExportTrackPolicy::All;media.subtitles.policy=ExportTrackPolicy::All;
         const bool hevc=mode.find(L"hevc")!=std::wstring::npos;
+        const bool fsr=mode.find(L"fsr-")==0;
+        const bool rejectXess=mode==L"reject-xess";
+        if(fsr||rejectXess){
+            settings.frameGenerationBackend=rejectXess?FrameGenerationBackend::XeSS:FrameGenerationBackend::Fsr;
+            settings.multiplier=2;
+            settings.fgMotion=MotionSource::Zero;
+            if(mode.find(L"-sr")!=std::wstring::npos){settings.sr=true;settings.videoSrQuality=kVideoSrFsr;settings.srTarget=veyra::pipeline::SrTarget::Qhd;}
+            if(mode.find(L"nr")!=std::wstring::npos){settings.nr=true;settings.nrRuntime=NrRuntime::NvidiaOriginal;settings.nrMotion=MotionSource::Zero;}
+        }
         // The real QML list stores explicit layers with preview resolution and
         // stale legacy summary fields. Exercise the actual child process, not
         // just a settings/chain round trip.
@@ -139,7 +148,7 @@ int wmain(int argc,wchar_t** argv){
             // "reject": the user picked every subtitle track by hand, so a track
             // the container cannot hold must fail the export. "skip": the default
             // "all tracks" policy leaves it out and says so in the result.
-            if(mode.find(L"reject")!=std::wstring::npos){
+            if(mode.find(L"reject")!=std::wstring::npos&&!rejectXess){
                 std::atomic<bool> stop{false};const auto info=ExportStreams::probe(input,ExportMediaOptions{},0,0,stop);
                 media.subtitles.policy=ExportTrackPolicy::Selected;media.subtitles.count=0;
                 for(const auto& t:info.tracks)if(t.subtitle&&media.subtitles.count<media.subtitles.indices.size())media.subtitles.indices[media.subtitles.count++]=t.index;
@@ -150,6 +159,16 @@ int wmain(int argc,wchar_t** argv){
             std::wcout<<L"state="<<int(s.state)<<L" encoded="<<s.encoded<<L" message="<<s.message<<L"\n";
             if(mode.find(L"reject")!=std::wstring::npos){require(s.state==ExportState::Failed,"incompatible source was not rejected");require(!std::filesystem::exists(output),"rejection produced final file");require(!s.message.empty(),"failure reason missing");}
             else require(s.state==ExportState::Succeeded,"export failed");
+            if(rejectXess){
+                require(s.message.find(L"XeSS")!=std::wstring::npos&&s.message.find(L"FSR")!=std::wstring::npos,"XeSS rejection lost its backend-specific reason");
+                require(s.encoded==0,"unsupported XeSS wrote frames");
+            }
+            if(fsr){
+                require(s.sourceFrames==60&&s.encoded==120,"FSR did not encode every source frame at 2X");
+                require(s.generated>0,"FSR never produced a valid generated frame");
+                require(s.frozen.frameGenerationBackend==FrameGenerationBackend::Fsr,"FSR frozen job changed backend");
+                std::wcout<<L"FSR_TEXTURE_EXPORT source="<<s.sourceFrames<<L" encoded="<<s.encoded<<L" validGenerated="<<s.generated<<L" holds="<<s.holds<<L"\n";
+            }
             if(mode.find(L"skip")!=std::wstring::npos)require(s.message.find(L"未保留")!=std::wstring::npos,"skipped tracks not reported");
         }
         passed=true;

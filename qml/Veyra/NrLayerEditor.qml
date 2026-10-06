@@ -120,7 +120,7 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
-        text: editor.amdNr ? qsTr("预览可降采样到 1080p。AMD NR 图片/视频导出仅接受预算内原生尺寸，暂不支持 4K NR 导出。")
+        text: editor.amdNr ? qsTr("AMD NR 预览与视频导出最高按内部 1080p 处理，视频保持输出尺寸；图片导出仍需符合模型尺寸预算。")
                           : qsTr("预览保留比例且不放大小输入；图片/视频导出仍完整处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap

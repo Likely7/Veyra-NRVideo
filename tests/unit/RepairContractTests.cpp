@@ -61,7 +61,7 @@ int main(){
     check(std::wstring_view(engine::ngxFailureHint(0xBAD00001)).find(L"不支持")!=std::wstring_view::npos,"NGX FeatureNotSupported has a distinct visible reason");
     for(bool lowQueue:{false,true})for(bool fullscreen:{false,true})for(auto sync:{engine::DisplaySync::Tearing,engine::DisplaySync::Vsync,engine::DisplaySync::Automatic}) {
         engine::PresentationSettings s;s.enabled=lowQueue;s.fullscreen=fullscreen;s.display=sync;
-        check(engine::presentationVsync(s)==(sync==engine::DisplaySync::Vsync)&&engine::presentationTearing(s)==(sync==engine::DisplaySync::Tearing),"VSync and tearing only when explicitly selected; Automatic is neither, windowed or fullscreen");
+        check(engine::presentationVsync(s)==(sync!=engine::DisplaySync::Tearing)&&engine::presentationTearing(s)==(sync==engine::DisplaySync::Tearing),"Automatic synchronizes windowed/fullscreen independently of low queue; only explicit Tearing is unsynchronized");
     }
     {
         source::AudioInputRecovery retry;retry.reset(1000);

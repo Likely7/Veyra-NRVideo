@@ -8546,3 +8546,16 @@ bootstrap第一次因新checkout CRLF与实测字节不同失败，未把它算�
 README更新仅当前版本更新/下载/过时状态和社区支持。独立确认英文远端页头与中文页头完整保留、两QR地址/width=220保持；教程主体未重写。Discord API验证c9aREyMj8为Veyra Dlss5/常规，原两QR及Ko-fi官方按钮HTTP200，Ko-fi用户页自动访问403，保留用户给定链接，不冒充页面验证通过。公告586字符，路径releases/.../GROUP_ANNOUNCEMENT.txt。docs/PERF_RELEASE_REPORT_2.0.4_2026-10-06.md列暖创建75.83%、单NR重激活99.01%、暂停编辑89.74%、暂停PID GPU利用率99.51%、最终S4增强区间3.52%及相应限制，拒绝/撤回实验没有计入产品收益。
 
 `py -3.11 -B scripts/package-2.0.4-dependency-source.py` v1因为vcpkg scripts含测试二进制后缀拒绝，partial ZIP保留到archives/.../dependency-source-rejected-v1.zip及SHA收据。过滤测试目录与二进制/工具档案后v2退出0，source tar目录安全/ZIP CRC/全部324载荷SHA通过，8个实际字幕上游源码归档及固定vcpkg30ef65cad9配方/补丁/元数据齐全。最终依赖ZIP598704862bytes，SHA2564eccde6343d66e0511b641aaacc12b999e424738a383fcce268d762abb3dceb9。原2.0.3依赖ZIP原字节嵌入，patched FFmpeg与全部串流/Qt源材料保持。日志logs/.../dependency-source-v2.log及dependency-source.json。
+
+
+## 2026-10-07 2.0.4 稳定性/导出/优先级本地候选
+
+用户要求同时处理 AMD 补帧入口及导出错误、NR 超过 1080p 的导出失效、跨来源撕裂和 2.0.3 性能比较，窗口与全屏都排查。隔离分支 codex/stability-export-priority-20261006，从 main 578d63c 开工；25 个既有工作树及 14 发布文件封存、control 反复通过，不派子 Agent、不运行压力/竞争负载、不公开发布。全部产物在 E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages}/stability-export-priority-20261006，TEMP/TMP 按子进程定向。
+
+修正通用 FG 能力 gate 和 AMD/Intel 新配置默认；移除强制 FSR/XeSS→DLSS 替换，FSR 用已有共享图编码纹理，XeSS 明确拒绝；AMD 视频 NR 冻结和 planner 内部最高 1080p、输出原尺寸，NVIDIA native 及旧每层参数保持。Auto 显式同步屏幕，低队列既有策略保留；新增实际 Present 换档日志。相同已生效 GPU 优先级不重复设置，不计未经证实的性能收益。
+
+实际命令、所有轮次/失败、限制见 docs/STABILITY_EXPORT_PRIORITY_REPORT_2026-10-06.md。生产 build-final-product 与最终测试目标构建通过，EXE 21e8e89c37d36f2cc43e7c619382185459ba36f76edefd602666050d6a20285b；264 效果链/246 修复契约/482 预设/56 能力/78 时序及 i18n 通过。真实 UI 复现旧 AMD 包 gate，修复后添加/FSR选择/列表预设及重启恢复通过；真实 FSR 4K60 窗口/全屏预览提交 120fps，H264/HEVC 导出 60源+59生成+1保持=120，完整解码及时间戳通过。AMD 恒等 GPU 图 10 例含4K输出/1080内部误差0；显示同步12例、DLSS4X/6X/4X像素与跨队列生命周期误差0/D3D12错误0；两包 Windows-only PATH 冷启动各26包内Qt/FFmpeg模块通过。
+
+性能普通档候选6.932ms/60fps，紧邻2.0.3为6.472ms，相差7.12%；同候选允许撕裂6.803ms，同步对照差1.90%。前台不一致的首轮14%差值作无效因果证据；不能声称没有回退或根因已修复，也未以调高优先级计成功。外部foreground查询与Qt active不一致、覆盖层/时钟未锁定，全部结果保留。AMD实卡离线推理/编码、FSR4、用户扫描撕裂和全设置稳定性未验，不据模拟/软件计数扩展支持。
+
+夹具失败保留：build-second变量声明顺序；display-first未drain即释放导致device hung、second累计计数误用；GUI预设mask/重复单例；FG运行配置路径；FSR子串匹配；cold-stage硬链接mapped路径假阴性。修正后复查，不冒充产品缺陷或抹掉原日志。完整便携候选2.0.4-fix2和源码存于本轮test-packages；最终ZIP/commit/SHA/CRC校验以DELIVERY.json为准，保护main/tag/现有发布资产。

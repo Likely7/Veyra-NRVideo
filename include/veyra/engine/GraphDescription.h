@@ -1,5 +1,6 @@
 #pragma once
 #include "veyra/engine/EnhancementSettings.h"
+#include "veyra/engine/ExportFeaturePolicy.h"
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/pipeline/ResolutionPlan.h"
 
@@ -41,7 +42,7 @@ struct StageRequest {
     uint32_t fgMultiplier=2;
     uint32_t width=0,height=0;
     bool stillImage=false;   // image preview/processing: no NR-first order
-    bool exportJob=false;    // offline export: native NR size, no present-sink FG, no NR-first order
+    bool exportJob=false;    // native NVIDIA NR, bounded AMD NR, no present-sink FG/NR-first order
     bool nvidiaAdapter=true;
     bool amdNr=false;        // AMD adapter: NR runs on the lmxxf runtime (no NGX)
     const ChainRuntimeOrder* nodeOrder=nullptr; // paired with this settings transaction
@@ -50,13 +51,16 @@ struct StageRequest {
 // Fills the stage, size and parameter fields of `desc` from `settings`.
 // Source-format fields (hdrInput, rgbInput, packedInput, ...), hdrOutput and
 // host hooks are left untouched: the caller owns those.
-inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const EnhancementSettings& settings,
+inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const EnhancementSettings& savedSettings,
                                                pipeline::EnhanceGraphDesc& desc) {
     desc.fixedExecutionPlan.reset();desc.fixedExecutionPlanError.clear();
     desc.runtimeNodeOrder=request.nodeOrder!=nullptr;
-    if(settings.nrLayerCount>settings.nrLayers.size()||settings.additionalColorCount>settings.additionalColors.size()){
+    if(savedSettings.nrLayerCount>savedSettings.nrLayers.size()||savedSettings.additionalColorCount>savedSettings.additionalColors.size()){
         desc.fixedExecutionPlanError="too many runtime chain instances";return {};
     }
+    std::optional<EnhancementSettings> exportSettings;
+    if(request.exportJob)exportSettings=freezeExportSettings(savedSettings);
+    const auto& settings=exportSettings?*exportSettings:savedSettings;
     auto chain=toChain(settings);
     bool lowLatency=!request.exportJob&&settings.lowLatency&&request.nr;
     if(request.nodeOrder){
@@ -73,7 +77,9 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
             desc.fixedExecutionPlanError="node NR-before-SR offline execution requires ordered dispatcher";return {};
         }
     }
-    const auto policy=request.exportJob?pipeline::NrSizePolicy::Native:settings.nrPolicy;
+    const bool boundedAmd=request.exportJob&&request.amdNr&&
+        currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd;
+    const auto policy=request.exportJob?exportNrSizePolicy(settings.nrRuntime):settings.nrPolicy;
     if(!pipeline::Extent{request.width,request.height}.valid()||!pipeline::validSrTarget(settings.srTarget)||
        !pipeline::validNrSizePolicy(policy)){
         // ResolutionPlan::make throws for these inputs. Report the same
@@ -82,7 +88,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         return {};
     }
     const auto plan=pipeline::ResolutionPlan::make({request.width,request.height},request.sr,policy,
-        request.stillImage||request.exportJob,settings.revision,settings.srTarget,lowLatency);
+        (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency);
     desc.sourceWidth=request.width;desc.sourceHeight=request.height;
     desc.workWidth=plan.base.width;desc.workHeight=plan.base.height;
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
@@ -93,7 +99,9 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.enableNvofStandalone=desc.enableNr;
     const bool temporalMotion=settings.usesNrTemporal();
     desc.enableNvofStandalone=desc.enableNr&&(motionUsesFlow(settings.nrMotion)||temporalMotion);
-    desc.enableFg=request.fg&&(request.nvidiaAdapter||(!request.exportJob&&crossVendorFrameGeneration(settings.frameGenerationBackend)));
+    desc.enableFg=request.fg&&(request.exportJob
+        ? exportFrameGenerationSupported(settings.frameGenerationBackend,request.nvidiaAdapter)
+        : request.nvidiaAdapter||crossVendorFrameGeneration(settings.frameGenerationBackend));
     desc.fgMultiplier=request.fgMultiplier;
     desc.videoSrQuality=settings.videoSrQuality;
     describeNrLayers(settings,desc);
@@ -127,7 +135,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     }
     ChainExecutionPlan execution;
     const auto validation=compileChainExecutionPlan(chain,{{request.width,request.height},settings.srTarget,
-        request.stillImage,request.exportJob},execution);
+        request.stillImage,request.exportJob,boundedAmd},execution);
     if(!validation.accepted){desc.fixedExecutionPlanError=validation.message;return plan;}
     if(request.nodeOrder){
         // Node order owns the first NR stage, even for an ordinary resize or
@@ -145,7 +153,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     // feature. Active NR extents now come exclusively from the compiled plan.
     if(!desc.enableNr)for(const auto size:desc.nrLayersSizePolicy){
         desc.nrLayersExtent.push_back(pipeline::ResolutionPlan::make({request.width,request.height},request.sr,
-            request.exportJob?pipeline::NrSizePolicy::Native:size,request.stillImage||request.exportJob,
+            request.exportJob?exportNrSizePolicy(settings.nrRuntime):size,(request.stillImage||request.exportJob)&&!boundedAmd,
             settings.revision,settings.srTarget,lowLatency).nr);
     }
     desc.fixedExecutionPlan=execution;

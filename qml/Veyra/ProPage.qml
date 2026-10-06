@@ -123,7 +123,7 @@ VPage {
         spacing: 0
         VRow {
             label: qsTr("显示同步")
-            hint: qsTr("独立于低延迟队列 · 自动：不撕裂，也不等待垂直同步")
+            hint: qsTr("自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制")
             VSeg {
                 objectName: "presentation-display-sync"
                 options: [{ id: "0", label: qsTr("允许撕裂") }, { id: "1", label: qsTr("垂直同步") }, { id: "2", label: qsTr("自动") }]

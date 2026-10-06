@@ -491,7 +491,11 @@ struct QmlPlayerBridge::Impl {
                 if(FAILED(adapter->GetDesc1(&desc))||(desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE))continue;
                 auto initial=facade.pendingSettings();
                 initial.nrRuntime=desc.VendorId==0x1002?engine::NrRuntime::LmxxfAmd:ngx::preferSfNr(desc.VendorId,desc.Description)?engine::NrRuntime::Ampere:engine::NrRuntime::Original;
-                if(desc.VendorId==0x1002){initial.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;initial.videoSrQuality=engine::kVideoSrFsr;}
+                if(desc.VendorId==0x1002||desc.VendorId==0x8086){
+                    initial.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
+                    initial.videoSrQuality=engine::kVideoSrFsr;
+                    initial.frameGenerationBackend=engine::FrameGenerationBackend::Fsr;
+                }
                 facade.setPending(initial);
                 veyra::log::info("nr-default",std::format("adapter={} selected={}",utf8Of(std::wstring(desc.Description)).toStdString(),engine::nrRuntimeName(initial.nrRuntime)));
                 break;
@@ -554,6 +558,10 @@ struct QmlPlayerBridge::Impl {
         }
         if (const auto why = unavailableEffects(settings); !why.isEmpty()) {
             error = QObject::tr("导出设置无效：%1").arg(why);
+            return std::nullopt;
+        }
+        if(settings.multiplier>1&&engine::presentSinkFrameGeneration(settings.frameGenerationBackend)){
+            error=QObject::tr("XeSS 尚未提供可编码的补帧纹理，请为导出选择 FSR、DLSS 或 VFG 补帧");
             return std::nullopt;
         }
         return settings;
@@ -4385,7 +4393,11 @@ QVariantList QmlPlayerBridge::effectCatalog() const {
         item["mustBeLast"] = info.mustBeLast;
         item["justBeforeLast"] = info.justBeforeLast;
         item["experimental"] = info.experimental;
-        const auto cap = effectAvailability(utf8Of(info.id));
+        auto cap = effectAvailability(utf8Of(info.id));
+        if(info.type==engine::EffectType::FrameGeneration)
+            for(const auto& choice:fgBackendChoices())if(!choice.toMap().value("disabled").toBool()){
+                cap=QVariantMap{{"available",true},{"reason",QString{}}};break;
+            }
         item["disabled"] = !cap.value("available").toBool();
         item["note"] = cap.value("reason");
         out << item;
@@ -5284,6 +5296,15 @@ void QmlPlayerBridge::openSubtitleDialog() { emit navigate(QStringLiteral("subti
 // RTX Video HDR where the pipeline cannot honour them is refused with a reason,
 // not silently dropped.
 int QmlPlayerBridge::addEffect(const QString& type) {
+    // The generic list entry means "add an available FG stage". A saved,
+    // disabled NVIDIA choice must not make FSR/XeSS impossible to add on AMD.
+    if(type==QLatin1String("frame-generation")&&
+       !effectAvailability(type).value("available").toBool()){
+        for(const auto& choice:fgBackendChoices()){
+            const auto row=choice.toMap();if(row.value("disabled").toBool())continue;
+            return addEffect(row.value("id").toString()+QStringLiteral("-fg"));
+        }
+    }
     const auto cap = effectAvailability(type);
     if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return -1; }
     const bool fgType=type==QLatin1String("dlss-fg")||type==QLatin1String("xess-fg")||

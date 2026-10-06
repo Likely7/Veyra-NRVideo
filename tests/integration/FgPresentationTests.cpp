@@ -15,7 +15,8 @@ extern "C" {
 int wmain(int argc,wchar_t** argv){
     using namespace veyra;
     if((argc<2||argc>4)||FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
-    const bool temporal=argc==4;
+    const bool displaySync=argc==4&&std::wstring_view(argv[3])==L"display-sync";
+    const bool temporal=argc==4&&!displaySync;
     const bool exact=temporal&&std::wstring_view(argv[3])==L"temporal-exact";
     if(temporal&&!exact&&std::wstring_view(argv[3])!=L"temporal")return 2;
     const auto runtimePath=argc>=3?std::filesystem::absolute(argv[2]):std::filesystem::path(VEYRA_PROJECT_ROOT)/"runtime_local/nvidia";
@@ -31,14 +32,56 @@ int wmain(int argc,wchar_t** argv){
     if(frame){frame->format=AV_PIX_FMT_RGBA;frame->width=640;frame->height=360;frame->color_range=AVCOL_RANGE_JPEG;frame->color_trc=AVCOL_TRC_IEC61966_2_1;}
     ok=ok&&frame&&av_frame_get_buffer(frame,32)>=0;
     unsigned cycle=0;
+    if(displaySync){
+        // Real windowed and borderless-fullscreen swapchains, including both
+        // latency-queue settings. The runner checks actual Present flags in
+        // addition to the pure settings contract; panel scanout is not measured.
+        MONITORINFO monitor{sizeof(MONITORINFO)};
+        ok=ok&&GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor);
+        for(bool full:{false,true})for(bool lowQueue:{false,true})for(auto mode:{engine::DisplaySync::Automatic,engine::DisplaySync::Vsync,engine::DisplaySync::Tearing}){
+            if(!ok)break;
+            const int w=full?monitor.rcMonitor.right-monitor.rcMonitor.left:640;
+            const int h=full?monitor.rcMonitor.bottom-monitor.rcMonitor.top:360;
+            SetWindowPos(window,nullptr,full?monitor.rcMonitor.left:0,full?monitor.rcMonitor.top:0,w,h,SWP_NOZORDER|SWP_NOACTIVATE);
+            ShowWindow(window,SW_SHOWNOACTIVATE);
+            pipeline::EnhanceGraphDesc desc;desc.sourceWidth=desc.workWidth=640;desc.sourceHeight=desc.workHeight=360;
+            desc.enableNr=desc.enableSr=desc.enableFg=false;desc.rgbInput=true;desc.runtimeAbsPath=runtimePath.wstring();
+            ok=graph.initialize(desc)&&presenter.open(ctx,window,graph)&&graph.createViews();
+            engine::PresentationSettings requested;requested.fullscreen=full;requested.enabled=lowQueue;requested.display=mode;
+            std::wstring text;const auto applied=presenter.configurePresentation(ctx,requested,false,text);
+            ok=ok&&applied.display==mode&&applied.enabled==lowQueue;
+            const auto beforeSubmitted=presenter.submittedCount();
+            std::cout<<"DISPLAY_SYNC_BEGIN full="<<full<<" lowQueue="<<lowQueue<<" mode="<<unsigned(mode)<<std::endl;
+            for(unsigned f=0;ok&&f<6;++f){
+                for(unsigned y=0;y<360;++y)for(unsigned x=0;x<640;++x){auto* p=frame->data[0]+size_t(y)*frame->linesize[0]+x*4;p[0]=60+f*10;p[1]=110;p[2]=180;p[3]=255;}
+                pipeline::EnhanceGraph::FrameOutputs out;
+                ok=graph.process(frame,f*33.333,f==0||f==3,out,f+1)&&presenter.present(ctx,ring,graph,out.videoSlot,false,false);
+                if(f==1&&ok){
+                    sink::RgbaImage actual,expected;
+                    ok=presenter.readPresentedFrameForTest(ctx,ring,actual)&&sink::readRgba8(ctx,ring,graph.videoFrameResource(out.videoSlot),expected);
+                    ok=ok&&actual.width==unsigned(w)&&actual.height==unsigned(h)&&!expected.pixels.empty();
+                    // The fullscreen monitor may have a different aspect
+                    // ratio; inspect the image centre, excluding letterboxing.
+                    if(ok)for(unsigned y=actual.height*3/8;y<actual.height*5/8;++y)for(unsigned x=actual.width*3/8;x<actual.width*5/8;++x)
+                        for(unsigned c=0;c<3;++c)if(std::abs(int(actual.pixels[(size_t(y)*actual.width+x)*4+c])-int(expected.pixels[c]))>2)ok=false;
+                }
+            }
+            ok=ok&&presenter.submittedCount()==beforeSubmitted+6;
+            // Native presentation uses the producer ring. Match the engine's
+            // drain-before-rebuild contract before releasing presenter passes.
+            ok=ring.drainQueue()&&ok;graph.shutdown();presenter.close();
+            std::cout<<"DISPLAY_SYNC_END full="<<full<<" lowQueue="<<lowQueue<<" mode="<<unsigned(mode)<<" pass="<<ok<<std::endl;
+        }
+    }
     for(unsigned multiplier:{4u,6u,4u}){
-        if(temporal)break;
+        if(temporal||displaySync)break;
         if(!ok)break;
         ++cycle;
         pipeline::EnhanceGraphDesc desc;desc.sourceWidth=desc.workWidth=640;desc.sourceHeight=desc.workHeight=360;
         desc.enableNr=desc.enableSr=false;desc.enableFg=desc.rgbInput=true;desc.fgMultiplier=multiplier;
         desc.runtimeAbsPath=runtimePath.wstring();
         ok=graph.initialize(desc)&&presenter.open(ctx,window,graph)&&graph.createViews();
+        if(ok){engine::PresentationSettings requested;std::wstring text;presenter.configurePresentation(ctx,requested,true,text);ShowWindow(window,SW_SHOWNOACTIVATE);}
         if(ok&&cycle==1){
             // A producer allocator stall must not be reported as private
             // presentation-ring service. Release the GPU wait from the CPU.

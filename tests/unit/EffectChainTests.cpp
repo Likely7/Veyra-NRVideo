@@ -977,6 +977,31 @@ void testPerLayerAntiFlickerSnapshot(){
     }
 }
 int main() {
+    {
+        using namespace veyra;using namespace veyra::engine;
+        for(const auto source:{pipeline::Extent{3840,2160},pipeline::Extent{2560,1440},pipeline::Extent{3840,1600}}){
+            EnhancementSettings s;s.nr=true;s.nrRuntime=NrRuntime::LmxxfAmd;s.nrLayerCount=2;
+            for(auto& n:s.nrLayers){n.enabled=true;n.runtime=NrRuntime::LmxxfAmd;n.sizePolicy=pipeline::NrSizePolicy::Native;}
+            s.nrLayers[0].model.style=1;s.nrLayers[1].model.style=2;s.nrLayers[1].residual.total=5;
+            const auto frozen=freezeExportSettings(s);auto restored=frozen;fromChain(toChain(frozen),restored);
+            check(restored==frozen&&frozen.nrLayers[1].residual.total==5,"AMD export freeze round-trip retains controls and worker contract");
+            StageRequest r;r.nr=true;r.exportJob=true;r.nvidiaAdapter=false;r.amdNr=true;r.width=source.width;r.height=source.height;
+            pipeline::EnhanceGraphDesc d;const auto plan=describeStages(r,frozen,d);
+            check(d.enableNr&&plan.output==source&&d.workWidth==source.width&&d.workHeight==source.height,"high-resolution AMD export keeps native output and enabled NR");
+            check(d.nrLayersExtent.size()==2&&std::all_of(d.nrLayersExtent.begin(),d.nrLayersExtent.end(),[](auto e){return e.height<=1080&&uint64_t(e.width)*e.height<=1920ull*1080;}),"every offline AMD model input fits the actual budget");
+            check(d.validateFixedExecutionPlan().empty()&&d.nrLayersSizePolicy[0]==pipeline::NrSizePolicy::Realtime,"bounded AMD processing matches the fixed shared execution plan");
+            s.nrRuntime=NrRuntime::NvidiaOriginal;for(auto& n:s.nrLayers)n.runtime=s.nrRuntime;
+            r.nvidiaAdapter=true;r.amdNr=false;describeStages(r,s,d);
+            check(d.nrLayersExtent[0]==source&&d.nrLayersExtent[1]==source,"NVIDIA export preserves native NR input dimensions");
+        }
+        for(auto backend:{FrameGenerationBackend::Dlss,FrameGenerationBackend::Vfg,FrameGenerationBackend::XeSS,FrameGenerationBackend::Fsr,FrameGenerationBackend::Fsr4}){
+            EnhancementSettings s;s.nr=s.sr=false;s.frameGenerationBackend=backend;s.multiplier=2;
+            StageRequest r;r.fg=true;r.fgMultiplier=2;r.exportJob=true;r.nvidiaAdapter=false;r.width=1920;r.height=1080;
+            pipeline::EnhanceGraphDesc d;describeStages(r,s,d);
+            check(d.frameGenerationBackend==backend&&d.fgMultiplier==2,"offline planning never substitutes DLSS or silently changes multiplier");
+            check(d.enableFg==fsrFrameGeneration(backend),"cross-vendor export admits actual FSR textures, rejects NVIDIA-only and present-sink stages");
+        }
+    }
     testPerLayerAntiFlickerSnapshot();
     testNrCorrectionDescription();
     std::setvbuf(stdout,nullptr,_IONBF,0);

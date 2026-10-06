@@ -1,5 +1,9 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-07 2.0.4-fix2 本地修复候选
+
+隔离分支 codex/stability-export-priority-20261006 修复跨厂商 FG 入口/导出、AMD NR 视频内部1080p与原尺寸输出，Auto 明确显示同步。真实 FSR/H264/HEVC、列表预设重启、12组呈现合同、GPU像素/复用和冷启动通过；候选 EXE 21e8e89c37d36f2cc43e7c619382185459ba36f76edefd602666050d6a20285b。普通GPU档 NR约6.93ms/60fps，对照2.0.3约6.47ms，仍有约7%性能疑点，未宣称根因已解决。真实AMD离线推理/编码与用户显示撕裂待复测。完整事实与失败见 [本轮报告](STABILITY_EXPORT_PRIORITY_REPORT_2026-10-06.md)，本地交付在E:/项目/Veyra/test-packages/stability-export-priority-20261006；ZIP完成以DELIVERY.json为准。未合入main/推送/公开发布，25其他工作树与既有发布文件不变。以下为历史状态。
+
 ## 2026-10-06 PR19/PR20 适配验收
 
 已合入并普通推送main：功能合并 `357c136`（此前main f8045fb）；PR20原历史合并2e3d239。GitHub REST核实PR19/20均closed/merged，原作者head保留为main祖先，合并Git树与实际验证树相同。v2.0.4 Release/tag/正文/资产不变。后续仅记录收尾和清理自有测试重复组件，565产品输入、生产EXE及92验收证据保持；最终main SHA见本轮logs/final-check.json。其他23原工作树原状态保留。
