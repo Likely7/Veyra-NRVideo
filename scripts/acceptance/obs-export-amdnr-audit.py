@@ -46,7 +46,7 @@ for name,f in names.items():
     imports.append({'file':name,'direct':direct,'delay':delay})
 assert not missing,missing
 result=dict(flavor=flavor,app=str(app),payloadFiles=len(manifest['files']),payloadBytes=sum(r['size'] for r in manifest['files']),
-            sourceCommit=manifest.get('baseCommit'),releaseReady=manifest.get('releaseReady'),runtimeFiles=len(runtime['files']),
+            baseCommit=manifest.get('baseCommit'),sourceCommit=manifest.get('sourceCommit'),releaseReady=manifest.get('releaseReady'),runtimeFiles=len(runtime['files']),
             peFiles=len(imports),imports=imports,missing=missing,fsrException=True)
 out.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8')
 print('PACKAGE AUDIT PASS',flavor,result['payloadFiles'],result['payloadBytes'],out,flush=True)

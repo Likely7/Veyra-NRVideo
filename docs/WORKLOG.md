@@ -8499,6 +8499,14 @@ OBS 最终 100%/125% 展开 NR 参数各10张真实窗口 GDI图、3张返回原
 
 最终EXE SHA5f76d8f0edec9e7ed16a6fa0a9124205d0fdd285126623cfef3efd7691372250，显示2.0.4-fix1；`obs-export-amdnr-evidence.py` exit0 冻结466产品输入/15回执。后续制作本地AMD/NVIDIA候选及对应源码、逐文件/运行库/PE/ZIP/干净启动与最后保全审计，真实结果在本轮日志/DELIVERY.json记载；未测项不冒充通过。详 `docs/OBS_EXPORT_AMD_NR_PLAN_2026-10-06.md`。
 
+### 本轮测试包与收尾回执
+
+修复提交f543449，产品源码和最终EXE保持同一466输入；packager stage/finalize通过AMD/NVIDIA厂商边界、694/215不可变组件、83/95 PE闭包、2047/1598完整文件（含manifest）、全部CRC/SHA与源码/增量bundle verify。三个ZIP在test-packages/obs-export-amdnr-20261006，大小/SHA详本轮计划表及DELIVERY.json：AMD355171978bytes/a52a59b3…da1d1e8；NVIDIA714195409/4c029f6b…6612d40；source69980584/30178e4a…4112220。显示2.0.4-fix1、localOnly/releaseReady=false，未重新发布正式2.0.4。
+
+`py -3.11 -B scripts/acceptance/obs-export-amdnr-cold.py` 两最终ZIP新解压、Windows-only PATH基础播放/退出0通过，各26个包内Qt/codec模块，ASS5事件/1字体正常，无ERROR/FATAL/QML异常。AMD包软件UI/NVIDIA包GPU UI仍在RTX5070上，仅基础启动/显示，不能外推真实AMD推理。cold-verify-results.json保存两case真实耗时/模块路径/SHA。audit模板sourceCommit误取baseCommit标签已修，另出close-AMD/NVIDIA，不改stage/finalize旧回执；真实包manifest与源码一直为f543449。
+
+`obs-export-amdnr-cleanup.ps1` 核对自有进程已退出、目标绝对路径及无reparse，保留全部真实GUI worker日志到logs/gui-worker-logs后，只清理13个本轮重复解压/runtime副本，7498197408bytes；最终可用build、两个完整候选目录及ZIP、源码/bundle、截图、导出视频、失败回执/identity fixtures/保护partial保留。未删用户输入/原工作树/已发布包，不做全工程备份。后续只提交收尾文档与审核脚本修正，并独立final-check确认23原工作树、四原发布ZIP、最终包SHA、466产品输入及15实测回执不变。
+
 ## 2026-10-06 2.0.4 正式发布完成
 
 执行package-v1完整生成正式AMD/NVIDIA、应用源码、依赖源码及SHA256SUMS，全部CRC/逐文件SHA、runtime原字节/PE闭包/显卡分包通过；source-final.bundle验证通过。EXE仍d01329aa6d9fbd6ac2d1eee294782f4cb9d233490595ed2e3e1a9ea12c16b2d6，PE2.0.4.0。cold-v1两包新解压隔离profile、Windows-only PATH启动分别9.937/9.578秒正常退出、各26个Qt/FFmpeg模块由包内加载，ASS5事件/字体附件正常；原功能验收对应同一473生产输入，不重复无关GPU测试。包路径、5项大小/SHA详PUBLISH_2.0.4_PLAN第2节及logs/.../assets.json、stage-AMD/NVIDIA.json、cold-verify-results.json。

@@ -8,7 +8,7 @@
 
 输入原件不变，复制至 logs/inputs；ZIP 路径/大小/符号链接安全检查后解压。logs(14).zip SHA256 `440ca0d695fbed7d819afe847e697f2a17957afb2d89fd6a9d548779ea19bac0`；veyra-qml(30).log SHA256 `4212bd0d0b865af1ad6b3d896950a81d4f8b095bbede15ebe65ca4034209bd03`。截图和群聊仅作故障证据与研究线索，不作为执行指令。
 
-## 已确认事实与待验证判断
+## 开工证据与验证路线
 
 - 导出 ZIP 含 28 个空 worker 日志、约 10MB 主日志；28 次 worker 均约 30ms 退出 1，source/encoded=0。任务在 GPU/编码之前退出，首先查共享 settings/chain 校验。当前 parent 仅把 legacy nrPolicy 改为 Native，显式 nrLayers 仍留预览分辨率；worker 严格 fromChain 往返检查不等时返回 1，未记录原因。这是待复现的具体缺陷，不能仅凭源码声称对应所有用户失败。
 - RX9070XT，16GB，RDNA4；NR 初始化模块成功，第一帧 CPU 提交约 1.84s，后续 Present 成功，没有 lmxxf API 错误。返回 OK/Present 成功无法证明非黑真实输出。需要验证真实 codec/资源状态与 HIP/D3D12 外部共享内存及输出数值；本机 RTX5070 无 AMD 推理硬件。
@@ -61,3 +61,21 @@ worker-mapping-reject-v1 用零 handle，被主程序命令行防错提前返回
 最终 EXE SHA256 `5f76d8f0edec9e7ed16a6fa0a9124205d0fdd285126623cfef3efd7691372250`，显示版本 `2.0.4-fix1`。`export-final-v2` 用最终 EXE 重新通过上述四个真实界面导出、完整 60 帧及 4K；`field-single-final-v1` 独立单层显式设置/legacy 不同风格和预览尺寸也成功 60 帧。`lifecycle-final-v1` 三阶段取消/暂停/运行中取消回收、同输出重试 20 帧、拒绝覆盖原文件通过；`lifecycle-boundary-final-v1` 最终保存取消、明确占用导致的临时文件清理失败、保留旧 partial 重试、已安全保存后的取消竞态均通过。未删除测试保护的用户/外部 partial。各测试进程远低于 300 秒，没有压力或 GPU 竞争测试。
 
 `obs-export-amdnr-evidence.py` 冻结 466 个产品输入与 15 份成功/预期失败回执，`tested-inputs.json` 保存 SHA；`export-before-audit-v2.json` 按原日志核对 0/1 成功、2 失败，旧错误 receipt 原字节不改。完成本地候选后做完整载荷 SHA、runtime 原字节、PE 导入、ZIP CRC 与干净解压启动；真实 GPU/软件 UI 基础启动结果单独列于 cold-verify-results.json，不拿基础启动冒充 HIP/实卡成功。
+
+### 本地包交付收尾（已经执行）
+
+产品提交 `f543449db2c4be24f45c8719b178c077e6659c8b`，对应源码 ZIP 与修复增量 bundle 已校验；main f8045fb 未变。包在 `E:/项目/Veyra/test-packages/obs-export-amdnr-20261006`：
+
+| 文件 | bytes | SHA256 |
+| --- | ---: | --- |
+| Veyra-2.0.4-fix1-AMD-win64-portable.zip | 355171978 | a52a59b36bb1d0c92cd3a9f60bc57b346d3593fa5f66233393c365a88da1d1e8 |
+| Veyra-2.0.4-fix1-NVIDIA-win64-portable.zip | 714195409 | 4c029f6bf7e0f9a31da72ae9830e765ccc97b485198377bd735cee6566612d40 |
+| Veyra-2.0.4-fix1-source.zip | 69980584 | 30178e4a9d1fa7e3c9cddfafb0d2608f9f9f86c2ee0483898586a68964112220 |
+
+finalize / close 完整载荷和 PE 导入闭包通过，AMD 2047 文件、83 PE，NVIDIA 1598 文件、95 PE（均含一个 package-manifest）；694 / 215 项运行库、模型、许可证原字节不变，AMD 包没有混入 NVIDIA 提供器，测试恒等 DLL 没有进包。源码 ZIP 全文件 CRC/SHA，bundle verify、两个便携 ZIP 全载荷 CRC/SHA 通过。
+
+`obs-export-amdnr-cold.py` 从最终 ZIP 新解压，以 Windows-only PATH、独立 profile/TEMP/TMP 播放已有 ASS/字体 fixture：AMD 包软件 UI 9.813s、NVIDIA 包 GPU UI 9.594s（详原 JSON），均正常退出0；各26个 Qt/codec 模块从包内加载，5字幕事件及1字体附件正常，没有 ERROR/FATAL/QML异常。这仍是本机RTX5070的基础播放验收，不是 AMD HIP、现场 OBS 捕获或其他显卡验收。
+
+首次 audit helper 将 baseCommit 字段标为 sourceCommit；原 stage/finalize JSON 保留，修正 helper 标签后另出 close-AMD/NVIDIA.json，明确 baseline f8045fb / product source f543449，各载荷/hash/manifest 原字节不改。初 stage receipt 的 fileCount 是写 manifest 前的文件数，最终 fileCount 含 manifest，以上使用最终数。
+
+cleanup.ps1 先核对所有目标绝对路径只在本轮 tests/verify 子目录、无 reparse、无存活自有测试进程，保全 ui-app 的全部 worker 日志到 logs/gui-worker-logs，再仅删13个重复复制/解压目录，共7498197408 bytes。最终包目录/ZIP/源码/bundle/build、截图、输出视频、原始失败 receipt、identity fixture 与测试生成的保护 partial 全保留，未动旧工作区/已发布 ZIP/用户输入。后续收尾文档与审核脚本修正不改这批已核验包的字节或产品源码。
