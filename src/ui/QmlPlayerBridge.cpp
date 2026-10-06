@@ -2,6 +2,7 @@
 #include "veyra/gfx/PresentSink.h"
 #include <QElapsedTimer>
 #include "veyra/ui/EffectAvailability.h"
+#include "veyra/engine/FrameGenerationSelection.h"
 #include "veyra/ui/QmlExportQueueModel.h"
 #include "veyra/ui/UiLanguage.h"
 #include <QQmlEngine>
@@ -494,8 +495,8 @@ struct QmlPlayerBridge::Impl {
                 if(desc.VendorId==0x1002||desc.VendorId==0x8086){
                     initial.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
                     initial.videoSrQuality=engine::kVideoSrFsr;
-                    initial.frameGenerationBackend=engine::FrameGenerationBackend::Fsr;
                 }
+                initial.frameGenerationBackend=engine::defaultFrameGenerationBackend(desc.VendorId);
                 facade.setPending(initial);
                 veyra::log::info("nr-default",std::format("adapter={} selected={}",utf8Of(std::wstring(desc.Description)).toStdString(),engine::nrRuntimeName(initial.nrRuntime)));
                 break;
@@ -925,8 +926,23 @@ static QString unavailableEffects(const engine::EnhancementSettings& settings) {
 }
 static QString disableUnavailableEffects(engine::ChainConfiguration& configuration) {
     const auto caps = currentEffectCapabilities();
+    const auto available = [&](const char* id) { return caps.value(id).toMap().value("available").toBool(); };
+    const engine::FrameGenerationAvailability fgAvailable{
+        available("dlss"),available("xess"),available("fsr3"),available("fsr4"),available("vfg")};
     QStringList reasons;
     const auto sanitize = [&](engine::EffectChain& chain, engine::ChainGlobalSettings& globals) {
+        // Also migrate disabled stages: keeping an unavailable DLSS selection
+        // left the AMD dropdown at DLSS even though a fresh profile chose FSR.
+        const auto savedBackend = globals.fgBackend;
+        globals.fgBackend = engine::restoredFrameGenerationBackend(savedBackend,fgAvailable);
+        if (globals.fgBackend != savedBackend) {
+            if (engine::fsrFrameGeneration(globals.fgBackend)) chain.fgMultiplier=2;
+            else if (globals.fgBackend==engine::FrameGenerationBackend::XeSS)
+                chain.fgMultiplier=normalizeFgMultiplier(chain.fgMultiplier,globals.fgBackend,2);
+            else chain.fgMultiplier=normalizeFgMultiplier(chain.fgMultiplier,globals.fgBackend,6);
+            veyra::log::warn("fg-default",std::format("unavailable saved backend={} selected={} rememberedMultiplier={} enabled flags preserved",
+                engine::frameGenerationBackendName(savedBackend),engine::frameGenerationBackendName(globals.fgBackend),chain.fgMultiplier));
+        }
         for (uint32_t i = 0; i < chain.nodeCount; ++i) {
             auto& node = chain.nodes[i];
             QString id;
@@ -1048,6 +1064,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const auto migrationNotice = uiText(impl_->facade.error());
         if (!migrationNotice.isEmpty())
             QTimer::singleShot(0, this, [this, migrationNotice] { emit notice(migrationNotice, false); });
+        const auto savedConfiguration = restored;
         QStringList disabled;
         for (auto& configuration : restored.configurations) {
             const auto reason = disableUnavailableEffects(configuration);
@@ -1063,7 +1080,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         configuration.apply(settings);
         const auto previous = impl_->facade.pendingSettings();
         if (settings.validate().empty() && impl_->facade.applySettings(settings,engine::runtimeOrder(configuration.chain))) {
-            impl_->session = impl_->savedSession = restored;
+            impl_->session = restored;
+            // Persist a repaired backend as well as the active mode. Otherwise
+            // every restart reloads the unavailable DLSS value again.
+            impl_->savedSession = savedConfiguration;
             impl_->restoreConfiguration(configuration);
             impl_->options = engine::PlayerOptions::from(settings,engine::runtimeOrder(impl_->activeRuntime()));
             impl_->revalidate();
@@ -1360,12 +1380,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             : tr("上次采集时显卡设备丢失");
         emit notice(head + QStringLiteral("；") + advice, true);
     });
-    // A saved FSR 4 ML choice on a non-AMD GPU crashed at the first open; move it on.
-    if (settings().frameGenerationBackend == engine::FrameGenerationBackend::Fsr4 && !fsr4Possible()) {
-        auto s = settings();
-        s.frameGenerationBackend = primaryGpuVendor() == 0x10DE ? engine::FrameGenerationBackend::Dlss : engine::FrameGenerationBackend::Fsr;
-        if (impl_->commit(s)) veyra::log::warn("fg-backend", "saved FSR 4 ML frame generation needs an AMD RX 9000; switched for this GPU");
-    }
+    // Unsupported saved FG choices were repaired together with both modes
+    // above, using actual provider availability rather than a brand alone.
 }
 
 QmlPlayerBridge::~QmlPlayerBridge() {

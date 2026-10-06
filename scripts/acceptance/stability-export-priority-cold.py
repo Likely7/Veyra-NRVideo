@@ -1,10 +1,11 @@
 """Cold portable starts with package-only Qt/FFmpeg and private profiles."""
 from pathlib import Path
-import os,sys,json,subprocess,time,hashlib,ctypes
+import os,sys,json,subprocess,time,hashlib,ctypes,zipfile
 from ctypes import wintypes
 BASE=Path('E:/项目/Veyra');TASK='stability-export-priority-20261006'
 ROOT=Path(__file__).resolve().parents[2]
 label=sys.argv[1];assert label.replace('-','').isalnum()
+from_zip='--zip' in sys.argv
 subprocess.run([sys.executable,'-B',str(ROOT/'scripts/acceptance/stability-export-priority-control.py')],check=True)
 results=[]
 api=ctypes.WinDLL('psapi')
@@ -24,6 +25,29 @@ def loaded_modules(process):
     return paths
 for vendor in ('AMD','NVIDIA'):
     app=BASE/'test-packages'/TASK/f'Veyra-2.0.4-fix2-{vendor}-win64-portable'
+    archive=None;archive_hash=None
+    if from_zip:
+        archive=app.parent/(app.name+'.zip')
+        delivery=json.loads((app.parent/'DELIVERY.json').read_text(encoding='utf8'))
+        expected=next(r for r in delivery if r['vendor']==vendor)
+        with archive.open('rb') as stream:archive_hash=hashlib.file_digest(stream,'sha256').hexdigest()
+        assert archive_hash==expected['archiveSha256']
+        extracted=BASE/'verify'/TASK/(label+'-'+vendor)
+        extracted.mkdir(parents=True,exist_ok=False)
+        with zipfile.ZipFile(archive) as zipped:
+            for entry in zipped.infolist():
+                target=extracted/entry.filename
+                assert target.resolve().is_relative_to(extracted.resolve())
+                assert entry.filename.startswith(app.name+'/') and not entry.is_dir()
+                assert (entry.external_attr>>16)&0o170000!=0o120000
+            zipped.extractall(extracted)
+        app=extracted/app.name
+        manifest=json.loads((app/'package-manifest.json').read_text(encoding='utf8'))
+        for row in manifest['files']:
+            item=app/row['path']
+            assert item.resolve().is_relative_to(app.resolve()) and not item.is_symlink()
+            with item.open('rb') as stream:actual_hash=hashlib.file_digest(stream,'sha256').hexdigest()
+            assert item.stat().st_size==row['size'] and actual_hash==row['sha256'],row['path']
     out=BASE/'tests'/TASK/(label+'-'+vendor);tmp=BASE/'tmp'/TASK/(label+'-'+vendor)
     for p in (out,tmp):p.mkdir(parents=True,exist_ok=False)
     logs=BASE/'logs'/TASK;console=logs/(label+'-'+vendor+'.log')
@@ -42,7 +66,7 @@ for vendor in ('AMD','NVIDIA'):
     body=console.read_text(encoding='utf8',errors='replace')
     required=[p for p in modules if Path(p).name.lower().startswith(('qt6','avcodec','avformat','avutil','swscale','swresample'))]
     passed=rc==0 and len(required)>=12 and all(Path(p).resolve().is_relative_to(app.resolve()) for p in required) and not any(x in body for x in ('ReferenceError:','TypeError:','[ERROR]','[FATAL]','failed to load'))
-    results.append(dict(vendor=vendor,passed=passed,exit=rc,seconds=time.monotonic()-begin,exeSha256=hashlib.sha256((app/'veyra_qml_ui.exe').read_bytes()).hexdigest(),packageModules=sorted(required),privateProfile=str(out/'profile')))
+    results.append(dict(vendor=vendor,passed=passed,exit=rc,seconds=time.monotonic()-begin,exeSha256=hashlib.sha256((app/'veyra_qml_ui.exe').read_bytes()).hexdigest(),packageModules=sorted(required),privateProfile=str(out/'profile'),archive=str(archive) if archive else None,archiveSha256=archive_hash,extractedApp=str(app) if from_zip else None))
     print(vendor,'PASS' if passed else 'FAIL','modules',len(required),flush=True)
 (BASE/'logs'/TASK/(label+'.json')).write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf8')
 raise SystemExit(0 if all(r['passed'] for r in results) else 1)

@@ -176,12 +176,15 @@ VPage {
                                     : fraction < 0.7 ? Theme.ok : fraction < 1.0 ? "#F2B941" : Theme.err
         implicitWidth: Math.max(size, labelText.implicitWidth)
         implicitHeight: showLabel ? size + 4 + labelText.implicitHeight : size
-        property real shown: known ? Math.min(1, Math.max(0, fraction)) : 0
-        // Live data changes every second; animating it behind another page redrew the
-        // window continuously (see VDot.qml), so only while shown.
-        // Paused telemetry still updates, but it does not need a 600 ms canvas
-        // animation every second. Keep live playback and user edits responsive.
-        Behavior on shown { enabled: orb.visible && (!veyra.paused || (typeof vyTest !== "undefined" && vyTest.disablePausedUiIdle === true)); NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
+        // The ring is only a few dozen pixels across. Sub-percent changes do
+        // not add visible information; the numeric label retains full precision.
+        readonly property real shown: Math.round(telemetry.value * 100) / 100
+        VTelemetryValue {
+            id: telemetry
+            targetValue: orb.known ? Math.min(1, Math.max(0, orb.fraction)) : 0
+            animate: orb.visible && !Theme.reduced && (!veyra.paused || (typeof vyTest !== "undefined" && vyTest.disablePausedUiIdle === true))
+            duration: 600
+        }
         onShownChanged: ring.requestPaint()
         onToneChanged: ring.requestPaint()
         Canvas {
@@ -833,11 +836,17 @@ VPage {
                                 color: Qt.rgba(1, 1, 1, 0.08)
                                 Rectangle {
                                     objectName: "stage-bar-fill"
-                                    width: root.barsArmed ? parent.width * Math.max(0, Math.min(1, modelData.fraction)) : 0
+                                    width: root.barsArmed ? Math.round(parent.width * (root.barsSettled ? liveFraction.value : Math.max(0, Math.min(1, modelData.fraction)))) : 0
                                     height: parent.height
                                     radius: 9
                                     color: modelData.color
-                                    Behavior on width { enabled: stageRow.visible; SequentialAnimation {
+                                    VTelemetryValue {
+                                        id: liveFraction
+                                        targetValue: Math.max(0, Math.min(1, modelData.fraction))
+                                        animate: root.barsSettled && stageRow.visible && !Theme.reduced
+                                        duration: 800
+                                    }
+                                    Behavior on width { enabled: stageRow.visible && !root.barsSettled; SequentialAnimation {
                                         PauseAnimation { duration: root.barsSettled ? 0 : Theme.d(120 + stageRow.index * 60) }
                                         NumberAnimation { duration: Theme.d(800); easing.bezierCurve: Theme.springSoft } } }
                                 }

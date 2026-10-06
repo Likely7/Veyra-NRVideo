@@ -8559,3 +8559,17 @@ README更新仅当前版本更新/下载/过时状态和社区支持。独立确
 性能普通档候选6.932ms/60fps，紧邻2.0.3为6.472ms，相差7.12%；同候选允许撕裂6.803ms，同步对照差1.90%。前台不一致的首轮14%差值作无效因果证据；不能声称没有回退或根因已修复，也未以调高优先级计成功。外部foreground查询与Qt active不一致、覆盖层/时钟未锁定，全部结果保留。AMD实卡离线推理/编码、FSR4、用户扫描撕裂和全设置稳定性未验，不据模拟/软件计数扩展支持。
 
 夹具失败保留：build-second变量声明顺序；display-first未drain即释放导致device hung、second累计计数误用；GUI预设mask/重复单例；FG运行配置路径；FSR子串匹配；cold-stage硬链接mapped路径假阴性。修正后复查，不冒充产品缺陷或抹掉原日志。完整便携候选2.0.4-fix2和源码存于本轮test-packages；最终ZIP/commit/SHA/CRC校验以DELIVERY.json为准，保护main/tag/现有发布资产。
+
+### 2026-10-07 普通优先级性能闭环与最终 AMD 默认修复
+
+用户要求先核实2.0.3默认GPU档位，并解决7%差距再封包；指定GTA VI 4K素材/1080p NR。检查v2.0.3 385a341b无GPU调度setter、队列NORMAL；原发布EXE三组135次只读D3DKMT查询均0x0/class2=普通。没有提高旧版或新版优先级来掩盖差异，没有压力/竞争测试或改全局驱动设置。
+
+补齐已保存配置的默认迁移：真实能力检查将不可用DLSS选择优先换FSR2X，覆盖列表和未激活节点模式、包括FG关闭状态，保留启用标志与可用手动选择；存储修复结果防止重启恢复旧值。build-amd-default-final成功，最终EXE 65fc23e33598d7efd77ea50ba8062a89beaacb29eb14369ffc78d03563312626。units-amd-default：264/258/482/56/78及i18n全通过；gui-amd-default-old-second、gui-amd-default-migrate、gui-amd-xess-keep、gui-nvidia-dlss-keep验证真实缺组件入口、FSR迁移、手动XeSS与NVIDIA6X保存。RTX5070运行缺组件包，不冒充AMD实卡。
+
+串行普通40秒播放：GTA素材3840×2160/30fps、SHA93db6129…1f8b3f；原版NR310.8、单层内部1080p、风格0/强度1、画面调控和SR/FG等关闭。软件UI实际OBS路径恢复NR约5.97ms，真正关闭动效约6.10ms；COMPUTE/D3D11/basic均只作反证，没有进入产品。当前EXE恢复旧统计动画（gta-ui-reversal-d1）NR6.963605/UI320Hz，最终修复（gta-meter-final-c4）6.559476/UI35Hz；紧邻原2.0.3（gta-old-bracket-a5）6.558881/UI20Hz。原4K60 M2最终新/旧6.590205/6.632515ms，均实际普通class2。相邻GTA差+0.009%、M2差−0.638%，同EXE UI反向对照修复减少NR区间5.80%、UI提交89.06%；不将此数冒充屏幕延迟或全设置收益。早期7%和全部波动保留；没有用最早5.94ms跨系统状态比较后续6.56ms。performance-final-comparison.json与每轮原始日志在本轮logs。
+
+产品仅将统计圆环/列表GPU条/节点统计条改为33ms有界插值和可见精度，保留页面/入场动画、实际数值和视频帧率，继续D3D12 UI/DIRECT图队列。build-telemetry-tests通过；telemetry-final揭示频繁retarget只取上次公布值导致停滞，修正推进内部轨迹而不立即绘制，telemetry-second 6/6通过，没有放宽测试。gta-new-reduced-b7偏好字段未消费，后续实际setter修正为b9；gui-amd-default-old关闭FG getter为1导致夹具错误，old-second修正仅期望。原失败完整保留。
+
+gui-telemetry-lifecycle（29.86秒）真实原版NR：播放/暂停恢复/窗口全屏返回/seek/节点NR接线/列表恢复/reduced motion/停止退出通过，NGX参数完整释放。gui-fsr-final（19.39秒）最终EXE/QML真实FSR预览和H264导出120帧、720p60通过。源码、日志和实际导出继续在本轮E盘目录；下一步只封包、新ZIP解压冷启动、逐文件/源码bundle与保护审计，按对应实际JSON记交付完成，不公开发布、不合main、不关机。
+
+封包前独立最终导出 `ffmpeg -v error -xerror ... -f null -` 完整解码、ffprobe逐帧时间戳检查通过：120帧、0–1.983333秒、每帧1/60递增；gui-fsr-final-timestamps.json保留实际文件SHA及解码exit0。全部本轮Python脚本AST语法检查通过。新增evidence freeze/close分别核对归档旧引擎证据和最终EXE/QML证据；未声称所有旧GPU用例在新EXE上重跑。

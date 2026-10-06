@@ -2,7 +2,11 @@
 
 ## 2026-10-07 2.0.4-fix2 本地修复候选
 
-隔离分支 codex/stability-export-priority-20261006 修复跨厂商 FG 入口/导出、AMD NR 视频内部1080p与原尺寸输出，Auto 明确显示同步。真实 FSR/H264/HEVC、列表预设重启、12组呈现合同、GPU像素/复用和冷启动通过；候选 EXE 21e8e89c37d36f2cc43e7c619382185459ba36f76edefd602666050d6a20285b。普通GPU档 NR约6.93ms/60fps，对照2.0.3约6.47ms，仍有约7%性能疑点，未宣称根因已解决。真实AMD离线推理/编码与用户显示撕裂待复测。完整事实与失败见 [本轮报告](STABILITY_EXPORT_PRIORITY_REPORT_2026-10-06.md)，本地交付在E:/项目/Veyra/test-packages/stability-export-priority-20261006；ZIP完成以DELIVERY.json为准。未合入main/推送/公开发布，25其他工作树与既有发布文件不变。以下为历史状态。
+隔离分支 codex/stability-export-priority-20261006 修复跨厂商 FG 入口/导出、AMD NR 视频内部1080p与原尺寸输出、Auto 显示同步及 AMD 旧 DLSS 选择迁移到可用 FSR（可用手动 XeSS 保留）。最终 EXE 65fc23e33598d7efd77ea50ba8062a89beaacb29eb14369ffc78d03563312626；真实 FSR/H264/HEVC、预设重启、12组呈现合同、GPU像素/复用及新增 GUI 生命周期通过。
+
+已核实 2.0.3 默认 GPU 优先级为普通（原进程135次只读查询 class2，源码无 setter）。此前约7%差距已定位到持续统计动画争用GPU，修复为有界更新，保留交互动效/数值/NR工作；同普通档、原版单层1080p NR，用户 GTA VI 4K30 相邻旧/新6.558881/6.559476ms（+0.009%），原 M2 4K60 为6.632515/6.590205ms（−0.638%）。同EXE反向恢复旧统计动画再次退化，详 [本轮报告](STABILITY_EXPORT_PRIORITY_REPORT_2026-10-06.md)。此结论限本机匹配设置，不代表全硬件/物理延迟/长期稳定性。
+
+真实AMD离线推理/编码与用户显示撕裂待复测。本地交付在E:/项目/Veyra/test-packages/stability-export-priority-20261006；ZIP以DELIVERY.json、最终新解压启动以logs/.../cold-final-zip.json为准。未合入main/推送/公开发布，25其他工作树与既有发布文件不变。以下为历史状态。
 
 ## 2026-10-06 PR19/PR20 适配验收
 
