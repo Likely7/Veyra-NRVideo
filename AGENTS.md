@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-06 PR #19/#20 审查与适配授权**：用户反馈9000系NR已通过其测试，并要求检查项目PR19、PR20、判断能否合并并做好适配。按 `docs/PR19_PR20_INTEGRATION_PLAN_2026-10-06.md`，从刚交付的 `63ce396` 在 E盘 `codex/pr19-pr20-20261006` 隔离审查/适配HDR输出调优、预设/会话迁移、QML、呈现metadata生命周期、MSVC日志转换和RemotePlay条件编译及必要构建/定向测试。此具体范围覆盖历史冻结，不复活暂缓的PR13/14。验证后允许将可合并PR及已测现场修复整合main，普通推送完成GitHub PR合并状态；保留作者原始提交、其他工作树和原发布资产。不派Agent，不做压力/竞争负载、不改DLL/模型/驱动或用户配置；测试每进程≤300秒，构建≤900秒，产物统一E盘。先运行独立 `scripts/acceptance/pr19-pr20-control.py`，开工start基线禁止修改。本轮无新Release/资产上传/贡献者消息或评论/关机请求。用户RX9000反馈与本机RTX/HDR软件验证分别报告，不外推全部型号或物理HDR实测。
+
 > **2026-10-06 OBS/导出/AMD NR 现场修复授权**：用户提交 logs(14).zip、veyra-qml(30).log 和两张截图，明确要求修复 OBS 兼容模式滚动拖影、视频导出失败及 AMD 开 NR 黑屏，并对照 lmxxf 与 A-ENTROPY 项目。仅在 E:/项目/Veyra/worktrees/obs-export-amdnr-20261006 / codex/obs-export-amdnr-20261006，从 main f8045fb 隔离实施必要启动/QML 绘制、导出冻结协议、共享 AMD NR/codec/互操作、构建和定向验收接点；按 docs/OBS_EXPORT_AMD_NR_PLAN_2026-10-06.md 执行。这些具体接点覆盖历史冻结，其他功能保持。不派 Agent、不做压力或竞争负载；测试每进程≤300秒，构建≤900秒。所有产物 E 盘，先运行 scripts/acceptance/obs-export-amdnr-control.py，独立 start 基线禁止修改。保留 main、其它工作树、用户文件/配置和已发布资产。允许本地修复及候选交付，不包含新公开发布/推送/合并或关机；不修改 proprietary DLL/模型/驱动，不用本机 RTX 测试冒充 RX9070 真推理通过。
 
 > **2026-10-06 正式发布授权**：用户明确要求发布2.0.4到Likely7/Veyra-NRVideo，README替换2.0.3更新内容，其余主体保持；新增Discord `https://discord.gg/c9aREyMj8` 与Ko-fi `https://ko-fi.com/likely7`，保留原微信群及微信赞助二维码各width=220；Release详述优化、实测数据与限制，完成后提供1000字以内群公告并关机。本轮允许必要发布文档/打包/源码归档、main合并、推送、v2.0.4标签与Release资产上传和正式发布。按docs/PUBLISH_2.0.4_PLAN_2026-10-06.md执行；沿用已验收程序及运行组件原字节，不扩改引擎、不派子Agent、不做压力测试。发布核实后才能安排关机；公告只交付用户，不代发群。本条覆盖此前本地候选的“不发布/不关机”限制。

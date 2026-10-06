@@ -1,5 +1,9 @@
 # Veyra 工作记录
 
+## 2026-10-06 PR19/20 审查与适配开工
+
+用户确认测试的9000系NR正常，授权检查PR19/20并适配合并；从已交付63ce396开E盘pr19-pr20-20261006工作树，保留OBS/多NR导出/AMD共享合成修复。只推进这两个PR，不复活暂缓PR13/14；无新Release/贡献者消息/关机请求。bootstrap保存24原工作树、四原发布ZIP身份、两PR固定head及原diff/元数据，source-before.bundle已verify；不可变start SHA f3d49a940e731ef7412d83666525cc37f08464f7a48ad226b9f9a286e947c771。guard与本轮方案新建，旧baseline不改。本轮archives/build/tests/logs/tmp/verify/test-packages均E:/项目/Veyra下pr19-pr20-20261006；产品审查与测试尚未完成。首轮apply_patch因WORKLOG标题不匹配原子失败，未改变文件；更正锚点后继续。
+
 ## 2026-10-06 2.0.4预设纠偏
 
 用户截图说明不要独立补帧预设，而是把共享光流·运动估算区块纳入既有列表预设。分支codex/list-preset-flow-20261006从main d2e589a隔离施工；before全引用bundle、21工作树原字节/patch及旧2.0.4 ZIP/manifest SHA封存。移除独立FG UI/API，旧fgPresets数据不删除；统一库Flow可选范围含后端/质量/AMD半分辨率/内容节奏，默认启动节奏优先级同步修复。v10另存.flow、v1–9行为保留，新未勾选项不被ChainGlobalSettings覆盖。新增checkbox/完整摘要，四语言词条齐全。
