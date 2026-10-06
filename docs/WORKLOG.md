@@ -8507,6 +8507,8 @@ OBS 最终 100%/125% 展开 NR 参数各10张真实窗口 GDI图、3张返回原
 
 `obs-export-amdnr-cleanup.ps1` 核对自有进程已退出、目标绝对路径及无reparse，保留全部真实GUI worker日志到logs/gui-worker-logs后，只清理13个本轮重复解压/runtime副本，7498197408bytes；最终可用build、两个完整候选目录及ZIP、源码/bundle、截图、导出视频、失败回执/identity fixtures/保护partial保留。未删用户输入/原工作树/已发布包，不做全工程备份。后续只提交收尾文档与审核脚本修正，并独立final-check确认23原工作树、四原发布ZIP、最终包SHA、466产品输入及15实测回执不变。
 
+最后close首版猜错旧依赖源码ZIP文件名，FileNotFoundError在回执写入前发生；产品/包未改变，原命令失败保留。改为从开工不可变start.json中按已核SHA定位真实发布资产路径，再核SHA并生成对应源码链接，不重造依赖包。该夹具错误不计作产品失败或最终检查通过。
+
 ## 2026-10-06 2.0.4 正式发布完成
 
 执行package-v1完整生成正式AMD/NVIDIA、应用源码、依赖源码及SHA256SUMS，全部CRC/逐文件SHA、runtime原字节/PE闭包/显卡分包通过；source-final.bundle验证通过。EXE仍d01329aa6d9fbd6ac2d1eee294782f4cb9d233490595ed2e3e1a9ea12c16b2d6，PE2.0.4.0。cold-v1两包新解压隔离profile、Windows-only PATH启动分别9.937/9.578秒正常退出、各26个Qt/FFmpeg模块由包内加载，ASS5事件/字体附件正常；原功能验收对应同一473生产输入，不重复无关GPU测试。包路径、5项大小/SHA详PUBLISH_2.0.4_PLAN第2节及logs/.../assets.json、stage-AMD/NVIDIA.json、cold-verify-results.json。

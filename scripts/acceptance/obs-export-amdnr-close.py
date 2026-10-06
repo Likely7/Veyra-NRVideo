@@ -1,6 +1,7 @@
 """Final byte/preservation check; bookkeeping commits do not replace tested product source."""
 from pathlib import Path
 import hashlib,json,subprocess,sys
+from urllib.parse import quote
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='obs-export-amdnr-20261006'
 LOG=BASE/'logs'/TASK;PACK=BASE/'test-packages'/TASK;ARCH=BASE/'archives'/TASK
 def sha(p):
@@ -27,13 +28,14 @@ head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).stri
 productCommit=delivery[0]['sourceCommit']
 changed=subprocess.check_output(['git','diff','--name-only',productCommit,head],cwd=ROOT,text=True).splitlines()
 assert all(n in ('docs/WORKLOG.md','docs/OBS_EXPORT_AMD_NR_PLAN_2026-10-06.md') or n.startswith('scripts/acceptance/obs-export-amdnr-') for n in changed)
-sourceDeps=BASE/'releases/publish-2.0.4-20261006/Veyra-2.0.4-open-source-dependencies.zip'
+start=json.loads((ARCH/'start.json').read_text(encoding='utf8'))
+sourceDeps=Path(next(r['path'] for r in start['published'] if r['sha256']=='4eccde6343d66e0511b641aaacc12b999e424738a383fcce268d762abb3dceb9'))
 assert sha(sourceDeps)=='4eccde6343d66e0511b641aaacc12b999e424738a383fcce268d762abb3dceb9'
 result=dict(passed=True,productSourceCommit=productCommit,bookkeepingHead=head,
     executableSha256=frozen['executableSha256'],productInputs=len(frozen['productInputs']),receipts=len(frozen['testReceipts']),
     candidates=delivery,coldReceiptSha256=sha(LOG/'cold-verify-results.json'),cleanup=json.loads((LOG/'cleanup.json').read_text(encoding='utf-8-sig')),
     dependencySourceArchive=str(sourceDeps),dependencySourceSha256=sha(sourceDeps),
-    dependencySourceURL='https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.0.4/Veyra-2.0.4-open-source-dependencies.zip',
+    dependencySourceURL='https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.0.4/'+quote(sourceDeps.name),
     mainMerged=False,pushed=False,published=False,amdHipInferenceVerified=False,affectedObsMachineVerified=False)
 out=LOG/'final-check.json';assert not out.exists();out.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
 sums={Path(r['archive']).name:r['archiveSha256'] for r in delivery};sums[Path(delivery[0]['sourceZip']).name]=delivery[0]['sourceZipSha256']
