@@ -2,6 +2,10 @@
 
 ## 2026-10-06 PR19/20 最终适配验收
 
+最终执行 `pr19-pr20-finish.py freeze/commit/merge/push/verify`：565产品输入/161测试与脚本输入/92证据SHA封存，8个新增可达提交无SDK/runtime/model产物。PR20 merge 2e3d239，PR19适配merge357c136，父提交2e3d239+b14dc5a；作者原heads完整保留。source-integration.bundle 73856888 bytes、SHA7bd38da97fce41739dcf3d19ae436ca501a075bc86421a63125e737ec6ff6c60并verify成功。本地main从f8045fb快进357c136、Git树8976fc731aab0e55467e39b42bfe4402ed6ccee3与实测freeze一致，nrvideo普通推送成功。REST核实PR19/20 closed/merged（mergeCommit357c136/2e3d239）；原Release/tag/正文/资产对象和4本机发布ZIP SHA保持。main-advance/push/remote-after收据保留。最终收尾仅三个文档及自有cleanup脚本，产品与测试证据保持，最终SHA以final-check.json为准。
+
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/acceptance/pr19-pr20-cleanup.ps1`：先核已退出自有测试进程、E盘任务绝对路径/无reparse、与批准fix1组件逐文件SHA相同，清431项重复DLL/runtime共1812729736 bytes；标准/RemotePlay-off构建、完整ui-app、source/bundle、所有回执/logs/exports/profiles/identity夹具保留。首轮PowerShell5.1误读无BOM UTF8中文路径，枚举前失败、无删除；使用原生PSScriptRoot解析且验证固定E盘根路径后重跑成功，cleanup.json完整记录。没有删除用户文件或其它工作树/旧发布包。23个其它原工作树HEAD/status/修改SHA保持，main按授权推进，24个开工工作树均保留。
+
 已完成两个PR原head审查和必要适配；最终生产11目标build-final-v6与RemotePlay-off-v3全部exit0，补resize夹具目标v8 exit0。units-final-v4：HDR124/EffectChain239/PresetLibrary482 PASS及i18n0 failures；hdr-final-v4：真实呈现23检查与现有HDR颜色目标全部0 failures、无D3D12 ERROR/CORRUPTION，knee最大误差scRGB0.0779% / HDR10 0.4415%，保色/负scRGB/关闭及强度0精确恒等/暂停live重绘/导出surface不变通过。新增DXGI resize→disable已实际resize到96像素buffer、SetHDRMetaData与NONE清除均HRESULT0，不冒充显示器使用。
 
 RemotePlay-off-v1 CMake生成失败，C语言原来只随PS5依赖初始化，但Moonlight/Xbox独立有C源码；显式project C/CXX/RC后v2、最终v3全生产构建通过。末次自审修复metadataSent在ResizeBuffers被清零导致旧hint无法清除的问题，保留已发送状态并用metadataDirty要求重发；build-final-v6及hdr-final-v4验证。其余v1编译/翻译ctx/旧HDR夹具失败按上条保留；一次文档apply_patch错误锚点原子失败、rg Windows通配路径查询失败，均更正后重新执行，未计作产品通过或改旧证据。

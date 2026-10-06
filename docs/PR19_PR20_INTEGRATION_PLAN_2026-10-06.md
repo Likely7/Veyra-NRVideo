@@ -58,3 +58,11 @@ RemotePlay-off-v1在CMake生成阶段失败：Moonlight/Xbox独立使用C源码�
 新HDR灰阶knee误差scRGB0.0779% / HDR10 0.4415%，保持单调、有界，关闭/0%原像素精确一致，图/导出surface原字节不变。BT.2020色块归一化RGB误差scRGB0.00013806 / HDR10 0.00101177，负scRGB分量保留。上述是GPU/DXGI像素回读，不是物理显示器亮度/色差测量。系统报告240nit只显示为系统信息，不作为真实峰值仪器验收。HDR10 metadata接口可接受不证明Windows转发/屏幕应用；Microsoft明确提示其可能被忽略，见[SetHDRMetaData](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_5/nf-dxgi1_5-idxgiswapchain4-sethdrmetadata)及[HDR10单位](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10)。
 
 本轮自审结论：两PR可在上述适配后整合；保留PR19/20作者原始head作main祖先，不对贡献者分支force push。先前OBS repaint、Native多层导出、AMD上下文合成修复保留；RX9000实卡可用性来自用户本轮反馈，本机是RTX5070/诊断identity，未重新进行AMD HIP/全部RX9000或物理HDR/其他显卡验证。既有PR13/14仍暂缓，无新Release或v2.0.4资产改动。最终源码/证据冻结及main/远端状态以logs/.../tested-inputs.json、main-advance.json、remote-after.json为准；下方记录实际合并结果。
+
+## 合并及收尾结果
+
+`pr19-pr20-finish.py freeze/commit/merge/push/verify` 已实际执行。冻结565产品输入、161测试/脚本输入、92证据文件，scope guard及四原发布ZIP SHA通过。PR20合并提交 `2e3d2397945f5a22bcbdefa87d1990e83a91de1e`；PR19适配合并提交 `357c13679cf193ad7e48f51218b678d6aef53b6c`，父提交为2e3d239与作者原head b14dc5a。8个新增可达提交已审查，没有新增DLL/SDK/模型/编译产物进入Git。source-integration.bundle 73856888 bytes，SHA256 `7bd38da97fce41739dcf3d19ae436ca501a075bc86421a63125e737ec6ff6c60`，bundle verify成功。
+
+本地main从 `f8045fb53a7d800b053f0631a9b44dc9f5f1aacb` 快进到357c136，无冲突，Git树 `8976fc731aab0e55467e39b42bfe4402ed6ccee3` 与实际冻结树完全一致，普通推送nrvideo成功。REST独立核实两PR均closed/merged：19 mergeCommit=357c136，20 mergeCommit=2e3d239，原heads不变。v2.0.4的tag、Release正文/状态/全部assets对象及本机四ZIP原字节保持；没有新Release、上传、贡献者评论或消息。最终收尾提交只补这三个记录文档和自有清理脚本，产品输入/EXE及以上测试证据不得改变，最终main SHA见final-check.json。
+
+`pr19-pr20-cleanup.ps1` 核对自有测试进程退出、E盘任务绝对边界、无reparse，并与已批准fix1组件逐字节SHA比较后删除431项重复根DLL/完整runtime副本，共1812729736 bytes。当前标准/RemotePlay-off构建、完整测试ui-app、源码/bundle、所有失败/成功回执、worker日志、exports/profiles与identity fixtures保留。首轮因PowerShell5.1把无BOM UTF8中文路径误解码而在枚举前失败、无删除；根路径改用原生PSScriptRoot解析及固定E盘校验，重新执行成功。没有删除用户文件、旧工作区或原发布包。23个其他原工作树的HEAD/status/修改SHA不变，main仅按当前授权推进，开工24个工作树仍全部保留。

@@ -2,6 +2,8 @@
 
 ## 2026-10-06 PR19/PR20 适配验收
 
+已合入并普通推送main：功能合并 `357c136`（此前main f8045fb）；PR20原历史合并2e3d239。GitHub REST核实PR19/20均closed/merged，原作者head保留为main祖先，合并Git树与实际验证树相同。v2.0.4 Release/tag/正文/资产不变。后续仅记录收尾和清理自有测试重复组件，565产品输入、生产EXE及92验收证据保持；最终main SHA见本轮logs/final-check.json。其他23原工作树原状态保留。
+
 用户已确认RX9000 NR实卡可用。本轮在E盘隔离分支审查PR19（HDR输出调优）及PR20（MSVC日志/RemotePlay条件编译），保留已验OBS软件重绘、Native多层NR导出和AMD共享合成修复。PR19增加静态曲线、七档预设、强度/显示峰值及可选HDR10 metadata；补正确的PQ解码/再编码与保色亮度映射、source epoch/resize/暂停cache生命周期、library v11/session v6及旧NR/Flow配置兼容。新曲线和metadata默认关闭。PR20保留UTF-8日志与禁用PS5接点，并补CMake独立C语言初始化，RemotePlay关闭时Moonlight/Xbox仍可构建。
 
 最终生产11目标及RemotePlay-off构建通过；HDR124、效果链239、预设482、i18n、HDR像素与metadata resize、AMD共享图7例/ABI62例、真GUI持久化/重启和五次完整60帧NR导出通过。EXE SHA d8803feb58a60a3cecc32641c3851b03c3e56059f1eef28dd13a1ad169e1a701；GPU灰阶knee误差0.0779%（scRGB）/0.4415%（HDR10），不冒充物理HDR测量。AMD identity是RTX诊断，未扩展用户RX9000反馈范围。完整命令/失败/限制见[PR19/20记录](PR19_PR20_INTEGRATION_PLAN_2026-10-06.md)，产物全在E:/项目/Veyra同名任务目录。本次不创建Release，不修改v2.0.4既有资产；main实际合并/推送SHA以该记录及日志收据为准。以下为历史状态。
