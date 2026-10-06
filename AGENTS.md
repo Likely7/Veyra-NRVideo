@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-06 正式发布授权**：用户明确要求发布2.0.4到Likely7/Veyra-NRVideo，README替换2.0.3更新内容，其余主体保持；新增Discord `https://discord.gg/c9aREyMj8` 与Ko-fi `https://ko-fi.com/likely7`，保留原微信群及微信赞助二维码各width=220；Release详述优化、实测数据与限制，完成后提供1000字以内群公告并关机。本轮允许必要发布文档/打包/源码归档、main合并、推送、v2.0.4标签与Release资产上传和正式发布。按docs/PUBLISH_2.0.4_PLAN_2026-10-06.md执行；沿用已验收程序及运行组件原字节，不扩改引擎、不派子Agent、不做压力测试。发布核实后才能安排关机；公告只交付用户，不代发群。本条覆盖此前本地候选的“不发布/不关机”限制。
+
 > **2026-10-06 列表预设纠偏**：用户明确不要独立补帧预设，要求图示光流/估算质量/内容节奏进入已有列表预设，并重新打包2.0.4。按docs/LIST_PRESET_FLOW_PLAN_2026-10-06.md在E盘codex/list-preset-flow-20261006实施必要PresetLibrary/bridge/QML/翻译/定向测试/本地main续修与打包；保留旧包/原工作区及用户配置，不替换运行库。新guard list-preset-flow-control.py使用独立不可变基线。此具体修复覆盖这些接点历史冻结；不推送/公开发布，不派Agent/压力测试/关机，沿用≤300秒测试与≤900秒构建。
 
 > **2026-10-05 2.0.4 整合与测试包授权**：用户要求检查其他分支及 Claude 刚完成的修复，与 NR 强度/三风格画面调控、采集/Xbox 修复整合到本地 main，打包 2.0.4 给用户测试并准备正式发布。工作树 `E:/项目/Veyra/worktrees/release-2.0.4-20261005`，分支 `codex/release-2.0.4-20261005`；按 `docs/RELEASE_2.0.4_PLAN_2026-10-05.md` 执行。本轮允许存档、提交、标签、本地 main 合并、必要版本/打包/翻译/定向验收及发现的整合缺陷修复；仅合入已审查的产品改动，不复活历史撤回实验。Claude UI 工作树的 18 份未提交文件已逐字节封存并复制，原工作区/桌面/用户配置保持。新 guard 为 `scripts/acceptance/release-2.0.4-control.py`，不可变 start 与全引用 bundle 在本轮 E 盘 archives。继续 NVIDIA/AMD 同源码分包，保留 patched FFmpeg、libass、原组件身份；不派 Agent、不跑压力或竞争负载。测试每进程≤300秒、构建≤900秒。此次是本地测试交付及发布准备，未请求新的 push/GitHub Release/上传或关机；HDR/Dolby PR13/14仍暂缓。本条覆盖此次整合所需的旧 main/分支冻结，不扩大无关算法或运行库改动范围。

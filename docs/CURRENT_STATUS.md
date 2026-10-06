@@ -597,3 +597,4 @@ RTX Video HDR 独立改动保留。用户已明确终止 NVIDIA FSR 4.1 实验�
 - 用户授权本地 `1.4.2beta` 内测群包，新增已核验的官方 TrueHDR 原件；未授权 GitHub push/Release 或 Agent 代发。便携包路径、哈希及解压后实测见 WORKLOG。实际 HDR 屏幕和 RTX30/40 HDR 仍待内测。
 
 所有新产物放 `E:/项目/Veyra/`，源码/文档留在隔离工作区；逐项结果以 [WORKLOG](WORKLOG.md) 为准。
+> 2026-10-06正式发布准备：用户已授权2.0.4公开发布、Discord/Ko-fi和原双QR、实测报告/群公告及发布核实后关机。当前工作树E:/项目/Veyra/worktrees/publish-2.0.4-20261006，473生产输入/已测EXE保持，远端README页头/Star History已合并。发布准备和实际远端结果以docs/PUBLISH_2.0.4_PLAN_2026-10-06.md及WORKLOG最新条目为准；此时尚未上传或正式发布。

@@ -61,13 +61,13 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ---
 
-**2.0.4 testing, 2026-10-06:** the local candidate combines the later performance/field fixes, NR strength 5 and style-specific automatic/manual picture control, bounded Xbox decoder recovery and Claude's latest UI repairs. List panels can be resized, slider numbers can be typed, floating mode buttons avoid picture clicks, and the existing list/node preset dialog can include shared optical flow, estimation quality and content cadence. GPU scheduling defaults to Realtime when no choice is saved; existing choices remain. [2.0.4 changes and test limits](docs/RELEASE_NOTES_2.0.4.md). The public download remains 2.0.3 until field testing and publication.
+**2.0.4 release, 2026-10-06:** performance improvements, NR strength 5 with style-specific picture control, Xbox/capture recovery, ASS subtitles, UI and unified presets. [Full release notes](docs/RELEASE_NOTES_2.0.4.md).
 
-**Local development, 2026-10-05:** this branch includes later RTSS restart, custom playback rate, subtitle, UI refresh, Professional layout and fullscreen restoration repairs; public 2.0.3 assets do not include them. Every local NR optimization node now has a measured retain/reject decision: core reuse, single-NR caching, idle prewarming, paused-frame reuse, narrowly admitted compute queues and NVENC export scheduling are retained. Auto NR and coarse-to-fine sizes remain optional and change the image. Normal matched runs measured about 6.1 ms for native single-layer NR; the dual-NR/SR4K/DLSS2X pipeline improved 3.52%, with nearly unchanged submission P99. [The execution record](docs/PERF_EXECUTION_NR_2026-10-04.md) and [local regression evidence](docs/PERF_R0_ACCEPTANCE_2026-10-05.md) distinguish measurements and limitations. Severe background frame loss remains unresolved; reliable OBS Game Capture uses the existing compatibility mode, while GPU UI capture is unstable even in the sealed baseline. HDR/Dolby PRs remain deferred. [Current project status](docs/CURRENT_STATUS.md) distinguishes published, local and unverified work.
+**Measured performance:** the dual-NR/SR4K/DLSS2X enhancement interval improved 3.52%; native single-layer NR remains about 6.1ms and software-Present P99 is nearly unchanged. Creation, paused editing and process GPU utilization are reported separately in the [measurement report](docs/PERF_RELEASE_REPORT_2.0.4_2026-10-06.md). Severe background loss and GPU-UI OBS Game Capture remain unresolved; the existing OBS compatibility mode is available. HDR/Dolby PRs remain deferred.
 
 ## Highlights
 
-**Local NR controls, 2026-10-05:** each NR layer's **Enhancement delta → Total strength** now reaches 5. **Picture control** defaults off; enable it and select Automatic or Manual. Automatic values now adapt separately to styles 0/1/2, with an amount slider (0 retains raw strength, 1 applies full correction). The nine manual controls cover hue, chroma, neutral tint, source color retention, lightness retention, shadows, highlights, local compression and temporal stability. **Use this style’s automatic values** provides a manual starting point. Switching modes keeps manual values; turning control off preserves the original residual algorithm. Five extrapolates one inference's residual, and protection reduces the corresponding changes; it cannot promise full gain five with no artifacts on every video. Presets, List/Node sessions, PNGs and video exports share the settings. [Local validation and known limits](docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md); public 2.0.3 assets do not include this feature.
+**2.0.4 NR controls:** each NR layer's **Enhancement delta → Total strength** now reaches 5. **Picture control** defaults off; enable it and select Automatic or Manual. Automatic values now adapt separately to styles 0/1/2, with an amount slider (0 retains raw strength, 1 applies full correction). The nine manual controls cover hue, chroma, neutral tint, source color retention, lightness retention, shadows, highlights, local compression and temporal stability. **Use this style’s automatic values** provides a manual starting point. Switching modes keeps manual values; turning control off preserves the original residual algorithm. Five extrapolates one inference's residual, and protection reduces the corresponding changes; it cannot promise full gain five with no artifacts on every video. Presets, List/Node sessions, PNGs and video exports share the settings. [Local validation and known limits](docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md).
 
 - **Rebuilt interface:** Home, Cinema, Professional List, Nodes, Colour, Export and Settings; Simplified/Traditional Chinese, English and Japanese.
 - **Node editing and layered NR:** executable connections, independent NR/colour parameters, separate List/Node configurations, sessions and presets.
@@ -75,21 +75,18 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** four NR runtime choices (NVIDIA original for RTX 50, Lecram, SF-v2 and AMD lmxxf), DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-## New in 2.0.3
+## New in 2.0.4
 
-- **GPU packages:** choose NVIDIA or AMD. AMD NR assets and NVIDIA-only NR/NGX/VFG/CUDA components are separated. Both keep the existing shared FidelityFX 2.3.0 components and cross-vendor FSR3.1/XeSS; FSR4 stays gray on NVIDIA.
-- **Visible compatibility:** four NR versions, SR backends, FG backends, RTX HDR and optical flow retain unsupported entries with a disabled reason in List/Node mode. Restoring old configurations disables unavailable stages and preserves their parameters.
-- **VFG and field fixes:** all 2–8X multipliers and Low/Medium/High; Xbox audio startup and bounded recovery; bitrate draft/validation/frozen exports; opaque RTSS-compatible UI; removed false NVIDIA App crash detection; fixed the minimal window's right-edge gap. Nine unrelated VFG NPP libraries are omitted. RX9000 inference and Xbox hardware long sessions remain unverified; HDR/Dolby PRs are deferred.
+- **NR strength and picture control:** total strength up to 5, optional per-layer automatic/manual control, separate automatic settings for styles 0/1/2, an amount slider and nine manual controls.
+- **Performance:** reuse eligible NR cores and single-NR configurations, avoid repeated work while paused, and improve selected dual-NR/SR/FG and export scheduling. The matched dual-NR1080/SR4K/DLSS2X enhancement interval fell **3.52%**; warm NR creation fell **75.83%**. See the [measurement report](docs/PERF_RELEASE_REPORT_2.0.4_2026-10-06.md) for conditions and limits. Prewarming defaults off.
+- **Playback and reliability:** custom 0.25–4× speed with preserved pitch, libass ASS subtitles/font attachments, bounded Xbox decoder recovery, capture cadence/history repairs, AMD NR enablement and restored GPU timing after graph rebuilds.
+- **UI and presets:** resizable Professional panels, typed slider values and fullscreen/RTSS/floating-control repairs. Existing List/Node presets can optionally include optical flow, estimation quality and content cadence; unchecked values remain unchanged. Unset GPU scheduling requests Realtime; saved choices are retained.
 
-
-- Restore NVIDIA original NR as a third choice; existing Lecram/SF-v2 settings remain valid.
-- Optional startup resume reopens the last movie at its saved position or starts the saved capture card configuration. Choose Cinema or Professional as your startup page.
-- Both playback bars offer 1× / 1.5× / 2× / 3× movie speed with preserved audio pitch.
-- Automatic RTSS compatibility, Xbox negotiation/shutdown fixes, VRR capture timing repair and GPU-reset export recovery. Fullscreen VRAM fallback is optional and **off by default**; the reported 5060 Ti leak itself remains unconfirmed.
+[Full 2.0.4 release notes and validation limits](docs/RELEASE_NOTES_2.0.4.md).
 
 ## Install and upgrade
 
-Download **Veyra-2.0.3-NVIDIA-win64-portable.7z** or **Veyra-2.0.3-AMD-win64-portable.7z** for Veyra's active GPU. Extract with 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.0.4-NVIDIA-win64-portable.zip** or **Veyra-2.0.4-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -127,7 +124,7 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 5. Optical flow is shared after input; SR is a single instance. RTX Video HDR stays before final FG; select one DLSS/XeSS/FSR backend. This is not an arbitrary branching/mixing graph.
 6. List and Node settings, presets and sessions are separate. Returning to List restores its settings and retains the node graph. Switching rebuilds processing and may briefly pause the picture.
 
-**2.0.3 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
+**2.0.4 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
 
 ### Capture and streaming
 
@@ -182,11 +179,15 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 ## Source and build
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.3 build/source](docs/BUILD_2.0.3.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.4 build/source](docs/BUILD_2.0.4.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 
-[Join the Discord community](https://discord.gg/j5TQbFJ7F)
+<p align="center">
+  <a href="https://discord.gg/c9aREyMj8"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Veyra on Discord" height="36"></a>
+  &nbsp;&nbsp;
+  <a href="https://ko-fi.com/likely7"><img src="https://storage.ko-fi.com/cdn/kofi5.png?v=6" alt="Support Veyra on Ko-fi" height="36"></a>
+</p>
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation" width="220">

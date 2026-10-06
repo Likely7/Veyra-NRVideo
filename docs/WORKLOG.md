@@ -8483,3 +8483,12 @@ Run takeover-20261005T061823Z-1ad4ac；logs/tests/tmp/archives 全在 E:/项目/
 `verify-merge.py pre-docs` 初次失败仅因桌面status默认折叠两个未追踪目录，而归档采用逐文件枚举；原失败JSON保留。修正为同样 --untracked-files=all后，`pre-docs-v2` exit0，两个目标工作树清洁，桌面HEAD/状态/未提交字节及其余14个工作树HEAD/状态/全部逐文件SHA保持。没有删除、移动或改变桌面文件。
 
 main后续仅更新AGENTS/CURRENT_STATUS/FIELD_FIXES/WORKLOG/本轮合并记录并提交，最后执行 `verify-merge.py final` 和合并后增量bundle核验，结果/最终main提交写入本轮logs与archives JSON。没有新产品改动或重新构建；依据刚才接管时实际通过的build-6、五测试、1578包载荷及七阶段真实播放计时，合并保持同一产品Git源码。没有push/Release/压力测试/用户配置变更/分支删除/旧UI删除；AMD/用户后台卡顿/暂停后新接OBS/其他RTX与主观画质缺口仍保留，等用户后续具体修复要求。
+## 2026-10-06 2.0.4 正式发布准备
+
+用户授权正式发布、Discord/Ko-fi及保留二维码、1000字内公告和发布后关机。本轮E盘路径为worktrees/releases/logs/tmp/verify/archives/tests下publish-2.0.4-20261006。未启动竞争/压力负载，不派子Agent；旧工作区、测试ZIP和运行组件保持。nrvideo远端main f652c93新增README页头/Star History，隔离分支merge7630268接入并保留；发布尚未进行，后续记录实际结果。
+
+bootstrap第一次因新checkout CRLF与实测字节不同失败，未把它算产品变更；逐项确认仅换行差异后复制已测工作区原字节，归档line-ending-restoration.json，git add刷新4项归一化index且cached diff为空。随后publish-2.0.4-control.py通过：22个其它工作区HEAD/status/既有修改SHA保持，473生产输入及原14份定向验收receipt/3测试ZIP SHA保持。EXE仍为d01329aa6d9fbd6ac2d1eee294782f4cb9d233490595ed2e3e1a9ea12c16b2d6；无新引擎/QML/运行库改动。
+
+README更新仅当前版本更新/下载/过时状态和社区支持。独立确认英文远端页头与中文页头完整保留、两QR地址/width=220保持；教程主体未重写。Discord API验证c9aREyMj8为Veyra Dlss5/常规，原两QR及Ko-fi官方按钮HTTP200，Ko-fi用户页自动访问403，保留用户给定链接，不冒充页面验证通过。公告586字符，路径releases/.../GROUP_ANNOUNCEMENT.txt。docs/PERF_RELEASE_REPORT_2.0.4_2026-10-06.md列暖创建75.83%、单NR重激活99.01%、暂停编辑89.74%、暂停PID GPU利用率99.51%、最终S4增强区间3.52%及相应限制，拒绝/撤回实验没有计入产品收益。
+
+`py -3.11 -B scripts/package-2.0.4-dependency-source.py` v1因为vcpkg scripts含测试二进制后缀拒绝，partial ZIP保留到archives/.../dependency-source-rejected-v1.zip及SHA收据。过滤测试目录与二进制/工具档案后v2退出0，source tar目录安全/ZIP CRC/全部324载荷SHA通过，8个实际字幕上游源码归档及固定vcpkg30ef65cad9配方/补丁/元数据齐全。最终依赖ZIP598704862bytes，SHA2564eccde6343d66e0511b641aaacc12b999e424738a383fcce268d762abb3dceb9。原2.0.3依赖ZIP原字节嵌入，patched FFmpeg与全部串流/Qt源材料保持。日志logs/.../dependency-source-v2.log及dependency-source.json。

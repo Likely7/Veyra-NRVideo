@@ -14,15 +14,15 @@
 
 Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
 
-[下载 2.0.3 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.3) · [完整更新（English / 中文）](docs/RELEASE_NOTES_2.0.3.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
+[下载 2.0.4 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.4) · [完整更新（English / 中文）](docs/RELEASE_NOTES_2.0.4.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
-**2.0.4 测试，2026-10-06：** 本地候选整合此前性能/现场修复、NR 强度5与三种风格自动/手动画面调控、Xbox 解码恢复和 Claude 最新 UI 修复。列表参数面板可拖动宽度，滑条数字可点击输入，浮窗切模式避免误触视频，已有列表/节点预设可勾选保存光流算法、运动估算质量和内容节奏。未保存选择时 GPU 优先级默认实时，旧选择保持。详见 [2.0.4 更新与测试边界](docs/RELEASE_NOTES_2.0.4.md)。用户测试和发布前，公开下载仍为2.0.3。
+**2.0.4 正式版，2026-10-06：** 本次整合性能优化、NR强度5与三风格画面调控、Xbox/采集恢复、ASS字幕、界面和统一预设修复。详见[完整更新](docs/RELEASE_NOTES_2.0.4.md)。
 
-**本地开发进度，2026-10-05：** 此分支另含RTSS重启、自定义倍速、字幕、UI刷新、专业布局和全屏恢复修复，公开2.0.3包尚未包含。本机全部NR优化节点已有实测保留/拒绝处置：保留核心复用、单NR缓存、空闲预热、暂停复用、限定COMPUTE和NVENC导出调度；自动NR及先粗后细会改画面，只作可选。正常匹配对照单层原生NR约6.1ms，双NR+SR4K+DLSS2X整链减少3.52%，软件提交P99几乎未变。[执行账本](docs/PERF_EXECUTION_NR_2026-10-04.md)和[最终回归记录](docs/PERF_R0_ACCEPTANCE_2026-10-05.md)列明数据与限制。严重后台掉帧仍未确认根因；OBS游戏采集使用现有兼容模式，GPU界面捕获在封存基线也不稳定。HDR/杜比PR继续暂缓。
+**实测数据：** 双NR＋4K超分＋DLSS2X处理区间降低3.52%；单层原生NR仍约6.1ms，软件Present P99基本不变。重建、暂停编辑及暂停GPU占用分别报告，详见[优化数据](docs/PERF_RELEASE_REPORT_2.0.4_2026-10-06.md)。严重后台掉帧根因与GPU界面OBS游戏采集限制仍未解决，OBS可用现有兼容模式；HDR/杜比PR继续暂缓。
 
 ## 2.0.0 重点
 
-**本地 NR 调控，2026-10-05：** 每层 NR 的“增强变化量 → 总变化强度”最高为 5。“画面调控”默认关闭，开启可选自动／手动。自动分别适配风格 0／1／2，新增力度滑块（0 保留原始强度，1 完整纠偏）。手动共九项：色相、色度、中性色、原图色彩保留、亮度保持、暗部、高光、局部压缩和时域稳定；“采用当前风格的自动参数”可作为手动起点。切换方式保留手动数值，关闭调控保留原始残差算法。5 是一次推理结果的残差外推，保护会降低对应变化量，不能保证所有素材在完整局部增益 5 下无失真。预设、列表／节点会话、PNG 与视频导出共用这些设置。验收与已知限制见[本轮记录](docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md)，公开 2.0.3 包尚未包含此功能。
+**2.0.4 NR 调控：** 每层 NR 的“增强变化量 → 总变化强度”最高为 5。“画面调控”默认关闭，开启可选自动／手动。自动分别适配风格 0／1／2，新增力度滑块（0 保留原始强度，1 完整纠偏）。手动共九项：色相、色度、中性色、原图色彩保留、亮度保持、暗部、高光、局部压缩和时域稳定；“采用当前风格的自动参数”可作为手动起点。切换方式保留手动数值，关闭调控保留原始残差算法。5 是一次推理结果的残差外推，保护会降低对应变化量，不能保证所有素材在完整局部增益 5 下无失真。预设、列表／节点会话、PNG 与视频导出共用这些设置。验收与已知限制见[本轮记录](docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md)。
 
 - **全新界面**：首页、极简、专业列表、节点、调色、导出和设置重新组织；支持简中、繁中、English、日本語。
 - **节点编辑与多层 NR**：连线编排处理顺序，NR/调色独立参数；列表与节点各自保存配置、会话和预设。
@@ -30,21 +30,18 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 - **导出页重做**：可编辑顺序队列、剪辑、MP4/MKV、多音轨/内嵌字幕、取消重试和完成提示音。
 - **增强与兼容**：NR 四版本（50 系 NVIDIA 原版、Lecram、SF-v2、AMD lmxxf）、DLSS/XeSS/FSR 补帧入口、采集优化及带重启确认的 OBS 游戏采集开关。详细新功能与修复见 Release。
 
-## 2.0.3 新增与修复
+## 2.0.4 新增与修复
 
-- **显卡分包**：NVIDIA 包不带 AMD NR；AMD 包不带 NVIDIA NR/NGX/VFG/CUDA。按用户追加决定，两包都保留原有 FidelityFX 2.3.0 共用组件，FSR3.1/XeSS 可用，NVIDIA 的 FSR4 入口置灰。
-- **功能可见但禁用**：NR 四版本、超分、补帧、RTX HDR、光流与节点添加统一判断硬件/组件，并显示禁用原因。恢复旧配置关闭不可用效果，保留参数。
-- **VFG 与现场修复**：VFG 全部 2–8X、低/中/高；Xbox 音频启动与有界恢复；导出码率草稿/验证/worker 冻结；小飞机兼容背景不透明；移除 NVIDIA App 插件误判；修复极简右侧像素黑边。删除九个 VFG 不使用的 NPP 库。RX9000 推理和 Xbox 真机长稳仍待验，HDR/杜比 PR 暂缓。
+- **NR 强度与画面调控**：总变化强度最高5；每层可选自动/手动，自动分别适配风格0/1/2，新增力度滑块与九项手动参数。
+- **性能优化**：复用符合条件的NR核心/单NR配置，暂停时减少重复工作，优化限定双NR/超分/补帧组合与导出调度。同条件双NR1080＋SR4K＋DLSS2X增强区间降低 **3.52%**，NR暖创建耗时降低 **75.83%**；条件和边界见[实测报告](docs/PERF_RELEASE_REPORT_2.0.4_2026-10-06.md)。预热默认关闭。
+- **播放与稳定性**：自定义0.25–4倍速保调，libass ASS特效字幕/字体附件，Xbox有界解码恢复，采集节奏/掉帧历史修复，AMD NR启用及重建后GPU耗时采样恢复。
+- **界面与预设**：专业面板可拖宽，滑条数字可直接输入，修复全屏/RTSS/浮窗误触。已有列表/节点预设可勾选保存光流算法、估算质量及内容节奏，未勾选项保留当前值。未保存GPU优先级时默认实时，已有选择保留。
 
-
-- 恢复 50 系 NVIDIA 原版 NR，与 Lecram、SF-v2 共三版切换，已有设置保留。
-- 设置可开启启动自动继续上次视频及进度，或按已保存的采集卡配置直接开始；启动页可选极简或专业。
-- 极简与专业播放栏都支持 1× / 1.5× / 2× / 3× 视频倍速，声音保调。
-- 加入小飞机 RTSS 自动兼容，修复 Xbox 协商/关闭异常与 VRR 采集时序；包含 GPU 重置后断点续导。全屏显存异常自动退窗改为可选开关，**默认关闭**，5060 Ti 显存增长根因仍未确认。
+[2.0.4 完整更新与验收边界](docs/RELEASE_NOTES_2.0.4.md)。
 
 ## 下载、启动与升级
 
-1. 按 Veyra 实际使用的显卡下载 **Veyra-2.0.3-NVIDIA-win64-portable.7z** 或 **Veyra-2.0.3-AMD-win64-portable.7z**，用 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
+1. 按 Veyra 实际使用的显卡下载 **Veyra-2.0.4-NVIDIA-win64-portable.zip** 或 **Veyra-2.0.4-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
 2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
 3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
 4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
@@ -81,7 +78,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 5. 光流在输入后计算并共享，超分为单实例；RTX Video HDR 在补帧前，补帧固定末端，DLSS/XeSS/FSR 选一个后端。不是任意分支混合图。
 6. 列表和节点分别保存参数、预设、会话。切回列表恢复原列表配置，节点链保留；切换重建处理链，可能短暂停顿。
 
-**2.0.3 节点模式不支持离线导出，也没有列表的 NR 全局保护区域。** 导出前切回列表并确认效果，不会自动转换节点链。
+**2.0.4 节点模式不支持离线导出，也没有列表的 NR 全局保护区域。** 导出前切回列表并确认效果，不会自动转换节点链。
 
 ### 采集与串流
 
@@ -136,11 +133,15 @@ QML 管界面，视频由原生 D3D12 呈现。列表/节点共用引擎，未�
 
 ## 开源与构建
 
-Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.0.3 构建与对应源码](docs/BUILD_2.0.3.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
+Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.0.4 构建与对应源码](docs/BUILD_2.0.4.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
 
 ## 支持与反馈
 
-[加入 Discord 交流群](https://discord.gg/j5TQbFJ7F)
+<p align="center">
+  <a href="https://discord.gg/c9aREyMj8"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Veyra on Discord" height="36"></a>
+  &nbsp;&nbsp;
+  <a href="https://ko-fi.com/likely7"><img src="https://storage.ko-fi.com/cdn/kofi5.png?v=6" alt="Support Veyra on Ko-fi" height="36"></a>
+</p>
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
