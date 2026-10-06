@@ -791,6 +791,22 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   add_executable(veyra_export_frame_pool_tests tests/integration/ExportFramePoolTests.cpp)
   add_executable(veyra_export_worker_failure_tests tests/integration/ExportWorkerFailureTests.cpp)
   add_executable(veyra_export_workflow_tests tests/integration/ExportWorkflowTests.cpp)
+  # Diagnostic-only graph variant: an identity-copy C ABI provider is admitted
+  # on the actual test adapter. Production graph and hardware policy are unchanged.
+  set(VEYRA_AMD_NR_TEST_GRAPH_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/pipeline/EnhanceGraph.cpp" CACHE FILEPATH "Graph snapshot for AMD identity regression only")
+  file(READ "${VEYRA_AMD_NR_TEST_GRAPH_SOURCE}" _amd_nr_graph)
+  string(REPLACE "ring_.queue(),context_.adapter().vendorId) || !instance->amd->admits"
+    "ring_.queue(),0x1002 /* identity fixture only */) || !instance->amd->admits" _amd_nr_graph "${_amd_nr_graph}")
+  file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/amd-nr-graph-test")
+  file(WRITE "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp" "${_amd_nr_graph}")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${VEYRA_AMD_NR_TEST_GRAPH_SOURCE}")
+  add_executable(veyra_amd_nr_graph_tests tests/integration/LmxxfNrGraphTests.cpp "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp")
+  target_compile_features(veyra_amd_nr_graph_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_amd_nr_graph_tests PRIVATE $<TARGET_PROPERTY:veyra_pipeline,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(veyra_amd_nr_graph_tests PRIVATE $<TARGET_PROPERTY:veyra_pipeline,COMPILE_DEFINITIONS>)
+  target_compile_options(veyra_amd_nr_graph_tests PRIVATE /utf-8 /WX-)
+  target_link_libraries(veyra_amd_nr_graph_tests PRIVATE veyra_pipeline veyra_sinks)
+  add_dependencies(veyra_amd_nr_graph_tests veyra_lmxxf_fake_runtime)
   target_compile_features(veyra_export_workflow_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_export_workflow_tests PRIVATE /utf-8)
   target_link_libraries(veyra_export_workflow_tests PRIVATE veyra_engine)

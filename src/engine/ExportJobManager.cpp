@@ -135,7 +135,14 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     if(!p_->mapping)return fail(L"无法创建导出通信资源");
     p_->shared=static_cast<Shared*>(MapViewOfFile(p_->mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!p_->shared)return fail(L"无法映射导出通信资源");
     if(!std::isfinite(trimStartSeconds)||!std::isfinite(trimEndSeconds)||trimStartSeconds<0||trimEndSeconds<0||(trimEndSeconds>0&&trimEndSeconds<=trimStartSeconds))return fail(L"导出剪辑范围无效");
-    new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=settings;s.settings.nrPolicy=pipeline::NrSizePolicy::Native;s.chain=toChain(s.settings);s.hevc=hevc;s.maxFrames=maxFrames;s.rateControl=uint32_t(rateControl);
+    new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=settings;
+    // Export executes every NR at native resolution. The list UI keeps explicit
+    // layers even for a single NR, and its legacy summary may be stale. Freeze
+    // both representations from the same native chain before crossing processes.
+    s.settings.nrPolicy=pipeline::NrSizePolicy::Native;
+    for(uint32_t i=0;i<s.settings.nrLayerCount;++i)s.settings.nrLayers[i].sizePolicy=pipeline::NrSizePolicy::Native;
+    s.chain=toChain(s.settings);fromChain(s.chain,s.settings);
+    s.hevc=hevc;s.maxFrames=maxFrames;s.rateControl=uint32_t(rateControl);
     s.audioStreamIndex=audioStreamIndex;
     s.trimStartSeconds=trimStartSeconds;s.trimEndSeconds=trimEndSeconds;
     s.media=media;wcscpy_s(s.temporary,p_->snapshot.temporaryPath.c_str());
@@ -244,15 +251,32 @@ ExportJobSnapshot ExportJobManager::poll(){
     if(p_->shared&&InterlockedCompareExchange(&p_->shared->messageLock,1,0)==0){if(p_->shared->message[0])p_->snapshot.message=p_->shared->message;InterlockedExchange(&p_->shared->messageLock,0);}if(p_->snapshot.message.empty()||p_->snapshot.state==ExportState::Paused)p_->snapshot.message=label(p_->snapshot.state);return p_->snapshot;
 }
 int runExportWorker(HANDLE mapping){
-    auto s=static_cast<Shared*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!s)return 1;
-    if(s->signature!=magic||s->version!=8||s->bytes!=sizeof(Shared)||!s->media.valid()||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||!s->settings.validate().empty()||s->input[32767]||s->output[32767]||s->temporary[32767]||!s->temporary[0]||s->priorCount>=kMaxExportParts){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}
     Logger::instance().openFile((runtime::logsDirectory()/std::format("export-worker-{}.log",GetCurrentProcessId())).wstring());
+    auto s=static_cast<Shared*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));
+    if(!s){log::error("export-worker",std::format("mapping failed win32={}",GetLastError()));CloseHandle(mapping);return 1;}
+    auto reject=[&](const wchar_t* reason){
+        log::error("export-worker",utf8(reason));
+        if(s->signature==magic&&s->version==8&&s->bytes==sizeof(Shared)){
+            if(InterlockedCompareExchange(&s->messageLock,1,0)==0){
+                wcsncpy_s(s->message,reason,_TRUNCATE);
+                InterlockedExchange(&s->messageLock,0);
+            }
+            InterlockedExchange(&s->state,LONG(ExportState::Failed));
+        }
+        UnmapViewOfFile(s);CloseHandle(mapping);return 1;
+    };
+    if(s->signature!=magic||s->version!=8||s->bytes!=sizeof(Shared))return reject(L"导出任务通信协议不匹配");
+    if(const auto error=s->settings.validate();!error.empty()){
+        log::error("export-worker",std::format("invalid frozen settings: {}",error));
+        return reject(L"导出任务的增强参数无效，请查看任务日志中的具体参数错误");
+    }
+    if(!s->media.valid()||s->audioStreamIndex< -1||s->rateControl>uint32_t(sink::ExportRateControl::Cq)||!std::isfinite(s->trimStartSeconds)||!std::isfinite(s->trimEndSeconds)||s->trimStartSeconds<0||s->trimEndSeconds<0||(s->trimEndSeconds>0&&s->trimEndSeconds<=s->trimStartSeconds)||s->input[32767]||s->output[32767]||s->temporary[32767]||!s->temporary[0]||s->priorCount>=kMaxExportParts)return reject(L"导出任务的路径、剪辑、封装或轨道参数无效");
     ExportStreams::enableWorkerLogging(GetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_FFMPEG_DEBUG",nullptr,0)>0);
     // The chain is the description of record for this job; the settings struct
     // stays the runtime input until the executor consumes chains directly.
     // Re-deriving one from the other must agree, otherwise the job is refused.
     {auto fromChainSettings=s->settings;fromChain(s->chain,fromChainSettings);
-     if(fromChainSettings!=s->settings){UnmapViewOfFile(s);CloseHandle(mapping);return 1;}}
+     if(fromChainSettings!=s->settings)return reject(L"导出任务的效果链与冻结参数不一致");}
     const auto settings=s->settings;log::info("export-frozen",std::format("revision={} nr={} sr={} multiplier={} intensity={} tone={} structure={} skin={} style={} autoMask={} ui={} total={} darken={} brighten={} color={} luminance={} flow={} content={} nativeNR=true",settings.revision,settings.nr,settings.sr,settings.multiplier,settings.model.intensity,settings.model.tone,settings.model.structure,settings.model.skin,settings.model.style,settings.model.autoMask,settings.model.uiCorrection,settings.residual.total,settings.residual.darken,settings.residual.brighten,settings.residual.color,settings.residual.luminance,int(settings.flow),int(settings.content)));std::atomic<bool> cancel=false,done=false;
     std::thread monitor([&]{while(!done){if(InterlockedCompareExchange(&s->cancel,0,0))cancel=true;std::this_thread::sleep_for(std::chrono::milliseconds(10));}});
     auto frameBoundary=[&]{

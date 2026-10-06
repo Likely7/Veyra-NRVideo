@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-06 OBS/导出/AMD NR 现场修复授权**：用户提交 logs(14).zip、veyra-qml(30).log 和两张截图，明确要求修复 OBS 兼容模式滚动拖影、视频导出失败及 AMD 开 NR 黑屏，并对照 lmxxf 与 A-ENTROPY 项目。仅在 E:/项目/Veyra/worktrees/obs-export-amdnr-20261006 / codex/obs-export-amdnr-20261006，从 main f8045fb 隔离实施必要启动/QML 绘制、导出冻结协议、共享 AMD NR/codec/互操作、构建和定向验收接点；按 docs/OBS_EXPORT_AMD_NR_PLAN_2026-10-06.md 执行。这些具体接点覆盖历史冻结，其他功能保持。不派 Agent、不做压力或竞争负载；测试每进程≤300秒，构建≤900秒。所有产物 E 盘，先运行 scripts/acceptance/obs-export-amdnr-control.py，独立 start 基线禁止修改。保留 main、其它工作树、用户文件/配置和已发布资产。允许本地修复及候选交付，不包含新公开发布/推送/合并或关机；不修改 proprietary DLL/模型/驱动，不用本机 RTX 测试冒充 RX9070 真推理通过。
+
 > **2026-10-06 正式发布授权**：用户明确要求发布2.0.4到Likely7/Veyra-NRVideo，README替换2.0.3更新内容，其余主体保持；新增Discord `https://discord.gg/c9aREyMj8` 与Ko-fi `https://ko-fi.com/likely7`，保留原微信群及微信赞助二维码各width=220；Release详述优化、实测数据与限制，完成后提供1000字以内群公告并关机。本轮允许必要发布文档/打包/源码归档、main合并、推送、v2.0.4标签与Release资产上传和正式发布。按docs/PUBLISH_2.0.4_PLAN_2026-10-06.md执行；沿用已验收程序及运行组件原字节，不扩改引擎、不派子Agent、不做压力测试。发布核实后才能安排关机；公告只交付用户，不代发群。本条覆盖此前本地候选的“不发布/不关机”限制。
 
 > **2026-10-06 列表预设纠偏**：用户明确不要独立补帧预设，要求图示光流/估算质量/内容节奏进入已有列表预设，并重新打包2.0.4。按docs/LIST_PRESET_FLOW_PLAN_2026-10-06.md在E盘codex/list-preset-flow-20261006实施必要PresetLibrary/bridge/QML/翻译/定向测试/本地main续修与打包；保留旧包/原工作区及用户配置，不替换运行库。新guard list-preset-flow-control.py使用独立不可变基线。此具体修复覆盖这些接点历史冻结；不推送/公开发布，不派Agent/压力测试/关机，沿用≤300秒测试与≤900秒构建。

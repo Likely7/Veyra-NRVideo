@@ -83,7 +83,14 @@ bool LmxxfNrBackend::recordInputs(ID3D12GraphicsCommandList* list, ID3D12Resourc
 }
 bool LmxxfNrBackend::enqueue() {
     if (!job_.handle || enqueued_ || !result(api_.EnqueueHip(context_, job_.handle, queue_), "EnqueueHip")) return false;
-    enqueued_ = true; return true;
+    enqueued_ = true;
+    if(!diagnosticsLogged_&&api_.GetStatus){
+        char status[4096]{};
+        if(api_.GetStatus(context_,status,sizeof(status))==LMXXF_NR_OK)
+            log::info("amd-nr",std::format("first enqueue session={} runtime={}",session_,status));
+        diagnosticsLogged_=true;
+    }
+    return true;
 }
 bool LmxxfNrBackend::recordOutputs(ID3D12GraphicsCommandList* list, ID3D12Resource* destination) {
     if (!job_.handle || !enqueued_ || !list || !destination || !result(api_.RecordOutputs(context_, job_.handle, list), "RecordOutputs")) return false;
@@ -107,7 +114,7 @@ void LmxxfNrBackend::close() noexcept {
         (void)result(api_.Drain(context_),"Drain"); (void)result(api_.Destroy(context_),"Destroy");
     }
     context_ = nullptr; queue_ = nullptr; job_ = {}; api_ = {}; caps_ = {};
-    enqueued_ = outputsRecorded_ = false;
+    enqueued_ = outputsRecorded_ = diagnosticsLogged_ = false;
     if (module_) FreeLibrary(module_); module_ = nullptr;
 }
 }

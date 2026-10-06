@@ -316,6 +316,7 @@ EffectChain toChain(const EnhancementSettings& settings) {
         nr.nr.residual = layer.residual;
         nr.nr.runtime = layer.runtime;
         nr.nr.temporal = layer.temporal;
+        nr.nr.antiFlicker = layer.antiFlicker;
         nr.nr.lowLatencyPairing = layer.lowLatencyPairing;
         nr.nr.sizePolicy = layer.sizePolicy;
     }
@@ -415,6 +416,7 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
                 settings.residual = node.nr.residual;
                 settings.nrRuntime = node.nr.runtime;
                 settings.nrTemporal = node.nr.temporal;
+                settings.nrAntiFlicker = node.nr.antiFlicker;
                 settings.lowLatency = node.nr.lowLatencyPairing;
                 settings.nrPolicy = node.nr.sizePolicy;
             }

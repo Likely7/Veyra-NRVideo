@@ -2472,7 +2472,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // not in a second loop after all layers have already evaluated.
     auto compositeNrLayer = [&](size_t layerIndex) {
         auto* layer=nrInstances_[layerIndex].get();
-        if(layer->handle()==nullptr||!layer->enabled)return;
+        // AMD owns a ready lmxxf context rather than an NGX feature handle.
+        // Skipping this pass leaves the downstream fullTarget unwritten.
+        if((layer->handle()==nullptr&&(!layer->amd||!layer->amd->ready()))||!layer->enabled)return;
         const bool temporallyStabilised=layer->stabilised;
         ID3D12Resource* destination=temporallyStabilised?layer->temporal().raw():layer->fullTarget();
         const auto& r=layer->residualSettings;
@@ -2596,6 +2598,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 tracker_.transition(list,layer->finalRgba(),D3D12_RESOURCE_STATE_COPY_DEST);
                 if(!layer->amd->recordOutputs(list,layer->finalRgba()))return false;
                 tracker_.transition(list,layer->finalRgba(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                if(reset||!layer->historyValid)
+                    veyra::log::info("amd-nr",std::format("layer={} linear output recorded; shared residual/temporal composite enabled input={}x{} target={}x{}",layerIndex+1,nrW,nrH,sourceW,sourceH));
                 gpuTimer_.mark(list,GpuStage::Nr,true);
                 gpuTimer_.mark(list,diagnostics::nrLayerStage(unsigned(layerIndex)),true);
                 ++metrics_.nrEvaluateCount;layer->historyValid=true;layer->inputRevision=1;

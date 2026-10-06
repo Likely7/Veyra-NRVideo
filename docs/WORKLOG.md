@@ -8483,6 +8483,22 @@ Run takeover-20261005T061823Z-1ad4ac；logs/tests/tmp/archives 全在 E:/项目/
 `verify-merge.py pre-docs` 初次失败仅因桌面status默认折叠两个未追踪目录，而归档采用逐文件枚举；原失败JSON保留。修正为同样 --untracked-files=all后，`pre-docs-v2` exit0，两个目标工作树清洁，桌面HEAD/状态/未提交字节及其余14个工作树HEAD/状态/全部逐文件SHA保持。没有删除、移动或改变桌面文件。
 
 main后续仅更新AGENTS/CURRENT_STATUS/FIELD_FIXES/WORKLOG/本轮合并记录并提交，最后执行 `verify-merge.py final` 和合并后增量bundle核验，结果/最终main提交写入本轮logs与archives JSON。没有新产品改动或重新构建；依据刚才接管时实际通过的build-6、五测试、1578包载荷及七阶段真实播放计时，合并保持同一产品Git源码。没有push/Release/压力测试/用户配置变更/分支删除/旧UI删除；AMD/用户后台卡顿/暂停后新接OBS/其他RTX与主观画质缺口仍保留，等用户后续具体修复要求。
+## 2026-10-06 OBS 拖影 / 导出入口失败 / AMD NR 黑屏隔离修复
+
+用户提供 logs(14).zip、veyra-qml(30).log 与截图，授权三项现场修复及核对 lmxxf/A-ENTROPY。从已发布 main f8045fb 开独立 `codex/obs-export-amdnr-20261006`；源码 worktrees 与 archives/build/tests/logs/tmp/test-packages/verify 全在 E:/项目/Veyra 对应任务目录。保存 23 个原工作树 HEAD/status/既有修改 SHA、修改原字节 ZIP、source-before.bundle（已 verify）和四个已发布 ZIP SHA；新增 guard 没有改旧 baseline。没有 merge/push/Release/关机/子Agent/竞争负载授权，均未执行。
+
+修复三个最小闭环：软件 UI 开启时 Qt partial-updates=0，变化时完整重绘；导出显式各 NR 层 Native、统一 chain/settings 冻结、保留每层 Static/FlowPlus 并提前打开 worker 日志；共享合成器接受 ready lmxxf context，避免把 AMD 的空 NGX handle 误判为禁用而使用未写 fullTarget。新增首次 enqueue 后端状态日志，运行库/权重/驱动原字节保持。来源固定 lmxxf 78f5487（当前）/359d6b3（公开最新）与 A-ENTROPY46f59c5；后者需要另一套 RDNA3 二进制/权重，未移植 private-offset/D3D11 路径，未扩大支持硬件范围。
+
+命令均在本轮工作树：`py -3.11 -B scripts/acceptance/obs-export-amdnr-build.py build-final-v4` exit0；`obs-export-amdnr-tests.py amd-graph-before-v2 graph-before` 关闭 NR 对照正常、六 NR 场景全黑（sum0），同夹具 after-v1 graph-after 7/7、最大像素 code 差0；这是 RTX5070 上恒等 C ABI GPU provider 和真实共享图/shader，非 HIP 神经推理。units-after-v1 的 EffectChain/PresetLibrary/i18n 全0；abi-after-v1 62/62（身份、reset、失效处理），非 AMD 硬件验收。
+
+实际界面 `obs-export-amdnr-ui.py export-before-v1 export before` 在双层 NR 复现约30ms/零帧/空日志，前两例各60帧；最终 `export-final-v2 export after` 关NR/单层/双层风格1+2/NR+4K全部成功，每项60帧，最后3840×2160。独立 field-single-final-v1/field-stack-after-v2 真实 worker 将 Realtime/P720 预览设置规范化 Native，保留独立抗闪烁档位。lifecycle-final-v1 / lifecycle-boundary-final-v1 取消回收、重试20帧、拒绝覆盖、保存边界/锁住partial/晚取消竞态通过；所有进程<300s。worker-mapping-reject-v2 返回1并记录 MapViewOfFile Win32=6。
+
+OBS 最终 100%/125% 展开 NR 参数各10张真实窗口 GDI图、3张返回原位 inspector 与起始 RGB >8 像素差全部0，partial updates disabled 日志确认。已查看截图；旧版本机同场景也没拖影，因此不能声称重现了现场缺陷或实卡已通过。约25秒125%滚动旧/新CPU总时间3.046875/3.421875秒，单轮增加0.375秒，非普遍性能结论。真实OBS现场与RX9070XT推理仍须用户复测。
+
+保留夹具失败：before graph缺shaders、baseline导出首版错误要求0文件（实际0/1成功、2失败）、field-stack首版runtime与legacy不一致、OBS页面未完成前查卡片、fractional首版crop未含缩放、mapping0被命令行防错拒绝。只修夹具后出新日志，不改旧receipt为通过；export-before-audit-v2重审原记录。首次诊断命令路径/slurp+jq错误不算产品结果。
+
+最终EXE SHA5f76d8f0edec9e7ed16a6fa0a9124205d0fdd285126623cfef3efd7691372250，显示2.0.4-fix1；`obs-export-amdnr-evidence.py` exit0 冻结466产品输入/15回执。后续制作本地AMD/NVIDIA候选及对应源码、逐文件/运行库/PE/ZIP/干净启动与最后保全审计，真实结果在本轮日志/DELIVERY.json记载；未测项不冒充通过。详 `docs/OBS_EXPORT_AMD_NR_PLAN_2026-10-06.md`。
+
 ## 2026-10-06 2.0.4 正式发布完成
 
 执行package-v1完整生成正式AMD/NVIDIA、应用源码、依赖源码及SHA256SUMS，全部CRC/逐文件SHA、runtime原字节/PE闭包/显卡分包通过；source-final.bundle验证通过。EXE仍d01329aa6d9fbd6ac2d1eee294782f4cb9d233490595ed2e3e1a9ea12c16b2d6，PE2.0.4.0。cold-v1两包新解压隔离profile、Windows-only PATH启动分别9.937/9.578秒正常退出、各26个Qt/FFmpeg模块由包内加载，ASS5事件/字体附件正常；原功能验收对应同一473生产输入，不重复无关GPU测试。包路径、5项大小/SHA详PUBLISH_2.0.4_PLAN第2节及logs/.../assets.json、stage-AMD/NVIDIA.json、cold-verify-results.json。

@@ -35,6 +35,22 @@ int wmain(int argc,wchar_t** argv){
         media.container=mode.find(L"mkv")!=std::wstring::npos?ExportContainer::Matroska:ExportContainer::Mp4;
         media.audio.policy=ExportTrackPolicy::All;media.subtitles.policy=ExportTrackPolicy::All;
         const bool hevc=mode.find(L"hevc")!=std::wstring::npos;
+        // The real QML list stores explicit layers with preview resolution and
+        // stale legacy summary fields. Exercise the actual child process, not
+        // just a settings/chain round trip.
+        if(mode.find(L"field-single")!=std::wstring::npos||mode.find(L"field-stack")!=std::wstring::npos){
+            settings.nr=true;settings.nrLayerCount=mode.find(L"field-stack")!=std::wstring::npos?2:1;
+            settings.nrRuntime=NrRuntime::NvidiaOriginal;
+            for(uint32_t i=0;i<settings.nrLayerCount;++i){
+                auto& n=settings.nrLayers[i];n.enabled=true;n.runtime=NrRuntime::NvidiaOriginal;
+                n.model.style=int(i);n.model.intensity=.8f;
+                n.temporal=true;n.antiFlicker=i?NrAntiFlicker::Static:NrAntiFlicker::FlowPlus;
+                n.sizePolicy=i?veyra::pipeline::NrSizePolicy::P720:veyra::pipeline::NrSizePolicy::Realtime;
+                n.residual.total=i?2.f:1.f;
+            }
+            settings.model.style=2;settings.nrPolicy=veyra::pipeline::NrSizePolicy::P480;
+            settings.flow=FlowQuality::Performance;settings.content=ContentRate::Transport;
+        }
         if(mode==L"queue"){
             std::filesystem::create_directories(output);
             ExportQueue queue(manager);

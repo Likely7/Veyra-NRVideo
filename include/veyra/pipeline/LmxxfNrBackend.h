@@ -32,7 +32,7 @@ private:
     void* context_ = nullptr;
     ID3D12CommandQueue* queue_ = nullptr; // graph owns it and outlives the adapter
     uint64_t session_ = 0;
-    bool enqueued_ = false, outputsRecorded_ = false;
+    bool enqueued_ = false, outputsRecorded_ = false, diagnosticsLogged_ = false;
     std::string error_;
 };
 }

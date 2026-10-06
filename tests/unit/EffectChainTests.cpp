@@ -962,7 +962,22 @@ void testNrCorrectionDescription(){
     check(d.nrLayersTemporal.size()==2&&!d.nrLayersTemporal[0]&&d.nrLayersTemporal[1],
           "controlled history is allocated per active layer");
 }
+void testPerLayerAntiFlickerSnapshot(){
+    using namespace veyra::engine;
+    for(uint32_t count:{1u,2u}){
+        EnhancementSettings settings;settings.nr=true;settings.nrLayerCount=count;
+        settings.nrTemporal=false;settings.nrAntiFlicker=NrAntiFlicker::Flow;
+        for(uint32_t i=0;i<count;++i){settings.nrLayers[i].enabled=true;settings.nrLayers[i].temporal=true;
+            settings.nrLayers[i].antiFlicker=i?NrAntiFlicker::Static:NrAntiFlicker::FlowPlus;}
+        const auto chain=toChain(settings);auto restored=settings;fromChain(chain,restored);
+        check(restored.nrLayer(0).usesTemporal()&&restored.nrLayer(0).antiFlicker==NrAntiFlicker::FlowPlus,
+              "single and stacked snapshots retain first layer anti-flicker tier");
+        if(count==2)check(restored.nrLayer(1).antiFlicker==NrAntiFlicker::Static,
+                         "stacked snapshot retains independent second layer anti-flicker tier");
+    }
+}
 int main() {
+    testPerLayerAntiFlickerSnapshot();
     testNrCorrectionDescription();
     std::setvbuf(stdout,nullptr,_IONBF,0);
     testNodeEditorGraph();
