@@ -8585,3 +8585,11 @@ gui-telemetry-lifecycle（29.86秒）真实原版NR：播放/暂停恢复/窗口
 `E:/项目/Veyra/tmp/stability-export-priority-20261006/cleanup-owned.ps1` 成功清理48个本轮重复测试app；先保存实际测试QML、worker日志/manifest及按SHA去重的测试EXE到archives/.../test-package-evidence，原日志/收据、profile、像素、导出结果、身份提供器、最终build/两完整目录及ZIP/源bundle保留，cleanup.json记真实路径。逻辑字节数含硬链接，未宣称回收相同物理空间。
 
 随后补充清理本轮runtime副本与两个cold-final-zip解压目录的原生PowerShell命令在创建进程前被自动审批拒绝，工具理由只为`blocked by policy`。该命令未执行，保留这些自有副本，没有绕过拒绝或转用另一shell删除；logs/.../cleanup-extra-blocked.json记录限制，不算产品失败或清理通过。收尾只提交三份状态/报告文档，产品输入和既有发布文件再次由close/control检查。
+
+## 2026-10-07 VFG + RTX Video HDR 联合导出功能核对
+
+用户询问能否导出经VFG和RTXHDR处理的HDR视频。先读当前VideoExportJob/共享EnhanceGraph/VfgBackend/NVENC与既有VFG/TrueHDR验收，确认离线链为SDR→TrueHDR scRGB→PQ/BT2020 RGB10→VFG→P010/HEVC Main10；能力范围和组合画质验收分开。未改产品源码、DLL、显示HDR开关或用户运行配置。
+
+新产物全部E:/项目/Veyra/{tests,logs,tmp}/vfg-rtxhdr-export-check-20261007。`python -B tests/.../run.py` 调用最终2.0.4-fix2 NVIDIA包的真实QML/隔离导出worker，private profile普通GPU档，只打开RTX Video HDR（峰值参数1000）+VFG Medium2X；源码/母包不变，实际EXE65fc23e3。720p30 SDR nr-fixture2秒（60源帧），用户编码偏好故意选H264，导出自动改HEVC Main10。进程约11.39秒exit0，60源+59生成+1尾hold=120，输出1280×720/60fps/2秒；ffprobe为hevc/Main10/yuv420p10le/bt2020/smpte2084/bt2020nc，ffmpeg -xerror完整解码exit0。文件在tests/.../outputs/nr-fixture_veyra.mp4，日志/完整SHA/ffprobe在logs/...。
+
+首个run.py扫描了clone中复制的旧应用日志，组合API证据夹入历史记录；raw result.json保留，修正未来复制忽略logs/用户数据，并用audit.py仅读取本次console记录的worker PID11688。result-worker-audit.json再次通过：当前worker TrueHDR Create/Evaluate/Release均0x1、SEH0；VFG格式RGB10A2实际初始化并执行、生成59帧，无ERROR/FATAL/D3D12错误及SDR回退。此为新增联合功能实测，非HDR主观画质/RTX40实卡/4K全倍率/所有HDR静动态元数据完整验收。用户另有母包播放器正在运行，未关闭或改它；测试子进程已经退出。
