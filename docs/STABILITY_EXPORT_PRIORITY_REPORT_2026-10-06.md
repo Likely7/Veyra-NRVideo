@@ -112,3 +112,19 @@ GTA 相邻旧/新差 **+0.009%**、M2 差 **−0.638%**，均未再出现约 7% 
 全部沿用 fix1 已批准运行组件，AMD/NVIDIA 分别 694/215 项逐文件身份保持。patched FFmpeg 与 libass/Qt 对应依赖源继续使用已发布 2.0.4 的固定 SHA `4eccde6343d66e0511b641aaacc12b999e424738a383fcce268d762abb3dceb9`，不提交 runtime/SDK/模型到源码，不修改任何 proprietary DLL。开工封存的 25 工作树及 14 发布文件继续由本轮 control 核验，main/tag/Release 不变。
 
 **仍未验证/未完成**：真实 AMD HIP 的高分辨率离线推理与 AMD Media Foundation 编码、FSR4 ML 实卡导出、用户显示器上的实际撕裂/VRR/覆盖层、所有来源/设置下的稳定性，以及全部设置/多应用负载下的性能和长期稳定性。上述约 7% 疑点已按 GTA/M2 匹配与同 EXE 反向 UI 对照闭环。用户此前 RX9000 NR 可用反馈保留，不能扩展成此次导出已通过。请在新目录解压测试，不混装旧运行库；AMD 图片超预算与 XeSS FG 导出仍有明确限制。本地候选用于复测，不宣称所有硬件/现场反馈已根治，也未替换公开 Release。
+
+### 最终本地封包回执
+
+产品源码提交 **4c917aa00419d321a3379fb064b72022ac0e11b2**，最终 EXE 与上文一致。`evidence.py freeze` 冻结477项产品输入和83项收据，区分归档引擎测试与最终AMD设置/QML测试。`package.py refresh/finalize` 两包2051/1602个文件、694/215项原运行组件字节、全部ZIP CRC和逐载荷SHA通过；没有把本机配置、测试媒体、SDK或开发二进制混入源码/用户包。
+
+| 最终文件 | 字节 | SHA256 |
+|---|---:|---|
+| Veyra-2.0.4-fix2-AMD-win64-portable.zip | 355210175 | 7be76af01f022dd79039d4db04a5e45911cf884312df83d531dc7319e3d521e2 |
+| Veyra-2.0.4-fix2-NVIDIA-win64-portable.zip | 714233409 | 8b6539870073d06705605b5d429c42776921f9f35b7ff0b7ee3a7b8ec694f506 |
+| Veyra-2.0.4-fix2-source.zip | 70093518 | 8619f8285661223ad18e14d5fa0d4f9d5f396727b1e5040a3fcda6d56944ab99 |
+
+`cold.py cold-final-zip --zip` 从这两个最终ZIP分别新解压，逐文件核对manifest、Windows-only PATH、隔离profile启动：AMD 7.062秒/NVIDIA 6.766秒均exit0，各26个实际loader Qt/FFmpeg模块来自各自解压目录，无QML/ERROR异常。此为RTX5070上的两种便携包基础启动验证，不是AMD推理/编码验收。
+
+`evidence.py close` 再核对最终EXE、477项源输入、83收据、包内全部QML、源ZIP中的全部产品输入与增量Git bundle通过。`repair-final.bundle` verified，源提交4c917aa、前提578d63c。收尾文档随后单独提交，不改变封存产品源码/ZIP；本地工作分支保留，未merge main、push或发布。实际收据位于本轮 `DELIVERY.json`、`logs/cold-final-zip.json`、`logs/final-check.json`。
+
+清理48个自有重复测试app前，实际测试QML/worker日志/manifest及不同EXE均存档，原日志/像素/导出/profile/身份fixture保持；收据`cleanup.json`。追加runtime/冷启动解压副本清理被自动审批以`blocked by policy`拒绝，未执行，暂保留这些副本，不影响完整包和校验；详`cleanup-extra-blocked.json`。

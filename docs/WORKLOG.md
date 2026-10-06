@@ -8573,3 +8573,15 @@ README更新仅当前版本更新/下载/过时状态和社区支持。独立确
 gui-telemetry-lifecycle（29.86秒）真实原版NR：播放/暂停恢复/窗口全屏返回/seek/节点NR接线/列表恢复/reduced motion/停止退出通过，NGX参数完整释放。gui-fsr-final（19.39秒）最终EXE/QML真实FSR预览和H264导出120帧、720p60通过。源码、日志和实际导出继续在本轮E盘目录；下一步只封包、新ZIP解压冷启动、逐文件/源码bundle与保护审计，按对应实际JSON记交付完成，不公开发布、不合main、不关机。
 
 封包前独立最终导出 `ffmpeg -v error -xerror ... -f null -` 完整解码、ffprobe逐帧时间戳检查通过：120帧、0–1.983333秒、每帧1/60递增；gui-fsr-final-timestamps.json保留实际文件SHA及解码exit0。全部本轮Python脚本AST语法检查通过。新增evidence freeze/close分别核对归档旧引擎证据和最终EXE/QML证据；未声称所有旧GPU用例在新EXE上重跑。
+
+### 最终封包与独立启动已通过
+
+源码4c917aa00419d321a3379fb064b72022ac0e11b2。实际命令 `stability-export-priority-evidence.py freeze` exit0：477源输入/83收据/最终EXE/QML匹配；`stability-export-priority-package.py refresh`、`finalize` exit0：AMD/NVIDIA 2051/1602文件、694/215项不可变组件、全部ZIP CRC/逐文件SHA保持。三ZIP位于本轮test-packages，大小355210175/714233409/70093518字节；完整SHA见本轮报告/DELIVERY.json，sourceZIP为4c917aa。`git bundle verify archives/.../repair-final.bundle` 成功，前提main578d63c。
+
+`stability-export-priority-cold.py cold-final-zip --zip` 两最终ZIP独立新解压/全manifest SHA、Windows-only PATH和private profile启动通过，AMD7.062秒/NVIDIA6.766秒均exit0，各26包内Qt/FFmpeg实际loader路径正确，没有QML/ERROR异常。实际文件路径在logs/.../cold-final-zip.json，不将AMD包在RTX5070基础启动当成AMD实卡NR/编码验收。
+
+`stability-export-priority-evidence.py close` exit0：产品输入/最终EXE/83收据、两包QML/源ZIP输入、源bundle和25原工作树/14既有发布文件全部保持，final-check.json passed=true。后续只补收尾文档；封存4c917aa产品commit/源码ZIP与运行组件不变。未合main/推送/公开发布、代发消息或关机。
+
+`E:/项目/Veyra/tmp/stability-export-priority-20261006/cleanup-owned.ps1` 成功清理48个本轮重复测试app；先保存实际测试QML、worker日志/manifest及按SHA去重的测试EXE到archives/.../test-package-evidence，原日志/收据、profile、像素、导出结果、身份提供器、最终build/两完整目录及ZIP/源bundle保留，cleanup.json记真实路径。逻辑字节数含硬链接，未宣称回收相同物理空间。
+
+随后补充清理本轮runtime副本与两个cold-final-zip解压目录的原生PowerShell命令在创建进程前被自动审批拒绝，工具理由只为`blocked by policy`。该命令未执行，保留这些自有副本，没有绕过拒绝或转用另一shell删除；logs/.../cleanup-extra-blocked.json记录限制，不算产品失败或清理通过。收尾只提交三份状态/报告文档，产品输入和既有发布文件再次由close/control检查。

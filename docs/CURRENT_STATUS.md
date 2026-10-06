@@ -6,7 +6,7 @@
 
 已核实 2.0.3 默认 GPU 优先级为普通（原进程135次只读查询 class2，源码无 setter）。此前约7%差距已定位到持续统计动画争用GPU，修复为有界更新，保留交互动效/数值/NR工作；同普通档、原版单层1080p NR，用户 GTA VI 4K30 相邻旧/新6.558881/6.559476ms（+0.009%），原 M2 4K60 为6.632515/6.590205ms（−0.638%）。同EXE反向恢复旧统计动画再次退化，详 [本轮报告](STABILITY_EXPORT_PRIORITY_REPORT_2026-10-06.md)。此结论限本机匹配设置，不代表全硬件/物理延迟/长期稳定性。
 
-真实AMD离线推理/编码与用户显示撕裂待复测。本地交付在E:/项目/Veyra/test-packages/stability-export-priority-20261006；ZIP以DELIVERY.json、最终新解压启动以logs/.../cold-final-zip.json为准。未合入main/推送/公开发布，25其他工作树与既有发布文件不变。以下为历史状态。
+本地测试包已经完成：E:/项目/Veyra/test-packages/stability-export-priority-20261006，两厂商完整ZIP及应用源码，产品commit4c917aa；DELIVERY.json/全部CRC与逐文件SHA通过，两最终ZIP重新解压/仅系统PATH/隔离profile启动exit0、各26个Qt/FFmpeg模块来自包内，final-check.json通过。真实AMD离线推理/编码与用户显示撕裂仍待实卡复测。未合入main/推送/公开发布，25其他工作树与14既有发布文件不变。以下为历史状态。
 
 ## 2026-10-06 PR19/PR20 适配验收
 
