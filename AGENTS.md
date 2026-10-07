@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-07 2.0.6正式发布授权**：用户明确构建2.0.6并发布GitHub，替换满员4群为所附5群二维码，发布后交付群公告。按docs/RELEASE_2.0.6_PLAN_2026-10-07.md从已验bf6e651在E盘codex/release-2.0.6-20261007整合VFG/Blackmagic/AMD NR-FSR修复，允许版本/双语README/新二维码/构建定向验收/同源码双显卡包及本轮commit/tag/main合并/普通push/v2.0.6正式Release与5资产上传。覆盖历史no-merge/no-push/no-Release；不扩改已验算法或运行组件，不改用户配置/驱动/其它工作树，不派Agent/竞争压力，不关机，群公告只交用户不代发。先运行release-2.0.6-control.py，独立start/bundle保护33工作树、495脏文件与3678项原件；仅main允许按合并回执推进，旧guard/baseline不改。测试≤300秒、构建≤900秒、产物全E盘。保留赞助QR/Discord/Ko-fi、双QR各width220，AMD/Blackmagic实卡与NV显存增长边界如实说明。
+
 > **2026-10-07 AMD NR/FSR现场修复**：用户报告1080p文件与XSX1080p60开关AMD NR无画面变化，提供veyra-qml(37).log。按docs/AMD_NR_FSR_PLAN_2026-10-07.md从4294341在E盘codex/amd-nr-fsr-handoff-20261007隔离修复共享NR→FSR资源交接和必要定向测试/构建/本地候选；这些具体接点覆盖历史冻结。先运行amd-nr-fsr-control.py，独立start/bundle保护32个工作树、495个脏文件与3672项已发布/候选文件，不改旧guard。运行库/模型原字节、正常链路不回读；无子Agent/竞争压力、不改用户配置/驱动/其他工作树、无新main合并/push/Release/关机。每测试≤300秒、构建≤900秒，所有产物E盘。本机RTX共享交接验证不等于RX9070/HIP/XSX实卡验收。
 
 > **2026-10-07 Blackmagic采集兼容授权**：用户要求兼容日志中的 Blackmagic WDM Capture / Decklink Video Capture，并说明不能确认物理卡数。从已验VFG候选cc22e88在E盘codex/blackmagic-capture-20261007按docs/BLACKMAGIC_CAPTURE_PLAN_2026-10-07.md隔离修复必要DirectShow上游连接/HDYC格式/驱动属性页/源黑帧诊断与QML及针对性构建验收。本次具体接点覆盖历史冻结；不改其它补帧/NR算法、不碰驱动/用户配置/其他工作树。独立start和Git bundle在archives/blackmagic-capture-20261007，先执行blackmagic-control.py，不改旧guard/baseline。无子Agent、压力/竞争负载；单测试≤300秒、构建≤900秒，产物统一E盘。运行库/模型原字节且不进Git；没有新merge/push/Release/关机授权。实卡未验不能宣称已解决。

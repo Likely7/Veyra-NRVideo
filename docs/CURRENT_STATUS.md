@@ -1,5 +1,9 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-07 2.0.6 发布施工
+
+用户授权构建并发布2.0.6：整合已验VFG优化、Blackmagic兼容及AMD NR→FSR结果交接修复，替换为5群二维码，保留赞助/Discord/Ko-fi。按[本轮方案](RELEASE_2.0.6_PLAN_2026-10-07.md)执行；构建/当前测试和实际公开状态分别由验收及GitHub回执证明。NVIDIA显存增长仍未修复，AMD/HIP与Blackmagic实卡边界保持。下方记录为历史状态。
+
 ## 2026-10-07 当前公开正式版2.0.5
 
 [v2.0.5](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.5)已发布并核对为latest，NVIDIA/AMD完整便携包、应用/依赖源码及SHA256SUMS共5资产的远端digest一致。产品与已测2.0.5保持，正式冷启通过，详见[发布回执](PUBLISH_2.0.5_REPORT_2026-10-07.md)。NVIDIA显存持续增长仍未定位/修复，AMD实卡离线编码仍待复测；下方各记录仅代表其当时状态。

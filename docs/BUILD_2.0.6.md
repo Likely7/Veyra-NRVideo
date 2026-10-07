@@ -1,0 +1,19 @@
+# Veyra 2.0.6 corresponding source and build / 对应源码与构建
+
+Download both [2.0.6 application source](https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.0.6/Veyra-2.0.6-source.zip) and [2.0.6 dependency source](https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.0.6/Veyra-2.0.6-dependency-source.zip). Use a GPU-matching complete portable package to run the application. Exact source commit, executable identity and hashes are recorded in package-manifest.json and SHA256SUMS.txt.
+
+The dependency asset is byte-identical to the 2.0.4 dependency-source ZIP, SHA256 `4eccde6343d66e0511b641aaacc12b999e424738a383fcce268d762abb3dceb9`, renamed for this release. No dependency/runtime/model was upgraded. Follow [2.0.4 dependency details](BUILD_2.0.4.md) and [2.0.0 baseline build](BUILD_2.0.0.md) with the current Veyra source/version. The old 2.0.4 application source is not the source of this release.
+
+Extract nested unchanged/ source archives as documented there. They retain Qt 6.8.3, patched FFmpeg/dav1d, Chiaki, Moonlight, Xbox/WebRTC, OpenSSL and FidelityFX SDK 2.3.0. Preserve FFmpeg's PS5 H.264 32→256 slice patch and veyra-local-build.json. Also retained: pinned MIT lmxxf 78f5487 source/build adaptation, MIT VFG reference 52011f8, and static subtitle tarballs/ports/patches for libass 0.17.5, FreeType 2.14.3, FriBidi 1.0.16, HarfBuzz 14.4.0, libpng 1.6.58, zlib 1.3.2, Brotli 1.2.0 and bzip2 1.0.8, with vcpkg 30ef65cad98f08e7197c9a1656fbd871bcb72f2d. SoundTouch 2.4.1 remains in application source. Proprietary SDK/runtime files, model weights and HIP code objects are excluded from source.
+
+Use Visual Studio 2022/MSVC x64, Windows SDK, C++20, CMake/Ninja, Python 3.11 and Qt 6.8.3 MSVC2022 x64. Configure explicit external paths as in BUILD_2.0.0, enable QML/RemotePlay/Moonlight/Xbox as required, and set `-DVEYRA_DISPLAY_VERSION=2.0.6`. Current CMake numeric version is 2.0.6; shipped PE File/ProductVersion is 2.0.6.0. Build `veyra_qml_ui`. RemotePlay-off retains the C compilation required by Moonlight/Xbox. Point `-DVEYRA_LIBASS_ROOT=<installed/x64-windows-static>` at the pinned static subtitle build.
+
+Modified static libass/font dependencies can be rebuilt from supplied tarballs and pinned vcpkg ports, then relinked into Veyra using the application source/build scripts. Qt is dynamically linked and replaceable. Optional VFG builds need external CUDA driver development headers through VEYRA_CUDA_DRIVER_INCLUDE_DIR; no driver/proprietary SDK headers are supplied in source. AMD driver HIP 7 and model/runtime payloads remain separate.
+
+Both vendor packages share one executable/QML/shader set. A new build can use package-qml-release.py followed by package-vendor-release.py with explicit external build/runtime/Qt/license/output paths; vendor staging audits driver exclusions, PE imports and runtime identities. Publication scripts release-2.0.6-*.py record this production build and its package paths, and serve as evidence rather than portable path defaults. Other machines must set their own external dependency locations.
+
+The application ZIP comes from the exact clean release commit. One historical tracked Python bytecode cache is explicitly omitted; no source code is excluded and the original Git file is preserved. Product source files match the freshly validated 2.0.6 build, including VFG submission, Blackmagic compatibility and NR/FSR handoff repairs.
+
+Veyra original code is GPL-3.0; the combined Chiaki application also carries AGPL-3.0 and its OpenSSL exception. Preserve THIRD_PARTY_NOTICES.md, runtime/source manifests and licenses. MIT host/sample code does not relicense proprietary models or NVIDIA runtimes. Publisher manifests do not lock compatible user runtime replacements.
+
+中文：重编译同时使用本Release应用源码与依赖源码；依赖ZIP与2.0.4逐字节相同，仅改名2.0.6，应用源码必须用本版。保留FFmpeg slice补丁、静态字幕依赖源码/重链接材料。项目数字/显示版本2.0.6，PE版本2.0.6.0。其他机器显式配置自己的外置目录，不能照搬本机E盘路径。RX9000预览可用来自用户反馈，AMD高分辨率HIP离线导出/硬编码仍待实卡验证，NV显存持续增长未修复。

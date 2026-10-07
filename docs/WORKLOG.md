@@ -1,5 +1,10 @@
 # Veyra 工作记录
 
+## 2026-10-07 2.0.6 正式发布施工
+
+用户明确授权构建、合并main、GitHub正式发布及换5群二维码。隔离codex/release-2.0.6-20261007起点bf6e651，main/nrvideo起点af5bfc3；VFG/Blackmagic/AMD NR→FSR修复保持原产品字节，CMake仅版本改2.0.6。全新构建143.859秒exit0，图20/ABI62/链264/采集213/颜色124/VFG913+设置331及四导出检查通过；GTA普通优先级中等4X120FPS/高2X60.0FPS。详细命令、数据、失败复核和未测硬件见[本轮验收](RELEASE_2.0.6_ACCEPTANCE_2026-10-07.md)、[发布计划](RELEASE_2.0.6_PLAN_2026-10-07.md)。新群码原字节/有效期10月14日前，原赞助/Discord/Ko-fi保留。所有产物E:/项目/Veyra/对应release-2.0.6-20261007目录。33旧工作树/495修改/3678证据由独立guard保护。后续打包/最终ZIP冷启/远端发布以实际回执追加，NVIDIA显存增长未修复。
+
+
 ## 2026-10-07 AMD NR → FSR结果丢失修复
 
 用户提交veyra-qml(37).log，报告1080p文件和XSX1080p60开关AMD NR无变化。从已验4294341在codex/amd-nr-fsr-handoff-20261007隔离修复，保留先前VFG和Blackmagic候选。独立start.json SHA256 0db892110ae4d7f358ed19cb9debbef747ea12cbbffd128f69a82040a5341499、全引用source-before.bundle SHA256 dcd0d2ce954b54b7aacf807d35d35395bc86d849a4e58cec8c7d9a0cf583f40a位于E:/项目/Veyra/archives/amd-nr-fsr-handoff-20261007；新amd-nr-fsr-control.py保护32个原工作树、495份未提交文件和3672项原包/运行库/模型/证据，不改旧guard/baseline、桌面/main/用户配置/驱动。不派Agent、不做竞争负载，不合并main/push/Release/关机。

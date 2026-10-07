@@ -14,11 +14,11 @@
 
 Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
 
-[下载 2.0.5 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.5) · [完整更新（English / 中文）](docs/RELEASE_NOTES_2.0.5.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
+[下载 2.0.6 免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.6) · [完整更新（English / 中文）](docs/RELEASE_NOTES_2.0.6.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
-**2.0.5 正式版，2026-10-07：** 修复统计界面性能回退、AMD补帧默认项/NR合成、FSR与多层NR导出、OBS重绘、自动显示同步，并适配PR #19/#20。详见[完整更新](docs/RELEASE_NOTES_2.0.5.md)。
+**2.0.6 正式版，2026-10-07：** 优化VFG实时提交，修复NR→FSR结果被原图覆盖，增加Blackmagic/DeckLink采集兼容与驱动属性入口。详见[完整更新](docs/RELEASE_NOTES_2.0.6.md)。
 
-**实测数据：** 本机RTX5070、原版单层内部1080p NR、实际普通优先级，同EXE统计动画对照的NR区间降低 **5.80%**，UI提交减少 **89.06%**。与2.0.3匹配对照差+0.009%（GTA 4K30）/−0.638%（4K60）。这些是限定条件下的处理区间/UI数据，不是延迟或显存降幅。[完整条件](docs/RELEASE_NOTES_2.0.5.md)。**NVIDIA显存持续增长仍未修复**，下版深入排查；AMD实卡离线编码及物理显示仍待验证。PR #13/#14继续暂缓。
+**VFG实测：** 本机RTX5070、GTA 4K30、单层内部1080p原版NR、实际普通优先级，相邻对照中Medium 4X送显提交读数 **80→120fps（+50%）**，High 2X **35.5→60fps（+69%）**。这是该环境的软件提交数据，不是所有显卡的保证或屏幕延迟收益。Medium 6X以上、High 3X以上仍有限制；**NVIDIA显存持续增长尚未修复**。AMD真实推理/主机和Blackmagic实卡需继续复测。[条件与边界](docs/RELEASE_NOTES_2.0.6.md)。
 
 ## 2.0.0 重点
 
@@ -30,18 +30,18 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 - **导出页重做**：可编辑顺序队列、剪辑、MP4/MKV、多音轨/内嵌字幕、取消重试和完成提示音。
 - **增强与兼容**：NR 四版本（50 系 NVIDIA 原版、Lecram、SF-v2、AMD lmxxf）、DLSS/XeSS/FSR 补帧入口、采集优化及带重启确认的 OBS 游戏采集开关。详细新功能与修复见 Release。
 
-## 2.0.5 新增与修复
+## 2.0.6 新增与修复
 
-- **性能回退**：限制统计动画无效高频重绘；GTA/4K60普通优先级匹配对照未再出现约7%差距。
-- **AMD与导出**：默认优先可用FSR、其次XeSS，迁移不可用旧DLSS选择；FSR离线导出不再强换DLSS，多层NR冻结参数一致。AMD视频NR支持内部1080p合成原尺寸输出，实卡离线编码待复测；XeSS补帧导出仍明确不支持。
-- **兼容与显示**：修复OBS软件界面滚动拖影和lmxxf线性输出合成；自动显示同步在窗口/全屏生效，手动允许撕裂保留。
-- **PR #19/#20**：可选HDR显示调优及预设/会话适配，修复UTF-8日志和RemotePlay-off构建；显示调优不烘焙进离线导出。
+- **VFG实时优化**：有界异步提交避免SDK调用阻塞送显；保留逐帧成功检查、队列上限和退出清理，导出继续使用同步判定。
+- **AMD NR→FSR**：超分及首帧/断点缩放使用NR处理结果，修复1080p视频与串流开关NR看不到变化的链路错误。
+- **Blackmagic/DeckLink**：补齐WDM上游连接，原生识别HDYC/BT709；增加设备/输入属性页、精确格式恢复和持续黑帧提示，实卡仍需复测。
+- **交流群**：更新为5群二维码，微信赞助、Discord和Ko-fi保留。
 
-[2.0.5 完整更新、数据与验收边界](docs/RELEASE_NOTES_2.0.5.md)。
+[2.0.6 完整更新、实测数据与验收边界](docs/RELEASE_NOTES_2.0.6.md)。
 
 ## 下载、启动与升级
 
-1. 按 Veyra 实际使用的显卡下载 **Veyra-2.0.5-NVIDIA-win64-portable.zip** 或 **Veyra-2.0.5-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
+1. 按 Veyra 实际使用的显卡下载 **Veyra-2.0.6-NVIDIA-win64-portable.zip** 或 **Veyra-2.0.6-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
 2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
 3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
 4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
@@ -78,7 +78,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 5. 光流在输入后计算并共享，超分为单实例；RTX Video HDR 在补帧前，补帧固定末端，DLSS/XeSS/FSR 选一个后端。不是任意分支混合图。
 6. 列表和节点分别保存参数、预设、会话。切回列表恢复原列表配置，节点链保留；切换重建处理链，可能短暂停顿。
 
-**2.0.5 节点模式不支持离线导出，也没有列表的 NR 全局保护区域。** 导出前切回列表并确认效果，不会自动转换节点链。
+**2.0.6 节点模式不支持离线导出，也没有列表的 NR 全局保护区域。** 导出前切回列表并确认效果，不会自动转换节点链。
 
 ### 采集与串流
 
@@ -133,7 +133,7 @@ QML 管界面，视频由原生 D3D12 呈现。列表/节点共用引擎，未�
 
 ## 开源与构建
 
-Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.0.5 构建与对应源码](docs/BUILD_2.0.5.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
+Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.0.6 构建与对应源码](docs/BUILD_2.0.6.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
 
 ## 支持与反馈
 
@@ -146,7 +146,7 @@ Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.0.0/docs/images/2.0.0/community-group.png" alt="Veyra 交流群 4" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.0.6/docs/images/2.0.6/community-group.png" alt="Veyra 交流群 5" width="220">
 </p>
 
-左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-09 前**有效，过期请查看仓库更新。
+左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-14 前**有效，过期请查看仓库更新。
