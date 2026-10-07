@@ -41,11 +41,13 @@
 
 gui-amd-catalog首轮沿用旧fixture，在List固定单例补帧已存在时再次添加，触发最多一个；v2试图删除固定尾节点也被正确拒绝。检查实际NodePage菜单与add/remove实现后，改在fresh Node上下文测试添加，未放宽产品规则。v3实际添加/预设通过且进程exit0，但Qt.quit异步退出前测试Timer再次执行，误把上一轮添加的节点当fresh draft而报FAIL；保留该失败收据。最终夹具在成功/失败时显式停Timer，v4全部通过。**这些是测试前置状态/生命周期错误，未改产品C++或QML来迎合测试。** 原失败app/console/engine日志及JSON均保留。
 
+首轮封包严格源码扫描发现历史已跟踪 `scripts/acceptance/__pycache__/fg-utilization-matrix.cpython-311.pyc`（16053字节），中止，没有生成便携ZIP或DELIVERY。不删除/改写这份既有Git文件；源码包明确排除该缓存，仍保护其原SHA。初次未完成源码ZIP、初次冻结与main合并记录另行归档；新冻结记录区分全部跟踪输入和实际源码ZIP输入。调整为先验证全清单、写partial并验后才改名。第二次提交仅打包/guard/证据脚本与失败记录，产品/EXE及20份通过收据不变，继续本地合并；旧开工baseline/guard不改。
+
 修复/旧配置测试真实使用缺NVIDIA组件的AMD包与RTX硬件，不伪造AMD厂商ID；AMD4K图测试仅确认共享合成契约。实际AMD HIP高分辨率导出、AMD硬编、FSR4 ML实卡、真实主机/采集长稳、用户显示器撕裂/VRR与NV显存根因仍未完成。本次短测不能代替这些现场验收。已有PR19/20与fix1保留，不复活PR13/14或先前撤回实验。
 
 ## 合并、源码和最终交付核对
 
-此记录随候选源码冻结，不在源码内循环填写自己的提交/ZIP SHA。`logs/release-2.0.5-20261007/tested-inputs.json` 冻结全部跟踪输入、当前EXE和20份当前通过收据；旧失败收据保留但不计通过。`main-merge.json` 记录本地main从578d63c --no-ff合入实测提交及树完全一致；只有该收据和独立检查通过才说明合并完成。原分支/桌面和其余工作树保持，旧guard/start不改。
+此记录随候选源码冻结，不在源码内循环填写自己的提交/ZIP SHA。`logs/release-2.0.5-20261007/tested-inputs.json` 冻结全部跟踪输入、实际源码归档输入、当前EXE和20份当前通过收据；旧失败收据保留但不计通过。`main-merge.json` 记录本地main从578d63c --no-ff合入实测提交，以及打包脚本续修的每次合并与树完全一致；只有该收据和独立检查通过才说明合并完成。原分支/桌面和其余工作树保持，旧guard/start不改。
 
 执行 `release-2.0.5-package.py refresh` 后 `finalize`，生成AMD/NVIDIA便携ZIP与应用源码ZIP、增量Git bundle、SHA256SUMS和DELIVERY.json；逐文件manifest、全部ZIP CRC及载荷SHA必须通过。对应依赖源码沿用已发布2.0.4字节，SHA4eccde63…，不新增下载/运行组件。`release-2.0.5-cold.py cold-final-zip --zip` 必须从最终ZIP独立解压、仅系统PATH/私有profile启动，核对实际包内Qt/FFmpeg模块来源；`release-2.0.5-evidence.py close` 再核main树、EXE、源码/ZIP、测试收据、27旧工作树/495修改文件/14发布文件。
 
