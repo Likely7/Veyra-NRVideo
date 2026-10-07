@@ -8648,3 +8648,17 @@ GPU独立helper按目标PID读取WMI Dedicated/Shared/TotalCommitted、PrivateBy
 全部产物E:/项目/Veyra/{archives,reports,logs,tests,tmp}/nv-vram-deep-20261007。补NV深查报告、纠正原计划NV/AMD顺序、更新CURRENT_STATUS。本轮证据汇总local-summary.json同时保留失败与短测范围；不修改旧原报告/原日志。独立verify.py核对原输入、1707基线、原main及26旧工作树、14已发布文件、仅5个当前授权文档/诊断接点、Python AST与git diff --check，收据final-check.json。收尾实际HEAD、fixture封存与自有副本整理见对应收据；产品修复与受影响实卡分配归属仍未完成。
 
 收尾已封存5组测试QML/隔离偏好及其SHA，fixture-preservation.json。清理4份自有测试app副本的PowerShell删除命令在CreateProcess前被自动审批以blocked by policy拒绝，没有执行、没有提供进一步原因；不重试或换方式删除，所有副本保留，cleanup.json记录removed=0。该限制只影响中间副本整理，不影响诊断、原包保全或研究结论。
+
+## 2026-10-07：VFG真实GTA6全档位与绿球未达标排查
+
+用户取消社区NR搜索，要求先用既有GTA6原片检查VFG各档位，解释Medium只能2X、High绿球仍无法提高。本轮从main af5bfc3a66afce3047868229a3070a91c0fc9c22创建独立codex/vfg-diagnosis-20261007及E:/项目/Veyra/worktrees/vfg-diagnosis-20261007。未改产品C++/shader/DLL，未重编译，无子Agent、竞争GPU负载、驱动/显示/用户配置修改、merge/push/Release/关机。prepare固定其他全部工作树HEAD、status及脏改动SHA，核验正式2.0.5原EXE acd49a23074b58ec9698d260d63b2d5a59a640627e09a9b83f0127ae47ebb936、VFG五DLL及原Main.qml；单份私有app仅加测试QML loader，运行库硬链接但不写入。原片14115273308字节/mtimeNs1789034773254693400与既有完整SHA93db6129收据相符；本轮ffprobe为4K H264/30fps/BT709/1608.066667秒，没有重新散列14GB全片。
+
+命令Python -B scripts/acceptance/vfg-diagnosis.py prepare；case medium2-nr --quality 1 --multiplier 2；case medium4-nr --quality 1 --multiplier 4；case medium4-nr-tearing同参数加--tearing；matrix（串行Low/Medium/High×2..8，已完成标准用例跳过）；三个对照case medium4-no-nr --quality 1 --multiplier 4 --no-nr、high2-no-nr --quality 2 --multiplier 2 --no-nr、medium4-nr-quiet --quality 1 --multiplier 4 --no-verbose。共21主矩阵+4对照、25独立进程，约5秒预热/20秒观察/每进程≤40秒。RTX5070/616.56、实际GPU class2、窗口1280×800、自动同步/限帧关/严格首帧准入关，原版单层1080NR强度1风格0零运动/调控关、SR/HDR/调色关；VFG实际最终4K。读数是应用呈现提交FPS，非物理显示FPS。
+
+2..8X顺序实测中位数：Low=60/90/112/123/130.5/131.5/128.5，Medium=60/82/84/74/57/34.5/30，High=37/30/30/33/33/32.5/32。Medium4总耗时19.04ms/GPU60.9%虽绿，CPU整组提交滚动P95中位数21.856ms超过8.333ms输出间隔。整会话fgReduced0/fgInvalid0/sourceSkipped0/slotWait0、2295有效生成、928送显前过期；稳态18.334秒550源/1541提交/659过期。pacing单调host与frame-batch UTC近似映射发现569段已就绪旧帧被下一组process覆盖的长呈现间隔；示例旧帧先就绪14.264ms，却遇下一组18.047ms处理，呈现空窗19.119ms。结束点UTC毫秒量化，不能冒充微秒精度；独立CPU P95/过期计数一致。已有独立呈现GPU队列，CPU仍共用graph owner；尚未逐SDK调用计时，不能断言NvVFX_Run具体内部等待。关闭同步仍84fps；关闭NR为Medium4=113/High2=58；关闭详细日志仍Medium4=84、总19.02ms，排除同步/日志为主导。
+
+High5总18.74ms/GPU67.8%同样绿但仅33fps，已大量reduced/seed/skip；完整FG预测7.578→79.798ms摆动，与FgRecoveryBudget完整FG样本2秒过期后value_or(0)一致。source711按7.883ms放行、source712重获76.326ms又拒绝，说明恢复探测造成尖峰。High2单张FG阶段18.12ms，相对Medium2为4.49ms；不能把降档组平均开销当完整High5余量，也不能承诺高倍率全跑满。方案/详细表/证据/优化顺序见docs/VFG_DIAGNOSIS_PLAN_2026-10-07.md与VFG_DIAGNOSIS_REPORT_2026-10-07.md：分段SDK CPU测量与重复绑定A/B→生成/送显解耦→受控成本恢复探测→输出达成率与过期原因显示。
+
+分析命令Python -B scripts/acceptance/vfg-diagnosis-report.py，只读原始日志重算analysis.json。prepare早期utf8-sig编码名失败，改utf-8-sig后成功，失败时未建app/基线；分析初次假定所有admission都有admittedPairs而KeyError，后修缺字段及行尾解释重复key覆盖实际值，重算JSON。没有将这些脚本失败当产品错误或通过证据。audit核对全部其他工作树及原发布包/五VFG DLL未变；Python AST、git diff --check及25组最终收据保存verify/vfg-diagnosis-20261007/final.json。自查不冒称独立Reviewer。
+
+本轮产物统一E:/项目/Veyra/{archives,tests,logs,tmp,verify}/vfg-diagnosis-20261007；保留一份私有app、25组配置与必要日志用于后续A/B，未删其他文件、未重复旧被拒清理操作。本轮只完成排查，产品优化尚未实施，未验证全屏/其他GPU驱动/采集串流/全片长稳/物理显示时序。
