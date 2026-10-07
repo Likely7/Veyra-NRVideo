@@ -9,3 +9,7 @@
 5. P4：匹配原片4K30/原版单层1080NR/强度1/零运动/调控关/GPU普通/Auto同步/限帧关，先测Medium3/4与High2，再按效果扩大档位。GUI正常负载串行，每进程≤300秒、构建≤900秒；验证8/10-bit所有质量/倍率、切镜/reset、关闭/seek/倍率与后端切换、完整导出计数与异常回退。只承诺本机实测，不预先承诺高档8X实时。
 
 产物统一E:/项目/Veyra/{archives,build,logs,tests,tmp,test-packages,verify}/vfg-optimization-20261007。先执行scripts/acceptance/vfg-opt-control.py，旧guard/start基线不改。各节点commit/checkpoint，负优化回退并留证据；最终提供有实测收益的本地候选与报告。源代码/运行组件严格分开，DLL/模型保持原字节。
+
+实际收尾：P0/P1/P2/P4完成，核心ddf71b1、最终candidate-build-v3。P1仅减少重复绑定，83fps未证明收益；P2才消除了送显线程阻塞。相邻Medium4原80→120fps（+50%），同EXE同步控制76.5fps；High2原35.5→60fps（+69.0%）。21档正常播放矩阵、913项GPU合同/168张同步异步相同像素、331项设置、GUI生命周期和24导出用例通过，完整表与限制见VFG_OPTIMIZATION_REPORT_2026-10-07.md。
+
+P3未实施：中档6X以上/高档3X以上仍未全部达标，但本轮主因已修正；保留共享准入/恢复策略，不能为追求数字改其它补帧。当前仅本地独立NVIDIA测试候选，无merge/push/Release；全片长稳、其它硬件及NV显存问题不由短测视为通过。包内冷启及最终保护检查以verify/vfg-optimization-20261007/candidate-cold.json、final-check.json为实际回执。

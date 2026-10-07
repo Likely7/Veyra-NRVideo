@@ -2,12 +2,20 @@
 from pathlib import Path
 import argparse,json,os,re,shutil,subprocess,time,psutil
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='vfg-optimization-20261007';APP=BASE/'tests'/TASK/'app'
-p=argparse.ArgumentParser();p.add_argument('label');p.add_argument('--failure-only',action='store_true');a=p.parse_args();assert a.label.replace('-','').isalnum()
+p=argparse.ArgumentParser();p.add_argument('label');modes=p.add_mutually_exclusive_group();modes.add_argument('--failure-only',action='store_true');modes.add_argument('--edge-from');a=p.parse_args();assert a.label.replace('-','').isalnum()
+if a.edge_from:assert a.edge_from.replace('-','').isalnum()
 subprocess.run(['python','-B',str(ROOT/'scripts/acceptance/vfg-opt-control.py')],cwd=ROOT,check=True)
 assert not any(x.info['name'].lower() in ('veyra.exe','veyra_qml_ui.exe','veyra_vfg_gpu_tests.exe','veyra_vfg_export_probe.exe') for x in psutil.process_iter(['name']))
 out,logs,tmp=(BASE/k/TASK/a.label for k in ('tests','logs','tmp'))
 for x in (out,logs,tmp):x.mkdir(parents=True,exist_ok=False)
-profile=out/'profile';profile.mkdir();(profile/'qml-preferences.v1.json').write_text(json.dumps({'overlayCompat':'off','gpuPriority':'normal','obsGameCapture':False}),encoding='utf8')
+profile=out/'profile'
+if a.edge_from:
+ prior=BASE/'tests'/TASK/a.edge_from
+ receipt=json.loads((BASE/'logs'/TASK/a.edge_from/'summary.json').read_text(encoding='utf8'))
+ assert all(any(x['phase']==phase and x['passed'] for x in receipt) for phase in ('run','restore'))
+ shutil.copytree(prior/'profile',profile)
+else:
+ profile.mkdir();(profile/'qml-preferences.v1.json').write_text(json.dumps({'overlayCompat':'off','gpuPriority':'normal','obsGameCapture':False}),encoding='utf8')
 outputs=out/'outputs';outputs.mkdir()
 media=Path('E:/Ai/知识/小七姐/GTAVI_An_Extended_Look_4K_Native.mp4')
 short=BASE/'tests/runtime-size-20261004/export-basic-v2/input.mp4';assert short.is_file()
@@ -18,14 +26,14 @@ env['PATH']=os.pathsep.join((env['WINDIR']+'/System32',env['WINDIR'],env['WINDIR
 package=BASE/'releases/publish-2.0.5-20261007/packages/Veyra-2.0.5-NVIDIA-win64-portable'
 original=(package/'qml/Veyra/Main.qml').read_bytes();source=original.decode('utf8');at=source.rfind('}');main=APP/'qml/Veyra/Main.qml';results=[]
 try:
- for phase in (['failure'] if a.failure_only else ['run','restore','missing','failure']):
+ for phase in (['failure'] if a.failure_only else ['missing','failure'] if a.edge_from else ['run','restore','missing','failure']):
   child=env.copy();data=profile
   child['VEYRA_LOG_FILE']=str(logs/(phase+'-engine.log'))
   if phase in ('missing','failure'):
    data=out/(phase+'-profile');shutil.copytree(profile,data)
   if phase=='missing':child['VEYRA_VFG_RUNTIME']=str(tmp/'missing-runtime')
   if phase=='failure':child['VEYRA_TEST_VFG_REJECT_RUN']='3'
-  qml=ROOT/'scripts/acceptance'/('vfg-opt-failure.qml' if phase=='failure' else 'vfg-ui.qml')
+  qml=ROOT/'scripts/acceptance'/('vfg-opt-failure.qml' if phase=='failure' else 'vfg-opt-ui.qml')
   settings='item.media='+json.dumps(str(media))+';'
   if phase!='failure':settings+='item.shortMedia='+json.dumps(str(short))+';item.evidence='+json.dumps(str(out))+';item.phase='+json.dumps(phase)+';'
   loader='\nLoader { source: '+json.dumps(qml.as_uri())+'; onLoaded: { '+settings+' } }\n'
@@ -49,7 +57,7 @@ try:
   print(results[-1],flush=True)
 finally:main.write_bytes(original)
 if not a.failure_only:
- files=list(outputs.glob('*.mp4'));assert len(files)==1,files
+ files=list((prior/'outputs' if a.edge_from else outputs).glob('*.mp4'));assert len(files)==1,files
  probe=json.loads(subprocess.check_output([shutil.which('ffprobe'),'-v','error','-count_frames','-show_streams','-of','json',str(files[0])],timeout=30))
  video=next(x for x in probe['streams'] if x['codec_type']=='video');assert int(video['nb_read_frames'])==64 and video['r_frame_rate']=='240/1',probe
  (logs/'export-probe.json').write_text(json.dumps(probe,indent=2),encoding='utf8')

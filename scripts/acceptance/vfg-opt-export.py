@@ -30,11 +30,16 @@ def run(name,media,m,q,flags=(),expected='success'):
   data=json.loads(subprocess.check_output([probe,'-v','error','-count_frames','-show_streams','-of','json',str(file)],timeout=30))
   v=next(x for x in data['streams'] if x['codec_type']=='video')
   assert v['codec_name']=='hevc' and int(v['nb_read_frames'])==8*m,data
-  assert all(abs(int(v[k].split('/')[0])/int(v[k].split('/')[1])-30*m)<.00001 for k in ('avg_frame_rate','r_frame_rate')),data
-  assert abs(float(v['duration'])-8/30)<1/(30*m),data
+  tick=int(v['time_base'].split('/')[0])/int(v['time_base'].split('/')[1])
+  rate=lambda k:int(v[k].split('/')[0])/int(v[k].split('/')[1])
+  assert abs(rate('r_frame_rate')-30*m)<.00001,data
+  # MP4 uses integer time-base ticks: an eight-frame clip's rounded duration
+  # changes avg_frame_rate slightly even with strictly CFR packet timestamps.
+  assert abs(rate('avg_frame_rate')-30*m)<=30*m*tick/(8/30-tick)+1e-9,data
+  assert abs(float(v['duration'])-8/30)<=tick+1e-9,data
   for audio in (x for x in data['streams'] if x['codec_type']=='audio'):assert abs(float(audio['duration'])-8/30)<.06,data
   packets=json.loads(subprocess.check_output([probe,'-v','error','-select_streams','v','-show_entries','packet=pts_time','-of','json',str(file)],timeout=30))['packets']
-  pts=[float(x['pts_time']) for x in packets];assert len(pts)==8*m and all(abs(b-a-1/(30*m))<.000003 for a,b in zip(pts,pts[1:])),pts
+  pts=[float(x['pts_time']) for x in packets];assert len(pts)==8*m and all(b>a and abs(b-a-1/(30*m))<=2*tick+1e-9 for a,b in zip(pts,pts[1:])),pts
   if '--nr' in flags:assert 'nr=1' in text and (v['width'],v['height'])==(3840,2160),text[-5000:]
   item.update(frames=8*m,probe=data,pts=pts)
  results.append(item);(logs/'summary.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf8');print('VFG EXPORT PASS',name,flush=True)

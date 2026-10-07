@@ -1,6 +1,6 @@
 # Veyra 工作记录
 
-## 2026-10-07 VFG 专项优化（进行中）
+## 2026-10-07 VFG 专项优化
 
 用户授权“尝试优化VFG，其他的补帧暂时不动”。排查分支封存aec800e，优化隔离codex/vfg-optimization-20261007；开工tag checkpoint/pre-vfg-optimization-20261007，完整Git bundle与不可变start.json在E:/项目/Veyra/archives/vfg-optimization-20261007。当前任务计划docs/VFG_OPTIMIZATION_PLAN_2026-10-07.md；新guard逐文件保护其它全部工作树、正式2.0.5 EXE/Main/VFG运行库及非VFG实现，未改旧guard/start。所有构建、测试、日志、临时目录使用E:/项目/Veyra对应vfg-optimization-20261007目录；无子Agent、竞争GPU压力、驱动/用户配置变更、merge/push/Release/关机。
 
@@ -11,6 +11,14 @@ P1按已登记固定MIT样例52011f89…只在新输入对绑定Src0/1、仅倍�
 async-build-v1构建通过。async-native-720-v1：8/10位、三质量、2X–8X、切镜及无效参数637项0失败。首轮async-medium4-nr-v1为120fps（原83–84），async-high2-nr-v1为60fps（前轮原版37）；均同原片/原版1080 NR/普通class2，SDK worker日志仍约6.7ms调用，证明收益是送显解耦，不是推理算法或GPU成本下降。以上尚为首轮，重复对照、4K像素/输入刷新、热切换、异步拒绝回退和完整导出验收仍待完成，不能据此交付或宣称所有档位通过。
 
 P2后续：async-build-v2成功；async-native-720-v2、sync-native-720-v2、async-native-4k-v2各913检查0失败（4K进程108.453秒）。相同候选同步/异步42组共168插帧逐像素哈希完全一致，native-hash-comparison.json；新增相同导入地址更新像素、反向运动、parity切换、切镜后2X→4X→8X验证。async-medium8-nr-v2约191fps且仍降档，明确未达240fps。failure-verified-v2第3次Run注入拒绝后实际multiplier=1、fgActive=false、视频继续，进程7.860秒正常退出，无等待悬挂。初次failure-v2及复核failure-observe-v2测试断言失败：误把QML fgEnabled（保存的节点请求）当实际后端；日志证实实际已降为1X，fgActive=false/failed=false。修正的是测试语义，保留两个失败日志，未为此改产品UI或其它后端。最终默认路径只加拒绝hook长度边界和准确注释，再构建最终候选；全档位重复/热切换/完整导出仍在验收，不预先算通过。
+
+最终核心提交ddf71b10cee673e5f50cd1425377f26206eb5214 / checkpoint/vfg-bounded-submission-20261007。python -B scripts/acceptance/vfg-opt-build.py candidate-build-v3退出0，EXE SHA751e1032cd3b2c00d1e95bf9c80bd4e5dba746b9b63fe4f16fba03a955b78653。随后只有本轮验收脚本/文档变化，产品代码未再改。vfg-opt-run.py matrix串行21组：Low2–8X达到60–240fps；Medium2–5X达到60–150，6/7/8X为174/178/156且降档；High2为60，高档3X以上均降档。这里fps为应用提交中位数，不能称物理屏幕fps或保证每帧稳定。vfg-opt-matched.py五组相邻对照：原版Medium4 80→候选120（+50%），同一候选强制同步仅76.5；原版High2 35.5→60（+69.0%）。Medium4 CPU滚动P95中位23.450→1.198ms，已就绪插帧累计过期增量726→0；GPU推理复杂度未变，实际送显增加反而提升GPU工作量，不宣传NR/GPU模型提速。完整数据见本轮REPORT和verify/measurements.json。
+
+vfg-opt-native.py candidate-native-720-v3：最终候选913项0失败，168张插帧与前轮同步/异步哈希再次相同。veyra_vfg_settings_tests.exe首次漏传绝对输出目录而exit2、无断言执行；补传E:/项目/Veyra/tests/vfg-optimization-20261007/settings-v3后331项0失败，日志settings-v3.log/json。vfg-opt-lifecycle.py lifecycle-v3正常/恢复两阶段57.313/4.313秒通过，含全屏进入/返回、暂停seek/resize、全部倍率与质量、VFG↔DLSS6X、列表/节点独立预设与重启、GUI独立同步导出worker。该轮缺运行库测试断言失败：现有启动迁移本就改选FSR2X且保持启用，不是强制原帧；原日志保留。只修测试，vfg-opt-lifecycle.py lifecycle-edge-v3 --edge-from lifecycle-v3分别8.297/5.718秒通过缺库迁移与第3次Run拒绝（实际FG关、视频继续、正常退出），既有共享回退代码逐字节不改。GUI导出8源帧/64输出/240fps经ffprobe核对。
+
+vfg-opt-export.py export-v3首组16帧正确，但avg_frame_rate=16000000/266667即59.999925fps，旧断言没考虑1微秒MP4刻度而失败。修测试按time_base推导容差，同时严格核对标称CFR/PTS递增与间距/时长，export-v3-verified全24组通过：21种720p质量×倍率、GTA4K30短片原生NR+VFG4、取消与缺库失败清理。源8帧输出8×倍率，导出不丢源帧，边界hold不算神经生成。所有GPU用例串行，每进程≤300秒，没有竞争压力。vfg-opt-finish.py生成最终REPORT/measurements.json；失败证据不覆盖、不改旧baseline。
+
+vfg-opt-stage.py从正式NVIDIA包独立复制本地Veyra-2.0.5-VFG-test-NVIDIA-win64-portable，1606载荷文件，只有EXE及包manifest更新并新增本轮报告，全部QML/runtime/model/license原字节保持、无可写hardlink。源码ZIP对应准确构建提交ddf71b1，SHAf8aebe0ae7fe504c15dc00daa539f9215869029d911e7dadf2e8492c480906a3。包、源码、构建及必要验证输出保留；冷启/最终保护/自有临时缓存整理按同任务verify/candidate-cold.json、final-check.json及logs/cleanup.json实际回执报告，不由本段推断尚未执行结果。main、旧发布包和其它工作树不变，无新推送/发布/关机。高倍率恢复策略P3保持旧版，NV显存增长仍未修复，未做全片长稳或其它显卡验收。
 
 ## 2026-10-07 2.0.5 正式发布完成
 
