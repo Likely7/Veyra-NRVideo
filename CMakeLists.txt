@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.0.4 LANGUAGES C CXX RC)
+project(veyra VERSION 2.0.5 LANGUAGES C CXX RC)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.0.4" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.0.5" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project

@@ -1,5 +1,13 @@
 # Veyra 工作记录
 
+## 2026-10-07 2.0.5 本地整合与测试包
+
+用户明确授权将已完成修复合入main并构建2.0.5测试，NV显存持续增长延期到下一版。main起点578d63c；候选从71483d5隔离，产品修复ef2069f/4c917aa、PR19/20与fix1均保留；其后NV文档/只读采集脚本不等于显存修复。本轮仅版本/整合文档与验收打包脚本变动，不扩改产品算法。27个原工作树、495个本地修改/未跟踪文件、14份发布文件已独立封存，start SHA48b998d583676c9c39b14cc417c89d294639060f2e2fd4aa1986b366113625c8；旧基线不改。
+
+产物路径为 E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages,verify}/release-2.0.5-20261007；受控源码worktrees同名。全新13目标513步构建exit0，EXE acd49a23074b58ec9698d260d63b2d5a59a640627e09a9b83f0127ae47ebb936，PE/显示版本2.0.5；7个CPU契约目标、6个统计组件用例、AMD共享合成10例、实际同步12组、DLSS4X/6X/4X像素复用、FSR H264及SR/原版NR/FSR HEVC、双原版NR HEVC与GUI导出全部通过，四输出完整解码/严格CFR时间线通过。真实NR GUI暂停/全屏/Node接线/恢复/停止30.094秒通过；AMD缺组件选择迁移、手动XeSS/NVIDIA DLSS保留与Flow预设重启通过。GTA VI 4K30/原版1080 NR/普通class2单轮NR约6.295ms、UI36次/秒、视频30fps；不计算与旧非相邻测量的收益。命令、限制及旧fix2匹配性能证据见本轮ACCEPTANCE。
+
+catalog/v2错误在固定List尾重复添加/删除FG；v3在成功后Qt.quit异步退出前Timer重跑，实际exit0但有FAIL，均保留为失败。不改产品规则，按真实Node菜单前置状态并在完成时停测试Timer，v4通过。最终本地main --no-ff合并、树一致、源码/ZIP/CRC/逐文件SHA、独立解压仅系统PATH启动及旧工作区/发布包保护分别以本任务main-merge.json、DELIVERY.json、cold-final-zip.json、final-check.json为准；本段不能代替尚未执行的最终步骤。无新公开发布/推送、压力或竞争程序、子Agent、运行库改写、用户配置改动或关机；NV显存延期。
+
 ## 2026-10-06 PR19/20 最终适配验收
 
 最终执行 `pr19-pr20-finish.py freeze/commit/merge/push/verify`：565产品输入/161测试与脚本输入/92证据SHA封存，8个新增可达提交无SDK/runtime/model产物。PR20 merge 2e3d239，PR19适配merge357c136，父提交2e3d239+b14dc5a；作者原heads完整保留。source-integration.bundle 73856888 bytes、SHA7bd38da97fce41739dcf3d19ae436ca501a075bc86421a63125e737ec6ff6c60并verify成功。本地main从f8045fb快进357c136、Git树8976fc731aab0e55467e39b42bfe4402ed6ccee3与实测freeze一致，nrvideo普通推送成功。REST核实PR19/20 closed/merged（mergeCommit357c136/2e3d239）；原Release/tag/正文/资产对象和4本机发布ZIP SHA保持。main-advance/push/remote-after收据保留。最终收尾仅三个文档及自有cleanup脚本，产品与测试证据保持，最终SHA以final-check.json为准。
