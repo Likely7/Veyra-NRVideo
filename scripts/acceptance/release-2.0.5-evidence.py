@@ -27,7 +27,11 @@ if mode=='freeze':
     names=git('ls-files').splitlines()
     tracked={name:sha(ROOT/name) for name in names}
     for p in (ROOT/'scripts/acceptance').glob('release-2.0.5-*.py'):ast.parse(p.read_text(encoding='utf8'))
+    excluded={name:h for name,h in tracked.items() if '__pycache__' in Path(name).parts and Path(name).suffix.lower()=='.pyc'}
+    opening=read(ARCH/'start.json')
+    for name,h in excluded.items():assert opening['trackedSha256'].get(name)==h,name
     receipt=dict(sourceCommit=git('rev-parse','HEAD'),executableSha256=sha(exe),trackedInputs=tracked,
+        sourceArchiveInputs={name:h for name,h in tracked.items() if name not in excluded},excludedTrackedCaches=excluded,
         testReceipts={name:sha(LOG/name) for name in required},
         validationScope='Fresh 2.0.5 build and bounded serial regression checks; previous fix2 A/B measurements remain historical',
         unresolved='NVIDIA VRAM growth deferred; actual AMD HIP/encoder and user-panel tearing unverified')
@@ -60,7 +64,8 @@ else:
             if name.startswith('qml/'):assert sha(app/name)==h,name
     with zipfile.ZipFile(delivery[0]['sourceZip']) as zipped:
         assert zipped.testzip() is None
-        for name,h in frozen['trackedInputs'].items():assert hashlib.sha256(zipped.read('Veyra-2.0.5-source/'+name)).hexdigest()==h,name
+        assert set(zipped.namelist())=={'Veyra-2.0.5-source/'+name for name in frozen['sourceArchiveInputs']}
+        for name,h in frozen['sourceArchiveInputs'].items():assert hashlib.sha256(zipped.read('Veyra-2.0.5-source/'+name)).hexdigest()==h,name
     subprocess.run(['git','bundle','verify',str(ARCH/'integration-final.bundle')],cwd=ROOT,check=True)
     receipt=dict(passed=True,version='2.0.5',testedSourceCommit=head,mainCommit=merge['mainAfter'],treesIdentical=True,
         executableSha256=sha(exe),trackedInputs=len(frozen['trackedInputs']),testReceipts=len(frozen['testReceipts']),

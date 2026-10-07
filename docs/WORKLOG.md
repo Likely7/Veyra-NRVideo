@@ -6,7 +6,9 @@
 
 产物路径为 E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages,verify}/release-2.0.5-20261007；受控源码worktrees同名。全新13目标513步构建exit0，EXE acd49a23074b58ec9698d260d63b2d5a59a640627e09a9b83f0127ae47ebb936，PE/显示版本2.0.5；7个CPU契约目标、6个统计组件用例、AMD共享合成10例、实际同步12组、DLSS4X/6X/4X像素复用、FSR H264及SR/原版NR/FSR HEVC、双原版NR HEVC与GUI导出全部通过，四输出完整解码/严格CFR时间线通过。真实NR GUI暂停/全屏/Node接线/恢复/停止30.094秒通过；AMD缺组件选择迁移、手动XeSS/NVIDIA DLSS保留与Flow预设重启通过。GTA VI 4K30/原版1080 NR/普通class2单轮NR约6.295ms、UI36次/秒、视频30fps；不计算与旧非相邻测量的收益。命令、限制及旧fix2匹配性能证据见本轮ACCEPTANCE。
 
-catalog/v2错误在固定List尾重复添加/删除FG；v3在成功后Qt.quit异步退出前Timer重跑，实际exit0但有FAIL，均保留为失败。不改产品规则，按真实Node菜单前置状态并在完成时停测试Timer，v4通过。最终本地main --no-ff合并、树一致、源码/ZIP/CRC/逐文件SHA、独立解压仅系统PATH启动及旧工作区/发布包保护分别以本任务main-merge.json、DELIVERY.json、cold-final-zip.json、final-check.json为准；本段不能代替尚未执行的最终步骤。无新公开发布/推送、压力或竞争程序、子Agent、运行库改写、用户配置改动或关机；NV显存延期。
+catalog/v2错误在固定List尾重复添加/删除FG；v3在成功后Qt.quit异步退出前Timer重跑，实际exit0但有FAIL，均保留为失败。不改产品规则，按真实Node菜单前置状态并在完成时停测试Timer，v4通过。初次本地main从578d63c合入6beeab0，merge1cec3ff、树一致；随后首轮源码封包被历史已跟踪16053字节pyc缓存挡住，无便携ZIP/DELIVERY。未完成源ZIP SHA200c3894…、首轮冻结与合并记录归档；不删除旧Git文件，明确排除缓存后先验证清单/partial验后改名。续修仅本轮打包/guard/证据脚本和记录，产品/EXE/20份通过收据不变，再合入main；独立start不改，guard逐次核对main父提交和实测树。
+
+最终main/源码/ZIP/CRC/逐文件SHA、独立解压仅系统PATH启动及旧工作区/发布包保护分别以本任务main-merge.json、DELIVERY.json、cold-final-zip.json、final-check.json为准；本段不能代替尚未执行的最终步骤。无新公开发布/推送、压力或竞争程序、子Agent、运行库改写、用户配置改动或关机；NV显存延期。
 
 ## 2026-10-06 PR19/20 最终适配验收
 

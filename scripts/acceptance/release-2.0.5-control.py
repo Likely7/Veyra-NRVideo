@@ -27,7 +27,13 @@ for row in start['preserved_worktrees']:
     if location.resolve()==Path(start['mainPath']).resolve() and head!=row['head']:
         merge=json.loads((BASE/'logs'/TASK/'main-merge.json').read_text(encoding='utf8'))
         assert head==merge['mainAfter'] and merge['mainBefore']==row['head']
-        assert git('rev-list','--parents','-n','1',head,cwd=location).strip().split()[1:]==[row['head'],merge['testedSourceCommit']]
+        previous=row['head']
+        for step in merge.get('steps',[merge]):
+            assert step['mainBefore']==previous
+            assert git('rev-list','--parents','-n','1',step['mainAfter'],cwd=location).strip().split()[1:]==[previous,step['testedSourceCommit']]
+            assert git('rev-parse',step['mainAfter']+'^{tree}',cwd=location).strip()==git('rev-parse',step['testedSourceCommit']+'^{tree}').strip()
+            previous=step['mainAfter']
+        assert previous==head
         assert git('rev-parse',head+'^{tree}',cwd=location).strip()==git('rev-parse',merge['testedSourceCommit']+'^{tree}').strip()
     else:assert head==row['head'],str(location)
     assert git('status','--porcelain=v1','-z','--untracked-files=all',cwd=location)==row['status'],str(location)

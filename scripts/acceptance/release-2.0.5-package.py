@@ -39,15 +39,21 @@ if mode=='finalize':
     frozen=read(LOG/'tested-inputs.json');assert frozen['sourceCommit']==head and frozen['executableSha256']==sha(exe)
     for name,h in frozen['trackedInputs'].items():assert sha(ROOT/name)==h,name
     for name,h in frozen['testReceipts'].items():assert sha(LOG/name)==h,name
-    with zipfile.ZipFile(sourcezip,'x',zipfile.ZIP_DEFLATED,compresslevel=6) as zipped:
-        for name in git('ls-files').splitlines():
-            safe(name)
-            assert not name.startswith(('runtime/','runtime_local/','third_party_local/','models/'))
-            assert Path(name).suffix.lower() not in ('.dll','.exe','.lib','.pdb','.addon64','.onnx','.bin','.hsaco','.f16','.f32','.ptx','.pyc'),name
+    # Validate every source entry before opening the output. Existing tracked
+    # Python caches stay in Git for preservation but are not rebuild materials.
+    for name in frozen['sourceArchiveInputs']:
+        safe(name)
+        assert not name.startswith(('runtime/','runtime_local/','third_party_local/','models/'))
+        assert Path(name).suffix.lower() not in ('.dll','.exe','.lib','.pdb','.addon64','.onnx','.bin','.hsaco','.f16','.f32','.ptx','.pyc'),name
+    assert not sourcezip.exists()
+    partial=PACK/(sourcezip.name+'.partial')
+    with zipfile.ZipFile(partial,'x',zipfile.ZIP_DEFLATED,compresslevel=6) as zipped:
+        for name in sorted(frozen['sourceArchiveInputs']):
             zipped.write(ROOT/name,arcname='Veyra-2.0.5-source/'+name)
-    with zipfile.ZipFile(sourcezip) as zipped:
+    with zipfile.ZipFile(partial) as zipped:
         assert zipped.testzip() is None
-        for name,h in frozen['trackedInputs'].items():assert hashlib.sha256(zipped.read('Veyra-2.0.5-source/'+name)).hexdigest()==h,name
+        for name,h in frozen['sourceArchiveInputs'].items():assert hashlib.sha256(zipped.read('Veyra-2.0.5-source/'+name)).hexdigest()==h,name
+    partial.rename(sourcezip)
     subprocess.run(['git','bundle','create',str(ARCH/'integration-final.bundle'),'578d63c3a0143429b306e26eeb89137473b4d99f..HEAD'],cwd=ROOT,check=True)
     subprocess.run(['git','bundle','verify',str(ARCH/'integration-final.bundle')],cwd=ROOT,check=True)
 delivery=[]
@@ -106,6 +112,7 @@ for vendor in ('AMD','NVIDIA'):
         fileCount=len(actual),unchangedComponentCount=len(immutable),dependencySource=str(DEPS),dependencySourceSha256=sha(DEPS))
     if mode=='finalize':
         receipt['mainCommit']=merge['mainAfter']
+        receipt['sourceArchiveExcludedCaches']=list(frozen['excludedTrackedCaches'])
         archive=PACK/(app.name+'.zip')
         with zipfile.ZipFile(archive,'x',zipfile.ZIP_DEFLATED,compresslevel=6) as zipped:
             for name,p in sorted(actual.items()):zipped.write(p,arcname=app.name+'/'+name)
