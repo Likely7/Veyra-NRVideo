@@ -111,6 +111,7 @@ namespace Gdiplus { using std::min; using std::max; }
 #include "veyra/ngx/NrArchitecturePolicy.h"
 #include "veyra/ngx/FgCompatibilitySession.h"
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/source/CaptureSignalProbe.h"
 #include "veyra/source/ScreenCaptureSource.h"
 
 namespace veyra::ui {
@@ -328,6 +329,8 @@ struct QmlPlayerBridge::Impl {
     struct CaptureQuery { int kind = 0; std::wstring device; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats; };
     std::future<CaptureQuery> captureQuery;
     bool captureBusy = false, captureListed = false, captureResumePending = false;
+    bool captureDriverSettingsOpen = false;
+    std::wstring captureDriverFormatKey;
     int captureQueryKind = 0;   // 0 device list, 1 formats, 2 formats then connect (continue)
     std::vector<source::CaptureDevice> captureVideo, captureAudio;
     std::vector<source::CaptureFormat> captureFormatList;
@@ -1952,9 +1955,11 @@ QVariantList QmlPlayerBridge::captureDevices() const {
 }
 QString QmlPlayerBridge::captureDeviceId() const { return utf8Of(impl_->captureDevice); }
 void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
+    if (impl_->captureDriverSettingsOpen) return;
     if (impl_->captureDevice == wideOf(value)) return;
     impl_->captureDevice = wideOf(value);
     impl_->captureFormatList.clear(); impl_->captureFormatKey.clear();
+    impl_->captureDriverFormatKey.clear();
     // Colour follows the device, as in 1.4.4; audio returns to "none" unless it
     // is the remembered device.
     impl_->captureColor = impl_->capturePrefs.colorForDevice(impl_->captureDevice);
@@ -1970,7 +1975,7 @@ QVariantList QmlPlayerBridge::captureFormats() const {
     QVariantList out;
     for (const auto& f : impl_->captureFormatList)
         out << QVariantMap{{"id", utf8Of(f.key)}, {"label", uiText(f.label)}, {"tier", f.tier},
-                           {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}};
+                           {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent}};
     return out;
 }
 QString QmlPlayerBridge::captureFormatKey() const { return utf8Of(impl_->captureFormatKey); }
@@ -2042,8 +2047,28 @@ void QmlPlayerBridge::setCaptureBufferMode(int value) {
     auto s = settings(); s.captureBuffer = static_cast<source::CaptureBufferMode>(value);
     impl_->commit(std::move(s)); emit settingsChanged();
 }
-bool QmlPlayerBridge::captureQueryBusy() const { return impl_->captureBusy; }
+bool QmlPlayerBridge::captureQueryBusy() const { return impl_->captureBusy || impl_->captureDriverSettingsOpen; }
 QString QmlPlayerBridge::captureStatus() const { return impl_->captureStatus; }
+bool QmlPlayerBridge::captureBlackmagicDevice() const {
+    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return source::isBlackmagicCaptureDevice(d.name, d.path);
+    return false;
+}
+bool QmlPlayerBridge::openCaptureDriverSettings(bool inputSelector) {
+    auto& i = *impl_;
+    if (captureQueryBusy() || i.captureDevice.empty()) { emit notice(tr("请先选择设备并等待查询完成"), true); return false; }
+    if (i.openingSource || (i.snapshot.capture && !i.engine.idle())) { emit notice(tr("请等待连接结束并断开采集，再打开驱动设置"), true); return false; }
+    HWND owner = i.videoWindow ? GetAncestor(i.videoWindow, GA_ROOT) : nullptr;
+    if (!owner) if (auto* window = QGuiApplication::focusWindow()) owner = reinterpret_cast<HWND>(window->winId());
+    i.captureDriverSettingsOpen = true; emit captureChanged();
+    std::wstring error;
+    const bool ok = source::CaptureCardSource::showDeviceProperties(i.captureDevice, reinterpret_cast<uintptr_t>(owner), inputSelector, error, &i.captureDriverFormatKey);
+    i.captureDriverSettingsOpen = false;
+    if (!ok) { i.captureStatus = uiText(error); emit notice(i.captureStatus, true); emit captureChanged(); return false; }
+    // Some property pages change only this filter instance's IAMStreamConfig.
+    // Carry its exact identity to the new graph instead of discarding it.
+    queryCapture(3, i.captureDevice);
+    return true;
+}
 bool QmlPlayerBridge::captureMagewellDevice() const { return source::magewell::isProCaptureDevicePath(impl_->captureDevice); }
 QString QmlPlayerBridge::captureMagewellStatus() const {
     std::wstring runtime;
@@ -2052,12 +2077,13 @@ QString QmlPlayerBridge::captureMagewellStatus() const {
     return veyra::ui::i18n::text(source::magewell::statusText());
 }
 void QmlPlayerBridge::refreshCaptureDevices() {
+    if (impl_->captureDriverSettingsOpen) return;
     impl_->capturePrefs = ui::CapturePreferenceStore(impl_->dataDir).load();
     queryCapture(0, {});
 }
 void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
     auto& i = *impl_;
-    if (i.captureBusy) { if (kind == 0) i.captureStatus = tr("正在查询设备…"); return; }
+    if (captureQueryBusy()) { if (kind == 0) i.captureStatus = tr("正在查询设备…"); return; }
     i.captureBusy = true; i.captureQueryKind = kind;
     i.captureStatus = kind == 0 ? tr("正在查询采集设备…当前播放继续") : tr("正在读取设备支持的格式…");
     i.captureQuery = std::async(std::launch::async, [kind, device] {
@@ -2115,12 +2141,18 @@ void QmlPlayerBridge::tickCapture() {
     if (q.device != i.captureDevice) { emit captureChanged(); return; }   // stale answer
     i.captureFormatList = std::move(q.formats);
     const bool remembered = i.captureDevice == i.capturePrefs.videoPath;
+    const std::wstring driverSelection = i.captureDriverFormatKey.empty() ? i.captureFormatKey : i.captureDriverFormatKey;
+    if (q.kind == 3) i.captureDriverFormatKey.clear();
     i.captureFormatKey.clear();
-    if (remembered && !i.capturePrefs.formatKey.empty()) {
-        for (const auto& f : i.captureFormatList) if (f.key == i.capturePrefs.formatKey) i.captureFormatKey = f.key;
+    if (q.kind == 3 && !driverSelection.empty()) {
+        if (const auto* f = source::selectCaptureFormat(i.captureFormatList, -1, driverSelection)) i.captureFormatKey = f->key;
+    } else if (remembered && !i.capturePrefs.formatKey.empty()) {
+        if (const auto* f = source::selectCaptureFormat(i.captureFormatList, -1, i.capturePrefs.formatKey)) i.captureFormatKey = f->key;
     } else if (!i.captureFormatList.empty()) i.captureFormatKey = i.captureFormatList.front().key;
     i.captureStatus = i.captureFormatList.empty() ? tr("未读到有效的 4K 以内采集格式，或设备正被其他应用占用。")
                     : i.captureFormatKey.empty() ? tr("上次格式已不可用，请重新选择格式。")
+                    : q.kind == 3 ? tr("驱动设置已关闭。请核对所选格式与设备帧率，再连接。")
+                    : captureBlackmagicDevice() ? tr("请选择与输入信号一致的格式。驱动默认格式不代表检测到的信号。")
                     : tr("连接后使用当前增强设置。格式与音频变更需要重新连接。");
     veyra::log::info("capture-ui", std::format("formats={} selected={}", i.captureFormatList.size(), !i.captureFormatKey.empty()));
     emit captureChanged();
@@ -2131,7 +2163,7 @@ void QmlPlayerBridge::tickCapture() {
 }
 bool QmlPlayerBridge::startCaptureSession() {
     auto& i = *impl_;
-    if (i.captureBusy) { emit notice(tr("设备查询还没有完成"), true); return false; }
+    if (captureQueryBusy()) { emit notice(tr("设备查询或驱动设置尚未完成"), true); return false; }
     int device = -1;
     for (size_t k = 0; k < i.captureVideo.size(); ++k) if (i.captureVideo[k].path == i.captureDevice) device = int(k);
     const auto* format = source::selectCaptureFormat(i.captureFormatList, -1, i.captureFormatKey);
@@ -6800,13 +6832,15 @@ QString QmlPlayerBridge::captureSignalLevel() const {
     const auto& s = impl_->snapshot;
     if (!s.running || !s.capture) return QStringLiteral("idle");
     if (s.captureRecovering) return QStringLiteral("warn");
+    if (s.captureSampledBlack) return QStringLiteral("warn");
     return s.captureFps > 0.5 ? QStringLiteral("ok") : QStringLiteral("warn");
 }
 QString QmlPlayerBridge::captureSignalText() const {
     const auto& s = impl_->snapshot;
     if (captureSignalLevel() == QLatin1String("idle")) return tr("未连接");
     if (s.captureRecovering) return tr("正在恢复");
-    return s.captureFps > 0.5 ? tr("信号正常") : tr("等待信号");
+    if (s.captureFps > 0.5 && s.captureSampledBlack) return tr("收到黑帧 · 检查输入制式");
+    return s.captureFps > 0.5 ? tr("正在收帧") : tr("等待信号");
 }
 
 void QmlPlayerBridge::importPresetDialog() {

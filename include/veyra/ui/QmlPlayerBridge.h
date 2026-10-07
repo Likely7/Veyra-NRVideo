@@ -109,6 +109,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantList captureDevices READ captureDevices NOTIFY captureChanged)
     Q_PROPERTY(QString captureDeviceId READ captureDeviceId WRITE setCaptureDeviceId NOTIFY captureChanged)
     Q_PROPERTY(QString captureDeviceLabel READ captureDeviceLabel NOTIFY captureChanged)
+    Q_PROPERTY(bool captureBlackmagicDevice READ captureBlackmagicDevice NOTIFY captureChanged)
     Q_PROPERTY(bool captureForceSdr READ captureForceSdr WRITE setCaptureForceSdr NOTIFY settingsChanged)
     Q_PROPERTY(bool amdNrGpu READ amdNrGpu CONSTANT)
     Q_PROPERTY(QVariantMap effectCapabilities READ effectCapabilities NOTIFY effectCapabilitiesChanged)
@@ -544,6 +545,7 @@ public:
     QString captureDeviceId() const;
     void setCaptureDeviceId(const QString& value);
     QString captureDeviceLabel() const;
+    bool captureBlackmagicDevice() const;
     bool captureForceSdr() const;
     bool captureMagewellDevice() const;
     QString captureMagewellStatus() const;
@@ -573,6 +575,7 @@ public:
     // private to QML ("is not a function").
     Q_INVOKABLE void refreshCaptureTargets();
     Q_INVOKABLE void refreshCaptureDevices();
+    Q_INVOKABLE bool openCaptureDriverSettings(bool inputSelector = false);
     Q_INVOKABLE bool startCaptureSession();
     Q_INVOKABLE bool setScreenOption(const QString& key, const QVariant& value);
     Q_INVOKABLE bool startScreenCapture();

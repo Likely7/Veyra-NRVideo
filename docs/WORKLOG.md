@@ -1,5 +1,54 @@
 # Veyra 工作记录
 
+## 2026-10-07 2.0.6 正式发布施工
+
+用户明确授权构建、合并main、GitHub正式发布及换5群二维码。隔离codex/release-2.0.6-20261007起点bf6e651，main/nrvideo起点af5bfc3；VFG/Blackmagic/AMD NR→FSR修复保持原产品字节，CMake仅版本改2.0.6。全新构建143.859秒exit0，图20/ABI62/链264/采集213/颜色124/VFG913+设置331及四导出检查通过；GTA普通优先级中等4X120FPS/高2X60.0FPS。详细命令、数据、失败复核和未测硬件见[本轮验收](RELEASE_2.0.6_ACCEPTANCE_2026-10-07.md)、[发布计划](RELEASE_2.0.6_PLAN_2026-10-07.md)。新群码原字节/有效期10月14日前，原赞助/Discord/Ko-fi保留。所有产物E:/项目/Veyra/对应release-2.0.6-20261007目录。33旧工作树/495修改/3678证据由独立guard保护。后续打包/最终ZIP冷启/远端发布以实际回执追加，NVIDIA显存增长未修复。
+
+
+## 2026-10-07 AMD NR → FSR结果丢失修复
+
+用户提交veyra-qml(37).log，报告1080p文件和XSX1080p60开关AMD NR无变化。从已验4294341在codex/amd-nr-fsr-handoff-20261007隔离修复，保留先前VFG和Blackmagic候选。独立start.json SHA256 0db892110ae4d7f358ed19cb9debbef747ea12cbbffd128f69a82040a5341499、全引用source-before.bundle SHA256 dcd0d2ce954b54b7aacf807d35d35395bc86d849a4e58cec8c7d9a0cf583f40a位于E:/项目/Veyra/archives/amd-nr-fsr-handoff-20261007；新amd-nr-fsr-control.py保护32个原工作树、495份未提交文件和3672项原包/运行库/模型/证据，不改旧guard/baseline、桌面/main/用户配置/驱动。不派Agent、不做竞争负载，不合并main/push/Release/关机。
+
+日志RX9070XT：两来源均NR→FSR(枚举4.1.1)→XeSS，NR已成功enqueue/合成且开关触发设置版本应用，并非按钮未传入。发现普通NR-first顺序FSR color读srcRgba而丢弃NR residual，光流首帧/断点普通blit也取原图；这条错误已存在2.0.5/main af5bfc3，并非本轮VFG/Blackmagic改动引入。生产只改EnhanceGraph.cpp：FSR与普通blit统一取已有srStageInput/descriptor18，设置必要资源读状态；模型、DLL、FSR选择和补帧/解码/采集/着色器不改。新增测试专用非恒等GPU marker，填补此前identity fixture无法检测结果被覆盖的缺口。
+
+执行python -B scripts/acceptance/amd-nr-fsr-build.py build-before ...：77.094秒exit0；amd-nr-fsr-tests.py pixels-before before：3.812秒exit1为预期复现，6个NR-before-SR用例确实算了NR却输出原图，marker误差156，NR-off/SR→NR/零强度对照通过。生产修复后build-after veyra_qml_ui veyra_amd_nr_graph_tests veyra_lmxxf_nr_tests veyra_effect_chain_tests：81.829秒exit0。pixels-after after：2.500秒，20个GPU用例0失败，非恒等交接采样最大误差0；含1080p/60fps合成PTS→4K、首帧/断点、时域、单/多层和原4K输出identity回归，D3D12错误0。abi-after abi：62项0失败/0.390秒；chain-after units：264条PASS/0.031秒。本机RTX5070执行真实FSR3.1.5和测试C ABI NR，不能外推RX9070/HIP、FSR4.1.1或实际XSX验收。
+
+amd-nr-fsr-package.py prepare独立复制正式AMD包，仅换EXE与保留的Blackmagic QML/notice；cold cold-after：13.140秒exit0、26个Qt/codec模块均来自候选、文件基础播放及QML无ERROR，使用E盘独立profile、默认增强关闭。EXE c57ef5fa2db6d297d5f9393b45c5866faa1504a7ffabe9621d52f91d2ecc6b9b，显示2.0.5-amd-nr-test。构建/测试/logs/tmp均在E:/项目/Veyra下同任务目录，每测试≤300秒、构建≤900秒；修复前失败证据保留。详细命令/原因/自查/限制与复测步骤在docs/AMD_NR_FSR_REPORT_2026-10-07.md。原日志含私人串流数据不入Git/便携包。XSX另有D3D12VA六次-22后软解回退，不与NR资源交接问题混为一谈，本轮未修改解码器。
+
+本地对应源码与完整AMD便携ZIP由amd-nr-fsr-package.py final审计生成到E:/项目/Veyra/test-packages/amd-nr-fsr-handoff-20261007，核验编译输入对应、runtime/model/shader原字节、测试provider不入包和ZIP逐文件hash/CRC；最终回执路径E:/项目/Veyra/verify/amd-nr-fsr-handoff-20261007/final-check.json。AMD实卡和真实XSX需用户复测；此前Blackmagic实卡/较高VFG倍率/NVIDIA显存增长边界不变。没有独立Reviewer验收声明。
+
+## 2026-10-07 Blackmagic / DeckLink 采集黑屏兼容
+
+用户要求兼容截图中 Blackmagic WDM Capture、Decklink Video Capture 两个入口，随后确认无法判断物理卡数。按 docs/BLACKMAGIC_CAPTURE_PLAN_2026-10-07.md，从已验 VFG 候选 cc22e88 隔离到 codex/blackmagic-capture-20261007，保留 VFG 优化。开工 tag checkpoint/pre-blackmagic-capture-20261007；E:/项目/Veyra/archives/blackmagic-capture-20261007 保存完整 source-before.bundle、不可变 start.json，原日志/截图只读副本在 logs/blackmagic-capture-20261007/input。新 guard 逐文件保护其它 31 个工作树及 1346 个原始文件，不改旧 baseline/guard、桌面脏区、main、发布包、运行库、驱动或用户配置。无子 Agent、竞争 GPU 压力、merge/push/Release/关机操作。
+
+原日志为 2.0.4 / RTX5070Ti / 驱动576.88：两入口五次连接均有回调和 Present，不能据此证明非黑；社区 NR 每次 BAD00002 / SEH C0000005。代码发现 HDYC 未识别、原生直连未接 WDM 上游输入选择器、默认格式不代表输入制式、旧 VideoInfo2 格式键缺扫描/场序。按已登记 OBS libdshowcapture c13d4b7b0c66979396ba0a9060c9aafc15bb7b22 LGPL2.1+ 移植 medium/上游连接，保留路由与已连接 pin，失败显式回传。HDYC 复用现有 GPU UYVY+BT709，明确元数据/覆盖优先；增加用户主动打开的设备/输入属性页及 Blackmagic 每秒有界 CPU 黑采样诊断。v210 保持系统转换，不新增去隔行。采集连接中、运行中和断开未完成时拒绝驱动争用。只加单个 snapshot 观察字段，没有改算法/处理图/着色器。
+
+命令 python -B scripts/acceptance/blackmagic-build.py capture-build-v1 首次失败：SDK 的 IKsPin 条件声明、错误常量不存在；失败日志保留。局部声明可见性及真实错误常量修复后 capture-build-v2 exit0。capture-build-v3 修正单场样本场率标签，最终 capture-build-v4 补齐连接/断开驱动争用边界，均 exit0。最终 EXE SHA256 0e95e46d0419fd2dbb04e33a55e6c47ecdc6ff93dad14c51a286552f30848214，显示版本2.0.5-capture-test。构建目录 E:/项目/Veyra/build/blackmagic-capture-20261007，使用已接受2.0.5依赖和 patched FFmpeg，临时目录 E:/项目/Veyra/tmp/blackmagic-capture-20261007/build；日志同任务 logs/ 下 build-v1至v4，不覆盖失败。
+
+python -B scripts/acceptance/blackmagic-tests.py contracts-v4：采集颜色/native sink/合成 COM 213项0失败，格式选择0失败，真实 GPU 124输出检查通过；HDYC 正/反向带 padding 彩图与明确 BT709 UYVY逐像素相同，灰阶全/限范围error=0；设备只读枚举通过。此前 contracts-v2 也通过，最终交付按 v4证据。python -B scripts/acceptance/blackmagic-field-tests.py prepare prepare-v4 验证正式包全部哈希后独立复制候选，无可写硬链接。rate usb-rate-v4 实卡 KUHAIMI27P/1080p60 YUY2 连接及重连14.281秒，通过60.084/59.961fps回调与单调PTS，inputMediums=0/crossbar=false/routeChanged=0。ui gui-v4 两进程11.766/4.172秒通过产品连接/断开、连接中和采集中禁开驱动设置、收帧状态、重启旧键迁移；显式截图显示采集卡内置无信号提示图，不能算外部HDMI信号验收。properties driver-page-v4 4.172秒通过真实 COM 图创建/GetFormat及无属性页E_NOINTERFACE回退，查询状态不悬挂。所有 GPU 测试串行，每进程≤300秒；使用私有E盘profile，候选 Main.qml 注入后恢复原字节。
+
+详细报告 docs/BLACKMAGIC_CAPTURE_REPORT_2026-10-07.md。本机无 Blackmagic 实卡，不宣称其已出画或型号认证，不宣称社区 NR 异常解决。源像素采样是黑场观察，不是物理信号检测；基本画面验证后才逐项开增强。legacy-only scripts/gates/delivery.ps1 不适用于当前 QML 入口，本轮执行针对性产品GUI、像素和采集回归。对应源码、便携候选、逐文件清单及最终保护核验由 blackmagic-finalize.py 生成在 E:/项目/Veyra/test-packages/blackmagic-capture-20261007 和 verify/blackmagic-capture-20261007；不更新正式版本或 README 发布内容。
+
+## 2026-10-07 VFG 专项优化
+
+用户授权“尝试优化VFG，其他的补帧暂时不动”。排查分支封存aec800e，优化隔离codex/vfg-optimization-20261007；开工tag checkpoint/pre-vfg-optimization-20261007，完整Git bundle与不可变start.json在E:/项目/Veyra/archives/vfg-optimization-20261007。当前任务计划docs/VFG_OPTIMIZATION_PLAN_2026-10-07.md；新guard逐文件保护其它全部工作树、正式2.0.5 EXE/Main/VFG运行库及非VFG实现，未改旧guard/start。所有构建、测试、日志、临时目录使用E:/项目/Veyra对应vfg-optimization-20261007目录；无子Agent、竞争GPU压力、驱动/用户配置变更、merge/push/Release/关机。
+
+P0源码b9394ea / checkpoint/vfg-cpu-profile-20261007：默认关闭的VFG CPU分段计时。命令python -B scripts/acceptance/vfg-opt-build.py profile-build-v1及vfg-opt-run.py case profile-medium4-nr --quality 1 --multiplier 4 --cpu-profile；GUI正式负载原GTA6/原版1080 NR/普通class2，Run均值约6.20ms，Src/SetU32为微秒级，FPS82。逐API日志记录证明阻塞发生在NvVFX_Run；不是从GPU利用率猜测CPU瓶颈。
+
+P1按已登记固定MIT样例52011f89…只在新输入对绑定Src0/1、仅倍率变化设置FrameMultiplier，capture修订检测相同CUDA地址的新像素；pair-cache-build-v1构建通过，pair-cache-medium4-nr仍83fps/FG12.18ms，未证明性能收益。保留其SDK调用契约修正但不计算优化百分比。P2实时VFG专用有界worker，CUDA推理仍串行，图owner预排producer/consumer fence；生成状态独立核验，失败帧不得当Valid。视频导出默认保留同步SDK判定路径；DLSS/XeSS/FSR代码与策略不改。
+
+async-build-v1构建通过。async-native-720-v1：8/10位、三质量、2X–8X、切镜及无效参数637项0失败。首轮async-medium4-nr-v1为120fps（原83–84），async-high2-nr-v1为60fps（前轮原版37）；均同原片/原版1080 NR/普通class2，SDK worker日志仍约6.7ms调用，证明收益是送显解耦，不是推理算法或GPU成本下降。以上尚为首轮，重复对照、4K像素/输入刷新、热切换、异步拒绝回退和完整导出验收仍待完成，不能据此交付或宣称所有档位通过。
+
+P2后续：async-build-v2成功；async-native-720-v2、sync-native-720-v2、async-native-4k-v2各913检查0失败（4K进程108.453秒）。相同候选同步/异步42组共168插帧逐像素哈希完全一致，native-hash-comparison.json；新增相同导入地址更新像素、反向运动、parity切换、切镜后2X→4X→8X验证。async-medium8-nr-v2约191fps且仍降档，明确未达240fps。failure-verified-v2第3次Run注入拒绝后实际multiplier=1、fgActive=false、视频继续，进程7.860秒正常退出，无等待悬挂。初次failure-v2及复核failure-observe-v2测试断言失败：误把QML fgEnabled（保存的节点请求）当实际后端；日志证实实际已降为1X，fgActive=false/failed=false。修正的是测试语义，保留两个失败日志，未为此改产品UI或其它后端。最终默认路径只加拒绝hook长度边界和准确注释，再构建最终候选；全档位重复/热切换/完整导出仍在验收，不预先算通过。
+
+最终核心提交ddf71b10cee673e5f50cd1425377f26206eb5214 / checkpoint/vfg-bounded-submission-20261007。python -B scripts/acceptance/vfg-opt-build.py candidate-build-v3退出0，EXE SHA751e1032cd3b2c00d1e95bf9c80bd4e5dba746b9b63fe4f16fba03a955b78653。随后只有本轮验收脚本/文档变化，产品代码未再改。vfg-opt-run.py matrix串行21组：Low2–8X达到60–240fps；Medium2–5X达到60–150，6/7/8X为174/178/156且降档；High2为60，高档3X以上均降档。这里fps为应用提交中位数，不能称物理屏幕fps或保证每帧稳定。vfg-opt-matched.py五组相邻对照：原版Medium4 80→候选120（+50%），同一候选强制同步仅76.5；原版High2 35.5→60（+69.0%）。Medium4 CPU滚动P95中位23.450→1.198ms，已就绪插帧累计过期增量726→0；GPU推理复杂度未变，实际送显增加反而提升GPU工作量，不宣传NR/GPU模型提速。完整数据见本轮REPORT和verify/measurements.json。
+
+vfg-opt-native.py candidate-native-720-v3：最终候选913项0失败，168张插帧与前轮同步/异步哈希再次相同。veyra_vfg_settings_tests.exe首次漏传绝对输出目录而exit2、无断言执行；补传E:/项目/Veyra/tests/vfg-optimization-20261007/settings-v3后331项0失败，日志settings-v3.log/json。vfg-opt-lifecycle.py lifecycle-v3正常/恢复两阶段57.313/4.313秒通过，含全屏进入/返回、暂停seek/resize、全部倍率与质量、VFG↔DLSS6X、列表/节点独立预设与重启、GUI独立同步导出worker。该轮缺运行库测试断言失败：现有启动迁移本就改选FSR2X且保持启用，不是强制原帧；原日志保留。只修测试，vfg-opt-lifecycle.py lifecycle-edge-v3 --edge-from lifecycle-v3分别8.297/5.718秒通过缺库迁移与第3次Run拒绝（实际FG关、视频继续、正常退出），既有共享回退代码逐字节不改。GUI导出8源帧/64输出/240fps经ffprobe核对。
+
+vfg-opt-export.py export-v3首组16帧正确，但avg_frame_rate=16000000/266667即59.999925fps，旧断言没考虑1微秒MP4刻度而失败。修测试按time_base推导容差，同时严格核对标称CFR/PTS递增与间距/时长，export-v3-verified全24组通过：21种720p质量×倍率、GTA4K30短片原生NR+VFG4、取消与缺库失败清理。源8帧输出8×倍率，导出不丢源帧，边界hold不算神经生成。所有GPU用例串行，每进程≤300秒，没有竞争压力。vfg-opt-finish.py生成最终REPORT/measurements.json；失败证据不覆盖、不改旧baseline。
+
+vfg-opt-stage.py从正式NVIDIA包独立复制本地Veyra-2.0.5-VFG-test-NVIDIA-win64-portable，1606载荷文件，只有EXE及包manifest更新并新增本轮报告，全部QML/runtime/model/license原字节保持、无可写hardlink。源码ZIP对应准确构建提交ddf71b1，SHAf8aebe0ae7fe504c15dc00daa539f9215869029d911e7dadf2e8492c480906a3。包、源码、构建及必要验证输出保留；冷启/最终保护/自有临时缓存整理按同任务verify/candidate-cold.json、final-check.json及logs/cleanup.json实际回执报告，不由本段推断尚未执行结果。main、旧发布包和其它工作树不变，无新推送/发布/关机。高倍率恢复策略P3保持旧版，NV显存增长仍未修复，未做全片长稳或其它显卡验收。
+
 ## 2026-10-07 2.0.5 正式发布完成
 
 已正式发布https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.5（Release ID 405358232，2026-10-07T03:59:46Z），5资产远端大小/SHA256 digest一致，最新正式版本、对应源码/依赖源码、正文/双QR和下载可用性核对通过。两最终ZIP冷启及26个包内模块路径各通过，产品字节保持。实际命令、结果、失败复核、哈希与日志路径见[PUBLISH_2.0.5_REPORT](PUBLISH_2.0.5_REPORT_2026-10-07.md)。main合并939f1a5afa7b1d122adf656d157d4df6b6fad9af、源码e44e828119710b8f031cc968e8ddb1982aecc873；随后只提交此正式回执，不改标签/资产/产品。NV显存未修复；公告≤1000字，只交用户，不代发不关机。
@@ -8648,3 +8697,17 @@ GPU独立helper按目标PID读取WMI Dedicated/Shared/TotalCommitted、PrivateBy
 全部产物E:/项目/Veyra/{archives,reports,logs,tests,tmp}/nv-vram-deep-20261007。补NV深查报告、纠正原计划NV/AMD顺序、更新CURRENT_STATUS。本轮证据汇总local-summary.json同时保留失败与短测范围；不修改旧原报告/原日志。独立verify.py核对原输入、1707基线、原main及26旧工作树、14已发布文件、仅5个当前授权文档/诊断接点、Python AST与git diff --check，收据final-check.json。收尾实际HEAD、fixture封存与自有副本整理见对应收据；产品修复与受影响实卡分配归属仍未完成。
 
 收尾已封存5组测试QML/隔离偏好及其SHA，fixture-preservation.json。清理4份自有测试app副本的PowerShell删除命令在CreateProcess前被自动审批以blocked by policy拒绝，没有执行、没有提供进一步原因；不重试或换方式删除，所有副本保留，cleanup.json记录removed=0。该限制只影响中间副本整理，不影响诊断、原包保全或研究结论。
+
+## 2026-10-07：VFG真实GTA6全档位与绿球未达标排查
+
+用户取消社区NR搜索，要求先用既有GTA6原片检查VFG各档位，解释Medium只能2X、High绿球仍无法提高。本轮从main af5bfc3a66afce3047868229a3070a91c0fc9c22创建独立codex/vfg-diagnosis-20261007及E:/项目/Veyra/worktrees/vfg-diagnosis-20261007。未改产品C++/shader/DLL，未重编译，无子Agent、竞争GPU负载、驱动/显示/用户配置修改、merge/push/Release/关机。prepare固定其他全部工作树HEAD、status及脏改动SHA，核验正式2.0.5原EXE acd49a23074b58ec9698d260d63b2d5a59a640627e09a9b83f0127ae47ebb936、VFG五DLL及原Main.qml；单份私有app仅加测试QML loader，运行库硬链接但不写入。原片14115273308字节/mtimeNs1789034773254693400与既有完整SHA93db6129收据相符；本轮ffprobe为4K H264/30fps/BT709/1608.066667秒，没有重新散列14GB全片。
+
+命令Python -B scripts/acceptance/vfg-diagnosis.py prepare；case medium2-nr --quality 1 --multiplier 2；case medium4-nr --quality 1 --multiplier 4；case medium4-nr-tearing同参数加--tearing；matrix（串行Low/Medium/High×2..8，已完成标准用例跳过）；三个对照case medium4-no-nr --quality 1 --multiplier 4 --no-nr、high2-no-nr --quality 2 --multiplier 2 --no-nr、medium4-nr-quiet --quality 1 --multiplier 4 --no-verbose。共21主矩阵+4对照、25独立进程，约5秒预热/20秒观察/每进程≤40秒。RTX5070/616.56、实际GPU class2、窗口1280×800、自动同步/限帧关/严格首帧准入关，原版单层1080NR强度1风格0零运动/调控关、SR/HDR/调色关；VFG实际最终4K。读数是应用呈现提交FPS，非物理显示FPS。
+
+2..8X顺序实测中位数：Low=60/90/112/123/130.5/131.5/128.5，Medium=60/82/84/74/57/34.5/30，High=37/30/30/33/33/32.5/32。Medium4总耗时19.04ms/GPU60.9%虽绿，CPU整组提交滚动P95中位数21.856ms超过8.333ms输出间隔。整会话fgReduced0/fgInvalid0/sourceSkipped0/slotWait0、2295有效生成、928送显前过期；稳态18.334秒550源/1541提交/659过期。pacing单调host与frame-batch UTC近似映射发现569段已就绪旧帧被下一组process覆盖的长呈现间隔；示例旧帧先就绪14.264ms，却遇下一组18.047ms处理，呈现空窗19.119ms。结束点UTC毫秒量化，不能冒充微秒精度；独立CPU P95/过期计数一致。已有独立呈现GPU队列，CPU仍共用graph owner；尚未逐SDK调用计时，不能断言NvVFX_Run具体内部等待。关闭同步仍84fps；关闭NR为Medium4=113/High2=58；关闭详细日志仍Medium4=84、总19.02ms，排除同步/日志为主导。
+
+High5总18.74ms/GPU67.8%同样绿但仅33fps，已大量reduced/seed/skip；完整FG预测7.578→79.798ms摆动，与FgRecoveryBudget完整FG样本2秒过期后value_or(0)一致。source711按7.883ms放行、source712重获76.326ms又拒绝，说明恢复探测造成尖峰。High2单张FG阶段18.12ms，相对Medium2为4.49ms；不能把降档组平均开销当完整High5余量，也不能承诺高倍率全跑满。方案/详细表/证据/优化顺序见docs/VFG_DIAGNOSIS_PLAN_2026-10-07.md与VFG_DIAGNOSIS_REPORT_2026-10-07.md：分段SDK CPU测量与重复绑定A/B→生成/送显解耦→受控成本恢复探测→输出达成率与过期原因显示。
+
+分析命令Python -B scripts/acceptance/vfg-diagnosis-report.py，只读原始日志重算analysis.json。prepare早期utf8-sig编码名失败，改utf-8-sig后成功，失败时未建app/基线；分析初次假定所有admission都有admittedPairs而KeyError，后修缺字段及行尾解释重复key覆盖实际值，重算JSON。没有将这些脚本失败当产品错误或通过证据。audit核对全部其他工作树及原发布包/五VFG DLL未变；Python AST、git diff --check及25组最终收据保存verify/vfg-diagnosis-20261007/final.json。自查不冒称独立Reviewer。
+
+本轮产物统一E:/项目/Veyra/{archives,tests,logs,tmp,verify}/vfg-diagnosis-20261007；保留一份私有app、25组配置与必要日志用于后续A/B，未删其他文件、未重复旧被拒清理操作。本轮只完成排查，产品优化尚未实施，未验证全屏/其他GPU驱动/采集串流/全片长稳/物理显示时序。

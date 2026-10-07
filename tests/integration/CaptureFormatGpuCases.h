@@ -21,7 +21,7 @@ inline bool captureReadFp16(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::Comm
 inline int captureGpuCases(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlotRing& ring){
     using namespace veyra;using namespace veyra::source;int failures=0;
     auto fourcc=[](const char* n){return GUID{captureFourcc(n[0],n[1],n[2],n[3]),0,0x10,{0x80,0,0,0xaa,0,0x38,0x9b,0x71}};};
-    const GUID ids[]={MEDIASUBTYPE_RGB24,MEDIASUBTYPE_RGB32,MEDIASUBTYPE_ARGB32,MEDIASUBTYPE_RGB555,MEDIASUBTYPE_RGB565,fourcc("YUY2"),fourcc("UYVY"),fourcc("YVYU"),fourcc("NV12"),fourcc("NV21"),fourcc("I420"),fourcc("IYUV"),fourcc("YV12"),fourcc("P010"),fourcc("P016")};
+    const GUID ids[]={MEDIASUBTYPE_RGB24,MEDIASUBTYPE_RGB32,MEDIASUBTYPE_ARGB32,MEDIASUBTYPE_RGB555,MEDIASUBTYPE_RGB565,fourcc("YUY2"),fourcc("UYVY"),fourcc("HDYC"),fourcc("YVYU"),fourcc("NV12"),fourcc("NV21"),fourcc("I420"),fourcc("IYUV"),fourcc("YV12"),fourcc("P010"),fourcc("P016")};
     for(const auto& id:ids)for(bool full:{false,true}){
         VIDEOINFOHEADER2 vi{};vi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);vi.bmiHeader.biWidth=64;vi.bmiHeader.biHeight=32;vi.AvgTimePerFrame=166667;
         DXVA2_ExtendedFormat ext{};ext.NominalRange=full?DXVA2_NominalRange_0_255:DXVA2_NominalRange_16_235;ext.VideoTransferMatrix=DXVA2_VideoTransferMatrix_BT709;vi.dwControlFlags=ext.value|AMCONTROL_COLORINFO_PRESENT;
@@ -34,7 +34,7 @@ inline int captureGpuCases(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::Comma
         for(unsigned y=0;y<32;++y){auto* row=raw.data()+y*l.stride;
             for(unsigned x=0;x<64;++x){
                 const unsigned code=x<16?black:x>=48?white:(wide?max/4+(x-16):black+(white-black)/2);
-                if(l.format==AV_PIX_FMT_BGR0){for(unsigned b=0;b<3;++b)row[x*4+b]=x<32?0:255;row[x*4+3]=255;}
+                if(l.format==AV_PIX_FMT_BGR0){for(unsigned b=0;b<3;++b)row[x*4+b]=x<32?0:255;row[x*4+3]=0;}
                 else if(l.format==AV_PIX_FMT_BGR24){row[x*3]=row[x*3+1]=row[x*3+2]=x<32?0:255;}
                 else if(l.format==AV_PIX_FMT_RGB555LE){const uint16_t v=x<32?0:0x7FFF;memcpy(row+x*2,&v,2);}
                 else if(l.format==AV_PIX_FMT_RGB565LE){const uint16_t v=x<32?0:0xFFFF;memcpy(row+x*2,&v,2);}
@@ -59,6 +59,31 @@ inline int captureGpuCases(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::Comma
         }
         std::cout<<"CAPTURE_GPU subtype="<<std::hex<<id.Data1<<std::dec<<" bits="<<bits<<" full="<<full<<" error="<<error<<" precision="<<precision<<" pass="<<ok<<std::endl;
         if(!ok)++failures;out={};ring.drainQueue();graph.shutdown();av_frame_free(&f);
+    }
+    // Blackmagic HDYC: colored padded samples at an SD-sized extent must
+    // match UYVY with explicit BT.709, including the manual row flip. Gray
+    // ramps alone cannot expose an accidental BT.601 matrix fallback.
+    for(bool flip:{false,true}){
+        std::vector<float> reference;bool pass=true;double colorSpread=0;
+        for(bool hdyc:{false,true}){
+            VIDEOINFOHEADER2 vi{};vi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);vi.bmiHeader.biWidth=64;vi.bmiHeader.biHeight=32;vi.bmiHeader.biSizeImage=(128+16)*32;vi.AvgTimePerFrame=333667;
+            if(!hdyc){DXVA2_ExtendedFormat ext{};ext.NominalRange=DXVA2_NominalRange_16_235;ext.VideoTransferMatrix=DXVA2_VideoTransferMatrix_BT709;ext.VideoPrimaries=DXVA2_VideoPrimaries_BT709;vi.dwControlFlags=ext.value|AMCONTROL_COLORINFO_PRESENT;}
+            AM_MEDIA_TYPE type{};type.majortype=MEDIATYPE_Video;type.subtype=fourcc(hdyc?"HDYC":"UYVY");type.formattype=FORMAT_VideoInfo2;type.cbFormat=sizeof(vi);type.pbFormat=reinterpret_cast<BYTE*>(&vi);
+            CaptureMediaLayout l;bool ok=captureMediaLayout(type,l);std::vector<uint8_t> raw(l.sampleBytes,0xee);
+            for(unsigned y=0;y<32&&ok;++y)for(unsigned x=0;x<64;x+=2){auto* p=raw.data()+size_t(y)*l.stride+x*2;p[0]=y<16?90:150;p[1]=x<32?40:200;p[2]=y<16?240:34;p[3]=x<32?80:160;}
+            AVFrame* f=av_frame_alloc();f->width=64;f->height=32;f->format=l.format;
+            ok=ok&&av_frame_get_buffer(f,32)>=0&&copyCaptureSample(l,raw.data(),raw.size(),*f,flip);
+            pipeline::EnhanceGraph graph(ctx,ring);pipeline::EnhanceGraphDesc gd;gd.sourceWidth=gd.workWidth=64;gd.sourceHeight=gd.workHeight=32;gd.enableNr=gd.enableFg=gd.enableSr=false;gd.noFeatures=true;gd.packedInput=pipeline::packedInputCode(l.color.pixelFormat);
+            pipeline::EnhanceGraph::FrameOutputs out;std::vector<float> pixels;
+            ok=ok&&graph.initialize(gd)&&graph.createViews()&&graph.process(f,0,true,out,1,&l.color)&&captureReadFp16(ctx,ring,graph.diagnosticLinearInput(),pixels);
+            if(ok){
+                for(size_t p=0;p<pixels.size();p+=4)colorSpread=std::max(colorSpread,std::abs(double(pixels[p])-pixels[p+2]));
+                if(!hdyc)reference=pixels;else ok=pixels==reference&&colorSpread>.2;
+            }
+            pass&=ok;out={};ring.drainQueue();graph.shutdown();av_frame_free(&f);
+        }
+        std::cout<<"BLACKMAGIC_HDYC_GPU flip="<<flip<<" identical709="<<pass<<" colorSpread="<<colorSpread<<" pass="<<pass<<std::endl;
+        if(!pass)++failures;
     }
     return failures;
 }

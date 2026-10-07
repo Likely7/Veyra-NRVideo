@@ -11,6 +11,10 @@ int main(){
     check(!selectCaptureFormat(formats,2,L"missing"),"missing key never falls back to another format");
     check(selectCaptureFormat(formats,2,L"")==&formats[1],"legacy request retains index semantics");
     check(!selectCaptureFormat(formats,9,L""),"invalid legacy index rejected");
+    std::array<CaptureFormat,2> scan{{{4,1920,1080,30,L"",L"1080-30:scan=0"},{9,1920,1080,30,L"",L"1080-30:scan=3"}}};
+    check(!selectCaptureFormat(scan,4,L"1080-30"),"ambiguous legacy p30/i60 key must be reselected");
+    check(selectCaptureFormat(scan,4,L"1080-30:scan=3")==&scan[1],"interlace identity overrides stale index");
+    check(selectCaptureFormat(std::span<const CaptureFormat>(scan.data(),1),9,L"1080-30")==&scan[0],"unique legacy scan key migrates safely");
     double fps=0;std::wstring key;
     for(double requested:{0.,29.97,40.,60.}){
         const auto query=capturePathOptions(requested,L"0034004B");

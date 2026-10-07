@@ -20,6 +20,7 @@ inline CapturePacking capturePacking(const GUID& id){
     struct Entry{DWORD code;CapturePacking packing;};
     static constexpr Entry entries[]={
         {captureFourcc('Y','U','Y','2'),CapturePacking::Yuy2},{captureFourcc('U','Y','V','Y'),CapturePacking::Uyvy},
+        {captureFourcc('H','D','Y','C'),CapturePacking::Uyvy},
         {captureFourcc('Y','V','Y','U'),CapturePacking::Yvyu},{captureFourcc('N','V','1','2'),CapturePacking::Nv12},
         {captureFourcc('N','V','2','1'),CapturePacking::Nv21},{captureFourcc('I','4','2','0'),CapturePacking::I420},
         {captureFourcc('I','Y','U','V'),CapturePacking::I420},{captureFourcc('Y','V','1','2'),CapturePacking::Yv12},

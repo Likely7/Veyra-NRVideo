@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// A test-only identity-copy C ABI provider. No HIP, weights or NR inference.
+// A test-only identity/marker C ABI provider. No HIP, weights or NR inference.
 #include "../../third_party/lmxxf/LmxxfNrApi.h"
 #include <windows.h>
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <string>
 #include <cstring>
+#include <cstdint>
 using Microsoft::WRL::ComPtr;
 namespace {
-struct Session { ID3D12Resource* color=nullptr; ComPtr<ID3D12Resource> output; ComPtr<ID3D12Device> device; ID3D12CommandQueue* queue=nullptr; unsigned state=0; };
+struct Session {
+    ID3D12Resource* color=nullptr;
+    ComPtr<ID3D12Resource> output,markerUpload;
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT markerFootprint{};
+    ComPtr<ID3D12Device> device;
+    ID3D12CommandQueue* queue=nullptr;
+    unsigned state=0;
+};
 std::string mode(){char b[64]{};GetEnvironmentVariableA("VEYRA_TEST_LMXXF_MODE",b,sizeof(b));return b;}
 int caps(LmxxfNrCapabilities* p){p->abi_version=1;p->max_input_width=1920;p->max_input_height=1080;return 0;}
 int create(const LmxxfNrCreateInfo* p,void** out){if(p->flags||!p->device||!p->queue)return 2;auto* s=new Session;s->device=static_cast<ID3D12Device*>(p->device);s->queue=static_cast<ID3D12CommandQueue*>(p->queue);*out=s;return 0;}
@@ -19,7 +27,24 @@ int prepare(void* p,const LmxxfNrFrameInfo* info,LmxxfNrJob* job){
     if(mode()=="oldabi"&&info->struct_size!=LMXXF_NR_FRAME_INFO_V1_SIZE)return 2;
     s->color=static_cast<ID3D12Resource*>(info->color);
     if(!s->output){auto desc=s->color->GetDesc();desc.Flags=D3D12_RESOURCE_FLAG_NONE;D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
-        if(FAILED(s->device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&s->output))))return 5;}
+        if(FAILED(s->device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&s->output))))return 5;
+        if(mode()=="marker"){
+            if(desc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return 2;
+            UINT64 bytes=0;s->device->GetCopyableFootprints(&desc,0,1,0,&s->markerFootprint,nullptr,nullptr,&bytes);
+            D3D12_RESOURCE_DESC upload{};upload.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;upload.Width=bytes;
+            upload.Height=1;upload.DepthOrArraySize=1;upload.MipLevels=1;upload.SampleDesc.Count=1;
+            upload.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;heap.Type=D3D12_HEAP_TYPE_UPLOAD;
+            if(FAILED(s->device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&upload,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&s->markerUpload))))return 5;
+            uint8_t* mapped=nullptr;D3D12_RANGE noRead{};
+            if(FAILED(s->markerUpload->Map(0,&noRead,reinterpret_cast<void**>(&mapped))))return 5;
+            // Exact half floats: linear (0.5, 0.125, 0.0625, 1). Constant,
+            // deliberately different from the input; uploaded once per session.
+            const uint16_t pixel[4]={0x3800,0x3000,0x2c00,0x3c00};
+            for(UINT y=0;y<desc.Height;++y)for(UINT64 x=0;x<desc.Width;++x)
+                std::memcpy(mapped+s->markerFootprint.Offset+size_t(y)*s->markerFootprint.Footprint.RowPitch+size_t(x)*sizeof(pixel),pixel,sizeof(pixel));
+            s->markerUpload->Unmap(0,nullptr);
+        }
+    }
     job->handle=s;job->private_output=s->output.Get();s->state=1;return 0;
 }
 int inputs(void* p,void* job,void* list){auto* s=static_cast<Session*>(p);if(job!=s||!list||s->state!=1)return 2;s->state=2;return 0;}
@@ -30,7 +55,12 @@ int outputs(void* p,void* job,void* cmd){
     for(auto& v:b)v.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     b[0].Transition={s->color,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};
     b[1].Transition={s->output.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_DEST};
-    list->ResourceBarrier(2,b);list->CopyResource(s->output.Get(),s->color);
+    list->ResourceBarrier(2,b);
+    if(s->markerUpload){
+        D3D12_TEXTURE_COPY_LOCATION source{};source.pResource=s->markerUpload.Get();source.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;source.PlacedFootprint=s->markerFootprint;
+        D3D12_TEXTURE_COPY_LOCATION target{};target.pResource=s->output.Get();target.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        list->CopyTextureRegion(&target,0,0,0,&source,nullptr);
+    }else list->CopyResource(s->output.Get(),s->color);
     for(auto& v:b)std::swap(v.Transition.StateBefore,v.Transition.StateAfter);list->ResourceBarrier(2,b);s->state=4;return 0;
 }
 int retire(void* p,void* job){auto* s=static_cast<Session*>(p);if(job!=s||s->state!=4)return 2;s->state=0;return 0;}
