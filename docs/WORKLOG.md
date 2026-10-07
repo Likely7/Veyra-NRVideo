@@ -1,5 +1,17 @@
 # Veyra 工作记录
 
+## 2026-10-07 AMD NR → FSR结果丢失修复
+
+用户提交veyra-qml(37).log，报告1080p文件和XSX1080p60开关AMD NR无变化。从已验4294341在codex/amd-nr-fsr-handoff-20261007隔离修复，保留先前VFG和Blackmagic候选。独立start.json SHA256 0db892110ae4d7f358ed19cb9debbef747ea12cbbffd128f69a82040a5341499、全引用source-before.bundle SHA256 dcd0d2ce954b54b7aacf807d35d35395bc86d849a4e58cec8c7d9a0cf583f40a位于E:/项目/Veyra/archives/amd-nr-fsr-handoff-20261007；新amd-nr-fsr-control.py保护32个原工作树、495份未提交文件和3672项原包/运行库/模型/证据，不改旧guard/baseline、桌面/main/用户配置/驱动。不派Agent、不做竞争负载，不合并main/push/Release/关机。
+
+日志RX9070XT：两来源均NR→FSR(枚举4.1.1)→XeSS，NR已成功enqueue/合成且开关触发设置版本应用，并非按钮未传入。发现普通NR-first顺序FSR color读srcRgba而丢弃NR residual，光流首帧/断点普通blit也取原图；这条错误已存在2.0.5/main af5bfc3，并非本轮VFG/Blackmagic改动引入。生产只改EnhanceGraph.cpp：FSR与普通blit统一取已有srStageInput/descriptor18，设置必要资源读状态；模型、DLL、FSR选择和补帧/解码/采集/着色器不改。新增测试专用非恒等GPU marker，填补此前identity fixture无法检测结果被覆盖的缺口。
+
+执行python -B scripts/acceptance/amd-nr-fsr-build.py build-before ...：77.094秒exit0；amd-nr-fsr-tests.py pixels-before before：3.812秒exit1为预期复现，6个NR-before-SR用例确实算了NR却输出原图，marker误差156，NR-off/SR→NR/零强度对照通过。生产修复后build-after veyra_qml_ui veyra_amd_nr_graph_tests veyra_lmxxf_nr_tests veyra_effect_chain_tests：81.829秒exit0。pixels-after after：2.500秒，20个GPU用例0失败，非恒等交接采样最大误差0；含1080p/60fps合成PTS→4K、首帧/断点、时域、单/多层和原4K输出identity回归，D3D12错误0。abi-after abi：62项0失败/0.390秒；chain-after units：264条PASS/0.031秒。本机RTX5070执行真实FSR3.1.5和测试C ABI NR，不能外推RX9070/HIP、FSR4.1.1或实际XSX验收。
+
+amd-nr-fsr-package.py prepare独立复制正式AMD包，仅换EXE与保留的Blackmagic QML/notice；cold cold-after：13.140秒exit0、26个Qt/codec模块均来自候选、文件基础播放及QML无ERROR，使用E盘独立profile、默认增强关闭。EXE c57ef5fa2db6d297d5f9393b45c5866faa1504a7ffabe9621d52f91d2ecc6b9b，显示2.0.5-amd-nr-test。构建/测试/logs/tmp均在E:/项目/Veyra下同任务目录，每测试≤300秒、构建≤900秒；修复前失败证据保留。详细命令/原因/自查/限制与复测步骤在docs/AMD_NR_FSR_REPORT_2026-10-07.md。原日志含私人串流数据不入Git/便携包。XSX另有D3D12VA六次-22后软解回退，不与NR资源交接问题混为一谈，本轮未修改解码器。
+
+本地对应源码与完整AMD便携ZIP由amd-nr-fsr-package.py final审计生成到E:/项目/Veyra/test-packages/amd-nr-fsr-handoff-20261007，核验编译输入对应、runtime/model/shader原字节、测试provider不入包和ZIP逐文件hash/CRC；最终回执路径E:/项目/Veyra/verify/amd-nr-fsr-handoff-20261007/final-check.json。AMD实卡和真实XSX需用户复测；此前Blackmagic实卡/较高VFG倍率/NVIDIA显存增长边界不变。没有独立Reviewer验收声明。
+
 ## 2026-10-07 Blackmagic / DeckLink 采集黑屏兼容
 
 用户要求兼容截图中 Blackmagic WDM Capture、Decklink Video Capture 两个入口，随后确认无法判断物理卡数。按 docs/BLACKMAGIC_CAPTURE_PLAN_2026-10-07.md，从已验 VFG 候选 cc22e88 隔离到 codex/blackmagic-capture-20261007，保留 VFG 优化。开工 tag checkpoint/pre-blackmagic-capture-20261007；E:/项目/Veyra/archives/blackmagic-capture-20261007 保存完整 source-before.bundle、不可变 start.json，原日志/截图只读副本在 logs/blackmagic-capture-20261007/input。新 guard 逐文件保护其它 31 个工作树及 1346 个原始文件，不改旧 baseline/guard、桌面脏区、main、发布包、运行库、驱动或用户配置。无子 Agent、竞争 GPU 压力、merge/push/Release/关机操作。

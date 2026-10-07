@@ -1752,6 +1752,7 @@ bool EnhanceGraph::createViews()
     //  7/8: videoFrame SRV   9: nvofInB UAV       (NVOF B:=video)
     // 10: genTex SRV        11/12: videoFrame SRV (presents)
     // 13/14: genTex SRV (slot 2)
+    // 18: resolved SR input (pre-SR NR/protection/color, or original source)
     if(videoSrInput_&&viewsUav)makeUav(context_.device(),videoSrInput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,cpu(blitPass_,16));
     if(videoSrOutput_&&viewsTex)stagedSrv(videoSrOutput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,blitPass_,17);
     if (viewsTex) stagedSrv(srStageInput(),DXGI_FORMAT_R16G16B16A16_FLOAT,blitPass_,18);
@@ -2388,7 +2389,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // motion falls through to the plain blit below instead of guessing.
         gpuTimer_.mark(list,GpuStage::Sr);
         const double deltaMs = (prevPtsMs_>=0.0&&ptsMs>prevPtsMs_)?(ptsMs-prevPtsMs_):16.6;
-        auto* srInput=desc_.splitNrAcrossSr()?srStageInput():(preSrColorOutput_?preSrColorOutput_:srcRgba_.Get());
+        // The shared boundary includes ordinary NR-first output as well as
+        // split-node/color output. Reading srcRgba_ here discards completed NR.
+        auto* srInput=srStageInput();
         tracker_.transition(list,srInput,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         auto* srMotion=desc_.srUsesFlow()?flowTex_.Get():fsrSrZeroMotion_.Get();
         tracker_.transition(list,srMotion,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -2424,11 +2427,12 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.uavBarrier(list, workRgba_.Get());
         tracker_.transition(list, workRgba_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     } else if(workRgba_.Get()!=srcRgba_.Get()) {
+        tracker_.transition(list,srStageInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list, workRgba_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         const float constants[8] = {
             uintBits(srcW_), uintBits(srcH_),
             uintBits(workW_), uintBits(workH_), 0, 0, 0, 0 };
-        blitPass_.bind(list, constants, gpuHandleOf(blitPass_, (preSrColorOutput_||desc_.splitNrAcrossSr())?18:0).ptr, gpuHandleOf(blitPass_, 1).ptr);
+        blitPass_.bind(list, constants, gpuHandleOf(blitPass_,18).ptr, gpuHandleOf(blitPass_, 1).ptr);
         list->Dispatch((workW_ + 15) / 16, (workH_ + 15) / 16, 1);
         tracker_.uavBarrier(list, workRgba_.Get());
         tracker_.transition(list, workRgba_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

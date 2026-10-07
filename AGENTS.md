@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-07 AMD NR/FSR现场修复**：用户报告1080p文件与XSX1080p60开关AMD NR无画面变化，提供veyra-qml(37).log。按docs/AMD_NR_FSR_PLAN_2026-10-07.md从4294341在E盘codex/amd-nr-fsr-handoff-20261007隔离修复共享NR→FSR资源交接和必要定向测试/构建/本地候选；这些具体接点覆盖历史冻结。先运行amd-nr-fsr-control.py，独立start/bundle保护32个工作树、495个脏文件与3672项已发布/候选文件，不改旧guard。运行库/模型原字节、正常链路不回读；无子Agent/竞争压力、不改用户配置/驱动/其他工作树、无新main合并/push/Release/关机。每测试≤300秒、构建≤900秒，所有产物E盘。本机RTX共享交接验证不等于RX9070/HIP/XSX实卡验收。
+
 > **2026-10-07 Blackmagic采集兼容授权**：用户要求兼容日志中的 Blackmagic WDM Capture / Decklink Video Capture，并说明不能确认物理卡数。从已验VFG候选cc22e88在E盘codex/blackmagic-capture-20261007按docs/BLACKMAGIC_CAPTURE_PLAN_2026-10-07.md隔离修复必要DirectShow上游连接/HDYC格式/驱动属性页/源黑帧诊断与QML及针对性构建验收。本次具体接点覆盖历史冻结；不改其它补帧/NR算法、不碰驱动/用户配置/其他工作树。独立start和Git bundle在archives/blackmagic-capture-20261007，先执行blackmagic-control.py，不改旧guard/baseline。无子Agent、压力/竞争负载；单测试≤300秒、构建≤900秒，产物统一E盘。运行库/模型原字节且不进Git；没有新merge/push/Release/关机授权。实卡未验不能宣称已解决。
 
 > **2026-10-07 VFG专项优化授权**：用户明确“尝试优化VFG，其他的补帧暂时不动”。从已封存排查aec800e在E盘codex/vfg-optimization-20261007按docs/VFG_OPTIMIZATION_PLAN_2026-10-07.md实施VFG必要提交/互操作/专属调度及定向构建验收、本地候选；这些具体接点覆盖旧冻结。DLSS/XeSS/FSR实现与策略保持，不改NR算法、用户配置、驱动或其它工作树。独立不可变start及source-before.bundle在archives/vfg-optimization-20261007，先运行vfg-opt-control.py，不改旧guard/baseline。不派Agent、无压力/竞争负载，测试≤300秒、构建≤900秒，产物全在E盘；没有新merge/push/Release/关机授权，运行库/模型原字节保留且不进源码Git。

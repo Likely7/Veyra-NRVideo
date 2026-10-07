@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Actual shared graph and shaders with a GPU identity provider. This checks
+// Actual shared graph and shaders with GPU identity and marker providers. This checks
 // composition, chaining and reset, and does NOT execute HIP/AMD neural inference.
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
@@ -9,10 +9,73 @@
 #include <iostream>
 #include <filesystem>
 #include <algorithm>
+#include <d3d12sdklayers.h>
 extern "C" {
 #include <libavutil/frame.h>
 }
 using namespace veyra;
+namespace {
+void checkSrHandoff(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,unsigned& checks,unsigned& failures){
+    struct Case {const char* name;unsigned layers;bool temporal,flow,beforeSr,fsr;uint32_t width,height;double fps;float strength=1;};
+    const Case cases[]={
+        {"off-fsr-zero",0,false,false,false,true,128,72,23.976},
+        {"pre-fsr-one",1,false,false,true,true,128,72,23.976},
+        {"pre-fsr-two",2,false,false,true,true,128,72,23.976},
+        {"pre-fsr-temporal",1,true,false,true,true,128,72,23.976},
+        {"pre-fsr-flow-file",1,false,true,true,true,128,72,23.976},
+        {"pre-fsr-flow-xsx-1080",1,false,true,true,true,1920,1080,60},
+        {"post-fsr-one",1,false,false,false,true,128,72,23.976},
+        {"pre-blit-one",1,false,false,true,false,128,72,60},
+        {"pre-fsr-zero-strength",1,false,false,true,true,128,72,60,0},
+        {"off-fsr-flow",0,false,true,false,true,128,72,60}
+    };
+    SetEnvironmentVariableA("VEYRA_TEST_LMXXF_MODE","marker");
+    for(const auto& c:cases){
+        AVFrame* frame=av_frame_alloc();frame->format=AV_PIX_FMT_RGBA;frame->width=int(c.width);frame->height=int(c.height);
+        if(av_frame_get_buffer(frame,32)<0){av_frame_free(&frame);++failures;continue;}
+        for(int y=0;y<frame->height;++y)for(int x=0;x<frame->width;++x){auto* p=frame->data[0]+y*frame->linesize[0]+x*4;p[0]=32;p[1]=96;p[2]=160;p[3]=255;}
+        pipeline::EnhanceGraphDesc gd;
+        gd.sourceWidth=c.width;gd.sourceHeight=c.height;gd.workWidth=c.width*2;gd.workHeight=c.height*2;
+        gd.rgbInput=true;gd.enableNr=c.layers>0;gd.enableSr=c.fsr;gd.enableFg=false;gd.nrBeforeSr=c.beforeSr;
+        gd.videoSrQuality=c.fsr?engine::kVideoSrFsr:0;
+        gd.nrRuntime=engine::NrRuntime::LmxxfAmd;gd.nrMotion=gd.fgMotion=engine::MotionSource::Zero;
+        gd.srMotion=c.flow?engine::MotionSource::OpticalFlow:engine::MotionSource::Zero;
+        gd.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
+        gd.runtimeAbsPath=std::filesystem::absolute("runtime/nvidia").wstring();
+        gd.nrWidth=c.width;gd.nrHeight=c.height;
+        gd.nrLayersModel.resize(c.layers);gd.nrLayersResidual.resize(c.layers);
+        for(auto& r:gd.nrLayersResidual)r.total=c.strength;
+        gd.nrLayersTemporal.assign(c.layers,c.temporal);gd.nrLayersSizePolicy.assign(c.layers,pipeline::NrSizePolicy::Native);
+        gd.nrLayersExtent.assign(c.layers,{c.width,c.height});
+        pipeline::EnhanceGraph graph(ctx,ring);
+        bool executed=graph.initialize(gd)&&graph.createViews();
+        executed=executed&&(!c.fsr||graph.fsrSrEnabled());
+        const uint8_t marker[3]={188,99,71},original[3]={32,96,160};
+        const auto* expected=c.layers&&c.strength>0?marker:original;
+        unsigned worst=0,first=0,last=0;
+        for(unsigned f=0;executed&&f<6;++f){
+            pipeline::EnhanceGraph::FrameOutputs out;sink::RgbaImage image;
+            executed=graph.process(frame,double(f)*1000/c.fps,f==0||f==3,out,f+1)&&
+                sink::readRgba8(ctx,ring,graph.videoFrameResource(out.videoSlot),image);
+            executed=executed&&image.width==gd.workWidth&&image.height==gd.workHeight;
+            unsigned error=0;
+            if(executed)for(unsigned y=1;y<=3;++y)for(unsigned x=1;x<=3;++x)for(unsigned ch=0;ch<3;++ch){
+                const auto offset=(size_t(image.height*y/4)*image.width+image.width*x/4)*4+ch;
+                error=std::max(error,unsigned(std::abs(int(image.pixels[offset])-int(expected[ch]))));
+            }
+            worst=std::max(worst,error);if(f==0)first=error;last=error;
+        }
+        const auto nr=graph.metrics().nrEvaluateCount,sr=graph.metrics().srEvaluateCount;
+        const uint64_t expectedSr=c.fsr?(c.flow?4:6):0;
+        const bool pass=executed&&worst<=3&&nr==uint64_t(c.layers)*6&&sr==expectedSr;
+        ring.drainQueue();graph.shutdown();av_frame_free(&frame);++checks;failures+=!pass;
+        std::cout<<"AMD_NR_SR_MARKER case="<<c.name<<" output="<<gd.workWidth<<'x'<<gd.workHeight
+            <<" fps="<<c.fps<<" nr="<<nr<<" sr="<<sr<<" firstError="<<first<<" lastError="<<last
+            <<" worstCodeDifference="<<worst<<" executed="<<executed<<" pass="<<pass<<'\n';
+    }
+    SetEnvironmentVariableA("VEYRA_TEST_LMXXF_MODE",nullptr);
+}
+}
 int main(){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st=Status::Ok;
@@ -25,6 +88,7 @@ int main(){
         p[0]=uint8_t(30+x);p[1]=uint8_t(40+y*2);p[2]=uint8_t(210-x);p[3]=255;
     }
     unsigned failures=0,checks=0;
+    checkSrHandoff(ctx,ring,checks,failures);
     sink::RgbaImage reference;
     for(unsigned layers:{0u,1u,2u,4u})for(bool temporal:{false,true}){
         if(!layers&&temporal)continue;
@@ -93,6 +157,18 @@ int main(){
             <<" evaluated="<<evaluated<<" maxCodeDifference="<<maximum<<" pass="<<ok<<'\n';
     }
     uint32_t removed=0;if(!ctx.checkDeviceAlive(removed))++failures;
+    Microsoft::WRL::ComPtr<ID3D12InfoQueue> info;
+    if(SUCCEEDED(ctx.device()->QueryInterface(IID_PPV_ARGS(&info)))){
+        unsigned errors=0;
+        for(UINT64 i=0;i<info->GetNumStoredMessages();++i){
+            SIZE_T bytes=0;info->GetMessage(i,nullptr,&bytes);std::vector<uint8_t> storage(bytes);
+            auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+            if(SUCCEEDED(info->GetMessage(i,message,&bytes))&&message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){
+                if(errors<12)std::cout<<"D3D12_ERROR id="<<message->ID<<" "<<message->pDescription<<'\n';++errors;
+            }
+        }
+        failures+=errors>0;std::cout<<"D3D12_DEBUG errors="<<errors<<'\n';
+    }else{++failures;std::cout<<"D3D12_DEBUG unavailable\n";}
     av_frame_free(&frame);CoUninitialize();
     std::cout<<"Shared AMD composition GPU test: "<<checks<<" cases, "<<failures<<" failures. Not HIP inference.\n";
     return failures?1:0;
