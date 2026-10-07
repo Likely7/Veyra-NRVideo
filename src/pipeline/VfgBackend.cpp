@@ -4,6 +4,7 @@
 #include "veyra/Log.h"
 #include <Windows.h>
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <format>
 #include <vector>
@@ -104,6 +105,23 @@ struct VfgBackend::Impl {
     unsigned width=0,height=0,maxMultiplier=2;
     DXGI_FORMAT format=DXGI_FORMAT_UNKNOWN;
     bool ready=false;
+    bool profileCpu=false;
+    std::array<double,13> cpuSum{},cpuMax{};
+    std::array<unsigned,13> cpuSamples{};
+    std::chrono::steady_clock::time_point nextCpuLog{};
+    template<class F> auto cpuCall(unsigned stage,F&& operation){
+        if(!profileCpu)return operation();
+        const auto start=std::chrono::steady_clock::now();const auto result=operation();
+        const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+        cpuSum[stage]+=ms;cpuMax[stage]=std::max(cpuMax[stage],ms);++cpuSamples[stage];return result;
+    }
+    void logCpu(){
+        if(!profileCpu||std::chrono::steady_clock::now()<nextCpuLog)return;
+        static constexpr std::array<const char*,13> names={"push","producer","cudaWait","src0","src1","dst","shot","multiplier","index","run","cudaSignal","queueWait","pop"};
+        std::string message;
+        for(unsigned i=0;i<names.size();++i)message+=std::format(" {}MeanMs={:.4f} {}MaxMs={:.4f} {}Calls={}",names[i],cpuSamples[i]?cpuSum[i]/cpuSamples[i]:0,names[i],cpuMax[i],names[i],cpuSamples[i]);
+        log::info("vfg-cpu",message);cpuSum={};cpuMax={};cpuSamples={};nextCpuLog=std::chrono::steady_clock::now()+std::chrono::seconds(1);
+    }
     bool cv(int code,const char* name){
         if(code==0)return true;
         log::error("vfg",std::format("{} status={} detail={}",name,code,errorString?errorString(code):"unavailable"));return false;
@@ -117,8 +135,8 @@ struct VfgBackend::Impl {
     }
     struct Current {
         Impl& owner;bool active=false;
-        explicit Current(Impl& p):owner(p){active=p.cu(p.cuCtxPushCurrentFn(p.cudaContext),"cuCtxPushCurrent");}
-        ~Current(){if(active){CUcontext previous=nullptr;owner.cu(owner.cuCtxPopCurrentFn(&previous),"cuCtxPopCurrent");}}
+        explicit Current(Impl& p):owner(p){active=p.cu(p.cpuCall(0,[&]{return p.cuCtxPushCurrentFn(p.cudaContext);}),"cuCtxPushCurrent");}
+        ~Current(){if(active){CUcontext previous=nullptr;owner.cu(owner.cpuCall(12,[&]{return owner.cuCtxPopCurrentFn(&previous);}),"cuCtxPopCurrent");}}
     };
     bool importFence(ID3D12Fence* fence,CUexternalSemaphore& semaphore){
         HANDLE handle=nullptr;
@@ -158,20 +176,20 @@ struct VfgBackend::Impl {
     bool handoff(unsigned parity,unsigned sub,unsigned multiplier,bool reset){
         Current current(*this);if(!current.active)return false;
         const uint64_t value=++signalValue;
-        if(!hr(context->directQueue()->Signal(producer.Get(),value),"signal VFG producer"))return false;
+        if(!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
         CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS wait{};wait.params.fence.value=value;
-        if(!cu(cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream),"cuWaitExternalSemaphoresAsync"))return false;
-        bool ok=cv(setImage(effect,"SrcImage0",inputs[reset?parity:1-parity].image),"SetImage previous")&&
-            cv(setImage(effect,"SrcImage1",inputs[parity].image),"SetImage current")&&
-            cv(setImage(effect,"DstImage0",outputs[parity+2*(sub-1)].image),"SetImage output")&&
-            cv(setU32(effect,"ShotChange",reset?1u:0u),"SetU32 ShotChange")&&
-            cv(setU32(effect,"FrameMultiplier",multiplier),"SetU32 FrameMultiplier")&&
-            cv(setU32(effect,"FrameIndex",sub),"SetU32 FrameIndex")&&cv(run(effect,1),"NvVFX_Run async");
+        if(!cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync"))return false;
+        bool ok=cv(cpuCall(3,[&]{return setImage(effect,"SrcImage0",inputs[reset?parity:1-parity].image);}),"SetImage previous")&&
+            cv(cpuCall(4,[&]{return setImage(effect,"SrcImage1",inputs[parity].image);}),"SetImage current")&&
+            cv(cpuCall(5,[&]{return setImage(effect,"DstImage0",outputs[parity+2*(sub-1)].image);}),"SetImage output")&&
+            cv(cpuCall(6,[&]{return setU32(effect,"ShotChange",reset?1u:0u);}),"SetU32 ShotChange")&&
+            cv(cpuCall(7,[&]{return setU32(effect,"FrameMultiplier",multiplier);}),"SetU32 FrameMultiplier")&&
+            cv(cpuCall(8,[&]{return setU32(effect,"FrameIndex",sub);}),"SetU32 FrameIndex")&&cv(cpuCall(9,[&]{return run(effect,1);}),"NvVFX_Run async");
         // Complete the ownership handoff even after a synchronous SDK rejection;
         // never leave the direct queue waiting on a signal we did not enqueue.
         CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS signal{};signal.params.fence.value=value;
-        if(!cu(cuSignalExternalSemaphoresAsyncFn(&outputSemaphore,&signal,1,stream),"cuSignalExternalSemaphoresAsync"))return false;
-        if(!hr(context->directQueue()->Wait(completion.Get(),value),"queue wait VFG completion"))return false;
+        if(!cu(cpuCall(10,[&]{return cuSignalExternalSemaphoresAsyncFn(&outputSemaphore,&signal,1,stream);}),"cuSignalExternalSemaphoresAsync"))return false;
+        if(!hr(cpuCall(11,[&]{return context->directQueue()->Wait(completion.Get(),value);}),"queue wait VFG completion"))return false;
         return ok;
     }
 #endif
@@ -188,6 +206,7 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
         log::error("vfg","unsupported adapter/runtime/dimensions/multiplier/quality/encoding");return false;
     }
     p.context=&context;p.width=width;p.height=height;p.format=format;p.maxMultiplier=multiplier;
+    p.profileCpu=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_CPU_PROFILE",nullptr,0)>0;
     std::array<wchar_t,32768> system{};const auto n=GetSystemDirectoryW(system.data(),UINT(system.size()));if(!n||n>=system.size())return false;
     HMODULE driver=load(fs::path(system.data())/L"nvcuda.dll");if(!driver)return false;p.libraries.push_back(driver);
 #define BIND_CU(name,exported) if(!bind(driver,exported,p.name##Fn))return false
@@ -290,7 +309,7 @@ bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture
 bool VfgBackend::generate(unsigned parity,unsigned sub,unsigned multiplier,bool reset){
 #ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
     auto& p=*impl_;if(!p.ready||parity>1||multiplier<2||multiplier>p.maxMultiplier||sub<1||sub>=multiplier)return false;
-    return p.handoff(parity,sub,multiplier,reset);
+    const bool ok=p.handoff(parity,sub,multiplier,reset);p.logCpu();return ok;
 #else
     (void)parity;(void)sub;(void)multiplier;(void)reset;return false;
 #endif
