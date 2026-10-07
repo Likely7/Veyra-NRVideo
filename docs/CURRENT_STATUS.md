@@ -1,5 +1,13 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-07 NV 显存深入排查
+
+用户明确实际反馈主要是NVIDIA、AMD尚无这类现场，已调整为NV优先。在新隔离分支codex/nv-vram-deep-20261007，从aeb544c只新增只读诊断工具与文档；main、产品源码/运行库和既有包不动。找回微信原log8/12、哈希与封存一致：5060Ti/616.92/4K225%采集，单层1080 NR+光流、FG关，在无重建/无reset/无窗口区域更新的一段6分21秒内LOCAL1849→18501MiB；这不是普通补帧排队或重建棘轮能解释的。
+
+发现产品直接NR Init_Ext没有显式配对snippet Shutdown，旧harness与固定Magpie有共享session收尾；仍不能断言这是现场根因。本机5070/616.56/1440p/普通class2，4K60输入/1080 NR，旧发布版专业页及主Qt零提交两组全屏150秒均平台期；fix2也1800MiB平台。停止后NR/NVOF模块卸载、Dedicated计数减少1316MiB，是不能将缺失调用直接判为泄漏的反证。一次尾部断言误把旧nrActive快照当资源存活而exit3，修正测试条件后51秒正常停止契约通过，原失败保留。PresentMon ETW access denied，未改权限；受影响4K显示/真实采集与分配所有者仍未闭环。
+
+详见 [NV深查记录](NV_VRAM_DEEP_INVESTIGATION_2026-10-07.md)；新增 `scripts/diagnostics/collect-nv-vram.ps1` 无需管理员，按PID/路径/进程启动时间只读采集Dedicated/Shared/PrivateBytes、模块驻留与SHA，每段≤280秒、拒绝覆盖。不自动启动/停止播放器或改系统。当前没有“已根治”结论，不将AMD代码隐患或本机短测替代NV现场验收。
+
 ## 2026-10-07 显存增长方案接管与复核（仅文档）
 
 已查本机Claude会话25277ee4：02:10写出242行方案，02:11收尾时weekly limit中断，没有产品修复。现补齐 [显存排查计划](VRAM_LEAK_INVESTIGATION_PLAN_2026-10-07.md)：AMD runtime卸载与静态裸资源池生命周期不匹配是明确代码隐患，poison/Drain失败后的主动资源保留为另一条件性路径，仍需RX9000同机验证；NVIDIA 5060Ti全屏持续增长单独未定位，不能归为AMD或直接判驱动。

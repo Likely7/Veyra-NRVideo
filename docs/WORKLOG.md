@@ -8607,3 +8607,21 @@ gui-telemetry-lifecycle（29.86秒）真实原版NR：播放/暂停恢复/窗口
 读取过程中先在10-06 shallow上游checkout查询78f5487失败，改用确有该固定提交的10-03 checkout；严格UTF8读取旧实验混编码路径文字报错，之后以替换模式读取，统计仅依赖ASCII时间戳/数值/频道。原日志未改，未把缺失原log8/12重新计算成新证据。只读分析脚本AST通过。
 
 补写 `docs/VRAM_LEAK_INVESTIGATION_PLAN_2026-10-07.md` 与CURRENT_STATUS：P0生命周期/LOCAL与NON_LOCAL/Qt/模块诊断、P1AMD模块保活与有界错误恢复、P2同机单变量全屏对照、P3版本二分、≤300秒分段与同PID30分钟现场门槛。无虚表补丁或自动系统改动，GetStatus缺字段明确标缺口，低开销须实测。新审计目录 `E:/项目/Veyra/reports/vram-leak-audit-20261007/`，start SHA fa51c98367e130ba769642613bde6b93de2663488b1fef1e0019aad855da6153；1706已有Git输入及10原证据冻结，历史实验EXE/DLL另存identity。`audit.py close` exit0/final-check passed：只改CURRENT_STATUS/WORKLOG及新增本计划，10原证据、25其它工作树、14既有发布文件和main均保持；`git diff --check`及文档UTF8/章节/重算数字一致性审查通过。仅三份文档作本地存档提交，收据记录实际HEAD；未改旧guard或baseline以放行新文档，本任务独立只读保全核对。
+
+## 2026-10-07 NVIDIA 显存深入排查与纠偏
+
+用户明确实际主要发生在NV、AMD尚无对应现场。本轮将NV调查优先，AMD池生命周期只列独立代码隐患。先确认main578d63c与既有fix2/旧工作树状态，在E盘从aeb544c创建codex/nv-vram-deep-20261007，保留旧工作区。新archives/nv-vram-deep-20261007/start.json固定1707文件及两日志SHA，开工文件SHA6c4d9e48a0149b74ca5919533a723908af37f4d719bfb7da6a0d0a9ab1df5a27；未改旧guard或baseline。只新增文档与外部只读诊断脚本，无C++/QML产品/算法/运行库/驱动/用户配置修改、子Agent、压力或竞争程序、merge/push/Release/关机。
+
+`rg --files` 找回微信2026-10原veyra-qml(8)/(12).log，SHA03ba7ef4/d7f9793f与10-02封存一致；复制到E:/项目/Veyra/logs/nv-vram-deep-20261007/inputs原样保留。Python -B reports/.../analyze_field.py --output reports/.../field inputs/...重算5039/2353样本，按session/fullscreen/settings/graph generation及reset分段，生成JSON/CSV；独立按原始UTC行复核。5060Ti/616.92/4K225%/采集4K60/内部1080 NR+NVOF/FG0：无重建、无reset、无SetWindowPos/Rgn的380.956秒区间1849→18501MiB（+2622.67MiB/min）；另一无重置275.189秒4660→7696（+661.95/min），该段有49次Rgn，不能误写0。LOCAL统计不冒充板载物理驻留。窗口固定使用量仍处理60fps不证明像素在运动，不能排除焦点/内容差异。
+
+读NRadapter/EnhanceGraph/NGX/NVOF/presenter/ring/Qt宿主与固定Magpie27c5df9。确认产品直接snippet Init后未显式调用snippet Shutdown；log8共42 Init/42 CoreShutdown/0显式snippetShutdown，log12为34/34/0。旧harness与Magpie在最后runtime owner收尾中有调用，固定源码SHA46c75e12，两本地副本一致。这是优先核验的生命周期缺口，不能由CoreShutdown=0x1认定NR私有上下文已关闭，也不能仅凭缺失wrapper日志证明Core没有代清理；单次稳态增长与退出收尾必须分别定位。
+
+普通负载命令：Python -B reports/.../run_normal_probe.py community-published 204 --runtime 0 --flow 1；community-quiet-published 204 --runtime 0 --flow 1 --quiet-ui --no-presentmon；community-quiet-fix2-v2 fix2 同参数并--observe-stop。既有M2 4K60以ffmpeg -stream_loop 3 -c copy重封装240秒，SHA380acd1a；正常串行播放40秒窗口/150秒全屏/30秒退窗，私有profile、GPU class2、NR一层1080、NVOF开FG关。旧专业页2059→2059MiB，旧极简/减少动效1831→1831，fix2极简1800→1800；统一去转换预热后的时长142.796/141.663/142.614秒，全屏均前台且60fps，后两组主Qt新增帧0。全屏未复现，只证明本机5070/616.56/1440p设置，不能覆盖5060Ti/616.92/4K225%/真实采集或同PID长稳。发布版Present(0,0)，fix2 Present(1,0)，没有把版本差异隐藏为相同呈现条件。
+
+首轮PID过滤/唯一会话名PresentMon2.3.1抓取exit6 ETW access denied；未提权/改用户组/停止其它会话，后续不重复，没有PresentMode/MPO归属证据。早期fix2用例47.047秒被主动结束，不计结果；原本未先读取上一exec完成状态，随后UTC核实上一app结束02:04:44.996、下一app开始02:04:45.279，实际未重叠，runner补启动前拒绝其它player存活。fix2-v2尾部错误要求nrActive=false，exit3；实际引擎已经关闭，NRActive读取保留snapshot不代表资源存活。原失败收据不改，修正断言后用fix2-stop-contract正常播放/停止独立用例51.313秒exit0，未重跑或冒充全屏长稳。
+
+GPU独立helper按目标PID读取WMI Dedicated/Shared/TotalCommitted、PrivateBytes及Module驻留；fix2-v2停止后NR与NVOF模块不再驻留，Dedicated减少1316.18MiB、Shared减少54.86MiB、PrivateBytes减少1481.53MiB；后续短契约再次卸载且Dedicated减少1203.90MiB。本机有大幅回收的反证，不能宣布遗漏snippetShutdown就是现场根因。新增scripts/diagnostics/collect-nv-vram.ps1只读采样，每段≤280秒，验证PID/EXE/进程启动时刻，首次模块出现记录版本/大小/SHA；拒绝覆盖既有输出、不改系统/应用、不自动启动/停止播放器。PowerShell解析、无GPU目标缺字段及输出保全检查分别记logs/.../collector-*，无GPU样本明确gpuAvailable=false，不作为真实GPU实测；实际GPU读取依据前述helper原始样本。
+
+全部产物E:/项目/Veyra/{archives,reports,logs,tests,tmp}/nv-vram-deep-20261007。补NV深查报告、纠正原计划NV/AMD顺序、更新CURRENT_STATUS。本轮证据汇总local-summary.json同时保留失败与短测范围；不修改旧原报告/原日志。独立verify.py核对原输入、1707基线、原main及26旧工作树、14已发布文件、仅5个当前授权文档/诊断接点、Python AST与git diff --check，收据final-check.json。收尾实际HEAD、fixture封存与自有副本整理见对应收据；产品修复与受影响实卡分配归属仍未完成。
+
+收尾已封存5组测试QML/隔离偏好及其SHA，fixture-preservation.json。清理4份自有测试app副本的PowerShell删除命令在CreateProcess前被自动审批以blocked by policy拒绝，没有执行、没有提供进一步原因；不重试或换方式删除，所有副本保留，cleanup.json记录removed=0。该限制只影响中间副本整理，不影响诊断、原包保全或研究结论。
