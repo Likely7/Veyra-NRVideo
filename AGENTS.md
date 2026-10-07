@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-07 2.0.5 正式发布授权**：用户明确“发布吧，2.0.5 老样子发完给我弄个群公告”。按docs/PUBLISH_2.0.5_PLAN_2026-10-07.md，仅将已测2.0.5做发布文档/元数据整理，允许本轮main合并、普通推送、v2.0.5标签、正式GitHub Release与5项资产上传；本条覆盖此前本地交付的no-push/no-Release限制。产品EXE/QML/shader/运行库/模型保持；NVIDIA显存持续增长未修复，留待下一版，不实施假说。群公告只交用户、不代发，不关机。独立start基线保护28既有工作树/495修改文件/53历史证据，先运行本轮publish-2.0.5-control.py，旧guard不修改。不派Agent、无压力/竞争负载、不改用户配置/驱动，所有产物E盘，保留双二维码width220、Discord和Ko-fi。
+
 > **2026-10-07 2.0.5 本地整合授权**：用户明确要求先将目前完成的修复合入 main，构建 2.0.5 给用户测试，显存持续增长留待下一版本详细排查。按 `docs/RELEASE_2.0.5_PLAN_2026-10-07.md` 在 E盘 `codex/release-2.0.5-20261007` 整合已测 ef2069f/4c917aa 及其调查记录，仅修改版本、文档和必要构建/定向验收/打包脚本；不实施未证实的 NR Shutdown、驱动或显存假说修复。允许本地 commit/checkpoint/main 合并和 NVIDIA/AMD 同源码测试包，不新增 push/GitHub Release/上传/关机授权。独立不可变基线 `archives/release-2.0.5-20261007/start.json` 保护27个原工作树（main只按授权推进）、495个未提交文件及14份已发布文件；先执行本轮 control，不修改旧 guard/baseline。不派Agent、不做压力/竞争负载、不改DLL/模型/驱动/用户配置；测试每进程≤300秒，构建≤900秒，全部产物统一 E:/项目/Veyra。
 
 > **2026-10-06 稳定性/导出/性能回归修复授权**：用户要求一起解决 AMD 补帧选择异常、补帧导出 DLSS 限制、NR 导出 1080p 限制、跨来源撕裂及 2.0.3→2.0.4 性能回退，确认使用当前电脑、NVIDIA 原版 NR、4K 视频输入。按 `docs/STABILITY_EXPORT_PRIORITY_PLAN_2026-10-06.md` 在 E盘 `codex/stability-export-priority-20261006` 从 main `578d63c` 隔离修复共享 graph/presenter/导出冻结与 codec/能力选择/QML及必要构建测试接点；本次具体范围覆盖历史冻结。先运行本轮 `scripts/acceptance/stability-export-priority-control.py`，独立开工基线不可修改；保留25个工作区及已发布包。不得派Agent、压力/竞争负载、修改DLL/模型/驱动/其他应用或用户配置。每个测试≤300秒，构建≤900秒，产物统一E盘。本轮交付本地可测修复包，未授权新的公开发布、贡献者消息或关机；AMD真实HIP推理、物理屏幕扫描与RTX软件测试分别报告。
