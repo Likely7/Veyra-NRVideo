@@ -100,6 +100,7 @@ struct PlayerSnapshot {
     uint64_t captureReceived=0,captureDropped=0,nrEvaluated=0,nvofExecuted=0;
     uint64_t captureRateSkipped=0,processedCompleted=0;
     bool captureHalfRate=false;
+    bool captureSampledBlack=false; // Sparse CPU-source samples, not no-signal detection.
     bool captureRecovering=false;unsigned captureReconnectAttempts=0;
     double captureFps=0,captureReadAgeMs=0,captureAgeMs=0,captureAgeP95Ms=0;
     double schedulingWaitP95Ms=0,processCpuP95Ms=0,presentCpuP95Ms=0;

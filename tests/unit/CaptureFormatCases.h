@@ -10,7 +10,7 @@ template<class Check> void captureFormatCases(Check check){
     struct Case{GUID id;int bytes;};
     const Case cases[]={
         {MEDIASUBTYPE_RGB24,48},{MEDIASUBTYPE_RGB32,64},{MEDIASUBTYPE_ARGB32,64},{MEDIASUBTYPE_RGB555,32},{MEDIASUBTYPE_RGB565,32},
-        {fourcc("YUY2"),32},{fourcc("UYVY"),32},{fourcc("YVYU"),32},
+        {fourcc("YUY2"),32},{fourcc("UYVY"),32},{fourcc("HDYC"),32},{fourcc("YVYU"),32},
         {fourcc("NV12"),24},{fourcc("NV21"),24},{fourcc("I420"),24},{fourcc("IYUV"),24},{fourcc("YV12"),24},
         {fourcc("P010"),48},{fourcc("P016"),48}};
     for(const auto& item:cases){

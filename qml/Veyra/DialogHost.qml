@@ -224,10 +224,11 @@ Item {
         dialogWidth: 660
         foot: qsTr("关闭其他占用同一采集卡的软件")
         actions: [
-            { label: qsTr("取消") },
+            { label: captureDialog.live ? qsTr("断开") : qsTr("取消") },
             { label: qsTr("连接并开始"), primary: true, icon: "play" }
         ]
         onActionTriggered: label => {
+            if (label === qsTr("断开")) { veyra.stopPlayback(); return }
             if (label !== qsTr("连接并开始")) { host.close(); return }
             if (veyra.startCaptureSession()) { host.close(); host.startCapture() }
         }
@@ -336,6 +337,31 @@ Item {
                     value: captureDialog.labelOf(veyra.captureFormats, veyra.captureFormatKey, veyra.captureFormats.length ? qsTr("请选择格式") : "—")
                     options: veyra.captureFormats
                     onPicked: id => veyra.captureFormatKey = id
+                }
+            }
+            VRow {
+                objectName: "capture-driver-settings-row"
+                visible: veyra.captureDeviceId.length > 0
+                label: qsTr("驱动设置")
+                hint: captureDialog.live ? qsTr("先断开采集，再配置驱动")
+                      : veyra.captureBlackmagicDevice
+                        ? qsTr("Blackmagic 两个条目可能属于同一张卡。确认 HDMI/SDI 输入口，格式须匹配信号的分辨率、59.94/60 和逐行/隔行；驱动默认格式不是自动检测。")
+                        : qsTr("配置驱动公开的输入与视频属性；其他采集应用占用设备时请先关闭")
+                RowLayout {
+                    spacing: 6
+                    VButton {
+                        objectName: "capture-driver-properties"
+                        text: qsTr("设备属性"); ghost: true
+                        enabled: !veyra.captureQueryBusy && !captureDialog.live && !veyra.liveOpeningText.length
+                        onClicked: veyra.openCaptureDriverSettings(false)
+                    }
+                    VButton {
+                        objectName: "capture-driver-input"
+                        visible: veyra.captureBlackmagicDevice
+                        text: qsTr("输入选择"); ghost: true
+                        enabled: !veyra.captureQueryBusy && !captureDialog.live && !veyra.liveOpeningText.length
+                        onClicked: veyra.openCaptureDriverSettings(true)
+                    }
                 }
             }
             VRow {

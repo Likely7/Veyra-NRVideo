@@ -1,5 +1,17 @@
 # Veyra 工作记录
 
+## 2026-10-07 Blackmagic / DeckLink 采集黑屏兼容
+
+用户要求兼容截图中 Blackmagic WDM Capture、Decklink Video Capture 两个入口，随后确认无法判断物理卡数。按 docs/BLACKMAGIC_CAPTURE_PLAN_2026-10-07.md，从已验 VFG 候选 cc22e88 隔离到 codex/blackmagic-capture-20261007，保留 VFG 优化。开工 tag checkpoint/pre-blackmagic-capture-20261007；E:/项目/Veyra/archives/blackmagic-capture-20261007 保存完整 source-before.bundle、不可变 start.json，原日志/截图只读副本在 logs/blackmagic-capture-20261007/input。新 guard 逐文件保护其它 31 个工作树及 1346 个原始文件，不改旧 baseline/guard、桌面脏区、main、发布包、运行库、驱动或用户配置。无子 Agent、竞争 GPU 压力、merge/push/Release/关机操作。
+
+原日志为 2.0.4 / RTX5070Ti / 驱动576.88：两入口五次连接均有回调和 Present，不能据此证明非黑；社区 NR 每次 BAD00002 / SEH C0000005。代码发现 HDYC 未识别、原生直连未接 WDM 上游输入选择器、默认格式不代表输入制式、旧 VideoInfo2 格式键缺扫描/场序。按已登记 OBS libdshowcapture c13d4b7b0c66979396ba0a9060c9aafc15bb7b22 LGPL2.1+ 移植 medium/上游连接，保留路由与已连接 pin，失败显式回传。HDYC 复用现有 GPU UYVY+BT709，明确元数据/覆盖优先；增加用户主动打开的设备/输入属性页及 Blackmagic 每秒有界 CPU 黑采样诊断。v210 保持系统转换，不新增去隔行。采集连接中、运行中和断开未完成时拒绝驱动争用。只加单个 snapshot 观察字段，没有改算法/处理图/着色器。
+
+命令 python -B scripts/acceptance/blackmagic-build.py capture-build-v1 首次失败：SDK 的 IKsPin 条件声明、错误常量不存在；失败日志保留。局部声明可见性及真实错误常量修复后 capture-build-v2 exit0。capture-build-v3 修正单场样本场率标签，最终 capture-build-v4 补齐连接/断开驱动争用边界，均 exit0。最终 EXE SHA256 0e95e46d0419fd2dbb04e33a55e6c47ecdc6ff93dad14c51a286552f30848214，显示版本2.0.5-capture-test。构建目录 E:/项目/Veyra/build/blackmagic-capture-20261007，使用已接受2.0.5依赖和 patched FFmpeg，临时目录 E:/项目/Veyra/tmp/blackmagic-capture-20261007/build；日志同任务 logs/ 下 build-v1至v4，不覆盖失败。
+
+python -B scripts/acceptance/blackmagic-tests.py contracts-v4：采集颜色/native sink/合成 COM 213项0失败，格式选择0失败，真实 GPU 124输出检查通过；HDYC 正/反向带 padding 彩图与明确 BT709 UYVY逐像素相同，灰阶全/限范围error=0；设备只读枚举通过。此前 contracts-v2 也通过，最终交付按 v4证据。python -B scripts/acceptance/blackmagic-field-tests.py prepare prepare-v4 验证正式包全部哈希后独立复制候选，无可写硬链接。rate usb-rate-v4 实卡 KUHAIMI27P/1080p60 YUY2 连接及重连14.281秒，通过60.084/59.961fps回调与单调PTS，inputMediums=0/crossbar=false/routeChanged=0。ui gui-v4 两进程11.766/4.172秒通过产品连接/断开、连接中和采集中禁开驱动设置、收帧状态、重启旧键迁移；显式截图显示采集卡内置无信号提示图，不能算外部HDMI信号验收。properties driver-page-v4 4.172秒通过真实 COM 图创建/GetFormat及无属性页E_NOINTERFACE回退，查询状态不悬挂。所有 GPU 测试串行，每进程≤300秒；使用私有E盘profile，候选 Main.qml 注入后恢复原字节。
+
+详细报告 docs/BLACKMAGIC_CAPTURE_REPORT_2026-10-07.md。本机无 Blackmagic 实卡，不宣称其已出画或型号认证，不宣称社区 NR 异常解决。源像素采样是黑场观察，不是物理信号检测；基本画面验证后才逐项开增强。legacy-only scripts/gates/delivery.ps1 不适用于当前 QML 入口，本轮执行针对性产品GUI、像素和采集回归。对应源码、便携候选、逐文件清单及最终保护核验由 blackmagic-finalize.py 生成在 E:/项目/Veyra/test-packages/blackmagic-capture-20261007 和 verify/blackmagic-capture-20261007；不更新正式版本或 README 发布内容。
+
 ## 2026-10-07 VFG 专项优化
 
 用户授权“尝试优化VFG，其他的补帧暂时不动”。排查分支封存aec800e，优化隔离codex/vfg-optimization-20261007；开工tag checkpoint/pre-vfg-optimization-20261007，完整Git bundle与不可变start.json在E:/项目/Veyra/archives/vfg-optimization-20261007。当前任务计划docs/VFG_OPTIMIZATION_PLAN_2026-10-07.md；新guard逐文件保护其它全部工作树、正式2.0.5 EXE/Main/VFG运行库及非VFG实现，未改旧guard/start。所有构建、测试、日志、临时目录使用E:/项目/Veyra对应vfg-optimization-20261007目录；无子Agent、竞争GPU压力、驱动/用户配置变更、merge/push/Release/关机。

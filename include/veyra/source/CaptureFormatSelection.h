@@ -4,11 +4,21 @@
 #include <span>
 
 namespace veyra::source {
-struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;};
+struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;bool driverCurrent=false;};
 
 inline const CaptureFormat* selectCaptureFormat(std::span<const CaptureFormat> formats,int legacyIndex,std::wstring_view key){
     for(const auto& format:formats)
         if(key.empty()?format.index==legacyIndex:format.key==key)return &format;
+    // Old VideoInfo2 keys omitted interlace/field-order flags. A single match
+    // is safe to migrate; p30/i60 or top/bottom-field ambiguity requires the
+    // user to choose explicitly. Never guess a mode from driver list order.
+    if(!key.empty()&&key.find(L":scan=")==key.npos){
+        const CaptureFormat* match=nullptr;const std::wstring prefix=std::wstring(key)+L":scan=";
+        for(const auto& format:formats)if(format.key.starts_with(prefix)){
+            if(match)return nullptr;match=&format;
+        }
+        return match;
+    }
     return nullptr;
 }
 

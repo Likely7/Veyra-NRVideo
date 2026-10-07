@@ -41,6 +41,19 @@ color accuracy or official NVIDIA certification. Provenance and measurements:
 
 ## AVerMedia capture HDR-to-SDR control
 
+The WDM upstream crossbar helpers in `include/veyra/source/DirectShowCaptureSetup.h`
+are adapted from OBS `libdshowcapture` at the same fixed commit
+`c13d4b7b0c66979396ba0a9060c9aafc15bb7b22`: `source/device.cpp`
+(`FindCrossbar`, `ConnectPins`) and `source/dshow-base.cpp` (`GetPinMedium`,
+`GetFilterByMedium`, `DirectConnectFilters`). Copyright (C) 2023 Lain Bailey,
+LGPL-2.1-or-later; see `licenses/capture/LIBDSHOWCAPTURE_LGPL.txt`.
+Veyra adds medium bounds and direction validation, multiple-medium matching,
+existing-connection protection and HRESULT reporting. It connects the upstream
+graph edge without changing the user's physical input routing. HDYC recognition
+also follows the format contract in that commit's `source/dshow-formats.cpp`;
+Veyra reuses its existing UYVY GPU ingress and retains explicit color metadata.
+These adaptations do not constitute Blackmagic hardware certification.
+
 The AVerMedia hardware HDR-to-SDR property request in
 `src/source/CaptureCardSource.cpp` is adapted from `source/device-vendor.cpp`
 (`SetTonemapperAvermedia`) in [obsproject/libdshowcapture](https://github.com/obsproject/libdshowcapture/tree/c13d4b7b0c66979396ba0a9060c9aafc15bb7b22),

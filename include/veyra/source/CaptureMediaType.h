@@ -31,6 +31,23 @@ inline BITMAPINFOHEADER* captureBitmapHeader(AM_MEDIA_TYPE& type){
     if(type.formattype==FORMAT_VideoInfo2&&type.cbFormat>=sizeof(VIDEOINFOHEADER2))return &reinterpret_cast<VIDEOINFOHEADER2*>(type.pbFormat)->bmiHeader;
     return nullptr;
 }
+inline std::wstring captureFormatIdentity(const AM_MEDIA_TYPE& type){
+    if(!type.pbFormat)return {};
+    const BITMAPINFOHEADER* bitmap=nullptr;REFERENCE_TIME duration=0;
+    if(type.formattype==FORMAT_VideoInfo&&type.cbFormat>=sizeof(VIDEOINFOHEADER)){
+        const auto& v=*reinterpret_cast<const VIDEOINFOHEADER*>(type.pbFormat);bitmap=&v.bmiHeader;duration=v.AvgTimePerFrame;
+    }else if(type.formattype==FORMAT_VideoInfo2&&type.cbFormat>=sizeof(VIDEOINFOHEADER2)){
+        const auto& v=*reinterpret_cast<const VIDEOINFOHEADER2*>(type.pbFormat);bitmap=&v.bmiHeader;duration=v.AvgTimePerFrame;
+    }
+    if(!bitmap)return {};
+    wchar_t subtype[40]{},formatType[40]{};StringFromGUID2(type.subtype,subtype,40);StringFromGUID2(type.formattype,formatType,40);
+    auto key=std::format(L"{}:{}:{}:{}:{}:{}:{}",bitmap->biWidth,bitmap->biHeight,duration,subtype,formatType,bitmap->biBitCount,bitmap->biCompression);
+    // 1080p30 and 1080i60 can otherwise have identical identities. Retain all
+    // interlace flags, including field order, rather than silently selecting
+    // the first same-size/rate entry. Legacy keys migrate only if unambiguous.
+    if(type.formattype==FORMAT_VideoInfo2)key+=std::format(L":scan={}",reinterpret_cast<const VIDEOINFOHEADER2*>(type.pbFormat)->dwInterlaceFlags);
+    return key;
+}
 // RGB DIB packings are the only ones whose biHeight sign describes storage
 // order; YUV formats are always top-down (see captureMediaLayout).
 constexpr bool captureIsRgbDib(CapturePacking packing){
@@ -93,6 +110,12 @@ inline bool captureMediaLayout(const AM_MEDIA_TYPE& type,CaptureMediaLayout& out
     if(out.sampleBytes>size_t(std::numeric_limits<LONG>::max()))return false;
     AVFrame frame{};frame.format=out.format;frame.width=int(out.width);frame.height=int(out.height);
     out.color=pipeline::resolveFrameColor(frame);
+    // HDYC is UYVY with BT.709, even at SD sizes. Explicit VideoInfo2 tags
+    // below, and the user's color override, retain precedence.
+    if(captureIsFourcc(type.subtype,captureFourcc('H','D','Y','C'))){
+        out.color.matrix=pipeline::YuvMatrix::BT709;out.color.matrixAssumed=false;
+        out.color.primaries=pipeline::ColorPrimaries::BT709;out.color.primariesAssumed=false;
+    }
     // SDR capture is already display-referred R'G'B' after the YUV matrix.
     // Preserve those code values through the sRGB working round trip, like
     // the old RGB ingress, instead of applying a camera OETF a second time.

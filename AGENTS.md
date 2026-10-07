@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-07 Blackmagic采集兼容授权**：用户要求兼容日志中的 Blackmagic WDM Capture / Decklink Video Capture，并说明不能确认物理卡数。从已验VFG候选cc22e88在E盘codex/blackmagic-capture-20261007按docs/BLACKMAGIC_CAPTURE_PLAN_2026-10-07.md隔离修复必要DirectShow上游连接/HDYC格式/驱动属性页/源黑帧诊断与QML及针对性构建验收。本次具体接点覆盖历史冻结；不改其它补帧/NR算法、不碰驱动/用户配置/其他工作树。独立start和Git bundle在archives/blackmagic-capture-20261007，先执行blackmagic-control.py，不改旧guard/baseline。无子Agent、压力/竞争负载；单测试≤300秒、构建≤900秒，产物统一E盘。运行库/模型原字节且不进Git；没有新merge/push/Release/关机授权。实卡未验不能宣称已解决。
+
 > **2026-10-07 VFG专项优化授权**：用户明确“尝试优化VFG，其他的补帧暂时不动”。从已封存排查aec800e在E盘codex/vfg-optimization-20261007按docs/VFG_OPTIMIZATION_PLAN_2026-10-07.md实施VFG必要提交/互操作/专属调度及定向构建验收、本地候选；这些具体接点覆盖旧冻结。DLSS/XeSS/FSR实现与策略保持，不改NR算法、用户配置、驱动或其它工作树。独立不可变start及source-before.bundle在archives/vfg-optimization-20261007，先运行vfg-opt-control.py，不改旧guard/baseline。不派Agent、无压力/竞争负载，测试≤300秒、构建≤900秒，产物全在E盘；没有新merge/push/Release/关机授权，运行库/模型原字节保留且不进源码Git。
 
 > **2026-10-07 2.0.5 正式发布授权**：用户明确“发布吧，2.0.5 老样子发完给我弄个群公告”。按docs/PUBLISH_2.0.5_PLAN_2026-10-07.md，仅将已测2.0.5做发布文档/元数据整理，允许本轮main合并、普通推送、v2.0.5标签、正式GitHub Release与5项资产上传；本条覆盖此前本地交付的no-push/no-Release限制。产品EXE/QML/shader/运行库/模型保持；NVIDIA显存持续增长未修复，留待下一版，不实施假说。群公告只交用户、不代发，不关机。独立start基线保护28既有工作树/495修改文件/53历史证据，先运行本轮publish-2.0.5-control.py，旧guard不修改。不派Agent、无压力/竞争负载、不改用户配置/驱动，所有产物E盘，保留双二维码width220、Discord和Ko-fi。

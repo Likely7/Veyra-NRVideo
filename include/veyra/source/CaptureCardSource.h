@@ -24,6 +24,7 @@ constexpr int kCaptureAudioWasapi=-3; // capture2 only; requires explicit endpoi
 struct CaptureMetrics {
     uint64_t received=0, delivered=0, dropped=0;
     double callbackFps=0, readAgeMs=0, frameAgeMs=0;
+    bool sampledBlack=false; // Sparse source pixels, not input signal detection.
 };
 class CaptureCardSource final:public IFrameSource {
 public:
@@ -34,6 +35,8 @@ public:
         int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride=0,double requestedFps=0,std::wstring_view formatKey={});
     static std::vector<CaptureFormat> formats(unsigned device);
     static std::vector<CaptureFormat> formatsByPath(std::wstring_view devicePath);
+    // Explicit user action on the UI COM apartment; no Run or auto-routing.
+    static bool showDeviceProperties(std::wstring_view devicePath,uintptr_t owner,bool inputSelector,std::wstring& error,std::wstring* changedFormatKey=nullptr);
     bool open(const SourceOpenDesc&)override;
     // Negotiate/allocate before GPU initialization, but do not queue frames
     // or start audio until the presenter and enhancement graph are ready.
