@@ -1,5 +1,13 @@
 # Veyra 工作记录
 
+## 2026-10-07 2.0.5 正式发布准备
+
+用户授权正式发布和群公告，未要求代发或关机。git fetch nrvideo --tags确认远端main578d63c、v2.0.5不存在；本地main5474064/测试源4deb479清洁，20份当前通过收据与EXE acd49a23…冻结。独立open.py封存28工作树/495修改文件/1724输入/53历史证据，start SHAa94e3e83…；新worktree codex/publish-2.0.5-20261007。仅更新README当前版本区、失效限制、发布说明/构建材料及发布脚本；不改算法、运行库、模型和驱动。性能数据采用fix2匹配/反向验证5.80% NR/89.06% UI，不把2.0.5单轮6.295ms拼成额外收益。
+
+命令统一Python3.11 -B，scripts/acceptance/publish-2.0.5-{control,package,audit,cold,remote}.py；新产物E:/项目/Veyra/{archives,logs,releases,tests,tmp,verify}/publish-2.0.5-20261007。本轮control保护旧工作树、既有包与20当前收据；正式包从已测2.0.5复制，依赖源码沿用2.0.4原SHA。详细动作/通过或失败/线上ID和哈希写任务JSON及正式收尾记录。未实际完成的步骤不由计划文字视为通过。NV显存明确未修复。
+
+开工guard首轮检查到新Git工作树13个继承文件被CRLF checkout转换；git status仍清洁，逐项证实仅换行差异后在本轮新工作树恢复受保护main原字节。baseline未改，随后guard通过。日志checkout-line-endings.json。
+
 ## 2026-10-07 2.0.5 本地整合与测试包
 
 用户明确授权将已完成修复合入main并构建2.0.5测试，NV显存持续增长延期到下一版。main起点578d63c；候选从71483d5隔离，产品修复ef2069f/4c917aa、PR19/20与fix1均保留；其后NV文档/只读采集脚本不等于显存修复。本轮仅版本/整合文档与验收打包脚本变动，不扩改产品算法。27个原工作树、495个本地修改/未跟踪文件、14份发布文件已独立封存，start SHA48b998d583676c9c39b14cc417c89d294639060f2e2fd4aa1986b366113625c8；旧基线不改。

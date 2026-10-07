@@ -61,9 +61,9 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ---
 
-**2.0.4 release, 2026-10-06:** performance improvements, NR strength 5 with style-specific picture control, Xbox/capture recovery, ASS subtitles, UI and unified presets. [Full release notes](docs/RELEASE_NOTES_2.0.4.md).
+**2.0.5 release, 2026-10-07:** telemetry performance regression, AMD FG defaults and NR composition, FSR/multi-NR export, OBS repaint, Auto display sync and adapted PR #19/#20. [Full release notes](docs/RELEASE_NOTES_2.0.5.md).
 
-**Measured performance:** the dual-NR/SR4K/DLSS2X enhancement interval improved 3.52%; native single-layer NR remains about 6.1ms and software-Present P99 is nearly unchanged. Creation, paused editing and process GPU utilization are reported separately in the [measurement report](docs/PERF_RELEASE_REPORT_2.0.4_2026-10-06.md). Severe background loss and GPU-UI OBS Game Capture remain unresolved; the existing OBS compatibility mode is available. HDR/Dolby PRs remain deferred.
+**Measured performance:** on RTX 5070, original single-layer internal 1080p NR at actual Normal priority, the same-EXE telemetry comparison reduced NR interval **5.80%** and UI submissions **89.06%**. Matched comparisons with 2.0.3 differed +0.009% (GTA 4K30) / −0.638% (4K60). These are local interval/UI measurements, not latency or VRAM gains. [Conditions and results](docs/RELEASE_NOTES_2.0.5.md). **NVIDIA VRAM growth remains unresolved**, with deeper investigation deferred to the next version; real AMD offline encoding and physical display tests remain incomplete. PR #13/#14 stay deferred.
 
 ## Highlights
 
@@ -75,18 +75,18 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** four NR runtime choices (NVIDIA original for RTX 50, Lecram, SF-v2 and AMD lmxxf), DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-## New in 2.0.4
+## New in 2.0.5
 
-- **NR strength and picture control:** total strength up to 5, optional per-layer automatic/manual control, separate automatic settings for styles 0/1/2, an amount slider and nine manual controls.
-- **Performance:** reuse eligible NR cores and single-NR configurations, avoid repeated work while paused, and improve selected dual-NR/SR/FG and export scheduling. The matched dual-NR1080/SR4K/DLSS2X enhancement interval fell **3.52%**; warm NR creation fell **75.83%**. See the [measurement report](docs/PERF_RELEASE_REPORT_2.0.4_2026-10-06.md) for conditions and limits. Prewarming defaults off.
-- **Playback and reliability:** custom 0.25–4× speed with preserved pitch, libass ASS subtitles/font attachments, bounded Xbox decoder recovery, capture cadence/history repairs, AMD NR enablement and restored GPU timing after graph rebuilds.
-- **UI and presets:** resizable Professional panels, typed slider values and fullscreen/RTSS/floating-control repairs. Existing List/Node presets can optionally include optical flow, estimation quality and content cadence; unchecked values remain unchanged. Unset GPU scheduling requests Realtime; saved choices are retained.
+- **Performance:** bound telemetry updates to avoid monitor-rate GPU contention; matched Normal-priority comparisons no longer showed the approximately 7% regression in the tested GTA/4K60 cases.
+- **AMD and export:** prefer available FSR then XeSS for AMD/Intel, migrate unavailable saved DLSS choices, retain FSR in offline exports and repair multi-NR setting snapshots. AMD video NR can use internal 1080p with original-size output; actual AMD offline encoding remains unverified. XeSS FG export remains explicitly unsupported.
+- **Compatibility and display:** repair OBS software-UI scroll trails and lmxxf linear-output composition; Auto now synchronizes in window/fullscreen while manual tearing stays selectable.
+- **PR #19/#20:** opt-in HDR display tuning with preset/session adaptation, UTF-8 logs and RemotePlay-off builds. HDR display tuning is not baked into offline export.
 
-[Full 2.0.4 release notes and validation limits](docs/RELEASE_NOTES_2.0.4.md).
+[Full 2.0.5 release notes, measurements and validation limits](docs/RELEASE_NOTES_2.0.5.md).
 
 ## Install and upgrade
 
-Download **Veyra-2.0.4-NVIDIA-win64-portable.zip** or **Veyra-2.0.4-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.0.5-NVIDIA-win64-portable.zip** or **Veyra-2.0.5-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -105,7 +105,7 @@ Home offers files, capture card, PS5, PC, Xbox and screen capture. Files/images 
 
 ### List mode
 
-The NR version selector offers RTX 50 · NVIDIA original, RTX 50 · Lecram, RTX 20–50 · SF-v2 and RX9000 · lmxxf (experimental) in both List and Node mode. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7 and is limited to its 1080p pixel budget; HDR/native 1440p or 4K NR export is unavailable. See [runtime identities](docs/RUNTIME_COMPONENTS_2.0.3.md).
+The NR version selector offers RTX 50 · NVIDIA original, RTX 50 · Lecram, RTX 20–50 · SF-v2 and RX9000 · lmxxf (experimental) in both List and Node mode. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7. Video export uses at most internal 1080p inference and composites to the original output size; this is not native 4K NR and actual AMD offline encoding still needs hardware retesting. Image exports retain the native model pixel budget; HDR NR is unavailable. See [runtime identities](docs/RUNTIME_COMPONENTS_2.0.3.md).
 
 Select List at the top of Professional. Enable SR, NR or RTX Video HDR as needed. Up to four NR layers have independent internal resolution, strength and parameters. The master switch disables all layers and restores their previous enabled states.
 
@@ -124,7 +124,7 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 5. Optical flow is shared after input; SR is a single instance. RTX Video HDR stays before final FG; select one DLSS/XeSS/FSR backend. This is not an arbitrary branching/mixing graph.
 6. List and Node settings, presets and sessions are separate. Returning to List restores its settings and retains the node graph. Switching rebuilds processing and may briefly pause the picture.
 
-**2.0.4 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
+**2.0.5 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
 
 ### Capture and streaming
 
@@ -179,7 +179,7 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 ## Source and build
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.4 build/source](docs/BUILD_2.0.4.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.5 build/source](docs/BUILD_2.0.5.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 
