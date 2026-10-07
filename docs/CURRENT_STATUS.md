@@ -1,5 +1,11 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-07 显存增长方案接管与复核（仅文档）
+
+已查本机Claude会话25277ee4：02:10写出242行方案，02:11收尾时weekly limit中断，没有产品修复。现补齐 [显存排查计划](VRAM_LEAK_INVESTIGATION_PLAN_2026-10-07.md)：AMD runtime卸载与静态裸资源池生命周期不匹配是明确代码隐患，poison/Drain失败后的主动资源保留为另一条件性路径，仍需RX9000同机验证；NVIDIA 5060Ti全屏持续增长单独未定位，不能归为AMD或直接判驱动。
+
+纠正“新PreviewGpuSession必然换设备”（D3D12同适配器存活设备为单例）、“重建无回收即排除自有链路”和短测无泄漏泛化。Claude旧实验实际为RTX5070/616.56、社区NR、GPU class5、窗口，36次开关NR开/关净增8/9MiB；5080最长32.7分钟平台期实际nr=0。完成既有日志重算与代码/官方契约复核，产物E:/项目/Veyra/reports/vram-leak-audit-20261007；未新构建/测试GPU/改产品/合main/发布。P0低干扰日志、P1模块保活、独立全屏对照与实卡门槛均在计划，尚未实施。下方fix2交付状态保持。
+
 ## 2026-10-07 2.0.4-fix2 本地修复候选
 
 隔离分支 codex/stability-export-priority-20261006 修复跨厂商 FG 入口/导出、AMD NR 视频内部1080p与原尺寸输出、Auto 显示同步及 AMD 旧 DLSS 选择迁移到可用 FSR（可用手动 XeSS 保留）。最终 EXE 65fc23e33598d7efd77ea50ba8062a89beaacb29eb14369ffc78d03563312626；真实 FSR/H264/HEVC、预设重启、12组呈现合同、GPU像素/复用及新增 GUI 生命周期通过。

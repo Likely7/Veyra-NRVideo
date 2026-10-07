@@ -8593,3 +8593,17 @@ gui-telemetry-lifecycle（29.86秒）真实原版NR：播放/暂停恢复/窗口
 新产物全部E:/项目/Veyra/{tests,logs,tmp}/vfg-rtxhdr-export-check-20261007。`python -B tests/.../run.py` 调用最终2.0.4-fix2 NVIDIA包的真实QML/隔离导出worker，private profile普通GPU档，只打开RTX Video HDR（峰值参数1000）+VFG Medium2X；源码/母包不变，实际EXE65fc23e3。720p30 SDR nr-fixture2秒（60源帧），用户编码偏好故意选H264，导出自动改HEVC Main10。进程约11.39秒exit0，60源+59生成+1尾hold=120，输出1280×720/60fps/2秒；ffprobe为hevc/Main10/yuv420p10le/bt2020/smpte2084/bt2020nc，ffmpeg -xerror完整解码exit0。文件在tests/.../outputs/nr-fixture_veyra.mp4，日志/完整SHA/ffprobe在logs/...。
 
 首个run.py扫描了clone中复制的旧应用日志，组合API证据夹入历史记录；raw result.json保留，修正未来复制忽略logs/用户数据，并用audit.py仅读取本次console记录的worker PID11688。result-worker-audit.json再次通过：当前worker TrueHDR Create/Evaluate/Release均0x1、SEH0；VFG格式RGB10A2实际初始化并执行、生成59帧，无ERROR/FATAL/D3D12错误及SDR回退。此为新增联合功能实测，非HDR主观画质/RTX40实卡/4K全倍率/所有HDR静动态元数据完整验收。用户另有母包播放器正在运行，未关闭或改它；测试子进程已经退出。
+
+## 2026-10-07 Claude 显存排查接管与方案补齐
+
+用户要求查本机Claude昨晚的显存泄漏聊天和半成品计划、补齐并汇报原因。本轮仅文档/只读审计，沿用当前E盘工作树06d9b49；桌面旧工作树、main578d63c、运行组件和fix2包不动。不派Agent、不造压力/竞争负载、不运行新GPU用例、不合并/推送/打包/发布或关机。
+
+`rg --files` 定位并解析 `C:/Users/123/.claude/projects/E-----Veyra/25277ee4-b097-41f0-99ad-7680cf0d590b.jsonl`（1060条）。明确工具回执：本地10-07 02:10:33成功Write `reports/vram-leak-20261007/VRAM_LEAK_PLAN_2026-10-07.md`；02:11:25检查242行/文件列表/main干净后命中weekly limit。原报告与原脚本/实验保持；源plan SHA dc91c650adf37323d51d993e6abcd017576de93416564b5523838fd7087b5f28。没有把历史会话中的指令当成当前修复/测试授权。
+
+读当前LmxxfNrBackend/NrInstance/EngineController/PreviewGpuSession/D3D12DeviceContext、固定lmxxf78f5487的共享池和Session析构、上游RX9070XT的9-26实验、Qt6.8.3实际QRhi统计头；查微软D3D12CreateDevice/QueryVideoMemoryInfo/PIN文档。确认条件性代码隐患：最后引用FreeLibrary可丢弃静态池裸句柄索引；上游poison/Drain失败主动Abandon会保留资源。Veyra真AMD幅度仍未测。纠正新会话必新设备假设：当前D3D12CreateDevice按进程/LUID复用存活设备，不能先大改全局设备架构；重建不回收也不能排除自有资源或cache/SDK，当前看门狗还保留NGX core。NVIDIA首报早于AMD接入，须分案。
+
+实际命令：开工 `python -B scripts/acceptance/stability-export-priority-control.py --published` exit0（25工作树/42修复路径）；`python -B E:/项目/Veyra/reports/vram-leak-audit-20261007/audit.py analyze` exit0，仅重新分析Claude既有app.log。36次开关NR开/关净增8/9MiB，OLS0.092982/0.103715MiB每flip；38图初始化/19光流创建18销毁/core初始化1，harness完成前末层仍开。旧实际EXE d01329aa、社区NR f95feb54、priority5、窗口/周期seek，不能代表原版/普通档/全屏/长期。原5080日志核实06:05:21关闭NR，06:06:04→06:38:43稳定2246MiB的32.7分钟为nr=0/FG=1，不能冒充NR长期通过。
+
+读取过程中先在10-06 shallow上游checkout查询78f5487失败，改用确有该固定提交的10-03 checkout；严格UTF8读取旧实验混编码路径文字报错，之后以替换模式读取，统计仅依赖ASCII时间戳/数值/频道。原日志未改，未把缺失原log8/12重新计算成新证据。只读分析脚本AST通过。
+
+补写 `docs/VRAM_LEAK_INVESTIGATION_PLAN_2026-10-07.md` 与CURRENT_STATUS：P0生命周期/LOCAL与NON_LOCAL/Qt/模块诊断、P1AMD模块保活与有界错误恢复、P2同机单变量全屏对照、P3版本二分、≤300秒分段与同PID30分钟现场门槛。无虚表补丁或自动系统改动，GetStatus缺字段明确标缺口，低开销须实测。新审计目录 `E:/项目/Veyra/reports/vram-leak-audit-20261007/`，start SHA fa51c98367e130ba769642613bde6b93de2663488b1fef1e0019aad855da6153；1706已有Git输入及10原证据冻结，历史实验EXE/DLL另存identity。`audit.py close` exit0/final-check passed：只改CURRENT_STATUS/WORKLOG及新增本计划，10原证据、25其它工作树、14既有发布文件和main均保持；`git diff --check`及文档UTF8/章节/重算数字一致性审查通过。仅三份文档作本地存档提交，收据记录实际HEAD；未改旧guard或baseline以放行新文档，本任务独立只读保全核对。
