@@ -975,12 +975,18 @@ VPage {
                     Repeater {
                         model: timingStrip.segments
                         delegate: Rectangle {
+                            id: timingSegment
                             required property var modelData
                             height: parent.height
-                            width: timingStrip.widthOf(modelData)
+                            width: Math.round(telemetryWidth.value)
                             radius: 4
                             color: modelData.measured ? modelData.color : Qt.rgba(1, 1, 1, 0.12)
-                            Behavior on width { enabled: visible; NumberAnimation { duration: Theme.d(600); easing.bezierCurve: Theme.springSoft } }
+                            VTelemetryValue {
+                                id: telemetryWidth
+                                targetValue: timingStrip.widthOf(timingSegment.modelData)
+                                animate: timingSegment.visible && !Theme.reduced
+                                duration: 600
+                            }
                             Text {
                                 anchors.centerIn: parent
                                 width: parent.width - 6

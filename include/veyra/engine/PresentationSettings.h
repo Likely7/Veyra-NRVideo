@@ -23,13 +23,12 @@ struct PresentationSettings {
     bool operator==(const PresentationSettings&) const = default;
     bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
 };
-// Automatic never waits for vertical sync and never requests tearing: a
-// flip-model Present(0, 0) replaces the queued frame at the next refresh.
-// Tearing is only requested when the user explicitly selects it, because a
-// borderless fullscreen window is promoted to independent flip, where
-// DXGI_PRESENT_ALLOW_TEARING really tears (windowed output is composed).
+// Automatic explicitly synchronizes the final swapchain to the display in
+// both windowed and fullscreen playback. Present(0,0) relies on the negotiated
+// compositor/provider path; it must not be sold as a universal tear-free mode.
+// The explicit Tearing choice keeps the unsynchronized path available.
 constexpr bool presentationVsync(const PresentationSettings& s) {
-    return s.display==DisplaySync::Vsync;
+    return s.display!=DisplaySync::Tearing;
 }
 constexpr bool presentationTearing(const PresentationSettings& s) {
     return s.display==DisplaySync::Tearing;

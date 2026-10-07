@@ -1,5 +1,33 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-07 2.0.5 本地测试包整合
+
+用户要求将已完成的跨厂商补帧/导出、AMD旧DLSS选择迁移、自动显示同步及统计动画性能修复合入main并构建2.0.5本地测试包。隔离分支codex/release-2.0.5-20261007从71483d5准备，保留既有PR19/20和fix1；具体进度以 [整合验收记录](RELEASE_2.0.5_ACCEPTANCE_2026-10-07.md) 与任务DELIVERY/main-merge收据为准。公开版仍2.0.4，本次未授权新公开发布。
+
+**NV显存持续增长尚未定位/修复，按用户决定延期到下一版本。** 下方调查及fix2记录保留历史事实，不能将本机短测未复现或缺失Shutdown疑点宣传为已解决。2.0.5只纳入已完成产品修复，不新增这些假设对应的生命周期改动。
+
+## 2026-10-07 NV 显存深入排查
+
+用户明确实际反馈主要是NVIDIA、AMD尚无这类现场，已调整为NV优先。在新隔离分支codex/nv-vram-deep-20261007，从aeb544c只新增只读诊断工具与文档；main、产品源码/运行库和既有包不动。找回微信原log8/12、哈希与封存一致：5060Ti/616.92/4K225%采集，单层1080 NR+光流、FG关，在无重建/无reset/无窗口区域更新的一段6分21秒内LOCAL1849→18501MiB；这不是普通补帧排队或重建棘轮能解释的。
+
+发现产品直接NR Init_Ext没有显式配对snippet Shutdown，旧harness与固定Magpie有共享session收尾；仍不能断言这是现场根因。本机5070/616.56/1440p/普通class2，4K60输入/1080 NR，旧发布版专业页及主Qt零提交两组全屏150秒均平台期；fix2也1800MiB平台。停止后NR/NVOF模块卸载、Dedicated计数减少1316MiB，是不能将缺失调用直接判为泄漏的反证。一次尾部断言误把旧nrActive快照当资源存活而exit3，修正测试条件后51秒正常停止契约通过，原失败保留。PresentMon ETW access denied，未改权限；受影响4K显示/真实采集与分配所有者仍未闭环。
+
+详见 [NV深查记录](NV_VRAM_DEEP_INVESTIGATION_2026-10-07.md)；新增 `scripts/diagnostics/collect-nv-vram.ps1` 无需管理员，按PID/路径/进程启动时间只读采集Dedicated/Shared/PrivateBytes、模块驻留与SHA，每段≤280秒、拒绝覆盖。不自动启动/停止播放器或改系统。当前没有“已根治”结论，不将AMD代码隐患或本机短测替代NV现场验收。
+
+## 2026-10-07 显存增长方案接管与复核（仅文档）
+
+已查本机Claude会话25277ee4：02:10写出242行方案，02:11收尾时weekly limit中断，没有产品修复。现补齐 [显存排查计划](VRAM_LEAK_INVESTIGATION_PLAN_2026-10-07.md)：AMD runtime卸载与静态裸资源池生命周期不匹配是明确代码隐患，poison/Drain失败后的主动资源保留为另一条件性路径，仍需RX9000同机验证；NVIDIA 5060Ti全屏持续增长单独未定位，不能归为AMD或直接判驱动。
+
+纠正“新PreviewGpuSession必然换设备”（D3D12同适配器存活设备为单例）、“重建无回收即排除自有链路”和短测无泄漏泛化。Claude旧实验实际为RTX5070/616.56、社区NR、GPU class5、窗口，36次开关NR开/关净增8/9MiB；5080最长32.7分钟平台期实际nr=0。完成既有日志重算与代码/官方契约复核，产物E:/项目/Veyra/reports/vram-leak-audit-20261007；未新构建/测试GPU/改产品/合main/发布。P0低干扰日志、P1模块保活、独立全屏对照与实卡门槛均在计划，尚未实施。下方fix2交付状态保持。
+
+## 2026-10-07 2.0.4-fix2 本地修复候选
+
+隔离分支 codex/stability-export-priority-20261006 修复跨厂商 FG 入口/导出、AMD NR 视频内部1080p与原尺寸输出、Auto 显示同步及 AMD 旧 DLSS 选择迁移到可用 FSR（可用手动 XeSS 保留）。最终 EXE 65fc23e33598d7efd77ea50ba8062a89beaacb29eb14369ffc78d03563312626；真实 FSR/H264/HEVC、预设重启、12组呈现合同、GPU像素/复用及新增 GUI 生命周期通过。
+
+已核实 2.0.3 默认 GPU 优先级为普通（原进程135次只读查询 class2，源码无 setter）。此前约7%差距已定位到持续统计动画争用GPU，修复为有界更新，保留交互动效/数值/NR工作；同普通档、原版单层1080p NR，用户 GTA VI 4K30 相邻旧/新6.558881/6.559476ms（+0.009%），原 M2 4K60 为6.632515/6.590205ms（−0.638%）。同EXE反向恢复旧统计动画再次退化，详 [本轮报告](STABILITY_EXPORT_PRIORITY_REPORT_2026-10-06.md)。此结论限本机匹配设置，不代表全硬件/物理延迟/长期稳定性。
+
+本地测试包已经完成：E:/项目/Veyra/test-packages/stability-export-priority-20261006，两厂商完整ZIP及应用源码，产品commit4c917aa；DELIVERY.json/全部CRC与逐文件SHA通过，两最终ZIP重新解压/仅系统PATH/隔离profile启动exit0、各26个Qt/FFmpeg模块来自包内，final-check.json通过。真实AMD离线推理/编码与用户显示撕裂仍待实卡复测。未合入main/推送/公开发布，25其他工作树与14既有发布文件不变。以下为历史状态。
+
 ## 2026-10-06 PR19/PR20 适配验收
 
 已合入并普通推送main：功能合并 `357c136`（此前main f8045fb）；PR20原历史合并2e3d239。GitHub REST核实PR19/20均closed/merged，原作者head保留为main祖先，合并Git树与实际验证树相同。v2.0.4 Release/tag/正文/资产不变。后续仅记录收尾和清理自有测试重复组件，565产品输入、生产EXE及92验收证据保持；最终main SHA见本轮logs/final-check.json。其他23原工作树原状态保留。

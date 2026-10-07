@@ -7780,11 +7780,11 @@
    "ja": "表示の同期：垂直同期"
   },
   {
-   "zh": "显示同步：自动 · 防撕裂（不等待垂直同步）",
+   "zh": "显示同步：自动 · 与屏幕同步防撕裂",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示同步：自動 · 防撕裂（不等待垂直同步）",
-   "en": "Display sync: auto · tear-free (does not wait for VSync)",
-   "ja": "表示の同期：自動 · ティアリング防止（垂直同期を待たない）"
+   "zh-TW": "顯示同步：自動 · 與螢幕同步防撕裂",
+   "en": "Display sync: auto · synchronize with the display to prevent tearing",
+   "ja": "表示の同期：自動 · 画面と同期してティアリングを防止"
   },
   {
    "zh": "显示器",
@@ -9376,11 +9376,11 @@
    "ja": "状態：%1"
   },
   {
-   "zh": "独立于低延迟队列 · 自动：不撕裂，也不等待垂直同步",
+   "zh": "自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制",
    "src": "qml/ProPage.qml",
-   "zh-TW": "獨立於低延遲佇列 · 自動：不撕裂，也不等待垂直同步",
-   "en": "Independent of the low-latency queue · Auto: no tearing, without waiting for VSync",
-   "ja": "低遅延キューとは独立 · 自動：ティアリングせず、垂直同期も待たない"
+   "zh-TW": "自動：與螢幕同步防撕裂 · 提交幀率受螢幕更新率限制",
+   "en": "Auto: synchronize with the display to prevent tearing; submitted FPS is limited by the refresh rate",
+   "ja": "自動：画面と同期してティアリングを防止 · 送信 FPS はリフレッシュレートが上限"
   },
   {
    "zh": "生效：{}p / {} fps / {} / 请求 {} Mbps · 实收视频 {:.1f} Mbps",
@@ -13415,11 +13415,11 @@
    "ja": "プレビューは縦横比を保ち、小さい入力は拡大しません。画像・動画の書き出しは完全に処理します。"
   },
   {
-   "zh": "预览可降采样到 1080p。AMD NR 图片/视频导出仅接受预算内原生尺寸，暂不支持 4K NR 导出。",
+   "zh": "AMD NR 预览与视频导出最高按内部 1080p 处理，视频保持输出尺寸；图片导出仍需符合模型尺寸预算。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "預覽可降採樣到 1080p。AMD NR 圖片/影片匯出僅接受預算內原生尺寸，暫不支援 4K NR 匯出。",
-   "en": "Preview can downsample to 1080p. AMD NR image/video export accepts only native sizes within that budget; 4K NR export is currently unsupported.",
-   "ja": "プレビューは 1080p まで縮小できます。AMD NR の画像・動画書き出しは画素数制限内のネイティブサイズのみ対応し、4K NR 書き出しは未対応です。"
+   "zh-TW": "AMD NR 預覽與影片匯出最高以內部 1080p 處理，影片保持輸出尺寸；圖片匯出仍需符合模型尺寸預算。",
+   "en": "AMD NR preview and video export use up to internal 1080p processing while keeping the video output size. Image export must still fit the model size budget.",
+   "ja": "AMD NR のプレビューと動画書き出しは内部で最大 1080p まで処理し、動画の出力サイズを維持します。画像書き出しはモデルのサイズ制限内である必要があります。"
   },
   {
    "zh": "预览：SDR 转 HDR 已运行",
@@ -14316,6 +14316,34 @@
    "zh-TW": "；預設“即時”，同時執行遊戲或其他重負載程式變慢時可改為“高”或“普通”",
    "en": "; Realtime by default. If a game or other heavy program running alongside slows down, choose High or Normal",
    "ja": "；既定は「リアルタイム」。同時に動かすゲームや重い処理が遅くなる場合は「高」か「通常」に変更してください"
+  },
+  {
+   "zh": "XeSS 尚未提供可编码的补帧纹理，请为导出选择 FSR、DLSS 或 VFG 补帧",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "XeSS 尚未提供可編碼的補幀紋理，請為匯出選擇 FSR、DLSS 或 VFG 補幀",
+   "en": "XeSS does not expose generated textures for encoding. Select FSR, DLSS or VFG for export.",
+   "ja": "XeSS はエンコード可能な補間テクスチャを公開していません。書き出しには FSR、DLSS または VFG を選択してください。"
+  },
+  {
+   "zh": "AMD NR 使用内部最高 1080p 处理，保留原尺寸合成与导出",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "AMD NR 使用內部最高 1080p 處理，保留原尺寸合成與匯出",
+   "en": "AMD NR uses internal processing up to 1080p and composites and exports at the original output size.",
+   "ja": "AMD NR は内部で最大 1080p まで処理し、元の出力サイズで合成・書き出します。"
+  },
+  {
+   "zh": "当前设备不能执行所选 NR，请选择此显卡可用的 NR 运行库",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "目前裝置無法執行所選 NR，請選擇此顯示卡可用的 NR 執行元件",
+   "en": "This device cannot run the selected NR. Select an NR runtime supported by this GPU.",
+   "ja": "このデバイスでは選択した NR を実行できません。この GPU に対応する NR ランタイムを選択してください。"
+  },
+  {
+   "zh": "当前导出设备不能执行所选补帧后端，未替换后端或降低倍率",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "目前匯出裝置無法執行所選補幀後端，未替換後端或降低倍率",
+   "en": "The export device cannot run the selected frame-generation backend. The backend and multiplier were kept.",
+   "ja": "この書き出しデバイスでは選択した補間バックエンドを実行できません。バックエンドと倍率は保持されています。"
   }
  ]
 }

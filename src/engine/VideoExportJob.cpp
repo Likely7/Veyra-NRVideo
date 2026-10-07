@@ -32,16 +32,10 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
     if(!std::isfinite(options.exportStartSeconds)||!std::isfinite(options.exportEndSeconds)||options.exportStartSeconds<0||options.exportEndSeconds<0||(options.exportEndSeconds>0&&options.exportEndSeconds<=options.exportStartSeconds)){progress(0,L"导出剪辑范围无效");return false;}
     if(std::filesystem::exists(output)){progress(0,L"目标文件已存在，请使用其他名称");return false;}
     if(cancel){progress(0,L"导出已取消");return false;}
-    // XeSS still has no exposed output texture. FSR preview now does, but
-    // FSR encoder/HDR/cadence acceptance remains a separate task. Preserve the
-    // established, explicit DLSS substitution for this release candidate.
     std::wstring fgNote;
-    if(options.fg&&crossVendorFrameGeneration(options.settings.frameGenerationBackend)){
-        const auto requested=options.settings.frameGenerationBackend;
-        fgNote=std::format(L"{} 补帧导出尚未验收；本次导出改用 DLSS 补帧 {}X",
-            requested==FrameGenerationBackend::XeSS?L"XeSS":requested==FrameGenerationBackend::Fsr4?L"FSR 4":L"FSR 3.1",options.fgMultiplier);
-        veyra::log::warn("export",std::format("requested preview backend is not admitted for export requested={} multiplier={}; substituting the in-graph DLSS path",frameGenerationBackendName(requested),options.fgMultiplier));
-        options.settings.frameGenerationBackend=FrameGenerationBackend::Dlss;
+    if(options.fg&&presentSinkFrameGeneration(options.settings.frameGenerationBackend)){
+        progress(0,L"XeSS 尚未提供可编码的补帧纹理，请为导出选择 FSR、DLSS 或 VFG 补帧");
+        return false;
     }
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;source::MediaFileSource source;pipeline::EnhanceGraph graph(ctx,ring);
     struct CompletionEvent {HANDLE value=nullptr;~CompletionEvent(){if(value)CloseHandle(value);}} completionEvent;
@@ -68,7 +62,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         // hardware encoder. Features that need NGX/NVOF stay NVIDIA-only and
         // are gated below instead of failing the job.
         const bool nvidiaAdapter=ctx.adapter().isNvidia;
-        if(!nvidiaAdapter)veyra::log::info("export",std::format("adapter={} vendor={}; DLSS NR/SR/FG and NVOF are unavailable, encoder falls back to the system Media Foundation hardware MFT",utf8(ctx.adapter().description),ctx.adapter().vendorIdHex));
+        if(!nvidiaAdapter)veyra::log::info("export",std::format("adapter={} vendor={}; selected AMD NR/FSR runtimes are checked independently of NVIDIA features; encoder uses the system Media Foundation hardware MFT",utf8(ctx.adapter().description),ctx.adapter().vendorIdHex));
         source::SourceOpenDesc od;od.path=input;od.preferHardwareDecode=false;if(!source.open(od)){failureReason=source.errorMessage();break;}
         auto info=source.info();if(!pipeline::Extent{info.width,info.height}.valid()){progress(0,L"输入尺寸超出GPU单纹理能力");break;}
         // The first decoded frame is authoritative when container headers omit
@@ -102,24 +96,23 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         gd.captureBitDepth=info.color.pixelFormat==pipeline::SourcePixelFormat::P010?10:info.color.pixelFormat==pipeline::SourcePixelFormat::P016?16:8;
         // Adapter gate mirrors the preview rules (EngineController): DLSS NR,
         // DLSS SR and the NVOF guidance need an NVIDIA device; AMD FSR
-        // upscaling is the only vendor-neutral video SR we ship. Requesting an
-        // unavailable feature must degrade the export, never fail it.
+        // upscaling is the vendor-neutral video SR. NR/FG requests must keep
+        // their selected backend and fail clearly when that backend is unavailable.
         const bool nvidiaFeatures=nvidiaAdapter;
-        // AMD adapters run NR on the lmxxf runtime. Export keeps native size,
-        // and that runtime only admits <=1920x1080 pixels (height <=1080).
         const bool amdAdapter=ctx.adapter().vendorId==0x1002;
-        const bool amdNrExport=amdAdapter&&info.width<=2560&&info.height<=1080&&uint64_t(info.width)*info.height<=1920ull*1080ull;
+        const bool amdNrExport=amdAdapter&&currentNrRuntime(options.settings.nrRuntime)==NrRuntime::LmxxfAmd;
+        if(options.nr&&!nvidiaFeatures&&!amdNrExport){failureReason=L"当前设备不能执行所选 NR，请选择此显卡可用的 NR 运行库";break;}
         // One description for the whole job: the stage rules (which SR runs,
         // whether NR/FG are available) come from the same place the preview uses.
         StageRequest stages;stages.nr=options.nr;stages.sr=options.sr;stages.fg=options.fg;stages.fgMultiplier=options.fgMultiplier;
         stages.width=info.width;stages.height=info.height;stages.exportJob=true;stages.nvidiaAdapter=nvidiaAdapter;stages.amdNr=amdNrExport;
         const auto plan=describeStages(stages,options.snapshot(),gd);
-        if(amdNrExport&&gd.enableNr&&gd.opticalFlowBackend==OpticalFlowBackend::Nvidia)gd.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
+        if(!nvidiaFeatures&&gd.opticalFlowBackend==OpticalFlowBackend::Nvidia)gd.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
         const auto resolution=plan;
         const bool srAvailable=plan.srApplied&&(nvidiaFeatures||options.settings.videoSrQuality==kVideoSrFsr);
-        if(options.nr&&!nvidiaFeatures&&!amdNrExport){
-            const wchar_t* note=amdAdapter?L"AMD NR 导出只支持 1080p 以内的片源，本次导出关闭 NR":L"当前显卡不能使用 DLSS NR，本次导出自动关闭 NR";
-            fgNote+=fgNote.empty()?std::wstring(note):std::wstring(L"；")+note;
+        if(options.nr&&amdNrExport){
+            fgNote=L"AMD NR 使用内部最高 1080p 处理，保留原尺寸合成与导出";
+            veyra::log::info("export-nr",std::format("runtime=lmxxf source={}x{} output={}x{} internal={}x{} layers={}",info.width,info.height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.nrLayersExtent.size()));
         }
         if(options.sr&&!srAvailable)fgNote+=fgNote.empty()?L"当前显卡不能使用所选超分，本次导出关闭超分":L"；当前显卡不能使用所选超分，本次导出关闭超分";
         if(!nvidiaFeatures&&srAvailable)fgNote+=fgNote.empty()?L"本次导出使用 AMD FSR 超分":L"；本次导出使用 AMD FSR 超分";
@@ -139,11 +132,13 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             fgFailure=graph.failedBackend()==FailedBackend::Fg;
             graph.shutdown();
         };
-        if(options.fg&&!nvidiaFeatures){failureReason=L"当前导出设备不能执行所请求的 DLSS 补帧，未降低倍率";break;}
+        if(options.fg&&!exportFrameGenerationSupported(options.settings.frameGenerationBackend,nvidiaFeatures)){
+            failureReason=L"当前导出设备不能执行所选补帧后端，未替换后端或降低倍率";break;
+        }
         if(options.fg){
             startGraph(true,options.fgMultiplier);
             if(!graphReady&&fgFailure){
-                failureReason=std::format(L"DLSS {}X 补帧初始化失败，未降低倍率；请查看任务诊断日志",options.fgMultiplier);
+                failureReason=std::format(L"{} {}X 补帧初始化失败，未替换后端或降低倍率；请查看任务诊断日志",std::wstring(frameGenerationBackendName(options.settings.frameGenerationBackend).begin(),frameGenerationBackendName(options.settings.frameGenerationBackend).end()),options.fgMultiplier);
             }
         } else startGraph(false,1);
         if(!graphReady){if(failureReason.empty())failureReason=L"增强管线初始化失败，请查看诊断";break;}

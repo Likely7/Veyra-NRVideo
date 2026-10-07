@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.0.4 LANGUAGES C CXX RC)
+project(veyra VERSION 2.0.5 LANGUAGES C CXX RC)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.0.4" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.0.5" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -801,7 +801,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/amd-nr-graph-test")
   file(WRITE "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp" "${_amd_nr_graph}")
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${VEYRA_AMD_NR_TEST_GRAPH_SOURCE}")
-  add_executable(veyra_amd_nr_graph_tests tests/integration/LmxxfNrGraphTests.cpp "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp")
+  add_executable(veyra_amd_nr_graph_tests tests/integration/LmxxfNrGraphTests.cpp src/engine/EffectChain.cpp "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp")
   target_compile_features(veyra_amd_nr_graph_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_amd_nr_graph_tests PRIVATE $<TARGET_PROPERTY:veyra_pipeline,INCLUDE_DIRECTORIES>)
   target_compile_definitions(veyra_amd_nr_graph_tests PRIVATE $<TARGET_PROPERTY:veyra_pipeline,COMPILE_DEFINITIONS>)

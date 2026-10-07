@@ -32,6 +32,11 @@ void applyLocked(){
         // WDDM has no process scheduling record before the first GPU context.
         publish(uint32_t(query)==0xC000000Du?GpuPriorityState::Pending:GpuPriorityState::Rejected,-1,uint32_t(query));return;
     }
+    // Query first and avoid a redundant scheduler call when the requested
+    // class is already in effect, including after a device reopen.
+    if(before==int(current.requested)){
+        publish(GpuPriorityState::Applied,before,0);return;
+    }
     auto set=api.set(GetCurrentProcess(),int(current.requested));
     auto verify=api.get(GetCurrentProcess(),&after);
     // Realtime is the default (field request 2026-10-05). Where Windows refuses it

@@ -1,5 +1,13 @@
 # Veyra 工作记录
 
+## 2026-10-07 2.0.5 本地整合与测试包
+
+用户明确授权将已完成修复合入main并构建2.0.5测试，NV显存持续增长延期到下一版。main起点578d63c；候选从71483d5隔离，产品修复ef2069f/4c917aa、PR19/20与fix1均保留；其后NV文档/只读采集脚本不等于显存修复。本轮仅版本/整合文档与验收打包脚本变动，不扩改产品算法。27个原工作树、495个本地修改/未跟踪文件、14份发布文件已独立封存，start SHA48b998d583676c9c39b14cc417c89d294639060f2e2fd4aa1986b366113625c8；旧基线不改。
+
+产物路径为 E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages,verify}/release-2.0.5-20261007；受控源码worktrees同名。全新13目标513步构建exit0，EXE acd49a23074b58ec9698d260d63b2d5a59a640627e09a9b83f0127ae47ebb936，PE/显示版本2.0.5；7个CPU契约目标、6个统计组件用例、AMD共享合成10例、实际同步12组、DLSS4X/6X/4X像素复用、FSR H264及SR/原版NR/FSR HEVC、双原版NR HEVC与GUI导出全部通过，四输出完整解码/严格CFR时间线通过。真实NR GUI暂停/全屏/Node接线/恢复/停止30.094秒通过；AMD缺组件选择迁移、手动XeSS/NVIDIA DLSS保留与Flow预设重启通过。GTA VI 4K30/原版1080 NR/普通class2单轮NR约6.295ms、UI36次/秒、视频30fps；不计算与旧非相邻测量的收益。命令、限制及旧fix2匹配性能证据见本轮ACCEPTANCE。
+
+catalog/v2错误在固定List尾重复添加/删除FG；v3在成功后Qt.quit异步退出前Timer重跑，实际exit0但有FAIL，均保留为失败。不改产品规则，按真实Node菜单前置状态并在完成时停测试Timer，v4通过。最终本地main --no-ff合并、树一致、源码/ZIP/CRC/逐文件SHA、独立解压仅系统PATH启动及旧工作区/发布包保护分别以本任务main-merge.json、DELIVERY.json、cold-final-zip.json、final-check.json为准；本段不能代替尚未执行的最终步骤。无新公开发布/推送、压力或竞争程序、子Agent、运行库改写、用户配置改动或关机；NV显存延期。
+
 ## 2026-10-06 PR19/20 最终适配验收
 
 最终执行 `pr19-pr20-finish.py freeze/commit/merge/push/verify`：565产品输入/161测试与脚本输入/92证据SHA封存，8个新增可达提交无SDK/runtime/model产物。PR20 merge 2e3d239，PR19适配merge357c136，父提交2e3d239+b14dc5a；作者原heads完整保留。source-integration.bundle 73856888 bytes、SHA7bd38da97fce41739dcf3d19ae436ca501a075bc86421a63125e737ec6ff6c60并verify成功。本地main从f8045fb快进357c136、Git树8976fc731aab0e55467e39b42bfe4402ed6ccee3与实测freeze一致，nrvideo普通推送成功。REST核实PR19/20 closed/merged（mergeCommit357c136/2e3d239）；原Release/tag/正文/资产对象和4本机发布ZIP SHA保持。main-advance/push/remote-after收据保留。最终收尾仅三个文档及自有cleanup脚本，产品与测试证据保持，最终SHA以final-check.json为准。
@@ -8546,3 +8554,82 @@ bootstrap第一次因新checkout CRLF与实测字节不同失败，未把它算�
 README更新仅当前版本更新/下载/过时状态和社区支持。独立确认英文远端页头与中文页头完整保留、两QR地址/width=220保持；教程主体未重写。Discord API验证c9aREyMj8为Veyra Dlss5/常规，原两QR及Ko-fi官方按钮HTTP200，Ko-fi用户页自动访问403，保留用户给定链接，不冒充页面验证通过。公告586字符，路径releases/.../GROUP_ANNOUNCEMENT.txt。docs/PERF_RELEASE_REPORT_2.0.4_2026-10-06.md列暖创建75.83%、单NR重激活99.01%、暂停编辑89.74%、暂停PID GPU利用率99.51%、最终S4增强区间3.52%及相应限制，拒绝/撤回实验没有计入产品收益。
 
 `py -3.11 -B scripts/package-2.0.4-dependency-source.py` v1因为vcpkg scripts含测试二进制后缀拒绝，partial ZIP保留到archives/.../dependency-source-rejected-v1.zip及SHA收据。过滤测试目录与二进制/工具档案后v2退出0，source tar目录安全/ZIP CRC/全部324载荷SHA通过，8个实际字幕上游源码归档及固定vcpkg30ef65cad9配方/补丁/元数据齐全。最终依赖ZIP598704862bytes，SHA2564eccde6343d66e0511b641aaacc12b999e424738a383fcce268d762abb3dceb9。原2.0.3依赖ZIP原字节嵌入，patched FFmpeg与全部串流/Qt源材料保持。日志logs/.../dependency-source-v2.log及dependency-source.json。
+
+
+## 2026-10-07 2.0.4 稳定性/导出/优先级本地候选
+
+用户要求同时处理 AMD 补帧入口及导出错误、NR 超过 1080p 的导出失效、跨来源撕裂和 2.0.3 性能比较，窗口与全屏都排查。隔离分支 codex/stability-export-priority-20261006，从 main 578d63c 开工；25 个既有工作树及 14 发布文件封存、control 反复通过，不派子 Agent、不运行压力/竞争负载、不公开发布。全部产物在 E:/项目/Veyra/{archives,build,tests,logs,tmp,test-packages}/stability-export-priority-20261006，TEMP/TMP 按子进程定向。
+
+修正通用 FG 能力 gate 和 AMD/Intel 新配置默认；移除强制 FSR/XeSS→DLSS 替换，FSR 用已有共享图编码纹理，XeSS 明确拒绝；AMD 视频 NR 冻结和 planner 内部最高 1080p、输出原尺寸，NVIDIA native 及旧每层参数保持。Auto 显式同步屏幕，低队列既有策略保留；新增实际 Present 换档日志。相同已生效 GPU 优先级不重复设置，不计未经证实的性能收益。
+
+实际命令、所有轮次/失败、限制见 docs/STABILITY_EXPORT_PRIORITY_REPORT_2026-10-06.md。生产 build-final-product 与最终测试目标构建通过，EXE 21e8e89c37d36f2cc43e7c619382185459ba36f76edefd602666050d6a20285b；264 效果链/246 修复契约/482 预设/56 能力/78 时序及 i18n 通过。真实 UI 复现旧 AMD 包 gate，修复后添加/FSR选择/列表预设及重启恢复通过；真实 FSR 4K60 窗口/全屏预览提交 120fps，H264/HEVC 导出 60源+59生成+1保持=120，完整解码及时间戳通过。AMD 恒等 GPU 图 10 例含4K输出/1080内部误差0；显示同步12例、DLSS4X/6X/4X像素与跨队列生命周期误差0/D3D12错误0；两包 Windows-only PATH 冷启动各26包内Qt/FFmpeg模块通过。
+
+性能普通档候选6.932ms/60fps，紧邻2.0.3为6.472ms，相差7.12%；同候选允许撕裂6.803ms，同步对照差1.90%。前台不一致的首轮14%差值作无效因果证据；不能声称没有回退或根因已修复，也未以调高优先级计成功。外部foreground查询与Qt active不一致、覆盖层/时钟未锁定，全部结果保留。AMD实卡离线推理/编码、FSR4、用户扫描撕裂和全设置稳定性未验，不据模拟/软件计数扩展支持。
+
+夹具失败保留：build-second变量声明顺序；display-first未drain即释放导致device hung、second累计计数误用；GUI预设mask/重复单例；FG运行配置路径；FSR子串匹配；cold-stage硬链接mapped路径假阴性。修正后复查，不冒充产品缺陷或抹掉原日志。完整便携候选2.0.4-fix2和源码存于本轮test-packages；最终ZIP/commit/SHA/CRC校验以DELIVERY.json为准，保护main/tag/现有发布资产。
+
+### 2026-10-07 普通优先级性能闭环与最终 AMD 默认修复
+
+用户要求先核实2.0.3默认GPU档位，并解决7%差距再封包；指定GTA VI 4K素材/1080p NR。检查v2.0.3 385a341b无GPU调度setter、队列NORMAL；原发布EXE三组135次只读D3DKMT查询均0x0/class2=普通。没有提高旧版或新版优先级来掩盖差异，没有压力/竞争测试或改全局驱动设置。
+
+补齐已保存配置的默认迁移：真实能力检查将不可用DLSS选择优先换FSR2X，覆盖列表和未激活节点模式、包括FG关闭状态，保留启用标志与可用手动选择；存储修复结果防止重启恢复旧值。build-amd-default-final成功，最终EXE 65fc23e33598d7efd77ea50ba8062a89beaacb29eb14369ffc78d03563312626。units-amd-default：264/258/482/56/78及i18n全通过；gui-amd-default-old-second、gui-amd-default-migrate、gui-amd-xess-keep、gui-nvidia-dlss-keep验证真实缺组件入口、FSR迁移、手动XeSS与NVIDIA6X保存。RTX5070运行缺组件包，不冒充AMD实卡。
+
+串行普通40秒播放：GTA素材3840×2160/30fps、SHA93db6129…1f8b3f；原版NR310.8、单层内部1080p、风格0/强度1、画面调控和SR/FG等关闭。软件UI实际OBS路径恢复NR约5.97ms，真正关闭动效约6.10ms；COMPUTE/D3D11/basic均只作反证，没有进入产品。当前EXE恢复旧统计动画（gta-ui-reversal-d1）NR6.963605/UI320Hz，最终修复（gta-meter-final-c4）6.559476/UI35Hz；紧邻原2.0.3（gta-old-bracket-a5）6.558881/UI20Hz。原4K60 M2最终新/旧6.590205/6.632515ms，均实际普通class2。相邻GTA差+0.009%、M2差−0.638%，同EXE UI反向对照修复减少NR区间5.80%、UI提交89.06%；不将此数冒充屏幕延迟或全设置收益。早期7%和全部波动保留；没有用最早5.94ms跨系统状态比较后续6.56ms。performance-final-comparison.json与每轮原始日志在本轮logs。
+
+产品仅将统计圆环/列表GPU条/节点统计条改为33ms有界插值和可见精度，保留页面/入场动画、实际数值和视频帧率，继续D3D12 UI/DIRECT图队列。build-telemetry-tests通过；telemetry-final揭示频繁retarget只取上次公布值导致停滞，修正推进内部轨迹而不立即绘制，telemetry-second 6/6通过，没有放宽测试。gta-new-reduced-b7偏好字段未消费，后续实际setter修正为b9；gui-amd-default-old关闭FG getter为1导致夹具错误，old-second修正仅期望。原失败完整保留。
+
+gui-telemetry-lifecycle（29.86秒）真实原版NR：播放/暂停恢复/窗口全屏返回/seek/节点NR接线/列表恢复/reduced motion/停止退出通过，NGX参数完整释放。gui-fsr-final（19.39秒）最终EXE/QML真实FSR预览和H264导出120帧、720p60通过。源码、日志和实际导出继续在本轮E盘目录；下一步只封包、新ZIP解压冷启动、逐文件/源码bundle与保护审计，按对应实际JSON记交付完成，不公开发布、不合main、不关机。
+
+封包前独立最终导出 `ffmpeg -v error -xerror ... -f null -` 完整解码、ffprobe逐帧时间戳检查通过：120帧、0–1.983333秒、每帧1/60递增；gui-fsr-final-timestamps.json保留实际文件SHA及解码exit0。全部本轮Python脚本AST语法检查通过。新增evidence freeze/close分别核对归档旧引擎证据和最终EXE/QML证据；未声称所有旧GPU用例在新EXE上重跑。
+
+### 最终封包与独立启动已通过
+
+源码4c917aa00419d321a3379fb064b72022ac0e11b2。实际命令 `stability-export-priority-evidence.py freeze` exit0：477源输入/83收据/最终EXE/QML匹配；`stability-export-priority-package.py refresh`、`finalize` exit0：AMD/NVIDIA 2051/1602文件、694/215项不可变组件、全部ZIP CRC/逐文件SHA保持。三ZIP位于本轮test-packages，大小355210175/714233409/70093518字节；完整SHA见本轮报告/DELIVERY.json，sourceZIP为4c917aa。`git bundle verify archives/.../repair-final.bundle` 成功，前提main578d63c。
+
+`stability-export-priority-cold.py cold-final-zip --zip` 两最终ZIP独立新解压/全manifest SHA、Windows-only PATH和private profile启动通过，AMD7.062秒/NVIDIA6.766秒均exit0，各26包内Qt/FFmpeg实际loader路径正确，没有QML/ERROR异常。实际文件路径在logs/.../cold-final-zip.json，不将AMD包在RTX5070基础启动当成AMD实卡NR/编码验收。
+
+`stability-export-priority-evidence.py close` exit0：产品输入/最终EXE/83收据、两包QML/源ZIP输入、源bundle和25原工作树/14既有发布文件全部保持，final-check.json passed=true。后续只补收尾文档；封存4c917aa产品commit/源码ZIP与运行组件不变。未合main/推送/公开发布、代发消息或关机。
+
+`E:/项目/Veyra/tmp/stability-export-priority-20261006/cleanup-owned.ps1` 成功清理48个本轮重复测试app；先保存实际测试QML、worker日志/manifest及按SHA去重的测试EXE到archives/.../test-package-evidence，原日志/收据、profile、像素、导出结果、身份提供器、最终build/两完整目录及ZIP/源bundle保留，cleanup.json记真实路径。逻辑字节数含硬链接，未宣称回收相同物理空间。
+
+随后补充清理本轮runtime副本与两个cold-final-zip解压目录的原生PowerShell命令在创建进程前被自动审批拒绝，工具理由只为`blocked by policy`。该命令未执行，保留这些自有副本，没有绕过拒绝或转用另一shell删除；logs/.../cleanup-extra-blocked.json记录限制，不算产品失败或清理通过。收尾只提交三份状态/报告文档，产品输入和既有发布文件再次由close/control检查。
+
+## 2026-10-07 VFG + RTX Video HDR 联合导出功能核对
+
+用户询问能否导出经VFG和RTXHDR处理的HDR视频。先读当前VideoExportJob/共享EnhanceGraph/VfgBackend/NVENC与既有VFG/TrueHDR验收，确认离线链为SDR→TrueHDR scRGB→PQ/BT2020 RGB10→VFG→P010/HEVC Main10；能力范围和组合画质验收分开。未改产品源码、DLL、显示HDR开关或用户运行配置。
+
+新产物全部E:/项目/Veyra/{tests,logs,tmp}/vfg-rtxhdr-export-check-20261007。`python -B tests/.../run.py` 调用最终2.0.4-fix2 NVIDIA包的真实QML/隔离导出worker，private profile普通GPU档，只打开RTX Video HDR（峰值参数1000）+VFG Medium2X；源码/母包不变，实际EXE65fc23e3。720p30 SDR nr-fixture2秒（60源帧），用户编码偏好故意选H264，导出自动改HEVC Main10。进程约11.39秒exit0，60源+59生成+1尾hold=120，输出1280×720/60fps/2秒；ffprobe为hevc/Main10/yuv420p10le/bt2020/smpte2084/bt2020nc，ffmpeg -xerror完整解码exit0。文件在tests/.../outputs/nr-fixture_veyra.mp4，日志/完整SHA/ffprobe在logs/...。
+
+首个run.py扫描了clone中复制的旧应用日志，组合API证据夹入历史记录；raw result.json保留，修正未来复制忽略logs/用户数据，并用audit.py仅读取本次console记录的worker PID11688。result-worker-audit.json再次通过：当前worker TrueHDR Create/Evaluate/Release均0x1、SEH0；VFG格式RGB10A2实际初始化并执行、生成59帧，无ERROR/FATAL/D3D12错误及SDR回退。此为新增联合功能实测，非HDR主观画质/RTX40实卡/4K全倍率/所有HDR静动态元数据完整验收。用户另有母包播放器正在运行，未关闭或改它；测试子进程已经退出。
+
+## 2026-10-07 Claude 显存排查接管与方案补齐
+
+用户要求查本机Claude昨晚的显存泄漏聊天和半成品计划、补齐并汇报原因。本轮仅文档/只读审计，沿用当前E盘工作树06d9b49；桌面旧工作树、main578d63c、运行组件和fix2包不动。不派Agent、不造压力/竞争负载、不运行新GPU用例、不合并/推送/打包/发布或关机。
+
+`rg --files` 定位并解析 `C:/Users/123/.claude/projects/E-----Veyra/25277ee4-b097-41f0-99ad-7680cf0d590b.jsonl`（1060条）。明确工具回执：本地10-07 02:10:33成功Write `reports/vram-leak-20261007/VRAM_LEAK_PLAN_2026-10-07.md`；02:11:25检查242行/文件列表/main干净后命中weekly limit。原报告与原脚本/实验保持；源plan SHA dc91c650adf37323d51d993e6abcd017576de93416564b5523838fd7087b5f28。没有把历史会话中的指令当成当前修复/测试授权。
+
+读当前LmxxfNrBackend/NrInstance/EngineController/PreviewGpuSession/D3D12DeviceContext、固定lmxxf78f5487的共享池和Session析构、上游RX9070XT的9-26实验、Qt6.8.3实际QRhi统计头；查微软D3D12CreateDevice/QueryVideoMemoryInfo/PIN文档。确认条件性代码隐患：最后引用FreeLibrary可丢弃静态池裸句柄索引；上游poison/Drain失败主动Abandon会保留资源。Veyra真AMD幅度仍未测。纠正新会话必新设备假设：当前D3D12CreateDevice按进程/LUID复用存活设备，不能先大改全局设备架构；重建不回收也不能排除自有资源或cache/SDK，当前看门狗还保留NGX core。NVIDIA首报早于AMD接入，须分案。
+
+实际命令：开工 `python -B scripts/acceptance/stability-export-priority-control.py --published` exit0（25工作树/42修复路径）；`python -B E:/项目/Veyra/reports/vram-leak-audit-20261007/audit.py analyze` exit0，仅重新分析Claude既有app.log。36次开关NR开/关净增8/9MiB，OLS0.092982/0.103715MiB每flip；38图初始化/19光流创建18销毁/core初始化1，harness完成前末层仍开。旧实际EXE d01329aa、社区NR f95feb54、priority5、窗口/周期seek，不能代表原版/普通档/全屏/长期。原5080日志核实06:05:21关闭NR，06:06:04→06:38:43稳定2246MiB的32.7分钟为nr=0/FG=1，不能冒充NR长期通过。
+
+读取过程中先在10-06 shallow上游checkout查询78f5487失败，改用确有该固定提交的10-03 checkout；严格UTF8读取旧实验混编码路径文字报错，之后以替换模式读取，统计仅依赖ASCII时间戳/数值/频道。原日志未改，未把缺失原log8/12重新计算成新证据。只读分析脚本AST通过。
+
+补写 `docs/VRAM_LEAK_INVESTIGATION_PLAN_2026-10-07.md` 与CURRENT_STATUS：P0生命周期/LOCAL与NON_LOCAL/Qt/模块诊断、P1AMD模块保活与有界错误恢复、P2同机单变量全屏对照、P3版本二分、≤300秒分段与同PID30分钟现场门槛。无虚表补丁或自动系统改动，GetStatus缺字段明确标缺口，低开销须实测。新审计目录 `E:/项目/Veyra/reports/vram-leak-audit-20261007/`，start SHA fa51c98367e130ba769642613bde6b93de2663488b1fef1e0019aad855da6153；1706已有Git输入及10原证据冻结，历史实验EXE/DLL另存identity。`audit.py close` exit0/final-check passed：只改CURRENT_STATUS/WORKLOG及新增本计划，10原证据、25其它工作树、14既有发布文件和main均保持；`git diff --check`及文档UTF8/章节/重算数字一致性审查通过。仅三份文档作本地存档提交，收据记录实际HEAD；未改旧guard或baseline以放行新文档，本任务独立只读保全核对。
+
+## 2026-10-07 NVIDIA 显存深入排查与纠偏
+
+用户明确实际主要发生在NV、AMD尚无对应现场。本轮将NV调查优先，AMD池生命周期只列独立代码隐患。先确认main578d63c与既有fix2/旧工作树状态，在E盘从aeb544c创建codex/nv-vram-deep-20261007，保留旧工作区。新archives/nv-vram-deep-20261007/start.json固定1707文件及两日志SHA，开工文件SHA6c4d9e48a0149b74ca5919533a723908af37f4d719bfb7da6a0d0a9ab1df5a27；未改旧guard或baseline。只新增文档与外部只读诊断脚本，无C++/QML产品/算法/运行库/驱动/用户配置修改、子Agent、压力或竞争程序、merge/push/Release/关机。
+
+`rg --files` 找回微信2026-10原veyra-qml(8)/(12).log，SHA03ba7ef4/d7f9793f与10-02封存一致；复制到E:/项目/Veyra/logs/nv-vram-deep-20261007/inputs原样保留。Python -B reports/.../analyze_field.py --output reports/.../field inputs/...重算5039/2353样本，按session/fullscreen/settings/graph generation及reset分段，生成JSON/CSV；独立按原始UTC行复核。5060Ti/616.92/4K225%/采集4K60/内部1080 NR+NVOF/FG0：无重建、无reset、无SetWindowPos/Rgn的380.956秒区间1849→18501MiB（+2622.67MiB/min）；另一无重置275.189秒4660→7696（+661.95/min），该段有49次Rgn，不能误写0。LOCAL统计不冒充板载物理驻留。窗口固定使用量仍处理60fps不证明像素在运动，不能排除焦点/内容差异。
+
+读NRadapter/EnhanceGraph/NGX/NVOF/presenter/ring/Qt宿主与固定Magpie27c5df9。确认产品直接snippet Init后未显式调用snippet Shutdown；log8共42 Init/42 CoreShutdown/0显式snippetShutdown，log12为34/34/0。旧harness与Magpie在最后runtime owner收尾中有调用，固定源码SHA46c75e12，两本地副本一致。这是优先核验的生命周期缺口，不能由CoreShutdown=0x1认定NR私有上下文已关闭，也不能仅凭缺失wrapper日志证明Core没有代清理；单次稳态增长与退出收尾必须分别定位。
+
+普通负载命令：Python -B reports/.../run_normal_probe.py community-published 204 --runtime 0 --flow 1；community-quiet-published 204 --runtime 0 --flow 1 --quiet-ui --no-presentmon；community-quiet-fix2-v2 fix2 同参数并--observe-stop。既有M2 4K60以ffmpeg -stream_loop 3 -c copy重封装240秒，SHA380acd1a；正常串行播放40秒窗口/150秒全屏/30秒退窗，私有profile、GPU class2、NR一层1080、NVOF开FG关。旧专业页2059→2059MiB，旧极简/减少动效1831→1831，fix2极简1800→1800；统一去转换预热后的时长142.796/141.663/142.614秒，全屏均前台且60fps，后两组主Qt新增帧0。全屏未复现，只证明本机5070/616.56/1440p设置，不能覆盖5060Ti/616.92/4K225%/真实采集或同PID长稳。发布版Present(0,0)，fix2 Present(1,0)，没有把版本差异隐藏为相同呈现条件。
+
+首轮PID过滤/唯一会话名PresentMon2.3.1抓取exit6 ETW access denied；未提权/改用户组/停止其它会话，后续不重复，没有PresentMode/MPO归属证据。早期fix2用例47.047秒被主动结束，不计结果；原本未先读取上一exec完成状态，随后UTC核实上一app结束02:04:44.996、下一app开始02:04:45.279，实际未重叠，runner补启动前拒绝其它player存活。fix2-v2尾部错误要求nrActive=false，exit3；实际引擎已经关闭，NRActive读取保留snapshot不代表资源存活。原失败收据不改，修正断言后用fix2-stop-contract正常播放/停止独立用例51.313秒exit0，未重跑或冒充全屏长稳。
+
+GPU独立helper按目标PID读取WMI Dedicated/Shared/TotalCommitted、PrivateBytes及Module驻留；fix2-v2停止后NR与NVOF模块不再驻留，Dedicated减少1316.18MiB、Shared减少54.86MiB、PrivateBytes减少1481.53MiB；后续短契约再次卸载且Dedicated减少1203.90MiB。本机有大幅回收的反证，不能宣布遗漏snippetShutdown就是现场根因。新增scripts/diagnostics/collect-nv-vram.ps1只读采样，每段≤280秒，验证PID/EXE/进程启动时刻，首次模块出现记录版本/大小/SHA；拒绝覆盖既有输出、不改系统/应用、不自动启动/停止播放器。PowerShell解析、无GPU目标缺字段及输出保全检查分别记logs/.../collector-*，无GPU样本明确gpuAvailable=false，不作为真实GPU实测；实际GPU读取依据前述helper原始样本。
+
+全部产物E:/项目/Veyra/{archives,reports,logs,tests,tmp}/nv-vram-deep-20261007。补NV深查报告、纠正原计划NV/AMD顺序、更新CURRENT_STATUS。本轮证据汇总local-summary.json同时保留失败与短测范围；不修改旧原报告/原日志。独立verify.py核对原输入、1707基线、原main及26旧工作树、14已发布文件、仅5个当前授权文档/诊断接点、Python AST与git diff --check，收据final-check.json。收尾实际HEAD、fixture封存与自有副本整理见对应收据；产品修复与受影响实卡分配归属仍未完成。
+
+收尾已封存5组测试QML/隔离偏好及其SHA，fixture-preservation.json。清理4份自有测试app副本的PowerShell删除命令在CreateProcess前被自动审批以blocked by policy拒绝，没有执行、没有提供进一步原因；不重试或换方式删除，所有副本保留，cleanup.json记录removed=0。该限制只影响中间副本整理，不影响诊断、原包保全或研究结论。

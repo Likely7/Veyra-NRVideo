@@ -155,6 +155,7 @@ private:
     uint32_t height_ = 0;
     uint64_t presentCount_ = 0;
     uint64_t attemptedPresentCount_ = 0;
+    bool presentContractDirty_=true;
     uint64_t failedPresentCount_ = 0;
     uint32_t scBufferWidth_ = 0;
     uint32_t scBufferHeight_ = 0;

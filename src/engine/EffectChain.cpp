@@ -479,9 +479,12 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
         step.input = step.processing = step.output = cursor;
         if (node.type == EffectType::SuperResolution) step.processing = step.output = srExtent;
         if (node.type == EffectType::NrEnhance) {
-            const auto policy = request.exportJob ? pipeline::NrSizePolicy::Native : node.nr.sizePolicy;
+            const bool boundedAmd=request.exportJob&&request.amdNrExport&&
+                currentNrRuntime(node.nr.runtime)==NrRuntime::LmxxfAmd;
+            const auto policy = boundedAmd?pipeline::NrSizePolicy::Realtime:
+                request.exportJob ? pipeline::NrSizePolicy::Native : node.nr.sizePolicy;
             step.processing = pipeline::ResolutionPlan::make(cursor, false, policy,
-                request.stillImage || request.exportJob, 0, request.srTarget).nr;
+                (request.stillImage || request.exportJob)&&!boundedAmd, 0, request.srTarget).nr;
         }
         plan.steps[plan.stepCount++] = step;
         cursor = step.output;

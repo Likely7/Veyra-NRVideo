@@ -158,6 +158,7 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     queue_ = queue;
     shutdownCalled_ = false;
     desc_ = desc;
+    presentContractDirty_=true;
     width_ = desc.width;
     height_ = desc.height;
     if (!device_ || !queue_ || (desc.targetWindow && !IsWindow(desc.targetWindow))) {
@@ -398,8 +399,10 @@ bool PresentSink::present(Status& status)
     if(!beforeOk){xessFailed_=true;status=Status::WindowFailure;return false;}
     const HRESULT hr = swapChain_->Present(syncInterval, flags);
     presentTiming_.callMs=split();presentTiming_.result=hr;
-    if(attemptedPresentCount_<=3||attemptedPresentCount_%120==0)
+    if(presentContractDirty_||attemptedPresentCount_<=3||attemptedPresentCount_%120==0){
         log::info("present-contract",std::format("backend={} sync={} flags=0x{:X} hr=0x{:X}",xess_?"XeSS":"DXGI",syncInterval,flags,unsigned(hr)));
+        presentContractDirty_=false;
+    }
     if (SUCCEEDED(hr)) {
         ++presentCount_;
         backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
@@ -480,6 +483,7 @@ PresentSink::FrameStatisticsDelta PresentSink::sampleFrameStatistics(){
 }
 
 bool PresentSink::configurePacing(bool enabled,bool vsync,bool tearing){
+    if(desc_.vsync!=vsync||desc_.tearing!=tearing)presentContractDirty_=true;
     // XeSS owns pacing, but its proxy accepts DXGI VSync independently.
     // Do not install another latency waiter on the provider swap chain.
     if(xess_){pacing_=false;capacityAcquired_=false;desc_.vsync=xess_&&vsync;desc_.tearing=tearing;log::info("pacing",std::format("provider={} applicationWait=0 vsync={} tearing={}","XeSS",desc_.vsync,desc_.tearing));return !enabled;}

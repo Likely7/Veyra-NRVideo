@@ -370,7 +370,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     }
     const bool vsync=presentationVsync(requested),tearing=presentationTearing(requested);
     providerOwnedPresentation_=xessActive();
-    const std::wstring sync=vsync?L"显示同步：垂直同步":tearing?L"显示同步：允许撕裂":L"显示同步：自动 · 防撕裂（不等待垂直同步）";
+    const std::wstring sync=requested.display==DisplaySync::Automatic?L"显示同步：自动 · 与屏幕同步防撕裂":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
     if(!reflexDisabled){effective.enabled=false;sink_.configurePacing(false,vsync,tearing);status=L"Reflex 驱动状态撤销失败；低延迟队列已停用 · "+sync;return effective;}
     if(xessActive()){
         // The provider owns Present for its generated frames, so neither the

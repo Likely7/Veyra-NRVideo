@@ -1,4 +1,5 @@
 #include "veyra/engine/EnhancementSettings.h"
+#include "veyra/engine/FrameGenerationSelection.h"
 #include "veyra/engine/BackendRecovery.h"
 #include "veyra/diagnostics/DiagnosticEvent.h"
 #include "veyra/diagnostics/FrameMetrics.h"
@@ -61,7 +62,7 @@ int main(){
     check(std::wstring_view(engine::ngxFailureHint(0xBAD00001)).find(L"不支持")!=std::wstring_view::npos,"NGX FeatureNotSupported has a distinct visible reason");
     for(bool lowQueue:{false,true})for(bool fullscreen:{false,true})for(auto sync:{engine::DisplaySync::Tearing,engine::DisplaySync::Vsync,engine::DisplaySync::Automatic}) {
         engine::PresentationSettings s;s.enabled=lowQueue;s.fullscreen=fullscreen;s.display=sync;
-        check(engine::presentationVsync(s)==(sync==engine::DisplaySync::Vsync)&&engine::presentationTearing(s)==(sync==engine::DisplaySync::Tearing),"VSync and tearing only when explicitly selected; Automatic is neither, windowed or fullscreen");
+        check(engine::presentationVsync(s)==(sync!=engine::DisplaySync::Tearing)&&engine::presentationTearing(s)==(sync==engine::DisplaySync::Tearing),"Automatic synchronizes windowed/fullscreen independently of low queue; only explicit Tearing is unsynchronized");
     }
     {
         source::AudioInputRecovery retry;retry.reset(1000);
@@ -595,6 +596,26 @@ int main(){
             check(!rejected.installed&&!rejected.error.empty(),"non-thunk target is rejected instead of guessed");
             VirtualFree(page,0,MEM_RELEASE);
         }
+    }
+    {
+        using F=engine::FrameGenerationBackend;
+        check(engine::defaultFrameGenerationBackend(0x1002)==F::Fsr,"AMD fresh session prefers FSR");
+        check(engine::defaultFrameGenerationBackend(0x8086)==F::Fsr,"Intel fresh session prefers FSR");
+        check(engine::defaultFrameGenerationBackend(0x10DE)==F::Dlss,"NVIDIA fresh session retains DLSS default");
+        const engine::FrameGenerationAvailability crossVendor{false,true,true,false,false};
+        check(engine::restoredFrameGenerationBackend(F::Dlss,crossVendor)==F::Fsr,"unavailable saved DLSS moves to FSR ahead of XeSS");
+        check(engine::restoredFrameGenerationBackend(F::Vfg,crossVendor)==F::Fsr,"unavailable NVIDIA VFG moves to cross-vendor FSR");
+        check(engine::restoredFrameGenerationBackend(F::XeSS,crossVendor)==F::XeSS,"usable manual XeSS choice is retained");
+        check(engine::restoredFrameGenerationBackend(F::Fsr,crossVendor)==F::Fsr,"usable manual FSR choice is retained");
+        const engine::FrameGenerationAvailability xessOnly{false,true,false,false,false};
+        check(engine::restoredFrameGenerationBackend(F::Dlss,xessOnly)==F::XeSS,"XeSS remains usable when the FSR provider is missing");
+        const engine::FrameGenerationAvailability noProvider{};
+        check(engine::restoredFrameGenerationBackend(F::Dlss,noProvider)==F::Dlss,"missing all providers never pretends a fallback exists");
+        const engine::FrameGenerationAvailability nvidia{true,true,true,false,true};
+        check(engine::restoredFrameGenerationBackend(F::Dlss,nvidia)==F::Dlss,"available NVIDIA DLSS is never replaced");
+        check(engine::restoredFrameGenerationBackend(F::Vfg,nvidia)==F::Vfg,"available manual VFG is never replaced");
+        const engine::FrameGenerationAvailability ml{false,true,true,true,false};
+        check(engine::restoredFrameGenerationBackend(F::Fsr4,ml)==F::Fsr4,"supported manually selected FSR4 remains FSR4");
     }
     std::cout<<checks<<" checks "<<failures<<" failures\n";return failures?1:0;
 }
