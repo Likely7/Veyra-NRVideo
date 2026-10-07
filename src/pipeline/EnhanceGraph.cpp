@@ -1043,7 +1043,7 @@ bool EnhanceGraph::initVfg()
     if(!fgEnabled_||desc_.frameGenerationBackend!=engine::FrameGenerationBackend::Vfg)return true;
     failedBackend_=engine::FailedBackend::Fg;
     vfgBackend_=std::make_unique<VfgBackend>();
-    if(!vfgBackend_->initialize(context_,desc_.runtimeAbsPath,workW_,workH_,outputFormat(),desc_.fgMultiplier,desc_.vfgQuality))return false;
+    if(!vfgBackend_->initialize(context_,desc_.runtimeAbsPath,workW_,workH_,outputFormat(),desc_.fgMultiplier,desc_.vfgQuality,desc_.vfgAsyncSubmission))return false;
     fgCapsAvailable_=true;fgMultiFrameMax_=int(FrameBatch::Capacity)-1;
     return true;
 }
@@ -2987,6 +2987,14 @@ bool EnhanceGraph::resolveFrame(FrameOutputs& out,uint32_t index)
     auto& frame=out.batch.frames[index];
     if(!frame.lease||!frame.lease->ready())return false;
     if(frame.kind!=FrameKind::Generated||frame.validity!=GenerationValidity::Pending)return true;
+    if(vfgBackend_){
+        const auto state=vfgBackend_->submissionState(frame.lease->slot);
+        if(state==VfgBackend::SubmissionState::Pending)return false;
+        if(state==VfgBackend::SubmissionState::Failed){
+            frame.validity=GenerationValidity::Failed;failedBackend_=engine::FailedBackend::Fg;
+            return true;
+        }
+    }
     if(fsrActive()||vfgBackend_){
         frame.validity=out.contentDuplicate?GenerationValidity::Disabled:GenerationValidity::Valid;
         if(out.contentDuplicate){++metrics_.fgDisabledFrames;++metrics_.fgDuplicateSuppressed;}else ++metrics_.fgGeneratedFrames;

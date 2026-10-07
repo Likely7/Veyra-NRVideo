@@ -587,6 +587,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 for(unsigned attempt=0;attempt<6;++attempt){
                     if(stop_)return false;
+                    desc.vfgAsyncSubmission=!isImage&&selected.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&
+                        GetEnvironmentVariableW(L"VEYRA_TEST_VFG_SYNC_SUBMIT",nullptr,0)==0;
                     desc.videoHdr=selected.settings.videoHdr;
                     desc.hdrOutput=selected.settings.useHdrPreview(desc.hdrInput,displayHdrActive());
                     // Auto is optional and preview-only; fixed/export policies

@@ -89,9 +89,10 @@ def run(args):
  env.update(TEMP=str(tmp),TMP=str(tmp),CUDA_CACHE_PATH=str(tmp/'cuda-cache'),QML_DISABLE_DISK_CACHE='1',QT_FORCE_STDERR_LOGGING='1',VEYRA_LOG_FILE=str(out/'player.log'))
  if not args.no_verbose:env['VEYRA_VERBOSE_FRAME_LOGS']='1'
  if args.cpu_profile:env['VEYRA_TEST_VFG_CPU_PROFILE']='1'
+ if args.sync_submit:env['VEYRA_TEST_VFG_SYNC_SUBMIT']='1'
  if args.no_reduced:env['VEYRA_TEST_FG_NO_REDUCED']='1'
  if args.software:env['QT_QUICK_BACKEND']='software'
- receipt={'config':config,'exeSha256':EXPECTED_EXE,'gpuBefore':gpu(),'noReduced':args.no_reduced,'softwareUi':args.software,'verboseFrameLogs':not args.no_verbose,'cpuProfile':args.cpu_profile,'selectedBinary':str(selected)}
+ receipt={'config':config,'exeSha256':EXPECTED_EXE,'gpuBefore':gpu(),'noReduced':args.no_reduced,'softwareUi':args.software,'verboseFrameLogs':not args.no_verbose,'cpuProfile':args.cpu_profile,'syncSubmit':args.sync_submit,'selectedBinary':str(selected)}
  started=time.monotonic();meters=[]
  with (out/'console.log').open('xb') as stream:
   proc=subprocess.Popen([str(APP/'veyra_qml_ui.exe'),'--data-dir',str(profile),'--page','pro','--size','1280x800','--exit-after','135000'],cwd=APP,env=env,stdout=stream,stderr=subprocess.STDOUT)
@@ -132,6 +133,7 @@ parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['prepare','
 parser.add_argument('--multiplier',type=int,choices=range(2,9),default=2);parser.add_argument('--quality',type=int,choices=range(3),default=1)
 parser.add_argument('--no-nr',action='store_true');parser.add_argument('--strict',action='store_true');parser.add_argument('--flow',action='store_true');parser.add_argument('--tearing',action='store_true');parser.add_argument('--no-reduced',action='store_true');parser.add_argument('--software',action='store_true');parser.add_argument('--no-verbose',action='store_true');parser.add_argument('--seconds',type=int,default=20)
 parser.add_argument('--original',action='store_true');parser.add_argument('--cpu-profile',action='store_true')
+parser.add_argument('--sync-submit',action='store_true')
 args=parser.parse_args()
 if args.mode=='prepare':prepare()
 elif args.mode=='case':run(args)

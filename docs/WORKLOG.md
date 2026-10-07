@@ -1,5 +1,17 @@
 # Veyra 工作记录
 
+## 2026-10-07 VFG 专项优化（进行中）
+
+用户授权“尝试优化VFG，其他的补帧暂时不动”。排查分支封存aec800e，优化隔离codex/vfg-optimization-20261007；开工tag checkpoint/pre-vfg-optimization-20261007，完整Git bundle与不可变start.json在E:/项目/Veyra/archives/vfg-optimization-20261007。当前任务计划docs/VFG_OPTIMIZATION_PLAN_2026-10-07.md；新guard逐文件保护其它全部工作树、正式2.0.5 EXE/Main/VFG运行库及非VFG实现，未改旧guard/start。所有构建、测试、日志、临时目录使用E:/项目/Veyra对应vfg-optimization-20261007目录；无子Agent、竞争GPU压力、驱动/用户配置变更、merge/push/Release/关机。
+
+P0源码b9394ea / checkpoint/vfg-cpu-profile-20261007：默认关闭的VFG CPU分段计时。命令python -B scripts/acceptance/vfg-opt-build.py profile-build-v1及vfg-opt-run.py case profile-medium4-nr --quality 1 --multiplier 4 --cpu-profile；GUI正式负载原GTA6/原版1080 NR/普通class2，Run均值约6.20ms，Src/SetU32为微秒级，FPS82。逐API日志记录证明阻塞发生在NvVFX_Run；不是从GPU利用率猜测CPU瓶颈。
+
+P1按已登记固定MIT样例52011f89…只在新输入对绑定Src0/1、仅倍率变化设置FrameMultiplier，capture修订检测相同CUDA地址的新像素；pair-cache-build-v1构建通过，pair-cache-medium4-nr仍83fps/FG12.18ms，未证明性能收益。保留其SDK调用契约修正但不计算优化百分比。P2实时VFG专用有界worker，CUDA推理仍串行，图owner预排producer/consumer fence；生成状态独立核验，失败帧不得当Valid。视频导出默认保留同步SDK判定路径；DLSS/XeSS/FSR代码与策略不改。
+
+async-build-v1构建通过。async-native-720-v1：8/10位、三质量、2X–8X、切镜及无效参数637项0失败。首轮async-medium4-nr-v1为120fps（原83–84），async-high2-nr-v1为60fps（前轮原版37）；均同原片/原版1080 NR/普通class2，SDK worker日志仍约6.7ms调用，证明收益是送显解耦，不是推理算法或GPU成本下降。以上尚为首轮，重复对照、4K像素/输入刷新、热切换、异步拒绝回退和完整导出验收仍待完成，不能据此交付或宣称所有档位通过。
+
+P2后续：async-build-v2成功；async-native-720-v2、sync-native-720-v2、async-native-4k-v2各913检查0失败（4K进程108.453秒）。相同候选同步/异步42组共168插帧逐像素哈希完全一致，native-hash-comparison.json；新增相同导入地址更新像素、反向运动、parity切换、切镜后2X→4X→8X验证。async-medium8-nr-v2约191fps且仍降档，明确未达240fps。failure-verified-v2第3次Run注入拒绝后实际multiplier=1、fgActive=false、视频继续，进程7.860秒正常退出，无等待悬挂。初次failure-v2及复核failure-observe-v2测试断言失败：误把QML fgEnabled（保存的节点请求）当实际后端；日志证实实际已降为1X，fgActive=false/failed=false。修正的是测试语义，保留两个失败日志，未为此改产品UI或其它后端。最终默认路径只加拒绝hook长度边界和准确注释，再构建最终候选；全档位重复/热切换/完整导出仍在验收，不预先算通过。
+
 ## 2026-10-07 2.0.5 正式发布完成
 
 已正式发布https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.5（Release ID 405358232，2026-10-07T03:59:46Z），5资产远端大小/SHA256 digest一致，最新正式版本、对应源码/依赖源码、正文/双QR和下载可用性核对通过。两最终ZIP冷启及26个包内模块路径各通过，产品字节保持。实际命令、结果、失败复核、哈希与日志路径见[PUBLISH_2.0.5_REPORT](PUBLISH_2.0.5_REPORT_2026-10-07.md)。main合并939f1a5afa7b1d122adf656d157d4df6b6fad9af、源码e44e828119710b8f031cc968e8ddb1982aecc873；随后只提交此正式回执，不改标签/资产/产品。NV显存未修复；公告≤1000字，只交用户，不代发不关机。
