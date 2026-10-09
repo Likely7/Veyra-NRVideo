@@ -1,4 +1,5 @@
 #include "veyra/sink/CaptureAudioSession.h"
+#include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/sink/AudioFormat.h"
 #include "veyra/source/AudioInputRecovery.h"
 #include <chrono>
@@ -21,6 +22,77 @@ int main(int argc,char** argv){
             else std::this_thread::sleep_until(due);
         }
     } pacer;
+    if(argc>=2&&std::string_view(argv[1])=="--endpoint-switch"){
+        // Exercise real endpoint selection while the same capture session
+        // continues receiving PCM. Muted output avoids playing test tones.
+        const auto endpoints=enumerateRenderEndpoints();
+        if(endpoints.size()<2){
+            std::cout<<"SKIP endpoint switch: two active render endpoints required\n";
+            return 77;
+        }
+        struct RestorePreference {
+            std::wstring id=preferredRenderEndpoint();
+            ~RestorePreference(){setPreferredRenderEndpoint(std::move(id));}
+        } restore;
+        CaptureAudioSession output;
+        const auto wave=floatWave({2,SPEAKER_FRONT_LEFT|SPEAKER_FRONT_RIGHT});
+        output.setGain(0);
+        output.setSync(2,0);
+        setPreferredRenderEndpoint(endpoints[0].id);
+        if(!output.configure(wave.Format,sizeof(wave))||!output.start())return 2;
+        std::vector<float> block(480*2,0.05f);
+        auto next=Clock::now();
+        uint64_t sequence=0;
+        auto feed=[&]{
+            pacer.until(next);next+=std::chrono::milliseconds(10);
+            const double pts=double(sequence++)*10;
+            if(!output.push(block.data(),block.size()*sizeof(float),pts,sequence==1))return false;
+            const auto host=std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;
+            output.videoPresented(pts,host,host);
+            return true;
+        };
+        auto awaitEndpoint=[&](const std::wstring& id,const char* phase,uint64_t previousRetries=0){
+            const auto deadline=Clock::now()+std::chrono::seconds(2);
+            while(Clock::now()<deadline){
+                if(!feed())return false;
+                const auto active=activeRenderEndpoint();const auto s=output.snapshot();
+                if(active.valid&&active.id==id&&s.running&&!s.outputRecovering&&s.endpointRetries>previousRetries){
+                    std::cout<<"PASS "<<phase<<" inputBlocks="<<s.inputBlocks
+                             <<" endpointRetries="<<s.endpointRetries<<std::endl;
+                    return true;
+                }
+            }
+            std::cout<<"FAIL "<<phase<<": active endpoint did not follow preference\n";
+            return false;
+        };
+        if(!awaitEndpoint(endpoints[0].id,"open A"))return 1;
+        const auto opened=output.snapshot();
+        setPreferredRenderEndpoint(endpoints[1].id);
+        if(!awaitEndpoint(endpoints[1].id,"switch A -> B"))return 1;
+        const auto switched=output.snapshot();
+        if(switched.endpointRetries<=opened.endpointRetries)return 1;
+        setPreferredRenderEndpoint(endpoints[0].id);
+        if(!awaitEndpoint(endpoints[0].id,"switch B -> A"))return 1;
+        const auto returned=output.snapshot();const auto generation=renderEndpointGeneration();
+        setPreferredRenderEndpoint(endpoints[0].id);
+        for(unsigned i=0;i<40;++i)if(!feed())return 3;
+        const auto stable=output.snapshot();const auto active=activeRenderEndpoint();
+        const bool pass=stable.running&&!stable.outputRecovering&&active.valid&&active.id==endpoints[0].id
+            &&stable.endpointRetries==returned.endpointRetries&&renderEndpointGeneration()==generation
+            &&stable.inputBlocks>returned.inputBlocks&&stable.bufferedMs<200;
+        std::cout<<(pass?"PASS ":"FAIL ")<<"same endpoint does not reopen; continuous inputBlocks="
+                 <<stable.inputBlocks<<" bufferedMs="<<stable.bufferedMs<<'\n';
+        if(!pass)return 1;
+        const auto currentEndpoints=enumerateRenderEndpoints();
+        const auto defaultEndpoint=std::find_if(currentEndpoints.begin(),currentEndpoints.end(),
+            [](const auto& endpoint){return endpoint.isDefault;});
+        if(defaultEndpoint==currentEndpoints.end())return 2;
+        setPreferredRenderEndpoint({});
+        if(!awaitEndpoint(defaultEndpoint->id,"select system default",stable.endpointRetries))return 1;
+        const auto following=output.snapshot();
+        output.stop();
+        return preferredRenderEndpoint().empty()&&following.endpointRetries>stable.endpointRetries?0:1;
+    }
     if(argc>=2&&std::string_view(argv[1])=="--xbox-float-rtp"){
         // Xbox's stereo float PCM and independent audio/video RTP origins,
         // through the real shared resampler and muted WASAPI endpoint.

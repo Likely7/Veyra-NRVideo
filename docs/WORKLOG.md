@@ -8716,3 +8716,48 @@ High5总18.74ms/GPU67.8%同样绿但仅33fps，已大量reduced/seed/skip；完�
 分析命令Python -B scripts/acceptance/vfg-diagnosis-report.py，只读原始日志重算analysis.json。prepare早期utf8-sig编码名失败，改utf-8-sig后成功，失败时未建app/基线；分析初次假定所有admission都有admittedPairs而KeyError，后修缺字段及行尾解释重复key覆盖实际值，重算JSON。没有将这些脚本失败当产品错误或通过证据。audit核对全部其他工作树及原发布包/五VFG DLL未变；Python AST、git diff --check及25组最终收据保存verify/vfg-diagnosis-20261007/final.json。自查不冒称独立Reviewer。
 
 本轮产物统一E:/项目/Veyra/{archives,tests,logs,tmp,verify}/vfg-diagnosis-20261007；保留一份私有app、25组配置与必要日志用于后续A/B，未删其他文件、未重复旧被拒清理操作。本轮只完成排查，产品优化尚未实施，未验证全屏/其他GPU驱动/采集串流/全片长稳/物理显示时序。
+
+## 2026-10-09 Capture audio output switching
+
+User report: selecting a new output during capture required an application
+restart. Required behavior also includes following Windows output changes
+when system default is selected. Isolated from main 96a7c8d on
+`fix/capture-audio-output-switch`, with original source copies, runtime,
+user-data backup, native dependencies and logs retained outside Git. Scope
+and validation are in CAPTURE_AUDIO_ENDPOINT_SWITCH_PLAN_2026-10-09.md.
+
+The preference setter already advances the endpoint generation; default
+device notifications already invalidate AudioRenderer. CaptureAudioSession
+did not poll lastError(), while event waits and buffer writes could still
+succeed on the old endpoint. Added that poll on the capture audio owner and
+reused its existing bounded recovery. No video graph, SDK or runtime changes.
+
+Added `veyra_capture_audio_tests --endpoint-switch`: continuous muted real
+WASAPI PCM, actual opened A -> B -> A, no reopen for the same preference,
+and selecting system default in the same session. Fewer than two active
+outputs returns explicit skip 77. Unmodified owner failed A -> B; fixed
+product test passed all phases, 221 input blocks, 10 ms buffered at the
+same-endpoint check. Existing --endpoint-loss, --slow-start and --transient
+checks passed. MSVC 14.44 / Windows SDK 10.0.26100 / Qt 6.8.3 Release product
+and integration targets built successfully; git diff --check passed. Each
+test stayed below 300 seconds and each build below 900 seconds. The final
+test's first launch lacked the portable FFmpeg DLL search path and exited
+0xC0000135; rerun with the official package on child-process PATH passed.
+
+Live side-by-side candidate: NS2 3840x2160/60 MJPEG + WASAPI input, explicit
+output changes took 0.526/0.515 seconds without restarting the process or
+capture input. The user selected system default and changed the Windows
+default output; notification-to-open was 0.517 seconds, preference remained
+system default. One capture configuration and one input start across these
+changes; 60 real frames/s and XeSS 240 SDK submissions/s continued. These
+are local API/log observations, not panel scanout or physical speaker
+measurement. User initially reported no USB-speaker sound, then reported
+that a manual retry seemed to work. No claim of measured audible latency.
+
+The local candidate reuses official 2.0.6 runtime files and has only its
+player executable replaced. Its build disables PS5/Moonlight/Xbox source
+modules and libass; those paths and other hardware were not verified. Only
+documented user-data was migrated, with a separate rollback copy; the
+complete official application remains available. Public contribution is
+source/test/documentation only, with no user data, endpoint IDs, logs,
+media, SDK files or runtime binaries.

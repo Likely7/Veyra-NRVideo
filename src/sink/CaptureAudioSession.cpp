@@ -151,6 +151,11 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                 lastUnderrunFrames=renderer.underrunFrames();lastSilenceFrames=renderer.silenceFrames();starvationSince=0;
                 {std::lock_guard lock(mutex);state.error.clear();state.outputRecovering=false;state.inputChannels=layout.channels;state.inputChannelMask=layout.mask;const auto output=renderer.outputFormat();state.outputChannels=output.channels;state.outputChannelMask=output.mask;pendingReset=true;}
             }
+            // Preference changes invalidate the renderer's endpoint generation
+            // without making WASAPI event waits or buffer fills fail. Observe
+            // that state on the audio owner, just as file playback does, so
+            // capture/streaming can reopen the selected output without a restart.
+            if(FAILED(renderer.lastError())){if(!recoverEndpoint())break;continue;}
             renderer.setGain(gain);
             // Wait before collecting callbacks, so PCM arriving during the
             // endpoint wait is available for this fill instead of padded silence.
