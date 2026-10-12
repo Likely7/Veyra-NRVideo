@@ -103,6 +103,29 @@ struct SampleAspectRatio {
     uint32_t den = 1;
 };
 
+// Dolby Vision profile 5 ("IPT-PQ-C2"): the base layer is not BT.2020 YCbCr, so
+// the usual matrix/transfer tags cannot describe it and treating it as HDR10
+// renders a green picture. Only the RPU states how to reach display colour, so
+// the values below are carried per frame from AV_FRAME_DATA_DOVI_METADATA and
+// applied by YuvToLinearRgb.hlsl before the normal PQ pipeline takes over.
+// Built by include/veyra/source/DolbyVisionRpu.h, packed by DolbyVisionP5.h.
+struct DolbyVisionP5 {
+    // False leaves every other path byte-identical to the upstream player.
+    bool active = false;
+    // ycc_to_rgb: RPU matrix turning base-layer Y/Cb/Cr (chroma centred on 0.5,
+    // full range) into the PQ-domain RGB that the profile-5 pipeline expects.
+    float yccToRgb[9] = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    // The RPU's rgb_to_lms crosstalk matrix composed with the fixed
+    // Hunt-Pointer-Estevez LMS -> BT.2020 RGB matrix. Both are linear and
+    // adjacent (nothing non-linear sits between them), so one matrix carries
+    // the pair and the shader needs a single multiply.
+    float lmsToRgb[9] = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    // Per-component RPU reshaping curve, projected onto the basis
+    // {1, sqrt(x), x}: curve[c][k] with x the normalised full-range code value.
+    // {0,0,1} is the identity, i.e. "no reshaping".
+    float curve[3][3] = {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}};
+};
+
 // Full ingress color metadata. Assumed flags must be set when a value was
 // derived from a documented default (SD->601, HD SDR->709) rather than the
 // container; the UI surfaces these.
@@ -134,6 +157,8 @@ struct ColorDescription {
     // declarations, not measured frame peaks or dynamic Dolby Vision metadata.
     float hdrMaxCllNits = 0, hdrMaxFallNits = 0, hdrMasteringPeakNits = 0;
     bool scRgb = false; // Explicit WGC FP16 linear BT.709, 1.0 = 80 nits.
+    // Active only for Dolby Vision profile 5 base layers; see DolbyVisionP5.
+    DolbyVisionP5 dolbyVisionP5;
 
     bool isHdrPath() const {
         return scRgb || transfer == TransferFunction::PQ || transfer == TransferFunction::HLG;

@@ -15,6 +15,19 @@ cbuffer YuvParams : register(b0)
     // veyra::pipeline::packColorGradeConstants (five float4s).
     float4 colorRow0; float4 colorRow1; float4 colorRow2;
     float4 colorControls; float4 colorFlags;
+    // Dolby Vision profile 5 (IPT-PQ-C2) base layer: seven float4s appended
+    // after the colour grade, packed by
+    // veyra::pipeline::packDolbyVisionP5Constants. Rows are row-major with one
+    // reshaping term in .w (mirror of include/veyra/pipeline/DolbyVisionP5.h):
+    //   dv0.xyz ycc_to_rgb row0  dv0.w curve[0].x
+    //   dv1.xyz ycc_to_rgb row1  dv1.w curve[0].y
+    //   dv2.xyz ycc_to_rgb row2  dv2.w curve[0].z
+    //   dv3.xyz lms_to_rgb row0  dv3.w curve[1].x
+    //   dv4.xyz lms_to_rgb row1  dv4.w curve[1].y
+    //   dv5.xyz lms_to_rgb row2  dv5.w curve[1].z
+    //   dv6.xyz curve[2]         dv6.w 1 when the conversion is live
+    float4 dv0; float4 dv1; float4 dv2;
+    float4 dv3; float4 dv4; float4 dv5; float4 dv6;
 };
 
 Texture2D<float> lumaPlane : register(t0);   // R8_UNORM or R16_UNORM
@@ -67,6 +80,58 @@ float SrgbDecode(float c)
     return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
 }
 
+// ST2084 EOTF: PQ code value -> absolute luminance, 1.0 = 10000 nits.
+float3 PqToNits(float3 code)
+{
+    const float m1=2610.0/16384.0,m2=2523.0/32.0;
+    float3 p=pow(saturate(code),1.0/m2);
+    return 10000.0*pow(max(p-3424.0/4096.0,0.0)/max(2413.0/128.0-2392.0/128.0*p,1e-6),1.0/m1);
+}
+
+// ST2084 inverse EOTF: absolute luminance -> PQ code value in 0..1.
+float3 NitsToPq(float3 nits)
+{
+    const float m1=2610.0/16384.0,m2=2523.0/32.0;
+    const float3 y=pow(saturate(max(nits,0.0)/10000.0),m1);
+    return pow((0.8359375+18.8515625*y)/(1.0+18.6875*y),m2);
+}
+
+// One RPU reshaping curve, projected on {1, sqrt(x), x} by the host.
+float DvReshape(float3 curve,float x)
+{
+    x=saturate(x);
+    return curve.x+curve.y*sqrt(x)+curve.z*x;
+}
+
+// Dolby Vision profile 5 base layer. A profile-5 base layer is IPT-PQ-C2, not
+// BT.2020 YCbCr, so the ordinary YUV matrix cannot describe it: decoding it as
+// HDR10 is what produces the green picture. Only the RPU states the colour, so
+// this replays the profile-5 chain and returns the PQ-encoded BT.2020 RGB the
+// rest of this shader already knows how to tone-map.
+float3 DoviP5ToPqBt2020(float luma,float2 chroma)
+{
+    // IPT-PQ-C2 is full range by definition; the base-layer range tag is not
+    // consulted here for that reason.
+    const bool sixteen=colorParams0.w>1.5,ten=colorParams0.w>0.5;
+    const float scale=sixteen?65535.0:ten?65535.0/64.0:255.0;
+    const float maximum=sixteen?65535.0:ten?1023.0:255.0;
+    const float3 code=saturate(float3(luma,chroma)*scale/maximum);
+    const float3 curve0=float3(dv0.w,dv1.w,dv2.w);
+    const float3 curve1=float3(dv3.w,dv4.w,dv5.w);
+    const float3 curve2=dv6.xyz;
+    // 1. Per-component RPU reshaping, then centre chroma on 0.5. The reshaped
+    //    values may leave 0..1 - that is what the curve is for - and the matrix
+    //    absorbs the excursion.
+    const float3 ipt=float3(DvReshape(curve0,code.x),
+                            DvReshape(curve1,code.y)-0.5,
+                            DvReshape(curve2,code.z)-0.5);
+    // 2. IPT carried as Y/Cb/Cr -> PQ-domain RGB, using the RPU's own matrix.
+    const float3 pq=saturate(mul(float3x3(dv0.xyz,dv1.xyz,dv2.xyz),ipt));
+    // 3. Linearise, apply the RPU crosstalk plus the fixed HPE LMS -> BT.2020
+    //    stage (folded into one matrix on the host), then re-encode.
+    return NitsToPq(mul(float3x3(dv3.xyz,dv4.xyz,dv5.xyz),PqToNits(pq)));
+}
+
 float2 ReconstructChroma(uint2 pixel)
 {
     uint location=yuvDimensions.w;
@@ -98,13 +163,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
     const float y = lumaPlane[uint2(dispatchThreadId.x, dispatchThreadId.y)];
     const float2 uv = ReconstructChroma(dispatchThreadId.xy);
-    float3 rgb = YuvToRgb(y, uv);
+    // dv6.w is set only for a Dolby Vision profile-5 base layer whose RPU
+    // supplied its colour; every other source takes the unchanged path.
+    float3 rgb = dv6.w > 0.5 ? DoviP5ToPqBt2020(y, uv) : YuvToRgb(y, uv);
     rgb = saturate(rgb);
     if(colorParams0.z>3.5){
         // ST2084 EOTF to absolute cd/m2, then BT.2020 -> BT.709 linear.
-        const float m1=2610.0/16384.0,m2=2523.0/32.0;
-        float3 p=pow(rgb,1.0/m2);
-        float3 nits=10000.0*pow(max(p-3424.0/4096.0,0.0)/max(2413.0/128.0-2392.0/128.0*p,1e-6),1.0/m1);
+        float3 nits=PqToNits(rgb);
         if(colorParams0.z>4.5){
             // BT.2100 HLG reference display: 1000-nit peak, gamma 1.2,
             // ideal black. HLG scene light needs its OOTF before PQ/scRGB.

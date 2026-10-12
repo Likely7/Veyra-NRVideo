@@ -678,6 +678,18 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_options(veyra_decode_profile_probe PRIVATE /utf-8 /WX-)
   target_compile_definitions(veyra_decode_profile_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
   target_link_libraries(veyra_decode_profile_probe PRIVATE d3d12 dxgi dxguid)
+  # Custom (Dolby Vision profile 5): runs the shipped YuvToLinearRgb.dxil over a
+  # decoded frame with the player's own root constants and dumps the working
+  # signal, so the profile-5 colour conversion can be diffed against an
+  # independent reference decode instead of being taken on trust.
+  add_executable(veyra_dovi_p5_probe tools/dovi_p5_probe/main.cpp)
+  target_compile_features(veyra_dovi_p5_probe PRIVATE cxx_std_20)
+  target_compile_options(veyra_dovi_p5_probe PRIVATE /utf-8 /WX-)
+  target_compile_definitions(veyra_dovi_p5_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE
+    VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
+  target_include_directories(veyra_dovi_p5_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${FFMPEG_INCLUDE_DIRS})
+  target_link_libraries(veyra_dovi_p5_probe PRIVATE d3d12 dxgi dxguid ${FFMPEG_LIBRARIES})
+  add_dependencies(veyra_dovi_p5_probe veyra_shader_yuv_to_rgb)
   add_executable(veyra_fsr_probe tools/fsr_probe/main.cpp)
   add_executable(veyra_fsr_dispatch_tests tests/integration/FsrFgDispatchTests.cpp)
   target_compile_features(veyra_fsr_dispatch_tests PRIVATE cxx_std_20)
