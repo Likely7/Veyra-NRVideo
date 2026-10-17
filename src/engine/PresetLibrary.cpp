@@ -1084,7 +1084,14 @@ bool ChainSessionStore::save(const ChainSession& session) {
     }
     std::error_code ec;
     if (!path_.parent_path().empty()) std::filesystem::create_directories(path_.parent_path(), ec);
-    if (ec) { error_ = L"模式会话目录无法创建"; return false; }
+    if (ec) {
+        // Put the path and the OS reason into the message that already reaches the
+        // log: "cannot create directory" alone gives nobody anything to act on.
+        const std::string reason = ec.message();
+        error_ = std::format(L"模式会话目录无法创建: {} ({}）", path_.wstring(),
+            std::wstring(reason.begin(), reason.end()));
+        return false;
+    }
     const auto temporary = std::filesystem::path(path_).concat(L".tmp");
     bool written = false;
     {
