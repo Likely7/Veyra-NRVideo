@@ -2623,6 +2623,17 @@ VPage {
                                     onToggled: checked => veyra.doviFollow = checked
                                 }
                             }
+                            VRow {
+                                hintBelow: true
+                                visible: veyra.doviFollow
+                                label: qsTr("参考平均亮度")
+                                hint: qsTr("勾选后，高光起点同时参考每帧的平均亮度：暗场多的片子压得更积极，亮场多的保留更多高光；取消则只看峰值")
+                                VSwitch {
+                                    objectName: "list-hdr-dovi-follow-average"
+                                    checked: veyra.doviFollowAverage
+                                    onToggled: checked => veyra.doviFollowAverage = checked
+                                }
+                            }
                             Text {
                                 Layout.fillWidth: true
                                 visible: veyra.doviFollow && !veyra.hdrCurve

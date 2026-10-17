@@ -41,14 +41,25 @@ inline double pqToNits(double pq) {
 // exactly what "follow the highlights" must never do. It would also breathe,
 // because the frame peak changes every frame.
 inline HdrCurveSettings doviCurveFromLevel1(const pipeline::DoviFrameInfo& dovi,
-                                            const HdrCurveSettings& userCurve) {
+                                            const HdrCurveSettings& userCurve,
+                                            bool useAverage = false,
+                                            double smoothedAvgPq = -1.0) {
     if (!dovi.valid) return userCurve;
     const double peakNits = pqToNits(dovi.maxPq);
     if (!(peakNits > 0.0)) return userCurve;
     HdrCurveSettings out = userCurve;
     // Start the roll-off a little below the frame's own peak so it has headroom to
     // work with, but never below the 100 nit floor the sliders allow.
-    const unsigned start = unsigned(std::lround(peakNits * 0.85));
+    double kneeNits = peakNits * 0.85;
+    if (useAverage) {
+        // libplacebo's st2094_pick_knee uses the scene average rather than the peak:
+        // a dark film's knee moves down (compresses earlier), a bright one moves up.
+        // Keep it bounded so a very dark frame cannot drag the knee into the mids.
+        const double avgPq = smoothedAvgPq >= 0.0 ? smoothedAvgPq : dovi.avgPq;
+        const double avgNits = pqToNits(avgPq);
+        if (avgNits > 0.0) kneeNits = std::max(avgNits * 1.2, kneeNits * 0.6);
+    }
+    const unsigned start = unsigned(std::lround(kneeNits));
     out.highlightStartNits = std::clamp(start, 100u, 2000u);
     // A start the user set below the frame's own knee stays: following may lift the
     // compression later in the frame, never pull it into the mid-tones.

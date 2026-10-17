@@ -315,6 +315,7 @@ class QmlPlayerBridge : public QObject {
     // Custom: follow the Dolby Vision RPU level 1 for the curve's highlight start.
     Q_PROPERTY(bool doviFollow READ doviFollow WRITE setDoviFollow NOTIFY settingsChanged)
     Q_PROPERTY(bool doviP7Compose READ doviP7Compose WRITE setDoviP7Compose NOTIFY settingsChanged)
+    Q_PROPERTY(bool doviFollowAverage READ doviFollowAverage WRITE setDoviFollowAverage NOTIFY settingsChanged)
     // One-click tuning presets (see hdrTuningPresets); "custom" when the sliders
     // no longer match any of them.
     Q_PROPERTY(QString hdrTuningPreset READ hdrTuningPreset NOTIFY settingsChanged)
@@ -893,6 +894,9 @@ public:
     // Custom (P5): composite the profile 7 enhancement layer. Takes effect on the
     // next open (it decides whether the second decoder runs at all).
     bool doviP7Compose() const;
+    // Custom: follow may also use the frame's average brightness for the knee.
+    bool doviFollowAverage() const;
+    void setDoviFollowAverage(bool on);
     void setDoviP7Compose(bool on);
     QVariantMap hdrMetadataParams() const;
     Q_INVOKABLE bool setHdrMetadataParameter(const QString& key, double value);

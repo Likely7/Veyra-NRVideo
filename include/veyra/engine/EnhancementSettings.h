@@ -329,6 +329,9 @@ struct EnhancementSettings {
     // roll-off starts per frame, so the user keeps every other dial. Meaningless
     // while `hdrCurve.enabled` is off, which is why the UI pairs the two.
     bool doviFollow=false;
+    // Custom: also let the frame's average brightness move the knee, the way
+    // libplacebo's st2094_pick_knee does. Off keeps the previous peak-only curve.
+    bool doviFollowAverage=false;
     // Custom (P5): decode and composite the Dolby Vision profile 7 enhancement
     // layer instead of playing the base layer alone. On by default: the source must
     // report profile 7 with an enhancement layer present before this path is entered

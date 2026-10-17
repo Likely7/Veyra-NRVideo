@@ -215,7 +215,24 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // unless the switch is on: the delivered image is unchanged otherwise.
     // VEYRA_DOVI_FOLLOW stays as a test override while the switch is checked.
     const bool followDovi=latestDovi_.valid&&(graph.doviFollow()||std::getenv("VEYRA_DOVI_FOLLOW")!=nullptr);
-    const HdrCurveSettings effective=followDovi?engine::doviCurveFromLevel1(latestDovi_,hdrCurve):hdrCurve;
+    // Average brightness, smoothed over ~0.5 s so the knee does not breathe with
+    // every frame. A large jump (scene change) resets the window instead of
+    // dragging the old value along.
+    double smoothedAvgPq=-1.0;
+    if(followDovi&&latestDovi_.valid){
+        const double avgPq=latestDovi_.avgPq;
+        if(avgPq>0.0){
+            constexpr int kWindow=12;
+            if(avgSumCount_>0&&(avgPq>0.0&&(avgSum_/double(avgSumCount_))>0.0)){
+                const double prevAvg=avgSum_/double(avgSumCount_);
+                if(prevAvg>0.0&&(avgPq>prevAvg*3.0||avgPq<prevAvg/3.0)){avgSum_=0.0;avgSumCount_=0;}
+            }
+            avgSum_+=avgPq;++avgSumCount_;
+            if(avgSumCount_>kWindow){avgSum_*=0.5;avgSumCount_/=2;}
+            smoothedAvgPq=avgSum_/double(avgSumCount_);
+        }
+    }
+    const HdrCurveSettings effective=followDovi?engine::doviCurveFromLevel1(latestDovi_,hdrCurve,graph.doviFollowAverage(),smoothedAvgPq):hdrCurve;
     // The trace is its own gate: a user who turns the switch on must not get a
     // line per frame pair for the length of a film. It also records the switch
     // itself, so "RPU present but the setting did not arrive" is diagnosable.

@@ -2388,6 +2388,27 @@
    "ja": "{}GPU リセット {} 回、{} 分割で書き出し再エンコードなしで結合しました"
   },
   {
+   "zh": "。RTX Video HDR 未能启动：可在设置里关闭该效果，或更新 NVIDIA 驱动",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "。RTX Video HDR 未能啟動：可在設定裡關閉該效果，或更新 NVIDIA 驅動",
+   "en": ". RTX Video HDR could not start: turn the effect off in settings, or update the NVIDIA driver",
+   "ja": "。RTX Video HDR を開始できませんでした。設定でこの効果をオフにするか、NVIDIA ドライバーを更新してください"
+  },
+  {
+   "zh": "。光流后端不可用：可在设置里改用 AMD FidelityFX 或关闭相关效果",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "。光流後端不可用：可在設定裡改用 AMD FidelityFX 或關閉相關效果",
+   "en": ". The optical-flow backend is unavailable: switch to AMD FidelityFX in settings, or disable the dependent effects",
+   "ja": "。オプティカルフローのバックエンドを利用できません。設定で AMD FidelityFX に切り替えるか、関連する効果をオフにしてください"
+  },
+  {
+   "zh": "。常见原因是硬件解码器分配内存失败（4K 片源居多）：关闭后重开播放器可恢复；若反复出现，可在 设置→播放 把解码改成「软件」",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "。常見原因是硬體解碼器配置記憶體失敗（4K 片源居多）：關閉後重開播放器可恢復；若反覆出現，可在 設定→播放 把解碼改成「軟體」",
+   "en": ". The usual cause is the hardware decoder failing to allocate memory (mostly 4K sources): close and reopen the player to recover; if it keeps happening, set decode to software under Settings → Playback",
+   "ja": "。通常の原因はハードウェアデコーダーのメモリ確保失敗です（4K 映像に多い）。プレーヤーを閉じて開き直すと回復します。繰り返す場合は 設定→再生 でデコードを「ソフトウェア」に変更してください"
+  },
+  {
    "zh": "一键推荐",
    "src": "qml/ProPage.qml",
    "zh-TW": "一鍵推薦",
@@ -4342,6 +4363,13 @@
    "ja": "ファイルを読み込む…"
   },
   {
+   "zh": "勾选后，高光起点同时参考每帧的平均亮度：暗场多的片子压得更积极，亮场多的保留更多高光；取消则只看峰值",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "勾選後，高光起點同時參考每幀的平均亮度：暗場多的片子壓得更積極，亮場多的保留更多高光；取消則只看峰值",
+   "en": "When on, the highlight start also considers each frame’s average brightness: dark films compress earlier, bright ones keep more highlights. Off uses the peak only.",
+   "ja": "オンにすると、ハイライト開始点が各フレームの平均輝度も参照します。暗い作品はより積極的に圧縮し、明るい作品はハイライトを多く残します。オフではピークのみを使用します。"
+  },
+  {
    "zh": "包含",
    "src": "qml/DialogHost.qml",
    "zh-TW": "包含",
@@ -4613,6 +4641,13 @@
    "zh-TW": "參數曲線",
    "en": "Parametric curve",
    "ja": "パラメトリックカーブ"
+  },
+  {
+   "zh": "参考平均亮度",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "參考平均亮度",
+   "en": "Use average brightness",
+   "ja": "平均輝度を参照"
   },
   {
    "zh": "双层",
@@ -8227,11 +8262,11 @@
    "ja": "プロジェクトページを開く機能はまだありません"
   },
   {
-   "zh": "执行失败；请查看日志",
+   "zh": "执行失败",
    "src": "src/engine/EngineController.cpp",
-   "zh-TW": "執行失敗；請查看日誌",
-   "en": "Execution failed; see the log",
-   "ja": "実行に失敗しました。ログを確認してください"
+   "zh-TW": "執行失敗",
+   "en": " failed",
+   "ja": "の実行に失敗しました"
   },
   {
    "zh": "执行计划尺寸或超分目标非法",
@@ -10356,11 +10391,11 @@
    "ja": "エンジンがモードセッションを受け付けなかったため、初期状態のままです"
   },
   {
-   "zh": "模式会话目录无法创建",
+   "zh": "模式会话目录无法创建: {} ({}）",
    "src": "src/engine/PresetLibrary.cpp",
-   "zh-TW": "模式會話目錄無法建立",
-   "en": "The mode session folder cannot be created",
-   "ja": "モードセッションのフォルダーを作成できません"
+   "zh-TW": "模式工作階段目錄無法建立: {} ({}）",
+   "en": "Cannot create the mode session directory: {} ({})",
+   "ja": "モードセッションのディレクトリを作成できません: {} ({})"
   },
   {
    "zh": "模式会话编码校验失败，未保存",
@@ -17081,6 +17116,13 @@
    "zh-TW": "；本次匯出使用 AMD FSR 超解析",
    "en": "; this export uses AMD FSR super resolution",
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
+  },
+  {
+   "zh": "；详细原因见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "；詳細原因見日誌",
+   "en": "; see the log for details",
+   "ja": "。詳細はログを参照してください"
   },
   {
    "zh": "；默认“实时”，同时运行游戏或其他重负载程序变慢时可改为“高”或“普通”",

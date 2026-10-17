@@ -5267,6 +5267,10 @@ void QmlPlayerBridge::setDoviP7Compose(bool on){
     commitHdrTuning(std::move(s));
 }
 bool QmlPlayerBridge::doviFollow()const{return settings().doviFollow;}
+bool QmlPlayerBridge::doviFollowAverage()const{return settings().doviFollowAverage;}
+void QmlPlayerBridge::setDoviFollowAverage(bool on){
+    auto s=settings();if(s.doviFollowAverage==on)return;s.doviFollowAverage=on;
+    commitHdrTuning(std::move(s));}
 void QmlPlayerBridge::setDoviFollow(bool on){
     auto s=settings();if(s.doviFollow==on)return;s.doviFollow=on;
     // The shell preference is the global fallback: it re-applies at the next start
