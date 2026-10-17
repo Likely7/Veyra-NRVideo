@@ -2269,7 +2269,29 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             finishReset(diagnostics::ResetOutcome::RolledBack);
                             std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=previous;snapshot_.status=L"参数执行失败，已整套回滚";transaction=false;
                         }else{if(!stop_)status(L"参数回滚失败，已停止",true);break;}
-                    }else{status(std::wstring(backendFailureName(failedComponent))+L"执行失败；请查看日志",true);break;}
+                    }else{
+                        // Custom: a bare "failed; see the log" leaves the user with
+                        // nothing to do. Name the likely cause and the action that
+                        // actually recovers it, per backend.
+                        std::wstring advice;
+                        switch(failedComponent){
+                        case FailedBackend::Infrastructure:
+                            advice=L"。常见原因是硬件解码器分配内存失败（4K 片源居多）：关闭后重开播放器可恢复；"
+                                   L"若反复出现，可在 设置→播放 把解码改成「软件」";
+                            break;
+                        case FailedBackend::VideoHdr:
+                            advice=L"。RTX Video HDR 未能启动：可在设置里关闭该效果，或更新 NVIDIA 驱动";
+                            break;
+                        case FailedBackend::OpticalFlow:
+                            advice=L"。光流后端不可用：可在设置里改用 AMD FidelityFX 或关闭相关效果";
+                            break;
+                        default:
+                            advice=L"；详细原因见日志";
+                            break;
+                        }
+                        status(std::wstring(backendFailureName(failedComponent))+L"执行失败"+advice,true);
+                        break;
+                    }
                 }
                 if(veyra::log::verboseFrameLogs())veyra::log::info("source-identity",std::format("source={} totalRead={} graphProcessed={} cached={} revision={} nvofStandalone={}",pkt.sequence,sourceFrames,frames+1,rereadCached,options.settings.revision,gd.enableNvofStandalone));
                 presenter.sourceProcessed(out.batch.identity);
