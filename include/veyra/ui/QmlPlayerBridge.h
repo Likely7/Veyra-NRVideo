@@ -312,8 +312,6 @@ class QmlPlayerBridge : public QObject {
     // Custom: static HDR output tuning (globals, every field live).
     Q_PROPERTY(bool hdrCurve READ hdrCurve WRITE setHdrCurve NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap hdrCurveParams READ hdrCurveParams NOTIFY settingsChanged)
-    Q_PROPERTY(bool hdrMetadataEnabled READ hdrMetadataEnabled WRITE setHdrMetadataEnabled NOTIFY settingsChanged)
-    Q_PROPERTY(QVariantMap hdrMetadataParams READ hdrMetadataParams NOTIFY settingsChanged)
     // One-click tuning presets (see hdrTuningPresets); "custom" when the sliders
     // no longer match any of them.
     Q_PROPERTY(QString hdrTuningPreset READ hdrTuningPreset NOTIFY settingsChanged)
@@ -886,10 +884,6 @@ public:
     void setHdrCurve(bool enabled);
     QVariantMap hdrCurveParams() const;
     Q_INVOKABLE bool setHdrCurveParameter(const QString& key, double value);
-    bool hdrMetadataEnabled() const;
-    void setHdrMetadataEnabled(bool enabled);
-    QVariantMap hdrMetadataParams() const;
-    Q_INVOKABLE bool setHdrMetadataParameter(const QString& key, double value);
     // Commit + re-assert the tuning in the places the session capture reads, so a
     // change takes effect and survives a restart (the same trap the earlier
     // per-scene brightness block hit: a plain commit left it out of the pending

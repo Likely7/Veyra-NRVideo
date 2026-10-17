@@ -547,20 +547,6 @@
    "ja": "0 = システムが報告する値を自動使用"
   },
   {
-   "zh": "0 = 跟随片源",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "0 = 跟隨片源",
-   "en": "0 = follow the source",
-   "ja": "0 = ソースに追従"
-  },
-  {
-   "zh": "0 = 跟随片源；实际效果取决于显示设备",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "0 = 跟隨片源；實際效果取決於顯示設備",
-   "en": "0 = follow the source; results depend on the display",
-   "ja": "0 = ソースに追従。効果はディスプレイによって異なります"
-  },
-  {
    "zh": "0 保留原始变化；1 按当前风格完整纠偏",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "0 保留原始變化；1 按目前風格完整糾偏",
@@ -1149,13 +1135,6 @@
    "ja": "HDR 輝度カーブ"
   },
   {
-   "zh": "HDR 元数据",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "HDR 中繼資料",
-   "en": "HDR metadata",
-   "ja": "HDR メタデータ"
-  },
-  {
    "zh": "HDR 片源也按 SDR 显示；与采集卡的“转为 SDR 显示”是同一设置",
    "src": "qml/ProPage.qml",
    "zh-TW": "HDR 片源也按 SDR 顯示；與擷取卡的“轉為 SDR 顯示”是同一設定",
@@ -1189,20 +1168,6 @@
    "zh-TW": "HDR 需要 PS5 實際輸出 HDR 且 Windows HDR 開啟",
    "en": "HDR needs the PS5 to actually output HDR and Windows HDR to be on",
    "ja": "HDR には PS5 が実際に HDR を出力し、Windows の HDR がオンである必要があります"
-  },
-  {
-   "zh": "HDR10 提示；系统或显示器可能忽略",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "HDR10 提示；系統或顯示器可能忽略",
-   "en": "HDR10 hint; Windows or the display may ignore it",
-   "ja": "HDR10 のヒント。OS やディスプレイが無視する場合があります"
-  },
-  {
-   "zh": "HDR10 提示；系统或显示器可能忽略，让它的动态色调映射有依据。",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "HDR10 提示；系統或顯示器可能忽略，讓其動態色調映射有依據。",
-   "en": "HDR10 hints for dynamic tone mapping; the system or display may ignore them.",
-   "ja": "HDR10 のトーンマッピング用ヒントです。システムやディスプレイに無視される場合があります。"
   },
   {
    "zh": "HDR10 默认；补帧固定 HDR10，需要 Windows HDR 开启",
@@ -6869,13 +6834,6 @@
    "ja": "有効"
   },
   {
-   "zh": "已启用（HDR10）",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "已啟用（HDR10）",
-   "en": "Enabled (HDR10)",
-   "ja": "有効（HDR10）"
-  },
-  {
    "zh": "已和主机配对",
    "src": "src/ui/MoonlightModel.cpp",
    "zh-TW": "已和主機配對",
@@ -9698,13 +9656,6 @@
    "ja": "カーブにハード上限が設定されていません"
   },
   {
-   "zh": "曲线生效时会约束内容亮度提示；SDR 输入默认不发送，手动填写除外。",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "曲線生效時會約束內容亮度提示；SDR 輸入預設不發送，手動填寫除外。",
-   "en": "The curve bounds content-light hints. SDR input sends none by default, unless entered manually.",
-   "ja": "カーブに応じてコンテンツ輝度のヒントを制限します。SDR 入力では手動指定がない限り送信しません。"
-  },
-  {
    "zh": "更改…",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "更改…",
@@ -10844,13 +10795,6 @@
    "zh-TW": "殘差",
    "en": "Residual",
    "ja": "残差"
-  },
-  {
-   "zh": "母版峰值 (nit)",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "母版峰值 (nit)",
-   "en": "Mastering peak (nit)",
-   "ja": "マスタリングピーク (nit)"
   },
   {
    "zh": "母版峰值偏低（老片 / 转制片）",
