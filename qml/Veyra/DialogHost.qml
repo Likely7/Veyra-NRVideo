@@ -764,7 +764,7 @@ Item {
                     spacing: 6
                     VButton { text: qsTr("登录 PSN"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnLogin() }
                     VButton { text: qsTr("提交登录结果"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnComplete() }
-                    VButton { text: qsTr("退出"); ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.psnReady; onClicked: veyra.ps5PsnForget() }
+                    VButton { text: qsTr("退出"); ghost: true; enabled: !veyra.ps5.busy && !!veyra.ps5.psnReady; onClicked: veyra.ps5PsnForget() }
                 }
             }
         }
@@ -1216,7 +1216,7 @@ Item {
                     spacing: 6
                     VSpinner { visible: xbDialog.st.busy === true; Layout.alignment: Qt.AlignVCenter }
                     VButton { objectName: "xbox-signin"; visible: !xbDialog.st.signedIn; text: qsTr("登录"); primary: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signIn() }
-                    VButton { visible: xbDialog.st.signedIn; text: qsTr("退出登录"); ghost: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signOut() }
+                    VButton { visible: !!xbDialog.st.signedIn; text: qsTr("退出登录"); ghost: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signOut() }
                 }
             }
         }
