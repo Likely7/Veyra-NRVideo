@@ -42,6 +42,11 @@ public:
         unsigned fullFrameNits = 0;   // sustained full-screen
         double minNits = 0.0;         // black level
         bool valid = false;
+        // False when the numbers look like the panel's EDID ceiling rather than a
+        // measurement: full-scale peak together with an idealised (near zero) black.
+        // Almost every display answers 10000/0.000 here, and scaling a curve against
+        // that number pushes its highlight start out of reach of real content.
+        bool plausible = false;
     };
     static DisplayPeakInfo queryDisplayPeak(HWND);
     PresentSink() = default;
