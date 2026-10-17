@@ -324,6 +324,20 @@ struct EnhancementSettings {
     // live: the curve reaches the present blit and the metadata the display.
     HdrCurveSettings hdrCurve;
     HdrMetadataSettings hdrMetadata;
+    // Custom: follow the Dolby Vision RPU level 1 for the highlight start. Live,
+    // and deliberately a separate switch: it only moves where the curve's
+    // roll-off starts per frame, so the user keeps every other dial. Meaningless
+    // while `hdrCurve.enabled` is off, which is why the UI pairs the two.
+    bool doviFollow=false;
+    // Custom (P5): decode and composite the Dolby Vision profile 7 enhancement
+    // layer instead of playing the base layer alone. On by default: the source must
+    // report profile 7 with an enhancement layer present before this path is entered
+    // at all, so ordinary material costs nothing and needs no decision. Turning it
+    // off forces base-layer-only playback for every source.
+    // Off until the enhancement layer can be paired with its own base frame; with
+    // the decoding lag measured on the FEL sample no frame currently matches, so an
+    // on default would promise something that does not happen.
+    bool doviP7Compose=false;
     bool useHdrPreview(bool hdrInput,bool hdrDisplayActive)const{return (hdrInput||videoHdr.enabled)&&hdrDisplayActive&&!forceSdrPreview;}
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
     uint32_t videoSrQuality=0; // 0 DLSS SR; 1–4 RTX Video SR

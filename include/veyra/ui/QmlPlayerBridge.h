@@ -312,6 +312,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantMap hdrCurveParams READ hdrCurveParams NOTIFY settingsChanged)
     Q_PROPERTY(bool hdrMetadataEnabled READ hdrMetadataEnabled WRITE setHdrMetadataEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap hdrMetadataParams READ hdrMetadataParams NOTIFY settingsChanged)
+    // Custom: follow the Dolby Vision RPU level 1 for the curve's highlight start.
+    Q_PROPERTY(bool doviFollow READ doviFollow WRITE setDoviFollow NOTIFY settingsChanged)
+    Q_PROPERTY(bool doviP7Compose READ doviP7Compose WRITE setDoviP7Compose NOTIFY settingsChanged)
     // One-click tuning presets (see hdrTuningPresets); "custom" when the sliders
     // no longer match any of them.
     Q_PROPERTY(QString hdrTuningPreset READ hdrTuningPreset NOTIFY settingsChanged)
@@ -884,6 +887,13 @@ public:
     Q_INVOKABLE bool setHdrCurveParameter(const QString& key, double value);
     bool hdrMetadataEnabled() const;
     void setHdrMetadataEnabled(bool enabled);
+    // Custom: Dolby Vision level 1 follow. Live; only meaningful with the curve on.
+    bool doviFollow() const;
+    void setDoviFollow(bool on);
+    // Custom (P5): composite the profile 7 enhancement layer. Takes effect on the
+    // next open (it decides whether the second decoder runs at all).
+    bool doviP7Compose() const;
+    void setDoviP7Compose(bool on);
     QVariantMap hdrMetadataParams() const;
     Q_INVOKABLE bool setHdrMetadataParameter(const QString& key, double value);
     // Commit + re-assert the tuning in the places the session capture reads, so a

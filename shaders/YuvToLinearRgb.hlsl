@@ -11,15 +11,32 @@ cbuffer YuvParams : register(b0)
     float4 colorParams0; // x=range (0 full, 1 limited, 2 limited luma/full chroma) y=matrix z=transfer w=bit depth class
     uint4 yuvDimensions; // x=width y=height z=bit0 nativeHDR, bit1 BT2020 primaries; w=chroma location
     float4 toneMapParams; // x=validated source peak nits, y=SDR target peak nits
+                          // Custom: z=exposure in EV, w=shoulder (1.0 = the
+                          // previous fixed knee). z/w were unused before.
     // Colour grade (plan v4): appended after the existing constants, packed by
     // veyra::pipeline::packColorGradeConstants (five float4s).
     float4 colorRow0; float4 colorRow1; float4 colorRow2;
     float4 colorControls; float4 colorFlags;
+    // Dolby Vision profile 5 (IPT-PQ-C2) base layer: seven float4s appended
+    // after the colour grade, packed by
+    // veyra::pipeline::packDolbyVisionP5Constants. Rows are row-major with one
+    // reshaping term in .w (mirror of include/veyra/pipeline/DolbyVisionP5.h):
+    //   dv0.xyz ycc_to_rgb row0  dv0.w curve[0].x
+    //   dv1.xyz ycc_to_rgb row1  dv1.w curve[0].y
+    //   dv2.xyz ycc_to_rgb row2  dv2.w curve[0].z
+    //   dv3.xyz lms_to_rgb row0  dv3.w curve[1].x
+    //   dv4.xyz lms_to_rgb row1  dv4.w curve[1].y
+    //   dv5.xyz lms_to_rgb row2  dv5.w curve[1].z
+    //   dv6.xyz curve[2]         dv6.w 1 when the conversion is live
+    float4 dv0; float4 dv1; float4 dv2;
+    float4 dv3; float4 dv4; float4 dv5; float4 dv6;
 };
 
 Texture2D<float> lumaPlane : register(t0);   // R8_UNORM or R16_UNORM
 Texture2D<float2> chromaPlane : register(t1); // R8G8_UNORM or R16G16_UNORM
 Texture2D<float2> chromaPlane2 : register(t2); // second chroma view (unused for NV12; reserved)
+// Custom (P7): enhancement layer luma, integer samples, half resolution per axis.
+Texture2D<uint> elLumaPlane : register(t12);
 RWTexture2D<float4> linearRgb : register(u0);
 
 float ExpandLimited(float c)
@@ -70,6 +87,58 @@ float SrgbDecode(float c)
     return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
 }
 
+// ST2084 EOTF: PQ code value -> absolute luminance, 1.0 = 10000 nits.
+float3 PqToNits(float3 code)
+{
+    const float m1=2610.0/16384.0,m2=2523.0/32.0;
+    float3 p=pow(saturate(code),1.0/m2);
+    return 10000.0*pow(max(p-3424.0/4096.0,0.0)/max(2413.0/128.0-2392.0/128.0*p,1e-6),1.0/m1);
+}
+
+// ST2084 inverse EOTF: absolute luminance -> PQ code value in 0..1.
+float3 NitsToPq(float3 nits)
+{
+    const float m1=2610.0/16384.0,m2=2523.0/32.0;
+    const float3 y=pow(saturate(max(nits,0.0)/10000.0),m1);
+    return pow((0.8359375+18.8515625*y)/(1.0+18.6875*y),m2);
+}
+
+// One RPU reshaping curve, projected on {1, sqrt(x), x} by the host.
+float DvReshape(float3 curve,float x)
+{
+    x=saturate(x);
+    return curve.x+curve.y*sqrt(x)+curve.z*x;
+}
+
+// Dolby Vision profile 5 base layer. A profile-5 base layer is IPT-PQ-C2, not
+// BT.2020 YCbCr, so the ordinary YUV matrix cannot describe it: decoding it as
+// HDR10 is what produces the green picture. Only the RPU states the colour, so
+// this replays the profile-5 chain and returns the PQ-encoded BT.2020 RGB the
+// rest of this shader already knows how to tone-map.
+float3 DoviP5ToPqBt2020(float luma,float2 chroma)
+{
+    // IPT-PQ-C2 is full range by definition; the base-layer range tag is not
+    // consulted here for that reason.
+    const bool sixteen=colorParams0.w>1.5,ten=colorParams0.w>0.5;
+    const float scale=sixteen?65535.0:ten?65535.0/64.0:255.0;
+    const float maximum=sixteen?65535.0:ten?1023.0:255.0;
+    const float3 code=saturate(float3(luma,chroma)*scale/maximum);
+    const float3 curve0=float3(dv0.w,dv1.w,dv2.w);
+    const float3 curve1=float3(dv3.w,dv4.w,dv5.w);
+    const float3 curve2=dv6.xyz;
+    // 1. Per-component RPU reshaping, then centre chroma on 0.5. The reshaped
+    //    values may leave 0..1 - that is what the curve is for - and the matrix
+    //    absorbs the excursion.
+    const float3 ipt=float3(DvReshape(curve0,code.x),
+                            DvReshape(curve1,code.y)-0.5,
+                            DvReshape(curve2,code.z)-0.5);
+    // 2. IPT carried as Y/Cb/Cr -> PQ-domain RGB, using the RPU's own matrix.
+    const float3 pq=saturate(mul(float3x3(dv0.xyz,dv1.xyz,dv2.xyz),ipt));
+    // 3. Linearise, apply the RPU crosstalk plus the fixed HPE LMS -> BT.2020
+    //    stage (folded into one matrix on the host), then re-encode.
+    return NitsToPq(mul(float3x3(dv3.xyz,dv4.xyz,dv5.xyz),PqToNits(pq)));
+}
+
 float2 ReconstructChroma(uint2 pixel)
 {
     uint location=yuvDimensions.w;
@@ -93,6 +162,56 @@ float2 ReconstructChroma(uint2 pixel)
     return lerp(lerp(a,b,fraction.x),lerp(c,d,fraction.x),fraction.y);
 }
 
+
+// Custom (P7): ETSI GS CCM 001 5.4.3 luma reconstruction, mirroring
+// veyra::engine::doviComposeLumaSample (which is unit tested).
+//   dv0 = (nlqOffset, nlqSlope, nlqThreshold, inMax)  dv1 = (coefLog2Denom, elBitDepth, outBitDepth, 0)
+//   dv2 = (elWidth, elHeight, 0, 0)                   dv6.w == 2 when live
+float SampleElLuma(float2 pos, int2 elSize)
+{
+    const float2 texel = pos - 0.5;
+    const int2 base = int2(floor(texel));
+    const float2 f = texel - floor(texel);
+    const int2 hi = elSize - 1;
+    const int2 c0 = clamp(base, int2(0, 0), hi);
+    const int2 c1 = clamp(base + int2(1, 0), int2(0, 0), hi);
+    const int2 c2 = clamp(base + int2(0, 1), int2(0, 0), hi);
+    const int2 c3 = clamp(base + int2(1, 1), int2(0, 0), hi);
+    const float a = float(elLumaPlane.Load(int3(c0, 0)));
+    const float b = float(elLumaPlane.Load(int3(c1, 0)));
+    const float c = float(elLumaPlane.Load(int3(c2, 0)));
+    const float d = float(elLumaPlane.Load(int3(c3, 0)));
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+
+float ReconstructLumaP7(float y, uint2 tid, out int residualOut)
+{
+    const int elBitDepth = int(dv1.y + 0.5);
+    const int outBitDepth = int(dv1.z + 0.5);
+    const int2 elSize = int2(dv2.xy + 0.5);
+    const float2 pos = float2(tid) * float2(elSize) / float2(yuvDimensions.xy);
+    const int e = int(round(SampleElLuma(pos, elSize)));
+    const int blValue = int(round(y * 1023.0));
+    int residual = 0;
+    int rr = e - int(dv0.x + 0.5);
+    if (rr != 0) {
+        const int sgn = rr < 0 ? -1 : 1;
+        rr = rr * 2 - sgn;
+        rr = rr << (10 - elBitDepth);
+        int dq = rr * int(dv0.y + 0.5);
+        dq += (int(dv0.z + 0.5) << (10 - elBitDepth + 1)) * sgn;
+        const int limit = int(dv0.w + 0.5) << (10 - elBitDepth + 1);
+        dq = clamp(dq, -limit, limit);
+        residual = dq >> (int(dv1.x + 0.5) - 5 - elBitDepth);
+    }
+    residualOut = residual;
+    const int v = blValue << 6;                     // identity inverse mapping
+    int hh = v + residual + (1 << (15 - outBitDepth));
+    hh = hh >> (16 - outBitDepth);
+    const int maxOut = (1 << outBitDepth) - 1;
+    return float(clamp(hh, 0, maxOut)) / float(maxOut);
+}
+
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
@@ -101,13 +220,27 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
     const float y = lumaPlane[uint2(dispatchThreadId.x, dispatchThreadId.y)];
     const float2 uv = ReconstructChroma(dispatchThreadId.xy);
-    float3 rgb = YuvToRgb(y, uv);
+    // Custom (P7): dv6.w == 2 rebuilds the 12-bit signal from base + enhancement
+    // before the colour conversion; dv6.w == 1 is the profile 5 conversion.
+    // dv6.w == 2 reconstructs; dv6.w == 3 reconstructs and shows the gap instead.
+    const bool p7Dump = abs(dv6.w - 3.0) < 0.5;
+    const bool p7Live = p7Dump || abs(dv6.w - 2.0) < 0.5;
+    int elResidual = 0;
+    const float luma = p7Live ? ReconstructLumaP7(y, dispatchThreadId.xy, elResidual) : y;
+    float3 rgb = abs(dv6.w - 1.0) < 0.5 ? DoviP5ToPqBt2020(luma, uv) : YuvToRgb(luma, uv);
+    // Custom (P7) diagnostic: showing the gap between the reconstructed luma and
+    // the base layer proves the enhancement layer took part; a frame without one
+    // renders pure black here.
+    if (p7Dump) {
+        // The residual itself: a frame without an enhancement layer is pure black,
+        // one with it lights up where the enhancement layer acts.
+        const float el = saturate(abs(float(elResidual)) / 400.0);
+        rgb = float3(el, el, el);
+    }
     rgb = saturate(rgb);
     if(colorParams0.z>3.5){
         // ST2084 EOTF to absolute cd/m2, then BT.2020 -> BT.709 linear.
-        const float m1=2610.0/16384.0,m2=2523.0/32.0;
-        float3 p=pow(rgb,1.0/m2);
-        float3 nits=10000.0*pow(max(p-3424.0/4096.0,0.0)/max(2413.0/128.0-2392.0/128.0*p,1e-6),1.0/m1);
+        float3 nits=PqToNits(rgb);
         if(colorParams0.z>4.5){
             // BT.2100 HLG reference display: 1000-nit peak, gamma 1.2,
             // ideal black. HLG scene light needs its OOTF before PQ/scRGB.
@@ -115,6 +248,28 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             nits=1000.0*scene*pow(max(dot(scene,float3(.2627,.6780,.0593)),0),.2);
         }
         float3 linear709=mul(float3x3(1.660491,-0.587641,-0.072850,-0.124550,1.132900,-0.008349,-0.018151,-0.100579,1.118730),nits);
+        // Custom: per-scene HDR brightness management, HDR-output path only. The
+        // graph measures the scene from the luma histogram it already keeps and
+        // packs the map into the two spare toneMapParams lanes: z holds the gain in
+        // 1/4096 units in its low half and the source peak in nits in its high
+        // half, w holds the target peak in nits in its high half and 1 in the low
+        // half while the map is live. Packed because this pass already uses 60 of
+        // the 64 root constants D3D12 allows next to its three descriptor tables.
+        if((yuvDimensions.z&1)!=0){
+            const uint packedGain=asuint(toneMapParams.z),packedPeak=asuint(toneMapParams.w);
+            if((packedPeak&0xFFFFu)==1u){
+                const float sceneGain=float(packedGain&0xFFFFu)/4096.0;
+                const float sceneTargetPeak=float(packedPeak>>16);
+                const float sceneSourcePeak=max(float(packedGain>>16),sceneTargetPeak*1.001);
+                const float3 gained=linear709*sceneGain;
+                const float sceneY=dot(gained,float3(.212639,.715169,.072192));
+                // Reuse the verified BT.2390 EETF. ToneLuminance returns the mapped
+                // luminance normalised to the target peak, so scaling it back by the
+                // target keeps absolute nits for the scRGB working space.
+                const float mapped=ToneLuminance(max(sceneY,0.0),sceneSourcePeak,sceneTargetPeak)*sceneTargetPeak;
+                linear709=gained*clamp(mapped/max(sceneY,0.05),0.0,4.0);
+            }
+        }
         // Grade in the normalised domain: HDR is referenced to the BT.2408
         // 203 cd/m2 SDR reference white; SDR paths below are already 0..1.
         if(colorFlags.x>0.5){ColorGradeParams grade={colorRow0,colorRow1,colorRow2,colorControls,colorFlags};linear709=ColorGradeApplyWithFlags(linear709/203.0,grade)*203.0;}

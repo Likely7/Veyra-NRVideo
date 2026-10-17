@@ -253,6 +253,13 @@
    "ja": " · バイパス"
   },
   {
+   "zh": " · 最亮 %1 nit",
+   "src": "qml/ProPage.qml",
+   "zh-TW": " · 最亮 %1 nit",
+   "en": " · peak %1 nit",
+   "ja": " · 最大 %1 nit"
+  },
+  {
    "zh": " · 校准中",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": " · 校準中",
@@ -398,6 +405,13 @@
    "zh-TW": " 調色實例 {} LUT 未載入：{}；其他調色繼續。",
    "en": " color instance {} LUT not loaded: {}; the other color adjustments continue.",
    "ja": " カラー調整 {} の LUT を読み込めません：{}。他のカラー調整は続行します。"
+  },
+  {
+   "zh": " 输出，增强层/RPU 动态元数据不参与输出）",
+   "src": "include/veyra/source/DolbyVision.h",
+   "zh-TW": "輸出，增強層/RPU 動態中繼資料不參與輸出）",
+   "en": " output; the enhancement layer and RPU dynamic metadata do not contribute)",
+   "ja": " 出力（エンハンスメントレイヤーと RPU の動的メタデータは出力に寄与しません）"
   },
   {
    "zh": " 阶段=",
@@ -944,6 +958,27 @@
    "zh-TW": "Dolby / DTS 位流",
    "en": "Dolby / DTS bitstream",
    "ja": "Dolby / DTS ビットストリーム"
+  },
+  {
+   "zh": "Dolby Vision P5 · IPT-PQ-C2 基础层按 RPU 转换（",
+   "src": "include/veyra/source/DolbyVision.h",
+   "zh-TW": "Dolby Vision P5 · IPT-PQ-C2 基礎層依 RPU 轉換（",
+   "en": "Dolby Vision P5 - IPT-PQ-C2 base layer converted per RPU (",
+   "ja": "Dolby Vision P5 · IPT-PQ-C2 ベースレイヤーを RPU に従って変換（"
+  },
+  {
+   "zh": "Dolby Vision P5：还没有可用的 RPU 转换参数，无法正确转换（不会退回普通 YUV 解码）",
+   "src": "include/veyra/source/DolbyVision.h",
+   "zh-TW": "Dolby Vision P5：還沒有可用的 RPU 轉換參數，無法正確轉換（不會退回一般 YUV 解碼）",
+   "en": "Dolby Vision P5: no usable RPU conversion parameters yet, cannot convert correctly (does not fall back to plain YUV decoding)",
+   "ja": "Dolby Vision P5：利用できる RPU 変換パラメーターがまだなく、正しく変換できません（通常の YUV デコードには戻りません）"
+  },
+  {
+   "zh": "Dolby Vision P5：这一帧没有可用的 RPU 转换参数（缺少 RPU、颜色块为空或整形方式不受支持），无法正确转换，已停止以避免错误颜色",
+   "src": "src/source/MediaFileSource.cpp",
+   "zh-TW": "Dolby Vision P5：這一幀沒有可用的 RPU 轉換參數（缺少 RPU、顏色區塊為空或整形方式不受支援），無法正確轉換，已停止以避免錯誤顏色",
+   "en": "Dolby Vision P5: this frame has no usable RPU conversion parameters (missing RPU, empty colour block, or unsupported reshaping), so it cannot be converted correctly and was stopped to avoid wrong colours",
+   "ja": "Dolby Vision P5：このフレームには利用できる RPU 変換パラメーターがありません（RPU 欠落、カラーブロックが空、または整形方式が非対応）。正しく変換できないため、誤った色を避けるために停止しました"
   },
   {
    "zh": "Dolby Vision 基础层颜色与兼容声明不匹配，已停止以避免错误颜色",
@@ -3691,11 +3726,25 @@
    "ja": "補正なし"
   },
   {
+   "zh": "其他",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "其他",
+   "en": "other",
+   "ja": "その他"
+  },
+  {
    "zh": "兼容",
    "src": "qml/DialogHost.qml",
    "zh-TW": "相容",
    "en": "Compatible",
    "ja": "互換"
+  },
+  {
+   "zh": "兼容层",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "相容層",
+   "en": "compatible layer",
+   "ja": "互換レイヤー"
   },
   {
    "zh": "兼容方式要求显示器连接在处理显卡上；请选择 Windows 采集",
@@ -4356,6 +4405,13 @@
    "ja": "映像をクリック"
   },
   {
+   "zh": "单层",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "單層",
+   "en": "single layer",
+   "ja": "シングルレイヤー"
+  },
+  {
    "zh": "压住高光",
    "src": "qml/ProPage.qml",
    "zh-TW": "壓住高光",
@@ -4559,6 +4615,13 @@
    "ja": "パラメトリックカーブ"
   },
   {
+   "zh": "双层",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "雙層",
+   "en": "dual layer",
+   "ja": "デュアルレイヤー"
+  },
+  {
    "zh": "双行不自动缩小；更多样式在字幕设置里",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "雙行不自動縮小；更多樣式在字幕設定裡",
@@ -4720,6 +4783,13 @@
    "ja": "インターレースと記録された動画のみ処理します。ハードウェアデコード時は GPU、ソフトウェアデコード時は互換フィルターを使用します。次に動画を開くと適用されます。"
   },
   {
+   "zh": "只按每帧亮度压低高光，暗部和中间调保持你设定的样子",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "只依每幀亮度壓低高光，暗部和中間調保持你設定的樣子",
+   "en": "Only lowers the highlights per frame; shadows and midtones stay as you set them",
+   "ja": "フレームごとの輝度に応じてハイライトだけを抑え、暗部と中間調は設定どおりに保ちます"
+  },
+  {
    "zh": "只有节点模式使用编辑连接",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "只有節點模式使用編輯連接",
@@ -4837,6 +4907,13 @@
    "zh-TW": "合併後的節點數量超出上限",
    "en": "The merged node count exceeds the limit",
    "ja": "結合後のノード数が上限を超えています"
+  },
+  {
+   "zh": "合并增强层（实验性）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "合併增強層（實驗性）",
+   "en": "Merge enhancement layer (experimental)",
+   "ja": "エンハンスメントレイヤーを合成（実験的）"
   },
   {
    "zh": "同名的色彩预设已存在",
@@ -6006,6 +6083,13 @@
    "zh-TW": "實驗",
    "en": "Experimental",
    "ja": "実験的"
+  },
+  {
+   "zh": "实验性：只对 Profile 7 双层片源生效，且多数帧因增强层解码失败会退回基础层；关闭则强制只用基础层（重新打开文件后应用）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "實驗性：只對 Profile 7 雙層片源生效，且多數影格因增強層解碼失敗會退回基礎層；關閉則強制只用基礎層（重新開啟檔案後套用）",
+   "en": "Experimental: applies to Profile 7 dual-layer sources only, and most frames fall back to the base layer because the enhancement layer fails to decode. Turning it off forces base-layer-only playback (applies after reopening the file).",
+   "ja": "実験的：Profile 7 のデュアルレイヤー映像のみ対象で、エンハンスメントレイヤーのデコード失敗によりほとんどのフレームはベースレイヤーに戻ります。オフにするとベースレイヤーのみの再生になります（ファイルを開き直すと反映されます）。"
   },
   {
    "zh": "对比",
@@ -9586,6 +9670,13 @@
    "ja": "カーブ・測定値・案内"
   },
   {
+   "zh": "曲线当前是关闭的，跟随暂时不会改变画面。",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "曲線目前是關閉的，跟隨暫時不會改變畫面。",
+   "en": "The curve is off, so following will not change the picture for now.",
+   "ja": "カーブが無効のため、追従は今のところ画面を変えません。"
+  },
+  {
    "zh": "曲线未开启",
    "src": "qml/ProPage.qml",
    "zh-TW": "曲線未開啟",
@@ -9810,6 +9901,13 @@
    "ja": "コントローラーが見つかりません"
   },
   {
+   "zh": "未检测到杜比视界片源",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "未偵測到杜比視界片源",
+   "en": "No Dolby Vision source detected",
+   "ja": "Dolby Vision の映像が検出されません"
+  },
+  {
    "zh": "未检测到采集设备",
    "src": "qml/DialogHost.qml",
    "zh-TW": "未檢測到擷取裝置",
@@ -10011,6 +10109,13 @@
    "zh-TW": "本次播放偵測到全螢幕顯示記憶體持續增加，請使用視窗播放；重新開啟來源後可再次測試全螢幕。",
    "en": "VRAM kept growing in fullscreen during this session. Use windowed playback; reopen the source to test fullscreen again.",
    "ja": "この再生では全画面中に VRAM が増え続けました。ウィンドウ表示を使用してください。ソースを開き直すと全画面を再テストできます。"
+  },
+  {
+   "zh": "杜比视界设置",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "杜比視界設定",
+   "en": "Dolby Vision",
+   "ja": "Dolby Vision 設定"
   },
   {
    "zh": "松开以追加到播放列表",
@@ -14045,6 +14150,13 @@
    "ja": "追従"
   },
   {
+   "zh": "跟随动态元数据",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "跟隨動態中繼資料",
+   "en": "Follow dynamic metadata",
+   "ja": "動的メタデータに追従"
+  },
+  {
    "zh": "跟随增强预设",
    "src": "qml/ExportPage.qml",
    "zh-TW": "跟隨增強預設",
@@ -15660,6 +15772,13 @@
    "zh-TW": "需要主機顯示器開啟 HDR，且編碼選 HEVC 或 AV1；本機需要硬體解碼",
    "en": "Needs HDR on for the host display and HEVC or AV1 as the codec; this PC needs hardware decoding",
    "ja": "ホストのディスプレイで HDR をオンにし、コーデックを HEVC か AV1 にする必要があります。この PC にはハードウェアデコードが必要です"
+  },
+  {
+   "zh": "需要先打开上面的 HDR 曲线，否则没有可移动的滚降",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "需要先開啟上方的 HDR 曲線，否則沒有可移動的滾降",
+   "en": "Turn the HDR curve above on first; there is no roll-off to move otherwise",
+   "ja": "上にある HDR カーブを先に有効にしてください。有効でないと動かせるロールオフがありません"
   },
   {
    "zh": "需要先配对才能唤醒。",

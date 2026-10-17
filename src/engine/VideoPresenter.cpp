@@ -1,9 +1,11 @@
 #include "veyra/engine/VideoPresenter.h"
+#include "veyra/engine/DoviCurveAdapter.h" // custom: Dolby Vision level 1 -> curve
 #include "veyra/engine/PresentationGeometry.h"
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/sink/ImageExportSink.h"
+#include <cstdlib> // std::getenv (custom: Dolby Vision follow switch)
 namespace veyra::engine {
 bool VideoPresenter::beginSourceInput(){
     auto* xess=sink_.xess();if(!xess)return true;
@@ -32,6 +34,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         return false;
     }
     viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
+    latestDovi_={}; // A new chain never inherits the previous source's RPU.
     ++generation_;
     Status st=Status::Ok;
     // Keep one presentation queue for the native chain's lifetime. A later
@@ -196,14 +199,30 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             hdrPeakInfo_=gfx::PresentSink::queryDisplayPeak(window_);hdrPeakMonitor_=monitor;hdrPeakQuery_=now;
             if(previous.valid!=hdrPeakInfo_.valid||previous.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
         }
+        // Only a plausible report may scale the curve; a ceiling value would push the
+        // highlight start past anything the content contains.
         if(hdrPeakInfo_.valid)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
+
     }
     HdrCurveSettings hdrCurve;HdrMetadataSettings hdrMetadata;
     resolveHdrTuning(hdrBaseline,graph.hdrMetadata(),hdrCurve,hdrMetadata);
     applyHdrMetadata(graph,hdrMetadata,hdrCurve,identity);
+    // Custom: follow Dolby Vision level 1. Only the highlight start (and the
+    // peak cap under the user's ceiling) moves; shadow lift, mid-gray and
+    // roll-off strength stay exactly what the user set, so the picture is never
+    // silently re-shaded. hdrCurve itself stays the static curve for the
+    // display metadata and the coverage probe, and nothing is applied at all
+    // unless the switch is on: the delivered image is unchanged otherwise.
+    // VEYRA_DOVI_FOLLOW stays as a test override while the switch is checked.
+    const bool followDovi=latestDovi_.valid&&(graph.doviFollow()||std::getenv("VEYRA_DOVI_FOLLOW")!=nullptr);
+    const HdrCurveSettings effective=followDovi?engine::doviCurveFromLevel1(latestDovi_,hdrCurve):hdrCurve;
+    // The trace is its own gate: a user who turns the switch on must not get a
+    // line per frame pair for the length of a film. It also records the switch
+    // itself, so "RPU present but the setting did not arrive" is diagnosable.
+    const bool traceDovi=latestDovi_.valid&&std::getenv("VEYRA_DOVI_TRACE")!=nullptr;
     const RetainedFrame retained{graph.presentationReadyFenceObject(slot,generated),graph.presentationReadyFence(slot,generated),
         slot,unsigned(rc.right),unsigned(rc.bottom),generated,referencesValid,baseReference,IsWindowVisible(window_)!=FALSE,
-        comparison,split,view,identity,MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST),graph.hdrOutput()?hdrCurve:HdrCurveSettings{}};
+        comparison,split,view,identity,MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST),graph.hdrOutput()?effective:HdrCurveSettings{}};
     // Pausing keeps the last flip-model buffer visible. Re-submit only when
     // its producer fence, view, comparison, visibility, monitor or size changes.
     // Deferred resize must keep polling until the actual buffers match.
@@ -265,17 +284,42 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const float curveFlag=(hdrCurve.enabled&&graph.hdrOutput())?16.0f:0.0f;
     const float mainFlags=samplingFlags+curveFlag+(curveFlag&&graph.hdr10Output()?36.0f:0.0f);
     float dims[16]={renderW,renderH,mainFlags,inverseFit,float(rc.right),float(rc.bottom),view.centerX,view.centerY};
-    dims[8]=float(hdrCurve.shadowLiftEv100)/100.0f;
-    dims[9]=float(hdrCurve.shadowRangeNits);
-    dims[10]=float(hdrCurve.midGrayNits);
-    dims[11]=float(hdrCurve.highlightStartNits);
+    // The blit sees the per-frame curve when Dolby Vision follow is on; every
+    // other frame (and every non-DV source) passes the user's settings through.
+    dims[8]=float(effective.shadowLiftEv100)/100.0f;
+    dims[9]=float(effective.shadowRangeNits);
+    dims[10]=float(effective.midGrayNits);
+    dims[11]=float(effective.highlightStartNits);
     {
-        const float peak=hdrCurve.peakCapNits?float(hdrCurve.peakCapNits):1000.0f;
-        const float start=float(hdrCurve.highlightStartNits);
-        dims[12]=std::max(1.0f,peak-start)*float(hdrCurve.rollOffPercent)/100.0f;
-        dims[13]=float(hdrCurve.peakCapNits);
+        // The roll-off has to close at a real ceiling. Following the frame means
+        // closing at the frame's own peak, so the knee is not a slope stretched
+        // across the whole panel range (a 4000 nit ceiling with a 286 nit knee
+        // would barely compress anything the frame actually contains). The hard
+        // ceiling itself (dims[13]) stays the user's: it also anchors the mid-gray
+        // gamma, so moving it would reshape the whole tone scale.
+        float peak=effective.peakCapNits?float(effective.peakCapNits):1000.0f;
+        const float start=float(effective.highlightStartNits);
+        if(followDovi){
+            const float framePeak=float(engine::pqToNits(latestDovi_.maxPq));
+            peak=std::min(peak,std::max(framePeak,start+1.0f));
+        }
+        dims[12]=std::max(1.0f,peak-start)*float(effective.rollOffPercent)/100.0f;
+        dims[13]=float(effective.peakCapNits);
     }
     dims[14]=0.0f;dims[15]=0.0f;
+    if(traceDovi){
+        // Gated trace: proves the per-frame curve reached the blit constants.
+        // Throttled like the source-side dovi-probe so a long file stays small.
+        static int doviFollowCount=0;
+        if(doviFollowCount<3||doviFollowCount%200==0){
+            veyra::log::info("dovi-follow",std::format("n={} follow={} applied={} profile={} maxPq={:.4f} peakNits={:.1f} highlightStartNits={} (user={}) peakCapNits={} (user={})",
+                doviFollowCount,followDovi?1:0,curveFlag!=0.0f?1:0,static_cast<int>(latestDovi_.profile),latestDovi_.maxPq,
+                engine::pqToNits(latestDovi_.maxPq),effective.highlightStartNits,hdrCurve.highlightStartNits,
+                effective.peakCapNits,hdrCurve.peakCapNits));
+        }
+        // The counter advances outside the branch, so the periodic sample fires.
+        ++doviFollowCount;
+    }
     list->SetGraphicsRoot32BitConstants(0,16,dims,0);
     list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+size_t(slot+(generated?2:0))*pass_.increment});
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);list->DrawInstanced(3,1,0,0);

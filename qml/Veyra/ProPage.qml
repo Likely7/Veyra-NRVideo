@@ -2590,6 +2590,59 @@ VPage {
                             }
                         }
 
+                        // Custom: Dolby Vision. Its own card, because the two
+                        // switches below are about the source's own metadata
+                        // rather than about the brightness curve.
+                        VAccordion {
+                            objectName: "list-hdr-dovi"
+                            Layout.fillWidth: true
+                            Layout.topMargin: 12
+                            glyph: "sun"
+                            hue: "#A88BF0"
+                            title: qsTr("杜比视界设置")
+                            summary: {
+                                const d = veyra.hdrSourceInfo;
+                                if(!d || !d.doviProfile) return qsTr("未检测到杜比视界片源");
+                                const kind = d.doviProfile === 5 ? qsTr("单层")
+                                    : d.doviProfile === 7 ? qsTr("双层")
+                                    : d.doviProfile === 8 ? qsTr("兼容层") : qsTr("其他");
+                                const peak = d.doviMaxNits > 0
+                                    ? qsTr(" · 最亮 %1 nit").arg(d.doviMaxNits) : "";
+                                return qsTr("Profile %1（%2）%3").arg(d.doviProfile).arg(kind).arg(peak);
+                            }
+                            VRow {
+                                hintBelow: true
+                                label: qsTr("跟随动态元数据")
+                                hint: veyra.hdrCurve
+                                    ? qsTr("只按每帧亮度压低高光，暗部和中间调保持你设定的样子")
+                                    : qsTr("需要先打开上面的 HDR 曲线，否则没有可移动的滚降")
+                                value: veyra.doviFollow ? qsTr("已开启") : qsTr("已关闭")
+                                VSwitch {
+                                    objectName: "list-hdr-dovi-follow"
+                                    checked: veyra.doviFollow
+                                    onToggled: checked => veyra.doviFollow = checked
+                                }
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                visible: veyra.doviFollow && !veyra.hdrCurve
+                                text: qsTr("曲线当前是关闭的，跟随暂时不会改变画面。")
+                                wrapMode: Text.WordWrap
+                                color: Theme.t3
+                                font.family: Theme.fontUi; font.pixelSize: 11
+                            }
+                            VRow {
+                                hintBelow: true
+                                label: qsTr("合并增强层（实验性）")
+                                hint: qsTr("实验性：只对 Profile 7 双层片源生效，且多数帧因增强层解码失败会退回基础层；关闭则强制只用基础层（重新打开文件后应用）")
+                                value: veyra.doviP7Compose ? qsTr("已开启") : qsTr("已关闭")
+                                VSwitch {
+                                    objectName: "list-hdr-dovi-p7"
+                                    checked: veyra.doviP7Compose
+                                    onToggled: checked => veyra.doviP7Compose = checked
+                                }
+                            }
+                        }
                         VAccordion {
                             objectName: "list-hdr-metadata"
                             Layout.fillWidth: true

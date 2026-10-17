@@ -109,6 +109,8 @@ struct EnhanceGraphDesc {
     // live: the curve reaches the present blit, the metadata the display.
     engine::HdrCurveSettings hdrCurve;
     engine::HdrMetadataSettings hdrMetadata;
+    // Custom: follow the Dolby Vision level 1 for the curve's highlight start.
+    bool doviFollow=false;
     // RTX Video HDR is an SDR -> HDR stage: it only ever runs for an SDR input,
     // and an HDR source keeps the native HDR path (HDR10 / Dolby Vision) instead of
     // being tone-mapped down first.
@@ -469,7 +471,7 @@ public:
     // `hardwareSurface` carries the decoded texture for paths whose surface
     // does not travel inside the AVFrame (D3D11VA). It must be provided exactly
     // when frame->format == AV_PIX_FMT_D3D11 and is unused otherwise.
-    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false);
+    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false, const AVFrame* doviEl = nullptr, const DoviP7Constants* doviP7 = nullptr);
     bool nextFrameSlotAvailable()const {
         const unsigned slot=unsigned(realFrameIndex_%2);
         if(presentationFences_[slot]&&presentationFences_[slot]->GetCompletedValue()<presentationValues_[slot])return false;
@@ -549,9 +551,23 @@ public:
     // the metadata is sent to the display.
     const engine::HdrCurveSettings& hdrCurve() const {return desc_.hdrCurve;}
     const engine::HdrMetadataSettings& hdrMetadata() const {return desc_.hdrMetadata;}
+    // Custom: whether the present blit follows the Dolby Vision level 1.
+    bool doviFollow() const {return desc_.doviFollow;}
+    // Custom (P5): the enhancement layer that arrived with the frame in flight,
+    // null when this frame has none (the reconstruction then uses zero residual).
+    const AVFrame* doviElFrame() const {return doviElFrame_;}
     // Colour description of the frame in flight, so the display metadata can fall
     // back to the source's own MaxCLL / MaxFALL / mastering peak.
     const pipeline::ColorDescription& sourceColor() const {return lastSourceColor_;}
+    // Custom (P5): borrowed EL frame of the input in flight (see doviElFrame()).
+    const AVFrame* doviElFrame_ = nullptr;
+    // Custom (P5): profile 7 enhancement layer texture (luma), uploaded per frame
+    // when the reconstruction parameters for that frame are usable.
+    ComPtr<ID3D12Resource> elLumaTexture_, elLumaUpload_;
+    uint32_t elLumaW_ = 0, elLumaH_ = 0;
+    bool p7Ready_ = false;
+    float p7Params_[28] = {};
+    bool uploadElLuma(ID3D12GraphicsCommandList* list, const AVFrame* frame);
     bool hdr10Output() const { return desc_.hdrOutput && (desc_.enableFg||desc_.hdrOutputMode==engine::HdrOutputMode::Hdr10); }
     DXGI_FORMAT outputFormat() const { return hdr10Output()?DXGI_FORMAT_R10G10B10A2_UNORM:desc_.hdrOutput?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM; }
     bool highQualityPresentation() const { return desc_.highQualityPresentation; }

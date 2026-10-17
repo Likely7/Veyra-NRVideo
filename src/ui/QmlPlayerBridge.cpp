@@ -1302,6 +1302,23 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             restoreError = tr("模式会话未被引擎接受，保留初始状态");
         }
     }
+    // Custom: the Dolby Vision follow is a viewing preference rather than part of
+    // the grade, so it is stored in the shell preferences and re-applied here -
+    // after the restored session has reached the engine, so it wins over a value
+    // the session round trip never carried.
+    if (impl_->prefBool("doviFollow", false) && !settings().doviFollow) {
+        auto followed = settings();
+        followed.doviFollow = true;
+        commitHdrTuning(std::move(followed));
+    }
+    // The P7 composite is its own preference. It used to be restored inside the
+    // doviFollow branch above, so a profile without that flag could never turn it
+    // on no matter what the preferences said.
+    if (impl_->prefBool("doviP7Compose", false) && !settings().doviP7Compose) {
+        auto composed = settings();
+        composed.doviP7Compose = true;
+        commitHdrTuning(std::move(composed));
+    }
     bool defaultFlowApplied = false;
     if (!restoreError.isEmpty()) {
         veyra::log::error("ui-session", restoreError.toStdString());
@@ -4773,13 +4790,14 @@ bool QmlPlayerBridge::commitHdrTuning(engine::EnhancementSettings settings){
     const bool wasValid=chainValid();
     const auto curve=settings.hdrCurve;
     const auto metadata=settings.hdrMetadata;
+    const bool doviFollow=settings.doviFollow;
     if(!impl_->commit(std::move(settings)))return false;
     // Re-project first, then re-assert both copies the session capture reads:
     // revalidate() rewrites the pending settings and the draft globals from the
     // runtime configuration, which does not carry this block yet.
     impl_->revalidate(true);
     auto after=impl_->facade.pendingSettings();
-    after.hdrCurve=curve;after.hdrMetadata=metadata;
+    after.hdrCurve=curve;after.hdrMetadata=metadata;after.doviFollow=doviFollow;
     impl_->facade.setPending(after);
     impl_->draftGlobals.hdrCurve=curve;impl_->draftGlobals.hdrMetadata=metadata;
     impl_->persistSession();
@@ -4953,6 +4971,11 @@ void QmlPlayerBridge::syncHdrTitleProfile(){
   const QFileInfo file(QString::fromStdWString(i.sourceLabel));
   if(!file.isFile())return; // Capture/stream labels are not film identities.
   const QString title=file.canonicalFilePath();
+  if(std::getenv("VEYRA_DOVI_TRACE")!=nullptr){
+      static unsigned titleLogged=0;
+      if(titleLogged<2){++titleLogged;
+          veyra::log::info("hdr-title", std::format("canonical={}", title.toStdString()));}
+  }
   if(title.isEmpty()||title==i.hdrTitleApplied)return;
   flushHdrMemory();i.hdrTitleApplied=title;
   if(hdrTitleMemory()&&loadHdrTitleProfile(title)){
@@ -4963,9 +4986,13 @@ void QmlPlayerBridge::syncHdrTitleProfile(){
 
 bool QmlPlayerBridge::loadHdrTitleProfile(const QString& title){
   const auto list=impl_->prefs.value(QStringLiteral("hdrTitles")).toList();
+  // Path separators must not decide whether a memory matches: canonicalFilePath()
+  // hands back '/', while entries written by older builds stored '\'.
+  const auto normalized=[](QString v){v.replace(QLatin1Char('\\'),QLatin1Char('/'));return v;};
+  const QString wanted=normalized(title);
   for(const auto& item:list){
     const auto stored=item.toMap();
-    if(stored.value(QStringLiteral("key")).toString()!=title)continue;
+    if(normalized(stored.value(QStringLiteral("key")).toString())!=wanted)continue;
     auto s=settings();
     const auto number=[&](const char* key,int fallback){
       return stored.contains(QLatin1String(key))?stored.value(QLatin1String(key)).toInt():fallback;};
@@ -4977,6 +5004,10 @@ bool QmlPlayerBridge::loadHdrTitleProfile(const QString& title){
     s.hdrCurve.rollOffPercent=unsigned(std::clamp(number("rollOffPercent",int(s.hdrCurve.rollOffPercent)),10,200));
     s.hdrCurve.peakCapNits=unsigned(std::clamp(number("peakCapNits",int(s.hdrCurve.peakCapNits)),0,4000));
     s.hdrCurve.strengthPercent=unsigned(std::clamp(number("strengthPercent",int(s.hdrCurve.strengthPercent)),0,200));
+    // Custom: the Dolby Vision follow belongs to the same per-film look, so it is
+    // remembered with it. Entries written before it existed keep the current value.
+    s.doviFollow=stored.value(QStringLiteral("doviFollow"),s.doviFollow).toBool();
+        s.doviP7Compose=stored.value(QStringLiteral("doviP7Compose"),s.doviP7Compose).toBool();
     QScopedValueRollback<bool> restoring(impl_->hdrRestoring,true);
     return commitHdrTuning(std::move(s));
   }
@@ -4997,10 +5028,14 @@ bool QmlPlayerBridge::storeHdrTitleProfile(const QString& title){
   entry[QStringLiteral("rollOffPercent")]=int(c.rollOffPercent);
   entry[QStringLiteral("peakCapNits")]=int(c.peakCapNits);
   entry[QStringLiteral("strengthPercent")]=int(c.strengthPercent);
+  entry[QStringLiteral("doviFollow")]=doviFollow();
+        entry[QStringLiteral("doviP7Compose")]=doviP7Compose();
   auto list=i.prefs.value(QStringLiteral("hdrTitles")).toList();
-  for(const auto& item:list)if(item.toMap().value(QStringLiteral("key")).toString()==title&&item.toMap()==entry)return false;
+  const auto normalized=[](QString v){v.replace(QLatin1Char('\\'),QLatin1Char('/'));return v;};
+  const QString wanted=normalized(title);
+  for(const auto& item:list)if(normalized(item.toMap().value(QStringLiteral("key")).toString())==wanted&&item.toMap()==entry)return false;
   for(int n=list.size()-1;n>=0;--n)
-    if(list[n].toMap().value(QStringLiteral("key")).toString()==title)list.removeAt(n);
+    if(normalized(list[n].toMap().value(QStringLiteral("key")).toString())==wanted)list.removeAt(n);
   list.append(entry);
   // Bounded list: the oldest titles fall off the front.
   while(list.size()>i.kHdrTitleProfileLimit)list.removeFirst();
@@ -5076,6 +5111,8 @@ bool QmlPlayerBridge::loadHdrProfile(const QString& id){
   s.hdrCurve.peakCapNits=unsigned(std::clamp(number("peakCapNits",int(s.hdrCurve.peakCapNits)),0,4000));
   s.hdrCurve.strengthPercent=unsigned(std::clamp(number("strengthPercent",int(s.hdrCurve.strengthPercent)),0,200));
   s.hdrCurve.displayPeakNits=unsigned(std::clamp(number("displayPeakNits",int(s.hdrCurve.displayPeakNits)),0,10000));
+  s.doviFollow=stored.value(QStringLiteral("doviFollow"),s.doviFollow).toBool();
+        s.doviP7Compose=stored.value(QStringLiteral("doviP7Compose"),s.doviP7Compose).toBool();
   QScopedValueRollback<bool> restoring(i.hdrRestoring,true);
   return commitHdrTuning(std::move(s));
 }
@@ -5093,6 +5130,8 @@ bool QmlPlayerBridge::storeHdrProfile(const QString& id){
   entry[QStringLiteral("peakCapNits")]=int(c.peakCapNits);
   entry[QStringLiteral("strengthPercent")]=int(c.strengthPercent);
   entry[QStringLiteral("displayPeakNits")]=int(c.displayPeakNits);
+  entry[QStringLiteral("doviFollow")]=doviFollow();
+        entry[QStringLiteral("doviP7Compose")]=doviP7Compose();
   auto profiles=i.prefs.value(QStringLiteral("hdrProfiles")).toMap();
   if(profiles.value(id).toMap()==entry)return false;   // nothing new to remember
   profiles[id]=entry;
@@ -5108,7 +5147,10 @@ QVariantMap QmlPlayerBridge::hdrSourceInfo() const {
   const unsigned cll=snap.sourceMaxCllNits,fall=snap.sourceMaxFallNits;
   const bool valid=snap.sourceHdr&&(mastering||cll||fall);
   return {{"valid",valid},{"masteringPeakNits",int(mastering)},
-          {"maxCllNits",int(cll)},{"maxFallNits",int(fall)}};
+          {"maxCllNits",int(cll)},{"maxFallNits",int(fall)},
+            {"doviProfile",int(snap.sourceDoviProfile)},
+            {"doviRpu",snap.sourceDoviRpu},
+            {"doviMaxNits",int(snap.sourceDoviMaxNits)}};
 }
 
 bool QmlPlayerBridge::sourceIsSdr() const {
@@ -5212,6 +5254,26 @@ bool QmlPlayerBridge::applyHdrTuningPreset(const QString& id){
 bool QmlPlayerBridge::hdrMetadataEnabled()const{return settings().hdrMetadata.enabled;}
 void QmlPlayerBridge::setHdrMetadataEnabled(bool enabled){
     auto s=settings();if(s.hdrMetadata.enabled==enabled)return;s.hdrMetadata.enabled=enabled;
+    commitHdrTuning(std::move(s));
+}
+bool QmlPlayerBridge::doviP7Compose()const{return settings().doviP7Compose;}
+void QmlPlayerBridge::setDoviP7Compose(bool on){
+    auto s=settings();if(s.doviP7Compose==on)return;s.doviP7Compose=on;
+    // Lives with the shell preference like the Level 1 follow flag, so it survives
+    // a restart and applies before the next file is opened.
+    auto& i=*impl_;
+    i.prefs[QStringLiteral("doviP7Compose")]=on;
+    if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision p7 compose flag not saved");
+    commitHdrTuning(std::move(s));
+}
+bool QmlPlayerBridge::doviFollow()const{return settings().doviFollow;}
+void QmlPlayerBridge::setDoviFollow(bool on){
+    auto s=settings();if(s.doviFollow==on)return;s.doviFollow=on;
+    // The shell preference is the global fallback: it re-applies at the next start
+    // even for a source that has no stored per-film profile yet.
+    auto& i=*impl_;
+    i.prefs[QStringLiteral("doviFollow")]=on;
+    if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision follow flag not saved");
     commitHdrTuning(std::move(s));
 }
 QVariantMap QmlPlayerBridge::hdrMetadataParams()const{
@@ -7207,8 +7269,10 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
         // re-derives, so preserve the values this commit is carrying.
         const auto keepCurve = settings.hdrCurve;
         const auto keepMetadata = settings.hdrMetadata;
+        const bool keepDoviFollow = settings.doviFollow;
         engine::ChainGlobalSettings::capture(previous).apply(settings);
         settings.hdrCurve = keepCurve; settings.hdrMetadata = keepMetadata;
+        settings.doviFollow = keepDoviFollow;
     } else validation = engine::PresetLibrary::applyToChain(entry, candidate, settings);
     if (!validation.accepted) { emit notice(uiText(validation.message), true); return false; }
     if (const auto error = settings.validate(); !error.empty()) {
