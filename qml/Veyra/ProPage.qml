@@ -2612,6 +2612,9 @@ VPage {
                             }
                             VRow {
                                 hintBelow: true
+                                // The follow only moves where the curve's roll-off starts.
+                                enabled: veyra.hdrCurve
+                                opacity: enabled ? 1 : 0.5
                                 label: qsTr("跟随动态元数据")
                                 hint: veyra.hdrCurve
                                     ? qsTr("只按每帧亮度压低高光，暗部和中间调保持你设定的样子")
@@ -2626,6 +2629,8 @@ VPage {
                             VRow {
                                 hintBelow: true
                                 visible: veyra.doviFollow
+                                enabled: veyra.hdrCurve
+                                opacity: enabled ? 1 : 0.5
                                 label: qsTr("参考平均亮度")
                                 hint: qsTr("勾选后，高光起点同时参考每帧的平均亮度：暗场多的片子压得更积极，亮场多的保留更多高光；取消则只看峰值")
                                 VSwitch {

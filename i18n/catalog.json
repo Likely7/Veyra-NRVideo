@@ -409,9 +409,9 @@
   {
    "zh": " 输出，增强层/RPU 动态元数据不参与输出）",
    "src": "include/veyra/source/DolbyVision.h",
-   "zh-TW": "輸出，增強層/RPU 動態中繼資料不參與輸出）",
-   "en": " output; the enhancement layer and RPU dynamic metadata do not contribute)",
-   "ja": " 出力（エンハンスメントレイヤーと RPU の動的メタデータは出力に寄与しません）"
+   "zh-TW": " 輸出，增強層/RPU 動態元資料不參與輸出）",
+   "en": " output; the enhancement layer and RPU dynamic metadata are not part of the output)",
+   "ja": " 出力。拡張レイヤーと RPU の動的メタデータは出力に含まれません）"
   },
   {
    "zh": " 阶段=",
@@ -962,23 +962,23 @@
   {
    "zh": "Dolby Vision P5 · IPT-PQ-C2 基础层按 RPU 转换（",
    "src": "include/veyra/source/DolbyVision.h",
-   "zh-TW": "Dolby Vision P5 · IPT-PQ-C2 基礎層依 RPU 轉換（",
-   "en": "Dolby Vision P5 - IPT-PQ-C2 base layer converted per RPU (",
-   "ja": "Dolby Vision P5 · IPT-PQ-C2 ベースレイヤーを RPU に従って変換（"
+   "zh-TW": "Dolby Vision P5 · IPT-PQ-C2 基礎層按 RPU 轉換（",
+   "en": "Dolby Vision P5 · IPT-PQ-C2 base layer converted from the RPU (",
+   "ja": "Dolby Vision P5 · IPT-PQ-C2 ベースレイヤーを RPU で変換（"
   },
   {
    "zh": "Dolby Vision P5：还没有可用的 RPU 转换参数，无法正确转换（不会退回普通 YUV 解码）",
    "src": "include/veyra/source/DolbyVision.h",
    "zh-TW": "Dolby Vision P5：還沒有可用的 RPU 轉換參數，無法正確轉換（不會退回一般 YUV 解碼）",
-   "en": "Dolby Vision P5: no usable RPU conversion parameters yet, cannot convert correctly (does not fall back to plain YUV decoding)",
-   "ja": "Dolby Vision P5：利用できる RPU 変換パラメーターがまだなく、正しく変換できません（通常の YUV デコードには戻りません）"
+   "en": "Dolby Vision P5: no usable RPU conversion parameters yet, so the frame cannot be converted correctly (it does not fall back to plain YUV decoding)",
+   "ja": "Dolby Vision P5：使用できる RPU 変換パラメーターがまだないため、正しく変換できません（通常の YUV デコードには戻りません）"
   },
   {
    "zh": "Dolby Vision P5：这一帧没有可用的 RPU 转换参数（缺少 RPU、颜色块为空或整形方式不受支持），无法正确转换，已停止以避免错误颜色",
    "src": "src/source/MediaFileSource.cpp",
    "zh-TW": "Dolby Vision P5：這一幀沒有可用的 RPU 轉換參數（缺少 RPU、顏色區塊為空或整形方式不受支援），無法正確轉換，已停止以避免錯誤顏色",
-   "en": "Dolby Vision P5: this frame has no usable RPU conversion parameters (missing RPU, empty colour block, or unsupported reshaping), so it cannot be converted correctly and was stopped to avoid wrong colours",
-   "ja": "Dolby Vision P5：このフレームには利用できる RPU 変換パラメーターがありません（RPU 欠落、カラーブロックが空、または整形方式が非対応）。正しく変換できないため、誤った色を避けるために停止しました"
+   "en": "Dolby Vision P5: this frame has no usable RPU conversion parameters (missing RPU, empty colour block, or an unsupported reshaping method), so it cannot be converted correctly; playback stopped to avoid wrong colours",
+   "ja": "Dolby Vision P5：このフレームには使用できる RPU 変換パラメーターがありません（RPU 欠落、カラーブロックが空、または整形方式が未対応）。正しく変換できないため、誤った色を避けるために停止しました"
   },
   {
    "zh": "Dolby Vision 基础层颜色与兼容声明不匹配，已停止以避免错误颜色",
@@ -1856,6 +1856,13 @@
    "ja": "PSN アカウント"
   },
   {
+   "zh": "Profile 5 的亮度信息在 RPU 里（不是 HDR10 元数据），推荐无法自动选档；下面的「跟随动态元数据」仍然可用",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "Profile 5 的亮度資訊在 RPU 裡（不是 HDR10 中繼資料），推薦無法自動選檔；下方的「跟隨動態中繼資料」仍然可用",
+   "en": "Profile 5 keeps its brightness inside the RPU (not HDR10 metadata), so the recommendation cannot pick a preset; the follow switch below still works",
+   "ja": "Profile 5 の輝度情報は RPU 内にあり（HDR10 メタデータではない）ため、推奨は自動選択できません。下の「動的メタデータに追従」は引き続き使用できます"
+  },
+  {
    "zh": "RTX 50 · NVIDIA 原版",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "RTX 50 · NVIDIA 原版",
@@ -1952,6 +1959,13 @@
    "zh-TW": "SDR → SDR（HDR顯示未啟用）",
    "en": "SDR → SDR (HDR display off)",
    "ja": "SDR → SDR（HDR 表示オフ）"
+  },
+  {
+   "zh": "SDR 片源没有 HDR 亮度元数据，可手动选档",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "SDR 片源沒有 HDR 亮度中繼資料，可手動選檔",
+   "en": "SDR sources carry no HDR brightness metadata; pick a preset manually",
+   "ja": "SDR 映像には HDR 輝度メタデータがないため、手動で選択してください"
   },
   {
    "zh": "SDR 片源没有 HDR 亮度元数据；可手动选档，HDR 输出时生效。",
@@ -3466,6 +3480,13 @@
    "ja": "設定を保存できなかったため、以前の設定のままです"
   },
   {
+   "zh": "偏暗且超出屏幕能力",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "偏暗且超出螢幕能力",
+   "en": "dim, and brighter than the screen can show",
+   "ja": "暗く、かつ画面の能力を超えている"
+  },
+  {
    "zh": "偏移",
    "src": "qml/NodePage.qml",
    "zh-TW": "偏移",
@@ -3750,7 +3771,7 @@
    "zh": "其他",
    "src": "qml/ProPage.qml",
    "zh-TW": "其他",
-   "en": "other",
+   "en": "Other",
    "ja": "その他"
   },
   {
@@ -3764,7 +3785,7 @@
    "zh": "兼容层",
    "src": "qml/ProPage.qml",
    "zh-TW": "相容層",
-   "en": "compatible layer",
+   "en": "Compatible layer",
    "ja": "互換レイヤー"
   },
   {
@@ -3787,6 +3808,13 @@
    "zh-TW": "相容軟解",
    "en": "software compatibility",
    "ja": "互換ソフトウェア"
+  },
+  {
+   "zh": "内容亮度超出屏幕能力",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容亮度超出螢幕能力",
+   "en": "content is brighter than the screen can show",
+   "ja": "コンテンツの輝度が画面の能力を超えている"
   },
   {
    "zh": "内容亮度远超显示设备能力",
@@ -4436,7 +4464,7 @@
    "zh": "单层",
    "src": "qml/ProPage.qml",
    "zh-TW": "單層",
-   "en": "single layer",
+   "en": "Single layer",
    "ja": "シングルレイヤー"
   },
   {
@@ -4653,7 +4681,7 @@
    "zh": "双层",
    "src": "qml/ProPage.qml",
    "zh-TW": "雙層",
-   "en": "dual layer",
+   "en": "Dual layer",
    "ja": "デュアルレイヤー"
   },
   {
@@ -4820,9 +4848,9 @@
   {
    "zh": "只按每帧亮度压低高光，暗部和中间调保持你设定的样子",
    "src": "qml/ProPage.qml",
-   "zh-TW": "只依每幀亮度壓低高光，暗部和中間調保持你設定的樣子",
-   "en": "Only lowers the highlights per frame; shadows and midtones stay as you set them",
-   "ja": "フレームごとの輝度に応じてハイライトだけを抑え、暗部と中間調は設定どおりに保ちます"
+   "zh-TW": "只按每幀亮度壓低高光，暗部和中間調保持你設定的樣子",
+   "en": "Lowers only the highlights using each frame's brightness; shadows and mid-tones stay as you set them",
+   "ja": "フレームごとの輝度でハイライトだけを抑えます。暗部と中間調は設定どおりです"
   },
   {
    "zh": "只有节点模式使用编辑连接",
@@ -4837,6 +4865,13 @@
    "zh-TW": "只清影片記憶，不動顯示裝置記憶",
    "en": "Clear film memory; keep display memory",
    "ja": "作品の記憶だけを消去し、ディスプレイの記憶は保持します"
+  },
+  {
+   "zh": "只清空这个列表，不会删除文件。",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "只清空這個列表，不會刪除檔案。",
+   "en": "Only clears this list; no file is deleted.",
+   "ja": "このリストだけを消去します。ファイルは削除されません。"
   },
   {
    "zh": "只用 DLSS / XeSS 补帧时：到 NVIDIA App 关闭 Smooth Motion。",
@@ -7387,6 +7422,13 @@
    "ja": "適用"
   },
   {
+   "zh": "应用推荐",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "套用推薦",
+   "en": "Apply recommendation",
+   "ja": "推奨を適用"
+  },
+  {
    "zh": "应用设置并重连",
    "src": "qml/DialogHost.qml",
    "zh-TW": "應用設定並重連",
@@ -7807,11 +7849,25 @@
    "ja": "このソースには選択できる音声トラックがありません。"
   },
   {
+   "zh": "当前片源不是杜比视界，推荐请用上面「一键选档」里的按钮",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "目前片源不是杜比視界，推薦請用上方「一鍵選檔」裡的按鈕",
+   "en": "this source is not Dolby Vision; use the recommendation button under the curve settings",
+   "ja": "この映像は Dolby Vision ではありません。カーブ設定の推奨ボタンをお使いください"
+  },
+  {
    "zh": "当前片源没有字幕",
    "src": "qml/DialogHost.qml",
    "zh-TW": "當前片源沒有字幕",
    "en": "This source has no subtitles",
    "ja": "このソースには字幕がありません"
+  },
+  {
+   "zh": "当前片源的推荐",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "目前片源的推薦",
+   "en": "Recommendation for this source",
+   "ja": "この映像への推奨"
   },
   {
    "zh": "当前生效：整档预设「%1」",
@@ -8837,6 +8893,13 @@
    "ja": "全体プリセット"
   },
   {
+   "zh": "整片偏暗",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "整片偏暗",
+   "en": "the film is mostly dark",
+   "ja": "全体的に暗い"
+  },
+  {
    "zh": "整片偏暗、只有少量亮点",
    "src": "qml/ProPage.qml",
    "zh-TW": "整片偏暗、只有少量亮點",
@@ -8968,6 +9031,13 @@
    "zh-TW": "無",
    "en": "None",
    "ja": "なし"
+  },
+  {
+   "zh": "无增强层",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "無增強層",
+   "en": "No enhancement layer",
+   "ja": "エンハンスメントレイヤーなし"
   },
   {
    "zh": "无效的按键",
@@ -9708,8 +9778,8 @@
    "zh": "曲线当前是关闭的，跟随暂时不会改变画面。",
    "src": "qml/ProPage.qml",
    "zh-TW": "曲線目前是關閉的，跟隨暫時不會改變畫面。",
-   "en": "The curve is off, so following will not change the picture for now.",
-   "ja": "カーブが無効のため、追従は今のところ画面を変えません。"
+   "en": "The curve is off, so following does not change the picture yet.",
+   "ja": "カーブがオフのため、追従してもまだ画面は変わりません。"
   },
   {
    "zh": "曲线未开启",
@@ -9940,7 +10010,7 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "未偵測到杜比視界片源",
    "en": "No Dolby Vision source detected",
-   "ja": "Dolby Vision の映像が検出されません"
+   "ja": "Dolby Vision のソースを検出できません"
   },
   {
    "zh": "未检测到采集设备",
@@ -10149,7 +10219,7 @@
    "zh": "杜比视界设置",
    "src": "qml/ProPage.qml",
    "zh-TW": "杜比視界設定",
-   "en": "Dolby Vision",
+   "en": "Dolby Vision settings",
    "ja": "Dolby Vision 設定"
   },
   {
@@ -10923,6 +10993,13 @@
    "ja": "マスタリングのピークが低い作品（旧作・変換版）"
   },
   {
+   "zh": "母版峰值偏低（老片）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "母版峰值偏低（老片）",
+   "en": "low mastering peak (older transfer)",
+   "ja": "マスターのピークが低い（旧作）"
+  },
+  {
    "zh": "比较源画面与上一帧：没有明显变化的像素沿用上一帧输出，明显变化的位置直接用新结果。",
    "src": "qml/ProPage.qml",
    "zh-TW": "比較源畫面與上一幀：沒有明顯變化的像素沿用上一幀輸出，明顯變化的位置直接用新結果。",
@@ -11161,6 +11238,13 @@
    "ja": "クリア"
   },
   {
+   "zh": "清空最近播放记录？",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "清空最近播放記錄？",
+   "en": "Clear the recent list?",
+   "ja": "最近再生した記録を消去しますか？"
+  },
+  {
    "zh": "清空等待",
    "src": "qml/ExportPage.qml",
    "zh-TW": "清空等待",
@@ -11397,6 +11481,13 @@
    "zh-TW": "片源最亮 %1 nit，曲線硬上限 %2 nit：%3",
    "en": "Declared source peak %1 nit, curve cap %2 nit: %3",
    "ja": "ソースの公称ピーク %1 nit、カーブ上限 %2 nit：%3"
+  },
+  {
+   "zh": "片源未携带亮度信息，无法自动选档",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "片源未攜帶亮度資訊，無法自動選檔",
+   "en": "no brightness metadata in this source; cannot pick automatically",
+   "ja": "映像に輝度情報がないため自動選択できません"
   },
   {
    "zh": "片源没有携带亮度信息",
@@ -14187,7 +14278,7 @@
   {
    "zh": "跟随动态元数据",
    "src": "qml/ProPage.qml",
-   "zh-TW": "跟隨動態中繼資料",
+   "zh-TW": "跟隨動態元資料",
    "en": "Follow dynamic metadata",
    "ja": "動的メタデータに追従"
   },
@@ -14764,6 +14855,13 @@
    "zh-TW": "這個微軟帳號還沒有 Xbox 檔案。請先在 xbox.com 用它登入一次，建立檔案後再試。",
    "en": "This Microsoft account has no Xbox profile yet. Sign in once at xbox.com with it to create one, then try again.",
    "ja": "この Microsoft アカウントには Xbox プロフィールがまだありません。一度 xbox.com でサインインしてプロフィールを作成してから再試行してください。"
+  },
+  {
+   "zh": "这个数值是显示器的上限声明，不是实测，因此曲线未按它缩放。",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "這個數值是顯示器的上限宣告，不是實測，因此曲線未依它縮放。",
+   "en": "This figure is the display's ceiling declaration, not a measurement, so the curve is not scaled by it.",
+   "ja": "この値はディスプレイの上限宣言であり実測値ではないため、カーブのスケーリングには使用していません。"
   },
   {
    "zh": "这个模式还没有预设。",
@@ -15811,9 +15909,9 @@
   {
    "zh": "需要先打开上面的 HDR 曲线，否则没有可移动的滚降",
    "src": "qml/ProPage.qml",
-   "zh-TW": "需要先開啟上方的 HDR 曲線，否則沒有可移動的滾降",
-   "en": "Turn the HDR curve above on first; there is no roll-off to move otherwise",
-   "ja": "上にある HDR カーブを先に有効にしてください。有効でないと動かせるロールオフがありません"
+   "zh-TW": "需要先開啟上面的 HDR 曲線，否則沒有可移動的滾降",
+   "en": "Turn the HDR curve on first; without it there is no roll-off to move",
+   "ja": "先に上の HDR カーブをオンにしてください（オフではロールオフがありません）"
   },
   {
    "zh": "需要先配对才能唤醒。",
@@ -17018,6 +17116,13 @@
    "zh-TW": "（片源最亮 %1 nit、最亮幀平均 %2 nit）",
    "en": "(Source peak %1 nit, maximum frame average %2 nit)",
    "ja": "（ソースの最大輝度 %1 nit、最大フレーム平均 %2 nit）"
+  },
+  {
+   "zh": "（片源最亮 %1 nit）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "（片源最亮 %1 nit）",
+   "en": "(source peak %1 nit)",
+   "ja": "（映像の最大 %1 nit）"
   },
   {
    "zh": "（终止码 {} / 错误 {}）",
