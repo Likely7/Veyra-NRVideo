@@ -12,6 +12,9 @@
 
 #include "veyra/media/FFmpegDemuxer.h"
 #include "veyra/media/FFmpegVideoDecoder.h"
+
+#include <deque>
+#include <map>
 #include "veyra/media/FFmpegDeinterlacer.h"
 #include "veyra/source/IFrameSource.h"
 
@@ -43,7 +46,29 @@ private:
     media::FFmpegDemuxer demuxer_;
     media::FFmpegVideoDecoder decoder_;
     media::FFmpegDeinterlacer deinterlacer_;
+    // Custom (P5): Dolby Vision Profile 7 enhancement layer. The EL rides inside
+    // each access unit as private NAL type 63, so a second decoder consumes the
+    // same packets. Off unless the caller asks for it, so BL playback is byte
+    // identical while this is still being brought up.
+    media::FFmpegVideoDecoder elDecoder_;
+    AVFrame* elFrame_ = nullptr;      // EL frame matched to the frame in flight (owned)
+    // Custom (P5): decoded EL frames keyed by timestamp, waiting for their base frame.
+    std::map<int64_t, AVFrame*> elByPts_;
+    uint32_t elLastWidth_ = 0, elLastHeight_ = 0;   // last decoded EL extent
+    // A base frame held back while waiting for its EL counterpart (bounded wait).
+    std::deque<std::pair<pipeline::FramePacket, AVFrame*>> baseWaiting_;
+    std::vector<std::vector<uint8_t>> elParamSets_; // VPS/SPS/PPS of the EL, re-sent per AU
+    bool elLayerEnabled_ = false;
+    bool elLayerOpen_ = false;
+    unsigned elLayerFrames_ = 0, elLayerMisses_ = 0;
+    // Returns true when this packet actually carried enhancement layer data.
+    bool feedEnhancementLayer(const AVPacket* packet);
+    SourceReadStatus readBase(pipeline::FramePacket& out, const AVFrame** decodedFrame);
+    void drainElFrames();
+    bool takeElForPts(int64_t pts, AVFrame** outFrame);
+    void closeEnhancementLayer();
     bool deinterlaceEnabled_=true,filterDraining_=false;
+    pipeline::DoviFrameInfo doviFrameInfo{};   // Dolby Vision L1 (RPU), invalid unless present
     SourceInfo info_{};
     uint64_t sequence_ = 0;
     uint64_t epoch_ = 1;

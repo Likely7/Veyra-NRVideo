@@ -93,6 +93,10 @@ struct PlayerSnapshot {
     // The source's own HDR numbers, straight from the container. They survive the
     // hardware-decode path, where there is no CPU luma to measure a histogram from.
     unsigned sourceMasteringPeakNits=0;
+    // Dolby Vision: stream-level profile/RPU flag plus the current frame's L1 peak.
+    unsigned sourceDoviProfile=0;
+    bool sourceDoviRpu=false;
+    unsigned sourceDoviMaxNits=0;
     unsigned sourceMaxCllNits=0;
     unsigned sourceMaxFallNits=0;
     // Custom: the live coverage the presenter measured with its 64x36 probe (see
