@@ -92,14 +92,6 @@ public:
 std::vector<diagnostics::GpuFrameTiming> takeGpuTimings(ID3D12Fence* fence){gpuTimer_.collect(presentationFence_?presentationFence_.Get():fence);return gpuTimer_.takeCompleted();}
 void recordGpuTimings(){gpuTimer_.recordCompleted();}
 private:
-    // Custom: HDR10 static metadata for the display (MaxCLL / MaxFALL / mastering
-    // peak). Sent only when it changes, and cleared when the HDR10 path stops.
-    void applyHdrMetadata(pipeline::EnhanceGraph& graph,const HdrMetadataSettings& metadata,const HdrCurveSettings& resolvedCurve,pipeline::FrameIdentity identity);
-    bool metadataSent_=false,metadataDirty_=false;
-    // The source's mastering/CLL values are absent on many frames; holding the last
-    // real value keeps the reported metadata steady instead of flapping to the
-    // fallback (which re-sent it on nearly every frame).
-    HdrSourceMetadata sourceMetadata_{};
     HMONITOR hdrPeakMonitor_=nullptr;
     gfx::PresentSink::DisplayPeakInfo hdrPeakInfo_{};
     std::chrono::steady_clock::time_point hdrPeakQuery_{},metadataAttempt_{};

@@ -5209,27 +5209,6 @@ bool QmlPlayerBridge::applyHdrTuningPreset(const QString& id){
     }
     return false;
 }
-bool QmlPlayerBridge::hdrMetadataEnabled()const{return settings().hdrMetadata.enabled;}
-void QmlPlayerBridge::setHdrMetadataEnabled(bool enabled){
-    auto s=settings();if(s.hdrMetadata.enabled==enabled)return;s.hdrMetadata.enabled=enabled;
-    commitHdrTuning(std::move(s));
-}
-QVariantMap QmlPlayerBridge::hdrMetadataParams()const{
-    const auto& m=settings().hdrMetadata;
-    return {{"masteringPeakNits",int(m.masteringPeakNits)},{"maxCllNits",int(m.maxCllNits)},
-            {"maxFallNits",int(m.maxFallNits)}};
-}
-bool QmlPlayerBridge::setHdrMetadataParameter(const QString& key,double value){
-    if(!std::isfinite(value)||value<0||value>10000)return false;
-    auto s=settings();const auto v=int(std::lround(value));
-    if(v<0||v>10000)return false;
-    if(key=="masteringPeakNits")s.hdrMetadata.masteringPeakNits=unsigned(v);
-    else if(key=="maxCllNits")s.hdrMetadata.maxCllNits=unsigned(v);
-    else if(key=="maxFallNits")s.hdrMetadata.maxFallNits=unsigned(v);
-    else return false;
-    if(!s.hdrMetadata.valid())return false;
-    return commitHdrTuning(std::move(s));
-}
 void QmlPlayerBridge::setVideoHdr(bool enabled) {
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
         if (impl_->chain.nodes[i].type == engine::EffectType::VideoHdr) {
