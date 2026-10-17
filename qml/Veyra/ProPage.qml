@@ -2471,6 +2471,14 @@ VPage {
                                             color: Theme.t3
                                             font.family: Theme.fontUi; font.pixelSize: 11
                                         }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            visible: veyra.hdrDisplayInfo.valid && !veyra.hdrDisplayInfo.plausible
+                                            text: qsTr("这个数值是显示器的上限声明，不是实测，因此曲线未按它缩放。")
+                                            wrapMode: Text.WordWrap
+                                            color: Theme.t3
+                                            font.family: Theme.fontUi; font.pixelSize: 11
+                                        }
                                     }
 
                             // The two dials. Both scale the baseline the sliders below

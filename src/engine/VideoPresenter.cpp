@@ -189,6 +189,19 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const auto& metadataBaseline=graph.hdrMetadata();
     const bool needsDisplayPeak=hdrBaseline.enabled||(metadataBaseline.enabled&&
         (metadataBaseline.masteringPeakNits||metadataBaseline.maxCllNits||metadataBaseline.maxFallNits));
+    {
+        // Custom: one-shot record of what the display reports and whether it was
+        // trusted, so the curve's effective target is never a guess.
+        static unsigned peakLogged = 0;
+        if (peakLogged < 2 && graph.hdrOutput()) {
+            ++peakLogged;
+            veyra::log::info("hdr-peak", std::format(
+                "report valid={} plausible={} peak={} black={:.3f} needsPeak={} curveDisplayPeakNits={}",
+                hdrPeakInfo_.valid ? 1 : 0, hdrPeakInfo_.plausible ? 1 : 0,
+                hdrPeakInfo_.peakNits, hdrPeakInfo_.minNits,
+                needsDisplayPeak ? 1 : 0, hdrBaseline.displayPeakNits));
+        }
+    }
     if(graph.hdrOutput()&&needsDisplayPeak&&hdrBaseline.displayPeakNits==0){
         const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
         if(hdrPeakMonitor_!=monitor||now-hdrPeakQuery_>=std::chrono::seconds(2)){
@@ -196,7 +209,10 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             hdrPeakInfo_=gfx::PresentSink::queryDisplayPeak(window_);hdrPeakMonitor_=monitor;hdrPeakQuery_=now;
             if(previous.valid!=hdrPeakInfo_.valid||previous.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
         }
-        if(hdrPeakInfo_.valid)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
+        // Only a plausible report may scale the curve; a ceiling value would push the
+        // highlight start past anything the content contains.
+        if(hdrPeakInfo_.valid&&hdrPeakInfo_.plausible)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
+
     }
     HdrCurveSettings hdrCurve;HdrMetadataSettings hdrMetadata;
     resolveHdrTuning(hdrBaseline,graph.hdrMetadata(),hdrCurve,hdrMetadata);

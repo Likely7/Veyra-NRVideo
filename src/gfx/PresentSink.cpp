@@ -103,6 +103,19 @@ PresentSink::DisplayPeakInfo PresentSink::queryDisplayPeak(HWND window){
                 ?unsigned(std::lround(std::min(desc.MaxFullFrameLuminance,10000.0f))):0;
             info.minNits=std::isfinite(desc.MinLuminance)&&desc.MinLuminance>=0?desc.MinLuminance:0;
             info.valid=info.peakNits>0;
+            // A full-scale peak paired with an idealised black is a ceiling declaration,
+            // not a measurement (see DisplayPeakInfo::plausible).
+            info.plausible=info.valid&&!(info.peakNits>=4000&&info.minNits<0.01);
+            {
+                static unsigned peakQueryLogged = 0;
+                if (peakQueryLogged < 2) {
+                    ++peakQueryLogged;
+                    log::info("hdr-peak", std::format(
+                        "dxgi output: peak={} full={} black={:.4f} valid={} plausible={}",
+                        info.peakNits, info.fullFrameNits, info.minNits,
+                        info.valid ? 1 : 0, info.plausible ? 1 : 0));
+                }
+            }
             return info;
         }
     }

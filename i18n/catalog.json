@@ -14619,6 +14619,13 @@
    "ja": "この Microsoft アカウントには Xbox プロフィールがまだありません。一度 xbox.com でサインインしてプロフィールを作成してから再試行してください。"
   },
   {
+   "zh": "这个数值是显示器的上限声明，不是实测，因此曲线未按它缩放。",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "這個數值是顯示器的上限宣告，不是實測，因此曲線未依它縮放。",
+   "en": "This figure is the display's ceiling declaration, not a measurement, so the curve is not scaled by it.",
+   "ja": "この値はディスプレイの上限宣言であり実測値ではないため、カーブのスケーリングには使用していません。"
+  },
+  {
    "zh": "这个模式还没有预设。",
    "src": "qml/DialogHost.qml",
    "zh-TW": "這個模式還沒有預設。",
