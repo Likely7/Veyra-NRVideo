@@ -718,6 +718,11 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   # veyra_engine is linked for the subtitle engine (SRT/ASS/VTT parsing +
   # indexed cue lookup); FFmpeg import libraries come from its public surface.
   target_link_libraries(veyra_repair_contract_tests PRIVATE veyra_base veyra_engine ${FFMPEG_LIBRARIES})
+  # This suite keeps many EnhancementSettings copies and P5 RPU blobs alive at once;
+  # the default 1 MiB stack overflowed after the 2.0.7 test/struct growth (verified: it
+  # completes with a larger stack). Same remedy the other suites already use.
+  target_link_options(veyra_repair_contract_tests PRIVATE /STACK:33554432)
+
   target_compile_features(veyra_repair_contract_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_repair_contract_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_repair_contract_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -735,19 +740,40 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_options(veyra_decode_profile_probe PRIVATE /utf-8 /WX-)
   target_compile_definitions(veyra_decode_profile_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
   target_link_libraries(veyra_decode_profile_probe PRIVATE d3d12 dxgi dxguid)
-  add_executable(veyra_fsr_probe tools/fsr_probe/main.cpp)
+  # Custom (Dolby Vision profile 5): runs the shipped YuvToLinearRgb.dxil over a
+  # decoded frame with the player's own root constants and dumps the working
+  # signal, so the profile-5 colour conversion can be diffed against an
+  # independent reference decode instead of being taken on trust.
+  add_executable(veyra_dovi_p5_probe tools/dovi_p5_probe/main.cpp)
+  target_compile_features(veyra_dovi_p5_probe PRIVATE cxx_std_20)
+  target_compile_options(veyra_dovi_p5_probe PRIVATE /utf-8 /WX-)
+  target_compile_definitions(veyra_dovi_p5_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE
+    VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
+  target_include_directories(veyra_dovi_p5_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${FFMPEG_INCLUDE_DIRS})
+  target_link_libraries(veyra_dovi_p5_probe PRIVATE d3d12 dxgi dxguid ${FFMPEG_LIBRARIES})
+  add_dependencies(veyra_dovi_p5_probe veyra_shader_yuv_to_rgb)
   add_executable(veyra_fsr_dispatch_tests tests/integration/FsrFgDispatchTests.cpp)
   target_compile_features(veyra_fsr_dispatch_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_fsr_dispatch_tests PRIVATE veyra_gfx d3d12 dxgi dxguid)
-  target_compile_features(veyra_fsr_probe PRIVATE cxx_std_20)
-  target_compile_options(veyra_fsr_probe PRIVATE /utf-8 /WX-)
-  target_compile_definitions(veyra_fsr_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
-  target_link_libraries(veyra_fsr_probe PRIVATE d3d12 dxgi dxguid)
-  add_executable(veyra_fsr_upscale_probe tools/fsr_upscale_probe/main.cpp)
-  target_compile_features(veyra_fsr_upscale_probe PRIVATE cxx_std_20)
-  target_compile_options(veyra_fsr_upscale_probe PRIVATE /utf-8 /WX-)
-  target_compile_definitions(veyra_fsr_upscale_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
-  target_link_libraries(veyra_fsr_upscale_probe PRIVATE d3d12 dxgi dxguid)
+# Everything that touches media headers (NetworkInput, Dovi, the audio tests) needs these.
+# Upstream relies on its own build environment exporting them; we add them globally.
+include_directories(${FFMPEG_INCLUDE_DIRS})
+
+  # The FSR probes include the FidelityFX SDK headers directly, so they cannot be built
+  # without the local SDK tree (same guard as the FSR backend above). They are diagnostic
+  # tools only; the player and the tests do not need them.
+  if(EXISTS "${VEYRA_FIDELITYFX2_ROOT}/api/include/ffx_api_loader.h")
+    add_executable(veyra_fsr_probe tools/fsr_probe/main.cpp)
+    target_compile_features(veyra_fsr_probe PRIVATE cxx_std_20)
+    target_compile_options(veyra_fsr_probe PRIVATE /utf-8 /WX-)
+    target_compile_definitions(veyra_fsr_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+    target_link_libraries(veyra_fsr_probe PRIVATE d3d12 dxgi dxguid)
+    add_executable(veyra_fsr_upscale_probe tools/fsr_upscale_probe/main.cpp)
+    target_compile_features(veyra_fsr_upscale_probe PRIVATE cxx_std_20)
+    target_compile_options(veyra_fsr_upscale_probe PRIVATE /utf-8 /WX-)
+    target_compile_definitions(veyra_fsr_upscale_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+    target_link_libraries(veyra_fsr_upscale_probe PRIVATE d3d12 dxgi dxguid)
+  endif()
   add_executable(veyra_capture_color_tests tests/unit/CaptureColorContractTests.cpp)
   add_executable(veyra_capture_format_selection_tests tests/unit/CaptureFormatSelectionTests.cpp)
   target_compile_features(veyra_capture_format_selection_tests PRIVATE cxx_std_20)
@@ -782,9 +808,11 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_link_libraries(veyra_nr_model_settings_tests PRIVATE veyra_engine)
   target_link_options(veyra_nr_model_settings_tests PRIVATE /STACK:33554432)
   add_executable(veyra_audio_timeline_tests tests/integration/AudioTimelineTests.cpp)
+  target_include_directories(veyra_audio_timeline_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_compile_features(veyra_audio_timeline_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_audio_timeline_tests PRIVATE veyra_sinks)
   add_executable(veyra_capture_audio_tests tests/integration/CaptureAudioTests.cpp)
+  target_include_directories(veyra_capture_audio_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   add_executable(veyra_avermedia_switch_tests tests/unit/AverMediaAudioSwitchTests.cpp)
   target_compile_features(veyra_avermedia_switch_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_avermedia_switch_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
