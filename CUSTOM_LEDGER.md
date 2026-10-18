@@ -136,7 +136,97 @@ git diff --shortstat origin/main..HEAD     # 真正的差异
 
 **如果作者回复了**（提意见或要求修改），再按他的意见处理；他没有要求就什么都不做。
 
-### 九、升级上游时的安全顺序
+### 九、作者合并了我的 PR 之后，怎么继续
+
+> 假设：作者合并了 #56（杜比视界）和 #62（删元数据）。
+> 这时**情况变了**：这些代码成了上游的一部分，不能再往旧 PR 分支加东西。
+
+#### 一个必须理解的差别
+
+| | 合并前 | 合并后 |
+| --- | --- | --- |
+| 代码住在哪 | 你的 `feat/dolby-vision` 分支 | **上游 `main`** |
+| 新功能往哪加 | 旧 PR 分支继续 push | **从最新上游开新分支** |
+| 旧 PR 分支 | 还有用 | **可以删了** |
+
+**核心陷阱**：作者合并后，他可能会**改写你的提交**（squash、fixup、调整）。
+如果这时你还往旧分支 push，两边历史就分叉了——你的改动会被孤立。
+
+#### 正确流程（合并确认后立刻做）
+
+```powershell
+# 1. 拉上游最新
+git fetch origin
+
+# 2. 确认你的东西真的进去了（不是"他说合并了"，是代码真的在）
+git log --oneline origin/main --grep="dovi" -20
+git log --oneline origin/main --grep="metadata" -10
+grep -n "DolbyVisionRpu\|active.hdrMetadata=defaults" include/veyra/engine/EnhancementSettings.h
+
+# 3. 把本地 custom 接到新上游上
+git checkout custom
+git merge origin/main
+
+# 4. 这时必然有冲突（你在 custom 上也改过这些文件）
+#    解决原则：优先取上游，你本地独有的定制（如 UI 改动）再补回
+
+# 5. 编译 + 冒烟 + 部署，确认没坏
+
+# 6. 删掉已合并的旧 PR 分支
+git branch -D feat/dolby-vision feat/remove-hdr-metadata
+```
+
+#### 之后的每一步新功能
+
+```powershell
+# 永远从"最新上游"开分支，不是从旧分支
+git checkout -B feat/dovi-next origin/main
+
+# 只改这一件事
+git commit
+python tools/check_pr_ready.py feat/dovi-next   # 检查
+git push fork feat/dovi-next
+gh pr create --head georgeg911:feat/dovi-next
+```
+
+#### ⚠️ 千万别做的事
+
+| 别做 | 为什么 |
+| --- | --- |
+| 继续往已合并的旧分支 push | 历史分叉，你的提交会被孤立 |
+| `git push --force` 到已合并分支 | 同上，而且作者会困惑 |
+| 在 `custom` 上做新功能然后从它提 PR | 夹带全部定制（见方案第二条） |
+| 合并后不验证就继续开发 | 上游可能改写了你的代码，行为可能变 |
+
+#### 一个重要判断：上游的版本和你的不一样怎么办
+
+作者合并时可能**改动了你的实现**（简化、重命名、整合进他的结构）。
+
+**这时**：
+
+1. **先读上游的代码**，搞清他怎么写的
+2. **以他的实现为基础**开发新功能——不要试图把你的旧代码再塞回去
+3. 如果你觉得他的改动有问题，**单独提一个小 issue 或 PR 讨论**，别直接覆盖
+
+**心态**：合并意味着代码归他维护了。你从"作者"变成"使用者 + 贡献者"，
+按他的形状来，冲突最少。
+
+#### 如果作者只合并了一部分
+
+比如合并了 #56 的 P5，但 P7 增强层他不要（因为覆盖率只有 5.9%）：
+
+```powershell
+# 你的 custom 上还有 P7，上游没有
+git checkout custom
+git merge origin/main     # P5 会和上游合并，P7 保留为本地定制
+
+# 确认 P7 还在
+grep -n "elLayerEnabled_\|DolbyVisionP7" src/source/MediaFileSource.cpp
+```
+
+**这没问题**——本地保留他没要的部分，是完全正常的用法。
+
+### 十、升级上游时的安全顺序
 
 ```
 1. 先备份：git bundle create .../custom-full.bundle --all
