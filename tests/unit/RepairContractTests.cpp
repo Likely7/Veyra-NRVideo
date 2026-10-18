@@ -33,11 +33,15 @@ int thunkReplacementFunction(int value) { ++thunkHookCalls; return thunkOriginal
 #include "veyra/sink/ArrivalClockMapping.h"
 #include "veyra/sink/CaptureSyncTarget.h"
 #include "veyra/source/DolbyVision.h"
+#include "veyra/source/DolbyVisionRpu.h"
 #include "veyra/source/AudioInputRecovery.h"
 #include "veyra/engine/Subtitles.h"
 #include "veyra/engine/PresentationSettings.h"
 #include "veyra/engine/PresentationGeometry.h"
 #include "veyra/gfx/NvidiaVrr.h"
+#include "veyra/engine/DoviCurveAdapter.h"
+#include "veyra/engine/DoviBlElCompose.h"
+#include "veyra/pipeline/DolbyVisionP7.h"
 int main(){
     using namespace veyra;int failures=0,checks=0;
     auto check=[&](bool ok,const char* name){++checks;if(!ok)++failures;std::cout<<(ok?"PASS ":"FAIL ")<<name<<'\n';};
@@ -115,7 +119,13 @@ int main(){
         check(engine::disableFailedBackend(recovered,engine::FailedBackend::OpticalFlow)&&!recovered.nr&&recovered.sr&&recovered.multiplier==1,"flow failure disables dependent consumers while retaining spatial video SR");
         check(!engine::disableFailedBackend(recovered,engine::FailedBackend::OpticalFlow),"repeated failure cannot create an unbounded recovery loop");
         source::DolbyVisionInfo dv;dv.present=dv.baseLayer=true;dv.profile=5;dv.compatibility=1;
-        check(dv.route()==source::DolbyBaseLayer::Unsupported,"DV P5 cannot be relabelled as HDR10 even with a conflicting compatibility id");
+        check(dv.route()==source::DolbyBaseLayer::Hdr10,"DV P5 base layer is pinned to the routed HDR10 container so the RPU conversion can run");
+        check(dv.description().find(L"还没有可用的 RPU 转换参数")!=std::wstring::npos,
+              "DV P5 does not report an RPU conversion before its parameters are actually in effect");
+        dv.profile5Converted=true;
+        check(dv.description().find(L"IPT-PQ-C2")!=std::wstring::npos,
+              "DV P5 reports the IPT-PQ-C2 conversion once the RPU parameters are in effect");
+        dv.profile5Converted=false;
         dv.profile=8;
         check(dv.route()==source::DolbyBaseLayer::Hdr10,"DV P8.1 selects HDR10 base-layer compatibility");
         pipeline::ColorDescription color;color.transfer=pipeline::TransferFunction::PQ;color.matrix=pipeline::YuvMatrix::BT2020NCL;color.primaries=pipeline::ColorPrimaries::BT2020;
@@ -124,6 +134,251 @@ int main(){
         dv.compatibility=4;check(dv.route()==source::DolbyBaseLayer::Hlg,"DV P8.4 selects HLG base layer");
         dv.compatibility=2;check(dv.route()==source::DolbyBaseLayer::Sdr,"DV P8.2 selects SDR base layer");
         dv.baseLayer=false;check(dv.route()==source::DolbyBaseLayer::Unsupported,"missing DV base layer fails closed");
+        // Profile-5 RPU -> shader parameters. The builder must be a pure function
+        // of one frame's metadata (the sample carries flat/placeholder frames)
+        // and must never claim a conversion it cannot actually perform.
+        {
+            struct RpuBlob { AVDOVIMetadata meta{}; AVDOVIRpuDataHeader header{}; AVDOVIDataMapping mapping{}; AVDOVIColorMetadata color{}; };
+            const auto fill=[&](RpuBlob& blob,bool matrices,bool polynomial,bool shaped){
+                blob={};
+                blob.meta.header_offset=size_t(reinterpret_cast<uint8_t*>(&blob.header)-reinterpret_cast<uint8_t*>(&blob.meta));
+                blob.meta.mapping_offset=size_t(reinterpret_cast<uint8_t*>(&blob.mapping)-reinterpret_cast<uint8_t*>(&blob.meta));
+                blob.meta.color_offset=size_t(reinterpret_cast<uint8_t*>(&blob.color)-reinterpret_cast<uint8_t*>(&blob.meta));
+                blob.header.coef_log2_denom=20;blob.header.bl_bit_depth=10;
+                for(int i=0;i<9;++i){
+                    const AVRational value{matrices&&i%4==0?1:0,1};
+                    blob.color.ycc_to_rgb_matrix[i]=value;blob.color.rgb_to_lms_matrix[i]=value;
+                }
+                for(int c=0;c<3;++c){
+                    auto& curve=blob.mapping.curves[c];
+                    curve.num_pivots=2;curve.pivots[0]=0;curve.pivots[1]=1023;
+                    curve.mapping_idc[0]=polynomial?AV_DOVI_MAPPING_POLYNOMIAL:AV_DOVI_MAPPING_MMR;
+                    curve.poly_order[0]=1;
+                    curve.poly_coef[0][0]=shaped?int64_t(0.25*(1<<20)):0;
+                    curve.poly_coef[0][1]=shaped?int64_t(0.5*(1<<20)):0;
+                    curve.poly_coef[0][2]=0;
+                }
+            };
+            const auto sameState=[](const pipeline::DolbyVisionP5& a,const pipeline::DolbyVisionP5& b){
+                if(a.active!=b.active)return false;
+                for(int i=0;i<9;++i)if(a.yccToRgb[i]!=b.yccToRgb[i]||a.lmsToRgb[i]!=b.lmsToRgb[i])return false;
+                for(int c=0;c<3;++c)for(int k=0;k<3;++k)if(a.curve[c][k]!=b.curve[c][k])return false;
+                return true;
+            };
+            RpuBlob blob; pipeline::DolbyVisionP5 state;
+            fill(blob,true,true,true);
+            auto built=source::buildDolbyVisionP5(blob.meta,state);
+            check(built.ok&&built.usable&&state.active&&!built.placeholderMapping&&!built.unsupportedMapping&&
+                  std::abs(state.curve[0][2]-0.5f)<0.01f&&std::abs(state.curve[0][0]-0.25f)<0.01f,
+                  "DV P5 conversion uses the RPU matrices and the per-frame reshaping curve");
+            const auto shaped=state;
+            // A profile-5 RPU has to describe its base layer; without that block
+            // the caller refuses the frame instead of guessing a colour.
+            fill(blob,false,true,true);
+            built=source::buildDolbyVisionP5(blob.meta,state);
+            check(!built.ok&&!built.usable&&built.colorMetadataMissing&&!state.active,
+                  "DV P5 refuses an RPU whose colour block is empty");
+            // A reshaping method this decoder cannot reproduce must not be
+            // silently replaced by the identity either.
+            fill(blob,true,false,true);
+            built=source::buildDolbyVisionP5(blob.meta,state);
+            check(built.ok&&!built.usable&&built.unsupportedMapping,
+                  "DV P5 refuses a reshaping method it cannot reproduce instead of converting with the identity");
+            // Flat (placeholder) frames: identity for the affected components, and
+            // the result may not depend on what played before - this is the
+            // backward-seek case (a later scene, then a seek into the opening).
+            fill(blob,true,true,false);
+            pipeline::DolbyVisionP5 fresh;
+            const auto freshBuilt=source::buildDolbyVisionP5(blob.meta,fresh);
+            pipeline::DolbyVisionP5 sequential=shaped;
+            const auto sequentialBuilt=source::buildDolbyVisionP5(blob.meta,sequential);
+            check(freshBuilt.ok&&freshBuilt.usable&&freshBuilt.placeholderMapping&&
+                  sequentialBuilt.placeholderMapping&&sameState(fresh,sequential)&&
+                  fresh.curve[0][0]==0.0f&&fresh.curve[0][1]==0.0f&&fresh.curve[0][2]==1.0f,
+                  "DV P5 flat mappings convert to the identity regardless of playback history");
+            // Dolby Vision level-1 (per-frame brightness): additive, never a guess.
+            {
+                AVDOVIDmData ext{};ext.level=1;ext.l1.min_pq=0;ext.l1.max_pq=1000;ext.l1.avg_pq=500;
+                RpuBlob l1{};
+                l1.meta.ext_block_offset=size_t(reinterpret_cast<uint8_t*>(&ext)-reinterpret_cast<uint8_t*>(&l1.meta));
+                l1.meta.ext_block_size=sizeof(AVDOVIDmData);
+                l1.meta.num_ext_blocks=1;
+                const auto got=source::extractDoviFrameInfo(l1.meta,8);
+                check(got.valid&&got.profile==8&&
+                      std::abs(got.maxPq-1000.0f/4095.0f)<1e-6f&&std::abs(got.avgPq-500.0f/4095.0f)<1e-6f,
+                      "DV level-1 max/avg PQ are normalised exactly like libplacebo");
+                RpuBlob none{};
+                check(!source::extractDoviFrameInfo(none.meta,8).valid,
+                      "DV without a level-1 block reports no brightness instead of a guess");
+                AVDOVIDmData l2msg{};l2msg.level=2;
+                RpuBlob l2{};
+                l2.meta.ext_block_offset=size_t(reinterpret_cast<uint8_t*>(&l2msg)-reinterpret_cast<uint8_t*>(&l2.meta));
+                l2.meta.ext_block_size=sizeof(AVDOVIDmData);
+                l2.meta.num_ext_blocks=1;
+                check(!source::extractDoviFrameInfo(l2.meta,8).valid,
+                      "DV ignores extension blocks that are not level 1");
+            // Dolby Vision level-1 -> curve: only the highlight start follows the frame,
+            // and a frame without level 1 must leave the user curve untouched.
+            {
+                engine::HdrCurveSettings user{};
+                user.enabled = true; user.shadowLiftEv100 = 15; user.shadowRangeNits = 20;
+                user.midGrayNits = 220; user.rollOffPercent = 130;
+                user.highlightStartNits = 400; user.peakCapNits = 0;
+                pipeline::DoviFrameInfo none{};
+                const auto unchanged = engine::doviCurveFromLevel1(none, user);
+                check(unchanged.shadowLiftEv100 == user.shadowLiftEv100 &&
+                      unchanged.shadowRangeNits == user.shadowRangeNits &&
+                      unchanged.midGrayNits == user.midGrayNits &&
+                      unchanged.rollOffPercent == user.rollOffPercent &&
+                      unchanged.highlightStartNits == user.highlightStartNits &&
+                      unchanged.peakCapNits == user.peakCapNits,
+                      "DV curve adapter keeps the user curve intact when a frame has no level 1");
+                pipeline::DoviFrameInfo l1{};
+                l1.valid = true; l1.profile = 8; l1.maxPq = 0.6339f; l1.avgPq = 0.4f;
+                const auto followed = engine::doviCurveFromLevel1(l1, user);
+                check(followed.highlightStartNits >= 100 && followed.highlightStartNits <= 2000 &&
+                      followed.highlightStartNits != user.highlightStartNits,
+                      "DV curve adapter moves the highlight start when level 1 is present");
+                check(followed.shadowLiftEv100 == user.shadowLiftEv100 &&
+                      followed.midGrayNits == user.midGrayNits &&
+                      followed.rollOffPercent == user.rollOffPercent,
+                      "DV curve adapter keeps every non-highlight parameter from the user");
+                user.peakCapNits = 200;
+                const auto capped = engine::doviCurveFromLevel1(l1, user);
+                check(capped.peakCapNits == 200,
+                      "DV curve adapter leaves the user peak ceiling exactly as set");
+                // The ceiling is the anchor of the mid-gray gamma, so following must
+                // never rewrite it: with mid != 203 that reshaped the whole tone
+                // scale (a real preset lost 78% at 1 nit). Only above the start may
+                // the two curves differ.
+                engine::HdrCurveSettings preset{};
+                preset.enabled = true; preset.midGrayNits = 175; preset.highlightStartNits = 450;
+                preset.rollOffPercent = 110; preset.peakCapNits = 1200;
+                const auto presetFollowed = engine::doviCurveFromLevel1(l1, preset);
+                check(presetFollowed.peakCapNits == 1200 && presetFollowed.midGrayNits == 175,
+                      "DV curve adapter keeps the ceiling and mid-gray of a real preset");
+                bool shadowIdentical = true, highlightsCompressed = false;
+                for (const double nits : {1.0, 10.0, 100.0, 203.0}) {
+                    const auto before = engine::hdrCurveLuminance(preset, nits);
+                    const auto after = engine::hdrCurveLuminance(presetFollowed, nits);
+                    if (std::abs(before - after) > 1e-9) shadowIdentical = false;
+                }
+                highlightsCompressed = engine::hdrCurveLuminance(presetFollowed, 1000.0) <
+                    engine::hdrCurveLuminance(preset, 1000.0);
+                check(shadowIdentical && highlightsCompressed,
+                      "DV curve adapter moves only the highlights: 1-203 nit identical, 1000 nit lower");
+                // Following may pull a start that idles above the frame's own peak
+                // down to it, never below a start the user already set stronger.
+                engine::HdrCurveSettings strong = preset;
+                strong.highlightStartNits = 200;
+                const auto keptStrong = engine::doviCurveFromLevel1(l1, strong);
+                check(keptStrong.highlightStartNits == 200,
+                      "DV curve adapter never weakens a compression the user set lower");
+                check(engine::pqToNits(0.0) == 0.0 && engine::pqToNits(1.0) > 9999.0 &&
+                      engine::pqToNits(0.6339) > 320.0 && engine::pqToNits(0.6339) < 350.0,
+                      "DV curve adapter converts PQ to nits with the ST 2084 curve");
+            }
+
+            // Custom (P5): BL+EL 重建的参考实现，参数取自 Dolby FEL 测试片实测值
+            // （luma 逆映射恒等、coef_log2_denom=23、bit depth 10/10/12、NLQ LINEAR_DZ）。
+            {
+                AVDOVIRpuDataHeader header{};
+                header.coef_log2_denom = 23;
+                header.bl_bit_depth = 10;
+                header.el_bit_depth = 10;
+                header.vdr_bit_depth = 12;
+                header.disable_residual_flag = 0;
+                header.ext_mapping_idc_0_4 = 0;
+                header.bl_video_full_range_flag = 0;
+
+                AVDOVIDataMapping mapping{};
+                mapping.nlq_method_idc = AV_DOVI_NLQ_LINEAR_DZ;
+                auto& luma = mapping.curves[0];
+                luma.num_pivots = 9;
+                const uint16_t pivots[9] = {0, 128, 256, 384, 512, 640, 768, 896, 1023};
+                for (int i = 0; i < 9; ++i) luma.pivots[i] = pivots[i];
+                for (int i = 0; i < 8; ++i) {
+                    luma.mapping_idc[i] = AV_DOVI_MAPPING_POLYNOMIAL;
+                    luma.poly_order[i] = 1;
+                    luma.poly_coef[i][0] = 0;
+                    luma.poly_coef[i][1] = 8388608;   // 1.0 in 2^23
+                    luma.poly_coef[i][2] = 0;
+                }
+                for (int c = 0; c < 3; ++c) {
+                    mapping.nlq[c].nlq_offset = 512;
+                    mapping.nlq[c].vdr_in_max = 1048576;
+                    mapping.nlq[c].linear_deadzone_slope = 2048;
+                    mapping.nlq[c].linear_deadzone_threshold = 0;
+                }
+
+                // 1) 本样本的 luma 曲线必须映射成恒等（v = s << 6），否则整条重建偏。
+                bool identity = true;
+                for (int s : {0, 100, 512, 1023}) {
+                    const auto v = engine::doviInverseMap(mapping, header, 0, s, s, s);
+                    if (v != uint16_t(s << 6)) identity = false;
+                }
+                check(identity, "DV P7 inverse mapping is identity for the HDR10 base layer");
+
+                // 2) NLQ：零点是 offset，已知样本对得上手算值
+                check(engine::doviNlq(mapping, 0, 10, 23, 512) == 0,
+                      "DV P7 NLQ maps the offset to zero residual");
+                check(engine::doviNlq(mapping, 0, 10, 23, 514) == 24,
+                      "DV P7 NLQ scales a +2 sample to +24");
+                check(engine::doviNlq(mapping, 0, 10, 23, 600) == 1400,
+                      "DV P7 NLQ scales a +88 sample to +1400");
+
+                // 3) 重建：无残差时 h = (v + rounding) >> 4
+                check(engine::doviComposeLumaSample(mapping, header, 512, 512) == 2048,
+                      "DV P7 reconstruction passes the base layer through when EL is zero");
+                check(engine::doviComposeLumaSample(mapping, header, 512, 600) == 2136,
+                      "DV P7 reconstruction adds the EL residual (2048 + 88)");
+                // 4) disable_residual_flag 时必须忽略 EL
+                header.disable_residual_flag = 1;
+                check(engine::doviComposeLumaSample(mapping, header, 512, 600) == 2048,
+                      "DV P7 reconstruction ignores EL when residual is disabled");
+            }
+
+            }
+
+        }
+
+            // Custom (P5): P7 参数打包（与着色器 dv0..dv2 的布局一一对应）
+            {
+                AVDOVIDataMapping mapping{};
+                AVDOVIRpuDataHeader header{};
+                header.coef_log2_denom = 23;
+                header.bl_bit_depth = 10; header.el_bit_depth = 10; header.vdr_bit_depth = 12;
+                header.disable_residual_flag = 0; header.ext_mapping_idc_0_4 = 0;
+                mapping.nlq_method_idc = AV_DOVI_NLQ_LINEAR_DZ;
+                auto& luma = mapping.curves[0];
+                luma.num_pivots = 2;
+                luma.pivots[0] = 0; luma.pivots[1] = 1023;
+                luma.mapping_idc[0] = AV_DOVI_MAPPING_POLYNOMIAL;
+                luma.poly_order[0] = 1;
+                luma.poly_coef[0][0] = 0; luma.poly_coef[0][1] = 8388608; luma.poly_coef[0][2] = 0;
+                for (int c = 0; c < 3; ++c) {
+                    mapping.nlq[c].nlq_offset = 512;
+                    mapping.nlq[c].vdr_in_max = 1048576;
+                    mapping.nlq[c].linear_deadzone_slope = 2048;
+                    mapping.nlq[c].linear_deadzone_threshold = 0;
+                }
+                pipeline::DoviP7Constants packed{};
+                check(pipeline::doviP7ConstantsSupported(mapping, header, 1920, 1080, packed) && packed.ready,
+                      "DV P7 constants pack for an identity-mapping RPU");
+                check(packed.params[0] == 512.0f && packed.params[1] == 2048.0f &&
+                      packed.params[2] == 0.0f && packed.params[3] == 1048576.0f,
+                      "DV P7 constants carry the NLQ fields in dv0");
+                check(packed.params[4] == 23.0f && packed.params[5] == 10.0f && packed.params[6] == 12.0f,
+                      "DV P7 constants carry the bit depths and denominator in dv1");
+                check(packed.params[8] == 1920.0f && packed.params[9] == 1080.0f,
+                      "DV P7 constants carry the enhancement extent in dv2");
+                check(packed.params[27] == 2.0f, "DV P7 constants mark dv6.w as reconstruction");
+                luma.poly_coef[0][1] = 4194304;   // 0.5, no longer identity
+                pipeline::DoviP7Constants rejected{};
+                check(!pipeline::doviP7ConstantsSupported(mapping, header, 1920, 1080, rejected) && !rejected.ready,
+                      "DV P7 constants refuse a non-identity luma curve");
+            }
+
         diagnostics::GpuFrameTiming gpu;auto& first=gpu.gpu[size_t(diagnostics::GpuStage::Color)];first={diagnostics::SampleState::Measured,2,1000,3000,1000000};
         auto& last=gpu.gpu[size_t(diagnostics::GpuStage::FgBatch)];last={diagnostics::SampleState::Measured,3,10000,13000,1000000};
         gpu.gpu[size_t(diagnostics::GpuStage::Blit)]={diagnostics::SampleState::Measured,2,100000,102000,1000000};

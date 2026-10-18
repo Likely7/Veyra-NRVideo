@@ -1007,7 +1007,7 @@ __declspec(noinline) void testInactiveEffectEdits(){
         case 3:active.color.enabled=true;break;
         case 4:active.videoHdr.enabled=true;break;
         case 5:active.hdrCurve.enabled=true;break;
-        case 6:active.hdrMetadata.enabled=true;break;
+        case 6:active.multiplier=3;break;  // metadata no longer changes identity
         }
         check(!active.sameVideoConfiguration(edited)&&!active.sameActiveVideoParameters(edited),"enabling an edited effect changes active identity");
     }
@@ -1033,11 +1033,16 @@ __declspec(noinline) void testInactiveEffectEdits(){
     auto live=populated();live.sr=false;live.multiplier=1;
     next=live;next.videoSrQuality=5;next.frameGenerationBackend=FrameGenerationBackend::XeSS;next.color.exposure+=.1f;
     check(live.sameVideoConfiguration(next)&&!live.sameActiveVideoParameters(next)&&!requiresGraphRebuild(live,next),"mixed live colour and inactive backend edits need uniform upload without a reset");
+    // HDR10 static metadata was removed, so it can no longer pull the display peak
+    // into the resolved curve. Normalisation forces it off; only the pixel curve
+    // makes the display peak matter now.
     auto metadata=off;metadata.hdrMetadata.enabled=true;metadata.hdrMetadata.maxCllNits=1000;
-    next=metadata;next.hdrCurve.displayPeakNits=600;
+    const auto active=metadata.activeVideoSettings();
+    check(active.hdrMetadata==HdrMetadataSettings{},"metadata is normalised away");
+    metadata.hdrCurve.enabled=true;metadata.hdrCurve.displayPeakNits=600;
     HdrCurveSettings curve;HdrMetadataSettings resolved;
-    resolveHdrTuning(next.hdrCurve,next.hdrMetadata,curve,resolved);
-    check(resolved.maxCllNits==600&&!metadata.sameActiveVideoParameters(next),"display peak remains active for enabled metadata even with the pixel curve off");
+    resolveHdrTuning(metadata.hdrCurve,metadata.hdrMetadata,curve,resolved);
+    check(curve.displayPeakNits==600,"the pixel curve still carries the display peak");
 }
 // 2.0.7 runs RTX Video SR at native size to repair compression artifacts. Raw capture has
 // none, so a raw source already at the target skips SR as 2.0.6 did (5090 field log 57).
