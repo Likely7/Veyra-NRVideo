@@ -307,7 +307,7 @@ grep -n "elLayerEnabled_\|DolbyVisionP7" src/source/MediaFileSource.cpp
 
 ### 十、任何 PR 被合并后升级：逐项问用户，不许替他决定
 
-> **详细流程见 [`docs/MERGING.md`](MERGING.md)。**
+> **详细流程见 [`docs/MERGING.md`](docs/MERGING.md)。**
 
 核心：合并时只要有文件两边都改过，就逐个问用户「跟作者 / 按本地 / 混合」，
 **不许自己决定**。判断依据是「这个文件两边都改过」，不是「这是不是我提的 PR」。
@@ -490,7 +490,7 @@ Add-Type -AssemblyName Microsoft.VisualBasic
 
 | 文档 | 内容 |
 | --- | --- |
-| [`docs/HISTORY.md`](HISTORY.md) | 全部历史技术记录（按日期倒序）|
-| [`docs/MERGING.md`](MERGING.md) | 合并冲突决策流程（规矩 10 的详细版）|
-| [`docs/DOVI_WORK_HANDOFF.md`](DOVI_WORK_HANDOFF.md) | 杜比视界工作交接 |
-| [`docs/VeyraNV_LOCAL_BUILD_NOTES.md`](VeyraNV_LOCAL_BUILD_NOTES.md) | 本地构建说明 |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | 全部历史技术记录（按日期倒序）|
+| [`docs/MERGING.md`](docs/MERGING.md) | 合并冲突决策流程（规矩 10 的详细版）|
+| [`docs/DOVI_WORK_HANDOFF.md`](docs/DOVI_WORK_HANDOFF.md) | 杜比视界工作交接 |
+| [`docs/VeyraNV_LOCAL_BUILD_NOTES.md`](docs/VeyraNV_LOCAL_BUILD_NOTES.md) | 本地构建说明 |
