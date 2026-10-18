@@ -34,15 +34,22 @@
 
 ### 本地定制（上游没有）
 
-| 功能 | 状态 | 说明 |
-| --- | --- | --- |
-| 杜比视界 P5 IPT-PQ 转换 | 稳定 | 修掉偏绿，着色器 `YuvToLinearRgb.hlsl` |
-| 杜比视界 P7 增强层 | 实验性（默认关） | 覆盖率仅 5.9%，多数帧需基础层参考 |
-| 杜比视界跟随 L1 | 稳定（默认关） | 含平均亮度模式，借 libplacebo st2094 |
-| 首页最近列表清空 | 稳定 | — |
-| QML 日志错误修复 | 稳定 | VRow 循环 / DialogHost / VMenu |
-| 后端失败提示可操作 | 稳定 | 按后端给恢复建议 |
-| 会话目录诊断 | 稳定 | 错误带路径与系统原因 |
+| 功能 | 状态 | 说明 | 关键文件（核查用）|
+| --- | --- | --- | --- |
+| 杜比视界 P5 IPT-PQ 转换 | 稳定 | 修掉偏绿 | `shaders/YuvToLinearRgb.hlsl`<br>`include/veyra/pipeline/DolbyVisionP5.h` |
+| 杜比视界 P7 增强层 | 实验性（默认关） | 覆盖率仅 5.9%，多数帧需基础层参考 | `include/veyra/pipeline/DolbyVisionP7.h`<br>`include/veyra/pipeline/DoviP7Constants.h`<br>`include/veyra/engine/DoviBlElCompose.h`<br>`include/veyra/source/DolbyVisionRpu.h`<br>`src/source/MediaFileSource.cpp`（`elLayerEnabled_`）|
+| 杜比视界跟随 L1 | 稳定（默认关） | 含平均亮度模式，借 libplacebo st2094 | `include/veyra/engine/DoviCurveAdapter.h`<br>`src/engine/VideoPresenter.cpp`<br>开关：`EnhancementSettings`（`doviFollow` / `doviFollowAverage`）|
+| 首页最近列表清空 | 稳定 | — | `qml/Veyra/HomePage.qml` |
+| QML 日志错误修复 | 稳定 | VRow 循环 / DialogHost / VMenu | `qml/Veyra/VRow.qml`<br>`qml/Veyra/DialogHost.qml`<br>`qml/Veyra/VMenu.qml` |
+| 后端失败提示可操作 | 稳定 | 按后端给恢复建议 | `src/engine/EngineController.cpp` |
+| 会话目录诊断 | 稳定 | 错误带路径与系统原因 | `src/engine/PresetLibrary.cpp` |
+
+**核查用法**：想知道某个功能还在不在，直接看「关键文件」列是否有文件，或 grep 括号里的符号：
+
+```powershell
+git cat-file -e HEAD:include/veyra/pipeline/DolbyVisionP7.h   # 存在则输出空
+grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
+```
 
 ### 已删除（合并上游后可能复活，需重新删）
 
