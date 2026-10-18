@@ -1,4 +1,134 @@
 
+## ✅ 2026-10-18 分支历史清理：263 个提交压成 9 个，并定下提交规矩
+
+### 为什么清理
+
+`custom` 领先上游 263 个提交，但净差异只有 46 个文件。中间大量提交是"改完又撤销"：
+
+```
+7 对 feat/fix + 后置 Revert（补帧页排版 5 次、seek 重建 1 次、显示峰值 1 次）
+HDR 元数据功能来回三轮：移除（2.0.6）→ 加回（16ee455d）→ 再移除（本次）
+大量调试/诊断中间提交（diag(...)、wip(...)）
+```
+
+后果是合并上游时冲突面变大、回溯问题要翻几百条提交、`git log` 读不出所以然。
+
+### 怎么做的（可复用的手法）
+
+**绝不 `rebase -i`**（263 个提交交互式重排风险太高）。改为：
+
+1. `git checkout -B <new> origin/main` —— 从上游开干净分支
+2. 按**功能分组**，每组把文件从旧 HEAD 检出：`git checkout <old-head> -- <files>`
+3. 每组用一段说明写清楚"为什么"，然后提交
+4. **逐文件哈希校验**：`git diff --name-only <old-head>..HEAD` 必须为空
+5. `git diff --shortstat` 必须与清理前**逐字节一致**
+6. 全量编译 + 冒烟，再 `git branch -f custom <new>`
+
+**三重备份**（重写历史前必须做）：
+
+- `git bundle create <path>/custom-full.bundle --all`
+- `git tag backup/custom-before-cleanup <old-head>`
+- 全部源文件 SHA256 快照（用于事后比对）
+
+后悔一条命令：`git reset --hard backup/custom-before-cleanup`。
+
+### 结果
+
+```
+263 提交 → 9 提交
+净差异不变：46 文件 +6438 / −278
+逐文件哈希：与清理前完全一致
+编译：318 目标全绿
+```
+
+9 个提交按功能分组（docs / tools / UI 修复 / 元数据移除 / HDR 曲线 / DV 跟随 / P5 / P7）。
+
+---
+
+## 📌 提交与分支规矩（从本次起执行）
+
+### 一、一个功能 = 一个提交
+
+- **不要**在同一个提交里混两件不相干的事（改配色 + 修 bug）。
+- **不要**"改完不满意再 revert 一条"——要么用临时分支试，要么在同一分支上 `--amend`。
+- 试错请开 `trial/<用途>` 分支，成了再 `cherry-pick` 回来，扔掉临时分支。
+
+### 二、提交信息写"为什么"，不是"改了什么"
+
+文件列表 Git 自己会记。信息要回答：**为什么非改不可**，以及**验证到什么程度**。
+
+```
+✅ fix(hdr): stop scaling the curve against a display peak that was never measured
+
+   The credibility check was a copy of `valid`, so a panel reporting 10000 nit
+   scaled the whole curve by ten. Now computed for real.
+
+❌ 改了一行
+❌ fix bug
+```
+
+**破坏性改动加 `!`**（如 `feat(hdr)!: remove ...`），并在正文说清影响面。
+
+### 三、合并上游前先看净差异
+
+```powershell
+git rev-list --count HEAD..origin/main   # 落后多少
+git rev-list --count origin/main..HEAD   # 领先多少
+git diff --stat origin/main..HEAD        # 真正的改动
+```
+
+**净差异稳定在几十个文件才对**。如果领先提交数远超文件数，说明历史里堆了撤销和试错，该清理了。
+
+### 四、每次升级上游后必做的三件事
+
+1. `git merge origin/main`，冲突**优先取上游**（定制改动另行补回）
+2. 检查 `EnhancementSettings` 归一化里的防护是否还在（见下）
+3. 全量编译 + 冒烟 + 部署，报告 `exe`/`qml` 哈希
+
+### 五、HDR 元数据功能的防护（重要）
+
+该功能已在本次彻底移除，但**上游 main 上有**。以后合并上游会把它带回来：
+
+```cpp
+// include/veyra/engine/EnhancementSettings.h
+// HDR10 static metadata is gone... A session saved while it existed must not
+// resurrect it.
+active.hdrMetadata = defaults.hdrMetadata;
+```
+
+**这行必须保留**——它保证即使上游代码回来，运行时也强制关闭、永不发送 `SetHDRMetaData`。
+如果上游把**卡片 UI** 也带回来，需要再删一次界面（`ProPage.qml` 的 `list-hdr-metadata`、
+`SettingsPage.qml` 的 `hdrmeta-enabled`）。
+
+**为什么必须删**：它的 `SetHDRMetaData` 在 flip-model 交换链上会让 DWM 重新合成；
+全屏时每次窗口区域更新（悬停 tooltip、弹出面板）都会重新应用它。**60Hz 下一次重组就是一帧**，
+表现为鼠标划过图标就卡、亮度反复脉动。120Hz 有余量所以看不出来——同一台机器上，60Hz 投影仪必现、
+120Hz 电视无感。
+
+### 六、验证请求必须连 exe 一起部署
+
+只换 QML 不换 exe，用户看到的界面与描述不符（已发生过）。部署清单：
+
+- `veyra_qml_ui.exe` + `.p5` 备份（作者原件 `.orig` 永远不动）
+- `qml\Veyra\*` → `qml.p5\Veyra\*` → `qml\Veyra\*`
+- `shaders\*.dxil`（若有改动）
+- 报告：生效 exe 哈希、`.p5` 是否一致、`.orig` 是否未变
+- 启动验证：`exit=0` 且日志无 `Unexpected token` / `no root object`
+
+### 七、删除一律进回收站
+
+```powershell
+Add-Type -AssemblyName Microsoft.VisualBasic
+[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($path,
+  [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
+  [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)
+```
+
+删除前先打印精确清单（绝对路径 + 大小）并向用户确认。
+
+---
+
+
 ## ✅ 2026-10-17 AMD 光流（FidelityFX）从"根本编不进来"到编译通过：一条完整的排查链
 
 ### 现象
