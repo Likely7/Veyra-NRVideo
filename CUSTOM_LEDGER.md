@@ -226,7 +226,101 @@ grep -n "elLayerEnabled_\|DolbyVisionP7" src/source/MediaFileSource.cpp
 
 **这没问题**——本地保留他没要的部分，是完全正常的用法。
 
-### 十、升级上游时的安全顺序
+### 十、作者合并后升级：必须逐项问用户，不许替他决定
+
+> 用户明确要求：**作者合并 PR 时可能改动过实现，升级时必须让我选「跟作者」还是「按本地原来的」。**
+
+#### 为什么必须问（不是礼貌，是数据）
+
+实测冲突面（`origin/main` vs `custom` vs 两个 PR 分支）：
+
+```
+#56 改 27 个文件，#62 改 8 个，custom 改 47 个
+三方重叠（合并时必冲突）：28 个文件
+只在 PR 里（合并后归上游，本地无冲突）：0 个   ← 注意：一个都没有
+只在 custom 里（本地独有，不受影响）：19 个
+```
+
+**关键事实**：`#56` 的 27 个文件**全部**也在 `custom` 里被改过。
+这意味着一旦作者合并 #56，**每个文件都会冲突**，没有"自动跟随"的余地。
+
+#### 决策分类（按文件性质，不是按文件数）
+
+把 28 个冲突文件分成四类，每一类问一次，不要逐个问 28 次：
+
+| 类别 | 文件 | 默认建议 | 问法 |
+| --- | --- | --- | --- |
+| **A. 纯新文件** | `DolbyVisionRpu.h`、`DolbyVisionP7.h`、`DoviP7Constants.h`、`DolbyVisionP5.h`、`DoviBlElCompose.h`、`DoviCurveAdapter.h` | **跟作者** | 「这些是新文件，上游有就看他的版本？他可能改过实现」 |
+| **B. 共享数据结构** | `FramePacket.h`、`EnhancementSettings.h`、`GraphDescription.h`、`EngineController.h`、`VideoPresenter.h`、`MediaFileSource.h`、`IFrameSource.h`、`QmlPlayerBridge.h`、`FFmpegVideoDecoder.h`、`EnhanceGraph.h`、`DolbyVision.h` | **要看 diff** | 「这些是结构定义，两边都改过。要我列出他改了什么，你再决定？」 |
+| **C. 实现代码** | `MediaFileSource.cpp`、`VideoPresenter.cpp`、`QmlPlayerBridge.cpp`、`EngineController.cpp`、`EnhanceGraph.cpp`、`FFmpegDemuxer.cpp`、`FFmpegVideoDecoder.cpp` | **要看 diff** | 同上 |
+| **D. 界面与资源** | `ProPage.qml`、`SettingsPage.qml`、`i18n/catalog.json`、`YuvToLinearRgb.hlsl` | **跟作者 + 补回定制** | 「界面会被他的版本覆盖，你之前的 DV 卡片改动会丢。要我保住你的部分吗？」 |
+
+#### 必须提供的选择（每个冲突给出三选一）
+
+```
+对这个文件，你要哪个？
+  1) 跟作者（放弃我本地的改动）
+  2) 按我本地的（覆盖他的版本）
+  3) 混合（我列出他改了什么，你逐段选）
+```
+
+**默认不替用户决定。** 除非用户说「都跟作者」或「都按本地」，否则逐类问。
+
+#### 操作步骤（先看清楚，再动手）
+
+```powershell
+# 1. 合并但不提交，让冲突摆出来
+git checkout custom
+git merge origin/main --no-commit --no-ff
+
+# 2. 列出冲突文件（这就是要问的清单）
+git diff --name-only --diff-filter=U
+
+# 3. 对每个文件，先看作者改了什么（相对你分支的版本）
+git diff feat/dolby-vision:工程文件路径 origin/main:工程文件路径
+
+# 4. 用户选完之后再逐个解决并提交
+git add <文件>
+git commit
+```
+
+**如果冲突太多理不清**，可以整体放弃这次合并：
+
+```powershell
+git merge --abort
+```
+
+**回到合并前状态，什么都不丢。**
+
+#### 一个重要的判断辅助
+
+**作者如果重构了你的代码，优先跟作者**。理由：
+
+- 他改可能是为了配合上游其他改动，硬保留你的版本会破坏别处
+- 你要的功能大概率还在，只是实现方式变了
+- 跟他的版本，以后合并阻力小
+
+**只有这些情况才保留本地版本**：
+
+- 上游**没有**这个功能（他拒收的部分，比如 P7 增强层）
+- 你本地有**他没接受的定制**（比如 UI 布局、默认值）
+- 他的改动**引入了 bug**（这时应该单独提 issue，而不是本地硬保留）
+
+#### 升级后的核对清单
+
+```powershell
+# 功能还在吗
+git cat-file -e HEAD:include/veyra/source/DolbyVisionRpu.h        # P7/P5 实现
+grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp          # 增强层开关
+grep -n "active.hdrMetadata=defaults.hdrMetadata" include/veyra/engine/EnhancementSettings.h  # 元数据防护
+
+# 编译
+cmake --build build-nv
+
+# 部署 + 冒烟
+```
+
+### 十一、升级上游时的安全顺序
 
 ```
 1. 先备份：git bundle create .../custom-full.bundle --all
