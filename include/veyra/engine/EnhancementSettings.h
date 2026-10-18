@@ -324,6 +324,28 @@ struct EnhancementSettings {
     // live: the curve reaches the present blit and the metadata the display.
     HdrCurveSettings hdrCurve;
     HdrMetadataSettings hdrMetadata;
+    // Custom: follow the Dolby Vision RPU level 1 for the highlight start. Live,
+    // and deliberately a separate switch: it only moves where the curve's
+    // roll-off starts per frame, so the user keeps every other dial. Meaningless
+    // while `hdrCurve.enabled` is off, which is why the UI pairs the two.
+    bool doviFollow=false;
+    // Custom: also let the frame's average brightness move the knee, the way
+    // libplacebo's st2094_pick_knee does. Off keeps the previous peak-only curve.
+    bool doviFollowAverage=false;
+    // Custom (P5): decode and composite the Dolby Vision profile 7 enhancement
+    // layer instead of playing the base layer alone. On by default: the source must
+    // report profile 7 with an enhancement layer present before this path is entered
+    // at all, so ordinary material costs nothing and needs no decision. Turning it
+    // off forces base-layer-only playback for every source.
+    // Off until the enhancement layer can be paired with its own base frame; with
+    // the decoding lag measured on the FEL sample no frame currently matches, so an
+    // on default would promise something that does not happen.
+    // Off by default and opt-in per user: the enhancement layer only decodes a few
+    // percent of frames on real discs, so it stays a deliberate choice rather than
+    // something that silently changes playback. The source must also report
+    // profile 7 with an enhancement layer present before the path is entered, so
+    // turning this on has no effect on material without one.
+    bool doviP7Compose=false;
     bool useHdrPreview(bool hdrInput,bool hdrDisplayActive)const{return (hdrInput||videoHdr.enabled)&&hdrDisplayActive&&!forceSdrPreview;}
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
     uint32_t videoSrQuality=0; // 0 DLSS SR; 1–4 RTX Video SR
@@ -404,12 +426,11 @@ struct EnhancementSettings {
         if(nrHoldStrength==0)active.nrHoldTolerance=defaults.nrHoldTolerance;
         if(!hdrCurve.enabled){
             active.hdrCurve=defaults.hdrCurve;
-            // Display peak also rescales enabled HDR10 metadata, independently
-            // of the pixel curve's switch (resolveHdrTuning).
-            if(hdrMetadata.enabled&&(hdrMetadata.masteringPeakNits||hdrMetadata.maxCllNits||hdrMetadata.maxFallNits))
-                active.hdrCurve.displayPeakNits=hdrCurve.displayPeakNits;
         }
-        if(!hdrMetadata.enabled)active.hdrMetadata=defaults.hdrMetadata;
+        // HDR10 static metadata is gone: the card and the send path were removed
+        // because it never changed a pixel and its swapchain call recomposites the
+        // screen. A session saved while it existed must not resurrect it.
+        active.hdrMetadata=defaults.hdrMetadata;
         // Flow is shared. Turning off one effect does not make it inactive
         // while another consumer still needs it (VFG has its own flow).
         const bool flowUsed=(nr&&(motionUsesFlow(nrMotion)||usesNrTemporal()))||

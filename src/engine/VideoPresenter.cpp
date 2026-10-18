@@ -1,9 +1,11 @@
 #include "veyra/engine/VideoPresenter.h"
+#include "veyra/engine/DoviCurveAdapter.h" // custom: Dolby Vision level 1 -> curve
 #include "veyra/engine/PresentationGeometry.h"
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/sink/ImageExportSink.h"
+#include <cstdlib> // std::getenv (custom: Dolby Vision follow switch)
 namespace veyra::engine {
 bool VideoPresenter::beginSourceInput(){
     auto* xess=sink_.xess();if(!xess)return true;
@@ -32,6 +34,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         return false;
     }
     viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
+    latestDovi_={}; // A new chain never inherits the previous source's RPU.
     ++generation_;
     Status st=Status::Ok;
     // Keep one presentation queue for the native chain's lifetime. A later
@@ -117,9 +120,6 @@ bool VideoPresenter::prepareGraphChange(){
     if(sink_.xess()){close();return true;}
     if(presentationRing_.initialized()&&!presentationRing_.drainQueue())return false;
     hasPresented_=false;retainedFrame_.reset();gpuTimer_.close();
-    // Retain metadataSent_: a new graph disabling metadata must clear the
-    // hint that is still attached to the retained DXGI chain.
-    metadataDirty_=true;metadataAttempt_={};sourceMetadata_={};
     reflex_.close();reflexFrame_=0;
     return true;
 }
@@ -127,7 +127,6 @@ bool VideoPresenter::refresh(ID3D12Device* device){
     // ResizeBuffers keeps the swapchain object and may retain its metadata.
     // Request a resend without forgetting an active hint that must be cleared
     // if the user disables metadata immediately after a resize.
-    metadataDirty_=true;metadataAttempt_={};
     Microsoft::WRL::ComPtr<ID3D12Resource> bb;
     for(unsigned i=0;i<3;++i){
         bb.Reset();const HRESULT hr=sink_.swapChain()->GetBuffer(i,IID_PPV_ARGS(&bb));
@@ -189,6 +188,19 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const auto& metadataBaseline=graph.hdrMetadata();
     const bool needsDisplayPeak=hdrBaseline.enabled||(metadataBaseline.enabled&&
         (metadataBaseline.masteringPeakNits||metadataBaseline.maxCllNits||metadataBaseline.maxFallNits));
+    {
+        // Custom: one-shot record of what the display reports and whether it was
+        // trusted, so the curve's effective target is never a guess.
+        static unsigned peakLogged = 0;
+        if (peakLogged < 2 && graph.hdrOutput()) {
+            ++peakLogged;
+            veyra::log::info("hdr-peak", std::format(
+                "report valid={} plausible={} peak={} black={:.3f} needsPeak={} curveDisplayPeakNits={}",
+                hdrPeakInfo_.valid ? 1 : 0, hdrPeakInfo_.plausible ? 1 : 0,
+                hdrPeakInfo_.peakNits, hdrPeakInfo_.minNits,
+                needsDisplayPeak ? 1 : 0, hdrBaseline.displayPeakNits));
+        }
+    }
     if(graph.hdrOutput()&&needsDisplayPeak&&hdrBaseline.displayPeakNits==0){
         const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
         if(hdrPeakMonitor_!=monitor||now-hdrPeakQuery_>=std::chrono::seconds(2)){
@@ -196,14 +208,46 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             hdrPeakInfo_=gfx::PresentSink::queryDisplayPeak(window_);hdrPeakMonitor_=monitor;hdrPeakQuery_=now;
             if(previous.valid!=hdrPeakInfo_.valid||previous.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
         }
-        if(hdrPeakInfo_.valid)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
+        // Only a plausible report may scale the curve; a ceiling value would push the
+        // highlight start past anything the content contains.
+        if(hdrPeakInfo_.valid&&hdrPeakInfo_.plausible)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
+
     }
     HdrCurveSettings hdrCurve;HdrMetadataSettings hdrMetadata;
     resolveHdrTuning(hdrBaseline,graph.hdrMetadata(),hdrCurve,hdrMetadata);
-    applyHdrMetadata(graph,hdrMetadata,hdrCurve,identity);
+    // Custom: follow Dolby Vision level 1. Only the highlight start (and the
+    // peak cap under the user's ceiling) moves; shadow lift, mid-gray and
+    // roll-off strength stay exactly what the user set, so the picture is never
+    // silently re-shaded. hdrCurve itself stays the static curve for the
+    // display metadata and the coverage probe, and nothing is applied at all
+    // unless the switch is on: the delivered image is unchanged otherwise.
+    // VEYRA_DOVI_FOLLOW stays as a test override while the switch is checked.
+    const bool followDovi=latestDovi_.valid&&(graph.doviFollow()||std::getenv("VEYRA_DOVI_FOLLOW")!=nullptr);
+    // Average brightness, smoothed over ~0.5 s so the knee does not breathe with
+    // every frame. A large jump (scene change) resets the window instead of
+    // dragging the old value along.
+    double smoothedAvgPq=-1.0;
+    if(followDovi&&latestDovi_.valid){
+        const double avgPq=latestDovi_.avgPq;
+        if(avgPq>0.0){
+            constexpr int kWindow=12;
+            if(avgSumCount_>0&&(avgPq>0.0&&(avgSum_/double(avgSumCount_))>0.0)){
+                const double prevAvg=avgSum_/double(avgSumCount_);
+                if(prevAvg>0.0&&(avgPq>prevAvg*3.0||avgPq<prevAvg/3.0)){avgSum_=0.0;avgSumCount_=0;}
+            }
+            avgSum_+=avgPq;++avgSumCount_;
+            if(avgSumCount_>kWindow){avgSum_*=0.5;avgSumCount_/=2;}
+            smoothedAvgPq=avgSum_/double(avgSumCount_);
+        }
+    }
+    const HdrCurveSettings effective=followDovi?engine::doviCurveFromLevel1(latestDovi_,hdrCurve,graph.doviFollowAverage(),smoothedAvgPq):hdrCurve;
+    // The trace is its own gate: a user who turns the switch on must not get a
+    // line per frame pair for the length of a film. It also records the switch
+    // itself, so "RPU present but the setting did not arrive" is diagnosable.
+    const bool traceDovi=latestDovi_.valid&&std::getenv("VEYRA_DOVI_TRACE")!=nullptr;
     const RetainedFrame retained{graph.presentationReadyFenceObject(slot,generated),graph.presentationReadyFence(slot,generated),
         slot,unsigned(rc.right),unsigned(rc.bottom),generated,referencesValid,baseReference,IsWindowVisible(window_)!=FALSE,
-        comparison,split,view,identity,MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST),graph.hdrOutput()?hdrCurve:HdrCurveSettings{}};
+        comparison,split,view,identity,MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST),graph.hdrOutput()?effective:HdrCurveSettings{}};
     // Pausing keeps the last flip-model buffer visible. Re-submit only when
     // its producer fence, view, comparison, visibility, monitor or size changes.
     // Deferred resize must keep polling until the actual buffers match.
@@ -265,17 +309,42 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const float curveFlag=(hdrCurve.enabled&&graph.hdrOutput())?16.0f:0.0f;
     const float mainFlags=samplingFlags+curveFlag+(curveFlag&&graph.hdr10Output()?36.0f:0.0f);
     float dims[16]={renderW,renderH,mainFlags,inverseFit,float(rc.right),float(rc.bottom),view.centerX,view.centerY};
-    dims[8]=float(hdrCurve.shadowLiftEv100)/100.0f;
-    dims[9]=float(hdrCurve.shadowRangeNits);
-    dims[10]=float(hdrCurve.midGrayNits);
-    dims[11]=float(hdrCurve.highlightStartNits);
+    // The blit sees the per-frame curve when Dolby Vision follow is on; every
+    // other frame (and every non-DV source) passes the user's settings through.
+    dims[8]=float(effective.shadowLiftEv100)/100.0f;
+    dims[9]=float(effective.shadowRangeNits);
+    dims[10]=float(effective.midGrayNits);
+    dims[11]=float(effective.highlightStartNits);
     {
-        const float peak=hdrCurve.peakCapNits?float(hdrCurve.peakCapNits):1000.0f;
-        const float start=float(hdrCurve.highlightStartNits);
-        dims[12]=std::max(1.0f,peak-start)*float(hdrCurve.rollOffPercent)/100.0f;
-        dims[13]=float(hdrCurve.peakCapNits);
+        // The roll-off has to close at a real ceiling. Following the frame means
+        // closing at the frame's own peak, so the knee is not a slope stretched
+        // across the whole panel range (a 4000 nit ceiling with a 286 nit knee
+        // would barely compress anything the frame actually contains). The hard
+        // ceiling itself (dims[13]) stays the user's: it also anchors the mid-gray
+        // gamma, so moving it would reshape the whole tone scale.
+        float peak=effective.peakCapNits?float(effective.peakCapNits):1000.0f;
+        const float start=float(effective.highlightStartNits);
+        if(followDovi){
+            const float framePeak=float(engine::pqToNits(latestDovi_.maxPq));
+            peak=std::min(peak,std::max(framePeak,start+1.0f));
+        }
+        dims[12]=std::max(1.0f,peak-start)*float(effective.rollOffPercent)/100.0f;
+        dims[13]=float(effective.peakCapNits);
     }
     dims[14]=0.0f;dims[15]=0.0f;
+    if(traceDovi){
+        // Gated trace: proves the per-frame curve reached the blit constants.
+        // Throttled like the source-side dovi-probe so a long file stays small.
+        static int doviFollowCount=0;
+        if(doviFollowCount<3||doviFollowCount%200==0){
+            veyra::log::info("dovi-follow",std::format("n={} follow={} applied={} profile={} maxPq={:.4f} peakNits={:.1f} highlightStartNits={} (user={}) peakCapNits={} (user={})",
+                doviFollowCount,followDovi?1:0,curveFlag!=0.0f?1:0,static_cast<int>(latestDovi_.profile),latestDovi_.maxPq,
+                engine::pqToNits(latestDovi_.maxPq),effective.highlightStartNits,hdrCurve.highlightStartNits,
+                effective.peakCapNits,hdrCurve.peakCapNits));
+        }
+        // The counter advances outside the branch, so the periodic sample fires.
+        ++doviFollowCount;
+    }
     list->SetGraphicsRoot32BitConstants(0,16,dims,0);
     list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+size_t(slot+(generated?2:0))*pass_.increment});
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);list->DrawInstanced(3,1,0,0);
@@ -478,7 +547,6 @@ void VideoPresenter::publishLiveCoverage(const HdrCurveSettings& curve,pipeline:
 }
 
 void VideoPresenter::close(){
-    metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
     hdrPeakMonitor_=nullptr;hdrPeakInfo_={};hdrPeakQuery_={};
     refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
     retainedFrame_.reset();
@@ -606,48 +674,4 @@ Microsoft::WRL::ComPtr<ID3D12Resource> VideoPresenter::presentedResourceForTest(
 
 // Optional HDR10 metadata hint. Windows/monitors may ignore it; the curve itself
 // is applied to pixels independently. Cache only accepted swapchain state.
-void VideoPresenter::applyHdrMetadata(pipeline::EnhanceGraph& graph,const HdrMetadataSettings& m,const HdrCurveSettings& resolvedCurve,pipeline::FrameIdentity identity) {
-    const auto& src=graph.sourceColor();
-    sourceMetadata_.observe(identity.epoch,src.isHdrPath(),src.hdrMasteringPeakNits,src.hdrMaxCllNits,src.hdrMaxFallNits);
-    // An SDR clip carries no HDR metadata, so resolving it would report the generic
-    // HDR10 fallback (1000 nit) as if it were measured. Treat that as "no hint" and
-    // clear instead - unless the user forced values, which stays their explicit call.
-    const bool forced=m.masteringPeakNits||m.maxCllNits||m.maxFallNits;
-    const bool hint=m.enabled&&graph.hdr10Output()&&(src.isHdrPath()||forced);
-    if(!hint&&!metadataSent_)return;
-    auto* chain=sink_.swapChain4();
-    if(!chain)return;
-    const auto now=std::chrono::steady_clock::now();
-    if(!hint){
-        if(metadataSent_&&now-metadataAttempt_>=std::chrono::seconds(2)){
-            metadataAttempt_=now;
-            const HRESULT hr=chain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE,0,nullptr);
-            log::info("hdr-metadata",std::format("clear swapchain metadata hr=0x{:08X}",unsigned(hr)));
-            if(SUCCEEDED(hr)){metadataSent_=false;metadataDirty_=false;metadataAttempt_={};}
-        }
-        return;
-    }
-    DXGI_HDR_METADATA_HDR10 md{};
-    // BT.2020 primaries and D65 in DXGI's 1/50000 units.
-    md.RedPrimary[0]=35400;md.RedPrimary[1]=14600;
-    md.GreenPrimary[0]=8500;md.GreenPrimary[1]=39850;
-    md.BluePrimary[0]=6550;md.BluePrimary[1]=2300;
-    md.WhitePoint[0]=15635;md.WhitePoint[1]=16450;
-    // ① Output-aware: describe what the curve actually produces, not the source.
-    auto light=resolveHdrMetadataLuminance(m,sourceMetadata_);
-    if(resolvedCurve.enabled&&resolvedCurve.peakCapNits){light.cll=std::min(light.cll,resolvedCurve.peakCapNits);light.fall=std::min(light.fall,light.cll);}
-    md.MaxMasteringLuminance=light.peak;md.MinMasteringLuminance=light.minX10000;
-    md.MaxContentLightLevel=uint16_t(light.cll);md.MaxFrameAverageLightLevel=uint16_t(light.fall);
-    if(metadataSent_&&!metadataDirty_&&std::memcmp(&lastMetadata_,&md,sizeof(md))==0)return;
-    if(now-metadataAttempt_<std::chrono::seconds(2))return;
-    const HRESULT hr=chain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10,sizeof(md),&md);
-    log::info("hdr-metadata",std::format("SetHDRMetaData hr=0x{:08X} masteringPeak={} minX10000={} maxCLL={} maxFALL={} epoch={} (swapchain hint; monitor delivery unverified)",
-        unsigned(hr),md.MaxMasteringLuminance,md.MinMasteringLuminance,md.MaxContentLightLevel,md.MaxFrameAverageLightLevel,identity.epoch));
-    if(SUCCEEDED(hr)){
-        lastMetadata_=md;metadataSent_=true;metadataDirty_=false;metadataAttempt_={};
-    }else{
-        metadataAttempt_=now;
-    }
-}
-
 }

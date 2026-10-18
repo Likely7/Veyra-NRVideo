@@ -3,6 +3,7 @@
 #include "veyra/gfx/PresentSink.h"
 #include <dxgi1_6.h> // DXGI_HDR_METADATA_HDR10 (custom: HDR static metadata)
 #include "veyra/pipeline/GpuPassUtils.h"
+#include "veyra/pipeline/FramePacket.h" // custom: pipeline::DoviFrameInfo
 #include "veyra/engine/PreviewView.h"
 #include "veyra/engine/HdrOutputTuning.h"
 #include "veyra/gfx/CommandSlotRing.h"
@@ -38,6 +39,12 @@ public:
     bool beginSourceInput();
     bool beginSourceProcessing();
     void sourceProcessed(pipeline::FrameIdentity);
+    // Custom: Dolby Vision level-1 brightness of the source frame that is about
+    // to be presented. The owner thread sets it after the frame leaves the
+    // graph and before present(); an invalid value means "no RPU", which keeps
+    // the follow path from changing anything.
+    void setFrameDovi(const pipeline::DoviFrameInfo& d){latestDovi_=d;}
+    const pipeline::DoviFrameInfo& frameDovi() const {return latestDovi_;}
     PresentationSettings configurePresentation(gfx::D3D12DeviceContext&,PresentationSettings,bool fg,std::wstring& status);
     bool presentationReady(){return sink_.presentationReady();}
     bool waitPresentationReady(unsigned ms){return sink_.waitPresentationReady(ms);}
@@ -92,14 +99,6 @@ public:
 std::vector<diagnostics::GpuFrameTiming> takeGpuTimings(ID3D12Fence* fence){gpuTimer_.collect(presentationFence_?presentationFence_.Get():fence);return gpuTimer_.takeCompleted();}
 void recordGpuTimings(){gpuTimer_.recordCompleted();}
 private:
-    // Custom: HDR10 static metadata for the display (MaxCLL / MaxFALL / mastering
-    // peak). Sent only when it changes, and cleared when the HDR10 path stops.
-    void applyHdrMetadata(pipeline::EnhanceGraph& graph,const HdrMetadataSettings& metadata,const HdrCurveSettings& resolvedCurve,pipeline::FrameIdentity identity);
-    bool metadataSent_=false,metadataDirty_=false;
-    // The source's mastering/CLL values are absent on many frames; holding the last
-    // real value keeps the reported metadata steady instead of flapping to the
-    // fallback (which re-sent it on nearly every frame).
-    HdrSourceMetadata sourceMetadata_{};
     HMONITOR hdrPeakMonitor_=nullptr;
     gfx::PresentSink::DisplayPeakInfo hdrPeakInfo_{};
     std::chrono::steady_clock::time_point hdrPeakQuery_{},metadataAttempt_{};
@@ -134,6 +133,11 @@ private:
     pipeline::FrameIdentity probeIdentity_{};
     std::chrono::steady_clock::time_point probeNext_{};
     HdrCurveCoverage liveCoverage_{};
+    // Custom: Dolby Vision level 1 for the frame being presented. Purely
+    // additive: the blit uses it only when the follow switch is on.
+    pipeline::DoviFrameInfo latestDovi_{};
+    // Sliding window for the average-brightness follow (see the follow block).
+    double avgSum_=0.0; int avgSumCount_=0;
     bool ensureCoverageProbe(ID3D12Device*);
     void publishLiveCoverage(const HdrCurveSettings&,pipeline::FrameIdentity);
     unsigned lastBuffer_=0;bool hasPresented_=false;
