@@ -123,6 +123,11 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     // Custom: static HDR output tuning (present blit curve + display metadata).
     desc.hdrCurve=settings.hdrCurve;
     desc.hdrMetadata=settings.hdrMetadata;
+    // Custom: the Dolby Vision follow rides with the curve. Every graph build goes
+    // through this function, so without it a rebuild (source open, backend
+    // recovery) silently dropped the switch while the curve survived.
+    desc.doviFollow=settings.doviFollow;
+    desc.doviFollowAverage=settings.doviFollowAverage;
     desc.hdrOutputMode=settings.hdrOutputMode;
     desc.fgMotion=settings.fgMotion;desc.srMotion=settings.srMotion;desc.nrMotion=settings.nrMotion;
     desc.settingsRevision=settings.revision;

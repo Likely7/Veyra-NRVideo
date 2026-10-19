@@ -31,6 +31,9 @@ struct SourceOpenDesc {
     bool legacyCaptureRgbForDiagnostic = false; // explicit A/B only; never set by the player
     const std::atomic<bool>* cancelled = nullptr;
     bool deinterlace = false; // playback opt-in; unchanged default for offline consumers
+    // Custom (P5): decode the Dolby Vision profile 7 enhancement layer. Off by
+    // default; the setting behind it is still opt-in while the path is new.
+    bool decodeDolbyEnhancementLayer = false;
 };
 
 struct SourceInfo {

@@ -1,4 +1,5 @@
 #include "veyra/pipeline/ColorMetadata.h"
+#include "veyra/pipeline/DolbyVisionP5.h"
 #include "veyra/pipeline/HdrToneMap.h"
 // EnhanceGraph implementation - the real GPU chain migrated from
 // tools/player_probe main.cpp (R3.2). Ordering constraints preserved from the
@@ -1583,7 +1584,7 @@ bool EnhanceGraph::createComputePasses()
     // needs the FP32 side output. The extra UAV is part of the R5.3 contract
     // only for graphs that actually allocate preGradeRgba_.
     const UINT ingressUavCount = preGradeRgba_ ? 2u : 1u;
-    if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 12, 2, ingressUavCount, 12+kColorGradeConstantCount, 4)) return false;
+    if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 16, 2, ingressUavCount, 12+kColorGradeConstantCount+kDolbyVisionP5ConstantCount, 5)) return false;
     const char* rgbShader=desc_.packedInput?"PackedCaptureToLinear.dxil":desc_.yuy2Input?"Yuy2ToLinear.dxil":"RgbToLinear.dxil";
     if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,(desc_.packedInput?12:8)+kColorGradeConstantCount,4)))return false;
     // Descriptor budget grows with the NR stack: encode needs one SRV+UAV pair
@@ -1945,8 +1946,74 @@ bool EnhanceGraph::createViews()
 // ---------------------------------------------------------------------------
 // process: the per-frame chain (verbatim from the probe lambda).
 // ---------------------------------------------------------------------------
-bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh)
+
+// Custom (P5): copy the enhancement layer luma plane into its own texture. The EL
+// arrives as a CPU frame (software decode) at half the base resolution, so this is
+// one row-wise copy per frame; no parity slot is needed because the upload and the
+// dispatch that reads it are submitted in the same command list.
+bool EnhanceGraph::uploadElLuma(ID3D12GraphicsCommandList* list, const AVFrame* frame) {
+    if (list == nullptr || frame == nullptr || frame->data[0] == nullptr) return false;
+    const auto w = uint32_t(frame->width), h = uint32_t(frame->height);
+    if (w == 0 || h == 0) return false;
+    if (!elLumaTexture_ || elLumaW_ != w || elLumaH_ != h) {
+        elLumaTexture_ = makeTexture(context_.device(), w, h, DXGI_FORMAT_R16_UINT, false);
+        if (!elLumaTexture_) return false;
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        rd.Width = uint64_t(w) * 2ull * h;
+        rd.Height = 1;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.Format = DXGI_FORMAT_UNKNOWN;
+        rd.SampleDesc.Count = 1;
+        rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        if (FAILED(context_.device()->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
+                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&elLumaUpload_)))) {
+            elLumaTexture_.Reset();
+            return false;
+        }
+        elLumaW_ = w;
+        elLumaH_ = h;
+        veyra::log::info("dovi-el-gpu", std::format("enhancement layer texture {}x{} r16_uint", w, h));
+    }
+    const uint32_t srcPitch = uint32_t(frame->linesize[0]);
+    const uint32_t dstPitch = w * 2u;
+    void* mapped = nullptr;
+    if (FAILED(elLumaUpload_->Map(0, nullptr, &mapped)) || mapped == nullptr) return false;
+    for (uint32_t y = 0; y < h; ++y)
+        std::memcpy(static_cast<uint8_t*>(mapped) + size_t(y) * dstPitch,
+                    frame->data[0] + size_t(y) * srcPitch, dstPitch);
+    elLumaUpload_->Unmap(0, nullptr);
+    tracker_.transition(list, elLumaTexture_.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
+    D3D12_TEXTURE_COPY_LOCATION dst{};
+    dst.pResource = elLumaTexture_.Get();
+    dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    D3D12_TEXTURE_COPY_LOCATION src{};
+    src.pResource = elLumaUpload_.Get();
+    src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    src.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R16_UINT;
+    src.PlacedFootprint.Footprint.Width = w;
+    src.PlacedFootprint.Footprint.Height = h;
+    src.PlacedFootprint.Footprint.Depth = 1;
+    src.PlacedFootprint.Footprint.RowPitch = dstPitch;
+    list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+    tracker_.transition(list, elLumaTexture_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    return true;
+}
+
+bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh, const AVFrame* doviEl, const DoviP7Constants* doviP7)
 {
+    doviElFrame_ = doviEl;   // Custom (P5): borrowed for this frame only
+    p7Ready_ = doviP7 != nullptr && doviP7->ready;
+    if (p7Ready_) std::memcpy(p7Params_, doviP7->params, sizeof(p7Params_));
+    if (doviEl != nullptr && std::getenv("VEYRA_DOVI_TRACE") != nullptr) {
+        static unsigned elArrived = 0;
+        if (++elArrived <= 3 || elArrived % 100 == 0)
+            veyra::log::info("dovi-el-graph", std::format("frames_with_el={} {}x{} fmt={}",
+                elArrived, doviEl->width, doviEl->height, int(doviEl->format)));
+    }
     reset=reset||nrAutoResetPending_;nrAutoResetPending_=false;
     // Whole-chain duplicate reuse failed the unchanged-output experiment.
     // This narrower path only handles repeated edits of the SAME paused
@@ -2312,13 +2379,54 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);
     }else{
         // 0 full range, 1 limited, 2 limited luma with full-range chroma (Elgato non-MK.2 P010).
-        float constants[12+kColorGradeConstantCount] = { resolved.range==ColorRange::Full?0.0f:resolved.fullRangeChroma?2.0f:1.0f,
+        float constants[12+kColorGradeConstantCount+kDolbyVisionP5ConstantCount] = { resolved.range==ColorRange::Full?0.0f:resolved.fullRangeChroma?2.0f:1.0f,
             resolved.matrix==YuvMatrix::BT2020NCL?2.0f:resolved.matrix==YuvMatrix::BT601?0.0f:1.0f,
             resolved.transfer==TransferFunction::HLG?5.0f:resolved.transfer==TransferFunction::PQ?4.0f:float(workingTransferCode(resolved)), (nv12Texture?(nv12Texture->GetDesc().Format==DXGI_FORMAT_P010?1.0f:0.0f):(desc_.captureBitDepth==16?2.0f:desc_.wideYuvInput()?1.0f:0.0f)),
             uintBits(srcW_), uintBits(srcH_), uintBits((desc_.hdrWorking()?1u:0u)|(resolved.primaries==ColorPrimaries::BT2020?2u:0u)),
             uintBits(resolved.reconstructChroma?std::max(1u,unsigned(resolved.chromaLocation)):0u),toneMapPeakNits_,203.0f,0,0 };
         if(grade)packColorGradeConstants(colorTables_,constants+12);
+        // Dolby Vision profile 5: written on every frame because the enable flag
+        // lives inside the block, so switching source content back to ordinary
+        // video clears it without any extra graph state.
+        packDolbyVisionP5Constants(resolved.dolbyVisionP5,constants+12+kColorGradeConstantCount);
+        // Custom (P5): when this frame's RPU is expressible, the same lanes carry
+        // the reconstruction parameters (profile 5 and 7 are exclusive) and the
+        // enhancement layer luma goes to t12.
+        if (doviElFrame_ != nullptr) {
+            static unsigned p7Dbg = 0;
+            if (++p7Dbg <= 3 || p7Dbg % 200 == 0)
+                veyra::log::info("dovi-el-gpu", std::format("dbg p7Ready={} el={}x{} fmt={}",
+                    p7Ready_ ? 1 : 0, doviElFrame_->width, doviElFrame_->height, int(doviElFrame_->format)));
+        }
+        bool p7Bound = false;
+        if (p7Ready_ && doviElFrame_ != nullptr && uploadElLuma(list, doviElFrame_)) {
+            std::memcpy(constants + 12 + kColorGradeConstantCount, p7Params_, sizeof(p7Params_));
+            // Custom (P7) diagnostic: dv3.x asks the shader to show the reconstruction gap.
+            if (std::getenv("VEYRA_DOVI_P7_DUMP") != nullptr) constants[12 + kColorGradeConstantCount + 27] = 3.0f;
+            D3D12_SHADER_RESOURCE_VIEW_DESC elSrvDesc{};
+            elSrvDesc.Format = DXGI_FORMAT_R16_UINT;
+            elSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            elSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            elSrvDesc.Texture2D.MipLevels = 1;
+            stager_.stageSrv(elLumaTexture_.Get(), &elSrvDesc, yuvPass_.heap.Get(), 12);
+            p7Bound = true;
+        }
         yuvPass_.bind(list, constants, gpuHandleOf(yuvPass_, nv12Texture ? 3 + parity * 2 : 0).ptr, gpuHandleOf(yuvPass_, 2+uavSlot).ptr,gpuHandleOf(yuvPass_,8).ptr);
+        {
+            static unsigned p7BoundCount = 0;
+            const unsigned before = p7BoundCount;
+            if (p7Bound) ++p7BoundCount;
+            static bool dvLogged = false;
+            if (p7Bound && !dvLogged) {
+                dvLogged = true;
+                const float* p7 = constants + 12 + kColorGradeConstantCount;
+                veyra::log::info("dovi-el-gpu", std::format("bound first frame dv6.w={:.1f} dv0.x={:.0f}",
+                    p7[27], p7[0]));
+            }
+            if (p7BoundCount <= 3 || (before != p7BoundCount && p7BoundCount % 100 == 0))
+                veyra::log::info("dovi-el-gpu", std::format("bound={} frames={} ready={} el={}",
+                    p7Bound ? 1 : 0, p7BoundCount, p7Ready_ ? 1 : 0, doviElFrame_ ? 1 : 0));
+        }
         list->Dispatch((srcW_ + 15) / 16, (srcH_ + 15) / 16, 1);
     }
     tracker_.uavBarrier(list, target);
@@ -3284,6 +3392,12 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     // Keep the same baseline at initialization and live updates. Resolution
     // happens once in VideoPresenter, which knows the actual output monitor.
     desc_.hdrCurve=s.hdrCurve;desc_.hdrMetadata=s.hdrMetadata;
+    // Live as well: the presenter decides per frame, so toggling it never needs a
+    // graph rebuild. The change is rare, so it is worth one line: a settings
+    // round trip that loses the flag is otherwise invisible.
+    if(desc_.doviFollow!=s.doviFollow)
+        veyra::log::info("hdr-dovi",std::format("Dolby Vision follow {} -> {}",desc_.doviFollow?"on":"off",s.doviFollow?"on":"off"));
+    desc_.doviFollow=s.doviFollow;
     if(!(s.color==desc_.color)){
         desc_.color=s.color;
         if(s.color.enabled){

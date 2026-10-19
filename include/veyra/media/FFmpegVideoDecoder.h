@@ -63,7 +63,7 @@ public:
     // that base when the codec context itself carries none.
     bool openSoftware(const AVCodecParameters* codecParameters,
         int streamTimeBaseNum = 0, int streamTimeBaseDen = 0, unsigned softwareThreads = 1,
-        bool lowLatency = false);
+        bool lowLatency = false, bool tolerateErrors = false);
 
     // D3D12VA hardware decode on the SHARED Veyra device (Playbook 13.2):
     // creates an AV_HWDEVICE_TYPE_D3D12VA context wrapping `device`/`queue`,

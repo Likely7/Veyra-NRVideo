@@ -566,6 +566,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 od.requireHardwareDecode=options.hardwareDecodeOnly&&!options.softwareDecode&&!isCapture&&!isImage; // stills have no hardware decoder
                 od.d3d12Device=ctx.device();od.d3d12Queue=ctx.directQueue();
                 od.d3d12AdapterLuid=ctx.adapter().luid;
+                od.decodeDolbyEnhancementLayer=options.settings.doviP7Compose;
+                veyra::log::info("decode", std::format("p7 compose setting={}", options.settings.doviP7Compose?1:0));
                 if(!isCapture)veyra::log::info("decode",std::format("file decode preference={}",options.softwareDecode?"software":options.hardwareDecodeOnly?"hardware-only":"hardware-first"));
                 // Diagnostic uses the production graph/presenter to validate
                 // D3D12VA imports without needing a paired PS5 or credentials.
@@ -695,7 +697,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     const unsigned sourceFall=hdrMetadataNits(sourceColor.hdrMaxFallNits);
     std::lock_guard lock(mutex_);snapshot_.sourceHdr=gd.hdrInput;
     snapshot_.sourceMasteringPeakNits=sourceMastering;snapshot_.sourceMaxCllNits=sourceCll;
-    snapshot_.sourceMaxFallNits=sourceFall;}
+    snapshot_.sourceMaxFallNits=sourceFall;
+      const auto& dvinfo=activeSource->info().dolbyVision;
+      snapshot_.sourceDoviProfile=dvinfo.present?dvinfo.profile:0;
+      snapshot_.sourceDoviRpu=dvinfo.present&&dvinfo.rpuDeclared;}
             gd.highQualityPresentation=isRemote&&activeSource->info().color.reconstructChroma;
             gd.rgbInput=isImage||isScreen||(isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Bgra8);
             auto ingressBitDepth=[](pipeline::SourcePixelFormat format){return format==pipeline::SourcePixelFormat::P010||format==pipeline::SourcePixelFormat::V210||format==pipeline::SourcePixelFormat::Rgb10xLE?10u:format==pipeline::SourcePixelFormat::P016?16u:8u;};
@@ -1669,9 +1674,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if(cachedFrame){
                             pipeline::EnhanceGraph::FrameOutputs refreshed;
                             const double refreshPtsMs=cachedPacket.pts.toDouble()*1000.0;
-                            if(graph->process(cachedFrame,refreshPtsMs,true,refreshed,cachedPacket.sequence,&cachedPacket.colorInfo,&cachedPacket.hardwareSurface,false,{},0,true)){
+                            if(graph->process(cachedFrame,refreshPtsMs,true,refreshed,cachedPacket.sequence,&cachedPacket.colorInfo,&cachedPacket.hardwareSurface,false,{},0,true,cachedPacket.doviEl,&cachedPacket.doviP7)){
                                 out=refreshed;
                                 hasOutput=true;
+                                // Custom: the still frame is re-presented below, so
+                                // keep its Dolby Vision level 1 alongside it.
+                                presenter.setFrameDovi(cachedPacket.dovi);
                                 {std::lock_guard lock(mutex_);++snapshot_.pausedFrameRefreshes;}
                                 veyra::log::info("settings",std::format("paused frame re-rendered with the new parameters ptsMs={:.3f}",refreshPtsMs));
                             }else{
@@ -2234,7 +2242,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(!presenter.beginSourceProcessing()){status(L"XeSS processing timing failed",true);break;}
                 bool processed=false;{
                     processWaitBase=ring.cpuWaitCount();processWaitMsBase=ring.cpuWaitMilliseconds();processSubmitBase=ring.submitCount();
-                    processed=!injectedReject&&graph->process(frame,pts,historyReset,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0,admitFg,previewFgMultiplier,(paused_||isImage)&&transaction);
+                    processed=!injectedReject&&graph->process(frame,pts,historyReset,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0,admitFg,previewFgMultiplier,(paused_||isImage)&&transaction,pkt.doviEl,&pkt.doviP7);
                     processSlotWaitMs=ring.cpuWaitMilliseconds()-processWaitMsBase;
                 }
                 loopTrace.mark("graphSubmit");
@@ -2268,7 +2276,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         out={};graph->shutdown();recentGraphCache.evict("process-rollback");
                         graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;options=PlayerOptions::from(previous,previousOrder);
                         gd=previousDesc;
-                        if(graph->initialize(gd)&&openPreparedPresenter(options)&&graph->process(frame,pts,true,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0)){
+                        if(graph->initialize(gd)&&openPreparedPresenter(options)&&graph->process(frame,pts,true,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0,{},0,false,pkt.doviEl,&pkt.doviP7)){
                             publishFrameGenerationCapabilities();
                             finishReset(diagnostics::ResetOutcome::RolledBack);
                             std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=previous;snapshot_.status=L"参数执行失败，已整套回滚";transaction=false;
@@ -2276,6 +2284,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }else{status(std::wstring(backendFailureName(failedComponent))+L"执行失败；请查看日志",true);break;}
                 }
                 if(veyra::log::verboseFrameLogs())veyra::log::info("source-identity",std::format("source={} totalRead={} graphProcessed={} cached={} revision={} nvofStandalone={}",pkt.sequence,sourceFrames,frames+1,rereadCached,options.settings.revision,gd.enableNvofStandalone));
+                // Custom: hand this source frame's Dolby Vision level 1 to the
+                // presenter, which will show this batch next. The value only
+                // moves the highlight curve, and only when the follow switch is
+                // on; an invalid value leaves the static curve untouched.
+                presenter.setFrameDovi(pkt.dovi);
                 presenter.sourceProcessed(out.batch.identity);
                 if(out.fgReduced||previewFgMultiplier!=options.fgMultiplier){std::lock_guard lock(mutex_);snapshot_.previewFgMultiplier=out.fgReduced?2u:previewFgMultiplier;}
                 reset=false;hasOutput=true;
