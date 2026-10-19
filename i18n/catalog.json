@@ -260,7 +260,7 @@
    "ja": " · 最大 %1 nit"
   },
   {
-"zh": " · 时域 4x（实验）",
+   "zh": " · 时域 4x（实验）",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": " · 時域 4x（實驗）",
    "en": " · temporal 4x (experimental)",
@@ -4762,7 +4762,7 @@
    "ja": "シングルレイヤー"
   },
   {
-"zh": "历史拒绝",
+   "zh": "历史拒绝",
    "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "歷史拒絕",
    "en": "History rejection",
@@ -6554,7 +6554,7 @@
    "ja": "実験的：Profile 7 のデュアルレイヤー映像のみ対象で、エンハンスメントレイヤーのデコード失敗によりほとんどのフレームはベースレイヤーに戻ります。オフにするとベースレイヤーのみの再生になります（ファイルを開き直すと反映されます）。"
   },
   {
-"zh": "实验：采集画面无法抖动，这是 SMAA T2x / 4x 的不抖动近似；静止画面更稳，运动处可能拖影",
+   "zh": "实验：采集画面无法抖动，这是 SMAA T2x / 4x 的不抖动近似；静止画面更稳，运动处可能拖影",
    "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "實驗：擷取畫面無法抖動，這是 SMAA T2x / 4x 的不抖動近似；靜止畫面更穩，運動處可能拖影",
    "en": "Experimental: captured frames cannot be jittered, so this approximates SMAA T2x / 4x without jitter; steadier on still scenes, may ghost on motion",
@@ -8752,10 +8752,13 @@
    "ja": "プロジェクトページを開く機能はまだありません"
   },
   {
-   "zh": "执行失败"
+   "zh": "执行失败",
+   "en": " failed",
+   "zh-TW": "執行失敗",
+   "ja": "の実行に失敗しました"
   },
   {
-"zh": "执行失败；请查看日志",
+   "zh": "执行失败；请查看日志",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "執行失敗",
    "en": " failed",
@@ -10828,7 +10831,7 @@
    "ja": "Dolby Vision 設定"
   },
   {
-"zh": "本软件开源免费，如果对你有帮助，你可以 →",
+   "zh": "本软件开源免费，如果对你有帮助，你可以 →",
    "src": "qml/HomePage.qml",
    "zh-TW": "本軟體開源免費，如果對你有幫助，你可以 →",
    "en": "This software is free and open source. If it helps you, you can →",
@@ -11626,7 +11629,7 @@
    "ja": "マスターのピークが低い（旧作）"
   },
   {
-"zh": "每帧识别 · 320 像素，最省；远处的小脸可能识别不到",
+   "zh": "每帧识别 · 320 像素，最省；远处的小脸可能识别不到",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "每幀識別 · 320 像素，最省；遠處的小臉可能識別不到",
    "en": "Every frame · 320 px, lightest; small distant faces may be missed",
