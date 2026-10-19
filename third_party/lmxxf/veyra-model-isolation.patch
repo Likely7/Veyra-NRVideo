@@ -1,0 +1,67 @@
+--- a/src/native_model_mode.h
++++ b/src/native_model_mode.h
+@@ -10,7 +10,14 @@
+  std::fprintf(stderr,"DLSS5_MULTI_PASS=%s invalid (0.5/1/2/3), using 0.5\n",v);return 0;}
+ inline unsigned Environment(){return Parse(std::getenv("DLSS5_MULTI_PASS"));}
+ inline std::atomic<int> hot_mode{-1};
+-inline unsigned Requested(){int n=hot_mode.load(std::memory_order_relaxed);return n<0?Environment():unsigned(n);}
++inline unsigned Requested(){
++#ifdef VEYRA_LMXXF_MODEL_MODE
++ static_assert(VEYRA_LMXXF_MODEL_MODE==0||VEYRA_LMXXF_MODEL_MODE==1,"Veyra supports Small and Original single-pass models");
++ return VEYRA_LMXXF_MODEL_MODE;
++#else
++ int n=hot_mode.load(std::memory_order_relaxed);return n<0?Environment():unsigned(n);
++#endif
++}
+ inline void Request(unsigned n){if(n<=3)hot_mode.store(int(n),std::memory_order_relaxed);}
+ inline const char* Name(unsigned mode){static const char*names[]={"0.5","1","2","3"};return names[mode<=3?mode:0];}
+ inline unsigned Passes(unsigned mode){return mode?mode:1;}
+--- a/src/native_hot_flags.h
++++ b/src/native_hot_flags.h
+@@ -51,9 +51,13 @@
+  }
+ public:
+  static bool Enabled(){
++#ifdef VEYRA_LMXXF_MODEL_MODE
++  return false; // Veyra owns all controls; no add-on configuration polling.
++#else
+   static const bool on=[]{if(const wchar_t*e=_wgetenv(L"DLSS5_HOT_RELOAD"))return wcscmp(e,L"0")!=0;
+    unsigned x=1;for(const std::string&cfg_line:NativeConfigFileLines()){const char*line=cfg_line.c_str();sscanf(line,"DLSS5_HOT_RELOAD=%u",&x);}return x!=0;}();
+   return on;
++#endif
+  }
+  /* Current values (defaults = "use what was read at start"). Polls the file stamp at most once per second. */
+  NativeHotFlagValues Get(){
+@@ -69,13 +73,18 @@
+     If native-game-flags.txt also has the key (it would win over custom), that line is rewritten as well, with a stderr line.
+     A DLSS5_MULTI_PASS system environment variable wins over every file: stderr line, files still written. The running mode changes immediately, even if persistence fails; HOT_RELOAD controls external file polling. Returns the new count (0 = no press). Not pressed = no file access. */
+  static unsigned HotkeyCode(){
++#ifdef VEYRA_LMXXF_MODEL_MODE
++  return 0; // Never capture/write the add-on model hotkey.
++#else
+   static const unsigned vk=[]{std::string v="F9";for(const std::string&l:NativeConfigFileLines())if(!l.compare(0,24,"DLSS5_MULTI_PASS_HOTKEY="))v=l.substr(24);
+    if(const char*e=std::getenv("DLSS5_MULTI_PASS_HOTKEY"))v=e;
+    if(v.empty()||v=="0")return 0u;
+    if((v[0]=='F'||v[0]=='f')&&v.size()>1){char*end=nullptr;unsigned long n=strtoul(v.c_str()+1,&end,10);if(!*end&&n>=1&&n<=24)return unsigned(VK_F1+n-1);}
+    char*end=nullptr;unsigned long n=strtoul(v.c_str(),&end,0);if(!*end&&n>0&&n<256)return unsigned(n);
+    std::fprintf(stderr,"DLSS5_MULTI_PASS_HOTKEY=%s invalid (F1..F24, key code, 0), using F9\n",v.c_str());return unsigned(VK_F9);}();
+-  return vk;}
++  return vk;
++#endif
++ }
+  static bool RewriteKey(const wchar_t*name,const char*key,const std::string&value,bool create){
+   const std::wstring path=NativeLabPath(name);std::string text;const bool exists=NativeConfigReadFile(path,text);if(!exists&&!create)return false;
+   const std::string nl=text.find("\r\n")!=std::string::npos?"\r\n":"\n";std::string out;bool done=false;size_t at=0;const std::string want=std::string(key)+"="+value;
+@@ -114,8 +123,12 @@
+ 
+ // Called before choosing per-frame geometry so a model hot switch can rebuild its buffers.
+ inline unsigned NativePollRequestedModelMode(bool allow=true){
++#ifdef VEYRA_LMXXF_MODEL_MODE
++ (void)allow;return dlss5_mode::Requested();
++#else
+  auto&hot=NativeHotFlags::Instance();if(NativeHotFlags::Enabled()||NativeHotFlags::HotkeyCode()){
+   hot.PollMultiPassHotkey(dlss5_mode::Requested(),allow);auto v=hot.Get();
+   if(v.multi_pass>=0)dlss5_mode::Request(unsigned(v.multi_pass));
+  }return dlss5_mode::Requested();
++#endif
+ }

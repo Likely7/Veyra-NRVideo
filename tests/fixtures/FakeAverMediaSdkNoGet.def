@@ -1,0 +1,15 @@
+EXPORTS
+    ??0VendorSdk@AVerMedia@@QEAA@PEBD@Z=SdkCtor
+    ??1VendorSdk@AVerMedia@@QEAA@XZ=SdkDtor
+    ?initialize@VendorSdk@AVerMedia@@QEAAHXZ=SdkInitialize
+    ?uninitialize@VendorSdk@AVerMedia@@QEAAHXZ=SdkUninitialize
+    ?closePort@VendorSdk@AVerMedia@@QEAAHXZ=SdkClose
+    ?getAudioFormat@VendorSdk@AVerMedia@@QEAAHPEAH@Z=SdkFormat
+    ?setNonPcmOnOff@VendorSdk@AVerMedia@@QEAAHH@Z=SdkSet
+    ??0DeviceOpener@AVerMedia@@QEAA@XZ=OpenerCtor
+    ??1DeviceOpener@AVerMedia@@QEAA@XZ=OpenerDtor
+    ?SetVendorSdk@DeviceOpener@AVerMedia@@QEAAXPEAVVendorSdk@2@@Z=OpenerBind
+    ?SwitchDeviceThenDetectAudioFormat@DeviceOpener@AVerMedia@@QEAAXAEBUDeviceOpenerParam@2@@Z=OpenerSwitch
+    ?IsAudioFormatNonPcm@DeviceOpener@AVerMedia@@QEBA_NXZ=OpenerNonPcm
+    ?StartChecking@DeviceOpener@AVerMedia@@QEAAXXZ=OpenerStart
+    ?StopChecking@DeviceOpener@AVerMedia@@QEAAXXZ=OpenerStop

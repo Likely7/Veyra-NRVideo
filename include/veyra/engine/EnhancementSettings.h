@@ -9,6 +9,8 @@
 #include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/source/CaptureBuffer.h"
 #include "veyra/engine/ColorSettings.h"
+#include "veyra/engine/AntiAliasSettings.h"
+#include "veyra/engine/BeautySettings.h"
 namespace veyra::engine {
 inline constexpr uint32_t kMaxColorInstances = 6;
 inline constexpr uint32_t kMaxNrInstances = 4;
@@ -141,13 +143,19 @@ constexpr std::string_view opticalFlowBackendName(OpticalFlowBackend backend) {
 struct NrSettings {
     float intensity=1,tone=1,structure=1,skin=-1;
     int32_t style=0,autoMask=0,uiCorrection=0;
-    bool performance=true; // SF 310.9.16: preset B; false selects legacy A.
+    bool performance=true; // SF: B/A; AMD 0.44: Small/Original. Create-time model choice.
     bool operator==(const NrSettings&) const = default;
 };
 // Create-time I32 contract, verified against both embedded models in the
 // user-provided 310.9.16 runtime. Original/AMD keep their previous parameters.
 constexpr int32_t nrRenderPreset(NrRuntime runtime,const NrSettings& model) {
     return currentNrRuntime(runtime)==NrRuntime::Ampere ? (model.performance?2:1) : 0;
+}
+constexpr bool nrUsesPerformanceModel(NrRuntime runtime) {
+    return currentNrRuntime(runtime)==NrRuntime::Ampere || runtime==NrRuntime::LmxxfAmd;
+}
+constexpr int32_t nrModelSelection(NrRuntime runtime,const NrSettings& model) {
+    return nrUsesPerformanceModel(runtime) ? (model.performance?2:1) : 0;
 }
 struct NrCorrectionSettings {
     bool enabled=false,automatic=true;
@@ -279,14 +287,14 @@ struct EnhancementSettings {
     }
     bool sameNrTopology(const EnhancementSettings& other) const {
         if(nrLayerCount!=other.nrLayerCount)return false;
-        if(nrRenderPreset(nrRuntime,model)!=nrRenderPreset(other.nrRuntime,other.model))return false;
+        if(nrModelSelection(nrRuntime,model)!=nrModelSelection(other.nrRuntime,other.model))return false;
         if(residual.correction.enabled!=other.residual.correction.enabled||usesNrTemporal()!=other.usesNrTemporal())return false;
         for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i){
             const auto& a=nrLayers[i]; const auto& b=other.nrLayers[i];
             if(a.enabled!=b.enabled||a.temporal!=b.temporal||a.usesTemporal()!=b.usesTemporal()||
                a.residual.correction.enabled!=b.residual.correction.enabled||a.runtime!=b.runtime||
                a.lowLatencyPairing!=b.lowLatencyPairing||a.sizePolicy!=b.sizePolicy||
-               nrRenderPreset(a.runtime,a.model)!=nrRenderPreset(b.runtime,b.model))return false;
+               nrModelSelection(a.runtime,a.model)!=nrModelSelection(b.runtime,b.model))return false;
         }
         return true;
     }
@@ -365,6 +373,22 @@ struct EnhancementSettings {
     // Fixed capacity preserves the export shared-memory POD contract.
     std::array<ColorSettings,kMaxColorInstances-1> additionalColors{};
     uint32_t additionalColorCount=0;
+    // Spatial anti-aliasing (#53). Instance zero is the list card; a node chain may
+    // hold a second instance. Fixed capacity for the export shared-memory POD.
+    AntiAliasSettings antiAlias;
+    std::array<AntiAliasSettings,kMaxAntiAliasInstances-1> additionalAntiAlias{};
+    uint32_t additionalAntiAliasCount=0;
+    // Beauty nodes: instance zero is the first list layer, the rest follow in
+    // group order. The detection values are shared by every instance of the chain.
+    BeautySettings beauty;
+    std::array<BeautySettings,kMaxBeautyInstances-1> additionalBeauty{};
+    uint32_t additionalBeautyCount=0;
+    BeautyDetection beautyDetection;
+    bool beautyEnabled() const {
+        if(beauty.enabled)return true;
+        for(uint32_t i=0;i<additionalBeautyCount&&i<additionalBeauty.size();++i)if(additionalBeauty[i].enabled)return true;
+        return false;
+    }
     // Stage-5 output stabiliser (anti-flicker). Holds the previous output where
     // the source has not visibly changed. 0 is off, and off is the default: the
     // graph then skips the dispatch entirely, so a build with this feature
@@ -399,14 +423,14 @@ struct EnhancementSettings {
             active.nrMotion=defaults.nrMotion;active.nrLayers=defaults.nrLayers;
         }else{
             active.nrRuntime=currentNrRuntime(active.nrRuntime);
-            if(active.nrRuntime!=NrRuntime::Ampere)active.model.performance=defaults.model.performance;
+            if(!nrUsesPerformanceModel(active.nrRuntime))active.model.performance=defaults.model.performance;
             if(!active.residual.correction.enabled)active.residual.correction={};
             if(!active.nrTemporal)active.nrAntiFlicker=defaults.nrAntiFlicker;
             for(size_t i=0;i<active.nrLayers.size();++i){
                 auto& layer=active.nrLayers[i];
                 if(i>=nrLayerCount||!layer.enabled){layer={};continue;}
                 layer.runtime=currentNrRuntime(layer.runtime);
-                if(layer.runtime!=NrRuntime::Ampere)layer.model.performance=defaults.model.performance;
+                if(!nrUsesPerformanceModel(layer.runtime))layer.model.performance=defaults.model.performance;
                 if(!layer.residual.correction.enabled)layer.residual.correction={};
                 if(!layer.temporal)layer.antiFlicker=NrAntiFlicker::Flow;
             }
@@ -423,6 +447,13 @@ struct EnhancementSettings {
         for(size_t i=0;i<active.additionalColors.size();++i)
             if(i>=additionalColorCount||!additionalColors[i].enabled)active.additionalColors[i]={};
         if(!videoHdr.enabled)active.videoHdr=defaults.videoHdr;
+        active.antiAlias=antiAlias.active();
+        for(size_t i=0;i<active.additionalAntiAlias.size();++i)
+            active.additionalAntiAlias[i]=i<additionalAntiAliasCount?additionalAntiAlias[i].active():AntiAliasSettings{};
+        active.beauty=beauty.active();
+        for(size_t i=0;i<active.additionalBeauty.size();++i)
+            active.additionalBeauty[i]=i<additionalBeautyCount?additionalBeauty[i].active():BeautySettings{};
+        if(!beautyEnabled())active.beautyDetection=defaults.beautyDetection;
         if(nrHoldStrength==0)active.nrHoldTolerance=defaults.nrHoldTolerance;
         if(!hdrCurve.enabled){
             active.hdrCurve=defaults.hdrCurve;
@@ -475,6 +506,16 @@ struct EnhancementSettings {
         }
         video.videoHdr=target.videoHdr;
         video.videoHdr.enabled=videoHdr.enabled;
+        // Anti-aliasing thresholds and history weights are uniforms; the method,
+        // tier and temporal mode decide which passes exist.
+        if(video.antiAlias.sameStructure(target.antiAlias))video.antiAlias=target.antiAlias;
+        for(size_t i=0;i<additionalAntiAlias.size();++i)
+            if(video.additionalAntiAlias[i].sameStructure(target.additionalAntiAlias[i]))video.additionalAntiAlias[i]=target.additionalAntiAlias[i];
+        // Beauty: only a node's master switch (and the node count) shapes the graph.
+        if(video.beauty.sameStructure(target.beauty))video.beauty=target.beauty;
+        for(size_t i=0;i<additionalBeauty.size();++i)
+            if(video.additionalBeauty[i].sameStructure(target.additionalBeauty[i]))video.additionalBeauty[i]=target.additionalBeauty[i];
+        video.beautyDetection=target.beautyDetection;
         return video==target;
     }
     void rejectVideoRequest(const EnhancementSettings& attempted,const EnhancementSettings& previous) {
@@ -545,6 +586,15 @@ struct EnhancementSettings {
         if(additionalColorCount>additionalColors.size())return "too many color instances";
         for(uint32_t i=0;i<additionalColorCount;++i)
             if(auto error=additionalColors[i].validate();!error.empty())return error;
+        if(auto error=antiAlias.validate();!error.empty())return error;
+        if(additionalAntiAliasCount>additionalAntiAlias.size())return "too many anti-aliasing instances";
+        for(uint32_t i=0;i<additionalAntiAliasCount;++i)
+            if(auto error=additionalAntiAlias[i].validate();!error.empty())return error;
+        if(auto error=beauty.validate();!error.empty())return error;
+        if(additionalBeautyCount>additionalBeauty.size())return "too many beauty instances";
+        for(uint32_t i=0;i<additionalBeautyCount;++i)
+            if(auto error=additionalBeauty[i].validate();!error.empty())return error;
+        if(auto error=beautyDetection.validate();!error.empty())return error;
         if(!pipeline::validNrSizePolicy(nrPolicy))return "invalid NR size policy";
         if(flow<FlowQuality::Performance||flow>FlowQuality::Quality||content<ContentRate::Transport||content>ContentRate::Capture60To30)return "invalid flow/content mode";
         return {};

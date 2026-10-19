@@ -39,7 +39,8 @@ constexpr double kAmplitudes[kChannels] = {0.50, 0.40, 0.30, 0.25, 0.20, 0.10};
 constexpr double kTones[kChannels] = {440.0, 440.0, 440.0, 60.0, 440.0, 440.0};
 
 // Encodes the test signal with libavcodec; returns the raw bitstream bytes.
-bool encodeTestStream(BitstreamKind kind, std::vector<uint8_t>& out, std::string& why) {
+bool encodeTestStream(BitstreamKind kind, std::vector<uint8_t>& out, std::string& why,
+                      std::vector<size_t>* packetSizes = nullptr) {
     const AVCodecID codecId = kind == BitstreamKind::Ac3 ? AV_CODEC_ID_AC3 : AV_CODEC_ID_EAC3;
     const AVCodec* codec = avcodec_find_encoder(codecId);
     if (codec == nullptr) {
@@ -120,6 +121,7 @@ bool encodeTestStream(BitstreamKind kind, std::vector<uint8_t>& out, std::string
                 ok = false;
                 break;
             }
+            if (packetSizes != nullptr) packetSizes->push_back(size_t(packet->size));
             out.insert(out.end(), packet->data, packet->data + packet->size);
             av_packet_unref(packet);
         }
@@ -129,6 +131,7 @@ bool encodeTestStream(BitstreamKind kind, std::vector<uint8_t>& out, std::string
         for (;;) {
             const int received = avcodec_receive_packet(context, packet);
             if (received < 0) break;
+            if (packetSizes != nullptr) packetSizes->push_back(size_t(packet->size));
             out.insert(out.end(), packet->data, packet->data + packet->size);
             av_packet_unref(packet);
         }
@@ -246,8 +249,9 @@ int main() {
     bool ok = true;
     for (BitstreamKind kind : {BitstreamKind::Ac3, BitstreamKind::Eac3}) {
         std::vector<uint8_t> bitstream;
+        std::vector<size_t> packetSizes;
         std::string why;
-        if (!encodeTestStream(kind, bitstream, why)) {
+        if (!encodeTestStream(kind, bitstream, why, &packetSizes)) {
             std::printf("[bitstream-test] %s encode skipped: %s\n", veyra::sink::bitstreamKindName(kind), why.c_str());
             ok = false;
             continue;
@@ -261,6 +265,31 @@ int main() {
             ok = false;
         }
         if (kind == BitstreamKind::Ac3) {
+            // The parser holds a finished AC-3 frame until the next header.
+            // pushFramed must emit that frame on the same call.
+            if (packetSizes.size() >= 2 && packetSizes[0] > 0 && packetSizes[1] > 0) {
+                BitstreamDecoder direct;
+                BitstreamDecoder parsed;
+                std::vector<float> directPcm;
+                std::vector<float> parsedPcm;
+                const bool opened = direct.open(kind) && parsed.open(kind);
+                const bool first = opened
+                    && direct.pushFramed(bitstream.data(), packetSizes[0], directPcm)
+                    && parsed.push(bitstream.data(), packetSizes[0], parsedPcm);
+                const uint64_t parserAfterFirst = parsed.decodedFrames();
+                const bool directImmediate = first && direct.decodedFrames() >= 1536 && parserAfterFirst == 0;
+                const bool parserHeld = directImmediate
+                    && parsed.push(bitstream.data() + packetSizes[0], packetSizes[1], parsedPcm)
+                    && parsed.decodedFrames() >= 1536;
+                std::printf("[bitstream-test] framed-latency directFrames=%llu parserAfterFirst=%llu parserAfterSecond=%llu\n",
+                            static_cast<unsigned long long>(direct.decodedFrames()),
+                            static_cast<unsigned long long>(parserAfterFirst),
+                            static_cast<unsigned long long>(parsed.decodedFrames()));
+                if (!parserHeld) {
+                    std::printf("[bitstream-test] FAIL AC-3 framed path did not beat the parser hold\n");
+                    ok = false;
+                }
+            }
             const auto framed = decodeStream(toIec61937(bitstream), kind, true, 2);
             report("AC-3 (IEC 61937)", framed);
             if (!framed.ok || framed.channels != kChannels || !amplitudeOrderingHolds(framed)) {

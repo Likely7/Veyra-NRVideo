@@ -15,8 +15,11 @@ inline std::optional<double> enhancementProcessingMs(const GpuFrameTiming& frame
     if(frame.gpu[size_t(GpuStage::Color)].state!=SampleState::Measured)return {};
     // Every NR layer marks the shared Nr slot, so it only holds the last layer;
     // the per-layer spans carry the others (several layers read as one, 2026-10-02).
+    // Anti-aliasing and beauty run outside those spans: their own spans count.
     constexpr GpuStage stages[]={GpuStage::Flow,GpuStage::Sr,GpuStage::Nr,GpuStage::NrLayer0,GpuStage::NrLayer1,
-        GpuStage::NrLayer2,GpuStage::NrLayer3,GpuStage::Residual,GpuStage::FgBatch};
+        GpuStage::NrLayer2,GpuStage::NrLayer3,GpuStage::Residual,GpuStage::FgBatch,GpuStage::AaNode0,GpuStage::AaNode1,
+        GpuStage::BeautyNode0,GpuStage::BeautyNode1,GpuStage::BeautyNode2,GpuStage::BeautyNode3,GpuStage::BeautyNode4,
+        GpuStage::BeautyNode5,GpuStage::BeautyDetect};
     struct Interval {uint64_t begin,end;};
     std::array<Interval,std::size(stages)> intervals{};
     size_t count=0;uint64_t frequency=0;

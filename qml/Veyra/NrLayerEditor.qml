@@ -92,10 +92,10 @@ ColumnLayout {
     }
     VRow {
         objectName: "nr-performance-row"
-        visible: !editor.amdNr
         label: qsTr("启用性能优化版")
-        hint: qsTr("开启使用新版模型 B；关闭使用旧版模型 A。切换会重建 NR，画面可能有所不同。")
-        enabled: editor.layerData.runtime === 2 && Support.available(veyra, "nr2")
+        hint: editor.amdNr ? qsTr("开启使用 Small 模型；关闭使用原模型。每层独立选择，切换会重建 NR，画面可能有所不同。")
+                           : qsTr("开启使用新版模型 B；关闭使用旧版模型 A。切换会重建 NR，画面可能有所不同。")
+        enabled: (editor.layerData.runtime === 2 || editor.amdNr) && Support.available(veyra, "nr" + editor.layerData.runtime)
         opacity: enabled ? 1 : 0.4
         VSwitch {
             objectName: "nr-performance"

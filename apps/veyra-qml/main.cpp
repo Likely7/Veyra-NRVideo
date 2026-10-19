@@ -61,6 +61,41 @@ using namespace veyra;
 
 namespace {
 HWND g_video = nullptr;
+bool g_videoCursorHidden = false;
+
+// The video is a foreign HWND, not a Qt item. Match the QML cursor policy here
+// without a repaint, a polling timer or ShowCursor's process-wide counter.
+bool pointerOverVideo() {
+    if (!g_video || !IsWindowVisible(g_video)) return false;
+    const HWND parent = GetParent(g_video);
+    if (!parent || GetForegroundWindow() != parent) return false;
+    POINT p{};
+    if (!GetCursorPos(&p)) return false;
+    const HWND hit = WindowFromPoint(p);
+    if (hit != g_video && hit != parent) return false;
+    ScreenToClient(g_video, &p);
+    RECT client{};
+    GetClientRect(g_video, &client);
+    if (!PtInRect(&client, p)) return false;
+    // Floating QML controls are holes in this region; never override their
+    // pointing/text cursors, nor any other application's cursor.
+    HRGN region = CreateRectRgn(0, 0, 0, 0);
+    const int kind = GetWindowRgn(g_video, region);
+    const bool inside = kind == ERROR || PtInRegion(region, p.x, p.y);
+    DeleteObject(region);
+    return inside;
+}
+
+void syncVideoCursor(bool hidden) {
+    if (g_videoCursorHidden == hidden) return;
+    g_videoCursorHidden = hidden;
+    const bool overVideo = pointerOverVideo();
+    if (overVideo) SetCursor(hidden ? nullptr : LoadCursorW(nullptr, IDC_ARROW));
+    CURSORINFO cursor{sizeof(cursor)};
+    const bool known = GetCursorInfo(&cursor) != 0;
+    veyra::log::info("ui-cursor", std::format("hidden={} overVideo={} applied={} cursorKnown={} cursorShowing={}",
+        hidden, overVideo, overVideo, known, known && (cursor.flags & CURSOR_SHOWING) != 0));
+}
 enum class VideoProbeMode { Normal, Hidden, NoRegion, CoversOnly };
 VideoProbeMode g_videoProbe = VideoProbeMode::Normal;
 bool g_videoHiddenByProbe = false;
@@ -121,6 +156,10 @@ LRESULT CALLBACK videoProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     // The pointer belongs to the QML layer under the picture (the dock's hot zone
     // at the top edge, the cinema controls): pass hit testing through to it.
     if (m == WM_NCHITTEST) return HTTRANSPARENT;
+    if (m == WM_SETCURSOR && LOWORD(l) == HTCLIENT && g_videoCursorHidden && pointerOverVideo()) {
+        SetCursor(nullptr);
+        return TRUE;
+    }
     return DefWindowProcW(h, m, w, l);
 }
 
@@ -594,6 +633,16 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         bool nativeEventFilter(const QByteArray& type, void* message, qintptr* result) override {
             if (type != "windows_generic_MSG") return false;
             const auto* msg = static_cast<const MSG*>(message);
+            // HTTRANSPARENT forwards the native child's hit test to Qt's
+            // parent. Refuse the class arrow there too while the picture hides
+            // the cursor; hover over a control or another window is untouched.
+            if (msg->message == WM_SETCURSOR && LOWORD(msg->lParam) == HTCLIENT
+                && g_videoCursorHidden && (msg->hwnd == g_video || msg->hwnd == GetParent(g_video))
+                && pointerOverVideo()) {
+                SetCursor(nullptr);
+                if (result) *result = TRUE;
+                return true;
+            }
             if (msg->message != WM_SYSCOMMAND || (msg->wParam & 0xFFF0) != SC_KEYMENU) return false;
             veyra::log::info("ui-window", std::format("system key menu refused (lParam=0x{:X})", unsigned(msg->lParam)));
             if (result) *result = 0;
@@ -872,6 +921,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // swapchain from a 1x1 window. The native calls only run when a value changed.
     auto follow = [window, &bridge] {
         if (!g_video) return;
+        syncVideoCursor(window->property("fullscreenCursorHidden").toBool());
         // Only the pre-open hook attaches the popup and converts it to WS_CHILD.
         // GetParent() is null for an unattached WS_POPUP, so reparenting here on
         // every animation frame can starve input and timers before any source opens.

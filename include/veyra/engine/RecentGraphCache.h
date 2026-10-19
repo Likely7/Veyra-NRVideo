@@ -44,14 +44,15 @@ public:
     }
     static bool eligible(const pipeline::EnhanceGraphDesc& desc){
         return desc.enableNr&&!desc.enableSr&&!desc.enableFg&&!desc.hdrInput&&!desc.hdrOutput&&!desc.videoHdr.enabled&&!desc.color.enabled&&desc.additionalColorCount==0&&
-            desc.nrHoldStrength==0&&!desc.noFeatures&&!desc.noNgx&&!desc.stillImage&&!desc.nrAutoPoolLayer&&
+            !desc.antiAliasActive()&&!desc.beautyActive()&&desc.nrHoldStrength==0&&!desc.noFeatures&&!desc.noNgx&&!desc.stillImage&&!desc.nrAutoPoolLayer&&
             currentNrRuntime(desc.nrRuntime)==NrRuntime::Ampere&&!desc.nrTemporal&&desc.nrLayersModel.size()<=1&&
             std::none_of(desc.nrLayersTemporal.begin(),desc.nrLayersTemporal.end(),[](bool value){return value;})&&
             !desc.runtimeNodeOrder&&(!desc.fixedExecutionPlan||(
                 desc.fixedExecutionPlan->stepCount==1&&desc.fixedExecutionPlan->steps[0].type==EffectType::NrEnhance));
     }
     static bool effectsOff(const pipeline::EnhanceGraphDesc& desc){
-        return !desc.enableNr&&!desc.enableSr&&!desc.enableFg&&!desc.videoHdr.enabled&&!desc.color.enabled&&desc.additionalColorCount==0;
+        return !desc.enableNr&&!desc.enableSr&&!desc.enableFg&&!desc.videoHdr.enabled&&!desc.color.enabled&&desc.additionalColorCount==0&&
+            !desc.antiAliasActive()&&!desc.beautyActive();
     }
     static std::string label(const Key& key){
         return std::format("{}x{}:{}x{}:{}x{}:runtime{}:file{}:mtime{}",key.sourceWidth,key.sourceHeight,

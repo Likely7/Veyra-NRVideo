@@ -97,6 +97,10 @@ constexpr const char* kExportSdkInitialize = "?initialize@VendorSdk@AVerMedia@@Q
 constexpr const char* kExportSdkUninitialize = "?uninitialize@VendorSdk@AVerMedia@@QEAAHXZ";
 constexpr const char* kExportSdkClosePort = "?closePort@VendorSdk@AVerMedia@@QEAAHXZ";
 constexpr const char* kExportSdkGetAudioFormat = "?getAudioFormat@VendorSdk@AVerMedia@@QEAAHPEAH@Z";
+// Public SDK signatures; PR64's author reports verification on 1.0.15.
+// Optional so older components still load. No real component on our test host.
+constexpr const char* kExportSdkGetNonPcmOnOff = "?getNonPcmOnOff@VendorSdk@AVerMedia@@QEAAHPEAI@Z";
+constexpr const char* kExportSdkSetNonPcmOnOff = "?setNonPcmOnOff@VendorSdk@AVerMedia@@QEAAHH@Z";
 constexpr const char* kExportOpenerCtor = "??0DeviceOpener@AVerMedia@@QEAA@XZ";
 constexpr const char* kExportOpenerDtor = "??1DeviceOpener@AVerMedia@@QEAA@XZ";
 constexpr const char* kExportOpenerSetVendorSdk = "?SetVendorSdk@DeviceOpener@AVerMedia@@QEAAXPEAVVendorSdk@2@@Z";
@@ -254,6 +258,8 @@ struct AverMediaAudioSwitch::Impl {
         RawFn uninitialize = nullptr;
         RawFn closePort = nullptr;
         RawFn getAudioFormat = nullptr;
+        RawFn getNonPcmOnOff = nullptr;  // optional
+        RawFn setNonPcmOnOff = nullptr;  // optional
         RawFn openerCtor = nullptr;
         RawFn openerDtor = nullptr;
         RawFn setVendorSdk = nullptr;
@@ -300,6 +306,8 @@ struct AverMediaAudioSwitch::Impl {
             {kExportSdkUninitialize, &exports.uninitialize},
             {kExportSdkClosePort, &exports.closePort},
             {kExportSdkGetAudioFormat, &exports.getAudioFormat},
+            {kExportSdkGetNonPcmOnOff, &exports.getNonPcmOnOff},
+            {kExportSdkSetNonPcmOnOff, &exports.setNonPcmOnOff},
             {kExportOpenerCtor, &exports.openerCtor},
             {kExportOpenerDtor, &exports.openerDtor},
             {kExportOpenerSetVendorSdk, &exports.setVendorSdk},
@@ -314,7 +322,9 @@ struct AverMediaAudioSwitch::Impl {
             if (address == nullptr) {
                 // The log sink is optional: keep working with components that
                 // do not export it, we just lose their internal trace.
-                if (entry.target == &exports.setLogHandler) continue;
+                if (entry.target == &exports.setLogHandler ||
+                    entry.target == &exports.getNonPcmOnOff ||
+                    entry.target == &exports.setNonPcmOnOff) continue;
                 status.detail = std::format("missing export {}", entry.name);
                 return false;
             }
@@ -513,8 +523,16 @@ const AverMediaUsbFunction* AverMediaAudioSwitch::pickAudioFunction(const std::v
     return functions.size() == 1 ? &functions.front() : nullptr;
 }
 
-bool AverMediaAudioSwitch::apply(const std::wstring& deviceName, const std::wstring& devicePath) {
+bool AverMediaAudioSwitch::apply(const std::wstring& deviceName, const std::wstring& devicePath,bool monitor) {
     auto& impl = *p_;
+    // A graph rebuild reuses this SDK object. Quiesce its old monitor before
+    // reading the flag and conditionally enabling; never contend with our own
+    // monitoring thread between the read and the write.
+    if(!monitor&&impl.checking){
+        RawCall stop{impl.exports.stopChecking,impl.opener()};std::string error;
+        if(!callVendor(stop,error)){impl.status.detail="StopChecking before graph setup failed: "+error;log::warn("capture-audio-vendor",impl.status.detail);return false;}
+        impl.checking=false;
+    }
     if (impl.sdkInitialized && !devicePath.empty() && devicePath == impl.lastAppliedPath) {
         // Already armed (for example after an audio reconnect); the vendor
         // monitor thread keeps the mode applied, so refreshing the status is
@@ -522,6 +540,7 @@ bool AverMediaAudioSwitch::apply(const std::wstring& deviceName, const std::wstr
         RawCall refresh{impl.exports.isNonPcm, impl.opener()};
         std::string refreshError;
         impl.status.nonPcmActive = callVendor(refresh, refreshError) && (refresh.result & 0xFF) != 0;
+        if(monitor)startMonitoring();
         return true;
     }
     if (!impl.loadComponent()) {
@@ -599,11 +618,13 @@ bool AverMediaAudioSwitch::apply(const std::wstring& deviceName, const std::wstr
             formatCall.result, formatError.empty() ? "" : " ", formatError);
         return false;
     }
+    // The SDK returns the format sign-extended (measured -236 = 0xFFFFFF14).
+    const int formatByte = chipFormat & 0xFF;
     impl.status.detail = std::format("chipAudioFormat={}{}", chipFormat,
-        chipFormat == kChipFormatNonPcm ? " (non-PCM/Dolby)" : " (PCM)");
+        formatByte == kChipFormatNonPcm ? " (non-PCM/Dolby)" : " (PCM)");
     impl.status.state = AverMediaSwitchState::Switched;
     impl.lastAppliedPath = devicePath;
-    startMonitoring();
+    if(monitor)startMonitoring();
     return true;
 }
 
@@ -625,6 +646,7 @@ void AverMediaAudioSwitch::stop() noexcept {
             RawCall uninitialize{impl.exports.uninitialize, impl.sdk()};
             callVendor(uninitialize, error);
             impl.sdkInitialized = false;
+            impl.status.sdkReady = false;
         }
         if (impl.openerConstructed) {
             RawCall dtor{impl.exports.openerDtor, impl.opener()};
@@ -642,8 +664,86 @@ void AverMediaAudioSwitch::stop() noexcept {
         // Teardown must never throw; the vendors' worker threads are already
         // stopped by the calls above.
     }
+    impl.lastAppliedPath.clear();
+    impl.status.passthroughKnown=false;impl.status.passthroughEnabled=false;
+    impl.status.chipAudioFormat=-1;impl.status.nonPcmActive=false;
     // The modules stay loaded on purpose: their monitor thread and the Qt
     // runtime are not safe to unload while other threads may still touch them.
+}
+
+bool AverMediaAudioSwitch::refreshChipState() {
+    if (!p_) return false;
+    auto& impl = *p_;
+    impl.status.passthroughKnown=false;
+    impl.status.passthroughEnabled=false;
+    impl.status.chipAudioFormat=-1;
+    if (!impl.sdkInitialized || impl.exports.getAudioFormat == nullptr) return false;
+    std::string error;
+    int chipFormat = -1;
+    RawCall formatCall{impl.exports.getAudioFormat, impl.sdk(), &chipFormat};
+    const bool formatOk = callVendor(formatCall, error) && formatCall.result == 0;
+    if (formatOk) impl.status.chipAudioFormat = chipFormat;
+    else {
+        impl.status.detail=std::format("getAudioFormat failed result={} {}",int32_t(uint32_t(formatCall.result)),error);
+        log::warn("capture-audio-vendor",impl.status.detail);
+    }
+    if (impl.exports.getNonPcmOnOff != nullptr) {
+        unsigned onOff = 0;
+        error.clear();
+        RawCall onOffCall{impl.exports.getNonPcmOnOff, impl.sdk(), &onOff};
+        if (callVendor(onOffCall, error) && onOffCall.result == 0) {
+            impl.status.passthroughEnabled = onOff != 0;
+            impl.status.passthroughKnown=true;
+        }else{
+            impl.status.detail=std::format("getNonPcmOnOff failed result={} {}",int32_t(uint32_t(onOffCall.result)),error);
+            log::warn("capture-audio-vendor",impl.status.detail);
+        }
+    }
+    return formatOk;
+}
+
+bool AverMediaAudioSwitch::sourceIsBitstream() {
+    return refreshChipState() && (p_->status.chipAudioFormat & 0xFF) == kChipFormatNonPcm;
+}
+
+bool AverMediaAudioSwitch::passthroughEnabled() const {
+    return p_ && p_->status.passthroughEnabled;
+}
+
+bool AverMediaAudioSwitch::setPassthrough(bool enable) {
+    if (!p_ || !enable) return false;
+    auto& impl = *p_;
+    if (!refreshChipState() || !impl.status.passthroughKnown) {
+        log::warn("capture-audio-vendor","passthrough query unavailable/failed; refusing a blind forced enable");return false;
+    }
+    if(impl.status.passthroughEnabled)return true;
+    if(impl.exports.setNonPcmOnOff == nullptr){log::warn("capture-audio-vendor","setNonPcmOnOff export unavailable; leaving current mode unchanged");return false;}
+    // The raw invoker passes void* arguments; an int parameter travels in the
+    // low 32 bits of the register on x64, which is how the component reads it.
+    RawCall call{impl.exports.setNonPcmOnOff, impl.sdk(),
+        reinterpret_cast<void*>(static_cast<intptr_t>(enable ? 1 : 0))};
+    std::string error;
+    const bool ok = callVendor(call, error) && call.result == 0;
+    log::info("capture-audio-vendor", std::format("setNonPcmOnOff({}) result={}{}",
+        enable ? 1 : 0, int32_t(uint32_t(call.result)), ok ? "" : (error.empty() ? " failed" : " failed: " + error)));
+    // A successful write is not proof that the chip actually armed.
+    const bool readback=ok&&refreshChipState()&&impl.status.passthroughKnown&&impl.status.passthroughEnabled;
+    if(ok&&!readback)log::warn("capture-audio-vendor","passthrough enable did not read back as armed");
+    return readback;
+}
+
+void AverMediaAudioSwitch::alignPassthroughOnce() {
+    if (!p_ || !p_->sdkInitialized) return;
+    const bool bitstream = sourceIsBitstream();
+    const bool armed = passthroughEnabled();
+    log::info("capture-audio-vendor", std::format(
+        "HDMI source audio format: chipFormat={} ({}); passthrough known={} armed={}",
+        p_->status.chipAudioFormat, bitstream ? "bitstream" : "PCM/unknown",p_->status.passthroughKnown, armed ? 1 : 0));
+    // Forcing this call when the component already reports armed left the KS
+    // pin silent (2026-10-01). Only top it up when it is actually off, and
+    // never disarm: the monitor thread treats a disarm as something to undo.
+    if (p_->status.passthroughKnown&&!armed) setPassthrough(true);
+    else if(!p_->status.passthroughKnown)log::warn("capture-audio-vendor","passthrough flag unknown; preserving existing mode");
 }
 
 void AverMediaAudioSwitch::startMonitoring() {

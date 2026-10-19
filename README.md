@@ -61,9 +61,9 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ---
 
-**2.0.9 release, 2026-10-17:** SF310.9.16 NR with performance/legacy models, expanded HDR display controls, subtitles/game hotkeys, URL playback, deinterlacing and compatibility fixes. [Full update report](docs/RELEASE_NOTES_2.0.9.md).
+**2.1.0 release, 2026-10-19:** AMD NR0.44 Small/Original models, independent anti-aliasing,468-point face beauty/restoration, capture format discovery/selection fixes, networking, AVerMedia audio and fullscreen/window capture improvements. [Full update report](docs/RELEASE_NOTES_2.1.0.md).
 
-**Measured NR example:** RTX5070/GTA4K input/internal1080p, oldSF-v2 **5.87→3.20ms (−45.5% NR GPU time)**. Models can differ visually; this is not a universal FPS or optical-latency claim. [Conditions and limits](docs/RELEASE_NOTES_2.0.9.md).
+**New-effect cost examples:** RTX5070 standard4K anti-aliasing fixtures: FXAA~0.15ms, SMAA/MLAA~0.30ms. Final single-face mesh beauty:1080p~0.93ms,4K~1.42ms. Costs vary with content/hardware; no local AMD speedup percentage was measured. [Conditions and limits](docs/RELEASE_NOTES_2.1.0.md).
 
 **[Veyra knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)** — community guidance compiled from four group chats, covering software setup, common problems and capture cards.
 
@@ -77,20 +77,20 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** SF310.9.16 performance/legacy models, NVIDIA original for RTX50 and AMD lmxxf, DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-## New in 2.0.9
+## New in 2.1.0
 
-- **New NR models:** SF310.9.16 defaults for RTX20–50; Use performance model defaults on (B), off selects embedded legacy A. NVIDIA original remains available with this control disabled; AMD components stay unchanged. Lecram/oldSF-v2 are removed from the new package.
-- **Measured NR cost reduction:** RTX5070, GTA4K source/internal1080NR, oldSF-v2 about5.87→new default3.20ms (−45.5% NR GPU time). Models can produce different pictures; this is not a universal equal-quality pipeline speedup.
-- **HDR display controls:** PR44's five cards, quick/axes presets, simple dials, metadata, per-title/per-display memory and recommendations; nativeHDR and RTXVideoHDR output, on-demand sparse statistics.
-- **Subtitles and game input:** fix late multi-trackPGS cache truncation; align the picture to the captured game window, customize adjustment/exit-passthrough hotkeys, and fix fullscreen re-entry focus timing.
-- **Playback and compatibility:** Ctrl+U opens directHTTP/HTTPS/RTSP media; automatic software/hardware deinterlacing preserves final fields and seek resets; fix G-SYNC Compatible request-versus-active reporting and the English Professional footer.
-- **NR initialization and persistence:** synchronize NVOF resource registration relevant to RTX20 waiting-for-samples reports and expose failure reasons; A/B settings survive layers/presets/List/Node sessions/export without rebuilding playback for inactive model edits.
+- **AMD NR0.44:** RX9000 Small/Original models via the per-layer performance switch(default on), saved in presets/sessions/export; explicit asset errors, no new RX6000/7000 support.
+- **Anti-aliasing:** independent FXAA/SMAA/MLAA, List/Nodes, quality/strength controls, HDR and List export; experimental temporal SMAA defaults off.
+- **Beauty and original-face restoration:** separate switches, up to six layers,468-point contours, eye/brow/lip exclusion, per-frame detection and smoothing; restoration mixes the pre-effect source back into faces.
+- **Capture modes:** native enumeration fallback, driver ranges/steps/custom-size checks, searchable legacy list, exact rate/pixel-format matching, explicit substitution rejection, saved/resumed capture settings.
+- **Network and AVerMedia audio:** shared buffering/reconnect, slow-server buffering status, HLS/interlaced damage handling, throttled subtitle scanning; vendor multichannel audio, non-PCM confirmation, complete-payload decode and bounded recovery.
+- **Other fixes:** game-mode handoff/hotkeys/scaling/static resize, fullscreen transport/cursor, disabled-node order and export protocol consistency, home/sponsor page, corrected Bilibili profile and complete new translations.
 
-[Complete2.0.8→2.0.9 update, instructions and measured limits](docs/RELEASE_NOTES_2.0.9.md). Delivered packages are promoted unchanged; internal2.0.9-test labels/manifests remain, PE2.0.9.0.
+[Complete2.0.9→2.1.0 update, instructions and validation limits](docs/RELEASE_NOTES_2.1.0.md). The exact user-tested packages are promoted without rebuilding/repacking; internal2.1.0-test labels/manifests remain, PE2.1.0.0.
 
 ## Install and upgrade
 
-Download **Veyra-2.0.9-NVIDIA-win64-portable.zip** or **Veyra-2.0.9-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.1.0-NVIDIA-win64-portable.zip** or **Veyra-2.1.0-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -109,7 +109,7 @@ Home offers files, capture card, PS5, PC, Xbox and screen capture. Files/images 
 
 ### List mode
 
-The NR version selector offers RTX20–50 · SF310.9.16, RTX50 · NVIDIA original and RX9000 · lmxxf (experimental) in both List and Node mode. SF defaults to performance modelB; disable Use performance model for legacyA. The control is disabled for NVIDIA original and hidden for AMD; model selection is saved per layer. Lecram/oldSF-v2 settings migrate to SF. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7. Video export uses at most internal 1080p inference and composites to the original output size; this is not native 4K NR and actual AMD offline encoding still needs hardware retesting. Image exports retain the native model pixel budget; HDR NR is unavailable. See [current runtime identities](docs/BUILD_2.0.9.md).
+The NR version selector offers RTX20–50 · SF310.9.16, RTX50 · NVIDIA original and RX9000 · lmxxf (experimental) in both List and Node mode. SF defaults to performance modelB; disable Use performance model for legacyA. The control is disabled for NVIDIA original; AMD0.44 selects Small when enabled(default) and Original when disabled. Model selection is saved per layer. Lecram/oldSF-v2 settings migrate to SF. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7. Video export uses at most internal 1080p inference and composites to the original output size; this is not native 4K NR and actual AMD offline encoding still needs hardware retesting. Image exports retain the native model pixel budget; HDR NR is unavailable. See [current runtime identities](docs/BUILD_2.1.0.md).
 
 Select List at the top of Professional. Enable SR, NR or RTX Video HDR as needed. Up to four NR layers have independent internal resolution, strength and parameters. The master switch disables all layers and restores their previous enabled states.
 
@@ -187,7 +187,7 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 ## Source and build
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.9 build/source](docs/BUILD_2.0.9.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.1.0 build/source](docs/BUILD_2.1.0.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 
@@ -200,7 +200,7 @@ Original code: GPL-3.0. The combined Chiaki streaming application is also subjec
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.0.7/docs/images/2.0.7/community-group.png" alt="Veyra community group 6" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.1.0/docs/images/2.1.0/community-group.png" alt="Veyra community group 6" width="220">
 </p>
 
-Left: optional donation, no feature restrictions. Right: community group; QR valid **before 2026-10-19** as shown. Check repository updates after expiry.
+Left: optional donation, no feature restrictions. Right: community group; QR valid **before 2026-10-26** as shown. Check repository updates after expiry.

@@ -19,6 +19,30 @@ pkg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pkg)
 VFG_KEEP = {'cudart64_12.dll', 'NVCVImage.dll', 'nvngxruntime.dll', 'NVVideoEffects.dll', 'nvVFXVideoFrameGeneration.dll'}
 AMD_RUNTIME_SHA = '2693cdb760db564ec6f34b39b8a7e554d35cbab5df2366bff030e1611756e3d8'
+AMD_044_RUNTIME_IDS = {
+    'LmxxfNrRuntime.dll': 'be83772a75f317a5243d4c67a0e09d0e6c6bb9b687a07f2af866bd43911867c2',
+    'LmxxfNrRuntime-Original.dll': 'dbeb6dea7afcac922d5c2cce83d96e5c42b27d165967b171be21482c40d6af68',
+}
+
+
+def audit_amd_source(directory):
+    """Publisher audit only; never used by the player's runtime loader."""
+    amd = json.loads((directory / 'amd-nr-local-manifest.json').read_text(encoding='utf8'))
+    if amd.get('version') == '0.44':
+        assert amd['upstream'] == '4764e4f1a24f5234b8e29952dc41f493b2d77c90'
+        assert amd['archiveSha256'] == 'cf812fe7909fbd53b38f54da8abd584698525f81f7ea71cab19ba14bab48e030'
+        assert amd['smallWeightFiles'] == 93 and amd['hipModules'] == 80
+        assert AMD_044_RUNTIME_IDS.keys() <= {row['path'] for row in amd['files']}
+        for name, digest in AMD_044_RUNTIME_IDS.items():
+            assert pkg.digest(directory / name) == digest, name
+    else:
+        assert amd['upstream'] == '78f548749e74824327b8458c57be31a1df78376a'
+        assert pkg.digest(directory / 'LmxxfNrRuntime.dll') == AMD_RUNTIME_SHA
+    for row in amd['files']:
+        file = (directory / row['path']).resolve()
+        assert file.is_relative_to(directory.resolve()), row['path']
+        assert file.stat().st_size == row['size'] and pkg.digest(file) == row['sha256'].lower(), row['path']
+    return amd
 
 
 def write_json(path, value):
@@ -60,6 +84,9 @@ def check_vendor(stage, flavor):
                                      'runtime/experimental/fallback-dlssg', 'runtime/experimental/dlssg-kernels/',
                                      'runtime/experimental/dlssg-lite/')) for n in names)
         assert 'runtime/amd-nr/LmxxfNrRuntime.dll' in names
+        metadata = stage / 'runtime/amd-nr/runtime-manifest.json'
+        if metadata.exists() and json.loads(metadata.read_text(encoding='utf8')).get('version') == '0.44':
+            assert 'runtime/amd-nr/LmxxfNrRuntime-Original.dll' in names
         assert 'runtime_local/amd/fidelityfx/amd_fidelityfx_framegeneration_dx12.dll' in names
     assert not any(Path(n).name.lower() in {'nvcuda.dll', 'nvopticalflow64.dll', 'amdhip64.dll', 'amdhip64_6.dll', 'amdhip64_7.dll'} for n in names)
     manifest = json.loads((stage / 'release-runtime-manifest.json').read_text(encoding='utf8'))
@@ -92,8 +119,8 @@ def stage_packages(args):
     vfg = json.loads((args.runtime_source / 'vfg-runtime-manifest.json').read_text(encoding='utf8'))
     assert {r['name'] for r in vfg['files']} == VFG_KEEP
     vfg_ids = signature_audit([args.runtime_source / r['path'] for r in vfg['files']])
-    assert pkg.digest(args.amd_source / 'LmxxfNrRuntime.dll') == AMD_RUNTIME_SHA
-    amd = json.loads((args.amd_source / 'amd-nr-local-manifest.json').read_text(encoding='utf8'))
+    amd = audit_amd_source(args.amd_source)
+    amd_version = amd.get('version', '0.39')
     for flavor in ('NVIDIA', 'AMD'):
         stage = args.output / f'Veyra-{args.version}-{flavor}-win64-portable'
         stage.mkdir(parents=True, exist_ok=False)
@@ -123,13 +150,13 @@ def stage_packages(args):
                 name = 'runtime/amd-nr/' + row['path']
                 checked_copy(source, stage, name, row)
                 item = dict(row, path=name, name=Path(name).name,
-                            source='lmxxf/dlss5-on-amd-9070xt-porting 78f548749e74824327b8458c57be31a1df78376a; user-supplied Magpie-DLSS5-AMD-0.39 assets',
+                            source=f'lmxxf/dlss5-on-amd-9070xt-porting {amd["upstream"]}; user-supplied Magpie-DLSS5-AMD-{amd_version} assets',
                             experimental=True, removable=True, modified=False)
-                if name.endswith('LmxxfNrRuntime.dll'):
+                if Path(name).name in {'LmxxfNrRuntime.dll', 'LmxxfNrRuntime-Original.dll'}:
                     item.update(source='Veyra-built MIT lmxxf host ABI; actual source and patches in corresponding-source bundle',
                                 authenticode='NotSigned', fileVersion='0.0.0.0', modified=True)
                 rows.append(item); amd_rows.append(item)
-            write_json(stage / 'runtime/amd-nr/runtime-manifest.json', dict(schema=2, upstream=amd['upstream'],
+            write_json(stage / 'runtime/amd-nr/runtime-manifest.json', dict(schema=2, upstream=amd['upstream'], version=amd_version,
                        inferenceVerified=False, hardware=['RX 9000 / gfx1200 / gfx1201'], hipRequirement='AMD driver HIP 7 in System32; not included',
                        license='LICENSE-lmxxf-MIT.txt', files=amd_rows))
         runtime_manifest = dict(schema=3, package=args.version, gpuPackage=flavor, enforcedAtRuntime=False,
@@ -137,7 +164,7 @@ def stage_packages(args):
         write_json(stage / 'release-runtime-manifest.json', runtime_manifest)
         write_json(stage / 'runtime/experimental/release-runtime-manifest.json', runtime_manifest)
         text = ('NVIDIA: NR Lecram / SF-v2 / original, DLSS/RTX SR, DLSS FG, VFG 2-8X, FSR 3.1 and XeSS. No AMD NR. Shared FidelityFX 2.3.0 components remain; FSR4 ML is disabled on NVIDIA.\n'
-                if flavor == 'NVIDIA' else 'AMD: lmxxf NR 0.39 (RX9000, requires HIP 7), FSR4 with FSR3.1 compatibility and XeSS. No NVIDIA DLSS/NGX/VFG/CUDA runtime. AMD inference still awaits physical RX9000 verification.\n')
+                if flavor == 'NVIDIA' else f'AMD: lmxxf NR {amd_version} (RX9000, requires HIP 7), FSR4 with FSR3.1 compatibility and XeSS. Small/Original selection requires the complete 0.44 runtime. No NVIDIA DLSS/NGX/VFG/CUDA runtime. AMD inference still awaits physical RX9000 verification.\n')
         (stage / 'GPU-PACKAGE.txt').write_text('Veyra ' + args.version + ' / ' + flavor + '\n' + text +
             'Unsupported functions stay visible and disabled. Use the package matching the GPU used by Veyra. Extract with 7-Zip, then run veyra_qml_ui.exe. Model/DLL bytes are unmodified; default effects are off.\n', encoding='utf8')
         check_vendor(stage, flavor)

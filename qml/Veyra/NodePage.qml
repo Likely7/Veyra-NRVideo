@@ -80,6 +80,8 @@ VPage {
         switch (type) {
         case "color": return "#E0C341"
         case "sr": return "#4F7BFF"
+        case "aa": return "#7FD4FF"
+        case "beauty": return "#FF8FBF"
         case "nr": return "#FF8A3D"
         case "protection": return "#8A8A96"
         case "video-hdr": return "#FFB547"
@@ -1052,7 +1054,7 @@ VPage {
                 radius: 5
                 color: Qt.rgba(10 / 255, 10 / 255, 13 / 255, 0.85)
                 visible: segments.length > 0
-                readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9",
+                readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9", aa: "#7FD4FF",
                                                "frame-generation": "#3DDC84", protection: "#E7B868" })
                 readonly property var segments: {
                     const timings = veyra.nodeTimings, chain = veyra.chain
@@ -1458,6 +1460,8 @@ VPage {
                 sourceComponent: card.node.type === "nr" ? nrEditor
                                : card.node.type === "color" ? colourEditor
                                : card.node.type === "sr" ? srEditor
+                               : card.node.type === "aa" ? aaEditor
+                               : card.node.type === "beauty" ? beautyEditor
                                : card.node.type === "video-hdr" ? hdrEditor
                                : card.node.type === "frame-generation" ? fgEditor : null
             }
@@ -1531,6 +1535,28 @@ VPage {
                         onPicked: id => veyra.videoSrQuality = parseInt(id)
                     }
                 }
+            }
+        }
+        Component {
+            id: aaEditor
+            AntiAliasEditor {
+                objectName: "node-aa-editor-" + card.node.id
+                namePrefix: "node-aa-" + card.node.id
+                params: (veyra.chain, veyra.antiAliasParams, veyra.antiAliasParamsAt(card.node.index))
+                onEdited: (key, amount) => veyra.setAntiAliasParameterAt(card.node.index, key, amount)
+            }
+        }
+        Component {
+            id: beautyEditor
+            BeautyEditor {
+                objectName: "node-beauty-editor-" + card.node.id
+                namePrefix: "node-beauty-" + card.node.id
+                params: (veyra.chain, veyra.beautyLayers, veyra.beautyParamsAt(card.node.index))
+                detection: veyra.beautyDetection
+                status: veyra.beautyStatus
+                onEdited: (key, amount) => veyra.setBeautyParameterAt(card.node.index, key, amount)
+                onPresetPicked: preset => veyra.applyBeautyPreset(card.node.index, preset)
+                onDetectionEdited: (key, amount) => veyra.setBeautyDetection(key, amount)
             }
         }
         Component {

@@ -1,0 +1,10 @@
+EXPORTS
+    ??0AudioDevice@AVerMedia@@QEAA@XZ=FakeCtor
+    ??1AudioDevice@AVerMedia@@QEAA@XZ=FakeDtor
+    ?ConnectFilters@AudioDevice@AVerMedia@@QEAA_NXZ=FakeConnect
+    ?GetDeviceList@AudioDevice@AVerMedia@@SAXAEAV?$vector@UDeviceInfo@AVerMedia@@V?$allocator@UDeviceInfo@AVerMedia@@@std@@@std@@@Z=FakeDevices
+    ?ResetGraph@AudioDevice@AVerMedia@@QEAA_NXZ=FakeReset
+    ?SetCallback@AudioDevice@AVerMedia@@QEAA_NPEAVAudioDealer@2@@Z=FakeCallback
+    ?Stop@AudioDevice@AVerMedia@@QEAA_NXZ=FakeStop
+    ?UpdateDevice@AudioDevice@AVerMedia@@QEAA_NAEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@0@Z=FakeUpdate
+    ?setInfoHandler@LogHelper@@YAXP6AXPEBDPEAD@Z@Z=FakeLogger

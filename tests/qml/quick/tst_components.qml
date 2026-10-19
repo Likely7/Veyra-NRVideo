@@ -522,7 +522,11 @@ Item {
             compare(control.checked,false)
             changed[0].runtime=4
             fixture.rows=changed.map(r => Object.assign({},r))
-            verify(!row.visible)
+            verify(row.visible)
+            verify(row.enabled && control.enabled)
+            mouseClick(control)
+            compare(fixture.lastKey,"performance")
+            compare(Boolean(fixture.rows[0].performance),true)
         }
         function test_nr_complete_parameters_and_skin_range() {
             const fixture=createTemporaryObject(nrFixture,root)

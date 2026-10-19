@@ -19,7 +19,9 @@ namespace veyra::engine {
 // The structure is additive for now: EnhancementSettings remains the runtime
 // input, and toChain()/fromChain() convert between the two. Later engine work
 // (multi-NR, ordered executor, node mode) consumes the chain directly.
-inline constexpr uint32_t kMaxChainNodes = 16;
+// 32 since the effect-chain extension (anti-aliasing, beauty): a full list chain is
+// 6 colours + SR + 4 NR + protection + 2 anti-aliasing + 6 beauty + HDR + FG = 22.
+inline constexpr uint32_t kMaxChainNodes = 32;
 
 enum class EffectType : uint8_t {
     Color = 0,          // tone/LUT grade
@@ -28,6 +30,8 @@ enum class EffectType : uint8_t {
     Protection,         // keeps NR out of chosen rectangles
     VideoHdr,           // SDR -> HDR conversion
     FrameGeneration,    // must be the last node
+    AntiAliasing,       // spatial anti-aliasing (#53): same size, repeatable, before RTX Video HDR
+    Beauty,             // face restore + skin smoothing: same size, repeatable, before RTX Video HDR
     Count
 };
 constexpr uint32_t effectTypeCount = uint32_t(EffectType::Count);
@@ -39,6 +43,8 @@ constexpr std::string_view effectTypeName(EffectType type) {
     case EffectType::Protection: return "protection";
     case EffectType::VideoHdr: return "video-hdr";
     case EffectType::FrameGeneration: return "frame-generation";
+    case EffectType::AntiAliasing: return "aa";
+    case EffectType::Beauty: return "beauty";
     case EffectType::Count: break;
     }
     return "unknown";
@@ -71,6 +77,8 @@ struct ChainNode {
     ProtectionSettings protection{};
     ColorSettings color{};
     VideoHdrSettings videoHdr{};
+    AntiAliasSettings aa{};
+    BeautySettings beauty{};
     bool operator==(const ChainNode&) const = default;
 };
 
@@ -88,6 +96,11 @@ struct EffectChain {
     // Non-stage settings that still belong to a job description (they were in
     // EnhancementSettings before and stay there; copied here for completeness).
     bool fgStrictAdmission = false;
+    // toChain() ran out of nodes: validateChain() refuses the chain instead of a
+    // stage being dropped silently.
+    bool overflow = false;
+    // One face detector serves every beauty node of this chain.
+    BeautyDetection beautyDetection{};
     bool operator==(const EffectChain&) const = default;
 
     // Counts nodes of one type, regardless of enabled state.
@@ -278,6 +291,8 @@ struct EffectInfo {
     bool justBeforeLast = false;
     bool changesResolution = false;
     bool experimental = false;
+    // Known to the engine and the file formats but not offered by the UI yet.
+    bool hidden = false;
 };
 const EffectInfo& effectInfo(EffectType type);
 const std::array<EffectInfo, effectTypeCount>& effectCatalog();

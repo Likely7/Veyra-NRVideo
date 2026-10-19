@@ -67,17 +67,63 @@ HevcLayerScan scanHevcLayers(const uint8_t* data, int size, unsigned lengthSize)
     }
     return out;
 }
-} // namespace
 
+// Rotation from the "rotate" tag or the display matrix in the stream's side data.
+int rotationFrom(const AVCodecParameters* parameters, const char* rotateTag)
+{
+    // av_display_rotation_get reads the container's display matrix (the same
+    // metadata players use); it returns degrees counter-clockwise.
+    if (rotateTag != nullptr && *rotateTag != '\0') {
+        const int value = std::atoi(rotateTag);
+        if (value != 0) return ((value % 360) + 360) % 360;
+    }
+    if (parameters == nullptr) return 0;
+    // FFmpeg 6+ exposes stream side data through the packet-side-data API.
+    const AVPacketSideData* side = parameters->coded_side_data;
+    const int sideCount = parameters->nb_coded_side_data;
+    const uint8_t* matrix = nullptr;
+    for (int i = 0; i < sideCount; ++i) {
+        if (side[i].type == AV_PKT_DATA_DISPLAYMATRIX && side[i].size >= 9 * int(sizeof(int32_t))) { matrix = side[i].data; break; }
+    }
+    if (matrix == nullptr) return 0;
+    const double degrees = av_display_rotation_get(reinterpret_cast<const int32_t*>(matrix));
+    if (!std::isfinite(degrees)) return 0;
+    int normalized = int(std::lround(-degrees)) % 360;
+    if (normalized < 0) normalized += 360;
+    return normalized;
+}
+} // namespace
 
 FFmpegDemuxer::~FFmpegDemuxer()
 {
     close();
 }
 
+bool FFmpegDemuxer::openShared(std::shared_ptr<DemuxSession> session)
+{
+    if (opened()) {
+        close();
+    }
+    if (!session || session->videoStream() < 0) {
+        return false;
+    }
+    packet_ = av_packet_alloc();
+    if (packet_ == nullptr) {
+        return false;
+    }
+    session_ = std::move(session);
+    videoStreamIndex_ = session_->videoStream();
+    stats_ = DemuxerStats{};
+    const auto* stream = session_->stream(videoStreamIndex_);
+    log::info("media", std::format("demuxer: opened shared session codecId={} streams={} videoStream={} durationUs={} timeBase={}/{} format={}",
+        stream && stream->parameters ? static_cast<int>(stream->parameters->codec_id) : -1, session_->streams().size(), videoStreamIndex_,
+        session_->durationUs(), stream ? stream->timeBaseNum : 0, stream ? stream->timeBaseDen : 0, session_->formatName()));
+    return true;
+}
+
 bool FFmpegDemuxer::open(const std::wstring& path,const std::atomic<bool>* cancelled)
 {
-    if (context_ != nullptr) {
+    if (opened()) {
         close();
     }
 
@@ -95,7 +141,7 @@ bool FFmpegDemuxer::open(const std::wstring& path,const std::atomic<bool>* cance
     raw->interrupt_callback={InputInterrupt::callback,&interrupt_};
     AVDictionary* options=nullptr;
     if(network)networkMediaOptions(&options);
-    interrupt_.arm();
+    interrupt_.armConnect();
     const int openResult = avformat_open_input(&raw, utf8Path.c_str(), nullptr, &options);
     av_dict_free(&options);
     if (openResult < 0) {
@@ -105,7 +151,7 @@ bool FFmpegDemuxer::open(const std::wstring& path,const std::atomic<bool>* cance
         return false;
     }
 
-    interrupt_.arm();
+    interrupt_.armProbe();
     const int infoResult=avformat_find_stream_info(raw, nullptr);
     interrupt_.disarm();
     if (infoResult < 0) {
@@ -146,12 +192,21 @@ void FFmpegDemuxer::close()
     if (context_ != nullptr) {
         avformat_close_input(&context_);
     }
+    session_.reset();
     videoStreamIndex_ = -1;
     havePendingPacket_ = false;
+    packetDiscontinuity_ = false;
 }
 
 int64_t FFmpegDemuxer::durationUs() const
 {
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        if (stream && stream->duration > 0 && stream->timeBaseDen > 0) {
+            return av_rescale_q(stream->duration, { stream->timeBaseNum, stream->timeBaseDen }, { 1, 1000000 });
+        }
+        return session_->durationUs();
+    }
     if (context_ == nullptr) {
         return 0;
     }
@@ -163,11 +218,17 @@ int64_t FFmpegDemuxer::durationUs() const
 }
 
 bool FFmpegDemuxer::seekable() const {
+    if (session_) return session_->seekable();
     return context_&&context_->pb&&(context_->pb->seekable&AVIO_SEEKABLE_NORMAL);
 }
 
 double FFmpegDemuxer::averageFps() const
 {
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        if (!stream || stream->avgRateDen == 0) return 0.0;
+        return static_cast<double>(stream->avgRateNum) / stream->avgRateDen;
+    }
     if (context_ == nullptr) {
         return 0.0;
     }
@@ -179,15 +240,33 @@ double FFmpegDemuxer::averageFps() const
 }
 
 int FFmpegDemuxer::nominalRateNum() const {
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        return stream ? stream->nominalRateNum : 0;
+    }
     return context_ && videoStreamIndex_ >= 0 ? context_->streams[videoStreamIndex_]->r_frame_rate.num : 0;
 }
 int FFmpegDemuxer::nominalRateDen() const {
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        return stream ? stream->nominalRateDen : 0;
+    }
     return context_ && videoStreamIndex_ >= 0 ? context_->streams[videoStreamIndex_]->r_frame_rate.den : 0;
 }
 
 void FFmpegDemuxer::sampleAspect(int& num, int& den) const
 {
     num = 0; den = 0;
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        if (!stream) return;
+        if (stream->sarNum > 0 && stream->sarDen > 0) { num = stream->sarNum; den = stream->sarDen; return; }
+        const auto* parameters = stream->parameters.get();
+        if (parameters && parameters->sample_aspect_ratio.num > 0 && parameters->sample_aspect_ratio.den > 0) {
+            num = parameters->sample_aspect_ratio.num; den = parameters->sample_aspect_ratio.den;
+        }
+        return;
+    }
     if (context_ == nullptr || videoStreamIndex_ < 0) return;
     const AVRational sar = context_->streams[videoStreamIndex_]->sample_aspect_ratio;
     if (sar.num > 0 && sar.den > 0) { num = sar.num; den = sar.den; return; }
@@ -198,32 +277,22 @@ void FFmpegDemuxer::sampleAspect(int& num, int& den) const
 
 int FFmpegDemuxer::rotationDegrees() const
 {
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        return stream ? rotationFrom(stream->parameters.get(), stream->rotate.c_str()) : 0;
+    }
     if (context_ == nullptr || videoStreamIndex_ < 0) return 0;
     const AVStream* stream = context_->streams[videoStreamIndex_];
-    // av_display_rotation_get reads the container's display matrix (the same
-    // metadata players use); it returns degrees counter-clockwise.
     const AVDictionaryEntry* rotate = av_dict_get(stream->metadata, "rotate", nullptr, 0);
-    if (rotate != nullptr) {
-        const int value = std::atoi(rotate->value);
-        if (value != 0) return ((value % 360) + 360) % 360;
-    }
-    // FFmpeg 6+ exposes stream side data through the packet-side-data API.
-    const AVPacketSideData* side = stream->codecpar->coded_side_data;
-    const int sideCount = stream->codecpar->nb_coded_side_data;
-    const uint8_t* matrix = nullptr;
-    for (int i = 0; i < sideCount; ++i) {
-        if (side[i].type == AV_PKT_DATA_DISPLAYMATRIX && side[i].size >= 9 * int(sizeof(int32_t))) { matrix = side[i].data; break; }
-    }
-    if (matrix == nullptr) return 0;
-    const double degrees = av_display_rotation_get(reinterpret_cast<const int32_t*>(matrix));
-    if (!std::isfinite(degrees)) return 0;
-    int normalized = int(std::lround(-degrees)) % 360;
-    if (normalized < 0) normalized += 360;
-    return normalized;
+    return rotationFrom(stream->codecpar, rotate != nullptr ? rotate->value : nullptr);
 }
 
 const AVCodecParameters* FFmpegDemuxer::videoCodecParameters() const
 {
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        return stream ? stream->parameters.get() : nullptr;
+    }
     if (context_ == nullptr || videoStreamIndex_ < 0) {
         return nullptr;
     }
@@ -232,6 +301,10 @@ const AVCodecParameters* FFmpegDemuxer::videoCodecParameters() const
 
 int FFmpegDemuxer::videoTimeBaseNum() const
 {
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        return stream ? stream->timeBaseNum : 0;
+    }
     if (context_ == nullptr || videoStreamIndex_ < 0) {
         return 0;
     }
@@ -240,6 +313,10 @@ int FFmpegDemuxer::videoTimeBaseNum() const
 
 int FFmpegDemuxer::videoTimeBaseDen() const
 {
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        return stream ? stream->timeBaseDen : 0;
+    }
     if (context_ == nullptr || videoStreamIndex_ < 0) {
         return 0;
     }
@@ -248,15 +325,50 @@ int FFmpegDemuxer::videoTimeBaseDen() const
 
 std::string FFmpegDemuxer::formatName() const
 {
+    if (session_) {
+        return session_->formatName();
+    }
     if (context_ == nullptr || context_->iformat == nullptr || context_->iformat->name == nullptr) {
         return {};
     }
     return context_->iformat->name;
 }
 
+void FFmpegDemuxer::notePacket()
+{
+    ++stats_.packetsRead;
+    AVRational base{};
+    if (session_) {
+        const auto* stream = session_->stream(videoStreamIndex_);
+        base = stream ? AVRational{stream->timeBaseNum, stream->timeBaseDen} : AVRational{1, 1000000};
+    } else {
+        base = context_->streams[videoStreamIndex_]->time_base;
+    }
+    const int64_t ptsUs = av_rescale_q(packet_->pts != AV_NOPTS_VALUE ? packet_->pts : packet_->dts, base, { 1, 1000000 });
+    if (stats_.packetsRead == 1) {
+        stats_.firstPts = ptsUs;
+    }
+    else if (ptsUs < stats_.lastPts) {
+        ++stats_.ptsNonMonotonicCount;
+    }
+    stats_.lastPts = ptsUs;
+}
+
 bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
 {
     endOfFile = false;
+    if (session_) {
+        // Offline / blocking consumers: wait for the session, ignore the buffering hold.
+        for (;;) {
+            const auto result = readVideoPacketEx(50, false);
+            switch (result) {
+            case ReadResult::Packet: return true;
+            case ReadResult::Eof: endOfFile = true; return false;
+            case ReadResult::Waiting: continue;
+            default: return false;
+            }
+        }
+    }
     if (context_ == nullptr) {
         return false;
     }
@@ -284,16 +396,7 @@ bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
             av_packet_unref(packet_);
             continue;
         }
-        ++stats_.packetsRead;
-        const int64_t ptsUs = av_rescale_q(packet_->pts != AV_NOPTS_VALUE ? packet_->pts : packet_->dts,
-            context_->streams[videoStreamIndex_]->time_base, { 1, 1000000 });
-        if (stats_.packetsRead == 1) {
-            stats_.firstPts = ptsUs;
-        }
-        else if (ptsUs < stats_.lastPts) {
-            ++stats_.ptsNonMonotonicCount;
-        }
-        stats_.lastPts = ptsUs;
+        notePacket();
         // Custom (P5): does the enhancement layer reach us inside the packet?
         if (std::getenv("VEYRA_DOVI_EL_TRACE") != nullptr) {
             static const unsigned lengthSize = hevcLengthSize(context_->streams[videoStreamIndex_]->codecpar);
@@ -322,8 +425,38 @@ bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
     }
 }
 
+FFmpegDemuxer::ReadResult FFmpegDemuxer::readVideoPacketEx(int waitMs, bool honourHold)
+{
+    if (!session_) {
+        bool eof = false;
+        if (readVideoPacket(eof)) return ReadResult::Packet;
+        return eof ? ReadResult::Eof : ReadResult::Error;
+    }
+    av_packet_unref(packet_);
+    DemuxSession::Meta meta;
+    switch (session_->popVideo(packet_, meta, waitMs, honourHold)) {
+    case DemuxSession::Pop::Packet:
+        packetDiscontinuity_ = meta.discontinuity;
+        notePacket();
+        return ReadResult::Packet;
+    case DemuxSession::Pop::Empty: return ReadResult::Waiting;
+    case DemuxSession::Pop::Eof: return ReadResult::Eof;
+    case DemuxSession::Pop::Cancelled: return ReadResult::Cancelled;
+    case DemuxSession::Pop::Failed: break;
+    }
+    return ReadResult::Error;
+}
+
 bool FFmpegDemuxer::seekToUs(int64_t targetUs)
 {
+    if (session_) {
+        if (!session_->seek(targetUs)) {
+            log::error("media", std::format("demuxer: session seek failed targetUs={}", targetUs));
+            return false;
+        }
+        packetDiscontinuity_ = false;
+        return true;
+    }
     if (context_ == nullptr) {
         return false;
     }

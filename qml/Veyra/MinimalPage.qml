@@ -109,6 +109,42 @@ VPage {
                 }
             }
         }
+        // A network or server source that is paused to buffer, or reconnecting (#48): the
+        // picture stays up and says why it waits, instead of ending in an error and a black screen.
+        Rectangle {
+            id: bufferingPill
+            objectName: "min-network-buffering"
+            readonly property bool videoCover: true
+            property real coverRadius: 16
+            // The picture's width bounds the sentence; the pill never sizes the text back.
+            readonly property real maxTextWidth: Math.max(120, parent.width - 48 - 32 - 22 - 10)
+            visible: veyra.networkHolding && veyra.networkNotice.length > 0
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 96
+            width: bufferingRow.implicitWidth + 32
+            height: Math.max(40, bufferingText.height + 20)
+            radius: coverRadius
+            color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.92)
+            border.width: 1
+            border.color: Theme.stroke2
+            Row {
+                id: bufferingRow
+                anchors.centerIn: parent
+                spacing: 10
+                VSpinner { anchors.verticalCenter: parent.verticalCenter }
+                Text {
+                    id: bufferingText
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, bufferingPill.maxTextWidth)
+                    wrapMode: Text.WordWrap
+                    text: veyra.networkNotice
+                    color: Theme.t1
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsBody
+                }
+            }
+        }
     }
 
     VMenu {

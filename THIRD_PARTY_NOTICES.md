@@ -1,5 +1,57 @@
 # Third-party dependencies
 
+## Beauty node: face restore and skin smoothing (2026-10-18)
+
+| Source | License | Veyra use |
+|---|---|---|
+| YuNet face detector, OpenCV Zoo `models/face_detection_yunet` at `47534e27`: `face_detection_yunet_2023mar.onnx` (232,589 bytes, SHA256 `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4`) and `face_detection_yunet_2026may.onnx` (229,738 bytes, SHA256 `ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0`); hashes match the Git LFS pointer oids | MIT, Copyright (c) 2020 Shiqi Yu | Weights only, loaded at run time from `runtime/models`, `runtime_local/models` or `models` next to the program; never in source Git. The network runs as Veyra's own D3D12 compute shaders (`shaders/BeautyYuNet*.hlsl`, `src/beauty/YuNetGpu.cpp`); `src/beauty/OnnxLite.cpp` reads the ONNX file. |
+| MediaPipe face landmark model, google-ai-edge/mediapipe tag `v0.8.9`, `mediapipe/modules/face_landmark/face_landmark.tflite` (1,241,896 bytes, SHA256 `c603fa6149219a3e9487dc9abd7a0c24474c77263273d24868378cdf40aa26d1`, committed in the repository at that tag), and the outline index lists of `mediapipe/python/solutions/face_mesh_connections.py` | Apache-2.0 (the repository's license, LICENSE SHA256 `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`) | 468 face points per tracked face: weights only, loaded at run time from the same model folders as YuNet, never in source Git; read by `src/beauty/TfliteLite.cpp` and run as Veyra's own D3D12 compute shaders (`shaders/BeautyMesh*.hlsl`, `src/beauty/FaceMeshGpu.cpp`). The contour, eye, brow and lip index lists are copied into `shaders/BeautyMeshDecode.hlsl` and the tests |
+| SkinSoft, yasunari01/obs-filters `fd5690f`, `skinsoft-filter/data/effects/skinsoft.effect` | GPL-2.0-or-later | Skin selection (HSV hue distance, saturation / luma windows, shared softness), detail protection and texture restore, ported to `shaders/Beauty.hlsli` and `shaders/BeautyApply.hlsl` |
+| GPUPixel, pixpark/gpupixel `ef552bf`, `BeautyFaceUnitFilter` | Apache-2.0 | The variance-adaptive skin blend, re-implemented as a fast guided filter (He & Sun 2015) in `shaders/BeautyStats.hlsl` / `BeautyBlur.hlsl`; no GPUPixel source or binary is included |
+| OpenCV 5.0.0 `FaceDetectorYN`, `dnn.readNetFromTFLite` | Apache-2.0 | Test references only (`scripts/beauty/yunet-reference.py` and `facemesh-reference.py` write the expected detector and face mesh outputs); `shaders/BeautyTrack.hlsl` follows its non-maximum suppression rules (whole-pixel boxes, score order, IoU). OpenCV is neither linked nor shipped |
+
+Veyra changes: the detector, the face mesh crop / network / outlines, the GPU face
+tracking (stable ids, One Euro smoothing, grace and fade), the same-frame original restore, the region pass with
+indirect dispatch and every UI / preset / export connection are Veyra's own.
+Smoothing works on a perceptual copy relative to the SDR or 203-nit HDR white
+and blends back in linear light; SkinSoft's sparse 9-tap blur is replaced by the
+guided filter, and its saturation / luma floors are lowered for dim skin. The
+test pictures (OpenCV samples, the OpenCV Zoo example, scikit-image's astronaut)
+are used by local tests only and are not part of the source tree. No inference
+runtime (ONNX Runtime, DirectML, WinML) is added.
+
+## Spatial anti-aliasing: FXAA / SMAA / MLAA (#53, 2026-10-18)
+
+Ported from SAOG0721/Magpie (experimental branch), commit
+`d687997780ac8d6e54d8b21a0c6b2be70f5eb401`, GPL-3.0. Every Veyra shader file
+names its sources and changes in its header and keeps the upstream notice.
+
+| Magpie source | Upstream origin and license | Veyra file |
+|---|---|---|
+| `src/Effects/FXAA/FXAA.hlsli`, `FXAA_{Medium,High,Ultra}.hlsl` (presets 3/4/5) | libretro/slang-shaders `anti-aliasing/shaders/fxaa.slang`, Copyright (c) 2011 NVIDIA Corporation notice | `shaders/AaFxaa.hlsl` (built as `AaFxaa3/4/5.dxil`) |
+| `src/Effects/SMAA/SMAA.hlsli`, `SMAA_{Low,Medium,High,Ultra}.hlsl` | iryoku/smaa, MIT, Copyright (C) 2013 Jorge Jimenez, Jose I. Echevarria, Belen Masia, Fernando Navarro, Diego Gutierrez | `shaders/Smaa.hlsli`, `AaSmaaEdges.hlsl`, `AaSmaaWeights.hlsl` (built as `AaSmaaWeights{Low,Medium,High,Ultra}.dxil`), `AaSmaaBlend.hlsl` |
+| `src/Effects/SMAA/SMAA_T2x_NoJitter_Experimental.hlsl`, `SMAA_4x_NoJitter_Experimental.hlsl` | Magpie fork addition on top of SMAA (same MIT notice) | `shaders/AaTemporalResolve.hlsl`; subsample-index sets in `src/pipeline/AntiAliasPass.cpp` |
+| `src/Effects/MLAA/MLAA.hlsl` | adapted there from GPUOpen-LibrariesAndSDKs/MLAA11, MIT, Copyright (c) 2016 Advanced Micro Devices, Inc. | `shaders/AaMlaa.hlsli`, `AaMlaaEdges.hlsl`, `AaMlaaCounts.hlsl`, `AaMlaaBlend.hlsl` |
+| `src/Effects/SMAA/AreaTex.dds` (SHA256 `16e6cd520c2d885cb142b98334b2516804cbb1f44dcda2922be1d68f0766208c`), `SearchTex.dds` (SHA256 `891e444b6dde7dd98f6902c805cd04e3469892aa1667c92f764d94789477ef3a`) | SMAA precomputed textures, iryoku/smaa, MIT | `src/pipeline/SmaaLookupTables.cpp`, generated by `scripts/generate-smaa-lookup-tables.py` (AreaTex R/G payload SHA256 `35065cef2a02cabcad711d6bf430239ae64e27d71c4e4fa06f29cce2c992f0d2`, SearchTex payload SHA256 `3694eae5e9d44b8ebb4415a13f8c7b94dc08a2fc86658434d771c4610fe5744d`) |
+
+Magpie's copy of the FXAA code had dropped the NVIDIA notice carried by the
+libretro source; `shaders/AaFxaa.hlsl` restores it verbatim.
+
+Veyra changes: the passes are compute shaders on the graph's linear FP16
+working textures (one pixel per thread); edges are detected on a perceptual
+luma pass (`shaders/AntiAlias.hlsli`, `AaLuma.hlsl`: sRGB transfer relative to
+the SDR white or the 203-nit HDR reference white, continued logarithmically
+above it) and every blend is done in linear light, which keeps HDR highlights
+and out-of-709 colours; SMAA neighbourhood blending passes pixels without
+weights through exactly; MLAA's `sqrt(lerp(c*c, a*a, w))` became a linear lerp;
+the temporal resolve measures its rejection distance on the perceptual
+transfer and takes history validity from the pass (reset on seek, scene cut,
+timeline discontinuity and rebuild) instead of the history alpha. The
+`AntiAliasPass` executor, the graph slots and every UI / preset / export
+connection are Veyra's own. Not ported: jittered SMAA T2x / 4x (captured
+frames cannot be jittered), Anime4K 3D AA upscale, SGSR, and the MagpieFX
+effect runtime. No Magpie binary or runtime is used.
+
 ## User-provided ShortFuse NR 310.9.16 (2026-10-17, local testing)
 
 The user supplied `nvngx_dlssnr.dll` and authorized replacement of the SF-v2
@@ -21,6 +73,19 @@ copies the supplied DLL without modifying its disk bytes; existing NVIDIA
 licenses/notices are retained, and this local authorization grants no new
 public redistribution permission. See `docs/NR_SF_310916_PLAN_2026-10-17.md`
 and the corresponding report for measured conditions and untested hardware.
+
+## Capture format capability discovery (2026-10-17)
+
+The format compatibility review used OBS Studio 32.2.2 at
+`ba2f32bdf791005443988a4955e963663e16b1ed` and its libdshowcapture submodule
+at `8878638324393815512f802640b0d5ce940161f1`, especially
+`src/dshow-enum.cpp` and `src/dshow-base.cpp` (LGPL-2.1-or-later).
+Veyra independently implements the capability fallback, range candidates,
+pin selection and exact media-type validation in
+`include/veyra/source/DirectShowFormatDiscovery.h` and
+`CaptureCapabilityRange.h`. No OBS runtime, capture loop, buffering,
+decoder or renderer is imported by this change. This is separate from the
+existing attributed libdshowcapture adaptations below.
 
 ## Compressed Matroska subtitles (2026-10-09)
 
@@ -243,6 +308,18 @@ Source: https://github.com/lucide-icons/lucide/tree/a537cb6eb323b885f4c60baf3cec
 
 The Qt/QML interface (2026-09-26) draws the Lucide geometry that the approved prototype carries in `prototypes/ui-redesign-2026-09-25/icons.js`. `tools/qt_probe/make-icons.py` converts those SVG elements to path data in `qml/Veyra/IconData.js`, rendered by `qml/Veyra/VIcon.qml`; the same Lucide ISC / Feather MIT notices in `assets/icons/lucide/LICENSE` apply. `back10`, `fwd10`, `playfill` and `pausefill` in that file are the prototype's own inline SVGs, not Lucide.
 
+The sponsor page (2026-10-19) adds Lucide `coffee` and `external-link` (as `external`) from lucide-static 1.51.0 to the same
+`icons.js`, under the same ISC notice.
+
+## Simple Icons brand glyphs (sponsor page, 2026-10-19)
+
+设置 → 赞助作者 draws the Bilibili, TikTok (Douyin uses the same mark), X, GitHub, YouTube, Ko-fi, WeChat and Alipay
+glyphs from [Simple Icons](https://github.com/simple-icons/simple-icons) 16.34.0 (npm `simple-icons`, CC0-1.0).
+`tools/qt_probe/make-sponsor-icons.py` places the unmodified path data on coloured tiles in `qml/Veyra/sponsor/*.svg`;
+the Ko-fi glyph is split into its subpaths to colour the cup the way Ko-fi's own button does. CC0 covers the
+drawings only: the logos remain trademarks of their owners and are used solely to link to the author's own
+pages; no endorsement is implied.
+
 ## RTX Video SDK 1.1 local VSR adapter
 
 User-provided official SDK from https://developer.nvidia.com/rtx-video-sdk/getting-started, kept under ignored third_party_local/nvidia/RTX_Video_SDK_1.1.0. Its NVIDIA RTX SDK license remains applicable. VideoSrBackend is independently authored against the documented VSR parameter ABI; no SDK sample implementation or proprietary header is copied into the repository. Local nvngx_vsr.dll remains excluded from Git. Under the user-authorized 2026-09-09 Release Runtime Pack policy, its pinned signed release copy may be included only as a Release asset alongside the applicable SDK license and manifest; it is never committed to source control.
@@ -303,6 +380,7 @@ Thank you to these projects and their contributors. Integrated code, dependencie
 | [SDL](https://github.com/libsdl-org/SDL) | PC controller input, DualSense support and haptic audio output. |
 | [AMD FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) | Optical flow and its D3D12 backend. |
 | [Lucide](https://github.com/lucide-icons/lucide) | UI icons, retaining Lucide and Feather-derived license notices. |
+| [Simple Icons](https://github.com/simple-icons/simple-icons) | Brand glyphs on the sponsor page (CC0; the logos stay their owners' trademarks). |
 | [Intel XeSS / XeLL](https://github.com/intel/xess) | Experimental XeSS frame generation and related runtime interfaces. |
 | [NVIDIA DLSS](https://github.com/NVIDIA/DLSS), [RTX Video SDK](https://developer.nvidia.com/rtx-video-sdk), [Optical Flow SDK](https://developer.nvidia.com/opticalflow-sdk), [Video Codec SDK](https://developer.nvidia.com/video-codec-sdk) | Upscaling, optical flow, encoding and enhancement interfaces. Experimental NR components have separate identities and boundaries in [Runtime Components](docs/RUNTIME_COMPONENTS_1.1.0.md); this is not vendor certification. |
 | [vcpkg](https://github.com/microsoft/vcpkg) | Dependency builds, version records and license provenance. |
@@ -788,6 +866,20 @@ The user-approved, unmodified NVIDIA-signed 310.8.0.0 NR (SHA256 E16BCF15E16E13F
 
 ## lmxxf AMD NR local integration (2026-10-03)
 
+2026-10-18 local upgrade: fixed MIT source `4764e4f1a24f5234b8e29952dc41f493b2d77c90`
+(0.44 F9 hotfix). User-provided archive SHA256
+`cf812fe7909fbd53b38f54da8abd584698525f81f7ea71cab19ba14bab48e030`.
+The public C ABI header is unchanged. `third_party/lmxxf/veyra-model-isolation.patch`
+adapts `src/native_model_mode.h` and `src/native_hot_flags.h` to select Small or
+Original per independently built module and disable add-on hotkeys/config polling.
+Veyra's model-query/asset-preflight exports use upstream's actual selector and
+Small asset validator. Inference/codec math and weights/kernels are unchanged.
+Build/staging recipes, changed host files and limits are documented in
+`third_party/lmxxf/VEYRA_ORIGIN.md` and `docs/AMD_NR_044_PLAN_2026-10-18.md`.
+NVIDIA-derived weights and HIP modules remain external binary assets, not MIT
+source. No AMD inference, quality or performance claim follows from host tests.
+The following 0.39 identity is preserved as historical provenance.
+
 Veyra calls the independent MIT C ABI from
 [lmxxf/dlss5-on-amd-9070xt-porting](https://github.com/lmxxf/dlss5-on-amd-9070xt-porting),
 fixed commit `78f548749e74824327b8458c57be31a1df78376a`, Copyright (c) 2026 Kien.
@@ -925,3 +1017,12 @@ Source: https://github.com/FFmpeg/FFmpeg/tree/bf1b838f2ab88b4f8fd83443325c782ea0
 Changes to `libavfilter/vf_deinterlace_d3d12.c` are supplied as `scripts/ffmpeg/deinterlace-d3d12-async.patch`: eight submission slots retain reference frames until their GPU fence completes, retain/signal the output pool's own fence, respect visible dimensions instead of padded decode allocation sizes, use declared stream frame rate, correct short-stream/field timestamps and drain final output before EOF. Slots only wait when reused while occupied; normal execution does not wait on every pass. `scripts/ffmpeg/build-deinterlace-module.py` also accommodates the localized MSVC banner during configure without changing its ABI. The caller wraps existing D3D11/D3D12 GPU surfaces, preserves source time/field order, and resets filter history on seek/close/fallback. It does not copy GPU pixels back to the CPU during playback.
 
 Redistribution of this module must include `COPYING.LGPLv2.1`, the FFmpeg license notice, the actual configuration/hash/patch manifest and the complete corresponding-source archive generated by that script. Build/use boundaries and rebuild instructions: `docs/BUILD_DEINTERLACE_2026-10-16.md`. MediaMTX v1.21.2 (MIT, https://github.com/bluenviron/mediamtx/releases/tag/v1.21.2) is used only as a loopback RTSP regression server and is not shipped in the player.
+## AVerMedia vendor audio graph (PR63)
+
+Follow-up: [PR64](https://github.com/Likely7/Veyra-NRVideo/pull/64), fixed commit `a7034d67ab75e16f85a17e123b9b07d391a7c75c`, contributes conditional non-PCM arming, sign-extended format classification, framed decode and nonfatal PCM delivery rejection. Veyra adapts unknown/failed optional SDK queries, verified readback, bounded rejection recovery and complete multi-frame payload tests. ABI reference additionally includes `avt_device_opener/include/AVerMediaVendorSdkLoader.h` at the same fixed AVerMedia public commit below; no vendor implementation or binary is copied. SDK/DeviceOpener test fixtures are independently authored source-only doubles.
+
+- Integration source: [Se7eNHea7eN/Veyra-NRVideo PR63](https://github.com/Likely7/Veyra-NRVideo/pull/63), fixed commit `4db24dada13748364d7e613bc4160224b330a7d2`, Veyra GPL-3.0 repository. The original graph adapter is credited to that contribution.
+- Adapted files: `include/veyra/source/AverMediaVendorAudio.h`, `src/source/AverMediaVendorAudio.cpp`, `src/source/CaptureCardSource.cpp`, and CMake. Veyra additions split bounded carrier handling into `AverMediaAudioCarrier`, add strict identity/public-ABI declarations in `AverMediaVendorProtocol`, format-aware decoding in `BitstreamAudio`, and source-only test doubles/codec tests.
+- ABI reference only: AVerMedia's [obs-MultichannelAudio public headers](https://github.com/AVerMedia-Technologies-Inc/obs-MultichannelAudio/tree/7d1250b42e42f964b4fa3a6bcb7269cc09a1e798/avt_dshow_core/include), fixed commit `7d1250b42e42f964b4fa3a6bcb7269cc09a1e798`. Its repository contains a GPL-2.0 license. No OBS implementation source or proprietary vendor implementation is copied into Veyra; local declarations describe the public x64 call contract (`AudioDevice`, `AudioDealer`, `AUDIO_SAMPLE_INFO`, `DeviceInfo`, and `LogHelper`).
+- Changes include STA ownership, bounded asynchronous startup/recovery, exact device matching, callback lifetime protection, guarded external calls/log formatting, continuously detected IEC 61937, and actual decoded channel-layout changes. The separately installed `avt_dshow_core.dll` and its dependencies are loaded in place by absolute path; they are never modified or included in source or test fixtures. Users must install the official AVerMedia Multichannel Audio component themselves. This does not grant redistribution rights or certify untested card/driver versions.
+

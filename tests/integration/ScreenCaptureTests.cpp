@@ -20,6 +20,8 @@ void check(bool pass,const char* name){std::cout<<"SCREEN "<<name<<" pass="<<pas
 void pump(){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}}
 LRESULT CALLBACK pattern(HWND w,UINT m,WPARAM wp,LPARAM lp){
     if(m==WM_TIMER){InvalidateRect(w,nullptr,FALSE);return 0;}
+    if(m==WM_APP+1){KillTimer(w,1);return 0;}
+    if(m==WM_APP+2){SetTimer(w,1,16,nullptr);return 0;}
     if(m==WM_PAINT){PAINTSTRUCT ps;auto dc=BeginPaint(w,&ps);RECT r;GetClientRect(w,&r);
         const COLORREF colors[]={RGB(225,30,45),RGB(20,210,70),RGB(25,60,225)};
         for(int i=0;i<3;++i){RECT band{r.right*i/3,0,r.right*(i+1)/3,r.bottom};auto brush=CreateSolidBrush(colors[i]);FillRect(dc,&band,brush);DeleteObject(brush);}
@@ -74,6 +76,29 @@ int wmain(int argc,wchar_t** argv){
     SetWindowPos(child.window,nullptr,40,40,820,510,SWP_NOZORDER);end=GetTickCount64()+3000;bool resized=false;
     while(GetTickCount64()<end&&next(source,p,&f)){if(f->width>660){resized=true;break;}}
     check(resized&&unsigned(f->width)==source.info().width,"resize updates dimensions");check(content(ctx,ring,source,p,f),"resize retains RGB content");
+    check(resized&&std::abs(source.info().displayAspect-double(f->width)/f->height)<1e-9,"resize updates source display aspect");
+    SetWindowPos(child.window,nullptr,40,40,460,720,SWP_NOZORDER);end=GetTickCount64()+4000;resized=false;
+    while(GetTickCount64()<end&&next(source,p,&f)){
+        if(f->height>f->width){resized=true;break;}
+    }
+    check(resized&&pipeline::hasFrameFlag(p.flags,pipeline::FrameFlagBits::Resize)&&
+          std::abs(source.info().displayAspect-double(f->width)/f->height)<1e-9,
+          "portrait resize publishes new DAR and temporal reset flag together");
+    check(resized&&content(ctx,ring,source,p,f),"portrait resize retains actual RGB content");
+    // A static window cannot rely on an animation to deliver another frame
+    // after the300ms pool debounce. Exercise that source contract directly,
+    // independently of a QML Timer's render-loop wakeups in an inactive window.
+    PostMessageW(child.window,WM_APP+1,0,0);Sleep(80);
+    SetWindowPos(child.window,nullptr,40,40,700,430,SWP_NOZORDER);
+    end=GetTickCount64()+4000;bool staticResized=false;
+    while(GetTickCount64()<end&&next(source,p,&f)){
+        if(f->width>f->height&&f->width>600){staticResized=true;break;}
+    }
+    check(staticResized&&pipeline::hasFrameFlag(p.flags,pipeline::FrameFlagBits::Resize)&&
+          source.info().width==unsigned(f->width)&&source.info().height==unsigned(f->height)&&
+          std::abs(source.info().displayAspect-double(f->width)/f->height)<1e-9,
+          "static window resize updates real frame metadata without ongoing animation");
+    PostMessageW(child.window,WM_APP+2,0,0);
     source.close();options.left=30;options.right=30;options.top=20;options.bottom=20;desc.path=options.uri();check(source.open(desc)&&next(source,p,&f)&&f->width<820,"cropped source opens");source.close();
     options.left=options.right=options.top=options.bottom=0;
     options.fps=0;check(source::ScreenCaptureOptions::parse(options.uri(),parsed)&&parsed.fps==0,"automatic rate URI round trip");
@@ -88,6 +113,16 @@ int wmain(int argc,wchar_t** argv){
         HWND host=CreateWindowW(L"STATIC",L"Screen engine test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,880,40,720,480,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
         SetWindowDisplayAffinity(host,WDA_EXCLUDEFROMCAPTURE);engine::EngineController engine;engine::PlayerOptions settings;settings.nr=true;settings.fg=true;settings.fgMultiplier=4;engine.open(host,options.uri(),settings);
         end=GetTickCount64()+20000;while(GetTickCount64()<end){pump();Sleep(10);}auto snapshot=engine.snapshot();check(snapshot.running&&!snapshot.failed&&snapshot.frames>100&&snapshot.generated>100&&snapshot.nrEvaluated>100,"screen NR and DLSS4x actual evaluation");std::wcout<<L"ENGINE "<<snapshot.status<<L" frames="<<snapshot.frames<<L" generated="<<snapshot.generated<<L" nr="<<snapshot.nrEvaluated<<std::endl;
+        const auto framesBeforeResize=snapshot.frames;
+        SetWindowPos(child.window,nullptr,40,40,820,510,SWP_NOZORDER);
+        end=GetTickCount64()+10000;bool engineResized=false;
+        while(GetTickCount64()<end){
+            pump();Sleep(10);snapshot=engine.snapshot();
+            if(snapshot.sourceWidth>snapshot.sourceHeight&&snapshot.sourceWidth>700&&snapshot.frames>framesBeforeResize+5){engineResized=true;break;}
+            if(snapshot.failed)break;
+        }
+        check(engineResized&&std::abs(snapshot.sourceDisplayAspect-double(snapshot.sourceWidth)/snapshot.sourceHeight)<1e-9,
+              "engine window resize refreshes UI dimensions and DAR while frames advance");
         engine.stop();end=GetTickCount64()+10000;while(!engine.idle()&&GetTickCount64()<end){pump();Sleep(10);}check(engine.idle(),"engine stop drains");DestroyWindow(host);
     }
     HWND excluded=CreateWindowW(L"STATIC",L"Screen exclusion test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,880,40,200,160,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);

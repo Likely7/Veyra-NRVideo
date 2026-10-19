@@ -14,7 +14,7 @@ public:
     LmxxfNrBackend() = default;
     LmxxfNrBackend(const LmxxfNrBackend&) = delete;
     LmxxfNrBackend& operator=(const LmxxfNrBackend&) = delete;
-    bool open(const std::filesystem::path& directory, ID3D12Device*, ID3D12CommandQueue*, uint32_t vendor);
+    bool open(const std::filesystem::path& directory, ID3D12Device*, ID3D12CommandQueue*, uint32_t vendor, bool performance = true);
     void close() noexcept;
     bool ready() const { return context_ != nullptr; }
     bool admits(uint32_t width, uint32_t height) const;

@@ -20,6 +20,11 @@ ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = Path('E:/项目/Veyra')
 FORBIDDEN = {'.pdb', '.lib', '.obj', '.h', '.hpp', '.cpp', '.c', '.zip', '.7z',
              '.pth', '.onnx', '.log', '.dmp', '.mp4', '.mkv', '.partial', '.addon64'}
+# The beauty node's models (2.1.0): the one ONNX file a package may carry is the
+# YuNet face detector (OpenCV Zoo 47534e27, MIT), beside MediaPipe's face landmark
+# model (v0.8.9, Apache-2.0); see THIRD_PARTY_NOTICES.md. Exact path and content.
+MODELS = {'runtime/models/face_detection_yunet_2023mar.onnx': '8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4',
+          'runtime/models/face_landmark.tflite': 'c603fa6149219a3e9487dc9abd7a0c24474c77263273d24868378cdf40aa26d1'}
 REQUIRED = {'veyra_qml_ui.exe', 'qml/Veyra/Main.qml', 'platforms/qwindows.dll',
             'Qt6Quick.dll', 'Qt6Core.dll', 'qt.conf', 'licenses/FFMPEG-VEYRA-BUILD.json',
             'licenses/qt/LGPL-3.0-only.txt', 'licenses/qt/GPL-3.0-only.txt',
@@ -49,7 +54,7 @@ def relative(name):
 def validate_payload(name):
     p = relative(name)
     parts = {part.lower() for part in p.parts}
-    if p.suffix.lower() in FORBIDDEN or parts & {'logs', 'captures', 'qml-tests', '.git', 'third_party_local'}:
+    if (p.suffix.lower() in FORBIDDEN and name not in MODELS) or parts & {'logs', 'captures', 'qml-tests', '.git', 'third_party_local'}:
         raise ValueError('Forbidden candidate payload: ' + name)
     if any(part.startswith(('user-data', 'qml-preferences', 'last-applied', 'presets.v1')) for part in parts):
         raise ValueError('User data in candidate: ' + name)
@@ -59,6 +64,16 @@ def validate_payload(name):
         raise ValueError('Test/development Qt dependency: ' + name)
     if 'runtime_local' in parts and not name.startswith(('runtime_local/amd/fidelityfx/', 'runtime_local/intel/experimental/')):
         raise ValueError('Unapproved runtime_local directory: ' + name)
+
+
+def check_models(stage):
+    """The beauty models a package carries are exactly the audited files."""
+    for name, sha in MODELS.items():
+        if digest(Path(stage) / name) != sha:
+            raise ValueError('Model identity mismatch: ' + name)
+    extra = {f.relative_to(stage).as_posix() for f in (Path(stage) / 'runtime/models').rglob('*') if f.is_file()} - set(MODELS)
+    if extra:
+        raise ValueError('Unaudited model files: ' + ', '.join(sorted(extra)))
 
 
 def verify_zip(path):

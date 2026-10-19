@@ -11,6 +11,8 @@ import QtQuick.Effects
 VPage {
     id: root
     signal requestPage(string page)
+    // The coffee line under the title: Main opens 设置 → 赞助作者.
+    signal requestSponsor()
 
     ColumnLayout {
         anchors.centerIn: parent
@@ -63,25 +65,59 @@ VPage {
             }
         }
 
-        // .hello: .h1 plus a muted line.
+        // .hello: .h1 plus a muted line. The line asks for a coffee; the whole of it
+        // opens the sponsor section of 设置.
         ColumnLayout {
             id: hello
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: qsTr("今天看点什么？")
+                text: "Veyra NR Video"
                 color: Theme.t1
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsH1
                 font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
             }
-            Text {
+            Item {
+                id: sponsorLine
+                objectName: "home-sponsor"
                 Layout.alignment: Qt.AlignHCenter
-                text: qsTr("选一个片源开始，画质预设和补帧随时在播放栏切换")
-                color: Theme.t2
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsBody
+                implicitWidth: sponsorRow.implicitWidth
+                implicitHeight: sponsorRow.implicitHeight
+                Row {
+                    id: sponsorRow
+                    spacing: 5
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: qsTr("本软件开源免费，如果对你有帮助，你可以 →")
+                        color: sponsorHover.hovered ? Theme.t1 : Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                    }
+                    VIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "coffee"
+                        size: 14
+                        color: Theme.accent
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: qsTr("请作者喝杯咖啡")
+                        color: Theme.accent
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        font.weight: Font.Medium
+                        font.underline: sponsorHover.hovered
+                    }
+                }
+                HoverHandler { id: sponsorHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler {
+                    onTapped: {
+                        veyra.logUi("ui-sponsor", "home link")
+                        root.requestSponsor()
+                    }
+                }
             }
         }
 

@@ -126,9 +126,11 @@ struct ComputePass {
 
     // extraSrvCount adds a second SRV table at a fixed register base (8): the
     // colour-grade tables. Passes that do not use it keep the original
-    // three-parameter root signature.
+    // three-parameter root signature. clampSamplers adds static samplers s0
+    // (point) and s1 (bilinear), both clamp-addressed (anti-aliasing passes).
     bool create(ID3D12Device* device, const std::vector<uint8_t>& cs, UINT heapSlots,
-                UINT srvCount = 3, UINT uavCount = 1, UINT constants = 8, UINT extraSrvCount = 0)
+                UINT srvCount = 3, UINT uavCount = 1, UINT constants = 8, UINT extraSrvCount = 0,
+                bool clampSamplers = false)
     {
         if(constants==0||constants>60)return false;
         constantCount=constants;
@@ -165,10 +167,20 @@ struct ComputePass {
             rp[3].DescriptorTable.NumDescriptorRanges=1;
             rp[3].DescriptorTable.pDescriptorRanges=&extraRange;
         }
+        D3D12_STATIC_SAMPLER_DESC samplers[2]{};
+        for(UINT i=0;i<2;++i){
+            samplers[i].Filter=i?D3D12_FILTER_MIN_MAG_MIP_LINEAR:D3D12_FILTER_MIN_MAG_MIP_POINT;
+            samplers[i].AddressU=samplers[i].AddressV=samplers[i].AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            samplers[i].ComparisonFunc=D3D12_COMPARISON_FUNC_NEVER;
+            samplers[i].MaxLOD=D3D12_FLOAT32_MAX;
+            samplers[i].ShaderRegister=i;
+            samplers[i].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
+        }
         D3D12_VERSIONED_ROOT_SIGNATURE_DESC rd{};
         rd.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
         rd.Desc_1_1.NumParameters = hasExtraSrv?4:3;
         rd.Desc_1_1.pParameters = rp;
+        if(clampSamplers){rd.Desc_1_1.NumStaticSamplers=2;rd.Desc_1_1.pStaticSamplers=samplers;}
         ComPtr<ID3DBlob> sig, err;
         const HRESULT serializeHr=D3D12SerializeVersionedRootSignature(&rd, &sig, &err);
         if (FAILED(serializeHr)) {

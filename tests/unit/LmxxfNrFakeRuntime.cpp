@@ -7,8 +7,14 @@
 #include <string>
 #include <cstring>
 #include <cstdint>
+#include <atomic>
+#include <cstdlib>
 using Microsoft::WRL::ComPtr;
+#ifndef VEYRA_TEST_MODEL_MODE
+#define VEYRA_TEST_MODEL_MODE 0
+#endif
 namespace {
+std::atomic<uint32_t> creates{0};
 struct Session {
     ID3D12Resource* color=nullptr;
     ComPtr<ID3D12Resource> output,markerUpload;
@@ -19,7 +25,7 @@ struct Session {
 };
 std::string mode(){char b[64]{};GetEnvironmentVariableA("VEYRA_TEST_LMXXF_MODE",b,sizeof(b));return b;}
 int caps(LmxxfNrCapabilities* p){p->abi_version=1;p->max_input_width=1920;p->max_input_height=1080;return 0;}
-int create(const LmxxfNrCreateInfo* p,void** out){if(p->flags||!p->device||!p->queue)return 2;auto* s=new Session;s->device=static_cast<ID3D12Device*>(p->device);s->queue=static_cast<ID3D12CommandQueue*>(p->queue);*out=s;return 0;}
+int create(const LmxxfNrCreateInfo* p,void** out){if(p->flags||!p->device||!p->queue)return 2;auto* s=new Session;s->device=static_cast<ID3D12Device*>(p->device);s->queue=static_cast<ID3D12CommandQueue*>(p->queue);*out=s;++creates;if(mode()=="hidden-config")_putenv_s("DLSS5_TEMPORAL_MODE","1");return 0;}
 int destroy(void* p){delete static_cast<Session*>(p);return 0;}
 int ok(void*){return 0;}
 int prepare(void* p,const LmxxfNrFrameInfo* info,LmxxfNrJob* job){
@@ -68,6 +74,19 @@ int cancel(void* p,void*){static_cast<Session*>(p)->state=0;return 0;}
 int poll(void* p,void*,uint32_t* state){*state=static_cast<Session*>(p)->state;return 0;}
 int error(char* b,uint32_t n){if(n)strncpy_s(b,n,"test provider: requested failure / incorrect call order",_TRUNCATE);return 0;}
 int status(void*,char* b,uint32_t n){return error(b,n);}
+}
+extern "C" __declspec(dllexport) uint32_t VeyraLmxxfModelMode(){
+    return mode()=="wrong-model" ? 2 : VEYRA_TEST_MODEL_MODE;
+}
+extern "C" __declspec(dllexport) uint32_t VeyraTestLmxxfCreates(){return creates.load();}
+// Fixture cleanup must use this DLL's CRT, just as production validation does.
+extern "C" __declspec(dllexport) void VeyraTestLmxxfResetControls(){_putenv_s("DLSS5_TEMPORAL_MODE","");}
+extern "C" __declspec(dllexport) uint32_t VeyraLmxxfControlsCompatible(){
+    const auto* temporal=std::getenv("DLSS5_TEMPORAL_MODE");
+    return !temporal||!*temporal||std::string(temporal)=="0";
+}
+extern "C" __declspec(dllexport) uint32_t VeyraLmxxfModelAssetsReady(const wchar_t*){
+    return mode()!="missing-small";
 }
 extern "C" __declspec(dllexport) int32_t LmxxfNrGetApi(uint32_t abi,LmxxfNrApi* p){
     if(abi!=1)return 1;if(mode()=="oldabi"&&p->struct_size>LMXXF_NR_API_V1_SIZE)return 2;

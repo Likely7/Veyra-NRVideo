@@ -23,6 +23,7 @@
 #include "veyra/source/XboxSessionSource.h"
 #endif
 #include "veyra/media/AudioTrack.h"
+#include "veyra/media/NetworkSettings.h"
 #include "veyra/sink/VideoEncoder.h"
 #include "veyra/engine/ExportOptions.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
@@ -45,6 +46,7 @@ struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t f
     bool softwareDecode=false; // user setting: files skip D3D12VA and decode on the CPU
     bool deinterlace=true; // automatic file deinterlace, preserves progressive bypass
     bool hardwareDecodeOnly=false; // user setting "强制硬解": files fail instead of falling back to software
+    media::NetworkSettings network; // buffering / reconnect / damaged-picture choices for network sources and servers
     EnhancementSettings snapshot()const{auto s=settings;s.nr=nr;s.sr=sr;s.multiplier=fg?fgMultiplier:1;s.nrPolicy=realtime?(settings.nrPolicy==pipeline::NrSizePolicy::Native?pipeline::NrSizePolicy::Realtime:settings.nrPolicy):pipeline::NrSizePolicy::Native;return s;}
     static PlayerOptions from(EnhancementSettings s,std::optional<ChainRuntimeOrder> order=std::nullopt){PlayerOptions o;o.nr=s.nr;o.sr=s.sr;o.fg=s.multiplier>1;o.fgMultiplier=std::max(2u,s.multiplier);o.realtime=s.nrPolicy!=pipeline::NrSizePolicy::Native;o.settings=s;o.nodeOrder=order;return o;}
 };
@@ -76,12 +78,20 @@ struct PlayerSnapshot {
     std::wstring sourceNotice;
     std::wstring colorStatus;
     std::wstring videoHdrStatus;
+    // Beauty nodes: whether the graph runs any, the faces the shared tracker saw a
+    // few frames ago, and a problem that keeps them from finding faces.
+    bool beautyActive=false;
+    uint32_t beautyFaces=0;
+    std::wstring beautyNotice;
     sink::CaptureAudioState captureAudio;
     unsigned audioInputChannels=0,audioOutputChannels=0;
     std::vector<media::AudioTrack> audioTracks;
     int selectedAudioTrack=-1;
     bool audioRebuffering=false;
     uint64_t audioVideoWaits=0;
+    // Network sources and files on a server (#48): buffered seconds, rates, reconnects,
+    // whether playback is paused for buffering and why. active=false for local files.
+    media::NetworkStats network;
     bool audioEndpointRecovering=false;HRESULT audioEndpointError=S_OK;uint64_t audioEndpointRecoveries=0;
     uint64_t seekRequested=0,seekPresented=0;double seekTarget=0;
     double position=0,duration=0,fps=0,lateMs=0,lateP95Ms=0;

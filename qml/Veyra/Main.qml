@@ -32,7 +32,8 @@ Window {
     // 游戏模式 click-through (ui/GamePassthrough.h): Qt's own flags, so Qt keeps the
     // window's layered/transparent/no-activate styles in both interface renderers.
     flags: Qt.Window | Qt.FramelessWindowHint
-           | (veyra.passthroughActive ? (Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus) : 0)
+           | (veyra.passthroughActive ? Qt.WindowTransparentForInput : 0)
+           | (veyra.gameInputActive ? Qt.WindowDoesNotAcceptFocus : 0)
     title: "Veyra " + veyra.version
 
     // Page ids match the prototype's PAGES keys so a design screenshot and an
@@ -44,6 +45,11 @@ Window {
     // node configuration is active, so the dock never drops into the list UI.
     function goPageTarget(p) { return p === "pro" && veyra.nodeMode === 1 ? "node" : p }
     function goPage(p) { page = goPageTarget(p) }
+    // 设置 → 赞助作者, from the home page's coffee line.
+    function showSponsor() {
+        settingsPage.section = "sponsor"
+        goPage("set")
+    }
     // Test switches from the command line (main.cpp, G0.3); empty in normal use.
     readonly property var test: typeof vyTest !== "undefined" ? vyTest : ({})
     readonly property real testAspect: test.aspect !== undefined ? test.aspect : 0
@@ -66,7 +72,7 @@ Window {
     // 16:9 until a source reports its own shape: a PS5 / capture session has no
     // aspect while it connects, and 2.39 then left a thin black strip.
     property real filmAspect: 16 / 9
-    readonly property bool gameAligned: fullscreen && veyra.gameMode
+    readonly property bool gameAligned: fullscreen && veyra.gameMode && !veyra.gameScaledPreview
     readonly property real reportedAspect: veyra.previewAspect
     onReportedAspectChanged: if (reportedAspect < 0.2) fitToFilm(16 / 9)
     property string lastPage: "home"
@@ -252,7 +258,7 @@ Window {
         visible: !root.fullscreen || root.page === "home" || root.page === "set" || root.quickPanelShown
         // Each page is shown while current or while sinking out; the sinking one
         // takes no input (.page.leave { pointer-events: none }).
-        HomePage { id: homePage; pageId: "home"; home: pages; onRequestPage: p => root.goPage(p) }
+        HomePage { id: homePage; pageId: "home"; home: pages; onRequestPage: p => root.goPage(p); onRequestSponsor: root.showSponsor() }
         MinimalPage {
             id: minPage
             pageId: "min"
@@ -440,8 +446,12 @@ Window {
         // Home: the adjust panel takes the input back / gives it to the program again.
         // Ctrl+Alt+Home: leave the fullscreen picture (and with it the click-through).
         function onGameHotkey(which) {
+            if (which === 1) {
+                root.closeQuickPanel()
+                if (root.fullscreen) root.toggleFullscreen()
+                return
+            }
             if (!root.fullscreen) return
-            if (which === 1) { root.closeQuickPanel(); root.toggleFullscreen(); return }
             root.fullLocked = false
             root.toggleQuickPanel()
         }
@@ -451,7 +461,7 @@ Window {
         }
         function onGameModeChanged() {
             videoHost.syncRect()
-            if (veyra.passthroughActive && playlistWindow.visible) playlistWindow.hide()
+            if (veyra.gameInputActive && playlistWindow.visible) playlistWindow.hide()
         }
     }
     onFullscreenChanged: {
@@ -490,6 +500,10 @@ Window {
     // top-level window (FullscreenBar.qml), because the native video window draws
     // above everything in this one.
     property bool fullControls: true
+    // Also consumed by the native video HWND: a QML cursor alone cannot hide
+    // the class cursor of the foreign child window under a stationary pointer.
+    readonly property bool fullscreenCursorHidden: fullscreen && (!fullControls || fullLocked)
+        && !quickPanelShown && dialogs.dialog === ""
     function pointerActivity() {
         if (!fullscreen || fullLocked || root.test.fullBar === "hidden") return
         if (root.test.fullDebug === true) veyra.logUi("ui-fullscreen-debug", "pointer activity")
@@ -511,7 +525,7 @@ Window {
     // hides with the controls, as in AppShell.
     HoverHandler {
         id: pointerWatch
-        cursorShape: root.fullscreen && (!root.fullControls || root.fullLocked) && !root.quickPanelShown ? Qt.BlankCursor : Qt.ArrowCursor
+        cursorShape: root.fullscreenCursorHidden ? Qt.BlankCursor : Qt.ArrowCursor
         // Qt re-sends hover while anything animates under a still pointer; only a
         // real change of position counts as movement.
         property point last: Qt.point(-1, -1)
@@ -559,19 +573,29 @@ Window {
     }
     TapHandler {
         id: pictureTap
-        enabled: !root.fullLocked
+        // Scaled game input deliberately catches mouse events instead of
+        // forwarding wrong coordinates; they must not control the player either.
+        enabled: !root.fullLocked && !veyra.gameInputActive
         // Judged where the press landed: by the release the page may already have changed.
         property bool pressOnCover: false
-        onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
+        property bool pressOnPicture: false
+        onPressedChanged: if (pressed) {
+            pressOnCover = root.overVideoCover(point.scenePosition)
+            pressOnPicture = root.pictureContains(point.scenePosition)
+        }
         onTapped: (eventPoint, button) => {
             const p = eventPoint.position
-            if (pressOnCover) return
+            // A transport button can enter fullscreen before this handler sees
+            // release. Its press still belongs to the transport, not the newly
+            // enlarged picture underneath it.
+            if (pressOnCover || !pressOnPicture) return
             if (root.page !== "min" && root.page !== "pro" && root.page !== "node" && !root.fullscreen) return
             if (dialogs.dialog !== "" || !veyra.hasSource) return
             if (root.fullscreen && root.quickPanelShown && (proPage.overlayContains(p.x, p.y) || nodePage.overlayContains(p.x, p.y))) return
             // 游戏模式: a click on the picture beside the panel returns to the game.
             if (root.fullscreen && root.quickPanelShown && veyra.gameMode) { root.closeQuickPanel(); return }
-            if (!root.fullscreen && !root.pictureContains(p)) return
+            // Do not re-test geometry on release: a picture double click may
+            // already have left fullscreen before this second tap restores play.
             root.contentItem.forceActiveFocus()
             if (veyra.isCapture || veyra.duration <= 0) return
             if (veyra.protectionDrawShape.length > 0 || veyra.compareMode === 2) return
@@ -579,12 +603,16 @@ Window {
         }
     }
     TapHandler {
-        enabled: !root.fullLocked
+        enabled: !root.fullLocked && !veyra.gameInputActive
         property bool pressOnCover: false
-        onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
+        property bool pressOnPicture: false
+        onPressedChanged: if (pressed) {
+            pressOnCover = root.overVideoCover(point.scenePosition)
+            pressOnPicture = root.pictureContains(point.scenePosition)
+        }
         onDoubleTapped: (eventPoint, button) => {
             const p = eventPoint.position
-            if (pressOnCover) return
+            if (pressOnCover || !pressOnPicture) return
             if (root.fullscreen) {
                 if (root.quickPanelShown && (proPage.overlayContains(p.x, p.y) || nodePage.overlayContains(p.x, p.y))) return
                 root.toggleFullscreen()
@@ -603,10 +631,14 @@ Window {
     TapHandler {
         enabled: veyra.moonlight && veyra.moonlight.state.streaming === true && !veyra.moonlightCaptured && dialogs.dialog === ""
         property bool pressOnCover: false
-        onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
+        property bool pressOnPicture: false
+        onPressedChanged: if (pressed) {
+            pressOnCover = root.overVideoCover(point.scenePosition)
+            pressOnPicture = root.pictureContains(point.scenePosition)
+        }
         onTapped: eventPoint => {
             const p = eventPoint.position
-            if (pressOnCover) return
+            if (pressOnCover || !pressOnPicture) return
             if (root.page !== "min" && root.page !== "pro" && root.page !== "node") return
             if (p.x < videoHost.x || p.y < videoHost.y || p.x > videoHost.x + videoHost.width
                 || p.y > videoHost.y + videoHost.height) return
@@ -640,7 +672,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: veyra.hasSource && !root.pillHidden && !veyra.passthroughActive && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: veyra.hasSource && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)

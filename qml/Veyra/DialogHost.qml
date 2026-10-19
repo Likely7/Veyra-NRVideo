@@ -20,6 +20,7 @@ Item {
 
     // Which dialog is showing: "" | capture | ps5 | moonlight | xbox | screen | subtitle | audio
     property string dialog: ""
+    onDialogChanged: if (dialog !== "capture") legacyCapturePicker.close()
 
     function open(key) {
         if (key === "save") saveDialog.resetForOpen()
@@ -37,6 +38,17 @@ Item {
     signal startMoonlight()
     signal startXbox()
     signal startScreen()
+
+    CaptureLegacyPicker {
+        id: legacyCapturePicker
+        formats: visible ? veyra.captureFormats : []
+        selectedKey: veyra.captureFormatKey
+        onSelected: key => { if (!veyra.captureQueryBusy) veyra.captureFormatKey = key }
+    }
+    Connections {
+        target: veyra
+        function onCaptureChanged() { if (veyra.captureQueryBusy) legacyCapturePicker.close() }
+    }
 
     // Scrim (M16): the design dims the page behind the dialog, opacity .2s linear.
     // The native video window cannot be dimmed from QML; only the dialog panel is cut
@@ -386,6 +398,17 @@ Item {
                 }
             }
             VRow {
+                objectName: "capture-legacy-entry"
+                label: qsTr("旧版格式选择")
+                hint: qsTr("直接查看完整格式列表，包含被常用帧率筛选隐藏的模式")
+                VButton {
+                    objectName: "capture-legacy-open"
+                    text: qsTr("打开旧版格式列表")
+                    enabled: !veyra.captureQueryBusy && veyra.captureDeviceId.length > 0
+                    onClicked: legacyCapturePicker.open()
+                }
+            }
+            VRow {
                 label: qsTr("分辨率")
                 hint: qsTr("先选择分辨率，再选择该分辨率支持的帧率和像素格式")
                 VSelect {
@@ -399,8 +422,18 @@ Item {
                 }
             }
             VRow {
+                label: qsTr("自定义分辨率")
+                hint: qsTr("仅接受驱动尺寸范围与步进支持的值；连接时核对实际格式")
+                RowLayout {
+                    spacing: 6
+                    enabled: !veyra.captureQueryBusy && veyra.captureDeviceId.length > 0
+                    VTextField { id: customCaptureResolution; objectName: "capture-custom-resolution"; implicitWidth: 140; text: "1920x1080" }
+                    VButton { text: qsTr("检查并选择"); onClicked: veyra.captureResolutionId = customCaptureResolution.text }
+                }
+            }
+            VRow {
                 label: qsTr("帧率")
-                hint: qsTr("只列出当前分辨率下设备上报的帧率。设备帧率填 0 时，连接使用这里选中的帧率")
+                hint: qsTr("列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择，连接时验证实际值")
                 VSelect {
                     objectName: "capture-frame-rate"
                     enabled: !veyra.captureQueryBusy && veyra.captureResolutionId.length > 0
@@ -1364,7 +1397,7 @@ Item {
                 label: qsTr("游戏模式")
                 hint: screenDialog.o.kind === 1
                       ? qsTr("开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的程序；%1 调整画面，%2 退出").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
-                      : qsTr("画面贴合游戏窗口的位置，键鼠和手柄照常操作游戏；%1 调整画面，%2 退出。独占全屏请改为无边框窗口").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
+                      : qsTr("贴合原窗口时可精确穿透鼠标；填满或拉伸支持键盘和手柄，鼠标点击会被拦截以免错位。%1 调整画面，%2 退出；独占全屏请改为无边框窗口").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
                 VSwitch {
                     objectName: "screen-game-mode"
                     checked: screenDialog.o.passthrough === true
@@ -1408,7 +1441,7 @@ Item {
             }
             VRow {
                 label: qsTr("裁剪（像素）")
-                hint: screenDialog.o.passthrough === true ? qsTr("游戏模式不裁剪，画面和屏幕一一对应，点到哪里就是哪里") : qsTr("左 / 上 / 右 / 下，按源像素")
+                hint: screenDialog.o.passthrough === true ? qsTr("游戏模式不裁剪；贴合原窗口时画面与鼠标位置一一对应") : qsTr("左 / 上 / 右 / 下，按源像素")
                 RowLayout {
                     spacing: 4
                     enabled: screenDialog.o.passthrough !== true
@@ -1426,8 +1459,10 @@ Item {
             }
             VRow {
                 label: qsTr("画面")
+                hint: screenDialog.o.passthrough === true ? qsTr("填满屏幕支持键盘和手柄；需要精确鼠标穿透时请选择贴合原窗口") : ""
                 VSeg {
-                    options: [{ id: "fit", label: qsTr("适应窗口") }, { id: "fill", label: qsTr("填满窗口") }]
+                    options: [{ id: "fit", label: screenDialog.o.passthrough === true ? qsTr("贴合原窗口") : qsTr("适应窗口") },
+                              { id: "fill", label: screenDialog.o.passthrough === true ? qsTr("填满屏幕") : qsTr("填满窗口") }]
                     current: screenDialog.o.fill ? "fill" : "fit"
                     onPicked: id => veyra.setScreenOption("fill", id === "fill")
                 }

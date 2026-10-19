@@ -30,7 +30,9 @@ struct Shared {
     // chain is fixed-capacity and trivially copyable, so it can cross the
     // process boundary; a worker that sees another version refuses the job
     // instead of reading a mismatched layout.
-    DWORD signature=magic,version=9,bytes=sizeof(Shared); // 9: per-NR performance model in the immutable snapshot
+    // 10: 32-node chain with anti-aliasing; 11: beauty payloads and face detection.
+    static constexpr DWORD kVersion=11;
+    DWORD signature=magic,version=kVersion,bytes=sizeof(Shared);
     EnhancementSettings settings;
     EffectChain chain;
     wchar_t input[32768]{},output[32768]{},temporary[32768]{};
@@ -254,7 +256,7 @@ int runExportWorker(HANDLE mapping){
     if(!s){log::error("export-worker",std::format("mapping failed win32={}",GetLastError()));CloseHandle(mapping);return 1;}
     auto reject=[&](const wchar_t* reason){
         log::error("export-worker",utf8(reason));
-        if(s->signature==magic&&s->version==9&&s->bytes==sizeof(Shared)){
+        if(s->signature==magic&&s->version==10&&s->bytes==sizeof(Shared)){
             if(InterlockedCompareExchange(&s->messageLock,1,0)==0){
                 wcsncpy_s(s->message,reason,_TRUNCATE);
                 InterlockedExchange(&s->messageLock,0);
@@ -263,7 +265,7 @@ int runExportWorker(HANDLE mapping){
         }
         UnmapViewOfFile(s);CloseHandle(mapping);return 1;
     };
-    if(s->signature!=magic||s->version!=9||s->bytes!=sizeof(Shared))return reject(L"导出任务通信协议不匹配");
+    if(s->signature!=magic||s->version!=Shared::kVersion||s->bytes!=sizeof(Shared))return reject(L"导出任务通信协议不匹配");
     if(const auto error=s->settings.validate();!error.empty()){
         log::error("export-worker",std::format("invalid frozen settings: {}",error));
         return reject(L"导出任务的增强参数无效，请查看任务日志中的具体参数错误");

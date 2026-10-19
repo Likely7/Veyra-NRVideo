@@ -26,6 +26,12 @@ struct CaptureMetrics {
     double callbackFps=0, readAgeMs=0, frameAgeMs=0;
     bool sampledBlack=false; // Sparse source pixels, not input signal detection.
 };
+struct CaptureFormatQueryInfo {
+    long code=0;
+    std::wstring stage;
+    size_t advertised=0,rejected=0;
+    bool partial=false,fallback=false;
+};
 class CaptureCardSource final:public IFrameSource {
 public:
     CaptureCardSource();~CaptureCardSource()override;
@@ -34,7 +40,8 @@ public:
     static std::wstring makeCapturePath(unsigned videoIndex,const CaptureDevice& video,
         int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride=0,double requestedFps=0,std::wstring_view formatKey={});
     static std::vector<CaptureFormat> formats(unsigned device);
-    static std::vector<CaptureFormat> formatsByPath(std::wstring_view devicePath);
+    static std::vector<CaptureFormat> formatsByPath(std::wstring_view devicePath,CaptureFormatQueryInfo* query=nullptr,
+        std::wstring_view preferredKey={},std::wstring_view requestedResolution={});
     // Explicit user action on the UI COM apartment; no Run or auto-routing.
     static bool showDeviceProperties(std::wstring_view devicePath,uintptr_t owner,bool inputSelector,std::wstring& error,std::wstring* changedFormatKey=nullptr);
     bool open(const SourceOpenDesc&)override;
@@ -83,6 +90,8 @@ private:
     std::wstring error_;
     bool configureDeckLink(const SourceOpenDesc&);
     bool connectDirectShowAudio(const SourceOpenDesc&);
+    // Starts AVerMedia's in-process audio graph; false means "use DirectShow".
+    bool connectVendorAudio(const std::wstring& deviceName,const std::wstring& preferName=std::wstring(),const std::wstring& preferPath=std::wstring());
     // AVerMedia capture cards need their installed vendor component to arm
     // non-PCM (Dolby/DTS) passthrough before the audio pin is negotiated.
     bool applyVendorAudioSwitch(const std::wstring& audioName,const std::wstring& audioPath);

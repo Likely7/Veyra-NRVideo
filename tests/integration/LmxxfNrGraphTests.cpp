@@ -44,6 +44,7 @@ void checkSrHandoff(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,unsi
         gd.runtimeAbsPath=std::filesystem::absolute("runtime/nvidia").wstring();
         gd.nrWidth=c.width;gd.nrHeight=c.height;
         gd.nrLayersModel.resize(c.layers);gd.nrLayersResidual.resize(c.layers);
+        for(unsigned n=0;n<c.layers;++n)gd.nrLayersModel[n].performance=n%2==0;
         for(auto& r:gd.nrLayersResidual)r.total=c.strength;
         gd.nrLayersTemporal.assign(c.layers,c.temporal);gd.nrLayersSizePolicy.assign(c.layers,pipeline::NrSizePolicy::Native);
         gd.nrLayersExtent.assign(c.layers,{c.width,c.height});
@@ -66,7 +67,10 @@ void checkSrHandoff(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,unsi
             worst=std::max(worst,error);if(f==0)first=error;last=error;
         }
         const auto nr=graph.metrics().nrEvaluateCount,sr=graph.metrics().srEvaluateCount;
-        const uint64_t expectedSr=c.fsr?(c.flow?4:6):0;
+        // Since 108cbaab (2026-10-10), FSR reconstructs all source frames:
+        // first/reset frames use zero guidance instead of bypassing the effect.
+        // The original 10-07 fixture's four-dispatch expectation is obsolete.
+        const uint64_t expectedSr=c.fsr?6:0;
         const bool pass=executed&&worst<=3&&nr==uint64_t(c.layers)*6&&sr==expectedSr;
         ring.drainQueue();graph.shutdown();av_frame_free(&frame);++checks;failures+=!pass;
         std::cout<<"AMD_NR_SR_MARKER case="<<c.name<<" output="<<gd.workWidth<<'x'<<gd.workHeight
@@ -89,6 +93,16 @@ int main(){
     }
     unsigned failures=0,checks=0;
     checkSrHandoff(ctx,ring,checks,failures);
+    // Keep both identity modules resident so per-model creation counters span
+    // graph teardown. This catches accidentally routing every layer to Small.
+    const auto fakeDirectory=std::filesystem::absolute("runtime/amd-nr");
+    HMODULE fakeSmall=LoadLibraryExW((fakeDirectory/L"LmxxfNrRuntime.dll").c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
+    HMODULE fakeOriginal=LoadLibraryExW((fakeDirectory/L"LmxxfNrRuntime-Original.dll").c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if(!fakeSmall||!fakeOriginal)return 2;
+    using Counter=uint32_t(*)();
+    const auto smallCreates=reinterpret_cast<Counter>(GetProcAddress(fakeSmall,"VeyraTestLmxxfCreates"));
+    const auto originalCreates=reinterpret_cast<Counter>(GetProcAddress(fakeOriginal,"VeyraTestLmxxfCreates"));
+    if(!smallCreates||!originalCreates)return 2;
     sink::RgbaImage reference;
     for(unsigned layers:{0u,1u,2u,4u})for(bool temporal:{false,true}){
         if(!layers&&temporal)continue;
@@ -99,10 +113,13 @@ int main(){
         gd.srMotion=gd.fgMotion=engine::MotionSource::Zero;
         gd.runtimeAbsPath=std::filesystem::absolute("runtime/nvidia").wstring();
         gd.nrLayersModel.resize(layers);gd.nrLayersResidual.resize(layers);
+        for(unsigned n=0;n<layers;++n)gd.nrLayersModel[n].performance=n%2==0;
         gd.nrLayersTemporal.assign(layers,temporal);
         gd.nrLayersSizePolicy.assign(layers,pipeline::NrSizePolicy::P480);
         gd.nrLayersExtent.assign(layers,{64,36});
+        const auto beforeSmall=smallCreates(),beforeOriginal=originalCreates();
         bool ok=graph.initialize(gd)&&graph.createViews();
+        ok=ok&&smallCreates()-beforeSmall==(layers+1)/2&&originalCreates()-beforeOriginal==layers/2;
         unsigned maximum=0;uint64_t rgbSum=0;
         for(unsigned f=0;ok&&f<8;++f){
             pipeline::EnhanceGraph::FrameOutputs out;sink::RgbaImage image;
@@ -134,7 +151,7 @@ int main(){
         engine::EnhancementSettings settings;settings.nr=layers>0;settings.sr=false;settings.multiplier=1;
         settings.nrRuntime=engine::NrRuntime::LmxxfAmd;settings.nrMotion=engine::MotionSource::Zero;
         settings.nrLayerCount=layers;
-        for(unsigned n=0;n<layers;++n){settings.nrLayers[n].enabled=true;settings.nrLayers[n].runtime=engine::NrRuntime::LmxxfAmd;settings.nrLayers[n].sizePolicy=pipeline::NrSizePolicy::Native;}
+        for(unsigned n=0;n<layers;++n){settings.nrLayers[n].enabled=true;settings.nrLayers[n].runtime=engine::NrRuntime::LmxxfAmd;settings.nrLayers[n].sizePolicy=pipeline::NrSizePolicy::Native;settings.nrLayers[n].model.performance=n%2==0;}
         engine::StageRequest request;request.nr=settings.nr;request.width=3840;request.height=2160;
         request.exportJob=true;request.nvidiaAdapter=false;request.amdNr=true;
         pipeline::EnhanceGraphDesc gd;const auto plan=engine::describeStages(request,settings,gd);
@@ -169,6 +186,7 @@ int main(){
         }
         failures+=errors>0;std::cout<<"D3D12_DEBUG errors="<<errors<<'\n';
     }else{++failures;std::cout<<"D3D12_DEBUG unavailable\n";}
+    FreeLibrary(fakeOriginal);FreeLibrary(fakeSmall);
     av_frame_free(&frame);CoUninitialize();
     std::cout<<"Shared AMD composition GPU test: "<<checks<<" cases, "<<failures<<" failures. Not HIP inference.\n";
     return failures?1:0;

@@ -56,8 +56,9 @@ extern "C" {
 
 namespace veyra::pipeline {
 using diagnostics::GpuStage;
-static_assert(diagnostics::kTimedNrLayers==engine::kMaxNrInstances&&diagnostics::kTimedColorNodes==engine::kMaxColorInstances,
-              "every NR layer / Color instance needs its own node timing slot");
+static_assert(diagnostics::kTimedNrLayers==engine::kMaxNrInstances&&diagnostics::kTimedColorNodes==engine::kMaxColorInstances&&
+              diagnostics::kTimedAaNodes==engine::kMaxAntiAliasInstances&&diagnostics::kTimedBeautyNodes==engine::kMaxBeautyInstances,
+              "every NR layer / Color / anti-aliasing / beauty instance needs its own node timing slot");
 
 namespace {
 
@@ -339,37 +340,176 @@ bool EnhanceGraph::createAdditionalColorResources(){
 }
 
 bool EnhanceGraph::createNodeColorResources(){
-    tailColorActiveCount_=preNrColorActiveCount_=preSrColorActiveCount_=interNrColorActiveCount_=0;
-    preSrColorOutput_=nullptr;
+    using PassSlot=EnhanceGraphDesc::PassSlot;
+    tailColorActiveCount_=preNrColorActiveCount_=preSrColorActiveCount_=interNrColorActiveCount_=sourcePostColorActiveCount_=0;
+    preSrColorOutput_=preNrColorOutput_=sourcePostOutput_=nullptr;
     interNrColorOutputs_={};
-    if(!desc_.runtimeNodeOrder||!desc_.fixedExecutionPlan)return true;
+    sourcePostPasses_.clear();preSrPasses_.clear();preNrPasses_.clear();tailPasses_.clear();
+    for(auto& passes:interNrPasses_)passes.clear();
+    if(!desc_.fixedExecutionPlan){
+        // Graphs built without a compiled plan (the tiled full-resolution image
+        // path) run their enabled anti-aliasing instances at source size, in
+        // parameter order, like the list chain.
+        for(uint32_t parameter=0;parameter<desc_.antiAlias.size();++parameter){
+            if(!desc_.antiAlias[parameter].enabled)continue;
+            if(!createAntiAlias(parameter,srcW_,srcH_))return false;
+            sourcePostPasses_.push_back({engine::kMaxChainNodes,engine::EffectType::AntiAliasing,parameter,
+                antiAliasOutputs_[parameter].Get(),srcW_,srcH_,parameter});
+        }
+        if(!sourcePostPasses_.empty())sourcePostOutput_=sourcePostPasses_.back().output;
+        return true;
+    }
     const auto& plan=*desc_.fixedExecutionPlan;
     for(uint32_t i=0;i<plan.stepCount;++i){
         const auto& step=plan.steps[i];
-        if(step.type!=engine::EffectType::Color||!desc_.nodeColor(step.parameterIndex))continue;
+        uint32_t target=engine::kMaxNrInstances;
+        const auto where=desc_.slotOfStep(i,&target);
+        // Ingress: the fused / in-place grade of the input conversion (createColorResources).
+        if(where==PassSlot::None||where==PassSlot::Ingress)continue;
         const auto parameter=step.parameterIndex;
-        const auto& settings=parameter?desc_.additionalColors[parameter-1]:desc_.color;
-        auto& instance=nodeColorInstances_[parameter];
-        instance=std::make_unique<ColorGradeInstance>();
-        if(!instance->initialize(context_.device(),ring_.slotCount()))return false;
-        instance->refresh(settings);
-        if(settings.hasLut()){
-            const bool mismatch=desc_.hdrWorking()?settings.lutInputSpace==engine::ColorSettings::kLutInputSrgb:settings.lutInputSpace==engine::ColorSettings::kLutInputPq;
-            engine::ColorLutData lut;
-            const engine::ColorLutStore store(runtime::localDataDirectory());
-            if(mismatch||!store.resolve(settings.lutNameString(),lut)||!lut.valid()||!instance->setLut(context_.device(),lut.rgb.data(),unsigned(lut.size))){
-                colorLutNotice_+=std::format(L" 调色实例 {} LUT 未加载：{}；其他调色继续。",parameter+1,mismatch?L"输入空间不匹配":L"资源不可用");
-                veyra::log::warn("color-grade",std::format("node instance={} lut rejected mismatch={} name={}",parameter,mismatch,utf8Of(settings.lutNameString())));
+        SlotPass pass{i,step.type,parameter,nullptr,step.output.width,step.output.height,step.resourceIndex};
+        if(step.type==engine::EffectType::Color){
+            const auto& settings=parameter?desc_.additionalColors[parameter-1]:desc_.color;
+            auto& instance=nodeColorInstances_[parameter];
+            instance=std::make_unique<ColorGradeInstance>();
+            if(!instance->initialize(context_.device(),ring_.slotCount()))return false;
+            instance->refresh(settings);
+            if(settings.hasLut()){
+                const bool mismatch=desc_.hdrWorking()?settings.lutInputSpace==engine::ColorSettings::kLutInputSrgb:settings.lutInputSpace==engine::ColorSettings::kLutInputPq;
+                engine::ColorLutData lut;
+                const engine::ColorLutStore store(runtime::localDataDirectory());
+                if(mismatch||!store.resolve(settings.lutNameString(),lut)||!lut.valid()||!instance->setLut(context_.device(),lut.rgb.data(),unsigned(lut.size))){
+                    colorLutNotice_+=std::format(L" 调色实例 {} LUT 未加载：{}；其他调色继续。",parameter+1,mismatch?L"输入空间不匹配":L"资源不可用");
+                    veyra::log::warn("color-grade",std::format("node instance={} lut rejected mismatch={} name={}",parameter,mismatch,utf8Of(settings.lutNameString())));
+                }
             }
+            nodeColorOutputs_[parameter]=makeTexture(context_.device(),step.output.width,step.output.height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+            if(!nodeColorOutputs_[parameter])return false;
+            pass.output=nodeColorOutputs_[parameter].Get();
+            if(where==PassSlot::PreNr)++preNrColorActiveCount_;
+            else if(where==PassSlot::PreSr)++preSrColorActiveCount_;
+            else if(where==PassSlot::InterNr)++interNrColorActiveCount_;
+            else if(where==PassSlot::SourcePost)++sourcePostColorActiveCount_;
+            else ++tailColorActiveCount_;
+        }else if(step.type==engine::EffectType::AntiAliasing&&parameter<antiAliasPasses_.size()){
+            if(!createAntiAlias(parameter,step.output.width,step.output.height))return false;
+            pass.output=antiAliasOutputs_[parameter].Get();
+        }else if(step.type==engine::EffectType::Beauty&&parameter<beautyPasses_.size()){
+            if(!createBeauty(parameter,step.output.width,step.output.height))return false;
+            pass.output=beautyOutputs_[parameter].Get();
+        }else{
+            veyra::log::error("graph",std::format("no executor for same-size {} step={}",engine::effectTypeName(step.type),i));
+            return false;
         }
-        nodeColorOutputs_[parameter]=makeTexture(context_.device(),step.output.width,step.output.height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
-        if(!nodeColorOutputs_[parameter])return false;
-        if(desc_.preNrColor(parameter)){++preNrColorActiveCount_;preNrColorOutput_=nodeColorOutputs_[parameter].Get();}
-        else if(desc_.preSrColor(parameter)){++preSrColorActiveCount_;preSrColorOutput_=nodeColorOutputs_[parameter].Get();}
-        else if(const auto target=desc_.interNrColorTarget(parameter);target<engine::kMaxNrInstances){
-            ++interNrColorActiveCount_;interNrColorOutputs_[target]=nodeColorOutputs_[parameter].Get();
+        if(where==PassSlot::SourcePost)sourcePostPasses_.push_back(pass);
+        else if(where==PassSlot::PreNr)preNrPasses_.push_back(pass);
+        else if(where==PassSlot::PreSr)preSrPasses_.push_back(pass);
+        else if(where==PassSlot::InterNr&&target<interNrPasses_.size())interNrPasses_[target].push_back(pass);
+        else tailPasses_.push_back(pass);
+    }
+    if(!sourcePostPasses_.empty())sourcePostOutput_=sourcePostPasses_.back().output;
+    if(!preNrPasses_.empty())preNrColorOutput_=preNrPasses_.back().output;
+    if(!preSrPasses_.empty())preSrColorOutput_=preSrPasses_.back().output;
+    for(size_t target=0;target<interNrPasses_.size();++target)
+        if(!interNrPasses_[target].empty())interNrColorOutputs_[target]=interNrPasses_[target].back().output;
+    return true;
+}
+
+bool EnhanceGraph::createAntiAlias(uint32_t parameter,uint32_t width,uint32_t height){
+    auto& pass=antiAliasPasses_[parameter];
+    pass=std::make_unique<AntiAliasPass>();
+    antiAliasOutputs_[parameter]=makeTexture(context_.device(),width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    const bool created=antiAliasOutputs_[parameter]&&pass->initialize(context_.device(),desc_.antiAlias[parameter],width,height);
+    if(created)veyra::log::info("anti-alias",std::format("instance={} {} extent={}x{} hdr={}",parameter,pass->describe(),width,height,desc_.hdrWorking()));
+    else veyra::log::error("anti-alias",std::format("instance={} {} extent={}x{}: creation failed",parameter,pass->describe(),width,height));
+    return created;
+}
+
+bool EnhanceGraph::createBeauty(uint32_t parameter,uint32_t width,uint32_t height){
+    auto& pass=beautyPasses_[parameter];
+    pass=std::make_unique<BeautyPass>();
+    beautyOutputs_[parameter]=makeTexture(context_.device(),width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    const bool created=beautyOutputs_[parameter]&&pass->initialize(context_.device(),desc_.beauty[parameter],width,height,srcW_,srcH_);
+    if(created){
+        beautyNodesActive_=true;
+        veyra::log::info("beauty",std::format("instance={} {} extent={}x{} hdr={}",parameter,pass->describe(),width,height,desc_.hdrWorking()));
+    }else veyra::log::error("beauty",std::format("instance={} extent={}x{}: creation failed",parameter,width,height));
+    return created;
+}
+
+// Shared by every beauty node: the tracker (the detector loads once per graph and
+// costs a few milliseconds), the faces buffer and the original's texture.
+bool EnhanceGraph::createBeautyShared(){
+    beautyNotice_.clear();beautyOriginalSource_=nullptr;
+    if(!beautyNodesActive_)return true;
+    if(colorActive_){
+        beautyOriginal_=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R16G16B16A16_FLOAT,false);
+        if(!beautyOriginal_)return false;
+        beautyOriginalSource_=beautyOriginal_.Get();
+    }else beautyOriginalSource_=preGradeRgba_?preGradeRgba_.Get():srcRgba_.Get();
+    const auto model=desc_.beautyModelPath.empty()?beauty::locateFaceModel():std::filesystem::path(desc_.beautyModelPath);
+    faceTracker_=std::make_unique<beauty::FaceTracker>();
+    std::string error;
+    if(!faceTracker_->initialize(context_.device(),model,ring_.slotCount(),error)){
+        veyra::log::error("beauty-detect",std::format("face detector unavailable ({}); beauty nodes see no faces",error));
+        faceTracker_.reset();
+        if(desc_.beautyRequireDetector)return false;
+        beautyNotice_=model.empty()?L"美颜：人脸模型文件缺失，人脸原画保护与人脸区域美颜暂不生效"
+                                   :L"美颜：人脸识别初始化失败，人脸原画保护与人脸区域美颜暂不生效";
+    }else{
+        faceTracker_->configure(desc_.beautyDetection,beautyMinConfidence());
+        if(!faceTracker_->meshReady())beautyNotice_=L"美颜：人脸网格模型缺失，人脸区域按椭圆近似，五官不单独排除";
+    }
+    if(!faceTracker_){
+        // Zeroed stand-ins: no faces, no outlines.
+        D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=beauty::FaceTracker::kFaceEntries*64;
+        bd.Height=1;bd.DepthOrArraySize=1;bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        if(FAILED(context_.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&beautyFacesFallback_))))return false;
+        bd.Width=beauty::FaceMeshGpu::kShapeBytes;
+        if(FAILED(context_.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&beautyShapesFallback_))))return false;
+    }
+    veyra::log::info("beauty",std::format("shared: original={} detector={} mesh={} quality={} faces<={} stability={:.2f}",
+        colorActive_?"ungraded copy":preGradeRgba_?"pre-grade input":"converted input",faceTracker_?"ready":"unavailable",
+        faceTracker_&&faceTracker_->meshReady()?"ready":"unavailable",
+        int(desc_.beautyDetection.quality),int(desc_.beautyDetection.maxFaces),desc_.beautyDetection.stability));
+    return true;
+}
+
+void EnhanceGraph::bindSlotPassInput(const SlotPass& pass,ID3D12Resource* input){
+    if(pass.type==engine::EffectType::Color)nodeColorInstances_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output);
+    else if(pass.type==engine::EffectType::AntiAliasing)antiAliasPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output);
+    else if(pass.type==engine::EffectType::Beauty)
+        beautyPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output,beautyOriginalSource_,beautyFaces(),beautyShapes());
+}
+
+// Binds one slot's passes in plan order: each reads the previous output.
+ID3D12Resource* EnhanceGraph::chainSlotViews(const std::vector<SlotPass>& passes,ID3D12Resource* input,const char* where){
+    for(const auto& pass:passes){
+        bindSlotPassInput(pass,input);
+        input=pass.output;
+        veyra::log::info("node-dispatch",std::format("{} {} step={} parameter={} resource={} input={}x{} output={}x{}",
+            where,engine::effectTypeName(pass.type),pass.step,pass.parameter,pass.resource,pass.width,pass.height,pass.width,pass.height));
+    }
+    return input;
+}
+
+bool EnhanceGraph::dispatchSlotPasses(ID3D12GraphicsCommandList* list,const std::vector<SlotPass>& passes,unsigned slot,const char* where,bool log,bool reset){
+    for(const auto& pass:passes){
+        if(pass.type==engine::EffectType::Color){
+            gpuTimer_.mark(list,diagnostics::colorNodeStage(pass.parameter));
+            if(!nodeColorInstances_[pass.parameter]->dispatch(list,tracker_,slot,pass.width,pass.height,desc_.hdrWorking()))return false;
+            gpuTimer_.mark(list,diagnostics::colorNodeStage(pass.parameter),true);
+        }else if(pass.type==engine::EffectType::AntiAliasing){
+            gpuTimer_.mark(list,diagnostics::aaNodeStage(pass.parameter));
+            if(!antiAliasPasses_[pass.parameter]->dispatch(list,tracker_,desc_.hdrWorking(),reset))return false;
+            gpuTimer_.mark(list,diagnostics::aaNodeStage(pass.parameter),true);
+        }else if(pass.type==engine::EffectType::Beauty){
+            gpuTimer_.mark(list,diagnostics::beautyNodeStage(pass.parameter));
+            if(!beautyPasses_[pass.parameter]->dispatch(list,tracker_,desc_.hdrWorking(),beautyOriginalValid_))return false;
+            gpuTimer_.mark(list,diagnostics::beautyNodeStage(pass.parameter),true);
         }
-        else ++tailColorActiveCount_;
+        if(log)veyra::log::info("node-dispatch",std::format("recorded {} {} step={} parameter={} resource={}",where,engine::effectTypeName(pass.type),pass.step,pass.parameter,pass.resource));
     }
     return true;
 }
@@ -594,7 +734,7 @@ bool EnhanceGraph::createResources()
         upFsrSrZeroMotion_=makeUploadBuffer(context_.device(),fsrSrDepthPitch_*srcH_);
         if(!upFsrSrDepth_||!upFsrSrZeroMotion_)return false;
     }
-    const bool directBase=!srEnabled_&&srcW_==workW_&&srcH_==workH_&&!desc_.splitNrAcrossSr();
+    const bool directBase=!srEnabled_&&srcW_==workW_&&srcH_==workH_&&!desc_.splitNrAcrossSr()&&!desc_.sourcePostActive();
     workRgba_=directBase?srcRgba_:makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
     const bool anyColor=desc_.color.enabled||std::any_of(desc_.additionalColors.begin(),desc_.additionalColors.begin()+desc_.additionalColorCount,[](const auto& s){return s.enabled;});
     for(unsigned i=0;i<2;++i){sourceReferences_[i]=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R16G16B16A16_FLOAT,false);baseReferences_[i]=(directBase&&!anyColor)?sourceReferences_[i]:makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16B16A16_FLOAT,false);if(!sourceReferences_[i]||!baseReferences_[i])return false;}
@@ -675,6 +815,7 @@ bool EnhanceGraph::createResources()
     }
     if(!createAdditionalColorResources())return false;
     if(!createNodeColorResources())return false;
+    if(!createBeautyShared())return false;
     videoFrame_[0] = makeTexture(context_.device(), workW_, workH_, outputFormat(), true);
     videoFrame_[1] = makeTexture(context_.device(), workW_, workH_, outputFormat(), true);
     confTex_ = makeTexture(context_.device(), nvofW_, nvofH_, DXGI_FORMAT_R8_UNORM, true);
@@ -1329,7 +1470,7 @@ bool EnhanceGraph::initNgxFeatures()
                 if(desc_.hdrWorking()){veyra::log::error("amd-nr","HDR input is not yet validated for this adapter; NR disabled by backend fallback");return false;}
                 instance->amd=std::make_unique<LmxxfNrBackend>();
                 const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr";
-                if(!instance->amd->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId) || !instance->amd->admits(extent.width,extent.height))return false;
+                if(!instance->amd->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId,instance->model.performance) || !instance->amd->admits(extent.width,extent.height))return false;
             }
             veyra::log::info("resolution",std::format("NR layer={} internal={}x{} composite={}x{} sharedMotion={}",
                 index+1,extent.width,extent.height,fullW,fullH,motion!=nullptr));
@@ -1648,45 +1789,14 @@ bool EnhanceGraph::createViews()
         stager_.stageSrv(resource, &srv, pass.heap.Get(), slot);
     };
 
-    if(preNrColorActiveCount_){
-        auto* input=workRgba_.Get();
-        const auto& plan=*desc_.fixedExecutionPlan;
-        for(uint32_t i=0;i<plan.stepCount;++i){
-            const auto& step=plan.steps[i];
-            if(step.type!=engine::EffectType::Color||!desc_.preNrColor(step.parameterIndex))continue;
-            auto* output=nodeColorOutputs_[step.parameterIndex].Get();
-            nodeColorInstances_[step.parameterIndex]->createViews(context_.device(),stager_,input,output);
-            input=output;
-            veyra::log::info("node-dispatch",std::format("pre-NR Color step={} parameter={} resource={} input={}x{} output={}x{}",
-                i,step.parameterIndex,step.resourceIndex,step.input.width,step.input.height,step.output.width,step.output.height));
-        }
+    if(!sourcePostPasses_.empty())(void)chainSlotViews(sourcePostPasses_,srcRgba_.Get(),"source-size");
+    if(!preNrPasses_.empty())(void)chainSlotViews(preNrPasses_,workRgba_.Get(),"pre-NR");
+    for(size_t layer=1;layer<nrInstances_.size()&&layer<interNrPasses_.size();++layer){
+        if(interNrPasses_[layer].empty())continue;
+        auto* input=interNrProtectionRgba_&&layer==desc_.interNrProtectionTarget()?interNrProtectionRgba_.Get():nrInstances_[layer-1]->fullTarget();
+        (void)chainSlotViews(interNrPasses_[layer],input,"inter-NR");
     }
-    if(interNrColorActiveCount_){
-        const auto& plan=*desc_.fixedExecutionPlan;
-        for(size_t layer=1;layer<nrInstances_.size();++layer){
-            auto* input=interNrProtectionRgba_&&layer==desc_.interNrProtectionTarget()?interNrProtectionRgba_.Get():nrInstances_[layer-1]->fullTarget();
-            for(uint32_t i=0;i<plan.stepCount;++i){
-                const auto& step=plan.steps[i];
-                if(step.type!=engine::EffectType::Color||desc_.interNrColorTarget(step.parameterIndex)!=layer)continue;
-                auto* output=nodeColorOutputs_[step.parameterIndex].Get();
-                nodeColorInstances_[step.parameterIndex]->createViews(context_.device(),stager_,input,output);
-                input=output;
-                veyra::log::info("node-dispatch",std::format("inter-NR Color step={} parameter={} resource={} beforeNR={} input={}x{} output={}x{}",
-                    i,step.parameterIndex,step.resourceIndex,layer,step.input.width,step.input.height,step.output.width,step.output.height));
-            }
-        }
-    }
-    if(preSrColorActiveCount_){
-        auto* input=preSrBaseInput();
-        const auto& plan=*desc_.fixedExecutionPlan;
-        for(uint32_t i=0;i<plan.stepCount;++i){
-            const auto& step=plan.steps[i];
-            if(step.type!=engine::EffectType::Color||!desc_.preSrColor(step.parameterIndex))continue;
-            auto* output=nodeColorOutputs_[step.parameterIndex].Get();
-            nodeColorInstances_[step.parameterIndex]->createViews(context_.device(),stager_,input,output);
-            input=output;
-        }
-    }
+    if(!preSrPasses_.empty())(void)chainSlotViews(preSrPasses_,preSrBaseInput(),"pre-SR");
     stagedSrv(srcRgba_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, blitPass_, 15);
     // Layer 0 downsamples the stage input; later layers downsample the previous
     // layer's result, so each gets its own slot-0 source.
@@ -1881,18 +1991,8 @@ bool EnhanceGraph::createViews()
     }
     if (viewsUav) makeUav(context_.device(), workRgba_.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(blitPass_, 1));
     auto* finalInput=nrEnabled_&&desc_.finalNrAfterSr()?residualRgba_.Get():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get());
-    if(tailColorActiveCount_){
-        const auto& plan=*desc_.fixedExecutionPlan;
-        for(uint32_t i=0;i<plan.stepCount;++i){
-            const auto& step=plan.steps[i];
-            if(step.type!=engine::EffectType::Color||!desc_.tailColor(step.parameterIndex))continue;
-            auto& instance=*nodeColorInstances_[step.parameterIndex];
-            auto* output=nodeColorOutputs_[step.parameterIndex].Get();
-            instance.createViews(context_.device(),stager_,finalInput,output);
-            finalInput=output;
-            veyra::log::info("node-dispatch",std::format("tail Color step={} parameter={} resource={} input={}x{} output={}x{}",
-                i,step.parameterIndex,step.resourceIndex,step.input.width,step.input.height,step.output.width,step.output.height));
-        }
+    if(!tailPasses_.empty()){
+        finalInput=chainSlotViews(tailPasses_,finalInput,"tail");
         tailColorOutput_=finalInput;
     }
     if (viewsTex) stagedSrv(finalInput, DXGI_FORMAT_R16G16B16A16_FLOAT, blitPass_, 2);
@@ -2023,7 +2123,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         desc_.nrRuntime==engine::NrRuntime::Original&&!desc_.enableSr&&!desc_.enableFg&&
         !srEnabled_&&!fgEnabled_&&!desc_.videoHdr.enabled&&!desc_.hdrInput&&!desc_.hdrOutput&&
         !colorGradeActive()&&!tailColorActiveCount_&&!preNrColorActiveCount_&&
-        !preSrColorActiveCount_&&!interNrColorActiveCount_&&desc_.nrHoldStrength==0&&
+        !preSrColorActiveCount_&&!interNrColorActiveCount_&&!slotPassesActive()&&desc_.nrHoldStrength==0&&
         (!hardwareSurface||!hardwareSurface->present())&&
         !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_NR_RESIDUAL_REUSE",nullptr,0);
     const bool reusePausedNr=pausedEligible&&pausedNrCacheValid_&&pausedNrResidualOnly_&&
@@ -2127,6 +2227,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     ID3D12Resource* nv12Texture = nullptr;
     ID3D12GraphicsCommandList* list = ring_.acquireNext(slot, st);
     if (list == nullptr) { veyra::log::error("graph", "ring acquire"); return false; }
+    // The ring handed this slot out after its fence: the face status it carried is ready.
+    if(faceTracker_)faceTracker_->collect(slot);
     cpuTrace.mark("acquire");
     gpuTimer_.frame({epoch_,desc_.settingsRevision,realFrameIndex_+1},context_.fence());gpuTimer_.mark(list,GpuStage::Color);
 
@@ -2433,12 +2535,22 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     };
     // Grading is fused into input conversion. Retain a genuinely ungraded
     // reference only when comparison requests it, then run the normal input.
-    if(colorGradeActive()&&retainReferences){
+    // A beauty node restoring faces needs the same ungraded picture this frame.
+    const bool beautyRestore=beautyNodesActive_&&beautyRestoreRequested();
+    const bool beautyCopy=beautyOriginal_&&beautyRestore;
+    if(colorGradeActive()&&(retainReferences||beautyCopy)){
         convertInput(false,srcRgba_.Get(),0);
         tracker_.transition(list,srcRgba_.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
-        tracker_.transition(list,sourceReferences_[parity].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
-        list->CopyResource(sourceReferences_[parity].Get(),srcRgba_.Get());
-        tracker_.transition(list,sourceReferences_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
+        if(retainReferences){
+            tracker_.transition(list,sourceReferences_[parity].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
+            list->CopyResource(sourceReferences_[parity].Get(),srcRgba_.Get());
+            tracker_.transition(list,sourceReferences_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
+        }
+        if(beautyCopy){
+            tracker_.transition(list,beautyOriginal_.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
+            list->CopyResource(beautyOriginal_.Get(),srcRgba_.Get());
+            tracker_.transition(list,beautyOriginal_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        }
     }
     if(preGradeRgba_&&!colorActive_)convertInput(false,preGradeRgba_.Get(),1);
     else convertInput(colorActive_,srcRgba_.Get(),0);
@@ -2465,19 +2577,47 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     gpuTimer_.mark(list,GpuStage::Color,true);
     if (desc_.stageMark) desc_.stageMark("yuv");
     cpuTrace.mark("color");
+    // Beauty: this frame's original, then faces for every beauty node, before any
+    // effect node runs. Detection reads the original when it holds this frame.
+    beautyOriginalValid_=false;
+    if(beautyNodesActive_){
+        beautyOriginalValid_=beautyOriginal_?beautyCopy:beautyOriginalSource_!=nullptr;
+        if(faceTracker_&&faceTracker_->ready()){
+            ID3D12Resource* faces=beautyOriginal_&&!beautyCopy?srcRgba_.Get():beautyOriginalSource_;
+            tracker_.transition(list,faces,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            gpuTimer_.mark(list,GpuStage::BeautyDetect);
+            beauty::FaceTracker::Frame frameFaces;
+            frameFaces.source=faces;frameFaces.width=srcW_;frameFaces.height=srcH_;frameFaces.hdr=desc_.hdrWorking();
+            frameFaces.slot=slot;frameFaces.frameId=sourceFrameId;frameFaces.ptsMs=ptsMs;frameFaces.reset=reset;
+            frameFaces.still=desc_.stillImage;
+            if(!faceTracker_->record(list,tracker_,frameFaces)){
+                if(!beautyDetectFailureLogged_)veyra::log::error("beauty-detect","face tracking could not be recorded; beauty nodes keep the last faces");
+                beautyDetectFailureLogged_=true;
+            }
+            gpuTimer_.mark(list,GpuStage::BeautyDetect,true);
+            if (desc_.stageMark) desc_.stageMark("beauty-faces");
+        }
+    }
+    if(!sourcePostPasses_.empty()){
+        if(!dispatchSlotPasses(list,sourcePostPasses_,slot,"source-size",!sourcePostExecutionLogged_,reset))return false;
+        tracker_.transition(list,sourcePostOutput_,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        sourcePostExecutionLogged_=true;
+        if (desc_.stageMark) desc_.stageMark("source-size-pass");
+        cpuTrace.mark("sourcePass");
+    }
 
     auto runVideoSr=[&]()->bool{
         gpuTimer_.mark(list,GpuStage::Sr);
         tracker_.transition(list,videoSrInput_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         const float enc[8]={uintBits(srcW_),uintBits(srcH_),uintBits(srcW_),uintBits(srcH_),desc_.hdrWorking()?3.0f:1.0f,0,0,0};
-        blitPass_.bind(list,enc,gpuHandleOf(blitPass_,desc_.nrBeforeSr?18:0).ptr,gpuHandleOf(blitPass_,16).ptr);list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);tracker_.uavBarrier(list,videoSrInput_.Get());
+        blitPass_.bind(list,enc,gpuHandleOf(blitPass_,desc_.nrBeforeSr||sourcePostOutput_?18:0).ptr,gpuHandleOf(blitPass_,16).ptr);list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);tracker_.uavBarrier(list,videoSrInput_.Get());
         tracker_.transition(list,videoSrInput_.Get(),D3D12_RESOURCE_STATE_COMMON);tracker_.transition(list,videoSrOutput_.Get(),D3D12_RESOURCE_STATE_COMMON);
         if(!videoSrBackend_->evaluate(list,videoSrInput_.Get(),videoSrOutput_.Get(),desc_.videoSrQuality)){failedBackend_=engine::FailedBackend::Sr;return false;}
         tracker_.uavBarrier(list,videoSrOutput_.Get());tracker_.transition(list,videoSrOutput_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         const float dec[8]={uintBits(workW_),uintBits(workH_),uintBits(workW_),uintBits(workH_),-1,0,0,0};
         if(desc_.hdrWorking()){
             tracker_.transition(list,videoSrInput_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            hdrVideoSrPass_.bind(list,dec,gpuHandleOf(hdrVideoSrPass_,desc_.nrBeforeSr?4:0).ptr,gpuHandleOf(hdrVideoSrPass_,3).ptr);
+            hdrVideoSrPass_.bind(list,dec,gpuHandleOf(hdrVideoSrPass_,desc_.nrBeforeSr||sourcePostOutput_?4:0).ptr,gpuHandleOf(hdrVideoSrPass_,3).ptr);
         }else blitPass_.bind(list,dec,gpuHandleOf(blitPass_,17).ptr,gpuHandleOf(blitPass_,1).ptr);list->Dispatch((workW_+15)/16,(workH_+15)/16,1);tracker_.uavBarrier(list,workRgba_.Get());tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         ++metrics_.srEvaluateCount;gpuTimer_.mark(list,GpuStage::Sr,true);
         return true;
@@ -2693,18 +2833,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     cpuTrace.mark("sr");
     return true;};
     auto runBoundaryColor=[&](bool beforeSr)->bool{
-    if(beforeSr?preSrColorActiveCount_:preNrColorActiveCount_){
+    const auto& passes=beforeSr?preSrPasses_:preNrPasses_;
+    if(!passes.empty()){
         auto& logged=beforeSr?preSrColorExecutionLogged_:preNrColorExecutionLogged_;
-        const auto& plan=*desc_.fixedExecutionPlan;
-        for(uint32_t i=0;i<plan.stepCount;++i){
-            const auto& step=plan.steps[i];
-            if(step.type!=engine::EffectType::Color||!(beforeSr?desc_.preSrColor(step.parameterIndex):desc_.preNrColor(step.parameterIndex)))continue;
-            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex));
-            if(!nodeColorInstances_[step.parameterIndex]->dispatch(list,tracker_,slot,step.output.width,step.output.height,desc_.hdrWorking()))return false;
-            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex),true);
-            if(!logged)veyra::log::info("node-dispatch",std::format("recorded {} Color step={} parameter={} resource={}",beforeSr?"pre-SR":"pre-NR",i,step.parameterIndex,step.resourceIndex));
-            if(desc_.stageMark)desc_.stageMark(beforeSr?"pre-sr-color":"pre-nr-color");
-        }
+        if(!dispatchSlotPasses(list,passes,slot,beforeSr?"pre-SR":"pre-NR",!logged,reset))return false;
+        if(desc_.stageMark)desc_.stageMark(beforeSr?"pre-sr-color":"pre-nr-color");
         logged=true;
     }
     return true;};
@@ -2795,17 +2928,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             auto* layer = nrInstances_[layerIndex].get();
             const uint32_t sourceW=layer->fullWidth(),sourceH=layer->fullHeight();
             if ((layer->handle() == nullptr && !layer->amd) || !layer->enabled) continue;
-            if(interNrColorActiveCount_){
-                const auto& plan=*desc_.fixedExecutionPlan;
-                for(uint32_t i=0;i<plan.stepCount;++i){
-                    const auto& step=plan.steps[i];
-                    if(step.type!=engine::EffectType::Color||desc_.interNrColorTarget(step.parameterIndex)!=layerIndex)continue;
-                    gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex));
-            if(!nodeColorInstances_[step.parameterIndex]->dispatch(list,tracker_,slot,step.output.width,step.output.height,desc_.hdrWorking()))return false;
-            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex),true);
-                    if(!interNrColorExecutionLogged_)veyra::log::info("node-dispatch",std::format("recorded inter-NR Color step={} parameter={} resource={} afterNR={} beforeNR={}",i,step.parameterIndex,step.resourceIndex,layerIndex-1,layerIndex));
-                    if(desc_.stageMark)desc_.stageMark("inter-nr-color");
-                }
+            if(size_t(layerIndex)<interNrPasses_.size()&&!interNrPasses_[layerIndex].empty()){
+                if(!dispatchSlotPasses(list,interNrPasses_[layerIndex],slot,"inter-NR",!interNrColorExecutionLogged_,reset))return false;
+                if(desc_.stageMark)desc_.stageMark("inter-nr-color");
             }
             const uint32_t nrW=layer->width(),nrH=layer->height();
             ID3D12Resource* stageInput = nrLayerBase(layerIndex);
@@ -2953,7 +3078,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             if (layerIndex + 1 < nrInstances_.size()) compositeNrLayer(layerIndex);
             if(desc_.splitNrAcrossSr()&&desc_.stageMark)desc_.stageMark("nr-layer");
         }
-        if(interNrColorActiveCount_)interNrColorExecutionLogged_=true;
+        if(std::any_of(interNrPasses_.begin(),interNrPasses_.end(),[](const auto& passes){return !passes.empty();}))interNrColorExecutionLogged_=true;
     }
     if (desc_.stageMark) desc_.stageMark("nr");
     cpuTrace.mark("nr");
@@ -3013,17 +3138,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
 
     if(!desc_.splitNrAcrossSr()&&!runBoundaryColor(true))return false;
     if(desc_.nrBeforeSr&&!desc_.splitNrAcrossSr()&&!runSr())return false;
-    if(tailColorActiveCount_){
-        const auto& plan=*desc_.fixedExecutionPlan;
-        for(uint32_t i=0;i<plan.stepCount;++i){
-            const auto& step=plan.steps[i];
-            if(step.type!=engine::EffectType::Color||!desc_.tailColor(step.parameterIndex))continue;
-            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex));
-            if(!nodeColorInstances_[step.parameterIndex]->dispatch(list,tracker_,slot,step.output.width,step.output.height,desc_.hdrWorking()))return false;
-            gpuTimer_.mark(list,diagnostics::colorNodeStage(step.parameterIndex),true);
-            if(!tailColorExecutionLogged_)veyra::log::info("node-dispatch",std::format("recorded tail Color step={} parameter={} resource={} after SR/NR/protection",i,step.parameterIndex,step.resourceIndex));
-            if(desc_.stageMark)desc_.stageMark("tail-color");
-        }
+    if(!tailPasses_.empty()){
+        if(!dispatchSlotPasses(list,tailPasses_,slot,"tail",!tailColorExecutionLogged_,reset))return false;
+        if(desc_.stageMark)desc_.stageMark("tail-color");
         tailColorExecutionLogged_=true;
         cpuTrace.mark("tailColor");
     }
@@ -3327,8 +3444,8 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
         if(s.activeNrLayerCount()!=nrInstances_.size())return false;
         for(size_t i=0;i<nrInstances_.size();++i){
             const auto& model=i<nextNr.nrLayersModel.size()?nextNr.nrLayersModel[i]:nextNr.model;
-            if(!lmxxfNr_&&engine::nrRenderPreset(s.nrRuntime,model)!=
-                engine::nrRenderPreset(desc_.nrRuntime,nrInstances_[i]->model))return false;
+            if(engine::nrModelSelection(s.nrRuntime,model)!=
+                engine::nrModelSelection(desc_.nrRuntime,nrInstances_[i]->model))return false;
             const bool temporal=i<nextNr.nrLayersTemporal.size()?nextNr.nrLayersTemporal[i]:nextNr.nrTemporal;
             if(temporal!=nrInstances_[i]->temporalEnabled)return false;
             const auto tier=i<nextNr.nrLayersAntiFlicker.size()?nextNr.nrLayersAntiFlicker[i]:nextNr.nrAntiFlicker;
@@ -3365,6 +3482,13 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
         const auto& a=s.additionalColors[i];const auto& b=desc_.additionalColors[i];
         if(a.enabled!=b.enabled||(a.enabled&&(a.lutName!=b.lutName||a.lutInputSpace!=b.lutInputSpace)))return false;
     }
+    // Anti-aliasing method, quality tier and temporal mode choose shaders and
+    // textures (rebuild); the MLAA threshold / strength and history weights are uniforms.
+    engine::describeAntiAlias(s,nextNr);
+    for(unsigned i=0;i<engine::kMaxAntiAliasInstances;++i)if(!nextNr.antiAlias[i].sameStructure(desc_.antiAlias[i]))return false;
+    // Beauty: a node exists while it is enabled; everything inside it is a uniform.
+    engine::describeBeauty(s,nextNr);
+    for(unsigned i=0;i<engine::kMaxBeautyInstances;++i)if(!nextNr.beauty[i].sameStructure(desc_.beauty[i]))return false;
     if(s.videoHdr.enabled!=desc_.videoHdr.enabled)return false;
     // Output stabiliser: its pass is allocated at build time, so on/off rebuilds; strength and
     // tolerance are uniforms. Neither used to reach a running graph (field report
@@ -3412,6 +3536,11 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
             if(nodeColorInstances_[i+1])nodeColorInstances_[i+1]->refresh(s.additionalColors[i]);
         }
     }
+    desc_.antiAlias=nextNr.antiAlias;
+    for(size_t i=0;i<antiAliasPasses_.size();++i)if(antiAliasPasses_[i])antiAliasPasses_[i]->refresh(desc_.antiAlias[i]);
+    desc_.beauty=nextNr.beauty;desc_.beautyDetection=nextNr.beautyDetection;
+    for(size_t i=0;i<beautyPasses_.size();++i)if(beautyPasses_[i])beautyPasses_[i]->refresh(desc_.beauty[i]);
+    if(faceTracker_)faceTracker_->configure(desc_.beautyDetection,beautyMinConfidence());
     desc_.contentRate=s.content;desc_.model=s.model;desc_.residual=s.residual;desc_.protection=s.protection;desc_.settingsRevision=s.revision;
     desc_.nrHoldStrength=s.nrHoldStrength;desc_.nrHoldTolerance=s.nrHoldTolerance;
     desc_.nrLayersModel=std::move(nextNr.nrLayersModel);
@@ -3453,16 +3582,10 @@ void EnhanceGraph::setNrEnabled(bool on)
         // Live colour edits also call this setter. Keep the final blit bound
         // to the tail, rather than silently bypassing every downstream grade.
         // A genuine NR bypass changes only the first tail pass's input.
-        if(wasEnabled!=nrEnabled_){
-            const auto& plan=*desc_.fixedExecutionPlan;
-            for(uint32_t i=0;i<plan.stepCount;++i){
-                const auto& step=plan.steps[i];
-                if(step.type!=engine::EffectType::Color||!desc_.tailColor(step.parameterIndex))continue;
-                nodeColorInstances_[step.parameterIndex]->createViews(context_.device(),stager_,
-                    nrEnabled_&&desc_.finalNrAfterSr()?residualRgba_.Get():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get()),
-                    nodeColorOutputs_[step.parameterIndex].Get());
-                break;
-            }
+        if(wasEnabled!=nrEnabled_&&!tailPasses_.empty()){
+            const auto& first=tailPasses_.front();
+            auto* input=nrEnabled_&&desc_.finalNrAfterSr()?residualRgba_.Get():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get());
+            bindSlotPassInput(first,input);
         }
         return;
     }
@@ -3640,7 +3763,17 @@ void EnhanceGraph::shutdown()
     yuvPass_ = ComputePass{};
     for(auto i=additionalColorInstances_.rbegin();i!=additionalColorInstances_.rend();++i)i->reset();
     for(auto i=nodeColorInstances_.rbegin();i!=nodeColorInstances_.rend();++i)i->reset();
-    nodeColorOutputs_={};tailColorActiveCount_=preNrColorActiveCount_=preSrColorActiveCount_=interNrColorActiveCount_=0;
+    nodeColorOutputs_={};tailColorActiveCount_=preNrColorActiveCount_=preSrColorActiveCount_=interNrColorActiveCount_=sourcePostColorActiveCount_=0;
+    sourcePostPasses_.clear();preSrPasses_.clear();preNrPasses_.clear();tailPasses_.clear();
+    for(auto& passes:interNrPasses_)passes.clear();
+    for(auto& pass:antiAliasPasses_)pass.reset();
+    antiAliasOutputs_={};
+    for(auto& pass:beautyPasses_)pass.reset();
+    beautyOutputs_={};
+    if(faceTracker_)faceTracker_->shutdown();
+    faceTracker_.reset();beautyOriginal_.Reset();beautyFacesFallback_.Reset();beautyShapesFallback_.Reset();beautyOriginalSource_=nullptr;
+    beautyNodesActive_=beautyOriginalValid_=beautyDetectFailureLogged_=false;beautyNotice_.clear();
+    sourcePostOutput_=nullptr;
     preSrColorOutput_=nullptr;preSrColorExecutionLogged_=false;
     interNrColorOutputs_={};interNrColorExecutionLogged_=false;
     tailColorOutput_=preNrColorOutput_=nullptr;tailColorExecutionLogged_=preNrColorExecutionLogged_=false;

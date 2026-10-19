@@ -44,11 +44,11 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
     fmt_->interrupt_callback={media::InputInterrupt::callback,&inputInterrupt_};
     AVDictionary* options=nullptr;
     if(media::networkMediaInput(path))media::networkMediaOptions(&options);
-    inputInterrupt_.arm();
+    inputInterrupt_.armConnect();
     const int opened=avformat_open_input(&fmt_,narrow.c_str(),nullptr,&options);
     av_dict_free(&options);
     if(opened<0)return false;
-    inputInterrupt_.arm();
+    inputInterrupt_.armProbe();
     const int found=avformat_find_stream_info(fmt_,nullptr);
     inputInterrupt_.disarm();
     if(found<0)return false;
@@ -69,10 +69,50 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
     return selectTrack(si);
 }
 
+void AudioPipeline::noteDamagedAudio(int code)
+{
+    ++damagedAudioPackets_;
+    const auto now = std::chrono::steady_clock::now();
+    if (now - damagedAudioLogAt_ >= std::chrono::seconds(1)) {
+        damagedAudioLogAt_ = now;
+        log::warn("audio", std::format("damaged audio data from the network skipped (code={}, packets so far {})", code, damagedAudioPackets_));
+    }
+}
+
+bool AudioPipeline::open(std::shared_ptr<media::DemuxSession> session)
+{
+    if(!session||thread_.joinable())return false;
+    session_=std::move(session);
+    queueMode_=true;
+    tracks_.clear();
+    for(const auto& stream:session_->streams()){
+        if(stream.type!=AVMEDIA_TYPE_AUDIO||!stream.parameters)continue;
+        const auto* p=stream.parameters.get();
+        tracks_.push_back({stream.index,stream.language,stream.title,avcodec_get_name(p->codec_id),unsigned(p->ch_layout.nb_channels)});
+    }
+    const int si=session_->audioStream();
+    if(si<0){
+        veyra::log::info("audio", "no audio stream in source");
+        return false;
+    }
+    return selectTrack(si);
+}
+
 bool AudioPipeline::selectTrack(int si)
 {
-    if(thread_.joinable()||!fmt_||si<0||unsigned(si)>=fmt_->nb_streams)return false;
-    const auto* parameters=fmt_->streams[si]->codecpar;
+    if(thread_.joinable()||(!fmt_&&!session_)||si<0)return false;
+    const AVCodecParameters* parameters=nullptr;
+    AVRational timeBase{1,1000};
+    if(session_){
+        const auto* stream=session_->stream(si);
+        if(!stream||!stream->parameters)return false;
+        parameters=stream->parameters.get();
+        timeBase={stream->timeBaseNum,std::max(stream->timeBaseDen,1)};
+    }else{
+        if(unsigned(si)>=fmt_->nb_streams)return false;
+        parameters=fmt_->streams[si]->codecpar;
+        timeBase=fmt_->streams[si]->time_base;
+    }
     if(parameters->codec_type!=AVMEDIA_TYPE_AUDIO)return false;
     const auto* codec=avcodec_find_decoder(parameters->codec_id);
     if(!codec)return false;
@@ -89,7 +129,13 @@ bool AudioPipeline::selectTrack(int si)
         log::error("audio-track",std::format("decoder rejected stream={} code={}",si,result));
         avcodec_free_context(&candidate);return false;
     }
-    avcodec_free_context(&codecCtx_);codecCtx_=candidate;streamIndex_=si;stream_=fmt_->streams[si];pcmFormat_=format;
+    // The session queues packets of one audio stream; switching tells it which.
+    if(session_&&!session_->selectAudioStream(si)){
+        log::error("audio-track",std::format("session refused audio stream {}",si));
+        avcodec_free_context(&candidate);return false;
+    }
+    avcodec_free_context(&codecCtx_);codecCtx_=candidate;streamIndex_=si;streamTimeBase_=timeBase;pcmFormat_=format;
+    sessionDiscontinuity_=false;
     if(swr_)swr_free(&swr_);
     resetTempo();
     av_packet_unref(packet_);havePacket_=demuxEof_=drainSent_=false;decodedEof_=false;
@@ -198,7 +244,7 @@ void AudioPipeline::readerLoop()
         AVPacket* queued=av_packet_alloc();
         if(!queued){av_packet_unref(scratch);readerEof_=true;continue;}
         av_packet_move_ref(queued,scratch);
-        queuedMs_+=queued->duration>0?queued->duration*av_q2d(stream_->time_base)*1000.0:0.0;
+        queuedMs_+=queued->duration>0?queued->duration*av_q2d(streamTimeBase_)*1000.0:0.0;
         queuedBytes_+=size_t(std::max(queued->size,0));
         queuedPackets_.push_back(queued);
     }
@@ -235,7 +281,7 @@ void AudioPipeline::resumeReader()
 
 void AudioPipeline::stopReader()
 {
-    queueMode_=false;
+    if(!session_)queueMode_=false;   // a session is always read through its queue
     if(!reader_.joinable())return;
     {std::lock_guard lock(readerMutex_);readerStop_=true;}
     readerCv_.notify_all();
@@ -245,13 +291,26 @@ void AudioPipeline::stopReader()
     queuedPackets_.clear();queuedMs_=0;queuedBytes_=0;
 }
 
-bool AudioPipeline::takeQueuedPacket(bool& eof)
+bool AudioPipeline::takeQueuedPacket(bool& eof,int waitMs)
 {
-    std::lock_guard lock(readerMutex_);
     eof=false;
+    if(session_){
+        // The demux thread of the session is the reader; this only moves a packet over.
+        media::DemuxSession::Meta meta;
+        switch(session_->popAudio(packet_,meta,waitMs)){
+        case media::DemuxSession::Pop::Packet:
+            if(meta.discontinuity)sessionDiscontinuity_=true;
+            return true;
+        case media::DemuxSession::Pop::Eof:
+        case media::DemuxSession::Pop::Failed:   // the video side reports a failed source
+            eof=true;return false;
+        default:return false;
+        }
+    }
+    std::lock_guard lock(readerMutex_);
     if(queuedPackets_.empty()){eof=readerEof_;return false;}
     AVPacket* front=queuedPackets_.front();queuedPackets_.pop_front();
-    queuedMs_=std::max(0.0,queuedMs_-(front->duration>0?front->duration*av_q2d(stream_->time_base)*1000.0:0.0));
+    queuedMs_=std::max(0.0,queuedMs_-(front->duration>0?front->duration*av_q2d(streamTimeBase_)*1000.0:0.0));
     queuedBytes_-=std::min(queuedBytes_,size_t(std::max(front->size,0)));
     av_packet_move_ref(packet_,front);av_packet_free(&front);
     readerCv_.notify_all();
@@ -268,7 +327,9 @@ double AudioPipeline::requestSeek(double targetMs)
     wake_.notify_all();
     // The audio thread signals when the ring is prefilled past target.
     if (!seekDoneCv_.wait_for(lock, std::chrono::milliseconds(3000), [this] { return seekDone_; })) {
-        veyra::log::error("audio", "seek prefill timed out");
+        // On a shared session the prefill waits for the network and finishes in the background.
+        if (session_) veyra::log::info("audio", "seek prefill still waiting for network data; the audio thread finishes it in the background");
+        else veyra::log::error("audio", "seek prefill timed out");
     }
     return seekDone_ ? firstPtsAfterSeek_.load() : std::numeric_limits<double>::quiet_NaN();
 }
@@ -312,7 +373,7 @@ void AudioPipeline::pushDecoded(const AVFrame* frame)
     const auto timestamp = frame->best_effort_timestamp != AV_NOPTS_VALUE
         ? frame->best_effort_timestamp : frame->pts;
     if (timestamp != AV_NOPTS_VALUE) {
-        const double ptsMs = timestamp * av_q2d(stream_->time_base) * 1000.0;
+        const double ptsMs = timestamp * av_q2d(streamTimeBase_) * 1000.0;
         nextPtsMs_ = ptsMs - 1000.0 * swr_get_delay(swr_, frame->sample_rate) / frame->sample_rate;
     }
     const auto capacity = swr_get_out_samples(swr_, frame->nb_samples);
@@ -446,6 +507,12 @@ void AudioPipeline::decodeBlock()
             break;
         }
         if (received != AVERROR(EAGAIN)) {
+            // A shared network session delivers packets from a link that loses data: one damaged
+            // audio packet is skipped, not the end of the sound (local files stay strict).
+            if (session_ && received == AVERROR_INVALIDDATA && ++damagedAudioRuns_ <= 8) {
+                noteDamagedAudio(received);
+                continue;
+            }
             log::error("audio", std::format("decode receive failed code={}", received));
             decodedEof_ = true;
             break;
@@ -460,8 +527,11 @@ void AudioPipeline::decodeBlock()
         if (!havePacket_) {
             if (queueMode_) {
                 bool eof = false;
-                if (!takeQueuedPacket(eof)) {
+                // Open / seek prefill waits for the session's packets (the endpoint is stopped, the
+                // network may be slow); steady playback never waits - the endpoint has to be fed.
+                if (!takeQueuedPacket(eof, prefillWait_ ? 50 : 0)) {
                     if (eof) { demuxEof_ = true; continue; }
+                    if (prefillWait_ && !stopFlag_ && !seekRequested_ && std::chrono::steady_clock::now() < prefillDeadline_) continue;
                     break; // nothing read ahead yet: go back to pumping the endpoint
                 }
             } else if (!readPacket(packet_)) {
@@ -474,12 +544,27 @@ void AudioPipeline::decodeBlock()
                 havePacket_ = false;
                 continue;
             }
+            if (sessionDiscontinuity_) {
+                // First packet of a new live connection: the old decoder state is meaningless.
+                sessionDiscontinuity_ = false;
+                avcodec_flush_buffers(codecCtx_);
+                if (swr_) swr_free(&swr_);
+                log::info("audio", "network source reconnected: audio decoder reset");
+            }
         }
         const int sent = avcodec_send_packet(codecCtx_, packet_);
         if (sent == 0) {
             av_packet_unref(packet_);
             havePacket_ = false;
+            damagedAudioRuns_ = 0;
         } else if (sent != AVERROR(EAGAIN)) {
+            if (session_ && sent == AVERROR_INVALIDDATA) {
+                // Damaged network data (a live source re-joined mid-frame, lost packets): skip this packet.
+                noteDamagedAudio(sent);
+                av_packet_unref(packet_);
+                havePacket_ = false;
+                continue;
+            }
             log::error("audio", std::format("decode send failed code={}", sent));
             decodedEof_ = true;
             break;
@@ -494,6 +579,49 @@ void AudioPipeline::closeAll()
     if (packet_ != nullptr) av_packet_free(&packet_);
     if (codecCtx_ != nullptr) avcodec_free_context(&codecCtx_);
     if (fmt_ != nullptr) avformat_close_input(&fmt_);
+    session_.reset();
+}
+
+// Drops PCM before targetMs from the front of the ring (mutex_ held).
+void AudioPipeline::trimRingBefore(double targetMs)
+{
+    while (!segments_.empty()) {
+        Segment& seg = segments_.front();
+        if (seg.startPtsMs >= targetMs || seg.stepMs <= 0) break;
+        const size_t drop = std::min(seg.frames, static_cast<size_t>(std::ceil((targetMs - seg.startPtsMs) / seg.stepMs - 1e-7)));
+        if (drop == 0) break;
+        ring_.erase(ring_.begin(), ring_.begin() + static_cast<std::ptrdiff_t>(drop * pcmFormat_.channels));
+        ringFrames_ -= drop;
+        seg.frames -= drop;
+        seg.startPtsMs += static_cast<double>(drop) * seg.stepMs;
+        if (seg.frames == 0) segments_.pop_front();
+        else break;
+    }
+}
+
+// Shared session: the demuxer is not ours to move. After an engine seek the session was
+// already repositioned (new generation), so everything decoded so far is stale; otherwise
+// (alignment to the first picture, endpoint recovery) only the PCM before `target` is dropped.
+bool AudioPipeline::rewindSession(double target)
+{
+    const uint32_t generation = session_->generation();
+    std::lock_guard lock(mutex_);
+    if (generation != sessionGeneration_) {
+        sessionGeneration_ = generation;
+        ring_.clear();ringFrames_=0;segments_.clear();
+        if(havePacket_){av_packet_unref(packet_);havePacket_=false;}
+        avcodec_flush_buffers(codecCtx_);
+        if(swr_)swr_free(&swr_);
+        resetTempo();
+        sessionDiscontinuity_ = false;
+        demuxEof_=drainSent_=false;decodedEof_=false;
+        nextPtsMs_=target;discardUntilPtsMs_=target;
+    } else {
+        trimRingBefore(target);
+        discardUntilPtsMs_ = target;
+        // The ring may now end before the target: decoding continues and discards up to it.
+    }
+    return true;
 }
 
 bool AudioRenderer::copyPcm(BYTE* destination,const float* input,size_t frames){
@@ -935,7 +1063,10 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
     // instead (engine-side, plan P1). Only explicit transport holds — open,
     // seek, settings rebuild, pause — gate the endpoint here.
     auto videoBlocked=[&]{return videoSync_&&videoHold_.load();};
-    auto shouldPause=[&]{return paused_.load()||videoBlocked();};
+    // A network source that ran dry (or is still collecting its start-up buffer) stops the
+    // device clock exactly like a pause, so picture and sound wait together.
+    auto networkHold=[&]{return session_&&session_->holding();};
+    auto shouldPause=[&]{return paused_.load()||videoBlocked()||networkHold();};
     auto publishVideoWait=[&](bool paused){const bool waiting=paused&&videoBlocked();if(videoWaiting_.exchange(waiting)!=waiting&&waiting)++videoWaitCount_;};
     auto nextContinuitySummary=t0+std::chrono::milliseconds(1000);
     auto recovering = [&](HRESULT error) {
@@ -953,6 +1084,17 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
         // resumes from the new position afterwards.
         pauseReader();
         struct ResumeReader{AudioPipeline* self;~ResumeReader(){self->resumeReader();}} resumeReader{this};
+        if(session_){
+            // Shared session: no file to seek. The prefill may have to wait for the network.
+            prefillWait_=true;prefillDeadline_=std::chrono::steady_clock::now()+std::chrono::seconds(20);
+            rewindSession(target);
+            decodeBlock();
+            prefillWait_=false;
+            discardUntilPtsMs_=-1;
+            clockExhausted_=decodedEof_&&headPtsMs()<0;
+            log::info("audio-seek",std::format("targetMs={:.3f} firstPtsMs={:.3f} totalMs={:.3f} (shared session)",target,headPtsMs(),std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-seekBegin).count()));
+            return true;
+        }
         {
             std::lock_guard lock(mutex_);
             ring_.clear();ringFrames_=0;segments_.clear();
@@ -981,9 +1123,11 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
     };
     if(renderer&&ownEndpoint&&!endpointReady)recovering(renderer->lastError());
     resetTempo();
-    // Initial prefill (open case).
+    // Initial prefill (open case). A shared session may still be collecting its start-up buffer.
+    if(session_){sessionGeneration_=session_->generation();prefillWait_=true;prefillDeadline_=std::chrono::steady_clock::now()+std::chrono::seconds(60);}
     if(initialMs>=0){if(!rewind(initialMs))recovering(E_FAIL);}
     else decodeBlock();
+    prefillWait_=false;
     {
         std::unique_lock<std::mutex> lock(mutex_);
         if (segments_.empty()) {
@@ -999,6 +1143,8 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
     // not mean "no audio"; headPtsMs() also uses -1 as its empty sentinel.
     // Use the actual prefetched sample count to distinguish those cases and
     // anchor the renderer whenever a finite audio timeline is available.
+    // A shared session can still be empty here (slow network): anchor as soon as PCM arrives.
+    bool needAnchor = session_ && endpointReady && !clockExhausted_ && !(prefetchedMs > 0.0 && std::isfinite(firstPts));
     if (endpointReady && prefetchedMs > 0.0 && std::isfinite(firstPts)) {
         if (!renderer->startAnchored(*this,pauseApplied)) recovering(renderer->lastError());
         else endpointRecovering_=false;
@@ -1054,6 +1200,7 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
                 const double target = seekTargetMs_;
                 seekCount_.fetch_add(1);
                 lock.unlock();
+                needAnchor = false;   // the seek anchors the endpoint itself
                 if (endpointReady) renderer->fadeAndReset(*this,stopFlag_);
                 lastClockMs=recoveryTargetMs=target;
                 const bool seekOk=rewind(target);
@@ -1095,6 +1242,21 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
             }
             std::unique_lock lock(mutex_);
             wake_.wait_for(lock,std::chrono::milliseconds(5),[&]{return stopFlag_||seekRequested_;});
+            continue;
+        }
+        if (needAnchor && endpointReady) {
+            // Shared session whose first PCM had not arrived at start-up: nothing may reach the
+            // endpoint before it is anchored to the first sample's PTS.
+            if (bufferedMs() >= kAudioLowWatermarkMs && headPtsMs() >= 0.0) {
+                needAnchor = false;
+                pauseApplied = shouldPause();
+                if (!renderer->startAnchored(*this,pauseApplied)) recovering(renderer->lastError());
+                else endpointRecovering_=false;
+                continue;
+            }
+            if (bufferedMs() < kAudioHighWatermarkMs) decodeBlock();
+            if (demuxEof_ && bufferedMs() < 1.0) needAnchor = false;
+            std::unique_lock lock(mutex_);wake_.wait_for(lock,std::chrono::milliseconds(5));
             continue;
         }
         if (pauseNow) { std::unique_lock lock(mutex_);wake_.wait_for(lock,std::chrono::milliseconds(2));continue; }
@@ -1144,6 +1306,7 @@ void AudioPipeline::startThread(AudioRenderer* renderer, bool ownEndpoint, doubl
     if(readStallMs_>0)log::warn("audio-test",std::format("injected file read stall {:.0f} ms every {:.0f} ms (test only) directRead={}",readStallMs_,readStallEveryMs_,directReadForTest_));
     stopFlag_=false;seekRequested_=false;seekDone_=true;discardUntilPtsMs_=-1;
     endpointRecovering_=renderer&&ownEndpoint;endpointError_=S_OK;endpointRecoveries_=0;clockExhausted_=false;
+    queueMode_=session_!=nullptr;   // a shared session is always read through its queue
     thread_ = std::thread(&AudioPipeline::runOnAudioThread, this, renderer, ownEndpoint, initialMs);
 }
 

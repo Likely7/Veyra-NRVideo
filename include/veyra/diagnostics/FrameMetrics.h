@@ -9,14 +9,19 @@ namespace veyra::diagnostics {
 // spans above; they are never merged into enhancementProcessingMs.
 enum class GpuStage { Color, Sr, Flow, Nr, Residual, Fg1, Fg2, Fg3, Fg4, Fg5, Fg6, Fg7, FgBatch, Blit, VideoHdr,
     NrLayer0, NrLayer1, NrLayer2, NrLayer3,
-    ColorNode0, ColorNode1, ColorNode2, ColorNode3, ColorNode4, ColorNode5, Count };
+    ColorNode0, ColorNode1, ColorNode2, ColorNode3, ColorNode4, ColorNode5,
+    AaNode0, AaNode1,
+    BeautyNode0, BeautyNode1, BeautyNode2, BeautyNode3, BeautyNode4, BeautyNode5, BeautyDetect, Count };
 static_assert(unsigned(GpuStage::Fg5)-unsigned(GpuStage::Fg1)==4);
 static_assert(unsigned(GpuStage::FgBatch)>unsigned(GpuStage::Fg7));
-static_assert(unsigned(GpuStage::Count)<=32,"GpuTimer keeps one mask bit per stage");
-inline constexpr unsigned kTimedNrLayers=4,kTimedColorNodes=6;
+static_assert(unsigned(GpuStage::Count)<=64,"GpuTimer keeps one mask bit per stage");
+inline constexpr unsigned kTimedNrLayers=4,kTimedColorNodes=6,kTimedAaNodes=2,kTimedBeautyNodes=6;
 // NR layers are indexed among EXECUTING layers; Color by parameter ordinal.
 constexpr GpuStage nrLayerStage(unsigned layer){return GpuStage(unsigned(GpuStage::NrLayer0)+layer);}
 constexpr GpuStage colorNodeStage(unsigned parameter){return GpuStage(unsigned(GpuStage::ColorNode0)+parameter);}
+// Anti-aliasing and beauty spans are indexed by parameter ordinal, like Color.
+constexpr GpuStage aaNodeStage(unsigned parameter){return GpuStage(unsigned(GpuStage::AaNode0)+parameter);}
+constexpr GpuStage beautyNodeStage(unsigned parameter){return GpuStage(unsigned(GpuStage::BeautyNode0)+parameter);}
 enum class SampleState { NotExecuted, Pending, Measured, Unavailable };
 enum class CpuStage { Decode, Submit, SlotWait, ReadyWait, DeadlineWait, Present, DecodedQueue, EnhancementDelayEstimate, Count };
 enum class PairTiming { ArrivalInterval, GeneratedFromA, GeneratedFromB, Count };

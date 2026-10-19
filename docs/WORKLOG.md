@@ -1,5 +1,68 @@
 # WORKLOG
 
+## 2026-10-19 2.1.0 整合与测试包（Claude）
+
+按用户要求在 `claude/release-2.1.0-20261019` 合并 Codex 全屏输入（含 AMD NR 0.44）、Claude #48、美颜（含 E0/AA）与赞助页，版本 2.1.0。冲突只在 AGENTS/WORKLOG/翻译目录；补上 #48 40 秒超时提示的三语翻译。只读审查 Codex 三项修复，无阻塞问题（AMD 默认改用 Small 需写进发布说明）。43 目标构建 153 秒通过；58 组回归除 image-dimension 既有 NR 分块环境问题外全部通过（两组脚本问题修正后重跑通过）。详见 docs/RELEASE_2.1.0_TEST_2026-10-19.md、docs/BUILD_2.1.0_TEST.md。
+
+## 2026-10-19 PR64验收完成并合并
+
+保留PR64 a7034d6，最终验收c55a4bf。GitHub PR64已合并f21b273，整合4facb81与已验树相同；随main正常同步，最终远端核对见E:/项目/Veyra/reports/pr64-avermedia-20261019/merge.json。补底层non-PCM条件开启/低字节格式、未知查询与旧导出保护/回读、即时完整包解码、单块拒收不停流而连续拒收有限恢复、stop复用状态与诊断；另补设置前停旧监测、图Start后再启动监测及默认快速路径恢复，不触碰UI/视频增强节奏。19目标构建通过（首次232.4s，最终增量19.1s，-j2）；16组回归通过；补日志/监测顺序后相关5组重跑通过。AC3/EAC3首包1536采样、原parser需第二包，聚合6帧9216全保留；该32ms是48kHz解码阶段等待差异，不是屏幕/整体延迟实测。
+
+本机T911实卡1080p60重连60.166882/60.082424FPS、HDMI音频48kHz/16bit/67块/0underruns通过；无圆刚实卡不能宣称现场恢复。全部命令/证据在E:/项目/Veyra/tmp、logs、reports/pr64-avermedia-20261019；详见docs/PR64_AVERMEDIA_REPORT_2026-10-19.md。原91树104分支/509脏路径保持，旧文档桌面509误标按快照更正为466+其他四树43；无测试门槛改动，无专有文件/驱动/用户配置改动、不派Agent。按本轮授权合并本地/远端main，不发布新包或关机。
+
+
+## 2026-10-19 PR64开工
+
+从main786efeb隔离合入PR64 a7034d6，已存档91旧树/104分支状态、509脏路径哈希（桌面466）和源码bundle verify。按PR64_AVERMEDIA_PLAN_2026-10-19.md补可选查询的未知状态保护、完整包解码边界、单块拒收与连续错误恢复及真实编码/模拟SDK/实卡回归。保持其他工作树和运行库，验收后只正常合并同步main。
+
+
+## 2026-10-18 PR63 适配验收完成并合并
+
+原PR提交4db24da保留；验收代码3a77635。GitHub PR63已合并642f608，整合提交8463a60与已验树内容完全相同，本记录随main正常同步；最终远端核对在E:/项目/Veyra/reports/pr63-avermedia-audio-20261018/merge.json。按官方固定ABI补精确设备、non-PCM arming、STA/150ms初始等待/有限恢复、格式切换与回调生命周期、载波有界/坏流无进展、实际声道mask及FFmpeg padding/reset。最终14目标MSVC构建通过；12组音频/采集回归全过；本机T911 1080p60含重连60.049599/60.050652FPS、HDMI音频48kHz/16bit/63块/0underruns通过。无圆刚实卡，不能代替GC553G2等实机验收；厂商Stop失败隔离保留和同步调用无法硬取消的边界见报告。
+
+命令（Python311）：`tmp/pr63-avermedia-audio-20261018/build.py` → `stage.py` → `checks.py` → `card.py` → `verify.py`；源码763文件/共用运行文件1374哈希检查，旧桌面466脏路径未变（其他四旧树43，合计509；PR64按原始快照更正口径）；Claude美颜在改文件变化单独记载未写入。各脚本绝对根为E:/项目/Veyra，构建日志E:\项目\Veyra\logs\pr63-avermedia-audio-20261018\build-20261018-201338\receipt.json，12组E:\项目\Veyra\logs\pr63-avermedia-audio-20261018\checks-20261018-201448\receipt.json，实卡E:\项目\Veyra\logs\pr63-avermedia-audio-20261018\card-20261018-201630\final.json，审查reports/pr63-avermedia-audio-20261018/verification.json。完整实现/测试/首次失败与基线复测见docs/PR63_AVERMEDIA_AUDIO_REPORT_2026-10-18.md。此前CMake测试包含路径、PE/COM夹具误判、首轮模拟同步失败均保留原日志且写明修正，不修改通过门槛。只合本PR及适配到main和普通GitHub同步，不夹AMD/全屏/Claude工作，不发布或关机。
+
+
+## 2026-10-18 PR63 圆刚5.1厂商图接入开工
+
+已存档90旧工作树/103分支状态哈希、旧桌面509脏文件ZIP及Claude美颜21在改文件哈希，source-before.bundle verify通过；原PR4db24da及patch在archives/pr63-avermedia-audio-20261018。nrvideo/main f0cbbbf仅星图更新，隔离合并8147496保留PR57新枚举/精确连接接口。公开厂商头7d1250b4固定归档至deps/.../reference，ABI为12字节AUDIO_SAMPLE_INFO按值回调；原PR签名/日志varargs/私有offset/设备误路由/格式切换/断流监测存在缺口，按PR63_AVERMEDIA_AUDIO_PLAN_2026-10-18.md补齐。全E盘、无子Agent、不碰Claude/旧树/真实配置，验收后只合并同步PR63不发布。
+
+## 2026-10-18 全屏点击与指针修复开工
+
+基于AMD0.44 f6c4fd9开codex/fullscreen-input-20261018，不改main/Claude树。基线独立GTA4K真实点击已复现按钮全屏后立刻pause，Qt BlankCursor请求后实际指针仍可见；日志logs/fullscreen-input-20261018/baseline。按下时记录画面归属，原生HWND同步Qt隐藏策略且尊重浮层区域；不加Timer/重绘、不改33ms/250ms。计划FULLSCREEN_INPUT_PLAN_2026-10-18.md。首次文档patch因WORKLOG标题匹配错误失败，原子回退该文档patch，正确标题重施；无产品数据影响。接下来独立构建/定向回归/实际鼠标验收，无发布授权。
+
+### 2026-10-18 全屏输入修复完成
+
+代码33ec229/2065efb，5目标从零258.6秒、最终增量17.6秒构建通过。首次Quick缺Qt模块为staging漏拷，修正后最终82Quick/384布局/18D3D12几何/2449翻译通过。真实点击证明专业模式播放/暂停两态全屏无误切换，补齐双击退出时第二tap的几何误判后，两态双击保持原状态。极简静止/活动、暂停、Home、锁定/解锁及软件UI实测通过；系统GetCursorInfo在实际视频区域隐藏false/showing恢复true，不能只看Qt请求值。
+
+命令与失败记录见FULLSCREEN_INPUT_REPORT_2026-10-18.md；工具在E:/项目/Veyra/tmp/fullscreen-input-20261018/{build,stage,checks,launch,verify}.py，最终logs/.../checks-153313、gpu-pro-153358、software-min-153508，reports/.../final.json核验源/构建/5EXE/2014依赖及main26c0d61。生产只改2文件，Timer数量及33ms/250ms保持，无媒体/效果/调度修改，无NR性能收益宣称。所有测试实例正常退出；本轮未写Claude/旧脏树、未合main/push/发布/关机，未验实卡/串流/混合DPI与Esc工具输入如实保留边界。
+
+## 2026-10-17 #48 网络稳定与服务器视频缓冲（Claude 子会话）
+
+- 授权与方案：AGENTS.md 顶部同日条目；docs/NETWORK_BUFFER_48_PLAN_2026-10-17.md。分支 claude/network-buffer-48-20261017（main 26c0d61），存档 checkpoint/pre-claude-network-buffer-48-20261017 与 archives/claude-network-buffer-48-20261017（bundle 已 verify，88 工作树 / 108 脏文件）。产物 {build,tests,logs,tmp,reports,archives}/claude-network-buffer-48-20261017。
+- 核对：计划所述“字幕加载器对网络地址再开连接”与代码不符（网络地址不扫描字幕）；实际问题是 NAS 路径整文件扫描与点播无内嵌字幕。设计改为一套共享解复用会话（含 HLS/RTSP/HTTP/NAS），理由见方案 §2。
+- 进度随实施追加在方案 §5。
+- 2026-10-18 子会话额度用尽，由协调会话接手：核对未提交的最后一批修正（HLS 主列表最佳变体、直播重连短探测与 0.5 s 起播缓冲、带宽判定证据、码率历史老化、音轨切换锁、重连退避、40 s 打开期限）后，`tmp/claude-network-buffer-48-20261017/build.py`（无改动增量，0.7 s）+ `make_app.py`，完整矩阵 `py -3.11 -I tests/network/run_network_tests.py --out tests/claude-network-buffer-48-20261017/results/matrix-claude-verify` 19/19 通过（日志 `logs/claude-network-buffer-48-20261017/matrix-claude-verify.log`）。
+- 发现并补上隔行分支的损坏帧仍会停止播放（1080i 网络电视常见）：改为与逐行同一容错策略；新素材 `av-1080i25-60s.ts` 与用例 `ts-flip-1pct-interlaced`。重新编译 3 个目标 14.8 s，`--only ts-flip-1pct-interlaced,ts-flip-1pct-10min-decode,local-ab` 3/3 通过（`results/claude-interlaced`）。
+
+## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
+
+按用户“全部修复掉，再添加老版本采集格式选择入口”，在窗口修复 1295d6b 之上隔离实施 `codex/capture-format-fixes-20261017`。修复 DirectShow 能力回退、尺寸/帧率范围候选、±1 tick 显示分组漏掉像素项、精确媒体类型恢复与连接校验；增加可搜索虚拟化旧版组合列表、自定义尺寸检查和查询错误诊断。原低延迟回调/队列、BMD 原生、增强/音频/渲染/运行库与配置保持。详见 docs/CAPTURE_FORMAT_FIXES_2026-10-17.md。
+
+原生能力测试、Windows/Wine 枚举及原格式测试、Qt 旧列表回归、QML 字节码与翻译检查，另做采集源和桥接的 Windows 对象编译。完整 MSVC 程序构建与真实采集卡端到端仍需 Windows 环境，不能用 Wine/模拟驱动结果代替实卡验收。没有合并 main、推送、打包或发布。
+
+## 2026-10-17 窗口捕获游戏模式修正（Linux 源码候选）
+
+按用户最新要求取消进入穿透的初始化/动画等待，修正退出热键接收和先释放后退出、全屏拉伸/填满与源窗口 resize 元数据；任务栏问题暂缓。以 origin/main d68d6be 在隔离 codex/window-game-fixes-20261017、/workspace/veyra-window-fixes 实施，原 main/用户文件/运行组件保持。源码、输入边界和验收记录见 docs/WINDOW_GAME_FIXES_2026-10-17.md。
+
+无固定3秒入口倒计时可删；取消等待引擎running及游戏模式首页820ms动画，保留3秒GUI卡死保护。热键改用message-only接收窗口，退出动作先原生恢复；Qt句柄替换重绑定，投递失败可恢复。缩放实际生效，键盘/手柄前台保留，鼠标点击拦截以免坐标错位；原尺寸模式保留精确穿透，未实现任意缩放鼠标映射。SourceInfo/DAR、UI快照和比例缓存同步更新，300ms去抖/250ms几何节奏保持；没有改NR/SR/FG算法或任务栏Shell标记。
+
+实际运行Linux g++ C++20 GameModePolicyTests：44检查0失败；Qt6.8.3 qmlcachegen两文件字节码/basic-block通过；i18n extract --check：2428条三语缺失0/占位符0；diff --check通过。MinGW14 Windows目标语法检查GamePassthroughTests通过。回执/workspace/scratch/veyra-window-checks/{checks.json,windows-syntax.log}。原生CMake配置因Linux缺RC编译器失败；交叉对象编译最初缺Windows汇编器，保留失败证据并补齐工具，最终结果另记。工具安装/公开头文件只在shared，不进源码库。
+
+补齐目标汇编器后，GamePassthroughTests及其真实热键/穿透头文件Windows对象编译通过，生成x86-64 COFF；windows-object-command.json记录实际命令/返回0，windows-object.log为空，首次失败日志保留。此对象未链接或运行。
+
+新增Qt Quick宿主连续切换与WGC源/engine resize回归，但本轮未在Windows运行；完整MSVC构建、实际QML bridge/GPU、真实游戏/远程热键、DPI跨屏均未执行，不宣称已实机复现或修复验收。下一步唯一任务是Windows隔离构建和用户操作顺序实测；无打包/合并main/push/Release/关机。
+
 ## 2026-10-10 VFG 优化（Claude，任务一）
 
 - 授权：用户“开始进行优化吧，全部搞定掉”“开始之前先创建存档，然后开分支弄，如果是结果是性能反而倒退，直接退回”。开工前打标签 checkpoint/pre-claude-perf-20261010（main 5ba186a），E 盘 archives/claude-perf-20261010 存 source-before.bundle（已 verify）和 start.json（46 工作树、495 脏文件逐项 SHA）。分支 claude/vfg-20261010 只改 VFG；软件链路在 claude/pipeline-20261010 独立实施。
@@ -9677,3 +9740,100 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 ### 2.0.9正式发布完成
 
 主https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9 ID415481126 published_at2026-10-17T00:18:11Z，latest/non-prerelease；源https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9-sources ID415481099非latest。先普通atomic push main+两新标签到08832f6，再草稿上传/核对digest+size+正文后发布。主恰2运行资产、源2新增资产，旧FFmpeg/依赖源固定链接不重复上传，旧2.0.8主/源及资产保持。原包SHA/内部test标记/745实际构建输入不变，发布checkout2个EOL差异等价，未重编译重封包。57提交/70路径完整说明与两README支持footer保持，两个Release的两图width220/知识库实际链接检查通过。完整报告RELEASE_2.0.9_REPORT_2026-10-17.md，远端/链接/资产回执reports/...。仅追加记录后正常同步main，不移动已发标签；随后保护复核/source-final.bundle/final.json。群公告799字含两链接拟稿，未代发；无Agent/关机/改驱动或用户配置。
+
+## 2026-10-17 PR57接手Windows验收
+
+用户要求合入云端Agent PR57并做好测试。已读PR正文/29文件清单/两提交/空评论，明确云端仅Linux/Wine/MinGW与Qt离屏，不能代替Windows验收。archive.py保护84旧树/96分支/509未提交文件、原PRJSON/patch、dirty备份和75114019字节source-before.bundle（verify通过）；main/远端d68d6be，head09ac54b固定。建立E盘codex/pr57-capture-window-20261017，no-ff合入原贡献，无冲突；main暂不推进。方案PR57_INTEGRATION_PLAN_2026-10-17.md，所有产物E:/项目/Veyra/{用途}/pr57-capture-window-20261017。不派Agent，不改运行库/驱动/真实配置/33ms或250ms；本轮不改2.0.9包/标签/Release或代发/关机，后续真实构建/测试/失败单独记录。
+
+
+### 2026-10-17 PR57 native follow-up: static WGC resize and Windows control style
+- Final native run `E:/项目/Veyra/logs/pr57-capture-window-20261017/native-20261017-215502` independently reproduced a static-source resize failure: pool Recreate completed at13:55:13Z, but no new frame arrived before timeout. This is an actual source defect, not the earlier QML observer timing assumption. Retain failing receipt.
+- Preserve300ms pool debounce and existing queue/PTS contracts. After a resized pool supplies no frame for another300ms, restart its WGC session once, preserving cursor/border settings. No target repaint, synthetic pixels/PTS, perpetual retry or change to UI cadence. Animated sources keep their session. Native regression must confirm the actual new-size frame and reset metadata.
+- Actual final GUI run `window-20261017-215528` passed aspect/input/rapid double-click/portrait/exit checks, but flagged the legacy search TextField's custom background as unsupported by the Windows native Controls style. Use explicitly scoped Qt Basic TextField/ItemDelegate/ScrollBar, consistent with existing custom controls; do not change the application's global style.
+- Related16-process run `checks-20261017-215403` passed, including82 Qt Quick cases. These predate the two follow-up changes and do not substitute their final regression.
+
+
+### 2026-10-17 PR57最终原生验收
+- 实测代码1f283dc：24目标构建通过，最终16程序/82Qt Quick/2448条i18n检查通过；实际窗口Raw Input、快速双击、五显示方式、正常/OBS软件125%、静态/动态图和多次退出重入通过。
+- 静态resize独立回归先真实失败；session/pool必须成对恢复的原生错误也已修复。最终native-215901新增检查全过，仅保留与2.0.9逐像素一致的HDR桌面颜色阈值6项失败（旧5项+新增竖屏）。fullScreenSuitePassed=false明确保留，不称全绿。
+- T911枚举1136模板/区间候选，三级/旧版列表共享精确选择、四语言及10场景保存/恢复/拒绝缺失项通过；NV12/YUY2 1080p60各两轮实际重连及单调PTS通过，回调约60.06–60.15fps。范围候选未逐一实卡连接，BMD无硬件不外推。
+- 所有命令、失败夹具修正、实际路径和边界见docs/PR57_INTEGRATION_REPORT_2026-10-17.md及E:/项目/Veyra/reports/pr57-capture-window-20261017。合并前verify通过：84旧树、96分支、509脏文件与1524共享组件保持。用户请求PR合并，不发布/改包/关机。
+
+- PR57远端合并确认：2026-10-17T14:09:26Z，state=MERGED，merge=9c7b342，main正常推送7e2157d；保留云端源分支。本补充仅文档回执，不改已验收代码；最终保护与source-after.bundle回执在E:/项目/Veyra/reports/pr57-capture-window-20261017/final.json。
+
+
+## 2026-10-18 AMD NR0.44隔离接入开工
+用户下载并提供0.44 Magpie包，要求新分支接入且Claude同时施工不得干扰。main26c0d61→codex/amd-nr-044-20261018；88原树/101分支/509脏文件和已verify source-before.bundle在archives/amd-nr-044-20261018。用户ZIP447952711bytes/SHA cf812fe7…48e030与作者热修一致，875内部SHA全部匹配，80模块/93Small权重加manifest；原件只读，提取到独立deps。固定MIT源码4764e4f1（与release.json一致），C ABI头与旧Veyra逐字节相同，开始审计/独立重编译。首次提取夹具误写Python编码utf8-sig，在读清单前失败，改utf-8-sig后全验证成功，无产品修改。Claude当前AA工作只读核对，不碰其分支/运行目录，不派Agent或发跨任务消息。计划AMD_NR_044_PLAN_2026-10-18.md；新产物全E盘，CPU限并发、GPU测试前核对空闲。不合main/push/发布/改驱动或用户配置/关机。真实AMD推理与画质性能未验。
+
+
+### 2026-10-18 AMD NR0.44模型接入与首轮构建
+- 同一既有performance参数接入AMD，默认Small/关闭Original；列表/节点/设置重建与关闭效果编辑合同统一，NVIDIA NGX preset不变。公共C ABI逐字节不变，两个独立MIT源码模块固定实际model selector，共享原样权重/内核，禁上游F9与配置轮询，不逐帧改全局环境。真实Small资源预检拒绝缺权重时静默回原模型。
+- 上游直接MSVC构建失败：Windows rpcndr small宏与新版bool small冲突、缺utf8。兼容头含D3D12后undef small，增加/utf-8；原源码只在本任务build/source副本施加可复现patch，外部固定checkout不改。初版patch CRLF导致git apply不匹配，规范LF后通过。两模块真实编译通过：logs/amd-nr-044-20261018/runtime-small-03.json、runtime-original-01.json；上游现有C4244告警保留。
+- 新stage-044-runtime.py只读验证用户ZIP875条SHA，再部署280个.f16/.f32参数文件（含辅助参数）、80HIP模块及必要codec/许可证；未提取执行Magpie/proxy/driver/add-on。两个真实模块同时加载检查其实际selector和上游Small structural preflight，正式模型与fake合同测试物理分开。0.39脚本保留作历史。
+- 增加混合模型真实D3D12合同计数（fake）、磁盘AMD预设/会话恢复、真实runtime元数据/缺资源/错模块测试；这些均不等同HIP推理。四语言新增Small提示。不提高UI33ms/250ms刷新率，Claude树不动。接下来提交输入、限-j2构建13目标并定向执行。
+
+### 2026-10-18 AMD NR0.44接入完成
+- 最终代码94861a0，13目标构建与12程序/13次有效验证通过；66ABI、20图/4K场景、82Quick、2449i18n、预设/会话/导出/关闭效果编辑及RTX5070实际GTA NR切换通过。真实模块10元数据检查与2项冲突配置拒绝通过，不等同AMD HIP推理。最终索引reports/amd-nr-044-20261018/checks.json；源码/二进制复用与重新链接目标复测回执在同目录。
+- 首轮3图失败是10-07测试仍预期4次FSR，与10-10既有108cbaab全帧重建修复冲突，像素输出已正确；纠正为6次，未改FSR产品实现。配置注入真实暴露跨CRT环境不可见，增加运行库内部有效参数导出，Create前/后均检查；fake注入也必须由其自身CRT清理，已定向回归。失败日志全部保留，详见AMD_NR_044_REPORT_2026-10-18.md。
+- 当前真实Small/Original DLL为runtime-small-04与runtime-original-02构建；publisher配方核验两模块身份，拒绝漏原模型/误放fake。只做本地审计，没有正式包/上传/发布。527文件对应源码归档覆盖实际构建输入，无专有二进制；最终源码bundle另见final.json。
+- 88原树/101原分支/main核对：87树未变；Claude AA树12 shader的正常并行施工已记录，不阻塞或回滚。509既有脏文件内容未改。所有新构建/测试/日志/源码和资源都在E:/项目/Veyra对应任务目录，未关他人进程或修改用户配置。
+- 自动审批拦截了本任务冗余解压目录清理（仅返回blocked by policy），没有换工具绕过，目录保留；原用户ZIP、旧0.39和已发布包未改。AMD实卡执行/画质/性能/长期显存、HDR及其他硬件未验；本轮未合main/push/发布/关机。
+
+### 2026-10-17 美颜节点开工（Claude，claude/beauty-20261017）
+- 授权与背景：用户“抗锯齿和美颜好好做，开工吧”；协调会话计划 `E:/项目/Veyra/reports/claude-plan-48-53-beauty-20261017/PLAN_48_53_BEAUTY_2026-10-17.md`（第 5 节 10 条复审、第 1.2/3 节共享基础 E0）。AGENTS.md 顶部已加授权条目。
+- 基线：本地 main `26c0d61`，分支 `claude/beauty-20261017`，工作树 `E:/项目/Veyra/worktrees/beauty-20261017`。存档：tag `checkpoint/pre-claude-beauty-20261017`，`E:/项目/Veyra/archives/claude-beauty-20261017/all-refs-26c0d61.bundle`（`git bundle verify` 通过，complete history）。
+- 产物目录：`E:/项目/Veyra/{build,tests,logs,tmp,reports,archives,downloads,deps}/claude-beauty-20261017`。
+- 计划：P0（推理路线对照 / SkinSoft D3D12 原型 / 同帧原画与 HDR 合同）→ 写 `docs/BEAUTY_IMPLEMENTATION_PLAN_2026-10-17.md`；`claude/effects-infra-20261017` 出现后再做 P1–P4。E0 范围（链容量、计时掩码、插入槽、格式版本）不自行改动。
+
+### 2026-10-17 美颜 P0 中段（用量上限中断，Claude）
+- 已完成：构建脚本 `scripts/acceptance/claude-beauty-build.py`（基线 configure+build 69 秒通过）；YuNet 两个 fp32 权重（2023mar / 2026may）下载到 `E:/项目/Veyra/deps/claude-beauty-20261017/yunet-47534e27`，SHA256 与 Git LFS 指针 oid 一致；SkinSoft fd5690f、GPUPixel ef552bf、公共测试人像已取到同目录下各自独立子目录；用 OpenCV 5.0.0 复现了 FaceDetectorYN 的预处理与解码（4 张图结果一致）。
+- 已写未验证：`include/veyra/beauty/{OnnxLite,YuNetGpu}.h`、`src/beauty/{OnnxLite,YuNetGpu}.cpp`、`shaders/BeautyYuNet*.hlsl`。**尚未接入 CMake、尚未编译、尚未运行**，不能当作已通过；不影响现有目标构建。
+- 未做：WinML / ORT-DML 实测对照、SkinSoft HLSL 原型、P0.3 合同测试、`docs/BEAUTY_IMPLEMENTATION_PLAN_2026-10-17.md`。`claude/effects-infra-20261017` 尚未出现（E0 未交付），P1–P4 未开始。
+- 详细发现与下一步：`C:/Users/123/AppData/Roaming/Claude/side-session-notes/local_089fcd60-31dd-4fd0-aac7-c63d8dc7d88a/beauty-20261017-handover.md`。
+
+## 2026-10-17 E0 + #53 anti-aliasing: start (Claude sub-session, usage limit reached early)
+Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives/claude-aa-53-20261017 (start.json, verified source-before.bundle). Added AGENTS.md authorization, docs/EFFECTS_INFRA_AA_53_PLAN_2026-10-17.md and the test-only harness veyra_effect_slot_regression_tests (commit df8028a). Baseline on unmodified product code: fresh configure+compile 105 s (build/claude-aa-53-20261017); 12 configurations (list default, NR-first, 6 colours, two NR layers with protection, node pre-NR/pre-SR/inter-NR/tail, mixed SR-first and NR-first, SR-only tail, split NR) recorded twice with identical SHA-256 (tests/claude-aa-53-20261017/golden-baseline.json, real NR and DLSS SR on RTX 5070). No product code changed yet: E0 and the anti-aliasing effect are NOT implemented and claude/effects-infra-20261017 does not exist. Hand-over notes: C:/Users/123/AppData/Roaming/Claude/side-session-notes/local_089fcd60-31dd-4fd0-aac7-c63d8dc7d88a/aa-53-E0-handover-2026-10-17.md. Untracked include/veyra/engine/AntiAliasSettings.h is an unreferenced draft.
+
+## 2026-10-18 E0 effect infrastructure done (coordinating session took over after the sub-session's usage limit)
+- Implemented plan §3: EffectType AntiAliasing/Beauty (hidden), 32-node chains with explicit overflow refusal, AntiAliasSettings in chain/settings/presets (library v14 + session v9 in `.effects` files, older files untouched), export protocol 10, 64-bit GPU timer mask with AA/beauty stages, step-based insertion slots (`slotOfStep`, SourcePost slot) with the colour executor rewritten onto slot lists. Anti-aliasing stays refused (`antiAliasExecutor=false`) until the AA commit.
+- 32 nodes double EffectChain (22 KB -> 45 KB) and the stack frames that copy it (assembly listings: bridge constructor 214 -> 400 KB, EngineController::run 385 KB); veyra_qml_ui and veyra now link /STACK:8388608 (reserve only). Fixed the legacy Win32 telemetry name table, already misaligned on main (Fg6/Fg7 missing).
+- Verified (builds 25-39 s each, `tmp/claude-aa-53-20261017/tools/build.py`): effect chain tests all pass (33 new E0 checks), preset library tests all pass (14 new), NR model settings 26/26, i18n 0 failures, colour slot regression 12/12 byte-identical to the main baseline (`tests/claude-aa-53-20261017/slot-e0-final.json`, logs `logs/claude-aa-53-20261017/slot-regression-20261018-142129`).
+
+## 2026-10-18 #53 spatial anti-aliasing (FXAA / SMAA / MLAA, experimental temporal SMAA)
+- Ported from SAOG0721/Magpie d687997 (sources, licenses, changes: THIRD_PARTY_NOTICES.md): 14 compute shader variants, `AntiAliasPass`, graph slots from E0 plus the plan-less tiled image path, live MLAA / history values, GPU stages AaNode0/1. HDR edge detection uses a perceptual luma relative to the SDR / 203-nit HDR white (not PQ: PQ compresses SDR-range contrast 3-4x and would under-detect with the tuned thresholds); all blending in linear light.
+- UI: 画质 tab top card 抗锯齿 (above 超分辨率), processing-order chip, node catalog entry (max 2) with the shared `AntiAliasEditor.qml`; bridge antiAlias*; 22 translations.
+- Tests (RTX 5070, one run each): `veyra_anti_alias_gpu_tests` (SDR quality vs a 16x16 supersampled linear reference: flat areas bit-identical, edge error 32.2 -> 6.8-10.5; HDR P010 PQ: no NaN, highlights / out-of-709 colours unchanged; temporal reset and history; real NGX node slots; tiled path exact for MLAA; D3D12 debug layer clean; timing), `ExportWorkflowTests aa` (worker creates and dispatches the pass), `scripts/acceptance/aa-53-gui.py` (39 checks in the live player, screenshot), QML editor tests, colour slot regression 12/12 identical. Timings at 4K: FXAA 0.15 ms, SMAA 0.30 ms, temporal 0.55 ms, MLAA 0.30 ms (dense-edge worst case 0.36 / 0.55-0.73 / 1.2-1.3 / 0.54 ms).
+- Fixed on the way (present on main 26c0d61): `TiledImageProcessor` carried the whole-image execution plan into the tiles, so the graph refused it and the six tiled colour cases of `veyra_image_dimension_tests` failed on main. The product path never passes a plan; tiles now drop it and run the list-order base (identical to the whole image, maxError8=0).
+- Final sweep (one staged build, fresh temp folder, logs/claude-aa-53-20261017/final-sweep-20261018-155900): 14 of 15 suites pass. image-dimension: all 11 size / tile cases pass; its NR tile case cannot find `runtime_local/config/ngx-local.json` because the test compiles the source root in as a narrow string and the `E:/项目` path does not survive (needs an ASCII-path build; unrelated). preset-library fails only when rerun in the same temp folder (sidecars from testDlssSrModels; main behaves the same). `veyra_amd_nr_graph_tests` compiled, not run.
+- Not verified: AMD / Intel hardware, real game / capture footage judged by eye (user), Switch material, long runs, temporal mode ghosting on real motion.
+
+## 2026-10-18 美颜节点完成（Claude，`claude/beauty-20261017`）
+- 合入 E0 + #53（`af415f3`）后实现人脸原画保护 + 磨皮两个独立子功能、共用的 GPU 人脸识别与跟踪（YuNet 手写 HLSL，不加新运行库）、列表“美颜”组（最多 6 层，新层默认关闭，四个预设）与节点（最多 6 个），预设库 v15 / 会话 v10 用 `.beauty` 文件，导出协议 11。设计、偏差、实测与未验证项：`docs/BEAUTY_IMPLEMENTATION_PLAN_2026-10-17.md`；来源与许可：THIRD_PARTY_NOTICES.md。
+- 顺带修复：导出 worker 仍只认协议 10（本分支所有导出都会被拒，`ExportWorkflowTests beauty` 发现）；节点模式里关闭且为默认值的抗锯齿 / 美颜节点让节点顺序还原失败（新加的美颜节点必现，抗锯齿分支仍有）；NR 旁路时插入槽只重绑调色。
+- 测试（RTX 5070，一次运行）：检测器与 OpenCV 5.0.0 在 8 图 × 3 尺寸 × 2 模型上一致；`veyra_beauty_gpu_tests` 11 例（关闭即逐位相同、保护逐位回到原画、HDR、两节点、跟踪、无模型、四张图的磨皮）；耗时 1080p 0.093 + 检测 0.13 ms、4K 0.321 + 0.16 ms；GUI 验收 `scripts/acceptance/beauty-gui.py` 59 项（实播放识别到人脸，实时参数不重建，日志无人脸坐标）；`ExportWorkflowTests beauty`；QML 编辑器 10 项。
+- 最终汇总（`logs/claude-beauty-20261017/final-sweep-20261018-210951`，同一构建、新临时目录）：29 项中 28 项通过（含调色逐字节回归 12/12、抗锯齿 GPU 17/17、抗锯齿 GUI 39 项、QML 99 项）；image-dimension 的尺寸 / 分块用例全部通过，只有 NR 分块用例因源码路径含非 ASCII 找不到 `ngx-local.json`（与 #53 汇总相同，需 ASCII 路径构建）。
+- 没有验证：AMD / Intel、真实采集卡与游戏画面的肉眼评价、长时间运行、CPU 渲染线程增量；打包尚未把模型放进 `runtime/models`。没有合并 main、推送、发布或打包。
+- 用户试用 r1 反馈跟踪落后、回弹：改为每帧识别 + One Euro 平滑（无预测、无过冲）、漏检外推 120 ms、新脸淡入、分数滞回；`tracking` 误差 9.8 → 3.4 px，新增 `tracking-motion`（每帧 16 px）落后 1.5% 脸宽、过冲 0.25%。详见实施文档第 7 节。
+- 10-19 用户反馈遮罩只是椭圆：按同意接入 MediaPipe 468 点人脸网格（v0.8.9，Apache-2.0，自写 TFLite 读取 + 45 个 GPU 层），原画保护按真实轮廓、磨皮排除双眼双眉嘴唇；网络与参考 62 张脸一致（最大差 0.00014 裁剪像素），新增 `mesh-landmarks` / `mesh-contour` / `mesh-features`；1080p 一张脸约 0.93 ms、4K 约 1.42 ms。详见实施文档第 8 节。
+
+## 2026-10-19 首页文案与赞助作者页（Claude）
+
+- 用户要求首页“今天看点什么？”改为“Veyra NR Video”，小字改为“本软件开源免费，如果对你有帮助，你可以 → 请作者喝杯咖啡”并可点到设置新增的赞助页；页内放作者 B站/抖音/X/GitHub/YouTube（图标 + 前往主页，不显示链接）、微信/支付宝收款码和 Ko-fi 咖啡按钮。分支 `claude/sponsor-20261019`（main 1dc8c18），工作树 `E:/项目/Veyra/worktrees/sponsor-20261019`。
+- 新增 `SponsorPanel.qml`、`qml/Veyra/sponsor/`（Simple Icons 16.34.0 CC0 品牌图形，`tools/qt_probe/make-sponsor-icons.py` 生成；两张收款码统一 572 px 宽、圆角做进像素，处理后与缩到 216 px 时解码内容均与原图一致）、桥接 `openSponsorLink`（链接只在 C++）。“关于”里从未接通的“交流群与赞助”拆为“赞助作者 → 前往”和“交流群 → 查看”（打开项目 README）。翻译新增 19 条全部补齐。
+- 构建 `E:/项目/Veyra/build/claude-sponsor-20261019`（118 秒）；Qt Quick 组件测试 87/87（新增 3 项）；真实程序 `scripts/acceptance/sponsor-gui.py` 6 组（四种语言、150%、软件渲染界面）真实点击全部通过，日志 `E:/项目/Veyra/logs/claude-sponsor-20261019/gui-20261019-105518`。六个网址 2026-10-19 均 HTTP 200。详见 docs/SPONSOR_PAGE_2026-10-19.md。没有合并 main、推送或发布。
+- 第二轮：用户要求咖啡在前、两个二维码标给中国大陆用户。Ko-fi 移到“请作者喝杯咖啡”下第一位，码卡归到“中国大陆用户 · 可以用微信或支付宝扫码”；组件测试 88/88，真实程序 6 组通过（`gui-20261019-111537`）。软件渲染组曾偶发一次卡片查找为空，未复现（8 次通过），原因未查明，见 docs/SPONSOR_PAGE_2026-10-19.md。
+
+## 2026-10-19 2.1.0 B 站主页纠正（Codex）
+
+用户测试后提供正确 B 站主页：`https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0`。修正桥接常量、既有赞助页验收预期与说明；HTTP 200 不能证明账号 ID 正确。沿用 Claude 已整合的 main 与 2.1.0-test 配方，只重新构建应用并重打 NVIDIA/AMD 本地包，不修改增强链路或运行库。产物与命令记录统一在 `E:/项目/Veyra/{build,tmp,logs,reports,test-packages}/bilibili-2.1.0-20261019`；原 2.1.0 包保留。不推送或发布；应用构建 234.8 秒通过，编译 URL 校验通过；命令、封包和冷启动回执路径见 `docs/BILIBILI_2.1.0_FIX_2026-10-19.md`。
+
+封包后：`tools/package210.py stage|seal|cold`、`verify.py` 全通过；两个 ZIP 的 GPU/软件界面共四组冷启动及 GTA 4K 播放均通过，399–404 帧。对照 Claude 原包，QML/着色器/运行库/模型全部 SHA256 不变，仅 EXE 和文档变化。最终回执 `reports/bilibili-2.1.0-20261019/final.json`，ZIP/源码绑定提交 `66b3210`，随后仅补本文档。清理本轮冷启动解压副本的命令被自动审批策略拒绝（blocked by policy），该批副本保留，不另行绕过。最终 ZIP、可用目录、构建和日志保留。
+
+
+## 2026-10-19 2.1.0 正式发布准备（Codex）
+
+用户已验收bilibili-2.1.0-20261019两包，明确原样发布、不再封包；暂停保留Lecram实验。从main d91ec9f在codex/release-2.1.0-20261019施工，存档checkpoint/pre-codex-publish-2.1.0-20261019（原Claude存档标签保留）。全部产物E:/项目/Veyra/{archives,releases,reports}/release-2.1.0-20261019。
+
+人工核对Claude/Codex产品报告并生成v2.0.9..d91ec9f的86提交（74非merge）/223路径索引；完成AMD0.44、AA、美颜/468点、PR57格式/窗口、PR63/64音频、#48网络、全屏与发行资料说明，区分实测、夹具、未验硬件和旧问题。原图复制新6群码SHA c41c67f0732462ded8a9d1956d0e2f1c4621b986d9e70f166f6c0039a8e1825f，赞助码220宽/Discord/Ko-fi/知识库保留；README仅更新相关区块/过时AMD模型说明/下载/构建链接。
+
+命令：python -X utf8 -B scripts/acceptance/release-2.1.0.py prepare；逐原ZIP及晋升硬链接SHA/CRC/EXE检查通过，原包未改字节，内部2.1.0-test保留，未构建/重压缩。reports/.../local.json记录两GPU包/应用源/AMD源大小与SHA；原DELIVERY与旧Release元数据存archives。三个不变依赖源的远端digest逐项核对通过（dependency-digests.json）；README/更新说明本地链接、编码、双图尺寸及群码日期检查通过；git diff --check通过。相对精确应用源66b3210没有产品文件变化，无SDK/运行库/模型新增Git。群公告只拟稿，不代发/关机。后续按计划上传草稿、核验远端资产后发布并追加回执。

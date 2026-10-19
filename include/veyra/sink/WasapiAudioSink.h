@@ -1,4 +1,5 @@
 #pragma once
+#include "veyra/media/DemuxSession.h"
 #include "veyra/media/NetworkInput.h"
 
 // AudioPipeline: FFmpeg audio demux/decode + watermarked bounded ring
@@ -73,6 +74,11 @@ public:
     ~AudioPipeline();
 
     bool open(const std::wstring& path,const std::atomic<bool>* cancelled=nullptr);
+    // Network sources and files on a server: take audio packets from the shared demux
+    // session that also feeds the video (one connection, #48) instead of opening the
+    // address a second time.
+    bool open(std::shared_ptr<media::DemuxSession> session);
+    bool sharedSession() const { return session_ != nullptr; }
     const std::vector<media::AudioTrack>& tracks() const { return tracks_; }
     int selectedTrack() const { return streamIndex_; }
     // Owner thread only, after stopThread(). Failure preserves the old decoder.
@@ -153,16 +159,29 @@ private:
     void pauseReader();                  // returns once the reader is idle; drops queued packets
     void resumeReader();
     void stopReader();
-    bool takeQueuedPacket(bool& eof);    // non-blocking; moves the head packet into packet_
+    bool takeQueuedPacket(bool& eof,int waitMs=0);   // moves the head packet into packet_; waits up to waitMs (session only)
+    // Shared session: reposition the decoder and PCM ring at `target` without moving
+    // the (shared) demuxer. The engine has already repositioned the session for a seek.
+    bool rewindSession(double target);
+    void noteDamagedAudio(int code);
+    void trimRingBefore(double targetMs);   // mutex_ held
 
     friend class AudioThread;
 
     AudioFormat pcmFormat_;
     std::vector<media::AudioTrack> tracks_;
     AVFormatContext* fmt_ = nullptr;
+    std::shared_ptr<media::DemuxSession> session_;   // shared mode: packets come from here, fmt_ stays null
+    uint32_t sessionGeneration_ = 0;                 // audio thread: the session reposition this decoder follows
+    bool sessionDiscontinuity_ = false;              // next packet starts a new live connection: reset the decoder
+    std::chrono::steady_clock::time_point prefillDeadline_{};
+    bool prefillWait_ = false;                       // audio thread: wait for session packets (open / seek prefill)
+    uint64_t damagedAudioPackets_ = 0;               // network audio packets the decoder rejected and we skipped
+    unsigned damagedAudioRuns_ = 0;
+    std::chrono::steady_clock::time_point damagedAudioLogAt_{};
     media::InputInterrupt inputInterrupt_;
     AVCodecContext* codecCtx_ = nullptr;
-    AVStream* stream_ = nullptr;
+    AVRational streamTimeBase_{1, 1000};
     AVPacket* packet_ = nullptr;
     int swrInputRate_=0,swrInputFormat_=-1;
     SwrContext* swr_ = nullptr;

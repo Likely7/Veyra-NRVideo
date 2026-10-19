@@ -14,11 +14,11 @@
 
 Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
 
-[下载2.0.9免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.0.9.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
+[下载2.1.0免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.0) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.0.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
-**2.0.9正式发布，2026-10-17：** 新SF310.9.16双模型、HDR显示调节、多轨字幕/游戏快捷键、网络播放、去隔行与兼容修复。[完整更新报告](docs/RELEASE_NOTES_2.0.9.md)。
+**2.1.0正式发布，2026-10-19：** AMD NR升级0.44并支持Small/原模型；新增独立抗锯齿、美颜与468点人脸原画保护，修复采集卡分辨率/格式缺项，整合网络缓冲、圆刚音频、窗口捕获及全屏修复。[完整更新报告](docs/RELEASE_NOTES_2.1.0.md)。
 
-**NR实测：** RTX5070、GTA4K输入/内部1080p，旧SF-v2 **5.87→3.20ms，NR GPU耗时降低约45.5%**。新旧模型画面可能不同，不代表所有显卡FPS或光学延迟收益。[条件与边界](docs/RELEASE_NOTES_2.0.9.md)。
+**本机新增效果开销示例：** RTX5070，4K标准测试抗锯齿FXAA约0.15ms、SMAA/MLAA约0.30ms；最终网格美颜一张脸1080p约0.93ms、4K约1.42ms。不同素材/显卡会变化；AMD新模型没有本机实卡性能百分比。[条件与限制](docs/RELEASE_NOTES_2.1.0.md)。
 
 **[Veyra软件知识库](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)**：整理四个群聊的消息汇总成的Veyra使用文档，大部分软件问题、采集卡问题都可以先在里面查找答案。
 
@@ -32,20 +32,20 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 - **导出页重做**：可编辑顺序队列、剪辑、MP4/MKV、多音轨/内嵌字幕、取消重试和完成提示音。
 - **增强与兼容**：新版SF310.9.16双模型、50系NVIDIA原版与AMD lmxxf、DLSS/XeSS/FSR 补帧入口、采集优化及带重启确认的 OBS 游戏采集开关。详细新功能与修复见 Release。
 
-## 2.0.9 新增与修复
+## 2.1.0 新增与修复
 
-- **新版 NR 与性能模型**：RTX20–50 默认 SF 310.9.16；“启用性能优化版”默认开，关闭改用同 DLL 的旧模型 A。NVIDIA 原版仍可选且开关置灰，AMD 运行组件保持；新包移除 Lecram/旧 SF-v2。
-- **实测 NR 减负**：RTX5070、GTA4K 输入/1080NR，旧 SF-v2 约5.87→新版默认模型3.20ms，NR GPU耗时降低约45.5%；画面模型有变化，不是同画质全链路提速承诺。
-- **HDR 显示调节**：整合PR44五张卡片、快捷预设/内容×环境、简化调节、元数据、影片/显示器记忆与推荐；支持原生HDR和RTX Video HDR输出，读数按需低频统计。
-- **字幕与游戏操作**：长片多轨PGS后段缓存截断修复；游戏画面对齐捕获窗口，设置中可自定义呼出调节/退出穿透快捷键，修复全屏重入焦点时序。
-- **播放与兼容**：Ctrl+U播放HTTP/HTTPS/RTSP直接媒体地址；自动去隔行适配软/硬解并保留尾场/seek；修复G-SYNC Compatible可请求/真活动状态和英文专业模式底栏换行。
-- **NR 初始化与保存**：补齐20系等待样本相关NVOF注册同步和失败原因显示；A/B选择贯穿每层、预设、列表/节点会话与导出，关闭效果时编辑无效模型参数不重建播放。
+- **AMD NR 0.44**：RX9000继续使用lmxxf，性能优化开关默认开启选Small，关闭选原模型；支持逐层独立选择、保存与导出，缺资源明确报错，不新增RX6000/7000支持。
+- **抗锯齿**：独立FXAA/SMAA/MLAA效果器，列表/节点、可调质量与强度、HDR和列表导出；实验时域SMAA默认关闭。
+- **美颜与原画保护**：两个独立子开关，最多6层；468点脸型轮廓与五官排除、每帧识别和平滑跟踪，支持磨皮/细节/纹理/羽化调节；原画保护恢复该帧全部效果之前的人脸。
+- **采集格式选择**：原生枚举回退、范围/步长与自定义尺寸检查、完整可搜索旧版列表、精确帧率/像素格式匹配；不支持或驱动换格式明确报错，保存/继续上次沿用配置。
+- **网络与圆刚音频**：共享网络缓冲、断线重连、慢服务器暂停缓冲、HLS/IPTV容错及字幕限速；圆刚厂商多声道音频图、non-PCM启用确认、完整杜比包即时解码和有界恢复。
+- **其他修复**：窗口游戏模式入口/快捷键/缩放与静态resize恢复，专业全屏误暂停、极简全屏指针、默认关闭节点顺序与导出协议；首页赞助页、B站主页和四语提示补齐。
 
-[2.0.8以来完整更新、用法与实测边界](docs/RELEASE_NOTES_2.0.9.md)。原样晋升已交付包，内部2.0.9-test/原清单保留，Windows文件版本2.0.9.0。
+[2.0.9以来全部更新、用法与验证边界](docs/RELEASE_NOTES_2.1.0.md)。原样晋升用户已验两包，不重新构建/压缩；内部2.1.0-test/原清单保留，Windows文件版本2.1.0.0。
 
 ## 下载、启动与升级
 
-1. 按 Veyra 实际使用的显卡下载 **Veyra-2.0.9-NVIDIA-win64-portable.zip** 或 **Veyra-2.0.9-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
+1. 按 Veyra 实际使用的显卡下载 **Veyra-2.1.0-NVIDIA-win64-portable.zip** 或 **Veyra-2.1.0-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
 2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
 3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
 4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
@@ -63,7 +63,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 ### 列表模式
 
-列表与节点的 **NR 版本** 可选RTX20–50 · SF310.9.16、RTX50 · NVIDIA原版、RX9000 · lmxxf（实验）。SF默认性能模型B，关闭“启用性能优化版”使用旧模型A；原版开关置灰，AMD不显示，各层选择可保存。旧Lecram/SF-v2设置迁移至新版SF。不支持的版本保留置灰，支持的版本切换时全 NR 链同步。AMD NR需要驱动HIP 7；视频最高内部1080p推理并合成原尺寸输出，不等于原生4K NR，实卡离线编码待复测；图片保持原尺寸模型预算，HDR NR不可用。[本版运行组件身份](docs/BUILD_2.0.9.md)。
+列表与节点的 **NR 版本** 可选RTX20–50 · SF310.9.16、RTX50 · NVIDIA原版、RX9000 · lmxxf（实验）。SF默认性能模型B，关闭“启用性能优化版”使用旧模型A；原版开关置灰，AMD默认开启时用Small、关闭用原模型，各层选择可保存。旧Lecram/SF-v2设置迁移至新版SF。不支持的版本保留置灰，支持的版本切换时全 NR 链同步。AMD NR需要驱动HIP 7；视频最高内部1080p推理并合成原尺寸输出，不等于原生4K NR，实卡离线编码待复测；图片保持原尺寸模型预算，HDR NR不可用。[本版运行组件身份](docs/BUILD_2.1.0.md)。
 
 顶部选 **列表**，按需开启超分、NR、RTX Video HDR。NR 最多四层，独立调整内部尺寸、强度等参数；总开关关闭全部 NR，重开恢复各层原状态。
 
@@ -141,7 +141,7 @@ QML 管界面，视频由原生 D3D12 呈现。列表/节点共用引擎，未�
 
 ## 开源与构建
 
-Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.0.9 构建与对应源码](docs/BUILD_2.0.9.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
+Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.1.0 构建与对应源码](docs/BUILD_2.1.0.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
 
 ## 支持与反馈
 
@@ -154,7 +154,7 @@ Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.0.7/docs/images/2.0.7/community-group.png" alt="Veyra 交流群 6" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.1.0/docs/images/2.1.0/community-group.png" alt="Veyra 交流群 6" width="220">
 </p>
 
-左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-19 前**有效，过期请查看仓库更新。
+左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-26 前**有效，过期请查看仓库更新。

@@ -29,6 +29,10 @@ bool TiledImageProcessor::process(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotR
     desc.sourceWidth=desc.workWidth=desc.nrWidth=tileW;
     desc.sourceHeight=desc.workHeight=desc.nrHeight=tileH;
     desc.rgbInput=true;desc.stillImage=true;desc.enableFg=false;desc.enableNvofStandalone=false;
+    // A plan compiled for the whole image describes none of these tile extents
+    // (the graph refuses it). Tiles run the list-order base: fused / additional
+    // grades as before, enabled anti-aliasing instances at source size.
+    desc.fixedExecutionPlan.reset();desc.fixedExecutionPlanError.clear();desc.runtimeNodeOrder=false;
     pipeline::EnhanceGraph graph(ctx,ring);
     if(!graph.initialize(desc)||!graph.createViews())return false;
     AVFrame* raw=av_frame_alloc();
@@ -61,6 +65,9 @@ bool TiledImageProcessor::process(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotR
         // (or a nonempty additional chain) before the first tile is processed.
         tileSettings.color=desc.color;tileSettings.additionalColors=desc.additionalColors;
         tileSettings.additionalColorCount=desc.additionalColorCount;
+        tileSettings.antiAlias=desc.antiAlias[0];
+        for(uint32_t i=1;i<kMaxAntiAliasInstances;++i)
+            if(desc.antiAlias[i].configured()){tileSettings.additionalAntiAlias[i-1]=desc.antiAlias[i];tileSettings.additionalAntiAliasCount=i;}
         for(auto& q:tileSettings.protection.regions){
             // A rectangle clipped to the tile is the same rectangle; an ellipse
             // clipped would be a different ellipse, so it keeps its full box.

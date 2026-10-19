@@ -8,6 +8,7 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
+#include <climits>
 #include <cstring>
 #include <format>
 
@@ -158,6 +159,9 @@ struct BitstreamDecoder::Impl {
     bool outLayoutValid = false;
     std::vector<uint8_t> iecPending;
     std::vector<uint8_t> parserScratch;
+    std::vector<uint8_t> inputScratch;
+    uint64_t formatRevision=0;
+    int outputRate=0,outputSampleFormat=-1;
     std::string lastError;
     uint64_t frames = 0;
     uint64_t bytesIn = 0;
@@ -170,6 +174,7 @@ struct BitstreamDecoder::Impl {
         if (packet != nullptr) av_packet_free(&packet);
         if (parser != nullptr) av_parser_close(parser);
         if (context != nullptr) avcodec_free_context(&context);
+        av_channel_layout_uninit(&outLayout);
         outLayoutValid = false;
     }
 
@@ -222,6 +227,12 @@ struct BitstreamDecoder::Impl {
     }
 
     bool handleFrame(std::vector<float>& out) {
+        if(outLayoutValid&&(av_channel_layout_compare(&outLayout,&frame->ch_layout)!=0
+            ||outputRate!=frame->sample_rate||outputSampleFormat!=frame->format)){
+            // A console can switch channel layout without changing codec.
+            // Do not concatenate samples from two formats into one callback.
+            out.clear();swr_free(&resampler);av_channel_layout_uninit(&outLayout);outLayoutValid=false;
+        }
         if (!outLayoutValid) {
             if (av_channel_layout_copy(&outLayout, &frame->ch_layout) < 0) {
                 lastError = "decoded frame has no usable channel layout";
@@ -231,6 +242,7 @@ struct BitstreamDecoder::Impl {
                 av_channel_layout_default(&outLayout, outLayout.nb_channels > 0 ? outLayout.nb_channels : 2);
             }
             outLayoutValid = true;
+            outputRate=frame->sample_rate;outputSampleFormat=frame->format;++formatRevision;
         }
         if (!ensureResampler()) return false;
         const unsigned channels = unsigned(outLayout.nb_channels);
@@ -339,6 +351,11 @@ bool BitstreamDecoder::push(const uint8_t* data, size_t bytes, std::vector<float
         return p.decodePacket(out);
     }
 
+    // FFmpeg parsers require zero padding even when the caller supplies a
+    // complete IEC payload. A vector's spare capacity is not readable padding.
+    p.inputScratch.assign(stream,stream+streamBytes);
+    p.inputScratch.resize(streamBytes+AV_INPUT_BUFFER_PADDING_SIZE,0);
+    stream=p.inputScratch.data();
     size_t offset = 0;
     while (offset < streamBytes) {
         uint8_t* packetData = nullptr;
@@ -350,6 +367,7 @@ bool BitstreamDecoder::push(const uint8_t* data, size_t bytes, std::vector<float
             return false;
         }
         offset += size_t(consumed);
+        if(consumed==0&&packetSize<=0){p.lastError="codec parser made no progress";return false;}
         if (packetSize <= 0) continue;
         av_packet_unref(p.packet);
         if (av_new_packet(p.packet, packetSize) < 0) {
@@ -362,10 +380,30 @@ bool BitstreamDecoder::push(const uint8_t* data, size_t bytes, std::vector<float
     return true;
 }
 
+bool BitstreamDecoder::pushFramed(const uint8_t* data, size_t bytes, std::vector<float>& out) {
+    auto& p = *p_;
+    if (p.context == nullptr) {p.lastError="decoder not opened";return false;}
+    if (bytes == 0) return true;
+    if (data == nullptr) {p.lastError="null framed packet";return false;}
+    if (bytes > size_t(INT_MAX)) {
+        p.lastError = "framed packet is too large";
+        return false;
+    }
+    p.bytesIn += bytes;
+    av_packet_unref(p.packet);
+    if (av_new_packet(p.packet, int(bytes)) < 0) {
+        p.lastError = "packet allocation failed";
+        return false;
+    }
+    std::memcpy(p.packet->data, data, bytes);
+    return p.decodePacket(out);
+}
+
 void BitstreamDecoder::reset() {
     auto& p = *p_;
     p.iecPending.clear();
     p.parserScratch.clear();
+    swr_free(&p.resampler);av_channel_layout_uninit(&p.outLayout);p.outLayoutValid=false;
     if (p.context != nullptr) avcodec_flush_buffers(p.context);
     if (p.parser != nullptr) av_parser_close(p.parser);
     if (p.context != nullptr) p.parser = av_parser_init(p.context->codec_id);
@@ -379,6 +417,10 @@ unsigned BitstreamDecoder::sampleRate() const {
     return p_->context != nullptr ? unsigned(p_->context->sample_rate) : 0;
 }
 uint64_t BitstreamDecoder::decodedFrames() const { return p_->frames; }
+uint32_t BitstreamDecoder::channelMask() const {
+    return p_->outLayoutValid&&p_->outLayout.order==AV_CHANNEL_ORDER_NATIVE?uint32_t(p_->outLayout.u.mask):0;
+}
+uint64_t BitstreamDecoder::formatRevision() const { return p_->formatRevision; }
 uint64_t BitstreamDecoder::decodedBytesIn() const { return p_->bytesIn; }
 const std::string& BitstreamDecoder::lastError() const { return p_->lastError; }
 

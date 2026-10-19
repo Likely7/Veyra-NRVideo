@@ -8,6 +8,7 @@
 #include <string>
 #include <atomic>
 
+#include "veyra/media/NetworkSettings.h"
 #include "veyra/pipeline/FramePacket.h"
 #include "veyra/source/DolbyVision.h"
 
@@ -34,6 +35,11 @@ struct SourceOpenDesc {
     // Custom (P5): decode the Dolby Vision profile 7 enhancement layer. Off by
     // default; the setting behind it is still opt-in while the path is new.
     bool decodeDolbyEnhancementLayer = false;
+    // Network and server playback (#48). Offline consumers (export, tools, tests) keep
+    // the defaults: strict about damaged data, reads that wait, direct file reads.
+    media::NetworkSettings network;   // the user's buffering / reconnect / damaged-picture choices
+    bool nonBlocking = false;         // player: read() may return Waiting while the network buffers
+    bool tolerateCorruption = false;  // player: keep going through damaged packets (network sources, MPEG-TS)
 };
 
 struct SourceInfo {

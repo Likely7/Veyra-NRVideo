@@ -2,6 +2,7 @@
 
 // Shared text and bitmap subtitle loading, including external SUP/VobSub and
 // container tracks. Bitmap subtitles retain their authored canvas and palette.
+#include <atomic>
 #include <string>
 #include <vector>
 #include <functional>
@@ -82,9 +83,18 @@ SubtitleTrack loadSubtitleFile(const std::wstring& path);
 std::vector<SubtitleTrack> loadExternalSubtitleTracks(const std::wstring& path,std::stop_token stop={},
     const std::function<void(const std::vector<SubtitleTrack>&)>& metadata={});
 
-// Subtitle tracks inside the container (Matroska/MP4/...).
+// Subtitle tracks inside the container (Matroska/MP4/...). `serverGate` is for a
+// file on a server (NAS) that playback is reading too (#48): the scan opens it only
+// once the gate is true, reads it at a bounded rate and stops reading while the gate
+// is false. Null reads the file straight away, as before.
 std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,std::stop_token stop={},
-    const std::function<void(const std::vector<SubtitleTrack>&)>& metadata={});
+    const std::function<void(const std::vector<SubtitleTrack>&)>& metadata={},const std::atomic<bool>* serverGate=nullptr);
+
+// True for a file on a server: a UNC path or a drive mapped to a share (media::remoteMediaPath),
+// or any file when VEYRA_TEST_FORCE_REMOTE_PATH is set (tests).
+bool subtitleServerFile(const std::wstring& path);
+// Bytes the server-file subtitle scan has read so far (diagnostics and tests).
+uint64_t subtitleServerScanBytes();
 
 // One worker, one pending source and one published snapshot. Replacing a source
 // interrupts its demuxer and prevents stale results from reaching the UI.
@@ -93,6 +103,9 @@ public:
     struct Result {uint64_t generation=0;bool complete=false;std::vector<SubtitleTrack> tracks;};
     SubtitleLoader();
     ~SubtitleLoader();
+    // Set before request(). Applies only to files on a server (UNC / mapped drive);
+    // the owner flips it with the state of playback's own buffer. See loadEmbeddedSubtitleTracks.
+    void setReadGate(std::shared_ptr<const std::atomic<bool>> gate);
     uint64_t request(std::wstring path);
     uint64_t requestFile(std::wstring path);
     std::optional<Result> poll();

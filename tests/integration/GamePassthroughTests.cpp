@@ -1,5 +1,6 @@
 #include "veyra/ui/GamePassthrough.h"
-#include <QCoreApplication>
+#include <QGuiApplication>
+#include <QQuickWindow>
 #include <iostream>
 
 using namespace veyra::ui;
@@ -12,7 +13,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp){
         std::cout<<"EVENT action="<<wp<<" epoch="<<lp<<" current="<<current<<" panels="<<panels<<" exits="<<exits<<std::endl;return 0;}
     return DefWindowProcW(w,m,wp,lp);
 }
-void pump(unsigned ms){const auto end=GetTickCount64()+ms;do{MSG m;while(PeekMessageW(&m,nullptr,0,0,PM_REMOVE)){TranslateMessage(&m);DispatchMessageW(&m);}Sleep(1);}while(GetTickCount64()<end);}
+void pump(unsigned ms){const auto end=GetTickCount64()+ms;do{QCoreApplication::processEvents();MSG m;while(PeekMessageW(&m,nullptr,0,0,PM_REMOVE)){TranslateMessage(&m);DispatchMessageW(&m);}Sleep(1);}while(GetTickCount64()<end);}
 bool key(WORD vk,bool up=false){INPUT i{};i.type=INPUT_KEYBOARD;i.ki.wVk=vk;i.ki.dwFlags=up?KEYEVENTF_KEYUP:0;return SendInput(1,&i,sizeof(i))==1;}
 bool send(std::initializer_list<std::pair<WORD,bool>> keys){
     // Do not block the receiving window's message pump inside SendInput. In
@@ -22,9 +23,65 @@ bool send(std::initializer_list<std::pair<WORD,bool>> keys){
     while(!done.load())pump(1);sender.join();pump(20);return ok;
 }
 void tap(WORD vk){check(send({{vk,false},{vk,true}}),"SendInput reaches our test foreground");pump(80);}
+void quickWindowSequence(HWND target){
+    QQuickWindow host;
+    host.setGeometry(0,0,960,600);
+    host.show();pump(100);
+    GamePassthrough game;
+    game.attach(reinterpret_cast<HWND>(host.winId()));
+    game.setTarget(target,MonitorFromWindow(target,MONITOR_DEFAULTTONEAREST),false);
+    game.setHotkeys({VK_F9,0},{VK_F10,3});
+    int panelEvents=0,exitEvents=0;
+    const auto apply=[&](GameInputMode mode){
+        Qt::WindowFlags flags=Qt::Window|Qt::FramelessWindowHint;
+        if(mode==GameInputMode::Through)flags|=Qt::WindowTransparentForInput;
+        if(mode==GameInputMode::Through||mode==GameInputMode::Scaled)flags|=Qt::WindowDoesNotAcceptFocus;
+        host.setFlags(flags);
+        if(mode==GameInputMode::Off)host.showNormal();else host.showFullScreen();
+        game.attach(reinterpret_cast<HWND>(host.winId()));
+        game.apply(mode);
+    };
+    game.onEvent=[&](GamePassthrough::Event event){
+        if(event==GamePassthrough::Event::PanelHotkey){
+            ++panelEvents;apply(game.mode()==GameInputMode::Panel?GameInputMode::Through:GameInputMode::Panel);
+        }else if(event==GamePassthrough::Event::ExitHotkey){++exitEvents;apply(GameInputMode::Off);}
+        else {check(false,"quick window listener remains available");apply(GameInputMode::Off);}
+    };
+    ShowWindow(target,SW_SHOW);
+    check(game.arm(),"message-only receiver arms before fullscreen flag changes");
+    apply(GameInputMode::Through);pump(100);
+    check(GetForegroundWindow()==target,"Qt fullscreen gives foreground to capture target");
+    for(int i=0;i<3;++i){
+        tap(VK_F9);
+        check(game.mode()==GameInputMode::Panel,"fullscreen hotkey restores interactive panel");
+        SetWindowPos(target,nullptr,420,300,720+i*20,400+i*30,SWP_NOACTIVATE|SWP_NOZORDER);
+        const auto geometry=game.pictureBounds();RECT source{};
+        DwmGetWindowAttribute(target,DWMWA_EXTENDED_FRAME_BOUNDS,&source,sizeof(source));
+        check(geometry.right-geometry.left==source.right-source.left&&geometry.bottom-geometry.top==source.bottom-source.top,
+              "source resize is reflected while passthrough is paused");
+        tap(VK_F9);
+        check(game.mode()==GameInputMode::Through,"panel closes back into passthrough");
+    }
+    check(panelEvents==6,"Qt flag transitions preserve all panel hotkey events");
+    apply(GameInputMode::Scaled);pump(80);
+    const auto scaledStyle=GetWindowLongPtrW(reinterpret_cast<HWND>(host.winId()),GWL_EXSTYLE);
+    check(!(scaledStyle&WS_EX_TRANSPARENT)&&(scaledStyle&WS_EX_NOACTIVATE)&&GetForegroundWindow()==target,
+          "scaled output keeps keyboard/gamepad foreground and blocks incorrect mouse passthrough");
+    // Force a platform-window replacement rather than assuming this Qt backend
+    // always replaces its HWND for an input-flag change.
+    host.destroy();host.create();
+    apply(GameInputMode::Through);pump(100);
+    check(send({{VK_LCONTROL,false},{VK_LMENU,false},{VK_F10,false},{VK_F10,true},{VK_LMENU,true},{VK_LCONTROL,true}}),
+          "exit chord reaches listener after platform-window replacement");pump(100);
+    const auto restoredStyle=GetWindowLongPtrW(reinterpret_cast<HWND>(host.winId()),GWL_EXSTYLE);
+    check(exitEvents==1&&game.mode()==GameInputMode::Off&&!(restoredStyle&(WS_EX_TRANSPARENT|WS_EX_NOACTIVATE)),
+          "exit restores real native input styles after fullscreen and handle changes");
+    game.onEvent={};game.apply(GameInputMode::Off);host.hide();
+}
 }
 int main(int argc,char** argv){
-    QCoreApplication app(argc,argv);
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
+    QGuiApplication app(argc,argv);
     check(gameKey(QKeySequence("Home"))==GameKey{VK_HOME,0},"default panel maps to Home");
     check(gameKey(QKeySequence("Ctrl+Alt+Home"))==GameKey{VK_HOME,3},"default exit maps to Ctrl Alt Home");
     for(const auto* invalid:{"Ctrl", "Meta+F9", "F9, F10", "UnknownKey", "Ctrl++"})check(gameKey(QKeySequence(invalid)).vk==0,"unsupported bindings cannot arm listener");
@@ -78,6 +135,7 @@ int main(int argc,char** argv){
         hook.stop();tap(VK_F9);check(panels==3&&!hook.running(),"stopped listener does not consume or trigger keys");
         check(hook.start(window),"listener can reenter after exit");hook.panelOwned(true);tap(VK_F9);check(panels==4,"new session responds to custom key");hook.stop();
     }
-    listener=nullptr;DestroyWindow(target);DestroyWindow(window);if(IsWindow(previous))SetForegroundWindow(previous);
+    listener=nullptr;quickWindowSequence(target);
+    DestroyWindow(target);DestroyWindow(window);if(IsWindow(previous))SetForegroundWindow(previous);
     std::cout<<"TOTAL failures="<<failures<<std::endl;return failures?1:0;
 }

@@ -170,6 +170,8 @@ struct ScreenCaptureSource::Impl {
     // (the new content clipped or padded) until the size has held for settle100ns.
     winrt::Windows::Graphics::SizeInt32 pendingSize{};
     int64_t pendingSince=0;
+    int64_t resizedAt=0;
+    bool resizeNeedsFrame=false,borderDisabled=false;
     static constexpr int64_t settle100ns=3000000;
     bool resizeSettled(winrt::Windows::Graphics::SizeInt32 size,int64_t now){
         if(size.Width!=pendingSize.Width||size.Height!=pendingSize.Height){pendingSize=size;pendingSince=now;}
@@ -177,7 +179,23 @@ struct ScreenCaptureSource::Impl {
     }
     void applyPendingSize(){
         poolSize=pendingSize;pendingSize={};pool.Recreate(wrapped,DirectXPixelFormat(format),2,poolSize);wasWaiting=true;
+        resizedAt=host100ns();resizeNeedsFrame=true;
         log::info("screen",std::format("capture size {}x{} after resizing settled",poolSize.Width,poolSize.Height));
+    }
+    void recoverStaticResize(int64_t now){
+        if(!resizeNeedsFrame||now-resizedAt<settle100ns)return;
+        // Recreate discards pending frames and WGC need not issue another for a
+        // static window. Restart this session once, after a grace period, to
+        // obtain a real new-size frame. Never repaint the target or fabricate
+        // pixels/timestamps; moving sources keep their existing session.
+        resizeNeedsFrame=false;
+        session.Close();pool.Close();
+        pool=Direct3D11CaptureFramePool::CreateFreeThreaded(wrapped,DirectXPixelFormat(format),2,poolSize);
+        session=pool.CreateCaptureSession(item);
+        session.IsCursorCaptureEnabled(options.cursor);
+        if(borderDisabled)session.IsBorderRequired(false);
+        session.StartCapture();wasWaiting=true;
+        log::info("screen","restarted WGC session once for a static resized target");
     }
     std::array<std::shared_ptr<Surface>,6> slots;
     AVFrame* frame=nullptr;
@@ -227,6 +245,7 @@ struct ScreenCaptureSource::Impl {
             }
             const auto access=GraphicsCaptureAccess::RequestAccessAsync(GraphicsCaptureAccessKind::Borderless).get();
             session.IsBorderRequired(false);
+            borderDisabled=!session.IsBorderRequired();
             log::info("screen",std::format("capture border: off access={} required={}",int(access),session.IsBorderRequired()));
         }catch(const winrt::hresult_error& e){
             log::warn("screen",std::format("capture border kept hr=0x{:08X} {}",uint32_t(e.code()),winrt::to_string(e.message())));
@@ -323,9 +342,9 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
         }else{
             for(unsigned i=0;i<2;++i){auto next=p.pool.TryGetNextFrame();if(!next)break;if(captured){captured.Close();++p.metrics.dropped;}captured=std::move(next);++p.metrics.received;}
             if(!captured){
-                // A window whose content stops changing sends no further frame:
-                // apply a settled size here, and the recreated pool delivers one.
+                // Apply a settled size even when no further frame arrives.
                 if(p.pendingSize.Width>0&&p.pendingSize.Height>0&&p.resizeSettled(p.pendingSize,now))p.applyPendingSize();
+                else p.recoverStaticResize(now);
                 return SourceReadStatus::Waiting;
             }
             const auto size=captured.ContentSize();
@@ -334,6 +353,7 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
                 if(p.resizeSettled(size,now)){captured.Close();captured=nullptr;p.applyPendingSize();return SourceReadStatus::Waiting;}
                 // Still resizing: deliver this frame at the current size below.
             }else p.pendingSize={};
+            p.resizeNeedsFrame=false;
             auto access=captured.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();check(access->GetInterface(IID_PPV_ARGS(&texture)),"capture surface");
             pts=captured.SystemRelativeTime().count()+p.clockOffset;
         }
@@ -356,7 +376,10 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
         packet.sourceKind=pipeline::SourceKind::ScreenCapture;packet.colorInfo=p.info.color;
         packet.arrivalHost100ns=host100ns();packet.decodedHost100ns=packet.arrivalHost100ns;
         if(p.sequence==1)packet.flags|=uint32_t(pipeline::FrameFlagBits::Open);
-        if(w!=p.info.width||h!=p.info.height){packet.flags|=uint32_t(pipeline::FrameFlagBits::Resize);p.info.width=w;p.info.height=h;}
+        if(w!=p.info.width||h!=p.info.height){
+            packet.flags|=uint32_t(pipeline::FrameFlagBits::Resize);
+            p.info.width=w;p.info.height=h;p.info.displayAspect=double(w)/h;
+        }
         if(p.wasWaiting||p.lastPts&&pts-p.lastPts>std::max<int64_t>(p.interval()*2,1000000))packet.flags|=uint32_t(pipeline::FrameFlagBits::Discontinuity);
         packet.hardwareSurface={slot->consumer.Get(),0,p.fence.Get(),p.signal,w,h};
         p.nextPts=std::max(p.nextPts+p.interval(),pts+p.interval()/2);

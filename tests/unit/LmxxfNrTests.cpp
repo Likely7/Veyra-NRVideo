@@ -19,6 +19,24 @@ int main(){
     pipeline::LmxxfNrBackend nr;
     check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x10DE),"NVIDIA path does not load AMD runtime");
     check(!nr.open(directory/"missing",ctx.device(),ctx.directQueue(),0x1002),"missing runtime refuses NR");
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"wrong-model");
+    check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"swapped model module refuses NR");
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"missing-small");
+    check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"missing Small assets cannot silently fall back");
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",nullptr);
+    pipeline::LmxxfNrBackend original;
+    check(nr.open(directory,ctx.device(),ctx.directQueue(),0x1002,true)&&
+        original.open(directory,ctx.device(),ctx.directQueue(),0x1002,false),"Small and Original sessions coexist");
+    original.close();nr.close();
+    const auto injectedModule=LoadLibraryExW((directory/L"LmxxfNrRuntime.dll").c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if(!injectedModule)return 2;
+    const auto resetInjectedControls=reinterpret_cast<void(*)()>(GetProcAddress(injectedModule,"VeyraTestLmxxfResetControls"));
+    if(!resetInjectedControls){FreeLibrary(injectedModule);return 2;}
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"hidden-config");
+    check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"runtime config cannot enable hidden history after host preflight");
+    resetInjectedControls();FreeLibrary(injectedModule);
+    _putenv_s("DLSS5_TEMPORAL_MODE","");
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",nullptr);
     SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"bad-table");
     check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"incomplete ABI is rejected");
     SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",nullptr);

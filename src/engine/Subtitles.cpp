@@ -1,5 +1,6 @@
 #include "veyra/engine/Subtitles.h"
 #include "veyra/engine/SubtitleCacheBudget.h"
+#include "veyra/media/NetworkInput.h"
 #include <cstdlib>
 #include "veyra/Log.h"
 
@@ -407,14 +408,121 @@ std::vector<uint32_t> SubtitleBitmap::pixels()const{
     return result;
 }
 
+// ---------------------------------------------------------------------------------------------
+// A file on a server (UNC share / mapped drive) read by the subtitle scan (#48 C5). Playback reads
+// the same file through the shared demux session, so the scan must not compete with it: the caller
+// opens the file only after playback has its start buffer, every read waits while the gate is false
+// (playback short of data), and reads are paced to a bounded rate. Container demuxers read every
+// block of the file to find subtitle packets, so this is the whole file's worth of traffic.
+// VEYRA_TEST_SLOW_IO=<MB/s>[,<ms per read>] slows it like a slow NAS, as it does for playback.
+// ---------------------------------------------------------------------------------------------
+namespace {
+constexpr double kServerScanMBps=40.0;
+std::atomic<uint64_t> g_serverScanBytes{0};
+bool serverFilePath(const std::wstring& path){
+    static const bool forced=GetEnvironmentVariableW(L"VEYRA_TEST_FORCE_REMOTE_PATH",nullptr,0)>0;   // tests: a local file stands in for a NAS
+    return forced||media::remoteMediaPath(path);
+}
+struct ScanAvio {
+    static constexpr int kBuffer=64*1024;
+    HANDLE handle=INVALID_HANDLE_VALUE;AVIOContext* avio=nullptr;
+    const std::atomic<bool>* gate=nullptr;std::stop_token stop;
+    int64_t size=-1;double mbps=kServerScanMBps;int latencyMs=0;int64_t startNs=0;double paced=0;
+    ScanAvio()=default;
+    ScanAvio(const ScanAvio&)=delete;ScanAvio& operator=(const ScanAvio&)=delete;
+    ~ScanAvio(){
+        if(avio){av_freep(&avio->buffer);avio_context_free(&avio);}
+        if(handle!=INVALID_HANDLE_VALUE)CloseHandle(handle);
+    }
+    static int64_t nowNs(){return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+    bool open(const std::wstring& file,const std::atomic<bool>* readGate,std::stop_token token){
+        gate=readGate;stop=std::move(token);
+        handle=CreateFileW(file.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL|FILE_FLAG_SEQUENTIAL_SCAN,nullptr);
+        if(handle==INVALID_HANDLE_VALUE)return false;
+        LARGE_INTEGER length{};if(GetFileSizeEx(handle,&length))size=length.QuadPart;
+        wchar_t text[64]{};
+        if(const DWORD n=GetEnvironmentVariableW(L"VEYRA_TEST_SLOW_IO",text,64);n>0&&n<64){
+            wchar_t* end=nullptr;const double slow=std::wcstod(text,&end);
+            if(slow>0)mbps=std::min(mbps,slow);
+            if(end&&*end==L',')latencyMs=std::max(0,_wtoi(end+1));
+        }
+        auto* buffer=static_cast<uint8_t*>(av_malloc(kBuffer));
+        if(!buffer)return false;
+        avio=avio_alloc_context(buffer,kBuffer,0,this,&ScanAvio::readPacket,nullptr,&ScanAvio::seek);
+        if(!avio){av_free(buffer);return false;}
+        startNs=nowNs();
+        return true;
+    }
+    // False once the scan is cancelled.
+    bool pause(int ms)const{
+        for(int waited=0;waited<ms;waited+=10){
+            if(stop.stop_requested())return false;
+            Sleep(DWORD(std::min(10,ms-waited)));
+        }
+        return !stop.stop_requested();
+    }
+    bool waitGate()const{
+        while(gate&&!gate->load()){
+            if(stop.stop_requested())return false;
+            Sleep(50);
+        }
+        return !stop.stop_requested();
+    }
+    static int readPacket(void* opaque,uint8_t* buffer,int size){
+        auto& self=*static_cast<ScanAvio*>(opaque);
+        if(!self.waitGate())return AVERROR_EXIT;
+        if(self.latencyMs>0&&!self.pause(self.latencyMs))return AVERROR_EXIT;
+        DWORD got=0;
+        if(!ReadFile(self.handle,buffer,DWORD(std::min(size,kBuffer)),&got,nullptr))return AVERROR(EIO);
+        if(got==0)return AVERROR_EOF;
+        g_serverScanBytes.fetch_add(got);
+        // Pacing: the bytes read so far may not run ahead of the allowed rate; idle time earns at most a second.
+        self.paced+=got;
+        const double allowed=self.paced/(self.mbps*1048576.0);
+        const double elapsed=double(nowNs()-self.startNs)/1e9;
+        if(allowed>elapsed&&!self.pause(int((allowed-elapsed)*1000.0)))return AVERROR_EXIT;
+        if(elapsed>allowed+1.0){self.startNs=nowNs();self.paced=0;}
+        return int(got);
+    }
+    static int64_t seek(void* opaque,int64_t offset,int whence){
+        auto& self=*static_cast<ScanAvio*>(opaque);
+        if(whence&AVSEEK_SIZE)return self.size;
+        whence&=~AVSEEK_FORCE;
+        if(self.latencyMs>0)self.pause(self.latencyMs);
+        LARGE_INTEGER target{},result{};
+        target.QuadPart=offset;
+        const DWORD method=whence==SEEK_SET?FILE_BEGIN:whence==SEEK_CUR?FILE_CURRENT:FILE_END;
+        if(!SetFilePointerEx(self.handle,target,&result,method))return AVERROR(EIO);
+        return result.QuadPart;
+    }
+};
+
+} // namespace
+
 static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& path,std::stop_token stop,
-    const std::function<void(const std::vector<SubtitleTrack>&)>& metadata,const AVInputFormat* format=nullptr){
+    const std::function<void(const std::vector<SubtitleTrack>&)>& metadata,const AVInputFormat* format=nullptr,
+    const std::atomic<bool>* serverGate=nullptr){
     std::vector<SubtitleTrack> tracks;
     if(stop.stop_requested())return tracks;
     const auto started=std::chrono::steady_clock::now();
+    ScanAvio serverFile;   // outlives the demuxer below (members are released in reverse order)
+    if(serverGate){
+        // Deferred: the server is not touched until playback has its buffer.
+        while(!serverGate->load()){
+            if(stop.stop_requested())return tracks;
+            Sleep(100);
+        }
+        log::info("subtitle",std::format("server file scan starts (playback buffered) file={} rate<={:.0f}MB/s",
+            utf8(std::filesystem::path(path).filename().wstring()),kServerScanMBps));
+        if(!serverFile.open(path,serverGate,stop)){
+            log::warn("subtitle",std::format("server file open failed file={}",utf8(std::filesystem::path(path).filename().wstring())));
+            return tracks;
+        }
+    }
     AVFormatContext* input=avformat_alloc_context();
     if(!input)return tracks;
     input->interrupt_callback={[](void* opaque){return static_cast<std::stop_token*>(opaque)->stop_requested()?1:0;},&stop};
+    if(serverGate){input->pb=serverFile.avio;input->flags|=AVFMT_FLAG_CUSTOM_IO;}
     struct InputCleanup {AVFormatContext*& input;~InputCleanup(){avformat_close_input(&input);}} cleanup{input};
     const auto utf8Path=utf8(path);
     const int openResult=avformat_open_input(&input,utf8Path.c_str(),format,nullptr);
@@ -646,9 +754,12 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
 }
 
 std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,std::stop_token stop,
-    const std::function<void(const std::vector<SubtitleTrack>&)>& metadata){
-    return loadDemuxedSubtitleTracks(path,stop,metadata);
+    const std::function<void(const std::vector<SubtitleTrack>&)>& metadata,const std::atomic<bool>* serverGate){
+    return loadDemuxedSubtitleTracks(path,stop,metadata,nullptr,serverGate);
 }
+
+bool subtitleServerFile(const std::wstring& path){return serverFilePath(path);}
+uint64_t subtitleServerScanBytes(){return g_serverScanBytes.load();}
 
 std::vector<SubtitleTrack> loadExternalSubtitleTracks(const std::wstring& path,std::stop_token stop,
     const std::function<void(const std::vector<SubtitleTrack>&)>& metadata){
@@ -719,6 +830,7 @@ struct SubtitleLoader::Impl {
     bool requested=false;
     bool pendingExternal=false;
     std::stop_source cancel;
+    std::shared_ptr<const std::atomic<bool>> gate;   // see setReadGate
     std::optional<Result> ready;
     std::jthread worker;
     Impl():worker([this](std::stop_token shutdown){
@@ -727,6 +839,7 @@ struct SubtitleLoader::Impl {
             if(!wake.wait(lock,shutdown,[&]{return requested;}))break;
             const auto path=std::move(pending);const auto id=generation;const auto stop=cancel.get_token();
             const bool externalFile=pendingExternal;requested=false;
+            const auto readGate=gate;
             lock.unlock();
             auto publish=[&](std::vector<SubtitleTrack> tracks,bool complete){
                 std::lock_guard guard(mutex);
@@ -748,7 +861,9 @@ struct SubtitleLoader::Impl {
                     external=std::move(tracks);break;
                 }
                 if(!external.empty())publish(external,false);
-                auto embedded=loadEmbeddedSubtitleTracks(path,stop,[&](const auto& tracks){auto listing=external;listing.insert(listing.end(),tracks.begin(),tracks.end());publish(std::move(listing),false);});
+                // A file on a server that playback is reading too: deferred and paced (#48 C5).
+                const std::atomic<bool>* serverGate=readGate&&serverFilePath(path)?readGate.get():nullptr;
+                auto embedded=loadEmbeddedSubtitleTracks(path,stop,[&](const auto& tracks){auto listing=external;listing.insert(listing.end(),tracks.begin(),tracks.end());publish(std::move(listing),false);},serverGate);
                 for(auto& track:embedded)external.push_back(std::move(track));
                 publish(std::move(external),true);
             }catch(const std::exception& e){log::error("subtitle",std::format("loader failed: {}",e.what()));publish({},true);}
@@ -758,6 +873,7 @@ struct SubtitleLoader::Impl {
 };
 SubtitleLoader::SubtitleLoader():p_(std::make_unique<Impl>()){}
 SubtitleLoader::~SubtitleLoader()=default;
+void SubtitleLoader::setReadGate(std::shared_ptr<const std::atomic<bool>> gate){std::lock_guard lock(p_->mutex);p_->gate=std::move(gate);}
 uint64_t SubtitleLoader::request(std::wstring path){return request(std::move(path),false);}
 uint64_t SubtitleLoader::requestFile(std::wstring path){return request(std::move(path),true);}
 uint64_t SubtitleLoader::request(std::wstring path,bool external){

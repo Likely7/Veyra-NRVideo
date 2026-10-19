@@ -86,8 +86,13 @@ public:
     bool open(BitstreamKind kind, bool iec61937 = false);
     // Feeds raw bytes from the capture endpoint; decoded interleaved float
     // samples are appended to `out`. Returns false only on a hard failure, which
-    // is also stored in lastError().
+    // is also stored in lastError(). The AC-3 parser holds a complete frame
+    // until the next frame header arrives, so this path is one frame behind.
     bool push(const uint8_t* data, size_t bytes, std::vector<float>& out);
+    // Complete codec packet, already delimited by the caller (e.g. an IEC
+    // payload, which may aggregate frames). It does not wait for the next
+    // packet's header. Do not mix this with push() without reset().
+    bool pushFramed(const uint8_t* data, size_t bytes, std::vector<float>& out);
     // Drops codec state (seek / discontinuity): the next bytes start a new
     // stream, which is what happens when the console switches audio format.
     void reset();
@@ -95,6 +100,8 @@ public:
     bool opened() const;
     unsigned channels() const;
     unsigned sampleRate() const;
+    uint32_t channelMask() const;
+    uint64_t formatRevision() const;
     uint64_t decodedFrames() const;
     uint64_t decodedBytesIn() const;
     const std::string& lastError() const;

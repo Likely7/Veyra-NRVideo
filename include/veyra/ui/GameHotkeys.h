@@ -72,10 +72,13 @@ public:
     }
     void panelOwned(bool on) { panelOwned_.store(on); }
     bool running() const { return running_.load(); }
+    DWORD takeDeliveryError() { return deliveryError_.exchange(0); }
     bool current(LPARAM epoch) const { return running() && uint64_t(epoch) == epoch_.load(); }
     bool start(HWND target) {
         if (running()) return true;
         stop(); target_ = target;
+        deliveryError_.store(0);
+        if (!IsWindow(target_)) return false;
         stopEvent_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
         if (!stopEvent_) return false;
         std::promise<bool> ready; auto initialized = ready.get_future();
@@ -111,6 +114,7 @@ private:
     HANDLE stopEvent_ = nullptr;
     std::thread thread_;
     std::atomic<bool> running_{false}, panelOwned_{false};
+    std::atomic<DWORD> deliveryError_{0};
     std::atomic<uint64_t> config_{uint64_t(VK_HOME) | (uint64_t(VK_HOME) << 16) | (3ull << 24)}, epoch_{0};
     GameKeyState state_;
     static inline thread_local GameHotkeyListener* self_ = nullptr;
@@ -124,7 +128,12 @@ private:
                 const GameKey panel{unsigned(config & 255), unsigned((config >> 8) & 15)};
                 const GameKey exit{unsigned((config >> 16) & 255), unsigned((config >> 24) & 15)};
                 const auto result = self.state_.input(key->vkCode, down, panel, exit, self.panelOwned_.load());
-                if (result.action >= 0 && epoch == self.epoch_.load()) PostMessageW(self.target_, message, WPARAM(result.action), LPARAM(epoch));
+                if (result.action >= 0 && epoch == self.epoch_.load() &&
+                    !PostMessageW(self.target_, message, WPARAM(result.action), LPARAM(epoch))) {
+                    const DWORD error = GetLastError();
+                    self.deliveryError_.store(error ? error : ERROR_INVALID_WINDOW_HANDLE);
+                    return CallNextHookEx(nullptr, code, wp, lp);
+                }
                 if (result.consume) return 1;
             }
         }

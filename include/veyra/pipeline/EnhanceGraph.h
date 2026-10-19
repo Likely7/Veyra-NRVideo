@@ -4,6 +4,9 @@
 #include "veyra/engine/BackendRecovery.h"
 #include "veyra/pipeline/ColorGradeTables.h"
 #include "veyra/pipeline/ColorGradeInstance.h"
+#include "veyra/pipeline/AntiAliasPass.h"
+#include "veyra/pipeline/BeautyPass.h"
+#include "veyra/beauty/FaceTracker.h"
 #include "veyra/pipeline/NrInstance.h"
 #include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/pipeline/NrTemporalPass.h"
@@ -169,6 +172,25 @@ struct EnhanceGraphDesc {
     // in order on RGBA16F textures; never on a CPU copy of a video frame.
     std::array<engine::ColorSettings,engine::kMaxColorInstances-1> additionalColors{};
     uint32_t additionalColorCount=0;
+    // Spatial anti-aliasing by parameter ordinal (0 = list card / first node). Only
+    // instances with a step in fixedExecutionPlan run; the settings carry the values.
+    std::array<engine::AntiAliasSettings,engine::kMaxAntiAliasInstances> antiAlias{};
+    // The anti-aliasing executor is compiled into this build (EnhanceGraph).
+    static constexpr bool antiAliasExecutor=true;
+    bool antiAliasActive() const {
+        for(const auto& a:antiAlias)if(a.enabled)return true;
+        return false;
+    }
+    // Beauty nodes by parameter ordinal, plus the chain's shared face detection.
+    std::array<engine::BeautySettings,engine::kMaxBeautyInstances> beauty{};
+    engine::BeautyDetection beautyDetection{};
+    bool beautyRequireDetector=false;    // export: a missing face detector fails the job before it starts
+    std::wstring beautyModelPath;        // empty: the shipped YuNet file (beauty::locateFaceModel)
+    static constexpr bool beautyExecutor=true;
+    bool beautyActive() const {
+        for(const auto& b:beauty)if(b.enabled)return true;
+        return false;
+    }
     // Production builders compile once and use this plan for NR resource
     // sizes and node tail Color routing after the fixed base block. This is
     // NOT an arbitrary-order GPU dispatcher. Direct
@@ -237,7 +259,40 @@ struct EnhanceGraphDesc {
         return nrBeforeSr?Extent{sourceWidth,sourceHeight}:Extent{workWidth,workHeight};
     }
     bool finalNrAfterSr() const { return !nrBeforeSr||splitNrAcrossSr(); }
-    bool preSrColor(uint32_t parameter) const {
+    // ---- insertion slots -------------------------------------------------------
+    // Same-size passes (Color, anti-aliasing, beauty) run in one of these slots, in
+    // plan order. A node chain places each step by its neighbours, with the exact
+    // rules the Color-only slots had, a neighbouring same-size pass of any kind
+    // counting as contiguous. List mode places them by type. Ingress is the fused /
+    // in-place grade of the input conversion (Color only); SourcePost runs right
+    // after it at source size, before any enlargement or NR.
+    enum class PassSlot : uint8_t { None, Ingress, SourcePost, PreSr, PreNr, InterNr, Tail };
+    static constexpr bool samePass(engine::EffectType type){
+        return type==engine::EffectType::Color||type==engine::EffectType::AntiAliasing||type==engine::EffectType::Beauty;
+    }
+    uint32_t planStepOf(engine::EffectType type,uint32_t parameter) const {
+        if(!fixedExecutionPlan)return engine::kMaxChainNodes;
+        const auto& plan=*fixedExecutionPlan;
+        for(uint32_t i=0;i<plan.stepCount&&i<plan.steps.size();++i)
+            if(plan.steps[i].type==type&&plan.steps[i].parameterIndex==parameter)return i;
+        return engine::kMaxChainNodes;
+    }
+    // A node-chain step in front of every SR / NR / protection step. Anti-aliasing
+    // and beauty there run at source size after the input conversion; a Color there
+    // joins them once a non-Color pass precedes it (it cannot be fused before it).
+    bool sourcePostStep(uint32_t s) const {
+        if(!runtimeNodeOrder||!fixedExecutionPlan)return false;
+        using engine::EffectType;
+        const auto& plan=*fixedExecutionPlan;bool afterPass=false;
+        for(uint32_t i=0;i<plan.stepCount&&i<plan.steps.size();++i){
+            const auto type=plan.steps[i].type;
+            if(type==EffectType::SuperResolution||type==EffectType::NrEnhance||type==EffectType::Protection)return false;
+            if(i==s)return samePass(type)&&(type!=EffectType::Color||afterPass);
+            if(samePass(type)&&type!=EffectType::Color)afterPass=true;
+        }
+        return false;
+    }
+    bool preSrStep(uint32_t s) const {
         if(!runtimeNodeOrder||!fixedExecutionPlan||!nrBeforeSr)return false;
         using engine::EffectType;
         const auto& plan=*fixedExecutionPlan;
@@ -246,17 +301,17 @@ struct EnhanceGraphDesc {
             const auto& step=plan.steps[i];
             if(step.type==EffectType::SuperResolution)return false;
             if(step.type==EffectType::NrEnhance)afterNr=true;
-            if(step.type!=EffectType::Color||step.parameterIndex!=parameter)continue;
-            if(!afterNr)return false;
+            if(i!=s)continue;
+            if(!samePass(step.type)||!afterNr)return false;
             for(uint32_t j=i+1;j<plan.stepCount&&j<plan.steps.size();++j){
                 if(plan.steps[j].type==EffectType::SuperResolution)return true;
-                if(plan.steps[j].type!=EffectType::Color)break;
+                if(!samePass(plan.steps[j].type))break;
             }
             return false;
         }
         return false;
     }
-    bool preNrColor(uint32_t parameter) const {
+    bool preNrStep(uint32_t s) const {
         if(!runtimeNodeOrder||!fixedExecutionPlan||(nrBeforeSr&&!splitNrAcrossSr()))return false;
         using engine::EffectType;
         bool afterSr=false;
@@ -264,18 +319,18 @@ struct EnhanceGraphDesc {
             const auto& step=fixedExecutionPlan->steps[i];
             if(step.type==EffectType::NrEnhance&&afterSr)return false;
             if(step.type==EffectType::SuperResolution)afterSr=true;
-            if(step.type!=EffectType::Color||step.parameterIndex!=parameter)continue;
-            if(!afterSr)return false;
+            if(i!=s)continue;
+            if(!samePass(step.type)||!afterSr)return false;
             for(uint32_t j=i+1;j<fixedExecutionPlan->stepCount&&j<fixedExecutionPlan->steps.size();++j)
                 if(fixedExecutionPlan->steps[j].type==EffectType::NrEnhance)return true;
             return false;
         }
         return false;
     }
-    // Compact NR resource ordinal consuming this grade. Only a contiguous
-    // NR -> [Protection] -> Color(s) -> NR segment is admitted here.
+    // Compact NR resource ordinal consuming this step. Only a contiguous
+    // NR -> [Protection] -> same-size pass(es) -> NR segment is admitted here.
     // Crossing SR needs a separate boundary, not a relaxed rank check.
-    uint32_t interNrColorTarget(uint32_t parameter) const {
+    uint32_t interNrStepTarget(uint32_t s) const {
         if(!runtimeNodeOrder||!fixedExecutionPlan)return engine::kMaxNrInstances;
         using engine::EffectType;
         const auto& plan=*fixedExecutionPlan;
@@ -283,31 +338,28 @@ struct EnhanceGraphDesc {
         for(uint32_t i=0;i<plan.stepCount&&i<plan.steps.size();++i){
             const auto& step=plan.steps[i];
             if(step.type==EffectType::NrEnhance)afterNr=true;
-            else if(step.type!=EffectType::Color&&
+            else if(!samePass(step.type)&&
                     !(step.type==EffectType::Protection&&interNrProtectionTarget()<engine::kMaxNrInstances))afterNr=false;
-            if(step.type!=EffectType::Color||step.parameterIndex!=parameter)continue;
-            if(!afterNr)return engine::kMaxNrInstances;
+            if(i!=s)continue;
+            if(!samePass(step.type)||!afterNr)return engine::kMaxNrInstances;
             for(uint32_t j=i+1;j<plan.stepCount&&j<plan.steps.size();++j){
                 const auto& next=plan.steps[j];
                 if(next.type==EffectType::NrEnhance)return next.resourceIndex;
-                if(next.type!=EffectType::Color)break;
+                if(!samePass(next.type))break;
             }
             return engine::kMaxNrInstances;
         }
         return engine::kMaxNrInstances;
     }
-    bool nodeColor(uint32_t parameter) const {
-        return preNrColor(parameter)||preSrColor(parameter)||tailColor(parameter)||interNrColorTarget(parameter)<engine::kMaxNrInstances;
-    }
-    bool tailColor(uint32_t parameter) const {
+    bool tailStep(uint32_t s) const {
         if(!runtimeNodeOrder||!fixedExecutionPlan)return false;
         using engine::EffectType;
         bool afterBase=false;
         for(uint32_t i=0;i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i){
             const auto& step=fixedExecutionPlan->steps[i];
             if(step.type==EffectType::SuperResolution||step.type==EffectType::NrEnhance||step.type==EffectType::Protection)afterBase=true;
-            if(step.type!=EffectType::Color||step.parameterIndex!=parameter)continue;
-            if(!afterBase)return false;
+            if(i!=s)continue;
+            if(!samePass(step.type)||!afterBase)return false;
             for(uint32_t j=i+1;j<fixedExecutionPlan->stepCount&&j<fixedExecutionPlan->steps.size();++j){
                 const auto type=fixedExecutionPlan->steps[j].type;
                 if(type==EffectType::SuperResolution||type==EffectType::NrEnhance||type==EffectType::Protection)return false;
@@ -315,6 +367,46 @@ struct EnhanceGraphDesc {
             return true;
         }
         return false;
+    }
+    // Where a plan step runs. `interTarget` receives the NR resource of an InterNr step.
+    bool sourcePostActive() const {
+        // Without a compiled plan (tiled full-resolution images) enabled
+        // anti-aliasing instances run at source size, like the list chain.
+        if(!fixedExecutionPlan)return antiAliasActive();
+        for(uint32_t i=0;i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i)
+            if(slotOfStep(i)==PassSlot::SourcePost)return true;
+        return false;
+    }
+    PassSlot slotOfStep(uint32_t s,uint32_t* interTarget=nullptr) const {
+        using engine::EffectType;
+        if(!fixedExecutionPlan||s>=fixedExecutionPlan->stepCount||s>=fixedExecutionPlan->steps.size())return PassSlot::None;
+        const auto type=fixedExecutionPlan->steps[s].type;
+        if(!samePass(type))return PassSlot::None;
+        if(!runtimeNodeOrder){
+            // List mode: the grade is fused into the input conversion, anti-aliasing
+            // follows at source size, beauty follows the whole NR group.
+            if(type==EffectType::Color)return PassSlot::Ingress;
+            if(type==EffectType::AntiAliasing)return PassSlot::SourcePost;
+            return nrBeforeSr?PassSlot::PreSr:PassSlot::Tail;
+        }
+        if(sourcePostStep(s))return PassSlot::SourcePost;
+        if(preNrStep(s))return PassSlot::PreNr;
+        if(preSrStep(s))return PassSlot::PreSr;
+        if(const auto target=interNrStepTarget(s);target<engine::kMaxNrInstances){if(interTarget)*interTarget=target;return PassSlot::InterNr;}
+        if(tailStep(s))return PassSlot::Tail;
+        return type==EffectType::Color?PassSlot::Ingress:PassSlot::None;
+    }
+    // Color wrappers (parameter ordinal), as before.
+    bool preSrColor(uint32_t parameter) const { return preSrStep(planStepOf(engine::EffectType::Color,parameter)); }
+    bool preNrColor(uint32_t parameter) const { return preNrStep(planStepOf(engine::EffectType::Color,parameter)); }
+    uint32_t interNrColorTarget(uint32_t parameter) const { return interNrStepTarget(planStepOf(engine::EffectType::Color,parameter)); }
+    bool tailColor(uint32_t parameter) const { return tailStep(planStepOf(engine::EffectType::Color,parameter)); }
+    bool sourcePostColor(uint32_t parameter) const { return sourcePostStep(planStepOf(engine::EffectType::Color,parameter)); }
+    // A Color that runs as a node pass (its own texture) instead of the fused /
+    // in-place input grade.
+    bool nodeColor(uint32_t parameter) const {
+        return preNrColor(parameter)||preSrColor(parameter)||tailColor(parameter)||sourcePostColor(parameter)||
+            interNrColorTarget(parameter)<engine::kMaxNrInstances;
     }
     std::string_view validateFixedExecutionPlan() const {
         if(!fixedExecutionPlanError.empty())return fixedExecutionPlanError;
@@ -335,21 +427,43 @@ struct EnhanceGraphDesc {
             const auto& step=plan.steps[i];const auto type=size_t(step.type);
             if(type>=counts.size())return "unknown fixed execution stage";
             int rank=int(type);
+            if(step.type==EffectType::AntiAliasing){
+                if(step.parameterIndex>=antiAlias.size()||!antiAlias[step.parameterIndex].enabled)
+                    return "anti-aliasing parameter index/enabled mismatch";
+                if(!antiAliasExecutor)return "anti-aliasing is not available in this build";
+            }
+            if(step.type==EffectType::Beauty){
+                if(step.parameterIndex>=beauty.size()||!beauty[step.parameterIndex].enabled)
+                    return "beauty parameter index/enabled mismatch";
+                if(!beautyExecutor)return "beauty nodes are not available in this build";
+            }
+            // Same-size passes take the rank of the slot they run in.
+            PassSlot passSlot=PassSlot::None;
+            if(samePass(step.type)){
+                passSlot=slotOfStep(i);
+                if(passSlot==PassSlot::None)return "same-size node position is not supported by the fixed dispatcher";
+                // List mode: anti-aliasing runs at source size first; the beauty group
+                // follows the whole NR group (with its protection). Node slots below.
+                if(step.type==EffectType::AntiAliasing)rank=0;
+                if(step.type==EffectType::Beauty)rank=passSlot==PassSlot::SourcePost?0:int(EffectType::Protection);
+            }
             if(nrBeforeSr){
                 if(step.type==EffectType::NrEnhance)rank=1;
                 if(step.type==EffectType::Protection)rank=2;
                 if(step.type==EffectType::SuperResolution)rank=3;
+                if(step.type==EffectType::Beauty&&!runtimeNodeOrder)rank=2;   // right after the NR group
             }
             if(runtimeNodeOrder){
                 if(step.type==EffectType::Protection&&interProtection)rank=nrBeforeSr?1:2;
-                if(step.type==EffectType::Color){
-                    if(step.parameterIndex>additionalColorCount||step.parameterIndex>=engine::kMaxColorInstances||
-                       !(step.parameterIndex?additionalColors[step.parameterIndex-1].enabled:color.enabled))
-                        return "node Color parameter index/enabled mismatch";
-                    if(tailColor(step.parameterIndex))rank=4;
-                    else if(preNrColor(step.parameterIndex))rank=2;
-                    else if(preSrColor(step.parameterIndex))rank=3;
-                    else if(interNrColorTarget(step.parameterIndex)<engine::kMaxNrInstances)rank=nrBeforeSr?1:2;
+                if(step.type==EffectType::Color&&
+                   (step.parameterIndex>additionalColorCount||step.parameterIndex>=engine::kMaxColorInstances||
+                    !(step.parameterIndex?additionalColors[step.parameterIndex-1].enabled:color.enabled)))
+                    return "node Color parameter index/enabled mismatch";
+                if(samePass(step.type)){
+                    if(passSlot==PassSlot::Tail)rank=4;
+                    else if(passSlot==PassSlot::PreNr)rank=2;
+                    else if(passSlot==PassSlot::PreSr)rank=3;
+                    else if(passSlot==PassSlot::InterNr)rank=nrBeforeSr?1:2;
                 }
                 if(step.type==EffectType::VideoHdr)rank=5;
                 if(step.type==EffectType::FrameGeneration)rank=6;
@@ -361,11 +475,11 @@ struct EnhanceGraphDesc {
                 }
                 if(step.type==EffectType::SuperResolution){rank=3;afterSr=true;}
                 if(step.type==EffectType::NrEnhance)rank=afterSr?4:1;
-                if(step.type==EffectType::Color){
-                    if(tailColor(step.parameterIndex))rank=6;
-                    else if(preNrColor(step.parameterIndex))rank=4;
-                    else if(preSrColor(step.parameterIndex))rank=2;
-                    else if(interNrColorTarget(step.parameterIndex)<engine::kMaxNrInstances)rank=afterSr?4:1;
+                if(samePass(step.type)){
+                    if(passSlot==PassSlot::Tail)rank=6;
+                    else if(passSlot==PassSlot::PreNr)rank=4;
+                    else if(passSlot==PassSlot::PreSr)rank=2;
+                    else if(passSlot==PassSlot::InterNr)rank=afterSr?4:1;
                 }
                 if(step.type==EffectType::VideoHdr)rank=7;
                 if(step.type==EffectType::FrameGeneration)rank=8;
@@ -627,9 +741,21 @@ public:
     // does not match the content domain). The engine surfaces this in the
     // status panel so the refusal is visible, not only logged.
     const std::wstring& colorLutNotice() const { return colorLutNotice_; }
+    // Beauty nodes: a problem that disables them (shown, never only logged), and the
+    // faces the shared tracker found a few frames ago (status only; the picture
+    // uses this frame's GPU result).
+    const std::wstring& beautyNotice() const { return beautyNotice_; }
+    bool beautyNodesActive() const { return beautyNodesActive_; }
+    bool beautyDetectorReady() const { return faceTracker_&&faceTracker_->ready(); }
+    uint32_t beautyFaceCount() const { return faceTracker_?faceTracker_->faceCount():0; }
+    uint64_t beautyDetections() const { return faceTracker_?faceTracker_->detections():0; }
+    // Tests: the tracked faces (non-pixel SRV state between frames).
+    ID3D12Resource* beautyFacesBuffer() const { return beautyNodesActive_?beautyFaces():nullptr; }
+    ID3D12Resource* beautyShapesBuffer() const { return beautyNodesActive_?beautyShapes():nullptr; }
+    bool beautyMeshReady() const { return faceTracker_&&faceTracker_->meshReady(); }
     // True when the colour stage exists in this graph (master switch on and not
     // neutral). The encoder uses it to dither its 8/10-bit conversion output.
-    bool colorGradeActive() const { return colorActive_||additionalColorActiveCount_!=0||tailColorActiveCount_!=0||preNrColorActiveCount_!=0||preSrColorActiveCount_!=0||interNrColorActiveCount_!=0; }
+    bool colorGradeActive() const { return colorActive_||additionalColorActiveCount_!=0||tailColorActiveCount_!=0||preNrColorActiveCount_!=0||preSrColorActiveCount_!=0||interNrColorActiveCount_!=0||sourcePostColorActiveCount_!=0; }
     // Effective dither step for the 8/10-bit output paths (0 = no dither).
     float outputDitherStep() const;
     // Isolated diagnostics only: existing constant guidance, borrowed lifetime.
@@ -807,22 +933,73 @@ private:
     // resource ordinal. Only enabled non-ingress nodes allocate resources.
     std::array<std::unique_ptr<ColorGradeInstance>,engine::kMaxColorInstances> nodeColorInstances_{};
     std::array<ComPtr<ID3D12Resource>,engine::kMaxColorInstances> nodeColorOutputs_{};
-    unsigned tailColorActiveCount_=0,preNrColorActiveCount_=0,preSrColorActiveCount_=0,interNrColorActiveCount_=0;
+    unsigned tailColorActiveCount_=0,preNrColorActiveCount_=0,preSrColorActiveCount_=0,interNrColorActiveCount_=0,sourcePostColorActiveCount_=0;
+    // Same-size passes per insertion slot, in plan order (EnhanceGraphDesc::slotOfStep).
+    // Each pass reads the previous pass's output; the slot output is the last one.
+    struct SlotPass {
+        uint32_t step=0;engine::EffectType type=engine::EffectType::Color;uint32_t parameter=0;ID3D12Resource* output=nullptr;
+        uint32_t width=0,height=0,resource=0; // output extent; resource ordinal of the plan step
+    };
+    std::vector<SlotPass> sourcePostPasses_,preSrPasses_,preNrPasses_,tailPasses_;
+    std::array<std::vector<SlotPass>,engine::kMaxNrInstances> interNrPasses_{};
+    ID3D12Resource* sourcePostOutput_=nullptr; // source size, after the input conversion
+    bool slotPassesActive() const {
+        if(!sourcePostPasses_.empty()||!preSrPasses_.empty()||!preNrPasses_.empty()||!tailPasses_.empty())return true;
+        for(const auto& passes:interNrPasses_)if(!passes.empty())return true;
+        return false;
+    }
+    ID3D12Resource* chainSlotViews(const std::vector<SlotPass>& passes,ID3D12Resource* input,const char* where);
+    bool dispatchSlotPasses(ID3D12GraphicsCommandList* list,const std::vector<SlotPass>& passes,unsigned slot,
+                            const char* where,bool log,bool reset);
+    // Indexed by anti-aliasing parameter ordinal, like the node Color instances.
+    std::array<std::unique_ptr<AntiAliasPass>,engine::kMaxAntiAliasInstances> antiAliasPasses_{};
+    std::array<ComPtr<ID3D12Resource>,engine::kMaxAntiAliasInstances> antiAliasOutputs_{};
+    bool createAntiAlias(uint32_t parameter,uint32_t width,uint32_t height);
+    // Beauty nodes by parameter ordinal, plus what they share: the face tracker,
+    // the faces buffer (a zero buffer when the detector is unavailable) and this
+    // frame's original - the picture before every effect node. Without a fused
+    // grade the converted input already is that picture (srcRgba_ / preGradeRgba_
+    // are never written again in the frame); with one, beautyOriginal_ receives an
+    // ungraded conversion on the frames where a node restores faces.
+    std::array<std::unique_ptr<BeautyPass>,engine::kMaxBeautyInstances> beautyPasses_{};
+    std::array<ComPtr<ID3D12Resource>,engine::kMaxBeautyInstances> beautyOutputs_{};
+    bool createBeauty(uint32_t parameter,uint32_t width,uint32_t height);
+    bool createBeautyShared();
+    ID3D12Resource* beautyFaces() const { return faceTracker_&&faceTracker_->ready()?faceTracker_->faces():beautyFacesFallback_.Get(); }
+    ID3D12Resource* beautyShapes() const { return faceTracker_&&faceTracker_->ready()?faceTracker_->shapes():beautyShapesFallback_.Get(); }
+    bool beautyRestoreRequested() const {
+        for(const auto& b:desc_.beauty)if(b.restoreActive())return true;
+        return false;
+    }
+    float beautyMinConfidence() const {
+        float value=0.95f;
+        for(const auto& b:desc_.beauty)if(b.enabled)value=std::min(value,b.minConfidence);
+        return value;
+    }
+    // Re-points one slot pass at a new input (chainSlotViews, NR bypass).
+    void bindSlotPassInput(const SlotPass& pass,ID3D12Resource* input);
+    std::unique_ptr<beauty::FaceTracker> faceTracker_;
+    ComPtr<ID3D12Resource> beautyOriginal_,beautyFacesFallback_,beautyShapesFallback_;
+    ID3D12Resource* beautyOriginalSource_=nullptr;
+    bool beautyNodesActive_=false,beautyOriginalValid_=false,beautyDetectFailureLogged_=false;
+    std::wstring beautyNotice_;
     bool tailColorExecutionLogged_=false,preNrColorExecutionLogged_=false;
     bool preSrColorExecutionLogged_=false;
     bool interNrColorExecutionLogged_=false;
+    bool sourcePostExecutionLogged_=false;
     ID3D12Resource* tailColorOutput_=nullptr; // borrowed from nodeColorOutputs_
     ID3D12Resource* preNrColorOutput_=nullptr;
     ID3D12Resource* preSrColorOutput_=nullptr;
     std::array<ID3D12Resource*,engine::kMaxNrInstances> interNrColorOutputs_{};
-    ID3D12Resource* nrBaseInput() const { return desc_.nrBeforeSr?srcRgba_.Get():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get()); }
+    ID3D12Resource* sourceStageOutput() const { return sourcePostOutput_?sourcePostOutput_:srcRgba_.Get(); }
+    ID3D12Resource* nrBaseInput() const { return desc_.nrBeforeSr?sourceStageOutput():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get()); }
     ID3D12Resource* preSrBaseInput() const {
         if(preSrProtectionRgba_)return preSrProtectionRgba_.Get();
         const auto before=desc_.nrBeforeSrLayerCount();
         return desc_.splitNrAcrossSr()&&before<=nrInstances_.size()?nrInstances_[before-1]->fullTarget():residualRgba_.Get();
     }
     ID3D12Resource* srStageInput() const {
-        return preSrColorOutput_?preSrColorOutput_:(desc_.nrBeforeSr?preSrBaseInput():srcRgba_.Get());
+        return preSrColorOutput_?preSrColorOutput_:(desc_.nrBeforeSr?preSrBaseInput():sourceStageOutput());
     }
     ID3D12Resource* nrLayerBase(size_t layer) const {
         if(layer<interNrColorOutputs_.size()&&interNrColorOutputs_[layer])return interNrColorOutputs_[layer];

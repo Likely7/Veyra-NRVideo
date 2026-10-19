@@ -167,6 +167,8 @@ class QmlPlayerBridge : public QObject {
     // fullscreen picture is click-through and the captured program has the input.
     Q_PROPERTY(bool gameMode READ gameMode NOTIFY gameModeChanged)
     Q_PROPERTY(bool passthroughActive READ passthroughActive NOTIFY gameModeChanged)
+    Q_PROPERTY(bool gameInputActive READ gameInputActive NOTIFY gameModeChanged)
+    Q_PROPERTY(bool gameScaledPreview READ gameScaledPreview NOTIFY gameModeChanged)
     Q_PROPERTY(QRectF gameVideoRect READ gameVideoRect NOTIFY gameModeChanged)
 
     // Subtitles (P4-c): the engine's SubtitleLoader reads the embedded tracks and
@@ -307,6 +309,16 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double nrHoldTolerance READ nrHoldTolerance WRITE setNrHoldTolerance NOTIFY settingsChanged)
     Q_PROPERTY(bool videoHdr READ videoHdr WRITE setVideoHdr NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY videoHdrParamsChanged)
+    // Spatial anti-aliasing (#53): the list card edits the first instance, created
+    // on first use; node cards edit their own node by chain index.
+    // Beauty nodes of the active chain in chain order (list mode: the group's layers).
+    Q_PROPERTY(QVariantList beautyLayers READ beautyLayers NOTIFY beautyChanged)
+    // The chain's shared face detection: quality, maxFaces, stability.
+    Q_PROPERTY(QVariantMap beautyDetection READ beautyDetection NOTIFY beautyChanged)
+    Q_PROPERTY(QString beautyStatus READ beautyStatus NOTIFY snapshotChanged)
+    Q_PROPERTY(bool beautyAnyEnabled READ beautyAnyEnabled NOTIFY beautyChanged)
+    Q_PROPERTY(bool antiAliasEnabled READ antiAliasEnabled WRITE setAntiAliasEnabled NOTIFY antiAliasChanged)
+    Q_PROPERTY(QVariantMap antiAliasParams READ antiAliasParams NOTIFY antiAliasChanged)
     // Custom: static HDR output tuning (globals, every field live).
     Q_PROPERTY(bool hdrCurve READ hdrCurve WRITE setHdrCurve NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap hdrCurveParams READ hdrCurveParams NOTIFY settingsChanged)
@@ -463,6 +475,12 @@ class QmlPlayerBridge : public QObject {
     // A live source (PS5 / capture) that is still opening: what the picture area
     // says meanwhile ("" once it plays or when nothing is opening).
     Q_PROPERTY(QString liveOpeningText READ liveOpeningText NOTIFY snapshotChanged)
+    // Network / server playback (#48): the signal-panel line ("缓冲 18.2 s · 下载 12.4 MB/s · 重连 0"),
+    // whether playback is paused to buffer, and the reason text shown while it is.
+    Q_PROPERTY(bool networkActive READ networkActive NOTIFY snapshotChanged)
+    Q_PROPERTY(bool networkHolding READ networkHolding NOTIFY snapshotChanged)
+    Q_PROPERTY(QString networkSummary READ networkSummary NOTIFY snapshotChanged)
+    Q_PROPERTY(QString networkNotice READ networkNotice NOTIFY snapshotChanged)
     // Protection regions as the engine holds them: [{left,top,right,bottom,ellipse}].
     Q_PROPERTY(QVariantList protectionRegions READ protectionRegions NOTIFY protectionChanged)
     Q_PROPERTY(QString protectionDrawShape READ protectionDrawShape NOTIFY protectionDrawChanged)
@@ -693,6 +711,8 @@ public:
     Q_INVOKABLE bool startScreenCapture();
     bool gameMode() const;
     bool passthroughActive() const;
+    bool gameInputActive() const;
+    bool gameScaledPreview() const;
     QRectF gameVideoRect() const;
     // The Home panel is open: the picture stays on top but takes the input back.
     Q_INVOKABLE void setGamePanelOpen(bool open);
@@ -791,6 +811,9 @@ public:
     Q_INVOKABLE bool presentationOverlayRunning() const;
     Q_INVOKABLE void openFeedbackPage();
     Q_INVOKABLE void openReleasesPage();
+    // 设置 → 赞助作者: opens the author's page for `id` (bilibili, douyin, x, github,
+    // youtube, kofi) in the browser. The addresses live here; any other id does nothing.
+    Q_INVOKABLE bool openSponsorLink(const QString& id);
     QObject* updates() const;
     QVariantList audioDevices() const;
     QVariantList gpuMonitorChoices() const;
@@ -947,6 +970,29 @@ public:
     void syncHdrDisplayProfile();
     QVariantMap videoHdrParams() const;
     Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
+    bool antiAliasEnabled() const;
+    void setAntiAliasEnabled(bool enabled);
+    QVariantMap antiAliasParams() const;
+    Q_INVOKABLE QVariantMap antiAliasParamsAt(int index) const;
+    QVariantList beautyLayers() const;
+    QVariantMap beautyDetection() const;
+    QString beautyStatus() const;
+    // `index` is the chain node index (node mode cards, list layers alike).
+    Q_INVOKABLE QVariantMap beautyParamsAt(int index) const;
+    Q_INVOKABLE bool setBeautyParameterAt(int index, const QString& key, double value);
+    // List mode: a copy right behind the layer; a move within the beauty group.
+    Q_INVOKABLE int duplicateBeautyLayer(int index);
+    Q_INVOKABLE bool moveBeautyLayer(int index, int delta);
+    // natural / light / restore / restoreNatural: the sub-switches and values they set.
+    Q_INVOKABLE bool applyBeautyPreset(int index, const QString& preset);
+    Q_INVOKABLE bool setBeautyDetection(const QString& key, double value);
+    bool beautyAnyEnabled() const;
+    // List group switch: every layer off, and on again the layers that were on.
+    Q_INVOKABLE bool setAllBeautyEnabled(bool enabled);
+    // Back to the defaults (both sub-functions off); the switch stays as it is.
+    Q_INVOKABLE bool resetBeautyLayer(int index);
+    Q_INVOKABLE bool setAntiAliasParameter(const QString& key, double value);
+    Q_INVOKABLE bool setAntiAliasParameterAt(int index, const QString& key, double value);
     int nrStyle() const;
     void setNrStyle(int value);
     double nrIntensity() const;
@@ -1063,6 +1109,10 @@ public:
     QString captureSignalText() const;
     QString captureSignalLevel() const;
     QString liveOpeningText() const;
+    bool networkActive() const;
+    bool networkHolding() const;
+    QString networkSummary() const;
+    QString networkNotice() const;
     Q_INVOKABLE void importPresetDialog();
     Q_INVOKABLE bool importPreset(const QString& path);
     Q_INVOKABLE void exportPresetDialog(int index);
@@ -1304,6 +1354,8 @@ signals:
     // labels or positions; only that group notifies (audit 2026-10-15 B1).
     void nrLayersChanged();
     void videoHdrParamsChanged();
+    void antiAliasChanged();
+    void beautyChanged();
     void colourParamsChanged();
     void protectionChanged();
     void recentFilesChanged();
@@ -1385,7 +1437,7 @@ private:
 #endif
     void queryCapture(int kind, std::wstring device);
     // Opens a device/stream URI (capture, screen) the way openPath opens a file.
-    void openSourceUri(const std::wstring& uri, const std::wstring& label);
+    void openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill = false);
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

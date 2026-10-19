@@ -52,6 +52,33 @@ function(veyra_add_compute_shader target_name shader_name)
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${source}" ${SHADER_INCLUDES})
 endfunction()
 
+# Compiles one compute shader source with preprocessor defines into
+# <binary-dir>/shaders/<output_name>.dxil: several presets of one source (the
+# anti-aliasing quality tiers). Extra arguments are NAME or NAME=VALUE defines.
+function(veyra_add_compute_shader_variant target_name shader_name output_name)
+  veyra_find_dxc(DXC_EXE)
+  veyra_shader_includes(SHADER_INCLUDES)
+  set(source "${CMAKE_CURRENT_SOURCE_DIR}/shaders/${shader_name}.hlsl")
+  set(output "${CMAKE_CURRENT_BINARY_DIR}/shaders/${output_name}.dxil")
+  set(config_flags -O3 -Qstrip_debug -Qstrip_reflect)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(config_flags -Od -Zi -Qembed_debug)
+  endif()
+  set(defines "")
+  foreach(define IN LISTS ARGN)
+    list(APPEND defines "-D${define}")
+  endforeach()
+  add_custom_command(
+    OUTPUT "${output}"
+    COMMAND "${DXC_EXE}" -T cs_6_0 -E main ${config_flags} ${defines}
+            -Fo "${output}" "${source}"
+    DEPENDS "${source}" ${SHADER_INCLUDES}
+    COMMENT "dxc ${shader_name}.hlsl -> ${output_name}.dxil (${CMAKE_BUILD_TYPE})"
+    VERBATIM)
+  add_custom_target(${target_name} DEPENDS "${output}")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${source}" ${SHADER_INCLUDES})
+endfunction()
+
 # Compiles a vertex+pixel shader pair (entry vsMain/psMain) into two DXIL
 # files under <binary-dir>/shaders/. Used by the graphics present path.
 function(veyra_add_graphics_shader_pair target_name shader_name)

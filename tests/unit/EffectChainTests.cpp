@@ -1060,6 +1060,302 @@ static void testNativeVideoSrPolicy(){
     check(!d.enableSr,"DLSS SR keeps skipping a source already at the target");
 }
 
+// E0 (2026-10-18): anti-aliasing / beauty effect types, chains past 16 nodes and
+// the same-size insertion slots shared with Color.
+__declspec(noinline) void testAntiAliasSettingsChain() {
+    using namespace veyra;
+    using namespace veyra::engine;
+    const EnhancementSettings plain;
+    auto chain = std::make_unique<EffectChain>(toChain(plain));
+    check(chain->countOf(EffectType::AntiAliasing) == 0 && chain->countOf(EffectType::Beauty) == 0 && !chain->overflow,
+          "E0: untouched settings add no anti-aliasing or beauty node");
+    check(effectInfo(EffectType::AntiAliasing).hidden != pipeline::EnhanceGraphDesc::antiAliasExecutor &&
+          effectInfo(EffectType::Beauty).hidden != pipeline::EnhanceGraphDesc::beautyExecutor,
+          "E0: the catalog shows exactly the effects whose executor is built");
+    chain->overflow = true;
+    check(!validateChain(*chain).accepted, "E0: an overflowing chain is refused instead of losing its last node");
+
+    auto s = std::make_unique<EnhancementSettings>(populated());
+    s->antiAlias.enabled = true; s->antiAlias.method = AntiAliasMethod::Fxaa; s->antiAlias.quality = 1;
+    s->additionalAntiAliasCount = 1;
+    auto& second = s->additionalAntiAlias[0];
+    second.enabled = false; second.method = AntiAliasMethod::Mlaa; second.quality = 0;
+    second.mlaaThreshold = 0.12f; second.mlaaStrength = 0.6f;
+    check(s->validate().empty(), "E0: two anti-aliasing instances validate");
+    *chain = toChain(*s);
+    uint32_t lastColor = 0, firstAa = chain->nodeCount, sr = chain->nodeCount;
+    for (uint32_t i = 0; i < chain->nodeCount; ++i) {
+        const auto type = chain->nodes[i].type;
+        if (type == EffectType::Color) lastColor = i;
+        if (type == EffectType::AntiAliasing && firstAa == chain->nodeCount) firstAa = i;
+        if (type == EffectType::SuperResolution) sr = i;
+    }
+    check(chain->countOf(EffectType::AntiAliasing) == 2 && lastColor < firstAa && firstAa + 2 == sr &&
+          chain->nodes[firstAa].enabled && !chain->nodes[firstAa + 1].enabled && validateChain(*chain).accepted,
+          "E0: the list chain keeps both instances between the grades and SR");
+    auto back = std::make_unique<EnhancementSettings>();
+    fromChain(*chain, *back);
+    check(back->antiAlias == s->antiAlias && back->additionalAntiAliasCount == 1 && back->additionalAntiAlias[0] == second,
+          "E0: anti-aliasing instances round-trip through the chain");
+
+    auto bad = std::make_unique<EnhancementSettings>(*s);
+    bad->antiAlias.quality = 3;
+    check(!bad->validate().empty(), "E0: an FXAA tier past ultra is rejected");
+    *bad = *s; bad->antiAlias.temporal = AntiAliasTemporal::T2x;
+    check(!bad->validate().empty(), "E0: temporal accumulation requires SMAA");
+    *bad = *s; bad->additionalAntiAliasCount = kMaxAntiAliasInstances;
+    check(!bad->validate().empty(), "E0: a third anti-aliasing instance is rejected");
+    *bad = *s; bad->additionalAntiAlias[0].mlaaThreshold = 0.5f;
+    check(!bad->validate().empty(), "E0: an MLAA threshold out of range is rejected even while switched off");
+
+    EnhancementSettings a; a.antiAlias.enabled = true; a.antiAlias.method = AntiAliasMethod::Mlaa; a.antiAlias.quality = 0;
+    auto b = a; b.antiAlias.mlaaThreshold = 0.2f; b.antiAlias.mlaaStrength = 0.5f;
+    check(!requiresGraphRebuild(a, b) && a.sameVideoConfiguration(b), "E0: MLAA threshold and strength are live uniforms");
+    b = a; b.antiAlias.method = AntiAliasMethod::Smaa; b.antiAlias.quality = 1;
+    check(requiresGraphRebuild(a, b) && !a.sameVideoConfiguration(b), "E0: changing the anti-aliasing method rebuilds");
+    b = a; b.antiAlias.enabled = false;
+    check(requiresGraphRebuild(a, b), "E0: switching anti-aliasing off rebuilds");
+    b = a; b.additionalAntiAliasCount = 1;
+    check(requiresGraphRebuild(a, b), "E0: adding an anti-aliasing instance rebuilds");
+    auto off = a; off.antiAlias.enabled = false; b = off; b.antiAlias.method = AntiAliasMethod::Fxaa;
+    check(!requiresGraphRebuild(off, b), "E0: edits of a switched-off instance do not rebuild");
+
+    // List mode: the instance reaches the description and runs at source size.
+    auto listSettings = std::make_unique<EnhancementSettings>();
+    listSettings->nr = true; listSettings->sr = true; listSettings->antiAlias = a.antiAlias;
+    StageRequest request; request.width = 1280; request.height = 720; request.nr = true; request.sr = true;
+    auto desc = std::make_unique<pipeline::EnhanceGraphDesc>();
+    describeStages(request, *listSettings, *desc);
+    check(desc->fixedExecutionPlanError.empty() && desc->fixedExecutionPlan && desc->antiAlias[0] == a.antiAlias &&
+          desc->antiAlias[1] == AntiAliasSettings{} && desc->antiAliasActive(), "E0: describeStages carries the anti-aliasing instance");
+    uint32_t aaStep = kMaxChainNodes;
+    if (desc->fixedExecutionPlan)
+        for (uint32_t i = 0; i < desc->fixedExecutionPlan->stepCount; ++i)
+            if (desc->fixedExecutionPlan->steps[i].type == EffectType::AntiAliasing) aaStep = i;
+    check(aaStep < kMaxChainNodes && desc->fixedExecutionPlan->steps[aaStep].output == pipeline::Extent{1280, 720} &&
+          desc->slotOfStep(aaStep) == pipeline::EnhanceGraphDesc::PassSlot::SourcePost,
+          "E0: list anti-aliasing runs at source size right after the input conversion");
+    const auto error = desc->validateFixedExecutionPlan();
+    check(pipeline::EnhanceGraphDesc::antiAliasExecutor ? error.empty() : error == "anti-aliasing is not available in this build",
+          "E0: an enabled instance is refused until its executor is built");
+    auto inactive = std::make_unique<EnhancementSettings>(*listSettings); inactive->antiAlias.enabled = false;
+    describeStages(request, *inactive, *desc);
+    check(desc->validateFixedExecutionPlan().empty() && !desc->antiAliasActive(),
+          "E0: a switched-off instance adds no step and no refusal");
+}
+
+__declspec(noinline) void testSameSizeSlots() {
+    using namespace veyra;
+    using namespace veyra::engine;
+    using Slot = pipeline::EnhanceGraphDesc::PassSlot;
+    const auto describe = [](const std::vector<EffectType>& types, bool sr, pipeline::EnhanceGraphDesc& desc) {
+        auto chain = std::make_unique<EffectChain>(); chain->mode = ChainMode::Node;
+        for (const auto type : types) {
+            auto& node = chain->nodes[chain->nodeCount++]; node.type = type; node.enabled = true;
+            if (type == EffectType::Color) node.color.enabled = true;
+            if (type == EffectType::AntiAliasing) { node.aa.enabled = true; node.aa.method = AntiAliasMethod::Smaa; node.aa.quality = 1; }
+            if (type == EffectType::Beauty) { node.beauty.enabled = true; node.beauty.smooth = true; }
+        }
+        auto settings = std::make_unique<EnhancementSettings>(); fromChain(*chain, *settings);
+        const auto order = runtimeOrder(*chain);
+        StageRequest request; request.width = 640; request.height = 360; request.sr = sr; request.nodeOrder = &*order;
+        request.nr = std::find(types.begin(), types.end(), EffectType::NrEnhance) != types.end();
+        describeStages(request, *settings, desc);
+    };
+    const auto step = [](const pipeline::EnhanceGraphDesc& desc, EffectType type, uint32_t parameter) {
+        return desc.planStepOf(type, parameter);
+    };
+    const auto refusedOrValid = [](const pipeline::EnhanceGraphDesc& desc) {
+        const auto error = desc.validateFixedExecutionPlan();
+        return pipeline::EnhanceGraphDesc::antiAliasExecutor ? error.empty() : error == "anti-aliasing is not available in this build";
+    };
+    auto desc = std::make_unique<pipeline::EnhanceGraphDesc>();
+    describe({EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::NrEnhance}, true, *desc);
+    check(desc->fixedExecutionPlanError.empty() && desc->slotOfStep(step(*desc, EffectType::AntiAliasing, 0)) == Slot::SourcePost &&
+          refusedOrValid(*desc), "E0 slots: AA -> SR -> NR runs anti-aliasing at source size");
+    describe({EffectType::SuperResolution, EffectType::AntiAliasing, EffectType::NrEnhance}, true, *desc);
+    check(desc->slotOfStep(step(*desc, EffectType::AntiAliasing, 0)) == Slot::PreNr && refusedOrValid(*desc),
+          "E0 slots: SR -> AA -> NR uses the pre-NR slot");
+    describe({EffectType::NrEnhance, EffectType::AntiAliasing, EffectType::SuperResolution}, true, *desc);
+    check(desc->nrBeforeSr && desc->slotOfStep(step(*desc, EffectType::AntiAliasing, 0)) == Slot::PreSr && refusedOrValid(*desc),
+          "E0 slots: NR -> AA -> SR uses the pre-SR slot");
+    describe({EffectType::SuperResolution, EffectType::NrEnhance, EffectType::AntiAliasing}, true, *desc);
+    check(desc->slotOfStep(step(*desc, EffectType::AntiAliasing, 0)) == Slot::Tail && refusedOrValid(*desc),
+          "E0 slots: SR -> NR -> AA uses the tail slot");
+    describe({EffectType::NrEnhance, EffectType::AntiAliasing, EffectType::NrEnhance}, false, *desc);
+    uint32_t target = kMaxNrInstances;
+    check(desc->slotOfStep(step(*desc, EffectType::AntiAliasing, 0), &target) == Slot::InterNr && target == 1 && refusedOrValid(*desc),
+          "E0 slots: NR -> AA -> NR binds to the next NR resource");
+    describe({EffectType::Color, EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::NrEnhance}, true, *desc);
+    check(desc->slotOfStep(step(*desc, EffectType::Color, 0)) == Slot::Ingress && !desc->nodeColor(0) &&
+          desc->slotOfStep(step(*desc, EffectType::AntiAliasing, 0)) == Slot::SourcePost,
+          "E0 slots: a leading grade stays fused; the following anti-aliasing runs at source size");
+    describe({EffectType::AntiAliasing, EffectType::Color, EffectType::SuperResolution, EffectType::NrEnhance}, true, *desc);
+    check(desc->slotOfStep(step(*desc, EffectType::Color, 0)) == Slot::SourcePost && desc->sourcePostColor(0) && desc->nodeColor(0),
+          "E0 slots: a grade behind anti-aliasing cannot be fused and runs as a source-size pass");
+    describe({EffectType::SuperResolution, EffectType::AntiAliasing, EffectType::Color, EffectType::AntiAliasing}, true, *desc);
+    check(desc->slotOfStep(step(*desc, EffectType::AntiAliasing, 0)) == Slot::Tail && desc->slotOfStep(step(*desc, EffectType::Color, 0)) == Slot::Tail &&
+          desc->slotOfStep(step(*desc, EffectType::AntiAliasing, 1)) == Slot::Tail && desc->antiAlias[1].enabled,
+          "E0 slots: mixed same-size passes after SR share the tail slot in order");
+    describe({EffectType::SuperResolution, EffectType::NrEnhance, EffectType::Beauty}, true, *desc);
+    check(desc->fixedExecutionPlanError.empty() && desc->slotOfStep(step(*desc, EffectType::Beauty, 0)) == Slot::Tail &&
+          desc->validateFixedExecutionPlan().empty() && desc->beautyActive(), "beauty: SR -> NR -> beauty runs in the tail slot");
+    describe({EffectType::Beauty, EffectType::SuperResolution, EffectType::NrEnhance}, true, *desc);
+    check(desc->slotOfStep(step(*desc, EffectType::Beauty, 0)) == Slot::SourcePost && desc->validateFixedExecutionPlan().empty(),
+          "beauty: a leading beauty node runs at source size");
+    describe({EffectType::SuperResolution, EffectType::Beauty, EffectType::NrEnhance}, true, *desc);
+    check(desc->slotOfStep(step(*desc, EffectType::Beauty, 0)) == Slot::PreNr && desc->validateFixedExecutionPlan().empty(),
+          "beauty: SR -> beauty -> NR uses the pre-NR slot");
+    describe({EffectType::NrEnhance, EffectType::Beauty, EffectType::SuperResolution}, true, *desc);
+    check(desc->nrBeforeSr && desc->slotOfStep(step(*desc, EffectType::Beauty, 0)) == Slot::PreSr && desc->validateFixedExecutionPlan().empty(),
+          "beauty: NR -> beauty -> SR uses the pre-SR slot");
+    // Color-only chains keep their existing slots (also covered byte-for-byte by the slot regression).
+    describe({EffectType::NrEnhance, EffectType::Color, EffectType::SuperResolution, EffectType::Color}, true, *desc);
+    check(desc->validateFixedExecutionPlan().empty() && desc->preSrColor(0) && desc->tailColor(1) && !desc->sourcePostActive(),
+          "E0 slots: Color-only node chains keep the pre-SR and tail grades");
+}
+
+__declspec(noinline) void testBeautySettingsChain() {
+    using namespace veyra;
+    using namespace veyra::engine;
+    using Slot = pipeline::EnhanceGraphDesc::PassSlot;
+    BeautySettings b;
+    check(b.validate().empty() && !b.configured() && !b.effective(), "beauty: defaults validate and do nothing");
+    const auto refused = [](auto edit) { BeautySettings v; v.enabled = true; edit(v); return !v.validate().empty(); };
+    check(refused([](BeautySettings& v) { v.radius = 13.0f; }) && refused([](BeautySettings& v) { v.satMin = 0.9f; }) &&
+          refused([](BeautySettings& v) { v.minConfidence = 0.2f; }) && refused([](BeautySettings& v) { v.regionExpand = 0.5f; }) &&
+          refused([](BeautySettings& v) { v.restoreStrength = std::nanf(""); }),
+          "beauty: out-of-range values are refused");
+    BeautyDetection d;
+    check(d.validate().empty() && d.inputLongSide() == 512, "beauty: balanced detection by default");
+    d.maxFaces = 0; check(!d.validate().empty(), "beauty: a detector needs at least one face");
+    // Sub-functions are independent: strength 0 skips only the smoothing.
+    b.enabled = true; b.restore = true; b.smooth = true; b.strength = 0.0f;
+    check(b.restoreActive() && !b.smoothActive() && b.effective(), "beauty: smoothing strength 0 keeps the face restore");
+    b.strength = 1.0f; b.restoreStrength = 0.0f;
+    check(!b.restoreActive() && b.smoothActive(), "beauty: restore strength 0 keeps the smoothing");
+
+    // Two list layers and shared detection survive the chain round trip, after protection.
+    auto s = std::make_unique<EnhancementSettings>();
+    s->nr = true; s->sr = true; s->protection.enabled = true;
+    s->beauty.enabled = true; s->beauty.restore = true; s->beauty.restoreStrength = 0.75f; s->beauty.feather = 0.12f;
+    s->additionalBeautyCount = 1;
+    auto& second = s->additionalBeauty[0];
+    second.enabled = false; second.smooth = true; second.smoothAmount = 0.5f; second.radius = 3.5f; second.scope = BeautyScope::AllSkin;
+    s->beautyDetection.quality = 2; s->beautyDetection.maxFaces = 2; s->beautyDetection.stability = 0.8f;
+    check(s->validate().empty(), "beauty: two list layers validate");
+    auto chain = std::make_unique<EffectChain>(toChain(*s));
+    uint32_t protection = chain->nodeCount, first = chain->nodeCount, hdr = chain->nodeCount;
+    for (uint32_t i = 0; i < chain->nodeCount; ++i) {
+        if (chain->nodes[i].type == EffectType::Protection) protection = i;
+        if (chain->nodes[i].type == EffectType::Beauty && first == chain->nodeCount) first = i;
+        if (chain->nodes[i].type == EffectType::VideoHdr) hdr = i;
+    }
+    check(chain->countOf(EffectType::Beauty) == 2 && protection < first && first < hdr && chain->beautyDetection == s->beautyDetection,
+          "beauty: the list group follows NR protection and precedes RTX Video HDR");
+    auto back = std::make_unique<EnhancementSettings>();
+    fromChain(*chain, *back);
+    check(back->beauty == s->beauty && back->additionalBeautyCount == 1 && back->additionalBeauty[0] == second &&
+          back->beautyDetection == s->beautyDetection, "beauty: fromChain restores both layers and the detection values");
+
+    // Plan: default order puts the group in the tail; NR-first preview right after NR.
+    StageRequest request; request.width = 1280; request.height = 720; request.nr = true; request.sr = true;
+    auto desc = std::make_unique<pipeline::EnhanceGraphDesc>();
+    describeStages(request, *s, *desc);
+    const auto beautyStep = desc->planStepOf(EffectType::Beauty, 0);
+    check(desc->fixedExecutionPlanError.empty() && desc->slotOfStep(beautyStep) == Slot::Tail && desc->beauty[0] == s->beauty &&
+          desc->beautyDetection == s->beautyDetection && desc->validateFixedExecutionPlan().empty(),
+          "beauty: list mode runs the group in the tail slot");
+    auto nrFirst = std::make_unique<EnhancementSettings>(*s); nrFirst->lowLatency = true;
+    for (auto& layer : nrFirst->nrLayers) layer.lowLatencyPairing = true;
+    describeStages(request, *nrFirst, *desc);
+    check(desc->nrBeforeSr && desc->slotOfStep(desc->planStepOf(EffectType::Beauty, 0)) == Slot::PreSr && desc->validateFixedExecutionPlan().empty(),
+          "beauty: NR-first preview runs the group between NR and SR");
+    StageRequest still = request; still.stillImage = true; still.sr = false;
+    describeStages(still, *s, *desc);
+    check(!desc->beautyRequireDetector, "beauty: a picture runs without requiring the detector");
+    StageRequest exportJob = request; exportJob.exportJob = true;
+    auto masked = std::make_unique<EnhancementSettings>(*s); masked->beauty.showMask = true;
+    describeStages(exportJob, *masked, *desc);
+    check(desc->beautyRequireDetector && !desc->beauty[0].showMask,
+          "beauty: export needs the detector and never writes the mask view");
+
+    // Only the master switch (and the instance count) rebuilds; every value is live.
+    auto live = std::make_unique<EnhancementSettings>(*s);
+    live->beauty.restoreStrength = 0.3f; live->beauty.smooth = true; live->beauty.radius = 6.0f; live->beautyDetection.quality = 0;
+    check(s->sameVideoConfiguration(*live) && !requiresGraphRebuild(*s, *live), "beauty: tuning an enabled node is live");
+    auto toggled = std::make_unique<EnhancementSettings>(*s); toggled->beauty.enabled = false;
+    check(!s->sameVideoConfiguration(*toggled) && requiresGraphRebuild(*s, *toggled), "beauty: switching a node rebuilds");
+    auto counted = std::make_unique<EnhancementSettings>(*s); counted->additionalBeautyCount = 0;
+    check(requiresGraphRebuild(*s, *counted), "beauty: removing a layer rebuilds");
+    auto disabled = std::make_unique<EnhancementSettings>(*toggled); disabled->beauty.radius = 7.0f;
+    check(toggled->sameVideoConfiguration(*disabled), "beauty: editing a disabled node changes nothing");
+
+    // Node mode: two beauty nodes keep their order and parameters.
+    auto node = std::make_unique<EffectChain>(); node->mode = ChainMode::Node;
+    const auto add = [&](EffectType type) -> ChainNode& { auto& n = node->nodes[node->nodeCount++]; n = ChainNode{}; n.type = type; n.enabled = true; return n; };
+    add(EffectType::Beauty).beauty.smooth = true;
+    add(EffectType::SuperResolution);
+    auto& tail = add(EffectType::Beauty); tail.beauty.restore = true; tail.beauty.minConfidence = 0.8f;
+    auto nodeSettings = std::make_unique<EnhancementSettings>(); fromChain(*node, *nodeSettings);
+    const auto order = runtimeOrder(*node);
+    auto restored = std::make_unique<EffectChain>();
+    const auto verdict = restoreRuntimeOrder(*nodeSettings, *order, *restored);
+    check(verdict.accepted && restored->nodes[2].beauty.minConfidence == 0.8f && restored->nodes[0].beauty.smooth,
+          "beauty: node order restores both instances");
+    StageRequest nodeRequest; nodeRequest.width = 640; nodeRequest.height = 360; nodeRequest.sr = true; nodeRequest.nodeOrder = &*order;
+    describeStages(nodeRequest, *nodeSettings, *desc);
+    check(desc->slotOfStep(desc->planStepOf(EffectType::Beauty, 0)) == Slot::SourcePost &&
+          desc->slotOfStep(desc->planStepOf(EffectType::Beauty, 1)) == Slot::Tail && desc->validateFixedExecutionPlan().empty(),
+          "beauty: node mode runs one instance at source size and one in the tail");
+    // A node just added (beauty arrives switched off) or switched off at its defaults
+    // has no settings instance; the node order still restores it, for AA too.
+    auto fresh = std::make_unique<EffectChain>(); fresh->mode = ChainMode::Node;
+    const auto addFresh = [&](EffectType type, bool enabled) { auto& n = fresh->nodes[fresh->nodeCount++]; n = ChainNode{}; n.type = type; n.enabled = enabled; };
+    addFresh(EffectType::AntiAliasing, false); addFresh(EffectType::SuperResolution, true); addFresh(EffectType::Beauty, false);
+    auto freshSettings = std::make_unique<EnhancementSettings>(); fromChain(*fresh, *freshSettings);
+    check(!freshSettings->beauty.configured() && !freshSettings->antiAlias.configured(), "untouched nodes: no settings instance");
+    const auto freshOrder = runtimeOrder(*fresh);
+    auto freshRestored = std::make_unique<EffectChain>();
+    check(restoreRuntimeOrder(*freshSettings, *freshOrder, *freshRestored).accepted && freshRestored->nodeCount == 3 &&
+          freshRestored->nodes[0] == fresh->nodes[0] && freshRestored->nodes[2] == fresh->nodes[2],
+          "untouched nodes: a switched-off default AA and beauty node keep their places in the node order");
+    auto twice = *freshOrder; twice.types[twice.nodeCount++] = EffectType::AntiAliasing;
+    check(!restoreRuntimeOrder(*freshSettings, twice, *freshRestored).accepted,
+          "untouched nodes: an order asking for a second untouched instance is still refused");
+    addFresh(EffectType::Beauty, false);
+    fromChain(*fresh, *freshSettings);
+    check(restoreRuntimeOrder(*freshSettings, *runtimeOrder(*fresh), *freshRestored).accepted &&
+          freshRestored->countOf(EffectType::Beauty) == 2, "untouched nodes: two beauty nodes carry their own instances");
+
+    for (int i = 0; i < 6; ++i) add(EffectType::Beauty);
+    check(!validateChain(*node).accepted, "beauty: more than six beauty nodes are refused");
+}
+
+__declspec(noinline) void testWideChains() {
+    using namespace veyra::engine;
+    auto chain = std::make_unique<EffectChain>(); chain->mode = ChainMode::Node;
+    const auto add = [&](EffectType type, uint32_t count) {
+        for (uint32_t i = 0; i < count; ++i) {
+            auto& node = chain->nodes[chain->nodeCount++]; node = ChainNode{}; node.type = type; node.enabled = true;
+            if (type == EffectType::Color) node.color.enabled = true;
+        }
+    };
+    add(EffectType::Color, kMaxColorInstances); add(EffectType::AntiAliasing, kMaxAntiAliasInstances);
+    add(EffectType::SuperResolution, 1); add(EffectType::NrEnhance, kMaxNrInstances); add(EffectType::Beauty, kMaxBeautyInstances);
+    add(EffectType::VideoHdr, 1); add(EffectType::FrameGeneration, 1);
+    check(chain->nodeCount == 21 && validateChain(*chain).accepted, "E0: the widest node chain (21 nodes) validates");
+    auto plan = std::make_unique<ChainExecutionPlan>();
+    check(compileChainExecutionPlan(*chain, {{640, 360}, EnhancementSettings{}.srTarget, false, false, false}, *plan).accepted &&
+          plan->stepCount >= 20 && plan->stepCount <= kMaxChainNodes, "E0: a 21-node chain compiles every step");
+    auto extra = std::make_unique<EffectChain>(*chain);
+    extra->nodes[extra->nodeCount++].type = EffectType::Beauty;
+    check(!validateChain(*extra).accepted, "E0: a seventh beauty node is refused");
+    const auto order = runtimeOrder(*chain);
+    check(order && order->nodeCount == 21 && order->types[20] == EffectType::FrameGeneration,
+          "E0: the runtime order transports every node of a wide chain");
+}
+
 int main() {
     {
         using namespace veyra;using namespace veyra::engine;
@@ -1129,6 +1425,10 @@ int main() {
     testNodePreSrProtectionDescription();
     testNodeInterNrProtectionDescription();
     testNativeVideoSrPolicy();
+    testAntiAliasSettingsChain();
+    testSameSizeSlots();
+    testBeautySettingsChain();
+    testWideChains();
     std::printf(failures ? "effect chain: %d FAILURES\n" : "effect chain: all checks passed\n", failures);
     return failures ? 1 : 0;
 }

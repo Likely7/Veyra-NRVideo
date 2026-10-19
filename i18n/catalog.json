@@ -260,6 +260,20 @@
    "ja": " · 最大 %1 nit"
   },
   {
+"zh": " · 时域 4x（实验）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": " · 時域 4x（實驗）",
+   "en": " · temporal 4x (experimental)",
+   "ja": " · 時間方向 4x（実験的）"
+  },
+  {
+   "zh": " · 时域 T2x（实验）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": " · 時域 T2x（實驗）",
+   "en": " · temporal T2x (experimental)",
+   "ja": " · 時間方向 T2x（実験的）"
+  },
+  {
    "zh": " · 校准中",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": " · 校準中",
@@ -293,6 +307,13 @@
    "zh-TW": " · 節點",
    "en": " · node",
    "ja": " · ノード"
+  },
+  {
+   "zh": " · 范围候选（连接时验证）",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": " · 範圍候選（連線時驗證）",
+   "en": " · Range candidate (verified on connection)",
+   "ja": " · 範囲内の候補（接続時に検証）"
   },
   {
    "zh": " · 质量 ",
@@ -372,6 +393,13 @@
    "ja": " ch"
   },
   {
+   "zh": " 层依次处理",
+   "src": "qml/ProPage.qml",
+   "zh-TW": " 層依次處理",
+   "en": " layers in sequence",
+   "ja": " 層を順に処理"
+  },
+  {
    "zh": " 层依次处理 · 每层参数独立",
    "src": "qml/ProPage.qml",
    "zh-TW": " 層依次處理 · 每層參數獨立",
@@ -426,6 +454,13 @@
    "zh-TW": " 項",
    "en": " items",
    "ja": " 件"
+  },
+  {
+   "zh": "%1 / %2 个格式",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "%1 / %2 個格式",
+   "en": "%1 / %2 formats",
+   "ja": "%1 / %2 形式"
   },
   {
    "zh": "%1 · 去重后约 %2 fps",
@@ -498,6 +533,13 @@
    "ja": "%1 が動作しています。インターフェースと映像の両方にフックするため、Veyra がフリーズすることがあります。互換描画を有効にするには Veyra を再起動してください。再起動後はインターフェースをソフトウェアで描画し、%1 は映像にだけ作用します。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
   },
   {
+   "zh": "%1 秒",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "%1 秒",
+   "en": "%1 s",
+   "ja": "%1 秒"
+  },
+  {
    "zh": "%1 项",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "%1 項",
@@ -517,6 +559,13 @@
    "zh-TW": "+  添加 NR 層",
    "en": "+  Add NR layer",
    "ja": "+  NR 層を追加"
+  },
+  {
+   "zh": "+  添加美颜层",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "+  添加美顏層",
+   "en": "+  Add beauty layer",
+   "ja": "+  美顔層を追加"
   },
   {
    "zh": "0 = 不做高光滚降",
@@ -566,6 +615,13 @@
    "zh-TW": "1080p · 預設",
    "en": "1080p · default",
    "ja": "1080p · 既定"
+  },
+  {
+   "zh": "1080p 像素，随画面尺寸缩放；越大越柔",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "1080p 像素，隨畫面尺寸縮放；越大越柔",
+   "en": "In 1080p pixels, scaled with the picture size; larger is softer",
+   "ja": "1080p 換算のピクセル数。画面サイズに合わせて変わり、大きいほど柔らかくなります"
   },
   {
    "zh": "2 项",
@@ -1051,6 +1107,13 @@
    "ja": "FSR 4 ML には対応する RX 9000 とドライバーが必要です。実機での検証は未完了です"
   },
   {
+   "zh": "FXAA：最快，整体略柔",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "FXAA：最快，整體略柔",
+   "en": "FXAA: fastest, slightly softer overall",
+   "ja": "FXAA：最速。全体がやや柔らかくなります"
+  },
+  {
    "zh": "GPU / 输入 / 显示资源",
    "src": "include/veyra/engine/BackendRecovery.h",
    "zh-TW": "GPU / 輸入 / 顯示資源",
@@ -1254,6 +1317,13 @@
    "ja": "K は従来モデル、M・L は DLSS 4.5 です。L は低い入力解像度向けです。画質と処理時間は映像により異なります。"
   },
   {
+   "zh": "Ko-fi、微信与支付宝",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "Ko-fi、微信與支付寶",
+   "en": "Ko-fi, WeChat and Alipay",
+   "ja": "Ko-fi・WeChat・Alipay"
+  },
+  {
    "zh": "LUT 不可用：%1",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "LUT 不可用：%1",
@@ -1315,6 +1385,13 @@
    "zh-TW": "MKV 不支援直接保留此編碼，請排除此軌",
    "en": "MKV cannot keep this codec as is; exclude this track",
    "ja": "MKV ではこのコーデックをそのまま保持できません。このトラックを除外してください"
+  },
+  {
+   "zh": "MLAA：形态学抗锯齿，阈值与强度可调",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "MLAA：形態學抗鋸齒，閾值與強度可調",
+   "en": "MLAA: morphological anti-aliasing with adjustable threshold and strength",
+   "ja": "MLAA：モルフォロジカル アンチエイリアス。しきい値と強度を調整できます"
   },
   {
    "zh": "MP4 · MKV · 图片",
@@ -1947,6 +2024,13 @@
    "ja": "SDR 表示、変換なし"
   },
   {
+   "zh": "SMAA：边缘判断更准，细节保留更好",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "SMAA：邊緣判斷更準，細節保留更好",
+   "en": "SMAA: more accurate edges, keeps more detail",
+   "ja": "SMAA：エッジ判定がより正確で、ディテールをよく保ちます"
+  },
+  {
    "zh": "Smooth Motion 开启方法",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "Smooth Motion 開啟方法",
@@ -2008,6 +2092,13 @@
    "zh-TW": "VFG 需要 NVIDIA Ada / Blackwell 顯示卡（RTX 40 / 50）",
    "en": "VFG requires an NVIDIA Ada / Blackwell GPU (RTX 40 / 50).",
    "ja": "VFG には NVIDIA Ada / Blackwell GPU（RTX 40 / 50）が必要です。"
+  },
+  {
+   "zh": "Veyra 开源免费，也需要你的支持",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "Veyra 開源免費，也需要你的支持",
+   "en": "Veyra is free and open source, and it runs on your support",
+   "ja": "Veyra は無料のオープンソース。皆さんの支援が支えです"
   },
   {
    "zh": "Veyra 本地诊断（复制前脱敏预览；不会上传）\n",
@@ -2395,6 +2486,13 @@
    "ja": "おすすめ"
   },
   {
+   "zh": "一键设定开关和数值，肤色范围与人脸识别保持不变",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "一鍵設定開關和數值，膚色範圍與人臉識別保持不變",
+   "en": "Sets the switches and values in one go; the skin range and face detection stay as they are",
+   "ja": "スイッチと数値をまとめて設定します。肌色範囲と顔検出はそのままです"
+  },
+  {
    "zh": "一键还原",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "一鍵還原",
@@ -2493,6 +2591,13 @@
    "ja": "前回のキャプチャーデバイスが接続されていません。差し直して更新するか、別のデバイスを選んでください。"
   },
   {
+   "zh": "上移",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "上移",
+   "en": "Move up",
+   "ja": "上へ移動"
+  },
+  {
    "zh": "上限 %1 nit 未被触及（滚降区 %2% · 暗部提升区 %3%）",
    "src": "qml/ProPage.qml",
    "zh-TW": "上限 %1 nit 未被觸及（滾降區 %2% · 暗部提升區 %3%）",
@@ -2533,6 +2638,27 @@
    "zh-TW": "下次啟動軟體時自動應用這個預設",
    "en": "Apply this preset automatically the next time the app starts",
    "ja": "次回起動時にこのプリセットを自動適用"
+  },
+  {
+   "zh": "下移",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "下移",
+   "en": "Move down",
+   "ja": "下へ移動"
+  },
+  {
+   "zh": "下载 %1 MB/s",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "下載 %1 MB/s",
+   "en": "Download %1 MB/s",
+   "ja": "ダウンロード %1 MB/s"
+  },
+  {
+   "zh": "下载 —",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "下載 —",
+   "en": "Download —",
+   "ja": "ダウンロード —"
   },
   {
    "zh": "不使用 LUT",
@@ -2605,6 +2731,13 @@
    "ja": "わからなければ「自動」を選んでください。HDR をキャプチャーする場合：フォーマットに P010 を選び、ここでは「HDR · PQ」を選択（ゲーム機や GPU の HDR10 は PQ）。「HDR · HLG」は放送信号用、「SDR · 709」は通常の映像です。変更には再接続が必要です"
   },
   {
+   "zh": "不等待",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "不等待",
+   "en": "Don't wait",
+   "ja": "待たない"
+  },
+  {
    "zh": "不补偿",
    "src": "qml/ProPage.qml",
    "zh-TW": "不補償",
@@ -2654,6 +2787,13 @@
    "ja": "プロ画面の「GPU 使用率」はこの GPU だけを集計します"
   },
   {
+   "zh": "丢包 %1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "丟包 %1",
+   "en": "Lost %1",
+   "ja": "パケット損失 %1"
+  },
+  {
    "zh": "两台电脑接在同一个局域网，这里会自动出现；也可以在下面手填它的 IP。首次使用需要配对。",
    "src": "qml/DialogHost.qml",
    "zh-TW": "兩台電腦接在同一個區域網路，這裡會自動出現；也可以在下面手填它的 IP。首次使用需要配對。",
@@ -2683,7 +2823,7 @@
   },
   {
    "zh": "中",
-   "src": "qml/NodePage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "中",
    "en": "Medium",
    "ja": "中"
@@ -2694,6 +2834,13 @@
    "zh-TW": "中+低",
    "en": "Medium+Low",
    "ja": "中+低"
+  },
+  {
+   "zh": "中国大陆用户",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "中國大陸用戶",
+   "en": "Users in mainland China",
+   "ja": "中国本土の方"
   },
   {
    "zh": "中延迟",
@@ -3088,11 +3235,11 @@
    "ja": "ホストが長時間ストリーミングの準備ができていません。電源とネットワークを確認してください。"
   },
   {
-   "zh": "交流群与赞助",
+   "zh": "交流群",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "交流群與贊助",
-   "en": "Community and sponsorship",
-   "ja": "コミュニティと支援"
+   "zh-TW": "交流群",
+   "en": "Community groups",
+   "ja": "コミュニティ"
   },
   {
    "zh": "亮",
@@ -3109,6 +3256,20 @@
    "ja": "明るさの変化"
   },
   {
+   "zh": "亮度上限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "亮度上限",
+   "en": "Brightness max",
+   "ja": "明るさの上限"
+  },
+  {
+   "zh": "亮度下限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "亮度下限",
+   "en": "Brightness min",
+   "ja": "明るさの下限"
+  },
+  {
    "zh": "亮度保持",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "亮度保持",
@@ -3123,6 +3284,55 @@
    "ja": "バランスのよい輝度分布"
   },
   {
+   "zh": "亮度差超过它才算边缘；越低，处理的边缘越多",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "亮度差超過它才算邊緣；越低，處理的邊緣越多",
+   "en": "A brightness step above this counts as an edge; lower values treat more edges",
+   "ja": "輝度差がこれを超えるとエッジとみなします。低いほど多くのエッジを処理します"
+  },
+  {
+   "zh": "人脸原画保护",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "人臉原畫保護",
+   "en": "Original face restore",
+   "ja": "顔のオリジナル保護"
+  },
+  {
+   "zh": "人脸原画保护：按人脸轮廓混回本帧原画（没有经过任何效果）。磨皮：柔化皮肤，眼睛、眉毛和嘴唇不参与。两项可分别开关。",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "人臉原畫保護：按人臉輪廓混回本幀原畫（沒有經過任何效果）。磨皮：柔化皮膚，眼睛、眉毛和嘴唇不參與。兩項可分別開關。",
+   "en": "Original face restore: blends this frame's original (before any effect) back in along the face outline. Skin smoothing: softens skin and leaves the eyes, brows and lips out. Each can be switched on its own.",
+   "ja": "顔のオリジナル保護：顔の輪郭に沿って、このフレームの元の画像（どの効果も通す前）を戻して合成します。美肌：肌をなめらかにし、目・眉・唇は対象外です。それぞれ個別にオン／オフできます。"
+  },
+  {
+   "zh": "人脸置信度",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "人臉置信度",
+   "en": "Face confidence",
+   "ja": "顔の信頼度"
+  },
+  {
+   "zh": "人脸识别",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "人臉識別",
+   "en": "Face detection",
+   "ja": "顔検出"
+  },
+  {
+   "zh": "人脸识别 · 全部美颜节点共用",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "人臉識別 · 所有美顏節點共用",
+   "en": "Face detection · shared by all beauty nodes",
+   "ja": "顔検出 · すべての美顔ノードで共有"
+  },
+  {
+   "zh": "仅人脸",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "僅人臉",
+   "en": "Faces only",
+   "ja": "顔のみ"
+  },
+  {
    "zh": "仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "僅在遊戲模式中接管按鍵；支援 Ctrl、Alt、Shift 組合",
@@ -3130,11 +3340,32 @@
    "ja": "ゲームモード中のみキーを使用します。Ctrl、Alt、Shift の組み合わせに対応"
   },
   {
+   "zh": "仅接受驱动尺寸范围与步进支持的值；连接时核对实际格式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "僅接受驅動尺寸範圍與步進支援的值；連線時核對實際格式",
+   "en": "Only sizes within driver bounds and granularity are accepted; the actual format is checked on connection",
+   "ja": "ドライバーのサイズ範囲と刻みに合う値のみ使用できます。実際の形式は接続時に確認します"
+  },
+  {
    "zh": "仅清空列表，不删除硬盘文件",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "僅清空清單，不刪除硬碟檔案",
    "en": "Clear playlist; keep files on disk",
    "ja": "リストのみクリア。ファイルは削除しません"
+  },
+  {
+   "zh": "仅皮肤",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "僅皮膚",
+   "en": "Skin only",
+   "ja": "肌のみ"
+  },
+  {
+   "zh": "仅皮肤：头发和背景保留效果",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "僅皮膚：頭髮和背景保留效果",
+   "en": "Skin only: hair and background keep the effects",
+   "ja": "肌のみ：髪と背景には効果が残ります"
   },
   {
    "zh": "仅美乐威 Pro Capture（PCIe 内置卡）可用；USB Capture 系列不支持",
@@ -3156,13 +3387,6 @@
    "zh-TW": "僅擷取影片；介面以軟體繪製，部分陰影與模糊簡化",
    "en": "Captures video only; software UI with simpler shadows and blur",
    "ja": "映像のみキャプチャ。UI はソフトウェア描画になり、一部の影・ぼかしを簡略化"
-  },
-  {
-   "zh": "今天看点什么？",
-   "src": "qml/HomePage.qml",
-   "zh-TW": "今天看點什麼？",
-   "en": "What are we watching today?",
-   "ja": "今日は何を観ますか？"
   },
   {
    "zh": "从列表移除，不删除文件",
@@ -3208,10 +3432,17 @@
   },
   {
    "zh": "低",
-   "src": "qml/NodePage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "低",
    "en": "Low",
    "ja": "低"
+  },
+  {
+   "zh": "低于它的人脸不算；误识别时调高",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "低於它的人臉不計；誤識別時調高",
+   "en": "Faces below it don't count; raise it when other things are taken for faces",
+   "ja": "これ未満の顔は無視します。誤検出するときは上げてください"
   },
   {
    "zh": "低延迟",
@@ -3289,6 +3520,13 @@
    "zh-TW": "餘量 ",
    "en": "Headroom ",
    "ja": "余裕 "
+  },
+  {
+   "zh": "例如调色或增强后脸色不自然时，让人脸回到原画",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "例如調色或增強後臉色不自然時，讓人臉回到原畫",
+   "en": "For example when grading or enhancement makes faces look wrong: they go back to the original",
+   "ja": "色調整や強調で顔色が不自然になったときなどに、顔を元の画像に戻します"
   },
   {
    "zh": "例如：夜间游戏",
@@ -3387,6 +3625,34 @@
    "zh-TW": "儲存預設失敗: %1",
    "en": "Failed to save preset: %1",
    "ja": "プリセットの保存に失敗しました：%1"
+  },
+  {
+   "zh": "保护强度",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "保護強度",
+   "en": "Restore strength",
+   "ja": "保護の強さ"
+  },
+  {
+   "zh": "保护范围",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "保護範圍",
+   "en": "Restore area",
+   "ja": "保護範囲"
+  },
+  {
+   "zh": "保持画面",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "保持畫面",
+   "en": "Keep picture",
+   "ja": "映像を維持"
+  },
+  {
+   "zh": "保持画面 = 显示解码器修补后的画面，动作不中断；只对网络视频与 MPEG-TS 生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "保持畫面 = 顯示解碼器修補後的畫面，動作不中斷；只對網路影片與 MPEG-TS 生效",
+   "en": "Keep picture = show the picture the decoder patched up, so motion carries on; only applies to network video and MPEG-TS",
+   "ja": "映像を維持 = デコーダーが補修した映像をそのまま表示し、動きを止めません。ネットワーク動画と MPEG-TS にのみ適用されます"
   },
   {
    "zh": "保留全部",
@@ -3606,6 +3872,13 @@
    "ja": "全画面表示（映像をダブルクリック / F11）"
   },
   {
+   "zh": "全屏缩放已启用：键盘和手柄控制源窗口，鼠标点击已拦截以免错位；需要鼠标穿透时切回贴合原窗口",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "全螢幕縮放已啟用：鍵盤和手把控制來源視窗，滑鼠點擊已攔截以免錯位；需要滑鼠穿透時切回貼合原視窗",
+   "en": "Fullscreen scaling is active. Keyboard and gamepad control the source window; mouse clicks are blocked to avoid misalignment. Return to original-window alignment for mouse passthrough.",
+   "ja": "全画面拡大を有効にしました。キーボードとゲームパッドは元のウィンドウを操作し、位置ずれを防ぐためマウスクリックを遮断します。マウス透過には元のウィンドウに合わせる表示へ戻してください。"
+  },
+  {
    "zh": "全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节",
    "src": "qml/ProPage.qml",
    "zh-TW": "全螢幕（雙擊畫面 / F11）· 全螢幕後按 %1 開啟快速調整",
@@ -3618,6 +3891,20 @@
    "zh-TW": "全部顯示卡",
    "en": "All GPUs",
    "ja": "すべての GPU"
+  },
+  {
+   "zh": "全部肤色",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "全部膚色",
+   "en": "All skin",
+   "ja": "すべての肌色"
+  },
+  {
+   "zh": "全部肤色：不依赖人脸识别，画面中所有肤色区域都会处理",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "全部膚色：不依賴人臉識別，畫面中所有膚色區域都會處理",
+   "en": "All skin: works without face detection; every skin-coloured area of the picture is smoothed",
+   "ja": "すべての肌色：顔検出を使わず、画面内の肌色の部分をすべて処理します"
   },
   {
    "zh": "全部还原",
@@ -3662,8 +3949,15 @@
    "ja": "電源オフ"
   },
   {
+   "zh": "关注作者",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "追蹤作者",
+   "en": "Follow the author",
+   "ja": "作者をフォロー"
+  },
+  {
    "zh": "关闭",
-   "src": "qml/DialogHost.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "關閉",
    "en": "Close",
    "ja": "閉じる"
@@ -4041,6 +4335,13 @@
    "ja": "解像度"
   },
   {
+   "zh": "分辨率、帧率和像素格式合并显示；包含非常用帧率，与主界面共用同一个精确选择。范围候选将在连接时验证。",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "解析度、影格率和像素格式合併顯示；包含非常用影格率，與主介面共用同一個精確選擇。範圍候選將在連線時驗證。",
+   "en": "Resolution, frame rate and pixel format in one list, including uncommon rates. Both views share the same exact selection. Range candidates are verified on connection.",
+   "ja": "解像度・フレームレート・ピクセル形式をまとめて表示します。一般的でないレートも含み、通常画面と同じ正確な選択を使用します。範囲内の候補は接続時に検証します。"
+  },
+  {
    "zh": "分辨率与帧率",
    "src": "qml/DialogHost.qml",
    "zh-TW": "解析度與幀率",
@@ -4116,6 +4417,13 @@
    "zh-TW": "切換極簡 / 專業",
    "en": "Toggle Minimal / Pro",
    "ja": "シンプル / プロを切り替え"
+  },
+  {
+   "zh": "列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择，连接时验证实际值",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "列出離散影格率及驅動範圍內的候選；裝置影格率填 0 時沿用此選擇，連線時驗證實際值",
+   "en": "Lists discrete rates and candidates within driver bounds; device FPS 0 uses this selection, verified on connection",
+   "ja": "個別のレートとドライバー範囲内の候補を表示します。デバイスFPSが0の場合はこの選択を使い、接続時に実際の値を検証します"
   },
   {
    "zh": "列表",
@@ -4279,6 +4587,20 @@
    "ja": "デバイスを更新"
   },
   {
+   "zh": "前往",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "前往",
+   "en": "Go",
+   "ja": "開く"
+  },
+  {
+   "zh": "前往主页",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "前往主頁",
+   "en": "Visit page",
+   "ja": "ページを開く"
+  },
+  {
    "zh": "剪贴板不是有效的 Sony 授权回调地址。请复制登录完成后的完整 URL。",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "剪貼簿不是有效的 Sony 授權回調地址。請複製登入完成後的完整 URL。",
@@ -4384,6 +4706,13 @@
    "ja": "領域内をすべての NR 層から除外 · リストモードのみ"
   },
   {
+   "zh": "区域扩展",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "區域擴展",
+   "en": "Area expansion",
+   "ja": "範囲の拡張"
+  },
+  {
    "zh": "半分辨率",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "半解析度",
@@ -4431,6 +4760,20 @@
    "zh-TW": "單層",
    "en": "Single layer",
    "ja": "シングルレイヤー"
+  },
+  {
+"zh": "历史拒绝",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "歷史拒絕",
+   "en": "History rejection",
+   "ja": "履歴の棄却"
+  },
+  {
+   "zh": "历史权重",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "歷史權重",
+   "en": "History weight",
+   "ja": "履歴の重み"
   },
   {
    "zh": "压住高光",
@@ -4522,6 +4865,20 @@
    "zh-TW": "原畫 / 增強對比",
    "en": "Original / enhanced comparison",
    "ja": "オリジナル / 補正後の比較"
+  },
+  {
+   "zh": "原画保护 %1%",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "原畫保護 %1%",
+   "en": "Original restore %1%",
+   "ja": "オリジナル保護 %1%"
+  },
+  {
+   "zh": "原画保护 + 自然磨皮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "原畫保護 + 自然磨皮",
+   "en": "Original restore + natural smoothing",
+   "ja": "オリジナル保護 + 自然な美肌"
   },
   {
    "zh": "去专业模式管理预设…",
@@ -4769,13 +5126,6 @@
    "ja": "処理中は 1 フレームのみ、フレーム生成なしでは Reflex を追加"
   },
   {
-   "zh": "只列出当前分辨率下设备上报的帧率。设备帧率填 0 时，连接使用这里选中的帧率",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "只列出目前解析度下裝置回報的幀率。裝置幀率填 0 時，連接使用這裡選中的幀率",
-   "en": "Only frame rates the device reports for the current resolution. A device frame rate of 0 uses the rate selected here",
-   "ja": "現在の解像度でデバイスが報告するフレームレートだけを表示します。デバイスのフレームレートが 0 のときは、ここで選んだ値で接続します"
-  },
-  {
    "zh": "只列出当前分辨率和帧率下的像素格式",
    "src": "qml/DialogHost.qml",
    "zh-TW": "只列出目前解析度與幀率下的像素格式",
@@ -4879,6 +5229,13 @@
    "zh-TW": "可以儲存",
    "en": "Can be saved",
    "ja": "保存可能"
+  },
+  {
+   "zh": "可以用微信或支付宝扫码",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "可以用微信或支付寶掃碼",
+   "en": "Scan with WeChat or Alipay",
+   "ja": "WeChat または Alipay でスキャンできます"
   },
   {
    "zh": "可变刷新",
@@ -5140,6 +5497,13 @@
    "ja": "「PS5 ストリーミング」とペアリングを共有"
   },
   {
+   "zh": "哔哩哔哩",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "嗶哩嗶哩",
+   "en": "Bilibili",
+   "ja": "bilibili"
+  },
+  {
    "zh": "唤醒",
    "src": "qml/DialogHost.qml",
    "zh-TW": "喚醒",
@@ -5350,6 +5714,13 @@
    "ja": "ホストで Sunshine の Web ページ（https://ホストIP:47990）を開き、「PIN」ページで下の数字を入力して送信してください："
   },
   {
+   "zh": "在原画保护之后执行",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "在原畫保護之後執行",
+   "en": "Runs after the original restore",
+   "ja": "オリジナル保護の後に実行"
+  },
+  {
    "zh": "在手机或浏览器打开 ",
    "src": "qml/DialogHost.qml",
    "zh-TW": "在手機或瀏覽器開啟 ",
@@ -5369,6 +5740,13 @@
    "zh-TW": "在瀏覽器開啟登入頁",
    "en": "Open the sign-in page in the browser",
    "ja": "ブラウザーでサインインページを開く"
+  },
+  {
+   "zh": "在源分辨率去除锯齿边缘，适合游戏画面、文字和界面线条；放在超分之前，锯齿不会被一起放大。",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "在來源解析度去除鋸齒邊緣，適合遊戲畫面、文字和介面線條；放在超解析之前，鋸齒不會被一起放大。",
+   "en": "Removes jagged edges at source resolution, for game footage, text and interface lines. It runs before super resolution, so the jaggies are not enlarged with the picture.",
+   "ja": "ソース解像度でギザギザのエッジを取り除きます。ゲーム映像、文字、UI の線に向いています。超解像の前に処理するため、ギザギザが一緒に拡大されません。"
   },
   {
    "zh": "在画面上按住左键拖出",
@@ -5414,7 +5792,7 @@
   },
   {
    "zh": "均衡",
-   "src": "src/engine/PresetLibrary.cpp",
+   "src": "qml/BeautyEditor.qml",
    "zh-TW": "均衡",
    "en": "Balanced",
    "ja": "バランス"
@@ -5453,6 +5831,20 @@
    "zh-TW": "填充裁切",
    "en": "Fill and crop",
    "ja": "フィル（切り取り）"
+  },
+  {
+   "zh": "填满屏幕",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "填滿螢幕",
+   "en": "Fill screen",
+   "ja": "画面全体に表示"
+  },
+  {
+   "zh": "填满屏幕支持键盘和手柄；需要精确鼠标穿透时请选择贴合原窗口",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "填滿螢幕支援鍵盤和手把；需要精確滑鼠穿透時請選擇貼合原視窗",
+   "en": "Fill screen supports keyboard and gamepad. Choose original-window alignment for precise mouse passthrough.",
+   "ja": "画面全体に表示する場合はキーボードとゲームパッドを使用できます。正確なマウス透過には元のウィンドウに合わせてください。"
   },
   {
    "zh": "填满窗口",
@@ -5651,6 +6043,13 @@
    "ja": "コピー · リセット · 削除"
   },
   {
+   "zh": "复制 · 移动 · 恢复默认 · 删除",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "複製 · 移動 · 恢復預設 · 刪除",
+   "en": "Copy · move · reset · delete",
+   "ja": "コピー · 移動 · 既定に戻す · 削除"
+  },
+  {
    "zh": "复制为新层",
    "src": "qml/ProPage.qml",
    "zh-TW": "複製為新層",
@@ -5756,6 +6155,13 @@
    "ja": "複数の NR レイヤーでは前段を 720p、最終段を 1080p に、3 段では 480p / 720p / 1080p にする方法もあります。前段の解像度を下げると映像が変わります。書き出しは引き続きネイティブサイズで処理します。"
   },
   {
+   "zh": "夜景或暗部的脸调低",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "夜景或暗部的臉調低",
+   "en": "Lower it for faces at night or in shadow",
+   "ja": "夜景や暗い場所の顔では下げてください"
+  },
+  {
    "zh": "夜里关灯看：柔和一点，同时保留暗部细节。",
    "src": "qml/ProPage.qml",
    "zh-TW": "夜裡關燈看：柔和一點，同時保留暗部細節。",
@@ -5782,6 +6188,13 @@
    "zh-TW": "大圖分塊增強失敗，請查看診斷",
    "en": "Large image tiled enhancement failed; see diagnostics",
    "ja": "大きな画像の分割補正に失敗しました。診断を確認してください"
+  },
+  {
+   "zh": "大图分块处理不支持美颜，本图未应用美颜",
+   "src": "src/engine/EngineControllerImage.cpp",
+   "zh-TW": "大圖分塊處理不支援美顏，本圖未套用美顏",
+   "en": "Beauty is not supported when a large image is processed in tiles; it was not applied to this image",
+   "ja": "大きな画像のタイル処理は美顔に対応していないため、この画像には美顔を適用していません"
   },
   {
    "zh": "大图参数应用失败，已保留上一结果",
@@ -5901,6 +6314,13 @@
    "zh-TW": "字幕原字型",
    "en": "Subtitle's own font",
    "ja": "字幕本来のフォント"
+  },
+  {
+   "zh": "字幕将在视频缓冲好后读取",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕將在影片緩衝好後讀取",
+   "en": "Subtitles will load once the video is buffered",
+   "ja": "動画のバッファーが整ってから字幕を読み込みます"
   },
   {
    "zh": "字幕延时 %1 ms",
@@ -6113,6 +6533,13 @@
    "ja": "実際の動作：FSR %1 · 2X"
   },
   {
+   "zh": "实际连接的采集格式与所选模式不同，请刷新并重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "實際連線的擷取格式與所選模式不同，請重新整理並重新選擇。",
+   "en": "The connected capture format differs from the selected mode. Refresh and select again.",
+   "ja": "接続されたキャプチャ形式が選択したモードと異なります。更新して選び直してください。"
+  },
+  {
    "zh": "实验",
    "src": "qml/ChainNodeCard.qml",
    "zh-TW": "實驗",
@@ -6125,6 +6552,13 @@
    "zh-TW": "實驗性：只對 Profile 7 雙層片源生效，且多數影格因增強層解碼失敗會退回基礎層；關閉則強制只用基礎層（重新開啟檔案後套用）",
    "en": "Experimental: applies to Profile 7 dual-layer sources only, and most frames fall back to the base layer because the enhancement layer fails to decode. Turning it off forces base-layer-only playback (applies after reopening the file).",
    "ja": "実験的：Profile 7 のデュアルレイヤー映像のみ対象で、エンハンスメントレイヤーのデコード失敗によりほとんどのフレームはベースレイヤーに戻ります。オフにするとベースレイヤーのみの再生になります（ファイルを開き直すと反映されます）。"
+  },
+  {
+"zh": "实验：采集画面无法抖动，这是 SMAA T2x / 4x 的不抖动近似；静止画面更稳，运动处可能拖影",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "實驗：擷取畫面無法抖動，這是 SMAA T2x / 4x 的不抖動近似；靜止畫面更穩，運動處可能拖影",
+   "en": "Experimental: captured frames cannot be jittered, so this approximates SMAA T2x / 4x without jitter; steadier on still scenes, may ghost on motion",
+   "ja": "実験的：キャプチャー映像にはジッターをかけられないため、SMAA T2x / 4x のジッターなし近似です。静止画面は安定しますが、動く部分に残像が出ることがあります"
   },
   {
    "zh": "对比",
@@ -6862,6 +7296,13 @@
    "ja": "起動要求を送信しました。PS5 が起動してから接続します。"
   },
   {
+   "zh": "已取消",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "已取消",
+   "en": "Cancelled",
+   "ja": "キャンセルしました"
+  },
+  {
    "zh": "已取消 · 可重新开始",
    "src": "qml/ExportPage.qml",
    "zh-TW": "已取消 · 可重新開始",
@@ -7415,6 +7856,20 @@
    "ja": "スイッチ、進行状況、選択状態"
   },
   {
+   "zh": "开发和测试设备的开销一直由作者自己承担。如果 Veyra 对你有帮助，欢迎请作者喝杯咖啡，你的支持就是持续更新的动力。",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "開發和測試設備的開銷一直由作者自己承擔。如果 Veyra 對你有幫助，歡迎請作者喝杯咖啡，你的支持就是持續更新的動力。",
+   "en": "The author has always paid for development and test hardware out of pocket. If Veyra helps you, consider buying the author a coffee: your support is what keeps the updates coming.",
+   "ja": "開発とテスト機材の費用は、これまで作者が自分で負担してきました。Veyra が役に立ったら、作者にコーヒーを一杯おごってください。皆さんの支援が更新を続ける力になります。"
+  },
+  {
+   "zh": "开启使用 Small 模型；关闭使用原模型。每层独立选择，切换会重建 NR，画面可能有所不同。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "開啟使用 Small 模型；關閉使用原模型。每層獨立選擇，切換會重建 NR，畫面可能有所不同。",
+   "en": "On: Small model. Off: Original model. Each layer selects independently. Switching rebuilds NR and may change the picture.",
+   "ja": "オン：Small モデル。オフ：元のモデル。各レイヤーで個別に選択します。切り替えると NR を再構築し、画面が変わる場合があります。"
+  },
+  {
    "zh": "开启使用新版模型 B；关闭使用旧版模型 A。切换会重建 NR，画面可能有所不同。",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "開啟使用新版模型 B；關閉使用舊版模型 A。切換會重建 NR，畫面可能有所不同。",
@@ -7483,6 +7938,13 @@
    "zh-TW": "開始擷取",
    "en": "Start capture",
    "ja": "キャプチャー開始"
+  },
+  {
+   "zh": "开始播放前先攒够的秒数；“跟随缓冲档”按上面的缓冲档位决定。下次打开网络视频生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "開始播放前先累積足夠的秒數；「跟隨緩衝檔」依上方的緩衝檔位決定。下次開啟網路影片生效",
+   "en": "Seconds to collect before playback starts; “Follow buffer level” uses the level chosen above. Takes effect the next time a network video is opened",
+   "ja": "再生を始める前に溜める秒数です。「バッファー段階に従う」は上のバッファー段階で決まります。次回ネットワーク動画を開いたときから反映されます"
   },
   {
    "zh": "开播自动选档",
@@ -7633,7 +8095,7 @@
   },
   {
    "zh": "强度",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "强度",
    "en": "Strength",
    "ja": "Strength"
@@ -7919,6 +8381,13 @@
    "ja": "待機"
   },
   {
+   "zh": "微信扫码",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "微信掃碼",
+   "en": "WeChat Pay",
+   "ja": "WeChat Pay"
+  },
+  {
    "zh": "快捷键",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "快速鍵",
@@ -7941,7 +8410,7 @@
   },
   {
    "zh": "性能",
-   "src": "qml/NodePage.qml",
+   "src": "qml/BeautyEditor.qml",
    "zh-TW": "性能",
    "en": "Performance",
    "ja": "パフォーマンス"
@@ -8206,6 +8675,13 @@
    "ja": "新しいファイルを開くと 2 番目の字幕を自動で選択"
   },
   {
+   "zh": "打开旧版格式列表",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "開啟舊版格式清單",
+   "en": "Open legacy format list",
+   "ja": "従来の形式一覧を開く"
+  },
+  {
    "zh": "打开时的默认页面",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "開啟時的預設頁面",
@@ -8276,7 +8752,10 @@
    "ja": "プロジェクトページを開く機能はまだありません"
   },
   {
-   "zh": "执行失败",
+   "zh": "执行失败"
+  },
+  {
+"zh": "执行失败；请查看日志",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "執行失敗",
    "en": " failed",
@@ -8325,6 +8804,13 @@
    "ja": "ウィンドウまたはディスプレイ全体をソースにする"
   },
   {
+   "zh": "把一部分皮肤纹理留回来，避免塑料感",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "把一部分皮膚紋理留回來，避免塑膠感",
+   "en": "Brings part of the skin texture back to avoid a plastic look",
+   "ja": "肌の質感の一部を戻して、プラスチックのような見た目を防ぎます"
+  },
+  {
    "zh": "把当前设置另存为预设…",
    "src": "qml/NodePage.qml",
    "zh-TW": "把當前設定另存為預設…",
@@ -8351,6 +8837,27 @@
    "zh-TW": "抑制白牆、雲和灰色區域的額外染色",
    "en": "Suppress added tint on white walls, clouds and gray areas",
    "ja": "白い壁、雲、灰色領域への余計な着色を抑えます"
+  },
+  {
+   "zh": "抖音",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "抖音",
+   "en": "Douyin",
+   "ja": "Douyin"
+  },
+  {
+   "zh": "抗锯齿",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "抗鋸齒",
+   "en": "Anti-aliasing",
+   "ja": "アンチエイリアス"
+  },
+  {
+   "zh": "抗锯齿 2",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "抗鋸齒 2",
+   "en": "Anti-aliasing 2",
+   "ja": "アンチエイリアス 2"
   },
   {
    "zh": "抗闪烁档位",
@@ -8486,6 +8993,13 @@
    "ja": "破損したファイルは保護されており、設定は書き込んでいません。先にバックアップして移動してください"
   },
   {
+   "zh": "损坏画面处理",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "損壞畫面處理",
+   "en": "Damaged picture handling",
+   "ja": "破損した映像の扱い"
+  },
+  {
    "zh": "排序",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "排序",
@@ -8568,6 +9082,13 @@
    "zh-TW": "搜索完成，未發現 PS5；確認同一區域網路，或手動填寫 IP。",
    "en": "Search finished; no PS5 found. Make sure it is on the same LAN, or enter the IP by hand.",
    "ja": "検索が完了しましたが、PS5 は見つかりませんでした。同じ LAN にあるか確認するか、IP を手入力してください。"
+  },
+  {
+   "zh": "搜索，例如：1920 60 NV12",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "搜尋，例如：1920 60 NV12",
+   "en": "Search, e.g. 1920 60 NV12",
+   "ja": "検索例：1920 60 NV12"
   },
   {
    "zh": "撤销",
@@ -8718,6 +9239,13 @@
    "ja": "操作に失敗しました。ネットワーク、入力、ディスクの空き容量を確認してください。"
   },
   {
+   "zh": "支付宝扫码",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "支付寶掃碼",
+   "en": "Alipay",
+   "ja": "Alipay"
+  },
+  {
    "zh": "收 ",
    "src": "qml/StreamHud.qml",
    "zh-TW": "收 ",
@@ -8830,6 +9358,13 @@
    "ja": "全体の明るさ"
   },
   {
+   "zh": "整体强度",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "整體強度",
+   "en": "Overall strength",
+   "ja": "全体の強さ"
+  },
+  {
    "zh": "整体观感",
    "src": "qml/ProPage.qml",
    "zh-TW": "整體觀感",
@@ -8842,6 +9377,13 @@
    "zh-TW": "整套設定無效，未應用任何字段",
    "en": "The whole set of settings is invalid; nothing was applied",
    "ja": "設定一式が無効なため、何も適用していません"
+  },
+  {
+   "zh": "整张脸",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "整張臉",
+   "en": "Whole face",
+   "ja": "顔全体"
   },
   {
    "zh": "整档预设",
@@ -8970,11 +9512,25 @@
    "ja": "切断"
   },
   {
+   "zh": "断线自动重连",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "斷線自動重連",
+   "en": "Auto-reconnect",
+   "ja": "切断時の自動再接続"
+  },
+  {
    "zh": "新预设名称",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "新預設名稱",
    "en": "New preset name",
    "ja": "新しいプリセット名"
+  },
+  {
+   "zh": "方式",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "方式",
+   "en": "Method",
+   "ja": "方式"
   },
   {
    "zh": "旋转显示器请使用 Windows 采集方式",
@@ -9038,6 +9594,13 @@
    "zh-TW": "無法寫入匯出檔案",
    "en": "Could not write the export file",
    "ja": "書き出しファイルに書き込めませんでした"
+  },
+  {
+   "zh": "无法分配媒体上下文",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "無法配置媒體上下文",
+   "en": "Could not allocate the media context",
+   "ja": "メディアコンテキストを確保できません"
   },
   {
    "zh": "无法分配配对存档，请重试。",
@@ -9166,6 +9729,13 @@
    "ja": "データフォルダーを開けません"
   },
   {
+   "zh": "无法打开浏览器",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "無法開啟瀏覽器",
+   "en": "Could not open the browser",
+   "ja": "ブラウザーを開けませんでした"
+  },
+  {
    "zh": "无法打开浏览器，请检查默认浏览器设置。",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "無法開啟瀏覽器，請檢查預設瀏覽器設定。",
@@ -9178,6 +9748,13 @@
    "zh-TW": "無法開啟目錄：%1",
    "en": "Could not open the folder: %1",
    "ja": "フォルダーを開けません：%1"
+  },
+  {
+   "zh": "无法打开视频文件，请检查路径和网络共享是否可访问",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "無法開啟影片檔案，請檢查路徑和網路共用是否可存取",
+   "en": "Could not open the video file. Check that the path and the network share are reachable.",
+   "ja": "動画ファイルを開けません。パスとネットワーク共有にアクセスできるか確認してください。"
   },
   {
    "zh": "无法打开视频，请查看诊断",
@@ -9199,6 +9776,13 @@
    "zh-TW": "無法映射匯出通信資源",
    "en": "Could not map the export communication resources",
    "ja": "書き出し用の通信リソースをマップできませんでした"
+  },
+  {
+   "zh": "无法构造所选采集格式，请检查分辨率、帧率与驱动能力。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "無法建立所選擷取格式，請檢查解析度、影格率與驅動能力。",
+   "en": "Cannot construct the selected capture format. Check resolution, frame rate and driver capabilities.",
+   "ja": "選択したキャプチャ形式を作成できません。解像度、レート、ドライバーの対応能力を確認してください。"
   },
   {
    "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）",
@@ -9236,6 +9820,13 @@
    "ja": "メディア情報を読み取れません"
   },
   {
+   "zh": "无法读取媒体信息，地址可能不是视频",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "無法讀取媒體資訊，位址可能不是影片",
+   "en": "Could not read the media information; the address may not be a video",
+   "ja": "メディア情報を読み取れません。アドレスが動画ではない可能性があります"
+  },
+  {
    "zh": "无法读取导入文件",
    "src": "src/engine/ColorLookStore.cpp",
    "zh-TW": "無法讀取匯入檔案",
@@ -9262,6 +9853,13 @@
    "zh-TW": "無法執行匯出處理程序",
    "en": "Could not run the export process",
    "ja": "書き出しプロセスを実行できません"
+  },
+  {
+   "zh": "无法连接到服务器或地址不可用，请检查网络",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "無法連線到伺服器或位址無法使用，請檢查網路",
+   "en": "Could not connect to the server, or the address is unavailable. Check the network.",
+   "ja": "サーバーに接続できないか、アドレスが利用できません。ネットワークを確認してください。"
   },
   {
    "zh": "无陀螺仪",
@@ -9292,6 +9890,20 @@
    "ja": "日本語"
   },
   {
+   "zh": "旧版格式列表",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "舊版格式清單",
+   "en": "Legacy format list",
+   "ja": "従来の形式一覧"
+  },
+  {
+   "zh": "旧版格式选择",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "舊版格式選擇",
+   "en": "Legacy format selection",
+   "ja": "従来の形式選択"
+  },
+  {
    "zh": "旧节点配置的 NR 保护区域已移除；列表保护及其他节点参数保留，后续保存到 .p3-node 文件，原文件不覆盖",
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "舊節點設定的 NR 保護區域已移除；列表保護及其他節點參數保留，後續儲存到 .p3-node 檔案，原檔案不覆蓋",
@@ -9311,6 +9923,13 @@
    "zh-TW": "時域穩定",
    "en": "Temporal stability",
    "ja": "時間方向の安定化"
+  },
+  {
+   "zh": "时域累积",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "時域累積",
+   "en": "Temporal accumulation",
+   "ja": "時間方向の蓄積"
   },
   {
    "zh": "时间",
@@ -9558,6 +10177,13 @@
    "ja": "ディスプレイのピーク（nit）"
   },
   {
+   "zh": "显示遮罩",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "顯示遮罩",
+   "en": "Show mask",
+   "ja": "マスクを表示"
+  },
+  {
    "zh": "显示队列恢复失败 · ",
    "src": "src/engine/VideoPresenter.cpp",
    "zh-TW": "顯示佇列恢復失敗 · ",
@@ -9775,6 +10401,13 @@
    "ja": "保護領域は最大 4 個です。先に 1 つ削除してください"
   },
   {
+   "zh": "最多人脸",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "最多人臉",
+   "en": "Max faces",
+   "ja": "最大顔数"
+  },
+  {
    "zh": "最多保存64套色彩预设",
    "src": "src/engine/ColorLookStore.cpp",
    "zh-TW": "最多儲存64套色彩預設",
@@ -9859,6 +10492,13 @@
    "ja": "リミテッド · Limited"
   },
   {
+   "zh": "服务器速度 {:.1f} MB/s 低于视频码率 {:.1f} MB/s，建议加大缓冲或下载后播放",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "伺服器速度 {:.1f} MB/s 低於影片位元率 {:.1f} MB/s，建議加大緩衝或下載後播放",
+   "en": "Server speed {:.1f} MB/s is below the video bitrate {:.1f} MB/s; raise the buffer or download it before playing",
+   "ja": "サーバー速度 {:.1f} MB/s が動画のビットレート {:.1f} MB/s を下回っています。バッファーを増やすか、ダウンロードしてから再生してください"
+  },
+  {
    "zh": "未使用",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "未使用",
@@ -9878,6 +10518,13 @@
    "zh-TW": "未啟用",
    "en": "Not enabled",
    "ja": "無効"
+  },
+  {
+   "zh": "未启用子功能",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未啟用子功能",
+   "en": "No function switched on",
+   "ja": "機能がオンになっていません"
   },
   {
    "zh": "未启用：",
@@ -9950,6 +10597,13 @@
    "ja": "再生していません"
   },
   {
+   "zh": "未检测到人脸",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未偵測到人臉",
+   "en": "No face detected",
+   "ja": "顔が検出されていません"
+  },
+  {
    "zh": "未检测到手柄",
    "src": "qml/DialogHost.qml",
    "zh-TW": "未偵測到手把",
@@ -9997,6 +10651,13 @@
    "zh-TW": "未新增項目：檔案已在清單中，或沒有支援的媒體檔案",
    "en": "No new items: files are already listed or no supported media was found.",
    "ja": "新しい項目はありません。登録済みか、対応するメディアが見つかりませんでした。"
+  },
+  {
+   "zh": "未添加美颜层 · 人脸原画保护与磨皮",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "未添加美顏層 · 人臉原畫保護與磨皮",
+   "en": "No beauty layer · original face restore and skin smoothing",
+   "ja": "美顔層なし · 顔のオリジナル保護と美肌"
   },
   {
    "zh": "未登录",
@@ -10097,13 +10758,6 @@
    "ja": "上限なし"
   },
   {
-   "zh": "未读到设备上报的采集格式，或设备正被其他应用占用。",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "未讀到裝置回報的擷取格式，或裝置正被其他應用程式佔用。",
-   "en": "No capture formats were reported, or the device is in use by another application.",
-   "ja": "キャプチャ形式が取得できないか、他のアプリがデバイスを使用しています。"
-  },
-  {
    "zh": "未输出",
    "src": "qml/NodePage.qml",
    "zh-TW": "未輸出",
@@ -10174,6 +10828,13 @@
    "ja": "Dolby Vision 設定"
   },
   {
+"zh": "本软件开源免费，如果对你有帮助，你可以 →",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "本軟體開源免費，如果對你有幫助，你可以 →",
+   "en": "This software is free and open source. If it helps you, you can →",
+   "ja": "本ソフトは無料のオープンソースです。役に立ったら →"
+  },
+  {
    "zh": "松开以追加到播放列表",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "放開以追加至播放清單",
@@ -10206,6 +10867,13 @@
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "極致",
    "en": "Ultimate",
+   "ja": "最高"
+  },
+  {
+   "zh": "极高",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "極高",
+   "en": "Ultra",
    "ja": "最高"
   },
   {
@@ -10279,6 +10947,13 @@
    "ja": "確認中…"
   },
   {
+   "zh": "检查并选择",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "檢查並選擇",
+   "en": "Check and select",
+   "ja": "確認して選択"
+  },
+  {
    "zh": "检查更新",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "檢查更新",
@@ -10298,6 +10973,13 @@
    "zh-TW": "偵測到 %1",
    "en": "%1 detected",
    "ja": "%1 を検出"
+  },
+  {
+   "zh": "检测到 %1 张人脸",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到 %1 張人臉",
+   "en": "%1 face(s) detected",
+   "ja": "%1 人の顔を検出"
   },
   {
    "zh": "检测到 Dolby Vision RPU，但缺少基础层兼容声明，无法确认颜色，已停止",
@@ -10347,6 +11029,13 @@
    "zh-TW": "偵測到獨佔全螢幕的遊戲：Windows 不允許其他視窗蓋在它上面，請把遊戲改成無邊框視窗或視窗化",
    "en": "An exclusive-fullscreen game is running: Windows lets no other window cover it. Switch the game to borderless or windowed mode",
    "ja": "排他的フルスクリーンのゲームを検出しました。Windows は他のウィンドウを重ねられません。ゲームをボーダーレスまたはウィンドウモードにしてください"
+  },
+  {
+   "zh": "检测到网络丢包，已自动跳过 %1 处",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到網路丟包，已自動跳過 %1 處",
+   "en": "Network packet loss detected; %1 spot(s) skipped automatically",
+   "ja": "ネットワークのパケット損失を検出し、%1 か所を自動的にスキップしました"
   },
   {
    "zh": "检测异常增长时自动退出全屏；默认关闭",
@@ -10713,6 +11402,13 @@
    "ja": "Xbox ストリーミングサービスにサインイン中…"
   },
   {
+   "zh": "正在缓冲 {:.1f}/{:.1f} 秒",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "正在緩衝 {:.1f}/{:.1f} 秒",
+   "en": "Buffering {:.1f}/{:.1f} s",
+   "ja": "バッファー中 {:.1f}/{:.1f} 秒"
+  },
+  {
    "zh": "正在编码",
    "src": "src/engine/ExportJobManager.cpp",
    "zh-TW": "正在編碼",
@@ -10909,20 +11605,6 @@
    "ja": "このキャプチャカードにこの形式はありません。対応する解像度、フレームレート、ピクセル形式を選び直してください。"
   },
   {
-   "zh": "此采集卡无此格式，驱动拒绝所选格式（0x{:08X}），请重新选择。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "此擷取卡無此格式，驅動拒絕所選格式（0x{:08X}），請重新選擇。",
-   "en": "This capture card rejected the selected format (0x{:08X}). Choose another supported format.",
-   "ja": "キャプチャカードのドライバーが選択形式を拒否しました（0x{:08X}）。対応する形式を選び直してください。"
-  },
-  {
-   "zh": "此采集卡无此格式：拒绝 {:.3f} FPS（0x{:08X}），请改用设备支持的帧率，或填 0 沿用所选格式。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "此擷取卡無此格式：拒絕 {:.3f} FPS（0x{:08X}），請改用裝置支援的幀率，或填 0 沿用所選格式。",
-   "en": "This capture card rejected the requested format at {:.3f} FPS (0x{:08X}). Choose a supported rate, or enter 0 to use the selected format rate.",
-   "ja": "キャプチャカードが {:.3f} FPS の指定形式を拒否しました（0x{:08X}）。対応するレートを選ぶか、0 を入力して選択形式のレートを使用してください。"
-  },
-  {
    "zh": "残差",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "殘差",
@@ -10944,11 +11626,39 @@
    "ja": "マスターのピークが低い（旧作）"
   },
   {
+"zh": "每帧识别 · 320 像素，最省；远处的小脸可能识别不到",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "每幀識別 · 320 像素，最省；遠處的小臉可能識別不到",
+   "en": "Every frame · 320 px, lightest; small distant faces may be missed",
+   "ja": "毎フレーム検出 · 320 px、最も軽量。遠くの小さな顔は検出されないことがあります"
+  },
+  {
+   "zh": "每帧识别 · 512 像素",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "每幀識別 · 512 像素",
+   "en": "Every frame · 512 px",
+   "ja": "毎フレーム検出 · 512 px"
+  },
+  {
+   "zh": "每帧识别 · 640 像素，小脸也能识别",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "每幀識別 · 640 像素，小臉也能識別",
+   "en": "Every frame · 640 px, finds small faces too",
+   "ja": "毎フレーム検出 · 640 px、小さな顔も検出"
+  },
+  {
    "zh": "比较源画面与上一帧：没有明显变化的像素沿用上一帧输出，明显变化的位置直接用新结果。",
    "src": "qml/ProPage.qml",
    "zh-TW": "比較源畫面與上一幀：沒有明顯變化的像素沿用上一幀輸出，明顯變化的位置直接用新結果。",
    "en": "Compares the source with the previous frame: pixels without a clear change reuse the previous output; clearly changed areas take the new result directly.",
    "ja": "ソースを前のフレームと比較し、目立った変化のないピクセルは前の出力を使い、変化した部分は新しい結果をそのまま使います。"
+  },
+  {
+   "zh": "没有匹配的格式",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "沒有相符的格式",
+   "en": "No matching formats",
+   "ja": "一致する形式がありません"
   },
   {
    "zh": "没有可保存的画面",
@@ -11245,11 +11955,11 @@
    "ja": "ゲームモード"
   },
   {
-   "zh": "游戏模式不裁剪，画面和屏幕一一对应，点到哪里就是哪里",
+   "zh": "游戏模式不裁剪；贴合原窗口时画面与鼠标位置一一对应",
    "src": "qml/DialogHost.qml",
-   "zh-TW": "遊戲模式不裁切，畫面和螢幕一一對應，點到哪裡就是哪裡",
-   "en": "Game mode does not crop: the picture matches the screen, so clicks land where you see them",
-   "ja": "ゲームモードでは切り抜きません。映像と画面が一致し、見た位置をそのままクリックできます"
+   "zh-TW": "遊戲模式不裁剪；貼合原視窗時畫面與滑鼠位置一一對應",
+   "en": "Game mode does not crop the source. Original-window alignment preserves exact mouse positions.",
+   "ja": "ゲームモードではソースを切り抜きません。元のウィンドウに合わせると映像とマウス位置が一致します。"
   },
   {
    "zh": "游戏模式用真实指针，画面里不再画一个",
@@ -11259,11 +11969,11 @@
    "ja": "ゲームモードでは実際のポインターを使い、映像には描きません"
   },
   {
-   "zh": "游戏模式键盘监听启动失败，未开启鼠标穿透；请退出全屏后重试",
+   "zh": "游戏模式键盘监听不可用，已退出鼠标穿透；请退出全屏后重试",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "遊戲模式鍵盤監聽啟動失敗，未開啟滑鼠穿透；請退出全螢幕後重試",
-   "en": "Game mode keyboard listener could not start. Mouse passthrough is off; leave fullscreen and try again.",
-   "ja": "ゲームモードのキー監視を開始できません。マウス透過はオフです。全画面を解除して再試行してください。"
+   "zh-TW": "遊戲模式鍵盤監聽無法使用，已退出滑鼠穿透；請退出全螢幕後重試",
+   "en": "Game-mode keyboard listener is unavailable. Mouse passthrough has been released; leave fullscreen and retry.",
+   "ja": "ゲームモードのキーボード監視を利用できません。マウス透過を解除しました。全画面を終了して再試行してください。"
   },
   {
    "zh": "游戏模式：调整画面",
@@ -11588,6 +12298,13 @@
    "ja": "平坦な映像のコントラスト感を高めます。"
   },
   {
+   "zh": "画面变化超过时丢弃历史；越高越不容易拖影",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "畫面變化超過時捨棄歷史；越高越不容易拖影",
+   "en": "Drops the history where the picture changes by more; higher means less ghosting",
+   "ja": "画面の変化がこれを超えると履歴を破棄します。高いほど残像が出にくくなります"
+  },
+  {
    "zh": "画面呈现失败",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "畫面呈現失敗",
@@ -11656,13 +12373,6 @@
    "zh-TW": "畫面調控已接管時域穩定；關閉調控後恢復此設定",
    "en": "Image correction controls temporal stability; this setting returns when correction is off",
    "ja": "画質調整が時間方向の安定化を制御中。オフにするとこの設定に戻ります。"
-  },
-  {
-   "zh": "画面贴合游戏窗口的位置，键鼠和手柄照常操作游戏；%1 调整画面，%2 退出。独占全屏请改为无边框窗口",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "畫面貼合遊戲視窗位置，鍵鼠與手把照常操作遊戲；%1 調整畫面，%2 退出。獨佔全螢幕請改為無邊框視窗",
-   "en": "The picture follows the game window position. Use the keyboard, mouse and controller normally; %1 adjusts the picture and %2 exits. Use borderless mode instead of exclusive fullscreen.",
-   "ja": "ゲームウィンドウの位置に画面を合わせます。通常どおり操作し、%1 で画面調整、%2 で解除。排他全画面ではなくボーダーレスにしてください。"
   },
   {
    "zh": "界面卡住超过 3 秒，已退出游戏模式",
@@ -11910,6 +12620,13 @@
    "ja": "IPTV やカメラなどの HTTP、HTTPS、RTSP メディアストリームを開きます。"
   },
   {
+   "zh": "直接查看完整格式列表，包含被常用帧率筛选隐藏的模式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "直接查看完整格式清單，包含被常用影格率篩選隱藏的模式",
+   "en": "View the full list, including modes hidden by the common frame rate filter",
+   "ja": "一般的なレートのフィルターで隠れるモードも含め、形式の全一覧を表示します"
+  },
+  {
    "zh": "直播兼容模式未能启用，已恢复",
    "src": "src/engine/EngineControllerImage.cpp",
    "zh-TW": "直播相容模式未能啟用，已恢復",
@@ -11929,6 +12646,13 @@
    "zh-TW": "相關性只有 {:.2f}，未找到可靠偏移（字幕可能與影片不匹配）",
    "en": "Correlation is only {:.2f}; no reliable offset found (the subtitles may not match the video)",
    "ja": "相関が {:.2f} しかなく、信頼できるオフセットが見つかりません（字幕が動画と合っていない可能性があります）"
+  },
+  {
+   "zh": "相对人脸大小；负值向内收",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "相對人臉大小；負值向內收",
+   "en": "Relative to the face size; negative shrinks it",
+   "ja": "顔の大きさに対する割合。負の値で内側に縮めます"
   },
   {
    "zh": "睡眠（可唤醒）",
@@ -11985,6 +12709,41 @@
    "zh-TW": "確定",
    "en": "OK",
    "ja": "OK"
+  },
+  {
+   "zh": "磨皮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "磨皮",
+   "en": "Skin smoothing",
+   "ja": "美肌"
+  },
+  {
+   "zh": "磨皮 %1%",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "磨皮 %1%",
+   "en": "Smoothing %1%",
+   "ja": "美肌 %1%"
+  },
+  {
+   "zh": "磨皮半径",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "磨皮半徑",
+   "en": "Smoothing radius",
+   "ja": "美肌の半径"
+  },
+  {
+   "zh": "磨皮程度",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "磨皮程度",
+   "en": "Smoothing amount",
+   "ja": "美肌の度合い"
+  },
+  {
+   "zh": "磨皮范围",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "磨皮範圍",
+   "en": "Smoothing area",
+   "ja": "美肌の範囲"
   },
   {
    "zh": "离线",
@@ -12106,6 +12865,20 @@
    "ja": "信号待ち"
   },
   {
+   "zh": "等待关键帧",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "等待關鍵幀",
+   "en": "Wait for keyframe",
+   "ja": "キーフレームを待つ"
+  },
+  {
+   "zh": "等待关键帧 = 丢弃损坏的画面，停在上一帧直到下一个完好的关键帧；只对网络视频与 MPEG-TS 生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "等待關鍵幀 = 丟棄損壞的畫面，停在上一幀直到下一個完好的關鍵幀；只對網路影片與 MPEG-TS 生效",
+   "en": "Wait for keyframe = drop damaged pictures and hold the last one until the next clean keyframe; only applies to network video and MPEG-TS",
+   "ja": "キーフレームを待つ = 破損した映像を破棄し、次の正常なキーフレームまで直前の映像を表示します。ネットワーク動画と MPEG-TS にのみ適用されます"
+  },
+  {
    "zh": "等待导出",
    "src": "qml/ExportPage.qml",
    "zh-TW": "等待匯出",
@@ -12191,7 +12964,7 @@
   },
   {
    "zh": "精细",
-   "src": "qml/DialogHost.qml",
+   "src": "qml/BeautyEditor.qml",
    "zh-TW": "精細",
    "en": "Fine",
    "ja": "精細"
@@ -12344,6 +13117,13 @@
    "ja": "テクスチャ"
   },
   {
+   "zh": "纹理保留",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "紋理保留",
+   "en": "Texture kept",
+   "ja": "質感の保持"
+  },
+  {
    "zh": "组件与许可",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "組件與許可",
@@ -12356,6 +13136,13 @@
    "zh-TW": "細",
    "en": "Thin",
    "ja": "細い"
+  },
+  {
+   "zh": "细节保护",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "細節保護",
+   "en": "Detail protection",
+   "ja": "ディテール保護"
   },
   {
    "zh": "继续上次",
@@ -12393,6 +13180,20 @@
    "ja": "グリーン"
   },
   {
+   "zh": "缓冲 %1 s",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "緩衝 %1 s",
+   "en": "Buffer %1 s",
+   "ja": "バッファー %1 s"
+  },
+  {
+   "zh": "缓冲中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "緩衝中",
+   "en": "Buffering",
+   "ja": "バッファー中"
+  },
+  {
    "zh": "编码",
    "src": "qml/DialogHost.qml",
    "zh-TW": "編碼",
@@ -12428,11 +13229,74 @@
    "ja": "この字幕形式のデコーダーがありません"
   },
   {
+   "zh": "网络",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "網路",
+   "en": "Network",
+   "ja": "ネットワーク"
+  },
+  {
+   "zh": "网络中断后自动重连：点播从断点继续，直播重新连接；关闭后断线即停止。下次打开网络视频生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "網路中斷後自動重連：點播從斷點繼續，直播重新連線；關閉後斷線即停止。下次開啟網路影片生效",
+   "en": "Reconnect automatically after a network drop: on-demand video resumes where it stopped and live streams reconnect; when off, a drop stops playback. Takes effect the next time a network video is opened",
+   "ja": "ネットワークが切れたら自動で再接続します。オンデマンドは中断した位置から再開し、ライブは再接続します。オフにすると切断で再生を止めます。次回ネットワーク動画を開いたときから反映されます"
+  },
+  {
+   "zh": "网络中断，正在重连（第 {} 次）",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "網路中斷，正在重連（第 {} 次）",
+   "en": "Network dropped, reconnecting (attempt {})",
+   "ja": "ネットワークが切断されました。再接続しています（{} 回目）"
+  },
+  {
+   "zh": "网络地址、直播与服务器视频先攒一段再播放；服务器速度低于视频码率时暂停缓冲并说明原因，不会报错黑屏。下次打开网络视频生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "網路位址、直播與伺服器影片會先累積一段再播放；伺服器速度低於影片位元率時會暫停緩衝並說明原因，不會報錯黑屏。下次開啟網路影片生效",
+   "en": "Network addresses, live streams and server videos collect a short buffer before playing. When the server is slower than the video's bitrate, playback pauses to buffer and says why instead of failing to a black screen. Takes effect the next time a network video is opened",
+   "ja": "ネットワークアドレス、ライブ、サーバー上の動画は、少し溜めてから再生します。サーバー速度が動画のビットレートを下回るとバッファーのため一時停止して理由を表示し、エラーや黒画面にはなりません。次回ネットワーク動画を開いたときから反映されます"
+  },
+  {
+   "zh": "网络已重新连接，继续播放",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "網路已重新連線，繼續播放",
+   "en": "Network reconnected, playback continues",
+   "ja": "ネットワークに再接続しました。再生を続けます"
+  },
+  {
+   "zh": "网络缓冲",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "網路緩衝",
+   "en": "Network buffer",
+   "ja": "ネットワークバッファー"
+  },
+  {
+   "zh": "网络缓冲中 {:.1f}/{:.1f} 秒",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "網路緩衝中 {:.1f}/{:.1f} 秒",
+   "en": "Buffering the network {:.1f}/{:.1f} s",
+   "ja": "ネットワークをバッファー中 {:.1f}/{:.1f} 秒"
+  },
+  {
    "zh": "网络视频 · %1",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "網路影片 · %1",
    "en": "Network video · %1",
    "ja": "ネットワーク動画 · %1"
+  },
+  {
+   "zh": "网络连接中断（断线自动重连已关闭）",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "網路連線中斷（斷線自動重連已關閉）",
+   "en": "Network connection lost (auto-reconnect is off)",
+   "ja": "ネットワーク接続が切れました（自動再接続はオフです）"
+  },
+  {
+   "zh": "网络连接中断，已重试 {} 秒仍无法恢复",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "網路連線中斷，已重試 {} 秒仍無法恢復",
+   "en": "Network connection lost; still not back after retrying for {} s",
+   "ja": "ネットワーク接続が切れ、{} 秒再試行しても復旧しませんでした"
   },
   {
    "zh": "美乐威低延迟模式",
@@ -12449,6 +13313,104 @@
    "ja": "Magewell のキャプチャーを開始できず、通常のキャプチャーに戻しました（ログの magewell を参照）"
   },
   {
+   "zh": "美颜",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "美顏",
+   "en": "Beauty",
+   "ja": "美顔"
+  },
+  {
+   "zh": "美颜 2",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 2",
+   "en": "Beauty 2",
+   "ja": "美顔 2"
+  },
+  {
+   "zh": "美颜 3",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 3",
+   "en": "Beauty 3",
+   "ja": "美顔 3"
+  },
+  {
+   "zh": "美颜 4",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 4",
+   "en": "Beauty 4",
+   "ja": "美顔 4"
+  },
+  {
+   "zh": "美颜 5",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 5",
+   "en": "Beauty 5",
+   "ja": "美顔 5"
+  },
+  {
+   "zh": "美颜 6",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 6",
+   "en": "Beauty 6",
+   "ja": "美顔 6"
+  },
+  {
+   "zh": "美颜人脸识别设置超出范围",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "美顏人臉識別設定超出範圍",
+   "en": "Beauty face detection settings out of range",
+   "ja": "美顔の顔検出設定が範囲外です"
+  },
+  {
+   "zh": "美颜参数超出范围",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "美顏參數超出範圍",
+   "en": "Beauty settings out of range",
+   "ja": "美顔の設定が範囲外です"
+  },
+  {
+   "zh": "美颜层 ",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "美顏層 ",
+   "en": "Beauty layer ",
+   "ja": "美顔層 "
+  },
+  {
+   "zh": "美颜预设",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "美顏預設",
+   "en": "Beauty presets",
+   "ja": "美顔プリセット"
+  },
+  {
+   "zh": "美颜：人脸模型文件缺失，人脸原画保护与人脸区域美颜暂不生效",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "美顏：人臉模型檔案缺失，人臉原畫保護與人臉區域美顏暫不生效",
+   "en": "Beauty: the face model file is missing; original face restore and face-area beauty are not applied",
+   "ja": "美顔：顔モデルファイルがないため、顔のオリジナル保護と顔の範囲の美顔は適用されません"
+  },
+  {
+   "zh": "美颜：人脸网格模型缺失，人脸区域按椭圆近似，五官不单独排除",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "美顏：人臉網格模型缺失，人臉區域按橢圓近似，五官不單獨排除",
+   "en": "Beauty: the face mesh model is missing; face areas are approximated by ovals and the eyes, brows and lips are not left out",
+   "ja": "美顔：顔メッシュモデルがないため、顔の範囲は楕円で近似され、目・眉・唇は除外されません"
+  },
+  {
+   "zh": "美颜：人脸识别初始化失败，人脸原画保护与人脸区域美颜暂不生效",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "美顏：人臉識別初始化失敗，人臉原畫保護與人臉區域美顏暫不生效",
+   "en": "Beauty: face detection failed to start; original face restore and face-area beauty are not applied",
+   "ja": "美顔：顔検出を開始できなかったため、顔のオリジナル保護と顔の範囲の美顔は適用されません"
+  },
+  {
+   "zh": "群二维码在项目主页 README 里",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "群組 QR 碼在專案主頁 README 裡",
+   "en": "The group QR codes are in the project README",
+   "ja": "グループの QR コードはプロジェクトの README にあります"
+  },
+  {
    "zh": "羽化像素",
    "src": "qml/ProPage.qml",
    "zh-TW": "羽化像素",
@@ -12461,6 +13423,20 @@
    "zh-TW": "老片平淡",
    "en": "Flat older transfer",
    "ja": "平坦な旧作"
+  },
+  {
+   "zh": "肤色提亮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "膚色提亮",
+   "en": "Skin brightening",
+   "ja": "肌を明るく"
+  },
+  {
+   "zh": "肤色范围 · 高级",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "膚色範圍 · 高級",
+   "en": "Skin range · advanced",
+   "ja": "肌色範囲 · 詳細"
   },
   {
    "zh": "肤质 · 未证实",
@@ -12757,6 +13733,13 @@
    "ja": "カスタム上限（FPS）"
   },
   {
+   "zh": "自定义分辨率",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "自訂解析度",
+   "en": "Custom resolution",
+   "ja": "カスタム解像度"
+  },
+  {
    "zh": "自定义播放速度",
    "src": "qml/PlaybackRateDialog.qml",
    "zh-TW": "自訂播放速度",
@@ -12769,6 +13752,13 @@
    "zh-TW": "自訂：已用下面的滑桿微調過。",
    "en": "Custom: adjusted with the sliders below.",
    "ja": "カスタム：下のスライダーで調整済み。"
+  },
+  {
+   "zh": "自然磨皮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "自然磨皮",
+   "en": "Natural smoothing",
+   "ja": "自然な美肌"
   },
   {
    "zh": "自然饱和度",
@@ -12911,11 +13901,25 @@
    "ja": "色相"
   },
   {
+   "zh": "色相中心",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "色相中心",
+   "en": "Hue centre",
+   "ja": "色相の中心"
+  },
+  {
    "zh": "色相保护",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "色相保護",
    "en": "Hue protection",
    "ja": "色相保護"
+  },
+  {
+   "zh": "色相范围",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "色相範圍",
+   "en": "Hue range",
+   "ja": "色相の範囲"
   },
   {
    "zh": "色调",
@@ -13030,6 +14034,13 @@
    "ja": "ノードモードは接続順に実際に処理します。オフラインの書き出しはリストモードのみ対応です。"
   },
   {
+   "zh": "节点模式请用节点的复制",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "節點模式請用節點的複製",
+   "en": "In node mode, copy the node instead",
+   "ja": "ノードモードではノードのコピーを使ってください"
+  },
+  {
    "zh": "节点编辑文档类型或容量无效",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "節點編輯文檔類型或容量無效",
@@ -13119,6 +14130,13 @@
    "zh-TW": "藍色",
    "en": "Blue",
    "ja": "ブルー"
+  },
+  {
+   "zh": "蓝色为原画保护区域，品红为磨皮区域；导出时自动关闭",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "藍色為原畫保護區域，洋紅為磨皮區域；匯出時自動關閉",
+   "en": "Blue: original restore area; magenta: smoothing area. Turned off automatically for export",
+   "ja": "青はオリジナル保護の範囲、マゼンタは美肌の範囲です。書き出し時は自動でオフになります"
   },
   {
    "zh": "补帧",
@@ -13646,6 +14664,13 @@
    "ja": "60fps コンテンツを判別"
   },
   {
+   "zh": "识别档位",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "識別檔位",
+   "en": "Detection level",
+   "ja": "検出レベル"
+  },
+  {
    "zh": "诊断信息",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "診斷資訊",
@@ -13665,6 +14690,13 @@
    "zh-TW": "診斷資訊已複製，可直接貼上到反饋裡",
    "en": "Diagnostics copied; paste them straight into your report",
    "ja": "診断情報をコピーしました。そのまま報告に貼り付けられます"
+  },
+  {
+   "zh": "该地址没有视频流",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "該位址沒有影片串流",
+   "en": "This address has no video stream",
+   "ja": "このアドレスには動画ストリームがありません"
   },
   {
    "zh": "该字幕轨没有可显示的内容",
@@ -13709,11 +14741,11 @@
    "ja": "この種類のノードは上限に達しています（無効・未接続のノードを含む）"
   },
   {
-   "zh": "该采集格式不支持设备帧率协商，请将采集帧率设为 0。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "該擷取格式不支援裝置幀率協商，請將擷取幀率設為 0。",
-   "en": "This capture format does not support frame rate negotiation; set the capture frame rate to 0.",
-   "ja": "このキャプチャーフォーマットはフレームレートの調整に対応していません。キャプチャーのフレームレートを 0 にしてください。"
+   "zh": "请作者喝杯咖啡",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "請作者喝杯咖啡",
+   "en": "Buy the author a coffee",
+   "ja": "作者にコーヒーをおごる"
   },
   {
    "zh": "请先切换到要保存的编辑模式",
@@ -13756,6 +14788,13 @@
    "zh-TW": "請先添加 RTX Video HDR 節點",
    "en": "Add an RTX Video HDR node first",
    "ja": "先に RTX Video HDR ノードを追加してください"
+  },
+  {
+   "zh": "请先添加抗锯齿节点",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請先添加抗鋸齒節點",
+   "en": "Add an anti-aliasing node first",
+   "ja": "先にアンチエイリアスのノードを追加してください"
   },
   {
    "zh": "请先添加补帧节点",
@@ -13975,11 +15014,25 @@
    "ja": "入力ポートを選んで接続を完了 · Esc でキャンセル"
   },
   {
+   "zh": "读取协商后的采集格式失败（0x{:08X}）。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "讀取協商後的擷取格式失敗（0x{:08X}）。",
+   "en": "Failed to read the negotiated capture format (0x{:08X}).",
+   "ja": "合意されたキャプチャ形式を読み取れませんでした（0x{:08X}）。"
+  },
+  {
    "zh": "读取媒体信息失败",
    "src": "src/engine/ExportQueue.cpp",
    "zh-TW": "讀取媒體資訊失敗",
    "en": "Could not read the media information",
    "ja": "メディア情報の読み取りに失敗しました"
+  },
+  {
+   "zh": "读取媒体信息超时（30 秒），服务器太慢或不是视频流",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "讀取媒體資訊超時（30 秒），伺服器太慢或不是影片串流",
+   "en": "Timed out reading the media information (30 s); the server is too slow or this is not a video stream",
+   "ja": "メディア情報の読み取りがタイムアウトしました（30 秒）。サーバーが遅いか、動画ストリームではありません"
   },
   {
    "zh": "读取字幕参数",
@@ -13994,6 +15047,13 @@
    "zh-TW": "讀取源軌道",
    "en": "Read source tracks",
    "ja": "ソーストラックの読み取り"
+  },
+  {
+   "zh": "读取采集格式失败：%1（0x%2）。请检查设备占用与驱动后重试。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "讀取擷取格式失敗：%1（0x%2）。請檢查裝置占用與驅動後重試。",
+   "en": "Failed to read capture formats: %1 (0x%2). Check whether the device is in use and check its driver, then retry.",
+   "ja": "キャプチャ形式を読み取れません：%1（0x%2）。デバイスの使用状況とドライバーを確認して再試行してください。"
   },
   {
    "zh": "读取附属轨道",
@@ -14123,7 +15183,7 @@
   },
   {
    "zh": "质量",
-   "src": "qml/NodePage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "品質",
    "en": "Quality",
    "ja": "品質"
@@ -14136,11 +15196,46 @@
    "ja": "品質の方式"
   },
   {
+   "zh": "贴合原窗口",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "貼合原視窗",
+   "en": "Align to source window",
+   "ja": "元のウィンドウに合わせる"
+  },
+  {
+   "zh": "贴合原窗口时可精确穿透鼠标；填满或拉伸支持键盘和手柄，鼠标点击会被拦截以免错位。%1 调整画面，%2 退出；独占全屏请改为无边框窗口",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "貼合原視窗時可精確穿透滑鼠；填滿或拉伸支援鍵盤和手把，滑鼠點擊會被攔截以免錯位。%1 調整畫面，%2 退出；獨佔全螢幕請改為無邊框視窗",
+   "en": "Original-window alignment supports precise mouse passthrough. Fill/stretch supports keyboard and gamepad; mouse clicks are blocked to prevent misalignment. %1 adjusts the picture; %2 exits. Use borderless instead of exclusive fullscreen.",
+   "ja": "元のウィンドウに合わせると正確なマウス透過を利用できます。塗りつぶし・引き伸ばしではキーボードとゲームパッドに対応し、位置ずれを防ぐためマウスクリックを遮断します。%1 で画面調整、%2 で終了。排他全画面ではなくボーダーレスにしてください。"
+  },
+  {
    "zh": "资源不可用",
    "src": "src/pipeline/EnhanceGraph.cpp",
    "zh-TW": "資源不可用",
    "en": "Resource unavailable",
    "ja": "リソースを使用できません"
+  },
+  {
+   "zh": "赞助作者",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "贊助作者",
+   "en": "Support the author",
+   "ja": "作者を支援"
+  },
+  {
+   "zh": "赞助完全自愿，不影响任何功能。谢谢你的支持！",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "贊助完全自願，不影響任何功能。謝謝你的支持！",
+   "en": "Sponsoring is entirely voluntary and doesn't affect any feature. Thank you for your support!",
+   "ja": "支援は任意で、機能には一切影響しません。ご支援ありがとうございます！"
+  },
+  {
+   "zh": "起播预缓冲",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "起播預緩衝",
+   "en": "Startup buffer",
+   "ja": "再生開始前のバッファー"
   },
   {
    "zh": "超分",
@@ -14206,11 +15301,39 @@
    "ja": "小さいほど敏感、大きいほど安定させる範囲が広がります"
   },
   {
+   "zh": "越高越保留五官和发丝",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "越高越保留五官和髮絲",
+   "en": "Higher keeps more of the facial features and hair",
+   "ja": "高いほど目鼻立ちや髪の毛を残します"
+  },
+  {
+   "zh": "越高越平滑，运动拖影也越多",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "越高越平滑，運動拖影也越多",
+   "en": "Higher is smoother but ghosts more on motion",
+   "ja": "高いほど滑らかですが、動きの残像も増えます"
+  },
+  {
    "zh": "越高越稳，过高会显得发闷",
    "src": "qml/ProPage.qml",
    "zh-TW": "越高越穩，過高會顯得發悶",
    "en": "Higher is steadier; too high looks dull",
    "ja": "高いほど安定しますが、高すぎるとこもった印象になります"
+  },
+  {
+   "zh": "越高静止时越稳；人物移动时都会紧跟",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "越高靜止時越穩；人物移動時都會緊跟",
+   "en": "Higher is steadier at rest; moving faces are followed closely either way",
+   "ja": "高いほど静止時に安定します。動く顔はどの設定でもしっかり追従します"
+  },
+  {
+   "zh": "跟踪平滑",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "追蹤平滑",
+   "en": "Tracking smoothing",
+   "ja": "追跡の平滑化"
   },
   {
    "zh": "跟随",
@@ -14260,6 +15383,13 @@
    "zh-TW": "跟隨系統預設",
    "en": "Follow the system default",
    "ja": "システムの既定に従う"
+  },
+  {
+   "zh": "跟随缓冲档",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "跟隨緩衝檔",
+   "en": "Follow buffer level",
+   "ja": "バッファー段階に従う"
   },
   {
    "zh": "跟随驱动输入",
@@ -14386,6 +15516,13 @@
    "zh-TW": "輕",
    "en": "Light",
    "ja": "弱"
+  },
+  {
+   "zh": "轻度磨皮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "輕度磨皮",
+   "en": "Light smoothing",
+   "ja": "軽い美肌"
   },
   {
    "zh": "轻微",
@@ -14647,6 +15784,13 @@
    "ja": "出力制限 · ディスプレイに合わせる"
   },
   {
+   "zh": "边界柔和",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "邊界柔和",
+   "en": "Edge softness",
+   "ja": "境界の柔らかさ"
+  },
+  {
    "zh": "边缘神盾",
    "src": "qml/ProPage.qml",
    "zh-TW": "邊緣神盾",
@@ -14659,6 +15803,20 @@
    "zh-TW": "邊緣神盾（XeSS 防果凍）",
    "en": "Edge Aegis (XeSS anti-jelly)",
    "ja": "エッジイージス（XeSS ゼリー対策）"
+  },
+  {
+   "zh": "边缘羽化",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "邊緣羽化",
+   "en": "Edge feather",
+   "ja": "エッジのぼかし"
+  },
+  {
+   "zh": "边缘阈值",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "邊緣閾值",
+   "en": "Edge threshold",
+   "ja": "エッジのしきい値"
   },
   {
    "zh": "运动估算质量",
@@ -15039,6 +16197,13 @@
    "ja": "接続して開始"
   },
   {
+   "zh": "连接服务器超时（40 秒内没有完成），请检查地址和网络",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "連線伺服器超時（40 秒內沒有完成），請檢查位址和網路",
+   "en": "Timed out connecting to the server (not finished within 40 s). Check the address and the network.",
+   "ja": "サーバーへの接続がタイムアウトしました（40 秒以内に完了しませんでした）。アドレスとネットワークを確認してください。"
+  },
+  {
    "zh": "连接端点无效",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "連接端點無效",
@@ -15095,11 +16260,11 @@
    "ja": "ウィンドウに合わせる"
   },
   {
-   "zh": "选一个片源开始，画质预设和补帧随时在播放栏切换",
-   "src": "qml/HomePage.qml",
-   "zh-TW": "選一個片源開始，畫質預設和補幀隨時在播放欄切換",
-   "en": "Choose a source to start; picture presets and frame generation can be switched in the playback bar at any time",
-   "ja": "ソースを選んで開始します。画質プリセットとフレーム生成は再生バーでいつでも切り替えられます"
+   "zh": "选择…",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "選擇…",
+   "en": "Choose…",
+   "ja": "選択…"
   },
   {
    "zh": "选择保存目录…",
@@ -15170,6 +16335,13 @@
    "zh-TW": "部分軌道當前封裝裝不下，未保留（詳見佇列說明）",
    "en": "Some tracks do not fit the current container and were not kept (see the queue notes)",
    "ja": "現在のコンテナーに保持できないトラックがあり、保持していません（キューの説明を参照）"
+  },
+  {
+   "zh": "部分采集能力读取失败（%1，0x%2）；当前列表可能不完整，请刷新重试。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "部分擷取能力讀取失敗（%1，0x%2）；目前清單可能不完整，請重新整理再試。",
+   "en": "Some capture capabilities could not be read (%1, 0x%2). The list may be incomplete; refresh to retry.",
+   "ja": "一部のキャプチャ能力を読み取れませんでした（%1、0x%2）。一覧が不完全な可能性があります。更新して再試行してください。"
   },
   {
    "zh": "配对",
@@ -15452,11 +16624,32 @@
    "ja": "キャプチャー方式"
   },
   {
+   "zh": "采集格式内存分配失败",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取格式記憶體配置失敗",
+   "en": "Capture format memory allocation failed",
+   "ja": "キャプチャ形式のメモリを確保できませんでした"
+  },
+  {
    "zh": "采集格式无效",
    "src": "src/source/MagewellCapture.cpp",
    "zh-TW": "擷取格式無效",
    "en": "Invalid capture format",
    "ja": "キャプチャーフォーマットが不正です"
+  },
+  {
+   "zh": "采集格式无法恢复：{}（0x{:08X}），请刷新并重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取格式無法還原：{}（0x{:08X}），請重新整理並重新選擇。",
+   "en": "Cannot restore capture format: {} (0x{:08X}). Refresh and select again.",
+   "ja": "キャプチャ形式を復元できません：{}（0x{:08X}）。更新して選び直してください。"
+  },
+  {
+   "zh": "采集格式的能力记录已失效，请刷新后重试。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取格式的能力記錄已失效，請重新整理後再試。",
+   "en": "The capture capability record is no longer valid. Refresh and retry.",
+   "ja": "キャプチャ能力の記録が無効です。更新して再試行してください。"
   },
   {
    "zh": "采集没有开始",
@@ -15620,11 +16813,25 @@
    "ja": "再接続"
   },
   {
+   "zh": "重连 %1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "重連 %1",
+   "en": "Reconnects %1",
+   "ja": "再接続 %1"
+  },
+  {
    "zh": "重连中",
    "src": "qml/DialogHost.qml",
    "zh-TW": "重連中",
    "en": "Reconnecting",
    "ja": "再接続中"
+  },
+  {
+   "zh": "金额随意，每一份支持都是很大的鼓励",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "金額隨意，每一份支持都是很大的鼓勵",
+   "en": "Any amount is welcome, and every bit of support means a lot",
+   "ja": "金額は自由です。どんな支援も大きな励みになります"
   },
   {
    "zh": "链路中固定为最后一步；画布上可移动",
@@ -15688,6 +16895,13 @@
    "zh-TW": "長時間收不到完整畫面。網路很不穩定，或位元率設得太高。",
    "en": "No complete picture for a long time. The network is very unstable, or the bitrate is set too high.",
    "ja": "長時間、完全な映像が届いていません。ネットワークが非常に不安定か、ビットレートが高すぎます。"
+  },
+  {
+   "zh": "阈值 %1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "閾值 %1",
+   "en": "threshold %1",
+   "ja": "しきい値 %1"
   },
   {
    "zh": "队列 ",
@@ -15774,11 +16988,11 @@
    "ja": "ゼロモーションは時間方向の再構成を制限します。RTX ビデオ超解像はこの入力を使いません"
   },
   {
-   "zh": "需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR",
+   "zh": "需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色、美颜及 HDR",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "需 1080p SDR 檔案、SF 與 NVIDIA 光流；關閉超解析度、補幀、抗閃爍、調色及 HDR",
-   "en": "Requires a 1080p SDR file, SF and NVIDIA optical flow; turn off upscaling, frame generation, anti-flicker, grading and HDR",
-   "ja": "1080p SDR ファイル、SF、NVIDIA 光フローが必要です。超解像、フレーム生成、ちらつき抑制、色調整、HDR をオフにしてください"
+   "zh-TW": "需 1080p SDR 檔案、SF 與 NVIDIA 光流；關閉超解析度、補幀、抗閃爍、調色、美顏及 HDR",
+   "en": "Requires a 1080p SDR file, SF and NVIDIA optical flow; turn off upscaling, frame generation, anti-flicker, grading, beauty and HDR",
+   "ja": "1080p SDR ファイル、SF、NVIDIA 光フローが必要です。超解像、フレーム生成、ちらつき抑制、色調整、美顔、HDR をオフにしてください"
   },
   {
    "zh": "需系统解码/转换",
@@ -16117,11 +17331,11 @@
    "ja": "ページ切り替えバー"
   },
   {
-   "zh": "项目主页 README 里的二维码",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "專案主頁 README 裡的二維碼",
-   "en": "The QR code in the project README",
-   "ja": "プロジェクトの README にある QR コード"
+   "zh": "须低于上限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "須低於上限",
+   "en": "Must stay below the maximum",
+   "ja": "上限より低くしてください"
   },
   {
    "zh": "预算 ",
@@ -16174,7 +17388,7 @@
   },
   {
    "zh": "预设",
-   "src": "qml/CineBar.qml",
+   "src": "qml/BeautyEditor.qml",
    "zh-TW": "預設",
    "en": "Presets",
    "ja": "プリセット"
@@ -16446,6 +17660,13 @@
    "ja": "プリセットライブラリの形式またはバージョンに対応していません"
   },
   {
+   "zh": "预设库美颜人脸识别字段损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫美顏人臉識別欄位損壞",
+   "en": "Preset library: beauty face detection fields damaged",
+   "ja": "プリセットライブラリの美顔の顔検出項目が破損しています"
+  },
+  {
    "zh": "预设库节点取值超出范围",
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "預設庫節點取值超出範圍",
@@ -16458,6 +17679,20 @@
    "zh-TW": "預設庫節點字段損壞",
    "en": "Preset library: node field damaged",
    "ja": "プリセットライブラリのノード項目が破損しています"
+  },
+  {
+   "zh": "预设库节点抗锯齿参数损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫節點抗鋸齒參數損壞",
+   "en": "Preset library: node anti-aliasing settings damaged",
+   "ja": "プリセットライブラリのノードのアンチエイリアス設定が破損しています"
+  },
+  {
+   "zh": "预设库节点美颜参数损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫節點美顏參數損壞",
+   "en": "Preset library: node beauty settings damaged",
+   "ja": "プリセットライブラリのノードの美顔設定が破損しています"
   },
   {
    "zh": "预设库节点调色参数损坏",
@@ -16698,6 +17933,20 @@
    "ja": "彩度"
   },
   {
+   "zh": "饱和度上限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "飽和度上限",
+   "en": "Saturation max",
+   "ja": "彩度の上限"
+  },
+  {
+   "zh": "饱和度下限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "飽和度下限",
+   "en": "Saturation min",
+   "ja": "彩度の下限"
+  },
+  {
    "zh": "首次使用：PS5 设置 → 系统 → 远程游玩 → 关联设备，填写账号 ID 与 8 位配对码后配对。",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "首次使用：PS5 設定 → 系統 → 遠程遊玩 → 關聯裝置，填寫帳號 ID 與 8 位配對碼後配對。",
@@ -16724,6 +17973,27 @@
    "zh-TW": "首頁 = 選擇片源的頁面（點頂部 Logo 也能回到這裡）",
    "en": "Home = the page for choosing a source (clicking the logo at the top also returns here)",
    "ja": "ホーム = ソースを選ぶ画面（上部のロゴをクリックしても戻れます）"
+  },
+  {
+   "zh": "驱动拒绝所选采集格式（0x{:08X}），请重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "驅動拒絕所選擷取格式（0x{:08X}），請重新選擇。",
+   "en": "The driver rejected the selected capture format (0x{:08X}). Select another mode.",
+   "ja": "ドライバーが選択したキャプチャ形式を拒否しました（0x{:08X}）。選び直してください。"
+  },
+  {
+   "zh": "驱动未提供可解析的视频格式，请检查设备与驱动后刷新。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "驅動未提供可解析的視訊格式，請檢查裝置與驅動後重新整理。",
+   "en": "The driver provided no readable video formats. Check the device and driver, then refresh.",
+   "ja": "ドライバーから読み取れる映像形式が取得できません。デバイスとドライバーを確認して更新してください。"
+  },
+  {
+   "zh": "驱动未提供该分辨率，或尺寸不符合步进要求；原选择已保留。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "驅動未提供該解析度，或尺寸不符合步進要求；原選擇已保留。",
+   "en": "The driver does not offer this resolution, or its size violates granularity. The previous selection was kept.",
+   "ja": "ドライバーがこの解像度に対応していないか、サイズが刻みに合いません。以前の選択を保持しました。"
   },
   {
    "zh": "驱动没有公开此设置页。Blackmagic 请用 Desktop Video Setup 选择 HDMI/SDI，并在采集面板匹配分辨率、帧率和逐行/隔行制式。",
@@ -16754,6 +18024,13 @@
    "ja": "ドライバー設定を開けません（0x{:08X}）。"
   },
   {
+   "zh": "驱动返回的分辨率、帧率、像素格式或扫描方式与所选模式不同，请重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "驅動傳回的解析度、影格率、像素格式或掃描方式與所選模式不同，請重新選擇。",
+   "en": "The driver returned a different resolution, frame rate, pixel format or scan mode. Select again.",
+   "ja": "ドライバーが返した解像度、レート、ピクセル形式、または走査方式が選択と異なります。選び直してください。"
+  },
+  {
    "zh": "驱动默认",
    "src": "qml/DialogHost.qml",
    "zh-TW": "驅動預設",
@@ -16769,7 +18046,7 @@
   },
   {
    "zh": "高",
-   "src": "qml/NodePage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "高",
    "en": "High",
    "ja": "高"
@@ -17048,11 +18325,25 @@
    "ja": "（MKV にするとより多く保持できます）"
   },
   {
+   "zh": "（新层默认关闭 · 最多 6 层）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "（新層預設關閉 · 最多 6 層）",
+   "en": " (new layers start off · max 6 layers)",
+   "ja": "（新しい層はオフで追加 · 最大 6 層）"
+  },
+  {
    "zh": "（最多 4 层）",
    "src": "qml/ProPage.qml",
    "zh-TW": "（最多 4 層）",
    "en": " (max 4 layers)",
    "ja": "（最大 4 層）"
+  },
+  {
+   "zh": "（最多 6 层）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "（最多 6 層）",
+   "en": " (max 6 layers)",
+   "ja": "（最大 6 層）"
   },
   {
    "zh": "（片源最亮 %1 nit、最亮帧平均 %2 nit）",

@@ -670,9 +670,13 @@ bool FFmpegVideoDecoder::sendPacket(const AVPacket* packet)
     }
     if (result == AVERROR_EOF && packet == nullptr) return true;
     if (result < 0) {
-        char errorText[AV_ERROR_MAX_STRING_SIZE]{};
-        av_strerror(result, errorText, sizeof(errorText));
-        log::error("media", std::format("decoder: send_packet failed code={} text={}", result, errorText));
+        lastError_ = result;
+        // Damaged network data fails often; log the first few and then a sample.
+        if (++errorLogs_ <= 5 || errorLogs_ % 100 == 0) {
+            char errorText[AV_ERROR_MAX_STRING_SIZE]{};
+            av_strerror(result, errorText, sizeof(errorText));
+            log::error("media", std::format("decoder: send_packet failed code={} text={} (failures so far {})", result, errorText, errorLogs_));
+        }
         return false;
     }
     if (packet != nullptr) {
@@ -700,9 +704,12 @@ const AVFrame* FFmpegVideoDecoder::receiveFrame()
         else if (result == AVERROR_EOF) receiveStatus_ = DecodeReceiveStatus::EndOfStream;
         else {
             receiveStatus_ = DecodeReceiveStatus::Error;
-            char errorText[AV_ERROR_MAX_STRING_SIZE]{};
-            av_strerror(result, errorText, sizeof(errorText));
-            log::error("media", std::format("decoder: receive_frame failed code={} text={}", result, errorText));
+            lastError_ = result;
+            if (++errorLogs_ <= 5 || errorLogs_ % 100 == 0) {
+                char errorText[AV_ERROR_MAX_STRING_SIZE]{};
+                av_strerror(result, errorText, sizeof(errorText));
+                log::error("media", std::format("decoder: receive_frame failed code={} text={} (failures so far {})", result, errorText, errorLogs_));
+            }
         }
         return nullptr;
     }

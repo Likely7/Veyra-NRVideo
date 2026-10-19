@@ -33,33 +33,36 @@
       <line x1="60" y1="340" x2="760" y2="340" class="grid" />
       <text x="50" y="344" class="text" text-anchor="end">0</text>
     
-      <line x1="60" y1="297.14285714285717" x2="760" y2="297.14285714285717" class="grid" />
-      <text x="50" y="301.14285714285717" class="text" text-anchor="end">100</text>
+      <line x1="60" y1="302.5" x2="760" y2="302.5" class="grid" />
+      <text x="50" y="306.5" class="text" text-anchor="end">100</text>
     
-      <line x1="60" y1="254.28571428571428" x2="760" y2="254.28571428571428" class="grid" />
-      <text x="50" y="258.2857142857143" class="text" text-anchor="end">200</text>
+      <line x1="60" y1="265" x2="760" y2="265" class="grid" />
+      <text x="50" y="269" class="text" text-anchor="end">200</text>
     
-      <line x1="60" y1="211.42857142857144" x2="760" y2="211.42857142857144" class="grid" />
-      <text x="50" y="215.42857142857144" class="text" text-anchor="end">300</text>
+      <line x1="60" y1="227.5" x2="760" y2="227.5" class="grid" />
+      <text x="50" y="231.5" class="text" text-anchor="end">300</text>
     
-      <line x1="60" y1="168.57142857142858" x2="760" y2="168.57142857142858" class="grid" />
-      <text x="50" y="172.57142857142858" class="text" text-anchor="end">400</text>
+      <line x1="60" y1="190" x2="760" y2="190" class="grid" />
+      <text x="50" y="194" class="text" text-anchor="end">400</text>
     
-      <line x1="60" y1="125.71428571428572" x2="760" y2="125.71428571428572" class="grid" />
-      <text x="50" y="129.71428571428572" class="text" text-anchor="end">500</text>
+      <line x1="60" y1="152.5" x2="760" y2="152.5" class="grid" />
+      <text x="50" y="156.5" class="text" text-anchor="end">500</text>
     
-      <line x1="60" y1="82.85714285714289" x2="760" y2="82.85714285714289" class="grid" />
-      <text x="50" y="86.85714285714289" class="text" text-anchor="end">600</text>
+      <line x1="60" y1="115" x2="760" y2="115" class="grid" />
+      <text x="50" y="119" class="text" text-anchor="end">600</text>
+    
+      <line x1="60" y1="77.5" x2="760" y2="77.5" class="grid" />
+      <text x="50" y="81.5" class="text" text-anchor="end">700</text>
     
       <line x1="60" y1="40" x2="760" y2="40" class="grid" />
-      <text x="50" y="44" class="text" text-anchor="end">700</text>
+      <text x="50" y="44" class="text" text-anchor="end">800</text>
     </g>
-  <g class="labels"><text x="60" y="380" class="text" text-anchor="middle">2026-09-13</text><text x="760" y="380" class="text" text-anchor="middle">2026-10-11</text></g>
+  <g class="labels"><text x="60" y="380" class="text" text-anchor="middle">2026-09-13</text><text x="760" y="380" class="text" text-anchor="middle">2026-10-18</text></g>
   
       <g class="series-group series-0">
-        <path d="M 60 337.85714285714283 L 85 306.14285714285717 L 110 288.14285714285717 L 135 274 L 160 259.8571428571429 L 185 244.42857142857144 L 210 236.28571428571428 L 235 226.42857142857144 L 260 218.28571428571428 L 285 210.57142857142856 L 310 205.85714285714286 L 335 199.85714285714286 L 360 197.28571428571428 L 385 194.28571428571428 L 410 187.85714285714286 L 435 181 L 460 177.14285714285717 L 484.99999999999994 175.42857142857142 L 510.00000000000006 169.85714285714286 L 535 164.28571428571428 L 560 159.57142857142858 L 585 150.14285714285714 L 610 144.57142857142856 L 635 140.71428571428572 L 660 132.57142857142858 L 685 122.7142857142857 L 710 109 L 735 84.57142857142858 L 760 80.71428571428572 L 760 340 L 60 340 Z" fill="#0366d6" fill-opacity="0.08" class="area" />
-        <path d="M 60 337.85714285714283 L 85 306.14285714285717 L 110 288.14285714285717 L 135 274 L 160 259.8571428571429 L 185 244.42857142857144 L 210 236.28571428571428 L 235 226.42857142857144 L 260 218.28571428571428 L 285 210.57142857142856 L 310 205.85714285714286 L 335 199.85714285714286 L 360 197.28571428571428 L 385 194.28571428571428 L 410 187.85714285714286 L 435 181 L 460 177.14285714285717 L 484.99999999999994 175.42857142857142 L 510.00000000000006 169.85714285714286 L 535 164.28571428571428 L 560 159.57142857142858 L 585 150.14285714285714 L 610 144.57142857142856 L 635 140.71428571428572 L 660 132.57142857142858 L 685 122.7142857142857 L 710 109 L 735 84.57142857142858 L 760 80.71428571428572" stroke="#0366d6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" class="line line-anim" />
-        <g class="dots"><circle cx="60" cy="337.85714285714283" r="3" fill="#0366d6" class="dot" /><circle cx="85" cy="306.14285714285717" r="3" fill="#0366d6" class="dot" /><circle cx="110" cy="288.14285714285717" r="3" fill="#0366d6" class="dot" /><circle cx="135" cy="274" r="3" fill="#0366d6" class="dot" /><circle cx="160" cy="259.8571428571429" r="3" fill="#0366d6" class="dot" /><circle cx="185" cy="244.42857142857144" r="3" fill="#0366d6" class="dot" /><circle cx="210" cy="236.28571428571428" r="3" fill="#0366d6" class="dot" /><circle cx="235" cy="226.42857142857144" r="3" fill="#0366d6" class="dot" /><circle cx="260" cy="218.28571428571428" r="3" fill="#0366d6" class="dot" /><circle cx="285" cy="210.57142857142856" r="3" fill="#0366d6" class="dot" /><circle cx="310" cy="205.85714285714286" r="3" fill="#0366d6" class="dot" /><circle cx="335" cy="199.85714285714286" r="3" fill="#0366d6" class="dot" /><circle cx="360" cy="197.28571428571428" r="3" fill="#0366d6" class="dot" /><circle cx="385" cy="194.28571428571428" r="3" fill="#0366d6" class="dot" /><circle cx="410" cy="187.85714285714286" r="3" fill="#0366d6" class="dot" /><circle cx="435" cy="181" r="3" fill="#0366d6" class="dot" /><circle cx="460" cy="177.14285714285717" r="3" fill="#0366d6" class="dot" /><circle cx="484.99999999999994" cy="175.42857142857142" r="3" fill="#0366d6" class="dot" /><circle cx="510.00000000000006" cy="169.85714285714286" r="3" fill="#0366d6" class="dot" /><circle cx="535" cy="164.28571428571428" r="3" fill="#0366d6" class="dot" /><circle cx="560" cy="159.57142857142858" r="3" fill="#0366d6" class="dot" /><circle cx="585" cy="150.14285714285714" r="3" fill="#0366d6" class="dot" /><circle cx="610" cy="144.57142857142856" r="3" fill="#0366d6" class="dot" /><circle cx="635" cy="140.71428571428572" r="3" fill="#0366d6" class="dot" /><circle cx="660" cy="132.57142857142858" r="3" fill="#0366d6" class="dot" /><circle cx="685" cy="122.7142857142857" r="3" fill="#0366d6" class="dot" /><circle cx="710" cy="109" r="3" fill="#0366d6" class="dot" /><circle cx="735" cy="84.57142857142858" r="3" fill="#0366d6" class="dot" /><circle cx="760" cy="80.71428571428572" r="3" fill="#0366d6" class="dot" /></g>
+        <path d="M 60 338.125 L 80 310.375 L 100 294.625 L 120 282.25 L 140 269.875 L 160 256.75 L 180 249.625 L 200 241 L 220 233.875 L 239.99999999999997 227.125 L 260 223 L 280 217.75 L 300 215.5 L 320 212.875 L 340 207.25 L 360 201.25 L 380 197.875 L 400 196.375 L 419.99999999999994 191.5 L 439.99999999999994 186.625 L 460 182.5 L 480 174.25 L 500 169.375 L 520 166.375 L 540 159.25 L 560 151 L 580 139 L 600 117.625 L 620 98.49999999999997 L 640 88 L 660 79.75 L 680 71.875 L 700 67 L 720 61.375 L 740 55.75 L 760 55.75 L 760 340 L 60 340 Z" fill="#0366d6" fill-opacity="0.08" class="area" />
+        <path d="M 60 338.125 L 80 310.375 L 100 294.625 L 120 282.25 L 140 269.875 L 160 256.75 L 180 249.625 L 200 241 L 220 233.875 L 239.99999999999997 227.125 L 260 223 L 280 217.75 L 300 215.5 L 320 212.875 L 340 207.25 L 360 201.25 L 380 197.875 L 400 196.375 L 419.99999999999994 191.5 L 439.99999999999994 186.625 L 460 182.5 L 480 174.25 L 500 169.375 L 520 166.375 L 540 159.25 L 560 151 L 580 139 L 600 117.625 L 620 98.49999999999997 L 640 88 L 660 79.75 L 680 71.875 L 700 67 L 720 61.375 L 740 55.75 L 760 55.75" stroke="#0366d6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" class="line line-anim" />
+        <g class="dots"><circle cx="60" cy="338.125" r="3" fill="#0366d6" class="dot" /><circle cx="80" cy="310.375" r="3" fill="#0366d6" class="dot" /><circle cx="100" cy="294.625" r="3" fill="#0366d6" class="dot" /><circle cx="120" cy="282.25" r="3" fill="#0366d6" class="dot" /><circle cx="140" cy="269.875" r="3" fill="#0366d6" class="dot" /><circle cx="160" cy="256.75" r="3" fill="#0366d6" class="dot" /><circle cx="180" cy="249.625" r="3" fill="#0366d6" class="dot" /><circle cx="200" cy="241" r="3" fill="#0366d6" class="dot" /><circle cx="220" cy="233.875" r="3" fill="#0366d6" class="dot" /><circle cx="239.99999999999997" cy="227.125" r="3" fill="#0366d6" class="dot" /><circle cx="260" cy="223" r="3" fill="#0366d6" class="dot" /><circle cx="280" cy="217.75" r="3" fill="#0366d6" class="dot" /><circle cx="300" cy="215.5" r="3" fill="#0366d6" class="dot" /><circle cx="320" cy="212.875" r="3" fill="#0366d6" class="dot" /><circle cx="340" cy="207.25" r="3" fill="#0366d6" class="dot" /><circle cx="360" cy="201.25" r="3" fill="#0366d6" class="dot" /><circle cx="380" cy="197.875" r="3" fill="#0366d6" class="dot" /><circle cx="400" cy="196.375" r="3" fill="#0366d6" class="dot" /><circle cx="419.99999999999994" cy="191.5" r="3" fill="#0366d6" class="dot" /><circle cx="439.99999999999994" cy="186.625" r="3" fill="#0366d6" class="dot" /><circle cx="460" cy="182.5" r="3" fill="#0366d6" class="dot" /><circle cx="480" cy="174.25" r="3" fill="#0366d6" class="dot" /><circle cx="500" cy="169.375" r="3" fill="#0366d6" class="dot" /><circle cx="520" cy="166.375" r="3" fill="#0366d6" class="dot" /><circle cx="540" cy="159.25" r="3" fill="#0366d6" class="dot" /><circle cx="560" cy="151" r="3" fill="#0366d6" class="dot" /><circle cx="580" cy="139" r="3" fill="#0366d6" class="dot" /><circle cx="600" cy="117.625" r="3" fill="#0366d6" class="dot" /><circle cx="620" cy="98.49999999999997" r="3" fill="#0366d6" class="dot" /><circle cx="640" cy="88" r="3" fill="#0366d6" class="dot" /><circle cx="660" cy="79.75" r="3" fill="#0366d6" class="dot" /><circle cx="680" cy="71.875" r="3" fill="#0366d6" class="dot" /><circle cx="700" cy="67" r="3" fill="#0366d6" class="dot" /><circle cx="720" cy="61.375" r="3" fill="#0366d6" class="dot" /><circle cx="740" cy="55.75" r="3" fill="#0366d6" class="dot" /><circle cx="760" cy="55.75" r="3" fill="#0366d6" class="dot" /></g>
       </g>
     
 </svg>

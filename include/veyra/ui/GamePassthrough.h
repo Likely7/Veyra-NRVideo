@@ -4,12 +4,13 @@
 // capture, the whole desktop - gets the real keyboard, mouse and gamepad (Raw Input
 // and DirectInput only report to the foreground window; posted input does not work).
 //
-// The main window becomes click-through through Qt's own flags
+// The 1:1 main window becomes click-through through Qt's own flags
 // (Qt::WindowTransparentForInput | Qt::WindowDoesNotAcceptFocus, bound in Main.qml to
 // passthroughActive), so Qt keeps WS_EX_LAYERED | WS_EX_TRANSPARENT itself - with the
 // software interface it drops a layered bit set behind its back. Qt does not set
 // WS_EX_NOACTIVATE on it, so this class adds that bit, makes the window topmost,
-// hands the foreground over, owns the hotkeys and the watchdog, and makes any other
+// Scaled output retains keyboard/gamepad foreground but blocks mouse clicks.
+// This class hands the foreground over, owns the hotkeys and the watchdog, and makes any other
 // visible Veyra window click-through too. The configurable panel key while the picture is
 // in front, opens the adjust panel and takes the input back; closing the panel hands
 // it to the program again. The configurable exit key leaves. The keyboard hook has
@@ -37,14 +38,15 @@
 #include "veyra/Log.h"
 #include "veyra/source/ScreenCaptureSource.h"
 #include "veyra/ui/GameHotkeys.h"
+#include "veyra/ui/GameModePolicy.h"
 
 namespace veyra::ui {
 
 class GamePassthrough final : public QAbstractNativeEventFilter {
 public:
     // Off: a normal window. Panel: on top and interactive (Home panel open).
-    // Through: on top, click-through, the captured program has the foreground.
-    enum class Mode { Off, Panel, Through };
+    // Through: exact click-through. Scaled: blocks mouse, target retains keyboard/gamepad.
+    using Mode = GameInputMode;
     enum class Event { PanelHotkey, ExitHotkey, ExitUnavailable, HangReleased };
     std::function<void(Event)> onEvent;
 
@@ -53,12 +55,20 @@ public:
         stopWatchdog();
         apply(Mode::Off);
         keys_.stop();
+        if (receiver_) DestroyWindow(receiver_);
         if (s_instance == this) s_instance = nullptr;
     }
     GamePassthrough(const GamePassthrough&) = delete;
     GamePassthrough& operator=(const GamePassthrough&) = delete;
 
-    void attach(HWND main) { main_ = main; }
+    void attach(HWND main) {
+        if (main_ == main) return;
+        const Mode previous = mode_;
+        apply(Mode::Off);
+        main_ = main;
+        watchedMain_.store(main);
+        if (previous != Mode::Off) apply(previous);
+    }
     // window: the captured window (window capture), else nullptr. monitor: where the
     // picture is shown (the captured monitor, or the monitor of the captured window).
     void setTarget(HWND window, HMONITOR monitor, bool monitorCapture) {
@@ -87,9 +97,9 @@ public:
 
     // The listener must exist before anything may become click-through.
     bool arm() {
-        if (!main_) return false;
+        if (!main_ || !IsWindow(main_)) return false;
         if (keys_.running()) return true;
-        if (!keys_.start(main_)) {
+        if (!ensureReceiver() || !keys_.start(receiver_)) {
             veyra::log::warn("game-mode", "keyboard listener unavailable; click-through refused");
             if (onEvent) onEvent(Event::ExitUnavailable);
             return false;
@@ -127,8 +137,8 @@ public:
         sunk_ = false;
         topmost(true);
         keepTaskbarButton();
-        if (next == Mode::Through) {
-            setTransparent(true);
+        if (next == Mode::Through || next == Mode::Scaled) {
+            setTransparent(next == Mode::Through);
             noActivate(true);
             focus(focusTarget(), "program");
         } else {
@@ -137,12 +147,17 @@ public:
             focus(main_, "Veyra");
         }
         updatePanelHotkey(GetForegroundWindow());
-        log(next == Mode::Through ? "click-through" : "panel");
+        log(next == Mode::Through ? "click-through" : next == Mode::Scaled ? "scaled keyboard/gamepad" : "panel");
     }
 
     // GUI thread, every 250 ms while the bridge runs.
     void heartbeat() {
         beat_.store(GetTickCount64());
+        if (const DWORD error = keys_.takeDeliveryError(); error && mode_ != Mode::Off) {
+            veyra::log::warn("game-mode", std::format("hotkey delivery failed err={}; releasing input", error));
+            if (onEvent) onEvent(Event::ExitUnavailable);
+            return;
+        }
         if (cloaked_.exchange(false)) {
             BOOL cloak = FALSE;
             DwmSetWindowAttribute(main_, DWMWA_CLOAK, &cloak, sizeof cloak);
@@ -154,16 +169,10 @@ public:
         if (mode_ != Mode::Off && !sunk_ && main_ && !(GetWindowLongPtrW(main_, GWL_EXSTYLE) & WS_EX_TOPMOST)) topmost(true);
     }
 
-    bool nativeEventFilter(const QByteArray& type, void* message, qintptr* result) override {
+    bool nativeEventFilter(const QByteArray& type, void* message, qintptr*) override {
         if (type != "windows_generic_MSG") return false;
         const auto* msg = static_cast<const MSG*>(message);
         switch (msg->message) {
-        case GameHotkeyListener::message:
-            if (!keys_.current(msg->lParam) || mode_ == Mode::Off || msg->wParam > 1 ||
-                (msg->wParam == 0 && !panelOwned_)) return false;
-            if (onEvent) onEvent(msg->wParam == 0 ? Event::PanelHotkey : Event::ExitHotkey);
-            if (result) *result = 0;
-            return true;
         case WM_SHOWWINDOW:
             if (msg->wParam) shown(msg->hwnd);
             return false;
@@ -182,6 +191,8 @@ private:
     static inline GamePassthrough* s_instance = nullptr;
 
     HWND main_ = nullptr, target_ = nullptr;
+    HWND receiver_ = nullptr; // message-only HWND; unaffected by Qt flags/fullscreen
+    std::atomic<HWND> watchedMain_{nullptr};
     HMONITOR monitor_ = nullptr;
     bool monitorCapture_ = false;
     Mode mode_ = Mode::Off;
@@ -197,6 +208,34 @@ private:
     bool watchStop_ = false;
     std::atomic<ULONGLONG> beat_{0};
     std::atomic<bool> armed_{false}, cloaked_{false};
+
+    static LRESULT CALLBACK receiverProc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
+        if (message == WM_NCCREATE) {
+            const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lp);
+            SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(create->lpCreateParams));
+        }
+        auto* self = reinterpret_cast<GamePassthrough*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+        if (self && message == GameHotkeyListener::message) {
+            if (self->keys_.current(lp) && self->mode_ != Mode::Off && wp <= 1 &&
+                (wp == 1 || self->panelOwned_)) {
+                veyra::log::info("game-mode", std::format("hotkey received action={} epoch={}", wp, lp));
+                if (self->onEvent) self->onEvent(wp == 0 ? Event::PanelHotkey : Event::ExitHotkey);
+            }
+            return 0;
+        }
+        return DefWindowProcW(window, message, wp, lp);
+    }
+    bool ensureReceiver() {
+        if (receiver_ && IsWindow(receiver_)) return true;
+        WNDCLASSW wc{};
+        wc.lpfnWndProc = &GamePassthrough::receiverProc;
+        wc.hInstance = GetModuleHandleW(nullptr);
+        wc.lpszClassName = L"Veyra.GameHotkeyReceiver";
+        if (!RegisterClassW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
+        receiver_ = CreateWindowExW(0, wc.lpszClassName, L"", 0, 0, 0, 0, 0,
+                                    HWND_MESSAGE, nullptr, wc.hInstance, this);
+        return receiver_ != nullptr;
+    }
 
     void log(const char* what) {
         const LONG_PTR ex = main_ ? GetWindowLongPtrW(main_, GWL_EXSTYLE) : 0;
@@ -319,7 +358,7 @@ private:
     // other programs it stays theirs.
     void updatePanelHotkey(HWND fg) {
         bool want = mode_ == Mode::Panel || ours(fg);
-        if (!want && mode_ == Mode::Through)
+        if (!want && (mode_ == Mode::Through || mode_ == Mode::Scaled))
             want = monitorCapture_ ? MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST) == monitor_ : isTarget(fg);
         setPanelHotkey(want);
     }
@@ -329,7 +368,7 @@ private:
     void foregroundChanged(HWND fg) {
         if (mode_ == Mode::Off) return;
         updatePanelHotkey(fg);
-        if (mode_ != Mode::Through || monitorCapture_ || ours(fg)) return;
+        if ((mode_ != Mode::Through && mode_ != Mode::Scaled) || monitorCapture_ || ours(fg)) return;
         if (isTarget(fg)) {
             if (sunk_) { sunk_ = false; topmost(true); log("program back in front: picture on top"); }
             return;
@@ -357,7 +396,8 @@ private:
                 if (stale < kHangMs) continue;
                 // DWM cloaking needs nothing from the stuck GUI thread.
                 BOOL cloak = TRUE;
-                const HRESULT hr = DwmSetWindowAttribute(main_, DWMWA_CLOAK, &cloak, sizeof cloak);
+                const HWND main = watchedMain_.load();
+                const HRESULT hr = main && ours(main) ? DwmSetWindowAttribute(main, DWMWA_CLOAK, &cloak, sizeof cloak) : E_HANDLE;
                 cloaked_.store(SUCCEEDED(hr));
                 veyra::log::warn("game-mode", std::format("GUI silent for {} ms: picture cloaked hr=0x{:08X}", stale, unsigned(hr)));
             }

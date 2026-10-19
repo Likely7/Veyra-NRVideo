@@ -153,10 +153,12 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
         "D3D12VA {} fallback to software reason={} path=redacted resumeUs={}", midStream ? "mid-stream" : "first-frame", reason, resumeUs));
     deinterlacer_.close();filterDraining_=false;
     decoder_.close();
-    demuxer_.close();
-    if (!demuxer_.open(path_,cancelled_)) {
-        veyra::log::error("source-file", "software fallback could not reopen demuxer");
-        return false;
+    if (!demuxer_.shared()) {
+        demuxer_.close();
+        if (!demuxer_.open(path_,cancelled_)) {
+            veyra::log::error("source-file", "software fallback could not reopen demuxer");
+            return false;
+        }
     }
     const auto* params = demuxer_.videoCodecParameters();
     if (params == nullptr || !decoder_.openSoftware(params, demuxer_.videoTimeBaseNum(),
@@ -166,7 +168,9 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
     }
     info_.hardwareDecodeActive = false;
     if (midStream && resumeUs != INT64_MIN) {
-        if (!demuxer_.seekToUs(std::max<int64_t>(0, resumeUs))) veyra::log::warn("source-file", "software fallback could not seek back; continuing from stream start");
+        // A live session cannot go back: the software decoder continues at the current position.
+        if (demuxer_.shared() && !demuxer_.seekable()) veyra::log::warn("source-file", "software fallback on a live source continues at the current position");
+        else if (!demuxer_.seekToUs(std::max<int64_t>(0, resumeUs))) veyra::log::warn("source-file", "software fallback could not seek back; continuing from stream start");
         decoder_.flushBuffers();
         // The engine treats Seek as a hard history reset; frames before the
         // resume point are dropped by the caller's discardBefore logic.
@@ -572,10 +576,31 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     deinterlaceEnabled_=desc.deinterlace;filterDraining_=false;
     preferHardwareDecode_ = desc.preferHardwareDecode && desc.d3d12Device != nullptr && desc.d3d12Queue != nullptr;
     requireHardwareDecode_ = desc.requireHardwareDecode;
-    if (!demuxer_.open(desc.path,cancelled_)) {
+    nonBlocking_ = desc.nonBlocking;
+    corruptPolicy_ = desc.network.corrupt;
+    resetCorruptionState();
+    if (media::sharedDemuxInput(desc.path, desc.nonBlocking)) {
+        // Network addresses and files on a server: one connection, read ahead of playback,
+        // shared with the audio pipeline (docs/NETWORK_BUFFER_48_PLAN_2026-10-17.md).
+        media::DemuxSession::OpenParams session;
+        session.path = desc.path;
+        session.settings = desc.network;
+        session.cancelled = desc.cancelled;
+        session.audioStream = desc.nonBlocking ? -2 : -1;   // offline readers (export, tools) take no audio
+        std::wstring failure;
+        auto opened = media::DemuxSession::open(session, &failure);
+        if (!opened || !demuxer_.openShared(std::move(opened))) {
+            errorMessage_ = failure.empty() ? L"无法打开视频，请查看诊断" : failure;
+            veyra::log::error("source-file", "shared demux session open failed");
+            return false;
+        }
+    } else if (!demuxer_.open(desc.path,cancelled_)) {
         veyra::log::error("source-file", "demuxer open failed");
         return false;
     }
+    // Damaged data is tolerated on the player's network sources and MPEG-TS; export
+    // and every offline user keep the strict stop.
+    tolerant_ = desc.tolerateCorruption && (media::networkMediaInput(desc.path) || demuxer_.formatName().find("mpegts") != std::string::npos);
     const AVCodecParameters* params = demuxer_.videoCodecParameters();
     if (params == nullptr) {
         veyra::log::error("source-file", "no video codec parameters");
@@ -726,6 +751,13 @@ SourceReadStatus MediaFileSource::readBase(pipeline::FramePacket& out, const AVF
     out = pipeline::FramePacket{};
     if (!info_.opened || !errorMessage_.empty()) { return SourceReadStatus::Error; }
 
+    {
+        // A long gap between read() calls (pause, stall) must not count as "no output".
+        const auto now = std::chrono::steady_clock::now();
+        if (now - lastReadCall_ > std::chrono::seconds(2)) noOutputSince_ = {};
+        lastReadCall_ = now;
+    }
+readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fetch the next one
     const AVFrame* frame = nullptr;
     // Whether the packet that produced this frame carried enhancement layer data;
     // stale EL must not be reused for a frame that has none.
@@ -740,9 +772,13 @@ SourceReadStatus MediaFileSource::readBase(pipeline::FramePacket& out, const AVF
         frame = decoder_.receiveFrame();
         if(frame){
             if(deinterlaceEnabled_&&((frame->flags&AV_FRAME_FLAG_INTERLACED)||deinterlacer_.active())){
-                if(frame->width!=int(info_.width)||frame->height!=int(info_.height)||frame->decode_error_flags||(frame->flags&AV_FRAME_FLAG_CORRUPT)){
+                const bool damaged=frame->decode_error_flags||(frame->flags&AV_FRAME_FLAG_CORRUPT);
+                if(frame->width!=int(info_.width)||frame->height!=int(info_.height)||(damaged&&!tolerant_)){
                     errorMessage_=L"隔行视频画面损坏或尺寸改变，已停止处理";return SourceReadStatus::Error;
                 }
+                // Interlaced network TV (1080i IPTV) loses packets like any other stream:
+                // the same damaged-picture policy applies before the picture reaches the filter.
+                if(damaged&&!keepDamagedPicture(frame))continue;
                 const auto* surface=decoder_.usingD3D11Frames()?&decoder_.hardwareSurface():nullptr;
                 if(!deinterlacer_.active()){
                     AVRational rate{demuxer_.nominalRateNum(),demuxer_.nominalRateDen()};
@@ -768,6 +804,10 @@ SourceReadStatus MediaFileSource::readBase(pipeline::FramePacket& out, const AVF
             return SourceReadStatus::Eos;
         }
         if (decoder_.receiveStatus() == media::DecodeReceiveStatus::Error) {
+            // Network data that the decoder rejects is skipped up to the next keyframe.
+            if (tolerant_ && tolerateDecoderError()) {
+                continue;
+            }
             if (fallbackToSoftware("decoder-error")) {
                 continue;
             }
@@ -778,9 +818,24 @@ SourceReadStatus MediaFileSource::readBase(pipeline::FramePacket& out, const AVF
             errorMessage_ = L"视频解码失败，已停止处理，请检查源文件是否损坏";
             return SourceReadStatus::Error;
         }
-        bool eof = false;
-        if (!demuxer_.readVideoPacket(eof)) {
-            if (!eof) { errorMessage_ = L"源视频读取失败，已停止处理"; return SourceReadStatus::Error; }
+        const auto got = demuxer_.readVideoPacketEx(nonBlocking_ ? 20 : 50, nonBlocking_);
+        if (got == media::FFmpegDemuxer::ReadResult::Waiting) {
+            // Playback is paused for buffering (or the next packet has not arrived):
+            // nothing is lost, the caller retries and the picture stays on screen.
+            if (nonBlocking_) {
+                return SourceReadStatus::Waiting;
+            }
+            continue;
+        }
+        if (got == media::FFmpegDemuxer::ReadResult::Cancelled) {
+            return SourceReadStatus::Error;   // the owner is stopping; no message
+        }
+        if (got == media::FFmpegDemuxer::ReadResult::Error) {
+            const auto failure = demuxer_.shared() ? demuxer_.session()->failureMessage() : std::wstring{};
+            errorMessage_ = failure.empty() ? L"源视频读取失败，已停止处理" : failure;
+            return SourceReadStatus::Error;
+        }
+        if (got == media::FFmpegDemuxer::ReadResult::Eof) {
             draining_ = true;
             if (!decoder_.sendPacket(nullptr)) {
                 errorMessage_ = L"视频尾帧解码失败，已停止处理";
@@ -788,16 +843,57 @@ SourceReadStatus MediaFileSource::readBase(pipeline::FramePacket& out, const AVF
             }
             continue;
         }
-        if (demuxer_.currentPacket()->flags & AV_PKT_FLAG_CORRUPT) {
-            veyra::log::error("source-file", "corrupt video packet; refusing to skip source data");
-            errorMessage_ = L"源视频包含损坏数据，已停止处理";
-            return SourceReadStatus::Error;
+        if (demuxer_.packetDiscontinuity()) {
+            beginDiscontinuity();
+        }
+        // Packets keep arriving but nothing decodable comes out for 10 s: the connection
+        // is delivering garbage. Start over on a fresh one (at most once per 30 s).
+        if (tolerant_ && demuxer_.shared()) {
+            const auto now = std::chrono::steady_clock::now();
+            if (noOutputSince_ == std::chrono::steady_clock::time_point{}) noOutputSince_ = now;
+            else if (now - noOutputSince_ >= std::chrono::seconds(10) && now - lastForcedReconnect_ >= std::chrono::seconds(30)) {
+                lastForcedReconnect_ = now;
+                noOutputSince_ = {};
+                veyra::log::warn("source-file", "no decodable picture for 10 s while data keeps arriving; reconnecting");
+                demuxer_.session()->requestReconnect("no decodable picture for 10 s");
+            }
+        }
+        const AVPacket* packet = demuxer_.currentPacket();
+        if (packet->flags & AV_PKT_FLAG_CORRUPT) {
+            if (!tolerant_) {
+                veyra::log::error("source-file", "corrupt video packet; refusing to skip source data");
+                errorMessage_ = L"源视频包含损坏数据，已停止处理";
+                return SourceReadStatus::Error;
+            }
+            ++corruptPacketsSeen_;
+            const auto now = std::chrono::steady_clock::now();
+            if (now - lastCorruptLog_ >= std::chrono::seconds(1)) {
+                lastCorruptLog_ = now;
+                veyra::log::warn("source-file", std::format("damaged video packet from the network (policy={} packetsSoFar={}); decoding continues",
+                    corruptPolicy_ == media::CorruptPolicy::WaitKeyframe ? "wait-keyframe" : "conceal", corruptPacketsSeen_));
+            }
+            if (corruptPolicy_ == media::CorruptPolicy::WaitKeyframe) {
+                startKeyframeWait();
+            }
+        }
+        if (waitKeyframe_) {
+            // A clean start after a damaged stretch is a keyframe that is not itself damaged. A stream
+            // that never flags one must not freeze the picture: after 5 s decoding just continues.
+            const bool clean = (packet->flags & AV_PKT_FLAG_KEY) && !(packet->flags & AV_PKT_FLAG_CORRUPT);
+            if (!clean && std::chrono::steady_clock::now() - waitKeyframeSince_ < std::chrono::seconds(5)) {
+                continue;
+            }
+            if (!clean) veyra::log::warn("source-file", "no clean keyframe within 5 s after damaged data; decoding continues without waiting");
+            waitKeyframe_ = false;
         }
         // Custom (P5): feed the enhancement layer BEFORE the base layer so its
         // decoder has one frame of head start; otherwise the decoded EL frame lags
         // the base frame and stale residuals land on the picture.
-        lastFrameHadEnhancementLayer = feedEnhancementLayer(demuxer_.currentPacket());
-        if (!decoder_.sendPacket(demuxer_.currentPacket())) {
+        lastFrameHadEnhancementLayer = feedEnhancementLayer(packet);
+        if (!decoder_.sendPacket(packet)) {
+            if (tolerant_ && tolerateDecoderError()) {
+                continue;
+            }
             if (fallbackToSoftware("send-packet-error")) {
                 continue;
             }
@@ -826,10 +922,17 @@ SourceReadStatus MediaFileSource::readBase(pipeline::FramePacket& out, const AVF
         return SourceReadStatus::Error;
     }
 
-    if ((frame->flags & AV_FRAME_FLAG_CORRUPT) || frame->decode_error_flags) {
-        veyra::log::error("source-file", std::format("corrupt decoded frame flags={} decodeErrors={}", frame->flags, frame->decode_error_flags));
-        errorMessage_ = L"源视频包含损坏画面，已停止处理";
-        return SourceReadStatus::Error;
+    // Deinterlaced output inherits the flags of a picture the policy already accepted
+    // before the filter; checking it again would count the same loss once per field.
+    if (!deinterlacer_.active() && ((frame->flags & AV_FRAME_FLAG_CORRUPT) || frame->decode_error_flags)) {
+        if (!tolerant_) {
+            veyra::log::error("source-file", std::format("corrupt decoded frame flags={} decodeErrors={}", frame->flags, frame->decode_error_flags));
+            errorMessage_ = L"源视频包含损坏画面，已停止处理";
+            return SourceReadStatus::Error;
+        }
+        if (!keepDamagedPicture(frame)) {
+            goto readAgain;
+        }
     }
     if (frame->width <= 0 || frame->height <= 0 || uint32_t(frame->width) != info_.width || uint32_t(frame->height) != info_.height) {
         veyra::log::error("source-file", std::format("frame extent changed: opened={}x{} decoded={}x{}; file processing stopped before upload", info_.width, info_.height, frame->width, frame->height));
@@ -1048,6 +1151,12 @@ SourceReadStatus MediaFileSource::readBase(pipeline::FramePacket& out, const AVF
         flags |= static_cast<uint32_t>(pipeline::FrameFlagBits::Seek);
         pendingSeekFlag_ = false;
     }
+    if (pendingDiscontinuity_) {
+        // First picture after a live reconnect: temporal history from the old connection
+        // does not apply to it.
+        flags |= static_cast<uint32_t>(pipeline::FrameFlagBits::Discontinuity);
+        pendingDiscontinuity_ = false;
+    }
     const int64_t ptsUs = rationalToUs(out.pts);
     if (lastPtsUs_ != INT64_MIN && !out.pts.isUnknown() && ptsUs < lastPtsUs_) {
         flags |= static_cast<uint32_t>(pipeline::FrameFlagBits::Discontinuity);
@@ -1074,14 +1183,102 @@ SourceReadStatus MediaFileSource::readBase(pipeline::FramePacket& out, const AVF
     }
 
     ++framesRead_;
+    noOutputSince_ = {};
     if (decodedFrame != nullptr) { *decodedFrame = frame; }
     return SourceReadStatus::Frame;
+}
+
+media::NetworkStats MediaFileSource::networkStats() const
+{
+    if (const auto& session = demuxer_.session()) return session->stats();
+    return {};
+}
+
+void MediaFileSource::setPlaybackPositionMs(double ms)
+{
+    if (const auto& session = demuxer_.session()) {
+        if (std::isfinite(ms) && ms >= 0) session->setPlaybackPositionUs(int64_t(ms * 1000.0));
+    }
+}
+
+void MediaFileSource::resetCorruptionState()
+{
+    waitKeyframe_ = false;
+    pendingDiscontinuity_ = false;
+    corruptPacketsSeen_ = corruptFramesSeen_ = decoderErrorsSeen_ = 0;
+    errorsInWindow_ = 0;
+    errorWindowStart_ = lastCorruptLog_ = lastReadCall_ = noOutputSince_ = {};
+    lastForcedReconnect_ = std::chrono::steady_clock::now();
+}
+
+// The first packet after a live reconnect: the old connection's decoder state and
+// temporal history do not apply. The session has already cut to a keyframe and kept
+// the timeline continuous.
+void MediaFileSource::beginDiscontinuity()
+{
+    veyra::log::info("source-file", "network source reconnected: resetting the decoder at the new keyframe");
+    deinterlacer_.close();
+    filterDraining_ = false;
+    decoder_.flushBuffers();   // the session starts the new connection at a keyframe
+    waitKeyframe_ = false;
+    pendingDiscontinuity_ = true;
+    lastPtsUs_ = INT64_MIN;
+    ++epoch_;
+}
+
+// A damaged packet the decoder rejects is a few lost frames, not a dead source: skip
+// to the next keyframe. A burst of failures (a broken decoder or hardware path) is
+// not tolerated, so the usual software fallback / error applies.
+bool MediaFileSource::tolerateDecoderError()
+{
+    const auto now = std::chrono::steady_clock::now();
+    if (errorsInWindow_ == 0 || now - errorWindowStart_ > std::chrono::seconds(2)) {
+        errorWindowStart_ = now;
+        errorsInWindow_ = 0;
+    }
+    ++decoderErrorsSeen_;
+    if (++errorsInWindow_ > 12) {
+        veyra::log::warn("source-file", std::format("decoder rejected {} packets within 2 s; treating it as a decoder failure", errorsInWindow_));
+        return false;
+    }
+    if (decoder_.lastError() != AVERROR_INVALIDDATA && decoderErrorsSeen_ > 3 && decoder_.hardwareActive()) {
+        return false;   // not damaged data: let the hardware fallback decide
+    }
+    startKeyframeWait();
+    return true;
+}
+
+// Damaged data reached the decoder: drop what it holds and feed it again from the next clean keyframe.
+void MediaFileSource::startKeyframeWait()
+{
+    deinterlacer_.close();
+    filterDraining_ = false;
+    decoder_.flushBuffers();
+    waitKeyframe_ = true;
+    waitKeyframeSince_ = std::chrono::steady_clock::now();
+}
+
+// Network loss: FFmpeg has concealed what it could. Keep that picture, or drop it and
+// wait for the next keyframe, as the user chose. Only called for tolerant sources.
+bool MediaFileSource::keepDamagedPicture(const AVFrame* frame)
+{
+    ++corruptFramesSeen_;
+    const bool drop = corruptPolicy_ == media::CorruptPolicy::WaitKeyframe;
+    if (const auto& session = demuxer_.session()) session->addCorruptFrames(1, drop ? 1 : 0);
+    const auto now = std::chrono::steady_clock::now();
+    if (now - lastCorruptLog_ >= std::chrono::seconds(1)) {
+        lastCorruptLog_ = now;
+        veyra::log::warn("source-file", std::format("damaged picture flags={} decodeErrors={} policy={} picturesSoFar={}",
+            frame->flags, frame->decode_error_flags, drop ? "wait-keyframe" : "conceal", corruptFramesSeen_));
+    }
+    if (drop) startKeyframeWait();
+    return !drop;
 }
 
 bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
 {
     if (!info_.opened) { return false; }
-    if(media::networkMediaInput(path_)&&!demuxer_.seekable())return false;
+    if((media::networkMediaInput(path_)||demuxer_.shared())&&!demuxer_.seekable())return false;
     if (targetSeconds.isUnknown() || targetSeconds.den == 0 || targetSeconds.isNegative()) {
         veyra::log::error("source-file", "seek target must be a known non-negative rational");
         return false;
@@ -1100,6 +1297,9 @@ bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
     draining_ = false;
     eofSignalled_ = false;
     pendingSeekFlag_ = true;
+    pendingDiscontinuity_ = false;
+    waitKeyframe_ = false;
+    noOutputSince_ = {};
     lastPtsUs_ = INT64_MIN;
     ++epoch_;
     ++seekCount_;

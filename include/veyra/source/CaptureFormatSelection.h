@@ -6,13 +6,15 @@
 #include <format>
 #include <iterator>
 #include <span>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace veyra::source {
 // `pixel` / `scan` / `interlaced` describe the same media type as `key`.
 // The capture dialog offers them as three linked choices; `key` stays the
 // persisted identity so an old combined selection still restores one type.
-struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;bool driverCurrent=false;std::wstring pixel;std::wstring scan;bool interlaced=false;int64_t interval100ns=0;bool supported=true;bool automatic=false;};
+struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;bool driverCurrent=false;std::wstring pixel;std::wstring scan;bool interlaced=false;int64_t interval100ns=0;bool supported=true;bool automatic=false;int capability=-1;bool rangeCandidate=false;};
 enum class CaptureFormatAxis { Resolution, FrameRate };
 // Frame-rate rows also carry the rate itself and whether it is a common one (see
 // captureVisibleFrameRates); the other menus leave those fields at their defaults.
@@ -52,15 +54,30 @@ inline std::wstring captureFrameRateId(const CaptureFormat& format){
     // Field order stays on the pixel list, so it does not create two identical fps rows.
     return std::format(L"{}|{}",format.interval100ns>0?format.interval100ns:format.fps>0?captureFrameInterval(format.fps):0,format.interlaced?1:0);
 }
+// Display groups absorb only integer 100ns rounding around standard rates.
+// The exact interval and media key above remain untouched for negotiation.
+inline std::wstring captureFrameRateGroupId(const CaptureFormat& format){
+    if(format.automatic)return L"auto";
+    const auto interval=format.interval100ns>0?format.interval100ns:captureFrameInterval(format.fps);
+    static constexpr double rates[]{1,2,3,4,5,10,15,20,24,25,30,40,48,50,60,90,100,120,144,165,180,200,240,360,480,960};
+    for(double rate:rates)for(double divisor:{1.,1001./1000.}){
+        const auto standard=captureFrameInterval(rate/divisor);
+        if(interval>0&&std::abs(interval-standard)<=1)
+            return std::format(L"{}|{}",standard,format.interlaced?1:0);
+    }
+    return captureFrameRateId(format);
+}
 inline const CaptureFormat* captureRateSample(std::span<const CaptureFormat> formats,std::wstring_view resolution,std::wstring_view rate){
     if(resolution.empty()||rate.empty())return nullptr;
     for(const auto& f:formats)if(captureResolutionId(f)==resolution&&captureFrameRateId(f)==rate)return &f;
+    for(const auto& f:formats)if(captureResolutionId(f)==resolution&&captureFrameRateGroupId(f)==rate)return &f;
     return nullptr;
 }
 inline const CaptureFormat* selectCapturePixelFormat(std::span<const CaptureFormat> formats,std::wstring_view resolution,std::wstring_view rate,std::wstring_view key){
     if(key.empty())return nullptr;
     const auto* f=selectCaptureFormat(formats,-1,key);
-    return f&&!resolution.empty()&&!rate.empty()&&captureResolutionId(*f)==resolution&&captureFrameRateId(*f)==rate?f:nullptr;
+    const auto* sample=captureRateSample(formats,resolution,rate);
+    return f&&sample&&captureResolutionId(*f)==resolution&&captureFrameRateGroupId(*f)==captureFrameRateGroupId(*sample)?f:nullptr;
 }
 inline bool captureMjpegFormat(const CaptureFormat& format){
     std::wstring pixel=format.pixel;
@@ -89,7 +106,7 @@ inline std::wstring capturePixelLabel(const CaptureFormat& format,bool ambiguous
     std::wstring label=format.pixel.empty()?L"未知格式":format.pixel;
     if(ambiguous){
         if(!format.scan.empty())label+=L" · "+format.scan;
-        label+=std::format(L" [format {}]",format.index);
+        label+=std::format(L" [format {}] · {} x100ns",format.index,format.interval100ns);
     }
     if(format.driverCurrent)label+=L" · 驱动默认";
     if(!format.supported)label+=L" · 当前播放器不支持";
@@ -97,21 +114,23 @@ inline std::wstring capturePixelLabel(const CaptureFormat& format,bool ambiguous
 }
 inline std::vector<CaptureFormatOption> captureResolutionOptions(std::span<const CaptureFormat> formats){
     std::vector<CaptureFormatOption> out;
+    std::unordered_set<std::wstring> seen;
     for(const auto& format:formats){
         const auto id=captureResolutionId(format);
-        if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.id==id;}))continue;
+        if(!seen.insert(id).second)continue;
         out.push_back({id,captureResolutionLabel(format)});
     }
     return out;
 }
 inline std::vector<CaptureFormatOption> captureFrameRateOptions(std::span<const CaptureFormat> formats,const CaptureFormat* current){
     std::vector<CaptureFormatOption> out;
+    std::unordered_set<std::wstring> seen;
     if(!current)return out;
     const auto resolution=captureResolutionId(*current);
     for(const auto& format:formats){
         if(captureResolutionId(format)!=resolution)continue;
-        const auto id=captureFrameRateId(format);
-        if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.id==id;}))continue;
+        const auto id=captureFrameRateGroupId(format);
+        if(!seen.insert(id).second)continue;
         auto label=captureFrameRateLabel(format);
         if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.label==label;}))
             label+=std::format(L" [format {}]",format.index);
@@ -129,12 +148,9 @@ inline std::vector<CaptureFormatOption> captureVisibleFrameRates(const std::vect
     std::vector<CaptureFormatOption> shown;
     if(std::none_of(all.begin(),all.end(),[](const CaptureFormatOption& option){return option.common;}))shown=all;
     else{
-        std::vector<std::pair<long long,bool>> rates;
         for(const auto& option:all){
-            const std::pair<long long,bool> rate{std::llround(option.fps*1000),option.interlaced};
-            const bool repeat=std::find(rates.begin(),rates.end(),rate)!=rates.end();
-            if(option.id!=selected&&(!option.common||repeat))continue;
-            shown.push_back(option);if(option.common)rates.push_back(rate);
+            if(option.id!=selected&&!option.common)continue;
+            shown.push_back(option);
         }
         if(hidden)*hidden=all.size()-shown.size();
         if(showAll)shown=all;
@@ -161,15 +177,15 @@ inline std::vector<CaptureFormatOption> capturePixelOptions(std::span<const Capt
     std::vector<CaptureFormatOption> out;
     if(!current)return out;
     const auto resolution=captureResolutionId(*current);
-    const auto rate=captureFrameRateId(*current);
+    const auto rate=captureFrameRateGroupId(*current);
     std::vector<const CaptureFormat*> matched;
+    std::unordered_map<std::wstring,int> copies;
+    std::unordered_set<std::wstring> seen;
     for(const auto& format:formats)
-        if(captureResolutionId(format)==resolution&&captureFrameRateId(format)==rate)matched.push_back(&format);
+        if(captureResolutionId(format)==resolution&&captureFrameRateGroupId(format)==rate){matched.push_back(&format);++copies[format.pixel];}
     for(const auto* format:matched){
-        int copies=0;
-        for(const auto* other:matched)if(other->pixel==format->pixel)++copies;
-        if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.id==format->key;}))continue;
-        out.push_back({format->key,capturePixelLabel(*format,copies>1),!format->supported,captureMjpegFormat(*format)});
+        if(!seen.insert(format->key).second)continue;
+        out.push_back({format->key,capturePixelLabel(*format,copies[format->pixel]>1),!format->supported,captureMjpegFormat(*format)});
     }
     return out;
 }
@@ -180,18 +196,18 @@ inline std::vector<CaptureFormatOption> capturePixelOptions(std::span<const Capt
 inline const CaptureFormat* retargetCaptureFormat(std::span<const CaptureFormat> formats,const CaptureFormat* current,CaptureFormatAxis axis,std::wstring_view id){
     if(id.empty()||(axis==CaptureFormatAxis::FrameRate&&!current))return nullptr;
     const auto resolution=current?captureResolutionId(*current):std::wstring{};
-    const auto rate=current?captureFrameRateId(*current):std::wstring{};
+    const auto rate=current?captureFrameRateGroupId(*current):std::wstring{};
     const auto pixel=current?current->pixel:std::wstring{};
     const CaptureFormat* fallback=nullptr;
     const CaptureFormat* samePixel=nullptr;
     const CaptureFormat* sameBoth=nullptr;
     for(const auto& format:formats){
         const bool match=axis==CaptureFormatAxis::Resolution?captureResolutionId(format)==id
-            :captureResolutionId(format)==resolution&&captureFrameRateId(format)==id;
+            :captureResolutionId(format)==resolution&&(captureFrameRateId(format)==id||captureFrameRateGroupId(format)==id);
         if(!match)continue;
         if(!fallback)fallback=&format;
         if(!current)continue;
-        const bool rateMatch=captureFrameRateId(format)==rate;
+        const bool rateMatch=captureFrameRateGroupId(format)==rate;
         const bool pixelMatch=!pixel.empty()&&format.pixel==pixel;
         if(rateMatch&&pixelMatch){if(!sameBoth)sameBoth=&format;}
         else if(pixelMatch){if(!samePixel)samePixel=&format;}

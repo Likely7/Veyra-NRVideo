@@ -3,3 +3,4 @@
 scripts/remoteplay/patches/*.patch text eol=lf
 # A single space is a required empty context line in unified diff syntax.
 scripts/ffmpeg/*.patch text eol=lf whitespace=-blank-at-eol
+third_party/lmxxf/*.patch text eol=lf whitespace=-blank-at-eol

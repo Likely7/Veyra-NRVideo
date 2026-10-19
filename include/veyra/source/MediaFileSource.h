@@ -7,9 +7,12 @@
 // implementation exists here: FFmpegDemuxer + FFmpegVideoDecoder do the
 // work; this class owns contract translation (PTS/duration/color/flags/
 // epoch) and the seek protocol.
+#include <chrono>
 #include <cstdint>
+#include <memory>
 #include <string_view>
 
+#include "veyra/media/DemuxSession.h"
 #include "veyra/media/FFmpegDemuxer.h"
 #include "veyra/media/FFmpegVideoDecoder.h"
 
@@ -39,9 +42,23 @@ public:
     uint64_t epoch() const { return epoch_; }
     const std::wstring& errorMessage() const { return errorMessage_; }
 
+    // ---- network / server playback (#48) -----------------------------------------
+    // The shared demux session the audio pipeline reads from too; null for local files.
+    std::shared_ptr<media::DemuxSession> sharedSession() const { return demuxer_.session(); }
+    // Zeroed (active=false) when the source does not go through a session.
+    media::NetworkStats networkStats() const;
+    // Playback position on the media timeline, written by the engine each turn so the
+    // session knows how much is buffered ahead.
+    void setPlaybackPositionMs(double ms);
+
 private:
     pipeline::ColorDescription parseColor(const AVCodecParameters* params) const;
     bool fallbackToSoftware(std::string_view reason);
+    void beginDiscontinuity();
+    void resetCorruptionState();
+    void startKeyframeWait();
+    bool tolerateDecoderError();
+    bool keepDamagedPicture(const AVFrame* frame);
 
     media::FFmpegDemuxer demuxer_;
     media::FFmpegVideoDecoder decoder_;
@@ -69,6 +86,12 @@ private:
     void closeEnhancementLayer();
     bool deinterlaceEnabled_=true,filterDraining_=false;
     pipeline::DoviFrameInfo doviFrameInfo{};   // Dolby Vision L1 (RPU), invalid unless present
+    // Damaged data tolerance (network sources, MPEG-TS) and buffering reads.
+    bool nonBlocking_=false,tolerant_=false,waitKeyframe_=false,pendingDiscontinuity_=false;
+    media::CorruptPolicy corruptPolicy_=media::CorruptPolicy::Conceal;
+    uint64_t corruptPacketsSeen_=0,corruptFramesSeen_=0,decoderErrorsSeen_=0;
+    std::chrono::steady_clock::time_point lastReadCall_{},noOutputSince_{},lastCorruptLog_{},lastForcedReconnect_{},errorWindowStart_{},waitKeyframeSince_{};
+    unsigned errorsInWindow_=0;
     SourceInfo info_{};
     uint64_t sequence_ = 0;
     uint64_t epoch_ = 1;

@@ -109,6 +109,9 @@ public:
 
     void flushBuffers(); // seek boundary (Playbook 13.4)
     void recoverAtKeyframe(); // compressed input loss: discard until a new key frame
+    // AVERROR of the last failed sendPacket / receiveFrame (0 when none). Damaged
+    // network data reports AVERROR_INVALIDDATA; the caller decides whether to skip it.
+    int lastError() const { return lastError_; }
     const DecoderStats& stats() const { return stats_; }
 
     // True when the decoder is producing AV_PIX_FMT_D3D12 frames.
@@ -164,6 +167,8 @@ private:
     AVFrame* frame_ = nullptr;
     std::deque<AVFrame*> bufferedFrames_;
     DecodeReceiveStatus receiveStatus_ = DecodeReceiveStatus::NeedInput;
+    int lastError_ = 0;
+    uint64_t errorLogs_ = 0;
     int frameTimeBaseNum_ = 0;
     int frameTimeBaseDen_ = 0;
     DecoderStats stats_{};

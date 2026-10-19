@@ -21,11 +21,17 @@ int wmain(int argc,wchar_t** argv){
     check(s.nrRuntime==NrRuntime::Ampere&&s.model.performance&&nrRenderPreset(s.nrRuntime,s.model)==2,"fresh NVIDIA settings select SF preset B");
     auto a=s;a.model.performance=false;
     check(nrRenderPreset(a.nrRuntime,a.model)==1&&requiresGraphRebuild(s,a),"active SF model change rebuilds NR");
-    for(auto runtime:{NrRuntime::NvidiaOriginal,NrRuntime::LmxxfAmd}){
+    for(auto runtime:{NrRuntime::NvidiaOriginal}){
         auto original=s;original.nrRuntime=runtime;auto edited=original;edited.model.performance=false;
         check(nrRenderPreset(runtime,edited.model)==0&&!requiresGraphRebuild(original,edited)&&
-            original.sameActiveVideoParameters(edited),"original and AMD ignore the inactive performance option");
+            original.sameActiveVideoParameters(edited),"NVIDIA original ignores the inactive performance option");
     }
+    auto amd=s;amd.nrRuntime=NrRuntime::LmxxfAmd;
+    auto amdOriginal=amd;amdOriginal.model.performance=false;
+    check(nrRenderPreset(amd.nrRuntime,amd.model)==0&&requiresGraphRebuild(amd,amdOriginal)&&
+        !amd.sameActiveVideoParameters(amdOriginal),"AMD model changes rebuild without setting an NGX preset");
+    amd.nr=false;amdOriginal.nr=false;
+    check(!requiresGraphRebuild(amd,amdOriginal)&&amd.sameActiveVideoParameters(amdOriginal),"disabled AMD edits preserve uninterrupted playback");
     auto off=s;off.nr=false;auto draft=off;draft.model.performance=false;
     check(!requiresGraphRebuild(off,draft)&&off.sameActiveVideoParameters(draft),"disabled NR model edit does not disturb playback");
     s.nrLayerCount=2;for(unsigned i=0;i<s.nrLayerCount;++i){s.nrLayers[i].enabled=true;s.nrLayers[i].runtime=s.nrRuntime;}
@@ -36,6 +42,11 @@ int wmain(int argc,wchar_t** argv){
     s.nrLayers[1].enabled=a.nrLayers[1].enabled=true;
     const auto frozen=freezeExportSettings(a);EnhancementSettings round=frozen;fromChain(toChain(frozen),round);
     check(round==frozen&&!round.nrLayers[1].model.performance,"export snapshot retains each layer's model");
+    auto mixedAmd=a;mixedAmd.nrRuntime=NrRuntime::LmxxfAmd;
+    for(auto& layer:mixedAmd.nrLayers)layer.runtime=NrRuntime::LmxxfAmd;
+    EnhancementSettings amdRound;fromChain(toChain(freezeExportSettings(mixedAmd)),amdRound);
+    check(amdRound.nrLayers[0].model.performance&&!amdRound.nrLayers[1].model.performance&&
+        requiresGraphRebuild(mixedAmd,[&]{auto v=mixedAmd;v.nrLayers[1].model.performance=true;return v;}()),"AMD list/export preserves independent Small and Original layers");
     StageRequest request;request.width=1920;request.height=1080;request.nr=true;request.exportJob=true;
     pipeline::EnhanceGraphDesc desc;describeStages(request,frozen,desc);
     check(desc.nrLayersModel.size()==2&&desc.nrLayersModel[0].performance&&!desc.nrLayersModel[1].performance,"export graph receives both model choices");
@@ -75,5 +86,13 @@ int wmain(int argc,wchar_t** argv){
     check(sessions.save(*session)&&bytes(sessionPath)==sessionRollback,"detached editor model opts into session 8 and preserves old file");
     auto restored=std::make_unique<ChainSession>();ChainSessionStore reader(sessionPath);
     check(reader.load(*restored)&&*restored==*session,"session restores list, node and editor model choices independently");
+    PresetLibrary amdLibrary(out/L"amd-library.v1");amdLibrary.setIncludeBuiltins(false);
+    PresetEntry amdEntry;amdEntry.name=L"AMD Small + Original";amdEntry.chain=toChain(mixedAmd);
+    const bool amdSaved=amdLibrary.load()&&amdLibrary.put(amdEntry);
+    PresetLibrary amdReader(out/L"amd-library.v1");amdReader.setIncludeBuiltins(false);
+    check(amdSaved&&amdReader.load()&&amdReader.entries().size()==1&&amdReader.entries()[0]==amdEntry,"AMD mixed models survive disk preset reload");
+    auto amdSession=std::make_unique<ChainSession>(ChainSession::initial(mixedAmd));ChainSessionStore amdSessions(out/L"amd-session.v1");
+    auto amdRestored=std::make_unique<ChainSession>();
+    check(amdSessions.save(*amdSession)&&amdSessions.load(*amdRestored)&&*amdSession==*amdRestored,"AMD mixed models survive complete session restore");
     std::cout<<"NR model settings failures="<<failures<<std::endl;return failures?1:0;
 }

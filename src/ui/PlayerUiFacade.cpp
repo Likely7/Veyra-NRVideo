@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <format>
 #include <iomanip>
@@ -28,11 +29,24 @@ std::wstring wide(const std::string& s) {
     if (n > 0) MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), r.data(), n);
     return r;
 }
+// Network buffering keeps the playback position frozen, so its own numbers have
+// to count as a change. Rounded to what the panel prints so the 100 ms stat
+// refresh does not repaint on every poll.
+bool sameNetwork(const veyra::media::NetworkStats& a, const veyra::media::NetworkStats& b) {
+    return a.active == b.active && a.live == b.live && a.state == b.state && a.bandwidthLow == b.bandwidthLow &&
+        a.reconnects == b.reconnects && a.reconnectAttempt == b.reconnectAttempt && a.stalls == b.stalls &&
+        a.corruptPackets == b.corruptPackets && a.corruptFrames == b.corruptFrames && a.skippedFrames == b.skippedFrames &&
+        a.message == b.message &&
+        std::llround(a.bufferedSeconds * 10) == std::llround(b.bufferedSeconds * 10) &&
+        std::llround(a.targetSeconds * 10) == std::llround(b.targetSeconds * 10) &&
+        std::llround(a.downloadBytesPerSecond / 1.0e5) == std::llround(b.downloadBytesPerSecond / 1.0e5);
+}
 // Only the fields the UI can show are compared. Comparing the whole struct is
 // fine too, but calling it out keeps the intent visible: a change here is what
 // makes the UI repaint.
 bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::PlayerSnapshot& b) {
-    return a.transport == b.transport && a.sessionId == b.sessionId && a.position == b.position &&
+    return sameNetwork(a.network, b.network) &&
+        a.transport == b.transport && a.sessionId == b.sessionId && a.position == b.position &&
         a.duration == b.duration && a.frames == b.frames && a.generated == b.generated &&
         a.status == b.status && a.backendWarning == b.backendWarning && a.sourceNotice == b.sourceNotice &&
         a.applying == b.applying && a.rejectedRevision == b.rejectedRevision &&

@@ -67,8 +67,10 @@ VPage {
     // M30: the NR layer card that was just added pops in; the number is reset
     // shortly after so a later rebuild of the list does not pop it again.
     property int popLayer: -1
-    Timer { id: popReset; interval: 900; onTriggered: root.popLayer = -1 }
+    property int popBeauty: -1
+    Timer { id: popReset; interval: 900; onTriggered: { root.popLayer = -1; root.popBeauty = -1 } }
     function markPop(number) { popLayer = number; popReset.restart() }
+    function markBeautyPop(number) { popBeauty = number; popReset.restart() }
 
     // Design's st.tab: quality / fg / color / audio / display.
     property string tab: "quality"
@@ -89,8 +91,15 @@ VPage {
         else {
             tab = "quality"
             if (chip.type === "sr") target = "list-sr"
+            else if (chip.type === "aa") target = "list-anti-alias"
             else if (chip.type === "video-hdr") target = "list-video-hdr"
             else if (chip.type === "protection") target = "list-global-protection"
+            else if (chip.type === "beauty") {
+                beautyStage.open = true
+                let ordinal = 0
+                for (const n of veyra.chain) { if (n.type === "beauty") ++ordinal; if (n.index === chip.index) break }
+                target = "beauty-card-" + ordinal
+            }
             else if (chip.type === "nr") {
                 nrStage.open = true
                 let ordinal = 0
@@ -411,6 +420,128 @@ VPage {
             onDuplicateRequested: i => card.duplicateRequested(i)
             onRemoveRequested: i => card.removeRequested(i)
             onOrderEdited: e => card.orderEdited(e)
+        }
+    }
+
+    // A beauty layer: the shared editor (BeautyEditor.qml) under a numbered header.
+    component BeautyLayerCard: VAccordion {
+        id: card
+        required property var layerData
+        property int layerNumber: 1
+        objectName: "beauty-card-" + layerNumber
+        Layout.fillWidth: true
+        glyph: "heart"; hue: "#FF8FBF"
+        compactHeader: true
+        popIn: layerNumber === root.popBeauty
+        title: qsTr("美颜层 ") + layerNumber
+        headerLeadingActions: Rectangle {
+            implicitWidth: 22; implicitHeight: 22; radius: 7
+            color: Qt.rgba(1, 143 / 255, 191 / 255, 0.16)
+            Text {
+                anchors.centerIn: parent
+                text: card.layerNumber
+                color: "#FF8FBF"
+                font.family: Theme.fontMono; font.pixelSize: 11
+                font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
+            }
+        }
+        headerActions: VButton {
+            objectName: "beauty-card-more-" + card.layerNumber
+            icon: true; ghost: true; iconName: "dup"
+            implicitWidth: 26; implicitHeight: 26
+            tip: qsTr("复制 · 移动 · 恢复默认 · 删除")
+            onClicked: { beautyLayerMenu.layer = card; beautyLayerMenu.openAt(this, "down") }
+        }
+        readonly property var timing: veyra.nodeTimings[String(layerData.index + 2)] || ({})
+        readonly property string timingText: timing.state === "measured" ? timing.ms.toFixed(2) + " ms"
+                                           : timing.state === "pending" ? qsTr("等待样本") : ""
+        summary: layerData.summary + (layerData.enabled && timingText.length > 0 ? " · " + timingText : "")
+        on: layerData.enabled
+        onToggled: on => veyra.setBeautyParameterAt(layerData.index, "enabled", on ? 1 : 0)
+        BeautyEditor {
+            Layout.fillWidth: true
+            namePrefix: "list-beauty-" + card.layerNumber
+            params: card.layerData
+            showDetection: false
+            onEdited: (key, amount) => veyra.setBeautyParameterAt(card.layerData.index, key, amount)
+            onPresetPicked: preset => veyra.applyBeautyPreset(card.layerData.index, preset)
+        }
+    }
+
+    // .addlayer: the dashed button at the bottom of a layered stage (NR, beauty).
+    component AddLayerButton: Rectangle {
+        id: addLayer
+        property string label: ""
+        property string note: ""
+        property bool full: false
+        signal add()
+        Layout.fillWidth: true
+        Layout.topMargin: 4
+        implicitHeight: 36
+        radius: 10
+        opacity: full ? 0.45 : 1
+        color: addHover.hovered && !full ? Theme.accentSoft : "transparent"
+        readonly property bool softwareRendering: (typeof vySoftwareUi !== "undefined" && vySoftwareUi)
+            || GraphicsInfo.api === GraphicsInfo.Software
+        readonly property color outline: addHover.hovered && !addLayer.full ? Theme.accent : Qt.rgba(1, 1, 1, 0.2)
+        Image {
+            anchors.fill: parent
+            visible: addLayer.softwareRendering
+            // Software Shape ignores empty clips. A cached image keeps
+            // this dashed path inside the inspector like the icons.
+            source: {
+                if (!visible || width <= 1 || height <= 1) return ""
+                const c = addLayer.outline
+                const paint = "rgb(" + Math.round(c.r * 255) + "," + Math.round(c.g * 255) + "," + Math.round(c.b * 255) + ")"
+                return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">'
+                    + '<rect x="0.5" y="0.5" width="' + (width-1) + '" height="' + (height-1)
+                    + '" rx="10" fill="none" stroke="' + paint + '" stroke-opacity="' + c.a
+                    + '" stroke-width="1" stroke-dasharray="5 4"/></svg>')
+            }
+            sourceSize.width: Math.max(1, Math.ceil(width * Screen.devicePixelRatio))
+            sourceSize.height: Math.max(1, Math.ceil(height * Screen.devicePixelRatio))
+            cache: true
+        }
+        Shape {
+            visible: !addLayer.softwareRendering
+            anchors.fill: parent
+            ShapePath {
+                strokeWidth: 1
+                strokeColor: addHover.hovered && !addLayer.full ? Theme.accent : Qt.rgba(1, 1, 1, 0.2)
+                fillColor: "transparent"
+                strokeStyle: ShapePath.DashLine
+                dashPattern: [5, 4]
+                PathRectangle {
+                    x: 0; y: 0
+                    width: addLayer.width
+                    height: addLayer.height
+                    radius: 10
+                }
+            }
+        }
+        Row {
+            anchors.centerIn: parent
+            spacing: 6
+            Text {
+                text: addLayer.label
+                color: addHover.hovered && !addLayer.full ? Theme.accent : Theme.t2
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsBody
+                font.weight: Font.Medium
+            }
+            Text {
+                anchors.baseline: parent.children[0].baseline
+                text: addLayer.note
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: 11
+            }
+        }
+        HoverHandler { id: addHover; cursorShape: addLayer.full ? Qt.ArrowCursor : Qt.PointingHandCursor }
+        TapHandler {
+            enabled: !addLayer.full
+            onTapped: addLayer.add()
         }
     }
 
@@ -807,6 +938,20 @@ VPage {
                         text: veyra.colorStatus.length > 0 ? veyra.colorStatus : "—"
                         color: Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
                         horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                    }
+                    // Network / server playback (#48): buffer, download speed, reconnects.
+                    Text { visible: veyra.networkActive; text: qsTr("网络"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 12 }
+                    Text {
+                        objectName: "pro-network-summary"
+                        visible: veyra.networkActive
+                        Layout.fillWidth: true
+                        text: veyra.networkSummary
+                        color: veyra.networkHolding ? Theme.warn : Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                        // The card is narrow: the three figures wrap instead of losing the last one.
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 3
                         elide: Text.ElideRight
                     }
                 }
@@ -1307,6 +1452,25 @@ VPage {
                         // The design builds the inspector from accordion cards, not
                         // flat rows: an icon, a title, a live summary line, a switch
                         // and a chevron, with nested groups inside.
+                        // Spatial anti-aliasing (#53) runs at source size right after the
+                        // input conversion, in front of SR, so jaggies are never enlarged.
+                        VAccordion {
+                            objectName: "list-anti-alias"
+                            Layout.fillWidth: true
+                            glyph: "type"
+                            hue: "#7FD4FF"
+                            title: qsTr("抗锯齿")
+                            summary: veyra.antiAliasEnabled ? veyra.antiAliasParams.summary : qsTr("已关闭")
+                            on: veyra.antiAliasEnabled
+                            onToggled: on => veyra.antiAliasEnabled = on
+                            AntiAliasEditor {
+                                Layout.fillWidth: true
+                                namePrefix: "list-aa"
+                                params: veyra.antiAliasParams
+                                onEdited: (key, amount) => veyra.setAntiAliasParameter(key, amount)
+                            }
+                        }
+
                         VAccordion {
                             objectName: "list-sr"
                             Layout.fillWidth: true
@@ -1485,78 +1649,12 @@ VPage {
 
                             // .addlayer: dashed, inside the stage; list mode adds and
                             // toggles layers, never reorders them.
-                            Rectangle {
-                                id: addLayer
+                            AddLayerButton {
                                 objectName: "list-nr-add"
-                                Layout.fillWidth: true
-                                Layout.topMargin: 4
-                                implicitHeight: 36
-                                radius: 10
-                                readonly property bool full: veyra.nrLayers.length >= 4
-                                opacity: full ? 0.45 : 1
-                                color: addHover.hovered && !full ? Theme.accentSoft : "transparent"
-                                readonly property bool softwareRendering: (typeof vySoftwareUi !== "undefined" && vySoftwareUi)
-                                    || GraphicsInfo.api === GraphicsInfo.Software
-                                readonly property color outline: addHover.hovered && !addLayer.full ? Theme.accent : Qt.rgba(1, 1, 1, 0.2)
-                                Image {
-                                    anchors.fill: parent
-                                    visible: addLayer.softwareRendering
-                                    // Software Shape ignores empty clips. A cached image keeps
-                                    // this dashed path inside the inspector like the icons.
-                                    source: {
-                                        if (!visible || width <= 1 || height <= 1) return ""
-                                        const c = addLayer.outline
-                                        const paint = "rgb(" + Math.round(c.r * 255) + "," + Math.round(c.g * 255) + "," + Math.round(c.b * 255) + ")"
-                                        return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
-                                            '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">'
-                                            + '<rect x="0.5" y="0.5" width="' + (width-1) + '" height="' + (height-1)
-                                            + '" rx="10" fill="none" stroke="' + paint + '" stroke-opacity="' + c.a
-                                            + '" stroke-width="1" stroke-dasharray="5 4"/></svg>')
-                                    }
-                                    sourceSize.width: Math.max(1, Math.ceil(width * Screen.devicePixelRatio))
-                                    sourceSize.height: Math.max(1, Math.ceil(height * Screen.devicePixelRatio))
-                                    cache: true
-                                }
-                                Shape {
-                                    visible: !addLayer.softwareRendering
-                                    anchors.fill: parent
-                                    ShapePath {
-                                        strokeWidth: 1
-                                        strokeColor: addHover.hovered && !addLayer.full ? Theme.accent : Qt.rgba(1, 1, 1, 0.2)
-                                        fillColor: "transparent"
-                                        strokeStyle: ShapePath.DashLine
-                                        dashPattern: [5, 4]
-                                        PathRectangle {
-                                            x: 0; y: 0
-                                            width: addLayer.width
-                                            height: addLayer.height
-                                            radius: 10
-                                        }
-                                    }
-                                }
-                                Row {
-                                    anchors.centerIn: parent
-                                    spacing: 6
-                                    Text {
-                                        text: qsTr("+  添加 NR 层")
-                                        color: addHover.hovered && !addLayer.full ? Theme.accent : Theme.t2
-                                        font.family: Theme.fontUi
-                                        font.pixelSize: Theme.fsBody
-                                        font.weight: Font.Medium
-                                    }
-                                    Text {
-                                        anchors.baseline: parent.children[0].baseline
-                                        text: addLayer.full ? qsTr("（最多 4 层）") : qsTr("（加在 NR ") + veyra.nrLayers.length + qsTr(" 之后 · 最多 4 层）")
-                                        color: Theme.t3
-                                        font.family: Theme.fontUi
-                                        font.pixelSize: 11
-                                    }
-                                }
-                                HoverHandler { id: addHover; cursorShape: addLayer.full ? Qt.ArrowCursor : Qt.PointingHandCursor }
-                                TapHandler {
-                                    enabled: !addLayer.full
-                                    onTapped: { root.markPop(veyra.nrLayers.length + 1); root.selectedEffect = veyra.addEffect("nr") }
-                                }
+                                full: veyra.nrLayers.length >= 4
+                                label: qsTr("+  添加 NR 层")
+                                note: full ? qsTr("（最多 4 层）") : qsTr("（加在 NR ") + veyra.nrLayers.length + qsTr(" 之后 · 最多 4 层）")
+                                onAdd: { root.markPop(veyra.nrLayers.length + 1); root.selectedEffect = veyra.addEffect("nr") }
                             }
                         }
 
@@ -1676,6 +1774,59 @@ VPage {
                                     value: veyra.protectionState.feather
                                     onMoved: value => veyra.setProtectionFeather(Math.round(value))
                                 }
+                            }
+                        }
+
+                        // Beauty: face restore and skin smoothing, after the whole NR group
+                        // (and its protection). Layers run in order; one face detection
+                        // serves all of them.
+                        VAccordion {
+                            id: beautyStage
+                            objectName: "list-beauty-stage"
+                            Layout.fillWidth: true
+                            glyph: "heart"
+                            hue: "#FF8FBF"
+                            title: qsTr("美颜")
+                            summary: veyra.beautyLayers.length === 0 ? qsTr("未添加美颜层 · 人脸原画保护与磨皮")
+                                     : !veyra.beautyAnyEnabled ? qsTr("已关闭")
+                                     : veyra.beautyStatus.length > 0 ? veyra.beautyStatus
+                                     : veyra.beautyLayers.length + qsTr(" 层依次处理")
+                            enabledSwitch: veyra.beautyLayers.length > 0
+                            switchObjectName: "list-beauty-master"
+                            on: veyra.beautyAnyEnabled
+                            bypassed: veyra.beautyLayers.length > 0 && !veyra.beautyAnyEnabled
+                            onToggled: on => veyra.setAllBeautyEnabled(on)
+                            headerActions: VTag { text: qsTr("实验"); kind: "exp" }
+                            Repeater {
+                                model: veyra.beautyLayers.length
+                                delegate: BeautyLayerCard {
+                                    id: beautyCard
+                                    required property int index
+                                    Layout.topMargin: 4
+                                    layerData: veyra.beautyLayers[index]
+                                    layerNumber: index + 1
+                                }
+                            }
+                            AddLayerButton {
+                                objectName: "list-beauty-add"
+                                full: veyra.beautyLayers.length >= 6
+                                label: qsTr("+  添加美颜层")
+                                note: full ? qsTr("（最多 6 层）") : qsTr("（新层默认关闭 · 最多 6 层）")
+                                onAdd: { root.markBeautyPop(veyra.beautyLayers.length + 1); root.selectedEffect = veyra.addEffect("beauty") }
+                            }
+                            // The detection every layer shares, drawn once for the group.
+                            BeautyEditor {
+                                id: beautyDetectionPanel
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                                visible: veyra.beautyLayers.length > 0
+                                namePrefix: "list-beauty-detection"
+                                // Only the detection rows: no layer's values here.
+                                params: ({})
+                                detection: veyra.beautyDetection
+                                status: veyra.beautyStatus
+                                detectionOnly: true
+                                onDetectionEdited: (key, amount) => veyra.setBeautyDetection(key, amount)
                             }
                         }
 
@@ -2867,6 +3018,31 @@ VPage {
             const nodeIndex = card.layerData.index
             if (o.act === "dup") { root.markPop(card.layerNumber + 1); root.selectedEffect = veyra.duplicateNrLayer(nodeIndex) }
             else if (o.act === "reset") veyra.resetNrLayer(nodeIndex)
+            else if (o.act === "del") card.bye(() => veyra.removeEffect(nodeIndex))
+        }
+    }
+
+    // A beauty layer's "更多": copy, move within the group, back to defaults, remove.
+    VMenu {
+        id: beautyLayerMenu
+        objectName: "beauty-layer-menu"
+        property Item layer: null
+        title: layer ? qsTr("美颜层 ") + layer.layerNumber : ""
+        items: layer ? [
+            { label: qsTr("复制为新层"), icon: "dup", act: "dup", disabled: veyra.beautyLayers.length >= 6 },
+            { label: qsTr("上移"), icon: "left", act: "up", disabled: layer.layerNumber <= 1 },
+            { label: qsTr("下移"), icon: "right", act: "down", disabled: layer.layerNumber >= veyra.beautyLayers.length },
+            { label: qsTr("恢复默认"), icon: "reset", act: "reset" },
+            { label: qsTr("删除这一层"), icon: "trash", act: "del" }
+        ] : []
+        onPicked: (i, o) => {
+            const card = layer
+            if (!card) return
+            const nodeIndex = card.layerData.index
+            if (o.act === "dup") { root.markBeautyPop(card.layerNumber + 1); root.selectedEffect = veyra.duplicateBeautyLayer(nodeIndex) }
+            else if (o.act === "up") veyra.moveBeautyLayer(nodeIndex, -1)
+            else if (o.act === "down") veyra.moveBeautyLayer(nodeIndex, 1)
+            else if (o.act === "reset") veyra.resetBeautyLayer(nodeIndex)
             else if (o.act === "del") card.bye(() => veyra.removeEffect(nodeIndex))
         }
     }

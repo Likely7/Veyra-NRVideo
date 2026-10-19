@@ -180,6 +180,7 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
     // keep them across the snapshot round-trip below.
     const bool captureCpuUnpack=opts.captureCpuUnpack;
     const bool softwareDecode=opts.softwareDecode;const bool hardwareDecodeOnly=opts.hardwareDecodeOnly;
+    const media::NetworkSettings network=opts.network; // #48: buffering / reconnect choices
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     // PS5 手柄控制 belongs to a capture card source; any other source ends it.
     if(!path.starts_with(L"capture:")&&!path.starts_with(L"capture2:"))stopRemoteControl();
@@ -188,6 +189,7 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
     opts.captureReplayForTest=captureReplay;
     opts.captureCpuUnpack=captureCpuUnpack;
     opts.softwareDecode=softwareDecode;opts.hardwareDecodeOnly=hardwareDecodeOnly;
+    opts.network=network;
     post([this,video,path,opts]{paused_=false;seekSeconds_=-1;run(video,path,opts);});
 }
 #ifdef VEYRA_ENABLE_REMOTEPLAY
@@ -556,6 +558,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 source::SourceOpenDesc od;od.path=path;
                 od.cancelled=&stop_;
                 od.deinterlace=options.deinterlace;
+                // Network sources and files on a server (#48): buffer settings, reads that may report
+                // "buffering" instead of blocking the loop, and tolerance for damaged packets. Local
+                // files and capture sources ignore all three.
+                od.network=options.network;
+                od.nonBlocking=!isCapture;
+                od.tolerateCorruption=!isCapture;
                 // Files use the same shared D3D12 device as the graph-> Capture
                 // uses it for the compressed-payload decoder (H.264/HEVC/AV1/
                 // VP9 through D3D12VA; MJPEG stays on the software path inside
@@ -649,7 +657,22 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // normal owner-thread loop below, preserving its PTS.
                 if(!isCapture){
                     pipeline::FramePacket firstPacket;const AVFrame* firstFrame=nullptr;
-                    const auto firstStatus=activeSource->read(firstPacket,&firstFrame);
+                    auto firstStatus=activeSource->read(firstPacket,&firstFrame);
+                    // A network source collects its start-up buffer before the first picture; show the
+                    // progress instead of an empty window, and let the user stop at any time.
+                    {
+                        auto nextShown=Clock::now();
+                        while(firstStatus==source::SourceReadStatus::Waiting&&!stop_){
+                            if(Clock::now()>=nextShown){
+                                nextShown=Clock::now()+std::chrono::milliseconds(150);
+                                const auto stats=source.networkStats();
+                                {std::lock_guard lock(mutex_);snapshot_.network=stats;}
+                                if(!stats.message.empty())status(stats.message);
+                            }
+                            firstStatus=activeSource->read(firstPacket,&firstFrame);
+                        }
+                        if(stop_)break;
+                    }
                     if(firstStatus!=source::SourceReadStatus::Frame||firstFrame==nullptr||firstPacket.pts.isUnknown()){
                         status(activeSource->info().kind==pipeline::SourceKind::File&&source.errorMessage().empty()
                             ?L"视频首帧无法解码或没有有效时间戳，请查看诊断":source.errorMessage().empty()?L"视频首帧读取失败":source.errorMessage(),true);
@@ -764,7 +787,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const bool admitted=(tested||(autoRequested&&automatic==desc.nrLayersSizePolicy.begin()&&selected.settings.activeAutoNrLayerCount()==1))&&
                        !nrAutoPoolUnavailable&&selected.settings.activeNrLayerCount()<=2&&
                        !isCapture&&!isImage&&desc.enableNr&&!desc.enableSr&&!desc.enableFg&&
-                       !desc.hdrWorking()&&!desc.videoHdr.enabled&&!desc.color.enabled&&!desc.additionalColorCount&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
+                       !desc.hdrWorking()&&!desc.videoHdr.enabled&&!desc.color.enabled&&!desc.additionalColorCount&&!desc.antiAliasActive()&&!desc.beautyActive()&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
                        currentNrRuntime(desc.nrRuntime)==NrRuntime::Ampere&&desc.opticalFlowBackend==OpticalFlowBackend::Nvidia&&
                        desc.nrMotion==MotionSource::OpticalFlow&&
                        nvidiaAdapter&&ctx.adapter().deviceId==0x2f04&&desc.workWidth==1920&&desc.workHeight==1080&&
@@ -919,10 +942,16 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             uint64_t seekDecoded=0;
             bool fileAwaitingVideo=true,fileAudioAlignPending=true,fileInputEnded=false;double lastFilePresentedMs=0,lastFilePresentLateness=0;
             TimingWindow presentEntryDeviation,presentReturnDeviation;
-            if(!isImage&&!isCapture&&audioPipe.open(path,&stop_)){
+            // Network sources and files on a server share ONE connection between picture and sound:
+            // the audio pipeline reads the same demux session instead of opening the address again.
+            const auto demuxSession=isImage||isCapture?std::shared_ptr<media::DemuxSession>{}:source.sharedSession();
+            if(!isImage&&!isCapture&&(demuxSession?audioPipe.open(demuxSession):audioPipe.open(path,&stop_))){
                 {std::lock_guard lock(mutex_);snapshot_.audioTracks=audioPipe.tracks();snapshot_.selectedAudioTrack=audioPipe.selectedTrack();}
                 audioPipe.holdForVideo();audioPipe.startThread(&audio,true);audioStarted=true;
                 std::lock_guard lock(mutex_);snapshot_.audioAvailable=true;
+            }else if(demuxSession){
+                demuxSession->selectAudioStream(-1);   // nobody reads audio: stop queueing it
+                veyra::log::info("net-session","no audio pipeline for this source; audio packets are dropped");
             }
             auto holdFileAudio=[&]{if(audioStarted)audioPipe.holdForVideo();fileAwaitingVideo=true;fileInputEnded=false;};
             TimingWindow captureAges,scheduleWaits,processTimes,presentTimes,decodeTimes,gpuReadyTimes;
@@ -1333,6 +1362,44 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 return lastAudioClockMs;
             };
+            // Network sources and files on a server: statistics for the signal panel, and the buffering /
+            // reconnect explanation on the status line while playback is held. The previous status comes
+            // back when the hold ends, unless something else replaced the text in the meantime.
+            std::wstring networkSavedStatus,networkShownStatus;
+            bool networkClockFrozen=false;double networkFrozenMs=0;
+            auto nextNetworkPublish=Clock::now();
+            auto publishNetwork=[&]{
+                const auto stats=source.networkStats();
+                std::lock_guard lock(mutex_);
+                snapshot_.network=stats;
+                const bool explain=!stats.message.empty()&&(stats.holding()||stats.state==media::NetworkStats::State::Reconnecting);
+                if(explain){
+                    if(networkShownStatus.empty())networkSavedStatus=snapshot_.status;
+                    snapshot_.status=networkShownStatus=stats.message;
+                }else if(!networkShownStatus.empty()){
+                    if(snapshot_.status==networkShownStatus)snapshot_.status=networkSavedStatus;
+                    networkShownStatus.clear();
+                }
+            };
+            // Runs every loop turn and inside the presentation back-pressure wait: while playback is held
+            // for buffering the frozen clock keeps queued pictures from presenting, and that wait must
+            // neither look like a hang to the watchdog nor stop the statistics.
+            auto networkTick=[&]{
+                if(!demuxSession)return;
+                const bool holding=demuxSession->holding();
+                if(holding)watchdog_->beat();
+                // Without an audio device the media clock is the wall clock: stand it still while the
+                // session pauses playback for buffering (with audio, pausing the endpoint does that).
+                if(!audioStarted){
+                    if(holding){
+                        if(!networkClockFrozen){networkClockFrozen=true;networkFrozenMs=nowMs();}
+                        anchor=Clock::now();anchorMs=networkFrozenMs;
+                    }else networkClockFrozen=false;
+                }
+                // Where playback is decides how far ahead the session reads and when it pauses for buffering.
+                source.setPlaybackPositionMs(nowMs());
+                if(Clock::now()>=nextNetworkPublish){nextNetworkPublish=Clock::now()+std::chrono::milliseconds(100);publishNetwork();}
+            };
             uint64_t hdrDisplayCheck=0;
             bool captureRecovering=false;unsigned captureRetries=0;
             Clock::time_point captureRetryAt{};
@@ -1395,6 +1462,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 diagnostics::CpuStallTrace loopTrace("engine-stall",frames,45.0,watchdog_->stage());
                 collectTimings();
                 loopTrace.mark("collect");
+                networkTick();
                 if(captureRecovering){
                     if(Clock::now()<captureRetryAt){std::this_thread::sleep_for(std::chrono::milliseconds(20));continue;}
                     ++captureRetries;
@@ -1730,6 +1798,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     };
                     const auto leaseWaitStart=Clock::now();
                     while((liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){
+                        networkTick();
                         advanceLive();if(seekSeconds_>=0)break;
                         if(liveScheduler->occupancy()==0&&!graph->nextFrameSlotAvailable()&&elapsedMs(leaseWaitStart)>2000){status(L"等待输出纹理释放超时",true);stop_=true;break;}
                         if(liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending()){
@@ -1876,6 +1945,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(nativeCapture){
                         captureGraphColor=activeSource->info().color;gd.rgbInput=captureGraphColor.pixelFormat==pipeline::SourcePixelFormat::Bgra8;
                         gd.yuy2Input=false;gd.packedInput=pipeline::packedInputCode(captureGraphColor.pixelFormat);gd.captureBitDepth=ingressBitDepth(captureGraphColor.pixelFormat);
+                    }
+                    // Window capture publishes the same geometry used to rebuild
+                    // the graph, rather than retaining its opening DAR.
+                    if(isScreen||nativeCapture){
                         std::lock_guard lock(mutex_);snapshot_.sourceWidth=width;snapshot_.sourceHeight=height;snapshot_.sourceHdr=gd.hdrInput;snapshot_.sourceMasteringPeakNits=resizeMastering;snapshot_.sourceMaxCllNits=resizeCll;snapshot_.sourceMaxFallNits=resizeFall;snapshot_.sourceDisplayAspect=activeSource->info().displayAspect;
                     }
                     if(!presenter.prepareGraphChange()){status(L"输入尺寸切换呈现排空失败",true);break;}
@@ -1968,6 +2041,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         pipeline::FramePacket next;const AVFrame* raw=nullptr;
                         const auto rs=activeSource->read(next,&raw);
                         if(rs==source::SourceReadStatus::Eos)break; // final decoded candidate is kept
+                        if(rs==source::SourceReadStatus::Waiting)break; // network buffering: nothing newer yet, keep this candidate
                         if(rs!=source::SourceReadStatus::Frame||next.pts.isUnknown()){previewSourceFailed=true;break;}
                         const double nextPts=next.pts.toDouble()*1000;
                         if(nextPts+0.1<discardBefore)continue; // post-seek decode residue keeps dropping
@@ -2714,6 +2788,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 presenter.displayRefreshHz();
                 ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.colorStatus=graph->videoHdrActive()?L"SDR → RTX Video HDR":options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph->hdr10Output()?L"HDR → HDR10 / PQ":L"HDR → scRGB / 浮点"):gd.hdrInput?L"HDR → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
                     snapshot_.videoHdrActive=graph->videoHdrActive();
+                    snapshot_.beautyActive=graph->beautyNodesActive();snapshot_.beautyFaces=graph->beautyFaceCount();
+                    snapshot_.beautyNotice=graph->beautyNotice();
                     snapshot_.videoHdrStatus=graph->videoHdrActive()?L"预览：SDR 转 HDR 已运行":
                         !options.settings.videoHdr.enabled?L"RTX Video HDR 已关闭":
                         gd.hdrInput?L"原生 HDR 输入，无需 SDR 转 HDR":

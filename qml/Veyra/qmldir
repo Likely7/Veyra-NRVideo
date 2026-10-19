@@ -1,4 +1,5 @@
 module Veyra
+CaptureLegacyPicker 1.0 CaptureLegacyPicker.qml
 UpdateBanner 1.0 UpdateBanner.qml
 PlaylistWindow 1.0 PlaylistWindow.qml
 PlaybackRateButton 1.0 PlaybackRateButton.qml
@@ -39,6 +40,9 @@ ColourPanel 1.0 ColourPanel.qml
 VScrollBar 1.0 VScrollBar.qml
 VConfirm 1.0 VConfirm.qml
 NrLayerEditor 1.0 NrLayerEditor.qml
+AntiAliasEditor 1.0 AntiAliasEditor.qml
+BeautyEditor 1.0 BeautyEditor.qml
 VSpinner 1.0 VSpinner.qml
 VEqBars 1.0 VEqBars.qml
 VTelemetryValue 1.0 VTelemetryValue.qml
+SponsorPanel 1.0 SponsorPanel.qml
