@@ -3,6 +3,7 @@
 #include "veyra/engine/PreviewFrameReadiness.h"
 #include "veyra/engine/FgCompatibilityProbe.h"
 #include "veyra/engine/VideoPresenter.h"
+#include "veyra/engine/LiveRecorder.h"
 #include "veyra/engine/HdrDisplayState.h"
 #include "veyra/engine/VideoExportJob.h"
 #include "veyra/engine/LivePresentationTiming.h"
@@ -365,6 +366,23 @@ bool EngineController::requestSettings(EnhancementSettings s,std::optional<Chain
     if(acceptedRevision)*acceptedRevision=s.revision;return true;
 }
 void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(mutex_);savePath_=path;}
+void EngineController::requestRecording(const RecordingOptions& options){
+    // The UI thread only records the request; the engine thread owns the
+    // encoder, the GPU resources and the file.
+    {std::lock_guard lock(mutex_);recordingRequest_=options;}
+    veyra::log::info("live-recorder",std::format("request directory={} bitrateMbps={} hevc={} fpsLimit={}",std::string(options.directory.begin(),options.directory.end()),options.bitrateMbps,options.hevc?1:0,options.fpsLimit));
+}
+void EngineController::stopRecording(){std::lock_guard lock(mutex_);recordingStop_=true;}
+void EngineController::publishRecordingStatus(){
+    if(!recorder_){std::lock_guard lock(mutex_);recordingSnapshot_={};return;}
+    const auto live=recorder_->status();
+    std::lock_guard lock(mutex_);
+    recordingSnapshot_.active=live.active;recordingSnapshot_.failed=live.failed;
+    recordingSnapshot_.path=live.path;recordingSnapshot_.error=live.error;
+    recordingSnapshot_.encoder=live.encoder;recordingSnapshot_.frames=live.frames;
+    recordingSnapshot_.dropped=live.dropped;recordingSnapshot_.seconds=live.seconds;
+}
+RecordingSnapshot EngineController::recordingSnapshot()const{std::lock_guard lock(mutex_);return recordingSnapshot_;}
 void EngineController::startExport(const std::wstring& input,const std::wstring& output,PlayerOptions opts,bool hevc){
     if(opts.nodeOrder){
         veyra::log::warn("node-order","export has no runtime node-order transport; request rejected before posting");
@@ -461,6 +479,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     MmcssScope mmcss(L"Pro Audio");
     status(L"正在初始化GPU与本地运行时…");
+    // A new session replaces the graph, so a recording from the previous one
+    // cannot continue into it.
+    if(recorder_&&recorder_->active()){recorder_->end();publishRecordingStatus();}
     auto extension=std::filesystem::path(path).extension().wstring();for(auto& c:extension)c=towlower(c);
     const bool ordinaryFile=!remoteRequest&&!moonlightRequest&&!xboxRequest&&
         !path.starts_with(L"capture:")&&!path.starts_with(L"capture2:")&&!path.starts_with(L"screen:")&&
@@ -1179,7 +1200,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 markResetStage(diagnostics::ResetStage::FirstValid);
                 finishReset(diagnostics::ResetOutcome::Completed);
             };
-            OnExit resetExit{[&]{finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);}};
+            OnExit resetExit{[&]{finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);
+                // The session owns the recorder: close the file on every exit
+                // path so the container is finalized.
+                if(recorder_&&recorder_->active()){recorder_->end();publishRecordingStatus();}};
             auto collectTimings=[&]{
                 auto record=[&](const diagnostics::GpuFrameTiming& sample){
                     const auto& fgCost=sample.gpu[size_t(diagnostics::GpuStage::FgBatch)];
@@ -1535,6 +1559,24 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     drainLivePresentation();
                     if(graph->hdrOutput()){auto hdrPath=std::filesystem::path(save);hdrPath.replace_extension(L".jxr");if(sink::saveHdrScreenshot(hdrPath.wstring(),ctx,ring,graph->videoFrameResource(out.videoSlot)))status(L"HDR截图已保存："+hdrPath.wstring());else status(L"HDR截图保存失败，请查看日志",false);}else if(!sink::readRgba8(ctx,ring,graph->videoFrameResource(out.videoSlot),result)||!sink::saveImage(save,result,e==L".jpg"||e==L".jpeg"))status(L"保存失败（目标文件可能已存在），播放已保留",false);else{status(L"图片已保存："+save);veyra::log::info("image-save",std::format("saved extent={}x{} revision={}",gd.workWidth,gd.workHeight,options.settings.revision));}}
                     catch(const std::exception& e){veyra::log::warn("image-save",std::format("save exception; retaining session: {}",e.what()));status(L"保存异常，播放已保留；可再次保存",false);}}
+                // Recording requests arrive from the UI thread; the encoder
+                // belongs to this thread, which owns the GPU context.
+                {
+                    std::optional<RecordingOptions> request;bool stop=false;
+                    {std::lock_guard lock(mutex_);request=recordingRequest_;recordingRequest_.reset();stop=recordingStop_;recordingStop_=false;}
+                    if(stop&&recorder_&&recorder_->active()){recorder_->end();publishRecordingStatus();status(L"录制已结束",false);}
+                    if(request){
+                        if(recorder_&&recorder_->active()){status(L"录制已在进行中",false);}
+                        else{
+                            double nominal=0;{std::lock_guard lock(mutex_);nominal=snapshot_.nominalSourceFps;}
+                            const uint32_t fps=nominal>1.0?uint32_t(std::llround(nominal)):60u;
+                            std::wstring error;
+                            if(!recorder_)recorder_=std::make_unique<LiveRecorder>();
+                            if(recorder_->begin(ctx,ring,*graph,*request,fps,error)){publishRecordingStatus();status(L"开始录制");}
+                            else{publishRecordingStatus();status(error.empty()?L"无法开始录制":error,true);}
+                        }
+                    }
+                }
                 if(isImage)requested.multiplier=1;
                 if(requested.revision==options.settings.revision&&requested!=options.settings){
                     options.settings.audioSync=requested.audioSync;options.settings.audioOffsetMs=requested.audioOffsetMs;
@@ -1567,6 +1609,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 const auto previous=options.snapshot();const auto previousDesc=gd;const auto previousOrder=options.nodeOrder;bool transaction=false;
                 if(requested.revision!=previous.revision){
+                    // The rebuild replaces the graph and its textures, which
+                    // the recorder registered: close the file before that.
+                    if(recorder_&&recorder_->active()){recorder_->end();publishRecordingStatus();status(L"设置已变更，录制已结束",false);}
                     holdFileAudio();
                     finishReset(diagnostics::ResetOutcome::Cancelled);
                     resetStart=resetStageStart=Clock::now();
@@ -2582,6 +2627,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 // work. The bounded scheduler retains that pressure.
                             }
                             if(didPresent){
+                                // Record what was presented. A provider-owned
+                                // presentation (XeSS) has no graph texture to
+                                // encode, so only the real frames are recorded
+                                // there - the same limit the export states.
+                                if(recorder_&&recorder_->active()&&!(generated&&presenter.providerOwnedPresentation()))
+                                    recorder_->encodeFrame(item.lease->slot,generated);
                                 cadence.submitted(optionalNow);
                                 cadence.rateSubmitted(optionalNow,capInterval);
                                 if(physicalCapture&&veyra::log::verboseFrameLogs())veyra::log::info("capture-present-sample",std::format("source={} epoch={} revision={} batch={} subframe={} generated={} arrival={} arrivalA={} ready={} begin={} end={}",item.identity.sourceFrameId,item.identity.epoch,item.identity.settingsRevision,batch.batch.batchId,item.subframe,generated,captureArrival,lineage?lineage->a.host100ns:0,watch->frameReadyObserved[s.next],optionalNow,host100ns()));

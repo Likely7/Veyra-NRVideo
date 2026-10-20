@@ -193,6 +193,7 @@ private:
     bool hevc_=false;
     uint32_t bitrateMbps_=0;
     ExportRateControl rateControl_=ExportRateControl::Cq;
+    uint32_t drainTimeoutMs_=10000;
     unsigned fpsNum_=1,fpsDen_=1;
     uint32_t width_=0,height_=0;
     ComputePass convert_;
@@ -211,6 +212,7 @@ private:
 bool MfVideoEncoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,EnhanceGraph& graph,const EncoderConfig& config,PacketWriter writer){
     ctx_=&ctx;ring_=&ring;graph_=&graph;writer_=std::move(writer);
     hevc_=config.hevc;bitrateMbps_=config.bitrateMbps;rateControl_=config.rateControl;
+    drainTimeoutMs_=config.drainTimeoutMs?config.drainTimeoutMs:10000;
     fpsNum_=std::max(1u,config.fpsNum);fpsDen_=std::max(1u,config.fpsDen);
     width_=graph.workWidth();height_=graph.workHeight();
     error_=L"Media Foundation startup failed; see worker log";
@@ -594,7 +596,7 @@ bool MfVideoEncoder::convertToNv12(unsigned frameSlot,bool generated){
     // (never-signalled) fence here was the first-frame timeout.
     const uint64_t value=ring_->lastSignaledValue();
     if(ctx_->fence()->GetCompletedValue()<value){
-        if(FAILED(ctx_->fence()->SetEventOnCompletion(value,fenceEvent_))||WaitForSingleObject(fenceEvent_,10000)!=WAIT_OBJECT_0){
+        if(FAILED(ctx_->fence()->SetEventOnCompletion(value,fenceEvent_))||WaitForSingleObject(fenceEvent_,drainTimeoutMs_)!=WAIT_OBJECT_0){
             log::error("mf-encoder",std::format("readback fence wait failed value={}",value));
             return false;
         }

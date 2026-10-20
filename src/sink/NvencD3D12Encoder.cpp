@@ -18,6 +18,7 @@ struct NvencD3D12Encoder::Impl {
     bool hdr=false;bool hevc=false;NV_ENC_BUFFER_FORMAT inputFormat=NV_ENC_BUFFER_FORMAT_NV12;
     unsigned w=0,h=0;uint64_t submitted=0,completed=0;
     uint32_t bitrateMbps=0;
+    uint32_t drainTimeoutMs=10000;
     std::wstring error;
     bool fail(std::wstring message){error=std::move(message);veyra::log::error("nvenc",std::string(error.begin(),error.end()));return false;}
     ComPtr<ID3D12Fence> fence;HANDLE event=nullptr;
@@ -32,7 +33,7 @@ struct NvencD3D12Encoder::Impl {
         if(code!=NV_ENC_SUCCESS||successLogs<24||veyra::log::verboseFrameLogs()){if(code==NV_ENC_SUCCESS)++successLogs;veyra::log::info("nvenc",std::format("{} status={} detail={}",op,int(code),detail));}if(code!=NV_ENC_SUCCESS){const auto text=std::format("{} status={} {}",op,int(code),detail);error.assign(text.begin(),text.end());}return code==NV_ENC_SUCCESS;}
     bool drain(Slot& s){
         if(!s.pending)return true;
-        if(fence->GetCompletedValue()<s.value){if(FAILED(fence->SetEventOnCompletion(s.value,event))||WaitForSingleObject(event,10000)!=WAIT_OBJECT_0)return false;}
+        if(fence->GetCompletedValue()<s.value){if(FAILED(fence->SetEventOnCompletion(s.value,event))||WaitForSingleObject(event,p.drainTimeoutMs)!=WAIT_OBJECT_0)return false;}
         NV_ENC_LOCK_BITSTREAM lock{};lock.version=NV_ENC_LOCK_BITSTREAM_VER;lock.outputBitstream=&s.out;lock.doNotWait=0;
         if(!check(api.nvEncLockBitstream(encoder,&lock),"LockBitstream"))return false;
         const bool ok=writer(static_cast<uint8_t*>(lock.bitstreamBufferPtr),lock.bitstreamSizeInBytes,static_cast<int64_t>(lock.outputTimeStamp),lock.pictureType==NV_ENC_PIC_TYPE_IDR);
@@ -51,6 +52,7 @@ bool NvencD3D12Encoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const bool hevc=config.hevc;const unsigned fpsNum=config.fpsNum,fpsDen=config.fpsDen;
     auto& p=*p_;p.ctx=&ctx;p.ring=&ring;p.graph=&graph;p.w=graph.workWidth();p.h=graph.workHeight();p.writer=std::move(writer);
     p.hevc=hevc;p.bitrateMbps=config.bitrateMbps;
+    p.drainTimeoutMs=config.drainTimeoutMs?config.drainTimeoutMs:10000;
     p.error=L"NVENC initialization incomplete";
     wchar_t dir[MAX_PATH]{};GetSystemDirectoryW(dir,MAX_PATH);const auto dllPath=std::wstring(dir)+L"\\nvEncodeAPI64.dll";
     p.dll=LoadLibraryExW(dllPath.c_str(),nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);if(!p.dll)return p.fail(std::format(L"LoadLibrary nvEncodeAPI64.dll win32={}",GetLastError()));

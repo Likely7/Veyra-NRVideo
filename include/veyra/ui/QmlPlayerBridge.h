@@ -219,6 +219,14 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString uiLanguage READ uiLanguage NOTIFY preferencesChanged)
     Q_PROPERTY(QString screenshotDirectory READ screenshotDirectory NOTIFY preferencesChanged)
     Q_PROPERTY(QString lastScreenshot READ lastScreenshot NOTIFY preferencesChanged)
+    // Live recording of the processed picture: the engine owns the encoder and
+    // the file, the interface shows the state and starts or stops it.
+    Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(QVariantMap recordingState READ recordingState NOTIFY recordingChanged)
+    Q_PROPERTY(QString recordingDirectory READ recordingDirectory NOTIFY preferencesChanged)
+    Q_PROPERTY(int recordingBitrateMbps READ recordingBitrateMbps NOTIFY preferencesChanged)
+    Q_PROPERTY(int recordingFpsLimit READ recordingFpsLimit NOTIFY preferencesChanged)
+    Q_PROPERTY(bool recordingHevc READ recordingHevc NOTIFY preferencesChanged)
     Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
     // Rebindable shortcuts: action -> key sequence text (defaults merged in).
     Q_PROPERTY(QVariantMap shortcuts READ shortcuts NOTIFY preferencesChanged)
@@ -1258,6 +1266,19 @@ public:
     Q_INVOKABLE void setWindowMask(QObject* window, const QRectF& rect);
     Q_INVOKABLE void stepFrame(int direction);
     Q_INVOKABLE void takeScreenshot();
+    // Recording: the 3 second countdown lives in the interface, the engine
+    // only opens the file when the request reaches it.
+    Q_INVOKABLE void startRecording();
+    Q_INVOKABLE void stopRecording();
+    Q_INVOKABLE void toggleRecording();
+    Q_INVOKABLE void chooseRecordingDirectory();
+    Q_INVOKABLE void openRecordingDirectory();
+    bool recording() const;
+    QVariantMap recordingState() const;
+    QString recordingDirectory() const;
+    int recordingBitrateMbps() const;
+    int recordingFpsLimit() const;
+    bool recordingHevc() const;
     Q_INVOKABLE void chooseExportPath();
     // The export target without the dialog (the dialog's result, or --export-out in a test).
     void setExportPath(const QString& path);
@@ -1327,6 +1348,7 @@ signals:
     void subtitlesChanged();
     void subtitleTextChanged();
     void preferencesChanged();
+    void recordingChanged();
     void colourLibraryChanged();
     // Emitted only when the underlying snapshot actually changed, so QML
     // bindings do not re-evaluate 60 times a second for nothing.

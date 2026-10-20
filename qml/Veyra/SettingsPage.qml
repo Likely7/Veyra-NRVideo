@@ -551,6 +551,48 @@ VPage {
                                 VButton { objectName: "set-shotdir"; text: qsTr("更改…"); onClicked: veyra.chooseScreenshotDirectory() }
                             }
                         }
+                    VGroup {
+                        objectName: "set-recording"
+                        VRow {
+                            label: qsTr("录制保存位置")
+                            hint: veyra.recordingDirectory + qsTr("（MP4，只录处理后的画面，不含音频）")
+                            RowLayout {
+                                spacing: 6
+                                VButton { text: qsTr("打开"); ghost: true; onClicked: veyra.openRecordingDirectory() }
+                                VButton { objectName: "set-recdir"; text: qsTr("更改…"); onClicked: veyra.chooseRecordingDirectory() }
+                            }
+                        }
+                        VRow {
+                            label: qsTr("录制码率")
+                            hint: qsTr("目标码率，越高越清晰、文件也越大")
+                            VSeg {
+                                objectName: "set-recbitrate"
+                                options: [{ id: "8", label: "8" }, { id: "16", label: "16" }, { id: "20", label: "20" }, { id: "40", label: "40" }, { id: "80", label: "80" }]
+                                current: String(veyra.recordingBitrateMbps)
+                                onPicked: id => veyra.setPreference("recordBitrateMbps", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("录制帧率")
+                            hint: qsTr("跟随显示可录到补帧后的画面；限速则按该帧率抽帧")
+                            VSeg {
+                                objectName: "set-recfps"
+                                options: [{ id: "0", label: qsTr("跟随") }, { id: "30", label: "30" }, { id: "60", label: "60" }]
+                                current: String(veyra.recordingFpsLimit)
+                                onPicked: id => veyra.setPreference("recordFps", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("录制编码")
+                            hint: qsTr("HDR 画面固定使用 HEVC 10bit")
+                            VSeg {
+                                objectName: "set-rechevc"
+                                options: [{ id: "0", label: "H.264" }, { id: "1", label: "HEVC" }]
+                                current: veyra.recordingHevc ? "1" : "0"
+                                onPicked: id => veyra.setPreference("recordHevc", id === "1")
+                            }
+                        }
+                    }
                     }
                     VGroup {
                         objectName: "set-smooth-motion"

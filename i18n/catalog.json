@@ -1212,6 +1212,13 @@
    "ja": "HDR ソースも SDR で表示します。キャプチャーカードの「SDR で表示」と同じ設定です"
   },
   {
+   "zh": "HDR 画面固定使用 HEVC 10bit",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "HDR 畫面固定使用 HEVC 10bit",
+   "en": "HDR video always uses HEVC 10bit",
+   "ja": "HDR 映像は常に HEVC 10bit を使用します"
+  },
+  {
    "zh": "HDR 补帧闪黑兼容",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "HDR 補幀閃黑相容",
@@ -3697,6 +3704,13 @@
    "ja": "高め"
   },
   {
+   "zh": "停止录制",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "停止錄製",
+   "en": "Stop recording",
+   "ja": "録画を停止"
+  },
+  {
    "zh": "像素格式",
    "src": "qml/DialogHost.qml",
    "zh-TW": "像素格式",
@@ -4151,6 +4165,13 @@
    "zh-TW": "寫入封裝索引",
    "en": "Write container index",
    "ja": "コンテナーインデックスの書き込み"
+  },
+  {
+   "zh": "写入录制帧失败",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "寫入錄製影格失敗",
+   "en": "Writing a recorded frame failed",
+   "ja": "録画フレームの書き込みに失敗しました"
   },
   {
    "zh": "写入视频帧",
@@ -7814,6 +7835,13 @@
    "ja": "書き出しを開始すると再生中のコンテンツを閉じ、GPU をすべて書き出しに回します。"
   },
   {
+   "zh": "开始录制",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "開始錄製",
+   "en": "Recording started",
+   "ja": "録画を開始しました"
+  },
+  {
    "zh": "开始捕获",
    "src": "qml/DialogHost.qml",
    "zh-TW": "開始擷取",
@@ -8171,6 +8199,20 @@
    "ja": "適用中：カスタム調整（一致するプリセットなし）"
   },
   {
+   "zh": "当前画面尺寸不可用",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "目前畫面尺寸不可用",
+   "en": "The current picture size is unavailable",
+   "ja": "現在の画面サイズを利用できません"
+  },
+  {
+   "zh": "当前画面尺寸为奇数，无法录制",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "目前畫面尺寸為奇數，無法錄製",
+   "en": "The current picture size is odd and cannot be recorded",
+   "ja": "現在の画面サイズが奇数のため録画できません"
+  },
+  {
    "zh": "当前硬件或包不支持所选效果，请查看组件页",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "目前硬體或套件不支援所選效果，請查看元件頁",
@@ -8218,6 +8260,83 @@
    "zh-TW": "當前非 NVIDIA 適配器：NR、NVIDIA 超解析與 DLSS 已停用；可使用 XeSS 預覽和 AMD 光流",
    "en": "Not an NVIDIA adapter: NR, NVIDIA super resolution and DLSS are disabled; XeSS preview and AMD optical flow are available",
    "ja": "NVIDIA 以外のアダプターです：NR、NVIDIA 超解像、DLSS は無効です。XeSS のプレビューと AMD オプティカルフローは使えます"
+  },
+  {
+   "zh": "录制",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "錄製",
+   "en": "Record",
+   "ja": "録画"
+  },
+  {
+   "zh": "录制 %1 秒",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "錄製 %1 秒",
+   "en": "Record in %1 s",
+   "ja": "録画 %1 秒後"
+  },
+  {
+   "zh": "录制保存位置",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製儲存位置",
+   "en": "Recording folder",
+   "ja": "録画の保存先"
+  },
+  {
+   "zh": "录制已在进行中",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "錄製已在進行中",
+   "en": "A recording is already running",
+   "ja": "すでに録画中です"
+  },
+  {
+   "zh": "录制已结束",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "錄製已結束",
+   "en": "Recording finished",
+   "ja": "録画を終了しました"
+  },
+  {
+   "zh": "录制已结束：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "錄製已結束：%1",
+   "en": "Recording finished: %1",
+   "ja": "録画を終了しました：%1"
+  },
+  {
+   "zh": "录制帧率",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製影格率",
+   "en": "Recording frame rate",
+   "ja": "録画のフレームレート"
+  },
+  {
+   "zh": "录制文件已存在，请更换保存位置",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製檔案已存在，請更換儲存位置",
+   "en": "The recording file already exists; choose another folder",
+   "ja": "録画ファイルが既に存在します。保存先を変更してください"
+  },
+  {
+   "zh": "录制目录不存在：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "錄製資料夾不存在：%1",
+   "en": "The recording folder does not exist: %1",
+   "ja": "録画フォルダが存在しません：%1"
+  },
+  {
+   "zh": "录制码率",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製位元率",
+   "en": "Recording bitrate",
+   "ja": "録画のビットレート"
+  },
+  {
+   "zh": "录制编码",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製編碼",
+   "en": "Recording codec",
+   "ja": "録画のコーデック"
   },
   {
    "zh": "往返 ",
@@ -9439,6 +9558,13 @@
    "ja": "書き出しファイルに書き込めませんでした"
   },
   {
+   "zh": "无法写入录制文件头",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法寫入錄製檔案標頭",
+   "en": "Cannot write the recording file header",
+   "ja": "録画ファイルのヘッダーを書き込めません"
+  },
+  {
    "zh": "无法分配媒体上下文",
    "src": "src/media/DemuxSession.cpp",
    "zh-TW": "無法配置媒體上下文",
@@ -9472,6 +9598,34 @@
    "zh-TW": "無法建立匯出通信資源",
    "en": "Could not create the export communication resources",
    "ja": "書き出し用の通信リソースを作成できませんでした"
+  },
+  {
+   "zh": "无法创建录制封装器",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立錄製封裝器",
+   "en": "Cannot create the recording muxer",
+   "ja": "録画の封装器を作成できません"
+  },
+  {
+   "zh": "无法创建录制文件",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立錄製檔案",
+   "en": "Cannot create the recording file",
+   "ja": "録画ファイルを作成できません"
+  },
+  {
+   "zh": "无法创建录制目录：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立錄製資料夾：",
+   "en": "Cannot create the recording folder: ",
+   "ja": "録画フォルダを作成できません："
+  },
+  {
+   "zh": "无法创建录制视频流",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立錄製影片串流",
+   "en": "Cannot create the recording video stream",
+   "ja": "録画の映像ストリームを作成できません"
   },
   {
    "zh": "无法创建拼接输出",
@@ -9549,6 +9703,13 @@
    "zh-TW": "無法開始串流，請查看日誌。",
    "en": "Could not start streaming; see the log.",
    "ja": "ストリーミングを開始できませんでした。ログを確認してください。"
+  },
+  {
+   "zh": "无法开始录制",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "無法開始錄製",
+   "en": "Cannot start recording",
+   "ja": "録画を開始できません"
   },
   {
    "zh": "无法打开",
@@ -10594,6 +10755,13 @@
    "ja": "上限なし"
   },
   {
+   "zh": "未设置录制保存位置",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "未設定錄製儲存位置",
+   "en": "No recording folder is set",
+   "ja": "録画の保存先が設定されていません"
+  },
+  {
    "zh": "未输出",
    "src": "qml/NodePage.qml",
    "zh-TW": "未輸出",
@@ -11526,7 +11694,7 @@
   },
   {
    "zh": "没有可用的视频编码器",
-   "src": "src/engine/VideoExportJob.cpp",
+   "src": "src/engine/LiveRecorder.cpp",
    "zh-TW": "沒有可用的影片編碼器",
    "en": "No video encoder available",
    "ja": "使用できる動画エンコーダーがありません"
@@ -11544,6 +11712,13 @@
    "zh-TW": "沒有收到影片資料。通常是防火墻或端口轉發沒有放行 UDP 47998–48010。",
    "en": "No video data received. Usually the firewall or port forwarding does not allow UDP 47998–48010.",
    "ja": "映像データを受信していません。多くはファイアウォールやポート転送で UDP 47998–48010 が許可されていないことが原因です。"
+  },
+  {
+   "zh": "没有正在播放的画面，无法录制",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "沒有正在播放的畫面，無法錄製",
+   "en": "Nothing is playing, so there is nothing to record",
+   "ja": "再生中の映像がないため録画できません"
   },
   {
    "zh": "没有正在播放的画面，无法截图",
@@ -12412,6 +12587,13 @@
    "zh-TW": "目標位元速率 1–300 Mbps；VBR 的實際平均位元速率隨畫面複雜度變化。",
    "en": "Target bitrate: 1–300 Mbps. Actual VBR average bitrate varies with scene complexity.",
    "ja": "目標ビットレートは 1～300 Mbps。VBR の実際の平均値は映像の複雑さによって変わります。"
+  },
+  {
+   "zh": "目标码率，越高越清晰、文件也越大",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "目標位元率，越高越清晰、檔案也越大",
+   "en": "Target bitrate: higher means clearer and larger",
+   "ja": "目標ビットレート：高いほど鮮明ですが、ファイルも大きくなります"
   },
   {
    "zh": "目标行数",
@@ -14437,6 +14619,13 @@
    "ja": "設定を保存しました。適用するには再起動が必要です。今すぐ再起動しますか？再生やストリーミングは停止します。"
   },
   {
+   "zh": "设置已变更，录制已结束",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "設定已變更，錄製已結束",
+   "en": "The settings changed, so the recording ended",
+   "ja": "設定が変更されたため、録画を終了しました"
+  },
+  {
    "zh": "设置应用失败，已恢复上一套参数",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "設定應用失敗，已恢復上一套參數",
@@ -15170,6 +15359,13 @@
    "zh-TW": "跟隨實際訊號",
    "en": "Follow the input signal",
    "ja": "入力信号に合わせる"
+  },
+  {
+   "zh": "跟随显示可录到补帧后的画面；限速则按该帧率抽帧",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "跟隨顯示可錄到補幀後的畫面；限速則依該影格率抽幀",
+   "en": "Follow the display to include generated frames; a limit samples at that rate",
+   "ja": "表示に追従すると補間フレームも録画されます。制限時はそのフレームレートでサンプリングします"
   },
   {
    "zh": "跟随显示器",
@@ -16080,6 +16276,13 @@
    "zh-TW": "選擇匯出目錄",
    "en": "Choose export folder",
    "ja": "書き出し先フォルダーを選択"
+  },
+  {
+   "zh": "选择录制保存位置",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "選擇錄製儲存位置",
+   "en": "Choose the recording folder",
+   "ja": "録画の保存先を選択"
   },
   {
    "zh": "选择截图目录",
@@ -18061,6 +18264,13 @@
    "zh-TW": "預設預設的編輯模式無效",
    "en": "The default preset's edit mode is invalid",
    "ja": "既定のプリセットの編集モードが不正です"
+  },
+  {
+   "zh": "（MP4，只录处理后的画面，不含音频）",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "（MP4，只錄製處理後的畫面，不含音訊）",
+   "en": "(MP4, processed picture only, no audio)",
+   "ja": "（MP4、処理後の映像のみ、音声なし）"
   },
   {
    "zh": "（NGX 0x{:08X}，驱动 {}），已关闭依赖效果",

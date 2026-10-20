@@ -347,6 +347,8 @@ struct QmlPlayerBridge::Impl {
     // Declared after everything the worker touches, so it is joined first.
     std::jthread subAlignWorker;
     QVariantMap prefs;
+    // Live recording state published by the engine (see LiveRecorder.h).
+    QVariantMap recordingState;
   // Custom: the display whose HDR curve is currently applied (see syncHdrDisplayProfile).
   QString hdrProfileDisplay;
   // Custom: the title whose curve is currently applied (see syncHdrTitleProfile).
@@ -1451,6 +1453,26 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
         if(impl_->poll()){emit settingsChanged();emitChainChanged();}
+        // Live recording state: the engine owns the file, this side shows it.
+        {
+            const auto live=impl_->engine.recordingSnapshot();
+            QVariantMap state;
+            state["active"]=live.active;
+            state["failed"]=live.failed;
+            state["path"]=QString::fromStdWString(live.path);
+            state["error"]=QString::fromStdWString(live.error);
+            state["encoder"]=QString::fromStdWString(live.encoder);
+            state["frames"]=QVariant::fromValue(qulonglong(live.frames));
+            state["dropped"]=QVariant::fromValue(qulonglong(live.dropped));
+            state["seconds"]=live.seconds;
+            if(state!=impl_->recordingState){
+                const bool wasActive=impl_->recordingState.value("active").toBool();
+                impl_->recordingState=state;
+                emit recordingChanged();
+                if(live.failed&&!live.error.empty())emit notice(uiText(live.error),true);
+                else if(wasActive&&!live.active)emit notice(tr("录制已结束：%1").arg(QString::fromStdWString(live.path)),false);
+            }
+        }
   // Custom: a display change re-applies that device's HDR curve. The id check is
   // a few Win32 calls, so this is safe on the polling path.
   syncHdrDisplayProfile();
@@ -6756,8 +6778,12 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // 列表模式 parameter panel width (ProPage splitter); QML clamps it to the window.
         {"listInspectorWidth", {376, 4000}},
         // Network sources (#48): seconds to collect before the first picture; -1 follows the buffer level.
-        {"networkPrebuffer", {-1, 60}}};
-    static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
+        {"networkPrebuffer", {-1, 60}},
+        // Live recording: the target bitrate for the file, and the frame rate
+        // cap (0 keeps the presented rate).
+        {"recordBitrateMbps", {1, 400}},
+        {"recordFps", {0, 240}}};
+    static const QStringList flags{"recordHevc", "subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
     QVariant stored;
@@ -6771,6 +6797,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     } else if (key == QLatin1String("screenshotDir")) {
         const QString dir = value.toString();
         if (!dir.isEmpty() && !QFileInfo(dir).isDir()) { emit notice(tr("截图目录不存在：%1").arg(dir), true); return false; }
+        stored = dir;
+    } else if (key == QLatin1String("recordDir")) {
+        const QString dir = value.toString();
+        if (!dir.isEmpty() && !QFileInfo(dir).isDir()) { emit notice(tr("录制目录不存在：%1").arg(dir), true); return false; }
         stored = dir;
     } else if (key == QLatin1String("audioDevice")) {
         stored = value.toString();
@@ -7205,6 +7235,47 @@ void QmlPlayerBridge::openLogFolder() {
 }
 void QmlPlayerBridge::openDataFolder() {
     if (!QDesktopServices::openUrl(QUrl::fromLocalFile(dataDirectory()))) emit notice(tr("无法打开数据目录"), true);
+}
+
+// --- live recording of the processed picture --------------------------------
+// The engine owns the encoder and the file; this side only starts, stops and
+// shows the state. The 3 second countdown is an interface animation and runs
+// before the request is sent.
+QString QmlPlayerBridge::recordingDirectory() const {
+    const QString chosen = impl_->prefString("recordDir");
+    if (!chosen.isEmpty()) return chosen;
+    const QString videos = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+    return QDir(videos.isEmpty() ? QDir::homePath() : videos).filePath(QStringLiteral("Veyra"));
+}
+int QmlPlayerBridge::recordingBitrateMbps() const { return std::clamp(impl_->prefInt("recordBitrateMbps", 20), 1, 400); }
+int QmlPlayerBridge::recordingFpsLimit() const { return impl_->prefInt("recordFps", 0); }
+bool QmlPlayerBridge::recordingHevc() const { return impl_->prefBool("recordHevc", false); }
+bool QmlPlayerBridge::recording() const { return impl_->recordingState.value("active").toBool(); }
+QVariantMap QmlPlayerBridge::recordingState() const { return impl_->recordingState; }
+
+void QmlPlayerBridge::startRecording() {
+    if (recording()) { emit notice(tr("录制已在进行中"), true); return; }
+    if (!hasSource()) { emit notice(tr("没有正在播放的画面，无法录制"), true); return; }
+    engine::RecordingOptions options;
+    options.directory = wideOf(recordingDirectory());
+    options.bitrateMbps = uint32_t(recordingBitrateMbps());
+    options.hevc = recordingHevc();
+    options.fpsLimit = uint32_t(std::max(0, recordingFpsLimit()));
+    impl_->engine.requestRecording(options);
+}
+void QmlPlayerBridge::stopRecording() {
+    if (!recording()) return;
+    impl_->engine.stopRecording();
+}
+void QmlPlayerBridge::toggleRecording() { if (recording()) stopRecording(); else startRecording(); }
+void QmlPlayerBridge::chooseRecordingDirectory() {
+    const QString dir = QFileDialog::getExistingDirectory(nullptr, tr("选择录制保存位置"), recordingDirectory());
+    if (!dir.isEmpty()) setPreference(QStringLiteral("recordDir"), dir);
+}
+void QmlPlayerBridge::openRecordingDirectory() {
+    const QString dir = recordingDirectory();
+    QDir().mkpath(dir);
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(dir))) emit notice(tr("无法打开目录：%1").arg(dir), true);
 }
 
 void QmlPlayerBridge::chooseExportPath() {

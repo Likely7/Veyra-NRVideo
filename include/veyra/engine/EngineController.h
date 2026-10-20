@@ -26,6 +26,7 @@
 #include "veyra/media/NetworkSettings.h"
 #include "veyra/sink/VideoEncoder.h"
 #include "veyra/engine/ExportOptions.h"
+#include "veyra/engine/LiveRecorder.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
@@ -249,12 +250,20 @@ public:
     void saveFrame(const std::wstring& path);
     void startExport(const std::wstring& input,const std::wstring& output,PlayerOptions,bool hevc);
     PlayerSnapshot snapshot()const;
+    // Live recording of the processed picture. The UI asks for it; the engine
+    // thread owns the encoder and the file, so the GPU resources stay on one
+    // thread and the playback loop keeps its cadence.
+    void requestRecording(const RecordingOptions& options);
+    void stopRecording();
+    RecordingSnapshot recordingSnapshot()const;
 private:
     void run(HWND,std::wstring,PlayerOptions,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest={},std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest={},std::shared_ptr<source::XboxConnectDesc> xboxRequest={});
     void runLargeImage(HWND,const sink::RgbaImage&,PlayerOptions,gfx::D3D12DeviceContext&,gfx::CommandSlotRing&);
     void post(std::function<void()>);
     void dispatch();
     void status(const std::wstring&,bool failed=false);
+    // Copy the recorder state into the snapshot the UI reads.
+    void publishRecordingStatus();
     void noteEngineHang(uint64_t stalledMs);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void controlLoop(std::stop_token);
@@ -281,6 +290,12 @@ private:
     std::shared_ptr<source::XboxSessionSource> activeXbox_;
     PreviewView previewView_;
     std::wstring savePath_;
+    // Live recorder: the request comes from the UI thread, the encoder and the
+    // file belong to the engine thread.
+    std::unique_ptr<LiveRecorder> recorder_;            // engine thread
+    std::optional<RecordingOptions> recordingRequest_;  // mutex_
+    bool recordingStop_=false;                          // mutex_
+    RecordingSnapshot recordingSnapshot_;               // mutex_
     std::thread worker_;
     std::unique_ptr<PreviewGpuSession> prewarmed_; // engine dispatcher only
     std::atomic<bool> prewarmEnabled_{false}; // off until the saved preference enables it (default off since 2026-10-05)
