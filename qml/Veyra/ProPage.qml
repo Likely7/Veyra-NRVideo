@@ -2741,45 +2741,6 @@ VPage {
                             }
                         }
 
-                        VAccordion {
-                            objectName: "list-hdr-metadata"
-                            Layout.fillWidth: true
-                            Layout.topMargin: 12
-                            glyph: "sun"
-                            hue: "#7FB2F5"
-                            title: qsTr("HDR 元数据")
-                            summary: veyra.hdrMetadataEnabled ? qsTr("已启用（HDR10）") : qsTr("已关闭")
-                            on: veyra.hdrMetadataEnabled
-                            onToggled: on => veyra.hdrMetadataEnabled = on
-                            Text {
-                                Layout.fillWidth: true
-                                text: qsTr("HDR10 提示；系统或显示器可能忽略，让它的动态色调映射有依据。")
-                                    + qsTr("曲线生效时会约束内容亮度提示；SDR 输入默认不发送，手动填写除外。")
-                                wrapMode: Text.WordWrap
-                                color: Theme.t3
-                                font.family: Theme.fontUi; font.pixelSize: 11
-                            }
-                            Repeater {
-                                model: [{key:"masteringPeakNits",label:qsTr("母版峰值 (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源；实际效果取决于显示设备")},
-                                        {key:"maxCllNits",label:qsTr("MaxCLL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")},
-                                        {key:"maxFallNits",label:qsTr("MaxFALL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")}]
-                                delegate: VRow {
-                                    required property var modelData
-                                    label: modelData.label
-                                    hint: modelData.hint || ""
-                                    value: String(veyra.hdrMetadataParams[modelData.key] ?? "—")
-                                    VSlider {
-                                        objectName: "list-hdrmeta-" + modelData.key
-                                        implicitWidth: 120
-                                        valueFromModel: true
-                                        resettable: true; defaultValue: modelData.def
-                                        from: modelData.from; to: modelData.to
-                                        value: veyra.hdrMetadataParams[modelData.key] ?? modelData.def
-                                        onMoved: value => veyra.setHdrMetadataParameter(modelData.key, Math.round(value))
-                                    }
-                                }
-                            }
-                        }
                         }
                         VGroup {
                             VRow {

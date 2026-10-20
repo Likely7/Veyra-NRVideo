@@ -435,12 +435,11 @@ struct EnhancementSettings {
         if(nrHoldStrength==0)active.nrHoldTolerance=defaults.nrHoldTolerance;
         if(!hdrCurve.enabled){
             active.hdrCurve=defaults.hdrCurve;
-            // Display peak also rescales enabled HDR10 metadata, independently
-            // of the pixel curve's switch (resolveHdrTuning).
-            if(hdrMetadata.enabled&&(hdrMetadata.masteringPeakNits||hdrMetadata.maxCllNits||hdrMetadata.maxFallNits))
-                active.hdrCurve.displayPeakNits=hdrCurve.displayPeakNits;
         }
-        if(!hdrMetadata.enabled)active.hdrMetadata=defaults.hdrMetadata;
+        // HDR10 static metadata is gone: the card and the send path were removed
+        // because it never changed a pixel and its swapchain call recomposites the
+        // screen. A session saved while it existed must not resurrect it.
+        active.hdrMetadata=defaults.hdrMetadata;
         // Flow is shared. Turning off one effect does not make it inactive
         // while another consumer still needs it (VFG has its own flow).
         const bool flowUsed=(nr&&(motionUsesFlow(nrMotion)||usesNrTemporal()))||
