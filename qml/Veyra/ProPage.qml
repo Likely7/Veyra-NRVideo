@@ -616,68 +616,64 @@ VPage {
             // Recording: the red dot pulses while the file is open, and a
             // three second countdown runs before the engine is asked to open
             // it. The countdown is an interface animation; the file itself is
-            // owned by the engine.
-            Item {
+            // owned by the engine. The header row is a layout, so this control
+            // uses Layout.alignment instead of anchors.
+            Rectangle {
                 id: recordControl
                 objectName: "pro-record-control"
-                anchors.verticalCenter: parent.verticalCenter
-                width: recordButton.implicitWidth
-                height: recordButton.implicitHeight
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: recordRow.implicitWidth + 24
+                Layout.preferredHeight: Theme.ctlHeight
+                implicitWidth: recordRow.implicitWidth + 24
+                implicitHeight: Theme.ctlHeight
+                radius: Theme.rCtl
+                color: recordMouse.containsMouse ? Theme.card3 : Theme.card2
+                border.width: 1
+                border.color: (veyra.recording || recordControl.countdown > 0) ? Theme.err : Theme.stroke2
                 property int countdown: 0
+                Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
+                Behavior on border.color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
 
-                Rectangle {
-                    id: recordButton
-                    objectName: "pro-record-button"
-                    anchors.fill: parent
-                    implicitWidth: recordRow.implicitWidth + 24
-                    implicitHeight: Theme.ctlHeight
-                    radius: Theme.rCtl
-                    color: recordMouse.containsMouse ? Theme.card3 : Theme.card2
-                    border.width: 1
-                    border.color: (veyra.recording || recordControl.countdown > 0) ? Theme.err : Theme.stroke2
-                    Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
-                    Behavior on border.color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
-
-                    Row {
-                        id: recordRow
-                        anchors.centerIn: parent
-                        spacing: 7
-                        Rectangle {
-                            id: recordDot
-                            width: 9; height: 9; radius: 4.5
-                            anchors.verticalCenter: parent.verticalCenter
-                            color: Theme.err
-                            SequentialAnimation on opacity {
-                                running: veyra.recording || recordControl.countdown > 0
-                                loops: Animation.Infinite
-                                NumberAnimation { to: 0.25; duration: veyra.recording ? 700 : 380; easing.type: Easing.InOutQuad }
-                                NumberAnimation { to: 1.0; duration: veyra.recording ? 700 : 380; easing.type: Easing.InOutQuad }
-                            }
-                        }
-                        Text {
-                            id: recordLabel
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: recordControl.countdown > 0 ? qsTr("录制 %1 秒").arg(recordControl.countdown)
-                                  : (veyra.recording ? qsTr("停止录制") : qsTr("录制"))
-                            color: Theme.t1
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fsBody
-                            font.weight: Font.Medium
+                Row {
+                    id: recordRow
+                    anchors.centerIn: parent
+                    spacing: 7
+                    Rectangle {
+                        id: recordDot
+                        width: 9; height: 9; radius: 4.5
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: Theme.err
+                        SequentialAnimation on opacity {
+                            running: veyra.recording || recordControl.countdown > 0
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.25; duration: veyra.recording ? 700 : 380; easing.type: Easing.InOutQuad }
+                            NumberAnimation { to: 1.0; duration: veyra.recording ? 700 : 380; easing.type: Easing.InOutQuad }
                         }
                     }
-                    MouseArea {
-                        id: recordMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (veyra.recording) { veyra.stopRecording(); recordControl.countdown = 0; recordTick.stop(); return }
-                            if (recordControl.countdown > 0) { recordControl.countdown = 0; recordTick.stop(); return }
-                            recordControl.countdown = 3
-                            recordTick.restart()
-                        }
+                    Text {
+                        id: recordLabel
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: recordControl.countdown > 0 ? qsTr("录制 %1 秒").arg(recordControl.countdown)
+                              : (veyra.recording ? qsTr("停止录制") : qsTr("录制"))
+                        color: Theme.t1
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        font.weight: Font.Medium
                     }
                 }
+                MouseArea {
+                    id: recordMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (veyra.recording) { veyra.stopRecording(); recordControl.countdown = 0; recordTick.stop(); return }
+                        if (recordControl.countdown > 0) { recordControl.countdown = 0; recordTick.stop(); return }
+                        recordControl.countdown = 3
+                        recordTick.restart()
+                    }
+                }
+                // The countdown number pops on every tick.
                 NumberAnimation {
                     id: recordPop
                     target: recordLabel
@@ -685,7 +681,7 @@ VPage {
                     from: 1.18
                     to: 1.0
                     duration: Theme.d(Theme.durFast)
-                    easing.type: Theme.spring
+                    easing: Theme.spring
                 }
                 Timer {
                     id: recordTick
