@@ -7256,7 +7256,7 @@ QVariantMap QmlPlayerBridge::recordingState() const { return impl_->recordingSta
 void QmlPlayerBridge::startRecording() {
     if (recording()) { emit notice(tr("录制已在进行中"), true); return; }
     if (!hasSource()) { emit notice(tr("没有正在播放的画面，无法录制"), true); return; }
-    engine::RecordingOptions options;
+    engine::RecordingSettings options;
     options.directory = wideOf(recordingDirectory());
     options.bitrateMbps = uint32_t(recordingBitrateMbps());
     options.hevc = recordingHevc();

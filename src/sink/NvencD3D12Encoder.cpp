@@ -33,7 +33,7 @@ struct NvencD3D12Encoder::Impl {
         if(code!=NV_ENC_SUCCESS||successLogs<24||veyra::log::verboseFrameLogs()){if(code==NV_ENC_SUCCESS)++successLogs;veyra::log::info("nvenc",std::format("{} status={} detail={}",op,int(code),detail));}if(code!=NV_ENC_SUCCESS){const auto text=std::format("{} status={} {}",op,int(code),detail);error.assign(text.begin(),text.end());}return code==NV_ENC_SUCCESS;}
     bool drain(Slot& s){
         if(!s.pending)return true;
-        if(fence->GetCompletedValue()<s.value){if(FAILED(fence->SetEventOnCompletion(s.value,event))||WaitForSingleObject(event,p.drainTimeoutMs)!=WAIT_OBJECT_0)return false;}
+        if(fence->GetCompletedValue()<s.value){if(FAILED(fence->SetEventOnCompletion(s.value,event))||WaitForSingleObject(event,drainTimeoutMs)!=WAIT_OBJECT_0)return false;}
         NV_ENC_LOCK_BITSTREAM lock{};lock.version=NV_ENC_LOCK_BITSTREAM_VER;lock.outputBitstream=&s.out;lock.doNotWait=0;
         if(!check(api.nvEncLockBitstream(encoder,&lock),"LockBitstream"))return false;
         const bool ok=writer(static_cast<uint8_t*>(lock.bitstreamBufferPtr),lock.bitstreamSizeInBytes,static_cast<int64_t>(lock.outputTimeStamp),lock.pictureType==NV_ENC_PIC_TYPE_IDR);

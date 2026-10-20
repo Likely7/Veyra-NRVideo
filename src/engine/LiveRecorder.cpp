@@ -90,8 +90,7 @@ struct LiveRecorder::Impl {
             std::lock_guard lock(statusMutex);
             if (error.empty()) error = reason;
         }
-        veyra::log::error("live-recorder", std::format("writer failed: {}",
-            std::string(error.begin(), error.end())));
+        veyra::log::error("live-recorder", std::format("writer failed: {}", utf8(error)));
     }
 
     bool writePacket(const Packet& packet) {
@@ -120,8 +119,7 @@ struct LiveRecorder::Impl {
             return;
         }
         headerWritten.store(true, std::memory_order_relaxed);
-        veyra::log::info("live-recorder", std::format("container header written path={}",
-            std::string(utf8(path).begin(), utf8(path).end())));
+        veyra::log::info("live-recorder", std::format("container header written path={}", utf8(path)));
         for (;;) {
             Packet packet;
             {
@@ -251,9 +249,8 @@ bool LiveRecorder::begin(gfx::D3D12DeviceContext& ctx, gfx::CommandSlotRing& rin
     state_.store(State::Recording, std::memory_order_release);
     veyra::log::info("live-recorder", std::format(
         "started path={} extent={}x{} codec={} hdr={} fps={} bitrateMbps={} encoder={}",
-        std::string(utf8(file).begin(), utf8(file).end()), p.width, p.height, p.hevc ? "HEVC" : "H264",
-        p.hdr ? 1 : 0, p.fps, settings.bitrateMbps,
-        std::string(utf8(p.encoderName).begin(), utf8(p.encoderName).end())));
+        utf8(file), p.width, p.height, p.hevc ? "HEVC" : "H264",
+        p.hdr ? 1 : 0, p.fps, settings.bitrateMbps, utf8(p.encoderName)));
     return true;
 }
 
@@ -319,7 +316,7 @@ void LiveRecorder::end() {
     state_.store(failed ? State::Failed : State::Idle, std::memory_order_release);
     veyra::log::info("live-recorder", std::format(
         "stopped path={} frames={} dropped={} seconds={:.2f} failed={}",
-        std::string(utf8(p.path).begin(), utf8(p.path).end()), p.frames.load(), p.dropped.load(),
+        utf8(p.path), p.frames.load(), p.dropped.load(),
         double(p.recordedUs.load()) / 1000000.0, failed ? 1 : 0));
 }
 

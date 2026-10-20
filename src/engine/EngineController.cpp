@@ -366,7 +366,7 @@ bool EngineController::requestSettings(EnhancementSettings s,std::optional<Chain
     if(acceptedRevision)*acceptedRevision=s.revision;return true;
 }
 void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(mutex_);savePath_=path;}
-void EngineController::requestRecording(const RecordingOptions& options){
+void EngineController::requestRecording(const RecordingSettings& options){
     // The UI thread only records the request; the engine thread owns the
     // encoder, the GPU resources and the file.
     {std::lock_guard lock(mutex_);recordingRequest_=options;}
@@ -374,15 +374,15 @@ void EngineController::requestRecording(const RecordingOptions& options){
 }
 void EngineController::stopRecording(){std::lock_guard lock(mutex_);recordingStop_=true;}
 void EngineController::publishRecordingStatus(){
-    if(!recorder_){std::lock_guard lock(mutex_);recordingSnapshot_={};return;}
+    if(!recorder_){std::lock_guard lock(mutex_);recordingStatus_={};return;}
     const auto live=recorder_->status();
     std::lock_guard lock(mutex_);
-    recordingSnapshot_.active=live.active;recordingSnapshot_.failed=live.failed;
-    recordingSnapshot_.path=live.path;recordingSnapshot_.error=live.error;
-    recordingSnapshot_.encoder=live.encoder;recordingSnapshot_.frames=live.frames;
-    recordingSnapshot_.dropped=live.dropped;recordingSnapshot_.seconds=live.seconds;
+    recordingStatus_.active=live.active;recordingStatus_.failed=live.failed;
+    recordingStatus_.path=live.path;recordingStatus_.error=live.error;
+    recordingStatus_.encoder=live.encoder;recordingStatus_.frames=live.frames;
+    recordingStatus_.dropped=live.dropped;recordingStatus_.seconds=live.seconds;
 }
-RecordingSnapshot EngineController::recordingSnapshot()const{std::lock_guard lock(mutex_);return recordingSnapshot_;}
+RecordingStatus EngineController::recordingSnapshot()const{std::lock_guard lock(mutex_);return recordingStatus_;}
 void EngineController::startExport(const std::wstring& input,const std::wstring& output,PlayerOptions opts,bool hevc){
     if(opts.nodeOrder){
         veyra::log::warn("node-order","export has no runtime node-order transport; request rejected before posting");
@@ -1203,7 +1203,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             OnExit resetExit{[&]{finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);
                 // The session owns the recorder: close the file on every exit
                 // path so the container is finalized.
-                if(recorder_&&recorder_->active()){recorder_->end();publishRecordingStatus();}};
+                if(recorder_&&recorder_->active()){recorder_->end();publishRecordingStatus();}}};
             auto collectTimings=[&]{
                 auto record=[&](const diagnostics::GpuFrameTiming& sample){
                     const auto& fgCost=sample.gpu[size_t(diagnostics::GpuStage::FgBatch)];
@@ -1562,7 +1562,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // Recording requests arrive from the UI thread; the encoder
                 // belongs to this thread, which owns the GPU context.
                 {
-                    std::optional<RecordingOptions> request;bool stop=false;
+                    std::optional<RecordingSettings> request;bool stop=false;
                     {std::lock_guard lock(mutex_);request=recordingRequest_;recordingRequest_.reset();stop=recordingStop_;recordingStop_=false;}
                     if(stop&&recorder_&&recorder_->active()){recorder_->end();publishRecordingStatus();status(L"录制已结束",false);}
                     if(request){

@@ -253,9 +253,9 @@ public:
     // Live recording of the processed picture. The UI asks for it; the engine
     // thread owns the encoder and the file, so the GPU resources stay on one
     // thread and the playback loop keeps its cadence.
-    void requestRecording(const RecordingOptions& options);
+    void requestRecording(const RecordingSettings& options);
     void stopRecording();
-    RecordingSnapshot recordingSnapshot()const;
+    RecordingStatus recordingSnapshot()const;
 private:
     void run(HWND,std::wstring,PlayerOptions,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest={},std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest={},std::shared_ptr<source::XboxConnectDesc> xboxRequest={});
     void runLargeImage(HWND,const sink::RgbaImage&,PlayerOptions,gfx::D3D12DeviceContext&,gfx::CommandSlotRing&);
@@ -293,9 +293,9 @@ private:
     // Live recorder: the request comes from the UI thread, the encoder and the
     // file belong to the engine thread.
     std::unique_ptr<LiveRecorder> recorder_;            // engine thread
-    std::optional<RecordingOptions> recordingRequest_;  // mutex_
+    std::optional<RecordingSettings> recordingRequest_;  // mutex_
     bool recordingStop_=false;                          // mutex_
-    RecordingSnapshot recordingSnapshot_;               // mutex_
+    RecordingStatus recordingStatus_;                   // mutex_
     std::thread worker_;
     std::unique_ptr<PreviewGpuSession> prewarmed_; // engine dispatcher only
     std::atomic<bool> prewarmEnabled_{false}; // off until the saved preference enables it (default off since 2026-10-05)

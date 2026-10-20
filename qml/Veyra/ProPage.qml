@@ -678,6 +678,15 @@ VPage {
                         }
                     }
                 }
+                NumberAnimation {
+                    id: recordPop
+                    target: recordLabel
+                    property: "scale"
+                    from: 1.18
+                    to: 1.0
+                    duration: Theme.d(Theme.durFast)
+                    easing.type: Theme.spring
+                }
                 Timer {
                     id: recordTick
                     interval: 1000
@@ -692,15 +701,6 @@ VPage {
                         }
                     }
                 }
-            }
-            NumberAnimation {
-                id: recordPop
-                target: recordLabel
-                property: "scale"
-                from: 1.18
-                to: 1.0
-                duration: Theme.d(Theme.durFast)
-                easing.type: Theme.spring
             }
             VButton {
                 id: presetBtn
