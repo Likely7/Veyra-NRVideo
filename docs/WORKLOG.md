@@ -1,5 +1,22 @@
 # WORKLOG
 
+## 2026-10-20 实时录制（处理后画面）功能
+
+用户要求录制处理后的画面、设置页可设位置与码率、专业模式截图按钮旁加带动画与 3 秒倒计时的录制按钮，并给出新测试版实测。
+
+分支 `codex/screen-recording-20261020`（起点 nrvideo/main `4ae285b`，E 盘 worktree `E:/项目/Veyra/worktrees/screen-recording-20261020`，存档标签 `checkpoint/pre-screen-recording-20261020`），提交 `2c80233` 功能、`99bfc43` 编译错误修正、`65fe7ef` 界面布局修正。方案 `docs/SCREEN_RECORDING_PLAN_2026-10-20.md`，执行记录 `docs/SCREEN_RECORDING_EXECUTION_2026-10-20.md`。
+
+实现：新增 `LiveRecorder`（`include/veyra/engine/LiveRecorder.h`、`src/engine/LiveRecorder.cpp`），复用产品导出编码器（N 卡 NVENC / 其它 Media Foundation MFT）对**实时增强图**编码，容器写入在独立线程并用有界队列（240 包、高水位 160），磁盘慢只丢帧计数不卡播放；`EncoderConfig` 增加可配置排空超时（录制 2 秒，导出保持 10 秒）。`EngineController` 负责请求/快照并在呈现点编码呈现的那一帧；增强设置变更重建图时先收尾文件。`QmlPlayerBridge` 提供录制属性与方法与偏好项（位置、码率 8/16/20/40/80、帧率、H.264/HEVC）。QML：专业模式截图按钮旁的录制按钮（红点呼吸 + 3 秒倒计时 + 数字弹跳）、设置页录制分区；i18n 新增 30 条四语文案（2637 条，缺译 0）。
+
+构建：沿用 2.1.0 正式包的固定依赖与 CMake 选项，`build/screen-recording-20261020`，-j2。首轮全量 548 步在 431/548 失败，三处编译错误（`Impl` 内成员误用 `p.` 前缀、引擎与 LiveRecorder 的类型名不一致、`OnExit` 初始化器少一个右花括号）均已修正，增量重建 44.8 秒通过 5 个目标。
+
+回归：QML 冒烟 105 passed / 0 failed（真实实例化改过的 ProPage）、QML 数据迁移 PASS、UI i18n 0 failures、UI 契约 PASS；`i18n/extract.py --check` 无缺译无占位符问题。**冷启动抓到两处真实 QML 错误**：录制控件在头部 RowLayout 里用了 anchors（改为 Layout.alignment），`easing.type: Theme.spring` 把线性缓动当枚举（改为 `easing: Theme.spring`）；修正后重新打包，冷启动日志无 QML 错误。
+
+功能验证：`scripts/acceptance/screen-recording-control.py` 用生产 bridge 打开合成测试片并真实录制 5.2 秒，得到 160 帧、丢帧 0 的 h264 1280x720 MP4（9,966,597 字节，ffprobe 时长 5.249 秒），界面通知“录制已结束：…”。
+
+测试包：`E:/项目/Veyra/test-packages/screen-recording-20261020/Veyra-2.1.0-rec-NVIDIA-win64-portable.zip`（697,851,293 字节，SHA256 `5809345641c5df2dd07e1a1427992c4e0f23d6c3fd0baad8523587cd767f8fbf`），运行组件与 2.1.0-test 原样相同，只换程序本体与 QML，manifest 按 1734 个文件重新审计，从压缩包解压冷启动退出码 0。
+
+未改运行库/模型/驱动与用户真实配置，未合并 main、未推送、未发布、未改 GitHub 已发布 Release 正文或标签；未关机。画质观感、长时录制、补帧帧是否进文件、采集卡与串流场景待用户实测。
 ## 2026-10-19 2.1.0 整合与测试包（Claude）
 
 按用户要求在 `claude/release-2.1.0-20261019` 合并 Codex 全屏输入（含 AMD NR 0.44）、Claude #48、美颜（含 E0/AA）与赞助页，版本 2.1.0。冲突只在 AGENTS/WORKLOG/翻译目录；补上 #48 40 秒超时提示的三语翻译。只读审查 Codex 三项修复，无阻塞问题（AMD 默认改用 Small 需写进发布说明）。43 目标构建 153 秒通过；58 组回归除 image-dimension 既有 NR 分块环境问题外全部通过（两组脚本问题修正后重跑通过）。详见 docs/RELEASE_2.1.0_TEST_2026-10-19.md、docs/BUILD_2.1.0_TEST.md。
