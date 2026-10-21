@@ -746,7 +746,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 r.nodeOrder=o.nodeOrder?&*o.nodeOrder:nullptr;return r;
             };
             describeStages(stageRequest(options),options.snapshot(),gd);
-            const bool xessFg=crossVendorFrameGeneration(options.settings.frameGenerationBackend);
             gd.noFeatures=false;
             gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
             veyra::log::info("display-color",std::format("hdrInput={} hdrOutput={} forceSdrPreview={}",gd.hdrInput,gd.hdrOutput,options.settings.forceSdrPreview));
@@ -917,7 +916,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(!backendRecoveryWarning.empty()){
                 std::lock_guard lock(mutex_);desired_.rejectVideoRequest(initialRequested,options.snapshot());snapshot_.desired=desired_;snapshot_.rejectedRevision=initialRequested.revision;snapshot_.backendWarning=backendRecoveryWarning;
             }
-            if(!nvidiaAdapter&&((options.nr&&!amdNrAdapter)||options.sr||(options.fg&&!xessFg))){
+            if(!nvidiaAdapter&&nvidiaOnlyStagesRequested(options.nr,options.sr,options.fg,options.settings,amdNrAdapter)){
                 veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested features: nr={} sr={} fgBackend={} flowBackend={}",options.nr,options.sr,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend)));
                 status(L"当前非 NVIDIA 适配器：NR、NVIDIA 超分与 DLSS 已禁用；可使用 XeSS 预览和 AMD 光流",false);
             }
@@ -925,7 +924,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(graph->xessEnabled()&&!presenter.xessActive())status(L"XeSS 未启用：运行时或设备不兼容；当前为普通呈现",false);
             {
                 std::lock_guard lock(mutex_);
-                if(!nvidiaAdapter&&((options.nr&&!amdNrAdapter)||options.sr||(options.fg&&!xessFg)))snapshot_.backendWarning=L"当前 GPU 不支持所选 NVIDIA 增强";
+                if(!nvidiaAdapter&&nvidiaOnlyStagesRequested(options.nr,options.sr,options.fg,options.settings,amdNrAdapter))snapshot_.backendWarning=L"当前 GPU 不支持所选 NVIDIA 增强";
                 if(graph->xessEnabled()&&!presenter.xessActive())snapshot_.backendWarning=L"XeSS 初始化失败；当前为普通呈现";
             }
             captureSource.setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
@@ -1606,7 +1605,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     resetRecord->settingsRevision=requested.revision;
                     auto next=PlayerOptions::from(requested,requestedOrder);auto nextDesc=gd;
                     const bool nvidiaAdapter=ctx.adapter().isNvidia;
-                    const bool xessFg=crossVendorFrameGeneration(next.settings.frameGenerationBackend);
                     describeStages(stageRequest(next),next.snapshot(),nextDesc);
                     nextDesc.hdrOutput=requested.useHdrPreview(nextDesc.hdrInput,displayHdrActive());
                     // Rebuild decision.
@@ -1624,7 +1622,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     //    settings record.
                     bool rebuild=engine::requiresGraphRebuild(previous,requested)||previousOrder!=requestedOrder;
                     if(gd.hdrOutput!=nextDesc.hdrOutput||
-                       (!nvidiaAdapter&&((next.nr&&!amdNrAdapter)||next.sr||(next.fg&&!xessFg)))||
+                       (!nvidiaAdapter&&nvidiaOnlyStagesRequested(next.nr,next.sr,next.fg,next.settings,amdNrAdapter))||
                        gd.enableNr!=nextDesc.enableNr||gd.enableFg!=nextDesc.enableFg||
                        gd.nrBeforeSr!=nextDesc.nrBeforeSr||
                        gd.workWidth!=nextDesc.workWidth||gd.workHeight!=nextDesc.workHeight||
@@ -1678,7 +1676,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         }
                         options=next;gd=nextDesc;transaction=true;pendingSettingsAck=true;reset=true;
                         resetRecord->epoch=0;
-                        if(!nvidiaAdapter&&((next.nr&&!amdNrAdapter)||next.sr||(next.fg&&!xessFg)))veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested settings revision={} nr={} sr={} fgBackend={} flowBackend={}",requested.revision,next.nr,next.sr,frameGenerationBackendName(requested.frameGenerationBackend),opticalFlowBackendName(requested.opticalFlowBackend)));
+                        if(!nvidiaAdapter&&nvidiaOnlyStagesRequested(next.nr,next.sr,next.fg,next.settings,amdNrAdapter))veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested settings revision={} nr={} sr={} fgBackend={} flowBackend={}",requested.revision,next.nr,next.sr,frameGenerationBackendName(requested.frameGenerationBackend),opticalFlowBackendName(requested.opticalFlowBackend)));
                     }
                     else {
                         finishReset(diagnostics::ResetOutcome::RolledBack);
