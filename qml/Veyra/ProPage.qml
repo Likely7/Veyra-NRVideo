@@ -631,6 +631,14 @@ VPage {
                 border.width: 1
                 border.color: (veyra.recording || recordControl.countdown > 0) ? Theme.err : Theme.stroke2
                 property int countdown: 0
+                // Elapsed recording time, m:ss (h:mm:ss after an hour).
+                readonly property string elapsed: {
+                    const total = Math.max(0, Math.floor((veyra.recordingState && veyra.recordingState.seconds) || 0))
+                    const h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, s = total % 60
+                    const two = n => (n < 10 ? "0" : "") + n
+                    return h > 0 ? h + ":" + two(m) + ":" + two(s) : two(m) + ":" + two(s)
+                }
+                readonly property bool saving: !veyra.recording && !!(veyra.recordingState && veyra.recordingState.finishing)
                 Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
                 Behavior on border.color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
 
@@ -654,7 +662,8 @@ VPage {
                         id: recordLabel
                         anchors.verticalCenter: parent.verticalCenter
                         text: recordControl.countdown > 0 ? qsTr("录制 %1 秒").arg(recordControl.countdown)
-                              : (veyra.recording ? qsTr("停止录制") : qsTr("录制"))
+                              : veyra.recording ? qsTr("停止 %1").arg(recordControl.elapsed)
+                              : recordControl.saving ? qsTr("保存中…") : qsTr("录制")
                         color: Theme.t1
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody

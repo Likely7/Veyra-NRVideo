@@ -577,7 +577,9 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/sink/BitstreamAudioSink.cpp
     src/sink/ImageExportSink.cpp
     src/sink/NvencD3D12Encoder.cpp
+    src/sink/NvencLiveEncoder.cpp
     src/sink/MfVideoEncoder.cpp
+    src/sink/RecordingAudioTap.cpp
     src/sink/VideoEncoderFactory.cpp
   )
   veyra_apply_warnings(veyra_sinks)

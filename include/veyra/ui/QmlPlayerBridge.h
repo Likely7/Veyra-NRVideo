@@ -227,6 +227,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int recordingBitrateMbps READ recordingBitrateMbps NOTIFY preferencesChanged)
     Q_PROPERTY(int recordingFpsLimit READ recordingFpsLimit NOTIFY preferencesChanged)
     Q_PROPERTY(bool recordingHevc READ recordingHevc NOTIFY preferencesChanged)
+    Q_PROPERTY(bool recordingAudio READ recordingAudio NOTIFY preferencesChanged)
     Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
     // Rebindable shortcuts: action -> key sequence text (defaults merged in).
     Q_PROPERTY(QVariantMap shortcuts READ shortcuts NOTIFY preferencesChanged)
@@ -1279,6 +1280,7 @@ public:
     int recordingBitrateMbps() const;
     int recordingFpsLimit() const;
     bool recordingHevc() const;
+    bool recordingAudio() const;
     Q_INVOKABLE void chooseExportPath();
     // The export target without the dialog (the dialog's result, or --export-out in a test).
     void setExportPath(const QString& path);

@@ -1,4 +1,5 @@
 #include "veyra/sink/VideoEncoder.h"
+#include "veyra/sink/MfLiveEncoder.h"
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/pipeline/GpuPassUtils.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
@@ -147,11 +148,18 @@ bool listHardwareMfts(bool hevc,uint32_t adapterVendorId,std::vector<MftCandidat
 
 uint32_t alignUp(uint32_t value,uint32_t alignment){return (value+alignment-1)/alignment*alignment;}
 
-class MfVideoEncoder final : public VideoEncoder {
+class MfVideoEncoder final : public VideoEncoder, public MfLiveEncoder {
 public:
     ~MfVideoEncoder() override {close();}
 
     bool open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,EnhanceGraph& graph,const EncoderConfig& config,PacketWriter writer) override;
+    // Live recorder path (MfLiveEncoder.h): packed NV12 in, microseconds in and out.
+    bool openLive(uint32_t width,uint32_t height,const EncoderConfig& config,PacketWriter writer) override;
+    std::vector<uint8_t> liveHeaders() const override {return extradata_;}
+    bool encodeNv12(const uint8_t* y,uint32_t yPitch,const uint8_t* uv,uint32_t uvPitch,int64_t ptsUs) override;
+    bool finishLive() override {return finish();}
+    std::wstring liveDescription() const override {return describe();}
+    std::wstring liveError() const override {return error_;}
     std::vector<uint8_t> headers() const override {return extradata_;}
     bool encode(unsigned frameSlot,bool generated,int64_t pts) override;
     bool finish() override;
@@ -172,6 +180,8 @@ private:
     bool writeSample(IMFSample* sample);
     bool convertToNv12(unsigned frameSlot,bool generated);
     bool sampleFromPacked(int64_t pts,IMFSample** sample);
+    bool openTransform(const EncoderConfig& config);
+    bool submitSample(IMFSample* sample);
 
     gfx::D3D12DeviceContext* ctx_=nullptr;
     gfx::CommandSlotRing* ring_=nullptr;
@@ -203,6 +213,9 @@ private:
     std::vector<uint8_t> packed_;
     HANDLE fenceEvent_=nullptr;
     bool mfAcquired_=false;
+    // Live recorder: sample times are microseconds (x10 in MF units) and key
+    // frames are forced every 2 s of media time instead of every N frames.
+    bool liveTimestamps_=false;
     uint64_t submitted_=0,written_=0;
     uint64_t nextKeyframe_=0;
     uint64_t gopLength_=1;
@@ -228,6 +241,39 @@ bool MfVideoEncoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& rin
         error_=std::format(L"Unsupported NV12 extent {}x{}",width_,height_);
         return false;
     }
+    if(!openTransform(config))return false;
+    // Same NV12 conversion the NVENC path uses; the result is read back because
+    // MFTs take system-memory NV12 (no shared D3D12 texture contract).
+    std::vector<uint8_t> shader;
+    error_=L"RgbToNv12 shader load/create failed";
+    if(!convert_.loadShader("RgbToNv12.dxil",shader)||!convert_.create(ctx.device(),shader,kOutputPoolSlots+2,1,2))return false;
+    for(unsigned i=0;i<kOutputPoolSlots;++i)makeSrv(ctx.device(),i<2?graph.videoFrameResource(i):graph.generatedFrameResource(i-2),graph.outputFormat(),cpuHandleOf(convert_,i));
+    error_=L"NV12 conversion/readback allocation failed";
+    y_=makeTexture(ctx.device(),width_,height_,DXGI_FORMAT_R8_UNORM,true);
+    uv_=makeTexture(ctx.device(),width_/2,height_/2,DXGI_FORMAT_R8G8_UNORM,true);
+    if(!y_||!uv_)return false;
+    makeUav(ctx.device(),y_.Get(),DXGI_FORMAT_R8_UNORM,cpuHandleOf(convert_,kOutputPoolSlots));
+    makeUav(ctx.device(),uv_.Get(),DXGI_FORMAT_R8G8_UNORM,cpuHandleOf(convert_,kOutputPoolSlots+1));
+    auto makeReadback=[&](uint32_t rows,uint32_t rowBytes,ComPtr<ID3D12Resource>& out,UINT& pitch){
+        pitch=alignUp(rowBytes,256);
+        D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_READBACK;
+        D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=uint64_t(pitch)*rows;
+        bd.Height=1;bd.DepthOrArraySize=1;bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        return SUCCEEDED(ctx.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&out)));
+    };
+    if(!makeReadback(height_,width_,yRead_,yPitch_)||!makeReadback(height_/2,width_,uvRead_,uvPitch_))return false;
+    packed_.resize(size_t(width_)*height_+size_t(width_)*(height_/2));
+    fenceEvent_=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+    if(!fenceEvent_){error_=std::format(L"CreateEvent win32={}",GetLastError());return false;}
+    if(!check(transform_->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH,0),L"Flush"))return false;
+    if(!check(transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,0),L"BeginStreaming"))return false;
+    if(!check(transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM,0),L"StartOfStream"))return false;
+    error_.clear();
+    return true;
+}
+
+// Vendor MFT selection and negotiation, shared by the export and the live recorder.
+bool MfVideoEncoder::openTransform(const EncoderConfig& config){
     if(!acquireMediaFoundation())return false;
     mfAcquired_=true;
     std::vector<MftCandidate> candidates;std::wstring detail;
@@ -281,33 +327,6 @@ bool MfVideoEncoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& rin
     }
     if(!check(transform_->GetOutputStreamInfo(outputId_,&outputInfo_),L"GetOutputStreamInfo"))return false;
     outputProvidesSamples_=(outputInfo_.dwFlags&(MFT_OUTPUT_STREAM_PROVIDES_SAMPLES|MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES))!=0;
-    // Same NV12 conversion the NVENC path uses; the result is read back because
-    // MFTs take system-memory NV12 (no shared D3D12 texture contract).
-    std::vector<uint8_t> shader;
-    error_=L"RgbToNv12 shader load/create failed";
-    if(!convert_.loadShader("RgbToNv12.dxil",shader)||!convert_.create(ctx.device(),shader,kOutputPoolSlots+2,1,2))return false;
-    for(unsigned i=0;i<kOutputPoolSlots;++i)makeSrv(ctx.device(),i<2?graph.videoFrameResource(i):graph.generatedFrameResource(i-2),graph.outputFormat(),cpuHandleOf(convert_,i));
-    error_=L"NV12 conversion/readback allocation failed";
-    y_=makeTexture(ctx.device(),width_,height_,DXGI_FORMAT_R8_UNORM,true);
-    uv_=makeTexture(ctx.device(),width_/2,height_/2,DXGI_FORMAT_R8G8_UNORM,true);
-    if(!y_||!uv_)return false;
-    makeUav(ctx.device(),y_.Get(),DXGI_FORMAT_R8_UNORM,cpuHandleOf(convert_,kOutputPoolSlots));
-    makeUav(ctx.device(),uv_.Get(),DXGI_FORMAT_R8G8_UNORM,cpuHandleOf(convert_,kOutputPoolSlots+1));
-    auto makeReadback=[&](uint32_t rows,uint32_t rowBytes,ComPtr<ID3D12Resource>& out,UINT& pitch){
-        pitch=alignUp(rowBytes,256);
-        D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=uint64_t(pitch)*rows;
-        bd.Height=1;bd.DepthOrArraySize=1;bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        return SUCCEEDED(ctx.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&out)));
-    };
-    if(!makeReadback(height_,width_,yRead_,yPitch_)||!makeReadback(height_/2,width_,uvRead_,uvPitch_))return false;
-    packed_.resize(size_t(width_)*height_+size_t(width_)*(height_/2));
-    fenceEvent_=CreateEventW(nullptr,FALSE,FALSE,nullptr);
-    if(!fenceEvent_){error_=std::format(L"CreateEvent win32={}",GetLastError());return false;}
-    if(!check(transform_->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH,0),L"Flush"))return false;
-    if(!check(transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,0),L"BeginStreaming"))return false;
-    if(!check(transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM,0),L"StartOfStream"))return false;
-    error_.clear();
     return true;
 }
 
@@ -497,7 +516,8 @@ bool MfVideoEncoder::writeSample(IMFSample* sample){
     }
     LONGLONG time=0;
     if(FAILED(sample->GetSampleTime(&time)))time=0;
-    const int64_t index=llround(double(time)*double(fpsNum_)/double(fpsDen_)/double(kTicksPerSecond));
+    // Export: the ordinal frame index. Live recorder: microseconds.
+    const int64_t index=liveTimestamps_?int64_t(time/10):llround(double(time)*double(fpsNum_)/double(fpsDen_)/double(kTicksPerSecond));
     UINT32 clean=0;
     const bool key=SUCCEEDED(sample->GetUINT32(MFSampleExtension_CleanPoint,&clean))&&clean!=0;
     const bool accepted=writer_(data,length,index,key);
@@ -646,6 +666,11 @@ bool MfVideoEncoder::encode(unsigned frameSlot,bool generated,int64_t pts){
     if(!convertToNv12(frameSlot,generated))return false;
     IMFSample* sample=nullptr;
     if(!sampleFromPacked(pts,&sample))return false;
+    return submitSample(sample);
+}
+
+// Takes ownership of `sample`.
+bool MfVideoEncoder::submitSample(IMFSample* sample){
     for(;;){
         if(async_){
             if(!waitEvents()){sample->Release();return false;}
@@ -667,6 +692,54 @@ bool MfVideoEncoder::encode(unsigned frameSlot,bool generated,int64_t pts){
     }
     sample->Release();
     return async_?drainOutputs(false):drainOutputs(true);
+}
+
+bool MfVideoEncoder::openLive(uint32_t width,uint32_t height,const EncoderConfig& config,PacketWriter writer){
+    writer_=std::move(writer);liveTimestamps_=true;
+    hevc_=config.hevc;bitrateMbps_=config.bitrateMbps;rateControl_=config.rateControl;
+    drainTimeoutMs_=config.drainTimeoutMs?config.drainTimeoutMs:10000;
+    fpsNum_=std::max(1u,config.fpsNum);fpsDen_=std::max(1u,config.fpsDen);
+    width_=width;height_=height;
+    error_=L"Media Foundation startup failed; see worker log";
+    if(width_<16||height_<16||(width_&1)||(height_&1)){
+        log::error("mf-encoder",std::format("unsupported live extent {}x{} for NV12",width_,height_));
+        error_=std::format(L"Unsupported NV12 extent {}x{}",width_,height_);
+        return false;
+    }
+    if(!openTransform(config))return false;
+    if(!check(transform_->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH,0),L"Flush"))return false;
+    if(!check(transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,0),L"BeginStreaming"))return false;
+    if(!check(transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM,0),L"StartOfStream"))return false;
+    error_.clear();
+    return true;
+}
+
+bool MfVideoEncoder::encodeNv12(const uint8_t* y,uint32_t yPitch,const uint8_t* uv,uint32_t uvPitch,int64_t ptsUs){
+    if(transform_==nullptr||!liveTimestamps_||!y||!uv)return false;
+    // A 2 s GOP of media time whatever the presented rate; the first frame is
+    // forced too, which is what makes vendor MFTs emit their first output.
+    if(ptsUs>=int64_t(nextKeyframe_)&&codecApi_!=nullptr){
+        VARIANT value;VariantInit(&value);value.vt=VT_UI4;value.ulVal=1;
+        const HRESULT forced=codecApi_->SetValue(&kPropForceKeyFrame,&value);
+        if(FAILED(forced))log::info("mf-encoder",std::format("ForceKeyFrame failed hr={} ptsUs={}",hrName(forced),ptsUs));
+        nextKeyframe_=uint64_t(std::max<int64_t>(0,ptsUs))+2000000;
+    }
+    const DWORD size=DWORD(size_t(width_)*height_*3/2);
+    ComPtr<IMFMediaBuffer> buffer;
+    if(FAILED(MFCreateMemoryBuffer(size,&buffer))){error_=L"MFCreateMemoryBuffer failed";return false;}
+    BYTE* data=nullptr;
+    if(FAILED(buffer->Lock(&data,nullptr,nullptr))){error_=L"IMFMediaBuffer::Lock failed";return false;}
+    for(uint32_t row=0;row<height_;++row)std::memcpy(data+size_t(row)*width_,y+size_t(row)*yPitch,width_);
+    uint8_t* chroma=data+size_t(width_)*height_;
+    for(uint32_t row=0;row<height_/2;++row)std::memcpy(chroma+size_t(row)*width_,uv+size_t(row)*uvPitch,width_);
+    buffer->Unlock();
+    buffer->SetCurrentLength(size);
+    ComPtr<IMFSample> created;
+    if(FAILED(MFCreateSample(&created))||FAILED(created->AddBuffer(buffer.Get()))){error_=L"MFCreateSample/AddBuffer failed";return false;}
+    created->SetSampleTime(LONGLONG(ptsUs)*10);
+    created->SetSampleDuration(LONGLONG(kTicksPerSecond)*fpsDen_/fpsNum_);
+    if(!sampleSent_)created->SetUINT32(MFSampleExtension_Discontinuity,TRUE);
+    return submitSample(created.Detach());
 }
 
 bool MfVideoEncoder::finish(){
@@ -712,6 +785,7 @@ void MfVideoEncoder::close(){
 } // namespace
 
 std::unique_ptr<VideoEncoder> createMediaFoundationEncoder(){return std::make_unique<MfVideoEncoder>();}
+std::unique_ptr<MfLiveEncoder> createMediaFoundationLiveEncoder(){return std::make_unique<MfVideoEncoder>();}
 
 EncoderCapability queryMediaFoundationEncoder(bool hevc){
     EncoderCapability capability;

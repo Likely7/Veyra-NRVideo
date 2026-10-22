@@ -250,10 +250,10 @@ public:
     void saveFrame(const std::wstring& path);
     void startExport(const std::wstring& input,const std::wstring& output,PlayerOptions,bool hevc);
     PlayerSnapshot snapshot()const;
-    // Live recording of the processed picture. The UI asks for it; the engine
-    // thread owns the encoder and the file, so the GPU resources stay on one
-    // thread and the playback loop keeps its cadence.
-    void requestRecording(const RecordingSettings& options);
+    // Live recording of the processed picture and the played sound
+    // (LiveRecorder.h). Any thread; the file opens with the next presented
+    // frame and is finished in the background.
+    bool requestRecording(const RecordingSettings& options,std::wstring& error);
     void stopRecording();
     RecordingStatus recordingSnapshot()const;
 private:
@@ -262,8 +262,6 @@ private:
     void post(std::function<void()>);
     void dispatch();
     void status(const std::wstring&,bool failed=false);
-    // Copy the recorder state into the snapshot the UI reads.
-    void publishRecordingStatus();
     void noteEngineHang(uint64_t stalledMs);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void controlLoop(std::stop_token);
@@ -290,12 +288,9 @@ private:
     std::shared_ptr<source::XboxSessionSource> activeXbox_;
     PreviewView previewView_;
     std::wstring savePath_;
-    // Live recorder: the request comes from the UI thread, the encoder and the
-    // file belong to the engine thread.
-    std::unique_ptr<LiveRecorder> recorder_;            // engine thread
-    std::optional<RecordingSettings> recordingRequest_;  // mutex_
-    bool recordingStop_=false;                          // mutex_
-    RecordingStatus recordingStatus_;                   // mutex_
+    // Live recorder: every session's presenter records into it; it owns its
+    // encoder and writer threads. Created before the engine thread starts.
+    std::unique_ptr<LiveRecorder> recorder_=std::make_unique<LiveRecorder>();
     std::thread worker_;
     std::unique_ptr<PreviewGpuSession> prewarmed_; // engine dispatcher only
     std::atomic<bool> prewarmEnabled_{false}; // off until the saved preference enables it (default off since 2026-10-05)

@@ -328,6 +328,14 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         barriers[1].Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;barriers[1].Transition.StateAfter=D3D12_RESOURCE_STATE_COMMON;
         list->ResourceBarrier(1,&barriers[1]);list->ResourceBarrier(1,&copy);
     }
+    // Live recording reads the frame here, in this list: the source is back in
+    // COMMON, and the consumer fence signalled after this list covers the read.
+    bool captureRecorded=false;
+    struct CaptureGuard{PresentCapture* capture;bool& recorded;~CaptureGuard(){if(recorded&&capture)capture->discarded();}} captureGuard{capture_,captureRecorded};
+    if(capture_){
+        const uint32_t hdrMode=graph.hdrOutput()?(graph.hdr10Output()?2u:1u):0u;
+        captureRecorded=capture_->record(list,{source,graph.outputFormat(),graph.workWidth(),graph.workHeight(),hdrMode,graph.outputDitherStep(),generated});
+    }
     // Interpolation region for the XeSS present-sink FG backend.
     // It must follow the PresentBlit view mapping (contain * zoom, view
     // center) rather than assuming the default centered view: the previous
@@ -408,6 +416,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
 
     gpuTimer_.mark(list,diagnostics::GpuStage::Blit,true);gpuTimer_.resolve(list);
     if(!ring.submitAndSignal(commandSlot))return false;gpuTimer_.submitted(ring.lastSignaledValue());
+    if(captureRecorded){captureRecorded=false;capture_->submitted(fence,ring.lastSignaledValue());}
     if(probeIssued){probePending_=true;probeFenceValue_=ring.lastSignaledValue();}
     // Custom: collect the previous probe as soon as the GPU reports it complete.
     // GetCompletedValue is a plain read, so presentation never waits here.

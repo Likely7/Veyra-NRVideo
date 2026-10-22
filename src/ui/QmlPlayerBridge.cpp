@@ -349,6 +349,7 @@ struct QmlPlayerBridge::Impl {
     QVariantMap prefs;
     // Live recording state published by the engine (see LiveRecorder.h).
     QVariantMap recordingState;
+    uint64_t recordingSaved = 0;   // LiveRecorder's finished-file counter already announced
   // Custom: the display whose HDR curve is currently applied (see syncHdrDisplayProfile).
   QString hdrProfileDisplay;
   // Custom: the title whose curve is currently applied (see syncHdrTitleProfile).
@@ -1453,24 +1454,34 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
         if(impl_->poll()){emit settingsChanged();emitChainChanged();}
-        // Live recording state: the engine owns the file, this side shows it.
+        // Live recording state: the recorder owns the files, this side shows them.
         {
             const auto live=impl_->engine.recordingSnapshot();
             QVariantMap state;
             state["active"]=live.active;
             state["failed"]=live.failed;
+            state["finishing"]=live.finishing;
             state["path"]=QString::fromStdWString(live.path);
-            state["error"]=QString::fromStdWString(live.error);
+            state["error"]=live.error.empty()?QString():uiText(live.error);
+            state["note"]=live.note.empty()?QString():uiText(live.note);
             state["encoder"]=QString::fromStdWString(live.encoder);
             state["frames"]=QVariant::fromValue(qulonglong(live.frames));
             state["dropped"]=QVariant::fromValue(qulonglong(live.dropped));
             state["seconds"]=live.seconds;
+            state["files"]=int(live.files);
+            state["audio"]=live.audio;
             if(state!=impl_->recordingState){
-                const bool wasActive=impl_->recordingState.value("active").toBool();
+                const auto previous=impl_->recordingState;
                 impl_->recordingState=state;
                 emit recordingChanged();
-                if(live.failed&&!live.error.empty())emit notice(uiText(live.error),true);
-                else if(wasActive&&!live.active)emit notice(tr("录制已结束：%1").arg(QString::fromStdWString(live.path)),false);
+                // One notice per event: a failure, a finished file, a new file.
+                const QString error=state.value("error").toString(),note=state.value("note").toString();
+                if(live.failed&&!error.isEmpty()&&error!=previous.value("error").toString())emit notice(error,true);
+                if(live.saved!=impl_->recordingSaved){
+                    impl_->recordingSaved=live.saved;
+                    emit notice(note.isEmpty()?tr("录制已保存：%1").arg(state.value("path").toString())
+                                              :tr("录制已保存：%1（%2）").arg(state.value("path").toString(),note),false);
+                }else if(live.active&&!note.isEmpty()&&note!=previous.value("note").toString())emit notice(note,false);
             }
         }
   // Custom: a display change re-applies that device's HDR curve. The id check is
@@ -6781,9 +6792,9 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"networkPrebuffer", {-1, 60}},
         // Live recording: the target bitrate for the file, and the frame rate
         // cap (0 keeps the presented rate).
-        {"recordBitrateMbps", {1, 400}},
+        {"recordBitrateMbps", {0, 400}},
         {"recordFps", {0, 240}}};
-    static const QStringList flags{"recordHevc", "subtitleEnabled", "subtitleBackground", "subtitleFit",
+    static const QStringList flags{"recordHevc", "recordAudio", "subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
     QVariant stored;
@@ -7247,9 +7258,11 @@ QString QmlPlayerBridge::recordingDirectory() const {
     const QString videos = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
     return QDir(videos.isEmpty() ? QDir::homePath() : videos).filePath(QStringLiteral("Veyra"));
 }
-int QmlPlayerBridge::recordingBitrateMbps() const { return std::clamp(impl_->prefInt("recordBitrateMbps", 20), 1, 400); }
-int QmlPlayerBridge::recordingFpsLimit() const { return impl_->prefInt("recordFps", 0); }
+// 0 = automatic from the picture size and frame rate (LiveRecorder).
+int QmlPlayerBridge::recordingBitrateMbps() const { return std::clamp(impl_->prefInt("recordBitrateMbps", 0), 0, 400); }
+int QmlPlayerBridge::recordingFpsLimit() const { return std::clamp(impl_->prefInt("recordFps", 0), 0, 240); }
 bool QmlPlayerBridge::recordingHevc() const { return impl_->prefBool("recordHevc", false); }
+bool QmlPlayerBridge::recordingAudio() const { return impl_->prefBool("recordAudio", true); }
 bool QmlPlayerBridge::recording() const { return impl_->recordingState.value("active").toBool(); }
 QVariantMap QmlPlayerBridge::recordingState() const { return impl_->recordingState; }
 
@@ -7261,11 +7274,19 @@ void QmlPlayerBridge::startRecording() {
     options.bitrateMbps = uint32_t(recordingBitrateMbps());
     options.hevc = recordingHevc();
     options.fpsLimit = uint32_t(std::max(0, recordingFpsLimit()));
-    impl_->engine.requestRecording(options);
+    options.audio = recordingAudio();
+    std::wstring error;
+    if (!impl_->engine.requestRecording(options, error)) { emit notice(uiText(error), true); return; }
+    // Shown at once; the poll fills in the file and the counters.
+    impl_->recordingState["active"] = true;
+    impl_->recordingState["failed"] = false;
+    emit recordingChanged();
 }
 void QmlPlayerBridge::stopRecording() {
     if (!recording()) return;
     impl_->engine.stopRecording();
+    impl_->recordingState["active"] = false;
+    emit recordingChanged();
 }
 void QmlPlayerBridge::toggleRecording() { if (recording()) stopRecording(); else startRecording(); }
 void QmlPlayerBridge::chooseRecordingDirectory() {
