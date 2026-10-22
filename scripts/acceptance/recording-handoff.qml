@@ -3,6 +3,7 @@
 // the file, and print what the recorder reported. Config is JSON:
 //   {dir, seconds, audio, fps, bitrate, hevc, effects:{...}, actions:[{at, do}]}
 import QtQuick
+import QtQuick.Window
 Item {
     id: test
     property string config: "{}"
@@ -18,6 +19,23 @@ Item {
         const s = veyra.recordingState || {}
         return { active: veyra.recording, frames: s.frames, dropped: s.dropped, seconds: s.seconds, files: s.files,
                  path: s.path, encoder: s.encoder, audio: s.audio, failed: s.failed, error: s.error, note: s.note, finishing: s.finishing }
+    }
+    function findControl(item, name) {
+        if (item.objectName === name) return item
+        for (const child of item.children || []) {
+            const found = findControl(child, name)
+            if (found) return found
+        }
+        return null
+    }
+    function control(name) { return findControl(test.Window.window.contentItem, name) }
+    function clickRecord() {
+        const mouse = control("pro-record-mouse")
+        if (!mouse || !mouse.enabled) { fail("record control unavailable"); return false }
+        // Invoke the production MouseArea signal. This checks the real handler
+        // and timer, not native hit-testing or physical pointer coordinates.
+        mouse.clicked(null)
+        return true
     }
     function act(name) {
         out("ACTION", name)
@@ -53,17 +71,33 @@ Item {
                 veyra.colorEnabled = !!fx.colour
                 if (fx.sr) { veyra.srTargetIndex = fx.srTarget || 2; veyra.srEnabled = true }
                 if (fx.fg) { veyra.fgMultiplier = fx.fg; veyra.fgEnabled = true } else veyra.fgEnabled = false
-                veyra.setPreference("recordDir", test.cfg.dir)
-                veyra.setPreference("recordAudio", test.cfg.audio !== false)
-                veyra.setPreference("recordFps", test.cfg.fps || 0)
-                veyra.setPreference("recordBitrateMbps", test.cfg.bitrate || 0)
-                veyra.setPreference("recordHevc", !!test.cfg.hevc)
+                if (!test.cfg.noRecord) {
+                    if (!test.cfg.expectFailure && !veyra.setPreference("recordDir", test.cfg.dir)) { test.fail("recordDir rejected"); return }
+                    if (test.cfg.expectFailure && veyra.recordingDirectory !== test.cfg.dir) { test.fail("invalid-directory profile not loaded"); return }
+                    veyra.setPreference("recordAudio", test.cfg.audio !== false)
+                    veyra.setPreference("recordFps", test.cfg.fps || 0)
+                    veyra.setPreference("recordBitrateMbps", test.cfg.bitrate || 0)
+                    veyra.setPreference("recordHevc", !!test.cfg.hevc)
+                }
                 test.mark = test.ticks; test.step = 1
             } else if (test.step === 1) {
                 // Let the effect settings apply before the file opens.
                 if (test.ticks - test.mark < (test.cfg.settle || 30)) return
                 if (test.cfg.noRecord) { test.mark = test.ticks; test.step = 5; return }
+                if (test.cfg.useButton) {
+                    if (!test.clickRecord()) return
+                    if (test.control("pro-record-control").countdown !== 3) { test.fail("countdown did not start"); return }
+                    test.mark = test.ticks; test.step = 6; return
+                }
                 veyra.startRecording()
+                test.mark = test.ticks; test.step = 2
+            } else if (test.step === 6) {
+                if (test.ticks - test.mark < 12) return
+                if (test.control("pro-record-control").countdown !== 2) { test.fail("countdown did not tick"); return }
+                test.clickRecord()
+                if (test.control("pro-record-control").countdown !== 0 || veyra.recording) { test.fail("countdown cancellation failed"); return }
+                test.out("BUTTON_CANCELLED", test.stateJson())
+                test.clickRecord()
                 test.mark = test.ticks; test.step = 2
             } else if (test.step === 2) {
                 const s = veyra.recordingState || {}
@@ -79,7 +113,7 @@ Item {
                 if (!veyra.recording && test.cfg.expectStop !== true) { test.fail("recording stopped early: " + JSON.stringify(test.stateJson())); return }
                 if (elapsed < test.cfg.seconds && veyra.recording) return
                 test.out("BEFORE_STOP", test.stateJson())
-                if (veyra.recording) veyra.stopRecording()
+                if (veyra.recording) { if (test.cfg.useButton) test.clickRecord(); else veyra.stopRecording() }
                 test.mark = test.ticks; test.step = 4
             } else if (test.step === 5) {
                 const elapsed = (test.ticks - test.mark) / 10

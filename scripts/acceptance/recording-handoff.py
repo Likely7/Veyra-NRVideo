@@ -1,4 +1,4 @@
-"""Live recording acceptance on this PC (claude/screen-recording-20261022).
+"""Real-player recording acceptance for the Claude handoff branch.
 
 The app is a hard-linked copy of the released 2.1.0 NVIDIA package with this
 branch's veyra_qml_ui.exe and QML copied over (copies replace links; nothing is
@@ -6,8 +6,8 @@ written through a link). A sync clip (white box + 1 kHz beep at every second)
 is played; the recording is checked for tracks, length, A/V offset (flash vs
 beep onset) and frame cadence.
 
-usage: py -3.11 -X utf8 -I recording_test.py CASE [--media sync|4k] [--keep]
-cases: basic settings resize pause fg mf amd source-check
+usage: python -X utf8 -B -I scripts/acceptance/recording-handoff.py CASE [--media sync|4k]
+cases: see CASES below; resize/released-resize are DLSS SR diagnostics, not passing acceptance cases
 """
 from pathlib import Path
 import argparse, json, os, re, shutil, statistics, subprocess, sys, time
@@ -25,8 +25,11 @@ GTA4K = Path('E:/Ai/知识/小七姐/GTAVI_An_Extended_Look_4K_Native.mp4')
 
 CASES = {
     'basic': dict(seconds=12),
+    'real4k': dict(seconds=8),
+    'button': dict(seconds=8, useButton=True),
     'muted': dict(seconds=8, muted=True),
     'baseline': dict(seconds=12, noRecord=True),
+    'released-resize': dict(seconds=15, noRecord=True, released=True, actions=[{'at': 4, 'do': 'sr-on'}, {'at': 9, 'do': 'sr-off'}]),
     'resize-baseline': dict(seconds=15, noRecord=True, actions=[{'at': 4, 'do': 'sr-on'}, {'at': 9, 'do': 'sr-off'}]),
     'resize-fsr': dict(seconds=15, fsr=True, actions=[{'at': 4, 'do': 'sr-on'}, {'at': 9, 'do': 'sr-off'}]),
     'rapid': dict(seconds=1, repeats=5),
@@ -55,12 +58,13 @@ def replace(path, data):
     path.write_bytes(data)
 
 
-def make_app():
+def make_app(released=False):
     if not APP.exists():
         for src in PKG.rglob('*'):
             dst = APP / src.relative_to(PKG)
             if src.is_dir(): dst.mkdir(parents=True, exist_ok=True)
             else: dst.parent.mkdir(parents=True, exist_ok=True); os.link(src, dst)
+    if released: return
     replace(APP / 'veyra_qml_ui.exe', (BUILD / 'veyra_qml_ui.exe').read_bytes())
     for src in (ROOT / 'qml/Veyra').rglob('*'):
         if src.is_file(): replace(APP / 'qml/Veyra' / src.relative_to(ROOT / 'qml/Veyra'), src.read_bytes())
@@ -152,7 +156,9 @@ def main():
     case = CASES[a.case]
     running = [l for l in subprocess.check_output(['tasklist', '/fo', 'csv', '/nh'], text=True, encoding='mbcs', errors='replace').splitlines() if l.lower().startswith('"veyra')]
     assert not running, 'another Veyra process is running: ' + repr(running)
-    make_app()
+    global APP
+    if case.get("released"): APP = APP.with_name(APP.name + "-released")
+    make_app(case.get("released", False))
     media = make_sync_clip() if a.media == 'sync' else GTA4K
     if a.case == 'long':
         extended = MEDIA / 'sync1080p60-wideflash-120s.mp4'
@@ -166,12 +172,13 @@ def main():
     profile = B / 'tests' / T / 'profiles' / (a.case + '-' + stamp); profile.mkdir(parents=True)
     prefs = dict(language='zh-CN', autoResume=False, prewarmEnhancement=False)
     prefs.update(case.get('prefs', {}))
+    if case.get('expectFailure'): prefs['recordDir'] = str(rec_dir/'not-a-directory')
     (profile / 'qml-preferences.v1.json').write_text(json.dumps(prefs), 'utf8')
     cfg = dict(case); cfg.pop('env', None); cfg.pop('prefs', None); cfg['dir'] = str(rec_dir)
     if a.case == 'bad-directory':
         blocked = rec_dir / 'not-a-directory'; blocked.write_text('intentional test file', 'utf8'); cfg['dir'] = str(blocked)
     main_qml = APP / 'qml/Veyra/Main.qml'
-    source = (ROOT / 'qml/Veyra/Main.qml').read_text('utf8')
+    source = ((PKG if case.get('released') else ROOT) / 'qml/Veyra/Main.qml').read_text('utf8')
     at = source.rfind('}')
     loader = '\nLoader { source: ' + json.dumps((HERE / 'recording-handoff.qml').as_uri()) + '; onLoaded: item.config = ' + json.dumps(json.dumps(cfg)) + ' }\n'
     replace(main_qml, (source[:at] + loader + source[at:]).encode('utf8'))
@@ -193,18 +200,28 @@ def main():
                   files=[analyze(f, f.name) for f in files])
     (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=1), 'utf8')
     print(json.dumps({k: v for k,v in report.items() if k != 'recorder'}, ensure_ascii=False, indent=1)[:6000])
-    assert rc == 0 and 'RECTEST FAIL' not in console and any('RECTEST FINAL' in l for l in lines), out
-    if not case.get('noRecord') and not case.get('expectFailure'):
-        assert report['files'] and all(f['frames'] > 0 for f in report['files']), out
-        if case.get('audio', True): assert all(f['audio'] == 'aac' for f in report['files']), out
-        if a.case in ('basic', 'long', 'hevc', 'limited', 'mf', 'amd', 'muted'):
-            for f in report['files']:
-                offset = f['av_offset_ms']['median']
-                assert offset is not None and abs(offset) <= 50, ('A/V gate', offset, out)
-        assert not any('failed=true' in l or '\"failed\":true' in l for l in lines), out
-    errors = [l for l in engine.splitlines() if '[ERROR]' in l and '[qml] Retrying to obtain clipboard.' not in l]
-    assert '[engine-hang]' not in engine and not errors, ('engine error', errors[:3], out)
-    if a.case in ('resize', 'resize-fsr'): assert len(report['files']) >= 3, ('resize did not create new segments', out)
+    try:
+        assert rc == 0 and 'RECTEST FAIL' not in console and any('RECTEST FINAL' in l for l in lines), out
+        if case.get('expectFailure'):
+            assert not report['files'] and not any('RECTEST STARTED' in l for l in lines) and any('RECTEST notice true' in l for l in lines), out
+        if not case.get('noRecord') and not case.get('expectFailure'):
+            assert report['files'] and all(f['frames'] > 0 for f in report['files']), out
+            if case.get('audio', True): assert all(f['audio'] == 'aac' for f in report['files']), out
+            if a.case in ('basic', 'long', 'hevc', 'limited', 'mf', 'amd', 'muted'):
+                for f in report['files']:
+                    offset = f['av_offset_ms']['median']
+                    assert offset is not None and max(abs(f['av_offset_ms']['min']), abs(f['av_offset_ms']['max'])) <= 50, ('A/V gate', f['av_offset_ms'], out)
+            assert not any('failed=true' in l or '\"failed\":true' in l for l in lines), out
+        errors = [l for l in engine.splitlines() if '[ERROR]' in l and '[qml] Retrying to obtain clipboard.' not in l]
+        assert '[engine-hang]' not in engine and not errors, ('engine error', errors[:3], out)
+        if a.case in ('resize', 'resize-fsr'): assert len(report['files']) >= 3, ('resize did not create new segments', out)
+        if a.case == 'real4k': assert all(f['width']==3840 and f['height']==2160 for f in report['files']), out
+    except BaseException:
+        report['passed'] = False
+        (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=1), 'utf8')
+        raise
+    report['passed'] = True
+    (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=1), 'utf8')
     print('LOG', out)
 
 

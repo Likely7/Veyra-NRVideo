@@ -9863,3 +9863,18 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 用户提供“群聊：Veyra Dlss5 交流 7.png”并要求替换 GitHub 已满群二维码。从最新 nrvideo/main 7ec143c 在 codex/community-qr7-20261020 修改；原图原样复制 docs/images/community/group-7-20261020.png，SHA256 1cf67beb48815bd53999bf17252e74de4bb617c6c47846252ff89a0e417ade84。中英 README、RELEASE_SUPPORT 和 2.1.0 更新说明同步新图、7群标记及图片注明的 2026-10-27 前有效期。微信赞助图、width220、Discord、Ko-fi、知识库和其他内容保留。
 
 工具命令：git fetch nrvideo main；bundled Python -X utf8 -B E:/项目/Veyra/tmp/community-qr7-20261020/update.py；git diff --check。Release v2.1.0 / v2.1.0-sources 修改前完整 JSON 与精确替换后的正文保存在 E:/项目/Veyra/reports/community-qr7-20261020；提交后普通 push HEAD:main，再 gh release edit --notes-file 更新两页正文。只改群信息，不重建/打包、不移动发布标签、不修改资产；远端正文、图片实际字节、赞助链接及资产身份的核验结果记该目录 final.json。
+
+
+## 2026-10-21 Claude 中断任务接手（Codex；目录沿用20261022标识）
+
+用户要求读取Claude两条对话后“把后续工作接上，然后完成他”，后明确“Lecram，先放着，不弄了”。复用E盘screen-recording-fix-20261022，切codex/claude-handoff-20261022。原20个未提交文件SHA/patch/ZIP在archives/codex-claude-handoff-20261022；检查点5614e8d及标签保存未经验证的原实现；AMD修复1b94bae移入88dbc26。旧桌面/其他树/真实配置/运行库/驱动不改，无子Agent/main合并/push/发布。
+
+20a30a6补录制队列字节数发布竞态、record/submitted间停止、GPU在途资源保活、音轨跨线程状态、分段上限、MF启动/收尾等待与退出时工作线程保活，保存中禁用按钮及取消失源倒计时，补36条三语言翻译。保留Claude呈现端捕获与工作线程编码/封装，NVENC不回读像素；MF仍为工作线程NV12回读，不称零拷贝。Lecram只保留已读取资料，后续不继续。
+
+命令：python -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-claude-handoff-20261022 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.0-rec veyra_qml_ui veyra_qml_quick_tests veyra_ui_contract_tests veyra_ui_i18n_tests veyra_repair_contract_tests（-j2，最终增量2秒）；scripts/i18n/extract.py --check（2659条零缺译/占位符问题）；scripts/acceptance/amd-sr-handoff.py after（真实核显开4K、关1080）；scripts/acceptance/recording-handoff.py的long/button/settings/resize-fsr/pause/fg/mf/amd/limited/hevc/silent/muted/rapid/stop/bad-directory/real4k --media 4k等独立真实进程测试。日志、独立profile、输出全部E:/项目/Veyra/{logs,tests,tmp,reports}/codex-claude-handoff-20261022；复用构建E:/项目/Veyra/build/claude-screen-recording-20261022。
+
+实际回归：Repair272 checks0fail，UI contract通过，UI i18n0fail，QtQuick105pass0fail，最后regression-204301。约62秒实录3702帧，AAC+H264，闪光/蜂鸣61组，偏移中位-1.3ms（-2.4至-0.2ms）；真实4K素材录3840x2160/248帧、有AAC；按钮倒计时/取消/再开始/停止用真实MouseArea信号验证（不冒充原生鼠标坐标测试）。生成帧录制/暂停/分段/连续启停/错误路径详情和失败证据见docs/CLAUDE_HANDOFF_REPORT_2026-10-22.md。
+
+失败真实保留：DLSS SR CreateFeature在新缓存/无预热环境卡住，录制与不录制均复现，未改2.1.0 EXE也复现（rec-released-resize-204431，PTX JIT堆栈）；不能宣称DLSS初始化已修好或永久死锁。首版限帧夹具单帧闪光被抽帧错过，改50ms后通过；首版错误目录夹具忽略setPreference拒绝，实际默认录制文件已精确移回E盘测试目录，原报告标失败，修正为无效私有profile后验证明确拒绝且无输出。仅忽略Qt剪贴板重试这一条无关日志。未做真实采集/主机串流/HDR/其他GPU/长期/光学延迟验收。
+
+本地包按scripts/acceptance/package-recording-handoff.py --zip生成，原2.1.0双GPU供体运行组件/模型/着色器原样SHA审计；准确包/ZIP哈希、源码提交及冷启动回执保存在reports/codex-claude-handoff-20261022。产物目录test-packages/codex-claude-handoff-20261022；正式版本与Release不动。

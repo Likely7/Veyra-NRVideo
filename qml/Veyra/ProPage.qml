@@ -672,6 +672,7 @@ VPage {
                 }
                 MouseArea {
                     id: recordMouse
+                    objectName: "pro-record-mouse"
                     anchors.fill: parent
                     enabled: veyra.hasSource && !recordControl.saving
                     hoverEnabled: true
