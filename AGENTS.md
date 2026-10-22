@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-21 #67 修复授权（Codex）**：用户暂停Lecram，要求修复issue67。按docs/ISSUE67_NVAPI_SHUTDOWN_PLAN_2026-10-21.md在codex/issue67-nvapi-shutdown-20261021隔离修复NR/NVAPI模块生命周期与关闭诊断，允许必要ngx/graph/CMake/测试接点，覆盖这些旧冻结；保留正常资源释放/UI频率和其他任务。产物全E盘，构建-j2≤900秒/单测≤300秒；不合main/push/发布/评论/关机，不派Agent，无3090实卡不称已验。
+
 > **2026-10-19 2.1.0 正式发布（Codex）**：用户已实测并批准 `test-packages/bilibili-2.1.0-20261019` 两包原样发布，禁止重新构建/打包。按 docs/RELEASE_2.1.0_PLAN_2026-10-19.md 整理2.0.9以来全部合入内容、替换用户新6群二维码、更新README/Release，主Release只放两个GPU包，源码另页；允许main普通快进/push/新标签及发布。Lecram两个实验分支暂停保留，不入本版。公告只拟稿，不代发、不关机、不派Agent、不改运行文件/驱动/真实配置；产物全E盘。
 
 > **2026-10-19 2.1.0 整合与测试包（Claude）**：用户要求“之前的所有修复，包括 Codex 那边的都一起合并到 Main，然后打包 2.1.0 测试包”，并审查 Codex 的修复。在 `claude/release-2.1.0-20261019`（main 1dc8c18）合并 fullscreen-input（含 AMD NR 0.44）、#48、美颜（含 E0/AA）与赞助页，版本 2.1.0；先存档 `checkpoint/pre-release-2.1.0-20261019` 与 `archives/claude-release-2.1.0-20261019`。允许本地 main 快进、以 2.0.9-test 两包为底打 NVIDIA/AMD 2.1.0-test 包（美颜两模型按名称+哈希放行、AMD 换 0.44 运行库）。记录见 docs/BUILD_2.1.0_TEST.md 与 docs/RELEASE_2.1.0_TEST_2026-10-19.md。不改运行库/模型字节、驱动或用户配置；无 push/Release/上传/子 Agent。

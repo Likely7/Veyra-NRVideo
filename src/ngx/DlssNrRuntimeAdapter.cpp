@@ -9,6 +9,7 @@
 #include "veyra/Log.h"
 #include "veyra/NgxResult.h"
 #include "veyra/ngx/NrArchitecturePolicy.h"
+#include "veyra/ngx/NvapiLifetime.h"
 
 namespace veyra::ngx {
 
@@ -197,7 +198,7 @@ bool ExchangeImport(void** slot, void* replacement, void*& previous)
 
 void ClearAmpereContext()
 {
-    if(g_ampere.nvapi)FreeLibrary(g_ampere.nvapi);
+    // Borrowed from processNvapi(); only the compatibility state is per graph.
     g_ampere.nvapi=nullptr;g_ampere.query=nullptr;g_ampere.getArch=nullptr;
     g_ampere.getProc=nullptr;g_ampere.count=0;
 }
@@ -423,6 +424,12 @@ bool DlssNrRuntimeAdapter::load(const std::wstring& runtimeDir, Status& status)
         return false;
     }
 
+    // Also covers SF builds that bypass installAmpereCompatibility. A retained
+    // module prevents a runtime's own FreeLibrary from causing driver detach.
+    if (!processNvapi()) {
+        status = Status::LoadLibraryFailure;
+        return false;
+    }
     module_ = LoadLibraryExW(dllPath_.c_str(), nullptr,
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (module_ == nullptr) {
@@ -568,10 +575,7 @@ bool DlssNrRuntimeAdapter::installAmpereCompatibility(ID3D12Device* device, Stat
         return true;
     }
     auto fail=[&](const char* reason){veyra::log::error("nr-ampere",reason);ClearAmpereContext();status=Status::DeviceFailure;return false;};
-    wchar_t system[MAX_PATH]{};
-    if(!GetSystemDirectoryW(system,MAX_PATH))return fail("system directory lookup failed");
-    const std::wstring path=std::wstring(system)+L"\\nvapi64.dll";
-    g_ampere.nvapi=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    g_ampere.nvapi=processNvapi();
     if(!g_ampere.nvapi)return fail("system NVAPI unavailable");
     g_ampere.query=reinterpret_cast<QueryNvApi>(GetProcAddress(g_ampere.nvapi,"nvapi_QueryInterface"));
     if(!g_ampere.query)return fail("NVAPI query entry missing");
@@ -633,6 +637,8 @@ bool DlssNrRuntimeAdapter::verifyAmpereCompatibilityForTest()
 
 void DlssNrRuntimeAdapter::unload()
 {
+    const bool wasLoaded = module_ != nullptr;
+    if (wasLoaded) veyra::log::info("ngx", "nr-adapter: unload begin");
     const bool hadAmpere=archLookupSlot_!=nullptr;
     if(hadAmpere){
         void* previous=nullptr;
@@ -651,6 +657,7 @@ void DlssNrRuntimeAdapter::unload()
     }
     if(hadAmpere)ClearAmpereContext();
     exports_ = Exports{};
+    if (wasLoaded) veyra::log::info("ngx", "nr-adapter: unload complete (system NVAPI retained)");
 }
 
 } // namespace veyra::ngx

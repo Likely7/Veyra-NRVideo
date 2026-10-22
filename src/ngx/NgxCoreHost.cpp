@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <format>
+#include <chrono>
 
 #include "veyra/Log.h"
 #include "veyra/NgxResult.h"
@@ -155,10 +156,13 @@ void NgxCoreHost::shutdown()
         { uint32_t seh = 0; (void)CallDestroyParameters(block, seh); }
     }
 
+    veyra::log::info("ngx", "core-host: Shutdown1 begin");
+    const auto started = std::chrono::steady_clock::now();
     uint32_t sehCode = 0;
     const NVSDK_NGX_Result result = CallShutdown1(device_, sehCode);
-    veyra::log::info("ngx", std::format("core-host: Shutdown1 result={} seh={}",
-        veyra::ngxResultString(static_cast<uint64_t>(result)), sehCode));
+    veyra::log::info("ngx", std::format("core-host: Shutdown1 result={} seh={} elapsedMs={:.3f}",
+        veyra::ngxResultString(static_cast<uint64_t>(result)), sehCode,
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count()));
 
     device_ = nullptr;
     initialized_ = false;
