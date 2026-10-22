@@ -14,6 +14,7 @@ OUT = BASE / 'test-packages' / TASK
 REPORT = BASE / 'reports' / TASK
 parser = argparse.ArgumentParser()
 parser.add_argument('--zip', action='store_true')
+parser.add_argument('--seal-existing', action='store_true', help='Reuse this task staging after a failed sealing step')
 args = parser.parse_args()
 OUT.mkdir(parents=True, exist_ok=True)
 REPORT.mkdir(parents=True, exist_ok=True)
@@ -52,14 +53,19 @@ receipts = []
 for vendor in ('NVIDIA', 'AMD'):
     donor = BASE / 'test-packages/bilibili-2.1.0-20261019' / f'Veyra-2.1.0-test-{vendor}-win64-portable'
     package = OUT / f'Veyra-2.1.0-rec2-{vendor}-win64-portable'
-    assert donor.is_dir() and not package.exists(), package
-    for source in donor.rglob('*'):
-        target = package / source.relative_to(donor)
-        if source.is_dir():
-            target.mkdir(parents=True, exist_ok=True)
-        elif source.is_file():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            os.link(source, target)
+    assert donor.is_dir(), donor
+    if package.exists():
+        assert args.seal_existing, package
+        staged = json.loads((package/'package-manifest.json').read_text('utf8'))
+        assert staged['candidate']=='2.1.0-rec2-local' and staged['exeSha256']==sha(BUILD/'veyra_qml_ui.exe')
+    else:
+        for source in donor.rglob('*'):
+            target = package / source.relative_to(donor)
+            if source.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+            elif source.is_file():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                os.link(source, target)
     replace(package / 'veyra_qml_ui.exe', (BUILD / 'veyra_qml_ui.exe').read_bytes())
     for folder in ('qml', 'i18n'):
         for source in (ROOT / folder).rglob('*'):
@@ -90,7 +96,8 @@ for vendor in ('NVIDIA', 'AMD'):
     result = dict(vendor=vendor, package=str(package), source=head, exeSha256=manifest['exeSha256'],
                   files=len(files), unchangedRuntimeModelShaderFiles=len(unchanged))
     if args.zip:
-        archive = package.with_suffix('.zip')
+        # Version dots are part of the directory name, not a file suffix.
+        archive = Path(str(package) + '.zip')
         assert not archive.exists(), archive
         with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=1) as z:
             for p in package.rglob('*'):
