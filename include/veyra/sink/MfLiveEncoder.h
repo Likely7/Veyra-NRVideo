@@ -1,6 +1,6 @@
 #pragma once
 // Media Foundation hardware MFT for the live recorder (AMD and Intel
-// adapters, and NVIDIA when NVENC refuses a session): system-memory NV12 in,
+// adapters, and the explicit NVIDIA diagnostic override): system-memory NV12 in,
 // microsecond timestamps in and out, 8-bit 4:2:0 only. The vendor MFT
 // selection, rate control and event handling are the export encoder's
 // (MfVideoEncoder.cpp). One thread drives every call.

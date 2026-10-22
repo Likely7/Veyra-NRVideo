@@ -94,7 +94,8 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink {
     // Fixed at creation.
     ComPtr<ID3D12Device> device;
     uint32_t width=0,height=0,hdrMode=0,fps=60,bitrateMbps=20,vendor=0;
-    bool hevc=false,nvenc=false,audio=false;
+    bool hevc=false,nvenc=false;
+    std::atomic<bool> audio{false};
     std::wstring path;
 
     // Engine thread: conversion into the slots.
@@ -174,7 +175,14 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink {
         releaseMux();
     }
 
-    bool done() const {return encoderFinished.load()&&writerFinished.load();}
+    bool done() const {
+        if(!encoderFinished.load()||!writerFinished.load()||pending>=0)return false;
+        // An encoder failure may leave submitted capture commands in flight.
+        // Keep their textures alive without making the playback thread wait.
+        for(const auto& slot:slots)
+            if(slot.fence&&slot.fence->GetCompletedValue()<slot.value)return false;
+        return true;
+    }
     void join(){if(encoderThread.joinable())encoderThread.join();if(writerThread.joinable())writerThread.join();}
     std::wstring errorText() const {std::lock_guard lock(textMutex);return error;}
     std::wstring encoderText() const {std::lock_guard lock(textMutex);return encoderName;}
@@ -195,7 +203,10 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink {
     void finish(int64_t endClockUs){
         const int64_t t0=t0Us.load();
         if(t0&&endUs.load()<0)endUs=std::max<int64_t>(0,endClockUs-t0);
-        closeJobs();
+        // UI stop can arrive between record() and submitted(). Keep the
+        // encoder alive until that command list is submitted or discarded.
+        closing=true;
+        if(pending<0)closeJobs();
     }
     bool matches(const PresentCapture::Frame& frame) const {
         return frame.width==width&&frame.height==height&&frame.hdrMode==hdrMode;
@@ -297,13 +308,15 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink {
         if(pending<0)return;
         auto& slot=slots[size_t(pending)];pending=-1;
         slot.fence=fence;slot.value=value;slot.state=2;
-        {std::lock_guard lock(jobMutex);jobs.push_back(unsigned(&slot-slots.data()));}
+        {std::lock_guard lock(jobMutex);if(!encoderFinished.load())jobs.push_back(unsigned(&slot-slots.data()));}
         jobCv.notify_one();
         ++frames;
+        if(closing.load())closeJobs();
     }
     void discardPending(){
         if(pending<0)return;
         slots[size_t(pending)].state=0;pending=-1;
+        if(closing.load())closeJobs();
     }
     void releaseSlot(unsigned index){slots[index].fence.Reset();slots[index].state=0;}
 
@@ -316,14 +329,16 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink {
     }
     void pushVideo(std::vector<uint8_t> data,int64_t ptsUs,bool key){
         const size_t size=data.size();
-        {std::lock_guard lock(outMutex);videoPackets.push_back({std::move(data),ptsUs,key});}
-        backlogBytes+=size;
+        // Publish the size before the writer can take the packet. Otherwise
+        // it can subtract first, underflow size_t and stop a healthy recording.
+        {std::lock_guard lock(outMutex);videoPackets.push_back({std::move(data),ptsUs,key});backlogBytes+=size;}
         outCv.notify_one();
     }
     void encoderMain(){
         if(nvenc)encodeNvenc();else encodeMediaFoundation();
         encoderReady=false;closing=true;
-        for(unsigned i=0;i<kSlots;++i)if(slots[i].state.load()==2)releaseSlot(i);
+        // Failed inputs may still be used by the presentation queue. Leave
+        // their fence references for done() to check before releasing memory.
         {std::lock_guard lock(outMutex);encoderDone=true;}
         outCv.notify_all();
         encoderFinished=true;
@@ -468,7 +483,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink {
         if(rc<0){fail(L"无法写入录制文件头："+avError(rc));return false;}
         headerWritten=true;
         veyra::log::info("live-recorder",std::format("file open path={} extent={}x{} codec={} hdr={} fps={} bitrateMbps={} audio={}",
-            utf8(path),width,height,hevc?"HEVC":"H264",hdrMode,fps,bitrateMbps,audio));
+            utf8(path),width,height,hevc?"HEVC":"H264",hdrMode,fps,bitrateMbps,audio.load()));
         return true;
     }
     bool openAudio(){
@@ -673,7 +688,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink {
                 setNote(L"没有录到画面，未保存文件");
             }
             veyra::log::info("live-recorder",std::format("file closed path={} videoFrames={} seconds={:.2f} audio={} audioGaps={} audioOverflow={} dropped={} ok={}",
-                utf8(path),videoWritten.load(),double(end)/1e6,audio,audioGaps.load(),audioOverflow.load(),dropped.load(),ok));
+                utf8(path),videoWritten.load(),double(end)/1e6,audio.load(),audioGaps.load(),audioOverflow.load(),dropped.load(),ok));
         }
         releaseMux();
         writerFinished=true;
@@ -735,6 +750,7 @@ bool LiveRecorder::start(const RecordingSettings& settings,std::wstring& error){
     std::lock_guard lock(s.m);
     s.reap();
     if(s.armed){error=L"录制已在进行中";return false;}
+    if(!s.finishing.empty()){error=L"上一段录制仍在保存，请稍后再试";return false;}
     if(settings.directory.empty()){error=L"未设置录制保存位置";return false;}
     std::error_code code;
     std::filesystem::create_directories(settings.directory,code);
@@ -801,7 +817,10 @@ void LiveRecorder::waitIdle(uint32_t timeoutMs){
                     veyra::log::error("live-recorder",std::format("segment not finished at exit path={}",utf8(segment->path)));
                     if(segment->encoderThread.joinable())segment->encoderThread.detach();
                     if(segment->writerThread.joinable())segment->writerThread.detach();
-                    static std::vector<std::shared_ptr<Segment>> abandoned;abandoned.push_back(segment);
+                    // Intentionally process-lifetime storage: a static vector
+                    // destructor could free a Segment under its detached worker.
+                    static auto* abandoned=new std::vector<std::shared_ptr<Segment>>;
+                    abandoned->push_back(segment);
                 }
                 s_->finishing.clear();
                 return;
@@ -825,6 +844,11 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
         s.nextDueUs=(s.nextDueUs&&now-s.nextDueUs<interval)?s.nextDueUs+interval:now+interval;
     }
     if(s.current&&!s.current->matches(frame)){
+        s.reap();
+        if(s.finishing.size()>=2){
+            s.armed=false;s.failed=true;s.error=L"录制文件仍在保存，已停止录制以避免积压";
+            s.retire(s.current,{});s.current.reset();return false;
+        }
         veyra::log::info("live-recorder",std::format("picture changed {}x{} hdr={} -> {}x{} hdr={}; continuing in a new file",
             s.current->width,s.current->height,s.current->hdrMode,frame.width,frame.height,frame.hdrMode));
         s.retire(s.current,L"画面尺寸或 HDR 模式变化，已接着写入新文件");s.current.reset();
@@ -863,7 +887,7 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
         if(segment->audio)sink::setRecordingAudioSink(segment);
         veyra::log::info("live-recorder",std::format("file {} path={} extent={}x{} hdr={} codec={} fps={} bitrateMbps={} encoder={} audio={}",
             s.files,utf8(segment->path),segment->width,segment->height,segment->hdrMode,segment->hevc?"HEVC":"H264",segment->fps,segment->bitrateMbps,
-            segment->nvenc?"NVENC":"MediaFoundation",segment->audio));
+            segment->nvenc?"NVENC":"MediaFoundation",segment->audio.load()));
     }
     if(!s.current->capture(list,frame,now))return false;
     if(!s.firstFrameUs)s.firstFrameUs=now;

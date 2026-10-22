@@ -673,6 +673,7 @@ VPage {
                 MouseArea {
                     id: recordMouse
                     anchors.fill: parent
+                    enabled: veyra.hasSource && !recordControl.saving
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
@@ -697,6 +698,7 @@ VPage {
                     interval: 1000
                     repeat: true
                     onTriggered: {
+                        if (!veyra.hasSource) { recordControl.countdown = 0; stop(); return }
                         recordControl.countdown -= 1
                         recordPop.restart()
                         if (recordControl.countdown <= 0) {

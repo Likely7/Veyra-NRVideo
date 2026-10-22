@@ -24,6 +24,7 @@
 #include <cmath>
 #include <format>
 #include <limits>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -74,7 +75,9 @@ std::string narrowUtf8(const std::wstring& w){
 }
 
 std::atomic<int> gMfSessions{0};
+std::mutex gMfLifecycleMutex;
 bool acquireMediaFoundation(){
+    std::lock_guard lock(gMfLifecycleMutex);
     if(gMfSessions.fetch_add(1)==0){
         const HRESULT hr=MFStartup(MF_VERSION,MFSTARTUP_LITE);
         if(FAILED(hr)){
@@ -85,7 +88,7 @@ bool acquireMediaFoundation(){
     }
     return true;
 }
-void releaseMediaFoundation(){if(gMfSessions.fetch_sub(1)==1)MFShutdown();}
+void releaseMediaFoundation(){std::lock_guard lock(gMfLifecycleMutex);if(gMfSessions.fetch_sub(1)==1)MFShutdown();}
 
 std::wstring attributeString(IMFAttributes* attributes,const GUID& key){
     LPWSTR raw=nullptr;UINT32 length=0;
@@ -476,7 +479,8 @@ bool MfVideoEncoder::waitEvents(){
         IMFMediaEvent* event=nullptr;
         const HRESULT hr=events_->GetEvent(MF_EVENT_FLAG_NO_WAIT,&event);
         if(hr==MF_E_NO_EVENTS_AVAILABLE){
-            if(GetTickCount64()-start>kWaitEventTimeoutMs){
+            if(GetTickCount64()-start>(liveTimestamps_?drainTimeoutMs_:kWaitEventTimeoutMs)){
+                error_=L"System encoder event wait timed out";
                 log::error("mf-encoder","timeout waiting for an encoder MFT event");
                 return false;
             }
@@ -762,7 +766,7 @@ bool MfVideoEncoder::finish(){
             return false;
         }
         if(!async_&&!haveOutput_)drainingDone_=true;
-        if(GetTickCount64()-start>kWaitEventTimeoutMs*2){
+        if(GetTickCount64()-start>(liveTimestamps_?drainTimeoutMs_*2:kWaitEventTimeoutMs*2)){
             log::error("mf-encoder",std::format("drain timeout submitted={}",submitted_));
             return false;
         }
