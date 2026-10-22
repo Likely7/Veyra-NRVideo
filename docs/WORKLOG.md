@@ -9878,3 +9878,6 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 失败真实保留：DLSS SR CreateFeature在新缓存/无预热环境卡住，录制与不录制均复现，未改2.1.0 EXE也复现（rec-released-resize-204431，PTX JIT堆栈）；不能宣称DLSS初始化已修好或永久死锁。首版限帧夹具单帧闪光被抽帧错过，改50ms后通过；首版错误目录夹具忽略setPreference拒绝，实际默认录制文件已精确移回E盘测试目录，原报告标失败，修正为无效私有profile后验证明确拒绝且无输出。仅忽略Qt剪贴板重试这一条无关日志。未做真实采集/主机串流/HDR/其他GPU/长期/光学延迟验收。
 
 本地包按scripts/acceptance/package-recording-handoff.py --zip生成，原2.1.0双GPU供体运行组件/模型/着色器原样SHA审计；准确包/ZIP哈希、源码提交及冷启动回执保存在reports/codex-claude-handoff-20261022。产物目录test-packages/codex-claude-handoff-20261022；正式版本与Release不动。
+
+
+收尾：产品源码26c7212。NVIDIA/AMD两ZIP698122675/501825845bytes、CRC/1736与2289文件SHA/177与246原样运行组件检查通过；GPU及--obs-game-capture明确软件UI的四次冷启动通过。final.json、packages.json、cold-start.json、source.json及DELIVERY.md保存准确路径/SHA/边界。verify-recording-handoff.py加入仓库供复现；源码26c7212.zip核验通过。封包Path.with_suffix导致名称截断已修正后重新封包，失败原件保留。自动审批拒绝清理任务自建解压副本和中间包（blocked by policy），未绕过，cleanup.json记录保留目录；原供体/源码/其他树不受影响。无main合并、push、发布。

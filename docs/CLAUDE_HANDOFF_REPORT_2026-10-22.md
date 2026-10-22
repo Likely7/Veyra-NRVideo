@@ -81,3 +81,8 @@ python -X utf8 -B -I scripts/acceptance/recording-handoff.py real4k --media 4k
 ## 本地测试包
 
 供体为已发布2.1.0 NVIDIA/AMD便携目录，原样运行库/模型/着色器逐文件验证，仅替换本轮程序、QML、翻译和说明。打包脚本 `scripts/acceptance/package-recording-handoff.py --zip`，产物 `E:/项目/Veyra/test-packages/codex-claude-handoff-20261022`，回执 `reports/codex-claude-handoff-20261022/packages.json`。包内仍显示 `2.1.0-rec`，外部 `rec2` 用来区分旧无声录制包；不是正式发布。
+
+
+最终封包：产品源码26c7212，NVIDIA清单1736文件、177项运行库/模型/着色器原样，ZIP698122675 bytes，SHA256 fa9f60a6926fb07db033f36ddfc72f60558ea5f298c470a27efdfef1514dc45f；AMD清单2289文件、246项原样，ZIP501825845 bytes，SHA256 f4f09c2ad6addeb2e8dea781876ba50fa391c6b7526f286502c2b661fd7e9e7f。ZIP CRC及解压后逐文件SHA全部通过。两包GPU冷启动和使用--obs-game-capture确认的软件UI冷启动均退出0、无产品QML错误；初次仅设置软件后端环境变量的启动另记为environment-only，不冒充软件UI确认。命令scripts/acceptance/verify-recording-handoff.py及其--software-existing补验，回执reports/codex-claude-handoff-20261022/cold-start.json。对应源码ZIP archives/codex-claude-handoff-20261022/Veyra-rec2-source-26c7212.zip已CRC核验，SHA256 1a5b9315bf6a1794dd67c7ce9e8b2d7348cf2363b42685e096c746469d4cfb29。
+
+首次封包脚本用Path.with_suffix误把版本号后半段当扩展名，两包ZIP名碰撞；修正为追加.zip并重新封包，失败中间包未交付。自动审批随后拒绝本轮解压副本/中间包清理命令，返回blocked by policy；没有改用其他途径删除，副本保留，记录reports/codex-claude-handoff-20261022/cleanup.json。最终测试包与原供体均不受影响。
