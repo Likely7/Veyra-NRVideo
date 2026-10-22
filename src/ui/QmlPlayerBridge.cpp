@@ -4892,7 +4892,7 @@ QVariantMap QmlPlayerBridge::hdrDisplayInfo()const{
         cached=gfx::PresentSink::queryDisplayPeak(window);cachedMonitor=monitor;
         cacheTimer.restart();
     }
-    return {{"valid",cached.valid},{"plausible",cached.valid},{"peakNits",int(cached.peakNits)},
+    return {{"valid",cached.valid},{"plausible",cached.plausible},{"peakNits",int(cached.peakNits)},
             {"fullFrameNits",int(cached.fullFrameNits)},{"minNits",cached.minNits}};
 }
 bool QmlPlayerBridge::hdrCurve()const{return settings().hdrCurve.enabled;}
