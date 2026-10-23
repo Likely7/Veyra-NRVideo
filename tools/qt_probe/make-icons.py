@@ -63,6 +63,7 @@ for name, svg in re.findall(r"^\s*(\w+):\s*'([^']*)'", body, re.M):
 # Inline SVGs the prototype writes into pages-a.js instead of icons.js: the 10-second
 # skip buttons and the filled play/pause glyphs of the .play button (drawn with fill).
 EXTRA = {
+    "rotatecw": '<path d="M20 7v5h-5M20 12a8 8 0 1 0-2.34 5.66"/>',
     "back10": '<path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/>',
     "fwd10": '<path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/>',
     "playfill": '<polygon points="7 4 20 12 7 20"/>',

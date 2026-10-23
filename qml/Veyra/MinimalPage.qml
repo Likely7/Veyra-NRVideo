@@ -174,7 +174,7 @@ VPage {
     function openSourceMenuForTest() { menuAnchor.x = width / 2; menuAnchor.y = pictureHeight / 2; sourceMenu.openAt(menuAnchor, "at") }
 
     // Report the film aspect upward so the window can snap to it.
-    onPictureHeightChanged: if (veyra.sourceAspect > 0.2) root.requestAspect(veyra.sourceAspect)
+    onPictureHeightChanged: if (veyra.previewAspect > 0.2) root.requestAspect(veyra.previewAspect)
     signal requestAspect(real aspect)
     signal requestFullscreen()
 }

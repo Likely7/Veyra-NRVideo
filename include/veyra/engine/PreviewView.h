@@ -11,10 +11,13 @@ struct PreviewView {
     // Container display rotation, clockwise. View centers live in the oriented
     // picture; processing/protection and estimated motion keep coded coordinates.
     int rotationDegrees=0;
+    // Session-local user offset; source DAR already includes container rotation.
+    unsigned userQuarterTurns=0;
     unsigned quarterTurns()const {
         const int angle=((rotationDegrees%360)+360)%360;
-        return angle%90==0?unsigned(angle/90):0;
+        return ((angle%90==0?unsigned(angle/90):0)+userQuarterTurns)%4;
     }
+    void rotateClockwise(){userQuarterTurns=(userQuarterTurns+1)%4;zoom=1;centerX=centerY=.5f;}
     std::pair<float,float> sourceUv(float u,float v)const {
         switch(quarterTurns()){
         case 1:return {v,1-u};case 2:return {1-u,1-v};case 3:return {1-v,u};default:return {u,v};
@@ -27,9 +30,10 @@ struct PreviewView {
     }
     bool operator==(const PreviewView&)const=default;
     double aspect(float iw,float ih)const{
-        if(mode==4)return 16.0/9;if(mode==5)return 4.0/3;if(mode==6)return 21.0/9;
+        const auto oriented=[this](double a){return userQuarterTurns&1?1/a:a;};
+        if(mode==4)return oriented(16.0/9);if(mode==5)return oriented(4.0/3);if(mode==6)return oriented(21.0/9);
         if(quarterTurns()&1)std::swap(iw,ih);
-        return mode!=1&&std::isfinite(displayAspect)&&displayAspect>0?displayAspect:ih>0?double(iw)/ih:0;
+        return mode!=1&&std::isfinite(displayAspect)&&displayAspect>0?oriented(displayAspect):ih>0?double(iw)/ih:0;
     }
     std::pair<float,float> renderedSize(float cw,float ch,float iw,float ih)const{
         if(cw<=0||ch<=0||iw<=0||ih<=0)return {0,0};

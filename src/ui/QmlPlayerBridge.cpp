@@ -1453,7 +1453,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const bool wasFullscreenUnsafe = impl_->snapshot.vramFullscreenUnsafe;
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
+        const auto oldSourceAspect=sourceAspect();
         if(impl_->poll()){emit settingsChanged();emitChainChanged();}
+        if(wasSession!=impl_->snapshot.sessionId||oldSourceAspect!=sourceAspect())emit compareChanged();
         // Live recording state: the recorder owns the files, this side shows them.
         {
             const auto live=impl_->engine.recordingSnapshot();
@@ -2947,7 +2949,7 @@ bool QmlPlayerBridge::gameMode() const { return impl_->gameModeSessionId != 0; }
 bool QmlPlayerBridge::passthroughActive() const { return impl_->passthroughShown; }
 bool QmlPlayerBridge::gameInputActive() const { return impl_->gameInputShown; }
 bool QmlPlayerBridge::gameScaledPreview() const {
-    return gameMode() && ui::gameViewportScaled(impl_->screenFillActive, impl_->aspectMode);
+    return gameMode() && (ui::gameViewportScaled(impl_->screenFillActive, impl_->aspectMode) || previewRotation()!=0);
 }
 QRectF QmlPlayerBridge::gameVideoRect() const { return impl_->gameVideoRect; }
 void QmlPlayerBridge::attachMainWindow(qulonglong nativeHandle) {
@@ -4759,6 +4761,16 @@ int QmlPlayerBridge::sourceWidth() const { return int(impl_->snapshot.sourceWidt
 int QmlPlayerBridge::sourceHeight() const { return int(impl_->snapshot.sourceHeight); }
 double QmlPlayerBridge::sourceFps() const { return impl_->snapshot.nominalSourceFps; }
 int QmlPlayerBridge::sourceRotation() const { return impl_->snapshot.sourceRotationDegrees; }
+int QmlPlayerBridge::previewRotation() const { return int(impl_->engine.previewView().userQuarterTurns)*90; }
+void QmlPlayerBridge::rotatePictureClockwise() {
+    if(!hasSource()||!impl_->engine.rotatePreviewClockwise(impl_->snapshot.sessionId))return;
+    // An in-progress protection selection uses the previous coordinate system.
+    beginProtectionDraw(QString());
+    tickSubtitles();
+    if(gameMode()){updateGameGeometry();updateGameMode();emit gameModeChanged();}
+    veyra::log::info("ui-rotation",std::format("session={} clockwise={}",impl_->snapshot.sessionId,previewRotation()));
+    emit compareChanged();
+}
 double QmlPlayerBridge::sourceAspect() const {
     const auto& s = impl_->snapshot;
     // A known DAR already includes SAR/rotation. With no DAR, rotate the coded
@@ -8529,13 +8541,13 @@ void QmlPlayerBridge::setPresentationFullscreen(bool value) {
 }
 double QmlPlayerBridge::previewAspect() const {
     const int mode=impl_->screenFillActive?2:impl_->aspectMode;
-    if(mode==4)return 16.0/9;if(mode==5)return 4.0/3;if(mode==6)return 21.0/9;
+    auto view=impl_->engine.previewView();
+    view.mode=mode;
+    view.rotationDegrees=impl_->snapshot.sourceRotationDegrees;
+    view.displayAspect=impl_->snapshot.sourceDisplayAspect;
     const auto e=impl_->snapshot.metrics.resolution.output;
-    if(mode==1&&e.height){
-        engine::PreviewView view;view.mode=1;view.rotationDegrees=impl_->snapshot.sourceRotationDegrees;
-        return view.aspect(float(e.width),float(e.height));
-    }
-    return sourceAspect();
+    if(mode==1&&e.height)return view.aspect(float(e.width),float(e.height));
+    return view.aspect(float(impl_->snapshot.sourceWidth),float(impl_->snapshot.sourceHeight));
 }
 void QmlPlayerBridge::setDisplaySync(int value) {
     if (value < 0 || value > 2 || int(impl_->presentation.display) == value) return;

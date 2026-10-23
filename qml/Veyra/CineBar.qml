@@ -57,7 +57,7 @@ Rectangle {
 
         // --- left: artwork + title (230px) ---------------------------
         RowLayout {
-            Layout.preferredWidth: 230; Layout.minimumWidth: 230; Layout.maximumWidth: 230
+            Layout.preferredWidth: 230; Layout.minimumWidth: 140; Layout.maximumWidth: 230
             Layout.fillHeight: true
             spacing: 10
             // The file's own cover art when it carries one (MP4 covr, MKV image
@@ -367,7 +367,7 @@ Rectangle {
 
         // --- right: preset, volume, fullscreen (230px) ---------------
         RowLayout {
-            Layout.preferredWidth: 250; Layout.minimumWidth: 250; Layout.maximumWidth: 250
+            Layout.preferredWidth: 284; Layout.minimumWidth: 284; Layout.maximumWidth: 284
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
             spacing: 6
 
@@ -397,6 +397,8 @@ Rectangle {
                     }
                 }
             }
+
+            RotateButton { objectName: "cine-rotate" }
 
             Item {
                 implicitWidth: 32; implicitHeight: 32

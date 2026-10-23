@@ -279,6 +279,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int sourceHeight READ sourceHeight NOTIFY snapshotChanged)
     Q_PROPERTY(double sourceFps READ sourceFps NOTIFY snapshotChanged)
     Q_PROPERTY(int sourceRotation READ sourceRotation NOTIFY snapshotChanged)
+    Q_PROPERTY(int previewRotation READ previewRotation NOTIFY compareChanged)
     // The film's display aspect, so the window can snap to it in cinema mode
     // exactly as the prototype's fitAspect() does. 0 when nothing is open.
     Q_PROPERTY(double sourceAspect READ sourceAspect NOTIFY snapshotChanged)
@@ -860,6 +861,8 @@ public:
     int sourceHeight() const;
     double sourceFps() const;
     int sourceRotation() const;
+    int previewRotation() const;
+    Q_INVOKABLE void rotatePictureClockwise();
     double sourceAspect() const;
     double previewAspect() const;
 

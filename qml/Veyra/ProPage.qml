@@ -919,6 +919,7 @@ VPage {
                 height: 34
                 spacing: 10
                 PlaybackRateButton { objectName: "pro-playback-rate" }
+                RotateButton { objectName: "pro-rotate" }
                 VTag {
                     objectName: "pro-fg-tag"
                     visible: veyra.hasSource

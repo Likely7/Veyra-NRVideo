@@ -9881,3 +9881,18 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 
 
 收尾：产品源码26c7212。NVIDIA/AMD两ZIP698122675/501825845bytes、CRC/1736与2289文件SHA/177与246原样运行组件检查通过；GPU及--obs-game-capture明确软件UI的四次冷启动通过。final.json、packages.json、cold-start.json、source.json及DELIVERY.md保存准确路径/SHA/边界。verify-recording-handoff.py加入仓库供复现；源码26c7212.zip核验通过。封包Path.with_suffix导致名称截断已修正后重新封包，失败原件保留。自动审批拒绝清理任务自建解压副本和中间包（blocked by policy），未绕过，cleanup.json记录保留目录；原供体/源码/其他树不受影响。无main合并、push、发布。
+
+
+## 2026-10-23 画面手动旋转（Codex）
+
+用户要求极简/专业模式加90°小按钮并适配UI。从上一轮4eee190干净E盘工作树切codex/picture-rotation-20261023，起点标签checkpoint/pre-picture-rotation-20261023；其它树和旧桌面不改，无Agent/main合并/push/发布。范围见docs/PICTURE_ROTATION_PLAN_2026-10-23.md，结果见docs/PICTURE_ROTATION_REPORT_2026-10-23.md。
+
+PreviewView会话级userQuarterTurns叠加容器角度，复用呈现/鼠标/字幕/XeSS旋转；新增共享RotateButton（极简/专业/全屏）、桥接动作和四语言。极简高度反馈改用旋转后比例，播放条左区可缩小；旋转重置缩放/平移和未完成选区，切源清零、模式/暂停/seek/全屏保留。旋转非原位的游戏预览沿用已有Scaled策略避免错位鼠标穿透。截图/录制/导出保持原方向，未改处理纹理。
+
+命令：build-recording-handoff.py --task codex-picture-rotation-20261023 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.0-rec（6目标，-j2，45.4s通过）；scripts/i18n/extract.py --check（2660，零缺译）；picture-rotation.py --prepare --contracts / --case wide / metadata / portrait --language zh-TW / wide --software --language en / record --language ja / wide --amd --scale 1.5 / wide --amd --software-decode --scale 1.5。输出全E:/项目/Veyra/{logs,tests,tmp,reports,test-packages,archives}/codex-picture-rotation-20261023，构建沿用同源build/claude-screen-recording-20261022，私有profile，不动真实配置/运行组件/模型/驱动。
+
+UI契约384既有布局+112新增方向/模式状态；repair272 checks0fail，i18n0fail，QtQuick109pass0fail；D3D12像素23例通过。真实横竖/元数据/软件界面/四语言、两按钮、暂停/seek/全屏往返/切源通过；日文旋转录制NVENC H264 1380帧正常收尾。原录制统计误读缺失nb_frames判失败，保留原report后以ffprobe -count_frames独立复核通过（recording-recheck.json）；首个FFmpeg rotate夹具未写矩阵也保留，修正为本机帮助的-display_rotation后通过。
+
+AMD150%硬解seek出现send_packet -22而自动回退软解，严格门槛判失败；未改动rec2原EXE/原QML同配置15秒对照复现（baseline-amd-065446），不归因旋转也不声称已修。明确软解的同卡150%旋转全回归通过（wide-amd-swdecode-zh-CN-065527）。其它GPU/真实采集/主机串流/HDR/跨屏/长期/游戏鼠标/光学延迟未验。无SDK/二进制新增Git。
+
+本地封包命令scripts/acceptance/package-picture-rotation.py；两GPU完整目录及ZIP、精确源码/SHA/清单以reports/.../packages.json为准。内部版本沿用2.1.0-rec，外部rot1，不覆盖原rec2供体。收尾逐文件核验和冷启动结果另追加回执。

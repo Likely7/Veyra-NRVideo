@@ -17482,6 +17482,13 @@
    "ja": "ページ切り替えバー"
   },
   {
+   "zh": "顺时针旋转 90°（已旋转 %1°）",
+   "src": "qml/RotateButton.qml",
+   "zh-TW": "順時針旋轉 90°（已旋轉 %1°）",
+   "en": "Rotate 90° clockwise (rotated %1°)",
+   "ja": "時計回りに90°回転（%1°回転済み）"
+  },
+  {
    "zh": "须低于上限",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "須低於上限",

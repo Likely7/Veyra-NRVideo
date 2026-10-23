@@ -102,6 +102,28 @@ void outputRateContracts(){
 int wmain(int argc,wchar_t** argv){try{
     using namespace veyra;
     outputRateContracts();
+    // Manual turns compose with metadata, including an already-oriented DAR.
+    for(int metadata:{0,90,180,270})for(int mode=0;mode<=6;++mode){
+        engine::PreviewView v;v.rotationDegrees=metadata;v.mode=mode;
+        v.displayAspect=metadata%180?3.0/4:4.0/3;
+        const auto base=v;const auto aspect=v.aspect(1920,1080);
+        for(int n=1;n<=4;++n){
+            v.rotateClockwise();
+            require(v.quarterTurns()==unsigned((metadata/90+n)%4),"manual turn composes with metadata");
+            require(std::abs(v.aspect(1920,1080)-(n%2?1/aspect:aspect))<.00001,"all display ratios follow manual rotation");
+            const auto source=v.sourceUv(.23f,.71f);const auto display=v.displayUv(source.first,source.second);
+            require(std::abs(display.first-.23f)<.00001&&std::abs(display.second-.71f)<.00001,"manual rotation inverse preserves pointer coordinates");
+            const auto anchor=v.sourcePoint(133,91,320,240,1920,1080);
+            v.wheel(2,133,91,320,240,1920,1080);
+            const auto after=v.sourcePoint(133,91,320,240,1920,1080);
+            require(std::abs(anchor.first-after.first)<.00001&&std::abs(anchor.second-after.second)<.00001,"zoom remains anchored after rotation");
+            v.wheel(-2,133,91,320,240,1920,1080);
+        }
+        v.zoom=base.zoom;v.centerX=base.centerX;v.centerY=base.centerY;
+        require(v==base,"four manual turns restore original metadata and display transform");
+        v.zoom=3;v.centerX=.2f;v.rotateClockwise();
+        require(v.zoom==1&&v.centerX==.5f&&v.centerY==.5f,"rotation recentres a zoomed picture");
+    }
     {source::CaptureAudioClock c;require(c.observe({},100,10,false)==100,"untimed audio anchors to arrival");require(c.observe({},170,10,false)==110,"driver arrival jitter cannot stretch untimed PCM");require(c.observe(120,180,10,false)==120,"valid driver timestamp takes precedence");require(c.observe({},190,10,false)==130,"missing timestamps continue from valid samples");require(c.observe({},500,10,true)==500,"discontinuity reanchors untimed audio");require(c.observe(0,510,10,true)==0,"timestamp zero remains valid");}
     {
         ui::live_status::DashboardHistory history;engine::PlayerSnapshot s;
