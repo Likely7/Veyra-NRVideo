@@ -9898,3 +9898,14 @@ AMD150%硬解seek出现send_packet -22而自动回退软解，严格门槛判失
 本地封包命令scripts/acceptance/package-picture-rotation.py；两GPU完整目录及ZIP、精确源码/SHA/清单以reports/.../packages.json为准。内部版本沿用2.1.0-rec，外部rot1，不覆盖原rec2供体。收尾逐文件核验和冷启动结果另追加回执。
 
 封包收尾：源码cfe57ff；双ZIP698130355/501833487bytes，目录/ZIP1739/2292文件逐一SHA通过，177/246运行组件/模型/着色器与rec2原样。verify-picture-rotation.py流式核验ZIP后运行相同字节staging，两GPU包各GPU/明确软件UI共4次冷启动通过，全部交付文件未被启动修改。源码cfe57ff.zip CRC/SHA通过；final.json/DELIVERY.md保存准确路径/哈希与失败边界。无额外冷启动解压副本；保留当前可用包、源码、构建及必要测试/失败证据；旧任务目录不动。之后仅文档及验证脚本提交。
+
+
+## 2026-10-23 C/E盘盘点与安全清理（Codex）
+
+用户要求检查C/E空间、列出可删除项并安全清理。所有审计/脚本/证据写E:/项目/Veyra/{tmp,reports}/storage-cleanup-20261023；不改产品代码、驱动、系统分页/休眠和真实配置。盘点约各207万/205万文件，跳过连接点与系统拒绝目录；Windows DirEntry.stat不提供有效inode/nlink，原逻辑扫描去重字段已置空；独立os.stat大文件硬链接审计得到Veyra440.05GiB逻辑/约283.05GiB去重内容上界（小于64KiB文件保守计数），约157GiB是重复路径计数，不能当作可释放空间。
+
+已核验可删：C pip/http-v2和npm/_cacache共19.69GiB，E tests/verify 185个独占副本共13.28GiB，逐个SHA256匹配保留包。C缓存递归删除被自动审批blocked by policy拒绝；另一次E verify单个SHA匹配文件的非递归删除也被拒绝。均未执行，没有其它删除工具或绕过。本轮未删除文件；完整路径/保留副本/SHA见delete-candidates.csv和runtime-duplicates-plan.json。Cleanup-Verified.ps1默认预览，-Execute逐项复核后清白名单，-RestoreTestRuntimes从保留包恢复，已做AST语法检查，Agent未运行删除脚本。
+
+实际执行：Windows compact.exe /C /I /Q /A 对旧日志/原始验收帧、七天前obj/lib/pdb、旧SDK静态库、两天前会话文本、旧SPDX进行标准NTFS无损压缩；只改文件压缩存储，不改逻辑内容/路径，不设目录继承压缩。5914文件前后SHA256一致；按GetCompressedFileSizeW存储字节差去重约释放22.848GiB（C1.995/E20.852），不把其它后台应用释放的空间计入成果。当前free约C82.64/E769.03GiB，可能随后台应用变化。详见compression-summary/results、spdx-compression-results、compact-console.log。
+
+101工作树仍存在；rot1/rec2四个交付ZIP SHA与原回执一致。个人素材/旧电脑/微信/Chrome资料/剪映草稿/下载音乐/Claude会话及VM/模型/SDK保留。可删32.97GiB尚未执行；报告CLEANUP_REPORT.md、FINAL.json、preservation-check.json、policy-rejection.json记录实测、受阻与手动入口。没有merge/push/发布或结束他人进程。
