@@ -13,7 +13,7 @@ from pathlib import Path
 import json, os, re, shutil, subprocess, sys, time
 
 B = Path('E:/项目/Veyra'); T = 'codex-claude-handoff-20261022'
-PKG = B / 'test-packages/bilibili-2.1.0-20261019/Veyra-2.1.0-test-AMD-win64-portable'
+PKG = B / 'releases/release-2.1.0-20261019/runtime-base/AMD'
 HERE = Path(__file__).resolve().parent
 os.environ['PATH'] = str(next((Path(os.environ['LOCALAPPDATA'])/'Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe').glob('*/bin'))) + os.pathsep + os.environ['PATH']
 which = sys.argv[1]; assert which in ('before', 'after')

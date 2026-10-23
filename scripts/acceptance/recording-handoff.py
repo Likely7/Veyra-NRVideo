@@ -16,7 +16,7 @@ import numpy as np
 os.environ['PATH'] = str(next((Path(os.environ['LOCALAPPDATA']) / 'Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe').glob('*/bin'))) + os.pathsep + os.environ['PATH']
 B = Path('E:/项目/Veyra'); T = 'codex-claude-handoff-20261022'
 ROOT = Path(__file__).resolve().parents[2]
-PKG = B / 'test-packages/bilibili-2.1.0-20261019/Veyra-2.1.0-test-NVIDIA-win64-portable'
+PKG = B / 'releases/release-2.1.0-20261019/runtime-base/NVIDIA'
 BUILD = B / 'build/claude-screen-recording-20261022'
 HERE = Path(__file__).resolve().parent
 APP = B / 'tests' / T / 'app'

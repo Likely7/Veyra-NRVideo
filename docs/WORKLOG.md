@@ -9909,3 +9909,17 @@ AMD150%硬解seek出现send_packet -22而自动回退软解，严格门槛判失
 实际执行：Windows compact.exe /C /I /Q /A 对旧日志/原始验收帧、七天前obj/lib/pdb、旧SDK静态库、两天前会话文本、旧SPDX进行标准NTFS无损压缩；只改文件压缩存储，不改逻辑内容/路径，不设目录继承压缩。5914文件前后SHA256一致；按GetCompressedFileSizeW存储字节差去重约释放22.848GiB（C1.995/E20.852），不把其它后台应用释放的空间计入成果。当前free约C82.64/E769.03GiB，可能随后台应用变化。详见compression-summary/results、spdx-compression-results、compact-console.log。
 
 101工作树仍存在；rot1/rec2四个交付ZIP SHA与原回执一致。个人素材/旧电脑/微信/Chrome资料/剪映草稿/下载音乐/Claude会话及VM/模型/SDK保留。可删32.97GiB尚未执行；报告CLEANUP_REPORT.md、FINAL.json、preservation-check.json、policy-rejection.json记录实测、受阻与手动入口。没有merge/push/发布或结束他人进程。
+
+## 2026-10-23 依赖迁移与历史测试/包清理（用户追加授权）
+
+用户明确要求C盘veyra-deps全迁E盘并更新AGENTS；历史测试/非正式包清理，正式包保留2.0.7及以后。按docs/DEPENDENCY_MIGRATION_CLEANUP_PLAN_2026-10-23.md执行，结果docs/DEPENDENCY_MIGRATION_CLEANUP_REPORT_2026-10-23.md。单Agent，不改产品或真实配置/驱动，不合main/push/Release/远端删除，Lecram仍暂停。
+
+C:/veyra-deps149125普通文件、15139684399字节以robocopy /E /COPY:DAT /DCOPY:DAT /XJ /SL复制到E:/项目/Veyra/deps/core，全SHA256目标验证/源size-mtime检查零差异；Qt原是Junction，目标重建到原E:/项目/Veyra/deps/qt，没有复制两份。核验后旧C根改名、建C根兼容Junction、非递归移除旧Qt入口，再删除旧C实体；第一次Target字段字符串误按数组导致守卫停止，核对路径后修正恢复，未丢数据。migration-result.json确认备份已删。共享E:/项目/Veyra/AGENTS.md、deps/DEPENDENCY_ROOTS.json及当前/旧桌面/main三个入口AGENTS有新记录，保留其他源码改动，不批量弄脏101树；C旧路径与E实体samefile四项通过。
+
+GitHub正式API及本地SHA核对保留2.0.7/2.0.8/2.0.9/2.1.0共15资产，正式2.1.0原ZIP核验解出releases/release-2.1.0-20261019/runtime-base/{NVIDIA,AMD}作为唯一活动供体。五个当前验收/封包脚本改引用供体，旋转包显式带录制接手报告；旧test/Bilibili/rec2供体可清。当前rot1双包保留且逐文件/ZIP核验，源码、models/SDK、logs/reports/archives/个人文件不动。
+
+原生Cleanup-History.ps1先预览后-Execute：删除E盘339历史根项（tests218/verify39/test-packages64/releases18），1018901文件路径、337.18GiB逻辑；385连接先非递归unlink，只操作连接本身。硬链接重复不能当空间收益，主删除窗口E盘空闲快照净增加172.56GiB（可能含后台I/O）；最终约C141.33/E923.37GiB空闲。清理小型文本/脚本32396条压成199490970字节ZIP并全SHA验证；GPL依赖对应源按内容留档，73模型副本都匹配保留来源。test-packages只剩当前rot1，verify空，tests只剩迁移回归私有配置；宣传文稿素材保留。此前storage-cleanup旧恢复/删除供体清单被新策略取代，不照旧路径执行。
+
+所有命令/清单/回执位于E:/项目/Veyra/{tmp,reports,archives}/dependency-migration-cleanup-20261023；日志E:/项目/Veyra/logs/codex-dependency-migration-20261023。build-recording-handoff.py同源-j2增量构建1.2s通过；Repair272零失败、UI契约含384布局通过、i18n2660零失败、QtQuick显式-o日志109通过零失败；Quick文本实际Windows编码，UTF8读取失败后按mbcs解析同一通过日志，不把解析失败当测试失败。rot1 NVIDIA/AMD私有配置冷启动各一次通过，启动后全目录SHA不变；脚本AST、qmake6.8.3、兼容路径检查通过。101树/111份清理前脏文件SHA通过（此快照在AGENTS更新后，AGENTS为本轮预期变化）；无其它源码变化。FINAL.json、preservation-check.json、quick-and-cold-start.json记录通过范围；不宣称全量重编译/新硬件验收。
+
+补查C旧源码下两个生成测试构建与out三个旧音频测试ZIP共0.38GiB，102份文本先留证；实际删除调用被自动审批blocked by policy拒绝，未给详细原因，五项仍保留，未换工具/移动绕过。policy-rejection.json与C-supplement-plan.json记实际未执行，Cleanup-C-Remaining.ps1供用户手动审阅、默认预览，仅AST语法检查，Agent未执行。C:/veyra-deps迁移与E盘339项删除已执行成功，此独立受阻不改变其事实。

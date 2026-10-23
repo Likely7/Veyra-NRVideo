@@ -51,7 +51,7 @@ Lecram 按用户要求暂停，不包含在此包。未合并 main、未推送�
 '''
 receipts = []
 for vendor in ('NVIDIA', 'AMD'):
-    donor = BASE / 'test-packages/bilibili-2.1.0-20261019' / f'Veyra-2.1.0-test-{vendor}-win64-portable'
+    donor = BASE / 'releases/release-2.1.0-20261019/runtime-base' / vendor
     package = OUT / f'Veyra-2.1.0-rec2-{vendor}-win64-portable'
     assert donor.is_dir(), donor
     if package.exists():

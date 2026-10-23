@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-23 依赖迁移与历史产物清理（用户明确授权）**：`C:\veyra-deps` 的149125个普通文件已逐文件SHA256核验并迁到 **`E:\项目\Veyra\deps\core`**，C盘旧实体已删除；`C:\veyra-deps` 仅为指向该E盘目录的 Junction，保留兼容旧脚本/CMake缓存，禁止删除此入口或重新在C盘建依赖实体。Qt实体仍为 `E:\项目\Veyra\deps\qt\6.8.3\msvc2022_64`，`deps\core\qt-veyra` 仅指向 `deps\qt`。新任务优先使用E盘实体路径；旧缓存不必为改路径强制全量重编译。共享路径清单 `E:\项目\Veyra\deps\DEPENDENCY_ROOTS.json`，共享规则 `E:\项目\Veyra\AGENTS.md`，证据 `E:\项目\Veyra\reports\dependency-migration-cleanup-20261023`。本条覆盖旧“C:\veyra-deps暂保留不迁移”的限制。历史测试/包按本轮清单清理；正式发布资产只保留2.0.7及以后（当前2.0.7/2.0.8/2.0.9/2.1.0），依GitHub资产SHA而非内部test文件名判定。当前未合入正式版的rot1交付单独保留；不删源码工作树/未提交改动/依赖模型/对应源码与必要验收记录。清理实际结果以该目录FINAL.json为准，不从计划推断已删除。不merge/push/发布，不继续Lecram。
+
 > **2026-10-23 画面旋转（Codex）**：用户要求极简/专业小按钮每次顺时针90°并适配UI。4eee190干净源码切codex/picture-rotation-20261023，起点标签checkpoint/pre-picture-rotation-20261023。按docs/PICTURE_ROTATION_PLAN_2026-10-23.md复用已有元数据呈现/坐标映射，允许必要PreviewView/EngineController/bridge/QML/翻译/定向测试接点，覆盖这些范围旧UI冻结；不继续Lecram或修改其它工作树。不改专有运行库/模型/驱动或真实配置，全E盘，复用同源构建限-j2≤900秒/单测试≤300秒，单Agent，无main合并/push/发布。
 
 > **2026-10-21 Claude 中断任务接手（Codex）**：用户要求“把后续工作接上，然后完成他”，后明确“Lecram，先放着，不弄了”。仅在 E盘既有 screen-recording-fix-20261022 工作树、codex/claude-handoff-20261022 完成 AMD 超分关闭和带声音的处理后实时录制修复、相关构建/回归/本地测试包；这些必要接点覆盖旧 UI 冻结。20个未提交源码先保存 ZIP/patch/SHA 与检查点5614e8d，AMD修复移入88dbc26，计划docs/CLAUDE_HANDOFF_PLAN_2026-10-22.md。Lecram 保留不继续。单 Agent、-j2构建≤900秒/单测试≤300秒、全E盘私有配置、不触碰真实配对主机/他人进程/运行库/模型/驱动；旧桌面与其他任务保留。不合 main/push/发布。

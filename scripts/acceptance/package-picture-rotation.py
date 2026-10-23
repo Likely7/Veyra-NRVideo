@@ -37,7 +37,7 @@ note='''# Veyra 2.1.0 画面旋转本地测试版（rot1）
 '''
 results=[]
 for vendor in ['NVIDIA','AMD']:
-    donor=B/'test-packages/codex-claude-handoff-20261022'/f'Veyra-2.1.0-rec2-{vendor}-win64-portable'
+    donor=B/'releases/release-2.1.0-20261019/runtime-base'/vendor
     pkg=OUT/f'Veyra-2.1.0-rot1-{vendor}-win64-portable'
     assert donor.is_dir() and not pkg.exists(),pkg
     for src in donor.rglob('*'):
@@ -48,7 +48,7 @@ for vendor in ['NVIDIA','AMD']:
     for folder in ['qml','i18n']:
         for src in (ROOT/folder).rglob('*'):
             if src.is_file():replace(pkg/folder/src.relative_to(ROOT/folder),src.read_bytes())
-    for name in ['PICTURE_ROTATION_PLAN_2026-10-23.md','PICTURE_ROTATION_REPORT_2026-10-23.md']:
+    for name in ['CLAUDE_HANDOFF_PLAN_2026-10-22.md','CLAUDE_HANDOFF_REPORT_2026-10-22.md','PICTURE_ROTATION_PLAN_2026-10-23.md','PICTURE_ROTATION_REPORT_2026-10-23.md']:
         replace(pkg/'docs'/name,(ROOT/'docs'/name).read_bytes())
     replace(pkg/'README-TEST.zh-CN.md',note.encode('utf8'))
     old=json.loads((donor/'package-manifest.json').read_text('utf8'));unchanged=[]

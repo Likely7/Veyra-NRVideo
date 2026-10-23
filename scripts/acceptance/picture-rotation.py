@@ -8,7 +8,7 @@ import argparse, hashlib, json, os, shutil, subprocess, time
 
 B=Path('E:/项目/Veyra'); T='codex-picture-rotation-20261023'
 ROOT=Path(__file__).resolve().parents[2]; BUILD=B/'build/claude-screen-recording-20261022'
-DONOR=B/'test-packages/codex-claude-handoff-20261022/Veyra-2.1.0-rec2-NVIDIA-win64-portable'
+DONOR=B/'releases/release-2.1.0-20261019/runtime-base/NVIDIA'
 APP=B/'tests'/T/'app'; MEDIA=B/'tests'/T/'media'
 FF=next((Path(os.environ['LOCALAPPDATA'])/'Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe').glob('*/bin'))
 
