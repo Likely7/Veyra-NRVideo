@@ -22,7 +22,7 @@ PreviewView已有的GPU呈现/坐标映射支持旋转，增加独立userQuarter
 - UI contract通过：既有384布局组合，新加4种容器角度×7显示模式×4次手动旋转，共112组比例/坐标/滚轮锚定状态，四次恢复及重置缩放检查。
 - repair 272检查0失败；UI i18n 0失败；catalog2660条，三种译文零缺译/占位符问题。
 - QtQuick109通过0失败（contracts-064254）：新增共享按钮的真实Qt鼠标事件，12次交替点击与状态同步、无片源禁用。真实播放器夹具调用按钮生产clicked信号，不冒充物理鼠标验收。
-- 实际D3D12呈现像素23例通过（gpu-contracts-064445）：包括manual90/180/270/360、容器90+手动90、原图对照、缩放、原像素、固定比例、窗口尺寸保留。像素PNG在同目录pixels，manual90.png已人工查看。
+- 实际D3D12呈现像素23例通过（gpu-contracts-064445）：包括manual90/180/270/360、容器90+手动90、原图对照、缩放、原像素、固定比例、窗口尺寸保留。像素PNG在同目录pixels，manual90.png已使用图像查看工具目视核对。
 - 真实播放器回归：wide-zh-CN-064450、metadata-zh-CN-064617（ffprobe核验显示矩阵，程序顺时针270°）、portrait-zh-TW-064718、wide-software-en-064852均通过。覆盖两按钮及全屏复用、暂停/seek、模式往返、横竖窗口适配、全部显示比例、重新打开清零；软件界面由--obs-game-capture及software UI日志确认。
 - 日文record-ja-065008：旋转和布局通过，实际NVENC H.264录制49.5秒、1380帧、零丢帧、正常收尾。原统计读取fragmented MP4中缺失的nb_frames误报0，失败report.json保留；改用ffprobe -count_frames解码计数，独立reports/.../recording-recheck.json通过。文件640×360，录制方向未随预览改变。
 
@@ -35,3 +35,12 @@ AMD核显真实D3D12 +150% DPI：wide-amd-zh-CN-065142的旋转/布局断言通�
 进一步用同一AMD核显、150% DPI及明确软件解码隔离验证旋转，wide-amd-swdecode-zh-CN-065527全部通过，零错误；日志明确device context initialized adapter=AMD Radeon(TM) Graphics。没有验证AMD独显/RX9000、其它NVIDIA型号、Intel、真实采集卡/主机串流、HDR、跨屏DPI切换、真实游戏鼠标策略、光学显示延迟或长时间稳定性。既有DLSS SR首次新缓存JIT问题沿用上一轮报告，不作新通过声明。
 
 本轮不合main、不push、不发布；本地包保留可用目录和ZIP，并按逐文件清单核验运行库/模型/着色器与rec2供体原样一致。命令scripts/acceptance/package-picture-rotation.py，准确源码提交、ZIP大小/SHA、文件计数以reports/.../packages.json为准，后续只追加文档回执不改变包内源码身份。
+
+
+## 封包回执
+
+产品源码cfe57ffd4088214b8ee9c723ef2c8a21be4fc8ac。NVIDIA/AMD ZIP分别698130355/501833487bytes，SHA256分别917aa0847e1b411065b9cf1335fb1aaa2d779cc4ab792fcf61e5915451f937ba、bed667724f07a0d0b6acf37ed9d624fb84db438c03f3140d14f2ec6e90a9bf50。两个目录/ZIP分别1739/2292文件逐一SHA一致，177/246个运行库/模型/着色器与rec2供体原样一致。
+
+verify-picture-rotation.py对每个ZIP条目流式SHA验证，与staging逐文件独立匹配，然后运行相同字节的staging；没有额外解压完整副本。两包GPU/--obs-game-capture明确软件UI共4次冷启动通过，启动后全清单字节不变。回执reports/codex-picture-rotation-20261023/cold-start.json、packages.json、final.json、DELIVERY.md。仅AMD原自动硬解seek门槛保留失败，原版对照及明确软解结果分列。
+
+源码archives/codex-picture-rotation-20261023/Veyra-rot1-source-cfe57ff.zip已CRC/SHA核验，SHA256 93f20a7cd751f9b8fb26216bdcd4cc36f78f7b726812055356e636166881ad32。包内产品与文档绑定封包时cfe57ff，之后仅追加本回执和验证脚本，不改变包内源码身份。保留最终可用包/ZIP/构建/源码及必要回归夹具和失败证据，未另建冷启动解压副本；旧任务目录不清理。没有合main、推送或发布。

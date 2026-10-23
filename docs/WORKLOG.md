@@ -9896,3 +9896,5 @@ UI契约384既有布局+112新增方向/模式状态；repair272 checks0fail，i
 AMD150%硬解seek出现send_packet -22而自动回退软解，严格门槛判失败；未改动rec2原EXE/原QML同配置15秒对照复现（baseline-amd-065446），不归因旋转也不声称已修。明确软解的同卡150%旋转全回归通过（wide-amd-swdecode-zh-CN-065527）。其它GPU/真实采集/主机串流/HDR/跨屏/长期/游戏鼠标/光学延迟未验。无SDK/二进制新增Git。
 
 本地封包命令scripts/acceptance/package-picture-rotation.py；两GPU完整目录及ZIP、精确源码/SHA/清单以reports/.../packages.json为准。内部版本沿用2.1.0-rec，外部rot1，不覆盖原rec2供体。收尾逐文件核验和冷启动结果另追加回执。
+
+封包收尾：源码cfe57ff；双ZIP698130355/501833487bytes，目录/ZIP1739/2292文件逐一SHA通过，177/246运行组件/模型/着色器与rec2原样。verify-picture-rotation.py流式核验ZIP后运行相同字节staging，两GPU包各GPU/明确软件UI共4次冷启动通过，全部交付文件未被启动修改。源码cfe57ff.zip CRC/SHA通过；final.json/DELIVERY.md保存准确路径/哈希与失败边界。无额外冷启动解压副本；保留当前可用包、源码、构建及必要测试/失败证据；旧任务目录不动。之后仅文档及验证脚本提交。
