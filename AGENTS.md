@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-24 补帧调度修复追加授权**：用户明确要求另开分支排查修复，覆盖上一轮仅诊断限制；从97959cc在codex/fg-scheduling-repair-20261024按docs/FG_SCHEDULING_REPAIR_PLAN_2026-10-24.md施工，允许有证据的调度/必要链路/限频诊断/定向测试接点。用户正在E:/App运行，只读日志，不停止其进程/改真实配置/争抢采集或添加GPU负载；不放宽期限/掩盖告警/无界排队。单Agent、全E盘、复用构建-j2<=900秒/单测<=300秒，无main合并/push/Release，Lecram暂停。
+
 > **2026-10-24 NR手动比例及日志排查（用户请求）**：从108c010在codex/nr-manual-scale-20261024实施每层NR内部手动百分比与条件滑条，按docs/NR_MANUAL_SCALE_PLAN_2026-10-24.md，仅扩展NR尺寸规划/既有参数桥接/共用QML滑条/翻译/必要合同测试与持久化兼容；这些新功能必要接点覆盖旧2.0.0 UI迁移冻结。不改FG预算/调度/采集/告警判定，用户指定调度降档只诊断。用户E:/App包/日志只读，私有测试不连真实主机或采集卡。单Agent，全E盘，复用当前同源构建-j2<=900秒/单测试<=300秒；不改专有运行文件/驱动/真实配置，无main合并/push/Release，Lecram暂停。
 
 > **2026-10-23 依赖迁移与历史产物清理（用户明确授权）**：`C:\veyra-deps` 的149125个普通文件已逐文件SHA256核验并迁到 **`E:\项目\Veyra\deps\core`**，C盘旧实体已删除；`C:\veyra-deps` 仅为指向该E盘目录的 Junction，保留兼容旧脚本/CMake缓存，禁止删除此入口或重新在C盘建依赖实体。Qt实体仍为 `E:\项目\Veyra\deps\qt\6.8.3\msvc2022_64`，`deps\core\qt-veyra` 仅指向 `deps\qt`。新任务优先使用E盘实体路径；旧缓存不必为改路径强制全量重编译。共享路径清单 `E:\项目\Veyra\deps\DEPENDENCY_ROOTS.json`，共享规则 `E:\项目\Veyra\AGENTS.md`，证据 `E:\项目\Veyra\reports\dependency-migration-cleanup-20261023`。本条覆盖旧“C:\veyra-deps暂保留不迁移”的限制。历史测试/包按本轮清单清理；正式发布资产只保留2.0.7及以后（当前2.0.7/2.0.8/2.0.9/2.1.0），依GitHub资产SHA而非内部test文件名判定。当前未合入正式版的rot1交付单独保留；不删源码工作树/未提交改动/依赖模型/对应源码与必要验收记录。清理实际结果以该目录FINAL.json为准，不从计划推断已删除。不merge/push/发布，不继续Lecram。

@@ -10,6 +10,7 @@
 #include "veyra/gfx/NvidiaVrr.h"
 #include "veyra/engine/PresentationSettings.h"
 #include "veyra/engine/PresentCapture.h"
+#include "veyra/engine/AsyncDisplayQuery.h"
 #include <chrono>
 #include <array>
 #include <optional>
@@ -77,6 +78,8 @@ public:
     // Monitor refresh for the live output budget. The swap chain samples it
     // only at creation; the window may move to another monitor or the mode
     // may change, so it is re-read on a monitor change and every 2 s.
+    // This accessor only polls a bounded asynchronous query; it never waits
+    // on QueryDisplayConfig or NVIDIA's monitor/VRR driver calls.
     double displayRefreshHz();
     // Variable refresh state of that monitor (NVIDIA only), re-read with it.
     gfx::VrrState displayVrr()const{return vrr_;}
@@ -170,6 +173,8 @@ private:
     bool xessFailed_=false;
     bool xessGenerationSuppressed_=false;
     HMONITOR refreshMonitor_=nullptr;double refreshHz_=0;gfx::VrrState vrr_{};bool refreshQueried_=false,vrrSync_=false;
+    struct DisplayQueryResult {HMONITOR monitor=nullptr;double hz=0;gfx::VrrState vrr;double refreshMs=0,vrrMs=0;};
+    AsyncDisplayQuery<DisplayQueryResult> displayQuery_;
     std::chrono::steady_clock::time_point refreshQuery_{};
     uint32_t xessInputId_=0;
     struct XessWork {pipeline::FrameIdentity identity{};uint32_t id=0;};

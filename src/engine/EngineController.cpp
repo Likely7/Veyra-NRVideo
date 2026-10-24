@@ -1309,14 +1309,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // source while the previous one is still on the GPU, as before.
             static const bool xessPresentAfterReady=GetEnvironmentVariableW(L"VEYRA_TEST_XESS_PRESENT_AFTER_READY",nullptr,0)>0;
             static const bool xessStackedReads=GetEnvironmentVariableW(L"VEYRA_TEST_XESS_STACKED_READS",nullptr,0)>0;
-            uint64_t pacingRevision=0,presenterGeneration=0;
+            uint64_t pacingRevision=0,presenterGeneration=0;double pacingRefreshHz=0;
             auto applyPresentation=[&]{
                 PresentationSettings requested;uint64_t revision;
                 {std::lock_guard lock(mutex_);requested=presentation_;revision=presentationRevision_;}
+                // Poll completed display/VRR queries before comparing policy.
+                // It must not make synchronous driver calls on the GPU owner.
+                const double refreshHz=presenter.displayRefreshHz();
+                const bool capRefreshChanged=requested.outputRate==OutputRateMode::FollowDisplay&&std::abs(refreshHz-pacingRefreshHz)>0.001;
                 // 可变刷新: the monitor's VRR availability is re-read every 2 s
                 // (window moved, driver setting changed); a change re-applies.
                 const bool vrrChanged=presenter.vrrSync()!=VideoPresenter::vrrSyncWanted(requested,presenter.displayVrr());
-                if(revision==pacingRevision&&presenterGeneration==presenter.generation()&&!vrrChanged){
+                if(revision==pacingRevision&&presenterGeneration==presenter.generation()&&!vrrChanged&&!capRefreshChanged){
                     // Reflex dropped out at runtime: the queue-depth part of the
                     // low-latency setting stays, so only the status line changes.
                     if(presentationEffective.enabled&&!presenter.reflexActive()&&presenter.reflexDisablePending()){
@@ -1333,7 +1337,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 std::wstring message;
                 presentationEffective=presenter.configurePresentation(ctx,requested,options.fg,message);
                 presentationPaced=presenter.pacingActive()&&!legacyVsyncQueue;
-                pacingRevision=revision;presenterGeneration=presenter.generation();cadence.reset();
+                pacingRevision=revision;presenterGeneration=presenter.generation();pacingRefreshHz=refreshHz;cadence.reset();
                 {std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationRevision=revision;snapshot_.presentationStatus=message;snapshot_.presentationProviderOwned=presenter.providerOwnedPresentation();}
                 veyra::log::info("pacing",std::format("revision={} requested={}/{}/{} effective={}/{}/{} displayQueuePaced={} variableRefresh={} vrrLevel={} vrrSync={}",revision,requested.enabled,unsigned(requested.mode),unsigned(requested.display),presentationEffective.enabled,unsigned(presentationEffective.mode),unsigned(presentationEffective.display),presentationPaced,requested.variableRefresh,gfx::vrrLevel(presenter.displayVrr()),presenter.vrrSync()));
             };

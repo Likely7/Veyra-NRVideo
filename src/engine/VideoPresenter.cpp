@@ -31,7 +31,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         veyra::log::warn("present","presentation creation cancelled: target window is no longer available");
         return false;
     }
-    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
+    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;displayQuery_.invalidate();refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
     ++generation_;
     Status st=Status::Ok;
     // Keep one presentation queue for the native chain's lifetime. A later
@@ -489,7 +489,7 @@ void VideoPresenter::publishLiveCoverage(const HdrCurveSettings& curve,pipeline:
 void VideoPresenter::close(){
     metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
     hdrPeakMonitor_=nullptr;hdrPeakInfo_={};hdrPeakQuery_={};
-    refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
+    displayQuery_.invalidate();refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
     retainedFrame_.reset();
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
@@ -505,13 +505,42 @@ double VideoPresenter::displayRefreshHz(){
     if(!window_)return 0;
     const auto now=std::chrono::steady_clock::now();
     const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
-    if(monitor!=refreshMonitor_||now-refreshQuery_>=std::chrono::seconds(2)){
-        const double hz=gfx::PresentSink::displayRefreshFps(window_);
-        if(refreshMonitor_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
-        refreshHz_=hz;refreshMonitor_=monitor;refreshQuery_=now;sink_.setDisplayRefreshHz(hz);
-        const auto vrr=gfx::queryVrr(window_);
+    if(monitor!=refreshMonitor_){
+        // Never apply the previous monitor's VRR/cap to a moved window.
+        displayQuery_.invalidate();refreshMonitor_=monitor;refreshQuery_={};
+        refreshHz_=0;vrr_={};refreshQueried_=false;
+    }
+    try{
+      if(auto result=displayQuery_.poll();result&&result->monitor==monitor){
+        const auto hz=result->hz;const auto& vrr=result->vrr;
+        if(refreshQueried_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
+        refreshHz_=hz;sink_.setDisplayRefreshHz(hz);
         if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; enabled by the user in the NVIDIA Control Panel, never changed by Veyra)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.status,hz));
         vrr_=vrr;refreshQueried_=true;
+        if(result->refreshMs+result->vrrMs>=2.0)veyra::log::info("display-query",std::format("refreshMs={:.3f} vrrMs={:.3f} asynchronous=true (driver query wall time; not GPU execution or owner-thread wait)",result->refreshMs,result->vrrMs));
+      }
+      if(monitor&&now-refreshQuery_>=std::chrono::seconds(2)&&!displayQuery_.pending()){
+        const HWND window=window_;
+        // Captures no presenter/swapchain/device. An obsolete HWND/monitor is
+        // rejected both here and by the owner's invalidation generation.
+        displayQuery_.request([window,monitor]{
+            DisplayQueryResult result;result.monitor=monitor;
+            if(!IsWindow(window)||MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST)!=monitor)return result;
+            const auto began=std::chrono::steady_clock::now();
+            result.hz=gfx::PresentSink::displayRefreshFps(window);
+            const auto refreshed=std::chrono::steady_clock::now();
+            result.vrr=gfx::queryVrr(window);
+            const auto finished=std::chrono::steady_clock::now();
+            result.refreshMs=std::chrono::duration<double,std::milli>(refreshed-began).count();
+            result.vrrMs=std::chrono::duration<double,std::milli>(finished-refreshed).count();
+            if(!IsWindow(window)||MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST)!=monitor)result.monitor=nullptr;
+            return result;
+        });
+        refreshQuery_=now;
+      }
+    }catch(const std::exception& error){
+        refreshQuery_=now;
+        veyra::log::warn("display-query",std::format("asynchronous display query failed: {} (retaining cached state; retry after 2 s)",error.what()));
     }
     return refreshHz_;
 }
@@ -541,7 +570,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     const bool reflexDisabled=reflex_.disable();reflexFrame_=0;
     const bool followDisplay=requested.outputRate==OutputRateMode::FollowDisplay;
     if(followDisplay){
-        const double hz=gfx::PresentSink::displayRefreshFps(sink_.hwnd());
+        const double hz=displayRefreshHz();
         if(hz>=1.0&&std::isfinite(hz)){requested.outputRate=OutputRateMode::Custom;requested.customFps=hz;}
         else requested.outputRate=OutputRateMode::Off;
     }

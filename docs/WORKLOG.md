@@ -9945,3 +9945,15 @@ NR模型、EffectChain、PresetLibrary、旧PresetStore、Repair272、UI384布�
 收尾：产品f743556，EXE SHA d43a5384be9e840912f260c1995c8c7d18f9a61176f4a9e45acfb3202df60289；Veyra-2.1.0-nr1-NVIDIA-update.zip 9886711字节，SHA14b3e0afcaf4fac569d31ea89737bc2027d40ae4f49248b344b05417c2ab3eaa。83文件CRC/逐SHA通过，79操作文件来自更新、其余1523操作输入与用户原包匹配，0额外运行库；177用户运行身份、4原日志、1739旧rot1清单文件均不变。旧供体manifest含日志及启动状态，非必要操作输入；新测试helper显式过滤这些可变文件，不共享其硬链接，更新包不含用户状态。产品代码未再改，后续只提交该测试工具/文档收尾。
 
 本轮E:/项目/Veyra/tests/nr-manual-scale-20261024/app、media在包验证后尝试原生绝对路径守卫删除，被自动审批blocked by policy拒绝，未提供详细原因；未执行、未用其他工具/移动绕过，两个目录及私有profile/证据保留。reports/.../test-cleanup.json记录受阻，FINAL.json区分已完成更新/诊断与未清理中间物。
+
+## 2026-10-24 补帧调度追加修复与2K60 NV12真采集
+
+用户从仅诊断追加为另开分支修复，后明确用采集卡2K60 NV12测试。97959cc干净树切codex/fg-scheduling-repair-20261024，存档checkpoint/pre-fg-scheduling-repair-20261024，不另复制工作树。计划/报告FG_SCHEDULING_REPAIR_{PLAN,REPORT}_2026-10-24.md。读取当前运行日志时发现Win32文件属性尚显示08:30但真实尾部持续更新，直接快照16:36之后会话，旧程序无需停止。读到NR关闭、输入60、VFG约3ms却反复准入elapsed11–17ms；源码定位processStart后每两秒同步queryVrr/刷新率。独立只读探针8次测得VRR10.5–22ms，刷新查询约0.01–0.16ms。
+
+AsyncDisplayQuery单在途future，owner只wait_for(0)取完成结果，按代号丢弃旧窗口/监视器结果，不捕获presenter/GPU对象，reset不销毁future阻塞播放；异常限频重试，跟随显示器cap/VRR在结果到达后重应用。保留预算/期限/状态/原帧/历史，不改FG算法或运行库。保护六文件做Git换行规范化内容比较相同，首次原始比较CRLF/LF差异失败已记录，未伪装二进制相同。
+
+build-recording-handoff.py --task codex-fg-scheduling-repair-20261024 --root 当前E工作树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-fg1，-j2配置构建50.3秒通过；探针测试小改独立重编2.8秒。应用SHA322960200acbbe39ce5c7f783c4b3df429d9de46a706984bcb318dfadb241a6a。六CPU回归通过：Async10、scheduler127、realtime57、HDR状态、UI384layout、Repair272。Repair首次启动依赖PATH缺FFmpeg报0xC0000135，同源依赖PATH补齐后通过，保留initial receipt。真实文件4K30 VFG2X/4X、FollowDisplay/VRR、暂停、关闭重开通过。
+
+用户原进程自行退出后，经明确授权在独立配置测KUHAIMI G50，NV12 subtype0x3231564E、ConnectDirect无converters、Run2560x1440/60均核对。NR/SR关闭、VFG2X Medium，四例各预热6秒+稳定40秒；同revision累计差计数：transport旧nr1 38.600秒/2316候选/10准入跳过/2生成过期，对照fg1相同38.600秒/2316候选/0/0；60->30旧39.166秒/1175候选/13/0，对照新39.100秒/1173/0/0。平均回调均60，邮箱覆盖0；旧准入采样最大13.188/16.729ms，新0.151/0.210ms，后台VRR仍最高14.602/14.366ms。所有新候选均实际评估与生成提交，没有通过关闭FG或删告警过关。截图在计数结束后抓，2560x1440非黑并已查看。四例均正常停止，没有争抢设备/写用户真实配置/碰PS5，供体运行字节不改。
+
+证据reports/fg-scheduling-repair-20261024，日志logs/fg-scheduling-repair-20261024，原快照archives同任务；private tests同任务一份app+四profile，无新大媒体。构建保留当前同源目录。交付EXE/QML/i18n更新层2.1.0-fg1，需完整2.1.0 NVIDIA底包，含nr1手动比例/此前旋转录制。当前短测不证明其它后端/卡/重NR/HDR/长期/光学延迟，也不修真实GPU超预算。单Agent，无merge/push/Release，Lecram暂停。
