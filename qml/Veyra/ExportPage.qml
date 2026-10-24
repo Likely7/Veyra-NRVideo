@@ -550,7 +550,8 @@ VPage {
                 }
                 Timer {
                     id: exportScrub
-                    interval: 120
+                    // Restarted on every move (see CineBar.qml).
+                    interval: 250
                     onTriggered: if (timeline.scrubbing) veyra.seekTo(timeline.scrubFrac * veyra.duration)
                 }
                 MouseArea {
@@ -559,8 +560,8 @@ VPage {
                     cursorShape: Qt.PointingHandCursor
                     preventStealing: true
                     function f(x) { return Math.max(0, Math.min(1, x / Math.max(1, timeline.width))) }
-                    onPressed: mouse => { timeline.scrubFrac = f(mouse.x); timeline.scrubbing = true; exportScrub.start() }
-                    onPositionChanged: mouse => { if (timeline.scrubbing) { timeline.scrubFrac = f(mouse.x); if (!exportScrub.running) exportScrub.start() } }
+                    onPressed: mouse => { timeline.scrubFrac = f(mouse.x); timeline.scrubbing = true }
+                    onPositionChanged: mouse => { if (timeline.scrubbing) { timeline.scrubFrac = f(mouse.x); exportScrub.restart() } }
                     onReleased: mouse => { exportScrub.stop(); timeline.scrubbing = false; veyra.seekTo(f(mouse.x) * veyra.duration) }
                     onCanceled: { exportScrub.stop(); timeline.scrubbing = false }
                 }

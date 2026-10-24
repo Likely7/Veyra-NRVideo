@@ -601,11 +601,15 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     // Damaged data is tolerated on the player's network sources and MPEG-TS; export
     // and every offline user keep the strict stop.
     tolerant_ = desc.tolerateCorruption && (media::networkMediaInput(desc.path) || demuxer_.formatName().find("mpegts") != std::string::npos);
+    veyra::log::info("source-file", "stage: demux opened, reading codec parameters");
     const AVCodecParameters* params = demuxer_.videoCodecParameters();
     if (params == nullptr) {
         veyra::log::error("source-file", "no video codec parameters");
         return false;
     }
+    veyra::log::info("source-file", std::format("stage: codec={} {}x{} preferHw={} device={}",
+        avcodec_get_name(params->codec_id), params->width, params->height,
+        desc.preferHardwareDecode ? 1 : 0, desc.d3d12Device ? 1 : 0));
 
     bool decoderOpen = false;
     if (desc.preferHardwareDecode && desc.d3d12Device != nullptr && desc.d3d12Queue != nullptr) {

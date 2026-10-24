@@ -783,7 +783,9 @@ VPage {
                     }
                     Timer {
                         id: proScrubSeek
-                        interval: 120
+                        // Restarted on every move, so it fires only once the drag settles
+                        // (see CineBar.qml for why overlapping seeks break playback).
+                        interval: 250
                         onTriggered: if (proSeekArea.scrubbing) veyra.seekTo(proSeekArea.scrubFrac * veyra.duration)
                     }
                     MouseArea {
@@ -794,11 +796,11 @@ VPage {
                         cursorShape: Qt.PointingHandCursor
                         preventStealing: true
                         function fracAt(x) { return Math.max(0, Math.min(1, x / Math.max(1, proSeekArea.width))) }
-                        onPressed: mouse => { proSeekArea.scrubFrac = fracAt(mouse.x); proSeekArea.scrubbing = true; proScrubSeek.start() }
+                        onPressed: mouse => { proSeekArea.scrubFrac = fracAt(mouse.x); proSeekArea.scrubbing = true }
                         onPositionChanged: mouse => {
                             if (!proSeekArea.scrubbing) return
                             proSeekArea.scrubFrac = fracAt(mouse.x)
-                            if (!proScrubSeek.running) proScrubSeek.start()
+                            proScrubSeek.restart()
                         }
                         onReleased: mouse => {
                             proScrubSeek.stop()

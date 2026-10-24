@@ -47,8 +47,16 @@ struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t f
     bool deinterlace=true; // automatic file deinterlace, preserves progressive bypass
     bool hardwareDecodeOnly=false; // user setting "强制硬解": files fail instead of falling back to software
     media::NetworkSettings network; // buffering / reconnect / damaged-picture choices for network sources and servers
+    // Separate audio address for a DASH source (Bilibili): the video container has
+    // no audio track, so the audio pipeline opens this instead.
+    std::wstring audioPath;
     EnhancementSettings snapshot()const{auto s=settings;s.nr=nr;s.sr=sr;s.multiplier=fg?fgMultiplier:1;s.nrPolicy=realtime?(settings.nrPolicy==pipeline::NrSizePolicy::Native?pipeline::NrSizePolicy::Realtime:settings.nrPolicy):pipeline::NrSizePolicy::Native;return s;}
-    static PlayerOptions from(EnhancementSettings s,std::optional<ChainRuntimeOrder> order=std::nullopt){PlayerOptions o;o.nr=s.nr;o.sr=s.sr;o.fg=s.multiplier>1;o.fgMultiplier=std::max(2u,s.multiplier);o.realtime=s.nrPolicy!=pipeline::NrSizePolicy::Native;o.settings=s;o.nodeOrder=order;return o;}
+    static PlayerOptions from(EnhancementSettings s,std::optional<ChainRuntimeOrder> order=std::nullopt,const PlayerOptions* keep=nullptr){
+        PlayerOptions o;o.nr=s.nr;o.sr=s.sr;o.fg=s.multiplier>1;o.fgMultiplier=std::max(2u,s.multiplier);o.realtime=s.nrPolicy!=pipeline::NrSizePolicy::Native;o.settings=s;o.nodeOrder=order;
+        // Per-open state that EnhancementSettings does not carry: a rebuild would
+        // otherwise drop the DASH audio address and the site's request headers.
+        if(keep){o.audioPath=keep->audioPath;o.network.requestHeaders=keep->network.requestHeaders;o.network.userAgent=keep->network.userAgent;}
+        return o;}
 };
 enum class TransportState { Empty, Opening, Playing, Paused, Ended, Stopping, Failed };
 struct PlayerSnapshot {

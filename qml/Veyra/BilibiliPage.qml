@@ -1,0 +1,1873 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
+import QtQuick.Layouts
+
+// Bilibili module: browse, search, open a video, and hand it to the player.
+//
+// Modelled on newBV's screens (home / popular / dynamics / history / favourites /
+// watch later / followed / search), adapted to a desktop mouse-and-keyboard shell:
+// the Android TV app navigates with a remote, so its focus-ring-heavy layout is
+// replaced by a left rail plus a scrollable content area.
+//
+// Everything here is read-mostly. The one write path is sign-in (the QR code is
+// drawn in-page) plus the per-video like / coin / favourite buttons.
+VPage {
+    id: root
+    pageId: "bili"
+    signal requestPage(string page)
+
+    // "home" | "popular" | "follow" | "history" | "fav" | "watchlater" | "search" | "detail"
+    property string view: "home"
+    property var cards: []
+    // The grid iterates this ListModel instead of the array. Appending to a ListModel
+    // keeps the scroll position; replacing an array resets it, which is what made the
+    // view jump back to the top every time another batch arrived.
+    ListModel { id: cardsModel }
+    // cards is still the source of truth for the cache and the paging code; this mirrors
+    // it into the model incrementally.
+    function appendCardsToModel(list, startIndex) {
+        for (let i = startIndex; i < list.length; ++i) {
+            const c = list[i]
+            if (!c) continue
+            cardsModel.append({
+                bvid: c.bvid || "",
+                title: c.title || "",
+                cover: c.cover || "",
+                owner: c.owner || "",
+                duration: c.duration || "",
+                play: c.play || 0
+            })
+        }
+    }
+    function resetCardsModel(list) {
+        cardsModel.clear()
+        appendCardsToModel(list, 0)
+    }
+    // One cached list per rail entry. cards is a single shared array, so without this a
+    // switch to another entry overwrote the previous one's cards, and coming back had to
+    // fetch again — which made 首页推荐 re-request on every click, the thing the 刷新
+    // button exists for. Keys are the view names; "fav:<folderId>" keeps a favourite
+    // folder's list separate and "search:<words>" keeps a query's result.
+    property var cardCache: ({})
+    // True while a list is being fetched. Drives the skeleton grid: the rail click can
+    // then paint placeholder tiles immediately and swap them for the real cards when the
+    // (blocking) request returns, instead of showing an empty area.
+    property bool listLoading: false
+    // The account's own favourite folders, and which one is showing. 0 means "the
+    // default folder", which is what the API picks when nothing is selected.
+    property var favFolders: []
+    property var favFolderId: 0
+    // The folder chooser the 收藏 button opens. A favourite goes into the folder picked
+    // there, not silently into the account's first one.
+    property bool favPickerOpen: false
+    property var favPickerFolders: []
+    property var favPickerTarget: 0
+    property string statusText: ""
+    property string keyword: ""
+
+    // Detail state
+    property var detail: ({})
+    property var qualities: []
+    property var related: []
+    property var comments: []
+    property var interaction: ({})
+    property int selectedPart: 0
+    property int selectedQuality: 0
+    property bool showComments: false
+    // Where the account left the selected part, in seconds; -1 when the video is not in
+    // the watch history. Drives the play button's label and is re-read on every part
+    // change, so the label never promises a resume that bilibiliPlay would not use.
+    property real resumeAt: -1
+    // Danmaku overlay state; the comments come from the same track the detail API
+    // already reports, so enabling it needs no extra request.
+    //
+    // The module-wide default lives in 播放设置 and this follows it: turning it off there
+    // switches danmaku off here too, and a newly opened video picks the default up again.
+    // The per-video toggle in the detail page only affects the video currently open.
+    readonly property bool danmakuDefault: !!veyra.preferences.biliDanmaku
+    property bool danmakuOn: danmakuDefault
+    property int danmakuLines: 0
+    // The module's own settings panel. It lives here rather than only under
+    // 设置 → 播放 because that is where someone browsing Bilibili looks for it.
+    property bool showSettings: false
+
+    property var account: ({})
+
+    // Sign-in state: "" idle -> "waiting" code shown -> "scanned" -> confirmed.
+    property string qrState: ""
+    property string qrImage: ""
+    property string qrHint: ""
+
+    // Load once, the first time the page is actually shown. Component.onCompleted also
+    // fires when the page object is built at startup — Main.qml declares it eagerly —
+    // so doing the work there spent three blocking HTTP round-trips (nav + WBI keys +
+    // feed) before the first frame of a window the user may never even open here.
+    property bool loadedOnce: false
+    onCurrentChanged: {
+        if (root.current && !loadedOnce) {
+            loadedOnce = true
+            root.refreshAccount()
+            // First load of the page: nothing is cached yet, so this always fetches.
+            root.loadFeed(true)
+        }
+    }
+
+    function refreshAccount() {
+        root.account = veyra.bilibiliAccount()
+    }
+
+    function startQrLogin() {
+        const url = veyra.bilibiliQrStart()
+        if (!url) {
+            root.qrState = ""
+            root.qrHint = qsTr("无法获取登录二维码")
+            return
+        }
+        root.qrImage = veyra.bilibiliQrImage(360)
+        root.qrState = "waiting"
+        root.qrHint = qsTr("请用 B 站手机客户端扫码")
+        qrPoll.session = true
+    }
+
+    function cancelQrLogin() {
+        qrPoll.session = false
+        root.qrState = ""
+        root.qrImage = ""
+        root.qrHint = ""
+    }
+
+    // Every list view goes through here so the empty-state message stays uniform.
+    //
+    // force = false (the rail's default) reuses that entry's cached list instead of
+    // fetching it again, so clicking a rail entry is an instant switch; re-fetching is
+    // what the 刷新 button at the top right is for. 刷新, the first load of the page and
+    // a fresh sign-in pass force = true.
+    function load(view_, force) {
+        root.showSettings = false
+        // A favourite folder keeps its own list, keyed by folder so switching folders does
+        // not reuse another folder's cards.
+        const key = view_ === "fav" ? ("fav:" + root.favFolderId) : view_
+        if (!force && Object.prototype.hasOwnProperty.call(root.cardCache, key)) {
+            root.view = view_
+            root.cards = root.cardCache[key].slice()
+            root.resetCardsModel(root.cards)
+            root.listLoading = false
+            root.statusText = ""
+            // Restore the paging cursor: the cached list may already hold several pages.
+            root.activeListKey = key
+            root.activeListPage = (root.cardCache[key + ":page"] || 1) + 1
+            root.loadingMore = false
+            root.lastRequestedPage = 0
+            root.listExhausted = false
+            return
+        }
+        root.view = view_
+        root.statusText = qsTr("加载中…")
+        root.listLoading = true
+        if (view_ === "fav") {
+            // The folder list still comes back synchronously: it is a single cheap request
+            // and the picker needs it as soon as the view appears. The videos themselves
+            // are fetched asynchronously below, like every other list.
+            root.favFolders = veyra.bilibiliFavFolders()
+        }
+        // Nothing blocks here: the request runs on a worker and arrives through
+        // onBilibiliListReady, so the window keeps painting (and the skeleton shows).
+        root.pendingListKey = key
+        root.pendingListGeneration = veyra.bilibiliLoadList(key)
+        // First page of a freshly selected entry: reset the paging state so loadMore
+        // starts from page 2.
+        root.activeListKey = key
+        root.activeListPage = 2
+        root.loadingMore = false
+        root.lastRequestedPage = 0
+        root.listExhausted = false
+    }
+
+    // One result slot for the asynchronous fetch. The generation check drops a reply that
+    // a newer click has already superseded, so a slow answer cannot overwrite a fast one.
+    property string pendingListKey: ""
+    property int pendingListGeneration: 0
+
+    property int pendingQualitiesGeneration: 0
+
+    // ---- endless scrolling ----
+    // The list currently on screen, so "load more" knows which one to extend. The page
+    // counter is per key: only popular/search/favourites have a page parameter, while
+    // 推荐/历史/稍后再看 are simply requested again (the site has no page for those).
+    property string activeListKey: ""
+    property int activeListPage: 1
+    property bool loadingMore: false
+    property int loadMoreGeneration: 0
+    // Stops the same page being appended twice when scroll and layout both fire in one
+    // turn.
+    property int lastRequestedPage: 0
+    // Set when a batch came back empty or with nothing new. Without it a short list that
+    // does not fill the viewport kept asking again (the new "content shorter than the
+    // viewport" trigger), and an empty reply would restart that loop on every tick.
+    property bool listExhausted: false
+
+    function listFetchKey(base, page) {
+        const paged = base === "popular" || base.startsWith("search:") || base.startsWith("fav:")
+        return paged ? (base + ":" + page) : base
+    }
+
+    function loadMore() {
+        if (root.loadingMore || root.listLoading || root.listExhausted) return
+        if (!root.activeListKey.length || root.cards.length === 0) return
+        if (root.lastRequestedPage === root.activeListPage) return
+        root.loadingMore = true
+        root.lastRequestedPage = root.activeListPage
+        root.loadMoreGeneration = veyra.bilibiliLoadList(
+            root.listFetchKey(root.activeListKey, root.activeListPage))
+    }
+
+    Connections {
+        target: veyra
+        function onBilibiliListReady(kind, items, generation) {
+            // One signal carries several kinds now; dispatch on the prefix so a card list,
+            // a quality list and a related list cannot be mistaken for one another.
+            if (kind.startsWith("qualities:")) {
+                if (generation !== root.pendingQualitiesGeneration) return
+                root.qualities = items
+                root.statusText = items.length ? "" : qsTr("无法获取画质列表，可能未登录")
+                return
+            }
+            if (kind.startsWith("related:")) {
+                if (generation !== root.pendingRelatedGeneration) return
+                root.related = items
+                return
+            }
+            // Append or replace? A reply to loadMore carries the loadMoreGeneration and
+            // must be added to the end instead of replacing what is already on screen.
+            if (root.loadingMore && generation === root.loadMoreGeneration) {
+                root.loadingMore = false
+                if (!items.length) {
+                    // Nothing more to give: stop asking until the list is switched.
+                    root.lastRequestedPage = root.activeListPage
+                    root.listExhausted = true
+                    return
+                }
+                // Deduplicate by bvid, because the endpoints without a page parameter
+                // return fresh batches that can overlap what is already listed.
+                const seen = ({})
+                for (let i = 0; i < root.cards.length; ++i)
+                    if (root.cards[i] && root.cards[i].bvid) seen[root.cards[i].bvid] = true
+                const merged = root.cards.slice()
+                for (let i = 0; i < items.length; ++i) {
+                    const it = items[i]
+                    if (!it || !it.bvid || seen[it.bvid]) continue
+                    seen[it.bvid] = true
+                    merged.push(it)
+                }
+                if (merged.length === root.cards.length) {
+                    // A batch with nothing new (the feed repeated itself): do not keep
+                    // asking for the same page.
+                    root.lastRequestedPage = root.activeListPage
+                    root.listExhausted = true
+                    return
+                }
+                // Only the new tail is appended, so GridView keeps its scroll offset.
+                // Assigning the merged array instead rebuilt the whole model and snapped
+                // the view back to the top on every batch.
+                root.appendCardsToModel(merged, root.cards.length)
+                root.cards = merged
+                // Advance the cursor only after a batch actually added something. The
+                // endpoints with a page parameter take the next page; the others are
+                // called again with the same key (the page suffix is ignored for them).
+                const paged = root.activeListKey === "popular"
+                              || root.activeListKey.startsWith("search:")
+                              || root.activeListKey.startsWith("fav:")
+                if (paged) root.activeListPage = root.activeListPage + 1
+                root.lastRequestedPage = 0
+                root.listExhausted = false
+                const cache = root.cardCache
+                cache[root.activeListKey] = merged.slice()
+                cache[root.activeListKey + ":page"] = root.activeListPage - 1
+                root.cardCache = cache
+                return
+            }
+            if (generation !== root.pendingListGeneration) return
+            // A paged reply may carry the page suffix, so compare the base key only.
+            const replyBase = kind.replace(/:[0-9]+$/, "")
+            if (replyBase !== root.pendingListKey && kind !== root.pendingListKey) return
+            root.listLoading = false
+            const result = items
+            // A copy, so GridView sees a new array every time.
+            root.cards = result.slice()
+            root.resetCardsModel(root.cards)
+            const cache = root.cardCache
+            cache[root.pendingListKey] = result.slice()
+            cache[root.pendingListKey + ":page"] = 1
+            root.cardCache = cache
+            root.statusText = result.length ? "" : (veyra.bilibiliLastError() || qsTr("没有内容"))
+        }
+    }
+
+    property int pendingRelatedGeneration: 0
+
+    // Switches to one favourite folder. Each folder keeps its own cached list, so going
+    // back and forth does not refetch; force reloads the folder that is on screen.
+    function openFavFolder(mediaId, force) {
+        root.showSettings = false
+        root.favFolderId = mediaId
+        root.view = "fav"
+        const key = "fav:" + mediaId
+        if (!force && Object.prototype.hasOwnProperty.call(root.cardCache, key)) {
+            root.cards = root.cardCache[key].slice()
+            root.resetCardsModel(root.cards)
+            root.activeListKey = key
+            root.activeListPage = (root.cardCache[key + ":page"] || 1) + 1
+            root.loadingMore = false
+            root.lastRequestedPage = 0
+            root.listExhausted = false
+            root.statusText = ""
+            return
+        }
+        root.statusText = qsTr("加载中…")
+        root.listLoading = true
+        // Same asynchronous path as the rail entries; the reply lands on the shared slot.
+        root.pendingListKey = key
+        root.pendingListGeneration = veyra.bilibiliLoadList(key)
+        root.activeListKey = key
+        root.activeListPage = 2
+        root.loadingMore = false
+        root.lastRequestedPage = 0
+        root.listExhausted = false
+    }
+
+    function loadFeed(force) { root.load("home", force === true) }
+
+    // force re-runs the same query; without it a repeated search of the same words reuses
+    // the cached result, keyed by the query itself so different words still search.
+    function doSearch(force) {
+        if (!root.keyword.trim().length) return
+        root.showSettings = false
+        root.view = "search"
+        const key = "search:" + root.keyword.trim()
+        if (!force && Object.prototype.hasOwnProperty.call(root.cardCache, key)) {
+            root.cards = root.cardCache[key].slice()
+            root.resetCardsModel(root.cards)
+            root.activeListKey = key
+            root.activeListPage = (root.cardCache[key + ":page"] || 1) + 1
+            root.loadingMore = false
+            root.lastRequestedPage = 0
+            root.listExhausted = false
+            root.statusText = ""
+            return
+        }
+        root.statusText = qsTr("搜索中…")
+        root.listLoading = true
+        // Asynchronous like the rail entries. The key carries the words, so the reply
+        // handler caches under the same slot the synchronous path used.
+        root.pendingListKey = key
+        root.pendingListGeneration = veyra.bilibiliLoadList(key)
+    }
+
+    function openVideo(bvid) {
+        root.showSettings = false
+        // A different video means a different track: drop the old one first.
+        if (root.danmakuOn) { veyra.bilibiliDisableDanmaku(); root.danmakuOn = false; }
+        root.danmakuLines = 0
+        // Switch first, fetch after: the detail request is a blocking round trip, and it
+        // used to run before root.view was set, so the click froze the window instead of
+        // showing the page. Now the page appears immediately and fills in when the reply
+        // arrives through onBilibiliObjectReady.
+        root.view = "detail"
+        root.detailLoading = true
+        root.detail = ({})
+        root.related = []
+        root.comments = []
+        root.showComments = false
+        root.pendingDetailBvid = bvid
+        root.pendingDetailGeneration = veyra.bilibiliLoadList("detail:" + bvid)
+    }
+
+    // Fills the detail page once its object arrives. Separate slot from the card lists so
+    // a slow list fetch cannot overwrite the detail and vice versa.
+    property string pendingDetailBvid: ""
+    property int pendingDetailGeneration: 0
+    property bool detailLoading: false
+
+    Connections {
+        target: veyra
+        function onBilibiliObjectReady(kind, object, generation) {
+            if (generation !== root.pendingDetailGeneration) return
+            if (kind !== "detail:" + root.pendingDetailBvid) return
+            root.detailLoading = false
+            root.detail = object
+            if (!object.ok) {
+                root.statusText = object.error || qsTr("无法打开该视频")
+                return
+            }
+            root.finishOpenDetail(root.pendingDetailBvid)
+        }
+    }
+
+    // Everything that depends on the detail response: qualities and the resume point need
+    // the first part's cid, which only the detail carries.
+    function finishOpenDetail(bvid) {
+        root.selectedPart = 0
+        root.selectedQuality = 0
+        const firstCid = (root.detail.parts && root.detail.parts.length)
+            ? root.detail.parts[0].cid : 0
+        // Both are asynchronous now and still blocking on the GUI thread worth noting:
+        // resumeAt is one cheap history read, qualities is the heavier playurl call. The
+        // cid is passed along so qualities no longer re-fetches the page to find it.
+        root.resumeAt = firstCid ? veyra.bilibiliResumeAtCid(bvid, firstCid) : -1
+        root.qualities = []
+        if (firstCid) {
+            root.pendingQualitiesGeneration = veyra.bilibiliLoadList(
+                "qualities:" + bvid + ":" + firstCid)
+        }
+        root.deferredBvid = bvid
+        detailFillTimer.restart()
+    }
+
+    // Filled in one turn after the detail page is already on screen. Each of these is a
+    // blocking request, so they are shown late rather than making the user wait.
+    property string deferredBvid: ""
+    Timer {
+        id: detailFillTimer
+        interval: 0
+        repeat: false
+        onTriggered: {
+            const bvid = root.deferredBvid
+            if (!bvid.length || root.view !== "detail") return
+            root.interaction = veyra.bilibiliInteractionState(bvid)
+            if (root.view !== "detail") return
+            root.related = []
+            root.pendingRelatedGeneration = veyra.bilibiliLoadList("related:" + bvid)
+            if (root.view !== "detail") return
+            if (root.danmakuDefault) root.loadDanmaku()
+        }
+    }
+
+    // m:ss, the shape a player shows for a resume position.
+    // One place for the "load the track, then report it" sequence: the default in
+    // 播放设置 and the per-video button must behave identically, including the note
+    // shown when a video simply has no danmaku.
+    function loadDanmaku() {
+        if (!root.detail.ok) return
+        if (veyra.bilibiliEnableDanmaku(root.detail.bvid, root.selectedPart)) {
+            root.danmakuOn = true
+            root.danmakuLines = veyra.bilibiliDanmakuCount()
+        } else {
+            root.danmakuOn = false
+            root.danmakuLines = 0
+            root.statusText = veyra.bilibiliLastError() || qsTr("这个视频没有弹幕")
+        }
+    }
+
+    function unloadDanmaku() {
+        veyra.bilibiliDisableDanmaku()
+        root.danmakuOn = false
+        root.danmakuLines = 0
+    }
+
+    function formatSeconds(total) {
+        const s = Math.max(0, Math.round(total))
+        const m = Math.floor(s / 60)
+        const rest = s % 60
+        return m + ":" + (rest < 10 ? "0" : "") + rest
+    }
+
+    // Set while a Bilibili video is playing, so the end can be noticed and the user put
+    // back on the page they started from. openPath moves to 极简 for playback; this is
+    // the way back, driven from the position the bridge already publishes.
+    property bool biliPlaying: false
+    property real lastSeenPosition: 0
+
+    function playSelected(fromStart) {
+        if (!root.detail.ok) return
+        // A different part is a different danmaku track: drop the old one, or it keeps
+        // drawing over the new picture (openVideo() clears it, but this path skips that).
+        if (root.danmakuOn) { veyra.bilibiliDisableDanmaku(); root.danmakuOn = false }
+        root.danmakuLines = 0
+        root.biliPlaying = true
+        root.lastSeenPosition = 0
+        // The cid comes from the detail response, so the play call no longer asks the site
+        // for the page again: that lookup sat between the click and the first frame.
+        const parts = root.detail.parts || []
+        const cid = (root.selectedPart >= 0 && root.selectedPart < parts.length)
+            ? parts[root.selectedPart].cid : 0
+        if (cid) {
+            veyra.bilibiliPlayCid(root.detail.bvid, cid, root.selectedQuality,
+                                  fromStart === true)
+        } else {
+            veyra.bilibiliPlay(root.detail.bvid, root.selectedPart, root.selectedQuality,
+                               fromStart === true)
+        }
+    }
+
+    // Playback reaching its end: position stops moving near the duration. Polled rather
+    // than event-driven because the bridge has no "ended" signal QML can bind to, and a
+    // 500 ms poll is far cheaper than the alternatives. Cleared as soon as it fires so a
+    // single end returns the user exactly once.
+    Timer {
+        interval: 500
+        repeat: true
+        running: root.biliPlaying
+        onTriggered: {
+            const pos = veyra.position
+            const dur = veyra.duration
+            if (dur <= 0) return
+            if (pos > 0.1) root.lastSeenPosition = pos
+            // Near the end, or the position went backwards to zero after having played
+            // (a restart) - either way playback is no longer mid-video.
+            if (root.lastSeenPosition > 1 && pos >= dur - 0.4) {
+                root.biliPlaying = false
+                // Back to the page the video was started from. The engine keeps its
+                // session; the picture stops being shown because "bili" is a browsing
+                // page and its video rect is not a playing surface.
+                root.requestPage("bili")
+            }
+        }
+    }
+
+    function toggleComments() {
+        root.showComments = !root.showComments
+        if (root.showComments && root.comments.length === 0)
+            root.comments = veyra.bilibiliComments(root.detail.bvid, 1)
+    }
+
+    // One tappable rail entry.
+    component NavItem: Rectangle {
+        id: navItem
+        property string label
+        property string target
+        signal activated()
+
+        // While the settings panel is open it owns the content area, so the rail
+        // highlights it rather than whichever list was showing before.
+        readonly property bool isActive:
+            root.showSettings ? target === "settings" : root.view === target
+
+        Layout.fillWidth: true
+        height: 34
+        radius: 8
+        color: isActive ? Theme.accentSoft : (navMouse.containsMouse ? Theme.card3 : "transparent")
+
+        Text {
+            anchors.left: parent.left
+            anchors.leftMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            text: navItem.label
+            color: navItem.isActive ? Theme.accent : Theme.t2
+            font.family: Theme.fontUi
+            font.pixelSize: 13
+        }
+
+        MouseArea {
+            id: navMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: navItem.activated()
+        }
+    }
+
+    RowLayout {
+        anchors.fill: parent
+        // 10 rather than 14: with the rail at 100 this is what lets the grid fit five
+        // columns in the default 1280 window (1280 - 20 - 100 - 10 = 1150).
+        anchors.margins: 10
+        spacing: 14
+
+        // ---- left rail ----
+        Rectangle {
+            Layout.preferredWidth: 100
+            Layout.fillHeight: true
+            radius: 12
+            color: Theme.card2
+            border.width: 1
+            border.color: Theme.stroke
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 4
+
+                NavItem { label: qsTr("首页推荐"); target: "home"; onActivated: root.load("home") }
+                NavItem { label: qsTr("热门"); target: "popular"; onActivated: root.load("popular") }
+                NavItem { label: qsTr("关注动态"); target: "follow"; onActivated: root.load("follow") }
+                NavItem { label: qsTr("历史记录"); target: "history"; onActivated: root.load("history") }
+                NavItem { label: qsTr("我的收藏"); target: "fav"; onActivated: root.load("fav") }
+                NavItem { label: qsTr("稍后再看"); target: "watchlater"; onActivated: root.load("watchlater") }
+                NavItem { label: qsTr("搜索结果"); target: "search"; onActivated: {} }
+                NavItem { label: qsTr("B站播放设置"); target: "settings"; onActivated: root.showSettings = true }
+
+                Item { Layout.fillHeight: true }
+
+                // account block
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: accountColumn.implicitHeight + 16
+                    radius: 8
+                    color: Theme.card3
+
+                    ColumnLayout {
+                        id: accountColumn
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: 6
+
+                        Text {
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            text: root.account.loggedIn
+                                  ? root.account.name + (root.account.vip ? qsTr("（大会员）") : "")
+                                  : qsTr("未登录")
+                            color: root.account.loggedIn ? Theme.ok : Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 12
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            visible: !root.account.loggedIn
+                            text: qsTr("仅能看 480P")
+                            color: Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 10
+                        }
+                        VButton {
+                            Layout.fillWidth: true
+                            implicitWidth: 0
+                            text: root.account.loggedIn ? qsTr("退出")
+                                  : (root.qrState.length ? qsTr("取消登录") : qsTr("扫码登录"))
+                            onClicked: {
+                                if (root.account.loggedIn) {
+                                    veyra.bilibiliSignOut()
+                                    root.refreshAccount()
+                                    // Signed out: everything cached came from the old
+                                    // account (favourites, history, feed), so drop it.
+                                    root.cardCache = ({})
+                                } else if (root.qrState.length) {
+                                    root.cancelQrLogin()
+                                } else {
+                                    root.startQrLogin()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- content ----
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 10
+
+            // search bar
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 34
+                    radius: 8
+                    color: Theme.card2
+                    border.width: 1
+                    border.color: searchField.activeFocus ? Theme.accent : Theme.stroke
+
+                    TextInput {
+                        id: searchField
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.t1
+                        font.family: Theme.fontUi
+                        font.pixelSize: 13
+                        selectByMouse: true
+                        onTextChanged: root.keyword = text
+                        onAccepted: root.doSearch(true)
+                    }
+                    // TextInput has no placeholder property; this is the usual stand-in.
+                    Text {
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        verticalAlignment: Text.AlignVCenter
+                        visible: searchField.text.length === 0
+                        text: qsTr("搜索 B 站视频")
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 13
+                    }
+                }
+
+                // The button always runs the query: pressing it is an explicit request
+                // for that search, even when the same words were searched before.
+                VButton { text: qsTr("搜索"); onClicked: root.doSearch(true) }
+                VButton {
+                    text: qsTr("刷新")
+                    onClicked: {
+                        // 刷新 always refetches; the rail entries reuse their cached list.
+                        if (root.view === "detail") root.openVideo(root.detail.bvid)
+                        else if (root.view === "fav") root.openFavFolder(root.favFolderId, true)
+                        else if (root.view === "search") root.doSearch(true)
+                        else root.load(root.view === "search" ? "home" : root.view, true)
+                    }
+                }
+            }
+
+            Timer {
+                id: qrPoll
+                interval: 1000
+                repeat: true
+                // Polling costs a blocking HTTPS round-trip every second. "running" is the
+                // session state (a code is being waited on); the poll only actually fires
+                // while the page is on screen, so leaving it for 极简/专业 no longer freezes
+                // the UI once a second for the whole ~180 s the code stays valid. The code
+                // itself is untouched, so coming back resumes the same session.
+                property bool session: false
+                running: session && root.current
+                onTriggered: {
+                    const s = veyra.bilibiliQrPoll()
+                    if (s === "confirmed") {
+                        session = false
+                        root.qrState = ""
+                        root.qrImage = ""
+                        root.qrHint = ""
+                        root.refreshAccount()
+                        // Signed in: the account can see more than a moment ago, so its
+                        // cached lists are dropped and the feed is refetched.
+                        root.cardCache = ({})
+                        root.load("home", true)
+                    } else if (s === "scanned") {
+                        root.qrState = "scanned"
+                        root.qrHint = qsTr("已扫码，请在手机上确认")
+                    } else if (s === "expired") {
+                        session = false
+                        root.qrState = ""
+                        root.qrImage = ""
+                        root.qrHint = qsTr("二维码已过期，请重新点击扫码登录")
+                    } else if (s === "failed" || s === "none") {
+                        session = false
+                        root.qrState = ""
+                        root.qrImage = ""
+                        root.qrHint = qsTr("登录失败，请重试")
+                    }
+                }
+            }
+
+            // ---- favourite folder picker ----
+            // Only on the favourites view: the account can keep several folders, and
+            // showing just the default one hid the user's own categories entirely.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                visible: root.view === "fav" && root.favFolders.length > 0
+
+                Repeater {
+                    model: root.favFolders
+
+                    Rectangle {
+                        // Comparing as strings: the id crosses from C++ as qlonglong
+                        // and QML compares that strictly against a JS number.
+                        readonly property bool active: String(root.favFolderId) === String(modelData.id)
+                        Layout.preferredHeight: 28
+                        // The label is laid out by the rectangle, not the other way
+                        // round: sizing the rectangle from an anchored child's
+                        // implicitWidth is a binding loop.
+                        Layout.preferredWidth: folderLabel.implicitWidth + 24
+                        radius: 14
+                        color: active ? Theme.accentSoft : Theme.card2
+                        border.width: 1
+                        border.color: active ? Theme.accent : Theme.stroke
+
+                        Text {
+                            id: folderLabel
+                            anchors.centerIn: parent
+                            text: modelData.title + " (" + modelData.count + ")"
+                            color: active ? Theme.accent : Theme.t2
+                            font.family: Theme.fontUi
+                            font.pixelSize: 12
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.openFavFolder(modelData.id)
+                        }
+                    }
+                }
+                Item { Layout.fillWidth: true }
+            }
+
+            // status line
+            Text {
+                Layout.fillWidth: true
+                visible: text.length > 0
+                wrapMode: Text.Wrap
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: 12
+                text: root.statusText
+            }
+
+            // ---- module settings ----
+            // The same three preferences the 设置 page exposes, reachable from the
+            // module itself so they are where the user looks for them.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.showSettings
+                radius: 12
+                color: Theme.card2
+                border.width: 1
+                border.color: Theme.stroke
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 20
+                    spacing: 16
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: qsTr("B 站播放设置")
+                            color: Theme.t1
+                            font.family: Theme.fontUi
+                            font.pixelSize: 16
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 12
+                        text: qsTr("默认画质是「上限」：实际取不高于此档的最高可用画质。"
+                                   + "全部可用画质都高于此档时，取最低档。")
+                    }
+
+                    Text { text: qsTr("默认画质"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Repeater {
+                            model: [
+                                { id: "0", label: qsTr("自动") },
+                                { id: "127", label: "8K" },
+                                { id: "126", label: qsTr("杜比") },
+                                { id: "125", label: "HDR" },
+                                { id: "120", label: "4K" },
+                                { id: "116", label: "1080P60" },
+                                { id: "112", label: "1080P+" },
+                                { id: "80", label: "1080P" },
+                                { id: "74", label: "720P60" },
+                                { id: "64", label: "720P" },
+                                { id: "32", label: "480P" },
+                                { id: "16", label: "360P" }
+                            ]
+                            Rectangle {
+                                readonly property bool active:
+                                    String(veyra.preferences.biliQuality ?? 0) === modelData.id
+                                width: label.implicitWidth + 22
+                                height: 28
+                                radius: 14
+                                color: active ? Theme.accentSoft : Theme.card3
+                                border.width: 1
+                                border.color: active ? Theme.accent : Theme.stroke
+                                Text {
+                                    id: label
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: active ? Theme.accent : Theme.t2
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 12
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: veyra.setPreference("biliQuality", Number(modelData.id))
+                                }
+                            }
+                        }
+                    }
+
+                    Text { text: qsTr("视频编码"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
+                    RowLayout {
+                        spacing: 6
+                        Repeater {
+                            model: [
+                                { id: "auto", label: qsTr("自动") },
+                                { id: "avc", label: "H.264" },
+                                { id: "hevc", label: "HEVC" }
+                            ]
+                            Rectangle {
+                                readonly property bool active:
+                                    (veyra.preferences.biliCodec || "auto") === modelData.id
+                                width: codecLabel.implicitWidth + 22
+                                height: 28
+                                radius: 14
+                                color: active ? Theme.accentSoft : Theme.card3
+                                border.width: 1
+                                border.color: active ? Theme.accent : Theme.stroke
+                                Text {
+                                    id: codecLabel
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: active ? Theme.accent : Theme.t2
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 12
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: veyra.setPreference("biliCodec", modelData.id)
+                                }
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Text { text: qsTr("音频编码"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
+                    RowLayout {
+                        spacing: 6
+                        Repeater {
+                            model: [
+                                { id: "auto", label: qsTr("自动") },
+                                { id: "flac", label: "Hi-Res" },
+                                { id: "dolby", label: qsTr("杜比全景声") },
+                                { id: "aac192", label: "AAC 192K" },
+                                { id: "aac132", label: "AAC 132K" },
+                                { id: "aac64", label: "AAC 64K" }
+                            ]
+                            Rectangle {
+                                readonly property bool active:
+                                    (veyra.preferences.biliAudio || "auto") === modelData.id
+                                width: audioLabel.implicitWidth + 22
+                                height: 28
+                                radius: 14
+                                color: active ? Theme.accentSoft : Theme.card3
+                                border.width: 1
+                                border.color: active ? Theme.accent : Theme.stroke
+                                Text {
+                                    id: audioLabel
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: active ? Theme.accent : Theme.t2
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 12
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: veyra.setPreference("biliAudio", modelData.id)
+                                }
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 11
+                        text: qsTr("Hi-Res 与杜比全景声需要大会员，且视频本身要有对应音轨；"
+                                   + "选中的音轨不存在时自动回退到最高码率 AAC。")
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        CheckBox {
+                            checked: veyra.preferences.biliAutoCdn !== false
+                            onToggled: veyra.setPreference("biliAutoCdn", checked)
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: qsTr("备用 CDN")
+                                color: Theme.t2
+                                font.family: Theme.fontUi
+                                font.pixelSize: 12
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                text: qsTr("主地址打不开时换用镜像节点")
+                                color: Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: 11
+                            }
+                        }
+                    }
+
+                    // ---- danmaku appearance ----
+                    // The engine already takes these four; they were hardcoded until now.
+                    // Title and switch on one line, the note under it. The switch is the
+                    // master default for the module; everything below it is how that
+                    // danmaku looks once loaded.
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 8
+                        spacing: 4
+
+                        RowLayout {
+                            spacing: 8
+                            Text {
+                                text: qsTr("弹幕")
+                                color: Theme.t1
+                                font.family: Theme.fontUi
+                                font.pixelSize: 14
+                            }
+                            VSwitch {
+                                objectName: "bili-danmaku-default"
+                                checked: root.danmakuDefault
+                                onToggled: function (on) {
+                                    veyra.setPreference("biliDanmaku", on)
+                                    // Follow immediately: the page the user is looking at
+                                    // must match the switch, not wait for the next video.
+                                    if (on) root.loadDanmaku()
+                                    else root.unloadDanmaku()
+                                }
+                            }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: qsTr("打开视频即加载弹幕；关闭后新视频不带弹幕，详情页也可以单独开关")
+                            color: Theme.t3
+                            wrapMode: Text.Wrap
+                            font.family: Theme.fontUi
+                            font.pixelSize: 11
+                        }
+                    }
+
+                    // A compact stepper: the value is shown between two buttons, which
+                    // keeps a 50..250 range usable without a full-width slider.
+                    component StepRow: RowLayout {
+                        id: stepRow
+                        property string label
+                        property string prefKey
+                        property int current
+                        property int step
+                        property int lowest
+                        property int highest
+                        property string suffix
+
+                        spacing: 8
+                        Text {
+                            Layout.preferredWidth: 84
+                            text: stepRow.label
+                            color: Theme.t2
+                            font.family: Theme.fontUi
+                            font.pixelSize: 12
+                        }
+                        VButton {
+                            text: "−"
+                            implicitWidth: 34
+                            enabled: stepRow.current > stepRow.lowest
+                            onClicked: veyra.setPreference(stepRow.prefKey,
+                                Math.max(stepRow.lowest, stepRow.current - stepRow.step))
+                        }
+                        Rectangle {
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 28
+                            radius: 6
+                            color: Theme.card3
+                            Text {
+                                anchors.centerIn: parent
+                                text: stepRow.current + stepRow.suffix
+                                color: Theme.t1
+                                font.family: Theme.fontMono
+                                font.pixelSize: 12
+                            }
+                        }
+                        VButton {
+                            text: "+"
+                            implicitWidth: 34
+                            enabled: stepRow.current < stepRow.highest
+                            onClicked: veyra.setPreference(stepRow.prefKey,
+                                Math.min(stepRow.highest, stepRow.current + stepRow.step))
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    StepRow {
+                        label: qsTr("大小")
+                        prefKey: "danmakuScale"
+                        current: veyra.preferences.danmakuScale ?? 100
+                        step: 10; lowest: 50; highest: 250; suffix: "%"
+                    }
+                    StepRow {
+                        label: qsTr("不透明度")
+                        prefKey: "danmakuOpacity"
+                        current: veyra.preferences.danmakuOpacity ?? 80
+                        step: 10; lowest: 10; highest: 100; suffix: "%"
+                    }
+                    StepRow {
+                        label: qsTr("速度")
+                        prefKey: "danmakuSpeed"
+                        current: veyra.preferences.danmakuSpeed ?? 100
+                        step: 10; lowest: 50; highest: 200; suffix: "%"
+                    }
+                    StepRow {
+                        label: qsTr("显示区域")
+                        prefKey: "danmakuArea"
+                        current: veyra.preferences.danmakuArea ?? 50
+                        step: 10; lowest: 10; highest: 100; suffix: "%"
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 11
+                        text: qsTr("显示区域 = 弹幕最多占用画面上方多高的比例，100% 会盖住整个画面。"
+                                   + "防遮挡需要 B 站的额外蒙版数据，目前未支持。")
+                    }
+
+                    Item { Layout.fillHeight: true }
+                }
+            }
+
+            // ---- sign-in panel ----
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.qrState.length > 0
+                radius: 12
+                color: Theme.card2
+                border.width: 1
+                border.color: Theme.stroke
+
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    spacing: 14
+
+                    Rectangle {
+                        Layout.alignment: Qt.AlignHCenter
+                        width: 300
+                        height: 300
+                        radius: 8
+                        color: "#fff"
+
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            source: root.qrImage
+                            fillMode: Image.PreserveAspectFit
+                            cache: false
+                            smooth: false
+                        }
+                    }
+
+                    Text {
+                        Layout.alignment: Qt.AlignHCenter
+                        color: root.qrState === "scanned" ? Theme.ok : Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: 13
+                        text: root.qrHint
+                    }
+                    Text {
+                        Layout.alignment: Qt.AlignHCenter
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 11
+                        text: qsTr("扫码后画质上限提升到账号等级允许的档位")
+                    }
+                }
+            }
+
+            // ---- loading skeleton ----
+            // Shown instead of the grid while a fetch is in flight. The request itself
+            // blocks the GUI thread, so without this the click paints nothing and the
+            // window freezes on the previous list until the answer arrives; the skeleton
+            // at least gives the click immediate feedback. It replaces the grid rather
+            // than covering it, so the two never paint on top of each other.
+            GridView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.listLoading && root.view !== "detail"
+                         && root.qrState.length === 0 && !root.showSettings
+                // Follows the real grid so the placeholders sit exactly where the tiles
+                // will land. The binding is re-evaluated once the grid exists, so the
+                // declaration order above it is harmless.
+                cellWidth: grid.fittedCellWidth > 0 ? grid.fittedCellWidth : 220
+                cellHeight: grid.fittedCellHeight > 0 ? grid.fittedCellHeight : 196
+                clip: true
+                interactive: false
+                // Enough to fill a maximised window; the count is capped so a huge screen
+                // does not build hundreds of placeholder tiles.
+                model: root.listLoading ? Math.min(40, Math.max(12, Math.ceil(width / cellWidth) * Math.ceil(height / cellHeight) + 4)) : 0
+
+                delegate: Item {
+                    width: GridView.view ? GridView.view.cellWidth : 232
+                    height: GridView.view ? GridView.view.cellHeight : 196
+
+                    readonly property real pad: 6
+
+                    Rectangle {
+                        x: parent.pad
+                        y: parent.pad
+                        width: parent.width - parent.pad * 2
+                        height: width * 0.5625
+                        radius: 6
+                        color: Theme.card3
+                    }
+                    Rectangle {
+                        x: parent.pad
+                        y: parent.pad + (parent.width - parent.pad * 2) * 0.5625 + 5
+                        width: parent.width - parent.pad * 2
+                        height: Math.ceil(12 * 1.35)
+                        radius: 3
+                        color: Theme.card3
+                    }
+                    Rectangle {
+                        x: parent.pad
+                        y: parent.pad + (parent.width - parent.pad * 2) * 0.5625 + 5 + Math.ceil(12 * 1.35) + 3
+                        width: (parent.width - parent.pad * 2) * 0.55
+                        height: 11
+                        radius: 3
+                        color: Theme.card3
+                    }
+                }
+            }
+
+            // ---- video grid ----
+            GridView {
+                id: grid
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: !root.listLoading && root.view !== "detail"
+                         && root.qrState.length === 0 && !root.showSettings
+                // The app's own scrollbar, same as every other list in this program: a thin
+                // thumb, draggable, no track or arrows.
+                ScrollBar.vertical: VScrollBar { }
+                // The column count follows the ideal card width and the cells then share
+                // the available width exactly, so every window size is flush with no
+                // leftover strip: a fixed 232 fits four columns in the default window and
+                // leaves 32 px at 2544 because 2352 is not a multiple of 232.
+                readonly property real idealCellWidth: 220
+                readonly property int columnCount: Math.max(1, Math.round(width / idealCellWidth))
+                readonly property real fittedCellWidth: width / columnCount
+                // A wider cell means a taller cover (16:9 on the inner width), so the cell
+                // grows with it or the title and author line get clipped.
+                readonly property real fittedCellHeight: (fittedCellWidth - 12) * 0.5625 + 78
+                cellWidth: fittedCellWidth
+                cellHeight: fittedCellHeight
+                clip: true
+                // A ListModel, not the array: appending to it leaves contentY untouched,
+                // while assigning a new array rebuilds the model and jumps to the top.
+                model: cardsModel
+                // Endless scrolling: ask for the next batch while two rows are still
+                // below the viewport, so the append usually lands before the user reaches
+                // the end. contentHeight changes as delegates are built, hence the wider
+                // threshold rather than an exact "at the bottom" test.
+                onContentYChanged: maybeLoadMore()
+                onContentHeightChanged: maybeLoadMore()
+                onHeightChanged: maybeLoadMore()
+                // Load when the bottom is near, and also when the content does not even
+                // fill the viewport: the old early return treated a short list as "nothing
+                // to scroll" and stopped there forever. That happened as soon as the window
+                // was maximised on a 4K display — the viewport grew taller than one page of
+                // cards, so the list could never grow and the grid stayed un-scrollable.
+                function maybeLoadMore() {
+                    if (!root.activeListKey.length || root.loadingMore || root.listLoading) return
+                    if (contentHeight <= height || contentY + height >= contentHeight - cellHeight * 1.5)
+                        root.loadMore()
+                }
+                // GridView keeps delegates for a band around the viewport. The default
+                // builds roughly a screen of extra tiles that the user may never scroll
+                // to, and every one of them costs a cover decode on the CPU under the
+                // software renderer. Half a cell of lead-in is enough to keep scrolling
+                // smooth while halving the eager work at each model swap.
+                cacheBuffer: fittedCellHeight / 2
+
+                // The tile is the single hottest piece of QML in this page: every rail
+                // click replaces the model, so all visible delegates are rebuilt at once.
+                // Under the software raster path (this machine runs the RTSS/NVIDIA
+                // overlay compatibility mode) three things dominated that rebuild and are
+                // gone here: Text.Outline (the duration label drew the string several
+                // times per frame), clip on the cover (a rounded clip forces an offscreen
+                // surface per tile) and the nested Column (absolute positions instead).
+                delegate: Item {
+                    id: tile
+                    width: grid.cellWidth
+                    height: grid.cellHeight
+
+                    readonly property real pad: 6
+                    readonly property real coverHeight: (width - pad * 2) * 0.5625
+                    // Fixed, so the two text blocks sit at absolute positions and the
+                    // delegate needs no layout pass beyond this.
+                    readonly property real titleLineHeight: Math.ceil(12 * 1.35)
+
+                    Rectangle {
+                        // Not "cover": that is a ListModel role name, and an id with the
+                        // same name wins the lookup, so source: cover resolved to this
+                        // rectangle instead of the image URL and every tile went blank.
+                        id: coverBox
+                        x: tile.pad
+                        y: tile.pad
+                        width: tile.width - tile.pad * 2
+                        height: tile.coverHeight
+                        radius: 6
+                        color: Theme.card3
+
+                        Image {
+                            anchors.fill: parent
+                            source: cover || ""
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            cache: true
+                            // Decoded at tile size, not at the source's size: the software
+                            // renderer pays for the full bitmap on every repaint, and a
+                            // Bilibili cover is much larger than a 220x124 tile.
+                            sourceSize.width: 480
+                            sourceSize.height: 270
+                        }
+                        // The duration sits on its own dark strip instead of an outlined
+                        // string: one translucent rectangle costs far less than outlined
+                        // text under the software renderer.
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 3
+                            width: durationLabel.implicitWidth + 8
+                            height: durationLabel.implicitHeight + 2
+                            radius: 3
+                            color: Qt.rgba(0, 0, 0, 0.66)
+                            visible: (duration || "").length > 0
+                            Text {
+                                id: durationLabel
+                                anchors.centerIn: parent
+                                text: duration
+                                color: "#fff"
+                                font.pixelSize: 10
+                                font.family: Theme.fontUi
+                            }
+                        }
+                    }
+
+                    Text {
+                        x: tile.pad
+                        y: coverBox.y + coverBox.height + 5
+                        width: tile.width - tile.pad * 2
+                        height: tile.titleLineHeight * 2
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        color: Theme.t1
+                        font.family: Theme.fontUi
+                        font.pixelSize: 12
+                        text: title || ""
+                    }
+                    Text {
+                        x: tile.pad
+                        y: coverBox.y + coverBox.height + 5 + tile.titleLineHeight * 2 + 3
+                        width: tile.width - tile.pad * 2
+                        elide: Text.ElideRight
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 11
+                        text: (owner || "") + "  " + (play || 0)
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.openVideo(bvid)
+                    }
+                }
+            }
+
+            // ---- detail ----
+            Flickable {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.view === "detail" && !root.showSettings
+                contentHeight: detailColumn.implicitHeight
+                clip: true
+
+                ColumnLayout {
+                    id: detailColumn
+                    width: parent.width
+                    spacing: 10
+
+                    // The page is already on screen while the detail request is in flight,
+                    // so say so rather than showing an empty frame with no explanation.
+                    Text {
+                        Layout.fillWidth: true
+                        visible: root.detailLoading
+                        text: qsTr("加载中…")
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 12
+                    }
+
+                    RowLayout {
+                        spacing: 12
+                        VButton { text: qsTr("← 返回"); onClicked: root.view = "home" }
+
+                        Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            color: Theme.t1
+                            font.family: Theme.fontUi
+                            font.pixelSize: 16
+                            text: root.detail.title || ""
+                        }
+                    }
+
+                    // Cover on the left, details on the right (newBV's detail layout).
+                    // Clicking the cover plays, which is the gesture users already know.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 14
+
+                        Rectangle {
+                            Layout.preferredWidth: 300
+                            Layout.preferredHeight: 169
+                            Layout.alignment: Qt.AlignTop
+                            radius: 8
+                            color: Theme.card3
+                            clip: true
+
+                            Image {
+                                anchors.fill: parent
+                                source: root.detail.cover || ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: true
+                            }
+
+                            // Play affordance, shown on hover so the picture still reads
+                            // as a cover at rest.
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 56
+                                height: 56
+                                radius: 28
+                                color: Qt.rgba(0, 0, 0, 0.55)
+                                visible: coverMouse.containsMouse
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "▶"
+                                    color: "#fff"
+                                    font.pixelSize: 22
+                                }
+                            }
+
+                            MouseArea {
+                                id: coverMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.playSelected()
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                        Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            color: Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 12
+                            text: (root.detail.owner || "") + "   "
+                                  + (root.detail.play || 0) + qsTr(" 播放   ")
+                                  + (root.detail.like || 0) + qsTr(" 点赞")
+                        }
+
+                        // interaction row
+                        RowLayout {
+                            spacing: 8
+
+                            VButton {
+                                text: (root.interaction.liked ? qsTr("已点赞") : qsTr("点赞"))
+                                onClicked: {
+                                    const next = !root.interaction.liked
+                                    if (veyra.bilibiliLike(root.detail.bvid, next))
+                                        root.interaction = veyra.bilibiliInteractionState(root.detail.bvid)
+                                }
+                            }
+                            VButton {
+                                text: root.interaction.coined ? qsTr("已投币") : qsTr("投币")
+                                onClicked: {
+                                    if (veyra.bilibiliCoin(root.detail.bvid, 1))
+                                        root.interaction = veyra.bilibiliInteractionState(root.detail.bvid)
+                                }
+                            }
+                            VButton {
+                                text: root.interaction.favorited ? qsTr("已收藏") : qsTr("收藏")
+                                onClicked: {
+                                    // Cancelling does not need a folder; adding asks which one.
+                                    if (root.interaction.favorited) {
+                                        if (veyra.bilibiliFavorite(root.detail.bvid, false, 0))
+                                            root.interaction = veyra.bilibiliInteractionState(root.detail.bvid)
+                                    } else {
+                                        root.favPickerFolders = veyra.bilibiliFavFolders()
+                                        root.favPickerTarget = 0
+                                        root.favPickerOpen = true
+                                    }
+                                }
+                            }
+                            VButton {
+                                text: qsTr("稍后再看")
+                                onClicked: veyra.bilibiliWatchLaterToggle(root.detail.bvid, true)
+                            }
+                            VButton {
+                                text: root.showComments ? qsTr("收起评论") : qsTr("查看评论")
+                                onClicked: root.toggleComments()
+                            }
+                        }
+
+                        // Folder chooser for 收藏: the account keeps several folders and a
+                        // favourite used to land in the first one whatever the user meant.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            visible: root.favPickerOpen
+                            implicitHeight: pickerRow.implicitHeight + 20
+                            radius: 10
+                            color: Theme.card2
+                            border.width: 1
+                            border.color: Theme.stroke
+
+                            ColumnLayout {
+                                id: pickerRow
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 8
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: qsTr("收藏到哪个收藏夹？")
+                                    color: Theme.t2
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 12
+                                }
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    Repeater {
+                                        model: root.favPickerFolders
+                                        Rectangle {
+                                            readonly property bool picked:
+                                                String(root.favPickerTarget) === String(modelData.id)
+                                            width: pickText.implicitWidth + 24
+                                            height: 26
+                                            radius: 13
+                                            color: picked ? Theme.accentSoft : Theme.card3
+                                            border.width: 1
+                                            border.color: picked ? Theme.accent : Theme.stroke
+                                            Text {
+                                                id: pickText
+                                                anchors.centerIn: parent
+                                                text: modelData.title + " (" + modelData.count + ")"
+                                                color: picked ? Theme.accent : Theme.t2
+                                                font.family: Theme.fontUi
+                                                font.pixelSize: 12
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.favPickerTarget = modelData.id
+                                            }
+                                        }
+                                    }
+                                }
+                                RowLayout {
+                                    spacing: 8
+                                    VButton {
+                                        text: qsTr("收藏")
+                                        primary: true
+                                        enabled: root.favPickerTarget !== 0
+                                        onClicked: {
+                                            if (veyra.bilibiliFavorite(root.detail.bvid, true, root.favPickerTarget)) {
+                                                root.favPickerOpen = false
+                                                root.interaction = veyra.bilibiliInteractionState(root.detail.bvid)
+                                            }
+                                        }
+                                    }
+                                    VButton {
+                                        text: qsTr("取消")
+                                        ghost: true
+                                        onClicked: root.favPickerOpen = false
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 10
+
+                            Text {
+                                text: qsTr("分P")
+                                color: Theme.t2
+                                font.family: Theme.fontUi
+                                font.pixelSize: 12
+                            }
+                            VSelect {
+                                Layout.preferredWidth: 260
+                                title: qsTr("分P")
+                                // value comes straight from selectedPart, so opening another
+                                // video (which resets it to 0) needs no rebinding.
+                                value: {
+                                    const ps = root.detail.parts || []
+                                    if (!ps.length) return ""
+                                    const i = Math.max(0, Math.min(root.selectedPart, ps.length - 1))
+                                    return (i + 1) + ". " + ps[i].title
+                                }
+                                options: (root.detail.parts || []).map(function (p, i) {
+                                    return { id: String(i), label: (i + 1) + ". " + p.title }
+                                })
+                                onPicked: function (id) {
+                                    const index = parseInt(id, 10) || 0
+                                    root.selectedPart = index
+                                    // Each part has its own position in the history, so the
+                                    // play button's label has to follow the part as well.
+                                    // The cid is already known, so neither call re-fetches
+                                    // the page; qualities is asynchronous like the first load.
+                                    const parts = root.detail.parts || []
+                                    const cid = (index >= 0 && index < parts.length)
+                                        ? parts[index].cid : 0
+                                    root.resumeAt = cid ? veyra.bilibiliResumeAtCid(root.detail.bvid, cid) : -1
+                                    root.qualities = []
+                                    if (cid) {
+                                        root.pendingQualitiesGeneration = veyra.bilibiliLoadList(
+                                            "qualities:" + root.detail.bvid + ":" + cid)
+                                    }
+                                    root.selectedQuality = 0
+                                }
+                            }
+
+                            Text {
+                                text: qsTr("画质")
+                                color: Theme.t2
+                                font.family: Theme.fontUi
+                                font.pixelSize: 12
+                            }
+                            VSelect {
+                                id: qualityBox
+                                Layout.preferredWidth: 200
+                                title: qsTr("画质")
+                                // An explicit "automatic" entry (id "0") rather than the
+                                // first real quality: that way the visible choice and
+                                // root.selectedQuality (0 = best the account may use)
+                                // always agree, whatever the list happens to contain.
+                                // value is derived from selectedQuality, so switching parts
+                                // (which resets it to 0) needs no rebinding.
+                                readonly property var allOptions: [{
+                                    id: "0", label: qsTr("自动（最高画质）")
+                                }].concat((root.qualities || []).map(function (q) {
+                                    return {
+                                        id: String(q.id),
+                                        label: q.label + (q.vip ? qsTr("（会员）") : "")
+                                    }
+                                }))
+                                value: {
+                                    for (let i = 0; i < allOptions.length; ++i)
+                                        if (Number(allOptions[i].id) === root.selectedQuality)
+                                            return allOptions[i].label
+                                    return allOptions[0].label
+                                }
+                                options: allOptions
+                                onPicked: function (id) {
+                                    root.selectedQuality = parseInt(id, 10) || 0
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 8
+
+                            VButton {
+                                // The label states what the click will actually do: with a
+                                // history entry it resumes at that position, without one it
+                                // simply plays. Saying "continue" over a video that will start
+                                // from zero is what made the old label misleading.
+                                primary: true
+                                text: root.resumeAt > 0
+                                      ? qsTr("继续上次播放（%1）").arg(root.formatSeconds(root.resumeAt))
+                                      : qsTr("播放")
+                                onClicked: root.playSelected(false)
+                            }
+
+                            // A video already in the watch history resumes where it was left,
+                            // so without this the user could never watch it again from the
+                            // beginning.
+                            VButton {
+                                objectName: "bili-play-from-start"
+                                text: qsTr("从头播放")
+                                onClicked: root.playSelected(true)
+                            }
+
+                            VButton {
+                                text: root.danmakuOn
+                                      ? qsTr("弹幕开（%1 条）").arg(root.danmakuLines)
+                                      : qsTr("弹幕关")
+                                // Per-video switch. The module default in 播放设置 decides
+                                // what a newly opened video starts with; this only affects
+                                // the video currently on screen.
+                                onClicked: root.danmakuOn ? root.unloadDanmaku()
+                                                          : root.loadDanmaku()
+                            }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            color: Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 12
+                            text: root.detail.desc || ""
+                        }
+                        }
+                    }
+
+                    // comments
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        visible: root.showComments
+
+                        Text {
+                            text: root.comments.length ? qsTr("评论") : qsTr("暂无评论")
+                            color: Theme.t2
+                            font.family: Theme.fontUi
+                            font.pixelSize: 13
+                        }
+
+                        Repeater {
+                            model: root.comments
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: commentColumn.implicitHeight + 16
+                                radius: 8
+                                color: Theme.card2
+
+                                ColumnLayout {
+                                    id: commentColumn
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 4
+
+                                    Text {
+                                        text: modelData.author + "   " + (modelData.like || 0) + qsTr(" 赞")
+                                        color: Theme.t3
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: 11
+                                    }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
+                                        text: modelData.message || ""
+                                        color: Theme.t1
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: 12
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // related videos
+                    Text {
+                        visible: root.related.length > 0
+                        text: qsTr("相关推荐")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: 13
+                    }
+
+                    GridView {
+                        id: relatedGrid
+                        Layout.fillWidth: true
+                        // The row count has to follow the width: four per row was wrong as
+                        // soon as the window was narrower, and the clipped rows could not
+                        // be scrolled to. The height goes through Layout.preferredHeight
+                        // because a ColumnLayout overrides the item's own height.
+                        // Same fitting rule as the main grid: describe the column count
+                        // from an ideal width, then divide the available width between the
+                        // cells so nothing is left over. rows and the height follow.
+                        readonly property real idealCellWidth: 220
+                        readonly property int columns: Math.max(1, Math.round(width / idealCellWidth))
+                        readonly property real fittedCellWidth: width / columns
+                        readonly property real fittedCellHeight: (fittedCellWidth - 12) * 0.5625 + 78
+                        readonly property int rows: Math.ceil(root.related.length / Math.max(1, columns))
+                        readonly property int wantedHeight: rows * fittedCellHeight
+                        Layout.preferredHeight: wantedHeight
+                        Layout.maximumHeight: wantedHeight
+                        implicitHeight: wantedHeight
+                        visible: root.related.length > 0
+                        cellWidth: fittedCellWidth
+                        cellHeight: fittedCellHeight
+                        // Only ask for scrolling when the rows really overflow; the height
+                        // above already covers every row, so this stays false in practice.
+                        interactive: contentHeight > height + 1
+                        clip: true
+                        model: root.related
+
+                        // Same shape as the main grid's tile: absolute positions, no clip on
+                        // the cover, and the width taken from the grid instead of a literal
+                        // (a literal stayed at 232 while the columns were computed from
+                        // cellWidth, so the tiles overhung their cells).
+                        delegate: Item {
+                            id: relatedTile
+                            width: relatedGrid.cellWidth
+                            height: relatedGrid.cellHeight
+
+                            readonly property real pad: 6
+                            readonly property real titleLineHeight: Math.ceil(12 * 1.35)
+
+                            Rectangle {
+                                x: relatedTile.pad
+                                y: relatedTile.pad
+                                width: relatedTile.width - relatedTile.pad * 2
+                                height: width * 0.5625
+                                radius: 6
+                                color: Theme.card3
+
+                                Image {
+                                    anchors.fill: parent
+                                    source: modelData.cover || ""
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                    sourceSize.width: 480
+                                    sourceSize.height: 270
+                                }
+                            }
+
+                            Text {
+                                x: relatedTile.pad
+                                y: relatedTile.pad + (relatedTile.width - relatedTile.pad * 2) * 0.5625 + 5
+                                width: relatedTile.width - relatedTile.pad * 2
+                                height: relatedTile.titleLineHeight * 2
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                                wrapMode: Text.Wrap
+                                color: Theme.t1
+                                font.family: Theme.fontUi
+                                font.pixelSize: 12
+                                text: modelData.title || ""
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.openVideo(modelData.bvid)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

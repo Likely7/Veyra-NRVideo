@@ -348,6 +348,9 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
     std::string name = utf8(path_);
     if (network_) {
         networkMediaOptions(&options);
+        // Site headers and UA go through the shared helper, so the demuxer and the
+        // audio pipeline cannot drift apart on how they are spelled.
+        networkMediaHeaders(&options, settings_.requestHeaders, settings_.userAgent);
         // Short drops are retried inside FFmpeg's HTTP layer first; this session's
         // reconnect (recover()) only takes over when they run out.
         av_dict_set(&options, "reconnect", "1", 0);
@@ -743,6 +746,19 @@ bool DemuxSession::seek(int64_t targetUs) {
     std::unique_lock lock(m_);
     if (failed_ && !settings_.autoReconnect) return false;
     seekTargetUs_ = std::max<int64_t>(0, targetUs);
+    // A seek that is already running is retargeted rather than interrupted: raising
+    // command again would abort its av_seek_frame with AVERROR_EXIT, and dragging the
+    // scrubber produces exactly that burst of requests. seekDone_ is false from the
+    // request until the demux thread finishes, which is what marks one as running.
+    if (!seekDone_) {
+        seekPending_ = true;
+        producerCv_.notify_all();
+        while (!seekDone_) {
+            if (stop_.load() || (cancelled_ && cancelled_->load())) return false;
+            seekCv_.wait_for(lock, std::chrono::milliseconds(50));
+        }
+        return seekOk_;
+    }
     seekPending_ = true;
     seekDone_ = false;
     seekOk_ = false;
@@ -1233,7 +1249,13 @@ void DemuxSession::doSeek() {
         rateSamples_.clear();
         contentBytes_ = 0;
         afterSeek_ = true;
-        targetSeconds_ = plan_.holds ? std::min(plan_.startSeconds, 5.0) : 0.0;
+        // After a seek the decoder has to walk from the keyframe up to the target, and
+        // that walk stalls whenever the download falls behind. Waiting a little longer
+        // before the first frame is cheaper than decoding in fits and starts: measured
+        // 1.1-2.1 s of "after demux" time with the old 3 s gate, most of it waiting on
+        // the network rather than decoding. Bounded by the level's own start value so a
+        // deliberately small buffer setting still behaves.
+        targetSeconds_ = plan_.holds ? std::min(std::max(plan_.startSeconds, 6.0), 10.0) : 0.0;
         phase_ = targetSeconds_ > 0 ? Phase::Prebuffering : Phase::Playing;
         phaseSinceNs_ = nowNs();
     }
@@ -1263,6 +1285,14 @@ void DemuxSession::doSeek() {
     {
         std::lock_guard lock(m_);
         seekOk_ = ok;
+        // A successful seek reopened the source if it had been closed (the loop above
+        // calls openContext), so a session that had been marked dead is usable again.
+        // Clearing the latch here is what lets a failed session be rescued by seeking
+        // instead of forcing the user to reopen the file.
+        if (ok) {
+            failed_ = false;
+            failure_.clear();
+        }
         seekDone_ = true;
         seekCv_.notify_all();
         updatePhaseLocked();
@@ -1342,6 +1372,11 @@ bool DemuxSession::recover(int code, const char* why) {
             reconnectAttempt_ = 0;
             ++reconnects_;
             eof_ = false;
+            // The session is alive again: fail() had marked it dead, and without this the
+            // latch stayed set forever, so popVideo/popAudio kept returning Pop::Failed
+            // and the only way out was reopening the file.
+            failed_ = false;
+            failure_.clear();
             liveBackCap_ = live_ && plan_.holds ? 0.5 : 0.0;
             log::info("net-session", std::format("reconnected after {} attempt(s), {} ms; reconnects={} live={}", attempt,
                 std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - begin).count(), reconnects_, live_));

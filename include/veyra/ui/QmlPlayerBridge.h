@@ -589,6 +589,109 @@ public:
     Q_INVOKABLE void addPlaylistFilesDialog();
     Q_INVOKABLE void addPlaylistFolderDialog();
     Q_INVOKABLE void openDroppedUrls(const QList<QUrl>& urls);
+
+    // --- Bilibili sign-in ---------------------------------------------------
+    // Member renditions (1080P+/4K) are only served to a signed-in session. The user
+    // pastes the Cookie header from their own browser once; it is kept under
+    // %LOCALAPPDATA%\Veyra and sent on every later resolve.
+    Q_INVOKABLE bool bilibiliSignIn(const QString& cookie);
+    Q_INVOKABLE void bilibiliSignOut();
+    Q_INVOKABLE bool bilibiliSignedIn() const;
+    // QR sign-in: start() fetches a code and returns the URL it encodes. The page
+    // draws it with bilibiliQrImage() and polls once a second until the phone
+    // confirms. The code stays in this process; no browser window is involved.
+    Q_INVOKABLE QString bilibiliQrStart();
+    Q_INVOKABLE QString bilibiliQrPoll();
+    // The current sign-in code as an image URL for QML's Image source. Empty when
+    // there is no code. `size` is the rendered pixel size of one symbol edge.
+    Q_INVOKABLE QString bilibiliQrImage(int size = 320);
+
+    // --- Bilibili module ----------------------------------------------------
+    // Search / feed / detail / lists. Each returns a list of cards
+    // (bvid, title, cover, owner, duration, play). An empty list means the request
+    // failed or had no results; bilibiliLastError() says which.
+    Q_INVOKABLE QVariantList bilibiliSearch(const QString& keyword, int page);
+    Q_INVOKABLE QVariantList bilibiliRecommended();
+    // Asynchronous form of the list endpoints. The synchronous ones block the GUI thread
+    // for a full HTTPS round trip, which is why a rail click used to freeze the window and
+    // why a loading skeleton could never appear: nothing repaints until the call returns.
+    // These start the fetch on a worker and publish the result through bilibiliListReady.
+    // Returns a generation id; a later request supersedes an earlier one.
+    Q_INVOKABLE int bilibiliLoadList(const QString& kind);
+    Q_INVOKABLE void bilibiliCancelListLoad();
+    // Collects the finished fetch; called from the GUI tick like tickCapture.
+    void tickBiliList();
+    // Result of one asynchronous list fetch, built by the worker and consumed unchanged on
+    // the GUI thread. Public so the worker lambda can name it.
+    struct ListFetchResult {
+        bool ok = false;
+        std::wstring error;
+        QVariantList items;
+        // Set instead of items when the request was a single object ("detail:<bvid>"),
+        // because the video detail page is one map, not a list of cards.
+        QVariantMap object;
+    };
+    Q_INVOKABLE QVariantList bilibiliHistory();
+    // mediaId is qlonglong: folder ids run past the 32-bit int range (3490600161
+    // for one real folder), and truncating one made the API fall back to the
+    // default folder, so every folder looked identical.
+    Q_INVOKABLE QVariantList bilibiliFavorites(qlonglong mediaId = 0, int page = 1);
+    // The account's own favourite folders (id, title, count), so the page can offer a
+    // picker instead of always showing the default one.
+    Q_INVOKABLE QVariantList bilibiliFavFolders();
+    Q_INVOKABLE QVariantList bilibiliFollowed();
+    // Watch later, the popular board, and the related list under a player.
+    Q_INVOKABLE QVariantList bilibiliWatchLater();
+    Q_INVOKABLE QVariantList bilibiliPopular(int page);
+    Q_INVOKABLE QVariantList bilibiliRelated(const QString& bvid);
+    // Comments and the danmaku track for the detail page.
+    Q_INVOKABLE QVariantList bilibiliComments(const QString& bvid, int page);
+    Q_INVOKABLE QVariantList bilibiliDanmaku(const QString& bvid, int pageIndex);
+    // Loads the danmaku track for the last-played Bilibili part into the overlay and
+    // starts drawing it over the picture. `bvid`/`pageIndex` identify the part; an
+    // empty or failing load just leaves the overlay hidden.
+    Q_INVOKABLE bool bilibiliEnableDanmaku(const QString& bvid, int pageIndex);
+    Q_INVOKABLE void bilibiliDisableDanmaku();
+    Q_INVOKABLE bool bilibiliDanmakuEnabled() const;
+    Q_INVOKABLE int bilibiliDanmakuCount() const;
+    // Interactions. Each returns false and sets bilibiliLastError() on refusal.
+    Q_INVOKABLE bool bilibiliLike(const QString& bvid, bool like);
+    Q_INVOKABLE bool bilibiliCoin(const QString& bvid, int count);
+    // folderId 0 targets the account's first folder; the page passes the one the user
+    // picked in the folder chooser shown beside the interaction buttons.
+    Q_INVOKABLE bool bilibiliFavorite(const QString& bvid, bool add, qlonglong folderId = 0);
+    Q_INVOKABLE bool bilibiliWatchLaterToggle(const QString& bvid, bool add);
+    Q_INVOKABLE QVariantMap bilibiliInteractionState(const QString& bvid);
+    Q_INVOKABLE QVariantMap bilibiliVideoDetail(const QString& bvid);
+    Q_INVOKABLE QVariantMap bilibiliAccount();
+    // Plays one part of a video through the normal pipeline. `qn` 0 = best allowed.
+    // fromStart skips the watch-history resume point: the detail page offers a separate
+    // button for that, because a video already in the history would otherwise always
+    // continue where it was left and could not be watched again from the beginning.
+    Q_INVOKABLE bool bilibiliPlay(const QString& bvid, int pageIndex, int qn,
+                                 bool fromStart = false);
+    // Same, but the caller already knows the part's cid from the detail response, so the
+    // page lookup inside bilibiliPlay can be skipped. That lookup is a full round trip and
+    // it runs on the GUI thread between the click and first frame.
+    Q_INVOKABLE bool bilibiliPlayCid(const QString& bvid, qlonglong cid, int qn,
+                                     bool fromStart = false);
+    // Shared tail of the two entry points above, after the part is known.
+    bool bilibiliPlayResolved(const QString& bvid, qlonglong cid,
+                              const std::wstring& pageTitle, int qn, bool fromStart);
+    // Where the account left this part, in seconds, or -1 when there is no resume
+    // point. The detail page calls it once so the play button can say what it will do;
+    // bilibiliPlay reads it again itself, so the two never disagree on the value.
+    Q_INVOKABLE double bilibiliResumeAt(const QString& bvid, int pageIndex);
+    // Same answer as bilibiliResumeAt without asking the site for the page again: the
+    // detail response already carries every part's cid, and parsing the page a second
+    // time was a whole extra round trip in the wait when opening a video.
+    Q_INVOKABLE double bilibiliResumeAtCid(const QString& bvid, qlonglong cid);
+    Q_INVOKABLE QVariantList bilibiliQualities(const QString& bvid, int pageIndex);
+    // Reports where the user stopped to the account's own watch history. Called when
+    // another source is opened and once more on teardown; a no-op when nothing from
+    // the Bilibili page is playing. Failures are logged and ignored.
+    void flushBiliWatchProgress();
+    Q_INVOKABLE QString bilibiliLastError() const;
     bool amdNrGpu() const;
     QVariantMap effectCapabilities() const;
     QVariantList nrRuntimeChoices() const;
@@ -1367,6 +1470,11 @@ signals:
     // User-facing notices the UI shows as a transient message: a rejected
     // chain edit, an export that finished, a failed open.
     void notice(const QString& text, bool isError);
+    // kind is the same token passed to bilibiliLoadList; items is the fetched list.
+    // generation lets QML drop a result that a newer request has already superseded.
+    void bilibiliListReady(const QString& kind, const QVariantList& items, int generation);
+    // Same request lifetime, for the single-object endpoints ("detail:<bvid>").
+    void bilibiliObjectReady(const QString& kind, const QVariantMap& object, int generation);
     // A presentation-hooking overlay appeared in a run whose interface draws on the GPU
     // ("rtss": its OSD is kept out of this process; "nvidia": NVIDIA's in-game overlay and
     // "gamepp": GamePP, which cannot be kept out); a restart draws the interface in software.
@@ -1418,6 +1526,8 @@ private:
     void rememberPosition(bool flush);
     void refreshSubtitles(const std::wstring& media);
     void tickSubtitles();
+    // Per-frame danmaku update; called from tickSubtitles().
+    void tickDanmaku();
     void tickImageBatch();
     void tickCapture();
     void tickPs5();

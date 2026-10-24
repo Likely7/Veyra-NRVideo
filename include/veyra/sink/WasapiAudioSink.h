@@ -73,7 +73,11 @@ public:
     AudioPipeline();
     ~AudioPipeline();
 
-    bool open(const std::wstring& path,const std::atomic<bool>* cancelled=nullptr);
+    // `requestHeaders` / `userAgent` are for a DASH audio address on a CDN that
+    // checks the Referer (Bilibili): the audio URL is a separate host request and
+    // needs the same headers the video one carries.
+    bool open(const std::wstring& path,const std::atomic<bool>* cancelled=nullptr,
+              const std::wstring& requestHeaders={},const std::wstring& userAgent={});
     // Network sources and files on a server: take audio packets from the shared demux
     // session that also feeds the video (one connection, #48) instead of opening the
     // address a second time.

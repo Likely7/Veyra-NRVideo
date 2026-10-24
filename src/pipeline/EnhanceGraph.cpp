@@ -2525,7 +2525,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 veyra::log::info("dovi-el-gpu", std::format("bound first frame dv6.w={:.1f} dv0.x={:.0f}",
                     p7[27], p7[0]));
             }
-            if (p7BoundCount <= 3 || (before != p7BoundCount && p7BoundCount % 100 == 0))
+            // Only once the layer has actually been bound: an ordinary source never
+            // binds it, and logging "bound=0" every frame then wrote 5400+ identical
+            // lines per play, burying the rest of the log.
+            if (p7Bound && (p7BoundCount <= 3 || (before != p7BoundCount && p7BoundCount % 100 == 0)))
                 veyra::log::info("dovi-el-gpu", std::format("bound={} frames={} ready={} el={}",
                     p7Bound ? 1 : 0, p7BoundCount, p7Ready_ ? 1 : 0, doviElFrame_ ? 1 : 0));
         }

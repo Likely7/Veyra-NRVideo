@@ -40,6 +40,16 @@ struct SourceOpenDesc {
     media::NetworkSettings network;   // the user's buffering / reconnect / damaged-picture choices
     bool nonBlocking = false;         // player: read() may return Waiting while the network buffers
     bool tolerateCorruption = false;  // player: keep going through damaged packets (network sources, MPEG-TS)
+    // Extra HTTP request headers for a network source, one "Name: value" per line.
+    // Some CDNs (Bilibili's among them) reject a media request without the site's
+    // Referer, so a resolved stream URL is not usable on its own.
+    std::wstring networkHeaders;
+    // Separate audio address for a source whose container carries no audio.
+    //
+    // DASH serves video and audio as two independent streams, so a Bilibili video
+    // arrives as a video URL plus an audio URL. Empty means the container has its
+    // own audio track and nothing changes.
+    std::wstring audioPath;
 };
 
 struct SourceInfo {

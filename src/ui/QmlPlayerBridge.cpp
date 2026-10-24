@@ -18,6 +18,12 @@
 #include "veyra/ui/PlaylistModel.h"
 #include "veyra/ui/UpdateChecker.h"
 #include "veyra/ui/UiLanguage.h"
+#include "veyra/media/BilibiliResolver.h"
+#include "veyra/media/BilibiliApi.h"
+#include "veyra/media/QrImage.h"
+#include "veyra/media/DanmakuWindow.h"
+// The sign-in QR is drawn from this encoder (MIT, Project Nayuki) rather than
+// opening Bilibili's scan page in a browser.
 #include <QQmlEngine>
 #include <QMetaMethod>
 #include <QMetaProperty>
@@ -189,6 +195,72 @@ struct QmlPlayerBridge::Impl {
     QQmlEngine* qmlEngine = nullptr;
     engine::EngineController& engine;
     PlayerUiFacade facade;
+
+    // Set by the Bilibili resolver for the next open: the page title and the HTTP
+    // headers the CDN requires. These live here rather than only in `options`
+    // because PlayerOptions::from() rebuilds the whole struct on every settings
+    // change and would wipe them; openPath() copies them back in before the open.
+    std::wstring pendingTitle;
+    std::wstring pendingHeaders;
+    std::wstring pendingUserAgent;
+    std::wstring pendingAudioPath;
+    // True only between a Bilibili branch writing the pending* fields above and the
+    // openPath call it makes, so openPath knows to keep them instead of clearing.
+    bool bilibiliOpenPending = false;
+    // True while bilibiliPlay is resolving. That call makes three blocking requests
+    // (progress report, page lookup, playurl); a second click during them used to queue a
+    // whole second set on the GUI thread, which is what made rapid switching feel stuck.
+    bool biliPlayResolving = false;
+    // QR sign-in key while a scan is pending.
+    std::wstring bilibiliQrKey;
+    // The URL the pending code encodes; the page renders it as a QR image.
+    std::wstring bilibiliQrUrl;
+    // Last Bilibili module failure, surfaced by bilibiliLastError().
+    std::wstring bilibiliError;
+    // One in-flight list fetch. Started by bilibiliLoadList, collected by tickBiliList on
+    // the GUI thread (same pattern as captureQuery below), so the result never crosses a
+    // thread boundary and the request no longer blocks a frame.
+    std::future<QmlPlayerBridge::ListFetchResult> biliListQuery;
+    bool biliListBusy = false;
+    QString biliListKind;
+    int biliListGeneration = 0;
+    // Danmaku overlay: created lazily, only while comments are enabled.
+    std::unique_ptr<media::DanmakuWindow> danmakuWindow;
+    bool danmakuEnabled = false;
+    bool danmakuFailed = false;
+    // Last position fed to the engine, to notice a seek.
+    double danmakuLastSeconds = -1.0;
+    // Backup CDN retry: the resolved mirrors of the current video, which one is in
+    // use, and how many attempts have already failed. Bilibili lists several mirrors
+    // of the same rendition; a node that cannot be opened is simply the usual
+    // reason a play fails, so the next one is tried instead of giving up.
+    std::vector<std::wstring> biliMirrors;
+    size_t biliMirrorIndex = 0;
+    int biliRetriesLeft = 0;
+    bool biliRetryPending = false;
+    std::wstring biliVideoUrl;   // the URL currently open, for context on retry
+    // Bumped by every openPath. A delayed mirror retry checks it and gives up when the
+    // user opened something else in the meantime: without this the retry reopened a CDN
+    // address over the user's new source, and because openPath had already cleared the
+    // pending headers the retried open went out without a Referer (403).
+    int biliOpenGen = 0;
+    // What was last played from the Bilibili page, so the watch progress can be reported
+    // to the account's history when the user moves on or closes the window. Reporting is
+    // done at those two points only, not on a timer: every Bilibili request runs on the
+    // GUI thread, and a 15 s heartbeat would freeze the interface a little each time.
+    std::wstring biliWatchBvid;
+    long long biliWatchCid = 0;
+    // The last position seen while this video was actually playing, refreshed by the
+    // 16 ms tick. Reported from here rather than read from the engine snapshot at flush
+    // time: by then the engine has already torn the old session down and reports a
+    // transport state and position that no longer describe what the user watched.
+    double biliWatchLastPos = -1.0;
+    double biliWatchDuration = 0.0;
+    // Where the account left this video, read from the site's history before the open.
+    // Negative means "no resume point": the tick below turns it into a seek once the
+    // engine has a running session to seek.
+    double biliResumeAt = -1.0;
+    uint64_t biliResumeSession = 0;
 
     // Last published snapshot and the revision it came from. Polling compares
     // revisions, so an unchanged snapshot costs one comparison per tick.
@@ -1317,7 +1389,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // every restart reloads the unavailable DLSS value again.
             impl_->savedSession = savedConfiguration;
             impl_->restoreConfiguration(configuration);
-            impl_->options = engine::PlayerOptions::from(settings,engine::runtimeOrder(impl_->activeRuntime()));
+            impl_->options = engine::PlayerOptions::from(settings,engine::runtimeOrder(impl_->activeRuntime()),&impl_->options);
             impl_->revalidate();
         } else {
             impl_->facade.setPending(previous);
@@ -1367,7 +1439,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 impl_->session = candidate;
                 impl_->restoreConfiguration(candidate.configurations[size_t(candidate.active)]);
                 impl_->revalidate();
-                impl_->options = engine::PlayerOptions::from(settings, engine::runtimeOrder(impl_->activeRuntime()));
+                impl_->options = engine::PlayerOptions::from(settings, engine::runtimeOrder(impl_->activeRuntime()),&impl_->options);
                 defaultFlowApplied = entry.flow.has_value() &&
                     (entry.contents & engine::presetContentMask(engine::PresetContent::Flow));
                 if (defaultFlowApplied) {
@@ -1484,6 +1556,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         tickSubtitles();
         tickImageBatch();
+        tickBiliList();
         tickCapture();
         tickPs5();
         tickMoonlight();
@@ -1503,6 +1576,21 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     seekTo(at);
                     veyra::log::info("ui-resume", std::format("resumed at {:.1f}s", at));
                     emit notice(tr("已从上次位置 %1 继续").arg(formatTime(at)), false);
+                }
+            }
+            // Bilibili resume: the position came from the site's own history, so it applies
+            // to the session this open produced. seekTo needs a running session with a known
+            // duration, which this condition is exactly.
+            if (impl_->biliResumeAt >= 0.0 && s.running && s.duration > 0) {
+                if (!impl_->biliResumeSession) impl_->biliResumeSession = s.sessionId;
+                if (s.sessionId == impl_->biliResumeSession) {
+                    const double at = impl_->biliResumeAt;
+                    impl_->biliResumeAt = -1.0;
+                    if (at >= 0.5 && at < s.duration - 0.5) {
+                        seekTo(at);
+                        veyra::log::info("ui-resume", std::format("bilibili history resumed at {:.1f}s", at));
+                        emit notice(tr("已从上次位置 %1 继续").arg(formatTime(at)), false);
+                    }
                 }
             }
             if (++impl_->positionTicks >= 120) {
@@ -1537,6 +1625,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         if (!had || impl_->publishedRevision != before) {
             const auto& s = impl_->snapshot;
+            // Once the picture is up, the mirrors have done their job: a later failure
+            // is a different problem (network drop, decode), not a bad node.
+            if (s.running && !s.failed && !impl_->biliMirrors.empty() && impl_->biliRetriesLeft > 0)
+                impl_->biliRetriesLeft = 0;
             if (!had || wasSession != s.sessionId || wasTransport != s.transport ||
                 wasRunning != s.running || wasImage != s.image || wasFailed != s.failed)
                 veyra::log::info("qml-window", std::format(
@@ -1544,6 +1636,36 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     s.sessionId, int(s.transport), s.running, s.image, s.failed,
                     impl_->openingSource, impl_->publishedRevision));
             impl_->power.update(s.running && !s.failed && !s.image && s.transport == engine::TransportState::Playing);
+            // A Bilibili stream that failed to open gets one attempt per remaining
+            // mirror before the failure is reported. The mirrors are the same
+            // rendition on different nodes, so a single unreachable node is the usual
+            // cause; the next one normally works.
+            if (had && !wasFailed && s.failed && !impl_->biliMirrors.empty() &&
+                impl_->biliRetriesLeft > 0 && !impl_->biliRetryPending) {
+                impl_->biliRetryPending = true;
+                --impl_->biliRetriesLeft;
+                // Next mirror, wrapping past the one that just failed.
+                impl_->biliMirrorIndex = (impl_->biliMirrorIndex + 1) % impl_->biliMirrors.size();
+                const std::wstring next = impl_->biliMirrors[impl_->biliMirrorIndex];
+                veyra::log::warn("bilibili", std::format("open failed; retrying mirror {}/{}",
+                    impl_->biliMirrorIndex + 1, impl_->biliMirrors.size()));
+                emit notice(tr("当前节点打不开，正在换用备用节点…"), false);
+                // Give the engine a moment to settle its failed session first;
+                // reopening inside the same poll tick left the old source half torn down.
+                const int retryGen = impl_->biliOpenGen;
+                QTimer::singleShot(150, this, [this, next, retryGen] {
+                    impl_->biliRetryPending = false;
+                    if (retryGen != impl_->biliOpenGen) {
+                        // Someone opened another source in these 150 ms; that source wins
+                        // and this mirror address is stale.
+                        veyra::log::info("bilibili", std::format("mirror retry superseded gen={} now={}",
+                                                                retryGen, impl_->biliOpenGen));
+                        return;
+                    }
+                    impl_->bilibiliOpenPending = true;   // the mirror is the same rendition
+                    openPath(QString::fromStdWString(next));
+                });
+            }
             if (had && !wasFailed && s.failed && !s.capture && !s.remotePlay &&
                 impl_->prefString("decode") == QLatin1String("hardware"))
                 emit notice(tr("已设为“强制硬解”，这个文件无法用硬件解码打开；可在 设置 → 播放 改回“自动”"), true);
@@ -1738,7 +1860,35 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // above, using actual provider availability rather than a brand alone.
 }
 
+void QmlPlayerBridge::flushBiliWatchProgress() {
+    if (impl_->biliWatchBvid.empty() || impl_->biliWatchCid <= 0) return;
+    // Nothing was ever observed playing: do not write a bogus position into the history.
+    if (impl_->biliWatchLastPos < 0.0) return;
+    int played = int(impl_->biliWatchLastPos);
+    // The site stores -1 for "watched to the end", which is what makes a finished video
+    // show as finished instead of resuming a few seconds before the credits.
+    if (impl_->biliWatchDuration > 0 && impl_->biliWatchLastPos >= impl_->biliWatchDuration - 1.0)
+        played = -1;
+    if (played < 0 && played != -1) played = 0;
+    // Cleared before reporting: the video is done, whatever this call returns, so the same
+    // position is not sent again from the destructor.
+    std::wstring bvid = std::move(impl_->biliWatchBvid);
+    const long long cid = impl_->biliWatchCid;
+    impl_->biliWatchBvid.clear();
+    impl_->biliWatchCid = 0;
+    impl_->biliWatchLastPos = -1.0;
+    impl_->biliWatchDuration = 0.0;
+    const std::string tag = utf8Of(bvid).toStdString();
+    if (media::biliReportWatchProgress(bvid, cid, played))
+        log::info("bilibili", std::format("watch progress reported bvid={} played_time={}", tag, played));
+    else
+        log::warn("bilibili", std::format("watch progress not reported bvid={} played_time={}", tag, played));
+}
 QmlPlayerBridge::~QmlPlayerBridge() {
+    // Before anything is torn down: this reads the playback position.
+    flushBiliWatchProgress();
+    // The overlay is a child window: it has to go before the video window does.
+    if (impl_->danmakuWindow) impl_->danmakuWindow->destroy();
     flushHdrMemory();
     if (qApp) qApp->removeEventFilter(this);
     rememberPosition(true);
@@ -2644,6 +2794,32 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
     });
     emit captureChanged();
 }
+void QmlPlayerBridge::tickBiliList() {
+    auto& i = *impl_;
+    if (!i.biliListBusy) return;
+    if (i.biliListQuery.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+
+    auto r = i.biliListQuery.get();
+    i.biliListBusy = false;
+    // A cancelled or superseded request drops its result: the user has already asked for
+    // something else and must not see this one land afterwards.
+    if (i.biliListKind.isEmpty()) return;
+    const QString kind = i.biliListKind;
+    const int generation = i.biliListGeneration;
+    i.biliListKind.clear();
+
+    const bool objectRequest = kind.startsWith(QLatin1String("detail:"));
+    if (!r.ok) {
+        i.bilibiliError = r.error;
+        if (objectRequest) emit bilibiliObjectReady(kind, QVariantMap{}, generation);
+        else emit bilibiliListReady(kind, QVariantList{}, generation);
+        return;
+    }
+    i.bilibiliError.clear();
+    if (objectRequest) emit bilibiliObjectReady(kind, r.object, generation);
+    else emit bilibiliListReady(kind, r.items, generation);
+}
+
 void QmlPlayerBridge::tickCapture() {
     auto& i = *impl_;
     if (!i.captureBusy || i.captureQuery.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
@@ -2773,6 +2949,14 @@ bool QmlPlayerBridge::startCaptureSession() {
     return true;
 }
 void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill) {
+    // A capture or stream open supersedes a waiting Bilibili mirror retry just as a
+    // file open does; this path does not go through openPath, so it bumps the
+    // generation itself and drops the retry state that belonged to the old source.
+    ++impl_->biliOpenGen;
+    impl_->biliMirrors.clear();
+    impl_->biliMirrorIndex = 0;
+    impl_->biliRetriesLeft = 0;
+    impl_->biliRetryPending = false;
     rememberPosition(true);
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
@@ -4409,6 +4593,18 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
 }
 void QmlPlayerBridge::tickSubtitles() {
     auto& i = *impl_;
+    // The only place that sees playback while it happens: remember where the Bilibili
+    // video got to, so the report at flush time describes what was actually watched.
+    if (!i.biliWatchBvid.empty() && i.biliWatchCid > 0) {
+        const auto& cur = i.snapshot;
+        using Tr = engine::TransportState;
+        const bool playing = cur.running && !cur.failed &&
+                             (cur.transport == Tr::Playing || cur.transport == Tr::Paused);
+        if (playing && cur.position > 0.0) {
+            i.biliWatchLastPos = cur.position;
+            if (cur.duration > 0.0) i.biliWatchDuration = cur.duration;
+        }
+    }
     bool changed = false;
     if (i.subScanGate) {
         // Opens once playback holds a few seconds ahead (or has read the whole file), closes when
@@ -4572,6 +4768,36 @@ void QmlPlayerBridge::tickSubtitles() {
         if (!joined.isEmpty()) veyra::log::info("subtitle-overlay", "text=" + joined.toStdString());
         emit subtitleTextChanged();
     }
+    tickDanmaku();
+}
+
+// Danmaku rides the same per-frame tick as the subtitle overlay: it reads the
+// engine's own position, so pause, seek and speed changes need no extra wiring.
+void QmlPlayerBridge::tickDanmaku() {
+    auto& i = *impl_;
+    if (!i.danmakuEnabled || !i.danmakuWindow) return;
+    const auto& s = i.snapshot;
+    // Only over a moving picture: a still image or a capture has no video timeline.
+    if (!s.running || s.image || s.capture) { i.danmakuWindow->hide(); return; }
+    if (s.duration <= 0) { i.danmakuWindow->hide(); return; }
+
+    // A jump means a seek: the engine rebuilds its tracks rather than letting old
+    // comments fly in from stale positions.
+    if (i.danmakuLastSeconds >= 0 &&
+        (s.position < i.danmakuLastSeconds - 0.5 || s.position > i.danmakuLastSeconds + 2.0))
+        i.danmakuWindow->noteSeek();
+    i.danmakuLastSeconds = s.position;
+
+    i.danmakuWindow->follow(impl_->videoWindow);
+
+    media::DanmakuView view;
+    view.scale = double(i.prefInt("danmakuScale", 100)) / 100.0;
+    view.opacity = double(i.prefInt("danmakuOpacity", 80)) / 100.0;
+    view.speedFactor = double(i.prefInt("danmakuSpeed", 100)) / 100.0;
+    view.area = double(i.prefInt("danmakuArea", 50)) / 100.0;
+    view.videoWidth = int(s.metrics.resolution.output.width);
+    view.videoHeight = int(s.metrics.resolution.output.height);
+    i.danmakuWindow->render(s.position, view);
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {
     QVariantList out;
@@ -4701,6 +4927,9 @@ void QmlPlayerBridge::autoAlignSubtitle() {
 void QmlPlayerBridge::attachVideoWindow(qulonglong nativeHandle) {
     impl_->videoWindow = reinterpret_cast<HWND>(nativeHandle);
 }
+
+// --- embedded browser -------------------------------------------------------
+
 
 void QmlPlayerBridge::setPreOpenHook(std::function<void()> hook) {
     impl_->preOpen = std::move(hook);
@@ -6226,7 +6455,7 @@ void QmlPlayerBridge::setNodeMode(int mode) {
     impl_->session = impl_->savedSession = candidate;
     impl_->restoreConfiguration(configuration);
     impl_->revalidate();
-    impl_->options = engine::PlayerOptions::from(next,engine::runtimeOrder(impl_->activeRuntime()));
+    impl_->options = engine::PlayerOptions::from(next,engine::runtimeOrder(impl_->activeRuntime()),&impl_->options);
     emitChainChanged();
     emit settingsChanged();
 }
@@ -6588,8 +6817,38 @@ void QmlPlayerBridge::tickPlaylist() {
 }
 
 void QmlPlayerBridge::openPath(const QString& path) {
+    // Opening anything ends the previous play: report where the user stopped before the
+    // position is lost to the new source. This is the one place every open goes through.
+    flushBiliWatchProgress();
+    // Consumed up front: an empty path must not leave the flag set for the next open.
+    const bool keepBilibiliStream = impl_->bilibiliOpenPending;
+    impl_->bilibiliOpenPending = false;
+    // Any open supersedes a mirror retry that is still waiting on its timer.
+    ++impl_->biliOpenGen;
     if (path.isEmpty()) return;
     flushHdrMemory();impl_->hdrTitleApplied.clear();
+    // A local file or an unrelated URL must not inherit the last video's DASH audio
+    // address or the site's Referer/UA: separateAudio reads audioPath alone, so a
+    // stale value makes the engine open the previous Bilibili track as this source's
+    // audio. The Bilibili branches write these immediately before calling openPath
+    // and raise bilibiliOpenPending, so the open they asked for keeps them.
+    if (!keepBilibiliStream) {
+        impl_->pendingHeaders.clear();
+        impl_->pendingUserAgent.clear();
+        impl_->pendingAudioPath.clear();
+        // The mirror retry belongs to the source that was being opened, not to this one.
+        impl_->biliMirrors.clear();
+        impl_->biliMirrorIndex = 0;
+        impl_->biliRetriesLeft = 0;
+        impl_->biliRetryPending = false;
+        // Danmaku belongs to the Bilibili track it was loaded for: a local file, a plain
+        // URL, a capture or a stream must not keep drawing the previous video's comments.
+        if (impl_->danmakuEnabled) bilibiliDisableDanmaku();
+        // A history position belongs to the Bilibili video it was read for. Opening
+        // anything else must not seek that other source to it.
+        impl_->biliResumeAt = -1.0;
+        impl_->biliResumeSession = 0;
+    }
     const bool network=media::networkMediaInput(wideOf(path));
     if (QFileInfo(path).isDir()) {
         impl_->playlist->addPaths({path}); emit playlistRequested(); return;
@@ -6619,10 +6878,14 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // geometry, and only then open. The presenter samples the window's client
     // size once at initialisation; opening before that point is what produced a
     // 1x1 swapchain.
-    // Only leave the current page when the user is choosing a source from home.
-    // Opening a file from the professional page keeps them there, which is what the
-    // design's source menu implies.
-    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home"))
+    // Leave the current page when the user is choosing a source from home, and also
+    // from the Bilibili page: that page is a browser, so letting the picture appear in
+    // its lower half covers the list and makes the page unusable. Playing a video from
+    // the professional page still keeps the user there, which is what the design's
+    // source menu implies.
+    const bool fromBrowsePage = impl_->currentPage == QLatin1String("bili");
+    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home")
+        || fromBrowsePage)
         emit navigate(QStringLiteral("min"));
     if(!network)rememberSource(QStringLiteral("file"), path);
     if (impl_->preOpen) impl_->preOpen();
@@ -6635,6 +6898,15 @@ void QmlPlayerBridge::openPath(const QString& path) {
     options.network.startupPrebufferSeconds=impl_->prefs.value(QStringLiteral("networkPrebuffer"),-1).toInt();
     options.network.autoReconnect=impl_->prefBool("networkAutoReconnect",true);
     options.network.corrupt=media::corruptPolicyFromId(impl_->prefString("networkCorrupt").toStdString());
+    // Per-open values a settings rebuild would otherwise drop: PlayerOptions::from()
+    // replaces the whole struct, so the resolver's headers and the DASH audio address
+    // are re-applied here, right before the engine reads them.
+    options.network.requestHeaders = impl_->pendingHeaders;
+    options.network.userAgent = impl_->pendingUserAgent;
+    options.audioPath = impl_->pendingAudioPath;
+    veyra::log::info("open",std::format("headers={} userAgent={} audioPath={}",
+        options.network.requestHeaders.size(),options.network.userAgent.size(),
+        options.audioPath.size()));
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
     impl_->playlistSession = network?0:impl_->openingSessionId;
@@ -6644,16 +6916,781 @@ void QmlPlayerBridge::openPath(const QString& path) {
         if (!saved.isEmpty()) { impl_->resumeSession = impl_->openingSessionId; impl_->resumeAt = saved.value("at").toDouble(); }
     }
     refreshSubtitles(network?std::wstring():wide);
+    if (fromBrowsePage)
+        veyra::log::info("open", "opened from the Bilibili page; the window has switched to 极简");
 }
 
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
 void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
 bool QmlPlayerBridge::openNetworkAddress(const QString& address){
-    const QUrl url(address.trimmed(),QUrl::StrictMode);
+    const QString trimmed = address.trimmed();
+    // A Bilibili page URL is not a media URL: resolve it to the CDN stream first.
+    // This is what makes "paste the page address and play the video" work without
+    // embedding a browser at all.
+    if (media::isBilibiliPageUrl(trimmed.toStdWString())) {
+        // Send the stored session so member renditions are available.
+        const std::wstring cookie = media::loadBilibiliCookie();
+        const auto stream = media::resolveBilibiliStream(trimmed.toStdWString(), cookie);
+        if (!stream.ok) {
+            emit notice(QString::fromStdWString(stream.error), true);
+            log::warn("bilibili", QString::fromStdWString(stream.error).toStdString());
+            return false;
+        }
+        if (!stream.title.empty()) impl_->pendingTitle = stream.title;
+        // The CDN needs the site's Referer/User-Agent; carry them on the open
+        // options so the demuxer sends them (see networkMediaHeaders).
+        impl_->pendingHeaders = stream.headers;
+        impl_->pendingUserAgent = stream.userAgent;
+        impl_->pendingAudioPath = stream.audioUrl;
+        impl_->bilibiliOpenPending = true;
+        impl_->options.network.requestHeaders = stream.headers;
+        impl_->options.network.userAgent = stream.userAgent;
+        // DASH keeps audio in its own stream; the video address carries none.
+        impl_->options.audioPath = stream.audioUrl;
+        // Report what was actually selected: without a session the API silently
+        // returns a low rendition, and the picture quality is the only clue.
+        QString info = QStringLiteral("%1 × %2  %3")
+            .arg(stream.width).arg(stream.height)
+            .arg(QString::fromStdWString(stream.codec));
+        if (stream.audioUrl.empty()) info += QStringLiteral("  ") + tr("无音频");
+        if (!media::bilibiliCookieLooksSignedIn(cookie)) info += QStringLiteral("  ") + tr("（未登录，画质受限）");
+        emit notice(tr("正在播放：") + QString::fromStdWString(stream.title) + QStringLiteral("  ") + info, false);
+        openPath(QString::fromStdWString(stream.url));
+        return true;
+    }
+    const QUrl url(trimmed,QUrl::StrictMode);
     if(!url.isValid()||url.host().isEmpty()||!media::networkMediaInput(wideOf(url.scheme()+QStringLiteral(":")))){
         emit notice(tr("请输入有效的 HTTP、HTTPS 或 RTSP 视频地址"),true);return false;
     }
     openPath(url.adjusted(QUrl::RemoveFragment).toString(QUrl::FullyEncoded));return true;
+}
+
+bool QmlPlayerBridge::bilibiliSignIn(const QString& cookie){
+    std::wstring value = cookie.trimmed().toStdWString();
+    // Accept a full "Cookie: ..." header as pasted from the browser's devtools.
+    const std::wstring prefix = L"cookie:";
+    if (value.size() > prefix.size()) {
+        std::wstring head = value.substr(0, prefix.size());
+        for (auto& ch : head) ch = std::towlower(ch);
+        if (head == prefix) value = value.substr(prefix.size());
+    }
+    while (!value.empty() && (value.front() == L' ' || value.front() == L'\t')) value.erase(value.begin());
+    if (!media::bilibiliCookieLooksSignedIn(value)) {
+        emit notice(tr("Cookie 里没有 SESSDATA，请复制完整的 Cookie 请求头"), true);
+        return false;
+    }
+    if (!media::saveBilibiliCookie(value)) {
+        emit notice(tr("无法保存 Cookie"), true);
+        return false;
+    }
+    log::info("bilibili", "cookie stored");
+    emit notice(tr("B 站登录已保存，重新打开视频即可使用会员画质"), false);
+    return true;
+}
+
+void QmlPlayerBridge::bilibiliSignOut(){
+    media::saveBilibiliCookie({});
+    log::info("bilibili", "cookie cleared");
+    emit notice(tr("B 站登录已清除"), false);
+}
+
+bool QmlPlayerBridge::bilibiliSignedIn() const {
+    return media::bilibiliCookieLooksSignedIn(media::loadBilibiliCookie());
+}
+
+// --- Bilibili module --------------------------------------------------------
+
+namespace {
+// Cards travel to QML as plain maps; the page decides how to draw them.
+QVariantList cardsToVariant(const std::vector<media::BiliVideoCard>& cards) {
+    QVariantList out;
+    out.reserve(int(cards.size()));
+    for (const auto& c : cards) {
+        QVariantMap m;
+        m.insert(QStringLiteral("bvid"), QString::fromStdWString(c.bvid));
+        m.insert(QStringLiteral("title"), QString::fromStdWString(c.title));
+        m.insert(QStringLiteral("cover"), QString::fromStdWString(c.cover));
+        m.insert(QStringLiteral("owner"), QString::fromStdWString(c.owner));
+        m.insert(QStringLiteral("duration"), QString::fromStdWString(c.duration));
+        // Numbers travel as int: QML only needs them for display, and qlonglong
+        // needs a registered metatype to cross the boundary safely.
+        m.insert(QStringLiteral("play"), QVariant(int(std::min<long long>(c.play, 2147483647LL))));
+        m.insert(QStringLiteral("danmaku"), QVariant(int(std::min<long long>(c.danmaku, 2147483647LL))));
+        out.push_back(m);
+    }
+    return out;
+}
+} // namespace
+
+QVariantList QmlPlayerBridge::bilibiliSearch(const QString& keyword, int page){
+    std::vector<media::BiliVideoCard> cards;
+    std::wstring error;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    if (!media::biliSearch(keyword.toStdWString(), page < 1 ? 1 : page, cards, error)) {
+        impl_->bilibiliError = error;
+        return {};
+    }
+    impl_->bilibiliError.clear();
+    return cardsToVariant(cards);
+}
+
+QVariantList QmlPlayerBridge::bilibiliRecommended(){
+    std::vector<media::BiliVideoCard> cards;
+    std::wstring error;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    if (!media::biliRecommended(cards, error)) { impl_->bilibiliError = error; return {}; }
+    impl_->bilibiliError.clear();
+    return cardsToVariant(cards);
+}
+
+QVariantList QmlPlayerBridge::bilibiliHistory(){
+    std::vector<media::BiliVideoCard> cards;
+    std::wstring error;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    if (!media::biliHistory(cards, error)) { impl_->bilibiliError = error; return {}; }
+    impl_->bilibiliError.clear();
+    return cardsToVariant(cards);
+}
+
+QVariantList QmlPlayerBridge::bilibiliFavorites(qlonglong mediaId, int page){
+    std::vector<media::BiliVideoCard> cards;
+    std::wstring error;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    if (!media::biliFavorites(cards, error, mediaId, page)) { impl_->bilibiliError = error; return {}; }
+    impl_->bilibiliError.clear();
+    return cardsToVariant(cards);
+}
+
+QVariantList QmlPlayerBridge::bilibiliFavFolders(){
+    std::vector<media::BiliFavFolder> folders;
+    std::wstring error;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    if (!media::biliFavFolders(folders, error)) { impl_->bilibiliError = error; return {}; }
+    impl_->bilibiliError.clear();
+    QVariantList out;
+    for (const auto& f : folders) {
+        QVariantMap m;
+        m.insert(QStringLiteral("id"), QVariant::fromValue<qlonglong>(f.id));
+        m.insert(QStringLiteral("title"), QString::fromStdWString(f.title));
+        m.insert(QStringLiteral("count"), QVariant::fromValue<qlonglong>(f.count));
+        out.push_back(m);
+    }
+    return out;
+}
+
+QVariantList QmlPlayerBridge::bilibiliFollowed(){
+    std::vector<media::BiliVideoCard> cards;
+    std::wstring error;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    if (!media::biliFollowed(cards, error)) { impl_->bilibiliError = error; return {}; }
+    impl_->bilibiliError.clear();
+    return cardsToVariant(cards);
+}
+
+QVariantMap QmlPlayerBridge::bilibiliAccount(){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const auto a = media::biliAccount();
+    QVariantMap m;
+    m.insert(QStringLiteral("loggedIn"), a.loggedIn);
+    m.insert(QStringLiteral("name"), QString::fromStdWString(a.name));
+    m.insert(QStringLiteral("face"), QString::fromStdWString(a.face));
+    m.insert(QStringLiteral("level"), a.level);
+    m.insert(QStringLiteral("vip"), a.vip);
+    return m;
+}
+
+QVariantList QmlPlayerBridge::bilibiliWatchLater(){
+    std::vector<media::BiliVideoCard> cards;
+    std::wstring error;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    if (!media::biliWatchLater(cards, error)) { impl_->bilibiliError = error; return {}; }
+    impl_->bilibiliError.clear();
+    return cardsToVariant(cards);
+}
+
+QVariantList QmlPlayerBridge::bilibiliPopular(int page){
+    std::vector<media::BiliVideoCard> cards;
+    std::wstring error;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    if (!media::biliPopular(cards, error, page)) { impl_->bilibiliError = error; return {}; }
+    impl_->bilibiliError.clear();
+    return cardsToVariant(cards);
+}
+
+QVariantList QmlPlayerBridge::bilibiliRelated(const QString& bvid){
+    std::vector<media::BiliVideoCard> cards;
+    std::wstring error;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    if (!media::biliRelated(bvid.toStdWString(), cards, error)) { impl_->bilibiliError = error; return {}; }
+    impl_->bilibiliError.clear();
+    return cardsToVariant(cards);
+}
+
+QVariantList QmlPlayerBridge::bilibiliComments(const QString& bvid, int page){
+    // The comment endpoint keys on aid, which the detail call exposes.
+    media::setBiliCookie(media::loadBilibiliCookie());
+    std::wstring error;
+    std::vector<media::BiliComment> comments;
+    if (!media::biliComments(bvid.toStdWString(), page, comments, error)) {
+        impl_->bilibiliError = error;
+        return {};
+    }
+    impl_->bilibiliError.clear();
+    QVariantList out;
+    for (const auto& c : comments) {
+        QVariantMap m;
+        m.insert(QStringLiteral("author"), QString::fromStdWString(c.author));
+        m.insert(QStringLiteral("face"), QString::fromStdWString(c.face));
+        m.insert(QStringLiteral("message"), QString::fromStdWString(c.message));
+        m.insert(QStringLiteral("like"), QVariant::fromValue<qlonglong>(c.like));
+        m.insert(QStringLiteral("ctime"), c.ctime);
+        m.insert(QStringLiteral("replies"), c.replies);
+        out.push_back(m);
+    }
+    return out;
+}
+
+bool QmlPlayerBridge::bilibiliEnableDanmaku(const QString& bvid, int pageIndex){
+    // The track comes from the same call the detail page already uses, so a failure
+    // is reported the same way and the overlay simply stays hidden.
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const auto page = media::biliVideoPage(bvid.toStdWString());
+    if (!page.ok) { impl_->bilibiliError = page.error; return false; }
+    if (pageIndex < 0 || pageIndex >= int(page.pages.size())) {
+        impl_->bilibiliError = L"分P序号无效";
+        return false;
+    }
+    std::vector<media::BiliDanmaku> lines;
+    std::wstring error;
+    if (!media::biliDanmaku(page.pages[size_t(pageIndex)].first, lines, error)) {
+        impl_->bilibiliError = error;
+        return false;
+    }
+    if (!impl_->danmakuWindow) {
+        impl_->danmakuWindow = std::make_unique<media::DanmakuWindow>();
+        if (!impl_->danmakuWindow->create(impl_->videoWindow)) {
+            impl_->danmakuWindow.reset();
+            impl_->bilibiliError = L"无法创建弹幕叠加层";
+            return false;
+        }
+    }
+    std::vector<media::DanmakuItem> items;
+    items.reserve(lines.size());
+    for (const auto& line : lines) {
+        media::DanmakuItem item;
+        item.time = line.time;
+        item.mode = line.mode;
+        item.color = line.color;
+        item.text = line.text;
+        items.push_back(std::move(item));
+    }
+    log::info("danmaku", std::format("stage: fetched items={}", items.size()));
+    // Reject text the renderer cannot handle before it reaches GDI+: an empty or
+    // over-long string is harmless, but a lone surrogate crashes AddString.
+    size_t dropped = 0;
+    items.erase(std::remove_if(items.begin(), items.end(), [&](const media::DanmakuItem& it) {
+        if (it.text.empty() || it.text.size() > 200) { ++dropped; return true; }
+        for (size_t i = 0; i < it.text.size(); ++i) {
+            const char32_t c = it.text[i];
+            if (c >= 0xD800 && c <= 0xDBFF) {
+                // A high surrogate must be followed by a low one.
+                if (i + 1 >= it.text.size() || it.text[i + 1] < 0xDC00 || it.text[i + 1] > 0xDFFF) {
+                    ++dropped; return true;
+                }
+                ++i;
+            } else if (c >= 0xDC00 && c <= 0xDFFF) { ++dropped; return true; }
+        }
+        return false;
+    }), items.end());
+    if (dropped) log::warn("danmaku", std::format("dropped {} unusable strings", dropped));
+    log::info("danmaku", std::format("stage: cleaned items={}", items.size()));
+
+    impl_->danmakuWindow->setItems(std::move(items));
+    log::info("danmaku", "stage: setItems done");
+    impl_->danmakuEnabled = true;
+    impl_->danmakuLastSeconds = -1.0;
+    impl_->bilibiliError.clear();
+    log::info("danmaku", std::format("enabled bvid={} page={} lines={}",
+                                     bvid.toStdString(), pageIndex,
+                                     impl_->danmakuWindow->itemCount()));
+    return true;
+}
+
+void QmlPlayerBridge::bilibiliDisableDanmaku(){
+    impl_->danmakuEnabled = false;
+    if (impl_->danmakuWindow) {
+        impl_->danmakuWindow->clearItems();
+        impl_->danmakuWindow->hide();
+    }
+    log::info("danmaku", "disabled");
+}
+
+bool QmlPlayerBridge::bilibiliDanmakuEnabled() const {
+    return impl_->danmakuEnabled;
+}
+
+int QmlPlayerBridge::bilibiliDanmakuCount() const {
+    return impl_->danmakuWindow ? int(impl_->danmakuWindow->itemCount()) : 0;
+}
+
+QVariantList QmlPlayerBridge::bilibiliDanmaku(const QString& bvid, int pageIndex){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const auto page = media::biliVideoPage(bvid.toStdWString());
+    if (!page.ok) { impl_->bilibiliError = page.error; return {}; }
+    if (pageIndex < 0 || pageIndex >= int(page.pages.size())) {
+        impl_->bilibiliError = L"分P序号无效";
+        return {};
+    }
+    std::vector<media::BiliDanmaku> lines;
+    std::wstring error;
+    if (!media::biliDanmaku(page.pages[size_t(pageIndex)].first, lines, error)) {
+        impl_->bilibiliError = error;
+        return {};
+    }
+    impl_->bilibiliError.clear();
+    QVariantList out;
+    out.reserve(int(lines.size()));
+    for (const auto& d : lines) {
+        QVariantMap m;
+        m.insert(QStringLiteral("time"), d.time);
+        m.insert(QStringLiteral("mode"), d.mode);
+        m.insert(QStringLiteral("color"), d.color);
+        m.insert(QStringLiteral("text"), QString::fromStdWString(d.text));
+        out.push_back(m);
+    }
+    return out;
+}
+
+bool QmlPlayerBridge::bilibiliLike(const QString& bvid, bool like){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    std::wstring error;
+    if (!media::biliLike(bvid.toStdWString(), like, error)) {
+        impl_->bilibiliError = error;
+        emit notice(QString::fromStdWString(error), true);
+        return false;
+    }
+    impl_->bilibiliError.clear();
+    emit notice(like ? tr("已点赞") : tr("已取消点赞"), false);
+    return true;
+}
+
+bool QmlPlayerBridge::bilibiliCoin(const QString& bvid, int count){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    std::wstring error;
+    if (!media::biliCoin(bvid.toStdWString(), count, error)) {
+        impl_->bilibiliError = error;
+        emit notice(QString::fromStdWString(error), true);
+        return false;
+    }
+    impl_->bilibiliError.clear();
+    emit notice(tr("已投币"), false);
+    return true;
+}
+
+bool QmlPlayerBridge::bilibiliFavorite(const QString& bvid, bool add, qlonglong folderId){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    std::wstring error;
+    if (!media::biliFavorite(bvid.toStdWString(), add, folderId, error)) {
+        impl_->bilibiliError = error;
+        emit notice(QString::fromStdWString(error), true);
+        return false;
+    }
+    impl_->bilibiliError.clear();
+    emit notice(add ? tr("已收藏") : tr("已取消收藏"), false);
+    return true;
+}
+
+int QmlPlayerBridge::bilibiliLoadList(const QString& kind){
+    // Follows the shape the capture-device query already uses: start the work with
+    // std::async, collect it from the GUI tick with a zero-timeout wait. That keeps the
+    // result hand-off on the GUI thread and needs no locking for the returned list.
+    //
+    // Cookie first, here on the GUI thread: the media layer keeps it in one global, and
+    // letting the worker write it would race with every other call reading it.
+    media::setBiliCookie(media::loadBilibiliCookie());
+
+    const int generation = ++impl_->biliListGeneration;
+    impl_->biliListKind = kind;
+    impl_->biliListBusy = true;
+
+    // kind carries everything the worker needs: "home"/"popular"/... , "fav:<id>" or
+    // "search:<words>".
+    impl_->biliListQuery = std::async(std::launch::async, [kind]() {
+        std::vector<media::BiliVideoCard> cards;
+        std::wstring error;
+        bool ok = false;
+        // A kind may carry a page ("popular:2", "search:<words>:2", "fav:<id>:2"). The
+        // endpoints with no page parameter (推荐/历史/稍后再看) are simply called again —
+        // the site has no page for them, and that is what endless scrolling uses.
+        int page = 1;
+        QString base = kind;
+        const int lastColon = kind.lastIndexOf(QLatin1Char(':'));
+        if (lastColon > 0) {
+            bool okPage = false;
+            const int parsed = kind.mid(lastColon + 1).toInt(&okPage);
+            if (okPage && parsed > 0) {
+                const QString head = kind.left(lastColon);
+                // detail:/qualities:/related: carry a bvid or a cid, not a page.
+                if (!head.startsWith(QLatin1String("detail:"))
+                    && !head.startsWith(QLatin1String("qualities:"))
+                    && !head.startsWith(QLatin1String("related:"))) {
+                    page = parsed;
+                    base = head;
+                }
+            }
+        }
+        if (base == QLatin1String("home")) ok = media::biliRecommended(cards, error);
+        else if (base == QLatin1String("popular")) ok = media::biliPopular(cards, error, page);
+        else if (base == QLatin1String("follow")) ok = media::biliFollowed(cards, error);
+        else if (base == QLatin1String("history")) ok = media::biliHistory(cards, error);
+        else if (base == QLatin1String("watchlater")) ok = media::biliWatchLater(cards, error);
+        else if (base.startsWith(QLatin1String("fav:")))
+            ok = media::biliFavorites(cards, error, base.mid(4).toLongLong(), page);
+        else if (base.startsWith(QLatin1String("search:")))
+            ok = media::biliSearch(base.mid(7).toStdWString(), page, cards, error);
+        else if (kind.startsWith(QLatin1String("qualities:"))) {
+            // "qualities:<bvid>:<cid>" — the cid comes from the detail response, so this
+            // does not ask the site for the page a second time (the synchronous
+            // bilibiliQualities does, which was a whole extra round trip).
+            const QStringList parts = kind.mid(10).split(QLatin1Char(':'));
+            if (parts.size() == 2) {
+                const QString bvid = parts[0];
+                const qlonglong cid = parts[1].toLongLong();
+                if (cid > 0) {
+                    QVariantList out;
+                    for (const auto& q : media::biliQualities(bvid.toStdWString(), cid)) {
+                        QVariantMap m;
+                        m.insert(QStringLiteral("id"), q.id);
+                        m.insert(QStringLiteral("label"), QString::fromStdWString(q.label));
+                        m.insert(QStringLiteral("vip"), q.needsVip);
+                        out.push_back(m);
+                    }
+                    ListFetchResult r;
+                    r.ok = !out.isEmpty();
+                    if (!r.ok) r.error = L"无法获取画质列表";
+                    r.items = out;
+                    return r;
+                }
+            }
+        }
+        else if (kind.startsWith(QLatin1String("related:"))) {
+            std::vector<media::BiliVideoCard> related;
+            std::wstring relError;
+            const bool relOk = media::biliRelated(kind.mid(8).toStdWString(), related, relError);
+            ListFetchResult r;
+            r.ok = relOk;
+            r.error = relError;
+            if (relOk) r.items = cardsToVariant(related);
+            return r;
+        }
+        else if (kind.startsWith(QLatin1String("detail:"))) {
+            // One object instead of a card list. Built here rather than through the
+            // synchronous bilibiliVideoDetail so the open no longer blocks a frame.
+            const auto page = media::biliVideoPage(kind.mid(7).toStdWString());
+            ListFetchResult r;
+            r.ok = page.ok;
+            r.error = page.error;
+            if (page.ok) {
+                QVariantMap m;
+                m.insert(QStringLiteral("ok"), true);
+                m.insert(QStringLiteral("error"), QString());
+                m.insert(QStringLiteral("bvid"), QString::fromStdWString(page.bvid));
+                m.insert(QStringLiteral("title"), QString::fromStdWString(page.title));
+                m.insert(QStringLiteral("cover"), QString::fromStdWString(page.cover));
+                m.insert(QStringLiteral("desc"), QString::fromStdWString(page.desc));
+                m.insert(QStringLiteral("owner"), QString::fromStdWString(page.owner));
+                m.insert(QStringLiteral("play"), QVariant(int(std::min<long long>(page.play, 2147483647LL))));
+                m.insert(QStringLiteral("like"), QVariant(int(std::min<long long>(page.like, 2147483647LL))));
+                m.insert(QStringLiteral("duration"), page.duration);
+                QVariantList parts;
+                for (const auto& [cid, title] : page.pages) {
+                    QVariantMap p;
+                    p.insert(QStringLiteral("cid"), QVariant::fromValue<qlonglong>(cid));
+                    p.insert(QStringLiteral("title"), QString::fromStdWString(title));
+                    parts.push_back(p);
+                }
+                m.insert(QStringLiteral("parts"), parts);
+                r.object = m;
+            }
+            return r;
+        }
+        ListFetchResult r;
+        r.ok = ok;
+        r.error = error;
+        if (ok) r.items = cardsToVariant(cards);
+        return r;
+    });
+    return generation;
+}
+
+void QmlPlayerBridge::bilibiliCancelListLoad(){
+    ++impl_->biliListGeneration;
+    impl_->biliListKind.clear();
+}
+
+bool QmlPlayerBridge::bilibiliWatchLaterToggle(const QString& bvid, bool add){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    std::wstring error;
+    if (!media::biliAddWatchLater(bvid.toStdWString(), add, error)) {
+        impl_->bilibiliError = error;
+        emit notice(QString::fromStdWString(error), true);
+        return false;
+    }
+    impl_->bilibiliError.clear();
+    emit notice(add ? tr("已加入稍后再看") : tr("已从稍后再看移除"), false);
+    return true;
+}
+
+QVariantMap QmlPlayerBridge::bilibiliInteractionState(const QString& bvid){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const auto state = media::biliInteractionState(bvid.toStdWString());
+    QVariantMap m;
+    m.insert(QStringLiteral("liked"), state.liked);
+    m.insert(QStringLiteral("coined"), state.coined);
+    m.insert(QStringLiteral("favorited"), state.favorited);
+    m.insert(QStringLiteral("coins"), state.coins);
+    return m;
+}
+
+QVariantMap QmlPlayerBridge::bilibiliVideoDetail(const QString& bvid){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const auto page = media::biliVideoPage(bvid.toStdWString());
+    QVariantMap m;
+    m.insert(QStringLiteral("ok"), page.ok);
+    m.insert(QStringLiteral("error"), QString::fromStdWString(page.error));
+    m.insert(QStringLiteral("bvid"), QString::fromStdWString(page.bvid));
+    m.insert(QStringLiteral("title"), QString::fromStdWString(page.title));
+    m.insert(QStringLiteral("cover"), QString::fromStdWString(page.cover));
+    m.insert(QStringLiteral("desc"), QString::fromStdWString(page.desc));
+    m.insert(QStringLiteral("owner"), QString::fromStdWString(page.owner));
+    m.insert(QStringLiteral("play"), QVariant::fromValue<qlonglong>(page.play));
+    m.insert(QStringLiteral("like"), QVariant::fromValue<qlonglong>(page.like));
+    m.insert(QStringLiteral("duration"), page.duration);
+    QVariantList parts;
+    for (const auto& [cid, title] : page.pages) {
+        QVariantMap p;
+        p.insert(QStringLiteral("cid"), QVariant::fromValue<qlonglong>(cid));
+        p.insert(QStringLiteral("title"), QString::fromStdWString(title));
+        parts.push_back(p);
+    }
+    m.insert(QStringLiteral("parts"), parts);
+    return m;
+}
+
+QVariantList QmlPlayerBridge::bilibiliQualities(const QString& bvid, int pageIndex){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const auto page = media::biliVideoPage(bvid.toStdWString());
+    if (pageIndex < 0 || pageIndex >= int(page.pages.size())) return {};
+    QVariantList out;
+    for (const auto& q : media::biliQualities(bvid.toStdWString(), page.pages[size_t(pageIndex)].first)) {
+        QVariantMap m;
+        m.insert(QStringLiteral("id"), q.id);
+        m.insert(QStringLiteral("label"), QString::fromStdWString(q.label));
+        m.insert(QStringLiteral("vip"), q.needsVip);
+        out.push_back(m);
+    }
+    return out;
+}
+
+double QmlPlayerBridge::bilibiliResumeAtCid(const QString& bvid, qlonglong cid) {
+    // No biliVideoPage here: the caller already has the cid from the detail response, and
+    // asking for the page again was a whole extra round trip while the user waited.
+    if (cid <= 0) return -1.0;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    return media::biliResumePosition(bvid.toStdWString(), cid);
+}
+
+double QmlPlayerBridge::bilibiliResumeAt(const QString& bvid, int pageIndex) {
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const auto page = media::biliVideoPage(bvid.toStdWString());
+    if (!page.ok) return -1.0;
+    if (pageIndex < 0 || pageIndex >= int(page.pages.size())) return -1.0;
+    const long long cid = page.pages[size_t(pageIndex)].first;
+    return media::biliResumePosition(bvid.toStdWString(), cid);
+}
+
+bool QmlPlayerBridge::bilibiliPlay(const QString& bvid, int pageIndex, int qn, bool fromStart){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    // This entry point has to look the page up itself: only the cid is not known here.
+    const auto page = media::biliVideoPage(bvid.toStdWString());
+    if (!page.ok) {
+        emit notice(QString::fromStdWString(page.error), true);
+        return false;
+    }
+    if (pageIndex < 0 || pageIndex >= int(page.pages.size())) {
+        emit notice(tr("分P序号无效"), true);
+        return false;
+    }
+    return bilibiliPlayResolved(bvid, page.pages[size_t(pageIndex)].first, page.title,
+                                qn, fromStart);
+}
+
+bool QmlPlayerBridge::bilibiliPlayCid(const QString& bvid, qlonglong cid, int qn, bool fromStart){
+    // No page lookup: the detail response already carried the cid, so this skips one
+    // whole round trip between the click and the first frame. The title is not needed for
+    // the resolve, and the notice still shows the video's own title from the caller.
+    if (cid <= 0) {
+        emit notice(tr("分P序号无效"), true);
+        return false;
+    }
+    return bilibiliPlayResolved(bvid, cid, std::wstring(), qn, fromStart);
+}
+
+// Shared tail of both play entry points: everything after the part is known. Kept in
+// one place so the cid-carrying variant cannot drift from the page-lookup one.
+bool QmlPlayerBridge::bilibiliPlayResolved(const QString& bvid, qlonglong cid,
+                                           const std::wstring& pageTitle, int qn,
+                                           bool fromStart){
+    // A click while the previous one is still resolving is dropped rather than queued:
+    // every step below is a blocking round trip, and two sets back to back on the GUI
+    // thread is what made rapid 继续/从头 switching stall the window. The user's newest
+    // intent is served by the click that starts once this one has finished.
+    if (impl_->biliPlayResolving) {
+        veyra::log::info("bilibili", "play request ignored: the previous one is still resolving");
+        return false;
+    }
+    struct ResolveGuard {
+        bool* flag;
+        explicit ResolveGuard(bool* f) : flag(f) { *flag = true; }
+        ~ResolveGuard() { *flag = false; }
+    } guard(&impl_->biliPlayResolving);
+    // Ends the previous play: report where the user stopped before this one starts.
+    flushBiliWatchProgress();
+    media::setBiliCookie(media::loadBilibiliCookie());
+    // Every play is a new track (a different part, or the same part replayed): the
+    // comments already on screen belong to the previous one. Done before the resolve so
+    // a failure below leaves nothing stale on screen either.
+    if (impl_->danmakuEnabled) bilibiliDisableDanmaku();
+    // The three Bilibili settings that change what gets requested. qn 0 means the
+    // quality preference, which itself may be 0 (automatic).
+    const int qualityPref = impl_->prefInt("biliQuality", 0);
+    const int effectiveQn = qn > 0 ? qn : qualityPref;
+    QString codecPref = impl_->prefString("biliCodec");
+    if (codecPref.isEmpty()) codecPref = QStringLiteral("auto");
+    const bool backupCdn = impl_->prefBool("biliAutoCdn", true);
+    QString audioPref = impl_->prefString("biliAudio");
+    if (audioPref.isEmpty()) audioPref = QStringLiteral("auto");
+    const auto urls = media::biliResolvePlay(bvid.toStdWString(), cid, effectiveQn,
+                                             codecPref.toStdString(), backupCdn,
+                                             audioPref.toStdString());
+    if (!urls.ok) {
+        emit notice(QString::fromStdWString(urls.error), true);
+        return false;
+    }
+    impl_->pendingTitle = pageTitle;
+    // Backup CDN: remember the full mirror list so a failed open can try the next.
+    impl_->biliMirrors = impl_->prefBool("biliAutoCdn", true) ? urls.videoMirrors
+                                                             : std::vector<std::wstring>{};
+    impl_->biliMirrorIndex = 0;
+    impl_->biliRetriesLeft = int(impl_->biliMirrors.size()) > 1
+                              ? int(impl_->biliMirrors.size()) - 1 : 0;
+    impl_->biliRetryPending = false;
+    impl_->biliVideoUrl = urls.videoUrl;
+    // Remember what is playing so the position can be reported when this play ends. The
+    // previous video was already flushed at the top of this function, and this one starts
+    // with no observed position yet, so openPath below (which flushes too) has nothing to
+    // send for it until the tick has actually seen it play.
+    impl_->biliWatchBvid = bvid.toStdWString();
+    impl_->biliWatchCid = cid;
+    impl_->biliWatchLastPos = -1.0;
+    impl_->biliWatchDuration = 0.0;
+    // Where the account left this part, so playback resumes there instead of always
+    // starting from zero. Read before the open so the seek can happen on the first
+    // running snapshot; the read costs one request, which the surrounding opens already
+    // dwarf.
+    // "Play from the start" deliberately skips the read: the user asked for the beginning
+    // even though the history has a position for this video.
+    bool startedFromTop = false;
+    if (!fromStart && (impl_->prefBool("rememberPosition", true) || impl_->prefBool("autoResume", false))) {
+        impl_->biliResumeAt = media::biliResumePosition(impl_->biliWatchBvid, cid);
+        if (impl_->biliResumeAt < 0.0) startedFromTop = true;   // nothing to resume from
+    } else {
+        impl_->biliResumeAt = -1.0;
+        startedFromTop = fromStart;   // only say it when the user asked for it
+    }
+    impl_->biliResumeSession = 0;
+    // Kept on impl_ as well: openPath() re-applies them after rebuilding options.
+    impl_->pendingHeaders = urls.headers;
+    impl_->pendingUserAgent = urls.userAgent;
+    impl_->pendingAudioPath = urls.audioUrl;
+    impl_->bilibiliOpenPending = true;
+    impl_->options.network.requestHeaders = urls.headers;
+    impl_->options.network.userAgent = urls.userAgent;
+    impl_->options.audioPath = urls.audioUrl;
+    QString info = QStringLiteral("%1 × %2  %3")
+        .arg(urls.width).arg(urls.height).arg(QString::fromStdWString(urls.codec));
+    if (urls.audioUrl.empty()) info += QStringLiteral("  ") + tr("无音频");
+    // The notice says which of the two buttons took effect. Without this, pressing
+    // 从头播放 produced no feedback at all, so it was impossible to tell whether the click
+    // had been honoured.
+    const QString fromTop = startedFromTop ? tr("（从头开始）") : QString();
+    if (!pageTitle.empty())
+        emit notice(tr("正在播放：") + QString::fromStdWString(pageTitle) + QStringLiteral("  ")
+                    + info + fromTop, false);
+    else
+        emit notice(tr("正在播放：") + info + fromTop, false);
+    openPath(QString::fromStdWString(urls.videoUrl));
+    return true;
+}
+
+QString QmlPlayerBridge::bilibiliLastError() const {
+    return QString::fromStdWString(impl_->bilibiliError);
+}
+
+QString QmlPlayerBridge::bilibiliQrStart(){
+    const auto login = media::startBilibiliQrLogin();
+    if (!login.ok) {
+        emit notice(QString::fromStdWString(login.error), true);
+        return {};
+    }
+    impl_->bilibiliQrKey = login.qrKey;
+    impl_->bilibiliQrUrl = login.qrUrl;
+    // The page draws the code itself (see bilibiliQrImage); nothing is opened in a
+    // browser, so the sign-in stays inside the app window.
+    log::info("bilibili", "qr code requested; rendering it in the page");
+    return QString::fromStdWString(login.qrUrl);
+}
+
+QString QmlPlayerBridge::bilibiliQrImage(int size){
+    if (impl_->bilibiliQrUrl.empty()) return {};
+    // The encoder lives in its own translation unit (see QrImage.h): its headers
+    // must not meet Qt's, or the process aborts at startup.
+    const std::string png = media::qrPngBase64(
+        QString::fromStdWString(impl_->bilibiliQrUrl).toStdString(), size);
+    if (png.empty()) return {};
+    return QStringLiteral("data:image/png;base64,") + QString::fromStdString(png);
+}
+
+QString QmlPlayerBridge::bilibiliQrPoll(){
+    if (impl_->bilibiliQrKey.empty()) return QStringLiteral("none");
+    const auto poll = media::pollBilibiliQrLogin(impl_->bilibiliQrKey);
+    using State = media::BilibiliQrPoll::State;
+    switch (poll.state) {
+    case State::Waiting:   return QStringLiteral("waiting");
+    case State::Scanned:   return QStringLiteral("scanned");
+    case State::Expired:
+        impl_->bilibiliQrKey.clear();
+        impl_->bilibiliQrUrl.clear();
+        return QStringLiteral("expired");
+    case State::Confirmed: {
+        impl_->bilibiliQrKey.clear();
+        impl_->bilibiliQrUrl.clear();
+        if (poll.cookie.empty() || !media::bilibiliCookieLooksSignedIn(poll.cookie)) {
+            emit notice(tr("登录返回的 Cookie 不完整"), true);
+            return QStringLiteral("failed");
+        }
+        if (!media::saveBilibiliCookie(poll.cookie)) {
+            emit notice(tr("无法保存登录信息"), true);
+            return QStringLiteral("failed");
+        }
+        log::info("bilibili", "qr sign-in stored");
+        emit notice(tr("B 站登录成功，可以播放会员画质"), false);
+        return QStringLiteral("confirmed");
+    }
+    default:
+        emit notice(QString::fromStdWString(poll.message), true);
+        return QStringLiteral("failed");
+    }
 }
 
 void QmlPlayerBridge::togglePlayPause() {
@@ -6805,7 +7842,9 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"networkPrebuffer", {-1, 60}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect", "biliAutoCdn",
+                                   // Bilibili module: whether a freshly opened video starts with danmaku on.
+                                   "biliDanmaku"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -6813,6 +7852,52 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         if (!ok || n < low || n > high) return false;
         stored = n;
     } else if (flags.contains(key)) {
+        stored = value.toBool();
+    } else if (key == QLatin1String("biliQuality")) {
+        // Bilibili module: the quality a video opens with. 0 = automatic (the best the
+        // account may use, which is HDR on a video that has an HDR master); otherwise a
+        // Bilibili quality id (127/125/120/116/112/80/74/64/32/16).
+        bool ok = false;
+        const int n = value.toInt(&ok);
+        static const QList<int> allowed{0, 127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16};
+        if (!ok || !allowed.contains(n)) return false;
+        stored = n;
+    } else if (key == QLatin1String("biliCodec")) {
+        // Bilibili module: which codec to prefer when several exist at the same quality.
+        // "auto" takes the HDR-capable one first (HEVC), "avc" forces H.264, "hevc"
+        // forces HEVC. "auto" is what makes an HDR video play as HDR.
+        const QString v = value.toString();
+        if (v != QLatin1String("auto") && v != QLatin1String("avc") && v != QLatin1String("hevc")) return false;
+        stored = v;
+    } else if (key == QLatin1String("danmakuScale")) {
+        // Danmaku appearance. Ranges are the ones newBV exposes: size 50-250%,
+        // opacity 10-100%, speed 50-200%, area 10-100% of the picture height.
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < 50 || n > 250) return false;
+        stored = n;
+    } else if (key == QLatin1String("danmakuOpacity")) {
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < 10 || n > 100) return false;
+        stored = n;
+    } else if (key == QLatin1String("danmakuSpeed")) {
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < 50 || n > 200) return false;
+        stored = n;
+    } else if (key == QLatin1String("danmakuArea")) {
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < 10 || n > 100) return false;
+        stored = n;
+    } else if (key == QLatin1String("biliAudio")) {
+        // Bilibili module: which audio track to prefer. "auto" takes Hi-Res, then
+        // Dolby, then the highest-bitrate AAC; a preference the video cannot satisfy
+        // falls back to "auto" rather than going silent.
+        const QString v = value.toString();
+        if (v != QLatin1String("auto") && v != QLatin1String("flac") && v != QLatin1String("dolby")
+            && v != QLatin1String("aac192") && v != QLatin1String("aac132")
+            && v != QLatin1String("aac64")) return false;
+        stored = v;
+    } else if (key == QLatin1String("biliAutoCdn")) {
+        // Bilibili module: try the backup CDN addresses when the primary one fails.
         stored = value.toBool();
     } else if (key == QLatin1String("screenshotDir")) {
         const QString dir = value.toString();
@@ -6987,7 +8072,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
                     impl_->session = candidate;
                     impl_->restoreConfiguration(configuration);
                     impl_->revalidate();
-                    impl_->options = engine::PlayerOptions::from(next, engine::runtimeOrder(impl_->activeRuntime()));
+                    impl_->options = engine::PlayerOptions::from(next, engine::runtimeOrder(impl_->activeRuntime()),&impl_->options);
                     if (!impl_->persistSession()) veyra::log::warn("effect-availability", "compute gpu refit not saved");
                     emitChainChanged(); emit settingsChanged();
                 } else veyra::log::warn("effect-availability", "compute gpu refit not accepted; chain unchanged");
@@ -7432,7 +8517,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
             c=before;impl_->facade.setPending(previous);impl_->validation=engine::validateChain(c);
             emit notice(tr("补帧选择未被接受，保留原设置；请检查倍率和后端能力"),true);return -1;
         }
-        impl_->options=engine::PlayerOptions::from(next,engine::runtimeOrder(c));
+        impl_->options=engine::PlayerOptions::from(next,engine::runtimeOrder(c),&impl_->options);
         emit settingsChanged();emitChainChanged();return slot;
     }
     engine::EffectType wanted = engine::EffectType::NrEnhance;

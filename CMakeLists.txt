@@ -528,6 +528,10 @@ endif()
 if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avformat.h")
   add_library(veyra_media STATIC
     src/media/FFmpegDemuxer.cpp
+    # Bilibili: page URL -> CDN stream, plus the module's API client.
+    src/media/BilibiliResolver.cpp
+    src/media/BilibiliApi.cpp
+    src/media/BiliJson.cpp
     src/media/DemuxSession.cpp
     src/media/FFmpegVideoDecoder.cpp
     src/media/FFmpegDeinterlacer.cpp
@@ -539,7 +543,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_media PUBLIC cxx_std_20)
   # d3d11: the HEVC hardware path decodes on a private D3D11VA device and shares
   # the surfaces with the D3D12 graph as NT handles.
-  target_link_libraries(veyra_media PUBLIC veyra_base veyra_gfx d3d11)
+  target_link_libraries(veyra_media PUBLIC veyra_base veyra_gfx d3d11 bcrypt winhttp)
   if(VEYRA_ENABLE_DEINTERLACE)
     if(NOT EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavfilter/avfilter.h")
       message(FATAL_ERROR "Deinterlacing requires the filter prefix; run scripts/ffmpeg/build-deinterlace-module.py and set VEYRA_FFMPEG_ROOT to its prefix (or explicitly disable VEYRA_ENABLE_DEINTERLACE).")
@@ -1090,11 +1094,20 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   add_library(veyra_qml_bridge STATIC src/ui/QmlExportQueueModel.cpp include/veyra/ui/QmlExportQueueModel.h src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
     src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h
     include/veyra/ui/QmlPlayerBridge.h include/veyra/ui/ThumbnailProvider.h
+    # The sign-in QR. QrImage.cpp is the only unit that sees the encoder's headers:
+    # qrcodegen throws, and compiling it alongside Qt's moc units aborted the process
+    # at startup (0xC0000409).
+    src/media/QrImage.cpp
+    third_party/qrcodegen/qrcodegen.cpp
+    # Danmaku overlay: the engine is Qt-free, the window wraps it for the player.
+    src/media/DanmakuOverlay.cpp
+    src/media/DanmakuWindow.cpp
     # P4-c: the existing subtitle renderer, reused as-is (no second renderer).
     apps/veyra/ui/SubtitleOverlay.cpp)
   set_source_files_properties(apps/veyra/ui/SubtitleOverlay.cpp PROPERTIES COMPILE_OPTIONS /utf-8)
   # AUTOMOC: QmlPlayerBridge declares Q_OBJECT, so its meta-object has to be
   # generated. Without this the library links but every signal is unresolved.
+  target_include_directories(veyra_qml_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/qrcodegen)
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
   # Interface language (UiLanguage.h): its own small library so the streaming models,
   # which are tested without the player, translate their messages too.

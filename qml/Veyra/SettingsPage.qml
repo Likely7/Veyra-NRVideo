@@ -547,6 +547,66 @@ VPage {
                             lineHeight: 1.3
                         }
                     }
+                    // Bilibili module. The video pipeline is shared with everything else,
+                    // so only what changes *what gets requested* from the site lives here.
+                    VH2 { text: qsTr("B 站") }
+                    Text {
+                        text: qsTr("打开 B 站视频时的默认画质与编码。画质选「自动」时取账号能用的最高档；"
+                                   + "有 HDR 版本的视频会自动播 HDR。")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    VGroup {
+                        VRow {
+                            label: qsTr("默认画质")
+                            hint: qsTr("上限而非精确值：实际取「不高于此档」的最高可用画质；全部高于此档时取最低档")
+                            VSeg {
+                                objectName: "set-bili-quality"
+                                options: [
+                                    { id: "0", label: qsTr("自动") },
+                                    { id: "127", label: "8K" },
+                                    { id: "126", label: qsTr("杜比") },
+                                    { id: "125", label: "HDR" },
+                                    { id: "120", label: "4K" },
+                                    { id: "116", label: "1080P60" },
+                                    { id: "112", label: "1080P+" },
+                                    { id: "80", label: "1080P" },
+                                    { id: "74", label: "720P60" },
+                                    { id: "64", label: "720P" },
+                                    { id: "32", label: "480P" },
+                                    { id: "16", label: "360P" }
+                                ]
+                                current: String(veyra.preferences.biliQuality ?? 0)
+                                onPicked: id => veyra.setPreference("biliQuality", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("视频编码")
+                            hint: qsTr("同画质有多个版本时生效；自动 = 优先 HDR 编码（HEVC），该画质只有一种编码时照常播放")
+                            VSeg {
+                                objectName: "set-bili-codec"
+                                options: [
+                                    { id: "auto", label: qsTr("自动") },
+                                    { id: "avc", label: "H.264" },
+                                    { id: "hevc", label: "HEVC" }
+                                ]
+                                current: veyra.preferences.biliCodec || "auto"
+                                onPicked: id => veyra.setPreference("biliCodec", id)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("备用 CDN")
+                            hint: qsTr("主地址打不开时自动换一个镜像节点；B 站每个画质通常有多个镜像")
+                            VSwitch {
+                                objectName: "set-bili-autocdn"
+                                checked: veyra.preferences.biliAutoCdn !== false
+                                onToggled: veyra.setPreference("biliAutoCdn", checked)
+                            }
+                        }
+                    }
                 }
 
                 // --- 音频 ---

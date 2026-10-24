@@ -33,17 +33,31 @@ AudioPipeline::~AudioPipeline()
     closeAll();
 }
 
-bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cancelled)
+bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cancelled,
+                         const std::wstring& requestHeaders,const std::wstring& userAgent)
 {
+    if(path.empty())return false;
+    // The shared-session overload refuses to open while a thread is still running;
+    // this one has to do the same. Starting a second thread over a live one is what
+    // surfaced as "bad allocation" when a DASH source re-opened its audio address.
+    if(thread_.joinable())return false;
+    // A failed conversion returns 0, and building a std::string from a negative length
+    // throws std::bad_alloc, which is indistinguishable from running out of memory.
     const int length=WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),nullptr,0,nullptr,nullptr);
-    std::string narrow(length,'\0');
+    if(length<=0)return false;
+    std::string narrow(static_cast<size_t>(length),'\0');
     WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),narrow.data(),length,nullptr,nullptr);
     fmt_=avformat_alloc_context();
     if(!fmt_)return false;
     inputInterrupt_.configure(media::networkMediaInput(path),cancelled,&stopFlag_);
     fmt_->interrupt_callback={media::InputInterrupt::callback,&inputInterrupt_};
     AVDictionary* options=nullptr;
-    if(media::networkMediaInput(path))media::networkMediaOptions(&options);
+    if(media::networkMediaInput(path)){
+        media::networkMediaOptions(&options);
+        // The DASH audio address is a separate CDN request and needs the same
+        // Referer/UA the video one carries; the shared helper spells them.
+        media::networkMediaHeaders(&options,requestHeaders,userAgent);
+    }
     inputInterrupt_.armConnect();
     const int opened=avformat_open_input(&fmt_,narrow.c_str(),nullptr,&options);
     av_dict_free(&options);
