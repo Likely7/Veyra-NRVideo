@@ -9923,3 +9923,21 @@ GitHub正式API及本地SHA核对保留2.0.7/2.0.8/2.0.9/2.1.0共15资产，正�
 所有命令/清单/回执位于E:/项目/Veyra/{tmp,reports,archives}/dependency-migration-cleanup-20261023；日志E:/项目/Veyra/logs/codex-dependency-migration-20261023。build-recording-handoff.py同源-j2增量构建1.2s通过；Repair272零失败、UI契约含384布局通过、i18n2660零失败、QtQuick显式-o日志109通过零失败；Quick文本实际Windows编码，UTF8读取失败后按mbcs解析同一通过日志，不把解析失败当测试失败。rot1 NVIDIA/AMD私有配置冷启动各一次通过，启动后全目录SHA不变；脚本AST、qmake6.8.3、兼容路径检查通过。101树/111份清理前脏文件SHA通过（此快照在AGENTS更新后，AGENTS为本轮预期变化）；无其它源码变化。FINAL.json、preservation-check.json、quick-and-cold-start.json记录通过范围；不宣称全量重编译/新硬件验收。
 
 补查C旧源码下两个生成测试构建与out三个旧音频测试ZIP共0.38GiB，102份文本先留证；实际删除调用被自动审批blocked by policy拒绝，未给详细原因，五项仍保留，未换工具/移动绕过。policy-rejection.json与C-supplement-plan.json记实际未执行，Cleanup-C-Remaining.ps1供用户手动审阅、默认预览，仅AST语法检查，Agent未执行。C:/veyra-deps迁移与E盘339项删除已执行成功，此独立受阻不改变其事实。
+
+## 2026-10-24 NR手动内部比例与补帧日志排查
+
+用户要求NR内部分辨率增加手动百分比滑条，并排查E:/App/Veyra-2.1.0-test-NVIDIA-win64-portable/logs偶发调度降档是否来自采集不稳，补帧只诊断不修。从108c010干净树切codex/nr-manual-scale-20261024，标签checkpoint/pre-nr-manual-scale-20261024；按docs/NR_MANUAL_SCALE_PLAN_2026-10-24.md实施，结果NR_MANUAL_SCALE_REPORT_2026-10-24.md及FG_SCHEDULING_LOG_DIAGNOSIS_2026-10-24.md。单Agent，不动旧桌面/其他源码改动/真实配置/驱动/运行组件，不合main/push/Release，Lecram暂停。
+
+ResolutionPlan保留旧0..6档、以具名helper扩展125..200编码25%..100%，Manual200为100%，不添POD字段；每层比例走原sizePolicy参数、校验和预设/会话/导出链。AMD手动比例在既有1080p预算内计算，NVIDIA按该层实际输入；NR先于SR也按实际输入，输出与离线合同不变。QmlPlayerBridge新增计算字段manualSize/sizePercent及严格整数范围校验；NrLayerEditor列表/节点共用条件滑条，25..100、1%步进、松开应用、键盘/输入/重置/绑定保持。VSlider的stepSize默认0不改其他滑条。四语言2664条齐全；未改FG/采集/呈现代码或状态判定。
+
+命令：build-recording-handoff.py --task codex-nr-manual-scale-20261024 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-nr1（9目标-j2）；scripts/i18n/extract.py --check；scripts/acceptance/nr-manual-scale.py / --four-k / --four-k --pixels。构建先增量180s、完整重新配置后36.8s通过；所有临时/TEMP/TMP/私有配置/记录在E:/项目/Veyra/{tmp,tests,logs,reports,archives,test-packages}/nr-manual-scale-20261024，构建日志logs/codex-nr-manual-scale-20261024。
+
+NR模型、EffectChain、PresetLibrary、旧PresetStore、Repair272、UI384布局、i18n合同通过；76比例/纵向/微小尺寸/NR先行/分层/AMD预算/原生导出/磁盘预设会话草稿均验证。QtQuick110pass0fail，鼠标拖动松开只提交一次、步进/输入边界/手动固定切换/重置实测。5070真实1080与4K各25/37/50/75/100、节点75及List50/Node75独立重启恢复通过；每组9次Feature18 Create=0x1、有非零NR GPU计时和连续输出。4K37%实际1420x798、输出3840x2160；真实处理PNG色彩非黑，证据pixel-validation.json。没做RX9000实卡/其他N卡/HDR/真实采集/主机/长期/光学延迟验收，不保证绝无bug。
+
+失败如实保存：初次Quick仍用旧staging测试、旧期望7选项，更新成真实源码后110通过。原生夹具冷启动过早验进度、首次节点无NR节点、复用失败profile遇到同名预设三次判失败；仅修正夹具有界等待/显式添加连接/每轮新私有profile，未放宽模型/错误门槛。成功gpu-091045/restore-091133、gpu-4k-091514/restore-4k-091602；旧失败和原日志均保留。
+
+显式重新配置暴露上一轮依赖迁移遗漏：Chiaki8个子模块Git core.worktree相对路径跨C/E盘；普通兼容访问/增量构建不能暴露Git递归错误。先备份原config，仅改为原C源码子树绝对路径，不动源码/pin/patch，verify-chiaki-stage.py完整子模块及patch校验通过；再次重新配置通过，依赖根清单和共享E盘AGENTS记录修正。build helper加--reconfigure以应用已有构建的新标签。证据dependency-git-path-plan/repair.json、chiaki-stage-verification.log；迁移时149125SHA为当时事实，Git元数据后续有意修正。
+
+用户包EXE SHA5b8a8920与manifest一致，177运行库/模型/着色器只读SHA零差异；用户4日志只读快照/hash留档不进Git。全日志3354准入采样/69拒绝，最新36拒绝中34附近平均回调达标；均值仅约2秒窗口，不排除单帧抖动。旧日志4K60/DLSS6X NR21.3ms+FG9.2ms、预测35.6ms，输入60fps仍预算不足；最新VFG多是输入平均稳定时处理/提交迟到，曾有graphSubmit1053ms停顿。半帧与邮箱覆盖不能当驱动帧率不足，不把软件期限/提交FPS当扫描或端到端延迟。预算/状态文件与用户包源码22f58cf逐字节相同，本轮没修补帧。
+
+交付为EXE/QML/i18n小更新层，复用已有2.1.0 NVIDIA组件，含之前录制/旋转改动；源提交和ZIP哈希见reports/.../update-package.json，不覆盖用户E:/App包。收尾复核、操作文件覆盖范围与测试中间物清理另记回执，保留日志/必要证据和旧完整供体。

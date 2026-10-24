@@ -19,7 +19,12 @@ ColumnLayout {
     signal orderEdited(bool enabled)
     readonly property bool amdNr: layerData.runtime === 4
     property string autoReason: ""
-    function updateAutoReason() { autoReason = veyra.nrAutoSelectionReason(layerData.index) }
+    readonly property bool manualSize: layerData.manualSize ?? false
+    property int lastManualPercent: 100
+    function updateAutoReason() {
+        autoReason = veyra.nrAutoSelectionReason(layerData.index)
+        if (layerData.manualSize) lastManualPercent = layerData.sizePercent ?? 100
+    }
     Component.onCompleted: updateAutoReason()
     onLayerDataChanged: updateAutoReason()
     // The snapshot arrives about 60 times a second and both editor pages stay
@@ -35,9 +40,10 @@ ColumnLayout {
     readonly property var sizeChoices: [
         {id:"2",label:"480p"}, {id:"3",label:"720p"}, {id:"4",label:"900p"},
         {id:"0",label:qsTr("1080p · 默认")}, {id:"5",label:"1440p",disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""}, {id:"1",label:qsTr("原生"),disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""},
-        {id:"6",label:qsTr("自动（按负载）"),disabled:autoReason.length>0,note:autoReason}
+        {id:"6",label:qsTr("自动（按负载）"),disabled:autoReason.length>0,note:autoReason},
+        {id:"manual",label:qsTr("手动")}
     ]
-    readonly property string sizeLabel: sizeChoices.find(o => Number(o.id) === layerData.sizePolicy)?.label ?? qsTr("未知")
+    readonly property string sizeLabel: manualSize ? qsTr("手动") : sizeChoices.find(o => Number(o.id) === layerData.sizePolicy)?.label ?? qsTr("未知")
     spacing: 6
 
     component NrValueRow: VRow {
@@ -123,8 +129,37 @@ ColumnLayout {
         VSelect {
             objectName: "nr-resolution"
             value: editor.sizeLabel; options: editor.sizeChoices
-            onPicked: id => editor.edited(editor.layerData.index, "sizePolicy", Number(id))
+            onPicked: id => id === "manual" ? editor.edited(editor.layerData.index, "sizePercent", editor.lastManualPercent)
+                                             : editor.edited(editor.layerData.index, "sizePolicy", Number(id))
         }
+    }
+    VRow {
+        objectName: "nr-manual-size-row"
+        visible: editor.manualSize
+        enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
+        opacity: enabled ? 1 : 0.4
+        label: qsTr("处理比例")
+        hint: qsTr("松开后应用 · 宽高同比例")
+        value: Math.round(percentSlider.displayedValue) + "%"
+        VSlider {
+            id: percentSlider
+            objectName: "nr-size-percent"
+            valueFromModel: true
+            resettable: true; defaultValue: 100
+            implicitWidth: 110
+            from: 25; to: 100; stepSize: 1
+            live: false // NR dimensions rebuild GPU features: commit once on release.
+            value: editor.layerData.sizePercent ?? 100
+            onMoved: value => editor.edited(editor.layerData.index, "sizePercent", Math.round(value))
+        }
+    }
+    Text {
+        Layout.fillWidth: true
+        visible: editor.manualSize
+        text: editor.amdNr ? qsTr("手动比例以最高 1080p 预算内的输入为基准；仅调整视频预览，输出尺寸不变。")
+                          : qsTr("手动比例缩放该层输入的宽高；50% 约为四分之一像素。仅调整视频预览，输出尺寸不变。")
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
+        wrapMode: Text.WordWrap
     }
     Text {
         Layout.fillWidth: true

@@ -6039,6 +6039,7 @@ QVariantList QmlPlayerBridge::nrLayers() const {
         if(node.type!=engine::EffectType::NrEnhance)continue;
         const auto& n=node.nr;
         out<<QVariantMap{{"index",int(i)},{"enabled",node.enabled},{"sizePolicy",int(n.sizePolicy)},{"runtime",int(engine::currentNrRuntime(n.runtime))},
+            {"manualSize",pipeline::manualNrSizePolicy(n.sizePolicy)},{"sizePercent",int(pipeline::nrSizePercent(n.sizePolicy))},
             {"intensity",n.model.intensity},{"tone",n.model.tone},{"structure",n.model.structure},
             {"skin",n.model.skin},{"style",n.model.style},{"autoMask",bool(n.model.autoMask)},
             {"uiCorrection",bool(n.model.uiCorrection)},{"performance",n.model.performance},{"total",n.residual.total},
@@ -6113,13 +6114,20 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     else if(key=="luminanceRetention")n.residual.correction.lumaKeep=float(value);
     else if(key=="shadowProtection")n.residual.correction.shadow=float(value);
     else if(key=="correctionAmount")n.residual.correction.autoAmount=float(value);
+    else if(key=="sizePercent"){
+        if(value!=std::floor(value)||value<pipeline::kNrMinimumPercent||value>pipeline::kNrMaximumPercent)return false;
+        n.sizePolicy=pipeline::nrSizePolicyForPercent(unsigned(value));
+    }
+    else if(key=="sizePolicy"){
+        if(value!=std::floor(value)||value<0||value>int(pipeline::NrSizePolicy::Manual))return false;
+        const auto policy=static_cast<pipeline::NrSizePolicy>(int(value));
+        if(!pipeline::validNrSizePolicy(policy))return false;
+        if(policy==pipeline::NrSizePolicy::Auto){const auto reason=nrAutoSelectionReason(index);if(!reason.isEmpty()){emit notice(reason,true);return false;}}
+        n.sizePolicy=policy;
+    }
     else {
         if(value!=std::floor(value)||value<0||value>6)return false;
-        if(key=="sizePolicy"){
-            if(value==6){const auto reason=nrAutoSelectionReason(index);if(!reason.isEmpty()){emit notice(reason,true);return false;}}
-            n.sizePolicy=static_cast<pipeline::NrSizePolicy>(int(value));
-        }
-        else if(key=="style"&&value<=2)n.model.style=int(value);
+        if(key=="style"&&value<=2)n.model.style=int(value);
         else if(key=="autoMask"&&value<=1)n.model.autoMask=int(value);
         else if(key=="uiCorrection"&&value<=1)n.model.uiCorrection=int(value);
         else if(key=="performance"&&value<=1&&engine::nrUsesPerformanceModel(n.runtime))n.model.performance=value!=0;

@@ -107,7 +107,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         return {};
     }
     const auto plan=pipeline::ResolutionPlan::make({request.width,request.height},request.sr,policy,
-        (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency);
+        (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency,
+        request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u);
     desc.sourceWidth=request.width;desc.sourceHeight=request.height;
     desc.workWidth=plan.base.width;desc.workHeight=plan.base.height;
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
@@ -186,7 +187,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     if(!desc.enableNr)for(const auto size:desc.nrLayersSizePolicy){
         desc.nrLayersExtent.push_back(pipeline::ResolutionPlan::make({request.width,request.height},request.sr,
             request.exportJob?exportNrSizePolicy(settings.nrRuntime):size,(request.stillImage||request.exportJob)&&!boundedAmd,
-            settings.revision,settings.srTarget,lowLatency).nr);
+            settings.revision,settings.srTarget,lowLatency,
+            request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u).nr);
     }
     desc.fixedExecutionPlan=execution;
     return plan;

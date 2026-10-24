@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-24 NR手动比例及日志排查（用户请求）**：从108c010在codex/nr-manual-scale-20261024实施每层NR内部手动百分比与条件滑条，按docs/NR_MANUAL_SCALE_PLAN_2026-10-24.md，仅扩展NR尺寸规划/既有参数桥接/共用QML滑条/翻译/必要合同测试与持久化兼容；这些新功能必要接点覆盖旧2.0.0 UI迁移冻结。不改FG预算/调度/采集/告警判定，用户指定调度降档只诊断。用户E:/App包/日志只读，私有测试不连真实主机或采集卡。单Agent，全E盘，复用当前同源构建-j2<=900秒/单测试<=300秒；不改专有运行文件/驱动/真实配置，无main合并/push/Release，Lecram暂停。
+
 > **2026-10-23 依赖迁移与历史产物清理（用户明确授权）**：`C:\veyra-deps` 的149125个普通文件已逐文件SHA256核验并迁到 **`E:\项目\Veyra\deps\core`**，C盘旧实体已删除；`C:\veyra-deps` 仅为指向该E盘目录的 Junction，保留兼容旧脚本/CMake缓存，禁止删除此入口或重新在C盘建依赖实体。Qt实体仍为 `E:\项目\Veyra\deps\qt\6.8.3\msvc2022_64`，`deps\core\qt-veyra` 仅指向 `deps\qt`。新任务优先使用E盘实体路径；旧缓存不必为改路径强制全量重编译。共享路径清单 `E:\项目\Veyra\deps\DEPENDENCY_ROOTS.json`，共享规则 `E:\项目\Veyra\AGENTS.md`，证据 `E:\项目\Veyra\reports\dependency-migration-cleanup-20261023`。本条覆盖旧“C:\veyra-deps暂保留不迁移”的限制。历史测试/包按本轮清单清理；正式发布资产只保留2.0.7及以后（当前2.0.7/2.0.8/2.0.9/2.1.0），依GitHub资产SHA而非内部test文件名判定。当前未合入正式版的rot1交付单独保留；不删源码工作树/未提交改动/依赖模型/对应源码与必要验收记录。清理实际结果以该目录FINAL.json为准，不从计划推断已删除。不merge/push/发布，不继续Lecram。
 
 > **2026-10-23 画面旋转（Codex）**：用户要求极简/专业小按钮每次顺时针90°并适配UI。4eee190干净源码切codex/picture-rotation-20261023，起点标签checkpoint/pre-picture-rotation-20261023。按docs/PICTURE_ROTATION_PLAN_2026-10-23.md复用已有元数据呈现/坐标映射，允许必要PreviewView/EngineController/bridge/QML/翻译/定向测试接点，覆盖这些范围旧UI冻结；不继续Lecram或修改其它工作树。不改专有运行库/模型/驱动或真实配置，全E盘，复用同源构建限-j2≤900秒/单测试≤300秒，单Agent，无main合并/push/发布。

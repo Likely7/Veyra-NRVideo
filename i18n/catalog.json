@@ -5924,6 +5924,13 @@
    "ja": "処理中 · "
   },
   {
+   "zh": "处理比例",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "處理比例",
+   "en": "Processing scale",
+   "ja": "処理解像度の比率"
+  },
+  {
    "zh": "处理耗时",
    "src": "qml/ProPage.qml",
    "zh-TW": "處理耗時",
@@ -8661,6 +8668,20 @@
    "ja": "手動オフセット · ライブ入力時に有効"
   },
   {
+   "zh": "手动比例以最高 1080p 预算内的输入为基准；仅调整视频预览，输出尺寸不变。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "手動比例以最高 1080p 預算內的輸入為基準；僅調整影片預覽，輸出尺寸不變。",
+   "en": "Manual scale is relative to input within the 1080p budget. Video preview only; output size stays unchanged.",
+   "ja": "手動比率は最大1080pの処理上限内の入力を基準にします。動画プレビューのみを調整し、出力サイズは変わりません。"
+  },
+  {
+   "zh": "手动比例缩放该层输入的宽高；50% 约为四分之一像素。仅调整视频预览，输出尺寸不变。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "手動比例縮放該層輸入的寬高；50% 約為四分之一像素。僅調整影片預覽，輸出尺寸不變。",
+   "en": "Manual scale applies to both input dimensions of this layer; 50% uses about one quarter of the pixels. Video preview only; output size stays unchanged.",
+   "ja": "手動比率はこのレイヤーの入力の幅と高さに適用されます。50%では画素数が約4分の1になります。動画プレビューのみを調整し、出力サイズは変わりません。"
+  },
+  {
    "zh": "手动添加",
    "src": "qml/DialogHost.qml",
    "zh-TW": "手動添加",
@@ -10949,6 +10970,13 @@
    "zh-TW": "放開以追加至播放清單",
    "en": "Drop to append to playlist",
    "ja": "ドロップしてプレイリストに追加"
+  },
+  {
+   "zh": "松开后应用 · 宽高同比例",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "放開後套用 · 寬高同比例",
+   "en": "Apply on release · scale both dimensions",
+   "ja": "離して適用 · 幅と高さを同比率で縮小"
   },
   {
    "zh": "松开恢复",

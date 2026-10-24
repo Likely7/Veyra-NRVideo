@@ -72,8 +72,9 @@ Item {
             width: 1480; height: 1500; z: 20
             property int lastIndex: -1
             property string lastKey: ""
+            property int editCount: 0
             property var rows: [0,1,2,3].map(i => ({
-                index: 2*i+1, enabled: true, runtime: 2, sizePolicy: 0, intensity: 1, performance: true,
+                index: 2*i+1, enabled: true, runtime: 2, sizePolicy: 0, manualSize: false, sizePercent: 100, intensity: 1, performance: true,
                 tone: 1, structure: 1, skin: -1, style: 0, autoMask: false,
                 uiCorrection: false, total: 1, darken: 1, brighten: 1,
                 color: 1, luminance: 1, temporal: false, antiFlicker: 2,
@@ -84,10 +85,13 @@ Item {
                 shadowProtection: 0, correctionAmount: 1
             }))
             function edit(nodeIndex,key,amount) {
-                lastIndex=nodeIndex; lastKey=key
+                lastIndex=nodeIndex; lastKey=key; editCount++
                 const next=rows.map(r => Object.assign({},r))
                 if(key==="correctionEnabled"||key==="correctionAuto")amount=Boolean(amount)
-                next.find(r => r.index===nodeIndex)[key]=amount
+                const row=next.find(r => r.index===nodeIndex)
+                row[key]=amount
+                if(key==="sizePercent") { row.manualSize=true; row.sizePolicy=100+amount }
+                if(key==="sizePolicy") { row.manualSize=false; row.sizePercent=100 }
                 rows=next
             }
             Repeater {
@@ -430,7 +434,7 @@ Item {
                 tryCompare(card,"open",true)
                 const resolution=findChild(card,"nr-resolution")
                 compare(resolution.options.slice(0,6).map(o=>o.label).join(","),"480p,720p,900p,1080p · 默认,1440p,原生")
-                compare(resolution.options.length,7)
+                compare(resolution.options.length,8)
                 compare(resolution.options[6].id,"6")
                 compare(resolution.options[6].disabled,true)
                 pickOption(resolution,optionIndices[i])
@@ -449,6 +453,41 @@ Item {
                 compare(fixture.rows[i].sizePolicy,policies[i])
                 fuzzyCompare(fixture.rows[i].intensity,0.2+0.15*i,0.015)
             }
+        }
+
+        function test_nr_manual_percent_release_keyboard_and_reset() {
+            const fixture=createTemporaryObject(nrFixture,root)
+            verify(waitForPolish(root.Window.window))
+            const card=findChild(fixture,"nr-card-1")
+            mouseClick(card,40,24);tryCompare(card,"open",true)
+            const select=findChild(card,"nr-resolution")
+            const row=findChild(card,"nr-manual-size-row")
+            compare(row.visible,false)
+            pickOption(select,7)
+            tryCompare(row,"visible",true)
+            const slider=findChild(card,"nr-size-percent")
+            compare(slider.value,100);compare(slider.live,false);compare(slider.stepSize,1)
+            const before=fixture.editCount
+            const x=slider.trackWidth-1,y=slider.height/2
+            mousePress(slider,x,y)
+            for(let i=1;i<=8;++i)mouseMove(slider,x-i*slider.trackWidth/12,y)
+            wait(100)
+            compare(fixture.editCount,before) // GPU size is committed only on release.
+            mouseRelease(slider,x-slider.trackWidth*2/3,y)
+            verify(fixture.rows[0].sizePercent>=48&&fixture.rows[0].sizePercent<=51)
+            const chosen=fixture.rows[0].sizePercent
+            compare(fixture.rows[1].manualSize,false)
+            keyClick(Qt.Key_Right);compare(fixture.rows[0].sizePercent,chosen+1)
+            slider.openEditor()
+            const input=findChild(slider,"vslider-editor-input")
+            input.text="24";keyClick(Qt.Key_Return);compare(fixture.rows[0].sizePercent,25)
+            keyClick(Qt.Key_Left);compare(fixture.rows[0].sizePercent,25)
+            slider.openEditor();input.text="75.4";keyClick(Qt.Key_Return)
+            compare(fixture.rows[0].sizePercent,75)
+            pickOption(select,1);compare(row.visible,false)
+            pickOption(select,7);compare(fixture.rows[0].sizePercent,75)
+            mouseClick(findChild(slider,"vslider-reset"));compare(fixture.rows[0].sizePercent,100)
+            keyClick(Qt.Key_Right);compare(fixture.rows[0].sizePercent,100)
         }
 
         function test_nr_correction_mouse_controls() {

@@ -20,6 +20,7 @@ parser.add_argument('--root', required=True)
 parser.add_argument('--label', default='2.1.1-test')
 parser.add_argument('--jobs', default='2')
 parser.add_argument('--build-dir', help='Existing task-local build directory under E:/项目/Veyra/build')
+parser.add_argument('--reconfigure', action='store_true', help='Apply pinned CMake options and the requested display label to an existing build')
 parser.add_argument('--timeout', type=int, default=880)
 parser.add_argument('--option', action='append', default=[], help='extra -D option NAME=VALUE')
 parser.add_argument('targets', nargs='+')
@@ -101,7 +102,7 @@ def run(name, command, deadline):
 
 start = time.monotonic()
 deadline = start + args.timeout
-if not (BUILD / 'build.ninja').exists():
+if args.reconfigure or not (BUILD / 'build.ninja').exists():
     run('configure', configure, deadline)
     if not (BUILD / 'CMakeFiles/rules.ninja').exists():
         print('ERROR: rules.ninja missing after configure (console code page?)', flush=True)
