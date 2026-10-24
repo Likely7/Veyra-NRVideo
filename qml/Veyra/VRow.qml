@@ -10,7 +10,10 @@ Item {
     // Narrow panels with a wide control (导出 输出设置): the hint runs under the
     // whole row instead of being squeezed beside the control.
     property bool hintBelow: false
-    readonly property bool stacked: width > 0 && width - slot.childrenRect.width - (value.length ? 52 : 0) - 12
+    // Uses the children's declared widths, not childrenRect: the latter is a
+    // layout result, and reading it here made `stacked` depend on the layout it
+    // changes (Qt reported a binding loop and logged it on every row).
+    readonly property bool stacked: width > 0 && width - slot.declaredWidth - (value.length ? 52 : 0) - 12
         < Math.min(170, labelMetrics.advanceWidth(label))
     FontMetrics { id: labelMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
     default property alias control: slot.data
@@ -63,6 +66,16 @@ Item {
         }
         Item {
             id: slot
+            // Sum of the children's declared widths — stable across layout changes.
+            readonly property real declaredWidth: {
+                let w = 0
+                for (let i = 0; i < children.length; ++i) {
+                    const c = children[i]
+                    if (!c || !c.visible) continue
+                    w += c.implicitWidth > 0 ? c.implicitWidth : 0
+                }
+                return w
+            }
             implicitHeight: childrenRect.height
             Layout.preferredWidth: childrenRect.width
             Layout.preferredHeight: childrenRect.height
