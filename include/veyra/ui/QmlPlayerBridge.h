@@ -303,6 +303,10 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool nrAnyEnabled READ nrAnyEnabled NOTIFY nrLayersChanged)
     Q_PROPERTY(bool srEnabled READ srEnabled WRITE setSrEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int fgMultiplier READ fgMultiplier WRITE setFgMultiplier NOTIFY settingsChanged)
+    // 自动选择倍率 开关：只对 DLSS 和 VFG 开放。开启后按源帧率 × 输出上限自动挑档，
+    // 源帧率超过上限时关闭补帧。与倍率档位完全分离（2026-10-24 用户要求）。
+    Q_PROPERTY(bool fgAutoMultiplierEnabled READ fgAutoMultiplier WRITE setFgAutoMultiplier NOTIFY settingsChanged)
+    Q_PROPERTY(bool fgAutoMultiplierAvailable READ fgAutoMultiplierAvailable NOTIFY settingsChanged)
     Q_PROPERTY(bool lowLatency READ lowLatency WRITE setLowLatency NOTIFY settingsChanged)
     Q_PROPERTY(bool nrTemporal READ nrTemporal WRITE setNrTemporal NOTIFY settingsChanged)
     Q_PROPERTY(double nrHoldStrength READ nrHoldStrength WRITE setNrHoldStrength NOTIFY settingsChanged)
@@ -994,6 +998,13 @@ public:
     void setSrEnabled(bool value);
     int fgMultiplier() const;
     void setFgMultiplier(int value);
+    bool fgAutoMultiplier() const;
+    void setFgAutoMultiplier(bool value);
+    bool fgAutoMultiplierAvailable() const;
+    // 「自动」倍率的运行时决策：每个会话首次进入播放时算一次档位。
+    void maybeApplyFgAutoMultiplier();
+    // 设倍率的实际动作，不碰 fgAutoMultiplier 标记（自动决策与手动选择共用）。
+    void applyFgMultiplier(int multiplier);
     bool lowLatency() const;
     void setLowLatency(bool value);
     bool nrTemporal() const;

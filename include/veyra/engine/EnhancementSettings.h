@@ -309,6 +309,10 @@ struct EnhancementSettings {
     //     frame at 6X against 1.4.0 hitting the full 3.0 of 3 at 4X.
     // Users reported 1.4.0 feeling better, so the looser rule is the default.
     bool fgStrictAdmission=false;
+    // 自动选择倍率开关（2026-10-24）：开启时 multiplier 只是占位/上次手动值，
+    // 实际档位在运行期由 displayFgAutoMultiplier(backend, 源帧率, 输出上限) 算出；
+    // 关闭时按 multiplier 走作者原版逻辑。只对 DLSS 和 VFG 开放。
+    bool fgAutoMultiplier=false;
     bool captureCompatible=false;
     // Capture audio ingress; requires a reconnect to take effect (the media type
     // is negotiated when the graph is built).

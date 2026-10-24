@@ -1892,7 +1892,7 @@ VPage {
                             }
                             VRow {
                                 label: qsTr("倍率")
-                                // Live output hint: a suggestion, the multiplier stays as chosen.
+                                // 档位与作者原版一致（只有数字档）；自动选择由下方独立开关控制。
                                 hint: veyra.fgDisplayHint.length > 0 ? veyra.fgDisplayHint : veyra.fgMaxMultiplier + qsTr("X 为上限")
                                 hintColor: veyra.fgDisplayHint.length > 0 ? Theme.warn : Theme.t3
                                 VSeg {
@@ -1938,6 +1938,19 @@ VPage {
                                 VSwitch {
                                     checked: veyra.fgStrict
                                     onToggled: checked => veyra.fgStrict = checked
+                                }
+                            }
+                            VRow {
+                                objectName: "list-fg-auto-multiplier"
+                                label: qsTr("自动选择倍率")
+                                visible: veyra.fgAutoMultiplierAvailable
+                                hint: veyra.fgAutoMultiplierEnabled
+                                      ? qsTr("按源帧率和输出上限自动选档；源帧率超过上限时关闭补帧")
+                                      : qsTr("关闭时按手动选的倍率 · 默认关闭")
+                                hintBelow: veyra.fgAutoMultiplierEnabled
+                                VSwitch {
+                                    checked: veyra.fgAutoMultiplierEnabled
+                                    onToggled: checked => veyra.fgAutoMultiplierEnabled = checked
                                 }
                             }
                             VSubGroup {

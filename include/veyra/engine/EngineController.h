@@ -34,6 +34,9 @@ namespace veyra::engine {
 class FrameFlowWindow;
 struct PreviewGpuSession;
 struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t fgMultiplier=2; EnhancementSettings settings;
+    // 「自动」抑制态由 settings.fgAutoMultiplier + 源帧率/输出上限在 EngineController
+    // 的每帧循环里判定（previewFgMultiplier=1），不在这里另存状态：PlayerOptions 会在
+    // 每次 applySettings 之后由 from() 重建，放在这里的字段会丢。
     std::optional<ChainRuntimeOrder> nodeOrder; // in-process only; not export shared memory
     int audioStreamIndex=-1; // export selection; -1 selects the container default
     double exportStartSeconds=0.0; // export-only trim; first complete frame at/after this time

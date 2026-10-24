@@ -2205,11 +2205,15 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const bool hinted=isCapture&&!isImage&&options.fg&&options.fgMultiplier>1&&
                         presentationEffective.display!=DisplaySync::Tearing;
                     double contentFps=0,refreshHz=0;
+                    // The monitor refresh is reported for EVERY source, not only
+                    // capture ones: the automatic multiplier needs a target rate when
+                    // the output cap is 关闭 (2026-10-24). It used to stay 0 for files
+                    // because the hint below is capture-only.
+                    if(!isImage)refreshHz=displayFgTestHz>0?displayFgTestHz:presenter.displayRefreshHz();
                     if(hinted){
                         // Content rate: 60->30 halves the transport; dedup uses its
                         // measured cadence and suggests nothing until it has one.
                         contentFps=dedupActive?contentDedup.contentFps():activeSource->info().averageFps*(halfRate?.5:1.0);
-                        refreshHz=displayFgTestHz>0?displayFgTestHz:presenter.displayRefreshHz();
                         if(contentFps>0&&refreshHz>0&&displayFgGate.update(displayFgSuggestion(options.settings.frameGenerationBackend,options.fgMultiplier,contentFps,refreshHz,presentationVsync(presentationEffective)),host100ns())){
                             const auto hint=displayFgGate.applied();
                             veyra::log::info("display-fg-hint",std::format("revision={} backend={} requested={}X suggestion={} outputFps={:.3f} contentFps={:.3f} refreshHz={:.3f}{} dedup={} halfRate={} display={} (hint only: the multiplier is never changed automatically)",

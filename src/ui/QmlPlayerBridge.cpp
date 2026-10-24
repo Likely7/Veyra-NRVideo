@@ -14,6 +14,7 @@
 #include <QScopedValueRollback>
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
+#include "veyra/engine/DisplayFgBudget.h"
 #include "veyra/ui/QmlExportQueueModel.h"
 #include "veyra/ui/PlaylistModel.h"
 #include "veyra/ui/UpdateChecker.h"
@@ -463,6 +464,10 @@ struct QmlPlayerBridge::Impl {
     uint64_t netNoticeSession = 0, netLossReported = 0;
     uint32_t netReconnectsReported = 0;
     std::chrono::steady_clock::time_point netLossNoticeAt{};
+    // 自动选择倍率：只在每个会话刚开始播放时决定一次，播放中不再改动。
+    // 换档必须重建 GPU 管线（缓冲区随倍率变），播放中做会丢补帧历史并卡顿，
+    // 所以这里只在 session 首次进入 running 时计算（用户 2026-10-24 选定）。
+    uint64_t fgAutoSession = 0;       // 已为哪个会话决定过档位
     struct CaptureListCache { bool valid = false; uint64_t generation = 0; QString language; std::wstring a, b; QVariantList list; };
     CaptureListCache captureFormatsCache, captureResolutionCache, captureRateCache, capturePixelCache;
     // Settings → 组件与许可. Read once and on refreshComponentList(): the property used to
@@ -1716,6 +1721,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     impl_->netLossNoticeAt = now;
                 }
             }
+            // 「自动」倍率：每个会话进入播放后决定一次（见 applyFgAutoMultiplier）。
+            maybeApplyFgAutoMultiplier();
             emit snapshotChanged();
         }
         // The reconnect waits for the failed session's teardown (the GPU reset can hold it for
@@ -2265,11 +2272,13 @@ QVariantList QmlPlayerBridge::fgMultiplierChoices() const {
     // Only multipliers the chosen backend supports are offered: DLSS reaches 6X on
     // capable hardware, XeSS stops at 4X. Offering a value the provider would
     // refuse is the same lie as a dead control.
-    const bool xess = settings().frameGenerationBackend
-                      == engine::FrameGenerationBackend::XeSS;
+    const auto backend = settings().frameGenerationBackend;
+    const bool xess = backend == engine::FrameGenerationBackend::XeSS;
     const int ceiling = xess ? std::min(fgMaxMultiplier(), 4) : fgMaxMultiplier();
     QVariantList out;
-    const auto choices=settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg?
+    // 档位与作者原版一致：只有数字档，不再有「自动」。自动改由单独的
+    // 自动选择倍率 开关控制（2026-10-24 用户要求）。
+    const auto choices=backend==engine::FrameGenerationBackend::Vfg?
         std::span<const uint32_t>(engine::kVfgMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
     for (const auto choice : choices) {
         const int m = int(choice);
@@ -2282,8 +2291,120 @@ QVariantList QmlPlayerBridge::fgMultiplierChoices() const {
     return out;
 }
 
-int QmlPlayerBridge::vfgQuality()const{return int(settings().vfgQuality);}
-void QmlPlayerBridge::setVfgQuality(int value){
+// 自动选择倍率只对 DLSS 和 VFG 开放：这两家的倍率选择足够宽，值得按上限去凑。
+// FSR 只有 2X、XeSS 最多 4X 且由提供方自报能力，自动在它们身上没有可调的余地。
+bool QmlPlayerBridge::fgAutoMultiplierAvailable() const {
+    const auto backend = settings().frameGenerationBackend;
+    return backend == engine::FrameGenerationBackend::Dlss ||
+           backend == engine::FrameGenerationBackend::Vfg;
+}
+
+bool QmlPlayerBridge::fgAutoMultiplier() const { return impl_->chain.fgAutoMultiplier; }
+
+void QmlPlayerBridge::setFgAutoMultiplier(bool value) {
+    if (!fgAutoMultiplierAvailable()) {
+        if (value) emit notice(tr("自动倍率只支持 DLSS 帧生成和 NVIDIA VFG"), true);
+        return;
+    }
+    if (impl_->chain.fgAutoMultiplier == value) return;
+    const auto before = impl_->chain.fgAutoMultiplier;
+    impl_->chain.fgAutoMultiplier = value;
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message;
+        impl_->chain.fgAutoMultiplier = before; impl_->revalidate();
+        emit notice(uiText(error), true); return;
+    }
+    // 打开自动选择时，若补帧正被关着就抬到 2X，让下一次播放有档可用。
+    // 注意：不覆盖用户已选的具体档位（关闭自动后仍按那个档跑）。
+    if (value && impl_->chain.fgMultiplier < 2) impl_->chain.fgMultiplier = 2;
+    // 重新打开必须让它再决策一次：fgAutoSession 记的是"本会话已经算过档位"，
+    // 用户中途关掉再打开时，不清这个标记就不会重新生效（2026-10-24 实测）。
+    if (value) impl_->fgAutoSession = 0;
+    veyra::log::info("ui-fg-auto", std::format("auto={} backend={} multiplier={}{}",
+        value, engine::frameGenerationBackendName(settings().frameGenerationBackend), impl_->chain.fgMultiplier,
+        value ? " (session decision reset)" : " (author-default multiplier logic)"));
+    emit settingsChanged(); emitChainChanged();
+}
+
+// 自动选择倍率 的运行时决策（用户 2026-10-24 定稿）。
+// 开关关闭：完全按作者原版逻辑，倍率就是用户选的那个数字档，这里什么都不做。
+// 开关开启：
+//   · 源帧率低于输出上限 → 按公式挑档（ceil(上限 ÷ (源帧率×1.02))，档位向上取）
+//   · 源帧率高于/等于输出上限 → 关闭补帧（节点 enabled=false，开关也跟着关）
+//   · 输出上限为「关闭」→ 用显示器实际刷新率当目标，照样自动选
+// 只在每个会话首次进入播放时算一次：改倍率要重建 GPU 管线，播放中改会卡顿。
+void QmlPlayerBridge::maybeApplyFgAutoMultiplier() {
+    const auto& s = impl_->snapshot;
+    if (!s.running || s.sessionId == 0) return;
+    // 本会话已经决定过：不再动。会话号变化才重新算。
+    if (impl_->fgAutoSession == s.sessionId) return;
+    if (!impl_->chain.fgAutoMultiplier) { impl_->fgAutoSession = s.sessionId; return; }
+    const auto backend = settings().frameGenerationBackend;
+    if (!fgAutoMultiplierAvailable()) { impl_->fgAutoSession = s.sessionId; return; }
+    // 补帧节点不存在才放弃；节点存在但被关着必须继续决策 —— 上一个片源可能按规则
+    // 把补帧关掉了（源帧率超过上限），下一个低帧率片源要能重新打开它。
+    const auto* node = impl_->chain.firstOf(engine::EffectType::FrameGeneration);
+    if (!node) { impl_->fgAutoSession = s.sessionId; return; }
+
+    // 目标帧率：「自定义」和「跟随显示器」用有效上限；「关闭」时退回显示器实际
+    // 刷新率，自动选倍数照常工作（用户 2026-10-24 要求）。
+    double targetFps = 0;
+    if (s.presentationEffective.outputRate == engine::OutputRateMode::Custom ||
+        s.presentationEffective.outputRate == engine::OutputRateMode::FollowDisplay)
+        targetFps = s.presentationEffective.customFps;   // 跟随显示器时引擎已解析成真实 Hz
+    else
+        targetFps = s.displayFgRefreshHz;                // 输出上限关闭：按显示器刷新率算
+    if (!(targetFps > 0.01)) {
+        // 显示器刷新率也没拿到：下一帧再试（不擅自改设置）。
+        veyra::log::info("fg-auto", std::format("waiting for a target rate cap={} refresh={:.3f}",
+            int(s.presentationEffective.outputRate), s.displayFgRefreshHz));
+        return;
+    }
+    const double sourceFps = s.nominalSourceFps;
+    if (!(sourceFps > 0.01)) {
+        // 源帧率还没就绪：下一帧再试。
+        veyra::log::info("fg-auto", std::format("waiting for source rate target={:.3f}", targetFps));
+        return;
+    }
+
+    impl_->fgAutoSession = s.sessionId;
+    const int before = fgMultiplier();
+    const uint64_t session = s.sessionId;
+
+    // 源帧率高于/等于输出上限：补了也显示不出来，关闭补帧。
+    if (sourceFps >= targetFps / engine::kDisplayFgFitTolerance) {
+        veyra::log::info("fg-auto", std::format("session={} backend={} source={:.3f} target={:.3f} chosen=off previous={} (source at/above the cap: frame generation off)",
+            session, engine::frameGenerationBackendName(backend), sourceFps, targetFps, before));
+        QTimer::singleShot(0, this, [this, session] {
+            if (impl_->snapshot.sessionId != session) return;
+            if (!impl_->chain.fgAutoMultiplier) return;
+            veyra::log::info("fg-auto", std::format("turning frame generation off session={}", session));
+            applyFgMultiplier(1);
+        });
+        return;
+    }
+
+    // 源帧率低于上限：按公式挑档，让它刚好打满上限。
+    const unsigned ceiling = unsigned(std::clamp(fgMaxMultiplier(), 2, 8));
+    const unsigned wanted = engine::displayFgAutoMultiplier(backend, sourceFps, targetFps, ceiling);
+    if (wanted == 0) {
+        veyra::log::info("fg-auto", std::format("no usable step backend={} source={:.3f} target={:.3f} ceiling={} (multiplier kept)",
+            engine::frameGenerationBackendName(backend), sourceFps, targetFps, ceiling));
+        return;
+    }
+    const int target = int(wanted);
+    veyra::log::info("fg-auto", std::format("session={} backend={} source={:.3f} target={:.3f} ceiling={} chosen={} previous={}",
+        session, engine::frameGenerationBackendName(backend), sourceFps, targetFps, ceiling, target, before));
+    if (before == target && node->enabled) return;
+    QTimer::singleShot(0, this, [this, session, target] {
+        if (impl_->snapshot.sessionId != session) return;
+        if (!impl_->chain.fgAutoMultiplier) return;
+        veyra::log::info("fg-auto", std::format("applying {}X session={}", target, session));
+        applyFgMultiplier(target);
+    });
+}
+
+int QmlPlayerBridge::vfgQuality()const{return int(settings().vfgQuality);}void QmlPlayerBridge::setVfgQuality(int value){
     if(value<0||uint32_t(value)>=engine::kVfgQualityCount)return;auto s=settings();if(s.vfgQuality==uint32_t(value))return;
     s.vfgQuality=uint32_t(value);
     if(!impl_->commit(s)){emit notice(tr("VFG 质量设置未被接受，原设置保留"),true);return;}
@@ -6058,9 +6179,18 @@ void QmlPlayerBridge::setFgEnabled(bool enabled) {
 }
 int QmlPlayerBridge::fgMultiplier() const {
     const auto* node = impl_->chain.firstOf(engine::EffectType::FrameGeneration);
+    // 档位只有数字：自动选倍数由独立开关控制，不再占用倍率档位（2026-10-24）。
     return node && node->enabled ? int(impl_->chain.fgMultiplier) : 1;
 }
 void QmlPlayerBridge::setFgMultiplier(int multiplier) {
+    // 倍率档只有数字（1 = 关闭，>=2 = 补帧倍率）。自动选择是独立开关，
+    // 不再占用 0 这个值；收到 0 说明调用方过旧，忽略即可。
+    if (multiplier <= 0) return;
+    applyFgMultiplier(multiplier);
+}
+
+// 设倍率的实际动作，不碰 fgAutoMultiplier 标记。自动决策与手动选择共用。
+void QmlPlayerBridge::applyFgMultiplier(int multiplier) {
     const auto choices=settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg?
         std::span<const uint32_t>(engine::kVfgMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
     const bool legal = std::find(choices.begin(),choices.end(),uint32_t(std::max(multiplier,0)))!=choices.end();
@@ -9279,7 +9409,10 @@ void QmlPlayerBridge::updateRunStatus() {
             case engine::FrameGenerationBackend::Fsr4: backend = tr("FSR 4 ML"); break;
             case engine::FrameGenerationBackend::Vfg: backend = QStringLiteral("NVIDIA VFG"); break;
             }
-            detail << tr("补帧 %1X · %2").arg(s.applied.multiplier)
+            // 自动选择倍率开启时，标出这是自动挑的档（数字仍是实际倍率）。
+            if (impl_->chain.fgAutoMultiplier)
+                detail << tr("补帧 %1X · %2 · 倍率自动").arg(s.applied.multiplier).arg(backend);
+            else detail << tr("补帧 %1X · %2").arg(s.applied.multiplier)
                           .arg(backend);
         }
         else detail << tr("未补帧");
