@@ -1154,6 +1154,18 @@ BiliPlayUrls biliResolvePlay(const std::wstring& bvid, long long cid, int qn,
     result.codec = fromUtf8((*best)["codecs"].asString());
     result.width = unsigned((*best)["width"].asInt(0));
     result.height = unsigned((*best)["height"].asInt(0));
+    // DASH "frame_rate" is either a plain number ("60") or a rational ("16000/672").
+    // Parsing it here lets the UI pick the frame-generation multiplier before the graph
+    // is built, which avoids a two-second pipeline rebuild right after playback starts.
+    {
+        const std::string rate = (*best)["frame_rate"].asString();
+        if (!rate.empty()) {
+            const auto slash = rate.find('/');
+            const double num = std::atof(rate.substr(0, slash).c_str());
+            const double den = slash == std::string::npos ? 1.0 : std::atof(rate.substr(slash + 1).c_str());
+            if (num > 0.0 && den > 0.0) result.frameRate = num / den;
+        }
+    }
     // FFmpeg's `headers` option is a CRLF-separated block ending in CRLF, and it must
     // not carry User-Agent: FFmpeg owns that through its own option, and a duplicate
     // makes the request malformed. The CDN checks both the Referer and a browser-like
@@ -1162,9 +1174,9 @@ BiliPlayUrls biliResolvePlay(const std::wstring& bvid, long long cid, int qn,
     result.userAgent = kUserAgent;
     if (audioUrl.empty())
         log::warn("bilibili", "no DASH audio track in the response; playback would be silent");
-    log::info("bilibili", std::format("play {} cid={} qn={} -> codec={} {}x{} audio={}",
+    log::info("bilibili", std::format("play {} cid={} qn={} -> codec={} {}x{} audio={} frameRate={:.3f}",
         toUtf8(bvid), cid, qn, toUtf8(result.codec), result.width, result.height,
-        audioCodec));
+        audioCodec, result.frameRate));
     return result;
 }
 

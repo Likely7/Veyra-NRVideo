@@ -1001,8 +1001,15 @@ public:
     bool fgAutoMultiplier() const;
     void setFgAutoMultiplier(bool value);
     bool fgAutoMultiplierAvailable() const;
-    // 「自动」倍率的运行时决策：每个会话首次进入播放时算一次档位。
+    // 自动选择倍率的运行时决策：每个会话首次进入播放时算一次档位。
     void maybeApplyFgAutoMultiplier();
+    // 打开片源前用元数据里的源帧率预先定档，避免播放中重建 GPU 管线。
+    // 返回 false 表示拿不到帧率或无可用档，由 maybeApplyFgAutoMultiplier 兜底。
+    bool planFgAutoMultiplierBeforeOpen(double sourceFps);
+    // B 站播放的解析在后台线程跑完后的回收（每个 GUI tick 一次）。
+    void tickBiliPlay();
+    // 把观看进度从 impl_ 状态里取出，网络上报交给后台 worker。
+    bool takeBiliWatchProgress(std::wstring& bvid, long long& cid, int& played);
     // 设倍率的实际动作，不碰 fgAutoMultiplier 标记（自动决策与手动选择共用）。
     void applyFgMultiplier(int multiplier);
     bool lowLatency() const;

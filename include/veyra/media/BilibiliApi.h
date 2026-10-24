@@ -60,6 +60,12 @@ struct BiliPlayUrls {
     std::wstring codec;
     unsigned width = 0;
     unsigned height = 0;
+    // DASH advertises the stream's nominal rate ("frame_rate", e.g. "60" or "16000/672").
+    // The automatic frame-generation multiplier needs a source rate BEFORE the graph is
+    // built: deciding it after the first frame rebuilds the whole pipeline mid-playback
+    // and stalls for about two seconds (field log 2026-10-24). 0 means the response did
+    // not carry it, and the caller falls back to deciding on the first frame.
+    double frameRate = 0.0;
     // Mirrors of the chosen video rendition, primary first. Only filled when
     // biliResolvePlay was asked for backup addresses; the bridge retries the next
     // one when a node cannot be opened.

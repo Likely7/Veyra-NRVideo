@@ -586,7 +586,15 @@ double DemuxSession::resumeTargetLocked() const {
     target = std::min(target, std::max(cap, plan_.startSeconds));
     // A live stream that has just come back restarts with half a second: the jitter buffer refills while it plays.
     if (liveBackCap_ > 0) target = std::min(target, liveBackCap_);
-    return std::min(target, std::max(1.0, aheadSecondsLocked() - 0.5));
+    target = std::min(target, std::max(1.0, aheadSecondsLocked() - 0.5));
+    // 服务器供不上时，上面算出的目标要等几十秒才攒得到，而攒够之后只够播十几秒又耗尽
+    // —— 观感是画面长期死等（现场 2026-10-24：server 0.81 MB/s 对 bitrate 1.75 MB/s，
+    // 目标 20 秒、实际只到 10.91 秒，一直停在「缓冲中」）。
+    // 这种情形改成「够一小段就继续播」：把等待压回 startSeconds 的量级，让画面和声音
+    // 都往前走，代价是停顿更频繁。反复短暂停顿比长期冻结更诚实，也更容易让用户想降画质。
+    if (bandwidthLow_ && target > plan_.startSeconds * 2.0)
+        target = std::max(plan_.startSeconds, std::min(target, plan_.startSeconds * 2.0));
+    return target;
 }
 
 void DemuxSession::enterPhaseLocked(Phase phase, const char* why) {
@@ -782,8 +790,12 @@ void DemuxSession::requestReconnect(const char* reason) {
 }
 
 bool DemuxSession::holding() const {
+    // 只读当前阶段，不重算。phase_ 由解码线程在 updatePhaseLocked() 里维护，而这里
+    // 会被音频线程每 2–10 ms 调一次（WasapiAudioSink 的 runOnAudioThread 循环）：
+    // 原来每次调用都执行 updatePhaseLocked()，等于让音频线程反复替解码线程判阶段，
+    // 既和白天的读循环抢锁，也会把刚刚判定的 Buffering 又算回 Playing —— 音频于是
+    // 在 pause / resume 之间抖动，表现成「时钟在走、画面不动」（现场 2026-10-24）。
     std::lock_guard lock(m_);
-    const_cast<DemuxSession*>(this)->updatePhaseLocked();
     return phase_ != Phase::Playing;
 }
 

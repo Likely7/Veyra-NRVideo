@@ -838,6 +838,20 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                     bridge.setFgAutoMultiplier(true);
                 });
             }
+        } else if (a == QLatin1String("--bili-play") && hasValue) {
+            // Test switch: play a Bilibili part so the pre-open multiplier decision can be
+            // checked against a real DASH response. Format: --bili-play <bvid> <cid> [qn]
+            const QString bvid = args.at(++i);
+            qlonglong cid = 0;
+            int qn = 0;
+            if (i + 1 < args.size()) cid = args.at(++i).toLongLong();
+            if (i + 1 < args.size() && !args.at(i + 1).startsWith(QLatin1Char('-')))
+                qn = args.at(++i).toInt();
+            QTimer::singleShot(1200, &bridge, [&bridge, bvid, cid, qn] {
+                veyra::log::info("qml-test", std::format("bili-play {} cid={} qn={}",
+                    bvid.toStdString(), cid, qn));
+                bridge.bilibiliPlayCid(bvid, cid, qn, false);
+            });
         } else if (!a.startsWith(QLatin1Char('-'))) {
             openPath = a;
         }

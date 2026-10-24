@@ -189,6 +189,18 @@ static QString unavailableEffects(const engine::EnhancementSettings& settings);
 static QString disableUnavailableEffects(engine::ChainConfiguration& configuration);
 static ui::EffectGpu effectGpu();
 
+// B 站播放解析的后台结果。三个网络往返在 worker 线程跑完写这里，GUI tick 读走。
+// 只含普通数据结构：worker 不能碰 Qt 对象或 impl_ 里的容器。
+struct BiliPlayWorkerResult {
+    media::BiliPlayUrls urls;
+    bool reportOk = false;
+    std::wstring reportBvid;
+    long long reportCid = 0;
+    int reportPlayed = 0;
+    double resumeAt = -1.0;
+    std::atomic<bool> done{false};
+};
+
 struct QmlPlayerBridge::Impl {
     // Per-layer on/off before the NR master switch turned them all off.
     std::vector<bool> nrMasterRestore;
@@ -468,6 +480,26 @@ struct QmlPlayerBridge::Impl {
     // 换档必须重建 GPU 管线（缓冲区随倍率变），播放中做会丢补帧历史并卡顿，
     // 所以这里只在 session 首次进入 running 时计算（用户 2026-10-24 选定）。
     uint64_t fgAutoSession = 0;       // 已为哪个会话决定过档位
+    // 打开片源前已经按元数据定过档：首帧后的决策看到它就跳过，避免二次重建管线。
+    bool fgAutoPlanned = false;
+    // B 站播放的解析工作放到后台线程。三个同步网络往返（上报进度 / 解析地址 /
+    // 读续播位置）原本全在 GUI 线程，WinHTTP 每个 15 秒超时 —— 网络一慢主线程就
+    // 静止十几秒（现场 2026-10-24：22.9 秒）。worker 只做请求，结果回到 GUI 线程
+    // 才推进播放状态，所以状态仍归主线程所有。
+    struct BiliPlayJob {
+        std::future<void> query;
+        std::shared_ptr<BiliPlayWorkerResult> result;   // worker 写，tick 读
+        uint64_t generation = 0;      // 当前请求的代号，新请求会顶掉旧的
+        bool busy = false;
+        bool resolving = false;       // 已有一个在解析（保留原有的防重入语义）
+        QString bvid;
+        long long cid = 0;
+        std::wstring pageTitle;
+        int qn = 0;
+        bool fromStart = false;
+        bool plannedResume = false;
+    };
+    BiliPlayJob biliPlayJob;
     struct CaptureListCache { bool valid = false; uint64_t generation = 0; QString language; std::wstring a, b; QVariantList list; };
     CaptureListCache captureFormatsCache, captureResolutionCache, captureRateCache, capturePixelCache;
     // Settings → 组件与许可. Read once and on refreshComponentList(): the property used to
@@ -1562,6 +1594,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         tickSubtitles();
         tickImageBatch();
         tickBiliList();
+        tickBiliPlay();
         tickCapture();
         tickPs5();
         tickMoonlight();
@@ -2326,6 +2359,76 @@ void QmlPlayerBridge::setFgAutoMultiplier(bool value) {
     emit settingsChanged(); emitChainChanged();
 }
 
+// 目标帧率：输出上限 = 自定义/跟随显示器 时用它的值，关闭时用显示器实际刷新率。
+// 打开片源之前也要能算（那时 snapshot 还没有本会话的数据），所以两个入口共用它：
+// 一个读引擎已解析的 snapshot，一个读待下发的 presentation + 最近一次上报的刷新率。
+static double fgAutoTargetRate(const engine::PresentationSettings& effective,
+                               const engine::PresentationSettings& requested,
+                               double reportedRefreshHz) {
+    // 引擎解析过的有效值优先（跟随显示器时那里已经是真实 Hz）。
+    if (effective.outputRate == engine::OutputRateMode::Custom ||
+        effective.outputRate == engine::OutputRateMode::FollowDisplay)
+        return effective.customFps;
+    // 打开片源之前引擎还没解析过，用待下发的请求值。
+    if (requested.outputRate == engine::OutputRateMode::Custom)
+        return requested.customFps;
+    if (requested.outputRate == engine::OutputRateMode::FollowDisplay)
+        return requested.customFps > 0.01 ? requested.customFps : reportedRefreshHz;
+    // 两处都说「关闭」：按显示器实际刷新率算。
+    return reportedRefreshHz;
+}
+
+// 打开片源之前先把倍率定下来，避开播放中重建管线导致的 ~2 秒卡顿。
+// sourceFps 来自容器/DASH 元数据；拿不到就返回 false，由首帧后的决策兜底。
+bool QmlPlayerBridge::planFgAutoMultiplierBeforeOpen(double sourceFps) {
+    if (!(sourceFps > 0.01)) {
+        veyra::log::info("fg-auto", std::format("pre-open skipped: no source rate ({:.3f})", sourceFps));
+        return false;
+    }
+    if (!impl_->chain.fgAutoMultiplier) {
+        veyra::log::info("fg-auto", "pre-open skipped: automatic selection is off");
+        return false;
+    }
+    if (!fgAutoMultiplierAvailable()) return false;
+    const auto* node = impl_->chain.firstOf(engine::EffectType::FrameGeneration);
+    if (!node) return false;
+
+    const double targetFps = fgAutoTargetRate(impl_->snapshot.presentationEffective,
+                                              impl_->presentation,
+                                              impl_->snapshot.displayFgRefreshHz);
+    if (!(targetFps > 0.01)) {
+        veyra::log::info("fg-auto", std::format("pre-open skipped: no target rate (eff={} req={} refresh={:.3f})",
+            int(impl_->snapshot.presentationEffective.outputRate), int(impl_->presentation.outputRate),
+            impl_->snapshot.displayFgRefreshHz));
+        return false;
+    }
+
+    const auto backend = settings().frameGenerationBackend;
+    const int before = fgMultiplier();
+    // 源帧率已达上限：关闭补帧（与首帧后决策同一条规则）。
+    int target = 1;
+    if (sourceFps < targetFps / engine::kDisplayFgFitTolerance) {
+        const unsigned ceiling = unsigned(std::clamp(fgMaxMultiplier(), 2, 8));
+        const unsigned wanted = engine::displayFgAutoMultiplier(backend, sourceFps, targetFps, ceiling);
+        if (wanted == 0) return false;      // 无可用档：交给首帧后决策
+        target = int(wanted);
+    }
+    if (before == target && node->enabled == (target > 1)) {
+        // 已经是这个档：什么都不用改。
+        veyra::log::info("fg-auto", std::format("pre-open: already {}X source={:.3f} target={:.3f}",
+            target, sourceFps, targetFps));
+        return true;
+    }
+    // 先把 chain 改成目标档，openPath 之后构建管线即用它，不产生二次重建。
+    applyFgMultiplier(target);
+    // 标记"本会话已按预决策定档"，否则首帧后的决策会再走一遍、把刚建好的管线又拆掉
+    // （实测 2026-10-24：pre-open 关掉补帧后，首帧后又关一次，卡 614ms）。
+    impl_->fgAutoPlanned = true;
+    veyra::log::info("fg-auto", std::format("pre-open: backend={} source={:.3f} target={:.3f} chosen={} previous={} (decided before the graph is built)",
+        engine::frameGenerationBackendName(backend), sourceFps, targetFps, target, before));
+    return true;
+}
+
 // 自动选择倍率 的运行时决策（用户 2026-10-24 定稿）。
 // 开关关闭：完全按作者原版逻辑，倍率就是用户选的那个数字档，这里什么都不做。
 // 开关开启：
@@ -2338,6 +2441,12 @@ void QmlPlayerBridge::maybeApplyFgAutoMultiplier() {
     if (!s.running || s.sessionId == 0) return;
     // 本会话已经决定过：不再动。会话号变化才重新算。
     if (impl_->fgAutoSession == s.sessionId) return;
+    // 打开前已按元数据定档：本会话不必再算，否则会把刚建好的管线拆了重建。
+    if (impl_->fgAutoPlanned) {
+        impl_->fgAutoSession = s.sessionId;
+        impl_->fgAutoPlanned = false;
+        return;
+    }
     if (!impl_->chain.fgAutoMultiplier) { impl_->fgAutoSession = s.sessionId; return; }
     const auto backend = settings().frameGenerationBackend;
     if (!fgAutoMultiplierAvailable()) { impl_->fgAutoSession = s.sessionId; return; }
@@ -2346,14 +2455,10 @@ void QmlPlayerBridge::maybeApplyFgAutoMultiplier() {
     const auto* node = impl_->chain.firstOf(engine::EffectType::FrameGeneration);
     if (!node) { impl_->fgAutoSession = s.sessionId; return; }
 
-    // 目标帧率：「自定义」和「跟随显示器」用有效上限；「关闭」时退回显示器实际
-    // 刷新率，自动选倍数照常工作（用户 2026-10-24 要求）。
-    double targetFps = 0;
-    if (s.presentationEffective.outputRate == engine::OutputRateMode::Custom ||
-        s.presentationEffective.outputRate == engine::OutputRateMode::FollowDisplay)
-        targetFps = s.presentationEffective.customFps;   // 跟随显示器时引擎已解析成真实 Hz
-    else
-        targetFps = s.displayFgRefreshHz;                // 输出上限关闭：按显示器刷新率算
+    // 目标帧率：输出上限为自定义/跟随显示器时用它的值；关闭时用显示器实际刷新率，
+    // 自动选倍数照常工作（用户 2026-10-24 要求）。
+    const double targetFps = fgAutoTargetRate(s.presentationEffective, s.presentationEffective,
+                                              s.displayFgRefreshHz);
     if (!(targetFps > 0.01)) {
         // 显示器刷新率也没拿到：下一帧再试（不擅自改设置）。
         veyra::log::info("fg-auto", std::format("waiting for a target rate cap={} refresh={:.3f}",
@@ -2939,6 +3044,72 @@ void QmlPlayerBridge::tickBiliList() {
     i.bilibiliError.clear();
     if (objectRequest) emit bilibiliObjectReady(kind, r.object, generation);
     else emit bilibiliListReady(kind, r.items, generation);
+}
+
+void QmlPlayerBridge::tickBiliPlay() {
+    auto& i = *impl_;
+    auto& job = i.biliPlayJob;
+    if (!job.busy) return;
+    // 只在 worker 真正完成时才取结果；done 由 worker 最后一步置位。
+    if (!job.result || !job.result->done.load()) return;
+    if (job.query.valid()) job.query.get();   // 回收线程；异常在 worker 里不会抛到这里
+    auto result = std::move(job.result);
+    job.busy = job.resolving = false;
+    // 期间用户又点了别的（新请求把 generation 顶掉）：这次结果作废。
+    if (job.generation == 0 || !result) return;
+    if (result->reportCid > 0)
+        veyra::log::info("bilibili", std::format("watch progress reported bvid={} played_time={} ok={}",
+            utf8Of(result->reportBvid).toStdString(), result->reportPlayed,
+            result->reportOk ? 1 : 0));
+    const auto& urls = result->urls;
+    if (!urls.ok) {
+        emit notice(QString::fromStdWString(urls.error), true);
+        return;
+    }
+    const std::wstring pageTitle = job.pageTitle;
+    i.pendingTitle = pageTitle;
+    // Backup CDN: remember the full mirror list so a failed open can try the next.
+    i.biliMirrors = i.prefBool("biliAutoCdn", true) ? urls.videoMirrors
+                                                    : std::vector<std::wstring>{};
+    i.biliMirrorIndex = 0;
+    i.biliRetriesLeft = int(i.biliMirrors.size()) > 1 ? int(i.biliMirrors.size()) - 1 : 0;
+    i.biliRetryPending = false;
+    i.biliVideoUrl = urls.videoUrl;
+    // Remember what is playing so the position can be reported when this play ends.
+    i.biliWatchBvid = job.bvid.toStdWString();
+    i.biliWatchCid = job.cid;
+    i.biliWatchLastPos = -1.0;
+    i.biliWatchDuration = 0.0;
+    // Where the account left this part, so playback resumes there.
+    bool startedFromTop = false;
+    if (job.plannedResume) {
+        i.biliResumeAt = result->resumeAt;
+        if (i.biliResumeAt < 0.0) startedFromTop = true;
+    } else {
+        i.biliResumeAt = -1.0;
+        startedFromTop = job.fromStart;
+    }
+    i.biliResumeSession = 0;
+    // Kept on impl_ as well: openPath() re-applies them after rebuilding options.
+    i.pendingHeaders = urls.headers;
+    i.pendingUserAgent = urls.userAgent;
+    i.pendingAudioPath = urls.audioUrl;
+    i.bilibiliOpenPending = true;
+    i.options.network.requestHeaders = urls.headers;
+    i.options.network.userAgent = urls.userAgent;
+    i.options.audioPath = urls.audioUrl;
+    // 自动选择倍率：用 DASH 的 frame_rate 在打开前定档，让管线一次就按对的倍率构建。
+    planFgAutoMultiplierBeforeOpen(urls.frameRate);
+    QString info = QStringLiteral("%1 × %2  %3")
+        .arg(urls.width).arg(urls.height).arg(QString::fromStdWString(urls.codec));
+    if (urls.audioUrl.empty()) info += QStringLiteral("  ") + tr("无音频");
+    const QString fromTop = startedFromTop ? tr("（从头开始）") : QString();
+    if (!pageTitle.empty())
+        emit notice(tr("正在播放：") + QString::fromStdWString(pageTitle) + QStringLiteral("  ")
+                    + info + fromTop, false);
+    else
+        emit notice(tr("正在播放：") + info + fromTop, false);
+    openPath(QString::fromStdWString(urls.videoUrl));
 }
 
 void QmlPlayerBridge::tickCapture() {
@@ -6947,8 +7118,9 @@ void QmlPlayerBridge::tickPlaylist() {
 }
 
 void QmlPlayerBridge::openPath(const QString& path) {
-    // Opening anything ends the previous play: report where the user stopped before the
-    // position is lost to the new source. This is the one place every open goes through.
+    // 观看进度由 tickBiliPlay 的 worker 负责上报（B 站那次打开会先把状态取走）。
+    // 只有非 B 站打开才在这里上报，因为那条路径没有 worker 替它做。
+    // 保留这个入口的理由：openPath 是所有打开方式的汇合点。
     flushBiliWatchProgress();
     // Consumed up front: an empty path must not leave the flag set for the next open.
     const bool keepBilibiliStream = impl_->bilibiliOpenPending;
@@ -6963,6 +7135,9 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // audio. The Bilibili branches write these immediately before calling openPath
     // and raise bilibiliOpenPending, so the open they asked for keeps them.
     if (!keepBilibiliStream) {
+        // 不是 B 站那次打开：清掉上一次预决策留下的标记，否则这一部片源会被当成
+        // "已经定过档"而跳过首帧决策。
+        impl_->fgAutoPlanned = false;
         impl_->pendingHeaders.clear();
         impl_->pendingUserAgent.clear();
         impl_->pendingAudioPath.clear();
@@ -7014,9 +7189,12 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // the professional page still keeps the user there, which is what the design's
     // source menu implies.
     const bool fromBrowsePage = impl_->currentPage == QLatin1String("bili");
+    // 从首页或 B 站页开始播放时切到专业模式：播放之后通常要调补帧/NR/画质，
+    // 首屏就给出这些控件比停在极简模式更顺手（用户 2026-10-25 要求）。
+    // 已经在专业模式里开始播放则原地不动。
     if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home")
         || fromBrowsePage)
-        emit navigate(QStringLiteral("min"));
+        emit navigate(QStringLiteral("pro"));
     if(!network)rememberSource(QStringLiteral("file"), path);
     if (impl_->preOpen) impl_->preOpen();
     auto options = impl_->options;
@@ -7671,21 +7849,22 @@ bool QmlPlayerBridge::bilibiliPlayCid(const QString& bvid, qlonglong cid, int qn
 bool QmlPlayerBridge::bilibiliPlayResolved(const QString& bvid, qlonglong cid,
                                            const std::wstring& pageTitle, int qn,
                                            bool fromStart){
-    // A click while the previous one is still resolving is dropped rather than queued:
-    // every step below is a blocking round trip, and two sets back to back on the GUI
-    // thread is what made rapid 继续/从头 switching stall the window. The user's newest
-    // intent is served by the click that starts once this one has finished.
-    if (impl_->biliPlayResolving) {
+    // B 站打开要发三个网络往返（上报进度 / 解析播放地址 / 读续播位置）。它们原先全在
+    // GUI 线程同步执行，而 WinHTTP 每个请求 15 秒超时 —— 网络一慢主线程就静止十几秒
+    // （现场 2026-10-24 15:03：从列表切一个 4K 视频后静止 22.9 秒）。
+    // 现在改成：主线程只取快照和发起请求，请求在 worker 里跑，结果由 tickBiliPlay 回收
+    // 后再推进播放状态。状态仍然只在 GUI 线程改。
+    if (impl_->biliPlayJob.resolving) {
         veyra::log::info("bilibili", "play request ignored: the previous one is still resolving");
         return false;
     }
-    struct ResolveGuard {
-        bool* flag;
-        explicit ResolveGuard(bool* f) : flag(f) { *flag = true; }
-        ~ResolveGuard() { *flag = false; }
-    } guard(&impl_->biliPlayResolving);
-    // Ends the previous play: report where the user stopped before this one starts.
-    flushBiliWatchProgress();
+    // 上一部的观看进度先取下来（这一部马上要覆盖 biliWatch 状态），网络部分交给 worker。
+    int pendingPlayed = 0;
+    std::wstring pendingReportBvid;
+    long long pendingReportCid = 0;
+    if (takeBiliWatchProgress(pendingReportBvid, pendingReportCid, pendingPlayed))
+        veyra::log::info("bilibili", std::format("watch progress reporting queued bvid={} played_time={}",
+            utf8Of(pendingReportBvid).toStdString(), pendingPlayed));
     media::setBiliCookie(media::loadBilibiliCookie());
     // Every play is a new track (a different part, or the same part replayed): the
     // comments already on screen belong to the previous one. Done before the resolve so
@@ -7700,66 +7879,57 @@ bool QmlPlayerBridge::bilibiliPlayResolved(const QString& bvid, qlonglong cid,
     const bool backupCdn = impl_->prefBool("biliAutoCdn", true);
     QString audioPref = impl_->prefString("biliAudio");
     if (audioPref.isEmpty()) audioPref = QStringLiteral("auto");
-    const auto urls = media::biliResolvePlay(bvid.toStdWString(), cid, effectiveQn,
-                                             codecPref.toStdString(), backupCdn,
-                                             audioPref.toStdString());
-    if (!urls.ok) {
-        emit notice(QString::fromStdWString(urls.error), true);
-        return false;
-    }
-    impl_->pendingTitle = pageTitle;
-    // Backup CDN: remember the full mirror list so a failed open can try the next.
-    impl_->biliMirrors = impl_->prefBool("biliAutoCdn", true) ? urls.videoMirrors
-                                                             : std::vector<std::wstring>{};
-    impl_->biliMirrorIndex = 0;
-    impl_->biliRetriesLeft = int(impl_->biliMirrors.size()) > 1
-                              ? int(impl_->biliMirrors.size()) - 1 : 0;
-    impl_->biliRetryPending = false;
-    impl_->biliVideoUrl = urls.videoUrl;
-    // Remember what is playing so the position can be reported when this play ends. The
-    // previous video was already flushed at the top of this function, and this one starts
-    // with no observed position yet, so openPath below (which flushes too) has nothing to
-    // send for it until the tick has actually seen it play.
-    impl_->biliWatchBvid = bvid.toStdWString();
-    impl_->biliWatchCid = cid;
+    const bool wantResume = !fromStart &&
+        (impl_->prefBool("rememberPosition", true) || impl_->prefBool("autoResume", false));
+
+    auto& job = impl_->biliPlayJob;
+    const uint64_t generation = ++job.generation;
+    job.busy = job.resolving = true;
+    job.bvid = bvid;
+    job.cid = cid;
+    job.pageTitle = pageTitle;
+    job.qn = effectiveQn;
+    job.fromStart = fromStart;
+    job.plannedResume = wantResume;
+    // worker 只碰自己的副本：Qt 对象（impl_ 里的 QString/容器）全部在发起前拷好。
+    const std::wstring wbvid = bvid.toStdWString();
+    const std::string codec = codecPref.toStdString();
+    const std::string audio = audioPref.toStdString();
+    // 结果放在 shared_ptr 里：worker 写它，GUI tick 读它。worker 不碰任何 Qt 对象。
+    job.result = std::make_shared<BiliPlayWorkerResult>();
+    auto result = job.result;
+    job.query = std::async(std::launch::async,
+        [wbvid, cid, effectiveQn, codec, audio, backupCdn, wantResume,
+         pendingReportBvid, pendingReportCid, pendingPlayed, result]() mutable {
+            // 顺序与原来一致：先解析播放地址，再上报上一部的进度，最后读续播位置。
+            result->urls = media::biliResolvePlay(wbvid, cid, effectiveQn, codec, backupCdn, audio);
+            if (pendingReportCid > 0 && !pendingReportBvid.empty())
+                result->reportOk = media::biliReportWatchProgress(pendingReportBvid, pendingReportCid, pendingPlayed);
+            result->reportBvid = pendingReportBvid;
+            result->reportCid = pendingReportCid;
+            result->reportPlayed = pendingPlayed;
+            if (wantResume) result->resumeAt = media::biliResumePosition(wbvid, cid);
+            result->done.store(true);
+        });
+    return true;
+}
+
+// 把观看进度从 impl_ 状态里取出来，网络上报交给调用方。
+bool QmlPlayerBridge::takeBiliWatchProgress(std::wstring& bvid, long long& cid, int& played) {    if (impl_->biliWatchBvid.empty() || impl_->biliWatchCid <= 0) return false;
+    // Nothing was ever observed playing: do not write a bogus position into the history.
+    if (impl_->biliWatchLastPos < 0.0) return false;
+    played = int(impl_->biliWatchLastPos);
+    // The site stores -1 for "watched to the end", which is what makes a finished video
+    // show as finished instead of resuming a few seconds before the credits.
+    if (impl_->biliWatchDuration > 0 && impl_->biliWatchLastPos >= impl_->biliWatchDuration - 1.0)
+        played = -1;
+    if (played < 0 && played != -1) played = 0;
+    bvid = std::move(impl_->biliWatchBvid);
+    cid = impl_->biliWatchCid;
+    impl_->biliWatchBvid.clear();
+    impl_->biliWatchCid = 0;
     impl_->biliWatchLastPos = -1.0;
     impl_->biliWatchDuration = 0.0;
-    // Where the account left this part, so playback resumes there instead of always
-    // starting from zero. Read before the open so the seek can happen on the first
-    // running snapshot; the read costs one request, which the surrounding opens already
-    // dwarf.
-    // "Play from the start" deliberately skips the read: the user asked for the beginning
-    // even though the history has a position for this video.
-    bool startedFromTop = false;
-    if (!fromStart && (impl_->prefBool("rememberPosition", true) || impl_->prefBool("autoResume", false))) {
-        impl_->biliResumeAt = media::biliResumePosition(impl_->biliWatchBvid, cid);
-        if (impl_->biliResumeAt < 0.0) startedFromTop = true;   // nothing to resume from
-    } else {
-        impl_->biliResumeAt = -1.0;
-        startedFromTop = fromStart;   // only say it when the user asked for it
-    }
-    impl_->biliResumeSession = 0;
-    // Kept on impl_ as well: openPath() re-applies them after rebuilding options.
-    impl_->pendingHeaders = urls.headers;
-    impl_->pendingUserAgent = urls.userAgent;
-    impl_->pendingAudioPath = urls.audioUrl;
-    impl_->bilibiliOpenPending = true;
-    impl_->options.network.requestHeaders = urls.headers;
-    impl_->options.network.userAgent = urls.userAgent;
-    impl_->options.audioPath = urls.audioUrl;
-    QString info = QStringLiteral("%1 × %2  %3")
-        .arg(urls.width).arg(urls.height).arg(QString::fromStdWString(urls.codec));
-    if (urls.audioUrl.empty()) info += QStringLiteral("  ") + tr("无音频");
-    // The notice says which of the two buttons took effect. Without this, pressing
-    // 从头播放 produced no feedback at all, so it was impossible to tell whether the click
-    // had been honoured.
-    const QString fromTop = startedFromTop ? tr("（从头开始）") : QString();
-    if (!pageTitle.empty())
-        emit notice(tr("正在播放：") + QString::fromStdWString(pageTitle) + QStringLiteral("  ")
-                    + info + fromTop, false);
-    else
-        emit notice(tr("正在播放：") + info + fromTop, false);
-    openPath(QString::fromStdWString(urls.videoUrl));
     return true;
 }
 
