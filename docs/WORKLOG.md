@@ -9941,3 +9941,7 @@ NR模型、EffectChain、PresetLibrary、旧PresetStore、Repair272、UI384布�
 用户包EXE SHA5b8a8920与manifest一致，177运行库/模型/着色器只读SHA零差异；用户4日志只读快照/hash留档不进Git。全日志3354准入采样/69拒绝，最新36拒绝中34附近平均回调达标；均值仅约2秒窗口，不排除单帧抖动。旧日志4K60/DLSS6X NR21.3ms+FG9.2ms、预测35.6ms，输入60fps仍预算不足；最新VFG多是输入平均稳定时处理/提交迟到，曾有graphSubmit1053ms停顿。半帧与邮箱覆盖不能当驱动帧率不足，不把软件期限/提交FPS当扫描或端到端延迟。预算/状态文件与用户包源码22f58cf逐字节相同，本轮没修补帧。
 
 交付为EXE/QML/i18n小更新层，复用已有2.1.0 NVIDIA组件，含之前录制/旋转改动；源提交和ZIP哈希见reports/.../update-package.json，不覆盖用户E:/App包。收尾复核、操作文件覆盖范围与测试中间物清理另记回执，保留日志/必要证据和旧完整供体。
+
+收尾：产品f743556，EXE SHA d43a5384be9e840912f260c1995c8c7d18f9a61176f4a9e45acfb3202df60289；Veyra-2.1.0-nr1-NVIDIA-update.zip 9886711字节，SHA14b3e0afcaf4fac569d31ea89737bc2027d40ae4f49248b344b05417c2ab3eaa。83文件CRC/逐SHA通过，79操作文件来自更新、其余1523操作输入与用户原包匹配，0额外运行库；177用户运行身份、4原日志、1739旧rot1清单文件均不变。旧供体manifest含日志及启动状态，非必要操作输入；新测试helper显式过滤这些可变文件，不共享其硬链接，更新包不含用户状态。产品代码未再改，后续只提交该测试工具/文档收尾。
+
+本轮E:/项目/Veyra/tests/nr-manual-scale-20261024/app、media在包验证后尝试原生绝对路径守卫删除，被自动审批blocked by policy拒绝，未提供详细原因；未执行、未用其他工具/移动绕过，两个目录及私有profile/证据保留。reports/.../test-cleanup.json记录受阻，FINAL.json区分已完成更新/诊断与未清理中间物。

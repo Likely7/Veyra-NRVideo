@@ -18,10 +18,12 @@ def replace(p,data):
     p.write_bytes(data)
 if not APP.exists():
     donor=B/'test-packages/codex-picture-rotation-20261023/Veyra-2.1.0-rot1-NVIDIA-win64-portable'
-    for p in donor.rglob('*'):
-        dst=APP/p.relative_to(donor)
-        if p.is_dir():dst.mkdir(parents=True,exist_ok=True)
-        else:os.link(p,dst)
+    approved=json.loads((donor/'package-manifest.json').read_text('utf8'))
+    # Some older donor manifests include bootstrap state and logs. They are
+    # mutable outputs, never test inputs or candidates for a shared hardlink.
+    for rel in [e['path'] for e in approved['files']]+['package-manifest.json']:
+        if rel.startswith('logs/') or any(part.startswith('user-data-') for part in Path(rel).parts):continue
+        p=donor/rel;dst=APP/rel;dst.parent.mkdir(parents=True,exist_ok=True);os.link(p,dst)
     (REPORT/'player-donor.json').write_text(json.dumps(dict(donor=str(donor),manifestSha256=sha(donor/'package-manifest.json')),ensure_ascii=False,indent=1),'utf8')
 replace(APP/'veyra_qml_ui.exe',(BUILD/'veyra_qml_ui.exe').read_bytes())
 for folder in ['qml','i18n']:
