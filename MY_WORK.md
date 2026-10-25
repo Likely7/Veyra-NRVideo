@@ -107,7 +107,7 @@ grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
 
 | 问题 | 原因 | 现状 |
 |---|---|---|
-| **B 站续播闪一下开头 + 缓冲两次** | 作者的 `EngineController::open()` 不支持指定起播位置，只能「先打开再到 0 秒 seek」 | **部分解决**（2026-10-25）：seek 现在**真正生效**了（原来 5/5 全丢）。「闪一下开头」仍在，那是「先打开再 seek」的必然结果。**曾尝试 4 次修复，3 次导致播放闪退**（都改引擎；这次没碰引擎）|
+| ~~**B 站续播闪一下开头 + 缓冲两次**~~ | 作者的 `EngineController::open()` 不支持指定起播位置，只能「先打开再到 0 秒 seek」 | **已解决 / 非缺陷**（2026-10-25）：「闪一下开头」是「先打开再 seek」的**必然结果，不是 BUG**（用户确认，不再处理）。真正的 bug 是「点了根本不跳」，已修好（原来 5/5 全丢，现在准确跳转）。**曾尝试 4 次改引擎，3 次闪退** —— 这次的修复没碰引擎 |
 | ~~**播完后点底部播放条 → 403**~~ | `togglePlayPause()` 复用已过期的 B 站 CDN 地址（带时效签名）| **已解决**（2026-10-25）：改记 `bvid/cid/画质` 重新解析拿新地址。**B 站分支必须排在「通用网络地址」分支之前**，否则会先拿过期地址重连 |
 | **B 站页内播放 + Esc 退出** | 原生视频窗口永远画在 QML 之上；全屏时 Qt 的 `Shortcut` 收不到 Esc | **已放弃**，相关改动已回滚 |
 | **投币 / 各种 `-401`** | **不是我们的 bug**：B 站服务端风控，网页端也会拦 | **B 站行为，不算缺陷**（2026-10-25 明确）。不修 |
@@ -132,18 +132,21 @@ QML 属性（`apps/veyra-qml/main.cpp` 里有这个状态，但只在 C++ 内部
 QML 用它切换 `vwrap.color`。**只改 QML 无效**：`veyra.running` 在片源打开时
 （08.598）就变 true，比首帧上屏早 1.85 秒，遮罩会提前消失。
 
-**续播的技术细节**（如果以后真要修）：
+**续播的实现方式（已定案，不要再当 bug 修）**：
 
-当前实现见 `src/ui/QmlPlayerBridge.cpp:1622-1632`：
+当前实现见 `src/ui/QmlPlayerBridge.cpp` 的 B 站续播分支：
 
 ```cpp
-// 视频已经打开并开始播放了，才 seek 到目标位置
-if (impl_->biliResumeAt >= 0.0 && s.running && s.duration > 0) {
-    seekTo(at);   // ← 此时已经从 0 秒开始播了几帧
+// 必须等「新会话已经建好」才发 seek —— 否则打在正在被拆掉的旧会话上，永远丢
+const bool biliSessionIsNew = s.sessionId != 0
+    && s.sessionId != impl_->biliResumeAfterSession;
+if (impl_->biliResumeAt >= 0.0 && s.running && s.duration > 0 && biliSessionIsNew) {
+    seekTo(at);   // ← 此时已经从 0 秒开始播了几帧，所以会「闪一下开头」
 }
 ```
 
-彻底解决需要改作者的核心接口：
+**「闪一下开头」是「先打开再 seek」的必然结果，不是缺陷**（2026-10-25 用户确认）。
+要消除它只能改作者的核心接口：
 
 ```cpp
 // 现在
@@ -153,7 +156,7 @@ engine.open(window, path, options, startPositionMs);
 ```
 
 涉及 `EngineController::open()` 签名、`run()` 的初始 seek、音视频时钟初始锚点。
-**改动侵入性大，前 3 次尝试都闪退。**
+**改动侵入性大，前 3 次尝试都闪退，已放弃。不要再试。**
 
 ---
 
