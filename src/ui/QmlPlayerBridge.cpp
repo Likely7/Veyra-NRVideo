@@ -9937,10 +9937,12 @@ void QmlPlayerBridge::updateRunStatus() {
             case engine::FrameGenerationBackend::Fsr4: backend = tr("FSR 4 ML"); break;
             case engine::FrameGenerationBackend::Vfg: backend = QStringLiteral("NVIDIA VFG"); break;
             }
-            // 自动选择倍率开启时，标出这是自动挑的档（数字仍是实际倍率）。
-            if (impl_->chain.fgAutoMultiplier)
-                detail << tr("补帧 %1X · %2 · 倍率自动").arg(s.applied.multiplier).arg(backend);
-            else detail << tr("补帧 %1X · %2").arg(s.applied.multiplier)
+            // 与作者原版一致：只报实际倍率和后端。自动选倍率是设置项，不需要在状态栏
+            // 反复标注 —— 「补帧 4X」已经把倍率说清楚了。
+            // Same as the author's original: report the multiplier and the backend only.
+            // Automatic selection is a setting, not something to repeat here - "补帧 4X"
+            // already says what the multiplier is.
+            detail << tr("补帧 %1X · %2").arg(s.applied.multiplier)
                           .arg(backend);
         }
         else detail << tr("未补帧");
