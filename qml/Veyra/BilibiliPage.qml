@@ -72,6 +72,25 @@ VPage {
     property var related: []
     property var comments: []
     property var interaction: ({})
+    // 互动状态请求的代号：每发起一次就递增，异步结果回来时用它丢弃过期回复。
+    // Generation counter for interaction-state requests: bumped on every request so a
+    // late reply can be dropped.
+    property int interactionGeneration: 0
+    // 扫码轮询是否有一个请求在飞：避免问与答重叠。
+    // Whether a QR poll request is in flight, so a request never overlaps its reply.
+    property bool qrPolling: false
+    // 扫码等待状态（Timer 在布局深处，外层访问不到它的 id，所以放在 root）。
+    // Whether a QR code is being waited on. Held on root because the polling Timer
+    // lives deep in the layout and this level cannot reach its id.
+    property bool qrWaitSession: false
+    // 发起一次异步互动状态查询。所有原来直接取返回值的调用点都改成调它。
+    // Start one async interaction-state query; replaces every call site that used to
+    // read the return value directly.
+    function requestInteraction(bvid) {
+        if (!bvid) return
+        root.interactionGeneration += 1
+        veyra.bilibiliRequestInteractionState(bvid)
+    }
     property int selectedPart: 0
     property int selectedQuality: 0
     property bool showComments: false
@@ -114,24 +133,20 @@ VPage {
     }
 
     function refreshAccount() {
-        root.account = veyra.bilibiliAccount()
+        // 异步读账号；结果通过 onBilibiliAccountReady 填。
+        // Read the account asynchronously; the reply fills it via onBilibiliAccountReady.
+        veyra.bilibiliRequestAccount()
     }
 
     function startQrLogin() {
-        const url = veyra.bilibiliQrStart()
-        if (!url) {
-            root.qrState = ""
-            root.qrHint = qsTr("无法获取登录二维码")
-            return
-        }
-        root.qrImage = veyra.bilibiliQrImage(360)
-        root.qrState = "waiting"
-        root.qrHint = qsTr("请用 B 站手机客户端扫码")
-        qrPoll.session = true
+        // 异步取二维码；成功后由 onBilibiliQrStarted 继续（显示图、开始轮询）。
+        // Request the code asynchronously; onBilibiliQrStarted continues from there.
+        root.qrHint = qsTr("正在获取登录二维码…")
+        veyra.bilibiliRequestQrStart()
     }
 
     function cancelQrLogin() {
-        qrPoll.session = false
+        root.qrWaitSession = false
         root.qrState = ""
         root.qrImage = ""
         root.qrHint = ""
@@ -166,10 +181,12 @@ VPage {
         root.statusText = qsTr("加载中…")
         root.listLoading = true
         if (view_ === "fav") {
-            // The folder list still comes back synchronously: it is a single cheap request
-            // and the picker needs it as soon as the view appears. The videos themselves
-            // are fetched asynchronously below, like every other list.
-            root.favFolders = veyra.bilibiliFavFolders()
+            // 收藏夹列表也走异步：它同样是一次网络往返，同步等会把窗口冻住。
+            // 结果通过 onBilibiliFavFoldersReady 回来，reason "page" 表示是这一处要的。
+            // The folder list is asynchronous too: it is a network round trip, and
+            // waiting for it froze the window. The result arrives through
+            // onBilibiliFavFoldersReady; reason "page" marks this caller.
+            veyra.bilibiliRequestFavFolders("page")
         }
         // Nothing blocks here: the request runs on a worker and arrives through
         // onBilibiliListReady, so the window keeps painting (and the skeleton shows).
@@ -402,6 +419,105 @@ VPage {
             }
             root.finishOpenDetail(root.pendingDetailBvid)
         }
+        // 互动状态（点赞/投币/收藏）异步回来。只接受当前正在看的那个视频的结果：
+        // 用户可能已经翻到别的视频了，迟到的回复必须丢弃，否则按钮状态会对错。
+        // Interaction state arrives asynchronously. Only the video currently on screen
+        // is accepted: the user may have moved on, and applying a late reply would put
+        // another video's liked/coined state on these buttons.
+        function onBilibiliInteractionReady(bvid, state, generation) {
+            if (generation !== root.interactionGeneration) return
+            if (!root.detail || root.detail.bvid !== bvid) return
+            root.interaction = state
+        }
+        // 收藏夹列表异步回来。按 reason 分派到两处：页面顶部的收藏夹视图、互动按钮旁的
+        // 选择器。两处共用同一次请求的结果，谁要谁取。
+        // The favourite-folder list arrives asynchronously. `reason` routes it to one of
+        // the two consumers: the 收藏 page view, or the picker beside the interaction
+        // buttons.
+        function onBilibiliFavFoldersReady(folders, reason) {
+            if (reason === "picker") root.favPickerFolders = folders
+            else root.favFolders = folders
+        }
+        // 收藏动作异步回来。成功才刷新按钮状态；从选择器发起的还要关掉浮层。
+        // 失败时状态保持不动 —— 服务端拒绝了，按钮不该假装成功。
+        // The favourite action reports back asynchronously. Re-read the button state only
+        // on success, and close the picker for the "picker" caller. On failure the state
+        // stays put: the server refused, so the button must not pretend otherwise.
+        function onBilibiliFavoriteReady(ok, error, add, reason) {
+            if (!ok) return
+            if (reason === "picker") root.favPickerOpen = false
+            if (root.detail && root.detail.bvid) root.requestInteraction(root.detail.bvid)
+        }
+        // 点赞 / 投币 / 稍后再看 完成后刷新按钮状态。三者形状相同，一个处理器覆盖。
+        // Liked / coined / watch-later all finish the same way: re-read the buttons.
+        function onBilibiliActionDone(op, ok, error) {
+            if (!ok) return
+            if (root.detail && root.detail.bvid) root.requestInteraction(root.detail.bvid)
+        }
+        // 评论列表到达。
+        function onBilibiliCommentsReady(comments, ok, error) {
+            if (!ok) return
+            root.comments = comments
+        }
+        // 弹幕轨道加载结果：成功点亮开关，失败给出原因。
+        function onBilibiliDanmakuReady(ok, error, lineCount) {
+            if (ok) {
+                root.danmakuOn = true
+                root.danmakuLines = lineCount
+            } else {
+                root.danmakuOn = false
+                root.danmakuLines = 0
+                root.statusText = error || qsTr("这个视频没有弹幕")
+            }
+        }
+        // 续播位置到达。只有在详情页还停在这个视频上时才采用。
+        function onBilibiliResumeReady(seconds) {
+            root.resumeAt = seconds
+        }
+        // 二维码地址到达：渲染图片、进入等待、开始轮询。
+        function onBilibiliQrStarted(qrUrl, ok, error) {
+            if (!ok || !qrUrl) {
+                root.qrState = ""
+                root.qrHint = qsTr("无法获取登录二维码")
+                return
+            }
+            root.qrImage = veyra.bilibiliQrImage(360)
+            root.qrState = "waiting"
+            root.qrHint = qsTr("请用 B 站手机客户端扫码")
+            root.qrWaitSession = true
+        }
+        // 扫码轮询结果。
+        function onBilibiliQrPolled(state) {
+            root.qrPolling = false
+            if (state === "confirmed") {
+                root.qrWaitSession = false
+                root.qrState = ""
+                root.qrImage = ""
+                root.qrHint = ""
+                root.refreshAccount()
+                // 登录后可见范围变大，缓存的列表全部作废。
+                root.cardCache = ({})
+                root.load("home", true)
+            } else if (state === "scanned") {
+                root.qrState = "scanned"
+                root.qrHint = qsTr("已扫码，请在手机上确认")
+            } else if (state === "expired") {
+                root.qrWaitSession = false
+                root.qrState = ""
+                root.qrImage = ""
+                root.qrHint = qsTr("二维码已过期，请重新点击扫码登录")
+            } else if (state === "failed" || state === "none") {
+                root.qrWaitSession = false
+                root.qrState = ""
+                root.qrImage = ""
+                root.qrHint = qsTr("登录失败，请重试")
+            }
+            // waiting / scanned 继续轮询，什么都不用做。
+        }
+        // 账号信息到达。
+        function onBilibiliAccountReady(account, ok) {
+            if (ok) root.account = account
+        }
     }
 
     // Everything that depends on the detail response: qualities and the resume point need
@@ -411,10 +527,13 @@ VPage {
         root.selectedQuality = 0
         const firstCid = (root.detail.parts && root.detail.parts.length)
             ? root.detail.parts[0].cid : 0
-        // Both are asynchronous now and still blocking on the GUI thread worth noting:
-        // resumeAt is one cheap history read, qualities is the heavier playurl call. The
-        // cid is passed along so qualities no longer re-fetches the page to find it.
-        root.resumeAt = firstCid ? veyra.bilibiliResumeAtCid(bvid, firstCid) : -1
+        // 续播位置异步读，画质列表异步拉，两者互不等待。
+        // 画质已经把 cid 传过去了，不再重复请求详情。
+        // The resume point and the quality list are both fetched asynchronously and
+        // neither waits for the other; qualities gets the cid so it does not re-request
+        // the detail page.
+        if (firstCid) veyra.bilibiliRequestResumeAt(bvid, firstCid)
+        else root.resumeAt = -1
         root.qualities = []
         if (firstCid) {
             root.pendingQualitiesGeneration = veyra.bilibiliLoadList(
@@ -434,7 +553,7 @@ VPage {
         onTriggered: {
             const bvid = root.deferredBvid
             if (!bvid.length || root.view !== "detail") return
-            root.interaction = veyra.bilibiliInteractionState(bvid)
+            root.requestInteraction(bvid)
             if (root.view !== "detail") return
             root.related = []
             root.pendingRelatedGeneration = veyra.bilibiliLoadList("related:" + bvid)
@@ -448,15 +567,16 @@ VPage {
     // 播放设置 and the per-video button must behave identically, including the note
     // shown when a video simply has no danmaku.
     function loadDanmaku() {
-        if (!root.detail.ok) return
-        if (veyra.bilibiliEnableDanmaku(root.detail.bvid, root.selectedPart)) {
-            root.danmakuOn = true
-            root.danmakuLines = veyra.bilibiliDanmakuCount()
-        } else {
-            root.danmakuOn = false
-            root.danmakuLines = 0
-            root.statusText = veyra.bilibiliLastError() || qsTr("这个视频没有弹幕")
-        }
+        // 只看 bvid 是否已知，不等详情页数据：详情是异步到的，弹幕请求本身也只需要
+        // bvid 和分P。原来这里检查 root.detail.ok，详情还没回来时请求就被吞掉，
+        // 表现为「点播放没有弹幕」。
+        // Gate on the bvid alone, not the detail payload: the detail arrives
+        // asynchronously while the danmaku request needs only the bvid and part index.
+        // The old root.detail.ok check swallowed the request whenever the detail had not
+        // landed yet, which showed up as "playing a video has no danmaku".
+        const bvid = (root.detail && root.detail.bvid) ? root.detail.bvid : root.deferredBvid
+        if (!bvid) return
+        veyra.bilibiliRequestEnableDanmaku(bvid, root.selectedPart)
     }
 
     function unloadDanmaku() {
@@ -480,9 +600,16 @@ VPage {
 
     function playSelected(fromStart) {
         if (!root.detail.ok) return
-        // A different part is a different danmaku track: drop the old one, or it keeps
-        // drawing over the new picture (openVideo() clears it, but this path skips that).
-        if (root.danmakuOn) { veyra.bilibiliDisableDanmaku(); root.danmakuOn = false }
+        // 不同分P是不同的弹幕轨道：丢掉旧的，否则旧弹幕会画在新画面上。
+        // 但丢掉之后必须按新分P重新加载 —— 只关不重开的表现就是「一点播放弹幕
+        // 就没了，得回详情页再点一次开关」。弹幕默认开着或用户手动开着时都要重载。
+        // A different part is a different danmaku track: drop the old one or it keeps
+        // drawing over the new picture. It must then be reloaded for the new part -
+        // closing without reopening is exactly why "playing a video loses the danmaku
+        // until you go back and flip the switch again".
+        const reloadDanmaku = root.danmakuOn || root.danmakuDefault
+        if (root.danmakuOn) veyra.bilibiliDisableDanmaku()
+        root.danmakuOn = false
         root.danmakuLines = 0
         root.biliPlaying = true
         root.lastSeenPosition = 0
@@ -498,6 +625,12 @@ VPage {
             veyra.bilibiliPlay(root.detail.bvid, root.selectedPart, root.selectedQuality,
                                fromStart === true)
         }
+        // 按新分P重新拉弹幕。叠加层属于播放窗口，openPath 已经在切换来源，
+        // 所以这里只发请求；加载成功由 onBilibiliDanmakuReady 点亮开关。
+        // Reload the track for the selected part. The overlay belongs to the playback
+        // window and openPath is switching sources underneath, so this only starts the
+        // request; success lights the switch through onBilibiliDanmakuReady.
+        if (reloadDanmaku) root.loadDanmaku()
     }
 
     // Playback reaching its end: position stops moving near the duration. Polled rather
@@ -527,8 +660,11 @@ VPage {
 
     function toggleComments() {
         root.showComments = !root.showComments
+        // 展开时异步拉评论，收起不等；结果通过 onBilibiliCommentsReady 填。
+        // Fetch asynchronously while expanding; collapsing needs no data. The list
+        // arrives through onBilibiliCommentsReady.
         if (root.showComments && root.comments.length === 0)
-            root.comments = veyra.bilibiliComments(root.detail.bvid, 1)
+            veyra.bilibiliRequestComments(root.detail.bvid, 1)
     }
 
     // One tappable rail entry.
@@ -633,6 +769,13 @@ VPage {
                         VButton {
                             Layout.fillWidth: true
                             implicitWidth: 0
+                            // 侧栏只有 100px，减去内边距后按钮内宽约 84px。「扫码登录」
+                            // 用 fsBody 放不下，会被中间省略成「扫…录」。这里用小一号
+                            // 字号，其它按钮不受影响。
+                            // The rail is 100px, so the button has about 84px of usable
+                            // width. "扫码登录" does not fit at fsBody and would elide to
+                            // "扫…录", so this instance uses one size smaller.
+                            fontSize: 11
                             text: root.account.loggedIn ? qsTr("退出")
                                   : (root.qrState.length ? qsTr("取消登录") : qsTr("扫码登录"))
                             onClicked: {
@@ -718,39 +861,24 @@ VPage {
                 id: qrPoll
                 interval: 1000
                 repeat: true
-                // Polling costs a blocking HTTPS round-trip every second. "running" is the
-                // session state (a code is being waited on); the poll only actually fires
-                // while the page is on screen, so leaving it for 极简/专业 no longer freezes
-                // the UI once a second for the whole ~180 s the code stays valid. The code
-                // itself is untouched, so coming back resumes the same session.
-                property bool session: false
-                running: session && root.current
+                // Polling was a blocking HTTPS round-trip once a second. It is now a
+                // request that returns immediately; the state arrives through
+                // onBilibiliQrPolled. "session" is the wait state, and the timer only
+                // fires while the page is on screen, so leaving for 极简/专业 no longer
+                // freezes the UI once a second for the code's whole ~180 s lifetime.
+                // The code itself is untouched, so coming back resumes the same session.
+                // session 状态提到 root 层（qrWaitSession）：Timer 在页面布局深处，
+                // 外层 Connections 访问不到它的 id，所以在回调里改 qrPoll.session 会报错。
+                // The session flag lives on root as qrWaitSession: this Timer sits deep in
+                // the layout and the outer Connections block cannot reach its id, so
+                // touching qrPoll.session from a handler would fail.
+                running: root.qrWaitSession && root.current
                 onTriggered: {
-                    const s = veyra.bilibiliQrPoll()
-                    if (s === "confirmed") {
-                        session = false
-                        root.qrState = ""
-                        root.qrImage = ""
-                        root.qrHint = ""
-                        root.refreshAccount()
-                        // Signed in: the account can see more than a moment ago, so its
-                        // cached lists are dropped and the feed is refetched.
-                        root.cardCache = ({})
-                        root.load("home", true)
-                    } else if (s === "scanned") {
-                        root.qrState = "scanned"
-                        root.qrHint = qsTr("已扫码，请在手机上确认")
-                    } else if (s === "expired") {
-                        session = false
-                        root.qrState = ""
-                        root.qrImage = ""
-                        root.qrHint = qsTr("二维码已过期，请重新点击扫码登录")
-                    } else if (s === "failed" || s === "none") {
-                        session = false
-                        root.qrState = ""
-                        root.qrImage = ""
-                        root.qrHint = qsTr("登录失败，请重试")
-                    }
+                    // 一问一答之间不重叠：上一次还没回来就跳过这一拍。
+                    // Never overlap request and reply: skip a beat while one is in flight.
+                    if (root.qrPolling) return
+                    root.qrPolling = true
+                    veyra.bilibiliRequestQrPoll()
                 }
             }
 
@@ -1491,35 +1619,40 @@ VPage {
                             VButton {
                                 text: (root.interaction.liked ? qsTr("已点赞") : qsTr("点赞"))
                                 onClicked: {
+                                    // 异步提交；成功后由 onBilibiliActionDone 刷新状态。
+                                    // Async submit; onBilibiliActionDone re-reads the state.
                                     const next = !root.interaction.liked
-                                    if (veyra.bilibiliLike(root.detail.bvid, next))
-                                        root.interaction = veyra.bilibiliInteractionState(root.detail.bvid)
+                                    veyra.bilibiliRequestLike(root.detail.bvid, next)
                                 }
                             }
                             VButton {
                                 text: root.interaction.coined ? qsTr("已投币") : qsTr("投币")
-                                onClicked: {
-                                    if (veyra.bilibiliCoin(root.detail.bvid, 1))
-                                        root.interaction = veyra.bilibiliInteractionState(root.detail.bvid)
-                                }
+                                onClicked: veyra.bilibiliRequestCoin(root.detail.bvid, 1)
                             }
                             VButton {
                                 text: root.interaction.favorited ? qsTr("已收藏") : qsTr("收藏")
                                 onClicked: {
                                     // Cancelling does not need a folder; adding asks which one.
                                     if (root.interaction.favorited) {
-                                        if (veyra.bilibiliFavorite(root.detail.bvid, false, 0))
-                                            root.interaction = veyra.bilibiliInteractionState(root.detail.bvid)
+                                        // 取消收藏走异步；成功与否由 onBilibiliFavoriteReady
+                                        // 回来时判断，reason "toggle" 表示是这一处发起的。
+                                        // Async: the outcome is reported by
+                                        // onBilibiliFavoriteReady; reason "toggle" marks it.
+                                        veyra.bilibiliRequestFavorite(root.detail.bvid, false, 0, "toggle")
                                     } else {
-                                        root.favPickerFolders = veyra.bilibiliFavFolders()
+                                        // 选择器打开不等数据：先开浮层，folder 列表异步填。
+                                        // reason "picker" 让回调知道该填哪个列表。
+                                        // Open the picker first and fill it when the
+                                        // list arrives; reason "picker" routes the reply.
                                         root.favPickerTarget = 0
                                         root.favPickerOpen = true
+                                        veyra.bilibiliRequestFavFolders("picker")
                                     }
                                 }
                             }
                             VButton {
                                 text: qsTr("稍后再看")
-                                onClicked: veyra.bilibiliWatchLaterToggle(root.detail.bvid, true)
+                                onClicked: veyra.bilibiliRequestWatchLater(root.detail.bvid, true)
                             }
                             VButton {
                                 text: root.showComments ? qsTr("收起评论") : qsTr("查看评论")
@@ -1588,10 +1721,12 @@ VPage {
                                         primary: true
                                         enabled: root.favPickerTarget !== 0
                                         onClicked: {
-                                            if (veyra.bilibiliFavorite(root.detail.bvid, true, root.favPickerTarget)) {
-                                                root.favPickerOpen = false
-                                                root.interaction = veyra.bilibiliInteractionState(root.detail.bvid)
-                                            }
+                                            // 选定文件夹后异步提交；成功时由回调关浮层
+                                            // 并刷新互动状态（reason "picker"）。
+                                            // Submit asynchronously; on success the reply
+                                            // closes the picker and re-reads the state.
+                                            veyra.bilibiliRequestFavorite(root.detail.bvid, true,
+                                                                          root.favPickerTarget, "picker")
                                         }
                                     }
                                     VButton {
@@ -1637,7 +1772,8 @@ VPage {
                                     const parts = root.detail.parts || []
                                     const cid = (index >= 0 && index < parts.length)
                                         ? parts[index].cid : 0
-                                    root.resumeAt = cid ? veyra.bilibiliResumeAtCid(root.detail.bvid, cid) : -1
+                                    if (cid) veyra.bilibiliRequestResumeAt(root.detail.bvid, cid)
+                                    else root.resumeAt = -1
                                     root.qualities = []
                                     if (cid) {
                                         root.pendingQualitiesGeneration = veyra.bilibiliLoadList(

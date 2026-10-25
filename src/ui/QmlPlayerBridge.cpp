@@ -237,7 +237,24 @@ struct QmlPlayerBridge::Impl {
     bool biliListBusy = false;
     QString biliListKind;
     int biliListGeneration = 0;
-    // Danmaku overlay: created lazily, only while comments are enabled.
+    // 互动状态请求的代号：每发起一次递增，用来丢弃过期回复。
+    // Generation counter for interaction-state requests, used to drop late replies.
+    int biliInteractionGeneration = 0;
+    // 通用异步任务的槽位：每个操作一个，互不覆盖。打开详情页时会同时发起
+    // 互动状态、续播位置、评论等请求，共用一个槽位会让后发起的顶掉先发起的，
+    // 那个请求就永远收不到结果。
+    // One slot per Bilibili operation so requests never evict each other: opening the
+    // detail page starts interaction state, resume point and comments together, and a
+    // shared slot would make the last one cancel the others.
+    struct BiliSlot {
+        std::future<BiliTaskResult> query;
+        bool busy = false;
+    };
+    // 12 个操作各一个槽位，索引就是枚举值，因此同时发起的请求互不覆盖。
+    // One slot per operation, indexed by the enum value, so requests started together
+    // never evict one another.
+    std::array<BiliSlot, 12> biliTaskSlots{};
+    // 丹�� overlay: created lazily, only while comments are enabled.
     std::unique_ptr<media::DanmakuWindow> danmakuWindow;
     bool danmakuEnabled = false;
     bool danmakuFailed = false;
@@ -1594,6 +1611,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         tickSubtitles();
         tickImageBatch();
         tickBiliList();
+        tickBiliTasks();
         tickBiliPlay();
         tickCapture();
         tickPs5();
@@ -7386,6 +7404,32 @@ QVariantList QmlPlayerBridge::bilibiliFavFolders(){
     return out;
 }
 
+// 异步版：worker 拉收藏夹列表，tickBiliTasks 取回后发信号。
+// The async form: a worker fetches the folder list; tickBiliTasks() collects it
+// and emits the signal.
+void QmlPlayerBridge::bilibiliRequestFavFolders(const QString& reason){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    startBiliTask(BiliOp::FavFolders, [reason] {
+        BiliTaskResult r;
+        r.reason = reason;
+        std::vector<media::BiliFavFolder> folders;
+        std::wstring error;
+        if (!media::biliFavFolders(folders, error)) {
+            r.error = QString::fromStdWString(error);
+            return r;
+        }
+        for (const auto& f : folders) {
+            QVariantMap m;
+            m.insert(QStringLiteral("id"), QVariant::fromValue<qlonglong>(f.id));
+            m.insert(QStringLiteral("title"), QString::fromStdWString(f.title));
+            m.insert(QStringLiteral("count"), QVariant::fromValue<qlonglong>(f.count));
+            r.list.push_back(m);
+        }
+        r.ok = true;
+        return r;
+    });
+}
+
 QVariantList QmlPlayerBridge::bilibiliFollowed(){
     std::vector<media::BiliVideoCard> cards;
     std::wstring error;
@@ -7608,6 +7652,416 @@ bool QmlPlayerBridge::bilibiliFavorite(const QString& bvid, bool add, qlonglong 
     return true;
 }
 
+// 异步版：worker 发收藏请求，tickBiliTasks 取回后发信号。
+// 提示语（已收藏/已取消收藏）和错误提示都在 GUI 线程发，worker 只带回结果。
+// The async form: a worker performs the request, tickBiliTasks() collects the
+// outcome. The user-facing notice stays on the GUI thread; the worker only carries
+// the result back.
+void QmlPlayerBridge::bilibiliRequestFavorite(const QString& bvid, bool add,
+                                              qlonglong folderId, const QString& reason){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::Favorite, [wbvid, add, folderId, reason] {
+        BiliTaskResult r;
+        r.add = add;
+        r.reason = reason;
+        std::wstring error;
+        r.ok = media::biliFavorite(wbvid, add, folderId, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+// ---------------------------------------------------------------------------
+// 通用异步 B 站任务：9 个方法共用一套发起 / 回收。每个 op 有自己的槽位，
+// 所以同时发起的请求互不覆盖。
+// Generic async Bilibili task: nine methods share one start/collect path, and each op
+// owns its slot, so requests started together never evict one another.
+// ---------------------------------------------------------------------------
+
+// 内部：发起一个任务。worker 闭包只捕获值，绝不捕获 this 指针或 Qt 容器。
+// Internal: start one task. The worker closure captures values only - never `this` and
+// never a Qt container.
+bool QmlPlayerBridge::startBiliTask(BiliOp op, std::function<BiliTaskResult()> work) {
+    auto& i = *impl_;
+    auto& slot = i.biliTaskSlots[static_cast<size_t>(op)];
+    slot.busy = true;
+    slot.query = std::async(std::launch::async, [op, work = std::move(work)] {
+        BiliTaskResult r = work();
+        r.op = op;
+        return r;
+    });
+    return true;
+}
+
+// GUI tick：把所有已完成的任务取走，按 op 发对应信号。一次遍历处理多个槽位，
+// 所以同时完成的请求会在同一帧送达，不会各占一帧。
+// GUI tick: drain every finished slot and emit the matching signal. Iterating all
+// slots means several completions in one frame arrive together.
+void QmlPlayerBridge::tickBiliTasks() {
+    auto& i = *impl_;
+    for (size_t n = 0; n < i.biliTaskSlots.size(); ++n) {
+        auto& slot = i.biliTaskSlots[n];
+        if (!slot.busy) continue;
+        if (slot.query.wait_for(std::chrono::seconds(0)) != std::future_status::ready) continue;
+        BiliTaskResult r = slot.query.get();
+        slot.busy = false;
+        if (!r.ok && !r.error.isEmpty()) {
+            i.bilibiliError = r.error.toStdWString();
+            emit notice(r.error, true);
+        } else if (r.ok) {
+            i.bilibiliError.clear();
+        }
+        switch (r.op) {
+        case BiliOp::Like:
+        case BiliOp::Coin:
+        case BiliOp::WatchLater:
+            // 成功提示要留在 GUI 线程发：worker 不能碰翻译表和信号。
+            // 三个动作各有自己的文案，所以按 op 分派而不是用一句通用的话。
+            // The success notice belongs on the GUI thread: the worker cannot touch the
+            // translation table or emit signals. Each action has its own wording, so
+            // dispatch on the op rather than using one generic sentence.
+            if (r.ok) {
+                switch (r.op) {
+                case BiliOp::Like:       emit notice(r.add ? tr("已点赞") : tr("已取消点赞"), false); break;
+                case BiliOp::Coin:       emit notice(tr("已投币"), false); break;
+                case BiliOp::WatchLater: emit notice(r.add ? tr("已加入稍后再看") : tr("已从稍后再看移除"), false); break;
+                default: break;
+                }
+            }
+            emit bilibiliActionDone(biliOpName(r.op), r.ok, r.error);
+            break;
+        case BiliOp::Comments:
+            emit bilibiliCommentsReady(r.list, r.ok, r.error);
+            break;
+        case BiliOp::EnableDanmaku: {
+            // 创建叠加层、清洗、交给渲染器 —— 三步都在 GUI 线程。
+            // Create the overlay, filter, hand it to the renderer - all on the GUI thread.
+            int shown = 0;
+            if (r.ok) {
+                if (!i.danmakuWindow) {
+                    i.danmakuWindow = std::make_unique<media::DanmakuWindow>();
+                    if (!i.danmakuWindow->create(i.videoWindow)) {
+                        i.danmakuWindow.reset();
+                        r.ok = false;
+                        r.error = tr("无法创建弹幕叠加层");
+                    }
+                }
+                if (r.ok) {
+                    std::vector<media::DanmakuItem> items;
+                    items.reserve(r.list.size());
+                    for (const auto& v : r.list) {
+                        const QVariantMap m = v.toMap();
+                        media::DanmakuItem item;
+                        item.time = m.value(QStringLiteral("time")).toDouble();
+                        item.mode = m.value(QStringLiteral("mode")).toInt();
+                        item.color = m.value(QStringLiteral("color")).toULongLong();
+                        item.text = m.value(QStringLiteral("text")).toString().toStdWString();
+                        items.push_back(std::move(item));
+                    }
+                    log::info("danmaku", std::format("stage: fetched items={}", items.size()));
+                    // 渲染器接不住的字符串先剔掉：空的或过长的无害，孤立代理项会让
+                    // GDI+ 的 AddString 崩溃。
+                    // Drop strings the renderer cannot handle before they reach GDI+: an
+                    // empty or over-long one is harmless, a lone surrogate crashes
+                    // AddString.
+                    size_t dropped = 0;
+                    items.erase(std::remove_if(items.begin(), items.end(), [&](const media::DanmakuItem& it) {
+                        if (it.text.empty() || it.text.size() > 200) { ++dropped; return true; }
+                        for (size_t k = 0; k < it.text.size(); ++k) {
+                            const char32_t c = it.text[k];
+                            if (c >= 0xD800 && c <= 0xDBFF) {
+                                if (k + 1 >= it.text.size() ||
+                                    it.text[k + 1] < 0xDC00 || it.text[k + 1] > 0xDFFF) {
+                                    ++dropped; return true;
+                                }
+                                ++k;
+                            } else if (c >= 0xDC00 && c <= 0xDFFF) { ++dropped; return true; }
+                        }
+                        return false;
+                    }), items.end());
+                    if (dropped) log::warn("danmaku", std::format("dropped {} unusable strings", dropped));
+                    log::info("danmaku", std::format("stage: cleaned items={}", items.size()));
+                    shown = int(items.size());
+                    i.danmakuWindow->setItems(std::move(items));
+                    log::info("danmaku", "stage: setItems done");
+                    i.danmakuEnabled = true;
+                    i.danmakuLastSeconds = -1.0;
+                    log::info("danmaku", std::format("enabled lines={}", i.danmakuWindow->itemCount()));
+                }
+            }
+            if (!r.ok && !r.error.isEmpty()) {
+                i.bilibiliError = r.error.toStdWString();
+                emit notice(r.error, true);
+            }
+            emit bilibiliDanmakuReady(r.ok, r.error, shown);
+            break;
+        }
+        case BiliOp::ResumeAtCid:
+            emit bilibiliResumeReady(r.number);
+            break;
+        case BiliOp::QrStart:
+            // qrKey / qrUrl 必须落进 impl_：bilibiliQrImage() 用 qrUrl 画二维码，
+            // 轮询用 qrKey 去问状态。worker 不能写 impl_（那是 GUI 线程的状态），
+            // 所以在这里写。漏了这一步的后果是二维码显示成白框、点完立刻退回原页面。
+            // qrKey and qrUrl have to land in impl_: bilibiliQrImage() draws the code
+            // from qrUrl and the poll asks with qrKey. The worker cannot write impl_ -
+            // that state belongs to the GUI thread - so it happens here. Missing this
+            // step left the code as a white square and sent the page straight back.
+            if (r.ok) {
+                i.bilibiliQrKey = r.object.value(QStringLiteral("qrKey")).toString().toStdWString();
+                i.bilibiliQrUrl = r.text.toStdWString();
+            }
+            emit bilibiliQrStarted(r.text, r.ok, r.error);
+            break;
+        case BiliOp::QrPoll:
+            // confirmed 时 worker 把 cookie 带回来，落盘并清掉一次性 key。
+            // 完整性校验和成功/失败提示都在 GUI 线程做，与原来的同步版一致。
+            // On confirmation the worker carries the cookie back: save it and drop the
+            // one-shot key. The integrity check and the notices stay on the GUI thread,
+            // matching the synchronous version.
+            if (r.text == QLatin1String("confirmed")) {
+                const std::wstring cookie =
+                    r.object.value(QStringLiteral("cookie")).toString().toStdWString();
+                i.bilibiliQrKey.clear();
+                i.bilibiliQrUrl.clear();
+                if (cookie.empty() || !media::bilibiliCookieLooksSignedIn(cookie)) {
+                    emit notice(tr("登录返回的 Cookie 不完整"), true);
+                    r.text = QStringLiteral("failed");
+                } else if (!media::saveBilibiliCookie(cookie)) {
+                    emit notice(tr("无法保存登录信息"), true);
+                    r.text = QStringLiteral("failed");
+                } else {
+                    log::info("bilibili", "qr sign-in stored");
+                    emit notice(tr("B 站登录成功，可以播放会员画质"), false);
+                }
+            } else if (r.text == QLatin1String("expired") || r.text == QLatin1String("none")) {
+                i.bilibiliQrKey.clear();
+                i.bilibiliQrUrl.clear();
+            }
+            emit bilibiliQrPolled(r.text);
+            break;
+        case BiliOp::Account:
+            emit bilibiliAccountReady(r.object, r.ok);
+            break;
+        // 三个早先完成的异步方法，现在也走这套槽位，回收逻辑只有一份。
+        // The three earlier async methods now share this path too, so collection
+        // logic exists once.
+        case BiliOp::InteractionState:
+            emit bilibiliInteractionReady(r.bvid, r.object, r.generation);
+            break;
+        case BiliOp::Favorite:
+            if (r.ok) emit notice(r.add ? tr("已收藏") : tr("已取消收藏"), false);
+            emit bilibiliFavoriteReady(r.ok, r.error, r.add, r.reason);
+            break;
+        case BiliOp::FavFolders:
+            emit bilibiliFavFoldersReady(r.list, r.reason);
+            break;
+        }
+    }
+}
+
+// --- 动作型：点赞 / 投币 / 稍后再看 -----------------------------------------
+// 三者形状一致：发一个写请求，成功则刷新互动状态。提示语在 GUI 线程发。
+// All three have the same shape: one write request, then re-read the interaction
+// state. The user-facing notice stays on the GUI thread.
+void QmlPlayerBridge::bilibiliRequestLike(const QString& bvid, bool like){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::Like, [wbvid, like] {
+        BiliTaskResult r;
+        r.add = like;   // 点赞方向：true=点赞 false=取消
+        std::wstring error;
+        r.ok = media::biliLike(wbvid, like, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+void QmlPlayerBridge::bilibiliRequestCoin(const QString& bvid, int count){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::Coin, [wbvid, count] {
+        BiliTaskResult r;
+        std::wstring error;
+        r.ok = media::biliCoin(wbvid, count, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+void QmlPlayerBridge::bilibiliRequestWatchLater(const QString& bvid, bool add){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::WatchLater, [wbvid, add] {
+        BiliTaskResult r;
+        r.add = add;    // 方向：true=加入 false=移除
+        std::wstring error;
+        r.ok = media::biliAddWatchLater(wbvid, add, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+// --- 取数型：评论 -----------------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestComments(const QString& bvid, int page){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::Comments, [wbvid, page] {
+        BiliTaskResult r;
+        std::wstring error;
+        std::vector<media::BiliComment> comments;
+        if (!media::biliComments(wbvid, page, comments, error)) {
+            r.error = QString::fromStdWString(error);
+            return r;
+        }
+        for (const auto& c : comments) {
+            QVariantMap m;
+            m.insert(QStringLiteral("author"), QString::fromStdWString(c.author));
+            m.insert(QStringLiteral("face"), QString::fromStdWString(c.face));
+            m.insert(QStringLiteral("message"), QString::fromStdWString(c.message));
+            m.insert(QStringLiteral("like"), QVariant::fromValue<qlonglong>(c.like));
+            m.insert(QStringLiteral("ctime"), c.ctime);
+            m.insert(QStringLiteral("replies"), c.replies);
+            r.list.push_back(m);
+        }
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 取数型：开弹幕 ---------------------------------------------------------
+// worker 只负责取数据（两次网络往返）；创建叠加层、清洗字符串、交给渲染器全部在
+// GUI 线程的 tick 里做 —— 那三步都碰 impl_ 和窗口句柄，不能离开 UI 线程。
+// 早先这版只把「条数」带回来，也没 setItems，所以开关看起来动了但画面没弹幕。
+// The worker only fetches (two round trips). Creating the overlay, filtering the
+// strings and handing them to the renderer all happen in the GUI tick - those three
+// touch impl_ and a window handle and cannot leave the UI thread. An earlier revision
+// carried back only a count and never called setItems, so the switch moved but no
+// danmaku appeared.
+void QmlPlayerBridge::bilibiliRequestEnableDanmaku(const QString& bvid, int pageIndex){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::EnableDanmaku, [wbvid, pageIndex] {
+        BiliTaskResult r;
+        // 分P 校验也在 worker 里做：biliVideoPage 本身是一次网络往返。
+        // The part lookup runs on the worker too: biliVideoPage is a network round trip.
+        const auto page = media::biliVideoPage(wbvid);
+        if (!page.ok) { r.error = QString::fromStdWString(page.error); return r; }
+        if (pageIndex < 0 || pageIndex >= int(page.pages.size())) {
+            r.error = QStringLiteral("分P序号无效");
+            return r;
+        }
+        std::vector<media::BiliDanmaku> lines;
+        std::wstring error;
+        if (!media::biliDanmaku(page.pages[size_t(pageIndex)].first, lines, error)) {
+            r.error = QString::fromStdWString(error);
+            return r;
+        }
+        // 原始弹幕按 QML 能接的形态带回去：时间、模式、颜色、文本。
+        // 清洗和渲染留给 GUI 线程。
+        // Carry the raw lines back in a form QML can hold: time, mode, colour, text.
+        // Filtering and rendering stay on the GUI thread.
+        for (const auto& line : lines) {
+            QVariantMap m;
+            m.insert(QStringLiteral("time"), line.time);
+            m.insert(QStringLiteral("mode"), line.mode);
+            m.insert(QStringLiteral("color"), QVariant::fromValue<qulonglong>(line.color));
+            m.insert(QStringLiteral("text"), QString::fromStdWString(line.text));
+            r.list.push_back(m);
+        }
+        r.number = double(lines.size());
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 取数型：续播位置 -------------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestResumeAt(const QString& bvid, qlonglong cid){
+    if (bvid.isEmpty() || cid <= 0) {
+        emit bilibiliResumeReady(-1.0);
+        return;
+    }
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::ResumeAtCid, [wbvid, cid] {
+        BiliTaskResult r;
+        r.number = media::biliResumePosition(wbvid, cid);
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 扫码登录：取二维码 -----------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestQrStart(){
+    startBiliTask(BiliOp::QrStart, [] {
+        BiliTaskResult r;
+        const auto login = media::startBilibiliQrLogin();
+        if (!login.ok) {
+            r.error = QString::fromStdWString(login.error);
+            return r;
+        }
+        // qrKey / qrUrl 要留到 poll 用，所以带回去由 GUI 线程写进 impl_。
+        // qrKey and qrUrl are kept for the poll, so they travel back to the GUI thread.
+        r.text = QString::fromStdWString(login.qrUrl);
+        r.object.insert(QStringLiteral("qrKey"), QString::fromStdWString(login.qrKey));
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 扫码登录：轮询 ---------------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestQrPoll(){
+    auto& i = *impl_;
+    if (i.bilibiliQrKey.empty()) {
+        emit bilibiliQrPolled(QStringLiteral("none"));
+        return;
+    }
+    const std::wstring key = i.bilibiliQrKey;
+    startBiliTask(BiliOp::QrPoll, [key] {
+        BiliTaskResult r;
+        const auto poll = media::pollBilibiliQrLogin(key);
+        using State = media::BilibiliQrPoll::State;
+        switch (poll.state) {
+        case State::Waiting:   r.text = QStringLiteral("waiting"); break;
+        case State::Scanned:   r.text = QStringLiteral("scanned"); break;
+        case State::Expired:   r.text = QStringLiteral("expired"); break;
+        case State::Confirmed:
+            // cookie 落盘必须在 GUI 线程：它会改 impl_ 并触发界面刷新。
+            // Saving the cookie has to happen on the GUI thread: it writes impl_ and
+            // refreshes the UI.
+            r.text = QStringLiteral("confirmed");
+            r.object.insert(QStringLiteral("cookie"), QString::fromStdWString(poll.cookie));
+            break;
+        default:               r.text = QStringLiteral("none"); break;
+        }
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 取数型：账号信息 -------------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestAccount(){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    startBiliTask(BiliOp::Account, [] {
+        BiliTaskResult r;
+        const auto a = media::biliAccount();
+        r.object.insert(QStringLiteral("loggedIn"), a.loggedIn);
+        r.object.insert(QStringLiteral("name"), QString::fromStdWString(a.name));
+        r.object.insert(QStringLiteral("face"), QString::fromStdWString(a.face));
+        r.object.insert(QStringLiteral("level"), a.level);
+        r.object.insert(QStringLiteral("vip"), a.vip);
+        r.ok = true;
+        return r;
+    });
+}
+
 int QmlPlayerBridge::bilibiliLoadList(const QString& kind){
     // Follows the shape the capture-device query already uses: start the work with
     // std::async, collect it from the GUI tick with a zero-timeout wait. That keeps the
@@ -7758,6 +8212,35 @@ QVariantMap QmlPlayerBridge::bilibiliInteractionState(const QString& bvid){
     m.insert(QStringLiteral("favorited"), state.favorited);
     m.insert(QStringLiteral("coins"), state.coins);
     return m;
+}
+
+// 异步版：本函数只启动 worker 就返回，网络请求不再占用 GUI 线程。
+// 结果由 tickBiliTasks() 取走并通过 bilibiliInteractionReady 交给 QML。
+// 查询期间按钮的旧状态继续显示，等信号到了再更新 —— 比"点一下界面卡半秒"好。
+// The async form starts a worker and returns; the round trip no longer occupies the
+// GUI thread. tickBiliTasks() collects the result and emits
+// bilibiliInteractionReady. The old button state stays on screen until then, which
+// beats freezing for half a second on every click.
+void QmlPlayerBridge::bilibiliRequestInteractionState(const QString& bvid){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    // 新的请求顶掉还没回来的旧请求：generation 让 QML 丢掉过期结果。
+    // A newer request supersedes one still in flight; the generation lets QML drop
+    // the stale reply.
+    const int generation = ++impl_->biliInteractionGeneration;
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::InteractionState, [wbvid, bvid, generation] {
+        BiliTaskResult r;
+        r.bvid = bvid;
+        r.generation = generation;
+        const auto state = media::biliInteractionState(wbvid);
+        r.object.insert(QStringLiteral("liked"), state.liked);
+        r.object.insert(QStringLiteral("coined"), state.coined);
+        r.object.insert(QStringLiteral("favorited"), state.favorited);
+        r.object.insert(QStringLiteral("coins"), state.coins);
+        r.ok = true;
+        return r;
+    });
 }
 
 QVariantMap QmlPlayerBridge::bilibiliVideoDetail(const QString& bvid){

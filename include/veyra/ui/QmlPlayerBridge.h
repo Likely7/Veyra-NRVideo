@@ -41,6 +41,54 @@ namespace veyra::ui {
 class MoonlightModel;
 class XboxModel;
 
+// 单次 B 站请求的操作种类。用枚举而不是字符串：拼错的枚举编译不过，
+// 拼错的字符串会静默地永远匹配不上。
+// The kind of one-shot Bilibili request. An enum rather than a string on purpose: a
+// typo in an enum fails to compile, a typo in a string silently never matches.
+enum class BiliOp : uint8_t {
+    InteractionState, Favorite, FavFolders,
+    Like, Coin, WatchLater,
+    Comments, EnableDanmaku, ResumeAtCid,
+    QrStart, QrPoll, Account,
+};
+// 操作名，供信号传给 QML 分派用。
+// The action name, passed to QML so one handler can serve several actions.
+constexpr const char* biliOpName(BiliOp op) {
+    switch (op) {
+    case BiliOp::InteractionState: return "interaction";
+    case BiliOp::Favorite:         return "favorite";
+    case BiliOp::FavFolders:       return "fav-folders";
+    case BiliOp::Like:             return "like";
+    case BiliOp::Coin:             return "coin";
+    case BiliOp::WatchLater:       return "watchlater";
+    case BiliOp::Comments:         return "comments";
+    case BiliOp::EnableDanmaku:    return "enable-danmaku";
+    case BiliOp::ResumeAtCid:      return "resume-at-cid";
+    case BiliOp::QrStart:          return "qr-start";
+    case BiliOp::QrPoll:           return "qr-poll";
+    case BiliOp::Account:          return "account";
+    }
+    return "unknown";
+}
+// 一次异步任务的结果信封。worker 只填这里，GUI tick 取走后发信号。
+// The result envelope of one async task: the worker only fills this, and the GUI tick
+// reads it and emits the signal.
+struct BiliTaskResult {
+    BiliOp op = BiliOp::Account;
+    bool ok = false;
+    QString error;
+    QVariantMap object;      // account / qr-start / interaction 这类单对象
+    QVariantList list;       // comments / fav-folders 这类列表
+    double number = -1.0;    // resume-at-cid 的秒数 / 弹幕条数
+    QString text;            // qr-start 的地址、qr-poll 的状态
+    // 三个方法需要回带自己的输入，才能把结果路由回正确的调用点。
+    // Three methods carry their own inputs back so the reply reaches the right caller.
+    QString bvid;
+    int generation = 0;
+    QString reason;          // fav-folders / favorite 区分调用点
+    bool add = false;        // favorite 的方向
+};
+
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
     // --- professional-page readouts ---------------------------------------
@@ -643,6 +691,10 @@ public:
     // The account's own favourite folders (id, title, count), so the page can offer a
     // picker instead of always showing the default one.
     Q_INVOKABLE QVariantList bilibiliFavFolders();
+    // 异步版：主线程只发起，结果为通过 bilibiliFavFoldersReady 回到 QML。
+    // Async form: starts the request on a worker; the list arrives through
+    // bilibiliFavFoldersReady.
+    Q_INVOKABLE void bilibiliRequestFavFolders(const QString& reason = QString());
     Q_INVOKABLE QVariantList bilibiliFollowed();
     // Watch later, the popular board, and the related list under a player.
     Q_INVOKABLE QVariantList bilibiliWatchLater();
@@ -660,12 +712,40 @@ public:
     Q_INVOKABLE int bilibiliDanmakuCount() const;
     // Interactions. Each returns false and sets bilibiliLastError() on refusal.
     Q_INVOKABLE bool bilibiliLike(const QString& bvid, bool like);
+    // 下面九个异步版：发起即返回，结果通过对应的 Ready 信号回到 QML。
+    // 每个操作有独立槽位，打开详情页时同时发起的多个请求互不覆盖。
+    // The nine async forms below return at once; results arrive through the matching
+    // Ready signal. Each op owns its own slot, so the several requests the detail page
+    // starts together never evict one another.
+    Q_INVOKABLE void bilibiliRequestLike(const QString& bvid, bool like);
+    Q_INVOKABLE void bilibiliRequestCoin(const QString& bvid, int count);
+    Q_INVOKABLE void bilibiliRequestWatchLater(const QString& bvid, bool add);
+    Q_INVOKABLE void bilibiliRequestComments(const QString& bvid, int page);
+    Q_INVOKABLE void bilibiliRequestEnableDanmaku(const QString& bvid, int pageIndex);
+    Q_INVOKABLE void bilibiliRequestResumeAt(const QString& bvid, qlonglong cid);
+    Q_INVOKABLE void bilibiliRequestQrStart();
+    Q_INVOKABLE void bilibiliRequestQrPoll();
+    Q_INVOKABLE void bilibiliRequestAccount();
     Q_INVOKABLE bool bilibiliCoin(const QString& bvid, int count);
     // folderId 0 targets the account's first folder; the page passes the one the user
     // picked in the folder chooser shown beside the interaction buttons.
     Q_INVOKABLE bool bilibiliFavorite(const QString& bvid, bool add, qlonglong folderId = 0);
+    // 异步版：发起后立即返回，结果通过 bilibiliFavoriteReady 回来。
+    // reason 区分两个调用点（"toggle" 取消收藏 / "picker" 从浮层选定文件夹），
+    // 回调据此决定要不要关浮层、要不要刷新互动状态。
+    // Async form: returns at once; the outcome arrives through
+    // bilibiliFavoriteReady. `reason` tells the two callers apart ("toggle" for
+    // removing a favourite, "picker" for choosing a folder) so the reply can decide
+    // whether to close the picker and whether to re-read the interaction state.
+    Q_INVOKABLE void bilibiliRequestFavorite(const QString& bvid, bool add,
+                                             qlonglong folderId, const QString& reason);
     Q_INVOKABLE bool bilibiliWatchLaterToggle(const QString& bvid, bool add);
     Q_INVOKABLE QVariantMap bilibiliInteractionState(const QString& bvid);
+    // 异步版：主线程只发起，网络请求在 worker 里跑，结果通过
+    // bilibiliInteractionReady 回到 QML。同步版保留给非界面调用点。
+    // Async form: the GUI thread only starts the request; the round trip runs on a
+    // worker and the result arrives through bilibiliInteractionReady.
+    Q_INVOKABLE void bilibiliRequestInteractionState(const QString& bvid);
     Q_INVOKABLE QVariantMap bilibiliVideoDetail(const QString& bvid);
     Q_INVOKABLE QVariantMap bilibiliAccount();
     // Plays one part of a video through the normal pipeline. `qn` 0 = best allowed.
@@ -1008,6 +1088,10 @@ public:
     bool planFgAutoMultiplierBeforeOpen(double sourceFps);
     // B 站播放的解析在后台线程跑完后的回收（每个 GUI tick 一次）。
     void tickBiliPlay();
+    // 通用任务：发起一个，回收全部已完成的。
+    // Generic tasks: start one; drain every finished one.
+    bool startBiliTask(BiliOp op, std::function<BiliTaskResult()> work);
+    void tickBiliTasks();
     // 把观看进度从 impl_ 状态里取出，网络上报交给后台 worker。
     bool takeBiliWatchProgress(std::wstring& bvid, long long& cid, int& played);
     // 设倍率的实际动作，不碰 fgAutoMultiplier 标记（自动决策与手动选择共用）。
@@ -1493,6 +1577,29 @@ signals:
     void bilibiliListReady(const QString& kind, const QVariantList& items, int generation);
     // Same request lifetime, for the single-object endpoints ("detail:<bvid>").
     void bilibiliObjectReady(const QString& kind, const QVariantMap& object, int generation);
+    // Async interaction state: emitted when the worker that answers
+    // bilibiliRequestInteractionState finishes. bvid echoes the request so a late
+    // reply for a video the user has already left can be dropped; generation does
+    // the same job for repeated requests on one video.
+    void bilibiliInteractionReady(const QString& bvid, const QVariantMap& state, int generation);
+    // Async favourite-folder list. `reason` tells the two call sites apart: switching to
+    // the 收藏 view fills the page-level list, while the folder picker beside the
+    // interaction buttons needs the same data for its own list.
+    void bilibiliFavFoldersReady(const QVariantList& folders, const QString& reason);
+    // Async favourite outcome. `ok` false means the server refused and `error` carries
+    // its message; QML keeps the old button state in that case and shows the text.
+    void bilibiliFavoriteReady(bool ok, const QString& error, bool add, const QString& reason);
+    // 通用异步任务的结果信号。op 是操作名（like / coin / watchlater），
+    // 便于 QML 用一个处理器覆盖三个形状相同的动作。
+    // Result signals for the generic async task. `op` names the action (like / coin /
+    // watchlater) so QML can handle the three same-shaped writes in one function.
+    void bilibiliActionDone(const QString& op, bool ok, const QString& error);
+    void bilibiliCommentsReady(const QVariantList& comments, bool ok, const QString& error);
+    void bilibiliDanmakuReady(bool ok, const QString& error, int lineCount);
+    void bilibiliResumeReady(double seconds);
+    void bilibiliQrStarted(const QString& qrUrl, bool ok, const QString& error);
+    void bilibiliQrPolled(const QString& state);
+    void bilibiliAccountReady(const QVariantMap& account, bool ok);
     // A presentation-hooking overlay appeared in a run whose interface draws on the GPU
     // ("rtss": its OSD is kept out of this process; "nvidia": NVIDIA's in-game overlay and
     // "gamepp": GamePP, which cannot be kept out); a restart draws the interface in software.
