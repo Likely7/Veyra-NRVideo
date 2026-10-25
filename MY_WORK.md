@@ -320,18 +320,34 @@ robocopy "qml.p5\Veyra" "qml\Veyra" /MIR /NFL /NDL /NJH /NJS /NP
 
 ## 六、文档索引
 
+整理后只剩 **4 份主文档**（2026-10-25 从 9 份精简）：
+
 | 内容 | 位置 | 行数 |
 |---|---|---|
-| **本文件**（记录 + 规则）| `src\MY_WORK.md` | — |
-| **操作手册**（构建/部署/环境）| `D:\Program\Veyra\HANDOFF.md` | 385 |
-| 杜比视界工作交接 | `src\docs\DOVI_WORK_HANDOFF.md` | 370 |
-| 杜比视界 P5 验证 | `src\docs\DOVI_P5_VERIFICATION.md` | 230 |
-| P7 双层合成算法 | `src\docs\DOLBY_BL_EL_COMPOSITING.md` | 250 |
-| 合并冲突决策流程 | `src\docs\MERGING.md` | 141 |
-| 历史技术记录 | `src\docs\HISTORY.md` | 1669 |
-| 本地构建笔记 | `src\docs\VeyraNV_LOCAL_BUILD_NOTES.md` | 45 |
-| P5 早期报告 | `D:\DSH\dolby-vision-p5-report.md` | 610 |
-| B 站模块历史 | `D:\DSH\.dsh-tmp\keep\veyra-history-README.md` | 1627 |
+| **本文件**（记录 + 全部规则）| `src\MY_WORK.md` | 633 |
+| **操作手册**（构建/部署/环境/验证）| `src\HANDOFF.md` | 385 |
+| **杜比视界完整技术档案** | `src\docs\DOLBY_VISION.md` | 912 |
+| **技术排查档案**（13 个专题的排查链）| `src\docs\HISTORY.md` | 1669 |
+
+### 已合并/删除的文档（2026-10-25）
+
+| 原文件 | 行数 | 去向 |
+|---|---|---|
+| `docs/DOVI_WORK_HANDOFF.md` | 370 | → `DOLBY_VISION.md` 第一节 |
+| `docs/DOVI_P5_VERIFICATION.md` | 230 | → `DOLBY_VISION.md` 第二节 |
+| `docs/DOLBY_BL_EL_COMPOSITING.md` | 250 | → `DOLBY_VISION.md` 第三节 |
+| `docs/MERGING.md` | 141 | → 本文件第七条规则十 |
+| `docs/VeyraNV_LOCAL_BUILD_NOTES.md` | 45 | → 本文件第六节构建命令 |
+| `CUSTOM_LEDGER.md` | 567 | → 本文件（20 条规则）|
+
+### 仓库外的旧材料（可选清理）
+
+| 内容 | 位置 | 建议 |
+|---|---|---|
+| P5 早期报告 | `D:\DSH\dolby-vision-p5-report.md`（610 行）| 已被 `DOLBY_VISION.md` 覆盖，可删 |
+| B 站模块历史 | `D:\DSH\.dsh-tmp\keep\veyra-history-README.md`（1627 行）| 早期记录，可删或留作参考 |
+
+**作者原版文档**：`src\docs\` 下另有作者自己写的 600+ 个文档，保持不动。
 
 ---
 
