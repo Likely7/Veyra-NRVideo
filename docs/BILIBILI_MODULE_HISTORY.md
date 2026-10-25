@@ -75,15 +75,49 @@
 3. 在 C++ `eventFilter` 里直接识别 Return 并转发（那区域历史上崩过多次，谨慎）
 
 
-### 2. B 站续播闪一下开头 + 缓冲两次（未解决）
+### 2. B 站续播闪一下开头 + 缓冲两次（部分解决 2026-10-25）
 
 | 项目 | 内容 |
 |---|---|
 | 现象 | 点「继续上次播放」会先显示开头画面，再跳到目标位置，期间缓冲两轮 |
 | 原因 | 作者的 `EngineController::open()` 不支持指定起播位置，只能“先打开再从 0 秒 seek” |
-| 替代方案 | 无（可以在详情页点「从头播放」明确从头开始）|
+| 现状 | **seek 现在能真正生效**（见下），「闪一下开头」仍在 —— 那是「先打开再 seek」的必然结果 |
 
 **曾尝试 4 次修复，3 次导致播放闪退**，详见 v13 章节的失败记录。
+（那几次都在改 `EngineController::open()`；下面的修复没有碰引擎。）
+
+#### 2026-10-25 修复：续播根本不生效（不是「闪一下」）
+
+用户报「点了继续上次播放，还是从头播」。两端加日志后定性：
+
+```
+手动 seek：seek-call → seek-drain 同毫秒内     3/3 成功
+续播 seek：只有 seek-call，完全没有 seek-drain  5/5 失败
+```
+
+**根因**：续播 seek 打在了**上一个视频**的快照上。点「继续上次播放」的那一刻引擎还
+没建新会话，`impl_->snapshot` 里仍是旧会话的 id/position/duration（实测那次 seek 旁边
+是 `pos=32.867 dur=103.533`，而正在打开的视频是 120.834 秒）。这条 seek 落在正要被
+拆掉的会话上，引擎永远取不到；而 `biliResumeAt` 已被清成 -1，新会话没有可重试的东西。
+
+**修复**：`bilibiliPlayResolved()` 记下点击时的会话号（`biliResumeAfterSession`），
+tick 里要求「快照报出的会话号已经不同」才发 seek：
+
+```cpp
+const bool biliSessionIsNew = s.sessionId != 0
+    && s.sessionId != impl_->biliResumeAfterSession;
+if (impl_->biliResumeAt >= 0.0 && s.running && s.duration > 0 && biliSessionIsNew) { ... }
+```
+
+依据：引擎每次打开都执行 `snapshot_.sessionId = ++sessionId_` 并 `snapshot_={}`
+（duration 归零），所以「会话号变了 + duration>0」就等价于「新会话已就绪」。
+
+**验证**：两个视频来回切，三次续播全部被引擎取走，目标值精确一致
+（7.000 / 3.000 / 15.000），延迟 64-450 毫秒。
+
+**排查方法（下次遇到同类问题直接用）**：在 `seekTo()` 和引擎取走 `seekSeconds_` 的
+地方各加一条日志，看 `seek-call` 和 `seek-drain` 是否配对 —— **配对不上就是没生效**，
+比看界面可靠得多。
 
 
 ### 3. 播完后点底部播放条按钮 → 403（**已解决 2026-10-25**）
