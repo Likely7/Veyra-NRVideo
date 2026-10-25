@@ -39,21 +39,38 @@
 
 ## 一、当前状态
 
+### 固定不变的（记这些）
+
 ```
 仓库      D:\Program\Veyra\src          git 分支 custom
-HEAD      c46140cc  Merge origin/main into custom
-落后      作者主线 0 个提交（2026-10-25 已同步）
-领先      作者主线 27 个提交
 远端      fork   = georgeg911/Veyra-NRVideo（我的）
           origin = Likely7/Veyra-NRVideo（作者的）
 
-构建      D:\Program\Veyra\build        全量 140/140 通过
+构建      D:\Program\Veyra\build
 部署      D:\Program\Veyra-2.1.0-NVIDIA-win64-portable
           启动-P5修复版.cmd    → 我的版本，user-data-2.0.0-p5
           启动-作者完整版.cmd  → 作者原版，user-data-2.0.0-author
 ```
 
-**统计**：本地提交 157 个，已提 PR 13 个（3 个已合并，1 个已关闭，9 个待处理）。
+### 会变的（用命令查，不要信文档里的数字）
+
+**HEAD 和提交数每次都变，文档里写死必然过期。用下面三条命令查实时状态：**
+
+```powershell
+cd D:\Program\Veyra\src
+git log --oneline -1                          # 当前 HEAD
+git rev-list --count custom..origin/main      # 落后作者几个提交（应为 0）
+git rev-list --count origin/main..custom      # 领先作者几个提交
+git status --porcelain                        # 工作区是否干净（应为空）
+```
+
+> 2026-10-25 整理时的快照（仅供对照，会过期）：HEAD `48d73d1c`、落后 0、领先 33、工作区干净。
+
+**PR 状态用 `gh` 查，不要抄文档**：
+
+```powershell
+gh pr list --repo Likely7/Veyra-NRVideo --author georgeg911 --state all
+```
 
 ### 本地定制（上游没有）
 
