@@ -1396,6 +1396,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // 网络源是否正被缓冲按住。nowMs() 要用它区分「音频真的放完了」和
             // 「只是网络暂时没数据」：后者不能把媒体时钟交给墙钟。
             std::atomic<bool> networkHolding{false};
+            // 缓冲相位每秒会在 buffering / playing 之间抖好几次，直接拿它去暂停音频会
+            // 让声音断断续续。只有连续处于缓冲状态半秒以上才真的停声音；恢复则立即生效。
+            // The buffering phase flaps between buffering and playing several times a
+            // second; pausing the audio straight from it makes the sound stutter. Only a
+            // stretch of half a second really stops it, while resuming applies at once.
+            Clock::time_point audioHoldSince{};
+            bool audioHoldPushed=false;
             auto nowMs=[&](){
                 if(!audioStarted)return anchorMs+std::chrono::duration<double,std::milli>(Clock::now()-anchor).count()*playbackRate;
                 publishAudioStatus();const double a=audio.mediaTimeMs();
@@ -1454,7 +1461,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // For a source whose audio is opened separately (Bilibili) the pipeline
                 // cannot see the video session's phase, so the buffering state is pushed
                 // here - otherwise the picture stalls while the sound keeps going.
-                audioPipe.setNetworkHold(holding);
+                // 半秒防抖后再停声音（见上面 audioHoldSince 的说明）。
+                // Half a second of debounce before the sound is actually stopped.
+                if(holding){
+                    if(audioHoldSince==Clock::time_point{})audioHoldSince=Clock::now();
+                    if(!audioHoldPushed&&Clock::now()-audioHoldSince>std::chrono::milliseconds(500)){
+                        audioPipe.setNetworkHold(true);
+                        audioHoldPushed=true;
+                    }
+                }else{
+                    audioHoldSince=Clock::time_point{};
+                    if(audioHoldPushed){audioPipe.setNetworkHold(false);audioHoldPushed=false;}
+                }
                 if(holding)watchdog_->beat();
                 // Without an audio device the media clock is the wall clock: stand it still while the
                 // session pauses playback for buffering (with audio, pausing the endpoint does that).
