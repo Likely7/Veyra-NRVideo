@@ -210,6 +210,10 @@ private:
     bool prefillWait_ = false;                       // audio thread: wait for session packets (open / seek prefill)
     uint64_t damagedAudioPackets_ = 0;               // network audio packets the decoder rejected and we skipped
     unsigned damagedAudioRuns_ = 0;
+    // 预读线程连续读失败的次数；达到阈值就请求跳过损坏区段（见 skipDamagedToMs_）。
+    // Consecutive read failures on the read-ahead thread; at the threshold it asks for the
+    // damaged stretch to be skipped (see skipDamagedToMs_).
+    unsigned readFailureRun_ = 0;
     std::chrono::steady_clock::time_point damagedAudioLogAt_{};
     media::InputInterrupt inputInterrupt_;
     AVCodecContext* codecCtx_ = nullptr;
@@ -232,6 +236,18 @@ private:
     // released - the link may really be gone - so the video keeps playing while the audio
     // retries; the drift correction catches it up if it recovers.
     std::chrono::steady_clock::time_point readRetryingSince_{};
+    // 最后成功读到的包时间戳（毫秒）。读包卡在损坏数据上时，用它算「往前跳多远」。
+    // Timestamp of the last packet read successfully, in ms. Used to work out how far to
+    // jump when reading is stuck on damaged data.
+    std::atomic<double> lastGoodReadMs_{-1.0};
+    // 需要跳过损坏区段时由预读线程写入目标位置，解码线程取走后转成一次 seek。
+    // 用原子变量而不是 seekTargetMs_：预读线程已持有 readerMutex_，再去拿 mutex_ 会
+    // 和解码线程的加锁顺序打结。
+    // Written by the read-ahead thread when a damaged stretch has to be skipped, taken by
+    // the decode thread and turned into a seek. An atomic on purpose: the read-ahead thread
+    // already holds readerMutex_, and taking mutex_ there would invert the lock order
+    // against the decode thread.
+    std::atomic<double> skipDamagedToMs_{-1.0};
     double nextPtsMs_ = 0.0;           // PTS of the NEXT decoded sample
     double discardUntilPtsMs_ = -1.0;  // seek pruning
     std::unique_ptr<soundtouch::SoundTouch> tempo_;

@@ -241,6 +241,8 @@ int AudioPipeline::readPacket(AVPacket* packet)
     inputInterrupt_.disarm();
     const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
     for(double seen=maxReadMs_.load();ms>seen&&!maxReadMs_.compare_exchange_weak(seen,ms);){}
+    if(result>=0&&packet->pts!=AV_NOPTS_VALUE)
+        lastGoodReadMs_.store(packet->pts*av_q2d(streamTimeBase_)*1000.0);
     // 返回 av_read_frame 的原始结果，而不是把它压成 bool：调用方必须能区分「流真的
     // 结束了」和「这一次没读到」。网络源的瞬时失败（超时、连接抖动）如果被当成 EOF，
     // 音频线程就会认为整条音轨播完了 —— 表现是画面继续、声音永久消失。
@@ -275,6 +277,18 @@ void AudioPipeline::readerLoop()
             // next round, otherwise one hiccup stops the read-ahead thread for good.
             if(read==AVERROR_EOF){readerEof_=true;continue;}
             if(networkTarget_||session_){
+                // 卡在损坏数据上：av_read_frame 有时不推进文件位置，原地重试就永远
+                // 返回同一个 AVERROR_INVALIDDATA（实测连续 5800 次、29 秒没有声音）。
+                // 累计到阈值就请求解码线程往前跳 3 秒，越过这段。
+                // Stuck on damaged data: av_read_frame sometimes does not advance the
+                // file position, so retrying in place returns the same AVERROR_INVALIDDATA
+                // forever (measured: 5800 attempts, 29 s of silence). Past a threshold, ask
+                // the decode thread to jump 3 s ahead and skip the stretch.
+                if(++readFailureRun_>=40){
+                    readFailureRun_=0;
+                    const double last=lastGoodReadMs_.load();
+                    if(last>=0.0)skipDamagedToMs_.store(last+3000.0);
+                }
                 // 限流：每 5ms 重试一次，全打出来就是每秒 200 条日志。
                 // Throttled: this retries every 5 ms, so logging each attempt would be
                 // 200 lines a second.
@@ -288,6 +302,7 @@ void AudioPipeline::readerLoop()
             }
             readerEof_=true;continue;
         }
+        readFailureRun_=0;
         if(scratch->stream_index!=streamIndex_){av_packet_unref(scratch);continue;}
         AVPacket* queued=av_packet_alloc();
         if(!queued){av_packet_unref(scratch);readerEof_=true;continue;}
@@ -1333,6 +1348,20 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
                     "audio {:.0f} ms behind the picture; re-syncing to it", coverage - lastClockMs));
                 std::lock_guard<std::mutex> lock(mutex_);
                 seekTargetMs_ = coverage;
+                seekDone_ = false;
+                seekRequested_ = true;
+            }
+        }
+        // 预读线程请求跳过损坏区段：转成一次普通 seek，走同一条路径。
+        // The read-ahead thread asked to skip a damaged stretch: turn it into an ordinary
+        // seek so it goes through the same path.
+        {
+            const double skipTo = skipDamagedToMs_.exchange(-1.0);
+            if (skipTo >= 0.0 && !seekRequested_.load()) {
+                log::warn("audio", std::format(
+                    "audio read was stuck on damaged data; skipping to {:.0f} ms", skipTo));
+                std::lock_guard<std::mutex> lock(mutex_);
+                seekTargetMs_ = skipTo;
                 seekDone_ = false;
                 seekRequested_ = true;
             }
