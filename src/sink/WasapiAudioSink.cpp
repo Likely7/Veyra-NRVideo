@@ -49,6 +49,11 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
     WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),narrow.data(),length,nullptr,nullptr);
     fmt_=avformat_alloc_context();
     if(!fmt_)return false;
+    // 记下这是不是网络目标：B 站（DASH）的音轨是单独一条 CDN 请求，走这个重载，
+    // session_ 为空，容错判断要靠这个标志。
+    // Remember whether this is a network target: a DASH source's audio is its own CDN
+    // request opened here, with session_ null, so the tolerance check needs this flag.
+    networkTarget_ = media::networkMediaInput(path);
     inputInterrupt_.configure(media::networkMediaInput(path),cancelled,&stopFlag_);
     fmt_->interrupt_callback={media::InputInterrupt::callback,&inputInterrupt_};
     AVDictionary* options=nullptr;
@@ -98,6 +103,9 @@ bool AudioPipeline::open(std::shared_ptr<media::DemuxSession> session)
     if(!session||thread_.joinable())return false;
     session_=std::move(session);
     queueMode_=true;
+    // 共享会话模式：音频数据来自 DemuxSession，不走独立网络请求，清掉标志。
+    // Shared-session mode: packets come from the DemuxSession, not a separate request.
+    networkTarget_ = false;
     tracks_.clear();
     for(const auto& stream:session_->streams()){
         if(stream.type!=AVMEDIA_TYPE_AUDIO||!stream.parameters)continue;
@@ -523,7 +531,13 @@ void AudioPipeline::decodeBlock()
         if (received != AVERROR(EAGAIN)) {
             // A shared network session delivers packets from a link that loses data: one damaged
             // audio packet is skipped, not the end of the sound (local files stay strict).
-            if (session_ && received == AVERROR_INVALIDDATA && ++damagedAudioRuns_ <= 8) {
+            // 单独打开的网络音轨（B 站 DASH）同样是会丢数据的链路，必须一并容错 ——
+            // 之前只看 session_，于是 DASH 音频的一个坏包直接走到下面 decodedEof_=true，
+            // 声音永久消失，只有 seek 才能恢复。
+            // A separately opened network audio track (Bilibili DASH) is just as lossy and
+            // has to be tolerated too - checking session_ alone sent one bad DASH packet
+            // down to decodedEof_=true below, silencing playback until a seek.
+            if ((session_ || networkTarget_) && received == AVERROR_INVALIDDATA && ++damagedAudioRuns_ <= 8) {
                 noteDamagedAudio(received);
                 continue;
             }
@@ -572,8 +586,11 @@ void AudioPipeline::decodeBlock()
             havePacket_ = false;
             damagedAudioRuns_ = 0;
         } else if (sent != AVERROR(EAGAIN)) {
-            if (session_ && sent == AVERROR_INVALIDDATA) {
+            if ((session_ || networkTarget_) && sent == AVERROR_INVALIDDATA) {
                 // Damaged network data (a live source re-joined mid-frame, lost packets): skip this packet.
+                // 单独打开的网络音轨（B 站 DASH）也走这里：跳过坏包，不要结束整条音轨。
+                // A separately opened network track (Bilibili DASH) lands here too: skip the
+                // bad packet instead of ending the whole track.
                 noteDamagedAudio(sent);
                 av_packet_unref(packet_);
                 havePacket_ = false;
@@ -594,6 +611,7 @@ void AudioPipeline::closeAll()
     if (codecCtx_ != nullptr) avcodec_free_context(&codecCtx_);
     if (fmt_ != nullptr) avformat_close_input(&fmt_);
     session_.reset();
+    networkTarget_ = false;
 }
 
 // Drops PCM before targetMs from the front of the ring (mutex_ held).

@@ -176,6 +176,15 @@ private:
     std::vector<media::AudioTrack> tracks_;
     AVFormatContext* fmt_ = nullptr;
     std::shared_ptr<media::DemuxSession> session_;   // shared mode: packets come from here, fmt_ stays null
+    // 独立打开模式下这个音频目标是不是网络地址。B 站这类 DASH 源的音轨是**单独一条
+    // CDN 请求**（`options.audioPath`），走的是 open(path) 而不是 open(session)，
+    // 所以 session_ 为空。容错判断必须同时认这种情况，否则一个坏包就会让声音永久停止。
+    // Whether the separately-opened audio target is a network address. A DASH source
+    // such as Bilibili carries its audio as its OWN CDN request (options.audioPath) and
+    // goes through open(path) rather than open(session), so session_ is null there. The
+    // damaged-packet tolerance must cover that case too, or one bad packet silences
+    // playback for good.
+    bool networkTarget_ = false;
     uint32_t sessionGeneration_ = 0;                 // audio thread: the session reposition this decoder follows
     bool sessionDiscontinuity_ = false;              // next packet starts a new live connection: reset the decoder
     std::chrono::steady_clock::time_point prefillDeadline_{};
