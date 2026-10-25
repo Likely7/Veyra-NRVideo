@@ -97,14 +97,8 @@ public:
     // 打开一个音轨地址并填好流信息，不碰解码器。换 CDN 节点时读-ahead 线程复用它。
     // Opens one audio address and fills in the stream information without touching the
     // decoder. The CDN switch reuses it from the read-ahead thread.
-    // collectTracks=false 时不碰 tracks_：换 CDN 节点走这条路径，因为 tracks_ 会被
-    // 引擎线程读取（snapshot_.audioTracks），在读-ahead 线程上改它是数据竞争。
-    // With collectTracks=false the track list is left alone: the CDN switch uses that
-    // form because tracks_ is read by the engine thread (snapshot_.audioTracks) and
-    // rewriting it from the read-ahead thread would be a data race.
     int openTarget(const std::wstring& path, const std::atomic<bool>* cancelled,
-                   const std::wstring& requestHeaders, const std::wstring& userAgent,
-                   bool collectTracks = true);
+                   const std::wstring& requestHeaders, const std::wstring& userAgent);
     // 读-ahead 线程：换到下一个 CDN 节点并跳回刚才的位置。true 表示已经换好。
     // Read-ahead thread: switch to the next CDN node and jump back to where reading had
     // got to. True means a new connection is in place.

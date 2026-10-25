@@ -987,13 +987,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // Backup CDNs for the audio: the pipeline switches nodes by itself when it
                 // sees EOF far short of the end. Only meaningful for a separately opened
                 // track - a shared session follows the video's own connection.
-                // 无条件调用：setMirrors 在列表不足两条时会自己清空。只在 size>1 时
-                // 调用的话，换到一个没有镜像的视频时上一个视频的地址会残留，读到 EOF
-                // 就会拿别人的 CDN 地址去重连。
-                // Always called: setMirrors clears itself when there are fewer than two
-                // entries. Calling only for size>1 would leave the previous video's
-                // addresses behind, and an EOF would reconnect to somebody else's CDN.
-                if(audioOpened&&separateAudio)
+                if(audioOpened&&separateAudio&&options.audioMirrors.size()>1)
                     audioPipe.setMirrors(options.audioMirrors,options.network.requestHeaders,options.network.userAgent);
             }catch(const std::exception& e){
                 veyra::log::error("audio",std::format("open failed: {} (separateAudio={} targetLen={})",
