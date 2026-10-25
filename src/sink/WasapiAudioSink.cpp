@@ -228,7 +228,7 @@ void AudioPipeline::stopThread()
     stopReader();
 }
 
-bool AudioPipeline::readPacket(AVPacket* packet)
+int AudioPipeline::readPacket(AVPacket* packet)
 {
     const auto begin=std::chrono::steady_clock::now();
     if(readStallMs_>0&&begin>=nextReadStall_){
@@ -241,7 +241,14 @@ bool AudioPipeline::readPacket(AVPacket* packet)
     inputInterrupt_.disarm();
     const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
     for(double seen=maxReadMs_.load();ms>seen&&!maxReadMs_.compare_exchange_weak(seen,ms);){}
-    return result>=0;
+    // 返回 av_read_frame 的原始结果，而不是把它压成 bool：调用方必须能区分「流真的
+    // 结束了」和「这一次没读到」。网络源的瞬时失败（超时、连接抖动）如果被当成 EOF，
+    // 音频线程就会认为整条音轨播完了 —— 表现是画面继续、声音永久消失。
+    // Return av_read_frame's own result instead of collapsing it to a bool: callers must
+    // tell "the stream really ended" from "this read returned nothing". Treating a
+    // transient network failure as EOF makes the audio thread believe the whole track is
+    // over - the picture keeps going and the sound is gone for good.
+    return result;
 }
 
 void AudioPipeline::readerLoop()
@@ -254,14 +261,28 @@ void AudioPipeline::readerLoop()
         if(readerStop_)break;
         readerBusy_=true;
         lock.unlock();
-        const bool read=readPacket(scratch);
+        const int read=readPacket(scratch);
         lock.lock();
         readerBusy_=false;
         if(readerPaused_||readerStop_){
             // A seek or stop superseded this read position; the owner re-seeks.
             av_packet_unref(scratch);readerCv_.notify_all();continue;
         }
-        if(!read){readerEof_=true;continue;}
+        if(read<0){
+            // 只有真正的结束才算 EOF；网络瞬时失败留到下一轮重试，否则一次抖动就会让
+            // 预读线程永久停摆。
+            // Only a real end counts as EOF; a transient network failure is retried on the
+            // next round, otherwise one hiccup stops the read-ahead thread for good.
+            if(read==AVERROR_EOF){readerEof_=true;continue;}
+            if(networkTarget_||session_){
+                log::warn("audio",std::format("read-ahead failed code={}; retrying",read));
+                lock.unlock();
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                lock.lock();
+                continue;
+            }
+            readerEof_=true;continue;
+        }
         if(scratch->stream_index!=streamIndex_){av_packet_unref(scratch);continue;}
         AVPacket* queued=av_packet_alloc();
         if(!queued){av_packet_unref(scratch);readerEof_=true;continue;}
@@ -562,9 +583,31 @@ void AudioPipeline::decodeBlock()
                     if (prefillWait_ && !stopFlag_ && !seekRequested_ && std::chrono::steady_clock::now() < prefillDeadline_) continue;
                     break; // nothing read ahead yet: go back to pumping the endpoint
                 }
-            } else if (!readPacket(packet_)) {
-                demuxEof_ = true;
-                continue;
+            } else {
+                const int read = readPacket(packet_);
+                if (read < 0) {
+                    if (read == AVERROR_EOF) {
+                        demuxEof_ = true;
+                        continue;
+                    }
+                    // 网络源的瞬时读失败（超时、连接抖动）不是「这条音轨播完了」。
+                    // 以前这里一律 demuxEof_ = true —— 后面必然 drain → decodedEof_，
+                    // 声音从此永久消失，只有 seek 能救回来。现在记一条日志、回泵端点，
+                    // 下一轮接着读。
+                    // A transient read failure on a network source is not "this track is
+                    // over". This used to set demuxEof_ unconditionally, which drains the
+                    // decoder and sets decodedEof_ - the sound was gone until a seek. Now it
+                    // logs once and returns to pumping the endpoint so the next round
+                    // retries.
+                    if (networkTarget_ || session_) {
+                        if (++damagedAudioRuns_ <= 8 || damagedAudioRuns_ % 200 == 0)
+                            log::warn("audio", std::format(
+                                "read failed code={} (attempt {}); retrying", read, damagedAudioRuns_));
+                        break;
+                    }
+                    demuxEof_ = true;
+                    continue;
+                }
             }
             havePacket_ = true;
             if (packet_->stream_index != streamIndex_) {

@@ -157,7 +157,12 @@ private:
     // WASAPI buffer, so it must never wait on file I/O. During steady playback
     // a reader thread owns av_read_frame and queues this track's packets; open,
     // seek and endpoint recovery pause it and read directly as before.
-    bool readPacket(AVPacket* packet);   // av_read_frame with timing and test stall
+    // 返回 av_read_frame 的原始结果：>= 0 成功，AVERROR_EOF 才是真正的结束，其它负值
+    // 是这一次没读到（网络源可能是瞬时的），调用方不得当成 EOF。
+    // Returns av_read_frame's own result: >= 0 success, AVERROR_EOF is a real end, any
+    // other negative value means this read returned nothing (transient on a network
+    // source) and must not be treated as EOF.
+    int readPacket(AVPacket* packet);   // av_read_frame with timing and test stall
     void readerLoop();
     void startReader();
     void pauseReader();                  // returns once the reader is idle; drops queued packets
