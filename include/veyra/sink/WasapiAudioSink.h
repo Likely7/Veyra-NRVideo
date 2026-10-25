@@ -214,6 +214,14 @@ private:
     // Consecutive read failures on the read-ahead thread; at the threshold it asks for the
     // damaged stretch to be skipped (see skipDamagedToMs_).
     unsigned readFailureRun_ = 0;
+    // 已经跳过损坏段几次。必须封顶：跳到音频末尾之后，seek 会"成功"但一字节都读不到，
+    // 于是又累计失败再跳同一个位置 —— 现场 2026-10-25 就是这样无限循环
+    // （日志里 58 次 "skipping to 33272 ms"），画面被反复冻住。
+    // How many times a damaged stretch has been skipped. This must be capped: once the
+    // jump lands past the end of the audio the seek "succeeds" but nothing can be read, so
+    // failures accumulate and it jumps to the same place again - the field log of
+    // 2026-10-25 shows 58 repeats of "skipping to 33272 ms", freezing the picture each time.
+    unsigned damagedSkipCount_ = 0;
     std::chrono::steady_clock::time_point damagedAudioLogAt_{};
     media::InputInterrupt inputInterrupt_;
     AVCodecContext* codecCtx_ = nullptr;

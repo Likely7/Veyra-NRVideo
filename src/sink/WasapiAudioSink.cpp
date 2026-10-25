@@ -41,6 +41,7 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
     // this one has to do the same. Starting a second thread over a live one is what
     // surfaced as "bad allocation" when a DASH source re-opened its audio address.
     if(thread_.joinable())return false;
+    damagedSkipCount_=0;readFailureRun_=0;
     // A failed conversion returns 0, and building a std::string from a negative length
     // throws std::bad_alloc, which is indistinguishable from running out of memory.
     const int length=WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),nullptr,0,nullptr,nullptr);
@@ -299,7 +300,25 @@ void AudioPipeline::readerLoop()
                 if(++readFailureRun_>=40){
                     readFailureRun_=0;
                     const double last=lastGoodReadMs_.load();
-                    if(last>=0.0)skipDamagedToMs_.store(last+3000.0);
+                    const double total=fmt_&&fmt_->duration!=AV_NOPTS_VALUE?double(fmt_->duration)/1000.0:-1.0;
+                    // 三条限制缺一不可：位置有效、跳过去不越过音频末尾、总次数不超三次。
+                    // 少了任何一条，跳到末尾之后就会「seek 成功、读不到、再跳同一处」地
+                    // 无限循环。
+                    // All three limits are needed: a valid position, a jump that stays inside
+                    // the audio, and at most three jumps. Without them the code loops to the
+                    // same place forever once a jump lands past the end.
+                    const bool pastEnd = total>0.0 && last+3000.0 >= total-500.0;
+                    if(last>=0.0 && !pastEnd && ++damagedSkipCount_<=3){
+                        skipDamagedToMs_.store(last+3000.0);
+                    }else if(last>=0.0){
+                        log::warn("audio", std::format(
+                            "audio unreadable at {:.0f} ms of {:.0f} ms after {} skips; closing the track",
+                            last, total, damagedSkipCount_));
+                        readerEof_=true;
+                        readRetrying_=false;
+                        readRetryingSince_={};
+                        continue;
+                    }
                 }
                 // 限流：每 5ms 重试一次，全打出来就是每秒 200 条日志。
                 // Throttled: this retries every 5 ms, so logging each attempt would be
@@ -1259,7 +1278,7 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
                 result=retried;
             }
             if(result<0){log::error("audio",std::format("seek failed code={}",result));clockExhausted_=false;return false;}
-            demuxEof_=drainSent_=false;decodedEof_=false;readRetrying_=false;
+            demuxEof_=drainSent_=false;decodedEof_=false;damagedSkipCount_=0;readRetrying_=false;
             nextPtsMs_=target;discardUntilPtsMs_=target;
         }
         decodeBlock();
