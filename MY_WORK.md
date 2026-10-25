@@ -392,11 +392,11 @@ Cookie DPAPI 加密（`VBCK` 前缀）。
 
 | 内容 | 位置 | 行数 |
 |---|---|---|
-| **本文件**（记录 + 全部规则）| `src\MY_WORK.md` | 649 |
-| **操作手册**（构建/部署/环境/验证）| `src\HANDOFF.md` | 385 |
-| **杜比视界完整技术档案** | `src\docs\DOLBY_VISION.md` | 912 |
-| **B 站模块开发史**（基线 v2→v17，含 6 个未解决问题）| `src\docs\BILIBILI_MODULE_HISTORY.md` | 1640 |
-| **技术排查档案**（13 个专题的排查链）| `src\docs\HISTORY.md` | 1669 |
+| **本文件**（记录 + 全部规则）| `src\MY_WORK.md` | 927 |
+| **操作手册**（构建/部署/环境/验证）| `src\HANDOFF.md` | 395 |
+| **杜比视界完整技术档案** | `src\docs\DOLBY_VISION.md` | 936 |
+| **B 站模块开发史**（基线 v2→v17，含历史问题与处理结论）| `src\docs\BILIBILI_MODULE_HISTORY.md` | 1771 |
+| **技术排查档案**（13 个专题的排查链）| `src\docs\HISTORY.md` | 1699 |
 
 ### 已合并/删除的文档（2026-10-25）
 
