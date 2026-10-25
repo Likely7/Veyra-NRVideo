@@ -105,6 +105,26 @@ grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
 | **HDR10 静态元数据**（`SetHDRMetaData`）| 2026-10-18 | `EnhancementSettings` 归一化 |
 | HDR 片源转 SDR + RTX Video HDR | 2026-10-03 | 无 |
 
+### 2026-10-25 修的两个现场问题
+
+**1. B 站视频播到十几分钟后声音消失，拖进度条才回来**
+
+- 日志硬证据：`12:07:12 [ERROR] [audio] decode send failed code=-1094995529`
+  （= `AVERROR_INVALIDDATA`），之后 underruns 从 0 变成每秒 +100
+- 根因：作者代码对坏包的容错只认 `session_`（共享解复用会话），而 **B 站这类
+  DASH 源的音轨是单独一条 CDN 请求**，走 `open(path)`、`session_` 为空 →
+  容错不生效 → `decodedEof_ = true` → 音频线程永久退出
+- 修法：加 `networkTarget_` 标志，两处容错条件改成 `(session_ || networkTarget_)`。
+  本地文件保持作者的严格模式
+- **这个修复作者用不上**（他的代码里没有 DASH 独立音轨路径），不适合单独提 PR
+
+**2. 播完视频后「历史记录」不更新**
+
+- 根因：推荐/热门/历史共用一个 card cache，`load()` 只有 `force=true` 才重新请求，
+  只有「刷新」按钮传 true，播放从不让历史缓存失效
+- 修法：`biliHistoryDirty` 标记（开播置位、看完再置位），`load("history")` 消费它
+  并强制真拉；从历史页播完返回时也直接重拉
+
 ### 已知限制（别再试，或要试先想清楚）
 
 | 问题 | 原因 | 现状 |
