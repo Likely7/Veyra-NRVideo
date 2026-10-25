@@ -199,7 +199,13 @@ double probeCdnSpeed(const std::wstring& url, int timeoutMs) {
     HINTERNET session = WinHttpOpen(L"Veyra/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return -1.0;
-    WinHttpSetTimeouts(session, timeoutMs, timeoutMs, timeoutMs, timeoutMs);
+    // 四个阶段（解析/连接/发送/接收）各自限制在 timeoutMs/2，总最坏才是两倍而不是四倍。
+    // 这段延迟直接压在「点击播放」到「第一帧」之间，宁可把慢节点判成失败排到后面。
+    // Each of the four stages (resolve/connect/send/receive) gets timeoutMs/2, so the worst
+    // case is twice the budget rather than four times. This delay sits between the click and
+    // the first frame, so a slow node is better misjudged as failed than waited for.
+    const int phaseMs = timeoutMs > 1 ? timeoutMs / 2 : 1;
+    WinHttpSetTimeouts(session, phaseMs, phaseMs, phaseMs, phaseMs);
     struct Guard { HINTERNET h; ~Guard() { if (h) WinHttpCloseHandle(h); } };
     Guard sessionGuard{session};
     HINTERNET connect = WinHttpConnect(session, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
@@ -284,15 +290,27 @@ std::vector<std::wstring> rankCdnCandidates(const std::vector<std::wstring>& url
         if (pending.size() > 4) pending.resize(4);
         std::vector<std::future<double>> running;
         running.reserve(pending.size());
-        for (const auto& item : pending)
-            running.push_back(std::async(std::launch::async, [&good, &item] {
-                return probeCdnSpeed(good[item.index], 800);
+        for (const auto& item : pending) {
+            // 按值捕获目标地址。捕获 `item` 本身是错的：它是范围 for 的循环变量引用，
+            // 迭代结束就失效了，而这段 lambda 是异步执行的 —— 那会读到悬空引用。
+            // Capture the address by value. Capturing `item` itself is wrong: it is the
+            // range-for loop variable's reference, dead once the iteration ends, and this
+            // lambda runs asynchronously - that would read a dangling reference.
+            const std::wstring target = good[item.index];
+            running.push_back(std::async(std::launch::async, [target] {
+                return probeCdnSpeed(target, 800);
             }));
+        }
+        // 先全部取完再拿锁：future.get() 会阻塞到探测结束，持锁等待会让其它解析排在这里。
+        // Collect every result first, then take the lock: get() blocks until the probe
+        // finishes, and holding the mutex across that would queue other resolutions behind it.
+        std::vector<double> measured;
+        measured.reserve(running.size());
+        for (auto& task : running) measured.push_back(task.get());
         std::lock_guard lock(g_cdnSpeedMutex);
-        for (size_t k = 0; k < running.size(); ++k) {
-            const double value = running[k].get();
-            speed[pending[k].index] = value;
-            if (value >= 0.0) g_cdnSpeedCache[pending[k].host] = value;
+        for (size_t k = 0; k < measured.size(); ++k) {
+            speed[pending[k].index] = measured[k];
+            if (measured[k] >= 0.0) g_cdnSpeedCache[pending[k].host] = measured[k];
         }
     }
 
@@ -1327,7 +1345,11 @@ BiliPlayUrls biliResolvePlay(const std::wstring& bvid, long long cid, int qn,
         };
         addBackups("backupUrl");
         if (candidates.size() == 1) addBackups("backup_url");
-        std::vector<std::wstring> ranked = rankCdnCandidates(candidates);
+        // 用户关掉「自动选源」时只做过滤（把 PCDN 沉底），不测速 —— 那种情况下不该
+        // 为排序多付一段点击延迟。
+        // With 自动选源 off, filter only (PCDN sinks) and skip probing: the user did not
+        // ask for ranking, and it must not add click latency.
+        std::vector<std::wstring> ranked = rankCdnCandidates(candidates, tryBackupCdn);
         if (!ranked.empty()) {
             if (ranked.front() != fromUtf8(videoUrl)) {
                 log::info("bilibili", std::format("video CDN reordered: primary host is now {}",
