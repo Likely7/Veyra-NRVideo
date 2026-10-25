@@ -1449,6 +1449,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(!demuxSession)return;
                 const bool holding=demuxSession->holding();
                 networkHolding.store(holding);
+                // B 站那种「音轨单独打开」的来源，音频管道看不到视频会话的阶段，
+                // 必须由这里把缓冲状态推过去：否则画面因缓冲停住、声音继续播。
+                // For a source whose audio is opened separately (Bilibili) the pipeline
+                // cannot see the video session's phase, so the buffering state is pushed
+                // here - otherwise the picture stalls while the sound keeps going.
+                audioPipe.setNetworkHold(holding);
                 if(holding)watchdog_->beat();
                 // Without an audio device the media clock is the wall clock: stand it still while the
                 // session pauses playback for buffering (with audio, pausing the endpoint does that).

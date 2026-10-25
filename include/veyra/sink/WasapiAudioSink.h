@@ -130,6 +130,14 @@ public:
     void videoReady(double ptsMs);
     void videoPresented(double nextPtsMs);
     bool waitingForVideo() const { return videoWaiting_.load(); }
+    // 视频那边的网络缓冲状态。B 站的音轨是单独打开的（session_ 为空），管道自己看不到
+    // 视频会话的缓冲阶段，于是 shouldPause() 里的 networkHold() 恒为假 —— 结果就是画面
+    // 因缓冲停住、声音却继续播。引擎在缓冲阶段变化时把状态推过来。
+    // The video's own buffering state. A Bilibili audio track is opened separately (session_
+    // is null), so the pipeline cannot see the video session's phase and networkHold() stays
+    // false - the picture stalls for buffering while the sound keeps going. The engine pushes
+    // the state here when the phase changes.
+    void setNetworkHold(bool hold) { networkHoldExternal_.store(hold); }
     uint64_t videoWaitCount() const { return videoWaitCount_.load(); }
 
     // Seek protocol (engine thread calls; audio thread executes). Blocks
@@ -290,6 +298,7 @@ private:
     std::atomic<HRESULT> endpointError_{S_OK};
     std::atomic<uint64_t> endpointRecoveries_{0};
     std::atomic<bool> videoSync_{false},videoHold_{false},videoWaiting_{false};
+    std::atomic<bool> networkHoldExternal_{false};   // 见 setNetworkHold()
     std::atomic<double> videoLimitMs_{std::numeric_limits<double>::infinity()};
     std::atomic<uint64_t> videoWaitCount_{0};
 

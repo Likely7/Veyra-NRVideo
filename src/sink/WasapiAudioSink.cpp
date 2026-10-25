@@ -42,6 +42,10 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
     // surfaced as "bad allocation" when a DASH source re-opened its audio address.
     if(thread_.joinable())return false;
     damagedSkipCount_=0;readFailureRun_=0;
+    // 上一次播放的缓冲状态不能残留到这一次，否则新音轨一上来就被判成「要暂停」。
+    // The previous playback's buffering state must not leak into this one, or the new
+    // track starts out judged as "should pause".
+    networkHoldExternal_=false;
     // A failed conversion returns 0, and building a std::string from a negative length
     // throws std::bad_alloc, which is indistinguishable from running out of memory.
     const int length=WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),nullptr,0,nullptr,nullptr);
@@ -1214,7 +1218,13 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
     auto videoBlocked=[&]{return videoSync_&&videoHold_.load();};
     // A network source that ran dry (or is still collecting its start-up buffer) stops the
     // device clock exactly like a pause, so picture and sound wait together.
-    auto networkHold=[&]{return session_&&session_->holding();};
+    auto networkHold=[&]{
+        if(session_)return session_->holding();
+        // 独立打开的音轨（B 站 DASH）看不到视频会话，只能由引擎推状态进来。
+        // A separately opened track (Bilibili DASH) cannot see the video session, so the
+        // engine has to push its phase in.
+        return networkHoldExternal_.load();
+    };
     auto shouldPause=[&]{return paused_.load()||videoBlocked()||networkHold();};
     auto publishVideoWait=[&](bool paused){const bool waiting=paused&&videoBlocked();if(videoWaiting_.exchange(waiting)!=waiting&&waiting)++videoWaitCount_;};
     auto nextContinuitySummary=t0+std::chrono::milliseconds(1000);
