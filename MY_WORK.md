@@ -320,13 +320,14 @@ robocopy "qml.p5\Veyra" "qml\Veyra" /MIR /NFL /NDL /NJH /NJS /NP
 
 ## 六、文档索引
 
-整理后只剩 **4 份主文档**（2026-10-25 从 9 份精简）：
+整理后只剩 **5 份主文档**（2026-10-25 从 10 份精简）：
 
 | 内容 | 位置 | 行数 |
 |---|---|---|
-| **本文件**（记录 + 全部规则）| `src\MY_WORK.md` | 633 |
+| **本文件**（记录 + 全部规则）| `src\MY_WORK.md` | 649 |
 | **操作手册**（构建/部署/环境/验证）| `src\HANDOFF.md` | 385 |
 | **杜比视界完整技术档案** | `src\docs\DOLBY_VISION.md` | 912 |
+| **B 站模块开发史**（基线 v2→v17，含 6 个未解决问题）| `src\docs\BILIBILI_MODULE_HISTORY.md` | 1640 |
 | **技术排查档案**（13 个专题的排查链）| `src\docs\HISTORY.md` | 1669 |
 
 ### 已合并/删除的文档（2026-10-25）
@@ -339,13 +340,8 @@ robocopy "qml.p5\Veyra" "qml\Veyra" /MIR /NFL /NDL /NJH /NJS /NP
 | `docs/MERGING.md` | 141 | → 本文件第七条规则十 |
 | `docs/VeyraNV_LOCAL_BUILD_NOTES.md` | 45 | → 本文件第六节构建命令 |
 | `CUSTOM_LEDGER.md` | 567 | → 本文件（20 条规则）|
-
-### 仓库外的旧材料（可选清理）
-
-| 内容 | 位置 | 建议 |
-|---|---|---|
-| P5 早期报告 | `D:\DSH\dolby-vision-p5-report.md`（610 行）| 已被 `DOLBY_VISION.md` 覆盖，可删 |
-| B 站模块历史 | `D:\DSH\.dsh-tmp\keep\veyra-history-README.md`（1627 行）| 早期记录，可删或留作参考 |
+| `D:\DSH\dolby-vision-p5-report.md` | 610 | 已被 `DOLBY_VISION.md` 覆盖，删除 |
+| `D:\DSH\.dsh-tmp\keep\veyra-history-README.md` | 1627 | → 迁入 `docs\BILIBILI_MODULE_HISTORY.md` |
 
 **作者原版文档**：`src\docs\` 下另有作者自己写的 600+ 个文档，保持不动。
 
