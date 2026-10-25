@@ -1,7 +1,37 @@
 # 历史技术记录
 
-> 从 `CUSTOM_LEDGER.md` 拆出，内容一字未改。
-> 按日期倒序（最新在最上）；末尾是早期按主题编号的旧结构。
+> 从 `CUSTOM_LEDGER.md` 拆出。按日期倒序（最新在上）；末尾是早期按主题编号的旧结构。
+
+
+> **文档地图**（我自己的 5 份文档，作者原版 600+ 份在 `docs/` 不动）
+>
+> | 文件 | 一句话定位 | 什么时候看 |
+> |---|---|---|
+> | **MY_WORK.md** | 记录 + 20 条行动规则 | 想提 PR、想知道做过什么、查当前状态 |
+> | **HANDOFF.md** | 环境、构建、部署、验证 | 要动手编译或部署 |
+> | **docs/DOLBY_VISION.md** | 杜比视界 P5/P7/L1 技术档案 | 改杜比视界相关代码 |
+> | **docs/BILIBILI_MODULE_HISTORY.md** | B 站模块开发史 + 未解决问题 | B 站功能出问题时 |
+> | **docs/HISTORY.md** | 13 个专题的技术排查链 | 遇到具体技术障碍（AMD 光流、采集卡…）|
+
+
+## 📌 读前必看：本文的路径全部是历史记录
+
+**文中出现的 `D:\项目\Veyra-NV\...`、`build-nv`、`deps\...` 等路径是当时的真实记录，
+原样保留不改。** 那个目录已于 **2026-10-25 删除**，现在全部迁到 `D:\Program\Veyra\`：
+
+| 文中的旧路径 | 现在的位置 |
+|---|---|
+| `D:\项目\Veyra-NV\Veyra-NRVideo` | `D:\Program\Veyra\src` |
+| `D:\项目\Veyra-NV\build-nv` | `D:\Program\Veyra\build` |
+| `D:\项目\Veyra-NV\deps\ffmpeg\...` | `D:\Program\Veyra\deps\ffmpeg\...` |
+| `D:\项目\Veyra-NV\Veyra-2.0.x-...portable` | `D:\Program\Veyra-2.1.0-NVIDIA-win64-portable` |
+
+**照抄文里的命令之前，先把路径换成上表的新位置。**
+
+原因是**中文路径会让 CMake 的 Ninja 生成器写不出 `rules.ninja`**，构建直接失败——
+这也是当初搬迁的唯一原因。当前可用的构建命令见 `HANDOFF.md` 第四节。
+
+---
 
 ## 按日期（最新在前）
 

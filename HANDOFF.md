@@ -5,25 +5,35 @@
 
 ---
 
-## 一、先读这段：环境已迁移，原因在下面
 
-**旧路径不能用了。** 原来在 `D:\项目\Veyra-NV\`，现在全部搬到 `D:\Program\Veyra\`。
-旧目录已由用户手动删除，不要再去找它。
+> **文档地图**（我自己的 5 份文档，作者原版 600+ 份在 `docs/` 不动）
+>
+> | 文件 | 一句话定位 | 什么时候看 |
+> |---|---|---|
+> | **MY_WORK.md** | 记录 + 20 条行动规则 | 想提 PR、想知道做过什么、查当前状态 |
+> | **HANDOFF.md** | 环境、构建、部署、验证 | 要动手编译或部署 |
+> | **docs/DOLBY_VISION.md** | 杜比视界 P5/P7/L1 技术档案 | 改杜比视界相关代码 |
+> | **docs/BILIBILI_MODULE_HISTORY.md** | B 站模块开发史 + 未解决问题 | B 站功能出问题时 |
+> | **docs/HISTORY.md** | 13 个专题的技术排查链 | 遇到具体技术障碍（AMD 光流、采集卡…）|
 
-### 为什么搬
 
-中文路径 `D:\项目\` 会让 CMake 的 Ninja 生成器**写不出 `CMakeFiles/rules.ninja`**，
-导致 `build.ninja` 引用了 989 条未定义的编译规则，构建直接报
-`unknown build rule 'CXX_COMPILER__...'`，而且 `cmake --fresh` 之后再也无法恢复。
+## 一、一条铁律：构建路径必须是纯 ASCII
+
+**本项目只能在纯 ASCII 路径下构建。** 旧路径 `D:\项目\Veyra-NV\`（含中文）已废弃并删除，
+现在全部在 `D:\Program\Veyra\`。
+
+**原因**（记住这条就不会再犯）：中文路径会让 CMake 的 Ninja 生成器**写不出
+`CMakeFiles/rules.ninja`**，于是 `build.ninja` 引用 989 条未定义的编译规则，
+构建报 `unknown build rule 'CXX_COMPILER__...'`，而且 `cmake --fresh` 也救不回来。
 
 实测对照（同一份源码、同一个 CMake 3.31.6）：
 
 | 构建目录 | rules.ninja |
 |---|---|
-| `D:\项目\Veyra-NV\build`（中文路径） | ❌ 缺失 |
-| `D:\Program\Veyra\build`（ASCII 路径） | ✅ 9309 行 / 989 条 rule |
+| 中文路径 | ❌ 缺失 |
+| `D:\Program\Veyra\build`（ASCII）| ✅ 9309 行 / 989 条 rule |
 
-**结论：这个项目必须在纯 ASCII 路径下构建。** 新路径已验证：清空 `build` 后全量重建 236/236。
+→ 所以：**任何新构建目录、临时脚本目录，都必须是纯 ASCII。**
 
 ---
 
