@@ -93,7 +93,7 @@ YuNet人脸检测搭配MediaPipe **468点人脸网格**，按脸型生成遮罩�
 - **全屏操作**：专业模式点击全屏按钮不再误触暂停/继续；双击退出保留原点击归属；极简全屏指针按实际画面区域隐藏，浮层可正常操作；游戏面板快速双击不再误退全屏。
 - **效果器基础**：处理链容量16→32，满额明确拒绝；抗锯齿/美颜支持统一插入位置与计时、参数保存、预设与会话兼容。修复默认关闭节点恢复时整链顺序失效、NR旁路时只重绑调色、分块图片继承整图执行计划导致被拒，以及导出worker协议不匹配导致任务拒绝。
 - **首页与赞助页**：首页标题改为Veyra NR Video，咖啡入口连接“赞助作者”页，保留微信/支付宝、Ko-fi及作者主页；B站主页已纠正为用户指定账号。补齐新增提示的繁中/英文/日文与网络40秒超时翻译。
-- **发行资料**：替换新的6群二维码（图片注明10月26日前有效），保留微信赞助、Discord、Ko-fi和知识库。UI原33ms/250ms节奏、默认GPU优先级、现行补帧模型不因本次发行文档更新而变化。
+- **发行资料**：替换新的7群二维码（图片注明10月27日前有效），保留微信赞助、Discord、Ko-fi和知识库。UI原33ms/250ms节奏、默认GPU优先级、现行补帧模型不因本次发行文档更新而变化。
 
 ## 验证、源码与组件
 
@@ -136,11 +136,11 @@ See the detailed sections and linked reports above for test evidence, hardware l
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.1.0/docs/images/2.1.0/community-group.png" alt="Veyra 交流群 6" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-7-20261020.png" alt="Veyra 交流群 7" width="220">
 </p>
 
-左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-26 前**有效，过期请查看仓库更新。
+左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-27 前**有效，过期请查看仓库更新。
 
-Left: optional donation; right: community group. QR valid before 2026-10-26.
+Left: optional donation; right: community group. QR valid before 2026-10-27.
 
 [Veyra 软件知识库 / Knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)：四个群聊汇总的使用文档，涵盖软件与采集卡常见问题。

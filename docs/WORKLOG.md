@@ -9837,3 +9837,12 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 人工核对Claude/Codex产品报告并生成v2.0.9..d91ec9f的86提交（74非merge）/223路径索引；完成AMD0.44、AA、美颜/468点、PR57格式/窗口、PR63/64音频、#48网络、全屏与发行资料说明，区分实测、夹具、未验硬件和旧问题。原图复制新6群码SHA c41c67f0732462ded8a9d1956d0e2f1c4621b986d9e70f166f6c0039a8e1825f，赞助码220宽/Discord/Ko-fi/知识库保留；README仅更新相关区块/过时AMD模型说明/下载/构建链接。
 
 命令：python -X utf8 -B scripts/acceptance/release-2.1.0.py prepare；逐原ZIP及晋升硬链接SHA/CRC/EXE检查通过，原包未改字节，内部2.1.0-test保留，未构建/重压缩。reports/.../local.json记录两GPU包/应用源/AMD源大小与SHA；原DELIVERY与旧Release元数据存archives。三个不变依赖源的远端digest逐项核对通过（dependency-digests.json）；README/更新说明本地链接、编码、双图尺寸及群码日期检查通过；git diff --check通过。相对精确应用源66b3210没有产品文件变化，无SDK/运行库/模型新增Git。群公告只拟稿，不代发/关机。后续按计划上传草稿、核验远端资产后发布并追加回执。
+
+
+2.1.0发布完成：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.0，published_at 2026-10-19T07:43:22Z，主版ID417022047、源码ID417022025，latest经API确认。全部远端digest/size/state及两个标签、支持图片区块核对通过；无重建/重封包。完整资产SHA、命令及回执见docs/RELEASE_2.1.0_REPORT_2026-10-19.md与reports/release-2.1.0-20261019/final.json。追加本回执后仅普通push main，不移动发布标签或改包。
+
+## 2026-10-20 GitHub 7 群二维码更新（Codex）
+
+用户提供“群聊：Veyra Dlss5 交流 7.png”并要求替换 GitHub 已满群二维码。从最新 nrvideo/main 7ec143c 在 codex/community-qr7-20261020 修改；原图原样复制 docs/images/community/group-7-20261020.png，SHA256 1cf67beb48815bd53999bf17252e74de4bb617c6c47846252ff89a0e417ade84。中英 README、RELEASE_SUPPORT 和 2.1.0 更新说明同步新图、7群标记及图片注明的 2026-10-27 前有效期。微信赞助图、width220、Discord、Ko-fi、知识库和其他内容保留。
+
+工具命令：git fetch nrvideo main；bundled Python -X utf8 -B E:/项目/Veyra/tmp/community-qr7-20261020/update.py；git diff --check。Release v2.1.0 / v2.1.0-sources 修改前完整 JSON 与精确替换后的正文保存在 E:/项目/Veyra/reports/community-qr7-20261020；提交后普通 push HEAD:main，再 gh release edit --notes-file 更新两页正文。只改群信息，不重建/打包、不移动发布标签、不修改资产；远端正文、图片实际字节、赞助链接及资产身份的核验结果记该目录 final.json。

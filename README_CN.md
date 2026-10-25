@@ -14,6 +14,8 @@
 
 Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
 
+**GitHub Release 累计下载已超过 3.8 万次**（[2026-10-20 数据快照](https://git.hiwiki.org/zh-CN/repo/likely7/veyra-nrvideo)，下载次数不等于独立用户数）。
+
 [下载2.1.0免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.0) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.0.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
 **2.1.0正式发布，2026-10-19：** AMD NR升级0.44并支持Small/原模型；新增独立抗锯齿、美颜与468点人脸原画保护，修复采集卡分辨率/格式缺项，整合网络缓冲、圆刚音频、窗口捕获及全屏修复。[完整更新报告](docs/RELEASE_NOTES_2.1.0.md)。
@@ -154,7 +156,7 @@ Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.1.0/docs/images/2.1.0/community-group.png" alt="Veyra 交流群 6" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-7-20261020.png" alt="Veyra 交流群 7" width="220">
 </p>
 
-左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-26 前**有效，过期请查看仓库更新。
+左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-10-27 前**有效，过期请查看仓库更新。
