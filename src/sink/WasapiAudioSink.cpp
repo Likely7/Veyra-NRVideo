@@ -1142,7 +1142,26 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
             const int seekStream=video>=0?video:streamIndex_;
             const auto tb=fmt_->streams[seekStream]->time_base;
             const int64_t tbTarget=av_rescale_q(int64_t(target*1000),{1,1000000},tb);
-            const int result=av_seek_frame(fmt_,seekStream,tbTarget,AVSEEK_FLAG_BACKWARD);
+            int result=av_seek_frame(fmt_,seekStream,tbTarget,AVSEEK_FLAG_BACKWARD);
+            // B 站这类 DASH 源的音轨是单独的 m4a，容器里没有视频流，而它的 duration
+            // 元数据只覆盖 sidx 声明的范围（实测标称十几秒，视频本体 97 秒）。往后拖时
+            // av_seek_frame 会拿这个错误时长判断越界，直接返回 AVERROR_EOF；上层每
+            // 500ms 重试一次，整段时间没有声音。
+            // 回退到 avformat_seek_file：它用调用方给的范围，不看文件标称时长，因此能
+            // 越过错误的元数据。只在原调用失败时尝试，正常路径行为不变。
+            // A DASH source's audio is its own m4a with no video stream, and its duration
+            // metadata only covers what the sidx declares (measured: a dozen seconds for a
+            // 97 s video). Seeking forward then trips av_seek_frame's out-of-range check with
+            // AVERROR_EOF, the caller retries every 500 ms, and there is no sound meanwhile.
+            // Fall back to avformat_seek_file, which uses the range the caller supplies
+            // instead of the container's claim. Only tried when the first call fails, so the
+            // normal path is unchanged.
+            if(result<0){
+                const int retried=avformat_seek_file(fmt_,seekStream,INT64_MIN,tbTarget,INT64_MAX,0);
+                if(retried>=0)log::info("audio",std::format(
+                    "seek recovered via avformat_seek_file targetMs={:.3f} (container duration unreliable)",target));
+                result=retried;
+            }
             if(result<0){log::error("audio",std::format("seek failed code={}",result));clockExhausted_=false;return false;}
             demuxEof_=drainSent_=false;decodedEof_=false;
             nextPtsMs_=target;discardUntilPtsMs_=target;
