@@ -3298,6 +3298,12 @@ void QmlPlayerBridge::tickBiliPlay() {
     i.options.network.requestHeaders = urls.headers;
     i.options.network.userAgent = urls.userAgent;
     i.options.audioPath = urls.audioUrl;
+    // 音轨的备用 CDN：某个节点可能只给文件前一段（现场 2026-10-25：97 秒的视频，
+    // 音频读到 45 秒就 EOF），音频管道据此换节点重连，不用等用户拖进度条。
+    // Backup CDNs for the audio: one node can serve only the first part of the file
+    // (field log 2026-10-25: a 97 s video whose audio hit EOF at 45 s); the audio
+    // pipeline uses these to reconnect instead of waiting for the user to seek.
+    i.options.audioMirrors = urls.audioMirrors;
     // 自动选择倍率：用 DASH 的 frame_rate 在打开前定档，让管线一次就按对的倍率构建。
     planFgAutoMultiplierBeforeOpen(urls.frameRate);
     QString info = QStringLiteral("%1 × %2  %3")

@@ -70,6 +70,14 @@ struct BiliPlayUrls {
     // biliResolvePlay was asked for backup addresses; the bridge retries the next
     // one when a node cannot be opened.
     std::vector<std::wstring> videoMirrors;
+    // 音轨的备用地址，主地址在前。音轨是**单独一条 CDN 请求**，某条节点可能只返回
+    // 文件前一段（现场 2026-10-25：97 秒的视频，音频读到 45 秒就 EOF），换一条就能
+    // 拿到完整内容。与 videoMirrors 一样，被要求取备用地址时才填。
+    // Backup addresses for the audio track, primary first. The audio is its own CDN
+    // request and one node can return only the first part of the file (field log
+    // 2026-10-25: a 97 s video whose audio hit EOF at 45 s); another node has all of it.
+    // Filled only when backup addresses were requested, like videoMirrors.
+    std::vector<std::wstring> audioMirrors;
 };
 
 // Session cookie, "SESSDATA=...; bili_jct=...". Empty means anonymous.

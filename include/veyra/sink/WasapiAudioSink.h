@@ -85,6 +85,24 @@ public:
     // needs the same headers the video one carries.
     bool open(const std::wstring& path,const std::atomic<bool>* cancelled=nullptr,
               const std::wstring& requestHeaders={},const std::wstring& userAgent={});
+    // 音轨的备用地址（主地址在前，含 path 本身）。单个 CDN 节点可能只返回文件前一段，
+    // 读-ahead 遇到「离结尾还差很多就 EOF」时用它换节点重连，并回到刚才的位置。
+    // 传空表等于不启用切换。
+    // Backup addresses for the audio track, primary first, including `path`. A single CDN
+    // node can return only the first part of the file; when the read-ahead sees EOF far
+    // short of the end it reconnects through the next node and resumes where it was.
+    // An empty list disables switching.
+    void setMirrors(std::vector<std::wstring> mirrors, const std::wstring& requestHeaders,
+                    const std::wstring& userAgent);
+    // 打开一个音轨地址并填好流信息，不碰解码器。换 CDN 节点时读-ahead 线程复用它。
+    // Opens one audio address and fills in the stream information without touching the
+    // decoder. The CDN switch reuses it from the read-ahead thread.
+    int openTarget(const std::wstring& path, const std::atomic<bool>* cancelled,
+                   const std::wstring& requestHeaders, const std::wstring& userAgent);
+    // 读-ahead 线程：换到下一个 CDN 节点并跳回刚才的位置。true 表示已经换好。
+    // Read-ahead thread: switch to the next CDN node and jump back to where reading had
+    // got to. True means a new connection is in place.
+    bool switchAudioMirror();
     // Network sources and files on a server: take audio packets from the shared demux
     // session that also feeds the video (one connection, #48) instead of opening the
     // address a second time.
@@ -214,6 +232,19 @@ private:
     // Consecutive read failures on the read-ahead thread; at the threshold it asks for the
     // damaged stretch to be skipped (see skipDamagedToMs_).
     unsigned readFailureRun_ = 0;
+    // 音轨备用地址与重连状态。audioMirrorIndex_ 指向当前正在用的那一条；-1 表示
+    // 没有启用切换。换节点要在读-ahead 线程里做，所以列表放在它能安全读到的地方。
+    // Audio mirrors and reconnect state. audioMirrorIndex_ is the entry currently in use;
+    // -1 disables switching. The switch happens on the read-ahead thread, so the list lives
+    // where that thread can read it safely.
+    std::vector<std::wstring> audioMirrors_;
+    int audioMirrorIndex_ = -1;
+    std::wstring audioMirrorHeaders_, audioMirrorUserAgent_;
+    // 首次 open 传进来的取消信号。换节点重连要沿用它，传 nullptr 会让中断回调少一个
+    // 停止条件。
+    // The cancel signal the first open was given. A reconnect must keep using it; passing
+    // nullptr would leave the interrupt callback one stop condition short.
+    const std::atomic<bool>* openCancelled_ = nullptr;
     std::chrono::steady_clock::time_point damagedAudioLogAt_{};
     media::InputInterrupt inputInterrupt_;
     AVCodecContext* codecCtx_ = nullptr;

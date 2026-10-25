@@ -33,28 +33,31 @@ AudioPipeline::~AudioPipeline()
     closeAll();
 }
 
-bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cancelled,
-                         const std::wstring& requestHeaders,const std::wstring& userAgent)
+// 打开一个音轨地址并把流信息填好，但**不**碰解码器 —— selectTrack 由调用方负责。
+// 换 CDN 节点时读-ahead 线程复用这一步，所以它不能重建 codecCtx_（那属于解码线程）。
+// Opens one audio address and fills in the stream information, without touching the
+// decoder - selectTrack belongs to the caller. The CDN switch reuses this from the
+// read-ahead thread, so it must not rebuild codecCtx_, which the decode thread owns.
+int AudioPipeline::openTarget(const std::wstring& path,const std::atomic<bool>* cancelled,
+                              const std::wstring& requestHeaders,const std::wstring& userAgent)
 {
-    if(path.empty())return false;
-    // The shared-session overload refuses to open while a thread is still running;
-    // this one has to do the same. Starting a second thread over a live one is what
-    // surfaced as "bad allocation" when a DASH source re-opened its audio address.
-    if(thread_.joinable())return false;
+    if(path.empty())return -1;
     // A failed conversion returns 0, and building a std::string from a negative length
     // throws std::bad_alloc, which is indistinguishable from running out of memory.
     const int length=WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),nullptr,0,nullptr,nullptr);
-    if(length<=0)return false;
+    if(length<=0)return -1;
     std::string narrow(static_cast<size_t>(length),'\0');
     WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),narrow.data(),length,nullptr,nullptr);
+    if(fmt_){avformat_close_input(&fmt_);fmt_=nullptr;}
     fmt_=avformat_alloc_context();
-    if(!fmt_)return false;
+    if(!fmt_)return -1;
     // 记下这是不是网络目标：B 站（DASH）的音轨是单独一条 CDN 请求，走这个重载，
     // session_ 为空，容错判断要靠这个标志。
     // Remember whether this is a network target: a DASH source's audio is its own CDN
     // request opened here, with session_ null, so the tolerance check needs this flag.
     networkTarget_ = media::networkMediaInput(path);
-    inputInterrupt_.configure(media::networkMediaInput(path),cancelled,&stopFlag_);
+    if(cancelled)openCancelled_=cancelled;
+    inputInterrupt_.configure(media::networkMediaInput(path),openCancelled_,&stopFlag_);
     fmt_->interrupt_callback={media::InputInterrupt::callback,&inputInterrupt_};
     AVDictionary* options=nullptr;
     if(media::networkMediaInput(path)){
@@ -66,11 +69,11 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
     inputInterrupt_.armConnect();
     const int opened=avformat_open_input(&fmt_,narrow.c_str(),nullptr,&options);
     av_dict_free(&options);
-    if(opened<0)return false;
+    if(opened<0){fmt_=nullptr;return -1;}
     inputInterrupt_.armProbe();
     const int found=avformat_find_stream_info(fmt_,nullptr);
     inputInterrupt_.disarm();
-    if(found<0)return false;
+    if(found<0)return -1;
     tracks_.clear();
     for(unsigned i=0;i<fmt_->nb_streams;++i){
         const auto* stream=fmt_->streams[i];const auto* p=stream->codecpar;
@@ -79,13 +82,68 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
         const auto* title=av_dict_get(stream->metadata,"title",nullptr,0);
         tracks_.push_back({int(i),language?language->value:"",title?title->value:"",avcodec_get_name(p->codec_id),unsigned(p->ch_layout.nb_channels)});
     }
-    const AVCodec* codec = nullptr;
-    const int si = av_find_best_stream(fmt_, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
-    if (si < 0 || codec == nullptr) {
+    return av_find_best_stream(fmt_, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+}
+
+bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cancelled,
+                         const std::wstring& requestHeaders,const std::wstring& userAgent)
+{
+    // The shared-session overload refuses to open while a thread is still running;
+    // this one has to do the same. Starting a second thread over a live one is what
+    // surfaced as "bad allocation" when a DASH source re-opened its audio address.
+    if(thread_.joinable())return false;
+    const int si=openTarget(path,cancelled,requestHeaders,userAgent);
+    if(si<0){
         veyra::log::info("audio", "no audio stream in source");
         return false;
     }
     return selectTrack(si);
+}
+
+// 记下音轨的备用地址。真正切换发生在读-ahead 线程遇到「提前 EOF」时。
+// Records the audio's backup addresses. The actual switch happens on the read-ahead
+// thread when it sees EOF far short of the end.
+void AudioPipeline::setMirrors(std::vector<std::wstring> mirrors,
+                               const std::wstring& requestHeaders,
+                               const std::wstring& userAgent)
+{
+    if (mirrors.size() < 2) {
+        audioMirrors_.clear();
+        audioMirrorIndex_ = -1;
+        return;
+    }
+    audioMirrors_ = std::move(mirrors);
+    audioMirrorIndex_ = 0;
+    audioMirrorHeaders_ = requestHeaders;
+    audioMirrorUserAgent_ = userAgent;
+}
+
+// 读-ahead 线程：当前节点提前结束时换下一个节点重连，并跳回刚才读到的位置。
+// 返回 true 表示已经换好、可以继续读；false 表示没有可用的下一个节点。
+// Read-ahead thread: when the current node ends early, reconnect through the next one and
+// jump back to where reading had got to. True means a new connection is in place; false
+// means no usable next node.
+bool AudioPipeline::switchAudioMirror()
+{
+    if (audioMirrorIndex_ < 0 || audioMirrorIndex_ + 1 >= int(audioMirrors_.size())) return false;
+    const double resumeAt = lastGoodReadMs_.load();
+    while (audioMirrorIndex_ + 1 < int(audioMirrors_.size())) {
+        ++audioMirrorIndex_;
+        const std::wstring& next = audioMirrors_[size_t(audioMirrorIndex_)];
+        // 就地重开：读-ahead 线程独占 fmt_（startReader 把 queueMode_ 置真之后解码线程
+        // 只从队列取包），所以这里换上下文是安全的。解码器的 flush 交给解码线程，通过
+        // skipDamagedToMs_ 让它走一次普通 seek。
+        // Reopen in place: the read-ahead thread owns fmt_ (once startReader sets
+        // queueMode_ the decode thread only takes packets from the queue), so swapping the
+        // context here is safe. Flushing the decoder stays with the decode thread - the
+        // resume point is handed over through skipDamagedToMs_ as an ordinary seek.
+        if (openTarget(next, openCancelled_, audioMirrorHeaders_, audioMirrorUserAgent_) >= 0) {
+            readerEof_ = false;
+            if (resumeAt > 0.0) skipDamagedToMs_.store(resumeAt);
+            return true;
+        }
+    }
+    return false;
 }
 
 void AudioPipeline::noteDamagedAudio(int code)
@@ -276,15 +334,23 @@ void AudioPipeline::readerLoop()
             // Only a real end counts as EOF; a transient network failure is retried on the
             // next round, otherwise one hiccup stops the read-ahead thread for good.
             if(read==AVERROR_EOF){
-                // 打印最后读到的位置：如果它远小于视频时长，说明音频流被提前截断
-                // （CDN 只给了前面一段），而不是真的播完了。
-                // Log the last position reached: if it is far short of the video duration
-                // the audio stream was truncated early (the CDN served only part of it)
-                // rather than genuinely ending.
+                const double reached=lastGoodReadMs_.load();
+                const double total=fmt_&&fmt_->duration!=AV_NOPTS_VALUE?double(fmt_->duration)/1000.0:-1.0;
+                // 提前 EOF：离结尾还差 10 秒以上，说明这条 CDN 只给了文件前一段
+                // （现场 2026-10-25：97 秒的视频，音频读到 45 秒就 EOF）。换下一个
+                // 节点重连并跳回原处，而不是让声音就此停住。
+                // Early EOF: still more than ten seconds short of the end means this CDN
+                // served only the first part of the file (field log 2026-10-25: a 97 s
+                // video whose audio hit EOF at 45 s). Reconnect through the next node and
+                // jump back instead of going silent.
+                if(total>0.0&&reached>=0.0&&reached<total-10000.0&&switchAudioMirror()){
+                    log::warn("audio", std::format(
+                        "audio EOF at {:.0f} ms of {:.0f} ms; switched to CDN node {}",
+                        reached,total,audioMirrorIndex_));
+                    continue;
+                }
                 log::warn("audio", std::format(
-                    "audio read hit EOF at {:.0f} ms (session duration {:.0f} ms)",
-                    lastGoodReadMs_.load(),
-                    fmt_&&fmt_->duration!=AV_NOPTS_VALUE?double(fmt_->duration)/1000.0:-1.0));
+                    "audio read hit EOF at {:.0f} ms (session duration {:.0f} ms)",reached,total));
                 readerEof_=true;
                 continue;
             }
