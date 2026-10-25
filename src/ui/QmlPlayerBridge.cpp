@@ -2024,6 +2024,28 @@ void QmlPlayerBridge::flushBiliWatchProgress() {
 // freeze the window. Reporting at the end is what makes the video appear in 历史记录
 // immediately; the write used to wait for the next open, which looked like "it only shows
 // up after playing another video".
+// 开播那一刻写一次历史（played_time=0）。不影响 biliWatch* 记录：调用方传的是副本，
+// 后续 tick 继续追踪真实位置，播完照旧按 -1 上报。
+// Writes the history the moment playback starts (played_time=0). The biliWatch* fields
+// are left alone - the caller passes copies - so the tick keeps tracking the real
+// position and the end still reports -1.
+bool QmlPlayerBridge::reportBiliWatchStartedAsync(const std::wstring& bvid, long long cid) {
+    auto& i = *impl_;
+    if (bvid.empty() || cid <= 0) return false;
+    // 槽位忙时跳过：覆盖一个还在跑的任务会析构旧 future 并阻塞 GUI 线程。
+    // Skip while the slot is busy: overwriting a running task destroys the old future
+    // and blocks the GUI thread.
+    if (i.biliTaskSlots[static_cast<size_t>(BiliOp::ReportProgress)].busy) return false;
+    const std::string tag = utf8Of(bvid).toStdString();
+    return startBiliTask(BiliOp::ReportProgress, [bvid, cid, tag] {
+        BiliTaskResult r;
+        r.ok = media::biliReportWatchProgress(bvid, cid, 0);
+        log::info("bilibili", std::format(
+            "watch progress reported at start bvid={} ok={}", tag, r.ok ? 1 : 0));
+        return r;
+    });
+}
+
 bool QmlPlayerBridge::reportBiliWatchProgressAsync() {
     auto& i = *impl_;
     if (i.biliWatchBvid.empty() || i.biliWatchCid <= 0) return false;
@@ -3230,6 +3252,14 @@ void QmlPlayerBridge::tickBiliPlay() {
     i.biliWatchCid = job.cid;
     i.biliWatchLastPos = -1.0;
     i.biliWatchDuration = 0.0;
+    // 开播即写一次历史：这样点开就算「看过」，不必等播完 —— B 站网页播放器也是
+    // 一开始播放就出现在历史记录里。这一次只写 played_time=0，**不碰**上面刚设好
+    // 的记录字段，所以 tick 仍会继续追踪真实位置，播完时照旧按 -1 上报。
+    // Write the history as soon as playback starts, so opening a video counts as watched
+    // without waiting for it to finish - the site's own player behaves the same way. This
+    // posts played_time=0 and deliberately leaves the fields above untouched, so the tick
+    // keeps tracking the real position and the end still reports -1.
+    reportBiliWatchStartedAsync(i.biliWatchBvid, i.biliWatchCid);
     // Where the account left this part, so playback resumes there.
     bool startedFromTop = false;
     if (job.plannedResume) {
