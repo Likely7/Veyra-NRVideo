@@ -1,19 +1,37 @@
-# MY_WORK — 我的 Veyra 开发记录
+# MY_WORK — 我的 Veyra 开发记录与规则
 
 **最后更新**：2026-10-25
-**说明**：这份文件记录我在 Veyra（作者 Likely7/Veyra-NRVideo）之上做的全部改动。
-只记我自己的东西，作者原版的 583 个文档在 `src/docs/` 里，不动。
+**说明**：这份文件合并了原来的 `CUSTOM_LEDGER.md`（规则）与 `MY_WORK.md`（记录）。
+前六部分是**现状与记录**，第七部分是**行动规则**（遇到情况该怎么做）。
+
+作者原版的 610 个文档在 `src/docs/` 里，保持不动 —— 合并进来会造成 git 大冲突，
+且作者每次更新都会让你的合并版落后。
 
 ---
 
-## 一、当前状态速查
+## 📖 想找什么，先看这里
+
+| 你想做什么 | 看哪一节 |
+|---|---|
+| 看当前 git 状态、构建部署位置 | 一、当前状态 |
+| 看我提过哪些 PR、什么状态 | 二、PR 一览 |
+| 看我什么时候做了什么 | 三、时间线 |
+| 查踩过的坑（构建/测试/Git/UI）| 四、踩过的坑 |
+| 部署和双版本切换怎么弄 | 五、部署与切换 |
+| **改东西要不要提 PR？提 PR 有什么规矩？** | **七、行动规则** |
+| **升级上游、合并冲突、删文件怎么做？** | **七、行动规则** |
+| 相关文档在哪 | 六、文档索引 |
+
+---
+
+## 一、当前状态
 
 ```
 仓库      D:\Program\Veyra\src          git 分支 custom
 HEAD      c46140cc  Merge origin/main into custom
 落后      作者主线 0 个提交（2026-10-25 已同步）
 领先      作者主线 27 个提交
-远端      fork = georgeg911/Veyra-NRVideo（我的）
+远端      fork   = georgeg911/Veyra-NRVideo（我的）
           origin = Likely7/Veyra-NRVideo（作者的）
 
 构建      D:\Program\Veyra\build        全量 140/140 通过
@@ -24,49 +42,79 @@ HEAD      c46140cc  Merge origin/main into custom
 
 **统计**：本地提交 157 个，已提 PR 13 个（3 个已合并，1 个已关闭，9 个待处理）。
 
+### 本地定制（上游没有）
+
+| 功能 | 状态 | 关键文件（核查用）|
+|---|---|---|
+| 杜比视界 P5 IPT-PQ 转换 | 稳定 | `shaders/YuvToLinearRgb.hlsl`、`include/veyra/pipeline/DolbyVisionP5.h` |
+| 杜比视界 P7 增强层 | 实验性（默认关）| `include/veyra/pipeline/DolbyVisionP7.h`、`src/source/MediaFileSource.cpp` |
+| 杜比视界跟随 L1 | 稳定（默认关）| `include/veyra/engine/DoviCurveAdapter.h` |
+| 首页最近列表清空 | 稳定 | `qml/Veyra/HomePage.qml` |
+| QML 日志错误修复 | 稳定 | `qml/Veyra/VRow.qml`、`DialogHost`、`VMenu` |
+| 后端失败提示可操作 | 稳定 | `src/engine/EngineController.cpp` |
+| 会话目录诊断 | 稳定 | `src/engine/PresetLibrary.cpp` |
+| **B 站模块** | 稳定 | `qml/Veyra/BilibiliPage.qml`、`src/media/BilibiliApi.cpp` |
+| **自动选择补帧倍率** | 稳定 | `include/veyra/engine/DisplayFgBudget.h`、`src/ui/QmlPlayerBridge.cpp` |
+
+**核查某个功能还在不在**：
+
+```powershell
+git cat-file -e HEAD:include/veyra/pipeline/DolbyVisionP7.h   # 存在则输出空
+grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
+```
+
+### 已删除（合并上游后可能复活，需重新删）
+
+| 功能 | 删除日期 | 防护 |
+|---|---|---|
+| **HDR10 静态元数据**（`SetHDRMetaData`）| 2026-10-18 | `EnhancementSettings` 归一化 |
+| HDR 片源转 SDR + RTX Video HDR | 2026-10-03 | 无 |
+
 ---
 
-## 二、提给作者的 PR 一览
+## 二、PR 一览
 
-| # | 状态 | 日期 | 分支 | 标题 |
+### 已合并（3 个，说明方向对了）
+
+| # | 日期 | 分支 | 标题 |
+|---|---|---|---|
+| **44** | 10-15 | `hdr-curve-metadata` | HDR 曲线：组合预设、白话旋钮、实时裁剪表、输出感知元数据 |
+| **20** | 10-04 | `build-msvc-compat` | 适配新版 MSVC STL 宽窄字符串转换 |
+| **19** | 10-04 | `hdr-static-tuning` | 静态 HDR 输出调优（曲线 + 元数据 + 七档预设）|
+
+### 待作者决定（9 个，作者回复前不要动）
+
+| # | 日期 | 分支 | 标题 | 规模 |
 |---|---|---|---|---|
-| **71** | 待处理 | 10-25 | `fix/network-buffer-clock-clean` | 慢速服务器缓冲时冻结媒体时钟（**中英双语**）|
-| **62** | 待处理 | 10-17 | `feat/remove-hdr-metadata` | 移除 HDR10 静态元数据功能（**破坏性**）|
-| **60** | 待处理 | 10-17 | `fix/actionable-errors` | 失败提示改成「告诉你怎么做」|
-| **59** | 待处理 | 10-17 | `fix/hdr-display-peak` | 别拿没测量过的显示峰值缩放曲线 |
-| **58** | 待处理 | 10-17 | `fix/log-and-robustness` | 清掉三个反复出现的 QML 日志错误 |
-| **56** | 待处理 | 10-17 | `feat/dolby-vision` | 杜比视界 P5 转换 + P7 增强层合成 |
-| **55** | 待处理 | 10-17 | `fix/hdr-title-memory-path` | 每片记忆的路径分隔符归一化 |
-| **44** | ✅ 已合并 | 10-15 | `hdr-curve-metadata` | HDR 曲线：组合预设、白话旋钮、实时裁剪表、输出感知元数据 |
-| **20** | ✅ 已合并 | 10-04 | `build-msvc-compat` | 适配新版 MSVC STL 宽窄字符串转换 |
-| **19** | ✅ 已合并 | 10-04 | `hdr-static-tuning` | 静态 HDR 输出调优（曲线 + 元数据 + 七档预设 + 强度旋钮）|
-| **15** | 待处理 | 10-03 | `home-clear-recent` | 首页清除最近记录 |
-| **14** | ❌ 已关闭 | 10-03 | `hdr-source-route-and-brightness` | HDR 源上的 RTX Video HDR + 逐场景亮度 |
-| **13** | 待处理 | 10-03 | `dovi-p5-fix` | 杜比视界 P5：转换 IPT-PQ-C2 基础层（原本显示成绿色）|
+| **71** | 10-25 | `fix/network-buffer-clock-clean` | 慢速服务器缓冲时冻结媒体时钟（**中英双语**）| +55/−2 |
+| **62** | 10-17 | `feat/remove-hdr-metadata` | 移除 HDR10 静态元数据（**破坏性**）| +4/−216 |
+| **60** | 10-17 | `fix/actionable-errors` | 失败提示改成「告诉你怎么做」| +31/−2 |
+| **59** | 10-17 | `fix/hdr-display-peak` | 别拿没测量过的显示峰值缩放曲线 | +51/−2 |
+| **58** | 10-17 | `fix/log-and-robustness` | 清掉三个反复出现的 QML 日志错误 | +19/−3 |
+| **56** | 10-17 | `feat/dolby-vision` | 杜比视界 P5 转换 + P7 增强层合成 | +2210/−40 |
+| **55** | 10-17 | `fix/hdr-title-memory-path` | 每片记忆的路径分隔符归一化 | +9/−3 |
+| **15** | 10-03 | `home-clear-recent` | 首页清除最近记录 | 小 |
+| **13** | 10-03 | `dovi-p5-fix` | 杜比视界 P5：转换 IPT-PQ-C2 基础层（原本显示绿色）| 中 |
 
-### 已合并的 3 个（说明方向对了）
+### 已关闭（1 个）
 
-- **#19 / #44** —— HDR 静态输出调优与曲线元数据，作者采纳
-- **#20** —— MSVC 兼容性修复，作者采纳
-
-### 特别注意
-
-- **#62 是破坏性改动**（`feat(hdr)!`），作者很可能不接受，属于我的个人偏好
-- **#71** 是唯一「中英双语注释 + 中英双语 PR 描述」的，作为以后的模板
+| # | 日期 | 分支 | 原因 |
+|---|---|---|---|
+| **14** | 10-03 | `hdr-source-route-and-brightness` | 方案被 #19/#44 取代 |
 
 ---
 
-## 三、时间线（做了什么）
+## 三、时间线
 
-### 2026-10-25 — 开发环境迁移 + PR #71
+### 2026-10-25 — 环境迁移 + PR #71
 
 **环境迁移**（中文路径导致 CMake 生成失败）
 
 - 旧路径 `D:\项目\Veyra-NV`（中文）→ 新路径 `D:\Program\Veyra`（纯 ASCII）
 - 根因：CMake 的 Ninja 生成器在中文路径下**写不出 `CMakeFiles/rules.ninja`**，
-  导致 989 条编译规则缺失，构建报 `unknown build rule`
-- 实测对照：同一份源码、同一个 CMake 3.31.6，ASCII 路径正常生成 9309 行 rules
-- 不需要升级 CMake（3.31.6 够用）
+  989 条编译规则缺失，构建报 `unknown build rule`
+- 实测：同一份源码、同一个 CMake 3.31.6，ASCII 路径正常生成 9309 行 rules
+- 不需要升级 CMake
 
 **PR #71 慢速服务器缓冲修复**
 
@@ -75,7 +123,7 @@ HEAD      c46140cc  Merge origin/main into custom
 | 项 | 位置 | 问题 | 修法 |
 |---|---|---|---|
 | **A** | `resumeTargetLocked()` | 带宽不足时目标 20 秒永远攒不满 | 压到 `startSeconds × 2` |
-| **B** | `holding()` | 音频线程每 2–10ms 重算阶段，导致 pause/resume 抖动 | 只读 `phase_` |
+| **B** | `holding()` | 音频线程每 2–10ms 重算阶段，pause/resume 抖动 | 只读 `phase_` |
 | **C** | `nowMs()` | 音频耗尽就把时钟交给墙钟，缓冲后画面回不来 | 网络 hold 期间继续冻结 |
 
 实测（60s 1080p / 10.8 Mbps，限速 45%）：
@@ -102,18 +150,18 @@ Cookie DPAPI 加密（`VBCK` 前缀）。
 
 **播放健壮性**（`926023e5`，后被拆为 PR #71）
 
-- B 站播放的三个网络往返（上报进度/解析地址/读续播位置）移出 GUI 线程
+- B 站播放的三个网络往返移出 GUI 线程
 - 现场日志实测：主线程原来静止 **22.9 秒**，修复后全程毫秒级
 - 播放后从极简模式改为跳**专业模式**
 
-### 2026-10-17～10-18 — 杜比视界 + HDR 系列（66+28 个提交）
+### 2026-10-17～10-18 — 杜比视界 + HDR 系列（94 个提交）
 
 **杜比视界支持**（PR #13 / #56）
 
 | Profile | 处理方式 |
 |---|---|
 | **P5** | IPT-PQ-C2 基础层 → 正确转换（原本显示成绿色）|
-| **P7** | 解码并合成增强层 |
+| **P7** | 解码并合成增强层（覆盖率仅 5.9%，多数帧需基础层）|
 | **P8** | 按 HLG 基础层播放（作者已有设计，不应用 RPU、不输出原生 DV）|
 
 关键技术点：
@@ -123,9 +171,8 @@ Cookie DPAPI 加密（`VBCK` 前缀）。
 - L1 动态元数据跟随：**只改高光起点、不动峰值上限**
   （上限是中灰 gamma 的锚点，动了会整体偏色）
 - 跟随可加权「帧平均亮度」，阈值可调
-- 与 mpv v0.41 / libplacebo v7.376 对拍验证：
-  内容峰值 336 nit 远低于面板能力时，专业实现也**不做非线性压缩**，
-  我们的「0.85 系数 + 内容峰值收口」在 HDR 直出场景下不是激进方案
+- 与 mpv v0.41 / libplacebo v7.376 对拍：内容峰值 336 nit 远低于面板能力时，
+  专业实现也**不做非线性压缩**，我们的「0.85 系数 + 内容峰值收口」不是激进方案
 
 **HDR 曲线与元数据**（PR #19 / #44 / #55 / #59 / #62）
 
@@ -140,20 +187,20 @@ Cookie DPAPI 加密（`VBCK` 前缀）。
 - Dolby Vision P5 首次修复（显示绿色 → 正确转换）
 - HDR 静态调优初版
 - 首页清除最近记录
-- HDR 源路由与逐场景亮度（PR #14，后被关闭，被 #19/#44 的方案取代）
+- HDR 源路由与逐场景亮度（PR #14，后被关闭，被 #19/#44 取代）
 
 ### 2026-10-04 — MSVC 兼容性（PR #20，已合并）
 
-适配新版 MSVC STL 的宽窄字符串转换，并补 RemotePlay 裁剪时的条件编译。
+适配新版 MSVC STL 宽窄字符串转换，并补 RemotePlay 裁剪时的条件编译。
 
 ---
 
-## 四、踩过的坑（避免重犯）
+## 四、踩过的坑
 
 ### 构建环境
 
-1. **中文路径不能用于本项目构建**。CMake 的 Ninja 生成器写不出 `rules.ninja`。
-   所有构建目录、临时脚本必须在纯 ASCII 路径。
+1. **中文路径不能用于本项目构建**。CMake 的 Ninja 生成器写不出 `rules.ninja`，
+   构建报 `unknown build rule`。所有构建目录、临时脚本必须在纯 ASCII 路径。
 
 2. **不要用 `write` 工具写含中文的 .bat**。cmd 按 GBK 读，会乱码
    （实测 `'ram' 不是内部命令`，`format` 被截断）。
@@ -164,7 +211,7 @@ Cookie DPAPI 加密（`VBCK` 前缀）。
    改配置用 `-D` 逐个补，不要用 `--fresh`。
 
 4. **必须显式给 `VEYRA_ENABLE_EXPERIMENTAL_DLSSNR=ON`**。
-   不开的话 `veyra_ngx` 目标不生成，而 `veyra_engine` 无条件链接它，会链不上。
+   不开的话 `veyra_ngx` 不生成，而 `veyra_engine` 无条件链接它，会链不上。
 
 5. **在同一个 build 目录里切 git 分支后编译会污染缓存**。
    实测出现 `LNK4098`（CRT 冲突）、`LNK2019`（找不到 `FFmpegVideoDecoder::openSoftware`）。
@@ -175,21 +222,20 @@ Cookie DPAPI 加密（`VBCK` 前缀）。
 6. **测试环境变量绝不能残留**。踩过：`VEYRA_TEST_FORCE_DEMUX_SESSION=1`
    和 `VEYRA_TEST_SLOW_IO=0.5` 留在 shell 里没清，导致给用户演示时
    **本地视频被当成网络源**（限速 0.35 MB/s 对码率 2.4 MB/s，首帧要 12 秒），
-   用户几乎看不到画面，还以为是程序坏了。
+   用户几乎看不到画面还以为是程序坏了。
 
    **规则**：优先用 `env -u VAR ./app.exe` 包单条命令（天然不残留）；
    演示前自查 `python -c "import os;print([k for k in os.environ if k.startswith('VEYRA_TEST')])"`
    必须为空。
 
 7. **给用户演示必须用和用户一样的启动方式**。不能用带 `--output-cap` /
-   `--fg-auto` / `--exit-after` 的命令行验证后就说「没问题」——
-   那些参数会改界面状态、输出上限、补帧行为。
+   `--fg-auto` / `--exit-after` 的命令行验证后就说「没问题」。
 
 ### Git / PR
 
 8. **PR 分支必须从 `origin/main` 切**，不能从自己的开发分支切。
-   踩过：从 `4d9165b5`（B 站模块提交）切出的 PR 分支带着 28 个无关提交，
-   会被作者要求重做。正确做法：
+   踩过：从 `4d9165b5`（B 站模块提交）切出的分支带着 28 个无关提交。
+   正确做法：
 
    ```bash
    git checkout -b fix/xxx origin/main
@@ -203,19 +249,19 @@ Cookie DPAPI 加密（`VBCK` 前缀）。
     症状：`CRYPT_E_NO_REVOCATION_CHECK`，但 TCP 到 `github.com:443` 是通的。
     修复：`git config --global http.schannelCheckRevoke false`
 
+11. **在 bash 里调 `cmd //c` 跑带引号的命令容易转义出错**。
+    写 `.bat` 文件再 `cmd //c xxx.bat`，不要在命令行里拼引号。
+
 ### QML / UI
 
-11. **统计 QML 文件数不能用 `ls *.qml`**。`Veyra` 下有 `sponsor` 子目录，
+12. **统计 QML 文件数不能用 `ls *.qml`**。`Veyra` 下有 `sponsor` 子目录，
     顶层 58 个、含子目录 75 个。用 Python 的 `os.walk`。
 
-12. **`robocopy /MIR` 会删除目标里的多余文件**。双版本切换时
-    `qml\Veyra\BilibiliPage.qml`（我独有的页面）切到作者版会消失，
-    切回我的版本会回来 —— 这是设计意图。
+13. **`robocopy /MIR` 会删除目标里的多余文件**。双版本切换时
+    `qml\Veyra\BilibiliPage.qml`（我独有的页面）切到作者版会消失，切回会回来 ——
+    这是设计意图。
 
-13. **`robocopy` 退出码不是「成功/失败」**：0=无变化，1=有文件复制，≥8 才是失败。
-
-14. **在 bash 里调 `cmd //c` 跑带引号的命令容易转义出错**。
-    写 `.bat` 文件再 `cmd //c xxx.bat`，不要在命令行里拼引号。
+14. **`robocopy` 退出码不是「成功/失败」**：0=无变化，1=有文件复制，≥8 才是失败。
 
 ---
 
@@ -247,6 +293,19 @@ copy /y "shaders\YuvToLinearRgb.dxil.p5" "shaders\YuvToLinearRgb.dxil"
 robocopy "qml.p5\Veyra" "qml\Veyra" /MIR /NFL /NDL /NJH /NJS /NP
 ```
 
+**为什么必须三处都换**：只换 exe 不换 shader/QML 会造成版本不一致
+（2026-10-19 血的教训，见规则十九）。
+
+### 用户数据目录
+
+| 目录 | 用途 | 状态 |
+|---|---|---|
+| `user-data-2.0.0-p5` | 我的版本数据（脚本启动时用）| 保留我的原数据 |
+| `user-data-2.0.0-author` | 作者版数据（脚本启动时用）| 保留原数据 |
+| `user-data-2.0.0` | 不用脚本直接双击 exe 时的默认目录 | 2026-10-25 已重置为作者初始 |
+| `user-data-2.0.0-p5.BAK` | 2026-10-17 历史备份 | 未动 |
+| `user-data-ab-test` | 2026-10-17 A/B 测试残留 | 未动 |
+
 ### 作者发布新版本时
 
 ```
@@ -259,84 +318,316 @@ robocopy "qml.p5\Veyra" "qml\Veyra" /MIR /NFL /NDL /NJH /NJS /NP
 
 ---
 
-## 六、构建命令（可直接复制）
+## 六、文档索引
 
-### 日常增量（约 10 秒）
+| 内容 | 位置 | 行数 |
+|---|---|---|
+| **本文件**（记录 + 规则）| `src\MY_WORK.md` | — |
+| **操作手册**（构建/部署/环境）| `D:\Program\Veyra\HANDOFF.md` | 385 |
+| 杜比视界工作交接 | `src\docs\DOVI_WORK_HANDOFF.md` | 370 |
+| 杜比视界 P5 验证 | `src\docs\DOVI_P5_VERIFICATION.md` | 230 |
+| P7 双层合成算法 | `src\docs\DOLBY_BL_EL_COMPOSITING.md` | 250 |
+| 合并冲突决策流程 | `src\docs\MERGING.md` | 141 |
+| 历史技术记录 | `src\docs\HISTORY.md` | 1669 |
+| 本地构建笔记 | `src\docs\VeyraNV_LOCAL_BUILD_NOTES.md` | 45 |
+| P5 早期报告 | `D:\DSH\dolby-vision-p5-report.md` | 610 |
+| B 站模块历史 | `D:\DSH\.dsh-tmp\keep\veyra-history-README.md` | 1627 |
 
-```bat
-@echo off
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul 2>&1
-set "PATH=%PATH%;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja"
-cd /d "D:\Program\Veyra\build"
+---
+
+## 七、行动规则
+
+> **背景**：我不是开发者，本地改功能凭感觉判断好坏，提了 PR 之后才发现有 bug 又回头删功能。
+> 担心自己的改动污染上游，怕作者不小心合并了出问题。
+> 这些规则的目标：**让「本地随便玩」和「给上游提什么」彻底分开**。
+
+### 核心原则：三条线，别混
+
+| 线 | 在哪 | 可以随便改吗 | 会上游吗 |
+|---|---|---|---|
+| **玩票区** | `custom` 分支 | ✅ 随便改、随便删、随便试 | ❌ 永不上游 |
+| **候选区** | `fix/*` `feat/*` 分支 | ⚠️ 只改一件事 | ✅ 检查通过后提 PR |
+| **干净区** | `origin/main` | ❌ 不直接碰 | — |
+
+**一句话**：`custom` 是我的游乐场，`origin/main` 是别人的家。
+**从游乐场里搬东西去别人家之前，必须先在候选区单独放好、洗干净。**
+
+### 一、改动先分三色，决定能不能提
+
+每次想改东西，先问自己：
+
+| 颜色 | 判据 | 处理 |
+|---|---|---|
+| 🟢 **绿** | **上游的 bug**（他写错了、崩了、日志报错）| 可以提 PR |
+| 🟡 **黄** | **行为/观感**（画面效果、默认值、UI 排版、文案）| **先问作者**，他同意再提 |
+| 🔴 **红** | **删功能 / 加功能 / 改架构** | **默认只留本地**，不提 |
+
+**判断口诀**：
+
+> 「这是**修好他的 bug**，还是**我想让他按我的喜好改**？」
+> 修 bug → 可以提　｜　我的喜好 → 只留本地
+
+**实例对照**：
+
+- #55 修路径分隔符匹配 → 🟢 绿（他的 bug）
+- #58 修三个日志错误 → 🟢 绿（他的 bug）
+- #60 改错误提示文案 → 🟢 绿（可读性，几乎无争议）
+- #59 修假峰值缩放 → 🟡 黄（**会改变画面**，虽是真 bug）
+- #71 缓冲时钟修复 → 🟢 绿（他的 bug，附实测数据）
+- #56 杜比视界全套 → 🔴 红（新功能，+2210 行，本地未完全验证）
+- #62 删 HDR 元数据 → 🔴 红（**删他的功能**，只有他明确要才提）
+
+### 二、永远不要从 `custom` 提 PR
+
+```powershell
+# ❌ 错：从 custom 开分支，必然夹带杜比视界、删元数据、改过的 UI
+git checkout -b fix/something custom
+
+# ✅ 对：从 origin/main 开，只 cherry-pick 目标提交
+git checkout -b fix/something origin/main
+git cherry-pick <那个提交>
+git rev-list --count origin/main..HEAD   # 必须是 1
+```
+
+**2026-10-25 实测**：从 `4d9165b5` 切出的 PR 分支带了 28 个无关提交。
+
+### 三、提 PR 前必跑检查
+
+```powershell
+# 1. 确认分支只含 1 个提交
+git rev-list --count origin/main..HEAD
+
+# 2. 确认改动文件范围对
+git diff origin/main..HEAD --stat
+
+# 3. 确认不含不该有的内容（如 B 站代码）
+git diff origin/main..HEAD | grep -c "bilibili"    # 应为 0
+
+# 4. 确认能编译
 ninja.exe veyra_qml_ui
 ```
 
-### 完整配置（改 CMakeLists 后或环境坏了）
+### 四、PR 要小、要单一、要能解释
 
-```bat
-@echo off
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul 2>&1
-chcp 65001 >nul
-set "CMAKE=C:\Program Files\CMake\bin\cmake.exe"
-set "NINJA=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
-"%CMAKE%" -S "D:\Program\Veyra\src" -B "D:\Program\Veyra\build" -G Ninja ^
-  -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
-  -DCMAKE_BUILD_TYPE=Release ^
-  -DCMAKE_PREFIX_PATH="D:\Program Files\Qt\6.8.3\msvc2022_64" ^
-  -DVEYRA_FFMPEG_ROOT="D:\Program\Veyra\deps\ffmpeg\ffmpeg-n9.0.1-11-ge47273f4d9-win64-lgpl-shared-9.0" ^
-  -DVEYRA_DLSS_SDK_ROOT="D:\Program\Veyra\src\third_party_local\nvidia\DLSS-SDK-310.7" ^
-  -DVEYRA_NVOF_SDK_ROOT="D:\Program\Veyra\src\third_party_local\nvidia\Optical_Flow_SDK_5.0.7" ^
-  -DVEYRA_BUILD_QML_UI=ON ^
-  -DVEYRA_ENABLE_NVOF=ON ^
-  -DVEYRA_ENABLE_EXPERIMENTAL_DLSSNR=ON
+- 一个 PR 只解决一个问题
+- 提交信息写「为什么」，不是「改了什么」
+- **注释和描述一律中英双语**（2026-10-25 用户要求）
+
+### 五、不确定的改动，先写进本文件，别急着提
+
+拿不准是 bug 还是个人偏好时，先记在这里，用一段时间再判断。
+
+### 六、已经提了但发现有问题
+
+1. **在 PR 分支上改**，不改 `custom`：
+
+   ```bash
+   git checkout fix/xxx
+   # 改代码
+   git commit -am "..."
+   git push fork fix/xxx          # PR 自动更新
+   ```
+
+2. 如果问题严重，可以在 GitHub 上关闭 PR，或在 PR 里说明
+
+### 七、定期自查：本地和上游差多少
+
+```powershell
+git fetch origin
+git rev-list --count custom..origin/main     # 落后多少
+git rev-list --count origin/main..custom     # 领先多少
 ```
 
-**配置成功的判据**：
-```python
-import os
-os.path.exists(r'D:\Program\Veyra\build\CMakeFiles\rules.ninja')   # 必须 True
+### 八、已提 PR 的处置状态
+
+作者自行决定是否合并，**不合并也没关系**。作者回复前不要动它们
+（不要关闭、不要催促、不要反复推）。
+
+### 九、作者合并了我的 PR 之后，怎么继续
+
+1. 先 `git fetch origin` 拉最新的 `origin/main`
+2. 对比自己的 `custom` 分支，看哪些改动已被上游吸收
+3. 已被吸收的，从 `custom` 里删掉对应改动（避免重复）
+4. 记录到本文件第一节「已进上游」
+
+### 十、任何 PR 被合并后升级：逐项问用户，不许替他决定
+
+升级涉及冲突、功能取舍时，**必须逐项问用户**：
+- 这个功能上游已吸收，我删掉本地版本？
+- 这个功能上游没动，我保留？
+- 这个冲突两边都有改动，用哪边？
+
+**不许自己判断「应该没影响」就替用户决定**（2026-10-18 用户明确要求）。
+
+### 十一、升级上游时的安全顺序
+
+```powershell
+# 1. 先存档当前状态（提交或 stash）
+git status                    # 必须干净
+git tag backup-before-upgrade
+
+# 2. 拉取上游
+git fetch origin
+
+# 3. 合并
+git merge origin/main
+
+# 4. 有冲突就停下来问用户
+
+# 5. 合并后立刻验证
+ninja.exe veyra_qml_ui
 ```
 
-### 工具链位置
+### 十二、一个功能 = 一个提交
 
-| 工具 | 路径 | 版本 |
-|---|---|---|
-| CMake | `C:\Program Files\CMake\bin\cmake.exe` | 3.31.6（官方版）|
-| Ninja | VS 自带 | — |
-| MSVC | VS 2022 Community | 19.44.35229.0 |
-| Qt | `D:\Program Files\Qt\6.8.3\msvc2022_64` | 6.8.3 |
-| FFmpeg | `D:\Program\Veyra\deps\ffmpeg\ffmpeg-n9.0.1-...` | 9.0.1 BtbN |
-| DLSS SDK | `...\third_party_local\nvidia\DLSS-SDK-310.7` | 310.7 |
-| NVOF SDK | `...\third_party_local\nvidia\Optical_Flow_SDK_5.0.7` | 5.0.7 |
+不要把多个不相关的改动塞进一个提交，否则 cherry-pick 时没法只拿一部分。
+
+### 十三、提交信息写「为什么」，不是「改了什么」
+
+```
+❌ 错：fix: 改了 DemuxSession.cpp
+✅ 对：fix(playback): 服务器缓冲时保持媒体时钟冻结
+        现场日志显示时钟跑了 16 秒而 coverage 停在原处
+```
+
+**中英双语**（2026-10-25 要求）。
+
+### 十四、合并上游前先看净差异
+
+```powershell
+git diff custom..origin/main --stat    # 不是 custom...origin/main
+```
+
+### 十五、每次升级上游后必做三件事
+
+1. 检查「已删除」的功能有没有复活（见第一节）
+2. 重新构建并部署四处
+3. 双版本切换测一遍
+
+### 十六、HDR 元数据功能的防护（重要）
+
+HDR10 静态元数据是我删掉的功能，**合并上游后一定会复活**。
+
+检查方法：
+
+```powershell
+grep -rn "SetHDRMetaData" src/ include/ | head -3
+```
+
+如果出现了，说明复活了，需要重新删（对应 PR #62）。
+
+### 十七、验证请求必须连 exe 一起部署
+
+说「请打开看看」之前，**必须四处都部署**（exe / exe.p5 / qml / qml.p5），
+否则用户看到的界面和描述不一致。部署后报告哈希。
+
+### 十八、删除一律进回收站
+
+```powershell
+Add-Type -AssemblyName Microsoft.VisualBasic
+[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($path,
+  [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
+  [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)
+```
+
+删除前先打印精确清单（绝对路径 + 大小）确认。
+
+### 十九、切换脚本必须覆盖全部二进制差异（2026-10-19 血的教训）
+
+**只换 exe 不换 shader / QML** 会造成版本不一致，界面和实际行为对不上。
+
+切换脚本必须同时换：
+
+1. `veyra_qml_ui.exe`
+2. `shaders\*.dxil`（如果两边不同）
+3. `qml\Veyra\*.qml`
+
+**判断依据**：
+
+```powershell
+# 两个包的 exe 是否相同
+certutil -hashfile veyra_qml_ui.exe.p5 MD5
+certutil -hashfile veyra_qml_ui.exe.orig MD5
+
+# shader 是否相同
+certutil -hashfile shaders\YuvToLinearRgb.dxil.p5 MD5
+certutil -hashfile shaders\YuvToLinearRgb.dxil.orig MD5
+```
+
+**只要有一处不同，切换脚本就必须覆盖它。**
+
+### 二十、升级必须改目录名
+
+换新版 Veyra 时，**部署目录名要跟着版本号改**（如 `Veyra-2.1.0-...`），
+不要沿用旧名字 —— 否则两个版本混在一起分不清。
+
+改名后同步更新：
+- 切换脚本里的路径（都是 `%~dp0` 相对路径，通常不用改）
+- 本文件第一、五节里的部署路径
+- `HANDOFF.md` 里的路径
 
 ---
 
-## 七、相关文档位置
+## 七之二、分支历史清理手法（2026-10-18，可复用）
 
-| 内容 | 位置 |
-|---|---|
-| 杜比视界工作交接（370 行）| `src\docs\DOVI_WORK_HANDOFF.md` |
-| 杜比视界 P5 验证（230 行）| `src\docs\DOVI_P5_VERIFICATION.md` |
-| 基础层/增强层合成（250 行）| `src\docs\DOLBY_BL_EL_COMPOSITING.md` |
-| DV PR 审查（91 行）| `src\docs\HDR_DOVI_PR_REVIEW_2026-10-04.md` |
-| 补帧/FSR/DV 方案与状态 | `src\docs\FRAMEGEN_FSR_DOLBY_*.md` |
-| P5 早期报告（610 行）| `D:\DSH\dolby-vision-p5-report.md` |
-| B 站模块历史记录（1627 行）| `D:\DSH\.dsh-tmp\keep\veyra-history-README.md` |
-| 操作手册（构建/部署/环境）| `D:\Program\Veyra\HANDOFF.md` |
+### 为什么清理
+
+`custom` 领先上游 263 个提交，但净差异只有 46 个文件。中间大量提交是「改完又撤销」：
+
+```
+7 对 feat/fix + 后置 Revert（补帧页排版 5 次、seek 重建 1 次、显示峰值 1 次）
+HDR 元数据功能来回三轮：移除（2.0.6）→ 加回（16ee455d）→ 再移除（本次）
+大量调试/诊断中间提交（diag(...)、wip(...)）
+```
+
+后果是合并上游时冲突面变大、回溯问题要翻几百条提交、`git log` 读不出所以然。
+
+### 怎么做（绝不 `rebase -i`）
+
+263 个提交交互式重排风险太高。改用这个手法：
+
+1. `git checkout -B <new> origin/main` —— 从上游开干净分支
+2. 按**功能分组**，每组把文件从旧 HEAD 检出：`git checkout <old-head> -- <files>`
+3. 每组用一段说明写清楚「为什么」，然后提交
+4. **逐文件哈希校验**：`git diff --name-only <old-head>..HEAD` 必须为空
+5. `git diff --shortstat` 必须与清理前**逐字节一致**
+6. 全量编译 + 冒烟，再 `git branch -f custom <new>`
+
+**三重备份**（重写历史前必须做）：
+
+```powershell
+git bundle create <path>\custom-full.bundle --all
+git tag backup/custom-before-cleanup <old-head>
+# 外加全部源文件 SHA256 快照（事后比对用）
+```
+
+后悔一条命令：`git reset --hard backup/custom-before-cleanup`。
+
+### 结果
+
+```
+263 提交 → 9 提交
+净差异不变：46 文件 +6438 / −278
+逐文件哈希：与清理前完全一致
+编译：318 目标全绿
+```
+
+9 个提交按功能分组（docs / tools / UI 修复 / 元数据移除 / HDR 曲线 / DV 跟随 / P5 / P7）。
 
 ---
+
 
 ## 八、待办与未决事项
 
 | 项 | 状态 |
 |---|---|
 | PR #71 等作者回复 | 等待中，作者可能要求调整 |
-| PR #13 / #56 / #62 等 6 个旧 PR | 都还开着，作者没表态 |
-| B 站模块是否提 PR | 需先问作者意向（作者没有这个功能）|
-| 自动选倍率是否提 PR | 属个人口味，需作者认可才提 |
+| PR #13 / #56 / #62 等 8 个旧 PR | 都还开着，作者没表态 |
+| B 站模块是否提 PR | 需先问作者意向（作者没有这个功能，属🔴红）|
+| 自动选倍率是否提 PR | 属个人口味（🟡黄），需作者认可 |
 | `D:\DSH\dolby-vision-p5-report.md` | 建议移进 `src\docs\` 跟 git 走 |
 
 ---
 
-**说明**：这份文件只记我自己的改动。作者原版的 583 个文档（6.5 MB）在 `src\docs\`，
-不要合并进来 —— 会造成 git 大冲突，且作者更新后你的合并版永远追不上。
+**说明**：这份文件记录我自己的改动与规则。作者原版的 610 个文档（6.5 MB）在
+`src\docs\` 保持不动 —— 合并进来会造成 git 大冲突，且作者更新后你的版本永远落后。
