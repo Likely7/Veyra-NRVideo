@@ -101,11 +101,19 @@ VPage {
     // Danmaku overlay state; the comments come from the same track the detail API
     // already reports, so enabling it needs no extra request.
     //
-    // The module-wide default lives in 播放设置 and this follows it: turning it off there
-    // switches danmaku off here too, and a newly opened video picks the default up again.
-    // The per-video toggle in the detail page only affects the video currently open.
+    // 弹幕开关只有一个事实来源：偏好项 `biliDanmaku`（持久化）。
+    // 详情页按钮和播放设置里的开关都读写它，所以两边永远一致：
+    // 在一处打开，另一处就是打开的；关掉一处，另一处也关。重启后保持原样。
+    // There is exactly one source of truth for the danmaku switch: the persisted
+    // preference `biliDanmaku`. The detail-page button and the switch in 播放设置 both
+    // read and write it, so the two can never disagree - turning it on in one place
+    // turns it on in the other, and the choice survives a restart.
     readonly property bool danmakuDefault: !!veyra.preferences.biliDanmaku
-    property bool danmakuOn: danmakuDefault
+    // danmakuOn 现在只是 danmakuDefault 的别名，保留这个名字是因为很多调用点已经用它。
+    // 它是「用户想看弹幕」的意图，不是「这个视频成功加载了弹幕」。
+    // danmakuOn is now an alias of danmakuDefault, kept because many call sites already
+    // use the name. It means "the user wants danmaku", not "this video loaded them".
+    readonly property bool danmakuOn: danmakuDefault
     property int danmakuLines: 0
     // The module's own settings panel. It lives here rather than only under
     // 设置 → 播放 because that is where someone browsing Bilibili looks for it.
@@ -383,8 +391,11 @@ VPage {
 
     function openVideo(bvid) {
         root.showSettings = false
-        // A different video means a different track: drop the old one first.
-        if (root.danmakuOn) { veyra.bilibiliDisableDanmaku(); root.danmakuOn = false; }
+        // 换视频就是换轨道：丢掉上一部的弹幕数据，但**不改开关** ——
+        // 开关代表用户意图，只有用户自己能改。
+        // A different video means a different track: drop the previous items, but leave
+        // the switch alone - it represents the user's intent, which only they change.
+        if (root.danmakuOn) veyra.bilibiliDisableDanmaku()
         root.danmakuLines = 0
         // Switch first, fetch after: the detail request is a blocking round trip, and it
         // used to run before root.view was set, so the click froze the window instead of
@@ -459,15 +470,13 @@ VPage {
             if (!ok) return
             root.comments = comments
         }
-        // 弹幕轨道加载结果：成功点亮开关；失败给出原因，但**不**把用户打开的开关
-        // 关掉 —— 分P 没弹幕、或网络偶发失败时，开关自己跳回「关」会让人以为功能坏了。
-        // 开关只在用户主动点击、或换视频时改变。
-        // Track load result: success lights the switch; on failure the reason is shown
-        // but the user's switch stays on - a part without comments, or one flaky
-        // request, must not flip the control back by itself.
+        // 弹幕轨道加载结果：只更新**条数**，不碰开关。
+        // 开关的状态来自持久化偏好，加载成功与否都不会改变用户的选择。
+        // Track load result: only the line count is updated; the switch is never touched.
+        // Its state comes from the persisted preference, so whether a load succeeds or
+        // fails cannot change what the user chose.
         function onBilibiliDanmakuReady(ok, error, lineCount) {
             if (ok) {
-                root.danmakuOn = true
                 root.danmakuLines = lineCount
             } else {
                 root.danmakuLines = 0
@@ -566,10 +575,10 @@ VPage {
         }
     }
 
-    // m:ss, the shape a player shows for a resume position.
-    // One place for the "load the track, then report it" sequence: the default in
-    // 播放设置 and the per-video button must behave identically, including the note
-    // shown when a video simply has no danmaku.
+    // 拉取当前视频的弹幕轨道。**只取数据，不改偏好** —— 播放、换分P 等自动流程
+    // 都调它，这些流程不该动用户的开关。
+    // Fetch the track for the current video. Data only: the automatic paths (playback,
+    // part switch) call this and they must not touch the user's switch.
     function loadDanmaku() {
         // 只看 bvid 是否已知，不等详情页数据：详情是异步到的，弹幕请求本身也只需要
         // bvid 和分P。原来这里检查 root.detail.ok，详情还没回来时请求就被吞掉，
@@ -583,10 +592,21 @@ VPage {
         veyra.bilibiliRequestEnableDanmaku(bvid, root.selectedPart)
     }
 
+    // 用户主动打开弹幕：设偏好 + 拉数据。详情页按钮和播放设置开关都走这里。
+    // The user turning danmaku on: persist the choice and fetch the track. Both the
+    // detail-page button and the 播放设置 switch go through this.
+    function enableDanmaku() {
+        veyra.setPreference("biliDanmaku", true)
+        root.loadDanmaku()
+    }
+
+    // 关弹幕：清掉当前数据 + 把偏好设成关。两处界面都读这个偏好，所以一起变。
+    // Turning danmaku off: clear the current items and persist the choice. Both switches
+    // read that preference, so they change together.
     function unloadDanmaku() {
         veyra.bilibiliDisableDanmaku()
-        root.danmakuOn = false
         root.danmakuLines = 0
+        veyra.setPreference("biliDanmaku", false)
     }
 
     function formatSeconds(total) {
@@ -1155,10 +1175,14 @@ VPage {
                                 objectName: "bili-danmaku-default"
                                 checked: root.danmakuDefault
                                 onToggled: function (on) {
-                                    veyra.setPreference("biliDanmaku", on)
-                                    // Follow immediately: the page the user is looking at
-                                    // must match the switch, not wait for the next video.
-                                    if (on) root.loadDanmaku()
+                                    // 与详情页按钮共用同一对入口，两边永远同步。
+                                    // 偏好由 enableDanmaku/unloadDanmaku 自己写，
+                                    // 这里不再单独 setPreference，避免两处不一致。
+                                    // Shares the same two entry points as the detail-page
+                                    // button, so the two stay in sync. The preference is
+                                    // written inside them; setting it here as well would
+                                    // be a second source of truth.
+                                    if (on) root.enableDanmaku()
                                     else root.unloadDanmaku()
                                 }
                             }
@@ -1857,11 +1881,13 @@ VPage {
                                 text: root.danmakuOn
                                       ? qsTr("弹幕开（%1 条）").arg(root.danmakuLines)
                                       : qsTr("弹幕关")
-                                // Per-video switch. The module default in 播放设置 decides
-                                // what a newly opened video starts with; this only affects
-                                // the video currently on screen.
+                                // 与播放设置里的同名开关是同一个状态：点这里会写偏好，
+                                // 那边跟着变，重启后保持。
+                                // Same state as the switch of the same name in 播放设置:
+                                // clicking here writes the preference, that switch
+                                // follows, and the choice survives a restart.
                                 onClicked: root.danmakuOn ? root.unloadDanmaku()
-                                                          : root.loadDanmaku()
+                                                          : root.enableDanmaku()
                             }
                         }
 
