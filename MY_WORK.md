@@ -108,6 +108,24 @@ grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
 | **播完后点底部播放条 → 403** | `togglePlayPause()` 复用已过期的 B 站 CDN 地址（带时效签名）| **未解决**。替代：回 B 站页重新点，或用「从头播放」|
 | **B 站页内播放 + Esc 退出** | 原生视频窗口永远画在 QML 之上；全屏时 Qt 的 `Shortcut` 收不到 Esc | **已放弃**，相关改动已回滚 |
 | **投币 / 搜索框回车 / 各种 `-401`** | B 站服务端风控 | **未解决**，详见 `docs\BILIBILI_MODULE_HISTORY.md` |
+| **选 4K 却只有 1080p** | **不是 bug**：B 站 4K 要大会员。日志写 `qn=126 not permitted for this account, served qn=112` | **无法修**（权限问题）。界面「输入 3840x2160」是**超分目标**，不是片源分辨率 |
+| **专业模式播放前约 2.7 秒透出桌面** | **作者原版架构**：`blankVideo()` 用 `SetWindowRgn(hwnd, 0×0)` 把原生视频窗口裁掉，直到新片源出帧；底下 Qt 的 `vwrap` 是空的，于是透出桌面 | **决定不修**（2026-10-25）。只影响观感，不影响功能 |
+
+**「透出桌面」的时序**（`logs/veyra-qml.log`，2026-10-25 实测）：
+
+```
+07.705  blank video until the new source presents (opening)   ← 空白期开始
+08.598  source-file] opened                                  ← 开网络流 0.89s
+09.956  ngx] NR adapter 初始化                                ← NGX 初始化 1.36s（最慢）
+10.192  graph] initialized                                   ← 建管线
+10.449  present-cost                                          ← 首帧上屏，空白期结束
+        合计 2.74 秒
+```
+
+**如果要修**（当时评估过，选择了不修）：需要 C++ 把 `g_videoBlanked` 暴露成
+QML 属性（`apps/veyra-qml/main.cpp` 里有这个状态，但只在 C++ 内部），然后
+QML 用它切换 `vwrap.color`。**只改 QML 无效**：`veyra.running` 在片源打开时
+（08.598）就变 true，比首帧上屏早 1.85 秒，遮罩会提前消失。
 
 **续播的技术细节**（如果以后真要修）：
 
