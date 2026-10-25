@@ -230,13 +230,40 @@ struct QmlPlayerBridge::Impl {
     std::wstring bilibiliQrUrl;
     // Last Bilibili module failure, surfaced by bilibiliLastError().
     std::wstring bilibiliError;
-    // One in-flight list fetch. Started by bilibiliLoadList, collected by tickBiliList on
-    // the GUI thread (same pattern as captureQuery below), so the result never crosses a
-    // thread boundary and the request no longer blocks a frame.
-    std::future<QmlPlayerBridge::ListFetchResult> biliListQuery;
-    bool biliListBusy = false;
-    QString biliListKind;
+    // 列表请求按「用途」分成四个独立槽位，互不顶替。
+    // 打开详情页时会同时发起 qualities 和 related 两个请求，而它们只相隔一个计时器
+    // 周期；共用一个槽位时后发的会覆盖先发的 future，先发的回复永远不会发出 ——
+    // 表现就是画质菜单一直只有「自动」，尽管请求确实发出去并拿到了数据。
+    // List requests get four independent slots grouped by purpose. Opening the detail
+    // page starts qualities and related one timer tick apart; a single shared slot let
+    // the later request overwrite the earlier one's future, so that reply never
+    // arrived - which showed as a quality menu stuck on 自动 even though the request
+    // ran and returned data.
+    enum class ListSlot : size_t { Cards = 0, Qualities, Related, Detail, Count };
+    // 一个排队中的请求：只记 kind 和它的代号，等前一个回收完再启动。
+    // A queued request: just the kind and its generation, started after the previous
+    // one in the same slot has been collected.
+    struct PendingListRequest {
+        QString kind;
+        int generation = 0;
+    };
+    struct ListSlotState {
+        std::future<QmlPlayerBridge::ListFetchResult> query;
+        bool busy = false;
+        QString kind;
+        int generation = 0;
+        std::vector<PendingListRequest> pending;
+    };
+    std::array<ListSlotState, size_t(ListSlot::Count)> biliListSlots{};
     int biliListGeneration = 0;
+    // 把一个 kind 归到它该用的槽位。（QString::startsWith 不是 constexpr，故不加。）
+    // Map a kind onto the slot it belongs to. (Not constexpr: startsWith is not.)
+    static ListSlot listSlotOf(const QString& kind) {
+        if (kind.startsWith(QLatin1String("qualities:"))) return ListSlot::Qualities;
+        if (kind.startsWith(QLatin1String("related:"))) return ListSlot::Related;
+        if (kind.startsWith(QLatin1String("detail:"))) return ListSlot::Detail;
+        return ListSlot::Cards;
+    }
     // 互动状态请求的代号：每发起一次递增，用来丢弃过期回复。
     // Generation counter for interaction-state requests, used to drop late replies.
     int biliInteractionGeneration = 0;
@@ -3040,28 +3067,46 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
 }
 void QmlPlayerBridge::tickBiliList() {
     auto& i = *impl_;
-    if (!i.biliListBusy) return;
-    if (i.biliListQuery.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    // 每个槽位单独回收：qualities 和 related 同时在路上时各自发自己的信号，
+    // 一次遍历处理所有已完成的，不会互相顶替。
+    // Collect each slot on its own: qualities and related can be in flight together and
+    // each emits its own signal, so one sweep drains everything that finished.
+    for (size_t n = 0; n < i.biliListSlots.size(); ++n) {
+        auto& slot = i.biliListSlots[n];
+        if (!slot.busy) {
+            // 槽位空着但有排队的请求：启动下一个。
+            // The slot is free and something is queued: start the next one.
+            if (!slot.pending.empty()) {
+                auto next = std::move(slot.pending.front());
+                slot.pending.erase(slot.pending.begin());
+                if (!next.kind.isEmpty()) {
+                    startListWorker(next.kind, next.generation);
+                }
+            }
+            continue;
+        }
+        if (slot.query.wait_for(std::chrono::seconds(0)) != std::future_status::ready) continue;
 
-    auto r = i.biliListQuery.get();
-    i.biliListBusy = false;
-    // A cancelled or superseded request drops its result: the user has already asked for
-    // something else and must not see this one land afterwards.
-    if (i.biliListKind.isEmpty()) return;
-    const QString kind = i.biliListKind;
-    const int generation = i.biliListGeneration;
-    i.biliListKind.clear();
+        auto r = slot.query.get();
+        slot.busy = false;
+        // A cancelled or superseded request drops its result: the user has already asked
+        // for something else and must not see this one land afterwards.
+        if (slot.kind.isEmpty()) continue;
+        const QString kind = slot.kind;
+        const int generation = slot.generation;
+        slot.kind.clear();
 
-    const bool objectRequest = kind.startsWith(QLatin1String("detail:"));
-    if (!r.ok) {
-        i.bilibiliError = r.error;
-        if (objectRequest) emit bilibiliObjectReady(kind, QVariantMap{}, generation);
-        else emit bilibiliListReady(kind, QVariantList{}, generation);
-        return;
+        const bool objectRequest = kind.startsWith(QLatin1String("detail:"));
+        if (!r.ok) {
+            i.bilibiliError = r.error;
+            if (objectRequest) emit bilibiliObjectReady(kind, QVariantMap{}, generation);
+            else emit bilibiliListReady(kind, QVariantList{}, generation);
+            continue;
+        }
+        i.bilibiliError.clear();
+        if (objectRequest) emit bilibiliObjectReady(kind, r.object, generation);
+        else emit bilibiliListReady(kind, r.items, generation);
     }
-    i.bilibiliError.clear();
-    if (objectRequest) emit bilibiliObjectReady(kind, r.object, generation);
-    else emit bilibiliListReady(kind, r.items, generation);
 }
 
 void QmlPlayerBridge::tickBiliPlay() {
@@ -7291,29 +7336,6 @@ bool QmlPlayerBridge::openNetworkAddress(const QString& address){
     openPath(url.adjusted(QUrl::RemoveFragment).toString(QUrl::FullyEncoded));return true;
 }
 
-bool QmlPlayerBridge::bilibiliSignIn(const QString& cookie){
-    std::wstring value = cookie.trimmed().toStdWString();
-    // Accept a full "Cookie: ..." header as pasted from the browser's devtools.
-    const std::wstring prefix = L"cookie:";
-    if (value.size() > prefix.size()) {
-        std::wstring head = value.substr(0, prefix.size());
-        for (auto& ch : head) ch = std::towlower(ch);
-        if (head == prefix) value = value.substr(prefix.size());
-    }
-    while (!value.empty() && (value.front() == L' ' || value.front() == L'\t')) value.erase(value.begin());
-    if (!media::bilibiliCookieLooksSignedIn(value)) {
-        emit notice(tr("Cookie 里没有 SESSDATA，请复制完整的 Cookie 请求头"), true);
-        return false;
-    }
-    if (!media::saveBilibiliCookie(value)) {
-        emit notice(tr("无法保存 Cookie"), true);
-        return false;
-    }
-    log::info("bilibili", "cookie stored");
-    emit notice(tr("B 站登录已保存，重新打开视频即可使用会员画质"), false);
-    return true;
-}
-
 void QmlPlayerBridge::bilibiliSignOut(){
     media::saveBilibiliCookie({});
     log::info("bilibili", "cookie cleared");
@@ -7347,45 +7369,6 @@ QVariantList cardsToVariant(const std::vector<media::BiliVideoCard>& cards) {
     return out;
 }
 } // namespace
-
-QVariantList QmlPlayerBridge::bilibiliSearch(const QString& keyword, int page){
-    std::vector<media::BiliVideoCard> cards;
-    std::wstring error;
-    media::setBiliCookie(media::loadBilibiliCookie());
-    if (!media::biliSearch(keyword.toStdWString(), page < 1 ? 1 : page, cards, error)) {
-        impl_->bilibiliError = error;
-        return {};
-    }
-    impl_->bilibiliError.clear();
-    return cardsToVariant(cards);
-}
-
-QVariantList QmlPlayerBridge::bilibiliRecommended(){
-    std::vector<media::BiliVideoCard> cards;
-    std::wstring error;
-    media::setBiliCookie(media::loadBilibiliCookie());
-    if (!media::biliRecommended(cards, error)) { impl_->bilibiliError = error; return {}; }
-    impl_->bilibiliError.clear();
-    return cardsToVariant(cards);
-}
-
-QVariantList QmlPlayerBridge::bilibiliHistory(){
-    std::vector<media::BiliVideoCard> cards;
-    std::wstring error;
-    media::setBiliCookie(media::loadBilibiliCookie());
-    if (!media::biliHistory(cards, error)) { impl_->bilibiliError = error; return {}; }
-    impl_->bilibiliError.clear();
-    return cardsToVariant(cards);
-}
-
-QVariantList QmlPlayerBridge::bilibiliFavorites(qlonglong mediaId, int page){
-    std::vector<media::BiliVideoCard> cards;
-    std::wstring error;
-    media::setBiliCookie(media::loadBilibiliCookie());
-    if (!media::biliFavorites(cards, error, mediaId, page)) { impl_->bilibiliError = error; return {}; }
-    impl_->bilibiliError.clear();
-    return cardsToVariant(cards);
-}
 
 QVariantList QmlPlayerBridge::bilibiliFavFolders(){
     std::vector<media::BiliFavFolder> folders;
@@ -7430,15 +7413,6 @@ void QmlPlayerBridge::bilibiliRequestFavFolders(const QString& reason){
     });
 }
 
-QVariantList QmlPlayerBridge::bilibiliFollowed(){
-    std::vector<media::BiliVideoCard> cards;
-    std::wstring error;
-    media::setBiliCookie(media::loadBilibiliCookie());
-    if (!media::biliFollowed(cards, error)) { impl_->bilibiliError = error; return {}; }
-    impl_->bilibiliError.clear();
-    return cardsToVariant(cards);
-}
-
 QVariantMap QmlPlayerBridge::bilibiliAccount(){
     media::setBiliCookie(media::loadBilibiliCookie());
     const auto a = media::biliAccount();
@@ -7449,33 +7423,6 @@ QVariantMap QmlPlayerBridge::bilibiliAccount(){
     m.insert(QStringLiteral("level"), a.level);
     m.insert(QStringLiteral("vip"), a.vip);
     return m;
-}
-
-QVariantList QmlPlayerBridge::bilibiliWatchLater(){
-    std::vector<media::BiliVideoCard> cards;
-    std::wstring error;
-    media::setBiliCookie(media::loadBilibiliCookie());
-    if (!media::biliWatchLater(cards, error)) { impl_->bilibiliError = error; return {}; }
-    impl_->bilibiliError.clear();
-    return cardsToVariant(cards);
-}
-
-QVariantList QmlPlayerBridge::bilibiliPopular(int page){
-    std::vector<media::BiliVideoCard> cards;
-    std::wstring error;
-    media::setBiliCookie(media::loadBilibiliCookie());
-    if (!media::biliPopular(cards, error, page)) { impl_->bilibiliError = error; return {}; }
-    impl_->bilibiliError.clear();
-    return cardsToVariant(cards);
-}
-
-QVariantList QmlPlayerBridge::bilibiliRelated(const QString& bvid){
-    std::vector<media::BiliVideoCard> cards;
-    std::wstring error;
-    media::setBiliCookie(media::loadBilibiliCookie());
-    if (!media::biliRelated(bvid.toStdWString(), cards, error)) { impl_->bilibiliError = error; return {}; }
-    impl_->bilibiliError.clear();
-    return cardsToVariant(cards);
 }
 
 QVariantList QmlPlayerBridge::bilibiliComments(const QString& bvid, int page){
@@ -7583,34 +7530,6 @@ bool QmlPlayerBridge::bilibiliDanmakuEnabled() const {
 
 int QmlPlayerBridge::bilibiliDanmakuCount() const {
     return impl_->danmakuWindow ? int(impl_->danmakuWindow->itemCount()) : 0;
-}
-
-QVariantList QmlPlayerBridge::bilibiliDanmaku(const QString& bvid, int pageIndex){
-    media::setBiliCookie(media::loadBilibiliCookie());
-    const auto page = media::biliVideoPage(bvid.toStdWString());
-    if (!page.ok) { impl_->bilibiliError = page.error; return {}; }
-    if (pageIndex < 0 || pageIndex >= int(page.pages.size())) {
-        impl_->bilibiliError = L"分P序号无效";
-        return {};
-    }
-    std::vector<media::BiliDanmaku> lines;
-    std::wstring error;
-    if (!media::biliDanmaku(page.pages[size_t(pageIndex)].first, lines, error)) {
-        impl_->bilibiliError = error;
-        return {};
-    }
-    impl_->bilibiliError.clear();
-    QVariantList out;
-    out.reserve(int(lines.size()));
-    for (const auto& d : lines) {
-        QVariantMap m;
-        m.insert(QStringLiteral("time"), d.time);
-        m.insert(QStringLiteral("mode"), d.mode);
-        m.insert(QStringLiteral("color"), d.color);
-        m.insert(QStringLiteral("text"), QString::fromStdWString(d.text));
-        out.push_back(m);
-    }
-    return out;
 }
 
 bool QmlPlayerBridge::bilibiliLike(const QString& bvid, bool like){
@@ -8072,12 +7991,39 @@ int QmlPlayerBridge::bilibiliLoadList(const QString& kind){
     media::setBiliCookie(media::loadBilibiliCookie());
 
     const int generation = ++impl_->biliListGeneration;
-    impl_->biliListKind = kind;
-    impl_->biliListBusy = true;
+    // 按 kind 选槽位：qualities / related / detail / 卡片列表各有各的位置，
+    // 所以详情页里同时发起的几个请求不会互相覆盖。
+    // Pick the slot by kind: qualities, related, detail and card lists each have their
+    // own, so the requests the detail page starts together cannot overwrite each other.
+    auto& slot = impl_->biliListSlots[size_t(Impl::listSlotOf(kind))];
+    // 同一槽位里已经有一个在途请求时，把新请求排进队列，而不是覆盖它。
+    // 直接给 slot.query 赋新值会销毁旧 future，那个请求取到的数据就永远不会送达
+    // QML —— 表现是数据明明回来了，界面却是空列表。队列里派发的请求在 tick 回收
+    // 完当前那个之后再启动，所以既不丢结果，也不会让 GUI 线程等待网络。
+    // Queue a new request instead of overwriting the one in flight in this slot.
+    // Assigning over slot.query destroys the old future, so whatever that request
+    // fetched never reaches QML - which shows as an empty list even though the data
+    // came back. A queued request starts only after the current one has been collected,
+    // so no result is lost and the GUI thread never waits on the network.
+    if (slot.busy) {
+        slot.pending.push_back(Impl::PendingListRequest{kind, generation});
+        return generation;
+    }
+    startListWorker(kind, generation);
+    return generation;
+}
+
+// 启动一个列表 worker。发起路径和 tick 的队列派发共用这一处。
+// Start one list worker; the direct path and the tick's queue both use this.
+void QmlPlayerBridge::startListWorker(const QString& kind, int generation) {
+    auto& slot = impl_->biliListSlots[size_t(Impl::listSlotOf(kind))];
+    slot.kind = kind;
+    slot.generation = generation;
+    slot.busy = true;
 
     // kind carries everything the worker needs: "home"/"popular"/... , "fav:<id>" or
     // "search:<words>".
-    impl_->biliListQuery = std::async(std::launch::async, [kind]() {
+    slot.query = std::async(std::launch::async, [kind]() {
         std::vector<media::BiliVideoCard> cards;
         std::wstring error;
         bool ok = false;
@@ -8093,9 +8039,23 @@ int QmlPlayerBridge::bilibiliLoadList(const QString& kind){
             if (okPage && parsed > 0) {
                 const QString head = kind.left(lastColon);
                 // detail:/qualities:/related: carry a bvid or a cid, not a page.
+                // fav: 的两种写法只差一件事：head（最后一个冒号左边）是不是就是
+                // "fav" 本身。
+                //   "fav:203714961"    → head=="fav"          → 截掉的是文件夹 id
+                //   "fav:203714961:2"  → head=="fav:203714961" → 截掉的是页码
+                // 不要再去数 head 里的冒号：带页码时 head 必然含一个冒号，用那个做判据
+                // 会把页码也当成 id（第一版就是这样，两处都错）。
+                // The two fav: forms differ in one thing only: whether head (everything
+                // left of the last colon) is the bare token "fav".
+                //   "fav:203714961"   -> head=="fav"           -> the cut piece is the id
+                //   "fav:203714961:2" -> head=="fav:203714961" -> the cut piece is a page
+                // Do not count colons in head: with a page, head always holds one, and
+                // using that as the test treats the page as an id too.
+                const bool favIdWithoutPage = head == QLatin1String("fav");
                 if (!head.startsWith(QLatin1String("detail:"))
                     && !head.startsWith(QLatin1String("qualities:"))
-                    && !head.startsWith(QLatin1String("related:"))) {
+                    && !head.startsWith(QLatin1String("related:"))
+                    && !favIdWithoutPage) {
                     page = parsed;
                     base = head;
                 }
@@ -8182,12 +8142,16 @@ int QmlPlayerBridge::bilibiliLoadList(const QString& kind){
         if (ok) r.items = cardsToVariant(cards);
         return r;
     });
-    return generation;
 }
 
 void QmlPlayerBridge::bilibiliCancelListLoad(){
+    // 取消所有在途的列表请求：清空每个槽位的 kind，回收时看到空 kind 就丢弃结果。
+    // biliListGeneration 继续递增，这样之后发出的小序号回复也会被判为过期。
+    // Cancel every in-flight list request by clearing each slot's kind; collection
+    // drops a result whose kind is empty. The generation still advances so replies to
+    // anything issued earlier are treated as stale too.
     ++impl_->biliListGeneration;
-    impl_->biliListKind.clear();
+    for (auto& slot : impl_->biliListSlots) slot.kind.clear();
 }
 
 bool QmlPlayerBridge::bilibiliWatchLaterToggle(const QString& bvid, bool add){
@@ -8243,60 +8207,11 @@ void QmlPlayerBridge::bilibiliRequestInteractionState(const QString& bvid){
     });
 }
 
-QVariantMap QmlPlayerBridge::bilibiliVideoDetail(const QString& bvid){
-    media::setBiliCookie(media::loadBilibiliCookie());
-    const auto page = media::biliVideoPage(bvid.toStdWString());
-    QVariantMap m;
-    m.insert(QStringLiteral("ok"), page.ok);
-    m.insert(QStringLiteral("error"), QString::fromStdWString(page.error));
-    m.insert(QStringLiteral("bvid"), QString::fromStdWString(page.bvid));
-    m.insert(QStringLiteral("title"), QString::fromStdWString(page.title));
-    m.insert(QStringLiteral("cover"), QString::fromStdWString(page.cover));
-    m.insert(QStringLiteral("desc"), QString::fromStdWString(page.desc));
-    m.insert(QStringLiteral("owner"), QString::fromStdWString(page.owner));
-    m.insert(QStringLiteral("play"), QVariant::fromValue<qlonglong>(page.play));
-    m.insert(QStringLiteral("like"), QVariant::fromValue<qlonglong>(page.like));
-    m.insert(QStringLiteral("duration"), page.duration);
-    QVariantList parts;
-    for (const auto& [cid, title] : page.pages) {
-        QVariantMap p;
-        p.insert(QStringLiteral("cid"), QVariant::fromValue<qlonglong>(cid));
-        p.insert(QStringLiteral("title"), QString::fromStdWString(title));
-        parts.push_back(p);
-    }
-    m.insert(QStringLiteral("parts"), parts);
-    return m;
-}
-
-QVariantList QmlPlayerBridge::bilibiliQualities(const QString& bvid, int pageIndex){
-    media::setBiliCookie(media::loadBilibiliCookie());
-    const auto page = media::biliVideoPage(bvid.toStdWString());
-    if (pageIndex < 0 || pageIndex >= int(page.pages.size())) return {};
-    QVariantList out;
-    for (const auto& q : media::biliQualities(bvid.toStdWString(), page.pages[size_t(pageIndex)].first)) {
-        QVariantMap m;
-        m.insert(QStringLiteral("id"), q.id);
-        m.insert(QStringLiteral("label"), QString::fromStdWString(q.label));
-        m.insert(QStringLiteral("vip"), q.needsVip);
-        out.push_back(m);
-    }
-    return out;
-}
-
 double QmlPlayerBridge::bilibiliResumeAtCid(const QString& bvid, qlonglong cid) {
     // No biliVideoPage here: the caller already has the cid from the detail response, and
     // asking for the page again was a whole extra round trip while the user waited.
     if (cid <= 0) return -1.0;
     media::setBiliCookie(media::loadBilibiliCookie());
-    return media::biliResumePosition(bvid.toStdWString(), cid);
-}
-
-double QmlPlayerBridge::bilibiliResumeAt(const QString& bvid, int pageIndex) {
-    media::setBiliCookie(media::loadBilibiliCookie());
-    const auto page = media::biliVideoPage(bvid.toStdWString());
-    if (!page.ok) return -1.0;
-    if (pageIndex < 0 || pageIndex >= int(page.pages.size())) return -1.0;
-    const long long cid = page.pages[size_t(pageIndex)].first;
     return media::biliResumePosition(bvid.toStdWString(), cid);
 }
 

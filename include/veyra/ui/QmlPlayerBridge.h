@@ -91,6 +91,10 @@ struct BiliTaskResult {
 
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
+    // 私有实现。提前声明，好让下面的成员函数签名能用它的嵌套类型。
+    // The private implementation, declared up front so member signatures below can
+    // name its nested types.
+    struct Impl;
     // --- professional-page readouts ---------------------------------------
     // Every one of these reports an engine value. Where the engine has no
     // measurement the getter says so (e.g. displayFpsKnown stays false, because
@@ -646,7 +650,6 @@ public:
     // Member renditions (1080P+/4K) are only served to a signed-in session. The user
     // pastes the Cookie header from their own browser once; it is kept under
     // %LOCALAPPDATA%\Veyra and sent on every later resolve.
-    Q_INVOKABLE bool bilibiliSignIn(const QString& cookie);
     Q_INVOKABLE void bilibiliSignOut();
     Q_INVOKABLE bool bilibiliSignedIn() const;
     // QR sign-in: start() fetches a code and returns the URL it encodes. The page
@@ -662,8 +665,6 @@ public:
     // Search / feed / detail / lists. Each returns a list of cards
     // (bvid, title, cover, owner, duration, play). An empty list means the request
     // failed or had no results; bilibiliLastError() says which.
-    Q_INVOKABLE QVariantList bilibiliSearch(const QString& keyword, int page);
-    Q_INVOKABLE QVariantList bilibiliRecommended();
     // Asynchronous form of the list endpoints. The synchronous ones block the GUI thread
     // for a full HTTPS round trip, which is why a rail click used to freeze the window and
     // why a loading skeleton could never appear: nothing repaints until the call returns.
@@ -673,6 +674,9 @@ public:
     Q_INVOKABLE void bilibiliCancelListLoad();
     // Collects the finished fetch; called from the GUI tick like tickCapture.
     void tickBiliList();
+    // 启动一个列表 worker。发起路径与 tick 的队列派发共用。
+    // Starts one list worker; shared by the direct path and the tick's queue dispatch.
+    void startListWorker(const QString& kind, int generation);
     // Result of one asynchronous list fetch, built by the worker and consumed unchanged on
     // the GUI thread. Public so the worker lambda can name it.
     struct ListFetchResult {
@@ -683,11 +687,9 @@ public:
         // because the video detail page is one map, not a list of cards.
         QVariantMap object;
     };
-    Q_INVOKABLE QVariantList bilibiliHistory();
     // mediaId is qlonglong: folder ids run past the 32-bit int range (3490600161
     // for one real folder), and truncating one made the API fall back to the
     // default folder, so every folder looked identical.
-    Q_INVOKABLE QVariantList bilibiliFavorites(qlonglong mediaId = 0, int page = 1);
     // The account's own favourite folders (id, title, count), so the page can offer a
     // picker instead of always showing the default one.
     Q_INVOKABLE QVariantList bilibiliFavFolders();
@@ -695,14 +697,9 @@ public:
     // Async form: starts the request on a worker; the list arrives through
     // bilibiliFavFoldersReady.
     Q_INVOKABLE void bilibiliRequestFavFolders(const QString& reason = QString());
-    Q_INVOKABLE QVariantList bilibiliFollowed();
     // Watch later, the popular board, and the related list under a player.
-    Q_INVOKABLE QVariantList bilibiliWatchLater();
-    Q_INVOKABLE QVariantList bilibiliPopular(int page);
-    Q_INVOKABLE QVariantList bilibiliRelated(const QString& bvid);
     // Comments and the danmaku track for the detail page.
     Q_INVOKABLE QVariantList bilibiliComments(const QString& bvid, int page);
-    Q_INVOKABLE QVariantList bilibiliDanmaku(const QString& bvid, int pageIndex);
     // Loads the danmaku track for the last-played Bilibili part into the overlay and
     // starts drawing it over the picture. `bvid`/`pageIndex` identify the part; an
     // empty or failing load just leaves the overlay hidden.
@@ -746,7 +743,6 @@ public:
     // Async form: the GUI thread only starts the request; the round trip runs on a
     // worker and the result arrives through bilibiliInteractionReady.
     Q_INVOKABLE void bilibiliRequestInteractionState(const QString& bvid);
-    Q_INVOKABLE QVariantMap bilibiliVideoDetail(const QString& bvid);
     Q_INVOKABLE QVariantMap bilibiliAccount();
     // Plays one part of a video through the normal pipeline. `qn` 0 = best allowed.
     // fromStart skips the watch-history resume point: the detail page offers a separate
@@ -765,12 +761,10 @@ public:
     // Where the account left this part, in seconds, or -1 when there is no resume
     // point. The detail page calls it once so the play button can say what it will do;
     // bilibiliPlay reads it again itself, so the two never disagree on the value.
-    Q_INVOKABLE double bilibiliResumeAt(const QString& bvid, int pageIndex);
     // Same answer as bilibiliResumeAt without asking the site for the page again: the
     // detail response already carries every part's cid, and parsing the page a second
     // time was a whole extra round trip in the wait when opening a video.
     Q_INVOKABLE double bilibiliResumeAtCid(const QString& bvid, qlonglong cid);
-    Q_INVOKABLE QVariantList bilibiliQualities(const QString& bvid, int pageIndex);
     // Reports where the user stopped to the account's own watch history. Called when
     // another source is opened and once more on teardown; a no-op when nothing from
     // the Bilibili page is playing. Failures are logged and ignored.
@@ -1674,7 +1668,6 @@ private:
     // Opens a device/stream URI (capture, screen) the way openPath opens a file.
     void openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill = false);
 
-    struct Impl;
     std::unique_ptr<Impl> impl_;
     QObject* updates_ = nullptr;
 };

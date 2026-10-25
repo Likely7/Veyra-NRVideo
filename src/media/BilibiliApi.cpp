@@ -498,6 +498,7 @@ bool biliFavFolders(std::vector<BiliFavFolder>& out, std::wstring& error) {
         f.id = (*folder)["id"].asInt(0);
         f.title = fromUtf8((*folder)["title"].asString());
         f.count = (*folder)["media_count"].asInt(0);
+        f.attr = int((*folder)["attr"].asInt(-1));
         if (f.id > 0) out.push_back(std::move(f));
     }
     return true;
@@ -514,21 +515,66 @@ bool biliFavorites(std::vector<BiliVideoCard>& out, std::wstring& error,
         std::vector<BiliFavFolder> folders;
         if (!biliFavFolders(folders, error)) return false;
         if (folders.empty()) { error = L"账号下没有收藏夹"; return false; }
-        mediaId = folders.front().id;
+        // media_id=0 应当表示「默认收藏夹」，但 list-all 接口不保证把默认收藏夹
+        // 排在第一位 —— 原来取 folders.front() 会挑中一个空文件夹，于是「我的收藏」
+        // 显示「没有内容」，而旁边几个收藏夹都是好的。
+        // 先用站方的 attr 标志（0 = 默认），它没给时退回「收藏数最多」的那个：
+        // 默认收藏夹几乎总是最大的一夹。
+        // media_id=0 is supposed to mean "the default folder", but list-all does not
+        // guarantee the default comes first. Taking folders.front() therefore picked
+        // some empty folder, which showed as "我的收藏 has no content" while the other
+        // folders listed fine. Use the site's attr flag (0 = default) first, and fall
+        // back to "the folder with the most items", which the default almost always is.
+        const BiliFavFolder* chosen = nullptr;
+        for (const auto& f : folders) {
+            if (f.attr == 0) { chosen = &f; break; }
+        }
+        if (!chosen) {
+            for (const auto& f : folders) {
+                if (!chosen || f.count > chosen->count) chosen = &f;
+            }
+        }
+        mediaId = chosen ? chosen->id : folders.front().id;
+        log::info("bili-fav", std::format("media_id=0 resolved to {} attr={} count={}",
+            mediaId, chosen ? chosen->attr : -1, chosen ? chosen->count : -1));
     }
     if (page < 1) page = 1;
 
+    // 参数对齐网页收藏夹页：order=mtime、type=0、tid=0。
+    // 只带 media_id/ps/pn/platform 时服务端会省略已失效的收藏 —— 于是 125 个的夹
+    // 只列出 121 条（apiCount=125 但 entries 合计 121）。网页端带上 type 之后才把
+    // 失效项一并给出。
+    // Match the parameters the site's own favourites page sends: order=mtime, type=0,
+    // tid=0. With only media_id/ps/pn/platform the server omits unavailable items, so a
+    // folder of 125 listed just 121 (apiCount=125 while the entries added up to 121).
+    // The site's page sends type, which is what brings the unavailable ones back.
     const std::wstring listPath = L"/x/v3/fav/resource/list?media_id="
-        + std::to_wstring(mediaId) + L"&ps=30&pn=" + std::to_wstring(page) + L"&platform=web";
+        + std::to_wstring(mediaId) + L"&ps=30&pn=" + std::to_wstring(page)
+        + L"&order=mtime&type=0&tid=0&platform=web";
     std::string body;
     if (!httpGet(L"api.bilibili.com", listPath, g_cookie, body, error)) return false;
     const auto root = json::parse(body);
     if (!checkCode(root, error, L"收藏")) return false;
+    size_t seen = 0;
+    size_t skipped = 0;
     for (const auto* media : root["data"]["medias"].elements()) {
+        ++seen;
         BiliVideoCard card;
         fillCard(*media, card);
         if (!card.bvid.empty()) out.push_back(card);
+        else ++skipped;
     }
+    // 这一页实际给了几条、其中几条没有 bvid 被跳过。收藏夹的 media_count 包含已
+    // 失效的收藏，而本接口不返回那些条目（2026-10-25 实测：某夹 media_count=125，
+    // 逐页累计只有 121，且 noBvid 始终为 0 —— 说明服务端就没给那 4 条，不是我们
+    // 过滤掉的）。补上 order/type/tid 参数也没能拿回来，故接受这个差异。
+    // How many entries this page returned, and how many were skipped for having no
+    // bvid. A folder's media_count includes unavailable favourites, and this endpoint
+    // omits them (measured 2026-10-25: media_count=125 while the pages added up to 121,
+    // with noBvid always 0 - so the server never sent those four; we did not filter
+    // them). Adding order/type/tid did not bring them back either, hence accepting it.
+    log::info("bili-fav", std::format("media_id={} page={} entries={} parsed={} skipped={}",
+        mediaId, page, seen, out.size(), skipped));
     return true;
 }
 
@@ -942,15 +988,45 @@ double biliResumePosition(const std::wstring& bvid, long long cid, double* durat
 
 std::vector<BiliQuality> biliQualities(const std::wstring& bvid, long long cid) {
     std::vector<BiliQuality> out;
-    if (cid <= 0) return out;
-    const auto response = fetchPlayurl(bvid, cid, 127);
-    if (!response.ok) return out;
+    if (cid <= 0) { log::warn("bili-quality", "cid<=0, no request"); return out; }
 
-    // Collect the distinct rendition ids the server actually returned.
+    // qn=80（1080p）而不是 127（8K）：playurl 的 qn 是「我要这一档」，服务端只会
+    // 在 dash.video 里给出被请求的那一档。用 127 请求时没 8K 权限的账号只能拿回
+    // 服务端降级后的单一档位，于是画质菜单只剩「自动」。用 80 请求才会列出全部
+    // 可选档位。newbv 的默认值同为 80，见其 BiliHttpApi.kt 的 `qn: Int? = 80`。
+    // qn=80 (1080p) rather than 127 (8K): playurl treats qn as "serve me this tier",
+    // so dash.video carries only the requested tier. Asking for 8K on an account
+    // without it returns just the single downgraded tier, which left the quality menu
+    // with nothing but 自动. Asking for 80 lists every tier instead. newbv defaults to
+    // 80 as well (BiliHttpApi.kt: `qn: Int? = 80`).
+    const auto response = fetchPlayurl(bvid, cid, 80);
+    if (!response.ok) {
+        log::warn("bili-quality", "playurl failed for qn=80");
+        return out;
+    }
+
     std::vector<long long> ids;
-    for (const auto* video : response.root["data"]["dash"]["video"].elements()) {
-        const long long id = (*video)["id"].asInt(0);
+    // support_formats 是服务端给出的「本片支持哪些画质」清单，与请求的 qn 无关，
+    // 是画质菜单的权威来源。dash.video 只反映这次请求实际取回的流，作为兜底。
+    // support_formats is the server's list of the tiers this video has, independent
+    // of the requested qn, so it is the authoritative menu source. dash.video only
+    // reflects the streams this request actually returned, hence the fallback.
+    for (const auto* format : response.root["data"]["support_formats"].elements()) {
+        const long long id = (*format)["quality"].asInt(0);
         if (id > 0 && std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
+    }
+    const char* source = "support_formats";
+    if (ids.empty()) {
+        source = "dash.video";
+        for (const auto* video : response.root["data"]["dash"]["video"].elements()) {
+            const long long id = (*video)["id"].asInt(0);
+            if (id > 0 && std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
+        }
+    }
+    {
+        std::string joined;
+        for (long long id : ids) joined += std::to_string(id) + " ";
+        log::info("bili-quality", std::format("cid={} via={} ids=[{}]", cid, source, joined));
     }
     std::sort(ids.begin(), ids.end(), std::greater<>());
     for (long long id : ids) {

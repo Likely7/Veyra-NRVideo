@@ -110,6 +110,7 @@ grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
 | **投币 / 搜索框回车 / 各种 `-401`** | B 站服务端风控 | **未解决**，详见 `docs\BILIBILI_MODULE_HISTORY.md` |
 | **选 4K 却只有 1080p** | **不是 bug**：B 站 4K 要大会员。日志写 `qn=126 not permitted for this account, served qn=112` | **无法修**（权限问题）。界面「输入 3840x2160」是**超分目标**，不是片源分辨率 |
 | **专业模式播放前约 2.7 秒透出桌面** | **作者原版架构**：`blankVideo()` 用 `SetWindowRgn(hwnd, 0×0)` 把原生视频窗口裁掉，直到新片源出帧；底下 Qt 的 `vwrap` 是空的，于是透出桌面 | **决定不修**（2026-10-25）。只影响观感，不影响功能 |
+| **收藏夹计数 125、实际只列出 121** | **不是我们的 bug**：`/x/v3/fav/resource/list` 不返回已失效的收藏，而 `media_count` 含它们 | **接受**（2026-10-25）。实测 `noBvid` 恒为 0、`apiCount=125` 而逐页累计 121，证明服务端就没发那 4 条；补 `order=mtime&type=0&tid=0` 也拿不回来 |
 
 **「透出桌面」的时序**（`logs/veyra-qml.log`，2026-10-25 实测）：
 

@@ -105,11 +105,16 @@ bool biliFavorites(std::vector<BiliVideoCard>& out, std::wstring& error,
                    long long mediaId = 0, int page = 1);
 bool biliFollowed(std::vector<BiliVideoCard>& out, std::wstring& error);
 
-// One favourite folder: its id, name and how many videos it holds.
+// One favourite folder: its id, name, how many videos it holds, and the site's attr
+// flag. attr 0 marks the account's default folder, which is the one media_id=0 is
+// supposed to mean; the API does not guarantee it comes first in the list.
+// 一个收藏夹：id、名称、视频数，以及站方的 attr 标志。attr 为 0 表示默认收藏夹 ——
+// 也就是 media_id=0 本该指向的那个；接口不保证它排在列表第一位。
 struct BiliFavFolder {
     long long id = 0;
     std::wstring title;
     long long count = 0;
+    int attr = -1;   // -1 表示接口没给这个字段
 };
 // The folders the signed-in account created, in the site's own order.
 bool biliFavFolders(std::vector<BiliFavFolder>& out, std::wstring& error);
