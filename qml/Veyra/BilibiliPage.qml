@@ -178,15 +178,12 @@ VPage {
     // a fresh sign-in pass force = true.
     function load(view_, force) {
         root.showSettings = false
-        // 播过视频之后历史记录必然变了，这一次必须真去拉：缓存里的列表是播放前的。
-        // 只对 history 生效，其它列表（推荐、热门）不受影响，仍然走缓存。
-        // After playback the history list has changed, so this fetch must really happen;
-        // the cached copy predates the video. Only history is affected - the feed and the
-        // popular board keep using their cache.
-        if (view_ === "history" && root.biliHistoryDirty) {
-            root.biliHistoryDirty = false
-            force = true
-        }
+        // 历史记录永远真拉，不吃缓存：进度是边播边上报的，B 站那边随时在变，缓存下来
+        // 只会显示过期内容。左侧栏那一项因此每次点击都先显示「加载中…」再填新列表。
+        // History always fetches: progress is reported continuously while a video plays,
+        // so the site's copy changes at any time and a cached list is simply stale. Each
+        // click on the rail entry refreshes the cards.
+        if (view_ === "history") force = true
         // A favourite folder keeps its own list, keyed by folder so switching folders does
         // not reuse another folder's cards.
         const key = view_ === "fav" ? ("fav:" + root.favFolderId) : view_
@@ -640,16 +637,6 @@ VPage {
     // the way back, driven from the position the bridge already publishes.
     property bool biliPlaying: false
     property real lastSeenPosition: 0
-    // 播放过 B 站视频之后，账号的历史记录就已经变了 —— 进度是边播边上报的（每隔几秒
-    // 一次，切走时还会再补一次），所以「历史记录」那张缓存列表必然过期。
-    // 之前没有任何地方让它失效：播完回到浏览页点「历史记录」，看到的还是播放前的旧
-    // 列表，只有点右上角刷新（force=true）才更新。
-    // Playing a video changes the account's history: progress is reported every few
-    // seconds while it plays, plus once when the source goes away, so the cached
-    // 历史记录 list is necessarily stale afterwards. Nothing used to invalidate it, so
-    // after a video finished the rail still showed the pre-playback list until the user
-    // pressed 刷新 (the only caller that passes force = true).
-    property bool biliHistoryDirty: false
 
     function playSelected(fromStart) {
         if (!root.detail.ok) return
@@ -663,10 +650,6 @@ VPage {
         const reloadDanmaku = root.danmakuOn || root.danmakuDefault
         if (root.danmakuOn) veyra.bilibiliDisableDanmaku()
         root.biliPlaying = true
-        // 一开播历史就随时会变（进度连续上报），下一次点「历史记录」必须重新拉。
-        // The moment playback starts the account's history can change (progress is
-        // reported continuously), so the next visit to 历史记录 has to fetch again.
-        root.biliHistoryDirty = true
         root.lastSeenPosition = 0
         // The cid comes from the detail response, so the play call no longer asks the site
         // for the page again: that lookup sat between the click and the first frame.
@@ -705,11 +688,6 @@ VPage {
             // (a restart) - either way playback is no longer mid-video.
             if (root.lastSeenPosition > 1 && pos >= dur - 0.4) {
                 root.biliPlaying = false
-                // 看完的那一刻会再上报一次（标记已看完），历史又变了一次；如果用户在
-                // 播放中点过历史记录（那次已经消费掉标记），这里必须重新打上。
-                // Finishing reports once more (the "watched to the end" flag), changing the
-                // history again; re-arm the flag in case a mid-playback visit consumed it.
-                root.biliHistoryDirty = true
                 // 回到视频开始的那个页面。引擎保留会话；画面不再显示，因为 "bili"
                 // 是浏览页，它的视频区域不是播放面。
                 // 用户关掉「播放完成后回到视频详情」时留在播放画面：按钮图标会变回
@@ -803,7 +781,7 @@ VPage {
                 NavItem { label: qsTr("首页推荐"); target: "home"; onActivated: root.load("home") }
                 NavItem { label: qsTr("热门"); target: "popular"; onActivated: root.load("popular") }
                 NavItem { label: qsTr("关注动态"); target: "follow"; onActivated: root.load("follow") }
-                NavItem { label: qsTr("历史记录"); target: "history"; onActivated: root.load("history") }
+                NavItem { label: qsTr("历史记录"); target: "history"; onActivated: root.load("history", true) }
                 NavItem { label: qsTr("我的收藏"); target: "fav"; onActivated: root.load("fav") }
                 NavItem { label: qsTr("稍后再看"); target: "watchlater"; onActivated: root.load("watchlater") }
                 NavItem { label: qsTr("搜索结果"); target: "search"; onActivated: {} }
