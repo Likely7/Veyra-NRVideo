@@ -651,12 +651,10 @@ public:
     // pastes the Cookie header from their own browser once; it is kept under
     // %LOCALAPPDATA%\Veyra and sent on every later resolve.
     Q_INVOKABLE void bilibiliSignOut();
-    Q_INVOKABLE bool bilibiliSignedIn() const;
-    // QR sign-in: start() fetches a code and returns the URL it encodes. The page
-    // draws it with bilibiliQrImage() and polls once a second until the phone
-    // confirms. The code stays in this process; no browser window is involved.
-    Q_INVOKABLE QString bilibiliQrStart();
-    Q_INVOKABLE QString bilibiliQrPoll();
+    // QR sign-in is asynchronous: bilibiliRequestQrStart() fetches a code and
+    // bilibiliRequestQrPoll() asks once per second until the phone confirms; the page
+    // renders whatever bilibiliQrImage() returns and reacts to bilibiliQrStarted /
+    // bilibiliQrPolled. The code stays in this process; no browser window is involved.
     // The current sign-in code as an image URL for QML's Image source. Empty when
     // there is no code. `size` is the rendered pixel size of one symbol edge.
     Q_INVOKABLE QString bilibiliQrImage(int size = 320);
@@ -671,7 +669,6 @@ public:
     // These start the fetch on a worker and publish the result through bilibiliListReady.
     // Returns a generation id; a later request supersedes an earlier one.
     Q_INVOKABLE int bilibiliLoadList(const QString& kind);
-    Q_INVOKABLE void bilibiliCancelListLoad();
     // Collects the finished fetch; called from the GUI tick like tickCapture.
     void tickBiliList();
     // 启动一个列表 worker。发起路径与 tick 的队列派发共用。
@@ -690,25 +687,11 @@ public:
     // mediaId is qlonglong: folder ids run past the 32-bit int range (3490600161
     // for one real folder), and truncating one made the API fall back to the
     // default folder, so every folder looked identical.
-    // The account's own favourite folders (id, title, count), so the page can offer a
-    // picker instead of always showing the default one.
-    Q_INVOKABLE QVariantList bilibiliFavFolders();
     // 异步版：主线程只发起，结果为通过 bilibiliFavFoldersReady 回到 QML。
     // Async form: starts the request on a worker; the list arrives through
     // bilibiliFavFoldersReady.
     Q_INVOKABLE void bilibiliRequestFavFolders(const QString& reason = QString());
-    // Watch later, the popular board, and the related list under a player.
-    // Comments and the danmaku track for the detail page.
-    Q_INVOKABLE QVariantList bilibiliComments(const QString& bvid, int page);
-    // Loads the danmaku track for the last-played Bilibili part into the overlay and
-    // starts drawing it over the picture. `bvid`/`pageIndex` identify the part; an
-    // empty or failing load just leaves the overlay hidden.
-    Q_INVOKABLE bool bilibiliEnableDanmaku(const QString& bvid, int pageIndex);
     Q_INVOKABLE void bilibiliDisableDanmaku();
-    Q_INVOKABLE bool bilibiliDanmakuEnabled() const;
-    Q_INVOKABLE int bilibiliDanmakuCount() const;
-    // Interactions. Each returns false and sets bilibiliLastError() on refusal.
-    Q_INVOKABLE bool bilibiliLike(const QString& bvid, bool like);
     // 下面九个异步版：发起即返回，结果通过对应的 Ready 信号回到 QML。
     // 每个操作有独立槽位，打开详情页时同时发起的多个请求互不覆盖。
     // The nine async forms below return at once; results arrive through the matching
@@ -723,10 +706,8 @@ public:
     Q_INVOKABLE void bilibiliRequestQrStart();
     Q_INVOKABLE void bilibiliRequestQrPoll();
     Q_INVOKABLE void bilibiliRequestAccount();
-    Q_INVOKABLE bool bilibiliCoin(const QString& bvid, int count);
     // folderId 0 targets the account's first folder; the page passes the one the user
     // picked in the folder chooser shown beside the interaction buttons.
-    Q_INVOKABLE bool bilibiliFavorite(const QString& bvid, bool add, qlonglong folderId = 0);
     // 异步版：发起后立即返回，结果通过 bilibiliFavoriteReady 回来。
     // reason 区分两个调用点（"toggle" 取消收藏 / "picker" 从浮层选定文件夹），
     // 回调据此决定要不要关浮层、要不要刷新互动状态。
@@ -736,14 +717,11 @@ public:
     // whether to close the picker and whether to re-read the interaction state.
     Q_INVOKABLE void bilibiliRequestFavorite(const QString& bvid, bool add,
                                              qlonglong folderId, const QString& reason);
-    Q_INVOKABLE bool bilibiliWatchLaterToggle(const QString& bvid, bool add);
-    Q_INVOKABLE QVariantMap bilibiliInteractionState(const QString& bvid);
     // 异步版：主线程只发起，网络请求在 worker 里跑，结果通过
-    // bilibiliInteractionReady 回到 QML。同步版保留给非界面调用点。
+    // bilibiliInteractionReady 回到 QML。
     // Async form: the GUI thread only starts the request; the round trip runs on a
     // worker and the result arrives through bilibiliInteractionReady.
     Q_INVOKABLE void bilibiliRequestInteractionState(const QString& bvid);
-    Q_INVOKABLE QVariantMap bilibiliAccount();
     // Plays one part of a video through the normal pipeline. `qn` 0 = best allowed.
     // fromStart skips the watch-history resume point: the detail page offers a separate
     // button for that, because a video already in the history would otherwise always
@@ -758,13 +736,6 @@ public:
     // Shared tail of the two entry points above, after the part is known.
     bool bilibiliPlayResolved(const QString& bvid, qlonglong cid,
                               const std::wstring& pageTitle, int qn, bool fromStart);
-    // Where the account left this part, in seconds, or -1 when there is no resume
-    // point. The detail page calls it once so the play button can say what it will do;
-    // bilibiliPlay reads it again itself, so the two never disagree on the value.
-    // Same answer as bilibiliResumeAt without asking the site for the page again: the
-    // detail response already carries every part's cid, and parsing the page a second
-    // time was a whole extra round trip in the wait when opening a video.
-    Q_INVOKABLE double bilibiliResumeAtCid(const QString& bvid, qlonglong cid);
     // Reports where the user stopped to the account's own watch history. Called when
     // another source is opened and once more on teardown; a no-op when nothing from
     // the Bilibili page is playing. Failures are logged and ignored.

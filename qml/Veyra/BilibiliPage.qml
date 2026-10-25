@@ -260,16 +260,6 @@ VPage {
     Connections {
         target: veyra
         function onBilibiliListReady(kind, items, generation) {
-            // 临时诊断：看清每个列表响应落到哪个分支、带了多少条。
-            if (!kind.startsWith("qualities:") && !kind.startsWith("related:"))
-                console.log("[bili-list] kind=" + kind + " items=" + items.length
-                    + " gen=" + generation
-                    + " pendingGen=" + root.pendingListGeneration
-                    + " moreGen=" + root.loadMoreGeneration
-                    + " loadingMore=" + root.loadingMore
-                    + " pendingKey=" + root.pendingListKey
-                    + " activeKey=" + root.activeListKey
-                    + " cards=" + root.cards.length)
             // One signal carries several kinds now; dispatch on the prefix so a card list,
             // a quality list and a related list cannot be mistaken for one another.
             if (kind.startsWith("qualities:")) {

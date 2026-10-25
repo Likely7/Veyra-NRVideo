@@ -698,6 +698,10 @@ double QmlPlayerBridge::bilibiliResumeAtCid(const QString& bvid, qlonglong cid) 
 而 `detail.parts` 里**已经有 cid**，白等一次往返。
 切换分 P 时同样改用 `parts[index].cid`。
 
+> **现状（2026-10-25）**：`bilibiliResumeAtCid` 已随其它同步方法一起删除，改用异步的
+> `bilibiliRequestResumeAt(bvid, cid)`，结果经 `bilibiliResumeReady` 回到 QML。
+> 上面这段是当时的记录，留作背景。
+
 **延后的安全措施**：每次延后请求后检查 `root.view !== "detail"`，
 用户已离开就不再发请求。
 
