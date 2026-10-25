@@ -34,14 +34,19 @@
 
 ## 一、未解决问题与已知限制
 
-### 1. 搜索框回车无响应（未解决）
+### 1. 搜索框回车无响应（未解决，2026-10-25 复测确认仍在）
 
 | 项目 | 内容 |
 |---|---|
 | 位置 | `qml/Veyra/BilibiliPage.qml` 的搜索框 |
 | 现象 | 输入关键词后按回车不搜索；点「搜索」按钮正常 |
 | 引入版本 | **既存问题**，基线 v16 就有，不是后来引入的 |
+| 现状 | **2026-10-25 用户复测：仍然不响应** |
 | 替代方案 | 用「搜索」按钮 |
+
+**注意**：`BilibiliPage.qml:879` 里**写着** `onAccepted: root.doSearch(true)`，
+但它不触发 —— 不是忘了写，是焦点链拿不到按键（见下面证据）。改代码前先看这一节，
+别以为没人接这个信号。
 
 **诊断证据**（在 `QmlPlayerBridge.cpp` 的 eventFilter 临时加日志得到）：
 ```
@@ -81,15 +86,21 @@
 **曾尝试 4 次修复，3 次导致播放闪退**，详见 v13 章节的失败记录。
 
 
-### 3. 播完后点底部播放条按钮 → 403（未解决）
+### 3. 播完后点底部播放条按钮 → 403（**已解决 2026-10-25**）
 
 | 项目 | 内容 |
 |---|---|
-| 现象 | 视频播完后点底部控制条的播放按钮，报「无法连接到服务器」 |
+| 现象 | 视频播完后点底部控制条的播放按钮，报「无法连接到服务器」|
 | 原因 | `togglePlayPause()` 复用已过期的 B 站 CDN 地址（带时效签名）|
-| 替代方案 | 回 B 站页重新点该视频，或用详情页的「从头播放」|
+| **修复** | 记住 `bvid/cid/画质` 重新解析，拿到一条新签名地址，从头播 |
+| **关键点** | B 站分支必须排在 `togglePlayPause()` 里**通用网络地址分支之前** —— B 站来源也是网络地址（`liveKind=="url"`），那个分支会先拿过期地址重连 |
+| 位置 | `QmlPlayerBridge::togglePlayPause()`；身份记录在 `bilibiliPlayResolved()`，清理在 `openPath()` 的 `!keepBilibiliStream` 分支 |
 
-**曾尝试修复，导致闪退**，详见 v13 章节。
+**早先那次「曾尝试修复，导致闪退」见 v13 章节——那是另一条思路（改 `EngineController::open()`），
+与本次无关。本次只动 `togglePlayPause()` 的分派顺序，没有碰引擎。**
+
+顺带加了「播放完成后回到视频详情」开关（偏好 `biliReturnAfterEnd`，默认关）。
+默认关时播完停在播放画面，点播放按钮从头重播；打开则播完回详情页（原行为）。
 
 
 ### 4. B 站页内播放 + Esc 退出（已放弃）
@@ -1201,11 +1212,11 @@ src/media/DanmakuOverlay.cpp  = EBA91C2B3FCFB48A
 
 无 pdb/cdb 无法符号化定位。**结论：这个区域存在未理解的问题，暂停尝试。**
 
-### 另一个未修问题：播完后点播放条按钮 → 403
+### 播完后点播放条按钮 → 403（**已于 2026-10-25 修复**）
 
-**根因**（已定位，但修复尝试导致闪退）：
+**根因**：
 
-`togglePlayPause()` 的 `:7482`：
+`togglePlayPause()` 里：
 ```cpp
 if (liveKind == "url" && (transport == Ended || ...)) {
     openNetworkAddress(sourceLabel);   // 用旧 CDN 地址重开 → 地址已过期 → 403
@@ -1213,12 +1224,27 @@ if (liveKind == "url" && (transport == Ended || ...)) {
 }
 ```
 
-B 站播放时 `liveKind = "url"`（`openPath:6833` 设置），所以播完点播放会复用过期地址。
-B 站 CDN 地址带时效签名，过期返回 403 Forbidden。
+B 站播放时 `liveKind = "url"`，所以播完点播放会复用过期地址。B 站 CDN 地址带时效签名，
+过期返回 403 Forbidden。
 
-**替代办法（不需要修代码）**：
-- 回 B 站页重新点该视频的播放按钮（会重新解析地址）
-- 或用详情页的「从头播放」按钮
+**当初为什么难修**：这条分支在 `togglePlayPause()` 靠前的位置，直接 `return` 掉了，
+所以任何加在它后面的 B 站判断都到不了。而且加在别处的尝试（改 `EngineController::open()`
+支持起播位置）曾导致闪退。
+
+**最终解法**：把 B 站判断**放到这条分支之前**，并按记住的 `bvid/cid/画质` 重新解析。
+
+```cpp
+// 函数开头，所有网络地址处理之前
+if (biliSourceActive && !biliReplayBvid.isEmpty() && biliReplayCid > 0
+    && (s.transport == T::Ended || !s.running)) {
+    bilibiliPlayCid(biliReplayBvid, biliReplayCid, biliReplayQuality, /*fromStart=*/true);
+    return;
+}
+```
+
+从头播（`fromStart=true`）：播完时位置在结尾，沿用续播位置会立刻又结束。
+
+**没有碰引擎**，只调整了 `togglePlayPause()` 的分派顺序，所以不存在当年那个闪退风险。
 
 ### 已知但接受的行为
 
