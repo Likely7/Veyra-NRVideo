@@ -318,6 +318,22 @@ struct QmlPlayerBridge::Impl {
     // engine has a running session to seek.
     double biliResumeAt = -1.0;
     uint64_t biliResumeSession = 0;
+    // 当前正在播的是 B 站视频。B 站给的是带时效签名的 CDN 地址，播完再拿它重开
+    // 必然 403，所以结束后的「播放」不能重开 sourceLabel —— 那里记的就是那条过期
+    // 地址。打开任何非 B 站来源时清掉。
+    // The source currently playing is a Bilibili video. Bilibili hands out CDN URLs
+    // with an expiry signature, so reopening sourceLabel after the video ends is
+    // guaranteed to 403 - that label holds exactly that stale address. Cleared whenever
+    // a non-Bilibili source is opened.
+    bool biliSourceActive = false;
+    // 重播身份：视频播完后点「播放」要重新解析地址，所以必须记住「要播什么」，
+    // 而不只是「上次从哪播」—— 后者是带时效签名的地址，过期就 403。
+    // Replay identity: after a video ends, Play has to resolve a fresh address, so the
+    // bridge remembers *what* to play rather than *where it played from* - the latter is
+    // a signed URL that expires and then only 403s.
+    QString biliReplayBvid;
+    long long biliReplayCid = 0;
+    int biliReplayQuality = 0;
 
     // Last published snapshot and the revision it came from. Polling compares
     // revisions, so an unchanged snapshot costs one comparison per tick.
@@ -3153,6 +3169,10 @@ void QmlPlayerBridge::tickBiliPlay() {
         startedFromTop = job.fromStart;
     }
     i.biliResumeSession = 0;
+    // 这一路打开的是 B 站来源，记下来：播完后「播放」不能再拿过期地址重开。
+    // This open is a Bilibili source, so remember it: after the video ends, Play must
+    // not reopen the stale address.
+    i.biliSourceActive = true;
     // Kept on impl_ as well: openPath() re-applies them after rebuilding options.
     i.pendingHeaders = urls.headers;
     i.pendingUserAgent = urls.userAgent;
@@ -5296,6 +5316,12 @@ QString QmlPlayerBridge::version() const { return QStringLiteral(VEYRA_DISPLAY_V
 // --- playback ---------------------------------------------------------------
 QString QmlPlayerBridge::statusText() const { return uiText(impl_->snapshot.status); }
 bool QmlPlayerBridge::running() const { return impl_->snapshot.running; }
+// 注意：必须保持原来的含义（只有 Paused），不要顺手把 Ended 也算进来 ——
+// 这个属性被作者原有的 7 处界面共用（极简/专业/节点/导出/音轨标记），把 Ended
+// 算成暂停会改掉本地视频播完后的按钮图标，那是动作者的原功能。
+// Keep this exactly as it was (Paused only). Seven of the author's own screens read
+// it (极简 / 专业 / 节点 / 导出 / audio-track marks), and counting Ended as paused
+// would change the button glyph for a finished local video - the author's behaviour.
 bool QmlPlayerBridge::paused() const { return impl_->snapshot.transport == engine::TransportState::Paused; }
 bool QmlPlayerBridge::failed() const { return impl_->snapshot.failed; }
 bool QmlPlayerBridge::isImage() const { return impl_->snapshot.image; }
@@ -7200,6 +7226,17 @@ void QmlPlayerBridge::openPath(const QString& path) {
     if (!keepBilibiliStream) {
         // 不是 B 站那次打开：清掉上一次预决策留下的标记，否则这一部片源会被当成
         // "已经定过档"而跳过首帧决策。
+        // 同时说明当前来源不再是 B 站，结束后的「播放」可以按本地路径重开。
+        // Not the Bilibili open: clear the previous pre-decision marker so this source
+        // is not treated as "already profiled", and note that the current source is no
+        // longer Bilibili so Play after the end may reopen by path again.
+        impl_->biliSourceActive = false;
+        // 重播身份也一起清：换了本地文件或别的地址之后，「播放」不该再回到那个
+        // B 站视频。
+        // Clear the replay identity too: once a local file or another address is open,
+        // Play must not jump back to that Bilibili video.
+        impl_->biliReplayBvid.clear();
+        impl_->biliReplayCid = 0;
         impl_->fgAutoPlanned = false;
         impl_->pendingHeaders.clear();
         impl_->pendingUserAgent.clear();
@@ -8264,6 +8301,12 @@ bool QmlPlayerBridge::bilibiliPlayResolved(const QString& bvid, qlonglong cid,
         veyra::log::info("bilibili", std::format("watch progress reporting queued bvid={} played_time={}",
             utf8Of(pendingReportBvid).toStdString(), pendingPlayed));
     media::setBiliCookie(media::loadBilibiliCookie());
+    // 记下这次要播什么，供播完后「播放」重播用：地址会过期，bvid/cid/画质不会。
+    // Remember what this play is, so Play after the end can resolve again: the address
+    // expires, the bvid/cid/quality do not.
+    impl_->biliReplayBvid = bvid;
+    impl_->biliReplayCid = cid;
+    impl_->biliReplayQuality = qn;
     // Every play is a new track (a different part, or the same part replayed): the
     // comments already on screen belong to the previous one. Done before the resolve so
     // a failure below leaves nothing stale on screen either.
@@ -8397,6 +8440,25 @@ void QmlPlayerBridge::togglePlayPause() {
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    // B 站视频的播完/恢复必须最先处理：它的来源也是网络地址（liveKind=="url"），
+    // 下面的网络地址重开会拿 sourceLabel 重新连接 —— 而那是带时效签名的 CDN 地址，
+    // 早已过期，只会 403。这里按记住的 bvid/cid/画质重新解析一次，拿到全新地址。
+    // 从头播：播完时位置就在结尾，沿用续播位置会立刻再次结束。
+    // A finished Bilibili video must be handled before everything else: its source is
+    // also a network address (liveKind=="url"), and the branch below reconnects from
+    // sourceLabel - a CDN URL with an expiry signature that only 403s by then. Re-resolve
+    // from the remembered bvid/cid/quality instead. From the start: the position sits at
+    // the end when the video finished, so a resume point would end it immediately again.
+    if (impl_->biliSourceActive && !impl_->biliReplayBvid.isEmpty() && impl_->biliReplayCid > 0
+        && (s.transport == T::Ended || !s.running)) {
+        veyra::log::info("ui-transport", std::format(
+            "ended Bilibili video: re-resolving bvid={} cid={} qn={} from the start",
+            impl_->biliReplayBvid.toStdString(), impl_->biliReplayCid,
+            impl_->biliReplayQuality));
+        bilibiliPlayCid(impl_->biliReplayBvid, impl_->biliReplayCid,
+                        impl_->biliReplayQuality, /*fromStart=*/true);
+        return;
+    }
     if(impl_->liveKind==QLatin1String("url")&&(s.transport==T::Ended||(s.transport==T::Paused&&s.duration<=0))){
         openNetworkAddress(QString::fromStdWString(impl_->sourceLabel));return;
     }
@@ -8411,7 +8473,11 @@ void QmlPlayerBridge::togglePlayPause() {
         return;
     }
     if (!s.running || s.transport == T::Ended) {
-        // Only a real file is reopened; device/stream labels are not paths.
+        // B 站的情况已在函数开头处理（它的来源也是网络地址），这里只管本地文件：
+        // 只有真实存在的文件才重开，设备/流标签不是路径。
+        // Bilibili is handled at the top of this function (its source is a network
+        // address too); this branch only covers local files - only a file that still
+        // exists is reopened, device/stream labels are not paths.
         const QString file = QString::fromStdWString(impl_->sourceLabel);
         if (!file.isEmpty() && QFileInfo(file).isFile()) openPath(file);
         return;
@@ -8542,7 +8608,12 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect", "biliAutoCdn",
                                    // Bilibili module: whether a freshly opened video starts with danmaku on.
-                                   "biliDanmaku"};
+                                   "biliDanmaku",
+                                   // Bilibili 模块：播放完毕后是否回到视频详情。默认关，播完停在
+                                   // 播放画面，点播放按钮从头重播。
+                                   // Bilibili module: return to the detail page once playback ends;
+                                   // off by default, so it finishes on the player and Play replays.
+                                   "biliReturnAfterEnd"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);

@@ -115,6 +115,16 @@ VPage {
     // use the name. It means "the user wants danmaku", not "this video loaded them".
     readonly property bool danmakuOn: danmakuDefault
     property int danmakuLines: 0
+    // 播放完毕后是否自动回到视频详情（持久化，默认关）。
+    // 默认留在播放画面上：按钮图标会变回「播放」，再点即从头重播。打开这个开关
+    // 才回到详情页。
+    // Whether to return to the detail page once playback ends; persisted, off by
+    // default. Off leaves the player on screen (the glyph turns back into Play and
+    // pressing it replays from the start); turning it on returns to the detail page.
+    readonly property bool returnAfterEnd: veyra.preferences.biliReturnAfterEnd === undefined
+                                           || veyra.preferences.biliReturnAfterEnd === null
+                                           ? false
+                                           : !!veyra.preferences.biliReturnAfterEnd
     // The module's own settings panel. It lives here rather than only under
     // 设置 → 播放 because that is where someone browsing Bilibili looks for it.
     property bool showSettings: false
@@ -682,10 +692,17 @@ VPage {
             // (a restart) - either way playback is no longer mid-video.
             if (root.lastSeenPosition > 1 && pos >= dur - 0.4) {
                 root.biliPlaying = false
+                // 回到视频开始的那个页面。引擎保留会话；画面不再显示，因为 "bili"
+                // 是浏览页，它的视频区域不是播放面。
+                // 用户关掉「播放完成后回到视频详情」时留在播放画面：按钮图标会变回
+                // 「播放」，再点即从头重播。
                 // Back to the page the video was started from. The engine keeps its
                 // session; the picture stops being shown because "bili" is a browsing
                 // page and its video rect is not a playing surface.
-                root.requestPage("bili")
+                // With "return after end" turned off, stay on the player instead: the
+                // button glyph turns back into Play, and pressing it replays from the
+                // start.
+                if (root.returnAfterEnd) root.requestPage("bili")
             }
         }
     }
@@ -1201,6 +1218,44 @@ VPage {
                         Text {
                             Layout.fillWidth: true
                             text: qsTr("打开视频即加载弹幕；关闭后新视频不带弹幕，详情页也可以单独开关")
+                            color: Theme.t3
+                            wrapMode: Text.Wrap
+                            font.family: Theme.fontUi
+                            font.pixelSize: 11
+                        }
+                    }
+
+                    // ---- 播放完毕后的行为 ----
+                    // 默认关闭：播完停在播放画面上，按钮图标变回「播放」，再点即从头
+                    // 重播。打开后播完自动回到视频详情。
+                    // Off by default: playback ends on the player, the glyph turns back
+                    // into Play, and pressing it replays from the start. Turning it on
+                    // returns to the detail page when playback ends.
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 8
+                        spacing: 4
+
+                        RowLayout {
+                            spacing: 8
+                            Text {
+                                text: qsTr("播放完成后回到视频详情")
+                                color: Theme.t1
+                                font.family: Theme.fontUi
+                                font.pixelSize: 14
+                            }
+                            VSwitch {
+                                objectName: "bili-return-after-end"
+                                checked: root.returnAfterEnd
+                                onToggled: function (on) {
+                                    veyra.setPreference("biliReturnAfterEnd", on)
+                                }
+                            }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: qsTr("默认关闭：播放结束停在播放画面，点播放按钮从头重播")
                             color: Theme.t3
                             wrapMode: Text.Wrap
                             font.family: Theme.fontUi
