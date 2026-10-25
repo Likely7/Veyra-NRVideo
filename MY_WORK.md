@@ -16,6 +16,7 @@
 | 看当前 git 状态、构建部署位置 | 一、当前状态 |
 | 看我提过哪些 PR、什么状态 | 二、PR 一览 |
 | 看我什么时候做了什么 | 三、时间线 |
+| **哪些已知问题还没修？能不能修？** | **一、当前状态 → 已知限制** |
 | 查踩过的坑（构建/测试/Git/UI）| 四、踩过的坑 |
 | 部署和双版本切换怎么弄 | 五、部署与切换 |
 | **改东西要不要提 PR？提 PR 有什么规矩？** | **七、行动规则** |
@@ -69,6 +70,38 @@ grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
 |---|---|---|
 | **HDR10 静态元数据**（`SetHDRMetaData`）| 2026-10-18 | `EnhancementSettings` 归一化 |
 | HDR 片源转 SDR + RTX Video HDR | 2026-10-03 | 无 |
+
+### 已知限制（别再试，或要试先想清楚）
+
+| 问题 | 原因 | 现状 |
+|---|---|---|
+| **B 站续播闪一下开头 + 缓冲两次** | 作者的 `EngineController::open()` 不支持指定起播位置，只能「先打开再到 0 秒 seek」 | **未解决**。功能可用（能续播），只是开头闪一下。**曾尝试 4 次修复，3 次导致播放闪退** |
+| **播完后点底部播放条 → 403** | `togglePlayPause()` 复用已过期的 B 站 CDN 地址（带时效签名）| **未解决**。替代：回 B 站页重新点，或用「从头播放」|
+| **B 站页内播放 + Esc 退出** | 原生视频窗口永远画在 QML 之上；全屏时 Qt 的 `Shortcut` 收不到 Esc | **已放弃**，相关改动已回滚 |
+| **投币 / 搜索框回车 / 各种 `-401`** | B 站服务端风控 | **未解决**，详见 `docs\BILIBILI_MODULE_HISTORY.md` |
+
+**续播的技术细节**（如果以后真要修）：
+
+当前实现见 `src/ui/QmlPlayerBridge.cpp:1622-1632`：
+
+```cpp
+// 视频已经打开并开始播放了，才 seek 到目标位置
+if (impl_->biliResumeAt >= 0.0 && s.running && s.duration > 0) {
+    seekTo(at);   // ← 此时已经从 0 秒开始播了几帧
+}
+```
+
+彻底解决需要改作者的核心接口：
+
+```cpp
+// 现在
+engine.open(window, path, options);
+// 需要
+engine.open(window, path, options, startPositionMs);
+```
+
+涉及 `EngineController::open()` 签名、`run()` 的初始 seek、音视频时钟初始锚点。
+**改动侵入性大，前 3 次尝试都闪退。**
 
 ---
 
