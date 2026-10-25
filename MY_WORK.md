@@ -126,6 +126,45 @@ grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
   从历史页播完返回时也直接重拉
 - 走过弯路：先做了「脏标记」方案，用户反馈他要的是**每次点都刷新**，已改成无条件 force
 
+### 2026-10-25 B 站音频「播着播着没声音」—— 五个独立缺陷
+
+同一个症状背后是五个缺陷，逐个暴露出来的。**排查顺序也是修复顺序**，记下来免得
+下次又从第一个重新查。
+
+| # | 缺陷 | 症状 | 修法 |
+|---|---|---|---|
+| **1** | 坏包容错只认 `session_`（共享会话）| 声音**永久**消失，只有 seek 能救 | 加 `networkTarget_`，条件改 `(session_ \|\| networkTarget_)` |
+| **2** | DASH 容器 duration 失真（视频 97s，音频标称十几秒）| seek 返回 `AVERROR_EOF`，每 500ms 重试一次，**6 秒无声** | seek 失败改用 `avformat_seek_file`（不信任容器时长）|
+| **3** | `readPacket` 把错误码压成 `bool` | 读包失败 = 判定「流结束」→ 声音永久消失，**且无日志** | 返回原始错误码，只有 `AVERROR_EOF` 才算结束 |
+| **4** | 恢复后没有追赶机制 | 声音回来了但**落后 1-7 秒**（`leadMs` 到过 -7495）| 落后 > 300ms 主动 seek 到画面位置 |
+| **5** | 音频饥饿时画面继续跑 | 声音断了画面还在走 → 必然落后 | 读失败时**冻结媒体时钟**，画面等声音 |
+
+**第 4 和第 5 是两层，不是重复**：
+
+```
+网络抖动 1-2 秒 → 第 5 个生效（画面冻结），根本不会落后，第 4 个不触发
+网络断 10 秒+   → 第 5 个超时解除（防止画面永久卡死），第 4 个负责追回来
+```
+
+（用户 2026-10-25 确认选「保留落后校正 + 10 秒超时」，不要「永久冻结」——
+后者在网络真断时会让程序看起来像死机。）
+
+**日志关键字**（下次排查直接搜）：
+
+```
+[WARN ] [audio] damaged audio data from the network skipped   ← 缺陷1，跳过坏包（正常）
+[WARN ] [audio] seek recovered via avformat_seek_file         ← 缺陷2，时长不可靠（正常）
+[WARN ] [audio] read failed ... holding the picture           ← 缺陷5，画面在等声音（正常）
+[WARN ] [audio] audio N ms behind the picture; re-syncing     ← 缺陷4，兜底校正（少见）
+[WARN ] [audio] audio read failing for 10 s; letting the picture continue  ← 网络真断
+[ERROR] [audio] decode send failed / receive failed           ← 如果还有，是新问题
+```
+
+**根因背景**：B 站的 DASH 音轨是**单独一条 CDN 请求**（`options.audioPath`），走
+`open(path)` 而不是 `open(session)` —— 于是 `session_` 为空，落进了作者所有
+「网络容错」判断的盲区。作者的代码里没有这条路径，所以这些修复**不适合单独提 PR**
+（在他的代码里是死代码），详见「规则十八之七」。
+
 ### 已知限制（别再试，或要试先想清楚）
 
 | 问题 | 原因 | 现状 |
