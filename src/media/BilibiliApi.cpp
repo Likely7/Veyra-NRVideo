@@ -1159,12 +1159,6 @@ BiliPlayUrls biliResolvePlay(const std::wstring& bvid, long long cid, int qn,
     // The preference picks between them; anything unavailable falls back to the
     // highest-bitrate AAC so a non-member still gets sound.
     std::string audioUrl, audioCodec;
-    // 音轨的备用地址也要留下：它是单独一条 CDN 请求，某条节点可能只返回文件前一段
-    // （现场 2026-10-25：97 秒的视频，音频读到 45 秒就 EOF），换一条就完整。
-    // The audio's backup addresses matter too: it is its own CDN request and one node can
-    // return only the first part of the file (field log 2026-10-25: a 97 s video whose
-    // audio hit EOF at 45 s), while another node has all of it.
-    std::vector<std::wstring> audioMirrors;
     auto urlOf = [](const json::Value& entry) {
         std::string base = entry["baseUrl"].asString();
         if (base.empty()) base = entry["base_url"].asString();
@@ -1175,21 +1169,6 @@ BiliPlayUrls biliResolvePlay(const std::wstring& bvid, long long cid, int qn,
         if (base.empty()) return false;
         audioUrl = base;
         audioCodec = entry["codecs"].asString();
-        audioMirrors.clear();
-        audioMirrors.push_back(fromUtf8(base));
-        if (tryBackupCdn) {
-            for (const auto* backup : entry["backupUrl"].elements()) {
-                const std::wstring url = fromUtf8((*backup).asString());
-                if (!url.empty() && std::find(audioMirrors.begin(), audioMirrors.end(), url) == audioMirrors.end())
-                    audioMirrors.push_back(url);
-            }
-            if (audioMirrors.size() == 1)
-                for (const auto* backup : entry["backup_url"].elements()) {
-                    const std::wstring url = fromUtf8((*backup).asString());
-                    if (!url.empty() && std::find(audioMirrors.begin(), audioMirrors.end(), url) == audioMirrors.end())
-                        audioMirrors.push_back(url);
-                }
-        }
         return true;
     };
     // Dolby and FLAC are shaped differently by the API: dolby.audio is an ARRAY of
@@ -1248,7 +1227,6 @@ BiliPlayUrls biliResolvePlay(const std::wstring& bvid, long long cid, int qn,
     result.ok = true;
     result.videoUrl = fromUtf8(videoUrl);
     result.audioUrl = fromUtf8(audioUrl);
-    result.audioMirrors = audioMirrors;
     result.codec = fromUtf8((*best)["codecs"].asString());
     result.width = unsigned((*best)["width"].asInt(0));
     result.height = unsigned((*best)["height"].asInt(0));

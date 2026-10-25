@@ -53,20 +53,12 @@ struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t f
     // Separate audio address for a DASH source (Bilibili): the video container has
     // no audio track, so the audio pipeline opens this instead.
     std::wstring audioPath;
-    // 音轨的备用地址，主地址在前。音轨是单独一条 CDN 请求，某个节点可能只返回文件
-    // 前一段（现场 2026-10-25：97 秒的视频，音频读到 45 秒就 EOF）；音频管道在这些
-    // 时候换下一个节点重连，而不是让声音一直停着。
-    // Backup addresses for the audio track, primary first. The audio is its own CDN
-    // request and one node can return only the first part of the file (field log
-    // 2026-10-25: a 97 s video whose audio hit EOF at 45 s); the audio pipeline switches
-    // to the next node instead of staying silent.
-    std::vector<std::wstring> audioMirrors;
     EnhancementSettings snapshot()const{auto s=settings;s.nr=nr;s.sr=sr;s.multiplier=fg?fgMultiplier:1;s.nrPolicy=realtime?(settings.nrPolicy==pipeline::NrSizePolicy::Native?pipeline::NrSizePolicy::Realtime:settings.nrPolicy):pipeline::NrSizePolicy::Native;return s;}
     static PlayerOptions from(EnhancementSettings s,std::optional<ChainRuntimeOrder> order=std::nullopt,const PlayerOptions* keep=nullptr){
         PlayerOptions o;o.nr=s.nr;o.sr=s.sr;o.fg=s.multiplier>1;o.fgMultiplier=std::max(2u,s.multiplier);o.realtime=s.nrPolicy!=pipeline::NrSizePolicy::Native;o.settings=s;o.nodeOrder=order;
         // Per-open state that EnhancementSettings does not carry: a rebuild would
         // otherwise drop the DASH audio address and the site's request headers.
-        if(keep){o.audioPath=keep->audioPath;o.audioMirrors=keep->audioMirrors;o.network.requestHeaders=keep->network.requestHeaders;o.network.userAgent=keep->network.userAgent;}
+        if(keep){o.audioPath=keep->audioPath;o.network.requestHeaders=keep->network.requestHeaders;o.network.userAgent=keep->network.userAgent;}
         return o;}
 };
 enum class TransportState { Empty, Opening, Playing, Paused, Ended, Stopping, Failed };

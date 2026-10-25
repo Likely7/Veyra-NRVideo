@@ -982,13 +982,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 audioOpened=!isImage&&!isCapture&&((demuxSession&&!separateAudio)
                     ?audioPipe.open(demuxSession)
                     :audioPipe.open(audioTarget,&stop_,options.network.requestHeaders,options.network.userAgent));
-                // 音轨的备用 CDN：管道在「离结尾还差很多就 EOF」时自己换节点重连。
-                // 只在单独打开的音轨上有意义（共享会话跟着视频走同一条连接）。
-                // Backup CDNs for the audio: the pipeline switches nodes by itself when it
-                // sees EOF far short of the end. Only meaningful for a separately opened
-                // track - a shared session follows the video's own connection.
-                if(audioOpened&&separateAudio&&options.audioMirrors.size()>1)
-                    audioPipe.setMirrors(options.audioMirrors,options.network.requestHeaders,options.network.userAgent);
             }catch(const std::exception& e){
                 veyra::log::error("audio",std::format("open failed: {} (separateAudio={} targetLen={})",
                                                       e.what(),separateAudio?1:0,audioTarget.size()));
