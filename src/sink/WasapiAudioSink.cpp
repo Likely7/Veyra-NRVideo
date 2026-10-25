@@ -275,7 +275,12 @@ void AudioPipeline::readerLoop()
             // next round, otherwise one hiccup stops the read-ahead thread for good.
             if(read==AVERROR_EOF){readerEof_=true;continue;}
             if(networkTarget_||session_){
-                log::warn("audio",std::format("read-ahead failed code={}; retrying",read));
+                // 限流：每 5ms 重试一次，全打出来就是每秒 200 条日志。
+                // Throttled: this retries every 5 ms, so logging each attempt would be
+                // 200 lines a second.
+                if (++damagedAudioRuns_ <= 8 || damagedAudioRuns_ % 200 == 0)
+                    log::warn("audio",std::format("read-ahead failed code={} (attempt {}); retrying",
+                                                  read, damagedAudioRuns_));
                 lock.unlock();
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 lock.lock();
