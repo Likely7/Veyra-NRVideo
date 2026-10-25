@@ -459,13 +459,17 @@ VPage {
             if (!ok) return
             root.comments = comments
         }
-        // 弹幕轨道加载结果：成功点亮开关，失败给出原因。
+        // 弹幕轨道加载结果：成功点亮开关；失败给出原因，但**不**把用户打开的开关
+        // 关掉 —— 分P 没弹幕、或网络偶发失败时，开关自己跳回「关」会让人以为功能坏了。
+        // 开关只在用户主动点击、或换视频时改变。
+        // Track load result: success lights the switch; on failure the reason is shown
+        // but the user's switch stays on - a part without comments, or one flaky
+        // request, must not flip the control back by itself.
         function onBilibiliDanmakuReady(ok, error, lineCount) {
             if (ok) {
                 root.danmakuOn = true
                 root.danmakuLines = lineCount
             } else {
-                root.danmakuOn = false
                 root.danmakuLines = 0
                 root.statusText = error || qsTr("这个视频没有弹幕")
             }
@@ -600,17 +604,15 @@ VPage {
 
     function playSelected(fromStart) {
         if (!root.detail.ok) return
-        // 不同分P是不同的弹幕轨道：丢掉旧的，否则旧弹幕会画在新画面上。
-        // 但丢掉之后必须按新分P重新加载 —— 只关不重开的表现就是「一点播放弹幕
-        // 就没了，得回详情页再点一次开关」。弹幕默认开着或用户手动开着时都要重载。
-        // A different part is a different danmaku track: drop the old one or it keeps
-        // drawing over the new picture. It must then be reloaded for the new part -
-        // closing without reopening is exactly why "playing a video loses the danmaku
-        // until you go back and flip the switch again".
+        // 不同分P是不同的弹幕轨道：丢掉旧的叠加层数据，否则旧弹幕会画在新画面上。
+        // 但**不要**把开关本身设为关：马上就会按新分P重新加载，先把开关灭掉只会
+        // 让按钮文字闪一下「弹幕关」，看起来像功能被关掉了。
+        // A different part is a different track, so the old items are dropped - but the
+        // switch itself stays as the user left it. It is reloaded for the new part
+        // immediately below, and flipping it off first only makes the label flash
+        // "弹幕关", which reads like the feature was turned off.
         const reloadDanmaku = root.danmakuOn || root.danmakuDefault
         if (root.danmakuOn) veyra.bilibiliDisableDanmaku()
-        root.danmakuOn = false
-        root.danmakuLines = 0
         root.biliPlaying = true
         root.lastSeenPosition = 0
         // The cid comes from the detail response, so the play call no longer asks the site
@@ -1780,6 +1782,13 @@ VPage {
                                             "qualities:" + root.detail.bvid + ":" + cid)
                                     }
                                     root.selectedQuality = 0
+                                    // 分P就是弹幕轨道：换了分P必须换轨道，否则要么旧弹幕
+                                    // 留着、要么开关停在旧状态。这里按新分P重新拉一次。
+                                    // The part is the track: switching it has to switch the
+                                    // track too, otherwise either the old comments stay or
+                                    // the switch keeps the previous part's state. Reload
+                                    // for the newly picked part.
+                                    if (root.danmakuOn || root.danmakuDefault) root.loadDanmaku()
                                 }
                             }
 
