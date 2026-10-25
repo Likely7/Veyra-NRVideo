@@ -588,6 +588,7 @@ void AudioPipeline::decodeBlock()
                 if (read < 0) {
                     if (read == AVERROR_EOF) {
                         demuxEof_ = true;
+                        readRetrying_ = false;
                         continue;
                     }
                     // 网络源的瞬时读失败（超时、连接抖动）不是「这条音轨播完了」。
@@ -600,9 +601,25 @@ void AudioPipeline::decodeBlock()
                     // logs once and returns to pumping the endpoint so the next round
                     // retries.
                     if (networkTarget_ || session_) {
+                        const auto nowBurst = std::chrono::steady_clock::now();
+                        if (readRetryingSince_ == std::chrono::steady_clock::time_point{}) {
+                            readRetryingSince_ = nowBurst;
+                            readRetrying_ = true;
+                        } else if (nowBurst - readRetryingSince_ >
+                                   std::chrono::seconds(10)) {
+                            // 十秒还没读到：别再冻住画面了，网络可能真断了。音频继续
+                            // 重试，恢复后由落后校正追上。
+                            // Ten seconds without a packet: stop freezing the picture, the
+                            // link may really be gone. The audio keeps retrying and the drift
+                            // correction catches it up when it recovers.
+                            if (readRetrying_) {
+                                readRetrying_ = false;
+                                log::warn("audio", "audio read failing for 10 s; letting the picture continue");
+                            }
+                        }
                         if (++damagedAudioRuns_ <= 8 || damagedAudioRuns_ % 200 == 0)
                             log::warn("audio", std::format(
-                                "read failed code={} (attempt {}); retrying", read, damagedAudioRuns_));
+                                "read failed code={} (attempt {}); holding the picture", read, damagedAudioRuns_));
                         break;
                     }
                     demuxEof_ = true;
@@ -610,6 +627,10 @@ void AudioPipeline::decodeBlock()
                 }
             }
             havePacket_ = true;
+            // 读到数据了：网络重试结束，引擎可以继续推进画面。
+            // Packets are flowing again: the engine may resume the picture.
+            readRetrying_ = false;
+            readRetryingSince_ = {};
             if (packet_->stream_index != streamIndex_) {
                 av_packet_unref(packet_);
                 havePacket_ = false;
@@ -1206,7 +1227,7 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
                 result=retried;
             }
             if(result<0){log::error("audio",std::format("seek failed code={}",result));clockExhausted_=false;return false;}
-            demuxEof_=drainSent_=false;decodedEof_=false;
+            demuxEof_=drainSent_=false;decodedEof_=false;readRetrying_=false;
             nextPtsMs_=target;discardUntilPtsMs_=target;
         }
         decodeBlock();
@@ -1423,7 +1444,7 @@ void AudioPipeline::startThread(AudioRenderer* renderer, bool ownEndpoint, doubl
     readStallEveryMs_=std::max(10.0,envMs(L"VEYRA_TEST_AUDIO_READ_STALL_EVERY_MS",1000));
     nextReadStall_={};maxReadMs_=0;
     if(readStallMs_>0)log::warn("audio-test",std::format("injected file read stall {:.0f} ms every {:.0f} ms (test only) directRead={}",readStallMs_,readStallEveryMs_,directReadForTest_));
-    stopFlag_=false;seekRequested_=false;seekDone_=true;discardUntilPtsMs_=-1;
+    stopFlag_=false;seekRequested_=false;seekDone_=true;discardUntilPtsMs_=-1;readRetrying_=false;
     endpointRecovering_=renderer&&ownEndpoint;endpointError_=S_OK;endpointRecoveries_=0;clockExhausted_=false;
     queueMode_=session_!=nullptr;   // a shared session is always read through its queue
     thread_ = std::thread(&AudioPipeline::runOnAudioThread, this, renderer, ownEndpoint, initialMs);

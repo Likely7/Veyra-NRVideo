@@ -1399,6 +1399,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             auto nowMs=[&](){
                 if(!audioStarted)return anchorMs+std::chrono::duration<double,std::milli>(Clock::now()-anchor).count()*playbackRate;
                 publishAudioStatus();const double a=audio.mediaTimeMs();
+                // 音频正在等网络重试：让媒体时钟停住，画面跟着停下等声音。不这么做
+                // 画面会一直往前跑，声音补上来时就落后几秒，对不上口型 —— 现场
+                // 2026-10-25：leadMs 到过 -1081 和 -7495。
+                // The audio is between read attempts: freeze the media clock so the picture
+                // waits for the sound. Otherwise the picture runs ahead and the sound comes
+                // back seconds behind (field log 2026-10-25: leadMs -1081, -7495).
+                if(audioPipe.retryingRead()){audioClockExhausted=false;return lastAudioClockMs;}
                 if(std::isfinite(a)){lastAudioClockMs=a;audioClockExhausted=false;return a;}
                 // A disconnected endpoint freezes the shared media clock. Only a
                 // fully exhausted audio stream may hand its tail to the wall clock.

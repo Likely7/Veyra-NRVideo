@@ -143,6 +143,13 @@ public:
     HRESULT endpointError()const{return endpointError_.load();}
     uint64_t endpointRecoveries()const{return endpointRecoveries_.load();}
     bool clockExhausted()const{return clockExhausted_.load();}
+    // 音频正在等网络重试（读包失败、尚未读到下一段）：不是流结束，只是暂时没数据。
+    // 引擎据此冻结媒体时钟，让画面停下来等声音 —— 不这样做，画面会一直往前跑，
+    // 声音恢复后就落后几秒，对不上口型。
+    // The audio is waiting for a network read to succeed: not end of stream, just no data
+    // yet. The engine freezes the media clock on it so the picture waits for the sound;
+    // without that the picture runs ahead and the sound comes back seconds behind.
+    bool retryingRead() const { return readRetrying_.load(); }
     // Fault injection is consumed by the audio owner; never release COM on a caller thread.
     void requestEndpointLossForTest(){endpointLossForTest_=true;}
 
@@ -215,6 +222,16 @@ private:
     bool demuxEof_ = false;
     bool drainSent_ = false;
     std::atomic<bool> decodedEof_{false};
+    // 网络源读包失败后置位，读到下一段数据或确认 EOF 时清除。引擎用它冻结时钟。
+    // Set when a network read fails, cleared once packets flow again or EOF is confirmed.
+    // The engine freezes the media clock while it is set.
+    std::atomic<bool> readRetrying_{false};
+    // 第一次读失败的时刻。重试超过 10 秒就放弃冻结画面（网络可能真的断了），让视频
+    // 继续播、音频在后面重试；恢复后由落后校正追上来。
+    // When the current burst of read failures started. Past ten seconds the freeze is
+    // released - the link may really be gone - so the video keeps playing while the audio
+    // retries; the drift correction catches it up if it recovers.
+    std::chrono::steady_clock::time_point readRetryingSince_{};
     double nextPtsMs_ = 0.0;           // PTS of the NEXT decoded sample
     double discardUntilPtsMs_ = -1.0;  // seek pruning
     std::unique_ptr<soundtouch::SoundTouch> tempo_;
