@@ -297,28 +297,30 @@ void AudioPipeline::readerLoop()
                 // file position, so retrying in place returns the same AVERROR_INVALIDDATA
                 // forever (measured: 5800 attempts, 29 s of silence). Past a threshold, ask
                 // the decode thread to jump 3 s ahead and skip the stretch.
+                // 这里**不再发起 seek**。曾经试过「跳过损坏段继续读」，但自动 seek 会
+                // 向服务器请求一个可能不存在的位置，网络超时要几十秒，而 seek 跑在读-ahead
+                // 线程上、十秒冻结上限管不到它 —— 现场 2026-10-25 因此把整个引擎卡死
+                // 28 秒（engine-hang），界面停止响应，连收藏夹都加载不出来。
+                // 现在读不过去就直接关闭这条音轨：视频静音继续播，绝不阻塞任何线程。
+                // No seek here any more. Skipping the damaged stretch was tried, but an
+                // automatic seek asks the server for a position that may not exist, and the
+                // network timeout takes tens of seconds. The seek runs on the read-ahead
+                // thread, where the ten-second freeze cap cannot reach it - on 2026-10-25
+                // that hung the whole engine for 28 seconds (engine-hang), left the UI
+                // unresponsive and even stopped the favourites list from loading.
+                // A track that cannot be read is now just closed: video keeps playing
+                // silently and no thread is blocked.
                 if(++readFailureRun_>=40){
                     readFailureRun_=0;
                     const double last=lastGoodReadMs_.load();
                     const double total=fmt_&&fmt_->duration!=AV_NOPTS_VALUE?double(fmt_->duration)/1000.0:-1.0;
-                    // 三条限制缺一不可：位置有效、跳过去不越过音频末尾、总次数不超三次。
-                    // 少了任何一条，跳到末尾之后就会「seek 成功、读不到、再跳同一处」地
-                    // 无限循环。
-                    // All three limits are needed: a valid position, a jump that stays inside
-                    // the audio, and at most three jumps. Without them the code loops to the
-                    // same place forever once a jump lands past the end.
-                    const bool pastEnd = total>0.0 && last+3000.0 >= total-500.0;
-                    if(last>=0.0 && !pastEnd && ++damagedSkipCount_<=3){
-                        skipDamagedToMs_.store(last+3000.0);
-                    }else if(last>=0.0){
-                        log::warn("audio", std::format(
-                            "audio unreadable at {:.0f} ms of {:.0f} ms after {} skips; closing the track",
-                            last, total, damagedSkipCount_));
-                        readerEof_=true;
-                        readRetrying_=false;
-                        readRetryingSince_={};
-                        continue;
-                    }
+                    log::warn("audio", std::format(
+                        "audio unreadable at {:.0f} ms of {:.0f} ms; closing the track",
+                        last, total));
+                    readerEof_=true;
+                    readRetrying_=false;
+                    readRetryingSince_={};
+                    continue;
                 }
                 // 限流：每 5ms 重试一次，全打出来就是每秒 200 条日志。
                 // Throttled: this retries every 5 ms, so logging each attempt would be
