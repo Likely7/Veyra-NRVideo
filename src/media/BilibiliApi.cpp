@@ -1378,26 +1378,16 @@ BiliPlayUrls biliResolvePlay(const std::wstring& bvid, long long cid, int qn,
     auto takeAudio = [&](const json::Value& entry) {
         const std::string base = urlOf(entry);
         if (base.empty()) return false;
-        // 音轨也避开 PCDN / 第三方节点，但**不测速**：音频码率只有一百多 kbps，慢节点
-        // 通常也撑得住，为它多花几百毫秒的测速不值得。
-        // The audio track avoids PCDN / third-party nodes too, but is **not** probed: its
-        // bitrate is a few hundred kbps at most, a slow node usually copes, and spending
-        // hundreds of milliseconds probing it is not worth it.
-        std::vector<std::wstring> candidates;
-        candidates.push_back(fromUtf8(base));
-        for (const auto* backup : entry["backupUrl"].elements()) {
-            const std::wstring url = fromUtf8((*backup).asString());
-            if (!url.empty() && std::find(candidates.begin(), candidates.end(), url) == candidates.end())
-                candidates.push_back(url);
-        }
-        if (candidates.size() == 1)
-            for (const auto* backup : entry["backup_url"].elements()) {
-                const std::wstring url = fromUtf8((*backup).asString());
-                if (!url.empty() && std::find(candidates.begin(), candidates.end(), url) == candidates.end())
-                    candidates.push_back(url);
-            }
-        const std::vector<std::wstring> ranked = rankCdnCandidates(candidates, /*probe=*/false);
-        audioUrl = toUtf8(ranked.empty() ? fromUtf8(base) : ranked.front());
+        // 音轨**不做** CDN 换序，就用服务端给的主地址。
+        // 试过一次，现场 2026-10-25 直接让它换到了另一条流：日志里音轨总长从 97216 ms
+        // 变成 1663936 ms，而且读到 22763 ms 就 EIO 关闭 —— 声音整段没有。音频码率只有
+        // 一百多 kbps，慢节点通常也撑得住，换序的收益远小于它带来的风险。
+        // The audio track is **not** reordered; the server's primary address is used as is.
+        // It was tried once and on 2026-10-25 it moved to a different stream: the log shows
+        // the track duration going from 97216 ms to 1663936 ms, then EOF/EIO at 22763 ms and
+        // the track closing - the whole video was silent. At a couple of hundred kbps a slow
+        // node usually copes, and the gain from reordering is far smaller than the risk.
+        audioUrl = base;
         audioCodec = entry["codecs"].asString();
         return true;
     };
