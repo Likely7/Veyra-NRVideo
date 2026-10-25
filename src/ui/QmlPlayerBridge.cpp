@@ -318,6 +318,17 @@ struct QmlPlayerBridge::Impl {
     // engine has a running session to seek.
     double biliResumeAt = -1.0;
     uint64_t biliResumeSession = 0;
+    // 发起这次播放时引擎正在用的会话号。续播 seek 必须等到会话号变成别的值才发：
+    // 点击后引擎还没开始新会话，impl_->snapshot 里仍是上一个视频的 position/duration，
+    // 此时发出的 seek 打在正要被拆掉的旧会话上，永远不会被引擎取走（实测 5 次
+    // 连续全丢），而 biliResumeAt 已被清空，于是新会话从头播。
+    // The session id the engine was using when this play was requested. The resume seek
+    // must wait until the session id changes: right after the click the engine has not
+    // started the new session yet, so impl_->snapshot still holds the previous video's
+    // position/duration. A seek issued then targets the session being torn down and is
+    // never drained by the engine (measured: five in a row lost), while biliResumeAt has
+    // already been cleared - so the new session plays from the beginning.
+    uint64_t biliResumeAfterSession = 0;
     // 当前正在播的是 B 站视频。B 站给的是带时效签名的 CDN 地址，播完再拿它重开
     // 必然 403，所以结束后的「播放」不能重开 sourceLabel —— 那里记的就是那条过期
     // 地址。打开任何非 B 站来源时清掉。
@@ -1680,14 +1691,28 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // Bilibili resume: the position came from the site's own history, so it applies
             // to the session this open produced. seekTo needs a running session with a known
             // duration, which this condition is exactly.
-            if (impl_->biliResumeAt >= 0.0 && s.running && s.duration > 0) {
+            // 还必须等到「会话号已经换成新的」：点击续播的那一刻引擎还没开始建新会话，
+            // impl_->snapshot 里仍是上一个视频的 position/duration，此时发出的 seek 打在
+            // 要被拆掉的旧会话上，引擎永远取不到（实测连续 5 次全丢），而 biliResumeAt
+            // 已经被清空 —— 结果就是新会话从头播。
+            // It must also wait until the session id has changed: at the moment of the
+            // click the engine has not built the new session yet, so impl_->snapshot still
+            // holds the previous video's position/duration. A seek issued then targets the
+            // session being torn down and is never drained (measured: five in a row lost),
+            // while biliResumeAt has already been cleared - so the new session starts from
+            // the beginning.
+            const bool biliSessionIsNew = s.sessionId != 0
+                && s.sessionId != impl_->biliResumeAfterSession;
+            if (impl_->biliResumeAt >= 0.0 && s.running && s.duration > 0 && biliSessionIsNew) {
                 if (!impl_->biliResumeSession) impl_->biliResumeSession = s.sessionId;
                 if (s.sessionId == impl_->biliResumeSession) {
                     const double at = impl_->biliResumeAt;
                     impl_->biliResumeAt = -1.0;
                     if (at >= 0.5 && at < s.duration - 0.5) {
                         seekTo(at);
-                        veyra::log::info("ui-resume", std::format("bilibili history resumed at {:.1f}s", at));
+                        veyra::log::info("ui-resume", std::format(
+                            "bilibili history resumed at {:.1f}s (session={} dur={:.1f})",
+                            at, static_cast<unsigned long long>(s.sessionId), s.duration));
                         emit notice(tr("已从上次位置 %1 继续").arg(formatTime(at)), false);
                     }
                 }
@@ -8332,6 +8357,13 @@ bool QmlPlayerBridge::bilibiliPlayResolved(const QString& bvid, qlonglong cid,
     job.qn = effectiveQn;
     job.fromStart = fromStart;
     job.plannedResume = wantResume;
+    // 记下「点击时」引擎用的会话号。续播 seek 要等它变成别的值才发 —— 见 Impl 里
+    // biliResumeAfterSession 的说明。这里取引擎的真实快照而不是缓存副本，缓存可能
+    // 已经滞后。
+    // Record the session the engine was using at click time. The resume seek waits
+    // until it changes - see biliResumeAfterSession in Impl. The engine's own snapshot
+    // is used rather than the cached copy, which may already be stale.
+    impl_->biliResumeAfterSession = impl_->engine.snapshot().sessionId;
     // worker 只碰自己的副本：Qt 对象（impl_ 里的 QString/容器）全部在发起前拷好。
     const std::wstring wbvid = bvid.toStdWString();
     const std::string codec = codecPref.toStdString();
