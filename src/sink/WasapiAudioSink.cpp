@@ -1286,6 +1286,31 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
                 bufferedMs(), queuedMs, maxReadMs_.exchange(0), maxLoopMs, reader_.joinable()));
             maxLoopMs=0;
         }
+        // 落后校正：音频时钟比画面落后太多，就主动跳到画面位置重新对齐。
+        // 读包失败后恢复、端点长时间欠载之后，音频会停在原处而视频继续走；没有这一步
+        // 就会一直不同步下去（观感是「声音回来了但对不上口型」）。
+        // 阈值 kAudioResyncBehindMs，最多每秒校正一次，避免和目标来回抖。
+        // Drift correction: when the audio clock has fallen well behind the picture, seek
+        // to the picture and carry on aligned. After recovering from a failed read or a
+        // long endpoint underrun the audio stalls while the video keeps going; without this
+        // it never catches up again - heard as "the sound is back but out of sync".
+        // Uses kAudioResyncBehindMs and corrects at most once per second so it cannot
+        // oscillate against the target.
+        if (videoSync_ && !pauseNow && !decodedEof_ && renderer != nullptr) {
+            const double coverage = videoLimitMs_.load();
+            static std::chrono::steady_clock::time_point nextDriftFix{};
+            const auto nowPoint = std::chrono::steady_clock::now();
+            if (std::isfinite(coverage) && coverage > 0.0 && nowPoint >= nextDriftFix &&
+                (lastClockMs - coverage) < -kAudioResyncBehindMs) {
+                nextDriftFix = nowPoint + std::chrono::milliseconds(1000);
+                log::warn("audio", std::format(
+                    "audio {:.0f} ms behind the picture; re-syncing to it", coverage - lastClockMs));
+                std::lock_guard<std::mutex> lock(mutex_);
+                seekTargetMs_ = coverage;
+                seekDone_ = false;
+                seekRequested_ = true;
+            }
+        }
         // Seek request? Atomic re-sequence.
         {
             std::unique_lock<std::mutex> lock(mutex_);

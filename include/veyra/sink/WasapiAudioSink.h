@@ -44,6 +44,13 @@ constexpr double kAudioLowWatermarkMs = 250.0;
 constexpr double kAudioPrefillMs = 500.0;
 constexpr double kAudioHighWatermarkMs = 1000.0;
 constexpr uint32_t kAudioRate = 48000;
+// 音频落后画面多少毫秒就主动跳过去重新对齐。正常播放 lead 只有几十毫秒，超过它
+// 一定是真的掉了（读包失败恢复中、端点长时间欠载），不校正就会一直不同步。
+// How far the audio clock may fall behind the picture before it is re-synced by
+// seeking. Steady playback stays within a few tens of milliseconds, so exceeding
+// this means it really fell behind (recovering from a failed read, a long endpoint
+// underrun) and would otherwise stay out of sync for the rest of the video.
+constexpr double kAudioResyncBehindMs = 300.0;
 
 // --- output endpoint choice (P4-d) -------------------------------------------
 // One process-wide choice shared by every renderer (file playback and capture
