@@ -1344,6 +1344,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // mapped, a monotonic anchor without audio, and its frozen value
             // while an endpoint recovers. Steady-state video scheduling reads
             // this clock; it never waits on audio coverage.
+            // 网络源是否正被缓冲按住。nowMs() 要用它区分「音频真的放完了」和
+            // 「只是网络暂时没数据」：后者不能把媒体时钟交给墙钟。
+            //
+            // Whether a network source is currently held for buffering. nowMs() uses it to
+            // tell "the audio really ended" apart from "the network has nothing *for now*":
+            // the latter must not hand the media clock to the wall clock.
+            std::atomic<bool> networkHolding{false};
             auto nowMs=[&](){
                 if(!audioStarted)return anchorMs+std::chrono::duration<double,std::milli>(Clock::now()-anchor).count()*playbackRate;
                 publishAudioStatus();const double a=audio.mediaTimeMs();
@@ -1351,6 +1358,21 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // A disconnected endpoint freezes the shared media clock. Only a
                 // fully exhausted audio stream may hand its tail to the wall clock.
                 if(audioPipe.clockExhausted()){
+                    // 但网络正在缓冲时必须继续冻结：网络源的数据是「暂时没有」，不是
+                    // 「放完了」。这时若用墙钟推进，媒体时钟会跑到没有画面的地方去，
+                    // 缓冲恢复后视频要等很久才追上来 —— 观感就是「画面卡住不恢复」
+                    // （现场 2026-10-24：clockMs 8 秒内前进 10 秒，coverage 停在原处）。
+                    //
+                    // Keep it frozen while a network source is holding: its data is
+                    // "missing for now", not "finished". Advancing the clock with the wall
+                    // clock here makes it run past the last presented picture, so after the
+                    // buffer recovers the picture takes a long time to catch up - the user
+                    // sees a frozen picture that never comes back (field log 2026-10-24:
+                    // clockMs advanced 10 s within 8 s while coverage stayed put).
+                    if(networkHolding.load()){
+                        audioClockExhausted=false;
+                        return lastAudioClockMs;
+                    }
                     if(!audioClockExhausted){audioClockExhausted=true;audioTailAnchor=Clock::now();}
                     return lastAudioClockMs+std::chrono::duration<double,std::milli>(Clock::now()-audioTailAnchor).count()*playbackRate;
                 }
@@ -1381,6 +1403,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             auto networkTick=[&]{
                 if(!demuxSession)return;
                 const bool holding=demuxSession->holding();
+                networkHolding.store(holding);
                 if(holding)watchdog_->beat();
                 // Without an audio device the media clock is the wall clock: stand it still while the
                 // session pauses playback for buffering (with audio, pausing the endpoint does that).
