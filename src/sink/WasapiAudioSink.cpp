@@ -275,7 +275,19 @@ void AudioPipeline::readerLoop()
             // 预读线程永久停摆。
             // Only a real end counts as EOF; a transient network failure is retried on the
             // next round, otherwise one hiccup stops the read-ahead thread for good.
-            if(read==AVERROR_EOF){readerEof_=true;continue;}
+            if(read==AVERROR_EOF){
+                // 打印最后读到的位置：如果它远小于视频时长，说明音频流被提前截断
+                // （CDN 只给了前面一段），而不是真的播完了。
+                // Log the last position reached: if it is far short of the video duration
+                // the audio stream was truncated early (the CDN served only part of it)
+                // rather than genuinely ending.
+                log::warn("audio", std::format(
+                    "audio read hit EOF at {:.0f} ms (session duration {:.0f} ms)",
+                    lastGoodReadMs_.load(),
+                    fmt_&&fmt_->duration!=AV_NOPTS_VALUE?double(fmt_->duration)/1000.0:-1.0));
+                readerEof_=true;
+                continue;
+            }
             if(networkTarget_||session_){
                 // 卡在损坏数据上：av_read_frame 有时不推进文件位置，原地重试就永远
                 // 返回同一个 AVERROR_INVALIDDATA（实测连续 5800 次、29 秒没有声音）。
