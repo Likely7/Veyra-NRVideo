@@ -75,6 +75,39 @@
 3. 在 C++ `eventFilter` 里直接识别 Return 并转发（那区域历史上崩过多次，谨慎）
 
 
+### 1-1. 观看进度上报的五个位置（2026-10-25 定稿）
+
+一次观看**最多发 3 次** HTTP 请求（`/x/click-interface/web/heartbeat`）。5 个代码位置
+里，后 3 个互斥 —— 都会先取走并清空 `biliWatch*`，谁先取走谁报，后到的发现记录为空
+（`biliWatchLastPos < 0`）直接返回。
+
+| # | 位置 | 触发时机 | 报的值 |
+|---|---|---|---|
+| A | `bilibiliPlayResolved` → `reportBiliWatchStartedAsync` | 点播放、地址解析成功 | **起播位置**：续播=续播点，从头=0 |
+| B | `tickSubtitles` 检测到 `Transport::Ended` → `reportBiliWatchProgressAsync` | 播放自然结束 | **`-1`**（已看完）|
+| C1 | `bilibiliPlayResolved` 开头 `takeBiliWatchProgress` → worker 内 | 点另一个 **B 站** 视频 | 上一个视频的最终位置 |
+| C2 | `openPath()` → `flushBiliWatchProgress` | 打开任意新来源（本地文件等）| 同上 |
+| C3 | `~QmlPlayerBridge()` → `flushBiliWatchProgress` | 程序退出 | 同上 |
+
+**典型序列**
+
+| 场景 | 上报 | 次数 |
+|---|---|---|
+| 开播 → 播完 | 起播位置 → `-1` | 2 |
+| 开播 → 中途切到别的 B 站视频 | 起播位置 → 上一个的位置 | 2 |
+| 开播 → 播完 → 再开一个 | 起播 → `-1` → 新起播 | 3 |
+
+**A 必须报「实际起播位置」，不能一律报 0**：续播时报 0 会把 B 站存下的进度覆盖成
+0，下次「继续上次播放」就查不到位置，只能从头开始。实现上 A 的调用位置必须在
+`biliResumeAt` 算完之后（`resumeAt > 0 ? int(resumeAt) : 0`）。
+
+**与 B 站网页播放器的差别**：网页端播放中约每 15 秒心跳一次，我们不做。所以程序被
+强杀时，最后一次上报之后的位置会丢；正常退出不受影响，`openPath` 和析构会补报。
+
+**同步 vs 异步**：A 和 B 走异步槽位 `BiliOp::ReportProgress`（因为
+`media::biliReportWatchProgress` 内部是同步 HTTP POST，在 GUI tick 里直接调会卡住
+界面）；C1 本来就在 worker 里；C2/C3 是同步的，但发生在打开来源和退出时，可以接受。
+
 ### 1-2. 播完视频后「历史记录」不更新（已解决 2026-10-25）
 
 | 项目 | 内容 |
