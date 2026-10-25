@@ -39,7 +39,8 @@ AudioPipeline::~AudioPipeline()
 // decoder - selectTrack belongs to the caller. The CDN switch reuses this from the
 // read-ahead thread, so it must not rebuild codecCtx_, which the decode thread owns.
 int AudioPipeline::openTarget(const std::wstring& path,const std::atomic<bool>* cancelled,
-                              const std::wstring& requestHeaders,const std::wstring& userAgent)
+                              const std::wstring& requestHeaders,const std::wstring& userAgent,
+                              bool collectTracks)
 {
     if(path.empty())return -1;
     // A failed conversion returns 0, and building a std::string from a negative length
@@ -48,9 +49,14 @@ int AudioPipeline::openTarget(const std::wstring& path,const std::atomic<bool>* 
     if(length<=0)return -1;
     std::string narrow(static_cast<size_t>(length),'\0');
     WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),narrow.data(),length,nullptr,nullptr);
-    if(fmt_){avformat_close_input(&fmt_);fmt_=nullptr;}
-    fmt_=avformat_alloc_context();
-    if(!fmt_)return -1;
+    // 先分配成功再关旧的：分配失败时保留原连接，否则 fmt_ 变空指针，后续 readPacket
+    // 解引用必崩。
+    // Allocate before closing the old context: if allocation fails the old connection is
+    // kept. Leaving fmt_ null would crash the next readPacket.
+    AVFormatContext* fresh=avformat_alloc_context();
+    if(!fresh)return -1;
+    if(fmt_)avformat_close_input(&fmt_);
+    fmt_=fresh;
     // 记下这是不是网络目标：B 站（DASH）的音轨是单独一条 CDN 请求，走这个重载，
     // session_ 为空，容错判断要靠这个标志。
     // Remember whether this is a network target: a DASH source's audio is its own CDN
@@ -74,13 +80,15 @@ int AudioPipeline::openTarget(const std::wstring& path,const std::atomic<bool>* 
     const int found=avformat_find_stream_info(fmt_,nullptr);
     inputInterrupt_.disarm();
     if(found<0)return -1;
-    tracks_.clear();
-    for(unsigned i=0;i<fmt_->nb_streams;++i){
-        const auto* stream=fmt_->streams[i];const auto* p=stream->codecpar;
-        if(p->codec_type!=AVMEDIA_TYPE_AUDIO)continue;
-        const auto* language=av_dict_get(stream->metadata,"language",nullptr,0);
-        const auto* title=av_dict_get(stream->metadata,"title",nullptr,0);
-        tracks_.push_back({int(i),language?language->value:"",title?title->value:"",avcodec_get_name(p->codec_id),unsigned(p->ch_layout.nb_channels)});
+    if(collectTracks){
+        tracks_.clear();
+        for(unsigned i=0;i<fmt_->nb_streams;++i){
+            const auto* stream=fmt_->streams[i];const auto* p=stream->codecpar;
+            if(p->codec_type!=AVMEDIA_TYPE_AUDIO)continue;
+            const auto* language=av_dict_get(stream->metadata,"language",nullptr,0);
+            const auto* title=av_dict_get(stream->metadata,"title",nullptr,0);
+            tracks_.push_back({int(i),language?language->value:"",title?title->value:"",avcodec_get_name(p->codec_id),unsigned(p->ch_layout.nb_channels)});
+        }
     }
     return av_find_best_stream(fmt_, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
 }
@@ -92,6 +100,13 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
     // this one has to do the same. Starting a second thread over a live one is what
     // surfaced as "bad allocation" when a DASH source re-opened its audio address.
     if(thread_.joinable())return false;
+    // 新的打开就是新的来源：清掉上一份镜像。否则上个视频的备用地址会留在这里，
+    // 本地文件提前 EOF 时会被拿去"重连"。
+    // A new open is a new source: drop the previous mirror list. Otherwise the last
+    // video's backup addresses stay behind and an early EOF on a local file would try to
+    // "reconnect" through them.
+    audioMirrors_.clear();
+    audioMirrorIndex_=-1;
     const int si=openTarget(path,cancelled,requestHeaders,userAgent);
     if(si<0){
         veyra::log::info("audio", "no audio stream in source");
@@ -137,12 +152,31 @@ bool AudioPipeline::switchAudioMirror()
         // queueMode_ the decode thread only takes packets from the queue), so swapping the
         // context here is safe. Flushing the decoder stays with the decode thread - the
         // resume point is handed over through skipDamagedToMs_ as an ordinary seek.
-        if (openTarget(next, openCancelled_, audioMirrorHeaders_, audioMirrorUserAgent_) >= 0) {
+        const int si = openTarget(next, openCancelled_, audioMirrorHeaders_,
+                                  audioMirrorUserAgent_, /*collectTracks=*/false);
+        // 新节点的音轨索引必须和正在播的一致，否则读到的会是另一条流。不一致就继续试
+        // 下一个节点。
+        // The new node must expose the same audio stream index, or reading would pick a
+        // different stream. A mismatch moves on to the next node.
+        if (si == streamIndex_) {
             readerEof_ = false;
+            // 新连接可用：解除对画面的冻结，否则引擎会一直等一个已经不存在的重试。
+            // A usable connection is back: release the picture freeze, or the engine keeps
+            // waiting for a retry that is no longer happening.
+            readRetrying_ = false;
+            readRetryingSince_ = {};
             if (resumeAt > 0.0) skipDamagedToMs_.store(resumeAt);
             return true;
         }
+        if (si >= 0) log::warn("audio", std::format(
+            "CDN node {} exposes audio stream {} instead of {}; trying the next one",
+            audioMirrorIndex_, si, streamIndex_));
     }
+    // 全部节点都失败：音轨到此为止，别再让引擎等一次不会发生的重试。
+    // Every node failed: the track ends here, so stop making the engine wait for a retry
+    // that will not happen.
+    readRetrying_ = false;
+    readRetryingSince_ = {};
     return false;
 }
 
@@ -294,6 +328,11 @@ int AudioPipeline::readPacket(AVPacket* packet)
         if(nextReadStall_!=std::chrono::steady_clock::time_point{})std::this_thread::sleep_for(std::chrono::duration<double,std::milli>(readStallMs_));
         nextReadStall_=std::chrono::steady_clock::now()+std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double,std::milli>(readStallEveryMs_));
     }
+    // 换 CDN 节点失败时 avformat_open_input 会把 fmt_ 置空；没有这个判空，
+    // 后续任何一次读都是解引用空指针。
+    // A failed CDN switch leaves fmt_ null (avformat_open_input clears it); without this
+    // check every later read would dereference a null pointer.
+    if(!fmt_)return AVERROR_EOF;
     inputInterrupt_.arm();
     const int result=av_read_frame(fmt_,packet);
     inputInterrupt_.disarm();
@@ -343,7 +382,11 @@ void AudioPipeline::readerLoop()
                 // served only the first part of the file (field log 2026-10-25: a 97 s
                 // video whose audio hit EOF at 45 s). Reconnect through the next node and
                 // jump back instead of going silent.
-                if(total>0.0&&reached>=0.0&&reached<total-10000.0&&switchAudioMirror()){
+                // 只有网络音轨才谈得上换 CDN；本地文件提前结束就是文件坏了，不能拿
+                // 网络地址去接。
+                // Only a network track can switch CDNs; a local file ending early means the
+                // file is damaged, and a network address must not be substituted for it.
+                if(networkTarget_&&total>0.0&&reached>=0.0&&reached<total-10000.0&&switchAudioMirror()){
                     log::warn("audio", std::format(
                         "audio EOF at {:.0f} ms of {:.0f} ms; switched to CDN node {}",
                         reached,total,audioMirrorIndex_));
