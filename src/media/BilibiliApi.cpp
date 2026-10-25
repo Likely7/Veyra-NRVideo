@@ -20,8 +20,11 @@
 #include <bcrypt.h>
 #include <algorithm>
 #include <chrono>
+#include <cwctype>
 #include <format>
+#include <future>
 #include <map>
+#include <mutex>
 #include <sstream>
 
 #pragma comment(lib, "winhttp.lib")
@@ -135,6 +138,178 @@ bool httpRequest(const std::wstring& host, const std::wstring& path, const std::
 bool httpGet(const std::wstring& host, const std::wstring& path, const std::wstring& cookie,
              std::string& body, std::wstring& error) {
     return httpRequest(host, path, cookie, {}, body, error);
+}
+
+// ---- CDN candidate ranking -------------------------------------------------
+
+// 从完整 URL 拆出 host 和 path（含查询串）。失败返回 false。
+// Split a full URL into host and path (query included). False when it is not https.
+bool splitMediaUrl(const std::wstring& url, std::wstring& host, std::wstring& path) {
+    const std::wstring prefix = L"https://";
+    if (url.compare(0, prefix.size(), prefix) != 0) return false;
+    const size_t slash = url.find(L'/', prefix.size());
+    if (slash == std::wstring::npos) return false;
+    host = url.substr(prefix.size(), slash - prefix.size());
+    path = url.substr(slash);
+    // Bilibili sometimes appends the host again in the query; the path alone is enough.
+    return !host.empty() && !path.empty();
+}
+
+// PCDN（mcdn）和第三方中转节点的带宽通常远低于官方 upos，主地址落在它们上面就是
+// 「缓冲一直涨不起来」的常见原因。IP 直连地址同理（没有就近调度）。
+// newBV 的 officialCdnCandidates() 正是这样过滤的，这里采用同一组规则。
+// PCDN (mcdn) and third-party relay nodes usually deliver far less bandwidth than the
+// official upos ones, and a primary address landing on them is the usual reason a buffer
+// never fills. IP-literal addresses have the same problem (no nearby scheduling).
+// newBV's officialCdnCandidates() filters exactly these, so the same rules apply here.
+bool isLowQualityCdn(const std::wstring& url) {
+    if (url.find(L"mcdn.bilivideo") != std::wstring::npos) return true;
+    if (url.find(L".szbdyd.com") != std::wstring::npos) return true;
+    // https://1.2.3.4:8080/... — an IP literal instead of a CDN hostname.
+    const std::wstring prefix = L"https://";
+    if (url.compare(0, prefix.size(), prefix) == 0) {
+        size_t i = prefix.size();
+        int groups = 0;
+        while (i < url.size() && std::iswdigit(url[i])) {
+            while (i < url.size() && std::iswdigit(url[i])) ++i;
+            ++groups;
+            if (i < url.size() && url[i] == L'.') { ++i; continue; }
+            break;
+        }
+        if (groups == 4 && (i >= url.size() || url[i] == L'/' || url[i] == L':')) return true;
+    }
+    return false;
+}
+
+// host -> 实测速度（MB/s）。同一节点的速度短时间内不会剧变，按 host 缓存，这样只有
+// 第一次遇到某个节点才付测速的延迟。失败记 0，下次仍会重测。
+// host -> measured MB/s. A node's speed does not swing wildly in a short time, so results
+// are cached per host; only the first encounter pays the probe cost. Failures are not
+// cached, so they are retried next time.
+std::mutex g_cdnSpeedMutex;
+std::map<std::wstring, double> g_cdnSpeedCache;
+
+// 测一个地址的下载速度：取前 256 KB，返回 MB/s；失败返回 -1。
+// 超时必须短 —— 这段延迟加在「点击播放」到「出第一帧」之间。
+// Measure one address by downloading the first 256 KB and return MB/s, or -1 on failure.
+// The timeout has to stay short: this delay sits between the click and the first frame.
+double probeCdnSpeed(const std::wstring& url, int timeoutMs) {
+    std::wstring host, path;
+    if (!splitMediaUrl(url, host, path)) return -1.0;
+    HINTERNET session = WinHttpOpen(L"Veyra/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!session) return -1.0;
+    WinHttpSetTimeouts(session, timeoutMs, timeoutMs, timeoutMs, timeoutMs);
+    struct Guard { HINTERNET h; ~Guard() { if (h) WinHttpCloseHandle(h); } };
+    Guard sessionGuard{session};
+    HINTERNET connect = WinHttpConnect(session, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!connect) return -1.0;
+    Guard connectGuard{connect};
+    HINTERNET request = WinHttpOpenRequest(connect, L"GET", path.c_str(), nullptr,
+                                           WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                           WINHTTP_FLAG_SECURE);
+    if (!request) return -1.0;
+    Guard requestGuard{request};
+    WinHttpAddRequestHeaders(request, (L"User-Agent: " + std::wstring(kUserAgent)).c_str(), -1L,
+                             WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
+    WinHttpAddRequestHeaders(request, (L"Referer: " + std::wstring(kReferer)).c_str(), -1L,
+                             WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
+    // Only the head of the stream: enough to tell a fast node from a crawling one.
+    WinHttpAddRequestHeaders(request, L"Range: bytes=0-262143", -1L,
+                             WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
+
+    const auto begin = std::chrono::steady_clock::now();
+    if (!WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+        !WinHttpReceiveResponse(request, nullptr))
+        return -1.0;
+    DWORD status = 0, len = sizeof(status);
+    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                             WINHTTP_HEADER_NAME_BY_INDEX, &status, &len, WINHTTP_NO_HEADER_INDEX))
+        return -1.0;
+    if (status != 200 && status != 206) return -1.0;
+    size_t total = 0;
+    while (total < 262144) {
+        DWORD available = 0;
+        if (!WinHttpQueryDataAvailable(request, &available) || available == 0) break;
+        std::string chunk(available, '\0');
+        DWORD read = 0;
+        if (!WinHttpReadData(request, chunk.data(), available, &read) || read == 0) break;
+        total += read;
+        // Enough to rank; reading further only slows the click down.
+        if (std::chrono::steady_clock::now() - begin > std::chrono::milliseconds(timeoutMs)) break;
+    }
+    if (total == 0) return -1.0;
+    const double ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - begin).count();
+    if (ms <= 0.0) return -1.0;
+    return (double(total) / (1024.0 * 1024.0)) / (ms / 1000.0);
+}
+
+// 给候选地址排序：先滤掉 PCDN / 第三方 / IP 直连（它们排到最后），再按实测速度降序。
+// 全部节点都不可测速时保持服务端给的顺序 —— 那个顺序本身是有意义的。
+// Rank the candidates: low-quality nodes (PCDN / third party / IP literal) sink to the
+// end, the rest are ordered by measured speed. If nothing can be measured the server's
+// own order is kept, which carries meaning of its own.
+std::vector<std::wstring> rankCdnCandidates(const std::vector<std::wstring>& urls,
+                                              bool probe = true) {
+    if (urls.size() < 2) return urls;
+    std::vector<std::wstring> good, poor;
+    for (const auto& url : urls) {
+        if (url.empty()) continue;
+        (isLowQualityCdn(url) ? poor : good).push_back(url);
+    }
+    if (good.empty()) good = poor;               // 全是低质量节点：保持原序
+    if (good.empty()) return urls;
+
+    // 测速：只测没有缓存的 host，并发进行，任何一个慢都不拖累其它。
+    // Probe only uncached hosts, concurrently: one slow node must not hold up the rest.
+    struct Probe { size_t index; std::wstring host; };
+    std::vector<Probe> pending;
+    std::vector<double> speed(good.size(), -1.0);
+    {
+        std::lock_guard lock(g_cdnSpeedMutex);
+        for (size_t i = 0; i < good.size(); ++i) {
+            std::wstring host, path;
+            if (!splitMediaUrl(good[i], host, path)) continue;
+            const auto hit = g_cdnSpeedCache.find(host);
+            if (hit != g_cdnSpeedCache.end()) { speed[i] = hit->second; continue; }
+            pending.push_back({i, std::move(host)});
+        }
+    }
+    if (!pending.empty() && !probe) pending.clear();   // 音频只过滤，不付测速的时间
+    if (!pending.empty()) {
+        // 最多测 4 个：再多也只是把点击到首帧的时间拉长。
+        // At most four: probing more only lengthens the click-to-first-frame path.
+        if (pending.size() > 4) pending.resize(4);
+        std::vector<std::future<double>> running;
+        running.reserve(pending.size());
+        for (const auto& item : pending)
+            running.push_back(std::async(std::launch::async, [&good, &item] {
+                return probeCdnSpeed(good[item.index], 800);
+            }));
+        std::lock_guard lock(g_cdnSpeedMutex);
+        for (size_t k = 0; k < running.size(); ++k) {
+            const double value = running[k].get();
+            speed[pending[k].index] = value;
+            if (value >= 0.0) g_cdnSpeedCache[pending[k].host] = value;
+        }
+    }
+
+    std::vector<size_t> order(good.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&speed](size_t a, size_t b) {
+        // 未测出速度的排在测出速度的后面，但保持彼此的相对顺序。
+        // Unmeasured entries follow the measured ones, keeping their relative order.
+        if ((speed[a] < 0.0) != (speed[b] < 0.0)) return speed[a] >= 0.0;
+        if (speed[a] >= 0.0 && speed[b] >= 0.0) return speed[a] > speed[b];
+        return false;
+    });
+    std::vector<std::wstring> ranked;
+    ranked.reserve(good.size() + poor.size());
+    for (size_t i : order) ranked.push_back(good[i]);
+    ranked.insert(ranked.end(), poor.begin(), poor.end());
+    return ranked;
 }
 
 // The CSRF token the write endpoints require: bili_jct out of the session cookie.
@@ -1134,21 +1309,35 @@ BiliPlayUrls biliResolvePlay(const std::wstring& bvid, long long cid, int qn,
 
     // Bilibili returns several mirrors of the same rendition. Keeping them lets the
     // caller retry a different node when one is unreachable, which is the usual
-    // reason a play fails on a single CDN. Ordered as the response gives them.
-    if (tryBackupCdn) {
-        std::vector<std::wstring> mirrors;
-        mirrors.push_back(fromUtf8(videoUrl));
-        for (const auto* backup : (*best)["backupUrl"].elements()) {
-            const std::wstring url = fromUtf8((*backup).asString());
-            if (!url.empty() && std::find(mirrors.begin(), mirrors.end(), url) == mirrors.end())
-                mirrors.push_back(url);
+    // reason a play fails on a single CDN.
+    // 候选集合并完之后统一排序：PCDN / 第三方 / IP 直连沉到最后，其余按实测速度排序，
+    // 然后把最快的那个当成主地址。主地址落在 PCDN 上正是「缓冲涨不起来」的常见原因。
+    // The full candidate set is ranked before anything is chosen: low-quality nodes sink to
+    // the end, the rest go by measured speed, and the fastest becomes the primary address.
+    // A primary landing on PCDN is the usual reason a buffer never fills.
+    {
+        std::vector<std::wstring> candidates;
+        candidates.push_back(fromUtf8(videoUrl));
+        auto addBackups = [&](const char* key) {
+            for (const auto* backup : (*best)[key].elements()) {
+                const std::wstring url = fromUtf8((*backup).asString());
+                if (!url.empty() && std::find(candidates.begin(), candidates.end(), url) == candidates.end())
+                    candidates.push_back(url);
+            }
+        };
+        addBackups("backupUrl");
+        if (candidates.size() == 1) addBackups("backup_url");
+        std::vector<std::wstring> ranked = rankCdnCandidates(candidates);
+        if (!ranked.empty()) {
+            if (ranked.front() != fromUtf8(videoUrl)) {
+                log::info("bilibili", std::format("video CDN reordered: primary host is now {}",
+                                                  toUtf8(ranked.front())));
+            }
+            videoUrl = toUtf8(ranked.front());
+            if (tryBackupCdn) result.videoMirrors = std::move(ranked);
+        } else if (tryBackupCdn) {
+            result.videoMirrors = std::move(candidates);
         }
-        if (mirrors.empty()) for (const auto* backup : (*best)["backup_url"].elements()) {
-            const std::wstring url = fromUtf8((*backup).asString());
-            if (!url.empty() && std::find(mirrors.begin(), mirrors.end(), url) == mirrors.end())
-                mirrors.push_back(url);
-        }
-        result.videoMirrors = std::move(mirrors);
     }
 
     // Audio. DASH keeps it in its own arrays and the video stream carries no audio
@@ -1167,7 +1356,26 @@ BiliPlayUrls biliResolvePlay(const std::wstring& bvid, long long cid, int qn,
     auto takeAudio = [&](const json::Value& entry) {
         const std::string base = urlOf(entry);
         if (base.empty()) return false;
-        audioUrl = base;
+        // 音轨也避开 PCDN / 第三方节点，但**不测速**：音频码率只有一百多 kbps，慢节点
+        // 通常也撑得住，为它多花几百毫秒的测速不值得。
+        // The audio track avoids PCDN / third-party nodes too, but is **not** probed: its
+        // bitrate is a few hundred kbps at most, a slow node usually copes, and spending
+        // hundreds of milliseconds probing it is not worth it.
+        std::vector<std::wstring> candidates;
+        candidates.push_back(fromUtf8(base));
+        for (const auto* backup : entry["backupUrl"].elements()) {
+            const std::wstring url = fromUtf8((*backup).asString());
+            if (!url.empty() && std::find(candidates.begin(), candidates.end(), url) == candidates.end())
+                candidates.push_back(url);
+        }
+        if (candidates.size() == 1)
+            for (const auto* backup : entry["backup_url"].elements()) {
+                const std::wstring url = fromUtf8((*backup).asString());
+                if (!url.empty() && std::find(candidates.begin(), candidates.end(), url) == candidates.end())
+                    candidates.push_back(url);
+            }
+        const std::vector<std::wstring> ranked = rankCdnCandidates(candidates, /*probe=*/false);
+        audioUrl = toUtf8(ranked.empty() ? fromUtf8(base) : ranked.front());
         audioCodec = entry["codecs"].asString();
         return true;
     };
