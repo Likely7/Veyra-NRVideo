@@ -1753,10 +1753,13 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         if (!had || impl_->publishedRevision != before) {
             const auto& s = impl_->snapshot;
-            // Once the picture is up, the mirrors have done their job: a later failure
-            // is a different problem (network drop, decode), not a bad node.
-            if (s.running && !s.failed && !impl_->biliMirrors.empty() && impl_->biliRetriesLeft > 0)
-                impl_->biliRetriesLeft = 0;
+            // 画面起来之后**不再**清掉重试次数：一个节点可能在开播时正常、播到一半才
+            // 开始失败或掉速，这时换到下一个节点仍然有意义。次数由 biliRetriesLeft 封顶
+            // （等于备用节点数），所以不会无限切换。
+            // The retry budget is **no longer** dropped once the picture is up: a node can
+            // open fine and only start failing or crawling later, and moving to the next one
+            // still helps. biliRetriesLeft caps the count (one per spare mirror), so this
+            // cannot loop.
             if (!had || wasSession != s.sessionId || wasTransport != s.transport ||
                 wasRunning != s.running || wasImage != s.image || wasFailed != s.failed)
                 veyra::log::info("qml-window", std::format(
@@ -1772,6 +1775,19 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 impl_->biliRetriesLeft > 0 && !impl_->biliRetryPending) {
                 impl_->biliRetryPending = true;
                 --impl_->biliRetriesLeft;
+                // 播放中失败：把当前位置交给续播机制，新节点打开后由 tick 里的
+                // 「等新会话再 seek」逻辑跳回来。打开阶段的失败没有位置，保持 -1。
+                // A failure during playback hands the position to the resume mechanism,
+                // which the tick's "wait for the new session, then seek" logic picks up.
+                // A failure while opening has no position, so it stays -1.
+                if (impl_->biliSourceActive && impl_->snapshot.position > 1.0) {
+                    impl_->biliResumeAt = impl_->snapshot.position;
+                    impl_->biliResumeAfterSession = impl_->snapshot.sessionId;
+                    impl_->biliResumeSession = 0;
+                    veyra::log::info("bilibili", std::format(
+                        "mirror switch during playback; resuming at {:.1f}s",
+                        impl_->snapshot.position));
+                }
                 // Next mirror, wrapping past the one that just failed.
                 impl_->biliMirrorIndex = (impl_->biliMirrorIndex + 1) % impl_->biliMirrors.size();
                 const std::wstring next = impl_->biliMirrors[impl_->biliMirrorIndex];
