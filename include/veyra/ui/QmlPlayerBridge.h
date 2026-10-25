@@ -755,11 +755,14 @@ public:
     // Reports the position the moment playback ends, on a worker. False means there was
     // nothing worth reporting (never played, or already reported).
     bool reportBiliWatchProgressAsync();
-    // 开播那一刻写一次历史（played_time=0），让视频立刻出现在历史记录里。
-    // 传副本，不动 biliWatch* 的记录状态。
-    // Writes the history when playback starts (played_time=0) so the video shows up in
-    // 历史记录 immediately. Takes copies and leaves the biliWatch* bookkeeping alone.
-    bool reportBiliWatchStartedAsync(const std::wstring& bvid, long long cid);
+    // 开播那一刻写一次历史，让视频立刻出现在历史记录里。
+    // played 是**实际起播位置**：续播传续播点，从头播放传 0 —— 一律传 0 会清掉 B 站
+    // 记下的进度。传副本，不动 biliWatch* 的记录状态。
+    // Writes the history when playback starts so the video shows up in 历史记录
+    // immediately. played is the position playback really begins at (resume point, or 0
+    // from the top) - always passing 0 would wipe the site's stored progress. Takes copies
+    // and leaves the biliWatch* bookkeeping alone.
+    bool reportBiliWatchStartedAsync(const std::wstring& bvid, long long cid, int played);
     Q_INVOKABLE QString bilibiliLastError() const;
     bool amdNrGpu() const;
     QVariantMap effectCapabilities() const;
