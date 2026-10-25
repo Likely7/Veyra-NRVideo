@@ -1130,7 +1130,7 @@ to current NR/Flow contracts*），并把过程写进了 `docs/PR19_PR20_INTEGRA
 > 
 > 实测：修复前作者版日志中该提示 57 次；修复后作者版 0 次并自建 `-author` 目录，定制版 0 次。
 > 
-# Veyra 个人定制改动清单（CUSTOM LEDGER）
+## 旧台账片段（CUSTOM LEDGER，已合并进 `MY_WORK.md`，此处保留原文）
 
 > 本文件是个人自用定制的唯一台账，随 `custom` 分支一起维护。
 > 上游作者不使用本文件；未来合并上游新版本时，以本文件 + git 提交历史为准移植定制。

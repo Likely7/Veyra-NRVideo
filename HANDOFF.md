@@ -41,7 +41,7 @@
 
 ```
 D:\Program\Veyra\                                    ← 开发环境
-├── src\       约 1.3 GB  3186 文件   ← 源码 + .git（分支 custom，HEAD 926023e5）
+├── src\       约 1.3 GB  3186 文件   ← 源码 + .git（分支 custom，HEAD 以 git rev-parse 为准）
 ├── deps\      159.1 MB    225 文件   ← FFmpeg 9.0.1（BtbN 版）
 ├── build\     约 320 MB              ← Ninja 构建目录（15 个 .lib + 4 个 .exe）
 └── HANDOFF.md
