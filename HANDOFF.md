@@ -109,11 +109,53 @@ set "NINJA=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\C
   -DVEYRA_NVOF_SDK_ROOT="D:\Program\Veyra\src\third_party_local\nvidia\Optical_Flow_SDK_5.0.7" ^
   -DVEYRA_BUILD_QML_UI=ON ^
   -DVEYRA_ENABLE_NVOF=ON ^
-  -DVEYRA_ENABLE_EXPERIMENTAL_DLSSNR=ON
+  -DVEYRA_ENABLE_EXPERIMENTAL_DLSSNR=ON ^
+  -DVEYRA_CUDA_DRIVER_INCLUDE_DIR="D:\Program\Veyra\src\third_party_local\nvidia\Optical_Flow_SDK_5.0.7\NvOFFRUC\NvOFFRUCSample\cudart_header"
 ```
 
-**`VEYRA_ENABLE_EXPERIMENTAL_DLSSNR=ON` 必须显式给**：不开的话 `veyra_ngx` 目标不生成，
-而 `veyra_engine` 无条件链接它，会链不上。这是踩过的坑。
+**两个必须显式给的开关，少一个就少一个功能：**
+
+| 参数 | 不给的后果 |
+|---|---|
+| `VEYRA_ENABLE_EXPERIMENTAL_DLSSNR=ON` | `veyra_ngx` 目标不生成，`veyra_engine` 链不上（**构建直接失败**）|
+| `VEYRA_CUDA_DRIVER_INCLUDE_DIR=<cudart_header>` | **VFG 在编译期被静默禁用**（构建成功，但补帧下拉里「NVIDIA VFG」永远是灰的，提示「当前包缺少此功能的运行组件」）|
+
+第二个尤其阴险：**它不报错、不警告**。CMake 只在
+`if(EXISTS "${VEYRA_CUDA_DRIVER_INCLUDE_DIR}/cuda.h")` 成立时才定义
+`VEYRA_HAVE_CUDA_DRIVER_HEADERS=1`，而 `VfgBackend::runtimeAvailable()` 在宏未定义时
+直接 `return false`。
+
+**验收方法**：配置后检查 `build/build.ninja` 里有 `VEYRA_HAVE_CUDA_DRIVER_HEADERS=1`。
+
+### 有意关闭的功能（不是遗漏，不要去"修"）
+
+以下功能**用户明确说用不到，所以不构建**。看到它们缺失属于正常，不要当成 bug：
+
+| 功能 | 关闭方式 | 为什么关闭 |
+|---|---|---|
+| **Moonlight / Sunshine 串流** | `VEYRA_ENABLE_MOONLIGHT=OFF`（默认）| 用户用不到 |
+| **PS5 Remote Play（chiaki）** | `VEYRA_ENABLE_REMOTEPLAY=OFF`（默认）| 用户用不到 |
+| **Xbox 串流** | `VEYRA_ENABLE_XBOX=OFF`（默认）| 用户用不到 |
+| **DeckLink 采集** | `VEYRA_DECKLINK_SDK_DIR` 留空 | 用户用不到，且需要外部 SDK |
+| **Magewell 采集** | `VEYRA_MAGEWELL_SDK_DIR` 留空 | 用户用不到，且需要厂商 SDK |
+
+**开启串流需要的第三方源码，本机源码树里没有**（`third_party_local/` 只有 `amd` 和
+`nvidia`）：`moonlight-common-c`（含 ENet/nanors 子模块）、`chiaki`、`libdatachannel`、
+DeckLink SDK。CMake 直接 `FATAL_ERROR`。
+
+**需要这些功能时**：用 `启动-作者完整版.cmd`，它切到作者原版 exe
+（`veyra_qml_ui.exe.orig`），那个是作者完整构建，串流功能都在。
+这也是 `.orig` 必须保留的原因。
+
+**另外两个「定义了但从未使用」的死选项**（改了也不会有任何效果）：
+
+```
+VEYRA_ENABLE_DLSS_SR   ← CMakeLists 里只有 option()，源码无任何引用
+VEYRA_ENABLE_DLSS_FG   ← 同上
+```
+
+**DLSS SR / FG 一直在包里**（二进制里有完整的 `nvngx_dlss` / `DLSSG` 字符串），
+不受这两个 OFF 影响。不要因为它们显示 OFF 就去改。
 
 ### 日常增量构建
 
