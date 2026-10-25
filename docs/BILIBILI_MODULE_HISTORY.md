@@ -1,10 +1,15 @@
 # Veyra B 站模块 — 开发史与技术记录
 
+> ⚠️ **两条读前须知**
+>
+> 1. 文中 `D:\项目\Veyra-NV\...` 是**当时的记录**，那个目录已于 2026-10-25 删除，
+>    当前路径见 `HANDOFF.md` 第二节。
+> 2. 本文的「基线恢复」机制（`restore.py` + 快照）**已废弃**，现在用 `git` 管理。
+
 **整理日期**：2026-10-25（原为逐版本追加的流水账，已重排）
 **来源**：`D:\DSH\.dsh-tmp\keep\veyra-history-README.md`（2026-10-25 迁入仓库）
 
 ---
-
 
 > **文档地图**（我自己的 5 份文档，作者原版 600+ 份在 `docs/` 不动）
 >
@@ -16,20 +21,14 @@
 > | **docs/BILIBILI_MODULE_HISTORY.md** | B 站模块开发史 + 未解决问题 | B 站功能出问题时 |
 > | **docs/HISTORY.md** | 13 个专题的技术排查链 | 遇到具体技术障碍（AMD 光流、采集卡…）|
 
-
 ## 📖 想找什么，先看这里
 
 | 你想查什么 | 看哪节 |
 |---|---|
 | **现在还有哪些问题没解决？** | 一、未解决问题与已知限制 |
 | B 站模块是怎么一步步做出来的 | 二、版本演进（v23 → v2，最新在前）|
-| 投币为什么一直失败 | 三、投币失败的技术分析 |
-| 怎么恢复某个旧版本 | 四、历史恢复机制（已废弃）|
+| 投币为什么一直失败 | 一、未解决问题 → 投币失败的技术分析 |
 | 当前模块状态与相关 PR | 见 `MY_WORK.md` 第一、二节 |
-
-> ⚠️ **本文的「基线恢复」机制已废弃**：原来靠 `restore.py` + 快照恢复，
-> 现在用 `git` 管理。文中出现的 `D:\项目\Veyra-NV\...` 路径是**当时的记录**，
-> 那个目录已于 2026-10-25 删除，当前路径见 `HANDOFF.md` 第二节。
 
 ---
 
@@ -274,7 +273,7 @@ flashRow、tileRow、totalRows、visibleRows、topRow 等属性。
 
 覆盖全部 5 个重置点：load 缓存命中、load 新请求、openFavFolder、doSearch、成功追加后。
 
-### 基线 v23 哈希
+#### 基线 v23 哈希
 
     veyra_qml_ui.exe              = EE6B14D92E7A4608   （未变，v22 的）
     veyra_qml_ui.exe.p5           = EE6B14D92E7A4608
@@ -378,7 +377,7 @@ y: coverBox.y + coverBox.height + 5   // 三处引用同步改
 | 缓存 | `cardCache[key]` + `cardCache[key + ":page"]` |
 | 切栏目 | `activeListPage` 重置，滚动位置重置（正常）|
 
-### 基线 v22 哈希
+#### 基线 v22 哈希
 
 ```
 veyra_qml_ui.exe              = EE6B14D92E7A4608
@@ -467,7 +466,7 @@ struct ResolveGuard {
 
 **结论：本项目设计已与大厂一致，之前唯一缺的是操作反馈，现已补上。**
 
-### 基线 v21 哈希
+#### 基线 v21 哈希
 
 ```
 veyra_qml_ui.exe              = 643F9DBA4C6FB4E6
@@ -581,7 +580,7 @@ void QmlPlayerBridge::tickBiliList() {
 
 **从 6 次阻塞降到只剩 2 次轻量同步调用**（`resumeAt`、`interaction`）。
 
-### 基线 v20 哈希
+#### 基线 v20 哈希
 
 ```
 veyra_qml_ui.exe              = E9420258E3256BB6
@@ -661,7 +660,7 @@ double QmlPlayerBridge::bilibiliResumeAtCid(const QString& bvid, qlonglong cid) 
 改前：`投币失败（code=-401）：非法访问`
 改后：`投币失败：B 站的风控拒绝了这次操作，请到网页端完成；同一账号的点赞、收藏不受影响`
 
-### 基线 v18 哈希
+#### 基线 v18 哈希
 
 ```
 veyra_qml_ui.exe              = 852AA37585397022
@@ -724,7 +723,7 @@ property var cardCache: ({})
 | 扫码登录成功 | **清空所有缓存** + 刷新（账号权限变了）|
 | 退出登录 | **清空所有缓存**（旧账号数据）|
 
-### 基线 v17 哈希
+#### 基线 v17 哈希
 
 ```
 veyra_qml_ui.exe              = 5E31FA77943105BF
@@ -835,7 +834,7 @@ ninja -t clean && ninja veyra_qml_ui       # 约 10-15 分钟，227 个编译单
 `veyra-cleanbuild` 是从 `build-nv` 复制的独立构建目录，
 配置完全一致但产物干净，已验证可靠。
 
-### 基线 v16 哈希
+#### 基线 v16 哈希
 
 ```
 veyra_qml_ui.exe                  = F6BDBA8954C28D4A   ← 全量重建，可复现
@@ -992,7 +991,7 @@ D:\DSH\.dsh-tmp\newbv              1 MB   newBV 参考实现
 
 **用户验收**：通过（截图确认）。
 
-### 基线 v15 哈希
+#### 基线 v15 哈希
 
 ```
 veyra_qml_ui.exe                  = BCB218CAC229A3A7   (未重新编译)
@@ -1081,7 +1080,7 @@ Timer {
 
 **已知限制**：只能检测「播到结尾」，无法检测「用户主动停止」（需要 C++ 信号）。
 
-### 基线 v14 哈希
+#### 基线 v14 哈希
 
 ```
 veyra_qml_ui.exe                  = BCB218CAC229A3A7   (与 v13 相同，未重新编译)
@@ -1159,7 +1158,7 @@ B 站播的是 CDN 网络地址，`isFile()` 返回 false，所以从不记录�
 - 切换分 P 时重新查（每个分 P 进度不同）
 - 新增 `formatSeconds()` 把秒数格式化成 `m:ss`
 
-### 基线 v13 哈希
+#### 基线 v13 哈希
 
 ```
 veyra_qml_ui.exe              = BCB218CAC229A3A7
@@ -1268,7 +1267,7 @@ B站历史:
 导致从第二次播放起全部跳过。日志显示播了 5 个视频、0 条上报。
 第二版改用「缓存位置 + 上报后清空状态」，才正确。
 
-### 基线 v12 哈希
+#### 基线 v12 哈希
 
 ```
 veyra_qml_ui.exe              = 07D8F3BADE361E60
@@ -1315,7 +1314,7 @@ src/media/DanmakuOverlay.cpp  = EBA91C2B3FCFB48A
 | 9 | `BilibiliApi.cpp:587` | （同 4）| | |
 | 10 | `DemuxSession.cpp:1366/1287` | `failed_` 在 recover/seek 成功时清除 | ⚠️ 需断网测，用户未测 | 独立测试 6 断言全过 |
 
-### 基线 v10 哈希
+#### 基线 v10 哈希
 
 ```
 veyra_qml_ui.exe       = 264D6A72A55CF949
@@ -1405,7 +1404,7 @@ python restore.py --apply  # 执行恢复（不需要重新编译）
   退出时用 `Qt.callLater` 延迟一帧还原（Windows 上 `visibility` 切换与坐标设置有
   时序竞争，立刻设坐标可能被系统覆盖）。
 
-### 基线 v6 哈希
+#### 基线 v6 哈希
 
 ```
 veyra_qml_ui.exe       = 6327EFAF9E6C31C0
@@ -1525,7 +1524,7 @@ if (p7BoundCount <= 3 || ...)   // p7BoundCount 恒为 0 → 恒为真 → 每�
 | `bandwidthLow` | false | false |
 | `seek` 首帧 | 345ms | 未测（本次无 seek）|
 
-### 基线 v2 哈希
+#### 基线 v2 哈希
 
 ```
 veyra_qml_ui.exe      = 54552D4A453A4520

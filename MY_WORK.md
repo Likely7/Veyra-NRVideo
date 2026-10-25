@@ -64,8 +64,6 @@ git rev-list --count origin/main..custom      # 领先作者几个提交
 git status --porcelain                        # 工作区是否干净（应为空）
 ```
 
-> 2026-10-25 整理时的快照（仅供对照，会过期）：HEAD `48d73d1c`、落后 0、领先 33、工作区干净。
-
 **PR 状态用 `gh` 查，不要抄文档**：
 
 ```powershell
@@ -355,15 +353,8 @@ Cookie DPAPI 加密（`VBCK` 前缀）。
 **切换到作者版时 `BilibiliPage.qml` 会消失、切回会回来** —— 这是 `/MIR` 镜像的正确行为，
 作者版本来就没有 B 站模块。
 
-### 作者发布新版本时
-
-```
-作者新 exe      → veyra_qml_ui.exe.orig
-作者新 shader   → shaders\YuvToLinearRgb.dxil.orig
-作者新 qml      → qml.orig\Veyra\（先清空再放）
-```
-
-然后我的改动重新合并到 `.p5` 系列（合并源码 → 构建 → 部署到 `qml.p5` / `exe.p5`）。
+**作者发布新版本时的更新规则**：见 `HANDOFF.md` 第五节末尾（作者的放 `.orig` 系列，
+我的放 `.p5` 系列）。这里不重复。
 
 ---
 
