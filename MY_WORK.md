@@ -122,8 +122,9 @@ grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
 
 - 根因：推荐/热门/历史共用一个 card cache，`load()` 只有 `force=true` 才重新请求，
   只有「刷新」按钮传 true，播放从不让历史缓存失效
-- 修法：`biliHistoryDirty` 标记（开播置位、看完再置位），`load("history")` 消费它
-  并强制真拉；从历史页播完返回时也直接重拉
+- 修法：**`load("history")` 无条件强制真拉**（历史不适合缓存，进度一直在上报）；
+  从历史页播完返回时也直接重拉
+- 走过弯路：先做了「脏标记」方案，用户反馈他要的是**每次点都刷新**，已改成无条件 force
 
 ### 已知限制（别再试，或要试先想清楚）
 
