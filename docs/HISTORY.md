@@ -1270,7 +1270,7 @@ D:\项目\Veyra-NV\build-nv\veyra_dovi_p5_probe.exe `
   到达，逐个矩阵与曲线比对）、`--sdr`（见上）。
 - 计算那些数字的**对比脚本也进了仓库**：`tools/dovi_p5_probe/compare_raw.py`
   （`pq` = 探针 scRGB 输出 ↔ 16 位 PQ 参考；`f2` = 两次探针输出互比；`u2` = 两个 16 位 raw 互比）。
-- 完整记录：**`docs/DOVI_P5_VERIFICATION.md`**（样本识别、libplacebo 命令、五类检查的命令与结果、
+- 完整记录：**`docs/DOLBY_VISION.md`**（样本识别、libplacebo 命令、五类检查的命令与结果、
   测试结果与断言名）。
 
 复测数字（t=95s，命令与参考命令见上面那份文档；0.00175 是首轮 t=90s 用另一套参考设置量的）：
@@ -1298,7 +1298,7 @@ D:\项目\Veyra-NV\build-nv\veyra_dovi_p5_probe.exe `
 | 3 | 杜比视界 P5 真正按 IPT-PQ-C2 转换（RPU 整形 + RPU 矩阵 + HPE，逐帧；占位整形**用单位映射**，与播放历史无关） | 需编译 | include/veyra/pipeline/{FramePacket,DolbyVisionP5}.h、include/veyra/source/{DolbyVision,DolbyVisionRpu}.h、src/source/MediaFileSource.cpp、src/pipeline/EnhanceGraph.cpp、shaders/YuvToLinearRgb.hlsl | e19e586（占位语义在 c9b2359 修正） | 已编译 + 已部署 + 日志实测通过 |
 | 4 | `tools/dovi_p5_probe` 诊断工具：离线跑真实 dxil 并回读，用于验证 P5 颜色（后续扩展见 #6） | 需编译（仅工具） | tools/dovi_p5_probe/main.cpp、CMakeLists.txt | 见下方提交 | 已实测：对独立解码器误差 0.00175，对照组 0.03957 |
 | 5 | P5 评审修复：无可用 RPU 参数时**拒绝**而不是退回普通 YUV；只在转换真正生效时报告；`usable` 判定 + 契约测试 | 需编译 | include/veyra/source/{DolbyVision,DolbyVisionRpu}.h、src/source/MediaFileSource.cpp、tests/unit/RepairContractTests.cpp | c9b2359（PR #13）、custom 727ee52 | 已编译；`veyra_repair_contract_tests` 249/249 |
-| 6 | 探针免 GPU 模式（`--scan`/`--history`）+ 对比脚本 + 验证记录文档 | 需编译（仅工具） | tools/dovi_p5_probe/{main.cpp,compare_raw.py}、docs/DOVI_P5_VERIFICATION.md | 78a5961、f08934b（PR #13）、custom 263153d | 已复跑：1500/1500 帧可用、`history independent=1`、比较脚本复现同数字 |
+| 6 | 探针免 GPU 模式（`--scan`/`--history`）+ 对比脚本 + 验证记录文档 | 需编译（仅工具） | tools/dovi_p5_probe/{main.cpp,compare_raw.py}、docs/DOLBY_VISION.md | 78a5961、f08934b（PR #13）、custom 263153d | 已复跑：1500/1500 帧可用、`history independent=1`、比较脚本复现同数字 |
 | 7 | 首页「最近」列表加「清空」：**右对齐**、与「继续上次」右侧的「开始」同款主按钮（`VButton` + `primary` + `trash` 图标），右边缘与「开始」逐像素对齐；先确认再调用桥接里已有的 `clearRecentFiles()`，只清历史不删文件 | QML 免编译（i18n 复用已有「清空」条目，目录无净增） | qml/Veyra/HomePage.qml | 898ccd1、cf555be、12e2f87 | 实测：`start.right=1712.0`、`clear.right=1712.0`（delta 0）、按钮同宽 74.0/73.5；确认框完整；清空后 ui-session 记录 8 → 0 ；**已提上游 PR #15**（纯 QML） |
 | 8 | **HDR 亮度管理**（逐场景自适应：强度 / 目标峰值 / 响应速度 / 过渡时间；只在 HDR 输出路径 + PQ 片源上运行，用图里已有的 64×36 亮度直方图测量，不新增 pass、不回读）。默认**强度 50%**，增益夹子 **[0.5, 3.2]** | 需编译 | include/veyra/pipeline/{HdrSceneMapping.h,EnhanceGraph.h}、include/veyra/engine/HdrBrightnessSettings.h、src/pipeline/EnhanceGraph.cpp、shaders/YuvToLinearRgb.hlsl（打包进 toneMapParams.z/w）、src/ui/QmlPlayerBridge.cpp、qml/Veyra/{ProPage,SettingsPage,NodePage}.qml、i18n/catalog.json | 特性本身在 PR #14；**滑块失效修复** custom `c5ca763`、默认 50% `5ab549c`（PR #14 上对应 `e33bfc6` 修复、`2fc83e3` 夹子/默认 60、`2a9f7eb` 默认 50，三条提交信息均为中文） | **该功能已于 2026-10-04 删除**，由 #9（静态曲线）与 #10（静态元数据）取代：逐场景增益与显示器自带动态映射叠加后，暗场提不动、亮场又被压 |
 | 9 | **静态 HDR 亮度曲线**：暗部抬升 (0.01EV) / 抬升范围 (nit) / 中灰 (nit) / 高光起点 (nit) / 滚降强度 (%) / 峰值上限 (nit)。暗部抬升带权重 `w=saturate(1-L/range)²`，**亮部按构造不受影响**（单一曝光做不到）；中灰用「以峰值为锚的幂函数」`gamma=log(mid/peak)/log(203/peak)`，中灰变了而峰值不变；高光起点后软压缩 + 可选硬上限。**只作用于预览**（PresentBlit 在传输函数编码前，flags bit 16），不碰导出与工作帧 | 需编译 | include/veyra/engine/HdrOutputTuning.h、shaders/PresentBlit.hlsl、include/veyra/pipeline/GpuPassUtils.h（根签名常量数改为可配）、src/engine/VideoPresenter.cpp、src/engine/{EffectChain,PresetLibrary}.cpp、include/veyra/engine/{EffectChain,EnhancementSettings,GraphDescription}.h、src/pipeline/EnhanceGraph.cpp、src/ui/QmlPlayerBridge.{h,cpp}、qml/Veyra/{ProPage,SettingsPage}.qml、i18n/catalog.json | f67d657（根签名/live/部署修复：5ec3c86、bbe5038） | **已部署；用户实测有效果** |
@@ -1674,7 +1674,7 @@ HDR→SDR 输出行为逐位不变。
 另外把 2 条 i18n 按上游目录的排序重新插入。
 
 两个 PR 都基于上游 `main`，`custom` 里的对应实现与它们**逐文件相同**（P5 相关 4 个文件 +
-`tools/dovi_p5_probe/*` + `docs/DOVI_P5_VERIFICATION.md`），已同步提交：custom `727ee52`、`263153d`。
+`tools/dovi_p5_probe/*` + `docs/DOLBY_VISION.md`），已同步提交：custom `727ee52`、`263153d`。
 
 **作者 review 的三点 + 我们的改法**（提交 c9b2359，已同步到 custom）：
 
@@ -1693,7 +1693,7 @@ HDR→SDR 输出行为逐位不变。
   （`VEYRA_ENABLE_REMOTEPLAY=OFF` 时 `ps5SendLoginPin` 不编译）+ `MfVideoEncoder` 的 wstring→UTF8；
   本机验证时是临时打上、验完撤掉的。作者若要求合并，把 #14 的那一条搬过来即可。
 - 本仓库**没有 CI**（无 `.github/workflows`，PR 上不会出现检查项）；所有数字都是本机跑出来的，
-  命令与结果见 `docs/DOVI_P5_VERIFICATION.md`。
+  命令与结果见 `docs/DOLBY_VISION.md`。
 
 **待补**（本文件还没登记、但 `custom` 里已经有的定制）：预设库 v8/v9 与会话 v5/v6 的字段表
 （HDR 亮度管理已在 §4 #8 登记，会话持久化的坑见 §8）。下次整理台账时一并补上。
