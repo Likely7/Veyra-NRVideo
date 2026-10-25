@@ -280,7 +280,11 @@ struct QmlPlayerBridge::Impl {
     // 12 个操作各一个槽位，索引就是枚举值，因此同时发起的请求互不覆盖。
     // One slot per operation, indexed by the enum value, so requests started together
     // never evict one another.
-    std::array<BiliSlot, 12> biliTaskSlots{};
+    // 大小取自枚举：以后再加操作不会漏掉一个槽位（原先写死 12，这次加
+    // ReportProgress 才需要改）。越界会静默踩到相邻字段，所以用枚举算。
+    // Sized from the enum so a new operation cannot silently fall off the end; the old
+    // literal 12 had to be remembered by hand every time.
+    std::array<BiliSlot, static_cast<size_t>(BiliOp::Count)> biliTaskSlots{};
     // 丹�� overlay: created lazily, only while comments are enabled.
     std::unique_ptr<media::DanmakuWindow> danmakuWindow;
     bool danmakuEnabled = false;
@@ -2009,6 +2013,48 @@ void QmlPlayerBridge::flushBiliWatchProgress() {
         log::info("bilibili", std::format("watch progress reported bvid={} played_time={}", tag, played));
     else
         log::warn("bilibili", std::format("watch progress not reported bvid={} played_time={}", tag, played));
+}
+
+// 播放自然结束时的上报：取值规则和 flushBiliWatchProgress 一样，但网络请求丢给 worker
+// —— 它内部是同步 HTTP POST，直接放在 GUI tick 里会卡住界面几百毫秒。
+// 这样历史在结束那一刻就写入了，用户马上点「历史记录」就能看到这个视频。以前要等下一次
+// 打开别的来源才补报，表现就是「必须再播一个视频它才出现」。
+// Same position rules as flushBiliWatchProgress, but the request runs on a worker:
+// biliReportWatchProgress posts synchronously, and doing that from the GUI tick would
+// freeze the window. Reporting at the end is what makes the video appear in 历史记录
+// immediately; the write used to wait for the next open, which looked like "it only shows
+// up after playing another video".
+bool QmlPlayerBridge::reportBiliWatchProgressAsync() {
+    auto& i = *impl_;
+    if (i.biliWatchBvid.empty() || i.biliWatchCid <= 0) return false;
+    if (i.biliWatchLastPos < 0.0) return false;
+    // 上一次上报还没回来：这一次先不碰，数据留着让下一帧重试。直接覆盖槽位会让旧
+    // future 析构并阻塞 GUI，网络慢的时候正好卡住一帧甚至更久。
+    // An earlier report is still in flight: leave the data alone and retry next frame.
+    // Overwriting the slot would destroy the old future, which blocks the GUI thread.
+    if (i.biliTaskSlots[static_cast<size_t>(BiliOp::ReportProgress)].busy) return false;
+    int played = int(i.biliWatchLastPos);
+    if (i.biliWatchDuration > 0 && i.biliWatchLastPos >= i.biliWatchDuration - 1.0)
+        played = -1;
+    if (played < 0 && played != -1) played = 0;
+    // 立刻清空：同一个位置只报一次，之后析构或 openPath 的 flush 不会再发。
+    // Cleared at once so the same position is not sent again by the flush in the
+    // destructor or in openPath.
+    const std::wstring bvid = std::move(i.biliWatchBvid);
+    const long long cid = i.biliWatchCid;
+    i.biliWatchBvid.clear();
+    i.biliWatchCid = 0;
+    i.biliWatchLastPos = -1.0;
+    i.biliWatchDuration = 0.0;
+    const std::string tag = utf8Of(bvid).toStdString();
+    return startBiliTask(BiliOp::ReportProgress, [bvid, cid, played, tag] {
+        BiliTaskResult r;
+        r.ok = media::biliReportWatchProgress(bvid, cid, played);
+        log::info("bilibili", std::format(
+            "watch progress reported at end bvid={} played_time={} ok={}",
+            tag, played, r.ok ? 1 : 0));
+        return r;
+    });
 }
 QmlPlayerBridge::~QmlPlayerBridge() {
     // Before anything is torn down: this reads the playback position.
@@ -5003,6 +5049,13 @@ void QmlPlayerBridge::tickSubtitles() {
         if (playing && cur.position > 0.0) {
             i.biliWatchLastPos = cur.position;
             if (cur.duration > 0.0) i.biliWatchDuration = cur.duration;
+        } else if (cur.transport == Tr::Ended && !cur.failed) {
+            // 播完立刻上报。以前只有「打开另一个来源」或程序退出时才写回历史，于是刚看完
+            // 的视频要等下一次播放才出现在历史记录里。
+            // Report at the end. The write used to happen only when another source was
+            // opened or the app exited, so a video that had just finished did not appear
+            // in the history until the next playback.
+            reportBiliWatchProgressAsync();
         }
     }
     bool changed = false;
@@ -7651,6 +7704,14 @@ void QmlPlayerBridge::tickBiliTasks() {
             break;
         case BiliOp::Account:
             emit bilibiliAccountReady(r.object, r.ok);
+            break;
+        // 观看进度上报：结果不通知界面。播放结束时弹一句「上报失败」只会打断观看，
+        // 而这个请求本来就是尽力而为（作者原注释：best effort）。
+        // The progress report tells the UI nothing: a "report failed" toast at the end of
+        // a video would only interrupt playback, and the request is best-effort by design.
+        case BiliOp::ReportProgress:
+            break;
+        case BiliOp::Count:
             break;
         // 三个早先完成的异步方法，现在也走这套槽位，回收逻辑只有一份。
         // The three earlier async methods now share this path too, so collection

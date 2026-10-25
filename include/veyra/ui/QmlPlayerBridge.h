@@ -50,6 +50,14 @@ enum class BiliOp : uint8_t {
     Like, Coin, WatchLater,
     Comments, EnableDanmaku, ResumeAtCid,
     QrStart, QrPoll, Account,
+    // 播放结束时把观看进度写回账号历史。单独做成一个异步操作，因为
+    // media::biliReportWatchProgress 内部是同步 HTTP POST —— 在 GUI tick 里直接调
+    // 会把界面卡住几百毫秒。
+    // Writing the watched position back to the account's history when playback ends.
+    // It is asynchronous because media::biliReportWatchProgress does a synchronous HTTP
+    // POST; calling it straight from the GUI tick would freeze the window for that long.
+    ReportProgress,
+    Count,
 };
 // 操作名，供信号传给 QML 分派用。
 // The action name, passed to QML so one handler can serve several actions.
@@ -67,6 +75,8 @@ constexpr const char* biliOpName(BiliOp op) {
     case BiliOp::QrStart:          return "qr-start";
     case BiliOp::QrPoll:           return "qr-poll";
     case BiliOp::Account:          return "account";
+    case BiliOp::ReportProgress:   return "report-progress";
+    case BiliOp::Count:            break;
     }
     return "unknown";
 }
@@ -740,6 +750,11 @@ public:
     // another source is opened and once more on teardown; a no-op when nothing from
     // the Bilibili page is playing. Failures are logged and ignored.
     void flushBiliWatchProgress();
+    // 播放自然结束时立即把进度写回账号历史（异步，网络请求在 worker 里）。
+    // 返回 false 表示没有可上报的位置（没播过、或已经报过）。
+    // Reports the position the moment playback ends, on a worker. False means there was
+    // nothing worth reporting (never played, or already reported).
+    bool reportBiliWatchProgressAsync();
     Q_INVOKABLE QString bilibiliLastError() const;
     bool amdNrGpu() const;
     QVariantMap effectCapabilities() const;
