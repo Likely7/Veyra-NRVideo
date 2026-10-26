@@ -1600,9 +1600,13 @@ signals:
     // Result signals for the generic async task. `op` names the action (like / coin /
     // watchlater) so QML can handle the three same-shaped writes in one function.
     void bilibiliActionDone(const QString& op, bool ok, const QString& error);
-    // 表情面板：每项 { text, url }。
-    // The emote panel: each entry is { text, url }.
-    void bilibiliEmotePanelReady(const QVariantList& items, bool ok, const QString& error);
+    // 表情面板：每项是 "text<TAB>url"。
+    // 用字符串而不是 QVariantList：QVariantMap 到 QML 的类型转换出过问题 —— delegate
+    // 里拿到的不是对象，source 被当成文件名。这里用最笨但不会错的形式，由 QML 自己拆。
+    // One "text<TAB>url" per entry. A QStringList rather than a QVariantList because the
+    // QVariantMap-to-QML conversion misbehaved: the delegate did not receive an object and
+    // the image source ended up being a filename. The dumbest form that cannot go wrong.
+    void bilibiliEmotePanelReady(const QStringList& items, bool ok, const QString& error);
     // total 是评论总数，标题上显示「评论 N」用。
     // total is the overall comment count, shown as "评论 N" in the heading.
     void bilibiliCommentsReady(const QVariantList& comments, qlonglong total, bool ok,

@@ -7671,7 +7671,7 @@ void QmlPlayerBridge::tickBiliTasks() {
             // 显示原因更贴切，弹一条全局提示反而突兀。
             // Signal only, no notice: the panel is fetched on a button press, so showing the
             // reason where the panel would be is clearer than a global toast.
-            emit bilibiliEmotePanelReady(r.list, r.ok, r.error);
+            emit bilibiliEmotePanelReady(r.text.split(QLatin1Char('\n')), r.ok, r.error);
             break;
         case BiliOp::EnableDanmaku: {
             // 创建叠加层、清洗、交给渲染器 —— 三步都在 GUI 线程。
@@ -7822,12 +7822,13 @@ void QmlPlayerBridge::bilibiliRequestEmotePanel(){
             r.error = QString::fromStdWString(error);
             return r;
         }
-        for (const auto& e : emotes) {
-            QVariantMap m;
-            m.insert(QStringLiteral("text"), QString::fromStdWString(e.text));
-            m.insert(QStringLiteral("url"), QString::fromStdWString(e.url));
-            r.list.push_back(m);
-        }
+        // 每项 "text<TAB>url"：文本里不会出现制表符，所以这个分隔是安全的。
+        // One "text<TAB>url" each; a tab never appears in either field.
+        QStringList flat;
+        for (const auto& e : emotes)
+            flat.push_back(QString::fromStdWString(e.text) + QLatin1Char('\t')
+                           + QString::fromStdWString(e.url));
+        r.text = flat.join(QLatin1Char('\n'));
         r.ok = true;
         return r;
     });

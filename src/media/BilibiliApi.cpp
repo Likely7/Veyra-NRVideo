@@ -1053,6 +1053,11 @@ bool biliEmotePanel(std::vector<BiliEmote>& out, std::wstring& error) {
             BiliEmote item;
             item.text = fromUtf8((*emote)["text"].asString());
             item.url = fromUtf8((*emote)["url"].asString());
+            // 头几条打出来：字段名和取值一次看清，省得再猜。
+            // Log the first few: field names and values in one go, so nothing has to be guessed.
+            if (out.size() < 3)
+                log::info("emote", std::format("item text=<{}> url=<{}>",
+                                               toUtf8(item.text), toUtf8(item.url)));
             if (!item.text.empty()) out.push_back(std::move(item));
         }
     }

@@ -565,7 +565,19 @@ VPage {
             root.emoteLoading = false
             if (!ok) { root.emoteError = error; return }
             root.emoteError = ""
-            root.emotes = items
+            // 每项是 "text<TAB>url"，在这里拆成普通对象数组。
+            // 这样 delegate 里的 modelData 一定是个 JS 对象，不经过任何类型转换。
+            // Each entry is "text<TAB>url", split here into a plain object array so the
+            // delegate's modelData is unambiguously a JS object, with no conversion involved.
+            const list = []
+            for (let i = 0; i < items.length; ++i) {
+                const parts = String(items[i]).split("\t")
+                if (parts.length >= 2 && parts[0].length > 0)
+                    list.push({ text: parts[0], url: parts[1] })
+            }
+            root.emotes = list
+            console.log("[emote] panel parsed " + list.length + " entries, first="
+                        + (list.length > 0 ? JSON.stringify(list[0]) : "none"))
         }
         function onBilibiliCommentsReady(comments, total, ok, error) {
             if (!ok) return
@@ -880,9 +892,11 @@ VPage {
     // 把表情代码接到正文末尾，并把光标放到后面，方便接着打字。
     // Append the emote code to the body and put the caret after it, ready for more typing.
     function insertEmote(code) {
+        console.log("[emote] insert code=<" + code + "> type=" + typeof code)
         if (!code) return
         replyInput.text = replyInput.text + code
         replyInput.cursorPosition = replyInput.text.length
+        console.log("[emote] after insert text=<" + replyInput.text + "> replyText=<" + root.replyText + ">")
     }
 
     function toggleComments() {
@@ -2531,38 +2545,6 @@ VPage {
                             }
                         }
 
-                        // 发送前预览：把正文里的 [表情名] 渲染成图片，和发出去之后
-                        // 一模一样的效果。只在正文里出现过方括号且表情表已加载时显示，
-                        // 纯文字时不多占一行。
-                        // Preview before sending: [emote] rendered as images, exactly what the
-                        // posted comment will look like. Shown only when the body contains a
-                        // bracket and the emote list is loaded, so plain text costs no extra row.
-                        Rectangle {
-                            Layout.fillWidth: true
-                            visible: root.replyText.indexOf("[") >= 0
-                                     && root.emotes.length > 0
-                            implicitHeight: previewText.implicitHeight + 12
-                            radius: 8
-                            color: Theme.card2
-                            border.width: 1
-                            border.color: Theme.stroke
-
-                            Text {
-                                id: previewText
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.leftMargin: 8
-                                anchors.rightMargin: 8
-                                textFormat: Text.RichText
-                                wrapMode: Text.Wrap
-                                text: root.toRichText(root.replyText)
-                                color: Theme.t2
-                                font.family: Theme.fontUi
-                                font.pixelSize: 12
-                            }
-                        }
-
                         // 表情面板。高度固定、内部可滚，表情再多也不会把评论区顶下去。
                         // 点一个立即插入并保持展开，方便连着选好几个。
                         // The emote panel: fixed height and its own scrolling, so no number of
@@ -2612,39 +2594,60 @@ VPage {
                                 ScrollBar.vertical: VScrollBar { }
                                 model: root.emotes
                                 delegate: Item {
+                                    id: emoteCell
                                     width: 38
                                     height: 38
+
+                                    // 表情分两种：带图片的，和纯文字的颜文字（这种的 url
+                                    // 字段就是文字本身，当图片加载会去打开一个不存在的文件）。
+                                    // Two kinds: image emotes, and text-only kaomoji whose url
+                                    // field is the text itself - loading that as an image tries
+                                    // to open a file that does not exist.
+                                    readonly property string imageSource: {
+                                        const u = modelData.url || ""
+                                        if (u.startsWith("http")) return u
+                                        if (u.startsWith("//")) return "https:" + u
+                                        return ""
+                                    }
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 6
+                                        color: emoteCellHover.hovered ? Theme.card3 : "transparent"
+                                    }
+
                                     Image {
                                         anchors.centerIn: parent
                                         width: 26
                                         height: 26
-                                        // 地址可能是完整的 https://…，也可能是 //i0.hdslb.com…
-                                        // 这种协议相对形式 —— 只在后者前面补协议。之前无条件加
-                                        // "https:" 把完整地址拼成了 https:https://…，图片自然全空。
-                                        // The address may be a full https://... or protocol-relative
-                                        // //i0.hdslb.com...; only the latter needs a scheme. Adding
-                                        // it unconditionally produced https:https://..., which is
-                                        // why every image came out blank.
-                                        source: {
-                                            const u = modelData.url || ""
-                                            if (u.length === 0) return ""
-                                            return u.startsWith("//") ? "https:" + u : u
-                                        }
+                                        visible: emoteCell.imageSource.length > 0
+                                        source: emoteCell.imageSource
                                         asynchronous: true
                                         cache: true
                                         fillMode: Image.PreserveAspectFit
                                     }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.insertEmote(modelData.text)
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: 6
-                                            color: Theme.card3
-                                            visible: parent.containsMouse
-                                            z: -1
+                                    Text {
+                                        anchors.centerIn: parent
+                                        width: parent.width - 4
+                                        visible: emoteCell.imageSource.length === 0
+                                        horizontalAlignment: Text.AlignHCenter
+                                        elide: Text.ElideRight
+                                        text: modelData.text || ""
+                                        color: Theme.t2
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: 9
+                                    }
+
+                                    // TapHandler 在 Flickable 里比 MouseArea 可靠：它不参与
+                                    // 拖动的手势竞争，短按不会被当成滚动起手。
+                                    // TapHandler is more reliable inside a Flickable than
+                                    // MouseArea: it does not compete for the drag gesture, so a
+                                    // short press is not swallowed as the start of a scroll.
+                                    TapHandler {
+                                        id: emoteCellHover
+                                        onTapped: {
+                                            console.log("[emote] tapped text=<" + modelData.text + ">")
+                                            root.insertEmote(modelData.text)
                                         }
                                     }
                                 }
