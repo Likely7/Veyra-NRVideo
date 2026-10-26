@@ -913,16 +913,20 @@ VPage {
                         // by itself; the Keys handlers cover both Return keys; onPressed is
                         // the fallback that matches the key codes directly. A 250 ms gate
                         // stops one key press from searching twice via several channels.
-                        onAccepted: root.triggerSearchFromField()
-                        Keys.onReturnPressed: function(event) {
+                        onAccepted: {
+                            console.log("[bili-search] onAccepted")
                             root.triggerSearchFromField()
-                            event.accepted = true
                         }
-                        Keys.onEnterPressed: function(event) {
-                            root.triggerSearchFromField()
-                            event.accepted = true
-                        }
+                        // 只留 Keys.onPressed 一个按键处理器。
+                        // Keys.onReturnPressed / onEnterPressed 本质上是 onPressed 的语法糖，
+                        // 三个同时定义时只有最后那个还在工作 —— 实测 onReleased 每次都触发，
+                        // 而三个回车处理器一个都没响，就是它们互相覆盖了。
+                        // Only Keys.onPressed handles keys. Keys.onReturnPressed and
+                        // onEnterPressed are sugar over the same thing, and with all three
+                        // defined only the last one survives - measured: onReleased fired every
+                        // time while none of the three Return handlers ever did.
                         Keys.onPressed: function(event) {
+                            console.log("[bili-search] onPressed key=" + event.key)
                             if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                                 root.triggerSearchFromField()
                                 event.accepted = true
