@@ -34,7 +34,47 @@
 
 ## 一、未解决问题与已知限制
 
-### 1. 搜索框回车无响应（未解决，2026-10-25 复测确认仍在）
+### 0. 搜索框回车无响应（**已解决 2026-10-26**）
+
+**根因是「回车这一个键的按下事件被 TextInput 吞掉」，不是焦点问题。**
+
+2026-10-26 的实测数据（加了逐键日志后跑出来的）：
+
+| 通道 | 结果 |
+|---|---|
+| 回车的**按下**（`16777220`）| **0 次** —— 到不了控件 |
+| 回车的**释放**（`16777220`）| **29/29 次全到** |
+| 退格键的按下（`16777219`）| **3 次，能到** |
+| 应用级 `eventFilter` | **0 次** —— 看不到 QML 的键盘事件 |
+
+**结论：**
+1. `TextInput` 只为自己的编辑吞掉回车，**连 `accepted()` 都不发**；其它键正常
+2. **QML 键盘事件不经过 `qApp` 的应用级 `eventFilter`**（Qt Quick 直接调用
+   `QQuickItem::keyPressEvent`，不走 `sendEvent`）
+
+**解法：用「释放」事件触发。**
+
+```qml
+Keys.onReleased: function(event) {
+    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+        root.triggerSearchFromField()
+        event.accepted = true
+    }
+}
+```
+
+`onAccepted` 和 `Keys.onPressed` 留作兜底，250 毫秒闸门保证一次按键只搜一次。
+
+**前 4 次为什么失败**：都在追「按下」事件（`onAccepted` / `Keys.onReturnPressed` /
+`Basic.TextField` / 窗口级 `Shortcut` / C++ eventFilter），**而那个事件根本到不了**。
+
+**教训**：这类「按键没反应」的问题，**先逐键打印日志确认事件有没有到，再改代码。**
+这一轮之前每次都是直接改，改了四次都没命中。
+
+---
+
+### 1. 搜索框回车无响应（旧记录，2026-10-25 已过时）
+
 
 | 项目 | 内容 |
 |---|---|
