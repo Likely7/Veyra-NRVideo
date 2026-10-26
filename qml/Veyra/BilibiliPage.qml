@@ -2676,29 +2676,6 @@ VPage {
                             }
                         }
 
-                        // 简介改成只读的 TextEdit：Text 不支持选中，换成它才能用鼠标
-                        // 划选并复制。只读 + 可选中，外观和原来的 Text 一致（无背景、无边框）。
-                        // 高度必须显式给 contentHeight —— TextEdit 不像 Text 那样自己撑开，
-                        // 在 ColumnLayout 里会塌成 0。
-                        // The description is a read-only TextEdit now: Text cannot be selected,
-                        // this can, so the text can be dragged over and copied. Read-only with
-                        // mouse selection keeps it looking like the old Text (no background, no
-                        // frame). The height has to be contentHeight explicitly - unlike Text,
-                        // a TextEdit does not size itself and would collapse to 0 in a layout.
-                        TextEdit {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: contentHeight
-                            readOnly: true
-                            selectByMouse: true
-                            textFormat: TextEdit.PlainText
-                            wrapMode: TextEdit.Wrap
-                            selectionColor: Theme.accentSoft
-                            selectedTextColor: Theme.t1
-                            color: Theme.t3
-                            font.family: Theme.fontUi
-                            font.pixelSize: 12
-                            text: root.detail.desc || ""
-                        }
                         }
                     }
 
@@ -2880,6 +2857,25 @@ VPage {
                                 onClicked: send()
                             }
                         }
+                    // 简介放在「封面 + 视频信息」那一行的下方，横跨整栏 —— 封面底下那块
+                    // 空白由它填上，而不是挤在视频信息那一列的右半边。
+                    // The description sits below the cover/info row and spans the whole
+                    // column, filling the space under the cover instead of being squeezed into
+                    // the right half of the info column.
+                    TextEdit {
+                        width: detailColumn.width
+                        height: contentHeight
+                        readOnly: true
+                        selectByMouse: true
+                        textFormat: TextEdit.PlainText
+                        wrapMode: TextEdit.Wrap
+                        selectionColor: Theme.accentSoft
+                        selectedTextColor: Theme.t1
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 12
+                        text: root.detail.desc || ""
+                    }
 
                         Text {
                             Layout.fillWidth: true
