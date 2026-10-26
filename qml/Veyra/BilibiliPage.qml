@@ -1526,48 +1526,42 @@ VPage {
                 // The app's own scrollbar, same as every other list in this program: a thin
                 // thumb, draggable, no track or arrows.
                 ScrollBar.vertical: VScrollBar { }
-                // 滚轮平滑滚动。
-                // 默认的 Flickable 处理是一格一跳：步长只有一个行高的量级，而且没有过渡，
-                // 所以看起来生硬。这里自己接管滚轮，把每次的位移先累加到目标位置，再用
-                // 缓出动画走过去 —— 连续滚几下时目标会累积得更远，动画一次滑过去，这就是
-                // 惯性的手感。
-                // Smooth wheel scrolling. Flickable's own handling jumps a row at a time with
-                // no transition, which reads as stiff. The wheel is handled here instead: each
-                // notch accumulates into a target, and an ease-out animation walks to it. A
-                // few quick notches therefore build up a longer distance that one animation
-                // covers - that is the inertial feel.
-                property real wheelTargetY: 0
-                // 一格滚轮的位移。取约半个卡片高，比按行跳更细，但明显大于默认那一格。
-                // 触控板给的是像素级增量，直接按像素走。
-                // Distance per wheel notch: about half a card, finer than a row jump but well
-                // above the default. A touchpad reports pixel deltas, so those are used as is.
-                readonly property real wheelStep: cellHeight * 0.5
+                // 滚轮平滑滚动：用 Flickable 自己的 flick()，不要直接动 contentY。
+                // 上一版给 contentY 挂了 NumberAnimation，那会和 Flickable 内部状态打架
+                // —— 它自己也在维护 contentY，结果连正常滚动都失效了。flick() 是官方
+                // API：给一个初速度，Flickable 按 flickDeceleration 自然减速，惯性是
+                // 它自带的，内部状态也不会被破坏。
+                // Smooth wheel scrolling through Flickable's own flick(). The previous version
+                // animated contentY directly, which fought Flickable's internal state - it
+                // maintains contentY itself, so even normal scrolling stopped. flick() is the
+                // supported API: hand it a velocity and Flickable decelerates by
+                // flickDeceleration, so the inertia comes for free and nothing is corrupted.
+                property real wheelVelocity: 0
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                     onWheel: function(event) {
                         event.accepted = true
-                        const pixel = event.pixelDelta.y
-                        const delta = pixel !== 0 ? -pixel
-                                                  : -(event.angleDelta.y / 120.0) * grid.wheelStep
-                        const maxY = Math.max(0, grid.contentHeight - grid.height)
-                        // 动画进行中就从当前目标继续累加，否则会先跳回实际位置再走。
-                        // While the animation runs the accumulation continues from its
-                        // target, otherwise the view would snap back before moving again.
-                        const base = grid.wheelAnim.running ? grid.wheelTargetY : grid.contentY
-                        grid.wheelTargetY = Math.max(0, Math.min(maxY, base + delta))
-                        grid.wheelAnim.to = grid.wheelTargetY
-                        grid.wheelAnim.restart()
+                        // 触控板是像素级增量，鼠标是 120 一格。一格约走半个卡片高。
+                        // A touchpad reports pixel deltas; a mouse notch is 120. One notch
+                        // covers about half a card.
+                        const notches = event.pixelDelta.y !== 0
+                            ? -event.pixelDelta.y / 60.0
+                            : -event.angleDelta.y / 120.0
+                        const speed = Math.max(600, grid.cellHeight * 6)
+                        // 连续滚动时速度累加，滚得越快滑得越远；停手 160ms 后归零，
+                        // 下一次滚轮重新从零算起。
+                        // Repeated notches add up so a faster flick travels further; the
+                        // velocity resets 160 ms after the last one.
+                        grid.wheelVelocity = Math.max(-8000, Math.min(8000,
+                            grid.wheelVelocity + notches * speed))
+                        grid.flick(0, grid.wheelVelocity)
+                        wheelVelocityReset.restart()
                     }
                 }
-                NumberAnimation {
-                    id: wheelAnim
-                    target: grid
-                    property: "contentY"
-                    duration: 220
-                    // 缓出：起步快、收尾慢，就是“滑过去”的感觉；线性会显得机械。
-                    // Ease-out: quick off the mark, slow at the end - that is the glide.
-                    // Linear reads mechanical.
-                    easing.type: Easing.OutCubic
+                Timer {
+                    id: wheelVelocityReset
+                    interval: 160
+                    onTriggered: grid.wheelVelocity = 0
                 }
                 // The column count follows the ideal card width and the cells then share
                 // the available width exactly, so every window size is flush with no
