@@ -505,8 +505,16 @@ VPage {
             // (the -401 risk check in particular) has to be visible, or a silent no-op looks
             // like a bug.
             if (op === "delete-reply") {
-                if (!ok) { root.replyMessage = error; return }
+                if (!ok) { root.replyMessage = error; root.pendingDeleteRpid = 0; return }
                 root.replyMessage = qsTr("评论已删除")
+                // 先从本地去掉这一条：服务端列表可能有延迟，等刷新会让人以为没删掉。
+                // 然后再拉一次做最终对齐（别人可能刚好也发了评论）。
+                // Drop it locally first: the server list can lag, and waiting for the refresh
+                // makes the delete look like it did nothing. Then fetch once for the final
+                // state, since someone else may have posted meanwhile.
+                const gone = root.pendingDeleteRpid
+                root.comments = root.comments.filter(c => c.rpid !== gone)
+                root.pendingDeleteRpid = 0
                 if (root.detail && root.detail.bvid)
                     veyra.bilibiliRequestComments(root.detail.bvid, 1)
                 return
@@ -759,6 +767,11 @@ VPage {
     property string replyText: ""
     property bool replySending: false
     property string replyMessage: ""
+    // 正在删除的评论 rpid：成功后先从本地列表移除，界面立刻有反应，
+    // 再向服务端要一次最新列表做最终对齐。
+    // The rpid being deleted: on success it is removed from the local list so the change is
+    // immediate, then the server list is fetched again for the final state.
+    property real pendingDeleteRpid: 0
 
     function toggleComments() {
         root.showComments = !root.showComments
@@ -2364,6 +2377,7 @@ VPage {
                                                 onClicked: {
                                                     if (!root.detail || !root.detail.bvid) return
                                                     root.replyMessage = ""
+                                                    root.pendingDeleteRpid = modelData.rpid
                                                     veyra.bilibiliDeleteReply(root.detail.bvid,
                                                                               modelData.rpid)
                                                 }
