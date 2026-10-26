@@ -832,20 +832,21 @@ VPage {
                                 onPicked: id => veyra.displaySync = Number(id)
                             }
                             // 可变刷新 (G-SYNC / FreeSync): the switch greys when the monitor
-                            // cannot do it; 重新检测 stays available (read on events only).
+                            // cannot do it. The node page has no 信号 card, so the shared
+                            // 刷新显示器状态 (HDR, refresh rate, VRR; read on events only) sits here.
                             RowLayout {
                                 Layout.fillWidth: true
                                 NodeLabel { Layout.fillWidth: true; text: qsTr("可变刷新"); wrapMode: Text.WordWrap }
                                 Item {
                                     implicitWidth: Theme.ctlHeight; implicitHeight: Theme.ctlHeight
                                     VButton {
-                                        objectName: "node-vrr-recheck"
+                                        objectName: "node-display-refresh"
                                         anchors.fill: parent
-                                        visible: !veyra.vrrChecking
-                                        icon: true; ghost: true; iconName: "refresh"; tip: qsTr("重新检测")
+                                        visible: !veyra.displayChecking
+                                        icon: true; ghost: true; iconName: "refresh"; tip: qsTr("刷新显示器状态")
                                         onClicked: veyra.recheckDisplay()
                                     }
-                                    VSpinner { anchors.centerIn: parent; visible: veyra.vrrChecking }
+                                    VSpinner { anchors.centerIn: parent; visible: veyra.displayChecking }
                                 }
                                 VSwitch {
                                     objectName: "node-vrr"

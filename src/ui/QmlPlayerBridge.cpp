@@ -499,11 +499,13 @@ struct QmlPlayerBridge::Impl {
     // presenting monitor, or of the main window's monitor while idle.
     QString fgDisplayHint;
     int vrrState=0;
-    // 重新检测: the display generation it asked for, until the shown monitor
-    // answers (vrrChecking also covers any query in flight).
-    bool vrrChecking=false,vrrRecheckPending=false,displayChanged=false;
-    uint64_t vrrRecheckGeneration=0;
-    std::chrono::steady_clock::time_point vrrRecheckSince{};
+    // The shown monitor's Windows HDR (-1 unknown) and refresh rate.
+    int displayHdr=-1;double displayRefreshHz=0;
+    // 刷新显示器状态: the display generation it asked for, until the shown monitor
+    // answers (displayChecking also covers any query in flight).
+    bool displayChecking=false,displayRecheckPending=false,displayChanged=false;
+    uint64_t displayRecheckGeneration=0;
+    std::chrono::steady_clock::time_point displayRecheckSince{};
     DisplayChangeFilter displayChangeFilter;
     std::atomic<double> gpuUtil{-1.0};
     // Hardware adapters in Windows' high-performance order (discrete first). The
@@ -4941,25 +4943,21 @@ void QmlPlayerBridge::setHdrDisplayPeakNits(int nits){
     commitHdrTuning(std::move(s));
 }
 QVariantMap QmlPlayerBridge::hdrDisplayInfo()const{
-    // This is read from QML bindings (the peak row's hint text), so it must not do
-    // real work per call: building a DXGI factory and enumerating every adapter and
-    // output is far too heavy for something the snapshot signal can re-evaluate
-    // every frame. Cache it for a few seconds instead.
-    static QElapsedTimer cacheTimer;
-    static gfx::PresentSink::DisplayPeakInfo cached;
-    static HMONITOR cachedMonitor=nullptr;
+    // Read from QML bindings (the peak row's hint text), so no driver work here:
+    // the values come from the shared display state, queried in the background on
+    // events and 刷新显示器状态 (this used to build a DXGI factory every 5 s on the
+    // UI thread).
     HWND window=impl_->videoWindow;
     if(!IsWindow(window)){
         if(auto* focused=QGuiApplication::focusWindow())window=reinterpret_cast<HWND>(focused->winId());
         else window=nullptr;
     }
-    const auto monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST):MonitorFromPoint(POINT{0,0},MONITOR_DEFAULTTOPRIMARY);
-    if(!cacheTimer.isValid()||cacheTimer.elapsed()>5000||cachedMonitor!=monitor){
-        cached=gfx::PresentSink::queryDisplayPeak(window);cachedMonitor=monitor;
-        cacheTimer.restart();
-    }
-    return {{"valid",cached.valid},{"plausible",cached.valid},{"peakNits",int(cached.peakNits)},
-            {"fullFrameNits",int(cached.fullFrameNits)},{"minNits",cached.minNits}};
+    auto& displays=impl_->engine.displayStates();
+    std::optional<engine::DisplayState> known;
+    if(window){displays.request(window,"ui");known=displays.state(displays.monitorOf(window));}
+    const engine::DisplayColorState c=known?known->color:engine::DisplayColorState{};
+    return {{"valid",c.peakValid},{"plausible",c.peakValid},{"peakNits",int(c.peakNits)},
+            {"fullFrameNits",int(c.fullFrameNits)},{"minNits",c.minNits}};
 }
 bool QmlPlayerBridge::hdrCurve()const{return settings().hdrCurve.enabled;}
 void QmlPlayerBridge::setHdrCurve(bool enabled){
@@ -8229,31 +8227,36 @@ void QmlPlayerBridge::updateRunStatus() {
         const auto sync=i.presentation.display==engine::DisplaySync::Vsync?tr("垂直同步"):tr("自动显示同步");
         options<<((refresh>0)?tr("%1 · 屏幕 %2 Hz").arg(sync).arg(refresh,0,'f',1):sync);
     }
-    // Variable refresh (NVIDIA G-SYNC / G-SYNC Compatible): the presenting
-    // monitor while playing, otherwise the main window's monitor. Both come
-    // from the engine's DisplayStateService, queried in the background on
-    // events only (startup, another monitor, WM_DISPLAYCHANGE, the switch
-    // turned on, 重新检测), never on a timer. The driver setting is the
-    // user's; the 可变刷新 switch decides how Veyra presents when it is possible.
+    // Variable refresh (NVIDIA G-SYNC / G-SYNC Compatible), Windows HDR and the
+    // refresh rate: the presenting monitor while playing, otherwise the main
+    // window's monitor. They come from the engine's DisplayStateService,
+    // queried in the background on events only (startup, another monitor,
+    // WM_DISPLAYCHANGE, the switch turned on, 刷新显示器状态), never on a timer.
+    // The driver and Windows settings are the user's; the 可变刷新 switch decides
+    // how Veyra presents when it is possible.
     auto& displays=i.engine.displayStates();
     if(i.displayChanged){i.displayChanged=false;displays.invalidate("display-change");}
     HWND host=s.running&&i.videoWindow?i.videoWindow:owner;
     if(!host)if(auto* window=QGuiApplication::focusWindow())host=reinterpret_cast<HWND>(window->winId());
     // request() starts a query only when this monitor's state is stale or
     // missing (the presenter asks for the same monitor while playing).
-    if(host)displays.request(host,i.vrrRecheckPending?"manual":"ui");
+    if(host)displays.request(host,i.displayRecheckPending?"manual":"ui");
     const auto display=host?displays.state(displays.monitorOf(host)):std::nullopt;
     const int vrrLevel=s.running?int(s.displayVrr):display?int(gfx::vrrLevel(display->vrr)):0;
+    const int hdr=display&&display->color.hdr?int(*display->color.hdr):-1;
+    const double refreshHz=display?display->refreshHz:0;
     QString recheckNotice;bool recheckFailed=false;
-    if(i.vrrRecheckPending){
+    if(i.displayRecheckPending){
         // Answered once the shown monitor has a state of the re-check's generation.
-        if(display&&display->generation>=i.vrrRecheckGeneration){
-            i.vrrRecheckPending=false;recheckNotice=tr("已重新检测：%1").arg(vrrHintText(int(gfx::vrrLevel(display->vrr))));
-        }else if(std::chrono::steady_clock::now()-i.vrrRecheckSince>std::chrono::seconds(5)){
-            i.vrrRecheckPending=false;recheckNotice=tr("重新检测没有完成，请稍后再试");recheckFailed=true;
+        if(display&&display->generation>=i.displayRecheckGeneration){
+            i.displayRecheckPending=false;
+            recheckNotice=tr("已刷新显示器状态：系统 HDR %1 · 可变刷新 %2")
+                .arg(hdr>0?tr("开"):hdr==0?tr("关"):tr("未知"),vrrSummaryText(int(gfx::vrrLevel(display->vrr))));
+        }else if(std::chrono::steady_clock::now()-i.displayRecheckSince>std::chrono::seconds(5)){
+            i.displayRecheckPending=false;recheckNotice=tr("刷新显示器状态没有完成，请稍后再试");recheckFailed=true;
         }
     }
-    const bool vrrChecking=i.vrrRecheckPending||displays.busy();
+    const bool displayChecking=i.displayRecheckPending||displays.busy();
     if(i.presentation.variableRefresh){
         if(vrrLevel>=4)options<<tr("可变刷新 · 生效中");
         else if(vrrLevel==3)options<<tr("可变刷新 · 等待驱动确认");
@@ -8347,9 +8350,11 @@ void QmlPlayerBridge::updateRunStatus() {
     const double gpu = i.gpuUtil.load();
     const double target=active&&f.rateWindowReady&&rate.targetFps>0?rate.targetFps:-1;
     const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05 ||
-                         fgHint != i.fgDisplayHint || vrrLevel != i.vrrState || vrrChecking != i.vrrChecking;
+                         fgHint != i.fgDisplayHint || vrrLevel != i.vrrState || displayChecking != i.displayChecking ||
+                         hdr != i.displayHdr || std::abs(refreshHz - i.displayRefreshHz) > .01;
     i.runStatus = status; i.runLevel = level; i.runDetail = text; i.gpuPublished = gpu;
-    i.runOptions=options;i.effectiveOutputFps=target;i.fgDisplayHint=fgHint;i.vrrState=vrrLevel;i.vrrChecking=vrrChecking;
+    i.runOptions=options;i.effectiveOutputFps=target;i.fgDisplayHint=fgHint;i.vrrState=vrrLevel;i.displayChecking=displayChecking;
+    i.displayHdr=hdr;i.displayRefreshHz=refreshHz;
     if (changed) emit perfChanged();
     if (!recheckNotice.isEmpty()) emit notice(recheckNotice, recheckFailed);
 }
@@ -8605,17 +8610,30 @@ void QmlPlayerBridge::setVariableRefresh(bool value) {
     applyPresentation();
 }
 int QmlPlayerBridge::vrrState() const { return impl_->vrrState; }
-bool QmlPlayerBridge::vrrChecking() const { return impl_->vrrChecking; }
+int QmlPlayerBridge::displayHdr() const { return impl_->displayHdr; }
+double QmlPlayerBridge::displayRefreshHz() const { return impl_->displayRefreshHz; }
+bool QmlPlayerBridge::displayChecking() const { return impl_->displayChecking; }
 void QmlPlayerBridge::recheckDisplay() {
     // Every stored display state becomes stale; the next status update (or the
     // presenter's next loop) queries the shown monitor in the background.
     auto& i = *impl_;
-    i.vrrRecheckGeneration = i.engine.displayStates().invalidate("manual");
-    i.vrrRecheckPending = true;
-    i.vrrRecheckSince = std::chrono::steady_clock::now();
-    if (!i.vrrChecking) { i.vrrChecking = true; emit perfChanged(); }
+    i.displayRecheckGeneration = i.engine.displayStates().invalidate("manual");
+    i.displayRecheckPending = true;
+    i.displayRecheckSince = std::chrono::steady_clock::now();
+    if (!i.displayChecking) { i.displayChecking = true; emit perfChanged(); }
 }
 QString QmlPlayerBridge::vrrHint() const { return vrrHintText(impl_->vrrState); }
+QString QmlPlayerBridge::vrrSummary() const { return vrrSummaryText(impl_->vrrState); }
+// The 信号 card's short form of vrrHintText.
+QString QmlPlayerBridge::vrrSummaryText(int level) const {
+    switch (level) {
+    case 0: return tr("无法检测");
+    case 1: return tr("不支持");
+    case 2: return tr("当前不可用");
+    case 3: return impl_->presentation.variableRefresh && impl_->snapshot.running ? tr("已请求") : tr("可用");
+    default: return tr("生效中");
+    }
+}
 QString QmlPlayerBridge::vrrHintText(int level) const {
     // The 可变刷新 switch is available (not grey) from level 2: the monitor
     // can do VRR even if the driver setting is still off.

@@ -69,6 +69,8 @@ int wmain(int argc,wchar_t** argv){
             if(raise.load())throw std::runtime_error("simulated NVAPI crash");
             DisplayState state;state.monitor=moved.load()?nullptr:monitor;state.refreshHz=window==windowA?144.0:60.0;
             state.vrr.known=true;state.vrr.capsKnown=state.vrr.supportsVrr=state.vrr.currentlyCapable=true;state.vrr.status=status.load();
+            // Windows HDR on monitor A only; the panel peak comes from the same answer.
+            state.color.hdr=window==windowA;state.color.peakValid=true;state.color.peakNits=window==windowA?1000:400;
             return state;
         };
         auto monitorOf=[&](HWND window){return window==windowA?monitorA:window==windowB?monitorB:HMONITOR(nullptr);};
@@ -89,6 +91,7 @@ int wmain(int argc,wchar_t** argv){
             check(service.request(windowA,"test"),"the first request starts one query");
             auto a=settle(monitorA);
             check(a&&a->refreshHz==144.0&&a->generation==service.generation()&&calls==1,"the answer is stored for its monitor in the current generation");
+            check(a&&a->color.hdr==true&&a->color.peakValid&&a->color.peakNits==1000,"Windows HDR and the panel peak arrive with the same answer");
             bool quiet=true;for(unsigned i=0;i<1000;++i)quiet&=!service.request(windowA,"test");
             check(quiet&&calls==1&&!service.busy(),"requests every frame/tick never query a current monitor again");
 
@@ -105,6 +108,7 @@ int wmain(int argc,wchar_t** argv){
             setGate(true);
             auto fresh=settle(monitorA);auto b=service.state(monitorB);
             check(fresh&&fresh->generation==generation&&fresh->serial!=first&&b&&b->refreshHz==60.0&&calls==3,"both monitors answered once each after the release");
+            check(b&&b->color.hdr==false&&b->color.peakNits==400,"each monitor keeps its own HDR state");
 
             check(service.request(windowA,"vrr-confirm",true)&&!service.request(windowA,"vrr-confirm",true),"a forced check runs once even while current");
             settle(monitorA);check(calls==4,"the forced check queried exactly once");

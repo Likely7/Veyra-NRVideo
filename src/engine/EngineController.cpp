@@ -709,9 +709,20 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(!pipeline::Extent{width,height}.valid()){status(L"图像尺寸超出单张GPU纹理能力，需要分块处理",true);break;}
             HdrDisplayState displayHdrState;
             bool displayQueryFailed=false;
+            uint64_t hdrDisplaySerial=0;
+            // Windows HDR comes from the shared display state (the same background
+            // query as refresh and VRR, asked again only on a display change, a
+            // monitor change or 刷新显示器状态). A new graph waits for a missing or
+            // stale answer once, like the synchronous query it replaces.
             auto displayHdrActive=[&]{
-                HMONITOR target=nullptr;
-                const auto queried=gfx::PresentSink::queryHdrDisplayActive(window,&target);
+                const HMONITOR target=displayStates_.monitorOf(window);
+                auto known=displayStates_.state(target);
+                if(!known||known->generation!=displayStates_.generation()){
+                    displayStates_.request(window,"hdr-output");
+                    known=displayStates_.wait(target,std::chrono::seconds(1));
+                }
+                const std::optional<bool> queried=known?known->color.hdr:std::nullopt;
+                if(known)hdrDisplaySerial=known->serial;
                 const bool active=displayHdrState.update(reinterpret_cast<std::uintptr_t>(target),queried);
                 if(!queried&&!displayQueryFailed)veyra::log::warn("display-color",std::format("HDR display query unavailable; using target-local hdr={} (unknown target defaults to SDR)",active));
                 if(queried&&displayQueryFailed)veyra::log::info("display-color",std::format("HDR display query recovered hdr={}",active));
@@ -1488,11 +1499,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         continue;
                     }
                 }
-                if((gd.hdrInput||options.settings.videoHdr.enabled)&&GetTickCount64()-hdrDisplayCheck>2000){
-                    diagnostics::CpuStallTrace hdrTrace("hdr-query-stall",frames);
+                // Windows HDR flips with a newer display answer (a display or monitor
+                // change, 刷新显示器状态, a session start). Reading it calls no driver; the
+                // owner used to enumerate DXGI outputs here every 2 s (0.25-0.64 ms each).
+                if((gd.hdrInput||options.settings.videoHdr.enabled)&&GetTickCount64()-hdrDisplayCheck>250){
                     hdrDisplayCheck=GetTickCount64();
-                    const bool native=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
-                    if(native!=gd.hdrOutput){std::lock_guard lock(mutex_);if(desired_.revision==options.settings.revision){desired_.revision=++nextRevision_;snapshot_.desired=desired_;snapshot_.applying=true;}}
+                    const HMONITOR target=displayStates_.monitorOf(window);
+                    if(const auto known=displayStates_.state(target);known&&known->serial!=hdrDisplaySerial){
+                        hdrDisplaySerial=known->serial;
+                        const bool active=displayHdrState.update(reinterpret_cast<std::uintptr_t>(target),known->color.hdr);
+                        const bool native=options.settings.useHdrPreview(gd.hdrInput,active);
+                        if(native!=gd.hdrOutput){std::lock_guard lock(mutex_);if(desired_.revision==options.settings.revision){desired_.revision=++nextRevision_;snapshot_.desired=desired_;snapshot_.applying=true;}}
+                    }
                 }
                 if(audioStarted)publishAudioStatus();
                 if(audioStarted&&injectFileEndpointLoss&&!fileEndpointLossInjected&&frames>=20){audioPipe.requestEndpointLossForTest();fileEndpointLossInjected=true;}

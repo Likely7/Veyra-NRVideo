@@ -43,11 +43,11 @@ Item {
                 // Mark first: the presenter may start the query before this handler returns.
                 test.notices=[];next(4,"recheck");veyra.recheckDisplay()
                 // The spinner shows at once; the next 250 ms status update may already clear it.
-                check(veyra.vrrChecking,"重新检测 shows the spinner at once")
+                check(veyra.displayChecking,"刷新显示器状态 shows the spinner at once")
             }else if(test.phase===4){
                 if(test.ticks<16)return
-                check(test.notices.some(t=>t.indexOf("已重新检测")===0),"re-check notice: "+JSON.stringify(test.notices))
-                check(!veyra.vrrChecking,"vrrChecking cleared after the answer")
+                check(test.notices.some(t=>t.indexOf("已刷新显示器状态")===0),"re-check notice: "+JSON.stringify(test.notices))
+                check(!veyra.displayChecking,"displayChecking cleared after the answer")
                 next(5,"vrr-on");veyra.variableRefresh=true
             }else if(test.phase===5){
                 // Switch on: one query, plus one VRR confirmation 3 s later when VRR presents.

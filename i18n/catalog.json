@@ -2689,6 +2689,13 @@
    "ja": "この PC のコントローラー入力を PS5 に転送しない"
   },
   {
+   "zh": "不支持",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "不支援",
+   "en": "Not supported",
+   "ja": "非対応"
+  },
+  {
    "zh": "不是 8 位配对码",
    "src": "qml/DialogHost.qml",
    "zh-TW": "不是 8 位配對碼",
@@ -4571,6 +4578,20 @@
    "zh-TW": "刷新並關閉輸出檔案",
    "en": "Flush and close the output file",
    "ja": "出力ファイルのフラッシュとクローズ"
+  },
+  {
+   "zh": "刷新显示器状态",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "重新整理顯示器狀態",
+   "en": "Refresh display state",
+   "ja": "ディスプレイの状態を更新"
+  },
+  {
+   "zh": "刷新显示器状态没有完成，请稍后再试",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "重新整理顯示器狀態未完成，請稍後再試",
+   "en": "Refreshing the display state did not finish; try again later",
+   "ja": "ディスプレイの状態の更新が完了しませんでした。しばらくしてからもう一度お試しください"
   },
   {
    "zh": "刷新设备",
@@ -7219,6 +7240,13 @@
    "ja": "削除しました。"
   },
   {
+   "zh": "已刷新显示器状态：系统 HDR %1 · 可变刷新 %2",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已重新整理顯示器狀態：系統 HDR %1 · 可變更新 %2",
+   "en": "Display state refreshed: Windows HDR %1 · variable refresh %2",
+   "ja": "ディスプレイの状態を更新しました：システム HDR %1 · 可変リフレッシュ %2"
+  },
+  {
    "zh": "已加载",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "已載入",
@@ -7618,6 +7646,13 @@
    "ja": "起動時の既定プリセットに設定しました"
   },
   {
+   "zh": "已请求",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已請求",
+   "en": "Requested",
+   "ja": "要求済み"
+  },
+  {
    "zh": "已请求主机退出游戏。",
    "src": "src/ui/MoonlightModel.cpp",
    "zh-TW": "已請求主機退出遊戲。",
@@ -7679,13 +7714,6 @@
    "zh-TW": "已釋放鍵盤和滑鼠（點擊畫面重新擷取）",
    "en": "Keyboard and mouse released (click the picture to capture again)",
    "ja": "キーボードとマウスを解放しました（映像をクリックすると再度キャプチャー）"
-  },
-  {
-   "zh": "已重新检测：%1",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "已重新偵測：%1",
-   "en": "Checked again: %1",
-   "ja": "再検出しました：%1"
   },
   {
    "zh": "已锁定全屏 · Ctrl+L 解锁，Esc 退出全屏",
@@ -7805,6 +7833,13 @@
    "zh-TW": "底部距離",
    "en": "Distance from bottom",
    "ja": "下端からの距離"
+  },
+  {
+   "zh": "开",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "開",
+   "en": "On",
+   "ja": "オン"
   },
   {
    "zh": "开关、进度、选中状态",
@@ -8113,6 +8148,13 @@
    "zh-TW": "當前 · 設定會原樣保留",
    "en": "Current · settings are kept as they are",
    "ja": "現在 · 設定はそのまま保持"
+  },
+  {
+   "zh": "当前不可用",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前不可用",
+   "en": "Unavailable now",
+   "ja": "現在は使用不可"
   },
   {
    "zh": "当前为 SDR 预览，HDR 转换未运行",
@@ -9920,6 +9962,13 @@
    "zh-TW": "無法建立所選擷取格式，請檢查解析度、影格率與驅動能力。",
    "en": "Cannot construct the selected capture format. Check resolution, frame rate and driver capabilities.",
    "ja": "選択したキャプチャ形式を作成できません。解像度、レート、ドライバーの対応能力を確認してください。"
+  },
+  {
+   "zh": "无法检测",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "無法偵測",
+   "en": "Cannot detect",
+   "ja": "検出できません"
   },
   {
    "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）",
@@ -12344,6 +12393,13 @@
    "ja": "環境光補正：明るい部屋では補正し、暗い部屋では補正しません"
   },
   {
+   "zh": "生效中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "生效中",
+   "en": "Active",
+   "ja": "有効"
+  },
+  {
    "zh": "生效中：NVIDIA DLSS 帧生成性能模式（测试版）",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "生效中：NVIDIA DLSS 幀生成效能模式（測試版）",
@@ -13140,6 +13196,13 @@
    "zh-TW": "精細：按位置還原色度，放大用雙三次；不是 AI 超解析",
    "en": "Fine: restores chroma by position and scales up bicubically; not AI super resolution",
    "ja": "精細：位置に合わせて色差を復元し、拡大はバイキュービック。AI 超解像ではありません"
+  },
+  {
+   "zh": "系统 HDR",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "系統 HDR",
+   "en": "Windows HDR",
+   "ja": "システム HDR"
   },
   {
    "zh": "系统不支持 Windows Graphics Capture",
@@ -16976,20 +17039,6 @@
    "zh-TW": "重新開啟同一個檔案時從上次位置繼續",
    "en": "Continue from the last position when the same file is reopened",
    "ja": "同じファイルを開き直すと前回の位置から再開"
-  },
-  {
-   "zh": "重新检测",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "重新偵測",
-   "en": "Check again",
-   "ja": "再検出"
-  },
-  {
-   "zh": "重新检测没有完成，请稍后再试",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "重新偵測未完成，請稍後再試",
-   "en": "The check did not finish. Please try again shortly.",
-   "ja": "再検出が完了しませんでした。しばらくしてから再試行してください。"
   },
   {
    "zh": "重置本页",

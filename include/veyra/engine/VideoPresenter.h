@@ -108,9 +108,8 @@ private:
     // real value keeps the reported metadata steady instead of flapping to the
     // fallback (which re-sent it on nearly every frame).
     HdrSourceMetadata sourceMetadata_{};
-    HMONITOR hdrPeakMonitor_=nullptr;
     gfx::PresentSink::DisplayPeakInfo hdrPeakInfo_{};
-    std::chrono::steady_clock::time_point hdrPeakQuery_{},metadataAttempt_{};
+    std::chrono::steady_clock::time_point metadataAttempt_{};
     DXGI_HDR_METADATA_HDR10 lastMetadata_{};
     gfx::ReflexSession reflex_;
     uint64_t reflexFrame_=0,generation_=0;

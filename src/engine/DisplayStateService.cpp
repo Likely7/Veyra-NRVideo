@@ -20,8 +20,13 @@ DisplayState DisplayStateService::queryDisplayState(HWND window,HMONITOR monitor
     state.refreshHz=gfx::PresentSink::displayRefreshFps(window);
     const auto refreshed=Clock::now();
     state.vrr=gfx::queryVrr(window);
+    const auto vrrDone=Clock::now();
+    gfx::PresentSink::DisplayPeakInfo peak;
+    state.color.hdr=gfx::PresentSink::queryHdrDisplayActive(window,nullptr,&peak);
+    state.color.peakValid=peak.valid;state.color.peakNits=peak.peakNits;
+    state.color.fullFrameNits=peak.fullFrameNits;state.color.minNits=peak.minNits;
     const auto finished=Clock::now();
-    state.refreshMs=Ms(refreshed-began).count();state.vrrMs=Ms(finished-refreshed).count();
+    state.refreshMs=Ms(refreshed-began).count();state.vrrMs=Ms(vrrDone-refreshed).count();state.colorMs=Ms(finished-vrrDone).count();
     if(IsWindow(window)&&MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST)==monitor)state.monitor=monitor;
     return state;
 }
@@ -100,8 +105,9 @@ void DisplayStateService::collectLocked(){
             else{
                 state.generation=job.generation;state.serial=++serial_;
                 if(!entry.state||entry.state->generation<=job.generation)entry.state=state;
-                veyra::log::info("display-query",std::format("result reason={} monitor={} generation={} refreshHz={:.3f} vrrLevel={} status={} refreshMs={:.3f} vrrMs={:.3f} (driver wall time on the worker thread)",
-                    job.reason,monitorName(job.monitor),job.generation,state.refreshHz,gfx::vrrLevel(state.vrr),state.vrr.status,state.refreshMs,state.vrrMs));
+                veyra::log::info("display-query",std::format("result reason={} monitor={} generation={} refreshHz={:.3f} vrrLevel={} status={} hdr={} peakNits={} refreshMs={:.3f} vrrMs={:.3f} colorMs={:.3f} (driver wall time on the worker thread)",
+                    job.reason,monitorName(job.monitor),job.generation,state.refreshHz,gfx::vrrLevel(state.vrr),state.vrr.status,
+                    state.color.hdr?(*state.color.hdr?"on":"off"):"unknown",state.color.peakValid?int(state.color.peakNits):-1,state.refreshMs,state.vrrMs,state.colorMs));
                 if(state.vrr.status!=0)failedLocked(entry,job,std::format("NVAPI status={}",state.vrr.status));
                 else if(entry.failedGeneration==job.generation)entry.failures=0;
             }

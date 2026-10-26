@@ -143,31 +143,17 @@ VPage {
             }
         }
         // 可变刷新 (G-SYNC / FreeSync): the switch greys when the monitor cannot
-        // do it. The state is read on events only; 重新检测 stays available and
-        // asks the driver again (its icon becomes a spinner meanwhile).
+        // do it. The state is read on events only; 刷新显示器状态 in the 信号
+        // card asks the driver again.
         VRow {
             label: qsTr("可变刷新")
             hint: veyra.vrrHint
-            RowLayout {
-                spacing: 6
-                Item {
-                    implicitWidth: Theme.ctlHeight; implicitHeight: Theme.ctlHeight
-                    VButton {
-                        objectName: "presentation-vrr-recheck"
-                        anchors.fill: parent
-                        visible: !veyra.vrrChecking
-                        icon: true; ghost: true; iconName: "refresh"; tip: qsTr("重新检测")
-                        onClicked: veyra.recheckDisplay()
-                    }
-                    VSpinner { anchors.centerIn: parent; visible: veyra.vrrChecking }
-                }
-                VSwitch {
-                    objectName: "presentation-vrr"
-                    enabled: veyra.vrrState >= 2
-                    opacity: enabled ? 1 : 0.5
-                    checked: veyra.variableRefresh
-                    onToggled: checked => veyra.variableRefresh = checked
-                }
+            VSwitch {
+                objectName: "presentation-vrr"
+                enabled: veyra.vrrState >= 2
+                opacity: enabled ? 1 : 0.5
+                checked: veyra.variableRefresh
+                onToggled: checked => veyra.variableRefresh = checked
             }
         }
         VRow {
@@ -1016,7 +1002,24 @@ VPage {
                 anchors.fill: parent
                 anchors.margins: 14
                 spacing: 6
-                VEyebrow { text: qsTr("信号") }
+                RowLayout {
+                    Layout.fillWidth: true
+                    VEyebrow { Layout.fillWidth: true; text: qsTr("信号") }
+                    // 刷新显示器状态: Windows HDR, refresh rate and variable refresh are
+                    // read on events only (startup, a display or monitor change, the
+                    // 可变刷新 switch turned on); this asks the driver again.
+                    Item {
+                        implicitWidth: 22; implicitHeight: 22
+                        VButton {
+                            objectName: "pro-display-refresh"
+                            anchors.fill: parent
+                            visible: !veyra.displayChecking
+                            icon: true; ghost: true; iconName: "refresh"; tip: qsTr("刷新显示器状态")
+                            onClicked: veyra.recheckDisplay()
+                        }
+                        VSpinner { anchors.centerIn: parent; visible: veyra.displayChecking }
+                    }
+                }
                 GridLayout {
                     Layout.fillWidth: true
                     columns: 2
@@ -1050,6 +1053,24 @@ VPage {
                         Layout.fillWidth: true
                         text: veyra.colorStatus.length > 0 ? veyra.colorStatus : "—"
                         color: Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                    }
+                    // The shown monitor: the video's while playing, otherwise the window's.
+                    Text { text: qsTr("系统 HDR"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 12 }
+                    Text {
+                        objectName: "pro-display-hdr"
+                        Layout.fillWidth: true
+                        text: veyra.displayHdr > 0 ? qsTr("开") : veyra.displayHdr === 0 ? qsTr("关") : qsTr("未知")
+                        color: Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                    }
+                    Text { text: qsTr("可变刷新"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 12 }
+                    Text {
+                        objectName: "pro-display-vrr"
+                        Layout.fillWidth: true
+                        text: veyra.vrrSummary + (veyra.displayRefreshHz > 0 ? " · " + veyra.displayRefreshHz.toFixed(0) + " Hz" : "")
+                        color: veyra.vrrState >= 4 ? Theme.ok : Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
                         horizontalAlignment: Text.AlignRight
                         elide: Text.ElideRight
                     }

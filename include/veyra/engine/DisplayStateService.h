@@ -11,21 +11,30 @@
 #include <vector>
 
 namespace veyra::engine {
-// Refresh rate and NVIDIA variable-refresh state of one monitor.
+// Windows HDR ("Use HDR") and the luminance the panel reports through DXGI.
+struct DisplayColorState {
+    std::optional<bool> hdr;    // none: the output description could not be read
+    bool peakValid=false;
+    unsigned peakNits=0,fullFrameNits=0;
+    double minNits=0;
+};
+// Refresh rate, NVIDIA variable-refresh and HDR state of one monitor.
 struct DisplayState {
     HMONITOR monitor=nullptr;
     double refreshHz=0;
     gfx::VrrState vrr{};
+    DisplayColorState color{};
     uint64_t generation=0;      // display generation the query ran in
     uint64_t serial=0;          // stored-result counter (all monitors): a holder applies each state once
-    double refreshMs=0,vrrMs=0; // driver call wall time on the worker thread
+    double refreshMs=0,vrrMs=0,colorMs=0; // driver call wall time on the worker thread
 };
-// Display states shared by the presenter and the UI (2026-10-25,
-// docs/VRR_EVENT_QUERY_PLAN_2026-10-25.md). Nothing re-reads them on a timer:
-// holders may call request() every frame or tick, and a query only runs when
-// the monitor has no state of the current display generation. invalidate() (a
-// display change, the 可变刷新 switch turned on, 重新检测) makes every state
-// stale; force is for the session-start check and the VRR confirmation. One
+// Display states shared by the engine, the presenter and the UI (2026-10-25,
+// docs/VRR_EVENT_QUERY_PLAN_2026-10-25.md; HDR 2026-10-26). Nothing re-reads them
+// on a timer: holders may call request() every frame or tick, and a query only
+// runs when the monitor has no state of the current display generation.
+// invalidate() (a display change, the 可变刷新 switch turned on, 刷新显示器状态)
+// makes every state stale; force is for the session-start check and the VRR
+// confirmation. One
 // query runs at a time on a worker thread and the others wait in a queue.
 // Reading never waits, except wait(), which only a new presentation chain uses.
 // A failed query (an NVAPI error, the window closed or moved meanwhile, an
@@ -35,7 +44,7 @@ public:
     using Clock=std::chrono::steady_clock;
     using Query=std::function<DisplayState(HWND,HMONITOR)>;
     using MonitorOf=std::function<HMONITOR(HWND)>;
-    // QueryDisplayConfig refresh + NVAPI VRR of the window's monitor.
+    // QueryDisplayConfig refresh + NVAPI VRR + DXGI HDR of the window's monitor.
     DisplayStateService();
     // Tests: fake query, monitor lookup and retry delay.
     DisplayStateService(Query,MonitorOf,std::chrono::milliseconds retryDelay=std::chrono::seconds(2));

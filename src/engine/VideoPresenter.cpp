@@ -196,12 +196,14 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const bool needsDisplayPeak=hdrBaseline.enabled||(metadataBaseline.enabled&&
         (metadataBaseline.masteringPeakNits||metadataBaseline.maxCllNits||metadataBaseline.maxFallNits));
     if(graph.hdrOutput()&&needsDisplayPeak&&hdrBaseline.displayPeakNits==0){
+        // The panel's own peak from the shared display state: no driver call here
+        // (this thread used to build a DXGI factory for it every 2 s).
         const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
-        if(hdrPeakMonitor_!=monitor||now-hdrPeakQuery_>=std::chrono::seconds(2)){
-            const auto previous=hdrPeakInfo_;
-            hdrPeakInfo_=gfx::PresentSink::queryDisplayPeak(window_);hdrPeakMonitor_=monitor;hdrPeakQuery_=now;
-            if(previous.valid!=hdrPeakInfo_.valid||previous.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
-        }
+        gfx::PresentSink::DisplayPeakInfo peak{};
+        if(displayStates_)if(const auto known=displayStates_->state(monitor))
+            peak={known->color.peakNits,known->color.fullFrameNits,known->color.minNits,known->color.peakValid};
+        if(peak.valid!=hdrPeakInfo_.valid||peak.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
+        hdrPeakInfo_=peak;
         if(hdrPeakInfo_.valid)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
     }
     HdrCurveSettings hdrCurve;HdrMetadataSettings hdrMetadata;
@@ -494,7 +496,7 @@ void VideoPresenter::publishLiveCoverage(const HdrCurveSettings& curve,pipeline:
 
 void VideoPresenter::close(){
     metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
-    hdrPeakMonitor_=nullptr;hdrPeakInfo_={};hdrPeakQuery_={};
+    hdrPeakInfo_={};
     refreshMonitor_=nullptr;refreshHz_=0;vrr_={};refreshQueried_=false;vrrSync_=false;displayStateSerial_=0;vrrConfirmAt_.reset();
     retainedFrame_.reset();
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
