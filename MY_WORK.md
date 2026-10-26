@@ -280,6 +280,41 @@ grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
 `Text` 能显示但不能编辑。两者不可兼得，除非自己写富文本编辑器（工作量以周计）。
 **所以输入框里是 `[吡牙]` 文字，发送后评论区里是图片。**
 
+### 2026-10-26 详情页左右分栏（验收通过）
+
+**布局：左边视频信息 + 评论（独立滚动），右边一列相关推荐（独立滚动），窗口 < 940 时右列隐藏。**
+
+**这次绕了六圈才修对，教训值得记：**
+
+| 现象 | 真正的原因 |
+|---|---|
+| 「发送」按钮只显示半个「发」 | **输入框是 fillWidth，RowLayout 把按钮压到 minimumWidth=0**，而 VButton 按 `btn.width - 24` 算文字宽 |
+| 长评论「被挡住」 | **文字没换行**，按自然宽度铺开后被卡片裁掉 |
+| 怎么调栏宽都没用 | **栏宽一直是对的**（814），是内部元素撑出去的 |
+
+**根因链（一层层撑宽）：**
+
+```
+Text 自然宽度 2620
+  → commentColumn 用了 anchors.fill（布局里不能用锚点！）宽度算成 -16
+  → 卡片 implicitWidth 被内容撑大
+  → 评论 section（ColumnLayout）implicitWidth 也被撑到 848 > 列宽 814
+```
+
+**最终解法：不再让布局去分配宽度。**
+**`detailColumn` 从 `ColumnLayout` 改成普通 `Column`，四个直接子元素各写 `width: detailColumn.width`。**
+**宽度一旦确定，内部布局就都正常了。**
+
+**四条硬规则（下次别再犯）：**
+
+1. **布局管理的项里不能用 `anchors`** —— 宽度会算成 margins 的负值。
+2. **`Layout.fillWidth` 的项会把同一行的其它项压到 `minimumWidth`** —— 按钮这类要给最小宽度。
+3. **布局容器的 `implicitWidth` 由子元素决定** —— 一条长文本能把整块撑宽。
+4. **`ColumnLayout`/`Column` 的 `implicitWidth` 是只读的** —— 赋值会让整页加载失败。
+
+**诊断方法**：这次能定位靠的是在每一层打宽度日志（flick/card/list/section/text），
+**而不是继续猜。** 修好后那些日志已删除。
+
 ### 已知限制（别再试，或要试先想清楚）
 
 | 问题 | 原因 | 现状 |
