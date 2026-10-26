@@ -1026,3 +1026,14 @@ Follow-up: [PR64](https://github.com/Likely7/Veyra-NRVideo/pull/64), fixed commi
 - ABI reference only: AVerMedia's [obs-MultichannelAudio public headers](https://github.com/AVerMedia-Technologies-Inc/obs-MultichannelAudio/tree/7d1250b42e42f964b4fa3a6bcb7269cc09a1e798/avt_dshow_core/include), fixed commit `7d1250b42e42f964b4fa3a6bcb7269cc09a1e798`. Its repository contains a GPL-2.0 license. No OBS implementation source or proprietary vendor implementation is copied into Veyra; local declarations describe the public x64 call contract (`AudioDevice`, `AudioDealer`, `AUDIO_SAMPLE_INFO`, `DeviceInfo`, and `LogHelper`).
 - Changes include STA ownership, bounded asynchronous startup/recovery, exact device matching, callback lifetime protection, guarded external calls/log formatting, continuously detected IEC 61937, and actual decoded channel-layout changes. The separately installed `avt_dshow_core.dll` and its dependencies are loaded in place by absolute path; they are never modified or included in source or test fixtures. Users must install the official AVerMedia Multichannel Audio component themselves. This does not grant redistribution rights or certify untested card/driver versions.
 
+## Community NR export size patch (2026-10-25)
+
+The NR export-size change was adapted from the user-supplied
+`2_EXPORT_NR_PRESET_SIZE_2026-10-25.code(1).patch` and its accompanying note.
+No author name was supplied. The original patch SHA-256 is
+`E4D92E28A35DFE64AE309D6B238B1061CBCDF85A1D25EA04A797C9F9F2480598`.
+It modifies Veyra's existing source; no third-party runtime or model was added.
+Local adaptations preserve the manual 25%–100% policies, AMD's input budget,
+invalid-value rejection, and shared per-layer export planning. Integration and
+verification are recorded in `docs/EXPORT_NR_SCALE_REPORT_2026-10-25.md`.
+

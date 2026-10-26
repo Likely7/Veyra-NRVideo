@@ -9957,3 +9957,19 @@ build-recording-handoff.py --task codex-fg-scheduling-repair-20261024 --root 当
 用户原进程自行退出后，经明确授权在独立配置测KUHAIMI G50，NV12 subtype0x3231564E、ConnectDirect无converters、Run2560x1440/60均核对。NR/SR关闭、VFG2X Medium，四例各预热6秒+稳定40秒；同revision累计差计数：transport旧nr1 38.600秒/2316候选/10准入跳过/2生成过期，对照fg1相同38.600秒/2316候选/0/0；60->30旧39.166秒/1175候选/13/0，对照新39.100秒/1173/0/0。平均回调均60，邮箱覆盖0；旧准入采样最大13.188/16.729ms，新0.151/0.210ms，后台VRR仍最高14.602/14.366ms。所有新候选均实际评估与生成提交，没有通过关闭FG或删告警过关。截图在计数结束后抓，2560x1440非黑并已查看。四例均正常停止，没有争抢设备/写用户真实配置/碰PS5，供体运行字节不改。
 
 证据reports/fg-scheduling-repair-20261024，日志logs/fg-scheduling-repair-20261024，原快照archives同任务；private tests同任务一份app+四profile，无新大媒体。构建保留当前同源目录。交付EXE/QML/i18n更新层2.1.0-fg1，需完整2.1.0 NVIDIA底包，含nr1手动比例/此前旋转录制。当前短测不证明其它后端/卡/重NR/HDR/长期/光学延迟，也不修真实GPU超预算。单Agent，无merge/push/Release，Lecram暂停。
+
+## 2026-10-25 社区NR导出尺寸与百分比兼容
+
+用户提供2_EXPORT_NR_PRESET_SIZE_2026-10-25说明/patch，要求研究接入且兼容手动滑条。038beac干净树开codex/export-nr-scale-20261025，checkpoint/pre-export-nr-scale-20261025。附件原样留archives/export-nr-scale-20261025，patch SHA E4D92E28A35DFE64AE309D6B238B1061CBCDF85A1D25EA04A797C9F9F2480598。git apply --check仅GraphDescription/EffectChain因已有手动接点冲突，其余审查接入，保留社区来源于THIRD_PARTY_NOTICES，未把附件当执行授权。
+
+确认freeze/图描述/逐层编译三处强制Native；修复视频NR按每层固定/百分比，输出不变，Auto固定最高1440p（AMD1080p）。exportNrProcessingExtent共享；AMD百分比保留编码并在既有预算内再缩放，避免原patch将手动或非法策略重置1080p；非法仍拒绝。离线flow/base/output与图片完整处理保留，AMD指导预算不放开。ExportJobManager注释/逐层export-nr-layer日志、QML四语说明及对应测试同步。未改ResolutionPlan编码、NGX/flow/shader核心或fg1调度。
+
+build-recording-handoff.py --task codex-export-nr-scale-20261025 --root 当前E工作树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-nre1，首轮65.5秒，定向测试19.8秒、GPU探针21.5秒、最终QML/界面5.9秒、光流测试3.2秒，-j2均通过。六CPU/界面合同通过：EffectChain1008组合、NR Model全76百分比NVIDIA/AMD 8K/存档/冻结/非法值、i18n、Repair272、UI384布局、QtQuick110。初轮EffectChain测试因新增大局部夹具默认1MiB栈溢出，测试目标改32MiB；新单层冻结测试误读规范化清空的nrLayers数组，改既有nrLayer(0)，非修改产品校验迁就断言。初始失败/重跑receipt留档。
+
+实际ExportJobManager→子进程runExportWorker→产品图→D3D12 NVENC，9例各6帧：4K固定1080、手动50/37/100、720p+50%双层、Auto；8K固定1080和25%；4K37%+真实NVOF。所有NR创建尺寸与逐层日志吻合，源/编码均6帧，ffprobe全解码、尺寸保持4K/8K、抽帧非黑。8K两文件完全相同SHA ff4de85bf384342daeebb602fefe91b479978fbaf1e9970ec1f02458b7bebe40。8K零运动输入，不冒充8K NVOF；4K光流用例NVOF实际执行5次。真实QML保存37%预设后改当前100%/关NR，选该导出预设，任务开始又改当前25%，worker仍NR1420x798→4K6帧，预览设置不变。应用SHA251ed807f2a45fcd5b2274d61797e4f6e71c9b62cffe8aece5cc57f0915d9905。
+
+GPU图探针stack1-percent-still/stack2-percent-export各2帧，前者手动50%图片模式仍NR1920x1080全尺寸；后者两层百分比独立纹理/参数/同帧一致，NR执行4次；均debugErrors=0。未将图探针冒充PNG编码或HDR验收。AMD实卡/用户原8K黑场素材/长期/音轨等未验明确记录。必要证据reports/export-nr-scale-20261025、logs同任务、单一tests/app worker日志与短合成媒体；旧90秒1080媒体只读复用。无其它进程竞争，无真实采集/主机/用户配置/运行库/模型/驱动修改。
+
+交付2.1.0-nre1 NVIDIA小更新，需要完整2.1.0底包，含之前手动比例/fg1/旋转录制；只含程序、QML、翻译与说明。源提交/ZIP SHA/最终核验见reports/.../update-package.json与FINAL.json。单Agent，无merge/push/Release，Lecram暂停。
+
+收尾测得本任务tmp约105MiB含CUDA缓存/私有状态。只删本任务cuda目录的原生PowerShell（绝对路径/无reparse/无活动Veyra守卫）被自动审批blocked by policy执行前拒绝，未给细因；无删除发生、无替代工具/移动绕过，cache-cleanup.json如实记受阻。后续nr-export-size脚本改共用任务级CUDA缓存，保留当前验收资料及单一私有app；不改产品代码，无需重跑已过GPU用例。

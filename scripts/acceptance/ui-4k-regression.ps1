@@ -51,7 +51,7 @@ try {
         if($codec -eq 'hevc'){$exportArgs+='--hevc'}
         Run "export-$codec" "$bin/veyra.exe" $exportArgs
         $exportLog=Get-Content "$dir/export-$codec.stdout.log" -Raw
-        Check "native-graph-counts-$codec" ($exportLog -match '\[resolution\] source=3840x2160 base=3840x2160 nr=3840x2160 flow=3840x2160 fg=3840x2160 output=3840x2160' -and $exportLog -match '\[export-counts\] source=12 generated=11 hold=1 output=24 multiplier=2 ') 'actual graph extents and separate source/generated/hold/output counters'
+        Check "native-graph-counts-$codec" ($exportLog -match '\[resolution\] source=3840x2160 base=3840x2160 nr=1920x1080 flow=3840x2160 fg=3840x2160 output=3840x2160' -and $exportLog -match '\[export-counts\] source=12 generated=11 hold=1 output=24 multiplier=2 ') 'actual graph extents and separate source/generated/hold/output counters'
         Run "inspect-$codec" $ffprobe @('-v','error','-count_frames','-show_streams','-of','json',$file)
         $streams=(Get-Content "$dir/inspect-$codec.stdout.log" -Raw|ConvertFrom-Json).streams
         $v=@($streams|Where-Object codec_type -eq 'video')[0];$a=@($streams|Where-Object codec_type -eq 'audio')

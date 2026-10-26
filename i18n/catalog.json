@@ -6099,11 +6099,11 @@
    "ja": "マルチチャンネルのソースをステレオにまとめて出力（ヘッドホン向け）。オフ時はデバイスのチャンネル配置に従います"
   },
   {
-   "zh": "多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，导出仍按原生尺寸处理。",
+   "zh": "多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，视频导出同样按各层所选分辨率处理。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "多層 NR 可嘗試前層 720p、末層 1080p；三層可嘗試 480p / 720p / 1080p。降低前層解析度會改變畫面，匯出仍按原生尺寸處理。",
-   "en": "For multiple NR layers, try 720p first and 1080p last; for three layers, try 480p / 720p / 1080p. Lowering the earlier layers changes the image. Exports still use native dimensions.",
-   "ja": "複数の NR レイヤーでは前段を 720p、最終段を 1080p に、3 段では 480p / 720p / 1080p にする方法もあります。前段の解像度を下げると映像が変わります。書き出しは引き続きネイティブサイズで処理します。"
+   "zh-TW": "多層 NR 可嘗試前層 720p、末層 1080p；三層可嘗試 480p / 720p / 1080p。降低前層解析度會改變畫面，影片匯出同樣依各層所選解析度處理。",
+   "en": "For multiple NR layers, try 720p first and 1080p last; for three layers, try 480p / 720p / 1080p. Lowering the earlier layers changes the image. Video export also uses each layer's selected resolution.",
+   "ja": "複数の NR レイヤーでは前段を 720p、最終段を 1080p に、3 段では 480p / 720p / 1080p にする方法もあります。前段の解像度を下げると映像が変わります。動画の書き出しも各レイヤーで選択した解像度で処理します。"
   },
   {
    "zh": "夜景或暗部的脸调低",
@@ -8668,18 +8668,18 @@
    "ja": "手動オフセット · ライブ入力時に有効"
   },
   {
-   "zh": "手动比例以最高 1080p 预算内的输入为基准；仅调整视频预览，输出尺寸不变。",
+   "zh": "手动比例以最高 1080p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "手動比例以最高 1080p 預算內的輸入為基準；僅調整影片預覽，輸出尺寸不變。",
-   "en": "Manual scale is relative to input within the 1080p budget. Video preview only; output size stays unchanged.",
-   "ja": "手動比率は最大1080pの処理上限内の入力を基準にします。動画プレビューのみを調整し、出力サイズは変わりません。"
+   "zh-TW": "手動比例以最高 1080p 預算內的輸入為基準；適用於預覽與影片匯出，輸出尺寸不變。",
+   "en": "Manual scale is relative to the input within the 1080p budget. It applies to preview and video export; the output size is unchanged.",
+   "ja": "手動倍率は最大1080pの予算内の入力を基準とし、プレビューと動画の書き出しに適用されます。出力サイズは変わりません。"
   },
   {
-   "zh": "手动比例缩放该层输入的宽高；50% 约为四分之一像素。仅调整视频预览，输出尺寸不变。",
+   "zh": "手动比例缩放该层输入的宽高；50% 约为四分之一像素。适用于预览与视频导出，输出尺寸不变。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "手動比例縮放該層輸入的寬高；50% 約為四分之一像素。僅調整影片預覽，輸出尺寸不變。",
-   "en": "Manual scale applies to both input dimensions of this layer; 50% uses about one quarter of the pixels. Video preview only; output size stays unchanged.",
-   "ja": "手動比率はこのレイヤーの入力の幅と高さに適用されます。50%では画素数が約4分の1になります。動画プレビューのみを調整し、出力サイズは変わりません。"
+   "zh-TW": "手動比例縮放該層輸入的寬高；50% 約為四分之一像素。適用於預覽與影片匯出，輸出尺寸不變。",
+   "en": "Manual scale changes the width and height of this layer’s input; 50% is about one quarter of the pixels. It applies to preview and video export; the output size is unchanged.",
+   "ja": "手動倍率はこのレイヤー入力の幅と高さに適用され、50%では画素数が約4分の1になります。プレビューと動画の書き出しに適用され、出力サイズは変わりません。"
   },
   {
    "zh": "手动添加",
@@ -13786,11 +13786,11 @@
    "ja": "自動ディスプレイ同期"
   },
   {
-   "zh": "自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。导出按原生尺寸处理。",
+   "zh": "自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。视频导出固定按最高 1440p 处理，输出尺寸不变。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "自動檔在預覽中依增強耗時調整 100%–40%；預建執行個體約增加 1.7GB 顯示記憶體及半秒啟動時間。匯出依原生尺寸處理。",
-   "en": "Auto adjusts preview processing from 100% to 40% using enhancement time. Prebuilt instances add about 1.7GB of VRAM and half a second of startup time. Export uses native dimensions.",
-   "ja": "自動設定は強化処理時間に応じてプレビューを 100%～40% に調整します。事前生成したインスタンスは約 1.7GB の VRAM と約 0.5 秒の起動時間を追加します。書き出しは元の解像度で処理します。"
+   "zh-TW": "自動檔在預覽中依增強耗時調整 100%–40%；預建執行個體約增加 1.7GB 顯示記憶體及半秒啟動時間。影片匯出固定依最高 1440p 處理，輸出尺寸不變。",
+   "en": "Auto adjusts preview processing from 100% to 40% using enhancement time. Prebuilt instances add about 1.7GB of VRAM and half a second of startup time. Video export uses a fixed maximum of 1440p; the output size is unchanged.",
+   "ja": "自動設定は強化処理時間に応じてプレビューを 100%～40% に調整します。事前生成したインスタンスは約 1.7GB の VRAM と約 0.5 秒の起動時間を追加します。動画の書き出しは最大 1440p 固定で処理し、出力サイズは変わりません。"
   },
   {
    "zh": "自动检测实际信号",
@@ -17552,11 +17552,11 @@
    "ja": "プレビューを使用できません"
   },
   {
-   "zh": "预览保留比例且不放大小输入；图片/视频导出仍完整处理。",
+   "zh": "预览与视频导出都按所选内部分辨率处理，保留比例且不放大小输入，输出尺寸不变；图片导出仍完整处理。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "預覽保留比例且不放大小輸入；圖片/影片匯出仍完整處理。",
-   "en": "The preview keeps the aspect ratio and does not upscale small inputs; image/video export is still fully processed.",
-   "ja": "プレビューは縦横比を保ち、小さい入力は拡大しません。画像・動画の書き出しは完全に処理します。"
+   "zh-TW": "預覽與影片匯出都依所選內部解析度處理，保留比例且不放大小輸入，輸出尺寸不變；圖片匯出仍完整處理。",
+   "en": "Preview and video export both process NR at the selected internal resolution, keeping the aspect ratio without upscaling small inputs; the output size is unchanged. Image export is still fully processed.",
+   "ja": "プレビューと動画の書き出しは選択した内部解像度で処理し、縦横比を保ち小さい入力は拡大しません。出力サイズは変わりません。画像の書き出しは完全に処理します。"
   },
   {
    "zh": "预览：SDR 转 HDR 已运行",

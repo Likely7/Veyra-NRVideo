@@ -57,7 +57,7 @@ struct StageRequest {
     uint32_t fgMultiplier=2;
     uint32_t width=0,height=0;
     bool stillImage=false;   // image preview/processing: no NR-first order
-    bool exportJob=false;    // native NVIDIA NR, bounded AMD NR, no present-sink FG/NR-first order
+    bool exportJob=false;    // selected NR size, bounded AMD NR, no present-sink FG/NR-first order
     bool nvidiaAdapter=true;
     bool amdNr=false;        // AMD adapter: NR runs on the lmxxf runtime (no NGX)
     // Raw capture-card or screen frames: nothing compressed for native-size RTX Video SR to repair.
@@ -96,9 +96,9 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
             desc.fixedExecutionPlanError="node NR-before-SR offline execution requires ordered dispatcher";return {};
         }
     }
-    const bool boundedAmd=request.exportJob&&request.amdNr&&
+    const bool boundedAmd=request.exportJob&&!request.stillImage&&request.amdNr&&
         currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd;
-    const auto policy=request.exportJob?exportNrSizePolicy(settings.nrRuntime):settings.nrPolicy;
+    const auto policy=request.exportJob?exportNrSizePolicy(settings.nrRuntime,settings.nrPolicy):settings.nrPolicy;
     if(!pipeline::Extent{request.width,request.height}.valid()||!pipeline::validSrTarget(settings.srTarget)||
        !pipeline::validNrSizePolicy(policy)){
         // ResolutionPlan::make throws for these inputs. Report the same
@@ -106,9 +106,14 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         desc.fixedExecutionPlanError="invalid fixed-plan source extent, SR target or NR size policy";
         return {};
     }
-    const auto plan=pipeline::ResolutionPlan::make({request.width,request.height},request.sr,policy,
+    // Preserve the existing offline base/flow/output contract. AMD keeps its
+    // existing 1080p guidance budget independently of the selected NR layer.
+    auto plan=pipeline::ResolutionPlan::make({request.width,request.height},request.sr,
+        boundedAmd?pipeline::NrSizePolicy::Realtime:policy,
         (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency,
         request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u);
+    if(request.exportJob&&!request.stillImage)
+        plan.nr=exportNrProcessingExtent(plan.base,settings.nrRuntime,policy);
     desc.sourceWidth=request.width;desc.sourceHeight=request.height;
     desc.workWidth=plan.base.width;desc.workHeight=plan.base.height;
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
@@ -185,8 +190,9 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     // Preserve disabled-stage diagnostic dimensions; these allocate no NR
     // feature. Active NR extents now come exclusively from the compiled plan.
     if(!desc.enableNr)for(const auto size:desc.nrLayersSizePolicy){
-        desc.nrLayersExtent.push_back(pipeline::ResolutionPlan::make({request.width,request.height},request.sr,
-            request.exportJob?exportNrSizePolicy(settings.nrRuntime):size,(request.stillImage||request.exportJob)&&!boundedAmd,
+        desc.nrLayersExtent.push_back(request.exportJob&&!request.stillImage?
+            exportNrProcessingExtent(plan.base,settings.nrRuntime,size):
+            pipeline::ResolutionPlan::make({request.width,request.height},request.sr,size,request.stillImage,
             settings.revision,settings.srTarget,lowLatency,
             request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u).nr);
     }

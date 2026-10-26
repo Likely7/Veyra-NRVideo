@@ -363,6 +363,8 @@ void testExistingChainContracts() {
         const NrSizePolicy policies[]={NrSizePolicy::Realtime,NrSizePolicy::Native,NrSizePolicy::P480,
             NrSizePolicy::P720,NrSizePolicy::P900,NrSizePolicy::P1440,NrSizePolicy::Auto};
         const unsigned heights[]={1080,2160,480,720,900,1440,1080};
+        // Video export follows the fixed preset; Auto is fixed at 1440p offline.
+        const unsigned exportHeights[]={1080,2160,480,720,900,1440,1440};
         for(unsigned i=0;i<7;++i){
             EnhancementSettings s;s.nr=true;s.nrPolicy=policies[i];
             auto c=toChain(s);EnhancementSettings restored;fromChain(c,restored);
@@ -372,9 +374,29 @@ void testExistingChainContracts() {
             check(d.nrLayersExtent.size()==1&&d.nrLayersExtent[0].height==heights[i]&&
                   d.workWidth==3840&&d.workHeight==2160,"fixed and Auto fallback policies preserve full output extent");
             request.exportJob=true;describeStages(request,restored,d);
-            check(d.nrLayersExtent[0]==Extent{3840,2160}&&!d.nrAutoPoolLayer,"export ignores preview policies and Auto pool");
+            check(d.nrLayersExtent[0].height==exportHeights[i]&&d.workWidth==3840&&d.workHeight==2160&&
+                  d.validateFixedExecutionPlan().empty()&&!d.nrAutoPoolLayer,"export follows the NR size preset at full output extent without the Auto pool");
             request.exportJob=false;request.stillImage=true;describeStages(request,restored,d);
             check(d.nrLayersExtent[0]==Extent{3840,2160}&&!d.nrAutoPoolLayer,"image ignores preview policies and Auto pool");
+        }
+        {
+            // 8K export with a 1080p preset: NR runs at 1920x1080, output stays 7680x4320.
+            struct Case{Extent source;NrSizePolicy policy;Extent nr;};
+            const Case cases[]={{{7680,4320},NrSizePolicy::Realtime,{1920,1080}},{{7680,4320},NrSizePolicy::P1440,{2560,1440}},
+                {{7680,4320},NrSizePolicy::Auto,{2560,1440}},{{7680,4320},NrSizePolicy::Native,{7680,4320}},
+                {{3840,1600},NrSizePolicy::Realtime,{1920,800}},{{1280,720},NrSizePolicy::P1440,{1280,720}}};
+            for(const auto& k:cases){
+                EnhancementSettings e;e.nr=true;e.nrPolicy=k.policy;
+                StageRequest r;r.nr=true;r.exportJob=true;r.width=k.source.width;r.height=k.source.height;
+                EnhanceGraphDesc d;describeStages(r,e,d);
+                check(d.enableNr&&d.nrLayersExtent==std::vector<Extent>{k.nr}&&d.workWidth==k.source.width&&d.workHeight==k.source.height&&
+                      d.flowWidth==k.source.width&&d.flowHeight==k.source.height&&
+                      d.validateFixedExecutionPlan().empty()&&e.nrPolicy==k.policy,"video export NR preset extent, output size and saved preset");
+            }
+            EnhancementSettings amd;amd.nr=true;amd.nrRuntime=NrRuntime::LmxxfAmd;amd.nrPolicy=NrSizePolicy::P720;
+            check(freezeExportSettings(amd).nrPolicy==NrSizePolicy::P720,"AMD export keeps presets within its 1080p budget");
+            amd.nrPolicy=NrSizePolicy::Auto;
+            check(freezeExportSettings(amd).nrPolicy==NrSizePolicy::Realtime,"AMD export bounds Auto at 1080p");
         }
         EffectChain c;c.nodeCount=4;
         for(unsigned i=0;i<4;++i){c.nodes[i].type=EffectType::NrEnhance;c.nodes[i].enabled=true;
@@ -389,8 +411,9 @@ void testExistingChainContracts() {
         for(auto& node:c.nodes)node.nr.lowLatencyPairing=true;fromChain(c,s);describeStages(request,s,d);
         check(d.nrLayersExtent.back()==Extent{1920,1080},"NR-first policy never enlarges source input");
         request.exportJob=true;describeStages(request,s,d);
-        check(std::all_of(d.nrLayersExtent.begin(),d.nrLayersExtent.end(),[](auto e){return e==Extent{3840,2160};})
-              &&!d.nrBeforeSr,"export preserves full-size processing in every instance");
+        check(d.nrLayersExtent==std::vector<Extent>({{852,480},{1280,720},{1600,900},{2560,1440}})&&
+              d.workWidth==3840&&d.workHeight==2160&&!d.nrBeforeSr&&d.validateFixedExecutionPlan().empty(),
+              "export keeps each instance's preset size after SR at full output extent");
         request.exportJob=false;request.stillImage=true;describeStages(request,s,d);
         check(d.nrLayersExtent.front()==Extent{3840,2160},"still images preserve full processing extent");
         c.nodes[1].nr.sizePolicy=static_cast<NrSizePolicy>(99);c.nodes[1].enabled=false;
@@ -451,7 +474,10 @@ void testExecutionPlans() {
         auto offline = request; offline.exportJob = true;
         check(compileChainExecutionPlan(first, offline, plan).accepted &&
               plan.steps[1].type == EffectType::SuperResolution &&
-              plan.steps[2].processing == plan.steps[2].input, "offline list stays SR-first with native NR");
+              plan.steps[2].output == plan.steps[2].input &&
+              plan.steps[2].processing == veyra::pipeline::ResolutionPlan::make(plan.steps[2].input, false,
+                  exportNrSizePolicy(first.firstOf(EffectType::NrEnhance)->nr.runtime, first.firstOf(EffectType::NrEnhance)->nr.sizePolicy),
+                  false).nr, "offline list stays SR-first with preset-sized NR");
         auto still = request; still.stillImage = true;
         check(compileChainExecutionPlan(first, still, plan).accepted &&
               plan.steps[1].type == EffectType::SuperResolution &&
@@ -570,8 +596,8 @@ void testLegacyPlanDimensions() {
         // Independent sizing formula. Video SR can also restore at 1:1:
         // source-size restoration has no resize resource but keeps NR/SR order.
         const auto oldPlan=veyra::pipeline::ResolutionPlan::make(source,s.sr,
-            request.exportJob?veyra::pipeline::NrSizePolicy::Native:s.nrPolicy,
-            request.stillImage||request.exportJob,s.revision,s.srTarget,
+            request.exportJob?exportNrSizePolicy(s.nrRuntime,s.nrPolicy):s.nrPolicy,
+            request.stillImage,s.revision,s.srTarget,
             !request.exportJob&&s.lowLatency&&s.nr);
         const bool nativeVideoSr=s.sr&&!request.stillImage&&s.videoSrQuality>=1&&s.videoSrQuality<=4;
         const bool oldNrFirst=!request.stillImage&&!request.exportJob&&s.lowLatency&&s.nr&&(oldPlan.srApplied||nativeVideoSr);
@@ -624,8 +650,8 @@ void testProductionFixedPlanDescription() {
         "NR-first fixed plan uses source-space input for all active layers");
     request.exportJob=true;describeStages(request,s,desc);
     check(desc.validateFixedExecutionPlan().empty()&&!desc.nrBeforeSr&&
-          desc.nrLayersExtent==std::vector<Extent>{{3840,2160},{3840,2160}},
-        "offline description retains native NR and default order");
+          desc.nrLayersExtent==std::vector<Extent>{{3840,2160},{1920,1080}},
+        "offline description keeps per-layer NR presets and default order");
     request.exportJob=false;request.nvidiaAdapter=false;describeStages(request,s,desc);
     check(desc.validateFixedExecutionPlan().empty()&&!desc.enableNr&&!desc.enableSr&&
           desc.fixedExecutionPlan&&desc.fixedExecutionPlan->resourceCounts[size_t(EffectType::NrEnhance)]==0&&

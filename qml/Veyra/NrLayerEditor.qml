@@ -156,15 +156,15 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         visible: editor.manualSize
-        text: editor.amdNr ? qsTr("手动比例以最高 1080p 预算内的输入为基准；仅调整视频预览，输出尺寸不变。")
-                          : qsTr("手动比例缩放该层输入的宽高；50% 约为四分之一像素。仅调整视频预览，输出尺寸不变。")
+        text: editor.amdNr ? qsTr("手动比例以最高 1080p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。")
+                          : qsTr("手动比例缩放该层输入的宽高；50% 约为四分之一像素。适用于预览与视频导出，输出尺寸不变。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
     Text {
         Layout.fillWidth: true
         visible: editor.layerData.sizePolicy === 6
-        text: qsTr("自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。导出按原生尺寸处理。") +
+        text: qsTr("自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。视频导出固定按最高 1440p 处理，输出尺寸不变。") +
               (veyra.nrAutoStatus.length > 0 ? "\n" + veyra.nrAutoStatus : "")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
@@ -172,7 +172,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         text: editor.amdNr ? qsTr("AMD NR 预览与视频导出最高按内部 1080p 处理，视频保持输出尺寸；图片导出仍需符合模型尺寸预算。")
-                          : qsTr("预览保留比例且不放大小输入；图片/视频导出仍完整处理。")
+                          : qsTr("预览与视频导出都按所选内部分辨率处理，保留比例且不放大小输入，输出尺寸不变；图片导出仍完整处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
@@ -180,7 +180,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: !editor.amdNr && editor.layerCount > 1 &&
                  (!editor.listControls || (veyra.nrLayers.length > 0 && editor.layerData.index === veyra.nrLayers[0].index))
-        text: qsTr("多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，导出仍按原生尺寸处理。")
+        text: qsTr("多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，视频导出同样按各层所选分辨率处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }

@@ -139,8 +139,9 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     p_->shared=static_cast<Shared*>(MapViewOfFile(p_->mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));if(!p_->shared)return fail(L"无法映射导出通信资源");
     if(!std::isfinite(trimStartSeconds)||!std::isfinite(trimEndSeconds)||trimStartSeconds<0||trimEndSeconds<0||(trimEndSeconds>0&&trimEndSeconds<=trimStartSeconds))return fail(L"导出剪辑范围无效");
     new(p_->shared) Shared{};auto& s=*p_->shared;s.settings=freezeExportSettings(settings);
-    // Normalize once before crossing processes. Source/encoder size is unchanged;
-    // only the lmxxf model input has its real 1080p budget.
+    // Freeze the selected fixed/manual NR sizes once before crossing processes.
+    // Auto becomes a fixed offline size; lmxxf retains its real input budget.
+    // Source/encoder size is unchanged.
     s.chain=toChain(s.settings);fromChain(s.chain,s.settings);
     s.hevc=hevc;s.maxFrames=maxFrames;s.rateControl=uint32_t(rateControl);
     s.audioStreamIndex=audioStreamIndex;

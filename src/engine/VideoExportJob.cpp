@@ -117,6 +117,16 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         if(options.nr&&amdNrExport){
             fgNote=L"AMD NR 使用内部最高 1080p 处理，保留原尺寸合成与导出";
             veyra::log::info("export-nr",std::format("runtime=lmxxf source={}x{} output={}x{} internal={}x{} layers={}",info.width,info.height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.nrLayersExtent.size()));
+        }else if(options.nr&&gd.enableNr){
+            // NR follows the preview size preset; its residual is composed at output size.
+            veyra::log::info("export-nr",std::format("source={}x{} output={}x{} internal={}x{} layers={}",info.width,info.height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.nrLayersExtent.size()));
+        }
+        if(options.nr&&gd.fixedExecutionPlan)for(uint32_t i=0;i<gd.fixedExecutionPlan->stepCount;++i){
+            const auto& step=gd.fixedExecutionPlan->steps[i];
+            if(step.type!=EffectType::NrEnhance)continue;
+            veyra::log::info("export-nr-layer",std::format("parameter={} resource={} input={}x{} internal={}x{} output={}x{}",
+                step.parameterIndex,step.resourceIndex,step.input.width,step.input.height,
+                step.processing.width,step.processing.height,step.output.width,step.output.height));
         }
         if(options.sr&&!srAvailable)fgNote+=fgNote.empty()?L"当前显卡不能使用所选超分，本次导出关闭超分":L"；当前显卡不能使用所选超分，本次导出关闭超分";
         if(!nvidiaFeatures&&srAvailable)fgNote+=fgNote.empty()?L"本次导出使用 AMD FSR 超分":L"；本次导出使用 AMD FSR 超分";

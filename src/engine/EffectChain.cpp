@@ -1,4 +1,5 @@
 #include "veyra/engine/EffectChain.h"
+#include "veyra/engine/ExportFeaturePolicy.h"
 
 #include <algorithm>
 #include <cmath>
@@ -548,12 +549,10 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
         step.input = step.processing = step.output = cursor;
         if (node.type == EffectType::SuperResolution) step.processing = step.output = srExtent;
         if (node.type == EffectType::NrEnhance) {
-            const bool boundedAmd=request.exportJob&&request.amdNrExport&&
-                currentNrRuntime(node.nr.runtime)==NrRuntime::LmxxfAmd;
-            const auto policy = boundedAmd?pipeline::NrSizePolicy::Realtime:
-                request.exportJob ? pipeline::NrSizePolicy::Native : node.nr.sizePolicy;
-            step.processing = pipeline::ResolutionPlan::make(cursor, false, policy,
-                (request.stillImage || request.exportJob)&&!boundedAmd, 0, request.srTarget,false,
+            step.processing = request.exportJob&&!request.stillImage?
+                exportNrProcessingExtent(cursor,node.nr.runtime,node.nr.sizePolicy):
+                pipeline::ResolutionPlan::make(cursor, false, node.nr.sizePolicy,
+                request.stillImage, 0, request.srTarget,false,
                 currentNrRuntime(node.nr.runtime)==NrRuntime::LmxxfAmd?1080u:0u).nr;
         }
         plan.steps[plan.stepCount++] = step;

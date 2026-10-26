@@ -1422,6 +1422,14 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_features(veyra_effect_chain_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_effect_chain_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_effect_chain_tests PRIVATE veyra_base)
+  # Large independent settings/descriptor fixtures, like the preset contracts.
+  target_link_options(veyra_effect_chain_tests PRIVATE /STACK:33554432)
+  add_executable(veyra_nr_export_size_tests tests/integration/NrExportSizeTests.cpp)
+  target_compile_features(veyra_nr_export_size_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_export_size_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_nr_export_size_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_link_options(veyra_nr_export_size_tests PRIVATE /STACK:33554432)
+  target_link_libraries(veyra_nr_export_size_tests PRIVATE veyra_engine)
 
   add_executable(veyra_repair_preset_tests tests/unit/RepairPresetTests.cpp src/engine/PresetStore.cpp)
   # CPU bake of the colour grade: no GPU, no engine link - the tables the ingest
