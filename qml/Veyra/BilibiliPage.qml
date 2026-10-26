@@ -1501,15 +1501,15 @@ VPage {
                         x: parent.pad
                         y: parent.pad + (parent.width - parent.pad * 2) * 0.5625 + 5
                         width: parent.width - parent.pad * 2
-                        height: Math.ceil(12 * 1.35)
+                        height: Math.ceil(13 * 1.4)
                         radius: 3
                         color: Theme.card3
                     }
                     Rectangle {
                         x: parent.pad
-                        y: parent.pad + (parent.width - parent.pad * 2) * 0.5625 + 5 + Math.ceil(12 * 1.35) + 3
+                        y: parent.pad + (parent.width - parent.pad * 2) * 0.5625 + 5 + Math.ceil(13 * 1.4) + 3
                         width: (parent.width - parent.pad * 2) * 0.55
-                        height: 11
+                        height: 12
                         radius: 3
                         color: Theme.card3
                     }
@@ -1599,7 +1599,10 @@ VPage {
                 readonly property real fittedCellWidth: width / columnCount
                 // A wider cell means a taller cover (16:9 on the inner width), so the cell
                 // grows with it or the title and author line get clipped.
-                readonly property real fittedCellHeight: (fittedCellWidth - 12) * 0.5625 + 78
+                // 文字区高度随字号走：两行标题 + 作者行 + 内边距，比原来多 3px。
+                // The text block below the cover grows with the font sizes: two title lines
+                // plus the meta line plus padding, three pixels more than before.
+                readonly property real fittedCellHeight: (fittedCellWidth - 12) * 0.5625 + 81
                 cellWidth: fittedCellWidth
                 cellHeight: fittedCellHeight
                 clip: true
@@ -1644,9 +1647,17 @@ VPage {
 
                     readonly property real pad: 6
                     readonly property real coverHeight: (width - pad * 2) * 0.5625
+                    // 字号照 B 站网页的比例定：那边标题 15px、作者行 13px，卡片约 254 宽；
+                    // 我们卡片约 220 宽，按同一比例换算是 13 和 12。抽成属性，以后只改这里。
+                    // Sizes follow Bilibili's proportions: its cards are ~254 px wide with a
+                    // 15 px title and a 13 px meta line; ours are ~220 px, which scales to
+                    // 13 and 12. Kept as properties so a change happens in one place.
+                    readonly property int titleFontSize: 13
+                    readonly property int metaFontSize: 12
                     // Fixed, so the two text blocks sit at absolute positions and the
-                    // delegate needs no layout pass beyond this.
-                    readonly property real titleLineHeight: Math.ceil(12 * 1.35)
+                    // delegate needs no layout pass beyond this. 1.4 is a comfortable line
+                    // box for a two-line title.
+                    readonly property real titleLineHeight: Math.ceil(titleFontSize * 1.4)
 
                     Rectangle {
                         // Not "cover": that is a ListModel role name, and an id with the
@@ -1705,7 +1716,7 @@ VPage {
                         wrapMode: Text.Wrap
                         color: Theme.t1
                         font.family: Theme.fontUi
-                        font.pixelSize: 12
+                        font.pixelSize: tile.titleFontSize
                         text: title || ""
                     }
                     Text {
@@ -1715,7 +1726,7 @@ VPage {
                         elide: Text.ElideRight
                         color: Theme.t3
                         font.family: Theme.fontUi
-                        font.pixelSize: 11
+                        font.pixelSize: tile.metaFontSize
                         text: (owner || "") + "  " + (play || 0)
                     }
 
@@ -2167,7 +2178,7 @@ VPage {
                         readonly property real idealCellWidth: 220
                         readonly property int columns: Math.max(1, Math.round(width / idealCellWidth))
                         readonly property real fittedCellWidth: width / columns
-                        readonly property real fittedCellHeight: (fittedCellWidth - 12) * 0.5625 + 78
+                        readonly property real fittedCellHeight: (fittedCellWidth - 12) * 0.5625 + 81
                         readonly property int rows: Math.ceil(root.related.length / Math.max(1, columns))
                         readonly property int wantedHeight: rows * fittedCellHeight
                         Layout.preferredHeight: wantedHeight
@@ -2192,7 +2203,10 @@ VPage {
                             height: relatedGrid.cellHeight
 
                             readonly property real pad: 6
-                            readonly property real titleLineHeight: Math.ceil(12 * 1.35)
+                            // 与主网格同一套字号，两处的卡片看起来才一致。
+                            // Same sizes as the main grid so both card styles match.
+                            readonly property int titleFontSize: 13
+                            readonly property real titleLineHeight: Math.ceil(titleFontSize * 1.4)
 
                             Rectangle {
                                 x: relatedTile.pad
@@ -2222,7 +2236,7 @@ VPage {
                                 wrapMode: Text.Wrap
                                 color: Theme.t1
                                 font.family: Theme.fontUi
-                                font.pixelSize: 12
+                                font.pixelSize: relatedTile.titleFontSize
                                 text: modelData.title || ""
                             }
 
