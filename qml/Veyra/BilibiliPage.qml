@@ -393,25 +393,21 @@ VPage {
     // after picking an emote.
     Popup {
         id: emotePopup
-        parent: Overlay.overlay
+        // parent 指向输入框：位置就按「相对输入框」来给，不需要任何坐标换算。
+        // 之前映射到 Overlay.overlay 算出来的位置是错的，面板跑到了窗口顶部。
+        // parent is the input field itself, so the position is expressed relative to it
+        // and no coordinate conversion is involved. Mapping onto Overlay.overlay produced
+        // the wrong point and put the panel at the top of the window.
+        parent: replyInput
         modal: false
         focus: false
         padding: 0
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        // 贴在输入框正下方。坐标要映射到 Popup 的 parent（Overlay.overlay）上，
-        // 用 null 会得到另一套坐标系，位置就跑到了窗口顶部。
-        // Sits directly under the input field. The position is mapped onto the Popup's own
-        // parent (Overlay.overlay); mapping with null gives a different coordinate space,
-        // which put the panel at the very top of the window.
-        x: {
-            const p = replyInput.mapToItem(Overlay.overlay, 0, 0)
-            return Math.round(p.x)
-        }
-        y: {
-            const p = replyInput.mapToItem(Overlay.overlay, 0, 0)
-            return Math.round(p.y + replyInput.height + 6)
-        }
-        width: Math.max(200, Math.round(replyInput.width))
+        // 相对输入框：左边对齐、正下方 6 像素、宽度一致。
+        // Relative to the field: flush left, 6 px below it, same width.
+        x: 0
+        y: replyInput.height + 6
+        width: replyInput.width
         height: 132
         visible: root.emotePanelOpen
 
