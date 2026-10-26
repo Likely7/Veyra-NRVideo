@@ -2866,6 +2866,15 @@ VPage {
 
                             Rectangle {
                                 Layout.fillWidth: true
+                                // 关键：把参与布局的宽度钉成 0。卡片的 implicitWidth 本会由
+                                // 内容撑出来，而内容宽度又依赖卡片宽度 —— 互为依赖，布局只好
+                                // 折中，结果卡片比列还宽（实测 848 对 814），文字跟着溢出。
+                                // Pin the layout width to zero: the card's implicitWidth would
+                                // otherwise be driven by its content, while the content width
+                                // depends on the card - a cycle that made the card wider than
+                                // its column (848 against 814) and pushed the text out.
+                                Layout.preferredWidth: 0
+                                implicitWidth: 0
                                 height: commentColumn.implicitHeight + 16
                                 radius: 8
                                 color: Theme.card2
