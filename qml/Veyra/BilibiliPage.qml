@@ -398,14 +398,17 @@ VPage {
         focus: false
         padding: 0
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        // 贴在输入框正下方，宽度跟着输入框走。
-        // Sits directly under the input field and follows its width.
+        // 贴在输入框正下方。坐标要映射到 Popup 的 parent（Overlay.overlay）上，
+        // 用 null 会得到另一套坐标系，位置就跑到了窗口顶部。
+        // Sits directly under the input field. The position is mapped onto the Popup's own
+        // parent (Overlay.overlay); mapping with null gives a different coordinate space,
+        // which put the panel at the very top of the window.
         x: {
-            const p = replyInput.mapToItem(null, 0, 0)
+            const p = replyInput.mapToItem(Overlay.overlay, 0, 0)
             return Math.round(p.x)
         }
         y: {
-            const p = replyInput.mapToItem(null, 0, 0)
+            const p = replyInput.mapToItem(Overlay.overlay, 0, 0)
             return Math.round(p.y + replyInput.height + 6)
         }
         width: Math.max(200, Math.round(replyInput.width))
