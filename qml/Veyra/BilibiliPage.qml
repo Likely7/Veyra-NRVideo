@@ -381,6 +381,123 @@ VPage {
 
     // force re-runs the same query; without it a repeated search of the same words reuses
     // the cached result, keyed by the query itself so different words still search.
+
+    // 表情面板做成 Popup：点击面板以外的任何地方都会收起，这是 Popup 的
+    // CloseOnPressOutside 自带的，不需要自己铺遮罩 —— 之前那个遮罩和面板不在同一父级，
+    // z 比较不成立，结果盖在面板上把点击吃掉了。
+    // 非模态、不抢焦点，所以选完表情输入框还能接着打字。
+    // The emote panel is a Popup: clicking anywhere outside closes it, which is what
+    // CloseOnPressOutside does, so no hand-rolled overlay is needed - the previous one was
+    // not a sibling of the panel, the z comparison did not apply, and it ended up covering
+    // the panel and eating its clicks. Non-modal and non-focusing, so typing continues
+    // after picking an emote.
+    Popup {
+        id: emotePopup
+        parent: Overlay.overlay
+        modal: false
+        focus: false
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        // 贴在输入框正下方，宽度跟着输入框走。
+        // Sits directly under the input field and follows its width.
+        x: {
+            const p = replyInput.mapToItem(null, 0, 0)
+            return Math.round(p.x)
+        }
+        y: {
+            const p = replyInput.mapToItem(null, 0, 0)
+            return Math.round(p.y + replyInput.height + 6)
+        }
+        width: Math.max(200, Math.round(replyInput.width))
+        height: 132
+        visible: root.emotePanelOpen
+
+        // 面板自己开关时同步状态，两条路径不会打架。
+        // Keep the flag in step whichever way it opens or closes.
+        onClosed: root.emotePanelOpen = false
+
+        contentItem: Rectangle {
+            radius: 8
+            color: Theme.card2
+            border.width: 1
+            border.color: Theme.stroke
+
+            Text {
+                anchors.centerIn: parent
+                visible: root.emoteLoading
+                text: qsTr("正在加载表情…")
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: 11
+            }
+            Text {
+                anchors.centerIn: parent
+                width: parent.width - 24
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                visible: !root.emoteLoading && root.emoteError.length > 0
+                text: root.emoteError
+                color: Theme.warn
+                font.family: Theme.fontUi
+                font.pixelSize: 11
+            }
+            GridView {
+                anchors.fill: parent
+                anchors.margins: 6
+                visible: !root.emoteLoading && root.emoteError.length === 0
+                         && root.emotes.length > 0
+                cellWidth: 38
+                cellHeight: 38
+                clip: true
+                ScrollBar.vertical: VScrollBar { }
+                model: root.emotes
+                delegate: Item {
+                    id: emoteCell
+                    width: 38
+                    height: 38
+
+                    readonly property string imageSource: {
+                        const u = modelData.url || ""
+                        if (u.startsWith("http")) return u
+                        if (u.startsWith("//")) return "https:" + u
+                        return ""
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 6
+                        color: emoteTap.hovered ? Theme.card3 : "transparent"
+                    }
+                    Image {
+                        anchors.centerIn: parent
+                        width: 26
+                        height: 26
+                        visible: emoteCell.imageSource.length > 0
+                        source: emoteCell.imageSource
+                        asynchronous: true
+                        cache: true
+                        fillMode: Image.PreserveAspectFit
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        width: parent.width - 4
+                        visible: emoteCell.imageSource.length === 0
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                        text: modelData.text || ""
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: 9
+                    }
+                    TapHandler {
+                        id: emoteTap
+                        onTapped: root.insertEmote(modelData.text)
+                    }
+                }
+            }
+        }
+    }
+
     // 搜索框回车的统一入口。四条通道都会走到这里，用一个 250ms 的闸门防止同一次
     // 按键被两条通道各触发一次。
     // One entry point for the search box's Enter key. All four channels call it; a 250 ms
@@ -2482,22 +2599,6 @@ VPage {
                                     onTextChanged: root.replyText = text
                                     enabled: !root.replySending
                                     onAccepted: replySendButton.send()
-                                    // 输入框失去焦点就收起面板 —— 也就是用户点了别处。
-                                    // 之前用一个铺满内容区的 MouseArea 做这件事，但它和面板
-                                    // 不在同一父级，z 比较不成立，结果遮罩盖在面板上面，
-                                    // 点击表情先被它收走：面板关了，字也没插进去。
-                                    // 点面板本身不会让输入框失焦（面板不接收焦点），所以选表情
-                                    // 时面板会保持打开。
-                                    // Losing focus closes the panel, which is exactly "the user
-                                    // clicked elsewhere". A full-area MouseArea used to do this,
-                                    // but it was not a sibling of the panel, so the z comparison
-                                    // did not apply: the overlay covered the panel, swallowed the
-                                    // click, closed the panel and inserted nothing. Clicking the
-                                    // panel itself does not blur the field (it takes no focus), so
-                                    // the panel stays open while emotes are being picked.
-                                    onActiveFocusChanged: {
-                                        if (!activeFocus) root.emotePanelOpen = false
-                                    }
                                 }
                                 Text {
                                     anchors.fill: parent
@@ -2544,112 +2645,6 @@ VPage {
                                     veyra.bilibiliPostReply(root.detail.bvid, body)
                                 }
                                 onClicked: send()
-                            }
-                        }
-
-                        // 表情面板。高度固定、内部可滚，表情再多也不会把评论区顶下去。
-                        // 点一个立即插入并保持展开，方便连着选好几个。
-                        // The emote panel: fixed height and its own scrolling, so no number of
-                        // emotes pushes the comments away. Picking one inserts it immediately
-                        // and leaves the panel open for the next pick.
-                        Rectangle {
-                            Layout.fillWidth: true
-                            visible: root.emotePanelOpen
-                            implicitHeight: 132
-                            radius: 8
-                            color: Theme.card2
-                            border.width: 1
-                            border.color: Theme.stroke
-
-                            Text {
-                                anchors.centerIn: parent
-                                visible: root.emoteLoading
-                                text: qsTr("正在加载表情…")
-                                color: Theme.t3
-                                font.family: Theme.fontUi
-                                font.pixelSize: 11
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                anchors.leftMargin: 12
-                                anchors.rightMargin: 12
-                                width: parent.width - 24
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.Wrap
-                                visible: !root.emoteLoading && root.emoteError.length > 0
-                                text: root.emoteError
-                                color: Theme.warn
-                                font.family: Theme.fontUi
-                                font.pixelSize: 11
-                            }
-                            GridView {
-                                anchors.fill: parent
-                                anchors.margins: 6
-                                visible: !root.emoteLoading && root.emoteError.length === 0
-                                         && root.emotes.length > 0
-                                cellWidth: 38
-                                cellHeight: 38
-                                clip: true
-                                ScrollBar.vertical: VScrollBar { }
-                                model: root.emotes
-                                delegate: Item {
-                                    id: emoteCell
-                                    width: 38
-                                    height: 38
-
-                                    // 表情分两种：带图片的，和纯文字的颜文字（这种的 url
-                                    // 字段就是文字本身，当图片加载会去打开一个不存在的文件）。
-                                    // Two kinds: image emotes, and text-only kaomoji whose url
-                                    // field is the text itself - loading that as an image tries
-                                    // to open a file that does not exist.
-                                    readonly property string imageSource: {
-                                        const u = modelData.url || ""
-                                        if (u.startsWith("http")) return u
-                                        if (u.startsWith("//")) return "https:" + u
-                                        return ""
-                                    }
-
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: 6
-                                        color: emoteCellHover.hovered ? Theme.card3 : "transparent"
-                                    }
-
-                                    Image {
-                                        anchors.centerIn: parent
-                                        width: 26
-                                        height: 26
-                                        visible: emoteCell.imageSource.length > 0
-                                        source: emoteCell.imageSource
-                                        asynchronous: true
-                                        cache: true
-                                        fillMode: Image.PreserveAspectFit
-                                    }
-                                    Text {
-                                        anchors.centerIn: parent
-                                        width: parent.width - 4
-                                        visible: emoteCell.imageSource.length === 0
-                                        horizontalAlignment: Text.AlignHCenter
-                                        elide: Text.ElideRight
-                                        text: modelData.text || ""
-                                        color: Theme.t2
-                                        font.family: Theme.fontUi
-                                        font.pixelSize: 9
-                                    }
-
-                                    // TapHandler 在 Flickable 里比 MouseArea 可靠：它不参与
-                                    // 拖动的手势竞争，短按不会被当成滚动起手。
-                                    // TapHandler is more reliable inside a Flickable than
-                                    // MouseArea: it does not compete for the drag gesture, so a
-                                    // short press is not swallowed as the start of a scroll.
-                                    TapHandler {
-                                        id: emoteCellHover
-                                        onTapped: {
-                                            console.log("[emote] tapped text=<" + modelData.text + ">")
-                                            root.insertEmote(modelData.text)
-                                        }
-                                    }
-                                }
                             }
                         }
 
