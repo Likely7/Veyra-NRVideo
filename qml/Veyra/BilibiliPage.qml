@@ -1536,49 +1536,50 @@ VPage {
                 // maintains contentY itself, so even normal scrolling stopped. flick() is the
                 // supported API: hand it a velocity and Flickable decelerates by
                 // flickDeceleration, so the inertia comes for free and nothing is corrupted.
-                // 参数按 Flickable 的滑行公式反推，不是凭手感猜：
-                //   d = v² / (2 × flickDeceleration)
-                // 目标是「一格滑约 120 px、快速连滚最多滑约 500 px」——
-                // 这是 Chrome / Windows 资源管理器一类的常见手感：
-                //   flickDeceleration 2200（默认 1500 停得太慢）
-                //   单格   v = √(2 × 2200 × 120) ≈ 727
-                //   上限   v = √(2 × 2200 × 500) ≈ 1483
-                // The numbers come from Flickable's own travel formula rather than from
-                // guessing: d = v² / (2 × flickDeceleration). The targets are "one notch
-                // glides ~120 px, a fast run caps at ~500 px", which is the usual feel in
-                // Chrome and Explorer: deceleration 2200 (the 1500 default coasts too long),
-                // one notch v ≈ 727, ceiling v ≈ 1483.
-                property real wheelVelocity: 0
-                flickDeceleration: 2200
+                // 对齐 Chrome 的滚轮手感：**没有甩动惯性**，只有「平滑动画到目标位置、
+                // 到位即停」。这和 flick() 是两种机制 —— flick 是给一个速度让它自己滑，
+                // Chrome 是算出目标再走一段固定时长的缓动。
+                // 参数取自 Chrome 的观感：一格约 100 px、时长约 150 ms、缓出曲线。
+                // Matching Chrome's wheel feel: **no fling inertia**, just a smooth move to
+                // a target that stops on arrival. That is a different mechanism from flick(),
+                // which is handed a velocity and coasts. Chrome computes a target and eases
+                // to it over a fixed duration. The values follow Chrome's behaviour: about
+                // 100 px per notch, about 150 ms, ease-out.
+                property real wheelTargetY: 0
+                readonly property real wheelStep: 100
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                     onWheel: function(event) {
                         event.accepted = true
-                        // 符号：向下滚（angleDelta.y 为负）要看到下面的内容，也就是
-                        // contentY 增加；而 flick() 的正 yVelocity 是让 contentY 减少，
-                        // 所以这里直接把滚轮量当速度用（向下 = 负 = contentY 增加）。
-                        // Sign: scrolling down (negative angleDelta.y) must reveal content
-                        // below, i.e. increase contentY; flick()'s positive yVelocity
-                        // decreases contentY, so the wheel delta is used as the velocity
-                        // as-is (down = negative = contentY increases).
-                        const notches = event.pixelDelta.y !== 0
-                            ? event.pixelDelta.y / 60.0
-                            : event.angleDelta.y / 120.0
-                        const speed = 730
-                        const ceiling = 1483
-                        grid.wheelVelocity = Math.max(-ceiling, Math.min(ceiling,
-                            grid.wheelVelocity + notches * speed))
-                        grid.flick(0, grid.wheelVelocity)
-                        // 停手 160ms 速度归零，下一次滚轮重新从零算起，不会越滚越飘。
-                        // Resetting 160 ms after the last notch keeps a long run from
-                        // building up speed forever.
-                        wheelVelocityReset.restart()
+                        // 触控板给像素增量，直接用；鼠标一格算 100 px。
+                        // A touchpad reports pixels and they are used as-is; a mouse notch
+                        // counts as 100 px.
+                        const delta = event.pixelDelta.y !== 0
+                            ? -event.pixelDelta.y
+                            : -(event.angleDelta.y / 120.0) * grid.wheelStep
+                        const maxY = Math.max(0, grid.contentHeight - grid.height)
+                        // 动画进行中就从当前目标继续累加，连续滚才连得上。
+                        // While the animation runs, accumulate onto its target so repeated
+                        // notches chain instead of fighting each other.
+                        const base = wheelMove.running ? grid.wheelTargetY : grid.contentY
+                        grid.wheelTargetY = Math.max(0, Math.min(maxY, base + delta))
+                        // 显式给 from：只改 to 会让动画从旧起点重算，位置会跳。
+                        // `from` is set explicitly: changing only `to` makes the animation
+                        // recompute from the old origin, which shows up as a jump.
+                        wheelMove.stop()
+                        wheelMove.from = grid.contentY
+                        wheelMove.to = grid.wheelTargetY
+                        wheelMove.start()
                     }
                 }
-                Timer {
-                    id: wheelVelocityReset
-                    interval: 160
-                    onTriggered: grid.wheelVelocity = 0
+                NumberAnimation {
+                    id: wheelMove
+                    target: grid
+                    property: "contentY"
+                    duration: 150
+                    // Chrome 的滚轮缓动接近 ease-out，不是线性。
+                    // Chrome's wheel easing is close to ease-out, not linear.
+                    easing.type: Easing.OutQuad
                 }
                 // The column count follows the ideal card width and the cells then share
                 // the available width exactly, so every window size is flush with no
