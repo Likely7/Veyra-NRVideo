@@ -2109,13 +2109,23 @@ VPage {
                 // card too tall and only 2.9 rows fitted. The cover also gets a cap: at 488 px
                 // wide a 16:9 cover is 268, so capping it at 222 puts the card near 328 and
                 // exactly four rows fit in the ~1312 px grid.
-                readonly property real coverHeight:
-                    Math.min((fittedCellWidth - 12) * 0.5625, 222)
+                // 行数固定为 4：卡片高度直接由「可见高度 ÷ 4」反算，所以一屏正好
+                // 四行，不会露出第五行的一角。下限 200 防止窗口极矮时把卡片压扁。
+                // Four rows, fixed: the height is derived from the viewport divided by four,
+                // so exactly four fit and no sliver of a fifth shows. A 200 px floor keeps
+                // the cards from being squashed in a very short window.
+                readonly property int visibleRows: 4
                 readonly property int cellTitleSize:
                     Math.max(11, Math.min(25, Math.round(
                         13 * Math.pow(fittedCellWidth / 220, 0.8))))
+                readonly property real textBlockHeight:
+                    Math.ceil(cellTitleSize * 1.4) * 2 + 24
                 readonly property real fittedCellHeight:
-                    coverHeight + Math.ceil(cellTitleSize * 1.4) * 2 + 24
+                    Math.max(200, height > 0 ? height / visibleRows : 320)
+                // 封面吃掉除文字区之外的余下高度。
+                // The cover takes whatever is left after the text block.
+                readonly property real coverHeight:
+                    Math.max(60, fittedCellHeight - textBlockHeight)
                 cellWidth: fittedCellWidth
                 cellHeight: fittedCellHeight
                 clip: true
@@ -2159,7 +2169,11 @@ VPage {
                     height: grid.cellHeight
 
                     readonly property real pad: 6
-                    readonly property real coverHeight: (width - pad * 2) * 0.5625
+                    // 封面高度由网格给出（卡片高度减去文字区），不再是固定的 16:9——
+                    // 否则行数确定后封面会撑破单元格。
+                    // The cover height comes from the grid (cell height minus the text block)
+                    // instead of a fixed 16:9, or it would overflow a cell sized for four rows.
+                    readonly property real coverHeight: grid.coverHeight
                     // 字号随卡片宽度缩放，而不是写死。
                     // 基准：卡片 220 宽时标题 13、作者行 12（这是 B 站网页 254 宽卡片
                     // 标题 15、作者行 13 按比例换算来的）。窗口拉大后卡片变宽，字号必须
