@@ -2235,17 +2235,25 @@ VPage {
             // Split like the web front end: video info and comments on the left, a single
             // column of related videos on the right, each scrolling on its own. The right
             // column steps aside in a narrow window so the comments keep their room.
-            RowLayout {
+            Item {
+                id: detailSplit
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 12
                 visible: root.view === "detail" && !root.showSettings
                          && root.qrState.length === 0
 
             Flickable {
                 id: detailFlick
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                // 用 anchors 而不是布局：左栏的右边界直接等于右栏的左边界，
+                // 数学上不可能重叠。之前用 RowLayout 分配宽度，内容仍然撑出去盖住右栏。
+                // Anchors instead of a layout: the left column's right edge IS the right
+                // column's left edge, so overlapping is arithmetically impossible. RowLayout
+                // handed out widths and the content still overran them.
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.right: relatedPanel.visible ? relatedPanel.left : parent.right
+                anchors.rightMargin: relatedPanel.visible ? 12 : 0
                 // 扫码面板出现时也要让位：原来只判断 showSettings，于是从详情页点
                 // 「扫码登录」会和二维码上下各占一半，看起来像二维码被挤扁了。
                 // Step aside while the QR panel is up as well: this used to check only
@@ -2283,6 +2291,13 @@ VPage {
                     // takes its width from contentWidth, and going around that indirection
                     // can yield an inconsistent value.
                     width: detailFlick.width
+                    // 诊断：三个宽度一次看清，省得再猜是哪一层不对。
+                    // Diagnostic: all three widths at once, so no more guessing which layer
+                    // is wrong.
+                    onWidthChanged: console.log("[detail-layout] flick=" + detailFlick.width
+                        + " column=" + detailColumn.width
+                        + " viewport=" + detailFlick.width
+                        + " related=" + (relatedPanel ? relatedPanel.width : -1))
                     spacing: 10
 
                     // The page is already on screen while the detail request is in flight,
@@ -2916,8 +2931,11 @@ VPage {
                 // 竖向列表，自己带滚动条，和首页那种一样。
                 // Vertical list with its own scrollbar, the same kind the home feed uses.
                 Rectangle {
-                    Layout.preferredWidth: 320
-                    Layout.fillHeight: true
+                    id: relatedPanel
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: 320
                     // 窗口窄的时候让位：给评论留出宽度比多一列推荐更重要。
                     // Stands aside in a narrow window: the comments matter more than a column
                     // of recommendations.
