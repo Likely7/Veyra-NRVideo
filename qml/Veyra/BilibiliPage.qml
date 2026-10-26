@@ -2872,8 +2872,18 @@ VPage {
 
                                 ColumnLayout {
                                     id: commentColumn
-                                    anchors.fill: parent
-                                    anchors.margins: 8
+                                    // 这里**不能**用 anchors：它的父级 Rectangle 处在
+                                    // ColumnLayout 里，由布局管理，给这种项的锚点不生效，
+                                    // 宽度会被算成 margins 的负值（实测 -16），于是一条条
+                                    // 评论的宽度全是错的，长评论根本不换行。
+                                    // Anchors must not be used here: the parent Rectangle is
+                                    // managed by a ColumnLayout, anchors on such an item do not
+                                    // take effect and the width comes out as the negated margins
+                                    // (measured -16), which made every comment's width wrong and
+                                    // stopped long ones from wrapping at all.
+                                    x: 8
+                                    y: 8
+                                    width: parent.width - 16
                                     spacing: 4
 
                                     RowLayout {
@@ -2941,13 +2951,14 @@ VPage {
                                         font.family: Theme.fontUi
                                         font.pixelSize: 12
                                         onLinkActivated: Qt.openUrlExternally(link)
-                                        // 诊断：实测宽度，确认到底有没有被约束住。
-                                        // Diagnostic: the measured width, to settle whether the
-                                        // constraint is actually taking effect.
-                                        Component.onCompleted: console.log(
-                                            "[comment-width] text=" + width
-                                            + " natural=" + implicitWidth
-                                            + " column=" + commentColumn.width)
+                                        // 诊断：宽度变化时打印，能看到布局完成后的最终值
+                                        // （创建时可能还是 0）。
+                                        // Diagnostic on width changes, so the settled value after
+                                        // layout is visible rather than the initial zero.
+                                        onWidthChanged: if (width > 0) console.log(
+                                            "[comment-width] text=" + Math.round(width)
+                                            + " natural=" + Math.round(implicitWidth)
+                                            + " column=" + Math.round(commentColumn.width))
                                     }
                                 }
                             }
