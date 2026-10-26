@@ -547,12 +547,13 @@ VPage {
                 root.replyText = ""
                 replyInput.text = ""
                 root.lastSentReply = ""
-                // 切到「最新」再刷新：按热度排的话，刚发的这条热度是 0，会掉到看不见的位置。
-                // Switch to 最新 before refreshing: under 最热 a brand-new comment has no heat
-                // and would sink out of sight.
+                // 切到「最新」：按热度排的话，刚发的这条热度是 0，会掉到看不见的位置。
+                // 但**不立即刷新** —— 本地那条已经插在最上面，立刻拉回来只会把它覆盖掉。
+                // Switch to 最新, since a brand-new comment has no heat and would sink under
+                // 最热 - but do **not** re-fetch now: the local entry is already at the top and
+                // an immediate fetch would only overwrite it.
                 root.commentSort = 0
-                if (root.detail && root.detail.bvid)
-                    veyra.bilibiliRequestComments(root.detail.bvid, 1, 0)
+                replyRefreshTimer.restart()
                 return
             }
             if (!ok) return
@@ -858,6 +859,23 @@ VPage {
     property bool emotePanelOpen: false
     property bool emoteLoading: false
     property string emoteError: ""
+
+    // 发送成功后延迟刷新。B 站网页版发完**不重拉列表**，评论就留在本地插进去的位置；
+    // 这里稍等一会儿再拉，是为了拿到服务端的真实 rpid（删除要用）。拉得太早的话，
+    // 服务端还没入库，新评论会被刷新结果覆盖掉 —— 那正是「要切两次排序才看见」的原因。
+    // Bilibili's web front end does not re-fetch after posting; the comment simply stays
+    // where it was inserted. This waits before re-fetching so the server's real rpid can be
+    // picked up (deleting needs it). Fetching immediately returns a list that does not
+    // contain the new comment yet, which is why it vanished until the order was toggled.
+    Timer {
+        id: replyRefreshTimer
+        interval: 2000
+        repeat: false
+        onTriggered: {
+            if (root.detail && root.detail.bvid)
+                veyra.bilibiliRequestComments(root.detail.bvid, 1, root.commentSort)
+        }
+    }
 
     // 把表情代码接到正文末尾，并把光标放到后面，方便接着打字。
     // Append the emote code to the body and put the caret after it, ready for more typing.
