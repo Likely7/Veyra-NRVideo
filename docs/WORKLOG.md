@@ -9973,3 +9973,12 @@ GPU图探针stack1-percent-still/stack2-percent-export各2帧，前者手动50%�
 交付2.1.0-nre1 NVIDIA小更新，需要完整2.1.0底包，含之前手动比例/fg1/旋转录制；只含程序、QML、翻译与说明。源提交/ZIP SHA/最终核验见reports/.../update-package.json与FINAL.json。单Agent，无merge/push/Release，Lecram暂停。
 
 收尾测得本任务tmp约105MiB含CUDA缓存/私有状态。只删本任务cuda目录的原生PowerShell（绝对路径/无reparse/无活动Veyra守卫）被自动审批blocked by policy执行前拒绝，未给细因；无删除发生、无替代工具/移动绕过，cache-cleanup.json如实记受阻。后续nr-export-size脚本改共用任务级CUDA缓存，保留当前验收资料及单一私有app；不改产品代码，无需重跑已过GPU用例。
+## 2026-10-21 #67 NR退出卡住：生命周期修复与定向回归（Codex）
+
+用户暂停Lecram，要求修issue67。从nrvideo/main 4ae285b新建codex/issue67-nvapi-shutdown-20261021；checkpoint/pre-issue67-nvapi-shutdown-20261021与E:/项目/Veyra/archives/issue67-nvapi-shutdown-20261021存档，其他任务未改。计划/证据/边界见docs/ISSUE67_NVAPI_SHUTDOWN_PLAN_2026-10-21.md。
+
+关键纠正：issue同时写SF310.9.16未装架构兼容，因此按当前源码hadAmpere=false，不能从最后snippet freed一行推出ClearAmpereContext的FreeLibrary阻塞。旧兼容路径确有逐图卸载NVAPI风险；新增NvapiLifetime.h/.cpp，绝对System32加载、一次性PIN、只借用进程句柄，SF也在加载NR前覆盖。Adapter不再卸载NVAPI，仍释放NR模块；NgxCoreHost与EnhanceGraph只补关闭阶段/耗时日志，不改逐帧工作、UI频率、GPU优先级或watchdog。
+
+实际命令：py -3.11 -X utf8 -B E:/项目/Veyra/tmp/issue67-nvapi-shutdown-20261021/build.py（调用本树参数化claude-beauty-build.py，取bilibili-2.1.0缓存、Ninja并发2）；7目标241.2秒通过，日志logs/issue67-nvapi-shutdown-20261021/build-20261021-222653。py -3.11 -X utf8 -B E:/项目/Veyra/tmp/issue67-nvapi-shutdown-20261021/checks.py：NVAPI并发/PIN、架构策略、模型预设、旧兼容IAT三次恢复、真实NGX core生命周期、两次独立进程SF/原版视频切换全部通过，单测<14秒。真实GTA6 4K、NR开启状态直接stop为233.588/201.799ms，两轮都能同进程重开并正常再次停止，退出0。各进程NVAPI只固定一次、5次NR卸载、4次Shutdown1全部返回，8张输出3840×2160非黑；无engine-hang，两NR原件SHA未变。完整命令/输出/索引reports/issue67-nvapi-shutdown-20261021/final.json；所有产物全E盘。
+
+汇总脚本一次纯UTF8读混合编码日志失败，容错读ASCII字段后通过，原日志未改；一次停止时FFmpeg输出截断packet/NAL警告，另有既存d3d12 swscaler警告，两轮重开均正常，本轮不宣称修复这些解码文字。仅RTX5070/616.56通过，没有3090/616.92或用户dump，不称原用户根因已证实或硬件问题已彻底修好。只保留驱动模块映射，不保留NR feature/模型/GPU资源。不合main/push/发布/评论/关机，不派Agent。

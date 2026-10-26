@@ -13,6 +13,7 @@
 > **2026-10-23 画面旋转（Codex）**：用户要求极简/专业小按钮每次顺时针90°并适配UI。4eee190干净源码切codex/picture-rotation-20261023，起点标签checkpoint/pre-picture-rotation-20261023。按docs/PICTURE_ROTATION_PLAN_2026-10-23.md复用已有元数据呈现/坐标映射，允许必要PreviewView/EngineController/bridge/QML/翻译/定向测试接点，覆盖这些范围旧UI冻结；不继续Lecram或修改其它工作树。不改专有运行库/模型/驱动或真实配置，全E盘，复用同源构建限-j2≤900秒/单测试≤300秒，单Agent，无main合并/push/发布。
 
 > **2026-10-21 Claude 中断任务接手（Codex）**：用户要求“把后续工作接上，然后完成他”，后明确“Lecram，先放着，不弄了”。仅在 E盘既有 screen-recording-fix-20261022 工作树、codex/claude-handoff-20261022 完成 AMD 超分关闭和带声音的处理后实时录制修复、相关构建/回归/本地测试包；这些必要接点覆盖旧 UI 冻结。20个未提交源码先保存 ZIP/patch/SHA 与检查点5614e8d，AMD修复移入88dbc26，计划docs/CLAUDE_HANDOFF_PLAN_2026-10-22.md。Lecram 保留不继续。单 Agent、-j2构建≤900秒/单测试≤300秒、全E盘私有配置、不触碰真实配对主机/他人进程/运行库/模型/驱动；旧桌面与其他任务保留。不合 main/push/发布。
+> **2026-10-21 #67 修复授权（Codex）**：用户暂停Lecram，要求修复issue67。按docs/ISSUE67_NVAPI_SHUTDOWN_PLAN_2026-10-21.md在codex/issue67-nvapi-shutdown-20261021隔离修复NR/NVAPI模块生命周期与关闭诊断，允许必要ngx/graph/CMake/测试接点，覆盖这些旧冻结；保留正常资源释放/UI频率和其他任务。产物全E盘，构建-j2≤900秒/单测≤300秒；不合main/push/发布/评论/关机，不派Agent，无3090实卡不称已验。
 
 > **2026-10-19 2.1.0 正式发布（Codex）**：用户已实测并批准 `test-packages/bilibili-2.1.0-20261019` 两包原样发布，禁止重新构建/打包。按 docs/RELEASE_2.1.0_PLAN_2026-10-19.md 整理2.0.9以来全部合入内容、替换用户新6群二维码、更新README/Release，主Release只放两个GPU包，源码另页；允许main普通快进/push/新标签及发布。Lecram两个实验分支暂停保留，不入本版。公告只拟稿，不代发、不关机、不派Agent、不改运行文件/驱动/真实配置；产物全E盘。
 

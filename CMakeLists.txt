@@ -151,6 +151,7 @@ add_library(veyra_ngx STATIC
   src/ngx/NgxCoreHost.cpp
   src/ngx/NgxCoreCache.cpp
   src/ngx/DlssNrRuntimeAdapter.cpp
+  src/ngx/NvapiLifetime.cpp
   src/ngx/DlssSrBackend.cpp
     src/ngx/VideoSrBackend.cpp
     src/ngx/TrueHdrBackend.cpp
@@ -230,6 +231,10 @@ if(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR)
   target_compile_features(veyra_nr_ampere_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_nr_ampere_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_link_libraries(veyra_nr_ampere_tests PRIVATE veyra_gfx veyra_ngx)
+  add_executable(veyra_nvapi_lifetime_tests tests/integration/NvapiLifetimeTests.cpp)
+  target_compile_features(veyra_nvapi_lifetime_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_nvapi_lifetime_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(veyra_nvapi_lifetime_tests PRIVATE veyra_ngx)
   add_executable(veyra_nr_harness
     tools/nr_harness/main.cpp
     tools/nr_harness/frame_loop.cpp

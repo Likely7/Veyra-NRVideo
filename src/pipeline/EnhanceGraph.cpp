@@ -3611,9 +3611,11 @@ void EnhanceGraph::shutdown()
         nrAdapter_->restoreCallerCompatibility();
         nrAdapter_->unload();
     }
+    log::info("graph", "shutdown: core retention/device health check begin");
     const bool retainCore=coreCache_&&coreCache_->owns(coreHost_)&&initialized_&&featuresReleased&&coreHost_->healthy()&&
         failedBackend_==engine::FailedBackend::None&&SUCCEEDED(context_.device()->GetDeviceRemovedReason())&&
         coreHost_->liveParameterBlockCount()==0;
+    log::info("graph", std::format("shutdown: core retention/device health check complete retain={}", retainCore));
     if(retainCore){
         log::info("ngx-core-cache","event=retain liveParameters=0 featuresReleased=1");
     }else if(coreHost_){
