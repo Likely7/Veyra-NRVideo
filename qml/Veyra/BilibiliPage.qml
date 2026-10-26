@@ -3340,9 +3340,23 @@ VPage {
                         GridView {
                             id: authorGrid
                             width: authorFlick.width
-                            anchors.top: parent.top
-                            cellWidth: width / Math.min(5, Math.max(1, Math.round(width / 220)))
-                            cellHeight: Math.max(200, (authorFlick.height) / 4)
+                            // 高度必须显式给：放在 Flickable 里的 GridView 默认为 0 高，
+                            // 那样一张卡片也排不出来 —— 表现就是「点了什么都没显示」。
+                            // 行数按内容算，所以滚动范围也对。
+                            // The height has to be given explicitly: a GridView inside a
+                            // Flickable defaults to zero height and lays out nothing at all,
+                            // which is exactly "clicking it showed nothing". Rows come from the
+                            // item count, so the scroll range is right too.
+                            readonly property int columns:
+                                Math.max(1, Math.min(5, Math.round(width / 220)))
+                            readonly property real cellWidthValue: width / columns
+                            readonly property real cellHeightValue:
+                                Math.max(200, authorPage.height / 4)
+                            readonly property int rows:
+                                Math.ceil(root.authorVideos.length / Math.max(1, columns))
+                            height: Math.max(cellHeightValue, rows * cellHeightValue)
+                            cellWidth: cellWidthValue
+                            cellHeight: cellHeightValue
                             clip: true
                             interactive: false
                             model: root.authorVideos
