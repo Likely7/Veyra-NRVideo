@@ -381,6 +381,24 @@ VPage {
 
     // force re-runs the same query; without it a repeated search of the same words reuses
     // the cached result, keyed by the query itself so different words still search.
+    // 搜索框回车的统一入口。四条通道都会走到这里，用一个 250ms 的闸门防止同一次
+    // 按键被两条通道各触发一次。
+    // One entry point for the search box's Enter key. All four channels call it; a 250 ms
+    // gate keeps a single key press from starting two searches.
+    property bool searchKeyGuard: false
+    function triggerSearchFromField() {
+        if (root.searchKeyGuard) return
+        root.searchKeyGuard = true
+        root.searchKeyResetTimer.restart()
+        console.log("[bili-search] enter triggered, keyword=" + root.keyword)
+        root.doSearch(true)
+    }
+    Timer {
+        id: searchKeyResetTimer
+        interval: 250
+        onTriggered: root.searchKeyGuard = false
+    }
+
     function doSearch(force) {
         if (!root.keyword.trim().length) return
         root.showSettings = false
@@ -881,7 +899,42 @@ VPage {
                         font.pixelSize: 13
                         selectByMouse: true
                         onTextChanged: root.keyword = text
-                        onAccepted: root.doSearch(true)
+                        // 回车触发搜索：四个通道都接上，任意一条通了就行。
+                        // 1) onAccepted —— TextInput 自己的信号，正常该由它负责；
+                        // 2) Keys.onReturnPressed / onEnterPressed —— 主键盘和小键盘的回车；
+                        // 3) Keys.onPressed 兜底，直接认 Key_Return / Key_Enter。
+                        // 重复触发用一个 250ms 的闸门挡住，避免同一按键走多条通道搜两次。
+                        // Enter starts the search: four channels are wired and whichever one
+                        // gets through wins. onAccepted is the signal TextInput should raise
+                        // by itself; the Keys handlers cover both Return keys; onPressed is
+                        // the fallback that matches the key codes directly. A 250 ms gate
+                        // stops one key press from searching twice via several channels.
+                        onAccepted: root.triggerSearchFromField()
+                        Keys.onReturnPressed: function(event) {
+                            root.triggerSearchFromField()
+                            event.accepted = true
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.triggerSearchFromField()
+                            event.accepted = true
+                        }
+                        Keys.onPressed: function(event) {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                root.triggerSearchFromField()
+                                event.accepted = true
+                            }
+                        }
+                        // 诊断：把每个按键的键码打出来，确认回车到底有没有到达控件。
+                        // 输入法（IME）在组词时会把回车吃掉——那样这条日志根本不会出现，
+                        // 是区分「QML 没接住」和「事件没到」的唯一办法。
+                        // Diagnostic: log every key so it is visible whether Return reaches the
+                        // control at all. An IME composing text swallows Return, and then this
+                        // line never appears - which is the only way to tell "QML missed it"
+                        // from "the event never arrived".
+                        Keys.onReleased: function(event) {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                                console.log("[bili-search] key released key=" + event.key)
+                        }
                     }
                     // TextInput has no placeholder property; this is the usual stand-in.
                     Text {
