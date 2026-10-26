@@ -399,7 +399,6 @@ VPage {
         const now = Date.now()
         if (now - root.searchKeyLastMs < 250) return
         root.searchKeyLastMs = now
-        console.log("[bili-search] enter triggered, keyword=" + root.keyword)
         root.doSearch(true)
     }
 
@@ -908,49 +907,33 @@ VPage {
                         font.pixelSize: 13
                         selectByMouse: true
                         onTextChanged: root.keyword = text
-                        // 回车触发搜索：四个通道都接上，任意一条通了就行。
-                        // 1) onAccepted —— TextInput 自己的信号，正常该由它负责；
-                        // 2) Keys.onReturnPressed / onEnterPressed —— 主键盘和小键盘的回车；
-                        // 3) Keys.onPressed 兜底，直接认 Key_Return / Key_Enter。
-                        // 重复触发用一个 250ms 的闸门挡住，避免同一按键走多条通道搜两次。
-                        // Enter starts the search: four channels are wired and whichever one
-                        // gets through wins. onAccepted is the signal TextInput should raise
-                        // by itself; the Keys handlers cover both Return keys; onPressed is
-                        // the fallback that matches the key codes directly. A 250 ms gate
-                        // stops one key press from searching twice via several channels.
-                        onAccepted: {
-                            console.log("[bili-search] onAccepted")
-                            root.triggerSearchFromField()
-                        }
-                        // 只留 Keys.onPressed 一个按键处理器。
-                        // Keys.onReturnPressed / onEnterPressed 本质上是 onPressed 的语法糖，
-                        // 三个同时定义时只有最后那个还在工作 —— 实测 onReleased 每次都触发，
-                        // 而三个回车处理器一个都没响，就是它们互相覆盖了。
-                        // Only Keys.onPressed handles keys. Keys.onReturnPressed and
-                        // onEnterPressed are sugar over the same thing, and with all three
-                        // defined only the last one survives - measured: onReleased fired every
-                        // time while none of the three Return handlers ever did.
-                        Keys.onPressed: function(event) {
-                            console.log("[bili-search] onPressed key=" + event.key)
+                        // 回车触发搜索。可靠通道是**释放**事件。
+                        // 2026-10-26 实测：回车的按下（16777220）到不了控件 —— TextInput
+                        // 为自己的编辑把它吞了，连 accepted() 也不发；释放每次都到（29/29），
+                        // 退格键的按下也能到（16777219），说明按键投递没问题，被吞的只有
+                        // 回车这一个键。应用级 eventFilter 也试过，一次都看不到回车
+                        // （Qt Quick 直接调 QQuickItem::keyPressEvent，不走 sendEvent）。
+                        // Enter triggers the search. The release is the reliable channel.
+                        // Measured 2026-10-26: Return's press (16777220) never reaches the
+                        // control - TextInput swallows it for its own editing and does not
+                        // emit accepted() either - while the release arrived 29 of 29 times,
+                        // and Backspace's press arrived too (16777219). Key delivery is fine;
+                        // only Return's press is consumed. An application-level event filter
+                        // was tried as well and never saw Return: Qt Quick calls
+                        // QQuickItem::keyPressEvent directly rather than through sendEvent.
+                        Keys.onReleased: function(event) {
                             if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                                 root.triggerSearchFromField()
                                 event.accepted = true
                             }
                         }
-                        // 回车的**释放**事件才是可靠通道，就用它触发搜索。
-                        // 实测（2026-10-26）：按下事件的 16777220 一次都到不了这里 ——
-                        // TextInput 为自己的编辑把它吞了，连 accepted() 都不发；而释放事件
-                        // 每次都到（29 次），退格键的按下也能到（16777219），说明按键投递
-                        // 本身没问题，被吞的只有回车这一个键。
-                        // The **release** of Enter is the reliable channel, so that is what
-                        // triggers the search. Measured 2026-10-26: the press (16777220) never
-                        // arrives - TextInput swallows it for its own editing and does not even
-                        // emit accepted() - while the release arrived every time (29 of them),
-                        // and Backspace's press arrived too (16777219). Key delivery works;
-                        // Return's press is the only one that does not.
-                        Keys.onReleased: function(event) {
+                        // 另两条留作兜底：换 Qt 版本后哪个先工作都行，250ms 闸门保证
+                        // 一次按键只搜一次。
+                        // The other two stay as fallbacks so the box keeps working whichever
+                        // one Qt honours; the 250 ms gate keeps one key press to one search.
+                        onAccepted: root.triggerSearchFromField()
+                        Keys.onPressed: function(event) {
                             if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                                console.log("[bili-search] released key=" + event.key)
                                 root.triggerSearchFromField()
                                 event.accepted = true
                             }
