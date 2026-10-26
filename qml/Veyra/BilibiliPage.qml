@@ -408,7 +408,9 @@ VPage {
         x: 0
         y: replyInput.height + 6
         width: replyInput.width
-        height: 132
+        // 比原来高：多了一行包名标签。
+        // Taller than before: it carries a package tab row now.
+        height: 186
         visible: root.emotePanelOpen
         // Popup 自带一层 Controls 主题的背景（带亮色描边），那正是外面那圈白边。
         // 这里换成和面板一致的底色，contentItem 只负责内容。
@@ -417,6 +419,10 @@ VPage {
         background: Rectangle {
             radius: 8
             color: Theme.card2
+            // 细的一圈深灰描边：既能看出边界，又不刺眼，和网页版那种淡边一致。
+            // A thin dark outline: enough to see the edge without being loud, like the web's.
+            border.width: 1
+            border.color: Theme.stroke
         }
 
         // 面板自己开关时同步状态，两条路径不会打架。
@@ -443,16 +449,39 @@ VPage {
                 font.family: Theme.fontUi
                 font.pixelSize: 11
             }
+            // 当前包名，按网页版放在左上角。
+            // The current package name, top-left as on the web.
+            Text {
+                id: packageLabel
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.leftMargin: 10
+                anchors.topMargin: 8
+                visible: !root.emoteLoading && root.emoteError.length === 0
+                text: root.emotePackage
+                color: Theme.t2
+                font.family: Theme.fontUi
+                font.pixelSize: 12
+            }
             GridView {
-                anchors.fill: parent
+                id: emoteGrid
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: packageLabel.bottom
+                anchors.bottom: tabs.top
                 anchors.margins: 6
+                anchors.topMargin: 8
                 visible: !root.emoteLoading && root.emoteError.length === 0
                          && root.emotes.length > 0
                 cellWidth: 38
                 cellHeight: 38
                 clip: true
                 ScrollBar.vertical: VScrollBar { }
-                model: root.emotes
+                // 只显示当前包的表情。
+                // Only the current package's emotes.
+                model: root.emotes.filter(function(e) {
+                    return e.package === root.emotePackage
+                })
                 delegate: Item {
                     id: emoteCell
                     width: 38
@@ -494,6 +523,45 @@ VPage {
                     TapHandler {
                         id: emoteTap
                         onTapped: root.insertEmote(modelData.text)
+                    }
+                }
+            }
+
+            // 底部的表情包标签，和网页版一样：点一下切换，网格只显示该包。
+            // The package tabs along the bottom, as on the web: clicking one switches the
+            // grid to that package.
+            Row {
+                id: tabs
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                anchors.bottomMargin: 6
+                spacing: 6
+                visible: !root.emoteLoading && root.emoteError.length === 0
+
+                Repeater {
+                    model: root.emotePackages
+                    delegate: Rectangle {
+                        width: Math.max(44, tabLabel.implicitWidth + 14)
+                        height: 20
+                        radius: 4
+                        color: root.emotePackage === modelData ? Theme.accentSoft : "transparent"
+                        border.width: 1
+                        border.color: root.emotePackage === modelData ? Theme.accent : Theme.stroke
+
+                        Text {
+                            id: tabLabel
+                            anchors.centerIn: parent
+                            text: modelData
+                            color: root.emotePackage === modelData ? Theme.accent : Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 10
+                        }
+                        TapHandler {
+                            onTapped: root.emotePackage = modelData
+                        }
                     }
                 }
             }
@@ -689,12 +757,19 @@ VPage {
             // Each entry is "text<TAB>url", split here into a plain object array so the
             // delegate's modelData is unambiguously a JS object, with no conversion involved.
             const list = []
+            const packages = []
             for (let i = 0; i < items.length; ++i) {
                 const parts = String(items[i]).split("\t")
-                if (parts.length >= 2 && parts[0].length > 0)
-                    list.push({ text: parts[0], url: parts[1] })
+                if (parts.length < 2 || parts[0].length === 0) continue
+                const pkg = parts.length >= 3 && parts[2].length > 0 ? parts[2] : qsTr("其它")
+                if (packages.indexOf(pkg) < 0) packages.push(pkg)
+                list.push({ text: parts[0], url: parts[1], package: pkg })
             }
             root.emotes = list
+            root.emotePackages = packages
+            // 默认显示第一个包，和网页版打开就停在「小黄脸」一致。
+            // Default to the first package, as the web front end opens on 小黄脸.
+            root.emotePackage = packages.length > 0 ? packages[0] : 
             console.log("[emote] panel parsed " + list.length + " entries, first="
                         + (list.length > 0 ? JSON.stringify(list[0]) : "none"))
         }
@@ -986,7 +1061,11 @@ VPage {
     // 评论总数，来自接口的 data.page.count。
     // The overall comment count, from data.page.count.
     property real commentTotal: 0
+    // 全部表情（平铺）与分组后的包名列表、以及当前选中的包。
+    // All emotes flattened, plus the package names and the one being shown.
     property var emotes: []
+    property var emotePackages: []
+    property string emotePackage: ""
     property bool emotePanelOpen: false
     property bool emoteLoading: false
     property string emoteError: ""

@@ -183,6 +183,10 @@ bool biliDeleteReply(const std::wstring& bvid, long long rpid, std::wstring& err
 struct BiliEmote {
     std::wstring text;
     std::wstring url;
+    // 所属表情包的名字（"小黄脸"、"颜文字"…）。界面按它分组，和网页版的标签一致。
+    // The name of the package this belongs to ("小黄脸", "颜文字", ...). The UI groups by
+    // it, matching the web front end's tabs.
+    std::wstring package;
 };
 
 // 拉取当前账号可用的评论表情。

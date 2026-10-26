@@ -1049,10 +1049,14 @@ bool biliEmotePanel(std::vector<BiliEmote>& out, std::wstring& error) {
     // The member is **emote**, singular, not emotes - confirmed against the actual body:
     // data.packages[].emote[], one package per emote series, flattened here.
     for (const auto* package : root["data"]["packages"].elements()) {
+        // 包名在 package.text 上（"小黄脸"、"颜文字"…）。
+        // The package name is package.text ("小黄脸", "颜文字", ...).
+        const std::wstring packageName = fromUtf8((*package)["text"].asString());
         for (const auto* emote : (*package)["emote"].elements()) {
             BiliEmote item;
             item.text = fromUtf8((*emote)["text"].asString());
             item.url = fromUtf8((*emote)["url"].asString());
+            item.package = packageName;
             // 头几条打出来：字段名和取值一次看清，省得再猜。
             // Log the first few: field names and values in one go, so nothing has to be guessed.
             if (out.size() < 3)

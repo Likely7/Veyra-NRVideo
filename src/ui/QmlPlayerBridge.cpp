@@ -7827,7 +7827,8 @@ void QmlPlayerBridge::bilibiliRequestEmotePanel(){
         QStringList flat;
         for (const auto& e : emotes)
             flat.push_back(QString::fromStdWString(e.text) + QLatin1Char('\t')
-                           + QString::fromStdWString(e.url));
+                           + QString::fromStdWString(e.url) + QLatin1Char('\t')
+                           + QString::fromStdWString(e.package));
         r.text = flat.join(QLatin1Char('\n'));
         r.ok = true;
         return r;
