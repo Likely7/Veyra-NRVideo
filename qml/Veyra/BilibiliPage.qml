@@ -2268,7 +2268,7 @@ VPage {
                 // parent.width - a circular dependency that let the content outgrow the column
                 // it was given, covering the right-hand list and the Send button with it.
                 contentWidth: width
-                contentHeight: detailColumn.implicitHeight
+                contentHeight: detailColumn.height
                 clip: true
                 // 滚到接近底部时自动取下一页评论，和首页的无限加载同一套思路：
                 // 提前一屏多一点就开始取，用户滑到底时通常已经接上了。
@@ -2283,14 +2283,13 @@ VPage {
                 }
 
 
-                ColumnLayout {
+                Column {
                     id: detailColumn
-                    // 直接绑 Flickable 的宽度，不经过 parent：Flickable 的 contentItem
+                    width: detailFlick.width
                     // 宽度由 contentWidth 决定，绕一圈取值容易拿到不一致的结果。
                     // Bound to the Flickable's own width rather than parent: the content item
                     // takes its width from contentWidth, and going around that indirection
                     // can yield an inconsistent value.
-                    width: detailFlick.width
                     // 诊断：三个宽度一次看清，省得再猜是哪一层不对。
                     // Diagnostic: all three widths at once, so no more guessing which layer
                     // is wrong.
@@ -2303,7 +2302,7 @@ VPage {
                     // The page is already on screen while the detail request is in flight,
                     // so say so rather than showing an empty frame with no explanation.
                     Text {
-                        Layout.fillWidth: true
+                        width: detailColumn.width
                         visible: root.detailLoading
                         text: qsTr("加载中…")
                         color: Theme.t3
@@ -2312,6 +2311,7 @@ VPage {
                     }
 
                     RowLayout {
+                        width: detailColumn.width
                         spacing: 12
                         VButton { text: qsTr("← 返回"); onClicked: root.view = "home" }
 
@@ -2328,7 +2328,7 @@ VPage {
                     // Cover on the left, details on the right (newBV's detail layout).
                     // Clicking the cover plays, which is the gesture users already know.
                     RowLayout {
-                        Layout.fillWidth: true
+                        width: detailColumn.width
                         spacing: 14
 
                         Rectangle {
@@ -2670,7 +2670,7 @@ VPage {
                     // comments
                     ColumnLayout {
                         id: commentSection
-                        Layout.fillWidth: true
+                        width: detailColumn.width
                         // 实测这一层自己就是 848，而父级只有 814 —— 它被内容撑宽了。
                         // 布局容器默认按子元素的 implicitWidth 算自己的 implicitWidth，
                         // 长评论于是把整块评论区顶宽，超出的部分伸出左栏、被裁掉。
