@@ -153,6 +153,10 @@ bool biliDanmaku(long long cid, std::vector<BiliDanmaku>& out, std::wstring& err
 // Interactions. All need a signed-in session and return false with a reason.
 bool biliLike(const std::wstring& bvid, bool like, std::wstring& error);
 bool biliCoin(const std::wstring& bvid, int count, std::wstring& error);
+// 发一条文字评论（纯文本，不含表情/@）。先用来验证风控是否放行。
+// Post one plain-text comment (no emoji, no mentions). Used first to find out whether
+// the risk check lets it through.
+bool biliPostReply(const std::wstring& bvid, const std::wstring& message, std::wstring& error);
 // folderId 0 means the account's first folder; the UI passes the folder the user picked.
 bool biliFavorite(const std::wstring& bvid, bool add, long long folderId,
                   std::wstring& error);

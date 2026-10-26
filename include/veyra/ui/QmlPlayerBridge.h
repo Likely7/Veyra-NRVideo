@@ -57,6 +57,10 @@ enum class BiliOp : uint8_t {
     // It is asynchronous because media::biliReportWatchProgress does a synchronous HTTP
     // POST; calling it straight from the GUI tick would freeze the window for that long.
     ReportProgress,
+    // 发评论。与其它写操作一样走异步任务，避免同步 HTTP 卡住界面。
+    // Posting a comment. Asynchronous like the other write actions, so a synchronous
+    // HTTP call cannot freeze the window.
+    Reply,
     Count,
 };
 // 操作名，供信号传给 QML 分派用。
@@ -76,6 +80,7 @@ constexpr const char* biliOpName(BiliOp op) {
     case BiliOp::QrPoll:           return "qr-poll";
     case BiliOp::Account:          return "account";
     case BiliOp::ReportProgress:   return "report-progress";
+    case BiliOp::Reply:            return "reply";
     case BiliOp::Count:            break;
     }
     return "unknown";
@@ -709,6 +714,9 @@ public:
     // starts together never evict one another.
     Q_INVOKABLE void bilibiliRequestLike(const QString& bvid, bool like);
     Q_INVOKABLE void bilibiliRequestCoin(const QString& bvid, int count);
+    // 发评论。结果通过 bilibiliActionDone("reply", ok, error) 回到界面。
+    // Post a comment; the outcome arrives as bilibiliActionDone("reply", ok, error).
+    Q_INVOKABLE void bilibiliPostReply(const QString& bvid, const QString& message);
     Q_INVOKABLE void bilibiliRequestWatchLater(const QString& bvid, bool add);
     Q_INVOKABLE void bilibiliRequestComments(const QString& bvid, int page);
     Q_INVOKABLE void bilibiliRequestEnableDanmaku(const QString& bvid, int pageIndex);

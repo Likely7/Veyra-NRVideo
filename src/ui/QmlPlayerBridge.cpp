@@ -7796,6 +7796,20 @@ void QmlPlayerBridge::tickBiliTasks() {
 // 三者形状一致：发一个写请求，成功则刷新互动状态。提示语在 GUI 线程发。
 // All three have the same shape: one write request, then re-read the interaction
 // state. The user-facing notice stays on the GUI thread.
+void QmlPlayerBridge::bilibiliPostReply(const QString& bvid, const QString& message){
+    if (bvid.isEmpty() || message.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    const std::wstring wmessage = message.toStdWString();
+    startBiliTask(BiliOp::Reply, [wbvid, wmessage] {
+        BiliTaskResult r;
+        std::wstring error;
+        r.ok = media::biliPostReply(wbvid, wmessage, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
 void QmlPlayerBridge::bilibiliRequestLike(const QString& bvid, bool like){
     if (bvid.isEmpty()) return;
     media::setBiliCookie(media::loadBilibiliCookie());

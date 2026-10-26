@@ -499,6 +499,20 @@ VPage {
         // 点赞 / 投币 / 稍后再看 完成后刷新按钮状态。三者形状相同，一个处理器覆盖。
         // Liked / coined / watch-later all finish the same way: re-read the buttons.
         function onBilibiliActionDone(op, ok, error) {
+            // 发评论的结果要单独说出来：失败时 B 站给的原因（尤其是风控 -401）
+            // 必须让用户看见，否则点了没反应更像坏了。
+            // The reply result is reported explicitly: on failure the reason from Bilibili
+            // (the -401 risk check in particular) has to be visible, or a silent no-op looks
+            // like a bug.
+            if (op === "reply") {
+                root.replySending = false
+                if (!ok) { root.replyMessage = error; return }
+                root.replyMessage = qsTr("评论已发送")
+                root.replyText = ""
+                if (root.detail && root.detail.bvid)
+                    veyra.bilibiliRequestComments(root.detail.bvid, 1)
+                return
+            }
             if (!ok) return
             if (root.detail && root.detail.bvid) root.requestInteraction(root.detail.bvid)
         }
@@ -732,6 +746,12 @@ VPage {
             }
         }
     }
+
+    // 发评论的界面状态。
+    // UI state for posting a comment.
+    property string replyText: ""
+    property bool replySending: false
+    property string replyMessage: ""
 
     function toggleComments() {
         root.showComments = !root.showComments
@@ -2214,6 +2234,78 @@ VPage {
                             color: Theme.t2
                             font.family: Theme.fontUi
                             font.pixelSize: 13
+                        }
+
+                        // 发评论：一个输入框加一个按钮。结果（成功或 B 站给的原因）
+                        // 显示在下面一行。
+                        // Posting a comment: one field and one button, with the outcome -
+                        // success or Bilibili's own reason - on the line below.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: 32
+                                radius: 8
+                                color: Theme.card2
+                                border.width: 1
+                                border.color: replyInput.activeFocus ? Theme.accent : Theme.stroke
+
+                                TextInput {
+                                    id: replyInput
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    color: Theme.t1
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 12
+                                    selectByMouse: true
+                                    clip: true
+                                    text: root.replyText
+                                    onTextChanged: root.replyText = text
+                                    enabled: !root.replySending
+                                    onAccepted: replySendButton.send()
+                                }
+                                Text {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    verticalAlignment: Text.AlignVCenter
+                                    visible: replyInput.text.length === 0
+                                    text: qsTr("发一条评论…")
+                                    color: Theme.t3
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 12
+                                }
+                            }
+
+                            VButton {
+                                id: replySendButton
+                                implicitWidth: 68
+                                fontSize: 12
+                                enabled: !root.replySending && root.replyText.trim().length > 0
+                                text: root.replySending ? qsTr("发送中") : qsTr("发送")
+                                function send() {
+                                    if (root.replySending) return
+                                    const body = root.replyText.trim()
+                                    if (!body.length) return
+                                    if (!root.detail || !root.detail.bvid) return
+                                    root.replySending = true
+                                    root.replyMessage = ""
+                                    veyra.bilibiliPostReply(root.detail.bvid, body)
+                                }
+                                onClicked: send()
+                            }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            visible: root.replyMessage.length > 0
+                            wrapMode: Text.Wrap
+                            text: root.replyMessage
+                            color: root.replyMessage === qsTr("评论已发送") ? Theme.ok : Theme.warn
+                            font.family: Theme.fontUi
+                            font.pixelSize: 11
                         }
 
                         Repeater {

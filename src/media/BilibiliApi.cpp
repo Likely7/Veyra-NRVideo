@@ -953,6 +953,37 @@ bool biliLike(const std::wstring& bvid, bool like, std::wstring& error) {
     return postAction(L"/x/web-interface/archive/like", form, error, L"点赞");
 }
 
+// 发一条文字评论。oid 要的是 aid 而不是 bvid，所以先解析一次。
+// Posting a plain-text comment. The endpoint keys on aid, not bvid, so resolve it first.
+bool biliPostReply(const std::wstring& bvid, const std::wstring& message, std::wstring& error) {
+    if (!bilibiliCookieLooksSignedIn(g_cookie)) { error = L"发评论需要登录"; return false; }
+    // 项目里没有现成的 trim，这里只去掉首尾空白再判空 —— 全是空格也算空。
+    // No trim helper exists in this file; strip the ends and reject an all-blank message.
+    const size_t first = message.find_first_not_of(L" \t\r\n");
+    if (first == std::wstring::npos) { error = L"评论内容为空"; return false; }
+    const size_t last = message.find_last_not_of(L" \t\r\n");
+    const std::wstring text = message.substr(first, last - first + 1);
+    if (text.size() > 1000) { error = L"评论太长（上限 1000 字）"; return false; }
+
+    std::string viewBody;
+    if (!httpGet(L"api.bilibili.com", L"/x/web-interface/view?bvid=" + bvid, g_cookie,
+                 viewBody, error)) return false;
+    const auto viewRoot = json::parse(viewBody);
+    if (!checkCode(viewRoot, error, L"视频信息")) return false;
+    const long long aid = viewRoot["data"]["aid"].asInt(0);
+    if (aid <= 0) { error = L"视频信息里没有 aid"; return false; }
+
+    const std::string csrf = csrfForm();
+    if (csrf.empty()) { error = L"登录信息缺少 csrf 令牌"; return false; }
+    // plat=1 是网页端，ordering=2 表示按时间排序（网页端默认就是这一组）。
+    // plat=1 marks the web client and ordering=2 sorts by time, which is what the web
+    // front end sends by default.
+    std::string form = "oid=" + std::to_string(aid)
+        + "&type=1&message=" + urlEncode(toUtf8(text))
+        + "&plat=1&ordering=2&" + csrf;
+    return postAction(L"/x/v2/reply/add", form, error, L"发评论");
+}
+
 bool biliCoin(const std::wstring& bvid, int count, std::wstring& error) {
     if (count < 1 || count > 2) { error = L"投币数只能是 1 或 2"; return false; }
     std::string form = "bvid=" + toUtf8(bvid) + "&multiply=" + std::to_string(count)
