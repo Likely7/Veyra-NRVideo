@@ -9,11 +9,30 @@
 #include <QQmlComponent>
 #include <QtQml/qqml.h>
 #include <QtQuickTest/quicktest.h>
+#include <QGuiApplication>
+#include <QTest>
+
+// Quick Test's keyClick targets its QQuickView host. Multi-window ownership
+// tests need events delivered to the actual focused QML Window instead.
+class ActiveWindowKeys : public QObject {
+    Q_OBJECT
+public:
+    using QObject::QObject;
+    Q_INVOKABLE bool focused(QObject* window) { return QGuiApplication::focusWindow() == window; }
+    Q_INVOKABLE bool press(int key) {
+        auto* window = QGuiApplication::focusWindow();
+        if (!window) return false;
+        QTest::keyClick(window, Qt::Key(key));
+        QCoreApplication::processEvents();
+        return true;
+    }
+};
 
 class Setup : public QObject {
     Q_OBJECT
 public slots:
     void qmlEngineAvailable(QQmlEngine* engine) {
+        engine->rootContext()->setContextProperty(QStringLiteral("testWindowKeys"), new ActiveWindowKeys(engine));
         engine->rootContext()->setContextProperty(QStringLiteral("exportTestOutputDirectory"),qEnvironmentVariable("VEYRA_EXPORT_TEST_ARTIFACTS"));
         engine->addImportPath(QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("qml")));
         // The registered inline NR card has the engine's creation context,

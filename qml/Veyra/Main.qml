@@ -59,7 +59,9 @@ Window {
     readonly property bool maximized: visibility === Window.Maximized
     readonly property bool screenSized: fullTarget || maximized
     function toggleMaximized() {
-        if (fullscreen) return
+        // The dock's restore button must also leave fullscreen, using the same
+        // saved window state and cleanup as F11 / the transport button.
+        if (fullscreen) { toggleFullscreen(); return }
         visibility = maximized ? Window.Windowed : Window.Maximized
         veyra.logUi("ui-window", "maximized=" + (visibility === Window.Maximized))
     }
@@ -324,7 +326,7 @@ Window {
         anchors.horizontalCenter: parent.horizontalCenter
         // The node page is the professional mode's node view.
         currentPage: root.page === "node" ? "pro" : root.page
-        maximized: root.maximized
+        maximized: root.maximized || root.fullscreen
         pinned: root.test.dockPinned === true || veyra.preferences.dockPinned === true
         locked: root.fullLocked
         forcedTip: root.test.tip !== undefined ? root.test.tip : ""
@@ -717,7 +719,17 @@ Window {
     Shortcut {
         sequence: "Esc"
         enabled: root.fullscreen
-        onActivated: veyra.gameMode && root.quickPanelShown ? root.closeQuickPanel() : root.toggleFullscreen()
+        onActivated: {
+            // Visible editing operations own the first Escape. Hidden pages and
+            // the hidden playlist must never compete with fullscreen's shortcut.
+            if (root.quickPanelShown && veyra.protectionDrawShape.length > 0)
+                veyra.beginProtectionDraw("")
+            else if (root.quickPanelShown && root.page === "node" &&
+                     (nodePage.wireFrom >= 0 || nodePage.marked.length > 0))
+                nodePage.clearSelection()
+            else if (veyra.gameMode && root.quickPanelShown) root.closeQuickPanel()
+            else root.toggleFullscreen()
+        }
     }
     // Home: the fullscreen quick-adjust panel, from 极简 or 专业 (list or node view).
     Shortcut {

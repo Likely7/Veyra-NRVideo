@@ -64,6 +64,8 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 **2.1.0 release, 2026-10-19:** AMD NR0.44 Small/Original models, independent anti-aliasing,468-point face beauty/restoration, capture format discovery/selection fixes, networking, AVerMedia audio and fullscreen/window capture improvements. [Full update report](docs/RELEASE_NOTES_2.1.0.md).
 
+**Local integration after 2.1.0 (not released):** recording and AMD SR-off fixes, 90° picture rotation, per-layer NR percentage controls and video-export size support, asynchronous VRR queries, NR/NVAPI shutdown lifetime, fullscreen/playlist key handling, and timestamp-less capture sample handling. CV710 and the original RTX3090 shutdown report still require verification on the affected hardware. [Integration scope and validation](docs/CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md).
+
 **New-effect cost examples:** RTX5070 standard4K anti-aliasing fixtures: FXAA~0.15ms, SMAA/MLAA~0.30ms. Final single-face mesh beauty:1080p~0.93ms,4K~1.42ms. Costs vary with content/hardware; no local AMD speedup percentage was measured. [Conditions and limits](docs/RELEASE_NOTES_2.1.0.md).
 
 **[Veyra knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)** — community guidance compiled from four group chats, covering software setup, common problems and capture cards.

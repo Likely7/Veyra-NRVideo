@@ -800,7 +800,8 @@ VPage {
             }
             Shortcut {
                 sequence: "Escape"
-                enabled: veyra.protectionDrawShape.length > 0
+                enabled: root.visible && (!root.shell || !root.shell.fullscreen) &&
+                         veyra.protectionDrawShape.length > 0
                 onActivated: veyra.beginProtectionDraw("")
             }
             Text {

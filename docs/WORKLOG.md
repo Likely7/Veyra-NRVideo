@@ -9982,3 +9982,20 @@ GPU图探针stack1-percent-still/stack2-percent-export各2帧，前者手动50%�
 实际命令：py -3.11 -X utf8 -B E:/项目/Veyra/tmp/issue67-nvapi-shutdown-20261021/build.py（调用本树参数化claude-beauty-build.py，取bilibili-2.1.0缓存、Ninja并发2）；7目标241.2秒通过，日志logs/issue67-nvapi-shutdown-20261021/build-20261021-222653。py -3.11 -X utf8 -B E:/项目/Veyra/tmp/issue67-nvapi-shutdown-20261021/checks.py：NVAPI并发/PIN、架构策略、模型预设、旧兼容IAT三次恢复、真实NGX core生命周期、两次独立进程SF/原版视频切换全部通过，单测<14秒。真实GTA6 4K、NR开启状态直接stop为233.588/201.799ms，两轮都能同进程重开并正常再次停止，退出0。各进程NVAPI只固定一次、5次NR卸载、4次Shutdown1全部返回，8张输出3840×2160非黑；无engine-hang，两NR原件SHA未变。完整命令/输出/索引reports/issue67-nvapi-shutdown-20261021/final.json；所有产物全E盘。
 
 汇总脚本一次纯UTF8读混合编码日志失败，容错读ASCII字段后通过，原日志未改；一次停止时FFmpeg输出截断packet/NAL警告，另有既存d3d12 swscaler警告，两轮重开均正常，本轮不宣称修复这些解码文字。仅RTX5070/616.56通过，没有3090/616.92或用户dump，不称原用户根因已证实或硬件问题已彻底修好。只保留驱动模块映射，不保留NR feature/模型/GPU资源。不合main/push/发布/评论/关机，不派Agent。
+
+
+## 2026-10-25 CV710监听卡画面与全部近期修复本地main整合
+
+用户明确要求修复所附veyra-qml(1).rar并合并近期全部修复/功能到main。207555b开codex/capture-audio-main-20261025，原main4ae285b与开工点打checkpoint；snapshot脚本存101树状态/全refs、全屏原脏补丁/7文件ZIP/SHA。原RAR仅日志，SHA809F6301...834FCD。单Agent、全E盘、不改原配置/运行库/模型/驱动/旧树，无push/Release/Lecram。
+
+CV710/3080Ti/1080p59.94YUY2：音频关约60fps，开同设备PCM48k后299块音频但0视频，默认/系统时钟交替三次均失败。确认原GetTime缺时戳失败直接返回驱动的接收错误；timedCaptureDelivery只对此状态S_OK跳过，不生成PTS/帧，其它真错误传播，首3次Receive及缺时戳/恢复限频日志。真实allocator/IMediaSample回归复现旧返回失败、零时戳/缺stop/后续恢复/真错误。原日志没记录视频Receive原因，不能宣称CV710原机根因已证实，需原卡新日志复测。
+
+6199212的#67生命周期以dd182be保留历史合入，仅AGENTS/WORKLOG追加冲突两边保留；CMake源码/测试同时保留。全屏原脏补丁导入后真实Esc仍失败：隐藏playlist.active仍true；visible加active也不能代表实际焦点。最终playlist转本窗口FocusScope/Keys+ShortcutOverride，主Esc统一分配；节点重复Esc合一，保护绘制互斥，顶部还原走既有toggleFullscreen。原树逐SHA保持。
+
+命令build-recording-handoff.py --task codex-capture-audio-main-20261025 --root 当前E树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-int1，-j2。初次误写目标nr_model_policy被Ninja拒绝、未开始编译，改nr_model_settings后40.5秒通过，后续定向4.7/4.6秒；Qt夹具3.6秒。初始Quick夹具owner类型和focus/active假设失败保存日志，不用offscreen证明窗口键归属；最终独立QML Window、等待真实focusWindow、实际Qt键事件，Windows/software115通过。9定向目标均0：Capture285、NVAPI并发PIN、Repair272、UI384布局、EffectChain1008、AsyncDisplay、NR Model76比例与存储、WASAPI音频约22秒、Quick115。
+
+实际5070 NR/SF模型/原版切换、4张输出、NR开启停止157.685ms、同进程重开NR再停与Shutdown1成对成功；不外推原3090。整合后真实worker 4K/37%+NVOF导出，NR1420x798、HEVC3840x2160/6帧全解码。G50真实请求2K60NV12+HDMI独立48k音频短接收1.2秒，通过生产/持帧/邮箱/Drop/52块音频，启动期callbackFps10.003，不算稳态60或CV710恢复。
+
+computer-use技能原生按键/点击：软件专业F11/Esc、顶部还原、极简退出；GPU D3D11 F11/Esc；实际确认进入节点模式后Ctrl+L/Esc、最大化->全屏->Esc。软件首轮误以为切到节点，实际弹确认框未确认，故另起gpu-node明确确认并核对mode=node后验收，未把初轮当节点通过。所有私有播放器正常退出。日志native-software-final/gpu-final/gpu-node。
+
+详细报告CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md；证据reports/capture-audio-main-20261025，日志logs同名，原档archives同名。finalize脚本核对100其它工作树HEAD/status、原全屏7文件哈希、旧refs（只本整合branch/main允许变化）。保留原分支与checkpoint，用正常快进整合本地主main；准确提交及包在integration-audit.json/update-package.json/FINAL.json，不从本条计划推断实际合并已执行。小更新共同EXE/QML需原2.1.0完整NVIDIA/AMD底包，不含运行库/模型/配置。
