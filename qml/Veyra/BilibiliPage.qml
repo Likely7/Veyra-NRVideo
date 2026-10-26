@@ -1526,6 +1526,49 @@ VPage {
                 // The app's own scrollbar, same as every other list in this program: a thin
                 // thumb, draggable, no track or arrows.
                 ScrollBar.vertical: VScrollBar { }
+                // 滚轮平滑滚动。
+                // 默认的 Flickable 处理是一格一跳：步长只有一个行高的量级，而且没有过渡，
+                // 所以看起来生硬。这里自己接管滚轮，把每次的位移先累加到目标位置，再用
+                // 缓出动画走过去 —— 连续滚几下时目标会累积得更远，动画一次滑过去，这就是
+                // 惯性的手感。
+                // Smooth wheel scrolling. Flickable's own handling jumps a row at a time with
+                // no transition, which reads as stiff. The wheel is handled here instead: each
+                // notch accumulates into a target, and an ease-out animation walks to it. A
+                // few quick notches therefore build up a longer distance that one animation
+                // covers - that is the inertial feel.
+                property real wheelTargetY: 0
+                // 一格滚轮的位移。取约半个卡片高，比按行跳更细，但明显大于默认那一格。
+                // 触控板给的是像素级增量，直接按像素走。
+                // Distance per wheel notch: about half a card, finer than a row jump but well
+                // above the default. A touchpad reports pixel deltas, so those are used as is.
+                readonly property real wheelStep: cellHeight * 0.5
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: function(event) {
+                        event.accepted = true
+                        const pixel = event.pixelDelta.y
+                        const delta = pixel !== 0 ? -pixel
+                                                  : -(event.angleDelta.y / 120.0) * grid.wheelStep
+                        const maxY = Math.max(0, grid.contentHeight - grid.height)
+                        // 动画进行中就从当前目标继续累加，否则会先跳回实际位置再走。
+                        // While the animation runs the accumulation continues from its
+                        // target, otherwise the view would snap back before moving again.
+                        const base = grid.wheelAnim.running ? grid.wheelTargetY : grid.contentY
+                        grid.wheelTargetY = Math.max(0, Math.min(maxY, base + delta))
+                        grid.wheelAnim.to = grid.wheelTargetY
+                        grid.wheelAnim.restart()
+                    }
+                }
+                NumberAnimation {
+                    id: wheelAnim
+                    target: grid
+                    property: "contentY"
+                    duration: 220
+                    // 缓出：起步快、收尾慢，就是“滑过去”的感觉；线性会显得机械。
+                    // Ease-out: quick off the mark, slow at the end - that is the glide.
+                    // Linear reads mechanical.
+                    easing.type: Easing.OutCubic
+                }
                 // The column count follows the ideal card width and the cells then share
                 // the available width exactly, so every window size is flush with no
                 // leftover strip: a fixed 232 fits four columns in the default window and
