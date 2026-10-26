@@ -831,19 +831,31 @@ VPage {
                                 current: String(veyra.displaySync)
                                 onPicked: id => veyra.displaySync = Number(id)
                             }
-                            // 可变刷新 (G-SYNC / FreeSync): greyed when the monitor cannot do it.
+                            // 可变刷新 (G-SYNC / FreeSync): the switch greys when the monitor
+                            // cannot do it; 重新检测 stays available (read on events only).
                             RowLayout {
                                 Layout.fillWidth: true
-                                enabled: veyra.vrrState >= 2
-                                opacity: enabled ? 1 : 0.5
                                 NodeLabel { Layout.fillWidth: true; text: qsTr("可变刷新"); wrapMode: Text.WordWrap }
+                                Item {
+                                    implicitWidth: Theme.ctlHeight; implicitHeight: Theme.ctlHeight
+                                    VButton {
+                                        objectName: "node-vrr-recheck"
+                                        anchors.fill: parent
+                                        visible: !veyra.vrrChecking
+                                        icon: true; ghost: true; iconName: "refresh"; tip: qsTr("重新检测")
+                                        onClicked: veyra.recheckDisplay()
+                                    }
+                                    VSpinner { anchors.centerIn: parent; visible: veyra.vrrChecking }
+                                }
                                 VSwitch {
                                     objectName: "node-vrr"
+                                    enabled: veyra.vrrState >= 2
+                                    opacity: enabled ? 1 : 0.5
                                     checked: veyra.variableRefresh
                                     onToggled: checked => veyra.variableRefresh = checked
                                 }
                             }
-                            NodeLabel { Layout.fillWidth: true; text: veyra.vrrHint; wrapMode: Text.WordWrap; opacity: veyra.vrrState >= 2 ? 1 : 0.5 }
+                            NodeLabel { Layout.fillWidth: true; text: veyra.vrrHint; wrapMode: Text.WordWrap }
                             NodeLabel { text: qsTr("输出上限") }
                             VSeg {
                                 objectName: "node-output-rate"

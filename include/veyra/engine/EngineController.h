@@ -27,6 +27,7 @@
 #include "veyra/sink/VideoEncoder.h"
 #include "veyra/engine/ExportOptions.h"
 #include "veyra/engine/LiveRecorder.h"
+#include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
@@ -257,6 +258,9 @@ public:
     bool requestRecording(const RecordingSettings& options,std::wstring& error);
     void stopRecording();
     RecordingStatus recordingSnapshot()const;
+    // Refresh/VRR state of monitors, shared by every session's presenter and
+    // the UI; queried in the background on events only. Any thread.
+    DisplayStateService& displayStates(){return displayStates_;}
 private:
     void run(HWND,std::wstring,PlayerOptions,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest={},std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest={},std::shared_ptr<source::XboxConnectDesc> xboxRequest={});
     void runLargeImage(HWND,const sink::RgbaImage&,PlayerOptions,gfx::D3D12DeviceContext&,gfx::CommandSlotRing&);
@@ -292,6 +296,8 @@ private:
     // Live recorder: every session's presenter records into it; it owns its
     // encoder and writer threads. Created before the engine thread starts.
     std::unique_ptr<LiveRecorder> recorder_=std::make_unique<LiveRecorder>();
+    // Declared before worker_: it outlives the engine thread's presenters.
+    DisplayStateService displayStates_;
     std::thread worker_;
     std::unique_ptr<PreviewGpuSession> prewarmed_; // engine dispatcher only
     std::atomic<bool> prewarmEnabled_{false}; // off until the saved preference enables it (default off since 2026-10-05)

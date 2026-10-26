@@ -481,7 +481,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     // only name the stopped command list after the removal, so teardown checks once more.
     bool gpuFailureAwaitingRemoval=false;
     sink::AudioPipeline audioPipe;sink::AudioRenderer audio;VideoPresenter presenter;
-    presenter.setCapture(recorder_.get());
+    presenter.setCapture(recorder_.get());presenter.setDisplayStates(&displayStates_);
     auto& coreCache=gpu->core;auto& recentGraphCache=gpu->recent;auto& graph=gpu->graph;
     auto& graphBytes=gpu->graphBytes;auto cacheBudgetPolledAt=Clock::now();
     const bool recentCacheAllowed=!GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_RECENT_GRAPH_CACHE",nullptr,0);
@@ -1317,8 +1317,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // It must not make synchronous driver calls on the GPU owner.
                 const double refreshHz=presenter.displayRefreshHz();
                 const bool capRefreshChanged=requested.outputRate==OutputRateMode::FollowDisplay&&std::abs(refreshHz-pacingRefreshHz)>0.001;
-                // 可变刷新: the monitor's VRR availability is re-read every 2 s
-                // (window moved, driver setting changed); a change re-applies.
+                // 可变刷新: the monitor's VRR availability is read again on events
+                // (another monitor, a display change, 重新检测, the VRR
+                // confirmation); a change re-applies.
                 const bool vrrChanged=presenter.vrrSync()!=VideoPresenter::vrrSyncWanted(requested,presenter.displayVrr());
                 if(revision==pacingRevision&&presenterGeneration==presenter.generation()&&!vrrChanged&&!capRefreshChanged){
                     // Reflex dropped out at runtime: the queue-depth part of the
@@ -2404,8 +2405,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 // Published after the metrics window switch above: a snapshot that already reports
                 // the new revision never carries the previous revision's totals. The publish of
-                // this frame's metrics can be a while later (the first frame after a rebuild
-                // re-reads the display VRR state, ~11 ms on the RTX 5070 rig).
+                // this frame's metrics can be a while later.
                 if(transaction||pendingSettingsAck){std::lock_guard lock(mutex_);snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;pendingSettingsAck=false;snapshot_.status=std::format(L"输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.flowWidth,gd.flowHeight,gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）");veyra::log::info("display-color",std::format("hdrInput={} hdrOutput={} forceSdrPreview={}",gd.hdrInput,gd.hdrOutput,options.settings.forceSdrPreview));veyra::log::info("settings",std::format("Applied revision={} sourcePtsMs={} fgBackend={} flowBackend={} multiplier={} (source kept open)",options.settings.revision,pts,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend),options.snapshot().multiplier));}
                 const double processMs=std::chrono::duration<double,std::milli>(processDone-processStart).count();
                 frameFlow->advanceHistory(out.batch.identity);
@@ -2759,8 +2759,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 loopTrace.mark("flowSnapshot");
                 measured.sourceFrames=measured.flow.counters.sourceAccepted;measured.validGenerated=measured.flow.counters.fgReadyValid;measured.submitted=measured.flow.counters.realPresented+measured.flow.counters.generatedPresented;measured.expired=measured.flow.counters.generatedExpiredAfterEval;
                 const double ageP95=liveScheduler?completed.ageP95:captureAges.p95(),waitP95=liveScheduler?completed.waitP95:scheduleWaits.p95(),presentP95=liveScheduler?completed.presentP95:presentTimes.p95();
-                // Refresh and VRR state (NVAPI, every 2 s) are read outside the
-                // snapshot lock.
+                // Refresh and VRR state (DisplayStateService, queried on events
+                // only) are polled outside the snapshot lock; this never waits.
                 presenter.displayRefreshHz();
                 ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.colorStatus=graph->videoHdrActive()?L"SDR → RTX Video HDR":options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph->hdr10Output()?L"HDR → HDR10 / PQ":L"HDR → scRGB / 浮点"):gd.hdrInput?L"HDR → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
                     snapshot_.videoHdrActive=graph->videoHdrActive();

@@ -436,6 +436,10 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool variableRefresh READ variableRefresh WRITE setVariableRefresh NOTIFY presentationChanged)
     Q_PROPERTY(int vrrState READ vrrState NOTIFY perfChanged)
     Q_PROPERTY(QString vrrHint READ vrrHint NOTIFY perfChanged)
+    // The level is read on events only (startup, another monitor, a display
+    // change, the switch turned on); 重新检测 (recheckDisplay) asks the driver
+    // again, and vrrChecking is true until that answer arrives.
+    Q_PROPERTY(bool vrrChecking READ vrrChecking NOTIFY perfChanged)
     Q_PROPERTY(int outputRateMode READ outputRateMode WRITE setOutputRateMode NOTIFY presentationChanged)
     Q_PROPERTY(double outputCustomFps READ outputCustomFps WRITE setOutputCustomFps NOTIFY presentationChanged)
     Q_PROPERTY(bool presentationOwned READ presentationOwned NOTIFY snapshotChanged)
@@ -1063,6 +1067,8 @@ public:
     void setVariableRefresh(bool value);
     int vrrState() const;
     QString vrrHint() const;
+    bool vrrChecking() const;
+    Q_INVOKABLE void recheckDisplay();
     QString fgDisplayHint() const;
     Q_INVOKABLE void setPresentationFullscreen(bool value);
     bool fullscreenMemorySafe() const;
@@ -1416,6 +1422,8 @@ private:
     void startGpuSampler();
     void requestApplicationRestart(bool overlayCompatibility);
     void updateRunStatus();
+    // vrrHint's text for a VRR level (the 重新检测 result notice uses it too).
+    QString vrrHintText(int level) const;
     void applyPresentation();
     void applyAspect(bool force);
     // Live sources started from the start page: switch to 极简 first, show the

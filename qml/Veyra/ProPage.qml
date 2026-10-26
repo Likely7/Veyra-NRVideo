@@ -142,16 +142,32 @@ VPage {
                 onPicked: id => veyra.displaySync = Number(id)
             }
         }
-        // 可变刷新 (G-SYNC / FreeSync): greyed when the monitor cannot do it.
+        // 可变刷新 (G-SYNC / FreeSync): the switch greys when the monitor cannot
+        // do it. The state is read on events only; 重新检测 stays available and
+        // asks the driver again (its icon becomes a spinner meanwhile).
         VRow {
             label: qsTr("可变刷新")
-            enabled: veyra.vrrState >= 2
-            opacity: enabled ? 1 : 0.5
             hint: veyra.vrrHint
-            VSwitch {
-                objectName: "presentation-vrr"
-                checked: veyra.variableRefresh
-                onToggled: checked => veyra.variableRefresh = checked
+            RowLayout {
+                spacing: 6
+                Item {
+                    implicitWidth: Theme.ctlHeight; implicitHeight: Theme.ctlHeight
+                    VButton {
+                        objectName: "presentation-vrr-recheck"
+                        anchors.fill: parent
+                        visible: !veyra.vrrChecking
+                        icon: true; ghost: true; iconName: "refresh"; tip: qsTr("重新检测")
+                        onClicked: veyra.recheckDisplay()
+                    }
+                    VSpinner { anchors.centerIn: parent; visible: veyra.vrrChecking }
+                }
+                VSwitch {
+                    objectName: "presentation-vrr"
+                    enabled: veyra.vrrState >= 2
+                    opacity: enabled ? 1 : 0.5
+                    checked: veyra.variableRefresh
+                    onToggled: checked => veyra.variableRefresh = checked
+                }
             }
         }
         VRow {

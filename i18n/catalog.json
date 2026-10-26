@@ -7681,6 +7681,13 @@
    "ja": "キーボードとマウスを解放しました（映像をクリックすると再度キャプチャー）"
   },
   {
+   "zh": "已重新检测：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已重新偵測：%1",
+   "en": "Checked again: %1",
+   "ja": "再検出しました：%1"
+  },
+  {
    "zh": "已锁定全屏 · Ctrl+L 解锁，Esc 退出全屏",
    "src": "qml/Main.qml",
    "zh-TW": "已鎖定全螢幕 · Ctrl+L 解鎖，Esc 退出全螢幕",
@@ -16969,6 +16976,20 @@
    "zh-TW": "重新開啟同一個檔案時從上次位置繼續",
    "en": "Continue from the last position when the same file is reopened",
    "ja": "同じファイルを開き直すと前回の位置から再開"
+  },
+  {
+   "zh": "重新检测",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "重新偵測",
+   "en": "Check again",
+   "ja": "再検出"
+  },
+  {
+   "zh": "重新检测没有完成，请稍后再试",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "重新偵測未完成，請稍後再試",
+   "en": "The check did not finish. Please try again shortly.",
+   "ja": "再検出が完了しませんでした。しばらくしてから再試行してください。"
   },
   {
    "zh": "重置本页",

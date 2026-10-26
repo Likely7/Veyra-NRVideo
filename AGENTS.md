@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-25 VRR事件触发查询（Claude）**：用户要求可变刷新/刷新率不再定时查询，改为事件触发并在“可变刷新”旁加“重新检测”按钮，引擎和界面都去掉2秒轮询。从main 68def10在claude/vrr-event-query-20261025按docs/VRR_EVENT_QUERY_PLAN_2026-10-25.md施工，起点标签checkpoint/pre-vrr-event-query-20261025；允许必要的呈现器/引擎/桥接/QML/翻译/CMake/定向测试接点，覆盖这些范围旧冻结。补帧调度、显示同步策略、33ms/250ms刷新不变，不加定时器。单Agent、全E盘、复用build/claude-screen-recording-20261022构建-j2<=900秒/单测<=300秒；不改运行库/模型/驱动/真实配置，无merge/push/Release，Lecram暂停。本机屏幕不支持VRR，真实VRR生效须用户设备验证。
+
 > **2026-10-25 采集内置音频修复与整合授权**：用户明确要求修复 CV710 开监听卡画面，并把近期全部修复/功能合入本地 main。从207555b在codex/capture-audio-main-20261025按docs/CAPTURE_AUDIO_MAIN_PLAN_2026-10-25.md施工；包含 #67/全屏退出与当前录制/AMD SR关/旋转/NR比例/FG异步查询/NR导出，覆盖这些接点旧冻结及无main合并限制。先存档原main与101工作树/原全屏脏文件，不覆盖其它工作树。保持单Agent、全E盘、-j2构建<=900秒/单测试<=300秒、真实配置/运行库/模型/驱动不变。CV710现场修复必须原卡复测，不拿本机卡或夹具替代；无push/Release/代发/关机授权，Lecram暂停。
 
 > **2026-10-25 社区NR导出尺寸补丁接入（用户授权）**：从038beac在codex/export-nr-scale-20261025按docs/EXPORT_NR_SCALE_PLAN_2026-10-25.md接入固定档与百分比的视频导出NR尺寸，允许必要export policy/图描述/执行计划/导出日志/QML四语/定向测试接点，覆盖这些范围旧UI冻结及此前“导出保持Native”限制。输出尺寸不变、图片完整处理、AMD预算、非法值校验及既有NR手动编码保留。不改补帧调度/运行库/模型/驱动/真实配置；单Agent、全E盘、复用构建-j2<=900秒/单测<=300秒，无merge/push/Release，Lecram暂停。
