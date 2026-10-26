@@ -2531,6 +2531,38 @@ VPage {
                             }
                         }
 
+                        // 发送前预览：把正文里的 [表情名] 渲染成图片，和发出去之后
+                        // 一模一样的效果。只在正文里出现过方括号且表情表已加载时显示，
+                        // 纯文字时不多占一行。
+                        // Preview before sending: [emote] rendered as images, exactly what the
+                        // posted comment will look like. Shown only when the body contains a
+                        // bracket and the emote list is loaded, so plain text costs no extra row.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            visible: root.replyText.indexOf("[") >= 0
+                                     && root.emotes.length > 0
+                            implicitHeight: previewText.implicitHeight + 12
+                            radius: 8
+                            color: Theme.card2
+                            border.width: 1
+                            border.color: Theme.stroke
+
+                            Text {
+                                id: previewText
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                textFormat: Text.RichText
+                                wrapMode: Text.Wrap
+                                text: root.toRichText(root.replyText)
+                                color: Theme.t2
+                                font.family: Theme.fontUi
+                                font.pixelSize: 12
+                            }
+                        }
+
                         // 表情面板。高度固定、内部可滚，表情再多也不会把评论区顶下去。
                         // 点一个立即插入并保持展开，方便连着选好几个。
                         // The emote panel: fixed height and its own scrolling, so no number of
