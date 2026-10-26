@@ -1497,11 +1497,16 @@ VPage {
                         radius: 6
                         color: Theme.card3
                     }
+                    // 骨架屏的占位条也按卡片宽度缩放，否则最大化时骨架和真卡片对不上。
+                    // The skeleton bars scale with the card width as well, or they no longer
+                    // line up with the real cards once the window is enlarged.
+                    readonly property int skelTitleSize:
+                        Math.max(11, Math.min(28, Math.round(13 * parent.width / 220)))
                     Rectangle {
                         x: parent.pad
                         y: parent.pad + (parent.width - parent.pad * 2) * 0.5625 + 5
                         width: parent.width - parent.pad * 2
-                        height: Math.ceil(13 * 1.4)
+                        height: Math.ceil(skelTitleSize * 1.4)
                         radius: 3
                         color: Theme.card3
                     }
@@ -1599,10 +1604,12 @@ VPage {
                 readonly property real fittedCellWidth: width / columnCount
                 // A wider cell means a taller cover (16:9 on the inner width), so the cell
                 // grows with it or the title and author line get clipped.
-                // 文字区高度随字号走：两行标题 + 作者行 + 内边距，比原来多 3px。
-                // The text block below the cover grows with the font sizes: two title lines
-                // plus the meta line plus padding, three pixels more than before.
-                readonly property real fittedCellHeight: (fittedCellWidth - 12) * 0.5625 + 81
+                // 文字区高度同样按卡片宽度缩放：字号变大了，两行标题加作者行就要更多
+                // 空间，固定 81 在最大化时会裁掉标题第二行。
+                // The text block scales with the card width too: larger type needs more room,
+                // and a fixed 81 would clip the second title line when maximised.
+                readonly property real fittedCellHeight:
+                    (fittedCellWidth - 12) * 0.5625 + 81 * (fittedCellWidth / 220)
                 cellWidth: fittedCellWidth
                 cellHeight: fittedCellHeight
                 clip: true
@@ -1647,13 +1654,19 @@ VPage {
 
                     readonly property real pad: 6
                     readonly property real coverHeight: (width - pad * 2) * 0.5625
-                    // 字号照 B 站网页的比例定：那边标题 15px、作者行 13px，卡片约 254 宽；
-                    // 我们卡片约 220 宽，按同一比例换算是 13 和 12。抽成属性，以后只改这里。
-                    // Sizes follow Bilibili's proportions: its cards are ~254 px wide with a
-                    // 15 px title and a 13 px meta line; ours are ~220 px, which scales to
-                    // 13 and 12. Kept as properties so a change happens in one place.
-                    readonly property int titleFontSize: 13
-                    readonly property int metaFontSize: 12
+                    // 字号随卡片宽度缩放，而不是写死。
+                    // 基准：卡片 220 宽时标题 13、作者行 12（这是 B 站网页 254 宽卡片
+                    // 标题 15、作者行 13 按比例换算来的）。窗口拉大后卡片变宽，字号必须
+                    // 跟着长，否则最大化时字会显得很小 —— 这正是实际反馈的问题。
+                    // Sizes scale with the card width instead of being fixed. The baseline is
+                    // 13 / 12 at 220 px (Bilibili's 254 px cards use 15 / 13). When the window
+                    // grows the cards grow, and the text has to grow with them or it looks
+                    // tiny when maximised - which is exactly what was reported.
+                    readonly property real baseCardWidth: 220
+                    readonly property int titleFontSize:
+                        Math.max(11, Math.min(28, Math.round(13 * width / baseCardWidth)))
+                    readonly property int metaFontSize:
+                        Math.max(10, Math.min(26, Math.round(12 * width / baseCardWidth)))
                     // Fixed, so the two text blocks sit at absolute positions and the
                     // delegate needs no layout pass beyond this. 1.4 is a comfortable line
                     // box for a two-line title.
@@ -2178,7 +2191,8 @@ VPage {
                         readonly property real idealCellWidth: 220
                         readonly property int columns: Math.max(1, Math.round(width / idealCellWidth))
                         readonly property real fittedCellWidth: width / columns
-                        readonly property real fittedCellHeight: (fittedCellWidth - 12) * 0.5625 + 81
+                        readonly property real fittedCellHeight:
+                            (fittedCellWidth - 12) * 0.5625 + 81 * (fittedCellWidth / 220)
                         readonly property int rows: Math.ceil(root.related.length / Math.max(1, columns))
                         readonly property int wantedHeight: rows * fittedCellHeight
                         Layout.preferredHeight: wantedHeight
@@ -2203,9 +2217,12 @@ VPage {
                             height: relatedGrid.cellHeight
 
                             readonly property real pad: 6
-                            // 与主网格同一套字号，两处的卡片看起来才一致。
-                            // Same sizes as the main grid so both card styles match.
-                            readonly property int titleFontSize: 13
+                            // 与主网格同一套规则：字号随卡片宽度缩放，两处看起来才一致。
+                            // Same rule as the main grid: the type scales with the card width
+                            // so both card styles match.
+                            readonly property real baseCardWidth: 220
+                            readonly property int titleFontSize:
+                                Math.max(11, Math.min(28, Math.round(13 * width / baseCardWidth)))
                             readonly property real titleLineHeight: Math.ceil(titleFontSize * 1.4)
 
                             Rectangle {
