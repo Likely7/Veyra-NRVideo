@@ -755,18 +755,49 @@ VPage {
             root.showSettings ? target === "settings" : root.view === target
 
         Layout.fillWidth: true
-        height: 34
+        // 八项平分侧栏的竖向空间（到账号块上方为止），所以每项都设 fillHeight，
+        // 不再有弹簧占位。窗口变高时卡片一起变高，文字随之变大。
+        // The eight entries share the rail's vertical space down to the account block,
+        // which is why each one fills instead of a spacer absorbing the remainder. A
+        // taller window gives taller cards and the type grows with them.
+        Layout.fillHeight: true
+        Layout.minimumHeight: 26
+        // 卡片本身：默认比栏底稍深，悬停再亮一档，选中用强调色的柔和版。
+        // The card: slightly darker than the rail by default, one step brighter on hover,
+        // and the soft accent for the selected one.
         radius: 8
-        color: isActive ? Theme.accentSoft : (navMouse.containsMouse ? Theme.card3 : "transparent")
+        color: isActive ? Theme.accentSoft
+                        : (navMouse.containsMouse ? Theme.card3 : Theme.card2)
+        border.width: 1
+        border.color: isActive ? Theme.accent : "transparent"
+
+        // 选中时左侧还有一条竖线，比只靠底色更容易一眼看出位置。
+        // A short bar on the left for the selected entry: easier to spot at a glance
+        // than a background tint alone.
+        Rectangle {
+            anchors.left: parent.left
+            anchors.leftMargin: 3
+            anchors.verticalCenter: parent.verticalCenter
+            width: 3
+            height: Math.min(parent.height - 14, 24)
+            radius: 1.5
+            color: Theme.accent
+            visible: navItem.isActive
+        }
 
         Text {
-            anchors.left: parent.left
-            anchors.leftMargin: 12
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.centerIn: parent
+            width: parent.width - 10
+            horizontalAlignment: Text.AlignHCenter
             text: navItem.label
             color: navItem.isActive ? Theme.accent : Theme.t2
             font.family: Theme.fontUi
-            font.pixelSize: 13
+            // 字号跟着卡片高度走，并夹住上下限：窗口很矮也不会小到看不清，
+            // 很高时也不会大到放不进 100px 宽的侧栏。
+            // Type follows the card height, clamped at both ends: a short window stays
+            // readable and a tall one cannot overflow the 100 px rail.
+            font.pixelSize: Math.max(11, Math.min(17, Math.round(navItem.height * 0.30)))
+            font.weight: navItem.isActive ? Font.DemiBold : Font.Normal
         }
 
         MouseArea {
@@ -797,7 +828,11 @@ VPage {
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 8
-                spacing: 4
+                // 项之间的间隔略大一点，卡片之间才有呼吸感；八项各自 fillHeight，
+                // 所以这个间距是唯一固定的竖向占用。
+                // A slightly wider gutter so the cards breathe; the eight entries fill the
+                // height themselves, so this spacing is the only fixed vertical cost.
+                spacing: 6
 
                 NavItem { label: qsTr("首页推荐"); target: "home"; onActivated: root.load("home") }
                 NavItem { label: qsTr("热门"); target: "popular"; onActivated: root.load("popular") }
@@ -806,9 +841,7 @@ VPage {
                 NavItem { label: qsTr("我的收藏"); target: "fav"; onActivated: root.load("fav") }
                 NavItem { label: qsTr("稍后再看"); target: "watchlater"; onActivated: root.load("watchlater") }
                 NavItem { label: qsTr("搜索结果"); target: "search"; onActivated: {} }
-                NavItem { label: qsTr("B站播放设置"); target: "settings"; onActivated: root.showSettings = true }
-
-                Item { Layout.fillHeight: true }
+                NavItem { label: qsTr("设置"); target: "settings"; onActivated: root.showSettings = true }
 
                 // account block
                 Rectangle {
@@ -1500,14 +1533,18 @@ VPage {
                     // 骨架屏的占位条也按卡片宽度缩放，否则最大化时骨架和真卡片对不上。
                     // The skeleton bars scale with the card width as well, or they no longer
                     // line up with the real cards once the window is enlarged.
+                    // 用 delegate 自己的 width，不能用 parent.width：属性初始化时
+                    // parent 可能还是 null，那样启动就抛 TypeError。
+                    // The delegate's own width, not parent.width: at property-initialisation
+                    // time `parent` can still be null, which threw on startup.
                     readonly property int skelTitleSize:
                         Math.max(11, Math.min(25, Math.round(
-                            13 * Math.pow(parent.width / 220, 0.8))))
+                            13 * Math.pow(width / 220, 0.8))))
                     Rectangle {
                         x: parent.pad
                         y: parent.pad + (parent.width - parent.pad * 2) * 0.5625 + 5
                         width: parent.width - parent.pad * 2
-                        height: Math.ceil(skelTitleSize * 1.4)
+                        height: Math.ceil(parent.skelTitleSize * 1.4)
                         radius: 3
                         color: Theme.card3
                     }
