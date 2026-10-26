@@ -385,18 +385,22 @@ VPage {
     // 按键被两条通道各触发一次。
     // One entry point for the search box's Enter key. All four channels call it; a 250 ms
     // gate keeps a single key press from starting two searches.
-    property bool searchKeyGuard: false
+    // 用时间戳做闸门，不再依赖 Timer 的 id。上一版写成 root.searchKeyResetTimer.restart()，
+    // 而 searchKeyResetTimer 只是一个 id、不是 root 的属性，取值是 undefined，调用即抛
+    // TypeError —— 函数在打日志之前就中断了，闸门还停在 true，于是之后每次按键都被挡掉。
+    // 现场日志：回车事件确实到达了（key=16777220 五次），却一条触发记录都没有。
+    // The gate is a timestamp now instead of a Timer id. The previous version called
+    // root.searchKeyResetTimer.restart(), but searchKeyResetTimer is only an id, not a
+    // property of root - the value is undefined and calling it throws immediately, before
+    // the log line, leaving the gate stuck at true so every later key was dropped. The
+    // field log shows the key did arrive (key=16777220, five times) with no trigger record.
+    property double searchKeyLastMs: 0
     function triggerSearchFromField() {
-        if (root.searchKeyGuard) return
-        root.searchKeyGuard = true
-        root.searchKeyResetTimer.restart()
+        const now = Date.now()
+        if (now - root.searchKeyLastMs < 250) return
+        root.searchKeyLastMs = now
         console.log("[bili-search] enter triggered, keyword=" + root.keyword)
         root.doSearch(true)
-    }
-    Timer {
-        id: searchKeyResetTimer
-        interval: 250
-        onTriggered: root.searchKeyGuard = false
     }
 
     function doSearch(force) {
