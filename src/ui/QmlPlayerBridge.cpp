@@ -7664,7 +7664,7 @@ void QmlPlayerBridge::tickBiliTasks() {
             emit bilibiliActionDone(biliOpName(r.op), r.ok, r.error);
             break;
         case BiliOp::Comments:
-            emit bilibiliCommentsReady(r.list, r.ok, r.error);
+            emit bilibiliCommentsReady(r.list, qlonglong(r.number), r.ok, r.error);
             break;
         case BiliOp::EmotePanel:
             // 这里只发信号，不发 notice：面板是点按钮才拉的，失败时在面板位置
@@ -7911,10 +7911,14 @@ void QmlPlayerBridge::bilibiliRequestComments(const QString& bvid, int page, int
         BiliTaskResult r;
         std::wstring error;
         std::vector<media::BiliComment> comments;
-        if (!media::biliComments(wbvid, page, sort, comments, error)) {
+        long long total = 0;
+        if (!media::biliComments(wbvid, page, sort, comments, total, error)) {
             r.error = QString::fromStdWString(error);
             return r;
         }
+        // 评论总数走 number：结构体里现成的数值字段，不必为此加成员。
+        // The total rides on `number`, an existing numeric field, instead of adding a member.
+        r.number = double(total);
         for (const auto& c : comments) {
             QVariantMap m;
             m.insert(QStringLiteral("author"), QString::fromStdWString(c.author));

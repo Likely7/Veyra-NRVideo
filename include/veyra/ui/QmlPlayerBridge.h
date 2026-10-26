@@ -1603,7 +1603,10 @@ signals:
     // 表情面板：每项 { text, url }。
     // The emote panel: each entry is { text, url }.
     void bilibiliEmotePanelReady(const QVariantList& items, bool ok, const QString& error);
-    void bilibiliCommentsReady(const QVariantList& comments, bool ok, const QString& error);
+    // total 是评论总数，标题上显示「评论 N」用。
+    // total is the overall comment count, shown as "评论 N" in the heading.
+    void bilibiliCommentsReady(const QVariantList& comments, qlonglong total, bool ok,
+                               const QString& error);
     void bilibiliDanmakuReady(bool ok, const QString& error, int lineCount);
     void bilibiliResumeReady(double seconds);
     void bilibiliQrStarted(const QString& qrUrl, bool ok, const QString& error);

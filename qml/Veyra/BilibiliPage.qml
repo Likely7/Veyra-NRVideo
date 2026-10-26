@@ -556,9 +556,10 @@ VPage {
             root.emoteError = ""
             root.emotes = items
         }
-        function onBilibiliCommentsReady(comments, ok, error) {
+        function onBilibiliCommentsReady(comments, total, ok, error) {
             if (!ok) return
             root.comments = comments
+            root.commentTotal = total
         }
         // 弹幕轨道加载结果：只更新**条数**，不碰开关。
         // 开关的状态来自持久化偏好，加载成功与否都不会改变用户的选择。
@@ -836,6 +837,9 @@ VPage {
     // 评论排序：0 最新，1 最热。与网页版的两个选项一致。
     // Comment order: 0 newest, 1 hottest - the same two choices as the web.
     property int commentSort: 1
+    // 评论总数，来自接口的 data.page.count。
+    // The overall comment count, from data.page.count.
+    property real commentTotal: 0
     property var emotes: []
     property bool emotePanelOpen: false
     property bool emoteLoading: false
@@ -2325,27 +2329,38 @@ VPage {
                         spacing: 8
                         visible: root.showComments
 
+                        // 标题行按 B 站网页的样子排：评论 32   最热 | 最新
+                        // 数字是灰色小一号，紧跟「评论」；两个排序之间有一条竖分隔。
+                        // Laid out like Bilibili's own heading: 评论 32   最热 | 最新
+                        // The count is smaller and grey, right after 评论, with a thin bar
+                        // between the two order choices.
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 8
 
                             Text {
-                                Layout.fillWidth: true
-                                text: root.comments.length ? qsTr("评论") : qsTr("暂无评论")
-                                color: Theme.t2
+                                text: qsTr("评论")
+                                color: Theme.t1
                                 font.family: Theme.fontUi
-                                font.pixelSize: 13
+                                font.pixelSize: 15
+                                font.weight: Font.DemiBold
                             }
-                            // 两个排序各是一个可点的文字；选中的用强调色。
-                            // 点选即重新请求，结果到达后网格整块替换 —— 没有过渡延迟。
-                            // Two clickable labels; the active one is accented. Clicking
-                            // re-fetches, and the arriving list replaces the model outright,
-                            // so the change shows as soon as the data lands.
                             Text {
-                                text: qsTr("最热")
-                                color: root.commentSort === 1 ? Theme.accent : Theme.t3
+                                visible: root.commentTotal > 0
+                                text: root.commentTotal > 10000
+                                      ? (root.commentTotal / 10000).toFixed(1) + qsTr("万")
+                                      : String(root.commentTotal)
+                                color: Theme.t3
                                 font.family: Theme.fontUi
                                 font.pixelSize: 12
+                            }
+                            Item { Layout.fillWidth: true }
+
+                            Text {
+                                text: qsTr("最热")
+                                color: root.commentSort === 1 ? Theme.t1 : Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: 13
                                 font.weight: root.commentSort === 1 ? Font.DemiBold : Font.Normal
                                 MouseArea {
                                     anchors.fill: parent
@@ -2361,10 +2376,16 @@ VPage {
                                 }
                             }
                             Text {
-                                text: qsTr("最新")
-                                color: root.commentSort === 0 ? Theme.accent : Theme.t3
+                                text: "|"
+                                color: Theme.stroke
                                 font.family: Theme.fontUi
                                 font.pixelSize: 12
+                            }
+                            Text {
+                                text: qsTr("最新")
+                                color: root.commentSort === 0 ? Theme.t1 : Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: 13
                                 font.weight: root.commentSort === 0 ? Font.DemiBold : Font.Normal
                                 MouseArea {
                                     anchors.fill: parent

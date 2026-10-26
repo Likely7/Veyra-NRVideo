@@ -149,8 +149,10 @@ struct BiliComment {
 // from the bvid here so callers do not have to carry it around.
 // sort: 0 按时间（最新），1 按热度（最热）—— 与网页版的两个选项一一对应。
 // sort: 0 by time (newest), 1 by popularity (hottest) - the same two choices as the web.
+// total 回填评论总数（data.page.count），用于标题上的「评论 N」。
+// total receives the overall comment count (data.page.count) for the "评论 N" heading.
 bool biliComments(const std::wstring& bvid, int page, int sort, std::vector<BiliComment>& out,
-                  std::wstring& error);
+                  long long& total, std::wstring& error);
 
 // One danmaku (bullet) line.
 struct BiliDanmaku {

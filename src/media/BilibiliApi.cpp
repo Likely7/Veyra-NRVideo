@@ -880,7 +880,7 @@ std::wstring richCommentText(const json::Value& content) {
 }
 
 bool biliComments(const std::wstring& bvid, int page, int sort, std::vector<BiliComment>& out,
-                  std::wstring& error) {
+                  long long& total, std::wstring& error) {
     if (page < 1) page = 1;
     // The reply endpoint keys on aid, so resolve it from the video first.
     std::string viewBody;
@@ -901,6 +901,7 @@ bool biliComments(const std::wstring& bvid, int page, int sort, std::vector<Bili
     if (!httpGet(L"api.bilibili.com", path, g_cookie, body, error)) return false;
     const auto root = json::parse(body);
     if (!checkCode(root, error, L"评论")) return false;
+    total = root["data"]["page"]["count"].asInt(0);
     for (const auto* reply : root["data"]["replies"].elements()) {
         BiliComment comment;
         comment.author = fromUtf8((*reply)["member"]["uname"].asString());
@@ -1043,10 +1044,12 @@ bool biliEmotePanel(std::vector<BiliEmote>& out, std::wstring& error) {
                                    body.size(), body.substr(0, 400)));
     const auto root = json::parse(body);
     if (!checkCode(root, error, L"表情")) return false;
-    // data.packages[].emotes[]，每个包是一个表情系列；这里把全部平铺出来。
-    // data.packages[].emotes[] - one package per emote series; they are flattened here.
+    // 字段名是 **emote**（单数），不是 emotes —— 实测返回体确认过。
+    // data.packages[].emote[]，每个包是一个表情系列；这里把全部平铺出来。
+    // The member is **emote**, singular, not emotes - confirmed against the actual body:
+    // data.packages[].emote[], one package per emote series, flattened here.
     for (const auto* package : root["data"]["packages"].elements()) {
-        for (const auto* emote : (*package)["emotes"].elements()) {
+        for (const auto* emote : (*package)["emote"].elements()) {
             BiliEmote item;
             item.text = fromUtf8((*emote)["text"].asString());
             item.url = fromUtf8((*emote)["url"].asString());
