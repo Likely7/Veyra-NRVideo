@@ -2287,7 +2287,6 @@ VPage {
                 Layout.fillHeight: true
                 visible: root.view === "detail" && !root.showSettings
                          && root.qrState.length === 0
-
             SmoothFlickable {
                 id: detailFlick
                 // 用 anchors 而不是布局：左栏的右边界直接等于右栏的左边界，
@@ -2676,29 +2675,6 @@ VPage {
                             }
                         }
 
-                        // 简介改成只读的 TextEdit：Text 不支持选中，换成它才能用鼠标
-                        // 划选并复制。只读 + 可选中，外观和原来的 Text 一致（无背景、无边框）。
-                        // 高度必须显式给 contentHeight —— TextEdit 不像 Text 那样自己撑开，
-                        // 在 ColumnLayout 里会塌成 0。
-                        // The description is a read-only TextEdit now: Text cannot be selected,
-                        // this can, so the text can be dragged over and copied. Read-only with
-                        // mouse selection keeps it looking like the old Text (no background, no
-                        // frame). The height has to be contentHeight explicitly - unlike Text,
-                        // a TextEdit does not size itself and would collapse to 0 in a layout.
-                        TextEdit {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: contentHeight
-                            readOnly: true
-                            selectByMouse: true
-                            textFormat: TextEdit.PlainText
-                            wrapMode: TextEdit.Wrap
-                            selectionColor: Theme.accentSoft
-                            selectedTextColor: Theme.t1
-                            color: Theme.t3
-                            font.family: Theme.fontUi
-                            font.pixelSize: 12
-                            text: root.detail.desc || ""
-                        }
                         }
                     }
 
@@ -2880,6 +2856,24 @@ VPage {
                                 onClicked: send()
                             }
                         }
+                    // 简介放在封面那一行的正下方、横跨整栏 —— 和网页版一致，不再缩在
+                    // 视频信息那一列里。
+                    // The description sits directly below the cover row and spans the whole
+                    // column, as on the web, instead of being tucked into the info column.
+                    TextEdit {
+                        width: detailColumn.width
+                        height: contentHeight
+                        readOnly: true
+                        selectByMouse: true
+                        textFormat: TextEdit.PlainText
+                        wrapMode: TextEdit.Wrap
+                        selectionColor: Theme.accentSoft
+                        selectedTextColor: Theme.t1
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 12
+                        text: root.detail.desc || ""
+                    }
 
                         Text {
                             Layout.fillWidth: true
@@ -3037,7 +3031,13 @@ VPage {
                 Rectangle {
                     id: relatedPanel
                     anchors.right: parent.right
+                    // 顶部留给「返回 + 标题」那一行：它横跨整宽，右列从封面行才开始，
+                    // 和网页版一致。贴顶的话右列会和标题并排，看起来像占了标题右边的位置。
+                    // The top is left to the back/title row, which spans the full width; the
+                    // column starts at the cover row as on the web. Flush with the top it would
+                    // sit beside the title and look like it had taken that space.
                     anchors.top: parent.top
+                    anchors.topMargin: 44
                     anchors.bottom: parent.bottom
                     width: 320
                     // 窗口窄的时候让位：给评论留出宽度比多一列推荐更重要。
