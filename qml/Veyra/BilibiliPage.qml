@@ -630,7 +630,11 @@ VPage {
         root.detail = ({})
         root.related = []
         root.comments = []
-        root.showComments = false
+        // 进入详情页默认展开评论：这一步同时把评论区的状态清干净，等详情到达后
+        // 由 deferred 的加载流程取第一页。
+        // Comments are open by default on entering the detail page. This also resets the
+        // section's state; the first page is fetched once the detail arrives.
+        root.showComments = true
         root.pendingDetailBvid = bvid
         root.pendingDetailGeneration = veyra.bilibiliLoadList("detail:" + bvid)
     }
@@ -889,6 +893,11 @@ VPage {
             if (root.view !== "detail") return
             root.related = []
             root.pendingRelatedGeneration = veyra.bilibiliLoadList("related:" + bvid)
+            if (root.view !== "detail") return
+            // 评论区默认展开，所以详情一到就把第一页取上，不用等用户去点。
+            // The section is open by default, so the first page is fetched as soon as the
+            // detail arrives rather than waiting for a click.
+            if (root.showComments && root.comments.length === 0) root.reloadComments()
             if (root.view !== "detail") return
             if (root.danmakuDefault) root.loadDanmaku()
         }
