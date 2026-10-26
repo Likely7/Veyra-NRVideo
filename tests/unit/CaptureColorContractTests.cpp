@@ -34,6 +34,7 @@ struct OutputPin final:IPin,IAMBufferNegotiation {
     HRESULT STDMETHODCALLTYPE NewSegment(REFERENCE_TIME,REFERENCE_TIME,double)override{return S_OK;}
 };
 #include "BmdAllocatorCases.h"
+#include "CaptureVideoDeliveryCases.h"
 int main(){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);int failures=0;
     auto check=[&](bool pass,const char* name){std::cout<<(pass?"PASS ":"FAIL ")<<name<<'\n';if(!pass)++failures;};
@@ -81,6 +82,7 @@ int main(){
         check(input->Disconnect()==S_OK,"disconnect releases allocator and upstream peer");
     }
     memory.Reset();input.Reset();filter.Reset();output.Reset();allocator.Reset();av_frame_free(&frame);
+    captureVideoDeliveryCases(type,raw,check);
     // NV12 uses separate planes; padding must not be copied into the UV plane.
     type.subtype=MEDIASUBTYPE_NV12;vi.bmiHeader.biHeight=4;vi.bmiHeader.biSizeImage=36;
     check(source::captureMediaLayout(type,layout)&&layout.stride==6&&layout.sampleBytes==36,"NV12 plane pitch derived without RGB conversion");

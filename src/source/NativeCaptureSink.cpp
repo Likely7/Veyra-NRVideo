@@ -11,6 +11,25 @@
 
 namespace veyra::source {
 using Microsoft::WRL::ComPtr;
+std::function<HRESULT(IMediaSample*)> timedCaptureDelivery(std::function<HRESULT(double,IMediaSample*)> deliver){
+    return [deliver=std::move(deliver),untimed=uint64_t{0}](IMediaSample* sample) mutable -> HRESULT {
+        if(!sample)return E_POINTER;
+        REFERENCE_TIME begin=0,end=0;
+        const auto hr=sample->GetTime(&begin,&end);
+        if(hr==VFW_E_SAMPLE_TIME_NOT_SET){
+            ++untimed;
+            if(untimed==1||untimed%300==0)
+                log::warn("capture-video-time",std::format("untimedSamples={} GetTime hr=0x{:08X} bytes={} acknowledged=1 delivered=0 (waiting for real video timestamps)",untimed,uint32_t(hr),sample->GetActualDataLength()));
+            return S_OK;
+        }
+        if(FAILED(hr)){
+            log::error("capture-video-time",std::format("GetTime hr=0x{:08X}",uint32_t(hr)));
+            return hr;
+        }
+        if(untimed){log::info("capture-video-time",std::format("timed video resumed after {} untimed samples firstPts100ns={} fabricatedPts=0",untimed,begin));untimed=0;}
+        return deliver(double(begin)/1e7,sample);
+    };
+}
 bool nativeCaptureContractsMatch(const AM_MEDIA_TYPE& a,const AM_MEDIA_TYPE& b){
     if(a.subtype!=b.subtype||!equivalentCaptureTypes(a,b))return false;
     const auto fields=[](const AM_MEDIA_TYPE& t){return t.formattype==FORMAT_VideoInfo2&&t.pbFormat&&t.cbFormat>=sizeof(VIDEOINFOHEADER2)?reinterpret_cast<const VIDEOINFOHEADER2*>(t.pbFormat)->dwInterlaceFlags:DWORD(0);};

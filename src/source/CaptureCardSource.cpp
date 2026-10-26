@@ -1122,7 +1122,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     AM_MEDIA_TYPE connected{};
     if(compressedPath){
         ComPtr<IPin> input,output;
-        hr=createCompressedCaptureSink(*native,[&p](IMediaSample* sample){REFERENCE_TIME a=0,b=0;const auto timeHr=sample->GetTime(&a,&b);if(FAILED(timeHr))return timeHr;return p.SampleCB(double(a)/1e7,sample);},p.grabFilter,input);
+        hr=createCompressedCaptureSink(*native,timedCaptureDelivery([&p](double time,IMediaSample* sample){return p.SampleCB(time,sample);}),p.grabFilter,input);
         if(SUCCEEDED(hr))hr=p.graph->AddFilter(p.grabFilter.Get(),L"Compressed frame mailbox");
         if(SUCCEEDED(hr))output=formatPin;
         if(SUCCEEDED(hr))suggestCaptureVideoBuffering(output.Get(),4,512*1024);
@@ -1158,7 +1158,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         const auto bufferPolicy=static_cast<CaptureBufferMode>(p.bufferMode);
         const long suggestedBuffers=bmdCompat?0:captureDesiredVideoBuffers(bufferPolicy,long(nativeLayout.width),long(nativeLayout.height));
         ComPtr<IPin> input,output;
-        hr=createNativeCaptureSink(*native,[&p](IMediaSample* sample){REFERENCE_TIME a=0,b=0;const auto timeHr=sample->GetTime(&a,&b);if(FAILED(timeHr))return timeHr;return p.SampleCB(double(a)/1e7,sample);},p.grabFilter,input,bmdCompat?CaptureAllocatorMode::Upstream:CaptureAllocatorMode::SinkDefault);
+        hr=createNativeCaptureSink(*native,timedCaptureDelivery([&p](double time,IMediaSample* sample){return p.SampleCB(time,sample);}),p.grabFilter,input,bmdCompat?CaptureAllocatorMode::Upstream:CaptureAllocatorMode::SinkDefault);
         if(SUCCEEDED(hr))hr=p.graph->AddFilter(p.grabFilter.Get(),L"Native frame mailbox");
         if(SUCCEEDED(hr))output=formatPin;
         if(SUCCEEDED(hr)&&suggestedBuffers>0)suggestCaptureVideoBuffering(output.Get(),suggestedBuffers,LONG(nativeLayout.sampleBytes));
