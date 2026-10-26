@@ -1997,20 +1997,6 @@ VPage {
                 contentHeight: detailColumn.implicitHeight
                 clip: true
 
-                // 点面板以外的任何地方都收起表情面板，和网页版一致。
-                // 铺在内容之上、面板之下：z=9 低于面板的 10，高于其它一切。
-                // 放在 Flickable 内部而不是窗口顶层，是因为 QML 的 z 只在同一父级内比较，
-                // 跨层级把它放到顶层反而会盖住面板自己。
-                // Clicking anywhere but the panel closes it, as the web front end does. It
-                // sits above the content and below the panel (z 9 against the panel's 10). It
-                // lives inside the Flickable rather than at window level because z is only
-                // compared between siblings - hoisting it upward would put it over the panel.
-                MouseArea {
-                    anchors.fill: parent
-                    visible: root.emotePanelOpen
-                    z: 9
-                    onClicked: root.emotePanelOpen = false
-                }
 
                 ColumnLayout {
                     id: detailColumn
@@ -2496,6 +2482,22 @@ VPage {
                                     onTextChanged: root.replyText = text
                                     enabled: !root.replySending
                                     onAccepted: replySendButton.send()
+                                    // 输入框失去焦点就收起面板 —— 也就是用户点了别处。
+                                    // 之前用一个铺满内容区的 MouseArea 做这件事，但它和面板
+                                    // 不在同一父级，z 比较不成立，结果遮罩盖在面板上面，
+                                    // 点击表情先被它收走：面板关了，字也没插进去。
+                                    // 点面板本身不会让输入框失焦（面板不接收焦点），所以选表情
+                                    // 时面板会保持打开。
+                                    // Losing focus closes the panel, which is exactly "the user
+                                    // clicked elsewhere". A full-area MouseArea used to do this,
+                                    // but it was not a sibling of the panel, so the z comparison
+                                    // did not apply: the overlay covered the panel, swallowed the
+                                    // click, closed the panel and inserted nothing. Clicking the
+                                    // panel itself does not blur the field (it takes no focus), so
+                                    // the panel stays open while emotes are being picked.
+                                    onActiveFocusChanged: {
+                                        if (!activeFocus) root.emotePanelOpen = false
+                                    }
                                 }
                                 Text {
                                     anchors.fill: parent
@@ -2553,9 +2555,6 @@ VPage {
                         Rectangle {
                             Layout.fillWidth: true
                             visible: root.emotePanelOpen
-                            // 比遮罩高，才不会被它盖住。
-                            // Above the overlay, or the overlay would cover it.
-                            z: 10
                             implicitHeight: 132
                             radius: 8
                             color: Theme.card2
