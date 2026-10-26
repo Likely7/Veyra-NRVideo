@@ -528,6 +528,9 @@ VPage {
                 // Insert the new comment at the top at once: waiting for the refresh leaves a
                 // gap that looks like nothing happened. The refresh replaces it wholesale with
                 // the server's own copy, real rpid included.
+                // 发送完就把表情面板收起来：它已经完成使命，留着只会挡住评论区。
+                // Close the emote panel: it has done its job and would only cover the list.
+                root.emotePanelOpen = false
                 const body = root.lastSentReply
                 if (body.length > 0) {
                     root.comments = [{
@@ -539,10 +542,17 @@ VPage {
                         rpid: -1,
                     }].concat(root.comments)
                 }
+                // 清空输入：同时写两处，避免只清状态而输入框里的文字还留着。
+                // Clear the field both ways, so the visible text cannot survive alone.
                 root.replyText = ""
+                replyInput.text = ""
                 root.lastSentReply = ""
+                // 切到「最新」再刷新：按热度排的话，刚发的这条热度是 0，会掉到看不见的位置。
+                // Switch to 最新 before refreshing: under 最热 a brand-new comment has no heat
+                // and would sink out of sight.
+                root.commentSort = 0
                 if (root.detail && root.detail.bvid)
-                    veyra.bilibiliRequestComments(root.detail.bvid, 1, root.commentSort)
+                    veyra.bilibiliRequestComments(root.detail.bvid, 1, 0)
                 return
             }
             if (!ok) return
