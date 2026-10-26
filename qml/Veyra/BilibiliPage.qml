@@ -1983,6 +1983,21 @@ VPage {
                 contentHeight: detailColumn.implicitHeight
                 clip: true
 
+                // 点面板以外的任何地方都收起表情面板，和网页版一致。
+                // 铺在内容之上、面板之下：z=9 低于面板的 10，高于其它一切。
+                // 放在 Flickable 内部而不是窗口顶层，是因为 QML 的 z 只在同一父级内比较，
+                // 跨层级把它放到顶层反而会盖住面板自己。
+                // Clicking anywhere but the panel closes it, as the web front end does. It
+                // sits above the content and below the panel (z 9 against the panel's 10). It
+                // lives inside the Flickable rather than at window level because z is only
+                // compared between siblings - hoisting it upward would put it over the panel.
+                MouseArea {
+                    anchors.fill: parent
+                    visible: root.emotePanelOpen
+                    z: 9
+                    onClicked: root.emotePanelOpen = false
+                }
+
                 ColumnLayout {
                     id: detailColumn
                     width: parent.width
@@ -2524,6 +2539,9 @@ VPage {
                         Rectangle {
                             Layout.fillWidth: true
                             visible: root.emotePanelOpen
+                            // 比遮罩高，才不会被它盖住。
+                            // Above the overlay, or the overlay would cover it.
+                            z: 10
                             implicitHeight: 132
                             radius: 8
                             color: Theme.card2
