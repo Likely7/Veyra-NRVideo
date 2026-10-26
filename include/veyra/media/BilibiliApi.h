@@ -30,6 +30,10 @@ struct BiliPage {
     std::wstring desc;
     std::wstring owner;
     std::wstring ownerFace;
+    // 作者的 mid：拉「作者视频」列表时要用。没有它就只知道名字。
+    // The uploader's mid, needed to list that author's videos; without it only the name
+    // is known.
+    long long ownerMid = 0;
     long long play = 0;
     long long like = 0;
     long long danmaku = 0;
@@ -151,6 +155,10 @@ struct BiliComment {
 // sort: 0 by time (newest), 1 by popularity (hottest) - the same two choices as the web.
 // total 回填评论总数（data.page.count），用于标题上的「评论 N」。
 // total receives the overall comment count (data.page.count) for the "评论 N" heading.
+// 某个 UP 主的投稿，按发布时间从新到旧。需要 WBI 签名。
+// One uploader's videos, newest first. Requires WBI signing.
+bool biliAuthorVideos(long long mid, int page, std::vector<BiliVideoCard>& out, std::wstring& error);
+
 bool biliComments(const std::wstring& bvid, int page, int sort, std::vector<BiliComment>& out,
                   long long& total, std::wstring& error);
 

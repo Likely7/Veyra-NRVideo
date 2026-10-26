@@ -7666,6 +7666,12 @@ void QmlPlayerBridge::tickBiliTasks() {
         case BiliOp::Comments:
             emit bilibiliCommentsReady(r.list, qlonglong(r.number), r.ok, r.error);
             break;
+        case BiliOp::AuthorVideos:
+            // 复用卡片列表信号，kind 带 "author:" 前缀，界面按前缀分流。
+            // Reuses the card-list signal; the kind carries an "author:" prefix and the UI
+            // dispatches on it.
+            emit bilibiliListReady(r.text, r.list, 0);
+            break;
         case BiliOp::EmotePanel:
             // 这里只发信号，不发 notice：面板是点按钮才拉的，失败时在面板位置
             // 显示原因更贴切，弹一条全局提示反而突兀。
@@ -8077,6 +8083,15 @@ void QmlPlayerBridge::bilibiliRequestAccount(){
     });
 }
 
+int QmlPlayerBridge::bilibiliLoadAuthorVideos(qlonglong mid, int page){
+    // 走和卡片列表同一条通道，只是 kind 用 "author:<mid>:<page>" ——
+    // 排队、槽位、结果分发都是现成的，不必再造一套。
+    // Uses the same channel as the card lists with an "author:<mid>:<page>" kind: queueing,
+    // slots and result delivery are all already there.
+    return bilibiliLoadList(QStringLiteral("author:") + QString::number(mid)
+                            + QLatin1Char(':') + QString::number(page));
+}
+
 int QmlPlayerBridge::bilibiliLoadList(const QString& kind){
     // Follows the shape the capture-device query already uses: start the work with
     // std::async, collect it from the GUI tick with a zero-timeout wait. That keeps the
@@ -8148,6 +8163,12 @@ void QmlPlayerBridge::startListWorker(const QString& kind, int generation) {
                 // Do not count colons in head: with a page, head always holds one, and
                 // using that as the test treats the page as an id too.
                 const bool favIdWithoutPage = head == QLatin1String("fav");
+                // "author:<mid>" 的最后一个冒号切掉的是页码，但 head 是 "author:<mid>"，
+                // 所以和 fav 不同：这里需要页码，判据是 head 是否以 "author:" 开头。
+                // For "author:<mid>" the last colon separates the page, and head is
+                // "author:<mid>" - unlike fav, the page IS wanted here, so the test is simply
+                // whether head starts with "author:".
+                const bool authorPage = head.startsWith(QLatin1String("author:"));
                 if (!head.startsWith(QLatin1String("detail:"))
                     && !head.startsWith(QLatin1String("qualities:"))
                     && !head.startsWith(QLatin1String("related:"))
@@ -8162,6 +8183,13 @@ void QmlPlayerBridge::startListWorker(const QString& kind, int generation) {
         else if (base == QLatin1String("follow")) ok = media::biliFollowed(cards, error);
         else if (base == QLatin1String("history")) ok = media::biliHistory(cards, error);
         else if (base == QLatin1String("watchlater")) ok = media::biliWatchLater(cards, error);
+        else if (base.startsWith(QLatin1String("author:"))) {
+            // "author:<mid>"，页码已经在上面解析到 page。
+            // "author:<mid>"; the page has already been parsed above.
+            bool okMid = false;
+            const qlonglong mid = base.mid(7).toLongLong(&okMid);
+            ok = okMid && media::biliAuthorVideos(mid, page, cards, error);
+        }
         else if (base.startsWith(QLatin1String("fav:")))
             ok = media::biliFavorites(cards, error, base.mid(4).toLongLong(), page);
         else if (base.startsWith(QLatin1String("search:")))
@@ -8217,6 +8245,9 @@ void QmlPlayerBridge::startListWorker(const QString& kind, int generation) {
                 m.insert(QStringLiteral("cover"), QString::fromStdWString(page.cover));
                 m.insert(QStringLiteral("desc"), QString::fromStdWString(page.desc));
                 m.insert(QStringLiteral("owner"), QString::fromStdWString(page.owner));
+                // 作者 mid：界面要用它拉「作者视频」。
+                // The uploader's mid, which the UI needs for the author's video list.
+                m.insert(QStringLiteral("ownerMid"), QVariant::fromValue<qlonglong>(page.ownerMid));
                 m.insert(QStringLiteral("play"), QVariant(int(std::min<long long>(page.play, 2147483647LL))));
                 m.insert(QStringLiteral("like"), QVariant(int(std::min<long long>(page.like, 2147483647LL))));
                 m.insert(QStringLiteral("duration"), page.duration);

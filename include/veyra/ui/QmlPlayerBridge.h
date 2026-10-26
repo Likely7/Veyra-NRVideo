@@ -60,7 +60,7 @@ enum class BiliOp : uint8_t {
     // 发评论。与其它写操作一样走异步任务，避免同步 HTTP 卡住界面。
     // Posting a comment. Asynchronous like the other write actions, so a synchronous
     // HTTP call cannot freeze the window.
-    Reply, DeleteReply, EmotePanel,
+    Reply, DeleteReply, EmotePanel, AuthorVideos,
     Count,
 };
 // 操作名，供信号传给 QML 分派用。
@@ -83,6 +83,7 @@ constexpr const char* biliOpName(BiliOp op) {
     case BiliOp::Reply:            return "reply";
     case BiliOp::DeleteReply:      return "delete-reply";
     case BiliOp::EmotePanel:       return "emote-panel";
+    case BiliOp::AuthorVideos:     return "author-videos";
     case BiliOp::Count:            break;
     }
     return "unknown";
@@ -725,6 +726,11 @@ public:
     // 拉评论表情面板，结果通过 bilibiliEmotePanelReady 回到界面。
     // Fetch the reply emote panel; the result arrives as bilibiliEmotePanelReady.
     Q_INVOKABLE void bilibiliRequestEmotePanel();
+    // 某个 UP 主的投稿（最新在前）。结果通过 bilibiliLoadList 的
+    // "author:<mid>:<page>" 前缀回来，复用现成的列表通道。
+    // One uploader's videos, newest first. The result comes back through the existing
+    // bilibiliLoadList channel with the "author:<mid>:<page>" prefix.
+    Q_INVOKABLE int bilibiliLoadAuthorVideos(qlonglong mid, int page);
     Q_INVOKABLE void bilibiliRequestWatchLater(const QString& bvid, bool add);
     // sort: 0 最新，1 最热。缺省按时间，和原来一致。
     // sort: 0 newest, 1 hottest; the default stays time-ordered as before.

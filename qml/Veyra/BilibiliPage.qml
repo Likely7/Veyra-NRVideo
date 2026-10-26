@@ -274,6 +274,21 @@ VPage {
                 root.statusText = items.length ? "" : qsTr("无法获取画质列表，可能未登录")
                 return
             }
+            if (kind.startsWith("author:")) {
+                root.authorLoading = false
+                // 页码来自 kind 里的最后一段，接口按页码返回，追加而不是替换。
+                // The page comes from the last segment of the kind; later pages append.
+                const pageOf = parseInt(kind.split(":").pop(), 10) || 1
+                if (items.length > 0) {
+                    root.authorPage = pageOf
+                    root.authorVideos = pageOf <= 1 ? items
+                                                    : root.authorVideos.concat(items)
+                }
+                // 一页 30 条；不足一页就说明到底了。
+                // One page is 30 entries; fewer than that means the end.
+                root.authorHasMore = items.length >= 30
+                return
+            }
             if (kind.startsWith("related:")) {
                 if (generation !== root.pendingRelatedGeneration) return
                 root.related = items
@@ -567,6 +582,206 @@ VPage {
             }
         }
     }
+
+    // 作者视频弹层。和表情弹层同一套做法（Popup + CloseOnPressOutside），
+    // 里面是一个竖向滚动的卡片列表，按发布时间从新到旧。
+    // The author's videos pop up. Same approach as the emote popup - a Popup with
+    // CloseOnPressOutside - holding a vertically scrolling list of cards, newest first.
+    Popup {
+        id: authorPopup
+        parent: Overlay.overlay
+        modal: true
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        width: Math.min(720, Overlay.overlay ? Overlay.overlay.width - 80 : 640)
+        height: Math.min(560, Overlay.overlay ? Overlay.overlay.height - 80 : 480)
+        x: Overlay.overlay ? Math.round((Overlay.overlay.width - width) / 2) : 0
+        y: Overlay.overlay ? Math.round((Overlay.overlay.height - height) / 2) : 0
+        visible: root.authorOpen
+        onClosed: root.authorOpen = false
+
+        background: Rectangle {
+            radius: 12
+            color: Theme.card2
+            border.width: 1
+            border.color: Theme.stroke
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            // 标题条：作者名在左，关闭在右。
+            // Header: the uploader's name left, close on the right.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 44
+                color: "transparent"
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.authorName.length > 0
+                          ? root.authorName + qsTr(" 的投稿")
+                          : qsTr("作者视频")
+                    color: Theme.t1
+                    font.family: Theme.fontUi
+                    font.pixelSize: 14
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.authorVideos.length > 0
+                          ? root.authorVideos.length + qsTr(" 个")
+                          : ""
+                    color: Theme.t3
+                    font.family: Theme.fontUi
+                    font.pixelSize: 11
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                color: Theme.stroke
+            }
+
+            // 加载中 / 错误
+            Text {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 60
+                visible: root.authorLoading && root.authorVideos.length === 0
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                text: qsTr("正在加载…")
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: 12
+            }
+            Text {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 60
+                visible: !root.authorLoading && root.authorError.length > 0
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                wrapMode: Text.Wrap
+                text: root.authorError
+                color: Theme.warn
+                font.family: Theme.fontUi
+                font.pixelSize: 12
+            }
+
+            // 列表
+            SmoothFlickable {
+                id: authorFlick
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentHeight: authorColumn.height
+                clip: true
+                ScrollBar.vertical: VScrollBar { }
+                visible: root.authorVideos.length > 0
+                onContentYChanged: {
+                    if (root.authorLoading || !root.authorHasMore) return
+                    if (contentY + height >= contentHeight - 300) root.loadMoreAuthor()
+                }
+
+                Column {
+                    id: authorColumn
+                    width: authorFlick.width
+                    spacing: 6
+
+                    Repeater {
+                        model: root.authorVideos
+                        delegate: Item {
+                            width: authorColumn.width
+                            height: 74
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                radius: 8
+                                color: authorHover.containsMouse ? Theme.card3 : "transparent"
+                            }
+                            Rectangle {
+                                id: authorCover
+                                x: 8
+                                y: 6
+                                width: 106
+                                height: 60
+                                radius: 6
+                                color: Theme.card3
+                                clip: true
+
+                                Image {
+                                    anchors.fill: parent
+                                    source: modelData.cover || ""
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                    cache: true
+                                    sourceSize.width: 212
+                                    sourceSize.height: 120
+                                }
+                            }
+                            Text {
+                                anchors.left: authorCover.right
+                                anchors.leftMargin: 10
+                                anchors.right: parent.right
+                                anchors.rightMargin: 8
+                                anchors.top: parent.top
+                                anchors.topMargin: 8
+                                height: 32
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                                wrapMode: Text.Wrap
+                                text: modelData.title || ""
+                                color: Theme.t1
+                                font.family: Theme.fontUi
+                                font.pixelSize: 12
+                            }
+                            Text {
+                                anchors.left: authorCover.right
+                                anchors.leftMargin: 10
+                                anchors.right: parent.right
+                                anchors.rightMargin: 8
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 8
+                                elide: Text.ElideRight
+                                text: (modelData.play || 0) + qsTr(" 播放")
+                                color: Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: 10
+                            }
+                            MouseArea {
+                                id: authorHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.authorOpen = false
+                                    root.openVideo(modelData.bvid)
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        width: authorColumn.width
+                        height: root.authorLoading ? 30 : 0
+                        visible: root.authorLoading
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        text: qsTr("正在加载更多…")
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 11
+                    }
+                }
+            }
+        }
+    }
+
 
     // 搜索框回车的统一入口。四条通道都会走到这里，用一个 250ms 的闸门防止同一次
     // 按键被两条通道各触发一次。
@@ -1116,6 +1331,34 @@ VPage {
     }
     // 全部表情（平铺）与分组后的包名列表、以及当前选中的包。
     // All emotes flattened, plus the package names and the one being shown.
+    // 作者视频：弹层状态、数据与分页。
+    // Author videos: the popup's state, its data and its paging.
+    property bool authorOpen: false
+    property var authorVideos: []
+    property string authorName: ""
+    property int authorPage: 1
+    property bool authorLoading: false
+    property bool authorHasMore: false
+    property string authorError: ""
+
+    function openAuthorVideos() {
+        if (!root.detail || !root.detail.ownerMid) return
+        root.authorName = root.detail.owner || ""
+        root.authorVideos = []
+        root.authorPage = 1
+        root.authorHasMore = false
+        root.authorError = ""
+        root.authorLoading = true
+        root.authorOpen = true
+        veyra.bilibiliLoadAuthorVideos(root.detail.ownerMid, 1)
+    }
+
+    function loadMoreAuthor() {
+        if (root.authorLoading || !root.authorHasMore || !root.detail.ownerMid) return
+        root.authorLoading = true
+        veyra.bilibiliLoadAuthorVideos(root.detail.ownerMid, root.authorPage + 1)
+    }
+
     property var emotes: []
     property var emotePackages: []
     property string emotePackage: ""
@@ -2488,6 +2731,13 @@ VPage {
                             VButton {
                                 text: qsTr("稍后再看")
                                 onClicked: veyra.bilibiliRequestWatchLater(root.detail.bvid, true)
+                            }
+                            VButton {
+                                // 只在拿到作者 mid 后才能用。
+                                // Only usable once the uploader's mid is known.
+                                visible: root.detail.ownerMid > 0
+                                text: qsTr("作者视频")
+                                onClicked: root.openAuthorVideos()
                             }
                             VButton {
                                 text: root.showComments ? qsTr("收起评论") : qsTr("查看评论")

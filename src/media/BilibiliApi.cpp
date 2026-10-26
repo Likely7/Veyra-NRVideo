@@ -638,6 +638,9 @@ BiliPage biliVideoPage(const std::wstring& bvid) {
     page.cover = normalizeCover(data["pic"].asString());
     page.desc = fromUtf8(stripHtml(data["desc"].asString()));
     page.owner = fromUtf8(data["owner"]["name"].asString());
+    // 作者 mid 供「作者视频」使用。
+    // The uploader's mid, used by the author's video list.
+    page.ownerMid = data["owner"]["mid"].asInt(0);
     page.ownerFace = normalizeCover(data["owner"]["face"].asString());
     page.duration = int(data["duration"].asInt(0));
     page.pubdate = int(data["pubdate"].asInt(0));
@@ -877,6 +880,42 @@ std::wstring richCommentText(const json::Value& content) {
         ++i;
     }
     return fromUtf8(out);
+}
+
+// 某个 UP 主的投稿列表，按发布时间从新到旧。
+// 这个接口在 /x/space/wbi/ 下，必须带 WBI 签名（wts + w_rid），否则直接 412。
+// One uploader's videos, newest first. The endpoint lives under /x/space/wbi/ and needs
+// WBI signing (wts + w_rid); without it the server answers 412.
+bool biliAuthorVideos(long long mid, int page, std::vector<BiliVideoCard>& out, std::wstring& error) {
+    if (mid <= 0) { error = L"缺少作者标识"; return false; }
+    if (page < 1) page = 1;
+    std::map<std::string, std::string> params{
+        {"mid", std::to_string(mid)},
+        {"ps", "30"},
+        {"pn", std::to_string(page)},
+        // 用户要求最新发布排最前。
+        // The user asked for newest first.
+        {"order", "pubdate"},
+        {"platform", "web"},
+        {"web_location", "1550101"},
+    };
+    const std::string query = signWbi(params);
+    std::string body;
+    if (!httpGet(L"api.bilibili.com", L"/x/space/wbi/arc/search?" + fromUtf8(query), g_cookie,
+                 body, error)) return false;
+    const auto root = json::parse(body);
+    if (!checkCode(root, error, L"作者视频")) return false;
+    for (const auto* item : root["data"]["list"]["vlist"].elements()) {
+        BiliVideoCard card;
+        card.bvid = fromUtf8((*item)["bvid"].asString());
+        card.title = fromUtf8((*item)["title"].asString());
+        card.cover = normalizeCover((*item)["pic"].asString());
+        card.owner = fromUtf8((*item)["author"].asString());
+        card.play = (*item)["play"].asInt(0);
+        card.pubdate = int((*item)["created"].asInt(0));
+        if (!card.bvid.empty()) out.push_back(std::move(card));
+    }
+    return true;
 }
 
 bool biliComments(const std::wstring& bvid, int page, int sort, std::vector<BiliComment>& out,
