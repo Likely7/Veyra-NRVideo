@@ -10030,3 +10030,10 @@ computer-use技能原生按键/点击：软件专业F11/Esc、顶部还原、极
 失败均保留：误用hdr-smaa-high用例名退出2，按--list改实际hdr-smaa，仅补该例；matplotlib缺packaging、内置Python缺matplotlib，通过已提供runtime site-packages补依赖，无全局安装；第一版全屏稳定visibility保护仍在中间Windowed失败，再加恢复状态保护后通过；首HDR视频无PQ VUI不能算HDR通过，改x265显式VUI并ffprobe确认后实测；截图完成初稿文件轮询改为引擎完成快照，最终UI两例重验。图/旧失败均是E盘必要证据，未覆盖Claude原JSON/实际原日志。
 
 收尾报告docs/CAPTURE_REVIEW_REPORT_2026-10-26.md；脚本finalize-capture-review-handoff.py验证受保护旧refs/其它树HEAD、177运行组件/源码QML恢复、最终EXE与构建一致、三GPU/六合同/两窗口例、无运行库入Git，生成本任务FINAL与原Claude任务FINAL指针。准确新提交见FINAL，不合main/push/发布/打包。
+
+
+## 2026-10-26 外部用户4K60约30帧日志诊断
+
+用户提供微信logs (2).zip，仅诊断。原档SHA256 f9c486fbb344161db1d3b7ad536f1404a07c9de4267fa388e1c195eb747d9caa；副本及两份log安全提取至E:/项目/Veyra/archives/field-capture-4k60-20261026。成功运行python E:/项目/Veyra/reports/field-capture-4k60-20261026/analyze.py，对149746行按会话/设置/输入尺寸及指定稳态窗口统计，analysis.json和evidence.txt保存在同名reports目录。
+
+结果：RTX5090D机器4K YUY2真实回调约53.1，开启60→30后约26原帧；关闭SR/NR/FG且关闭60→30后仍约53。稳定60的窗口为1080p输入后增强至4K，不能作为4K60通过。末段原帧53/提交53、GPU ready P95约0.24ms、调度等待0，主要限制位于采集交付环节；同机其它应用与USB协商信息缺失，未区分驱动/链路和Veyra采集回调根因。未擅改产品或配置，无构建/新采集测试/打包/合并/推送。后续同机同格式逐个应用A/B建议及证据边界见docs/FIELD_CAPTURE_4K60_DIAGNOSIS_2026-10-26.md。

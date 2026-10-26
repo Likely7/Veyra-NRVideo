@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-26 2.1.1本地完整包（用户授权）**：用户要求“构建2.1.1正式包给我，给我测试”。从26aa9dd在codex/build-2.1.1-20261026更新版本为2.1.1并构建NVIDIA/AMD完整Release配置便携包，按docs/BUILD_2.1.1_PLAN_2026-10-26.md。此条覆盖本范围此前不封包限制；不代表已公开发布或授权合main/push/上传。运行组件沿用2.1.0正式包受控供体并逐文件核验，不增换组件。单Agent、全E盘、复用构建-j2<=900秒、单测<=300秒、私有配置，不停止用户进程或占采集卡。4K约53fps现场问题只诊断未修，不写入已修；Lecram暂停。
+
 > **2026-10-26 Codex接手Claude采集审查**：用户要求接续Claude整体排查剩余工作。b2eb77d干净树新开codex/capture-review-handoff-20261026，按docs/CAPTURE_REVIEW_HANDOFF_PLAN_2026-10-26.md完成同帧AA对照、确认缺陷修复与验收报告；继承用户只做一轮采集（原轮已完成，不重复实卡）、单Agent、全E盘、-j2<=900秒/单测<=300秒、真实配置/端点音量/运行库/模型/驱动不改、不停止用户进程。原Claude分支、main与软件UI默认独立分支保留，不merge main/push/Release/封包，Lecram仍暂停。
 
 > **2026-10-26 采集链路审查与抗锯齿修复（Claude，用户授权）**：用户要求整体审查采集链路及效果器衔接，排除类似VRR轮询的性能拖累，尽量降延迟，修复“抗锯齿开了没变化”，并用采集卡实测一轮（效果器全开）。从main 68def10在claude/capture-review-20261026按docs/CAPTURE_REVIEW_PLAN_2026-10-26.md施工，起点标签checkpoint/pre-capture-review-20261026。允许必要的执行计划/图/展示/采集音频日志/QML四语/定向测试接点。用户的E:/App包与配置只读，其采集进程不停止、不抢设备；实测前由用户自己让出采集卡。单Agent、全E盘、-j2构建<=900秒/单测<=300秒，不改运行库/模型/驱动，无merge/push/Release，Lecram暂停；用户随后追加：HDR显示状态也按VRR改为事件触发，专业模式左下“信号”区放一个公用的“刷新显示器状态”按钮并显示系统HDR开关与可变刷新状态，VRR原刷新按钮挪到这里；顺带排查采集卡声音偏大。为此把claude/vrr-event-query-20261025并入本分支（不进main）；claude/software-ui-default-20261026仍保留未并入。
