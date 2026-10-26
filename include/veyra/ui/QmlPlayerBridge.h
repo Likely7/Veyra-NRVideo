@@ -1563,6 +1563,14 @@ signals:
     // kind is the same token passed to bilibiliLoadList; items is the fetched list.
     // generation lets QML drop a result that a newer request has already superseded.
     void bilibiliListReady(const QString& kind, const QVariantList& items, int generation);
+    // 搜索框里按回车。由 eventFilter 捕获后发出：TextInput 自己消费了按键的 press 事件，
+    // QML 的 Keys.onPressed 和 onAccepted 都收不到（现场日志：onReleased 19 次，
+    // onPressed 和 onAccepted 各 0 次）。只能在这一层截。
+    // Enter pressed in the search box. Raised from the event filter because TextInput
+    // consumes the key press itself, so neither Keys.onPressed nor onAccepted ever sees it
+    // (field log: onReleased 19 times, onPressed and onAccepted 0 each). This is the only
+    // layer that still gets it.
+    void bilibiliSearchSubmitted();
     // Same request lifetime, for the single-object endpoints ("detail:<bvid>").
     void bilibiliObjectReady(const QString& kind, const QVariantMap& object, int generation);
     // Async interaction state: emitted when the worker that answers

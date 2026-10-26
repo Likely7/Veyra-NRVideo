@@ -8931,6 +8931,21 @@ bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
         if (!key->isAutoRepeat() && qobject_cast<QWindow*>(watched)) {
             const QKeySequence hold(shortcuts().value("hold").toString(), QKeySequence::PortableText);
             const int pressed = key->key() | int(key->modifiers() & ~Qt::KeypadModifier);
+            // 搜索框的回车只能在这里截：TextInput 自己消费了 press 事件，QML 侧
+            // Keys.onPressed / onAccepted 都收不到（现场日志 onReleased 19 次、其余 0 次）。
+            // 用 objectName 认出是哪个输入框，不影响其它文本控件。
+            // The search box's Enter is only reachable here: TextInput consumes the press and
+            // neither Keys.onPressed nor onAccepted sees it (field log: onReleased 19 times,
+            // the other two 0). objectName identifies which input this is, so other text
+            // fields are unaffected.
+            if (type == QEvent::KeyPress &&
+                (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter)) {
+                const QObject* focused = QGuiApplication::focusObject();
+                if (focused && focused->objectName() == QLatin1String("bili-search-field")) {
+                    emit bilibiliSearchSubmitted();
+                    return true;   // 已经处理：不要再往控件里送一次
+                }
+            }
             // Typing into a text field never compares.
             const QObject* focus = QGuiApplication::focusObject();
             const bool typing = focus && (focus->inherits("QQuickTextInput") || focus->inherits("QQuickTextEdit"));

@@ -265,6 +265,14 @@ VPage {
 
     Connections {
         target: veyra
+        // 搜索框的回车由 C++ 的 eventFilter 捕获后发过来（TextInput 消费了 press 事件，
+        // QML 侧的 Keys.onPressed / onAccepted 都收不到）。
+        // The search box's Enter arrives from the C++ event filter: TextInput consumes the
+        // key press, so neither Keys.onPressed nor onAccepted works here.
+        function onBilibiliSearchSubmitted() {
+            console.log("[bili-search] submitted from event filter, keyword=" + root.keyword)
+            root.doSearch(true)
+        }
         function onBilibiliListReady(kind, items, generation) {
             // One signal carries several kinds now; dispatch on the prefix so a card list,
             // a quality list and a related list cannot be mistaken for one another.
@@ -894,6 +902,11 @@ VPage {
 
                     TextInput {
                         id: searchField
+                        // C++ 的 eventFilter 靠这个名字认出这是搜索框（TextInput 会消费
+                        // press 事件，QML 侧收不到回车）。
+                        // The C++ event filter recognises this box by name: TextInput consumes
+                        // the key press, so QML never sees Return here.
+                        objectName: "bili-search-field"
                         anchors.fill: parent
                         anchors.leftMargin: 12
                         anchors.rightMargin: 12
