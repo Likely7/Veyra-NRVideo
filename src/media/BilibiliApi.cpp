@@ -879,7 +879,7 @@ std::wstring richCommentText(const json::Value& content) {
     return fromUtf8(out);
 }
 
-bool biliComments(const std::wstring& bvid, int page, std::vector<BiliComment>& out,
+bool biliComments(const std::wstring& bvid, int page, int sort, std::vector<BiliComment>& out,
                   std::wstring& error) {
     if (page < 1) page = 1;
     // The reply endpoint keys on aid, so resolve it from the video first.
@@ -891,8 +891,12 @@ bool biliComments(const std::wstring& bvid, int page, std::vector<BiliComment>& 
     const long long aid = viewRoot["data"]["aid"].asInt(0);
     if (aid <= 0) { error = L"视频信息里没有 aid"; return false; }
 
+    // sort 0 = 按时间，1 = 按热度。参数直接透传，和网页版两个选项对应。
+    // sort 0 = by time, 1 = by popularity; passed straight through, matching the web's two
+    // choices.
     const std::wstring path = L"/x/v2/reply?type=1&oid=" + std::to_wstring(aid)
-        + L"&sort=0&pn=" + std::to_wstring(page) + L"&ps=20";
+        + L"&sort=" + std::to_wstring(sort == 1 ? 1 : 0)
+        + L"&pn=" + std::to_wstring(page) + L"&ps=20";
     std::string body;
     if (!httpGet(L"api.bilibili.com", path, g_cookie, body, error)) return false;
     const auto root = json::parse(body);
@@ -1032,6 +1036,11 @@ bool biliEmotePanel(std::vector<BiliEmote>& out, std::wstring& error) {
     std::string body;
     if (!httpGet(L"api.bilibili.com", L"/x/emote/user/panel/web?business=reply", g_cookie,
                  body, error)) return false;
+    // 把返回体开头记下来：这个接口的结构和预期不符时，只有原文能说清差在哪。
+    // Keep the start of the response: when the shape is not what was expected, only the
+    // raw text can show where it differs.
+    log::info("emote", std::format("panel body[{}]= {}",
+                                   body.size(), body.substr(0, 400)));
     const auto root = json::parse(body);
     if (!checkCode(root, error, L"表情")) return false;
     // data.packages[].emotes[]，每个包是一个表情系列；这里把全部平铺出来。

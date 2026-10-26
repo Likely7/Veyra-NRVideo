@@ -147,7 +147,9 @@ struct BiliComment {
 
 // Comments, newest first. The endpoint keys on the video's aid, which is resolved
 // from the bvid here so callers do not have to carry it around.
-bool biliComments(const std::wstring& bvid, int page, std::vector<BiliComment>& out,
+// sort: 0 按时间（最新），1 按热度（最热）—— 与网页版的两个选项一一对应。
+// sort: 0 by time (newest), 1 by popularity (hottest) - the same two choices as the web.
+bool biliComments(const std::wstring& bvid, int page, int sort, std::vector<BiliComment>& out,
                   std::wstring& error);
 
 // One danmaku (bullet) line.

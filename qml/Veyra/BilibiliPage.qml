@@ -516,16 +516,33 @@ VPage {
                 root.comments = root.comments.filter(c => c.rpid !== gone)
                 root.pendingDeleteRpid = 0
                 if (root.detail && root.detail.bvid)
-                    veyra.bilibiliRequestComments(root.detail.bvid, 1)
+                    veyra.bilibiliRequestComments(root.detail.bvid, 1, root.commentSort)
                 return
             }
             if (op === "reply") {
                 root.replySending = false
                 if (!ok) { root.replyMessage = error; return }
                 root.replyMessage = qsTr("评论已发送")
+                // 立刻在列表顶部插一条自己刚发的：等刷新会有一段空窗，看起来像没发出去。
+                // 刷新到达后会整块替换掉它，那时才是服务端的真实数据（含真实 rpid）。
+                // Insert the new comment at the top at once: waiting for the refresh leaves a
+                // gap that looks like nothing happened. The refresh replaces it wholesale with
+                // the server's own copy, real rpid included.
+                const body = root.lastSentReply
+                if (body.length > 0) {
+                    root.comments = [{
+                        author: root.account.name || qsTr("我"),
+                        message: body,
+                        messageRich: root.toRichText(body),
+                        like: 0,
+                        mid: root.account.mid,
+                        rpid: -1,
+                    }].concat(root.comments)
+                }
                 root.replyText = ""
+                root.lastSentReply = ""
                 if (root.detail && root.detail.bvid)
-                    veyra.bilibiliRequestComments(root.detail.bvid, 1)
+                    veyra.bilibiliRequestComments(root.detail.bvid, 1, root.commentSort)
                 return
             }
             if (!ok) return
@@ -774,6 +791,41 @@ VPage {
     property string replyText: ""
     property bool replySending: false
     property string replyMessage: ""
+    // 刚刚发送成功的正文。发送后马上用它在本地的列表里插一条，再等刷新覆盖。
+    // The body just sent successfully; it is inserted locally first and replaced by the
+    // refresh that follows.
+    property string lastSentReply: ""
+
+    // 用已加载的表情把 [名字] 换成图片，和小节里的 C++ 版规则一致。
+    // 表情面板没加载过时退化成原样文本，刷新后自然变成图片。
+    // Turns [name] into an image using the loaded emote panel, same rule as the C++ side.
+    // Without a loaded panel it degrades to plain text and becomes images after the refresh.
+    function toRichText(text) {
+        if (!text) return ""
+        let out = ""
+        for (let i = 0; i < text.length;) {
+            if (text[i] === "[") {
+                const close = text.indexOf("]", i + 1)
+                if (close > i && close - i <= 40) {
+                    const name = text.slice(i, close + 1)
+                    for (let k = 0; k < root.emotes.length; ++k) {
+                        if (root.emotes[k].text === name) {
+                            out += '<img src="https:' + root.emotes[k].url + '" width="22" height="22"/>'
+                            i = close + 1
+                            continue
+                        }
+                    }
+                    // 没有匹配上就走下面的转义分支
+                    // no match: fall through to the escaping branch
+                }
+            }
+            const c = text[i]
+            out += c === "&" ? "&amp;" : c === "<" ? "&lt;"
+                 : c === ">" ? "&gt;" : c === '"' ? "&quot;" : c
+            ++i
+        }
+        return out
+    }
     // 正在删除的评论 rpid：成功后先从本地列表移除，界面立刻有反应，
     // 再向服务端要一次最新列表做最终对齐。
     // The rpid being deleted: on success it is removed from the local list so the change is
@@ -781,6 +833,9 @@ VPage {
     property real pendingDeleteRpid: 0
     // 表情面板状态。拉到之后一直留着，再点按钮不再重复请求。
     // Emote panel state; once fetched it is kept, so reopening costs nothing.
+    // 评论排序：0 最新，1 最热。与网页版的两个选项一致。
+    // Comment order: 0 newest, 1 hottest - the same two choices as the web.
+    property int commentSort: 1
     property var emotes: []
     property bool emotePanelOpen: false
     property bool emoteLoading: false
@@ -800,7 +855,7 @@ VPage {
         // Fetch asynchronously while expanding; collapsing needs no data. The list
         // arrives through onBilibiliCommentsReady.
         if (root.showComments && root.comments.length === 0)
-            veyra.bilibiliRequestComments(root.detail.bvid, 1)
+            veyra.bilibiliRequestComments(root.detail.bvid, 1, root.commentSort)
     }
 
     // One tappable rail entry.
@@ -2270,11 +2325,60 @@ VPage {
                         spacing: 8
                         visible: root.showComments
 
-                        Text {
-                            text: root.comments.length ? qsTr("评论") : qsTr("暂无评论")
-                            color: Theme.t2
-                            font.family: Theme.fontUi
-                            font.pixelSize: 13
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: root.comments.length ? qsTr("评论") : qsTr("暂无评论")
+                                color: Theme.t2
+                                font.family: Theme.fontUi
+                                font.pixelSize: 13
+                            }
+                            // 两个排序各是一个可点的文字；选中的用强调色。
+                            // 点选即重新请求，结果到达后网格整块替换 —— 没有过渡延迟。
+                            // Two clickable labels; the active one is accented. Clicking
+                            // re-fetches, and the arriving list replaces the model outright,
+                            // so the change shows as soon as the data lands.
+                            Text {
+                                text: qsTr("最热")
+                                color: root.commentSort === 1 ? Theme.accent : Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: 12
+                                font.weight: root.commentSort === 1 ? Font.DemiBold : Font.Normal
+                                MouseArea {
+                                    anchors.fill: parent
+                                    anchors.margins: -4
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (root.commentSort === 1) return
+                                        root.commentSort = 1
+                                        root.comments = []
+                                        if (root.detail && root.detail.bvid)
+                                            veyra.bilibiliRequestComments(root.detail.bvid, 1, 1)
+                                    }
+                                }
+                            }
+                            Text {
+                                text: qsTr("最新")
+                                color: root.commentSort === 0 ? Theme.accent : Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: 12
+                                font.weight: root.commentSort === 0 ? Font.DemiBold : Font.Normal
+                                MouseArea {
+                                    anchors.fill: parent
+                                    anchors.margins: -4
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (root.commentSort === 0) return
+                                        root.commentSort = 0
+                                        root.comments = []
+                                        if (root.detail && root.detail.bvid)
+                                            veyra.bilibiliRequestComments(root.detail.bvid, 1, 0)
+                                    }
+                                }
+                            }
                         }
 
                         // 发评论：一个输入框加一个按钮。结果（成功或 B 站给的原因）
@@ -2349,6 +2453,7 @@ VPage {
                                     if (!root.detail || !root.detail.bvid) return
                                     root.replySending = true
                                     root.replyMessage = ""
+                                    root.lastSentReply = body
                                     veyra.bilibiliPostReply(root.detail.bvid, body)
                                 }
                                 onClicked: send()

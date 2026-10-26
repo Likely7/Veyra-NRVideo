@@ -726,7 +726,9 @@ public:
     // Fetch the reply emote panel; the result arrives as bilibiliEmotePanelReady.
     Q_INVOKABLE void bilibiliRequestEmotePanel();
     Q_INVOKABLE void bilibiliRequestWatchLater(const QString& bvid, bool add);
-    Q_INVOKABLE void bilibiliRequestComments(const QString& bvid, int page);
+    // sort: 0 最新，1 最热。缺省按时间，和原来一致。
+    // sort: 0 newest, 1 hottest; the default stays time-ordered as before.
+    Q_INVOKABLE void bilibiliRequestComments(const QString& bvid, int page, int sort = 0);
     Q_INVOKABLE void bilibiliRequestEnableDanmaku(const QString& bvid, int pageIndex);
     Q_INVOKABLE void bilibiliRequestResumeAt(const QString& bvid, qlonglong cid);
     Q_INVOKABLE void bilibiliRequestQrStart();

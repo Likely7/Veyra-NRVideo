@@ -7903,15 +7903,15 @@ void QmlPlayerBridge::bilibiliRequestWatchLater(const QString& bvid, bool add){
 }
 
 // --- 取数型：评论 -----------------------------------------------------------
-void QmlPlayerBridge::bilibiliRequestComments(const QString& bvid, int page){
+void QmlPlayerBridge::bilibiliRequestComments(const QString& bvid, int page, int sort){
     if (bvid.isEmpty()) return;
     media::setBiliCookie(media::loadBilibiliCookie());
     const std::wstring wbvid = bvid.toStdWString();
-    startBiliTask(BiliOp::Comments, [wbvid, page] {
+    startBiliTask(BiliOp::Comments, [wbvid, page, sort] {
         BiliTaskResult r;
         std::wstring error;
         std::vector<media::BiliComment> comments;
-        if (!media::biliComments(wbvid, page, comments, error)) {
+        if (!media::biliComments(wbvid, page, sort, comments, error)) {
             r.error = QString::fromStdWString(error);
             return r;
         }
