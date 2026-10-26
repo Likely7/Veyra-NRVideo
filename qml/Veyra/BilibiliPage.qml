@@ -410,17 +410,20 @@ VPage {
         width: replyInput.width
         height: 132
         visible: root.emotePanelOpen
+        // Popup 自带一层 Controls 主题的背景（带亮色描边），那正是外面那圈白边。
+        // 这里换成和面板一致的底色，contentItem 只负责内容。
+        // Popup brings its own Controls background with a bright outline - that is the white
+        // ring. Replaced with the panel's own colour, leaving contentItem to do just the content.
+        background: Rectangle {
+            radius: 8
+            color: Theme.card2
+        }
 
         // 面板自己开关时同步状态，两条路径不会打架。
         // Keep the flag in step whichever way it opens or closes.
         onClosed: root.emotePanelOpen = false
 
-        contentItem: Rectangle {
-            radius: 8
-            color: Theme.card2
-            border.width: 1
-            border.color: Theme.stroke
-
+        contentItem: Item {
             Text {
                 anchors.centerIn: parent
                 visible: root.emoteLoading
