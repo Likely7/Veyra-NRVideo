@@ -70,6 +70,9 @@ struct PlayerSnapshot {
     // Known injected components loaded when the growth was seen (gfx::riskyInjections).
     std::wstring vramInjected;
     std::wstring status=L"请打开视频或图片";
+    // Set only after the encoder has finished. The actual extension can differ
+    // from the request (HDR screenshots are JXR); no UI-thread file polling.
+    std::wstring savedFramePath;
     EnhancementSettings desired,applied;bool applying=false;
     bool nrActive=false,srActive=false,fgActive=false;
     bool nrAutoActive=false;

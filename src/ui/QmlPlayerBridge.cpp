@@ -375,6 +375,8 @@ struct QmlPlayerBridge::Impl {
   // Custom: how many remembered titles survive; the oldest fall off first.
   int kHdrTitleProfileLimit = 60;
     QString lastScreenshot;
+    QString pendingScreenshot;
+    qint64 pendingScreenshotDeadline=0;
     bool holdKeyDown = false;
     int positionTicks = 0;
     // A reopened file resumes here once its session is running.
@@ -4306,7 +4308,7 @@ int QmlPlayerBridge::imageBatchTotal() const { return int(impl_->imageFiles.size
 int QmlPlayerBridge::imageBatchFailures() const { return impl_->imageFailures; }
 QString QmlPlayerBridge::imageBatchStatus() const { return impl_->imageStatus; }
 void QmlPlayerBridge::saveFrameDialog() {
-    if(!impl_->pendingFrameExport.isEmpty()||imageBatchActive()){emit notice(tr("请等待当前图片导出完成"),true);return;}
+    if(!impl_->pendingFrameExport.isEmpty()||!impl_->pendingScreenshot.isEmpty()||imageBatchActive()){emit notice(tr("请等待当前图片导出完成"),true);return;}
     if (!hasSource()) { emit notice(tr("没有可保存的画面"), true); return; }
     if (impl_->chain.mode == engine::ChainMode::Node) {
         emit notice(tr("图片导出只接受列表模式；请切回列表模式再导出"), true); return;
@@ -4351,6 +4353,19 @@ void QmlPlayerBridge::cancelImageBatch() {
 }
 void QmlPlayerBridge::tickImageBatch() {
     auto& i = *impl_;
+    if(!i.pendingScreenshot.isEmpty()){
+        const QString written=QDir::fromNativeSeparators(QString::fromStdWString(i.snapshot.savedFramePath));
+        const QString hdr=QFileInfo(i.pendingScreenshot).path()+QLatin1Char('/')+QFileInfo(i.pendingScreenshot).completeBaseName()+QStringLiteral(".jxr");
+        if(written==i.pendingScreenshot||written==hdr){
+            i.lastScreenshot=written;i.pendingScreenshot.clear();
+            veyra::log::info("ui-screenshot","saved path="+written.toStdString());
+            emit preferencesChanged();
+            emit notice(tr("截图保存到：%1").arg(QDir::toNativeSeparators(written)),false);
+        }
+        if(!i.pendingScreenshot.isEmpty()&&QDateTime::currentMSecsSinceEpoch()>i.pendingScreenshotDeadline){
+            i.pendingScreenshot.clear();emit notice(tr("图片保存未确认完成，请查看诊断"),true);
+        }
+    }
     if(!i.pendingFrameExport.isEmpty()){
         QString path=i.pendingFrameExport;
         if(!QFileInfo(path).isFile())path=QFileInfo(path).path()+QLatin1Char('/')+QFileInfo(path).completeBaseName()+QStringLiteral(".jxr");
@@ -6761,16 +6776,18 @@ void QmlPlayerBridge::stepFrame(int direction) {
 
 void QmlPlayerBridge::takeScreenshot() {
     if (!hasSource()) { emit notice(tr("没有正在播放的画面，无法截图"), true); return; }
+    if(!impl_->pendingScreenshot.isEmpty()||!impl_->pendingFrameExport.isEmpty()||imageBatchActive()){emit notice(tr("请等待当前图片导出完成"),true);return;}
     const QString folder = screenshotDirectory();
     if (!QDir().mkpath(folder)) { emit notice(tr("截图目录不可用：%1").arg(folder), true); return; }
     const QString name = QStringLiteral("veyra-%1.png")
                              .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss-zzz")));
     const QString path = QDir(folder).filePath(name);
     impl_->engine.saveFrame(wideOf(QDir::toNativeSeparators(path)));
-    impl_->lastScreenshot = path;
+    impl_->pendingScreenshot=path;
+    impl_->pendingScreenshotDeadline=QDateTime::currentMSecsSinceEpoch()+30000;
+    impl_->lastScreenshot.clear();
     veyra::log::info("ui-screenshot", "requested path=" + path.toStdString());
     emit preferencesChanged();
-    emit notice(tr("截图保存到：%1").arg(QDir::toNativeSeparators(path)), false);
 }
 
 // --- shell preferences (P4-f / P4-c / P4-d) --------------------------------

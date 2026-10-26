@@ -10011,3 +10011,22 @@ computer-use技能原生按键/点击：软件专业F11/Esc、顶部还原、极
 构建：复用 `build/claude-screen-recording-20261022`，标签 2.1.0-vrr1，8 个目标 190 秒通过（日志 `logs/claude-vrr-event-query-20261025/build-20261026-001118`，EXE SHA256 cc35f381…e062）。测试：异步查询 33 项、实时预览、呈现线程、UI 合同、Repair 272 项、翻译均 0 失败；QtQuick 115 passed / 0 failed。第一次 QtQuick 运行缺离屏参数，日志为空，不算通过，补参数后重跑。`extract.py --check` 2667 条，0 缺译、0 占位符问题。
 
 实机：`scripts/acceptance/vrr-event-query.py --case native|novrr`，私有配置，真实 1080p30 + VFG 2X。15 秒播放和空闲期间 0 次查询；每个事件 1 次查询，真实屏幕整轮 6 次、模拟不支持 VRR 4 次。对照 fg1 的日志是 28.5 秒 15 次、间隔 2.0 秒。第一轮脚本先执行动作后打标记、并用 250 ms 采样抓“检测中”状态，两处判定有误，修正脚本后两轮通过，产品代码未改。本机屏幕现报告 VRR 等级 3，窗口模式下驱动未报告生效，真实 VRR 生效与全屏切换待用户设备验证。证据 `reports/claude-vrr-event-query-20261025`，截图 `tests/claude-vrr-event-query-20261025/shots`。无用户包、无 merge/push/Release，Lecram 暂停。
+
+
+## 2026-10-26 Codex接续Claude采集链路排查
+
+用户要求接续Claude因额度中断的整体软件/采集链路排查。读取本机Claude会话8ec1c944-fff6-4d57-af33-3ea3ca27c6ab最后交接，核对实际b2eb77d（非摘要中旧未提交状态）。干净claude/capture-review-20261026新开codex/capture-review-handoff-20261026，存checkpoint/pre-capture-review-handoff-20261026；全refs/工作树HEAD、原capture-round/aa-shots/tests JSON存archives/codex-capture-review-handoff-20261026。继承不合main/push/Release/封包、单Agent、不重复实卡一轮、不动用户配置/端点音量/运行库/模型/驱动，Lecram暂停。软件UI默认ea148bf仍独立。
+
+补完固定同帧离线AA验证：用原空节点链的HDR截图作无NR/AA输入，scRGB按203nit/Reinhard转SDR8bit，再跑实际产品GPU图。NR两次完全一致；SMAA后置任意变化22485像素、超过1个8bit等级19402（约0.53%），边缘平均变化约非边缘60倍。前置AA影响更多区域不能当质量优劣或“完全抵消”证明。sdr-smaa-high：2215像素变化、208229平坦像素不变，合成参考误差32.191->6.762；hdr-smaa验证有限值/平坦高光/1000nit与负色域保留。不是原HDR实卡画质或运动盲测。详细图/数据在reports本任务fixed-frame-*；命令capture-review-handoff.py prepare/aa/analyze。
+
+追加确认修复：HDR图重建缓存过期原等1秒，改旧缓存立即使用、只首次无缓存最多100ms；HDR独立查询失败不能永久当有效缓存，最多2次延后重试后等事件，新增3个CPU回归。最大化->全屏->恢复在Windows中间Windowed态触发极简几何动画，direct visibility+fullRestorePending/Qt.callLater保护；最终无尺寸警告。截图以引擎savedFramePath完成结果/Facade比较发布实际编码路径，HDR通知JXR、SDR通知PNG；不用UI线程文件轮询/解码，也不在请求时宣布成功。
+
+构建build-recording-handoff.py --task codex-capture-review-handoff-20261026 --root 当前E树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-cr2：-j2 45.2秒通过；最终截图快照接点重建41.4秒。六目标通过：EffectChain、AsyncDisplay（含新增HDR失败）、UI contract、i18n、Repair272、QtQuick115（Windows/software32.7秒）；最终Snapshot后仅重跑受影响UI/Repair。提取2674条、缺译/占位0。实际Qt/Windows窗口程序化测试（非物理键鼠/非采集）ui-sdr-r4和ui-hdr-r4各约8秒，最大化尺寸恢复、暂停画面、保存文件/lastScreenshot/通知一致；HDR实际HDR10/PQ，写.jxr。所有测试进程<300秒。
+
+纠正原交接：“全效果”实卡其实只有NR/AA/调色/VFG，SR计时0且美颜未强制开启，故不能扩大成全部效果同时通过；原60秒稳态查询0、stall0的证据保留，本轮不再采集。37ms驱动年龄/17.58ms调度等待不是已证硬件物理下限，P95不能相加冒充屏幕延迟。区域日志整轮112条但稳态0，并非正常播放每帧刷盘；双格式发现服务枚举与打开核验，不删保护。
+
+只读复查G50端点仍+30.00dB/hw0x2，微软文档说明共享模式缺硬件音量时由Windows音频引擎软件实现，不是Veyra又放大30dB。未改端点，建议用户自行0dB后复核，未做音量A/B，不能说唯一原因已证实。音频probe原源只Get/Query，无Set，输出reports本任务audio-endpoints-now.txt。
+
+失败均保留：误用hdr-smaa-high用例名退出2，按--list改实际hdr-smaa，仅补该例；matplotlib缺packaging、内置Python缺matplotlib，通过已提供runtime site-packages补依赖，无全局安装；第一版全屏稳定visibility保护仍在中间Windowed失败，再加恢复状态保护后通过；首HDR视频无PQ VUI不能算HDR通过，改x265显式VUI并ffprobe确认后实测；截图完成初稿文件轮询改为引擎完成快照，最终UI两例重验。图/旧失败均是E盘必要证据，未覆盖Claude原JSON/实际原日志。
+
+收尾报告docs/CAPTURE_REVIEW_REPORT_2026-10-26.md；脚本finalize-capture-review-handoff.py验证受保护旧refs/其它树HEAD、177运行组件/源码QML恢复、最终EXE与构建一致、三GPU/六合同/两窗口例、无运行库入Git，生成本任务FINAL与原Claude任务FINAL指针。准确新提交见FINAL，不合main/push/发布/打包。

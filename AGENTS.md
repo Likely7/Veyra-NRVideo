@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-26 Codex接手Claude采集审查**：用户要求接续Claude整体排查剩余工作。b2eb77d干净树新开codex/capture-review-handoff-20261026，按docs/CAPTURE_REVIEW_HANDOFF_PLAN_2026-10-26.md完成同帧AA对照、确认缺陷修复与验收报告；继承用户只做一轮采集（原轮已完成，不重复实卡）、单Agent、全E盘、-j2<=900秒/单测<=300秒、真实配置/端点音量/运行库/模型/驱动不改、不停止用户进程。原Claude分支、main与软件UI默认独立分支保留，不merge main/push/Release/封包，Lecram仍暂停。
+
 > **2026-10-26 采集链路审查与抗锯齿修复（Claude，用户授权）**：用户要求整体审查采集链路及效果器衔接，排除类似VRR轮询的性能拖累，尽量降延迟，修复“抗锯齿开了没变化”，并用采集卡实测一轮（效果器全开）。从main 68def10在claude/capture-review-20261026按docs/CAPTURE_REVIEW_PLAN_2026-10-26.md施工，起点标签checkpoint/pre-capture-review-20261026。允许必要的执行计划/图/展示/采集音频日志/QML四语/定向测试接点。用户的E:/App包与配置只读，其采集进程不停止、不抢设备；实测前由用户自己让出采集卡。单Agent、全E盘、-j2构建<=900秒/单测<=300秒，不改运行库/模型/驱动，无merge/push/Release，Lecram暂停；用户随后追加：HDR显示状态也按VRR改为事件触发，专业模式左下“信号”区放一个公用的“刷新显示器状态”按钮并显示系统HDR开关与可变刷新状态，VRR原刷新按钮挪到这里；顺带排查采集卡声音偏大。为此把claude/vrr-event-query-20261025并入本分支（不进main）；claude/software-ui-default-20261026仍保留未并入。
 
 > **2026-10-25 VRR事件触发查询（Claude）**：用户要求可变刷新/刷新率不再定时查询，改为事件触发并在“可变刷新”旁加“重新检测”按钮，引擎和界面都去掉2秒轮询。从main 68def10在claude/vrr-event-query-20261025按docs/VRR_EVENT_QUERY_PLAN_2026-10-25.md施工，起点标签checkpoint/pre-vrr-event-query-20261025；允许必要的呈现器/引擎/桥接/QML/翻译/CMake/定向测试接点，覆盖这些范围旧冻结。补帧调度、显示同步策略、33ms/250ms刷新不变，不加定时器。单Agent、全E盘、复用build/claude-screen-recording-20261022构建-j2<=900秒/单测<=300秒；不改运行库/模型/驱动/真实配置，无merge/push/Release，Lecram暂停。本机屏幕不支持VRR，真实VRR生效须用户设备验证。

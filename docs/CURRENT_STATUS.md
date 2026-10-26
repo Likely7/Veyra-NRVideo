@@ -1,5 +1,9 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-26 采集审查接手完成（隔离分支）
+
+当前施工在`codex/capture-review-handoff-20261026`，继承Claude的AA后置、事件式VRR/HDR与信号卡片刷新，补完同帧AA对照、截图实际完成路径、HDR缓存/失败重试及全屏最大化恢复修复。完整证据与覆盖纠偏见[采集审查报告](CAPTURE_REVIEW_REPORT_2026-10-26.md)。主线仍68def10，软件UI默认ea148bf独立保留，未合main/push/封包。原实卡轮次只覆盖NR/AA/调色/VFG，不能称全部效果；本次不重复实卡。Lecram暂停。
+
 ## 2026-10-25 近期功能与修复本地整合
 
 用户已授权合入本地main：录制/AMD超分关闭、90°旋转、NR每层手动百分比、FG后台VRR查询、NR视频导出尺寸、#67 NVAPI生命周期，以及本轮采集无时戳预备样本/全屏与播放列表键归属修复。Windows构建、9个定向测试目标、115项QML、真实NR切换/关闭/重开、4K37%+NVOF导出与原生全屏操作通过。CV710原卡/原3090关闭问题仍需现场复测，不冒充已确认根因。详见[整合报告](CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md)；准确main与包身份在E盘reports/capture-audio-main-20261025。正式发布仍为2.1.0；无push/Release，Lecram暂停。以下“未合main”为各历史时点记录，不覆盖本次整合。

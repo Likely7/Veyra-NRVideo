@@ -60,7 +60,7 @@ int wmain(int argc,wchar_t** argv){
         using veyra::engine::DisplayState;using veyra::engine::DisplayStateService;
         const auto windowA=reinterpret_cast<HWND>(uintptr_t(0x10)),windowB=reinterpret_cast<HWND>(uintptr_t(0x20));
         const auto monitorA=reinterpret_cast<HMONITOR>(uintptr_t(0x1000)),monitorB=reinterpret_cast<HMONITOR>(uintptr_t(0x2000));
-        std::atomic<unsigned> calls{0};std::atomic<int> status{0};std::atomic<bool> moved{false},raise{false};
+        std::atomic<unsigned> calls{0};std::atomic<int> status{0};std::atomic<bool> moved{false},raise{false},missingHdr{false};
         std::mutex gateMutex;std::condition_variable gateWake;bool gateOpen=true;
         auto setGate=[&](bool open){{std::lock_guard lock(gateMutex);gateOpen=open;}gateWake.notify_all();};
         auto fakeQuery=[&](HWND window,HMONITOR monitor){
@@ -71,6 +71,7 @@ int wmain(int argc,wchar_t** argv){
             state.vrr.known=true;state.vrr.capsKnown=state.vrr.supportsVrr=state.vrr.currentlyCapable=true;state.vrr.status=status.load();
             // Windows HDR on monitor A only; the panel peak comes from the same answer.
             state.color.hdr=window==windowA;state.color.peakValid=true;state.color.peakNits=window==windowA?1000:400;
+            if(missingHdr)state.color.hdr.reset();
             return state;
         };
         auto monitorOf=[&](HWND window){return window==windowA?monitorA:window==windowB?monitorB:HMONITOR(nullptr);};
@@ -148,6 +149,20 @@ int wmain(int argc,wchar_t** argv){
             auto notAnswering=service.wait(monitorB,std::chrono::milliseconds(500));
             check(notAnswering&&notAnswering->generation<service.generation()&&Clock::now()-quick<std::chrono::milliseconds(100),
                 "waiting without a query for the monitor returns at once");
+        }
+        // HDR can fail independently of a successful VRR call. Keep it unknown
+        // and use the same bounded retry policy instead of caching it forever.
+        {
+            missingHdr=true;DisplayStateService service(fakeQuery,monitorOf,std::chrono::milliseconds(50));
+            const auto before=calls.load();
+            service.request(windowA,"hdr-failure");auto unknown=service.wait(monitorA,std::chrono::milliseconds(500));
+            check(unknown&&!unknown->color.hdr.has_value()&&!service.request(windowA,"test"),"missing HDR is unknown, not fabricated SDR; retry is delayed");
+            unsigned retries=0;
+            for(unsigned i=0;i<4;++i){std::this_thread::sleep_for(std::chrono::milliseconds(70));if(service.request(windowA,"test")){++retries;service.wait(monitorA,std::chrono::milliseconds(500));}}
+            check(retries==2&&calls==before+3,"HDR failure retries twice and never becomes a permanent polling loop");
+            missingHdr=false;service.invalidate("manual");service.request(windowA,"manual");
+            auto recovered=service.wait(monitorA,std::chrono::milliseconds(500));
+            check(recovered&&recovered->color.hdr==true&&!service.request(windowA,"test"),"manual refresh recovers HDR and caches the valid answer");
         }
         // Destruction waits for the running driver call, never for the queue.
         setGate(false);

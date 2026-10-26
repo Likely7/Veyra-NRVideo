@@ -57,7 +57,10 @@ Window {
     // Maximized behaves like fullscreen for geometry: the screen owns the size,
     // so the cinema aspect rule must not fight the window manager.
     readonly property bool maximized: visibility === Window.Maximized
-    readonly property bool screenSized: fullTarget || maximized
+    // Use visibility directly: leaving fullscreen clears fullTarget before the
+    // Maximized binding settles. The cinema animation must not resize a screen
+    // sized window during that transition.
+    readonly property bool screenSized: fullTarget || fullRestorePending || visibility === Window.FullScreen || visibility === Window.Maximized
     function toggleMaximized() {
         // The dock's restore button must also leave fullscreen, using the same
         // saved window state and cleanup as F11 / the transport button.
@@ -128,7 +131,7 @@ Window {
     // mode exists to avoid.
     onHeightChanged: videoHost.syncRect()
     onMaximizedChanged: {
-        if (!maximized && cinema && !fullTarget) height = Math.round(pictureHeight)
+        if (visibility === Window.Windowed && cinema && !fullTarget && !fullRestorePending) height = Math.round(pictureHeight)
         videoHost.syncRect()
     }
     onPageChanged: {
@@ -394,6 +397,9 @@ Window {
     // cinema rule would otherwise snap that fullscreen size back to the film.
     property bool fullTarget: false
     property int fullRestoreVisibility: Window.Windowed
+    // Windows may briefly report Windowed while restoring a maximized window.
+    // Keep cinema sizing out of that native transition, without a polling timer.
+    property bool fullRestorePending: false
     property bool fullLocked: false
     // Fullscreen quick-adjust panel (Home): the professional mode's own controls
     // over the picture - the list inspector (with the performance orbs) in list
@@ -472,7 +478,7 @@ Window {
         if (!fullscreen) {
             fullLocked = false
             closeQuickPanel()
-            if (cinema && !maximized) height = Math.round(pictureHeight)
+            if (cinema && visibility === Window.Windowed && !fullRestorePending) height = Math.round(pictureHeight)
         }
         fullControls = true
         fullHide.restart()
@@ -490,8 +496,10 @@ Window {
             fullTarget = true
             visibility = Window.FullScreen
         } else {
+            fullRestorePending = fullRestoreVisibility === Window.Maximized
             fullTarget = false
             visibility = fullRestoreVisibility
+            Qt.callLater(function() { root.fullRestorePending = false })
         }
         veyra.logUi("ui-fullscreen", "enabled=" + fullscreen)
     }

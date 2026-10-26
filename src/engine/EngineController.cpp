@@ -365,7 +365,7 @@ bool EngineController::requestSettings(EnhancementSettings s,std::optional<Chain
     desiredNodeOrder_=order;desired_=s;snapshot_.desired=s;snapshot_.applying=snapshot_.applied!=desired_;
     if(acceptedRevision)*acceptedRevision=s.revision;return true;
 }
-void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(mutex_);savePath_=path;}
+void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(mutex_);savePath_=path;snapshot_.savedFramePath.clear();}
 bool EngineController::requestRecording(const RecordingSettings& options,std::wstring& error){return recorder_->start(options,error);}
 void EngineController::stopRecording(){recorder_->stop();}
 RecordingStatus EngineController::recordingSnapshot()const{return recorder_->status();}
@@ -713,13 +713,15 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // Windows HDR comes from the shared display state (the same background
             // query as refresh and VRR, asked again only on a display change, a
             // monitor change or 刷新显示器状态). A new graph waits for a missing or
-            // stale answer once, like the synchronous query it replaces.
+            // answer once (100ms maximum). A stale target-local cache stays
+            // usable while the worker refreshes it; a settings transaction must
+            // never wait for an unrelated slow VRR/driver call to finish.
             auto displayHdrActive=[&]{
                 const HMONITOR target=displayStates_.monitorOf(window);
                 auto known=displayStates_.state(target);
                 if(!known||known->generation!=displayStates_.generation()){
                     displayStates_.request(window,"hdr-output");
-                    known=displayStates_.wait(target,std::chrono::seconds(1));
+                    if(!known)known=displayStates_.wait(target,std::chrono::milliseconds(100));
                 }
                 const std::optional<bool> queried=known?known->color.hdr:std::nullopt;
                 if(known)hdrDisplaySerial=known->serial;
@@ -1563,8 +1565,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 std::wstring save;EnhancementSettings requested;std::optional<ChainRuntimeOrder> requestedOrder;
                 {std::lock_guard lock(mutex_);requested=desired_;requestedOrder=desiredNodeOrder_;if(hasOutput)save.swap(savePath_);}
                 if(!save.empty()){try{sink::RgbaImage result;const auto e=std::filesystem::path(save).extension().wstring();
+                    const auto saved=[this](const std::wstring& path,const std::wstring& message){
+                        {std::lock_guard lock(mutex_);snapshot_.savedFramePath=path;}
+                        status(message);
+                    };
                     drainLivePresentation();
-                    if(graph->hdrOutput()){auto hdrPath=std::filesystem::path(save);hdrPath.replace_extension(L".jxr");if(sink::saveHdrScreenshot(hdrPath.wstring(),ctx,ring,graph->videoFrameResource(out.videoSlot)))status(L"HDR截图已保存："+hdrPath.wstring());else status(L"HDR截图保存失败，请查看日志",false);}else if(!sink::readRgba8(ctx,ring,graph->videoFrameResource(out.videoSlot),result)||!sink::saveImage(save,result,e==L".jpg"||e==L".jpeg"))status(L"保存失败（目标文件可能已存在），播放已保留",false);else{status(L"图片已保存："+save);veyra::log::info("image-save",std::format("saved extent={}x{} revision={}",gd.workWidth,gd.workHeight,options.settings.revision));}}
+                    if(graph->hdrOutput()){auto hdrPath=std::filesystem::path(save);hdrPath.replace_extension(L".jxr");if(sink::saveHdrScreenshot(hdrPath.wstring(),ctx,ring,graph->videoFrameResource(out.videoSlot)))saved(hdrPath.wstring(),L"HDR截图已保存："+hdrPath.wstring());else status(L"HDR截图保存失败，请查看日志",false);}else if(!sink::readRgba8(ctx,ring,graph->videoFrameResource(out.videoSlot),result)||!sink::saveImage(save,result,e==L".jpg"||e==L".jpeg"))status(L"保存失败（目标文件可能已存在），播放已保留",false);else{saved(save,L"图片已保存："+save);veyra::log::info("image-save",std::format("saved extent={}x{} revision={}",gd.workWidth,gd.workHeight,options.settings.revision));}}
                     catch(const std::exception& e){veyra::log::warn("image-save",std::format("save exception; retaining session: {}",e.what()));status(L"保存异常，播放已保留；可再次保存",false);}}
                 if(isImage)requested.multiplier=1;
                 if(requested.revision==options.settings.revision&&requested!=options.settings){

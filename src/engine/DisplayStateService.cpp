@@ -109,6 +109,7 @@ void DisplayStateService::collectLocked(){
                     job.reason,monitorName(job.monitor),job.generation,state.refreshHz,gfx::vrrLevel(state.vrr),state.vrr.status,
                     state.color.hdr?(*state.color.hdr?"on":"off"):"unknown",state.color.peakValid?int(state.color.peakNits):-1,state.refreshMs,state.vrrMs,state.colorMs));
                 if(state.vrr.status!=0)failedLocked(entry,job,std::format("NVAPI status={}",state.vrr.status));
+                else if(!state.color.hdr.has_value())failedLocked(entry,job,"HDR output description unavailable");
                 else if(entry.failedGeneration==job.generation)entry.failures=0;
             }
         }catch(const std::exception& error){failedLocked(entry,job,std::format("exception: {}",error.what()));}
