@@ -811,7 +811,11 @@ VPage {
                     const name = text.slice(i, close + 1)
                     for (let k = 0; k < root.emotes.length; ++k) {
                         if (root.emotes[k].text === name) {
-                            out += '<img src="https:' + root.emotes[k].url + '" width="22" height="22"/>'
+                            // 与面板同一套规则：只有协议相对地址才补 https:。
+                            // Same rule as the panel: only protocol-relative addresses get a scheme.
+                            const eu = root.emotes[k].url
+                            out += '<img src="' + (eu.startsWith("//") ? "https:" + eu : eu)
+                                 + '" width="22" height="22"/>'
                             i = close + 1
                             continue
                         }
@@ -2354,7 +2358,10 @@ VPage {
                                 font.family: Theme.fontUi
                                 font.pixelSize: 12
                             }
-                            Item { Layout.fillWidth: true }
+                            // 排序紧跟评论数，不推到最右 —— 按参考图那样整体靠左。
+                            // The order choices sit right after the count instead of being
+                            // pushed to the far edge, matching the reference layout.
+                            Item { Layout.preferredWidth: 14 }
 
                             Text {
                                 text: qsTr("最热")
@@ -2533,9 +2540,18 @@ VPage {
                                         anchors.centerIn: parent
                                         width: 26
                                         height: 26
-                                        // 接口给的是 //i0.hdslb.com 这种协议相对地址。
-                                        // The endpoint returns a protocol-relative address.
-                                        source: modelData.url ? "https:" + modelData.url : ""
+                                        // 地址可能是完整的 https://…，也可能是 //i0.hdslb.com…
+                                        // 这种协议相对形式 —— 只在后者前面补协议。之前无条件加
+                                        // "https:" 把完整地址拼成了 https:https://…，图片自然全空。
+                                        // The address may be a full https://... or protocol-relative
+                                        // //i0.hdslb.com...; only the latter needs a scheme. Adding
+                                        // it unconditionally produced https:https://..., which is
+                                        // why every image came out blank.
+                                        source: {
+                                            const u = modelData.url || ""
+                                            if (u.length === 0) return ""
+                                            return u.startsWith("//") ? "https:" + u : u
+                                        }
                                         asynchronous: true
                                         cache: true
                                         fillMode: Image.PreserveAspectFit
