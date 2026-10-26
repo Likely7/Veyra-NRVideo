@@ -2671,6 +2671,14 @@ VPage {
                     ColumnLayout {
                         id: commentSection
                         Layout.fillWidth: true
+                        // 实测这一层自己就是 848，而父级只有 814 —— 它被内容撑宽了。
+                        // 布局容器默认按子元素的 implicitWidth 算自己的 implicitWidth，
+                        // 长评论于是把整块评论区顶宽，超出的部分伸出左栏、被裁掉。
+                        // Measured: this layer was 848 wide while its parent was 814 - the
+                        // content widened it. A layout container derives its own implicitWidth
+                        // from its children, so a long comment pushed the whole section out
+                        // past the column, where it got clipped.
+                        Layout.preferredWidth: 0
                         spacing: 8
                         visible: root.showComments
 
@@ -2872,6 +2880,11 @@ VPage {
                         Column {
                             id: commentList
                             Layout.fillWidth: true
+                            Layout.preferredWidth: 0
+                            // Column 也是定位器，implicitWidth 同样只读；宽度已经完全由
+                            // width 这一行决定，不需要它。
+                            // Column is a positioner too, so implicitWidth is read-only as
+                            // well; the width line below already settles it.
                             width: commentSection.width
                             spacing: 8
 
