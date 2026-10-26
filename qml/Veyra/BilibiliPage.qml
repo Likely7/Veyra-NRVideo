@@ -703,7 +703,7 @@ VPage {
                 root.comments = root.comments.filter(c => c.rpid !== gone)
                 root.pendingDeleteRpid = 0
                 if (root.detail && root.detail.bvid)
-                    veyra.bilibiliRequestComments(root.detail.bvid, 1, root.commentSort)
+                    root.reloadComments()
                 return
             }
             if (op === "reply") {
@@ -774,9 +774,22 @@ VPage {
                         + (list.length > 0 ? JSON.stringify(list[0]) : "none"))
         }
         function onBilibiliCommentsReady(comments, total, ok, error) {
+            const page = root.commentPendingPage || 1
+            root.commentLoadingMore = false
             if (!ok) return
-            root.comments = comments
             root.commentTotal = total
+            if (page <= 1) {
+                root.comments = comments
+            } else {
+                // 追加：翻页时不能整块替换，否则前面看过的会被冲掉。
+                // Append: a later page must not replace the list, or what was already read
+                // disappears.
+                root.comments = root.comments.concat(comments)
+            }
+            root.commentPage = page
+            // 还有没有下一页：拿到空页，或者已经够总数，就停。
+            // More to come unless the page came back empty or the total is reached.
+            root.commentHasMore = comments.length > 0 && root.comments.length < total
         }
         // 弹幕轨道加载结果：只更新**条数**，不碰开关。
         // 开关的状态来自持久化偏好，加载成功与否都不会改变用户的选择。
@@ -1061,6 +1074,39 @@ VPage {
     // 评论总数，来自接口的 data.page.count。
     // The overall comment count, from data.page.count.
     property real commentTotal: 0
+    // 分页：评论接口一页 20 条，滚到底再要下一页。
+    // Paging: the endpoint returns 20 per page; the next one is requested when the end is
+    // reached.
+    property int commentPage: 1
+    property int commentPendingPage: 0
+    property bool commentHasMore: false
+    property bool commentLoadingMore: false
+
+    // 统一入口：记下这次要的是第几页，结果回来时才能判断该替换还是追加。
+    // One entry point: remember which page was asked for so the reply can be applied as a
+    // replacement or an append.
+    function requestComments(page) {
+        if (!root.detail || !root.detail.bvid) return
+        const p = Math.max(1, page)
+        root.commentPendingPage = p
+        if (p > 1) root.commentLoadingMore = true
+        veyra.bilibiliRequestComments(root.detail.bvid, p, root.commentSort)
+    }
+
+    // 第一页（切换视频、切换排序时用）：清空重来。
+    // First page, used when the video or the order changes: start over.
+    function reloadComments() {
+        root.commentPage = 1
+        root.commentHasMore = false
+        root.commentLoadingMore = false
+        root.comments = []
+        root.requestComments(1)
+    }
+
+    function loadMoreComments() {
+        if (root.commentLoadingMore || !root.commentHasMore) return
+        root.requestComments(root.commentPage + 1)
+    }
     // 全部表情（平铺）与分组后的包名列表、以及当前选中的包。
     // All emotes flattened, plus the package names and the one being shown.
     property var emotes: []
@@ -1082,8 +1128,10 @@ VPage {
         interval: 2000
         repeat: false
         onTriggered: {
-            if (root.detail && root.detail.bvid)
-                veyra.bilibiliRequestComments(root.detail.bvid, 1, root.commentSort)
+            // 发送后重新从第一页取，页码要跟着回到 1，否则下一次翻页会算错。
+            // Re-read from page one after posting, so the page counter has to return to 1
+            // or the next "load more" would ask for the wrong page.
+            root.reloadComments()
         }
     }
 
@@ -1103,7 +1151,7 @@ VPage {
         // Fetch asynchronously while expanding; collapsing needs no data. The list
         // arrives through onBilibiliCommentsReady.
         if (root.showComments && root.comments.length === 0)
-            veyra.bilibiliRequestComments(root.detail.bvid, 1, root.commentSort)
+            root.reloadComments()
     }
 
     // One tappable rail entry.
@@ -2194,6 +2242,17 @@ VPage {
                          && root.qrState.length === 0
                 contentHeight: detailColumn.implicitHeight
                 clip: true
+                // 滚到接近底部时自动取下一页评论，和首页的无限加载同一套思路：
+                // 提前一屏多一点就开始取，用户滑到底时通常已经接上了。
+                // Ask for the next page of comments near the bottom, the same idea as the
+                // home feed: start a bit early so the append usually lands before the user
+                // reaches the end.
+                onContentYChanged: {
+                    if (!root.showComments || root.commentLoadingMore || !root.commentHasMore)
+                        return
+                    if (contentHeight <= height) return
+                    if (contentY + height >= contentHeight - 400) root.loadMoreComments()
+                }
 
 
                 ColumnLayout {
@@ -2617,9 +2676,7 @@ VPage {
                                     onClicked: {
                                         if (root.commentSort === 1) return
                                         root.commentSort = 1
-                                        root.comments = []
-                                        if (root.detail && root.detail.bvid)
-                                            veyra.bilibiliRequestComments(root.detail.bvid, 1, 1)
+                                        root.reloadComments()
                                     }
                                 }
                             }
@@ -2642,9 +2699,7 @@ VPage {
                                     onClicked: {
                                         if (root.commentSort === 0) return
                                         root.commentSort = 0
-                                        root.comments = []
-                                        if (root.detail && root.detail.bvid)
-                                            veyra.bilibiliRequestComments(root.detail.bvid, 1, 0)
+                                        root.reloadComments()
                                     }
                                 }
                             }
@@ -2737,6 +2792,19 @@ VPage {
                             color: root.replyMessage === qsTr("评论已发送") ? Theme.ok : Theme.warn
                             font.family: Theme.fontUi
                             font.pixelSize: 11
+                        }
+
+                        // 还有更多评论时的提示，避免用户以为已经到底了。
+                        // A hint while more comments exist, so the end does not look final.
+                        Text {
+                            Layout.fillWidth: true
+                            visible: root.showComments && root.commentHasMore
+                            text: root.commentLoadingMore ? qsTr("正在加载更多评论…")
+                                                          : qsTr("继续下滑加载更多评论")
+                            color: Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 11
+                            horizontalAlignment: Text.AlignHCenter
                         }
 
                         Repeater {
