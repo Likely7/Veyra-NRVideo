@@ -1160,6 +1160,47 @@ VPage {
     }
 
     // One tappable rail entry.
+    // 带平滑滚轮的 Flickable，供详情页的评论区和右侧相关推荐使用。
+    // 参数和首页推荐完全一致：一格 100 px、150 ms、OutQuad —— 三处手感统一。
+    // A Flickable with smooth wheel scrolling, used by the comment area and the
+    // related-videos column. Same figures as the home feed - 100 px per notch, 150 ms,
+    // OutQuad - so all three feel identical.
+    component SmoothFlickable: Flickable {
+        id: smoothFlick
+        property real wheelTargetY: 0
+        readonly property real wheelStep: 100
+
+        WheelHandler {
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            onWheel: function(event) {
+                event.accepted = true
+                const delta = event.pixelDelta.y !== 0
+                    ? -event.pixelDelta.y
+                    : -(event.angleDelta.y / 120.0) * smoothFlick.wheelStep
+                const maxY = Math.max(0, smoothFlick.contentHeight - smoothFlick.height)
+                // 动画进行中从当前目标继续累加，连续滚才接得上。
+                // While the animation runs, accumulate onto its target so repeated notches
+                // chain instead of fighting each other.
+                const base = smoothMove.running ? smoothFlick.wheelTargetY : smoothFlick.contentY
+                smoothFlick.wheelTargetY = Math.max(0, Math.min(maxY, base + delta))
+                // 显式给 from，否则动画会从旧起点重算，位置会跳。
+                // `from` is set explicitly, or the animation recomputes from the old origin
+                // and the position jumps.
+                smoothMove.stop()
+                smoothMove.from = smoothFlick.contentY
+                smoothMove.to = smoothFlick.wheelTargetY
+                smoothMove.start()
+            }
+        }
+        NumberAnimation {
+            id: smoothMove
+            target: smoothFlick
+            property: "contentY"
+            duration: 150
+            easing.type: Easing.OutQuad
+        }
+    }
+
     component NavItem: Rectangle {
         id: navItem
         property string label
@@ -2247,7 +2288,7 @@ VPage {
                 visible: root.view === "detail" && !root.showSettings
                          && root.qrState.length === 0
 
-            Flickable {
+            SmoothFlickable {
                 id: detailFlick
                 // 用 anchors 而不是布局：左栏的右边界直接等于右栏的左边界，
                 // 数学上不可能重叠。之前用 RowLayout 分配宽度，内容仍然撑出去盖住右栏。
@@ -3021,7 +3062,7 @@ VPage {
                             font.pixelSize: 13
                         }
 
-                        Flickable {
+                        SmoothFlickable {
                             id: relatedFlick
                             Layout.fillWidth: true
                             Layout.fillHeight: true
