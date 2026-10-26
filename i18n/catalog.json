@@ -1618,11 +1618,11 @@
    "ja": "OBS ゲームキャプチャ互換でインターフェースはソフトウェア描画です。RTSS の OSD は映像にだけ表示されます"
   },
   {
-   "zh": "OBS、监控软件兼容需重启；HDR 补帧兼容可在播放中切换。",
+   "zh": "OBS 游戏采集兼容开启时，界面始终软件绘制",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "OBS、監控軟體相容需重新啟動；HDR 補幀相容可在播放中切換。",
-   "en": "OBS and monitoring compatibility require a restart; HDR frame generation compatibility can be switched during playback.",
-   "ja": "OBS とモニタリングソフトの互換設定は再起動が必要です。HDR フレーム生成の互換設定は再生中に切り替えられます。"
+   "zh-TW": "OBS 遊戲擷取相容開啟時，介面一律以軟體繪製",
+   "en": "With OBS game capture compatibility on, the interface is always drawn in software",
+   "ja": "OBS ゲームキャプチャ互換がオンの間、インターフェースは常にソフトウェア描画です"
   },
   {
    "zh": "PC 串流",
@@ -5110,6 +5110,13 @@
    "zh-TW": "只壓縮向白色溢出的變化，保留高光回暗",
    "en": "Compress changes toward blown whites; retain highlight darkening",
    "ja": "白飛びする変化だけを圧縮し、ハイライトの減光は保持します"
+  },
+  {
+   "zh": "只在“界面绘制”选 GPU 时起作用；软件绘制时小飞机 OSD 只显示在视频上",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "只在「介面繪製」選 GPU 時起作用；軟體繪製時小飛機 OSD 只顯示在影片上",
+   "en": "Only matters when Interface drawing is set to GPU; with software drawing the RTSS OSD shows on the video only",
+   "ja": "「インターフェース描画」が GPU のときだけ有効です。ソフトウェア描画では RTSS の OSD は映像にだけ表示されます"
   },
   {
    "zh": "只在这个亮度以下的暗部生效",
@@ -10132,6 +10139,13 @@
    "ja": "{} フレーム目で GPU がリセットされました。最初の {:.1f} 秒は保存済みで、残りを書き出します"
   },
   {
+   "zh": "显卡绘制：动画更顺，带阴影与模糊；占用显存和 GPU，可能与小飞机等监控软件冲突",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "顯示卡繪製：動畫更順，帶陰影與模糊；佔用顯示記憶體和 GPU，可能與小飛機等監控軟體衝突",
+   "en": "GPU drawing: smoother animation with shadows and blur; uses video memory and GPU time, and may conflict with RTSS and other monitoring overlays",
+   "ja": "GPU 描画：アニメーションが滑らかで影・ぼかしあり。VRAM と GPU を使い、RTSS などのモニタリングソフトと競合することがあります"
+  },
+  {
    "zh": "显卡调度、预热与资源监控。默认设置适合大多数机器。",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "顯示卡排程、預熱與資源監控。預設值適合大多數電腦。",
@@ -10956,6 +10970,13 @@
    "zh-TW": "本次播放偵測到全螢幕顯示記憶體持續增加，請使用視窗播放；重新開啟來源後可再次測試全螢幕。",
    "en": "VRAM kept growing in fullscreen during this session. Use windowed playback; reopen the source to test fullscreen again.",
    "ja": "この再生では全画面中に VRAM が増え続けました。ウィンドウ表示を使用してください。ソースを開き直すと全画面を再テストできます。"
+  },
+  {
+   "zh": "本次检测到监控软件，仍用软件绘制（监控软件兼容：自动）",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "本次偵測到監控軟體，仍以軟體繪製（監控軟體相容：自動）",
+   "en": "A monitoring overlay was detected at this start, so the interface is still drawn in software (monitoring overlay compatibility: Auto)",
+   "ja": "今回の起動でモニタリングソフトを検出したため、ソフトウェア描画のままです（モニタリングソフト互換：自動）"
   },
   {
    "zh": "本软件开源免费，如果对你有帮助，你可以 →",
@@ -12587,6 +12608,20 @@
    "zh-TW": "介面狀態擷取會話損壞",
    "en": "The capture session in the interface state is damaged",
    "ja": "画面状態のキャプチャーセッションが破損しています"
+  },
+  {
+   "zh": "界面绘制",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "介面繪製",
+   "en": "Interface drawing",
+   "ja": "インターフェース描画"
+  },
+  {
+   "zh": "界面绘制、OBS、监控软件兼容需重启；HDR 补帧兼容可在播放中切换。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "介面繪製、OBS、監控軟體相容需重新啟動；HDR 補幀相容可在播放中切換。",
+   "en": "Interface drawing, OBS and monitoring compatibility require a restart; HDR frame generation compatibility can be switched during playback.",
+   "ja": "インターフェース描画、OBS、モニタリングソフトの互換設定は再起動が必要です。HDR フレーム生成の互換設定は再生中に切り替えられます。"
   },
   {
    "zh": "界面缩放",
@@ -15655,6 +15690,13 @@
    "ja": "字幕の変換"
   },
   {
+   "zh": "软件",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "軟體",
+   "en": "Software",
+   "ja": "ソフトウェア"
+  },
+  {
    "zh": "软件不检测、不拦截两者叠加，也不修改驱动配置；AMD FSR 补帧暂不提供。",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "軟體不檢測、不攔截兩者疊加，也不修改驅動設定；AMD FSR 補幀暫不提供。",
@@ -15674,6 +15716,13 @@
    "zh-TW": "軟體內測得的音畫偏差，不是揚聲器實測；只在擷取卡 / PS5 即時輸入時有",
    "en": "Audio/video offset measured inside the app, not at the speakers; only for live capture card / PS5 input",
    "ja": "アプリ内で測定した音声と映像のずれで、スピーカーでの実測ではありません。キャプチャーカード / PS5 のライブ入力時のみ"
+  },
+  {
+   "zh": "软件绘制：兼容性最好，不占显存，不和视频抢 GPU；部分阴影与模糊简化",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "軟體繪製：相容性最好，不佔顯示記憶體，不和影片搶 GPU；部分陰影與模糊簡化",
+   "en": "Software drawing: best compatibility, no video memory, no competition with the video for the GPU; some shadows and blur are simplified",
+   "ja": "ソフトウェア描画：互換性が最も高く、VRAM を使わず、映像と GPU を取り合いません。一部の影・ぼかしは簡略化されます"
   },
   {
    "zh": "软件解码",

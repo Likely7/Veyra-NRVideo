@@ -766,7 +766,7 @@ VPage {
                     visible: root.section === "compat"
                     VH1 { text: qsTr("兼容") }
                     Text {
-                        text: qsTr("OBS、监控软件兼容需重启；HDR 补帧兼容可在播放中切换。")
+                        text: qsTr("界面绘制、OBS、监控软件兼容需重启；HDR 补帧兼容可在播放中切换。")
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -774,6 +774,40 @@ VPage {
                         wrapMode: Text.WordWrap
                     }
                     VGroup {
+                        VRow {
+                            // 界面绘制 (veyra/ui/InterfaceRenderer.h, read by main.cpp at start).
+                            // Software by default: no swapchain or D3D12 device of its own for
+                            // overlays to hook, and no video memory. OBS 游戏采集兼容 and
+                            // 监控软件兼容 still draw in software when GPU is chosen.
+                            readonly property bool gpuChosen: veyra.preferences.uiRenderer === "gpu"
+                            label: qsTr("界面绘制")
+                            hint: gpuChosen
+                                  ? (!veyra.softwareUiActive
+                                     ? qsTr("显卡绘制：动画更顺，带阴影与模糊；占用显存和 GPU，可能与小飞机等监控软件冲突")
+                                     : veyra.obsGameCaptureActive
+                                       ? qsTr("OBS 游戏采集兼容开启时，界面始终软件绘制")
+                                       : veyra.overlayCompatActive
+                                         ? qsTr("本次检测到监控软件，仍用软件绘制（监控软件兼容：自动）")
+                                         : qsTr("重启后生效"))
+                                  : (veyra.softwareUiActive
+                                     ? qsTr("软件绘制：兼容性最好，不占显存，不和视频抢 GPU；部分阴影与模糊简化")
+                                     : qsTr("重启后生效"))
+                            VSeg {
+                                objectName: "set-ui-renderer"
+                                options: [{ id: "software", label: qsTr("软件") }, { id: "gpu", label: "GPU" }]
+                                current: veyra.preferences.uiRenderer === "gpu" ? "gpu" : "software"
+                                onPicked: id => {
+                                    // A restart changes the renderer unless a compatibility rule
+                                    // keeps the interface in software anyway.
+                                    const changes = id === "gpu"
+                                        ? veyra.softwareUiActive && !veyra.obsGameCaptureActive
+                                          && !((veyra.preferences.overlayCompat || "auto") === "auto" && veyra.presentationOverlayRunning())
+                                        : !veyra.softwareUiActive
+                                    if (veyra.setPreference("uiRenderer", id) && changes)
+                                        obsRestart.open()
+                                }
+                            }
+                        }
                         VRow {
                             label: qsTr("HDR 补帧闪黑兼容")
                             hint: qsTr("默认关闭。仅 NVIDIA HDR10 补帧时生效；4K 额外约 32 MiB 显存，可能增加 GPU 开销。切换时画面可能短暂停顿。")
@@ -801,11 +835,16 @@ VPage {
                         VRow {
                             // RivaTuner (MSI Afterburner's OSD), NVIDIA's in-game overlay and GamePP: see
                             // main.cpp. Auto draws the interface in software when one runs at start, so
-                            // they only hook the video.
+                            // they only hook the video. With 界面绘制 = 软件 (the default) the interface
+                            // is drawn in software anyway, and this choice changes nothing.
+                            id: overlayCompatRow
                             readonly property bool automatic: (veyra.preferences.overlayCompat || "auto") === "auto"
+                            readonly property bool gpuChosen: veyra.preferences.uiRenderer === "gpu"
                             label: qsTr("监控软件兼容")
                             hint: veyra.obsGameCaptureActive
                                   ? qsTr("OBS 游戏采集兼容已让界面软件绘制，小飞机 OSD 只显示在视频上")
+                                  : !gpuChosen
+                                  ? qsTr("只在“界面绘制”选 GPU 时起作用；软件绘制时小飞机 OSD 只显示在视频上")
                                   : (automatic !== veyra.overlayCompatActive && (veyra.overlayCompatActive || veyra.presentationOverlayRunning()))
                                     ? qsTr("重启后生效")
                                     : veyra.overlayCompatActive
@@ -819,6 +858,7 @@ VPage {
                                 current: veyra.preferences.overlayCompat || "auto"
                                 onPicked: id => {
                                     if (veyra.setPreference("overlayCompat", id) && !veyra.obsGameCaptureActive
+                                            && overlayCompatRow.gpuChosen
                                             && (id === "auto") !== veyra.overlayCompatActive
                                             && (veyra.overlayCompatActive || veyra.presentationOverlayRunning()))
                                         obsRestart.open()

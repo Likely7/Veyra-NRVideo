@@ -11,6 +11,7 @@
 #include "veyra/engine/PreviewView.h"
 #include "veyra/source/CaptureAudioClock.h"
 #include "veyra/source/DeckLinkInputConnection.h"
+#include "veyra/ui/InterfaceRenderer.h"
 #include <iostream>
 #include <vector>
 #include <stdexcept>
@@ -99,9 +100,40 @@ void outputRateContracts(){
     require(std::wstring(h.rateStatus(s))==L"补帧调度降档","uncapped FG admission shortfall retains its own warning");
     std::cout<<"PASS output-rate policy: dedup, static, half-rate, display sync, caps, provider, speed, comparison, real deficits and resets\n";
 }
+// 设置 → 界面绘制 (2026-10-26): software unless GPU is chosen; the OBS and 监控软件兼容
+// rules and VEYRA_UI_RHI keep the meaning they had before the default changed.
+static void interfaceRendererContracts(){
+    using namespace veyra::ui;
+    using R=InterfaceRendererReason;
+    auto decide=[](bool gpu,bool obs,bool autoCompat,bool overlay,bool restart,bool forced){
+        return decideInterfaceRenderer({gpu,obs,autoCompat,overlay,restart,forced});
+    };
+    auto d=decide(false,false,true,false,false,false);
+    require(d.software&&d.reason==R::Default&&!d.overlayCompat,"a fresh profile draws the interface in software");
+    d=decide(true,false,true,false,false,false);
+    require(!d.software&&d.reason==R::Gpu,"GPU chosen and nothing to stay compatible with: GPU interface");
+    d=decide(true,false,true,true,false,false);
+    require(d.software&&d.reason==R::OverlayCompat&&d.overlayCompat,"GPU chosen, an overlay at start and 监控软件兼容 auto: software as before");
+    d=decide(true,false,false,true,false,false);
+    require(!d.software&&!d.overlayCompat,"GPU chosen with 监控软件兼容 off stays GPU next to an overlay, as before");
+    d=decide(true,false,true,false,true,false);
+    require(d.software&&d.reason==R::OverlayCompat,"an accepted compatibility restart draws in software");
+    for(bool gpu:{false,true})for(bool forced:{false,true}){
+        d=decide(gpu,true,true,true,false,forced);
+        require(d.software&&d.reason==R::ObsGameCapture&&!d.overlayCompat,"OBS game capture always draws in software");
+    }
+    d=decide(false,false,true,true,false,false);
+    require(d.software&&d.reason==R::OverlayCompat&&d.overlayCompat,"software default with an overlay still reports the compatibility rule");
+    for(bool gpu:{false,true})for(bool overlay:{false,true}){
+        d=decide(gpu,false,true,overlay,false,true);
+        require(!d.software&&d.reason==R::Gpu&&!d.overlayCompat,"VEYRA_UI_RHI picks a GPU renderer and skips the compatibility rule");
+    }
+    std::cout<<"PASS interface renderer: software default, GPU choice, OBS / overlay compatibility and VEYRA_UI_RHI precedence\n";
+}
 int wmain(int argc,wchar_t** argv){try{
     using namespace veyra;
     outputRateContracts();
+    interfaceRendererContracts();
     // Manual turns compose with metadata, including an already-oriented DAR.
     for(int metadata:{0,90,180,270})for(int mode=0;mode<=6;++mode){
         engine::PreviewView v;v.rotationDegrees=metadata;v.mode=mode;
