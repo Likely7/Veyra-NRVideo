@@ -10001,3 +10001,13 @@ computer-use技能原生按键/点击：软件专业F11/Esc、顶部还原、极
 详细报告CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md；证据reports/capture-audio-main-20261025，日志logs同名，原档archives同名。finalize脚本核对100其它工作树HEAD/status、原全屏7文件哈希、旧refs（只本整合branch/main允许变化）。保留原分支与checkpoint，用正常快进整合本地主main；准确提交及包在integration-audit.json/update-package.json/FINAL.json，不从本条计划推断实际合并已执行。小更新共同EXE/QML需原2.1.0完整NVIDIA/AMD底包，不含运行库/模型/配置。
 
 本地main已正常快进到28f6532，22提交、原功能及#67历史保留；预/后integration-audit均通过，100其它树不变。首轮封包准确字节核对在RotateButton.qml失败：main切换按Git策略将该一个文件LF落成CRLF，逐文件换行归一后全部内容相同（main-checkout-line-endings.json），非产品差异。封包工具修正为验证内容一致后携带实际已验QML原字节；初轮partial目录仅在已知输入逐字节一致、无sealed manifest时原位续封，不删除或覆盖已封包。该修正单独提交后再快进main；无需重跑未变产品GPU测试，最终CRC/逐SHA仍实际检查。
+
+## 2026-10-25 可变刷新/刷新率改为事件触发查询（Claude）
+
+用户审查补帧链路后要求：VRR 不再定时查询，改为事件触发，在“可变刷新”旁加“重新检测”按钮，引擎和界面都去掉 2 秒轮询；从 main 开新分支，按 AGENTS.md 施工，不 merge、不 push。从 68def10 开 `claude/vrr-event-query-20261025`，起点标签 `checkpoint/pre-vrr-event-query-20261025`，开工状态 `archives/claude-vrr-event-query-20261025/start.json`（工作树干净，另 100 个工作树未动）。方案 `docs/VRR_EVENT_QUERY_PLAN_2026-10-25.md`，结果 `docs/VRR_EVENT_QUERY_REPORT_2026-10-25.md`，功能提交 5a80948。
+
+实现：引擎持有共享的 `DisplayStateService`，按显示器缓存刷新率/VRR，后台一次一个查询，状态为当前代时请求不做任何事。查询只在这些时候发生：启动、新建呈现链（先用缓存，后台核对；无缓存最多等 100 ms）、换屏、`WM_DISPLAYCHANGE`、打开开关、重新检测、VRR 呈现开启或画面尺寸变化停止 3 秒后补查一次。处理图重建保留状态。界面空闲时不再在界面线程同步调用 NVAPI。专业页“显示”和节点页输出框加刷新图标按钮，只有开关会变灰。新增 3 条四语文案。
+
+构建：复用 `build/claude-screen-recording-20261022`，标签 2.1.0-vrr1，8 个目标 190 秒通过（日志 `logs/claude-vrr-event-query-20261025/build-20261026-001118`，EXE SHA256 cc35f381…e062）。测试：异步查询 33 项、实时预览、呈现线程、UI 合同、Repair 272 项、翻译均 0 失败；QtQuick 115 passed / 0 failed。第一次 QtQuick 运行缺离屏参数，日志为空，不算通过，补参数后重跑。`extract.py --check` 2667 条，0 缺译、0 占位符问题。
+
+实机：`scripts/acceptance/vrr-event-query.py --case native|novrr`，私有配置，真实 1080p30 + VFG 2X。15 秒播放和空闲期间 0 次查询；每个事件 1 次查询，真实屏幕整轮 6 次、模拟不支持 VRR 4 次。对照 fg1 的日志是 28.5 秒 15 次、间隔 2.0 秒。第一轮脚本先执行动作后打标记、并用 250 ms 采样抓“检测中”状态，两处判定有误，修正脚本后两轮通过，产品代码未改。本机屏幕现报告 VRR 等级 3，窗口模式下驱动未报告生效，真实 VRR 生效与全屏切换待用户设备验证。证据 `reports/claude-vrr-event-query-20261025`，截图 `tests/claude-vrr-event-query-20261025/shots`。无用户包、无 merge/push/Release，Lecram 暂停。
