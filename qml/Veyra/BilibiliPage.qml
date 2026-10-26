@@ -2230,6 +2230,18 @@ VPage {
             }
 
             // ---- detail ----
+            // 和网页版一样左右分栏：左边是视频信息与评论，右边是一列相关推荐，
+            // 两边各自滚动、各有自己的滚动条。窗口太窄时右侧让位，免得把评论挤没。
+            // Split like the web front end: video info and comments on the left, a single
+            // column of related videos on the right, each scrolling on its own. The right
+            // column steps aside in a narrow window so the comments keep their room.
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 12
+                visible: root.view === "detail" && !root.showSettings
+                         && root.qrState.length === 0
+
             Flickable {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -2238,8 +2250,6 @@ VPage {
                 // Step aside while the QR panel is up as well: this used to check only
                 // showSettings, so opening the code from the detail page split the area
                 // in half and the code looked squeezed.
-                visible: root.view === "detail" && !root.showSettings
-                         && root.qrState.length === 0
                 contentHeight: detailColumn.implicitHeight
                 clip: true
                 // 滚到接近底部时自动取下一页评论，和首页的无限加载同一套思路：
@@ -2884,118 +2894,126 @@ VPage {
                         }
                     }
 
-                    // related videos
-                    Text {
-                        visible: root.related.length > 0
-                        text: qsTr("相关推荐")
-                        color: Theme.t2
-                        font.family: Theme.fontUi
-                        font.pixelSize: 13
-                    }
+                }
+            }
 
-                    GridView {
-                        id: relatedGrid
-                        Layout.fillWidth: true
-                        // The row count has to follow the width: four per row was wrong as
-                        // soon as the window was narrower, and the clipped rows could not
-                        // be scrolled to. The height goes through Layout.preferredHeight
-                        // because a ColumnLayout overrides the item's own height.
-                        // Same fitting rule as the main grid: describe the column count
-                        // from an ideal width, then divide the available width between the
-                        // cells so nothing is left over. rows and the height follow.
-                        readonly property real idealCellWidth: 220
-                        readonly property int columns: Math.max(1, Math.round(width / idealCellWidth))
-                        readonly property real fittedCellWidth: width / columns
-                        readonly property real fittedCellHeight:
-                            (fittedCellWidth - 12) * 0.5625 + 81 * (fittedCellWidth / 220)
-                        readonly property int rows: Math.ceil(root.related.length / Math.max(1, columns))
-                        readonly property int wantedHeight: rows * fittedCellHeight
-                        Layout.preferredHeight: wantedHeight
-                        Layout.maximumHeight: wantedHeight
-                        implicitHeight: wantedHeight
-                        visible: root.related.length > 0
-                        cellWidth: fittedCellWidth
-                        cellHeight: fittedCellHeight
-                        // Only ask for scrolling when the rows really overflow; the height
-                        // above already covers every row, so this stays false in practice.
-                        interactive: contentHeight > height + 1
-                        clip: true
-                        model: root.related
+                // ---- 右列：相关推荐 ----
+                // 竖向列表，自己带滚动条，和首页那种一样。
+                // Vertical list with its own scrollbar, the same kind the home feed uses.
+                Rectangle {
+                    Layout.preferredWidth: 320
+                    Layout.fillHeight: true
+                    // 窗口窄的时候让位：给评论留出宽度比多一列推荐更重要。
+                    // Stands aside in a narrow window: the comments matter more than a column
+                    // of recommendations.
+                    visible: root.related.length > 0 && root.width > 940
+                    radius: 12
+                    color: Theme.card2
+                    border.width: 1
+                    border.color: Theme.stroke
 
-                        // Same shape as the main grid's tile: absolute positions, no clip on
-                        // the cover, and the width taken from the grid instead of a literal
-                        // (a literal stayed at 232 while the columns were computed from
-                        // cellWidth, so the tiles overhung their cells).
-                        delegate: Item {
-                            id: relatedTile
-                            width: relatedGrid.cellWidth
-                            height: relatedGrid.cellHeight
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 8
 
-                            readonly property real pad: 6
-                            // 与主网格同一套规则：字号随卡片宽度缩放，两处看起来才一致。
-                            // Same rule as the main grid: the type scales with the card width
-                            // so both card styles match.
-                            readonly property real baseCardWidth: 220
-                            readonly property int titleFontSize:
-                                Math.max(11, Math.min(25, Math.round(
-                                    13 * Math.pow(width / baseCardWidth, 0.8))))
-                            readonly property real titleLineHeight: Math.ceil(titleFontSize * 1.4)
+                        Text {
+                            Layout.fillWidth: true
+                            text: qsTr("相关推荐")
+                            color: Theme.t2
+                            font.family: Theme.fontUi
+                            font.pixelSize: 13
+                        }
 
-                            // 与主网格同一套悬停反馈。
-                            // Same hover feedback as the main grid.
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 10
-                                color: relatedMouse.containsMouse ? Theme.card3 : "transparent"
+                        Flickable {
+                            id: relatedFlick
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            contentHeight: relatedColumn.implicitHeight
+                            clip: true
+                            ScrollBar.vertical: VScrollBar { }
 
-                                Behavior on color {
-                                    ColorAnimation { duration: 110; easing.type: Easing.OutQuad }
+                            ColumnLayout {
+                                id: relatedColumn
+                                width: relatedFlick.width
+                                spacing: 8
+
+                                Repeater {
+                                    model: root.related
+                                    delegate: Item {
+                                        width: relatedColumn.width
+                                        height: 76
+
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 8
+                                            color: relatedHover.containsMouse ? Theme.card3
+                                                                             : "transparent"
+                                        }
+                                        Rectangle {
+                                            id: relCoverBox
+                                            x: 4
+                                            y: 4
+                                            width: 118
+                                            height: 66
+                                            radius: 6
+                                            color: Theme.card3
+                                            clip: true
+
+                                            Image {
+                                                anchors.fill: parent
+                                                source: modelData.cover || ""
+                                                fillMode: Image.PreserveAspectCrop
+                                                asynchronous: true
+                                                cache: true
+                                                sourceSize.width: 236
+                                                sourceSize.height: 132
+                                            }
+                                        }
+                                        Text {
+                                            anchors.left: relCoverBox.right
+                                            anchors.leftMargin: 8
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: 4
+                                            anchors.top: parent.top
+                                            anchors.topMargin: 6
+                                            height: 34
+                                            maximumLineCount: 2
+                                            elide: Text.ElideRight
+                                            wrapMode: Text.Wrap
+                                            text: modelData.title || ""
+                                            color: Theme.t1
+                                            font.family: Theme.fontUi
+                                            font.pixelSize: 12
+                                        }
+                                        Text {
+                                            anchors.left: relCoverBox.right
+                                            anchors.leftMargin: 8
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: 4
+                                            anchors.bottom: parent.bottom
+                                            anchors.bottomMargin: 6
+                                            elide: Text.ElideRight
+                                            text: modelData.owner || ""
+                                            color: Theme.t3
+                                            font.family: Theme.fontUi
+                                            font.pixelSize: 10
+                                        }
+                                        MouseArea {
+                                            id: relatedHover
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.openVideo(modelData.bvid)
+                                        }
+                                    }
                                 }
-                            }
-
-                            Rectangle {
-                                x: relatedTile.pad
-                                y: relatedTile.pad
-                                width: relatedTile.width - relatedTile.pad * 2
-                                height: width * 0.5625
-                                radius: 6
-                                color: Theme.card3
-
-                                Image {
-                                    anchors.fill: parent
-                                    source: modelData.cover || ""
-                                    fillMode: Image.PreserveAspectCrop
-                                    asynchronous: true
-                                    sourceSize.width: 480
-                                    sourceSize.height: 270
-                                }
-                            }
-
-                            Text {
-                                x: relatedTile.pad
-                                y: relatedTile.pad + (relatedTile.width - relatedTile.pad * 2) * 0.5625 + 5
-                                width: relatedTile.width - relatedTile.pad * 2
-                                height: relatedTile.titleLineHeight * 2
-                                maximumLineCount: 2
-                                elide: Text.ElideRight
-                                wrapMode: Text.Wrap
-                                color: Theme.t1
-                                font.family: Theme.fontUi
-                                font.pixelSize: relatedTile.titleFontSize
-                                text: modelData.title || ""
-                            }
-
-                            MouseArea {
-                                id: relatedMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.openVideo(modelData.bvid)
                             }
                         }
                     }
                 }
             }
+
         }
     }
 }
