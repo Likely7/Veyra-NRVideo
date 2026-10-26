@@ -217,6 +217,33 @@ grep -n "elLayerEnabled_" src/source/MediaFileSource.cpp
 
 **「能跑」不等于「对」。**
 
+### 2026-10-26 B 站页面的界面调整（验收通过）
+
+**全部只改 QML，不碰引擎、音频、CDN、数据层。**
+
+| 改动 | 关键点 |
+|---|---|
+| **卡片列数封顶 5** | 默认窗口正是 5 列；更宽时锁 5 列、卡片变大，更窄时照旧减少列数 |
+| **卡片字号随宽度缩放** | 以 220px 宽、13px 为基准，用 **0.8 次幂**（不是线性）—— 线性会让最大化时字号翻倍显得过大 |
+| **侧栏改卡片 + 平分高度** | 八项 `Layout.fillHeight`，删掉原来的弹簧；选中加左侧竖条 |
+| **「B站播放设置」改名「设置」** | |
+| **卡片悬停反馈** | 关键是 `MouseArea` 必须开 `hoverEnabled`，否则 `containsMouse` 永远 false |
+| **滚轮平滑** | 对齐 Chrome：**没有甩动惯性**，算目标位置再缓动过去（一格 100px / 150ms / OutQuad）|
+| **简介和评论可选中复制** | `Text` 没有选择模型，必须换 `TextEdit`（`readOnly` + `selectByMouse`）|
+
+**三处踩过的坑（都当场修了）：**
+
+1. **给 `contentY` 挂 `NumberAnimation` 会让连正常滚动都失效** —— `Flickable` 自己在维护它。
+   改用官方 `flick()`；再要「无敌惯性」时改成「算目标 + 显式设 `from`」的缓动。
+2. **`Keys.onReturnPressed` / `onEnterPressed` 和 `Keys.onPressed` 同时声明会互相覆盖**，
+   只有最后那个生效。
+3. **属性初始化时 `parent` 可能还是 null**，`Math.pow(parent.width / 220, ...)` 会抛
+   `TypeError`，要用元素自己的 `width`。
+
+**已知副作用（用户确认暂不处理）：** 只读 `TextEdit` 获得焦点后，作者的
+`typing` 判断会把它算作打字（「按住 V 对比原画」失效），方向键会被 `Shortcut`
+抢走。详情页不播放视频，实际碰不到。
+
 ### 已知限制（别再试，或要试先想清楚）
 
 | 问题 | 原因 | 现状 |
