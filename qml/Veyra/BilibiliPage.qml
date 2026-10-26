@@ -1501,7 +1501,8 @@ VPage {
                     // The skeleton bars scale with the card width as well, or they no longer
                     // line up with the real cards once the window is enlarged.
                     readonly property int skelTitleSize:
-                        Math.max(11, Math.min(28, Math.round(13 * parent.width / 220)))
+                        Math.max(11, Math.min(25, Math.round(
+                            13 * Math.pow(parent.width / 220, 0.8))))
                     Rectangle {
                         x: parent.pad
                         y: parent.pad + (parent.width - parent.pad * 2) * 0.5625 + 5
@@ -1663,10 +1664,19 @@ VPage {
                     // grows the cards grow, and the text has to grow with them or it looks
                     // tiny when maximised - which is exactly what was reported.
                     readonly property real baseCardWidth: 220
+                    // 用 0.8 次幂而不是线性：卡片宽一倍时字号不该也宽一倍，那样最大化
+                    // 会显得字过大 —— 实际反馈就是「最大化时字体大了一点点」。幂函数让
+                    // 增长逐渐变缓，宽卡片配的字号更协调。
+                    // A 0.8 power rather than linear: doubling the card should not double the
+                    // type, which is what made it look oversized when maximised (the reported
+                    // "a little too large"). The power curve flattens as cards grow, keeping
+                    // large cards proportionate.
                     readonly property int titleFontSize:
-                        Math.max(11, Math.min(28, Math.round(13 * width / baseCardWidth)))
+                        Math.max(11, Math.min(25, Math.round(
+                            13 * Math.pow(width / baseCardWidth, 0.8))))
                     readonly property int metaFontSize:
-                        Math.max(10, Math.min(26, Math.round(12 * width / baseCardWidth)))
+                        Math.max(10, Math.min(23, Math.round(
+                            12 * Math.pow(width / baseCardWidth, 0.8))))
                     // Fixed, so the two text blocks sit at absolute positions and the
                     // delegate needs no layout pass beyond this. 1.4 is a comfortable line
                     // box for a two-line title.
@@ -2222,7 +2232,8 @@ VPage {
                             // so both card styles match.
                             readonly property real baseCardWidth: 220
                             readonly property int titleFontSize:
-                                Math.max(11, Math.min(28, Math.round(13 * width / baseCardWidth)))
+                                Math.max(11, Math.min(25, Math.round(
+                                    13 * Math.pow(width / baseCardWidth, 0.8))))
                             readonly property real titleLineHeight: Math.ceil(titleFontSize * 1.4)
 
                             Rectangle {
