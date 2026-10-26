@@ -2925,6 +2925,15 @@ VPage {
                                     // are not selectable; the description keeps that.
                                     Text {
                                         Layout.fillWidth: true
+                                        // 硬性限制宽度：只靠 Layout.fillWidth 时，这一行会按
+                                        // 文字的自然宽度排，超出的部分被卡片裁掉 —— 表现就是
+                                        // 长评论「被挡住了」，其实根本没换行。
+                                        // Hard width limit: with only Layout.fillWidth the line is
+                                        // laid out at its natural width and the overflow is
+                                        // clipped by the card, which looks like a long comment
+                                        // being covered when it simply never wrapped.
+                                        Layout.maximumWidth: commentColumn.width
+                                        width: commentColumn.width
                                         wrapMode: Text.Wrap
                                         textFormat: Text.RichText
                                         text: modelData.messageRich || modelData.message || ""
@@ -2932,6 +2941,13 @@ VPage {
                                         font.family: Theme.fontUi
                                         font.pixelSize: 12
                                         onLinkActivated: Qt.openUrlExternally(link)
+                                        // 诊断：实测宽度，确认到底有没有被约束住。
+                                        // Diagnostic: the measured width, to settle whether the
+                                        // constraint is actually taking effect.
+                                        Component.onCompleted: console.log(
+                                            "[comment-width] text=" + width
+                                            + " natural=" + implicitWidth
+                                            + " column=" + commentColumn.width)
                                     }
                                 }
                             }
