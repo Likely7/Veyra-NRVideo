@@ -2250,6 +2250,15 @@ VPage {
                 // Step aside while the QR panel is up as well: this used to check only
                 // showSettings, so opening the code from the detail page split the area
                 // in half and the code looked squeezed.
+                // 内容宽度必须钉死成可视宽度。之前没设，contentItem 的宽度就由子元素
+                // 的自然宽度决定，而 detailColumn 又写着 width: parent.width —— 两边互相
+                // 依赖，结果宽度撑出了分栏给它的范围，把右侧那一列盖住了，连「发送」按钮
+                // 都被压在下面。
+                // The content width has to be pinned to the viewport. Without it the content
+                // item sizes itself from its children, while detailColumn asks for
+                // parent.width - a circular dependency that let the content outgrow the column
+                // it was given, covering the right-hand list and the Send button with it.
+                contentWidth: width
                 contentHeight: detailColumn.implicitHeight
                 clip: true
                 // 滚到接近底部时自动取下一页评论，和首页的无限加载同一套思路：
