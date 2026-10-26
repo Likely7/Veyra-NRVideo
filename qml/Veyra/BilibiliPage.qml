@@ -2669,6 +2669,7 @@ VPage {
 
                     // comments
                     ColumnLayout {
+                        id: commentSection
                         Layout.fillWidth: true
                         spacing: 8
                         visible: root.showComments
@@ -2861,10 +2862,24 @@ VPage {
                             horizontalAlignment: Text.AlignHCenter
                         }
 
-                        Repeater {
-                            model: root.comments
+                        // 用普通 Column 而不是直接挂在 ColumnLayout 里：Column 的宽度是
+                        // 显式给的，卡片再直接绑它。delegate 的宽度不再经过布局分配 —— 之前
+                        // 无论怎么设 Layout 属性，卡片都比列宽 34 像素，文字跟着溢出去。
+                        // A plain Column instead of hanging the delegates off the ColumnLayout:
+                        // its width is explicit and each card binds to it, so the delegate width
+                        // never goes through layout allocation. However the Layout properties
+                        // were set, the card kept coming out 34 px wider than the column.
+                        Column {
+                            id: commentList
+                            Layout.fillWidth: true
+                            width: commentSection.width
+                            spacing: 8
+
+                            Repeater {
+                                model: root.comments
 
                             Rectangle {
+                                width: commentList.width
                                 Layout.fillWidth: true
                                 // 关键：把参与布局的宽度钉成 0。卡片的 implicitWidth 本会由
                                 // 内容撑出来，而内容宽度又依赖卡片宽度 —— 互为依赖，布局只好
@@ -2878,6 +2893,13 @@ VPage {
                                 height: commentColumn.implicitHeight + 16
                                 radius: 8
                                 color: Theme.card2
+                                // 诊断：卡片宽度和它的父级宽度各是多少，一次看清差额来自哪层。
+                                // Diagnostic: the card's width against its parent's, so the gap
+                                // can be attributed to a layer instead of guessed at.
+                                onWidthChanged: if (width > 0) console.log(
+                                    "[card-width] card=" + Math.round(width)
+                                    + " list=" + Math.round(commentList.width)
+                                    + " section=" + Math.round(commentSection.width))
 
                                 ColumnLayout {
                                     id: commentColumn
@@ -2971,6 +2993,7 @@ VPage {
                                     }
                                 }
                             }
+                        }
                         }
                     }
 
