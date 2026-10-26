@@ -2243,6 +2243,7 @@ VPage {
                          && root.qrState.length === 0
 
             Flickable {
+                id: detailFlick
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 // 扫码面板出现时也要让位：原来只判断 showSettings，于是从详情页点
@@ -2276,7 +2277,12 @@ VPage {
 
                 ColumnLayout {
                     id: detailColumn
-                    width: parent.width
+                    // 直接绑 Flickable 的宽度，不经过 parent：Flickable 的 contentItem
+                    // 宽度由 contentWidth 决定，绕一圈取值容易拿到不一致的结果。
+                    // Bound to the Flickable's own width rather than parent: the content item
+                    // takes its width from contentWidth, and going around that indirection
+                    // can yield an inconsistent value.
+                    width: detailFlick.width
                     spacing: 10
 
                     // The page is already on screen while the detail request is in flight,
