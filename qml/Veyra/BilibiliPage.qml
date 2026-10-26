@@ -2679,6 +2679,26 @@ VPage {
                         }
                     }
 
+                    // 简介放在「封面 + 视频信息」那一行下方、评论区之上，横跨整栏 ——
+                    // 封面底下那块空白由它填上。
+                    // The description sits below the cover/info row and above the comments,
+                    // spanning the whole column and filling the space under the cover.
+                    TextEdit {
+                        width: detailColumn.width
+                        height: contentHeight
+                        readOnly: true
+                        selectByMouse: true
+                        textFormat: TextEdit.PlainText
+                        wrapMode: TextEdit.Wrap
+                        selectionColor: Theme.accentSoft
+                        selectedTextColor: Theme.t1
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: 12
+                        text: root.detail.desc || ""
+                    }
+
+
                     // comments
                     ColumnLayout {
                         id: commentSection
@@ -2857,25 +2877,6 @@ VPage {
                                 onClicked: send()
                             }
                         }
-                    // 简介放在「封面 + 视频信息」那一行的下方，横跨整栏 —— 封面底下那块
-                    // 空白由它填上，而不是挤在视频信息那一列的右半边。
-                    // The description sits below the cover/info row and spans the whole
-                    // column, filling the space under the cover instead of being squeezed into
-                    // the right half of the info column.
-                    TextEdit {
-                        width: detailColumn.width
-                        height: contentHeight
-                        readOnly: true
-                        selectByMouse: true
-                        textFormat: TextEdit.PlainText
-                        wrapMode: TextEdit.Wrap
-                        selectionColor: Theme.accentSoft
-                        selectedTextColor: Theme.t1
-                        color: Theme.t3
-                        font.family: Theme.fontUi
-                        font.pixelSize: 12
-                        text: root.detail.desc || ""
-                    }
 
                         Text {
                             Layout.fillWidth: true
