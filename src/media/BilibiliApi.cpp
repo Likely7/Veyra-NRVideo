@@ -1037,11 +1037,6 @@ bool biliEmotePanel(std::vector<BiliEmote>& out, std::wstring& error) {
     std::string body;
     if (!httpGet(L"api.bilibili.com", L"/x/emote/user/panel/web?business=reply", g_cookie,
                  body, error)) return false;
-    // 把返回体开头记下来：这个接口的结构和预期不符时，只有原文能说清差在哪。
-    // Keep the start of the response: when the shape is not what was expected, only the
-    // raw text can show where it differs.
-    log::info("emote", std::format("panel body[{}]= {}",
-                                   body.size(), body.substr(0, 400)));
     const auto root = json::parse(body);
     if (!checkCode(root, error, L"表情")) return false;
     // 字段名是 **emote**（单数），不是 emotes —— 实测返回体确认过。
@@ -1057,11 +1052,6 @@ bool biliEmotePanel(std::vector<BiliEmote>& out, std::wstring& error) {
             item.text = fromUtf8((*emote)["text"].asString());
             item.url = fromUtf8((*emote)["url"].asString());
             item.package = packageName;
-            // 头几条打出来：字段名和取值一次看清，省得再猜。
-            // Log the first few: field names and values in one go, so nothing has to be guessed.
-            if (out.size() < 3)
-                log::info("emote", std::format("item text=<{}> url=<{}>",
-                                               toUtf8(item.text), toUtf8(item.url)));
             if (!item.text.empty()) out.push_back(std::move(item));
         }
     }

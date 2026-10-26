@@ -769,9 +769,7 @@ VPage {
             root.emotePackages = packages
             // 默认显示第一个包，和网页版打开就停在「小黄脸」一致。
             // Default to the first package, as the web front end opens on 小黄脸.
-            root.emotePackage = packages.length > 0 ? packages[0] : 
-            console.log("[emote] panel parsed " + list.length + " entries, first="
-                        + (list.length > 0 ? JSON.stringify(list[0]) : "none"))
+            root.emotePackage = packages.length > 0 ? packages[0] : ""
         }
         function onBilibiliCommentsReady(comments, total, ok, error) {
             const page = root.commentPendingPage || 1
@@ -1138,11 +1136,9 @@ VPage {
     // 把表情代码接到正文末尾，并把光标放到后面，方便接着打字。
     // Append the emote code to the body and put the caret after it, ready for more typing.
     function insertEmote(code) {
-        console.log("[emote] insert code=<" + code + "> type=" + typeof code)
         if (!code) return
         replyInput.text = replyInput.text + code
         replyInput.cursorPosition = replyInput.text.length
-        console.log("[emote] after insert text=<" + replyInput.text + "> replyText=<" + root.replyText + ">")
     }
 
     function toggleComments() {
@@ -2286,17 +2282,6 @@ VPage {
                 Column {
                     id: detailColumn
                     width: detailFlick.width
-                    // 宽度由 contentWidth 决定，绕一圈取值容易拿到不一致的结果。
-                    // Bound to the Flickable's own width rather than parent: the content item
-                    // takes its width from contentWidth, and going around that indirection
-                    // can yield an inconsistent value.
-                    // 诊断：三个宽度一次看清，省得再猜是哪一层不对。
-                    // Diagnostic: all three widths at once, so no more guessing which layer
-                    // is wrong.
-                    onWidthChanged: console.log("[detail-layout] flick=" + detailFlick.width
-                        + " column=" + detailColumn.width
-                        + " viewport=" + detailFlick.width
-                        + " related=" + (relatedPanel ? relatedPanel.width : -1))
                     spacing: 10
 
                     // The page is already on screen while the detail request is in flight,
@@ -2678,7 +2663,6 @@ VPage {
                         // content widened it. A layout container derives its own implicitWidth
                         // from its children, so a long comment pushed the whole section out
                         // past the column, where it got clipped.
-                        Layout.preferredWidth: 0
                         spacing: 8
                         visible: root.showComments
 
@@ -2901,18 +2885,10 @@ VPage {
                                 // otherwise be driven by its content, while the content width
                                 // depends on the card - a cycle that made the card wider than
                                 // its column (848 against 814) and pushed the text out.
-                                Layout.preferredWidth: 0
                                 implicitWidth: 0
                                 height: commentColumn.implicitHeight + 16
                                 radius: 8
                                 color: Theme.card2
-                                // 诊断：卡片宽度和它的父级宽度各是多少，一次看清差额来自哪层。
-                                // Diagnostic: the card's width against its parent's, so the gap
-                                // can be attributed to a layer instead of guessed at.
-                                onWidthChanged: if (width > 0) console.log(
-                                    "[card-width] card=" + Math.round(width)
-                                    + " list=" + Math.round(commentList.width)
-                                    + " section=" + Math.round(commentSection.width))
 
                                 ColumnLayout {
                                     id: commentColumn
@@ -2995,14 +2971,6 @@ VPage {
                                         font.family: Theme.fontUi
                                         font.pixelSize: 12
                                         onLinkActivated: Qt.openUrlExternally(link)
-                                        // 诊断：宽度变化时打印，能看到布局完成后的最终值
-                                        // （创建时可能还是 0）。
-                                        // Diagnostic on width changes, so the settled value after
-                                        // layout is visible rather than the initial zero.
-                                        onWidthChanged: if (width > 0) console.log(
-                                            "[comment-width] text=" + Math.round(width)
-                                            + " natural=" + Math.round(implicitWidth)
-                                            + " column=" + Math.round(commentColumn.width))
                                     }
                                 }
                             }
