@@ -1719,6 +1719,21 @@ VPage {
                     // box for a two-line title.
                     readonly property real titleLineHeight: Math.ceil(titleFontSize * 1.4)
 
+                    // 鼠标经过时整张卡片亮一档，和左边栏的反馈一致。放在最底层，
+                    // 封面和文字盖在它上面，所以只会在卡片留白处露出来。
+                    // The whole tile brightens one step under the pointer, matching the rail's
+                    // feedback. It sits underneath, so the cover and the text draw over it and
+                    // it only shows in the tile's own margins.
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 10
+                        color: tileMouse.containsMouse ? Theme.card3 : "transparent"
+
+                        Behavior on color {
+                            ColorAnimation { duration: 110; easing.type: Easing.OutQuad }
+                        }
+                    }
+
                     Rectangle {
                         // Not "cover": that is a ListModel role name, and an id with the
                         // same name wins the lookup, so source: cover resolved to this
@@ -1791,7 +1806,11 @@ VPage {
                     }
 
                     MouseArea {
+                        id: tileMouse
                         anchors.fill: parent
+                        // 必须开 hoverEnabled，否则 containsMouse 永远是 false。
+                        // hoverEnabled has to be on, or containsMouse is always false.
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.openVideo(bvid)
                     }
@@ -2273,6 +2292,18 @@ VPage {
                                     13 * Math.pow(width / baseCardWidth, 0.8))))
                             readonly property real titleLineHeight: Math.ceil(titleFontSize * 1.4)
 
+                            // 与主网格同一套悬停反馈。
+                            // Same hover feedback as the main grid.
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 10
+                                color: relatedMouse.containsMouse ? Theme.card3 : "transparent"
+
+                                Behavior on color {
+                                    ColorAnimation { duration: 110; easing.type: Easing.OutQuad }
+                                }
+                            }
+
                             Rectangle {
                                 x: relatedTile.pad
                                 y: relatedTile.pad
@@ -2306,7 +2337,9 @@ VPage {
                             }
 
                             MouseArea {
+                                id: relatedMouse
                                 anchors.fill: parent
+                                hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: root.openVideo(modelData.bvid)
                             }
