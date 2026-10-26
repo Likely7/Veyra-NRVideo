@@ -2791,7 +2791,17 @@ VPage {
                             // 表情按钮：点一下就在下面展开面板，再点收起。
                             // Emote button: one press opens the panel below, another closes it.
                             VButton {
+                                // 必须给最小宽度：同一行里的输入框是 fillWidth，
+                                // RowLayout 会把其它项压缩到 minimumWidth（默认 0），
+                                // 于是按钮只剩十几像素，VButton 内部按 btn.width - 24 算文字
+                                // 宽度，就只显示得出半个字。
+                                // The minimum width is required: the field on the same row is
+                                // fillWidth, so RowLayout squeezes the other items down to
+                                // minimumWidth (0 by default). VButton then sizes its text as
+                                // btn.width - 24 and only half a character fits.
                                 implicitWidth: 56
+                                Layout.preferredWidth: 56
+                                Layout.minimumWidth: 56
                                 fontSize: 12
                                 text: root.emotePanelOpen ? qsTr("收起") : qsTr("表情")
                                 onClicked: {
@@ -2806,7 +2816,11 @@ VPage {
 
                             VButton {
                                 id: replySendButton
+                                // 同上：不钉死最小宽度就会被输入框挤掉。
+                                // Same as above: without a minimum it gets squeezed away.
                                 implicitWidth: 68
+                                Layout.preferredWidth: 68
+                                Layout.minimumWidth: 68
                                 fontSize: 12
                                 enabled: !root.replySending && root.replyText.trim().length > 0
                                 text: root.replySending ? qsTr("发送中") : qsTr("发送")
