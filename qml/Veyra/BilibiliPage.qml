@@ -3368,6 +3368,23 @@ VPage {
                                 readonly property real pad: 6
                                 readonly property real coverHeight: authorGrid.cellHeight - 60
 
+                                // 悬停底色必须是卡片的第一个子元素：放在 MouseArea 里
+                                // 会盖在封面上面，z: -1 在同一父级内也压不下去 ——
+                                // 之前那块灰正好糊住了卡片。
+                                // The hover tint has to be the card's first child. Inside the
+                                // MouseArea it paints over the cover, and z: -1 does not push
+                                // it down among siblings - that rectangle is what covered the
+                                // card.
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 10
+                                    color: Theme.card3
+                                    visible: authorTileMouse.containsMouse
+                                    Behavior on color {
+                                        ColorAnimation { duration: 110 }
+                                    }
+                                }
+
                                 Rectangle {
                                     id: authorCoverBox
                                     x: parent.pad
@@ -3412,17 +3429,11 @@ VPage {
                                     font.pixelSize: 10
                                 }
                                 MouseArea {
+                                    id: authorTileMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: root.openVideo(modelData.bvid)
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: 10
-                                        color: Theme.card3
-                                        visible: parent.containsMouse
-                                        z: -1
-                                    }
                                 }
                             }
                         }
