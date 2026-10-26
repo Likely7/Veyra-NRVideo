@@ -701,11 +701,11 @@
    "ja": "AMD NR のプレビューと動画書き出しは内部で最大 1080p まで処理し、動画の出力サイズを維持します。画像書き出しはモデルのサイズ制限内である必要があります。"
   },
   {
-   "zh": "AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。HDR 尚未验收。",
+   "zh": "AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。原生 HDR 保留原图基底，通过 SDR 代理增强后还原；AMD 实卡效果仍待验证。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "AMD NR（實驗）：需要 RX 9000 驅動及 lmxxf 執行元件，內部最高 1080p 像素預算。支援模型強度、殘差與保護；風格使用執行元件設定。HDR 尚未驗收。",
-   "en": "AMD NR (experimental): requires an RX 9000 driver and lmxxf runtime, with an internal 1080p pixel budget. Model strength, residual and protection are supported; style uses the runtime configuration. HDR has not been validated.",
-   "ja": "AMD NR（実験）：RX 9000 ドライバーと lmxxf ランタイムが必要です。内部処理の画素数は最大 1080p 相当です。モデル強度・残差・保護に対応し、スタイルはランタイム設定を使います。HDR は未検証です。"
+   "zh-TW": "AMD NR（實驗）：需要 RX 9000 驅動及 lmxxf 執行元件，內部最高 1080p 像素預算。支援模型強度、殘差與保護；風格使用執行環境設定。原生 HDR 保留原圖基底，透過 SDR 代理增強後還原；AMD 實卡效果仍待驗證。",
+   "en": "AMD NR (experimental): requires an RX 9000 driver and lmxxf runtime, with an internal 1080p pixel budget. Model strength, residual and protection are supported; style uses the runtime configuration. Native HDR retains its original base and restores enhancement from an SDR proxy; results on AMD hardware still need verification.",
+   "ja": "AMD NR（実験）：RX 9000 ドライバーと lmxxf ランタイムが必要です。内部処理は最大1080p相当のピクセル数です。モデル強度、残差、保護に対応し、スタイルはランタイム設定を使用します。ネイティブHDRの原画を保持し、SDRプロキシの補正差分を復元します。AMD実機での効果は未検証です。"
   },
   {
    "zh": "AMD 光流",

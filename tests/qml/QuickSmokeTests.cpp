@@ -11,6 +11,9 @@
 #include <QtQuickTest/quicktest.h>
 #include <QGuiApplication>
 #include <QTest>
+#include <QWindow>
+#include <QScreen>
+#include <QPixmap>
 
 // Quick Test's keyClick targets its QQuickView host. Multi-window ownership
 // tests need events delivered to the actual focused QML Window instead.
@@ -19,6 +22,13 @@ class ActiveWindowKeys : public QObject {
 public:
     using QObject::QObject;
     Q_INVOKABLE bool focused(QObject* window) { return QGuiApplication::focusWindow() == window; }
+    Q_INVOKABLE bool savePresented(QObject* object,const QString& path) {
+        auto* window=qobject_cast<QWindow*>(object);
+        if(!window||!window->screen())return false;
+        // Read already presented pixels, without triggering a fresh QML render.
+        const auto image=window->screen()->grabWindow(window->winId());
+        return !image.isNull()&&image.save(path);
+    }
     Q_INVOKABLE bool press(int key) {
         auto* window = QGuiApplication::focusWindow();
         if (!window) return false;

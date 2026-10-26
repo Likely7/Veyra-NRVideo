@@ -40,6 +40,7 @@ public:
                 ID3D12Resource* zeroMotion, ID3D12Resource* zeroDepth,
                 ID3D12Resource* borrowedInput = nullptr, ID3D12Resource* borrowedMotion = nullptr);
     void close();
+    bool createAmdHdrProxy(ID3D12Device* device);
 
     bool created() const { return proxy_ != nullptr; }
     NVSDK_NGX_Handle* handle() const { return handle_; }
@@ -52,6 +53,8 @@ public:
     ID3D12Resource* proxy() const { return proxy_.Get(); }
     ID3D12Resource* neural() const { return neural_.Get(); }
     ID3D12Resource* finalRgba() const { return finalRgba_.Get(); }
+    ID3D12Resource* amdHdrProxy() const { return amdHdrProxy_.Get(); }
+    ID3D12Resource* amdHdrNeural() const { return amdHdrNeural_.Get(); }
     ID3D12Resource* residual() const { return residual_.Get(); }
     ID3D12Resource* zeroMotion() const { return zeroMotion_; }
     ID3D12Resource* motion() const { return motion_.Get(); }
@@ -96,6 +99,9 @@ public:
 
 private:
     ComPtr<ID3D12Resource> input_, proxy_, neural_, finalRgba_, residual_, outputFull_;
+    // Allocated only for AMD NR on a native HDR working graph. The runtime
+    // sees an SDR linear proxy; the original HDR input remains untouched.
+    ComPtr<ID3D12Resource> amdHdrProxy_, amdHdrNeural_;
     ComPtr<ID3D12Resource> motion_; // same-size shared guidance or own adapted texture
     ID3D12Resource* baseFull_ = nullptr;
     // Not owned: either this layer's `outputFull_` or the graph's residual

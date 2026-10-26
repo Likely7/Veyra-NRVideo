@@ -225,6 +225,8 @@ target_link_libraries(veyra_runtime_probe PRIVATE veyra_gfx)
 veyra_add_compute_shader(veyra_shader_parity_encode ParityEncode)
 veyra_add_compute_shader(veyra_shader_parity_decode ParityDecode)
 veyra_add_compute_shader(veyra_shader_hdr_video_sr HdrVideoSrRestore)
+veyra_add_compute_shader(veyra_shader_hdr_amd_nr_encode HdrAmdNrEncode)
+veyra_add_compute_shader(veyra_shader_hdr_amd_nr_restore HdrAmdNrRestore)
 if(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR)
   veyra_add_compute_shader(veyra_shader_test_pattern GenerateTestPattern)
   add_executable(veyra_nr_ampere_tests tests/integration/NrAmpereTests.cpp)
@@ -523,6 +525,7 @@ if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
   add_dependencies(veyra_pipeline
     veyra_shader_yuv_to_rgb veyra_shader_rgb_to_linear veyra_shader_parity_encode
     veyra_shader_parity_decode veyra_shader_scale_blit
+    veyra_shader_hdr_amd_nr_encode veyra_shader_hdr_amd_nr_restore
     veyra_shader_nv12_upload veyra_shader_nvof_densify veyra_shader_packed_capture)
 endif()
 

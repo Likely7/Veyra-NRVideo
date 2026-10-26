@@ -10037,3 +10037,14 @@ computer-use技能原生按键/点击：软件专业F11/Esc、顶部还原、极
 用户提供微信logs (2).zip，仅诊断。原档SHA256 f9c486fbb344161db1d3b7ad536f1404a07c9de4267fa388e1c195eb747d9caa；副本及两份log安全提取至E:/项目/Veyra/archives/field-capture-4k60-20261026。成功运行python E:/项目/Veyra/reports/field-capture-4k60-20261026/analyze.py，对149746行按会话/设置/输入尺寸及指定稳态窗口统计，analysis.json和evidence.txt保存在同名reports目录。
 
 结果：RTX5090D机器4K YUY2真实回调约53.1，开启60→30后约26原帧；关闭SR/NR/FG且关闭60→30后仍约53。稳定60的窗口为1080p输入后增强至4K，不能作为4K60通过。末段原帧53/提交53、GPU ready P95约0.24ms、调度等待0，主要限制位于采集交付环节；同机其它应用与USB协商信息缺失，未区分驱动/链路和Veyra采集回调根因。未擅改产品或配置，无构建/新采集测试/打包/合并/推送。后续同机同格式逐个应用A/B建议及证据边界见docs/FIELD_CAPTURE_4K60_DIAGNOSIS_2026-10-26.md。
+
+
+## 2026-10-26 暂停2.1.1封包，菜单首次布局及AMD原生HDR+NR
+
+用户要求先停封包修两个bug，明确原生HDR，并否决淡入淡出替换、指定2.0.7正常效果对照。从2de14fd到codex/menu-amd-hdr-fix-20261026，不合main、不封包/推送/发布。2.1.1旧stage标记PAUSED/superseded，不作交付。计划MENU_AMD_HDR_PLAN_2026-10-26.md、结果MENU_AMD_HDR_REPORT_2026-10-26.md。
+
+直接读2.0.7正式ZIP，VMenu/VSelect/Theme与原HEAD一致；原动画块最终保持相同。真正局部布局回归为首次开菜单第一行y 14→42，修复仅提前宽度与嵌套布局polish，去掉open后callLater定位。纯淡入淡出、文字全局不移动的错误测试、软件layer裁剪原型和无效font hinting均撤回/保留失败证据，不计交付。最终软件/GPU×100/150/200%六组原spring仍运行、局部布局稳定；QtQuick117通过/0失败/1跳过（单独截图3通过），实际窗口六档原动画截图已检查。
+
+AMD根因是HDR working模式初始化直接拒绝。新增两个FP16内部纹理及GPU encode/restore，复用203nit HDR代理/还原，模型仍SDR线性FP16，原HDR基底/共享残差/时序/reset保留。实际D3D12图+明确fake AMD provider共128组合0失败，其中108 HDR，debug0；ABI、HDR颜色检查通过。本机真实NVIDIA原版NR+PQ HDR20帧通过，高光998.932nit，非AMD实卡证据。RX9000 HIP/用户画质帧率仍需原机；运行库模型驱动不改。
+
+构建命令build-recording-handoff.py --task codex-menu-amd-hdr-fix-20261026 --root 当前E盘树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.1 --jobs 2；主轮--reconfigure 60.7秒通过，之后仅定向增量。测试python -B scripts/acceptance/menu-amd-hdr-fix.py gpu/menu/contracts，私有配置、单进程<=280秒，翻译2674/缺译占位0。证据reports/logs/tests/tmp/menu-amd-hdr-fix-20261026，编译回执logs/codex-menu-amd-hdr-fix-20261026。曾误拼多fix的构建目录，仅停止自有9个子进程并改回原缓存；自动审批拒绝该误建目录的安全递归删除（blocked by policy），保留未绕过，见cleanup-blocked.json。旧2.1.1验收脚本曾错误调用NR导出无参数和翻译路径，此前不计通过、不交付；本任务测试命令和证据独立。

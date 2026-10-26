@@ -14,6 +14,7 @@ extern "C" {
 #include <libavutil/frame.h>
 }
 using namespace veyra;
+#include "AmdNrHdrCases.h"
 namespace {
 void checkSrHandoff(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,unsigned& checks,unsigned& failures){
     struct Case {const char* name;unsigned layers;bool temporal,flow,beforeSr,fsr;uint32_t width,height;double fps;float strength=1;};
@@ -92,6 +93,7 @@ int main(){
         p[0]=uint8_t(30+x);p[1]=uint8_t(40+y*2);p[2]=uint8_t(210-x);p[3]=255;
     }
     unsigned failures=0,checks=0;
+    amdHdrTest::run(ctx,ring,checks,failures);
     checkSrHandoff(ctx,ring,checks,failures);
     // Keep both identity modules resident so per-model creation counters span
     // graph teardown. This catches accidentally routing every layer to Small.

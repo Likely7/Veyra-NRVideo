@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-26 暂停封包修两处bug（用户授权）**：暂停2.1.1封包，在codex/menu-amd-hdr-fix-20261026按docs/MENU_AMD_HDR_PLAN_2026-10-26.md修菜单/下拉文字抖动与AMD HDR+NR。允许必要QML、图/每层资源、HDR代理/还原着色器、CMake/翻译/定向测试，覆盖旧冻结。保持现有SDR/NVIDIA及AMD运行组件身份，不以取消HDR检查代替处理合同。无AMD实卡不称HIP已验；单Agent、全E盘、-j2<=900秒/单测<=300秒、私有配置，无封包/main合并/push/发布，Lecram暂停。
+
 > **2026-10-26 2.1.1本地完整包（用户授权）**：用户要求“构建2.1.1正式包给我，给我测试”。从26aa9dd在codex/build-2.1.1-20261026更新版本为2.1.1并构建NVIDIA/AMD完整Release配置便携包，按docs/BUILD_2.1.1_PLAN_2026-10-26.md。此条覆盖本范围此前不封包限制；不代表已公开发布或授权合main/push/上传。运行组件沿用2.1.0正式包受控供体并逐文件核验，不增换组件。单Agent、全E盘、复用构建-j2<=900秒、单测<=300秒、私有配置，不停止用户进程或占采集卡。4K约53fps现场问题只诊断未修，不写入已修；Lecram暂停。
 
 > **2026-10-26 Codex接手Claude采集审查**：用户要求接续Claude整体排查剩余工作。b2eb77d干净树新开codex/capture-review-handoff-20261026，按docs/CAPTURE_REVIEW_HANDOFF_PLAN_2026-10-26.md完成同帧AA对照、确认缺陷修复与验收报告；继承用户只做一轮采集（原轮已完成，不重复实卡）、单Agent、全E盘、-j2<=900秒/单测<=300秒、真实配置/端点音量/运行库/模型/驱动不改、不停止用户进程。原Claude分支、main与软件UI默认独立分支保留，不merge main/push/Release/封包，Lecram仍暂停。
