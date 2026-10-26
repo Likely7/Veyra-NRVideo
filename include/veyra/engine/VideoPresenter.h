@@ -10,7 +10,7 @@
 #include "veyra/gfx/NvidiaVrr.h"
 #include "veyra/engine/PresentationSettings.h"
 #include "veyra/engine/PresentCapture.h"
-#include "veyra/engine/AsyncDisplayQuery.h"
+#include "veyra/engine/DisplayStateService.h"
 #include <chrono>
 #include <array>
 #include <optional>
@@ -22,6 +22,8 @@ class VideoPresenter {
 public:
     // Live recording hook; the object must outlive every present() call.
     void setCapture(PresentCapture* capture){capture_=capture;}
+    // Shared refresh/VRR states (the engine's); must outlive the presenter.
+    void setDisplayStates(DisplayStateService* states){displayStates_=states;}
     ~VideoPresenter(){close();}
     // mediaClockPaced: the owner already waits on a media clock before each
     // source (file playback). Retained for diagnostics; XeLL low latency must
@@ -75,13 +77,13 @@ public:
     // per-frame history reset, never a per-frame toggle.
     void setXessGenerationSuppressed(bool v){xessGenerationSuppressed_=v;}
     bool xessGenerationSuppressed() const {return xessGenerationSuppressed_;}
-    // Monitor refresh for the live output budget. The swap chain samples it
-    // only at creation; the window may move to another monitor or the mode
-    // may change, so it is re-read on a monitor change and every 2 s.
-    // This accessor only polls a bounded asynchronous query; it never waits
-    // on QueryDisplayConfig or NVIDIA's monitor/VRR driver calls.
+    // Monitor refresh for the live output budget and 跟随显示器, from the shared
+    // DisplayStateService. It is read again only on events: a new presentation
+    // chain, the window moving to another monitor, a display change or
+    // 重新检测, and one VRR confirmation (vrrConfirmAt_); never on a timer.
+    // This accessor never waits on QueryDisplayConfig or NVIDIA's driver calls.
     double displayRefreshHz();
-    // Variable refresh state of that monitor (NVIDIA only), re-read with it.
+    // Variable refresh state of that monitor (NVIDIA only), read with it.
     gfx::VrrState displayVrr()const{return vrr_;}
     // The 可变刷新 rule: the switch is on, Automatic is selected and VRR is
     // possible on the monitor, so Automatic presents like explicit Vsync.
@@ -173,9 +175,13 @@ private:
     bool xessFailed_=false;
     bool xessGenerationSuppressed_=false;
     HMONITOR refreshMonitor_=nullptr;double refreshHz_=0;gfx::VrrState vrr_{};bool refreshQueried_=false,vrrSync_=false;
-    struct DisplayQueryResult {HMONITOR monitor=nullptr;double hz=0;gfx::VrrState vrr;double refreshMs=0,vrrMs=0;};
-    AsyncDisplayQuery<DisplayQueryResult> displayQuery_;
-    std::chrono::steady_clock::time_point refreshQuery_{};
+    DisplayStateService* displayStates_=nullptr;
+    uint64_t displayStateSerial_=0,displayGeneration_=0;
+    // VRR presentation may start or stop after it is requested or when the
+    // window enters/leaves fullscreen: one forced query 3 s after that settles.
+    std::optional<std::chrono::steady_clock::time_point> vrrConfirmAt_;
+    void startDisplayState();
+    void applyDisplayState(const DisplayState&);
     uint32_t xessInputId_=0;
     struct XessWork {pipeline::FrameIdentity identity{};uint32_t id=0;};
     std::array<XessWork,4> xessWork_{};
