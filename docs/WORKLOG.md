@@ -9999,3 +9999,5 @@ CV710/3080Ti/1080p59.94YUY2：音频关约60fps，开同设备PCM48k后299块音
 computer-use技能原生按键/点击：软件专业F11/Esc、顶部还原、极简退出；GPU D3D11 F11/Esc；实际确认进入节点模式后Ctrl+L/Esc、最大化->全屏->Esc。软件首轮误以为切到节点，实际弹确认框未确认，故另起gpu-node明确确认并核对mode=node后验收，未把初轮当节点通过。所有私有播放器正常退出。日志native-software-final/gpu-final/gpu-node。
 
 详细报告CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md；证据reports/capture-audio-main-20261025，日志logs同名，原档archives同名。finalize脚本核对100其它工作树HEAD/status、原全屏7文件哈希、旧refs（只本整合branch/main允许变化）。保留原分支与checkpoint，用正常快进整合本地主main；准确提交及包在integration-audit.json/update-package.json/FINAL.json，不从本条计划推断实际合并已执行。小更新共同EXE/QML需原2.1.0完整NVIDIA/AMD底包，不含运行库/模型/配置。
+
+本地main已正常快进到28f6532，22提交、原功能及#67历史保留；预/后integration-audit均通过，100其它树不变。首轮封包准确字节核对在RotateButton.qml失败：main切换按Git策略将该一个文件LF落成CRLF，逐文件换行归一后全部内容相同（main-checkout-line-endings.json），非产品差异。封包工具修正为验证内容一致后携带实际已验QML原字节；初轮partial目录仅在已知输入逐字节一致、无sealed manifest时原位续封，不删除或覆盖已封包。该修正单独提交后再快进main；无需重跑未变产品GPU测试，最终CRC/逐SHA仍实际检查。

@@ -9,15 +9,26 @@ audit=json.loads((O/'integration-audit.json').read_text('utf8'));assert audit['s
 def sha(p):
     with p.open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
 assert sha(D/'veyra_qml_ui.exe')==sha(A/'veyra_qml_ui.exe')==json.loads((O/'prepared.json').read_text('utf8'))['exeSha256']
-assert not P.exists();P.mkdir(parents=True)
+# A failed seal may leave a partial directory. Resume only our known inputs;
+# never overwrite a sealed package or accept unrelated files in that directory.
+if P.exists():
+    assert not (P/'LOCAL_UPDATE.json').exists(),'sealed package already exists'
+    for p in P.rglob('*'):
+        if not p.is_file():continue
+        rel=p.relative_to(P);expected=D/rel if rel.as_posix()=='veyra_qml_ui.exe' else R/rel
+        assert expected.is_file() and p.read_bytes()==expected.read_bytes(),p
+else:P.mkdir(parents=True)
 def copy(src,rel):
     dst=P/rel;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(src,dst)
 copy(D/'veyra_qml_ui.exe','veyra_qml_ui.exe')
 for folder in ['qml','i18n']:
     for p in (R/folder).rglob('*'):
         if p.is_file():
-            assert sha(A/folder/p.relative_to(R/folder))==sha(p),p
-            copy(p,Path(folder)/p.relative_to(R/folder))
+            tested=A/folder/p.relative_to(R/folder)
+            # Switching the tested branch to main can materialize Git's CRLF
+            # checkout policy. Compare content, then ship the exact tested bytes.
+            assert tested.read_bytes().replace(b'\r\n',b'\n')==p.read_bytes().replace(b'\r\n',b'\n'),p
+            copy(tested,Path(folder)/p.relative_to(R/folder))
 for name in ['CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md','EXPORT_NR_SCALE_REPORT_2026-10-25.md','FG_SCHEDULING_REPAIR_REPORT_2026-10-24.md']:copy(R/'docs'/name,Path('docs')/name)
 for name in ['LICENSE','THIRD_PARTY_NOTICES.md']:copy(R/name,name)
 (P/'README-INT1.zh-CN.md').write_text('''# Veyra 2.1.0-int1 本地整合更新
