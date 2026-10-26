@@ -2384,22 +2384,21 @@ VPage {
                                             }
                                         }
                                     }
-                                    // 评论正文同样改成只读 TextEdit，可划选复制。
-                                    // The comment body is a read-only TextEdit too, so it can
-                                    // be selected and copied.
-                                    TextEdit {
+                                    // 评论正文用 Text + RichText 渲染：这样才能显示
+                                    // B 站的表情图片（TextEdit 不支持内联图片）。
+                                    // 评论不提供划选复制 —— 简介那边保留。
+                                    // The comment body is Text with RichText so Bilibili's emote
+                                    // images can render (TextEdit cannot inline images). Comments
+                                    // are not selectable; the description keeps that.
+                                    Text {
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: contentHeight
-                                        readOnly: true
-                                        selectByMouse: true
-                                        textFormat: TextEdit.PlainText
-                                        wrapMode: TextEdit.Wrap
-                                        selectionColor: Theme.accentSoft
-                                        selectedTextColor: Theme.t1
-                                        text: modelData.message || ""
+                                        wrapMode: Text.Wrap
+                                        textFormat: Text.RichText
+                                        text: modelData.messageRich || modelData.message || ""
                                         color: Theme.t1
                                         font.family: Theme.fontUi
                                         font.pixelSize: 12
+                                        onLinkActivated: Qt.openUrlExternally(link)
                                     }
                                 }
                             }

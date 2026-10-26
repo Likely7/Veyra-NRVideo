@@ -840,6 +840,45 @@ bool biliRelated(const std::wstring& bvid, std::vector<BiliVideoCard>& out, std:
     return true;
 }
 
+// 把评论正文转成富文本：文本里的 [表情名] 换成 <img>，其余字符做 HTML 转义。
+// 不遍历 emote 对象 —— 表情名就写在正文里，直接拿 "[doge]" 去查表即可，
+// 顺带避开了「哪个 key 更长该先匹配」这类问题。
+// Turn a comment body into rich text: [emote] becomes <img> and the rest is HTML-escaped.
+// The emote object is not enumerated - the name is already in the text, so "[doge]" is
+// looked up directly, which also sidesteps any longest-key-first matching question.
+std::wstring richCommentText(const json::Value& content) {
+    const std::string message = content["message"].asString();
+    const json::Value& emotes = content["emote"];
+    std::string out;
+    out.reserve(message.size() + 96);
+    for (size_t i = 0; i < message.size();) {
+        if (message[i] == '[') {
+            const size_t close = message.find(']', i + 1);
+            if (close != std::string::npos && close - i <= 40) {
+                const std::string name = message.substr(i, close - i + 1);
+                const std::string url = emotes[name]["url"].asString();
+                if (!url.empty()) {
+                    // 接口给的是 //i0.hdslb.com/... 这种协议相对地址。
+                    // The endpoint returns a protocol-relative //i0.hdslb.com/... address.
+                    const std::string src = url.rfind("//", 0) == 0 ? "https:" + url : url;
+                    out += "<img src=\"" + src + "\" width=\"22\" height=\"22\"/>";
+                    i = close + 1;
+                    continue;
+                }
+            }
+        }
+        switch (message[i]) {
+        case '&': out += "&amp;"; break;
+        case '<': out += "&lt;"; break;
+        case '>': out += "&gt;"; break;
+        case '"': out += "&quot;"; break;
+        default: out += message[i]; break;
+        }
+        ++i;
+    }
+    return fromUtf8(out);
+}
+
 bool biliComments(const std::wstring& bvid, int page, std::vector<BiliComment>& out,
                   std::wstring& error) {
     if (page < 1) page = 1;
@@ -863,6 +902,7 @@ bool biliComments(const std::wstring& bvid, int page, std::vector<BiliComment>& 
         comment.author = fromUtf8((*reply)["member"]["uname"].asString());
         comment.face = normalizeCover((*reply)["member"]["avatar"].asString());
         comment.message = fromUtf8((*reply)["content"]["message"].asString());
+        comment.messageRich = richCommentText((*reply)["content"]);
         comment.like = (*reply)["like"].asInt(0);
         comment.ctime = int((*reply)["ctime"].asInt(0));
         comment.replies = int((*reply)["rcount"].asInt(0));

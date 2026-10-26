@@ -138,6 +138,11 @@ struct BiliComment {
     // (only those get a delete button). Both come from the same reply parse.
     long long rpid = 0;
     long long mid = 0;
+    // 富文本版本：文本里的 [表情名] 已经换成 <img>，供 Text.RichText 渲染。
+    // 纯文本的 message 保留，用于复制等场合。
+    // A rich-text version where [emote] became <img>, for Text.RichText. The plain
+    // `message` stays for copying and the like.
+    std::wstring messageRich;
 };
 
 // Comments, newest first. The endpoint keys on the video's aid, which is resolved

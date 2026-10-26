@@ -7892,6 +7892,9 @@ void QmlPlayerBridge::bilibiliRequestComments(const QString& bvid, int page){
             m.insert(QStringLiteral("author"), QString::fromStdWString(c.author));
             m.insert(QStringLiteral("face"), QString::fromStdWString(c.face));
             m.insert(QStringLiteral("message"), QString::fromStdWString(c.message));
+            // 富文本版（表情已换成 <img>），供评论正文用 RichText 渲染。
+            // The rich version with emotes turned into <img>, rendered as RichText.
+            m.insert(QStringLiteral("messageRich"), QString::fromStdWString(c.messageRich));
             m.insert(QStringLiteral("like"), QVariant::fromValue<qlonglong>(c.like));
             m.insert(QStringLiteral("ctime"), c.ctime);
             m.insert(QStringLiteral("replies"), c.replies);
