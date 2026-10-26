@@ -1141,21 +1141,43 @@ __declspec(noinline) void testAntiAliasSettingsChain() {
     auto off = a; off.antiAlias.enabled = false; b = off; b.antiAlias.method = AntiAliasMethod::Fxaa;
     check(!requiresGraphRebuild(off, b), "E0: edits of a switched-off instance do not rebuild");
 
-    // List mode: the instance reaches the description and runs at source size.
+    // List mode: the instance reaches the description. With NR it runs behind the NR
+    // group (NR redraws the edges it smoothed in front); without NR at source size.
     auto listSettings = std::make_unique<EnhancementSettings>();
     listSettings->nr = true; listSettings->sr = true; listSettings->antiAlias = a.antiAlias;
     StageRequest request; request.width = 1280; request.height = 720; request.nr = true; request.sr = true;
     auto desc = std::make_unique<pipeline::EnhanceGraphDesc>();
+    const auto stepOf = [&](EffectType type) {
+        uint32_t found = kMaxChainNodes;
+        if (desc->fixedExecutionPlan)
+            for (uint32_t i = 0; i < desc->fixedExecutionPlan->stepCount; ++i)
+                if (desc->fixedExecutionPlan->steps[i].type == type) found = i;
+        return found;
+    };
+    using Slot = pipeline::EnhanceGraphDesc::PassSlot;
+    auto noNr = std::make_unique<EnhancementSettings>(*listSettings); noNr->nr = false;
+    StageRequest noNrRequest = request; noNrRequest.nr = false;
+    describeStages(noNrRequest, *noNr, *desc);
+    uint32_t aaStep = stepOf(EffectType::AntiAliasing);
+    check(aaStep < kMaxChainNodes && aaStep < stepOf(EffectType::SuperResolution) &&
+          desc->fixedExecutionPlan->steps[aaStep].output == pipeline::Extent{1280, 720} &&
+          desc->slotOfStep(aaStep) == Slot::SourcePost && desc->sourcePostActive(),
+          "E0: without NR, list anti-aliasing runs at source size right after the input conversion");
+    auto nrFirst = std::make_unique<EnhancementSettings>(*listSettings); nrFirst->lowLatency = true;
+    describeStages(request, *nrFirst, *desc);
+    aaStep = stepOf(EffectType::AntiAliasing);
+    check(desc->nrBeforeSr && aaStep < kMaxChainNodes && stepOf(EffectType::NrEnhance) < aaStep &&
+          aaStep < stepOf(EffectType::SuperResolution) && desc->fixedExecutionPlan->steps[aaStep].output == pipeline::Extent{1280, 720} &&
+          desc->slotOfStep(aaStep) == Slot::PreSr && !desc->sourcePostActive(),
+          "E0: NR first, list anti-aliasing follows NR at source size, in front of SR");
     describeStages(request, *listSettings, *desc);
     check(desc->fixedExecutionPlanError.empty() && desc->fixedExecutionPlan && desc->antiAlias[0] == a.antiAlias &&
           desc->antiAlias[1] == AntiAliasSettings{} && desc->antiAliasActive(), "E0: describeStages carries the anti-aliasing instance");
-    uint32_t aaStep = kMaxChainNodes;
-    if (desc->fixedExecutionPlan)
-        for (uint32_t i = 0; i < desc->fixedExecutionPlan->stepCount; ++i)
-            if (desc->fixedExecutionPlan->steps[i].type == EffectType::AntiAliasing) aaStep = i;
-    check(aaStep < kMaxChainNodes && desc->fixedExecutionPlan->steps[aaStep].output == pipeline::Extent{1280, 720} &&
-          desc->slotOfStep(aaStep) == pipeline::EnhanceGraphDesc::PassSlot::SourcePost,
-          "E0: list anti-aliasing runs at source size right after the input conversion");
+    aaStep = stepOf(EffectType::AntiAliasing);
+    check(aaStep < kMaxChainNodes && stepOf(EffectType::SuperResolution) < aaStep && stepOf(EffectType::NrEnhance) < aaStep &&
+          desc->fixedExecutionPlan->steps[aaStep].output == desc->fixedExecutionPlan->output &&
+          desc->slotOfStep(aaStep) == Slot::Tail && !desc->sourcePostActive(),
+          "E0: SR first, list anti-aliasing follows NR at the output size");
     const auto error = desc->validateFixedExecutionPlan();
     check(pipeline::EnhanceGraphDesc::antiAliasExecutor ? error.empty() : error == "anti-aliasing is not available in this build",
           "E0: an enabled instance is refused until its executor is built");

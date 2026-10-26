@@ -561,11 +561,20 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
     if (chain.mode == ChainMode::Node) {
         for (uint32_t i = 0; i < chain.nodeCount; ++i) append(i);
     } else {
-        // Anti-aliasing always runs at source size, ahead of any enlargement; beauty
-        // follows the whole NR group (with its protection), ahead of SR when NR goes first.
+        // Beauty follows the whole NR group (with its protection), ahead of SR when NR
+        // goes first. Anti-aliasing follows it too: NR redraws edges and its change
+        // gain sharpens them again, which undid an earlier pass (user 2026-10-26).
+        // Behind SR that is the output size. Without enabled NR it stays at source
+        // size, ahead of any enlargement.
+        bool nrActive = false;
+        for (uint32_t i = 0; i < chain.nodeCount; ++i)
+            if (chain.nodes[i].enabled && chain.nodes[i].type == EffectType::NrEnhance) nrActive = true;
         const std::array<EffectType, effectTypeCount> order = nrFirst
-            ? std::array{EffectType::Color, EffectType::AntiAliasing, EffectType::NrEnhance, EffectType::Protection,
-                EffectType::Beauty, EffectType::SuperResolution, EffectType::VideoHdr, EffectType::FrameGeneration}
+            ? std::array{EffectType::Color, EffectType::NrEnhance, EffectType::Protection, EffectType::Beauty,
+                EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::VideoHdr, EffectType::FrameGeneration}
+            : nrActive
+            ? std::array{EffectType::Color, EffectType::SuperResolution, EffectType::NrEnhance, EffectType::Protection,
+                EffectType::Beauty, EffectType::AntiAliasing, EffectType::VideoHdr, EffectType::FrameGeneration}
             : std::array{EffectType::Color, EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::NrEnhance,
                 EffectType::Protection, EffectType::Beauty, EffectType::VideoHdr, EffectType::FrameGeneration};
         for (const auto type : order)

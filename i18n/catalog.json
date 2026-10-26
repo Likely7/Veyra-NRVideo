@@ -4888,6 +4888,13 @@
    "ja": "ペアリングへ"
   },
   {
+   "zh": "去除锯齿边缘，适合游戏画面、文字和界面线条。列表模式开着 NR 时排在 NR 之后，NR 重新勾出的边缘也会处理；不开 NR 时在源分辨率、超分之前运行，锯齿不会被一起放大。",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "去除鋸齒邊緣，適合遊戲畫面、文字和介面線條。清單模式開著 NR 時排在 NR 之後，NR 重新勾出的邊緣也會處理；不開 NR 時在來源解析度、超解析之前執行，鋸齒不會被一起放大。",
+   "en": "Removes jagged edges, for game footage, text and interface lines. In list mode with NR on it runs after NR, so the edges NR redraws are smoothed too; without NR it runs at source resolution before super resolution, so the jaggies are not enlarged with the picture.",
+   "ja": "ギザギザのエッジを取り除きます。ゲーム映像、文字、UI の線に向いています。リストモードで NR がオンのときは NR の後に処理するため、NR が描き直したエッジも滑らかにします。NR がオフのときはソース解像度で超解像の前に処理するため、ギザギザが一緒に拡大されません。"
+  },
+  {
    "zh": "去隔行处理失败，请查看诊断",
    "src": "src/source/MediaFileSource.cpp",
    "zh-TW": "去交錯處理失敗，請查看診斷",
@@ -5684,13 +5691,6 @@
    "zh-TW": "在瀏覽器開啟登入頁",
    "en": "Open the sign-in page in the browser",
    "ja": "ブラウザーでサインインページを開く"
-  },
-  {
-   "zh": "在源分辨率去除锯齿边缘，适合游戏画面、文字和界面线条；放在超分之前，锯齿不会被一起放大。",
-   "src": "qml/AntiAliasEditor.qml",
-   "zh-TW": "在來源解析度去除鋸齒邊緣，適合遊戲畫面、文字和介面線條；放在超解析之前，鋸齒不會被一起放大。",
-   "en": "Removes jagged edges at source resolution, for game footage, text and interface lines. It runs before super resolution, so the jaggies are not enlarged with the picture.",
-   "ja": "ソース解像度でギザギザのエッジを取り除きます。ゲーム映像、文字、UI の線に向いています。超解像の前に処理するため、ギザギザが一緒に拡大されません。"
   },
   {
    "zh": "在画面上按住左键拖出",

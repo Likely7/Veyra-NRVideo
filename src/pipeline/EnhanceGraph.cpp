@@ -347,12 +347,13 @@ bool EnhanceGraph::createNodeColorResources(){
     for(auto& passes:interNrPasses_)passes.clear();
     if(!desc_.fixedExecutionPlan){
         // Graphs built without a compiled plan (the tiled full-resolution image
-        // path) run their enabled anti-aliasing instances at source size, in
-        // parameter order, like the list chain.
+        // path) run their enabled anti-aliasing instances in parameter order like
+        // the list chain: behind NR when NR runs (no SR here, so still the source
+        // size), otherwise right after the input conversion.
         for(uint32_t parameter=0;parameter<desc_.antiAlias.size();++parameter){
             if(!desc_.antiAlias[parameter].enabled)continue;
             if(!createAntiAlias(parameter,srcW_,srcH_))return false;
-            sourcePostPasses_.push_back({engine::kMaxChainNodes,engine::EffectType::AntiAliasing,parameter,
+            (desc_.enableNr?tailPasses_:sourcePostPasses_).push_back({engine::kMaxChainNodes,engine::EffectType::AntiAliasing,parameter,
                 antiAliasOutputs_[parameter].Get(),srcW_,srcH_,parameter});
         }
         if(!sourcePostPasses_.empty())sourcePostOutput_=sourcePostPasses_.back().output;

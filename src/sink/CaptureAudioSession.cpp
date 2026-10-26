@@ -108,6 +108,8 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
         int64_t lastReset=0;
         int64_t nextSyncLog=0;
         int64_t nextPeakLog=0;
+        // Sample findings since the last report (see the report below).
+        uint64_t heldPadding=0,heldNonFinite=0,heldOverRange=0;double heldPeak=0;bool sampleReported=false;
         unsigned appliedMode=mode.load();int appliedOffset=offset.load();
         CaptureSyncTarget syncTarget;
         CaptureSyncTarget::Result syncEstimate;
@@ -236,9 +238,20 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                     state.overRangeSamples+=stats.overRange;state.inputPeak=std::max<double>(state.inputPeak,stats.peak);
                 }
                 const auto sampleLogTime=hostTime();
-                if((invalidPadding||stats.nonFinite||stats.overRange)&&sampleLogTime>=nextPeakLog){
-                    nextPeakLog=sampleLogTime+5000000;
-                    log::warn("capture-audio-samples",std::format("invalidPadding={} nonFinite={} overRange={} convertedPeak={:.6f} blockAgc=0 format={}Hz/{}bit validBits={}",invalidPadding,stats.nonFinite,stats.overRange,stats.peak,format.nSamplesPerSec,format.wBitsPerSample,validBits));
+                heldPadding+=invalidPadding;heldNonFinite+=stats.nonFinite;heldOverRange+=stats.overRange;
+                if(invalidPadding||stats.nonFinite||stats.overRange)heldPeak=std::max<double>(heldPeak,stats.peak);
+                if((heldPadding||heldNonFinite||heldOverRange)&&sampleLogTime>=nextPeakLog){
+                    // Float PCM above unity is legitimate here (CaptureAudioDsp.h), and a
+                    // hot source repeats it all session: a warning twice a second flushed
+                    // the log and replaced the latest problem each time (field log
+                    // 2026-10-26). The first report and any padding/non-finite samples stay
+                    // warnings; over-range alone is summarised every 30 s.
+                    const auto text=std::format("invalidPadding={} nonFinite={} overRange={} convertedPeak={:.6f} blockAgc=0 format={}Hz/{}bit validBits={}{}",
+                        heldPadding,heldNonFinite,heldOverRange,heldPeak,format.nSamplesPerSec,format.wBitsPerSample,validBits,sampleReported?" (since the last report)":"");
+                    if(!sampleReported||heldPadding||heldNonFinite)log::warn("capture-audio-samples",text);
+                    else log::info("capture-audio-samples",text);
+                    sampleReported=true;nextPeakLog=sampleLogTime+300000000;
+                    heldPadding=heldNonFinite=heldOverRange=0;heldPeak=0;
                 }
                 const double start=chunk.pts-1000.0*delay/format.nSamplesPerSec;
                 const double end=chunk.pts+1000.0*(inputFrames-swr_get_delay(swr,format.nSamplesPerSec))/format.nSamplesPerSec;

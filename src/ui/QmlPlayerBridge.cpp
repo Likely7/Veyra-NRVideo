@@ -5515,8 +5515,9 @@ bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
     for (uint32_t i = 0; i < c.nodeCount; ++i)
         if (c.nodes[i].type == engine::EffectType::AntiAliasing) return setAntiAliasParameterAt(int(i), key, value);
     if (c.mode != engine::ChainMode::List) { emit notice(tr("请先添加抗锯齿节点"), true); return false; }
-    // The list card's instance exists once it is used: after the grades, in
-    // front of SR, where toChain() puts it.
+    // The list card's instance exists once it is used, stored after the grades
+    // where toChain() puts it; the list order (compileChainExecutionPlan) runs it
+    // behind the NR group when NR is on and in front of SR otherwise.
     engine::ChainNode node; node.type = engine::EffectType::AntiAliasing;
     bool enabled = false;
     if (!applyAntiAliasKey(node.aa, enabled, key, value)) return false;
