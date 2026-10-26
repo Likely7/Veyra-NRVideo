@@ -2554,13 +2554,25 @@ VPage {
                             spacing: 10
 
                             Text {
+                                // 有 fillWidth 项时 RowLayout 会把其它项压到 minimumWidth，
+                                // 标签一旦被压就会只剩一两个字。
+                                // With fillWidth items present RowLayout squeezes the rest down
+                                // to minimumWidth, which would leave a label with one character.
+                                Layout.minimumWidth: implicitWidth
                                 text: qsTr("分P")
                                 color: Theme.t2
                                 font.family: Theme.fontUi
                                 font.pixelSize: 12
                             }
                             VSelect {
+                                // 固定 260 + 画质 200 加标签已经超过这一行的可用宽度，
+                                // 多出来的部分被右列盖住 —— 让两个下拉框分配剩余空间。
+                                // A fixed 260 plus 200 for the quality box, plus the labels,
+                                // already exceeded this row's width and the excess went under
+                                // the right column; the two now share what is available.
+                                Layout.fillWidth: true
                                 Layout.preferredWidth: 260
+                                Layout.minimumWidth: 130
                                 title: qsTr("分P")
                                 // value comes straight from selectedPart, so opening another
                                 // video (which resets it to 0) needs no rebinding.
@@ -2602,6 +2614,7 @@ VPage {
                             }
 
                             Text {
+                                Layout.minimumWidth: implicitWidth
                                 text: qsTr("画质")
                                 color: Theme.t2
                                 font.family: Theme.fontUi
@@ -2609,7 +2622,9 @@ VPage {
                             }
                             VSelect {
                                 id: qualityBox
+                                Layout.fillWidth: true
                                 Layout.preferredWidth: 200
+                                Layout.minimumWidth: 110
                                 title: qsTr("画质")
                                 // An explicit "automatic" entry (id "0") rather than the
                                 // first real quality: that way the visible choice and
