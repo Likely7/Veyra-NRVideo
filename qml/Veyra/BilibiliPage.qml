@@ -1531,7 +1531,16 @@ VPage {
                 // leftover strip: a fixed 232 fits four columns in the default window and
                 // leaves 32 px at 2544 because 2352 is not a multiple of 232.
                 readonly property real idealCellWidth: 220
-                readonly property int columnCount: Math.max(1, Math.round(width / idealCellWidth))
+                // 列数封顶 5：默认窗口（1280 宽）正好排 5 列，窗口再宽就把多出来的宽度
+                // 给卡片，而不是往里塞更多列 —— 拉大窗口看到的是更大的卡片，不是更密的
+                // 网格。窗口比默认更窄时仍按原来的逻辑自动减少列数。
+                // Columns are capped at five: the default 1280-wide window fits exactly five,
+                // and anything wider hands the extra width to the cards instead of adding
+                // columns - enlarging the window shows bigger cards, not a denser grid. A
+                // window narrower than the default still drops columns the way it did before.
+                readonly property int maxColumns: 5
+                readonly property int columnCount:
+                    Math.min(maxColumns, Math.max(1, Math.round(width / idealCellWidth)))
                 readonly property real fittedCellWidth: width / columnCount
                 // A wider cell means a taller cover (16:9 on the inner width), so the cell
                 // grows with it or the title and author line get clipped.
