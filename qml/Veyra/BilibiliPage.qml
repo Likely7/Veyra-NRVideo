@@ -504,6 +504,13 @@ VPage {
             // The reply result is reported explicitly: on failure the reason from Bilibili
             // (the -401 risk check in particular) has to be visible, or a silent no-op looks
             // like a bug.
+            if (op === "delete-reply") {
+                if (!ok) { root.replyMessage = error; return }
+                root.replyMessage = qsTr("评论已删除")
+                if (root.detail && root.detail.bvid)
+                    veyra.bilibiliRequestComments(root.detail.bvid, 1)
+                return
+            }
             if (op === "reply") {
                 root.replySending = false
                 if (!ok) { root.replyMessage = error; return }
@@ -2323,11 +2330,45 @@ VPage {
                                     anchors.margins: 8
                                     spacing: 4
 
-                                    Text {
-                                        text: modelData.author + "   " + (modelData.like || 0) + qsTr(" 赞")
-                                        color: Theme.t3
-                                        font.family: Theme.fontUi
-                                        font.pixelSize: 11
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            text: modelData.author + "   " + (modelData.like || 0) + qsTr(" 赞")
+                                            color: Theme.t3
+                                            font.family: Theme.fontUi
+                                            font.pixelSize: 11
+                                        }
+                                        // 只有自己发的评论才有删除按钮：拿作者 mid 和当前
+                                        // 账号的 mid 比。mid 是 9-10 位数，双精度能精确表示。
+                                        // Only the account's own comments get a delete button:
+                                        // the author mid is compared with the signed-in one.
+                                        // A mid is 9-10 digits, exact in a double.
+                                        Text {
+                                            visible: modelData.mid > 0
+                                                     && root.account.mid === modelData.mid
+                                            text: qsTr("删除")
+                                            color: deletingMouse.containsMouse ? Theme.warn : Theme.t3
+                                            font.family: Theme.fontUi
+                                            font.pixelSize: 11
+
+                                            MouseArea {
+                                                id: deletingMouse
+                                                anchors.fill: parent
+                                                anchors.margins: -4
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    if (!root.detail || !root.detail.bvid) return
+                                                    root.replyMessage = ""
+                                                    veyra.bilibiliDeleteReply(root.detail.bvid,
+                                                                              modelData.rpid)
+                                                }
+                                            }
+                                        }
                                     }
                                     // 评论正文同样改成只读 TextEdit，可划选复制。
                                     // The comment body is a read-only TextEdit too, so it can

@@ -60,7 +60,7 @@ enum class BiliOp : uint8_t {
     // 发评论。与其它写操作一样走异步任务，避免同步 HTTP 卡住界面。
     // Posting a comment. Asynchronous like the other write actions, so a synchronous
     // HTTP call cannot freeze the window.
-    Reply,
+    Reply, DeleteReply,
     Count,
 };
 // 操作名，供信号传给 QML 分派用。
@@ -81,6 +81,7 @@ constexpr const char* biliOpName(BiliOp op) {
     case BiliOp::Account:          return "account";
     case BiliOp::ReportProgress:   return "report-progress";
     case BiliOp::Reply:            return "reply";
+    case BiliOp::DeleteReply:      return "delete-reply";
     case BiliOp::Count:            break;
     }
     return "unknown";
@@ -717,6 +718,9 @@ public:
     // 发评论。结果通过 bilibiliActionDone("reply", ok, error) 回到界面。
     // Post a comment; the outcome arrives as bilibiliActionDone("reply", ok, error).
     Q_INVOKABLE void bilibiliPostReply(const QString& bvid, const QString& message);
+    // 删除自己的一条评论。
+    // Delete one comment the account owns.
+    Q_INVOKABLE void bilibiliDeleteReply(const QString& bvid, qlonglong rpid);
     Q_INVOKABLE void bilibiliRequestWatchLater(const QString& bvid, bool add);
     Q_INVOKABLE void bilibiliRequestComments(const QString& bvid, int page);
     Q_INVOKABLE void bilibiliRequestEnableDanmaku(const QString& bvid, int pageIndex);

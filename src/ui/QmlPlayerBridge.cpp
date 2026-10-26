@@ -7639,6 +7639,13 @@ void QmlPlayerBridge::tickBiliTasks() {
         case BiliOp::Like:
         case BiliOp::Coin:
         case BiliOp::WatchLater:
+        // 发评论和删评论也走这一组：它们同样只需要把结果送回界面。
+        // 之前漏了 Reply 这个 case，结果被 switch 丢掉，界面就一直停在「发送中」。
+        // Posting and deleting a reply belong here too: they only need their result
+        // delivered. Reply was missing, so the switch discarded it and the button stayed at
+        // "sending" forever.
+        case BiliOp::Reply:
+        case BiliOp::DeleteReply:
             // 成功提示要留在 GUI 线程发：worker 不能碰翻译表和信号。
             // 三个动作各有自己的文案，所以按 op 分派而不是用一句通用的话。
             // The success notice belongs on the GUI thread: the worker cannot touch the
@@ -7649,6 +7656,8 @@ void QmlPlayerBridge::tickBiliTasks() {
                 case BiliOp::Like:       emit notice(r.add ? tr("已点赞") : tr("已取消点赞"), false); break;
                 case BiliOp::Coin:       emit notice(tr("已投币"), false); break;
                 case BiliOp::WatchLater: emit notice(r.add ? tr("已加入稍后再看") : tr("已从稍后再看移除"), false); break;
+                case BiliOp::Reply:       emit notice(tr("评论已发送"), false); break;
+                case BiliOp::DeleteReply: emit notice(tr("评论已删除"), false); break;
                 default: break;
                 }
             }
@@ -7796,6 +7805,20 @@ void QmlPlayerBridge::tickBiliTasks() {
 // 三者形状一致：发一个写请求，成功则刷新互动状态。提示语在 GUI 线程发。
 // All three have the same shape: one write request, then re-read the interaction
 // state. The user-facing notice stays on the GUI thread.
+void QmlPlayerBridge::bilibiliDeleteReply(const QString& bvid, qlonglong rpid){
+    if (bvid.isEmpty() || rpid <= 0) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    const long long wrpid = rpid;
+    startBiliTask(BiliOp::DeleteReply, [wbvid, wrpid] {
+        BiliTaskResult r;
+        std::wstring error;
+        r.ok = media::biliDeleteReply(wbvid, wrpid, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
 void QmlPlayerBridge::bilibiliPostReply(const QString& bvid, const QString& message){
     if (bvid.isEmpty() || message.isEmpty()) return;
     media::setBiliCookie(media::loadBilibiliCookie());
@@ -7872,6 +7895,14 @@ void QmlPlayerBridge::bilibiliRequestComments(const QString& bvid, int page){
             m.insert(QStringLiteral("like"), QVariant::fromValue<qlonglong>(c.like));
             m.insert(QStringLiteral("ctime"), c.ctime);
             m.insert(QStringLiteral("replies"), c.replies);
+            // 删除按钮只给自己的评论，所以把 rpid 和作者 mid 一起送过去；
+            // 「是不是我的」由 QML 拿它与 root.account.mid 比较 —— 账号数据本来就在那边，
+            // 不必在这里再存一份。
+            // The delete button only appears on the account's own comments, so rpid and the
+            // author mid go along; QML compares that against root.account.mid, which it
+            // already holds, instead of this layer keeping a second copy.
+            m.insert(QStringLiteral("rpid"), QVariant::fromValue<qlonglong>(c.rpid));
+            m.insert(QStringLiteral("mid"), QVariant::fromValue<qlonglong>(c.mid));
             r.list.push_back(m);
         }
         r.ok = true;
@@ -8001,6 +8032,9 @@ void QmlPlayerBridge::bilibiliRequestAccount(){
         r.object.insert(QStringLiteral("face"), QString::fromStdWString(a.face));
         r.object.insert(QStringLiteral("level"), a.level);
         r.object.insert(QStringLiteral("vip"), a.vip);
+        // mid 用来判断哪条评论是自己发的。
+        // mid identifies which comments belong to this account.
+        r.object.insert(QStringLiteral("mid"), QVariant::fromValue<qlonglong>(a.mid));
         r.ok = true;
         return r;
     });

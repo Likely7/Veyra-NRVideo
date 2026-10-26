@@ -132,6 +132,12 @@ struct BiliComment {
     long long like = 0;
     int ctime = 0;
     int replies = 0;
+    // rpid 是删除时唯一需要的标识；mid 用来判断这条是不是自己发的
+    // （只有自己的评论才给删除按钮）。两者都来自同一次回复解析。
+    // rpid identifies the comment for deletion, mid says whether it is the account's own
+    // (only those get a delete button). Both come from the same reply parse.
+    long long rpid = 0;
+    long long mid = 0;
 };
 
 // Comments, newest first. The endpoint keys on the video's aid, which is resolved
@@ -157,6 +163,9 @@ bool biliCoin(const std::wstring& bvid, int count, std::wstring& error);
 // Post one plain-text comment (no emoji, no mentions). Used first to find out whether
 // the risk check lets it through.
 bool biliPostReply(const std::wstring& bvid, const std::wstring& message, std::wstring& error);
+// 删除一条自己发的评论。
+// Delete one comment the account owns.
+bool biliDeleteReply(const std::wstring& bvid, long long rpid, std::wstring& error);
 // folderId 0 means the account's first folder; the UI passes the folder the user picked.
 bool biliFavorite(const std::wstring& bvid, bool add, long long folderId,
                   std::wstring& error);

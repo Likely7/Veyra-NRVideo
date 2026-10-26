@@ -866,6 +866,8 @@ bool biliComments(const std::wstring& bvid, int page, std::vector<BiliComment>& 
         comment.like = (*reply)["like"].asInt(0);
         comment.ctime = int((*reply)["ctime"].asInt(0));
         comment.replies = int((*reply)["rcount"].asInt(0));
+        comment.rpid = (*reply)["rpid"].asInt(0);
+        comment.mid = (*reply)["mid"].asInt(0);
         out.push_back(std::move(comment));
     }
     return true;
@@ -982,6 +984,25 @@ bool biliPostReply(const std::wstring& bvid, const std::wstring& message, std::w
         + "&type=1&message=" + urlEncode(toUtf8(text))
         + "&plat=1&ordering=2&" + csrf;
     return postAction(L"/x/v2/reply/add", form, error, L"发评论");
+}
+
+// 删除自己的一条评论。B 站同样按 aid 索引。
+// Deleting one of the account's own comments; the endpoint keys on aid as well.
+bool biliDeleteReply(const std::wstring& bvid, long long rpid, std::wstring& error) {
+    if (!bilibiliCookieLooksSignedIn(g_cookie)) { error = L"删除评论需要登录"; return false; }
+    if (rpid <= 0) { error = L"评论标识无效"; return false; }
+    std::string viewBody;
+    if (!httpGet(L"api.bilibili.com", L"/x/web-interface/view?bvid=" + bvid, g_cookie,
+                 viewBody, error)) return false;
+    const auto viewRoot = json::parse(viewBody);
+    if (!checkCode(viewRoot, error, L"视频信息")) return false;
+    const long long aid = viewRoot["data"]["aid"].asInt(0);
+    if (aid <= 0) { error = L"视频信息里没有 aid"; return false; }
+    const std::string csrf = csrfForm();
+    if (csrf.empty()) { error = L"登录信息缺少 csrf 令牌"; return false; }
+    std::string form = "oid=" + std::to_string(aid) + "&type=1&rpid="
+        + std::to_string(rpid) + "&" + csrf;
+    return postAction(L"/x/v2/reply/del", form, error, L"删除评论");
 }
 
 bool biliCoin(const std::wstring& bvid, int count, std::wstring& error) {
