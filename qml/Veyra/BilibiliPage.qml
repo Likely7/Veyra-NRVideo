@@ -2177,9 +2177,24 @@ VPage {
                             }
                         }
 
-                        Text {
+                        // 简介改成只读的 TextEdit：Text 不支持选中，换成它才能用鼠标
+                        // 划选并复制。只读 + 可选中，外观和原来的 Text 一致（无背景、无边框）。
+                        // 高度必须显式给 contentHeight —— TextEdit 不像 Text 那样自己撑开，
+                        // 在 ColumnLayout 里会塌成 0。
+                        // The description is a read-only TextEdit now: Text cannot be selected,
+                        // this can, so the text can be dragged over and copied. Read-only with
+                        // mouse selection keeps it looking like the old Text (no background, no
+                        // frame). The height has to be contentHeight explicitly - unlike Text,
+                        // a TextEdit does not size itself and would collapse to 0 in a layout.
+                        TextEdit {
                             Layout.fillWidth: true
-                            wrapMode: Text.Wrap
+                            Layout.preferredHeight: contentHeight
+                            readOnly: true
+                            selectByMouse: true
+                            textFormat: TextEdit.PlainText
+                            wrapMode: TextEdit.Wrap
+                            selectionColor: Theme.accentSoft
+                            selectedTextColor: Theme.t1
                             color: Theme.t3
                             font.family: Theme.fontUi
                             font.pixelSize: 12
@@ -2222,9 +2237,18 @@ VPage {
                                         font.family: Theme.fontUi
                                         font.pixelSize: 11
                                     }
-                                    Text {
+                                    // 评论正文同样改成只读 TextEdit，可划选复制。
+                                    // The comment body is a read-only TextEdit too, so it can
+                                    // be selected and copied.
+                                    TextEdit {
                                         Layout.fillWidth: true
-                                        wrapMode: Text.Wrap
+                                        Layout.preferredHeight: contentHeight
+                                        readOnly: true
+                                        selectByMouse: true
+                                        textFormat: TextEdit.PlainText
+                                        wrapMode: TextEdit.Wrap
+                                        selectionColor: Theme.accentSoft
+                                        selectedTextColor: Theme.t1
                                         text: modelData.message || ""
                                         color: Theme.t1
                                         font.family: Theme.fontUi
