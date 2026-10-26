@@ -60,7 +60,7 @@ enum class BiliOp : uint8_t {
     // 发评论。与其它写操作一样走异步任务，避免同步 HTTP 卡住界面。
     // Posting a comment. Asynchronous like the other write actions, so a synchronous
     // HTTP call cannot freeze the window.
-    Reply, DeleteReply,
+    Reply, DeleteReply, EmotePanel,
     Count,
 };
 // 操作名，供信号传给 QML 分派用。
@@ -82,6 +82,7 @@ constexpr const char* biliOpName(BiliOp op) {
     case BiliOp::ReportProgress:   return "report-progress";
     case BiliOp::Reply:            return "reply";
     case BiliOp::DeleteReply:      return "delete-reply";
+    case BiliOp::EmotePanel:       return "emote-panel";
     case BiliOp::Count:            break;
     }
     return "unknown";
@@ -721,6 +722,9 @@ public:
     // 删除自己的一条评论。
     // Delete one comment the account owns.
     Q_INVOKABLE void bilibiliDeleteReply(const QString& bvid, qlonglong rpid);
+    // 拉评论表情面板，结果通过 bilibiliEmotePanelReady 回到界面。
+    // Fetch the reply emote panel; the result arrives as bilibiliEmotePanelReady.
+    Q_INVOKABLE void bilibiliRequestEmotePanel();
     Q_INVOKABLE void bilibiliRequestWatchLater(const QString& bvid, bool add);
     Q_INVOKABLE void bilibiliRequestComments(const QString& bvid, int page);
     Q_INVOKABLE void bilibiliRequestEnableDanmaku(const QString& bvid, int pageIndex);
@@ -1594,6 +1598,9 @@ signals:
     // Result signals for the generic async task. `op` names the action (like / coin /
     // watchlater) so QML can handle the three same-shaped writes in one function.
     void bilibiliActionDone(const QString& op, bool ok, const QString& error);
+    // 表情面板：每项 { text, url }。
+    // The emote panel: each entry is { text, url }.
+    void bilibiliEmotePanelReady(const QVariantList& items, bool ok, const QString& error);
     void bilibiliCommentsReady(const QVariantList& comments, bool ok, const QString& error);
     void bilibiliDanmakuReady(bool ok, const QString& error, int lineCount);
     void bilibiliResumeReady(double seconds);

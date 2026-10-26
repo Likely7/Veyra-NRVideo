@@ -532,6 +532,13 @@ VPage {
             if (root.detail && root.detail.bvid) root.requestInteraction(root.detail.bvid)
         }
         // 评论列表到达。
+        // 表情面板到达。
+        function onBilibiliEmotePanelReady(items, ok, error) {
+            root.emoteLoading = false
+            if (!ok) { root.emoteError = error; return }
+            root.emoteError = ""
+            root.emotes = items
+        }
         function onBilibiliCommentsReady(comments, ok, error) {
             if (!ok) return
             root.comments = comments
@@ -772,6 +779,20 @@ VPage {
     // The rpid being deleted: on success it is removed from the local list so the change is
     // immediate, then the server list is fetched again for the final state.
     property real pendingDeleteRpid: 0
+    // 表情面板状态。拉到之后一直留着，再点按钮不再重复请求。
+    // Emote panel state; once fetched it is kept, so reopening costs nothing.
+    property var emotes: []
+    property bool emotePanelOpen: false
+    property bool emoteLoading: false
+    property string emoteError: ""
+
+    // 把表情代码接到正文末尾，并把光标放到后面，方便接着打字。
+    // Append the emote code to the body and put the caret after it, ready for more typing.
+    function insertEmote(code) {
+        if (!code) return
+        replyInput.text = replyInput.text + code
+        replyInput.cursorPosition = replyInput.text.length
+    }
 
     function toggleComments() {
         root.showComments = !root.showComments
@@ -2299,6 +2320,22 @@ VPage {
                                 }
                             }
 
+                            // 表情按钮：点一下就在下面展开面板，再点收起。
+                            // Emote button: one press opens the panel below, another closes it.
+                            VButton {
+                                implicitWidth: 56
+                                fontSize: 12
+                                text: root.emotePanelOpen ? qsTr("收起") : qsTr("表情")
+                                onClicked: {
+                                    root.emotePanelOpen = !root.emotePanelOpen
+                                    if (!root.emotePanelOpen) return
+                                    if (root.emotes.length > 0 || root.emoteLoading) return
+                                    root.emoteLoading = true
+                                    root.emoteError = ""
+                                    veyra.bilibiliRequestEmotePanel()
+                                }
+                            }
+
                             VButton {
                                 id: replySendButton
                                 implicitWidth: 68
@@ -2315,6 +2352,82 @@ VPage {
                                     veyra.bilibiliPostReply(root.detail.bvid, body)
                                 }
                                 onClicked: send()
+                            }
+                        }
+
+                        // 表情面板。高度固定、内部可滚，表情再多也不会把评论区顶下去。
+                        // 点一个立即插入并保持展开，方便连着选好几个。
+                        // The emote panel: fixed height and its own scrolling, so no number of
+                        // emotes pushes the comments away. Picking one inserts it immediately
+                        // and leaves the panel open for the next pick.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            visible: root.emotePanelOpen
+                            implicitHeight: 132
+                            radius: 8
+                            color: Theme.card2
+                            border.width: 1
+                            border.color: Theme.stroke
+
+                            Text {
+                                anchors.centerIn: parent
+                                visible: root.emoteLoading
+                                text: qsTr("正在加载表情…")
+                                color: Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: 11
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 12
+                                width: parent.width - 24
+                                horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.Wrap
+                                visible: !root.emoteLoading && root.emoteError.length > 0
+                                text: root.emoteError
+                                color: Theme.warn
+                                font.family: Theme.fontUi
+                                font.pixelSize: 11
+                            }
+                            GridView {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                visible: !root.emoteLoading && root.emoteError.length === 0
+                                         && root.emotes.length > 0
+                                cellWidth: 38
+                                cellHeight: 38
+                                clip: true
+                                ScrollBar.vertical: VScrollBar { }
+                                model: root.emotes
+                                delegate: Item {
+                                    width: 38
+                                    height: 38
+                                    Image {
+                                        anchors.centerIn: parent
+                                        width: 26
+                                        height: 26
+                                        // 接口给的是 //i0.hdslb.com 这种协议相对地址。
+                                        // The endpoint returns a protocol-relative address.
+                                        source: modelData.url ? "https:" + modelData.url : ""
+                                        asynchronous: true
+                                        cache: true
+                                        fillMode: Image.PreserveAspectFit
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.insertEmote(modelData.text)
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 6
+                                            color: Theme.card3
+                                            visible: parent.containsMouse
+                                            z: -1
+                                        }
+                                    }
+                                }
                             }
                         }
 

@@ -7666,6 +7666,13 @@ void QmlPlayerBridge::tickBiliTasks() {
         case BiliOp::Comments:
             emit bilibiliCommentsReady(r.list, r.ok, r.error);
             break;
+        case BiliOp::EmotePanel:
+            // 这里只发信号，不发 notice：面板是点按钮才拉的，失败时在面板位置
+            // 显示原因更贴切，弹一条全局提示反而突兀。
+            // Signal only, no notice: the panel is fetched on a button press, so showing the
+            // reason where the panel would be is clearer than a global toast.
+            emit bilibiliEmotePanelReady(r.list, r.ok, r.error);
+            break;
         case BiliOp::EnableDanmaku: {
             // 创建叠加层、清洗、交给渲染器 —— 三步都在 GUI 线程。
             // Create the overlay, filter, hand it to the renderer - all on the GUI thread.
@@ -7805,6 +7812,27 @@ void QmlPlayerBridge::tickBiliTasks() {
 // 三者形状一致：发一个写请求，成功则刷新互动状态。提示语在 GUI 线程发。
 // All three have the same shape: one write request, then re-read the interaction
 // state. The user-facing notice stays on the GUI thread.
+void QmlPlayerBridge::bilibiliRequestEmotePanel(){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    startBiliTask(BiliOp::EmotePanel, [] {
+        BiliTaskResult r;
+        std::wstring error;
+        std::vector<media::BiliEmote> emotes;
+        if (!media::biliEmotePanel(emotes, error)) {
+            r.error = QString::fromStdWString(error);
+            return r;
+        }
+        for (const auto& e : emotes) {
+            QVariantMap m;
+            m.insert(QStringLiteral("text"), QString::fromStdWString(e.text));
+            m.insert(QStringLiteral("url"), QString::fromStdWString(e.url));
+            r.list.push_back(m);
+        }
+        r.ok = true;
+        return r;
+    });
+}
+
 void QmlPlayerBridge::bilibiliDeleteReply(const QString& bvid, qlonglong rpid){
     if (bvid.isEmpty() || rpid <= 0) return;
     media::setBiliCookie(media::loadBilibiliCookie());

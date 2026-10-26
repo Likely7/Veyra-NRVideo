@@ -1026,6 +1026,27 @@ bool biliPostReply(const std::wstring& bvid, const std::wstring& message, std::w
     return postAction(L"/x/v2/reply/add", form, error, L"发评论");
 }
 
+// 拉取评论表情面板。接口按业务分类，business=reply 是评论区用的那一组。
+// Fetch the reply emote panel: the endpoint groups by business, reply being the comment one.
+bool biliEmotePanel(std::vector<BiliEmote>& out, std::wstring& error) {
+    std::string body;
+    if (!httpGet(L"api.bilibili.com", L"/x/emote/user/panel/web?business=reply", g_cookie,
+                 body, error)) return false;
+    const auto root = json::parse(body);
+    if (!checkCode(root, error, L"表情")) return false;
+    // data.packages[].emotes[]，每个包是一个表情系列；这里把全部平铺出来。
+    // data.packages[].emotes[] - one package per emote series; they are flattened here.
+    for (const auto* package : root["data"]["packages"].elements()) {
+        for (const auto* emote : (*package)["emotes"].elements()) {
+            BiliEmote item;
+            item.text = fromUtf8((*emote)["text"].asString());
+            item.url = fromUtf8((*emote)["url"].asString());
+            if (!item.text.empty()) out.push_back(std::move(item));
+        }
+    }
+    return true;
+}
+
 // 删除自己的一条评论。B 站同样按 aid 索引。
 // Deleting one of the account's own comments; the endpoint keys on aid as well.
 bool biliDeleteReply(const std::wstring& bvid, long long rpid, std::wstring& error) {

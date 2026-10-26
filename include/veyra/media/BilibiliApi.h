@@ -171,6 +171,19 @@ bool biliPostReply(const std::wstring& bvid, const std::wstring& message, std::w
 // 删除一条自己发的评论。
 // Delete one comment the account owns.
 bool biliDeleteReply(const std::wstring& bvid, long long rpid, std::wstring& error);
+
+// 一栏可用的评论表情。text 是插进正文的代码（如 "[doge]"），url 是它的图片地址
+// （协议相对，显示时要补 https:）。
+// One usable reply emote. `text` is the code inserted into the body (e.g. "[doge]") and
+// `url` its image address, protocol-relative and needing https: when displayed.
+struct BiliEmote {
+    std::wstring text;
+    std::wstring url;
+};
+
+// 拉取当前账号可用的评论表情。
+// Fetch the reply emotes available to this account.
+bool biliEmotePanel(std::vector<BiliEmote>& out, std::wstring& error);
 // folderId 0 means the account's first folder; the UI passes the folder the user picked.
 bool biliFavorite(const std::wstring& bvid, bool add, long long folderId,
                   std::wstring& error);
