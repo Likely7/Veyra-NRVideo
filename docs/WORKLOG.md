@@ -10001,3 +10001,13 @@ computer-use技能原生按键/点击：软件专业F11/Esc、顶部还原、极
 详细报告CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md；证据reports/capture-audio-main-20261025，日志logs同名，原档archives同名。finalize脚本核对100其它工作树HEAD/status、原全屏7文件哈希、旧refs（只本整合branch/main允许变化）。保留原分支与checkpoint，用正常快进整合本地主main；准确提交及包在integration-audit.json/update-package.json/FINAL.json，不从本条计划推断实际合并已执行。小更新共同EXE/QML需原2.1.0完整NVIDIA/AMD底包，不含运行库/模型/配置。
 
 本地main已正常快进到28f6532，22提交、原功能及#67历史保留；预/后integration-audit均通过，100其它树不变。首轮封包准确字节核对在RotateButton.qml失败：main切换按Git策略将该一个文件LF落成CRLF，逐文件换行归一后全部内容相同（main-checkout-line-endings.json），非产品差异。封包工具修正为验证内容一致后携带实际已验QML原字节；初轮partial目录仅在已知输入逐字节一致、无sealed manifest时原位续封，不删除或覆盖已封包。该修正单独提交后再快进main；无需重跑未变产品GPU测试，最终CRC/逐SHA仍实际检查。
+
+## 2026-10-26 界面默认软件绘制（Claude）
+
+用户根据 GPU/软件界面 A/B 决定：默认界面改为软件绘制，设置里保留“GPU 绘制”（需重启），自动兼容逻辑不变；从 main 开新分支，按 AGENTS.md 施工，不 merge、不 push。从 68def10 开 `claude/software-ui-default-20261026`，起点标签 `checkpoint/pre-software-ui-default-20261026`，开工状态 `archives/claude-software-ui-default-20261026/start.json`（工作树干净，另 100 个工作树未动；上一分支 `claude/vrr-event-query-20261025` 保留未并入）。方案 `docs/SOFTWARE_UI_DEFAULT_PLAN_2026-10-26.md`，结果 `docs/SOFTWARE_UI_DEFAULT_REPORT_2026-10-26.md`，功能提交 41f0994。
+
+依据：`reports/claude-ui-renderer-ab-20261026/ab.json`（RTX 5070、4K30 + VFG 2X、2400×1300、GPU/软件/软件/GPU）。GPU 界面进程显存 469 MiB，软件界面 105 MiB；界面动画时 GPU 约 30% 对 15%，软件界面多用约 6.6% 单核 CPU；视频均为 60 fps、0 跳帧。
+
+实现：`include/veyra/ui/InterfaceRenderer.h` 统一启动选择。OBS 兼容、监控软件兼容（自动 + 启动时检测到浮窗或接受过兼容重启）、`VEYRA_UI_RHI` 的原有判定保持不变并优先；其余按偏好 `uiRenderer`，缺省软件，GPU 仍走 D3D12。设置 → 兼容新增“界面绘制：软件 / GPU”，只有重启真会改变渲染器时才弹确认；“监控软件兼容”的提示和重启判断改为只在选 GPU 时生效。桥接新增 `softwareUiActive`，新增 8 条四语文案。
+
+构建：复用 `build/claude-screen-recording-20261022`，标签 2.1.0-swui1，5 个目标 62.2 秒通过（日志 `logs/claude-software-ui-default-20261026/build-20261026-005610`，EXE SHA256 8e0d85d9…c599）。测试：UI 合同（新增启动选择组合）、Repair 272 项、翻译均 0 失败；QtQuick 115/0；`extract.py --check` 2671 条，0 缺译、0 占位符问题。实机 `scripts/acceptance/ui-renderer-default.py` 同一私有配置四次启动：缺省软件 → 选 GPU 弹确认 → D3D12 → 选软件弹确认 → GPU + 兼容重启仍软件、选软件不弹确认 → 软件，全部通过。首轮脚本异步截图与点选重叠，截图混入点选后状态，改为等截图写完再点后重跑通过。证据 `reports/claude-software-ui-default-20261026`，截图 `tests/claude-software-ui-default-20261026/shots`。无用户包、无 merge/push/Release，Lecram 暂停。
