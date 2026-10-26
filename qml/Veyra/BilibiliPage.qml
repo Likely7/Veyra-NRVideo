@@ -265,14 +265,6 @@ VPage {
 
     Connections {
         target: veyra
-        // 搜索框的回车由 C++ 的 eventFilter 捕获后发过来（TextInput 消费了 press 事件，
-        // QML 侧的 Keys.onPressed / onAccepted 都收不到）。
-        // The search box's Enter arrives from the C++ event filter: TextInput consumes the
-        // key press, so neither Keys.onPressed nor onAccepted works here.
-        function onBilibiliSearchSubmitted() {
-            console.log("[bili-search] submitted from event filter, keyword=" + root.keyword)
-            root.doSearch(true)
-        }
         function onBilibiliListReady(kind, items, generation) {
             // One signal carries several kinds now; dispatch on the prefix so a card list,
             // a quality list and a related list cannot be mistaken for one another.
@@ -945,16 +937,23 @@ VPage {
                                 event.accepted = true
                             }
                         }
-                        // 诊断：把每个按键的键码打出来，确认回车到底有没有到达控件。
-                        // 输入法（IME）在组词时会把回车吃掉——那样这条日志根本不会出现，
-                        // 是区分「QML 没接住」和「事件没到」的唯一办法。
-                        // Diagnostic: log every key so it is visible whether Return reaches the
-                        // control at all. An IME composing text swallows Return, and then this
-                        // line never appears - which is the only way to tell "QML missed it"
-                        // from "the event never arrived".
+                        // 回车的**释放**事件才是可靠通道，就用它触发搜索。
+                        // 实测（2026-10-26）：按下事件的 16777220 一次都到不了这里 ——
+                        // TextInput 为自己的编辑把它吞了，连 accepted() 都不发；而释放事件
+                        // 每次都到（29 次），退格键的按下也能到（16777219），说明按键投递
+                        // 本身没问题，被吞的只有回车这一个键。
+                        // The **release** of Enter is the reliable channel, so that is what
+                        // triggers the search. Measured 2026-10-26: the press (16777220) never
+                        // arrives - TextInput swallows it for its own editing and does not even
+                        // emit accepted() - while the release arrived every time (29 of them),
+                        // and Backspace's press arrived too (16777219). Key delivery works;
+                        // Return's press is the only one that does not.
                         Keys.onReleased: function(event) {
-                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
-                                console.log("[bili-search] key released key=" + event.key)
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                console.log("[bili-search] released key=" + event.key)
+                                root.triggerSearchFromField()
+                                event.accepted = true
+                            }
                         }
                     }
                     // TextInput has no placeholder property; this is the usual stand-in.

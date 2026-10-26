@@ -8928,27 +8928,15 @@ bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
     }
     if (type == QEvent::KeyPress || type == QEvent::KeyRelease) {
         auto* key = static_cast<QKeyEvent*>(event);
-        // 搜索框的回车**必须**在 qobject_cast<QWindow*> 之外判断：那段只在事件目标是
-        // 窗口时才进，而发到 QML 控件身上时 watched 不是 QWindow，整段会被跳过 ——
-        // 上一版就是这样一次都没触发（日志里 submitted 为 0）。
-        // The search box's Enter has to be matched **outside** the QWindow cast below: that
-        // block only runs when the event target is a window, and for an event aimed at a QML
-        // item `watched` is not one, so the whole block is skipped - which is exactly why the
-        // previous version never fired (submitted was 0 in the log).
-        if (type == QEvent::KeyPress &&
-            (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter)) {
-            const QObject* focused = QGuiApplication::focusObject();
-            const QString focusName = focused ? focused->objectName() : QString();
-            const QString focusClass = focused ? QString::fromLatin1(focused->metaObject()->className()) : QStringLiteral("null");
-            const QString watchClass = watched ? QString::fromLatin1(watched->metaObject()->className()) : QStringLiteral("null");
-            veyra::log::info("bili-search-cpp", std::format(
-                "return seen: watched={} focusClass={} focusName={}",
-                watchClass.toStdString(), focusClass.toStdString(), focusName.toStdString()));
-            if (focusName == QLatin1String("bili-search-field")) {
-                emit bilibiliSearchSubmitted();
-                return true;   // 已经处理：不要再往控件里送一次
-            }
-        }
+        // 这里**不再**尝试捕获搜索框的回车。实测 2026-10-26：QML 的键盘事件不经过
+        // 应用级 eventFilter（Qt Quick 直接调用 QQuickItem::keyPressEvent，不走 sendEvent），
+        // 所以这个过滤器一次都看不到回车。回到 QML，用按键的释放事件触发 —— 那是唯一
+        // 每次都到得了的通道。
+        // The search box's Enter is **not** captured here any more. Measured 2026-10-26: QML
+        // keyboard events do not pass through an application-level event filter (Qt Quick
+        // calls QQuickItem::keyPressEvent directly rather than sendEvent), so this filter
+        // never saw Return even once. The trigger is back in QML, on the key's release - the
+        // one channel that arrives every time.
         if (!key->isAutoRepeat() && qobject_cast<QWindow*>(watched)) {
             const QKeySequence hold(shortcuts().value("hold").toString(), QKeySequence::PortableText);
             const int pressed = key->key() | int(key->modifiers() & ~Qt::KeypadModifier);
