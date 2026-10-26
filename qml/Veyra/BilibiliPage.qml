@@ -2098,14 +2098,24 @@ VPage {
                 readonly property int columnCount:
                     Math.min(maxColumns, Math.max(1, Math.round(width / idealCellWidth)))
                 readonly property real fittedCellWidth: width / columnCount
-                // A wider cell means a taller cover (16:9 on the inner width), so the cell
-                // grows with it or the title and author line get clipped.
-                // 文字区高度同样按卡片宽度缩放：字号变大了，两行标题加作者行就要更多
-                // 空间，固定 81 在最大化时会裁掉标题第二行。
-                // The text block scales with the card width too: larger type needs more room,
-                // and a fixed 81 would clip the second title line when maximised.
+                // 卡片高度按「真实需要的文字高度」算，不再乘一个放大系数。
+                // 旧公式在最大化时给文字区留了 180 px，而两行标题加作者行只要约 106 ——
+                // 多出来的 74 px 空白让每张卡片过高，一屏只放得下 2.9 行。
+                // 封面另设高度上限：488 px 宽的 16:9 是 268，封顶 222 之后卡片高约 328，
+                // 最大化时正好四行（网格区约 1312）。
+                // The card height is computed from what the text actually needs instead of
+                // scaling a constant. The old formula reserved 180 px for text when two title
+                // lines plus the author line need about 106 - that 74 px of slack made every
+                // card too tall and only 2.9 rows fitted. The cover also gets a cap: at 488 px
+                // wide a 16:9 cover is 268, so capping it at 222 puts the card near 328 and
+                // exactly four rows fit in the ~1312 px grid.
+                readonly property real coverHeight:
+                    Math.min((fittedCellWidth - 12) * 0.5625, 222)
+                readonly property int cellTitleSize:
+                    Math.max(11, Math.min(25, Math.round(
+                        13 * Math.pow(fittedCellWidth / 220, 0.8))))
                 readonly property real fittedCellHeight:
-                    (fittedCellWidth - 12) * 0.5625 + 81 * (fittedCellWidth / 220)
+                    coverHeight + Math.ceil(cellTitleSize * 1.4) * 2 + 24
                 cellWidth: fittedCellWidth
                 cellHeight: fittedCellHeight
                 clip: true
