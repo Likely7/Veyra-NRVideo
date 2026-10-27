@@ -10127,3 +10127,5 @@ AMD：Veyra-2.1.1-AMD-win64-portable.zip，466204342 bytes，SHA256 5153e97be26c
 最终13组回归通过，QML117通过/0失败/1跳过，翻译2681条/缺译占位0；NR模型测试初次漏传输出目录exit2，按工具argc合同补参数后通过，原JSON保留contracts-before-argument-fix.json。四次真实UI启动通过：新配置软件且SR选择4；选择GPU后实际D3D12并保留DLSS 0；兼容重启实际软件；再次启动保留FSR 5；全程SR关闭。测试只修改独立app/profile，截图已查看。为避免覆盖旧HDR证据，GPU验收脚本增加--task，重新编译GPU相关四目标12.2秒通过。
 
 当前构建GPU补验通过：AMD fake provider实际D3D12图128组合（108 HDR）/debug0，lmxxf ABI与HDR颜色测试通过；真实NVIDIA原版NR+PQ HDR20帧通过（nvidia-hdr-current-r2.json）。首轮HDR探针缺自身相对out目录导致JXR写入0x80070003，创建本任务私有app/out后13秒通过，原失败日志保留；未改产品或测试判断。三次构建EXE均3199aae280c9910eddc9e845ce5f9f64e52d7bf7e357b167d08e9504e866ee4b，90.3/6.2/12.2秒。接下来seal/cold与发布，不复用旧2.1.1 ZIP。
+
+最终新ZIP及源码封装、四次实际解压冷启动通过：NVIDIA GPU/software呈现286/289，AMD包286/289，均exit0且无QML运行错误；采用私有配置和隔离PATH。PRE_PUBLICATION.json全部检查通过，运行行50/654不变、软件分支已为祖先、无运行库入Git、产品与63852e4源码快照一致。最终EXE3199aae2...；ZIP SHA NVIDIA31a4f9ac.../AMDb78b8a0c...，准确全值DELIVERY与PRE_PUBLICATION。GitHub正文只写交付内容，支持双图仍各220且HTTP200；发布前最后核验完成，后续实际远端状态写FINAL。

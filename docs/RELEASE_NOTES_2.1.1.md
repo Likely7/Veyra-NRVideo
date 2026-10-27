@@ -25,7 +25,7 @@
 - NR内部处理分辨率新增“手动”，25%–100%、1%步进，各层可独立调整，列表与节点共用。
 - 滑条松开后提交，支持键盘/数值输入、保存预设与会话，减少拖动时反复重建处理图。
 - 接入社区导出尺寸补丁，修复视频导出强制恢复原生NR尺寸的问题，固定档和手动百分比都按所选值执行。
-- NR内部尺寸与最终编码尺寸分别管理：例如4K视频选择1080p或50% NR，NR按1920×1080处理，最终仍按所选4K尺寸导出。
+- NR内部尺寸与最终编码尺寸分别管理：以NVIDIA路径为例，4K视频选择1080p或50% NR，NR按1920×1080处理，最终仍按所选4K尺寸导出。
 - 修复多层尺寸与导出预设冻结，任务使用启动时的配置快照，播放界面的后续调整各自生效。
 
 ## 补帧、刷新率与HDR状态查询
@@ -67,7 +67,7 @@
 
 ## 校验与组件
 
-完成12组定向回归，QML117项通过；两包的软件界面/D3D12界面共四组解压启动播放检查通过，ZIP文件逐项哈希与完整性校验通过。
+完成13组定向回归，QML117项通过；两包的软件界面/D3D12界面共四组解压启动播放检查通过，ZIP文件逐项哈希与完整性校验通过。
 
 运行组件与模型沿用2.1.0受控供体，随包保留来源、版本、哈希、许可证和实验/社区标记。Veyra为独立开源项目，社区实验组件不代表GPU厂商官方认证。AMD NR适用RX9000及对应HIP运行环境。
 
@@ -85,7 +85,7 @@
 - Correct HDR-cache waits/recovery, AMD FSR-off state, and AMD native-HDR NR initialization through an SDR-linear proxy with HDR reconstruction.
 - Apply List-mode AA after the NR group; acknowledge timestamp-less capture preparation samples without rejecting subsequent delivery; retain system NVAPI across NR teardown.
 - Settle popup layouts before opening, preserve the existing animation, report actual saved screenshot paths/formats, restore maximized/fullscreen geometry and scope playlist keys correctly.
-- Update all four interface languages.12 targeted regression groups,117 QML tests and four extracted-package startup/playback checks passed.
+- Update all four interface languages.13 targeted regression groups,117 QML tests and four extracted-package startup/playback checks passed.
 
 Download one complete GPU package and extract it into a new directory. Runtime versions/licenses and community-experimental labels are retained from the audited2.1.0 distribution. The2.1.1 ZIPs are rebuilt with the interface-renderer and SR-default changes; embedded manifests describe their packaging time.
 
@@ -108,3 +108,10 @@ Download one complete GPU package and extract it into a new directory. Runtime v
 Left: optional donation; right: community group. QR valid before 2026-10-27.
 
 [Veyra 软件知识库 / Knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)：四个群聊汇总的使用文档，涵盖软件与采集卡常见问题。
+
+## 下载校验 / SHA256
+
+| 完整包 | SHA256 |
+|---|---|
+| NVIDIA | `31a4f9acf34b01c5bfc43d8af5c8de14232089f0b99a9e213a9a7c659c6a0277` |
+| AMD | `b78b8a0ceec9d677821432c847684e5caac7005910cd44173725c83e255c5226` |

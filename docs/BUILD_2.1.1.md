@@ -8,7 +8,7 @@
 
 软件绘制与RTX视频超分默认项整合后重新构建。准确应用快照见源码ZIP内source-snapshot-manifest.json；构建提交、EXE哈希与对应源码哈希记录于运行包package-manifest.json及GitHub Release资产。
 
-MSVC2022/C++20、CMake/Ninja Release、Qt6.8.3。通用构建入口scripts/acceptance/build-recording-handoff.py，构建目标veyra_qml_ui；本机2.1.1构建记录见docs/BUILD_2.1.1_REPORT_2026-10-26.md。SDK/模型/专有运行文件独立准备，不包含在源码Git中。
+MSVC2022/C++20、CMake/Ninja Release、Qt6.8.3。通用构建入口scripts/acceptance/build-recording-handoff.py，构建目标veyra_qml_ui；本次重建记录见docs/RELEASE_2.1.1_EXECUTION_2026-10-27.md。SDK/模型/专有运行文件独立准备，不包含在源码Git中。
 
 ## 未变依赖的固定对应源码
 
@@ -24,3 +24,7 @@ MSVC2022/C++20、CMake/Ninja Release、Qt6.8.3。通用构建入口scripts/accep
 原始源码、固定提交、修改说明、FFmpeg补丁与构建材料随相应源码档及仓库保留。Veyra自身为GPLv3；Chiaki相关组合遵循随附AGPLv3及OpenSSL例外，其他依赖以各自许可证和THIRD_PARTY_NOTICES为准。运行包中的专有/社区实验组件按manifest记录身份，许可证随运行包提供。
 
 English: the application snapshot above matches the published executable code. Unchanged dependency sources remain at the fixed, digest-verified assets listed here. Release tags additionally contain publication documentation.
+
+## 本次应用快照身份
+
+源码快照`63852e45f3f561133d674d5472dc7a111e33f911`，源码ZIP SHA256 `09e584012b25e1770ebbeca63cb63f4f0c144c3cd530a9e6aabc7716813936cf`。主EXE SHA256 `3199aae280c9910eddc9e845ce5f9f64e52d7bf7e357b167d08e9504e866ee4b`。发布标签额外包含发布说明、README与发行记录；产品源码与上述应用快照一致。
