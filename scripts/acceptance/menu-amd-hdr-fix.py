@@ -4,7 +4,10 @@ import argparse,json,os,re,shutil,subprocess,sys,time
 
 R=Path(__file__).resolve().parents[2];B=Path('E:/项目/Veyra');T='menu-amd-hdr-fix-20261026'
 D=B/'build/claude-screen-recording-20261022';O=B/'reports'/T;L=B/'logs'/T;A=B/'tests'/T/'amd-graph'
-parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['gpu','menu','contracts']);args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['gpu','menu','contracts'])
+parser.add_argument('--task',default=T);args=parser.parse_args()
+assert re.fullmatch(r'(claude|codex|menu)-[a-z0-9.-]+',args.task)
+T=args.task;O=B/'reports'/T;L=B/'logs'/T;A=B/'tests'/T/'amd-graph'
 for p in [O,L]:p.mkdir(parents=True,exist_ok=True)
 if args.mode!='gpu':
     # The executable's POST_BUILD staging is skipped when C++ is unchanged.
