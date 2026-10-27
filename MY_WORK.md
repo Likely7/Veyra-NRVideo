@@ -342,6 +342,41 @@ Text 自然宽度 2620
 **布局的项用了 anchors**、**固定宽度溢出**。
 每次都是靠「打出实际宽度」定位的，靠猜的几次全错。
 
+### 2026-10-27 升级到 2.1.1（验收通过）
+
+**做法：合并作者的 `v2.1.1-sources` tag，不是替换运行文件。**
+
+| 项目 | 值 |
+|---|---|
+| 合并分支 | `merge-2.1.1-20261027` |
+| 合并提交 | `344334e0` |
+| 合并前存档 | tag `custom-before-2.1.1-20261027` |
+| 新部署目录 | `D:\Program\Veyra-2.1.1-NVIDIA-win64-portable` |
+
+**八处冲突，按「谁的架构谁作主」解决：**
+
+| 文件 | 冲突 | 解决 |
+|---|---|---|
+| `PresentSink.cpp` | 我把 HDR 峰值查询移了位置，上游把它并进 `queryHdrDisplayActive` | **采用上游**，但把 `plausible` 判定补进上游的 `peakOf()` |
+| `VideoPresenter.cpp` (2 处) | 我的 2 秒定时查询 vs 上游的事件驱动 `DisplayStateService` | **采用上游**，保留 `plausible`（防上限值被当实测） |
+| `VideoPresenter.cpp` (1 处) | 关闭时的成员清理 | 两边都保留 |
+| `VideoPresenter.h` | `hdrPeakMonitor_` vs HDR 元数据成员 | 两边都保留 |
+| `QmlPlayerBridge.cpp` (2 处) | B站 worker 结构 vs 显示变化过滤器；HDR 峰值查询 | 结构两边保留，查询采用上游 |
+| `i18n/catalog.json` | 同一位置各加一条翻译 | 两条都保留 |
+
+**合并后清理的死代码：** `hdrPeakMonitor_`、`hdrPeakQuery_` 随事件驱动改造失效，已删除。
+
+**部署结构（保持原有规则）：**
+
+```
+veyra_qml_ui.exe      我的构建（2.1.1 源码 + B站模块）
+veyra_qml_ui.exe.p5   同上
+veyra_qml_ui.exe.orig 作者 2.1.1 原版（未动）
+qml\Veyra\ / qml.p5\Veyra\   我的 QML
+qml.orig\Veyra\                作者原 QML
+runtime_local         用户配置（从 2.1.0 目录迁移）
+```
+
 ### 已知限制（别再试，或要试先想清楚）
 
 | 问题 | 原因 | 现状 |
