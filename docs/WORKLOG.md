@@ -10129,3 +10129,11 @@ AMD：Veyra-2.1.1-AMD-win64-portable.zip，466204342 bytes，SHA256 5153e97be26c
 当前构建GPU补验通过：AMD fake provider实际D3D12图128组合（108 HDR）/debug0，lmxxf ABI与HDR颜色测试通过；真实NVIDIA原版NR+PQ HDR20帧通过（nvidia-hdr-current-r2.json）。首轮HDR探针缺自身相对out目录导致JXR写入0x80070003，创建本任务私有app/out后13秒通过，原失败日志保留；未改产品或测试判断。三次构建EXE均3199aae280c9910eddc9e845ce5f9f64e52d7bf7e357b167d08e9504e866ee4b，90.3/6.2/12.2秒。接下来seal/cold与发布，不复用旧2.1.1 ZIP。
 
 最终新ZIP及源码封装、四次实际解压冷启动通过：NVIDIA GPU/software呈现286/289，AMD包286/289，均exit0且无QML运行错误；采用私有配置和隔离PATH。PRE_PUBLICATION.json全部检查通过，运行行50/654不变、软件分支已为祖先、无运行库入Git、产品与63852e4源码快照一致。最终EXE3199aae2...；ZIP SHA NVIDIA31a4f9ac.../AMDb78b8a0c...，准确全值DELIVERY与PRE_PUBLICATION。GitHub正文只写交付内容，支持双图仍各220且HTTP200；发布前最后核验完成，后续实际远端状态写FINAL。
+
+## 2026-10-27 2.1.1正式发布完成
+
+main普通快进至2fecacf，atomic push主线及v2.1.1/v2.1.1-sources成功。草稿上传应用源码及校验文件、主版两个完整ZIP；核对服务器state/size/digest全一致。读草稿的published-by-tag端点404，按发行list/ID读取正确草稿，未重复创建/替换。refs审计确认nrvideo/HEAD是跟随main的符号引用；其它旧refs/100其它工作树HEAD保持。
+
+按发行ID先公开源码页make_latest=false，再公开主版make_latest=true，releases/latest实际确认v2.1.1。两运行包/两源码资产匿名HEAD均200，正文双二维码各220，旧运行组件身份不变；最终全值及测试结果见reports/codex-release-2.1.1-final-20261027/FINAL.json。归档releases/release-2.1.1-final-20261027，群公告517字，仅拟稿未代发。
+
+主版：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.1；源码：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.1-sources。发行标签固定2fecacf；本条仅发行回执，不改变已发布包。旧清理拦截未重试、旧分支/脏树保留、Lecram暂停。

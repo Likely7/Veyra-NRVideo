@@ -1,5 +1,8 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-27 2.1.1已正式发布**：main/tag发行提交2fecacf，软件绘制默认/GPU切换已合入，RTX视频超分高质量为新SR默认，旧明确选择保留。最终两包E:/项目/Veyra/releases/release-2.1.1-final-20261027；服务端size/digest逐项一致，主Release v2.1.1已公开且latest，源码独立v2.1.1-sources。准确证据reports/codex-release-2.1.1-final-20261027/FINAL.json。10/26旧2.1.1包已被替代，旧分支/脏树保留，Lecram暂停。
+
+
 > **2026-10-27 用户追加整合并重建发布2.1.1**：用户明确要求合并claude/software-ui-default-20261026，将默认超分模型改为RTX视频超分，再重建2.1.1并发布GitHub。覆盖前条原包不重建限制，允许必要UI启动/设置默认/相关回归及重打完整两包；首次效果仍关闭，已保存明确模型选择保留，AMD/Intel沿用可用FSR默认。产物任务codex-release-2.1.1-final-20261027，单Agent、全E盘、受控2.1.0运行库不变，必要main整合/push/两Release已授权，不代发公告，不动旧脏树，Lecram暂停。
 
 

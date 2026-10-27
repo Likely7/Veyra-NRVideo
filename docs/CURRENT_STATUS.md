@@ -1,3 +1,5 @@
+> **2026-10-27 2.1.1已发布**：[运行包](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.1) / [源码](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.1-sources)。默认软件绘制、可选GPU界面、RTX视频超分新默认及2.1.0以来整合修复；完整更新RELEASE_NOTES_2.1.1.md，发行记录RELEASE_2.1.1_EXECUTION_2026-10-27.md。
+
 # 当前项目状态 / Current Status
 
 ## 2026-10-26 采集审查接手完成（隔离分支）
