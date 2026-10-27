@@ -144,14 +144,16 @@ VPage {
                 onPicked: id => veyra.displaySync = Number(id)
             }
         }
-        // 可变刷新 (G-SYNC / FreeSync): greyed when the monitor cannot do it.
+        // 可变刷新 (G-SYNC / FreeSync): the switch greys when the monitor cannot
+        // do it. The state is read on events only; 刷新显示器状态 in the 信号
+        // card asks the driver again.
         VRow {
             label: qsTr("可变刷新")
-            enabled: veyra.vrrState >= 2
-            opacity: enabled ? 1 : 0.5
             hint: veyra.vrrHint
             VSwitch {
                 objectName: "presentation-vrr"
+                enabled: veyra.vrrState >= 2
+                opacity: enabled ? 1 : 0.5
                 checked: veyra.variableRefresh
                 onToggled: checked => veyra.variableRefresh = checked
             }
@@ -615,6 +617,103 @@ VPage {
                 }
             }
             VButton { iconName: "camera"; text: qsTr("截图"); onClicked: veyra.takeScreenshot() }
+            // Recording: the red dot pulses while the file is open, and a
+            // three second countdown runs before the engine is asked to open
+            // it. The countdown is an interface animation; the file itself is
+            // owned by the engine. The header row is a layout, so this control
+            // uses Layout.alignment instead of anchors.
+            Rectangle {
+                id: recordControl
+                objectName: "pro-record-control"
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: recordRow.implicitWidth + 24
+                Layout.preferredHeight: Theme.ctlHeight
+                implicitWidth: recordRow.implicitWidth + 24
+                implicitHeight: Theme.ctlHeight
+                radius: Theme.rCtl
+                color: recordMouse.containsMouse ? Theme.card3 : Theme.card2
+                border.width: 1
+                border.color: (veyra.recording || recordControl.countdown > 0) ? Theme.err : Theme.stroke2
+                property int countdown: 0
+                // Elapsed recording time, m:ss (h:mm:ss after an hour).
+                readonly property string elapsed: {
+                    const total = Math.max(0, Math.floor((veyra.recordingState && veyra.recordingState.seconds) || 0))
+                    const h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, s = total % 60
+                    const two = n => (n < 10 ? "0" : "") + n
+                    return h > 0 ? h + ":" + two(m) + ":" + two(s) : two(m) + ":" + two(s)
+                }
+                readonly property bool saving: !veyra.recording && !!(veyra.recordingState && veyra.recordingState.finishing)
+                Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
+                Behavior on border.color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
+
+                Row {
+                    id: recordRow
+                    anchors.centerIn: parent
+                    spacing: 7
+                    Rectangle {
+                        id: recordDot
+                        width: 9; height: 9; radius: 4.5
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: Theme.err
+                        SequentialAnimation on opacity {
+                            running: veyra.recording || recordControl.countdown > 0
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.25; duration: veyra.recording ? 700 : 380; easing.type: Easing.InOutQuad }
+                            NumberAnimation { to: 1.0; duration: veyra.recording ? 700 : 380; easing.type: Easing.InOutQuad }
+                        }
+                    }
+                    Text {
+                        id: recordLabel
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: recordControl.countdown > 0 ? qsTr("录制 %1 秒").arg(recordControl.countdown)
+                              : veyra.recording ? qsTr("停止 %1").arg(recordControl.elapsed)
+                              : recordControl.saving ? qsTr("保存中…") : qsTr("录制")
+                        color: Theme.t1
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        font.weight: Font.Medium
+                    }
+                }
+                MouseArea {
+                    id: recordMouse
+                    objectName: "pro-record-mouse"
+                    anchors.fill: parent
+                    enabled: veyra.hasSource && !recordControl.saving
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (veyra.recording) { veyra.stopRecording(); recordControl.countdown = 0; recordTick.stop(); return }
+                        if (recordControl.countdown > 0) { recordControl.countdown = 0; recordTick.stop(); return }
+                        recordControl.countdown = 3
+                        recordTick.restart()
+                    }
+                }
+                // The countdown number pops on every tick.
+                NumberAnimation {
+                    id: recordPop
+                    target: recordLabel
+                    property: "scale"
+                    from: 1.18
+                    to: 1.0
+                    duration: Theme.d(Theme.durFast)
+                    easing: Theme.spring
+                }
+                Timer {
+                    id: recordTick
+                    interval: 1000
+                    repeat: true
+                    onTriggered: {
+                        if (!veyra.hasSource) { recordControl.countdown = 0; stop(); return }
+                        recordControl.countdown -= 1
+                        recordPop.restart()
+                        if (recordControl.countdown <= 0) {
+                            recordControl.countdown = 0
+                            recordTick.stop()
+                            veyra.startRecording()
+                        }
+                    }
+                }
+            }
             VButton {
                 id: presetBtn
                 iconName: "layers"
@@ -705,7 +804,8 @@ VPage {
             }
             Shortcut {
                 sequence: "Escape"
-                enabled: veyra.protectionDrawShape.length > 0
+                enabled: root.visible && (!root.shell || !root.shell.fullscreen) &&
+                         veyra.protectionDrawShape.length > 0
                 onActivated: veyra.beginProtectionDraw("")
             }
             Text {
@@ -826,6 +926,7 @@ VPage {
                 height: 34
                 spacing: 10
                 PlaybackRateButton { objectName: "pro-playback-rate" }
+                RotateButton { objectName: "pro-rotate" }
                 VTag {
                     objectName: "pro-fg-tag"
                     visible: veyra.hasSource
@@ -905,7 +1006,24 @@ VPage {
                 anchors.fill: parent
                 anchors.margins: 14
                 spacing: 6
-                VEyebrow { text: qsTr("信号") }
+                RowLayout {
+                    Layout.fillWidth: true
+                    VEyebrow { Layout.fillWidth: true; text: qsTr("信号") }
+                    // 刷新显示器状态: Windows HDR, refresh rate and variable refresh are
+                    // read on events only (startup, a display or monitor change, the
+                    // 可变刷新 switch turned on); this asks the driver again.
+                    Item {
+                        implicitWidth: 22; implicitHeight: 22
+                        VButton {
+                            objectName: "pro-display-refresh"
+                            anchors.fill: parent
+                            visible: !veyra.displayChecking
+                            icon: true; ghost: true; iconName: "refresh"; tip: qsTr("刷新显示器状态")
+                            onClicked: veyra.recheckDisplay()
+                        }
+                        VSpinner { anchors.centerIn: parent; visible: veyra.displayChecking }
+                    }
+                }
                 GridLayout {
                     Layout.fillWidth: true
                     columns: 2
@@ -939,6 +1057,24 @@ VPage {
                         Layout.fillWidth: true
                         text: veyra.colorStatus.length > 0 ? veyra.colorStatus : "—"
                         color: Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                    }
+                    // The shown monitor: the video's while playing, otherwise the window's.
+                    Text { text: qsTr("系统 HDR"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 12 }
+                    Text {
+                        objectName: "pro-display-hdr"
+                        Layout.fillWidth: true
+                        text: veyra.displayHdr > 0 ? qsTr("开") : veyra.displayHdr === 0 ? qsTr("关") : qsTr("未知")
+                        color: Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                    }
+                    Text { text: qsTr("可变刷新"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 12 }
+                    Text {
+                        objectName: "pro-display-vrr"
+                        Layout.fillWidth: true
+                        text: veyra.vrrSummary + (veyra.displayRefreshHz > 0 ? " · " + veyra.displayRefreshHz.toFixed(0) + " Hz" : "")
+                        color: veyra.vrrState >= 4 ? Theme.ok : Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
                         horizontalAlignment: Text.AlignRight
                         elide: Text.ElideRight
                     }

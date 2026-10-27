@@ -127,7 +127,17 @@ VPage {
         enabled: root.visible && (root.marked.length > 0 || root.selectedId > 1)
         onActivated: root.deleteSelected()
     }
-    Shortcut { sequence: "Escape"; enabled: root.visible && root.marked.length > 0; onActivated: root.marked = [] }
+    // One local Escape action: the old overlapping wire/selection shortcuts
+    // became ambiguous. In fullscreen the shell arbitrates visible operations.
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.visible && (!root.shell || !root.shell.fullscreen) &&
+                 (root.wireFrom >= 0 || root.marked.length > 0)
+        onActivated: {
+            if (root.wireFrom >= 0) root.clearSelection()
+            else root.marked = []
+        }
+    }
     // Every box with its TARGET position (where the spring is heading), not the
     // animated on-screen one; a box being dragged uses where the pointer holds it.
     function boxes() {
@@ -315,7 +325,6 @@ VPage {
         }
         function onNodeAnchorsChanged() { wires.requestPaint() }
     }
-    Shortcut { sequence: "Escape"; enabled: root.wireFrom >= 0; onActivated: root.clearSelection() }
     // Card sizes are only known after their editors lay out (and change on
     // collapse / section switches): settle once the sizes stop changing.
     // A layout that overlaps once the cards have their real sizes after the page
@@ -341,7 +350,6 @@ VPage {
     }
     onVisibleChanged: if (visible) { layoutChecked = false; settleTimer.restart() }
     Component.onCompleted: settleTimer.restart()
-    Shortcut { sequence: "Escape"; enabled: root.wireFrom >= 0; onActivated: root.wireFrom = -1 }
 
     onPanXChanged: { canvasGrid.requestPaint(); wires.requestPaint() }
     onPanYChanged: { canvasGrid.requestPaint(); wires.requestPaint() }
@@ -823,19 +831,32 @@ VPage {
                                 current: String(veyra.displaySync)
                                 onPicked: id => veyra.displaySync = Number(id)
                             }
-                            // 可变刷新 (G-SYNC / FreeSync): greyed when the monitor cannot do it.
+                            // 可变刷新 (G-SYNC / FreeSync): the switch greys when the monitor
+                            // cannot do it. The node page has no 信号 card, so the shared
+                            // 刷新显示器状态 (HDR, refresh rate, VRR; read on events only) sits here.
                             RowLayout {
                                 Layout.fillWidth: true
-                                enabled: veyra.vrrState >= 2
-                                opacity: enabled ? 1 : 0.5
                                 NodeLabel { Layout.fillWidth: true; text: qsTr("可变刷新"); wrapMode: Text.WordWrap }
+                                Item {
+                                    implicitWidth: Theme.ctlHeight; implicitHeight: Theme.ctlHeight
+                                    VButton {
+                                        objectName: "node-display-refresh"
+                                        anchors.fill: parent
+                                        visible: !veyra.displayChecking
+                                        icon: true; ghost: true; iconName: "refresh"; tip: qsTr("刷新显示器状态")
+                                        onClicked: veyra.recheckDisplay()
+                                    }
+                                    VSpinner { anchors.centerIn: parent; visible: veyra.displayChecking }
+                                }
                                 VSwitch {
                                     objectName: "node-vrr"
+                                    enabled: veyra.vrrState >= 2
+                                    opacity: enabled ? 1 : 0.5
                                     checked: veyra.variableRefresh
                                     onToggled: checked => veyra.variableRefresh = checked
                                 }
                             }
-                            NodeLabel { Layout.fillWidth: true; text: veyra.vrrHint; wrapMode: Text.WordWrap; opacity: veyra.vrrState >= 2 ? 1 : 0.5 }
+                            NodeLabel { Layout.fillWidth: true; text: veyra.vrrHint; wrapMode: Text.WordWrap }
                             NodeLabel { text: qsTr("输出上限") }
                             VSeg {
                                 objectName: "node-output-rate"

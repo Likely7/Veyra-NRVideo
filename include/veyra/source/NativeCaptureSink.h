@@ -8,6 +8,9 @@ namespace veyra::source {
 enum class CaptureAllocatorMode { SinkDefault, Upstream };
 // Exact raw connection contract, including subtype and VideoInfo2 field flags.
 bool nativeCaptureContractsMatch(const AM_MEDIA_TYPE&,const AM_MEDIA_TYPE&);
+// A timestamp-less priming sample is not a fatal driver error. Acknowledge it
+// without creating a frame/PTS; timed samples retain the exact driver timestamp.
+std::function<HRESULT(IMediaSample*)> timedCaptureDelivery(std::function<HRESULT(double,IMediaSample*)>);
 // Native terminal filter: no legacy SampleGrabber orientation/VideoInfo2
 // restriction, conversion filter or extra queue. Callback borrows the sample.
 HRESULT createNativeCaptureSink(const AM_MEDIA_TYPE&,std::function<HRESULT(IMediaSample*)>,Microsoft::WRL::ComPtr<IBaseFilter>&,Microsoft::WRL::ComPtr<IPin>&);

@@ -107,6 +107,20 @@ int main(){
         s=engine::EnhancementSettings{};s.nr=s.sr=true;s.multiplier=2;s.nrRuntime=engine::NrRuntime::LmxxfAmd;
         check(engine::disableUnsupportedNvidiaEffects(s,false,true)&&s.nr&&!s.sr&&s.multiplier==1&&
               s.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx,"AMD normalization keeps NR on the AMD runtime with AMD flow");
+        // FSR is the AMD default SR backend. Normalization keeps an enabled FSR
+        // SR and must never switch a disabled one on (2.1.0: SR could not be
+        // turned off on AMD because every graph build re-enabled it).
+        s=engine::EnhancementSettings{};s.videoSrQuality=engine::kVideoSrFsr;s.sr=false;
+        check(!engine::disableUnsupportedNvidiaEffects(s,false,true)&&!s.sr,"AMD normalization leaves disabled FSR SR off");
+        s.sr=true;
+        check(!engine::disableUnsupportedNvidiaEffects(s,false,true)&&s.sr,"AMD normalization keeps enabled FSR SR");
+        s.videoSrQuality=0;
+        check(engine::disableUnsupportedNvidiaEffects(s,false,true)&&!s.sr,"AMD normalization removes DLSS SR");
+        s=engine::EnhancementSettings{};s.sr=true;s.videoSrQuality=engine::kVideoSrFsr;s.multiplier=2;s.frameGenerationBackend=engine::FrameGenerationBackend::Fsr;
+        check(!engine::nvidiaOnlyStagesRequested(false,s.sr,true,s,true),"FSR SR and FSR frame generation are not NVIDIA-only stages");
+        s.videoSrQuality=2;
+        check(engine::nvidiaOnlyStagesRequested(false,s.sr,false,s,true),"RTX Video SR is an NVIDIA-only stage");
+        check(engine::nvidiaOnlyStagesRequested(true,false,false,s,false)&&!engine::nvidiaOnlyStagesRequested(true,false,false,s,true),"NR is NVIDIA-only except on the AMD runtime");
     }
     {
         engine::EnhancementSettings requested;requested.nr=requested.sr=true;requested.multiplier=2;requested.audioOffsetMs=37;

@@ -33,7 +33,11 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         veyra::log::warn("present","presentation creation cancelled: target window is no longer available");
         return false;
     }
-    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
+    // A graph change on the same chain (reuse) keeps the display state and the
+    // VRR presentation; a new chain starts them at the end (startDisplayState).
+    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;
+    refreshMonitor_=nullptr;
+    hdrPeakInfo_={};
     latestDovi_={}; // A new chain never inherits the previous source's RPU.
     ++generation_;
     Status st=Status::Ok;
@@ -114,6 +118,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     veyra::log::info("present-copy",std::format("enabled={} format={} extent={}x{} (GPU-only final composition; no pixel readback)",copyBeforePresent_,unsigned(graph.outputFormat()),sink_.bufferWidth(),sink_.bufferHeight()));
     for(unsigned i=0;i<pipeline::kOutputPoolSlots;++i)pipeline::makeSrv(ctx.device(),i<2?graph.videoFrameResource(i):graph.generatedFrameResource(i-2),graph.outputFormat(),{pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i)*pass_.increment});
     for(unsigned i=0;i<4;++i)pipeline::makeSrv(ctx.device(),i<2?graph.sourceReference(i):graph.baseReference(i-2),DXGI_FORMAT_R16G16B16A16_FLOAT,{pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i+pipeline::kOutputPoolSlots)*pass_.increment});
+    if(!reuse)startDisplayState();
     return true;
 }
 bool VideoPresenter::prepareGraphChange(){
@@ -165,6 +170,9 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     bool resized=false;
     const auto deferUntil=uint64_t(uintptr_t(GetPropW(window_,L"Veyra.ResizeDeferUntil")));
     if(viewWidth_!=unsigned(rc.right)||viewHeight_!=unsigned(rc.bottom)){
+        // 进出全屏 or a resized window during VRR presentation: VRR may start
+        // or stop for it, so ask once 3 s after the size settles.
+        if(viewWidth_&&vrrSync_)vrrConfirmAt_=now+std::chrono::seconds(3);
         viewWidth_=rc.right;viewHeight_=rc.bottom;xessWasEnabled_=false;
     }
     unsigned targetWidth=rc.right,targetHeight=rc.bottom;
@@ -202,16 +210,22 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         }
     }
     if(graph.hdrOutput()&&needsDisplayPeak&&hdrBaseline.displayPeakNits==0){
+        // The panel's own peak from the shared display state: no driver call here
+        // (this thread used to build a DXGI factory for it every 2 s).
         const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
-        if(hdrPeakMonitor_!=monitor||now-hdrPeakQuery_>=std::chrono::seconds(2)){
-            const auto previous=hdrPeakInfo_;
-            hdrPeakInfo_=gfx::PresentSink::queryDisplayPeak(window_);hdrPeakMonitor_=monitor;hdrPeakQuery_=now;
-            if(previous.valid!=hdrPeakInfo_.valid||previous.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
-        }
+        gfx::PresentSink::DisplayPeakInfo peak{};
+        if(displayStates_)if(const auto known=displayStates_->state(monitor))
+            peak={known->color.peakNits,known->color.fullFrameNits,known->color.minNits,known->color.peakValid};
+        if(peak.valid!=hdrPeakInfo_.valid||peak.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
+        hdrPeakInfo_=peak;
+        if(hdrPeakInfo_.valid)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
         // Only a plausible report may scale the curve; a ceiling value would push the
-        // highlight start past anything the content contains.
-        if(hdrPeakInfo_.valid&&hdrPeakInfo_.plausible)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
-
+        // highlight start past anything the content contains. Kept from the custom
+        // branch: upstream switched to the event-driven DisplayStateService.
+        if(hdrPeakInfo_.valid&&hdrPeakInfo_.plausible)
+            hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
+        else if(hdrPeakInfo_.valid)
+            hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
     }
     HdrCurveSettings hdrCurve;HdrMetadataSettings hdrMetadata;
     resolveHdrTuning(hdrBaseline,graph.hdrMetadata(),hdrCurve,hdrMetadata);
@@ -397,6 +411,14 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         barriers[1].Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;barriers[1].Transition.StateAfter=D3D12_RESOURCE_STATE_COMMON;
         list->ResourceBarrier(1,&barriers[1]);list->ResourceBarrier(1,&copy);
     }
+    // Live recording reads the frame here, in this list: the source is back in
+    // COMMON, and the consumer fence signalled after this list covers the read.
+    bool captureRecorded=false;
+    struct CaptureGuard{PresentCapture* capture;bool& recorded;~CaptureGuard(){if(recorded&&capture)capture->discarded();}} captureGuard{capture_,captureRecorded};
+    if(capture_){
+        const uint32_t hdrMode=graph.hdrOutput()?(graph.hdr10Output()?2u:1u):0u;
+        captureRecorded=capture_->record(list,{source,graph.outputFormat(),graph.workWidth(),graph.workHeight(),hdrMode,graph.outputDitherStep(),generated});
+    }
     // Interpolation region for the XeSS present-sink FG backend.
     // It must follow the PresentBlit view mapping (contain * zoom, view
     // center) rather than assuming the default centered view: the previous
@@ -477,6 +499,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
 
     gpuTimer_.mark(list,diagnostics::GpuStage::Blit,true);gpuTimer_.resolve(list);
     if(!ring.submitAndSignal(commandSlot))return false;gpuTimer_.submitted(ring.lastSignaledValue());
+    if(captureRecorded){captureRecorded=false;capture_->submitted(fence,ring.lastSignaledValue());}
     if(probeIssued){probePending_=true;probeFenceValue_=ring.lastSignaledValue();}
     // Custom: collect the previous probe as soon as the GPU reports it complete.
     // GetCompletedValue is a plain read, so presentation never waits here.
@@ -547,8 +570,10 @@ void VideoPresenter::publishLiveCoverage(const HdrCurveSettings& curve,pipeline:
 }
 
 void VideoPresenter::close(){
-    hdrPeakMonitor_=nullptr;hdrPeakInfo_={};hdrPeakQuery_={};
-    refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
+    metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
+    hdrPeakInfo_={};
+    refreshMonitor_=nullptr;refreshHz_=0;vrr_={};refreshQueried_=false;vrrSync_=false;displayStateSerial_=0;vrrConfirmAt_.reset();
+    
     retainedFrame_.reset();
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
@@ -560,18 +585,45 @@ void VideoPresenter::close(){
     if(presentationEvent_){CloseHandle(presentationEvent_);presentationEvent_=nullptr;}
     presentationDevice_=nullptr;presentationFormat_=DXGI_FORMAT_UNKNOWN;window_=nullptr;
 }
+void VideoPresenter::startDisplayState(){
+    // A new presentation chain (session start): the monitor's stored state
+    // applies at once and is checked once more in the background; without one
+    // the first configuration waits up to 100 ms for the first answer.
+    if(!displayStates_||!window_)return;
+    const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
+    refreshMonitor_=monitor;displayGeneration_=displayStates_->generation();
+    auto state=displayStates_->state(monitor);
+    const bool cached=state.has_value();
+    displayStates_->request(window_,"session-start",cached);
+    if(!cached)state=displayStates_->wait(monitor,std::chrono::milliseconds(100));
+    if(state)applyDisplayState(*state);
+    veyra::log::info("display-query",std::format("presentation chain start monitor=0x{:X} cached={} answered={} (read again only on events, never on a timer)",
+        reinterpret_cast<uintptr_t>(monitor),cached,state.has_value()));
+}
+void VideoPresenter::applyDisplayState(const DisplayState& state){
+    if(state.monitor!=refreshMonitor_)return;
+    const auto hz=state.refreshHz;const auto& vrr=state.vrr;
+    if(refreshQueried_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
+    refreshHz_=hz;sink_.setDisplayRefreshHz(hz);
+    if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; enabled by the user in the NVIDIA Control Panel, never changed by Veyra)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.status,hz));
+    vrr_=vrr;refreshQueried_=true;displayStateSerial_=state.serial;
+}
 double VideoPresenter::displayRefreshHz(){
     if(!window_)return 0;
-    const auto now=std::chrono::steady_clock::now();
+    if(!displayStates_)return refreshHz_;
     const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
-    if(monitor!=refreshMonitor_||now-refreshQuery_>=std::chrono::seconds(2)){
-        const double hz=gfx::PresentSink::displayRefreshFps(window_);
-        if(refreshMonitor_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
-        refreshHz_=hz;refreshMonitor_=monitor;refreshQuery_=now;sink_.setDisplayRefreshHz(hz);
-        const auto vrr=gfx::queryVrr(window_);
-        if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; enabled by the user in the NVIDIA Control Panel, never changed by Veyra)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.status,hz));
-        vrr_=vrr;refreshQueried_=true;
+    const char* reason="presenter";
+    if(monitor!=refreshMonitor_){
+        // Never apply the previous monitor's VRR/cap to a moved window; its own
+        // stored state (an earlier visit) applies at once when there is one.
+        refreshMonitor_=monitor;refreshHz_=0;vrr_={};refreshQueried_=false;displayStateSerial_=0;reason="monitor-change";
     }
+    if(const auto generation=displayStates_->generation();generation!=displayGeneration_){displayGeneration_=generation;reason="display-change";}
+    // request() starts a query only when this monitor's state is stale or
+    // missing, so calling it every loop costs a lock and a lookup.
+    if(vrrConfirmAt_&&std::chrono::steady_clock::now()>=*vrrConfirmAt_){vrrConfirmAt_.reset();displayStates_->request(window_,"vrr-confirm",true);}
+    else displayStates_->request(window_,reason);
+    if(const auto state=displayStates_->state(monitor);state&&state->serial!=displayStateSerial_)applyDisplayState(*state);
     return refreshHz_;
 }
 PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceContext& ctx,PresentationSettings requested,bool fg,std::wstring& status){
@@ -600,7 +652,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     const bool reflexDisabled=reflex_.disable();reflexFrame_=0;
     const bool followDisplay=requested.outputRate==OutputRateMode::FollowDisplay;
     if(followDisplay){
-        const double hz=gfx::PresentSink::displayRefreshFps(sink_.hwnd());
+        const double hz=displayRefreshHz();
         if(hz>=1.0&&std::isfinite(hz)){requested.outputRate=OutputRateMode::Custom;requested.customFps=hz;}
         else requested.outputRate=OutputRateMode::Off;
     }
@@ -620,7 +672,10 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     // one-deep VSync queue below holds. Without VRR (switch off, another
     // monitor, driver setting off) Automatic stays Present(0,0).
     displayRefreshHz();
+    const bool wasVrrSync=vrrSync_;
     vrrSync_=vrrSyncWanted(requested,vrr_);
+    // VRR presentation just started: ask the driver once more whether it runs.
+    if(vrrSync_&&!wasVrrSync)vrrConfirmAt_=std::chrono::steady_clock::now()+std::chrono::seconds(3);
     if(vrrSync_){requested.display=DisplaySync::Vsync;effective.display=DisplaySync::Vsync;}
     const bool vsync=presentationVsync(requested),tearing=presentationTearing(requested);
     providerOwnedPresentation_=xessActive();

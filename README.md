@@ -62,7 +62,8 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ---
 
-**2.1.0 release, 2026-10-19:** AMD NR0.44 Small/Original models, independent anti-aliasing,468-point face beauty/restoration, capture format discovery/selection fixes, networking, AVerMedia audio and fullscreen/window capture improvements. [Full update report](docs/RELEASE_NOTES_2.1.0.md).
+**2.1.1 release, 2026-10-27:** processed-picture recording with audio,90° playback rotation, per-layer NR percentage controls and export sizing, event-driven refresh/VRR/HDR queries, AMD HDR+NR handling, AA ordering, capture timestamp handling, NR shutdown, popup layout, screenshots and fullscreen fixes. [All changes since2.1.0](docs/RELEASE_NOTES_2.1.1.md).
+
 
 **New-effect cost examples:** RTX5070 standard4K anti-aliasing fixtures: FXAA~0.15ms, SMAA/MLAA~0.30ms. Final single-face mesh beauty:1080p~0.93ms,4K~1.42ms. Costs vary with content/hardware; no local AMD speedup percentage was measured. [Conditions and limits](docs/RELEASE_NOTES_2.1.0.md).
 
@@ -78,6 +79,18 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** SF310.9.16 performance/legacy models, NVIDIA original for RTX50 and AMD lmxxf, DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
+## New in 2.1.1
+
+- **Interface and SR defaults:** software UI drawing by default, an optional GPU renderer with restart confirmation, and RTX Video SR high as the new SR model selection; saved model choices are retained.
+
+- **Record and rotate:** record the processed picture with player audio; rotate playback90° in Cinema/Professional with matching preview and window layout.
+- **NR sizing:** per-layer25–100% scale controls, saved presets/sessions and fixed/percentage video-export inference sizes with independent output resolution.
+- **Display and frame generation:** background event-driven refresh/VRR/HDR queries, shared signal-panel refresh and HDR-cache recovery.
+- **Enhancement:** correct AMD FSR-off state, native-HDR NR proxy/reconstruction and List-mode AA placement after NR.
+- **Interaction and lifecycle:** popup first-open layout, real screenshot paths/formats, fullscreen/maximized restoration, playlist key ownership, capture preparation timestamps and NR/NVAPI teardown.
+
+[Full2.1.1 update](docs/RELEASE_NOTES_2.1.1.md) · [Build and corresponding source](docs/BUILD_2.1.1.md).
+
 ## New in 2.1.0
 
 - **AMD NR0.44:** RX9000 Small/Original models via the per-layer performance switch(default on), saved in presets/sessions/export; explicit asset errors, no new RX6000/7000 support.
@@ -91,7 +104,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ## Install and upgrade
 
-Download **Veyra-2.1.0-NVIDIA-win64-portable.zip** or **Veyra-2.1.0-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.1.1-NVIDIA-win64-portable.zip** or **Veyra-2.1.1-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -110,7 +123,7 @@ Home offers files, capture card, PS5, PC, Xbox and screen capture. Files/images 
 
 ### List mode
 
-The NR version selector offers RTX20–50 · SF310.9.16, RTX50 · NVIDIA original and RX9000 · lmxxf (experimental) in both List and Node mode. SF defaults to performance modelB; disable Use performance model for legacyA. The control is disabled for NVIDIA original; AMD0.44 selects Small when enabled(default) and Original when disabled. Model selection is saved per layer. Lecram/oldSF-v2 settings migrate to SF. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7. Video export uses at most internal 1080p inference and composites to the original output size; this is not native 4K NR and actual AMD offline encoding still needs hardware retesting. Image exports retain the native model pixel budget; HDR NR is unavailable. See [current runtime identities](docs/BUILD_2.1.0.md).
+The NR version selector offers RTX20–50 · SF310.9.16, RTX50 · NVIDIA original and RX9000 · lmxxf (experimental) in both List and Node mode. SF defaults to performance modelB; disable Use performance model for legacyA. The control is disabled for NVIDIA original; AMD0.44 selects Small when enabled(default) and Original when disabled. Model selection is saved per layer. Lecram/oldSF-v2 settings migrate to SF. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7. Video export uses at most internal 1080p inference and composites to the original output size; this is not native 4K NR and image exports retain the native model pixel budget. Version2.1.1 processes AMD native-HDR NR through an SDR-linear proxy and reconstructs the result over the HDR base ([2.1.1 details](docs/RELEASE_NOTES_2.1.1.md)). See [current runtime identities](docs/BUILD_2.1.0.md).
 
 Select List at the top of Professional. Enable SR, NR or RTX Video HDR as needed. Up to four NR layers have independent internal resolution, strength and parameters. The master switch disables all layers and restores their previous enabled states.
 
@@ -188,7 +201,7 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 ## Source and build
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.1.0 build/source](docs/BUILD_2.1.0.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.1.1 build/source](docs/BUILD_2.1.1.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 

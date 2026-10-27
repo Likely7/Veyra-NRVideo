@@ -46,3 +46,4 @@ VSpinner 1.0 VSpinner.qml
 VEqBars 1.0 VEqBars.qml
 VTelemetryValue 1.0 VTelemetryValue.qml
 SponsorPanel 1.0 SponsorPanel.qml
+RotateButton 1.0 RotateButton.qml

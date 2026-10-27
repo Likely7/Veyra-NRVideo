@@ -1,5 +1,41 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-27 用户追加整合并重建发布2.1.1**：用户明确要求合并claude/software-ui-default-20261026，将默认超分模型改为RTX视频超分，再重建2.1.1并发布GitHub。覆盖前条原包不重建限制，允许必要UI启动/设置默认/相关回归及重打完整两包；首次效果仍关闭，已保存明确模型选择保留，AMD/Intel沿用可用FSR默认。产物任务codex-release-2.1.1-final-20261027，单Agent、全E盘、受控2.1.0运行库不变，必要main整合/push/两Release已授权，不代发公告，不动旧脏树，Lecram暂停。
+
+
+> **2026-10-27 用户授权发布2.1.1**：按docs/RELEASE_2.1.1_PLAN_2026-10-27.md，在codex/release-2.1.1-20261027原样发布已验两个ZIP，允许必要main普通整合/push/两个Release及tag/资产上传，覆盖此前不发布限制。更新报告只写实际交付修复，保留实验组件身份与源码/许可证义务；不重建包、不改产品/运行库/用户配置，不代发群公告，Lecram暂停。
+
+
+> **2026-10-26 恢复2.1.1封包（用户明确授权）**：用户要求继续构建2.1.1，覆盖前一轮暂停封包限制。从41488c2在codex/build-2.1.1-resume-20261026重建本地NVIDIA/AMD完整包，包含已完成菜单/AMD HDR修复；采集停流只诊断未修，Lecram暂停。按BUILD_2.1.1_PLAN_2026-10-26.md，单Agent/全E盘/受控2.1.0供体/私有配置；不占采集卡、不合main/push/上传。旧stage过期不seal，当前产物test-packages/codex-build-2.1.1-resume-20261026。
+
+
+> **2026-10-26 暂停封包修两处bug（用户授权）**：暂停2.1.1封包，在codex/menu-amd-hdr-fix-20261026按docs/MENU_AMD_HDR_PLAN_2026-10-26.md修菜单/下拉文字抖动与AMD HDR+NR。允许必要QML、图/每层资源、HDR代理/还原着色器、CMake/翻译/定向测试，覆盖旧冻结。保持现有SDR/NVIDIA及AMD运行组件身份，不以取消HDR检查代替处理合同。无AMD实卡不称HIP已验；单Agent、全E盘、-j2<=900秒/单测<=300秒、私有配置，无封包/main合并/push/发布，Lecram暂停。
+
+> **2026-10-26 2.1.1本地完整包（用户授权）**：用户要求“构建2.1.1正式包给我，给我测试”。从26aa9dd在codex/build-2.1.1-20261026更新版本为2.1.1并构建NVIDIA/AMD完整Release配置便携包，按docs/BUILD_2.1.1_PLAN_2026-10-26.md。此条覆盖本范围此前不封包限制；不代表已公开发布或授权合main/push/上传。运行组件沿用2.1.0正式包受控供体并逐文件核验，不增换组件。单Agent、全E盘、复用构建-j2<=900秒、单测<=300秒、私有配置，不停止用户进程或占采集卡。4K约53fps现场问题只诊断未修，不写入已修；Lecram暂停。
+
+> **2026-10-26 Codex接手Claude采集审查**：用户要求接续Claude整体排查剩余工作。b2eb77d干净树新开codex/capture-review-handoff-20261026，按docs/CAPTURE_REVIEW_HANDOFF_PLAN_2026-10-26.md完成同帧AA对照、确认缺陷修复与验收报告；继承用户只做一轮采集（原轮已完成，不重复实卡）、单Agent、全E盘、-j2<=900秒/单测<=300秒、真实配置/端点音量/运行库/模型/驱动不改、不停止用户进程。原Claude分支、main与软件UI默认独立分支保留，不merge main/push/Release/封包，Lecram仍暂停。
+
+> **2026-10-26 采集链路审查与抗锯齿修复（Claude，用户授权）**：用户要求整体审查采集链路及效果器衔接，排除类似VRR轮询的性能拖累，尽量降延迟，修复“抗锯齿开了没变化”，并用采集卡实测一轮（效果器全开）。从main 68def10在claude/capture-review-20261026按docs/CAPTURE_REVIEW_PLAN_2026-10-26.md施工，起点标签checkpoint/pre-capture-review-20261026。允许必要的执行计划/图/展示/采集音频日志/QML四语/定向测试接点。用户的E:/App包与配置只读，其采集进程不停止、不抢设备；实测前由用户自己让出采集卡。单Agent、全E盘、-j2构建<=900秒/单测<=300秒，不改运行库/模型/驱动，无merge/push/Release，Lecram暂停；用户随后追加：HDR显示状态也按VRR改为事件触发，专业模式左下“信号”区放一个公用的“刷新显示器状态”按钮并显示系统HDR开关与可变刷新状态，VRR原刷新按钮挪到这里；顺带排查采集卡声音偏大。为此把claude/vrr-event-query-20261025并入本分支（不进main）；claude/software-ui-default-20261026仍保留未并入。
+
+> **2026-10-25 VRR事件触发查询（Claude）**：用户要求可变刷新/刷新率不再定时查询，改为事件触发并在“可变刷新”旁加“重新检测”按钮，引擎和界面都去掉2秒轮询。从main 68def10在claude/vrr-event-query-20261025按docs/VRR_EVENT_QUERY_PLAN_2026-10-25.md施工，起点标签checkpoint/pre-vrr-event-query-20261025；允许必要的呈现器/引擎/桥接/QML/翻译/CMake/定向测试接点，覆盖这些范围旧冻结。补帧调度、显示同步策略、33ms/250ms刷新不变，不加定时器。单Agent、全E盘、复用build/claude-screen-recording-20261022构建-j2<=900秒/单测<=300秒；不改运行库/模型/驱动/真实配置，无merge/push/Release，Lecram暂停。本机屏幕不支持VRR，真实VRR生效须用户设备验证。
+
+> **2026-10-26 界面默认软件绘制（Claude）**：用户依据GPU/软件界面A/B（reports/claude-ui-renderer-ab-20261026）要求默认界面改为软件绘制，设置里保留“GPU 绘制”（需重启），自动兼容逻辑不变。从main 68def10在claude/software-ui-default-20261026按docs/SOFTWARE_UI_DEFAULT_PLAN_2026-10-26.md施工，起点标签checkpoint/pre-software-ui-default-20261026；允许main.cpp启动选择/桥接偏好/设置页QML/翻译/定向测试接点，覆盖这些范围旧冻结。视频D3D12链路、OBS与监控软件兼容判定、VEYRA_UI_RHI、33ms/250ms刷新不变。单Agent、全E盘、复用build/claude-screen-recording-20261022构建-j2<=900秒/单测<=300秒；不改运行库/模型/驱动/真实配置，无merge/push/Release，Lecram暂停。上一分支claude/vrr-event-query-20261025保留，不并入本分支。
+
+> **2026-10-25 采集内置音频修复与整合授权**：用户明确要求修复 CV710 开监听卡画面，并把近期全部修复/功能合入本地 main。从207555b在codex/capture-audio-main-20261025按docs/CAPTURE_AUDIO_MAIN_PLAN_2026-10-25.md施工；包含 #67/全屏退出与当前录制/AMD SR关/旋转/NR比例/FG异步查询/NR导出，覆盖这些接点旧冻结及无main合并限制。先存档原main与101工作树/原全屏脏文件，不覆盖其它工作树。保持单Agent、全E盘、-j2构建<=900秒/单测试<=300秒、真实配置/运行库/模型/驱动不变。CV710现场修复必须原卡复测，不拿本机卡或夹具替代；无push/Release/代发/关机授权，Lecram暂停。
+
+> **2026-10-25 社区NR导出尺寸补丁接入（用户授权）**：从038beac在codex/export-nr-scale-20261025按docs/EXPORT_NR_SCALE_PLAN_2026-10-25.md接入固定档与百分比的视频导出NR尺寸，允许必要export policy/图描述/执行计划/导出日志/QML四语/定向测试接点，覆盖这些范围旧UI冻结及此前“导出保持Native”限制。输出尺寸不变、图片完整处理、AMD预算、非法值校验及既有NR手动编码保留。不改补帧调度/运行库/模型/驱动/真实配置；单Agent、全E盘、复用构建-j2<=900秒/单测<=300秒，无merge/push/Release，Lecram暂停。
+
+> **2026-10-24 补帧调度修复追加授权**：用户明确要求另开分支排查修复，覆盖上一轮仅诊断限制；从97959cc在codex/fg-scheduling-repair-20261024按docs/FG_SCHEDULING_REPAIR_PLAN_2026-10-24.md施工，允许有证据的调度/必要链路/限频诊断/定向测试接点。用户正在E:/App运行，只读日志，不停止其进程/改真实配置/争抢采集或添加GPU负载；不放宽期限/掩盖告警/无界排队。单Agent、全E盘、复用构建-j2<=900秒/单测<=300秒，无main合并/push/Release，Lecram暂停。
+
+> **2026-10-24 NR手动比例及日志排查（用户请求）**：从108c010在codex/nr-manual-scale-20261024实施每层NR内部手动百分比与条件滑条，按docs/NR_MANUAL_SCALE_PLAN_2026-10-24.md，仅扩展NR尺寸规划/既有参数桥接/共用QML滑条/翻译/必要合同测试与持久化兼容；这些新功能必要接点覆盖旧2.0.0 UI迁移冻结。不改FG预算/调度/采集/告警判定，用户指定调度降档只诊断。用户E:/App包/日志只读，私有测试不连真实主机或采集卡。单Agent，全E盘，复用当前同源构建-j2<=900秒/单测试<=300秒；不改专有运行文件/驱动/真实配置，无main合并/push/Release，Lecram暂停。
+
+> **2026-10-23 依赖迁移与历史产物清理（用户明确授权）**：`C:\veyra-deps` 的149125个普通文件已逐文件SHA256核验并迁到 **`E:\项目\Veyra\deps\core`**，C盘旧实体已删除；`C:\veyra-deps` 仅为指向该E盘目录的 Junction，保留兼容旧脚本/CMake缓存，禁止删除此入口或重新在C盘建依赖实体。Qt实体仍为 `E:\项目\Veyra\deps\qt\6.8.3\msvc2022_64`，`deps\core\qt-veyra` 仅指向 `deps\qt`。新任务优先使用E盘实体路径；旧缓存不必为改路径强制全量重编译。共享路径清单 `E:\项目\Veyra\deps\DEPENDENCY_ROOTS.json`，共享规则 `E:\项目\Veyra\AGENTS.md`，证据 `E:\项目\Veyra\reports\dependency-migration-cleanup-20261023`。本条覆盖旧“C:\veyra-deps暂保留不迁移”的限制。历史测试/包按本轮清单清理；正式发布资产只保留2.0.7及以后（当前2.0.7/2.0.8/2.0.9/2.1.0），依GitHub资产SHA而非内部test文件名判定。当前未合入正式版的rot1交付单独保留；不删源码工作树/未提交改动/依赖模型/对应源码与必要验收记录。清理实际结果以该目录FINAL.json为准，不从计划推断已删除。不merge/push/发布，不继续Lecram。
+
+> **2026-10-23 画面旋转（Codex）**：用户要求极简/专业小按钮每次顺时针90°并适配UI。4eee190干净源码切codex/picture-rotation-20261023，起点标签checkpoint/pre-picture-rotation-20261023。按docs/PICTURE_ROTATION_PLAN_2026-10-23.md复用已有元数据呈现/坐标映射，允许必要PreviewView/EngineController/bridge/QML/翻译/定向测试接点，覆盖这些范围旧UI冻结；不继续Lecram或修改其它工作树。不改专有运行库/模型/驱动或真实配置，全E盘，复用同源构建限-j2≤900秒/单测试≤300秒，单Agent，无main合并/push/发布。
+
+> **2026-10-21 Claude 中断任务接手（Codex）**：用户要求“把后续工作接上，然后完成他”，后明确“Lecram，先放着，不弄了”。仅在 E盘既有 screen-recording-fix-20261022 工作树、codex/claude-handoff-20261022 完成 AMD 超分关闭和带声音的处理后实时录制修复、相关构建/回归/本地测试包；这些必要接点覆盖旧 UI 冻结。20个未提交源码先保存 ZIP/patch/SHA 与检查点5614e8d，AMD修复移入88dbc26，计划docs/CLAUDE_HANDOFF_PLAN_2026-10-22.md。Lecram 保留不继续。单 Agent、-j2构建≤900秒/单测试≤300秒、全E盘私有配置、不触碰真实配对主机/他人进程/运行库/模型/驱动；旧桌面与其他任务保留。不合 main/push/发布。
+> **2026-10-21 #67 修复授权（Codex）**：用户暂停Lecram，要求修复issue67。按docs/ISSUE67_NVAPI_SHUTDOWN_PLAN_2026-10-21.md在codex/issue67-nvapi-shutdown-20261021隔离修复NR/NVAPI模块生命周期与关闭诊断，允许必要ngx/graph/CMake/测试接点，覆盖这些旧冻结；保留正常资源释放/UI频率和其他任务。产物全E盘，构建-j2≤900秒/单测≤300秒；不合main/push/发布/评论/关机，不派Agent，无3090实卡不称已验。
+
 > **2026-10-19 2.1.0 正式发布（Codex）**：用户已实测并批准 `test-packages/bilibili-2.1.0-20261019` 两包原样发布，禁止重新构建/打包。按 docs/RELEASE_2.1.0_PLAN_2026-10-19.md 整理2.0.9以来全部合入内容、替换用户新6群二维码、更新README/Release，主Release只放两个GPU包，源码另页；允许main普通快进/push/新标签及发布。Lecram两个实验分支暂停保留，不入本版。公告只拟稿，不代发、不关机、不派Agent、不改运行文件/驱动/真实配置；产物全E盘。
 
 > **2026-10-19 2.1.0 整合与测试包（Claude）**：用户要求“之前的所有修复，包括 Codex 那边的都一起合并到 Main，然后打包 2.1.0 测试包”，并审查 Codex 的修复。在 `claude/release-2.1.0-20261019`（main 1dc8c18）合并 fullscreen-input（含 AMD NR 0.44）、#48、美颜（含 E0/AA）与赞助页，版本 2.1.0；先存档 `checkpoint/pre-release-2.1.0-20261019` 与 `archives/claude-release-2.1.0-20261019`。允许本地 main 快进、以 2.0.9-test 两包为底打 NVIDIA/AMD 2.1.0-test 包（美颜两模型按名称+哈希放行、AMD 换 0.44 运行库）。记录见 docs/BUILD_2.1.0_TEST.md 与 docs/RELEASE_2.1.0_TEST_2026-10-19.md。不改运行库/模型字节、驱动或用户配置；无 push/Release/上传/子 Agent。

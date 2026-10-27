@@ -369,10 +369,18 @@ struct EnhanceGraphDesc {
         return false;
     }
     // Where a plan step runs. `interTarget` receives the NR resource of an InterNr step.
+    // A plan step behind an NR step.
+    bool afterNrStep(uint32_t s) const {
+        if(!fixedExecutionPlan)return false;
+        for(uint32_t i=0;i<s&&i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i)
+            if(fixedExecutionPlan->steps[i].type==engine::EffectType::NrEnhance)return true;
+        return false;
+    }
     bool sourcePostActive() const {
         // Without a compiled plan (tiled full-resolution images) enabled
-        // anti-aliasing instances run at source size, like the list chain.
-        if(!fixedExecutionPlan)return antiAliasActive();
+        // anti-aliasing instances follow the list chain: behind NR when NR
+        // runs, otherwise at source size.
+        if(!fixedExecutionPlan)return antiAliasActive()&&!enableNr;
         for(uint32_t i=0;i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i)
             if(slotOfStep(i)==PassSlot::SourcePost)return true;
         return false;
@@ -383,10 +391,12 @@ struct EnhanceGraphDesc {
         const auto type=fixedExecutionPlan->steps[s].type;
         if(!samePass(type))return PassSlot::None;
         if(!runtimeNodeOrder){
-            // List mode: the grade is fused into the input conversion, anti-aliasing
-            // follows at source size, beauty follows the whole NR group.
+            // List mode: the grade is fused into the input conversion; beauty and,
+            // whenever NR runs, anti-aliasing follow the whole NR group
+            // (compileChainExecutionPlan). Without NR anti-aliasing runs at source
+            // size right after the input conversion.
             if(type==EffectType::Color)return PassSlot::Ingress;
-            if(type==EffectType::AntiAliasing)return PassSlot::SourcePost;
+            if(type==EffectType::AntiAliasing&&!afterNrStep(s))return PassSlot::SourcePost;
             return nrBeforeSr?PassSlot::PreSr:PassSlot::Tail;
         }
         if(sourcePostStep(s))return PassSlot::SourcePost;
@@ -442,16 +452,18 @@ struct EnhanceGraphDesc {
             if(samePass(step.type)){
                 passSlot=slotOfStep(i);
                 if(passSlot==PassSlot::None)return "same-size node position is not supported by the fixed dispatcher";
-                // List mode: anti-aliasing runs at source size first; the beauty group
-                // follows the whole NR group (with its protection). Node slots below.
-                if(step.type==EffectType::AntiAliasing)rank=0;
-                if(step.type==EffectType::Beauty)rank=passSlot==PassSlot::SourcePost?0:int(EffectType::Protection);
+                // List mode: anti-aliasing without NR runs at source size first; the
+                // beauty group and, with NR, anti-aliasing follow the whole NR group
+                // (with its protection). Node slots below.
+                if(step.type==EffectType::AntiAliasing||step.type==EffectType::Beauty)
+                    rank=passSlot==PassSlot::SourcePost?0:int(EffectType::Protection);
             }
             if(nrBeforeSr){
                 if(step.type==EffectType::NrEnhance)rank=1;
                 if(step.type==EffectType::Protection)rank=2;
                 if(step.type==EffectType::SuperResolution)rank=3;
-                if(step.type==EffectType::Beauty&&!runtimeNodeOrder)rank=2;   // right after the NR group
+                // Right after the NR group.
+                if((step.type==EffectType::Beauty||(step.type==EffectType::AntiAliasing&&passSlot!=PassSlot::SourcePost))&&!runtimeNodeOrder)rank=2;
             }
             if(runtimeNodeOrder){
                 if(step.type==EffectType::Protection&&interProtection)rank=nrBeforeSr?1:2;
@@ -895,6 +907,7 @@ private:
     std::vector<uint8_t> nv12Buf_;
 
     ComputePass yuvPass_, encPass_, decPass_, blitPass_, uploadPass_, densifyPass_;
+    ComputePass amdHdrEncodePass_, amdHdrRestorePass_;
     float toneMapPeakNits_=0; // latched per graph/source; never varies with frame brightness
     ComputePass rgbPass_,hdrVideoSrPass_;
     ComputePass downsamplePass_,residualPass_,stackProtectionPass_,flowAdaptPass_;

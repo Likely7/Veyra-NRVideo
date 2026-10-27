@@ -6,6 +6,7 @@
 #include "veyra/ngx/DlssgLite.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/ui/GamePassthrough.h"
+#include <QAbstractNativeEventFilter>
 #include <QGuiApplication>
 #include <QScreen>
 #include <QtGui/qscreen_platform.h>
@@ -188,6 +189,19 @@ static QVariantMap currentEffectCapabilities(bool refresh=false);
 static QString unavailableEffects(const engine::EnhancementSettings& settings);
 static QString disableUnavailableEffects(engine::ChainConfiguration& configuration);
 static ui::EffectGpu effectGpu();
+
+namespace {
+// WM_DISPLAYCHANGE reaches every top-level window when a display mode, refresh
+// rate or HDR state, or the set of screens, changes: the 可变刷新 state is then
+// read once more (DisplayStateService) instead of on a timer.
+struct DisplayChangeFilter final : QAbstractNativeEventFilter {
+    bool* changed = nullptr;
+    bool nativeEventFilter(const QByteArray& type, void* message, qintptr*) override {
+        if (changed && type == "windows_generic_MSG" && static_cast<const MSG*>(message)->message == WM_DISPLAYCHANGE) *changed = true;
+        return false;
+    }
+};
+}
 
 // B 站播放解析的后台结果。三个网络往返在 worker 线程跑完写这里，GUI tick 读走。
 // 只含普通数据结构：worker 不能碰 Qt 对象或 impl_ 里的容器。
@@ -507,6 +521,9 @@ struct QmlPlayerBridge::Impl {
     // Declared after everything the worker touches, so it is joined first.
     std::jthread subAlignWorker;
     QVariantMap prefs;
+    // Live recording state published by the engine (see LiveRecorder.h).
+    QVariantMap recordingState;
+    uint64_t recordingSaved = 0;   // LiveRecorder's finished-file counter already announced
   // Custom: the display whose HDR curve is currently applied (see syncHdrDisplayProfile).
   QString hdrProfileDisplay;
   // Custom: the title whose curve is currently applied (see syncHdrTitleProfile).
@@ -518,6 +535,8 @@ struct QmlPlayerBridge::Impl {
   // Custom: how many remembered titles survive; the oldest fall off first.
   int kHdrTitleProfileLimit = 60;
     QString lastScreenshot;
+    QString pendingScreenshot;
+    qint64 pendingScreenshotDeadline=0;
     bool holdKeyDown = false;
     int positionTicks = 0;
     // A reopened file resumes here once its session is running.
@@ -666,8 +685,14 @@ struct QmlPlayerBridge::Impl {
     // presenting monitor, or of the main window's monitor while idle.
     QString fgDisplayHint;
     int vrrState=0;
-    gfx::VrrState idleVrr{};
-    std::chrono::steady_clock::time_point idleVrrQuery{};
+    // The shown monitor's Windows HDR (-1 unknown) and refresh rate.
+    int displayHdr=-1;double displayRefreshHz=0;
+    // 刷新显示器状态: the display generation it asked for, until the shown monitor
+    // answers (displayChecking also covers any query in flight).
+    bool displayChecking=false,displayRecheckPending=false,displayChanged=false;
+    uint64_t displayRecheckGeneration=0;
+    std::chrono::steady_clock::time_point displayRecheckSince{};
+    DisplayChangeFilter displayChangeFilter;
     std::atomic<double> gpuUtil{-1.0};
     // Hardware adapters in Windows' high-performance order (discrete first). The
     // sampler only counts engines of the adapter whose LUID is in gpuMonitorLuid
@@ -1421,6 +1446,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // 游戏模式. The native filter also keeps windows shown during a monitor capture
     // out of that capture, so it is installed for every run.
     if (qApp) qApp->installNativeEventFilter(&impl_->game);
+    impl_->displayChangeFilter.changed = &impl_->displayChanged;
+    if (qApp) qApp->installNativeEventFilter(&impl_->displayChangeFilter);
     impl_->game.onEvent = [this](ui::GamePassthrough::Event event) {
         using E = ui::GamePassthrough::Event;
         switch (event) {
@@ -1651,7 +1678,39 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const bool wasFullscreenUnsafe = impl_->snapshot.vramFullscreenUnsafe;
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
+        const auto oldSourceAspect=sourceAspect();
         if(impl_->poll()){emit settingsChanged();emitChainChanged();}
+        if(wasSession!=impl_->snapshot.sessionId||oldSourceAspect!=sourceAspect())emit compareChanged();
+        // Live recording state: the recorder owns the files, this side shows them.
+        {
+            const auto live=impl_->engine.recordingSnapshot();
+            QVariantMap state;
+            state["active"]=live.active;
+            state["failed"]=live.failed;
+            state["finishing"]=live.finishing;
+            state["path"]=QString::fromStdWString(live.path);
+            state["error"]=live.error.empty()?QString():uiText(live.error);
+            state["note"]=live.note.empty()?QString():uiText(live.note);
+            state["encoder"]=QString::fromStdWString(live.encoder);
+            state["frames"]=QVariant::fromValue(qulonglong(live.frames));
+            state["dropped"]=QVariant::fromValue(qulonglong(live.dropped));
+            state["seconds"]=live.seconds;
+            state["files"]=int(live.files);
+            state["audio"]=live.audio;
+            if(state!=impl_->recordingState){
+                const auto previous=impl_->recordingState;
+                impl_->recordingState=state;
+                emit recordingChanged();
+                // One notice per event: a failure, a finished file, a new file.
+                const QString error=state.value("error").toString(),note=state.value("note").toString();
+                if(live.failed&&!error.isEmpty()&&error!=previous.value("error").toString())emit notice(error,true);
+                if(live.saved!=impl_->recordingSaved){
+                    impl_->recordingSaved=live.saved;
+                    emit notice(note.isEmpty()?tr("录制已保存：%1").arg(state.value("path").toString())
+                                              :tr("录制已保存：%1（%2）").arg(state.value("path").toString(),note),false);
+                }else if(live.active&&!note.isEmpty()&&note!=previous.value("note").toString())emit notice(note,false);
+            }
+        }
   // Custom: a display change re-applies that device's HDR curve. The id check is
   // a few Win32 calls, so this is safe on the polling path.
   syncHdrDisplayProfile();
@@ -2108,6 +2167,7 @@ QmlPlayerBridge::~QmlPlayerBridge() {
     if (impl_->danmakuWindow) impl_->danmakuWindow->destroy();
     flushHdrMemory();
     if (qApp) qApp->removeEventFilter(this);
+    if (qApp) qApp->removeNativeEventFilter(&impl_->displayChangeFilter);
     rememberPosition(true);
     if (impl_->sessionSaveTimer) impl_->sessionSaveTimer->stop();
     if (!impl_->persistSession())
@@ -3623,7 +3683,7 @@ bool QmlPlayerBridge::gameMode() const { return impl_->gameModeSessionId != 0; }
 bool QmlPlayerBridge::passthroughActive() const { return impl_->passthroughShown; }
 bool QmlPlayerBridge::gameInputActive() const { return impl_->gameInputShown; }
 bool QmlPlayerBridge::gameScaledPreview() const {
-    return gameMode() && ui::gameViewportScaled(impl_->screenFillActive, impl_->aspectMode);
+    return gameMode() && (ui::gameViewportScaled(impl_->screenFillActive, impl_->aspectMode) || previewRotation()!=0);
 }
 QRectF QmlPlayerBridge::gameVideoRect() const { return impl_->gameVideoRect; }
 void QmlPlayerBridge::attachMainWindow(qulonglong nativeHandle) {
@@ -4957,7 +5017,7 @@ int QmlPlayerBridge::imageBatchTotal() const { return int(impl_->imageFiles.size
 int QmlPlayerBridge::imageBatchFailures() const { return impl_->imageFailures; }
 QString QmlPlayerBridge::imageBatchStatus() const { return impl_->imageStatus; }
 void QmlPlayerBridge::saveFrameDialog() {
-    if(!impl_->pendingFrameExport.isEmpty()||imageBatchActive()){emit notice(tr("请等待当前图片导出完成"),true);return;}
+    if(!impl_->pendingFrameExport.isEmpty()||!impl_->pendingScreenshot.isEmpty()||imageBatchActive()){emit notice(tr("请等待当前图片导出完成"),true);return;}
     if (!hasSource()) { emit notice(tr("没有可保存的画面"), true); return; }
     if (impl_->chain.mode == engine::ChainMode::Node) {
         emit notice(tr("图片导出只接受列表模式；请切回列表模式再导出"), true); return;
@@ -5002,6 +5062,19 @@ void QmlPlayerBridge::cancelImageBatch() {
 }
 void QmlPlayerBridge::tickImageBatch() {
     auto& i = *impl_;
+    if(!i.pendingScreenshot.isEmpty()){
+        const QString written=QDir::fromNativeSeparators(QString::fromStdWString(i.snapshot.savedFramePath));
+        const QString hdr=QFileInfo(i.pendingScreenshot).path()+QLatin1Char('/')+QFileInfo(i.pendingScreenshot).completeBaseName()+QStringLiteral(".jxr");
+        if(written==i.pendingScreenshot||written==hdr){
+            i.lastScreenshot=written;i.pendingScreenshot.clear();
+            veyra::log::info("ui-screenshot","saved path="+written.toStdString());
+            emit preferencesChanged();
+            emit notice(tr("截图保存到：%1").arg(QDir::toNativeSeparators(written)),false);
+        }
+        if(!i.pendingScreenshot.isEmpty()&&QDateTime::currentMSecsSinceEpoch()>i.pendingScreenshotDeadline){
+            i.pendingScreenshot.clear();emit notice(tr("图片保存未确认完成，请查看诊断"),true);
+        }
+    }
     if(!i.pendingFrameExport.isEmpty()){
         QString path=i.pendingFrameExport;
         if(!QFileInfo(path).isFile())path=QFileInfo(path).path()+QLatin1Char('/')+QFileInfo(path).completeBaseName()+QStringLiteral(".jxr");
@@ -5493,6 +5566,16 @@ int QmlPlayerBridge::sourceWidth() const { return int(impl_->snapshot.sourceWidt
 int QmlPlayerBridge::sourceHeight() const { return int(impl_->snapshot.sourceHeight); }
 double QmlPlayerBridge::sourceFps() const { return impl_->snapshot.nominalSourceFps; }
 int QmlPlayerBridge::sourceRotation() const { return impl_->snapshot.sourceRotationDegrees; }
+int QmlPlayerBridge::previewRotation() const { return int(impl_->engine.previewView().userQuarterTurns)*90; }
+void QmlPlayerBridge::rotatePictureClockwise() {
+    if(!hasSource()||!impl_->engine.rotatePreviewClockwise(impl_->snapshot.sessionId))return;
+    // An in-progress protection selection uses the previous coordinate system.
+    beginProtectionDraw(QString());
+    tickSubtitles();
+    if(gameMode()){updateGameGeometry();updateGameMode();emit gameModeChanged();}
+    veyra::log::info("ui-rotation",std::format("session={} clockwise={}",impl_->snapshot.sessionId,previewRotation()));
+    emit compareChanged();
+}
 double QmlPlayerBridge::sourceAspect() const {
     const auto& s = impl_->snapshot;
     // A known DAR already includes SAR/rotation. With no DAR, rotate the coded
@@ -5642,25 +5725,21 @@ void QmlPlayerBridge::setHdrDisplayPeakNits(int nits){
     commitHdrTuning(std::move(s));
 }
 QVariantMap QmlPlayerBridge::hdrDisplayInfo()const{
-    // This is read from QML bindings (the peak row's hint text), so it must not do
-    // real work per call: building a DXGI factory and enumerating every adapter and
-    // output is far too heavy for something the snapshot signal can re-evaluate
-    // every frame. Cache it for a few seconds instead.
-    static QElapsedTimer cacheTimer;
-    static gfx::PresentSink::DisplayPeakInfo cached;
-    static HMONITOR cachedMonitor=nullptr;
+    // Read from QML bindings (the peak row's hint text), so no driver work here:
+    // the values come from the shared display state, queried in the background on
+    // events and 刷新显示器状态 (this used to build a DXGI factory every 5 s on the
+    // UI thread).
     HWND window=impl_->videoWindow;
     if(!IsWindow(window)){
         if(auto* focused=QGuiApplication::focusWindow())window=reinterpret_cast<HWND>(focused->winId());
         else window=nullptr;
     }
-    const auto monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST):MonitorFromPoint(POINT{0,0},MONITOR_DEFAULTTOPRIMARY);
-    if(!cacheTimer.isValid()||cacheTimer.elapsed()>5000||cachedMonitor!=monitor){
-        cached=gfx::PresentSink::queryDisplayPeak(window);cachedMonitor=monitor;
-        cacheTimer.restart();
-    }
-    return {{"valid",cached.valid},{"plausible",cached.plausible},{"peakNits",int(cached.peakNits)},
-            {"fullFrameNits",int(cached.fullFrameNits)},{"minNits",cached.minNits}};
+    auto& displays=impl_->engine.displayStates();
+    std::optional<engine::DisplayState> known;
+    if(window){displays.request(window,"ui");known=displays.state(displays.monitorOf(window));}
+    const engine::DisplayColorState c=known?known->color:engine::DisplayColorState{};
+    return {{"valid",c.peakValid},{"plausible",c.peakValid},{"peakNits",int(c.peakNits)},
+            {"fullFrameNits",int(c.fullFrameNits)},{"minNits",c.minNits}};
 }
 bool QmlPlayerBridge::hdrCurve()const{return settings().hdrCurve.enabled;}
 void QmlPlayerBridge::setHdrCurve(bool enabled){
@@ -6266,8 +6345,9 @@ bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
     for (uint32_t i = 0; i < c.nodeCount; ++i)
         if (c.nodes[i].type == engine::EffectType::AntiAliasing) return setAntiAliasParameterAt(int(i), key, value);
     if (c.mode != engine::ChainMode::List) { emit notice(tr("请先添加抗锯齿节点"), true); return false; }
-    // The list card's instance exists once it is used: after the grades, in
-    // front of SR, where toChain() puts it.
+    // The list card's instance exists once it is used, stored after the grades
+    // where toChain() puts it; the list order (compileChainExecutionPlan) runs it
+    // behind the NR group when NR is on and in front of SR otherwise.
     engine::ChainNode node; node.type = engine::EffectType::AntiAliasing;
     bool enabled = false;
     if (!applyAntiAliasKey(node.aa, enabled, key, value)) return false;
@@ -6799,6 +6879,7 @@ QVariantList QmlPlayerBridge::nrLayers() const {
         if(node.type!=engine::EffectType::NrEnhance)continue;
         const auto& n=node.nr;
         out<<QVariantMap{{"index",int(i)},{"enabled",node.enabled},{"sizePolicy",int(n.sizePolicy)},{"runtime",int(engine::currentNrRuntime(n.runtime))},
+            {"manualSize",pipeline::manualNrSizePolicy(n.sizePolicy)},{"sizePercent",int(pipeline::nrSizePercent(n.sizePolicy))},
             {"intensity",n.model.intensity},{"tone",n.model.tone},{"structure",n.model.structure},
             {"skin",n.model.skin},{"style",n.model.style},{"autoMask",bool(n.model.autoMask)},
             {"uiCorrection",bool(n.model.uiCorrection)},{"performance",n.model.performance},{"total",n.residual.total},
@@ -6873,13 +6954,20 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     else if(key=="luminanceRetention")n.residual.correction.lumaKeep=float(value);
     else if(key=="shadowProtection")n.residual.correction.shadow=float(value);
     else if(key=="correctionAmount")n.residual.correction.autoAmount=float(value);
+    else if(key=="sizePercent"){
+        if(value!=std::floor(value)||value<pipeline::kNrMinimumPercent||value>pipeline::kNrMaximumPercent)return false;
+        n.sizePolicy=pipeline::nrSizePolicyForPercent(unsigned(value));
+    }
+    else if(key=="sizePolicy"){
+        if(value!=std::floor(value)||value<0||value>int(pipeline::NrSizePolicy::Manual))return false;
+        const auto policy=static_cast<pipeline::NrSizePolicy>(int(value));
+        if(!pipeline::validNrSizePolicy(policy))return false;
+        if(policy==pipeline::NrSizePolicy::Auto){const auto reason=nrAutoSelectionReason(index);if(!reason.isEmpty()){emit notice(reason,true);return false;}}
+        n.sizePolicy=policy;
+    }
     else {
         if(value!=std::floor(value)||value<0||value>6)return false;
-        if(key=="sizePolicy"){
-            if(value==6){const auto reason=nrAutoSelectionReason(index);if(!reason.isEmpty()){emit notice(reason,true);return false;}}
-            n.sizePolicy=static_cast<pipeline::NrSizePolicy>(int(value));
-        }
-        else if(key=="style"&&value<=2)n.model.style=int(value);
+        if(key=="style"&&value<=2)n.model.style=int(value);
         else if(key=="autoMask"&&value<=1)n.model.autoMask=int(value);
         else if(key=="uiCorrection"&&value<=1)n.model.uiCorrection=int(value);
         else if(key=="performance"&&value<=1&&engine::nrUsesPerformanceModel(n.runtime))n.model.performance=value!=0;
@@ -8540,16 +8628,18 @@ void QmlPlayerBridge::stepFrame(int direction) {
 
 void QmlPlayerBridge::takeScreenshot() {
     if (!hasSource()) { emit notice(tr("没有正在播放的画面，无法截图"), true); return; }
+    if(!impl_->pendingScreenshot.isEmpty()||!impl_->pendingFrameExport.isEmpty()||imageBatchActive()){emit notice(tr("请等待当前图片导出完成"),true);return;}
     const QString folder = screenshotDirectory();
     if (!QDir().mkpath(folder)) { emit notice(tr("截图目录不可用：%1").arg(folder), true); return; }
     const QString name = QStringLiteral("veyra-%1.png")
                              .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss-zzz")));
     const QString path = QDir(folder).filePath(name);
     impl_->engine.saveFrame(wideOf(QDir::toNativeSeparators(path)));
-    impl_->lastScreenshot = path;
+    impl_->pendingScreenshot=path;
+    impl_->pendingScreenshotDeadline=QDateTime::currentMSecsSinceEpoch()+30000;
+    impl_->lastScreenshot.clear();
     veyra::log::info("ui-screenshot", "requested path=" + path.toStdString());
     emit preferencesChanged();
-    emit notice(tr("截图保存到：%1").arg(QDir::toNativeSeparators(path)), false);
 }
 
 // --- shell preferences (P4-f / P4-c / P4-d) --------------------------------
@@ -8608,8 +8698,12 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // 列表模式 parameter panel width (ProPage splitter); QML clamps it to the window.
         {"listInspectorWidth", {376, 4000}},
         // Network sources (#48): seconds to collect before the first picture; -1 follows the buffer level.
-        {"networkPrebuffer", {-1, 60}}};
-    static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
+        {"networkPrebuffer", {-1, 60}},
+        // Live recording: the target bitrate for the file, and the frame rate
+        // cap (0 keeps the presented rate).
+        {"recordBitrateMbps", {0, 400}},
+        {"recordFps", {0, 240}}};
+    static const QStringList flags{"recordHevc", "recordAudio", "subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect", "biliAutoCdn",
                                    // Bilibili module: whether a freshly opened video starts with danmaku on.
@@ -8677,6 +8771,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         const QString dir = value.toString();
         if (!dir.isEmpty() && !QFileInfo(dir).isDir()) { emit notice(tr("截图目录不存在：%1").arg(dir), true); return false; }
         stored = dir;
+    } else if (key == QLatin1String("recordDir")) {
+        const QString dir = value.toString();
+        if (!dir.isEmpty() && !QFileInfo(dir).isDir()) { emit notice(tr("录制目录不存在：%1").arg(dir), true); return false; }
+        stored = dir;
     } else if (key == QLatin1String("audioDevice")) {
         stored = value.toString();
     } else if (key == QLatin1String("sliderKeyStep")) {
@@ -8700,6 +8798,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // 设置 → 监控软件兼容; read by main.cpp before Qt starts.
         const QString v = value.toString();
         if (v != QLatin1String("auto") && v != QLatin1String("off")) return false;
+        stored = v;
+    } else if (key == QLatin1String("uiRenderer")) {
+        // 设置 → 界面绘制 (veyra/ui/InterfaceRenderer.h); read by main.cpp before Qt starts.
+        const QString v = value.toString();
+        if (v != QLatin1String("software") && v != QLatin1String("gpu")) return false;
         stored = v;
     } else if (key == QLatin1String("gpuPriority")) {
         const QString v=value.toString();
@@ -8971,6 +9074,7 @@ void QmlPlayerBridge::resetShortcuts() {
 }
 bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->property("veyraObsGameCapture").toBool(); }
 bool QmlPlayerBridge::overlayCompatActive() const { return qApp && qApp->property("veyraOverlayCompat").toBool(); }
+bool QmlPlayerBridge::softwareUiActive() const { return qApp && qApp->property("veyraSoftwareUi").toBool(); }
 bool QmlPlayerBridge::rivaTunerRunning() const { return gfx::rivaTunerRunning(); }
 bool QmlPlayerBridge::presentationOverlayRunning() const {
     return gfx::rivaTunerRunning() || gfx::nvidiaOverlayRunning() || gfx::gamePPRunning() || gfx::douyinLiveCompanionRunning();
@@ -9119,6 +9223,57 @@ void QmlPlayerBridge::openLogFolder() {
 }
 void QmlPlayerBridge::openDataFolder() {
     if (!QDesktopServices::openUrl(QUrl::fromLocalFile(dataDirectory()))) emit notice(tr("无法打开数据目录"), true);
+}
+
+// --- live recording of the processed picture --------------------------------
+// The engine owns the encoder and the file; this side only starts, stops and
+// shows the state. The 3 second countdown is an interface animation and runs
+// before the request is sent.
+QString QmlPlayerBridge::recordingDirectory() const {
+    const QString chosen = impl_->prefString("recordDir");
+    if (!chosen.isEmpty()) return chosen;
+    const QString videos = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+    return QDir(videos.isEmpty() ? QDir::homePath() : videos).filePath(QStringLiteral("Veyra"));
+}
+// 0 = automatic from the picture size and frame rate (LiveRecorder).
+int QmlPlayerBridge::recordingBitrateMbps() const { return std::clamp(impl_->prefInt("recordBitrateMbps", 0), 0, 400); }
+int QmlPlayerBridge::recordingFpsLimit() const { return std::clamp(impl_->prefInt("recordFps", 0), 0, 240); }
+bool QmlPlayerBridge::recordingHevc() const { return impl_->prefBool("recordHevc", false); }
+bool QmlPlayerBridge::recordingAudio() const { return impl_->prefBool("recordAudio", true); }
+bool QmlPlayerBridge::recording() const { return impl_->recordingState.value("active").toBool(); }
+QVariantMap QmlPlayerBridge::recordingState() const { return impl_->recordingState; }
+
+void QmlPlayerBridge::startRecording() {
+    if (recording()) { emit notice(tr("录制已在进行中"), true); return; }
+    if (!hasSource()) { emit notice(tr("没有正在播放的画面，无法录制"), true); return; }
+    engine::RecordingSettings options;
+    options.directory = wideOf(recordingDirectory());
+    options.bitrateMbps = uint32_t(recordingBitrateMbps());
+    options.hevc = recordingHevc();
+    options.fpsLimit = uint32_t(std::max(0, recordingFpsLimit()));
+    options.audio = recordingAudio();
+    std::wstring error;
+    if (!impl_->engine.requestRecording(options, error)) { emit notice(uiText(error), true); return; }
+    // Shown at once; the poll fills in the file and the counters.
+    impl_->recordingState["active"] = true;
+    impl_->recordingState["failed"] = false;
+    emit recordingChanged();
+}
+void QmlPlayerBridge::stopRecording() {
+    if (!recording()) return;
+    impl_->engine.stopRecording();
+    impl_->recordingState["active"] = false;
+    emit recordingChanged();
+}
+void QmlPlayerBridge::toggleRecording() { if (recording()) stopRecording(); else startRecording(); }
+void QmlPlayerBridge::chooseRecordingDirectory() {
+    const QString dir = QFileDialog::getExistingDirectory(nullptr, tr("选择录制保存位置"), recordingDirectory());
+    if (!dir.isEmpty()) setPreference(QStringLiteral("recordDir"), dir);
+}
+void QmlPlayerBridge::openRecordingDirectory() {
+    const QString dir = recordingDirectory();
+    QDir().mkpath(dir);
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(dir))) emit notice(tr("无法打开目录：%1").arg(dir), true);
 }
 
 void QmlPlayerBridge::chooseExportPath() {
@@ -10011,20 +10166,36 @@ void QmlPlayerBridge::updateRunStatus() {
         const auto sync=i.presentation.display==engine::DisplaySync::Vsync?tr("垂直同步"):tr("自动显示同步");
         options<<((refresh>0)?tr("%1 · 屏幕 %2 Hz").arg(sync).arg(refresh,0,'f',1):sync);
     }
-    // Variable refresh (NVIDIA G-SYNC / G-SYNC Compatible): the presenting
-    // monitor while playing, otherwise the main window's monitor (NVAPI,
-    // at most every 2 s). The driver setting is the user's; the 可变刷新
-    // switch decides how Veyra presents when it is possible.
-    int vrrLevel=int(s.displayVrr);
-    if(!s.running){
-        const auto now=std::chrono::steady_clock::now();
-        if(i.idleVrrQuery==std::chrono::steady_clock::time_point{}||now-i.idleVrrQuery>=std::chrono::seconds(2)){
-            HWND host=owner;
-            if(!host)if(auto* window=QGuiApplication::focusWindow())host=reinterpret_cast<HWND>(window->winId());
-            if(host){i.idleVrr=gfx::queryVrr(host);i.idleVrrQuery=now;}
+    // Variable refresh (NVIDIA G-SYNC / G-SYNC Compatible), Windows HDR and the
+    // refresh rate: the presenting monitor while playing, otherwise the main
+    // window's monitor. They come from the engine's DisplayStateService,
+    // queried in the background on events only (startup, another monitor,
+    // WM_DISPLAYCHANGE, the switch turned on, 刷新显示器状态), never on a timer.
+    // The driver and Windows settings are the user's; the 可变刷新 switch decides
+    // how Veyra presents when it is possible.
+    auto& displays=i.engine.displayStates();
+    if(i.displayChanged){i.displayChanged=false;displays.invalidate("display-change");}
+    HWND host=s.running&&i.videoWindow?i.videoWindow:owner;
+    if(!host)if(auto* window=QGuiApplication::focusWindow())host=reinterpret_cast<HWND>(window->winId());
+    // request() starts a query only when this monitor's state is stale or
+    // missing (the presenter asks for the same monitor while playing).
+    if(host)displays.request(host,i.displayRecheckPending?"manual":"ui");
+    const auto display=host?displays.state(displays.monitorOf(host)):std::nullopt;
+    const int vrrLevel=s.running?int(s.displayVrr):display?int(gfx::vrrLevel(display->vrr)):0;
+    const int hdr=display&&display->color.hdr?int(*display->color.hdr):-1;
+    const double refreshHz=display?display->refreshHz:0;
+    QString recheckNotice;bool recheckFailed=false;
+    if(i.displayRecheckPending){
+        // Answered once the shown monitor has a state of the re-check's generation.
+        if(display&&display->generation>=i.displayRecheckGeneration){
+            i.displayRecheckPending=false;
+            recheckNotice=tr("已刷新显示器状态：系统 HDR %1 · 可变刷新 %2")
+                .arg(hdr>0?tr("开"):hdr==0?tr("关"):tr("未知"),vrrSummaryText(int(gfx::vrrLevel(display->vrr))));
+        }else if(std::chrono::steady_clock::now()-i.displayRecheckSince>std::chrono::seconds(5)){
+            i.displayRecheckPending=false;recheckNotice=tr("刷新显示器状态没有完成，请稍后再试");recheckFailed=true;
         }
-        vrrLevel=int(gfx::vrrLevel(i.idleVrr));
     }
+    const bool displayChecking=i.displayRecheckPending||displays.busy();
     if(i.presentation.variableRefresh){
         if(vrrLevel>=4)options<<tr("可变刷新 · 生效中");
         else if(vrrLevel==3)options<<tr("可变刷新 · 等待驱动确认");
@@ -10123,10 +10294,13 @@ void QmlPlayerBridge::updateRunStatus() {
     const double gpu = i.gpuUtil.load();
     const double target=active&&f.rateWindowReady&&rate.targetFps>0?rate.targetFps:-1;
     const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05 ||
-                         fgHint != i.fgDisplayHint || vrrLevel != i.vrrState;
+                         fgHint != i.fgDisplayHint || vrrLevel != i.vrrState || displayChecking != i.displayChecking ||
+                         hdr != i.displayHdr || std::abs(refreshHz - i.displayRefreshHz) > .01;
     i.runStatus = status; i.runLevel = level; i.runDetail = text; i.gpuPublished = gpu;
-    i.runOptions=options;i.effectiveOutputFps=target;i.fgDisplayHint=fgHint;i.vrrState=vrrLevel;
+    i.runOptions=options;i.effectiveOutputFps=target;i.fgDisplayHint=fgHint;i.vrrState=vrrLevel;i.displayChecking=displayChecking;
+    i.displayHdr=hdr;i.displayRefreshHz=refreshHz;
     if (changed) emit perfChanged();
+    if (!recheckNotice.isEmpty()) emit notice(recheckNotice, recheckFailed);
 }
 
 // --- NR protection regions drawn on the picture (#8) ------------------------
@@ -10358,13 +10532,13 @@ void QmlPlayerBridge::setPresentationFullscreen(bool value) {
 }
 double QmlPlayerBridge::previewAspect() const {
     const int mode=impl_->screenFillActive?2:impl_->aspectMode;
-    if(mode==4)return 16.0/9;if(mode==5)return 4.0/3;if(mode==6)return 21.0/9;
+    auto view=impl_->engine.previewView();
+    view.mode=mode;
+    view.rotationDegrees=impl_->snapshot.sourceRotationDegrees;
+    view.displayAspect=impl_->snapshot.sourceDisplayAspect;
     const auto e=impl_->snapshot.metrics.resolution.output;
-    if(mode==1&&e.height){
-        engine::PreviewView view;view.mode=1;view.rotationDegrees=impl_->snapshot.sourceRotationDegrees;
-        return view.aspect(float(e.width),float(e.height));
-    }
-    return sourceAspect();
+    if(mode==1&&e.height)return view.aspect(float(e.width),float(e.height));
+    return view.aspect(float(impl_->snapshot.sourceWidth),float(impl_->snapshot.sourceHeight));
 }
 void QmlPlayerBridge::setDisplaySync(int value) {
     if (value < 0 || value > 2 || int(impl_->presentation.display) == value) return;
@@ -10375,14 +10549,40 @@ bool QmlPlayerBridge::variableRefresh() const { return impl_->presentation.varia
 void QmlPlayerBridge::setVariableRefresh(bool value) {
     if (impl_->presentation.variableRefresh == value) return;
     impl_->presentation.variableRefresh = value;
+    // Turning it on reads the monitor again: the driver setting may have changed.
+    if (value) impl_->engine.displayStates().invalidate("vrr-switch-on");
     applyPresentation();
 }
 int QmlPlayerBridge::vrrState() const { return impl_->vrrState; }
-QString QmlPlayerBridge::vrrHint() const {
+int QmlPlayerBridge::displayHdr() const { return impl_->displayHdr; }
+double QmlPlayerBridge::displayRefreshHz() const { return impl_->displayRefreshHz; }
+bool QmlPlayerBridge::displayChecking() const { return impl_->displayChecking; }
+void QmlPlayerBridge::recheckDisplay() {
+    // Every stored display state becomes stale; the next status update (or the
+    // presenter's next loop) queries the shown monitor in the background.
+    auto& i = *impl_;
+    i.displayRecheckGeneration = i.engine.displayStates().invalidate("manual");
+    i.displayRecheckPending = true;
+    i.displayRecheckSince = std::chrono::steady_clock::now();
+    if (!i.displayChecking) { i.displayChecking = true; emit perfChanged(); }
+}
+QString QmlPlayerBridge::vrrHint() const { return vrrHintText(impl_->vrrState); }
+QString QmlPlayerBridge::vrrSummary() const { return vrrSummaryText(impl_->vrrState); }
+// The 信号 card's short form of vrrHintText.
+QString QmlPlayerBridge::vrrSummaryText(int level) const {
+    switch (level) {
+    case 0: return tr("无法检测");
+    case 1: return tr("不支持");
+    case 2: return tr("当前不可用");
+    case 3: return impl_->presentation.variableRefresh && impl_->snapshot.running ? tr("已请求") : tr("可用");
+    default: return tr("生效中");
+    }
+}
+QString QmlPlayerBridge::vrrHintText(int level) const {
     // The 可变刷新 switch is available (not grey) from level 2: the monitor
     // can do VRR even if the driver setting is still off.
     const bool on = impl_->presentation.variableRefresh, running = impl_->snapshot.running;
-    switch (impl_->vrrState) {
+    switch (level) {
     case 0: return tr("无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）");
     case 1: return tr("当前屏幕不支持可变刷新");
     case 2: return tr("屏幕支持可变刷新，但当前显示模式不可用；请检查连接、刷新率及驱动设置");

@@ -26,6 +26,8 @@
 #include "veyra/media/NetworkSettings.h"
 #include "veyra/sink/VideoEncoder.h"
 #include "veyra/engine/ExportOptions.h"
+#include "veyra/engine/LiveRecorder.h"
+#include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
@@ -79,6 +81,9 @@ struct PlayerSnapshot {
     // Known injected components loaded when the growth was seen (gfx::riskyInjections).
     std::wstring vramInjected;
     std::wstring status=L"请打开视频或图片";
+    // Set only after the encoder has finished. The actual extension can differ
+    // from the request (HDR screenshots are JXR); no UI-thread file polling.
+    std::wstring savedFramePath;
     EnhancementSettings desired,applied;bool applying=false;
     bool nrActive=false,srActive=false,fgActive=false;
     bool nrAutoActive=false;
@@ -259,7 +264,8 @@ public:
     bool setPlaybackRate(double rate);
     void setFullscreenMemoryProtection(bool enabled);
     void observeHdrCoverage(bool on){hdrCoverageObserved_=on;}
-    void previewView(PreviewView view){if(!std::isfinite(view.zoom)||!std::isfinite(view.centerX)||!std::isfinite(view.centerY)||!std::isfinite(view.displayAspect)||view.displayAspect<0||view.mode<0||view.mode>6)return;std::lock_guard lock(mutex_);view.zoom=std::clamp(view.zoom,.05f,64.0f);if(view.displayAspect==0)view.displayAspect=previewView_.displayAspect;view.rotationDegrees=previewView_.rotationDegrees;previewView_=view;}
+    void previewView(PreviewView view){if(!std::isfinite(view.zoom)||!std::isfinite(view.centerX)||!std::isfinite(view.centerY)||!std::isfinite(view.displayAspect)||view.displayAspect<0||view.mode<0||view.mode>6)return;std::lock_guard lock(mutex_);view.zoom=std::clamp(view.zoom,.05f,64.0f);if(view.displayAspect==0)view.displayAspect=previewView_.displayAspect;view.rotationDegrees=previewView_.rotationDegrees;view.userQuarterTurns=previewView_.userQuarterTurns;previewView_=view;}
+    bool rotatePreviewClockwise(uint64_t session){std::lock_guard lock(mutex_);if(session!=snapshot_.sessionId||(!snapshot_.running&&!snapshot_.image))return false;previewView_.rotateClockwise();return true;}
     PreviewView previewView()const{std::lock_guard lock(mutex_);return previewView_;}
     void setVolume(float gain,bool mute);
     bool selectAudioTrack(uint64_t sessionId,int streamIndex);
@@ -267,6 +273,15 @@ public:
     void saveFrame(const std::wstring& path);
     void startExport(const std::wstring& input,const std::wstring& output,PlayerOptions,bool hevc);
     PlayerSnapshot snapshot()const;
+    // Live recording of the processed picture and the played sound
+    // (LiveRecorder.h). Any thread; the file opens with the next presented
+    // frame and is finished in the background.
+    bool requestRecording(const RecordingSettings& options,std::wstring& error);
+    void stopRecording();
+    RecordingStatus recordingSnapshot()const;
+    // Refresh/VRR state of monitors, shared by every session's presenter and
+    // the UI; queried in the background on events only. Any thread.
+    DisplayStateService& displayStates(){return displayStates_;}
 private:
     void run(HWND,std::wstring,PlayerOptions,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest={},std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest={},std::shared_ptr<source::XboxConnectDesc> xboxRequest={});
     void runLargeImage(HWND,const sink::RgbaImage&,PlayerOptions,gfx::D3D12DeviceContext&,gfx::CommandSlotRing&);
@@ -299,6 +314,11 @@ private:
     std::shared_ptr<source::XboxSessionSource> activeXbox_;
     PreviewView previewView_;
     std::wstring savePath_;
+    // Live recorder: every session's presenter records into it; it owns its
+    // encoder and writer threads. Created before the engine thread starts.
+    std::unique_ptr<LiveRecorder> recorder_=std::make_unique<LiveRecorder>();
+    // Declared before worker_: it outlives the engine thread's presenters.
+    DisplayStateService displayStates_;
     std::thread worker_;
     std::unique_ptr<PreviewGpuSession> prewarmed_; // engine dispatcher only
     std::atomic<bool> prewarmEnabled_{false}; // off until the saved preference enables it (default off since 2026-10-05)

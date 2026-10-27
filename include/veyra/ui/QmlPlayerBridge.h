@@ -289,6 +289,15 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString uiLanguage READ uiLanguage NOTIFY preferencesChanged)
     Q_PROPERTY(QString screenshotDirectory READ screenshotDirectory NOTIFY preferencesChanged)
     Q_PROPERTY(QString lastScreenshot READ lastScreenshot NOTIFY preferencesChanged)
+    // Live recording of the processed picture: the engine owns the encoder and
+    // the file, the interface shows the state and starts or stops it.
+    Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(QVariantMap recordingState READ recordingState NOTIFY recordingChanged)
+    Q_PROPERTY(QString recordingDirectory READ recordingDirectory NOTIFY preferencesChanged)
+    Q_PROPERTY(int recordingBitrateMbps READ recordingBitrateMbps NOTIFY preferencesChanged)
+    Q_PROPERTY(int recordingFpsLimit READ recordingFpsLimit NOTIFY preferencesChanged)
+    Q_PROPERTY(bool recordingHevc READ recordingHevc NOTIFY preferencesChanged)
+    Q_PROPERTY(bool recordingAudio READ recordingAudio NOTIFY preferencesChanged)
     Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
     // Rebindable shortcuts: action -> key sequence text (defaults merged in).
     Q_PROPERTY(QVariantMap shortcuts READ shortcuts NOTIFY preferencesChanged)
@@ -298,6 +307,9 @@ class QmlPlayerBridge : public QObject {
     // This run draws the interface in software because RivaTuner (RTSS) was running at start
     // (设置 → 监控软件兼容, main.cpp): its OSD then sits on the video only.
     Q_PROPERTY(bool overlayCompatActive READ overlayCompatActive CONSTANT)
+    // This run draws the interface in software: 设置 → 界面绘制 (software unless GPU is
+    // chosen) or one of the compatibility rules above (veyra/ui/InterfaceRenderer.h).
+    Q_PROPERTY(bool softwareUiActive READ softwareUiActive CONSTANT)
     // Audio output (P4-d): the active WASAPI render endpoints by device id, the
     // stored choice (preferences.audioDevice, empty = system default) and what
     // the renderer actually opened, including a fallback to the default.
@@ -340,6 +352,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int sourceHeight READ sourceHeight NOTIFY snapshotChanged)
     Q_PROPERTY(double sourceFps READ sourceFps NOTIFY snapshotChanged)
     Q_PROPERTY(int sourceRotation READ sourceRotation NOTIFY snapshotChanged)
+    Q_PROPERTY(int previewRotation READ previewRotation NOTIFY compareChanged)
     // The film's display aspect, so the window can snap to it in cinema mode
     // exactly as the prototype's fitAspect() does. 0 when nothing is open.
     Q_PROPERTY(double sourceAspect READ sourceAspect NOTIFY snapshotChanged)
@@ -502,6 +515,15 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool variableRefresh READ variableRefresh WRITE setVariableRefresh NOTIFY presentationChanged)
     Q_PROPERTY(int vrrState READ vrrState NOTIFY perfChanged)
     Q_PROPERTY(QString vrrHint READ vrrHint NOTIFY perfChanged)
+    // Display state of the shown monitor for the 信号 card: Windows HDR (-1
+    // unknown, 0 off, 1 on), refresh rate (0 unknown) and a short VRR summary.
+    // Everything is read on events only (startup, another monitor, a display
+    // change, the switch turned on); 刷新显示器状态 (recheckDisplay) asks the
+    // driver again, and displayChecking is true until that answer arrives.
+    Q_PROPERTY(int displayHdr READ displayHdr NOTIFY perfChanged)
+    Q_PROPERTY(double displayRefreshHz READ displayRefreshHz NOTIFY perfChanged)
+    Q_PROPERTY(QString vrrSummary READ vrrSummary NOTIFY perfChanged)
+    Q_PROPERTY(bool displayChecking READ displayChecking NOTIFY perfChanged)
     Q_PROPERTY(int outputRateMode READ outputRateMode WRITE setOutputRateMode NOTIFY presentationChanged)
     Q_PROPERTY(double outputCustomFps READ outputCustomFps WRITE setOutputCustomFps NOTIFY presentationChanged)
     Q_PROPERTY(bool presentationOwned READ presentationOwned NOTIFY snapshotChanged)
@@ -1003,6 +1025,7 @@ public:
     int uiScaleActive() const;
     bool obsGameCaptureActive() const;
     bool overlayCompatActive() const;
+    bool softwareUiActive() const;
     // RivaTuner Statistics Server is running now (gfx::rivaTunerRunning).
     Q_INVOKABLE bool rivaTunerRunning() const;
     // An overlay that 监控软件兼容 reacts to is running now: RTSS, NVIDIA's in-game overlay
@@ -1052,6 +1075,8 @@ public:
     int sourceHeight() const;
     double sourceFps() const;
     int sourceRotation() const;
+    int previewRotation() const;
+    Q_INVOKABLE void rotatePictureClockwise();
     double sourceAspect() const;
     double previewAspect() const;
 
@@ -1276,6 +1301,11 @@ public:
     void setVariableRefresh(bool value);
     int vrrState() const;
     QString vrrHint() const;
+    int displayHdr() const;
+    double displayRefreshHz() const;
+    QString vrrSummary() const;
+    bool displayChecking() const;
+    Q_INVOKABLE void recheckDisplay();
     QString fgDisplayHint() const;
     Q_INVOKABLE void setPresentationFullscreen(bool value);
     bool fullscreenMemorySafe() const;
@@ -1483,6 +1513,20 @@ public:
     Q_INVOKABLE void setWindowMask(QObject* window, const QRectF& rect);
     Q_INVOKABLE void stepFrame(int direction);
     Q_INVOKABLE void takeScreenshot();
+    // Recording: the 3 second countdown lives in the interface, the engine
+    // only opens the file when the request reaches it.
+    Q_INVOKABLE void startRecording();
+    Q_INVOKABLE void stopRecording();
+    Q_INVOKABLE void toggleRecording();
+    Q_INVOKABLE void chooseRecordingDirectory();
+    Q_INVOKABLE void openRecordingDirectory();
+    bool recording() const;
+    QVariantMap recordingState() const;
+    QString recordingDirectory() const;
+    int recordingBitrateMbps() const;
+    int recordingFpsLimit() const;
+    bool recordingHevc() const;
+    bool recordingAudio() const;
     Q_INVOKABLE void chooseExportPath();
     // The export target without the dialog (the dialog's result, or --export-out in a test).
     void setExportPath(const QString& path);
@@ -1552,6 +1596,7 @@ signals:
     void subtitlesChanged();
     void subtitleTextChanged();
     void preferencesChanged();
+    void recordingChanged();
     void colourLibraryChanged();
     // Emitted only when the underlying snapshot actually changed, so QML
     // bindings do not re-evaluate 60 times a second for nothing.
@@ -1652,6 +1697,9 @@ private:
     void startGpuSampler();
     void requestApplicationRestart(bool overlayCompatibility);
     void updateRunStatus();
+    // vrrHint's text for a VRR level (the 重新检测 result notice uses it too).
+    QString vrrHintText(int level) const;
+    QString vrrSummaryText(int level) const;
     void applyPresentation();
     void applyAspect(bool force);
     // Live sources started from the start page: switch to 极简 first, show the

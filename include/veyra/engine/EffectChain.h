@@ -209,7 +209,7 @@ ChainValidation compileChainExecutionPlan(const EffectChain&, const ChainExecuti
 // Only options belonging to the effect chain travel when the mode changes.
 struct ChainGlobalSettings {
     pipeline::SrTarget srTarget = pipeline::SrTarget::Uhd4K;
-    uint32_t videoSrQuality = 0;
+    uint32_t videoSrQuality = kDefaultVideoSrQuality;
     uint32_t dlssSrModel = 0;   // EnhancementSettings::dlssSrModel
     FrameGenerationBackend fgBackend = FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;

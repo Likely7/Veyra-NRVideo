@@ -1,5 +1,22 @@
 # WORKLOG
 
+## 2026-10-20 实时录制（处理后画面）功能
+
+用户要求录制处理后的画面、设置页可设位置与码率、专业模式截图按钮旁加带动画与 3 秒倒计时的录制按钮，并给出新测试版实测。
+
+分支 `codex/screen-recording-20261020`（起点 nrvideo/main `4ae285b`，E 盘 worktree `E:/项目/Veyra/worktrees/screen-recording-20261020`，存档标签 `checkpoint/pre-screen-recording-20261020`），提交 `2c80233` 功能、`99bfc43` 编译错误修正、`65fe7ef` 界面布局修正。方案 `docs/SCREEN_RECORDING_PLAN_2026-10-20.md`，执行记录 `docs/SCREEN_RECORDING_EXECUTION_2026-10-20.md`。
+
+实现：新增 `LiveRecorder`（`include/veyra/engine/LiveRecorder.h`、`src/engine/LiveRecorder.cpp`），复用产品导出编码器（N 卡 NVENC / 其它 Media Foundation MFT）对**实时增强图**编码，容器写入在独立线程并用有界队列（240 包、高水位 160），磁盘慢只丢帧计数不卡播放；`EncoderConfig` 增加可配置排空超时（录制 2 秒，导出保持 10 秒）。`EngineController` 负责请求/快照并在呈现点编码呈现的那一帧；增强设置变更重建图时先收尾文件。`QmlPlayerBridge` 提供录制属性与方法与偏好项（位置、码率 8/16/20/40/80、帧率、H.264/HEVC）。QML：专业模式截图按钮旁的录制按钮（红点呼吸 + 3 秒倒计时 + 数字弹跳）、设置页录制分区；i18n 新增 30 条四语文案（2637 条，缺译 0）。
+
+构建：沿用 2.1.0 正式包的固定依赖与 CMake 选项，`build/screen-recording-20261020`，-j2。首轮全量 548 步在 431/548 失败，三处编译错误（`Impl` 内成员误用 `p.` 前缀、引擎与 LiveRecorder 的类型名不一致、`OnExit` 初始化器少一个右花括号）均已修正，增量重建 44.8 秒通过 5 个目标。
+
+回归：QML 冒烟 105 passed / 0 failed（真实实例化改过的 ProPage）、QML 数据迁移 PASS、UI i18n 0 failures、UI 契约 PASS；`i18n/extract.py --check` 无缺译无占位符问题。**冷启动抓到两处真实 QML 错误**：录制控件在头部 RowLayout 里用了 anchors（改为 Layout.alignment），`easing.type: Theme.spring` 把线性缓动当枚举（改为 `easing: Theme.spring`）；修正后重新打包，冷启动日志无 QML 错误。
+
+功能验证：`scripts/acceptance/screen-recording-control.py` 用生产 bridge 打开合成测试片并真实录制 5.2 秒，得到 160 帧、丢帧 0 的 h264 1280x720 MP4（9,966,597 字节，ffprobe 时长 5.249 秒），界面通知“录制已结束：…”。
+
+测试包：`E:/项目/Veyra/test-packages/screen-recording-20261020/Veyra-2.1.0-rec-NVIDIA-win64-portable.zip`（697,851,293 字节，SHA256 `5809345641c5df2dd07e1a1427992c4e0f23d6c3fd0baad8523587cd767f8fbf`），运行组件与 2.1.0-test 原样相同，只换程序本体与 QML，manifest 按 1734 个文件重新审计，从压缩包解压冷启动退出码 0。
+
+未改运行库/模型/驱动与用户真实配置，未合并 main、未推送、未发布、未改 GitHub 已发布 Release 正文或标签；未关机。画质观感、长时录制、补帧帧是否进文件、采集卡与串流场景待用户实测。
 ## 2026-10-19 2.1.0 整合与测试包（Claude）
 
 按用户要求在 `claude/release-2.1.0-20261019` 合并 Codex 全屏输入（含 AMD NR 0.44）、Claude #48、美颜（含 E0/AA）与赞助页，版本 2.1.0。冲突只在 AGENTS/WORKLOG/翻译目录；补上 #48 40 秒超时提示的三语翻译。只读审查 Codex 三项修复，无阻塞问题（AMD 默认改用 Small 需写进发布说明）。43 目标构建 153 秒通过；58 组回归除 image-dimension 既有 NR 分块环境问题外全部通过（两组脚本问题修正后重跑通过）。详见 docs/RELEASE_2.1.0_TEST_2026-10-19.md、docs/BUILD_2.1.0_TEST.md。
@@ -9846,3 +9863,269 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 用户提供“群聊：Veyra Dlss5 交流 7.png”并要求替换 GitHub 已满群二维码。从最新 nrvideo/main 7ec143c 在 codex/community-qr7-20261020 修改；原图原样复制 docs/images/community/group-7-20261020.png，SHA256 1cf67beb48815bd53999bf17252e74de4bb617c6c47846252ff89a0e417ade84。中英 README、RELEASE_SUPPORT 和 2.1.0 更新说明同步新图、7群标记及图片注明的 2026-10-27 前有效期。微信赞助图、width220、Discord、Ko-fi、知识库和其他内容保留。
 
 工具命令：git fetch nrvideo main；bundled Python -X utf8 -B E:/项目/Veyra/tmp/community-qr7-20261020/update.py；git diff --check。Release v2.1.0 / v2.1.0-sources 修改前完整 JSON 与精确替换后的正文保存在 E:/项目/Veyra/reports/community-qr7-20261020；提交后普通 push HEAD:main，再 gh release edit --notes-file 更新两页正文。只改群信息，不重建/打包、不移动发布标签、不修改资产；远端正文、图片实际字节、赞助链接及资产身份的核验结果记该目录 final.json。
+
+
+## 2026-10-21 Claude 中断任务接手（Codex；目录沿用20261022标识）
+
+用户要求读取Claude两条对话后“把后续工作接上，然后完成他”，后明确“Lecram，先放着，不弄了”。复用E盘screen-recording-fix-20261022，切codex/claude-handoff-20261022。原20个未提交文件SHA/patch/ZIP在archives/codex-claude-handoff-20261022；检查点5614e8d及标签保存未经验证的原实现；AMD修复1b94bae移入88dbc26。旧桌面/其他树/真实配置/运行库/驱动不改，无子Agent/main合并/push/发布。
+
+20a30a6补录制队列字节数发布竞态、record/submitted间停止、GPU在途资源保活、音轨跨线程状态、分段上限、MF启动/收尾等待与退出时工作线程保活，保存中禁用按钮及取消失源倒计时，补36条三语言翻译。保留Claude呈现端捕获与工作线程编码/封装，NVENC不回读像素；MF仍为工作线程NV12回读，不称零拷贝。Lecram只保留已读取资料，后续不继续。
+
+命令：python -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-claude-handoff-20261022 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.0-rec veyra_qml_ui veyra_qml_quick_tests veyra_ui_contract_tests veyra_ui_i18n_tests veyra_repair_contract_tests（-j2，最终增量2秒）；scripts/i18n/extract.py --check（2659条零缺译/占位符问题）；scripts/acceptance/amd-sr-handoff.py after（真实核显开4K、关1080）；scripts/acceptance/recording-handoff.py的long/button/settings/resize-fsr/pause/fg/mf/amd/limited/hevc/silent/muted/rapid/stop/bad-directory/real4k --media 4k等独立真实进程测试。日志、独立profile、输出全部E:/项目/Veyra/{logs,tests,tmp,reports}/codex-claude-handoff-20261022；复用构建E:/项目/Veyra/build/claude-screen-recording-20261022。
+
+实际回归：Repair272 checks0fail，UI contract通过，UI i18n0fail，QtQuick105pass0fail，最后regression-204301。约62秒实录3702帧，AAC+H264，闪光/蜂鸣61组，偏移中位-1.3ms（-2.4至-0.2ms）；真实4K素材录3840x2160/248帧、有AAC；按钮倒计时/取消/再开始/停止用真实MouseArea信号验证（不冒充原生鼠标坐标测试）。生成帧录制/暂停/分段/连续启停/错误路径详情和失败证据见docs/CLAUDE_HANDOFF_REPORT_2026-10-22.md。
+
+失败真实保留：DLSS SR CreateFeature在新缓存/无预热环境卡住，录制与不录制均复现，未改2.1.0 EXE也复现（rec-released-resize-204431，PTX JIT堆栈）；不能宣称DLSS初始化已修好或永久死锁。首版限帧夹具单帧闪光被抽帧错过，改50ms后通过；首版错误目录夹具忽略setPreference拒绝，实际默认录制文件已精确移回E盘测试目录，原报告标失败，修正为无效私有profile后验证明确拒绝且无输出。仅忽略Qt剪贴板重试这一条无关日志。未做真实采集/主机串流/HDR/其他GPU/长期/光学延迟验收。
+
+本地包按scripts/acceptance/package-recording-handoff.py --zip生成，原2.1.0双GPU供体运行组件/模型/着色器原样SHA审计；准确包/ZIP哈希、源码提交及冷启动回执保存在reports/codex-claude-handoff-20261022。产物目录test-packages/codex-claude-handoff-20261022；正式版本与Release不动。
+
+
+收尾：产品源码26c7212。NVIDIA/AMD两ZIP698122675/501825845bytes、CRC/1736与2289文件SHA/177与246原样运行组件检查通过；GPU及--obs-game-capture明确软件UI的四次冷启动通过。final.json、packages.json、cold-start.json、source.json及DELIVERY.md保存准确路径/SHA/边界。verify-recording-handoff.py加入仓库供复现；源码26c7212.zip核验通过。封包Path.with_suffix导致名称截断已修正后重新封包，失败原件保留。自动审批拒绝清理任务自建解压副本和中间包（blocked by policy），未绕过，cleanup.json记录保留目录；原供体/源码/其他树不受影响。无main合并、push、发布。
+
+
+## 2026-10-23 画面手动旋转（Codex）
+
+用户要求极简/专业模式加90°小按钮并适配UI。从上一轮4eee190干净E盘工作树切codex/picture-rotation-20261023，起点标签checkpoint/pre-picture-rotation-20261023；其它树和旧桌面不改，无Agent/main合并/push/发布。范围见docs/PICTURE_ROTATION_PLAN_2026-10-23.md，结果见docs/PICTURE_ROTATION_REPORT_2026-10-23.md。
+
+PreviewView会话级userQuarterTurns叠加容器角度，复用呈现/鼠标/字幕/XeSS旋转；新增共享RotateButton（极简/专业/全屏）、桥接动作和四语言。极简高度反馈改用旋转后比例，播放条左区可缩小；旋转重置缩放/平移和未完成选区，切源清零、模式/暂停/seek/全屏保留。旋转非原位的游戏预览沿用已有Scaled策略避免错位鼠标穿透。截图/录制/导出保持原方向，未改处理纹理。
+
+命令：build-recording-handoff.py --task codex-picture-rotation-20261023 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.0-rec（6目标，-j2，45.4s通过）；scripts/i18n/extract.py --check（2660，零缺译）；picture-rotation.py --prepare --contracts / --case wide / metadata / portrait --language zh-TW / wide --software --language en / record --language ja / wide --amd --scale 1.5 / wide --amd --software-decode --scale 1.5。输出全E:/项目/Veyra/{logs,tests,tmp,reports,test-packages,archives}/codex-picture-rotation-20261023，构建沿用同源build/claude-screen-recording-20261022，私有profile，不动真实配置/运行组件/模型/驱动。
+
+UI契约384既有布局+112新增方向/模式状态；repair272 checks0fail，i18n0fail，QtQuick109pass0fail；D3D12像素23例通过。真实横竖/元数据/软件界面/四语言、两按钮、暂停/seek/全屏往返/切源通过；日文旋转录制NVENC H264 1380帧正常收尾。原录制统计误读缺失nb_frames判失败，保留原report后以ffprobe -count_frames独立复核通过（recording-recheck.json）；首个FFmpeg rotate夹具未写矩阵也保留，修正为本机帮助的-display_rotation后通过。
+
+AMD150%硬解seek出现send_packet -22而自动回退软解，严格门槛判失败；未改动rec2原EXE/原QML同配置15秒对照复现（baseline-amd-065446），不归因旋转也不声称已修。明确软解的同卡150%旋转全回归通过（wide-amd-swdecode-zh-CN-065527）。其它GPU/真实采集/主机串流/HDR/跨屏/长期/游戏鼠标/光学延迟未验。无SDK/二进制新增Git。
+
+本地封包命令scripts/acceptance/package-picture-rotation.py；两GPU完整目录及ZIP、精确源码/SHA/清单以reports/.../packages.json为准。内部版本沿用2.1.0-rec，外部rot1，不覆盖原rec2供体。收尾逐文件核验和冷启动结果另追加回执。
+
+封包收尾：源码cfe57ff；双ZIP698130355/501833487bytes，目录/ZIP1739/2292文件逐一SHA通过，177/246运行组件/模型/着色器与rec2原样。verify-picture-rotation.py流式核验ZIP后运行相同字节staging，两GPU包各GPU/明确软件UI共4次冷启动通过，全部交付文件未被启动修改。源码cfe57ff.zip CRC/SHA通过；final.json/DELIVERY.md保存准确路径/哈希与失败边界。无额外冷启动解压副本；保留当前可用包、源码、构建及必要测试/失败证据；旧任务目录不动。之后仅文档及验证脚本提交。
+
+
+## 2026-10-23 C/E盘盘点与安全清理（Codex）
+
+用户要求检查C/E空间、列出可删除项并安全清理。所有审计/脚本/证据写E:/项目/Veyra/{tmp,reports}/storage-cleanup-20261023；不改产品代码、驱动、系统分页/休眠和真实配置。盘点约各207万/205万文件，跳过连接点与系统拒绝目录；Windows DirEntry.stat不提供有效inode/nlink，原逻辑扫描去重字段已置空；独立os.stat大文件硬链接审计得到Veyra440.05GiB逻辑/约283.05GiB去重内容上界（小于64KiB文件保守计数），约157GiB是重复路径计数，不能当作可释放空间。
+
+已核验可删：C pip/http-v2和npm/_cacache共19.69GiB，E tests/verify 185个独占副本共13.28GiB，逐个SHA256匹配保留包。C缓存递归删除被自动审批blocked by policy拒绝；另一次E verify单个SHA匹配文件的非递归删除也被拒绝。均未执行，没有其它删除工具或绕过。本轮未删除文件；完整路径/保留副本/SHA见delete-candidates.csv和runtime-duplicates-plan.json。Cleanup-Verified.ps1默认预览，-Execute逐项复核后清白名单，-RestoreTestRuntimes从保留包恢复，已做AST语法检查，Agent未运行删除脚本。
+
+实际执行：Windows compact.exe /C /I /Q /A 对旧日志/原始验收帧、七天前obj/lib/pdb、旧SDK静态库、两天前会话文本、旧SPDX进行标准NTFS无损压缩；只改文件压缩存储，不改逻辑内容/路径，不设目录继承压缩。5914文件前后SHA256一致；按GetCompressedFileSizeW存储字节差去重约释放22.848GiB（C1.995/E20.852），不把其它后台应用释放的空间计入成果。当前free约C82.64/E769.03GiB，可能随后台应用变化。详见compression-summary/results、spdx-compression-results、compact-console.log。
+
+101工作树仍存在；rot1/rec2四个交付ZIP SHA与原回执一致。个人素材/旧电脑/微信/Chrome资料/剪映草稿/下载音乐/Claude会话及VM/模型/SDK保留。可删32.97GiB尚未执行；报告CLEANUP_REPORT.md、FINAL.json、preservation-check.json、policy-rejection.json记录实测、受阻与手动入口。没有merge/push/发布或结束他人进程。
+
+## 2026-10-23 依赖迁移与历史测试/包清理（用户追加授权）
+
+用户明确要求C盘veyra-deps全迁E盘并更新AGENTS；历史测试/非正式包清理，正式包保留2.0.7及以后。按docs/DEPENDENCY_MIGRATION_CLEANUP_PLAN_2026-10-23.md执行，结果docs/DEPENDENCY_MIGRATION_CLEANUP_REPORT_2026-10-23.md。单Agent，不改产品或真实配置/驱动，不合main/push/Release/远端删除，Lecram仍暂停。
+
+C:/veyra-deps149125普通文件、15139684399字节以robocopy /E /COPY:DAT /DCOPY:DAT /XJ /SL复制到E:/项目/Veyra/deps/core，全SHA256目标验证/源size-mtime检查零差异；Qt原是Junction，目标重建到原E:/项目/Veyra/deps/qt，没有复制两份。核验后旧C根改名、建C根兼容Junction、非递归移除旧Qt入口，再删除旧C实体；第一次Target字段字符串误按数组导致守卫停止，核对路径后修正恢复，未丢数据。migration-result.json确认备份已删。共享E:/项目/Veyra/AGENTS.md、deps/DEPENDENCY_ROOTS.json及当前/旧桌面/main三个入口AGENTS有新记录，保留其他源码改动，不批量弄脏101树；C旧路径与E实体samefile四项通过。
+
+GitHub正式API及本地SHA核对保留2.0.7/2.0.8/2.0.9/2.1.0共15资产，正式2.1.0原ZIP核验解出releases/release-2.1.0-20261019/runtime-base/{NVIDIA,AMD}作为唯一活动供体。五个当前验收/封包脚本改引用供体，旋转包显式带录制接手报告；旧test/Bilibili/rec2供体可清。当前rot1双包保留且逐文件/ZIP核验，源码、models/SDK、logs/reports/archives/个人文件不动。
+
+原生Cleanup-History.ps1先预览后-Execute：删除E盘339历史根项（tests218/verify39/test-packages64/releases18），1018901文件路径、337.18GiB逻辑；385连接先非递归unlink，只操作连接本身。硬链接重复不能当空间收益，主删除窗口E盘空闲快照净增加172.56GiB（可能含后台I/O）；最终约C141.33/E923.37GiB空闲。清理小型文本/脚本32396条压成199490970字节ZIP并全SHA验证；GPL依赖对应源按内容留档，73模型副本都匹配保留来源。test-packages只剩当前rot1，verify空，tests只剩迁移回归私有配置；宣传文稿素材保留。此前storage-cleanup旧恢复/删除供体清单被新策略取代，不照旧路径执行。
+
+所有命令/清单/回执位于E:/项目/Veyra/{tmp,reports,archives}/dependency-migration-cleanup-20261023；日志E:/项目/Veyra/logs/codex-dependency-migration-20261023。build-recording-handoff.py同源-j2增量构建1.2s通过；Repair272零失败、UI契约含384布局通过、i18n2660零失败、QtQuick显式-o日志109通过零失败；Quick文本实际Windows编码，UTF8读取失败后按mbcs解析同一通过日志，不把解析失败当测试失败。rot1 NVIDIA/AMD私有配置冷启动各一次通过，启动后全目录SHA不变；脚本AST、qmake6.8.3、兼容路径检查通过。101树/111份清理前脏文件SHA通过（此快照在AGENTS更新后，AGENTS为本轮预期变化）；无其它源码变化。FINAL.json、preservation-check.json、quick-and-cold-start.json记录通过范围；不宣称全量重编译/新硬件验收。
+
+补查C旧源码下两个生成测试构建与out三个旧音频测试ZIP共0.38GiB，102份文本先留证；实际删除调用被自动审批blocked by policy拒绝，未给详细原因，五项仍保留，未换工具/移动绕过。policy-rejection.json与C-supplement-plan.json记实际未执行，Cleanup-C-Remaining.ps1供用户手动审阅、默认预览，仅AST语法检查，Agent未执行。C:/veyra-deps迁移与E盘339项删除已执行成功，此独立受阻不改变其事实。
+
+## 2026-10-24 NR手动内部比例与补帧日志排查
+
+用户要求NR内部分辨率增加手动百分比滑条，并排查E:/App/Veyra-2.1.0-test-NVIDIA-win64-portable/logs偶发调度降档是否来自采集不稳，补帧只诊断不修。从108c010干净树切codex/nr-manual-scale-20261024，标签checkpoint/pre-nr-manual-scale-20261024；按docs/NR_MANUAL_SCALE_PLAN_2026-10-24.md实施，结果NR_MANUAL_SCALE_REPORT_2026-10-24.md及FG_SCHEDULING_LOG_DIAGNOSIS_2026-10-24.md。单Agent，不动旧桌面/其他源码改动/真实配置/驱动/运行组件，不合main/push/Release，Lecram暂停。
+
+ResolutionPlan保留旧0..6档、以具名helper扩展125..200编码25%..100%，Manual200为100%，不添POD字段；每层比例走原sizePolicy参数、校验和预设/会话/导出链。AMD手动比例在既有1080p预算内计算，NVIDIA按该层实际输入；NR先于SR也按实际输入，输出与离线合同不变。QmlPlayerBridge新增计算字段manualSize/sizePercent及严格整数范围校验；NrLayerEditor列表/节点共用条件滑条，25..100、1%步进、松开应用、键盘/输入/重置/绑定保持。VSlider的stepSize默认0不改其他滑条。四语言2664条齐全；未改FG/采集/呈现代码或状态判定。
+
+命令：build-recording-handoff.py --task codex-nr-manual-scale-20261024 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-nr1（9目标-j2）；scripts/i18n/extract.py --check；scripts/acceptance/nr-manual-scale.py / --four-k / --four-k --pixels。构建先增量180s、完整重新配置后36.8s通过；所有临时/TEMP/TMP/私有配置/记录在E:/项目/Veyra/{tmp,tests,logs,reports,archives,test-packages}/nr-manual-scale-20261024，构建日志logs/codex-nr-manual-scale-20261024。
+
+NR模型、EffectChain、PresetLibrary、旧PresetStore、Repair272、UI384布局、i18n合同通过；76比例/纵向/微小尺寸/NR先行/分层/AMD预算/原生导出/磁盘预设会话草稿均验证。QtQuick110pass0fail，鼠标拖动松开只提交一次、步进/输入边界/手动固定切换/重置实测。5070真实1080与4K各25/37/50/75/100、节点75及List50/Node75独立重启恢复通过；每组9次Feature18 Create=0x1、有非零NR GPU计时和连续输出。4K37%实际1420x798、输出3840x2160；真实处理PNG色彩非黑，证据pixel-validation.json。没做RX9000实卡/其他N卡/HDR/真实采集/主机/长期/光学延迟验收，不保证绝无bug。
+
+失败如实保存：初次Quick仍用旧staging测试、旧期望7选项，更新成真实源码后110通过。原生夹具冷启动过早验进度、首次节点无NR节点、复用失败profile遇到同名预设三次判失败；仅修正夹具有界等待/显式添加连接/每轮新私有profile，未放宽模型/错误门槛。成功gpu-091045/restore-091133、gpu-4k-091514/restore-4k-091602；旧失败和原日志均保留。
+
+显式重新配置暴露上一轮依赖迁移遗漏：Chiaki8个子模块Git core.worktree相对路径跨C/E盘；普通兼容访问/增量构建不能暴露Git递归错误。先备份原config，仅改为原C源码子树绝对路径，不动源码/pin/patch，verify-chiaki-stage.py完整子模块及patch校验通过；再次重新配置通过，依赖根清单和共享E盘AGENTS记录修正。build helper加--reconfigure以应用已有构建的新标签。证据dependency-git-path-plan/repair.json、chiaki-stage-verification.log；迁移时149125SHA为当时事实，Git元数据后续有意修正。
+
+用户包EXE SHA5b8a8920与manifest一致，177运行库/模型/着色器只读SHA零差异；用户4日志只读快照/hash留档不进Git。全日志3354准入采样/69拒绝，最新36拒绝中34附近平均回调达标；均值仅约2秒窗口，不排除单帧抖动。旧日志4K60/DLSS6X NR21.3ms+FG9.2ms、预测35.6ms，输入60fps仍预算不足；最新VFG多是输入平均稳定时处理/提交迟到，曾有graphSubmit1053ms停顿。半帧与邮箱覆盖不能当驱动帧率不足，不把软件期限/提交FPS当扫描或端到端延迟。预算/状态文件与用户包源码22f58cf逐字节相同，本轮没修补帧。
+
+交付为EXE/QML/i18n小更新层，复用已有2.1.0 NVIDIA组件，含之前录制/旋转改动；源提交和ZIP哈希见reports/.../update-package.json，不覆盖用户E:/App包。收尾复核、操作文件覆盖范围与测试中间物清理另记回执，保留日志/必要证据和旧完整供体。
+
+收尾：产品f743556，EXE SHA d43a5384be9e840912f260c1995c8c7d18f9a61176f4a9e45acfb3202df60289；Veyra-2.1.0-nr1-NVIDIA-update.zip 9886711字节，SHA14b3e0afcaf4fac569d31ea89737bc2027d40ae4f49248b344b05417c2ab3eaa。83文件CRC/逐SHA通过，79操作文件来自更新、其余1523操作输入与用户原包匹配，0额外运行库；177用户运行身份、4原日志、1739旧rot1清单文件均不变。旧供体manifest含日志及启动状态，非必要操作输入；新测试helper显式过滤这些可变文件，不共享其硬链接，更新包不含用户状态。产品代码未再改，后续只提交该测试工具/文档收尾。
+
+本轮E:/项目/Veyra/tests/nr-manual-scale-20261024/app、media在包验证后尝试原生绝对路径守卫删除，被自动审批blocked by policy拒绝，未提供详细原因；未执行、未用其他工具/移动绕过，两个目录及私有profile/证据保留。reports/.../test-cleanup.json记录受阻，FINAL.json区分已完成更新/诊断与未清理中间物。
+
+## 2026-10-24 补帧调度追加修复与2K60 NV12真采集
+
+用户从仅诊断追加为另开分支修复，后明确用采集卡2K60 NV12测试。97959cc干净树切codex/fg-scheduling-repair-20261024，存档checkpoint/pre-fg-scheduling-repair-20261024，不另复制工作树。计划/报告FG_SCHEDULING_REPAIR_{PLAN,REPORT}_2026-10-24.md。读取当前运行日志时发现Win32文件属性尚显示08:30但真实尾部持续更新，直接快照16:36之后会话，旧程序无需停止。读到NR关闭、输入60、VFG约3ms却反复准入elapsed11–17ms；源码定位processStart后每两秒同步queryVrr/刷新率。独立只读探针8次测得VRR10.5–22ms，刷新查询约0.01–0.16ms。
+
+AsyncDisplayQuery单在途future，owner只wait_for(0)取完成结果，按代号丢弃旧窗口/监视器结果，不捕获presenter/GPU对象，reset不销毁future阻塞播放；异常限频重试，跟随显示器cap/VRR在结果到达后重应用。保留预算/期限/状态/原帧/历史，不改FG算法或运行库。保护六文件做Git换行规范化内容比较相同，首次原始比较CRLF/LF差异失败已记录，未伪装二进制相同。
+
+build-recording-handoff.py --task codex-fg-scheduling-repair-20261024 --root 当前E工作树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-fg1，-j2配置构建50.3秒通过；探针测试小改独立重编2.8秒。应用SHA322960200acbbe39ce5c7f783c4b3df429d9de46a706984bcb318dfadb241a6a。六CPU回归通过：Async10、scheduler127、realtime57、HDR状态、UI384layout、Repair272。Repair首次启动依赖PATH缺FFmpeg报0xC0000135，同源依赖PATH补齐后通过，保留initial receipt。真实文件4K30 VFG2X/4X、FollowDisplay/VRR、暂停、关闭重开通过。
+
+用户原进程自行退出后，经明确授权在独立配置测KUHAIMI G50，NV12 subtype0x3231564E、ConnectDirect无converters、Run2560x1440/60均核对。NR/SR关闭、VFG2X Medium，四例各预热6秒+稳定40秒；同revision累计差计数：transport旧nr1 38.600秒/2316候选/10准入跳过/2生成过期，对照fg1相同38.600秒/2316候选/0/0；60->30旧39.166秒/1175候选/13/0，对照新39.100秒/1173/0/0。平均回调均60，邮箱覆盖0；旧准入采样最大13.188/16.729ms，新0.151/0.210ms，后台VRR仍最高14.602/14.366ms。所有新候选均实际评估与生成提交，没有通过关闭FG或删告警过关。截图在计数结束后抓，2560x1440非黑并已查看。四例均正常停止，没有争抢设备/写用户真实配置/碰PS5，供体运行字节不改。
+
+证据reports/fg-scheduling-repair-20261024，日志logs/fg-scheduling-repair-20261024，原快照archives同任务；private tests同任务一份app+四profile，无新大媒体。构建保留当前同源目录。交付EXE/QML/i18n更新层2.1.0-fg1，需完整2.1.0 NVIDIA底包，含nr1手动比例/此前旋转录制。当前短测不证明其它后端/卡/重NR/HDR/长期/光学延迟，也不修真实GPU超预算。单Agent，无merge/push/Release，Lecram暂停。
+
+## 2026-10-25 社区NR导出尺寸与百分比兼容
+
+用户提供2_EXPORT_NR_PRESET_SIZE_2026-10-25说明/patch，要求研究接入且兼容手动滑条。038beac干净树开codex/export-nr-scale-20261025，checkpoint/pre-export-nr-scale-20261025。附件原样留archives/export-nr-scale-20261025，patch SHA E4D92E28A35DFE64AE309D6B238B1061CBCDF85A1D25EA04A797C9F9F2480598。git apply --check仅GraphDescription/EffectChain因已有手动接点冲突，其余审查接入，保留社区来源于THIRD_PARTY_NOTICES，未把附件当执行授权。
+
+确认freeze/图描述/逐层编译三处强制Native；修复视频NR按每层固定/百分比，输出不变，Auto固定最高1440p（AMD1080p）。exportNrProcessingExtent共享；AMD百分比保留编码并在既有预算内再缩放，避免原patch将手动或非法策略重置1080p；非法仍拒绝。离线flow/base/output与图片完整处理保留，AMD指导预算不放开。ExportJobManager注释/逐层export-nr-layer日志、QML四语说明及对应测试同步。未改ResolutionPlan编码、NGX/flow/shader核心或fg1调度。
+
+build-recording-handoff.py --task codex-export-nr-scale-20261025 --root 当前E工作树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-nre1，首轮65.5秒，定向测试19.8秒、GPU探针21.5秒、最终QML/界面5.9秒、光流测试3.2秒，-j2均通过。六CPU/界面合同通过：EffectChain1008组合、NR Model全76百分比NVIDIA/AMD 8K/存档/冻结/非法值、i18n、Repair272、UI384布局、QtQuick110。初轮EffectChain测试因新增大局部夹具默认1MiB栈溢出，测试目标改32MiB；新单层冻结测试误读规范化清空的nrLayers数组，改既有nrLayer(0)，非修改产品校验迁就断言。初始失败/重跑receipt留档。
+
+实际ExportJobManager→子进程runExportWorker→产品图→D3D12 NVENC，9例各6帧：4K固定1080、手动50/37/100、720p+50%双层、Auto；8K固定1080和25%；4K37%+真实NVOF。所有NR创建尺寸与逐层日志吻合，源/编码均6帧，ffprobe全解码、尺寸保持4K/8K、抽帧非黑。8K两文件完全相同SHA ff4de85bf384342daeebb602fefe91b479978fbaf1e9970ec1f02458b7bebe40。8K零运动输入，不冒充8K NVOF；4K光流用例NVOF实际执行5次。真实QML保存37%预设后改当前100%/关NR，选该导出预设，任务开始又改当前25%，worker仍NR1420x798→4K6帧，预览设置不变。应用SHA251ed807f2a45fcd5b2274d61797e4f6e71c9b62cffe8aece5cc57f0915d9905。
+
+GPU图探针stack1-percent-still/stack2-percent-export各2帧，前者手动50%图片模式仍NR1920x1080全尺寸；后者两层百分比独立纹理/参数/同帧一致，NR执行4次；均debugErrors=0。未将图探针冒充PNG编码或HDR验收。AMD实卡/用户原8K黑场素材/长期/音轨等未验明确记录。必要证据reports/export-nr-scale-20261025、logs同任务、单一tests/app worker日志与短合成媒体；旧90秒1080媒体只读复用。无其它进程竞争，无真实采集/主机/用户配置/运行库/模型/驱动修改。
+
+交付2.1.0-nre1 NVIDIA小更新，需要完整2.1.0底包，含之前手动比例/fg1/旋转录制；只含程序、QML、翻译与说明。源提交/ZIP SHA/最终核验见reports/.../update-package.json与FINAL.json。单Agent，无merge/push/Release，Lecram暂停。
+
+收尾测得本任务tmp约105MiB含CUDA缓存/私有状态。只删本任务cuda目录的原生PowerShell（绝对路径/无reparse/无活动Veyra守卫）被自动审批blocked by policy执行前拒绝，未给细因；无删除发生、无替代工具/移动绕过，cache-cleanup.json如实记受阻。后续nr-export-size脚本改共用任务级CUDA缓存，保留当前验收资料及单一私有app；不改产品代码，无需重跑已过GPU用例。
+## 2026-10-21 #67 NR退出卡住：生命周期修复与定向回归（Codex）
+
+用户暂停Lecram，要求修issue67。从nrvideo/main 4ae285b新建codex/issue67-nvapi-shutdown-20261021；checkpoint/pre-issue67-nvapi-shutdown-20261021与E:/项目/Veyra/archives/issue67-nvapi-shutdown-20261021存档，其他任务未改。计划/证据/边界见docs/ISSUE67_NVAPI_SHUTDOWN_PLAN_2026-10-21.md。
+
+关键纠正：issue同时写SF310.9.16未装架构兼容，因此按当前源码hadAmpere=false，不能从最后snippet freed一行推出ClearAmpereContext的FreeLibrary阻塞。旧兼容路径确有逐图卸载NVAPI风险；新增NvapiLifetime.h/.cpp，绝对System32加载、一次性PIN、只借用进程句柄，SF也在加载NR前覆盖。Adapter不再卸载NVAPI，仍释放NR模块；NgxCoreHost与EnhanceGraph只补关闭阶段/耗时日志，不改逐帧工作、UI频率、GPU优先级或watchdog。
+
+实际命令：py -3.11 -X utf8 -B E:/项目/Veyra/tmp/issue67-nvapi-shutdown-20261021/build.py（调用本树参数化claude-beauty-build.py，取bilibili-2.1.0缓存、Ninja并发2）；7目标241.2秒通过，日志logs/issue67-nvapi-shutdown-20261021/build-20261021-222653。py -3.11 -X utf8 -B E:/项目/Veyra/tmp/issue67-nvapi-shutdown-20261021/checks.py：NVAPI并发/PIN、架构策略、模型预设、旧兼容IAT三次恢复、真实NGX core生命周期、两次独立进程SF/原版视频切换全部通过，单测<14秒。真实GTA6 4K、NR开启状态直接stop为233.588/201.799ms，两轮都能同进程重开并正常再次停止，退出0。各进程NVAPI只固定一次、5次NR卸载、4次Shutdown1全部返回，8张输出3840×2160非黑；无engine-hang，两NR原件SHA未变。完整命令/输出/索引reports/issue67-nvapi-shutdown-20261021/final.json；所有产物全E盘。
+
+汇总脚本一次纯UTF8读混合编码日志失败，容错读ASCII字段后通过，原日志未改；一次停止时FFmpeg输出截断packet/NAL警告，另有既存d3d12 swscaler警告，两轮重开均正常，本轮不宣称修复这些解码文字。仅RTX5070/616.56通过，没有3090/616.92或用户dump，不称原用户根因已证实或硬件问题已彻底修好。只保留驱动模块映射，不保留NR feature/模型/GPU资源。不合main/push/发布/评论/关机，不派Agent。
+
+
+## 2026-10-25 CV710监听卡画面与全部近期修复本地main整合
+
+用户明确要求修复所附veyra-qml(1).rar并合并近期全部修复/功能到main。207555b开codex/capture-audio-main-20261025，原main4ae285b与开工点打checkpoint；snapshot脚本存101树状态/全refs、全屏原脏补丁/7文件ZIP/SHA。原RAR仅日志，SHA809F6301...834FCD。单Agent、全E盘、不改原配置/运行库/模型/驱动/旧树，无push/Release/Lecram。
+
+CV710/3080Ti/1080p59.94YUY2：音频关约60fps，开同设备PCM48k后299块音频但0视频，默认/系统时钟交替三次均失败。确认原GetTime缺时戳失败直接返回驱动的接收错误；timedCaptureDelivery只对此状态S_OK跳过，不生成PTS/帧，其它真错误传播，首3次Receive及缺时戳/恢复限频日志。真实allocator/IMediaSample回归复现旧返回失败、零时戳/缺stop/后续恢复/真错误。原日志没记录视频Receive原因，不能宣称CV710原机根因已证实，需原卡新日志复测。
+
+6199212的#67生命周期以dd182be保留历史合入，仅AGENTS/WORKLOG追加冲突两边保留；CMake源码/测试同时保留。全屏原脏补丁导入后真实Esc仍失败：隐藏playlist.active仍true；visible加active也不能代表实际焦点。最终playlist转本窗口FocusScope/Keys+ShortcutOverride，主Esc统一分配；节点重复Esc合一，保护绘制互斥，顶部还原走既有toggleFullscreen。原树逐SHA保持。
+
+命令build-recording-handoff.py --task codex-capture-audio-main-20261025 --root 当前E树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-int1，-j2。初次误写目标nr_model_policy被Ninja拒绝、未开始编译，改nr_model_settings后40.5秒通过，后续定向4.7/4.6秒；Qt夹具3.6秒。初始Quick夹具owner类型和focus/active假设失败保存日志，不用offscreen证明窗口键归属；最终独立QML Window、等待真实focusWindow、实际Qt键事件，Windows/software115通过。9定向目标均0：Capture285、NVAPI并发PIN、Repair272、UI384布局、EffectChain1008、AsyncDisplay、NR Model76比例与存储、WASAPI音频约22秒、Quick115。
+
+实际5070 NR/SF模型/原版切换、4张输出、NR开启停止157.685ms、同进程重开NR再停与Shutdown1成对成功；不外推原3090。整合后真实worker 4K/37%+NVOF导出，NR1420x798、HEVC3840x2160/6帧全解码。G50真实请求2K60NV12+HDMI独立48k音频短接收1.2秒，通过生产/持帧/邮箱/Drop/52块音频，启动期callbackFps10.003，不算稳态60或CV710恢复。
+
+computer-use技能原生按键/点击：软件专业F11/Esc、顶部还原、极简退出；GPU D3D11 F11/Esc；实际确认进入节点模式后Ctrl+L/Esc、最大化->全屏->Esc。软件首轮误以为切到节点，实际弹确认框未确认，故另起gpu-node明确确认并核对mode=node后验收，未把初轮当节点通过。所有私有播放器正常退出。日志native-software-final/gpu-final/gpu-node。
+
+详细报告CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md；证据reports/capture-audio-main-20261025，日志logs同名，原档archives同名。finalize脚本核对100其它工作树HEAD/status、原全屏7文件哈希、旧refs（只本整合branch/main允许变化）。保留原分支与checkpoint，用正常快进整合本地主main；准确提交及包在integration-audit.json/update-package.json/FINAL.json，不从本条计划推断实际合并已执行。小更新共同EXE/QML需原2.1.0完整NVIDIA/AMD底包，不含运行库/模型/配置。
+
+本地main已正常快进到28f6532，22提交、原功能及#67历史保留；预/后integration-audit均通过，100其它树不变。首轮封包准确字节核对在RotateButton.qml失败：main切换按Git策略将该一个文件LF落成CRLF，逐文件换行归一后全部内容相同（main-checkout-line-endings.json），非产品差异。封包工具修正为验证内容一致后携带实际已验QML原字节；初轮partial目录仅在已知输入逐字节一致、无sealed manifest时原位续封，不删除或覆盖已封包。该修正单独提交后再快进main；无需重跑未变产品GPU测试，最终CRC/逐SHA仍实际检查。
+
+## 2026-10-25 可变刷新/刷新率改为事件触发查询（Claude）
+
+用户审查补帧链路后要求：VRR 不再定时查询，改为事件触发，在“可变刷新”旁加“重新检测”按钮，引擎和界面都去掉 2 秒轮询；从 main 开新分支，按 AGENTS.md 施工，不 merge、不 push。从 68def10 开 `claude/vrr-event-query-20261025`，起点标签 `checkpoint/pre-vrr-event-query-20261025`，开工状态 `archives/claude-vrr-event-query-20261025/start.json`（工作树干净，另 100 个工作树未动）。方案 `docs/VRR_EVENT_QUERY_PLAN_2026-10-25.md`，结果 `docs/VRR_EVENT_QUERY_REPORT_2026-10-25.md`，功能提交 5a80948。
+
+实现：引擎持有共享的 `DisplayStateService`，按显示器缓存刷新率/VRR，后台一次一个查询，状态为当前代时请求不做任何事。查询只在这些时候发生：启动、新建呈现链（先用缓存，后台核对；无缓存最多等 100 ms）、换屏、`WM_DISPLAYCHANGE`、打开开关、重新检测、VRR 呈现开启或画面尺寸变化停止 3 秒后补查一次。处理图重建保留状态。界面空闲时不再在界面线程同步调用 NVAPI。专业页“显示”和节点页输出框加刷新图标按钮，只有开关会变灰。新增 3 条四语文案。
+
+构建：复用 `build/claude-screen-recording-20261022`，标签 2.1.0-vrr1，8 个目标 190 秒通过（日志 `logs/claude-vrr-event-query-20261025/build-20261026-001118`，EXE SHA256 cc35f381…e062）。测试：异步查询 33 项、实时预览、呈现线程、UI 合同、Repair 272 项、翻译均 0 失败；QtQuick 115 passed / 0 failed。第一次 QtQuick 运行缺离屏参数，日志为空，不算通过，补参数后重跑。`extract.py --check` 2667 条，0 缺译、0 占位符问题。
+
+实机：`scripts/acceptance/vrr-event-query.py --case native|novrr`，私有配置，真实 1080p30 + VFG 2X。15 秒播放和空闲期间 0 次查询；每个事件 1 次查询，真实屏幕整轮 6 次、模拟不支持 VRR 4 次。对照 fg1 的日志是 28.5 秒 15 次、间隔 2.0 秒。第一轮脚本先执行动作后打标记、并用 250 ms 采样抓“检测中”状态，两处判定有误，修正脚本后两轮通过，产品代码未改。本机屏幕现报告 VRR 等级 3，窗口模式下驱动未报告生效，真实 VRR 生效与全屏切换待用户设备验证。证据 `reports/claude-vrr-event-query-20261025`，截图 `tests/claude-vrr-event-query-20261025/shots`。无用户包、无 merge/push/Release，Lecram 暂停。
+
+
+## 2026-10-26 Codex接续Claude采集链路排查
+
+用户要求接续Claude因额度中断的整体软件/采集链路排查。读取本机Claude会话8ec1c944-fff6-4d57-af33-3ea3ca27c6ab最后交接，核对实际b2eb77d（非摘要中旧未提交状态）。干净claude/capture-review-20261026新开codex/capture-review-handoff-20261026，存checkpoint/pre-capture-review-handoff-20261026；全refs/工作树HEAD、原capture-round/aa-shots/tests JSON存archives/codex-capture-review-handoff-20261026。继承不合main/push/Release/封包、单Agent、不重复实卡一轮、不动用户配置/端点音量/运行库/模型/驱动，Lecram暂停。软件UI默认ea148bf仍独立。
+
+补完固定同帧离线AA验证：用原空节点链的HDR截图作无NR/AA输入，scRGB按203nit/Reinhard转SDR8bit，再跑实际产品GPU图。NR两次完全一致；SMAA后置任意变化22485像素、超过1个8bit等级19402（约0.53%），边缘平均变化约非边缘60倍。前置AA影响更多区域不能当质量优劣或“完全抵消”证明。sdr-smaa-high：2215像素变化、208229平坦像素不变，合成参考误差32.191->6.762；hdr-smaa验证有限值/平坦高光/1000nit与负色域保留。不是原HDR实卡画质或运动盲测。详细图/数据在reports本任务fixed-frame-*；命令capture-review-handoff.py prepare/aa/analyze。
+
+追加确认修复：HDR图重建缓存过期原等1秒，改旧缓存立即使用、只首次无缓存最多100ms；HDR独立查询失败不能永久当有效缓存，最多2次延后重试后等事件，新增3个CPU回归。最大化->全屏->恢复在Windows中间Windowed态触发极简几何动画，direct visibility+fullRestorePending/Qt.callLater保护；最终无尺寸警告。截图以引擎savedFramePath完成结果/Facade比较发布实际编码路径，HDR通知JXR、SDR通知PNG；不用UI线程文件轮询/解码，也不在请求时宣布成功。
+
+构建build-recording-handoff.py --task codex-capture-review-handoff-20261026 --root 当前E树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.0-cr2：-j2 45.2秒通过；最终截图快照接点重建41.4秒。六目标通过：EffectChain、AsyncDisplay（含新增HDR失败）、UI contract、i18n、Repair272、QtQuick115（Windows/software32.7秒）；最终Snapshot后仅重跑受影响UI/Repair。提取2674条、缺译/占位0。实际Qt/Windows窗口程序化测试（非物理键鼠/非采集）ui-sdr-r4和ui-hdr-r4各约8秒，最大化尺寸恢复、暂停画面、保存文件/lastScreenshot/通知一致；HDR实际HDR10/PQ，写.jxr。所有测试进程<300秒。
+
+纠正原交接：“全效果”实卡其实只有NR/AA/调色/VFG，SR计时0且美颜未强制开启，故不能扩大成全部效果同时通过；原60秒稳态查询0、stall0的证据保留，本轮不再采集。37ms驱动年龄/17.58ms调度等待不是已证硬件物理下限，P95不能相加冒充屏幕延迟。区域日志整轮112条但稳态0，并非正常播放每帧刷盘；双格式发现服务枚举与打开核验，不删保护。
+
+只读复查G50端点仍+30.00dB/hw0x2，微软文档说明共享模式缺硬件音量时由Windows音频引擎软件实现，不是Veyra又放大30dB。未改端点，建议用户自行0dB后复核，未做音量A/B，不能说唯一原因已证实。音频probe原源只Get/Query，无Set，输出reports本任务audio-endpoints-now.txt。
+
+失败均保留：误用hdr-smaa-high用例名退出2，按--list改实际hdr-smaa，仅补该例；matplotlib缺packaging、内置Python缺matplotlib，通过已提供runtime site-packages补依赖，无全局安装；第一版全屏稳定visibility保护仍在中间Windowed失败，再加恢复状态保护后通过；首HDR视频无PQ VUI不能算HDR通过，改x265显式VUI并ffprobe确认后实测；截图完成初稿文件轮询改为引擎完成快照，最终UI两例重验。图/旧失败均是E盘必要证据，未覆盖Claude原JSON/实际原日志。
+
+收尾报告docs/CAPTURE_REVIEW_REPORT_2026-10-26.md；脚本finalize-capture-review-handoff.py验证受保护旧refs/其它树HEAD、177运行组件/源码QML恢复、最终EXE与构建一致、三GPU/六合同/两窗口例、无运行库入Git，生成本任务FINAL与原Claude任务FINAL指针。准确新提交见FINAL，不合main/push/发布/打包。
+
+
+## 2026-10-26 外部用户4K60约30帧日志诊断
+
+用户提供微信logs (2).zip，仅诊断。原档SHA256 f9c486fbb344161db1d3b7ad536f1404a07c9de4267fa388e1c195eb747d9caa；副本及两份log安全提取至E:/项目/Veyra/archives/field-capture-4k60-20261026。成功运行python E:/项目/Veyra/reports/field-capture-4k60-20261026/analyze.py，对149746行按会话/设置/输入尺寸及指定稳态窗口统计，analysis.json和evidence.txt保存在同名reports目录。
+
+结果：RTX5090D机器4K YUY2真实回调约53.1，开启60→30后约26原帧；关闭SR/NR/FG且关闭60→30后仍约53。稳定60的窗口为1080p输入后增强至4K，不能作为4K60通过。末段原帧53/提交53、GPU ready P95约0.24ms、调度等待0，主要限制位于采集交付环节；同机其它应用与USB协商信息缺失，未区分驱动/链路和Veyra采集回调根因。未擅改产品或配置，无构建/新采集测试/打包/合并/推送。后续同机同格式逐个应用A/B建议及证据边界见docs/FIELD_CAPTURE_4K60_DIAGNOSIS_2026-10-26.md。
+
+
+## 2026-10-26 暂停2.1.1封包，菜单首次布局及AMD原生HDR+NR
+
+用户要求先停封包修两个bug，明确原生HDR，并否决淡入淡出替换、指定2.0.7正常效果对照。从2de14fd到codex/menu-amd-hdr-fix-20261026，不合main、不封包/推送/发布。2.1.1旧stage标记PAUSED/superseded，不作交付。计划MENU_AMD_HDR_PLAN_2026-10-26.md、结果MENU_AMD_HDR_REPORT_2026-10-26.md。
+
+直接读2.0.7正式ZIP，VMenu/VSelect/Theme与原HEAD一致；原动画块最终保持相同。真正局部布局回归为首次开菜单第一行y 14→42，修复仅提前宽度与嵌套布局polish，去掉open后callLater定位。纯淡入淡出、文字全局不移动的错误测试、软件layer裁剪原型和无效font hinting均撤回/保留失败证据，不计交付。最终软件/GPU×100/150/200%六组原spring仍运行、局部布局稳定；QtQuick117通过/0失败/1跳过（单独截图3通过），实际窗口六档原动画截图已检查。
+
+AMD根因是HDR working模式初始化直接拒绝。新增两个FP16内部纹理及GPU encode/restore，复用203nit HDR代理/还原，模型仍SDR线性FP16，原HDR基底/共享残差/时序/reset保留。实际D3D12图+明确fake AMD provider共128组合0失败，其中108 HDR，debug0；ABI、HDR颜色检查通过。本机真实NVIDIA原版NR+PQ HDR20帧通过，高光998.932nit，非AMD实卡证据。RX9000 HIP/用户画质帧率仍需原机；运行库模型驱动不改。
+
+构建命令build-recording-handoff.py --task codex-menu-amd-hdr-fix-20261026 --root 当前E盘树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.1 --jobs 2；主轮--reconfigure 60.7秒通过，之后仅定向增量。测试python -B scripts/acceptance/menu-amd-hdr-fix.py gpu/menu/contracts，私有配置、单进程<=280秒，翻译2674/缺译占位0。证据reports/logs/tests/tmp/menu-amd-hdr-fix-20261026，编译回执logs/codex-menu-amd-hdr-fix-20261026。曾误拼多fix的构建目录，仅停止自有9个子进程并改回原缓存；自动审批拒绝该误建目录的安全递归删除（blocked by policy），保留未绕过，见cleanup-blocked.json。旧2.1.1验收脚本曾错误调用NR导出无参数和翻译路径，此前不计通过、不交付；本任务测试命令和证据独立。
+
+
+## 2026-10-26 外部T911/RTX3080 NR后采集停流诊断
+
+用户提供logs(20).zip要求排查，未改产品/配置、未构建或占用采集卡。原档SHA256 6ce6753f1b3d110da61998ba019410bda89c96dc0c29dcf03e2b929e25041f41，副本及受限提取到archives/field-capture-nr-disconnect-20261026；python -B reports同名/analyze.py成功，三日志128209行。26次PCM恢复、25次Run 0x800701B1、17条EC_DEVICE_LOST；实际是音视频先停流，再同步恢复长阻塞。RTX3080/NR SF内部1080p，4K60 NR+NVOF处理约47但入口60；约一分钟的那轮是1080p协商165/实际回调240，NR后44秒停止进展。NR关而SR+NVOF开时也有同类停流（同进程先前开过NR），全关约47分钟稳定，因此不作NR单一根因结论。控制恢复多次7.35秒，旧过滤器重启NO_SUCH_DEVICE；当前事件日志漏记lParam2，不能从指针detail判定拔插方向。无NR Evaluate/GPU移除/爆显存证据。dump仅元数据：10月23日旧hang，无异常流，未符号化/展开，不冒充当前栈证据。完整报告docs/FIELD_CAPTURE_NR_DISCONNECT_2026-10-26.md，统计及带行号证据reports/field-capture-nr-disconnect-20261026。2.1.1封包继续暂停。
+
+
+## 2026-10-26 外部NR停流继续定位（用户追问首因）
+
+继续只读调查，纠正“回调完成不增长即驱动停止送帧”的过强推断：完成日志无法排除回调内部阻塞。静态查到回调会经gpuBusy调用GetCompletedValue，列为待测候选，不作为已证实首因。包内dump是10月23日，日志为25/26日，无法对齐。
+
+在E:/项目/Veyra/tmp/field-capture-nr-disconnect-20261026编译read-dump.cpp，匹配Windows符号后展开55线程；用保留旧对象重链接old-app-map.exe生成MAP（未执行），与donor原EXE完整.text SHA256及字节一致：b48bcd462af9d82aeee97b919fd90d5c033d38ea04dd7408edf09db56c35b71c。GUI在Qt循环，CaptureAudioSession在音频输出事件等待，没有可归因的首次停流SampleCB栈；NVIDIA私有栈仍不完整。未修改/构建当前产品、未触碰设备或配置。
+
+命令/结果：build-dump.cmd编译修正后成功（dump-helper-build-r2/r3.log）；read-dump.exe <dump> <symbols> <images>执行成功（dump-stacks-matched.log）；link-old-map.cmd首次缺MANIFEST:EMBED失败，补齐后exit0（old-app-map-link-r2.log，保留原库链接警告）；PE段逐字节核对same=true（map-text-verification.json）。完整证据目录E:/项目/Veyra/reports/field-capture-nr-disconnect-20261026。诊断工具通过不等于产品/实卡验收。
+
+更新docs/FIELD_CAPTURE_NR_DISCONNECT_2026-10-26.md，下一步应在首次无进展且Stop/Run之前自动记录入口/出口/阶段心跳、线程快照和完整设备事件，替代盲目多开关试验；该诊断尚未接入。根因仍未确定，恢复阻塞是已知次生问题。2.1.1封包仍暂停，不merge/push/发布。
+
+2026-10-26 用户补充：同一软件包前几天正常、近两天异常。已更新外部NR停流诊断，降低近期代码回归优先级但不排除既有软件缺陷。只读复核故障包D3D初始化，驱动唯一值32.0.16.2101，无正常时期对照，不能据此断言近期更新；未改产品。
+
+
+## 2026-10-26 用户恢复2.1.1本地构建
+
+用户明确继续构建2.1.1。从41488c2开codex/build-2.1.1-resume-20261026；archives同任务/before.json记录603个refs、所有工作树及原诊断脏文件/patch。仅新增构建材料/已知问题，不改已验产品逻辑。打包脚本支持--task，本轮使用新的stage/receipt，包含MENU_AMD_HDR报告和T911未解决说明。旧stage过期不交付；不合main/push/发布、不重复占采集卡，Lecram暂停。实际结果待后续回执。
+
+
+## 2026-10-26 2.1.1恢复封包完成
+
+
+
+- python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-build-2.1.1-resume-20261026 --root 当前E盘树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.1 --jobs 2，应用及11定向目标，26.1秒通过；完整targets/哈希在logs同任务/build-20261026-224756/receipt.json。
+- python -X utf8 -B E:/项目/Veyra/tmp/codex-build-2.1.1-resume-20261026/run-checks.py：12组全部exit0，QML117通过/0失败/1跳过，翻译2674条/缺译及占位问题0。包括效果链、异步显示查询、UI、Repair、呈现、预览、配置及预设回归。
+- python -X utf8 -B scripts/acceptance/package-2.1.1.py stage|seal|cold --task codex-build-2.1.1-resume-20261026，三阶段依次成功。受控2.1.0供体逐文件核验，NVIDIA50/AMD654个runtime行保持，签名/版本相同，PE版本/依赖闭包/模型边界通过；实际新编译HDR AMD两着色器入包。ZIP全文件SHA及CRC成功，应用源码2292个文件复核；未变依赖源码随目录提供。
+- 从ZIP解压、隔离PATH/私有配置，NVIDIA D3D12/软件界面分别实际呈现284/290帧，AMD包D3D12/软件界面289/289帧，四轮exit0/无QML运行错误。AMD包在本机NVIDIA显卡只验基础播放与打包依赖，不是HIP推理验收。
+
+## 证据与边界
+
+当前主EXE SHA与菜单/HDR验收时完全一致，de07548373b8bd308d9af8865b06bb9551aa507761225ea35e574142b356db6a；图源码与VMenu哈希也相同。沿用原真实NVIDIA HDR+NR/AMD fake provider图测试的明确边界，不重复声称新做了实卡采集；RX9000 HIP原生HDR仍待实卡。T911/3080增强后停流首因未定、未修；4K约53fps未修、原CV710/3090仍待复测、长期显存/真实VRR仍未扩大验收。没有首次停流新插桩。
+
+603个旧refs与100个其它工作树HEAD不变，main仍68def10。对应源码快照89116ba，产品构建回执2c0c82f，两者产品代码无差异。本报告是封包后的验收记录，未倒填进已经核验的ZIP/源码快照。
+
+自动审批拒绝“准备清理旧stage和验收解压副本脚本”的操作，仅给出blocked by policy；没有实际生成脚本/执行删除，也未绕过重试。旧stage、新stage及verify解压副本保留，cleanup-blocked.json记录。本机原误建build的既有清理拦截状态也不变。
+
+交付目录：E:\项目\Veyra\test-packages\codex-build-2.1.1-resume-20261026
+
+最终证据：E:\项目\Veyra\reports\codex-build-2.1.1-resume-20261026\FINAL.json
+
+NVIDIA：Veyra-2.1.1-NVIDIA-win64-portable.zip，679560249 bytes，SHA256 e3d78f91b4c2669108f2c22c1d491d17f3bfdc73b2dbda8f9eba823d5f32b451
+
+AMD：Veyra-2.1.1-AMD-win64-portable.zip，466204342 bytes，SHA256 5153e97be26c03062b8596462fbede41b700f354799df02875bad3bf5d895f15
+
+
+## 2026-10-27 用户授权发布2.1.1
+
+起点00d7d2d，archives/release-2.1.1-20261027存refs/工作树HEAD；分支codex/release-2.1.1-20261027。fetch发现远端c525379仅自动更新Star历史图，普通merge保留。原ZIP保持，上游连接器无Release资产上传接口，使用已登录Likely7的gh。按全部提交与验收整理RELEASE_NOTES_2.1.1，更新报告仅本次实际交付内容。主Release两运行ZIP、源码独立非latest页；不改程序/运行组件/用户配置、不代发群消息。准确结果以本任务FINAL为准。
+
+## 2026-10-26 界面默认软件绘制（Claude）
+
+用户根据 GPU/软件界面 A/B 决定：默认界面改为软件绘制，设置里保留“GPU 绘制”（需重启），自动兼容逻辑不变；从 main 开新分支，按 AGENTS.md 施工，不 merge、不 push。从 68def10 开 `claude/software-ui-default-20261026`，起点标签 `checkpoint/pre-software-ui-default-20261026`，开工状态 `archives/claude-software-ui-default-20261026/start.json`（工作树干净，另 100 个工作树未动；上一分支 `claude/vrr-event-query-20261025` 保留未并入）。方案 `docs/SOFTWARE_UI_DEFAULT_PLAN_2026-10-26.md`，结果 `docs/SOFTWARE_UI_DEFAULT_REPORT_2026-10-26.md`，功能提交 41f0994。
+
+依据：`reports/claude-ui-renderer-ab-20261026/ab.json`（RTX 5070、4K30 + VFG 2X、2400×1300、GPU/软件/软件/GPU）。GPU 界面进程显存 469 MiB，软件界面 105 MiB；界面动画时 GPU 约 30% 对 15%，软件界面多用约 6.6% 单核 CPU；视频均为 60 fps、0 跳帧。
+
+实现：`include/veyra/ui/InterfaceRenderer.h` 统一启动选择。OBS 兼容、监控软件兼容（自动 + 启动时检测到浮窗或接受过兼容重启）、`VEYRA_UI_RHI` 的原有判定保持不变并优先；其余按偏好 `uiRenderer`，缺省软件，GPU 仍走 D3D12。设置 → 兼容新增“界面绘制：软件 / GPU”，只有重启真会改变渲染器时才弹确认；“监控软件兼容”的提示和重启判断改为只在选 GPU 时生效。桥接新增 `softwareUiActive`，新增 8 条四语文案。
+
+构建：复用 `build/claude-screen-recording-20261022`，标签 2.1.0-swui1，5 个目标 62.2 秒通过（日志 `logs/claude-software-ui-default-20261026/build-20261026-005610`，EXE SHA256 8e0d85d9…c599）。测试：UI 合同（新增启动选择组合）、Repair 272 项、翻译均 0 失败；QtQuick 115/0；`extract.py --check` 2671 条，0 缺译、0 占位符问题。实机 `scripts/acceptance/ui-renderer-default.py` 同一私有配置四次启动：缺省软件 → 选 GPU 弹确认 → D3D12 → 选软件弹确认 → GPU + 兼容重启仍软件、选软件不弹确认 → 软件，全部通过。首轮脚本异步截图与点选重叠，截图混入点选后状态，改为等截图写完再点后重跑通过。证据 `reports/claude-software-ui-default-20261026`，截图 `tests/claude-software-ui-default-20261026/shots`。无用户包、无 merge/push/Release，Lecram 暂停。
+
+
+## 2026-10-27 软件绘制与RTX视频超分默认项整合
+
+用户授权重新整合/构建/发布2.1.1，覆盖前阶段原包不重建。先存档发行文档脏文件至archives/codex-release-2.1.1-final-20261027，fd42018保存，再正常merge Claude软件绘制ea148bf为eae5fd9；仅AGENTS/WORKLOG追加冲突，两边保留。软件UI分支已在候选历史中；主线未推送。
+
+共享kDefaultVideoSrQuality=4，EnhancementSettings/ChainGlobalSettings新配置选择RTX视频超分高质量；AMD/Intel既有硬件初始化仍选FSR，首次sr/nr/FG仍关闭，既有明确模型ID不迁移。UI合同覆盖新默认与旧DLSS/RTX/FSR开关保存；四次真实启动夹具追加默认4、已选0/5持久化验证。InterfaceRenderer说明去掉未经证明的GPU故障隔离/零显存绝对断言，仅注释更正。
+
+打包改用公开RELEASE_NOTES_2.1.1及BUILD_2.1.1说明，移除旧ZIP校验值以避免循环/过时身份；新task隔离新stage/receipt，原两包作旧交付保留，不上传旧包。不改运行库/模型/驱动/真实配置，不占采集卡，不派Agent。实际结果后续填回执。
+
+首次13组检查在EffectChain一个旧夹具失败：同尺寸SR应折叠的断言隐含默认DLSS；RTX Video SR支持同尺寸恢复，默认改变后该假设失效。将该DLSS专属夹具显式选0，保留原产品合同，不改变新默认/放松验证；失败完整日志保存在effect_chain-initial-default-fixture.log。
+
+最终13组回归通过，QML117通过/0失败/1跳过，翻译2681条/缺译占位0；NR模型测试初次漏传输出目录exit2，按工具argc合同补参数后通过，原JSON保留contracts-before-argument-fix.json。四次真实UI启动通过：新配置软件且SR选择4；选择GPU后实际D3D12并保留DLSS 0；兼容重启实际软件；再次启动保留FSR 5；全程SR关闭。测试只修改独立app/profile，截图已查看。为避免覆盖旧HDR证据，GPU验收脚本增加--task，重新编译GPU相关四目标12.2秒通过。
+
+当前构建GPU补验通过：AMD fake provider实际D3D12图128组合（108 HDR）/debug0，lmxxf ABI与HDR颜色测试通过；真实NVIDIA原版NR+PQ HDR20帧通过（nvidia-hdr-current-r2.json）。首轮HDR探针缺自身相对out目录导致JXR写入0x80070003，创建本任务私有app/out后13秒通过，原失败日志保留；未改产品或测试判断。三次构建EXE均3199aae280c9910eddc9e845ce5f9f64e52d7bf7e357b167d08e9504e866ee4b，90.3/6.2/12.2秒。接下来seal/cold与发布，不复用旧2.1.1 ZIP。
+
+最终新ZIP及源码封装、四次实际解压冷启动通过：NVIDIA GPU/software呈现286/289，AMD包286/289，均exit0且无QML运行错误；采用私有配置和隔离PATH。PRE_PUBLICATION.json全部检查通过，运行行50/654不变、软件分支已为祖先、无运行库入Git、产品与63852e4源码快照一致。最终EXE3199aae2...；ZIP SHA NVIDIA31a4f9ac.../AMDb78b8a0c...，准确全值DELIVERY与PRE_PUBLICATION。GitHub正文只写交付内容，支持双图仍各220且HTTP200；发布前最后核验完成，后续实际远端状态写FINAL。

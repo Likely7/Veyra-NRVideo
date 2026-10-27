@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.1.0 LANGUAGES C CXX RC)
+project(veyra VERSION 2.1.1 LANGUAGES C CXX RC)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.1.0" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.1.1" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -151,6 +151,7 @@ add_library(veyra_ngx STATIC
   src/ngx/NgxCoreHost.cpp
   src/ngx/NgxCoreCache.cpp
   src/ngx/DlssNrRuntimeAdapter.cpp
+  src/ngx/NvapiLifetime.cpp
   src/ngx/DlssSrBackend.cpp
     src/ngx/VideoSrBackend.cpp
     src/ngx/TrueHdrBackend.cpp
@@ -224,12 +225,18 @@ target_link_libraries(veyra_runtime_probe PRIVATE veyra_gfx)
 veyra_add_compute_shader(veyra_shader_parity_encode ParityEncode)
 veyra_add_compute_shader(veyra_shader_parity_decode ParityDecode)
 veyra_add_compute_shader(veyra_shader_hdr_video_sr HdrVideoSrRestore)
+veyra_add_compute_shader(veyra_shader_hdr_amd_nr_encode HdrAmdNrEncode)
+veyra_add_compute_shader(veyra_shader_hdr_amd_nr_restore HdrAmdNrRestore)
 if(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR)
   veyra_add_compute_shader(veyra_shader_test_pattern GenerateTestPattern)
   add_executable(veyra_nr_ampere_tests tests/integration/NrAmpereTests.cpp)
   target_compile_features(veyra_nr_ampere_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_nr_ampere_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_link_libraries(veyra_nr_ampere_tests PRIVATE veyra_gfx veyra_ngx)
+  add_executable(veyra_nvapi_lifetime_tests tests/integration/NvapiLifetimeTests.cpp)
+  target_compile_features(veyra_nvapi_lifetime_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_nvapi_lifetime_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(veyra_nvapi_lifetime_tests PRIVATE veyra_ngx)
   add_executable(veyra_nr_harness
     tools/nr_harness/main.cpp
     tools/nr_harness/frame_loop.cpp
@@ -518,6 +525,7 @@ if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
   add_dependencies(veyra_pipeline
     veyra_shader_yuv_to_rgb veyra_shader_rgb_to_linear veyra_shader_parity_encode
     veyra_shader_parity_decode veyra_shader_scale_blit
+    veyra_shader_hdr_amd_nr_encode veyra_shader_hdr_amd_nr_restore
     veyra_shader_nv12_upload veyra_shader_nvof_densify veyra_shader_packed_capture)
 endif()
 
@@ -581,7 +589,9 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/sink/BitstreamAudioSink.cpp
     src/sink/ImageExportSink.cpp
     src/sink/NvencD3D12Encoder.cpp
+    src/sink/NvencLiveEncoder.cpp
     src/sink/MfVideoEncoder.cpp
+    src/sink/RecordingAudioTap.cpp
     src/sink/VideoEncoderFactory.cpp
   )
   veyra_apply_warnings(veyra_sinks)
@@ -770,6 +780,8 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_repair_contract_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_repair_contract_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_repair_contract_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  # main() holds hundreds of 8 KB EnhancementSettings copies; the 1 MB default stack overflowed partway (2.1.0).
+  target_link_options(veyra_repair_contract_tests PRIVATE /STACK:33554432)
 
   add_executable(veyra_repair_parameter_tests tests/integration/RepairParameterTests.cpp)
   add_executable(veyra_image_dimension_tests tests/integration/ImageDimensionTests.cpp)
@@ -826,6 +838,10 @@ include_directories(${FFMPEG_INCLUDE_DIRS})
   target_compile_definitions(veyra_capture_format_selection_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_capture_format_selection_tests PRIVATE ole32 strmiids)
   add_executable(veyra_presentation_worker_tests tests/unit/LiveGpuSchedulerTests.cpp)
+  add_executable(veyra_async_display_query_tests tests/unit/AsyncDisplayQueryTests.cpp)
+  target_compile_features(veyra_async_display_query_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_async_display_query_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_link_libraries(veyra_async_display_query_tests PRIVATE veyra_engine)
   target_compile_features(veyra_presentation_worker_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_presentation_worker_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_presentation_worker_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -1407,7 +1423,7 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_link_libraries(veyra_repair_fg_tests PRIVATE veyra_pipeline veyra_sinks veyra_nvof)
 
   # Headless quality-core runner (Playbook R3.3): the phase5 gate's quality
-  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineWatchdog.cpp src/engine/PreviewGpuSession.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/VideoExportJob.cpp src/engine/ExportStreams.cpp src/engine/ExportQueue.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp)
+  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineWatchdog.cpp src/engine/PreviewGpuSession.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/DisplayStateService.cpp src/engine/VideoExportJob.cpp src/engine/ExportStreams.cpp src/engine/ExportQueue.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp src/engine/LiveRecorder.cpp)
   target_sources(veyra_pipeline PRIVATE src/guidance/AmdOpticalFlow.cpp
     src/guidance/GpuDisOpticalFlow.cpp third_party/gpu-dis/src/gpu/native_strict_dis_provider.cpp)
   target_include_directories(veyra_pipeline PRIVATE third_party/gpu-dis/src/gpu)
@@ -1455,6 +1471,14 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_features(veyra_effect_chain_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_effect_chain_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_effect_chain_tests PRIVATE veyra_base)
+  # Large independent settings/descriptor fixtures, like the preset contracts.
+  target_link_options(veyra_effect_chain_tests PRIVATE /STACK:33554432)
+  add_executable(veyra_nr_export_size_tests tests/integration/NrExportSizeTests.cpp)
+  target_compile_features(veyra_nr_export_size_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_export_size_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_nr_export_size_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_link_options(veyra_nr_export_size_tests PRIVATE /STACK:33554432)
+  target_link_libraries(veyra_nr_export_size_tests PRIVATE veyra_engine)
 
   add_executable(veyra_repair_preset_tests tests/unit/RepairPresetTests.cpp src/engine/PresetStore.cpp)
   # CPU bake of the colour grade: no GPU, no engine link - the tables the ingest

@@ -53,8 +53,22 @@ int wmain(int argc,wchar_t** argv) {
             const auto revision=engine.snapshot().desired.revision;
             check(wait([&](const auto& s){return !s.applying&&s.applied.revision==revision&&!s.nrActive&&!s.srActive&&!s.fgActive;}),"plain playback restored in same process");
         }
+        auto closeSettings=engine.snapshot().desired;
+        closeSettings.nr=true;
+        if(!failures) {
+            check(engine.requestSettings(closeSettings),"re-enable NR before close regression");
+            check(wait([](const auto& s){return !s.applying&&s.nrActive&&s.nrEvaluated>10;}),"NR active at close (no disable workaround)");
+        }
+        const auto stopping=std::chrono::steady_clock::now();
         engine.stop();
         check(wait([&](const auto&){return engine.idle();}),"GPU drained and engine stopped");
+        std::cout<<"NR_ACTIVE_STOP_MS="<<std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-stopping).count()<<std::endl;
+        if(!failures) {
+            engine.open(window,argv[1],veyra::engine::PlayerOptions::from(closeSettings));
+            check(wait([](const auto& s){return s.frames>30&&s.nrActive&&s.nrEvaluated>10;},25),"next video produces NR frames in same process");
+            engine.stop();
+            check(wait([&](const auto&){return engine.idle();}),"second NR-active session stops cleanly");
+        }
     }
     DestroyWindow(window);CoUninitialize();
     std::cout<<"RTX30 hardware performance and visual quality NOT TESTED\n";

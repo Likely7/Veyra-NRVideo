@@ -27,7 +27,25 @@ bool PresentSink::hdrDisplayActive(HWND window){
     return queryHdrDisplayActive(window).value_or(false);
 }
 
-std::optional<bool> PresentSink::queryHdrDisplayActive(HWND window,HMONITOR* queriedMonitor){
+namespace {
+PresentSink::DisplayPeakInfo peakOf(const DXGI_OUTPUT_DESC1& desc){
+    PresentSink::DisplayPeakInfo info{};
+    if(!std::isfinite(desc.MaxLuminance)||desc.MaxLuminance<100.0f||desc.MaxLuminance>10000.0f)return info;
+    info.peakNits=unsigned(std::lround(desc.MaxLuminance));
+    info.fullFrameNits=std::isfinite(desc.MaxFullFrameLuminance)&&desc.MaxFullFrameLuminance>0
+        ?unsigned(std::lround(std::min(desc.MaxFullFrameLuminance,10000.0f))):0;
+    info.minNits=std::isfinite(desc.MinLuminance)&&desc.MinLuminance>=0?desc.MinLuminance:0;
+    info.valid=info.peakNits>0;
+    // A full-scale peak paired with an idealised black is a ceiling declaration, not a
+    // measurement (see DisplayPeakInfo::plausible). Kept from the custom branch; the
+    // upstream refactor moved the parsing into this helper and the field would otherwise
+    // stay false forever.
+    info.plausible=info.valid&&!(info.peakNits>=4000&&info.minNits<0.01);
+    return info;
+}
+}
+
+std::optional<bool> PresentSink::queryHdrDisplayActive(HWND window,HMONITOR* queriedMonitor,DisplayPeakInfo* peak){
     const auto monitor=MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST);
     if(queriedMonitor)*queriedMonitor=monitor;
     if(!monitor)return std::nullopt;
@@ -62,64 +80,11 @@ std::optional<bool> PresentSink::queryHdrDisplayActive(HWND window,HMONITOR* que
             DXGI_OUTPUT_DESC1 desc{};hr=advanced->GetDesc1(&desc);
             if(FAILED(hr)){log::warn("display-color",std::format("GetDesc1 query failed hr=0x{:X}",unsigned(hr)));return std::nullopt;}
             if(desc.Monitor!=monitor)return std::nullopt;
+            if(peak)*peak=peakOf(desc);
             return desc.ColorSpace==DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
         }
     }
     return std::nullopt;
-}
-
-PresentSink::DisplayPeakInfo PresentSink::queryDisplayPeak(HWND window){
-    DisplayPeakInfo info{};
-    // Without a window (the UI asking before playback starts) answer about the
-    // primary monitor, which is what a fresh install would be showing on.
-    HMONITOR monitor=nullptr;
-    if(window){
-        MONITORINFOEXW mi{};mi.cbSize=sizeof(mi);
-        monitor=MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST);
-        if(!monitor||!GetMonitorInfoW(monitor,&mi))return info;
-    }else{
-        monitor=MonitorFromPoint(POINT{0,0},MONITOR_DEFAULTTOPRIMARY);
-    }
-    if(!monitor)return info;
-    // Called on demand (the user asking for the system value), so a fresh factory is
-    // fine here - no need to join the cached one the 2 s HDR poll uses.
-    ComPtr<IDXGIFactory1> factory;
-    if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))||!factory)return info;
-    for(UINT a=0;;++a){
-        ComPtr<IDXGIAdapter1> adapter;
-        if(factory->EnumAdapters1(a,&adapter)==DXGI_ERROR_NOT_FOUND)break;
-        if(!adapter)break;
-        for(UINT i=0;;++i){
-            ComPtr<IDXGIOutput> output;
-            if(adapter->EnumOutputs(i,&output)==DXGI_ERROR_NOT_FOUND)break;
-            if(!output)break;
-            DXGI_OUTPUT_DESC basic{};if(FAILED(output->GetDesc(&basic)))continue;
-            if(basic.Monitor!=monitor)continue;
-            ComPtr<IDXGIOutput6> advanced;if(FAILED(output.As(&advanced)))return info;
-            DXGI_OUTPUT_DESC1 desc{};if(FAILED(advanced->GetDesc1(&desc)))return info;
-            if(!std::isfinite(desc.MaxLuminance)||desc.MaxLuminance<100.0f||desc.MaxLuminance>10000.0f)return info;
-            info.peakNits=unsigned(std::lround(desc.MaxLuminance));
-            info.fullFrameNits=std::isfinite(desc.MaxFullFrameLuminance)&&desc.MaxFullFrameLuminance>0
-                ?unsigned(std::lround(std::min(desc.MaxFullFrameLuminance,10000.0f))):0;
-            info.minNits=std::isfinite(desc.MinLuminance)&&desc.MinLuminance>=0?desc.MinLuminance:0;
-            info.valid=info.peakNits>0;
-            // A full-scale peak paired with an idealised black is a ceiling declaration,
-            // not a measurement (see DisplayPeakInfo::plausible).
-            info.plausible=info.valid&&!(info.peakNits>=4000&&info.minNits<0.01);
-            {
-                static unsigned peakQueryLogged = 0;
-                if (peakQueryLogged < 2) {
-                    ++peakQueryLogged;
-                    log::info("hdr-peak", std::format(
-                        "dxgi output: peak={} full={} black={:.4f} valid={} plausible={}",
-                        info.peakNits, info.fullFrameNits, info.minNits,
-                        info.valid ? 1 : 0, info.plausible ? 1 : 0));
-                }
-            }
-            return info;
-        }
-    }
-    return info;
 }
 
 double PresentSink::displayRefreshFps(HWND window){

@@ -10,6 +10,8 @@
 #include "veyra/gfx/ReflexSession.h"
 #include "veyra/gfx/NvidiaVrr.h"
 #include "veyra/engine/PresentationSettings.h"
+#include "veyra/engine/PresentCapture.h"
+#include "veyra/engine/DisplayStateService.h"
 #include <chrono>
 #include <array>
 #include <optional>
@@ -19,6 +21,10 @@ namespace veyra::sink { struct RgbaImage; }
 namespace veyra::engine {
 class VideoPresenter {
 public:
+    // Live recording hook; the object must outlive every present() call.
+    void setCapture(PresentCapture* capture){capture_=capture;}
+    // Shared refresh/VRR states (the engine's); must outlive the presenter.
+    void setDisplayStates(DisplayStateService* states){displayStates_=states;}
     ~VideoPresenter(){close();}
     // mediaClockPaced: the owner already waits on a media clock before each
     // source (file playback). Retained for diagnostics; XeLL low latency must
@@ -78,11 +84,13 @@ public:
     // per-frame history reset, never a per-frame toggle.
     void setXessGenerationSuppressed(bool v){xessGenerationSuppressed_=v;}
     bool xessGenerationSuppressed() const {return xessGenerationSuppressed_;}
-    // Monitor refresh for the live output budget. The swap chain samples it
-    // only at creation; the window may move to another monitor or the mode
-    // may change, so it is re-read on a monitor change and every 2 s.
+    // Monitor refresh for the live output budget and 跟随显示器, from the shared
+    // DisplayStateService. It is read again only on events: a new presentation
+    // chain, the window moving to another monitor, a display change or
+    // 重新检测, and one VRR confirmation (vrrConfirmAt_); never on a timer.
+    // This accessor never waits on QueryDisplayConfig or NVIDIA's driver calls.
     double displayRefreshHz();
-    // Variable refresh state of that monitor (NVIDIA only), re-read with it.
+    // Variable refresh state of that monitor (NVIDIA only), read with it.
     gfx::VrrState displayVrr()const{return vrr_;}
     // The 可变刷新 rule: the switch is on, Automatic is selected and VRR is
     // possible on the monitor, so Automatic presents like explicit Vsync.
@@ -99,13 +107,21 @@ public:
 std::vector<diagnostics::GpuFrameTiming> takeGpuTimings(ID3D12Fence* fence){gpuTimer_.collect(presentationFence_?presentationFence_.Get():fence);return gpuTimer_.takeCompleted();}
 void recordGpuTimings(){gpuTimer_.recordCompleted();}
 private:
-    HMONITOR hdrPeakMonitor_=nullptr;
+    // Custom: HDR10 static metadata for the display (MaxCLL / MaxFALL / mastering
+    // peak). Sent only when it changes, and cleared when the HDR10 path stops.
+    void applyHdrMetadata(pipeline::EnhanceGraph& graph,const HdrMetadataSettings& metadata,const HdrCurveSettings& resolvedCurve,pipeline::FrameIdentity identity);
+    bool metadataSent_=false,metadataDirty_=false;
+    // The source's mastering/CLL values are absent on many frames; holding the last
+    // real value keeps the reported metadata steady instead of flapping to the
+    // fallback (which re-sent it on nearly every frame).
+    HdrSourceMetadata sourceMetadata_{};
     gfx::PresentSink::DisplayPeakInfo hdrPeakInfo_{};
-    std::chrono::steady_clock::time_point hdrPeakQuery_{},metadataAttempt_{};
+    std::chrono::steady_clock::time_point metadataAttempt_{};
     DXGI_HDR_METADATA_HDR10 lastMetadata_{};
     gfx::ReflexSession reflex_;
     uint64_t reflexFrame_=0,generation_=0;
     bool providerOwnedPresentation_=false;
+    PresentCapture* capture_=nullptr;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> presentationQueue_;
     Microsoft::WRL::ComPtr<ID3D12Fence> presentationFence_;
     HANDLE presentationEvent_=nullptr;
@@ -170,7 +186,13 @@ private:
     bool xessFailed_=false;
     bool xessGenerationSuppressed_=false;
     HMONITOR refreshMonitor_=nullptr;double refreshHz_=0;gfx::VrrState vrr_{};bool refreshQueried_=false,vrrSync_=false;
-    std::chrono::steady_clock::time_point refreshQuery_{};
+    DisplayStateService* displayStates_=nullptr;
+    uint64_t displayStateSerial_=0,displayGeneration_=0;
+    // VRR presentation may start or stop after it is requested or when the
+    // window enters/leaves fullscreen: one forced query 3 s after that settles.
+    std::optional<std::chrono::steady_clock::time_point> vrrConfirmAt_;
+    void startDisplayState();
+    void applyDisplayState(const DisplayState&);
     uint32_t xessInputId_=0;
     struct XessWork {pipeline::FrameIdentity identity{};uint32_t id=0;};
     std::array<XessWork,4> xessWork_{};

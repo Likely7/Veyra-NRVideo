@@ -400,6 +400,7 @@ private:
     std::atomic<bool> fading_{false};bool pausedEndpoint_=false;
     size_t fadeInRemaining_=0;
     LiveAudioGapTracker liveGap_;
+    int64_t tapLatencyUs_=0;   // live recording: device-clock playout minus the queued-frame estimate
     std::vector<float> lastRaw_=std::vector<float>(2,0);
     AudioFormat inputFormat_,outputFormat_;
     SwrContext* channelMix_=nullptr;

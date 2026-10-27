@@ -701,11 +701,11 @@
    "ja": "AMD NR のプレビューと動画書き出しは内部で最大 1080p まで処理し、動画の出力サイズを維持します。画像書き出しはモデルのサイズ制限内である必要があります。"
   },
   {
-   "zh": "AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。HDR 尚未验收。",
+   "zh": "AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。原生 HDR 保留原图基底，通过 SDR 代理增强后还原；AMD 实卡效果仍待验证。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "AMD NR（實驗）：需要 RX 9000 驅動及 lmxxf 執行元件，內部最高 1080p 像素預算。支援模型強度、殘差與保護；風格使用執行元件設定。HDR 尚未驗收。",
-   "en": "AMD NR (experimental): requires an RX 9000 driver and lmxxf runtime, with an internal 1080p pixel budget. Model strength, residual and protection are supported; style uses the runtime configuration. HDR has not been validated.",
-   "ja": "AMD NR（実験）：RX 9000 ドライバーと lmxxf ランタイムが必要です。内部処理の画素数は最大 1080p 相当です。モデル強度・残差・保護に対応し、スタイルはランタイム設定を使います。HDR は未検証です。"
+   "zh-TW": "AMD NR（實驗）：需要 RX 9000 驅動及 lmxxf 執行元件，內部最高 1080p 像素預算。支援模型強度、殘差與保護；風格使用執行環境設定。原生 HDR 保留原圖基底，透過 SDR 代理增強後還原；AMD 實卡效果仍待驗證。",
+   "en": "AMD NR (experimental): requires an RX 9000 driver and lmxxf runtime, with an internal 1080p pixel budget. Model strength, residual and protection are supported; style uses the runtime configuration. Native HDR retains its original base and restores enhancement from an SDR proxy; results on AMD hardware still need verification.",
+   "ja": "AMD NR（実験）：RX 9000 ドライバーと lmxxf ランタイムが必要です。内部処理は最大1080p相当のピクセル数です。モデル強度、残差、保護に対応し、スタイルはランタイム設定を使用します。ネイティブHDRの原画を保持し、SDRプロキシの補正差分を復元します。AMD実機での効果は未検証です。"
   },
   {
    "zh": "AMD 光流",
@@ -1226,6 +1226,20 @@
    "ja": "HDR ソースも SDR で表示します。キャプチャーカードの「SDR で表示」と同じ設定です"
   },
   {
+   "zh": "HDR 画面固定使用 HEVC 10bit；宽或高超过 4096 时自动使用 HEVC",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "HDR 畫面固定使用 HEVC 10bit；寬或高超過 4096 時自動使用 HEVC",
+   "en": "HDR uses HEVC 10-bit; dimensions above 4096 automatically use HEVC",
+   "ja": "HDR は HEVC 10bit を使用し、幅または高さが 4096 を超える場合も HEVC を使用します"
+  },
+  {
+   "zh": "HDR 画面录制需要 NVIDIA 显卡（HEVC 10bit）；请关闭 HDR 输出后再录制",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "HDR 畫面錄製需要 NVIDIA 顯示卡（HEVC 10bit）；請關閉 HDR 輸出後再錄製",
+   "en": "HDR recording requires an NVIDIA GPU (HEVC 10-bit); disable HDR output to record",
+   "ja": "HDR 録画には NVIDIA GPU（HEVC 10bit）が必要です。HDR 出力をオフにして録画してください"
+  },
+  {
    "zh": "HDR 补帧闪黑兼容",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "HDR 補幀閃黑相容",
@@ -1541,6 +1555,20 @@
    "ja": "NR"
   },
   {
+   "zh": "NVENC 无法开始录制：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "NVENC 無法開始錄製：",
+   "en": "NVENC could not start recording: ",
+   "ja": "NVENC 録画を開始できません："
+  },
+  {
+   "zh": "NVENC 编码失败：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "NVENC 編碼失敗：",
+   "en": "NVENC encoding failed: ",
+   "ja": "NVENC エンコードに失敗しました："
+  },
+  {
    "zh": "NVIDIA RTX 补帧；倍率以运行库实际能力为准",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "NVIDIA RTX 補幀；倍率以執行庫實際能力為準",
@@ -1590,11 +1618,11 @@
    "ja": "OBS ゲームキャプチャ互換でインターフェースはソフトウェア描画です。RTSS の OSD は映像にだけ表示されます"
   },
   {
-   "zh": "OBS、监控软件兼容需重启；HDR 补帧兼容可在播放中切换。",
+   "zh": "OBS 游戏采集兼容开启时，界面始终软件绘制",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "OBS、監控軟體相容需重新啟動；HDR 補幀相容可在播放中切換。",
-   "en": "OBS and monitoring compatibility require a restart; HDR frame generation compatibility can be switched during playback.",
-   "ja": "OBS とモニタリングソフトの互換設定は再起動が必要です。HDR フレーム生成の互換設定は再生中に切り替えられます。"
+   "zh-TW": "OBS 遊戲擷取相容開啟時，介面一律以軟體繪製",
+   "en": "With OBS game capture compatibility on, the interface is always drawn in software",
+   "ja": "OBS ゲームキャプチャ互換がオンの間、インターフェースは常にソフトウェア描画です"
   },
   {
    "zh": "PC 串流",
@@ -2521,6 +2549,13 @@
    "ja": "前のバッチがまだ実行中か回収中です"
   },
   {
+   "zh": "上一段录制仍在保存，请稍后再试",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "上一段錄製仍在儲存，請稍後再試",
+   "en": "The previous recording is still being saved; try again shortly",
+   "ja": "前の録画を保存中です。しばらくしてから再試行してください"
+  },
+  {
    "zh": "上一项",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "上一項",
@@ -2687,6 +2722,13 @@
    "zh-TW": "不向 PS5 轉發電腦手把輸入",
    "en": "Don't forward this PC's controller input to the PS5",
    "ja": "この PC のコントローラー入力を PS5 に転送しない"
+  },
+  {
+   "zh": "不支持",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "不支援",
+   "en": "Not supported",
+   "ja": "非対応"
   },
   {
    "zh": "不是 8 位配对码",
@@ -3543,6 +3585,13 @@
    "ja": "保存"
   },
   {
+   "zh": "保存中…",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "儲存中…",
+   "en": "Saving…",
+   "ja": "保存中…"
+  },
+  {
    "zh": "保存到",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "儲存到",
@@ -3737,6 +3786,13 @@
    "zh-TW": "偏高",
    "en": "High",
    "ja": "高め"
+  },
+  {
+   "zh": "停止 %1",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "停止 %1",
+   "en": "Stop %1",
+   "ja": "停止 %1"
   },
   {
    "zh": "像素格式",
@@ -4216,6 +4272,13 @@
    "ja": "コンテナーインデックスの書き込み"
   },
   {
+   "zh": "写入录制文件失败（磁盘已满或没有写入权限？）",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "寫入錄製檔案失敗（磁碟已滿或沒有寫入權限？）",
+   "en": "Could not write the recording (disk full or no write permission?)",
+   "ja": "録画を書き込めません（ディスク容量または書き込み権限を確認してください）"
+  },
+  {
    "zh": "写入视频帧",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "寫入影片幀",
@@ -4580,6 +4643,20 @@
    "ja": "出力ファイルのフラッシュとクローズ"
   },
   {
+   "zh": "刷新显示器状态",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "重新整理顯示器狀態",
+   "en": "Refresh display state",
+   "ja": "ディスプレイの状態を更新"
+  },
+  {
+   "zh": "刷新显示器状态没有完成，请稍后再试",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "重新整理顯示器狀態未完成，請稍後再試",
+   "en": "Refreshing the display state did not finish; try again later",
+   "ja": "ディスプレイの状態の更新が完了しませんでした。しばらくしてからもう一度お試しください"
+  },
+  {
    "zh": "刷新设备",
    "src": "qml/DialogHost.qml",
    "zh-TW": "刷新裝置",
@@ -4909,6 +4986,13 @@
    "ja": "ペアリングへ"
   },
   {
+   "zh": "去除锯齿边缘，适合游戏画面、文字和界面线条。列表模式开着 NR 时排在 NR 之后，NR 重新勾出的边缘也会处理；不开 NR 时在源分辨率、超分之前运行，锯齿不会被一起放大。",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "去除鋸齒邊緣，適合遊戲畫面、文字和介面線條。清單模式開著 NR 時排在 NR 之後，NR 重新勾出的邊緣也會處理；不開 NR 時在來源解析度、超解析之前執行，鋸齒不會被一起放大。",
+   "en": "Removes jagged edges, for game footage, text and interface lines. In list mode with NR on it runs after NR, so the edges NR redraws are smoothed too; without NR it runs at source resolution before super resolution, so the jaggies are not enlarged with the picture.",
+   "ja": "ギザギザのエッジを取り除きます。ゲーム映像、文字、UI の線に向いています。リストモードで NR がオンのときは NR の後に処理するため、NR が描き直したエッジも滑らかにします。NR がオフのときはソース解像度で超解像の前に処理するため、ギザギザが一緒に拡大されません。"
+  },
+  {
    "zh": "去隔行处理失败，请查看诊断",
    "src": "src/source/MediaFileSource.cpp",
    "zh-TW": "去交錯處理失敗，請查看診斷",
@@ -5145,6 +5229,13 @@
    "zh-TW": "只壓縮向白色溢出的變化，保留高光回暗",
    "en": "Compress changes toward blown whites; retain highlight darkening",
    "ja": "白飛びする変化だけを圧縮し、ハイライトの減光は保持します"
+  },
+  {
+   "zh": "只在“界面绘制”选 GPU 时起作用；软件绘制时小飞机 OSD 只显示在视频上",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "只在「介面繪製」選 GPU 時起作用；軟體繪製時小飛機 OSD 只顯示在影片上",
+   "en": "Only matters when Interface drawing is set to GPU; with software drawing the RTSS OSD shows on the video only",
+   "ja": "「インターフェース描画」が GPU のときだけ有効です。ソフトウェア描画では RTSS の OSD は映像にだけ表示されます"
   },
   {
    "zh": "只在这个亮度以下的暗部生效",
@@ -5742,13 +5833,6 @@
    "ja": "ブラウザーでサインインページを開く"
   },
   {
-   "zh": "在源分辨率去除锯齿边缘，适合游戏画面、文字和界面线条；放在超分之前，锯齿不会被一起放大。",
-   "src": "qml/AntiAliasEditor.qml",
-   "zh-TW": "在來源解析度去除鋸齒邊緣，適合遊戲畫面、文字和介面線條；放在超解析之前，鋸齒不會被一起放大。",
-   "en": "Removes jagged edges at source resolution, for game footage, text and interface lines. It runs before super resolution, so the jaggies are not enlarged with the picture.",
-   "ja": "ソース解像度でギザギザのエッジを取り除きます。ゲーム映像、文字、UI の線に向いています。超解像の前に処理するため、ギザギザが一緒に拡大されません。"
-  },
-  {
    "zh": "在画面上按住左键拖出",
    "src": "qml/ProPage.qml",
    "zh-TW": "在畫面上按住左鍵拖出",
@@ -5980,6 +6064,13 @@
    "ja": "処理中 · "
   },
   {
+   "zh": "处理比例",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "處理比例",
+   "en": "Processing scale",
+   "ja": "処理解像度の比率"
+  },
+  {
    "zh": "处理耗时",
    "src": "qml/ProPage.qml",
    "zh-TW": "處理耗時",
@@ -6148,11 +6239,11 @@
    "ja": "マルチチャンネルのソースをステレオにまとめて出力（ヘッドホン向け）。オフ時はデバイスのチャンネル配置に従います"
   },
   {
-   "zh": "多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，导出仍按原生尺寸处理。",
+   "zh": "多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，视频导出同样按各层所选分辨率处理。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "多層 NR 可嘗試前層 720p、末層 1080p；三層可嘗試 480p / 720p / 1080p。降低前層解析度會改變畫面，匯出仍按原生尺寸處理。",
-   "en": "For multiple NR layers, try 720p first and 1080p last; for three layers, try 480p / 720p / 1080p. Lowering the earlier layers changes the image. Exports still use native dimensions.",
-   "ja": "複数の NR レイヤーでは前段を 720p、最終段を 1080p に、3 段では 480p / 720p / 1080p にする方法もあります。前段の解像度を下げると映像が変わります。書き出しは引き続きネイティブサイズで処理します。"
+   "zh-TW": "多層 NR 可嘗試前層 720p、末層 1080p；三層可嘗試 480p / 720p / 1080p。降低前層解析度會改變畫面，影片匯出同樣依各層所選解析度處理。",
+   "en": "For multiple NR layers, try 720p first and 1080p last; for three layers, try 480p / 720p / 1080p. Lowering the earlier layers changes the image. Video export also uses each layer's selected resolution.",
+   "ja": "複数の NR レイヤーでは前段を 720p、最終段を 1080p に、3 段では 480p / 720p / 1080p にする方法もあります。前段の解像度を下げると映像が変わります。動画の書き出しも各レイヤーで選択した解像度で処理します。"
   },
   {
    "zh": "夜景或暗部的脸调低",
@@ -7261,11 +7352,25 @@
    "ja": "再生中のコンテンツを閉じ、GPU をすべて書き出しに回しました"
   },
   {
+   "zh": "已切换播放内容，录制已保存",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "已切換播放內容，錄製已儲存",
+   "en": "Playback source changed; recording saved",
+   "ja": "再生ソースが切り替わりました。録画を保存しました"
+  },
+  {
    "zh": "已删除。",
    "src": "src/ui/MoonlightModel.cpp",
    "zh-TW": "已刪除。",
    "en": "Removed.",
    "ja": "削除しました。"
+  },
+  {
+   "zh": "已刷新显示器状态：系统 HDR %1 · 可变刷新 %2",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已重新整理顯示器狀態：系統 HDR %1 · 可變更新 %2",
+   "en": "Display state refreshed: Windows HDR %1 · variable refresh %2",
+   "ja": "ディスプレイの状態を更新しました：システム HDR %1 · 可変リフレッシュ %2"
   },
   {
    "zh": "已加载",
@@ -7660,6 +7765,13 @@
    "ja": "起動時の既定プリセットに設定しました"
   },
   {
+   "zh": "已请求",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已請求",
+   "en": "Requested",
+   "ja": "要求済み"
+  },
+  {
    "zh": "已请求主机退出游戏。",
    "src": "src/ui/MoonlightModel.cpp",
    "zh-TW": "已請求主機退出遊戲。",
@@ -7847,6 +7959,13 @@
    "zh-TW": "底部距離",
    "en": "Distance from bottom",
    "ja": "下端からの距離"
+  },
+  {
+   "zh": "开",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "開",
+   "en": "On",
+   "ja": "オン"
   },
   {
    "zh": "开关、进度、选中状态",
@@ -8157,6 +8276,13 @@
    "ja": "現在 · 設定はそのまま保持"
   },
   {
+   "zh": "当前不可用",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前不可用",
+   "en": "Unavailable now",
+   "ja": "現在は使用不可"
+  },
+  {
    "zh": "当前为 SDR 预览，HDR 转换未运行",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "當前為 SDR 預覽，HDR 轉換未執行",
@@ -8304,6 +8430,13 @@
    "ja": "適用中：カスタム調整（一致するプリセットなし）"
   },
   {
+   "zh": "当前画面尺寸 {}×{} 无法录制",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "目前畫面尺寸 {}×{} 無法錄製",
+   "en": "Cannot record the current frame size {}×{}",
+   "ja": "現在のフレームサイズ {}×{} は録画できません"
+  },
+  {
    "zh": "当前硬件或包不支持所选效果，请查看组件页",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "目前硬體或套件不支援所選效果，請查看元件頁",
@@ -8351,6 +8484,146 @@
    "zh-TW": "當前非 NVIDIA 適配器：NR、NVIDIA 超解析與 DLSS 已停用；可使用 XeSS 預覽和 AMD 光流",
    "en": "Not an NVIDIA adapter: NR, NVIDIA super resolution and DLSS are disabled; XeSS preview and AMD optical flow are available",
    "ja": "NVIDIA 以外のアダプターです：NR、NVIDIA 超解像、DLSS は無効です。XeSS のプレビューと AMD オプティカルフローは使えます"
+  },
+  {
+   "zh": "录入播放器正在播放的声音，不受音量和静音影响；采集卡需要开启音频监听",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄入播放器正在播放的聲音，不受音量和靜音影響；擷取卡需要開啟音訊監聽",
+   "en": "Records player audio before volume and mute; capture cards need audio monitoring enabled",
+   "ja": "音量・ミュート適用前の音声を録音します。キャプチャーカードでは音声モニターを有効にしてください"
+  },
+  {
+   "zh": "录制",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "錄製",
+   "en": "Record",
+   "ja": "録画"
+  },
+  {
+   "zh": "录制 %1 秒",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "錄製 %1 秒",
+   "en": "Record in %1 s",
+   "ja": "録画 %1 秒後"
+  },
+  {
+   "zh": "录制保存位置",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製儲存位置",
+   "en": "Recording folder",
+   "ja": "録画の保存先"
+  },
+  {
+   "zh": "录制回读缓冲分配失败",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製回讀緩衝區分配失敗",
+   "en": "Could not allocate recording readback buffers",
+   "ja": "録画読み戻しバッファを確保できません"
+  },
+  {
+   "zh": "录制声音",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製聲音",
+   "en": "Record audio",
+   "ja": "音声を録音"
+  },
+  {
+   "zh": "录制已保存：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "錄製已儲存：%1",
+   "en": "Recording saved: %1",
+   "ja": "録画を保存しました：%1"
+  },
+  {
+   "zh": "录制已保存：%1（%2）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "錄製已儲存：%1（%2）",
+   "en": "Recording saved: %1 (%2)",
+   "ja": "録画を保存しました：%1（%2）"
+  },
+  {
+   "zh": "录制已在进行中",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製已在進行中",
+   "en": "A recording is already running",
+   "ja": "すでに録画中です"
+  },
+  {
+   "zh": "录制帧率",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製影格率",
+   "en": "Recording frame rate",
+   "ja": "録画のフレームレート"
+  },
+  {
+   "zh": "录制描述符分配失败",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製描述元分配失敗",
+   "en": "Could not allocate recording descriptors",
+   "ja": "録画ディスクリプターを確保できません"
+  },
+  {
+   "zh": "录制文件仍在保存，已停止录制以避免积压",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製檔案仍在儲存，已停止錄製以避免積壓",
+   "en": "Recording stopped because previous files are still being saved",
+   "ja": "前のファイルを保存中のため、滞留を防ぐために録画を停止しました"
+  },
+  {
+   "zh": "录制文件收尾失败",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製檔案收尾失敗",
+   "en": "Could not finalize the recording",
+   "ja": "録画ファイルを確定できません"
+  },
+  {
+   "zh": "录制显存分配失败",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製顯示記憶體分配失敗",
+   "en": "Could not allocate recording GPU memory",
+   "ja": "録画用 GPU メモリーを確保できません"
+  },
+  {
+   "zh": "录制画面回读超时",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製畫面回讀逾時",
+   "en": "Recording frame readback timed out",
+   "ja": "録画フレームの読み戻しがタイムアウトしました"
+  },
+  {
+   "zh": "录制目录不存在：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "錄製資料夾不存在：%1",
+   "en": "The recording folder does not exist: %1",
+   "ja": "録画フォルダが存在しません：%1"
+  },
+  {
+   "zh": "录制目录所在磁盘剩余空间不足 1 GB",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製目錄所在磁碟剩餘空間不足 1 GB",
+   "en": "Less than 1 GB is free on the recording drive",
+   "ja": "録画先ドライブの空き容量が 1 GB 未満です"
+  },
+  {
+   "zh": "录制码率",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製位元率",
+   "en": "Recording bitrate",
+   "ja": "録画のビットレート"
+  },
+  {
+   "zh": "录制编码",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製編碼",
+   "en": "Recording codec",
+   "ja": "録画のコーデック"
+  },
+  {
+   "zh": "录制转换着色器加载失败",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製轉換著色器載入失敗",
+   "en": "Could not load the recording conversion shader",
+   "ja": "録画変換シェーダーを読み込めません"
   },
   {
    "zh": "往返 ",
@@ -8582,6 +8855,20 @@
    "zh-TW": "手動偏移 · 即時輸入時生效",
    "en": "Manual offset · applies to live input",
    "ja": "手動オフセット · ライブ入力時に有効"
+  },
+  {
+   "zh": "手动比例以最高 1080p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "手動比例以最高 1080p 預算內的輸入為基準；適用於預覽與影片匯出，輸出尺寸不變。",
+   "en": "Manual scale is relative to the input within the 1080p budget. It applies to preview and video export; the output size is unchanged.",
+   "ja": "手動倍率は最大1080pの予算内の入力を基準とし、プレビューと動画の書き出しに適用されます。出力サイズは変わりません。"
+  },
+  {
+   "zh": "手动比例缩放该层输入的宽高；50% 约为四分之一像素。适用于预览与视频导出，输出尺寸不变。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "手動比例縮放該層輸入的寬高；50% 約為四分之一像素。適用於預覽與影片匯出，輸出尺寸不變。",
+   "en": "Manual scale changes the width and height of this layer’s input; 50% is about one quarter of the pixels. It applies to preview and video export; the output size is unchanged.",
+   "ja": "手動倍率はこのレイヤー入力の幅と高さに適用され、50%では画素数が約4分の1になります。プレビューと動画の書き出しに適用され、出力サイズは変わりません。"
   },
   {
    "zh": "手动添加",
@@ -9200,6 +9487,20 @@
    "ja": "再生に失敗"
   },
   {
+   "zh": "播放已停止，录制已保存",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "播放已停止，錄製已儲存",
+   "en": "Playback stopped; recording saved",
+   "ja": "再生が停止しました。録画を保存しました"
+  },
+  {
+   "zh": "播放已结束，录制已保存",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "播放已結束，錄製已儲存",
+   "en": "Playback ended; recording saved",
+   "ja": "再生が終了しました。録画を保存しました"
+  },
+  {
    "zh": "播放时减闪；暂停单帧不体现时域效果",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "播放時減閃；暫停單幀不體現時域效果",
@@ -9599,6 +9900,20 @@
    "ja": "書き出しファイルに書き込めませんでした"
   },
   {
+   "zh": "无法写入录制文件头",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法寫入錄製檔案標頭",
+   "en": "Cannot write the recording file header",
+   "ja": "録画ファイルのヘッダーを書き込めません"
+  },
+  {
+   "zh": "无法写入录制文件头：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法寫入錄製檔案標頭：",
+   "en": "Could not write the recording header: ",
+   "ja": "録画ヘッダーを書き込めません："
+  },
+  {
    "zh": "无法分配媒体上下文",
    "src": "src/media/DemuxSession.cpp",
    "zh-TW": "無法配置媒體上下文",
@@ -9632,6 +9947,34 @@
    "zh-TW": "無法建立匯出通信資源",
    "en": "Could not create the export communication resources",
    "ja": "書き出し用の通信リソースを作成できませんでした"
+  },
+  {
+   "zh": "无法创建录制封装器",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立錄製封裝器",
+   "en": "Cannot create the recording muxer",
+   "ja": "録画の封装器を作成できません"
+  },
+  {
+   "zh": "无法创建录制文件：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立錄製檔案：",
+   "en": "Could not create the recording file: ",
+   "ja": "録画ファイルを作成できません："
+  },
+  {
+   "zh": "无法创建录制目录：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立錄製資料夾：",
+   "en": "Cannot create the recording folder: ",
+   "ja": "録画フォルダを作成できません："
+  },
+  {
+   "zh": "无法创建录制视频流",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立錄製影片串流",
+   "en": "Cannot create the recording video stream",
+   "ja": "録画の映像ストリームを作成できません"
   },
   {
    "zh": "无法创建拼接输出",
@@ -9788,6 +10131,13 @@
    "ja": "選択したキャプチャ形式を作成できません。解像度、レート、ドライバーの対応能力を確認してください。"
   },
   {
+   "zh": "无法检测",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "無法偵測",
+   "en": "Cannot detect",
+   "ja": "検出できません"
+  },
+  {
    "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "無法偵測螢幕是否支援（目前只支援 NVIDIA 顯示卡）",
@@ -9807,6 +10157,13 @@
    "zh-TW": "無法生成擷取連接參數",
    "en": "Could not build the capture connection parameters",
    "ja": "キャプチャー接続のパラメーターを生成できませんでした"
+  },
+  {
+   "zh": "无法获取当前显卡",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法取得目前顯示卡",
+   "en": "Could not obtain the current GPU device",
+   "ja": "現在の GPU デバイスを取得できません"
   },
   {
    "zh": "无法解码PNG/JPEG",
@@ -9996,6 +10353,13 @@
    "zh-TW": "顯示卡在第 {} 幀被系統重置；前 {:.1f} 秒已儲存，接著匯出剩餘部分",
    "en": "The GPU was reset at frame {}; the first {:.1f} s are saved, exporting the rest",
    "ja": "{} フレーム目で GPU がリセットされました。最初の {:.1f} 秒は保存済みで、残りを書き出します"
+  },
+  {
+   "zh": "显卡绘制：动画更顺，带阴影与模糊；占用显存和 GPU，可能与小飞机等监控软件冲突",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "顯示卡繪製：動畫更順，帶陰影與模糊；佔用顯示記憶體和 GPU，可能與小飛機等監控軟體衝突",
+   "en": "GPU drawing: smoother animation with shadows and blur; uses video memory and GPU time, and may conflict with RTSS and other monitoring overlays",
+   "ja": "GPU 描画：アニメーションが滑らかで影・ぼかしあり。VRAM と GPU を使い、RTSS などのモニタリングソフトと競合することがあります"
   },
   {
    "zh": "显卡调度、预热与资源监控。默认设置适合大多数机器。",
@@ -10761,6 +11125,13 @@
    "ja": "上限なし"
   },
   {
+   "zh": "未设置录制保存位置",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "未設定錄製儲存位置",
+   "en": "No recording folder is set",
+   "ja": "録画の保存先が設定されていません"
+  },
+  {
    "zh": "未输出",
    "src": "qml/NodePage.qml",
    "zh-TW": "未輸出",
@@ -10828,7 +11199,12 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "杜比視界設定",
    "en": "Dolby Vision settings",
-   "ja": "Dolby Vision 設定"
+   "ja": "Dolby Vision 設定",
+   "zh": "本次检测到监控软件，仍用软件绘制（监控软件兼容：自动）",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "本次偵測到監控軟體，仍以軟體繪製（監控軟體相容：自動）",
+   "en": "A monitoring overlay was detected at this start, so the interface is still drawn in software (monitoring overlay compatibility: Auto)",
+   "ja": "今回の起動でモニタリングソフトを検出したため、ソフトウェア描画のままです（モニタリングソフト互換：自動）"
   },
   {
    "zh": "本软件开源免费，如果对你有帮助，你可以 →",
@@ -10843,6 +11219,13 @@
    "zh-TW": "放開以追加至播放清單",
    "en": "Drop to append to playlist",
    "ja": "ドロップしてプレイリストに追加"
+  },
+  {
+   "zh": "松开后应用 · 宽高同比例",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "放開後套用 · 寬高同比例",
+   "en": "Apply on release · scale both dimensions",
+   "ja": "離して適用 · 幅と高さを同比率で縮小"
   },
   {
    "zh": "松开恢复",
@@ -11671,6 +12054,13 @@
    "ja": "保存できる映像がありません"
   },
   {
+   "zh": "没有可用的 AAC 编码器，本次录制不含声音",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "沒有可用的 AAC 編碼器，本次錄製不含聲音",
+   "en": "No AAC encoder is available; this recording has no audio",
+   "ja": "AAC エンコーダーが利用できないため、今回は音声なしで録画します"
+  },
+  {
    "zh": "没有可用的 H.264 解码器。",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "沒有可用的 H.264 解碼器。",
@@ -11706,6 +12096,13 @@
    "ja": "使用できる動画エンコーダーがありません"
   },
   {
+   "zh": "没有录到画面，未保存文件",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "沒有錄到畫面，未儲存檔案",
+   "en": "No frames were recorded; no file was saved",
+   "ja": "フレームが録画されていないため、ファイルを保存しませんでした"
+  },
+  {
    "zh": "没有待导出文件；失败项请先点击重试",
    "src": "src/engine/ExportQueue.cpp",
    "zh-TW": "沒有待匯出檔案；失敗項請先點擊重試",
@@ -11718,6 +12115,13 @@
    "zh-TW": "沒有收到影片資料。通常是防火墻或端口轉發沒有放行 UDP 47998–48010。",
    "en": "No video data received. Usually the firewall or port forwarding does not allow UDP 47998–48010.",
    "ja": "映像データを受信していません。多くはファイアウォールやポート転送で UDP 47998–48010 が許可されていないことが原因です。"
+  },
+  {
+   "zh": "没有正在播放的画面，无法录制",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "沒有正在播放的畫面，無法錄製",
+   "en": "Nothing is playing, so there is nothing to record",
+   "ja": "再生中の映像がないため録画できません"
   },
   {
    "zh": "没有正在播放的画面，无法截图",
@@ -12196,6 +12600,13 @@
    "ja": "環境光補正：明るい部屋では補正し、暗い部屋では補正しません"
   },
   {
+   "zh": "生效中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "生效中",
+   "en": "Active",
+   "ja": "有効"
+  },
+  {
    "zh": "生效中：NVIDIA DLSS 帧生成性能模式（测试版）",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "生效中：NVIDIA DLSS 幀生成效能模式（測試版）",
@@ -12336,6 +12747,13 @@
    "ja": "映像比較 · フレーム生成は一時停止中"
   },
   {
+   "zh": "画面尺寸或 HDR 模式变化，已接着写入新文件",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "畫面尺寸或 HDR 模式變更，已接著寫入新檔案",
+   "en": "Frame size or HDR mode changed; recording continues in a new file",
+   "ja": "フレームサイズまたは HDR モードが変わったため、新しいファイルで録画を続けます"
+  },
+  {
    "zh": "画面引擎无响应，已记录诊断信息；如画面未恢复，请关闭软件后重新打开",
    "src": "include/veyra/engine/EngineWatchdog.h",
    "zh-TW": "畫面引擎無回應，已記錄診斷資訊；如畫面未恢復，請關閉軟體後重新開啟",
@@ -12439,6 +12857,20 @@
    "zh-TW": "介面狀態擷取會話損壞",
    "en": "The capture session in the interface state is damaged",
    "ja": "画面状態のキャプチャーセッションが破損しています"
+  },
+  {
+   "zh": "界面绘制",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "介面繪製",
+   "en": "Interface drawing",
+   "ja": "インターフェース描画"
+  },
+  {
+   "zh": "界面绘制、OBS、监控软件兼容需重启；HDR 补帧兼容可在播放中切换。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "介面繪製、OBS、監控軟體相容需重新啟動；HDR 補幀相容可在播放中切換。",
+   "en": "Interface drawing, OBS and monitoring compatibility require a restart; HDR frame generation compatibility can be switched during playback.",
+   "ja": "インターフェース描画、OBS、モニタリングソフトの互換設定は再起動が必要です。HDR フレーム生成の互換設定は再生中に切り替えられます。"
   },
   {
    "zh": "界面缩放",
@@ -12714,6 +13146,13 @@
    "ja": "OK"
   },
   {
+   "zh": "磁盘写入跟不上录制，已停止录制（请换更快的磁盘或降低码率）",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "磁碟寫入跟不上錄製，已停止錄製（請換更快的磁碟或降低位元率）",
+   "en": "Recording stopped: disk writes are too slow (use a faster drive or lower bitrate)",
+   "ja": "ディスク書き込みが追いつかないため録画を停止しました（高速ドライブを使用するかビットレートを下げてください）"
+  },
+  {
    "zh": "磨皮",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "磨皮",
@@ -12980,6 +13419,13 @@
    "ja": "精細：位置に合わせて色差を復元し、拡大はバイキュービック。AI 超解像ではありません"
   },
   {
+   "zh": "系统 HDR",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "系統 HDR",
+   "en": "Windows HDR",
+   "ja": "システム HDR"
+  },
+  {
    "zh": "系统不支持 Windows Graphics Capture",
    "src": "src/source/ScreenCaptureSource.cpp",
    "zh-TW": "系統不支援 Windows Graphics Capture",
@@ -13029,11 +13475,32 @@
    "ja": "システムのハードウェアエンコーダー HEVC（{}）"
   },
   {
+   "zh": "系统硬件编码器收尾失败：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "系統硬體編碼器收尾失敗：",
+   "en": "System hardware encoder finalization failed: ",
+   "ja": "システムのハードウェアエンコーダーの終了処理に失敗しました："
+  },
+  {
+   "zh": "系统硬件编码器无法开始录制：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "系統硬體編碼器無法開始錄製：",
+   "en": "System hardware encoder could not start recording: ",
+   "ja": "システムのハードウェアエンコーダーで録画を開始できません："
+  },
+  {
    "zh": "系统硬件编码器无法激活",
    "src": "src/sink/MfVideoEncoder.cpp",
    "zh-TW": "系統硬體編碼器無法啟用",
    "en": "The system hardware encoder cannot be activated",
    "ja": "システムのハードウェアエンコーダーを有効にできません"
+  },
+  {
+   "zh": "系统硬件编码失败：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "系統硬體編碼失敗：",
+   "en": "System hardware encoding failed: ",
+   "ja": "システムのハードウェアエンコードに失敗しました："
   },
   {
    "zh": "系统编码器初始化失败：{}",
@@ -13589,6 +14056,13 @@
    "ja": "自動調整：%1（Z/X で微調整）"
   },
   {
+   "zh": "自动按画面尺寸和帧率选择；数字为 Mbps，越高越清晰、文件也越大",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "自動依畫面尺寸和影格率選擇；數字為 Mbps，越高越清晰、檔案也越大",
+   "en": "Automatic selects by frame size and rate; Mbps: higher values improve quality and increase file size",
+   "ja": "自動ではフレームサイズとレートに応じて選択します。単位は Mbps で、高いほど高画質でファイルも大きくなります"
+  },
+  {
    "zh": "自动捕获键盘鼠标",
    "src": "qml/DialogHost.qml",
    "zh-TW": "自動擷取鍵盤滑鼠",
@@ -13603,11 +14077,11 @@
    "ja": "自動ディスプレイ同期"
   },
   {
-   "zh": "自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。导出按原生尺寸处理。",
+   "zh": "自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。视频导出固定按最高 1440p 处理，输出尺寸不变。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "自動檔在預覽中依增強耗時調整 100%–40%；預建執行個體約增加 1.7GB 顯示記憶體及半秒啟動時間。匯出依原生尺寸處理。",
-   "en": "Auto adjusts preview processing from 100% to 40% using enhancement time. Prebuilt instances add about 1.7GB of VRAM and half a second of startup time. Export uses native dimensions.",
-   "ja": "自動設定は強化処理時間に応じてプレビューを 100%～40% に調整します。事前生成したインスタンスは約 1.7GB の VRAM と約 0.5 秒の起動時間を追加します。書き出しは元の解像度で処理します。"
+   "zh-TW": "自動檔在預覽中依增強耗時調整 100%–40%；預建執行個體約增加 1.7GB 顯示記憶體及半秒啟動時間。影片匯出固定依最高 1440p 處理，輸出尺寸不變。",
+   "en": "Auto adjusts preview processing from 100% to 40% using enhancement time. Prebuilt instances add about 1.7GB of VRAM and half a second of startup time. Video export uses a fixed maximum of 1440p; the output size is unchanged.",
+   "ja": "自動設定は強化処理時間に応じてプレビューを 100%～40% に調整します。事前生成したインスタンスは約 1.7GB の VRAM と約 0.5 秒の起動時間を追加します。動画の書き出しは最大 1440p 固定で処理し、出力サイズは変わりません。"
   },
   {
    "zh": "自动检测实际信号",
@@ -15367,6 +15841,13 @@
    "ja": "入力信号に合わせる"
   },
   {
+   "zh": "跟随显示可录到补帧后的画面；限速则按该帧率抽帧",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "跟隨顯示可錄到補幀後的畫面；限速則依該影格率抽幀",
+   "en": "Follow the display to include generated frames; a limit samples at that rate",
+   "ja": "表示に追従すると補間フレームも録画されます。制限時はそのフレームレートでサンプリングします"
+  },
+  {
    "zh": "跟随显示器",
    "src": "qml/NodePage.qml",
    "zh-TW": "跟隨顯示器",
@@ -15472,6 +15953,13 @@
    "ja": "字幕の変換"
   },
   {
+   "zh": "软件",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "軟體",
+   "en": "Software",
+   "ja": "ソフトウェア"
+  },
+  {
    "zh": "软件不检测、不拦截两者叠加，也不修改驱动配置；AMD FSR 补帧暂不提供。",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "軟體不檢測、不攔截兩者疊加，也不修改驅動設定；AMD FSR 補幀暫不提供。",
@@ -15491,6 +15979,13 @@
    "zh-TW": "軟體內測得的音畫偏差，不是揚聲器實測；只在擷取卡 / PS5 即時輸入時有",
    "en": "Audio/video offset measured inside the app, not at the speakers; only for live capture card / PS5 input",
    "ja": "アプリ内で測定した音声と映像のずれで、スピーカーでの実測ではありません。キャプチャーカード / PS5 のライブ入力時のみ"
+  },
+  {
+   "zh": "软件绘制：兼容性最好，不占显存，不和视频抢 GPU；部分阴影与模糊简化",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "軟體繪製：相容性最好，不佔顯示記憶體，不和影片搶 GPU；部分陰影與模糊簡化",
+   "en": "Software drawing: best compatibility, no video memory, no competition with the video for the GPU; some shadows and blur are simplified",
+   "ja": "ソフトウェア描画：互換性が最も高く、VRAM を使わず、映像と GPU を取り合いません。一部の影・ぼかしは簡略化されます"
   },
   {
    "zh": "软件解码",
@@ -16282,6 +16777,13 @@
    "zh-TW": "選擇匯出目錄",
    "en": "Choose export folder",
    "ja": "書き出し先フォルダーを選択"
+  },
+  {
+   "zh": "选择录制保存位置",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "選擇錄製儲存位置",
+   "en": "Choose the recording folder",
+   "ja": "録画の保存先を選択"
   },
   {
    "zh": "选择截图目录",
@@ -17334,6 +17836,13 @@
    "ja": "ページ切り替えバー"
   },
   {
+   "zh": "顺时针旋转 90°（已旋转 %1°）",
+   "src": "qml/RotateButton.qml",
+   "zh-TW": "順時針旋轉 90°（已旋轉 %1°）",
+   "en": "Rotate 90° clockwise (rotated %1°)",
+   "ja": "時計回りに90°回転（%1°回転済み）"
+  },
+  {
    "zh": "须低于上限",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "須低於上限",
@@ -17369,11 +17878,11 @@
    "ja": "プレビューを使用できません"
   },
   {
-   "zh": "预览保留比例且不放大小输入；图片/视频导出仍完整处理。",
+   "zh": "预览与视频导出都按所选内部分辨率处理，保留比例且不放大小输入，输出尺寸不变；图片导出仍完整处理。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "預覽保留比例且不放大小輸入；圖片/影片匯出仍完整處理。",
-   "en": "The preview keeps the aspect ratio and does not upscale small inputs; image/video export is still fully processed.",
-   "ja": "プレビューは縦横比を保ち、小さい入力は拡大しません。画像・動画の書き出しは完全に処理します。"
+   "zh-TW": "預覽與影片匯出都依所選內部解析度處理，保留比例且不放大小輸入，輸出尺寸不變；圖片匯出仍完整處理。",
+   "en": "Preview and video export both process NR at the selected internal resolution, keeping the aspect ratio without upscaling small inputs; the output size is unchanged. Image export is still fully processed.",
+   "ja": "プレビューと動画の書き出しは選択した内部解像度で処理し、縦横比を保ち小さい入力は拡大しません。出力サイズは変わりません。画像の書き出しは完全に処理します。"
   },
   {
    "zh": "预览：SDR 转 HDR 已运行",
@@ -18270,6 +18779,13 @@
    "zh-TW": "預設預設的編輯模式無效",
    "en": "The default preset's edit mode is invalid",
    "ja": "既定のプリセットの編集モードが不正です"
+  },
+  {
+   "zh": "（MP4，录下处理后的画面和正在播放的声音）",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "（MP4，錄下處理後的畫面和正在播放的聲音）",
+   "en": "(MP4, records the processed picture and player audio)",
+   "ja": "（MP4、処理後の映像と再生中の音声を録画）"
   },
   {
    "zh": "（NGX 0x{:08X}，驱动 {}），已关闭依赖效果",

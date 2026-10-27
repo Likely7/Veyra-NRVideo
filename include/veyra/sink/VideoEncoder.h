@@ -57,6 +57,11 @@ struct EncoderConfig {
     // host), so the Media Foundation path must prefer the MFT of the GPU that
     // actually renders the frames. 0x10DE/0x1002/0x8086 = NVIDIA/AMD/Intel.
     uint32_t adapterVendorId=0;
+    // How long a bitstream drain may wait for the GPU before the encoder
+    // gives up. The export can afford a long wait; the live recorder runs
+    // inside the playback loop and keeps this short so a slow GPU cannot
+    // stall playback behind the recorder.
+    uint32_t drainTimeoutMs=10000;
 };
 
 class VideoEncoder {

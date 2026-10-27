@@ -348,12 +348,13 @@ bool EnhanceGraph::createNodeColorResources(){
     for(auto& passes:interNrPasses_)passes.clear();
     if(!desc_.fixedExecutionPlan){
         // Graphs built without a compiled plan (the tiled full-resolution image
-        // path) run their enabled anti-aliasing instances at source size, in
-        // parameter order, like the list chain.
+        // path) run their enabled anti-aliasing instances in parameter order like
+        // the list chain: behind NR when NR runs (no SR here, so still the source
+        // size), otherwise right after the input conversion.
         for(uint32_t parameter=0;parameter<desc_.antiAlias.size();++parameter){
             if(!desc_.antiAlias[parameter].enabled)continue;
             if(!createAntiAlias(parameter,srcW_,srcH_))return false;
-            sourcePostPasses_.push_back({engine::kMaxChainNodes,engine::EffectType::AntiAliasing,parameter,
+            (desc_.enableNr?tailPasses_:sourcePostPasses_).push_back({engine::kMaxChainNodes,engine::EffectType::AntiAliasing,parameter,
                 antiAliasOutputs_[parameter].Get(),srcW_,srcH_,parameter});
         }
         if(!sourcePostPasses_.empty())sourcePostOutput_=sourcePostPasses_.back().output;
@@ -1465,9 +1466,10 @@ bool EnhanceGraph::initNgxFeatures()
                 correction.neutral,correction.colorKeep,correction.lumaKeep,correction.shadow));
             if(lmxxfNr_){
                 failedBackend_=engine::FailedBackend::Nr;
-                // The upstream ABI owns encode/network/decode; feed the stable
-                // linear layer texture directly and use Veyra's shared composite.
-                if(desc_.hdrWorking()){veyra::log::error("amd-nr","HDR input is not yet validated for this adapter; NR disabled by backend fallback");return false;}
+                // The upstream ABI is linear SDR. HDR uses a bounded proxy and
+                // restores its delta over the untouched HDR base before the
+                // same shared residual/protection/temporal composite.
+                if(desc_.hdrWorking()&&!instance->createAmdHdrProxy(context_.device()))return false;
                 instance->amd=std::make_unique<LmxxfNrBackend>();
                 const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr";
                 if(!instance->amd->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId,instance->model.performance) || !instance->amd->admits(extent.width,extent.height))return false;
@@ -1734,6 +1736,10 @@ bool EnhanceGraph::createComputePasses()
     const UINT nrLayerSlots = UINT(std::max<size_t>(1, nrInstances_.size()));
     if (!encPass_.loadShader("ParityEncode.dxil", cs) || !encPass_.create(context_.device(), cs, 2 * nrLayerSlots, nrLayerSlots, nrLayerSlots)) return false;
     if (!decPass_.loadShader("ParityDecode.dxil", cs) || !decPass_.create(context_.device(), cs, 4 * nrLayerSlots, 3 * nrLayerSlots, nrLayerSlots)) return false;
+    if(lmxxfNr_&&desc_.hdrWorking()&&!nrInstances_.empty()){
+        if(!amdHdrEncodePass_.loadShader("HdrAmdNrEncode.dxil",cs)||!amdHdrEncodePass_.create(context_.device(),cs,2*nrLayerSlots,1,1))return false;
+        if(!amdHdrRestorePass_.loadShader("HdrAmdNrRestore.dxil",cs)||!amdHdrRestorePass_.create(context_.device(),cs,4*nrLayerSlots,3,1))return false;
+    }
     if (!blitPass_.loadShader("ScaleBlit.dxil", cs) || !blitPass_.create(context_.device(), cs, 21, 1, 1)) return false;
     // Nv12Upload stays: frame-time CopyTextureRegion is poisoned by the
     // injected layer (SEH in NGX evaluate, r33-final3 evidence); the compute
@@ -1943,6 +1949,18 @@ bool EnhanceGraph::createViews()
             if (viewsTex) stagedSrv(layer->proxy(), DXGI_FORMAT_R8G8B8A8_UNORM, decPass_, 3 * k + 1);
             if (viewsTex) stagedSrv(layer->neural(), DXGI_FORMAT_R8G8B8A8_UNORM, decPass_, 3 * k + 2);
             if (viewsUav) makeUav(context_.device(), layer->finalRgba(), DXGI_FORMAT_R16G16B16A16_FLOAT, cpu(decPass_, 3 * layers + k));
+            if(layer->amdHdrProxy()){
+                if(viewsTex){
+                    stagedSrv(layer->input(),DXGI_FORMAT_R16G16B16A16_FLOAT,amdHdrEncodePass_,2*k);
+                    stagedSrv(layer->input(),DXGI_FORMAT_R16G16B16A16_FLOAT,amdHdrRestorePass_,4*k);
+                    stagedSrv(layer->amdHdrProxy(),DXGI_FORMAT_R16G16B16A16_FLOAT,amdHdrRestorePass_,4*k+1);
+                    stagedSrv(layer->amdHdrNeural(),DXGI_FORMAT_R16G16B16A16_FLOAT,amdHdrRestorePass_,4*k+2);
+                }
+                if(viewsUav){
+                    makeUav(context_.device(),layer->amdHdrProxy(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(amdHdrEncodePass_,2*k+1));
+                    makeUav(context_.device(),layer->finalRgba(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(amdHdrRestorePass_,4*k+3));
+                }
+            }
         }
     }
     if (viewsUav) makeUav(context_.device(), lumaTex_.Get(), desc_.wideYuvInput()?DXGI_FORMAT_R16_UNORM:DXGI_FORMAT_R8_UNORM, cpu(uploadPass_, 2));
@@ -2975,16 +2993,35 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 failedBackend_=engine::FailedBackend::Nr;
                 gpuTimer_.mark(list,GpuStage::Nr);
                 gpuTimer_.mark(list,diagnostics::nrLayerStage(unsigned(layerIndex)));
-                if(!layer->amd->recordInputs(list,layer->input(),realFrameIndex_+1,reset||!layer->historyValid||layer->inputRevision!=1,layer->model.intensity))return false;
+                const bool hdr=layer->amdHdrProxy()!=nullptr;
+                const float dimensions[8]={uintBits(nrW),uintBits(nrH),0,0,0,0,0,0};
+                if(hdr){
+                    tracker_.transition(list,layer->amdHdrProxy(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    amdHdrEncodePass_.bind(list,dimensions,gpuHandleOf(amdHdrEncodePass_,2*UINT(layerIndex)).ptr,gpuHandleOf(amdHdrEncodePass_,2*UINT(layerIndex)+1).ptr);
+                    list->Dispatch((nrW+15)/16,(nrH+15)/16,1);
+                    tracker_.uavBarrier(list,layer->amdHdrProxy());
+                    tracker_.transition(list,layer->amdHdrProxy(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                }
+                if(!layer->amd->recordInputs(list,hdr?layer->amdHdrProxy():layer->input(),realFrameIndex_+1,reset||!layer->historyValid||layer->inputRevision!=1,layer->model.intensity))return false;
                 // Same direct queue, producer -> HIP handoff -> consumer. No
                 // CPU wait on this frame; only the normal allocator reuse bound.
                 if(!submitGraph(slot)||!layer->amd->enqueue())return false;
                 list=ring_.acquireNext(slot,st);if(!list)return false;
-                tracker_.transition(list,layer->finalRgba(),D3D12_RESOURCE_STATE_COPY_DEST);
-                if(!layer->amd->recordOutputs(list,layer->finalRgba()))return false;
+                auto* neuralOutput=hdr?layer->amdHdrNeural():layer->finalRgba();
+                tracker_.transition(list,neuralOutput,D3D12_RESOURCE_STATE_COPY_DEST);
+                if(!layer->amd->recordOutputs(list,neuralOutput))return false;
+                if(hdr){
+                    tracker_.transition(list,neuralOutput,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    tracker_.transition(list,layer->finalRgba(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    amdHdrRestorePass_.bind(list,dimensions,gpuHandleOf(amdHdrRestorePass_,4*UINT(layerIndex)).ptr,gpuHandleOf(amdHdrRestorePass_,4*UINT(layerIndex)+3).ptr);
+                    list->Dispatch((nrW+15)/16,(nrH+15)/16,1);
+                    tracker_.uavBarrier(list,layer->finalRgba());
+                }
                 tracker_.transition(list,layer->finalRgba(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 if(reset||!layer->historyValid)
                     veyra::log::info("amd-nr",std::format("layer={} linear output recorded; shared residual/temporal composite enabled input={}x{} target={}x{}",layerIndex+1,nrW,nrH,sourceW,sourceH));
+                if(hdr&&(reset||!layer->historyValid))
+                    veyra::log::info("amd-nr-hdr",std::format("layer={} route=native-HDR->SDR-linear-proxy->AMD-NR->HDR-delta-restore referenceWhiteNits=203 input={}x{}; model inference is SDR, HDR base retained",layerIndex+1,nrW,nrH));
                 gpuTimer_.mark(list,GpuStage::Nr,true);
                 gpuTimer_.mark(list,diagnostics::nrLayerStage(unsigned(layerIndex)),true);
                 ++metrics_.nrEvaluateCount;layer->historyValid=true;layer->inputRevision=1;
@@ -3728,9 +3765,11 @@ void EnhanceGraph::shutdown()
         nrAdapter_->restoreCallerCompatibility();
         nrAdapter_->unload();
     }
+    log::info("graph", "shutdown: core retention/device health check begin");
     const bool retainCore=coreCache_&&coreCache_->owns(coreHost_)&&initialized_&&featuresReleased&&coreHost_->healthy()&&
         failedBackend_==engine::FailedBackend::None&&SUCCEEDED(context_.device()->GetDeviceRemovedReason())&&
         coreHost_->liveParameterBlockCount()==0;
+    log::info("graph", std::format("shutdown: core retention/device health check complete retain={}", retainCore));
     if(retainCore){
         log::info("ngx-core-cache","event=retain liveParameters=0 featuresReleased=1");
     }else if(coreHost_){
@@ -3751,6 +3790,7 @@ void EnhanceGraph::shutdown()
 
     // Staged explicit release (scope-end destructors then have nothing left).
     decPass_ = ComputePass{};
+    amdHdrEncodePass_ = {};amdHdrRestorePass_ = {};
     rgbPass_={};rgbTex_.Reset();
     for(unsigned i=0;i<2;++i){if(upRgb_[i]&&mappedRgb_[i])upRgb_[i]->Unmap(0,nullptr);mappedRgb_[i]=nullptr;upRgb_[i].Reset();}
     downsamplePass_={};residualPass_={};stackProtectionPass_={};flowAdaptPass_={};

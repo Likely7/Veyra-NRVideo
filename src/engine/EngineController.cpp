@@ -3,6 +3,7 @@
 #include "veyra/engine/PreviewFrameReadiness.h"
 #include "veyra/engine/FgCompatibilityProbe.h"
 #include "veyra/engine/VideoPresenter.h"
+#include "veyra/engine/LiveRecorder.h"
 #include "veyra/engine/HdrDisplayState.h"
 #include "veyra/engine/VideoExportJob.h"
 #include "veyra/engine/LivePresentationTiming.h"
@@ -369,7 +370,10 @@ bool EngineController::requestSettings(EnhancementSettings s,std::optional<Chain
     desiredNodeOrder_=order;desired_=s;snapshot_.desired=s;snapshot_.applying=snapshot_.applied!=desired_;
     if(acceptedRevision)*acceptedRevision=s.revision;return true;
 }
-void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(mutex_);savePath_=path;}
+void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(mutex_);savePath_=path;snapshot_.savedFramePath.clear();}
+bool EngineController::requestRecording(const RecordingSettings& options,std::wstring& error){return recorder_->start(options,error);}
+void EngineController::stopRecording(){recorder_->stop();}
+RecordingStatus EngineController::recordingSnapshot()const{return recorder_->status();}
 void EngineController::startExport(const std::wstring& input,const std::wstring& output,PlayerOptions opts,bool hevc){
     if(opts.nodeOrder){
         veyra::log::warn("node-order","export has no runtime node-order transport; request rejected before posting");
@@ -466,6 +470,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     MmcssScope mmcss(L"Pro Audio");
     status(L"正在初始化GPU与本地运行时…");
+    // A recording belongs to the session (and device) it started in.
+    if(recorder_->active())recorder_->sessionEnded(L"已切换播放内容，录制已保存");
     auto extension=std::filesystem::path(path).extension().wstring();for(auto& c:extension)c=towlower(c);
     const bool ordinaryFile=!remoteRequest&&!moonlightRequest&&!xboxRequest&&
         !path.starts_with(L"capture:")&&!path.starts_with(L"capture2:")&&!path.starts_with(L"screen:")&&
@@ -480,6 +486,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     // only name the stopped command list after the removal, so teardown checks once more.
     bool gpuFailureAwaitingRemoval=false;
     sink::AudioPipeline audioPipe;sink::AudioRenderer audio;VideoPresenter presenter;
+    presenter.setCapture(recorder_.get());presenter.setDisplayStates(&displayStates_);
     auto& coreCache=gpu->core;auto& recentGraphCache=gpu->recent;auto& graph=gpu->graph;
     auto& graphBytes=gpu->graphBytes;auto cacheBudgetPolledAt=Clock::now();
     const bool recentCacheAllowed=!GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_RECENT_GRAPH_CACHE",nullptr,0);
@@ -724,9 +731,22 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(!pipeline::Extent{width,height}.valid()){status(L"图像尺寸超出单张GPU纹理能力，需要分块处理",true);break;}
             HdrDisplayState displayHdrState;
             bool displayQueryFailed=false;
+            uint64_t hdrDisplaySerial=0;
+            // Windows HDR comes from the shared display state (the same background
+            // query as refresh and VRR, asked again only on a display change, a
+            // monitor change or 刷新显示器状态). A new graph waits for a missing or
+            // answer once (100ms maximum). A stale target-local cache stays
+            // usable while the worker refreshes it; a settings transaction must
+            // never wait for an unrelated slow VRR/driver call to finish.
             auto displayHdrActive=[&]{
-                HMONITOR target=nullptr;
-                const auto queried=gfx::PresentSink::queryHdrDisplayActive(window,&target);
+                const HMONITOR target=displayStates_.monitorOf(window);
+                auto known=displayStates_.state(target);
+                if(!known||known->generation!=displayStates_.generation()){
+                    displayStates_.request(window,"hdr-output");
+                    if(!known)known=displayStates_.wait(target,std::chrono::milliseconds(100));
+                }
+                const std::optional<bool> queried=known?known->color.hdr:std::nullopt;
+                if(known)hdrDisplaySerial=known->serial;
                 const bool active=displayHdrState.update(reinterpret_cast<std::uintptr_t>(target),queried);
                 if(!queried&&!displayQueryFailed)veyra::log::warn("display-color",std::format("HDR display query unavailable; using target-local hdr={} (unknown target defaults to SDR)",active));
                 if(queried&&displayQueryFailed)veyra::log::info("display-color",std::format("HDR display query recovered hdr={}",active));
@@ -765,7 +785,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 r.nodeOrder=o.nodeOrder?&*o.nodeOrder:nullptr;return r;
             };
             describeStages(stageRequest(options),options.snapshot(),gd);
-            const bool xessFg=crossVendorFrameGeneration(options.settings.frameGenerationBackend);
             gd.noFeatures=false;
             gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
             veyra::log::info("display-color",std::format("hdrInput={} hdrOutput={} forceSdrPreview={}",gd.hdrInput,gd.hdrOutput,options.settings.forceSdrPreview));
@@ -936,7 +955,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(!backendRecoveryWarning.empty()){
                 std::lock_guard lock(mutex_);desired_.rejectVideoRequest(initialRequested,options.snapshot());snapshot_.desired=desired_;snapshot_.rejectedRevision=initialRequested.revision;snapshot_.backendWarning=backendRecoveryWarning;
             }
-            if(!nvidiaAdapter&&((options.nr&&!amdNrAdapter)||options.sr||(options.fg&&!xessFg))){
+            if(!nvidiaAdapter&&nvidiaOnlyStagesRequested(options.nr,options.sr,options.fg,options.settings,amdNrAdapter)){
                 veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested features: nr={} sr={} fgBackend={} flowBackend={}",options.nr,options.sr,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend)));
                 status(L"当前非 NVIDIA 适配器：NR、NVIDIA 超分与 DLSS 已禁用；可使用 XeSS 预览和 AMD 光流",false);
             }
@@ -944,7 +963,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(graph->xessEnabled()&&!presenter.xessActive())status(L"XeSS 未启用：运行时或设备不兼容；当前为普通呈现",false);
             {
                 std::lock_guard lock(mutex_);
-                if(!nvidiaAdapter&&((options.nr&&!amdNrAdapter)||options.sr||(options.fg&&!xessFg)))snapshot_.backendWarning=L"当前 GPU 不支持所选 NVIDIA 增强";
+                if(!nvidiaAdapter&&nvidiaOnlyStagesRequested(options.nr,options.sr,options.fg,options.settings,amdNrAdapter))snapshot_.backendWarning=L"当前 GPU 不支持所选 NVIDIA 增强";
                 if(graph->xessEnabled()&&!presenter.xessActive())snapshot_.backendWarning=L"XeSS 初始化失败；当前为普通呈现";
             }
             captureSource.setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
@@ -1228,7 +1247,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 markResetStage(diagnostics::ResetStage::FirstValid);
                 finishReset(diagnostics::ResetOutcome::Completed);
             };
-            OnExit resetExit{[&]{finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);}};
+            OnExit resetExit{[&]{finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);
+                // The recording ends with the session; its file is finished in the background.
+                recorder_->sessionEnded(stop_?L"播放已停止，录制已保存":L"播放已结束，录制已保存");}};
             auto collectTimings=[&]{
                 auto record=[&](const diagnostics::GpuFrameTiming& sample){
                     const auto& fgCost=sample.gpu[size_t(diagnostics::GpuStage::FgBatch)];
@@ -1350,14 +1371,19 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // source while the previous one is still on the GPU, as before.
             static const bool xessPresentAfterReady=GetEnvironmentVariableW(L"VEYRA_TEST_XESS_PRESENT_AFTER_READY",nullptr,0)>0;
             static const bool xessStackedReads=GetEnvironmentVariableW(L"VEYRA_TEST_XESS_STACKED_READS",nullptr,0)>0;
-            uint64_t pacingRevision=0,presenterGeneration=0;
+            uint64_t pacingRevision=0,presenterGeneration=0;double pacingRefreshHz=0;
             auto applyPresentation=[&]{
                 PresentationSettings requested;uint64_t revision;
                 {std::lock_guard lock(mutex_);requested=presentation_;revision=presentationRevision_;}
-                // 可变刷新: the monitor's VRR availability is re-read every 2 s
-                // (window moved, driver setting changed); a change re-applies.
+                // Poll completed display/VRR queries before comparing policy.
+                // It must not make synchronous driver calls on the GPU owner.
+                const double refreshHz=presenter.displayRefreshHz();
+                const bool capRefreshChanged=requested.outputRate==OutputRateMode::FollowDisplay&&std::abs(refreshHz-pacingRefreshHz)>0.001;
+                // 可变刷新: the monitor's VRR availability is read again on events
+                // (another monitor, a display change, 重新检测, the VRR
+                // confirmation); a change re-applies.
                 const bool vrrChanged=presenter.vrrSync()!=VideoPresenter::vrrSyncWanted(requested,presenter.displayVrr());
-                if(revision==pacingRevision&&presenterGeneration==presenter.generation()&&!vrrChanged){
+                if(revision==pacingRevision&&presenterGeneration==presenter.generation()&&!vrrChanged&&!capRefreshChanged){
                     // Reflex dropped out at runtime: the queue-depth part of the
                     // low-latency setting stays, so only the status line changes.
                     if(presentationEffective.enabled&&!presenter.reflexActive()&&presenter.reflexDisablePending()){
@@ -1374,7 +1400,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 std::wstring message;
                 presentationEffective=presenter.configurePresentation(ctx,requested,options.fg,message);
                 presentationPaced=presenter.pacingActive()&&!legacyVsyncQueue;
-                pacingRevision=revision;presenterGeneration=presenter.generation();cadence.reset();
+                pacingRevision=revision;presenterGeneration=presenter.generation();pacingRefreshHz=refreshHz;cadence.reset();
                 {std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationRevision=revision;snapshot_.presentationStatus=message;snapshot_.presentationProviderOwned=presenter.providerOwnedPresentation();}
                 veyra::log::info("pacing",std::format("revision={} requested={}/{}/{} effective={}/{}/{} displayQueuePaced={} variableRefresh={} vrrLevel={} vrrSync={}",revision,requested.enabled,unsigned(requested.mode),unsigned(requested.display),presentationEffective.enabled,unsigned(presentationEffective.mode),unsigned(presentationEffective.display),presentationPaced,requested.variableRefresh,gfx::vrrLevel(presenter.displayVrr()),presenter.vrrSync()));
             };
@@ -1567,11 +1593,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         continue;
                     }
                 }
-                if((gd.hdrInput||options.settings.videoHdr.enabled)&&GetTickCount64()-hdrDisplayCheck>2000){
-                    diagnostics::CpuStallTrace hdrTrace("hdr-query-stall",frames);
+                // Windows HDR flips with a newer display answer (a display or monitor
+                // change, 刷新显示器状态, a session start). Reading it calls no driver; the
+                // owner used to enumerate DXGI outputs here every 2 s (0.25-0.64 ms each).
+                if((gd.hdrInput||options.settings.videoHdr.enabled)&&GetTickCount64()-hdrDisplayCheck>250){
                     hdrDisplayCheck=GetTickCount64();
-                    const bool native=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
-                    if(native!=gd.hdrOutput){std::lock_guard lock(mutex_);if(desired_.revision==options.settings.revision){desired_.revision=++nextRevision_;snapshot_.desired=desired_;snapshot_.applying=true;}}
+                    const HMONITOR target=displayStates_.monitorOf(window);
+                    if(const auto known=displayStates_.state(target);known&&known->serial!=hdrDisplaySerial){
+                        hdrDisplaySerial=known->serial;
+                        const bool active=displayHdrState.update(reinterpret_cast<std::uintptr_t>(target),known->color.hdr);
+                        const bool native=options.settings.useHdrPreview(gd.hdrInput,active);
+                        if(native!=gd.hdrOutput){std::lock_guard lock(mutex_);if(desired_.revision==options.settings.revision){desired_.revision=++nextRevision_;snapshot_.desired=desired_;snapshot_.applying=true;}}
+                    }
                 }
                 if(audioStarted)publishAudioStatus();
                 if(audioStarted&&injectFileEndpointLoss&&!fileEndpointLossInjected&&frames>=20){audioPipe.requestEndpointLossForTest();fileEndpointLossInjected=true;}
@@ -1624,8 +1657,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 std::wstring save;EnhancementSettings requested;std::optional<ChainRuntimeOrder> requestedOrder;
                 {std::lock_guard lock(mutex_);requested=desired_;requestedOrder=desiredNodeOrder_;if(hasOutput)save.swap(savePath_);}
                 if(!save.empty()){try{sink::RgbaImage result;const auto e=std::filesystem::path(save).extension().wstring();
+                    const auto saved=[this](const std::wstring& path,const std::wstring& message){
+                        {std::lock_guard lock(mutex_);snapshot_.savedFramePath=path;}
+                        status(message);
+                    };
                     drainLivePresentation();
-                    if(graph->hdrOutput()){auto hdrPath=std::filesystem::path(save);hdrPath.replace_extension(L".jxr");if(sink::saveHdrScreenshot(hdrPath.wstring(),ctx,ring,graph->videoFrameResource(out.videoSlot)))status(L"HDR截图已保存："+hdrPath.wstring());else status(L"HDR截图保存失败，请查看日志",false);}else if(!sink::readRgba8(ctx,ring,graph->videoFrameResource(out.videoSlot),result)||!sink::saveImage(save,result,e==L".jpg"||e==L".jpeg"))status(L"保存失败（目标文件可能已存在），播放已保留",false);else{status(L"图片已保存："+save);veyra::log::info("image-save",std::format("saved extent={}x{} revision={}",gd.workWidth,gd.workHeight,options.settings.revision));}}
+                    if(graph->hdrOutput()){auto hdrPath=std::filesystem::path(save);hdrPath.replace_extension(L".jxr");if(sink::saveHdrScreenshot(hdrPath.wstring(),ctx,ring,graph->videoFrameResource(out.videoSlot)))saved(hdrPath.wstring(),L"HDR截图已保存："+hdrPath.wstring());else status(L"HDR截图保存失败，请查看日志",false);}else if(!sink::readRgba8(ctx,ring,graph->videoFrameResource(out.videoSlot),result)||!sink::saveImage(save,result,e==L".jpg"||e==L".jpeg"))status(L"保存失败（目标文件可能已存在），播放已保留",false);else{saved(save,L"图片已保存："+save);veyra::log::info("image-save",std::format("saved extent={}x{} revision={}",gd.workWidth,gd.workHeight,options.settings.revision));}}
                     catch(const std::exception& e){veyra::log::warn("image-save",std::format("save exception; retaining session: {}",e.what()));status(L"保存异常，播放已保留；可再次保存",false);}}
                 if(isImage)requested.multiplier=1;
                 if(requested.revision==options.settings.revision&&requested!=options.settings){
@@ -1689,7 +1726,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     resetRecord->settingsRevision=requested.revision;
                     auto next=PlayerOptions::from(requested,requestedOrder,&options);auto nextDesc=gd;
                     const bool nvidiaAdapter=ctx.adapter().isNvidia;
-                    const bool xessFg=crossVendorFrameGeneration(next.settings.frameGenerationBackend);
                     describeStages(stageRequest(next),next.snapshot(),nextDesc);
                     nextDesc.hdrOutput=requested.useHdrPreview(nextDesc.hdrInput,displayHdrActive());
                     // Rebuild decision.
@@ -1707,7 +1743,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     //    settings record.
                     bool rebuild=engine::requiresGraphRebuild(previous,requested)||previousOrder!=requestedOrder;
                     if(gd.hdrOutput!=nextDesc.hdrOutput||
-                       (!nvidiaAdapter&&((next.nr&&!amdNrAdapter)||next.sr||(next.fg&&!xessFg)))||
+                       (!nvidiaAdapter&&nvidiaOnlyStagesRequested(next.nr,next.sr,next.fg,next.settings,amdNrAdapter))||
                        gd.enableNr!=nextDesc.enableNr||gd.enableFg!=nextDesc.enableFg||
                        gd.nrBeforeSr!=nextDesc.nrBeforeSr||
                        gd.workWidth!=nextDesc.workWidth||gd.workHeight!=nextDesc.workHeight||
@@ -1761,7 +1797,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         }
                         options=next;gd=nextDesc;transaction=true;pendingSettingsAck=true;reset=true;
                         resetRecord->epoch=0;
-                        if(!nvidiaAdapter&&((next.nr&&!amdNrAdapter)||next.sr||(next.fg&&!xessFg)))veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested settings revision={} nr={} sr={} fgBackend={} flowBackend={}",requested.revision,next.nr,next.sr,frameGenerationBackendName(requested.frameGenerationBackend),opticalFlowBackendName(requested.opticalFlowBackend)));
+                        if(!nvidiaAdapter&&nvidiaOnlyStagesRequested(next.nr,next.sr,next.fg,next.settings,amdNrAdapter))veyra::log::warn("capability",std::format("non-NVIDIA adapter disabled requested settings revision={} nr={} sr={} fgBackend={} flowBackend={}",requested.revision,next.nr,next.sr,frameGenerationBackendName(requested.frameGenerationBackend),opticalFlowBackendName(requested.opticalFlowBackend)));
                     }
                     else {
                         finishReset(diagnostics::ResetOutcome::RolledBack);
@@ -2520,8 +2556,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 // Published after the metrics window switch above: a snapshot that already reports
                 // the new revision never carries the previous revision's totals. The publish of
-                // this frame's metrics can be a while later (the first frame after a rebuild
-                // re-reads the display VRR state, ~11 ms on the RTX 5070 rig).
+                // this frame's metrics can be a while later.
                 if(transaction||pendingSettingsAck){std::lock_guard lock(mutex_);snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;pendingSettingsAck=false;snapshot_.status=std::format(L"输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.flowWidth,gd.flowHeight,gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）");veyra::log::info("display-color",std::format("hdrInput={} hdrOutput={} forceSdrPreview={}",gd.hdrInput,gd.hdrOutput,options.settings.forceSdrPreview));veyra::log::info("settings",std::format("Applied revision={} sourcePtsMs={} fgBackend={} flowBackend={} multiplier={} (source kept open)",options.settings.revision,pts,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend),options.snapshot().multiplier));}
                 const double processMs=std::chrono::duration<double,std::milli>(processDone-processStart).count();
                 frameFlow->advanceHistory(out.batch.identity);
@@ -2875,11 +2910,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 captureFlowLast=captureStats;
                 loopTrace.mark("flowUpdate");
                 measured.flow=frameFlow->snapshot(host100ns());
+                recorder_->setPresentRateHint(measured.flow.presentSubmitFps);
                 loopTrace.mark("flowSnapshot");
                 measured.sourceFrames=measured.flow.counters.sourceAccepted;measured.validGenerated=measured.flow.counters.fgReadyValid;measured.submitted=measured.flow.counters.realPresented+measured.flow.counters.generatedPresented;measured.expired=measured.flow.counters.generatedExpiredAfterEval;
                 const double ageP95=liveScheduler?completed.ageP95:captureAges.p95(),waitP95=liveScheduler?completed.waitP95:scheduleWaits.p95(),presentP95=liveScheduler?completed.presentP95:presentTimes.p95();
-                // Refresh and VRR state (NVAPI, every 2 s) are read outside the
-                // snapshot lock.
+                // Refresh and VRR state (DisplayStateService, queried on events
+                // only) are polled outside the snapshot lock; this never waits.
                 presenter.displayRefreshHz();
                 ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.colorStatus=graph->videoHdrActive()?L"SDR → RTX Video HDR":options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph->hdr10Output()?L"HDR → HDR10 / PQ":L"HDR → scRGB / 浮点"):gd.hdrInput?L"HDR → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
                     snapshot_.videoHdrActive=graph->videoHdrActive();
