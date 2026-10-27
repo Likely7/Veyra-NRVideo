@@ -53,6 +53,7 @@
 #include "veyra/engine/ExportJobManager.h"
 #include "veyra/engine/PresentationGeometry.h"
 #include "veyra/gfx/PresentationHooks.h"
+#include "veyra/ui/InterfaceRenderer.h"
 #include "veyra/ui/QmlDataDirectory.h"
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/ui/ThumbnailProvider.h"
@@ -501,6 +502,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     bool obsGameCapture = false;
     bool overlayCompatAuto = true;   // 设置 → 监控软件兼容: "auto" (default) or "off"
     bool overlayCompatRestart = false;
+    bool gpuUiChosen = false;        // 设置 → 界面绘制: "software" (default) or "gpu"
     {
         int count = 0;
         LPWSTR* args = CommandLineToArgvW(GetCommandLineW(), &count);
@@ -518,6 +520,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             uiScale = saved.value(QStringLiteral("uiScale")).toInt();
             obsGameCapture = saved.value(QStringLiteral("obsGameCapture")).toBool();
             overlayCompatAuto = saved.value(QStringLiteral("overlayCompat")).toString() != QStringLiteral("off");
+            gpuUiChosen = saved.value(QStringLiteral("uiRenderer")).toString() == QStringLiteral("gpu");
         }
         obsGameCapture = obsGameCapture || obsGameCaptureArg;
         if (uiScale == 100 || uiScale == 125 || uiScale == 150) {
@@ -561,19 +564,26 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // the other capture and overlay tools; the bridge also lowers the GPU priority while
     // it runs. VEYRA_TEST_IGNORE_DOUYIN=1 starts as if it were not running.
     const bool douyin = !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_DOUYIN", nullptr, 0) && veyra::gfx::douyinLiveCompanionRunning();
-    const bool overlayCompat = !obsGameCapture && overlayCompatAuto
-                               && (rivaTuner || nvidiaOverlay || gamePP || douyin || overlayCompatRestart) && !forcedRenderer[0];
-    const bool softwareUi = obsGameCapture || overlayCompat;
-    if (softwareUi)
+    // 设置 → 界面绘制 (software unless GPU is chosen) together with the compatibility
+    // rules above, which are unchanged: veyra/ui/InterfaceRenderer.h.
+    const auto renderer = veyra::ui::decideInterfaceRenderer({gpuUiChosen, obsGameCapture, overlayCompatAuto,
+        rivaTuner || nvidiaOverlay || gamePP || douyin, overlayCompatRestart, forcedRenderer[0] != 0});
+    const bool overlayCompat = renderer.overlayCompat;
+    const bool softwareUi = renderer.software;
+    if (softwareUi) {
+        QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
         veyra::log::info("app", "software UI: cached raster paths; normal partial updates; no additional frame requests");
-    if (obsGameCapture) {
-        QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
+    }
+    using Reason = veyra::ui::InterfaceRendererReason;
+    if (renderer.reason == Reason::ObsGameCapture)
         veyra::log::info("app", "OBS game capture compatibility: software UI; native D3D12 video unchanged");
-    } else if (overlayCompat) {
-        QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
+    else if (renderer.reason == Reason::OverlayCompat)
         veyra::log::info("app", std::format("RTSS compatibility: software UI; activeServer={} nvidiaOverlay={} gamePP={} douyinCompanion={} acceptedRestart={}; native D3D12 video unchanged",
                                           rivaTuner, nvidiaOverlay, gamePP, douyin, overlayCompatRestart));
-    }
+    else if (renderer.reason == Reason::Default)
+        veyra::log::info("app", "software UI by default (interface drawing preference: software); native D3D12 video unchanged");
+    else
+        veyra::log::info("app", std::format("GPU UI: {}", forcedRenderer[0] ? "renderer forced by VEYRA_UI_RHI" : "interface drawing preference: GPU"));
     {
         // A GPU interface keeps RTSS from drawing in this process at all, so a RivaTuner
         // started after Veyra (or kept with 监控软件兼容 off) cannot take the device down.
@@ -606,7 +616,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     }
     app.setWindowIcon(appIcon);
     veyra::log::info("app-icon", std::format("embedded window icon sizes={}", appIcon.availableSizes().size()));
-    // The interface draws with Direct3D 12, like the video. Qt's default is Direct3D 11,
+    // A GPU interface (设置 → 界面绘制 = GPU, or VEYRA_UI_RHI) draws with Direct3D 12, like the video. Qt's default is Direct3D 11,
     // and a D3D11 device in the process changed how overlays treat it: RivaTuner (MSI
     // Afterburner) then crashed in d3d11.dll inside its own hooks while drawing its OSD on
     // the XeSS swapchain through D3D11On12 (field dumps 2026-10-01). 1.4.4 drew its UI with

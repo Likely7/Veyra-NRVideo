@@ -10102,3 +10102,13 @@ AMD：Veyra-2.1.1-AMD-win64-portable.zip，466204342 bytes，SHA256 5153e97be26c
 ## 2026-10-27 用户授权发布2.1.1
 
 起点00d7d2d，archives/release-2.1.1-20261027存refs/工作树HEAD；分支codex/release-2.1.1-20261027。fetch发现远端c525379仅自动更新Star历史图，普通merge保留。原ZIP保持，上游连接器无Release资产上传接口，使用已登录Likely7的gh。按全部提交与验收整理RELEASE_NOTES_2.1.1，更新报告仅本次实际交付内容。主Release两运行ZIP、源码独立非latest页；不改程序/运行组件/用户配置、不代发群消息。准确结果以本任务FINAL为准。
+
+## 2026-10-26 界面默认软件绘制（Claude）
+
+用户根据 GPU/软件界面 A/B 决定：默认界面改为软件绘制，设置里保留“GPU 绘制”（需重启），自动兼容逻辑不变；从 main 开新分支，按 AGENTS.md 施工，不 merge、不 push。从 68def10 开 `claude/software-ui-default-20261026`，起点标签 `checkpoint/pre-software-ui-default-20261026`，开工状态 `archives/claude-software-ui-default-20261026/start.json`（工作树干净，另 100 个工作树未动；上一分支 `claude/vrr-event-query-20261025` 保留未并入）。方案 `docs/SOFTWARE_UI_DEFAULT_PLAN_2026-10-26.md`，结果 `docs/SOFTWARE_UI_DEFAULT_REPORT_2026-10-26.md`，功能提交 41f0994。
+
+依据：`reports/claude-ui-renderer-ab-20261026/ab.json`（RTX 5070、4K30 + VFG 2X、2400×1300、GPU/软件/软件/GPU）。GPU 界面进程显存 469 MiB，软件界面 105 MiB；界面动画时 GPU 约 30% 对 15%，软件界面多用约 6.6% 单核 CPU；视频均为 60 fps、0 跳帧。
+
+实现：`include/veyra/ui/InterfaceRenderer.h` 统一启动选择。OBS 兼容、监控软件兼容（自动 + 启动时检测到浮窗或接受过兼容重启）、`VEYRA_UI_RHI` 的原有判定保持不变并优先；其余按偏好 `uiRenderer`，缺省软件，GPU 仍走 D3D12。设置 → 兼容新增“界面绘制：软件 / GPU”，只有重启真会改变渲染器时才弹确认；“监控软件兼容”的提示和重启判断改为只在选 GPU 时生效。桥接新增 `softwareUiActive`，新增 8 条四语文案。
+
+构建：复用 `build/claude-screen-recording-20261022`，标签 2.1.0-swui1，5 个目标 62.2 秒通过（日志 `logs/claude-software-ui-default-20261026/build-20261026-005610`，EXE SHA256 8e0d85d9…c599）。测试：UI 合同（新增启动选择组合）、Repair 272 项、翻译均 0 失败；QtQuick 115/0；`extract.py --check` 2671 条，0 缺译、0 占位符问题。实机 `scripts/acceptance/ui-renderer-default.py` 同一私有配置四次启动：缺省软件 → 选 GPU 弹确认 → D3D12 → 选软件弹确认 → GPU + 兼容重启仍软件、选软件不弹确认 → 软件，全部通过。首轮脚本异步截图与点选重叠，截图混入点选后状态，改为等截图写完再点后重跑通过。证据 `reports/claude-software-ui-default-20261026`，截图 `tests/claude-software-ui-default-20261026/shots`。无用户包、无 merge/push/Release，Lecram 暂停。

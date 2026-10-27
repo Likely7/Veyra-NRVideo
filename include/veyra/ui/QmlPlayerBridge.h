@@ -237,6 +237,9 @@ class QmlPlayerBridge : public QObject {
     // This run draws the interface in software because RivaTuner (RTSS) was running at start
     // (设置 → 监控软件兼容, main.cpp): its OSD then sits on the video only.
     Q_PROPERTY(bool overlayCompatActive READ overlayCompatActive CONSTANT)
+    // This run draws the interface in software: 设置 → 界面绘制 (software unless GPU is
+    // chosen) or one of the compatibility rules above (veyra/ui/InterfaceRenderer.h).
+    Q_PROPERTY(bool softwareUiActive READ softwareUiActive CONSTANT)
     // Audio output (P4-d): the active WASAPI render endpoints by device id, the
     // stored choice (preferences.audioDevice, empty = system default) and what
     // the renderer actually opened, including a fallback to the default.
@@ -821,6 +824,7 @@ public:
     int uiScaleActive() const;
     bool obsGameCaptureActive() const;
     bool overlayCompatActive() const;
+    bool softwareUiActive() const;
     // RivaTuner Statistics Server is running now (gfx::rivaTunerRunning).
     Q_INVOKABLE bool rivaTunerRunning() const;
     // An overlay that 监控软件兼容 reacts to is running now: RTSS, NVIDIA's in-game overlay

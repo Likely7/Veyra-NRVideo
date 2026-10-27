@@ -6894,6 +6894,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         const QString v = value.toString();
         if (v != QLatin1String("auto") && v != QLatin1String("off")) return false;
         stored = v;
+    } else if (key == QLatin1String("uiRenderer")) {
+        // 设置 → 界面绘制 (veyra/ui/InterfaceRenderer.h); read by main.cpp before Qt starts.
+        const QString v = value.toString();
+        if (v != QLatin1String("software") && v != QLatin1String("gpu")) return false;
+        stored = v;
     } else if (key == QLatin1String("gpuPriority")) {
         const QString v=value.toString();
         if(v!=QLatin1String("normal")&&v!=QLatin1String("high")&&v!=QLatin1String("realtime"))return false;
@@ -7164,6 +7169,7 @@ void QmlPlayerBridge::resetShortcuts() {
 }
 bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->property("veyraObsGameCapture").toBool(); }
 bool QmlPlayerBridge::overlayCompatActive() const { return qApp && qApp->property("veyraOverlayCompat").toBool(); }
+bool QmlPlayerBridge::softwareUiActive() const { return qApp && qApp->property("veyraSoftwareUi").toBool(); }
 bool QmlPlayerBridge::rivaTunerRunning() const { return gfx::rivaTunerRunning(); }
 bool QmlPlayerBridge::presentationOverlayRunning() const {
     return gfx::rivaTunerRunning() || gfx::nvidiaOverlayRunning() || gfx::gamePPRunning() || gfx::douyinLiveCompanionRunning();
