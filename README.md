@@ -81,6 +81,8 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ## New in 2.1.1
 
+- **Interface and SR defaults:** software UI drawing by default, an optional GPU renderer with restart confirmation, and RTX Video SR high as the new SR model selection; saved model choices are retained.
+
 - **Record and rotate:** record the processed picture with player audio; rotate playback90° in Cinema/Professional with matching preview and window layout.
 - **NR sizing:** per-layer25–100% scale controls, saved presets/sessions and fixed/percentage video-export inference sizes with independent output resolution.
 - **Display and frame generation:** background event-driven refresh/VRR/HDR queries, shared signal-panel refresh and HDR-cache recovery.

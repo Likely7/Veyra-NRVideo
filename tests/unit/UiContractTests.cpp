@@ -6,6 +6,7 @@
 #include "../../apps/veyra/ui/CapturePreferenceStore.h"
 #include "../../apps/veyra/ui/SourceTitle.h"
 #include "veyra/engine/EngineController.h"
+#include "veyra/engine/EffectChain.h"
 #include "../../apps/veyra/ui/LiveStatusHistory.h"
 #include "veyra/sink/AudioGain.h"
 #include "veyra/engine/PreviewView.h"
@@ -134,6 +135,12 @@ int wmain(int argc,wchar_t** argv){try{
     using namespace veyra;
     outputRateContracts();
     interfaceRendererContracts();
+    {
+        engine::EnhancementSettings fresh;
+        engine::ChainGlobalSettings globals;
+        require(fresh.videoSrQuality==4&&globals.videoSrQuality==4,"fresh List and Node SR selections use RTX Video SR high");
+        require(!fresh.sr&&!fresh.nr&&fresh.multiplier==1,"changing the SR model does not enable enhancement");
+    }
     // Manual turns compose with metadata, including an already-oriented DAR.
     for(int metadata:{0,90,180,270})for(int mode=0;mode<=6;++mode){
         engine::PreviewView v;v.rotationDegrees=metadata;v.mode=mode;
@@ -279,6 +286,12 @@ int wmain(int argc,wchar_t** argv){try{
     // range check. Both silently reset window size, volume and subtitle style.
     {ui::UiPreferences audio;audio.volume=.9f;audio.muted=true;audio.inspector=4;audio.inspectorWidth=380;audio.width=1600;audio.height=900;require(prefs.save(audio,nullptr),"audio-page preferences save");ui::UiPreferenceStore reload(dir);const auto back=reload.load();require(std::abs(back.volume-.9f)<1e-6&&back.inspector==4&&back.inspectorWidth==380&&back.width==1600,"audio page and geometry survive the version 3 round trip");}
     auto setting=loaded.startup({});before.revision=setting.revision;require(setting==before,"all confirmed parameters round trip");
+    for(unsigned selected:{0u,4u,engine::kVideoSrFsr})for(bool enabled:{false,true}){
+        auto chosen=before;chosen.videoSrQuality=selected;chosen.sr=enabled;
+        require(prefs.save(p,&chosen),"explicit SR selection saved");
+        ui::UiPreferenceStore restart(dir);const auto restored=restart.startup({});
+        require(restored.videoSrQuality==selected&&restored.sr==enabled,"saved DLSS / RTX Video / FSR and off state survive new defaults");
+    }
     for(int enabled:{0,1})for(const auto runtime:{engine::NrRuntime::Original,engine::NrRuntime::Community,engine::NrRuntime::Ampere,engine::NrRuntime::NvidiaOriginal}){p.enhancementEnabled=enabled;before.nr=true;before.nrRuntime=runtime;before.nrTemporal=true;require(prefs.save(p,&before),"master and runtime save");ui::UiPreferenceStore restart(dir);require(restart.load().enhancementEnabled==enabled,"master state survives restart");auto restoredSettings=restart.startup({});require(restoredSettings.nr&&restoredSettings.nrRuntime==engine::currentNrRuntime(runtime)&&restoredSettings.nrTemporal,"bypassed effects, selected runtime (legacy migrated) and temporal NR survive restart");}
     for(bool enabled:{false,true})for(unsigned mode=0;mode<3;++mode)for(unsigned sync=0;sync<3;++sync)for(unsigned rate=0;rate<3;++rate){p.presentation={enabled,engine::PacingMode(mode),engine::DisplaySync(sync),engine::OutputRateMode(rate),rate==2?119.88:60.0};require(prefs.save(p,nullptr),"presentation atomic save");ui::UiPreferenceStore restart(dir);require(restart.load().presentation==p.presentation,"all presentation combinations and output caps survive restart");}
     auto path=dir/"ui-preferences.v1";

@@ -3,10 +3,9 @@
 namespace veyra::ui {
 // How the interface draws, decided in main.cpp before Qt starts (2026-10-26,
 // docs/SOFTWARE_UI_DEFAULT_PLAN_2026-10-26.md). Software is the default: the
-// interface then has no swapchain or D3D12 device of its own, so overlays and
-// capture tools hook only the video, a GPU fault in the video leaves the
-// interface running, and it uses no video memory (A/B 2026-10-26: 469 vs 105 MiB,
-// about half the GPU load while the interface animates). 设置 → 界面绘制 = GPU
+// interface then avoids a GPU scene-graph swapchain/device. Video rendering
+// still uses the GPU; software drawing is not a guarantee against video-driver
+// faults or all overlay interactions. 设置 → 界面绘制 = GPU
 // draws it with the GPU again. The compatibility switches keep their meaning:
 // OBS game capture and an overlay seen at start (监控软件兼容 = 自动) still draw
 // in software when GPU is chosen, and VEYRA_UI_RHI still picks a GPU renderer.

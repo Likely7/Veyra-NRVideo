@@ -10,14 +10,18 @@ package. ui-renderer-default.qml picks values through the real 设置 control.
 usage: py -3.11 -X utf8 -B -I scripts/acceptance/ui-renderer-default.py
 """
 from pathlib import Path
-import hashlib, json, os, re, shutil, subprocess
+import argparse, hashlib, json, os, re, shutil, subprocess
 
-B = Path('E:/项目/Veyra'); T = 'claude-software-ui-default-20261026'; R = Path(__file__).resolve().parents[2]
+parser=argparse.ArgumentParser()
+parser.add_argument('--task',default='claude-software-ui-default-20261026')
+parser.add_argument('--package-dir',type=Path)
+options=parser.parse_args()
+assert re.fullmatch(r'(claude|codex)-[a-z0-9.-]+',options.task)
+B = Path('E:/项目/Veyra'); T = options.task; R = Path(__file__).resolve().parents[2]
 D = B/'build/claude-screen-recording-20261022'; A = B/'tests'/T/'app'; P = B/'tests'/T/'profile'
 L = B/'logs'/T/'launches'; TMP = B/'tmp'/T/'launches'; OUT = B/'reports'/T; SHOTS = B/'tests'/T/'shots'
 for p in [L, TMP, OUT, SHOTS]: p.mkdir(parents=True, exist_ok=True)
-if P.exists(): shutil.rmtree(P)
-P.mkdir(parents=True)
+P.mkdir(parents=True,exist_ok=False)
 
 
 def sha(p):
@@ -31,13 +35,13 @@ def replace(p, data):
     p.write_bytes(data)
 
 
-donor = B/'releases/release-2.1.0-20261019/runtime-base/NVIDIA'
+donor = options.package_dir or B/'releases/release-2.1.0-20261019/runtime-base/NVIDIA'
 manifest = json.loads((donor/'package-manifest.json').read_text('utf8'))
 if not A.exists():
     for e in manifest['files']:
         rel = e['path']
         if rel.startswith('logs/') or any(x.startswith('user-data-') for x in Path(rel).parts): continue
-        p = A/rel; p.parent.mkdir(parents=True, exist_ok=True); os.link(donor/rel, p)
+        p = A/rel; p.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(donor/rel, p)
     shutil.copyfile(donor/'package-manifest.json', A/'package-manifest.json')
 replace(A/'veyra_qml_ui.exe', (D/'veyra_qml_ui.exe').read_bytes())
 for folder in ['qml', 'i18n']:
@@ -88,6 +92,7 @@ try:
         if not any(l.endswith(want['state']) for l in lines): problems.append(f'state line {want["state"]!r} missing: {lines}')
         if want['picked'] and want['picked'] not in lines: problems.append(f'pick line {want["picked"]!r} missing: {lines}')
         if want['done'] not in lines: problems.append(f'done line {want["done"]!r} missing: {lines}')
+        if not any(l.startswith('sr-selection=') for l in lines): problems.append('SR default / saved-selection check missing')
         errors = [x for x in text.splitlines() if any(s in x for s in ['[ERROR]', 'ReferenceError:', 'TypeError:', 'Binding loop detected'])]
         if errors: problems.append('QML/engine errors')
         results.append(dict(step=step, renderer=renderer, passed=not problems, problems=problems, lines=lines, errors=errors[:10],

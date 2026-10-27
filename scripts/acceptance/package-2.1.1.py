@@ -15,7 +15,7 @@ OUT = B/'test-packages'/TASK
 REPORT = B/'reports'/TASK
 DONOR = B/'releases/release-2.1.0-20261019/runtime-base'
 VERSION = '2.1.1'
-DOC = 'docs/BUILD_2.1.1_2026-10-26.md'
+DOC = 'docs/RELEASE_NOTES_2.1.1.md'
 SOURCE = OUT/'Veyra-2.1.1-source.zip'
 SOURCES = [
     (B/'archives/dependency-migration-cleanup-20261023/dependency-corresponding-source/Veyra-2.0.6-dependency-source.zip', '4eccde6343d66e0511b641aaacc12b999e424738a383fcce268d762abb3dceb9'),
@@ -116,10 +116,10 @@ def stage():
         for f in (BUILD/'shaders').glob('*.dxil'):copy(f,app/'shaders'/f.name)
         for name in ['LICENSE','THIRD_PARTY_NOTICES.md','README.md','README_CN.md','README_EN.md']:
             if (ROOT/name).is_file():copy(ROOT/name,app/name)
-        for name in [DOC,'docs/CAPTURE_REVIEW_REPORT_2026-10-26.md','docs/CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md','docs/EXPORT_NR_SCALE_REPORT_2026-10-25.md','docs/MENU_AMD_HDR_REPORT_2026-10-26.md','docs/FIELD_CAPTURE_4K60_DIAGNOSIS_2026-10-26.md','docs/FIELD_CAPTURE_NR_DISCONNECT_2026-10-26.md']:
+        for name in [DOC,'docs/BUILD_2.1.1.md']:
             copy(ROOT/name,app/name)
         copy(ROOT/DOC,app/'README-2.1.1.zh-CN.md');copy(ROOT/DOC,app/'RELEASE_NOTES.md')
-        (app/'GPU-PACKAGE.txt').write_text(f'Veyra {VERSION} / {flavor}\nComplete local Release-configuration portable build for user testing; not published.\nExtract all files to a new directory. Runtime/model bytes match audited 2.1.0.\n','utf-8')
+        (app/'GPU-PACKAGE.txt').write_text(f'Veyra {VERSION} / {flavor}\nComplete Release-configuration portable package. Publication status follows the GitHub Release page.\nExtract all files to a new directory. Runtime/model bytes match audited 2.1.0.\n','utf-8')
         runtime=json.loads((DONOR/flavor/'release-runtime-manifest.json').read_text('utf-8'))
         runtime.update(package=VERSION,candidate=VERSION,localOnly=True)
         for n in ['release-runtime-manifest.json','runtime/experimental/release-runtime-manifest.json']:document(app/n,runtime)

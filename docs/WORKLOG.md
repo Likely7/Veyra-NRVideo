@@ -10112,3 +10112,12 @@ AMD：Veyra-2.1.1-AMD-win64-portable.zip，466204342 bytes，SHA256 5153e97be26c
 实现：`include/veyra/ui/InterfaceRenderer.h` 统一启动选择。OBS 兼容、监控软件兼容（自动 + 启动时检测到浮窗或接受过兼容重启）、`VEYRA_UI_RHI` 的原有判定保持不变并优先；其余按偏好 `uiRenderer`，缺省软件，GPU 仍走 D3D12。设置 → 兼容新增“界面绘制：软件 / GPU”，只有重启真会改变渲染器时才弹确认；“监控软件兼容”的提示和重启判断改为只在选 GPU 时生效。桥接新增 `softwareUiActive`，新增 8 条四语文案。
 
 构建：复用 `build/claude-screen-recording-20261022`，标签 2.1.0-swui1，5 个目标 62.2 秒通过（日志 `logs/claude-software-ui-default-20261026/build-20261026-005610`，EXE SHA256 8e0d85d9…c599）。测试：UI 合同（新增启动选择组合）、Repair 272 项、翻译均 0 失败；QtQuick 115/0；`extract.py --check` 2671 条，0 缺译、0 占位符问题。实机 `scripts/acceptance/ui-renderer-default.py` 同一私有配置四次启动：缺省软件 → 选 GPU 弹确认 → D3D12 → 选软件弹确认 → GPU + 兼容重启仍软件、选软件不弹确认 → 软件，全部通过。首轮脚本异步截图与点选重叠，截图混入点选后状态，改为等截图写完再点后重跑通过。证据 `reports/claude-software-ui-default-20261026`，截图 `tests/claude-software-ui-default-20261026/shots`。无用户包、无 merge/push/Release，Lecram 暂停。
+
+
+## 2026-10-27 软件绘制与RTX视频超分默认项整合
+
+用户授权重新整合/构建/发布2.1.1，覆盖前阶段原包不重建。先存档发行文档脏文件至archives/codex-release-2.1.1-final-20261027，fd42018保存，再正常merge Claude软件绘制ea148bf为eae5fd9；仅AGENTS/WORKLOG追加冲突，两边保留。软件UI分支已在候选历史中；主线未推送。
+
+共享kDefaultVideoSrQuality=4，EnhancementSettings/ChainGlobalSettings新配置选择RTX视频超分高质量；AMD/Intel既有硬件初始化仍选FSR，首次sr/nr/FG仍关闭，既有明确模型ID不迁移。UI合同覆盖新默认与旧DLSS/RTX/FSR开关保存；四次真实启动夹具追加默认4、已选0/5持久化验证。InterfaceRenderer说明去掉未经证明的GPU故障隔离/零显存绝对断言，仅注释更正。
+
+打包改用公开RELEASE_NOTES_2.1.1及BUILD_2.1.1说明，移除旧ZIP校验值以避免循环/过时身份；新task隔离新stage/receipt，原两包作旧交付保留，不上传旧包。不改运行库/模型/驱动/真实配置，不占采集卡，不派Agent。实际结果后续填回执。

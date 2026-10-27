@@ -30,6 +30,10 @@ Item {
                 if(test.ticks<8)return
                 const seg=find(settingsPage,"set-ui-renderer"),confirm=find(settingsPage,"obs-restart-confirm")
                 check(seg!==null&&confirm!==null,"界面绘制 control and restart confirmation found")
+                const expectedSr=test.step===1?4:test.step===4?5:0
+                check(veyra.videoSrQuality===expectedSr,"fresh RTX Video SR or saved SR selection restored")
+                check(!veyra.srEnabled,"SR stays off while its model choice changes")
+                log("sr-selection="+veyra.videoSrQuality+" enabled="+veyra.srEnabled)
                 log("step="+test.step+" softwareUiActive="+veyra.softwareUiActive+" overlayCompatActive="+veyra.overlayCompatActive
                     +" pref="+(veyra.preferences.uiRenderer||"")+" segment="+seg.current)
                 // The grab is asynchronous: pick only after the PNG of the state before the pick is written.
@@ -48,6 +52,8 @@ Item {
                     if(confirm.shown){confirm.close();confirm.rejected()}
                 }
                 if(test.step===2)check(veyra.setPreference("uiRenderer","gpu"),"GPU stored again for the next launch")
+                if(test.step===1){veyra.videoSrQuality=0;check(veyra.videoSrQuality===0,"explicit DLSS selection accepted")}
+                if(test.step===3){veyra.videoSrQuality=5;check(veyra.videoSrQuality===5,"explicit FSR selection accepted")}
                 test.phase=3;test.ticks=0
             }else if(test.phase===3){
                 if(test.ticks<4)return

@@ -2,6 +2,12 @@
 
 本版汇总2.1.0发布后Claude与Codex共同完成的功能和修复，重点是处理后录制、画面旋转、NR尺寸控制，以及采集、补帧、显示和界面链路。
 
+## 界面绘制与默认超分模型
+
+- 合入软件绘制设置：界面默认使用软件绘制，设置→兼容可切换软件/GPU绘制，重启后生效；视频解码、增强与呈现继续使用GPU。
+- 保留OBS和监控软件的自动兼容规则，设置页显示当前实际绘制方式及切换提示。
+- 默认超分模型调整为RTX视频超分（高质量）；首次启动仍保持效果关闭。已经保存的模型选择继续保留，AMD/Intel沿用可用的FSR默认项。
+
 ## 录制处理后的画面与声音
 
 - 新增处理后画面实时录制入口，支持开始倒计时、取消和停止保存；录制直接取播放器的处理结果。
@@ -57,7 +63,7 @@
 - [AMD完整包](https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.1.1/Veyra-2.1.1-AMD-win64-portable.zip)
 - [应用与依赖对应源码](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.1-sources)
 
-本次原样发布已交付的2.1.1完整包，版本号2.1.1，Windows文件版本2.1.1.0。包内本地验收说明及manifest保留封包时记录，正式发布时间以本页为准。
+本次发布为整合软件绘制与RTX视频超分默认项后重新构建的2.1.1完整包，Windows文件版本2.1.1.0。manifest保留封包时记录，正式发布时间以本页为准。
 
 ## 校验与组件
 
@@ -65,15 +71,13 @@
 
 运行组件与模型沿用2.1.0受控供体，随包保留来源、版本、哈希、许可证和实验/社区标记。Veyra为独立开源项目，社区实验组件不代表GPU厂商官方认证。AMD NR适用RX9000及对应HIP运行环境。
 
-| 完整包 | SHA256 |
-|---|---|
-| NVIDIA | `e3d78f91b4c2669108f2c22c1d491d17f3bfdc73b2dbda8f9eba823d5f32b451` |
-| AMD | `5153e97be26c03062b8596462fbede41b700f354799df02875bad3bf5d895f15` |
+下载文件的SHA256校验值见GitHub Release页面。
 
 感谢社区提供NR导出尺寸补丁与使用反馈，也感谢持续支持项目的用户。
 
 ## English — Changes since 2.1.0
 
+- Default the interface to software drawing with an optional GPU setting and restart confirmation; video stays on the GPU. New SR selections use RTX Video SR high, while saved selections and AMD/Intel FSR defaults are preserved. Effects remain off at first launch.
 - Record the processed picture and player audio, with countdown/cancel controls, bounded asynchronous start/stop and encoder/file finalization.
 - Rotate the playback view by90° in Cinema/Professional/fullscreen, with matching aspect ratio, window layout and pointer coordinates.
 - Per-layer manual NR processing scale:25–100%,1% steps, saved with presets/sessions. Video export now honors fixed and percentage NR sizes while retaining the selected encoded output dimensions.
@@ -83,7 +87,7 @@
 - Settle popup layouts before opening, preserve the existing animation, report actual saved screenshot paths/formats, restore maximized/fullscreen geometry and scope playlist keys correctly.
 - Update all four interface languages.12 targeted regression groups,117 QML tests and four extracted-package startup/playback checks passed.
 
-Download one complete GPU package and extract it into a new directory. Runtime versions/licenses and community-experimental labels are retained from the audited2.1.0 distribution. The published ZIPs are the original verified2.1.1 delivery; embedded local-build records describe their packaging time.
+Download one complete GPU package and extract it into a new directory. Runtime versions/licenses and community-experimental labels are retained from the audited2.1.0 distribution. The2.1.1 ZIPs are rebuilt with the interface-renderer and SR-default changes; embedded manifests describe their packaging time.
 
 ## 支持与反馈 / Support & feedback
 

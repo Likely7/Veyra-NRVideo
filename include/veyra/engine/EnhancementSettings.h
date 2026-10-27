@@ -72,6 +72,9 @@ inline size_t exportBitrateIndex(uint32_t mbps){for(size_t i=0;i<kExportBitrateC
 // videoSrQuality values: 0 = DLSS SR, 1..4 = RTX video SR quality steps,
 // 5 = AMD FSR upscaling (vendor neutral; verified on an NVIDIA adapter).
 inline constexpr uint32_t kVideoSrFsr=5;
+// Fresh SR selections use RTX Video SR high; explicit saved selections retain
+// their numeric IDs. The UI seeds FSR separately on AMD/Intel adapters.
+inline constexpr uint32_t kDefaultVideoSrQuality=4;
 // DLSS SR model (videoSrQuality 0 only): 0 = DLSS 4 transformer (preset K,
 // what DLSS SR always used here), 1 = DLSS 4.5 second-generation transformer
 // (preset M), 2 = DLSS 4.5 Ultra Performance model (preset L). Both 4.5
@@ -334,7 +337,7 @@ struct EnhancementSettings {
     HdrMetadataSettings hdrMetadata;
     bool useHdrPreview(bool hdrInput,bool hdrDisplayActive)const{return (hdrInput||videoHdr.enabled)&&hdrDisplayActive&&!forceSdrPreview;}
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
-    uint32_t videoSrQuality=0; // 0 DLSS SR; 1–4 RTX Video SR
+    uint32_t videoSrQuality=kDefaultVideoSrQuality; // 0 DLSS SR; 1–4 RTX Video SR
     uint32_t dlssSrModel=0;    // DLSS SR only; see kDlssSrModelCount
     uint32_t multiplier=1;
     FrameGenerationBackend frameGenerationBackend=FrameGenerationBackend::Dlss;

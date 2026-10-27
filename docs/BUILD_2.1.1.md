@@ -1,12 +1,12 @@
 # Veyra 2.1.1 对应源码 / Corresponding source
 
-应用版本2.1.1，PE版本2.1.1.0。发布ZIP原样沿用2026-10-26交付原件，运行库与模型身份沿用2.1.0。源码与运行包分别分发。
+应用版本2.1.1，PE版本2.1.1.0。发布ZIP于2026-10-27重新构建，运行库与模型身份沿用2.1.0。源码与运行包分别分发。
 
 ## 应用源码
 
 [Veyra-2.1.1-source.zip](https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.1.1-sources/Veyra-2.1.1-source.zip)
 
-SHA256：`29ea1f842a2f76e04a2c49ddb737e260fc5c0fb29a1d62255b6cb69735b08f0d`。应用源码快照89116ba51cafa445686baa7061e5267ebed7ef98，源码清单随包；产品构建回执2c0c82f69216e7731b0ee28cc6ecb2abdbd3d386，主EXE SHA256为`de07548373b8bd308d9af8865b06bb9551aa507761225ea35e574142b356db6a`。Release标签另包含发布说明、README与远端Star图同步；产品实现与该快照一致。
+软件绘制与RTX视频超分默认项整合后重新构建。准确应用快照见源码ZIP内source-snapshot-manifest.json；构建提交、EXE哈希与对应源码哈希记录于运行包package-manifest.json及GitHub Release资产。
 
 MSVC2022/C++20、CMake/Ninja Release、Qt6.8.3。通用构建入口scripts/acceptance/build-recording-handoff.py，构建目标veyra_qml_ui；本机2.1.1构建记录见docs/BUILD_2.1.1_REPORT_2026-10-26.md。SDK/模型/专有运行文件独立准备，不包含在源码Git中。
 
