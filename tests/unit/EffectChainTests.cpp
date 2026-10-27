@@ -864,10 +864,14 @@ void testNodeSplitNrDescription() {
     broken=desc;broken.noFeatures=true;
     check(!broken.validateFixedExecutionPlan().empty(),
           "split graph cannot claim successful execution with all features bypassed");
+    // Same-size DLSS folds away; RTX Video SR intentionally also restores
+    // native-size video. This contract must name DLSS rather than rely on the
+    // fresh-session model default.
+    settings.videoSrQuality=0;
     request.width=2560;request.height=1440;describeStages(request,settings,desc);
     check(desc.validateFixedExecutionPlan().empty()&&!desc.splitNrAcrossSr()&&!desc.enableSr&&
           desc.nrLayersExtent.size()==2&&desc.nrFullExtent(0)==desc.nrFullExtent(1),
-          "same-size SR folds away while both NR stages remain at the same declared extent");
+          "same-size DLSS SR folds away while both NR stages remain at the same declared extent");
     request.stillImage=true;describeStages(request,settings,desc);
     check(!desc.validateFixedExecutionPlan().empty(),
           "split preview does not bypass offline NR-before-SR guard");

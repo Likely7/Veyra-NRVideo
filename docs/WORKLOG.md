@@ -10121,3 +10121,5 @@ AMD：Veyra-2.1.1-AMD-win64-portable.zip，466204342 bytes，SHA256 5153e97be26c
 共享kDefaultVideoSrQuality=4，EnhancementSettings/ChainGlobalSettings新配置选择RTX视频超分高质量；AMD/Intel既有硬件初始化仍选FSR，首次sr/nr/FG仍关闭，既有明确模型ID不迁移。UI合同覆盖新默认与旧DLSS/RTX/FSR开关保存；四次真实启动夹具追加默认4、已选0/5持久化验证。InterfaceRenderer说明去掉未经证明的GPU故障隔离/零显存绝对断言，仅注释更正。
 
 打包改用公开RELEASE_NOTES_2.1.1及BUILD_2.1.1说明，移除旧ZIP校验值以避免循环/过时身份；新task隔离新stage/receipt，原两包作旧交付保留，不上传旧包。不改运行库/模型/驱动/真实配置，不占采集卡，不派Agent。实际结果后续填回执。
+
+首次13组检查在EffectChain一个旧夹具失败：同尺寸SR应折叠的断言隐含默认DLSS；RTX Video SR支持同尺寸恢复，默认改变后该假设失效。将该DLSS专属夹具显式选0，保留原产品合同，不改变新默认/放松验证；失败完整日志保存在effect_chain-initial-default-fixture.log。
