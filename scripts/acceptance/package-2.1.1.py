@@ -116,7 +116,7 @@ def stage():
         for f in (BUILD/'shaders').glob('*.dxil'):copy(f,app/'shaders'/f.name)
         for name in ['LICENSE','THIRD_PARTY_NOTICES.md','README.md','README_CN.md','README_EN.md']:
             if (ROOT/name).is_file():copy(ROOT/name,app/name)
-        for name in [DOC,'docs/CAPTURE_REVIEW_REPORT_2026-10-26.md','docs/CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md','docs/EXPORT_NR_SCALE_REPORT_2026-10-25.md','docs/FIELD_CAPTURE_4K60_DIAGNOSIS_2026-10-26.md']:
+        for name in [DOC,'docs/CAPTURE_REVIEW_REPORT_2026-10-26.md','docs/CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md','docs/EXPORT_NR_SCALE_REPORT_2026-10-25.md','docs/MENU_AMD_HDR_REPORT_2026-10-26.md','docs/FIELD_CAPTURE_4K60_DIAGNOSIS_2026-10-26.md','docs/FIELD_CAPTURE_NR_DISCONNECT_2026-10-26.md']:
             copy(ROOT/name,app/name)
         copy(ROOT/DOC,app/'README-2.1.1.zh-CN.md');copy(ROOT/DOC,app/'RELEASE_NOTES.md')
         (app/'GPU-PACKAGE.txt').write_text(f'Veyra {VERSION} / {flavor}\nComplete local Release-configuration portable build for user testing; not published.\nExtract all files to a new directory. Runtime/model bytes match audited 2.1.0.\n','utf-8')
@@ -128,7 +128,7 @@ def stage():
                       exeSha256=sha(BUILD/'veyra_qml_ui.exe'),buildReceipt=str(receiptpath),validationRecord=DOC,
                       correspondingSource=dict(application='../'+SOURCE.name,applicationSha256=None,
                          dependencies=[dict(archive='../'+p.name,sha256=h) for p,h in SOURCES]),
-                      knownIssues=['4K YUY2 ~53fps field issue diagnosed only','CV710 and RTX3090 require original-machine retest','AMD NR requires RX9000 verification','Long-run VRAM growth unresolved'],
+                      knownIssues=['4K YUY2 ~53fps field issue diagnosed only','T911 capture stops with enhancement: initial cause unresolved','CV710 and RTX3090 require original-machine retest','AMD HDR+NR requires RX9000 verification','Long-run VRAM growth unresolved'],
                       files=payload(app))
         document(app/'package-manifest.json',manifest);audit(app,flavor);signatures(app,flavor);check_donor(flavor)
         print('STAGE PASS',flavor,flush=True)
@@ -207,6 +207,10 @@ def cold():
     document(REPORT/'cold-start.json',dict(passed=True,results=results,existingUserProcesses=running,performanceMeasurement=False))
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['stage','seal','cold']);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['stage','seal','cold'])
+    parser.add_argument('--task',default=TASK,help='Separate output/receipt directory for a fresh packaging run')
+    args=parser.parse_args()
+    assert re.fullmatch(r'codex-[a-z0-9.-]+',args.task),args.task
+    TASK=args.task;OUT=B/'test-packages'/TASK;REPORT=B/'reports'/TASK;SOURCE=OUT/'Veyra-2.1.1-source.zip'
     OUT.mkdir(parents=True,exist_ok=True);REPORT.mkdir(parents=True,exist_ok=True)
     {'stage':stage,'seal':seal,'cold':cold}[args.mode]()

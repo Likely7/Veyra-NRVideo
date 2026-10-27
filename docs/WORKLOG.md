@@ -10048,3 +10048,26 @@ computer-use技能原生按键/点击：软件专业F11/Esc、顶部还原、极
 AMD根因是HDR working模式初始化直接拒绝。新增两个FP16内部纹理及GPU encode/restore，复用203nit HDR代理/还原，模型仍SDR线性FP16，原HDR基底/共享残差/时序/reset保留。实际D3D12图+明确fake AMD provider共128组合0失败，其中108 HDR，debug0；ABI、HDR颜色检查通过。本机真实NVIDIA原版NR+PQ HDR20帧通过，高光998.932nit，非AMD实卡证据。RX9000 HIP/用户画质帧率仍需原机；运行库模型驱动不改。
 
 构建命令build-recording-handoff.py --task codex-menu-amd-hdr-fix-20261026 --root 当前E盘树 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.1 --jobs 2；主轮--reconfigure 60.7秒通过，之后仅定向增量。测试python -B scripts/acceptance/menu-amd-hdr-fix.py gpu/menu/contracts，私有配置、单进程<=280秒，翻译2674/缺译占位0。证据reports/logs/tests/tmp/menu-amd-hdr-fix-20261026，编译回执logs/codex-menu-amd-hdr-fix-20261026。曾误拼多fix的构建目录，仅停止自有9个子进程并改回原缓存；自动审批拒绝该误建目录的安全递归删除（blocked by policy），保留未绕过，见cleanup-blocked.json。旧2.1.1验收脚本曾错误调用NR导出无参数和翻译路径，此前不计通过、不交付；本任务测试命令和证据独立。
+
+
+## 2026-10-26 外部T911/RTX3080 NR后采集停流诊断
+
+用户提供logs(20).zip要求排查，未改产品/配置、未构建或占用采集卡。原档SHA256 6ce6753f1b3d110da61998ba019410bda89c96dc0c29dcf03e2b929e25041f41，副本及受限提取到archives/field-capture-nr-disconnect-20261026；python -B reports同名/analyze.py成功，三日志128209行。26次PCM恢复、25次Run 0x800701B1、17条EC_DEVICE_LOST；实际是音视频先停流，再同步恢复长阻塞。RTX3080/NR SF内部1080p，4K60 NR+NVOF处理约47但入口60；约一分钟的那轮是1080p协商165/实际回调240，NR后44秒停止进展。NR关而SR+NVOF开时也有同类停流（同进程先前开过NR），全关约47分钟稳定，因此不作NR单一根因结论。控制恢复多次7.35秒，旧过滤器重启NO_SUCH_DEVICE；当前事件日志漏记lParam2，不能从指针detail判定拔插方向。无NR Evaluate/GPU移除/爆显存证据。dump仅元数据：10月23日旧hang，无异常流，未符号化/展开，不冒充当前栈证据。完整报告docs/FIELD_CAPTURE_NR_DISCONNECT_2026-10-26.md，统计及带行号证据reports/field-capture-nr-disconnect-20261026。2.1.1封包继续暂停。
+
+
+## 2026-10-26 外部NR停流继续定位（用户追问首因）
+
+继续只读调查，纠正“回调完成不增长即驱动停止送帧”的过强推断：完成日志无法排除回调内部阻塞。静态查到回调会经gpuBusy调用GetCompletedValue，列为待测候选，不作为已证实首因。包内dump是10月23日，日志为25/26日，无法对齐。
+
+在E:/项目/Veyra/tmp/field-capture-nr-disconnect-20261026编译read-dump.cpp，匹配Windows符号后展开55线程；用保留旧对象重链接old-app-map.exe生成MAP（未执行），与donor原EXE完整.text SHA256及字节一致：b48bcd462af9d82aeee97b919fd90d5c033d38ea04dd7408edf09db56c35b71c。GUI在Qt循环，CaptureAudioSession在音频输出事件等待，没有可归因的首次停流SampleCB栈；NVIDIA私有栈仍不完整。未修改/构建当前产品、未触碰设备或配置。
+
+命令/结果：build-dump.cmd编译修正后成功（dump-helper-build-r2/r3.log）；read-dump.exe <dump> <symbols> <images>执行成功（dump-stacks-matched.log）；link-old-map.cmd首次缺MANIFEST:EMBED失败，补齐后exit0（old-app-map-link-r2.log，保留原库链接警告）；PE段逐字节核对same=true（map-text-verification.json）。完整证据目录E:/项目/Veyra/reports/field-capture-nr-disconnect-20261026。诊断工具通过不等于产品/实卡验收。
+
+更新docs/FIELD_CAPTURE_NR_DISCONNECT_2026-10-26.md，下一步应在首次无进展且Stop/Run之前自动记录入口/出口/阶段心跳、线程快照和完整设备事件，替代盲目多开关试验；该诊断尚未接入。根因仍未确定，恢复阻塞是已知次生问题。2.1.1封包仍暂停，不merge/push/发布。
+
+2026-10-26 用户补充：同一软件包前几天正常、近两天异常。已更新外部NR停流诊断，降低近期代码回归优先级但不排除既有软件缺陷。只读复核故障包D3D初始化，驱动唯一值32.0.16.2101，无正常时期对照，不能据此断言近期更新；未改产品。
+
+
+## 2026-10-26 用户恢复2.1.1本地构建
+
+用户明确继续构建2.1.1。从41488c2开codex/build-2.1.1-resume-20261026；archives同任务/before.json记录603个refs、所有工作树及原诊断脏文件/patch。仅新增构建材料/已知问题，不改已验产品逻辑。打包脚本支持--task，本轮使用新的stage/receipt，包含MENU_AMD_HDR报告和T911未解决说明。旧stage过期不交付；不合main/push/发布、不重复占采集卡，Lecram暂停。实际结果待后续回执。

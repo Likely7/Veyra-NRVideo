@@ -11,6 +11,8 @@
 - 列表模式空间抗锯齿移至NR组之后，避免后续NR覆盖AA效果；离线同帧GPU验证有实际变化，效果依素材而异。
 - 截图提示等待实际编码完成，HDR截图报告真实JXR路径；全屏/最大化恢复与播放列表焦点修复。
 - #67 NR/NVAPI关闭生命周期；采集卡无时间戳预备样本正常确认后跳过，不再向驱动返回失败，不伪造PTS。
+- 菜单首次打开前完成布局，修复文字位置跳动；保留2.0.7原有弹出动画，不引入淡入淡出替换。
+- AMD原生HDR与NR通过SDR线性代理增强后还原到HDR基底；模型仍按SDR合同推理，不宣称模型原生HDR。RX9000实卡效果与稳定性待测。
 
 ## 测试方法
 
@@ -21,11 +23,12 @@
 ## 已知边界
 
 - 外部用户4K YUY2约53fps及开启60→30后约26fps的问题本轮仅诊断，没有实现根因修复。
+- T911/RTX3080开启增强后音视频停流的首因尚未确定；本包未加入该问题的修复或首次停流诊断插桩，不能宣称已解决。
 - CV710内置音频监听卡画面与3090关闭问题仍需原用户机器复测；本机通过不替代原硬件验收。
 - 本机没有RX9000，AMD包启动/内容检查不等于AMD NR实际推理验证。长期显存增长尚未宣布根治。
 - 实际VRR生效、屏幕端到端延迟、所有效果同时开启的实卡性能没有本轮新增验证。Lecram原生链接入仍暂停。
 - 运行组件沿用2.1.0受控供体原件；社区/实验标记、许可证和哈希保留，清单不锁定用户自行替换兼容运行库。
 
-构建脚本scripts/acceptance/build-recording-handoff.py，任务codex-build-2.1.1-20261026，复用build/claude-screen-recording-20261022，参数--reconfigure --label 2.1.1 --jobs 2。打包与检验脚本scripts/acceptance/package-2.1.1.py。
+构建脚本scripts/acceptance/build-recording-handoff.py，恢复任务codex-build-2.1.1-resume-20261026，复用build/claude-screen-recording-20261022，参数--reconfigure --label 2.1.1 --jobs 2。打包与检验脚本scripts/acceptance/package-2.1.1.py，stage/seal/cold均传--task codex-build-2.1.1-resume-20261026。
 
-当前证据写入E:/项目/Veyra/{logs,reports}/codex-build-2.1.1-20261026，交付在E:/项目/Veyra/test-packages/codex-build-2.1.1-20261026。具体构建/测试回执与包SHA以DELIVERY.json、FINAL.json为准，本文不预先声明尚未执行的检查通过。已完成的修复验收见CAPTURE_REVIEW_REPORT_2026-10-26.md及CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md。
+当前证据写入E:/项目/Veyra/{logs,reports}/codex-build-2.1.1-resume-20261026，交付在E:/项目/Veyra/test-packages/codex-build-2.1.1-resume-20261026。具体构建/测试回执与包SHA以DELIVERY.json、FINAL.json为准，本文不预先声明尚未执行的检查通过。已完成的修复验收另见CAPTURE_REVIEW_REPORT_2026-10-26.md、CAPTURE_AUDIO_MAIN_REPORT_2026-10-25.md与MENU_AMD_HDR_REPORT_2026-10-26.md。旧暂停stage不作本次交付。
