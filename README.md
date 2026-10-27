@@ -110,6 +110,8 @@ Start with effects off, check picture/sound, then enable effects individually. H
 
 **The 1.4.4 UI guide is obsolete.** Version 2.0 uses separate settings. Retain the old version for rollback; do not overwrite the new package with old `veyra.ini`, an entire `runtime_local` folder or mixed DLLs.
 
+**Retain settings when upgrading2.1.0→2.1.1:** close Veyra and back up user data first. Overlay the matching GPU package contents into the existing executable directory to retain its data folder. For a new installation directory on the same PC, open Settings→About→User data in the old version, then close it and copy its `user-data-2.0.0` folder into the new package’s `runtime_local` directory. Copy only the data folder to keep the new runtime files; custom data-directory launches use the location shown in the app.
+
 ## Using 2.0
 
 ### Sources and pages

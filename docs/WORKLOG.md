@@ -10137,3 +10137,6 @@ main普通快进至2fecacf，atomic push主线及v2.1.1/v2.1.1-sources成功。�
 按发行ID先公开源码页make_latest=false，再公开主版make_latest=true，releases/latest实际确认v2.1.1。两运行包/两源码资产匿名HEAD均200，正文双二维码各220，旧运行组件身份不变；最终全值及测试结果见reports/codex-release-2.1.1-final-20261027/FINAL.json。归档releases/release-2.1.1-final-20261027，群公告517字，仅拟稿未代发。
 
 主版：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.1；源码：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.1-sources。发行标签固定2fecacf；本条仅发行回执，不改变已发布包。旧清理拦截未重试、旧分支/脏树保留、Lecram暂停。
+
+
+2026-10-27 用户要求群公告增加实测数据与升级迁移说明。核对RuntimePaths.cpp/main.cpp后纠正“新目录自动读取旧设置”的过强表述：默认为程序目录/runtime_local/user-data-2.0.0，软件入口设置→关于→用户数据→打开目录。同GPU包原地覆盖保留数据，迁到新目录须只复制用户数据子文件夹。两包manifest均无用户数据文件。更新公开说明/双语README及详细群公告，不改程序、ZIP、源档、tag或运行库。公告性能值标明RTX5070/4K30+2X/2400x1300条件及CPU代价，原GPU A/B及导出记录已复核。

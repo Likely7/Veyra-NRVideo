@@ -57,7 +57,12 @@
 
 ## 下载与升级
 
-按实际使用的显卡下载NVIDIA或AMD完整包，完整解压到新目录，运行`veyra_qml_ui.exe`。程序会读取原有用户设置，升级时保留个人预设与配置。
+按实际使用的显卡下载NVIDIA或AMD完整包，运行`veyra_qml_ui.exe`。从2.1.0升级可选择以下方式，操作前先退出软件并备份用户数据：
+
+- **原地覆盖**：将同显卡类型新包内的文件覆盖到旧版EXE所在目录，保留原数据文件夹，继续使用原设置。解压时确认文件放进原程序目录，而非额外套一层新目录。
+- **同电脑换目录**：在旧版打开“设置→关于→用户数据→打开目录”，退出软件后，将整个`user-data-2.0.0`文件夹复制到新版的`runtime_local`目录下。默认完整路径为`runtime_local/user-data-2.0.0/`。只迁移此数据文件夹，避免旧运行库混入新版。
+
+配置默认随软件目录保存；新目录首次运行会使用自己的数据目录。使用自定义`--data-dir`启动参数时，以软件内显示的路径为准。
 
 - [NVIDIA完整包](https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.1.1/Veyra-2.1.1-NVIDIA-win64-portable.zip)
 - [AMD完整包](https://github.com/Likely7/Veyra-NRVideo/releases/download/v2.1.1/Veyra-2.1.1-AMD-win64-portable.zip)
@@ -87,7 +92,7 @@
 - Settle popup layouts before opening, preserve the existing animation, report actual saved screenshot paths/formats, restore maximized/fullscreen geometry and scope playlist keys correctly.
 - Update all four interface languages.13 targeted regression groups,117 QML tests and four extracted-package startup/playback checks passed.
 
-Download one complete GPU package and extract it into a new directory. Runtime versions/licenses and community-experimental labels are retained from the audited2.1.0 distribution. The2.1.1 ZIPs are rebuilt with the interface-renderer and SR-default changes; embedded manifests describe their packaging time.
+For2.1.0 upgrades, close Veyra and back up user data first. You can overlay the matching GPU package into the existing executable directory, preserving its data folder. When installing into a new directory on the same PC, copy the old runtime_local/user-data-2.0.0 folder to the same location in the new package; Settings→About→User data opens the actual location. Copy only that data folder to retain the new runtimes. Runtime versions/licenses and community-experimental labels are retained from the audited2.1.0 distribution. The2.1.1 ZIPs are rebuilt with the interface-renderer and SR-default changes; embedded manifests describe their packaging time.
 
 ## 支持与反馈 / Support & feedback
 
