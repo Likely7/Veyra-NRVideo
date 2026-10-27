@@ -10125,3 +10125,5 @@ AMD：Veyra-2.1.1-AMD-win64-portable.zip，466204342 bytes，SHA256 5153e97be26c
 首次13组检查在EffectChain一个旧夹具失败：同尺寸SR应折叠的断言隐含默认DLSS；RTX Video SR支持同尺寸恢复，默认改变后该假设失效。将该DLSS专属夹具显式选0，保留原产品合同，不改变新默认/放松验证；失败完整日志保存在effect_chain-initial-default-fixture.log。
 
 最终13组回归通过，QML117通过/0失败/1跳过，翻译2681条/缺译占位0；NR模型测试初次漏传输出目录exit2，按工具argc合同补参数后通过，原JSON保留contracts-before-argument-fix.json。四次真实UI启动通过：新配置软件且SR选择4；选择GPU后实际D3D12并保留DLSS 0；兼容重启实际软件；再次启动保留FSR 5；全程SR关闭。测试只修改独立app/profile，截图已查看。为避免覆盖旧HDR证据，GPU验收脚本增加--task，重新编译GPU相关四目标12.2秒通过。
+
+当前构建GPU补验通过：AMD fake provider实际D3D12图128组合（108 HDR）/debug0，lmxxf ABI与HDR颜色测试通过；真实NVIDIA原版NR+PQ HDR20帧通过（nvidia-hdr-current-r2.json）。首轮HDR探针缺自身相对out目录导致JXR写入0x80070003，创建本任务私有app/out后13秒通过，原失败日志保留；未改产品或测试判断。三次构建EXE均3199aae280c9910eddc9e845ce5f9f64e52d7bf7e357b167d08e9504e866ee4b，90.3/6.2/12.2秒。接下来seal/cold与发布，不复用旧2.1.1 ZIP。
