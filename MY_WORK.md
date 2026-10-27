@@ -377,6 +377,43 @@ qml.orig\Veyra\                作者原 QML
 runtime_local         用户配置（从 2.1.0 目录迁移）
 ```
 
+### 2026-10-27 2.1.1 合并的完整核查（验收通过）
+
+**核查方法（三步，不靠猜）：**
+
+1. **比文件清单** —— 我改了 91 个、上游改了 182 个、**共同 37 个**
+2. **逐个核对 37 个共同文件**里我的改动是否还在
+3. **按名字查找**每项功能在合并后的树里是否存在
+
+**发现的真实遗漏：**
+
+| 项目 | 情况 |
+|---|---|
+| **i18n 五条翻译** | 随上游整份 catalog 丢失，**且仍被 QML 引用** → 界面会显示原文。**已补回** |
+| `PresentSink.cpp` | 只丢了一段诊断日志（`plausible` 判定保留） |
+| `VideoPresenter.h` | 只丢了被事件驱动取代的 `hdrPeakMonitor_` |
+
+**全部确认在位的功能：**
+
+- **B 站模块整体**：页面接入、发/删评论、带标签的表情、作者页、评论分页与最热/最新、平滑滚动、搜索框回车
+- **音频链路**：读重试 8 处、缓冲时停音频 2 处、最后好读位置 3 处
+- **CDN**：PCDN 过滤、测速排序、换节点 9 处
+
+**上游 2.1.1 的新功能全部到位**（DisplayStateService、LiveRecorder、PresentCapture、MfLiveEncoder、NvencLiveEncoder、RecordingAudioTap、RotateButton 等）。
+
+**验证结果：**
+
+| 项目 | 结果 |
+|---|---|
+| 构建 | exit=0 |
+| 启动 | exit=0，QML 错误 0 |
+| `veyra_effect_chain_tests` | 全部 PASS |
+| `veyra_preset_library_tests` | 全部 PASS |
+| `veyra_realtime_preview_tests` | failures=0 |
+
+**方法论教训：** 合并后「构建通过 + 启动正常」**不等于没有遗漏**。
+真正查出问题的，是**逐文件比对改动量**和**逐条检查翻译是否仍被引用**。
+
 ### 已知限制（别再试，或要试先想清楚）
 
 | 问题 | 原因 | 现状 |
