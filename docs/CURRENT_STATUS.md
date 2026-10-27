@@ -2,6 +2,10 @@
 
 # 当前项目状态 / Current Status
 
+## 2026-10-27 当前开发基线与整理入口
+
+2.1.1发行提交`2fecacf`已是本地和远端main的祖先；核对时两端main同为`9520946`，其后仅发行记录和迁移文档，产品源码与2.1.1无差异。`git merge --ff-only v2.1.1`返回Already up to date。当前源码仍在`E:/项目/Veyra/worktrees/screen-recording-fix-20261022`；后续下方“未合main”等内容是历史状态。清理方案见[项目整理方案](PROJECT_MAINTENANCE_PLAN_2026-10-27.md)：132分支、101工作树、6脏树/516状态记录已盘点；当前仅方案，未删产物或分支，Lecram暂停。
+
 ## 2026-10-26 采集审查接手完成（隔离分支）
 
 当前施工在`codex/capture-review-handoff-20261026`，继承Claude的AA后置、事件式VRR/HDR与信号卡片刷新，补完同帧AA对照、截图实际完成路径、HDR缓存/失败重试及全屏最大化恢复修复。完整证据与覆盖纠偏见[采集审查报告](CAPTURE_REVIEW_REPORT_2026-10-26.md)。主线仍68def10，软件UI默认ea148bf独立保留，未合main/push/封包。原实卡轮次只覆盖NR/AA/调色/VFG，不能称全部效果；本次不重复实卡。Lecram暂停。

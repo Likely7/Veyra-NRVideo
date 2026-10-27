@@ -10140,3 +10140,11 @@ main普通快进至2fecacf，atomic push主线及v2.1.1/v2.1.1-sources成功。�
 
 
 2026-10-27 用户要求群公告增加实测数据与升级迁移说明。核对RuntimePaths.cpp/main.cpp后纠正“新目录自动读取旧设置”的过强表述：默认为程序目录/runtime_local/user-data-2.0.0，软件入口设置→关于→用户数据→打开目录。同GPU包原地覆盖保留数据，迁到新目录须只复制用户数据子文件夹。两包manifest均无用户数据文件。更新公开说明/双语README及详细群公告，不改程序、ZIP、源档、tag或运行库。公告性能值标明RTX5070/4K30+2X/2400x1300条件及CPU代价，原GPU A/B及导出记录已复核。
+
+## 2026-10-27 2.1.1主线核对与项目整理方案
+
+用户要求先把2.1.1内容整合main，再提供其余内容的清洁整理方案。只读核对本地main/nrvideo/main/远端main均9520946，v2.1.1与源码标签均指向2fecacf；`git merge --ff-only v2.1.1`成功返回Already up to date，产品路径diff为空，不重复整合或改产品。正式两包与应用源码重新SHA256，全部匹配对应校验文件，证据reports/project-maintenance-20261027/release-hashes.json。
+
+audit_git.py记录132本地分支（121为main祖先，含main本身；11非祖先，AMD关闭修复为patch等价）、101工作树、6个脏树516条状态、461标签。audit_storage.py跳过reparse点，以os.stat文件ID/链接数和FileStandardInfo.AllocationSize复核792045文件路径：E项目去重128.27GiB，桌面旧树11.77GiB；三组43个候选目录（34旧CMake、7旧测试包、2verify）所有已知链接都在候选集合内的分配量22.45GiB，尚需扣除必要证据保存量，未当作已回收。首次DirEntry.stat身份全0的统计无效，已改os.stat；GetCompressedFileSize只给非压缩文件长度，最终改用FileStandardInfo，旧结果被纠正，未据旧数操作。
+
+完整方案docs/PROJECT_MAINTENANCE_PLAN_2026-10-27.md；全分支/工作树CSV、CLEANUP_PLAN.json、原始盘点位于E:/项目/Veyra/reports/project-maintenance-20261027。共用Git库仍在桌面.git，不可直接删桌面树；脏工作、Lecram、SDK/模型/运行原件、2.0.7及以后正式资产、对应源码/许可/必要现场证据保护。本轮不删、不移动、不清分支、不改历史guard/start、不push/Release、不运行产品重建/GPU/采集测试；产品代码未变。

@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-27 主线与整理核对**：2.1.1发行提交2fecacf已完整包含在本地/远端main，核对时main为9520946；`git merge --ff-only v2.1.1`返回Already up to date，产品目录无差异。本轮用户要求先确认整合，再提供项目清理方案：见`docs/PROJECT_MAINTENANCE_PLAN_2026-10-27.md`；完整132分支/101工作树及磁盘清单在`E:/项目/Veyra/reports/project-maintenance-20261027`。6个脏树516条状态记录保护，桌面`.git`仍是所有工作树的共用库；本轮仅主线核对和方案，不删除/移动/推送/发布。Lecram继续暂停。
+
 > **2026-10-27 2.1.1已正式发布**：main/tag发行提交2fecacf，软件绘制默认/GPU切换已合入，RTX视频超分高质量为新SR默认，旧明确选择保留。最终两包E:/项目/Veyra/releases/release-2.1.1-final-20261027；服务端size/digest逐项一致，主Release v2.1.1已公开且latest，源码独立v2.1.1-sources。准确证据reports/codex-release-2.1.1-final-20261027/FINAL.json。10/26旧2.1.1包已被替代，旧分支/脏树保留，Lecram暂停。
 
 
