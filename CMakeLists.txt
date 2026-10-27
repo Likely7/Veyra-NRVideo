@@ -1083,6 +1083,23 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   set_source_files_properties(apps/veyra/ui/SubtitleOverlay.cpp PROPERTIES COMPILE_OPTIONS /utf-8)
   # AUTOMOC: QmlPlayerBridge declares Q_OBJECT, so its meta-object has to be
   # generated. Without this the library links but every signal is unresolved.
+  # Keep bridge domains explicit: no source glob or duplicate runtime state.
+  target_sources(veyra_qml_bridge PRIVATE
+    src/ui/bridge/Hardware.cpp
+    src/ui/bridge/Status.cpp
+    src/ui/bridge/FrameGeneration.cpp
+    src/ui/bridge/Colour.cpp
+    src/ui/bridge/Preferences.cpp
+    src/ui/bridge/Capture.cpp
+    src/ui/bridge/RemotePlay.cpp
+    src/ui/bridge/Export.cpp
+    src/ui/bridge/Subtitles.cpp
+    src/ui/bridge/Playback.cpp
+    src/ui/bridge/Enhancement.cpp
+    src/ui/bridge/Chain.cpp
+    src/ui/bridge/Recording.cpp
+    src/ui/bridge/View.cpp
+    src/ui/QmlPlayerBridge_p.h)
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
   # Interface language (UiLanguage.h): its own small library so the streaming models,
   # which are tested without the player, translate their messages too.
@@ -1583,7 +1600,7 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
     # pushed the veyra_qml_ui link line over CMake's response-file threshold, and
     # link.exe reads response files in the ANSI code page, which breaks the UTF-8
     # Qt paths under E:/项目. Those system libraries come from #pragma comment in
-    # QmlPlayerBridge.cpp instead.
+    # the private QmlPlayerBridge_p.h instead.
     if(TARGET veyra_qml_bridge)
       target_sources(veyra_qml_bridge PRIVATE src/remoteplay/ControllerInput.cpp)
       target_link_libraries(veyra_qml_bridge PUBLIC $<TARGET_LINKER_FILE:SDL3::SDL3-static>)

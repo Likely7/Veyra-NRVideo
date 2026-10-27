@@ -47,3 +47,31 @@ VEqBars 1.0 VEqBars.qml
 VTelemetryValue 1.0 VTelemetryValue.qml
 SponsorPanel 1.0 SponsorPanel.qml
 RotateButton 1.0 RotateButton.qml
+
+
+# Professional-view reusable components
+ProPresentationRows 1.0 ProPresentationRows.qml
+ProPerfOrb 1.0 ProPerfOrb.qml
+ProPerfOrbs 1.0 ProPerfOrbs.qml
+ProStatusLight 1.0 ProStatusLight.qml
+ProStatusSummary 1.0 ProStatusSummary.qml
+ProAddLayerButton 1.0 ProAddLayerButton.qml
+ProAudioPanel 1.0 ProAudioPanel.qml
+ProDisplayPanel 1.0 ProDisplayPanel.qml
+
+# Dialog components
+DialogLayer 1.0 DialogLayer.qml
+DialogSection 1.0 DialogSection.qml
+DialogGroup 1.0 DialogGroup.qml
+DialogNote 1.0 DialogNote.qml
+DialogTextField 1.0 DialogTextField.qml
+NetworkSourceDialog 1.0 NetworkSourceDialog.qml
+CaptureSourceDialog 1.0 CaptureSourceDialog.qml
+Ps5SourceDialog 1.0 Ps5SourceDialog.qml
+PcSourceDialog 1.0 PcSourceDialog.qml
+XboxSourceDialog 1.0 XboxSourceDialog.qml
+ScreenSourceDialog 1.0 ScreenSourceDialog.qml
+SubtitleSettingsDialog 1.0 SubtitleSettingsDialog.qml
+AudioSettingsDialog 1.0 AudioSettingsDialog.qml
+SavePresetDialog 1.0 SavePresetDialog.qml
+ManagePresetsDialog 1.0 ManagePresetsDialog.qml
