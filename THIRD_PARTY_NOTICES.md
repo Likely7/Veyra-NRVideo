@@ -382,7 +382,7 @@ Thank you to these projects and their contributors. Integrated code, dependencie
 | [Lucide](https://github.com/lucide-icons/lucide) | UI icons, retaining Lucide and Feather-derived license notices. |
 | [Simple Icons](https://github.com/simple-icons/simple-icons) | Brand glyphs on the sponsor page (CC0; the logos stay their owners' trademarks). |
 | [Intel XeSS / XeLL](https://github.com/intel/xess) | Experimental XeSS frame generation and related runtime interfaces. |
-| [NVIDIA DLSS](https://github.com/NVIDIA/DLSS), [RTX Video SDK](https://developer.nvidia.com/rtx-video-sdk), [Optical Flow SDK](https://developer.nvidia.com/opticalflow-sdk), [Video Codec SDK](https://developer.nvidia.com/video-codec-sdk) | Upscaling, optical flow, encoding and enhancement interfaces. Experimental NR components have separate identities and boundaries in [Runtime Components](docs/RUNTIME_COMPONENTS_1.1.0.md); this is not vendor certification. |
+| [NVIDIA DLSS](https://github.com/NVIDIA/DLSS), [RTX Video SDK](https://developer.nvidia.com/rtx-video-sdk), [Optical Flow SDK](https://developer.nvidia.com/opticalflow-sdk), [Video Codec SDK](https://developer.nvidia.com/video-codec-sdk) | Upscaling, optical flow, encoding and enhancement interfaces. Experimental NR components have separate identities and boundaries in [Runtime Components](docs/history/reports/RUNTIME_COMPONENTS_1.1.0.md); this is not vendor certification. |
 | [vcpkg](https://github.com/microsoft/vcpkg) | Dependency builds, version records and license provenance. |
 
 Remote Play also depends on **OpenSSL, Opus, json-c, libevent, miniupnpc, curl, nanopb, Jerasure and gf-complete**. Their attribution and license notices are retained in [licenses/remoteplay](licenses/remoteplay), with corresponding source supplied in Releases.
@@ -393,7 +393,7 @@ Remote Play also depends on **OpenSSL, Opus, json-c, libevent, miniupnpc, curl, 
 | --- | --- |
 | [Magpie Experimental](https://github.com/SAOG0721/Magpie/tree/experimental) | NR / SR / FG combinations, configurable processing order, motion guidance, residual composition, resource synchronization and presentation pacing; an important practical comparison during development. |
 | [OBS Studio](https://github.com/obsproject/obs-studio) | DirectShow capture, pixel formats, color metadata, buffering and window-capture behavior. |
-| [DLSS5-NeuralScreen](https://github.com/perseval-BLR/DLSS5-NeuralScreen/tree/8098ccf261bedc16e4b5fe7887c51a07eb41720e) | RTX30 NR compatibility research and architecture-query behavior reference. Veyra's scoped adapter is independently implemented; the user-provided modified runtime has a separate identity and is not covered by the application's MIT license. See [local integration record](docs/RTX30_NR_AND_SAFE_DEFAULTS_2026-09-14.md). |
+| [DLSS5-NeuralScreen](https://github.com/perseval-BLR/DLSS5-NeuralScreen/tree/8098ccf261bedc16e4b5fe7887c51a07eb41720e) | RTX30 NR compatibility research and architecture-query behavior reference. Veyra's scoped adapter is independently implemented; the user-provided modified runtime has a separate identity and is not covered by the application's MIT license. See [local integration record](docs/history/reports/RTX30_NR_AND_SAFE_DEFAULTS_2026-09-14.md). |
 | [NVEnc](https://github.com/rigaya/NVEnc) / [RTXVideoProcessor](https://github.com/DrC0ns0le/RTXVideoProcessor) | Video upscaling, GPU frame resources, codecs and scheduling. FRUC was also researched; it has since been removed from Veyra. |
 | [mpv](https://github.com/mpv-player/mpv) | RTX upscaling integration and video-processing approaches in a media player. |
 | [video2dlssnr](https://github.com/DaniilSokolyuk/video2dlssnr) / [dlss5-nr-player](https://github.com/Zonnery/dlss5-nr-player) | Research comparisons for NR pipelines, stage order and data transfers; their code was not copied. |
@@ -452,13 +452,13 @@ Version selection and API ordering were also compared with OptiScaler commit
 `FSRFG_Dx12.cpp` (GPL-3.0); no source code from that file was
 copied. AMD algorithm source, SDK files and runtime binaries are not added to
 the Veyra source repository. Changes and actual hardware evidence are in
-[FSR / XeSS repair execution](docs/FG_FSR_XESS_EXECUTION_2026-09-30.md).
+[FSR / XeSS repair execution](docs/history/reports/FG_FSR_XESS_EXECUTION_2026-09-30.md).
 
 The FidelityFX upscale dispatch also does
 not complete under D3D12 GPU-based validation (the standalone probe stalls
 before its dispatch), so that validation mode is skipped for the FSR SR
 configuration with an explicit log line. See
-[AMD FSR frame generation integration record](docs/FSR_FRAMEGEN_INTEGRATION_2026-09-16.md).
+[AMD FSR frame generation integration record](docs/history/reports/FSR_FRAMEGEN_INTEGRATION_2026-09-16.md).
 
 ## DLSS-G 310.9.16 performance-mode runtime (2026-10-14)
 

@@ -1,8 +1,8 @@
 # Windows 原生 Chiaki 构建门槛
 
-> 当前状态已由 [修复执行记录](../REMOTEPLAY_REPAIR_EXECUTION_2026-09-11.md) 更新：metadata patch 已恢复、共享生产 CMake 和 UI 已接入，旧主体保留供追溯，不作为当前失败/成功结论。
+> 当前状态已由 [修复执行记录](../history/reports/REMOTEPLAY_REPAIR_EXECUTION_2026-09-11.md) 更新：metadata patch 已恢复、共享生产 CMake 和 UI 已接入，旧主体保留供追溯，不作为当前失败/成功结论。
 
-**当前状态：Windows x64/MSVC 原生门槛已通过。** 固定 chiaki-ng 提交 `0e16950165f06e5c3291537c2eeba6e852be7120` 在本机完成 248/248 个构建步骤；真实 probe 退出码为 0，并输出 `REAL_CHIAKI_CORE_INITIALIZED upstream_video_callback=1`。这只证明真实 `chiaki-lib` 能构建、链接和初始化，PS5 连接、真码流解码、音频、手柄、Windows 播放器和增强均未执行。当前状态和后续任务以 [`../REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md`](../REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md) 为准。
+**当前状态：Windows x64/MSVC 原生门槛已通过。** 固定 chiaki-ng 提交 `0e16950165f06e5c3291537c2eeba6e852be7120` 在本机完成 248/248 个构建步骤；真实 probe 退出码为 0，并输出 `REAL_CHIAKI_CORE_INITIALIZED upstream_video_callback=1`。这只证明真实 `chiaki-lib` 能构建、链接和初始化，PS5 连接、真码流解码、音频、手柄、Windows 播放器和增强均未执行。当前状态和后续任务以 [`../REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md`](../history/reports/REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md) 为准。
 
 本次通过使用的目录：
 

@@ -1,8 +1,8 @@
 # 源码依据与许可证记录
 
-> 当前状态已由 [修复执行记录](../REMOTEPLAY_REPAIR_EXECUTION_2026-09-11.md) 更新：metadata patch 已恢复、共享生产 CMake 和 UI 已接入，旧主体保留供追溯，不作为当前失败/成功结论。
+> 当前状态已由 [修复执行记录](../history/reports/REMOTEPLAY_REPAIR_EXECUTION_2026-09-11.md) 更新：metadata patch 已恢复、共享生产 CMake 和 UI 已接入，旧主体保留供追溯，不作为当前失败/成功结论。
 
-> 本文原主体为用户 Code 01 包的历史来源记录。2026-09-11 二次审计确认：当前工作树未导入其 `prepare_chiaki.py` / metadata JSON / PatchToolsTests；实际 backend 改用普通视频 callback，metadata 丢失已列为必须修复的问题。当前 native build 使用五文件 MSVC patch，初始化已通过；当前 source adapter 则有真解码/PCM/PTS失败。状态和命令以 [主交接第18节](../REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md#18-2026-09-11-二次代码审计用户要求交给其他-agent-修) 为准，不能照下方历史描述寻找不存在的元数据脚本。
+> 本文原主体为用户 Code 01 包的历史来源记录。2026-09-11 二次审计确认：当前工作树未导入其 `prepare_chiaki.py` / metadata JSON / PatchToolsTests；实际 backend 改用普通视频 callback，metadata 丢失已列为必须修复的问题。当前 native build 使用五文件 MSVC patch，初始化已通过；当前 source adapter 则有真解码/PCM/PTS失败。状态和命令以 [主交接第18节](../history/reports/REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md#18-2026-09-11-二次代码审计用户要求交给其他-agent-修) 为准，不能照下方历史描述寻找不存在的元数据脚本。
 
 ## Veyra 审查基线
 

@@ -1,6 +1,6 @@
 # Remote Play 代码交付 01 — 实施记录
 
-> 历史阶段记录：本文保留 Code 01 交付当时的状态，其中“原生编译未执行”和 `BLOCKED_NATIVE_BUILD` 已过期。Windows x64/MSVC 原生 Chiaki probe 后续已完成 248/248 步并真实初始化成功。当前事实、必修缺陷和下一步只以 [`../REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md`](../REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md) 为准。
+> 历史阶段记录：本文保留 Code 01 交付当时的状态，其中“原生编译未执行”和 `BLOCKED_NATIVE_BUILD` 已过期。Windows x64/MSVC 原生 Chiaki probe 后续已完成 248/248 步并真实初始化成功。当前事实、必修缺陷和下一步只以 [`../REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md`](../history/reports/REMOTEPLAY_INTEGRATION_HANDOFF_2026-09-11.md) 为准。
 
 > 二次审计已写入主交接第18节：普通 callback 替换了本包的 metadata 扩展；H.264 首帧、PCM 和 PTS 在实际 source 中失败，67项原包核心测试不覆盖它们。当前不是继续重复 native 初始化，而是先修数据适配层。
 
