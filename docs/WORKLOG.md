@@ -10097,3 +10097,8 @@ AMD根因是HDR working模式初始化直接拒绝。新增两个FP16内部纹�
 NVIDIA：Veyra-2.1.1-NVIDIA-win64-portable.zip，679560249 bytes，SHA256 e3d78f91b4c2669108f2c22c1d491d17f3bfdc73b2dbda8f9eba823d5f32b451
 
 AMD：Veyra-2.1.1-AMD-win64-portable.zip，466204342 bytes，SHA256 5153e97be26c03062b8596462fbede41b700f354799df02875bad3bf5d895f15
+
+
+## 2026-10-27 用户授权发布2.1.1
+
+起点00d7d2d，archives/release-2.1.1-20261027存refs/工作树HEAD；分支codex/release-2.1.1-20261027。fetch发现远端c525379仅自动更新Star历史图，普通merge保留。原ZIP保持，上游连接器无Release资产上传接口，使用已登录Likely7的gh。按全部提交与验收整理RELEASE_NOTES_2.1.1，更新报告仅本次实际交付内容。主Release两运行ZIP、源码独立非latest页；不改程序/运行组件/用户配置、不代发群消息。准确结果以本任务FINAL为准。
