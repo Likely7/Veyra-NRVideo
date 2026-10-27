@@ -2112,6 +2112,19 @@ VPage {
                     root.view === "home" && !root.listLoading && !root.loadingMore
                     && root.cards.length > 0
 
+
+                // 松手时判断：过了阈值就刷新。
+                // On release: past the threshold means refresh.
+                onDragEnded: {
+                    if (!pullEnabled) return
+                    const pulled = Math.max(pullDistance, -contentY)
+                    pullDistance = 0
+                    pullArmed = false
+                    if (pulled >= pullThreshold) {
+                        root.load(root.view === "search" ? "home" : root.view, true)
+                    }
+                }
+
                 // ---------- 滚轮平滑 ----------
                 property real wheelTargetY: 0
                 readonly property real wheelStep: 100
@@ -2139,58 +2152,6 @@ VPage {
                         wheelMove.to = grid.wheelTargetY
                         wheelMove.start()
                     }
-                }
-                // 下拉手势。DragHandler 只在内容已在顶部且是首页时接管，
-                // 否则让 Flickable 自己处理，不干扰正常滚动和拖动。
-                // The pull gesture. The DragHandler only takes over when the content is
-                // already at the top on the home feed; otherwise the Flickable keeps the
-                // gesture, so ordinary scrolling and dragging are unaffected.
-                DragHandler {
-                    id: pullDrag
-                    enabled: grid.pullEnabled && grid.contentY <= 0
-                    target: null
-                    onActiveChanged: {
-                        if (!active) {
-                            // 松手：过了阈值就刷新，否则回弹。
-                            // Released: past the threshold refreshes, otherwise spring back.
-                            if (grid.pullArmed) {
-                                grid.pullArmed = false
-                                grid.pullDistance = 0
-                                pullResetAnim.stop()
-                                pullResetAnim.from = grid.contentY
-                                pullResetAnim.to = 0
-                                pullResetAnim.start()
-                                root.load(root.view === "search" ? "home" : root.view, true)
-                            } else {
-                                pullResetAnim.from = grid.contentY
-                                pullResetAnim.to = 0
-                                pullResetAnim.start()
-                            }
-                            grid.pullDistance = 0
-                        }
-                    }
-                    onTranslationChanged: {
-                        if (!active) return
-                        // 只认向下拖（正值），向上拖交给 Flickable。
-                        // Only a downward drag counts; upward belongs to the Flickable.
-                        const dy = translation.y
-                        if (dy <= 0) { grid.pullDistance = 0; grid.pullArmed = false; return }
-                        // 阻尼：越拉越费劲，拉到阈值附近就走得很慢，手感更自然。
-                        // Damped: the further it goes the harder it pulls, so it slows near
-                        // the threshold instead of shooting past it.
-                        const damped = dy / (1 + dy / 120)
-                        grid.pullDistance = Math.min(damped, 140)
-                        grid.pullArmed = grid.pullDistance >= grid.pullThreshold
-                        pullResetAnim.stop()
-                        grid.contentY = -grid.pullDistance
-                    }
-                }
-                NumberAnimation {
-                    id: pullResetAnim
-                    target: grid
-                    property: "contentY"
-                    duration: 220
-                    easing.type: Easing.OutCubic
                 }
                 NumberAnimation {
                     id: wheelMove
@@ -2255,7 +2216,26 @@ VPage {
                 // below the viewport, so the append usually lands before the user reaches
                 // the end. contentHeight changes as delegates are built, hence the wider
                 // threshold rather than an exact "at the bottom" test.
-                onContentYChanged: maybeLoadMore()
+                // 一个处理器做两件事：下拉检测 + 到底加载更多。QML 不允许同一属性
+                // 有两个处理器，上一版就是因为又加了一个 onContentYChanged 而报
+                // "Property value set multiple times"、整个页面加载失败。
+                // One handler does both: the pull check and load-more. QML forbids two
+                // handlers for the same property, which is why the previous version failed
+                // to load entirely with "Property value set multiple times".
+                onContentYChanged: {
+                    maybeLoadMore()
+                    if (!pullEnabled) { pullDistance = 0; pullArmed = false; return }
+                    if (contentY < 0) {
+                        // 越界往下拖：contentY 变负，绝对值就是拉了多少。
+                        // Dragged above the top: contentY goes negative and its magnitude is
+                        // how far it has been pulled.
+                        pullDistance = -contentY
+                        pullArmed = pullDistance >= pullThreshold
+                    } else if (contentY === 0 && !dragging) {
+                        pullDistance = 0
+                        pullArmed = false
+                    }
+                }
                 onContentHeightChanged: maybeLoadMore()
                 onHeightChanged: maybeLoadMore()
                 // Load when the bottom is near, and also when the content does not even
