@@ -384,7 +384,7 @@ Rectangle {
             }
 
             Item {
-                implicitWidth: 80
+                implicitWidth: 132
                 implicitHeight: 20
                 RowLayout {
                     anchors.fill: parent
@@ -392,8 +392,17 @@ Rectangle {
                     VIcon { name: "vol"; color: Theme.t2 }
                     VSlider {
                         Layout.fillWidth: true
-                        from: 0; to: 1; value: veyra.volume; inputScale: 100
+                        id: cineVolume
+                        objectName: "cine-volume"
+                        from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
+                        valueFromModel: true; defaultValue: 1
                         onMoved: moved => veyra.volume = moved
+                    }
+                    VSliderValue {
+                        Layout.preferredWidth: 36
+                        slider: cineVolume
+                        text: Math.round(veyra.volume * 100) + "%"
+                        color: Theme.t2; pixelSize: 10
                     }
                 }
             }

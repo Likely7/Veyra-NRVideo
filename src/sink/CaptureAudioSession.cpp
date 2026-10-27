@@ -1,4 +1,5 @@
 #include "veyra/sink/CaptureAudioSession.h"
+#include "veyra/sink/AudioGain.h"
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/sink/ArrivalClockMapping.h"
 #include "veyra/sink/CaptureAudioDsp.h"
@@ -472,7 +473,7 @@ bool CaptureAudioSession::push(const void* data,size_t bytes,double pts,bool dis
 }
 void CaptureAudioSession::videoPresented(double pts,int64_t time,std::optional<int64_t> arrival){std::lock_guard lock(p_->mutex);p_->videoPts=pts;p_->videoHost=double(time)/10000;p_->videoArrival=arrival;++p_->videoObservation;p_->haveVideo=true;}
 void CaptureAudioSession::videoReset(bool resetAudio){std::lock_guard lock(p_->mutex);p_->haveVideo=false;if(resetAudio&&p_->mode==0)p_->pendingReset=true;p_->wake.notify_all();}
-void CaptureAudioSession::setGain(float value){p_->gain=std::clamp(value,0.0f,1.0f);}
+void CaptureAudioSession::setGain(float value){p_->gain=clampAudioGain(value);}
 void CaptureAudioSession::setSync(unsigned mode,int offset){p_->mode=std::min(mode,2u);p_->offset=std::clamp(offset,-250,250);}
 CaptureAudioState CaptureAudioSession::snapshot()const{std::lock_guard lock(p_->mutex);return p_->state;}
 }

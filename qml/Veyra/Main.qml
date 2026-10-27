@@ -749,7 +749,7 @@ Window {
     // 5 s steps (field request 2026-10-02).
     Shortcut { sequence: "Left"; onActivated: veyra.seekBy(-5) }
     Shortcut { sequence: "Right"; onActivated: veyra.seekBy(5) }
-    Shortcut { sequence: "Up"; onActivated: veyra.volume = Math.min(1, veyra.volume + 0.05) }
+    Shortcut { sequence: "Up"; onActivated: veyra.volume = Math.min(veyra.maximumVolume, veyra.volume + 0.05) }
     Shortcut { sequence: "Down"; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
     Shortcut { sequence: "Ctrl+O"; onActivated: veyra.openFileDialog() }
     Shortcut { sequence: "Ctrl+U"; onActivated: veyra.openNetworkDialog() }

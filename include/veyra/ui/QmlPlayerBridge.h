@@ -505,6 +505,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantList protectionRegions READ protectionRegions NOTIFY protectionChanged)
     Q_PROPERTY(QString protectionDrawShape READ protectionDrawShape NOTIFY protectionDrawChanged)
     Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY snapshotChanged)
+    Q_PROPERTY(double maximumVolume READ maximumVolume CONSTANT)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY snapshotChanged)
     Q_PROPERTY(double playbackSpeed READ playbackSpeed NOTIFY snapshotChanged)
     Q_PROPERTY(double playbackRate READ playbackRate WRITE setPlaybackRate NOTIFY snapshotChanged)
@@ -897,6 +898,7 @@ public:
 
     bool applying() const;
     double volume() const;
+    double maximumVolume() const;
     void setVolume(double value);
     bool muted() const;
     void setMuted(bool value);

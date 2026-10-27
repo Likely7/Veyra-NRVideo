@@ -625,12 +625,19 @@ bool AudioPipeline::rewindSession(double target)
     return true;
 }
 
-bool AudioRenderer::copyPcm(BYTE* destination,const float* input,size_t frames){
-    if(!channelMix_){std::memcpy(destination,input,frames*outputFormat_.channels*sizeof(float));return true;}
+bool AudioRenderer::copyPcm(BYTE* destination,const float* input,size_t frames,bool boosted){
+    if(!channelMix_){
+        std::memcpy(destination,input,frames*outputFormat_.channels*sizeof(float));
+        if(boosted)limitPcmPeaks(reinterpret_cast<float*>(destination),frames,outputFormat_.channels);
+        return true;
+    }
     mixed_.resize(frames*outputFormat_.channels);
     uint8_t* out[]={reinterpret_cast<uint8_t*>(mixed_.data())};const uint8_t* in[]={reinterpret_cast<const uint8_t*>(input)};
     const int converted=swr_convert(channelMix_,out,int(frames),in,int(frames));
     if(converted!=int(frames))return checked(E_FAIL,"Channel mapping unexpectedly changed frame count");
+    // Limit after mapping: clipping individual input channels before a downmix
+    // would distort signals which fit the final endpoint's range.
+    if(boosted)limitPcmPeaks(mixed_.data(),frames,outputFormat_.channels);
     std::memcpy(destination,mixed_.data(),frames*outputFormat_.channels*sizeof(float));return true;
 }
 
@@ -939,11 +946,12 @@ bool AudioRenderer::pumpOnce(AudioPcmSource& pipeline, double* firstWrittenPtsMs
     }
     if (got > 0) {
         for(unsigned c=0;c<inputFormat_.channels;++c)lastRaw_[c]=chunk_[(got-1)*inputFormat_.channels+c];
-        const float target=std::clamp(gain_.load(),0.0f,1.0f);
+        const float target=clampAudioGain(gain_.load());
+        const bool boosted=std::max(target,smoothedGain_)>1.0f;
         applyPcmGain(chunk_.data(),got,inputFormat_.channels,target,smoothedGain_);
         if(fadeInRemaining_)fadePcmHead(chunk_.data(),got,inputFormat_.channels,fadeInRemaining_);
         if(target!=loggedGain_&&std::abs(smoothedGain_-target)<.00001f){loggedGain_=target;log::info("audio-gain",std::format("target={} reached={} framesWritten={} clockPreserved=true applicationPCM=true",target,smoothedGain_,framesWritten_.load()));}
-        if(!copyPcm(dest,chunk_.data(),got)){render_->ReleaseBuffer(0,0);return false;}
+        if(!copyPcm(dest,chunk_.data(),got,boosted)){render_->ReleaseBuffer(0,0);return false;}
         if (got < written) {
             std::memset(dest + got * outputFormat_.channels*4, 0, (written - got) * outputFormat_.channels*4);
             underruns_.fetch_add(1);
@@ -1028,7 +1036,7 @@ AudioFadeResult AudioRenderer::fadeAndReset(AudioPcmSource& source,const std::at
             double pts=-1;const size_t got=source.pull(tail.data(),frames,&pts);
             for(unsigned c=0;c<inputFormat_.channels;++c){const float last=got?tail[(got-1)*inputFormat_.channels+c]:(padding?lastRaw_[c]:0);for(size_t i=got;i<frames;++i)tail[i*inputFormat_.channels+c]=last;}
             fadePcmTail(tail.data(),frames,inputFormat_.channels,smoothedGain_);
-            if(!copyPcm(dest,tail.data(),frames)){render_->ReleaseBuffer(0,0);result=AudioFadeResult::Failed;break;}
+            if(!copyPcm(dest,tail.data(),frames,smoothedGain_>1.0f)){render_->ReleaseBuffer(0,0);result=AudioFadeResult::Failed;break;}
             if(!checked(render_->ReleaseBuffer(frames,0),"Fade ReleaseBuffer")){result=AudioFadeResult::Failed;break;}
             submitted=true;framesWritten_+=frames;
             log::info("audio-fade",std::format("submitted frames={} realPcm={} finalLeft={} finalRight={}",frames,got,tail[tail.size()-inputFormat_.channels],tail.back()));

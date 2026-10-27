@@ -436,6 +436,12 @@ add_dependencies(veyra_pipeline veyra_shader_aa_luma veyra_shader_aa_fxaa3 veyra
   veyra_shader_aa_smaa_weights_high veyra_shader_aa_smaa_weights_ultra veyra_shader_aa_smaa_blend veyra_shader_aa_temporal
   veyra_shader_aa_mlaa_edges veyra_shader_aa_mlaa_counts veyra_shader_aa_mlaa_blend)
 
+# Header-only PCM gain checks do not need audio hardware, Qt or GPU runtimes.
+add_executable(veyra_audio_gain_tests tests/unit/AudioGainTests.cpp)
+target_compile_features(veyra_audio_gain_tests PRIVATE cxx_std_20)
+target_include_directories(veyra_audio_gain_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+veyra_apply_warnings(veyra_audio_gain_tests)
+
 add_executable(veyra_pipeline_tests
   tests/unit/PipelineContractTests.cpp
 )
@@ -1138,6 +1144,11 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_link_libraries(veyra_playlist_tests PRIVATE Qt6::Core)
   find_package(Qt6 COMPONENTS Test)
   if(TARGET Qt6::Test)
+    add_executable(veyra_audio_volume_bridge_tests tests/integration/AudioVolumeBridgeTests.cpp)
+    target_compile_features(veyra_audio_volume_bridge_tests PRIVATE cxx_std_20)
+    target_compile_options(veyra_audio_volume_bridge_tests PRIVATE /utf-8)
+    target_link_options(veyra_audio_volume_bridge_tests PRIVATE /STACK:8388608)
+    target_link_libraries(veyra_audio_volume_bridge_tests PRIVATE veyra_qml_bridge Qt6::Test)
     add_executable(veyra_update_checker_tests tests/unit/UpdateCheckerTests.cpp)
     set_target_properties(veyra_update_checker_tests PROPERTIES AUTOMOC ON)
     target_compile_options(veyra_update_checker_tests PRIVATE /utf-8)
