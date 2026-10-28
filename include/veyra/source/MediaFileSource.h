@@ -21,6 +21,10 @@
 #include "veyra/media/FFmpegDeinterlacer.h"
 #include "veyra/source/IFrameSource.h"
 
+// FFmpeg's bitstream filter context (libavcodec/bsf.h). Forward-declared so this
+// header keeps its existing include surface.
+struct AVBSFContext;
+
 namespace veyra::source {
 
 class MediaFileSource final : public IFrameSource {
@@ -72,6 +76,20 @@ private:
     // Custom (P5): decoded EL frames keyed by timestamp, waiting for their base frame.
     std::map<int64_t, AVFrame*> elByPts_;
     uint32_t elLastWidth_ = 0, elLastHeight_ = 0;   // last decoded EL extent
+    // Custom (P7): FFmpeg's dovi_split bitstream filter produces the enhancement
+    // layer bitstream out of the same access units. When the container also
+    // carries the EL's own parameter sets (Matroska hvcE, surfaced by libavformat
+    // as AV_PKT_DATA_HEVC_CONF) this replaces the hand-written NAL walk and keeps
+    // the EL decoder valid across seeks, because nothing has to be re-sniffed
+    // from the stream. Without the hvcE record the built-in walk stays in use.
+    AVBSFContext* elSplitter_ = nullptr;
+    bool elSplitterActive_ = false;
+    // Raw timestamp distance (stream time base ticks) still treated as the same
+    // picture when pairing a base frame with its enhancement frame.
+    int64_t elMatchTolerance_ = 0;
+    // Consecutive RPUs that declare "no residual in this layer" (MEL).
+    unsigned elMelStrikes_ = 0;
+    bool elMelDrop_ = false;   // set in readBase(), consumed at the top of read()
     // A base frame held back while waiting for its EL counterpart (bounded wait).
     std::deque<std::pair<pipeline::FramePacket, AVFrame*>> baseWaiting_;
     // Custom (P7 fix): a base frame taken out of baseWaiting_ is a clone, so it
@@ -87,9 +105,19 @@ private:
     unsigned elLayerFrames_ = 0, elLayerMisses_ = 0;
     // Returns true when this packet actually carried enhancement layer data.
     bool feedEnhancementLayer(const AVPacket* packet);
+    // Custom (P7): EL bitstream extraction. Both return an OWNED packet, or null
+    // when this access unit carries no enhancement layer.
+    bool openEnhancementSplitter(const AVCodecParameters* params);
+    void closeEnhancementSplitter();
+    AVPacket* splitEnhancementPacket(const AVPacket* packet);
+    AVPacket* buildEnhancementPacket(const AVPacket* packet);
+    bool openEnhancementDecoder(const AVCodecParameters* elParams, int timeBaseNum, int timeBaseDen);
+    // Custom (P7): nearest enhancement frame within elMatchTolerance_, dropping
+    // the ones whose base frame has already gone past.
+    bool takeElNear(int64_t pts, AVFrame** outFrame);
+    void dropStaleEl(int64_t oldestBasePts);
     SourceReadStatus readBase(pipeline::FramePacket& out, const AVFrame** decodedFrame);
     void drainElFrames();
-    bool takeElForPts(int64_t pts, AVFrame** outFrame);
     void closeEnhancementLayer();
     bool deinterlaceEnabled_=true,filterDraining_=false;
     pipeline::DoviFrameInfo doviFrameInfo{};   // Dolby Vision L1 (RPU), invalid unless present

@@ -17,6 +17,8 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/bsf.h>
+#include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/dovi_meta.h>
 #include <libavutil/mastering_display_metadata.h>
@@ -195,20 +197,80 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
     return true;
 }
 
-// Custom (P5): decode the Dolby Vision enhancement layer that rides inside the
-// same access units as the base layer. The parameter sets come from the EL's own
-// first access unit (they are not in the stream's hvcC), so nothing else needs
-// re-parsing. Any failure disables the path instead of disturbing playback.
-bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
-    const auto elStart = std::chrono::steady_clock::now();
+// Custom (P7): FFmpeg's own Dolby Vision splitter. It emits exactly the
+// enhancement layer bitstream (private NAL type 63 with its two-byte wrapper
+// stripped), takes the EL's parameter sets from the container's hvcE record and
+// halves the extent for a 4K base layer. Nothing has to be re-derived from the
+// stream, so the EL decoder also survives a seek without losing its parameter
+// sets. Requires libavformat to have surfaced AV_PKT_DATA_HEVC_CONF.
+bool MediaFileSource::openEnhancementSplitter(const AVCodecParameters* params) {
+    closeEnhancementSplitter();
+    if (params == nullptr) return false;
+    const AVBitStreamFilter* filter = av_bsf_get_by_name("dovi_split");
+    if (filter == nullptr) {
+        veyra::log::info("source-dovi-el", "dovi_split bitstream filter unavailable; using the built-in NAL walk");
+        return false;
+    }
+    AVBSFContext* context = nullptr;
+    if (av_bsf_alloc(filter, &context) < 0) return false;
+    const auto fail = [&context]() {
+        av_bsf_free(&context);
+        return false;
+    };
+    if (avcodec_parameters_copy(context->par_in, params) < 0) return fail();
+    // Without the enhancement layer's own configuration record the filter would
+    // hand the EL decoder the base layer's hvcC: the wrong extent and the wrong
+    // parameter sets. The walk sniffs them from the stream instead.
+    if (av_packet_side_data_get(context->par_in->coded_side_data,
+            context->par_in->nb_coded_side_data, AV_PKT_DATA_HEVC_CONF) == nullptr) {
+        veyra::log::info("source-dovi-el", "container carries no hvcE record; using the built-in NAL walk");
+        return fail();
+    }
+    context->time_base_in = AVRational{demuxer_.videoTimeBaseNum(), demuxer_.videoTimeBaseDen()};
+    if (av_opt_set(context, "mode", "el", AV_OPT_SEARCH_CHILDREN) < 0) return fail();
+    if (av_bsf_init(context) < 0) return fail();
+    elSplitter_ = context;
+    elSplitterActive_ = true;
+    veyra::log::info("source-dovi-el", std::format("dovi_split filter ready mode=el EL {}x{} extradata={} bytes",
+        context->par_out->width, context->par_out->height, context->par_out->extradata_size));
+    return true;
+}
 
-    if (!elLayerEnabled_ || packet == nullptr || packet->data == nullptr || packet->size <= 0) return true;
+void MediaFileSource::closeEnhancementSplitter() {
+    av_bsf_free(&elSplitter_);
+    elSplitterActive_ = false;
+}
+
+// Owned packet with this access unit's enhancement layer, or null when the unit
+// carries none (the filter reports EAGAIN, which is the normal sparse case).
+AVPacket* MediaFileSource::splitEnhancementPacket(const AVPacket* packet) {
+    if (elSplitter_ == nullptr || packet == nullptr) return nullptr;
+    AVPacket* input = av_packet_clone(packet);
+    if (input == nullptr) return nullptr;
+    const int sent = av_bsf_send_packet(elSplitter_, input);
+    av_packet_free(&input);   // the filter holds the reference either way
+    if (sent < 0) {
+        av_bsf_flush(elSplitter_);
+        return nullptr;
+    }
+    AVPacket* el = av_packet_alloc();
+    if (el == nullptr) return nullptr;
+    const int received = av_bsf_receive_packet(elSplitter_, el);
+    if (received < 0) {
+        if (received != AVERROR(EAGAIN) && received != AVERROR_EOF) av_bsf_flush(elSplitter_);
+        av_packet_free(&el);
+        return nullptr;
+    }
+    return el;
+}
+
+// Fallback splitter: the enhancement layer travels as private NAL type 63 framed
+// as 0x7E 0x01 followed by a complete standard NAL, and its VPS/SPS/PPS appear in
+// the first access unit that carries one.
+AVPacket* MediaFileSource::buildEnhancementPacket(const AVPacket* packet) {
+    if (packet == nullptr || packet->data == nullptr) return nullptr;
     const auto nals = extractEnhancementNals(packet->data, packet->size, 4);
-    // The enhancement layer is sparse by design here: only about half the base
-    // frames carry one, in a repeating pattern. An empty packet is normal, and it
-    // must report "no EL for this frame" so the caller does not reuse the texture
-    // uploaded for the previous one.
-    if (nals.empty()) return false;
+    if (nals.empty()) return nullptr;
     if (!elLayerOpen_) {
         std::vector<const std::vector<uint8_t>*> sets;
         for (const auto& nal : nals) {
@@ -216,7 +278,7 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
             const unsigned type = (nal[0] >> 1) & 0x3F;
             if (type == 32 || type == 33 || type == 34) sets.push_back(&nal);
         }
-        if (sets.size() < 3) return false;  // parameter sets not complete yet
+        if (sets.size() < 3) return nullptr;  // parameter sets not complete yet
         std::vector<uint8_t> extradata;
         for (const auto* set : sets) {
             elParamSets_.push_back(*set);
@@ -225,27 +287,20 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
             extradata.insert(extradata.end(), set->begin(), set->end());
         }
         AVCodecParameters* par = avcodec_parameters_alloc();
-        if (par == nullptr) return true;
+        if (par == nullptr) return nullptr;
         par->codec_type = AVMEDIA_TYPE_VIDEO;
         par->codec_id = AV_CODEC_ID_HEVC;
         par->format = AV_PIX_FMT_YUV420P10LE;
         par->extradata = static_cast<uint8_t*>(av_mallocz(extradata.size() + AV_INPUT_BUFFER_PADDING_SIZE));
-        if (par->extradata == nullptr) { avcodec_parameters_free(&par); return true; }
+        if (par->extradata == nullptr) { avcodec_parameters_free(&par); return nullptr; }
         std::memcpy(par->extradata, extradata.data(), extradata.size());
         par->extradata_size = int(extradata.size());
-        // lowLatency: frame-level threading buffers frames before emitting them, which
-        // made the decoded enhancement layer lag the base frame by one or two and
-        // painted stale residuals onto the picture.
-        elLayerOpen_ = elDecoder_.openSoftware(par, 0, 0, 2, /*lowLatency=*/true, true);
-        const int elWidth = elDecoder_.width(), elHeight = elDecoder_.height();
+        const bool opened = openEnhancementDecoder(par, 0, 0);
         avcodec_parameters_free(&par);
-        if (!elLayerOpen_) {
-            veyra::log::error("source-dovi-el", "enhancement layer decoder refused the parameter sets");
+        if (!opened) {
             elLayerEnabled_ = false;
-            return false;
+            return nullptr;
         }
-        veyra::log::info("source-dovi-el", std::format("enhancement layer decoder opened extradata={} bytes {}x{}",
-            extradata.size(), elWidth, elHeight));
     }
     std::vector<uint8_t> accessUnit;
     // Only VCL NALs (types 0-31) belong in the packet stream. The type 63 payloads
@@ -259,13 +314,71 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
         accessUnit.insert(accessUnit.end(), startCode, startCode + 4);
         accessUnit.insert(accessUnit.end(), nal.begin(), nal.end());
     }
-    if (accessUnit.empty()) return false;
+    if (accessUnit.empty()) return nullptr;
     AVPacket* elPacket = av_packet_alloc();
-    if (elPacket == nullptr) return true;
-    if (av_new_packet(elPacket, int(accessUnit.size())) < 0) { av_packet_free(&elPacket); return true; }
+    if (elPacket == nullptr) return nullptr;
+    if (av_new_packet(elPacket, int(accessUnit.size())) < 0) { av_packet_free(&elPacket); return nullptr; }
     std::memcpy(elPacket->data, accessUnit.data(), accessUnit.size());
     elPacket->pts = packet->pts;
     elPacket->dts = packet->dts;
+    return elPacket;
+}
+
+bool MediaFileSource::openEnhancementDecoder(const AVCodecParameters* elParams, int timeBaseNum, int timeBaseDen) {
+    if (elParams == nullptr) return false;
+    // lowLatency: frame-level threading buffers frames before emitting them, which
+    // made the decoded enhancement layer lag the base frame by one or two and
+    // painted stale residuals onto the picture. tolerateErrors: the residual stream
+    // is sparse by design, so its reference chain is incomplete on purpose.
+    elLayerOpen_ = elDecoder_.openSoftware(elParams, timeBaseNum, timeBaseDen, 2,
+        /*lowLatency=*/true, /*tolerateErrors=*/true);
+    if (!elLayerOpen_) {
+        veyra::log::error("source-dovi-el", "enhancement layer decoder refused the parameter sets");
+        return false;
+    }
+    veyra::log::info("source-dovi-el", std::format("enhancement layer decoder opened extradata={} bytes {}x{}",
+        elParams->extradata_size, elDecoder_.width(), elDecoder_.height()));
+    return true;
+}
+
+// Custom (P7): pairing tolerance instead of exact equality. The EL decoder runs
+// one frame behind the base decoder by construction, so the oldest waiting base
+// frame is the one that gets its layer first; see read().
+bool MediaFileSource::takeElNear(int64_t pts, AVFrame** outFrame) {
+    if (outFrame == nullptr || pts == AV_NOPTS_VALUE) return false;
+    const auto it = elByPts_.lower_bound(pts - elMatchTolerance_);
+    if (it == elByPts_.end() || it->first - elMatchTolerance_ > pts) return false;
+    av_frame_free(outFrame);
+    *outFrame = it->second;
+    elByPts_.erase(it);
+    return true;
+}
+
+// Custom (P7): an enhancement frame older than the OLDEST waiting base frame can
+// never be used again: its own base picture has already been delivered. The bound
+// has to be the oldest waiting frame, not whichever frame is being probed, or the
+// layer of an older frame still in the queue would be thrown away.
+void MediaFileSource::dropStaleEl(int64_t oldestBasePts) {
+    if (oldestBasePts == AV_NOPTS_VALUE) return;
+    while (!elByPts_.empty() && elByPts_.begin()->first + elMatchTolerance_ < oldestBasePts) {
+        av_frame_free(&elByPts_.begin()->second);
+        elByPts_.erase(elByPts_.begin());
+    }
+}
+
+// Custom (P5): decode the Dolby Vision enhancement layer that rides inside the
+// same access units as the base layer. Any failure disables the path instead of
+// disturbing playback.
+bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
+    const auto elStart = std::chrono::steady_clock::now();
+
+    if (!elLayerEnabled_ || packet == nullptr || packet->data == nullptr || packet->size <= 0) return true;
+    // The enhancement layer is sparse by design here: only about half the base
+    // frames carry one, in a repeating pattern. An empty packet is normal, and it
+    // must report "no EL for this frame" so the caller does not reuse the texture
+    // uploaded for the previous one.
+    AVPacket* elPacket = elSplitterActive_ ? splitEnhancementPacket(packet) : buildEnhancementPacket(packet);
+    if (elPacket == nullptr) return false;
     const bool sent = elDecoder_.sendPacket(elPacket);
     av_packet_free(&elPacket);
     if (!sent) {
@@ -398,16 +511,6 @@ void MediaFileSource::drainElFrames() {
     }
 }
 
-bool MediaFileSource::takeElForPts(int64_t pts, AVFrame** outFrame) {
-    if (outFrame == nullptr || pts == AV_NOPTS_VALUE) return false;
-    auto it = elByPts_.find(pts);
-    if (it == elByPts_.end()) return false;
-    av_frame_free(outFrame);
-    *outFrame = it->second;
-    elByPts_.erase(it);
-    return true;
-}
-
 // Custom (P5): hold a base frame for at most a couple of frames while its
 // enhancement layer catches up, then deliver it without one. This is the only way
 // to pair them: the EL decoder reorders, so the layer for frame N is only decoded
@@ -420,6 +523,21 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
     if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
     if (!elLayerEnabled_) return readBase(out, decodedFrame);
 
+    // Custom (P7): a MEL layer declares in its RPU that the layer carries no
+    // residual at all, so composing it only burns decode time. readBase() raises
+    // the flag once the evidence is consistent, and the EL path is dropped here,
+    // before anything is handed out.
+    if (elMelDrop_) {
+        elMelDrop_ = false;
+        elLayerEnabled_ = false;
+        veyra::log::info("source-dovi-el",
+            "RPU declares no usable residual on the observed frames; MEL layer, composing skipped");
+        closeEnhancementLayer();
+        for (auto& entry : elByPts_) av_frame_free(&entry.second);
+        elByPts_.clear();
+        return readBase(out, decodedFrame);
+    }
+
     auto ptsOf = [](const AVFrame* f) -> int64_t {
         if (f == nullptr) return AV_NOPTS_VALUE;
         return f->best_effort_timestamp != AV_NOPTS_VALUE ? f->best_effort_timestamp : f->pts;
@@ -427,6 +545,8 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
 
     for (int spin = 0; spin < 4; ++spin) {
         drainElFrames();
+        // The oldest waiting base frame defines what is still usable.
+        if (!baseWaiting_.empty()) dropStaleEl(ptsOf(baseWaiting_.front().second));
         // A held frame whose layer has arrived can be delivered now.
         for (auto it = baseWaiting_.begin(); it != baseWaiting_.end(); ++it) {
             AVFrame* el = nullptr;
@@ -443,13 +563,13 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
                         wf ? wf->pts : int64_t(-999), keys));
                 }
             }
-            if (takeElForPts(ptsOf(it->second), &el)) {
+            if (takeElNear(ptsOf(it->second), &el)) {
                 if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
                     static unsigned okDbg = 0;
                     if (++okDbg <= 8)
                         log::info("source-dovi-el", std::format("PAIRED held pts={} el={}", ptsOf(it->second), el?1:0));
                 }
-                // Ownership moves to the member: takeElForPts removed it from the
+                // Ownership moves to the member: takeElNear removed it from the
                 // table, so someone has to free it on the next match.
                 if (elFrame_ != nullptr) av_frame_free(&elFrame_);
                 elFrame_ = el;
@@ -487,7 +607,7 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
                 log::info("source-dovi-el", std::format("attempt base_pts={} cached=[{}] held={}", bp, keys, baseWaiting_.size()));
             }
         }
-        if (takeElForPts(ptsOf(frame), &el)) {
+        if (takeElNear(ptsOf(frame), &el)) {
             if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
                 static unsigned okDbg2 = 0;
                 if (++okDbg2 <= 8)
@@ -742,7 +862,21 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
             // and avcodec_send_packet fails with ENOMEM (-12). Reserve headroom
             // before the first frame creates the hardware frames context.
             decoder_.setExtraHardwareFrames(10);
-            log::info("source-dovi-el", "enhancement layer decode requested");
+            // The EL frame inherits the base packet's timestamp, so pairing only
+            // has to absorb a rounding difference, not a whole frame interval.
+            elMatchTolerance_ = 2;
+            elMelStrikes_ = 0;
+            elMelDrop_ = false;
+            // Prefer FFmpeg's splitter: it also supplies the EL's own parameter
+            // sets, which the walk below can only sniff from the first access unit
+            // that happens to carry them (and cannot recover after a seek).
+            if (openEnhancementSplitter(params) &&
+                !openEnhancementDecoder(elSplitter_->par_out,
+                    demuxer_.videoTimeBaseNum(), demuxer_.videoTimeBaseDen())) {
+                closeEnhancementSplitter();
+                elLayerEnabled_ = false;
+            }
+            if (elLayerEnabled_) log::info("source-dovi-el", "enhancement layer decode requested");
         }
     }
     // Profile-5 conversion state belongs to the stream position, never to the
@@ -1052,6 +1186,17 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
                 log::info("source-dovi-el", std::format("reconstruction parameters packed nlqOffset={:.0f} slope={:.0f} coefDenom={:.0f}",
                     out.doviP7.params[0], out.doviP7.params[1], out.doviP7.params[4]));
             }
+            // Custom (P7): MEL versus FEL. A MEL layer sets disable_residual_flag,
+            // which means the layer carries no correction at all: decoding and
+            // compositing it is pure cost. Require a consistent run before telling
+            // read() to drop the path.
+            if (elLayerEnabled_ && frame != nullptr) {
+                if (av_dovi_get_header(&meta)->disable_residual_flag != 0) {
+                    if (++elMelStrikes_ >= 24) elMelDrop_ = true;
+                } else {
+                    elMelStrikes_ = 0;
+                }
+            }
         }
     }
     if (std::getenv("VEYRA_DOVI_TRACE")) {
@@ -1314,6 +1459,8 @@ bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
         // Custom (P5): the enhancement decoder keeps state across a seek too, and a
         // stale reference chain there produces garbage on the first new frame.
         if (elLayerOpen_) elDecoder_.flushBuffers();
+        // Custom (P7): the splitter holds one packet in flight; a seek invalidates it.
+        if (elSplitter_ != nullptr) av_bsf_flush(elSplitter_);
     // Custom (P7 fix): every frame decoded before the seek belongs to the old
     // position and is never delivered again, and each held clone keeps one
     // d3d11va surface checked out for the rest of the session.
@@ -1346,6 +1493,7 @@ void MediaFileSource::close() noexcept
     errorMessage_.clear();
     deinterlacer_.close();filterDraining_=false;
     closeEnhancementLayer();       // Custom (P5): release the EL decoder and its frame
+    closeEnhancementSplitter();    // Custom (P7): and the bitstream filter feeding it
     for (auto& entry : elByPts_) av_frame_free(&entry.second);
     elByPts_.clear();
     for (auto& held : baseWaiting_) av_frame_free(&held.second);
