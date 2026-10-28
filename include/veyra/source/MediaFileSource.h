@@ -90,6 +90,10 @@ private:
     // Consecutive RPUs that declare "no residual in this layer" (MEL).
     unsigned elMelStrikes_ = 0;
     bool elMelDrop_ = false;   // set in readBase(), consumed at the top of read()
+    // Custom (P7): the RPU curve diagnosis is logged once per state change, not
+    // once per frame. Reset on open and seek so a new position reports again.
+    bool p7CurveReported_ = false;
+    bool p7CurveReady_ = false;
     // A base frame held back while waiting for its EL counterpart (bounded wait).
     std::deque<std::pair<pipeline::FramePacket, AVFrame*>> baseWaiting_;
     // Custom (P7 fix): a base frame taken out of baseWaiting_ is a clone, so it

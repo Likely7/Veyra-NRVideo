@@ -874,6 +874,8 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
             elMatchTolerance_ = 2;
             elMelStrikes_ = 0;
             elMelDrop_ = false;
+            p7CurveReported_ = false;
+            p7CurveReady_ = false;
             // Prefer FFmpeg's splitter: it also supplies the EL's own parameter
             // sets, which the walk below can only sniff from the first access unit
             // that happens to carry them (and cannot recover after a seek).
@@ -1183,17 +1185,30 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         if (const auto* metaSide = av_frame_get_side_data(frame, AV_FRAME_DATA_DOVI_METADATA);
             metaSide != nullptr && metaSide->size >= sizeof(AVDOVIMetadata)) {
             const auto& meta = *reinterpret_cast<const AVDOVIMetadata*>(metaSide->data);
-            pipeline::doviP7ConstantsSupported(*av_dovi_get_mapping(&meta), *av_dovi_get_header(&meta),
+            pipeline::DoviP7CurveReport curveReport;
+            const bool curveOk = pipeline::doviP7ConstantsSupported(
+                *av_dovi_get_mapping(&meta), *av_dovi_get_header(&meta),
                 elLastWidth_ != 0 ? elLastWidth_ : uint32_t(elFrame_ ? elFrame_->width : 1920),
                 elLastHeight_ != 0 ? elLastHeight_ : uint32_t(elFrame_ ? elFrame_->height : 1080),
-                out.doviP7);
-            static bool p7Logged = false;
-            if (out.doviP7.ready && !p7Logged) {
-                p7Logged = true;
-                log::info("source-dovi-el", std::format("reconstruction parameters packed nlqOffset={:.0f} slope={:.0f} coefDenom={:.0f} modes={:.0f}/{:.0f}/{:.0f} mmrOrders={:.0f}/{:.0f}/{:.0f}",
-                    out.doviP7.params[0], out.doviP7.params[1], out.doviP7.params[12],
-                    out.doviP7.params[21], out.doviP7.params[22], out.doviP7.params[23],
-                    out.doviP7.params[24], out.doviP7.params[25], out.doviP7.params[26]));
+                out.doviP7, &curveReport);
+            // Custom (P7): say WHY the mapping was accepted or refused. A bare "not
+            // ready" left MEL, multi-piece curves and unsupported methods looking
+            // identical in the log.
+            if (!p7CurveReported_ || curveOk != p7CurveReady_) {
+                p7CurveReported_ = true;
+                p7CurveReady_ = curveOk;
+                log::info("source-dovi-el", std::format("RPU mapping {}",
+                    pipeline::doviP7CurveSummary(curveReport, *av_dovi_get_header(&meta))));
+            }
+            if (out.doviP7.ready) {
+                static bool p7Logged = false;
+                if (!p7Logged) {
+                    p7Logged = true;
+                    log::info("source-dovi-el", std::format("reconstruction parameters packed nlqOffset={:.0f} slope={:.0f} coefDenom={:.0f} modes={:.0f}/{:.0f}/{:.0f} mmrOrders={:.0f}/{:.0f}/{:.0f}",
+                        out.doviP7.params[0], out.doviP7.params[1], out.doviP7.params[12],
+                        out.doviP7.params[21], out.doviP7.params[22], out.doviP7.params[23],
+                        out.doviP7.params[24], out.doviP7.params[25], out.doviP7.params[26]));
+                }
             }
             // Custom (P7): MEL versus FEL. A MEL layer sets disable_residual_flag,
             // which means the layer carries no correction at all: decoding and
@@ -1519,6 +1534,10 @@ bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
     if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
     for (auto& entry : elByPts_) av_frame_free(&entry.second);
     elByPts_.clear();
+    // Report the curves again after a jump: the new position may land in a
+    // segment with a different reshaping.
+    p7CurveReported_ = false;
+    p7CurveReady_ = false;
     deinterlacer_.close();filterDraining_=false;
     decoder_.flushBuffers();
     // No profile-5 conversion state survives a seek: the next frame has to
