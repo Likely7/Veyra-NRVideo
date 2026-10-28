@@ -378,8 +378,21 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
     // frames carry one, in a repeating pattern. An empty packet is normal, and it
     // must report "no EL for this frame" so the caller does not reuse the texture
     // uploaded for the previous one.
+    ++elFeedCalls_;
     AVPacket* elPacket = elSplitterActive_ ? splitEnhancementPacket(packet) : buildEnhancementPacket(packet);
     if (elPacket == nullptr) return false;
+    ++elPacketHits_;
+    // Report the layer's coverage and the pairing loss every 300 access units: a
+    // FEL disc is expected to carry EL on (nearly) every frame, so a low hit rate
+    // means the splitter is not extracting it and a low pairing rate means the
+    // queue gives up too early. Both look like flicker on screen.
+    if (elFeedCalls_ % 300 == 0) {
+        veyra::log::info("source-dovi-el", std::format(
+            "EL coverage feed={} carried={} ({:.1f}%) paired_forced={}",
+            elFeedCalls_, elPacketHits_,
+            elFeedCalls_ ? 100.0 * double(elPacketHits_) / double(elFeedCalls_) : 0.0,
+            elForcedDeliveries_));
+    }
     const bool sent = elDecoder_.sendPacket(elPacket);
     av_packet_free(&elPacket);
     if (!sent) {
@@ -584,6 +597,7 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
         }
         // Held too long: deliver the oldest without a layer rather than stall.
         if (baseWaiting_.size() >= 3) {
+            ++elForcedDeliveries_;
             out = baseWaiting_.front().first;
             out.doviEl = nullptr;
             if (decodedFrame != nullptr) *decodedFrame = baseWaiting_.front().second;

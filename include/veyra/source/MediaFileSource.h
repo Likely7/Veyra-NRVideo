@@ -98,6 +98,10 @@ private:
     // so a stream's mix of usable and refused RPUs is a number and not a guess.
     uint64_t p7CurveSupportedFrames_ = 0;
     uint64_t p7CurveRefusedFrames_ = 0;
+    // Custom (P7): where the enhancement layer goes missing. `feedCalls` counts
+    // access units offered to the splitter, `packetHits` the ones that carried EL
+    // NALs, `forcedDeliveries` the base frames given up on without a partner.
+    uint64_t elFeedCalls_ = 0, elPacketHits_ = 0, elForcedDeliveries_ = 0;
     // Custom (DV extension blocks): record which levels the stream declares and,
     // when present, the L5 active-area rectangle. Descriptive only.
     bool doviExtReported_ = false;
