@@ -877,8 +877,8 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
                 c.matrix=pipeline::YuvMatrix::BT2020NCL;c.matrixAssumed=true;}
             if(c.primaries==pipeline::ColorPrimaries::Unknown||c.primariesAssumed){
                 c.primaries=pipeline::ColorPrimaries::BT2020;c.primariesAssumed=true;}
-            log::info("source-dovi",std::format("base layer pinned to {} (profile 8.4 is an HLG base, 8.1 is PQ)",
-                dv.route()==DolbyBaseLayer::Hlg?"HLG":"PQ"));
+            log::info("source-dovi",std::format("base layer pinned to {} for profile {} (8.1 is a PQ base, 8.4 is an HLG base)",
+                dv.route()==DolbyBaseLayer::Hlg?"HLG":"PQ", int(dv.profile)));
         }
         // Custom (P5): bring-up switch for the enhancement layer. Off unless the
         // environment asks for it, so BL playback stays byte identical until the
