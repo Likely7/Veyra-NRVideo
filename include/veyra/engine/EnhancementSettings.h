@@ -343,23 +343,28 @@ struct EnhancementSettings {
     // and deliberately a separate switch: it only moves where the curve's
     // roll-off starts per frame, so the user keeps every other dial. Meaningless
     // while `hdrCurve.enabled` is off, which is why the UI pairs the two.
+    //
+    // Kept off by default on purpose. A static curve is the predictable baseline;
+    // the follow re-derives the highlight start from each frame's L1, and Veyra only
+    // has L1 (no L2 trim passes, no CM v4.0 L8), so it is an approximation of what a
+    // Dolby display would do. Users who want it can turn both switches on; leaving it
+    // on by default would silently re-shade every Dolby Vision film.
     bool doviFollow=false;
     // Custom: also let the frame's average brightness move the knee, the way
     // libplacebo's st2094_pick_knee does. Off keeps the previous peak-only curve.
     bool doviFollowAverage=false;
     // Custom (P5): decode and composite the Dolby Vision profile 7 enhancement
-    // layer instead of playing the base layer alone. On by default: the source must
-    // report profile 7 with an enhancement layer present before this path is entered
-    // at all, so ordinary material costs nothing and needs no decision. Turning it
-    // off forces base-layer-only playback for every source.
-    // Off until the enhancement layer can be paired with its own base frame; with
-    // the decoding lag measured on the FEL sample no frame currently matches, so an
-    // on default would promise something that does not happen.
-    // Off by default and opt-in per user: the enhancement layer only decodes a few
-    // percent of frames on real discs, so it stays a deliberate choice rather than
-    // something that silently changes playback. The source must also report
-    // profile 7 with an enhancement layer present before the path is entered, so
-    // turning this on has no effect on material without one.
+    // layer instead of playing the base layer alone.
+    //
+    // Off by default: turning it on changes the picture, adds a second software
+    // decoder (4-8 ms per frame at 1080p) and only means anything for a source that
+    // reports profile 7 with an enhancement layer present - everything else never
+    // enters the path. Measured on a real UHD remux, 98.5% of frames carry a mapping
+    // this build can evaluate; the rest keep the base layer for that frame instead of
+    // being approximated. (An earlier note here claimed the layer only decodes "a few
+    // percent" of frames and that no frame matched its base frame - both were
+    // measured before the splitter moved to FFmpeg's dovi_split, and neither is true
+    // now.)
     bool doviP7Compose=false;
     bool useHdrPreview(bool hdrInput,bool hdrDisplayActive)const{return (hdrInput||videoHdr.enabled)&&hdrDisplayActive&&!forceSdrPreview;}
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
