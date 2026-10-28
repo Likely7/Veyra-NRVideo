@@ -24,6 +24,7 @@
 #include "veyra/media/BilibiliApi.h"
 #include "veyra/media/QrImage.h"
 #include "veyra/media/DanmakuWindow.h"
+#include "veyra/media/FormatBadgeWindow.h"
 // The sign-in QR is drawn from this encoder (MIT, Project Nayuki) rather than
 // opening Bilibili's scan page in a browser.
 #include <QQmlEngine>
@@ -301,6 +302,10 @@ struct QmlPlayerBridge::Impl {
     std::array<BiliSlot, static_cast<size_t>(BiliOp::Count)> biliTaskSlots{};
     // 丹�� overlay: created lazily, only while comments are enabled.
     std::unique_ptr<media::DanmakuWindow> danmakuWindow;
+    // Custom (format badge): the start-up announcement drawn over the picture.
+    // Created lazily on the first session that reaches Playing.
+    std::unique_ptr<media::FormatBadgeWindow> formatBadge;
+    uint64_t formatBadgeSession = 0;
     bool danmakuEnabled = false;
     bool danmakuFailed = false;
     // Last position fed to the engine, to notice a seek.
@@ -1826,6 +1831,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     s.sessionId, int(s.transport), s.running, s.image, s.failed,
                     impl_->openingSource, impl_->publishedRevision));
             impl_->power.update(s.running && !s.failed && !s.image && s.transport == engine::TransportState::Playing);
+            // Custom (format badge): announce the source format once per session,
+            // when the picture actually starts. `frames > 0` matters: the transport
+            // flips to Playing when the source opens, which is before the first
+            // frame carried its dynamic metadata, so announcing there would say
+            // "SDR" for an HDR Vivid or HDR10+ stream.
+            if (s.transport == engine::TransportState::Playing && !s.image && !s.failed &&
+                s.frames > 0 && impl_->formatBadgeSession != s.sessionId)
+                showFormatBadge(s);
             // A Bilibili stream that failed to open gets one attempt per remaining
             // mirror before the failure is reported. The mirrors are the same
             // rendition on different nodes, so a single unreachable node is the usual
@@ -10881,6 +10894,35 @@ QString QmlPlayerBridge::sourceRateText() const {
     return QStringLiteral("%1p%2").arg(s.sourceHeight)
         .arg(whole ? QString::number(int(std::round(fps))) : QString::number(fps, 'f', 2));
 }
+// Custom (format badge): a short announcement of what the source carries, drawn
+// over the picture by a layered child window because the video is a native window
+// and a QML item cannot cover it. One per session, auto-hidden.
+void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
+    impl_->formatBadgeSession = s.sessionId;
+    if (impl_->videoWindow == nullptr) return;
+    if (!impl_->formatBadge) {
+        impl_->formatBadge = std::make_unique<media::FormatBadgeWindow>();
+        if (!impl_->formatBadge->create(impl_->videoWindow)) {
+            impl_->formatBadge.reset();
+            return;
+        }
+    }
+    const QString label = uiText(s.sourceHdrLabel);
+    const QString title = label.isEmpty() ? QStringLiteral("SDR") : label;
+    QStringList detailParts;
+    const QString rate = sourceRateText();
+    if (!rate.isEmpty()) detailParts << rate;
+    QString summary = sourceSummary();
+    if (!summary.isEmpty()) detailParts << summary.replace(QLatin1Char('x'), QString::fromUtf8("×"));
+    const QString detail = detailParts.join(QString::fromUtf8(" · "));
+    impl_->formatBadge->show(impl_->videoWindow, title.toStdWString(), detail.toStdWString());
+    veyra::log::info("format-badge", std::format("shown title={} detail={} session={}",
+        title.toStdString(), detail.toStdString(), s.sessionId));
+    QTimer::singleShot(3200, this, [this]() {
+        if (impl_->formatBadge) impl_->formatBadge->hide();
+    });
+}
+
 QString QmlPlayerBridge::sourceFormatText() const {
     QStringList parts;
     const QString rate = sourceRateText();

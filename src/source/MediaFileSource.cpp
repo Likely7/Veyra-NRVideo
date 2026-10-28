@@ -1320,6 +1320,15 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
                 level(window.average_maxrgb), level(window.maximum_maxrgb)));
         }
     }
+    // Custom (HDR10+): SMPTE ST 2094-40 metadata arrives the same way.
+    if (av_frame_get_side_data(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS) != nullptr) {
+        auto& info = info_.hdr10Plus;
+        ++info.framesWithMetadata;
+        if (!info.present) {
+            info.present = true;
+            log::info("source-hdr", "HDR10+ dynamic metadata observed (identification only; the static curve still drives the mapping)");
+        }
+    }
     if (frame->format == AV_PIX_FMT_D3D12) {
         info_.videoPixelFormatName = out.colorInfo.pixelFormat == pipeline::SourcePixelFormat::P010 ? "p010(d3d12)" : "nv12(d3d12)";
     } else if (const auto* name = av_get_pix_fmt_name(static_cast<AVPixelFormat>(frame->format))) {

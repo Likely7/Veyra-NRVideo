@@ -1329,6 +1329,9 @@ public:
     QString sourceKind() const;
     QString sourceTitle() const;
     QString sourceFormatText() const;
+    // Custom (format badge): draws the start-up format announcement over the
+    // picture once per session. See QmlPlayerBridge.cpp.
+    void showFormatBadge(const engine::PlayerSnapshot& snapshot);
     QString sourceRateText() const;
     bool colourCanUndo() const;
     bool colourCanRedo() const;

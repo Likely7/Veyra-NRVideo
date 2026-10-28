@@ -1118,6 +1118,8 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     # Danmaku overlay: the engine is Qt-free, the window wraps it for the player.
     src/media/DanmakuOverlay.cpp
     src/media/DanmakuWindow.cpp
+    # Custom: the start-up format badge, same layered-window construction.
+    src/media/FormatBadgeWindow.cpp
     # P4-c: the existing subtitle renderer, reused as-is (no second renderer).
     apps/veyra/ui/SubtitleOverlay.cpp)
   set_source_files_properties(apps/veyra/ui/SubtitleOverlay.cpp PROPERTIES COMPILE_OPTIONS /utf-8)

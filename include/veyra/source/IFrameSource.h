@@ -62,6 +62,13 @@ struct HdrVividInfo {
     uint64_t framesWithMetadata = 0;
 };
 
+// HDR10+ (SMPTE ST 2094-40) dynamic metadata. Same story as HDR Vivid: FFmpeg
+// parses the SEI, Veyra only reports that the stream carries it.
+struct Hdr10PlusInfo {
+    bool present = false;
+    uint64_t framesWithMetadata = 0;
+};
+
 struct SourceInfo {
     bool opened = false;
     pipeline::SourceKind kind = pipeline::SourceKind::Unknown;
@@ -92,6 +99,7 @@ struct SourceInfo {
     std::string videoPixelFormatName;
     DolbyVisionInfo dolbyVision;
     HdrVividInfo hdrVivid;
+    Hdr10PlusInfo hdr10Plus;
     pipeline::ColorDescription color;
 };
 
