@@ -311,6 +311,42 @@ attempt base_pts=125 cached=[]       ← 0 和 42 都被当成"过期"删掉了
 `DoviBlElCompose.h` 里的 CPU 参考实现有完整 MMR，尚未移植到 HLSL。
 
 
+#### 2026-10-28 P2：三通道残差与 MMR 逆映射
+
+P0/P1 之后能播了，但合成只加**亮度**残差，色度是原样透传。抓一帧 RPU 看就明白这不成立：
+
+```
+curve 0 (Y) : numPivots=9  mapping=poly(1)  coef=(0, 1<<23, 0)   → identity
+curve 1 (Cb): numPivots=2  mapping=MMR     mmrOrder=3
+curve 2 (Cr): numPivots=2  mapping=MMR     mmrOrder=3
+nlq: offset=512 slope=2048 threshold=0 inMax=1048576 （三个分量相同）
+```
+
+两个事实：
+1. **三个分量各有自己的 LINEAR_DZ 量化器**，残差必须按分量分别反量化；
+2. **色度的逆映射是 MMR 多项式**，不是恒等。以 Cb 为例，权重是
+   `0.762·c + 0.381·c² + 0.1905·c³`（`coef_log2_denom = 23` 归一化后），
+   在 0.5 附近几乎不变、离中心越远越偏离恒等。
+
+实现：
+- 参数布局改成每分量一组 NLQ（`dv0..dv2`），`dv3` 放位深/分母，`dv4/dv5/dv6` 放 MMR 常数、
+  模式与阶数；
+- MMR 权重放不下常量池（60 个已经用完），改为 **18×1 的 RGBA32F 系数纹理（t14）**，
+  每帧上传 288 字节；
+- 色度平面上传到 **t13（R16G16，960×540）**，与 luma 采样一致地做双线性上采样后取整；
+- pass 的额外 SRV 范围从 `t8..t12` 扩到 **`t8..t14`**（这条没改会导致
+  `CreateComputePipelineState failed constants=60 extra=5`，shader 里引用了范围外的寄存器）。
+
+`ReconstructP7` 现在是：分量级 NLQ 反量化 → 分量级逆映射（identity 或 MMR）→
+三者相加 → 12bit 量化。与 libplacebo 的 `sh_dovi_compose_nlq` + `sh_dovi_reshape`
+同构，差别只在我们要求「单段 MMR」或「恒等」，其它曲线仍回退 BL。
+
+**实测**：`reconstruction parameters packed nlqOffset=512 slope=2048 coefDenom=23 modes=0/1/1 mmrOrders=0/3/3`
+与 RPU 完全对应；残差图（`VEYRA_DOVI_P7_DUMP=1`）能看到城市夜景的高频细节，
+不是全屏过曝，说明 NLQ 的量级正确。
+
+仍未做：多段曲线（每个分量 >2 个 pivot 且分段不同）与 `ext_mapping_idc != 0` 的片源仍回退 BL。
+
 #### 复盘（2026-10-17）：修掉 4 个缺陷
 
 对整条杜比视界路径做了一次通读，P7 这部分有 3 个缺陷、参考实现有 1 个越界：
