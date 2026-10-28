@@ -1183,8 +1183,10 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
             static bool p7Logged = false;
             if (out.doviP7.ready && !p7Logged) {
                 p7Logged = true;
-                log::info("source-dovi-el", std::format("reconstruction parameters packed nlqOffset={:.0f} slope={:.0f} coefDenom={:.0f}",
-                    out.doviP7.params[0], out.doviP7.params[1], out.doviP7.params[4]));
+                log::info("source-dovi-el", std::format("reconstruction parameters packed nlqOffset={:.0f} slope={:.0f} coefDenom={:.0f} modes={:.0f}/{:.0f}/{:.0f} mmrOrders={:.0f}/{:.0f}/{:.0f}",
+                    out.doviP7.params[0], out.doviP7.params[1], out.doviP7.params[12],
+                    out.doviP7.params[21], out.doviP7.params[22], out.doviP7.params[23],
+                    out.doviP7.params[24], out.doviP7.params[25], out.doviP7.params[26]));
             }
             // Custom (P7): MEL versus FEL. A MEL layer sets disable_residual_flag,
             // which means the layer carries no correction at all: decoding and

@@ -35,8 +35,13 @@ cbuffer YuvParams : register(b0)
 Texture2D<float> lumaPlane : register(t0);   // R8_UNORM or R16_UNORM
 Texture2D<float2> chromaPlane : register(t1); // R8G8_UNORM or R16G16_UNORM
 Texture2D<float2> chromaPlane2 : register(t2); // second chroma view (unused for NV12; reserved)
-// Custom (P7): enhancement layer luma, integer samples, half resolution per axis.
+// Custom (P7): enhancement layer planes, integer samples, 4:2:0 10-bit:
+// luma at full size, chroma at half size per axis.
 Texture2D<uint> elLumaPlane : register(t12);
+Texture2D<uint2> elChromaPlane : register(t13);
+// Custom (P7): reshaping weights for the components whose inverse mapping is an
+// MMR polynomial (18 float4s, one row). Mirrors libplacebo's reshape shader.
+Texture2D<float4> elCurvePlane : register(t14);
 RWTexture2D<float4> linearRgb : register(u0);
 
 float ExpandLimited(float c)
@@ -163,10 +168,15 @@ float2 ReconstructChroma(uint2 pixel)
 }
 
 
-// Custom (P7): ETSI GS CCM 001 5.4.3 luma reconstruction, mirroring
-// veyra::engine::doviComposeLumaSample (which is unit tested).
-//   dv0 = (nlqOffset, nlqSlope, nlqThreshold, inMax)  dv1 = (coefLog2Denom, elBitDepth, outBitDepth, 0)
-//   dv2 = (elWidth, elHeight, 0, 0)                   dv6.w == 2 when live
+// Custom (P7): ETSI GS CCM 001 5.4.3 reconstruction, mirroring
+// veyra::engine::doviBlElComposeLuma / doviComposeLumaSample (unit tested).
+// Every component of the layer carries its own LINEAR_DZ quantiser:
+//   dv0 = channel 0 (Y)  nlq: (offset, slope, threshold, inMax)
+//   dv1 = channel 1 (Cb) nlq
+//   dv2 = channel 2 (Cr) nlq
+//   dv3 = (coefLog2Denom, elBitDepth, outBitDepth, 0)
+//   dv4 = (elWidth, elHeight, 0, 0)
+//   dv6.w == 2 when live, 3 when the residual should be drawn instead.
 float SampleElLuma(float2 pos, int2 elSize)
 {
     const float2 texel = pos - 0.5;
@@ -184,32 +194,95 @@ float SampleElLuma(float2 pos, int2 elSize)
     return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
 }
 
-float ReconstructLumaP7(float y, uint2 tid, out int residualOut)
+// The layer is 4:2:0, so its chroma plane is half the extent per axis. `pos`
+// arrives in luma pixels; resample bilinearly like luma, then round.
+float2 SampleElChroma(float2 pos, int2 elSize)
 {
-    const int elBitDepth = int(dv1.y + 0.5);
-    const int outBitDepth = int(dv1.z + 0.5);
-    const int2 elSize = int2(dv2.xy + 0.5);
-    const float2 pos = float2(tid) * float2(elSize) / float2(yuvDimensions.xy);
-    const int e = int(round(SampleElLuma(pos, elSize)));
-    const int blValue = int(round(y * 1023.0));
-    int residual = 0;
-    int rr = e - int(dv0.x + 0.5);
-    if (rr != 0) {
-        const int sgn = rr < 0 ? -1 : 1;
-        rr = rr * 2 - sgn;
-        rr = rr << (10 - elBitDepth);
-        int dq = rr * int(dv0.y + 0.5);
-        dq += (int(dv0.z + 0.5) << (10 - elBitDepth + 1)) * sgn;
-        const int limit = int(dv0.w + 0.5) << (10 - elBitDepth + 1);
-        dq = clamp(dq, -limit, limit);
-        residual = dq >> (int(dv1.x + 0.5) - 5 - elBitDepth);
+    const int2 crSize = int2((elSize + 1) / 2);
+    const float2 texel = pos * 0.5 - 0.5;
+    const int2 base = int2(floor(texel));
+    const float2 f = texel - floor(texel);
+    const int2 hi = crSize - 1;
+    const int2 c0 = clamp(base, int2(0, 0), hi);
+    const int2 c1 = clamp(base + int2(1, 0), int2(0, 0), hi);
+    const int2 c2 = clamp(base + int2(0, 1), int2(0, 0), hi);
+    const int2 c3 = clamp(base + int2(1, 1), int2(0, 0), hi);
+    const float2 a = float2(elChromaPlane.Load(int3(c0, 0)));
+    const float2 b = float2(elChromaPlane.Load(int3(c1, 0)));
+    const float2 c = float2(elChromaPlane.Load(int3(c2, 0)));
+    const float2 d = float2(elChromaPlane.Load(int3(c3, 0)));
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+
+// LINEAR_DZ inverse quantisation of one component, in the 17-bit signed domain
+// ETSI GS CCM 001 uses for the sum with the base layer.
+int P7Residual(int e, float4 nlq, int elBitDepth, int coefLog2Denom)
+{
+    int rr = e - int(nlq.x + 0.5);
+    if (rr == 0) return 0;                    // no residual on this sample
+    const int sgn = rr < 0 ? -1 : 1;
+    rr = rr * 2 - sgn;                        // |rr| - 0.5, in half-code units
+    rr = rr << (10 - elBitDepth);
+    int dq = rr * int(nlq.y + 0.5);
+    dq += (int(nlq.z + 0.5) << (10 - elBitDepth + 1)) * sgn;
+    const int limit = int(nlq.w + 0.5) << (10 - elBitDepth + 1);
+    dq = clamp(dq, -limit, limit);
+    return dq >> (coefLog2Denom - 5 - elBitDepth);
+}
+
+// One component of the base layer's inverse reshaping, evaluated the way
+// libplacebo's reshape_mmr() does: the seven weights of an order are packed into
+// two float4s, and the cross terms are the same r*g, r*b, g*b, r*g*b products.
+float MmrEvaluate(int component, float3 sig, float constant, int order)
+{
+    const int base = component * 6;
+    float4 sigX;
+    sigX.xyz = sig.xxy * sig.yzz;   // (r*g, r*b, g*b)
+    sigX.w = sigX.x * sig.z;        // r*g*b
+    float s = constant;
+    s += dot(elCurvePlane.Load(int3(base + 0, 0, 0)).xyz, sig);
+    s += dot(elCurvePlane.Load(int3(base + 1, 0, 0)), sigX);
+    if (order >= 2) {
+        const float3 sig2 = sig * sig;
+        const float4 sigX2 = sigX * sigX;
+        s += dot(elCurvePlane.Load(int3(base + 2, 0, 0)).xyz, sig2);
+        s += dot(elCurvePlane.Load(int3(base + 3, 0, 0)), sigX2);
+        if (order >= 3) {
+            s += dot(elCurvePlane.Load(int3(base + 4, 0, 0)).xyz, sig2 * sig);
+            s += dot(elCurvePlane.Load(int3(base + 5, 0, 0)), sigX2 * sigX);
+        }
     }
+    return saturate(s);
+}
+
+// dv4 = (elWidth, elHeight, mmrConstant[0], mmrConstant[1])
+// dv5 = (mmrConstant[2], mode[0], mode[1], mode[2])
+// dv6 = (order[0], order[1], order[2], live flag)
+float3 ReconstructP7(float3 sig, uint2 tid, out int3 residualOut)
+{
+    const int elBitDepth = int(dv3.y + 0.5);
+    const int outBitDepth = int(dv3.z + 0.5);
+    const int coefLog2Denom = int(dv3.x + 0.5);
+    const int2 elSize = int2(dv4.xy + 0.5);
+    const float2 pos = float2(tid) * float2(elSize) / float2(yuvDimensions.xy);
+    const float2 elChroma = SampleElChroma(pos, elSize);
+    const int3 e = int3(int(round(SampleElLuma(pos, elSize))),
+                        int(round(elChroma.x)),
+                        int(round(elChroma.y)));
+    const int3 residual = int3(P7Residual(e.x, dv0, elBitDepth, coefLog2Denom),
+                               P7Residual(e.y, dv1, elBitDepth, coefLog2Denom),
+                               P7Residual(e.z, dv2, elBitDepth, coefLog2Denom));
     residualOut = residual;
-    const int v = blValue << 6;                     // identity inverse mapping
-    int hh = v + residual + (1 << (15 - outBitDepth));
+    // Inverse reshaping of the base layer, then the residual on top. A component
+    // whose mapping is the identity still goes through the same 16-bit domain so
+    // the sum below has one unit.
+    float3 base = sig;
+    if (dv5.y > 0.5) base.y = MmrEvaluate(1, sig, dv4.z, int(dv6.y + 0.5));
+    if (dv5.z > 0.5) base.z = MmrEvaluate(2, sig, dv4.w, int(dv6.z + 0.5));
+    int3 hh = int3(round(base * 65535.0)) + residual + (1 << (15 - outBitDepth));
     hh = hh >> (16 - outBitDepth);
     const int maxOut = (1 << outBitDepth) - 1;
-    return float(clamp(hh, 0, maxOut)) / float(maxOut);
+    return float3(clamp(hh, 0, maxOut)) / float(maxOut);
 }
 
 [numthreads(16, 16, 1)]
@@ -225,16 +298,17 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     // dv6.w == 2 reconstructs; dv6.w == 3 reconstructs and shows the gap instead.
     const bool p7Dump = abs(dv6.w - 3.0) < 0.5;
     const bool p7Live = p7Dump || abs(dv6.w - 2.0) < 0.5;
-    int elResidual = 0;
-    const float luma = p7Live ? ReconstructLumaP7(y, dispatchThreadId.xy, elResidual) : y;
-    float3 rgb = abs(dv6.w - 1.0) < 0.5 ? DoviP5ToPqBt2020(luma, uv) : YuvToRgb(luma, uv);
-    // Custom (P7) diagnostic: showing the gap between the reconstructed luma and
+    int3 elResidual = int3(0, 0, 0);
+    float3 yuvCode = float3(y, uv);
+    if (p7Live) yuvCode = ReconstructP7(yuvCode, dispatchThreadId.xy, elResidual);
+    float3 rgb = abs(dv6.w - 1.0) < 0.5 ? DoviP5ToPqBt2020(yuvCode.x, uv) : YuvToRgb(yuvCode.x, yuvCode.yz);
+    // Custom (P7) diagnostic: showing the gap between the reconstructed signal and
     // the base layer proves the enhancement layer took part; a frame without one
     // renders pure black here.
     if (p7Dump) {
         // The residual itself: a frame without an enhancement layer is pure black,
         // one with it lights up where the enhancement layer acts.
-        const float el = saturate(abs(float(elResidual)) / 400.0);
+        const float el = saturate(float(max(max(abs(elResidual.x), abs(elResidual.y)), abs(elResidual.z))) / 400.0);
         rgb = float3(el, el, el);
     }
     rgb = saturate(rgb);

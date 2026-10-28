@@ -694,13 +694,24 @@ public:
     const pipeline::ColorDescription& sourceColor() const {return lastSourceColor_;}
     // Custom (P5): borrowed EL frame of the input in flight (see doviElFrame()).
     const AVFrame* doviElFrame_ = nullptr;
-    // Custom (P5): profile 7 enhancement layer texture (luma), uploaded per frame
-    // when the reconstruction parameters for that frame are usable.
+    // Custom (P5): profile 7 enhancement layer textures, uploaded per frame when
+    // the reconstruction parameters for that frame are usable. The layer is
+    // 4:2:0 10-bit, so luma and chroma are separate planes: a 16-bit single
+    // channel texture at full size and a two-channel one at half size.
     ComPtr<ID3D12Resource> elLumaTexture_, elLumaUpload_;
+    ComPtr<ID3D12Resource> elChromaTexture_, elChromaUpload_;
+    // Custom (P7): MMR mapping coefficients, 18 float4s in a 1-pixel-high
+    // texture (t14). The pass' constant buffer is full, and this changes at most
+    // once per shot, but it is small enough to refresh every composited frame.
+    ComPtr<ID3D12Resource> elCurveTexture_, elCurveUpload_;
     uint32_t elLumaW_ = 0, elLumaH_ = 0;
+    uint32_t elChromaW_ = 0, elChromaH_ = 0;
     bool p7Ready_ = false;
     float p7Params_[28] = {};
+    float p7Curve_[kDoviP7Components][kDoviP7CurveVec4][4] = {};
     bool uploadElLuma(ID3D12GraphicsCommandList* list, const AVFrame* frame);
+    bool uploadElChroma(ID3D12GraphicsCommandList* list, const AVFrame* frame);
+    bool uploadElCurve(ID3D12GraphicsCommandList* list);
     bool hdr10Output() const { return desc_.hdrOutput && (desc_.enableFg||desc_.hdrOutputMode==engine::HdrOutputMode::Hdr10); }
     DXGI_FORMAT outputFormat() const { return hdr10Output()?DXGI_FORMAT_R10G10B10A2_UNORM:desc_.hdrOutput?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM; }
     bool highQualityPresentation() const { return desc_.highQualityPresentation; }

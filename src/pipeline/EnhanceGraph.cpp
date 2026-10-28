@@ -1727,7 +1727,9 @@ bool EnhanceGraph::createComputePasses()
     // needs the FP32 side output. The extra UAV is part of the R5.3 contract
     // only for graphs that actually allocate preGradeRgba_.
     const UINT ingressUavCount = preGradeRgba_ ? 2u : 1u;
-    if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 16, 2, ingressUavCount, 12+kColorGradeConstantCount+kDolbyVisionP5ConstantCount, 5)) return false;
+    // extraSrvCount covers t8..t14: the five colour-grade tables plus the three
+    // Dolby Vision profile 7 enhancement layer planes (luma, chroma, curve).
+    if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 16, 2, ingressUavCount, 12+kColorGradeConstantCount+kDolbyVisionP5ConstantCount, 7)) return false;
     const char* rgbShader=desc_.packedInput?"PackedCaptureToLinear.dxil":desc_.yuy2Input?"Yuy2ToLinear.dxil":"RgbToLinear.dxil";
     if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,(desc_.packedInput?12:8)+kColorGradeConstantCount,4)))return false;
     // Descriptor budget grows with the NR stack: encode needs one SRV+UAV pair
@@ -2121,11 +2123,119 @@ bool EnhanceGraph::uploadElLuma(ID3D12GraphicsCommandList* list, const AVFrame* 
     return true;
 }
 
+bool EnhanceGraph::uploadElChroma(ID3D12GraphicsCommandList* list, const AVFrame* frame) {
+    if (list == nullptr || frame == nullptr || frame->data[1] == nullptr || frame->data[2] == nullptr) return false;
+    const auto w = uint32_t((frame->width + 1) / 2), h = uint32_t((frame->height + 1) / 2);
+    if (w == 0 || h == 0) return false;
+    if (!elChromaTexture_ || elChromaW_ != w || elChromaH_ != h) {
+        elChromaTexture_ = makeTexture(context_.device(), w, h, DXGI_FORMAT_R16G16_UINT, false);
+        if (!elChromaTexture_) return false;
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        rd.Width = uint64_t(w) * 4ull * h;
+        rd.Height = 1;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.Format = DXGI_FORMAT_UNKNOWN;
+        rd.SampleDesc.Count = 1;
+        rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        if (FAILED(context_.device()->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
+                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&elChromaUpload_)))) {
+            elChromaTexture_.Reset();
+            return false;
+        }
+        elChromaW_ = w;
+        elChromaH_ = h;
+        veyra::log::info("dovi-el-gpu", std::format("enhancement layer chroma texture {}x{} r16g16_uint", w, h));
+    }
+    const uint32_t dstPitch = w * 4u;
+    void* mapped = nullptr;
+    if (FAILED(elChromaUpload_->Map(0, nullptr, &mapped)) || mapped == nullptr) return false;
+    for (uint32_t y = 0; y < h; ++y) {
+        const auto* srcU = reinterpret_cast<const uint16_t*>(frame->data[1] + size_t(y) * size_t(frame->linesize[1]));
+        const auto* srcV = reinterpret_cast<const uint16_t*>(frame->data[2] + size_t(y) * size_t(frame->linesize[2]));
+        auto* row = reinterpret_cast<uint16_t*>(static_cast<uint8_t*>(mapped) + size_t(y) * dstPitch);
+        for (uint32_t x = 0; x < w; ++x) {
+            row[x * 2 + 0] = srcU[x];
+            row[x * 2 + 1] = srcV[x];
+        }
+    }
+    elChromaUpload_->Unmap(0, nullptr);
+    tracker_.transition(list, elChromaTexture_.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
+    D3D12_TEXTURE_COPY_LOCATION dst{};
+    dst.pResource = elChromaTexture_.Get();
+    dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    D3D12_TEXTURE_COPY_LOCATION src{};
+    src.pResource = elChromaUpload_.Get();
+    src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    src.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R16G16_UINT;
+    src.PlacedFootprint.Footprint.Width = w;
+    src.PlacedFootprint.Footprint.Height = h;
+    src.PlacedFootprint.Footprint.Depth = 1;
+    src.PlacedFootprint.Footprint.RowPitch = dstPitch;
+    list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+    tracker_.transition(list, elChromaTexture_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    return true;
+}
+
+bool EnhanceGraph::uploadElCurve(ID3D12GraphicsCommandList* list) {
+    constexpr uint32_t kWidth = uint32_t(kDoviP7Components * kDoviP7CurveVec4);
+    constexpr uint32_t kHeight = 1;
+    if (!elCurveTexture_) {
+        elCurveTexture_ = makeTexture(context_.device(), kWidth, kHeight, DXGI_FORMAT_R32G32B32A32_FLOAT, false);
+        if (!elCurveTexture_) return false;
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        rd.Width = uint64_t(kWidth) * 16ull * kHeight;
+        rd.Height = 1;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.Format = DXGI_FORMAT_UNKNOWN;
+        rd.SampleDesc.Count = 1;
+        rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        if (FAILED(context_.device()->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
+                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&elCurveUpload_)))) {
+            elCurveTexture_.Reset();
+            return false;
+        }
+    }
+    float packed[kDoviP7Components * kDoviP7CurveVec4][4] = {};
+    for (int c = 0; c < kDoviP7Components; ++c)
+        for (int v = 0; v < kDoviP7CurveVec4; ++v)
+            for (int k = 0; k < 4; ++k) packed[c * kDoviP7CurveVec4 + v][k] = p7Curve_[c][v][k];
+    void* mapped = nullptr;
+    if (FAILED(elCurveUpload_->Map(0, nullptr, &mapped)) || mapped == nullptr) return false;
+    std::memcpy(mapped, packed, sizeof(packed));
+    elCurveUpload_->Unmap(0, nullptr);
+    tracker_.transition(list, elCurveTexture_.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
+    D3D12_TEXTURE_COPY_LOCATION dst{};
+    dst.pResource = elCurveTexture_.Get();
+    dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    D3D12_TEXTURE_COPY_LOCATION src{};
+    src.pResource = elCurveUpload_.Get();
+    src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    src.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    src.PlacedFootprint.Footprint.Width = kWidth;
+    src.PlacedFootprint.Footprint.Height = kHeight;
+    src.PlacedFootprint.Footprint.Depth = 1;
+    src.PlacedFootprint.Footprint.RowPitch = kWidth * 16u;
+    list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+    tracker_.transition(list, elCurveTexture_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    return true;
+}
+
 bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh, const AVFrame* doviEl, const DoviP7Constants* doviP7)
 {
     doviElFrame_ = doviEl;   // Custom (P5): borrowed for this frame only
     p7Ready_ = doviP7 != nullptr && doviP7->ready;
-    if (p7Ready_) std::memcpy(p7Params_, doviP7->params, sizeof(p7Params_));
+    if (p7Ready_) {
+        std::memcpy(p7Params_, doviP7->params, sizeof(p7Params_));
+        std::memcpy(p7Curve_, doviP7->curve, sizeof(p7Curve_));
+    }
     if (doviEl != nullptr && std::getenv("VEYRA_DOVI_TRACE") != nullptr) {
         static unsigned elArrived = 0;
         if (++elArrived <= 3 || elArrived % 100 == 0)
@@ -2519,7 +2629,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                     p7Ready_ ? 1 : 0, doviElFrame_->width, doviElFrame_->height, int(doviElFrame_->format)));
         }
         bool p7Bound = false;
-        if (p7Ready_ && doviElFrame_ != nullptr && uploadElLuma(list, doviElFrame_)) {
+        if (p7Ready_ && doviElFrame_ != nullptr && uploadElLuma(list, doviElFrame_) &&
+            uploadElChroma(list, doviElFrame_) && uploadElCurve(list)) {
             std::memcpy(constants + 12 + kColorGradeConstantCount, p7Params_, sizeof(p7Params_));
             // Custom (P7) diagnostic: dv3.x asks the shader to show the reconstruction gap.
             if (std::getenv("VEYRA_DOVI_P7_DUMP") != nullptr) constants[12 + kColorGradeConstantCount + 27] = 3.0f;
@@ -2529,6 +2640,18 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             elSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             elSrvDesc.Texture2D.MipLevels = 1;
             stager_.stageSrv(elLumaTexture_.Get(), &elSrvDesc, yuvPass_.heap.Get(), 12);
+            D3D12_SHADER_RESOURCE_VIEW_DESC elChromaSrvDesc{};
+            elChromaSrvDesc.Format = DXGI_FORMAT_R16G16_UINT;
+            elChromaSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            elChromaSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            elChromaSrvDesc.Texture2D.MipLevels = 1;
+            stager_.stageSrv(elChromaTexture_.Get(), &elChromaSrvDesc, yuvPass_.heap.Get(), 13);
+            D3D12_SHADER_RESOURCE_VIEW_DESC elCurveSrvDesc{};
+            elCurveSrvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            elCurveSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            elCurveSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            elCurveSrvDesc.Texture2D.MipLevels = 1;
+            stager_.stageSrv(elCurveTexture_.Get(), &elCurveSrvDesc, yuvPass_.heap.Get(), 14);
             p7Bound = true;
         }
         yuvPass_.bind(list, constants, gpuHandleOf(yuvPass_, nv12Texture ? 3 + parity * 2 : 0).ptr, gpuHandleOf(yuvPass_, 2+uavSlot).ptr,gpuHandleOf(yuvPass_,8).ptr);

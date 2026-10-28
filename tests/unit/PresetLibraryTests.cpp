@@ -19,7 +19,18 @@ void check(bool ok, const char* label) {
 }
 std::filesystem::path scratch(const wchar_t* name) {
     auto dir = std::filesystem::temp_directory_path() / L"veyra-preset-library-tests";
-    std::filesystem::create_directories(dir);
+    // Each library writes sidecar files next to its own path (".field-render",
+    // ".beauty", ".dlss-sr", ...) that outlive the per-name remove() below, and a
+    // leftover sidecar makes the next run of this process fail at load(). Start
+    // from an empty directory once per run; removing it per call would delete the
+    // files of the step that is still running.
+    static const bool cleaned = [&dir] {
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec);
+        std::filesystem::create_directories(dir, ec);
+        return true;
+    }();
+    (void)cleaned;
     auto path = dir / name;
     std::error_code ec;
     std::filesystem::remove(path, ec);
