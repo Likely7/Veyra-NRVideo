@@ -876,6 +876,7 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
             elMelDrop_ = false;
             p7CurveReported_ = false;
             p7CurveReady_ = false;
+            doviExtReported_ = false;
             // Prefer FFmpeg's splitter: it also supplies the EL's own parameter
             // sets, which the walk below can only sniff from the first access unit
             // that happens to carry them (and cannot recover after a seek).
@@ -1185,6 +1186,31 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         if (const auto* metaSide = av_frame_get_side_data(frame, AV_FRAME_DATA_DOVI_METADATA);
             metaSide != nullptr && metaSide->size >= sizeof(AVDOVIMetadata)) {
             const auto& meta = *reinterpret_cast<const AVDOVIMetadata*>(metaSide->data);
+            // Custom (DV extension blocks): which metadata levels this stream
+            // declares, and the L5 active-area rectangle when there is one. L5 says
+            // where the real picture sits inside the coded frame, which is what a
+            // letterbox mask or crop would use. Nothing applies it yet: this is the
+            // measurement that decides whether applying it is worth doing.
+            if (!doviExtReported_ && meta.num_ext_blocks > 0) {
+                std::string levels;
+                bool sawL5 = false;
+                for (int i = 0; i < meta.num_ext_blocks; ++i) {
+                    const auto* block = av_dovi_get_ext(&meta, i);
+                    if (block == nullptr) continue;
+                    if (!levels.empty()) levels += ',';
+                    levels += std::to_string(int(block->level));
+                    if (block->level != 5) continue;
+                    sawL5 = true;
+                    log::info("source-dovi", std::format(
+                        "L5 active area left={} right={} top={} bottom={} of {}x{} (recorded only; not applied)",
+                        block->l5.left_offset, block->l5.right_offset,
+                        block->l5.top_offset, block->l5.bottom_offset,
+                        info_.width, info_.height));
+                }
+                doviExtReported_ = true;
+                log::info("source-dovi", std::format("extension blocks={} levels=[{}] L5={}",
+                    meta.num_ext_blocks, levels, sawL5 ? 1 : 0));
+            }
             pipeline::DoviP7CurveReport curveReport;
             const bool curveOk = pipeline::doviP7ConstantsSupported(
                 *av_dovi_get_mapping(&meta), *av_dovi_get_header(&meta),
@@ -1538,6 +1564,7 @@ bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
     // segment with a different reshaping.
     p7CurveReported_ = false;
     p7CurveReady_ = false;
+    doviExtReported_ = false;
     deinterlacer_.close();filterDraining_=false;
     decoder_.flushBuffers();
     // No profile-5 conversion state survives a seek: the next frame has to
