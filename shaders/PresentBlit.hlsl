@@ -12,7 +12,7 @@ cbuffer PresentBlitConstants : register(b0)
     // 64 = 输出前加抖动（12 位源量化到 10 位交换链时抑制色带）。
     // 64 = dither before output (suppresses banding when a 12-bit source is quantised
     // onto a 10-bit swapchain).
-    float4 srcDims; // z flags: 1=sRGB encode, 2=fine, 4=PQ encode, 8=SDR white, 16=HDR curve, 32=PQ, 64=dither decode
+    float4 srcDims; // z flags: 1=sRGB encode, 2=fine, 4=PQ encode, 8=SDR white, 16=HDR curve, 32=PQ, 64/128=rotation, 256=dither decode
     float4 dstDims; // x/y=client extent z/w=view center
     // Custom: static HDR brightness curve, applied on absolute nits before the PQ
     // encode. See veyra/engine/HdrOutputTuning.h for the contract; every field is
@@ -150,7 +150,7 @@ float4 psMain(VSOut input) : SV_Target
     // The dither goes after the transfer-function encode and just before the write: only
     // then is the value in the final 0..1 output domain, where one 10-bit step is the
     // right size. Applied earlier the later non-linear curve would scale it.
-    if(flags&64){
+    if(flags&256){
         const int2 p=int2(input.pos.xy);
         color.rgb=saturate(color.rgb+DitherOffset(uint2(p)));
     }

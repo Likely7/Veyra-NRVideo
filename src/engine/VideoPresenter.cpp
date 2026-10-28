@@ -329,7 +329,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // truncates on resolve, which leaves banding in smooth gradients. A sub-LSB offset
     // turns that step into noise the eye averages away.
     const bool p7Frame=graph.doviP7Active();
-    const float ditherFlag=(graph.hdrOutput()&&p7Frame)?64.0f:0.0f;
+    const float ditherFlag=(graph.hdrOutput()&&p7Frame)?256.0f:0.0f;
     const float mainFlags=samplingFlags+curveFlag+(curveFlag&&graph.hdr10Output()?36.0f:0.0f)+ditherFlag;
     float dims[16]={renderW,renderH,mainFlags,inverseFit,float(rc.right),float(rc.bottom),view.centerX,view.centerY};
     // The blit sees the per-frame curve when Dolby Vision follow is on; every
