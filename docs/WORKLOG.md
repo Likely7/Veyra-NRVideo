@@ -10,6 +10,8 @@
 - 采集音频75444b3：G50仅双声道USB音频，PS5多声道LPCM时中置（对白）在卡内丢失，OBS同样；强制PCM不改PS5输出。通用16-bit立体声DirectShow引脚加PcmCarrierRouter，复用AverMediaAudioCarrier解码载波内AC3/E-AC-3/DTS（PS5位流），真PCM原路径不变。单测真实AC3 5.1中置有信号、无载波字节作PCM播放；carrier 39363、vendor 65+7、passthrough 26+8+8、IEC、采集音频（静音）通过。未上实卡/PS5。
 - 调研：建议去色带、独立RCAS、对白增强优先，CRT光束模拟再评估；NR沿用10-26结论；DLSS RR（310.9.1 Preset F）需游戏G-buffer，不适用于视频/采集。
 
+- 快捷键：截图默认Ctrl+S→F7，新增录制F8，可在设置改；游戏模式钩子扩为面板/退出/截图/录制四槽，仅在游戏或Veyra在前台时接管。老配置已占F7/F8时保留原功能、新项未设置。game_passthrough/UI合同/翻译/QtQuick及私有配置启动检查通过。
+
 构建build-recording-handoff --task claude-capture-fps-audio-20261027（首轮--reconfigure 79.4秒，其后增量）。未验证：用户165Hz实机与游戏模式、G50位流透传、无该属性的旧Windows。
 
 ## 2026-10-27 项目整理1–4

@@ -99,6 +99,12 @@ int main(int argc,char** argv){
     GameKeyState changed;changed.input(VK_F9,true,{VK_F9,0},{VK_F10,3},false);
     changed.input(VK_F9,false,{VK_F8,0},{VK_F10,3},false);
     check(changed.input(VK_F9,true,{VK_F9,0},{VK_F10,3},true).action==0,"released old binding does not stay latched after rebinding");
+    GameKeyState capture;const GameKey shot{VK_F7,0},record{VK_F8,0};
+    auto press=[&](unsigned vk,bool down,bool owned=true){return capture.input(vk,down,panel,exit,owned,shot,record);};
+    check(press(VK_F7,true).action==2&&press(VK_F7,true).action<0&&press(VK_F7,false).consume,"F7 screenshot fires once per press, release paired");
+    check(press(VK_F8,true).action==3&&press(VK_F8,false).consume,"F8 toggles recording");
+    check(!press(VK_F7,true,false).consume&&!press(VK_F7,false,false).consume,"other programs keep F7 and F8");
+    check(capture.input(VK_F7,true,panel,exit,true).action<0,"unbound screenshot key passes through");
 
     const HWND previous=GetForegroundWindow();
     WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraGameHotkeyTest";RegisterClassW(&wc);

@@ -1424,6 +1424,8 @@ private:
     void emitParameterChanged(void (QmlPlayerBridge::*group)(), bool wasValid);
     void updateGameMode();
     void updateGameGeometry();
+    // Game mode's keyboard hook gets the current panel, exit, screenshot and record keys.
+    void applyGameHotkeys();
     // 抖音直播伴侣 running (gfx/PresentationHooks.h): Realtime GPU priority is capped at
     // High while it runs and restored when it exits; 监控软件兼容 "off" leaves it alone.
     void updateLiveCompanionCompat();

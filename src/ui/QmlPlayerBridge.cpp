@@ -73,9 +73,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
-    const auto gameKeys=shortcuts();
-    impl_->game.setHotkeys(ui::gameKey(QKeySequence(gameKeys.value("gamePanel").toString(),QKeySequence::PortableText)),
-                          ui::gameKey(QKeySequence(gameKeys.value("gameExit").toString(),QKeySequence::PortableText)));
+    applyGameHotkeys();
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
     impl_->applyComputeGpu();
@@ -131,6 +129,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             emit gameModeChanged();
             impl_->game.apply(ui::GamePassthrough::Mode::Off);
             emit gameModeStopped(tr("界面卡住超过 3 秒，已退出游戏模式")); break;
+        // The game has the keyboard in game mode; the hook hands these over.
+        case E::ScreenshotHotkey: takeScreenshot(); break;
+        case E::RecordHotkey: toggleRecording(); break;
         }
     };
     auto* gameBeat = new QTimer(this);

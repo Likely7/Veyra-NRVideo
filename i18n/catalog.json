@@ -7891,6 +7891,13 @@
    "ja": "開始"
   },
   {
+   "zh": "开始 / 停止录制",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "開始 / 停止錄製",
+   "en": "Start / stop recording",
+   "ja": "録画の開始 / 停止"
+  },
+  {
    "zh": "开始串流",
    "src": "qml/PcSourceDialog.qml",
    "zh-TW": "開始串流",
@@ -10958,6 +10965,13 @@
    "ja": "上限なし"
   },
   {
+   "zh": "未设置",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "未設定",
+   "en": "Not set",
+   "ja": "未設定"
+  },
+  {
    "zh": "未设置录制保存位置",
    "src": "src/engine/LiveRecorder.cpp",
    "zh-TW": "未設定錄製儲存位置",
@@ -12181,6 +12195,13 @@
    "zh-TW": "遊戲模式",
    "en": "Game mode",
    "ja": "ゲームモード"
+  },
+  {
+   "zh": "游戏模式下在游戏里也能用",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "遊戲模式下在遊戲裡也能用",
+   "en": "Also works inside the game in game mode",
+   "ja": "ゲームモード中はゲーム内でも使えます"
   },
   {
    "zh": "游戏模式不裁剪；贴合原窗口时画面与鼠标位置一一对应",
