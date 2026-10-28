@@ -251,6 +251,66 @@ PAIRED held pts=542 el=1
    EL，`ready` 恒为 0，即使配上也不合成。
 
 
+#### 2026-10-28 修复：崩溃根因与配对率（P0 + P1）
+
+2026-10-17 的结论是"配对率被 EL 出帧率卡死"，这个判断**是错的**。真实原因有两个，
+都在我们自己的代码里。
+
+**P0：d3d11va 表面池被配对帧泄漏耗尽（崩溃，`code=-12`）**
+
+`read()` 为等 EL 把基础帧 `av_frame_clone` 后放进 `baseWaiting_`，交付时把裸指针交给
+调用方却**从没释放**。每个克隆都 ref 住一片 d3d11va surface，而该解码器的表面数组是
+**固定大小**的（日志实测 `array=20`），Veyra 又从未设过 `extra_hw_frames`：
+
+```
+[media] decoder: d3d11va decoded surface 3840x2176 ... array=20 slice=19
+[engine-stall] frame=12 ...
+[media] decoder: send_packet failed code=-12 text=Cannot allocate memory
+```
+
+20 片里 DPB 常驻约 8 片，可周转 12 片，正好等于崩溃前的 12 帧。上游 mpv 在
+`video/decode/vd_lavc.c` 里把这件事写得很直白（"every frame ... pins a surface from
+the fixed pool"），并给 BL 解码器预留 6+8 片；我们没有。
+
+修复：交给调用方的克隆在**下次 `read()` 入口**释放（调用方本来只借到下一次读，
+`EngineController::retainCandidate()` 会先自己拷一份）；seek、硬件→软件回退、close
+时一并清理；P7 启用时给硬解预留 10 片（实测池子从 `array=20` 变成 `array=30`）。
+
+**P1：配对永远差一帧，而且过期判断用错了基准**
+
+EL 解码器按设计比基础解码器**慢一帧**（送包 N 时解出的是 N−1 的帧）：
+
+```
+attempt base_pts=42  cached=[0]      ← BL 42 在等，缓存里只有 EL 0
+attempt base_pts=83  cached=[42]
+attempt base_pts=125 cached=[]       ← 0 和 42 都被当成"过期"删掉了
+```
+
+新增的"丢弃过期 EL"用了**当前正在探测的 BL 帧**作基准，于是把**队列里更老的 BL 帧
+还需要的那一帧**删掉了，谁也配不上。改成按 `baseWaiting_.front()`（最老等待帧）判断，
+并把配对容差从精确相等改成 2 tick。
+
+**P1：改用 FFmpeg 自带的 `dovi_split` 拆流**
+
+手写 walk 只能在"参数集恰好出现在流里"时工作，seek 之后无法恢复。FFmpeg 9.0 的
+`dovi_split` BSF 做同样的事，并且额外：从容器的 `hvcE` 记录取 EL 参数集
+（Matroska BlockAdditionMapping → `AV_PKT_DATA_HEVC_CONF`，libavformat 已经帮我们挂好）、
+按 profile 折半算 EL 尺寸、无 EL 的 AU 返回 `EAGAIN`。容器没有 hvcE 时自动回退到手写 walk。
+另外：RPU 的 `disable_residual_flag` 连续 24 帧为 1 时判定为 MEL，直接关掉 EL 解码。
+
+**实测（4K P7 FEL 测试片，120.036 秒）**
+
+| 项目 | 修复前 | 修复后 |
+|---|---|---|
+| 播放 | 12 帧后 `-12` 崩溃 | 全片播完，0 次 `-12`、0 次回退 |
+| EL 拆流 | 手写 NAL walk | `dovi_split filter ready mode=el EL 1920x1080 extradata=795 bytes` |
+| 配对 | 多数配不上 | `PAIRED held pts=…` 正常，`bound=1 frames=800` |
+| seek | 未验证 | 8 次精确跳转，每次 2 帧内重新配上 |
+
+仍未做：FEL 重建只有亮度通道（上游 libplacebo 是三通道 + pivot 多项式 + 12bit），
+`DoviBlElCompose.h` 里的 CPU 参考实现有完整 MMR，尚未移植到 HLSL。
+
+
 #### 复盘（2026-10-17）：修掉 4 个缺陷
 
 对整条杜比视界路径做了一次通读，P7 这部分有 3 个缺陷、参考实现有 1 个越界：
