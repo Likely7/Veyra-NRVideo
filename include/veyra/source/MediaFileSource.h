@@ -94,6 +94,10 @@ private:
     // once per frame. Reset on open and seek so a new position reports again.
     bool p7CurveReported_ = false;
     bool p7CurveReady_ = false;
+    // Custom (P7): how many frames the mapping could / could not be evaluated for,
+    // so a stream's mix of usable and refused RPUs is a number and not a guess.
+    uint64_t p7CurveSupportedFrames_ = 0;
+    uint64_t p7CurveRefusedFrames_ = 0;
     // Custom (DV extension blocks): record which levels the stream declares and,
     // when present, the L5 active-area rectangle. Descriptive only.
     bool doviExtReported_ = false;

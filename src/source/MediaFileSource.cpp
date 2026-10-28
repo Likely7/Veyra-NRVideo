@@ -877,6 +877,8 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
             p7CurveReported_ = false;
             p7CurveReady_ = false;
             doviExtReported_ = false;
+            p7CurveSupportedFrames_ = 0;
+            p7CurveRefusedFrames_ = 0;
             // Prefer FFmpeg's splitter: it also supplies the EL's own parameter
             // sets, which the walk below can only sniff from the first access unit
             // that happens to carry them (and cannot recover after a seek).
@@ -1217,6 +1219,20 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
                 elLastWidth_ != 0 ? elLastWidth_ : uint32_t(elFrame_ ? elFrame_->width : 1920),
                 elLastHeight_ != 0 ? elLastHeight_ : uint32_t(elFrame_ ? elFrame_->height : 1080),
                 out.doviP7, &curveReport);
+            // Custom (P7): count usable and refused frames. A stream that alternates
+            // between an evaluable curve and a multi-piece one composites some frames
+            // and not others, which is visible as flicker; the ratio says whether
+            // supporting the rest is worth the work rather than a guess.
+            if (curveOk) ++p7CurveSupportedFrames_; else ++p7CurveRefusedFrames_;
+            {
+                const uint64_t total = p7CurveSupportedFrames_ + p7CurveRefusedFrames_;
+                if (total % 300 == 0) {
+                    log::info("source-dovi-el", std::format(
+                        "P7 mapping frames supported={} refused={} ({:.1f}% base-layer-only)",
+                        p7CurveSupportedFrames_, p7CurveRefusedFrames_,
+                        total != 0 ? 100.0 * double(p7CurveRefusedFrames_) / double(total) : 0.0));
+                }
+            }
             // Custom (P7): say WHY the mapping was accepted or refused. A bare "not
             // ready" left MEL, multi-piece curves and unsupported methods looking
             // identical in the log.
