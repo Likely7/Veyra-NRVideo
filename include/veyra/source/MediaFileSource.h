@@ -74,6 +74,13 @@ private:
     uint32_t elLastWidth_ = 0, elLastHeight_ = 0;   // last decoded EL extent
     // A base frame held back while waiting for its EL counterpart (bounded wait).
     std::deque<std::pair<pipeline::FramePacket, AVFrame*>> baseWaiting_;
+    // Custom (P7 fix): a base frame taken out of baseWaiting_ is a clone, so it
+    // keeps one surface of the decoder's fixed d3d11va array checked out. The
+    // caller only borrows it until its next read() (EngineController clones it
+    // into cachedFrame first), so it is released at the top of that read().
+    // Without that release one surface leaked per delivered frame until
+    // avcodec_send_packet failed with ENOMEM (-12) and playback stopped.
+    AVFrame* deliveredHeld_ = nullptr;
     std::vector<std::vector<uint8_t>> elParamSets_; // VPS/SPS/PPS of the EL, re-sent per AU
     bool elLayerEnabled_ = false;
     bool elLayerOpen_ = false;

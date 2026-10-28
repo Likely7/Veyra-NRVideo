@@ -628,6 +628,17 @@ bool FFmpegVideoDecoder::hardwareFrameImportable() const
         desc.Height == static_cast<UINT>(context_->height);
 }
 
+void FFmpegVideoDecoder::setExtraHardwareFrames(int frames)
+{
+    if (context_ == nullptr) { return; }
+    const int clamped = std::clamp(frames, 0, 32);
+    if (context_->extra_hw_frames == clamped) { return; }
+    context_->extra_hw_frames = clamped;
+    log::info("media", std::format(
+        "decoder: extra hardware frames={} (reserved on top of the codec's own pool; hw={})",
+        clamped, hwAccelActive_));
+}
+
 int FFmpegVideoDecoder::width() const
 {
     return context_ != nullptr ? context_->width : 0;

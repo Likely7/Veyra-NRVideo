@@ -92,6 +92,14 @@ public:
     // the hardware opens use the native "av1" decoder (the one with the hwaccels).
     void setPreferNativeAv1Hardware(bool prefer) { preferNativeAv1_ = prefer; }
 
+    // Custom (P7 fix): how many decoded frames the player may keep alive beyond
+    // what libavcodec reserves for the codec itself (AVCodecContext.extra_hw_frames).
+    // The hardware frames context is created lazily on the first decoded frame, so
+    // this is still effective after a hardware open and before any output. A
+    // d3d11va decoder allocates a FIXED array of surfaces, so retaining more
+    // frames than this headroom allows makes the next decode fail with ENOMEM.
+    void setExtraHardwareFrames(int frames);
+
     bool opened() const { return context_ != nullptr; }
     int width() const;
     int height() const;

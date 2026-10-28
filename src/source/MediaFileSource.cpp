@@ -152,6 +152,12 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
     veyra::log::warn("source-file", std::format(
         "D3D12VA {} fallback to software reason={} path=redacted resumeUs={}", midStream ? "mid-stream" : "first-frame", reason, resumeUs));
     deinterlacer_.close();filterDraining_=false;
+    // Custom (P7 fix): the frames held for pairing belong to the hardware decoder
+    // that is about to be destroyed, and each one pins one of its d3d11va
+    // surfaces. Drop them before the device goes away.
+    for (auto& held : baseWaiting_) av_frame_free(&held.second);
+    baseWaiting_.clear();
+    if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
     decoder_.close();
     if (!demuxer_.shared()) {
         demuxer_.close();
@@ -354,11 +360,12 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
     elTotalMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - elStart).count();
     ++elPackets;
     if (elLayerFrames_ <= 3 || (elLayerFrames_ && elLayerFrames_ % 100 == 0))
-        veyra::log::info("source-dovi-el", std::format("decoded={} status={} format={} {}x{} avgCost={:.2f}ms over {} packets",
+        veyra::log::info("source-dovi-el", std::format("decoded={} status={} format={} {}x{} avgCost={:.2f}ms over {} packets held={} waiting={}",
             elLayerFrames_, int(elDecoder_.receiveStatus()),
             elFrame_ ? int(elFrame_->format) : -1,
             elFrame_ ? elFrame_->width : 0, elFrame_ ? elFrame_->height : 0,
-            elPackets ? elTotalMs / double(elPackets) : 0.0, elPackets));
+            elPackets ? elTotalMs / double(elPackets) : 0.0, elPackets,
+            deliveredHeld_ != nullptr ? 1 : 0, baseWaiting_.size()));
     return gotFrame;
 }
 
@@ -407,6 +414,10 @@ bool MediaFileSource::takeElForPts(int64_t pts, AVFrame** outFrame) {
 // after frame N has already been produced by the base decoder.
 SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame** decodedFrame) {
     if (decodedFrame != nullptr) *decodedFrame = nullptr;
+    // Custom (P7 fix): the caller has finished with the frame it borrowed from
+    // the previous call. Releasing it here is what keeps the fixed d3d11va
+    // surface array from running dry; see the member comment in the header.
+    if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
     if (!elLayerEnabled_) return readBase(out, decodedFrame);
 
     auto ptsOf = [](const AVFrame* f) -> int64_t {
@@ -445,6 +456,7 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
                 out = it->first;
                 out.doviEl = elFrame_;
                 if (decodedFrame != nullptr) *decodedFrame = it->second;
+                deliveredHeld_ = it->second;   // Custom (P7 fix): freed on the next read()
                 baseWaiting_.erase(it);
                 return SourceReadStatus::Frame;
             }
@@ -454,6 +466,7 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
             out = baseWaiting_.front().first;
             out.doviEl = nullptr;
             if (decodedFrame != nullptr) *decodedFrame = baseWaiting_.front().second;
+            deliveredHeld_ = baseWaiting_.front().second;
             baseWaiting_.pop_front();
             return SourceReadStatus::Frame;
         }
@@ -504,6 +517,7 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
         out = baseWaiting_.front().first;
         out.doviEl = nullptr;
         if (decodedFrame != nullptr) *decodedFrame = baseWaiting_.front().second;
+        deliveredHeld_ = baseWaiting_.front().second;
         baseWaiting_.pop_front();
         return SourceReadStatus::Frame;
     }
@@ -720,8 +734,16 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         // environment asks for it, so BL playback stays byte identical until the
         // compositing path is complete.
         elLayerEnabled_ = dv.profile == 7 && dv.enhancementLayer && desc.decodeDolbyEnhancementLayer;
-        if (elLayerEnabled_)
+        if (elLayerEnabled_) {
+            // The pairing path keeps up to three base frames in baseWaiting_ plus
+            // the one handed to the caller, on top of whatever the decode loop
+            // already retains. d3d11va allocates a FIXED surface array sized for
+            // the codec alone, so the pool runs dry a dozen frames into playback
+            // and avcodec_send_packet fails with ENOMEM (-12). Reserve headroom
+            // before the first frame creates the hardware frames context.
+            decoder_.setExtraHardwareFrames(10);
             log::info("source-dovi-el", "enhancement layer decode requested");
+        }
     }
     // Profile-5 conversion state belongs to the stream position, never to the
     // previous open: a stale value would let a fresh play start from parameters
@@ -1292,6 +1314,14 @@ bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
         // Custom (P5): the enhancement decoder keeps state across a seek too, and a
         // stale reference chain there produces garbage on the first new frame.
         if (elLayerOpen_) elDecoder_.flushBuffers();
+    // Custom (P7 fix): every frame decoded before the seek belongs to the old
+    // position and is never delivered again, and each held clone keeps one
+    // d3d11va surface checked out for the rest of the session.
+    for (auto& held : baseWaiting_) av_frame_free(&held.second);
+    baseWaiting_.clear();
+    if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
+    for (auto& entry : elByPts_) av_frame_free(&entry.second);
+    elByPts_.clear();
     deinterlacer_.close();filterDraining_=false;
     decoder_.flushBuffers();
     // No profile-5 conversion state survives a seek: the next frame has to
@@ -1320,6 +1350,7 @@ void MediaFileSource::close() noexcept
     elByPts_.clear();
     for (auto& held : baseWaiting_) av_frame_free(&held.second);
     baseWaiting_.clear();
+    if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
     elLayerEnabled_ = false;
     elLayerFrames_ = 0;
     elLayerMisses_ = 0;
