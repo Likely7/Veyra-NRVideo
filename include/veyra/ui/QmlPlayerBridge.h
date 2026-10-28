@@ -395,6 +395,9 @@ class QmlPlayerBridge : public QObject {
     // Three-step SR (RTX Video SR). srPrescale: 0 off, 1..4 720p/900p/1080p/1440p,
     // 150..190 a manual 50..90 %. srOutput: 0 keep the SR result, 1 source size, 2..6 2K/4K/5K/6K/7K.
     Q_PROPERTY(int srPrescale READ srPrescale WRITE setSrPrescale NOTIFY settingsChanged)
+    Q_PROPERTY(bool dualSrEnabled READ dualSrEnabled WRITE setDualSrEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(int dualSrTargetIndex READ dualSrTargetIndex WRITE setDualSrTargetIndex NOTIFY settingsChanged)
+    Q_PROPERTY(int dualSrQuality READ dualSrQuality WRITE setDualSrQuality NOTIFY settingsChanged)
     Q_PROPERTY(int srOutput READ srOutput WRITE setSrOutput NOTIFY settingsChanged)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY protectionChanged)
@@ -1038,6 +1041,12 @@ public:
     void setDlssSrModel(int value);
     QVariantList dlssSrModelChoices() const;
     int srPrescale() const;
+    bool dualSrEnabled() const;
+    void setDualSrEnabled(bool enabled);
+    int dualSrTargetIndex() const;
+    void setDualSrTargetIndex(int index);
+    int dualSrQuality() const;
+    void setDualSrQuality(int quality);
     void setSrPrescale(int value);
     int srOutput() const;
     void setSrOutput(int value);

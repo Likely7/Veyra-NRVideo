@@ -181,6 +181,8 @@ struct ChainExecutionRequest {
     // Three-step SR as it runs (callers pass Off/Target where it does not apply).
     pipeline::SrPrescale srPrescale = pipeline::SrPrescale::Off;
     pipeline::SrOutput srOutput = pipeline::SrOutput::Target;
+    bool dualSrEnabled = false;
+    pipeline::SrTarget dualSrTarget = pipeline::SrTarget::Uhd4K;
 };
 struct ChainExecutionStep {
     EffectType type = EffectType::NrEnhance;
@@ -212,6 +214,9 @@ struct ChainGlobalSettings {
     uint32_t dlssSrModel = 0;   // EnhancementSettings::dlssSrModel
     pipeline::SrPrescale srPrescale = pipeline::SrPrescale::Off;   // EnhancementSettings::srPrescale
     pipeline::SrOutput srOutput = pipeline::SrOutput::Target;      // EnhancementSettings::srOutput
+    bool dualSrEnabled = false;
+    pipeline::SrTarget dualSrTarget = pipeline::SrTarget::Uhd4K;
+    uint32_t dualSrQuality = 4;
     FrameGenerationBackend fgBackend = FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;
     FlowQuality flow = FlowQuality::Balanced;

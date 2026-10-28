@@ -341,10 +341,14 @@ struct EnhancementSettings {
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
     uint32_t videoSrQuality=kDefaultVideoSrQuality; // 0 DLSS SR; 1–4 RTX Video SR
     uint32_t dlssSrModel=0;    // DLSS SR only; see kDlssSrModelCount
-    // Three-step SR (user 2026-10-28): shrink to srPrescale, SR to srTarget,
-    // then fit into srOutput. Off/Target keep the single step.
+    // Base SR uses srTarget; the optional second SR has its own target/quality.
+    // srPrescale now lowers the first AI result only when dualSrEnabled.
+    // srOutput is retained for reading the older experimental presets.
     pipeline::SrPrescale srPrescale=pipeline::SrPrescale::Off;
     pipeline::SrOutput srOutput=pipeline::SrOutput::Target;
+    bool dualSrEnabled=false;
+    pipeline::SrTarget dualSrTarget=pipeline::SrTarget::Uhd4K;
+    uint32_t dualSrQuality=4;
     uint32_t multiplier=1;
     FrameGenerationBackend frameGenerationBackend=FrameGenerationBackend::Dlss;
     // NvVFX Mode: Low=0, Medium=1 (default), High=2; mixed tiers 3-5, see vfgPrimaryMode().
@@ -426,7 +430,11 @@ struct EnhancementSettings {
         if(!nr||!protection.enabled)active.protection=defaults.protection;
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
         if(!sr||videoSrQuality!=0)active.dlssSrModel=defaults.dlssSrModel;
-        if(!sr||!srStageBackend(videoSrQuality)){active.srPrescale=defaults.srPrescale;active.srOutput=defaults.srOutput;}
+        if(!sr||!srStageBackend(videoSrQuality)||!dualSrEnabled){
+            active.srPrescale=defaults.srPrescale;active.srOutput=defaults.srOutput;
+            active.dualSrEnabled=false;active.dualSrTarget=defaults.dualSrTarget;active.dualSrQuality=defaults.dualSrQuality;
+        }
+        active.srOutput=defaults.srOutput; // retired post-fit never changes the running graph
         if(multiplier<=1){
             active.frameGenerationBackend=defaults.frameGenerationBackend;active.vfgQuality=defaults.vfgQuality;
             active.fgMotion=defaults.fgMotion;active.fgStrictAdmission=defaults.fgStrictAdmission;
@@ -568,6 +576,7 @@ struct EnhancementSettings {
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";
         if(!pipeline::validSrPrescale(srPrescale))return "invalid SR prescale";
         if(!pipeline::validSrOutput(srOutput))return "invalid SR output";
+        if(!pipeline::validSrTarget(dualSrTarget)||dualSrQuality<1||dualSrQuality>4)return "invalid second SR target or quality";
         if(opticalFlowBackend!=OpticalFlowBackend::Nvidia&&opticalFlowBackend!=OpticalFlowBackend::AmdFidelityFx&&opticalFlowBackend!=OpticalFlowBackend::GpuDis)return "invalid optical flow backend";
         if(multiplier<1||multiplier>(frameGenerationBackend==FrameGenerationBackend::Vfg?8u:6u))return "unsupported multiplier";
         // 0 = auto quality; explicit values are capped at 300 Mbps so a typo

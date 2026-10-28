@@ -64,6 +64,8 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
         a.metrics.resolution.nr.height == b.metrics.resolution.nr.height &&
         a.metrics.resolution.output.width == b.metrics.resolution.output.width &&
         a.metrics.resolution.output.height == b.metrics.resolution.output.height &&
+        a.metrics.resolution.firstSrOutput == b.metrics.resolution.firstSrOutput &&
+        a.metrics.resolution.dualSrApplied == b.metrics.resolution.dualSrApplied &&
         a.metrics.resolution.srInput == b.metrics.resolution.srInput &&
         a.metrics.resolution.srOutput == b.metrics.resolution.srOutput &&
         a.metrics.resolution.srPrescaleIneffective == b.metrics.resolution.srPrescaleIneffective &&

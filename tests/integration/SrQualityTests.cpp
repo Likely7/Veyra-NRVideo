@@ -172,9 +172,9 @@ Frame hdrFrame(const sink::RgbaImage& img){
     }
     return f;
 }
-struct Run{bool ok=false;sink::RgbaImage output,srInput;double srMs=-1;uint64_t evaluations=0;pipeline::Extent srIn{},srOut{},work{};bool enabled=false;};
+struct Run{bool ok=false;sink::RgbaImage output,srInput,firstLinear;double srMs=-1;uint64_t evaluations=0;pipeline::Extent srIn{},srOut{},work{};bool enabled=false;};
 Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* frame,bool hdr,const engine::EnhancementSettings& settings,
-        bool readSrInput,bool still=false,bool uncompressed=false,unsigned frames=6){
+        bool readSrInput,bool still=false,bool uncompressed=false,unsigned frames=6,bool readFirst=false){
     engine::StageRequest request;request.width=unsigned(frame->width);request.height=unsigned(frame->height);request.sr=settings.sr;
     request.stillImage=still;request.uncompressedSource=uncompressed;request.nr=settings.nr;
     pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
@@ -191,7 +191,8 @@ Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* f
     if(ok){auto* tex=graph.videoFrameResource(out.videoSlot);
         ok=tex&&read(ctx,ring,tex,D3D12_RESOURCE_STATE_COMMON,tex->GetDesc().Format==DXGI_FORMAT_R16G16B16A16_FLOAT?8:4,r.output);}
     // The single-step and prescale SDR paths leave the encoded SR input in COMMON.
-    if(ok&&readSrInput)ok=read(ctx,ring,graph.diagnosticVideoSrInput(),D3D12_RESOURCE_STATE_COMMON,4,r.srInput);
+    if(ok&&readSrInput)ok=read(ctx,ring,graph.diagnosticVideoSrInput(),hdr?D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE:D3D12_RESOURCE_STATE_COMMON,4,r.srInput);
+    if(ok&&readFirst)ok=read(ctx,ring,graph.diagnosticFirstSrLinear(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,8,r.firstLinear);
     r.evaluations=graph.metrics().srEvaluateCount;r.enabled=graph.srEnabled();
     if(!ms.empty()){std::sort(ms.begin(),ms.end());r.srMs=ms[ms.size()/2];}
     r.ok=ok;out={};ring.drainQueue();graph.shutdown();return r;
@@ -300,6 +301,37 @@ int test(const std::filesystem::path& directory){
     }
     ring.shutdown();ctx.shutdown();std::cout<<"STAGE_RESULT passed="<<ok<<std::endl;return ok?0:1;
 }
+int dual(const std::filesystem::path& directory){
+    std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
+    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
+    if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
+    bool ok=true;const auto check=[&](bool pass,const std::string& name){std::cout<<(pass?"PASS ":"FAIL ")<<name<<std::endl;ok=ok&&pass;};
+    const auto image=pattern(2560,1440);const auto sdr=sdrFrame(image),hdr=hdrFrame(image);
+    if(!sdr||!hdr)return 2;
+    auto s=vsr(1,pipeline::SrTarget::Uhd4K);s.dualSrEnabled=true;s.srPrescale=pipeline::SrPrescale::P1080;s.dualSrTarget=pipeline::SrTarget::Uhd4K;s.dualSrQuality=2;
+    const auto two=run(ctx,ring,sdr.get(),false,s,true,false,false,3,true);
+    check(two.ok&&two.evaluations==6&&two.firstLinear.width==3840&&two.srInput.width==1920&&two.work==pipeline::Extent{3840,2160},"two independent AI evaluations per frame, with first 4K output retained");
+    if(two.ok){
+        const auto expected=shrink(two.firstLinear,2,true);int worst=0;
+        for(size_t p=0;p<size_t(1920)*1080;++p)for(unsigned c=0;c<3;++c)
+            worst=std::max(worst,std::abs(int(two.srInput.pixels[p*4+c])-int(std::lround(encode(expected[p*3+c])))));
+        check(worst<=2,"second input is the area reduction of the FIRST AI result, max difference "+std::to_string(worst));
+    }
+    s.srTarget=pipeline::SrTarget::Uhd8K;
+    const auto eightThenFour=run(ctx,ring,sdr.get(),false,s,false,false,false,2);
+    check(eightThenFour.ok&&eightThenFour.evaluations==4&&eightThenFour.output.width==3840,"base 8K -> reduce 1080p -> second 4K actually runs twice");
+    s.srTarget=pipeline::SrTarget::Uhd4K;
+    const auto matched=sdrFrame(pattern(1920,1080));
+    const auto shared=run(ctx,ring,matched.get(),false,s,false,false,false,2);
+    check(shared.ok&&shared.evaluations==4&&shared.output.width==3840,"equal input/output create keys still execute two AI passes without duplicate ownership");
+    const auto h=run(ctx,ring,hdr.get(),true,s,false,false,false,2,true);
+    bool finite=h.ok;for(size_t i=0;finite&&i<h.output.pixels.size()/2;++i)finite=std::isfinite(half(h.output,i));
+    check(finite&&h.evaluations==4&&h.firstLinear.width==3840,"HDR restores the first result before the second reduction and evaluation");
+    s.dualSrEnabled=false;s.srTarget=pipeline::SrTarget::Uhd8K;s.srOutput=pipeline::SrOutput::Uhd4K;
+    const auto normal=run(ctx,ring,sdr.get(),false,s,false,false,false,2);
+    check(normal.ok&&normal.evaluations==2&&normal.output.width==7680,"dual OFF preserves normal 8K output and ignores retired pre/post fields");
+    ring.shutdown();ctx.shutdown();std::cout<<"DUAL_SR_RESULT passed="<<ok<<std::endl;return ok?0:1;
+}
 int boundaries(const std::filesystem::path& directory){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
@@ -383,6 +415,7 @@ int wmain(int argc,wchar_t** argv){
     const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(FAILED(com))return 2;
     if(argc==3&&std::wstring_view(argv[2])==L"stage"){const int result=stage::test(argv[1]);CoUninitialize();return result;}
+    if(argc==3&&std::wstring_view(argv[2])==L"dual"){const int result=stage::dual(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"stage-boundaries"){const int result=stage::boundaries(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"stage-capabilities"){const int result=stage::capabilities(argv[1]);CoUninitialize();return result;}
     if(argc>=9&&std::wstring_view(argv[2])==L"stage-image"){

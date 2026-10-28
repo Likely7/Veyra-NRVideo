@@ -18,10 +18,10 @@ QString QmlPlayerBridge::srStageSummary() const {
     const auto& s = impl_->snapshot;
     const auto& plan = s.metrics.resolution;
     if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision || !plan.srApplied) return {};
-    if (plan.srInput == plan.source && plan.srOutput == plan.base) return {};
+    if (!plan.dualSrApplied) return {};
     const auto size = [](pipeline::Extent e) { return QStringLiteral("%1x%2").arg(e.width).arg(e.height); };
-    QStringList parts{size(plan.source)};
-    if (plan.srInput != plan.source) parts << size(plan.srInput);
+    QStringList parts{size(plan.source),size(plan.firstSrOutput)};
+    parts << size(plan.srInput);
     parts << size(plan.srOutput);
     if (plan.base != plan.srOutput) parts << size(plan.base);
     return parts.join(QStringLiteral(" → "));
@@ -31,8 +31,7 @@ QString QmlPlayerBridge::srStageNote() const {
     const auto& plan = s.metrics.resolution;
     if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision) return {};
     QStringList notes;
-    if (plan.srPrescaleIneffective) notes << tr("先降到未生效：片源不大于所选尺寸，或先降后已不能再放大");
-    if (plan.srOutputIneffective) notes << tr("再缩到未生效：只在超分放大后、且小于超分结果时执行");
+    if (plan.srPrescaleIneffective) notes << tr("第二次超分未执行：再次降低后的尺寸须小于基础超分结果及第二次目标。");
     return notes.join(QStringLiteral("；"));
 }
 

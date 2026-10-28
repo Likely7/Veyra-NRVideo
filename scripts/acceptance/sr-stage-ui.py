@@ -1,4 +1,4 @@
-"""Three-step SR rows in the real app (claude-sr-stage-20261028).
+"""Double SR rows in the real app (shared claude-sr-stage-20261028 staging).
 
 Runs this tree's build in the task's staged copy (tmp stage_app.py: hard links to the
 2.1.1 portable donor, this build's EXE / shaders / QML), on a private profile, playing a
@@ -12,6 +12,7 @@ import argparse, json, os, shutil, subprocess, sys
 parser=argparse.ArgumentParser()
 parser.add_argument('media',nargs='?',default='E:/项目/Veyra/tests/nr-manual-scale-20261024/media/nr-4k30.mp4')
 parser.add_argument('--task',default='claude-sr-stage-20261028')
+parser.add_argument('--fixture',default='dual-sr-ui.qml')
 args=parser.parse_args()
 assert args.task.startswith(('codex-','claude-')) and '/' not in args.task and '\\' not in args.task and '..' not in args.task
 B = Path('E:/项目/Veyra'); T = args.task; R = Path(__file__).resolve().parents[2]
@@ -31,7 +32,9 @@ if P.exists(): shutil.rmtree(P)
 P.mkdir(parents=True)
 (P/'qml-preferences.v1.json').write_text(json.dumps(dict(language='zh-CN', autoResume=False, prewarmEnhancement=False)), 'utf8')
 main_src = R/'qml/Veyra/Main.qml'; main = main_src.read_text('utf8'); pos = main.rfind('}')
-loader = ('\nLoader { anchors.fill: parent; source: ' + json.dumps((R/'scripts/acceptance/sr-stage-ui.qml').as_uri()) +
+fixture=(R/'scripts/acceptance'/args.fixture).resolve()
+assert fixture.is_relative_to((R/'scripts/acceptance').resolve()) and fixture.is_file()
+loader = ('\nLoader { anchors.fill: parent; source: ' + json.dumps(fixture.as_uri()) +
           '; onLoaded: item.media=' + json.dumps(MEDIA.as_posix()) + ' }\n')
 replace(A/'qml/Veyra/Main.qml', (main[:pos] + loader + main[pos:]).encode('utf8'))
 env = {k: v for k, v in os.environ.items() if not k.upper().startswith(('VEYRA_', 'QT_', 'QSG_', 'QML_'))}
@@ -49,7 +52,7 @@ finally:
 text = console.read_text('utf8', errors='replace')
 lines = log_file.read_text('utf8', errors='replace').splitlines() if log_file.exists() else []
 grab = lambda tag: [l.split('] ', 2)[-1] for l in lines if tag in l]
-result = dict(exit=run.returncode, media=str(MEDIA), passed='SR_STAGE_UI_PASS' in text and 'SR_STAGE_UI_FAIL' not in text,
+result = dict(exit=run.returncode, media=str(MEDIA), fixture=str(fixture), passed=run.returncode==0 and 'SR_STAGE_UI_PASS' in text and 'SR_STAGE_UI_FAIL' not in text,
               steps=grab('[sr-stage-test]'), videoSr=grab('[video-sr] selected'), resolution=grab('[resolution] source=')[:12],
               accepted=grab('accepted srTarget=')[:12],
               qmlErrors=[l for l in text.splitlines() if any(s in l for s in ['ReferenceError:', 'TypeError:', 'Binding loop detected', 'is not a type', 'ambiguous'])][:8],

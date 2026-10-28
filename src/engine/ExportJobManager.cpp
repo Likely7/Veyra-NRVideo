@@ -32,7 +32,7 @@ struct Shared {
     // instead of reading a mismatched layout.
     // 10: 32-node chain with anti-aliasing; 11: beauty payloads and face detection.
     // 12: SR prescale/output fields change the shared settings layout.
-    static constexpr DWORD kVersion=12;
+    static constexpr DWORD kVersion=13; // independent second SR parameters
     DWORD signature=magic,version=kVersion,bytes=sizeof(Shared);
     EnhancementSettings settings;
     EffectChain chain;

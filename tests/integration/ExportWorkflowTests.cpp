@@ -38,6 +38,14 @@ int wmain(int argc,wchar_t** argv){
         const bool fsr=mode.find(L"fsr-")==0;
         const bool rejectXess=mode==L"reject-xess";
         const bool srStage=mode==L"sr-stage-fit"||mode==L"sr-stage-prescale";
+        const bool dualSr=mode==L"dual-sr";
+        if(dualSr){
+            settings.sr=true;settings.videoSrQuality=1;settings.srMotion=MotionSource::Zero;
+            settings.srTarget=veyra::pipeline::SrTarget::Uhd4K;
+            settings.dualSrEnabled=true;settings.srPrescale=veyra::pipeline::SrPrescale::P1080;
+            settings.dualSrTarget=veyra::pipeline::SrTarget::Qhd;settings.dualSrQuality=2;
+            media.audio.policy=media.subtitles.policy=ExportTrackPolicy::None;
+        }
         if(srStage){
             settings.sr=true;settings.videoSrQuality=1;settings.srMotion=MotionSource::Zero;
             settings.srPrescale=veyra::pipeline::SrPrescale::P1080;
@@ -174,11 +182,22 @@ int wmain(int argc,wchar_t** argv){
                 for(const auto& t:info.tracks)if(t.subtitle&&media.subtitles.count<media.subtitles.indices.size())media.subtitles.indices[media.subtitles.count++]=t.index;
                 require(media.subtitles.count>0,"reject source has no subtitle track");
             }
-            require(manager.start(input,output,settings,hevc,srStage?4:0,-1,from,to,veyra::sink::ExportRateControl::Cq,media),"start refused");
+            require(manager.start(input,output,settings,hevc,(srStage||dualSr)?4:0,-1,from,to,veyra::sink::ExportRateControl::Cq,media),"start refused");
             auto s=finish(manager);collected(s);
             std::wcout<<L"state="<<int(s.state)<<L" encoded="<<s.encoded<<L" message="<<s.message<<L"\n";
             if(mode.find(L"reject")!=std::wstring::npos){require(s.state==ExportState::Failed,"incompatible source was not rejected");require(!std::filesystem::exists(output),"rejection produced final file");require(!s.message.empty(),"failure reason missing");}
             else require(s.state==ExportState::Succeeded,"export failed");
+            if(dualSr){
+                require(s.encoded==4&&s.sourceFrames==4,"dual SR export lost source frames");
+                require(s.frozen.dualSrEnabled&&s.frozen.dualSrTarget==settings.dualSrTarget&&
+                        s.frozen.dualSrQuality==2&&s.frozen.videoSrQuality==1&&
+                        s.frozen.srTarget==settings.srTarget&&s.frozen.srPrescale==settings.srPrescale,
+                        "independent SR fields lost crossing the worker protocol");
+                std::ifstream log(s.workerLog);const std::string text((std::istreambuf_iterator<char>(log)),{});
+                require(text.find("passes=2 source=1920x1080 first=3840x2160 shrink=1920x1080 second=2560x1440 output=2560x1440 firstQuality=1 secondQuality=2")!=std::string::npos,
+                        "export worker did not create the requested two SR operations");
+                std::wcout<<L"DUAL_SR_EXPORT source=4 encoded=4 frozenAndEvaluated=1\n";
+            }
             if(srStage){
                 require(s.encoded==4&&s.sourceFrames==4,"SR stage export lost source frames");
                 require(s.frozen.srPrescale==settings.srPrescale&&s.frozen.srOutput==settings.srOutput&&s.frozen.srTarget==settings.srTarget,

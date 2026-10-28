@@ -2,7 +2,6 @@
 // modes must obey. These are the guards for the multi-NR and node-mode work.
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/GraphDescription.h"
-#include "veyra/engine/SrStageSafety.h"
 #include <type_traits>
 #include <algorithm>
 #include <random>
@@ -1453,7 +1452,7 @@ static void testThreeStepSr(){
               "three-step SR: a 4K prescale changes only what SR reads; NR, flow and output sizes stay");
     }
     // The chain step: present even when the source already has the target size.
-    EnhancementSettings s;s.nr=false;s.sr=true;s.videoSrQuality=3;s.srPrescale=SrPrescale::P1080;
+    EnhancementSettings s;s.nr=false;s.sr=true;s.videoSrQuality=3;s.srPrescale=SrPrescale::P1080;s.dualSrEnabled=true;
     {
         const auto chain=toChain(s);
         ChainExecutionPlan plan;ChainExecutionRequest request{{3840,2160},SrTarget::Uhd4K,false,false,false,SrPrescale::P1080,SrOutput::Target};
@@ -1493,8 +1492,8 @@ static void testThreeStepSr(){
         request.nvidiaAdapter=false;describeStages(request,s,desc);
         check(desc.srInputWidth==3840&&desc.srOutputWidth==desc.workWidth,"three-step SR: other adapters keep the single step");
         request.nvidiaAdapter=true;request.width=2560;request.height=1440;
-        auto fit=s;fit.srPrescale=SrPrescale::Off;fit.srTarget=SrTarget::Uhd8K;fit.srOutput=SrOutput::Uhd4K;describeStages(request,fit,desc);
-        check(desc.enableSr&&desc.srInputWidth==2560&&desc.srOutputWidth==7680&&desc.srOutputHeight==4320&&desc.workWidth==3840&&
+        auto fit=s;fit.srPrescale=SrPrescale::P1080;fit.srTarget=SrTarget::Uhd8K;fit.srOutput=SrOutput::Uhd4K;describeStages(request,fit,desc);
+        check(desc.enableSr&&desc.dualSr&&desc.firstSrWidth==7680&&desc.srInputWidth==1920&&desc.srOutputWidth==3840&&desc.srOutputHeight==2160&&desc.workWidth==3840&&
               desc.workHeight==2160&&desc.validateFixedExecutionPlan().empty(),"three-step SR: 2K -> 8K -> 4K works at 4K after SR");
     }
     // Settings: validation, inactive normalization, rebuilds and chain globals.
@@ -1508,7 +1507,7 @@ static void testThreeStepSr(){
         check(off.activeVideoSettings().srPrescale==SrPrescale::Off&&dlss.activeVideoSettings().srPrescale==SrPrescale::Off,
               "three-step SR: SR off and other backends normalize the fields");
         auto before=s;before.srPrescale=SrPrescale::Off;auto output=s;output.srOutput=SrOutput::Qhd;
-        check(requiresGraphRebuild(before,s)&&requiresGraphRebuild(s,output),"three-step SR: prescale and output changes rebuild the graph");
+        check(requiresGraphRebuild(before,s)&&!requiresGraphRebuild(s,output),"double SR: reduction rebuilds, retired post-fit does not change the graph");
         auto dlssBefore=before;dlssBefore.videoSrQuality=0;
         check(!requiresGraphRebuild(dlssBefore,dlss),"three-step SR: inactive edits do not rebuild the graph");
         EnhancementSettings restored;ChainGlobalSettings::capture(output).apply(restored);
@@ -1593,24 +1592,29 @@ int main() {
     testWideChains();
     testThreeStepSr();
     {
-        using namespace veyra;using pipeline::SrPrescale;using pipeline::SrTarget;using pipeline::SrOutput;
-        EnhancementSettings s;s.sr=s.nr=true;s.videoSrQuality=2;s.srTarget=SrTarget::Uhd8K;s.srPrescale=SrPrescale::P1080;
-        s.multiplier=2;s.frameGenerationBackend=FrameGenerationBackend::Vfg;
-        StageRequest r;r.width=3840;r.height=2160;r.sr=r.nr=r.fg=true;r.fgMultiplier=2;
-        pipeline::EnhanceGraphDesc unsafe;describeStages(r,s,unsafe);
-        check(!unsafe.validateFixedExecutionPlan().empty(),"8K three-step NR/VFG rejected before GPU allocation");
-        check(boundSrStageOutput(s,{3840,2160})&&s.srOutput==SrOutput::Uhd4K&&s.srTarget==SrTarget::Uhd8K&&s.nr&&s.multiplier==2,
-              "atomic SR safety fit retains 8K evaluation, NR and VFG choices");
-        pipeline::EnhanceGraphDesc safe;describeStages(r,s,safe);
-        check(safe.validateFixedExecutionPlan().empty()&&safe.srOutputWidth==7680&&safe.workWidth==3840&&safe.enableNr&&safe.enableFg,
-              "8K internal SR with 4K downstream NR/VFG remains admitted");
-        check(!boundSrStageOutput(s,{3840,2160}),"bounded SR settings are idempotent");
-        s.srOutput=SrOutput::Target;s.nr=false;s.multiplier=1;
-        check(!boundSrStageOutput(s,{3840,2160}),"SR alone retains its explicit final size");
-        s.nr=true;s.srPrescale=SrPrescale::Off;
-        check(!boundSrStageOutput(s,{3840,2160}),"legacy single-step SR settings are unchanged");
-        s.srPrescale=SrPrescale::P1080;s.srOutput=SrOutput::Uhd5K;
-        check(boundSrStageOutput(s,{}),"unknown-source restored three-step settings are bounded before opening");
+        using namespace veyra;using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::SrOutput;
+        EnhancementSettings s;s.sr=true;s.nr=false;s.videoSrQuality=2;s.srTarget=SrTarget::Uhd8K;
+        s.srPrescale=SrPrescale::P1080;s.srOutput=SrOutput::Uhd4K;
+        StageRequest r;r.width=2560;r.height=1440;r.sr=true;
+        pipeline::EnhanceGraphDesc d;auto p=describeStages(r,s,d);
+        check(!d.dualSr&&d.workWidth==7680&&d.srInputWidth==2560,"dual off restores ordinary 8K and ignores retired pre/post fields");
+        s.dualSrEnabled=true;s.dualSrTarget=SrTarget::Uhd4K;s.dualSrQuality=1;
+        p=describeStages(r,s,d);
+        check(d.dualSr&&d.firstSrWidth==7680&&d.srInputWidth==1920&&d.srOutputWidth==3840&&d.workWidth==3840&&d.dualSrQuality==1&&d.videoSrQuality==2&&d.validateFixedExecutionPlan().empty(),
+              "dual SR describes first 8K, reduction 1080p and second 4K with separate qualities");
+        check(p.dualSrApplied&&p.firstSrOutput==pipeline::Extent{7680,4320},"metrics preserve first-stage dimensions rather than labelling one AI pass as two");
+        s.srTarget=SrTarget::Uhd4K;s.dualSrTarget=SrTarget::Uhd8K;p=describeStages(r,s,d);
+        check(d.firstSrWidth==3840&&d.workWidth==7680&&s.dualSrTarget==SrTarget::Uhd8K,"second 8K selection remains 8K with no silent 4K fit");
+        auto disabled=s;disabled.dualSrEnabled=false;auto edited=disabled;edited.dualSrTarget=SrTarget::Qhd;edited.dualSrQuality=3;
+        check(!requiresGraphRebuild(disabled,edited),"editing stored second-stage settings while disabled does not rebuild base SR");
+        check(requiresGraphRebuild(disabled,s),"enabling the second actual SR pass rebuilds");
+        auto g=ChainGlobalSettings::capture(s);EnhancementSettings restored;g.apply(restored);
+        check(restored.dualSrEnabled&&restored.dualSrTarget==s.dualSrTarget&&restored.dualSrQuality==s.dualSrQuality,"chain globals retain independent second-stage settings");
+        auto invalid=s;invalid.dualSrQuality=0;check(!invalid.validate().empty(),"reject invalid second SR quality before any GPU work");
+        invalid=s;invalid.dualSrTarget=SrTarget(99);check(!invalid.validate().empty(),"reject invalid second SR target");
+        ChainExecutionRequest badRequest{{2560,1440},s.srTarget};badRequest.dualSrEnabled=true;badRequest.dualSrTarget=SrTarget(99);
+        ChainExecutionPlan rejected;check(!compileChainExecutionPlan(toChain(s),badRequest,rejected).accepted,"invalid second target returns a rejected plan rather than throwing");
+        s.videoSrQuality=kVideoSrFsr;describeStages(r,s,d);check(!d.dualSr&&!s.activeVideoSettings().dualSrEnabled,"other base backends keep their existing single-stage path");
     }
     std::printf(failures ? "effect chain: %d FAILURES\n" : "effect chain: all checks passed\n", failures);
     return failures ? 1 : 0;

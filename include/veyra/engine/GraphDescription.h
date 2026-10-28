@@ -65,13 +65,13 @@ struct StageRequest {
     const ChainRuntimeOrder* nodeOrder=nullptr; // paired with this settings transaction
 };
 
-// Three-step SR runs on RTX Video SR (NVIDIA) only; every other backend keeps
-// the single step whatever the saved fields say.
+// Double SR runs on RTX Video SR (NVIDIA) only; every other backend keeps
+// its existing single pass, regardless of saved second-pass fields.
 inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter){
-    return nvidiaAdapter&&srStageBackend(s.videoSrQuality)?s.srPrescale:pipeline::SrPrescale::Off;
+    return nvidiaAdapter&&srStageBackend(s.videoSrQuality)&&s.dualSrEnabled?s.srPrescale:pipeline::SrPrescale::Off;
 }
 inline pipeline::SrOutput runningSrOutput(const EnhancementSettings& s,bool nvidiaAdapter){
-    return nvidiaAdapter&&srStageBackend(s.videoSrQuality)?s.srOutput:pipeline::SrOutput::Target;
+    (void)s;(void)nvidiaAdapter;return pipeline::SrOutput::Target;
 }
 
 // Fills the stage, size and parameter fields of `desc` from `settings`.
@@ -122,13 +122,16 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     auto plan=pipeline::ResolutionPlan::make({request.width,request.height},request.sr,
         boundedAmd?pipeline::NrSizePolicy::Realtime:policy,
         (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency,
-        request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput);
+        request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput,
+        settings.dualSrEnabled&&request.nvidiaAdapter&&srStageBackend(settings.videoSrQuality),settings.dualSrTarget);
     if(request.exportJob&&!request.stillImage)
         plan.nr=exportNrProcessingExtent(plan.base,settings.nrRuntime,policy);
     desc.sourceWidth=request.width;desc.sourceHeight=request.height;
     desc.workWidth=plan.base.width;desc.workHeight=plan.base.height;
     desc.srInputWidth=plan.srInput.width;desc.srInputHeight=plan.srInput.height;
     desc.srOutputWidth=plan.srOutput.width;desc.srOutputHeight=plan.srOutput.height;
+    desc.dualSr=plan.dualSrApplied;desc.dualSrQuality=settings.dualSrQuality;
+    desc.firstSrWidth=plan.firstSrOutput.width;desc.firstSrHeight=plan.firstSrOutput.height;
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
     desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
     // RTX Video SR can restore compressed video at its original resolution.
@@ -186,7 +189,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     }
     ChainExecutionPlan execution;
     const auto validation=compileChainExecutionPlan(chain,{{request.width,request.height},settings.srTarget,
-        request.stillImage,request.exportJob,boundedAmd,srPrescale,srOutput},execution);
+        request.stillImage,request.exportJob,boundedAmd,desc.dualSr?srPrescale:pipeline::SrPrescale::Off,
+        pipeline::SrOutput::Target,desc.dualSr,settings.dualSrTarget},execution);
     if(!validation.accepted){desc.fixedExecutionPlanError=validation.message;return plan;}
     if(request.nodeOrder){
         // Node order owns the first NR stage, even for an ordinary resize or
@@ -207,7 +211,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
             exportNrProcessingExtent(plan.base,settings.nrRuntime,size):
             pipeline::ResolutionPlan::make({request.width,request.height},request.sr,size,request.stillImage,
             settings.revision,settings.srTarget,lowLatency,
-            request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput).nr);
+                request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput,
+                desc.dualSr,settings.dualSrTarget).nr);
     }
     desc.fixedExecutionPlan=execution;
     return plan;

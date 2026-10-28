@@ -14,7 +14,7 @@ namespace {
 // Six full grades per entry (plus the legacy first-grade field), up to 64
 // entries. Never remove the file-size guard as LUT names are external input.
 constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
-void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;
+void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;
     // Static HDR output tuning: library v11 / session v6.
     // Older mainline versions keep their original NR/Flow layout.
     if(tuning)out<<' '<<g.hdrCurve.shadowLiftEv100<<' '<<g.hdrCurve.shadowRangeNits<<' '<<g.hdrCurve.midGrayNits<<' '
@@ -24,8 +24,9 @@ void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=fals
         <<' '<<g.hdrCurve.strengthPercent<<' '<<g.hdrCurve.displayPeakNits;
     if(dlss)out<<' '<<g.dlssSrModel;
     // Three-step SR prescale / output: library v16, session v11.
-    if(srStage)out<<' '<<uint32_t(g.srPrescale)<<' '<<uint32_t(g.srOutput);}
-bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false){
+    if(srStage)out<<' '<<uint32_t(g.srPrescale)<<' '<<uint32_t(g.srOutput);
+    if(dual)out<<' '<<g.dualSrEnabled<<' '<<uint32_t(g.dualSrTarget)<<' '<<g.dualSrQuality;}
+bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false){
     int hdr,fg,sr,nr;
     if(!(in>>hdr>>fg>>sr>>nr))return false;
     g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);
@@ -41,6 +42,7 @@ bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool t
     }
     if(dlss&&(!(in>>g.dlssSrModel)||g.dlssSrModel>=kDlssSrModelCount))return false;
     if(srStage){uint32_t prescale=0,output=0;if(!(in>>prescale>>output))return false;g.srPrescale=pipeline::SrPrescale(prescale);g.srOutput=pipeline::SrOutput(output);}
+    if(dual){int enabled=0;uint32_t target=0;if(!(in>>enabled>>target>>g.dualSrQuality)||enabled<0||enabled>1)return false;g.dualSrEnabled=enabled!=0;g.dualSrTarget=pipeline::SrTarget(target);}
     EnhancementSettings s;g.apply(s);return s.validate().empty();
 }
 void applyRenderingPreset(const PresetEntry& e,EnhancementSettings& s){
@@ -96,6 +98,7 @@ void PresetLibrary::addBuiltins() {
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto directDual=std::filesystem::path(path_).concat(L".dual-sr");
     const auto directSrStage=std::filesystem::path(path_).concat(L".sr-stage");
     const auto directBeauty=std::filesystem::path(path_).concat(L".beauty");
     const auto directEffects=std::filesystem::path(path_).concat(L".effects");
@@ -139,6 +142,8 @@ bool PresetLibrary::load() {
     const auto srStagePath=std::filesystem::path(path_).concat(L".sr-stage");
     if(std::filesystem::exists(directSrStage))path_=directSrStage;
     else if(std::filesystem::exists(srStagePath))path_=srStagePath;
+    const auto dualPath=std::filesystem::path(path_).concat(L".dual-sr");
+    if(std::filesystem::exists(directDual))path_=directDual;else if(std::filesystem::exists(dualPath))path_=dualPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -235,6 +240,8 @@ bool PresetLibrary::save() {
     // Opting into a new model must leave the older build's library intact.
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
+    if(data.starts_with("VEYRA_PRESET_LIBRARY 17")&&!path_.wstring().ends_with(L".dual-sr"))path_=std::filesystem::path(path_).concat(L".dual-sr");
+    if(!path_.wstring().ends_with(L".dual-sr")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 16")&&!path_.wstring().ends_with(L".sr-stage"))path_=std::filesystem::path(path_).concat(L".sr-stage");
     if(!path_.wstring().ends_with(L".sr-stage")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 15")&&!path_.wstring().ends_with(L".beauty"))path_=std::filesystem::path(path_).concat(L".beauty");
@@ -258,6 +265,7 @@ bool PresetLibrary::save() {
             return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
         }) && !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     }
     }
     }
@@ -713,14 +721,16 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return beautyChain(e.chain)||(e.nodeConfiguration&&(beautyChain(e.nodeConfiguration->chain)||
             (e.nodeConfiguration->editor&&beautyChain(e.nodeConfiguration->editor->nodes))));});
     // v16: three-step SR prescale / output in any stored globals.
-    const auto srStageOf=[](const ChainGlobalSettings& g){return g.srPrescale!=pipeline::SrPrescale::Off||g.srOutput!=pipeline::SrOutput::Target;};
+    const auto srStageOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=4||g.srPrescale!=pipeline::SrPrescale::Off||g.srOutput!=pipeline::SrOutput::Target;};
     const bool srStage=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
         if(e.globals&&srStageOf(*e.globals))return true;
         if(!e.nodeConfiguration)return false;
         const auto& c=*e.nodeConfiguration;
         return srStageOf(c)||(c.editor&&c.editor->globals&&srStageOf(*c.editor->globals));
     });
-    const int version=std::max(minimumVersion, srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const auto dualOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=4;};
+    const bool dual=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){return (e.globals&&dualOf(*e.globals))||(e.nodeConfiguration&&(dualOf(*e.nodeConfiguration)||(e.nodeConfiguration->editor&&e.nodeConfiguration->editor->globals&&dualOf(*e.nodeConfiguration->editor->globals))));});
+    const int version=std::max(minimumVersion, dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -774,7 +784,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         }
         if(version>=6){
             o<<' '<<e.globals.has_value();
-            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11,version>=12,version>=16);}
+            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11,version>=12,version>=16,version>=17);}
         }
         if(version>=10){
             o<<' '<<e.flow.has_value();
@@ -794,7 +804,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,16):16;
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,17):17;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
@@ -906,7 +916,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){ChainGlobalSettings g;int target,backend,flow,optical,half,policy;
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
-                if(!readRendering(in,g,version>=7,version>=11,version>=12,version>=16))return false;e.globals=g;
+                if(!readRendering(in,g,version>=7,version>=11,version>=12,version>=16,version>=17))return false;e.globals=g;
             }
         }
         if(version>=10){
@@ -959,10 +969,12 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             return n.type==EffectType::Beauty;});};
     const bool beauty=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
         return beautyChain(c.chain)||(c.editor&&beautyChain(c.editor->nodes));});
-    const auto srStageOf=[](const ChainGlobalSettings& g){return g.srPrescale!=pipeline::SrPrescale::Off||g.srOutput!=pipeline::SrOutput::Target;};
+    const auto srStageOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=4||g.srPrescale!=pipeline::SrPrescale::Off||g.srOutput!=pipeline::SrOutput::Target;};
     const bool srStage=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
         return srStageOf(c)||(c.editor&&c.editor->globals&&srStageOf(*c.editor->globals));});
-    const int version = srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const auto dualOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=4;};
+    const bool dual=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return dualOf(c)||(c.editor&&c.editor->globals&&dualOf(*c.editor->globals));});
+    const int version = dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -971,7 +983,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         out << int(c.srTarget) << ' ' << c.videoSrQuality << ' ' << int(c.fgBackend) << ' '
             << int(c.flow) << ' ' << int(c.opticalFlowBackend) << ' ' << c.amdFlowHalfResolution << ' '
             << int(c.nrPolicy) << ' ' << c.selectedNr << ' ' << c.selectedColour;
-        if(version>=4)writeRendering(out,c,version>=5,version>=6,version>=7,version>=11);out<<'\n';
+        if(version>=4)writeRendering(out,c,version>=5,version>=6,version>=7,version>=11,version>=12);out<<'\n';
         PresetEntry entry;
         entry.name = i == 0 ? L"list" : L"node";
         entry.kind = ChainMode(i); entry.chain = c.chain;
@@ -989,7 +1001,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             const auto& g = *document.globals;
             out << int(g.srTarget) << ' ' << g.videoSrQuality << ' ' << int(g.fgBackend) << ' '
                 << int(g.flow) << ' ' << int(g.opticalFlowBackend) << ' ' << g.amdFlowHalfResolution << ' '
-                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6,version>=7,version>=11);out<<'\n';
+                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6,version>=7,version>=11,version>=12);out<<'\n';
         }
         out << graph.nextId << ' ' << graph.inputNext << ' ' << document.nodes.nodeCount << '\n';
         // The ordinary preset codec validates a linear runtime chain. Use a
@@ -1016,7 +1028,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 11) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 12) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -1027,7 +1039,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         c.srTarget = pipeline::SrTarget(target); c.fgBackend = FrameGenerationBackend(backend);
         c.flow = FlowQuality(flow); c.opticalFlowBackend = OpticalFlowBackend(optical);
         c.amdFlowHalfResolution = half != 0; c.nrPolicy = pipeline::NrSizePolicy(policy);
-        if(version>=4&&!readRendering(in,c,version>=5,version>=6,version>=7,version>=11))return false;
+        if(version>=4&&!readRendering(in,c,version>=5,version>=6,version>=7,version>=11,version>=12))return false;
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
@@ -1052,7 +1064,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
             g.srTarget = pipeline::SrTarget(target); g.fgBackend = FrameGenerationBackend(backend);
             g.flow = FlowQuality(flow); g.opticalFlowBackend = OpticalFlowBackend(optical);
             g.amdFlowHalfResolution = half != 0; g.nrPolicy = pipeline::NrSizePolicy(policy);
-            if(version>=4&&!readRendering(in,g,version>=5,version>=6,version>=7,version>=11))return false;
+            if(version>=4&&!readRendering(in,g,version>=5,version>=6,version>=7,version>=11,version>=12))return false;
             editor->globals = g;
         }
         uint32_t count = 0;
@@ -1082,6 +1094,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
 }
 
 bool ChainSessionStore::load(ChainSession& session) {
+    const auto directDual=std::filesystem::path(path_).concat(L".dual-sr");
     const auto directSrStage=std::filesystem::path(path_).concat(L".sr-stage");
     const auto directBeauty=std::filesystem::path(path_).concat(L".beauty");
     const auto directEffects=std::filesystem::path(path_).concat(L".effects");
@@ -1123,6 +1136,8 @@ bool ChainSessionStore::load(ChainSession& session) {
     const auto srStagePath=std::filesystem::path(path_).concat(L".sr-stage");
     if(std::filesystem::exists(directSrStage,ec))path_=directSrStage;
     else if(std::filesystem::exists(srStagePath,ec))path_=srStagePath;
+    const auto dualPath=std::filesystem::path(path_).concat(L".dual-sr");
+    if(std::filesystem::exists(directDual))path_=directDual;else if(std::filesystem::exists(dualPath))path_=dualPath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1152,6 +1167,8 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    if(data.starts_with("VEYRA_CHAIN_SESSION 12")&&!path_.wstring().ends_with(L".dual-sr"))path_=std::filesystem::path(path_).concat(L".dual-sr");
+    if(!path_.wstring().ends_with(L".dual-sr")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 11")&&!path_.wstring().ends_with(L".sr-stage"))path_=std::filesystem::path(path_).concat(L".sr-stage");
     if(!path_.wstring().ends_with(L".sr-stage")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 10")&&!path_.wstring().ends_with(L".beauty"))path_=std::filesystem::path(path_).concat(L".beauty");
@@ -1175,6 +1192,7 @@ bool ChainSessionStore::save(const ChainSession& session) {
     if (session.configurations[1].editor && session.configurations[1].editor->globals &&
         !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     }
     }
     }

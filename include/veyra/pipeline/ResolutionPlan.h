@@ -76,14 +76,6 @@ struct SrStageExtents {
     bool prescaleIneffective=false,outputIneffective=false;
     bool enlarges()const{return evaluated!=input;}
 };
-// Field failure 2026-10-28: a three-step SR result also became the full NR/FG
-// working extent (8K + NR + VFG). Keep the new combination bounded until that
-// full-size path has independent stability evidence. The SR evaluation itself
-// may still be 8K; only downstream NR/FG textures must fit the 4K pixel budget.
-inline bool unsafeSrStageOutput(Extent source,Extent input,Extent evaluated,Extent output,bool downstreamEffects){
-    const bool staged=input!=source||evaluated!=output;
-    return downstreamEffects&&staged&&uint64_t(output.width)*output.height>3840ull*2160;
-}
 inline SrStageExtents srStageExtents(Extent source,SrTarget target,SrPrescale prescale=SrPrescale::Off,SrOutput output=SrOutput::Target){
     // Fit into the box, enlarging only: the single-step SR size rule.
     const auto enlarge=[](Extent from,Extent box){
@@ -116,21 +108,36 @@ struct ResolutionPlan {
     Extent source,base,nr,flow,fg,output;
     // What SR reads and writes. Single-step SR: srInput==source, srOutput==base.
     Extent srInput,srOutput;
+    Extent firstSrOutput;
+    bool dualSrApplied=false;
     bool srApplied=false;
     bool srPrescaleIneffective=false,srOutputIneffective=false;
     uint64_t settingsRevision=0;
     static ResolutionPlan make(Extent source,bool sr,NrSizePolicy policy,bool exporting,uint64_t revision=0,SrTarget target=SrTarget::Uhd4K,bool nrBeforeSr=false,unsigned manualHeightBudget=0,
-                               SrPrescale prescale=SrPrescale::Off,SrOutput output=SrOutput::Target) {
+                               SrPrescale prescale=SrPrescale::Off,SrOutput output=SrOutput::Target,
+                               bool dual=false,SrTarget secondTarget=SrTarget::Uhd4K) {
         if(!source.valid())throw std::invalid_argument("invalid SDR source extent");
         if(!validSrTarget(target))throw std::invalid_argument("invalid SR target");
         if(!validNrSizePolicy(policy))throw std::invalid_argument("invalid NR size policy");
         if(!validSrPrescale(prescale)||!validSrOutput(output))throw std::invalid_argument("invalid SR prescale or output");
+        if(!validSrTarget(secondTarget))throw std::invalid_argument("invalid second SR target");
         ResolutionPlan p; p.source=source;p.base=p.srInput=p.srOutput=source;
         if(sr){
             const auto stage=srStageExtents(source,target,prescale,output);
             p.srInput=stage.input;p.srOutput=stage.evaluated;p.base=stage.output;
             p.srPrescaleIneffective=stage.prescaleIneffective;p.srOutputIneffective=stage.outputIneffective;
+            if(dual){
+                const auto first=srStageExtents(source,target);
+                const auto second=srStageExtents(first.output,secondTarget,prescale,output);
+                p.firstSrOutput=first.output;
+                // A second pass needs a real reduction followed by enlargement.
+                p.dualSrApplied=second.input!=first.output&&second.enlarges();
+                if(p.dualSrApplied){p.srInput=second.input;p.srOutput=second.evaluated;p.base=second.output;}
+                else{p.srInput=source;p.srOutput=p.base=first.output;}
+                p.srPrescaleIneffective=!p.dualSrApplied;p.srOutputIneffective=second.outputIneffective;
+            }
         }
+        if(!p.firstSrOutput.valid())p.firstSrOutput=p.srOutput;
         p.srApplied=sr&&p.srOutput!=p.srInput;p.nr=p.base;
         if(nrBeforeSr&&!exporting)p.nr=source;
         if(!exporting&&policy!=NrSizePolicy::Native) {

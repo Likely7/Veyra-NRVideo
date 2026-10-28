@@ -519,7 +519,8 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
     const auto validation = validateChain(chain);
     if (!validation.accepted) return validation;
     if (!request.source.valid() || !pipeline::validSrTarget(request.srTarget) ||
-        !pipeline::validSrPrescale(request.srPrescale) || !pipeline::validSrOutput(request.srOutput))
+        !pipeline::validSrPrescale(request.srPrescale) || !pipeline::validSrOutput(request.srOutput) ||
+        !pipeline::validSrTarget(request.dualSrTarget))
         return {false, "执行计划尺寸或超分目标非法"};
 
     // Retain storage ordinals even when an earlier instance is disabled. This
@@ -537,7 +538,9 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
     nrFirst = nrFirst && !request.stillImage && !request.exportJob;
     // SR processing is its evaluated size; a three-step output fit can make
     // the step output smaller than that.
-    const auto srStage = pipeline::srStageExtents(request.source, request.srTarget, request.srPrescale, request.srOutput);
+    const auto resolved = pipeline::ResolutionPlan::make(request.source,true,pipeline::NrSizePolicy::Native,true,0,
+        request.srTarget,false,0,request.srPrescale,request.srOutput,request.dualSrEnabled,request.dualSrTarget);
+    const pipeline::SrStageExtents srStage{resolved.srInput,resolved.srOutput,resolved.base};
     ChainExecutionPlan plan;
     auto cursor = request.source;
     const auto append = [&](uint32_t index) {
@@ -592,6 +595,7 @@ ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     ChainGlobalSettings c;
     c.srTarget = s.srTarget; c.videoSrQuality = s.videoSrQuality; c.dlssSrModel = s.dlssSrModel;
     c.srPrescale = s.srPrescale; c.srOutput = s.srOutput;
+    c.dualSrEnabled=s.dualSrEnabled;c.dualSrTarget=s.dualSrTarget;c.dualSrQuality=s.dualSrQuality;
     c.fgBackend = s.frameGenerationBackend; c.flow = s.flow;
     c.vfgQuality=s.vfgQuality;
     c.opticalFlowBackend = s.opticalFlowBackend; c.amdFlowHalfResolution = s.amdFlowHalfResolution;
@@ -607,6 +611,7 @@ void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.hdrCurve=hdrCurve;s.hdrMetadata=hdrMetadata;
     s.srTarget = srTarget; s.videoSrQuality = videoSrQuality; s.dlssSrModel = dlssSrModel;
     s.srPrescale = srPrescale; s.srOutput = srOutput;
+    s.dualSrEnabled=dualSrEnabled;s.dualSrTarget=dualSrTarget;s.dualSrQuality=dualSrQuality;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
     s.vfgQuality=vfgQuality;
     s.opticalFlowBackend = opticalFlowBackend; s.amdFlowHalfResolution = amdFlowHalfResolution;
@@ -628,6 +633,7 @@ void ChainConfiguration::apply(EnhancementSettings& s) const {
 bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
     return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality && dlssSrModel == other.dlssSrModel &&
         srPrescale == other.srPrescale && srOutput == other.srOutput &&
+        dualSrEnabled==other.dualSrEnabled&&dualSrTarget==other.dualSrTarget&&dualSrQuality==other.dualSrQuality&&
         fgBackend == other.fgBackend && vfgQuality == other.vfgQuality && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&
         // The author's own rendering globals had the same blind spot: a change to
@@ -728,6 +734,7 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if (previous.srTarget != next.srTarget) return true;
     // Three-step SR changes what SR reads and writes.
     if (previous.srPrescale != next.srPrescale || previous.srOutput != next.srOutput) return true;
+    if(previous.dualSrEnabled!=next.dualSrEnabled||previous.dualSrTarget!=next.dualSrTarget||previous.dualSrQuality!=next.dualSrQuality)return true;
     // A different DLSS SR model (render preset) needs a new SR feature.
     if (previous.dlssSrModel != next.dlssSrModel) return true;
     if (previous.frameGenerationBackend != next.frameGenerationBackend) return true;

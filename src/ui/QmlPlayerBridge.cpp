@@ -170,25 +170,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             QTimer::singleShot(0, this, [this, migrationNotice] { emit notice(migrationNotice, false); });
         const auto savedConfiguration = restored;
         QStringList disabled;
-        bool boundedSrStage=false;
         for (auto& configuration : restored.configurations) {
             const auto reason = disableUnavailableEffects(configuration);
             if (!reason.isEmpty()) disabled << reason;
-            engine::EnhancementSettings candidate;configuration.apply(candidate);
-            if(engine::boundSrStageOutput(candidate,{})){
-                configuration.srOutput=candidate.srOutput;
-                if(configuration.editor&&configuration.editor->globals){
-                    auto editor=std::make_shared<engine::NodeEditorDocument>(*configuration.editor);
-                    editor->globals->srOutput=candidate.srOutput;
-                    configuration.editor=std::move(editor);
-                }
-                boundedSrStage=true;
-            }
-        }
-        if(boundedSrStage){
-            const auto message=tr("已保留内部超分目标，并将三段式超分的 NR/补帧最终处理尺寸设为 4K，避免恢复高负载组合。");
-            veyra::log::warn("sr-stage-safety",message.toStdString());
-            QTimer::singleShot(0,this,[this,message]{emit notice(message,false);});
         }
         if (!disabled.isEmpty()) {
             const auto message = tr("已关闭当前硬件或包不支持的效果，参数仍保留：") + disabled.join("; ");

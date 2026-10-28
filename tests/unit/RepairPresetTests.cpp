@@ -349,4 +349,11 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
   }
   ok&=roundtrip;std::cout<<"SR stage mode="<<mode<<" schema="<<version<<" roundtrip="<<roundtrip<<'\n';
  }
+ {
+  EnhancementSettings dual;dual.sr=true;dual.dualSrEnabled=true;dual.srPrescale=veyra::pipeline::SrPrescale::P1080;dual.dualSrTarget=veyra::pipeline::SrTarget::Uhd8K;dual.dualSrQuality=2;
+  auto path=p;path+=L"-dual";PresetStore w(path);bool pass=w.load()&&w.put(L"dual",dual);PresetStore r(path);
+  pass=pass&&r.load()&&r.entries().size()==1&&r.entries()[0].settings==dual;
+  std::ifstream h(path);std::string magic;int version=0;h>>magic>>version;pass=pass&&version==34;
+  ok=ok&&pass;std::cout<<"dual SR schema34 roundtrip="<<pass<<'\n';
+ }
  std::cout<<"preset roundtrip, all fields, duplicate, rename-default, delete, validation, unknown schema, corrupt-preservation="<<ok<<'\n';return ok?0:1;}

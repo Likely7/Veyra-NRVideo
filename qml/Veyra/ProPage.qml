@@ -1350,27 +1350,8 @@ VPage {
                                 }
                             }
                             SrStageEditor { Layout.fillWidth: true; namePrefix: "list" }
-                            VRow {
-                                label: qsTr("超分运动来源")
-                                hint: qsTr("零运动会限制时序重建；RTX 视频超分不使用此输入")
-                                VSeg { options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.srMotionSource); onPicked: id => veyra.srMotionSource = Number(id) }
-                            }
-                            VRow {
-                                label: qsTr("质量")
-                                hint: qsTr("RTX 视频超分档位")
-                                enabled: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4 && Support.available(veyra, "sr")
-                                opacity: enabled ? 1 : 0.4
-                                VSeg {
-                                    options: [
-                                        { id: "1", label: "1" },
-                                        { id: "2", label: "2" },
-                                        { id: "3", label: "3" },
-                                        { id: "4", label: "4" }
-                                    ]
-                                    current: String(veyra.videoSrQuality)
-                                    onPicked: id => veyra.videoSrQuality = parseInt(id)
-                                }
-                            }
+
+
                         }
 
                         // RTX Video HDR: SDR -> HDR before frame generation. Runs

@@ -40,6 +40,24 @@ void QmlPlayerBridge::setDlssSrModel(int value) {
     if (impl_->commit(s)) emit settingsChanged();
 }
 int QmlPlayerBridge::srPrescale() const { return int(settings().srPrescale); }
+bool QmlPlayerBridge::dualSrEnabled() const { return settings().dualSrEnabled; }
+void QmlPlayerBridge::setDualSrEnabled(bool enabled){
+    auto s=settings();if(s.dualSrEnabled==enabled)return;
+    if(enabled&&!engine::srStageBackend(s.videoSrQuality))return;
+    s.dualSrEnabled=enabled;
+    if(enabled){if(s.srPrescale==pipeline::SrPrescale::Off)s.srPrescale=pipeline::SrPrescale::P1080;s.srOutput=pipeline::SrOutput::Target;}
+    if(impl_->commit(s))emit settingsChanged();
+}
+int QmlPlayerBridge::dualSrTargetIndex() const {
+    switch(settings().dualSrTarget){case pipeline::SrTarget::Qhd:return 1;case pipeline::SrTarget::Uhd4K:return 2;case pipeline::SrTarget::Uhd8K:return 3;case pipeline::SrTarget::Uhd5K:return 4;case pipeline::SrTarget::Uhd6K:return 5;case pipeline::SrTarget::Uhd7K:return 6;}return 2;
+}
+void QmlPlayerBridge::setDualSrTargetIndex(int index){
+    if(index<1||index>6)return;
+    const pipeline::SrTarget targets[]={pipeline::SrTarget::Qhd,pipeline::SrTarget::Uhd4K,pipeline::SrTarget::Uhd8K,pipeline::SrTarget::Uhd5K,pipeline::SrTarget::Uhd6K,pipeline::SrTarget::Uhd7K};
+    auto s=settings();s.dualSrTarget=targets[index-1];if(impl_->commit(s))emit settingsChanged();
+}
+int QmlPlayerBridge::dualSrQuality() const {return int(settings().dualSrQuality);}
+void QmlPlayerBridge::setDualSrQuality(int quality){if(quality<1||quality>4)return;auto s=settings();s.dualSrQuality=uint32_t(quality);if(impl_->commit(s))emit settingsChanged();}
 int QmlPlayerBridge::srOutput() const { return int(settings().srOutput); }
 // Three-step SR runs on RTX Video SR only; other backends keep the single step.
 void QmlPlayerBridge::setSrPrescale(int value) {

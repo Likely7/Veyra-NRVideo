@@ -1102,6 +1102,28 @@ __declspec(noinline) void testDlssSrModels() {
 }
 // Three-step SR (2026-10-28): library v16 / session v11 in .sr-stage files; the
 // older files keep their bytes for a 2.1.1 rollback.
+__declspec(noinline) void testDualSrStorage() {
+    const auto path=scratch(L"dual-library.v1");
+    PresetLibrary writer(path);writer.setIncludeBuiltins(false);
+    auto e=std::make_unique<PresetEntry>();e->name=L"base";e->chain=toChain(sample());
+    check(writer.load()&&writer.put(*e),"dual storage seeds an ordinary library");
+    const auto original=readBytes(path);
+    auto s=sample();s.dualSrEnabled=true;s.srPrescale=veyra::pipeline::SrPrescale::P1080;s.dualSrTarget=veyra::pipeline::SrTarget::Uhd8K;s.dualSrQuality=2;
+    e->name=L"two passes";e->globals=ChainGlobalSettings::capture(s);
+    check(writer.put(*e)&&readBytes(path)==original,"dual library preserves the original file");
+    check(readBytes(std::filesystem::path(path).concat(L".dual-sr")).starts_with("VEYRA_PRESET_LIBRARY 17"),"dual library uses the independent v17 sidecar");
+    PresetLibrary reader(path);reader.setIncludeBuiltins(false);auto out=sample();
+    const bool loaded=reader.load()&&reader.entries().size()==2;
+    if(loaded)PresetLibrary::apply(reader.entries()[1],out);
+    check(loaded&&out.dualSrEnabled&&out.dualSrTarget==s.dualSrTarget&&out.dualSrQuality==2,"library reload restores both SR stages");
+    const auto sessionPath=scratch(L"dual-session.v1");auto session=std::make_unique<ChainSession>(ChainSession::initial(sample()));
+    ChainSessionStore sessions(sessionPath);check(sessions.save(*session),"dual session seeds ordinary configuration");
+    const auto old=readBytes(sessionPath);session->configurations[0]=ChainConfiguration::capture(toChain(s),s,-1,-1);
+    check(sessions.save(*session)&&readBytes(sessionPath)==old,"dual session preserves the older file");
+    check(readBytes(std::filesystem::path(sessionPath).concat(L".dual-sr")).starts_with("VEYRA_CHAIN_SESSION 12"),"dual session uses v12 sidecar");
+    auto back=std::make_unique<ChainSession>();ChainSessionStore reload(sessionPath);
+    check(reload.load(*back)&&back->configurations[0].dualSrEnabled&&back->configurations[0].dualSrQuality==2&&back->configurations[0].dualSrTarget==s.dualSrTarget,"session reload preserves independent second target and quality");
+}
 __declspec(noinline) void testSrStageStorage() {
     EnhancementSettings source;source.nr=false;source.sr=true;source.videoSrQuality=3;
     const auto libraryPath=scratch(L"sr-stage-library.v1");
@@ -1284,6 +1306,7 @@ int main() {
     testBeautyNodeStorage();
     testDlssSrModels();
     testSrStageStorage();
+    testDualSrStorage();
     testFlowStorage();
     testFlowApplication();
     testNrCorrectionStorage();
