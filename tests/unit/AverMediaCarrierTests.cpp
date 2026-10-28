@@ -152,5 +152,40 @@ int main(){try{
     require(!progress&&outputs.empty(),"continuous undecodable carrier has a bounded recovery trigger");
     carrier.reset();outputs.clear();
     for(unsigned n=0;n<2000;++n){std::vector<uint8_t> noise(511,0);require(carrier.feed(noise,stereo,n*.01),"continuous quiet PCM");require(carrier.state().retainedBytes<=12,"bounded persistent PCM buffer");}
-    std::cout<<"PASS "<<checks<<" checks: identity, real AC3/EAC3, fragmented carriers, 6/2ch and rate changes, PCM transitions, malformed input\n";return 0;
+    {
+        // PcmCarrierRouter: any card's 16-bit stereo DirectShow pin (PS5 Bitstream
+        // behind a card with two-channel USB audio, user log 68).
+        std::vector<Output> decoded;unsigned restores=0;size_t raw=0,held=0;
+        source::PcmCarrierRouter router(48000,[&](const source::VendorPcmBlock& b){
+            decoded.push_back({b.channels,b.rate,b.mask,b.discontinuity,std::string(b.codec),{b.samples,b.samples+b.frames*b.channels}});return true;});
+        auto route=[&](std::span<const uint8_t> bytes,double now){
+            const auto r=router.feed(bytes,now);restores+=r.restorePcm;(r.route==source::PcmCarrierRouter::Route::Pcm?raw:held)+=bytes.size();};
+        double now=0;
+        for(int n=0;n<50;++n,now+=.04)route(pcm,now);
+        require(raw==50*pcm.size()&&held==0&&decoded.empty()&&!router.decoding()&&!restores,"router: plain PCM stays on the caller's path untouched");
+        raw=0;
+        for(const auto& packet:encode(AV_CODEC_ID_AC3,0x60f,48000)){
+            const auto wire=burst(packet,1);
+            for(size_t pos=0;pos<wire.size();pos+=1920){route(std::span(wire).subspan(pos,std::min<size_t>(1920,wire.size()-pos)),now);now+=.01;}
+        }
+        require(raw==0&&held>0,"router: no carried Dolby byte reaches the speakers as PCM");
+        require(!decoded.empty()&&router.decoding(),"router: carried AC3 decoded");
+        const auto& block=decoded.back();
+        require(block.channels==6&&(block.mask&0x4)&&!block.codec.empty(),"router: 5.1 decoded with a front centre channel");
+        const unsigned centre=unsigned(std::popcount(block.mask&0x3u)); // channels precede in speaker-mask order
+        double centreEnergy=0;for(size_t i=centre;i<block.pcm.size();i+=block.channels)centreEnergy+=block.pcm[i]*block.pcm[i];
+        require(centreEnergy>0.001,"router: the centre channel (dialogue) carries its signal");
+        held=0;size_t restoredAt=0;
+        for(int n=0;n<150;++n,now+=.04){route(pcm,now);if(restores&&!restoredAt)restoredAt=size_t(n)+1;}
+        require(restores==1&&!router.decoding(),"router: session returns to PCM once");
+        std::cout<<"ROUTER decodedBlocks="<<decoded.size()<<" mask=0x"<<std::hex<<block.mask<<std::dec<<" pcmReturnAfter="<<restoredAt*0.04<<"s\n";
+        require(restoredAt*0.04>=4.0&&restoredAt*0.04<4.5,"router: PCM returns about 4 s after the last burst");
+        const size_t decodedBefore=decoded.size();raw=0;held=0;
+        std::vector<uint8_t> fake=pcm;fake[64]=0x72;fake[65]=0xf8;fake[66]=0x1f;fake[67]=0x4e;fake[68]=1;fake[69]=0;fake[70]=64;fake[71]=0;
+        route(fake,now);now+=.04;
+        for(int n=0;n<20;++n,now+=.04)route(pcm,now);
+        require(router.falseStarts()==1&&decoded.size()==decodedBefore&&restores==1,"router: a sync-like pattern inside PCM is released");
+        require(held<=std::max<size_t>(8,size_t(source::PcmCarrierRouter::kConfirmSeconds/.04+1))*pcm.size()&&raw>=10*pcm.size(),"router: at most the confirmation window is withheld");
+    }
+    std::cout<<"PASS "<<checks<<" checks: identity, real AC3/EAC3, fragmented carriers, 6/2ch and rate changes, PCM transitions, malformed input, generic PCM router\n";return 0;
 }catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<" after "<<checks<<" checks\n";return 1;}}
