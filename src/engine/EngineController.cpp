@@ -2917,7 +2917,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // Refresh and VRR state (DisplayStateService, queried on events
                 // only) are polled outside the snapshot lock; this never waits.
                 presenter.displayRefreshHz();
-                ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.colorStatus=graph->videoHdrActive()?L"SDR → RTX Video HDR":options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph->hdr10Output()?L"HDR → HDR10 / PQ":L"HDR → scRGB / 浮点"):gd.hdrInput?L"HDR → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
+                ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;
+                    // Custom (HDR Vivid): name the source's dynamic metadata in the
+                    // colour status. Vivid stays on the static curve for now, so
+                    // this states what the stream carries, not what is applied.
+                    const std::wstring hdrSource = (!isCapture && !isImage && activeSource != nullptr &&
+                        activeSource->info().hdrVivid.present) ? L"HDR Vivid" : L"HDR";
+                    snapshot_.colorStatus=graph->videoHdrActive()?L"SDR → RTX Video HDR":options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph->hdr10Output()?hdrSource+L" → HDR10 / PQ":hdrSource+L" → scRGB / 浮点"):gd.hdrInput?hdrSource+L" → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
                     snapshot_.videoHdrActive=graph->videoHdrActive();
                     snapshot_.beautyActive=graph->beautyNodesActive();snapshot_.beautyFaces=graph->beautyFaceCount();
                     snapshot_.beautyNotice=graph->beautyNotice();

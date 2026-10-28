@@ -21,6 +21,7 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/dovi_meta.h>
+#include <libavutil/hdr_dynamic_vivid_metadata.h>
 #include <libavutil/mastering_display_metadata.h>
 #include <libavutil/hwcontext_d3d12va.h>
 }
@@ -1287,6 +1288,38 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
             ? pipeline::SourcePixelFormat::P010 : pipeline::SourcePixelFormat::NV12;
     }
     info_.color = out.colorInfo;
+    // Custom (HDR Vivid): the HEVC parser attaches the CUVA 005.1 dynamic metadata
+    // to the frame it belongs to. Report the stream as carrying it; the colour
+    // chain deliberately stays on the static curve (no Vivid tone mapping yet),
+    // and this only states what the bitstream contains.
+    if (const auto* vivid = av_frame_get_side_data(frame, AV_FRAME_DATA_DYNAMIC_HDR_VIVID);
+        vivid != nullptr && vivid->size >= sizeof(AVDynamicHDRVivid)) {
+        const auto& meta = *reinterpret_cast<const AVDynamicHDRVivid*>(vivid->data);
+        auto& info = info_.hdrVivid;
+        info.systemStartCode = meta.system_start_code;
+        info.numWindows = meta.num_windows;
+        ++info.framesWithMetadata;
+        const auto& window = meta.params[0];
+        auto level = [](const AVRational& value) {
+            return value.den > 0 ? av_q2d(value) : -1.0;
+        };
+        if (!info.present) {
+            info.present = true;
+            log::info("source-hdr", std::format(
+                "HDR Vivid dynamic metadata observed startCode={} windows={} minMaxRgb={:.4f} averageMaxRgb={:.4f} maxMaxRgb={:.4f} toneMapping={} toneMapParams={} saturation={} satParams={} (identification only; the static curve still drives the mapping)",
+                int(meta.system_start_code), int(meta.num_windows),
+                level(window.minimum_maxrgb), level(window.average_maxrgb), level(window.maximum_maxrgb),
+                window.tone_mapping_mode_flag, window.tone_mapping_param_num,
+                window.color_saturation_mapping_flag, window.color_saturation_num));
+        } else if (info.framesWithMetadata % 600 == 0) {
+            // The window levels move with the picture; that is what makes this
+            // dynamic metadata rather than a static declaration.
+            log::info("source-hdr", std::format(
+                "HDR Vivid frames={} window0 minMaxRgb={:.4f} averageMaxRgb={:.4f} maxMaxRgb={:.4f}",
+                info.framesWithMetadata, level(window.minimum_maxrgb),
+                level(window.average_maxrgb), level(window.maximum_maxrgb)));
+        }
+    }
     if (frame->format == AV_PIX_FMT_D3D12) {
         info_.videoPixelFormatName = out.colorInfo.pixelFormat == pipeline::SourcePixelFormat::P010 ? "p010(d3d12)" : "nv12(d3d12)";
     } else if (const auto* name = av_get_pix_fmt_name(static_cast<AVPixelFormat>(frame->format))) {

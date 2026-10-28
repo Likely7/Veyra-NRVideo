@@ -52,6 +52,16 @@ struct SourceOpenDesc {
     std::wstring audioPath;
 };
 
+// HDR Vivid (CUVA 005.1:2021) dynamic metadata, as the HEVC parser hands it over
+// on a decoded frame. Descriptive only: Veyra reports that the stream carries it,
+// the colour chain keeps using the static curve exactly like HDR10+ today.
+struct HdrVividInfo {
+    bool present = false;          // at least one decoded frame carried it
+    uint8_t systemStartCode = 0;   // shall be 0x01
+    uint8_t numWindows = 0;        // 1..3
+    uint64_t framesWithMetadata = 0;
+};
+
 struct SourceInfo {
     bool opened = false;
     pipeline::SourceKind kind = pipeline::SourceKind::Unknown;
@@ -81,6 +91,7 @@ struct SourceInfo {
     std::string videoCodecName;
     std::string videoPixelFormatName;
     DolbyVisionInfo dolbyVision;
+    HdrVividInfo hdrVivid;
     pipeline::ColorDescription color;
 };
 
