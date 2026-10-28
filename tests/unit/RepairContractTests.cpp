@@ -382,10 +382,18 @@ int main(){
                 check(packed.params[0] == 512.0f && packed.params[1] == 2048.0f &&
                       packed.params[2] == 0.0f && packed.params[3] == 1048576.0f,
                       "DV P7 constants carry the NLQ fields in dv0");
-                check(packed.params[4] == 23.0f && packed.params[5] == 10.0f && packed.params[6] == 12.0f,
-                      "DV P7 constants carry the bit depths and denominator in dv1");
-                check(packed.params[8] == 1920.0f && packed.params[9] == 1080.0f,
-                      "DV P7 constants carry the enhancement extent in dv2");
+                check(packed.params[12] == 23.0f && packed.params[13] == 10.0f && packed.params[14] == 12.0f,
+                      "DV P7 constants carry the bit depths and denominator in dv3");
+                check(packed.params[16] == 1920.0f && packed.params[17] == 1080.0f,
+                      "DV P7 constants carry the enhancement extent in dv4");
+                // dv1/dv2 became one NLQ triple per chroma component when the
+                // reconstruction went three-channel; they used to hold dv3/dv4's
+                // contents and these two assertions still expected the old lanes.
+                check(packed.params[4] == 512.0f && packed.params[5] == 2048.0f &&
+                      packed.params[7] == 1048576.0f,
+                      "DV P7 constants carry the Cb NLQ fields in dv1");
+                check(packed.params[8] == 512.0f && packed.params[11] == 1048576.0f,
+                      "DV P7 constants carry the Cr NLQ fields in dv2");
                 check(packed.params[27] == 2.0f, "DV P7 constants mark dv6.w as reconstruction");
                 luma.poly_coef[0][1] = 4194304;   // 0.5, no longer identity
                 pipeline::DoviP7Constants rejected{};
@@ -907,6 +915,138 @@ int main(){
         check(engine::restoredFrameGenerationBackend(F::Vfg,nvidia)==F::Vfg,"available manual VFG is never replaced");
         const engine::FrameGenerationAvailability ml{false,true,true,true,false};
         check(engine::restoredFrameGenerationBackend(F::Fsr4,ml)==F::Fsr4,"supported manually selected FSR4 remains FSR4");
+    }
+    // Custom (P7): parity between the CPU reference in DoviBlElCompose.h and the
+    // reconstruction the HLSL shader actually performs. The shader is written from
+    // the same ETSI pseudocode but in float and with its own lane packing, and an
+    // earlier review found the two had drifted (Cb read luma's mode flag). This
+    // keeps them honest: luma is integer arithmetic on both sides and must match
+    // exactly, the MMR path is float versus fixed point and may round differently.
+    {
+        AVDOVIDataMapping mapping{};
+        AVDOVIRpuDataHeader header{};
+        header.coef_log2_denom = 23;
+        header.bl_bit_depth = 10;
+        header.el_bit_depth = 10;
+        header.vdr_bit_depth = 12;
+        header.disable_residual_flag = 0;
+        mapping.nlq_method_idc = AV_DOVI_NLQ_LINEAR_DZ;
+        for (int c = 0; c < 3; ++c) {
+            mapping.nlq[c].nlq_offset = 512;
+            mapping.nlq[c].vdr_in_max = 1048576;
+            mapping.nlq[c].linear_deadzone_slope = 2048;
+            mapping.nlq[c].linear_deadzone_threshold = 0;
+        }
+        // Y: nine pivots, every piece poly(1) slope 1.0 -> identity (the real clip).
+        auto& ycurve = mapping.curves[0];
+        ycurve.num_pivots = 9;
+        for (int i = 0; i < 8; ++i) {
+            ycurve.pivots[i] = uint16_t(i * 128);
+            ycurve.mapping_idc[i] = AV_DOVI_MAPPING_POLYNOMIAL;
+            ycurve.poly_order[i] = 1;
+            ycurve.poly_coef[i][0] = 0;
+            ycurve.poly_coef[i][1] = 1 << 23;
+            ycurve.poly_coef[i][2] = 0;
+        }
+        ycurve.pivots[8] = 1023;
+        // Cb/Cr: single-piece MMR order 3, coefficients dumped from the FEL clip.
+        const int64_t mmr[3][7] = {
+            {0, 6391320, 0, 0, 0, 0, 0},
+            {0, 3195660, 0, 0, 0, 0, 0},
+            {0, 1597830, 0, 0, 0, 0, 0},
+        };
+        for (int c = 1; c < 3; ++c) {
+            auto& cv = mapping.curves[c];
+            cv.num_pivots = 2;
+            cv.pivots[0] = 0;
+            cv.pivots[1] = 1023;
+            cv.mapping_idc[0] = AV_DOVI_MAPPING_MMR;
+            cv.mmr_order[0] = 3;
+            for (int j = 0; j < 3; ++j)
+                for (int k = 0; k < 7; ++k) cv.mmr_coef[0][j][k] = mmr[j][k];
+        }
+
+        // --- the shader's P7Residual, transcribed from YuvToLinearRgb.hlsl ---
+        const auto shaderResidual = [](int e, int offset, int slope, int threshold, int inMax,
+                                       int elBitDepth, int coefLog2Denom) {
+            int rr = e - offset;
+            if (rr == 0) return 0;
+            const int sgn = rr < 0 ? -1 : 1;
+            rr = rr * 2 - sgn;
+            rr = rr << (10 - elBitDepth);
+            int dq = rr * slope;
+            dq += (threshold << (10 - elBitDepth + 1)) * sgn;
+            const int limit = inMax << (10 - elBitDepth + 1);
+            dq = std::clamp(dq, -limit, limit);
+            return dq >> (coefLog2Denom - 5 - elBitDepth);
+        };
+        // --- the shader's reconstruct tail, with identity luma (base = code << 6) ---
+        const auto shaderLuma = [&](int blCode, int elCode) {
+            const int r = shaderResidual(elCode, 512, 2048, 0, 1048576, 10, 23);
+            int hh = (blCode << 6) + r + (1 << (15 - 12));
+            hh >>= (16 - 12);
+            return std::clamp(hh, 0, 4095);
+        };
+        bool lumaParity = true;
+        for (int bl : {0, 64, 512, 940, 1023}) {
+            for (int el : {0, 256, 511, 512, 513, 767, 1023}) {
+                const auto reference = int(engine::doviComposeLumaSample(mapping, header, bl, el));
+                if (shaderLuma(bl, el) != reference) lumaParity = false;
+            }
+        }
+        check(lumaParity, "P7 shader luma reconstruction matches the CPU reference exactly");
+
+        // --- the shader's MmrEvaluate, transcribed from YuvToLinearRgb.hlsl ---
+        const auto shaderMmr = [&](int component, const float sig[3], int order) {
+            float packed[6][4] = {};
+            const float scale = 1.0f / float(1 << 23);
+            for (int j = 0; j < order; ++j) {
+                for (int k = 0; k < 3; ++k) packed[j * 2][k] = scale * float(mmr[j][k]);
+                for (int k = 0; k < 4; ++k) packed[j * 2 + 1][k] = scale * float(mmr[j][3 + k]);
+            }
+            float sigX[4] = {sig[0] * sig[1], sig[0] * sig[2], sig[1] * sig[2], 0.0f};
+            sigX[3] = sigX[0] * sig[2];
+            float s = 0.0f;
+            s += packed[0][0] * sig[0] + packed[0][1] * sig[1] + packed[0][2] * sig[2];
+            s += packed[1][0] * sigX[0] + packed[1][1] * sigX[1] +
+                 packed[1][2] * sigX[2] + packed[1][3] * sigX[3];
+            if (order >= 2) {
+                s += packed[2][0] * sig[0] * sig[0] + packed[2][1] * sig[1] * sig[1] +
+                     packed[2][2] * sig[2] * sig[2];
+                s += packed[3][0] * sigX[0] * sigX[0] + packed[3][1] * sigX[1] * sigX[1] +
+                     packed[3][2] * sigX[2] * sigX[2] + packed[3][3] * sigX[3] * sigX[3];
+                if (order >= 3) {
+                    s += packed[4][0] * sig[0] * sig[0] * sig[0] +
+                         packed[4][1] * sig[1] * sig[1] * sig[1] +
+                         packed[4][2] * sig[2] * sig[2] * sig[2];
+                    s += packed[5][0] * sigX[0] * sigX[0] * sigX[0] +
+                         packed[5][1] * sigX[1] * sigX[1] * sigX[1] +
+                         packed[5][2] * sigX[2] * sigX[2] * sigX[2] +
+                         packed[5][3] * sigX[3] * sigX[3] * sigX[3];
+                }
+            }
+            (void)component;
+            return std::clamp(s, 0.0f, 1.0f);
+        };
+        int worstChroma = 0;
+        for (int cb : {0, 256, 512, 768, 1023}) {
+            for (int el : {400, 512, 620}) {
+                const float sig[3] = {512.0f / 1023.0f, float(cb) / 1023.0f, float(cb) / 1023.0f};
+                const float mapped = shaderMmr(1, sig, 3);
+                const int shaderValue = int(std::lround(mapped * 65535.0f));
+                int hh = shaderValue + shaderResidual(el, 512, 2048, 0, 1048576, 10, 23) + (1 << 3);
+                hh >>= 4;
+                const int reference = int(engine::doviComposeChromaSample(mapping, header, 1, 512, cb, cb, el));
+                worstChroma = std::max(worstChroma, std::abs(std::clamp(hh, 0, 4095) - reference));
+            }
+        }
+        // The reference evaluates MMR in 20-bit fixed point, the shader in float, so
+        // the two cannot agree bit for bit here. 8 codes of a 4095 range is 0.2%,
+        // i.e. half a step of the 10-bit output - below anything visible, and small
+        // enough that a real formula difference (an off-by-one lane, a wrong
+        // normalisation) would exceed it by an order of magnitude.
+        std::cout << "P7 chroma parity worst difference = " << worstChroma << " (12-bit codes)\n";
+        check(worstChroma <= 8, "P7 shader chroma MMR agrees with the CPU reference within rounding");
     }
     std::cout<<checks<<" checks "<<failures<<" failures\n";return failures?1:0;
 }
