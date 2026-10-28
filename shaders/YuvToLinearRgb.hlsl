@@ -276,9 +276,15 @@ float3 ReconstructP7(float3 sig, uint2 tid, out int3 residualOut)
     // Inverse reshaping of the base layer, then the residual on top. A component
     // whose mapping is the identity still goes through the same 16-bit domain so
     // the sum below has one unit.
+    //
+    // Lane map (see DolbyVisionP7.h): mode[0..2] is dv5.y/.z/.w, the MMR constant
+    // is dv4.z / dv4.w / dv5.x, the order is dv6.x/.y/.z. Each component reads its
+    // OWN triple: an earlier version indexed one component off, which silently
+    // skipped Cb's mapping because it tested the luma mode flag.
     float3 base = sig;
-    if (dv5.y > 0.5) base.y = MmrEvaluate(1, sig, dv4.z, int(dv6.y + 0.5));
-    if (dv5.z > 0.5) base.z = MmrEvaluate(2, sig, dv4.w, int(dv6.z + 0.5));
+    if (dv5.y > 0.5) base.x = MmrEvaluate(0, sig, dv4.z, int(dv6.x + 0.5));
+    if (dv5.z > 0.5) base.y = MmrEvaluate(1, sig, dv4.w, int(dv6.y + 0.5));
+    if (dv5.w > 0.5) base.z = MmrEvaluate(2, sig, dv5.x, int(dv6.z + 0.5));
     int3 hh = int3(round(base * 65535.0)) + residual + (1 << (15 - outBitDepth));
     hh = hh >> (16 - outBitDepth);
     const int maxOut = (1 << outBitDepth) - 1;

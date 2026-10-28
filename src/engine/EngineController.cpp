@@ -2147,7 +2147,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(frame==cachedFrame)return true;
                     AVFrame* owned=av_frame_clone(frame);
                     if(!owned)return false;
-                    av_frame_free(&cachedFrame);cachedFrame=owned;cachedPacket=pkt;frame=cachedFrame;
+                    av_frame_free(&cachedFrame);cachedFrame=owned;cachedPacket=pkt;
+                    // The enhancement layer is a borrowed pointer whose owner
+                    // (MediaFileSource::elFrame_) frees it on the next pairing or on
+                    // open failure; a cached packet can outlive that. A replay of the
+                    // cached candidate renders the base layer for one frame instead
+                    // of dereferencing a freed frame.
+                    cachedPacket.doviEl=nullptr;
+                    frame=cachedFrame;
                     return true;
                 };
                 // Realtime preview candidates: decode stays ordered and
