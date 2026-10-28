@@ -2928,7 +2928,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if (si.dolbyVision.present) {
                             if (si.dolbyVision.profile == 5) return L"Dolby Vision P5";
                             if (si.dolbyVision.profile == 7) return L"Dolby Vision P7";
-                            if (si.dolbyVision.profile == 8) return L"Dolby Vision P8";
+                            // Profile 8 carries its base layer's signal in the
+                            // compatibility id: 8.1 PQ, 8.2 SDR, 8.4 HLG.
+                            if (si.dolbyVision.profile == 8) {
+                                if (si.dolbyVision.compatibility == 4) return L"Dolby Vision P8.4";
+                                if (si.dolbyVision.compatibility == 2) return L"Dolby Vision P8.2";
+                                if (si.dolbyVision.compatibility == 1) return L"Dolby Vision P8.1";
+                                return L"Dolby Vision P8";
+                            }
                             return L"Dolby Vision";
                         }
                         if (si.hdrVivid.present) return L"HDR Vivid";

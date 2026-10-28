@@ -842,14 +842,20 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         // not apply. Pin the base layer to the routed HDR container instead of
         // letting it fall back to BT.709 SDR (which then mismatches / washes
         // out). Explicit, non-assumed tags from P7/P8/P10 are left untouched.
-        if(dv.route()==DolbyBaseLayer::Hdr10){
+        // Profile 8.4 routes to HLG, not PQ: its base layer is an HLG encoding and
+        // pinning it to PQ would invert the transfer and wash the picture out.
+        if(dv.route()==DolbyBaseLayer::Hdr10||dv.route()==DolbyBaseLayer::Hlg){
             auto& c=info_.color;
+            const auto routed=dv.route()==DolbyBaseLayer::Hlg
+                ?pipeline::TransferFunction::HLG:pipeline::TransferFunction::PQ;
             if(c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
-                c.transfer=pipeline::TransferFunction::PQ;c.transferAssumed=true;}
+                c.transfer=routed;c.transferAssumed=true;}
             if(c.matrix==pipeline::YuvMatrix::Unknown||c.matrixAssumed){
                 c.matrix=pipeline::YuvMatrix::BT2020NCL;c.matrixAssumed=true;}
             if(c.primaries==pipeline::ColorPrimaries::Unknown||c.primariesAssumed){
                 c.primaries=pipeline::ColorPrimaries::BT2020;c.primariesAssumed=true;}
+            log::info("source-dovi",std::format("base layer pinned to {} (profile 8.4 is an HLG base, 8.1 is PQ)",
+                dv.route()==DolbyBaseLayer::Hlg?"HLG":"PQ"));
         }
         // Custom (P5): bring-up switch for the enhancement layer. Off unless the
         // environment asks for it, so BL playback stays byte identical until the
