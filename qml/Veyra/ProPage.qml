@@ -1318,8 +1318,12 @@ VPage {
                             title: qsTr("超分辨率")
                             switchAvailable: Support.available(veyra, "sr")
                             summary: !switchAvailable ? Support.reason(veyra, "sr") : (veyra.srEnabled ? (veyra.srBackendChoices?.find(o => o.id === String(veyra.videoSrQuality === 0 || veyra.videoSrQuality === 5 ? veyra.videoSrQuality : 4))?.label || qsTr("RTX 视频超分")) : qsTr("已关闭"))
-                                     + " · " + veyra.srTargetLabel
+                                     + " · " + (srStageShown && veyra.srPrescale > 0 ? (veyra.srPrescale >= 150 ? (veyra.srPrescale - 100) + "%" : ["", "720p", "900p", "1080p", "1440p"][veyra.srPrescale]) + "→" : "")
+                                     + veyra.srTargetLabel
+                                     + (srStageShown && veyra.srOutput > 0 ? "→" + (veyra.srOutput === 1 ? qsTr("片源尺寸") : ["", "", "2K", "4K", "5K", "6K", "7K"][veyra.srOutput]) : "")
                                      + (veyra.videoSrQuality > 0 ? qsTr(" · 质量 ") + veyra.videoSrQuality : "")
+                            // Three-step SR shows in the summary only where it runs (RTX Video SR).
+                            readonly property bool srStageShown: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
                             on: veyra.srEnabled
                             open: true
                             onToggled: on => veyra.srEnabled = on
@@ -1345,24 +1349,7 @@ VPage {
                                     onPicked: id => veyra.dlssSrModel = Number(id)
                                 }
                             }
-                            VRow {
-                                label: qsTr("目标尺寸")
-                                hint: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
-                                    ? qsTr("放大时重建细节；原尺寸时修复视频文件和串流的压缩伪影，无压缩的采集卡格式在原尺寸不运行。效果取决于片源。")
-                                    : qsTr("目标须大于片源尺寸；已达到目标时不执行超分。")
-                                VSeg {
-                                    options: [
-                                        { id: "1", label: "2K" },
-                                        { id: "2", label: "4K" },
-                                        { id: "4", label: "5K" },
-                                        { id: "5", label: "6K" },
-                                        { id: "6", label: "7K" },
-                                        { id: "3", label: "8K" }
-                                    ]
-                                    current: String(veyra.srTargetIndex)
-                                    onPicked: id => veyra.srTargetIndex = parseInt(id)
-                                }
-                            }
+                            SrStageEditor { Layout.fillWidth: true; namePrefix: "list" }
                             VRow {
                                 label: qsTr("超分运动来源")
                                 hint: qsTr("零运动会限制时序重建；RTX 视频超分不使用此输入")

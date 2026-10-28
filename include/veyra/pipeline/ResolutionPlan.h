@@ -37,17 +37,93 @@ constexpr Extent srTargetExtent(SrTarget target) {
     }
     return {};
 }
+// Three-step SR (user 2026-10-28): shrink the picture before SR, then fit the
+// SR result into a smaller output. Off/Target keep the single-step SR. A fixed
+// height fits a 16:9 box like NrSizePolicy; a manual value is 100+percent of
+// the SR input (50..90), stored the way NR stores its percent.
+enum class SrPrescale : uint32_t { Off, P720, P900, P1080, P1440 };
+inline constexpr unsigned kSrPrescaleMinimumPercent=50,kSrPrescaleMaximumPercent=90;
+constexpr bool manualSrPrescale(SrPrescale prescale){
+    return uint32_t(prescale)>=100+kSrPrescaleMinimumPercent&&uint32_t(prescale)<=100+kSrPrescaleMaximumPercent;
+}
+constexpr SrPrescale srPrescaleForPercent(unsigned percent){
+    return percent>=kSrPrescaleMinimumPercent&&percent<=kSrPrescaleMaximumPercent?SrPrescale(100+percent):SrPrescale(~0u);
+}
+constexpr unsigned srPrescalePercent(SrPrescale prescale){return manualSrPrescale(prescale)?uint32_t(prescale)-100:100;}
+constexpr bool validSrPrescale(SrPrescale prescale){return prescale<=SrPrescale::P1440||manualSrPrescale(prescale);}
+constexpr unsigned srPrescaleHeight(SrPrescale prescale){
+    switch(prescale){case SrPrescale::P720:return 720;case SrPrescale::P900:return 900;case SrPrescale::P1080:return 1080;case SrPrescale::P1440:return 1440;default:return 0;}
+}
+// Target keeps the SR result; Source returns to the source extent.
+enum class SrOutput : uint32_t { Target, Source, Qhd, Uhd4K, Uhd5K, Uhd6K, Uhd7K };
+constexpr bool validSrOutput(SrOutput output){return output<=SrOutput::Uhd7K;}
+constexpr Extent srOutputExtent(SrOutput output,Extent source){
+    switch(output){
+    case SrOutput::Source:return source;
+    case SrOutput::Qhd:return srTargetExtent(SrTarget::Qhd);
+    case SrOutput::Uhd4K:return srTargetExtent(SrTarget::Uhd4K);
+    case SrOutput::Uhd5K:return srTargetExtent(SrTarget::Uhd5K);
+    case SrOutput::Uhd6K:return srTargetExtent(SrTarget::Uhd6K);
+    case SrOutput::Uhd7K:return srTargetExtent(SrTarget::Uhd7K);
+    default:return {};
+    }
+}
+// Sizes of one SR step: input after the prescale, the SR result, the step
+// output. A prescale that leaves nothing for SR to enlarge, and an output that
+// would not shrink an enlarged result, are not applied and are reported.
+struct SrStageExtents {
+    Extent input,evaluated,output;
+    bool prescaleIneffective=false,outputIneffective=false;
+    bool enlarges()const{return evaluated!=input;}
+};
+inline SrStageExtents srStageExtents(Extent source,SrTarget target,SrPrescale prescale=SrPrescale::Off,SrOutput output=SrOutput::Target){
+    // Fit into the box, enlarging only: the single-step SR size rule.
+    const auto enlarge=[](Extent from,Extent box){
+        const double scale=std::min(double(box.width)/from.width,double(box.height)/from.height);
+        return scale>1.0?Extent{std::max(2u,uint32_t(from.width*scale+1e-6)&~1u),std::max(2u,uint32_t(from.height*scale+1e-6)&~1u)}:from;
+    };
+    const auto shrink=[](Extent from,double scale){
+        return Extent{std::max(2u,uint32_t(from.width*scale+1e-6)&~1u),std::max(2u,uint32_t(from.height*scale+1e-6)&~1u)};
+    };
+    SrStageExtents s;s.input=source;s.evaluated=enlarge(source,srTargetExtent(target));
+    if(prescale!=SrPrescale::Off){
+        const double height=srPrescaleHeight(prescale);
+        const double scale=manualSrPrescale(prescale)?srPrescalePercent(prescale)/100.0:
+            std::min({1.0,(height*16.0/9.0)/source.width,height/source.height});
+        const auto input=shrink(source,scale);
+        const auto evaluated=enlarge(input,srTargetExtent(target));
+        if(scale<1.0&&input.width<source.width&&input.height<source.height&&evaluated!=input){s.input=input;s.evaluated=evaluated;}
+        else s.prescaleIneffective=true;
+    }
+    s.output=s.evaluated;
+    if(output!=SrOutput::Target){
+        const auto box=srOutputExtent(output,source);
+        const double scale=std::min(double(box.width)/s.evaluated.width,double(box.height)/s.evaluated.height);
+        if(s.enlarges()&&scale<1.0)s.output=output==SrOutput::Source?source:shrink(s.evaluated,scale);
+        else if(s.evaluated!=box)s.outputIneffective=true;
+    }
+    return s;
+}
 struct ResolutionPlan {
     Extent source,base,nr,flow,fg,output;
+    // What SR reads and writes. Single-step SR: srInput==source, srOutput==base.
+    Extent srInput,srOutput;
     bool srApplied=false;
+    bool srPrescaleIneffective=false,srOutputIneffective=false;
     uint64_t settingsRevision=0;
-    static ResolutionPlan make(Extent source,bool sr,NrSizePolicy policy,bool exporting,uint64_t revision=0,SrTarget target=SrTarget::Uhd4K,bool nrBeforeSr=false,unsigned manualHeightBudget=0) {
+    static ResolutionPlan make(Extent source,bool sr,NrSizePolicy policy,bool exporting,uint64_t revision=0,SrTarget target=SrTarget::Uhd4K,bool nrBeforeSr=false,unsigned manualHeightBudget=0,
+                               SrPrescale prescale=SrPrescale::Off,SrOutput output=SrOutput::Target) {
         if(!source.valid())throw std::invalid_argument("invalid SDR source extent");
         if(!validSrTarget(target))throw std::invalid_argument("invalid SR target");
         if(!validNrSizePolicy(policy))throw std::invalid_argument("invalid NR size policy");
-        ResolutionPlan p; p.source=source;p.base=source;
-        if(sr){const auto limit=srTargetExtent(target);const double scale=std::min(double(limit.width)/source.width,double(limit.height)/source.height);if(scale>1.0)p.base={std::max(2u,uint32_t(source.width*scale+1e-6)&~1u),std::max(2u,uint32_t(source.height*scale+1e-6)&~1u)};}
-        p.srApplied=sr&&p.base!=source;p.nr=p.base;
+        if(!validSrPrescale(prescale)||!validSrOutput(output))throw std::invalid_argument("invalid SR prescale or output");
+        ResolutionPlan p; p.source=source;p.base=p.srInput=p.srOutput=source;
+        if(sr){
+            const auto stage=srStageExtents(source,target,prescale,output);
+            p.srInput=stage.input;p.srOutput=stage.evaluated;p.base=stage.output;
+            p.srPrescaleIneffective=stage.prescaleIneffective;p.srOutputIneffective=stage.outputIneffective;
+        }
+        p.srApplied=sr&&p.srOutput!=p.srInput;p.nr=p.base;
         if(nrBeforeSr&&!exporting)p.nr=source;
         if(!exporting&&policy!=NrSizePolicy::Native) {
             // A bounded backend supplies its existing maximum budget. Manual

@@ -1100,6 +1100,48 @@ __declspec(noinline) void testDlssSrModels() {
     ChainSessionStore finalReader(sessionPath);
     check(finalReader.load(*restored)&&*restored==*session,"DLSS session: saved K wins over old M/L choices");
 }
+// Three-step SR (2026-10-28): library v16 / session v11 in .sr-stage files; the
+// older files keep their bytes for a 2.1.1 rollback.
+__declspec(noinline) void testSrStageStorage() {
+    EnhancementSettings source;source.nr=false;source.sr=true;source.videoSrQuality=3;
+    const auto libraryPath=scratch(L"sr-stage-library.v1");
+    const auto legacyLibrary=std::filesystem::path(libraryPath).concat(L".field-render");
+    for(const auto* suffix:{L".field-render",L".field-render.sr-stage",L".sr-stage"})std::filesystem::remove(std::filesystem::path(libraryPath).concat(suffix));
+    PresetLibrary writer(libraryPath);writer.setIncludeBuiltins(false);
+    PresetEntry entry;entry.name=L"SR stage";entry.kind=ChainMode::List;
+    entry.contents=presetContentMask(PresetContent::Chain);entry.chain=toChain(source);
+    entry.globals=ChainGlobalSettings::capture(source);
+    check(writer.load()&&writer.put(entry),"SR stage presets: save a single-step library");
+    const auto rollback=readBytes(legacyLibrary);
+    check(!rollback.empty()&&rollback.starts_with("VEYRA_PRESET_LIBRARY 6"),"SR stage presets: single step keeps the old format");
+    entry.globals->srPrescale=veyra::pipeline::SrPrescale::P1080;entry.globals->srOutput=veyra::pipeline::SrOutput::Uhd4K;
+    check(writer.put(entry,true),"SR stage presets: save prescale and output");
+    check(readBytes(legacyLibrary)==rollback,"SR stage presets: original library is retained for rollback");
+    PresetLibrary reader(libraryPath);reader.setIncludeBuiltins(false);
+    check(reader.load()&&reader.entries().size()==1&&reader.entries()[0].globals->srPrescale==veyra::pipeline::SrPrescale::P1080&&
+          reader.entries()[0].globals->srOutput==veyra::pipeline::SrOutput::Uhd4K,"SR stage presets: fresh reader finds the sidecar");
+    auto applied=source;PresetLibrary::apply(reader.entries()[0],applied);
+    check(applied.srPrescale==veyra::pipeline::SrPrescale::P1080&&applied.srOutput==veyra::pipeline::SrOutput::Uhd4K,"SR stage presets: applying the chain restores both");
+    const auto exported=scratch(L"sr-stage-export.v16");
+    check(writer.exportEntry(0,exported)&&readBytes(exported).starts_with("VEYRA_PRESET_LIBRARY 16"),"SR stage presets: export declares v16");
+    entry.name=L"invalid stage";entry.globals->srPrescale=veyra::pipeline::SrPrescale(5);
+    check(!writer.put(entry),"SR stage presets: an invalid prescale is rejected atomically");
+
+    const auto sessionPath=scratch(L"sr-stage-session.v1");
+    for(const auto* suffix:{L".sr-stage",L".p3-editor",L".p3-editor.p3-globals",L".p3-editor.sr-stage"})std::filesystem::remove(std::filesystem::path(sessionPath).concat(suffix));
+    std::filesystem::remove(sessionPath);
+    auto session=std::make_unique<ChainSession>(ChainSession::initial(source));
+    check(session->select(ChainMode::Node),"SR stage session: initialize independent node configuration");
+    ChainSessionStore sessions(sessionPath);
+    check(sessions.save(*session),"SR stage session: save single-step rollback file");
+    const auto sessionRollback=readBytes(sessionPath);
+    session->configurations[0].srPrescale=veyra::pipeline::srPrescaleForPercent(75);
+    session->configurations[1].srOutput=veyra::pipeline::SrOutput::Source;
+    check(sessions.save(*session)&&readBytes(sessionPath)==sessionRollback,"SR stage session: save the new format beside the original");
+    check(readBytes(std::filesystem::path(sessionPath).concat(L".sr-stage")).starts_with("VEYRA_CHAIN_SESSION 11"),"SR stage session: the sidecar declares v11");
+    auto restored=std::make_unique<ChainSession>();ChainSessionStore reopened(sessionPath);
+    check(reopened.load(*restored)&&*restored==*session,"SR stage session: List and Node values round-trip independently");
+}
 // E0 (2026-10-18): library v14 / session v9 carry anti-aliasing nodes and chains
 // past 16 nodes in their own files; older readers keep their bytes.
 __declspec(noinline) void testBeautyNodeStorage() {
@@ -1241,6 +1283,7 @@ int main() {
     testEffectNodeStorage();
     testBeautyNodeStorage();
     testDlssSrModels();
+    testSrStageStorage();
     testFlowStorage();
     testFlowApplication();
     testNrCorrectionStorage();

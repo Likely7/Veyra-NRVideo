@@ -37,6 +37,14 @@ int wmain(int argc,wchar_t** argv){
         const bool hevc=mode.find(L"hevc")!=std::wstring::npos;
         const bool fsr=mode.find(L"fsr-")==0;
         const bool rejectXess=mode==L"reject-xess";
+        const bool srStage=mode==L"sr-stage-fit"||mode==L"sr-stage-prescale";
+        if(srStage){
+            settings.sr=true;settings.videoSrQuality=1;settings.srMotion=MotionSource::Zero;
+            settings.srPrescale=veyra::pipeline::SrPrescale::P1080;
+            settings.srTarget=mode==L"sr-stage-fit"?veyra::pipeline::SrTarget::Uhd8K:veyra::pipeline::SrTarget::Uhd4K;
+            settings.srOutput=mode==L"sr-stage-fit"?veyra::pipeline::SrOutput::Uhd4K:veyra::pipeline::SrOutput::Qhd;
+            media.audio.policy=media.subtitles.policy=ExportTrackPolicy::None;
+        }
         if(fsr||rejectXess){
             settings.frameGenerationBackend=rejectXess?FrameGenerationBackend::XeSS:FrameGenerationBackend::Fsr;
             settings.multiplier=2;
@@ -166,11 +174,20 @@ int wmain(int argc,wchar_t** argv){
                 for(const auto& t:info.tracks)if(t.subtitle&&media.subtitles.count<media.subtitles.indices.size())media.subtitles.indices[media.subtitles.count++]=t.index;
                 require(media.subtitles.count>0,"reject source has no subtitle track");
             }
-            require(manager.start(input,output,settings,hevc,0,-1,from,to,veyra::sink::ExportRateControl::Cq,media),"start refused");
+            require(manager.start(input,output,settings,hevc,srStage?4:0,-1,from,to,veyra::sink::ExportRateControl::Cq,media),"start refused");
             auto s=finish(manager);collected(s);
             std::wcout<<L"state="<<int(s.state)<<L" encoded="<<s.encoded<<L" message="<<s.message<<L"\n";
             if(mode.find(L"reject")!=std::wstring::npos){require(s.state==ExportState::Failed,"incompatible source was not rejected");require(!std::filesystem::exists(output),"rejection produced final file");require(!s.message.empty(),"failure reason missing");}
             else require(s.state==ExportState::Succeeded,"export failed");
+            if(srStage){
+                require(s.encoded==4&&s.sourceFrames==4,"SR stage export lost source frames");
+                require(s.frozen.srPrescale==settings.srPrescale&&s.frozen.srOutput==settings.srOutput&&s.frozen.srTarget==settings.srTarget,
+                        "SR stage fields lost crossing the worker protocol");
+                std::ifstream log(s.workerLog);const std::string text((std::istreambuf_iterator<char>(log)),{});
+                const auto evaluated=mode==L"sr-stage-fit"?"evaluate=7680x4320":"evaluate=3840x2160";
+                require(text.find(evaluated)!=std::string::npos,"SR stage was not evaluated at the requested dimensions");
+                std::wcout<<L"SR_STAGE_EXPORT encoded="<<s.encoded<<L" frozenAndEvaluated=1\n";
+            }
             if(rejectXess){
                 require(s.message.find(L"XeSS")!=std::wstring::npos&&s.message.find(L"FSR")!=std::wstring::npos,"XeSS rejection lost its backend-specific reason");
                 require(s.encoded==0,"unsupported XeSS wrote frames");

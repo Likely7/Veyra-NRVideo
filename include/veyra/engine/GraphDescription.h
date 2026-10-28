@@ -65,6 +65,15 @@ struct StageRequest {
     const ChainRuntimeOrder* nodeOrder=nullptr; // paired with this settings transaction
 };
 
+// Three-step SR runs on RTX Video SR (NVIDIA) only; every other backend keeps
+// the single step whatever the saved fields say.
+inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter){
+    return nvidiaAdapter&&srStageBackend(s.videoSrQuality)?s.srPrescale:pipeline::SrPrescale::Off;
+}
+inline pipeline::SrOutput runningSrOutput(const EnhancementSettings& s,bool nvidiaAdapter){
+    return nvidiaAdapter&&srStageBackend(s.videoSrQuality)?s.srOutput:pipeline::SrOutput::Target;
+}
+
 // Fills the stage, size and parameter fields of `desc` from `settings`.
 // Source-format fields (hdrInput, rgbInput, packedInput, ...), hdrOutput and
 // host hooks are left untouched: the caller owns those.
@@ -99,8 +108,10 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     const bool boundedAmd=request.exportJob&&!request.stillImage&&request.amdNr&&
         currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd;
     const auto policy=request.exportJob?exportNrSizePolicy(settings.nrRuntime,settings.nrPolicy):settings.nrPolicy;
+    const auto srPrescale=runningSrPrescale(settings,request.nvidiaAdapter);
+    const auto srOutput=runningSrOutput(settings,request.nvidiaAdapter);
     if(!pipeline::Extent{request.width,request.height}.valid()||!pipeline::validSrTarget(settings.srTarget)||
-       !pipeline::validNrSizePolicy(policy)){
+       !pipeline::validNrSizePolicy(policy)||!pipeline::validSrPrescale(srPrescale)||!pipeline::validSrOutput(srOutput)){
         // ResolutionPlan::make throws for these inputs. Report the same
         // invalid contract before any graph allocation, including on reuse.
         desc.fixedExecutionPlanError="invalid fixed-plan source extent, SR target or NR size policy";
@@ -111,11 +122,13 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     auto plan=pipeline::ResolutionPlan::make({request.width,request.height},request.sr,
         boundedAmd?pipeline::NrSizePolicy::Realtime:policy,
         (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency,
-        request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u);
+        request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput);
     if(request.exportJob&&!request.stillImage)
         plan.nr=exportNrProcessingExtent(plan.base,settings.nrRuntime,policy);
     desc.sourceWidth=request.width;desc.sourceHeight=request.height;
     desc.workWidth=plan.base.width;desc.workHeight=plan.base.height;
+    desc.srInputWidth=plan.srInput.width;desc.srInputHeight=plan.srInput.height;
+    desc.srOutputWidth=plan.srOutput.width;desc.srOutputHeight=plan.srOutput.height;
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
     desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
     // RTX Video SR can restore compressed video at its original resolution.
@@ -173,7 +186,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     }
     ChainExecutionPlan execution;
     const auto validation=compileChainExecutionPlan(chain,{{request.width,request.height},settings.srTarget,
-        request.stillImage,request.exportJob,boundedAmd},execution);
+        request.stillImage,request.exportJob,boundedAmd,srPrescale,srOutput},execution);
     if(!validation.accepted){desc.fixedExecutionPlanError=validation.message;return plan;}
     if(request.nodeOrder){
         // Node order owns the first NR stage, even for an ordinary resize or
@@ -194,7 +207,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
             exportNrProcessingExtent(plan.base,settings.nrRuntime,size):
             pipeline::ResolutionPlan::make({request.width,request.height},request.sr,size,request.stillImage,
             settings.revision,settings.srTarget,lowLatency,
-            request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u).nr);
+            request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput).nr);
     }
     desc.fixedExecutionPlan=execution;
     return plan;

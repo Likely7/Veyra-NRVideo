@@ -571,6 +571,8 @@ bool QmlPlayerBridge::resetNode(uint id) {
         impl_->draftGlobals.srTarget = defaults.srTarget;
         impl_->draftGlobals.videoSrQuality = defaults.videoSrQuality;
         impl_->draftGlobals.dlssSrModel = defaults.dlssSrModel;
+        impl_->draftGlobals.srPrescale = defaults.srPrescale;
+        impl_->draftGlobals.srOutput = defaults.srOutput;
     }
     if (!impl_->revalidate(true, &previous)) {
         const auto error = impl_->validation.message; node = before;

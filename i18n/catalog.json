@@ -2745,6 +2745,13 @@
    "ja": "待たない"
   },
   {
+   "zh": "不缩",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "不縮",
+   "en": "No downscale",
+   "ja": "縮小しない"
+  },
+  {
    "zh": "不补偿",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "不補償",
@@ -3795,6 +3802,34 @@
    "ja": "先に解像度を選択し、その解像度で対応するフレームレートとピクセル形式を選択してください。"
   },
   {
+   "zh": "先降到",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "先降到",
+   "en": "Shrink first to",
+   "ja": "先に縮小"
+  },
+  {
+   "zh": "先降到 / 再缩到目前仅 RTX 视频超分支持",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "先降到 / 再縮到目前僅 RTX 影片超解析支援",
+   "en": "Shrink first / Fit after are available with RTX Video Super Resolution only for now",
+   "ja": "先に縮小 / 後で縮小は現在 RTX ビデオ超解像のみ対応しています"
+  },
+  {
+   "zh": "先降到未生效：片源不大于所选尺寸，或先降后已不能再放大",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "先降到未生效：片源不大於所選尺寸，或先降後已不能再放大",
+   "en": "Shrink first not applied: the source is not larger than the chosen size, or nothing would be left to enlarge after shrinking",
+   "ja": "先に縮小は適用されていません：ソースが選択サイズ以下か、縮小後に拡大する余地がありません"
+  },
+  {
+   "zh": "先降比例",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "先降比例",
+   "en": "Shrink scale",
+   "ja": "縮小率"
+  },
+  {
    "zh": "光流",
    "src": "qml/NodePage.qml",
    "zh-TW": "光流",
@@ -4193,6 +4228,20 @@
    "zh-TW": "再串流時建議打開：Veyra 不在前景也繼續轉發。打開後在這台電腦上用別的程式時，手把也會操作 PS5",
    "en": "Recommended when re-streaming: input keeps going while Veyra is not in front. While on, the controller also drives the PS5 when you use other programs on this PC",
    "ja": "再ストリーミングするときはオン推奨：Veyra が前面になくても転送を続けます。オンの間は、この PC で他のソフトを使っていてもコントローラーが PS5 を操作します"
+  },
+  {
+   "zh": "再缩到",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "再縮到",
+   "en": "Fit after to",
+   "ja": "後で縮小"
+  },
+  {
+   "zh": "再缩到未生效：只在超分放大后、且小于超分结果时执行",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "再縮到未生效：只在超解析放大後、且小於超解析結果時執行",
+   "en": "Fit after not applied: it runs only after an enlarging upscale, and only to a size smaller than the upscaled result",
+   "ja": "後で縮小は適用されていません：超解像で拡大した後、その結果より小さいサイズにのみ実行します"
   },
   {
    "zh": "写入封装文件头",
@@ -6503,6 +6552,13 @@
    "zh-TW": "即時預覽，設定對所有檔案生效",
    "en": "Live preview; settings apply to every file",
    "ja": "リアルタイムプレビュー。設定はすべてのファイルに適用"
+  },
+  {
+   "zh": "实际尺寸",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "實際尺寸",
+   "en": "Actual sizes",
+   "ja": "実際のサイズ"
   },
   {
    "zh": "实际运行：FSR %1 · 2X",
@@ -9460,11 +9516,11 @@
    "ja": "名前の変更に失敗しました：空、48 文字超、または既存のプリセットと同じ名前にはできません"
   },
   {
-   "zh": "放大时重建细节；原尺寸时修复视频文件和串流的压缩伪影，无压缩的采集卡格式在原尺寸不运行。效果取决于片源。",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "放大時重建細節；原尺寸時修復影片檔案和串流的壓縮瑕疵，無壓縮的擷取卡格式在原尺寸不執行。效果取決於片源。",
-   "en": "Reconstructs detail when upscaling; at native size it reduces compression artifacts in video files and streams, and does not run for uncompressed capture-card formats. Results depend on the source.",
-   "ja": "拡大時は細部を再構成し、元の解像度では動画ファイルとストリームの圧縮ノイズを軽減します。非圧縮のキャプチャーカード形式では元の解像度で実行しません。効果はソースにより異なります。"
+   "zh": "放大时重建细节；原尺寸时修复视频文件和串流的压缩伪影，无压缩的采集卡格式在原尺寸不运行；开启先降到后，片源已达目标也会执行。效果取决于片源。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "放大時重建細節；原尺寸時修復影片檔案和串流的壓縮偽影，無壓縮的擷取卡格式在原尺寸不執行；開啟先降到後，片源已達目標也會執行。效果取決於片源。",
+   "en": "Reconstructs detail when upscaling; at native size it reduces compression artifacts in video files and streams, and does not run for uncompressed capture-card formats. With Shrink first on, it also runs when the source already meets the target. Results depend on the source.",
+   "ja": "拡大時は細部を再構成し、元の解像度では動画ファイルとストリームの圧縮ノイズを軽減します。非圧縮のキャプチャーカード形式では元の解像度で実行しません。「先に縮小」がオンの場合は、ソースが目標に達していても実行します。効果はソースにより異なります。"
   },
   {
    "zh": "效果",
@@ -12358,11 +12414,25 @@
    "ja": "ソース"
   },
   {
+   "zh": "片源尺寸",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "片源尺寸",
+   "en": "Source size",
+   "ja": "ソースのサイズ"
+  },
+  {
    "zh": "片源最亮 %1 nit，曲线硬上限 %2 nit：%3",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "片源最亮 %1 nit，曲線硬上限 %2 nit：%3",
    "en": "Declared source peak %1 nit, curve cap %2 nit: %3",
    "ja": "ソースの公称ピーク %1 nit、カーブ上限 %2 nit：%3"
+  },
+  {
+   "zh": "片源本身糊时，先缩小再超分，RTX 视频超分更容易重建细节；会损失片源中真实的高分辨率细节（如原生 4K 的 HUD、字幕）。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "片源本身糊時，先縮小再超解析，RTX 影片超解析更容易重建細節；會損失片源中真實的高解析度細節（如原生 4K 的 HUD、字幕）。",
+   "en": "When the source itself is soft, shrinking before upscaling lets RTX Video Super Resolution rebuild detail more easily; real high-resolution detail in the source (such as native 4K HUD or subtitles) is lost.",
+   "ja": "ソース自体がぼやけている場合、先に縮小してから超解像すると RTX ビデオ超解像が細部を再構成しやすくなります。ソース本来の高解像度の細部（ネイティブ 4K の HUD や字幕など）は失われます。"
   },
   {
    "zh": "片源没有携带亮度信息",
@@ -12799,6 +12869,13 @@
    "ja": "モニタリングソフト互換"
   },
   {
+   "zh": "目前仅 RTX 视频超分支持",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "目前僅 RTX 影片超解析支援",
+   "en": "RTX Video Super Resolution only for now",
+   "ja": "現在は RTX ビデオ超解像のみ対応"
+  },
+  {
    "zh": "目前只支持 RTX 50 系列：40/30 系的多帧解锁只适用于原版运行库",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "目前只支援 RTX 50 系列：40/30 系的多幀解鎖只適用於原版執行庫",
@@ -12811,13 +12888,6 @@
    "zh-TW": "目標",
    "en": "Target",
    "ja": "対象"
-  },
-  {
-   "zh": "目标尺寸",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "目標尺寸",
-   "en": "Target size",
-   "ja": "目標サイズ"
   },
   {
    "zh": "目标已失效",
@@ -12856,7 +12926,7 @@
   },
   {
    "zh": "目标须大于片源尺寸；已达到目标时不执行超分。",
-   "src": "qml/NodePage.qml",
+   "src": "qml/SrStageEditor.qml",
    "zh-TW": "目標須大於片源尺寸；已達到目標時不執行超解析度。",
    "en": "The target must exceed the source size. Upscaling is skipped when the source already meets the target.",
    "ja": "入力より大きい目標解像度が必要です。入力が目標以上の場合は超解像処理を行いません。"
@@ -15557,6 +15627,20 @@
    "ja": "超解像 4K · NR 1 層 · フレーム生成 2X"
   },
   {
+   "zh": "超分到",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "超解析到",
+   "en": "Upscale to",
+   "ja": "超解像の目標"
+  },
+  {
+   "zh": "超分到更大尺寸后按面积缩回，相当于超采样；只在超分放大后执行。8K 超分耗时显著增加。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "超解析到更大尺寸後按面積縮回，相當於超取樣；只在超解析放大後執行。8K 超解析耗時顯著增加。",
+   "en": "Upscales to a larger size, then area-averages back down, like supersampling; runs only after an enlarging upscale. 8K upscaling takes much more GPU time.",
+   "ja": "より大きなサイズへ超解像してから面積平均で縮小します（スーパーサンプリング相当）。超解像で拡大した場合のみ実行します。8K の超解像は処理時間が大きく増えます。"
+  },
+  {
    "zh": "超分算法",
    "src": "qml/NodePage.qml",
    "zh-TW": "超解析演算法",
@@ -17641,6 +17725,13 @@
    "zh-TW": "須低於上限",
    "en": "Must stay below the maximum",
    "ja": "上限より低くしてください"
+  },
+  {
+   "zh": "须小于超分目标",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "須小於超解析目標",
+   "en": "Must be smaller than the upscale target",
+   "ja": "超解像の目標より小さい必要があります"
   },
   {
    "zh": "预算 ",

@@ -12,6 +12,29 @@ QString QmlPlayerBridge::outputSummary() const {
     if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision) return {};
     return QStringLiteral("%1x%2").arg(plan.output.width).arg(plan.output.height);
 }
+// Three-step SR as the running plan has it: source -> shrunk input -> SR
+// result -> output. Empty for single-step SR.
+QString QmlPlayerBridge::srStageSummary() const {
+    const auto& s = impl_->snapshot;
+    const auto& plan = s.metrics.resolution;
+    if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision || !plan.srApplied) return {};
+    if (plan.srInput == plan.source && plan.srOutput == plan.base) return {};
+    const auto size = [](pipeline::Extent e) { return QStringLiteral("%1x%2").arg(e.width).arg(e.height); };
+    QStringList parts{size(plan.source)};
+    if (plan.srInput != plan.source) parts << size(plan.srInput);
+    parts << size(plan.srOutput);
+    if (plan.base != plan.srOutput) parts << size(plan.base);
+    return parts.join(QStringLiteral(" → "));
+}
+QString QmlPlayerBridge::srStageNote() const {
+    const auto& s = impl_->snapshot;
+    const auto& plan = s.metrics.resolution;
+    if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision) return {};
+    QStringList notes;
+    if (plan.srPrescaleIneffective) notes << tr("先降到未生效：片源不大于所选尺寸，或先降后已不能再放大");
+    if (plan.srOutputIneffective) notes << tr("再缩到未生效：只在超分放大后、且小于超分结果时执行");
+    return notes.join(QStringLiteral("；"));
+}
 
 // A display rate is only real when the system's display event can be read. No
 // counter is wired in this build, so it reports unknown and the UI shows "未测" -

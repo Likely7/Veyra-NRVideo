@@ -39,6 +39,27 @@ void QmlPlayerBridge::setDlssSrModel(int value) {
     s.dlssSrModel = unsigned(value);
     if (impl_->commit(s)) emit settingsChanged();
 }
+int QmlPlayerBridge::srPrescale() const { return int(settings().srPrescale); }
+int QmlPlayerBridge::srOutput() const { return int(settings().srOutput); }
+// Three-step SR runs on RTX Video SR only; other backends keep the single step.
+void QmlPlayerBridge::setSrPrescale(int value) {
+    const auto want = pipeline::SrPrescale(uint32_t(value));
+    if (value < 0 || !pipeline::validSrPrescale(want)) return;
+    auto s = settings();
+    if (s.srPrescale == want) return;
+    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("先降到 / 再缩到目前仅 RTX 视频超分支持"), true); return; }
+    s.srPrescale = want;
+    if (impl_->commit(s)) emit settingsChanged();
+}
+void QmlPlayerBridge::setSrOutput(int value) {
+    const auto want = pipeline::SrOutput(uint32_t(value));
+    if (value < 0 || !pipeline::validSrOutput(want)) return;
+    auto s = settings();
+    if (s.srOutput == want) return;
+    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("先降到 / 再缩到目前仅 RTX 视频超分支持"), true); return; }
+    s.srOutput = want;
+    if (impl_->commit(s)) emit settingsChanged();
+}
 void QmlPlayerBridge::setVideoSrQuality(int value) {
     if (value < 0 || value > 5) return;
     const auto cap = effectCapabilities().value("sr" + QString::number(value)).toMap();

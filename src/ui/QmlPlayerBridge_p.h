@@ -901,6 +901,7 @@ struct QmlPlayerBridge::Impl {
             if (!projected->firstOf(engine::EffectType::SuperResolution)) {
                 s.srTarget = previous.srTarget; s.videoSrQuality = previous.videoSrQuality;
                 s.dlssSrModel = previous.dlssSrModel;
+                s.srPrescale = previous.srPrescale; s.srOutput = previous.srOutput;
             }
             if (!projected->firstOf(engine::EffectType::FrameGeneration)){
                 s.frameGenerationBackend = previous.frameGenerationBackend;

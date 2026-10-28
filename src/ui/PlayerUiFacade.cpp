@@ -63,7 +63,11 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
         a.metrics.resolution.nr.width == b.metrics.resolution.nr.width &&
         a.metrics.resolution.nr.height == b.metrics.resolution.nr.height &&
         a.metrics.resolution.output.width == b.metrics.resolution.output.width &&
-        a.metrics.resolution.output.height == b.metrics.resolution.output.height;
+        a.metrics.resolution.output.height == b.metrics.resolution.output.height &&
+        a.metrics.resolution.srInput == b.metrics.resolution.srInput &&
+        a.metrics.resolution.srOutput == b.metrics.resolution.srOutput &&
+        a.metrics.resolution.srPrescaleIneffective == b.metrics.resolution.srPrescaleIneffective &&
+        a.metrics.resolution.srOutputIneffective == b.metrics.resolution.srOutputIneffective;
 }
 } // namespace
 
@@ -132,8 +136,9 @@ bool PlayerUiFacade::applySettings(const veyra::engine::EnhancementSettings& set
     uint64_t acceptedRevision=0;
     if (!engine_.requestSettings(settings, order,&acceptedRevision)) return false;
     veyra::log::info("ui-settings-request", std::format(
-        "accepted srTarget={} quality={} fgBackend={} flowBackend={}",
-        int(settings.srTarget), settings.videoSrQuality, int(settings.frameGenerationBackend), int(settings.opticalFlowBackend)));
+        "accepted srTarget={} quality={} fgBackend={} flowBackend={} srPrescale={} srOutput={}",
+        int(settings.srTarget), settings.videoSrQuality, int(settings.frameGenerationBackend), int(settings.opticalFlowBackend),
+        uint32_t(settings.srPrescale), uint32_t(settings.srOutput)));
     pending_ = settings;
     pendingFgRevision_=acceptedRevision;
     pendingNrRevision_=acceptedRevision;requestedNrRuntime_=settings.nrRuntime;
