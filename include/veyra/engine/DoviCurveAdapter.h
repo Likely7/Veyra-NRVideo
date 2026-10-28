@@ -39,13 +39,17 @@ inline double pqToNits(double pq) {
 // preset (mid 175, start 450, cap 1200) a per-frame cap of 304 nit took 1 nit
 // down by 78% and 100 nit by 18% - the picture dimmed everywhere, which is
 // exactly what "follow the highlights" must never do. It would also breathe,
-// because the frame peak changes every frame.
+// because the frame peak changes every frame - which is why the caller now hands
+// over a smoothed peak instead of the raw one.
 inline HdrCurveSettings doviCurveFromLevel1(const pipeline::DoviFrameInfo& dovi,
                                             const HdrCurveSettings& userCurve,
                                             bool useAverage = false,
-                                            double smoothedAvgPq = -1.0) {
+                                            double smoothedAvgPq = -1.0,
+                                            double smoothedPeakPq = -1.0) {
     if (!dovi.valid) return userCurve;
-    const double peakNits = pqToNits(dovi.maxPq);
+    // `smoothedPeakPq` is the caller's sliding-window peak. Falling back to the raw
+    // value keeps single-shot and test callers working unchanged.
+    const double peakNits = pqToNits(smoothedPeakPq > 0.0 ? smoothedPeakPq : dovi.maxPq);
     if (!(peakNits > 0.0)) return userCurve;
     HdrCurveSettings out = userCurve;
     // Start the roll-off a little below the frame's own peak so it has headroom to

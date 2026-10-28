@@ -154,6 +154,9 @@ private:
     pipeline::DoviFrameInfo latestDovi_{};
     // Sliding window for the average-brightness follow (see the follow block).
     double avgSum_=0.0; int avgSumCount_=0;
+    // Custom: same window for the peak. A per-frame 1:1 knee visibly breathes on a
+    // fast cut, so the peak that drives the roll-off is averaged the same way.
+    double peakSum_=0.0; int peakSumCount_=0;
     bool ensureCoverageProbe(ID3D12Device*);
     void publishLiveCoverage(const HdrCurveSettings&,pipeline::FrameIdentity);
     unsigned lastBuffer_=0;bool hasPresented_=false;

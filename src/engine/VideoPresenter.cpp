@@ -254,7 +254,25 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             smoothedAvgPq=avgSum_/double(avgSumCount_);
         }
     }
-    const HdrCurveSettings effective=followDovi?engine::doviCurveFromLevel1(latestDovi_,hdrCurve,graph.doviFollowAverage(),smoothedAvgPq):hdrCurve;
+    // Custom: smooth the peak the same way. The knee is peak * 0.85, so an
+    // unsmoothed peak turns every bright frame into a step in the curve - which is
+    // what "the follow flickers" meant in practice. Same window and same
+    // scene-change reset as the average, so a cut does not drag the old value in.
+    double smoothedPeakPq=-1.0;
+    if(followDovi&&latestDovi_.valid){
+        const double peakPq=latestDovi_.maxPq;
+        if(peakPq>0.0){
+            constexpr int kWindow=12;
+            if(peakSumCount_>0){
+                const double prevPeak=peakSum_/double(peakSumCount_);
+                if(prevPeak>0.0&&(peakPq>prevPeak*3.0||peakPq<prevPeak/3.0)){peakSum_=0.0;peakSumCount_=0;}
+            }
+            peakSum_+=peakPq;++peakSumCount_;
+            if(peakSumCount_>kWindow){peakSum_*=0.5;peakSumCount_/=2;}
+            smoothedPeakPq=peakSum_/double(peakSumCount_);
+        }
+    }
+    const HdrCurveSettings effective=followDovi?engine::doviCurveFromLevel1(latestDovi_,hdrCurve,graph.doviFollowAverage(),smoothedAvgPq,smoothedPeakPq):hdrCurve;
     // The trace is its own gate: a user who turns the switch on must not get a
     // line per frame pair for the length of a film. It also records the switch
     // itself, so "RPU present but the setting did not arrive" is diagnosable.
@@ -360,9 +378,10 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         // Throttled like the source-side dovi-probe so a long file stays small.
         static int doviFollowCount=0;
         if(doviFollowCount<3||doviFollowCount%200==0){
-            veyra::log::info("dovi-follow",std::format("n={} follow={} applied={} profile={} maxPq={:.4f} peakNits={:.1f} highlightStartNits={} (user={}) peakCapNits={} (user={})",
+            veyra::log::info("dovi-follow",std::format("n={} follow={} applied={} profile={} maxPq={:.4f} smoothedMaxPq={:.4f} peakNits={:.1f} highlightStartNits={} (user={}) peakCapNits={} (user={})",
                 doviFollowCount,followDovi?1:0,curveFlag!=0.0f?1:0,static_cast<int>(latestDovi_.profile),latestDovi_.maxPq,
-                engine::pqToNits(latestDovi_.maxPq),effective.highlightStartNits,hdrCurve.highlightStartNits,
+                smoothedPeakPq,
+                engine::pqToNits(smoothedPeakPq>0.0?smoothedPeakPq:latestDovi_.maxPq),effective.highlightStartNits,hdrCurve.highlightStartNits,
                 effective.peakCapNits,hdrCurve.peakCapNits));
         }
         // The counter advances outside the branch, so the periodic sample fires.
