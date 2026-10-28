@@ -1265,7 +1265,10 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
             // Custom (P7): say WHY the mapping was accepted or refused. A bare "not
             // ready" left MEL, multi-piece curves and unsupported methods looking
             // identical in the log.
-            if (!p7CurveReported_ || curveOk != p7CurveReady_) {
+            // Only profile 7 has a curve worth reporting. The packer is short-circuited
+            // for other profiles, so its report is a default-constructed "supported"
+            // that would read as a claim about a stream that has no enhancement layer.
+            if (info_.dolbyVision.profile == 7 && (!p7CurveReported_ || curveOk != p7CurveReady_)) {
                 p7CurveReported_ = true;
                 p7CurveReady_ = curveOk;
                 log::info("source-dovi-el", std::format("RPU mapping {}",

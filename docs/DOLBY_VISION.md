@@ -431,6 +431,36 @@ DV 的 L5 扩展块描述"有效画面矩形"，mpv 用 `dovi-level5-mode` 暴�
 
 所以现在只记录、不应用。数据留在日志里，需要时再说。
 
+#### Profile 5 实测（2026-10-29）
+
+P5 一直是本项目里唯一只有代码审查、没有真实数据的主路径。找到片源后补上了：
+
+片源 `Wednesday S02E01 2022 2160p NF WEB-DL DDP5.1 Atmos DV H.265`（Netflix，8.2 GB）。
+
+```
+[source-dovi] profile=5 level=6 compatibility=0 bl=true el=false rpuDeclared=true route=2
+[source-dovi] base layer pinned to PQ for profile 5
+[source-dovi] profile 5 base layer converted as IPT-PQ-C2: RPU reshaping (per-frame,
+              projected on {1,sqrt(x),x}) -> RPU ycc_to_rgb -> PQ EOTF
+              -> RPU rgb_to_lms x fixed HPE LMS->BT.2020 -> PQ OETF
+[source-dovi] profile 5 constants ycc_to_rgb=[1.000, 0.0975, 0.2052 | ...]
+              lms_to_rgb=[3.2388, -2.3256, 0.0867 | ...]
+```
+
+画面色彩正常（若 IPT-PQ-C2 映射出错会呈现明显的绿屏或紫屏），日志 0 错误。
+
+顺带修掉两处日志缺陷：
+
+| 问题 | 后果 |
+|---|---|
+| 钉基底时无条件打印 "8.1 is PQ" | profile 5 的日志在说 8.1 的事 |
+| profile 5 也打印 P7 的曲线诊断 "supported" | 打包器被短路，report 是默认构造值，相当于对一条没有增强层的流断言"曲线可用" |
+
+构造伪 P5 的办法（改容器 DoVi 配置记录，用于验证 P5 的守门逻辑，不验证转换）：
+把 MKV 里 `dvcC` 之后 7 字节起的 `DOVIDecoderConfigurationRecord` 改成
+`profile=5, el=0, bl=1, compatibility=0`。这样 Veyra 会进入 P5 路径，并因为
+RPU 仍是 P7 的、没有颜色块而正确拒绝——这正好验证了"不硬转"的防御逻辑。
+
 #### 复盘（2026-10-17）：修掉 4 个缺陷
 
 对整条杜比视界路径做了一次通读，P7 这部分有 3 个缺陷、参考实现有 1 个越界：
