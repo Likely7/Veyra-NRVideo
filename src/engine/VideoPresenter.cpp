@@ -321,7 +321,16 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // tuning, then encode back; disabled tuning keeps the original exact blit.
     // Display tuning also applies after RTX Video HDR converted an SDR source.
     const float curveFlag=(hdrCurve.enabled&&graph.hdrOutput())?16.0f:0.0f;
-    const float mainFlags=samplingFlags+curveFlag+(curveFlag&&graph.hdr10Output()?36.0f:0.0f);
+    // 抖动位：HDR 输出、且这一帧来自 P7 重建时开启。
+    // 重建出的是 12 位，而交换链是 R10G10B10A2（10 位），硬件在 resolve 时截断，
+    // 平滑渐变会因此出现色带。加一个亚于 1 个台阶的偏移把台阶变成人眼会平均掉的噪声。
+    // The dither bit: on for HDR output when this frame came from the P7 reconstruction.
+    // The reconstruction produces 12 bits and the swapchain takes 10, and the hardware
+    // truncates on resolve, which leaves banding in smooth gradients. A sub-LSB offset
+    // turns that step into noise the eye averages away.
+    const bool p7Frame=graph.doviP7Active();
+    const float ditherFlag=(graph.hdrOutput()&&p7Frame)?64.0f:0.0f;
+    const float mainFlags=samplingFlags+curveFlag+(curveFlag&&graph.hdr10Output()?36.0f:0.0f)+ditherFlag;
     float dims[16]={renderW,renderH,mainFlags,inverseFit,float(rc.right),float(rc.bottom),view.centerX,view.centerY};
     // The blit sees the per-frame curve when Dolby Vision follow is on; every
     // other frame (and every non-DV source) passes the user's settings through.

@@ -675,6 +675,10 @@ public:
     // the ceiling could never engage and the control would silently do nothing.
     bool hdrInput() const { return desc_.hdrInput; }
     bool videoHdrActive() const {return desc_.convertVideoHdr();}
+    // Custom: this frame took the P7 enhancement-layer reconstruction path. The present
+    // blit needs it to know that its 10-bit swapchain is quantising a 12-bit signal, which
+    // is the case where truncation leaves visible banding and dithering is worth doing.
+    bool doviP7Active() const {return p7Ready_;}
     // Custom: static HDR output tuning. The curve is read by the present blit,
     // the metadata is sent to the display.
     const engine::HdrCurveSettings& hdrCurve() const {return desc_.hdrCurve;}
