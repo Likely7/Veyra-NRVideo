@@ -48,6 +48,33 @@ int main(){
         check(sampler.accept(dt,dt,true),"history boundary cannot be swallowed by sampling");
         sampler.reset();check(sampler.accept(dt,dt,false),"reset accepts first new frame immediately");
     }
+    {
+        // Phase onto first copies (2026-10-27). picture(i) is the number of sample i.
+        const int64_t dt=166667;
+        auto run=[&](auto picture,int start,int count,std::vector<int>& kept){
+            CaptureHalfRate sampler;
+            for(int i=start;i<start+count;++i){const uint64_t id=picture(i);if(sampler.accept(i*dt+(i%3-1)*1000,dt,false,&id))kept.push_back(i);}
+            return sampler.shifts();
+        };
+        // 30 fps game: samples 2k and 2k+1 show picture k; the grid starts on a second copy.
+        std::vector<int> wrong;const auto shifts=run([](int i){return uint64_t(i/2);},1,400,wrong);
+        bool firstsAfter=true,noneLost=true;
+        for(size_t n=0;n+1<wrong.size();++n)noneLost&=wrong[n+1]/2-wrong[n]/2<=1;
+        for(size_t n=6;n<wrong.size();++n)firstsAfter&=wrong[n]%2==0;
+        check(shifts==1&&firstsAfter&&noneLost,"30 fps content moves onto first copies once and loses no picture");
+        check(wrong.size()>=199&&wrong.size()<=201,"30 fps content keeps 30 per second");
+        std::vector<int> right;
+        check(run([](int i){return uint64_t(i/2);},0,400,right)==0&&right.size()==200&&std::all_of(right.begin(),right.end(),[](int i){return i%2==0;}),
+              "first copies already: no move");
+        // 60 fps game: every sample new; the picture numbers change nothing.
+        std::vector<int> sixty;CaptureHalfRate plain;int plainKept=0;bool same=true;size_t at=0;
+        run([](int i){return uint64_t(i);},0,600,sixty);
+        for(int i=0;i<600;++i){const bool accepted=plain.accept(i*dt+(i%3-1)*1000,dt,false);plainKept+=accepted;if(accepted)same&=at<sixty.size()&&sixty[at++]==i;}
+        check(same&&size_t(plainKept)==sixty.size(),"60 fps content keeps the plain every-second-sample grid");
+        // 45 fps in 60 Hz (new,new,new,repeat): never three second copies in a row.
+        std::vector<int> fortyFive;
+        check(run([](int i){return uint64_t(i-i/4);},0,600,fortyFive)==0&&fortyFive.size()==300,"irregular content keeps the plain grid");
+    }
     check(!CaptureHalfRate::supported(30)&&!CaptureHalfRate::supported(18)&&!CaptureHalfRate::supported(120)&&CaptureHalfRate::supported(59.94),"60-to-30 setting does not halve other transport modes");
     veyra::engine::FrameRateWindow rate;rate.reset(0);
     for(int i=1;i<=60;++i)rate.complete(i*166666);
