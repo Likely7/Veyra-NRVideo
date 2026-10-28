@@ -2162,7 +2162,9 @@ VPage {
                                 value: Math.round(veyra.volume * 100) + "%"
                                 VSlider {
                                     implicitWidth: 150
-                                    from: 0; to: 1; value: veyra.volume; inputScale: 100
+                                    objectName: "pro-volume"
+                                    from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
+                                    valueFromModel: true; defaultValue: 1
                                     onMoved: value => veyra.volume = value
                                 }
                             }

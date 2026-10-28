@@ -54,9 +54,20 @@ Item {
             // The model binding must survive input so a later engine update is visible.
             root.amount = 3.5; compare(slider.value, 3.5)
         }
-        function test_percent() {
-            slider.to = 1; slider.inputScale = 100; slider.inputDecimals = 0; root.amount = .4
-            type("75"); keyClick(Qt.Key_Return); compare(root.amount, .75)
+        function test_percent_data() {
+            return [{tag:"normal-volume",typed:"75",expected:.75},
+                    {tag:"unity",typed:"100",expected:1},
+                    {tag:"double-volume",typed:"200",expected:2},
+                    {tag:"triple-volume",typed:"300",expected:3},
+                    {tag:"volume-upper-bound",typed:"999",expected:3},
+                    {tag:"volume-lower-bound",typed:"-10",expected:0},
+                    {tag:"invalid-volume",typed:"abc",expected:.4}]
+        }
+        function test_percent(data) {
+            slider.to = 3; slider.inputScale = 100; slider.inputDecimals = 0; root.amount = .4
+            type(data.typed); keyClick(Qt.Key_Return); compare(root.amount, data.expected)
+            // Input must not break the binding when another page changes volume.
+            root.amount = 2.5; compare(slider.value, 2.5)
         }
         function test_escape() {
             type("4"); keyClick(Qt.Key_Escape)

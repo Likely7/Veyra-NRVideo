@@ -1,4 +1,5 @@
 #include "veyra/source/WasapiAudioInput.h"
+#include "veyra/sink/AudioGain.h"
 #include "veyra/Log.h"
 #include <audioclient.h>
 #include <mmdeviceapi.h>
@@ -149,7 +150,7 @@ bool WasapiAudioInput::start(){
     catch(...){p_->stopping=true;return false;}return true;
 }
 void WasapiAudioInput::stop(){p_->stopping=true;if(p_->stopEvent.value)SetEvent(p_->stopEvent.value);if(p_->worker.joinable())p_->worker.join();}
-void WasapiAudioInput::setGain(float value){std::lock_guard lock(p_->mutex);p_->gain=std::clamp(value,0.f,1.f);if(p_->session)p_->session->setGain(p_->gain);}
+void WasapiAudioInput::setGain(float value){std::lock_guard lock(p_->mutex);p_->gain=sink::clampAudioGain(value);if(p_->session)p_->session->setGain(p_->gain);}
 void WasapiAudioInput::setSync(unsigned mode,int offset){std::lock_guard lock(p_->mutex);p_->mode=std::min(mode,2u);p_->offset=std::clamp(offset,-250,250);if(p_->session)p_->session->setSync(p_->mode,p_->offset);}
 void WasapiAudioInput::videoPresented(double pts,int64_t host,std::optional<int64_t> arrival){std::lock_guard lock(p_->mutex);p_->haveVideo=true;p_->videoPts=pts;p_->videoHost=host;p_->videoArrival=arrival;if(p_->session)p_->session->videoPresented(pts,host,arrival);}
 void WasapiAudioInput::videoReset(bool resetAudio){std::lock_guard lock(p_->mutex);p_->haveVideo=false;if(p_->session)p_->session->videoReset(resetAudio);}

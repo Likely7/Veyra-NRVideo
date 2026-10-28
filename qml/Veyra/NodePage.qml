@@ -785,7 +785,8 @@ VPage {
                                 id: nodeVolume
                                 objectName: "node-out-volume"
                                 Layout.fillWidth: true
-                                from: 0; to: 1; value: veyra.volume; inputScale: 100
+                                from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
+                                valueFromModel: true; defaultValue: 1
                                 onMoved: value => veyra.volume = value
                             }
                             VSliderValue { slider: nodeVolume; text: Math.round(veyra.volume * 100) + "%"; color: Theme.t2; pixelSize: 10 }

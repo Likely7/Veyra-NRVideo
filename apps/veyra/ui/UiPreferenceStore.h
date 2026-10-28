@@ -1,5 +1,6 @@
 #pragma once
 #include "UiSessionState.h"
+#include "veyra/sink/AudioGain.h"
 #include "veyra/engine/PresetStore.h"
 #include "veyra/engine/PresentationSettings.h"
 #include <filesystem>
@@ -35,7 +36,7 @@ public:
         // inspector index 4 is the audio page (selectInspector(4)), so the valid
         // range is 0..4. A narrower bound here silently discarded every saved
         // window size, volume and subtitle style for users who last sat on it.
-        if(!(file>>magic>>version>>read.volume>>mute>>sub>>read.width>>read.height>>read.x>>read.y>>pos>>read.inspector>>read.subtitleSize)||magic!="VEYRA_UI"||(version<1||version>10)||!std::isfinite(read.volume)||read.volume<0||read.volume>1||mute<0||mute>1||sub<0||sub>1||pos<0||pos>1||read.width<720||read.width>10000||read.height<540||read.height>10000||abs(int64_t(read.x))>100000||abs(int64_t(read.y))>100000||read.inspector<0||read.inspector>4||read.subtitleSize<16||read.subtitleSize>56){corrupt_=true;return result;}
+        if(!(file>>magic>>version>>read.volume>>mute>>sub>>read.width>>read.height>>read.x>>read.y>>pos>>read.inspector>>read.subtitleSize)||magic!="VEYRA_UI"||(version<1||version>11)||!std::isfinite(read.volume)||read.volume<0||read.volume>sink::kMaxAudioGain||mute<0||mute>1||sub<0||sub>1||pos<0||pos>1||read.width<720||read.width>10000||read.height<540||read.height>10000||abs(int64_t(read.x))>100000||abs(int64_t(read.y))>100000||read.inspector<0||read.inspector>4||read.subtitleSize<16||read.subtitleSize>56){corrupt_=true;return result;}
         if(version==2&&(!(file>>read.inspectorWidth)||read.inspectorWidth<296||read.inspectorWidth>420)){corrupt_=true;return result;}
         if(version>=3){
             int outline=0,background=0,second=0;
@@ -57,7 +58,7 @@ public:
     engine::EnhancementSettings startup(engine::EnhancementSettings fallback){engine::PresetStore last(folder_/"last-applied.v1");if(!last.load()||last.entries().empty())return fallback;return last.entries().front().settings;}
     bool save(const UiPreferences& p,const engine::EnhancementSettings* applied){
         bool ok=true;std::filesystem::create_directories(folder_);if(applied){engine::PresetStore last(folder_/"last-applied.v1");ok=last.load()&&last.put(L"Last applied",*applied,true);}
-        if(corrupt_)return false;std::ostringstream out;out<<"VEYRA_UI 10\n"<<p.volume<<' '<<p.muted<<' '<<p.subtitles<<' '<<p.width<<' '<<p.height<<' '<<p.x<<' '<<p.y<<' '<<p.positioned<<' '<<p.inspector<<' '<<p.subtitleSize<<' '<<p.inspectorWidth<<' '<<p.subtitleOutline<<' '<<p.subtitleBackground<<' '<<p.subtitleSecondLanguage<<' '<<p.subtitleMargin<<' '<<p.subtitleFont<<' '<<p.colourFoldMask<<' '<<p.enhancementEnabled<<' '<<p.presentation.enabled<<' '<<unsigned(p.presentation.mode)<<' '<<unsigned(p.presentation.display)<<' '<<p.subtitleLines<<' '<<p.subtitleFitToLines<<' '<<unsigned(p.presentation.outputRate)<<' '<<p.presentation.customFps<<'\n';
+        if(corrupt_)return false;std::ostringstream out;out<<"VEYRA_UI 11\n"<<p.volume<<' '<<p.muted<<' '<<p.subtitles<<' '<<p.width<<' '<<p.height<<' '<<p.x<<' '<<p.y<<' '<<p.positioned<<' '<<p.inspector<<' '<<p.subtitleSize<<' '<<p.inspectorWidth<<' '<<p.subtitleOutline<<' '<<p.subtitleBackground<<' '<<p.subtitleSecondLanguage<<' '<<p.subtitleMargin<<' '<<p.subtitleFont<<' '<<p.colourFoldMask<<' '<<p.enhancementEnabled<<' '<<p.presentation.enabled<<' '<<unsigned(p.presentation.mode)<<' '<<unsigned(p.presentation.display)<<' '<<p.subtitleLines<<' '<<p.subtitleFitToLines<<' '<<unsigned(p.presentation.outputRate)<<' '<<p.presentation.customFps<<'\n';
         auto target=folder_/"ui-preferences.v1",tmp=folder_/(L"ui-preferences.tmp-"+std::to_wstring(GetCurrentProcessId()));auto data=out.str();HANDLE file=CreateFileW(tmp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);if(file==INVALID_HANDLE_VALUE)return false;DWORD written=0;bool saved=WriteFile(file,data.data(),DWORD(data.size()),&written,nullptr)&&written==data.size()&&FlushFileBuffers(file);CloseHandle(file);if(saved)saved=MoveFileExW(tmp.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=FALSE;return ok&&saved;
     }
 };

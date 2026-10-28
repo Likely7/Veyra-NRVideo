@@ -1,5 +1,6 @@
 #include "veyra/media/FFmpegDeinterlacer.h"
 #include "veyra/ui/QmlPlayerBridge.h"
+#include "veyra/sink/AudioGain.h"
 #include "veyra/gfx/PresentSink.h"
 #include "veyra/gfx/NvidiaVrr.h"
 #include "veyra/media/NetworkInput.h"
@@ -48,6 +49,7 @@
 #include <QHash>
 #include <QFile>
 #include <QSaveFile>
+#include <QTemporaryFile>
 #include <QTimer>
 #include <QBuffer>
 #include <QImage>
@@ -321,6 +323,7 @@ struct QmlPlayerBridge::Impl {
     QString remotePlayHost, remotePlayPin;
 
     QTimer* timer = nullptr;
+    QTimer* audioPreferenceSaveTimer = nullptr;
 
     // Canvas positions of the fixed input / optical-flow / output boxes. They are
     // editor furniture, not chain nodes, so they live beside the preferences.
@@ -623,12 +626,27 @@ struct QmlPlayerBridge::Impl {
         // on a new profile used to fail and was silently kept only in memory.
         std::error_code ec;
         std::filesystem::create_directories(prefsFile().parent_path(), ec);
-        if(ec)return false;
-        QSaveFile file(path);
-        if (!file.open(QIODevice::WriteOnly)) return false;
-        const auto bytes = QJsonDocument(QJsonObject::fromVariantMap(prefs)).toJson(QJsonDocument::Indented);
-        if (file.write(bytes) != bytes.size()) return false;
-        return file.commit();
+        if(ec){veyra::log::warn("ui-prefs",std::format("preferences directory unavailable: {}",ec.message()));return false;}
+        // Same-directory temporary + native atomic replacement, as used by
+        // PlayerUiFacade/PresetStore. Never truncate the accepted preferences:
+        // QSaveFile replacement can fail here even while native replacement works.
+        QString temporary;
+        {
+            QTemporaryFile file(path+QStringLiteral(".XXXXXX"));
+            if(!file.open()){veyra::log::warn("ui-prefs",std::format("preferences temporary open failed: {}",file.errorString().toStdString()));return false;}
+            const auto bytes = QJsonDocument(QJsonObject::fromVariantMap(prefs)).toJson(QJsonDocument::Indented);
+            if(file.write(bytes)!=bytes.size()||!file.flush()){veyra::log::warn("ui-prefs",std::format("preferences temporary write failed: {}",file.errorString().toStdString()));return false;}
+            temporary=file.fileName();
+            file.setAutoRemove(false);
+            // QTemporaryFile::close retains its native handle for reopening.
+            // Destroy it before MoveFileEx to release the Windows sharing lock.
+        }
+        if(!MoveFileExW(temporary.toStdWString().c_str(),prefsFile().c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)){
+            const auto error=GetLastError();
+            QFile::remove(temporary);
+            veyra::log::warn("ui-prefs",std::format("atomic preferences replacement failed: Windows error {}",error));return false;
+        }
+        return true;
     }
     int prefInt(const char* key, int fallback) const { return prefs.contains(key) ? prefs.value(key).toInt() : fallback; }
     bool prefBool(const char* key, bool fallback) const { return prefs.contains(key) ? prefs.value(key).toBool() : fallback; }
@@ -1228,6 +1246,23 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
+    // Playback volume is global to every source and page. Missing/invalid saved
+    // gains keep unity; old profiles need no migration and are never boosted.
+    double savedVolume=1.0;
+    bool savedVolumeOk=false;
+    const double candidateVolume=impl_->prefs.value(QStringLiteral("audioVolume")).toDouble(&savedVolumeOk);
+    if(savedVolumeOk&&std::isfinite(candidateVolume)&&candidateVolume>=0&&candidateVolume<=sink::kMaxAudioGain)
+        savedVolume=candidateVolume;
+    impl_->engine.setVolume(float(savedVolume),impl_->prefBool("audioMuted",false));
+    impl_->snapshot.volume=float(savedVolume);
+    impl_->snapshot.muted=impl_->prefBool("audioMuted",false);
+    // One-shot debounce only, not a polling timer or per-drag disk write.
+    impl_->audioPreferenceSaveTimer=new QTimer(this);
+    impl_->audioPreferenceSaveTimer->setSingleShot(true);
+    impl_->audioPreferenceSaveTimer->setInterval(500);
+    connect(impl_->audioPreferenceSaveTimer,&QTimer::timeout,this,[this]{
+        if(!impl_->savePrefs())veyra::log::warn("ui-prefs","playback volume/mute not saved");
+    });
     const auto gameKeys=shortcuts();
     impl_->game.setHotkeys(ui::gameKey(QKeySequence(gameKeys.value("gamePanel").toString(),QKeySequence::PortableText)),
                           ui::gameKey(QKeySequence(gameKeys.value("gameExit").toString(),QKeySequence::PortableText)));
@@ -1781,6 +1816,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
 }
 
 QmlPlayerBridge::~QmlPlayerBridge() {
+    if(impl_->audioPreferenceSaveTimer&&impl_->audioPreferenceSaveTimer->isActive()){
+        impl_->audioPreferenceSaveTimer->stop();
+        if(!impl_->savePrefs())veyra::log::warn("ui-prefs","playback volume/mute not saved on exit");
+    }
     flushHdrMemory();
     if (qApp) qApp->removeEventFilter(this);
     if (qApp) qApp->removeNativeEventFilter(&impl_->displayChangeFilter);
@@ -6013,12 +6052,27 @@ bool QmlPlayerBridge::applying() const { return impl_->facade.applying(); }
 // straight to the engine and come back through the snapshot: the UI shows what
 // the engine did, not what it asked for.
 double QmlPlayerBridge::volume() const { return double(impl_->snapshot.volume); }
+double QmlPlayerBridge::maximumVolume() const { return sink::kMaxAudioGain; }
 void QmlPlayerBridge::setVolume(double value) {
-    impl_->engine.setVolume(float(std::clamp(value, 0.0, 1.0)), impl_->snapshot.muted);
+    if(!std::isfinite(value))return;
+    const float gain=float(std::clamp(value,0.0,double(sink::kMaxAudioGain)));
+    if(gain==impl_->snapshot.volume)return;
+    impl_->engine.setVolume(gain, impl_->snapshot.muted);
+    // setVolume synchronously accepts the gain. Publish its accepted state now
+    // so all sliders and rapid keyboard adjustments stay in sync between polls.
+    impl_->snapshot.volume=gain;
+    impl_->prefs[QStringLiteral("audioVolume")]=double(gain);
+    impl_->audioPreferenceSaveTimer->start();
+    emit snapshotChanged();
 }
 bool QmlPlayerBridge::muted() const { return impl_->snapshot.muted; }
 void QmlPlayerBridge::setMuted(bool value) {
+    if(value==impl_->snapshot.muted)return;
     impl_->engine.setVolume(impl_->snapshot.volume, value);
+    impl_->snapshot.muted=value;
+    impl_->prefs[QStringLiteral("audioMuted")]=value;
+    impl_->audioPreferenceSaveTimer->start();
+    emit snapshotChanged();
 }
 double QmlPlayerBridge::playbackSpeed() const { return impl_->snapshot.playbackSpeed; }
 double QmlPlayerBridge::playbackRate() const { return impl_->snapshot.playbackRate; }

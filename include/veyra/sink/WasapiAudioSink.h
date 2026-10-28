@@ -330,7 +330,7 @@ private:
     AudioFormat inputFormat_,outputFormat_;
     SwrContext* channelMix_=nullptr;
     std::vector<float> mixed_;
-    bool copyPcm(BYTE* destination,const float* input,size_t frames);
+    bool copyPcm(BYTE* destination,const float* input,size_t frames,bool boosted);
     bool comInited_ = false;
     std::atomic<uint64_t> underruns_{0};
     std::atomic<uint64_t> underrunFrames_{0},silenceFrames_{0};

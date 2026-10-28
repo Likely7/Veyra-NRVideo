@@ -285,6 +285,7 @@ int wmain(int argc,wchar_t** argv){try{
     // and inspector 4 - the audio page, one of the five rail tabs - failed the
     // range check. Both silently reset window size, volume and subtitle style.
     {ui::UiPreferences audio;audio.volume=.9f;audio.muted=true;audio.inspector=4;audio.inspectorWidth=380;audio.width=1600;audio.height=900;require(prefs.save(audio,nullptr),"audio-page preferences save");ui::UiPreferenceStore reload(dir);const auto back=reload.load();require(std::abs(back.volume-.9f)<1e-6&&back.inspector==4&&back.inspectorWidth==380&&back.width==1600,"audio page and geometry survive the version 3 round trip");}
+    {ui::UiPreferences boosted;boosted.volume=3.0f;boosted.inspector=4;require(prefs.save(boosted,nullptr),"300 percent preferences save");ui::UiPreferenceStore reload(dir);require(reload.load().volume==3.0f,"300 percent volume survives restart");}
     auto setting=loaded.startup({});before.revision=setting.revision;require(setting==before,"all confirmed parameters round trip");
     for(unsigned selected:{0u,4u,engine::kVideoSrFsr})for(bool enabled:{false,true}){
         auto chosen=before;chosen.videoSrQuality=selected;chosen.sr=enabled;

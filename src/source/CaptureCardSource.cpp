@@ -1,4 +1,5 @@
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/sink/AudioGain.h"
 #include "veyra/source/DeckLinkCapture.h"
 #include "veyra/source/CaptureFrameRate.h"
 #include "veyra/source/WasapiAudioInput.h"
@@ -950,9 +951,18 @@ void CaptureCardSource::setCpuUnpack(bool enabled){
     log::warn("capture-unpack",std::format("legacy CPU per-pixel unpack={} (diagnostic; takes effect on the next connect)",enabled?1:0));
 }
 bool CaptureCardSource::setAudioGain(float gain){
+    gain=sink::clampAudioGain(gain);
     if(p_->wasapi){p_->wasapi->setGain(gain);return p_->wasapi->snapshot().available;}
     auto& p=*p_;if(p.audioSession){p.audioSession->setGain(gain);return p.audioSession->snapshot().available;}if(!p.graph||!p.audioFilter)return false;
     if(gain==p.lastAudioGain)return p.audioGainSupported;
+    // All adjustable PCM paths above use the application renderer. The legacy
+    // DirectShow attenuation API cannot amplify (nor may encoded passthrough
+    // bytes be multiplied). Do not falsely report a 300% gain as applied.
+    if(gain>1.0f){
+        p.lastAudioGain=gain;p.audioGainSupported=false;
+        log::warn("capture-audio","boost requires decoded PCM; legacy attenuation/receiver passthrough cannot amplify");
+        return false;
+    }
     ComPtr<IBasicAudio> audio;HRESULT hr=p.graph.As(&audio);
     if(SUCCEEDED(hr)){long attenuation=gain<=0?-10000:long(std::clamp(2000.0*std::log10(double(gain)),-10000.0,0.0));hr=audio->put_Volume(attenuation);}
     p.lastAudioGain=gain;p.audioGainSupported=SUCCEEDED(hr);log::info("capture-audio",std::format("application gain={} hr=0x{:X}",gain,unsigned(hr)));return p.audioGainSupported;
