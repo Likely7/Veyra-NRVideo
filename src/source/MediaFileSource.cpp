@@ -388,7 +388,7 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
     // queue gives up too early. Both look like flicker on screen.
     if (elFeedCalls_ % 300 == 0) {
         veyra::log::info("source-dovi-el", std::format(
-            "EL coverage feed={} carried={} ({:.1f}%) paired_forced={}",
+            "EL coverage feed={} carried={} ({:.1f}%) delivered_without_layer={}",
             elFeedCalls_, elPacketHits_,
             elFeedCalls_ ? 100.0 * double(elPacketHits_) / double(elFeedCalls_) : 0.0,
             elForcedDeliveries_));
@@ -559,52 +559,61 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
 
     for (int spin = 0; spin < 4; ++spin) {
         drainElFrames();
-        // The oldest waiting base frame defines what is still usable.
-        if (!baseWaiting_.empty()) dropStaleEl(ptsOf(baseWaiting_.front().second));
-        // A held frame whose layer has arrived can be delivered now.
-        for (auto it = baseWaiting_.begin(); it != baseWaiting_.end(); ++it) {
+        // Only the OLDEST waiting base frame may be delivered. Handing out a newer
+        // one because it happens to have its layer reorders the picture, and on a
+        // stream where only half the frames carry a layer that is exactly what the
+        // viewer sees as a frame jumping back and forth. mpv's pairing filter keeps
+        // the same rule for the same reason.
+        if (!baseWaiting_.empty()) {
+            const int64_t headPts = ptsOf(baseWaiting_.front().second);
+            dropStaleEl(headPts);   // anything older than the head can never be used
             AVFrame* el = nullptr;
+            bool deliver = false;
+            bool withLayer = false;
             if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
                 static unsigned waitDbg = 0;
                 if (++waitDbg <= 10) {
-                    const AVFrame* wf = it->second;
                     std::string keys;
                     for (const auto& kv : elByPts_) keys += std::format("{} ", kv.first);
-                    log::info("source-dovi-el", std::format(
-                        "wait check pts={} bet={} frame_pts={} cached=[{}]",
-                        ptsOf(wf),
-                        wf ? wf->best_effort_timestamp : int64_t(-999),
-                        wf ? wf->pts : int64_t(-999), keys));
+                    log::info("source-dovi-el", std::format("wait check pts={} cached=[{}] held={}",
+                        headPts, keys, baseWaiting_.size()));
                 }
             }
-            if (takeElNear(ptsOf(it->second), &el)) {
-                if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
-                    static unsigned okDbg = 0;
-                    if (++okDbg <= 8)
-                        log::info("source-dovi-el", std::format("PAIRED held pts={} el={}", ptsOf(it->second), el?1:0));
+            if (takeElNear(headPts, &el)) {
+                deliver = true;
+                withLayer = true;
+            } else if (!elByPts_.empty() && elByPts_.begin()->first > headPts + elMatchTolerance_) {
+                // The layer stream is ordered and has already moved past this frame, so
+                // its layer is never coming: this base frame genuinely has none. Deliver
+                // it now instead of waiting for the queue to overflow - waiting would
+                // cost three frames of latency and still force the same decision.
+                deliver = true;
+            } else if (baseWaiting_.size() >= 3) {
+                deliver = true;   // safety valve: never stall playback for a layer
+            }
+            if (deliver) {
+                if (withLayer) {
+                    if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
+                        static unsigned okDbg = 0;
+                        if (++okDbg <= 8)
+                            log::info("source-dovi-el", std::format("PAIRED held pts={} el=1", headPts));
+                    }
+                    // Ownership moves to the member: takeElNear removed it from the
+                    // table, so someone has to free it on the next match.
+                    if (elFrame_ != nullptr) av_frame_free(&elFrame_);
+                    elFrame_ = el;
+                } else {
+                    ++elForcedDeliveries_;
                 }
-                // Ownership moves to the member: takeElNear removed it from the
-                // table, so someone has to free it on the next match.
-                if (elFrame_ != nullptr) av_frame_free(&elFrame_);
-                elFrame_ = el;
-                out = it->first;
-                out.doviEl = elFrame_;
-                if (decodedFrame != nullptr) *decodedFrame = it->second;
-                deliveredHeld_ = it->second;   // Custom (P7 fix): freed on the next read()
-                baseWaiting_.erase(it);
+                out = baseWaiting_.front().first;
+                out.doviEl = withLayer ? elFrame_ : nullptr;
+                if (decodedFrame != nullptr) *decodedFrame = baseWaiting_.front().second;
+                deliveredHeld_ = baseWaiting_.front().second;   // freed on the next read()
+                baseWaiting_.pop_front();
                 return SourceReadStatus::Frame;
             }
         }
-        // Held too long: deliver the oldest without a layer rather than stall.
-        if (baseWaiting_.size() >= 3) {
-            ++elForcedDeliveries_;
-            out = baseWaiting_.front().first;
-            out.doviEl = nullptr;
-            if (decodedFrame != nullptr) *decodedFrame = baseWaiting_.front().second;
-            deliveredHeld_ = baseWaiting_.front().second;
-            baseWaiting_.pop_front();
-            return SourceReadStatus::Frame;
-        }
+
 
         pipeline::FramePacket pkt{};
         const AVFrame* frame = nullptr;
@@ -1227,8 +1236,14 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
                 log::info("source-dovi", std::format("extension blocks={} levels=[{}] L5={}",
                     meta.num_ext_blocks, levels, sawL5 ? 1 : 0));
             }
+            // Profile 5 also carries a reshaping curve in its RPU, and for a frame
+            // whose curve happens to be identity or single-piece MMR it would pass the
+            // check below and overwrite the profile 5 conversion constants. It is only
+            // safe today because profile 5 has no enhancement layer to bind, which is
+            // an indirect guarantee - exclude it explicitly instead.
             pipeline::DoviP7CurveReport curveReport;
-            const bool curveOk = pipeline::doviP7ConstantsSupported(
+            const bool curveOk = info_.dolbyVision.profile == 7 &&
+                pipeline::doviP7ConstantsSupported(
                 *av_dovi_get_mapping(&meta), *av_dovi_get_header(&meta),
                 elLastWidth_ != 0 ? elLastWidth_ : uint32_t(elFrame_ ? elFrame_->width : 1920),
                 elLastHeight_ != 0 ? elLastHeight_ : uint32_t(elFrame_ ? elFrame_->height : 1080),

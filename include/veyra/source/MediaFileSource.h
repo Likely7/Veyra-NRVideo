@@ -100,7 +100,9 @@ private:
     uint64_t p7CurveRefusedFrames_ = 0;
     // Custom (P7): where the enhancement layer goes missing. `feedCalls` counts
     // access units offered to the splitter, `packetHits` the ones that carried EL
-    // NALs, `forcedDeliveries` the base frames given up on without a partner.
+    // NALs, `forcedDeliveries` the base frames delivered without a layer - either
+    // because the layer stream had already moved past them (the usual case on a
+    // sparse stream) or because the queue could not wait any longer.
     uint64_t elFeedCalls_ = 0, elPacketHits_ = 0, elForcedDeliveries_ = 0;
     // Custom (DV extension blocks): record which levels the stream declares and,
     // when present, the L5 active-area rectangle. Descriptive only.
