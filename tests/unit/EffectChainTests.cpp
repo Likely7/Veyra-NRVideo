@@ -2,6 +2,7 @@
 // modes must obey. These are the guards for the multi-NR and node-mode work.
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/GraphDescription.h"
+#include "veyra/engine/SrStageSafety.h"
 #include <type_traits>
 #include <algorithm>
 #include <random>
@@ -1591,6 +1592,26 @@ int main() {
     testBeautySettingsChain();
     testWideChains();
     testThreeStepSr();
+    {
+        using namespace veyra;using pipeline::SrPrescale;using pipeline::SrTarget;using pipeline::SrOutput;
+        EnhancementSettings s;s.sr=s.nr=true;s.videoSrQuality=2;s.srTarget=SrTarget::Uhd8K;s.srPrescale=SrPrescale::P1080;
+        s.multiplier=2;s.frameGenerationBackend=FrameGenerationBackend::Vfg;
+        StageRequest r;r.width=3840;r.height=2160;r.sr=r.nr=r.fg=true;r.fgMultiplier=2;
+        pipeline::EnhanceGraphDesc unsafe;describeStages(r,s,unsafe);
+        check(!unsafe.validateFixedExecutionPlan().empty(),"8K three-step NR/VFG rejected before GPU allocation");
+        check(boundSrStageOutput(s,{3840,2160})&&s.srOutput==SrOutput::Uhd4K&&s.srTarget==SrTarget::Uhd8K&&s.nr&&s.multiplier==2,
+              "atomic SR safety fit retains 8K evaluation, NR and VFG choices");
+        pipeline::EnhanceGraphDesc safe;describeStages(r,s,safe);
+        check(safe.validateFixedExecutionPlan().empty()&&safe.srOutputWidth==7680&&safe.workWidth==3840&&safe.enableNr&&safe.enableFg,
+              "8K internal SR with 4K downstream NR/VFG remains admitted");
+        check(!boundSrStageOutput(s,{3840,2160}),"bounded SR settings are idempotent");
+        s.srOutput=SrOutput::Target;s.nr=false;s.multiplier=1;
+        check(!boundSrStageOutput(s,{3840,2160}),"SR alone retains its explicit final size");
+        s.nr=true;s.srPrescale=SrPrescale::Off;
+        check(!boundSrStageOutput(s,{3840,2160}),"legacy single-step SR settings are unchanged");
+        s.srPrescale=SrPrescale::P1080;s.srOutput=SrOutput::Uhd5K;
+        check(boundSrStageOutput(s,{}),"unknown-source restored three-step settings are bounded before opening");
+    }
     std::printf(failures ? "effect chain: %d FAILURES\n" : "effect chain: all checks passed\n", failures);
     return failures ? 1 : 0;
 }

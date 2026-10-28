@@ -1471,6 +1471,13 @@
    "ja": "NR 層 "
   },
   {
+   "zh": "NR 或补帧开启时，三段式超分的最终处理尺寸最高 4K；选择更高超分目标会同时设为再缩到 4K。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "NR 或補幀開啟時，三段式超分的最終處理尺寸最高 4K；選擇更高超分目標會同時設為再縮到 4K。",
+   "en": "With NR or frame generation enabled, three-step SR is limited to a 4K final processing size. Higher SR targets also select a 4K output fit.",
+   "ja": "NR またはフレーム生成が有効な場合、3段階超解像の最終処理解像度は最大4Kです。それ以上の超解像目標を選ぶと、出力は同時に4Kへ縮小されます。"
+  },
+  {
    "zh": "NR 求值 %1 / NVOF %2",
    "src": "src/ui/bridge/Export.cpp",
    "zh-TW": "NR 求值 %1 / NVOF %2",
@@ -7238,6 +7245,13 @@
    "zh-TW": "已儲存顏色預設：%1",
    "en": "Color preset saved: %1",
    "ja": "カラープリセットを保存しました：%1"
+  },
+  {
+   "zh": "已保留内部超分目标，并将三段式超分的 NR/补帧最终处理尺寸设为 4K，避免恢复高负载组合。",
+   "src": "src/ui/bridge/Export.cpp",
+   "zh-TW": "已保留內部超分目標，並將三段式超分的 NR/補幀最終處理尺寸設為 4K，避免恢復高負載組合。",
+   "en": "The internal SR target is preserved. Final NR/frame-generation processing is fitted to 4K to avoid restoring the high-load combination.",
+   "ja": "内部の超解像目標を保持し、NR／フレーム生成の最終処理解像度を4Kに設定しました。高負荷の組み合わせを復元しないための制限です。"
   },
   {
    "zh": "已停止",

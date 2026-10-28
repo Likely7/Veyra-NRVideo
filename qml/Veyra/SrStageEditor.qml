@@ -12,6 +12,7 @@ ColumnLayout {
     spacing: 6
     readonly property bool stageBackend: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
     readonly property bool stageEnabled: stageBackend && Support.available(veyra, "sr")
+    readonly property bool boundedOutput: stageEnabled && (veyra.nrEnabled || veyra.fgEnabled)
     // SR target box height by the UI target IDs (1 2K, 2 4K, 3 8K, 4 5K, 5 6K, 6 7K).
     readonly property int targetHeight: ({1: 1440, 2: 2160, 3: 4320, 4: 2880, 5: 3456, 6: 4032})[veyra.srTargetIndex] || 2160
     // A manual prescale is stored as 100 + percent (50..90).
@@ -30,9 +31,17 @@ ColumnLayout {
         sized("3", "1080p", 1080), sized("4", "1440p", 1440), {id: "manual", label: qsTr("手动")}
     ]
     readonly property var outputChoices: [
-        {id: "0", label: qsTr("不缩")}, {id: "1", label: qsTr("片源尺寸")}, sized("2", "2K", 1440),
-        sized("3", "4K", 2160), sized("4", "5K", 2880), sized("5", "6K", 3456), sized("6", "7K", 4032)
+        {id: "0", label: qsTr("不缩"), disabled: boundedOutput && targetHeight > 2160},
+        {id: "1", label: qsTr("片源尺寸")}, sized("2", "2K", 1440), sized("3", "4K", 2160),
+        ...[sized("4", "5K", 2880), sized("5", "6K", 3456), sized("6", "7K", 4032)].map(o => Object.assign({}, o, {disabled: o.disabled || boundedOutput}))
     ]
+
+    Text {
+        visible: editor.boundedOutput
+        text: qsTr("NR 或补帧开启时，三段式超分的最终处理尺寸最高 4K；选择更高超分目标会同时设为再缩到 4K。")
+        color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 11
+        wrapMode: Text.WordWrap; Layout.fillWidth: true
+    }
 
     VRow {
         label: qsTr("先降到")
@@ -90,7 +99,7 @@ ColumnLayout {
         VSelect {
             objectName: editor.namePrefix + "-sr-output"
             options: editor.outputChoices
-            value: options.find(o => o.id === String(veyra.srOutput))?.label || ""
+            value: (veyra.chain, options.find(o => o.id === String(veyra.srOutput))?.label || "")
             onPicked: id => veyra.srOutput = Number(id)
         }
     }

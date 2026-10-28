@@ -272,7 +272,10 @@ void QmlPlayerBridge::setSrTargetIndex(int index) {
     }
     if (s.srTarget == want) return;
     s.srTarget = want;
-    impl_->commit(std::move(s));
+    const auto oldOutput=s.srOutput;
+    if(!impl_->commit(std::move(s)))return;
+    if(oldOutput!=settings().srOutput&&settings().srOutput==pipeline::SrOutput::Uhd4K)
+        emit notice(tr("已保留内部超分目标，并将三段式超分的 NR/补帧最终处理尺寸设为 4K，避免恢复高负载组合。"),false);
     emit settingsChanged();
 }
 

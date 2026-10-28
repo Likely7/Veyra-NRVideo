@@ -76,6 +76,14 @@ struct SrStageExtents {
     bool prescaleIneffective=false,outputIneffective=false;
     bool enlarges()const{return evaluated!=input;}
 };
+// Field failure 2026-10-28: a three-step SR result also became the full NR/FG
+// working extent (8K + NR + VFG). Keep the new combination bounded until that
+// full-size path has independent stability evidence. The SR evaluation itself
+// may still be 8K; only downstream NR/FG textures must fit the 4K pixel budget.
+inline bool unsafeSrStageOutput(Extent source,Extent input,Extent evaluated,Extent output,bool downstreamEffects){
+    const bool staged=input!=source||evaluated!=output;
+    return downstreamEffects&&staged&&uint64_t(output.width)*output.height>3840ull*2160;
+}
 inline SrStageExtents srStageExtents(Extent source,SrTarget target,SrPrescale prescale=SrPrescale::Off,SrOutput output=SrOutput::Target){
     // Fit into the box, enlarging only: the single-step SR size rule.
     const auto enlarge=[](Extent from,Extent box){

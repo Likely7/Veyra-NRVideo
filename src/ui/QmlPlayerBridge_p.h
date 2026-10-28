@@ -18,6 +18,7 @@
 #include <QScopedValueRollback>
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
+#include "veyra/engine/SrStageSafety.h"
 #include "veyra/ui/QmlExportQueueModel.h"
 #include "veyra/ui/PlaylistModel.h"
 #include "veyra/ui/UpdateChecker.h"
@@ -860,6 +861,10 @@ struct QmlPlayerBridge::Impl {
         }
         const auto& runtime = activeRuntime();
         engine::fromChain(runtime, settings);
+        if(engine::boundSrStageOutput(settings,snapshot.metrics.resolution.source)){
+            draftGlobals.srOutput=settings.srOutput;
+            veyra::log::warn("sr-stage-safety","bounded NR/FG output to 4K in the same settings transaction; SR target preserved");
+        }
         if (const auto reason = unavailableEffects(settings); !reason.isEmpty()) {
             veyra::log::warn("effect-availability", reason.toStdString());
             return false;
@@ -909,6 +914,10 @@ struct QmlPlayerBridge::Impl {
             }
         }
         engine::fromChain(*projected, s);
+        if(engine::boundSrStageOutput(s,snapshot.metrics.resolution.source)){
+            draftGlobals.srOutput=s.srOutput;
+            veyra::log::warn("sr-stage-safety","bounded node NR/FG output to 4K in the same settings transaction; SR target preserved");
+        }
         if(const auto error=s.validate();!error.empty()){
             veyra::log::error("qml-settings",error);
             validation={false,"效果参数无效，未提交；详见诊断日志"};return false;

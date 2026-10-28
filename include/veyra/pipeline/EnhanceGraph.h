@@ -418,6 +418,12 @@ struct EnhanceGraphDesc {
             interNrColorTarget(parameter)<engine::kMaxNrInstances;
     }
     std::string_view validateFixedExecutionPlan() const {
+        if(enableSr&&engine::srStageBackend(videoSrQuality)&&
+           unsafeSrStageOutput({sourceWidth,sourceHeight},
+               {srInputWidth?srInputWidth:sourceWidth,srInputHeight?srInputHeight:sourceHeight},
+               {srOutputWidth?srOutputWidth:workWidth,srOutputHeight?srOutputHeight:workHeight},
+               {workWidth,workHeight},enableNr||enableFg))
+            return "three-step SR with NR/FG requires an output fit of 4K or smaller";
         if(!fixedExecutionPlanError.empty())return fixedExecutionPlanError;
         if(!fixedExecutionPlan)return {};
         using engine::EffectType;
