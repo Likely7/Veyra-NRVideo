@@ -378,8 +378,10 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         // Throttled like the source-side dovi-probe so a long file stays small.
         static int doviFollowCount=0;
         if(doviFollowCount<3||doviFollowCount%200==0){
-            veyra::log::info("dovi-follow",std::format("n={} follow={} applied={} profile={} maxPq={:.4f} smoothedMaxPq={:.4f} peakNits={:.1f} highlightStartNits={} (user={}) peakCapNits={} (user={})",
-                doviFollowCount,followDovi?1:0,curveFlag!=0.0f?1:0,static_cast<int>(latestDovi_.profile),latestDovi_.maxPq,
+            const std::string sourceLabel=latestDovi_.profile==pipeline::kHdr10PlusProfile?"HDR10+":
+                (latestDovi_.profile==0?"none":std::format("DV{}",int(latestDovi_.profile)));
+            veyra::log::info("dovi-follow",std::format("n={} follow={} applied={} source={} maxPq={:.4f} smoothedMaxPq={:.4f} peakNits={:.1f} highlightStartNits={} (user={}) peakCapNits={} (user={})",
+                doviFollowCount,followDovi?1:0,curveFlag!=0.0f?1:0,sourceLabel,latestDovi_.maxPq,
                 smoothedPeakPq,
                 engine::pqToNits(smoothedPeakPq>0.0?smoothedPeakPq:latestDovi_.maxPq),effective.highlightStartNits,hdrCurve.highlightStartNits,
                 effective.peakCapNits,hdrCurve.peakCapNits));

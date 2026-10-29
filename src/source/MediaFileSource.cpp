@@ -2,6 +2,7 @@
 #include "veyra/pipeline/ColorMetadata.h"
 #include "veyra/source/DolbyVisionRpu.h"
 #include "veyra/pipeline/DolbyVisionP7.h"
+#include "veyra/pipeline/PqTransfer.h"
 
 #include <climits>
 #include <cstddef>
@@ -21,6 +22,7 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/dovi_meta.h>
+#include <libavutil/hdr_dynamic_metadata.h>
 #include <libavutil/hdr_dynamic_vivid_metadata.h>
 #include <libavutil/mastering_display_metadata.h>
 #include <libavutil/hwcontext_d3d12va.h>
@@ -1416,12 +1418,34 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         }
     }
     // Custom (HDR10+): SMPTE ST 2094-40 metadata arrives the same way.
-    if (av_frame_get_side_data(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS) != nullptr) {
+    if (const auto* plusSide = av_frame_get_side_data(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+        plusSide != nullptr && plusSide->size >= sizeof(AVDynamicHDRPlus)) {
         auto& info = info_.hdr10Plus;
         ++info.framesWithMetadata;
-        if (!info.present) {
-            info.present = true;
-            log::info("source-hdr", "HDR10+ dynamic metadata observed (identification only; the static curve still drives the mapping)");
+        const auto& plus = *reinterpret_cast<const AVDynamicHDRPlus*>(plusSide->data);
+        // Custom (HDR10+): SMPTE ST 2094-40 scene metadata. maxscl[] and
+        // average_maxrgb are linear, normalised to 10000 nits; DoviFrameInfo carries
+        // PQ because that is what the Dolby path feeds the same follow logic.
+        // Never set when an RPU is present - the two must not both drive one frame.
+        if (!out.dovi.valid && plus.num_windows > 0) {
+            const auto& win = plus.params[0];
+            const double peakLinear = std::max({av_q2d(win.maxscl[0]), av_q2d(win.maxscl[1]), av_q2d(win.maxscl[2])});
+            const double avgLinear = av_q2d(win.average_maxrgb);
+            if (peakLinear > 0.0) {
+                const double peakNits = peakLinear * 10000.0;
+                const double avgNits = avgLinear * 10000.0;
+                out.dovi.valid = true;
+                out.dovi.profile = pipeline::kHdr10PlusProfile;
+                out.dovi.minPq = 0.0f;
+                out.dovi.maxPq = float(pipeline::nitsToPq(peakNits));
+                out.dovi.avgPq = float(pipeline::nitsToPq(avgNits));
+                if (!info.present) {
+                    info.present = true;
+                    log::info("source-hdr", std::format(
+                        "HDR10+ scene metadata peak={:.1f} nits avg={:.1f} nits (drives the HDR curve while the follow switch is on)",
+                        peakNits, avgNits));
+                }
+            }
         }
     }
     if (frame->format == AV_PIX_FMT_D3D12) {

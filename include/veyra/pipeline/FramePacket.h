@@ -251,11 +251,19 @@ struct HardwareSurfaceInput {
 // carry a Dolby Vision RPU, so nothing downstream changes unless a caller
 // opts in. Values are normalised to 0..1 PQ (raw 12-bit / 4095), matching
 // libplacebo's pl_hdr_metadata.max_pq_y / avg_pq_y.
+// Dynamic brightness metadata for the current frame, whichever format supplied it.
+// The curve follow only needs a peak and an average, so HDR10+ scene metadata is
+// carried here as well instead of threading a second structure through the graph;
+// `profile == kHdr10PlusProfile` marks the provenance, and 0 means "none".
 struct DoviFrameInfo {
     bool valid=false;
     uint8_t profile=0;
     float minPq=0.0f, maxPq=0.0f, avgPq=0.0f;
 };
+
+// Sentinel for DoviFrameInfo::profile when the values came from an HDR10+
+// (SMPTE ST 2094-40) SEI rather than a Dolby RPU. No Dolby profile uses 100.
+inline constexpr uint8_t kHdr10PlusProfile = 100;
 
 // Custom (P5): the decoded Dolby Vision Profile 7 enhancement layer for this
 // frame, when the source produced one. Borrowed for the lifetime of the next
