@@ -560,6 +560,23 @@ decoder: d3d12va decoder opened codec=libdav1d
 该测试流的 L1 标称值接近 10000 nits（`maxPq=0.9995`），会被跟随逻辑的
 「可疑元数据」钳制（>4000 nits 不跟随）拦下——这是预期行为，不是 P10 的问题。
 
+#### 日志陷阱：P7 诊断计数只对 profile 7 有意义（2026-10-29）
+
+`P7 mapping frames supported=/refused=` 这个计数器衡量的是「有多少帧的 P7 重建
+曲线可以算」。它原本没有 profile 守卫，于是 B 站的杜比视界档（P8.4）会打印：
+
+```
+[source-dovi-el] P7 mapping frames supported=0 refused=300 (100.0% base-layer-only)
+```
+
+**P8 没有增强层，不存在「拒绝」这回事**——播放完全正常，是这行日志在说谎。
+
+已修：只在 `profile == 7` 时统计和打印。验证后该行消失，P8.4 的
+`route=4`（HLG）与 `hdr-route input=HLG` 输出不变。
+
+**和 EMA 那个 bug 是同一类教训**：看到一个「100% 失败」的数字，先确认它对当前
+格式是否适用，再判断是不是真坏了。
+
 #### L2 / L8 trim 元数据：数据在，但没人做，也不该猜（2026-10-29）
 
 调研过一次，结论是不做。记在这里，避免以后再查一遍。
