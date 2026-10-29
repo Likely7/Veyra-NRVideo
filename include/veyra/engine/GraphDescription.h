@@ -70,8 +70,11 @@ struct StageRequest {
 inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter){
     return nvidiaAdapter&&srStageBackend(s.videoSrQuality)&&s.dualSrEnabled?s.srPrescale:pipeline::SrPrescale::Off;
 }
+// Supersampling (user 2026-10-28): one RTX Video SR pass evaluates at its target
+// and the result is area-shrunk into srOutput before every later effect. Double
+// SR has its own second target, so the shrink is inactive there.
 inline pipeline::SrOutput runningSrOutput(const EnhancementSettings& s,bool nvidiaAdapter){
-    (void)s;(void)nvidiaAdapter;return pipeline::SrOutput::Target;
+    return nvidiaAdapter&&srStageBackend(s.videoSrQuality)&&!s.dualSrEnabled?s.srOutput:pipeline::SrOutput::Target;
 }
 
 // Fills the stage, size and parameter fields of `desc` from `settings`.
@@ -190,7 +193,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     ChainExecutionPlan execution;
     const auto validation=compileChainExecutionPlan(chain,{{request.width,request.height},settings.srTarget,
         request.stillImage,request.exportJob,boundedAmd,desc.dualSr?srPrescale:pipeline::SrPrescale::Off,
-        pipeline::SrOutput::Target,desc.dualSr,settings.dualSrTarget},execution);
+        desc.dualSr?pipeline::SrOutput::Target:srOutput,desc.dualSr,settings.dualSrTarget},execution);
     if(!validation.accepted){desc.fixedExecutionPlanError=validation.message;return plan;}
     if(request.nodeOrder){
         // Node order owns the first NR stage, even for an ordinary resize or

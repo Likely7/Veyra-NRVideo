@@ -11,7 +11,7 @@ ColumnLayout {
     readonly property var targets: [{id:"1",label:"2K"},{id:"2",label:"4K"},{id:"4",label:"5K"},{id:"5",label:"6K"},{id:"6",label:"7K"},{id:"3",label:"8K"}]
     VRow {
         label: qsTr("目标尺寸")
-        hint: qsTr("基础超分的输出尺寸；关闭双重超分时保持原有单次超分。")
+        hint: qsTr("基础超分的尺寸；设置缩回时为中间尺寸。")
         VSeg { objectName: editor.namePrefix+"-sr-target"; options: editor.targets; current: String(veyra.srTargetIndex); onPicked: id => veyra.srTargetIndex=Number(id) }
     }
     VRow {
@@ -23,6 +23,21 @@ ColumnLayout {
         label: qsTr("质量")
         enabled: editor.supported; opacity: enabled ? 1 : 0.4
         VSeg { objectName:editor.namePrefix+"-sr-quality"; options:[{id:"1",label:"1"},{id:"2",label:"2"},{id:"3",label:"3"},{id:"4",label:"4"}]; current:String(veyra.videoSrQuality); onPicked:id=>veyra.videoSrQuality=Number(id) }
+    }
+    // Supersampling: a single RTX Video SR pass at the target, shrunk into this size.
+    VRow {
+        label: qsTr("超分后缩回到")
+        hint: !editor.supported ? qsTr("超分后缩回目前使用 RTX 视频超分")
+            : veyra.dualSrEnabled ? qsTr("双重超分开启时不使用；关闭双重超分后恢复。")
+            : qsTr("超采样：先超到目标尺寸再精确缩回，更自然、略软；显存更高，降噪和补帧按缩回后尺寸运行。")
+        enabled: editor.supported && !veyra.dualSrEnabled
+        opacity: enabled ? 1 : 0.4
+        VSelect {
+            objectName: editor.namePrefix+"-sr-output"
+            options: [{id:"0",label:qsTr("不缩回")},{id:"1",label:qsTr("片源尺寸")},{id:"2",label:"2K"},{id:"3",label:"4K"},{id:"4",label:"5K"},{id:"5",label:"6K"},{id:"6",label:"7K"}]
+            value: options.find(o=>o.id===String(veyra.srOutput))?.label||qsTr("不缩回")
+            onPicked: id => veyra.srOutput=Number(id)
+        }
     }
     VRow {
         label: qsTr("双重超分")
@@ -67,7 +82,8 @@ ColumnLayout {
             hint: qsTr("RTX 视频超分，独立于基础超分质量")
             VSeg { objectName: editor.namePrefix+"-dual-sr-quality"; options:[{id:"1",label:"1"},{id:"2",label:"2"},{id:"3",label:"3"},{id:"4",label:"4"}]; current:String(veyra.dualSrQuality); onPicked:id=>veyra.dualSrQuality=Number(id) }
         }
-        Text { text: veyra.srStageSummary; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize:11; wrapMode:Text.WordWrap; Layout.fillWidth:true }
-        Text { text: veyra.srStageNote; visible:text.length>0; color:Theme.t2; font.pixelSize:11; wrapMode:Text.WordWrap; Layout.fillWidth:true }
     }
+    // Running sizes of double SR or supersampling, and why a choice did not apply.
+    Text { text: veyra.srStageSummary; visible:text.length>0; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize:11; wrapMode:Text.WordWrap; Layout.fillWidth:true }
+    Text { text: veyra.srStageNote; visible:text.length>0; color:Theme.t2; font.pixelSize:11; wrapMode:Text.WordWrap; Layout.fillWidth:true }
 }

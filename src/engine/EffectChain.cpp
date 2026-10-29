@@ -536,8 +536,8 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
         if (node.enabled && node.type == EffectType::NrEnhance) nrFirst = node.nr.lowLatencyPairing;
     }
     nrFirst = nrFirst && !request.stillImage && !request.exportJob;
-    // SR processing is its evaluated size; a three-step output fit can make
-    // the step output smaller than that.
+    // SR processing is its evaluated size; a supersample shrink makes the step
+    // output smaller than that.
     const auto resolved = pipeline::ResolutionPlan::make(request.source,true,pipeline::NrSizePolicy::Native,true,0,
         request.srTarget,false,0,request.srPrescale,request.srOutput,request.dualSrEnabled,request.dualSrTarget);
     const pipeline::SrStageExtents srStage{resolved.srInput,resolved.srOutput,resolved.base};
@@ -732,7 +732,7 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if ((previous.nrHoldStrength > 0.0f) != (next.nrHoldStrength > 0.0f)) return true;
     if (previous.nrPolicy != next.nrPolicy) return true;
     if (previous.srTarget != next.srTarget) return true;
-    // Three-step SR changes what SR reads and writes.
+    // The double SR reduction and the supersample shrink change what SR reads and writes.
     if (previous.srPrescale != next.srPrescale || previous.srOutput != next.srOutput) return true;
     if(previous.dualSrEnabled!=next.dualSrEnabled||previous.dualSrTarget!=next.dualSrTarget||previous.dualSrQuality!=next.dualSrQuality)return true;
     // A different DLSS SR model (render preset) needs a new SR feature.

@@ -1507,13 +1507,57 @@ static void testThreeStepSr(){
         check(off.activeVideoSettings().srPrescale==SrPrescale::Off&&dlss.activeVideoSettings().srPrescale==SrPrescale::Off,
               "three-step SR: SR off and other backends normalize the fields");
         auto before=s;before.srPrescale=SrPrescale::Off;auto output=s;output.srOutput=SrOutput::Qhd;
-        check(requiresGraphRebuild(before,s)&&!requiresGraphRebuild(s,output),"double SR: reduction rebuilds, retired post-fit does not change the graph");
+        check(requiresGraphRebuild(before,s)&&!requiresGraphRebuild(s,output),"double SR: reduction rebuilds, the kept shrink is inactive under double SR");
+        auto single=s;single.dualSrEnabled=false;auto shrunk=single;shrunk.srOutput=SrOutput::Uhd4K;
+        check(requiresGraphRebuild(single,shrunk)&&shrunk.activeVideoSettings().srOutput==SrOutput::Uhd4K&&
+              output.activeVideoSettings().srOutput==SrOutput::Target,"supersample: the shrink rebuilds a single RTX Video SR pass only");
         auto dlssBefore=before;dlssBefore.videoSrQuality=0;
         check(!requiresGraphRebuild(dlssBefore,dlss),"three-step SR: inactive edits do not rebuild the graph");
         EnhancementSettings restored;ChainGlobalSettings::capture(output).apply(restored);
         check(restored.srPrescale==SrPrescale::P1080&&restored.srOutput==SrOutput::Qhd,"three-step SR: chain globals carry both fields");
         auto a=ChainConfiguration::capture(toChain(s),s,-1,-1);auto b=a;b.srOutput=SrOutput::Qhd;
         check(!(a==b),"three-step SR: configuration equality sees the output fit");
+    }
+}
+
+// Supersampling (2026-10-28): one RTX Video SR pass evaluates at its target and is
+// shrunk before every later effect, so NR and FG never run at the larger size.
+static void testSupersampleSr(){
+    using namespace veyra;using pipeline::Extent;using pipeline::SrOutput;using pipeline::SrTarget;
+    EnhancementSettings s;s.sr=true;s.nr=true;s.lowLatency=false;s.nrPolicy=pipeline::NrSizePolicy::Native;
+    s.videoSrQuality=4;s.srTarget=SrTarget::Uhd8K;s.srOutput=SrOutput::Uhd4K;s.multiplier=2;
+    StageRequest r;r.width=1920;r.height=1080;r.sr=true;r.nr=true;r.fg=true;r.nvidiaAdapter=true;
+    pipeline::EnhanceGraphDesc d;auto p=describeStages(r,s,d);
+    check(d.enableSr&&!d.dualSr&&d.srInputWidth==1920&&d.srOutputWidth==7680&&d.srOutputHeight==4320&&d.workWidth==3840&&d.workHeight==2160&&
+          d.validateFixedExecutionPlan().empty(),"supersample: 1080p evaluates 8K and the chain continues at 4K");
+    bool layers=!d.nrLayersExtent.empty();for(const auto e:d.nrLayersExtent)layers=layers&&e==Extent{3840,2160};
+    check(d.enableNr&&d.nrWidth==3840&&d.nrHeight==2160&&layers&&p.fg==Extent{3840,2160}&&p.output==Extent{3840,2160},
+          "supersample: NR and FG run at the shrunk 4K, never at 8K");
+    for(const bool exporting:{true,false}){
+        auto q=r;q.exportJob=exporting;q.stillImage=!exporting;q.fg=false;describeStages(q,s,d);
+        check(d.srOutputWidth==7680&&d.workWidth==3840&&d.validateFixedExecutionPlan().empty(),
+              exporting?"supersample: exports use the same sizes":"supersample: still images use the same sizes");
+    }
+    {
+        auto source=s;source.srOutput=SrOutput::Source;auto q=r;q.width=2560;q.height=1440;p=describeStages(q,source,d);
+        check(d.srOutputWidth==7680&&d.workWidth==2560&&d.workHeight==1440,"supersample: 2K -> 8K -> back to the exact source size");
+        auto qhd=s;qhd.srTarget=SrTarget::Uhd4K;qhd.srOutput=SrOutput::Qhd;describeStages(r,qhd,d);
+        check(d.srOutputWidth==3840&&d.workWidth==2560&&d.workHeight==1440&&d.validateFixedExecutionPlan().empty(),
+              "supersample: 1080p -> 4K -> a non-integer 2K shrink");
+        auto none=s;none.srTarget=SrTarget::Uhd4K;none.srOutput=SrOutput::Qhd;auto q4k=r;q4k.width=3840;q4k.height=2160;
+        p=describeStages(q4k,none,d);
+        check(p.srOutputIneffective&&d.workWidth==3840&&d.srOutputWidth==3840,"supersample: no enlargement leaves the shrink unapplied and reported");
+    }
+    {
+        auto dual=s;dual.dualSrEnabled=true;dual.srPrescale=pipeline::SrPrescale::P1080;dual.dualSrTarget=SrTarget::Uhd4K;describeStages(r,dual,d);
+        check(d.dualSr&&d.firstSrWidth==7680&&d.srOutputWidth==3840&&d.workWidth==3840,"supersample: double SR keeps its own second target and ignores the shrink");
+        for(const unsigned backend:{0u,kVideoSrFsr}){
+            auto other=s;other.videoSrQuality=backend;describeStages(r,other,d);
+            check(d.workWidth==7680&&d.srOutputWidth==7680&&other.activeVideoSettings().srOutput==SrOutput::Target,
+                  "supersample: DLSS SR and FSR keep their single step");
+        }
+        auto amd=r;amd.nvidiaAdapter=false;describeStages(amd,s,d);
+        check(d.srOutputWidth==d.workWidth,"supersample: other adapters keep the single step");
     }
 }
 
@@ -1591,13 +1635,19 @@ int main() {
     testBeautySettingsChain();
     testWideChains();
     testThreeStepSr();
+    testSupersampleSr();
     {
         using namespace veyra;using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::SrOutput;
         EnhancementSettings s;s.sr=true;s.nr=false;s.videoSrQuality=2;s.srTarget=SrTarget::Uhd8K;
         s.srPrescale=SrPrescale::P1080;s.srOutput=SrOutput::Uhd4K;
         StageRequest r;r.width=2560;r.height=1440;r.sr=true;
         pipeline::EnhanceGraphDesc d;auto p=describeStages(r,s,d);
-        check(!d.dualSr&&d.workWidth==7680&&d.srInputWidth==2560,"dual off restores ordinary 8K and ignores retired pre/post fields");
+        check(!d.dualSr&&d.srInputWidth==2560&&d.srOutputWidth==7680&&d.workWidth==3840&&d.validateFixedExecutionPlan().empty(),
+              "dual off: the kept reduction is unused and the 4K shrink supersamples the 8K pass");
+        {
+            auto plain=s;plain.srOutput=SrOutput::Target;pipeline::EnhanceGraphDesc o;describeStages(r,plain,o);
+            check(!o.dualSr&&o.workWidth==7680&&o.srOutputWidth==7680,"dual off without a shrink keeps ordinary 8K");
+        }
         s.dualSrEnabled=true;s.dualSrTarget=SrTarget::Uhd4K;s.dualSrQuality=1;
         p=describeStages(r,s,d);
         check(d.dualSr&&d.firstSrWidth==7680&&d.srInputWidth==1920&&d.srOutputWidth==3840&&d.workWidth==3840&&d.dualSrQuality==1&&d.videoSrQuality==2&&d.validateFixedExecutionPlan().empty(),

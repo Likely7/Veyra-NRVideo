@@ -32,7 +32,9 @@ struct Shared {
     // instead of reading a mismatched layout.
     // 10: 32-node chain with anti-aliasing; 11: beauty payloads and face detection.
     // 12: SR prescale/output fields change the shared settings layout.
-    static constexpr DWORD kVersion=13; // independent second SR parameters
+    // 13: independent second SR parameters. 14: srOutput (the supersample
+    // shrink) is honoured again; a version 13 worker would silently ignore it.
+    static constexpr DWORD kVersion=14;
     DWORD signature=magic,version=kVersion,bytes=sizeof(Shared);
     EnhancementSettings settings;
     EffectChain chain;

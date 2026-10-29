@@ -1,16 +1,17 @@
-"""Double SR rows in the real app (shared claude-sr-stage-20261028 staging).
+"""Supersample and double SR rows in the real app (shared claude-sr-stage-20261028 staging).
 
 Runs this tree's build in the task's staged copy (tmp stage_app.py: hard links to the
 2.1.1 portable donor, this build's EXE / shaders / QML), on a private profile, playing a
-4K file with RTX Video SR while sr-stage-ui.qml drives the list SR card. Main.qml gets the
-test Loader only inside that copy.
-usage: py -3.11 -X utf8 -B -I scripts/acceptance/sr-stage-ui.py [media]
+1080p file with RTX Video SR while the fixture (dual-sr-ui.qml) drives the list and node SR
+controls. Main.qml gets the test Loader only inside that copy; the fixture's screenshot
+goes to tests/<task>/dual-controls.png.
+usage: py -3.11 -X utf8 -B -I scripts/acceptance/sr-stage-ui.py [media] [--task NAME] [--fixture FILE]
 """
 from pathlib import Path
 import argparse, json, os, shutil, subprocess, sys
 
 parser=argparse.ArgumentParser()
-parser.add_argument('media',nargs='?',default='E:/项目/Veyra/tests/nr-manual-scale-20261024/media/nr-4k30.mp4')
+parser.add_argument('media',nargs='?',default='E:/项目/Veyra/tests/nr-manual-scale-20261024/media/nr-1080p30.mp4')
 parser.add_argument('--task',default='claude-sr-stage-20261028')
 parser.add_argument('--fixture',default='dual-sr-ui.qml')
 args=parser.parse_args()
@@ -34,8 +35,10 @@ P.mkdir(parents=True)
 main_src = R/'qml/Veyra/Main.qml'; main = main_src.read_text('utf8'); pos = main.rfind('}')
 fixture=(R/'scripts/acceptance'/args.fixture).resolve()
 assert fixture.is_relative_to((R/'scripts/acceptance').resolve()) and fixture.is_file()
+SHOT = B/'tests'/T/'dual-controls.png'; SHOT.parent.mkdir(parents=True, exist_ok=True)
 loader = ('\nLoader { anchors.fill: parent; source: ' + json.dumps(fixture.as_uri()) +
-          '; onLoaded: item.media=' + json.dumps(MEDIA.as_posix()) + ' }\n')
+          '; onLoaded: { if (item.shot !== undefined) item.shot=' + json.dumps(SHOT.as_posix()) +
+          '; item.media=' + json.dumps(MEDIA.as_posix()) + ' } }\n')
 replace(A/'qml/Veyra/Main.qml', (main[:pos] + loader + main[pos:]).encode('utf8'))
 env = {k: v for k, v in os.environ.items() if not k.upper().startswith(('VEYRA_', 'QT_', 'QSG_', 'QML_'))}
 log_file = L/'engine.log'; console = L/'console.log'

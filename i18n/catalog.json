@@ -2745,6 +2745,13 @@
    "ja": "待たない"
   },
   {
+   "zh": "不缩回",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "不縮回",
+   "en": "No shrink",
+   "ja": "縮小しない"
+  },
+  {
    "zh": "不补偿",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "不補償",
@@ -3807,13 +3814,6 @@
    "zh-TW": "先選擇解析度，再選擇該解析度支援的幀率和像素格式",
    "en": "Choose a resolution first, then a frame rate and pixel format supported at that resolution.",
    "ja": "先に解像度を選択し、その解像度で対応するフレームレートとピクセル形式を選択してください。"
-  },
-  {
-   "zh": "先降到 / 再缩到目前仅 RTX 视频超分支持",
-   "src": "src/ui/bridge/Enhancement.cpp",
-   "zh-TW": "先降到 / 再縮到目前僅 RTX 影片超解析支援",
-   "en": "Shrink first / Fit after are available with RTX Video Super Resolution only for now",
-   "ja": "先に縮小 / 後で縮小は現在 RTX ビデオ超解像のみ対応しています"
   },
   {
    "zh": "光流",
@@ -5042,6 +5042,20 @@
    "ja": "2段階超解像"
   },
   {
+   "zh": "双重超分开启时不使用；关闭双重超分后恢复。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "雙重超解析開啟時不使用；關閉雙重超解析後恢復。",
+   "en": "Not used while double SR is on; it returns when double SR is turned off.",
+   "ja": "2段階超解像がオンの間は使用されません。オフにすると戻ります。"
+  },
+  {
+   "zh": "双重超分目前仅 RTX 视频超分支持",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "雙重超解析目前僅 RTX 影片超解析支援",
+   "en": "Double SR is currently supported by RTX Video SR only",
+   "ja": "2段階超解像は現在RTX Video SRのみ対応しています"
+  },
+  {
    "zh": "双重超分目前使用 RTX 视频超分",
    "src": "qml/SrStageEditor.qml",
    "zh-TW": "雙重超分目前使用 RTX 視訊超分",
@@ -5840,11 +5854,11 @@
    "ja": "基本設定"
   },
   {
-   "zh": "基础超分的输出尺寸；关闭双重超分时保持原有单次超分。",
+   "zh": "基础超分的尺寸；设置缩回时为中间尺寸。",
    "src": "qml/SrStageEditor.qml",
-   "zh-TW": "基礎超分的輸出尺寸；關閉雙重超分時保持原有單次超分。",
-   "en": "Base SR output size. With Double SR off, the original single-pass behavior is preserved.",
-   "ja": "基本超解像の出力サイズです。2段階超解像をオフにすると、従来の1回の処理を維持します。"
+   "zh-TW": "基礎超解析的尺寸；設定縮回時為中間尺寸。",
+   "en": "Base SR size; with a shrink set, this is the intermediate size.",
+   "ja": "基本超解像のサイズです。縮小先を設定すると中間サイズになります。"
   },
   {
    "zh": "填充裁切",
@@ -15620,6 +15634,34 @@
    "ja": "超解像 4K · NR 1 層 · フレーム生成 2X"
   },
   {
+   "zh": "超分后缩回到",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "超解析後縮回到",
+   "en": "Shrink after SR to",
+   "ja": "超解像後の縮小先"
+  },
+  {
+   "zh": "超分后缩回未生效：超分须先放大画面，且缩回尺寸要小于超分结果。",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "超解析後縮回未生效：超解析須先放大畫面，且縮回尺寸要小於超解析結果。",
+   "en": "Shrink after SR was not applied: SR must enlarge the picture, and the shrink size must be smaller than the SR result.",
+   "ja": "超解像後の縮小は未適用です。超解像で拡大し、縮小先は超解像の結果より小さくする必要があります。"
+  },
+  {
+   "zh": "超分后缩回目前仅 RTX 视频超分支持",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "超解析後縮回目前僅 RTX 影片超解析支援",
+   "en": "Shrink after SR is currently supported by RTX Video SR only",
+   "ja": "超解像後の縮小は現在RTX Video SRのみ対応しています"
+  },
+  {
+   "zh": "超分后缩回目前使用 RTX 视频超分",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "超解析後縮回目前使用 RTX 影片超解析",
+   "en": "Shrink after SR currently uses RTX Video SR",
+   "ja": "超解像後の縮小は現在RTX Video SRを使用します"
+  },
+  {
    "zh": "超分算法",
    "src": "qml/NodePage.qml",
    "zh-TW": "超解析演算法",
@@ -15646,6 +15688,13 @@
    "zh-TW": "超過上限的亮度需要壓縮；是否觸及硬上限以抽樣讀數為準",
    "en": "Brightness beyond the cap needs compression; use the sample reading to check hard clipping",
    "ja": "上限を超える輝度は圧縮が必要です。実際のクリップはサンプル値で確認してください。"
+  },
+  {
+   "zh": "超采样：先超到目标尺寸再精确缩回，更自然、略软；显存更高，降噪和补帧按缩回后尺寸运行。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "超取樣：先超到目標尺寸再精確縮回，更自然、略軟；顯示記憶體更高，降噪和補幀按縮回後尺寸執行。",
+   "en": "Supersampling: SR to the target, then an exact shrink. More natural, slightly softer; more video memory. NR and frame generation run at the shrunk size.",
+   "ja": "スーパーサンプリング：目標サイズまで超解像して正確に縮小します。より自然で少し柔らかく、ビデオメモリ使用量が増えます。ノイズ除去とフレーム生成は縮小後のサイズで実行します。"
   },
   {
    "zh": "越小越敏感，越大稳得越多",

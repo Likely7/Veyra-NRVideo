@@ -1318,12 +1318,16 @@ VPage {
                             title: qsTr("超分辨率")
                             switchAvailable: Support.available(veyra, "sr")
                             summary: !switchAvailable ? Support.reason(veyra, "sr") : (veyra.srEnabled ? (veyra.srBackendChoices?.find(o => o.id === String(veyra.videoSrQuality === 0 || veyra.videoSrQuality === 5 ? veyra.videoSrQuality : 4))?.label || qsTr("RTX 视频超分")) : qsTr("已关闭"))
-                                     + " · " + (srStageShown && veyra.srPrescale > 0 ? (veyra.srPrescale >= 150 ? (veyra.srPrescale - 100) + "%" : ["", "720p", "900p", "1080p", "1440p"][veyra.srPrescale]) + "→" : "")
-                                     + veyra.srTargetLabel
-                                     + (srStageShown && veyra.srOutput > 0 ? "→" + (veyra.srOutput === 1 ? qsTr("片源尺寸") : ["", "", "2K", "4K", "5K", "6K", "7K"][veyra.srOutput]) : "")
-                                     + (veyra.videoSrQuality > 0 ? qsTr(" · 质量 ") + veyra.videoSrQuality : "")
-                            // Three-step SR shows in the summary only where it runs (RTX Video SR).
-                            readonly property bool srStageShown: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
+                                     + " · " + veyra.srTargetLabel
+                                     + (supersampleShown ? "→" + (veyra.srOutput === 1 ? qsTr("片源尺寸") : ["", "", "2K", "4K", "5K", "6K", "7K"][veyra.srOutput]) : "")
+                                     + (dualShown ? "→" + (veyra.srPrescale >= 150 ? (veyra.srPrescale - 100) + "%" : ["", "720p", "900p", "1080p", "1440p"][veyra.srPrescale]) + "→" + ["", "2K", "4K", "8K", "5K", "6K", "7K"][veyra.dualSrTargetIndex] : "")
+                                     + (veyra.videoSrQuality > 0 ? qsTr(" · 质量 ") + veyra.videoSrQuality + (dualShown ? "/" + veyra.dualSrQuality : "") : "")
+                            // Base target, then the supersample shrink, or the double SR reduction
+                            // and second target while double SR is on (RTX Video SR). Each kept
+                            // value is hidden while its mode is off.
+                            readonly property bool rtxVideoSr: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
+                            readonly property bool supersampleShown: !veyra.dualSrEnabled && veyra.srOutput > 0 && rtxVideoSr
+                            readonly property bool dualShown: veyra.dualSrEnabled && veyra.srPrescale > 0 && rtxVideoSr
                             on: veyra.srEnabled
                             open: true
                             onToggled: on => veyra.srEnabled = on

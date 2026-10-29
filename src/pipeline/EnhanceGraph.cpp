@@ -580,8 +580,8 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if(!Extent{srcW_,srcH_}.valid()||!Extent{workW_,workH_}.valid()){
         veyra::log::error("resolution","source/output exceeds D3D12 texture dimensions or is empty");return false;
     }
-    // NR before SR still reads the source. Three-step SR can now produce a
-    // smaller work texture, so its output is not the bound for that NR input.
+    // NR before SR still reads the source. Double SR or a supersample shrink can
+    // produce a smaller work texture, so its output is not the bound for that NR input.
     const auto nrFull=desc_.nrFullExtent(0);
     if(!Extent{nrW_,nrH_}.valid()||nrW_>nrFull.width||nrH_>nrFull.height){
         veyra::log::error("resolution",std::format("invalid NR extent {}x{} for stage input {}x{}",nrW_,nrH_,nrFull.width,nrFull.height));return false;
@@ -595,10 +595,11 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         veyra::log::error("dual-sr","invalid independent SR stages or missing reduction");return false;
     }
     if(srPrescaleActive()||srResolveActive()){
-        // Three-step SR: shrink, enlarge with RTX Video SR, fit into the work extent.
+        // Staged SR: double SR reduces before its second pass; supersampling
+        // enlarges with RTX Video SR and then shrinks into the work extent.
         if(!Extent{srInW_,srInH_}.valid()||!Extent{srOutW_,srOutH_}.valid()||srInW_>(desc.dualSr?desc.firstSrWidth:srcW_)||srInH_>(desc.dualSr?desc.firstSrHeight:srcH_)||
-           srOutW_<workW_||srOutH_<workH_||srOutW_<=srInW_||srOutH_<=srInH_){veyra::log::error("resolution","invalid three-step SR extent");return false;}
-        if(!desc.enableSr||!engine::srStageBackend(desc.videoSrQuality)){veyra::log::error("resolution","three-step SR runs on RTX Video SR only");return false;}
+           srOutW_<workW_||srOutH_<workH_||srOutW_<=srInW_||srOutH_<=srInH_){veyra::log::error("resolution","invalid staged SR extent");return false;}
+        if(!desc.enableSr||!engine::srStageBackend(desc.videoSrQuality)){veyra::log::error("resolution","staged SR runs on RTX Video SR only");return false;}
     }
     diagnostics::DiagnosticEvent initDiagnostic;initDiagnostic.stage="initialize";initDiagnostic.identity={epoch_+1,desc.settingsRevision,0};initDiagnostic.resolution.source={srcW_,srcH_};initDiagnostic.resolution.base=initDiagnostic.resolution.fg=initDiagnostic.resolution.output={workW_,workH_};initDiagnostic.resolution.nr={nrW_,nrH_};initDiagnostic.resolution.flow={nvofW_,nvofH_};initDiagnostic.flowApplied=std::to_string(unsigned(desc.flowQuality));initDiagnostic.runtimeHash="unverified-user-replaceable";Logger::diagnosticContext(initDiagnostic);
     veyra::log::info("resolution",std::format("source={}x{} base={}x{} nr={}x{} flow={}x{} fg={}x{} output={}x{}",srcW_,srcH_,workW_,workH_,nrW_,nrH_,nvofW_,nvofH_,workW_,workH_,workW_,workH_));
@@ -648,7 +649,10 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const uint64_t vfgSharedBytes=vfg?uint64_t((workW_*4u+255u)&~255u)*workH_*(2u+2u*(desc_.fgMultiplier-1u)):0;
     const unsigned generatedTextures=fgEnabled_?(fsrEnabled()?2u:vfg?2u*(desc_.fgMultiplier-1u):10u):0;
     const uint64_t dualBytes=desc_.dualSr?uint64_t(desc_.firstSrWidth)*desc_.firstSrHeight*12u+uint64_t(srcW_)*srcH_*4u:0;
-    const uint64_t estimate=dualBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
+    // Supersampling keeps the larger RGBA8 SR result beside the work textures.
+    const uint64_t supersampleBytes=!desc_.dualSr&&srResolveActive()?uint64_t(srOutW_)*srOutH_*4u:0;
+    const bool stagedSr=desc_.dualSr||supersampleBytes>0;
+    const uint64_t estimate=dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
         +nrTextureBytes+fullLayerBytes
         +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes
         +(flowRefine_?uint64_t(nvofW_)*nvofH_*(flowConsistency_?13u:flowClaims_?18u:12u)+uint64_t(workW_)*workH_*4u:0);
@@ -657,14 +661,15 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         // Keep measured WDDM headroom for SDK-owned allocations. There is no
         // resolution cap or silent resize: reject the transaction when its
         // conservative reservation cannot fit, preserving the previous graph.
-        // The new reservation belongs to the new two-pass graph. Keep the
-        // existing single-pass admission policy, including ordinary 8K.
-        const uint64_t sdkReserve=desc_.dualSr?((nrEnabled_?(1024ull<<20):0)+
+        // The new reservation belongs to the staged graphs (double SR and the
+        // supersample shrink). Keep the existing single-pass admission policy,
+        // including ordinary 8K.
+        const uint64_t sdkReserve=stagedSr?((nrEnabled_?(1024ull<<20):0)+
             (vfg?uint64_t(workW_)*workH_*128u:0)+(256ull<<20)):0;
         const uint64_t required=estimate+sdkReserve;
         const uint64_t available=budget>usage?budget-usage:0;
-        veyra::log::info("memory",std::format("admission textures={}MiB sdkReserve={}MiB available={}MiB headroom={}%",estimate>>20,sdkReserve>>20,available>>20,desc_.dualSr?20:0));
-        if(usage>=budget||required>(desc_.dualSr?available*4/5:available)){veyra::log::error("memory","insufficient adapter budget for requested graph and SDK reservation; dimensions unchanged");return false;}
+        veyra::log::info("memory",std::format("admission textures={}MiB sdkReserve={}MiB available={}MiB headroom={}%",estimate>>20,sdkReserve>>20,available>>20,stagedSr?20:0));
+        if(usage>=budget||required>(stagedSr?available*4/5:available)){veyra::log::error("memory","insufficient adapter budget for requested graph and SDK reservation; dimensions unchanged");return false;}
     }
     Status st = Status::Ok;
 
@@ -1534,7 +1539,8 @@ bool EnhanceGraph::initNgxFeatures()
         if (list == nullptr) { failedBackend_=engine::FailedBackend::Infrastructure; return false; }
         failedBackend_=engine::FailedBackend::Sr;
         if(desc_.videoSrQuality){videoSrBackend_=std::make_unique<ngx::VideoSrBackend>();if(!videoSrBackend_->create(*coreHost_,list,desc_.dualSr?srInW_:0,desc_.dualSr?srInH_:0,desc_.dualSr?srOutW_:0,desc_.dualSr?srOutH_:0))return false;veyra::log::info("video-sr",std::format("selected quality={} input={}x{} output={}x{}{}",desc_.videoSrQuality,srcW_,srcH_,workW_,workH_,
-            srPrescaleActive()||srResolveActive()?std::format(" three-step prescale={}x{} evaluate={}x{}",srInW_,srInH_,srOutW_,srOutH_):std::string()));
+            desc_.dualSr?std::format(" dual reduce={}x{} evaluate={}x{}",srInW_,srInH_,srOutW_,srOutH_):
+            srResolveActive()?std::format(" supersample evaluate={}x{} output={}x{}",srOutW_,srOutH_,workW_,workH_):std::string()));
             if(desc_.dualSr){firstVideoSrBackend_=std::make_unique<ngx::VideoSrBackend>();if(!firstVideoSrBackend_->create(*coreHost_,list,srcW_,srcH_,desc_.firstSrWidth,desc_.firstSrHeight)){
                     if(!firstVideoSrBackend_->duplicateCreation())return false;
                     firstVideoSrBackend_.reset();
@@ -2624,7 +2630,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             list->Dispatch((desc_.firstSrWidth+15)/16,(desc_.firstSrHeight+15)/16,1);tracker_.uavBarrier(list,firstSrLinear_.Get());
             tracker_.transition(list,firstSrLinear_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);++metrics_.srEvaluateCount;
         }
-        // Three-step SR shrinks the resolved SR input first (exact area, linear light).
+        // Double SR reduces the first AI result before the second pass (exact area, linear light).
         const bool prescaled=srPrescaled_!=nullptr;
         if(prescaled){
             tracker_.transition(list,desc_.dualSr?firstSrLinear_.Get():srStageInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

@@ -37,7 +37,8 @@ int wmain(int argc,wchar_t** argv){
         const bool hevc=mode.find(L"hevc")!=std::wstring::npos;
         const bool fsr=mode.find(L"fsr-")==0;
         const bool rejectXess=mode==L"reject-xess";
-        const bool srStage=mode==L"sr-stage-fit"||mode==L"sr-stage-prescale";
+        // Supersampling: 1080p -> 8K -> 4K, or 1080p -> 4K -> a non-integer 2K shrink.
+        const bool srStage=mode==L"sr-supersample"||mode==L"sr-supersample-2k";
         const bool dualSr=mode==L"dual-sr";
         if(dualSr){
             settings.sr=true;settings.videoSrQuality=1;settings.srMotion=MotionSource::Zero;
@@ -48,9 +49,9 @@ int wmain(int argc,wchar_t** argv){
         }
         if(srStage){
             settings.sr=true;settings.videoSrQuality=1;settings.srMotion=MotionSource::Zero;
-            settings.srPrescale=veyra::pipeline::SrPrescale::P1080;
-            settings.srTarget=mode==L"sr-stage-fit"?veyra::pipeline::SrTarget::Uhd8K:veyra::pipeline::SrTarget::Uhd4K;
-            settings.srOutput=mode==L"sr-stage-fit"?veyra::pipeline::SrOutput::Uhd4K:veyra::pipeline::SrOutput::Qhd;
+            settings.srPrescale=veyra::pipeline::SrPrescale::P1080; // kept for double SR, unused here
+            settings.srTarget=mode==L"sr-supersample"?veyra::pipeline::SrTarget::Uhd8K:veyra::pipeline::SrTarget::Uhd4K;
+            settings.srOutput=mode==L"sr-supersample"?veyra::pipeline::SrOutput::Uhd4K:veyra::pipeline::SrOutput::Qhd;
             media.audio.policy=media.subtitles.policy=ExportTrackPolicy::None;
         }
         if(fsr||rejectXess){
@@ -199,13 +200,14 @@ int wmain(int argc,wchar_t** argv){
                 std::wcout<<L"DUAL_SR_EXPORT source=4 encoded=4 frozenAndEvaluated=1\n";
             }
             if(srStage){
-                require(s.encoded==4&&s.sourceFrames==4,"SR stage export lost source frames");
+                require(s.encoded==4&&s.sourceFrames==4,"supersample export lost source frames");
                 require(s.frozen.srPrescale==settings.srPrescale&&s.frozen.srOutput==settings.srOutput&&s.frozen.srTarget==settings.srTarget,
-                        "SR stage fields lost crossing the worker protocol");
+                        "supersample fields lost crossing the worker protocol");
                 std::ifstream log(s.workerLog);const std::string text((std::istreambuf_iterator<char>(log)),{});
-                const auto evaluated=mode==L"sr-stage-fit"?"evaluate=7680x4320":"evaluate=3840x2160";
-                require(text.find(evaluated)!=std::string::npos,"SR stage was not evaluated at the requested dimensions");
-                std::wcout<<L"SR_STAGE_EXPORT encoded="<<s.encoded<<L" frozenAndEvaluated=1\n";
+                const auto evaluated=mode==L"sr-supersample"?"supersample evaluate=7680x4320 output=3840x2160":"supersample evaluate=3840x2160 output=2560x1440";
+                require(text.find(evaluated)!=std::string::npos&&text.find("dual reduce=")==std::string::npos,
+                        "supersample was not evaluated and shrunk at the requested dimensions");
+                std::wcout<<L"SUPERSAMPLE_EXPORT encoded="<<s.encoded<<L" frozenAndEvaluated=1\n";
             }
             if(rejectXess){
                 require(s.message.find(L"XeSS")!=std::wstring::npos&&s.message.find(L"FSR")!=std::wstring::npos,"XeSS rejection lost its backend-specific reason");

@@ -343,7 +343,8 @@ struct EnhancementSettings {
     uint32_t dlssSrModel=0;    // DLSS SR only; see kDlssSrModelCount
     // Base SR uses srTarget; the optional second SR has its own target/quality.
     // srPrescale now lowers the first AI result only when dualSrEnabled.
-    // srOutput is retained for reading the older experimental presets.
+    // srOutput shrinks a single RTX Video SR result (supersampling); double SR
+    // ignores it.
     pipeline::SrPrescale srPrescale=pipeline::SrPrescale::Off;
     pipeline::SrOutput srOutput=pipeline::SrOutput::Target;
     bool dualSrEnabled=false;
@@ -431,10 +432,11 @@ struct EnhancementSettings {
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
         if(!sr||videoSrQuality!=0)active.dlssSrModel=defaults.dlssSrModel;
         if(!sr||!srStageBackend(videoSrQuality)||!dualSrEnabled){
-            active.srPrescale=defaults.srPrescale;active.srOutput=defaults.srOutput;
+            active.srPrescale=defaults.srPrescale;
             active.dualSrEnabled=false;active.dualSrTarget=defaults.dualSrTarget;active.dualSrQuality=defaults.dualSrQuality;
         }
-        active.srOutput=defaults.srOutput; // retired post-fit never changes the running graph
+        // The supersample shrink belongs to a single RTX Video SR pass.
+        if(!sr||!srStageBackend(videoSrQuality)||dualSrEnabled)active.srOutput=defaults.srOutput;
         if(multiplier<=1){
             active.frameGenerationBackend=defaults.frameGenerationBackend;active.vfgQuality=defaults.vfgQuality;
             active.fgMotion=defaults.fgMotion;active.fgStrictAdmission=defaults.fgStrictAdmission;

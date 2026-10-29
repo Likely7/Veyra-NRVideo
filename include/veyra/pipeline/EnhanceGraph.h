@@ -841,7 +841,7 @@ private:
     size_t rgbPitch_=0;
     ComPtr<ID3D12Resource> workRgba_;
     ComPtr<ID3D12Resource> videoSrInput_,videoSrOutput_;
-    ComPtr<ID3D12Resource> srPrescaled_; // linear SR input after the three-step prescale
+    ComPtr<ID3D12Resource> srPrescaled_; // linear second-SR input: the double SR reduction of the first result
     ComPtr<ID3D12Resource> firstSrInput_,firstSrOutput_,firstSrLinear_;
     ComPtr<ID3D12Resource> videoHdrInput_,videoHdrOutput_;
     ComPtr<ID3D12Resource> residualRgba_,nrFlow_,baseFlow_;
@@ -902,7 +902,7 @@ private:
     ComputePass amdHdrEncodePass_, amdHdrRestorePass_;
     float toneMapPeakNits_=0; // latched per graph/source; never varies with frame brightness
     ComputePass rgbPass_,hdrVideoSrPass_;
-    ComputePass srPrescalePass_,srResolvePass_; // three-step SR area shrink before / after RTX Video SR
+    ComputePass srPrescalePass_,srResolvePass_; // area shrinks: double SR reduction / supersample shrink after RTX Video SR
     ComputePass firstSrRestorePass_;
     ComputePass downsamplePass_,residualPass_,stackProtectionPass_,flowAdaptPass_;
     ComputePass flowRefinePass_,flowFillPass_,fgFlowAdaptPass_,flowClaimPass_;

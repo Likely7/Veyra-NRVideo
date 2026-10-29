@@ -45,7 +45,8 @@ void QmlPlayerBridge::setDualSrEnabled(bool enabled){
     auto s=settings();if(s.dualSrEnabled==enabled)return;
     if(enabled&&!engine::srStageBackend(s.videoSrQuality))return;
     s.dualSrEnabled=enabled;
-    if(enabled){if(s.srPrescale==pipeline::SrPrescale::Off)s.srPrescale=pipeline::SrPrescale::P1080;s.srOutput=pipeline::SrOutput::Target;}
+    // A kept supersample shrink is inactive under double SR and returns when it is off.
+    if(enabled&&s.srPrescale==pipeline::SrPrescale::Off)s.srPrescale=pipeline::SrPrescale::P1080;
     if(impl_->commit(s))emit settingsChanged();
 }
 int QmlPlayerBridge::dualSrTargetIndex() const {
@@ -59,13 +60,14 @@ void QmlPlayerBridge::setDualSrTargetIndex(int index){
 int QmlPlayerBridge::dualSrQuality() const {return int(settings().dualSrQuality);}
 void QmlPlayerBridge::setDualSrQuality(int quality){if(quality<1||quality>4)return;auto s=settings();s.dualSrQuality=uint32_t(quality);if(impl_->commit(s))emit settingsChanged();}
 int QmlPlayerBridge::srOutput() const { return int(settings().srOutput); }
-// Three-step SR runs on RTX Video SR only; other backends keep the single step.
+// Double SR and the supersample shrink run on RTX Video SR only; other backends
+// keep the single step.
 void QmlPlayerBridge::setSrPrescale(int value) {
     const auto want = pipeline::SrPrescale(uint32_t(value));
     if (value < 0 || !pipeline::validSrPrescale(want)) return;
     auto s = settings();
     if (s.srPrescale == want) return;
-    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("先降到 / 再缩到目前仅 RTX 视频超分支持"), true); return; }
+    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("双重超分目前仅 RTX 视频超分支持"), true); return; }
     s.srPrescale = want;
     if (impl_->commit(s)) emit settingsChanged();
 }
@@ -74,7 +76,7 @@ void QmlPlayerBridge::setSrOutput(int value) {
     if (value < 0 || !pipeline::validSrOutput(want)) return;
     auto s = settings();
     if (s.srOutput == want) return;
-    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("先降到 / 再缩到目前仅 RTX 视频超分支持"), true); return; }
+    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("超分后缩回目前仅 RTX 视频超分支持"), true); return; }
     s.srOutput = want;
     if (impl_->commit(s)) emit settingsChanged();
 }

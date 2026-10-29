@@ -1,5 +1,7 @@
 # Veyra Agent 工作规则
 
+> **2026-10-28后续（用户选择）**：同分支新增“超分后缩回到”超采样选项：单次RTX视频超分到目标尺寸，再线性光精确缩回`srOutput`，NR/补帧/显示按缩回尺寸运行；双重开启时不用、保留选择。复用`srOutput`字段与`SrResolve`，导出协议14，超采样图同双重图走WDDM预算准入。读`docs/SR_SUPERSAMPLE_2026-10-28.md`及`reports/claude-sr-supersample-20261028/FINAL.json`。用户随后要求直接合并：双重超分、复查修正与超采样已合入本地main（未push/Release），活动树切回main，其余限制同下条。
+
 > **2026-10-28最新用户纠偏（覆盖下面同日早期两条）**：当前分支`codex/dual-sr-20261028`，实施真正的“基础SR→降低第一次AI结果→第二次SR”；双重开关位于基础超分下，展开独立第二设置，默认关闭。普通8K保持原规则，撤回强制4K参数修正/拦截；新双重图按WDDM预算拒绝不足的分配，不偷偷缩小尺寸。当前双重仅RTX视频超分，两次真实Evaluate；本机SDK共享Feature，不宣称两个独立SDK实例。实际验证与限制读`docs/DUAL_SR_PLAN_2026-10-28.md`及`reports/dual-sr-20261028/FINAL.json`。不重跑原8K最终输出+NR+VFG危险组合，根因未证实；不改真实配置、不合并main、不push/Release。
 
 > 2026-10-28后续：用户报告接手测试版在1080p先降/8K最终输出时整机卡住重启。当前修复分支`codex/sr-stage-freeze-20261028`，依据`docs/SR_STAGE_FREEZE_2026-10-28.md`；原存档同时开NR与VFG 2X，不得再无防护重跑原组合。当前将三段式SR的NR/FG最终输出限制到4K，保留8K内部超分；这不是底层驱动挂死已根治的证明。真实用户会话仅只读及保全，不直接修改；私有副本验证。无合并main/push/Release授权。

@@ -92,11 +92,12 @@ static int referenceTest(const std::filesystem::path& directory,const std::wstri
 }
 
 
-// ---- three-step SR (2026-10-28) ----------------------------------------------
-// Real RTX Video SR with the prescale and the output fit: sizes and SDK
-// evaluations, the shrink against a CPU area average of the graph's own encoded
-// input, and the fit against a CPU area average of the same graph run at the SR
-// size (SDR and HDR). Readbacks are restricted to this test.
+// ---- double RTX Video SR and supersampling (2026-10-28) ------------------------
+// Base SR, an exact area reduction of the first AI result, then a second SR with
+// real SDK evaluations: sizes, the reduction against a CPU area average of the
+// graph's own first result, and both HDR restores against the bases they must
+// use. Supersampling: one pass shrunk into the output, against a CPU area average
+// of the same graph's larger result. Readbacks are restricted to this test.
 namespace stage {
 using namespace veyra;
 // Copy a texture in a known state to the CPU and restore that state.
@@ -172,14 +173,14 @@ Frame hdrFrame(const sink::RgbaImage& img){
     }
     return f;
 }
-struct Run{bool ok=false;sink::RgbaImage output,srInput,firstLinear;double srMs=-1;uint64_t evaluations=0;pipeline::Extent srIn{},srOut{},work{};bool enabled=false;};
+struct Run{bool ok=false;sink::RgbaImage output,srInput,firstLinear;double srMs=-1;uint64_t evaluations=0;pipeline::Extent srIn{},srOut{},work{},first{};bool enabled=false;};
 Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* frame,bool hdr,const engine::EnhancementSettings& settings,
         bool readSrInput,bool still=false,bool uncompressed=false,unsigned frames=6,bool readFirst=false){
     engine::StageRequest request;request.width=unsigned(frame->width);request.height=unsigned(frame->height);request.sr=settings.sr;
     request.stillImage=still;request.uncompressedSource=uncompressed;request.nr=settings.nr;
     pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
     desc.rgbInput=!hdr;desc.hdrInput=hdr;desc.hdrOutput=hdr;desc.outputDitherStep=0;desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
-    Run r;r.srIn={desc.srInputWidth,desc.srInputHeight};r.srOut={desc.srOutputWidth,desc.srOutputHeight};r.work={desc.workWidth,desc.workHeight};
+    Run r;r.srIn={desc.srInputWidth,desc.srInputHeight};r.srOut={desc.srOutputWidth,desc.srOutputHeight};r.work={desc.workWidth,desc.workHeight};r.first={desc.firstSrWidth,desc.firstSrHeight};
     if(!desc.fixedExecutionPlanError.empty()){std::cout<<"plan error: "<<desc.fixedExecutionPlanError<<std::endl;return r;}
     pipeline::EnhanceGraph graph(ctx,ring);
     if(!graph.initialize(desc)||!graph.createViews()){graph.shutdown();return r;}
@@ -197,9 +198,14 @@ Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* f
     if(!ms.empty()){std::sort(ms.begin(),ms.end());r.srMs=ms[ms.size()/2];}
     r.ok=ok;out={};ring.drainQueue();graph.shutdown();return r;
 }
-engine::EnhancementSettings vsr(unsigned quality,pipeline::SrTarget target,pipeline::SrPrescale prescale=pipeline::SrPrescale::Off,pipeline::SrOutput output=pipeline::SrOutput::Target){
+engine::EnhancementSettings vsr(unsigned quality,pipeline::SrTarget target){
     engine::EnhancementSettings s;s.nr=false;s.sr=quality!=0;s.multiplier=1;s.videoSrQuality=quality?quality:engine::kDefaultVideoSrQuality;
-    s.srTarget=target;s.srPrescale=prescale;s.srOutput=output;s.srMotion=engine::MotionSource::Zero;s.hdrOutputMode=engine::HdrOutputMode::ScRgb;
+    s.srTarget=target;s.srMotion=engine::MotionSource::Zero;s.hdrOutputMode=engine::HdrOutputMode::ScRgb;
+    return s;
+}
+// Base SR to `target`, its result reduced to `reduce`, then a second SR to `second`.
+engine::EnhancementSettings twoPass(unsigned quality,pipeline::SrTarget target,pipeline::SrPrescale reduce,pipeline::SrTarget second,unsigned secondQuality){
+    auto s=vsr(quality,target);s.dualSrEnabled=true;s.srPrescale=reduce;s.dualSrTarget=second;s.dualSrQuality=secondQuality;
     return s;
 }
 // CPU area average of an image by an integer factor, SDR (sRGB) or scRGB FP16.
@@ -212,94 +218,70 @@ std::vector<double> shrink(const sink::RgbaImage& img,unsigned factor,bool hdr){
     }
     return out;
 }
-int test(const std::filesystem::path& directory){
+// CPU exact area resample to linear RGB with NrDownsample's weights; fp16 reads
+// linear/scRGB FP16 texels, otherwise sRGB bytes.
+std::vector<double> area(const sink::RgbaImage& img,unsigned w,unsigned h,bool fp16){
+    std::vector<double> out(size_t(w)*h*3);const double sx=double(img.width)/w,sy=double(img.height)/h;
+    for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+        const double x0=x*sx,x1=(x+1)*sx,y0=y*sy,y1=(y+1)*sy;double sum[3]{},weights=0;
+        for(unsigned j=unsigned(y0);j<unsigned(std::ceil(y1))&&j<img.height;++j)for(unsigned i=unsigned(x0);i<unsigned(std::ceil(x1))&&i<img.width;++i){
+            const double weight=(std::min(x1,i+1.0)-std::max(x0,double(i)))*(std::min(y1,j+1.0)-std::max(y0,double(j)));
+            if(weight<=0)continue;weights+=weight;
+            for(unsigned c=0;c<3;++c){const size_t p=(size_t(j)*img.width+i)*4+c;sum[c]+=weight*(fp16?half(img,p):decode(img.pixels[p]));}
+        }
+        for(unsigned c=0;c<3;++c)out[(size_t(y)*w+x)*3+c]=sum[c]/weights;
+    }
+    return out;
+}
+std::vector<double> linear(const sink::RgbaImage& img){
+    std::vector<double> out(size_t(img.width)*img.height*3);
+    for(size_t p=0;p<size_t(img.width)*img.height;++p)for(unsigned c=0;c<3;++c)out[p*3+c]=half(img,p*4+c);
+    return out;
+}
+// HdrVideoSrRestore's bilinear base sample for output pixel (x,y) of a W x H output.
+double bilinear(const std::vector<double>& img,unsigned w,unsigned h,unsigned W,unsigned H,unsigned x,unsigned y,unsigned c){
+    const double px=(x+0.5)*double(w)/W-0.5,py=(y+0.5)*double(h)/H-0.5;const int qx=int(std::floor(px)),qy=int(std::floor(py));
+    const double fx=px-qx,fy=py-qy;double v=0;
+    for(int j=0;j<2;++j)for(int i=0;i<2;++i){const int sx=std::clamp(qx+i,0,int(w)-1),sy=std::clamp(qy+j,0,int(h)-1);
+        v+=img[(size_t(sy)*w+sx)*3+c]*(i?fx:1-fx)*(j?fy:1-fy);}
+    return v;
+}
+// SDR input/output transparency (the A/B baseline) and both HDR restores of
+// double SR. HdrRestore returns its base plus a delta clamped to +-0.5*203/80,
+// so every output lies within that bound of the base it sampled: the first
+// restore must sample the source, the second the area reduction of the first
+// AI result. A full-size base would break the bound on the thin 1000-nit lines.
+int restore(const std::filesystem::path& directory){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
     if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
     bool ok=true;
     const auto check=[&](bool pass,const std::string& label){std::cout<<(pass?"PASS ":"FAIL ")<<label<<std::endl;ok=ok&&pass;};
-    using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::SrOutput;using pipeline::Extent;
-    const auto uhd=pattern(3840,2160),qhd=pattern(2560,1440);
-    const auto uhdSdr=sdrFrame(uhd),qhdSdr=sdrFrame(qhd),uhdHdr=hdrFrame(uhd),qhdHdr=hdrFrame(qhd);
-    if(!uhdSdr||!qhdSdr||!uhdHdr||!qhdHdr)return 2;
-    // 1. Without SR the input/output conversion is transparent (the A/B baseline).
+    using pipeline::SrTarget;using pipeline::SrPrescale;
     {
-        const auto off=run(ctx,ring,uhdSdr.get(),false,vsr(0,SrTarget::Uhd4K),false);
+        const auto uhd=pattern(3840,2160);const auto frame=sdrFrame(uhd);if(!frame)return 2;
+        const auto off=run(ctx,ring,frame.get(),false,vsr(0,SrTarget::Uhd4K),false);
         int worst=0;for(size_t i=0;off.ok&&i<uhd.pixels.size();++i)if(i%4!=3)worst=std::max(worst,std::abs(int(off.output.pixels[i])-int(uhd.pixels[i])));
         check(off.ok&&off.output.width==3840&&worst<=1,"SDR input/output conversion is transparent (max "+std::to_string(worst)+")");
     }
-    // 2. SDR prescale: 4K -> 1080p -> RTX Video SR 4K.
-    for(const unsigned quality:{1u,4u}){
-        const auto native=run(ctx,ring,uhdSdr.get(),false,vsr(quality,SrTarget::Uhd4K),true);
-        const auto shrunk=run(ctx,ring,uhdSdr.get(),false,vsr(quality,SrTarget::Uhd4K,SrPrescale::P1080),true);
-        check(native.ok&&native.enabled&&native.srInput.width==3840&&native.evaluations==6,"SDR q"+std::to_string(quality)+" single step: 4K native restore runs RTX Video SR");
-        check(shrunk.ok&&shrunk.enabled&&shrunk.srIn==Extent{1920,1080}&&shrunk.srOut==Extent{3840,2160}&&shrunk.srInput.width==1920&&
-              shrunk.srInput.height==1080&&shrunk.output.width==3840&&shrunk.output.height==2160&&shrunk.evaluations==6,
-              "SDR q"+std::to_string(quality)+" prescale: SR reads 1920x1080 and writes 3840x2160");
-        if(native.ok&&shrunk.ok&&native.srInput.width==3840&&shrunk.srInput.width==1920){
-            const auto reference=shrink(native.srInput,2,false);int worst=0;size_t over=0,count=0;
-            for(size_t p=0;p<size_t(1920)*1080;++p)for(unsigned c=0;c<3;++c){
-                const int d=std::abs(int(shrunk.srInput.pixels[p*4+c])-int(std::lround(encode(reference[p*3+c]))));worst=std::max(worst,d);over+=d>1;++count;}
-            check(worst<=2&&over*1000<count,"SDR q"+std::to_string(quality)+" prescale equals the area average in linear light (max "+std::to_string(worst)+", >1: "+std::to_string(over)+")");
+    const auto hdr=hdrFrame(pattern(2560,1440));if(!hdr)return 2;
+    const auto source=run(ctx,ring,hdr.get(),true,vsr(0,SrTarget::Uhd4K),false);
+    const auto two=run(ctx,ring,hdr.get(),true,twoPass(2,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,2),false,false,false,3,true);
+    check(source.ok&&source.output.width==2560&&two.ok&&two.evaluations==6&&two.firstLinear.width==3840&&two.output.width==3840,
+          "HDR double SR: 2560x1440 -> base 3840x2160 -> 1920x1080 -> second 3840x2160");
+    if(source.ok&&two.ok&&source.output.width==2560&&two.firstLinear.width==3840&&two.output.width==3840){
+        const auto base=linear(source.output),reduced=area(two.firstLinear,1920,1080,true);
+        const double bound=0.5*203.0/80.0+0.05;double first=0,second=0;size_t bad=0;
+        for(unsigned y=0;y<2160;++y)for(unsigned x=0;x<3840;++x)for(unsigned c=0;c<3;++c){
+            const size_t i=(size_t(y)*3840+x)*4+c;const double f=half(two.firstLinear,i),o=half(two.output,i);
+            if(!std::isfinite(f)||!std::isfinite(o)){++bad;continue;}
+            first=std::max(first,std::abs(f-bilinear(base,2560,1440,3840,2160,x,y,c)));
+            second=std::max(second,std::abs(o-bilinear(reduced,1920,1080,3840,2160,x,y,c)));
         }
-        std::cout<<"STAGE_TIMING case=sdr-4k q="<<quality<<" nativeSrMs="<<native.srMs<<" prescale1080SrMs="<<shrunk.srMs<<std::endl;
+        check(!bad&&first<=bound,"HDR first restore uses the source base ("+std::to_string(first)+")");
+        check(!bad&&second<=bound,"HDR second restore uses the reduced first result ("+std::to_string(second)+")");
     }
-    // 3. SDR fit: 2K -> RTX Video SR 8K -> 4K equals the area average of the 8K run.
-    {
-        const auto full=run(ctx,ring,qhdSdr.get(),false,vsr(2,SrTarget::Uhd8K),false);
-        const auto fit=run(ctx,ring,qhdSdr.get(),false,vsr(2,SrTarget::Uhd8K,SrPrescale::Off,SrOutput::Uhd4K),false);
-        check(full.ok&&full.output.width==7680&&fit.ok&&fit.enabled&&fit.srOut==Extent{7680,4320}&&fit.work==Extent{3840,2160}&&
-              fit.output.width==3840&&fit.output.height==2160&&fit.evaluations==6,"SDR fit: SR writes 7680x4320, the chain runs at 3840x2160");
-        if(full.ok&&fit.ok&&full.output.width==7680&&fit.output.width==3840){
-            const auto reference=shrink(full.output,2,false);int worst=0;size_t over=0,count=0;
-            for(size_t p=0;p<size_t(3840)*2160;++p)for(unsigned c=0;c<3;++c){
-                const int d=std::abs(int(fit.output.pixels[p*4+c])-int(std::lround(encode(reference[p*3+c]))));worst=std::max(worst,d);over+=d>1;++count;}
-            check(worst<=2&&over*200<count,"SDR fit equals the area average of the 8K result (max "+std::to_string(worst)+", >1: "+std::to_string(over)+")");
-        }
-        std::cout<<"STAGE_TIMING case=sdr-2k-8k q=2 fullSrMs="<<full.srMs<<" fitSrMs="<<fit.srMs<<std::endl;
-    }
-    // 4. HDR fit (proxy + restore per SR texel, then the average), scRGB output.
-    {
-        const auto full=run(ctx,ring,qhdHdr.get(),true,vsr(2,SrTarget::Uhd8K),false);
-        const auto fit=run(ctx,ring,qhdHdr.get(),true,vsr(2,SrTarget::Uhd8K,SrPrescale::Off,SrOutput::Uhd4K),false);
-        check(full.ok&&fit.ok&&fit.enabled&&fit.output.width==3840&&full.output.width==7680,"HDR fit: 8K SR result fitted to 3840x2160");
-        if(full.ok&&fit.ok&&full.output.width==7680&&fit.output.width==3840){
-            const auto reference=shrink(full.output,2,true);size_t over=0,count=0,bad=0;double worst=0,peak=0;
-            for(size_t p=0;p<size_t(3840)*2160;++p)for(unsigned c=0;c<3;++c){
-                const double v=half(fit.output,p*4+c),r=reference[p*3+c];if(!std::isfinite(v)){++bad;continue;}
-                const double d=std::abs(v-r);worst=std::max(worst,d);peak=std::max(peak,v);over+=d>0.003+0.003*std::abs(r);++count;}
-            check(!bad&&over*1000<count,"HDR fit equals the area average of the 8K restore (worst "+std::to_string(worst)+", over "+std::to_string(over)+", peak "+std::to_string(peak)+")");
-        }
-    }
-    // 5. HDR prescale. HdrRestore returns base + a delta clamped to +-0.5*203/80, so
-    // every output channel lies within that bound of the base it sampled. The
-    // single step must stay near the full linear input; the prescale near the
-    // bilinear-sampled area average of it (a full-size base would fail on the
-    // thin 1000-nit lines).
-    {
-        const auto linear=run(ctx,ring,uhdHdr.get(),true,vsr(0,SrTarget::Uhd4K),false);
-        const auto native=run(ctx,ring,uhdHdr.get(),true,vsr(2,SrTarget::Uhd4K),false);
-        const auto shrunk=run(ctx,ring,uhdHdr.get(),true,vsr(2,SrTarget::Uhd4K,SrPrescale::P1080),false);
-        check(linear.ok&&native.ok&&shrunk.ok&&shrunk.enabled&&shrunk.srIn==Extent{1920,1080}&&shrunk.output.width==3840,"HDR prescale: SR reads 1920x1080");
-        if(linear.ok&&native.ok&&shrunk.ok&&linear.output.width==3840&&native.output.width==3840&&shrunk.output.width==3840){
-            const auto base=shrink(linear.output,2,true);
-            const auto sample=[&](unsigned x,unsigned y,unsigned c){
-                const double px=(x+0.5)*0.5-0.5,py=(y+0.5)*0.5-0.5;const int qx=int(std::floor(px)),qy=int(std::floor(py));
-                const double fx=px-qx,fy=py-qy;double v=0;
-                for(int j=0;j<2;++j)for(int i=0;i<2;++i){const int sx=std::clamp(qx+i,0,1919),sy=std::clamp(qy+j,0,1079);
-                    v+=base[(size_t(sy)*1920+sx)*3+c]*(i?fx:1-fx)*(j?fy:1-fy);}
-                return v;};
-            const double bound=0.5*203.0/80.0+0.05;double worstNative=0,worstShrunk=0,a=0,b=0;size_t bad=0;
-            for(unsigned y=0;y<2160;++y)for(unsigned x=0;x<3840;++x)for(unsigned c=0;c<3;++c){
-                const size_t i=(size_t(y)*3840+x)*4+c;const double n=half(native.output,i),s=half(shrunk.output,i);
-                if(!std::isfinite(n)||!std::isfinite(s)){++bad;continue;}
-                worstNative=std::max(worstNative,std::abs(n-half(linear.output,i)));worstShrunk=std::max(worstShrunk,std::abs(s-sample(x,y,c)));a+=n;b+=s;}
-            check(!bad&&worstNative<=bound,"HDR single step stays within the restore clamp of the full base ("+std::to_string(worstNative)+")");
-            check(!bad&&worstShrunk<=bound,"HDR prescale restores from the shrunk base ("+std::to_string(worstShrunk)+")");
-            check(std::abs(b/a-1)<0.03,"HDR prescale keeps the mean brightness (ratio "+std::to_string(b/a)+")");
-        }
-    }
-    ring.shutdown();ctx.shutdown();std::cout<<"STAGE_RESULT passed="<<ok<<std::endl;return ok?0:1;
+    ring.shutdown();ctx.shutdown();std::cout<<"DUAL_RESTORE passed="<<ok<<std::endl;return ok?0:1;
 }
 int dual(const std::filesystem::path& directory){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
@@ -327,58 +309,118 @@ int dual(const std::filesystem::path& directory){
     const auto h=run(ctx,ring,hdr.get(),true,s,false,false,false,2,true);
     bool finite=h.ok;for(size_t i=0;finite&&i<h.output.pixels.size()/2;++i)finite=std::isfinite(half(h.output,i));
     check(finite&&h.evaluations==4&&h.firstLinear.width==3840,"HDR restores the first result before the second reduction and evaluation");
-    s.dualSrEnabled=false;s.srTarget=pipeline::SrTarget::Uhd8K;s.srOutput=pipeline::SrOutput::Uhd4K;
+    s.dualSrEnabled=false;s.srTarget=pipeline::SrTarget::Uhd8K;s.srOutput=pipeline::SrOutput::Target;
     const auto normal=run(ctx,ring,sdr.get(),false,s,false,false,false,2);
-    check(normal.ok&&normal.evaluations==2&&normal.output.width==7680,"dual OFF preserves normal 8K output and ignores retired pre/post fields");
+    check(normal.ok&&normal.evaluations==2&&normal.output.width==7680,"dual OFF preserves normal 8K output and ignores the kept reduction");
     ring.shutdown();ctx.shutdown();std::cout<<"DUAL_SR_RESULT passed="<<ok<<std::endl;return ok?0:1;
 }
+// A final output smaller than the source, also with native NR first at the
+// source size, and a non-integer reduction of the first AI result.
 int boundaries(const std::filesystem::path& directory){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
     if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
     bool ok=true;
-    const auto check=[&](bool pass,const char* label){std::cout<<(pass?"PASS ":"FAIL ")<<label<<std::endl;ok=ok&&pass;};
-    using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::SrOutput;using pipeline::Extent;
-    const auto frame=sdrFrame(pattern(3840,2160));if(!frame)return 2;
-    auto settings=vsr(1,SrTarget::Qhd,SrPrescale::P1080);
-    const auto down=run(ctx,ring,frame.get(),false,settings,false);
-    check(down.ok&&down.enabled&&down.work==Extent{2560,1440}&&down.evaluations==6,
-          "4K -> 1080p -> 2K runs with a chain output smaller than the source");
+    const auto check=[&](bool pass,const std::string& label){std::cout<<(pass?"PASS ":"FAIL ")<<label<<std::endl;ok=ok&&pass;};
+    using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::Extent;
+    const auto uhd=sdrFrame(pattern(3840,2160)),qhd=sdrFrame(pattern(2560,1440));if(!uhd||!qhd)return 2;
+    auto settings=twoPass(1,SrTarget::Uhd4K,SrPrescale::P720,SrTarget::Qhd,1);
+    const auto down=run(ctx,ring,uhd.get(),false,settings,false,false,false,3);
+    check(down.ok&&down.enabled&&down.srIn==Extent{1280,720}&&down.work==Extent{2560,1440}&&down.evaluations==6,
+          "4K -> base 4K -> 720p -> second 2K: the final output may be smaller than the source");
     settings.nr=true;settings.lowLatency=true;settings.nrPolicy=pipeline::NrSizePolicy::Native;
     settings.nrTemporal=false;settings.nrMotion=engine::MotionSource::Zero;
-    const auto nrFirst=run(ctx,ring,frame.get(),false,settings,false);
+    const auto nrFirst=run(ctx,ring,uhd.get(),false,settings,false,false,false,3);
     check(nrFirst.ok&&nrFirst.enabled&&nrFirst.work==Extent{2560,1440}&&nrFirst.evaluations==6,
-          "native NR at source 4K -> prescale 1080p -> VSR 2K retains the source NR extent");
-    settings.nr=false;settings.lowLatency=false;settings.srPrescale=SrPrescale::P720;
-    settings.srTarget=SrTarget::Uhd4K;settings.srOutput=SrOutput::Qhd;
-    const auto fit=run(ctx,ring,frame.get(),false,settings,false);
-    check(fit.ok&&fit.enabled&&fit.srIn==Extent{1280,720}&&fit.srOut==Extent{3840,2160}&&fit.work==Extent{2560,1440},
-          "4K -> 720p -> VSR 4K -> 2K supports a non-integer area resolve");
-    ring.shutdown();ctx.shutdown();std::cout<<"STAGE_BOUNDARIES passed="<<ok<<std::endl;return ok?0:1;
+          "native NR first at the 4K source still runs with a 2K double SR output");
+    const auto manual=run(ctx,ring,qhd.get(),false,twoPass(1,SrTarget::Uhd4K,pipeline::srPrescaleForPercent(75),SrTarget::Uhd4K,1),true,false,false,3,true);
+    check(manual.ok&&manual.srIn==Extent{2880,1620}&&manual.firstLinear.width==3840&&manual.work==Extent{3840,2160}&&manual.evaluations==6,
+          "75 % of the 4K first result is 2880x1620");
+    if(manual.ok&&manual.srInput.width==2880&&manual.firstLinear.width==3840){
+        const auto expected=area(manual.firstLinear,2880,1620,true);int worst=0;size_t over=0;
+        for(size_t p=0;p<size_t(2880)*1620;++p)for(unsigned c=0;c<3;++c){
+            const int d=std::abs(int(manual.srInput.pixels[p*4+c])-int(std::lround(encode(expected[p*3+c]))));worst=std::max(worst,d);over+=d>1;}
+        check(worst<=2&&over*1000<size_t(2880)*1620*3,"the non-integer reduction equals the exact area average (max "+std::to_string(worst)+", >1: "+std::to_string(over)+")");
+    }
+    ring.shutdown();ctx.shutdown();std::cout<<"DUAL_BOUNDARIES passed="<<ok<<std::endl;return ok?0:1;
 }
+// Every RTX Video SR quality with each larger second target, a 720p reduction
+// and a 21:9 source, through real SDK evaluations of both passes.
 int capabilities(const std::filesystem::path& directory){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
     if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
-    using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::SrOutput;using pipeline::Extent;
-    const auto frame=sdrFrame(pattern(3840,2160)),wide=sdrFrame(pattern(3840,1600));if(!frame||!wide)return 2;
+    using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::Extent;
+    const auto fhd=sdrFrame(pattern(1920,1080)),wide=sdrFrame(pattern(3840,1600));if(!fhd||!wide)return 2;
     bool ok=true;unsigned cases=0;
     for(unsigned quality=1;quality<=4;++quality){
         for(auto target:{SrTarget::Uhd5K,SrTarget::Uhd6K,SrTarget::Uhd7K,SrTarget::Uhd8K}){
-            const auto result=run(ctx,ring,frame.get(),false,vsr(quality,target,SrPrescale::P1080,SrOutput::Uhd4K),false,false,false,2);
-            const bool passed=result.ok&&result.srIn==Extent{1920,1080}&&result.srOut==pipeline::srTargetExtent(target)&&
-                result.work==Extent{3840,2160}&&result.evaluations==2;
-            std::cout<<"STAGE_CAPABILITY q="<<quality<<" target="<<uint32_t(target)<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
+            const auto result=run(ctx,ring,fhd.get(),false,twoPass(quality,SrTarget::Uhd4K,SrPrescale::P1080,target,quality),false,false,false,2);
+            const bool passed=result.ok&&result.first==Extent{3840,2160}&&result.srIn==Extent{1920,1080}&&
+                result.srOut==pipeline::srTargetExtent(target)&&result.work==pipeline::srTargetExtent(target)&&result.evaluations==4;
+            std::cout<<"DUAL_CAPABILITY q="<<quality<<" second="<<uint32_t(target)<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
         }
         for(bool isWide:{false,true}){
-            const auto result=run(ctx,ring,isWide?wide.get():frame.get(),false,vsr(quality,SrTarget::Uhd4K,isWide?SrPrescale::P1080:SrPrescale::P720),false,false,false,2);
-            const bool passed=result.ok&&result.evaluations==2&&result.work==(isWide?Extent{3840,1600}:Extent{3840,2160});
-            std::cout<<"STAGE_CAPABILITY q="<<quality<<" wide="<<isWide<<" scale="<<(isWide?2:3)<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
+            const auto result=run(ctx,ring,isWide?wide.get():fhd.get(),false,
+                twoPass(quality,SrTarget::Uhd4K,isWide?SrPrescale::P1080:SrPrescale::P720,SrTarget::Uhd4K,quality),false,false,false,2);
+            const bool passed=result.ok&&result.evaluations==4&&result.srIn==(isWide?Extent{1920,800}:Extent{1280,720})&&
+                result.work==(isWide?Extent{3840,1600}:Extent{3840,2160});
+            std::cout<<"DUAL_CAPABILITY q="<<quality<<" wide="<<isWide<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
         }
     }
-    ring.shutdown();ctx.shutdown();std::cout<<"STAGE_CAPABILITIES cases="<<cases<<" passed="<<ok<<std::endl;return ok?0:1;
+    ring.shutdown();ctx.shutdown();std::cout<<"DUAL_CAPABILITIES cases="<<cases<<" passed="<<ok<<std::endl;return ok?0:1;
 }
-pipeline::SrPrescale prescaleArg(std::wstring_view v){
+// Supersampling: one RTX Video SR pass at 8K shrunk to 4K equals the CPU area
+// average of the same graph's 8K result (SDR in sRGB; HDR after the per-texel
+// restore), the exact source size and a non-integer 2K shrink run, and double
+// SR ignores a kept shrink.
+int supersample(const std::filesystem::path& directory){
+    std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
+    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
+    if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
+    bool ok=true;
+    const auto check=[&](bool pass,const std::string& label){std::cout<<(pass?"PASS ":"FAIL ")<<label<<std::endl;ok=ok&&pass;};
+    using pipeline::SrTarget;using pipeline::SrOutput;using pipeline::Extent;
+    const auto qhd=pattern(2560,1440);const auto qhdSdr=sdrFrame(qhd),qhdHdr=hdrFrame(qhd),hd=sdrFrame(pattern(1920,1080));
+    if(!qhdSdr||!qhdHdr||!hd)return 2;
+    const auto shrunk=[](unsigned quality,SrTarget target,SrOutput output){auto s=vsr(quality,target);s.srOutput=output;return s;};
+    {
+        const auto full=run(ctx,ring,qhdSdr.get(),false,vsr(2,SrTarget::Uhd8K),false);
+        const auto fit=run(ctx,ring,qhdSdr.get(),false,shrunk(2,SrTarget::Uhd8K,SrOutput::Uhd4K),false);
+        check(full.ok&&full.output.width==7680&&fit.ok&&fit.enabled&&fit.srOut==Extent{7680,4320}&&fit.work==Extent{3840,2160}&&
+              fit.output.width==3840&&fit.output.height==2160&&fit.evaluations==6,"SDR: SR writes 7680x4320 once per frame, the chain runs at 3840x2160");
+        if(full.ok&&fit.ok&&full.output.width==7680&&fit.output.width==3840){
+            const auto reference=shrink(full.output,2,false);int worst=0;size_t over=0,count=0;
+            for(size_t p=0;p<size_t(3840)*2160;++p)for(unsigned c=0;c<3;++c){
+                const int d=std::abs(int(fit.output.pixels[p*4+c])-int(std::lround(encode(reference[p*3+c]))));worst=std::max(worst,d);over+=d>1;++count;}
+            check(worst<=2&&over*200<count,"SDR shrink equals the area average of the 8K result (max "+std::to_string(worst)+", >1: "+std::to_string(over)+")");
+        }
+        std::cout<<"SUPERSAMPLE_TIMING case=sdr-2k-8k-4k q=2 fullSrMs="<<full.srMs<<" shrinkSrMs="<<fit.srMs<<std::endl;
+    }
+    {
+        const auto full=run(ctx,ring,qhdHdr.get(),true,vsr(2,SrTarget::Uhd8K),false);
+        const auto fit=run(ctx,ring,qhdHdr.get(),true,shrunk(2,SrTarget::Uhd8K,SrOutput::Uhd4K),false);
+        check(full.ok&&fit.ok&&fit.enabled&&fit.output.width==3840&&full.output.width==7680,"HDR: the 8K SR result is shrunk to 3840x2160");
+        if(full.ok&&fit.ok&&full.output.width==7680&&fit.output.width==3840){
+            const auto reference=shrink(full.output,2,true);size_t over=0,count=0,bad=0;double worst=0,peak=0;
+            for(size_t p=0;p<size_t(3840)*2160;++p)for(unsigned c=0;c<3;++c){
+                const double v=half(fit.output,p*4+c),r=reference[p*3+c];if(!std::isfinite(v)){++bad;continue;}
+                const double d=std::abs(v-r);worst=std::max(worst,d);peak=std::max(peak,v);over+=d>0.003+0.003*std::abs(r);++count;}
+            check(!bad&&over*1000<count,"HDR shrink equals the area average of the 8K restore (worst "+std::to_string(worst)+", over "+std::to_string(over)+", peak "+std::to_string(peak)+")");
+        }
+    }
+    {
+        const auto back=run(ctx,ring,qhdSdr.get(),false,shrunk(4,SrTarget::Uhd8K,SrOutput::Source),false,false,false,2);
+        check(back.ok&&back.srOut==Extent{7680,4320}&&back.output.width==2560&&back.output.height==1440&&back.evaluations==2,"2K -> 8K -> back to the exact 2560x1440 source");
+        const auto twoK=run(ctx,ring,hd.get(),false,shrunk(4,SrTarget::Uhd4K,SrOutput::Qhd),false,false,false,2);
+        check(twoK.ok&&twoK.srOut==Extent{3840,2160}&&twoK.output.width==2560&&twoK.output.height==1440,"1080p -> 4K -> a non-integer 2K shrink");
+        auto dual=twoPass(2,SrTarget::Uhd8K,pipeline::SrPrescale::P1080,SrTarget::Uhd4K,2);dual.srOutput=SrOutput::Qhd;
+        const auto both=run(ctx,ring,hd.get(),false,dual,false,false,false,2);
+        check(both.ok&&both.evaluations==4&&both.output.width==3840,"double SR runs both passes and ignores a kept shrink");
+    }
+    ring.shutdown();ctx.shutdown();std::cout<<"SUPERSAMPLE_RESULT passed="<<ok<<std::endl;return ok?0:1;
+}
+pipeline::SrPrescale reduceArg(std::wstring_view v){
     if(v==L"720")return pipeline::SrPrescale::P720;if(v==L"900")return pipeline::SrPrescale::P900;
     if(v==L"1080")return pipeline::SrPrescale::P1080;if(v==L"1440")return pipeline::SrPrescale::P1440;
     if(v.ends_with(L"%"))return pipeline::srPrescaleForPercent(unsigned(std::stoi(std::wstring(v.substr(0,v.size()-1)))));
@@ -388,23 +430,30 @@ pipeline::SrTarget targetArg(std::wstring_view v){
     if(v==L"2k")return pipeline::SrTarget::Qhd;if(v==L"5k")return pipeline::SrTarget::Uhd5K;if(v==L"6k")return pipeline::SrTarget::Uhd6K;
     if(v==L"7k")return pipeline::SrTarget::Uhd7K;if(v==L"8k")return pipeline::SrTarget::Uhd8K;return pipeline::SrTarget::Uhd4K;
 }
-pipeline::SrOutput outputArg(std::wstring_view v){
+pipeline::SrOutput shrinkArg(std::wstring_view v){
     if(v==L"source")return pipeline::SrOutput::Source;if(v==L"2k")return pipeline::SrOutput::Qhd;if(v==L"4k")return pipeline::SrOutput::Uhd4K;
-    if(v==L"5k")return pipeline::SrOutput::Uhd5K;if(v==L"6k")return pipeline::SrOutput::Uhd6K;if(v==L"7k")return pipeline::SrOutput::Uhd7K;return pipeline::SrOutput::Target;
+    if(v==L"5k")return pipeline::SrOutput::Uhd5K;if(v==L"6k")return pipeline::SrOutput::Uhd6K;if(v==L"7k")return pipeline::SrOutput::Uhd7K;
+    return pipeline::SrOutput::Target;
 }
-// One A/B picture: <dir> stage-image <input.png> <name> <quality 0..4> <prescale> <target> <output> [video|still|capture]
-int image(const std::filesystem::path& directory,const std::wstring& input,const std::wstring& name,unsigned quality,
-          std::wstring_view prescale,std::wstring_view target,std::wstring_view output,std::wstring_view mode){
+// One A/B picture: <dir> sr-image <input.png> <name> <quality 0..4> <target> <shrink off|source|2k..7k>
+//   <reduce off|720|900|1080|1440|NN%> <second-target> <second-quality> [video|still|capture]
+// Quality 0 leaves SR off; a shrink supersamples one pass; reduce "off" keeps a single pass.
+int image(const std::filesystem::path& directory,const std::wstring& input,const std::wstring& name,unsigned quality,std::wstring_view target,
+          std::wstring_view shrinkTo,std::wstring_view reduce,std::wstring_view second,unsigned secondQuality,std::wstring_view mode){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/(name+L".log")).wstring());
     sink::RgbaImage source;if(!sink::loadImage(input,source))return 2;
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
     if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
     const auto frame=sdrFrame(source);if(!frame)return 2;
-    const auto r=run(ctx,ring,frame.get(),false,vsr(quality,targetArg(target),prescaleArg(prescale),outputArg(output)),false,mode==L"still",mode==L"capture");
+    auto settings=quality&&reduce!=L"off"?twoPass(quality,targetArg(target),reduceArg(reduce),targetArg(second),secondQuality):vsr(quality,targetArg(target));
+    settings.srOutput=shrinkArg(shrinkTo);
+    const auto r=run(ctx,ring,frame.get(),false,settings,false,mode==L"still",mode==L"capture");
     std::error_code ec;std::filesystem::remove(directory/(name+L".png"),ec);  // saveImage never replaces a file
     const bool saved=r.ok&&sink::saveImage((directory/(name+L".png")).wstring(),r.output,false);
-    std::cout<<"STAGE_IMAGE name="<<std::string(name.begin(),name.end())<<" source="<<source.width<<'x'<<source.height<<" srInput="<<r.srIn.width<<'x'<<r.srIn.height<<" srOutput="<<r.srOut.width<<'x'<<r.srOut.height
-             <<" output="<<r.output.width<<'x'<<r.output.height<<" srActive="<<r.enabled<<" evaluations="<<r.evaluations<<" srMs="<<r.srMs<<" passed="<<saved<<std::endl;
+    char label[1024]{};WideCharToMultiByte(CP_UTF8,0,name.c_str(),-1,label,sizeof(label),nullptr,nullptr);
+    std::cout<<"SR_IMAGE name="<<label<<" source="<<source.width<<'x'<<source.height<<" first="<<r.first.width<<'x'<<r.first.height
+             <<" srInput="<<r.srIn.width<<'x'<<r.srIn.height<<" srOutput="<<r.srOut.width<<'x'<<r.srOut.height<<" output="<<r.output.width<<'x'<<r.output.height
+             <<" srActive="<<r.enabled<<" evaluations="<<r.evaluations<<" srMs="<<r.srMs<<" passed="<<saved<<std::endl;
     ring.shutdown();ctx.shutdown();return saved?0:1;
 }
 }
@@ -414,12 +463,13 @@ int wmain(int argc,wchar_t** argv){
     if(argc<2)return 2;
     const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(FAILED(com))return 2;
-    if(argc==3&&std::wstring_view(argv[2])==L"stage"){const int result=stage::test(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual"){const int result=stage::dual(argv[1]);CoUninitialize();return result;}
-    if(argc==3&&std::wstring_view(argv[2])==L"stage-boundaries"){const int result=stage::boundaries(argv[1]);CoUninitialize();return result;}
-    if(argc==3&&std::wstring_view(argv[2])==L"stage-capabilities"){const int result=stage::capabilities(argv[1]);CoUninitialize();return result;}
-    if(argc>=9&&std::wstring_view(argv[2])==L"stage-image"){
-        const int result=stage::image(argv[1],argv[3],argv[4],unsigned(std::stoi(argv[5])),argv[6],argv[7],argv[8],argc>9?argv[9]:L"video");
+    if(argc==3&&std::wstring_view(argv[2])==L"dual-restore"){const int result=stage::restore(argv[1]);CoUninitialize();return result;}
+    if(argc==3&&std::wstring_view(argv[2])==L"dual-boundaries"){const int result=stage::boundaries(argv[1]);CoUninitialize();return result;}
+    if(argc==3&&std::wstring_view(argv[2])==L"dual-capabilities"){const int result=stage::capabilities(argv[1]);CoUninitialize();return result;}
+    if(argc==3&&std::wstring_view(argv[2])==L"supersample"){const int result=stage::supersample(argv[1]);CoUninitialize();return result;}
+    if(argc>=11&&std::wstring_view(argv[2])==L"sr-image"){
+        const int result=stage::image(argv[1],argv[3],argv[4],unsigned(std::stoi(argv[5])),argv[6],argv[7],argv[8],argv[9],unsigned(std::stoi(argv[10])),argc>11?argv[11]:L"video");
         CoUninitialize();return result;
     }
     if(argc>5&&(std::wstring_view(argv[2])==L"reference"||std::wstring_view(argv[2])==L"models")){
