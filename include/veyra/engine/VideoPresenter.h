@@ -3,6 +3,7 @@
 #include "veyra/gfx/PresentSink.h"
 #include <dxgi1_6.h> // DXGI_HDR_METADATA_HDR10 (custom: HDR static metadata)
 #include "veyra/pipeline/GpuPassUtils.h"
+#include "veyra/pipeline/FramePacket.h" // custom: pipeline::DoviFrameInfo
 #include "veyra/engine/PreviewView.h"
 #include "veyra/engine/HdrOutputTuning.h"
 #include "veyra/gfx/CommandSlotRing.h"
@@ -44,6 +45,12 @@ public:
     bool beginSourceInput();
     bool beginSourceProcessing();
     void sourceProcessed(pipeline::FrameIdentity);
+    // Custom: Dolby Vision level-1 brightness of the source frame that is about
+    // to be presented. The owner thread sets it after the frame leaves the
+    // graph and before present(); an invalid value means "no RPU", which keeps
+    // the follow path from changing anything.
+    void setFrameDovi(const pipeline::DoviFrameInfo& d){latestDovi_=d;}
+    const pipeline::DoviFrameInfo& frameDovi() const {return latestDovi_;}
     PresentationSettings configurePresentation(gfx::D3D12DeviceContext&,PresentationSettings,bool fg,std::wstring& status);
     bool presentationReady(){return sink_.presentationReady();}
     bool waitPresentationReady(unsigned ms){return sink_.waitPresentationReady(ms);}
@@ -142,6 +149,21 @@ private:
     pipeline::FrameIdentity probeIdentity_{};
     std::chrono::steady_clock::time_point probeNext_{};
     HdrCurveCoverage liveCoverage_{};
+    // Custom: Dolby Vision level 1 for the frame being presented. Purely
+    // additive: the blit uses it only when the follow switch is on.
+    pipeline::DoviFrameInfo latestDovi_{};
+    // Exponential smoothing for the follow inputs. A sliding window was used here
+    // first and was wrong: halving a running sum and its integer count keeps the
+    // ratio only when the count is even, so on odd counts the average gained a
+    // fraction each time the window overflowed and drifted above every input it had
+    // seen - a peak reading of 1.11 after inputs capped at 1.0. EMA has no such
+    // accumulation and a reset path for scene cuts.
+    double avgEma_=0.0; bool avgEmaSeeded_=false;
+    double peakEma_=0.0; bool peakEmaSeeded_=false;
+    // Custom: the knee also runs through clamp() and min(user); those flatten or
+    // step, so a smoothed input can still reach the blit as a jump. The value that
+    // actually ships is smoothed here too.
+    float smoothedStartNits_=0.0f;
     bool ensureCoverageProbe(ID3D12Device*);
     void publishLiveCoverage(const HdrCurveSettings&,pipeline::FrameIdentity);
     unsigned lastBuffer_=0;bool hasPresented_=false;

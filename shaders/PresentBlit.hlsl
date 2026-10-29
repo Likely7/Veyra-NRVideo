@@ -9,7 +9,10 @@ Texture2D<float4> sourceTex : register(t0);
 
 cbuffer PresentBlitConstants : register(b0)
 {
-    float4 srcDims; // z flags: 1=sRGB encode, 2=fine, 4=PQ encode, 8=SDR white, 16=HDR curve, 32=PQ decode
+    // 64 = 输出前加抖动（12 位源量化到 10 位交换链时抑制色带）。
+    // 64 = dither before output (suppresses banding when a 12-bit source is quantised
+    // onto a 10-bit swapchain).
+    float4 srcDims; // z flags: 1=sRGB encode, 2=fine, 4=PQ encode, 8=SDR white, 16=HDR curve, 32=PQ, 64/128=rotation, 256=dither decode
     float4 dstDims; // x/y=client extent z/w=view center
     // Custom: static HDR brightness curve, applied on absolute nits before the PQ
     // encode. See veyra/engine/HdrOutputTuning.h for the contract; every field is
@@ -105,6 +108,24 @@ float4 FineSample(float2 uv)
     return clamp(result,min(min(a,b),min(c,d)),max(max(a,b),max(c,d)));
 }
 
+// Ordered dither for the 12 -> 10 bit quantisation.
+//
+// The reconstruction produces 12 bits and the swapchain takes 10 (R10G10B10A2_UNORM).
+// A 16-float texture is written by the shader and the hardware truncates it to 10 bits
+// when the swapchain is resolved, so a smooth gradient that crosses one 10-bit step
+// shows as a visible band. Adding a sub-LSB offset before that truncation turns the
+// step into noise the eye averages away.
+//
+// The pattern is an 8x8 interleaved gradient noise (Jimenez 2014): cheap, no texture,
+// and its visual character is stable under motion - a random offset would crawl.
+// The amplitude is exactly one 10-bit step (1/1023) scaled to the shader's output
+// domain, so the dither never moves a value by more than half a step either way.
+float DitherOffset(uint2 pixel)
+{
+    float noise = frac(52.9829189 * frac(dot(float2(pixel), float2(0.06711056, 0.00583715))));
+    return (noise - 0.5) / 1023.0;
+}
+
 float4 psMain(VSOut input) : SV_Target
 {
     // zoom==0 retains the original contract for diagnostic harness callers.
@@ -124,5 +145,14 @@ float4 psMain(VSOut input) : SV_Target
     if(flags&16)color.rgb=HdrCurve(color.rgb*80.0,curve0,curve1)/80.0;
     if(flags&1){float3 c=max(color.rgb,0);color.rgb=lerp(1.055*pow(c,1.0/2.4)-0.055,c*12.92,step(c,0.0031308));}
     if(flags&4)color.rgb=HdrEncodePq(color.rgb);
+    // 抖动放在传输函数编码之后、写回之前：那时值已经是最终输出域的 0..1，
+    // 一个 10 位台阶的偏移才是准确的。加在前面会被后面的非线性曲线放大。
+    // The dither goes after the transfer-function encode and just before the write: only
+    // then is the value in the final 0..1 output domain, where one 10-bit step is the
+    // right size. Applied earlier the later non-linear curve would scale it.
+    if(flags&256){
+        const int2 p=int2(input.pos.xy);
+        color.rgb=saturate(color.rgb+DitherOffset(uint2(p)));
+    }
     return color;
 }

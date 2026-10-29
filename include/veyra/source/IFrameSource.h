@@ -32,11 +32,41 @@ struct SourceOpenDesc {
     bool legacyCaptureRgbForDiagnostic = false; // explicit A/B only; never set by the player
     const std::atomic<bool>* cancelled = nullptr;
     bool deinterlace = false; // playback opt-in; unchanged default for offline consumers
+    // Custom (P5): decode the Dolby Vision profile 7 enhancement layer. Off by
+    // default; the setting behind it is still opt-in while the path is new.
+    bool decodeDolbyEnhancementLayer = false;
     // Network and server playback (#48). Offline consumers (export, tools, tests) keep
     // the defaults: strict about damaged data, reads that wait, direct file reads.
     media::NetworkSettings network;   // the user's buffering / reconnect / damaged-picture choices
     bool nonBlocking = false;         // player: read() may return Waiting while the network buffers
     bool tolerateCorruption = false;  // player: keep going through damaged packets (network sources, MPEG-TS)
+    // Extra HTTP request headers for a network source, one "Name: value" per line.
+    // Some CDNs (Bilibili's among them) reject a media request without the site's
+    // Referer, so a resolved stream URL is not usable on its own.
+    std::wstring networkHeaders;
+    // Separate audio address for a source whose container carries no audio.
+    //
+    // DASH serves video and audio as two independent streams, so a Bilibili video
+    // arrives as a video URL plus an audio URL. Empty means the container has its
+    // own audio track and nothing changes.
+    std::wstring audioPath;
+};
+
+// HDR Vivid (CUVA 005.1:2021) dynamic metadata, as the HEVC parser hands it over
+// on a decoded frame. Descriptive only: Veyra reports that the stream carries it,
+// the colour chain keeps using the static curve exactly like HDR10+ today.
+struct HdrVividInfo {
+    bool present = false;          // at least one decoded frame carried it
+    uint8_t systemStartCode = 0;   // shall be 0x01
+    uint8_t numWindows = 0;        // 1..3
+    uint64_t framesWithMetadata = 0;
+};
+
+// HDR10+ (SMPTE ST 2094-40) dynamic metadata. Same story as HDR Vivid: FFmpeg
+// parses the SEI, Veyra only reports that the stream carries it.
+struct Hdr10PlusInfo {
+    bool present = false;
+    uint64_t framesWithMetadata = 0;
 };
 
 struct SourceInfo {
@@ -68,6 +98,8 @@ struct SourceInfo {
     std::string videoCodecName;
     std::string videoPixelFormatName;
     DolbyVisionInfo dolbyVision;
+    HdrVividInfo hdrVivid;
+    Hdr10PlusInfo hdr10Plus;
     pipeline::ColorDescription color;
 };
 

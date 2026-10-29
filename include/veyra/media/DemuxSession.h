@@ -52,6 +52,11 @@ public:
         NetworkSettings settings;
         const std::atomic<bool>* cancelled = nullptr;  // owner stop (engine): aborts every blocking call
         int audioStream = -2;                          // -2 best audio, -1 none, >=0 explicit
+        // Where the first packet should come from, in seconds. Seeking during open, before
+        // the demux thread starts, means the first buffered window is already at that
+        // position: opening at 0 and seeking afterwards made playback buffer the start of
+        // the file and then the target, which showed up as two prebuffer rounds.
+        double startSeconds = 0.0;
     };
     // Connects and probes (bounded by the connect/probe limits and `cancelled`),
     // then starts the demux thread. Null with `error` set on failure.
@@ -179,6 +184,9 @@ private:
     Queue video_, audio_;
     Phase phase_ = Phase::Prebuffering;
     double targetSeconds_ = 0;
+    // Where this session should start, in seconds; set once at open and used to position
+    // the context before the demux thread runs.
+    double startSeconds_ = 0;
     bool afterSeek_ = false;
     int64_t playbackUs_ = -1;              // hint from the player (media timeline)
     bool hasHint_ = false;                 // the player supplies playbackUs_; otherwise consumption is the position

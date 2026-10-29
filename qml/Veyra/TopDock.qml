@@ -43,6 +43,7 @@ Item {
     readonly property var items: [
         { id: "min",   icon: "tv", tip: qsTr("极简") },
         { id: "pro",   icon: "sliders", tip: qsTr("专业模式") },
+        { id: "bili",  icon: "bili", tip: qsTr("B 站") },
         { id: "exp",   icon: "upload", tip: qsTr("导出") },
         { id: "set",   icon: "settings", tip: qsTr("设置") }
     ]
@@ -187,6 +188,10 @@ Item {
                             VIcon {
                                 anchors.centerIn: parent
                                 name: btn.modelData.icon
+                                // The Bilibili button's letter B is a single-glyph mark: it
+                                // needs a heavier stroke than the line icons beside it to
+                                // read as bold at 16px (user decision 2026-10-23).
+                                strokeWidth: btn.modelData.icon === "bili" ? 2.5 : 1.7
                                 color: "#FFFFFF"
                                 opacity: dockRoot.currentPage === btn.modelData.id || tip.on ? 1.0 : 0.45
                                 Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }

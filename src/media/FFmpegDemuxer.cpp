@@ -18,6 +18,56 @@ extern "C" {
 namespace veyra::media {
 
 namespace {
+// Custom (P5): count the HEVC layers inside one access unit. Dolby Vision
+// Profile 7 carries the enhancement layer as a second NAL layer inside the same
+// access unit; the hardware decoder drops it, so this is the only proof that the
+// data reaches us at all. Gated by VEYRA_DOVI_EL_TRACE, never on in production.
+struct HevcLayerScan { unsigned nal=0, enhancement=0, maxLayer=0; };
+
+// Matroska stores HEVC length-prefixed (hvcC), not as Annex B start codes: the
+// prefix width lives in byte 21 of the configuration record.
+unsigned hevcLengthSize(const AVCodecParameters* par) {
+    const uint8_t* ext = par ? par->extradata : nullptr;
+    const int size = par ? par->extradata_size : 0;
+    if (ext && size > 21 && ext[0] == 1) return unsigned(ext[21] & 3) + 1u;
+    return 0;
+}
+
+void countOneNal(const uint8_t* nal, unsigned available, HevcLayerScan& out) {
+    if (nal == nullptr || available < 2) return;
+    // HEVC NAL header: forbidden(1) type(6) layer(6) tid+1(3)
+    const unsigned type = (unsigned(nal[0]) >> 1) & 0x3F;
+    const unsigned layer = ((unsigned(nal[0]) & 1u) << 5) | (unsigned(nal[1]) >> 3);
+    if (type < 1 || type > 63) return;
+    ++out.nal;
+    if (layer > 0) ++out.enhancement;
+    if (layer > out.maxLayer) out.maxLayer = layer;
+}
+
+HevcLayerScan scanHevcLayers(const uint8_t* data, int size, unsigned lengthSize) {
+    HevcLayerScan out;
+    if (data == nullptr || size < 6) return out;
+    if (lengthSize >= 1 && lengthSize <= 4) {
+        int pos = 0;
+        while (pos + int(lengthSize) + 2 <= size) {
+            uint32_t length = 0;
+            for (unsigned b = 0; b < lengthSize; ++b) length = (length << 8) | data[pos + b];
+            pos += int(lengthSize);
+            if (length == 0 || pos + int(length) > size) break;
+            countOneNal(data + pos, length, out);
+            pos += int(length);
+        }
+        return out;
+    }
+    // Annex B fallback (raw .hevc input): start-code delimited.
+    for (int i = 0; i + 2 < size; ++i) {
+        if (data[i] != 0 || data[i + 1] != 0 || data[i + 2] != 1) continue;
+        countOneNal(data + i + 3, unsigned(size - i - 3), out);
+        i += 2;
+    }
+    return out;
+}
+
 // Rotation from the "rotate" tag or the display matrix in the stream's side data.
 int rotationFrom(const AVCodecParameters* parameters, const char* rotateTag)
 {
@@ -42,7 +92,7 @@ int rotationFrom(const AVCodecParameters* parameters, const char* rotateTag)
     if (normalized < 0) normalized += 360;
     return normalized;
 }
-}
+} // namespace
 
 FFmpegDemuxer::~FFmpegDemuxer()
 {
@@ -347,6 +397,30 @@ bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
             continue;
         }
         notePacket();
+        // Custom (P5): does the enhancement layer reach us inside the packet?
+        if (std::getenv("VEYRA_DOVI_EL_TRACE") != nullptr) {
+            static const unsigned lengthSize = hevcLengthSize(context_->streams[videoStreamIndex_]->codecpar);
+            const auto scan = scanHevcLayers(packet_->data, packet_->size, lengthSize);
+            static unsigned withEl = 0, withoutEl = 0, logged = 0;
+            if (scan.enhancement) ++withEl; else ++withoutEl;
+            if (logged < 4 || stats_.packetsRead % 200 == 0) {
+                ++logged;
+                log::info("dovi-el", std::format(
+                    "packet={} bytes={} lengthSize={} nal={} enhancementNal={} maxLayer={} withEl={} withoutEl={}",
+                    stats_.packetsRead, packet_->size, lengthSize, scan.nal, scan.enhancement, scan.maxLayer, withEl, withoutEl));
+            }
+            // Matroska can carry the dependent layer as a BlockAdditional; FFmpeg
+            // surfaces those as packet side data. Report them so the next step is
+            // decided by evidence instead of guesswork.
+            static unsigned sideReported = 0;
+            if (sideReported < 3) {
+                ++sideReported;
+                log::info("dovi-el", std::format("  packet={} sideDataElems={}", stats_.packetsRead, packet_->side_data_elems));
+                for (int i = 0; i < packet_->side_data_elems; ++i)
+                    log::info("dovi-el", std::format("    side[{}] type={} size={}", i,
+                        static_cast<int>(packet_->side_data[i].type), packet_->side_data[i].size));
+            }
+        }
         return true;
     }
 }

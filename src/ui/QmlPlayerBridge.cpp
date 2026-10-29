@@ -15,10 +15,18 @@
 #include <QScopedValueRollback>
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
+#include "veyra/engine/DisplayFgBudget.h"
 #include "veyra/ui/QmlExportQueueModel.h"
 #include "veyra/ui/PlaylistModel.h"
 #include "veyra/ui/UpdateChecker.h"
 #include "veyra/ui/UiLanguage.h"
+#include "veyra/media/BilibiliResolver.h"
+#include "veyra/media/BilibiliApi.h"
+#include "veyra/media/QrImage.h"
+#include "veyra/media/DanmakuWindow.h"
+#include "veyra/media/FormatBadgeWindow.h"
+// The sign-in QR is drawn from this encoder (MIT, Project Nayuki) rather than
+// opening Bilibili's scan page in a browser.
 #include <QQmlEngine>
 #include <QMetaMethod>
 #include <QMetaProperty>
@@ -196,6 +204,18 @@ struct DisplayChangeFilter final : QAbstractNativeEventFilter {
 };
 }
 
+// B 站播放解析的后台结果。三个网络往返在 worker 线程跑完写这里，GUI tick 读走。
+// 只含普通数据结构：worker 不能碰 Qt 对象或 impl_ 里的容器。
+struct BiliPlayWorkerResult {
+    media::BiliPlayUrls urls;
+    bool reportOk = false;
+    std::wstring reportBvid;
+    long long reportCid = 0;
+    int reportPlayed = 0;
+    double resumeAt = -1.0;
+    std::atomic<bool> done{false};
+};
+
 struct QmlPlayerBridge::Impl {
     // Per-layer on/off before the NR master switch turned them all off.
     std::vector<bool> nrMasterRestore;
@@ -203,6 +223,151 @@ struct QmlPlayerBridge::Impl {
     QQmlEngine* qmlEngine = nullptr;
     engine::EngineController& engine;
     PlayerUiFacade facade;
+
+    // Set by the Bilibili resolver for the next open: the page title and the HTTP
+    // headers the CDN requires. These live here rather than only in `options`
+    // because PlayerOptions::from() rebuilds the whole struct on every settings
+    // change and would wipe them; openPath() copies them back in before the open.
+    std::wstring pendingTitle;
+    std::wstring pendingHeaders;
+    std::wstring pendingUserAgent;
+    std::wstring pendingAudioPath;
+    // True only between a Bilibili branch writing the pending* fields above and the
+    // openPath call it makes, so openPath knows to keep them instead of clearing.
+    bool bilibiliOpenPending = false;
+    // True while bilibiliPlay is resolving. That call makes three blocking requests
+    // (progress report, page lookup, playurl); a second click during them used to queue a
+    // whole second set on the GUI thread, which is what made rapid switching feel stuck.
+    bool biliPlayResolving = false;
+    // QR sign-in key while a scan is pending.
+    std::wstring bilibiliQrKey;
+    // The URL the pending code encodes; the page renders it as a QR image.
+    std::wstring bilibiliQrUrl;
+    // Last Bilibili module failure, surfaced by bilibiliLastError().
+    std::wstring bilibiliError;
+    // 列表请求按「用途」分成四个独立槽位，互不顶替。
+    // 打开详情页时会同时发起 qualities 和 related 两个请求，而它们只相隔一个计时器
+    // 周期；共用一个槽位时后发的会覆盖先发的 future，先发的回复永远不会发出 ——
+    // 表现就是画质菜单一直只有「自动」，尽管请求确实发出去并拿到了数据。
+    // List requests get four independent slots grouped by purpose. Opening the detail
+    // page starts qualities and related one timer tick apart; a single shared slot let
+    // the later request overwrite the earlier one's future, so that reply never
+    // arrived - which showed as a quality menu stuck on 自动 even though the request
+    // ran and returned data.
+    enum class ListSlot : size_t { Cards = 0, Qualities, Related, Detail, Count };
+    // 一个排队中的请求：只记 kind 和它的代号，等前一个回收完再启动。
+    // A queued request: just the kind and its generation, started after the previous
+    // one in the same slot has been collected.
+    struct PendingListRequest {
+        QString kind;
+        int generation = 0;
+    };
+    struct ListSlotState {
+        std::future<QmlPlayerBridge::ListFetchResult> query;
+        bool busy = false;
+        QString kind;
+        int generation = 0;
+        std::vector<PendingListRequest> pending;
+    };
+    std::array<ListSlotState, size_t(ListSlot::Count)> biliListSlots{};
+    int biliListGeneration = 0;
+    // 把一个 kind 归到它该用的槽位。（QString::startsWith 不是 constexpr，故不加。）
+    // Map a kind onto the slot it belongs to. (Not constexpr: startsWith is not.)
+    static ListSlot listSlotOf(const QString& kind) {
+        if (kind.startsWith(QLatin1String("qualities:"))) return ListSlot::Qualities;
+        if (kind.startsWith(QLatin1String("related:"))) return ListSlot::Related;
+        if (kind.startsWith(QLatin1String("detail:"))) return ListSlot::Detail;
+        return ListSlot::Cards;
+    }
+    // 互动状态请求的代号：每发起一次递增，用来丢弃过期回复。
+    // Generation counter for interaction-state requests, used to drop late replies.
+    int biliInteractionGeneration = 0;
+    // 通用异步任务的槽位：每个操作一个，互不覆盖。打开详情页时会同时发起
+    // 互动状态、续播位置、评论等请求，共用一个槽位会让后发起的顶掉先发起的，
+    // 那个请求就永远收不到结果。
+    // One slot per Bilibili operation so requests never evict each other: opening the
+    // detail page starts interaction state, resume point and comments together, and a
+    // shared slot would make the last one cancel the others.
+    struct BiliSlot {
+        std::future<BiliTaskResult> query;
+        bool busy = false;
+    };
+    // 12 个操作各一个槽位，索引就是枚举值，因此同时发起的请求互不覆盖。
+    // One slot per operation, indexed by the enum value, so requests started together
+    // never evict one another.
+    // 大小取自枚举：以后再加操作不会漏掉一个槽位（原先写死 12，这次加
+    // ReportProgress 才需要改）。越界会静默踩到相邻字段，所以用枚举算。
+    // Sized from the enum so a new operation cannot silently fall off the end; the old
+    // literal 12 had to be remembered by hand every time.
+    std::array<BiliSlot, static_cast<size_t>(BiliOp::Count)> biliTaskSlots{};
+    // 丹�� overlay: created lazily, only while comments are enabled.
+    std::unique_ptr<media::DanmakuWindow> danmakuWindow;
+    // Custom (format badge): the start-up announcement drawn over the picture.
+    // Created lazily on the first session that reaches Playing.
+    std::unique_ptr<media::FormatBadgeWindow> formatBadge;
+    uint64_t formatBadgeSession = 0;
+    bool danmakuEnabled = false;
+    bool danmakuFailed = false;
+    // Last position fed to the engine, to notice a seek.
+    double danmakuLastSeconds = -1.0;
+    // Backup CDN retry: the resolved mirrors of the current video, which one is in
+    // use, and how many attempts have already failed. Bilibili lists several mirrors
+    // of the same rendition; a node that cannot be opened is simply the usual
+    // reason a play fails, so the next one is tried instead of giving up.
+    std::vector<std::wstring> biliMirrors;
+    size_t biliMirrorIndex = 0;
+    int biliRetriesLeft = 0;
+    bool biliRetryPending = false;
+    std::wstring biliVideoUrl;   // the URL currently open, for context on retry
+    // Bumped by every openPath. A delayed mirror retry checks it and gives up when the
+    // user opened something else in the meantime: without this the retry reopened a CDN
+    // address over the user's new source, and because openPath had already cleared the
+    // pending headers the retried open went out without a Referer (403).
+    int biliOpenGen = 0;
+    // What was last played from the Bilibili page, so the watch progress can be reported
+    // to the account's history when the user moves on or closes the window. Reporting is
+    // done at those two points only, not on a timer: every Bilibili request runs on the
+    // GUI thread, and a 15 s heartbeat would freeze the interface a little each time.
+    std::wstring biliWatchBvid;
+    long long biliWatchCid = 0;
+    // The last position seen while this video was actually playing, refreshed by the
+    // 16 ms tick. Reported from here rather than read from the engine snapshot at flush
+    // time: by then the engine has already torn the old session down and reports a
+    // transport state and position that no longer describe what the user watched.
+    double biliWatchLastPos = -1.0;
+    double biliWatchDuration = 0.0;
+    // Where the account left this video, read from the site's history before the open.
+    // Negative means "no resume point": the tick below turns it into a seek once the
+    // engine has a running session to seek.
+    double biliResumeAt = -1.0;
+    uint64_t biliResumeSession = 0;
+    // 发起这次播放时引擎正在用的会话号。续播 seek 必须等到会话号变成别的值才发：
+    // 点击后引擎还没开始新会话，impl_->snapshot 里仍是上一个视频的 position/duration，
+    // 此时发出的 seek 打在正要被拆掉的旧会话上，永远不会被引擎取走（实测 5 次
+    // 连续全丢），而 biliResumeAt 已被清空，于是新会话从头播。
+    // The session id the engine was using when this play was requested. The resume seek
+    // must wait until the session id changes: right after the click the engine has not
+    // started the new session yet, so impl_->snapshot still holds the previous video's
+    // position/duration. A seek issued then targets the session being torn down and is
+    // never drained by the engine (measured: five in a row lost), while biliResumeAt has
+    // already been cleared - so the new session plays from the beginning.
+    uint64_t biliResumeAfterSession = 0;
+    // 当前正在播的是 B 站视频。B 站给的是带时效签名的 CDN 地址，播完再拿它重开
+    // 必然 403，所以结束后的「播放」不能重开 sourceLabel —— 那里记的就是那条过期
+    // 地址。打开任何非 B 站来源时清掉。
+    // The source currently playing is a Bilibili video. Bilibili hands out CDN URLs
+    // with an expiry signature, so reopening sourceLabel after the video ends is
+    // guaranteed to 403 - that label holds exactly that stale address. Cleared whenever
+    // a non-Bilibili source is opened.
+    bool biliSourceActive = false;
+    // 重播身份：视频播完后点「播放」要重新解析地址，所以必须记住「要播什么」，
+    // 而不只是「上次从哪播」—— 后者是带时效签名的地址，过期就 403。
+    // Replay identity: after a video ends, Play has to resolve a fresh address, so the
+    // bridge remembers *what* to play rather than *where it played from* - the latter is
+    // a signed URL that expires and then only 403s.
+    QString biliReplayBvid;
+    long long biliReplayCid = 0;
+    int biliReplayQuality = 0;
 
     // Last published snapshot and the revision it came from. Polling compares
     // revisions, so an unchanged snapshot costs one comparison per tick.
@@ -410,6 +575,30 @@ struct QmlPlayerBridge::Impl {
     uint64_t netNoticeSession = 0, netLossReported = 0;
     uint32_t netReconnectsReported = 0;
     std::chrono::steady_clock::time_point netLossNoticeAt{};
+    // 自动选择倍率：只在每个会话刚开始播放时决定一次，播放中不再改动。
+    // 换档必须重建 GPU 管线（缓冲区随倍率变），播放中做会丢补帧历史并卡顿，
+    // 所以这里只在 session 首次进入 running 时计算（用户 2026-10-24 选定）。
+    uint64_t fgAutoSession = 0;       // 已为哪个会话决定过档位
+    // 打开片源前已经按元数据定过档：首帧后的决策看到它就跳过，避免二次重建管线。
+    bool fgAutoPlanned = false;
+    // B 站播放的解析工作放到后台线程。三个同步网络往返（上报进度 / 解析地址 /
+    // 读续播位置）原本全在 GUI 线程，WinHTTP 每个 15 秒超时 —— 网络一慢主线程就
+    // 静止十几秒（现场 2026-10-24：22.9 秒）。worker 只做请求，结果回到 GUI 线程
+    // 才推进播放状态，所以状态仍归主线程所有。
+    struct BiliPlayJob {
+        std::future<void> query;
+        std::shared_ptr<BiliPlayWorkerResult> result;   // worker 写，tick 读
+        uint64_t generation = 0;      // 当前请求的代号，新请求会顶掉旧的
+        bool busy = false;
+        bool resolving = false;       // 已有一个在解析（保留原有的防重入语义）
+        QString bvid;
+        long long cid = 0;
+        std::wstring pageTitle;
+        int qn = 0;
+        bool fromStart = false;
+        bool plannedResume = false;
+    };
+    BiliPlayJob biliPlayJob;
     struct CaptureListCache { bool valid = false; uint64_t generation = 0; QString language; std::wstring a, b; QVariantList list; };
     CaptureListCache captureFormatsCache, captureResolutionCache, captureRateCache, capturePixelCache;
     // Settings → 组件与许可. Read once and on refreshComponentList(): the property used to
@@ -1344,12 +1533,29 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // every restart reloads the unavailable DLSS value again.
             impl_->savedSession = savedConfiguration;
             impl_->restoreConfiguration(configuration);
-            impl_->options = engine::PlayerOptions::from(settings,engine::runtimeOrder(impl_->activeRuntime()));
+            impl_->options = engine::PlayerOptions::from(settings,engine::runtimeOrder(impl_->activeRuntime()),&impl_->options);
             impl_->revalidate();
         } else {
             impl_->facade.setPending(previous);
             restoreError = tr("模式会话未被引擎接受，保留初始状态");
         }
+    }
+    // Custom: the Dolby Vision follow is a viewing preference rather than part of
+    // the grade, so it is stored in the shell preferences and re-applied here -
+    // after the restored session has reached the engine, so it wins over a value
+    // the session round trip never carried.
+    if (impl_->prefBool("doviFollow", false) && !settings().doviFollow) {
+        auto followed = settings();
+        followed.doviFollow = true;
+        commitHdrTuning(std::move(followed));
+    }
+    // The P7 composite is its own preference. It used to be restored inside the
+    // doviFollow branch above, so a profile without that flag could never turn it
+    // on no matter what the preferences said.
+    if (impl_->prefBool("doviP7Compose", false) && !settings().doviP7Compose) {
+        auto composed = settings();
+        composed.doviP7Compose = true;
+        commitHdrTuning(std::move(composed));
     }
     bool defaultFlowApplied = false;
     if (!restoreError.isEmpty()) {
@@ -1377,7 +1583,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 impl_->session = candidate;
                 impl_->restoreConfiguration(candidate.configurations[size_t(candidate.active)]);
                 impl_->revalidate();
-                impl_->options = engine::PlayerOptions::from(settings, engine::runtimeOrder(impl_->activeRuntime()));
+                impl_->options = engine::PlayerOptions::from(settings, engine::runtimeOrder(impl_->activeRuntime()),&impl_->options);
                 defaultFlowApplied = entry.flow.has_value() &&
                     (entry.contents & engine::presetContentMask(engine::PresetContent::Flow));
                 if (defaultFlowApplied) {
@@ -1526,6 +1732,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         tickSubtitles();
         tickImageBatch();
+        tickBiliList();
+        tickBiliTasks();
+        tickBiliPlay();
         tickCapture();
         tickPs5();
         tickMoonlight();
@@ -1545,6 +1754,35 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     seekTo(at);
                     veyra::log::info("ui-resume", std::format("resumed at {:.1f}s", at));
                     emit notice(tr("已从上次位置 %1 继续").arg(formatTime(at)), false);
+                }
+            }
+            // Bilibili resume: the position came from the site's own history, so it applies
+            // to the session this open produced. seekTo needs a running session with a known
+            // duration, which this condition is exactly.
+            // 还必须等到「会话号已经换成新的」：点击续播的那一刻引擎还没开始建新会话，
+            // impl_->snapshot 里仍是上一个视频的 position/duration，此时发出的 seek 打在
+            // 要被拆掉的旧会话上，引擎永远取不到（实测连续 5 次全丢），而 biliResumeAt
+            // 已经被清空 —— 结果就是新会话从头播。
+            // It must also wait until the session id has changed: at the moment of the
+            // click the engine has not built the new session yet, so impl_->snapshot still
+            // holds the previous video's position/duration. A seek issued then targets the
+            // session being torn down and is never drained (measured: five in a row lost),
+            // while biliResumeAt has already been cleared - so the new session starts from
+            // the beginning.
+            const bool biliSessionIsNew = s.sessionId != 0
+                && s.sessionId != impl_->biliResumeAfterSession;
+            if (impl_->biliResumeAt >= 0.0 && s.running && s.duration > 0 && biliSessionIsNew) {
+                if (!impl_->biliResumeSession) impl_->biliResumeSession = s.sessionId;
+                if (s.sessionId == impl_->biliResumeSession) {
+                    const double at = impl_->biliResumeAt;
+                    impl_->biliResumeAt = -1.0;
+                    if (at >= 0.5 && at < s.duration - 0.5) {
+                        seekTo(at);
+                        veyra::log::info("ui-resume", std::format(
+                            "bilibili history resumed at {:.1f}s (session={} dur={:.1f})",
+                            at, static_cast<unsigned long long>(s.sessionId), s.duration));
+                        emit notice(tr("已从上次位置 %1 继续").arg(formatTime(at)), false);
+                    }
                 }
             }
             if (++impl_->positionTicks >= 120) {
@@ -1579,6 +1817,13 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         if (!had || impl_->publishedRevision != before) {
             const auto& s = impl_->snapshot;
+            // 画面起来之后**不再**清掉重试次数：一个节点可能在开播时正常、播到一半才
+            // 开始失败或掉速，这时换到下一个节点仍然有意义。次数由 biliRetriesLeft 封顶
+            // （等于备用节点数），所以不会无限切换。
+            // The retry budget is **no longer** dropped once the picture is up: a node can
+            // open fine and only start failing or crawling later, and moving to the next one
+            // still helps. biliRetriesLeft caps the count (one per spare mirror), so this
+            // cannot loop.
             if (!had || wasSession != s.sessionId || wasTransport != s.transport ||
                 wasRunning != s.running || wasImage != s.image || wasFailed != s.failed)
                 veyra::log::info("qml-window", std::format(
@@ -1586,6 +1831,57 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     s.sessionId, int(s.transport), s.running, s.image, s.failed,
                     impl_->openingSource, impl_->publishedRevision));
             impl_->power.update(s.running && !s.failed && !s.image && s.transport == engine::TransportState::Playing);
+            // Custom (format badge): announce the source format once per session,
+            // when the picture actually starts. `frames > 0` matters: the transport
+            // flips to Playing when the source opens, which is before the first
+            // frame carried its dynamic metadata, so announcing there would say
+            // "SDR" for an HDR Vivid or HDR10+ stream.
+            if (s.transport == engine::TransportState::Playing && !s.image && !s.failed &&
+                s.frames > 0 && impl_->formatBadgeSession != s.sessionId)
+                showFormatBadge(s);
+            // A Bilibili stream that failed to open gets one attempt per remaining
+            // mirror before the failure is reported. The mirrors are the same
+            // rendition on different nodes, so a single unreachable node is the usual
+            // cause; the next one normally works.
+            if (had && !wasFailed && s.failed && !impl_->biliMirrors.empty() &&
+                impl_->biliRetriesLeft > 0 && !impl_->biliRetryPending) {
+                impl_->biliRetryPending = true;
+                --impl_->biliRetriesLeft;
+                // 播放中失败：把当前位置交给续播机制，新节点打开后由 tick 里的
+                // 「等新会话再 seek」逻辑跳回来。打开阶段的失败没有位置，保持 -1。
+                // A failure during playback hands the position to the resume mechanism,
+                // which the tick's "wait for the new session, then seek" logic picks up.
+                // A failure while opening has no position, so it stays -1.
+                if (impl_->biliSourceActive && impl_->snapshot.position > 1.0) {
+                    impl_->biliResumeAt = impl_->snapshot.position;
+                    impl_->biliResumeAfterSession = impl_->snapshot.sessionId;
+                    impl_->biliResumeSession = 0;
+                    veyra::log::info("bilibili", std::format(
+                        "mirror switch during playback; resuming at {:.1f}s",
+                        impl_->snapshot.position));
+                }
+                // Next mirror, wrapping past the one that just failed.
+                impl_->biliMirrorIndex = (impl_->biliMirrorIndex + 1) % impl_->biliMirrors.size();
+                const std::wstring next = impl_->biliMirrors[impl_->biliMirrorIndex];
+                veyra::log::warn("bilibili", std::format("open failed; retrying mirror {}/{}",
+                    impl_->biliMirrorIndex + 1, impl_->biliMirrors.size()));
+                emit notice(tr("当前节点打不开，正在换用备用节点…"), false);
+                // Give the engine a moment to settle its failed session first;
+                // reopening inside the same poll tick left the old source half torn down.
+                const int retryGen = impl_->biliOpenGen;
+                QTimer::singleShot(150, this, [this, next, retryGen] {
+                    impl_->biliRetryPending = false;
+                    if (retryGen != impl_->biliOpenGen) {
+                        // Someone opened another source in these 150 ms; that source wins
+                        // and this mirror address is stale.
+                        veyra::log::info("bilibili", std::format("mirror retry superseded gen={} now={}",
+                                                                retryGen, impl_->biliOpenGen));
+                        return;
+                    }
+                    impl_->bilibiliOpenPending = true;   // the mirror is the same rendition
+                    openPath(QString::fromStdWString(next));
+                });
+            }
             if (had && !wasFailed && s.failed && !s.capture && !s.remotePlay &&
                 impl_->prefString("decode") == QLatin1String("hardware"))
                 emit notice(tr("已设为“强制硬解”，这个文件无法用硬件解码打开；可在 设置 → 播放 改回“自动”"), true);
@@ -1636,6 +1932,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     impl_->netLossNoticeAt = now;
                 }
             }
+            // 「自动」倍率：每个会话进入播放后决定一次（见 applyFgAutoMultiplier）。
+            maybeApplyFgAutoMultiplier();
             emit snapshotChanged();
         }
         // The reconnect waits for the failed session's teardown (the GPU reset can hold it for
@@ -1780,7 +2078,106 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // above, using actual provider availability rather than a brand alone.
 }
 
+void QmlPlayerBridge::flushBiliWatchProgress() {
+    if (impl_->biliWatchBvid.empty() || impl_->biliWatchCid <= 0) return;
+    // Nothing was ever observed playing: do not write a bogus position into the history.
+    if (impl_->biliWatchLastPos < 0.0) return;
+    int played = int(impl_->biliWatchLastPos);
+    // The site stores -1 for "watched to the end", which is what makes a finished video
+    // show as finished instead of resuming a few seconds before the credits.
+    if (impl_->biliWatchDuration > 0 && impl_->biliWatchLastPos >= impl_->biliWatchDuration - 1.0)
+        played = -1;
+    if (played < 0 && played != -1) played = 0;
+    // Cleared before reporting: the video is done, whatever this call returns, so the same
+    // position is not sent again from the destructor.
+    std::wstring bvid = std::move(impl_->biliWatchBvid);
+    const long long cid = impl_->biliWatchCid;
+    impl_->biliWatchBvid.clear();
+    impl_->biliWatchCid = 0;
+    impl_->biliWatchLastPos = -1.0;
+    impl_->biliWatchDuration = 0.0;
+    const std::string tag = utf8Of(bvid).toStdString();
+    if (media::biliReportWatchProgress(bvid, cid, played))
+        log::info("bilibili", std::format("watch progress reported bvid={} played_time={}", tag, played));
+    else
+        log::warn("bilibili", std::format("watch progress not reported bvid={} played_time={}", tag, played));
+}
+
+// 播放自然结束时的上报：取值规则和 flushBiliWatchProgress 一样，但网络请求丢给 worker
+// —— 它内部是同步 HTTP POST，直接放在 GUI tick 里会卡住界面几百毫秒。
+// 这样历史在结束那一刻就写入了，用户马上点「历史记录」就能看到这个视频。以前要等下一次
+// 打开别的来源才补报，表现就是「必须再播一个视频它才出现」。
+// Same position rules as flushBiliWatchProgress, but the request runs on a worker:
+// biliReportWatchProgress posts synchronously, and doing that from the GUI tick would
+// freeze the window. Reporting at the end is what makes the video appear in 历史记录
+// immediately; the write used to wait for the next open, which looked like "it only shows
+// up after playing another video".
+// 开播那一刻写一次历史。played 必须是**实际起播位置**：续播传续播点，从头播放传 0。
+// 一律传 0 会把 B 站记下来的进度清掉，用户下次就没法从原处继续。
+// 不影响 biliWatch* 记录：调用方传的是副本，后续 tick 继续追踪真实位置，播完照旧按 -1
+// 上报。
+// Writes the history the moment playback starts. played must be the position playback
+// really begins at: the resume point when resuming, 0 when starting from the top. Always
+// passing 0 would wipe the progress the site stored, so the next resume would start over.
+// The biliWatch* fields are left alone - the caller passes copies - so the tick keeps
+// tracking the real position and the end still reports -1.
+bool QmlPlayerBridge::reportBiliWatchStartedAsync(const std::wstring& bvid, long long cid,
+                                                  int played) {
+    auto& i = *impl_;
+    if (bvid.empty() || cid <= 0) return false;
+    if (played < 0) played = 0;
+    // 槽位忙时跳过：覆盖一个还在跑的任务会析构旧 future 并阻塞 GUI 线程。
+    // Skip while the slot is busy: overwriting a running task destroys the old future
+    // and blocks the GUI thread.
+    if (i.biliTaskSlots[static_cast<size_t>(BiliOp::ReportProgress)].busy) return false;
+    const std::string tag = utf8Of(bvid).toStdString();
+    return startBiliTask(BiliOp::ReportProgress, [bvid, cid, played, tag] {
+        BiliTaskResult r;
+        r.ok = media::biliReportWatchProgress(bvid, cid, played);
+        log::info("bilibili", std::format(
+            "watch progress reported at start bvid={} played_time={} ok={}",
+            tag, played, r.ok ? 1 : 0));
+        return r;
+    });
+}
+
+bool QmlPlayerBridge::reportBiliWatchProgressAsync() {
+    auto& i = *impl_;
+    if (i.biliWatchBvid.empty() || i.biliWatchCid <= 0) return false;
+    if (i.biliWatchLastPos < 0.0) return false;
+    // 上一次上报还没回来：这一次先不碰，数据留着让下一帧重试。直接覆盖槽位会让旧
+    // future 析构并阻塞 GUI，网络慢的时候正好卡住一帧甚至更久。
+    // An earlier report is still in flight: leave the data alone and retry next frame.
+    // Overwriting the slot would destroy the old future, which blocks the GUI thread.
+    if (i.biliTaskSlots[static_cast<size_t>(BiliOp::ReportProgress)].busy) return false;
+    int played = int(i.biliWatchLastPos);
+    if (i.biliWatchDuration > 0 && i.biliWatchLastPos >= i.biliWatchDuration - 1.0)
+        played = -1;
+    if (played < 0 && played != -1) played = 0;
+    // 立刻清空：同一个位置只报一次，之后析构或 openPath 的 flush 不会再发。
+    // Cleared at once so the same position is not sent again by the flush in the
+    // destructor or in openPath.
+    const std::wstring bvid = std::move(i.biliWatchBvid);
+    const long long cid = i.biliWatchCid;
+    i.biliWatchBvid.clear();
+    i.biliWatchCid = 0;
+    i.biliWatchLastPos = -1.0;
+    i.biliWatchDuration = 0.0;
+    const std::string tag = utf8Of(bvid).toStdString();
+    return startBiliTask(BiliOp::ReportProgress, [bvid, cid, played, tag] {
+        BiliTaskResult r;
+        r.ok = media::biliReportWatchProgress(bvid, cid, played);
+        log::info("bilibili", std::format(
+            "watch progress reported at end bvid={} played_time={} ok={}",
+            tag, played, r.ok ? 1 : 0));
+        return r;
+    });
+}
 QmlPlayerBridge::~QmlPlayerBridge() {
+    // Before anything is torn down: this reads the playback position.
+    flushBiliWatchProgress();
+    // The overlay is a child window: it has to go before the video window does.
+    if (impl_->danmakuWindow) impl_->danmakuWindow->destroy();
     flushHdrMemory();
     if (qApp) qApp->removeEventFilter(this);
     if (qApp) qApp->removeNativeEventFilter(&impl_->displayChangeFilter);
@@ -2158,11 +2555,13 @@ QVariantList QmlPlayerBridge::fgMultiplierChoices() const {
     // Only multipliers the chosen backend supports are offered: DLSS reaches 6X on
     // capable hardware, XeSS stops at 4X. Offering a value the provider would
     // refuse is the same lie as a dead control.
-    const bool xess = settings().frameGenerationBackend
-                      == engine::FrameGenerationBackend::XeSS;
+    const auto backend = settings().frameGenerationBackend;
+    const bool xess = backend == engine::FrameGenerationBackend::XeSS;
     const int ceiling = xess ? std::min(fgMaxMultiplier(), 4) : fgMaxMultiplier();
     QVariantList out;
-    const auto choices=settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg?
+    // 档位与作者原版一致：只有数字档，不再有「自动」。自动改由单独的
+    // 自动选择倍率 开关控制（2026-10-24 用户要求）。
+    const auto choices=backend==engine::FrameGenerationBackend::Vfg?
         std::span<const uint32_t>(engine::kVfgMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
     for (const auto choice : choices) {
         const int m = int(choice);
@@ -2175,8 +2574,192 @@ QVariantList QmlPlayerBridge::fgMultiplierChoices() const {
     return out;
 }
 
-int QmlPlayerBridge::vfgQuality()const{return int(settings().vfgQuality);}
-void QmlPlayerBridge::setVfgQuality(int value){
+// 自动选择倍率只对 DLSS 和 VFG 开放：这两家的倍率选择足够宽，值得按上限去凑。
+// FSR 只有 2X、XeSS 最多 4X 且由提供方自报能力，自动在它们身上没有可调的余地。
+bool QmlPlayerBridge::fgAutoMultiplierAvailable() const {
+    const auto backend = settings().frameGenerationBackend;
+    return backend == engine::FrameGenerationBackend::Dlss ||
+           backend == engine::FrameGenerationBackend::Vfg;
+}
+
+bool QmlPlayerBridge::fgAutoMultiplier() const { return impl_->chain.fgAutoMultiplier; }
+
+void QmlPlayerBridge::setFgAutoMultiplier(bool value) {
+    if (!fgAutoMultiplierAvailable()) {
+        if (value) emit notice(tr("自动倍率只支持 DLSS 帧生成和 NVIDIA VFG"), true);
+        return;
+    }
+    if (impl_->chain.fgAutoMultiplier == value) return;
+    const auto before = impl_->chain.fgAutoMultiplier;
+    impl_->chain.fgAutoMultiplier = value;
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message;
+        impl_->chain.fgAutoMultiplier = before; impl_->revalidate();
+        emit notice(uiText(error), true); return;
+    }
+    // 打开自动选择时，若补帧正被关着就抬到 2X，让下一次播放有档可用。
+    // 注意：不覆盖用户已选的具体档位（关闭自动后仍按那个档跑）。
+    if (value && impl_->chain.fgMultiplier < 2) impl_->chain.fgMultiplier = 2;
+    // 重新打开必须让它再决策一次：fgAutoSession 记的是"本会话已经算过档位"，
+    // 用户中途关掉再打开时，不清这个标记就不会重新生效（2026-10-24 实测）。
+    if (value) impl_->fgAutoSession = 0;
+    veyra::log::info("ui-fg-auto", std::format("auto={} backend={} multiplier={}{}",
+        value, engine::frameGenerationBackendName(settings().frameGenerationBackend), impl_->chain.fgMultiplier,
+        value ? " (session decision reset)" : " (author-default multiplier logic)"));
+    emit settingsChanged(); emitChainChanged();
+}
+
+// 目标帧率：输出上限 = 自定义/跟随显示器 时用它的值，关闭时用显示器实际刷新率。
+// 打开片源之前也要能算（那时 snapshot 还没有本会话的数据），所以两个入口共用它：
+// 一个读引擎已解析的 snapshot，一个读待下发的 presentation + 最近一次上报的刷新率。
+static double fgAutoTargetRate(const engine::PresentationSettings& effective,
+                               const engine::PresentationSettings& requested,
+                               double reportedRefreshHz) {
+    // 引擎解析过的有效值优先（跟随显示器时那里已经是真实 Hz）。
+    if (effective.outputRate == engine::OutputRateMode::Custom ||
+        effective.outputRate == engine::OutputRateMode::FollowDisplay)
+        return effective.customFps;
+    // 打开片源之前引擎还没解析过，用待下发的请求值。
+    if (requested.outputRate == engine::OutputRateMode::Custom)
+        return requested.customFps;
+    if (requested.outputRate == engine::OutputRateMode::FollowDisplay)
+        return requested.customFps > 0.01 ? requested.customFps : reportedRefreshHz;
+    // 两处都说「关闭」：按显示器实际刷新率算。
+    return reportedRefreshHz;
+}
+
+// 打开片源之前先把倍率定下来，避开播放中重建管线导致的 ~2 秒卡顿。
+// sourceFps 来自容器/DASH 元数据；拿不到就返回 false，由首帧后的决策兜底。
+bool QmlPlayerBridge::planFgAutoMultiplierBeforeOpen(double sourceFps) {
+    if (!(sourceFps > 0.01)) {
+        veyra::log::info("fg-auto", std::format("pre-open skipped: no source rate ({:.3f})", sourceFps));
+        return false;
+    }
+    if (!impl_->chain.fgAutoMultiplier) {
+        veyra::log::info("fg-auto", "pre-open skipped: automatic selection is off");
+        return false;
+    }
+    if (!fgAutoMultiplierAvailable()) return false;
+    const auto* node = impl_->chain.firstOf(engine::EffectType::FrameGeneration);
+    if (!node) return false;
+
+    const double targetFps = fgAutoTargetRate(impl_->snapshot.presentationEffective,
+                                              impl_->presentation,
+                                              impl_->snapshot.displayFgRefreshHz);
+    if (!(targetFps > 0.01)) {
+        veyra::log::info("fg-auto", std::format("pre-open skipped: no target rate (eff={} req={} refresh={:.3f})",
+            int(impl_->snapshot.presentationEffective.outputRate), int(impl_->presentation.outputRate),
+            impl_->snapshot.displayFgRefreshHz));
+        return false;
+    }
+
+    const auto backend = settings().frameGenerationBackend;
+    const int before = fgMultiplier();
+    // 源帧率已达上限：关闭补帧（与首帧后决策同一条规则）。
+    int target = 1;
+    if (sourceFps < targetFps / engine::kDisplayFgFitTolerance) {
+        const unsigned ceiling = unsigned(std::clamp(fgMaxMultiplier(), 2, 8));
+        const unsigned wanted = engine::displayFgAutoMultiplier(backend, sourceFps, targetFps, ceiling);
+        if (wanted == 0) return false;      // 无可用档：交给首帧后决策
+        target = int(wanted);
+    }
+    if (before == target && node->enabled == (target > 1)) {
+        // 已经是这个档：什么都不用改。
+        veyra::log::info("fg-auto", std::format("pre-open: already {}X source={:.3f} target={:.3f}",
+            target, sourceFps, targetFps));
+        return true;
+    }
+    // 先把 chain 改成目标档，openPath 之后构建管线即用它，不产生二次重建。
+    applyFgMultiplier(target);
+    // 标记"本会话已按预决策定档"，否则首帧后的决策会再走一遍、把刚建好的管线又拆掉
+    // （实测 2026-10-24：pre-open 关掉补帧后，首帧后又关一次，卡 614ms）。
+    impl_->fgAutoPlanned = true;
+    veyra::log::info("fg-auto", std::format("pre-open: backend={} source={:.3f} target={:.3f} chosen={} previous={} (decided before the graph is built)",
+        engine::frameGenerationBackendName(backend), sourceFps, targetFps, target, before));
+    return true;
+}
+
+// 自动选择倍率 的运行时决策（用户 2026-10-24 定稿）。
+// 开关关闭：完全按作者原版逻辑，倍率就是用户选的那个数字档，这里什么都不做。
+// 开关开启：
+//   · 源帧率低于输出上限 → 按公式挑档（ceil(上限 ÷ (源帧率×1.02))，档位向上取）
+//   · 源帧率高于/等于输出上限 → 关闭补帧（节点 enabled=false，开关也跟着关）
+//   · 输出上限为「关闭」→ 用显示器实际刷新率当目标，照样自动选
+// 只在每个会话首次进入播放时算一次：改倍率要重建 GPU 管线，播放中改会卡顿。
+void QmlPlayerBridge::maybeApplyFgAutoMultiplier() {
+    const auto& s = impl_->snapshot;
+    if (!s.running || s.sessionId == 0) return;
+    // 本会话已经决定过：不再动。会话号变化才重新算。
+    if (impl_->fgAutoSession == s.sessionId) return;
+    // 打开前已按元数据定档：本会话不必再算，否则会把刚建好的管线拆了重建。
+    if (impl_->fgAutoPlanned) {
+        impl_->fgAutoSession = s.sessionId;
+        impl_->fgAutoPlanned = false;
+        return;
+    }
+    if (!impl_->chain.fgAutoMultiplier) { impl_->fgAutoSession = s.sessionId; return; }
+    const auto backend = settings().frameGenerationBackend;
+    if (!fgAutoMultiplierAvailable()) { impl_->fgAutoSession = s.sessionId; return; }
+    // 补帧节点不存在才放弃；节点存在但被关着必须继续决策 —— 上一个片源可能按规则
+    // 把补帧关掉了（源帧率超过上限），下一个低帧率片源要能重新打开它。
+    const auto* node = impl_->chain.firstOf(engine::EffectType::FrameGeneration);
+    if (!node) { impl_->fgAutoSession = s.sessionId; return; }
+
+    // 目标帧率：输出上限为自定义/跟随显示器时用它的值；关闭时用显示器实际刷新率，
+    // 自动选倍数照常工作（用户 2026-10-24 要求）。
+    const double targetFps = fgAutoTargetRate(s.presentationEffective, s.presentationEffective,
+                                              s.displayFgRefreshHz);
+    if (!(targetFps > 0.01)) {
+        // 显示器刷新率也没拿到：下一帧再试（不擅自改设置）。
+        veyra::log::info("fg-auto", std::format("waiting for a target rate cap={} refresh={:.3f}",
+            int(s.presentationEffective.outputRate), s.displayFgRefreshHz));
+        return;
+    }
+    const double sourceFps = s.nominalSourceFps;
+    if (!(sourceFps > 0.01)) {
+        // 源帧率还没就绪：下一帧再试。
+        veyra::log::info("fg-auto", std::format("waiting for source rate target={:.3f}", targetFps));
+        return;
+    }
+
+    impl_->fgAutoSession = s.sessionId;
+    const int before = fgMultiplier();
+    const uint64_t session = s.sessionId;
+
+    // 源帧率高于/等于输出上限：补了也显示不出来，关闭补帧。
+    if (sourceFps >= targetFps / engine::kDisplayFgFitTolerance) {
+        veyra::log::info("fg-auto", std::format("session={} backend={} source={:.3f} target={:.3f} chosen=off previous={} (source at/above the cap: frame generation off)",
+            session, engine::frameGenerationBackendName(backend), sourceFps, targetFps, before));
+        QTimer::singleShot(0, this, [this, session] {
+            if (impl_->snapshot.sessionId != session) return;
+            if (!impl_->chain.fgAutoMultiplier) return;
+            veyra::log::info("fg-auto", std::format("turning frame generation off session={}", session));
+            applyFgMultiplier(1);
+        });
+        return;
+    }
+
+    // 源帧率低于上限：按公式挑档，让它刚好打满上限。
+    const unsigned ceiling = unsigned(std::clamp(fgMaxMultiplier(), 2, 8));
+    const unsigned wanted = engine::displayFgAutoMultiplier(backend, sourceFps, targetFps, ceiling);
+    if (wanted == 0) {
+        veyra::log::info("fg-auto", std::format("no usable step backend={} source={:.3f} target={:.3f} ceiling={} (multiplier kept)",
+            engine::frameGenerationBackendName(backend), sourceFps, targetFps, ceiling));
+        return;
+    }
+    const int target = int(wanted);
+    veyra::log::info("fg-auto", std::format("session={} backend={} source={:.3f} target={:.3f} ceiling={} chosen={} previous={}",
+        session, engine::frameGenerationBackendName(backend), sourceFps, targetFps, ceiling, target, before));
+    if (before == target && node->enabled) return;
+    QTimer::singleShot(0, this, [this, session, target] {
+        if (impl_->snapshot.sessionId != session) return;
+        if (!impl_->chain.fgAutoMultiplier) return;
+        veyra::log::info("fg-auto", std::format("applying {}X session={}", target, session));
+        applyFgMultiplier(target);
+    });
+}
+
+int QmlPlayerBridge::vfgQuality()const{return int(settings().vfgQuality);}void QmlPlayerBridge::setVfgQuality(int value){
     if(value<0||uint32_t(value)>=engine::kVfgQualityCount)return;auto s=settings();if(s.vfgQuality==uint32_t(value))return;
     s.vfgQuality=uint32_t(value);
     if(!impl_->commit(s)){emit notice(tr("VFG 质量设置未被接受，原设置保留"),true);return;}
@@ -2687,6 +3270,137 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
     });
     emit captureChanged();
 }
+void QmlPlayerBridge::tickBiliList() {
+    auto& i = *impl_;
+    // 每个槽位单独回收：qualities 和 related 同时在路上时各自发自己的信号，
+    // 一次遍历处理所有已完成的，不会互相顶替。
+    // Collect each slot on its own: qualities and related can be in flight together and
+    // each emits its own signal, so one sweep drains everything that finished.
+    for (size_t n = 0; n < i.biliListSlots.size(); ++n) {
+        auto& slot = i.biliListSlots[n];
+        if (!slot.busy) {
+            // 槽位空着但有排队的请求：启动下一个。
+            // The slot is free and something is queued: start the next one.
+            if (!slot.pending.empty()) {
+                auto next = std::move(slot.pending.front());
+                slot.pending.erase(slot.pending.begin());
+                if (!next.kind.isEmpty()) {
+                    startListWorker(next.kind, next.generation);
+                }
+            }
+            continue;
+        }
+        if (slot.query.wait_for(std::chrono::seconds(0)) != std::future_status::ready) continue;
+
+        auto r = slot.query.get();
+        slot.busy = false;
+        // A cancelled or superseded request drops its result: the user has already asked
+        // for something else and must not see this one land afterwards.
+        if (slot.kind.isEmpty()) continue;
+        const QString kind = slot.kind;
+        const int generation = slot.generation;
+        slot.kind.clear();
+
+        const bool objectRequest = kind.startsWith(QLatin1String("detail:"));
+        if (!r.ok) {
+            i.bilibiliError = r.error;
+            if (objectRequest) emit bilibiliObjectReady(kind, QVariantMap{}, generation);
+            else emit bilibiliListReady(kind, QVariantList{}, generation);
+            continue;
+        }
+        i.bilibiliError.clear();
+        if (objectRequest) emit bilibiliObjectReady(kind, r.object, generation);
+        else emit bilibiliListReady(kind, r.items, generation);
+    }
+}
+
+void QmlPlayerBridge::tickBiliPlay() {
+    auto& i = *impl_;
+    auto& job = i.biliPlayJob;
+    if (!job.busy) return;
+    // 只在 worker 真正完成时才取结果；done 由 worker 最后一步置位。
+    if (!job.result || !job.result->done.load()) return;
+    if (job.query.valid()) job.query.get();   // 回收线程；异常在 worker 里不会抛到这里
+    auto result = std::move(job.result);
+    job.busy = job.resolving = false;
+    // 期间用户又点了别的（新请求把 generation 顶掉）：这次结果作废。
+    if (job.generation == 0 || !result) return;
+    if (result->reportCid > 0)
+        veyra::log::info("bilibili", std::format("watch progress reported bvid={} played_time={} ok={}",
+            utf8Of(result->reportBvid).toStdString(), result->reportPlayed,
+            result->reportOk ? 1 : 0));
+    const auto& urls = result->urls;
+    if (!urls.ok) {
+        emit notice(QString::fromStdWString(urls.error), true);
+        return;
+    }
+    const std::wstring pageTitle = job.pageTitle;
+    i.pendingTitle = pageTitle;
+    // Backup CDN: remember the full mirror list so a failed open can try the next.
+    i.biliMirrors = i.prefBool("biliAutoCdn", true) ? urls.videoMirrors
+                                                    : std::vector<std::wstring>{};
+    i.biliMirrorIndex = 0;
+    i.biliRetriesLeft = int(i.biliMirrors.size()) > 1 ? int(i.biliMirrors.size()) - 1 : 0;
+    i.biliRetryPending = false;
+    i.biliVideoUrl = urls.videoUrl;
+    // Remember what is playing so the position can be reported when this play ends.
+    i.biliWatchBvid = job.bvid.toStdWString();
+    i.biliWatchCid = job.cid;
+    i.biliWatchLastPos = -1.0;
+    i.biliWatchDuration = 0.0;
+    // 开播即写一次历史：这样点开就算「看过」，不必等播完 —— B 站网页播放器也是
+    // 一开始播放就出现在历史记录里。**不碰**上面刚设好的记录字段，所以 tick 仍会
+    // 继续追踪真实位置，播完时照旧按 -1 上报。
+    // （真正的调用在 resumeAt 算完之后：续播必须报续播位置，不能报 0，否则会把 B 站
+    //   记录下来的进度清掉，用户下次就没法从原处继续了。）
+    // Write the history as soon as playback starts, so opening a video counts as watched
+    // without waiting for it to finish - the site's own player behaves the same way. The
+    // fields above are left untouched, so the tick keeps tracking the real position and the
+    // end still reports -1.
+    // (The call itself sits after resumeAt is resolved: a resume must report the resumed
+    // position, not 0, or it would wipe the progress the site stored and the next resume
+    // would start over.)
+    // Where the account left this part, so playback resumes there.
+    bool startedFromTop = false;
+    if (job.plannedResume) {
+        i.biliResumeAt = result->resumeAt;
+        if (i.biliResumeAt < 0.0) startedFromTop = true;
+    } else {
+        i.biliResumeAt = -1.0;
+        startedFromTop = job.fromStart;
+    }
+    // 报「实际起播位置」：续播就是那个续播点，从头播放（或本来就没有进度）才是 0。
+    // Report where playback actually starts: the resume point when resuming, 0 only when
+    // starting from the top (or when there was no saved position at all).
+    reportBiliWatchStartedAsync(i.biliWatchBvid, i.biliWatchCid,
+                                i.biliResumeAt > 0.0 ? int(i.biliResumeAt) : 0);
+    i.biliResumeSession = 0;
+    // 这一路打开的是 B 站来源，记下来：播完后「播放」不能再拿过期地址重开。
+    // This open is a Bilibili source, so remember it: after the video ends, Play must
+    // not reopen the stale address.
+    i.biliSourceActive = true;
+    // Kept on impl_ as well: openPath() re-applies them after rebuilding options.
+    i.pendingHeaders = urls.headers;
+    i.pendingUserAgent = urls.userAgent;
+    i.pendingAudioPath = urls.audioUrl;
+    i.bilibiliOpenPending = true;
+    i.options.network.requestHeaders = urls.headers;
+    i.options.network.userAgent = urls.userAgent;
+    i.options.audioPath = urls.audioUrl;
+    // 自动选择倍率：用 DASH 的 frame_rate 在打开前定档，让管线一次就按对的倍率构建。
+    planFgAutoMultiplierBeforeOpen(urls.frameRate);
+    QString info = QStringLiteral("%1 × %2  %3")
+        .arg(urls.width).arg(urls.height).arg(QString::fromStdWString(urls.codec));
+    if (urls.audioUrl.empty()) info += QStringLiteral("  ") + tr("无音频");
+    const QString fromTop = startedFromTop ? tr("（从头开始）") : QString();
+    if (!pageTitle.empty())
+        emit notice(tr("正在播放：") + QString::fromStdWString(pageTitle) + QStringLiteral("  ")
+                    + info + fromTop, false);
+    else
+        emit notice(tr("正在播放：") + info + fromTop, false);
+    openPath(QString::fromStdWString(urls.videoUrl));
+}
+
 void QmlPlayerBridge::tickCapture() {
     auto& i = *impl_;
     if (!i.captureBusy || i.captureQuery.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
@@ -2816,6 +3530,14 @@ bool QmlPlayerBridge::startCaptureSession() {
     return true;
 }
 void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill) {
+    // A capture or stream open supersedes a waiting Bilibili mirror retry just as a
+    // file open does; this path does not go through openPath, so it bumps the
+    // generation itself and drops the retry state that belonged to the old source.
+    ++impl_->biliOpenGen;
+    impl_->biliMirrors.clear();
+    impl_->biliMirrorIndex = 0;
+    impl_->biliRetriesLeft = 0;
+    impl_->biliRetryPending = false;
     rememberPosition(true);
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
@@ -4465,6 +5187,25 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
 }
 void QmlPlayerBridge::tickSubtitles() {
     auto& i = *impl_;
+    // The only place that sees playback while it happens: remember where the Bilibili
+    // video got to, so the report at flush time describes what was actually watched.
+    if (!i.biliWatchBvid.empty() && i.biliWatchCid > 0) {
+        const auto& cur = i.snapshot;
+        using Tr = engine::TransportState;
+        const bool playing = cur.running && !cur.failed &&
+                             (cur.transport == Tr::Playing || cur.transport == Tr::Paused);
+        if (playing && cur.position > 0.0) {
+            i.biliWatchLastPos = cur.position;
+            if (cur.duration > 0.0) i.biliWatchDuration = cur.duration;
+        } else if (cur.transport == Tr::Ended && !cur.failed) {
+            // 播完立刻上报。以前只有「打开另一个来源」或程序退出时才写回历史，于是刚看完
+            // 的视频要等下一次播放才出现在历史记录里。
+            // Report at the end. The write used to happen only when another source was
+            // opened or the app exited, so a video that had just finished did not appear
+            // in the history until the next playback.
+            reportBiliWatchProgressAsync();
+        }
+    }
     bool changed = false;
     if (i.subScanGate) {
         // Opens once playback holds a few seconds ahead (or has read the whole file), closes when
@@ -4628,6 +5369,36 @@ void QmlPlayerBridge::tickSubtitles() {
         if (!joined.isEmpty()) veyra::log::info("subtitle-overlay", "text=" + joined.toStdString());
         emit subtitleTextChanged();
     }
+    tickDanmaku();
+}
+
+// Danmaku rides the same per-frame tick as the subtitle overlay: it reads the
+// engine's own position, so pause, seek and speed changes need no extra wiring.
+void QmlPlayerBridge::tickDanmaku() {
+    auto& i = *impl_;
+    if (!i.danmakuEnabled || !i.danmakuWindow) return;
+    const auto& s = i.snapshot;
+    // Only over a moving picture: a still image or a capture has no video timeline.
+    if (!s.running || s.image || s.capture) { i.danmakuWindow->hide(); return; }
+    if (s.duration <= 0) { i.danmakuWindow->hide(); return; }
+
+    // A jump means a seek: the engine rebuilds its tracks rather than letting old
+    // comments fly in from stale positions.
+    if (i.danmakuLastSeconds >= 0 &&
+        (s.position < i.danmakuLastSeconds - 0.5 || s.position > i.danmakuLastSeconds + 2.0))
+        i.danmakuWindow->noteSeek();
+    i.danmakuLastSeconds = s.position;
+
+    i.danmakuWindow->follow(impl_->videoWindow);
+
+    media::DanmakuView view;
+    view.scale = double(i.prefInt("danmakuScale", 100)) / 100.0;
+    view.opacity = double(i.prefInt("danmakuOpacity", 80)) / 100.0;
+    view.speedFactor = double(i.prefInt("danmakuSpeed", 100)) / 100.0;
+    view.area = double(i.prefInt("danmakuArea", 50)) / 100.0;
+    view.videoWidth = int(s.metrics.resolution.output.width);
+    view.videoHeight = int(s.metrics.resolution.output.height);
+    i.danmakuWindow->render(s.position, view);
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {
     QVariantList out;
@@ -4758,6 +5529,9 @@ void QmlPlayerBridge::attachVideoWindow(qulonglong nativeHandle) {
     impl_->videoWindow = reinterpret_cast<HWND>(nativeHandle);
 }
 
+// --- embedded browser -------------------------------------------------------
+
+
 void QmlPlayerBridge::setPreOpenHook(std::function<void()> hook) {
     impl_->preOpen = std::move(hook);
 }
@@ -4768,6 +5542,12 @@ QString QmlPlayerBridge::version() const { return QStringLiteral(VEYRA_DISPLAY_V
 // --- playback ---------------------------------------------------------------
 QString QmlPlayerBridge::statusText() const { return uiText(impl_->snapshot.status); }
 bool QmlPlayerBridge::running() const { return impl_->snapshot.running; }
+// 注意：必须保持原来的含义（只有 Paused），不要顺手把 Ended 也算进来 ——
+// 这个属性被作者原有的 7 处界面共用（极简/专业/节点/导出/音轨标记），把 Ended
+// 算成暂停会改掉本地视频播完后的按钮图标，那是动作者的原功能。
+// Keep this exactly as it was (Paused only). Seven of the author's own screens read
+// it (极简 / 专业 / 节点 / 导出 / audio-track marks), and counting Ended as paused
+// would change the button glyph for a finished local video - the author's behaviour.
 bool QmlPlayerBridge::paused() const { return impl_->snapshot.transport == engine::TransportState::Paused; }
 bool QmlPlayerBridge::failed() const { return impl_->snapshot.failed; }
 bool QmlPlayerBridge::isImage() const { return impl_->snapshot.image; }
@@ -5002,13 +5782,14 @@ bool QmlPlayerBridge::commitHdrTuning(engine::EnhancementSettings settings){
     const bool wasValid=chainValid();
     const auto curve=settings.hdrCurve;
     const auto metadata=settings.hdrMetadata;
+    const bool doviFollow=settings.doviFollow;
     if(!impl_->commit(std::move(settings)))return false;
     // Re-project first, then re-assert both copies the session capture reads:
     // revalidate() rewrites the pending settings and the draft globals from the
     // runtime configuration, which does not carry this block yet.
     impl_->revalidate(true);
     auto after=impl_->facade.pendingSettings();
-    after.hdrCurve=curve;after.hdrMetadata=metadata;
+    after.hdrCurve=curve;after.hdrMetadata=metadata;after.doviFollow=doviFollow;
     impl_->facade.setPending(after);
     impl_->draftGlobals.hdrCurve=curve;impl_->draftGlobals.hdrMetadata=metadata;
     impl_->persistSession();
@@ -5182,6 +5963,11 @@ void QmlPlayerBridge::syncHdrTitleProfile(){
   const QFileInfo file(QString::fromStdWString(i.sourceLabel));
   if(!file.isFile())return; // Capture/stream labels are not film identities.
   const QString title=file.canonicalFilePath();
+  if(std::getenv("VEYRA_DOVI_TRACE")!=nullptr){
+      static unsigned titleLogged=0;
+      if(titleLogged<2){++titleLogged;
+          veyra::log::info("hdr-title", std::format("canonical={}", title.toStdString()));}
+  }
   if(title.isEmpty()||title==i.hdrTitleApplied)return;
   flushHdrMemory();i.hdrTitleApplied=title;
   if(hdrTitleMemory()&&loadHdrTitleProfile(title)){
@@ -5192,9 +5978,13 @@ void QmlPlayerBridge::syncHdrTitleProfile(){
 
 bool QmlPlayerBridge::loadHdrTitleProfile(const QString& title){
   const auto list=impl_->prefs.value(QStringLiteral("hdrTitles")).toList();
+  // Path separators must not decide whether a memory matches: canonicalFilePath()
+  // hands back '/', while entries written by older builds stored '\'.
+  const auto normalized=[](QString v){v.replace(QLatin1Char('\\'),QLatin1Char('/'));return v;};
+  const QString wanted=normalized(title);
   for(const auto& item:list){
     const auto stored=item.toMap();
-    if(stored.value(QStringLiteral("key")).toString()!=title)continue;
+    if(normalized(stored.value(QStringLiteral("key")).toString())!=wanted)continue;
     auto s=settings();
     const auto number=[&](const char* key,int fallback){
       return stored.contains(QLatin1String(key))?stored.value(QLatin1String(key)).toInt():fallback;};
@@ -5206,6 +5996,10 @@ bool QmlPlayerBridge::loadHdrTitleProfile(const QString& title){
     s.hdrCurve.rollOffPercent=unsigned(std::clamp(number("rollOffPercent",int(s.hdrCurve.rollOffPercent)),10,200));
     s.hdrCurve.peakCapNits=unsigned(std::clamp(number("peakCapNits",int(s.hdrCurve.peakCapNits)),0,4000));
     s.hdrCurve.strengthPercent=unsigned(std::clamp(number("strengthPercent",int(s.hdrCurve.strengthPercent)),0,200));
+    // Custom: the Dolby Vision follow belongs to the same per-film look, so it is
+    // remembered with it. Entries written before it existed keep the current value.
+    s.doviFollow=stored.value(QStringLiteral("doviFollow"),s.doviFollow).toBool();
+        s.doviP7Compose=stored.value(QStringLiteral("doviP7Compose"),s.doviP7Compose).toBool();
     QScopedValueRollback<bool> restoring(impl_->hdrRestoring,true);
     return commitHdrTuning(std::move(s));
   }
@@ -5226,10 +6020,14 @@ bool QmlPlayerBridge::storeHdrTitleProfile(const QString& title){
   entry[QStringLiteral("rollOffPercent")]=int(c.rollOffPercent);
   entry[QStringLiteral("peakCapNits")]=int(c.peakCapNits);
   entry[QStringLiteral("strengthPercent")]=int(c.strengthPercent);
+  entry[QStringLiteral("doviFollow")]=doviFollow();
+        entry[QStringLiteral("doviP7Compose")]=doviP7Compose();
   auto list=i.prefs.value(QStringLiteral("hdrTitles")).toList();
-  for(const auto& item:list)if(item.toMap().value(QStringLiteral("key")).toString()==title&&item.toMap()==entry)return false;
+  const auto normalized=[](QString v){v.replace(QLatin1Char('\\'),QLatin1Char('/'));return v;};
+  const QString wanted=normalized(title);
+  for(const auto& item:list)if(normalized(item.toMap().value(QStringLiteral("key")).toString())==wanted&&item.toMap()==entry)return false;
   for(int n=list.size()-1;n>=0;--n)
-    if(list[n].toMap().value(QStringLiteral("key")).toString()==title)list.removeAt(n);
+    if(normalized(list[n].toMap().value(QStringLiteral("key")).toString())==wanted)list.removeAt(n);
   list.append(entry);
   // Bounded list: the oldest titles fall off the front.
   while(list.size()>i.kHdrTitleProfileLimit)list.removeFirst();
@@ -5305,6 +6103,8 @@ bool QmlPlayerBridge::loadHdrProfile(const QString& id){
   s.hdrCurve.peakCapNits=unsigned(std::clamp(number("peakCapNits",int(s.hdrCurve.peakCapNits)),0,4000));
   s.hdrCurve.strengthPercent=unsigned(std::clamp(number("strengthPercent",int(s.hdrCurve.strengthPercent)),0,200));
   s.hdrCurve.displayPeakNits=unsigned(std::clamp(number("displayPeakNits",int(s.hdrCurve.displayPeakNits)),0,10000));
+  s.doviFollow=stored.value(QStringLiteral("doviFollow"),s.doviFollow).toBool();
+        s.doviP7Compose=stored.value(QStringLiteral("doviP7Compose"),s.doviP7Compose).toBool();
   QScopedValueRollback<bool> restoring(i.hdrRestoring,true);
   return commitHdrTuning(std::move(s));
 }
@@ -5322,6 +6122,8 @@ bool QmlPlayerBridge::storeHdrProfile(const QString& id){
   entry[QStringLiteral("peakCapNits")]=int(c.peakCapNits);
   entry[QStringLiteral("strengthPercent")]=int(c.strengthPercent);
   entry[QStringLiteral("displayPeakNits")]=int(c.displayPeakNits);
+  entry[QStringLiteral("doviFollow")]=doviFollow();
+        entry[QStringLiteral("doviP7Compose")]=doviP7Compose();
   auto profiles=i.prefs.value(QStringLiteral("hdrProfiles")).toMap();
   if(profiles.value(id).toMap()==entry)return false;   // nothing new to remember
   profiles[id]=entry;
@@ -5337,7 +6139,12 @@ QVariantMap QmlPlayerBridge::hdrSourceInfo() const {
   const unsigned cll=snap.sourceMaxCllNits,fall=snap.sourceMaxFallNits;
   const bool valid=snap.sourceHdr&&(mastering||cll||fall);
   return {{"valid",valid},{"masteringPeakNits",int(mastering)},
-          {"maxCllNits",int(cll)},{"maxFallNits",int(fall)}};
+          {"maxCllNits",int(cll)},{"maxFallNits",int(fall)},
+            {"doviProfile",int(snap.sourceDoviProfile)},
+            {"doviRpu",snap.sourceDoviRpu},
+            {"doviMaxNits",int(snap.sourceDoviMaxNits)},
+          {"doviEnhancement",snap.sourceDoviEnhancement},
+            {"hdr10Plus",snap.sourceHdr10Plus}};
 }
 
 bool QmlPlayerBridge::sourceIsSdr() const {
@@ -5438,26 +6245,29 @@ bool QmlPlayerBridge::applyHdrTuningPreset(const QString& id){
     }
     return false;
 }
-bool QmlPlayerBridge::hdrMetadataEnabled()const{return settings().hdrMetadata.enabled;}
-void QmlPlayerBridge::setHdrMetadataEnabled(bool enabled){
-    auto s=settings();if(s.hdrMetadata.enabled==enabled)return;s.hdrMetadata.enabled=enabled;
+bool QmlPlayerBridge::doviP7Compose()const{return settings().doviP7Compose;}
+void QmlPlayerBridge::setDoviP7Compose(bool on){
+    auto s=settings();if(s.doviP7Compose==on)return;s.doviP7Compose=on;
+    // Lives with the shell preference like the Level 1 follow flag, so it survives
+    // a restart and applies before the next file is opened.
+    auto& i=*impl_;
+    i.prefs[QStringLiteral("doviP7Compose")]=on;
+    if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision p7 compose flag not saved");
     commitHdrTuning(std::move(s));
 }
-QVariantMap QmlPlayerBridge::hdrMetadataParams()const{
-    const auto& m=settings().hdrMetadata;
-    return {{"masteringPeakNits",int(m.masteringPeakNits)},{"maxCllNits",int(m.maxCllNits)},
-            {"maxFallNits",int(m.maxFallNits)}};
-}
-bool QmlPlayerBridge::setHdrMetadataParameter(const QString& key,double value){
-    if(!std::isfinite(value)||value<0||value>10000)return false;
-    auto s=settings();const auto v=int(std::lround(value));
-    if(v<0||v>10000)return false;
-    if(key=="masteringPeakNits")s.hdrMetadata.masteringPeakNits=unsigned(v);
-    else if(key=="maxCllNits")s.hdrMetadata.maxCllNits=unsigned(v);
-    else if(key=="maxFallNits")s.hdrMetadata.maxFallNits=unsigned(v);
-    else return false;
-    if(!s.hdrMetadata.valid())return false;
-    return commitHdrTuning(std::move(s));
+bool QmlPlayerBridge::doviFollow()const{return settings().doviFollow;}
+bool QmlPlayerBridge::doviFollowAverage()const{return settings().doviFollowAverage;}
+void QmlPlayerBridge::setDoviFollowAverage(bool on){
+    auto s=settings();if(s.doviFollowAverage==on)return;s.doviFollowAverage=on;
+    commitHdrTuning(std::move(s));}
+void QmlPlayerBridge::setDoviFollow(bool on){
+    auto s=settings();if(s.doviFollow==on)return;s.doviFollow=on;
+    // The shell preference is the global fallback: it re-applies at the next start
+    // even for a source that has no stored per-film profile yet.
+    auto& i=*impl_;
+    i.prefs[QStringLiteral("doviFollow")]=on;
+    if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision follow flag not saved");
+    commitHdrTuning(std::move(s));
 }
 void QmlPlayerBridge::setVideoHdr(bool enabled) {
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
@@ -5863,9 +6673,18 @@ void QmlPlayerBridge::setFgEnabled(bool enabled) {
 }
 int QmlPlayerBridge::fgMultiplier() const {
     const auto* node = impl_->chain.firstOf(engine::EffectType::FrameGeneration);
+    // 档位只有数字：自动选倍数由独立开关控制，不再占用倍率档位（2026-10-24）。
     return node && node->enabled ? int(impl_->chain.fgMultiplier) : 1;
 }
 void QmlPlayerBridge::setFgMultiplier(int multiplier) {
+    // 倍率档只有数字（1 = 关闭，>=2 = 补帧倍率）。自动选择是独立开关，
+    // 不再占用 0 这个值；收到 0 说明调用方过旧，忽略即可。
+    if (multiplier <= 0) return;
+    applyFgMultiplier(multiplier);
+}
+
+// 设倍率的实际动作，不碰 fgAutoMultiplier 标记。自动决策与手动选择共用。
+void QmlPlayerBridge::applyFgMultiplier(int multiplier) {
     const auto choices=settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg?
         std::span<const uint32_t>(engine::kVfgMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
     const bool legal = std::find(choices.begin(),choices.end(),uint32_t(std::max(multiplier,0)))!=choices.end();
@@ -6268,7 +7087,7 @@ void QmlPlayerBridge::setNodeMode(int mode) {
     impl_->session = impl_->savedSession = candidate;
     impl_->restoreConfiguration(configuration);
     impl_->revalidate();
-    impl_->options = engine::PlayerOptions::from(next,engine::runtimeOrder(impl_->activeRuntime()));
+    impl_->options = engine::PlayerOptions::from(next,engine::runtimeOrder(impl_->activeRuntime()),&impl_->options);
     emitChainChanged();
     emit settingsChanged();
 }
@@ -6630,8 +7449,53 @@ void QmlPlayerBridge::tickPlaylist() {
 }
 
 void QmlPlayerBridge::openPath(const QString& path) {
+    // 观看进度由 tickBiliPlay 的 worker 负责上报（B 站那次打开会先把状态取走）。
+    // 只有非 B 站打开才在这里上报，因为那条路径没有 worker 替它做。
+    // 保留这个入口的理由：openPath 是所有打开方式的汇合点。
+    flushBiliWatchProgress();
+    // Consumed up front: an empty path must not leave the flag set for the next open.
+    const bool keepBilibiliStream = impl_->bilibiliOpenPending;
+    impl_->bilibiliOpenPending = false;
+    // Any open supersedes a mirror retry that is still waiting on its timer.
+    ++impl_->biliOpenGen;
     if (path.isEmpty()) return;
     flushHdrMemory();impl_->hdrTitleApplied.clear();
+    // A local file or an unrelated URL must not inherit the last video's DASH audio
+    // address or the site's Referer/UA: separateAudio reads audioPath alone, so a
+    // stale value makes the engine open the previous Bilibili track as this source's
+    // audio. The Bilibili branches write these immediately before calling openPath
+    // and raise bilibiliOpenPending, so the open they asked for keeps them.
+    if (!keepBilibiliStream) {
+        // 不是 B 站那次打开：清掉上一次预决策留下的标记，否则这一部片源会被当成
+        // "已经定过档"而跳过首帧决策。
+        // 同时说明当前来源不再是 B 站，结束后的「播放」可以按本地路径重开。
+        // Not the Bilibili open: clear the previous pre-decision marker so this source
+        // is not treated as "already profiled", and note that the current source is no
+        // longer Bilibili so Play after the end may reopen by path again.
+        impl_->biliSourceActive = false;
+        // 重播身份也一起清：换了本地文件或别的地址之后，「播放」不该再回到那个
+        // B 站视频。
+        // Clear the replay identity too: once a local file or another address is open,
+        // Play must not jump back to that Bilibili video.
+        impl_->biliReplayBvid.clear();
+        impl_->biliReplayCid = 0;
+        impl_->fgAutoPlanned = false;
+        impl_->pendingHeaders.clear();
+        impl_->pendingUserAgent.clear();
+        impl_->pendingAudioPath.clear();
+        // The mirror retry belongs to the source that was being opened, not to this one.
+        impl_->biliMirrors.clear();
+        impl_->biliMirrorIndex = 0;
+        impl_->biliRetriesLeft = 0;
+        impl_->biliRetryPending = false;
+        // Danmaku belongs to the Bilibili track it was loaded for: a local file, a plain
+        // URL, a capture or a stream must not keep drawing the previous video's comments.
+        if (impl_->danmakuEnabled) bilibiliDisableDanmaku();
+        // A history position belongs to the Bilibili video it was read for. Opening
+        // anything else must not seek that other source to it.
+        impl_->biliResumeAt = -1.0;
+        impl_->biliResumeSession = 0;
+    }
     const bool network=media::networkMediaInput(wideOf(path));
     if (QFileInfo(path).isDir()) {
         impl_->playlist->addPaths({path}); emit playlistRequested(); return;
@@ -6661,11 +7525,18 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // geometry, and only then open. The presenter samples the window's client
     // size once at initialisation; opening before that point is what produced a
     // 1x1 swapchain.
-    // Only leave the current page when the user is choosing a source from home.
-    // Opening a file from the professional page keeps them there, which is what the
-    // design's source menu implies.
-    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home"))
-        emit navigate(QStringLiteral("min"));
+    // Leave the current page when the user is choosing a source from home, and also
+    // from the Bilibili page: that page is a browser, so letting the picture appear in
+    // its lower half covers the list and makes the page unusable. Playing a video from
+    // the professional page still keeps the user there, which is what the design's
+    // source menu implies.
+    const bool fromBrowsePage = impl_->currentPage == QLatin1String("bili");
+    // 从首页或 B 站页开始播放时切到专业模式：播放之后通常要调补帧/NR/画质，
+    // 首屏就给出这些控件比停在极简模式更顺手（用户 2026-10-25 要求）。
+    // 已经在专业模式里开始播放则原地不动。
+    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home")
+        || fromBrowsePage)
+        emit navigate(QStringLiteral("pro"));
     if(!network)rememberSource(QStringLiteral("file"), path);
     if (impl_->preOpen) impl_->preOpen();
     auto options = impl_->options;
@@ -6677,6 +7548,15 @@ void QmlPlayerBridge::openPath(const QString& path) {
     options.network.startupPrebufferSeconds=impl_->prefs.value(QStringLiteral("networkPrebuffer"),-1).toInt();
     options.network.autoReconnect=impl_->prefBool("networkAutoReconnect",true);
     options.network.corrupt=media::corruptPolicyFromId(impl_->prefString("networkCorrupt").toStdString());
+    // Per-open values a settings rebuild would otherwise drop: PlayerOptions::from()
+    // replaces the whole struct, so the resolver's headers and the DASH audio address
+    // are re-applied here, right before the engine reads them.
+    options.network.requestHeaders = impl_->pendingHeaders;
+    options.network.userAgent = impl_->pendingUserAgent;
+    options.audioPath = impl_->pendingAudioPath;
+    veyra::log::info("open",std::format("headers={} userAgent={} audioPath={}",
+        options.network.requestHeaders.size(),options.network.userAgent.size(),
+        options.audioPath.size()));
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
     impl_->playlistSession = network?0:impl_->openingSessionId;
@@ -6686,24 +7566,1006 @@ void QmlPlayerBridge::openPath(const QString& path) {
         if (!saved.isEmpty()) { impl_->resumeSession = impl_->openingSessionId; impl_->resumeAt = saved.value("at").toDouble(); }
     }
     refreshSubtitles(network?std::wstring():wide);
+    if (fromBrowsePage)
+        veyra::log::info("open", "opened from the Bilibili page; the window has switched to 极简");
 }
 
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
 void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
 bool QmlPlayerBridge::openNetworkAddress(const QString& address){
-    const QUrl url(address.trimmed(),QUrl::StrictMode);
+    const QString trimmed = address.trimmed();
+    // A Bilibili page URL is not a media URL: resolve it to the CDN stream first.
+    // This is what makes "paste the page address and play the video" work without
+    // embedding a browser at all.
+    if (media::isBilibiliPageUrl(trimmed.toStdWString())) {
+        // Send the stored session so member renditions are available.
+        const std::wstring cookie = media::loadBilibiliCookie();
+        const auto stream = media::resolveBilibiliStream(trimmed.toStdWString(), cookie);
+        if (!stream.ok) {
+            emit notice(QString::fromStdWString(stream.error), true);
+            log::warn("bilibili", QString::fromStdWString(stream.error).toStdString());
+            return false;
+        }
+        if (!stream.title.empty()) impl_->pendingTitle = stream.title;
+        // The CDN needs the site's Referer/User-Agent; carry them on the open
+        // options so the demuxer sends them (see networkMediaHeaders).
+        impl_->pendingHeaders = stream.headers;
+        impl_->pendingUserAgent = stream.userAgent;
+        impl_->pendingAudioPath = stream.audioUrl;
+        impl_->bilibiliOpenPending = true;
+        impl_->options.network.requestHeaders = stream.headers;
+        impl_->options.network.userAgent = stream.userAgent;
+        // DASH keeps audio in its own stream; the video address carries none.
+        impl_->options.audioPath = stream.audioUrl;
+        // Report what was actually selected: without a session the API silently
+        // returns a low rendition, and the picture quality is the only clue.
+        QString info = QStringLiteral("%1 × %2  %3")
+            .arg(stream.width).arg(stream.height)
+            .arg(QString::fromStdWString(stream.codec));
+        if (stream.audioUrl.empty()) info += QStringLiteral("  ") + tr("无音频");
+        if (!media::bilibiliCookieLooksSignedIn(cookie)) info += QStringLiteral("  ") + tr("（未登录，画质受限）");
+        emit notice(tr("正在播放：") + QString::fromStdWString(stream.title) + QStringLiteral("  ") + info, false);
+        openPath(QString::fromStdWString(stream.url));
+        return true;
+    }
+    const QUrl url(trimmed,QUrl::StrictMode);
     if(!url.isValid()||url.host().isEmpty()||!media::networkMediaInput(wideOf(url.scheme()+QStringLiteral(":")))){
         emit notice(tr("请输入有效的 HTTP、HTTPS 或 RTSP 视频地址"),true);return false;
     }
     openPath(url.adjusted(QUrl::RemoveFragment).toString(QUrl::FullyEncoded));return true;
 }
 
+void QmlPlayerBridge::bilibiliSignOut(){
+    media::saveBilibiliCookie({});
+    log::info("bilibili", "cookie cleared");
+    emit notice(tr("B 站登录已清除"), false);
+}
+// --- Bilibili module --------------------------------------------------------
+
+namespace {
+// Cards travel to QML as plain maps; the page decides how to draw them.
+QVariantList cardsToVariant(const std::vector<media::BiliVideoCard>& cards) {
+    QVariantList out;
+    out.reserve(int(cards.size()));
+    for (const auto& c : cards) {
+        QVariantMap m;
+        m.insert(QStringLiteral("bvid"), QString::fromStdWString(c.bvid));
+        m.insert(QStringLiteral("title"), QString::fromStdWString(c.title));
+        m.insert(QStringLiteral("cover"), QString::fromStdWString(c.cover));
+        m.insert(QStringLiteral("owner"), QString::fromStdWString(c.owner));
+        m.insert(QStringLiteral("duration"), QString::fromStdWString(c.duration));
+        // Numbers travel as int: QML only needs them for display, and qlonglong
+        // needs a registered metatype to cross the boundary safely.
+        m.insert(QStringLiteral("play"), QVariant(int(std::min<long long>(c.play, 2147483647LL))));
+        m.insert(QStringLiteral("danmaku"), QVariant(int(std::min<long long>(c.danmaku, 2147483647LL))));
+        out.push_back(m);
+    }
+    return out;
+}
+} // namespace
+// 异步版：worker 拉收藏夹列表，tickBiliTasks 取回后发信号。
+// The async form: a worker fetches the folder list; tickBiliTasks() collects it
+// and emits the signal.
+void QmlPlayerBridge::bilibiliRequestFavFolders(const QString& reason){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    startBiliTask(BiliOp::FavFolders, [reason] {
+        BiliTaskResult r;
+        r.reason = reason;
+        std::vector<media::BiliFavFolder> folders;
+        std::wstring error;
+        if (!media::biliFavFolders(folders, error)) {
+            r.error = QString::fromStdWString(error);
+            return r;
+        }
+        for (const auto& f : folders) {
+            QVariantMap m;
+            m.insert(QStringLiteral("id"), QVariant::fromValue<qlonglong>(f.id));
+            m.insert(QStringLiteral("title"), QString::fromStdWString(f.title));
+            m.insert(QStringLiteral("count"), QVariant::fromValue<qlonglong>(f.count));
+            r.list.push_back(m);
+        }
+        r.ok = true;
+        return r;
+    });
+}
+void QmlPlayerBridge::bilibiliDisableDanmaku(){
+    impl_->danmakuEnabled = false;
+    if (impl_->danmakuWindow) {
+        impl_->danmakuWindow->clearItems();
+        impl_->danmakuWindow->hide();
+    }
+    log::info("danmaku", "disabled");
+}
+// 异步版：worker 发收藏请求，tickBiliTasks 取回后发信号。
+// 提示语（已收藏/已取消收藏）和错误提示都在 GUI 线程发，worker 只带回结果。
+// The async form: a worker performs the request, tickBiliTasks() collects the
+// outcome. The user-facing notice stays on the GUI thread; the worker only carries
+// the result back.
+void QmlPlayerBridge::bilibiliRequestFavorite(const QString& bvid, bool add,
+                                              qlonglong folderId, const QString& reason){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::Favorite, [wbvid, add, folderId, reason] {
+        BiliTaskResult r;
+        r.add = add;
+        r.reason = reason;
+        std::wstring error;
+        r.ok = media::biliFavorite(wbvid, add, folderId, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+// ---------------------------------------------------------------------------
+// 通用异步 B 站任务：9 个方法共用一套发起 / 回收。每个 op 有自己的槽位，
+// 所以同时发起的请求互不覆盖。
+// Generic async Bilibili task: nine methods share one start/collect path, and each op
+// owns its slot, so requests started together never evict one another.
+// ---------------------------------------------------------------------------
+
+// 内部：发起一个任务。worker 闭包只捕获值，绝不捕获 this 指针或 Qt 容器。
+// Internal: start one task. The worker closure captures values only - never `this` and
+// never a Qt container.
+bool QmlPlayerBridge::startBiliTask(BiliOp op, std::function<BiliTaskResult()> work) {
+    auto& i = *impl_;
+    auto& slot = i.biliTaskSlots[static_cast<size_t>(op)];
+    slot.busy = true;
+    slot.query = std::async(std::launch::async, [op, work = std::move(work)] {
+        BiliTaskResult r = work();
+        r.op = op;
+        return r;
+    });
+    return true;
+}
+
+// GUI tick：把所有已完成的任务取走，按 op 发对应信号。一次遍历处理多个槽位，
+// 所以同时完成的请求会在同一帧送达，不会各占一帧。
+// GUI tick: drain every finished slot and emit the matching signal. Iterating all
+// slots means several completions in one frame arrive together.
+void QmlPlayerBridge::tickBiliTasks() {
+    auto& i = *impl_;
+    for (size_t n = 0; n < i.biliTaskSlots.size(); ++n) {
+        auto& slot = i.biliTaskSlots[n];
+        if (!slot.busy) continue;
+        if (slot.query.wait_for(std::chrono::seconds(0)) != std::future_status::ready) continue;
+        BiliTaskResult r = slot.query.get();
+        slot.busy = false;
+        if (!r.ok && !r.error.isEmpty()) {
+            i.bilibiliError = r.error.toStdWString();
+            emit notice(r.error, true);
+        } else if (r.ok) {
+            i.bilibiliError.clear();
+        }
+        switch (r.op) {
+        case BiliOp::Like:
+        case BiliOp::Coin:
+        case BiliOp::WatchLater:
+        // 发评论和删评论也走这一组：它们同样只需要把结果送回界面。
+        // 之前漏了 Reply 这个 case，结果被 switch 丢掉，界面就一直停在「发送中」。
+        // Posting and deleting a reply belong here too: they only need their result
+        // delivered. Reply was missing, so the switch discarded it and the button stayed at
+        // "sending" forever.
+        case BiliOp::Reply:
+        case BiliOp::DeleteReply:
+            // 成功提示要留在 GUI 线程发：worker 不能碰翻译表和信号。
+            // 三个动作各有自己的文案，所以按 op 分派而不是用一句通用的话。
+            // The success notice belongs on the GUI thread: the worker cannot touch the
+            // translation table or emit signals. Each action has its own wording, so
+            // dispatch on the op rather than using one generic sentence.
+            if (r.ok) {
+                switch (r.op) {
+                case BiliOp::Like:       emit notice(r.add ? tr("已点赞") : tr("已取消点赞"), false); break;
+                case BiliOp::Coin:       emit notice(tr("已投币"), false); break;
+                case BiliOp::WatchLater: emit notice(r.add ? tr("已加入稍后再看") : tr("已从稍后再看移除"), false); break;
+                case BiliOp::Reply:       emit notice(tr("评论已发送"), false); break;
+                case BiliOp::DeleteReply: emit notice(tr("评论已删除"), false); break;
+                default: break;
+                }
+            }
+            emit bilibiliActionDone(biliOpName(r.op), r.ok, r.error);
+            break;
+        case BiliOp::Comments:
+            emit bilibiliCommentsReady(r.list, qlonglong(r.number), r.ok, r.error);
+            break;
+        case BiliOp::AuthorVideos:
+            // 复用卡片列表信号，kind 带 "author:" 前缀，界面按前缀分流。
+            // Reuses the card-list signal; the kind carries an "author:" prefix and the UI
+            // dispatches on it.
+            emit bilibiliListReady(r.text, r.list, 0);
+            break;
+        case BiliOp::EmotePanel:
+            // 这里只发信号，不发 notice：面板是点按钮才拉的，失败时在面板位置
+            // 显示原因更贴切，弹一条全局提示反而突兀。
+            // Signal only, no notice: the panel is fetched on a button press, so showing the
+            // reason where the panel would be is clearer than a global toast.
+            emit bilibiliEmotePanelReady(r.text.split(QLatin1Char('\n')), r.ok, r.error);
+            break;
+        case BiliOp::EnableDanmaku: {
+            // 创建叠加层、清洗、交给渲染器 —— 三步都在 GUI 线程。
+            // Create the overlay, filter, hand it to the renderer - all on the GUI thread.
+            int shown = 0;
+            if (r.ok) {
+                if (!i.danmakuWindow) {
+                    i.danmakuWindow = std::make_unique<media::DanmakuWindow>();
+                    if (!i.danmakuWindow->create(i.videoWindow)) {
+                        i.danmakuWindow.reset();
+                        r.ok = false;
+                        r.error = tr("无法创建弹幕叠加层");
+                    }
+                }
+                if (r.ok) {
+                    std::vector<media::DanmakuItem> items;
+                    items.reserve(r.list.size());
+                    for (const auto& v : r.list) {
+                        const QVariantMap m = v.toMap();
+                        media::DanmakuItem item;
+                        item.time = m.value(QStringLiteral("time")).toDouble();
+                        item.mode = m.value(QStringLiteral("mode")).toInt();
+                        item.color = m.value(QStringLiteral("color")).toULongLong();
+                        item.text = m.value(QStringLiteral("text")).toString().toStdWString();
+                        items.push_back(std::move(item));
+                    }
+                    log::info("danmaku", std::format("stage: fetched items={}", items.size()));
+                    // 渲染器接不住的字符串先剔掉：空的或过长的无害，孤立代理项会让
+                    // GDI+ 的 AddString 崩溃。
+                    // Drop strings the renderer cannot handle before they reach GDI+: an
+                    // empty or over-long one is harmless, a lone surrogate crashes
+                    // AddString.
+                    size_t dropped = 0;
+                    items.erase(std::remove_if(items.begin(), items.end(), [&](const media::DanmakuItem& it) {
+                        if (it.text.empty() || it.text.size() > 200) { ++dropped; return true; }
+                        for (size_t k = 0; k < it.text.size(); ++k) {
+                            const char32_t c = it.text[k];
+                            if (c >= 0xD800 && c <= 0xDBFF) {
+                                if (k + 1 >= it.text.size() ||
+                                    it.text[k + 1] < 0xDC00 || it.text[k + 1] > 0xDFFF) {
+                                    ++dropped; return true;
+                                }
+                                ++k;
+                            } else if (c >= 0xDC00 && c <= 0xDFFF) { ++dropped; return true; }
+                        }
+                        return false;
+                    }), items.end());
+                    if (dropped) log::warn("danmaku", std::format("dropped {} unusable strings", dropped));
+                    log::info("danmaku", std::format("stage: cleaned items={}", items.size()));
+                    shown = int(items.size());
+                    i.danmakuWindow->setItems(std::move(items));
+                    log::info("danmaku", "stage: setItems done");
+                    i.danmakuEnabled = true;
+                    i.danmakuLastSeconds = -1.0;
+                    log::info("danmaku", std::format("enabled lines={}", i.danmakuWindow->itemCount()));
+                }
+            }
+            if (!r.ok && !r.error.isEmpty()) {
+                i.bilibiliError = r.error.toStdWString();
+                emit notice(r.error, true);
+            }
+            emit bilibiliDanmakuReady(r.ok, r.error, shown);
+            break;
+        }
+        case BiliOp::ResumeAtCid:
+            emit bilibiliResumeReady(r.number);
+            break;
+        case BiliOp::QrStart:
+            // qrKey / qrUrl 必须落进 impl_：bilibiliQrImage() 用 qrUrl 画二维码，
+            // 轮询用 qrKey 去问状态。worker 不能写 impl_（那是 GUI 线程的状态），
+            // 所以在这里写。漏了这一步的后果是二维码显示成白框、点完立刻退回原页面。
+            // qrKey and qrUrl have to land in impl_: bilibiliQrImage() draws the code
+            // from qrUrl and the poll asks with qrKey. The worker cannot write impl_ -
+            // that state belongs to the GUI thread - so it happens here. Missing this
+            // step left the code as a white square and sent the page straight back.
+            if (r.ok) {
+                i.bilibiliQrKey = r.object.value(QStringLiteral("qrKey")).toString().toStdWString();
+                i.bilibiliQrUrl = r.text.toStdWString();
+            }
+            emit bilibiliQrStarted(r.text, r.ok, r.error);
+            break;
+        case BiliOp::QrPoll:
+            // confirmed 时 worker 把 cookie 带回来，落盘并清掉一次性 key。
+            // 完整性校验和成功/失败提示都在 GUI 线程做，与原来的同步版一致。
+            // On confirmation the worker carries the cookie back: save it and drop the
+            // one-shot key. The integrity check and the notices stay on the GUI thread,
+            // matching the synchronous version.
+            if (r.text == QLatin1String("confirmed")) {
+                const std::wstring cookie =
+                    r.object.value(QStringLiteral("cookie")).toString().toStdWString();
+                i.bilibiliQrKey.clear();
+                i.bilibiliQrUrl.clear();
+                if (cookie.empty() || !media::bilibiliCookieLooksSignedIn(cookie)) {
+                    emit notice(tr("登录返回的 Cookie 不完整"), true);
+                    r.text = QStringLiteral("failed");
+                } else if (!media::saveBilibiliCookie(cookie)) {
+                    emit notice(tr("无法保存登录信息"), true);
+                    r.text = QStringLiteral("failed");
+                } else {
+                    log::info("bilibili", "qr sign-in stored");
+                    emit notice(tr("B 站登录成功，可以播放会员画质"), false);
+                }
+            } else if (r.text == QLatin1String("expired") || r.text == QLatin1String("none")) {
+                i.bilibiliQrKey.clear();
+                i.bilibiliQrUrl.clear();
+            }
+            emit bilibiliQrPolled(r.text);
+            break;
+        case BiliOp::Account:
+            emit bilibiliAccountReady(r.object, r.ok);
+            break;
+        // 观看进度上报：结果不通知界面。播放结束时弹一句「上报失败」只会打断观看，
+        // 而这个请求本来就是尽力而为（作者原注释：best effort）。
+        // The progress report tells the UI nothing: a "report failed" toast at the end of
+        // a video would only interrupt playback, and the request is best-effort by design.
+        case BiliOp::ReportProgress:
+            break;
+        case BiliOp::Count:
+            break;
+        // 三个早先完成的异步方法，现在也走这套槽位，回收逻辑只有一份。
+        // The three earlier async methods now share this path too, so collection
+        // logic exists once.
+        case BiliOp::InteractionState:
+            emit bilibiliInteractionReady(r.bvid, r.object, r.generation);
+            break;
+        case BiliOp::Favorite:
+            if (r.ok) emit notice(r.add ? tr("已收藏") : tr("已取消收藏"), false);
+            emit bilibiliFavoriteReady(r.ok, r.error, r.add, r.reason);
+            break;
+        case BiliOp::FavFolders:
+            emit bilibiliFavFoldersReady(r.list, r.reason);
+            break;
+        }
+    }
+}
+
+// --- 动作型：点赞 / 投币 / 稍后再看 -----------------------------------------
+// 三者形状一致：发一个写请求，成功则刷新互动状态。提示语在 GUI 线程发。
+// All three have the same shape: one write request, then re-read the interaction
+// state. The user-facing notice stays on the GUI thread.
+void QmlPlayerBridge::bilibiliRequestEmotePanel(){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    startBiliTask(BiliOp::EmotePanel, [] {
+        BiliTaskResult r;
+        std::wstring error;
+        std::vector<media::BiliEmote> emotes;
+        if (!media::biliEmotePanel(emotes, error)) {
+            r.error = QString::fromStdWString(error);
+            return r;
+        }
+        // 每项 "text<TAB>url"：文本里不会出现制表符，所以这个分隔是安全的。
+        // One "text<TAB>url" each; a tab never appears in either field.
+        QStringList flat;
+        for (const auto& e : emotes)
+            flat.push_back(QString::fromStdWString(e.text) + QLatin1Char('\t')
+                           + QString::fromStdWString(e.url) + QLatin1Char('\t')
+                           + QString::fromStdWString(e.package));
+        r.text = flat.join(QLatin1Char('\n'));
+        r.ok = true;
+        return r;
+    });
+}
+
+void QmlPlayerBridge::bilibiliDeleteReply(const QString& bvid, qlonglong rpid){
+    if (bvid.isEmpty() || rpid <= 0) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    const long long wrpid = rpid;
+    startBiliTask(BiliOp::DeleteReply, [wbvid, wrpid] {
+        BiliTaskResult r;
+        std::wstring error;
+        r.ok = media::biliDeleteReply(wbvid, wrpid, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+void QmlPlayerBridge::bilibiliPostReply(const QString& bvid, const QString& message){
+    if (bvid.isEmpty() || message.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    const std::wstring wmessage = message.toStdWString();
+    startBiliTask(BiliOp::Reply, [wbvid, wmessage] {
+        BiliTaskResult r;
+        std::wstring error;
+        r.ok = media::biliPostReply(wbvid, wmessage, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+void QmlPlayerBridge::bilibiliRequestLike(const QString& bvid, bool like){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::Like, [wbvid, like] {
+        BiliTaskResult r;
+        r.add = like;   // 点赞方向：true=点赞 false=取消
+        std::wstring error;
+        r.ok = media::biliLike(wbvid, like, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+void QmlPlayerBridge::bilibiliRequestCoin(const QString& bvid, int count){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::Coin, [wbvid, count] {
+        BiliTaskResult r;
+        std::wstring error;
+        r.ok = media::biliCoin(wbvid, count, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+void QmlPlayerBridge::bilibiliRequestWatchLater(const QString& bvid, bool add){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::WatchLater, [wbvid, add] {
+        BiliTaskResult r;
+        r.add = add;    // 方向：true=加入 false=移除
+        std::wstring error;
+        r.ok = media::biliAddWatchLater(wbvid, add, error);
+        if (!r.ok) r.error = QString::fromStdWString(error);
+        return r;
+    });
+}
+
+// --- 取数型：评论 -----------------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestComments(const QString& bvid, int page, int sort){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::Comments, [wbvid, page, sort] {
+        BiliTaskResult r;
+        std::wstring error;
+        std::vector<media::BiliComment> comments;
+        long long total = 0;
+        if (!media::biliComments(wbvid, page, sort, comments, total, error)) {
+            r.error = QString::fromStdWString(error);
+            return r;
+        }
+        // 评论总数走 number：结构体里现成的数值字段，不必为此加成员。
+        // The total rides on `number`, an existing numeric field, instead of adding a member.
+        r.number = double(total);
+        for (const auto& c : comments) {
+            QVariantMap m;
+            m.insert(QStringLiteral("author"), QString::fromStdWString(c.author));
+            m.insert(QStringLiteral("face"), QString::fromStdWString(c.face));
+            m.insert(QStringLiteral("message"), QString::fromStdWString(c.message));
+            // 富文本版（表情已换成 <img>），供评论正文用 RichText 渲染。
+            // The rich version with emotes turned into <img>, rendered as RichText.
+            m.insert(QStringLiteral("messageRich"), QString::fromStdWString(c.messageRich));
+            m.insert(QStringLiteral("like"), QVariant::fromValue<qlonglong>(c.like));
+            m.insert(QStringLiteral("ctime"), c.ctime);
+            m.insert(QStringLiteral("replies"), c.replies);
+            // 删除按钮只给自己的评论，所以把 rpid 和作者 mid 一起送过去；
+            // 「是不是我的」由 QML 拿它与 root.account.mid 比较 —— 账号数据本来就在那边，
+            // 不必在这里再存一份。
+            // The delete button only appears on the account's own comments, so rpid and the
+            // author mid go along; QML compares that against root.account.mid, which it
+            // already holds, instead of this layer keeping a second copy.
+            m.insert(QStringLiteral("rpid"), QVariant::fromValue<qlonglong>(c.rpid));
+            m.insert(QStringLiteral("mid"), QVariant::fromValue<qlonglong>(c.mid));
+            r.list.push_back(m);
+        }
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 取数型：开弹幕 ---------------------------------------------------------
+// worker 只负责取数据（两次网络往返）；创建叠加层、清洗字符串、交给渲染器全部在
+// GUI 线程的 tick 里做 —— 那三步都碰 impl_ 和窗口句柄，不能离开 UI 线程。
+// 早先这版只把「条数」带回来，也没 setItems，所以开关看起来动了但画面没弹幕。
+// The worker only fetches (two round trips). Creating the overlay, filtering the
+// strings and handing them to the renderer all happen in the GUI tick - those three
+// touch impl_ and a window handle and cannot leave the UI thread. An earlier revision
+// carried back only a count and never called setItems, so the switch moved but no
+// danmaku appeared.
+void QmlPlayerBridge::bilibiliRequestEnableDanmaku(const QString& bvid, int pageIndex){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::EnableDanmaku, [wbvid, pageIndex] {
+        BiliTaskResult r;
+        // 分P 校验也在 worker 里做：biliVideoPage 本身是一次网络往返。
+        // The part lookup runs on the worker too: biliVideoPage is a network round trip.
+        const auto page = media::biliVideoPage(wbvid);
+        if (!page.ok) { r.error = QString::fromStdWString(page.error); return r; }
+        if (pageIndex < 0 || pageIndex >= int(page.pages.size())) {
+            r.error = QStringLiteral("分P序号无效");
+            return r;
+        }
+        std::vector<media::BiliDanmaku> lines;
+        std::wstring error;
+        if (!media::biliDanmaku(page.pages[size_t(pageIndex)].first, lines, error)) {
+            r.error = QString::fromStdWString(error);
+            return r;
+        }
+        // 原始弹幕按 QML 能接的形态带回去：时间、模式、颜色、文本。
+        // 清洗和渲染留给 GUI 线程。
+        // Carry the raw lines back in a form QML can hold: time, mode, colour, text.
+        // Filtering and rendering stay on the GUI thread.
+        for (const auto& line : lines) {
+            QVariantMap m;
+            m.insert(QStringLiteral("time"), line.time);
+            m.insert(QStringLiteral("mode"), line.mode);
+            m.insert(QStringLiteral("color"), QVariant::fromValue<qulonglong>(line.color));
+            m.insert(QStringLiteral("text"), QString::fromStdWString(line.text));
+            r.list.push_back(m);
+        }
+        r.number = double(lines.size());
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 取数型：续播位置 -------------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestResumeAt(const QString& bvid, qlonglong cid){
+    if (bvid.isEmpty() || cid <= 0) {
+        emit bilibiliResumeReady(-1.0);
+        return;
+    }
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::ResumeAtCid, [wbvid, cid] {
+        BiliTaskResult r;
+        r.number = media::biliResumePosition(wbvid, cid);
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 扫码登录：取二维码 -----------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestQrStart(){
+    startBiliTask(BiliOp::QrStart, [] {
+        BiliTaskResult r;
+        const auto login = media::startBilibiliQrLogin();
+        if (!login.ok) {
+            r.error = QString::fromStdWString(login.error);
+            return r;
+        }
+        // qrKey / qrUrl 要留到 poll 用，所以带回去由 GUI 线程写进 impl_。
+        // qrKey and qrUrl are kept for the poll, so they travel back to the GUI thread.
+        r.text = QString::fromStdWString(login.qrUrl);
+        r.object.insert(QStringLiteral("qrKey"), QString::fromStdWString(login.qrKey));
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 扫码登录：轮询 ---------------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestQrPoll(){
+    auto& i = *impl_;
+    if (i.bilibiliQrKey.empty()) {
+        emit bilibiliQrPolled(QStringLiteral("none"));
+        return;
+    }
+    const std::wstring key = i.bilibiliQrKey;
+    startBiliTask(BiliOp::QrPoll, [key] {
+        BiliTaskResult r;
+        const auto poll = media::pollBilibiliQrLogin(key);
+        using State = media::BilibiliQrPoll::State;
+        switch (poll.state) {
+        case State::Waiting:   r.text = QStringLiteral("waiting"); break;
+        case State::Scanned:   r.text = QStringLiteral("scanned"); break;
+        case State::Expired:   r.text = QStringLiteral("expired"); break;
+        case State::Confirmed:
+            // cookie 落盘必须在 GUI 线程：它会改 impl_ 并触发界面刷新。
+            // Saving the cookie has to happen on the GUI thread: it writes impl_ and
+            // refreshes the UI.
+            r.text = QStringLiteral("confirmed");
+            r.object.insert(QStringLiteral("cookie"), QString::fromStdWString(poll.cookie));
+            break;
+        default:               r.text = QStringLiteral("none"); break;
+        }
+        r.ok = true;
+        return r;
+    });
+}
+
+// --- 取数型：账号信息 -------------------------------------------------------
+void QmlPlayerBridge::bilibiliRequestAccount(){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    startBiliTask(BiliOp::Account, [] {
+        BiliTaskResult r;
+        const auto a = media::biliAccount();
+        r.object.insert(QStringLiteral("loggedIn"), a.loggedIn);
+        r.object.insert(QStringLiteral("name"), QString::fromStdWString(a.name));
+        r.object.insert(QStringLiteral("face"), QString::fromStdWString(a.face));
+        r.object.insert(QStringLiteral("level"), a.level);
+        r.object.insert(QStringLiteral("vip"), a.vip);
+        // mid 用来判断哪条评论是自己发的。
+        // mid identifies which comments belong to this account.
+        r.object.insert(QStringLiteral("mid"), QVariant::fromValue<qlonglong>(a.mid));
+        r.ok = true;
+        return r;
+    });
+}
+
+int QmlPlayerBridge::bilibiliLoadAuthorVideos(qlonglong mid, int page){
+    // 走和卡片列表同一条通道，只是 kind 用 "author:<mid>:<page>" ——
+    // 排队、槽位、结果分发都是现成的，不必再造一套。
+    // Uses the same channel as the card lists with an "author:<mid>:<page>" kind: queueing,
+    // slots and result delivery are all already there.
+    return bilibiliLoadList(QStringLiteral("author:") + QString::number(mid)
+                            + QLatin1Char(':') + QString::number(page));
+}
+
+int QmlPlayerBridge::bilibiliLoadList(const QString& kind){
+    // Follows the shape the capture-device query already uses: start the work with
+    // std::async, collect it from the GUI tick with a zero-timeout wait. That keeps the
+    // result hand-off on the GUI thread and needs no locking for the returned list.
+    //
+    // Cookie first, here on the GUI thread: the media layer keeps it in one global, and
+    // letting the worker write it would race with every other call reading it.
+    media::setBiliCookie(media::loadBilibiliCookie());
+
+    const int generation = ++impl_->biliListGeneration;
+    // 按 kind 选槽位：qualities / related / detail / 卡片列表各有各的位置，
+    // 所以详情页里同时发起的几个请求不会互相覆盖。
+    // Pick the slot by kind: qualities, related, detail and card lists each have their
+    // own, so the requests the detail page starts together cannot overwrite each other.
+    auto& slot = impl_->biliListSlots[size_t(Impl::listSlotOf(kind))];
+    // 同一槽位里已经有一个在途请求时，把新请求排进队列，而不是覆盖它。
+    // 直接给 slot.query 赋新值会销毁旧 future，那个请求取到的数据就永远不会送达
+    // QML —— 表现是数据明明回来了，界面却是空列表。队列里派发的请求在 tick 回收
+    // 完当前那个之后再启动，所以既不丢结果，也不会让 GUI 线程等待网络。
+    // Queue a new request instead of overwriting the one in flight in this slot.
+    // Assigning over slot.query destroys the old future, so whatever that request
+    // fetched never reaches QML - which shows as an empty list even though the data
+    // came back. A queued request starts only after the current one has been collected,
+    // so no result is lost and the GUI thread never waits on the network.
+    if (slot.busy) {
+        slot.pending.push_back(Impl::PendingListRequest{kind, generation});
+        return generation;
+    }
+    startListWorker(kind, generation);
+    return generation;
+}
+
+// 启动一个列表 worker。发起路径和 tick 的队列派发共用这一处。
+// Start one list worker; the direct path and the tick's queue both use this.
+void QmlPlayerBridge::startListWorker(const QString& kind, int generation) {
+    auto& slot = impl_->biliListSlots[size_t(Impl::listSlotOf(kind))];
+    slot.kind = kind;
+    slot.generation = generation;
+    slot.busy = true;
+
+    // kind carries everything the worker needs: "home"/"popular"/... , "fav:<id>" or
+    // "search:<words>".
+    slot.query = std::async(std::launch::async, [kind]() {
+        std::vector<media::BiliVideoCard> cards;
+        std::wstring error;
+        bool ok = false;
+        // A kind may carry a page ("popular:2", "search:<words>:2", "fav:<id>:2"). The
+        // endpoints with no page parameter (推荐/历史/稍后再看) are simply called again —
+        // the site has no page for them, and that is what endless scrolling uses.
+        int page = 1;
+        QString base = kind;
+        const int lastColon = kind.lastIndexOf(QLatin1Char(':'));
+        if (lastColon > 0) {
+            bool okPage = false;
+            const int parsed = kind.mid(lastColon + 1).toInt(&okPage);
+            if (okPage && parsed > 0) {
+                const QString head = kind.left(lastColon);
+                // detail:/qualities:/related: carry a bvid or a cid, not a page.
+                // fav: 的两种写法只差一件事：head（最后一个冒号左边）是不是就是
+                // "fav" 本身。
+                //   "fav:203714961"    → head=="fav"          → 截掉的是文件夹 id
+                //   "fav:203714961:2"  → head=="fav:203714961" → 截掉的是页码
+                // 不要再去数 head 里的冒号：带页码时 head 必然含一个冒号，用那个做判据
+                // 会把页码也当成 id（第一版就是这样，两处都错）。
+                // The two fav: forms differ in one thing only: whether head (everything
+                // left of the last colon) is the bare token "fav".
+                //   "fav:203714961"   -> head=="fav"           -> the cut piece is the id
+                //   "fav:203714961:2" -> head=="fav:203714961" -> the cut piece is a page
+                // Do not count colons in head: with a page, head always holds one, and
+                // using that as the test treats the page as an id too.
+                const bool favIdWithoutPage = head == QLatin1String("fav");
+                // "author:<mid>" 的最后一个冒号切掉的是页码，但 head 是 "author:<mid>"，
+                // 所以和 fav 不同：这里需要页码，判据是 head 是否以 "author:" 开头。
+                // For "author:<mid>" the last colon separates the page, and head is
+                // "author:<mid>" - unlike fav, the page IS wanted here, so the test is simply
+                // whether head starts with "author:".
+                const bool authorPage = head.startsWith(QLatin1String("author:"));
+                if (!head.startsWith(QLatin1String("detail:"))
+                    && !head.startsWith(QLatin1String("qualities:"))
+                    && !head.startsWith(QLatin1String("related:"))
+                    && !favIdWithoutPage) {
+                    page = parsed;
+                    base = head;
+                }
+            }
+        }
+        if (base == QLatin1String("home")) ok = media::biliRecommended(cards, error);
+        else if (base == QLatin1String("popular")) ok = media::biliPopular(cards, error, page);
+        else if (base == QLatin1String("follow")) ok = media::biliFollowed(cards, error);
+        else if (base == QLatin1String("history")) ok = media::biliHistory(cards, error);
+        else if (base == QLatin1String("watchlater")) ok = media::biliWatchLater(cards, error);
+        else if (base.startsWith(QLatin1String("author:"))) {
+            // "author:<mid>"，页码已经在上面解析到 page。
+            // "author:<mid>"; the page has already been parsed above.
+            bool okMid = false;
+            const qlonglong mid = base.mid(7).toLongLong(&okMid);
+            ok = okMid && media::biliAuthorVideos(mid, page, cards, error);
+        }
+        else if (base.startsWith(QLatin1String("fav:")))
+            ok = media::biliFavorites(cards, error, base.mid(4).toLongLong(), page);
+        else if (base.startsWith(QLatin1String("search:")))
+            ok = media::biliSearch(base.mid(7).toStdWString(), page, cards, error);
+        else if (kind.startsWith(QLatin1String("qualities:"))) {
+            // "qualities:<bvid>:<cid>" — the cid comes from the detail response, so this
+            // does not ask the site for the page a second time (the synchronous
+            // bilibiliQualities does, which was a whole extra round trip).
+            const QStringList parts = kind.mid(10).split(QLatin1Char(':'));
+            if (parts.size() == 2) {
+                const QString bvid = parts[0];
+                const qlonglong cid = parts[1].toLongLong();
+                if (cid > 0) {
+                    QVariantList out;
+                    for (const auto& q : media::biliQualities(bvid.toStdWString(), cid)) {
+                        QVariantMap m;
+                        m.insert(QStringLiteral("id"), q.id);
+                        m.insert(QStringLiteral("label"), QString::fromStdWString(q.label));
+                        m.insert(QStringLiteral("vip"), q.needsVip);
+                        out.push_back(m);
+                    }
+                    ListFetchResult r;
+                    r.ok = !out.isEmpty();
+                    if (!r.ok) r.error = L"无法获取画质列表";
+                    r.items = out;
+                    return r;
+                }
+            }
+        }
+        else if (kind.startsWith(QLatin1String("related:"))) {
+            std::vector<media::BiliVideoCard> related;
+            std::wstring relError;
+            const bool relOk = media::biliRelated(kind.mid(8).toStdWString(), related, relError);
+            ListFetchResult r;
+            r.ok = relOk;
+            r.error = relError;
+            if (relOk) r.items = cardsToVariant(related);
+            return r;
+        }
+        else if (kind.startsWith(QLatin1String("detail:"))) {
+            // One object instead of a card list. Built here rather than through the
+            // synchronous bilibiliVideoDetail so the open no longer blocks a frame.
+            const auto page = media::biliVideoPage(kind.mid(7).toStdWString());
+            ListFetchResult r;
+            r.ok = page.ok;
+            r.error = page.error;
+            if (page.ok) {
+                QVariantMap m;
+                m.insert(QStringLiteral("ok"), true);
+                m.insert(QStringLiteral("error"), QString());
+                m.insert(QStringLiteral("bvid"), QString::fromStdWString(page.bvid));
+                m.insert(QStringLiteral("title"), QString::fromStdWString(page.title));
+                m.insert(QStringLiteral("cover"), QString::fromStdWString(page.cover));
+                m.insert(QStringLiteral("desc"), QString::fromStdWString(page.desc));
+                m.insert(QStringLiteral("owner"), QString::fromStdWString(page.owner));
+                // 作者 mid：界面要用它拉「作者视频」。
+                // The uploader's mid, which the UI needs for the author's video list.
+                m.insert(QStringLiteral("ownerMid"), QVariant::fromValue<qlonglong>(page.ownerMid));
+                m.insert(QStringLiteral("play"), QVariant(int(std::min<long long>(page.play, 2147483647LL))));
+                m.insert(QStringLiteral("like"), QVariant(int(std::min<long long>(page.like, 2147483647LL))));
+                m.insert(QStringLiteral("duration"), page.duration);
+                QVariantList parts;
+                for (const auto& [cid, title] : page.pages) {
+                    QVariantMap p;
+                    p.insert(QStringLiteral("cid"), QVariant::fromValue<qlonglong>(cid));
+                    p.insert(QStringLiteral("title"), QString::fromStdWString(title));
+                    parts.push_back(p);
+                }
+                m.insert(QStringLiteral("parts"), parts);
+                r.object = m;
+            }
+            return r;
+        }
+        ListFetchResult r;
+        r.ok = ok;
+        r.error = error;
+        if (ok) r.items = cardsToVariant(cards);
+        return r;
+    });
+}
+// 异步版：本函数只启动 worker 就返回，网络请求不再占用 GUI 线程。
+// 结果由 tickBiliTasks() 取走并通过 bilibiliInteractionReady 交给 QML。
+// 查询期间按钮的旧状态继续显示，等信号到了再更新 —— 比"点一下界面卡半秒"好。
+// The async form starts a worker and returns; the round trip no longer occupies the
+// GUI thread. tickBiliTasks() collects the result and emits
+// bilibiliInteractionReady. The old button state stays on screen until then, which
+// beats freezing for half a second on every click.
+void QmlPlayerBridge::bilibiliRequestInteractionState(const QString& bvid){
+    if (bvid.isEmpty()) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    // 新的请求顶掉还没回来的旧请求：generation 让 QML 丢掉过期结果。
+    // A newer request supersedes one still in flight; the generation lets QML drop
+    // the stale reply.
+    const int generation = ++impl_->biliInteractionGeneration;
+    const std::wstring wbvid = bvid.toStdWString();
+    startBiliTask(BiliOp::InteractionState, [wbvid, bvid, generation] {
+        BiliTaskResult r;
+        r.bvid = bvid;
+        r.generation = generation;
+        const auto state = media::biliInteractionState(wbvid);
+        r.object.insert(QStringLiteral("liked"), state.liked);
+        r.object.insert(QStringLiteral("coined"), state.coined);
+        r.object.insert(QStringLiteral("favorited"), state.favorited);
+        r.object.insert(QStringLiteral("coins"), state.coins);
+        r.ok = true;
+        return r;
+    });
+}
+bool QmlPlayerBridge::bilibiliPlay(const QString& bvid, int pageIndex, int qn, bool fromStart){
+    media::setBiliCookie(media::loadBilibiliCookie());
+    // This entry point has to look the page up itself: only the cid is not known here.
+    const auto page = media::biliVideoPage(bvid.toStdWString());
+    if (!page.ok) {
+        emit notice(QString::fromStdWString(page.error), true);
+        return false;
+    }
+    if (pageIndex < 0 || pageIndex >= int(page.pages.size())) {
+        emit notice(tr("分P序号无效"), true);
+        return false;
+    }
+    return bilibiliPlayResolved(bvid, page.pages[size_t(pageIndex)].first, page.title,
+                                qn, fromStart);
+}
+
+bool QmlPlayerBridge::bilibiliPlayCid(const QString& bvid, qlonglong cid, int qn, bool fromStart){
+    // No page lookup: the detail response already carried the cid, so this skips one
+    // whole round trip between the click and the first frame. The title is not needed for
+    // the resolve, and the notice still shows the video's own title from the caller.
+    if (cid <= 0) {
+        emit notice(tr("分P序号无效"), true);
+        return false;
+    }
+    return bilibiliPlayResolved(bvid, cid, std::wstring(), qn, fromStart);
+}
+
+// Shared tail of both play entry points: everything after the part is known. Kept in
+// one place so the cid-carrying variant cannot drift from the page-lookup one.
+bool QmlPlayerBridge::bilibiliPlayResolved(const QString& bvid, qlonglong cid,
+                                           const std::wstring& pageTitle, int qn,
+                                           bool fromStart){
+    // B 站打开要发三个网络往返（上报进度 / 解析播放地址 / 读续播位置）。它们原先全在
+    // GUI 线程同步执行，而 WinHTTP 每个请求 15 秒超时 —— 网络一慢主线程就静止十几秒
+    // （现场 2026-10-24 15:03：从列表切一个 4K 视频后静止 22.9 秒）。
+    // 现在改成：主线程只取快照和发起请求，请求在 worker 里跑，结果由 tickBiliPlay 回收
+    // 后再推进播放状态。状态仍然只在 GUI 线程改。
+    if (impl_->biliPlayJob.resolving) {
+        veyra::log::info("bilibili", "play request ignored: the previous one is still resolving");
+        return false;
+    }
+    // 上一部的观看进度先取下来（这一部马上要覆盖 biliWatch 状态），网络部分交给 worker。
+    int pendingPlayed = 0;
+    std::wstring pendingReportBvid;
+    long long pendingReportCid = 0;
+    if (takeBiliWatchProgress(pendingReportBvid, pendingReportCid, pendingPlayed))
+        veyra::log::info("bilibili", std::format("watch progress reporting queued bvid={} played_time={}",
+            utf8Of(pendingReportBvid).toStdString(), pendingPlayed));
+    media::setBiliCookie(media::loadBilibiliCookie());
+    // 记下这次要播什么，供播完后「播放」重播用：地址会过期，bvid/cid/画质不会。
+    // Remember what this play is, so Play after the end can resolve again: the address
+    // expires, the bvid/cid/quality do not.
+    impl_->biliReplayBvid = bvid;
+    impl_->biliReplayCid = cid;
+    impl_->biliReplayQuality = qn;
+    // Every play is a new track (a different part, or the same part replayed): the
+    // comments already on screen belong to the previous one. Done before the resolve so
+    // a failure below leaves nothing stale on screen either.
+    if (impl_->danmakuEnabled) bilibiliDisableDanmaku();
+    // The three Bilibili settings that change what gets requested. qn 0 means the
+    // quality preference, which itself may be 0 (automatic).
+    const int qualityPref = impl_->prefInt("biliQuality", 0);
+    const int effectiveQn = qn > 0 ? qn : qualityPref;
+    QString codecPref = impl_->prefString("biliCodec");
+    if (codecPref.isEmpty()) codecPref = QStringLiteral("auto");
+    const bool backupCdn = impl_->prefBool("biliAutoCdn", true);
+    QString audioPref = impl_->prefString("biliAudio");
+    if (audioPref.isEmpty()) audioPref = QStringLiteral("auto");
+    const bool wantResume = !fromStart &&
+        (impl_->prefBool("rememberPosition", true) || impl_->prefBool("autoResume", false));
+
+    auto& job = impl_->biliPlayJob;
+    const uint64_t generation = ++job.generation;
+    job.busy = job.resolving = true;
+    job.bvid = bvid;
+    job.cid = cid;
+    job.pageTitle = pageTitle;
+    job.qn = effectiveQn;
+    job.fromStart = fromStart;
+    job.plannedResume = wantResume;
+    // 记下「点击时」引擎用的会话号。续播 seek 要等它变成别的值才发 —— 见 Impl 里
+    // biliResumeAfterSession 的说明。这里取引擎的真实快照而不是缓存副本，缓存可能
+    // 已经滞后。
+    // Record the session the engine was using at click time. The resume seek waits
+    // until it changes - see biliResumeAfterSession in Impl. The engine's own snapshot
+    // is used rather than the cached copy, which may already be stale.
+    impl_->biliResumeAfterSession = impl_->engine.snapshot().sessionId;
+    // worker 只碰自己的副本：Qt 对象（impl_ 里的 QString/容器）全部在发起前拷好。
+    const std::wstring wbvid = bvid.toStdWString();
+    const std::string codec = codecPref.toStdString();
+    const std::string audio = audioPref.toStdString();
+    // 结果放在 shared_ptr 里：worker 写它，GUI tick 读它。worker 不碰任何 Qt 对象。
+    job.result = std::make_shared<BiliPlayWorkerResult>();
+    auto result = job.result;
+    job.query = std::async(std::launch::async,
+        [wbvid, cid, effectiveQn, codec, audio, backupCdn, wantResume,
+         pendingReportBvid, pendingReportCid, pendingPlayed, result]() mutable {
+            // 顺序与原来一致：先解析播放地址，再上报上一部的进度，最后读续播位置。
+            result->urls = media::biliResolvePlay(wbvid, cid, effectiveQn, codec, backupCdn, audio);
+            if (pendingReportCid > 0 && !pendingReportBvid.empty())
+                result->reportOk = media::biliReportWatchProgress(pendingReportBvid, pendingReportCid, pendingPlayed);
+            result->reportBvid = pendingReportBvid;
+            result->reportCid = pendingReportCid;
+            result->reportPlayed = pendingPlayed;
+            if (wantResume) result->resumeAt = media::biliResumePosition(wbvid, cid);
+            result->done.store(true);
+        });
+    return true;
+}
+
+// 把观看进度从 impl_ 状态里取出来，网络上报交给调用方。
+bool QmlPlayerBridge::takeBiliWatchProgress(std::wstring& bvid, long long& cid, int& played) {    if (impl_->biliWatchBvid.empty() || impl_->biliWatchCid <= 0) return false;
+    // Nothing was ever observed playing: do not write a bogus position into the history.
+    if (impl_->biliWatchLastPos < 0.0) return false;
+    played = int(impl_->biliWatchLastPos);
+    // The site stores -1 for "watched to the end", which is what makes a finished video
+    // show as finished instead of resuming a few seconds before the credits.
+    if (impl_->biliWatchDuration > 0 && impl_->biliWatchLastPos >= impl_->biliWatchDuration - 1.0)
+        played = -1;
+    if (played < 0 && played != -1) played = 0;
+    bvid = std::move(impl_->biliWatchBvid);
+    cid = impl_->biliWatchCid;
+    impl_->biliWatchBvid.clear();
+    impl_->biliWatchCid = 0;
+    impl_->biliWatchLastPos = -1.0;
+    impl_->biliWatchDuration = 0.0;
+    return true;
+}
+
+QString QmlPlayerBridge::bilibiliLastError() const {
+    return QString::fromStdWString(impl_->bilibiliError);
+}
+QString QmlPlayerBridge::bilibiliQrImage(int size){
+    if (impl_->bilibiliQrUrl.empty()) return {};
+    // The encoder lives in its own translation unit (see QrImage.h): its headers
+    // must not meet Qt's, or the process aborts at startup.
+    const std::string png = media::qrPngBase64(
+        QString::fromStdWString(impl_->bilibiliQrUrl).toStdString(), size);
+    if (png.empty()) return {};
+    return QStringLiteral("data:image/png;base64,") + QString::fromStdString(png);
+}
 void QmlPlayerBridge::togglePlayPause() {
     // AppShell's Play button: a paused session is still "running" (the worker
     // stays alive), so the decision must come from the transport state.
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    // B 站视频的播完/恢复必须最先处理：它的来源也是网络地址（liveKind=="url"），
+    // 下面的网络地址重开会拿 sourceLabel 重新连接 —— 而那是带时效签名的 CDN 地址，
+    // 早已过期，只会 403。这里按记住的 bvid/cid/画质重新解析一次，拿到全新地址。
+    // 从头播：播完时位置就在结尾，沿用续播位置会立刻再次结束。
+    // A finished Bilibili video must be handled before everything else: its source is
+    // also a network address (liveKind=="url"), and the branch below reconnects from
+    // sourceLabel - a CDN URL with an expiry signature that only 403s by then. Re-resolve
+    // from the remembered bvid/cid/quality instead. From the start: the position sits at
+    // the end when the video finished, so a resume point would end it immediately again.
+    if (impl_->biliSourceActive && !impl_->biliReplayBvid.isEmpty() && impl_->biliReplayCid > 0
+        && (s.transport == T::Ended || !s.running)) {
+        veyra::log::info("ui-transport", std::format(
+            "ended Bilibili video: re-resolving bvid={} cid={} qn={} from the start",
+            impl_->biliReplayBvid.toStdString(), impl_->biliReplayCid,
+            impl_->biliReplayQuality));
+        bilibiliPlayCid(impl_->biliReplayBvid, impl_->biliReplayCid,
+                        impl_->biliReplayQuality, /*fromStart=*/true);
+        return;
+    }
     if(impl_->liveKind==QLatin1String("url")&&(s.transport==T::Ended||(s.transport==T::Paused&&s.duration<=0))){
         openNetworkAddress(QString::fromStdWString(impl_->sourceLabel));return;
     }
@@ -6718,7 +8580,11 @@ void QmlPlayerBridge::togglePlayPause() {
         return;
     }
     if (!s.running || s.transport == T::Ended) {
-        // Only a real file is reopened; device/stream labels are not paths.
+        // B 站的情况已在函数开头处理（它的来源也是网络地址），这里只管本地文件：
+        // 只有真实存在的文件才重开，设备/流标签不是路径。
+        // Bilibili is handled at the top of this function (its source is a network
+        // address too); this branch only covers local files - only a file that still
+        // exists is reopened, device/stream labels are not paths.
         const QString file = QString::fromStdWString(impl_->sourceLabel);
         if (!file.isEmpty() && QFileInfo(file).isFile()) openPath(file);
         return;
@@ -6853,7 +8719,14 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"recordFps", {0, 240}}};
     static const QStringList flags{"recordHevc", "recordAudio", "subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect", "biliAutoCdn",
+                                   // Bilibili module: whether a freshly opened video starts with danmaku on.
+                                   "biliDanmaku",
+                                   // Bilibili 模块：播放完毕后是否回到视频详情。默认关，播完停在
+                                   // 播放画面，点播放按钮从头重播。
+                                   // Bilibili module: return to the detail page once playback ends;
+                                   // off by default, so it finishes on the player and Play replays.
+                                   "biliReturnAfterEnd"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -6861,6 +8734,52 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         if (!ok || n < low || n > high) return false;
         stored = n;
     } else if (flags.contains(key)) {
+        stored = value.toBool();
+    } else if (key == QLatin1String("biliQuality")) {
+        // Bilibili module: the quality a video opens with. 0 = automatic (the best the
+        // account may use, which is HDR on a video that has an HDR master); otherwise a
+        // Bilibili quality id (127/125/120/116/112/80/74/64/32/16).
+        bool ok = false;
+        const int n = value.toInt(&ok);
+        static const QList<int> allowed{0, 127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16};
+        if (!ok || !allowed.contains(n)) return false;
+        stored = n;
+    } else if (key == QLatin1String("biliCodec")) {
+        // Bilibili module: which codec to prefer when several exist at the same quality.
+        // "auto" takes the HDR-capable one first (HEVC), "avc" forces H.264, "hevc"
+        // forces HEVC. "auto" is what makes an HDR video play as HDR.
+        const QString v = value.toString();
+        if (v != QLatin1String("auto") && v != QLatin1String("avc") && v != QLatin1String("hevc")) return false;
+        stored = v;
+    } else if (key == QLatin1String("danmakuScale")) {
+        // Danmaku appearance. Ranges are the ones newBV exposes: size 50-250%,
+        // opacity 10-100%, speed 50-200%, area 10-100% of the picture height.
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < 50 || n > 250) return false;
+        stored = n;
+    } else if (key == QLatin1String("danmakuOpacity")) {
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < 10 || n > 100) return false;
+        stored = n;
+    } else if (key == QLatin1String("danmakuSpeed")) {
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < 50 || n > 200) return false;
+        stored = n;
+    } else if (key == QLatin1String("danmakuArea")) {
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < 10 || n > 100) return false;
+        stored = n;
+    } else if (key == QLatin1String("biliAudio")) {
+        // Bilibili module: which audio track to prefer. "auto" takes Hi-Res, then
+        // Dolby, then the highest-bitrate AAC; a preference the video cannot satisfy
+        // falls back to "auto" rather than going silent.
+        const QString v = value.toString();
+        if (v != QLatin1String("auto") && v != QLatin1String("flac") && v != QLatin1String("dolby")
+            && v != QLatin1String("aac192") && v != QLatin1String("aac132")
+            && v != QLatin1String("aac64")) return false;
+        stored = v;
+    } else if (key == QLatin1String("biliAutoCdn")) {
+        // Bilibili module: try the backup CDN addresses when the primary one fails.
         stored = value.toBool();
     } else if (key == QLatin1String("screenshotDir")) {
         const QString dir = value.toString();
@@ -7044,7 +8963,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
                     impl_->session = candidate;
                     impl_->restoreConfiguration(configuration);
                     impl_->revalidate();
-                    impl_->options = engine::PlayerOptions::from(next, engine::runtimeOrder(impl_->activeRuntime()));
+                    impl_->options = engine::PlayerOptions::from(next, engine::runtimeOrder(impl_->activeRuntime()),&impl_->options);
                     if (!impl_->persistSession()) veyra::log::warn("effect-availability", "compute gpu refit not saved");
                     emitChainChanged(); emit settingsChanged();
                 } else veyra::log::warn("effect-availability", "compute gpu refit not accepted; chain unchanged");
@@ -7243,6 +9162,15 @@ bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
     }
     if (type == QEvent::KeyPress || type == QEvent::KeyRelease) {
         auto* key = static_cast<QKeyEvent*>(event);
+        // 这里**不再**尝试捕获搜索框的回车。实测 2026-10-26：QML 的键盘事件不经过
+        // 应用级 eventFilter（Qt Quick 直接调用 QQuickItem::keyPressEvent，不走 sendEvent），
+        // 所以这个过滤器一次都看不到回车。回到 QML，用按键的释放事件触发 —— 那是唯一
+        // 每次都到得了的通道。
+        // The search box's Enter is **not** captured here any more. Measured 2026-10-26: QML
+        // keyboard events do not pass through an application-level event filter (Qt Quick
+        // calls QQuickItem::keyPressEvent directly rather than sendEvent), so this filter
+        // never saw Return even once. The trigger is back in QML, on the key's release - the
+        // one channel that arrives every time.
         if (!key->isAutoRepeat() && qobject_cast<QWindow*>(watched)) {
             const QKeySequence hold(shortcuts().value("hold").toString(), QKeySequence::PortableText);
             const int pressed = key->key() | int(key->modifiers() & ~Qt::KeypadModifier);
@@ -7541,7 +9469,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
             c=before;impl_->facade.setPending(previous);impl_->validation=engine::validateChain(c);
             emit notice(tr("补帧选择未被接受，保留原设置；请检查倍率和后端能力"),true);return -1;
         }
-        impl_->options=engine::PlayerOptions::from(next,engine::runtimeOrder(c));
+        impl_->options=engine::PlayerOptions::from(next,engine::runtimeOrder(c),&impl_->options);
         emit settingsChanged();emitChainChanged();return slot;
     }
     engine::EffectType wanted = engine::EffectType::NrEnhance;
@@ -7918,8 +9846,10 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
         // re-derives, so preserve the values this commit is carrying.
         const auto keepCurve = settings.hdrCurve;
         const auto keepMetadata = settings.hdrMetadata;
+        const bool keepDoviFollow = settings.doviFollow;
         engine::ChainGlobalSettings::capture(previous).apply(settings);
         settings.hdrCurve = keepCurve; settings.hdrMetadata = keepMetadata;
+        settings.doviFollow = keepDoviFollow;
     } else validation = engine::PresetLibrary::applyToChain(entry, candidate, settings);
     if (!validation.accepted) { emit notice(uiText(validation.message), true); return false; }
     if (const auto error = settings.validate(); !error.empty()) {
@@ -8317,6 +10247,11 @@ void QmlPlayerBridge::updateRunStatus() {
             case engine::FrameGenerationBackend::Fsr4: backend = tr("FSR 4 ML"); break;
             case engine::FrameGenerationBackend::Vfg: backend = QStringLiteral("NVIDIA VFG"); break;
             }
+            // 与作者原版一致：只报实际倍率和后端。自动选倍率是设置项，不需要在状态栏
+            // 反复标注 —— 「补帧 4X」已经把倍率说清楚了。
+            // Same as the author's original: report the multiplier and the backend only.
+            // Automatic selection is a setting, not something to repeat here - "补帧 4X"
+            // already says what the multiplier is.
             detail << tr("补帧 %1X · %2").arg(s.applied.multiplier)
                           .arg(backend);
         }
@@ -8960,6 +10895,35 @@ QString QmlPlayerBridge::sourceRateText() const {
     return QStringLiteral("%1p%2").arg(s.sourceHeight)
         .arg(whole ? QString::number(int(std::round(fps))) : QString::number(fps, 'f', 2));
 }
+// Custom (format badge): a short announcement of what the source carries, drawn
+// over the picture by a layered child window because the video is a native window
+// and a QML item cannot cover it. One per session, auto-hidden.
+void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
+    impl_->formatBadgeSession = s.sessionId;
+    if (impl_->videoWindow == nullptr) return;
+    if (!impl_->formatBadge) {
+        impl_->formatBadge = std::make_unique<media::FormatBadgeWindow>();
+        if (!impl_->formatBadge->create(impl_->videoWindow)) {
+            impl_->formatBadge.reset();
+            return;
+        }
+    }
+    const QString label = uiText(s.sourceHdrLabel);
+    const QString title = label.isEmpty() ? QStringLiteral("SDR") : label;
+    QStringList detailParts;
+    const QString rate = sourceRateText();
+    if (!rate.isEmpty()) detailParts << rate;
+    QString summary = sourceSummary();
+    if (!summary.isEmpty()) detailParts << summary.replace(QLatin1Char('x'), QString::fromUtf8("×"));
+    const QString detail = detailParts.join(QString::fromUtf8(" · "));
+    impl_->formatBadge->show(impl_->videoWindow, title.toStdWString(), detail.toStdWString());
+    veyra::log::info("format-badge", std::format("shown title={} detail={} session={}",
+        title.toStdString(), detail.toStdString(), s.sessionId));
+    QTimer::singleShot(3200, this, [this]() {
+        if (impl_->formatBadge) impl_->formatBadge->hide();
+    });
+}
+
 QString QmlPlayerBridge::sourceFormatText() const {
     QStringList parts;
     const QString rate = sourceRateText();

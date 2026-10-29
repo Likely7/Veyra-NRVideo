@@ -61,7 +61,7 @@ FFmpegVideoDecoder::~FFmpegVideoDecoder()
 }
 
 bool FFmpegVideoDecoder::openSoftware(const AVCodecParameters* codecParameters,
-    int streamTimeBaseNum, int streamTimeBaseDen, unsigned softwareThreads, bool lowLatency)
+    int streamTimeBaseNum, int streamTimeBaseDen, unsigned softwareThreads, bool lowLatency, bool tolerateErrors)
 {
     receiveStatus_ = DecodeReceiveStatus::NeedInput;
     if (context_ != nullptr) {
@@ -114,6 +114,14 @@ bool FFmpegVideoDecoder::openSoftware(const AVCodecParameters* codecParameters,
         // available as soon as it is complete.
         context_->thread_type = FF_THREAD_SLICE;
         context_->flags |= AV_CODEC_FLAG_LOW_DELAY;
+    }
+    if (tolerateErrors) {
+        // Custom (P5): the profile 7 enhancement layer is a residual stream whose
+        // reference chain is broken by design (only about half the base frames
+        // carry one). Without this the decoder throws away every frame after the
+        // first keyframe instead of emitting what it could reconstruct.
+        context_->err_recognition = 0;
+        context_->flags |= AV_CODEC_FLAG_OUTPUT_CORRUPT;
     }
     if (avcodec_open2(context_, codec, nullptr) < 0) {
         log::error("media", "decoder: avcodec_open2 failed");
@@ -618,6 +626,17 @@ bool FFmpegVideoDecoder::hardwareFrameImportable() const
     }
     return context_ != nullptr && desc.Width == static_cast<UINT64>(context_->width) &&
         desc.Height == static_cast<UINT>(context_->height);
+}
+
+void FFmpegVideoDecoder::setExtraHardwareFrames(int frames)
+{
+    if (context_ == nullptr) { return; }
+    const int clamped = std::clamp(frames, 0, 32);
+    if (context_->extra_hw_frames == clamped) { return; }
+    context_->extra_hw_frames = clamped;
+    log::info("media", std::format(
+        "decoder: extra hardware frames={} (reserved on top of the codec's own pool; hw={})",
+        clamped, hwAccelActive_));
 }
 
 int FFmpegVideoDecoder::width() const

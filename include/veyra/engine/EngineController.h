@@ -36,6 +36,9 @@ namespace veyra::engine {
 class FrameFlowWindow;
 struct PreviewGpuSession;
 struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t fgMultiplier=2; EnhancementSettings settings;
+    // 「自动」抑制态由 settings.fgAutoMultiplier + 源帧率/输出上限在 EngineController
+    // 的每帧循环里判定（previewFgMultiplier=1），不在这里另存状态：PlayerOptions 会在
+    // 每次 applySettings 之后由 from() 重建，放在这里的字段会丢。
     std::optional<ChainRuntimeOrder> nodeOrder; // in-process only; not export shared memory
     int audioStreamIndex=-1; // export selection; -1 selects the container default
     double exportStartSeconds=0.0; // export-only trim; first complete frame at/after this time
@@ -49,8 +52,16 @@ struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t f
     bool deinterlace=true; // automatic file deinterlace, preserves progressive bypass
     bool hardwareDecodeOnly=false; // user setting "强制硬解": files fail instead of falling back to software
     media::NetworkSettings network; // buffering / reconnect / damaged-picture choices for network sources and servers
+    // Separate audio address for a DASH source (Bilibili): the video container has
+    // no audio track, so the audio pipeline opens this instead.
+    std::wstring audioPath;
     EnhancementSettings snapshot()const{auto s=settings;s.nr=nr;s.sr=sr;s.multiplier=fg?fgMultiplier:1;s.nrPolicy=realtime?(settings.nrPolicy==pipeline::NrSizePolicy::Native?pipeline::NrSizePolicy::Realtime:settings.nrPolicy):pipeline::NrSizePolicy::Native;return s;}
-    static PlayerOptions from(EnhancementSettings s,std::optional<ChainRuntimeOrder> order=std::nullopt){PlayerOptions o;o.nr=s.nr;o.sr=s.sr;o.fg=s.multiplier>1;o.fgMultiplier=std::max(2u,s.multiplier);o.realtime=s.nrPolicy!=pipeline::NrSizePolicy::Native;o.settings=s;o.nodeOrder=order;return o;}
+    static PlayerOptions from(EnhancementSettings s,std::optional<ChainRuntimeOrder> order=std::nullopt,const PlayerOptions* keep=nullptr){
+        PlayerOptions o;o.nr=s.nr;o.sr=s.sr;o.fg=s.multiplier>1;o.fgMultiplier=std::max(2u,s.multiplier);o.realtime=s.nrPolicy!=pipeline::NrSizePolicy::Native;o.settings=s;o.nodeOrder=order;
+        // Per-open state that EnhancementSettings does not carry: a rebuild would
+        // otherwise drop the DASH audio address and the site's request headers.
+        if(keep){o.audioPath=keep->audioPath;o.network.requestHeaders=keep->network.requestHeaders;o.network.userAgent=keep->network.userAgent;}
+        return o;}
 };
 enum class TransportState { Empty, Opening, Playing, Paused, Ended, Stopping, Failed };
 struct PlayerSnapshot {
@@ -82,6 +93,10 @@ struct PlayerSnapshot {
     std::wstring backendWarning;
     std::wstring sourceNotice;
     std::wstring colorStatus;
+    // Custom (format label): the source's HDR format as one word ("Dolby Vision
+    // P7", "HDR Vivid", "HDR10+", "HDR10", "HLG", "SDR"). The start-up badge and
+    // the player bar both read it; empty for captures and images.
+    std::wstring sourceHdrLabel;
     std::wstring videoHdrStatus;
     // Beauty nodes: whether the graph runs any, the faces the shared tracker saw a
     // few frames ago, and a problem that keeps them from finding faces.
@@ -108,6 +123,16 @@ struct PlayerSnapshot {
     // The source's own HDR numbers, straight from the container. They survive the
     // hardware-decode path, where there is no CPU luma to measure a histogram from.
     unsigned sourceMasteringPeakNits=0;
+    // Dolby Vision: stream-level profile/RPU flag plus the current frame's L1 peak.
+    unsigned sourceDoviProfile=0;
+    bool sourceDoviRpu=false;
+    unsigned sourceDoviMaxNits=0;
+    // True when the source declares a Dolby Vision enhancement layer, which is
+    // what drives the "auto" composite switch in the UI.
+    bool sourceDoviEnhancement=false;
+    // True when the source carries HDR10+ (SMPTE ST 2094-40) scene metadata. The
+    // follow switch serves this too, so the UI has to know the format to name it.
+    bool sourceHdr10Plus=false;
     unsigned sourceMaxCllNits=0;
     unsigned sourceMaxFallNits=0;
     // Custom: the live coverage the presenter measured with its 64x36 probe (see

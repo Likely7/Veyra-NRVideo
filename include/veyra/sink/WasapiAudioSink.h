@@ -44,6 +44,13 @@ constexpr double kAudioLowWatermarkMs = 250.0;
 constexpr double kAudioPrefillMs = 500.0;
 constexpr double kAudioHighWatermarkMs = 1000.0;
 constexpr uint32_t kAudioRate = 48000;
+// 音频落后画面多少毫秒就主动跳过去重新对齐。正常播放 lead 只有几十毫秒，超过它
+// 一定是真的掉了（读包失败恢复中、端点长时间欠载），不校正就会一直不同步。
+// How far the audio clock may fall behind the picture before it is re-synced by
+// seeking. Steady playback stays within a few tens of milliseconds, so exceeding
+// this means it really fell behind (recovering from a failed read, a long endpoint
+// underrun) and would otherwise stay out of sync for the rest of the video.
+constexpr double kAudioResyncBehindMs = 300.0;
 
 // --- output endpoint choice (P4-d) -------------------------------------------
 // One process-wide choice shared by every renderer (file playback and capture
@@ -73,7 +80,11 @@ public:
     AudioPipeline();
     ~AudioPipeline();
 
-    bool open(const std::wstring& path,const std::atomic<bool>* cancelled=nullptr);
+    // `requestHeaders` / `userAgent` are for a DASH audio address on a CDN that
+    // checks the Referer (Bilibili): the audio URL is a separate host request and
+    // needs the same headers the video one carries.
+    bool open(const std::wstring& path,const std::atomic<bool>* cancelled=nullptr,
+              const std::wstring& requestHeaders={},const std::wstring& userAgent={});
     // Network sources and files on a server: take audio packets from the shared demux
     // session that also feeds the video (one connection, #48) instead of opening the
     // address a second time.
@@ -119,6 +130,14 @@ public:
     void videoReady(double ptsMs);
     void videoPresented(double nextPtsMs);
     bool waitingForVideo() const { return videoWaiting_.load(); }
+    // 视频那边的网络缓冲状态。B 站的音轨是单独打开的（session_ 为空），管道自己看不到
+    // 视频会话的缓冲阶段，于是 shouldPause() 里的 networkHold() 恒为假 —— 结果就是画面
+    // 因缓冲停住、声音却继续播。引擎在缓冲阶段变化时把状态推过来。
+    // The video's own buffering state. A Bilibili audio track is opened separately (session_
+    // is null), so the pipeline cannot see the video session's phase and networkHold() stays
+    // false - the picture stalls for buffering while the sound keeps going. The engine pushes
+    // the state here when the phase changes.
+    void setNetworkHold(bool hold) { networkHoldExternal_.store(hold); }
     uint64_t videoWaitCount() const { return videoWaitCount_.load(); }
 
     // Seek protocol (engine thread calls; audio thread executes). Blocks
@@ -132,6 +151,13 @@ public:
     HRESULT endpointError()const{return endpointError_.load();}
     uint64_t endpointRecoveries()const{return endpointRecoveries_.load();}
     bool clockExhausted()const{return clockExhausted_.load();}
+    // 音频正在等网络重试（读包失败、尚未读到下一段）：不是流结束，只是暂时没数据。
+    // 引擎据此冻结媒体时钟，让画面停下来等声音 —— 不这样做，画面会一直往前跑，
+    // 声音恢复后就落后几秒，对不上口型。
+    // The audio is waiting for a network read to succeed: not end of stream, just no data
+    // yet. The engine freezes the media clock on it so the picture waits for the sound;
+    // without that the picture runs ahead and the sound comes back seconds behind.
+    bool retryingRead() const { return readRetrying_.load(); }
     // Fault injection is consumed by the audio owner; never release COM on a caller thread.
     void requestEndpointLossForTest(){endpointLossForTest_=true;}
 
@@ -153,7 +179,12 @@ private:
     // WASAPI buffer, so it must never wait on file I/O. During steady playback
     // a reader thread owns av_read_frame and queues this track's packets; open,
     // seek and endpoint recovery pause it and read directly as before.
-    bool readPacket(AVPacket* packet);   // av_read_frame with timing and test stall
+    // 返回 av_read_frame 的原始结果：>= 0 成功，AVERROR_EOF 才是真正的结束，其它负值
+    // 是这一次没读到（网络源可能是瞬时的），调用方不得当成 EOF。
+    // Returns av_read_frame's own result: >= 0 success, AVERROR_EOF is a real end, any
+    // other negative value means this read returned nothing (transient on a network
+    // source) and must not be treated as EOF.
+    int readPacket(AVPacket* packet);   // av_read_frame with timing and test stall
     void readerLoop();
     void startReader();
     void pauseReader();                  // returns once the reader is idle; drops queued packets
@@ -172,12 +203,33 @@ private:
     std::vector<media::AudioTrack> tracks_;
     AVFormatContext* fmt_ = nullptr;
     std::shared_ptr<media::DemuxSession> session_;   // shared mode: packets come from here, fmt_ stays null
+    // 独立打开模式下这个音频目标是不是网络地址。B 站这类 DASH 源的音轨是**单独一条
+    // CDN 请求**（`options.audioPath`），走的是 open(path) 而不是 open(session)，
+    // 所以 session_ 为空。容错判断必须同时认这种情况，否则一个坏包就会让声音永久停止。
+    // Whether the separately-opened audio target is a network address. A DASH source
+    // such as Bilibili carries its audio as its OWN CDN request (options.audioPath) and
+    // goes through open(path) rather than open(session), so session_ is null there. The
+    // damaged-packet tolerance must cover that case too, or one bad packet silences
+    // playback for good.
+    bool networkTarget_ = false;
     uint32_t sessionGeneration_ = 0;                 // audio thread: the session reposition this decoder follows
     bool sessionDiscontinuity_ = false;              // next packet starts a new live connection: reset the decoder
     std::chrono::steady_clock::time_point prefillDeadline_{};
     bool prefillWait_ = false;                       // audio thread: wait for session packets (open / seek prefill)
     uint64_t damagedAudioPackets_ = 0;               // network audio packets the decoder rejected and we skipped
     unsigned damagedAudioRuns_ = 0;
+    // 预读线程连续读失败的次数；达到阈值就请求跳过损坏区段（见 skipDamagedToMs_）。
+    // Consecutive read failures on the read-ahead thread; at the threshold it asks for the
+    // damaged stretch to be skipped (see skipDamagedToMs_).
+    unsigned readFailureRun_ = 0;
+    // 已经跳过损坏段几次。必须封顶：跳到音频末尾之后，seek 会"成功"但一字节都读不到，
+    // 于是又累计失败再跳同一个位置 —— 现场 2026-10-25 就是这样无限循环
+    // （日志里 58 次 "skipping to 33272 ms"），画面被反复冻住。
+    // How many times a damaged stretch has been skipped. This must be capped: once the
+    // jump lands past the end of the audio the seek "succeeds" but nothing can be read, so
+    // failures accumulate and it jumps to the same place again - the field log of
+    // 2026-10-25 shows 58 repeats of "skipping to 33272 ms", freezing the picture each time.
+    unsigned damagedSkipCount_ = 0;
     std::chrono::steady_clock::time_point damagedAudioLogAt_{};
     media::InputInterrupt inputInterrupt_;
     AVCodecContext* codecCtx_ = nullptr;
@@ -190,6 +242,28 @@ private:
     bool demuxEof_ = false;
     bool drainSent_ = false;
     std::atomic<bool> decodedEof_{false};
+    // 网络源读包失败后置位，读到下一段数据或确认 EOF 时清除。引擎用它冻结时钟。
+    // Set when a network read fails, cleared once packets flow again or EOF is confirmed.
+    // The engine freezes the media clock while it is set.
+    std::atomic<bool> readRetrying_{false};
+    // 第一次读失败的时刻。重试超过 10 秒就放弃冻结画面（网络可能真的断了），让视频
+    // 继续播、音频在后面重试；恢复后由落后校正追上来。
+    // When the current burst of read failures started. Past ten seconds the freeze is
+    // released - the link may really be gone - so the video keeps playing while the audio
+    // retries; the drift correction catches it up if it recovers.
+    std::chrono::steady_clock::time_point readRetryingSince_{};
+    // 最后成功读到的包时间戳（毫秒）。读包卡在损坏数据上时，用它算「往前跳多远」。
+    // Timestamp of the last packet read successfully, in ms. Used to work out how far to
+    // jump when reading is stuck on damaged data.
+    std::atomic<double> lastGoodReadMs_{-1.0};
+    // 需要跳过损坏区段时由预读线程写入目标位置，解码线程取走后转成一次 seek。
+    // 用原子变量而不是 seekTargetMs_：预读线程已持有 readerMutex_，再去拿 mutex_ 会
+    // 和解码线程的加锁顺序打结。
+    // Written by the read-ahead thread when a damaged stretch has to be skipped, taken by
+    // the decode thread and turned into a seek. An atomic on purpose: the read-ahead thread
+    // already holds readerMutex_, and taking mutex_ there would invert the lock order
+    // against the decode thread.
+    std::atomic<double> skipDamagedToMs_{-1.0};
     double nextPtsMs_ = 0.0;           // PTS of the NEXT decoded sample
     double discardUntilPtsMs_ = -1.0;  // seek pruning
     std::unique_ptr<soundtouch::SoundTouch> tempo_;
@@ -224,6 +298,7 @@ private:
     std::atomic<HRESULT> endpointError_{S_OK};
     std::atomic<uint64_t> endpointRecoveries_{0};
     std::atomic<bool> videoSync_{false},videoHold_{false},videoWaiting_{false};
+    std::atomic<bool> networkHoldExternal_{false};   // 见 setNetworkHold()
     std::atomic<double> videoLimitMs_{std::numeric_limits<double>::infinity()};
     std::atomic<uint64_t> videoWaitCount_{0};
 

@@ -34,17 +34,41 @@ AudioPipeline::~AudioPipeline()
     closeAll();
 }
 
-bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cancelled)
+bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cancelled,
+                         const std::wstring& requestHeaders,const std::wstring& userAgent)
 {
+    if(path.empty())return false;
+    // The shared-session overload refuses to open while a thread is still running;
+    // this one has to do the same. Starting a second thread over a live one is what
+    // surfaced as "bad allocation" when a DASH source re-opened its audio address.
+    if(thread_.joinable())return false;
+    damagedSkipCount_=0;readFailureRun_=0;
+    // 上一次播放的缓冲状态不能残留到这一次，否则新音轨一上来就被判成「要暂停」。
+    // The previous playback's buffering state must not leak into this one, or the new
+    // track starts out judged as "should pause".
+    networkHoldExternal_=false;
+    // A failed conversion returns 0, and building a std::string from a negative length
+    // throws std::bad_alloc, which is indistinguishable from running out of memory.
     const int length=WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),nullptr,0,nullptr,nullptr);
-    std::string narrow(length,'\0');
+    if(length<=0)return false;
+    std::string narrow(static_cast<size_t>(length),'\0');
     WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),narrow.data(),length,nullptr,nullptr);
     fmt_=avformat_alloc_context();
     if(!fmt_)return false;
+    // 记下这是不是网络目标：B 站（DASH）的音轨是单独一条 CDN 请求，走这个重载，
+    // session_ 为空，容错判断要靠这个标志。
+    // Remember whether this is a network target: a DASH source's audio is its own CDN
+    // request opened here, with session_ null, so the tolerance check needs this flag.
+    networkTarget_ = media::networkMediaInput(path);
     inputInterrupt_.configure(media::networkMediaInput(path),cancelled,&stopFlag_);
     fmt_->interrupt_callback={media::InputInterrupt::callback,&inputInterrupt_};
     AVDictionary* options=nullptr;
-    if(media::networkMediaInput(path))media::networkMediaOptions(&options);
+    if(media::networkMediaInput(path)){
+        media::networkMediaOptions(&options);
+        // The DASH audio address is a separate CDN request and needs the same
+        // Referer/UA the video one carries; the shared helper spells them.
+        media::networkMediaHeaders(&options,requestHeaders,userAgent);
+    }
     inputInterrupt_.armConnect();
     const int opened=avformat_open_input(&fmt_,narrow.c_str(),nullptr,&options);
     av_dict_free(&options);
@@ -85,6 +109,9 @@ bool AudioPipeline::open(std::shared_ptr<media::DemuxSession> session)
     if(!session||thread_.joinable())return false;
     session_=std::move(session);
     queueMode_=true;
+    // 共享会话模式：音频数据来自 DemuxSession，不走独立网络请求，清掉标志。
+    // Shared-session mode: packets come from the DemuxSession, not a separate request.
+    networkTarget_ = false;
     tracks_.clear();
     for(const auto& stream:session_->streams()){
         if(stream.type!=AVMEDIA_TYPE_AUDIO||!stream.parameters)continue;
@@ -207,7 +234,7 @@ void AudioPipeline::stopThread()
     stopReader();
 }
 
-bool AudioPipeline::readPacket(AVPacket* packet)
+int AudioPipeline::readPacket(AVPacket* packet)
 {
     const auto begin=std::chrono::steady_clock::now();
     if(readStallMs_>0&&begin>=nextReadStall_){
@@ -220,7 +247,16 @@ bool AudioPipeline::readPacket(AVPacket* packet)
     inputInterrupt_.disarm();
     const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
     for(double seen=maxReadMs_.load();ms>seen&&!maxReadMs_.compare_exchange_weak(seen,ms);){}
-    return result>=0;
+    if(result>=0&&packet->pts!=AV_NOPTS_VALUE)
+        lastGoodReadMs_.store(packet->pts*av_q2d(streamTimeBase_)*1000.0);
+    // 返回 av_read_frame 的原始结果，而不是把它压成 bool：调用方必须能区分「流真的
+    // 结束了」和「这一次没读到」。网络源的瞬时失败（超时、连接抖动）如果被当成 EOF，
+    // 音频线程就会认为整条音轨播完了 —— 表现是画面继续、声音永久消失。
+    // Return av_read_frame's own result instead of collapsing it to a bool: callers must
+    // tell "the stream really ended" from "this read returned nothing". Treating a
+    // transient network failure as EOF makes the audio thread believe the whole track is
+    // over - the picture keeps going and the sound is gone for good.
+    return result;
 }
 
 void AudioPipeline::readerLoop()
@@ -233,14 +269,78 @@ void AudioPipeline::readerLoop()
         if(readerStop_)break;
         readerBusy_=true;
         lock.unlock();
-        const bool read=readPacket(scratch);
+        const int read=readPacket(scratch);
         lock.lock();
         readerBusy_=false;
         if(readerPaused_||readerStop_){
             // A seek or stop superseded this read position; the owner re-seeks.
             av_packet_unref(scratch);readerCv_.notify_all();continue;
         }
-        if(!read){readerEof_=true;continue;}
+        if(read<0){
+            // 只有真正的结束才算 EOF；网络瞬时失败留到下一轮重试，否则一次抖动就会让
+            // 预读线程永久停摆。
+            // Only a real end counts as EOF; a transient network failure is retried on the
+            // next round, otherwise one hiccup stops the read-ahead thread for good.
+            if(read==AVERROR_EOF){
+                // 打印最后读到的位置：如果它远小于视频时长，说明音频流被提前截断
+                // （CDN 只给了前面一段），而不是真的播完了。
+                // Log the last position reached: if it is far short of the video duration
+                // the audio stream was truncated early (the CDN served only part of it)
+                // rather than genuinely ending.
+                log::warn("audio", std::format(
+                    "audio read hit EOF at {:.0f} ms (session duration {:.0f} ms)",
+                    lastGoodReadMs_.load(),
+                    fmt_&&fmt_->duration!=AV_NOPTS_VALUE?double(fmt_->duration)/1000.0:-1.0));
+                readerEof_=true;
+                continue;
+            }
+            if(networkTarget_||session_){
+                // 卡在损坏数据上：av_read_frame 有时不推进文件位置，原地重试就永远
+                // 返回同一个 AVERROR_INVALIDDATA（实测连续 5800 次、29 秒没有声音）。
+                // 累计到阈值就请求解码线程往前跳 3 秒，越过这段。
+                // Stuck on damaged data: av_read_frame sometimes does not advance the
+                // file position, so retrying in place returns the same AVERROR_INVALIDDATA
+                // forever (measured: 5800 attempts, 29 s of silence). Past a threshold, ask
+                // the decode thread to jump 3 s ahead and skip the stretch.
+                // 这里**不再发起 seek**。曾经试过「跳过损坏段继续读」，但自动 seek 会
+                // 向服务器请求一个可能不存在的位置，网络超时要几十秒，而 seek 跑在读-ahead
+                // 线程上、十秒冻结上限管不到它 —— 现场 2026-10-25 因此把整个引擎卡死
+                // 28 秒（engine-hang），界面停止响应，连收藏夹都加载不出来。
+                // 现在读不过去就直接关闭这条音轨：视频静音继续播，绝不阻塞任何线程。
+                // No seek here any more. Skipping the damaged stretch was tried, but an
+                // automatic seek asks the server for a position that may not exist, and the
+                // network timeout takes tens of seconds. The seek runs on the read-ahead
+                // thread, where the ten-second freeze cap cannot reach it - on 2026-10-25
+                // that hung the whole engine for 28 seconds (engine-hang), left the UI
+                // unresponsive and even stopped the favourites list from loading.
+                // A track that cannot be read is now just closed: video keeps playing
+                // silently and no thread is blocked.
+                if(++readFailureRun_>=40){
+                    readFailureRun_=0;
+                    const double last=lastGoodReadMs_.load();
+                    const double total=fmt_&&fmt_->duration!=AV_NOPTS_VALUE?double(fmt_->duration)/1000.0:-1.0;
+                    log::warn("audio", std::format(
+                        "audio unreadable at {:.0f} ms of {:.0f} ms; closing the track",
+                        last, total));
+                    readerEof_=true;
+                    readRetrying_=false;
+                    readRetryingSince_={};
+                    continue;
+                }
+                // 限流：每 5ms 重试一次，全打出来就是每秒 200 条日志。
+                // Throttled: this retries every 5 ms, so logging each attempt would be
+                // 200 lines a second.
+                if (++damagedAudioRuns_ <= 8 || damagedAudioRuns_ % 200 == 0)
+                    log::warn("audio",std::format("read-ahead failed code={} (attempt {}); retrying",
+                                                  read, damagedAudioRuns_));
+                lock.unlock();
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                lock.lock();
+                continue;
+            }
+            readerEof_=true;continue;
+        }
+        readFailureRun_=0;
         if(scratch->stream_index!=streamIndex_){av_packet_unref(scratch);continue;}
         AVPacket* queued=av_packet_alloc();
         if(!queued){av_packet_unref(scratch);readerEof_=true;continue;}
@@ -510,7 +610,13 @@ void AudioPipeline::decodeBlock()
         if (received != AVERROR(EAGAIN)) {
             // A shared network session delivers packets from a link that loses data: one damaged
             // audio packet is skipped, not the end of the sound (local files stay strict).
-            if (session_ && received == AVERROR_INVALIDDATA && ++damagedAudioRuns_ <= 8) {
+            // 单独打开的网络音轨（B 站 DASH）同样是会丢数据的链路，必须一并容错 ——
+            // 之前只看 session_，于是 DASH 音频的一个坏包直接走到下面 decodedEof_=true，
+            // 声音永久消失，只有 seek 才能恢复。
+            // A separately opened network audio track (Bilibili DASH) is just as lossy and
+            // has to be tolerated too - checking session_ alone sent one bad DASH packet
+            // down to decodedEof_=true below, silencing playback until a seek.
+            if ((session_ || networkTarget_) && received == AVERROR_INVALIDDATA && ++damagedAudioRuns_ <= 8) {
                 noteDamagedAudio(received);
                 continue;
             }
@@ -535,11 +641,54 @@ void AudioPipeline::decodeBlock()
                     if (prefillWait_ && !stopFlag_ && !seekRequested_ && std::chrono::steady_clock::now() < prefillDeadline_) continue;
                     break; // nothing read ahead yet: go back to pumping the endpoint
                 }
-            } else if (!readPacket(packet_)) {
-                demuxEof_ = true;
-                continue;
+            } else {
+                const int read = readPacket(packet_);
+                if (read < 0) {
+                    if (read == AVERROR_EOF) {
+                        demuxEof_ = true;
+                        readRetrying_ = false;
+                        continue;
+                    }
+                    // 网络源的瞬时读失败（超时、连接抖动）不是「这条音轨播完了」。
+                    // 以前这里一律 demuxEof_ = true —— 后面必然 drain → decodedEof_，
+                    // 声音从此永久消失，只有 seek 能救回来。现在记一条日志、回泵端点，
+                    // 下一轮接着读。
+                    // A transient read failure on a network source is not "this track is
+                    // over". This used to set demuxEof_ unconditionally, which drains the
+                    // decoder and sets decodedEof_ - the sound was gone until a seek. Now it
+                    // logs once and returns to pumping the endpoint so the next round
+                    // retries.
+                    if (networkTarget_ || session_) {
+                        const auto nowBurst = std::chrono::steady_clock::now();
+                        if (readRetryingSince_ == std::chrono::steady_clock::time_point{}) {
+                            readRetryingSince_ = nowBurst;
+                            readRetrying_ = true;
+                        } else if (nowBurst - readRetryingSince_ >
+                                   std::chrono::seconds(10)) {
+                            // 十秒还没读到：别再冻住画面了，网络可能真断了。音频继续
+                            // 重试，恢复后由落后校正追上。
+                            // Ten seconds without a packet: stop freezing the picture, the
+                            // link may really be gone. The audio keeps retrying and the drift
+                            // correction catches it up when it recovers.
+                            if (readRetrying_) {
+                                readRetrying_ = false;
+                                log::warn("audio", "audio read failing for 10 s; letting the picture continue");
+                            }
+                        }
+                        if (++damagedAudioRuns_ <= 8 || damagedAudioRuns_ % 200 == 0)
+                            log::warn("audio", std::format(
+                                "read failed code={} (attempt {}); holding the picture", read, damagedAudioRuns_));
+                        break;
+                    }
+                    demuxEof_ = true;
+                    continue;
+                }
             }
             havePacket_ = true;
+            // 读到数据了：网络重试结束，引擎可以继续推进画面。
+            // Packets are flowing again: the engine may resume the picture.
+            readRetrying_ = false;
+            readRetryingSince_ = {};
             if (packet_->stream_index != streamIndex_) {
                 av_packet_unref(packet_);
                 havePacket_ = false;
@@ -559,8 +708,11 @@ void AudioPipeline::decodeBlock()
             havePacket_ = false;
             damagedAudioRuns_ = 0;
         } else if (sent != AVERROR(EAGAIN)) {
-            if (session_ && sent == AVERROR_INVALIDDATA) {
+            if ((session_ || networkTarget_) && sent == AVERROR_INVALIDDATA) {
                 // Damaged network data (a live source re-joined mid-frame, lost packets): skip this packet.
+                // 单独打开的网络音轨（B 站 DASH）也走这里：跳过坏包，不要结束整条音轨。
+                // A separately opened network track (Bilibili DASH) lands here too: skip the
+                // bad packet instead of ending the whole track.
                 noteDamagedAudio(sent);
                 av_packet_unref(packet_);
                 havePacket_ = false;
@@ -581,6 +733,7 @@ void AudioPipeline::closeAll()
     if (codecCtx_ != nullptr) avcodec_free_context(&codecCtx_);
     if (fmt_ != nullptr) avformat_close_input(&fmt_);
     session_.reset();
+    networkTarget_ = false;
 }
 
 // Drops PCM before targetMs from the front of the ring (mutex_ held).
@@ -1084,7 +1237,13 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
     auto videoBlocked=[&]{return videoSync_&&videoHold_.load();};
     // A network source that ran dry (or is still collecting its start-up buffer) stops the
     // device clock exactly like a pause, so picture and sound wait together.
-    auto networkHold=[&]{return session_&&session_->holding();};
+    auto networkHold=[&]{
+        if(session_)return session_->holding();
+        // 独立打开的音轨（B 站 DASH）看不到视频会话，只能由引擎推状态进来。
+        // A separately opened track (Bilibili DASH) cannot see the video session, so the
+        // engine has to push its phase in.
+        return networkHoldExternal_.load();
+    };
     auto shouldPause=[&]{return paused_.load()||videoBlocked()||networkHold();};
     auto publishVideoWait=[&](bool paused){const bool waiting=paused&&videoBlocked();if(videoWaiting_.exchange(waiting)!=waiting&&waiting)++videoWaitCount_;};
     auto nextContinuitySummary=t0+std::chrono::milliseconds(1000);
@@ -1129,9 +1288,28 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
             const int seekStream=video>=0?video:streamIndex_;
             const auto tb=fmt_->streams[seekStream]->time_base;
             const int64_t tbTarget=av_rescale_q(int64_t(target*1000),{1,1000000},tb);
-            const int result=av_seek_frame(fmt_,seekStream,tbTarget,AVSEEK_FLAG_BACKWARD);
+            int result=av_seek_frame(fmt_,seekStream,tbTarget,AVSEEK_FLAG_BACKWARD);
+            // B 站这类 DASH 源的音轨是单独的 m4a，容器里没有视频流，而它的 duration
+            // 元数据只覆盖 sidx 声明的范围（实测标称十几秒，视频本体 97 秒）。往后拖时
+            // av_seek_frame 会拿这个错误时长判断越界，直接返回 AVERROR_EOF；上层每
+            // 500ms 重试一次，整段时间没有声音。
+            // 回退到 avformat_seek_file：它用调用方给的范围，不看文件标称时长，因此能
+            // 越过错误的元数据。只在原调用失败时尝试，正常路径行为不变。
+            // A DASH source's audio is its own m4a with no video stream, and its duration
+            // metadata only covers what the sidx declares (measured: a dozen seconds for a
+            // 97 s video). Seeking forward then trips av_seek_frame's out-of-range check with
+            // AVERROR_EOF, the caller retries every 500 ms, and there is no sound meanwhile.
+            // Fall back to avformat_seek_file, which uses the range the caller supplies
+            // instead of the container's claim. Only tried when the first call fails, so the
+            // normal path is unchanged.
+            if(result<0){
+                const int retried=avformat_seek_file(fmt_,seekStream,INT64_MIN,tbTarget,INT64_MAX,0);
+                if(retried>=0)log::info("audio",std::format(
+                    "seek recovered via avformat_seek_file targetMs={:.3f} (container duration unreliable)",target));
+                result=retried;
+            }
             if(result<0){log::error("audio",std::format("seek failed code={}",result));clockExhausted_=false;return false;}
-            demuxEof_=drainSent_=false;decodedEof_=false;
+            demuxEof_=drainSent_=false;decodedEof_=false;damagedSkipCount_=0;readRetrying_=false;
             nextPtsMs_=target;discardUntilPtsMs_=target;
         }
         decodeBlock();
@@ -1210,6 +1388,45 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
                 videoHold_.load(), endpointRecovering_.load(), renderer ? renderer->underruns() : 0,
                 bufferedMs(), queuedMs, maxReadMs_.exchange(0), maxLoopMs, reader_.joinable()));
             maxLoopMs=0;
+        }
+        // 落后校正：音频时钟比画面落后太多，就主动跳到画面位置重新对齐。
+        // 读包失败后恢复、端点长时间欠载之后，音频会停在原处而视频继续走；没有这一步
+        // 就会一直不同步下去（观感是「声音回来了但对不上口型」）。
+        // 阈值 kAudioResyncBehindMs，最多每秒校正一次，避免和目标来回抖。
+        // Drift correction: when the audio clock has fallen well behind the picture, seek
+        // to the picture and carry on aligned. After recovering from a failed read or a
+        // long endpoint underrun the audio stalls while the video keeps going; without this
+        // it never catches up again - heard as "the sound is back but out of sync".
+        // Uses kAudioResyncBehindMs and corrects at most once per second so it cannot
+        // oscillate against the target.
+        if (videoSync_ && !pauseNow && !decodedEof_ && renderer != nullptr) {
+            const double coverage = videoLimitMs_.load();
+            static std::chrono::steady_clock::time_point nextDriftFix{};
+            const auto nowPoint = std::chrono::steady_clock::now();
+            if (std::isfinite(coverage) && coverage > 0.0 && nowPoint >= nextDriftFix &&
+                (lastClockMs - coverage) < -kAudioResyncBehindMs) {
+                nextDriftFix = nowPoint + std::chrono::milliseconds(1000);
+                log::warn("audio", std::format(
+                    "audio {:.0f} ms behind the picture; re-syncing to it", coverage - lastClockMs));
+                std::lock_guard<std::mutex> lock(mutex_);
+                seekTargetMs_ = coverage;
+                seekDone_ = false;
+                seekRequested_ = true;
+            }
+        }
+        // 预读线程请求跳过损坏区段：转成一次普通 seek，走同一条路径。
+        // The read-ahead thread asked to skip a damaged stretch: turn it into an ordinary
+        // seek so it goes through the same path.
+        {
+            const double skipTo = skipDamagedToMs_.exchange(-1.0);
+            if (skipTo >= 0.0 && !seekRequested_.load()) {
+                log::warn("audio", std::format(
+                    "audio read was stuck on damaged data; skipping to {:.0f} ms", skipTo));
+                std::lock_guard<std::mutex> lock(mutex_);
+                seekTargetMs_ = skipTo;
+                seekDone_ = false;
+                seekRequested_ = true;
+            }
         }
         // Seek request? Atomic re-sequence.
         {
@@ -1323,7 +1540,7 @@ void AudioPipeline::startThread(AudioRenderer* renderer, bool ownEndpoint, doubl
     readStallEveryMs_=std::max(10.0,envMs(L"VEYRA_TEST_AUDIO_READ_STALL_EVERY_MS",1000));
     nextReadStall_={};maxReadMs_=0;
     if(readStallMs_>0)log::warn("audio-test",std::format("injected file read stall {:.0f} ms every {:.0f} ms (test only) directRead={}",readStallMs_,readStallEveryMs_,directReadForTest_));
-    stopFlag_=false;seekRequested_=false;seekDone_=true;discardUntilPtsMs_=-1;
+    stopFlag_=false;seekRequested_=false;seekDone_=true;discardUntilPtsMs_=-1;readRetrying_=false;
     endpointRecovering_=renderer&&ownEndpoint;endpointError_=S_OK;endpointRecoveries_=0;clockExhausted_=false;
     queueMode_=session_!=nullptr;   // a shared session is always read through its queue
     thread_ = std::thread(&AudioPipeline::runOnAudioThread, this, renderer, ownEndpoint, initialMs);

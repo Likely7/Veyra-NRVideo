@@ -133,6 +133,8 @@ VPage {
         Layout.fillWidth: true
         spacing: 0
         VRow {
+            // 提示文字很长，放在控件下方，避免把左侧标签挤成一列窄字。
+            hintBelow: true
             label: qsTr("显示同步")
             hint: qsTr("自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线")
             VSeg {
@@ -881,7 +883,9 @@ VPage {
                     }
                     Timer {
                         id: proScrubSeek
-                        interval: 120
+                        // Restarted on every move, so it fires only once the drag settles
+                        // (see CineBar.qml for why overlapping seeks break playback).
+                        interval: 250
                         onTriggered: if (proSeekArea.scrubbing) veyra.seekTo(proSeekArea.scrubFrac * veyra.duration)
                     }
                     MouseArea {
@@ -892,11 +896,11 @@ VPage {
                         cursorShape: Qt.PointingHandCursor
                         preventStealing: true
                         function fracAt(x) { return Math.max(0, Math.min(1, x / Math.max(1, proSeekArea.width))) }
-                        onPressed: mouse => { proSeekArea.scrubFrac = fracAt(mouse.x); proSeekArea.scrubbing = true; proScrubSeek.start() }
+                        onPressed: mouse => { proSeekArea.scrubFrac = fracAt(mouse.x); proSeekArea.scrubbing = true }
                         onPositionChanged: mouse => {
                             if (!proSeekArea.scrubbing) return
                             proSeekArea.scrubFrac = fracAt(mouse.x)
-                            if (!proScrubSeek.running) proScrubSeek.start()
+                            proScrubSeek.restart()
                         }
                         onReleased: mouse => {
                             proScrubSeek.stop()
@@ -2024,7 +2028,7 @@ VPage {
                             }
                             VRow {
                                 label: qsTr("倍率")
-                                // Live output hint: a suggestion, the multiplier stays as chosen.
+                                // 档位与作者原版一致（只有数字档）；自动选择由下方独立开关控制。
                                 hint: veyra.fgDisplayHint.length > 0 ? veyra.fgDisplayHint : veyra.fgMaxMultiplier + qsTr("X 为上限")
                                 hintColor: veyra.fgDisplayHint.length > 0 ? Theme.warn : Theme.t3
                                 VSeg {
@@ -2070,6 +2074,19 @@ VPage {
                                 VSwitch {
                                     checked: veyra.fgStrict
                                     onToggled: checked => veyra.fgStrict = checked
+                                }
+                            }
+                            VRow {
+                                objectName: "list-fg-auto-multiplier"
+                                label: qsTr("自动选择倍率")
+                                visible: veyra.fgAutoMultiplierAvailable
+                                hint: veyra.fgAutoMultiplierEnabled
+                                      ? qsTr("按源帧率和输出上限自动选档；源帧率超过上限时关闭补帧")
+                                      : qsTr("关闭时按手动选的倍率 · 默认关闭")
+                                hintBelow: veyra.fgAutoMultiplierEnabled
+                                VSwitch {
+                                    checked: veyra.fgAutoMultiplierEnabled
+                                    onToggled: checked => veyra.fgAutoMultiplierEnabled = checked
                                 }
                             }
                             VSubGroup {
@@ -2758,6 +2775,14 @@ VPage {
                                             color: Theme.t3
                                             font.family: Theme.fontUi; font.pixelSize: 11
                                         }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            visible: veyra.hdrDisplayInfo.valid && !veyra.hdrDisplayInfo.plausible
+                                            text: qsTr("这个数值是显示器的上限声明，不是实测，因此曲线未按它缩放。")
+                                            wrapMode: Text.WordWrap
+                                            color: Theme.t3
+                                            font.family: Theme.fontUi; font.pixelSize: 11
+                                        }
                                     }
 
                             // The two dials. Both scale the baseline the sliders below
@@ -2877,42 +2902,123 @@ VPage {
                             }
                         }
 
+                        // 杜比视界：独立一张卡，不混进 HDR 曲线的基础设置里。
                         VAccordion {
-                            objectName: "list-hdr-metadata"
+                            objectName: "list-hdr-dovi"
                             Layout.fillWidth: true
                             Layout.topMargin: 12
                             glyph: "sun"
-                            hue: "#7FB2F5"
-                            title: qsTr("HDR 元数据")
-                            summary: veyra.hdrMetadataEnabled ? qsTr("已启用（HDR10）") : qsTr("已关闭")
-                            on: veyra.hdrMetadataEnabled
-                            onToggled: on => veyra.hdrMetadataEnabled = on
+                            hue: "#A88BF0"
+                            title: qsTr("杜比视界 / HDR10+ 设置")
+                            summary: {
+                                const d = veyra.hdrSourceInfo;
+                                // The follow switch below serves HDR10+ as well, so a
+                                // Dolby-only summary said "no Dolby Vision source" on a
+                                // stream that does have dynamic metadata.
+                                if(d && d.hdr10Plus) return qsTr("HDR10+ 片源（逐帧跟随可用）");
+                                if(!d || !d.doviProfile) return qsTr("未检测到动态元数据片源");
+                                const kind = d.doviProfile === 5 ? qsTr("单层")
+                                    : d.doviProfile === 7 ? qsTr("双层")
+                                    : d.doviProfile === 8 ? qsTr("兼容层") : qsTr("其他");
+                                const peak = d.doviMaxNits > 0
+                                    ? qsTr(" · 最亮 %1 nit").arg(d.doviMaxNits) : "";
+                                return qsTr("Profile %1（%2）%3").arg(d.doviProfile).arg(kind).arg(peak);
+                            }
+                            VRow {
+                                hintBelow: true
+                                label: qsTr("当前片源的推荐")
+                                hint: {
+                                    if (!(veyra.hdrSourceInfo && veyra.hdrSourceInfo.doviProfile > 0))
+                                        return qsTr("当前片源不是杜比视界，推荐请用上面「一键选档」里的按钮");
+                                    if (!veyra.hdrRecommendation.available) {
+                                        // Profile 5 keeps its brightness inside the RPU, so the
+                                        // HDR10 static-metadata recommendation cannot run even
+                                        // though the follow switch still works. Say which case
+                                        // this is instead of implying the source has no data.
+                                        const prof = veyra.hdrSourceInfo
+                                            ? veyra.hdrSourceInfo.doviProfile : 0;
+                                        if (veyra.sourceIsSdr)
+                                            return qsTr("SDR 片源没有 HDR 亮度元数据，可手动选档");
+                                        if (prof === 5)
+                                            return qsTr("Profile 5 的亮度信息在 RPU 里（不是 HDR10 元数据），推荐无法自动选档；下面的「跟随动态元数据」仍然可用");
+                                        return qsTr("片源未携带亮度信息，无法自动选档");
+                                    }
+                                    var r = veyra.hdrRecommendation.reason;
+                                    var why = r === "dark-content" ? qsTr("整片偏暗")
+                                        : r === "bright-content" ? qsTr("高光又亮又多")
+                                        : r === "narrow-range" ? qsTr("母版峰值偏低（老片）")
+                                        : r === "beyond-display" ? qsTr("内容亮度超出屏幕能力")
+                                        : r === "dark-and-bright" ? qsTr("偏暗且超出屏幕能力")
+                                        : qsTr("亮度分布均衡");
+                                    var pick = r === "dark-content" ? qsTr("暗场提亮")
+                                        : r === "bright-content" ? qsTr("高光保护")
+                                        : r === "beyond-display" ? qsTr("高光保护")
+                                        : r === "dark-and-bright" ? qsTr("暗亮双修")
+                                        : r === "narrow-range" ? qsTr("强化冲击") : qsTr("标准");
+                                    return why + qsTr(" → 建议 ") + pick
+                                        + qsTr("（片源最亮 %1 nit）").arg(veyra.hdrRecommendation.cllNits);
+                                }
+                                VButton {
+                                    objectName: "list-hdr-dovi-recommend"
+                                    text: qsTr("应用推荐")
+                                    ghost: true
+                                    enabled: veyra.hdrRecommendation.available
+                                        && veyra.hdrSourceInfo
+                                        && veyra.hdrSourceInfo.doviProfile > 0
+                                    onClicked: veyra.applyRecommendedHdrTuning()
+                                }
+                            }
+                            VRow {
+                                hintBelow: true
+                                // The follow only moves where the curve's roll-off starts,
+                                // so with the curve off there is nothing for it to move.
+                                enabled: veyra.hdrCurve
+                                opacity: enabled ? 1 : 0.5
+                                label: qsTr("跟随动态元数据")
+                                hint: veyra.hdrCurve
+                                    ? qsTr("杜比视界（L1）和 HDR10+ 的逐场景元数据都走这里：只按每帧亮度压低高光，暗部和中间调保持你设定的样子")
+                                    : qsTr("需要先打开上面的 HDR 曲线，否则没有可移动的滚降")
+                                value: veyra.doviFollow ? qsTr("已开启") : qsTr("已关闭")
+                                VSwitch {
+                                    objectName: "list-hdr-dovi-follow"
+                                    checked: veyra.doviFollow
+                                    onToggled: checked => veyra.doviFollow = checked
+                                }
+                            }
+                            VRow {
+                                hintBelow: true
+                                visible: veyra.doviFollow
+                                enabled: veyra.hdrCurve
+                                opacity: enabled ? 1 : 0.5
+                                label: qsTr("参考平均亮度")
+                                hint: qsTr("勾选后，高光起点同时参考每帧的平均亮度：暗场多的片子压得更积极，亮场多的保留更多高光；取消则只看峰值")
+                                VSwitch {
+                                    objectName: "list-hdr-dovi-follow-average"
+                                    checked: veyra.doviFollowAverage
+                                    onToggled: checked => veyra.doviFollowAverage = checked
+                                }
+                            }
                             Text {
                                 Layout.fillWidth: true
-                                text: qsTr("HDR10 提示；系统或显示器可能忽略，让它的动态色调映射有依据。")
-                                    + qsTr("曲线生效时会约束内容亮度提示；SDR 输入默认不发送，手动填写除外。")
+                                visible: veyra.doviFollow && !veyra.hdrCurve
+                                text: qsTr("曲线当前是关闭的，跟随暂时不会改变画面。")
                                 wrapMode: Text.WordWrap
                                 color: Theme.t3
                                 font.family: Theme.fontUi; font.pixelSize: 11
                             }
-                            Repeater {
-                                model: [{key:"masteringPeakNits",label:qsTr("母版峰值 (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源；实际效果取决于显示设备")},
-                                        {key:"maxCllNits",label:qsTr("MaxCLL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")},
-                                        {key:"maxFallNits",label:qsTr("MaxFALL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")}]
-                                delegate: VRow {
-                                    required property var modelData
-                                    label: modelData.label
-                                    hint: modelData.hint || ""
-                                    value: String(veyra.hdrMetadataParams[modelData.key] ?? "—")
-                                    VSlider {
-                                        objectName: "list-hdrmeta-" + modelData.key
-                                        implicitWidth: 120
-                                        valueFromModel: true
-                                        resettable: true; defaultValue: modelData.def
-                                        from: modelData.from; to: modelData.to
-                                        value: veyra.hdrMetadataParams[modelData.key] ?? modelData.def
-                                        onMoved: value => veyra.setHdrMetadataParameter(modelData.key, Math.round(value))
-                                    }
+                            VRow {
+                                hintBelow: true
+                                label: qsTr("合并增强层（实验性）")
+                                hint: qsTr("实验性：只对 Profile 7 双层片源生效，且多数帧因增强层解码失败会退回基础层；关闭则强制只用基础层（重新打开文件后应用）")
+                                value: {
+                                    const d = veyra.hdrSourceInfo;
+                                    if(!d || !d.doviEnhancement) return qsTr("无增强层");
+                                    return veyra.doviP7Compose ? qsTr("已开启") : qsTr("已关闭");
+                                }
+                                VSwitch {
+                                    objectName: "list-hdr-dovi-p7"
+                                    checked: veyra.doviP7Compose
+                                    onToggled: checked => veyra.doviP7Compose = checked
                                 }
                             }
                         }

@@ -15,8 +15,15 @@
 #include "veyra/media/DemuxSession.h"
 #include "veyra/media/FFmpegDemuxer.h"
 #include "veyra/media/FFmpegVideoDecoder.h"
+
+#include <deque>
+#include <map>
 #include "veyra/media/FFmpegDeinterlacer.h"
 #include "veyra/source/IFrameSource.h"
+
+// FFmpeg's bitstream filter context (libavcodec/bsf.h). Forward-declared so this
+// header keeps its existing include surface.
+struct AVBSFContext;
 
 namespace veyra::source {
 
@@ -60,7 +67,77 @@ private:
     media::FFmpegDemuxer demuxer_;
     media::FFmpegVideoDecoder decoder_;
     media::FFmpegDeinterlacer deinterlacer_;
+    // Custom (P5): Dolby Vision Profile 7 enhancement layer. The EL rides inside
+    // each access unit as private NAL type 63, so a second decoder consumes the
+    // same packets. Off unless the caller asks for it, so BL playback is byte
+    // identical while this is still being brought up.
+    media::FFmpegVideoDecoder elDecoder_;
+    AVFrame* elFrame_ = nullptr;      // EL frame matched to the frame in flight (owned)
+    // Custom (P5): decoded EL frames keyed by timestamp, waiting for their base frame.
+    std::map<int64_t, AVFrame*> elByPts_;
+    uint32_t elLastWidth_ = 0, elLastHeight_ = 0;   // last decoded EL extent
+    // Custom (P7): FFmpeg's dovi_split bitstream filter produces the enhancement
+    // layer bitstream out of the same access units. When the container also
+    // carries the EL's own parameter sets (Matroska hvcE, surfaced by libavformat
+    // as AV_PKT_DATA_HEVC_CONF) this replaces the hand-written NAL walk and keeps
+    // the EL decoder valid across seeks, because nothing has to be re-sniffed
+    // from the stream. Without the hvcE record the built-in walk stays in use.
+    AVBSFContext* elSplitter_ = nullptr;
+    bool elSplitterActive_ = false;
+    // Raw timestamp distance (stream time base ticks) still treated as the same
+    // picture when pairing a base frame with its enhancement frame.
+    int64_t elMatchTolerance_ = 0;
+    // Consecutive RPUs that declare "no residual in this layer" (MEL).
+    unsigned elMelStrikes_ = 0;
+    bool elMelDrop_ = false;   // set in readBase(), consumed at the top of read()
+    // Custom (P7): the RPU curve diagnosis is logged once per state change, not
+    // once per frame. Reset on open and seek so a new position reports again.
+    bool p7CurveReported_ = false;
+    bool p7CurveReady_ = false;
+    // Custom (P7): how many frames the mapping could / could not be evaluated for,
+    // so a stream's mix of usable and refused RPUs is a number and not a guess.
+    uint64_t p7CurveSupportedFrames_ = 0;
+    uint64_t p7CurveRefusedFrames_ = 0;
+    // Custom (P7): where the enhancement layer goes missing. `feedCalls` counts
+    // access units offered to the splitter, `packetHits` the ones that carried EL
+    // NALs, `forcedDeliveries` the base frames delivered without a layer - either
+    // because the layer stream had already moved past them (the usual case on a
+    // sparse stream) or because the queue could not wait any longer.
+    uint64_t elFeedCalls_ = 0, elPacketHits_ = 0, elForcedDeliveries_ = 0;
+    // Custom (DV extension blocks): record which levels the stream declares and,
+    // when present, the L5 active-area rectangle. Descriptive only.
+    bool doviExtReported_ = false;
+    // A base frame held back while waiting for its EL counterpart (bounded wait).
+    std::deque<std::pair<pipeline::FramePacket, AVFrame*>> baseWaiting_;
+    // Custom (P7 fix): a base frame taken out of baseWaiting_ is a clone, so it
+    // keeps one surface of the decoder's fixed d3d11va array checked out. The
+    // caller only borrows it until its next read() (EngineController clones it
+    // into cachedFrame first), so it is released at the top of that read().
+    // Without that release one surface leaked per delivered frame until
+    // avcodec_send_packet failed with ENOMEM (-12) and playback stopped.
+    AVFrame* deliveredHeld_ = nullptr;
+    std::vector<std::vector<uint8_t>> elParamSets_; // VPS/SPS/PPS of the EL, re-sent per AU
+    bool elLayerEnabled_ = false;
+    bool elLayerOpen_ = false;
+    unsigned elLayerFrames_ = 0, elLayerMisses_ = 0;
+    // Returns true when this packet actually carried enhancement layer data.
+    bool feedEnhancementLayer(const AVPacket* packet);
+    // Custom (P7): EL bitstream extraction. Both return an OWNED packet, or null
+    // when this access unit carries no enhancement layer.
+    bool openEnhancementSplitter(const AVCodecParameters* params);
+    void closeEnhancementSplitter();
+    AVPacket* splitEnhancementPacket(const AVPacket* packet);
+    AVPacket* buildEnhancementPacket(const AVPacket* packet);
+    bool openEnhancementDecoder(const AVCodecParameters* elParams, int timeBaseNum, int timeBaseDen);
+    // Custom (P7): nearest enhancement frame within elMatchTolerance_, dropping
+    // the ones whose base frame has already gone past.
+    bool takeElNear(int64_t pts, AVFrame** outFrame);
+    void dropStaleEl(int64_t oldestBasePts);
+    SourceReadStatus readBase(pipeline::FramePacket& out, const AVFrame** decodedFrame);
+    void drainElFrames();
+    void closeEnhancementLayer();
     bool deinterlaceEnabled_=true,filterDraining_=false;
+    pipeline::DoviFrameInfo doviFrameInfo{};   // Dolby Vision L1 (RPU), invalid unless present
     // Damaged data tolerance (network sources, MPEG-TS) and buffering reads.
     bool nonBlocking_=false,tolerant_=false,waitKeyframe_=false,pendingDiscontinuity_=false;
     media::CorruptPolicy corruptPolicy_=media::CorruptPolicy::Conceal;
