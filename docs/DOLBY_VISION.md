@@ -533,10 +533,14 @@ proprietary"），而路由当时只映射 1/2/4，落进 default 分支直接�
 | 缺口 | 表现 | 现状 |
 |---|---|---|
 | `dav1` sample entry 没被 `isom_tags` 映射 | demuxer 报 `codecId=0`，完全无法解码 | **重封装绕过**：把 init 里的 `dav1` 改成 `av01`，立即能播（payload 本就是 av01 + dvvC） |
-| AV1 的 DV RPU 不解析 | 没有 L1/L2/L5 | **仍存在**，P10 只能当 HDR10 播 |
 
-注意 `dvvC` 配置**是被解析的**（`profile=10`、`compatibility=0` 都读到了），缺的
-只是 OBU 里的 RPU。
+**只有这一个缺口。** `av01` 封装的 P10 是完全可用的：`dvvC` 配置读得到，
+**AV1 OBU 里的 RPU 也读得到**（实测 `extension blocks=5 levels=[6,1,2,4,5]`，
+即 L1/L2/L4/L5/L6 全在），L1 跟随也能跑（`source=DV10`）。
+
+> 更正：早先从一个 480p、fourcc 被改写过的文件只看到配置、没看到 RPU，据此写过
+> 「FFmpeg 不解析 AV1 的 DV RPU」，那是错的。用 1080p 原始 `av01` 文件复测，
+> RPU 完整可读。
 
 ### 实测
 
@@ -547,10 +551,14 @@ decoder: d3d12va decoder opened codec=libdav1d
 [source-dovi] base layer pinned to PQ for profile 10
 ```
 
-画面正确。所以 P10 的结论要分开说：**「能播」成立，「动态元数据」不成立**。
+1080p 的 `av01` 版本更完整：`extension blocks=5 levels=[6,1,2,4,5]`，
+`decoded RPU observed`，跟随日志为 `source=DV10`。
 
-要完整支持 P10，得等 FFmpeg 补上 `dav1` 映射与 AV1 RPU 解析，或者自己写一层 OBU
-解析（代价与收益不成比例：AV1 + DV 的内容极少）。
+所以 P10 的实际状态是：**`av01` 封装完全可用；`dav1` 封装要等 FFmpeg 补上
+`isom_tags` 那一条映射。** 后者可以自己重封装绕过，不需要改本项目的代码。
+
+该测试流的 L1 标称值接近 10000 nits（`maxPq=0.9995`），会被跟随逻辑的
+「可疑元数据」钳制（>4000 nits 不跟随）拦下——这是预期行为，不是 P10 的问题。
 
 #### L2 / L8 trim 元数据：数据在，但没人做，也不该猜（2026-10-29）
 
