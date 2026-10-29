@@ -507,6 +507,51 @@ Veyra 就会进 SDR 分支。判定只看两行日志：
 效果，P8.2 的基底只有 SDR）。要做提升需要一套 SDR→HDR 的 reshaping，规模和 P7
 的三通道重建相当，且同样没有片源可验。
 
+#### Profile 10（AV1 里的杜比视界）：能播，但 FFmpeg 还差两处（2026-10-29）
+
+P10 是 AV1 封装的杜比视界（`dav1.10.xx`），元数据在 **AV1 的 T.35/EMDF OBU** 里，
+不是 HEVC NAL。MP4 里的 sample entry 是 `dav1`，内部结构是 `av1C` + `dvvC`。
+
+**测试素材**：Dolby 官方在线交付套件的 P10 测试流（AV1 10-bit，47 秒，25fps，
+480p/720p/1080p/4K 四档，国内可直连、无 DRM）：
+
+```
+https://ott.dolby.com/OnDelKits/Dolby_Vision_Online_Delivery_Kit/v1/test_signals/clear/P10_25/master.m3u8
+```
+
+### 修掉的 bug：CCID 0 被当成「不支持」
+
+这个测试流的 `dv_bl_signal_compatibility_id = 0`（Dolby 定义为 "Dolby Vision
+proprietary"），而路由当时只映射 1/2/4，落进 default 分支直接拒绝播放。
+
+但 Dolby 的 Table 2 给出 Profile 10 在 CCID 0 时的 VUI 是 `1, 9, 16, 15, 1` ——
+**16 = PQ、9 = BT.2020**，也就是 PQ 基底、只是不声明兼容性。现在路由到 HDR10
+并钉 PQ。
+
+### 两个 FFmpeg 上游缺口
+
+| 缺口 | 表现 | 现状 |
+|---|---|---|
+| `dav1` sample entry 没被 `isom_tags` 映射 | demuxer 报 `codecId=0`，完全无法解码 | **重封装绕过**：把 init 里的 `dav1` 改成 `av01`，立即能播（payload 本就是 av01 + dvvC） |
+| AV1 的 DV RPU 不解析 | 没有 L1/L2/L5 | **仍存在**，P10 只能当 HDR10 播 |
+
+注意 `dvvC` 配置**是被解析的**（`profile=10`、`compatibility=0` 都读到了），缺的
+只是 OBU 里的 RPU。
+
+### 实测
+
+```
+opened 854x480 dur=47.36s avgFps=25.000 codec=av1 pixelFmt=yuv420p10le transfer=5
+decoder: d3d12va decoder opened codec=libdav1d
+[source-dovi] profile=10 level=1 compatibility=0 bl=true el=false rpuDeclared=true route=2
+[source-dovi] base layer pinned to PQ for profile 10
+```
+
+画面正确。所以 P10 的结论要分开说：**「能播」成立，「动态元数据」不成立**。
+
+要完整支持 P10，得等 FFmpeg 补上 `dav1` 映射与 AV1 RPU 解析，或者自己写一层 OBU
+解析（代价与收益不成比例：AV1 + DV 的内容极少）。
+
 #### L2 / L8 trim 元数据：数据在，但没人做，也不该猜（2026-10-29）
 
 调研过一次，结论是不做。记在这里，避免以后再查一遍。
