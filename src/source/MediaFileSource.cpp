@@ -1429,8 +1429,14 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         // Never set when an RPU is present - the two must not both drive one frame.
         if (!out.dovi.valid && plus.num_windows > 0) {
             const auto& win = plus.params[0];
-            const double peakLinear = std::max({av_q2d(win.maxscl[0]), av_q2d(win.maxscl[1]), av_q2d(win.maxscl[2])});
-            const double avgLinear = av_q2d(win.average_maxrgb);
+            // av_q2d divides by den, and these streams do contain {num, 0} rationals.
+            // That produced +inf, which nitsToPq then pinned to 1.0 - a "10000 nit"
+            // frame appearing out of nowhere every 10 s on the FF Pictures test clip.
+            const auto ratio = [](const AVRational& r) {
+                return r.den != 0 ? double(r.num) / double(r.den) : 0.0;
+            };
+            const double peakLinear = std::max({ratio(win.maxscl[0]), ratio(win.maxscl[1]), ratio(win.maxscl[2])});
+            const double avgLinear = ratio(win.average_maxrgb);
             if (peakLinear > 0.0) {
                 const double peakNits = peakLinear * 10000.0;
                 const double avgNits = avgLinear * 10000.0;
