@@ -461,6 +461,35 @@ P5 一直是本项目里唯一只有代码审查、没有真实数据的主路�
 `profile=5, el=0, bl=1, compatibility=0`。这样 Veyra 会进入 P5 路径，并因为
 RPU 仍是 P7 的、没有颜色块而正确拒绝——这正好验证了"不硬转"的防御逻辑。
 
+#### Profile 8 的基底类型由 compatibility ID 决定，不是 profile 号（2026-10-29）
+
+常见的混淆是把 8.2 和 8.4 对调。按 Dolby 的 bitstream profiles 文档 Table 2：
+
+| CCID | 标签 | 基底 |
+|---|---|---|
+| 0 | Dolby Vision proprietary | P5 |
+| 1 | HDR10 | P8.1 |
+| 2 | **SDR**（BT.1886 / BT.709） | **P8.2** |
+| 4 | **HLG** | **P8.4** |
+| 6 | Blu-ray | P7 |
+
+所以：
+
+- **iPhone 录的 Dolby Vision 是 HLG 基底，即 Profile 8.4**
+- **SDR 兼容基底是 Profile 8.2**
+
+代码按 CCID 判断而不是 profile 号（`source/DolbyVision.h` 的 `route()`），并
+据此钉住色彩标签：`matches()` 要求 HLG 是 `transfer==HLG && BT2020`、SDR 是
+`!isHdrPath() && BT709`。
+
+实测印证：B 站那部 Galaxy 是 `profile=8 compatibility=4`，日志为
+`base layer pinned to HLG`。
+
+一个细节：官方 Table 1 里 Profile 8 的 CCID 只列 "1 or 4"，CCID 2 在官方对应
+Profile 9（AVC 8-bit）。但实践中确实存在 `profile=8 compatibility=2` 的文件
+（Jellyfin 也接受 1/2/4），所以「P8.2」是实践叫法。按 CCID 判断两种情况都能
+正确处理。
+
 #### L2 / L8 trim 元数据：数据在，但没人做，也不该猜（2026-10-29）
 
 调研过一次，结论是不做。记在这里，避免以后再查一遍。
