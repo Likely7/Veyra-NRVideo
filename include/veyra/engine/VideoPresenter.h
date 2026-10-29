@@ -152,11 +152,18 @@ private:
     // Custom: Dolby Vision level 1 for the frame being presented. Purely
     // additive: the blit uses it only when the follow switch is on.
     pipeline::DoviFrameInfo latestDovi_{};
-    // Sliding window for the average-brightness follow (see the follow block).
-    double avgSum_=0.0; int avgSumCount_=0;
-    // Custom: same window for the peak. A per-frame 1:1 knee visibly breathes on a
-    // fast cut, so the peak that drives the roll-off is averaged the same way.
-    double peakSum_=0.0; int peakSumCount_=0;
+    // Exponential smoothing for the follow inputs. A sliding window was used here
+    // first and was wrong: halving a running sum and its integer count keeps the
+    // ratio only when the count is even, so on odd counts the average gained a
+    // fraction each time the window overflowed and drifted above every input it had
+    // seen - a peak reading of 1.11 after inputs capped at 1.0. EMA has no such
+    // accumulation and a reset path for scene cuts.
+    double avgEma_=0.0; bool avgEmaSeeded_=false;
+    double peakEma_=0.0; bool peakEmaSeeded_=false;
+    // Custom: the knee also runs through clamp() and min(user); those flatten or
+    // step, so a smoothed input can still reach the blit as a jump. The value that
+    // actually ships is smoothed here too.
+    float smoothedStartNits_=0.0f;
     bool ensureCoverageProbe(ID3D12Device*);
     void publishLiveCoverage(const HdrCurveSettings&,pipeline::FrameIdentity);
     unsigned lastBuffer_=0;bool hasPresented_=false;

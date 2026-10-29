@@ -39,6 +39,8 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     refreshMonitor_=nullptr;
     hdrPeakInfo_={};
     latestDovi_={}; // A new chain never inherits the previous source's RPU.
+    smoothedStartNits_=0.0f;
+    avgEmaSeeded_=false; peakEmaSeeded_=false;
     ++generation_;
     Status st=Status::Ok;
     // Keep one presentation queue for the native chain's lifetime. A later
@@ -244,14 +246,10 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     if(followDovi&&latestDovi_.valid){
         const double avgPq=latestDovi_.avgPq;
         if(avgPq>0.0){
-            constexpr int kWindow=12;
-            if(avgSumCount_>0&&(avgPq>0.0&&(avgSum_/double(avgSumCount_))>0.0)){
-                const double prevAvg=avgSum_/double(avgSumCount_);
-                if(prevAvg>0.0&&(avgPq>prevAvg*3.0||avgPq<prevAvg/3.0)){avgSum_=0.0;avgSumCount_=0;}
-            }
-            avgSum_+=avgPq;++avgSumCount_;
-            if(avgSumCount_>kWindow){avgSum_*=0.5;avgSumCount_/=2;}
-            smoothedAvgPq=avgSum_/double(avgSumCount_);
+            const bool reset=!avgEmaSeeded_||(avgEma_>0.0&&(avgPq>avgEma_*3.0||avgPq<avgEma_/3.0));
+            if(reset){avgEma_=avgPq;avgEmaSeeded_=true;}
+            else avgEma_+=(avgPq-avgEma_)*0.2;
+            smoothedAvgPq=avgEma_;
         }
     }
     // Custom: smooth the peak the same way. The knee is peak * 0.85, so an
@@ -261,18 +259,34 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     double smoothedPeakPq=-1.0;
     if(followDovi&&latestDovi_.valid){
         const double peakPq=latestDovi_.maxPq;
-        if(peakPq>0.0){
-            constexpr int kWindow=12;
-            if(peakSumCount_>0){
-                const double prevPeak=peakSum_/double(peakSumCount_);
-                if(prevPeak>0.0&&(peakPq>prevPeak*3.0||peakPq<prevPeak/3.0)){peakSum_=0.0;peakSumCount_=0;}
-            }
-            peakSum_+=peakPq;++peakSumCount_;
-            if(peakSumCount_>kWindow){peakSum_*=0.5;peakSumCount_/=2;}
-            smoothedPeakPq=peakSum_/double(peakSumCount_);
+        // A frame claiming more than 4000 nits is not a real master - the HDR10+ test
+        // clip carries frames at maxscl = 1.0, i.e. 10000 nits. Following such a frame
+        // pins the knee at its ceiling for one frame and drops it the next, which is
+        // exactly the flicker being chased. Ignore it and hold the last sane value.
+        constexpr double kMaxSanePeakNits=4000.0;
+        const bool sane=peakPq>0.0&&engine::pqToNits(peakPq)<=kMaxSanePeakNits;
+        if(sane){
+            const bool reset=!peakEmaSeeded_||(peakEma_>0.0&&(peakPq>peakEma_*3.0||peakPq<peakEma_/3.0));
+            if(reset){peakEma_=peakPq;peakEmaSeeded_=true;}
+            else peakEma_+=(peakPq-peakEma_)*0.2;
+            smoothedPeakPq=peakEma_;
+        }else if(peakEmaSeeded_){
+            smoothedPeakPq=peakEma_;   // hold: an implausible frame must not move the curve
         }
     }
-    const HdrCurveSettings effective=followDovi?engine::doviCurveFromLevel1(latestDovi_,hdrCurve,graph.doviFollowAverage(),smoothedAvgPq,smoothedPeakPq):hdrCurve;
+    HdrCurveSettings effective=followDovi?engine::doviCurveFromLevel1(latestDovi_,hdrCurve,graph.doviFollowAverage(),smoothedAvgPq,smoothedPeakPq):hdrCurve;
+    // Custom: smooth the value that actually reaches the blit. Smoothing the peak is
+    // not enough: the knee goes through clamp() and min(user), both of which flatten
+    // or step, so the output can jump while the input is already smooth. This is what
+    // the sky flicker on the HDR10+ test clip actually was.
+    if(followDovi&&graph.hdrOutput()){
+        const float target=float(effective.highlightStartNits);
+        if(smoothedStartNits_<=0.0f)smoothedStartNits_=target;
+        else smoothedStartNits_+=(target-smoothedStartNits_)*0.12f;
+        effective.highlightStartNits=unsigned(std::lround(smoothedStartNits_));
+    }else{
+        smoothedStartNits_=0.0f;
+    }
     // The trace is its own gate: a user who turns the switch on must not get a
     // line per frame pair for the length of a film. It also records the switch
     // itself, so "RPU present but the setting did not arrive" is diagnosable.

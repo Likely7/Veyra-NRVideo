@@ -34,9 +34,16 @@ inline HdrCurveSettings doviCurveFromLevel1(const pipeline::DoviFrameInfo& dovi,
                                             double smoothedAvgPq = -1.0,
                                             double smoothedPeakPq = -1.0) {
     if (!dovi.valid) return userCurve;
-    // `smoothedPeakPq` is the caller's sliding-window peak. Falling back to the raw
-    // value keeps single-shot and test callers working unchanged.
-    const double peakNits = pqToNits(smoothedPeakPq > 0.0 ? smoothedPeakPq : dovi.maxPq);
+    // `smoothedPeakPq` is the caller's smoothed peak. Falling back to the raw value
+    // keeps single-shot and test callers working unchanged.
+    double peakNits = pqToNits(smoothedPeakPq > 0.0 ? smoothedPeakPq : dovi.maxPq);
+    // A scene that claims more than 4000 nits is outside every mastering standard
+    // this project targets. Test material does contain such frames (the HDR10+
+    // lake clip reports maxscl = 1.0, i.e. 10000 nits), and without this one frame
+    // pins the knee at its ceiling and the next drops it, which is visible as
+    // flicker. Clamping keeps a bad frame from moving the curve at all.
+    constexpr double kMaxSanePeakNits = 4000.0;
+    peakNits = std::min(peakNits, kMaxSanePeakNits);
     if (!(peakNits > 0.0)) return userCurve;
     HdrCurveSettings out = userCurve;
     // Start the roll-off a little below the frame's own peak so it has headroom to
@@ -51,7 +58,11 @@ inline HdrCurveSettings doviCurveFromLevel1(const pipeline::DoviFrameInfo& dovi,
         if (avgNits > 0.0) kneeNits = std::max(avgNits * 1.2, kneeNits * 0.6);
     }
     const unsigned start = unsigned(std::lround(kneeNits));
-    out.highlightStartNits = std::clamp(start, 100u, 2000u);
+    // Upper bound raised from 2000: the knee is peak*0.85, so a 3000-nit scene wants
+    // 2550 and clamping it to the slider's own maximum held the curve at a plateau
+    // and then released it in one step when the peak dropped. The user's own setting
+    // still wins through the min() below.
+    out.highlightStartNits = std::clamp(start, 100u, 4000u);
     // A start the user set below the frame's own knee stays: following may lift the
     // compression later in the frame, never pull it into the mid-tones.
     if (userCurve.highlightStartNits > 0)
