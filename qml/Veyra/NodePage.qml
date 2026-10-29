@@ -1529,33 +1529,9 @@ VPage {
                         onPicked: id => veyra.dlssSrModel = Number(id)
                     }
                 }
-                VRow {
-                    label: qsTr("目标尺寸")
-                    hint: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
-                        ? qsTr("放大时重建细节；原尺寸时修复视频文件和串流的压缩伪影，无压缩的采集卡格式在原尺寸不运行。效果取决于片源。")
-                        : qsTr("目标须大于片源尺寸；已达到目标时不执行超分。")
-                    VSeg {
-                        options: [{ id: "1", label: "2K" }, { id: "2", label: "4K" }, { id: "4", label: "5K" }, { id: "5", label: "6K" }, { id: "6", label: "7K" }, { id: "3", label: "8K" }]
-                        current: String(veyra.srTargetIndex)
-                        onPicked: id => veyra.srTargetIndex = parseInt(id)
-                    }
-                }
-                VRow {
-                    label: qsTr("超分运动来源")
-                    hint: qsTr("零运动会限制时序重建；RTX 视频超分不使用此输入")
-                    VSeg { options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.srMotionSource); onPicked: id => veyra.srMotionSource = Number(id) }
-                }
-                VRow {
-                    label: qsTr("质量")
-                    hint: qsTr("RTX 视频超分档位")
-                    enabled: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4 && Support.available(veyra, "sr")
-                    opacity: enabled ? 1 : 0.4
-                    VSeg {
-                        options: [{ id: "1", label: "1" }, { id: "2", label: "2" }, { id: "3", label: "3" }, { id: "4", label: "4" }]
-                        current: String(veyra.videoSrQuality)
-                        onPicked: id => veyra.videoSrQuality = parseInt(id)
-                    }
-                }
+                SrStageEditor { Layout.fillWidth: true; namePrefix: "node" }
+
+
             }
         }
         Component {

@@ -19,10 +19,15 @@ bool result(int op,NVSDK_NGX_Result r,unsigned seh){
     return ok;
 }
 }
-bool VideoSrBackend::create(NgxCoreHost& core,ID3D12GraphicsCommandList* list){
+bool VideoSrBackend::create(NgxCoreHost& core,ID3D12GraphicsCommandList* list,unsigned width,unsigned height,unsigned outWidth,unsigned outHeight){
     release();core_=&core;Status status=Status::Ok;params_=core.allocateParameters(status);if(!params_)return false;
+    duplicateCreation_=false;
     params_->Set("CreationNodeMask",1u);params_->Set("VisibilityNodeMask",1u);
-    unsigned seh=0;auto r=invoke(0,list,params_,&handle_,seh);return result(0,r,seh)&&handle_;
+    if(width&&height&&outWidth&&outHeight){params_->Set("Width",width);params_->Set("Height",height);params_->Set("OutWidth",outWidth);params_->Set("OutHeight",outHeight);}
+    unsigned seh=0;auto r=invoke(0,list,params_,&handle_,seh);
+    duplicateCreation_=!seh&&r==NVSDK_NGX_Result_FAIL_FeatureAlreadyExists;
+    if(duplicateCreation_){handle_=nullptr;log::info("video-sr","create key already exists; no ownership acquired");return false;}
+    return result(0,r,seh)&&handle_;
 }
 bool VideoSrBackend::evaluate(ID3D12GraphicsCommandList* list,ID3D12Resource* input,ID3D12Resource* output,unsigned quality){
     if(!handle_||!input||!output||quality<1||quality>4)return false;

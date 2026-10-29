@@ -1319,7 +1319,15 @@ VPage {
                             switchAvailable: Support.available(veyra, "sr")
                             summary: !switchAvailable ? Support.reason(veyra, "sr") : (veyra.srEnabled ? (veyra.srBackendChoices?.find(o => o.id === String(veyra.videoSrQuality === 0 || veyra.videoSrQuality === 5 ? veyra.videoSrQuality : 4))?.label || qsTr("RTX 视频超分")) : qsTr("已关闭"))
                                      + " · " + veyra.srTargetLabel
-                                     + (veyra.videoSrQuality > 0 ? qsTr(" · 质量 ") + veyra.videoSrQuality : "")
+                                     + (supersampleShown ? "→" + (veyra.srOutput === 1 ? qsTr("片源尺寸") : ["", "", "2K", "4K", "5K", "6K", "7K"][veyra.srOutput]) : "")
+                                     + (dualShown ? "→" + (veyra.srPrescale >= 150 ? (veyra.srPrescale - 100) + "%" : ["", "720p", "900p", "1080p", "1440p"][veyra.srPrescale]) + "→" + ["", "2K", "4K", "8K", "5K", "6K", "7K"][veyra.dualSrTargetIndex] : "")
+                                     + (veyra.videoSrQuality > 0 ? qsTr(" · 质量 ") + veyra.videoSrQuality + (dualShown ? "/" + veyra.dualSrQuality : "") : "")
+                            // Base target, then the supersample shrink, or the double SR reduction
+                            // and second target while double SR is on (RTX Video SR). Each kept
+                            // value is hidden while its mode is off.
+                            readonly property bool rtxVideoSr: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
+                            readonly property bool supersampleShown: !veyra.dualSrEnabled && veyra.srOutput > 0 && rtxVideoSr
+                            readonly property bool dualShown: veyra.dualSrEnabled && veyra.srPrescale > 0 && rtxVideoSr
                             on: veyra.srEnabled
                             open: true
                             onToggled: on => veyra.srEnabled = on
@@ -1345,45 +1353,9 @@ VPage {
                                     onPicked: id => veyra.dlssSrModel = Number(id)
                                 }
                             }
-                            VRow {
-                                label: qsTr("目标尺寸")
-                                hint: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
-                                    ? qsTr("放大时重建细节；原尺寸时修复视频文件和串流的压缩伪影，无压缩的采集卡格式在原尺寸不运行。效果取决于片源。")
-                                    : qsTr("目标须大于片源尺寸；已达到目标时不执行超分。")
-                                VSeg {
-                                    options: [
-                                        { id: "1", label: "2K" },
-                                        { id: "2", label: "4K" },
-                                        { id: "4", label: "5K" },
-                                        { id: "5", label: "6K" },
-                                        { id: "6", label: "7K" },
-                                        { id: "3", label: "8K" }
-                                    ]
-                                    current: String(veyra.srTargetIndex)
-                                    onPicked: id => veyra.srTargetIndex = parseInt(id)
-                                }
-                            }
-                            VRow {
-                                label: qsTr("超分运动来源")
-                                hint: qsTr("零运动会限制时序重建；RTX 视频超分不使用此输入")
-                                VSeg { options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.srMotionSource); onPicked: id => veyra.srMotionSource = Number(id) }
-                            }
-                            VRow {
-                                label: qsTr("质量")
-                                hint: qsTr("RTX 视频超分档位")
-                                enabled: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4 && Support.available(veyra, "sr")
-                                opacity: enabled ? 1 : 0.4
-                                VSeg {
-                                    options: [
-                                        { id: "1", label: "1" },
-                                        { id: "2", label: "2" },
-                                        { id: "3", label: "3" },
-                                        { id: "4", label: "4" }
-                                    ]
-                                    current: String(veyra.videoSrQuality)
-                                    onPicked: id => veyra.videoSrQuality = parseInt(id)
-                                }
-                            }
+                            SrStageEditor { Layout.fillWidth: true; namePrefix: "list" }
+
+
                         }
 
                         // RTX Video HDR: SDR -> HDR before frame generation. Runs

@@ -9,5 +9,6 @@
 5. [分支与工作树归档](BRANCH_ARCHIVE.md)：保留项、已退休分支tip与恢复方法。
 6. [2.1.1用户更新说明](RELEASE_NOTES_2.1.1.md) 与 [对应源码/构建](BUILD_2.1.1.md)。
 7. [界面代码与职责边界](ARCHITECTURE.md)：桥接模块与QML组件从哪里找。
+8. [当前双重超分施工](DUAL_SR_PLAN_2026-10-28.md)：基础SR→降低AI结果→第二次SR；覆盖同日早期单层方案与4K限制。随后新增[超采样选项](SR_SUPERSAMPLE_2026-10-28.md)：单次RTX视频超分到更高尺寸后精确缩回。
 
 历史方案、排查和发行过程集中在[历史索引](history/INDEX.md)。旧路径对照[PATH_MAP.json](history/PATH_MAP.json)；这些历史文件中的“当前/未合并/未发布”按原日期解释。

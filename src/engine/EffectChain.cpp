@@ -518,7 +518,9 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
     if (chain.mode != ChainMode::List && chain.mode != ChainMode::Node) return {false, "未知链路模式"};
     const auto validation = validateChain(chain);
     if (!validation.accepted) return validation;
-    if (!request.source.valid() || !pipeline::validSrTarget(request.srTarget))
+    if (!request.source.valid() || !pipeline::validSrTarget(request.srTarget) ||
+        !pipeline::validSrPrescale(request.srPrescale) || !pipeline::validSrOutput(request.srOutput) ||
+        !pipeline::validSrTarget(request.dualSrTarget))
         return {false, "执行计划尺寸或超分目标非法"};
 
     // Retain storage ordinals even when an earlier instance is disabled. This
@@ -534,20 +536,23 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
         if (node.enabled && node.type == EffectType::NrEnhance) nrFirst = node.nr.lowLatencyPairing;
     }
     nrFirst = nrFirst && !request.stillImage && !request.exportJob;
-    const auto srExtent = pipeline::ResolutionPlan::make(request.source, true,
-        pipeline::NrSizePolicy::Native, true, 0, request.srTarget).base;
+    // SR processing is its evaluated size; a supersample shrink makes the step
+    // output smaller than that.
+    const auto resolved = pipeline::ResolutionPlan::make(request.source,true,pipeline::NrSizePolicy::Native,true,0,
+        request.srTarget,false,0,request.srPrescale,request.srOutput,request.dualSrEnabled,request.dualSrTarget);
+    const pipeline::SrStageExtents srStage{resolved.srInput,resolved.srOutput,resolved.base};
     ChainExecutionPlan plan;
     auto cursor = request.source;
     const auto append = [&](uint32_t index) {
         const auto& node = chain.nodes[index];
         if (!node.enabled) return;
-        if (node.type == EffectType::SuperResolution && cursor == srExtent) return;
+        if (node.type == EffectType::SuperResolution && !srStage.enlarges() && cursor == srStage.output) return;
         ChainExecutionStep step;
         step.type = node.type; step.nodeIndex = index;
         step.parameterIndex = parameterIndices[index];
         step.resourceIndex = plan.resourceCounts[size_t(node.type)]++;
         step.input = step.processing = step.output = cursor;
-        if (node.type == EffectType::SuperResolution) step.processing = step.output = srExtent;
+        if (node.type == EffectType::SuperResolution) { step.processing = srStage.evaluated; step.output = srStage.output; }
         if (node.type == EffectType::NrEnhance) {
             step.processing = request.exportJob&&!request.stillImage?
                 exportNrProcessingExtent(cursor,node.nr.runtime,node.nr.sizePolicy):
@@ -589,6 +594,8 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
 ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     ChainGlobalSettings c;
     c.srTarget = s.srTarget; c.videoSrQuality = s.videoSrQuality; c.dlssSrModel = s.dlssSrModel;
+    c.srPrescale = s.srPrescale; c.srOutput = s.srOutput;
+    c.dualSrEnabled=s.dualSrEnabled;c.dualSrTarget=s.dualSrTarget;c.dualSrQuality=s.dualSrQuality;
     c.fgBackend = s.frameGenerationBackend; c.flow = s.flow;
     c.vfgQuality=s.vfgQuality;
     c.opticalFlowBackend = s.opticalFlowBackend; c.amdFlowHalfResolution = s.amdFlowHalfResolution;
@@ -603,6 +610,8 @@ void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.hdrOutputMode=hdrOutputMode;s.fgMotion=fgMotion;s.srMotion=srMotion;s.nrMotion=nrMotion;
     s.hdrCurve=hdrCurve;s.hdrMetadata=hdrMetadata;
     s.srTarget = srTarget; s.videoSrQuality = videoSrQuality; s.dlssSrModel = dlssSrModel;
+    s.srPrescale = srPrescale; s.srOutput = srOutput;
+    s.dualSrEnabled=dualSrEnabled;s.dualSrTarget=dualSrTarget;s.dualSrQuality=dualSrQuality;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
     s.vfgQuality=vfgQuality;
     s.opticalFlowBackend = opticalFlowBackend; s.amdFlowHalfResolution = amdFlowHalfResolution;
@@ -623,6 +632,8 @@ void ChainConfiguration::apply(EnhancementSettings& s) const {
 
 bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
     return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality && dlssSrModel == other.dlssSrModel &&
+        srPrescale == other.srPrescale && srOutput == other.srOutput &&
+        dualSrEnabled==other.dualSrEnabled&&dualSrTarget==other.dualSrTarget&&dualSrQuality==other.dualSrQuality&&
         fgBackend == other.fgBackend && vfgQuality == other.vfgQuality && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&
         // The author's own rendering globals had the same blind spot: a change to
@@ -721,6 +732,9 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if ((previous.nrHoldStrength > 0.0f) != (next.nrHoldStrength > 0.0f)) return true;
     if (previous.nrPolicy != next.nrPolicy) return true;
     if (previous.srTarget != next.srTarget) return true;
+    // The double SR reduction and the supersample shrink change what SR reads and writes.
+    if (previous.srPrescale != next.srPrescale || previous.srOutput != next.srOutput) return true;
+    if(previous.dualSrEnabled!=next.dualSrEnabled||previous.dualSrTarget!=next.dualSrTarget||previous.dualSrQuality!=next.dualSrQuality)return true;
     // A different DLSS SR model (render preset) needs a new SR feature.
     if (previous.dlssSrModel != next.dlssSrModel) return true;
     if (previous.frameGenerationBackend != next.frameGenerationBackend) return true;

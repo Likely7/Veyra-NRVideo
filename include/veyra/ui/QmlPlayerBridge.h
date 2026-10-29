@@ -49,6 +49,8 @@ class QmlPlayerBridge : public QObject {
     // a display rate is only real if the system display event can be read - the
     // design requires exactly this distinction rather than reusing submit FPS).
     Q_PROPERTY(QString outputSummary READ outputSummary NOTIFY snapshotChanged)
+    Q_PROPERTY(QString srStageSummary READ srStageSummary NOTIFY snapshotChanged)
+    Q_PROPERTY(QString srStageNote READ srStageNote NOTIFY snapshotChanged)
     Q_PROPERTY(bool fullscreenMemorySafe READ fullscreenMemorySafe NOTIFY snapshotChanged)
     Q_PROPERTY(double displayFps READ displayFps NOTIFY snapshotChanged)
     Q_PROPERTY(bool displayFpsKnown READ displayFpsKnown NOTIFY snapshotChanged)
@@ -390,6 +392,13 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int videoSrQuality READ videoSrQuality WRITE setVideoSrQuality NOTIFY settingsChanged)
     Q_PROPERTY(int dlssSrModel READ dlssSrModel WRITE setDlssSrModel NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList dlssSrModelChoices READ dlssSrModelChoices CONSTANT)
+    // Three-step SR (RTX Video SR). srPrescale: 0 off, 1..4 720p/900p/1080p/1440p,
+    // 150..190 a manual 50..90 %. srOutput: 0 keep the SR result, 1 source size, 2..6 2K/4K/5K/6K/7K.
+    Q_PROPERTY(int srPrescale READ srPrescale WRITE setSrPrescale NOTIFY settingsChanged)
+    Q_PROPERTY(bool dualSrEnabled READ dualSrEnabled WRITE setDualSrEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(int dualSrTargetIndex READ dualSrTargetIndex WRITE setDualSrTargetIndex NOTIFY settingsChanged)
+    Q_PROPERTY(int dualSrQuality READ dualSrQuality WRITE setDualSrQuality NOTIFY settingsChanged)
+    Q_PROPERTY(int srOutput READ srOutput WRITE setSrOutput NOTIFY settingsChanged)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY protectionChanged)
     Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
@@ -621,6 +630,8 @@ public:
     ~QmlPlayerBridge() override;
 
     QString outputSummary() const;
+    QString srStageSummary() const;
+    QString srStageNote() const;
     double displayFps() const;
     bool displayFpsKnown() const;
     double queuedFrames() const;
@@ -1029,6 +1040,16 @@ public:
     int dlssSrModel() const;
     void setDlssSrModel(int value);
     QVariantList dlssSrModelChoices() const;
+    int srPrescale() const;
+    bool dualSrEnabled() const;
+    void setDualSrEnabled(bool enabled);
+    int dualSrTargetIndex() const;
+    void setDualSrTargetIndex(int index);
+    int dualSrQuality() const;
+    void setDualSrQuality(int quality);
+    void setSrPrescale(int value);
+    int srOutput() const;
+    void setSrOutput(int value);
     bool protectionEnabled() const;
     void setProtectionEnabled(bool value);
     QVariantMap protectionState() const;

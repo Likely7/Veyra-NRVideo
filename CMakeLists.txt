@@ -225,6 +225,7 @@ target_link_libraries(veyra_runtime_probe PRIVATE veyra_gfx)
 veyra_add_compute_shader(veyra_shader_parity_encode ParityEncode)
 veyra_add_compute_shader(veyra_shader_parity_decode ParityDecode)
 veyra_add_compute_shader(veyra_shader_hdr_video_sr HdrVideoSrRestore)
+veyra_add_compute_shader(veyra_shader_sr_resolve SrResolve)
 veyra_add_compute_shader(veyra_shader_hdr_amd_nr_encode HdrAmdNrEncode)
 veyra_add_compute_shader(veyra_shader_hdr_amd_nr_restore HdrAmdNrRestore)
 if(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR)
@@ -614,7 +615,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp

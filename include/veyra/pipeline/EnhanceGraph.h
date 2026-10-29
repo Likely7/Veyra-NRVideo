@@ -126,6 +126,11 @@ struct EnhanceGraphDesc {
     bool stillImage = false;     // no temporal motion/FG history for a single image
     uint32_t nrWidth=0,nrHeight=0; // zero preserves legacy native working extent
     uint32_t flowWidth=0,flowHeight=0; // zero preserves legacy source-space NVOF extent
+    // Three-step SR (RTX Video SR): what SR reads after the prescale and what it
+    // writes before the output fit. Zero: SR reads the source and writes the work extent.
+    uint32_t srInputWidth=0,srInputHeight=0,srOutputWidth=0,srOutputHeight=0;
+    bool dualSr=false;
+    uint32_t firstSrWidth=0,firstSrHeight=0,dualSrQuality=4;
     uint32_t fgMultiplier=2;
     engine::FrameGenerationBackend frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;
@@ -719,6 +724,7 @@ public:
     ID3D12Resource* diagnosticPreSrProtection() const { return preSrProtectionRgba_.Get(); }
     ID3D12Resource* diagnosticInterNrProtection() const { return interNrProtectionRgba_.Get(); }
     ID3D12Resource* diagnosticVideoSrInput() const { return videoSrInput_.Get(); }
+    ID3D12Resource* diagnosticFirstSrLinear() const { return firstSrLinear_.Get(); }
     ID3D12Resource* diagnosticVideoSrOutput() const { return videoSrOutput_.Get(); }
     ID3D12Resource* diagnosticNrLayerInput(size_t index) const { return index < nrInstances_.size() ? nrInstances_[index]->input() : nullptr; }
     ID3D12Resource* diagnosticNrLayerOutput(size_t index) const { return index < nrInstances_.size() ? nrInstances_[index]->fullTarget() : nullptr; }
@@ -810,6 +816,9 @@ private:
     bool initialized_ = false;
 
     uint32_t srcW_ = 0, srcH_ = 0, workW_ = 3840, workH_ = 2160;
+    uint32_t srInW_ = 0, srInH_ = 0, srOutW_ = 0, srOutH_ = 0; // RTX Video SR input/result
+    bool srPrescaleActive()const{return srInW_!=(desc_.dualSr?desc_.firstSrWidth:srcW_)||srInH_!=(desc_.dualSr?desc_.firstSrHeight:srcH_);}
+    bool srResolveActive()const{return srOutW_!=workW_||srOutH_!=workH_;}
     uint32_t nrW_=0,nrH_=0;
     uint32_t nvofW_ = 0, nvofH_ = 0, rawW_ = 0, rawH_ = 0, nvofGrid_ = 4, selectedGrid_ = 4;
     bool srEnabled_ = false, nrEnabled_ = false, fgEnabled_ = false, nvofStandalone_ = false;
@@ -832,6 +841,8 @@ private:
     size_t rgbPitch_=0;
     ComPtr<ID3D12Resource> workRgba_;
     ComPtr<ID3D12Resource> videoSrInput_,videoSrOutput_;
+    ComPtr<ID3D12Resource> srPrescaled_; // linear second-SR input: the double SR reduction of the first result
+    ComPtr<ID3D12Resource> firstSrInput_,firstSrOutput_,firstSrLinear_;
     ComPtr<ID3D12Resource> videoHdrInput_,videoHdrOutput_;
     ComPtr<ID3D12Resource> residualRgba_,nrFlow_,baseFlow_;
     ComPtr<ID3D12Resource> preSrProtectionRgba_;
@@ -891,6 +902,8 @@ private:
     ComputePass amdHdrEncodePass_, amdHdrRestorePass_;
     float toneMapPeakNits_=0; // latched per graph/source; never varies with frame brightness
     ComputePass rgbPass_,hdrVideoSrPass_;
+    ComputePass srPrescalePass_,srResolvePass_; // area shrinks: double SR reduction / supersample shrink after RTX Video SR
+    ComputePass firstSrRestorePass_;
     ComputePass downsamplePass_,residualPass_,stackProtectionPass_,flowAdaptPass_;
     ComputePass flowRefinePass_,flowFillPass_,fgFlowAdaptPass_,flowClaimPass_;
     // Stage-5 output stabiliser (anti-flicker). Constructed only when the
@@ -1020,6 +1033,7 @@ private:
     std::unique_ptr<guidance::AmdOpticalFlow> amdOf_;
     std::unique_ptr<guidance::GpuDisOpticalFlow> gpuDis_;
     std::unique_ptr<ngx::VideoSrBackend> videoSrBackend_;
+    std::unique_ptr<ngx::VideoSrBackend> firstVideoSrBackend_;
     std::unique_ptr<ngx::TrueHdrBackend> videoHdrBackend_;
     std::unique_ptr<ngx::DlssFgBackend> fgBackend_;
     std::unique_ptr<gfx::FsrFgPresenter> fsrFgBackend_;

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <iterator>
 namespace {
 bool retiredSrMode(const std::filesystem::path& path) {
  using namespace veyra::engine;
@@ -325,5 +326,34 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
   PresetStore reader(path);roundtrip=roundtrip&&reader.load()&&reader.entries().size()==1&&reader.entries()[0].settings==dlss;
   std::ifstream header(path);std::string magic;unsigned version=0;roundtrip=roundtrip&&bool(header>>magic>>version)&&version==(model?31:21);
   ok&=roundtrip;std::cout<<"DLSS model="<<model<<" schema="<<version<<" roundtrip="<<roundtrip<<'\n';
+ }
+ // Three-step SR (v33): the schema changes only when a preset uses it; a bad
+ // value in a v33 row fails the whole file, which is then kept.
+ for(unsigned mode=0;mode<3;++mode){
+  EnhancementSettings stage;stage.nr=false;stage.sr=true;
+  if(mode==1)stage.srPrescale=veyra::pipeline::SrPrescale::P1080;
+  if(mode==2){stage.srPrescale=veyra::pipeline::srPrescaleForPercent(75);stage.srOutput=veyra::pipeline::SrOutput::Uhd4K;}
+  auto path=p;path+=L"-sr-stage-"+std::to_wstring(mode);
+  std::error_code ec;std::filesystem::remove(path,ec);
+  PresetStore writer(path);bool roundtrip=writer.load()&&writer.put(L"SR stage",stage);
+  PresetStore reader(path);roundtrip=roundtrip&&reader.load()&&reader.entries().size()==1&&reader.entries()[0].settings==stage;
+  std::ifstream header(path);std::string magic;unsigned version=0;roundtrip=roundtrip&&bool(header>>magic>>version)&&version==(mode?33:21);
+  header.close();
+  if(mode==1){
+   std::ifstream in(path,std::ios::binary);std::string text((std::istreambuf_iterator<char>(in)),{});in.close();
+   const auto end=text.find_last_not_of("\r\n"),last=text.rfind(' ',end),before=text.rfind(' ',last-1);
+   text.replace(before+1,last-before-1,"5");
+   auto broken=p;broken+=L"-sr-stage-invalid";std::ofstream(broken,std::ios::binary)<<text;
+   PresetStore bad(broken);roundtrip=roundtrip&&!bad.load();
+   std::ifstream kept(broken,std::ios::binary);roundtrip=roundtrip&&std::string((std::istreambuf_iterator<char>(kept)),{})==text;
+  }
+  ok&=roundtrip;std::cout<<"SR stage mode="<<mode<<" schema="<<version<<" roundtrip="<<roundtrip<<'\n';
+ }
+ {
+  EnhancementSettings dual;dual.sr=true;dual.dualSrEnabled=true;dual.srPrescale=veyra::pipeline::SrPrescale::P1080;dual.dualSrTarget=veyra::pipeline::SrTarget::Uhd8K;dual.dualSrQuality=2;
+  auto path=p;path+=L"-dual";PresetStore w(path);bool pass=w.load()&&w.put(L"dual",dual);PresetStore r(path);
+  pass=pass&&r.load()&&r.entries().size()==1&&r.entries()[0].settings==dual;
+  std::ifstream h(path);std::string magic;int version=0;h>>magic>>version;pass=pass&&version==34;
+  ok=ok&&pass;std::cout<<"dual SR schema34 roundtrip="<<pass<<'\n';
  }
  std::cout<<"preset roundtrip, all fields, duplicate, rename-default, delete, validation, unknown schema, corrupt-preservation="<<ok<<'\n';return ok?0:1;}

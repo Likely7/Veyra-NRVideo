@@ -12,6 +12,30 @@ QString QmlPlayerBridge::outputSummary() const {
     if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision) return {};
     return QStringLiteral("%1x%2").arg(plan.output.width).arg(plan.output.height);
 }
+// Staged SR as the running plan has it. Double SR: source -> first result ->
+// reduction -> second result; supersampling: source -> SR result -> shrunk
+// output. Empty for single-step SR.
+QString QmlPlayerBridge::srStageSummary() const {
+    const auto& s = impl_->snapshot;
+    const auto& plan = s.metrics.resolution;
+    if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision || !plan.srApplied) return {};
+    if (!plan.dualSrApplied && plan.base == plan.srOutput) return {};
+    const auto size = [](pipeline::Extent e) { return QStringLiteral("%1x%2").arg(e.width).arg(e.height); };
+    QStringList parts{size(plan.source)};
+    if (plan.dualSrApplied) parts << size(plan.firstSrOutput) << size(plan.srInput);
+    parts << size(plan.srOutput);
+    if (plan.base != plan.srOutput) parts << size(plan.base);
+    return parts.join(QStringLiteral(" → "));
+}
+QString QmlPlayerBridge::srStageNote() const {
+    const auto& s = impl_->snapshot;
+    const auto& plan = s.metrics.resolution;
+    if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision) return {};
+    QStringList notes;
+    if (plan.srPrescaleIneffective) notes << tr("第二次超分未执行：再次降低后的尺寸须小于基础超分结果及第二次目标。");
+    if (plan.srOutputIneffective) notes << tr("超分后缩回未生效：超分须先放大画面，且缩回尺寸要小于超分结果。");
+    return notes.join(QStringLiteral("；"));
+}
 
 // A display rate is only real when the system's display event can be read. No
 // counter is wired in this build, so it reports unknown and the UI shows "未测" -

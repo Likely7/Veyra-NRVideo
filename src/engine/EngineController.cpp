@@ -1656,7 +1656,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                        gd.nrBeforeSr!=nextDesc.nrBeforeSr||
                        gd.workWidth!=nextDesc.workWidth||gd.workHeight!=nextDesc.workHeight||
                        gd.nrWidth!=nextDesc.nrWidth||gd.nrHeight!=nextDesc.nrHeight||
-                       gd.flowWidth!=nextDesc.flowWidth||gd.flowHeight!=nextDesc.flowHeight)rebuild=true;
+                       gd.flowWidth!=nextDesc.flowWidth||gd.flowHeight!=nextDesc.flowHeight||
+                       gd.dualSr!=nextDesc.dualSr||gd.dualSrQuality!=nextDesc.dualSrQuality||gd.firstSrWidth!=nextDesc.firstSrWidth||gd.firstSrHeight!=nextDesc.firstSrHeight||
+                       gd.srInputWidth!=nextDesc.srInputWidth||gd.srInputHeight!=nextDesc.srInputHeight||
+                       gd.srOutputWidth!=nextDesc.srOutputWidth||gd.srOutputHeight!=nextDesc.srOutputHeight)rebuild=true;
                     bool accepted=ring.drainQueue();out={};hasOutput=false;
                     resetRecord->rebuilt=rebuild;
                     markResetStage(diagnostics::ResetStage::Drain);
@@ -2771,7 +2774,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 
 
                 for(size_t stage=0;stage<measured.gpu.size();++stage){const auto& sample=measured.gpu[stage];if(sample.state==diagnostics::SampleState::Measured&&sample.milliseconds&&sample.end&&sample.end!=lastGpuSampleEnd[stage]){gpuStageTimes[stage].add(*sample.milliseconds);lastGpuSampleEnd[stage]=sample.end;}}
-                measured.resolution=pipeline::ResolutionPlan::make({width,height},options.sr,options.snapshot().nrPolicy,isImage,options.settings.revision,options.settings.srTarget,options.settings.lowLatency&&options.nr);measured.decodeCpuMs=decodeMs;measured.submitCpuMs=std::chrono::duration<double,std::milli>(processDone-processStart).count();measured.gpuWaitCpuMs=gpuWaitMs;measured.deadlineWaitCpuMs=frameWaitMs;measured.presentCpuMs=framePresentMs;measured.queueWatermark=out.batch.count;
+                measured.resolution=pipeline::ResolutionPlan::make({width,height},options.sr,options.snapshot().nrPolicy,isImage,options.settings.revision,options.settings.srTarget,options.settings.lowLatency&&options.nr,0,runningSrPrescale(options.settings,ctx.adapter().isNvidia),runningSrOutput(options.settings,ctx.adapter().isNvidia),options.settings.dualSrEnabled&&ctx.adapter().isNvidia&&srStageBackend(options.settings.videoSrQuality),options.settings.dualSrTarget);measured.decodeCpuMs=decodeMs;measured.submitCpuMs=std::chrono::duration<double,std::milli>(processDone-processStart).count();measured.gpuWaitCpuMs=gpuWaitMs;measured.deadlineWaitCpuMs=frameWaitMs;measured.presentCpuMs=framePresentMs;measured.queueWatermark=out.batch.count;
                 LiveStats completed;if(liveScheduler)completed=liveStats;
                 uint64_t skipped=0;{std::lock_guard lock(mutex_);skipped=snapshot_.captureRateSkipped-rateSkippedBase;}
                 frameFlow->update([&](auto& m){m.counters.captureReceived=captureStats.received-captureFlowBase.received;m.counters.mailboxOverwritten=captureStats.dropped-captureFlowBase.dropped;m.counters.sourceSkippedBeforeGraph=skipped;m.slotReuseWaitCount=slotWaitCount;m.slotReuseWaitMs=slotWaitMilliseconds;m.counters.commandSlotsInFlight=slotsInFlight;m.counters.commandSlotHighWater=std::max(m.counters.commandSlotHighWater,slotsInFlight);});

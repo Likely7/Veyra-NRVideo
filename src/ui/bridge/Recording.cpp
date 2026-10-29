@@ -88,8 +88,8 @@ void QmlPlayerBridge::startExport() {
     if(!impl_->exportQueue.queue().start(wideOf(folder),*settings,impl_->exportHevc,impl_->exportRateControl,reason)){
         emit notice(uiText(reason),true);emit exportChanged();return;
     }
-    veyra::log::info("qml-export",std::format("export frozen bitrateMbps={} rateControl={} hevc={} srTarget={}",
-        settings->exportBitrateMbps,int(impl_->exportRateControl),impl_->exportHevc,int(settings->srTarget)));
+    veyra::log::info("qml-export",std::format("export frozen bitrateMbps={} rateControl={} hevc={} srTarget={} srPrescale={} srOutput={}",
+        settings->exportBitrateMbps,int(impl_->exportRateControl),impl_->exportHevc,int(settings->srTarget),uint32_t(settings->srPrescale),uint32_t(settings->srOutput)));
     impl_->exportQueue.refresh();pollExport();emit navigate(QStringLiteral("exp"));
     // Leave the GPU to the export (field request 2026-10-02): whatever plays is closed,
     // unless 导出页 → 导出时关闭正在播放的内容 is off.

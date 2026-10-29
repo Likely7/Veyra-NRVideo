@@ -31,7 +31,10 @@ struct Shared {
     // process boundary; a worker that sees another version refuses the job
     // instead of reading a mismatched layout.
     // 10: 32-node chain with anti-aliasing; 11: beauty payloads and face detection.
-    static constexpr DWORD kVersion=11;
+    // 12: SR prescale/output fields change the shared settings layout.
+    // 13: independent second SR parameters. 14: srOutput (the supersample
+    // shrink) is honoured again; a version 13 worker would silently ignore it.
+    static constexpr DWORD kVersion=14;
     DWORD signature=magic,version=kVersion,bytes=sizeof(Shared);
     EnhancementSettings settings;
     EffectChain chain;

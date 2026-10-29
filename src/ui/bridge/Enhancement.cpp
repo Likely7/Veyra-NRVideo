@@ -39,6 +39,47 @@ void QmlPlayerBridge::setDlssSrModel(int value) {
     s.dlssSrModel = unsigned(value);
     if (impl_->commit(s)) emit settingsChanged();
 }
+int QmlPlayerBridge::srPrescale() const { return int(settings().srPrescale); }
+bool QmlPlayerBridge::dualSrEnabled() const { return settings().dualSrEnabled; }
+void QmlPlayerBridge::setDualSrEnabled(bool enabled){
+    auto s=settings();if(s.dualSrEnabled==enabled)return;
+    if(enabled&&!engine::srStageBackend(s.videoSrQuality))return;
+    s.dualSrEnabled=enabled;
+    // A kept supersample shrink is inactive under double SR and returns when it is off.
+    if(enabled&&s.srPrescale==pipeline::SrPrescale::Off)s.srPrescale=pipeline::SrPrescale::P1080;
+    if(impl_->commit(s))emit settingsChanged();
+}
+int QmlPlayerBridge::dualSrTargetIndex() const {
+    switch(settings().dualSrTarget){case pipeline::SrTarget::Qhd:return 1;case pipeline::SrTarget::Uhd4K:return 2;case pipeline::SrTarget::Uhd8K:return 3;case pipeline::SrTarget::Uhd5K:return 4;case pipeline::SrTarget::Uhd6K:return 5;case pipeline::SrTarget::Uhd7K:return 6;}return 2;
+}
+void QmlPlayerBridge::setDualSrTargetIndex(int index){
+    if(index<1||index>6)return;
+    const pipeline::SrTarget targets[]={pipeline::SrTarget::Qhd,pipeline::SrTarget::Uhd4K,pipeline::SrTarget::Uhd8K,pipeline::SrTarget::Uhd5K,pipeline::SrTarget::Uhd6K,pipeline::SrTarget::Uhd7K};
+    auto s=settings();s.dualSrTarget=targets[index-1];if(impl_->commit(s))emit settingsChanged();
+}
+int QmlPlayerBridge::dualSrQuality() const {return int(settings().dualSrQuality);}
+void QmlPlayerBridge::setDualSrQuality(int quality){if(quality<1||quality>4)return;auto s=settings();s.dualSrQuality=uint32_t(quality);if(impl_->commit(s))emit settingsChanged();}
+int QmlPlayerBridge::srOutput() const { return int(settings().srOutput); }
+// Double SR and the supersample shrink run on RTX Video SR only; other backends
+// keep the single step.
+void QmlPlayerBridge::setSrPrescale(int value) {
+    const auto want = pipeline::SrPrescale(uint32_t(value));
+    if (value < 0 || !pipeline::validSrPrescale(want)) return;
+    auto s = settings();
+    if (s.srPrescale == want) return;
+    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("双重超分目前仅 RTX 视频超分支持"), true); return; }
+    s.srPrescale = want;
+    if (impl_->commit(s)) emit settingsChanged();
+}
+void QmlPlayerBridge::setSrOutput(int value) {
+    const auto want = pipeline::SrOutput(uint32_t(value));
+    if (value < 0 || !pipeline::validSrOutput(want)) return;
+    auto s = settings();
+    if (s.srOutput == want) return;
+    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("超分后缩回目前仅 RTX 视频超分支持"), true); return; }
+    s.srOutput = want;
+    if (impl_->commit(s)) emit settingsChanged();
+}
 void QmlPlayerBridge::setVideoSrQuality(int value) {
     if (value < 0 || value > 5) return;
     const auto cap = effectCapabilities().value("sr" + QString::number(value)).toMap();

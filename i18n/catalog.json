@@ -1961,11 +1961,11 @@
    "ja": "RTX ビデオ超解像"
   },
   {
-   "zh": "RTX 视频超分档位",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "RTX 影片超解析檔位",
-   "en": "RTX Video Super Resolution level",
-   "ja": "RTX ビデオ超解像のレベル"
+   "zh": "RTX 视频超分，独立于基础超分质量",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "RTX 視訊超分，獨立於基礎超分品質",
+   "en": "RTX Video SR, independent of the base SR quality",
+   "ja": "RTX Video SR。基本超解像とは独立した品質設定"
   },
   {
    "zh": "RX 9000 · lmxxf（实验）",
@@ -2745,6 +2745,13 @@
    "ja": "待たない"
   },
   {
+   "zh": "不缩回",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "不縮回",
+   "en": "No shrink",
+   "ja": "縮小しない"
+  },
+  {
    "zh": "不补偿",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "不補償",
@@ -3240,6 +3247,13 @@
    "zh-TW": "主機長時間沒有準備好串流。請確認主機開著並且網路正常。",
    "en": "The host was not ready to stream for a long time. Make sure it is on and the network works.",
    "ja": "ホストが長時間ストリーミングの準備ができていません。電源とネットワークを確認してください。"
+  },
+  {
+   "zh": "二次处理比例",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "二次處理比例",
+   "en": "Second-pass scale",
+   "ja": "2回目の処理倍率"
   },
   {
    "zh": "交流群",
@@ -3767,6 +3781,13 @@
    "ja": "ティアリングを許可"
   },
   {
+   "zh": "先完成基础超分，再将结果降低分辨率并执行第二次超分；两次执行独立，会增加耗时和显存。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "先完成基礎超分，再將結果降低解析度並執行第二次超分；兩次執行獨立，會增加耗時和顯存。",
+   "en": "Finish base SR, reduce its result, then run SR again. The two evaluations increase GPU time and memory.",
+   "ja": "基本超解像の結果を縮小し、2回目の超解像を実行します。GPU時間とメモリ使用量が増加します。"
+  },
+  {
    "zh": "先整理文件，再按顺序导出",
    "src": "qml/ExportPage.qml",
    "zh-TW": "先整理檔案，再按順序匯出",
@@ -4193,6 +4214,13 @@
    "zh-TW": "再串流時建議打開：Veyra 不在前景也繼續轉發。打開後在這台電腦上用別的程式時，手把也會操作 PS5",
    "en": "Recommended when re-streaming: input keeps going while Veyra is not in front. While on, the controller also drives the PS5 when you use other programs on this PC",
    "ja": "再ストリーミングするときはオン推奨：Veyra が前面になくても転送を続けます。オンの間は、この PC で他のソフトを使っていてもコントローラーが PS5 を操作します"
+  },
+  {
+   "zh": "再次降低到",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "再次降低到",
+   "en": "Reduce the first result to",
+   "ja": "基本結果を縮小"
   },
   {
    "zh": "写入封装文件头",
@@ -5007,6 +5035,34 @@
    "ja": "2 行表示は自動縮小しません。その他のスタイルは字幕設定で"
   },
   {
+   "zh": "双重超分",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "雙重超分",
+   "en": "Double super resolution",
+   "ja": "2段階超解像"
+  },
+  {
+   "zh": "双重超分开启时不使用；关闭双重超分后恢复。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "雙重超解析開啟時不使用；關閉雙重超解析後恢復。",
+   "en": "Not used while double SR is on; it returns when double SR is turned off.",
+   "ja": "2段階超解像がオンの間は使用されません。オフにすると戻ります。"
+  },
+  {
+   "zh": "双重超分目前仅 RTX 视频超分支持",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "雙重超解析目前僅 RTX 影片超解析支援",
+   "en": "Double SR is currently supported by RTX Video SR only",
+   "ja": "2段階超解像は現在RTX Video SRのみ対応しています"
+  },
+  {
+   "zh": "双重超分目前使用 RTX 视频超分",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "雙重超分目前使用 RTX 視訊超分",
+   "en": "Double SR currently uses RTX Video SR",
+   "ja": "2段階超解像は現在RTX Video SRを使用します"
+  },
+  {
    "zh": "反馈问题",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "反饋問題",
@@ -5796,6 +5852,13 @@
    "zh-TW": "基礎設定",
    "en": "Basic controls",
    "ja": "基本設定"
+  },
+  {
+   "zh": "基础超分的尺寸；设置缩回时为中间尺寸。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "基礎超解析的尺寸；設定縮回時為中間尺寸。",
+   "en": "Base SR size; with a shrink set, this is the intermediate size.",
+   "ja": "基本超解像のサイズです。縮小先を設定すると中間サイズになります。"
   },
   {
    "zh": "填充裁切",
@@ -9460,13 +9523,6 @@
    "ja": "名前の変更に失敗しました：空、48 文字超、または既存のプリセットと同じ名前にはできません"
   },
   {
-   "zh": "放大时重建细节；原尺寸时修复视频文件和串流的压缩伪影，无压缩的采集卡格式在原尺寸不运行。效果取决于片源。",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "放大時重建細節；原尺寸時修復影片檔案和串流的壓縮瑕疵，無壓縮的擷取卡格式在原尺寸不執行。效果取決於片源。",
-   "en": "Reconstructs detail when upscaling; at native size it reduces compression artifacts in video files and streams, and does not run for uncompressed capture-card formats. Results depend on the source.",
-   "ja": "拡大時は細部を再構成し、元の解像度では動画ファイルとストリームの圧縮ノイズを軽減します。非圧縮のキャプチャーカード形式では元の解像度で実行しません。効果はソースにより異なります。"
-  },
-  {
    "zh": "效果",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "效果",
@@ -12358,6 +12414,13 @@
    "ja": "ソース"
   },
   {
+   "zh": "片源尺寸",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "片源尺寸",
+   "en": "Source size",
+   "ja": "ソースのサイズ"
+  },
+  {
    "zh": "片源最亮 %1 nit，曲线硬上限 %2 nit：%3",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "片源最亮 %1 nit，曲線硬上限 %2 nit：%3",
@@ -12814,7 +12877,7 @@
   },
   {
    "zh": "目标尺寸",
-   "src": "qml/NodePage.qml",
+   "src": "qml/SrStageEditor.qml",
    "zh-TW": "目標尺寸",
    "en": "Target size",
    "ja": "目標サイズ"
@@ -12853,13 +12916,6 @@
    "zh-TW": "目標行數",
    "en": "Target lines",
    "ja": "目標の行数"
-  },
-  {
-   "zh": "目标须大于片源尺寸；已达到目标时不执行超分。",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "目標須大於片源尺寸；已達到目標時不執行超解析度。",
-   "en": "The target must exceed the source size. Upscaling is skipped when the source already meets the target.",
-   "ja": "入力より大きい目標解像度が必要です。入力が目標以上の場合は超解像処理を行いません。"
   },
   {
    "zh": "直接打开 HTTP、HTTPS 或 RTSP 视频流，例如 IPTV 或摄像机地址",
@@ -13105,6 +13161,27 @@
    "zh-TW": "端點已開啟",
    "en": "Endpoint open",
    "ja": "エンドポイントを開きました"
+  },
+  {
+   "zh": "第二次超分到",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "第二次超分到",
+   "en": "Second SR target",
+   "ja": "2回目の超解像目標"
+  },
+  {
+   "zh": "第二次超分未执行：再次降低后的尺寸须小于基础超分结果及第二次目标。",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "第二次超分未執行：再次降低後的尺寸須小於基礎超分結果及第二次目標。",
+   "en": "Second SR was not applied: its reduced input must be smaller than the base result and the second target.",
+   "ja": "2回目の超解像は未実行です。縮小後の入力は、基本結果と2回目の目標より小さくする必要があります。"
+  },
+  {
+   "zh": "第二次超分质量",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "第二次超分品質",
+   "en": "Second SR quality",
+   "ja": "2回目の超解像品質"
   },
   {
    "zh": "等待 PS5 登录 PIN 超时，请重新连接。",
@@ -15557,6 +15634,34 @@
    "ja": "超解像 4K · NR 1 層 · フレーム生成 2X"
   },
   {
+   "zh": "超分后缩回到",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "超解析後縮回到",
+   "en": "Shrink after SR to",
+   "ja": "超解像後の縮小先"
+  },
+  {
+   "zh": "超分后缩回未生效：超分须先放大画面，且缩回尺寸要小于超分结果。",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "超解析後縮回未生效：超解析須先放大畫面，且縮回尺寸要小於超解析結果。",
+   "en": "Shrink after SR was not applied: SR must enlarge the picture, and the shrink size must be smaller than the SR result.",
+   "ja": "超解像後の縮小は未適用です。超解像で拡大し、縮小先は超解像の結果より小さくする必要があります。"
+  },
+  {
+   "zh": "超分后缩回目前仅 RTX 视频超分支持",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "超解析後縮回目前僅 RTX 影片超解析支援",
+   "en": "Shrink after SR is currently supported by RTX Video SR only",
+   "ja": "超解像後の縮小は現在RTX Video SRのみ対応しています"
+  },
+  {
+   "zh": "超分后缩回目前使用 RTX 视频超分",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "超解析後縮回目前使用 RTX 影片超解析",
+   "en": "Shrink after SR currently uses RTX Video SR",
+   "ja": "超解像後の縮小は現在RTX Video SRを使用します"
+  },
+  {
    "zh": "超分算法",
    "src": "qml/NodePage.qml",
    "zh-TW": "超解析演算法",
@@ -15572,7 +15677,7 @@
   },
   {
    "zh": "超分运动来源",
-   "src": "qml/NodePage.qml",
+   "src": "qml/SrStageEditor.qml",
    "zh-TW": "超解析運動來源",
    "en": "Super resolution motion source",
    "ja": "超解像のモーション入力"
@@ -15583,6 +15688,13 @@
    "zh-TW": "超過上限的亮度需要壓縮；是否觸及硬上限以抽樣讀數為準",
    "en": "Brightness beyond the cap needs compression; use the sample reading to check hard clipping",
    "ja": "上限を超える輝度は圧縮が必要です。実際のクリップはサンプル値で確認してください。"
+  },
+  {
+   "zh": "超采样：先超到目标尺寸再精确缩回，更自然、略软；显存更高，降噪和补帧按缩回后尺寸运行。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "超取樣：先超到目標尺寸再精確縮回，更自然、略軟；顯示記憶體更高，降噪和補幀按縮回後尺寸執行。",
+   "en": "Supersampling: SR to the target, then an exact shrink. More natural, slightly softer; more video memory. NR and frame generation run at the shrunk size.",
+   "ja": "スーパーサンプリング：目標サイズまで超解像して正確に縮小します。より自然で少し柔らかく、ビデオメモリ使用量が増えます。ノイズ除去とフレーム生成は縮小後のサイズで実行します。"
   },
   {
    "zh": "越小越敏感，越大稳得越多",
@@ -17244,6 +17356,13 @@
    "ja": "ジャイロ"
   },
   {
+   "zh": "降低的是基础超分后的画面，不是原始输入；选项必须小于基础结果和第二次超分目标。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "降低的是基礎超分後的畫面，不是原始輸入；選項必須小於基礎結果和第二次超分目標。",
+   "en": "This reduces the base SR result, not the original input. Select a size below both the base result and the second SR target.",
+   "ja": "基本超解像の結果を縮小します。元の入力ではありません。基本結果と2回目の目標の両方より小さいサイズを選択してください。"
+  },
+  {
    "zh": "隐藏播放条",
    "src": "qml/TopDock.qml",
    "zh-TW": "隱藏播放條",
@@ -17287,7 +17406,7 @@
   },
   {
    "zh": "零运动会限制时序重建；RTX 视频超分不使用此输入",
-   "src": "qml/NodePage.qml",
+   "src": "qml/SrStageEditor.qml",
    "zh-TW": "零運動會限制時序重建；RTX 影片超解析不使用此輸入",
    "en": "Zero motion limits temporal reconstruction; RTX Video Super Resolution does not use this input",
    "ja": "ゼロモーションは時間方向の再構成を制限します。RTX ビデオ超解像はこの入力を使いません"
