@@ -22,6 +22,11 @@ struct DolbyVisionInfo {
         // HDR10 (RPU/enhancement layer is not applied, no native DV output).
         if(profile==5)return DolbyBaseLayer::Hdr10;
         if(profile!=8&&profile!=10)return DolbyBaseLayer::Unsupported;
+        // Profile 10 with compatibility id 0 means "Dolby Vision proprietary": no
+        // cross-compatibility is advertised, but Dolby's bitstream table gives its
+        // base layer the VUI 1/9/16/15/1, i.e. PQ / BT.2020. Both of Dolby's own
+        // profile 10 test signals carry it, so refusing it rejected a valid stream.
+        if(profile==10&&compatibility==0)return DolbyBaseLayer::Hdr10;
         switch(compatibility){
         case 1:return DolbyBaseLayer::Hdr10;
         case 2:return DolbyBaseLayer::Sdr;
