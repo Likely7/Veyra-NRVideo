@@ -130,6 +130,9 @@ struct PlayerSnapshot {
     // True when the source declares a Dolby Vision enhancement layer, which is
     // what drives the "auto" composite switch in the UI.
     bool sourceDoviEnhancement=false;
+    // True when the source carries HDR10+ (SMPTE ST 2094-40) scene metadata. The
+    // follow switch serves this too, so the UI has to know the format to name it.
+    bool sourceHdr10Plus=false;
     unsigned sourceMaxCllNits=0;
     unsigned sourceMaxFallNits=0;
     // Custom: the live coverage the presenter measured with its 64x36 probe (see

@@ -764,7 +764,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
       const auto& dvinfo=activeSource->info().dolbyVision;
       snapshot_.sourceDoviProfile=dvinfo.present?dvinfo.profile:0;
       snapshot_.sourceDoviRpu=dvinfo.present&&dvinfo.rpuDeclared;
-      snapshot_.sourceDoviEnhancement=dvinfo.present&&dvinfo.enhancementLayer;}
+      snapshot_.sourceDoviEnhancement=dvinfo.present&&dvinfo.enhancementLayer;
+      snapshot_.sourceHdr10Plus=activeSource->info().hdr10Plus.present;}
             gd.highQualityPresentation=isRemote&&activeSource->info().color.reconstructChroma;
             gd.rgbInput=isImage||isScreen||(isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Bgra8);
             auto ingressBitDepth=[](pipeline::SourcePixelFormat format){return format==pipeline::SourcePixelFormat::P010||format==pipeline::SourcePixelFormat::V210||format==pipeline::SourcePixelFormat::Rgb10xLE?10u:format==pipeline::SourcePixelFormat::P016?16u:8u;};

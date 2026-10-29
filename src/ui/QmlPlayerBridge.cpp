@@ -6143,7 +6143,8 @@ QVariantMap QmlPlayerBridge::hdrSourceInfo() const {
             {"doviProfile",int(snap.sourceDoviProfile)},
             {"doviRpu",snap.sourceDoviRpu},
             {"doviMaxNits",int(snap.sourceDoviMaxNits)},
-          {"doviEnhancement",snap.sourceDoviEnhancement}};
+          {"doviEnhancement",snap.sourceDoviEnhancement},
+            {"hdr10Plus",snap.sourceHdr10Plus}};
 }
 
 bool QmlPlayerBridge::sourceIsSdr() const {

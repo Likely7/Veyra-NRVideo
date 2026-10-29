@@ -2909,10 +2909,14 @@ VPage {
                             Layout.topMargin: 12
                             glyph: "sun"
                             hue: "#A88BF0"
-                            title: qsTr("杜比视界设置")
+                            title: qsTr("杜比视界 / HDR10+ 设置")
                             summary: {
                                 const d = veyra.hdrSourceInfo;
-                                if(!d || !d.doviProfile) return qsTr("未检测到杜比视界片源");
+                                // The follow switch below serves HDR10+ as well, so a
+                                // Dolby-only summary said "no Dolby Vision source" on a
+                                // stream that does have dynamic metadata.
+                                if(d && d.hdr10Plus) return qsTr("HDR10+ 片源（逐帧跟随可用）");
+                                if(!d || !d.doviProfile) return qsTr("未检测到动态元数据片源");
                                 const kind = d.doviProfile === 5 ? qsTr("单层")
                                     : d.doviProfile === 7 ? qsTr("双层")
                                     : d.doviProfile === 8 ? qsTr("兼容层") : qsTr("其他");
@@ -2972,7 +2976,7 @@ VPage {
                                 opacity: enabled ? 1 : 0.5
                                 label: qsTr("跟随动态元数据")
                                 hint: veyra.hdrCurve
-                                    ? qsTr("只按每帧亮度压低高光，暗部和中间调保持你设定的样子")
+                                    ? qsTr("杜比视界（L1）和 HDR10+ 的逐场景元数据都走这里：只按每帧亮度压低高光，暗部和中间调保持你设定的样子")
                                     : qsTr("需要先打开上面的 HDR 曲线，否则没有可移动的滚降")
                                 value: veyra.doviFollow ? qsTr("已开启") : qsTr("已关闭")
                                 VSwitch {
