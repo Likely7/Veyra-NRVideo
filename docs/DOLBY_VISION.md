@@ -490,6 +490,23 @@ Profile 9（AVC 8-bit）。但实践中确实存在 `profile=8 compatibility=2` 
 （Jellyfin 也接受 1/2/4），所以「P8.2」是实践叫法。按 CCID 判断两种情况都能
 正确处理。
 
+**验证路由的伪造办法**（手头没有 P8.2 片源时）：把任意 DV 文件的 `dvcC` 里
+`DOVIDecoderConfigurationRecord` 改成 `profile=8, el=0, bl=1, compatibility=2`，
+Veyra 就会进 SDR 分支。判定只看两行日志：
+
+```
+[source-dovi] profile=8 ... compatibility=2 ... route=3     ← 3 = DolbyBaseLayer::Sdr
+（并且没有 "base layer pinned to" 那一行：SDR 基底不钉 HDR 标签）
+```
+
+画面会错，因为伪造文件的基底其实是 PQ，被按 BT.709 解释。所以这只能验证路由与
+色彩钉选，**不能**验证 P8.2 真正的价值——它的 RPU 会把 SDR 基底**提升**成 HDR。
+
+**这部分没有实现。** P8.2 目前的定位是"兼容播放"：按非 DV 设备的方式显示 SDR
+基底，不应用 RPU。和 P8.1 是同一类取舍，只是损失更大（P8.1 的基底本身接近 DV
+效果，P8.2 的基底只有 SDR）。要做提升需要一套 SDR→HDR 的 reshaping，规模和 P7
+的三通道重建相当，且同样没有片源可验。
+
 #### L2 / L8 trim 元数据：数据在，但没人做，也不该猜（2026-10-29）
 
 调研过一次，结论是不做。记在这里，避免以后再查一遍。
