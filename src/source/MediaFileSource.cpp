@@ -1442,8 +1442,10 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
                 if (!info.present) {
                     info.present = true;
                     log::info("source-hdr", std::format(
-                        "HDR10+ scene metadata peak={:.1f} nits avg={:.1f} nits (drives the HDR curve while the follow switch is on)",
-                        peakNits, avgNits));
+                        "HDR10+ scene metadata peak={:.1f} nits avg={:.1f} nits (maxscl raw {}/{}/{} avg raw {}/{}; drives the HDR curve while the follow switch is on)",
+                        peakNits, avgNits,
+                        win.maxscl[0].num, win.maxscl[1].num, win.maxscl[2].num,
+                        win.average_maxrgb.num, win.average_maxrgb.den));
                 }
             }
         }
