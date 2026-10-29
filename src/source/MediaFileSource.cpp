@@ -1254,8 +1254,12 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
             // between an evaluable curve and a multi-piece one composites some frames
             // and not others, which is visible as flicker; the ratio says whether
             // supporting the rest is worth the work rather than a guess.
-            if (curveOk) ++p7CurveSupportedFrames_; else ++p7CurveRefusedFrames_;
-            {
+            // Only profile 7 has a reconstruction curve, so only profile 7 can be
+            // "refused": without this guard a profile 8.4 stream reported
+            // "refused=300 (100.0% base-layer-only)", which reads as a defect when it
+            // simply has no enhancement layer to evaluate.
+            if (info_.dolbyVision.profile == 7) {
+                if (curveOk) ++p7CurveSupportedFrames_; else ++p7CurveRefusedFrames_;
                 const uint64_t total = p7CurveSupportedFrames_ + p7CurveRefusedFrames_;
                 if (total % 300 == 0) {
                     log::info("source-dovi-el", std::format(
