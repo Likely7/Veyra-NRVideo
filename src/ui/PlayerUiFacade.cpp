@@ -46,6 +46,8 @@ bool sameNetwork(const veyra::media::NetworkStats& a, const veyra::media::Networ
 // makes the UI repaint.
 bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::PlayerSnapshot& b) {
     return sameNetwork(a.network, b.network) &&
+        a.presentationStatus==b.presentationStatus&&a.presentationEffective==b.presentationEffective&&
+        a.presentationRevision==b.presentationRevision&&a.presentationProviderOwned==b.presentationProviderOwned&&
         a.transport == b.transport && a.sessionId == b.sessionId && a.position == b.position &&
         a.duration == b.duration && a.frames == b.frames && a.generated == b.generated &&
         a.status == b.status && a.savedFramePath == b.savedFramePath && a.backendWarning == b.backendWarning && a.sourceNotice == b.sourceNotice &&

@@ -287,6 +287,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         pr.hdrFgCompatibility = impl_->prefBool("hdrFgCompatibility", false);
         if (!saved.isEmpty()) {
             pr.enabled = saved.value(QStringLiteral("lowQueue")).toBool();
+            pr.nvidiaLowLatency=engine::savedNvidiaLowLatency(saved.value(QStringLiteral("nvidiaLowLatency"),pr.enabled&&primaryGpuVendor()==0x10de?1:0).toInt());
+            if(pr.nvidiaLowLatency!=engine::NvidiaLowLatency::Off)pr.enabled=true;
             pr.display = static_cast<engine::DisplaySync>(std::clamp(saved.value(QStringLiteral("display")).toInt(), 0, 2));
             pr.outputRate = static_cast<engine::OutputRateMode>(std::clamp(saved.value(QStringLiteral("outputRate")).toInt(), 0, 2));
             pr.customFps = std::clamp(saved.value(QStringLiteral("customFps"), 60.0).toDouble(), 1.0, 1000.0);

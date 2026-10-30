@@ -733,12 +733,17 @@ Source: https://github.com/NVIDIA/nvapi/tree/87dca625e83fd89a983e19b904e5f3a580d
 (`nvapi.h`, `nvapi_interface.h`, `nvapi_lite_common.h`), MIT.
 `include/veyra/gfx/ReflexSession.h` contains minimal renamed ABI declarations for
 SetSleepMode v1 and SetLatencyMarker v1, and QueryInterface IDs for initialization,
-unloading, sleep and markers. Adaptations: independent RAII device lifetime,
+sleep and markers. Adaptations: independent RAII device lifetime,
 absolute system-driver loading, return-code logging, successful call counts and
 explicit disable. No complete SDK header or NVIDIA runtime is committed or bundled.
 The driver is supplied by Windows/NVIDIA. Frame markers delimit Veyra enhancement
 and presentation, not game input or physical display latency. Generated-frame
-Reflex integration is not enabled; DLSS retains its selected multiplier.
+Reflex integration was initially disabled with generated frames. The 2026-10-28
+extension adds Boost, out-of-band marker types and the public
+NotifyOutOfBandCommandQueue ID from the same fixed NVAPI source. Source-frame Sleep/markers and out-of-band presentation are separated;
+generated frames never create another simulation or Sleep. XeSS keeps its own
+presentation owner. NVIDIA Streamline's public `sl.chi/d3d12.cpp` is an API-use
+reference only; Streamline is not linked, loaded or bundled.
 
 `include/veyra/gfx/NvidiaVrr.h` (2026-10-14) adds, from the same interface
 files, the QueryInterface IDs of NvAPI_DISP_GetDisplayIdByDisplayName,

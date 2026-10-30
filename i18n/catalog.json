@@ -113,13 +113,6 @@
    "ja": "  ·  デコード "
   },
   {
-   "zh": " + NVIDIA Reflex（实验）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": " + NVIDIA Reflex（實驗）",
-   "en": " + NVIDIA Reflex (experimental)",
-   "ja": " + NVIDIA Reflex（実験的）"
-  },
-  {
    "zh": " / 4 个区域",
    "src": "qml/SavePresetDialog.qml",
    "zh-TW": " / 4 個區域",
@@ -1975,27 +1968,6 @@
    "ja": "RX 9000 · lmxxf（実験）"
   },
   {
-   "zh": "Reflex 调用及驱动撤销失败；请关闭视频后重试",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "Reflex 調用及驅動撤銷失敗；請關閉影片後重試",
-   "en": "Reflex call and driver rollback failed; close the video and try again",
-   "ja": "Reflex の呼び出しとドライバー設定の取り消しに失敗しました。動画を閉じて再試行してください"
-  },
-  {
-   "zh": "Reflex 调用失败，当前使用低排队；详见日志",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "Reflex 調用失敗，當前使用低排隊；詳見日誌",
-   "en": "Reflex call failed; using the low queue instead. See the log",
-   "ja": "Reflex の呼び出しに失敗したため、低キューを使用中です。ログを確認してください"
-  },
-  {
-   "zh": "Reflex 驱动状态撤销失败；低延迟队列已停用 · ",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "Reflex 驅動狀態撤銷失敗；低延遲佇列已停用 · ",
-   "en": "Reflex driver state could not be rolled back; low-latency queue disabled · ",
-   "ja": "Reflex のドライバー状態を取り消せませんでした。低遅延キューを無効にしました · "
-  },
-  {
    "zh": "SDK 提交",
    "src": "src/ui/bridge/Playback.cpp",
    "zh-TW": "SDK 提交",
@@ -2360,11 +2332,11 @@
    "ja": "XeSS はエンコード可能な補間テクスチャを公開していません。書き出しには FSR、DLSS または VFG を選択してください。"
   },
   {
-   "zh": "XeSS 提供方自行调度：低延迟队列与输出上限不生效 · ",
+   "zh": "XeSS 提供方自行调度：英伟达低延迟与输出上限不生效，选择已保留 · ",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "XeSS 提供方自行調度：低延遲佇列與輸出上限不生效 · ",
-   "en": "The XeSS provider schedules itself: low-latency queue and output cap do not apply · ",
-   "ja": "XeSS は独自にスケジュールします：低遅延キューと出力上限は効きません · "
+   "zh-TW": "XeSS 提供方自行調度：NVIDIA 低延遲與輸出上限不生效，選擇已保留 · ",
+   "en": "XeSS owns scheduling: NVIDIA Low Latency and output cap are inactive; selections retained · ",
+   "ja": "XeSS がスケジュールを管理：NVIDIA 低遅延と出力制限は無効です。選択は保持されます · "
   },
   {
    "zh": "XeSS 未启用：运行时或设备不兼容；当前为普通呈现",
@@ -3515,11 +3487,11 @@
    "ja": "低遅延キュー · 現在無効"
   },
   {
-   "zh": "低延迟队列：只保留一帧在处理",
+   "zh": "低延迟队列：已开启",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "低延遲佇列：只保留一幀在處理",
-   "en": "Low-latency queue: one frame in flight",
-   "ja": "低遅延キュー：処理中は 1 フレームのみ"
+   "zh-TW": "低延遲佇列：已開啟",
+   "en": "Low queue latency: on",
+   "ja": "低遅延キュー：オン"
   },
   {
    "zh": "低延迟顺序，仅预览、全层同步",
@@ -3964,7 +3936,7 @@
   },
   {
    "zh": "关",
-   "src": "qml/ProDisplayPanel.qml",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
    "zh-TW": "關",
    "en": "Off",
    "ja": "オフ"
@@ -4270,6 +4242,20 @@
    "zh-TW": "減少動畫",
    "en": "Reduce motion",
    "ja": "アニメーションを減らす"
+  },
+  {
+   "zh": "减少处理排队",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "減少處理排隊",
+   "en": "Reduce processing queue depth",
+   "ja": "処理の待ち行列を減らす"
+  },
+  {
+   "zh": "减少处理排队；增强档提高 GPU 频率，可能增加功耗。",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "減少處理排隊；增強模式提高 GPU 時脈，可能增加功耗。",
+   "en": "Reduce processing queue depth. Boost requests higher GPU clocks and may increase power use.",
+   "ja": "処理の待ち行列を減らします。ブーストは GPU クロックを上げ、消費電力が増える場合があります。"
   },
   {
    "zh": "减少暗部被进一步压黑，保留提亮细节",
@@ -5159,20 +5145,6 @@
    "zh-TW": "另存為",
    "en": "Save as",
    "ja": "名前を付けて保存"
-  },
-  {
-   "zh": "只保留一帧在处理，未补帧时加 NVIDIA Reflex；垂直同步本身已不排队",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "只保留一幀在處理，未補幀時加 NVIDIA Reflex；垂直同步本身已不排隊",
-   "en": "Keeps one frame in flight and adds NVIDIA Reflex without frame generation; VSync itself no longer queues",
-   "ja": "処理中のフレームを 1 枚に保ち、フレーム生成なしでは NVIDIA Reflex を追加；垂直同期自体はもうキューを溜めない"
-  },
-  {
-   "zh": "只保留一帧在处理，未补帧时加 Reflex",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "只保留一幀在處理，未補幀時加 Reflex",
-   "en": "One frame in flight; adds Reflex without frame generation",
-   "ja": "処理中は 1 フレームのみ、フレーム生成なしでは Reflex を追加"
   },
   {
    "zh": "只列出当前分辨率和帧率下的像素格式",
@@ -7906,7 +7878,7 @@
   },
   {
    "zh": "开",
-   "src": "qml/ProPage.qml",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
    "zh-TW": "開",
    "en": "On",
    "ja": "オン"
@@ -8022,6 +7994,13 @@
    "zh-TW": "開機",
    "en": "Power on",
    "ja": "電源オン"
+  },
+  {
+   "zh": "开＋增强",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "開＋增強",
+   "en": "On + Boost",
+   "ja": "オン＋ブースト"
   },
   {
    "zh": "引擎异常，请查看诊断",
@@ -8946,6 +8925,13 @@
    "zh-TW": "開啟影片後顯示可用字幕",
    "en": "Available subtitles appear once a video is open",
    "ja": "動画を開くと使える字幕が表示されます"
+  },
+  {
+   "zh": "打开视频后生效",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "開啟影片後生效",
+   "en": "Applies when a video is opened",
+   "ja": "動画を開くと適用されます"
   },
   {
    "zh": "打开视频或图片",
@@ -14465,6 +14451,69 @@
    "ja": "ノードのプリセット："
   },
   {
+   "zh": "英伟达低延迟",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "NVIDIA 低延遲",
+   "en": "NVIDIA Low Latency",
+   "ja": "NVIDIA 低遅延"
+  },
+  {
+   "zh": "英伟达低延迟不可用，当前使用低排队；详见日志",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲無法使用，目前使用低排隊；詳見記錄",
+   "en": "NVIDIA Low Latency unavailable; using low queue depth. See logs.",
+   "ja": "NVIDIA 低遅延は利用できません。低遅延キューを使用中です。ログをご確認ください。"
+  },
+  {
+   "zh": "英伟达低延迟撤销失败；请关闭视频后重试 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲停用失敗；請關閉影片後重試 · ",
+   "en": "Could not disable NVIDIA Low Latency; close the video and retry · ",
+   "ja": "NVIDIA 低遅延を無効にできません。動画を閉じて再試行してください · "
+  },
+  {
+   "zh": "英伟达低延迟调用及撤销失败；请关闭视频后重试",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "NVIDIA 低延遲呼叫及停用失敗；請關閉影片後重試",
+   "en": "NVIDIA Low Latency call and disable failed; close the video and retry",
+   "ja": "NVIDIA 低遅延の呼び出しと無効化に失敗しました。動画を閉じて再試行してください"
+  },
+  {
+   "zh": "英伟达低延迟调用失败，当前使用低排队；详见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "NVIDIA 低延遲呼叫失敗，目前使用低排隊；詳見記錄",
+   "en": "NVIDIA Low Latency call failed; using low queue depth. See logs.",
+   "ja": "NVIDIA 低遅延の呼び出しに失敗しました。低遅延キューを使用中です。ログをご確認ください。"
+  },
+  {
+   "zh": "英伟达低延迟需要 NVIDIA 显卡，当前使用低排队",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲需要 NVIDIA 顯示卡，目前使用低排隊",
+   "en": "NVIDIA Low Latency requires an NVIDIA GPU; using low queue depth",
+   "ja": "NVIDIA 低遅延には NVIDIA GPU が必要です。低遅延キューを使用中です"
+  },
+  {
+   "zh": "英伟达低延迟：关 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲：關 · ",
+   "en": "NVIDIA Low Latency: Off · ",
+   "ja": "NVIDIA 低遅延：オフ · "
+  },
+  {
+   "zh": "英伟达低延迟：开（已启用）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲：開（已啟用）",
+   "en": "NVIDIA Low Latency: On (active)",
+   "ja": "NVIDIA 低遅延：オン（有効）"
+  },
+  {
+   "zh": "英伟达低延迟：开＋增强（已启用）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲：開＋增強（已啟用）",
+   "en": "NVIDIA Low Latency: On + Boost (active)",
+   "ja": "NVIDIA 低遅延：オン＋ブースト（有効）"
+  },
+  {
    "zh": "范围 0.25～4.00 倍，保持原有音调",
    "src": "qml/PlaybackRateDialog.qml",
    "zh-TW": "範圍 0.25～4.00 倍，保持原有音調",
@@ -17475,6 +17524,13 @@
    "ja": "NVIDIA RTX GPU と NVOF ドライバーが必要です"
   },
   {
+   "zh": "需要 NVIDIA 显卡",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "需要 NVIDIA 顯示卡",
+   "en": "Requires an NVIDIA GPU",
+   "ja": "NVIDIA GPU が必要です"
+  },
+  {
    "zh": "需要 PIN",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "需要 PIN",
@@ -18707,13 +18763,6 @@
    "ja": "（NGX 0x{:08X}、ドライバー {}）。依存するエフェクトをオフにしました"
   },
   {
-   "zh": "（Reflex 初始化失败）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "（Reflex 初始化失敗）",
-   "en": " (Reflex initialization failed)",
-   "ja": "（Reflex の初期化に失敗）"
-  },
-  {
    "zh": "（SDR 存 PNG，HDR 存 JPEG XR）",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "（SDR 存 PNG，HDR 存 JPEG XR）",
@@ -18789,13 +18838,6 @@
    "zh-TW": "（終止碼 {} / 錯誤 {}）",
    "en": " (exit code {} / error {})",
    "ja": "（終了コード {} / エラー {}）"
-  },
-  {
-   "zh": "（补帧运行，Reflex 不启用）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "（補幀執行，Reflex 不啟用）",
-   "en": " (frame generation running, Reflex not enabled)",
-   "ja": "（フレーム生成中のため Reflex は無効）"
   },
   {
    "zh": "，最忙的引擎类型，全系统），每秒采样；在 设置 → 通用与外观 中更换监控的显卡",

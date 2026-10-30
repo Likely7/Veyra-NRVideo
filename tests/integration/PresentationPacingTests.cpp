@@ -32,7 +32,7 @@ int wmain(int argc,wchar_t** argv){
     if(mode< -1||mode>2||display<0||display>2)return 2;
     const std::wstring scenario=argc>7?argv[7]:L"";
     const bool screen=scenario==L"screen-xess"||scenario==L"screen-dlss";
-    const bool xess=scenario==L"xess"||scenario==L"screen-xess";
+    const bool xess=scenario==L"xess"||scenario==L"screen-xess"||scenario==L"native-xess";
     if(scenario==L"legacy"){if(mode!=-1)return 2;SetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_SWAPCHAIN",L"1");}
     std::filesystem::path dir=argv[2];std::filesystem::create_directories(dir);
     SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",screen?L"0":L"1");
@@ -79,14 +79,18 @@ int wmain(int argc,wchar_t** argv){
     {
         EngineController engine;engine.setVolume(0,true);
         PresentationSettings p{mode>=0,PacingMode(std::max(0,mode)),DisplaySync(display)};engine.requestPresentation(p);
+        const bool native=scenario.starts_with(L"native-");
+        if(native){p.nvidiaLowLatency=mode<0?NvidiaLowLatency::Off:mode==2?NvidiaLowLatency::Boost:NvidiaLowLatency::On;engine.requestPresentation(p);}
         EnhancementSettings effects;effects.multiplier=unsigned(multiplier);if(xess)effects.frameGenerationBackend=FrameGenerationBackend::XeSS;
-        if(scenario==L"effects"){effects.nr=true;effects.sr=true;effects.srTarget=veyra::pipeline::SrTarget::Qhd;}
+        if(scenario==L"native-vfg")effects.frameGenerationBackend=FrameGenerationBackend::Vfg;
+        if(scenario==L"native-fsr")effects.frameGenerationBackend=FrameGenerationBackend::Fsr;
+        if(scenario==L"effects"||scenario==L"native-effects"){effects.nr=true;effects.sr=true;effects.srTarget=veyra::pipeline::SrTarget::Qhd;}
         if(physical){effects.nr=true;effects.sr=false;}
         auto options=PlayerOptions::from(effects);options.captureReplayForTest=scenario==L"replay";
         engine.open(window,sourcePath,options);
         auto pump=[] {MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}};
         auto wait=[&](auto predicate,int ms=15000){auto end=Clock::now()+std::chrono::milliseconds(ms);while(Clock::now()<end){pump();auto s=engine.snapshot();if(s.failed)return false;if(predicate(s))return true;std::this_thread::sleep_for(std::chrono::milliseconds(2));}return false;};
-        check(wait([](auto& s){return s.frames>10;}),"first frames");
+        check(wait([](auto& s){return s.frames>10;},scenario==L"native-effects"?30000:15000),"first frames");
         if(physical){const auto warm=Clock::now();check(wait([&](auto& s){return Clock::now()-warm>=std::chrono::seconds(10)&&s.nrActive&&s.fgActive;},20000),"ten second warmup with NR and DLSS active");}
         std::ofstream samples(dir/L"snapshots.csv");samples<<"wall,position,frames,generated,lateMs,queueReadyMs,presentMs,skipped,effective,mode,sync,revision\n";
         const auto start=Clock::now();auto last=engine.snapshot();const auto first=last;
@@ -105,10 +109,9 @@ int wmain(int argc,wchar_t** argv){
         std::cout<<"mediaSpeed="<<speed<<" processedDelta="<<last.frames-first.frames<<std::endl;
         check(!last.failed&&last.frames>first.frames+10&&speed>.8&&speed<1.2,"sustained playback at media speed");
         if(multiplier>1)check(last.fgActive&&last.generated>first.generated,"real provider generated frames during measurement");
-        if(scenario==L"effects")check(last.nrActive&&last.srActive&&last.nrEvaluated>first.nrEvaluated,"NR and SR remain active with pacing");
+        if(scenario==L"effects"||scenario==L"native-effects")check(last.nrActive&&last.srActive&&last.nrEvaluated>first.nrEvaluated,"NR and SR remain active with pacing");
         if(mode>=0&&!xess)check(last.presentationEffective.enabled,"optional pacing active");
-        if(mode==2&&multiplier==1)check(last.presentationEffective.mode==PacingMode::Reflex,"native Reflex active");
-        if(mode==2&&multiplier>1&&!xess)check(last.presentationEffective.mode==PacingMode::LowQueue,"Reflex with FG explicitly falls back to low queue");
+        if(native&&mode>=0&&!xess)check(last.presentationEffective.nvidiaLowLatency==p.nvidiaLowLatency,"requested native NVIDIA low latency mode actually active with or without FG");
         if(mode>=0&&xess)check(!last.presentationEffective.enabled&&last.fgActive,"provider remains pacing owner");
         if(screen){
             for(unsigned cycle=0;cycle<3;++cycle){
@@ -128,6 +131,24 @@ int wmain(int argc,wchar_t** argv){
             for(unsigned i=0;i<3;++i){const auto revision=engine.snapshot().presentationRevision;p={true,PacingMode(i),DisplaySync(i)};engine.requestPresentation(p);check(wait([&](auto& s){return s.presentationRevision>revision&&s.presentation==p&&s.presentationEffective.enabled&&s.presentationEffective.mode==(i==2&&multiplier>1?PacingMode::LowQueue:PacingMode(i))&&s.presentationEffective.display==DisplaySync(i);}),"live mode change applied");}
             SetWindowPos(window,nullptr,30,30,960,600,SWP_NOZORDER);p.enabled=false;engine.requestPresentation(p);check(wait([](auto& s){return !s.presentationEffective.enabled;}),"off after resize");
             const auto before=engine.snapshot().frames;check(wait([&](auto& s){return s.frames>before+10;}),"off keeps playing");
+        }
+        if(scenario==L"native-lifecycle"){
+            const auto beforePause=engine.snapshot().frames;
+            engine.pause(true);check(wait([](auto& s){return s.transport==TransportState::Paused;}),"pause with Boost retained");
+            Sleep(150);engine.pause(false);check(wait([&](auto& s){return s.frames>beforePause+8&&s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::Boost;}),"resume native Boost without a stale prepared input");
+            engine.pause(true);check(wait([](auto& s){return s.transport==TransportState::Paused;}),"native pause");
+            p.enabled=false;p.nvidiaLowLatency=NvidiaLowLatency::Off;engine.requestPresentation(p);
+            check(wait([](auto& s){return s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::Off&&!s.presentationEffective.enabled;}),"disable native latency and Boost while paused");
+            engine.seek(5);const auto seek=engine.snapshot().seekRequested;check(wait([&](auto& s){return s.seekPresented>=seek;}),"native paused seek");
+            engine.pause(false);check(wait([](auto& s){return s.position>5.3;}),"native resume");
+            for(auto setting:{NvidiaLowLatency::On,NvidiaLowLatency::Boost,NvidiaLowLatency::Off,NvidiaLowLatency::Boost}){
+                const auto before=engine.snapshot().frames;p.enabled=setting!=NvidiaLowLatency::Off;p.nvidiaLowLatency=setting;engine.requestPresentation(p);
+                check(wait([&](auto& s){return s.frames>before+12&&s.presentationEffective.nvidiaLowLatency==setting;}),"native live mode transition retains playback");
+            }
+            SetWindowPos(window,nullptr,30,30,960,600,SWP_NOZORDER);
+            const auto before=engine.snapshot().frames;check(wait([&](auto& s){return s.frames>before+20&&s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::Boost;}),"native Boost survives resize");
+            const auto session=engine.snapshot().sessionId;engine.open(window,sourcePath,options);
+            check(wait([&](auto& s){return s.sessionId!=session&&s.frames>12&&s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::Boost;}),"source replacement restores requested Boost on the new device");
         }
         if(scenario==L"overload"){
             SetEnvironmentVariableW(L"VEYRA_TEST_VIDEO_WORK_MS",L"80");

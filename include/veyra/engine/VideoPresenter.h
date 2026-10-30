@@ -47,7 +47,9 @@ public:
     PresentationSettings configurePresentation(gfx::D3D12DeviceContext&,PresentationSettings,bool fg,std::wstring& status);
     bool presentationReady(){return sink_.presentationReady();}
     bool waitPresentationReady(unsigned ms){return sink_.waitPresentationReady(ms);}
-    uint64_t beginReflex(){return reflex_.begin();}
+    uint64_t beginReflex(){const auto id=reflexInputFrame_;reflexInputFrame_=0;reflex_.renderStart(id);return id;}
+    void endReflex(uint64_t id){reflex_.renderEnd(id);}
+    void cancelReflexInput(){if(reflexInputFrame_)reflex_.mark(reflexInputFrame_,1);reflexInputFrame_=0;}
     void reflexFrame(uint64_t id){reflexFrame_=id;}
     // True while XeSS owns Present: the low-latency queue and the output
     // cap cannot reach provider-generated frames, so the UI greys them out.
@@ -55,6 +57,7 @@ public:
 
     bool reflexActive()const{return reflex_.active();}
     bool reflexDisablePending()const{return reflex_.disablePending();}
+    bool reflexFailed()const{return reflex_.failed();}
     bool pacingActive()const{return sink_.pacingActive();}
     uint64_t generation()const{return generation_;}
     // Explicit integration-test capture only; never called by playback/export.
@@ -112,7 +115,7 @@ private:
     std::chrono::steady_clock::time_point metadataAttempt_{};
     DXGI_HDR_METADATA_HDR10 lastMetadata_{};
     gfx::ReflexSession reflex_;
-    uint64_t reflexFrame_=0,generation_=0;
+    uint64_t reflexFrame_=0,reflexInputFrame_=0,generation_=0;
     bool providerOwnedPresentation_=false;
     PresentCapture* capture_=nullptr;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> presentationQueue_;

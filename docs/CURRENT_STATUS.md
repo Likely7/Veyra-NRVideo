@@ -2,6 +2,8 @@
 
 更新：2026-10-28。这里只描述现在；历史过程见[历史索引](history/INDEX.md)。
 
+2026-10-28/29当前任务：隔离分支`codex/nvidia-low-latency-20261028`完善“英伟达低延迟”三档（关/开/开＋增强），基线为下述合并后的main4351bbd。直接NVAPI，生成帧不重复Sleep；DLSS/VFG/FSR与提供方回退、GUI/保存验证见[执行记录](NVIDIA_LOW_LATENCY_2026-10-28.md)。尚未合并main或发布，正式版仍2.1.1。
+
 ## 正式版与开发基线
 
 - 正式版 **2.1.1**：`v2.1.1` / `v2.1.1-sources` → `2fecacf`，已完整进入main。正式包在`E:/项目/Veyra/releases/release-2.1.1-final-20261027`。

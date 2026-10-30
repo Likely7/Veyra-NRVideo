@@ -6,6 +6,7 @@
 #include "veyra/sink/ImageExportSink.h"
 namespace veyra::engine {
 bool VideoPresenter::beginSourceInput(){
+    if(!reflexInputFrame_&&reflex_.active())reflexInputFrame_=reflex_.begin();
     auto* xess=sink_.xess();if(!xess)return true;
     // Waiting/filtered inputs keep the same preparation ID. Do not sleep again
     // until one accepted source has been submitted to the enhancement graph.
@@ -123,7 +124,7 @@ bool VideoPresenter::prepareGraphChange(){
     // Retain metadataSent_: a new graph disabling metadata must clear the
     // hint that is still attached to the retained DXGI chain.
     metadataDirty_=true;metadataAttempt_={};sourceMetadata_={};
-    reflex_.close();reflexFrame_=0;
+    reflex_.close();reflexFrame_=reflexInputFrame_=0;
     return true;
 }
 bool VideoPresenter::refresh(ID3D12Device* device){
@@ -159,6 +160,7 @@ bool VideoPresenter::refresh(ID3D12Device* device){
     return true;
 }
 bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& sharedRing,pipeline::EnhanceGraph& graph,unsigned slot,bool generated,bool referencesValid,int comparison,bool baseReference,float split,pipeline::FrameIdentity identity,PreviewView view,int64_t sourcePts100ns,bool retainUnchanged) {
+    const auto reflexFrame=reflexFrame_;reflexFrame_=0;
     auto& ring=presentationQueue_?presentationRing_:sharedRing;
     auto* fence=presentationFence_?presentationFence_.Get():ctx.fence();
     const auto presentStart=std::chrono::steady_clock::now();
@@ -242,6 +244,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         if(FAILED(hr)){veyra::log::error("present",std::format("producer handoff wait hr=0x{:X}",unsigned(hr)));return false;}
     }
     Status st=Status::Ok;uint32_t commandSlot=0;auto* list=ring.acquireNext(commandSlot,st);if(!list)return false;
+    reflex_.blitStart(reflexFrame);
     gpuTimer_.frame(identity.sourceFrameId?identity:pipeline::FrameIdentity{0,0,submittedCount()+1},fence);gpuTimer_.mark(list,diagnostics::GpuStage::Blit);
     uint32_t backBufferIndex=0;
     auto* source=generated?graph.generatedFrameResource(slot):graph.videoFrameResource(slot);auto* bb=sink_.currentBackBuffer(&backBufferIndex);if(!bb)return false;
@@ -424,6 +427,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
 
     gpuTimer_.mark(list,diagnostics::GpuStage::Blit,true);gpuTimer_.resolve(list);
     if(!ring.submitAndSignal(commandSlot))return false;gpuTimer_.submitted(ring.lastSignaledValue());
+    reflex_.blitEnd(reflexFrame);
     if(captureRecorded){captureRecorded=false;capture_->submitted(fence,ring.lastSignaledValue());}
     if(probeIssued){probePending_=true;probeFenceValue_=ring.lastSignaledValue();}
     // Custom: collect the previous probe as soon as the GPU reports it complete.
@@ -432,9 +436,9 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         publishLiveCoverage(hdrCurve,identity);lastBuffer_=backBufferIndex;hasPresented_=true;
     if(presentationQueue_)graph.presentationSubmitted(slot,fence,ring.lastSignaledValue());
     const auto dxgiStart=std::chrono::steady_clock::now();
-    reflex_.mark(reflexFrame_,3);reflex_.mark(reflexFrame_,4);
+    reflex_.presentStart(reflexFrame,generated);
     const bool presented=sink_.present(st);
-    reflex_.mark(reflexFrame_,5);reflexFrame_=0;
+    reflex_.presentEnd(reflexFrame,generated);
     const auto presentEnd=std::chrono::steady_clock::now();
     const auto ms=[](auto d){return std::chrono::duration<double,std::milli>(d).count();};
     const bool slow=ms(presentEnd-presentStart)>=80.0;
@@ -500,7 +504,7 @@ void VideoPresenter::close(){
     refreshMonitor_=nullptr;refreshHz_=0;vrr_={};refreshQueried_=false;vrrSync_=false;displayStateSerial_=0;vrrConfirmAt_.reset();
     retainedFrame_.reset();
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
-    reflex_.close();reflexFrame_=0;
+    reflex_.close();reflexFrame_=reflexInputFrame_=0;
     if(presentationRing_.initialized())presentationRing_.drainQueue();
     hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();copyBeforePresent_=copyEligible_=false;rtvs_.Reset();
     probeStats_.Reset();probeReadback_.Reset();probeCpuViews_.Reset();probePass_={};probePending_=false;probeFailed_=false;probeNext_={};probeCurve_={};probeIdentity_={};liveCoverage_={};pass_={};sink_.shutdown();
@@ -551,6 +555,7 @@ double VideoPresenter::displayRefreshHz(){
     return refreshHz_;
 }
 PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceContext& ctx,PresentationSettings requested,bool fg,std::wstring& status){
+    if(requested.nvidiaLowLatency!=NvidiaLowLatency::Off)requested.enabled=true;
     bool wanted=requested.hdrFgCompatibility&&copyEligible_;
     wchar_t copyOverride[4]{};
     if(GetEnvironmentVariableW(L"VEYRA_TEST_HDR_PRESENT_COPY",copyOverride,4)&&copyOverride[1]==L'\0'){
@@ -573,7 +578,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
             veyra::log::info("present-copy",std::format("requested={} eligible={} enabled={} (user preference; switch drains once)",requested.hdrFgCompatibility,copyEligible_,copyBeforePresent_));
         }
     }
-    const bool reflexDisabled=reflex_.disable();reflexFrame_=0;
+    const bool reflexDisabled=reflex_.disable();reflexFrame_=reflexInputFrame_=0;
     const bool followDisplay=requested.outputRate==OutputRateMode::FollowDisplay;
     if(followDisplay){
         const double hz=displayRefreshHz();
@@ -604,15 +609,16 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     const bool vsync=presentationVsync(requested),tearing=presentationTearing(requested);
     providerOwnedPresentation_=xessActive();
     const std::wstring sync=vrrSync_?(gfx::vrrLevel(vrr_)>=4?L"显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂":L"显示同步：自动 + 可变刷新 · 已请求，等待驱动确认"):requested.display==DisplaySync::Automatic?L"显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
-    if(!reflexDisabled){effective.enabled=false;sink_.configurePacing(false,vsync,tearing);status=L"Reflex 驱动状态撤销失败；低延迟队列已停用 · "+sync;return effective;}
+    if(!reflexDisabled){effective.enabled=false;effective.nvidiaLowLatency=NvidiaLowLatency::Off;sink_.configurePacing(false,vsync,tearing);status=L"英伟达低延迟撤销失败；请关闭视频后重试 · "+sync;return effective;}
     if(xessActive()){
         // The provider owns Present for its generated frames, so neither the
         // latency waiter nor an output cap can reach them. Only the DXGI VSync
         // bit still applies (XeSS accepts it on the proxy chain).
         effective.enabled=false;
+        effective.nvidiaLowLatency=NvidiaLowLatency::Off;
         providerOwnedPresentation_=true;
         sink_.configurePacing(false,vsync,tearing);
-        status=L"XeSS 提供方自行调度：低延迟队列与输出上限不生效 · "+sync;
+        status=L"XeSS 提供方自行调度：英伟达低延迟与输出上限不生效，选择已保留 · "+sync;
         return effective;
     }
     providerOwnedPresentation_=false;
@@ -633,14 +639,15 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     if(followDisplay)cap=std::format(L"输出上限：跟随显示器 {:.0f} Hz",requested.customFps);
     else if(requested.outputRate==OutputRateMode::Custom)cap=std::format(L"输出上限：{:.3f} FPS",requested.customFps);
     else cap=L"输出上限：关闭";
-    if(!requested.enabled){status=queue+sync;if(effective.outputRate==OutputRateMode::Custom)status+=L" · "+cap;status+=capNotice;return effective;}
-    // Low-latency queue: one source frame in flight (the next input is read
-    // after the previous one was presented), plus Reflex when frame generation
-    // is off (generated outputs would need separately validated markers).
-    std::wstring latency=L"低延迟队列：只保留一帧在处理";
-    if(fg)latency+=L"（补帧运行，Reflex 不启用）";
-    else if(reflex_.enable(ctx.device()))latency+=L" + NVIDIA Reflex（实验）";
-    else latency+=L"（Reflex 初始化失败）";
+    if(!requested.enabled){status=(ctx.adapter().isNvidia?std::wstring(L"英伟达低延迟：关 · "):std::wstring())+queue+sync;if(effective.outputRate==OutputRateMode::Custom)status+=L" · "+cap;status+=capNotice;return effective;}
+    // Source cadence owns Sleep. Generated/copy work on the presentation queue
+    // carries out-of-band markers, never another source-frame Sleep.
+    std::wstring latency=L"低延迟队列：已开启";
+    if(requested.nvidiaLowLatency!=NvidiaLowLatency::Off){
+        if(ctx.adapter().isNvidia&&reflex_.enable(ctx.device(),requested.nvidiaLowLatency==NvidiaLowLatency::Boost,fg,presentationQueue_.Get()))
+            latency=requested.nvidiaLowLatency==NvidiaLowLatency::Boost?L"英伟达低延迟：开＋增强（已启用）":L"英伟达低延迟：开（已启用）";
+        else{effective.nvidiaLowLatency=NvidiaLowLatency::Off;latency=ctx.adapter().isNvidia?L"英伟达低延迟不可用，当前使用低排队；详见日志":L"英伟达低延迟需要 NVIDIA 显卡，当前使用低排队";}
+    }
     status=latency+L" · "+cap+L" · "+queue+sync;
     return effective;
 }

@@ -1337,8 +1337,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(revision==pacingRevision&&presenterGeneration==presenter.generation()&&!vrrChanged&&!capRefreshChanged){
                     // Reflex dropped out at runtime: the queue-depth part of the
                     // low-latency setting stays, so only the status line changes.
-                    if(presentationEffective.enabled&&!presenter.reflexActive()&&presenter.reflexDisablePending()){
-                        std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationStatus=presenter.reflexDisablePending()?L"Reflex 调用及驱动撤销失败；请关闭视频后重试":L"Reflex 调用失败，当前使用低排队；详见日志";
+                    if(presentationEffective.nvidiaLowLatency!=NvidiaLowLatency::Off&&!presenter.reflexActive()&&presenter.reflexFailed()){
+                        presentationEffective.nvidiaLowLatency=NvidiaLowLatency::Off;
+                        std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationStatus=presenter.reflexDisablePending()?L"英伟达低延迟调用及撤销失败；请关闭视频后重试":L"英伟达低延迟调用失败，当前使用低排队；详见日志";
                     }
                     if(presentationPaced&&!presenter.pacingActive()){
                         // The sink already stopped waiting; reconfiguring would arm it again.
@@ -1347,7 +1348,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                     return;
                 }
-                if(isImage)requested.enabled=false;
+                if(isImage){requested.enabled=false;requested.nvidiaLowLatency=NvidiaLowLatency::Off;}
                 std::wstring message;
                 presentationEffective=presenter.configurePresentation(ctx,requested,options.fg,message);
                 presentationPaced=presenter.pacingActive()&&!legacyVsyncQueue;
@@ -1798,6 +1799,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(xb)xb->videoReset();
 #endif
 }
+                    presenter.cancelReflexInput();
                     if(audioStarted)audioPipe.setPaused(true);wasPaused=true;
                     const bool referencesValid=hasOutput&&out.batch.count&&out.batch.frames[out.batch.count-1].lease&&out.batch.frames[out.batch.count-1].lease->referencesValid;
                     if(hasOutput&&!presenter.present(ctx,ring,*graph,out.videoSlot,false,referencesValid,comparisonMode_,comparisonBase_,comparisonSplit_,out.batch.identity,previewView(),-1,true)){if(recoverXessPresentation())continue;status(L"画面呈现失败",true);break;}
@@ -2344,6 +2346,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 bool processed=false;{
                     processWaitBase=ring.cpuWaitCount();processWaitMsBase=ring.cpuWaitMilliseconds();processSubmitBase=ring.submitCount();
                     processed=!injectedReject&&graph->process(frame,pts,historyReset,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0,admitFg,previewFgMultiplier,(paused_||isImage)&&transaction);
+                    presenter.endReflex(currentReflexFrame);
                     processSlotWaitMs=ring.cpuWaitMilliseconds()-processWaitMsBase;
                 }
                 loopTrace.mark("graphSubmit");

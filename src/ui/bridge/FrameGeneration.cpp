@@ -163,7 +163,16 @@ bool QmlPlayerBridge::fgLowQueue() const { return impl_->presentation.enabled; }
 void QmlPlayerBridge::setFgLowQueue(bool value) {
     if (impl_->presentation.enabled == value) return;
     impl_->presentation.enabled = value;
+    if(nvidiaLowLatencyAvailable())impl_->presentation.nvidiaLowLatency=value?engine::NvidiaLowLatency::On:engine::NvidiaLowLatency::Off;
     applyPresentation();
+}
+int QmlPlayerBridge::nvidiaLowLatency()const{return int(impl_->presentation.nvidiaLowLatency);}
+bool QmlPlayerBridge::nvidiaLowLatencyAvailable()const{return primaryGpuVendor()==0x10de;}
+void QmlPlayerBridge::setNvidiaLowLatency(int value){
+    if(value<0||value>2||(!nvidiaLowLatencyAvailable()&&value!=0))return;
+    auto& p=impl_->presentation;
+    if(int(p.nvidiaLowLatency)==value&&p.enabled==(value!=0))return;
+    p.nvidiaLowLatency=engine::NvidiaLowLatency(value);p.enabled=value!=0;applyPresentation();
 }
 
 // --- design gap A1-A5: flow, cadence, presentation ----------------------------
@@ -336,10 +345,10 @@ void QmlPlayerBridge::applyPresentation() {
     if (!p.valid()) return;
     impl_->engine.requestPresentation(p);
     impl_->prefs[QStringLiteral("presentation")] = QVariantMap{
-        {"lowQueue", p.enabled}, {"display", int(p.display)}, {"outputRate", int(p.outputRate)}, {"customFps", p.customFps}, {"vrr", p.variableRefresh}};
+        {"lowQueue", p.enabled}, {"nvidiaLowLatency",int(p.nvidiaLowLatency)}, {"display", int(p.display)}, {"outputRate", int(p.outputRate)}, {"customFps", p.customFps}, {"vrr", p.variableRefresh}};
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "presentation settings not saved");
-    veyra::log::info("ui-presentation", std::format("lowQueue={} display={} outputRate={} customFps={:.3f} variableRefresh={}",
-        p.enabled, int(p.display), int(p.outputRate), p.customFps, p.variableRefresh));
+    veyra::log::info("ui-presentation", std::format("lowQueue={} nvidiaLowLatency={} display={} outputRate={} customFps={:.3f} variableRefresh={}",
+        p.enabled, int(p.nvidiaLowLatency), int(p.display), int(p.outputRate), p.customFps, p.variableRefresh));
     emit presentationChanged();
     emit settingsChanged();
     emit perfChanged();
