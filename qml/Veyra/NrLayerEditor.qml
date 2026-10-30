@@ -18,6 +18,11 @@ ColumnLayout {
     signal removeRequested(int nodeIndex)
     signal orderEdited(bool enabled)
     readonly property bool amdNr: layerData.runtime === 4
+    readonly property string amdRuntimeLabel: {
+        const choices = veyra.nrRuntimeChoices || []
+        const choice = choices.find(entry => String(entry.id) === "4")
+        return choice ? choice.label : qsTr("RX 7000 / 9000 · AMD NR（实验）")
+    }
     property string autoReason: ""
     readonly property bool manualSize: layerData.manualSize ?? false
     property int lastManualPercent: 100
@@ -89,10 +94,10 @@ ColumnLayout {
         hint: qsTr("全链共享 · 切换会重建 NR 管线")
         VSelect {
             objectName: "nr-runtime"
-            value: editor.layerData.runtime === 4 ? qsTr("RX 9000 · lmxxf（实验）")
+            value: editor.layerData.runtime === 4 ? editor.amdRuntimeLabel
                    : editor.layerData.runtime === 3 ? qsTr("RTX 50 · NVIDIA 原版")
                    : "RTX 20–50 · SF 310.9.16"
-            options: veyra.nrRuntimeChoices || [{id:"2",label:"RTX 20–50 · SF 310.9.16"},{id:"3",label:qsTr("RTX 50 · NVIDIA 原版")},{id:"4",label:qsTr("RX 9000 · lmxxf（实验）")}]
+            options: veyra.nrRuntimeChoices || [{id:"2",label:"RTX 20–50 · SF 310.9.16"},{id:"3",label:qsTr("RTX 50 · NVIDIA 原版")},{id:"4",label:qsTr("RX 7000 / 9000 · AMD NR（实验）")}]
             onPicked: id => editor.edited(editor.layerData.index, "runtime", Number(id))
         }
     }
@@ -194,7 +199,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         visible: editor.amdNr || !Support.available(veyra, "nr" + editor.layerData.runtime)
-        text: !Support.available(veyra, "nr" + editor.layerData.runtime) ? Support.reason(veyra, "nr" + editor.layerData.runtime) : qsTr("AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。原生 HDR 保留原图基底，通过 SDR 代理增强后还原；AMD 实卡效果仍待验证。")
+        text: !Support.available(veyra, "nr" + editor.layerData.runtime) ? Support.reason(veyra, "nr" + editor.layerData.runtime) : qsTr("AMD NR（实验）：RX 7000 / 9000 使用各自运行组件，需要 HIP 7 驱动。性能模式使用 Small，关闭使用原模型；内部最高 1080p 像素预算，支持百分比尺寸。7000 系风格固定默认，9000 系沿用运行时配置。原生 HDR 保留基底，通过 SDR 代理增强后还原。7000 系仍需实卡验收。")
         color: Theme.t3; font.pixelSize: 11; wrapMode: Text.WordWrap
     }
     VSubGroup {

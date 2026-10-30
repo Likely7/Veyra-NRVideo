@@ -687,11 +687,11 @@
    "ja": "AMD NR のプレビューと動画書き出しは内部で最大 1080p まで処理し、動画の出力サイズを維持します。画像書き出しはモデルのサイズ制限内である必要があります。"
   },
   {
-   "zh": "AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。原生 HDR 保留原图基底，通过 SDR 代理增强后还原；AMD 实卡效果仍待验证。",
+   "zh": "AMD NR（实验）：RX 7000 / 9000 使用各自运行组件，需要 HIP 7 驱动。性能模式使用 Small，关闭使用原模型；内部最高 1080p 像素预算，支持百分比尺寸。7000 系风格固定默认，9000 系沿用运行时配置。原生 HDR 保留基底，通过 SDR 代理增强后还原。7000 系仍需实卡验收。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "AMD NR（實驗）：需要 RX 9000 驅動及 lmxxf 執行元件，內部最高 1080p 像素預算。支援模型強度、殘差與保護；風格使用執行環境設定。原生 HDR 保留原圖基底，透過 SDR 代理增強後還原；AMD 實卡效果仍待驗證。",
-   "en": "AMD NR (experimental): requires an RX 9000 driver and lmxxf runtime, with an internal 1080p pixel budget. Model strength, residual and protection are supported; style uses the runtime configuration. Native HDR retains its original base and restores enhancement from an SDR proxy; results on AMD hardware still need verification.",
-   "ja": "AMD NR（実験）：RX 9000 ドライバーと lmxxf ランタイムが必要です。内部処理は最大1080p相当のピクセル数です。モデル強度、残差、保護に対応し、スタイルはランタイム設定を使用します。ネイティブHDRの原画を保持し、SDRプロキシの補正差分を復元します。AMD実機での効果は未検証です。"
+   "zh-TW": "AMD NR（實驗）：RX 7000 / 9000 使用各自執行元件，需要 HIP 7 驅動。效能模式使用 Small，關閉使用原模型；內部最高 1080p 像素預算，支援百分比尺寸。7000 系風格固定預設，9000 系沿用執行時設定。原生 HDR 保留基底，透過 SDR 代理增強後還原。7000 系仍需實卡驗收。",
+   "en": "AMD NR (experimental): RX 7000 / 9000 use separate runtimes and require HIP 7. Performance mode selects Small; off selects Original. Internal processing supports percentages within a 1080p pixel budget. RX 7000 uses the default style; RX 9000 retains runtime configuration. Native HDR preserves its base and reconstructs the SDR-proxy enhancement. RX 7000 hardware validation is still required.",
+   "ja": "AMD NR（実験）：RX 7000 / 9000 は専用ランタイムと HIP 7 が必要です。性能モードは Small、オフは元のモデルを使用します。内部処理は 1080p 相当の画素数内で割合を指定できます。7000 系は標準スタイル固定、9000 系はランタイム設定を使用します。ネイティブ HDR のベースを保持し、SDR プロキシの強化を復元します。7000 系の実機検証は未実施です。"
   },
   {
    "zh": "AMD 光流",
@@ -1954,8 +1954,22 @@
    "ja": "RTX Video SR。基本超解像とは独立した品質設定"
   },
   {
-   "zh": "RX 9000 · lmxxf（实验）",
+   "zh": "RX 7000 / 9000 · AMD NR（实验）",
    "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "RX 7000 / 9000 · AMD NR（實驗）",
+   "en": "RX 7000 / 9000 · AMD NR (experimental)",
+   "ja": "RX 7000 / 9000 · AMD NR（実験）"
+  },
+  {
+   "zh": "RX 7000 · RedDuke（实验）",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "RX 7000 · RedDuke（實驗）",
+   "en": "RX 7000 · RedDuke (experimental)",
+   "ja": "RX 7000 · RedDuke（実験）"
+  },
+  {
+   "zh": "RX 9000 · lmxxf（实验）",
+   "src": "src/ui/bridge/Hardware.cpp",
    "zh-TW": "RX 9000 · lmxxf（實驗）",
    "en": "RX 9000 · lmxxf (experimental)",
    "ja": "RX 9000 · lmxxf（実験）"
@@ -8239,6 +8253,13 @@
    "zh-TW": "當前偏差",
    "en": "Current offset",
    "ja": "現在のずれ"
+  },
+  {
+   "zh": "当前包缺少 RX 7000 NR 运行组件",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "目前套件缺少 RX 7000 NR 執行元件",
+   "en": "This package is missing the RX 7000 NR runtime components",
+   "ja": "このパッケージには RX 7000 NR ランタイムがありません"
   },
   {
    "zh": "当前包缺少此功能的运行组件",
@@ -17515,6 +17536,13 @@
    "zh-TW": "需要 AMD HIP 7 驅動執行元件",
    "en": "Requires the AMD HIP 7 driver runtime",
    "ja": "AMD HIP 7 ドライバーランタイムが必要です"
+  },
+  {
+   "zh": "需要 AMD RX 7000 / 9000",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "需要 AMD RX 7000 / 9000",
+   "en": "Requires AMD RX 7000 / 9000",
+   "ja": "AMD RX 7000 / 9000 が必要です"
   },
   {
    "zh": "需要 AMD RX 9000",

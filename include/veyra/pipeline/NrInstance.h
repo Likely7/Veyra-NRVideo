@@ -90,7 +90,7 @@ public:
     // direct-to-target path.
     bool stabilised = false;
     bool enabled = true;
-    std::unique_ptr<LmxxfNrBackend> amd;
+    std::unique_ptr<AmdNrBackend> amd;
     // Bumped when an upstream layer's settings or output change. A layer whose
     // input revision moved drops its history, the same contract Magpie's
     // inputRevision enforces between passes.

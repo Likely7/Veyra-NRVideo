@@ -1,5 +1,11 @@
 # Third-party dependencies
 
+## RX 7000 experimental NR provider (2026-10-30, development branch)
+
+RedDukeDev/dlss5-nr-amd-custom, fixed commit `ab455d179922adc11f65675d399e1d553bf423f0`: MIT network layer and NR kernels; ZLUDA at `b135e233bb7a6ff7f8690e49701f87f4944adcee`, MIT OR Apache-2.0. Original notices, exact file selection, modifications and proprietary component boundaries are in [third_party/redduke/VEYRA_ORIGIN.md](third_party/redduke/VEYRA_ORIGIN.md) and its LICENSE. The five external source files are fetched and Git-blob verified by `scripts/amd-nr/prepare-rdna3-source.py`; no SDK, runtime DLL, model or translation cache enters source Git.
+
+Veyra adds a per-layer isolated network host with D3D12 shared textures/fences, adapter-LUID selection, bounded queues, same-frame GPU validity markers and failure teardown. Small/Original model selection uses the existing AMD runtime ID and settings. No OptiScaler/ReShade/game wrapper or SR/RR/FG kernels are used. Private ZLUDA compatibility DLLs are not system driver replacements and never load in the player process. NVIDIA's original 310.9.16.0 DLL and translation cache retain their separate rights; local staging and manifest audit do not confer redistribution rights or change the formal Release whitelist. Existing RX 9000 lmxxf integration retains its own notices and ABI.
+
 ## Beauty node: face restore and skin smoothing (2026-10-18)
 
 | Source | License | Veyra use |

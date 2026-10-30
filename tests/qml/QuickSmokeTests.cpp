@@ -52,7 +52,7 @@ public slots:
         snapshot.setData(R"qml(import QtQml
 QtObject {
     property var effectCapabilities: ({nr2:{available:true},nr3:{available:true},nr4:{available:true}})
-    property var nrRuntimeChoices: [{id:"2",label:"RTX 20–50 · SF 310.9.16"},{id:"3",label:"RTX 50 · NVIDIA original"}]
+    property var nrRuntimeChoices: [{id:"2",label:"RTX 20–50 · SF 310.9.16"},{id:"3",label:"RTX 50 · NVIDIA original"},{id:"4",label:"RX 7000 · RedDuke (experimental)"}]
     property var nrLayers: [{index:1}]
     property int nrMotionSource: 1
     property string nrAutoStatus: ""
@@ -74,6 +74,8 @@ QtObject {
         if (!model) qFatal("Cannot create explicit component snapshot: %s", qPrintable(snapshot.errorString()));
         model->setParent(engine);
         engine->rootContext()->setContextProperty(QStringLiteral("veyra"), model);
+        qmlRegisterType(QUrl::fromLocalFile(QDir(QCoreApplication::applicationDirPath()).filePath(
+            QStringLiteral("qml/Veyra/NrLayerEditor.qml"))), "VeyraTest", 1, 0, "NrLayerEditor");
         // ProPage is private to the production shell's directory, not exported
         // by Veyra/qmldir. Register it only here to test its real inline controls.
         qmlRegisterType(QUrl::fromLocalFile(QDir(QCoreApplication::applicationDirPath()).filePath(

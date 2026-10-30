@@ -159,3 +159,15 @@ A/B（GTA VI原生4K两帧，全部质量4，完整表见DUAL_SR_PLAN“复查�
 验证（脚本`tmp/claude-nvidia-ll-review-20261029/review.py`，每项≤300秒）：RepairContract 300项0失败（新增7项：归属规则4项、通知失败3项）；i18n 0失败（新增英文状态两项）；QtQuick 117/0/1既有跳过。真实GUI：AMD核显上关低排队后`requested=false effective=false`，英伟达控件显示“关”；切回英伟达重开后开＋增强恢复且驱动已启用；英文界面关/开/开＋增强在自动与垂直同步下状态无中文残留，摘要“NVIDIA Low Latency · On + Boost”。两次GUI前后原配置SHA不变、Main.qml复原，无QML错误。GPU回归9组（plain开/增强、DLSS 2X/6X、VFG、FSR、XeSS回退、NR＋SR＋DLSS、生命周期）全部通过；驱动Sleep平均约0.002毫秒、最长0.13毫秒。
 
 效果实测（`review.py latency <场景> <倍率> 10 <显示同步>`，档位-1关/0仅低排队/1开/2开＋增强各两轮，窗口采集60fps代替采集卡；拆分脚本`latency_split.py`）：驱动Sleep平均约0.003毫秒；DLSS 2X窗口采集四档采集到呈现p50 16.87–17.03毫秒，SR 4K＋DLSS 2X 17.93–18.15毫秒，档位差别<0.2毫秒；GPU处理各档相同。无补帧窗口采集另发现与本功能无关的旧问题：呈现按首帧锚定，整场固定多等3.1–52毫秒（读到GPU完成<1毫秒），因此无补帧绝对延迟不用于档位比较。垂直同步DLSS 2X四档p50 16.87–17.05毫秒，同样无差别。未测采集卡、串流、30/40系与屏幕光电延迟。
+
+## 2026-10-29/30 RX7000 NR接入
+
+用户明确授权加入7000系。基线e7a9ae1，checkpoint/pre-amd-rdna3-nr-20261029；隔离分支codex/amd-rdna3-nr-20261029，不合并main、不push/Release。代码/运行协议/来源/许可/失败记录与完整命令读docs/AMD_RDNA3_NR_PLAN_2026-10-29.md，最终回执E:/项目/Veyra/reports/amd-rdna3-nr-20261029/FINAL.json。
+
+复用RedDuke固定MIT网络层ab455d1、ZLUDA b135e23，每层独立worker，D3D12/CUDA原生共享纹理/fence；主进程不加载兼容替身。不使用ReShade/OptiScaler、游戏代理或旧帧残差。输入RGBA16F显示代理，网络每帧reset/零guide，Veyra原有HDR基底/残差/保护/历史合成保留；强度用解码混合，不随滑条重建Feature。RX7000和RX9000按真硬件选择不同后端，保存runtime数字ID4不变。Small性能模型和Original、25–100%手动内部比例在列表/节点独立保存。现有AMD1080p像素预算保持，未给7000虚开FSR4。
+
+最终构建6.1秒退出0（logs/codex-amd-rdna3-nr-20261029/build-20261030-005622/compile.log）；CPU能力72、repair300、原lmxxf fake ABI66、GPU协议与parity54项均0失败；QtQuick123通过/0失败/1既有跳过；设置/导出冻结兼容和i18n2712条通过。真实GUI保存与重启通过，无QML错误，原用户配置SHA未变。复用原NVIDIA runner测NR+SR+DLSS2X+Boost，22.47秒通过，149处理帧/源速0.987573，回执真实位于reports/nvidia-low-latency-20261028/gpu-native-effects-2-2-rdna3-regression.json。失败夹具/编译记录完整保留，未篡改历史验收。
+
+本地复用tests/claude-sr-stage-20261028/app，新增审计27项RX7000组件及guard shader；原NVIDIA runtime97项、正式供体manifest1730项核验不变。五个固定外部源码SHA与prepared源码核验，native worker和EXE与构建一致，未把测试copy worker装入产品runtime。310.9.16.0网络原件Valid/NVIDIA，SHA2bc19bc09a7b89dd44f73e2ac0108fcc586e2154bdd0830f242f4f040e28789f；保留本地依赖/manifest/许可，不扩展正式Release白名单。入口tests/amd-rdna3-nr-20261029/启动RX7000-NR测试.cmd，独立interactive-profile、默认不自动开媒体；启动冒烟退出0，原配置SHA不变。
+
+本机没有RX7000，54项GPU检查使用明确copy测试worker，不是AMD推理。没有实测RX7000画质、性能、HDR、导出、采集、VRR或长时稳定；没有重跑原8K最终输出+NR+VFG危险组合。不改真实配置/驱动/已有SDK与运行组件；Lecram继续暂停。本轮清理仅自己的重复下载ZIP及数字TEMP，删除身份/路径检查与逻辑字节另记cleanup.json，不宣称物理净回收。

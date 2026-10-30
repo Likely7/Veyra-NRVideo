@@ -6,9 +6,10 @@
 #include <cstdint>
 #include <string>
 #include "../../../third_party/lmxxf/LmxxfNrApi.h"
+#include "veyra/pipeline/AmdNrBackend.h"
 
 namespace veyra::pipeline {
-class LmxxfNrBackend {
+class LmxxfNrBackend : public AmdNrBackend {
 public:
     ~LmxxfNrBackend() { close(); }
     LmxxfNrBackend() = default;

@@ -1,5 +1,7 @@
 // QML bridge: Hardware responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/pipeline/Rdna3NrBackend.h"
+#include "veyra/pipeline/AmdNrProvider.h"
 
 namespace veyra::ui {
 
@@ -60,6 +62,7 @@ ui::EffectGpu effectGpu() {
     result.blackwell = name.contains("RTX 50", Qt::CaseInsensitive) || name.contains("Blackwell", Qt::CaseInsensitive);
     result.ada = name.contains("RTX 40", Qt::CaseInsensitive) || name.contains("Ada", Qt::CaseInsensitive);
     result.rx9000 = name.contains("RX 90", Qt::CaseInsensitive);
+    result.rx7000 = pipeline::amdNrProvider(d->VendorId,d->Description)==pipeline::AmdNrProvider::RedDukeRdna3;
     return result;
 }
 
@@ -81,9 +84,14 @@ static QVariantMap scanEffectCapabilities() {
     out["nrAuto"]=QVariantMap{{"available",gpu.vendor==0x10DE&&gpu.deviceId==0x2f04&&out.value("nr0").toMap().value("available").toBool()},
         {"reason",gpu.deviceId!=0x2f04?QObject::tr("自动 NR 当前仅验证 RTX 5070"):!out.value("nr0").toMap().value("available").toBool()?QObject::tr("当前包缺少此功能的运行组件"):QString{}}};
     add("nr3", H::NvidiaNr50, exists(nr / "nr-original/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 50 / Blackwell"));
-    add("nr4", H::AmdNr, exists(nr / "../amd-nr/LmxxfNrRuntime.dll"), QObject::tr("需要 AMD RX 9000"));
+    const auto rdna3Directory=(nr/"../amd-nr-rdna3").lexically_normal();
+    const bool amdNrFiles=gpu.rx7000?pipeline::Rdna3NrBackend::runtimeAvailable(rdna3Directory):exists(nr / "../amd-nr/LmxxfNrRuntime.dll");
+    add("nr4", H::AmdNr, amdNrFiles, QObject::tr("需要 AMD RX 7000 / 9000"));
+    if(gpu.rx7000&&!amdNrFiles){auto cap=out.value("nr4").toMap();cap["reason"]=QObject::tr("当前包缺少 RX 7000 NR 运行组件");out["nr4"]=cap;}
     wchar_t systemDir[MAX_PATH]{};
-    if (GetSystemDirectoryW(systemDir, MAX_PATH) && !exists(std::filesystem::path(systemDir) / "amdhip64_7.dll") && !GetModuleHandleW(L"amdhip64_7.dll")) {
+    const bool hipMissing=gpu.rx7000?!pipeline::Rdna3NrBackend::hipRuntimeAvailable():
+        GetSystemDirectoryW(systemDir, MAX_PATH)&&!exists(std::filesystem::path(systemDir)/"amdhip64_7.dll")&&!GetModuleHandleW(L"amdhip64_7.dll");
+    if (hipMissing) {
         auto cap = out.value("nr4").toMap();
         if (cap.value("available").toBool()) { cap["available"] = false; cap["reason"] = QObject::tr("需要 AMD HIP 7 驱动运行组件"); out["nr4"] = cap; }
     }
@@ -200,7 +208,7 @@ QVariantMap QmlPlayerBridge::effectAvailability(const QString& id) const {
 QVariantList QmlPlayerBridge::nrRuntimeChoices() const {
     QVariantList choices;
     const auto caps = effectCapabilities();
-    for (const auto& entry : std::initializer_list<std::pair<int, QString>>{{2, "RTX 20–50 · SF 310.9.16"}, {3, tr("RTX 50 · NVIDIA 原版")}, {4, tr("RX 9000 · lmxxf（实验）")}}) {
+    for (const auto& entry : std::initializer_list<std::pair<int, QString>>{{2, "RTX 20–50 · SF 310.9.16"}, {3, tr("RTX 50 · NVIDIA 原版")}, {4, effectGpu().rx7000?tr("RX 7000 · RedDuke（实验）"):tr("RX 9000 · lmxxf（实验）")}}) {
         const auto cap = caps.value("nr" + QString::number(entry.first)).toMap();
         choices << QVariantMap{{"id", QString::number(entry.first)}, {"label", entry.second}, {"disabled", !cap.value("available").toBool()}, {"note", cap.value("reason")}};
     }
