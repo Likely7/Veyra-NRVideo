@@ -145,3 +145,17 @@ A/B（GTA VI原生4K两帧，全部质量4，完整表见DUAL_SR_PLAN“复查�
 入口`E:/项目/Veyra/tests/nvidia-low-latency-20261028/启动英伟达低延迟测试.cmd`使用私有interactive-profile，初始关闭、不自动开媒体；启动冒烟退出0。运行目录仍`tests/claude-sr-stage-20261028/app`。回执/脚本`reports/nvidia-low-latency-20261028`，日志`logs/nvidia-low-latency-20261028`，截图`tests/nvidia-low-latency-20261028/controls.png`，执行细节`docs/NVIDIA_LOW_LATENCY_2026-10-28.md`。
 
 未测30/40系持卡、采集卡、真实VRR/物理屏幕端延迟与长时稳定性；不重跑原8K最终输出＋NR＋VFG整机卡死组合。主线仍4351bbd，正式版仍2.1.1；本分支本地提交哈希与干净状态写入FINAL，不push/Release。Lecram继续暂停。
+
+## 2026-10-29 英伟达低延迟复查修正与效果实测（Claude）
+
+用户请Claude复查Codex的`4edcb49`后选择“修完再测效果”。修正提交到同分支，未合并main、未push/Release；真实配置、驱动、SDK/模型/DLL不动，测试全部用私有data-dir。
+
+复查实测（修前，`reports/claude-nvidia-ll-review-20261029/ui-amd.json`、`ui-en.json`）：保存开＋增强后把运算显卡切到本机AMD核显，关掉旧“低延迟队列”后引擎仍`requested=false effective=true`；英文界面状态显示“英伟达低延迟：关 · Display sync: allow tearing”；专业页摘要只写“低延迟队列”。另从代码看出未补帧时带外队列通知失败会整段降级。DLSS 6X文件播放关/仅低排队/开/开＋增强各两轮（`fg-ab.json`）均180帧/秒、生成帧0过期，四档无可测差别。本机RTX5070在Veyra关闭时也停在P0约2730MHz，增强档在本机测不出时钟/功耗差别。
+
+修正：`syncNvidiaLowLatencyQueue`统一低排队归属（英伟达上三档决定，其他显卡普通开关决定、英伟达选择只保留），`configurePresentation`只在英伟达适配器上折算；状态行改为无分隔符片段拼接并补17条翻译（`extract.py`→填写→`--check`缺失0）；摘要显示英伟达三档；未补帧时通知失败退回设备内标记。附带：关闭日志记录驱动Sleep耗时，测试程序新增`latency-screen[-sr]`屏幕采集场景。
+
+构建（`tmp/claude-nvidia-ll-review-20261029/build/build.py`，并发2）：五目标78.6秒、增量16.4/4.4秒退出0；新增代码无新警告（日志中C4244来自既有PreviewView.h）。暂存：EXE、测速程序、1个QML、翻译以新文件写入`tests/claude-sr-stage-20261028/app`，97个运行组件与2.1.1供体manifest一致。
+
+验证（脚本`tmp/claude-nvidia-ll-review-20261029/review.py`，每项≤300秒）：RepairContract 300项0失败（新增7项：归属规则4项、通知失败3项）；i18n 0失败（新增英文状态两项）；QtQuick 117/0/1既有跳过。真实GUI：AMD核显上关低排队后`requested=false effective=false`，英伟达控件显示“关”；切回英伟达重开后开＋增强恢复且驱动已启用；英文界面关/开/开＋增强在自动与垂直同步下状态无中文残留，摘要“NVIDIA Low Latency · On + Boost”。两次GUI前后原配置SHA不变、Main.qml复原，无QML错误。GPU回归9组（plain开/增强、DLSS 2X/6X、VFG、FSR、XeSS回退、NR＋SR＋DLSS、生命周期）全部通过；驱动Sleep平均约0.002毫秒、最长0.13毫秒。
+
+效果实测（`review.py latency <场景> <倍率> 10 <显示同步>`，档位-1关/0仅低排队/1开/2开＋增强各两轮，窗口采集60fps代替采集卡；拆分脚本`latency_split.py`）：驱动Sleep平均约0.003毫秒；DLSS 2X窗口采集四档采集到呈现p50 16.87–17.03毫秒，SR 4K＋DLSS 2X 17.93–18.15毫秒，档位差别<0.2毫秒；GPU处理各档相同。无补帧窗口采集另发现与本功能无关的旧问题：呈现按首帧锚定，整场固定多等3.1–52毫秒（读到GPU完成<1毫秒），因此无补帧绝对延迟不用于档位比较。垂直同步DLSS 2X四档p50 16.87–17.05毫秒，同样无差别。未测采集卡、串流、30/40系与屏幕光电延迟。

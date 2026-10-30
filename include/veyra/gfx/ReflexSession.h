@@ -1,6 +1,8 @@
 #pragma once
 #include <windows.h>
 #include <d3d12.h>
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <format>
 #include "veyra/Log.h"
@@ -38,7 +40,8 @@ public:
         active_=false;
         if(driverEnabled_&&api_.set){
             SleepParams p{};p.version=sizeof(p)|(1u<<16);const int r=api_.set(device_,&p);
-            log::info("reflex",std::format("disable status={} successfulSleeps={} successfulMarkers={} oobMarkers={} realPresents={} generatedPresents={}",r,sleeps_,markers_,oobMarkers_,realPresents_,generatedPresents_));
+            log::info("reflex",std::format("disable status={} successfulSleeps={} sleepMeanMs={:.3f} sleepMaxMs={:.3f} successfulMarkers={} oobMarkers={} realPresents={} generatedPresents={}",
+                r,sleeps_,sleeps_?sleepUs_/1000.0/double(sleeps_):0.0,maxSleepUs_/1000.0,markers_,oobMarkers_,realPresents_,generatedPresents_));
             if(r){failed_=true;return false;}driverEnabled_=false;
         }
         return true;
@@ -54,12 +57,15 @@ public:
         if(queue&&api_.notify){
             const int r=api_.notify(queue,3); // OUT_OF_BAND_RENDER_PRESENT
             log::info("reflex",std::format("present queue out-of-band status={}",r));
-            if(r)return false;queueMarkers_=true;
+            // Only generated frames need the out-of-band queue. Source Sleep and
+            // in-band markers ran without it before frame generation support.
+            if(r&&generated)return false;
+            queueMarkers_=r==0;
         }
         SleepParams p{};p.version=sizeof(p)|(1u<<16);p.low=1;p.boost=boost;p.markers=1;
         const int r=api_.set(device_,&p);
         log::info("reflex",std::format("enable status={} intervalUs=0 boost={} frameGeneration={} queueMarkers={}",r,boost,generated,queueMarkers_));
-        sleeps_=markers_=oobMarkers_=realPresents_=generatedPresents_=0;firstFrame_=next_+1;
+        sleeps_=sleepUs_=maxSleepUs_=markers_=oobMarkers_=realPresents_=generatedPresents_=0;firstFrame_=next_+1;
         return active_=driverEnabled_=r==0;
     }
     void mark(uint64_t frame,uint32_t type){
@@ -70,8 +76,12 @@ public:
     }
     uint64_t begin(){
         if(!active_)return 0;
+        // How long the driver really holds the source read, for the disable log.
+        const auto start=std::chrono::steady_clock::now();
         const int r=api_.sleep(device_);if(r){fail("sleep",r);return 0;}
-        ++sleeps_;const auto frame=++next_;mark(frame,0);return active_?frame:0;
+        const auto us=uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count());
+        ++sleeps_;sleepUs_+=us;maxSleepUs_=std::max(maxSleepUs_,us);
+        const auto frame=++next_;mark(frame,0);return active_?frame:0;
     }
     void renderStart(uint64_t frame){mark(frame,1);mark(frame,2);}
     void renderEnd(uint64_t frame){if(queueMarkers_)mark(frame,3);}
@@ -114,6 +124,6 @@ private:
     }
     DriverApi api_{};HMODULE module_=nullptr;ID3D12Device* device_=nullptr;ID3D12CommandQueue* queue_=nullptr;
     bool initialized_=false,active_=false,driverEnabled_=false,boost_=false,generated_=false,queueMarkers_=false,failed_=false;
-    uint64_t next_=0,firstFrame_=1,presentId_=0,sleeps_=0,markers_=0,oobMarkers_=0,realPresents_=0,generatedPresents_=0;
+    uint64_t next_=0,firstFrame_=1,presentId_=0,sleeps_=0,sleepUs_=0,maxSleepUs_=0,markers_=0,oobMarkers_=0,realPresents_=0,generatedPresents_=0;
 };
 }

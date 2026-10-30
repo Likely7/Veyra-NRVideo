@@ -555,7 +555,12 @@ double VideoPresenter::displayRefreshHz(){
     return refreshHz_;
 }
 PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceContext& ctx,PresentationSettings requested,bool fg,std::wstring& status){
-    if(requested.nvidiaLowLatency!=NvidiaLowLatency::Off)requested.enabled=true;
+    // The NVIDIA choice only runs on an NVIDIA adapter, where it implies the
+    // low queue. Another adapter keeps the plain switch's value; the UI retains
+    // the choice for the next NVIDIA session (syncNvidiaLowLatencyQueue).
+    const bool nvidia=ctx.adapter().isNvidia;
+    if(!nvidia)requested.nvidiaLowLatency=NvidiaLowLatency::Off;
+    else if(requested.nvidiaLowLatency!=NvidiaLowLatency::Off)requested.enabled=true;
     bool wanted=requested.hdrFgCompatibility&&copyEligible_;
     wchar_t copyOverride[4]{};
     if(GetEnvironmentVariableW(L"VEYRA_TEST_HDR_PRESENT_COPY",copyOverride,4)&&copyOverride[1]==L'\0'){
@@ -592,7 +597,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         // Provider owns generated Present calls. Capping our real-frame input
         // would change the source cadence, not cap its final output.
         effective.outputRate=OutputRateMode::Off;
-        capNotice=L" · 此补帧提供方暂不支持独立输出限帧；已保留设置";
+        capNotice=L"此补帧提供方暂不支持独立输出限帧，已保留设置";
     }
     // 可变刷新: when the applied monitor mode can request VRR, Automatic presents like
     // explicit Vsync - the G-SYNC/FreeSync + V-SYNC combination. Inside the
@@ -608,8 +613,16 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     if(vrrSync_){requested.display=DisplaySync::Vsync;effective.display=DisplaySync::Vsync;}
     const bool vsync=presentationVsync(requested),tearing=presentationTearing(requested);
     providerOwnedPresentation_=xessActive();
-    const std::wstring sync=vrrSync_?(gfx::vrrLevel(vrr_)>=4?L"显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂":L"显示同步：自动 + 可变刷新 · 已请求，等待驱动确认"):requested.display==DisplaySync::Automatic?L"显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
-    if(!reflexDisabled){effective.enabled=false;effective.nvidiaLowLatency=NvidiaLowLatency::Off;sink_.configurePacing(false,vsync,tearing);status=L"英伟达低延迟撤销失败；请关闭视频后重试 · "+sync;return effective;}
+    // The interface translates this line piece by piece at " · " and "；"
+    // (UiLanguage), so every piece is its own catalog entry without separators.
+    const auto join=[](std::initializer_list<std::wstring> pieces){
+        std::wstring line;
+        for(const auto& piece:pieces)if(!piece.empty())line+=(line.empty()?L"":L" · ")+piece;
+        return line;
+    };
+    const std::wstring syncMode=vrrSync_?L"显示同步：自动 + 可变刷新":requested.display==DisplaySync::Automatic?L"显示同步：自动":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
+    const std::wstring syncDetail=vrrSync_?(gfx::vrrLevel(vrr_)>=4?L"屏幕跟着画面刷新，不撕裂":L"已请求，等待驱动确认"):requested.display==DisplaySync::Automatic?L"不撕裂，也不等待垂直同步（延迟最低）":L"";
+    if(!reflexDisabled){effective.enabled=false;effective.nvidiaLowLatency=NvidiaLowLatency::Off;sink_.configurePacing(false,vsync,tearing);status=join({L"英伟达低延迟撤销失败，请关闭视频后重试",syncMode,syncDetail});return effective;}
     if(xessActive()){
         // The provider owns Present for its generated frames, so neither the
         // latency waiter nor an output cap can reach them. Only the DXGI VSync
@@ -618,7 +631,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         effective.nvidiaLowLatency=NvidiaLowLatency::Off;
         providerOwnedPresentation_=true;
         sink_.configurePacing(false,vsync,tearing);
-        status=L"XeSS 提供方自行调度：英伟达低延迟与输出上限不生效，选择已保留 · "+sync;
+        status=join({L"XeSS 提供方自行调度：英伟达低延迟与输出上限不生效，选择已保留",syncMode,syncDetail});
         return effective;
     }
     providerOwnedPresentation_=false;
@@ -634,21 +647,21 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     // there would throttle presents to the refresh, the wait they avoid.
     const bool paced=vsync&&sink_.configurePacing(true,vsync,tearing);
     const bool restored=paced||sink_.configurePacing(false,vsync,tearing);
-    const std::wstring queue=paced?(vrrSync_?L"可变刷新：超过屏幕最高刷新时只排 1 帧 · ":L"垂直同步：屏幕队列 1 帧，读帧前等待刷新 · "):vsync?L"垂直同步：屏幕队列控制不可用 · ":restored?L"":L"显示队列恢复失败 · ";
+    const std::wstring queue=paced?(vrrSync_?L"可变刷新：超过屏幕最高刷新时只排 1 帧":L"垂直同步：屏幕队列 1 帧，读帧前等待刷新"):vsync?L"垂直同步：屏幕队列控制不可用":restored?L"":L"显示队列恢复失败";
     std::wstring cap;
     if(followDisplay)cap=std::format(L"输出上限：跟随显示器 {:.0f} Hz",requested.customFps);
     else if(requested.outputRate==OutputRateMode::Custom)cap=std::format(L"输出上限：{:.3f} FPS",requested.customFps);
     else cap=L"输出上限：关闭";
-    if(!requested.enabled){status=(ctx.adapter().isNvidia?std::wstring(L"英伟达低延迟：关 · "):std::wstring())+queue+sync;if(effective.outputRate==OutputRateMode::Custom)status+=L" · "+cap;status+=capNotice;return effective;}
+    if(!requested.enabled){status=join({nvidia?L"英伟达低延迟：关":L"",queue,syncMode,syncDetail,effective.outputRate==OutputRateMode::Custom?cap:L"",capNotice});return effective;}
     // Source cadence owns Sleep. Generated/copy work on the presentation queue
     // carries out-of-band markers, never another source-frame Sleep.
     std::wstring latency=L"低延迟队列：已开启";
     if(requested.nvidiaLowLatency!=NvidiaLowLatency::Off){
-        if(ctx.adapter().isNvidia&&reflex_.enable(ctx.device(),requested.nvidiaLowLatency==NvidiaLowLatency::Boost,fg,presentationQueue_.Get()))
+        if(reflex_.enable(ctx.device(),requested.nvidiaLowLatency==NvidiaLowLatency::Boost,fg,presentationQueue_.Get()))
             latency=requested.nvidiaLowLatency==NvidiaLowLatency::Boost?L"英伟达低延迟：开＋增强（已启用）":L"英伟达低延迟：开（已启用）";
-        else{effective.nvidiaLowLatency=NvidiaLowLatency::Off;latency=ctx.adapter().isNvidia?L"英伟达低延迟不可用，当前使用低排队；详见日志":L"英伟达低延迟需要 NVIDIA 显卡，当前使用低排队";}
+        else{effective.nvidiaLowLatency=NvidiaLowLatency::Off;latency=L"英伟达低延迟不可用，当前使用低排队（详见日志）";}
     }
-    status=latency+L" · "+cap+L" · "+queue+sync;
+    status=join({latency,cap,queue,syncMode,syncDetail});
     return effective;
 }
 Microsoft::WRL::ComPtr<ID3D12Resource> VideoPresenter::presentedResourceForTest() {

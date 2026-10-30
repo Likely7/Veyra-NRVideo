@@ -15,7 +15,9 @@ ColumnLayout {
             enabled: root.available
             opacity: enabled ? 1 : 0.4
             options: [{id:"0",label:qsTr("关")},{id:"1",label:qsTr("开")},{id:"2",label:qsTr("开＋增强")}]
-            current: String(veyra.nvidiaLowLatency ?? 0)
+            // Another adapter shows 关: the NVIDIA choice is kept for the next
+            // NVIDIA session but does nothing there.
+            current: root.available ? String(veyra.nvidiaLowLatency ?? 0) : "0"
             onPicked: id => veyra.nvidiaLowLatency=Number(id)
         }
     }

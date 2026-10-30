@@ -31,6 +31,16 @@ struct PresentationSettings {
     bool operator==(const PresentationSettings&) const = default;
     bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&unsigned(nvidiaLowLatency)<=2&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
 };
+// Who owns the low queue in the interface: on an NVIDIA adapter the three
+// NVIDIA states (开/开＋增强 imply it, 关 clears it); on another adapter the
+// plain low-queue switch, and the NVIDIA choice is only kept for the next
+// NVIDIA session. Returns whether `enabled` had to change (review 2026-10-29:
+// a kept 开＋增强 used to force the queue on an AMD compute GPU for good).
+constexpr bool syncNvidiaLowLatencyQueue(PresentationSettings& p,bool nvidiaAdapter){
+    const bool queue=p.nvidiaLowLatency!=NvidiaLowLatency::Off;
+    if(!nvidiaAdapter||p.enabled==queue)return false;
+    p.enabled=queue;return true;
+}
 // Automatic never waits for vertical sync and never requests tearing: a
 // flip-model Present(0, 0) replaces a frame that has not been shown yet at the
 // next refresh, so the newest finished frame is the one shown and nothing

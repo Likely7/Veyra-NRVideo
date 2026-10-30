@@ -31,11 +31,14 @@ int wmain(int argc,wchar_t** argv){
     const int mode=_wtoi(argv[3]),display=_wtoi(argv[4]),multiplier=_wtoi(argv[5]),seconds=std::clamp(_wtoi(argv[6]),3,120);
     if(mode< -1||mode>2||display<0||display>2)return 2;
     const std::wstring scenario=argc>7?argv[7]:L"";
-    const bool screen=scenario==L"screen-xess"||scenario==L"screen-dlss";
+    // latency-screen[-sr]: a live 60 fps window capture for capture-to-present
+    // A/B runs. mode -1 off, 0 low queue only, 1 NVIDIA 开, 2 NVIDIA 开＋增强.
+    const bool latency=scenario.starts_with(L"latency-");
+    const bool screen=scenario==L"screen-xess"||scenario==L"screen-dlss"||latency;
     const bool xess=scenario==L"xess"||scenario==L"screen-xess"||scenario==L"native-xess";
     if(scenario==L"legacy"){if(mode!=-1)return 2;SetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_SWAPCHAIN",L"1");}
     std::filesystem::path dir=argv[2];std::filesystem::create_directories(dir);
-    SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",screen?L"0":L"1");
+    SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",screen&&!latency?L"0":L"1");
     veyra::Logger::instance().openFile((dir/L"engine.log").wstring());veyra::Logger::instance().setConsoleEnabled(false);
     if(FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
     const bool physical=scenario==L"capture-nr"||scenario==L"capture-nr-recovery";
@@ -69,7 +72,7 @@ int wmain(int argc,wchar_t** argv){
             if(!inputWindow)std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         if(!inputWindow){TerminateProcess(inputProcess.hProcess,2);WaitForSingleObject(inputProcess.hProcess,1000);CloseHandle(inputProcess.hProcess);return 2;}
-        veyra::source::ScreenCaptureOptions input;input.target=reinterpret_cast<uint64_t>(inputWindow);input.fps=30;input.cursor=false;
+        veyra::source::ScreenCaptureOptions input;input.target=reinterpret_cast<uint64_t>(inputWindow);input.fps=latency?60:30;input.cursor=false;
         sourcePath=input.uri();
     }
     MONITORINFOEXW monitor{};monitor.cbSize=sizeof(monitor);GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor);
@@ -81,16 +84,18 @@ int wmain(int argc,wchar_t** argv){
         PresentationSettings p{mode>=0,PacingMode(std::max(0,mode)),DisplaySync(display)};engine.requestPresentation(p);
         const bool native=scenario.starts_with(L"native-");
         if(native){p.nvidiaLowLatency=mode<0?NvidiaLowLatency::Off:mode==2?NvidiaLowLatency::Boost:NvidiaLowLatency::On;engine.requestPresentation(p);}
+        if(latency){p.nvidiaLowLatency=mode==1?NvidiaLowLatency::On:mode==2?NvidiaLowLatency::Boost:NvidiaLowLatency::Off;engine.requestPresentation(p);}
         EnhancementSettings effects;effects.multiplier=unsigned(multiplier);if(xess)effects.frameGenerationBackend=FrameGenerationBackend::XeSS;
         if(scenario==L"native-vfg")effects.frameGenerationBackend=FrameGenerationBackend::Vfg;
         if(scenario==L"native-fsr")effects.frameGenerationBackend=FrameGenerationBackend::Fsr;
         if(scenario==L"effects"||scenario==L"native-effects"){effects.nr=true;effects.sr=true;effects.srTarget=veyra::pipeline::SrTarget::Qhd;}
+        if(scenario==L"latency-screen-sr"){effects.sr=true;effects.srTarget=veyra::pipeline::SrTarget::Uhd4K;}
         if(physical){effects.nr=true;effects.sr=false;}
         auto options=PlayerOptions::from(effects);options.captureReplayForTest=scenario==L"replay";
         engine.open(window,sourcePath,options);
         auto pump=[] {MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}};
         auto wait=[&](auto predicate,int ms=15000){auto end=Clock::now()+std::chrono::milliseconds(ms);while(Clock::now()<end){pump();auto s=engine.snapshot();if(s.failed)return false;if(predicate(s))return true;std::this_thread::sleep_for(std::chrono::milliseconds(2));}return false;};
-        check(wait([](auto& s){return s.frames>10;},scenario==L"native-effects"?30000:15000),"first frames");
+        check(wait([](auto& s){return s.frames>10;},scenario==L"native-effects"||scenario==L"latency-screen-sr"?30000:15000),"first frames");
         if(physical){const auto warm=Clock::now();check(wait([&](auto& s){return Clock::now()-warm>=std::chrono::seconds(10)&&s.nrActive&&s.fgActive;},20000),"ten second warmup with NR and DLSS active");}
         std::ofstream samples(dir/L"snapshots.csv");samples<<"wall,position,frames,generated,lateMs,queueReadyMs,presentMs,skipped,effective,mode,sync,revision\n";
         const auto start=Clock::now();auto last=engine.snapshot();const auto first=last;
@@ -111,9 +116,9 @@ int wmain(int argc,wchar_t** argv){
         if(multiplier>1)check(last.fgActive&&last.generated>first.generated,"real provider generated frames during measurement");
         if(scenario==L"effects"||scenario==L"native-effects")check(last.nrActive&&last.srActive&&last.nrEvaluated>first.nrEvaluated,"NR and SR remain active with pacing");
         if(mode>=0&&!xess)check(last.presentationEffective.enabled,"optional pacing active");
-        if(native&&mode>=0&&!xess)check(last.presentationEffective.nvidiaLowLatency==p.nvidiaLowLatency,"requested native NVIDIA low latency mode actually active with or without FG");
+        if((native||latency)&&mode>=0&&!xess)check(last.presentationEffective.nvidiaLowLatency==p.nvidiaLowLatency,"requested native NVIDIA low latency mode actually active with or without FG");
         if(mode>=0&&xess)check(!last.presentationEffective.enabled&&last.fgActive,"provider remains pacing owner");
-        if(screen){
+        if(screen&&!latency){
             for(unsigned cycle=0;cycle<3;++cycle){
                 SetEnvironmentVariableW(L"VEYRA_TEST_VIDEO_WORK_MS",L"80");
                 auto before=engine.snapshot();

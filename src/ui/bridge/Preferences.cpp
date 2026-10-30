@@ -394,6 +394,9 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
                 }
             }
             emit effectCapabilitiesChanged(); emit fgChoicesChanged();
+            // The low queue follows the new card's own control: the NVIDIA states
+            // there, the plain switch elsewhere (the NVIDIA choice is kept).
+            if (engine::syncNvidiaLowLatencyQueue(impl_->presentation, nvidiaLowLatencyAvailable())) applyPresentation();
             if (impl_->snapshot.running)
                 emit notice(impl_->computeLuid ? tr("运算显卡已切换为「%1」，重新打开视频后生效").arg(impl_->computeGpuName)
                                                : tr("运算显卡已恢复默认（性能最强的显卡），重新打开视频后生效"), false);

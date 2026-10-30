@@ -267,13 +267,6 @@
    "ja": " · 補正中"
   },
   {
-   "zh": " · 此补帧提供方暂不支持独立输出限帧；已保留设置",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": " · 此補幀提供方暫不支援獨立輸出限幀；已保留設定",
-   "en": " · this frame generation provider cannot cap its own output yet; setting kept",
-   "ja": " · このフレーム生成方式は出力上限を個別に設定できません。設定は保持しました"
-  },
-  {
    "zh": " · 等待 ",
    "src": "qml/ExportPage.qml",
    "zh-TW": " · 等待 ",
@@ -2332,11 +2325,11 @@
    "ja": "XeSS はエンコード可能な補間テクスチャを公開していません。書き出しには FSR、DLSS または VFG を選択してください。"
   },
   {
-   "zh": "XeSS 提供方自行调度：英伟达低延迟与输出上限不生效，选择已保留 · ",
+   "zh": "XeSS 提供方自行调度：英伟达低延迟与输出上限不生效，选择已保留",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "XeSS 提供方自行調度：NVIDIA 低延遲與輸出上限不生效，選擇已保留 · ",
-   "en": "XeSS owns scheduling: NVIDIA Low Latency and output cap are inactive; selections retained · ",
-   "ja": "XeSS がスケジュールを管理：NVIDIA 低遅延と出力制限は無効です。選択は保持されます · "
+   "zh-TW": "XeSS 提供方自行調度：NVIDIA 低延遲與輸出上限不生效，選擇已保留",
+   "en": "XeSS owns scheduling: NVIDIA Low Latency and output cap are inactive; selections retained",
+   "ja": "XeSS がスケジュールを管理：NVIDIA 低遅延と出力制限は無効です。選択は保持されます"
   },
   {
    "zh": "XeSS 未启用：运行时或设备不兼容；当前为普通呈现",
@@ -2659,6 +2652,13 @@
    "zh-TW": "不向 PS5 轉發電腦手把輸入",
    "en": "Don't forward this PC's controller input to the PS5",
    "ja": "この PC のコントローラー入力を PS5 に転送しない"
+  },
+  {
+   "zh": "不撕裂，也不等待垂直同步（延迟最低）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "不撕裂，也不等待垂直同步（延遲最低）",
+   "en": "no tearing and no VSync wait (lowest latency)",
+   "ja": "ティアリングなし、垂直同期を待たない（最小遅延）"
   },
   {
    "zh": "不支持",
@@ -5280,11 +5280,11 @@
    "ja": "可変リフレッシュ · ドライバーの確認待ち"
   },
   {
-   "zh": "可变刷新：超过屏幕最高刷新时只排 1 帧 · ",
+   "zh": "可变刷新：超过屏幕最高刷新时只排 1 帧",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "可變刷新：超過螢幕最高刷新時只排 1 幀 · ",
-   "en": "Variable refresh: only 1 frame queued above the display maximum · ",
-   "ja": "可変リフレッシュ：画面の最大リフレッシュを超えると 1 フレームだけキュー · "
+   "zh-TW": "可變刷新：超過螢幕最高刷新時只排 1 幀",
+   "en": "Variable refresh: only 1 frame queued above the display maximum",
+   "ja": "可変リフレッシュ：画面の最大リフレッシュを超えると 1 フレームだけキュー"
   },
   {
    "zh": "可用",
@@ -5805,18 +5805,18 @@
    "ja": "垂直同期"
   },
   {
-   "zh": "垂直同步：屏幕队列 1 帧，读帧前等待刷新 · ",
+   "zh": "垂直同步：屏幕队列 1 帧，读帧前等待刷新",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "垂直同步：螢幕佇列 1 幀，讀幀前等待刷新 · ",
-   "en": "VSync: 1-frame display queue, waits for refresh before reading a frame · ",
-   "ja": "垂直同期：画面キュー 1 フレーム、フレーム読み込み前にリフレッシュを待機 · "
+   "zh-TW": "垂直同步：螢幕佇列 1 幀，讀幀前等待刷新",
+   "en": "VSync: 1-frame display queue, waits for refresh before reading a frame",
+   "ja": "垂直同期：画面キュー 1 フレーム、フレーム読み込み前にリフレッシュを待機"
   },
   {
-   "zh": "垂直同步：屏幕队列控制不可用 · ",
+   "zh": "垂直同步：屏幕队列控制不可用",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "垂直同步：螢幕佇列控制不可用 · ",
-   "en": "VSync: display queue control unavailable · ",
-   "ja": "垂直同期：画面キュー制御は使用できません · "
+   "zh-TW": "垂直同步：螢幕佇列控制不可用",
+   "en": "VSync: display queue control unavailable",
+   "ja": "垂直同期：画面キュー制御は使用できません"
   },
   {
    "zh": "基础设置",
@@ -7100,6 +7100,13 @@
    "ja": "ディスプレイは可変リフレッシュ中（ドライバーで有効）"
   },
   {
+   "zh": "屏幕跟着画面刷新，不撕裂",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "螢幕跟著畫面更新，不撕裂",
+   "en": "the display refreshes with each frame, no tearing",
+   "ja": "画面がフレームに合わせて更新、ティアリングなし"
+  },
+  {
    "zh": "屏幕跟着画面刷新：不撕裂，也几乎不用等刷新",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "螢幕跟著畫面更新：不撕裂，也幾乎不用等更新",
@@ -7707,6 +7714,13 @@
    "zh-TW": "已請求可變更新率，驅動尚未確認生效；可檢查視窗/全螢幕 G-SYNC 設定，目前狀態不代表驅動已關閉",
    "en": "VRR presentation requested; the driver has not confirmed activation. Check windowed/fullscreen G-SYNC settings. This does not mean the driver setting is off.",
    "ja": "VRR 表示を要求しましたが、ドライバーはまだ動作を確認していません。ウィンドウ/全画面の G-SYNC 設定を確認できます。この状態は設定がオフという意味ではありません。"
+  },
+  {
+   "zh": "已请求，等待驱动确认",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "已請求，等待驅動確認",
+   "en": "requested, awaiting driver confirmation",
+   "ja": "要求済み、ドライバーの確認待ち"
   },
   {
    "zh": "已达到导入上限（最多10000项），其余文件未添加",
@@ -10349,25 +10363,18 @@
    "ja": "表示の同期：垂直同期"
   },
   {
-   "zh": "显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂",
+   "zh": "显示同步：自动",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示同步：自動 + 可變更新 · 螢幕跟著畫面更新，不撕裂",
-   "en": "Display sync: auto + variable refresh · the display refreshes with each frame, no tearing",
-   "ja": "表示の同期：自動 + 可変リフレッシュ · 画面がフレームに合わせて更新、ティアリングなし"
+   "zh-TW": "顯示同步：自動",
+   "en": "Display sync: auto",
+   "ja": "表示の同期：自動"
   },
   {
-   "zh": "显示同步：自动 + 可变刷新 · 已请求，等待驱动确认",
+   "zh": "显示同步：自动 + 可变刷新",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示同步：自動 + 可變更新率 · 已請求，等待驅動確認",
-   "en": "Display sync: Auto + variable refresh · requested, awaiting driver confirmation",
-   "ja": "表示同期：自動 + 可変リフレッシュ · 要求済み、ドライバーの確認待ち"
-  },
-  {
-   "zh": "显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示同步：自動 · 不撕裂，也不等待垂直同步（延遲最低）",
-   "en": "Display sync: auto · no tearing and no VSync wait (lowest latency)",
-   "ja": "表示の同期：自動 · ティアリングなし、垂直同期を待たない（最小遅延）"
+   "zh-TW": "顯示同步：自動 + 可變更新",
+   "en": "Display sync: auto + variable refresh",
+   "ja": "表示の同期：自動 + 可変リフレッシュ"
   },
   {
    "zh": "显示器",
@@ -10433,11 +10440,11 @@
    "ja": "マスクを表示"
   },
   {
-   "zh": "显示队列恢复失败 · ",
+   "zh": "显示队列恢复失败",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示佇列恢復失敗 · ",
-   "en": "Display queue could not be restored · ",
-   "ja": "表示キューを復元できませんでした · "
+   "zh-TW": "顯示佇列恢復失敗",
+   "en": "Display queue could not be restored",
+   "ja": "表示キューを復元できませんでした"
   },
   {
    "zh": "显示队列等待失败，垂直同步屏幕队列不再限制；详见日志",
@@ -11845,6 +11852,13 @@
    "zh-TW": "此版本未包含美樂威 SDK 支援",
    "en": "This version does not include Magewell SDK support",
    "ja": "このバージョンには Magewell SDK のサポートが含まれていません"
+  },
+  {
+   "zh": "此补帧提供方暂不支持独立输出限帧，已保留设置",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "此補幀提供方暫不支援獨立輸出限幀，已保留設定",
+   "en": "this frame generation provider cannot cap its own output yet; setting kept",
+   "ja": "このフレーム生成方式は出力上限を個別に設定できません。設定は保持しました"
   },
   {
    "zh": "此软件包没有附带性能模式所需的 DLSS 帧生成 310.9.16 运行库",
@@ -14458,18 +14472,39 @@
    "ja": "NVIDIA 低遅延"
   },
   {
-   "zh": "英伟达低延迟不可用，当前使用低排队；详见日志",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "NVIDIA 低延遲無法使用，目前使用低排隊；詳見記錄",
-   "en": "NVIDIA Low Latency unavailable; using low queue depth. See logs.",
-   "ja": "NVIDIA 低遅延は利用できません。低遅延キューを使用中です。ログをご確認ください。"
+   "zh": "英伟达低延迟 · 开",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "NVIDIA 低延遲 · 開",
+   "en": "NVIDIA Low Latency · On",
+   "ja": "NVIDIA 低遅延 · オン"
   },
   {
-   "zh": "英伟达低延迟撤销失败；请关闭视频后重试 · ",
+   "zh": "英伟达低延迟 · 开＋增强",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "NVIDIA 低延遲 · 開＋增強",
+   "en": "NVIDIA Low Latency · On + Boost",
+   "ja": "NVIDIA 低遅延 · オン＋ブースト"
+  },
+  {
+   "zh": "英伟达低延迟 · 当前未生效",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "NVIDIA 低延遲 · 目前未生效",
+   "en": "NVIDIA Low Latency · currently inactive",
+   "ja": "NVIDIA 低遅延 · 現在無効"
+  },
+  {
+   "zh": "英伟达低延迟不可用，当前使用低排队（详见日志）",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "NVIDIA 低延遲停用失敗；請關閉影片後重試 · ",
-   "en": "Could not disable NVIDIA Low Latency; close the video and retry · ",
-   "ja": "NVIDIA 低遅延を無効にできません。動画を閉じて再試行してください · "
+   "zh-TW": "NVIDIA 低延遲無法使用，目前使用低排隊（詳見記錄）",
+   "en": "NVIDIA Low Latency unavailable; using low queue depth (see the log)",
+   "ja": "NVIDIA 低遅延は利用できません。低遅延キューを使用中です（ログを参照）"
+  },
+  {
+   "zh": "英伟达低延迟撤销失败，请关闭视频后重试",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲停用失敗，請關閉影片後重試",
+   "en": "Could not disable NVIDIA Low Latency; close the video and retry",
+   "ja": "NVIDIA 低遅延を無効にできません。動画を閉じて再試行してください"
   },
   {
    "zh": "英伟达低延迟调用及撤销失败；请关闭视频后重试",
@@ -14486,18 +14521,11 @@
    "ja": "NVIDIA 低遅延の呼び出しに失敗しました。低遅延キューを使用中です。ログをご確認ください。"
   },
   {
-   "zh": "英伟达低延迟需要 NVIDIA 显卡，当前使用低排队",
+   "zh": "英伟达低延迟：关",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "NVIDIA 低延遲需要 NVIDIA 顯示卡，目前使用低排隊",
-   "en": "NVIDIA Low Latency requires an NVIDIA GPU; using low queue depth",
-   "ja": "NVIDIA 低遅延には NVIDIA GPU が必要です。低遅延キューを使用中です"
-  },
-  {
-   "zh": "英伟达低延迟：关 · ",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "NVIDIA 低延遲：關 · ",
-   "en": "NVIDIA Low Latency: Off · ",
-   "ja": "NVIDIA 低遅延：オフ · "
+   "zh-TW": "NVIDIA 低延遲：關",
+   "en": "NVIDIA Low Latency: Off",
+   "ja": "NVIDIA 低遅延：オフ"
   },
   {
    "zh": "英伟达低延迟：开（已启用）",

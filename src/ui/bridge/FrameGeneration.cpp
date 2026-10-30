@@ -169,10 +169,13 @@ void QmlPlayerBridge::setFgLowQueue(bool value) {
 int QmlPlayerBridge::nvidiaLowLatency()const{return int(impl_->presentation.nvidiaLowLatency);}
 bool QmlPlayerBridge::nvidiaLowLatencyAvailable()const{return primaryGpuVendor()==0x10de;}
 void QmlPlayerBridge::setNvidiaLowLatency(int value){
-    if(value<0||value>2||(!nvidiaLowLatencyAvailable()&&value!=0))return;
-    auto& p=impl_->presentation;
-    if(int(p.nvidiaLowLatency)==value&&p.enabled==(value!=0))return;
-    p.nvidiaLowLatency=engine::NvidiaLowLatency(value);p.enabled=value!=0;applyPresentation();
+    const bool nvidia=nvidiaLowLatencyAvailable();
+    if(value<0||value>2||(!nvidia&&value!=0))return;
+    // On NVIDIA the three states own the low queue; elsewhere only the kept choice changes.
+    auto p=impl_->presentation;p.nvidiaLowLatency=engine::NvidiaLowLatency(value);
+    engine::syncNvidiaLowLatencyQueue(p,nvidia);
+    if(p==impl_->presentation)return;
+    impl_->presentation=p;applyPresentation();
 }
 
 // --- design gap A1-A5: flow, cadence, presentation ----------------------------
