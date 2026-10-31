@@ -121,3 +121,95 @@ A/B（GTA VI原生4K两帧，全部质量4，完整表见DUAL_SR_PLAN“复查�
 用户明确要求“直接合并到Main即可”，覆盖此前各段“不合并main”。在`codex/dual-sr-20261028`把复查修正与超采样选项提交为一个提交，再以合并提交并入本地`main`（原`7b0b64b`，是该分支祖先，无分叉），沿用以往“Merge … for local integration”的做法；仓库没有启用的git钩子。活动树随后切回`main`，内容与已测试的工作区一致，无需重编。
 
 并入内容：claude/sr-stage-20261028（cf84762）、codex/sr-stage-freeze-20261028（67d0294）、codex/dual-sr-20261028（e61e497）及本次提交。独立`claude/capture-fps-audio-20261027`未并入；施工分支保留未删。未push、未Release，正式版仍2.1.1，运行目录与真实配置不变。提交与合并哈希、合并后检查见reports/claude-sr-supersample-20261028/FINAL.json。
+
+## 2026-10-28/29 英伟达低延迟三档与Reflex补帧接入
+
+用户要求完善NVIDIA低延迟并命名“英伟达低延迟”，提供关/开/开＋增强。基线main4351bbd，隔离分支`codex/nvidia-low-latency-20261028`，存档`checkpoint/pre-nvidia-low-latency-20261028`。本轮不合并main、不push/Release。单Agent，复用既有构建和一份测试运行目录，所有新增证据/临时数据在E盘。
+
+完成：独立三档配置和旧lowQueue迁移（旧开启仅迁移到开，不自动Boost；非法值关）；列表/节点共享控件；实际驱动状态、错误回退、XeSS提供方所有权说明及重启持久化。直接NVAPI原生SetSleepMode区分Boost，interval=0不另加限帧。源输入前Sleep并复用等待ID，增强提交后renderEnd；独立呈现队列注册带外工作，复制9/10和生成Present11/12使用公开SetLatencyMarker(queue)，真实Present4/5正常标记。生成帧不增加Sleep/模拟ID。暂停、模式切换、图重建和切源清理准备ID；关闭撤销Boost，失败不能假报成功。XeSS沿用自身XeLL调度。未引入Streamline或改动驱动、SDK/模型/运行DLL。
+
+主要命令（均在活动源码树执行）：
+
+- `python -X utf8 -B E:/项目/Veyra/tmp/claude-sr-stage-20261028/build/build.py veyra_qml_ui veyra_presentation_pacing_tests veyra_repair_contract_tests veyra_ui_i18n_tests veyra_qml_quick_tests`；后续按变更仅重建相关目标，并发2/单次≤900秒。主要批次73.8/72.1秒，最终产品增量15.7秒、测试增量4.1秒退出0；原始MSVC/Ninja日志保留`logs/claude-sr-stage-20261028/build-20261028*.log`及`build-20261029-001739.log`/`build-20261029-002204.log`，不把既有编译警告写成零警告。
+- `python -X utf8 -B E:/项目/Veyra/tmp/claude-sr-stage-20261028/stage_app.py`：以unlink后写新文件更新EXE/QML，不写穿供体硬链接。
+- `python -X utf8 -B E:/项目/Veyra/reports/nvidia-low-latency-20261028/run.py cpu|qml`；GPU用`gpu <档位> <倍率> <场景> [后缀]`，档位-1关/1开/2增强。场景native-plain、native-dlss-queue、native-dlss、native-vfg、native-fsr、native-xess、native-effects、native-lifecycle。最终组合及生命周期分别`gpu 2 2 native-effects final`/`gpu 2 2 native-lifecycle final`。每测试≤300秒。
+- `python -X utf8 -B E:/项目/Veyra/reports/nvidia-low-latency-20261028/ui.py --retry`及`--retry --verify`：真实GUI/驱动、旧设置迁移与Boost重启恢复；`python -X utf8 -B scripts/i18n/extract.py --check`、`git diff --check`。
+- `python -X utf8 -B E:/项目/Veyra/reports/nvidia-low-latency-20261028/finalize.py`：交互入口启动、源QML/翻译与EXE身份、供体与运行组件全核验。
+
+结果：RepairContract293项0失败，QtQuick117通过/0失败/1既有跳过，i18n2704条缺失/占位符错误0；10个最终GPU用例退出0。真实RTX5070文件1080p30测试包括关/开/增强、DLSS2X/6X、VFG2X、FSR2X、XeSS提供方回退；最终NR＋SR＋DLSS组合21.03秒、生命周期20.94秒通过，组合源速0.988793、测量期间149处理帧。列表/节点/关后VFG继续/保存恢复真实GUI通过，无QML错误。162成功Sleep对应160真实/159生成Present为软件和驱动接口计数，不能冒充物理显示帧或延迟收益。
+
+失败如实保留：初始AsyncFrameMarker返回-1（清内部字段仍失败），当场回退；改用NVIDIA公开queue目标SetLatencyMarker后9–12返回0，原两次engine.log保留。GUI初始夹具误用fg键，改现有vfg-fg后新配置复验通过。组合首次15秒首帧夹具超时、之后真实处理成功但整体仍记失败；只把该新增组合夹具等待改30秒后另目录通过，不修改产品或历史guard。清理脚本首版Split-Path参数集合不兼容、尚未删除即退出，改用IO.Directory.GetParent后通过。
+
+保护及空间：EXE构建/运行SHA一致；QML/翻译全一致；97个运行组件与正式供体一致，正式供体1730个manifest文件全核验。GUI与最终交互启动前后真实配置SHA一致。只清本轮19个数字TEMP子目录，删除逻辑46,093,122字节，先核对绝对路径、父链/子项无reparse和进程占用；脚本、原始失败日志、配置、交互入口及运行目录保留。未测本轮净物理空间变化，收尾剩余任务逻辑字节见FINAL。
+
+入口`E:/项目/Veyra/tests/nvidia-low-latency-20261028/启动英伟达低延迟测试.cmd`使用私有interactive-profile，初始关闭、不自动开媒体；启动冒烟退出0。运行目录仍`tests/claude-sr-stage-20261028/app`。回执/脚本`reports/nvidia-low-latency-20261028`，日志`logs/nvidia-low-latency-20261028`，截图`tests/nvidia-low-latency-20261028/controls.png`，执行细节`docs/NVIDIA_LOW_LATENCY_2026-10-28.md`。
+
+未测30/40系持卡、采集卡、真实VRR/物理屏幕端延迟与长时稳定性；不重跑原8K最终输出＋NR＋VFG整机卡死组合。主线仍4351bbd，正式版仍2.1.1；本分支本地提交哈希与干净状态写入FINAL，不push/Release。Lecram继续暂停。
+
+## 2026-10-29 英伟达低延迟复查修正与效果实测（Claude）
+
+用户请Claude复查Codex的`4edcb49`后选择“修完再测效果”。修正提交到同分支，未合并main、未push/Release；真实配置、驱动、SDK/模型/DLL不动，测试全部用私有data-dir。
+
+复查实测（修前，`reports/claude-nvidia-ll-review-20261029/ui-amd.json`、`ui-en.json`）：保存开＋增强后把运算显卡切到本机AMD核显，关掉旧“低延迟队列”后引擎仍`requested=false effective=true`；英文界面状态显示“英伟达低延迟：关 · Display sync: allow tearing”；专业页摘要只写“低延迟队列”。另从代码看出未补帧时带外队列通知失败会整段降级。DLSS 6X文件播放关/仅低排队/开/开＋增强各两轮（`fg-ab.json`）均180帧/秒、生成帧0过期，四档无可测差别。本机RTX5070在Veyra关闭时也停在P0约2730MHz，增强档在本机测不出时钟/功耗差别。
+
+修正：`syncNvidiaLowLatencyQueue`统一低排队归属（英伟达上三档决定，其他显卡普通开关决定、英伟达选择只保留），`configurePresentation`只在英伟达适配器上折算；状态行改为无分隔符片段拼接并补17条翻译（`extract.py`→填写→`--check`缺失0）；摘要显示英伟达三档；未补帧时通知失败退回设备内标记。附带：关闭日志记录驱动Sleep耗时，测试程序新增`latency-screen[-sr]`屏幕采集场景。
+
+构建（`tmp/claude-nvidia-ll-review-20261029/build/build.py`，并发2）：五目标78.6秒、增量16.4/4.4秒退出0；新增代码无新警告（日志中C4244来自既有PreviewView.h）。暂存：EXE、测速程序、1个QML、翻译以新文件写入`tests/claude-sr-stage-20261028/app`，97个运行组件与2.1.1供体manifest一致。
+
+验证（脚本`tmp/claude-nvidia-ll-review-20261029/review.py`，每项≤300秒）：RepairContract 300项0失败（新增7项：归属规则4项、通知失败3项）；i18n 0失败（新增英文状态两项）；QtQuick 117/0/1既有跳过。真实GUI：AMD核显上关低排队后`requested=false effective=false`，英伟达控件显示“关”；切回英伟达重开后开＋增强恢复且驱动已启用；英文界面关/开/开＋增强在自动与垂直同步下状态无中文残留，摘要“NVIDIA Low Latency · On + Boost”。两次GUI前后原配置SHA不变、Main.qml复原，无QML错误。GPU回归9组（plain开/增强、DLSS 2X/6X、VFG、FSR、XeSS回退、NR＋SR＋DLSS、生命周期）全部通过；驱动Sleep平均约0.002毫秒、最长0.13毫秒。
+
+效果实测（`review.py latency <场景> <倍率> 10 <显示同步>`，档位-1关/0仅低排队/1开/2开＋增强各两轮，窗口采集60fps代替采集卡；拆分脚本`latency_split.py`）：驱动Sleep平均约0.003毫秒；DLSS 2X窗口采集四档采集到呈现p50 16.87–17.03毫秒，SR 4K＋DLSS 2X 17.93–18.15毫秒，档位差别<0.2毫秒；GPU处理各档相同。无补帧窗口采集另发现与本功能无关的旧问题：呈现按首帧锚定，整场固定多等3.1–52毫秒（读到GPU完成<1毫秒），因此无补帧绝对延迟不用于档位比较。垂直同步DLSS 2X四档p50 16.87–17.05毫秒，同样无差别。未测采集卡、串流、30/40系与屏幕光电延迟。
+
+## 2026-10-29/30 RX7000 NR接入
+
+用户明确授权加入7000系。基线e7a9ae1，checkpoint/pre-amd-rdna3-nr-20261029；隔离分支codex/amd-rdna3-nr-20261029，不合并main、不push/Release。代码/运行协议/来源/许可/失败记录与完整命令读docs/AMD_RDNA3_NR_PLAN_2026-10-29.md，最终回执E:/项目/Veyra/reports/amd-rdna3-nr-20261029/FINAL.json。
+
+复用RedDuke固定MIT网络层ab455d1、ZLUDA b135e23，每层独立worker，D3D12/CUDA原生共享纹理/fence；主进程不加载兼容替身。不使用ReShade/OptiScaler、游戏代理或旧帧残差。输入RGBA16F显示代理，网络每帧reset/零guide，Veyra原有HDR基底/残差/保护/历史合成保留；强度用解码混合，不随滑条重建Feature。RX7000和RX9000按真硬件选择不同后端，保存runtime数字ID4不变。Small性能模型和Original、25–100%手动内部比例在列表/节点独立保存。现有AMD1080p像素预算保持，未给7000虚开FSR4。
+
+最终构建6.1秒退出0（logs/codex-amd-rdna3-nr-20261029/build-20261030-005622/compile.log）；CPU能力72、repair300、原lmxxf fake ABI66、GPU协议与parity54项均0失败；QtQuick123通过/0失败/1既有跳过；设置/导出冻结兼容和i18n2712条通过。真实GUI保存与重启通过，无QML错误，原用户配置SHA未变。复用原NVIDIA runner测NR+SR+DLSS2X+Boost，22.47秒通过，149处理帧/源速0.987573，回执真实位于reports/nvidia-low-latency-20261028/gpu-native-effects-2-2-rdna3-regression.json。失败夹具/编译记录完整保留，未篡改历史验收。
+
+本地复用tests/claude-sr-stage-20261028/app，新增审计27项RX7000组件及guard shader；原NVIDIA runtime97项、正式供体manifest1730项核验不变。五个固定外部源码SHA与prepared源码核验，native worker和EXE与构建一致，未把测试copy worker装入产品runtime。310.9.16.0网络原件Valid/NVIDIA，SHA2bc19bc09a7b89dd44f73e2ac0108fcc586e2154bdd0830f242f4f040e28789f；保留本地依赖/manifest/许可，不扩展正式Release白名单。入口tests/amd-rdna3-nr-20261029/启动RX7000-NR测试.cmd，独立interactive-profile、默认不自动开媒体；启动冒烟退出0，原配置SHA不变。
+
+本机没有RX7000，54项GPU检查使用明确copy测试worker，不是AMD推理。没有实测RX7000画质、性能、HDR、导出、采集、VRR或长时稳定；没有重跑原8K最终输出+NR+VFG危险组合。不改真实配置/驱动/已有SDK与运行组件；Lecram继续暂停。本轮清理仅自己的重复下载ZIP及数字TEMP，删除身份/路径检查与逻辑字节另记cleanup.json，不宣称物理净回收。
+## 2026-10-31 用户veyra-qml(69).log补帧间歇掉帧只读排查
+
+本次读取用户提供的7940394字节日志（SHA256 f0b04d276358e98b01fafd7bd33d61e5c0a65d270e92c268f329361905ab7d9f），22611行、3次启动，按启动/session/revision及前5秒预热分开统计；未构建、未运行软件/占用采集卡、未修改产品代码/驱动/配置/运行组件，不push/Release。代码参考3172262，不假定用户包与本机提交一致。报告及原始派生证据E:/项目/Veyra/reports/fg-intermittent-20261031/README.md、analysis.json、segments.json、intervals.csv、steady-medium.json、evidence.json；可重算脚本analyze.py。仅新增诊断文档记录。
+
+RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016秒原帧呈现2518，评估补帧2518，生成呈现2420、过期98（约3.89%），邮箱覆盖/无效结果新增均0；GPU补帧P95指标中位5.573ms。另1秒样本原帧+30、生成+20、过期+10、邮箱不变、提交50fps，主要定位到软件生成帧过期路径而非证明采集不稳。源码采集生成帧deadline容忍10ms；优先调查自适应配对相位、ready观察/唤醒与VSync反压，但低频日志尚不能确定每张过期帧的实际GPU完成时刻。
+
+分开处理：部分高档配置3030候选中2302次预算准入跳过，GPU约23ms；后续高档也有接近全执行的段，不能只以23>16.7断言整体吞吐不足。显示接口错误附近Present/输出检查路径单次约0.73–1.38秒，GPU耗时仅约8ms，属于独立显示调用停顿，根触发源未证实；overlay注入存在但不能直接归罪。DLSS段1838无效明确是contentDuplicate，不是providerDisabled；不冒充DLSS错误。起流discontinuity仅source1，无持续断线/device-removed证据。没有旧版同条件对照，不能确认新版回归，也未修复。
+
+## 2026-10-31 继续复核VRR旧问题与4K30上选择60→30
+
+用户指出现象类似已修VRR周期查询，并询问4K30 NV12上选择60→30的影响。只读复核正式v2.1.1与3172262代码及原日志，未改产品/配置/驱动，未运行或占用采集设备。报告E:/项目/Veyra/reports/fg-intermittent-20261031/RECHECK.md，脚本recheck.py/数据vr-recheck.json；源日志SHA未变。用户暂不清楚是肉眼卡顿还是仅FPS数字下降，未把静止画面过滤直接认作可见故障。
+
+原31分钟/3次启动共22次后台显示query，7ui/13session-start/2display-change；271.988秒连续0次query，仍有8150次FG评估及249评估后丢弃，排除旧2秒周期查询复发。10:48首次728.741ms慢呈现开始比对应display-change query早1.842秒，不能颠倒因果。正式版仍在Present owner同步查DXGI统计，和旧NVAPI VRR探测不同；逐帧查询混在callMs、每秒统计位于presentEnd之后，是待单独计时盲点，未证明其为根因。
+
+纠正上一轮表述：generatedExpiredAfterEval合计三种s.dropped（deadline过期、输出限帧跳过、显示容量最多2ms等待失败），98不能全部称为deadline过期。中档84秒中84条限频deadline日志均expired=false，无法据此分解实际每帧原因；当前优先调查60Hz VSync容量2ms策略与限帧，但尚未有用户设备单变量复现。原README同步更正，原计数证据未改。
+
+五次连接均3840x2160 NV12/30.000030，softwareLimiter=0。37条rate日志requested60To30为true30/false7，而active=false37；1610条frame-rate capture60To30=false、rateSkipped=0，未把30变15。源码supported只接受59–61fps。但选项仍以contentRate=5进入图，上层排除Capture60To30的输入去重，下层却仅排除Transport而开启luma SAD重复判定；正式v2.1.1同样存在。DLSS段1838次contentDuplicate、providerDisabled=0与此策略一致，不能因halfRate未激活就说开关完全无影响，也不能无原画认定1838次均误判。VFG中档无invalid/contentDuplicate仍有98评估后丢弃，故不是单一根因。后续若授权修复，须分开丢弃原因与验证未激活半帧模式下的内容合同；本轮未修改软件。
+
+## 2026-10-31 用户澄清最初为原始时间戳、未开60→30
+
+现场确认与最初日志一致，不能将后期contentPolicy5重复判定倒推为首发原因。已单列reports/fg-intermittent-20261031/INITIAL_TRANSPORT.md并在README置顶。最早可连续统计VFG高档rev6为contentPolicy0/requested60To30=false、无contentDuplicate，显示Automatic/displayQueuePaced=false/vrrSync=false，故后期VSync容量2ms规则也不解释该段。101.089秒3030候选中2302（75.97%）在评估前被预算准入跳过，GPU FG P95指标约23ms；原帧呈现3030、邮箱新增覆盖0。具体日志remaining17.238ms+10ms不足predicted29.847ms（减已有进度约0.181ms），admitted=false。首发主线应查高档4K VFG的预算与配对相位，尚未证明是成本估计还是相位策略错误；后期中档/同步/去重分开保留。本轮只读分析及文档，不改软件，不运行测试、不发布。
+## 2026-10-31 用户补充任何补帧都一样：跨提供方复核
+
+不得将此前高档VFG预算拒绝当作全局结论。报告reports/fg-intermittent-20261031/MULTI_PROVIDER.md；原日志还含DLSS和XeSS。XeSS行9884（10:30:19.447）Present调用80.881ms、总81.097ms，前置记录提交0.207ms；生成和节奏在代理内部，不能将0.207ms冒充GPU推理耗时。SDK各短阶段有效样本大多58–62fps、cycleMismatches=0，关闭尾窗低FPS不代表播放持续掉帧；普通frame-flow原帧30也不是XeSS最终帧率。
+
+源码明确XeSS生成帧不经Veyra生成子帧预算/10ms期限/2ms容量分支，每帧显示统计trackScanout也排除XeSS（每秒统计仍调用）；上述机制均不能被当作全提供方同症状的唯一原因。调查范围应扩至共用采集、owner调度、呈现入口、Windows/驱动/合成及窗口状态，但现有证据不能确定同一根因。无产品修改/新构建/现场测试/发布。后续需要同设置分提供方的丢弃原因计数及API耗时分解，不能继续把单段关联提升为定论。
+
+## 2026-10-31 补帧接近刷新率修复
+
+用户确认“开始修”。分支claude/fg-60hz-pacing-20261031，基于c6c28b9；未合并main、未push/Release，未提交。记录docs/FG_60HZ_PACING_2026-10-31.md，回执reports/claude-fg-60hz-pacing-20261031/FINAL.json。
+
+改动：输出不超过刷新率×1.02时生成帧等到下一帧到期前0.5 ms；输出在0.65–1.02倍时自动模式走一帧队列，迟到容忍与准入预算同步放宽（60 Hz 2X为16.2 ms）；实时VFG跳帧后前2次不计入成本；新增fg-near-refresh、fg-drops、replacedAtLeast日志。第4项到达时刻平滑未做。
+
+命令：tmp/claude-fg-60hz-pacing-20261031/build/build.py（并发2）；check.py unit/ab/near/gpu-regress/qml/stage，sweep.py，func.py，ui_smoke.py，脚本已复制到报告tools。
+
+失败与修正：timing测试目标不带/utf-8，包含DisplayFgBudget.h编译失败，比值断言改放realtime测试；pacing日志漏传参数编译失败；测试脚本写入NUL字符常量编译失败；首轮从构建目录运行缺DLSS运行库，FG未生效，改在共享运行目录运行。窗口输入16 ms定时器加GetTickCount只能产出约28 fps，改高精度重绘后才达到目标速率。
+
+05:50–05:53与06:06后用户自行打开E:/App下2.1.1，首轮上限/低比值A/B被污染（GPU约48%），已移到contaminated目录并重跑；未停止用户进程，之后脚本记录userVeyraRunning。首轮用samples比较时发现自动模式samples只是下限、与垂直同步口径不同，会高估旧版丢帧，新增replacedAtLeast后重测，结果按范围报告。
+
+结果：320 Hz自动模式比值0.74–1.0，旧版实际显示少3–15%（范围），新版被替换0、容量丢帧不超过生成帧的2%；捕获→呈现P50差≤0.3 ms，P95 0至+1.8 ms。垂直同步回放容量丢帧78–101→18–22。高于刷新率规则不生效，结果在波动内。单元回放：6000对丢153→0；VFG陷阱600对评估10→600。repair/timing/scheduler/realtime/i18n 0失败，QtQuick 123/0/1跳过，9个原生GPU场景通过，运行目录97个运行组件哈希一致。
+
+未验：真实60 Hz屏、采集卡、RTX 5060 Ti；VFG陷阱本机不能复现，只有日志数字回放；跳帧后高成本的原因未证实。屏幕采集固定延迟修复分支也改同几个文件，未合并、未联合测试。

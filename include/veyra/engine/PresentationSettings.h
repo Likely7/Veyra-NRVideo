@@ -10,9 +10,11 @@ namespace veyra::engine {
 enum class PacingMode : unsigned { LowQueue, Even, Reflex };
 enum class DisplaySync : unsigned { Tearing, Vsync, Automatic };
 enum class OutputRateMode : unsigned { Off, FollowDisplay, Custom };
+enum class NvidiaLowLatency : unsigned { Off, On, Boost };
+constexpr NvidiaLowLatency savedNvidiaLowLatency(int value){return value>=0&&value<=2?NvidiaLowLatency(value):NvidiaLowLatency::Off;}
 struct PresentationSettings {
-    // Low-latency queue: DXGI maximum frame latency 1 instead of 3, plus
-    // Reflex when frame generation is off. Reduces submit-to-scanout queueing,
+    // Low-latency queue: DXGI maximum frame latency 1 instead of 3.
+    // Native NVIDIA Reflex is selected separately below. Reduces queueing,
     // which cannot be measured on this machine - do not claim a figure for it.
     bool enabled=false;
     PacingMode mode=PacingMode::LowQueue;  // deprecated, see above
@@ -25,9 +27,20 @@ struct PresentationSettings {
     // 可变刷新 switch: where the monitor can run VRR, Automatic presents like
     // explicit Vsync (G-SYNC/FreeSync + V-SYNC, see presentationVsync below).
     bool variableRefresh=false;
+    NvidiaLowLatency nvidiaLowLatency=NvidiaLowLatency::Off;
     bool operator==(const PresentationSettings&) const = default;
-    bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
+    bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&unsigned(nvidiaLowLatency)<=2&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
 };
+// Who owns the low queue in the interface: on an NVIDIA adapter the three
+// NVIDIA states (开/开＋增强 imply it, 关 clears it); on another adapter the
+// plain low-queue switch, and the NVIDIA choice is only kept for the next
+// NVIDIA session. Returns whether `enabled` had to change (review 2026-10-29:
+// a kept 开＋增强 used to force the queue on an AMD compute GPU for good).
+constexpr bool syncNvidiaLowLatencyQueue(PresentationSettings& p,bool nvidiaAdapter){
+    const bool queue=p.nvidiaLowLatency!=NvidiaLowLatency::Off;
+    if(!nvidiaAdapter||p.enabled==queue)return false;
+    p.enabled=queue;return true;
+}
 // Automatic never waits for vertical sync and never requests tearing: a
 // flip-model Present(0, 0) replaces a frame that has not been shown yet at the
 // next refresh, so the newest finished frame is the one shown and nothing
@@ -43,7 +56,9 @@ struct PresentationSettings {
 // effective settings: inside the VRR range the panel starts a refresh when
 // the frame arrives, so the wait is about zero and nothing tears; above the
 // range the one-deep VSync queue holds (Microsoft documents VRR through the
-// tearing flag, which only explicit Tearing may use).
+// tearing flag, which only explicit Tearing may use). Automatic is reported as
+// Vsync the same way while live frame generation runs near the refresh, where
+// replacing is what loses frames (VideoPresenter::automaticQueueWanted).
 constexpr bool presentationVsync(const PresentationSettings& s) {
     return s.display==DisplaySync::Vsync;
 }

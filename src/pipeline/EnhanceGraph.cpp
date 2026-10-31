@@ -7,6 +7,8 @@
 // views are created last. Per-frame execution uses the shared command slot
 // ring (NR evaluates on a fresh list - snippet constraint).
 #include "veyra/pipeline/EnhanceGraph.h"
+#include "veyra/pipeline/Rdna3NrBackend.h"
+#include "veyra/pipeline/AmdNrProvider.h"
 #include "veyra/pipeline/VfgBackend.h"
 #include "veyra/engine/GraphDescription.h"
 #include "veyra/engine/ColorLut.h"
@@ -1512,9 +1514,18 @@ bool EnhanceGraph::initNgxFeatures()
                 // restores its delta over the untouched HDR base before the
                 // same shared residual/protection/temporal composite.
                 if(desc_.hdrWorking()&&!instance->createAmdHdrProxy(context_.device()))return false;
-                instance->amd=std::make_unique<LmxxfNrBackend>();
-                const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr";
-                if(!instance->amd->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId,instance->model.performance) || !instance->amd->admits(extent.width,extent.height))return false;
+                if(amdNrProvider(context_.adapter().vendorId,context_.adapter().description)==AmdNrProvider::RedDukeRdna3){
+                    auto backend=std::make_unique<Rdna3NrBackend>();
+                    const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr-rdna3";
+                    if(!backend->open(directory.lexically_normal(),context_.device(),ring_.queue(),extent.width,extent.height,instance->model.performance))return false;
+                    instance->amd=std::move(backend);
+                }else{
+                    auto backend=std::make_unique<LmxxfNrBackend>();
+                    const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr";
+                    if(!backend->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId,instance->model.performance))return false;
+                    instance->amd=std::move(backend);
+                }
+                if(!instance->amd->admits(extent.width,extent.height))return false;
             }
             veyra::log::info("resolution",std::format("NR layer={} internal={}x{} composite={}x{} sharedMotion={}",
                 index+1,extent.width,extent.height,fullW,fullH,motion!=nullptr));

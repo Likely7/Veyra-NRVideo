@@ -224,6 +224,7 @@ target_link_libraries(veyra_runtime_probe PRIVATE veyra_gfx)
 
 veyra_add_compute_shader(veyra_shader_parity_encode ParityEncode)
 veyra_add_compute_shader(veyra_shader_parity_decode ParityDecode)
+veyra_add_compute_shader(veyra_shader_rdna3_nr_decode Rdna3NrDecode)
 veyra_add_compute_shader(veyra_shader_hdr_video_sr HdrVideoSrRestore)
 veyra_add_compute_shader(veyra_shader_sr_resolve SrResolve)
 veyra_add_compute_shader(veyra_shader_hdr_amd_nr_encode HdrAmdNrEncode)
@@ -381,6 +382,7 @@ add_library(veyra_pipeline STATIC
   src/pipeline/SmaaLookupTables.cpp
   src/pipeline/NrInstance.cpp
   src/pipeline/LmxxfNrBackend.cpp
+  src/pipeline/Rdna3NrBackend.cpp
   src/pipeline/VfgBackend.cpp
 )
 veyra_apply_warnings(veyra_pipeline)
@@ -397,6 +399,31 @@ if(EXISTS "${VEYRA_CUDA_DRIVER_INCLUDE_DIR}/cuda.h")
   target_compile_definitions(veyra_pipeline PRIVATE VEYRA_HAVE_CUDA_DRIVER_HEADERS=1)
 endif()
 target_link_libraries(veyra_pipeline PUBLIC veyra_base veyra_gfx d3d12 dxgi dxguid d3dcompiler)
+add_dependencies(veyra_pipeline veyra_shader_rdna3_nr_decode)
+
+# Optional independent RX7000 network worker. All third-party source and runtime
+# assets remain external; only our host and reproducible preparation script live here.
+set(VEYRA_RDNA3_NETWORK_SOURCE_DIR "" CACHE PATH "Prepared external RedDuke network source (MIT)")
+if(EXISTS "${VEYRA_RDNA3_NETWORK_SOURCE_DIR}/runtime/core/network.cpp")
+  add_executable(veyra_amd_nr_worker src/pipeline/Rdna3NrWorker.cpp "${VEYRA_RDNA3_NETWORK_SOURCE_DIR}/runtime/core/network.cpp")
+  target_include_directories(veyra_amd_nr_worker PRIVATE include "${VEYRA_RDNA3_NETWORK_SOURCE_DIR}")
+  target_compile_features(veyra_amd_nr_worker PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_amd_nr_worker PRIVATE NOMINMAX UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+  target_compile_options(veyra_amd_nr_worker PRIVATE /utf-8 /WX-)
+  target_link_libraries(veyra_amd_nr_worker PRIVATE d3d12 dxgi dxguid version)
+endif()
+add_executable(veyra_amd_nr_test_worker src/pipeline/Rdna3NrWorker.cpp)
+target_include_directories(veyra_amd_nr_test_worker PRIVATE include)
+target_compile_features(veyra_amd_nr_test_worker PRIVATE cxx_std_20)
+target_compile_definitions(veyra_amd_nr_test_worker PRIVATE NOMINMAX UNICODE _UNICODE WIN32_LEAN_AND_MEAN VEYRA_RDNA3_CONTRACT_WORKER=1)
+target_compile_options(veyra_amd_nr_test_worker PRIVATE /utf-8 /WX-)
+target_link_libraries(veyra_amd_nr_test_worker PRIVATE d3d12 dxgi dxguid)
+add_executable(veyra_rdna3_nr_contract_tests tests/integration/Rdna3NrContractTests.cpp)
+target_include_directories(veyra_rdna3_nr_contract_tests PRIVATE include)
+target_compile_features(veyra_rdna3_nr_contract_tests PRIVATE cxx_std_20)
+target_compile_definitions(veyra_rdna3_nr_contract_tests PRIVATE NOMINMAX UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+target_link_libraries(veyra_rdna3_nr_contract_tests PRIVATE veyra_pipeline veyra_parity)
+add_dependencies(veyra_rdna3_nr_contract_tests veyra_shader_rdna3_nr_decode)
 add_library(veyra_lmxxf_fake_runtime SHARED tests/unit/LmxxfNrFakeRuntime.cpp)
 target_compile_features(veyra_lmxxf_fake_runtime PRIVATE cxx_std_20)
 target_compile_definitions(veyra_lmxxf_fake_runtime PRIVATE LMXXF_NR_RUNTIME_EXPORTS NOMINMAX WIN32_LEAN_AND_MEAN)

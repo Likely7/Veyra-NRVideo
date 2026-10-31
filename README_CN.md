@@ -160,6 +160,8 @@ QML 管界面，视频由原生 D3D12 呈现。列表/节点共用引擎，未�
 
 开发从[当前文档入口](docs/README.md)开始：[构建与验证](docs/DEVELOPMENT.md)、[界面代码职责](docs/ARCHITECTURE.md)。历史任务记录已单独归档。
 
+开发分支新增 [RX 7000 实验 NR 接入](docs/AMD_RDNA3_NR_PLAN_2026-10-29.md)：支持 Small / Original 与内部百分比，保留 RX 9000 和 NVIDIA 路径。本地协议/UI回归完成，RX 7000 实卡推理尚待验收；当前正式2.1.1不包含此分支功能。
+
 Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.1.0 构建与对应源码](docs/history/releases/BUILD_2.1.0.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
 
 ## 支持与反馈

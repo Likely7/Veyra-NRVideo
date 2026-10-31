@@ -34,6 +34,15 @@ int main(int argc, char** argv) {
     // A capture format label with a technical tag at the end.
     expect(i18n::text(QStringLiteral("1920 x 1080 @ 120.00 fps · NV12 · 原生 · 低延迟 [format 16]")),
            QStringLiteral("1920 x 1080 @ 120.00 fps · NV12 · Native · low latency [format 16]"), "tagged segment");
+    // The presentation status (VideoPresenter) joins its pieces with " · "; each is its own entry.
+    expect(i18n::text(QStringLiteral("英伟达低延迟：关 · 显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）")),
+           QStringLiteral("NVIDIA Low Latency: Off · Display sync: auto · no tearing and no VSync wait (lowest latency)"), "presentation status pieces");
+    expect(i18n::text(QStringLiteral("英伟达低延迟不可用，当前使用低排队（详见日志） · 输出上限：关闭 · 垂直同步：屏幕队列 1 帧，读帧前等待刷新 · 显示同步：垂直同步")),
+           QStringLiteral("NVIDIA Low Latency unavailable; using low queue depth (see the log) · Output cap: off · VSync: 1-frame display queue, waits for refresh before reading a frame · Display sync: VSync"),
+           "presentation fallback status pieces");
+    expect(i18n::text(QStringLiteral("英伟达低延迟：关 · 显示同步：自动（补帧接近刷新率） · 屏幕队列 1 帧，避免丢帧")),
+           QStringLiteral("NVIDIA Low Latency: Off · Display sync: auto (frame generation near refresh rate) · 1-frame display queue to avoid dropped frames"),
+           "near-refresh status pieces");
     // Unknown text and paths come back unchanged.
     expect(i18n::text(QStringLiteral("D:/视频/我的片子.mkv")), QStringLiteral("D:/视频/我的片子.mkv"), "path untouched");
 

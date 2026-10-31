@@ -38,9 +38,11 @@ int thunkReplacementFunction(int value) { ++thunkHookCalls; return thunkOriginal
 #include "veyra/engine/PresentationSettings.h"
 #include "veyra/engine/PresentationGeometry.h"
 #include "veyra/gfx/NvidiaVrr.h"
+#include "NvidiaLowLatencyTests.h"
 int main(){
     using namespace veyra;int failures=0,checks=0;
     auto check=[&](bool ok,const char* name){++checks;if(!ok)++failures;std::cout<<(ok?"PASS ":"FAIL ")<<name<<'\n';};
+    nvidia_latency_test::run(check);
     {
         gfx::VrrState state;state.known=state.capsKnown=true;
         state.supportsVrr=state.currentlyCapable=true;

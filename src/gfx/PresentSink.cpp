@@ -300,7 +300,7 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     frameStatisticsBaseValid_=false;
     // New swap chain: present ids restart; VEYRA_TEST_NO_DISPLAY_STATS=1 disables the samples.
     displayLatencyEnabled_=GetEnvironmentVariableW(L"VEYRA_TEST_NO_DISPLAY_STATS",nullptr,0)==0;
-    pendingPresents_={};lastDisplayedPresent_=0;lastSyncRefresh_=0;lastSyncQpc_=0;refreshQpc_=0;displayLatencyMs_.clear();
+    pendingPresents_={};lastDisplayedPresent_=0;lastSyncRefresh_=0;lastPresentRefresh_=0;replacedPresents_=0;lastSyncQpc_=0;refreshQpc_=0;displayLatencyMs_.clear();
     log::info("display-refresh",std::format("monitor refresh={:.3f} Hz at swapchain creation (0 = unknown); submissions above this rate cannot all be scanned out",displayRefreshHz_));
     log::info("present", std::format("present-sink: window {}x{} swapEffect={} buffers=3 vsync={} tearing={} captureCompatible={} (capture not verified)",
         width_, height_, actual.SwapEffect==DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL?"flip-sequential":"flip-discard", desc_.vsync ? 1 : 0, (desc_.tearing && tearingSupported_) ? 1 : 0, desc.captureCompatible));
@@ -480,6 +480,14 @@ void PresentSink::sampleDisplayLatency(){
     if(stats.PresentCount==lastDisplayedPresent_)return;
     const UINT previous=lastDisplayedPresent_;
     lastDisplayedPresent_=stats.PresentCount;
+    // One refresh shows one new present, so presents beyond the refreshes
+    // between two shown frames were replaced unseen: Present(0,0) loses them
+    // with every other counter still reading full rate (field log 2026-10-31).
+    if(previous&&stats.PresentCount>previous&&stats.PresentRefreshCount>=lastPresentRefresh_){
+        const UINT presents=stats.PresentCount-previous,refreshes=stats.PresentRefreshCount-lastPresentRefresh_;
+        if(presents>refreshes)replacedPresents_+=presents-refreshes;
+    }
+    lastPresentRefresh_=stats.PresentRefreshCount;
     const double period=refreshQpc_>0?refreshQpc_:displayRefreshHz_>=1?frequency/displayRefreshHz_:0;
     if(period<=0||stats.SyncRefreshCount<stats.PresentRefreshCount||stats.SyncRefreshCount-stats.PresentRefreshCount>16)return;
     const double scanout=double(stats.SyncQPCTime.QuadPart)-double(stats.SyncRefreshCount-stats.PresentRefreshCount)*period;
@@ -505,6 +513,7 @@ void PresentSink::sampleDisplayLatency(){
 }
 PresentSink::DisplayLatencySummary PresentSink::takeDisplayLatency(){
     DisplayLatencySummary summary;
+    summary.replacedAtLeast=replacedPresents_;replacedPresents_=0;
     auto& values=displayLatencyMs_;
     if(!values.empty()){
         std::sort(values.begin(),values.end());

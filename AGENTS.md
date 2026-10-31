@@ -1,5 +1,11 @@
 # Veyra Agent 工作规则
 
+> **2026-10-31 补帧接近刷新率修复**：用户确认“开始修”。分支`claude/fg-60hz-pacing-20261031`（基于c6c28b9）按docs/FG_60HZ_PACING_2026-10-31.md改实时图内补帧：输出在刷新率0.65–1.02倍时自动模式走一帧队列，输出不超过刷新率时生成帧等到下一帧到期，VFG跳帧后前2次不计入成本。`VEYRA_TEST_LEGACY_NEAR_REFRESH=1`恢复旧规则。本机只验证320 Hz，未在真实60 Hz屏/采集卡/5060 Ti验证，不得当作现场已修好。不合并main、不push/Release。
+
+> **2026-10-29 RX7000 NR接入**：用户授权在codex/amd-rdna3-nr-20261029（基线e7a9ae1）加入7000系NR与Small性能模型。按docs/AMD_RDNA3_NR_PLAN_2026-10-29.md隔离RedDuke网络worker，保留9000 lmxxf及现有NVIDIA路径；不接旧帧异步残差，不回读GPU图像，不改真实配置/驱动/现有SDK与运行组件。不合并main、不push/Release。本机无RX7000，合同测试不冒充实卡通过。
+
+> **2026-10-28/29英伟达低延迟任务**：当前隔离分支`codex/nvidia-low-latency-20261028`，基线main4351bbd；用户授权完善Reflex并改为“英伟达低延迟：关/开/开＋增强”。直接NVAPI，源帧Sleep与生成帧带外队列标记分开；当前本机DLSS/VFG/FSR原生路径验证，XeSS保持提供方调度并显示不生效。真实证据、失败修正和硬件边界见`docs/NVIDIA_LOW_LATENCY_2026-10-28.md`与`reports/nvidia-low-latency-20261028/FINAL.json`。2026-10-29 Claude复查修正（非英伟达显卡低排队归属、状态逐段翻译、摘要、未补帧通知降级）与屏幕采集延迟对比已提交到本分支（未合并main），见执行记录末节及`reports/claude-nvidia-ll-review-20261029/FINAL.json`。不合并main、不push/Release，不改真实配置、驱动、SDK/模型/DLL；使用私有测试配置。
+
 > **2026-10-28后续（用户选择）**：同分支新增“超分后缩回到”超采样选项：单次RTX视频超分到目标尺寸，再线性光精确缩回`srOutput`，NR/补帧/显示按缩回尺寸运行；双重开启时不用、保留选择。复用`srOutput`字段与`SrResolve`，导出协议14，超采样图同双重图走WDDM预算准入。读`docs/SR_SUPERSAMPLE_2026-10-28.md`及`reports/claude-sr-supersample-20261028/FINAL.json`。用户随后要求直接合并：双重超分、复查修正与超采样已合入本地main（未push/Release），活动树切回main，其余限制同下条。
 
 > **2026-10-28最新用户纠偏（覆盖下面同日早期两条）**：当前分支`codex/dual-sr-20261028`，实施真正的“基础SR→降低第一次AI结果→第二次SR”；双重开关位于基础超分下，展开独立第二设置，默认关闭。普通8K保持原规则，撤回强制4K参数修正/拦截；新双重图按WDDM预算拒绝不足的分配，不偷偷缩小尺寸。当前双重仅RTX视频超分，两次真实Evaluate；本机SDK共享Feature，不宣称两个独立SDK实例。实际验证与限制读`docs/DUAL_SR_PLAN_2026-10-28.md`及`reports/dual-sr-20261028/FINAL.json`。不重跑原8K最终输出+NR+VFG危险组合，根因未证实；不改真实配置、不合并main、不push/Release。

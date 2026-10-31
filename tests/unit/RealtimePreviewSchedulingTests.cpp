@@ -159,6 +159,12 @@ int main() {
         check(displayFgSuggestion(B::Dlss, 6, 0, 60) == 0 && displayFgSuggestion(B::Dlss, 6, 60, 0) == 0, "unknown rates suggest nothing");
         check(displayFgSuggestion(B::Dlss, 1, 60, 60) == 0, "no generation requested: no hint");
         check(displayFgSuggestion(B::Dlss, 6, 60, 100, true) == 1, "under VSync 60 fps on 100 Hz suggests off: the surplus would wait");
+        check(displayFgOutputNear(60, 60) && displayFgOutputNear(59.9444, 60.0049) && displayFgOutputNear(61, 60), "30 fps 2X is near a 60 Hz panel, within the hint's 2% tolerance");
+        check(!displayFgOutputFits(360, 320) && !displayFgOutputNear(360, 320), "DLSS 6X above 320 Hz keeps the rules tuned for it");
+        check(displayFgOutputNear(318, 320) && displayFgOutputNear(240, 320), "MFG close to a 320 Hz panel is near");
+        check(displayFgOutputFits(120, 320) && !displayFgOutputNear(120, 320), "60 fps 2X on 320 Hz fits but is far from the refresh");
+        check(displayFgOutputFits(60, 120) && !displayFgOutputNear(60, 120), "30 fps 2X on 120 Hz is not near: the model loses nothing there");
+        check(!displayFgOutputFits(0, 60) && !displayFgOutputFits(60, 0) && !displayFgOutputNear(std::nan(""), 60), "unknown rates select no rule");
         check(displayFgSuggestion(B::Dlss, 2, 60, 100, true) == 1, "under VSync 2X at 60 fps on 100 Hz suggests off");
         check(displayFgSuggestion(B::Dlss, 6, 60, 320, true) == 4, "under VSync a fitting lower multiplier is suggested");
         check(displayFgSuggestion(B::Dlss, 2, 30, 60, true) == 0, "under VSync a fitting request: no hint");

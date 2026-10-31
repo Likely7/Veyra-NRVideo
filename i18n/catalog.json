@@ -113,13 +113,6 @@
    "ja": "  ·  デコード "
   },
   {
-   "zh": " + NVIDIA Reflex（实验）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": " + NVIDIA Reflex（實驗）",
-   "en": " + NVIDIA Reflex (experimental)",
-   "ja": " + NVIDIA Reflex（実験的）"
-  },
-  {
    "zh": " / 4 个区域",
    "src": "qml/SavePresetDialog.qml",
    "zh-TW": " / 4 個區域",
@@ -272,13 +265,6 @@
    "zh-TW": " · 校準中",
    "en": " · calibrating",
    "ja": " · 補正中"
-  },
-  {
-   "zh": " · 此补帧提供方暂不支持独立输出限帧；已保留设置",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": " · 此補幀提供方暫不支援獨立輸出限幀；已保留設定",
-   "en": " · this frame generation provider cannot cap its own output yet; setting kept",
-   "ja": " · このフレーム生成方式は出力上限を個別に設定できません。設定は保持しました"
   },
   {
    "zh": " · 等待 ",
@@ -701,11 +687,11 @@
    "ja": "AMD NR のプレビューと動画書き出しは内部で最大 1080p まで処理し、動画の出力サイズを維持します。画像書き出しはモデルのサイズ制限内である必要があります。"
   },
   {
-   "zh": "AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。原生 HDR 保留原图基底，通过 SDR 代理增强后还原；AMD 实卡效果仍待验证。",
+   "zh": "AMD NR（实验）：RX 7000 / 9000 使用各自运行组件，需要 HIP 7 驱动。性能模式使用 Small，关闭使用原模型；内部最高 1080p 像素预算，支持百分比尺寸。7000 系风格固定默认，9000 系沿用运行时配置。原生 HDR 保留基底，通过 SDR 代理增强后还原。7000 系仍需实卡验收。",
    "src": "qml/NrLayerEditor.qml",
-   "zh-TW": "AMD NR（實驗）：需要 RX 9000 驅動及 lmxxf 執行元件，內部最高 1080p 像素預算。支援模型強度、殘差與保護；風格使用執行環境設定。原生 HDR 保留原圖基底，透過 SDR 代理增強後還原；AMD 實卡效果仍待驗證。",
-   "en": "AMD NR (experimental): requires an RX 9000 driver and lmxxf runtime, with an internal 1080p pixel budget. Model strength, residual and protection are supported; style uses the runtime configuration. Native HDR retains its original base and restores enhancement from an SDR proxy; results on AMD hardware still need verification.",
-   "ja": "AMD NR（実験）：RX 9000 ドライバーと lmxxf ランタイムが必要です。内部処理は最大1080p相当のピクセル数です。モデル強度、残差、保護に対応し、スタイルはランタイム設定を使用します。ネイティブHDRの原画を保持し、SDRプロキシの補正差分を復元します。AMD実機での効果は未検証です。"
+   "zh-TW": "AMD NR（實驗）：RX 7000 / 9000 使用各自執行元件，需要 HIP 7 驅動。效能模式使用 Small，關閉使用原模型；內部最高 1080p 像素預算，支援百分比尺寸。7000 系風格固定預設，9000 系沿用執行時設定。原生 HDR 保留基底，透過 SDR 代理增強後還原。7000 系仍需實卡驗收。",
+   "en": "AMD NR (experimental): RX 7000 / 9000 use separate runtimes and require HIP 7. Performance mode selects Small; off selects Original. Internal processing supports percentages within a 1080p pixel budget. RX 7000 uses the default style; RX 9000 retains runtime configuration. Native HDR preserves its base and reconstructs the SDR-proxy enhancement. RX 7000 hardware validation is still required.",
+   "ja": "AMD NR（実験）：RX 7000 / 9000 は専用ランタイムと HIP 7 が必要です。性能モードは Small、オフは元のモデルを使用します。内部処理は 1080p 相当の画素数内で割合を指定できます。7000 系は標準スタイル固定、9000 系はランタイム設定を使用します。ネイティブ HDR のベースを保持し、SDR プロキシの強化を復元します。7000 系の実機検証は未実施です。"
   },
   {
    "zh": "AMD 光流",
@@ -1968,32 +1954,25 @@
    "ja": "RTX Video SR。基本超解像とは独立した品質設定"
   },
   {
-   "zh": "RX 9000 · lmxxf（实验）",
+   "zh": "RX 7000 / 9000 · AMD NR（实验）",
    "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "RX 7000 / 9000 · AMD NR（實驗）",
+   "en": "RX 7000 / 9000 · AMD NR (experimental)",
+   "ja": "RX 7000 / 9000 · AMD NR（実験）"
+  },
+  {
+   "zh": "RX 7000 · RedDuke（实验）",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "RX 7000 · RedDuke（實驗）",
+   "en": "RX 7000 · RedDuke (experimental)",
+   "ja": "RX 7000 · RedDuke（実験）"
+  },
+  {
+   "zh": "RX 9000 · lmxxf（实验）",
+   "src": "src/ui/bridge/Hardware.cpp",
    "zh-TW": "RX 9000 · lmxxf（實驗）",
    "en": "RX 9000 · lmxxf (experimental)",
    "ja": "RX 9000 · lmxxf（実験）"
-  },
-  {
-   "zh": "Reflex 调用及驱动撤销失败；请关闭视频后重试",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "Reflex 調用及驅動撤銷失敗；請關閉影片後重試",
-   "en": "Reflex call and driver rollback failed; close the video and try again",
-   "ja": "Reflex の呼び出しとドライバー設定の取り消しに失敗しました。動画を閉じて再試行してください"
-  },
-  {
-   "zh": "Reflex 调用失败，当前使用低排队；详见日志",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "Reflex 調用失敗，當前使用低排隊；詳見日誌",
-   "en": "Reflex call failed; using the low queue instead. See the log",
-   "ja": "Reflex の呼び出しに失敗したため、低キューを使用中です。ログを確認してください"
-  },
-  {
-   "zh": "Reflex 驱动状态撤销失败；低延迟队列已停用 · ",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "Reflex 驅動狀態撤銷失敗；低延遲佇列已停用 · ",
-   "en": "Reflex driver state could not be rolled back; low-latency queue disabled · ",
-   "ja": "Reflex のドライバー状態を取り消せませんでした。低遅延キューを無効にしました · "
   },
   {
    "zh": "SDK 提交",
@@ -2360,11 +2339,11 @@
    "ja": "XeSS はエンコード可能な補間テクスチャを公開していません。書き出しには FSR、DLSS または VFG を選択してください。"
   },
   {
-   "zh": "XeSS 提供方自行调度：低延迟队列与输出上限不生效 · ",
+   "zh": "XeSS 提供方自行调度：英伟达低延迟与输出上限不生效，选择已保留",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "XeSS 提供方自行調度：低延遲佇列與輸出上限不生效 · ",
-   "en": "The XeSS provider schedules itself: low-latency queue and output cap do not apply · ",
-   "ja": "XeSS は独自にスケジュールします：低遅延キューと出力上限は効きません · "
+   "zh-TW": "XeSS 提供方自行調度：NVIDIA 低延遲與輸出上限不生效，選擇已保留",
+   "en": "XeSS owns scheduling: NVIDIA Low Latency and output cap are inactive; selections retained",
+   "ja": "XeSS がスケジュールを管理：NVIDIA 低遅延と出力制限は無効です。選択は保持されます"
   },
   {
    "zh": "XeSS 未启用：运行时或设备不兼容；当前为普通呈现",
@@ -2687,6 +2666,13 @@
    "zh-TW": "不向 PS5 轉發電腦手把輸入",
    "en": "Don't forward this PC's controller input to the PS5",
    "ja": "この PC のコントローラー入力を PS5 に転送しない"
+  },
+  {
+   "zh": "不撕裂，也不等待垂直同步（延迟最低）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "不撕裂，也不等待垂直同步（延遲最低）",
+   "en": "no tearing and no VSync wait (lowest latency)",
+   "ja": "ティアリングなし、垂直同期を待たない（最小遅延）"
   },
   {
    "zh": "不支持",
@@ -3515,11 +3501,11 @@
    "ja": "低遅延キュー · 現在無効"
   },
   {
-   "zh": "低延迟队列：只保留一帧在处理",
+   "zh": "低延迟队列：已开启",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "低延遲佇列：只保留一幀在處理",
-   "en": "Low-latency queue: one frame in flight",
-   "ja": "低遅延キュー：処理中は 1 フレームのみ"
+   "zh-TW": "低延遲佇列：已開啟",
+   "en": "Low queue latency: on",
+   "ja": "低遅延キュー：オン"
   },
   {
    "zh": "低延迟顺序，仅预览、全层同步",
@@ -3964,7 +3950,7 @@
   },
   {
    "zh": "关",
-   "src": "qml/ProDisplayPanel.qml",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
    "zh-TW": "關",
    "en": "Off",
    "ja": "オフ"
@@ -4270,6 +4256,20 @@
    "zh-TW": "減少動畫",
    "en": "Reduce motion",
    "ja": "アニメーションを減らす"
+  },
+  {
+   "zh": "减少处理排队",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "減少處理排隊",
+   "en": "Reduce processing queue depth",
+   "ja": "処理の待ち行列を減らす"
+  },
+  {
+   "zh": "减少处理排队；增强档提高 GPU 频率，可能增加功耗。",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "減少處理排隊；增強模式提高 GPU 時脈，可能增加功耗。",
+   "en": "Reduce processing queue depth. Boost requests higher GPU clocks and may increase power use.",
+   "ja": "処理の待ち行列を減らします。ブーストは GPU クロックを上げ、消費電力が増える場合があります。"
   },
   {
    "zh": "减少暗部被进一步压黑，保留提亮细节",
@@ -5161,20 +5161,6 @@
    "ja": "名前を付けて保存"
   },
   {
-   "zh": "只保留一帧在处理，未补帧时加 NVIDIA Reflex；垂直同步本身已不排队",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "只保留一幀在處理，未補幀時加 NVIDIA Reflex；垂直同步本身已不排隊",
-   "en": "Keeps one frame in flight and adds NVIDIA Reflex without frame generation; VSync itself no longer queues",
-   "ja": "処理中のフレームを 1 枚に保ち、フレーム生成なしでは NVIDIA Reflex を追加；垂直同期自体はもうキューを溜めない"
-  },
-  {
-   "zh": "只保留一帧在处理，未补帧时加 Reflex",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "只保留一幀在處理，未補幀時加 Reflex",
-   "en": "One frame in flight; adds Reflex without frame generation",
-   "ja": "処理中は 1 フレームのみ、フレーム生成なしでは Reflex を追加"
-  },
-  {
    "zh": "只列出当前分辨率和帧率下的像素格式",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "只列出目前解析度與幀率下的像素格式",
@@ -5308,11 +5294,11 @@
    "ja": "可変リフレッシュ · ドライバーの確認待ち"
   },
   {
-   "zh": "可变刷新：超过屏幕最高刷新时只排 1 帧 · ",
+   "zh": "可变刷新：超过屏幕最高刷新时只排 1 帧",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "可變刷新：超過螢幕最高刷新時只排 1 幀 · ",
-   "en": "Variable refresh: only 1 frame queued above the display maximum · ",
-   "ja": "可変リフレッシュ：画面の最大リフレッシュを超えると 1 フレームだけキュー · "
+   "zh-TW": "可變刷新：超過螢幕最高刷新時只排 1 幀",
+   "en": "Variable refresh: only 1 frame queued above the display maximum",
+   "ja": "可変リフレッシュ：画面の最大リフレッシュを超えると 1 フレームだけキュー"
   },
   {
    "zh": "可用",
@@ -5833,18 +5819,18 @@
    "ja": "垂直同期"
   },
   {
-   "zh": "垂直同步：屏幕队列 1 帧，读帧前等待刷新 · ",
+   "zh": "垂直同步：屏幕队列 1 帧，读帧前等待刷新",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "垂直同步：螢幕佇列 1 幀，讀幀前等待刷新 · ",
-   "en": "VSync: 1-frame display queue, waits for refresh before reading a frame · ",
-   "ja": "垂直同期：画面キュー 1 フレーム、フレーム読み込み前にリフレッシュを待機 · "
+   "zh-TW": "垂直同步：螢幕佇列 1 幀，讀幀前等待刷新",
+   "en": "VSync: 1-frame display queue, waits for refresh before reading a frame",
+   "ja": "垂直同期：画面キュー 1 フレーム、フレーム読み込み前にリフレッシュを待機"
   },
   {
-   "zh": "垂直同步：屏幕队列控制不可用 · ",
+   "zh": "垂直同步：屏幕队列控制不可用",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "垂直同步：螢幕佇列控制不可用 · ",
-   "en": "VSync: display queue control unavailable · ",
-   "ja": "垂直同期：画面キュー制御は使用できません · "
+   "zh-TW": "垂直同步：螢幕佇列控制不可用",
+   "en": "VSync: display queue control unavailable",
+   "ja": "垂直同期：画面キュー制御は使用できません"
   },
   {
    "zh": "基础设置",
@@ -7128,6 +7114,13 @@
    "ja": "ディスプレイは可変リフレッシュ中（ドライバーで有効）"
   },
   {
+   "zh": "屏幕跟着画面刷新，不撕裂",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "螢幕跟著畫面更新，不撕裂",
+   "en": "the display refreshes with each frame, no tearing",
+   "ja": "画面がフレームに合わせて更新、ティアリングなし"
+  },
+  {
    "zh": "屏幕跟着画面刷新：不撕裂，也几乎不用等刷新",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "螢幕跟著畫面更新：不撕裂，也幾乎不用等更新",
@@ -7161,6 +7154,13 @@
    "zh-TW": "螢幕擷取錯誤 0x{:08X}：{}",
    "en": "Screen capture error 0x{:08X}: {}",
    "ja": "画面キャプチャーのエラー 0x{:08X}：{}"
+  },
+  {
+   "zh": "屏幕队列 1 帧，避免丢帧",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "螢幕佇列 1 幀，避免掉幀",
+   "en": "1-frame display queue to avoid dropped frames",
+   "ja": "画面キュー 1 フレーム、フレーム落ちを防止"
   },
   {
    "zh": "展开本卡片并播放 HDR 输出时测量，每秒最多 4 次",
@@ -7737,6 +7737,13 @@
    "ja": "VRR 表示を要求しましたが、ドライバーはまだ動作を確認していません。ウィンドウ/全画面の G-SYNC 設定を確認できます。この状態は設定がオフという意味ではありません。"
   },
   {
+   "zh": "已请求，等待驱动确认",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "已請求，等待驅動確認",
+   "en": "requested, awaiting driver confirmation",
+   "ja": "要求済み、ドライバーの確認待ち"
+  },
+  {
    "zh": "已达到导入上限（最多10000项），其余文件未添加",
    "src": "src/ui/PlaylistModel.cpp",
    "zh-TW": "已達到匯入上限（最多10000項），其餘檔案未新增",
@@ -7906,7 +7913,7 @@
   },
   {
    "zh": "开",
-   "src": "qml/ProPage.qml",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
    "zh-TW": "開",
    "en": "On",
    "ja": "オン"
@@ -8022,6 +8029,13 @@
    "zh-TW": "開機",
    "en": "Power on",
    "ja": "電源オン"
+  },
+  {
+   "zh": "开＋增强",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "開＋增強",
+   "en": "On + Boost",
+   "ja": "オン＋ブースト"
   },
   {
    "zh": "引擎异常，请查看诊断",
@@ -8246,6 +8260,13 @@
    "zh-TW": "當前偏差",
    "en": "Current offset",
    "ja": "現在のずれ"
+  },
+  {
+   "zh": "当前包缺少 RX 7000 NR 运行组件",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "目前套件缺少 RX 7000 NR 執行元件",
+   "en": "This package is missing the RX 7000 NR runtime components",
+   "ja": "このパッケージには RX 7000 NR ランタイムがありません"
   },
   {
    "zh": "当前包缺少此功能的运行组件",
@@ -8946,6 +8967,13 @@
    "zh-TW": "開啟影片後顯示可用字幕",
    "en": "Available subtitles appear once a video is open",
    "ja": "動画を開くと使える字幕が表示されます"
+  },
+  {
+   "zh": "打开视频后生效",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "開啟影片後生效",
+   "en": "Applies when a video is opened",
+   "ja": "動画を開くと適用されます"
   },
   {
    "zh": "打开视频或图片",
@@ -10363,25 +10391,25 @@
    "ja": "表示の同期：垂直同期"
   },
   {
-   "zh": "显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂",
+   "zh": "显示同步：自动",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示同步：自動 + 可變更新 · 螢幕跟著畫面更新，不撕裂",
-   "en": "Display sync: auto + variable refresh · the display refreshes with each frame, no tearing",
-   "ja": "表示の同期：自動 + 可変リフレッシュ · 画面がフレームに合わせて更新、ティアリングなし"
+   "zh-TW": "顯示同步：自動",
+   "en": "Display sync: auto",
+   "ja": "表示の同期：自動"
   },
   {
-   "zh": "显示同步：自动 + 可变刷新 · 已请求，等待驱动确认",
+   "zh": "显示同步：自动 + 可变刷新",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示同步：自動 + 可變更新率 · 已請求，等待驅動確認",
-   "en": "Display sync: Auto + variable refresh · requested, awaiting driver confirmation",
-   "ja": "表示同期：自動 + 可変リフレッシュ · 要求済み、ドライバーの確認待ち"
+   "zh-TW": "顯示同步：自動 + 可變更新",
+   "en": "Display sync: auto + variable refresh",
+   "ja": "表示の同期：自動 + 可変リフレッシュ"
   },
   {
-   "zh": "显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）",
+   "zh": "显示同步：自动（补帧接近刷新率）",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示同步：自動 · 不撕裂，也不等待垂直同步（延遲最低）",
-   "en": "Display sync: auto · no tearing and no VSync wait (lowest latency)",
-   "ja": "表示の同期：自動 · ティアリングなし、垂直同期を待たない（最小遅延）"
+   "zh-TW": "顯示同步：自動（補幀接近更新率）",
+   "en": "Display sync: auto (frame generation near refresh rate)",
+   "ja": "表示の同期：自動（フレーム生成がリフレッシュレートに近い）"
   },
   {
    "zh": "显示器",
@@ -10447,11 +10475,11 @@
    "ja": "マスクを表示"
   },
   {
-   "zh": "显示队列恢复失败 · ",
+   "zh": "显示队列恢复失败",
    "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示佇列恢復失敗 · ",
-   "en": "Display queue could not be restored · ",
-   "ja": "表示キューを復元できませんでした · "
+   "zh-TW": "顯示佇列恢復失敗",
+   "en": "Display queue could not be restored",
+   "ja": "表示キューを復元できませんでした"
   },
   {
    "zh": "显示队列等待失败，垂直同步屏幕队列不再限制；详见日志",
@@ -11859,6 +11887,13 @@
    "zh-TW": "此版本未包含美樂威 SDK 支援",
    "en": "This version does not include Magewell SDK support",
    "ja": "このバージョンには Magewell SDK のサポートが含まれていません"
+  },
+  {
+   "zh": "此补帧提供方暂不支持独立输出限帧，已保留设置",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "此補幀提供方暫不支援獨立輸出限幀，已保留設定",
+   "en": "this frame generation provider cannot cap its own output yet; setting kept",
+   "ja": "このフレーム生成方式は出力上限を個別に設定できません。設定は保持しました"
   },
   {
    "zh": "此软件包没有附带性能模式所需的 DLSS 帧生成 310.9.16 运行库",
@@ -14045,11 +14080,11 @@
    "ja": "自動（負荷に応じて）"
   },
   {
-   "zh": "自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线",
+   "zh": "自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低（实时补帧输出接近刷新率时改排 1 帧，避免丢帧） · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线",
    "src": "qml/ProPresentationRows.qml",
-   "zh-TW": "自動（推薦）：不撕裂，也不等待垂直同步，每次更新顯示最新一幀，延遲最低 · 垂直同步：每幀都等到更新才顯示，比自動多等最多一次更新 · 允許撕裂：可能出現撕裂線",
-   "en": "Auto (recommended): no tearing and no VSync wait; each refresh shows the newest frame for the lowest latency · VSync: every frame waits for a refresh, at most one refresh longer than Auto · Allow tearing: tear lines may appear",
-   "ja": "自動（推奨）：ティアリングなし、垂直同期を待たず、毎回のリフレッシュで最新フレームを表示し遅延が最小 · 垂直同期：全フレームがリフレッシュを待って表示され、自動より最大 1 リフレッシュ分長く待つ · ティアリングを許可：ティアリングが発生する場合あり"
+   "zh-TW": "自動（推薦）：不撕裂，也不等待垂直同步，每次更新顯示最新一幀，延遲最低（即時補幀輸出接近更新率時改排 1 幀，避免掉幀） · 垂直同步：每幀都等到更新才顯示，比自動多等最多一次更新 · 允許撕裂：可能出現撕裂線",
+   "en": "Auto (recommended): no tearing and no VSync wait; each refresh shows the newest frame for the lowest latency (live frame generation near the refresh rate queues 1 frame to avoid drops) · VSync: every frame waits for a refresh, at most one refresh longer than Auto · Allow tearing: tear lines may appear",
+   "ja": "自動（推奨）：ティアリングなし、垂直同期を待たず、毎回のリフレッシュで最新フレームを表示し遅延が最小（ライブのフレーム生成がリフレッシュレートに近いときは 1 フレームをキューしてフレーム落ちを防止） · 垂直同期：全フレームがリフレッシュを待って表示され、自動より最大 1 リフレッシュ分長く待つ · ティアリングを許可：ティアリングが発生する場合あり"
   },
   {
    "zh": "自动（独立显卡）",
@@ -14463,6 +14498,83 @@
    "zh-TW": "節點預設：",
    "en": "Node preset: ",
    "ja": "ノードのプリセット："
+  },
+  {
+   "zh": "英伟达低延迟",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "NVIDIA 低延遲",
+   "en": "NVIDIA Low Latency",
+   "ja": "NVIDIA 低遅延"
+  },
+  {
+   "zh": "英伟达低延迟 · 开",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "NVIDIA 低延遲 · 開",
+   "en": "NVIDIA Low Latency · On",
+   "ja": "NVIDIA 低遅延 · オン"
+  },
+  {
+   "zh": "英伟达低延迟 · 开＋增强",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "NVIDIA 低延遲 · 開＋增強",
+   "en": "NVIDIA Low Latency · On + Boost",
+   "ja": "NVIDIA 低遅延 · オン＋ブースト"
+  },
+  {
+   "zh": "英伟达低延迟 · 当前未生效",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "NVIDIA 低延遲 · 目前未生效",
+   "en": "NVIDIA Low Latency · currently inactive",
+   "ja": "NVIDIA 低遅延 · 現在無効"
+  },
+  {
+   "zh": "英伟达低延迟不可用，当前使用低排队（详见日志）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲無法使用，目前使用低排隊（詳見記錄）",
+   "en": "NVIDIA Low Latency unavailable; using low queue depth (see the log)",
+   "ja": "NVIDIA 低遅延は利用できません。低遅延キューを使用中です（ログを参照）"
+  },
+  {
+   "zh": "英伟达低延迟撤销失败，请关闭视频后重试",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲停用失敗，請關閉影片後重試",
+   "en": "Could not disable NVIDIA Low Latency; close the video and retry",
+   "ja": "NVIDIA 低遅延を無効にできません。動画を閉じて再試行してください"
+  },
+  {
+   "zh": "英伟达低延迟调用及撤销失败；请关闭视频后重试",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "NVIDIA 低延遲呼叫及停用失敗；請關閉影片後重試",
+   "en": "NVIDIA Low Latency call and disable failed; close the video and retry",
+   "ja": "NVIDIA 低遅延の呼び出しと無効化に失敗しました。動画を閉じて再試行してください"
+  },
+  {
+   "zh": "英伟达低延迟调用失败，当前使用低排队；详见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "NVIDIA 低延遲呼叫失敗，目前使用低排隊；詳見記錄",
+   "en": "NVIDIA Low Latency call failed; using low queue depth. See logs.",
+   "ja": "NVIDIA 低遅延の呼び出しに失敗しました。低遅延キューを使用中です。ログをご確認ください。"
+  },
+  {
+   "zh": "英伟达低延迟：关",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲：關",
+   "en": "NVIDIA Low Latency: Off",
+   "ja": "NVIDIA 低遅延：オフ"
+  },
+  {
+   "zh": "英伟达低延迟：开（已启用）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲：開（已啟用）",
+   "en": "NVIDIA Low Latency: On (active)",
+   "ja": "NVIDIA 低遅延：オン（有効）"
+  },
+  {
+   "zh": "英伟达低延迟：开＋增强（已启用）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "NVIDIA 低延遲：開＋增強（已啟用）",
+   "en": "NVIDIA Low Latency: On + Boost (active)",
+   "ja": "NVIDIA 低遅延：オン＋ブースト（有効）"
   },
   {
    "zh": "范围 0.25～4.00 倍，保持原有音调",
@@ -17440,6 +17552,13 @@
    "ja": "AMD HIP 7 ドライバーランタイムが必要です"
   },
   {
+   "zh": "需要 AMD RX 7000 / 9000",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "需要 AMD RX 7000 / 9000",
+   "en": "Requires AMD RX 7000 / 9000",
+   "ja": "AMD RX 7000 / 9000 が必要です"
+  },
+  {
    "zh": "需要 AMD RX 9000",
    "src": "src/ui/bridge/Hardware.cpp",
    "zh-TW": "需要 AMD RX 9000",
@@ -17473,6 +17592,13 @@
    "zh-TW": "需要 NVIDIA RTX 顯示卡及 NVOF 驅動",
    "en": "Requires an NVIDIA RTX GPU and the NVOF driver",
    "ja": "NVIDIA RTX GPU と NVOF ドライバーが必要です"
+  },
+  {
+   "zh": "需要 NVIDIA 显卡",
+   "src": "qml/NvidiaLowLatencyEditor.qml",
+   "zh-TW": "需要 NVIDIA 顯示卡",
+   "en": "Requires an NVIDIA GPU",
+   "ja": "NVIDIA GPU が必要です"
   },
   {
    "zh": "需要 PIN",
@@ -18707,13 +18833,6 @@
    "ja": "（NGX 0x{:08X}、ドライバー {}）。依存するエフェクトをオフにしました"
   },
   {
-   "zh": "（Reflex 初始化失败）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "（Reflex 初始化失敗）",
-   "en": " (Reflex initialization failed)",
-   "ja": "（Reflex の初期化に失敗）"
-  },
-  {
    "zh": "（SDR 存 PNG，HDR 存 JPEG XR）",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "（SDR 存 PNG，HDR 存 JPEG XR）",
@@ -18789,13 +18908,6 @@
    "zh-TW": "（終止碼 {} / 錯誤 {}）",
    "en": " (exit code {} / error {})",
    "ja": "（終了コード {} / エラー {}）"
-  },
-  {
-   "zh": "（补帧运行，Reflex 不启用）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "（補幀執行，Reflex 不啟用）",
-   "en": " (frame generation running, Reflex not enabled)",
-   "ja": "（フレーム生成中のため Reflex は無効）"
   },
   {
    "zh": "，最忙的引擎类型，全系统），每秒采样；在 设置 → 通用与外观 中更换监控的显卡",

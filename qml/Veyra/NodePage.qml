@@ -1659,9 +1659,11 @@ VPage {
                     hint: qsTr("帧同步 · 默认关闭")
                     VSwitch { checked: veyra.fgStrict; onToggled: checked => veyra.fgStrict = checked }
                 }
+                NvidiaLowLatencyEditor { namePrefix: "node" }
                 VRow {
+                    visible: !veyra.nvidiaLowLatencyAvailable
                     label: qsTr("低延迟队列")
-                    hint: qsTr("只保留一帧在处理，未补帧时加 Reflex")
+                    hint: qsTr("减少处理排队")
                     VSwitch { checked: veyra.fgLowQueue; onToggled: checked => veyra.fgLowQueue = checked }
                 }
             }

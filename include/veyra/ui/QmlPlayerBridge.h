@@ -79,6 +79,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantList fgMultiplierChoices READ fgMultiplierChoices NOTIFY fgChoicesChanged)
     Q_PROPERTY(bool fgStrict READ fgStrict WRITE setFgStrict NOTIFY settingsChanged)
     Q_PROPERTY(bool fgLowQueue READ fgLowQueue WRITE setFgLowQueue NOTIFY settingsChanged)
+    Q_PROPERTY(int nvidiaLowLatency READ nvidiaLowLatency WRITE setNvidiaLowLatency NOTIFY presentationChanged)
+    Q_PROPERTY(bool nvidiaLowLatencyAvailable READ nvidiaLowLatencyAvailable NOTIFY effectCapabilitiesChanged)
 
     // --- colour settings ---------------------------------------------------
     Q_PROPERTY(double colorExposure READ colorExposure WRITE setColorExposure NOTIFY settingsChanged)
@@ -664,6 +666,9 @@ public:
     bool fgStrict() const;
     void setFgStrict(bool value);
     bool fgLowQueue() const;
+    int nvidiaLowLatency() const;
+    void setNvidiaLowLatency(int value);
+    bool nvidiaLowLatencyAvailable() const;
     void setFgLowQueue(bool value);
 
     double colorExposure() const;

@@ -44,10 +44,12 @@ public:
     bool beginSourceInput();
     bool beginSourceProcessing();
     void sourceProcessed(pipeline::FrameIdentity);
-    PresentationSettings configurePresentation(gfx::D3D12DeviceContext&,PresentationSettings,bool fg,std::wstring& status);
+    PresentationSettings configurePresentation(gfx::D3D12DeviceContext&,PresentationSettings,bool fg,std::wstring& status,bool outputNearRefresh=false);
     bool presentationReady(){return sink_.presentationReady();}
     bool waitPresentationReady(unsigned ms){return sink_.waitPresentationReady(ms);}
-    uint64_t beginReflex(){return reflex_.begin();}
+    uint64_t beginReflex(){const auto id=reflexInputFrame_;reflexInputFrame_=0;reflex_.renderStart(id);return id;}
+    void endReflex(uint64_t id){reflex_.renderEnd(id);}
+    void cancelReflexInput(){if(reflexInputFrame_)reflex_.mark(reflexInputFrame_,1);reflexInputFrame_=0;}
     void reflexFrame(uint64_t id){reflexFrame_=id;}
     // True while XeSS owns Present: the low-latency queue and the output
     // cap cannot reach provider-generated frames, so the UI greys them out.
@@ -55,6 +57,7 @@ public:
 
     bool reflexActive()const{return reflex_.active();}
     bool reflexDisablePending()const{return reflex_.disablePending();}
+    bool reflexFailed()const{return reflex_.failed();}
     bool pacingActive()const{return sink_.pacingActive();}
     uint64_t generation()const{return generation_;}
     // Explicit integration-test capture only; never called by playback/export.
@@ -92,6 +95,15 @@ public:
         return requested.variableRefresh&&requested.display==DisplaySync::Automatic&&gfx::vrrLevel(vrr)>=3;
     }
     bool vrrSync()const{return vrrSync_;}
+    // Live frame generation near the refresh (displayFgOutputNear): Automatic
+    // presents through the one-deep VSync queue, because Present(0,0) would
+    // replace a frame whose neighbour landed in the same refresh. With room for
+    // each frame the wait is about zero: the frame still shows at the next
+    // refresh. Output above the refresh keeps Present(0,0) and its low latency.
+    static bool automaticQueueWanted(const PresentationSettings& requested,const gfx::VrrState& vrr,bool outputNearRefresh){
+        return outputNearRefresh&&requested.display==DisplaySync::Automatic&&!vrrSyncWanted(requested,vrr);
+    }
+    bool automaticQueue()const{return automaticQueue_;}
     diagnostics::GpuSample blitTiming(ID3D12Fence* f,uint64_t revision=0,uint64_t epoch=0){gpuTimer_.collect(presentationFence_?presentationFence_.Get():f);if((revision&&gpuTimer_.last().identity.settingsRevision!=revision)||(epoch&&gpuTimer_.last().identity.epoch!=epoch)){diagnostics::GpuSample pending;pending.state=diagnostics::SampleState::Pending;return pending;}return gpuTimer_.last().gpu[size_t(diagnostics::GpuStage::Blit)];}
     // Application-side frame-generation timing for present-sink backends
     // (XeSS): the copies, barriers and provider prepare work recorded on
@@ -112,7 +124,7 @@ private:
     std::chrono::steady_clock::time_point metadataAttempt_{};
     DXGI_HDR_METADATA_HDR10 lastMetadata_{};
     gfx::ReflexSession reflex_;
-    uint64_t reflexFrame_=0,generation_=0;
+    uint64_t reflexFrame_=0,reflexInputFrame_=0,generation_=0;
     bool providerOwnedPresentation_=false;
     PresentCapture* capture_=nullptr;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> presentationQueue_;
@@ -173,7 +185,7 @@ private:
     bool xessWasEnabled_=false;
     bool xessFailed_=false;
     bool xessGenerationSuppressed_=false;
-    HMONITOR refreshMonitor_=nullptr;double refreshHz_=0;gfx::VrrState vrr_{};bool refreshQueried_=false,vrrSync_=false;
+    HMONITOR refreshMonitor_=nullptr;double refreshHz_=0;gfx::VrrState vrr_{};bool refreshQueried_=false,vrrSync_=false,automaticQueue_=false;
     DisplayStateService* displayStates_=nullptr;
     uint64_t displayStateSerial_=0,displayGeneration_=0;
     // VRR presentation may start or stop after it is requested or when the
