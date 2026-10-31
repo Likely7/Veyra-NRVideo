@@ -188,3 +188,7 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 纠正上一轮表述：generatedExpiredAfterEval合计三种s.dropped（deadline过期、输出限帧跳过、显示容量最多2ms等待失败），98不能全部称为deadline过期。中档84秒中84条限频deadline日志均expired=false，无法据此分解实际每帧原因；当前优先调查60Hz VSync容量2ms策略与限帧，但尚未有用户设备单变量复现。原README同步更正，原计数证据未改。
 
 五次连接均3840x2160 NV12/30.000030，softwareLimiter=0。37条rate日志requested60To30为true30/false7，而active=false37；1610条frame-rate capture60To30=false、rateSkipped=0，未把30变15。源码supported只接受59–61fps。但选项仍以contentRate=5进入图，上层排除Capture60To30的输入去重，下层却仅排除Transport而开启luma SAD重复判定；正式v2.1.1同样存在。DLSS段1838次contentDuplicate、providerDisabled=0与此策略一致，不能因halfRate未激活就说开关完全无影响，也不能无原画认定1838次均误判。VFG中档无invalid/contentDuplicate仍有98评估后丢弃，故不是单一根因。后续若授权修复，须分开丢弃原因与验证未激活半帧模式下的内容合同；本轮未修改软件。
+
+## 2026-10-31 用户澄清最初为原始时间戳、未开60→30
+
+现场确认与最初日志一致，不能将后期contentPolicy5重复判定倒推为首发原因。已单列reports/fg-intermittent-20261031/INITIAL_TRANSPORT.md并在README置顶。最早可连续统计VFG高档rev6为contentPolicy0/requested60To30=false、无contentDuplicate，显示Automatic/displayQueuePaced=false/vrrSync=false，故后期VSync容量2ms规则也不解释该段。101.089秒3030候选中2302（75.97%）在评估前被预算准入跳过，GPU FG P95指标约23ms；原帧呈现3030、邮箱新增覆盖0。具体日志remaining17.238ms+10ms不足predicted29.847ms（减已有进度约0.181ms），admitted=false。首发主线应查高档4K VFG的预算与配对相位，尚未证明是成本估计还是相位策略错误；后期中档/同步/去重分开保留。本轮只读分析及文档，不改软件，不运行测试、不发布。
