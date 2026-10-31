@@ -995,8 +995,15 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   # on the actual test adapter. Production graph and hardware policy are unchanged.
   set(VEYRA_AMD_NR_TEST_GRAPH_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/pipeline/EnhanceGraph.cpp" CACHE FILEPATH "Graph snapshot for AMD identity regression only")
   file(READ "${VEYRA_AMD_NR_TEST_GRAPH_SOURCE}" _amd_nr_graph)
-  string(REPLACE "ring_.queue(),context_.adapter().vendorId,instance->model.performance) || !instance->amd->admits"
-    "ring_.queue(),0x1002 /* identity fixture only */,instance->model.performance) || !instance->amd->admits" _amd_nr_graph "${_amd_nr_graph}")
+  # A pattern that stops matching must stop the build: the fixture then runs on
+  # the real adapter, and every AMD case fails with "requires an AMD adapter".
+  set(_amd_nr_open "ring_.queue(),context_.adapter().vendorId,instance->model.performance))return false;")
+  string(FIND "${_amd_nr_graph}" "${_amd_nr_open}" _amd_nr_open_at)
+  if(_amd_nr_open_at EQUAL -1)
+    message(FATAL_ERROR "AMD NR identity fixture: the backend open call in EnhanceGraph.cpp changed; update this pattern")
+  endif()
+  string(REPLACE "${_amd_nr_open}"
+    "ring_.queue(),0x1002 /* identity fixture only */,instance->model.performance))return false;" _amd_nr_graph "${_amd_nr_graph}")
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/amd-nr-graph-test")
   file(WRITE "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp" "${_amd_nr_graph}")
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${VEYRA_AMD_NR_TEST_GRAPH_SOURCE}")
