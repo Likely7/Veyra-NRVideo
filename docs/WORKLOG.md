@@ -255,3 +255,32 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 空间：新增构建411,825,958字节、工作树88,250,651字节、运行目录新文件（4个EXE+着色器）56,796,288字节、40秒切片77,515,754字节、40个证据目录66,153,977字节、日志/回执约0.33MB；基线工作树已恢复为干净后正常移除，基线构建405,895,676字节确认无reparse/进程后删除，每次运行的临时CUDA缓存84,422,224字节已回收。
 
 未做/边界：未用采集卡（物理采集无FG本已就绪呈现，只新增FG关闭后重复epoch的处理，由单元覆盖）；未测串流；运行中切换FG的屏幕采集只做了单元检查；未重编产品`veyra_qml_ui`（同一引擎库已编译通过）及独立probe工程的`veyra_remoteplay_core_tests`（未调用`anchored`）；Present开始是CPU侧观测，不是屏幕端到端延迟；仅本机RTX 5070/320Hz。回执`reports/claude-screen-capture-hold-20261029/`（FINAL.json及各阶段JSON），日志`logs/claude-screen-capture-hold-20261029/`，证据`tests/claude-screen-capture-hold-20261029/`。
+
+## 2026-10-31 各分支修复合入本地main
+
+用户要求“给目前各分支的修复都合并到main去，包括Codex那边对7000系的支持，和其他的修复，处理好兼容，冲突”。覆盖此前各段“不合并main”。未push/Release，正式版仍2.1.1，真实配置/驱动/运行库不改。回执E:/项目/Veyra/reports/claude-main-integration-20261031/FINAL.json。
+
+并入（先在`claude/main-integration-20261031`合并并测试，再快进main）：`claude/fg-60hz-pacing-20261031`（8544c0c，含英伟达低延迟4edcb49/e7a9ae1、RX7000 3172262、现场诊断记录）、`claude/screen-capture-hold-20261029`（b819891，提交时取自其工作树未提交内容）、`claude/capture-fps-audio-20261027`（54c942e）。
+
+未并入：`codex/lecram-native-20261019`、`codex/lecram-nr-113-20261019`（暂停线）、`codex/avermedia-51-switch-20260917`（诊断存档）。远端`nrvideo/pr-31`的修复main已有等价提交51591bc。6个旧脏树未动，最新改动早于10-24，没有新近未提交的修复。
+
+冲突：只在合并扣留修复时出现。`PresentationPacingTests.cpp`保留已有latency场景并带上1X扣留断言；`LivePresentationTimingTests.cpp`和本日志两边都留。其余自动合并，翻译2717条无缺失。
+
+兼容修正：
+- RX7000把NR后端open拆开后，CMake给`veyra_amd_nr_graph_tests`注入假适配器的字符串替换不再匹配且没有报错，128项118项失败（“requires an AMD adapter”）。改匹配新调用，匹配不上时配置直接失败；修后128项0失败。Codex当时未跑此测试。
+- `PresentationPacingTests` lifecycle在2X时期望Reflex变LowQueue，PacingMode自2026-09-22已不起作用，VideoPresenter里main和合并版都没有这个转换，所以2X必失败，属过时断言。改后1X/2X通过。
+
+构建：`tmp/claude-main-integration-20261031/build/build.py all`（并发2，-k 0），只有`veyra_fsr_probe`、`veyra_fsr_upscale_probe`失败：缺`third_party_local/amd/FidelityFX-SDK-2.3.0`，文件未被本次合并改动。其余全部通过。首次未带-k时在此停止，随后补跑。
+
+回归（`verify.py`，运行目录tests/claude-sr-stage-20261028/app，97个运行组件哈希一致）：
+- CPU/合同：timing、scheduler、realtime、repair 300、i18n、effect availability 72、effect chain、preset、qml data、playlist、game passthrough、game mode 44、AverMedia carrier/vendor/passthrough、IEC、capture audio、NR model settings全部0失败。第一轮有7项因没传参数退出，补参数后通过。
+- RX7000/AMD：rdna3合同54项、lmxxf ABI、metadata、AMD合成图128项0失败；都是假provider/复制worker，不是AMD推理。
+- 界面：QtQuick 123/0/1跳过，启动无QML错误，F7/F8私有配置两例通过（未注入真实按键）。
+- GPU：9个原生场景、screen-dlss/vfg/xess、latency 1X三档、2X Boost、SR 2X、overload、回放6X垂直同步、lifecycle 1X/2X、settings transaction、fg settings（含backend switch）全部通过。
+- 扣留修复合并后仍生效：窗口采集无补帧hold P50 0.002 ms，`capture-ready`。
+- 接近刷新率合并后仍生效：回放319.2呈现/秒，旧规则samples 287、被替换≥11/秒；新规则samples 320、被替换0、容量丢帧10秒6帧。垂直同步容量丢帧29→6。窗口39.6→40.0×6在合并后旧规则也不再被替换（samples 238/239.9），新规则P95 26.2→26.5，说明此前窗口场景的丢失与WGC抖动有关。
+- 实时呈现：replay、overload、settings-rebuild、reset-rollback、inactive-effects通过。`--source-gap`的EOF快照检查不稳定：合并版3次过1次，未合并main基线3次过1次，差1–2帧；“每帧恰好呈现一次”每次通过。原有问题，未修。
+
+未解决：屏幕捕获真实程序60上限接收59.8–60.0、处理57.0–57.4（3次），120上限60.0/60.0。10-27分支测得60.0/60.0，限速器代码与该分支逐字相同；此后驱动从32.0.16.1656变为32.0.16.2101，2.1.1正式版今天也从53.55/53.72变为56.27/55.27。推断来自环境（合成时间戳抖动），但没有在今天的环境单独构建分支对比，原因未证实。
+
+未验：RX7000实卡推理/画质/性能；真实60 Hz屏、采集卡、RTX 5060 Ti；PS5加采集卡的载波音频；串流；打包。未重跑8K最终输出+NR+VFG危险组合。

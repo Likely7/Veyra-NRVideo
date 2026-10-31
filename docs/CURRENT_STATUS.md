@@ -2,11 +2,17 @@
 
 更新：2026-10-31。这里只描述现在；历史过程见[历史索引](history/INDEX.md)。
 
-2026-10-31当前任务：分支 `claude/fg-60hz-pacing-20261031`（基于 `c6c28b9`）修现场 60 Hz 屏 4K30 补帧每 16.5 秒一串掉帧和 VFG 卡在 30 fps：接近刷新率时自动模式走一帧队列、垂直同步下生成帧等到下一帧到期、VFG 跳帧后前两次不计入成本。本机 320 Hz A/B 与回归通过，**未在真实 60 Hz 屏或 RTX 5060 Ti 验证**，需现场确认。见[执行记录](FG_60HZ_PACING_2026-10-31.md)；未合并 main、未 push/Release。
+**2026-10-31 本地 main 整合**：用户要求把各分支修复合入 main 并处理兼容，活动树现在 main，未 push/Release，正式版仍 2.1.1。本次并入：英伟达低延迟三档、RX 7000 NR、补帧接近刷新率修复、屏幕采集无补帧扣留修复、屏幕捕获帧率、采集载波 Dolby/DTS、F7/F8、60→30 取第一份。未并入：Lecram 两条暂停线和 AverMedia 诊断存档。冲突、兼容修正和回归结果见 [WORKLOG](WORKLOG.md) 最后一节，回执 `E:/项目/Veyra/reports/claude-main-integration-20261031/FINAL.json`。
 
-当前施工分支 `codex/amd-rdna3-nr-20261029`，从下述英伟达低延迟及Claude复查后的 `e7a9ae1` 接入 RX 7000 NR（RedDuke 独立网络 worker，Small / Original，兼容手动百分比）。保留 RX 9000 lmxxf 与 NVIDIA；本地构建、GPU 协议及设置/UI回归已通过，尚未在 RX 7000 实卡推理验收。测试入口和证据见 [接入记录](AMD_RDNA3_NR_PLAN_2026-10-29.md)。未合并main、未push/发布，正式版仍2.1.1。
+未实卡验证：RX 7000 推理；真实 60 Hz 屏、采集卡、RTX 5060 Ti 上的补帧修复；PS5 加采集卡的载波音频。
 
-2026-10-28/29当前任务：隔离分支`codex/nvidia-low-latency-20261028`完善“英伟达低延迟”三档（关/开/开＋增强），基线为下述合并后的main4351bbd。直接NVAPI，生成帧不重复Sleep；DLSS/VFG/FSR与提供方回退、GUI/保存验证见[执行记录](NVIDIA_LOW_LATENCY_2026-10-28.md)。2026-10-29 Claude复查后在同分支工作区修正非英伟达显卡低排队关不掉、状态翻译、专业页摘要与未补帧通知降级，并做屏幕采集延迟对比（已提交到本分支，结果见执行记录末节）。尚未合并main或发布，正式版仍2.1.1。
+补帧接近刷新率修复（已并入）：修现场 60 Hz 屏 4K30 补帧每 16.5 秒一串掉帧和 VFG 卡在 30 fps：接近刷新率时自动模式走一帧队列、垂直同步下生成帧等到下一帧到期、VFG 跳帧后前两次不计入成本。本机 320 Hz A/B 与回归通过，**未在真实 60 Hz 屏或 RTX 5060 Ti 验证**，需现场确认。见[执行记录](FG_60HZ_PACING_2026-10-31.md)。
+
+屏幕采集扣留修复（已并入）：物理与屏幕采集无补帧时 GPU 就绪即呈现，不再按首帧锚定固定多等 3–52 ms；记录见 [WORKLOG](WORKLOG.md)。
+
+RX 7000 NR（已并入）：RedDuke 独立网络 worker，Small / Original，兼容手动百分比。保留 RX 9000 lmxxf 与 NVIDIA；本地构建、GPU 协议及设置/UI回归已通过，尚未在 RX 7000 实卡推理验收。测试入口和证据见 [接入记录](AMD_RDNA3_NR_PLAN_2026-10-29.md)。
+
+英伟达低延迟三档（已并入）：关/开/开＋增强，直接NVAPI，生成帧不重复Sleep；DLSS/VFG/FSR与提供方回退、GUI/保存验证见[执行记录](NVIDIA_LOW_LATENCY_2026-10-28.md)。2026-10-29 Claude复查修正了非英伟达显卡低排队关不掉、状态翻译、专业页摘要与未补帧通知降级，并做屏幕采集延迟对比（结果见执行记录末节）。
 
 ## 正式版与开发基线
 
@@ -25,7 +31,7 @@
 - 项目整理1–4由用户明确授权执行，起点main `7bf02d4`；结构整理提交`d4b1034`，构建与相关回归已通过。本轮以main作为后续开发入口，准确整合HEAD见执行任务FINAL回执。
 - 已清43退休产物目录、移除89干净旧工作树、归档122分支引用；工作树101→12，收尾施工分支移除后本地分支132→10。保留的旧分支是6脏树、2条Lecram暂停线和1条带独有忽略内容的旧诊断线，另加main。
 - 历史规则/计划/报告已分类，611份文档进入history；原9千行桥接改为启动接线与领域模块，对话框和专业页复用组件已拆分。E盘空闲空间相对开工前净增约28.14GiB，包含本轮保全归档/测试目录成本。
-- 待合并：`claude/capture-fps-audio-20261027`（屏幕捕获WGC 55→60帧、通用采集卡PCM载波Dolby/DTS解码），见[报告](CAPTURE_FPS_AUDIO_REPORT_2026-10-27.md)；未入main。
+- 已并入main（2026-10-31）：`claude/capture-fps-audio-20261027`（屏幕捕获WGC 55→60帧、通用采集卡PCM载波Dolby/DTS解码、F7/F8、60→30取第一份），见[报告](CAPTURE_FPS_AUDIO_REPORT_2026-10-27.md)。
 - 源码：`E:/项目/Veyra/worktrees/screen-recording-fix-20261022`。
 - 当前构建：`E:/项目/Veyra/build/claude-screen-recording-20261022`。
 - [执行记录](PROJECT_MAINTENANCE_EXECUTION_2026-10-27.md)、[开发入口](DEVELOPMENT.md)、[工作日志](WORKLOG.md)、[归档分支恢复](BRANCH_ARCHIVE.md)。

@@ -1,5 +1,7 @@
 # Veyra Agent 工作规则
 
+> **2026-10-31 本地main整合（最新）**：用户要求把各分支修复合入main并处理兼容。main现含英伟达低延迟三档、RX7000 NR、补帧接近刷新率修复、屏幕采集无补帧扣留修复、屏幕捕获帧率、采集载波Dolby/DTS、F7/F8、60→30取第一份。Lecram两线和AverMedia诊断存档未并入。活动树在main，下面各段“不合并main”到此结束；未push/Release，正式版仍2.1.1。回执E:/项目/Veyra/reports/claude-main-integration-20261031/FINAL.json。RX7000实卡、真实60 Hz屏/采集卡/5060 Ti、PS5载波音频未验证。
+
 > **2026-10-31 补帧接近刷新率修复**：用户确认“开始修”。分支`claude/fg-60hz-pacing-20261031`（基于c6c28b9）按docs/FG_60HZ_PACING_2026-10-31.md改实时图内补帧：输出在刷新率0.65–1.02倍时自动模式走一帧队列，输出不超过刷新率时生成帧等到下一帧到期，VFG跳帧后前2次不计入成本。`VEYRA_TEST_LEGACY_NEAR_REFRESH=1`恢复旧规则。本机只验证320 Hz，未在真实60 Hz屏/采集卡/5060 Ti验证，不得当作现场已修好。不合并main、不push/Release。
 
 > **2026-10-29 RX7000 NR接入**：用户授权在codex/amd-rdna3-nr-20261029（基线e7a9ae1）加入7000系NR与Small性能模型。按docs/AMD_RDNA3_NR_PLAN_2026-10-29.md隔离RedDuke网络worker，保留9000 lmxxf及现有NVIDIA路径；不接旧帧异步残差，不回读GPU图像，不改真实配置/驱动/现有SDK与运行组件。不合并main、不push/Release。本机无RX7000，合同测试不冒充实卡通过。
