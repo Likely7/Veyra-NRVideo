@@ -171,3 +171,10 @@ A/B（GTA VI原生4K两帧，全部质量4，完整表见DUAL_SR_PLAN“复查�
 本地复用tests/claude-sr-stage-20261028/app，新增审计27项RX7000组件及guard shader；原NVIDIA runtime97项、正式供体manifest1730项核验不变。五个固定外部源码SHA与prepared源码核验，native worker和EXE与构建一致，未把测试copy worker装入产品runtime。310.9.16.0网络原件Valid/NVIDIA，SHA2bc19bc09a7b89dd44f73e2ac0108fcc586e2154bdd0830f242f4f040e28789f；保留本地依赖/manifest/许可，不扩展正式Release白名单。入口tests/amd-rdna3-nr-20261029/启动RX7000-NR测试.cmd，独立interactive-profile、默认不自动开媒体；启动冒烟退出0，原配置SHA不变。
 
 本机没有RX7000，54项GPU检查使用明确copy测试worker，不是AMD推理。没有实测RX7000画质、性能、HDR、导出、采集、VRR或长时稳定；没有重跑原8K最终输出+NR+VFG危险组合。不改真实配置/驱动/已有SDK与运行组件；Lecram继续暂停。本轮清理仅自己的重复下载ZIP及数字TEMP，删除身份/路径检查与逻辑字节另记cleanup.json，不宣称物理净回收。
+## 2026-10-31 用户veyra-qml(69).log补帧间歇掉帧只读排查
+
+本次读取用户提供的7940394字节日志（SHA256 f0b04d276358e98b01fafd7bd33d61e5c0a65d270e92c268f329361905ab7d9f），22611行、3次启动，按启动/session/revision及前5秒预热分开统计；未构建、未运行软件/占用采集卡、未修改产品代码/驱动/配置/运行组件，不push/Release。代码参考3172262，不假定用户包与本机提交一致。报告及原始派生证据E:/项目/Veyra/reports/fg-intermittent-20261031/README.md、analysis.json、segments.json、intervals.csv、steady-medium.json、evidence.json；可重算脚本analyze.py。仅新增诊断文档记录。
+
+RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016秒原帧呈现2518，评估补帧2518，生成呈现2420、过期98（约3.89%），邮箱覆盖/无效结果新增均0；GPU补帧P95指标中位5.573ms。另1秒样本原帧+30、生成+20、过期+10、邮箱不变、提交50fps，主要定位到软件生成帧过期路径而非证明采集不稳。源码采集生成帧deadline容忍10ms；优先调查自适应配对相位、ready观察/唤醒与VSync反压，但低频日志尚不能确定每张过期帧的实际GPU完成时刻。
+
+分开处理：部分高档配置3030候选中2302次预算准入跳过，GPU约23ms；后续高档也有接近全执行的段，不能只以23>16.7断言整体吞吐不足。显示接口错误附近Present/输出检查路径单次约0.73–1.38秒，GPU耗时仅约8ms，属于独立显示调用停顿，根触发源未证实；overlay注入存在但不能直接归罪。DLSS段1838无效明确是contentDuplicate，不是providerDisabled；不冒充DLSS错误。起流discontinuity仅source1，无持续断线/device-removed证据。没有旧版同条件对照，不能确认新版回归，也未修复。
