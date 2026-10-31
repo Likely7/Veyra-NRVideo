@@ -150,6 +150,34 @@ int main(){
     check(livePairHoldMs(true,10,20)==0,"backwards PTS cannot sleep negatively");
     check(livePairHoldMs(true,std::numeric_limits<double>::infinity(),0)==0,"nonfinite PTS rejected");
     {
+        // 60 fps window capture without FG (2026-10-29): the first frame was read
+        // 52 ms after its compositor time, later frames 1 ms after theirs. Same
+        // sequence as the engine: anchor only when this epoch and mode have none.
+        using veyra::engine::livePacesSourcePts;
+        check(!livePacesSourcePts(false,false,true)&&!livePacesSourcePts(false,true,false),"screen and physical capture without FG are ready-driven");
+        check(livePacesSourcePts(false,false,false)&&livePacesSourcePts(true,false,true)&&livePacesSourcePts(true,true,false),"file replay, streams and FG pairs keep their PTS clock");
+        auto worstHold=[](bool screen){
+            veyra::engine::PresentationScheduler timeline;const bool paced=livePacesSourcePts(false,false,screen);
+            int64_t read=0,worst=std::numeric_limits<int64_t>::min();
+            for(int i=0;i<600;++i){
+                const int64_t pts=i*166667;read=std::max(read,pts)+(i?10000:520000);const int64_t ready=read+5000;
+                if(!timeline.anchored(1,paced))timeline.reset(1,pts,read,0,paced);
+                if(i>=60)worst=std::max(worst,std::max(timeline.deadline(pts),timeline.cadenceDeadline(pts,ready))-ready);
+            }
+            return worst;
+        };
+        check(worstHold(true)<=0,"late first screen read is not held on every later frame");
+        check(worstHold(false)>=500000,"file replay keeps the PTS clock of its first anchor");
+        // FG on/off rebuilds the graph and its epochs restart at 1: the last FG pair
+        // anchor (B read 52 ms late, one interval of phase) must not pace capture
+        // after FG. The next frame is read 1 ms after its compositor time.
+        veyra::engine::PresentationScheduler timeline;timeline.resetPair(1,1000000,1520000,166667);
+        const bool paced=livePacesSourcePts(false,false,true);
+        if(!timeline.anchored(1,paced))timeline.reset(1,5000000,5010000,0,paced);
+        check(timeline.deadline(5000000)<=5015000&&timeline.cadenceDeadline(5000000,5015000)<=5015000,"FG pair anchor in a repeated epoch does not hold capture after FG is off");
+        check(timeline.anchored(1,false)&&!timeline.anchored(1),"anchor records its pacing mode");
+    }
+    {
         // PictureCompare.h: a sample repeats the last new picture only when every
         // component of the whole picture is within the capture-noise band.
         using veyra::pipeline::PictureReference;using veyra::pipeline::PicturePlane;using veyra::pipeline::PictureComponents;

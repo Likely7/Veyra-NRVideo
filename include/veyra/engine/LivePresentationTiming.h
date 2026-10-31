@@ -24,6 +24,11 @@ inline int64_t capturePairInterval100ns(pipeline::Rational duration,double nomin
     if(!reset&&std::isfinite(span)&&span>=1&&span<=100)return int64_t(std::llround(span*10000));
     return liveSourceInterval100ns(duration,nominalFps);
 }
+// File replay has no arrival clock and keeps its PTS anchor; FG keeps the A/B
+// pair phase; streams re-anchor every frame. Physical and screen capture without
+// FG present when ready: one PTS anchor per epoch turned the first sample's late
+// read into a hold on every later frame (60 fps window capture: 3-52 ms per run).
+inline bool livePacesSourcePts(bool fg,bool physicalCapture,bool screenCapture){return fg||!(physicalCapture||screenCapture);}
 // Live capture never waits on an absolute source PTS. Once B is available,
 // display generated(A,B), then B up to half an input interval later. Anchor
 // each pair to current host time, not to the first (possibly stale) sample.

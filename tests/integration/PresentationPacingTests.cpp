@@ -31,11 +31,13 @@ int wmain(int argc,wchar_t** argv){
     const int mode=_wtoi(argv[3]),display=_wtoi(argv[4]),multiplier=_wtoi(argv[5]),seconds=std::clamp(_wtoi(argv[6]),3,120);
     if(mode< -1||mode>2||display<0||display>2)return 2;
     const std::wstring scenario=argc>7?argv[7]:L"";
-    const bool screen=scenario==L"screen-xess"||scenario==L"screen-dlss";
+    // latency-screen: a live 60 fps window capture for capture-to-present runs.
+    const bool latency=scenario.starts_with(L"latency-");
+    const bool screen=scenario==L"screen-xess"||scenario==L"screen-dlss"||latency;
     const bool xess=scenario==L"xess"||scenario==L"screen-xess";
     if(scenario==L"legacy"){if(mode!=-1)return 2;SetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_SWAPCHAIN",L"1");}
     std::filesystem::path dir=argv[2];std::filesystem::create_directories(dir);
-    SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",screen?L"0":L"1");
+    SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",screen&&!latency?L"0":L"1");
     veyra::Logger::instance().openFile((dir/L"engine.log").wstring());veyra::Logger::instance().setConsoleEnabled(false);
     if(FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
     const bool physical=scenario==L"capture-nr"||scenario==L"capture-nr-recovery";
@@ -69,7 +71,7 @@ int wmain(int argc,wchar_t** argv){
             if(!inputWindow)std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         if(!inputWindow){TerminateProcess(inputProcess.hProcess,2);WaitForSingleObject(inputProcess.hProcess,1000);CloseHandle(inputProcess.hProcess);return 2;}
-        veyra::source::ScreenCaptureOptions input;input.target=reinterpret_cast<uint64_t>(inputWindow);input.fps=30;input.cursor=false;
+        veyra::source::ScreenCaptureOptions input;input.target=reinterpret_cast<uint64_t>(inputWindow);input.fps=latency?60:30;input.cursor=false;
         sourcePath=input.uri();
     }
     MONITORINFOEXW monitor{};monitor.cbSize=sizeof(monitor);GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor);
@@ -104,13 +106,15 @@ int wmain(int argc,wchar_t** argv){
         if(physical){check(last.nrActive&&last.fgActive&&last.nrEvaluated>first.nrEvaluated,"real capture NR and DLSS remain active");std::cout<<"captureReceivedDelta="<<last.captureReceived-first.captureReceived<<" captureDroppedDelta="<<last.captureDropped-first.captureDropped<<" generatedDelta="<<last.generated-first.generated<<" requested="<<mode<<" effective="<<(last.presentationEffective.enabled?int(last.presentationEffective.mode):-1)<<std::endl;}
         std::cout<<"mediaSpeed="<<speed<<" processedDelta="<<last.frames-first.frames<<std::endl;
         check(!last.failed&&last.frames>first.frames+10&&speed>.8&&speed<1.2,"sustained playback at media speed");
+        // Without FG the ready->Present wait is display capacity only, never a first-frame PTS anchor.
+        if(latency&&multiplier==1){std::cout<<"schedulingWaitP95Ms="<<last.schedulingWaitP95Ms<<std::endl;check(last.schedulingWaitP95Ms<1000.0/std::max<DWORD>(dm.dmDisplayFrequency,30)+2,"screen capture without FG is held at most one display refresh");}
         if(multiplier>1)check(last.fgActive&&last.generated>first.generated,"real provider generated frames during measurement");
         if(scenario==L"effects")check(last.nrActive&&last.srActive&&last.nrEvaluated>first.nrEvaluated,"NR and SR remain active with pacing");
         if(mode>=0&&!xess)check(last.presentationEffective.enabled,"optional pacing active");
         if(mode==2&&multiplier==1)check(last.presentationEffective.mode==PacingMode::Reflex,"native Reflex active");
         if(mode==2&&multiplier>1&&!xess)check(last.presentationEffective.mode==PacingMode::LowQueue,"Reflex with FG explicitly falls back to low queue");
         if(mode>=0&&xess)check(!last.presentationEffective.enabled&&last.fgActive,"provider remains pacing owner");
-        if(screen){
+        if(screen&&!latency){
             for(unsigned cycle=0;cycle<3;++cycle){
                 SetEnvironmentVariableW(L"VEYRA_TEST_VIDEO_WORK_MS",L"80");
                 auto before=engine.snapshot();
