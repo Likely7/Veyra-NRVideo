@@ -125,7 +125,7 @@ public:
     // compositionMode: DXGI_FRAME_PRESENTATION_MODE (0 composed, 1 overlay,
     // 2 none, 3 composition failure), -1 when the query is unavailable.
     struct DisplayLatencySummary {
-        uint64_t samples=0;
+        uint64_t samples=0,replacedAtLeast=0;
         double p50Ms=-1,p95Ms=-1,maxMs=-1;
         int compositionMode=-1;
     };
@@ -217,7 +217,8 @@ private:
     struct PendingPresent { UINT id=0; int64_t qpc=0; bool replaceable=false; };
     std::array<PendingPresent,16> pendingPresents_{};
     unsigned pendingPresentNext_=0;
-    UINT lastDisplayedPresent_=0,lastSyncRefresh_=0;
+    UINT lastDisplayedPresent_=0,lastSyncRefresh_=0,lastPresentRefresh_=0;
+    uint64_t replacedPresents_=0;
     int64_t lastSyncQpc_=0;
     double refreshQpc_=0;
     bool displayLatencyEnabled_=true;

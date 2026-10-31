@@ -1,6 +1,8 @@
 # 当前项目状态
 
-更新：2026-10-30。这里只描述现在；历史过程见[历史索引](history/INDEX.md)。
+更新：2026-10-31。这里只描述现在；历史过程见[历史索引](history/INDEX.md)。
+
+2026-10-31当前任务：分支 `claude/fg-60hz-pacing-20261031`（基于 `c6c28b9`）修现场 60 Hz 屏 4K30 补帧每 16.5 秒一串掉帧和 VFG 卡在 30 fps：接近刷新率时自动模式走一帧队列、垂直同步下生成帧等到下一帧到期、VFG 跳帧后前两次不计入成本。本机 320 Hz A/B 与回归通过，**未在真实 60 Hz 屏或 RTX 5060 Ti 验证**，需现场确认。见[执行记录](FG_60HZ_PACING_2026-10-31.md)；未合并 main、未 push/Release。
 
 当前施工分支 `codex/amd-rdna3-nr-20261029`，从下述英伟达低延迟及Claude复查后的 `e7a9ae1` 接入 RX 7000 NR（RedDuke 独立网络 worker，Small / Original，兼容手动百分比）。保留 RX 9000 lmxxf 与 NVIDIA；本地构建、GPU 协议及设置/UI回归已通过，尚未在 RX 7000 实卡推理验收。测试入口和证据见 [接入记录](AMD_RDNA3_NR_PLAN_2026-10-29.md)。未合并main、未push/发布，正式版仍2.1.1。
 

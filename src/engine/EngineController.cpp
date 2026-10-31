@@ -1137,6 +1137,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // VEYRA_TEST_DISPLAY_HZ=<hz> replaces the measured refresh for it.
             DisplayFgBudgetGate displayFgGate;
             static const double displayFgTestHz=[]{wchar_t v[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_DISPLAY_HZ",v,16)?std::clamp(_wtof(v),0.0,1000.0):0.0;}();
+            // Live graph FG against the panel (DisplayFgBudget.h, LivePresentationTiming.h).
+            // The near decision holds like the hint, so a wobbling rate cannot
+            // reconfigure the presentation queue. VEYRA_TEST_LEGACY_NEAR_REFRESH=1
+            // restores the earlier rules, including FgCostSettling, for A/B runs.
+            DisplayFgBudgetGate nearRefreshGate;bool liveOutputFits=false,liveNearRefresh=false;
+            static const bool legacyNearRefresh=GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_NEAR_REFRESH",nullptr,0)>0;
+            FgCostSettling vfgCostSettling;
+            uint64_t generatedDropDeadline=0,generatedDropCapacity=0,generatedDropCap=0;
             LivePairLatency pairLatency;
             const bool adaptiveCapturePhase=physicalCapture&&GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_CAPTURE_PHASE",nullptr,0)==0;
             int64_t nextFgAdmissionLog=0,nextFgRejectionLog=0;
@@ -1260,8 +1268,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // A reduced (2X) group must not lower the full-group FG
                     // cost estimate, but its base cost is a normal sample -
                     // see FgRecoveryBudget::complete. Only a history reset or
-                    // an FG recovery is a warmup sample.
-                    if(batch.batch.identity.settingsRevision==fgBudgetRevision)fgBudget.complete(watch.gpuExecutionMs,batch.fgEvaluated>0,batch.historyReset||batch.fgRecovery,host100ns(),watch.fgExecutionMs,!batch.fgReduced);
+                    // an FG recovery is a warmup sample. See FgCostSettling for
+                    // the evaluations that follow a skipped live VFG pair.
+                    if(batch.batch.identity.settingsRevision==fgBudgetRevision){
+                        const bool settled=!isCapture||legacyNearRefresh||options.settings.frameGenerationBackend!=FrameGenerationBackend::Vfg||vfgCostSettling.observe(batch.fgCandidates>0&&batch.fgEvaluated==0,batch.fgEvaluated>0);
+                        fgBudget.complete(watch.gpuExecutionMs,batch.fgEvaluated>0,batch.historyReset||batch.fgRecovery,host100ns(),watch.fgExecutionMs,!batch.fgReduced&&settled);
+                    }
                     if(options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&batch.batch.identity.settingsRevision==fgBudgetRevision){
                         if(batch.historyReset)vfgOverload.reset();
                         if(!batch.historyReset&&!batch.fgRecovery&&!batch.fgReduced&&batch.fgEvaluated+1==options.fgMultiplier)
@@ -1334,7 +1346,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // (another monitor, a display change, 重新检测, the VRR
                 // confirmation); a change re-applies.
                 const bool vrrChanged=presenter.vrrSync()!=VideoPresenter::vrrSyncWanted(requested,presenter.displayVrr());
-                if(revision==pacingRevision&&presenterGeneration==presenter.generation()&&!vrrChanged&&!capRefreshChanged){
+                const bool automaticQueueChanged=presenter.automaticQueue()!=VideoPresenter::automaticQueueWanted(requested,presenter.displayVrr(),liveNearRefresh);
+                if(revision==pacingRevision&&presenterGeneration==presenter.generation()&&!vrrChanged&&!capRefreshChanged&&!automaticQueueChanged){
                     // Reflex dropped out at runtime: the queue-depth part of the
                     // low-latency setting stays, so only the status line changes.
                     if(presentationEffective.nvidiaLowLatency!=NvidiaLowLatency::Off&&!presenter.reflexActive()&&presenter.reflexFailed()){
@@ -1350,11 +1363,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 if(isImage){requested.enabled=false;requested.nvidiaLowLatency=NvidiaLowLatency::Off;}
                 std::wstring message;
-                presentationEffective=presenter.configurePresentation(ctx,requested,options.fg,message);
+                presentationEffective=presenter.configurePresentation(ctx,requested,options.fg,message,liveNearRefresh);
                 presentationPaced=presenter.pacingActive()&&!legacyVsyncQueue;
                 pacingRevision=revision;presenterGeneration=presenter.generation();pacingRefreshHz=refreshHz;cadence.reset();
                 {std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationRevision=revision;snapshot_.presentationStatus=message;snapshot_.presentationProviderOwned=presenter.providerOwnedPresentation();}
-                veyra::log::info("pacing",std::format("revision={} requested={}/{}/{} effective={}/{}/{} displayQueuePaced={} variableRefresh={} vrrLevel={} vrrSync={}",revision,requested.enabled,unsigned(requested.mode),unsigned(requested.display),presentationEffective.enabled,unsigned(presentationEffective.mode),unsigned(presentationEffective.display),presentationPaced,requested.variableRefresh,gfx::vrrLevel(presenter.displayVrr()),presenter.vrrSync()));
+                veyra::log::info("pacing",std::format("revision={} requested={}/{}/{} effective={}/{}/{} displayQueuePaced={} variableRefresh={} vrrLevel={} vrrSync={} automaticQueue={}",revision,requested.enabled,unsigned(requested.mode),unsigned(requested.display),presentationEffective.enabled,unsigned(presentationEffective.mode),unsigned(presentationEffective.display),presentationPaced,requested.variableRefresh,gfx::vrrLevel(presenter.displayVrr()),presenter.vrrSync(),presenter.automaticQueue()));
             };
             auto drainLivePresentation=[&]{cadence.reset();if(liveScheduler){++presentationDrains;liveScheduler->cancel();pollCompletions();pendingCompletions.clear();}pairLatency.reset();};
             auto advanceLive=[&]{applyPresentation();if(liveScheduler){pollCompletions();if(stop_||(paused_&&!seekPreviewPending)||seekSeconds_>=0){liveScheduler->cancel();cadence.reset();}else liveScheduler->advance(host100ns());}};
@@ -2166,7 +2179,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     nextFgAdmissionLog=now+10000000;if(!admitted)nextFgRejectionLog=now+10000000;
                     veyra::log::info("live-fg-admission",std::format("timeline={} revision={} source={} multiplier={} requestedMultiplier={} admitted={} admittedPairs={} rejectedPairs={} remainingDeadlineMs={:.3f} firstDeadlineMs={:.3f} queuedGpuMs={:.3f} predictedMs={:.3f} elapsedMs={:.3f} blitGpuP95Ms={:.3f} presentCpuP95Ms={:.3f} warmingHistory={} (CPU Present is backpressure, not added GPU cost; firstDeadlineMs=-1 when unused)",timeline,batch.identity.settingsRevision,batch.identity.sourceFrameId,previewFgMultiplier,options.fgMultiplier,admitted,fgAdmittedPairs,fgRejectedPairs,double(deadline-now)/10000,firstDeadline?double(firstDeadline-now)/10000:-1,queuedMs,fgBudget.predicted(now,warmingHistory).value_or(-1),elapsed,blit,livePresent.p95(),warmingHistory));
                 };
-                if(fgBudgetRevision!=options.settings.revision){fgBudget.reset();vfgOverload.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;displayFgGate.reset();}
+                if(fgBudgetRevision!=options.settings.revision){fgBudget.reset();vfgOverload.reset();vfgCostSettling.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;displayFgGate.reset();nearRefreshGate.reset();}
                 previewFgMultiplier=options.fgMultiplier;
                 // An output cap used to only drop candidates at present time, so
                 // the GPU still generated frames that were thrown away: at 6X on
@@ -2204,6 +2217,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 options.settings.revision,frameGenerationBackendName(options.settings.frameGenerationBackend),options.fgMultiplier,hint==0?std::string("none"):hint==1?std::string("off"):std::format("{}X",hint),contentFps*options.fgMultiplier,contentFps,refreshHz,displayFgTestHz>0?" (test override)":"",dedupActive,halfRate,unsigned(presentationEffective.display)));
                         }
                     }else displayFgGate.reset();
+                    // XeSS paces its own generated frames behind Present.
+                    const bool graphOutput=hinted&&!legacyNearRefresh&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend);
+                    const double outputFps=contentFps*previewFgMultiplier;
+                    liveOutputFits=graphOutput&&displayFgOutputFits(outputFps,refreshHz);
+                    if(!graphOutput)nearRefreshGate.reset();
+                    else if(contentFps>0&&refreshHz>0&&nearRefreshGate.update(displayFgOutputNear(outputFps,refreshHz)?1u:0u,host100ns()))
+                        veyra::log::info("fg-near-refresh",std::format("revision={} near={} outputFps={:.3f} refreshHz={:.3f}{} (near: Automatic uses the one-frame VSync queue, a generated frame stays valid until the next one is due)",options.settings.revision,nearRefreshGate.applied()==1,outputFps,refreshHz,displayFgTestHz>0?" (test override)":""));
+                    liveNearRefresh=graphOutput&&nearRefreshGate.valid()&&nearRefreshGate.applied()==1;
                     std::lock_guard lock(mutex_);
                     snapshot_.displayFgSuggestion=hinted&&displayFgGate.valid()?displayFgGate.applied():0u;
                     snapshot_.displayFgRefreshHz=refreshHz;snapshot_.displayFgContentFps=contentFps;
@@ -2223,6 +2244,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const auto legacyPairDelay=presentSinkFrameGeneration(options.settings.frameGenerationBackend)?0:liveInterval+processingAllowance;
                 const auto pairDelay=adaptiveCapturePhase&&options.fg&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)?
                     pairLatency.select(host100ns(),legacyPairDelay,liveInterval,previewFgMultiplier):legacyPairDelay;
+                const auto generatedGrace=liveGeneratedGrace100ns(liveNearRefresh,liveInterval/std::max(1u,previewFgMultiplier));
                 // DLSS can reseed after a skipped pair. XeSS
                 // owns generation inside its presenter and has no graph admission.
                 if(isCapture&&!rereadCached&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)){
@@ -2240,7 +2262,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto lastGenerated=pipeline::FrameBatch::interpolate(a,batch.b100ns,previewFgMultiplier-1,previewFgMultiplier);
                         const auto now=host100ns(),deadline=liveTimeline.deadline(lastGenerated);
                         const double elapsed=elapsedMs(processStart);
-                        const bool admitted=fgBudget.admit(now,deadline,elapsed,presentP95,warmingHistory);
+                        const bool admitted=fgBudget.admit(now,deadline,elapsed,presentP95,warmingHistory,0,double(generatedGrace)/10000);
                         logAdmission(batch,now,deadline,elapsed,presentP95,admitted,warmingHistory,pairAnchoredLive?(isStream?"decoded-pair":"capture-pair"):"continuous");
                         return admitted?pipeline::EnhanceGraph::FgDecision::Evaluate:pipeline::EnhanceGraph::FgDecision::Skip;
                     };
@@ -2513,7 +2535,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_XBOX
                         &xb,
 #endif
-                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
+                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&generatedDropCap,&generatedDropCapacity,&generatedDropDeadline,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,generatedGrace,outputFitsRefresh=liveOutputFits,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
                         using State=LiveGpuScheduler::State;auto& batch=watch->output;auto& s=*step;
                         auto updatePending=[&](LiveStepState*){
                             unsigned left=0;for(unsigned i=s.next;i<batch.batch.count;++i)if(batch.batch.frames[i].kind!=pipeline::FrameKind::Generated||batch.batch.frames[i].validity==pipeline::GenerationValidity::Valid)++left;
@@ -2532,7 +2554,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             if(stop_||(paused_&&!seekPreviewPending)||seekSeconds_>=0)return {State::Complete};
                             const double itemPtsMs=double(item.pts100ns)/10000;
                             const auto decisionTime=host100ns();
-                            const bool generationExpired=generated&&(isCapture?timeline.expired(item.pts100ns,decisionTime,100000):!fileAwaitingVideo&&previewGeneratedExpired(nowMs(),itemPtsMs));
+                            const bool generationExpired=generated&&(isCapture?timeline.expired(item.pts100ns,decisionTime,generatedGrace):!fileAwaitingVideo&&previewGeneratedExpired(nowMs(),itemPtsMs));
                             // B1: an XeSS real frame needs no CPU fence; the queue orders it.
                             const bool early=submitThenPresent&&!generated&&!watch->ready;
                             const auto readiness=previewFrameReadiness(item,comparisonMode_!=0||!generatedPresentationCurrent(jobGeneration,presentationGeneration.load()),generationExpired,[&]{return early||graph->resolveFrame(batch,s.next);});
@@ -2554,8 +2576,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 nextFgDeadlineLog=decisionTime+10000000;
                                 const auto ready=watch->frameReadyObserved[s.next];
                                 veyra::log::info("fg-deadline",std::format("revision={} batch={} subframe={} expired={} readyObservedLateMs={:.3f} decisionLateMs={:.3f} observedReadyToDecisionMs={:.3f} batchReady={} (CPU fence observations, not scanout; -1 means readiness unknown)",item.identity.settingsRevision,batch.batch.batchId,item.subframe,generationExpired,ready?double(ready-timeline.deadline(item.pts100ns))/10000:-1,double(decisionTime-timeline.deadline(item.pts100ns))/10000,ready?double(decisionTime-ready)/10000:-1,watch->ready.load()));
+                                veyra::log::info("fg-drops",std::format("revision={} deadline={} capacity={} cap={} outputFitsRefresh={} graceMs={:.1f} (session totals of frames dropped before Present, by reason)",item.identity.settingsRevision,generatedDropDeadline,generatedDropCapacity,generatedDropCap,outputFitsRefresh,double(generatedGrace)/10000));
                             }
-                            if(readiness==PreviewFrameReadiness::Expired){++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();continue;}
+                            if(readiness==PreviewFrameReadiness::Expired){++generatedDropDeadline;++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();s.capacityStart.reset();continue;}
                             if(!s.deadlineStart)s.deadlineStart=Clock::now();
                             if(isCapture){if(host100ns()<timeline.deadline(item.pts100ns))return {State::Pending,timeline.deadline(item.pts100ns)};}
                             else if(!fileAwaitingVideo){
@@ -2586,19 +2609,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 // If the next candidate is due before this
                                 // slot, discard this stale display opportunity
                                 // instead of accumulating latency.
-                                if(capInterval>0&&cadence.rateSkipsCandidate(optionalNow,mediaDeadline,interval,capInterval)){++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();continue;}
+                                if(capInterval>0&&cadence.rateSkipsCandidate(optionalNow,mediaDeadline,interval,capInterval)){++generatedDropCap;++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();continue;}
                                 if(optionalNow<due)return {State::Pending,due};
                             }
                             // Explicit VSync: one present of display capacity per present, so a
                             // frame never waits in DXGI's queue (true when not paced). A generated
-                            // frame waits at most half its interval (<= 2 ms) and is otherwise
-                            // replaced by the next one: waiting longer only moved the queue into
-                            // this scheduler and held the real frame behind it (DLSS 6X replay
-                            // on 320 Hz: callback->present P95 18.4 -> 34.2 ms). The real frame waits.
+                            // frame gives up as liveGeneratedCapacityExpired says and is replaced
+                            // by the next one. The real frame waits.
                             if((!legacyVsyncQueue||presentationEffective.enabled||presentationEffective.outputRate==OutputRateMode::Custom)&&!presenter.presentationReady()){
                                 if(generated&&!legacyVsyncQueue){
                                     if(!s.capacityStart)s.capacityStart=Clock::now();
-                                    if(elapsedMs(*s.capacityStart)>std::min(2.0,sourceIntervalMs/std::max(1u,batch.batch.count)/2)){++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();s.capacityStart.reset();continue;}
+                                    const auto nextDue=outputFitsRefresh&&s.next+1<batch.batch.count?timeline.deadline(batch.batch.frames[s.next+1].pts100ns):optionalNow;
+                                    if(liveGeneratedCapacityExpired(outputFitsRefresh,elapsedMs(*s.capacityStart),sourceIntervalMs/std::max(1u,batch.batch.count),optionalNow,nextDue)){++generatedDropCapacity;++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();s.capacityStart.reset();continue;}
                                 }
                                 return {State::Pending,optionalNow+2000};
                             }

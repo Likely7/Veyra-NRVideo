@@ -11,7 +11,7 @@ static HWND movingInput(){
     WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraPacingInput";
     wc.lpfnWndProc=[](HWND w,UINT m,WPARAM a,LPARAM b)->LRESULT{
         if(m==WM_TIMER){InvalidateRect(w,nullptr,FALSE);return 0;}
-        if(m==WM_PAINT){PAINTSTRUCT ps;auto dc=BeginPaint(w,&ps);RECT r;GetClientRect(w,&r);FillRect(dc,&r,(HBRUSH)GetStockObject(BLACK_BRUSH));const LONG x=LONG(GetTickCount64()/4%600);RECT bar{x,0,x+40,r.bottom};FillRect(dc,&bar,(HBRUSH)GetStockObject(WHITE_BRUSH));EndPaint(w,&ps);return 0;}
+        if(m==WM_PAINT){PAINTSTRUCT ps;auto dc=BeginPaint(w,&ps);RECT r;GetClientRect(w,&r);FillRect(dc,&r,(HBRUSH)GetStockObject(BLACK_BRUSH));const LONG x=LONG(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()/1000%2400/4);RECT bar{x,0,x+40,r.bottom};FillRect(dc,&bar,(HBRUSH)GetStockObject(WHITE_BRUSH));EndPaint(w,&ps);return 0;}
         return DefWindowProcW(w,m,a,b);
     };
     RegisterClassW(&wc);
@@ -23,7 +23,18 @@ int wmain(int argc,wchar_t** argv){
     using namespace veyra::engine;using Clock=std::chrono::steady_clock;
     if(argc==2&&std::wstring(argv[1])==L"--capture-input"){
         auto w=movingInput();const auto end=Clock::now()+std::chrono::seconds(240);
-        while(IsWindow(w)&&Clock::now()<end){MSG m;while(PeekMessageW(&m,nullptr,0,0,PM_REMOVE)){TranslateMessage(&m);DispatchMessageW(&m);}std::this_thread::sleep_for(std::chrono::milliseconds(2));}
+        // A chosen capture rate needs a window that changes faster than the
+        // limit: the 16 ms message timer alone delivers about 30 fps under it.
+        const bool repaint=GetEnvironmentVariableW(L"VEYRA_TEST_SCREEN_FPS",nullptr,0)>0;
+        HANDLE timer=CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_ALL_ACCESS);
+        while(IsWindow(w)&&Clock::now()<end){
+            MSG m;while(PeekMessageW(&m,nullptr,0,0,PM_REMOVE)){TranslateMessage(&m);DispatchMessageW(&m);}
+            if(repaint&&IsWindow(w)){InvalidateRect(w,nullptr,FALSE);UpdateWindow(w);}
+            LARGE_INTEGER due;due.QuadPart=-20000;
+            if(timer&&SetWaitableTimer(timer,&due,0,nullptr,nullptr,FALSE))WaitForSingleObject(timer,10);
+            else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        if(timer)CloseHandle(timer);
         if(IsWindow(w))DestroyWindow(w);return w?0:2;
     }
     // media, evidence directory, mode(-1=off), display(0..2), multiplier, seconds, lifecycle/replay/xess
@@ -31,10 +42,12 @@ int wmain(int argc,wchar_t** argv){
     const int mode=_wtoi(argv[3]),display=_wtoi(argv[4]),multiplier=_wtoi(argv[5]),seconds=std::clamp(_wtoi(argv[6]),3,120);
     if(mode< -1||mode>2||display<0||display>2)return 2;
     const std::wstring scenario=argc>7?argv[7]:L"";
-    // latency-screen[-sr]: a live 60 fps window capture for capture-to-present
-    // A/B runs. mode -1 off, 0 low queue only, 1 NVIDIA 开, 2 NVIDIA 开＋增强.
+    // latency-screen[-sr|-vfg]: a live window capture, 60 fps unless
+    // VEYRA_TEST_SCREEN_FPS says otherwise (near-refresh A/B: 53 fps x 6 = 318
+    // on 320 Hz), for capture-to-present A/B runs. mode -1 off, 0 low queue
+    // only, 1 NVIDIA 开, 2 NVIDIA 开＋增强.
     const bool latency=scenario.starts_with(L"latency-");
-    const bool screen=scenario==L"screen-xess"||scenario==L"screen-dlss"||latency;
+    const bool screen=scenario==L"screen-xess"||scenario==L"screen-dlss"||scenario==L"screen-vfg"||latency;
     const bool xess=scenario==L"xess"||scenario==L"screen-xess"||scenario==L"native-xess";
     if(scenario==L"legacy"){if(mode!=-1)return 2;SetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_SWAPCHAIN",L"1");}
     std::filesystem::path dir=argv[2];std::filesystem::create_directories(dir);
@@ -72,7 +85,7 @@ int wmain(int argc,wchar_t** argv){
             if(!inputWindow)std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         if(!inputWindow){TerminateProcess(inputProcess.hProcess,2);WaitForSingleObject(inputProcess.hProcess,1000);CloseHandle(inputProcess.hProcess);return 2;}
-        veyra::source::ScreenCaptureOptions input;input.target=reinterpret_cast<uint64_t>(inputWindow);input.fps=latency?60:30;input.cursor=false;
+        veyra::source::ScreenCaptureOptions input;input.target=reinterpret_cast<uint64_t>(inputWindow);input.fps=30;if(latency){wchar_t fps[16]{};input.fps=GetEnvironmentVariableW(L"VEYRA_TEST_SCREEN_FPS",fps,16)?std::clamp(_wtoi(fps),10,240):60;}input.cursor=false;
         sourcePath=input.uri();
     }
     MONITORINFOEXW monitor{};monitor.cbSize=sizeof(monitor);GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor);
@@ -86,7 +99,7 @@ int wmain(int argc,wchar_t** argv){
         if(native){p.nvidiaLowLatency=mode<0?NvidiaLowLatency::Off:mode==2?NvidiaLowLatency::Boost:NvidiaLowLatency::On;engine.requestPresentation(p);}
         if(latency){p.nvidiaLowLatency=mode==1?NvidiaLowLatency::On:mode==2?NvidiaLowLatency::Boost:NvidiaLowLatency::Off;engine.requestPresentation(p);}
         EnhancementSettings effects;effects.multiplier=unsigned(multiplier);if(xess)effects.frameGenerationBackend=FrameGenerationBackend::XeSS;
-        if(scenario==L"native-vfg")effects.frameGenerationBackend=FrameGenerationBackend::Vfg;
+        if(scenario==L"native-vfg"||scenario==L"latency-screen-vfg"||scenario==L"screen-vfg")effects.frameGenerationBackend=FrameGenerationBackend::Vfg;
         if(scenario==L"native-fsr")effects.frameGenerationBackend=FrameGenerationBackend::Fsr;
         if(scenario==L"effects"||scenario==L"native-effects"){effects.nr=true;effects.sr=true;effects.srTarget=veyra::pipeline::SrTarget::Qhd;}
         if(scenario==L"latency-screen-sr"){effects.sr=true;effects.srTarget=veyra::pipeline::SrTarget::Uhd4K;}
@@ -112,6 +125,7 @@ int wmain(int argc,wchar_t** argv){
         std::cout<<"measurementEnd="<<host()<<" elapsedSeconds="<<std::chrono::duration<double>(Clock::now()-start).count()<<std::endl;
         if(physical){check(last.nrActive&&last.fgActive&&last.nrEvaluated>first.nrEvaluated,"real capture NR and DLSS remain active");std::cout<<"captureReceivedDelta="<<last.captureReceived-first.captureReceived<<" captureDroppedDelta="<<last.captureDropped-first.captureDropped<<" generatedDelta="<<last.generated-first.generated<<" requested="<<mode<<" effective="<<(last.presentationEffective.enabled?int(last.presentationEffective.mode):-1)<<std::endl;}
         std::cout<<"mediaSpeed="<<speed<<" processedDelta="<<last.frames-first.frames<<std::endl;
+        {std::string status(4096,char(0));status.resize(std::max(0,WideCharToMultiByte(CP_UTF8,0,last.presentationStatus.c_str(),-1,status.data(),int(status.size()),nullptr,nullptr)-1));std::cout<<"presentationStatus="<<status<<std::endl;}
         check(!last.failed&&last.frames>first.frames+10&&speed>.8&&speed<1.2,"sustained playback at media speed");
         if(multiplier>1)check(last.fgActive&&last.generated>first.generated,"real provider generated frames during measurement");
         if(scenario==L"effects"||scenario==L"native-effects")check(last.nrActive&&last.srActive&&last.nrEvaluated>first.nrEvaluated,"NR and SR remain active with pacing");

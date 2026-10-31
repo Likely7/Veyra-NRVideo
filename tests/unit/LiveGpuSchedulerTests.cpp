@@ -154,6 +154,48 @@ int main(){
     check(budget.predicted(50000003,true)==7,"rejected reset without FG cannot become a warmup timing sample");
     check(!budget.admit(50000002,49800002,1.217,.047,true),"cheap recovery cannot bypass an expired deadline");
     check(budget.predicted(60000002,true)==budget.predicted(60000002),"expired recovery measurement falls back to steady estimate");
+    {
+        veyra::engine::FgCostSettling settling;
+        check(settling.observe(false,true),"continuous evaluations enter the FG estimate");
+        check(!settling.observe(true,false)&&!settling.observe(false,true)&&!settling.observe(false,true)&&settling.observe(false,true),"the first two evaluations after a skip stay out of it");
+        settling.observe(true,false);
+        check(settling.observe(false,false)&&!settling.observe(false,true),"a group without FG does not use up the settling evaluations");
+        settling.reset();check(settling.observe(false,true),"settings revision reset clears settling");
+        // Field log 2026-10-31, 4K30 VFG High on an RTX 5060 Ti: base 3.4 ms with FG and
+        // 1.45 ms without, 23.1 ms running continuously, 39.6 ms (fullscreen) or 28.5 ms
+        // (window) after skips. One second of FG at 33 ms starts it, as a hiccup did.
+        // Returns the evaluated pairs of the last 20 s out of 60 s (600 pairs at most).
+        const auto replay=[](double continuous,double isolated,bool settle,double graceMs,unsigned& maxPer2s){
+            veyra::engine::FgRecoveryBudget replayBudget;veyra::engine::FgCostSettling cost;
+            const int64_t interval=333667;
+            bool previous=true;unsigned evaluated=0,window=0;maxPer2s=0;
+            for(unsigned n=0;n<1800;++n){
+                const int64_t now=100000000+n*interval;
+                const auto allowance=replayBudget.processingAllowance(now,interval);
+                const bool admitted=replayBudget.admit(now,now+interval/2+allowance-5000,.2,.45,false,0,graceMs);
+                const bool comparable=!settle||cost.observe(!admitted,admitted);
+                if(admitted){const double fg=n<30?33:previous?continuous:isolated;replayBudget.complete(3.4+fg,true,false,now+int64_t(fg*10000),fg,comparable);}
+                else replayBudget.complete(1.45,false,false,now+14500);
+                previous=admitted;
+                if(n>=1200){evaluated+=admitted;window+=admitted;if(n%60==59){maxPer2s=std::max(maxPer2s,window);window=0;}}
+            }
+            return evaluated;
+        };
+        unsigned per2s=0;
+        const auto trapped=replay(23.1,39.6,false,10,per2s);
+        printf("VFG trap replay: earlier rule %u of 600 pairs evaluated, most in 2 s %u\n",trapped,per2s);
+        check(trapped<=20,"replay: counting the lone probe keeps VFG at 30 fps");
+        const auto recoveredFull=replay(23.1,39.6,true,10,per2s);
+        printf("VFG trap replay: fullscreen %u of 600\n",recoveredFull);
+        check(recoveredFull==600,"replay: fullscreen probes at 39.6 ms recover full FG");
+        check(replay(23.1,28.5,true,10,per2s)==600,"replay: windowed probes at 28.5 ms recover full FG");
+        const auto overload=replay(46,46,true,10,per2s);
+        printf("VFG trap replay: really too slow %u of 600, most in 2 s %u\n",overload,per2s);
+        check(overload<=40&&per2s<=4,"replay: a mode that really is too slow stays rejected with a bounded probe");
+        check(replay(29,29,false,10,per2s)<=20,"replay: 29 ms misses the 10 ms bound");
+        check(replay(29,29,true,16.18,per2s)==600,"replay: near a 60 Hz refresh 29 ms still reaches the next frame's due time");
+        check(replay(34,34,true,16.18,per2s)<=40,"replay: near the refresh a group longer than the input interval stays rejected");
+    }
     veyra::engine::LivePairLatency phase;
     check(phase.select(10000000,420000,333333,4)==420000,"unknown live readiness keeps legacy phase");
     for(int i=0;i<8;++i)phase.observe(10000000+i,370000);

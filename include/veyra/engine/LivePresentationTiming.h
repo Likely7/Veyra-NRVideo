@@ -31,4 +31,24 @@ inline double livePairHoldMs(bool hasGenerated,double realPtsMs,double generated
     if(!hasGenerated||!std::isfinite(realPtsMs)||!std::isfinite(generatedPtsMs))return 0;
     return std::clamp(realPtsMs-generatedPtsMs,0.0,1000.0/30.0);
 }
+// How late a live generated frame is still worth showing: 10 ms, the bound the
+// FG budget admits against. Near the refresh a dropped frame leaves a refresh
+// repeating the last picture, so it stays useful until the next frame is due
+// (60 Hz 2X: 16.2 ms). Never later: the real frame must not wait behind it.
+inline constexpr int64_t kLiveGeneratedGrace100ns=100000,kLiveNextFrameMargin100ns=5000;
+inline int64_t liveGeneratedGrace100ns(bool outputNearRefresh,int64_t outputInterval100ns){
+    return outputNearRefresh?std::max(kLiveGeneratedGrace100ns,outputInterval100ns-kLiveNextFrameMargin100ns):kLiveGeneratedGrace100ns;
+}
+// One present of display capacity (explicit VSync): when a generated frame
+// stops waiting for it. Above the refresh the queue is always full, so waiting
+// only moves it into the scheduler and holds the real frame behind (DLSS 6X
+// replay on 320 Hz: callback->present P95 18.4 -> 34.2 ms): half the interval,
+// at most 2 ms. When the output fits, capacity comes back within a refresh and
+// no backlog can build; giving up after 2 ms there dropped 3-4% of the generated
+// frames of a 60 Hz 2X stream in bursts every 16.5 s (field log 2026-10-31), so
+// it waits until the next frame is due.
+inline bool liveGeneratedCapacityExpired(bool outputFitsRefresh,double waitedMs,double outputIntervalMs,int64_t now,int64_t nextDue){
+    if(waitedMs<=std::min(2.0,outputIntervalMs/2))return false;
+    return !outputFitsRefresh||now>=nextDue-kLiveNextFrameMargin100ns;
+}
 }

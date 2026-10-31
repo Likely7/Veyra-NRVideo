@@ -150,6 +150,47 @@ int main(){
     check(livePairHoldMs(true,10,20)==0,"backwards PTS cannot sleep negatively");
     check(livePairHoldMs(true,std::numeric_limits<double>::infinity(),0)==0,"nonfinite PTS rejected");
     {
+        using veyra::engine::liveGeneratedGrace100ns;
+        check(liveGeneratedGrace100ns(false,166667)==100000,"away from the refresh a generated frame keeps 10 ms");
+        check(liveGeneratedGrace100ns(true,166667)==161667,"60 Hz 2X stays useful until 0.5 ms before the next frame is due");
+        check(liveGeneratedGrace100ns(true,31447)==100000,"a short output interval never shortens the 10 ms bound");
+        using veyra::engine::liveGeneratedCapacityExpired;
+        check(!liveGeneratedCapacityExpired(false,1.3,2.78,0,0)&&liveGeneratedCapacityExpired(false,1.5,2.78,0,0),"above the refresh 6X waits half its interval");
+        check(!liveGeneratedCapacityExpired(false,1.9,16.7,0,0)&&liveGeneratedCapacityExpired(false,2.1,16.7,0,0),"above the refresh the wait stays at most 2 ms");
+        check(!liveGeneratedCapacityExpired(true,5,16.7,1000000,1100000),"output that fits keeps waiting 10 ms before the next frame is due");
+        check(liveGeneratedCapacityExpired(true,5,16.7,1095000,1100000),"output that fits gives up 0.5 ms before the next frame is due");
+        check(!liveGeneratedCapacityExpired(true,1,16.7,2000000,1100000),"a frame that only just started waiting keeps the earlier floor");
+        // A one-deep queue on 60.005 Hz fed with the field log's pairs (29.972 fps,
+        // arrival sd about 1.9 ms). A present flips at the next refresh, which is
+        // when capacity returns. Polls every 0.2 ms as the scheduler does. 100 ns units.
+        struct Replay{unsigned pairs=0,drops=0;double maxRealWait=0;};
+        const auto replay=[](bool fits,double hz,double fps,double sd){
+            const double refresh=1e7/hz,interval=1e7/fps;
+            Replay r;uint32_t seed=7;
+            const auto gauss=[&]{double sum=0;for(int i=0;i<12;++i){seed=seed*1664525u+1013904223u;sum+=double(seed>>8)/double(1u<<24);}return (sum-6)*sd;};
+            double free=-1e18,last=0;
+            for(unsigned n=0;n<6000;++n){
+                const double real=n*interval+gauss()+interval+34000,generated=real-interval/2;
+                ++r.pairs;
+                double start=std::max(generated,last);bool dropped=false;
+                for(double t=start;t<free;t+=2000)
+                    if(liveGeneratedCapacityExpired(fits,(t-start)/10000,interval/2/10000,int64_t(t),int64_t(real))){dropped=true;break;}
+                if(dropped)++r.drops;
+                else{start=std::max(start,free);last=start;free=(std::floor(start/refresh)+1)*refresh;}
+                start=std::max(real,last);
+                const double presented=std::max(start,free);
+                r.maxRealWait=std::max(r.maxRealWait,(presented-real)/10000);
+                last=presented;free=(std::floor(presented/refresh)+1)*refresh;
+            }
+            return r;
+        };
+        const auto before=replay(false,60.0049,29.9722,18700),after=replay(true,60.0049,29.9722,18700);
+        printf("near-refresh replay: drops %u -> %u of %u pairs, max real wait %.2f -> %.2f ms\n",before.drops,after.drops,after.pairs,before.maxRealWait,after.maxRealWait);
+        check(before.drops*100>=before.pairs,"field-rate replay: the 2 ms rule drops at least 1% of the pairs");
+        check(after.drops==0,"field-rate replay: no generated frame is dropped when it may wait for the next due time");
+        check(after.maxRealWait<=1000/60.0049,"field-rate replay: the real frame waits at most one refresh");
+    }
+    {
         // PictureCompare.h: a sample repeats the last new picture only when every
         // component of the whole picture is within the capture-noise band.
         using veyra::pipeline::PictureReference;using veyra::pipeline::PicturePlane;using veyra::pipeline::PictureComponents;

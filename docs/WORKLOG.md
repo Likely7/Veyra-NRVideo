@@ -197,3 +197,19 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 不得将此前高档VFG预算拒绝当作全局结论。报告reports/fg-intermittent-20261031/MULTI_PROVIDER.md；原日志还含DLSS和XeSS。XeSS行9884（10:30:19.447）Present调用80.881ms、总81.097ms，前置记录提交0.207ms；生成和节奏在代理内部，不能将0.207ms冒充GPU推理耗时。SDK各短阶段有效样本大多58–62fps、cycleMismatches=0，关闭尾窗低FPS不代表播放持续掉帧；普通frame-flow原帧30也不是XeSS最终帧率。
 
 源码明确XeSS生成帧不经Veyra生成子帧预算/10ms期限/2ms容量分支，每帧显示统计trackScanout也排除XeSS（每秒统计仍调用）；上述机制均不能被当作全提供方同症状的唯一原因。调查范围应扩至共用采集、owner调度、呈现入口、Windows/驱动/合成及窗口状态，但现有证据不能确定同一根因。无产品修改/新构建/现场测试/发布。后续需要同设置分提供方的丢弃原因计数及API耗时分解，不能继续把单段关联提升为定论。
+
+## 2026-10-31 补帧接近刷新率修复
+
+用户确认“开始修”。分支claude/fg-60hz-pacing-20261031，基于c6c28b9；未合并main、未push/Release，未提交。记录docs/FG_60HZ_PACING_2026-10-31.md，回执reports/claude-fg-60hz-pacing-20261031/FINAL.json。
+
+改动：输出不超过刷新率×1.02时生成帧等到下一帧到期前0.5 ms；输出在0.65–1.02倍时自动模式走一帧队列，迟到容忍与准入预算同步放宽（60 Hz 2X为16.2 ms）；实时VFG跳帧后前2次不计入成本；新增fg-near-refresh、fg-drops、replacedAtLeast日志。第4项到达时刻平滑未做。
+
+命令：tmp/claude-fg-60hz-pacing-20261031/build/build.py（并发2）；check.py unit/ab/near/gpu-regress/qml/stage，sweep.py，func.py，ui_smoke.py，脚本已复制到报告tools。
+
+失败与修正：timing测试目标不带/utf-8，包含DisplayFgBudget.h编译失败，比值断言改放realtime测试；pacing日志漏传参数编译失败；测试脚本写入NUL字符常量编译失败；首轮从构建目录运行缺DLSS运行库，FG未生效，改在共享运行目录运行。窗口输入16 ms定时器加GetTickCount只能产出约28 fps，改高精度重绘后才达到目标速率。
+
+05:50–05:53与06:06后用户自行打开E:/App下2.1.1，首轮上限/低比值A/B被污染（GPU约48%），已移到contaminated目录并重跑；未停止用户进程，之后脚本记录userVeyraRunning。首轮用samples比较时发现自动模式samples只是下限、与垂直同步口径不同，会高估旧版丢帧，新增replacedAtLeast后重测，结果按范围报告。
+
+结果：320 Hz自动模式比值0.74–1.0，旧版实际显示少3–15%（范围），新版被替换0、容量丢帧不超过生成帧的2%；捕获→呈现P50差≤0.3 ms，P95 0至+1.8 ms。垂直同步回放容量丢帧78–101→18–22。高于刷新率规则不生效，结果在波动内。单元回放：6000对丢153→0；VFG陷阱600对评估10→600。repair/timing/scheduler/realtime/i18n 0失败，QtQuick 123/0/1跳过，9个原生GPU场景通过，运行目录97个运行组件哈希一致。
+
+未验：真实60 Hz屏、采集卡、RTX 5060 Ti；VFG陷阱本机不能复现，只有日志数字回放；跳帧后高成本的原因未证实。屏幕采集固定延迟修复分支也改同几个文件，未合并、未联合测试。

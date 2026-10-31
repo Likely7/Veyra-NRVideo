@@ -69,17 +69,19 @@ public:
     int64_t processingAllowance(int64_t now,int64_t interval)const{
         return int64_t(std::min(double(std::max<int64_t>(0,interval)),baseCost(now).value_or(0)*10000));
     }
-    bool canAdmit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0)const{
+    // graceMs: how late the generated frame may still be shown; the caller
+    // passes the bound presentation uses (liveGeneratedGrace100ns).
+    bool canAdmit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0,double graceMs=10)const{
         const auto cost=predicted(now,warmingHistory);
         // FG has not been submitted at admission. CPU time can at most cover
         // the base work; it must never erase the cost of future FG calls.
         const double queued=std::isfinite(queuedMs)?std::max(0.0,queuedMs):0.0;
         const double progress=std::clamp(elapsed,0.0,queued+baseCost(now).value_or(0));
-        const bool fits=double(deadline-now)/10000+10>=std::max(0.0,queued+cost.value_or(0)-progress)+std::max(0.0,present);
+        const bool fits=double(deadline-now)/10000+graceMs>=std::max(0.0,queued+cost.value_or(0)-progress)+std::max(0.0,present);
         return fits;
     }
-    bool admit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0){
-        return recordAdmission(canAdmit(now,deadline,elapsed,present,warmingHistory,queuedMs));
+    bool admit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0,double graceMs=10){
+        return recordAdmission(canAdmit(now,deadline,elapsed,present,warmingHistory,queuedMs,graceMs));
     }
     // strictFirstOutput=false reproduces the 1.4.0 rule: only the whole group
     // against its last deadline. true additionally requires the first output to
@@ -112,5 +114,26 @@ public:
         return double(midpointDeadline-now)/10000+grace>=std::max(0.0,queued+*base+*firstFgMs-progress)+std::max(0.0,present);
     }
     bool recovering()const{return limited_&&recoveryPairs_>0;}
+};
+// Live VFG keeps its A/B history across a skipped pair, so the next evaluation
+// is not a warmup sample like a DLSS reseed, and it is not a steady sample
+// either. Field log 2026-10-31 (RTX 5060 Ti, 4K30 VFG High): 23.1-23.6 ms when
+// running continuously, 28.5 ms windowed and 39.6 ms fullscreen after skips,
+// while the budget allowed about 25.9 ms. Each lone probe then measured over
+// budget and rejected the next pair for 2 s: 30 fps for up to 76 s, until a
+// settings change. The first evaluations after a skip therefore do not enter
+// the FG estimate. A mode that really is too slow is still rejected by the
+// first group after them, so a failed probe costs three groups per 2 s, not one.
+class FgCostSettling {
+    unsigned left_=0;
+public:
+    static constexpr unsigned kEvaluations=2;
+    void reset(){left_=0;}
+    // Call for each completed group in order; true when its FG time may be used.
+    bool observe(bool skipped,bool evaluated){
+        if(skipped){left_=kEvaluations;return false;}
+        if(!evaluated||!left_)return true;
+        --left_;return false;
+    }
 };
 }

@@ -7156,6 +7156,13 @@
    "ja": "画面キャプチャーのエラー 0x{:08X}：{}"
   },
   {
+   "zh": "屏幕队列 1 帧，避免丢帧",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "螢幕佇列 1 幀，避免掉幀",
+   "en": "1-frame display queue to avoid dropped frames",
+   "ja": "画面キュー 1 フレーム、フレーム落ちを防止"
+  },
+  {
    "zh": "展开本卡片并播放 HDR 输出时测量，每秒最多 4 次",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "展開本卡片並播放 HDR 輸出時測量，每秒最多 4 次",
@@ -10396,6 +10403,13 @@
    "zh-TW": "顯示同步：自動 + 可變更新",
    "en": "Display sync: auto + variable refresh",
    "ja": "表示の同期：自動 + 可変リフレッシュ"
+  },
+  {
+   "zh": "显示同步：自动（补帧接近刷新率）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動（補幀接近更新率）",
+   "en": "Display sync: auto (frame generation near refresh rate)",
+   "ja": "表示の同期：自動（フレーム生成がリフレッシュレートに近い）"
   },
   {
    "zh": "显示器",
@@ -14066,11 +14080,11 @@
    "ja": "自動（負荷に応じて）"
   },
   {
-   "zh": "自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线",
+   "zh": "自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低（实时补帧输出接近刷新率时改排 1 帧，避免丢帧） · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线",
    "src": "qml/ProPresentationRows.qml",
-   "zh-TW": "自動（推薦）：不撕裂，也不等待垂直同步，每次更新顯示最新一幀，延遲最低 · 垂直同步：每幀都等到更新才顯示，比自動多等最多一次更新 · 允許撕裂：可能出現撕裂線",
-   "en": "Auto (recommended): no tearing and no VSync wait; each refresh shows the newest frame for the lowest latency · VSync: every frame waits for a refresh, at most one refresh longer than Auto · Allow tearing: tear lines may appear",
-   "ja": "自動（推奨）：ティアリングなし、垂直同期を待たず、毎回のリフレッシュで最新フレームを表示し遅延が最小 · 垂直同期：全フレームがリフレッシュを待って表示され、自動より最大 1 リフレッシュ分長く待つ · ティアリングを許可：ティアリングが発生する場合あり"
+   "zh-TW": "自動（推薦）：不撕裂，也不等待垂直同步，每次更新顯示最新一幀，延遲最低（即時補幀輸出接近更新率時改排 1 幀，避免掉幀） · 垂直同步：每幀都等到更新才顯示，比自動多等最多一次更新 · 允許撕裂：可能出現撕裂線",
+   "en": "Auto (recommended): no tearing and no VSync wait; each refresh shows the newest frame for the lowest latency (live frame generation near the refresh rate queues 1 frame to avoid drops) · VSync: every frame waits for a refresh, at most one refresh longer than Auto · Allow tearing: tear lines may appear",
+   "ja": "自動（推奨）：ティアリングなし、垂直同期を待たず、毎回のリフレッシュで最新フレームを表示し遅延が最小（ライブのフレーム生成がリフレッシュレートに近いときは 1 フレームをキューしてフレーム落ちを防止） · 垂直同期：全フレームがリフレッシュを待って表示され、自動より最大 1 リフレッシュ分長く待つ · ティアリングを許可：ティアリングが発生する場合あり"
   },
   {
    "zh": "自动（独立显卡）",
