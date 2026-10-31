@@ -1,7 +1,9 @@
 #include "veyra/source/AverMediaAudioCarrier.h"
+#include "veyra/Log.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <format>
 
 namespace veyra::source {
 namespace {
@@ -132,5 +134,29 @@ bool AverMediaAudioCarrier::feed(std::span<const uint8_t> bytes,avermedia::Sampl
         if(complete){const bool ok=emitPcm(std::span(buffer_).first(complete),info);if(!ok)return false;buffer_.erase(buffer_.begin(),buffer_.begin()+complete);}
     }
     state_.retainedBytes=buffer_.size();return true;
+}
+PcmCarrierRouter::PcmCarrierRouter(uint32_t rate,AverMediaAudioCarrier::Callback decoded)
+    :carrier_([this,decoded=std::move(decoded)](const VendorPcmBlock& block){
+        // PCM blocks are the caller's own bytes, pushed unchanged by the caller. A
+        // decoded block the session rejects is the session's business and must not
+        // reset decoding (that would let the carrier through as noise).
+        if(block.codec.empty())return true;
+        decoding_=true;if(decoded)decoded(block);return true;
+    }),info_{2,16,rate}{}
+PcmCarrierRouter::Result PcmCarrierRouter::feed(std::span<const uint8_t> bytes,double now){
+    Result result;
+    if(!carrier_.feed(bytes,info_,now)){
+        log::warn("capture-audio-carrier",std::format("carrier reset: {}",carrier_.state().error));
+        carrier_.reset();compressedSince_=-1;
+    }
+    if(carrier_.compressed()){
+        if(compressedSince_<0){compressedSince_=now;burstsAtEntry_=carrier_.state().bursts;}
+        if(carrier_.state().bursts>=burstsAtEntry_+2||now-compressedSince_<kConfirmSeconds){result.route=Route::Withheld;return result;}
+        // A sync-like pattern inside real PCM: no second burst followed it.
+        ++falseStarts_;carrier_.reset();compressedSince_=-1;
+        log::info("capture-audio-carrier",std::format("IEC 61937 sync without a following burst; playing PCM again falseStarts={}",falseStarts_));
+    }else compressedSince_=-1;
+    if(decoding_){decoding_=false;result.restorePcm=true;}
+    return result;
 }
 } // namespace veyra::source

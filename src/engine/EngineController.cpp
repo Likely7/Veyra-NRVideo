@@ -1104,7 +1104,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // 60 fps content modes, repeated pictures (every component within the
             // capture-noise band, PictureCompare.h) are dropped before any GPU work and
             // kept frames get content timestamps. "60->30" is the plain
-            // every-second-sample CaptureHalfRate again (user 2026-10-12).
+            // every-second-sample CaptureHalfRate again (user 2026-10-12); since
+            // 2026-10-27 the callback's picture numbers only move its phase onto the
+            // first copies of a 30 fps game (CaptureHalfRate.h).
             // VEYRA_TEST_CONTENT_DEDUP_LEGACY=1 restores the report-only content modes
             // for A/B runs.
             ContentDedup contentDedup;uint64_t dedupRevision=0;
@@ -2021,8 +2023,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const bool halfRate=isCapture&&options.settings.content==ContentRate::Capture60To30&&
                     CaptureHalfRate::supported(activeSource->info().averageFps);
                 const bool dedupActive=isCapture&&!isImage&&!legacyCadence&&dedupContent(options.settings.content);
-                // The callback compares whole pictures only while dedup needs them.
-                if(physicalCapture)captureSource.setPictureCompare(dedupActive);
+                // The callback compares whole pictures only while dedup or the 60->30 phase needs them.
+                if(physicalCapture)captureSource.setPictureCompare(dedupActive||halfRate);
                 if(reset||pipeline::breaksHistory(pkt.flags))captureSampler.reset();
                 const int64_t samplePts100ns=pkt.pts.isUnknown()?0:pkt.pts.to100ns();
                 if(dedupActive&&!rereadCached&&!pkt.pts.isUnknown()){
@@ -2045,10 +2047,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(decision.interval>0)pkt.duration={decision.interval,10000000};
                 }else if(halfRate&&!rereadCached){
                     // 60->30: every second sample by timestamp, original PTS, a steady 30.
+                    // Only a number the capture callback already computed is used, so the
+                    // engine thread never compares a whole picture for this.
                     const auto interval=liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps);
-                    if(!pkt.pts.isUnknown()&&!captureSampler.accept(pkt.pts.to100ns(),interval,false)){
+                    const auto* upload=pipeline::captureUploadFrame(frame);
+                    const uint64_t* picture=upload&&upload->pictureValid?&upload->pictureId:nullptr;
+                    const auto shifts=captureSampler.shifts();
+                    if(!pkt.pts.isUnknown()&&!captureSampler.accept(pkt.pts.to100ns(),interval,false,picture)){
                         std::lock_guard lock(mutex_);++snapshot_.captureRateSkipped;continue;
                     }
+                    if(captureSampler.shifts()!=shifts||(picture&&captureSampler.gridKept()%600==0))
+                        veyra::log::info("capture-rate",std::format("60->30 phase: shifts={} keptOnGrid={} secondCopiesKept={} (a 30 fps game moves onto first copies; 60 fps content never repeats)",
+                            captureSampler.shifts(),captureSampler.gridKept(),captureSampler.secondCopiesKept()));
                     pkt.duration={interval*2,10000000};
                 }
                 if(!halfRate)captureSampler.reset();

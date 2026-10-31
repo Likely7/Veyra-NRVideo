@@ -2,6 +2,20 @@
 
 完整旧日志：[截至本轮整理前的记录](history/worklog/WORKLOG_before_maintenance_2026-10-27.md)。当前状态见[CURRENT_STATUS](CURRENT_STATUS.md)，历史授权见[历史索引](history/INDEX.md)。
 
+## 2026-10-27 屏幕捕获帧率、采集对白与后续方向（Claude）
+
+用户要求：屏幕捕获60帧只有55（日志67）、采集对白很轻（日志68）、后续方向只调研。分支claude/capture-fps-audio-20261027从main 7b0b64b；用户Veyra运行中，未停止、未占采集卡；不push/Release。报告[CAPTURE_FPS_AUDIO_REPORT_2026-10-27](CAPTURE_FPS_AUDIO_REPORT_2026-10-27.md)，证据reports/claude-capture-fps-audio-20261027。
+
+- 屏幕捕获6376564：WGC默认MinUpdateInterval 16ms使165Hz下60帧只收55（日志67六个目标均止于55.0，间隔皆18.18ms倍数）。改为上限间隔一半减1ms；限速容差0.5ms→四分之一间隔；每秒HDR检查改缓存factory（原中位0.43ms/最长21.8ms）。探针60.00fps源：默认52.5–55.1，修复60.2；真实程序2.1.1为53.55/53.72，修复后60.0/59.99（60/120上限）。screen_capture_tests与main同一通过集（6项HDR桌面颜色检查原已失败）。
+- 采集音频75444b3：G50仅双声道USB音频，PS5多声道LPCM时中置（对白）在卡内丢失，OBS同样；强制PCM不改PS5输出。通用16-bit立体声DirectShow引脚加PcmCarrierRouter，复用AverMediaAudioCarrier解码载波内AC3/E-AC-3/DTS（PS5位流），真PCM原路径不变。单测真实AC3 5.1中置有信号、无载波字节作PCM播放；carrier 39363、vendor 65+7、passthrough 26+8+8、IEC、采集音频（静音）通过。未上实卡/PS5。
+- 调研：建议去色带、独立RCAS、对白增强优先，CRT光束模拟再评估；NR沿用10-26结论；DLSS RR（310.9.1 Preset F）需游戏G-buffer，不适用于视频/采集。
+
+- 快捷键：截图默认Ctrl+S→F7，新增录制F8，可在设置改；游戏模式钩子扩为面板/退出/截图/录制四槽，仅在游戏或Veyra在前台时接管。老配置已占F7/F8时保留原功能、新项未设置。game_passthrough/UI合同/翻译/QtQuick及私有配置启动检查通过。
+
+- 60→30：采集回调画面编号用于相位，连续3次第二份即挪到第一份；60帧/不规则内容取帧不变。实卡T911+PS5 30帧游戏：702保留帧中第二份19（2.7%），挪动5次。驱动缓冲：建议1/3均被无视（实际10），送达均匀无排队，缓冲不是延迟来源；T911 P010 1440p60时间戳到回调约77ms且曾跌到59.54帧累积，SDR建议NV12（需慢动作实拍确认）。
+
+构建build-recording-handoff --task claude-capture-fps-audio-20261027（首轮--reconfigure 79.4秒，其后增量）。未验证：用户165Hz实机与游戏模式、G50位流透传、无该属性的旧Windows。
+
 ## 2026-10-27 项目整理1–4
 
 用户授权执行全部四项：清退休产物、收拢分支/工作树、文档归档、按职责整理桥接与QML并验证。分支codex/project-maintenance-20261027，main基线7bf02d4，当前正式版仍2.1.1；不push/Release，Lecram暂停。

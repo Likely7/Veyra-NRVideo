@@ -453,8 +453,9 @@ void QmlPlayerBridge::refreshAudioDevices() {
 // --- shortcuts (P4-f) --------------------------------------------------------
 namespace {
 const QVariantMap& shortcutDefaults() {
+    // Screenshot was Ctrl+S before 2026-10-27; saved custom keys are kept.
     static const QVariantMap d{{"playPause", "Space"}, {"fullscreen", "F"}, {"lock", "Ctrl+L"},
-                               {"hold", "V"}, {"screenshot", "Ctrl+S"}, {"toggleMode", "Tab"},
+                               {"hold", "V"}, {"screenshot", "F7"}, {"record", "F8"}, {"toggleMode", "Tab"},
                                {"gamePanel", "Home"}, {"gameExit", "Ctrl+Alt+Home"}};
     return d;
 }
@@ -462,12 +463,23 @@ const QVariantMap& shortcutDefaults() {
 QVariantMap QmlPlayerBridge::shortcuts() const {
     QVariantMap out = shortcutDefaults();
     const auto custom = impl_->prefs.value("shortcuts").toMap();
+    QStringList taken;
     for (auto it = custom.begin(); it != custom.end(); ++it)
         if (out.contains(it.key())) {
             if ((it.key()=="gamePanel"||it.key()=="gameExit") && !ui::gameKey(QKeySequence(it.value().toString(),QKeySequence::PortableText)).vk) continue;
             out[it.key()] = it.value();
+            taken << it.value().toString();
         }
+    // A default added later (F7/F8) may be a key the user already gave another
+    // action: that action keeps it and the new one stays unbound until set.
+    for (auto it = out.begin(); it != out.end(); ++it)
+        if (!custom.contains(it.key()) && taken.contains(it.value().toString())) it.value() = QString();
     return out;
+}
+void QmlPlayerBridge::applyGameHotkeys() {
+    const auto keys = shortcuts();
+    const auto key = [&keys](const char* action) { return ui::gameKey(QKeySequence(keys.value(action).toString(), QKeySequence::PortableText)); };
+    impl_->game.setHotkeys(key("gamePanel"), key("gameExit"), key("screenshot"), key("record"));
 }
 bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence) {
     if (!shortcutDefaults().contains(action)) return false;
@@ -496,9 +508,7 @@ bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence
     impl_->prefs["shortcuts"] = custom;
     if (!impl_->savePrefs()) { impl_->prefs = previous; emit notice(tr("快捷键保存失败"), true); return false; }
     veyra::log::info("ui-prefs", std::format("shortcut {}={}", action.toStdString(), text.toStdString()));
-    const auto keys=shortcuts();
-    impl_->game.setHotkeys(ui::gameKey(QKeySequence(keys.value("gamePanel").toString(),QKeySequence::PortableText)),
-                          ui::gameKey(QKeySequence(keys.value("gameExit").toString(),QKeySequence::PortableText)));
+    applyGameHotkeys();
     emit preferencesChanged();
     return true;
 }
@@ -506,7 +516,7 @@ void QmlPlayerBridge::resetShortcuts() {
     const auto previous = impl_->prefs;
     impl_->prefs.remove("shortcuts");
     if (!impl_->savePrefs()) { impl_->prefs = previous; return; }
-    impl_->game.setHotkeys(ui::gameKey(QKeySequence("Home")),ui::gameKey(QKeySequence("Ctrl+Alt+Home")));
+    applyGameHotkeys();
     emit preferencesChanged();
 }
 bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->property("veyraObsGameCapture").toBool(); }

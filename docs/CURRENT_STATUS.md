@@ -25,6 +25,7 @@
 - 项目整理1–4由用户明确授权执行，起点main `7bf02d4`；结构整理提交`d4b1034`，构建与相关回归已通过。本轮以main作为后续开发入口，准确整合HEAD见执行任务FINAL回执。
 - 已清43退休产物目录、移除89干净旧工作树、归档122分支引用；工作树101→12，收尾施工分支移除后本地分支132→10。保留的旧分支是6脏树、2条Lecram暂停线和1条带独有忽略内容的旧诊断线，另加main。
 - 历史规则/计划/报告已分类，611份文档进入history；原9千行桥接改为启动接线与领域模块，对话框和专业页复用组件已拆分。E盘空闲空间相对开工前净增约28.14GiB，包含本轮保全归档/测试目录成本。
+- 待合并：`claude/capture-fps-audio-20261027`（屏幕捕获WGC 55→60帧、通用采集卡PCM载波Dolby/DTS解码），见[报告](CAPTURE_FPS_AUDIO_REPORT_2026-10-27.md)；未入main。
 - 源码：`E:/项目/Veyra/worktrees/screen-recording-fix-20261022`。
 - 当前构建：`E:/项目/Veyra/build/claude-screen-recording-20261022`。
 - [执行记录](PROJECT_MAINTENANCE_EXECUTION_2026-10-27.md)、[开发入口](DEVELOPMENT.md)、[工作日志](WORKLOG.md)、[归档分支恢复](BRANCH_ARCHIVE.md)。

@@ -103,8 +103,8 @@ DXGI_RATIONAL monitorRate(HMONITOR monitor){
     if(EnumDisplaySettingsW(mi.szDevice,ENUM_CURRENT_SETTINGS,&mode)&&mode.dmDisplayFrequency>1&&mode.dmDisplayFrequency<=1000)return {mode.dmDisplayFrequency,1};
     return {};
 }
-bool hdrMonitor(HMONITOR monitor){
-    ComPtr<IDXGIFactory1> factory;if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))return false;
+bool hdrMonitor(IDXGIFactory1* factory,HMONITOR monitor){
+    if(!factory)return false;
     for(UINT a=0;;++a){ComPtr<IDXGIAdapter1> adapter;if(factory->EnumAdapters1(a,&adapter)==DXGI_ERROR_NOT_FOUND)break;
         for(UINT o=0;;++o){ComPtr<IDXGIOutput> output;if(adapter->EnumOutputs(o,&output)==DXGI_ERROR_NOT_FOUND)break;
             DXGI_OUTPUT_DESC d{};if(FAILED(output->GetDesc(&d))||d.Monitor!=monitor)continue;
@@ -194,6 +194,7 @@ struct ScreenCaptureSource::Impl {
         session=pool.CreateCaptureSession(item);
         session.IsCursorCaptureEnabled(options.cursor);
         if(borderDisabled)session.IsBorderRequired(false);
+        applyMinUpdateInterval();
         session.StartCapture();wasWaiting=true;
         log::info("screen","restarted WGC session once for a static resized target");
     }
@@ -201,6 +202,17 @@ struct ScreenCaptureSource::Impl {
     AVFrame* frame=nullptr;
     uint64_t signal=0,sequence=0;int64_t lastPts=0,nextPts=0,clockOffset=0,lastColorCheck=0;
     DWORD targetPid=0;bool hdr=false,wasWaiting=false,exclusion=false;
+    // An output's color space changes only with the display configuration, which
+    // invalidates the DXGI factory. Walking the outputs with a new factory every
+    // second cost about 0.4 ms on the engine thread (one 20 ms spike, bench
+    // 2026-10-27), so it is repeated only when the factory or the monitor changed.
+    ComPtr<IDXGIFactory1> displayFactory;HMONITOR displayMonitor=nullptr;
+    bool displayHdr(HMONITOR monitor,bool& value){
+        if(displayFactory&&displayFactory->IsCurrent()&&monitor==displayMonitor)return false;
+        displayFactory.Reset();displayMonitor=monitor;
+        if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&displayFactory))))displayFactory.Reset();
+        value=hdrMonitor(displayFactory.Get(),monitor);return true;
+    }
     std::wstring message;DXGI_FORMAT format=DXGI_FORMAT_B8G8R8A8_UNORM;
     ~Impl(){av_frame_free(&frame);}
     int64_t interval()const{return 10000000LL*info.nominalRateDen/info.nominalRateNum;}
@@ -215,6 +227,26 @@ struct ScreenCaptureSource::Impl {
         info.averageFps=double(rate.Numerator)/rate.Denominator;nextPts=0;
         if(sequence)wasWaiting=true;
         log::info("screen-rate",std::format("followDisplay={} limit={}/{} ({:.3f} Hz) monitor={}",options.fps==0,rate.Numerator,rate.Denominator,info.averageFps,uint64_t(monitor)));
+        applyMinUpdateInterval();
+    }
+    // WGC's default MinUpdateInterval (16 ms on Windows 11 24H2) skips a frame that
+    // composes sooner than that after the last one: a 60 FPS window on a 165 Hz
+    // display arrived at 55 FPS (every third refresh) and no limit above 60 was
+    // reachable. On any refresh grid, composed frames of a source at or below the
+    // limit are at least half a limit interval apart, so ask for that less 1 ms of
+    // timestamp jitter; the deadline accumulator in read() still enforces the limit.
+    void applyMinUpdateInterval(){
+        if(!session||!info.nominalRateNum)return;
+        try{
+            if(!winrt::Windows::Foundation::Metadata::ApiInformation::IsPropertyPresent(L"Windows.Graphics.Capture.GraphicsCaptureSession",L"MinUpdateInterval"))return;
+            const int64_t value=std::max<int64_t>(10000,interval()/2-10000);
+            const auto previous=session.MinUpdateInterval().count();
+            if(previous==value)return;
+            session.MinUpdateInterval(winrt::Windows::Foundation::TimeSpan{value});
+            log::info("screen-rate",std::format("WGC minUpdateInterval={:.3f} ms (was {:.3f} ms)",value/1e4,previous/1e4));
+        }catch(const winrt::hresult_error& e){
+            log::warn("screen-rate",std::format("WGC minUpdateInterval kept hr=0x{:08X}",uint32_t(e.code())));
+        }
     }
     void color(){
         auto& c=info.color;c={};c.pixelFormat=hdr?pipeline::SourcePixelFormat::Rgba16F:pipeline::SourcePixelFormat::Bgra8;
@@ -270,7 +302,7 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
         const auto& o=p.options;HWND window=o.kind==ScreenTargetKind::Window?reinterpret_cast<HWND>(o.target):nullptr;
         if(window){GetWindowThreadProcessId(window,&p.targetPid);if(!IsWindow(window)||p.targetPid==GetCurrentProcessId())throw winrt::hresult_error(E_INVALIDARG,L"窗口已关闭或属于 Veyra");}
         HMONITOR monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST):reinterpret_cast<HMONITOR>(o.target);
-        p.hdr=hdrMonitor(monitor);p.format=p.hdr?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_B8G8R8A8_UNORM;
+        p.displayHdr(monitor,p.hdr);p.format=p.hdr?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_B8G8R8A8_UNORM;
         p.consumer=static_cast<ID3D12Device*>(desc.d3d12Device);
         ComPtr<IDXGIFactory4> factory;check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)),"factory");ComPtr<IDXGIAdapter> adapter;
         check(factory->EnumAdapterByLuid(p.consumer->GetAdapterLuid(),IID_PPV_ARGS(&adapter)),"processing adapter");
@@ -294,6 +326,7 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
             p.poolSize=p.item.Size();p.pool=Direct3D11CaptureFramePool::CreateFreeThreaded(p.wrapped,DirectXPixelFormat(p.format),2,p.poolSize);
             p.session=p.pool.CreateCaptureSession(p.item);p.session.IsCursorCaptureEnabled(o.cursor);
             if(o.borderless||o.kind==ScreenTargetKind::Monitor)p.dropBorder();
+            p.updateRate(monitor);p.applyMinUpdateInterval();
             p.session.StartCapture();
         }
         if(p.poolSize.Width<=int(o.left+o.right)||p.poolSize.Height<=int(o.top+o.bottom))throw winrt::hresult_error(E_INVALIDARG,L"裁剪范围超出画面");
@@ -321,8 +354,8 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
             MONITORINFO mi{sizeof(mi)};
             if(!GetMonitorInfoW(monitor,&mi)){p.message=L"显示器已断开，请重新选择目标";return SourceReadStatus::Error;}
             if(!p.options.fps)p.updateRate(monitor);
-            const bool hdr=hdrMonitor(monitor);
-            if(hdr!=p.hdr){
+            bool hdr=p.hdr;
+            if(p.displayHdr(monitor,hdr)&&hdr!=p.hdr){
                 p.hdr=hdr;p.format=hdr?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_B8G8R8A8_UNORM;p.color();p.wasWaiting=true;
                 p.info.videoPixelFormatName=hdr?"scRGB FP16":"BGRA8 sRGB";
                 if(p.duplication){p.duplication.Reset();p.startDuplication();}
@@ -358,8 +391,12 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
             pts=captured.SystemRelativeTime().count()+p.clockOffset;
         }
         // Accumulate deadlines: comparing each jittery interval to an exact
-        // 1/60 would accidentally discard nearly half of a 60 Hz stream.
-        if(pts<=p.lastPts||pts<p.nextPts-5000){++p.metrics.dropped;return SourceReadStatus::Waiting;}
+        // 1/60 would accidentally discard nearly half of a 60 Hz stream. The
+        // compositor timestamp of a busy desktop also lands a refresh or two late
+        // and the next one on time, so a frame may come a quarter interval early:
+        // with 0.5 ms a 60 FPS window lost about 2 FPS at the 60 limit (58.1,
+        // 2026-10-27). The accumulated deadline still holds the average to the limit.
+        if(pts<=p.lastPts||pts<p.nextPts-p.interval()/4){++p.metrics.dropped;return SourceReadStatus::Waiting;}
         D3D11_TEXTURE2D_DESC td{};texture->GetDesc(&td);
         if(td.Format!=p.format)throw winrt::hresult_error(E_UNEXPECTED,L"采集颜色格式发生变化，请重新连接");
         const auto& o=p.options;unsigned w=std::min(td.Width,unsigned(p.poolSize.Width)),h=std::min(td.Height,unsigned(p.poolSize.Height));

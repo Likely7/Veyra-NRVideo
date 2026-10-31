@@ -1633,7 +1633,40 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
         if(type->formattype==FORMAT_WaveFormatEx&&type->pbFormat&&type->cbFormat>=sizeof(WAVEFORMATEX)&&sink::parseWavePcm(type->pbFormat,type->cbFormat,parsed)&&session->configure(parsed)){
             auto* target=session.get();
             auto probe=std::make_shared<sink::Iec61937Probe>();
-            hr=createNativeAudioSink(*type,[target,probe,clock=CaptureAudioClock{},rate=parsed.wave.nAvgBytesPerSec,warned=false](IMediaSample* sample) mutable {
+            // A 16-bit stereo pin can carry Dolby/DTS as IEC 61937: a PS5 set to
+            // Bitstream behind a card whose USB audio has two channels only. That
+            // used to be played as noise; decode it (5.1 keeps the centre, where
+            // dialogue lives). PCM-only mode leaves every byte as it is.
+            struct DecodedFormat {unsigned channels=0;uint32_t rate=0,mask=0;CaptureAudioClock clock;uint64_t rejected=0;};
+            auto decodedFormat=std::make_shared<DecodedFormat>();
+            std::shared_ptr<PcmCarrierRouter> router;
+            if(allowBitstream&&parsed.layout.channels==2&&parsed.wave.wBitsPerSample==16&&!parsed.floating)
+                router=std::make_shared<PcmCarrierRouter>(parsed.wave.nSamplesPerSec,[target,decodedFormat](const VendorPcmBlock& block){
+                    auto& format=*decodedFormat;
+                    const bool changed=format.channels!=block.channels||format.rate!=block.rate||format.mask!=block.mask;
+                    if(changed){
+                        target->stop();
+                        WAVEFORMATEXTENSIBLE wfx{};
+                        wfx.Format.wFormatTag=WAVE_FORMAT_EXTENSIBLE;wfx.Format.nChannels=WORD(block.channels);
+                        wfx.Format.nSamplesPerSec=block.rate;wfx.Format.wBitsPerSample=32;
+                        wfx.Format.nBlockAlign=WORD(block.channels*sizeof(float));
+                        wfx.Format.nAvgBytesPerSec=block.rate*wfx.Format.nBlockAlign;
+                        wfx.Format.cbSize=sizeof(wfx)-sizeof(WAVEFORMATEX);wfx.Samples.wValidBitsPerSample=32;
+                        wfx.dwChannelMask=block.mask;wfx.SubFormat=KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+                        const bool ok=target->configure(wfx.Format,sizeof(wfx))&&target->start();
+                        log::info("capture-audio-carrier",std::format("decoding {} carried in PCM: channels={} mask=0x{:X} rate={} ok={}",block.codec,block.channels,block.mask,block.rate,ok));
+                        if(!ok){format.channels=0;return false;}
+                        format.channels=block.channels;format.rate=block.rate;format.mask=block.mask;
+                    }
+                    target->setInputBitstream(std::wstring(block.codec.begin(),block.codec.end()));
+                    const double arrival=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                    const bool discontinuity=changed||block.discontinuity;
+                    const double pts=format.clock.observe(std::nullopt,arrival,1000.0*double(block.frames)/block.rate,discontinuity);
+                    if(target->push(block.samples,block.frames*block.channels*sizeof(float),pts,discontinuity))return true;
+                    if((++format.rejected&(format.rejected-1))==0)log::warn("capture-audio-carrier",std::format("audio session rejected decoded block channels={} rejected={}",block.channels,format.rejected));
+                    return false;
+                });
+            hr=createNativeAudioSink(*type,[target,probe,router,decodedFormat,pcm=parsed,clock=CaptureAudioClock{},rate=parsed.wave.nAvgBytesPerSec,warned=false](IMediaSample* sample) mutable {
                 BYTE* bytes=nullptr;REFERENCE_TIME begin=0,end=0;
                 const auto pointerHr=sample->GetPointer(&bytes);if(FAILED(pointerHr))return pointerHr;
                 const auto timeHr=sample->GetTime(&begin,&end);const bool timed=SUCCEEDED(timeHr);
@@ -1641,6 +1674,16 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
                 const double arrival=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
                 const double pts=clock.observe(timed?std::optional<double>(double(begin)/10000):std::nullopt,arrival,1000.0*sample->GetActualDataLength()/rate,sample->IsDiscontinuity()==S_OK);
                 probe->feed(bytes,size_t(sample->GetActualDataLength()));
+                if(router){
+                    const auto routed=router->feed(std::span<const uint8_t>(bytes,size_t(sample->GetActualDataLength())),arrival/1000);
+                    if(routed.restorePcm){
+                        target->stop();decodedFormat->channels=0;target->setInputBitstream({});
+                        const bool ok=target->configure(pcm)&&target->start();
+                        log::info("capture-audio-carrier",std::format("carried bitstream ended; session back on PCM ok={}",ok));
+                        if(!ok)return E_FAIL;
+                    }
+                    if(routed.route==PcmCarrierRouter::Route::Withheld)return S_OK;
+                }
                 return target->push(bytes,size_t(sample->GetActualDataLength()),pts,sample->IsDiscontinuity()==S_OK)?S_OK:E_FAIL;
             },candidate,terminal);
             if(SUCCEEDED(hr))hr=p.graph->AddFilter(candidate.Get(),L"Veyra audio PCM");
