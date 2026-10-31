@@ -127,6 +127,8 @@ int wmain(int argc,wchar_t** argv){
         std::cout<<"mediaSpeed="<<speed<<" processedDelta="<<last.frames-first.frames<<std::endl;
         {std::string status(4096,char(0));status.resize(std::max(0,WideCharToMultiByte(CP_UTF8,0,last.presentationStatus.c_str(),-1,status.data(),int(status.size()),nullptr,nullptr)-1));std::cout<<"presentationStatus="<<status<<std::endl;}
         check(!last.failed&&last.frames>first.frames+10&&speed>.8&&speed<1.2,"sustained playback at media speed");
+        // Without FG the ready->Present wait is display capacity only, never a first-frame PTS anchor.
+        if(latency&&multiplier==1){std::cout<<"schedulingWaitP95Ms="<<last.schedulingWaitP95Ms<<std::endl;check(last.schedulingWaitP95Ms<1000.0/std::max<DWORD>(dm.dmDisplayFrequency,30)+2,"screen capture without FG is held at most one display refresh");}
         if(multiplier>1)check(last.fgActive&&last.generated>first.generated,"real provider generated frames during measurement");
         if(scenario==L"effects"||scenario==L"native-effects")check(last.nrActive&&last.srActive&&last.nrEvaluated>first.nrEvaluated,"NR and SR remain active with pacing");
         if(mode>=0&&!xess)check(last.presentationEffective.enabled,"optional pacing active");

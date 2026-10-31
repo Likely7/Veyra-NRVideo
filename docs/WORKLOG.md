@@ -213,3 +213,31 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 结果：320 Hz自动模式比值0.74–1.0，旧版实际显示少3–15%（范围），新版被替换0、容量丢帧不超过生成帧的2%；捕获→呈现P50差≤0.3 ms，P95 0至+1.8 ms。垂直同步回放容量丢帧78–101→18–22。高于刷新率规则不生效，结果在波动内。单元回放：6000对丢153→0；VFG陷阱600对评估10→600。repair/timing/scheduler/realtime/i18n 0失败，QtQuick 123/0/1跳过，9个原生GPU场景通过，运行目录97个运行组件哈希一致。
 
 未验：真实60 Hz屏、采集卡、RTX 5060 Ti；VFG陷阱本机不能复现，只有日志数字回放；跳帧后高成本的原因未证实。屏幕采集固定延迟修复分支也改同几个文件，未合并、未联合测试。
+
+## 2026-10-29 屏幕采集无补帧时的首帧锚定扣留（Claude）
+
+上级会话复查英伟达低延迟时测到：60fps窗口采集、关闭补帧时，读取→GPU就绪每帧<1ms，但每帧在Present前被固定扣留，每轮p50 3.1–52ms，等于该轮首帧的合成→读取延迟；低队列下扣留超过一个源间隔还使下一次读取晚约15ms。此问题main已有，与Reflex无关。按要求从本地main `4351bbd`新建工作树`worktrees/screen-capture-hold-20261029`（分支`claude/screen-capture-hold-20261029`），不碰共享树中未提交的低延迟改动；未提交、未合并、未push/Release，未改真实配置/驱动/运行组件。
+
+原因：`EngineController.cpp`无补帧分支用`paceSourcePts=options.fg||!physicalCapture`。2026-09-11（history/reports/CAPTURE_LATENCY_AUDIT_2026-09-11.md）只把物理采集改为GPU就绪即呈现；1.4.2加入屏幕采集时只接入了FG成对重锚，无FG仍走文件回放的源PTS时钟——每epoch只锚一次，`deadline=host_+(pts-source_)`把首帧晚读的偏移带到整段会话。同类第二条路径：开/关补帧会重建图，新图epoch从1重新计数，最后一个FG成对锚（按PTS）可能以相同epoch号留到关闭补帧之后继续扣留，物理采集同样受影响。
+
+修改：
+- `LivePresentationTiming.h`新增`livePacesSourcePts(fg,physicalCapture,screenCapture)`：物理与屏幕采集无FG按就绪呈现；文件回放、串流（每帧重锚）和FG成对相位保持源PTS。
+- `PresentationScheduler::anchored(epoch,paceSourcePts=true)`同时比较锚定模式，另一模式的锚视为未锚定；默认参数让其他调用行为不变。
+- `EngineController.cpp`该段改用以上两者；屏幕无FG的`capture-timeline pacing=`由`source-pts`变为`capture-ready`。文件回放、串流与FG路径的参数与原来一致。
+- 测试：`LivePresentationTimingTests`新增6项（各来源策略、首帧晚读52ms后600帧的扣留、文件回放保留PTS钟、FG锚在重复epoch中不再扣留、锚记录模式）；`PresentationPacingTests`新增`latency-screen`（60fps窗口采集、开详细帧日志；与低延迟分支同名同义，但无英伟达模式映射），1X时断言`schedulingWaitP95Ms`不超过一个显示刷新+2ms。
+
+构建：`py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-screen-capture-hold-20261029 --root E:/项目/Veyra/worktrees/screen-capture-hold-20261029 --label 2.1.1-hold --jobs 2 veyra_live_timing_tests veyra_repair_contract_tests veyra_presentation_pacing_tests veyra_live_presentation_tests`，新建`build/claude-screen-capture-hold-20261029`，配置+编译218.6秒退出0，改动文件无警告。A/B基线：detached工作树`worktrees/screen-capture-hold-main-20261029`（main加本次测试文件，引擎未修复），同脚本加`--build-dir E:/项目/Veyra/build/claude-screen-capture-hold-20261029-main --label 2.1.1-main`构建两个集成目标210.7秒退出0。
+
+运行：`py -3.11 -X utf8 -B -I E:/项目/Veyra/tmp/claude-screen-capture-hold-20261029/run.py stage|stage-main|unit|latency 3 10|pacing …|live …`（`--main`跑基线EXE，`--warm`共用CUDA缓存）。私有运行目录`tests/claude-screen-capture-hold-20261029/app`由2.1.1 NVIDIA供体硬链接，EXE/着色器以新文件替换，97个运行组件与manifest逐一一致；基线EXE以`*_main.exe`并存，两侧着色器字节相同。每进程≤290秒，TEMP/TMP/CUDA缓存私有。
+
+结果：
+- unit：live timing 106/0（含新6项），RepairContract 272/0。RepairContract首次以0xC0000135退出，是runner没给Qt/FFmpeg DLL路径，补PATH后重跑通过。反向检查`tmp/claude-screen-capture-hold-20261029/negative/negative.py`：恢复main的策略时新检查4项失败、其余102项通过；只恢复不比较模式的`anchored`时2项FG关闭检查失败、其余104项通过。
+- latency-screen A/B（RTX 5070，2560×1440@320Hz，60fps窗口，无FG，每轮10秒，关/低队列/Reflex各3轮，hold=GPU就绪→Present开始）：修复后9轮hold p50均0.002ms、p95≤0.016ms、max≤0.087ms，`pacing=capture-ready`，9/9通过，读取max≤−0.05ms，未见延后。同一工具的main基线hold p50：关4.08/32.33/27.41、低队列36.74/33.38/32.01、Reflex 36.44/29.61/36.27ms（p95最高55.4ms），低队列/Reflex 6轮读取p95延后13.9–39.1ms（其中3轮p50也延后10.5–20.2ms），`pacing=source-pts`；9轮中8轮新断言失败（关第1轮4.1ms低于320Hz阈值5.1ms，所以确定性回归以单元检查为准）。两侧read(process−pts)约−1.4ms：WGC时间戳早于读取时刻，不能当作合成→读取年龄（上级会话数据同样如此）。
+- 原有节奏测试（修复版）：lifecycle 13项、回放6X垂直同步4项、screen-dlss 4X 10项（capture-pair）、screen-xess 2X 10项、回放无FG 3项（仍`source-pts`）、文件2X低队列5项、overload 9项全部通过。effects在冷CUDA缓存时“first frames”（15秒内>10帧）失败、其余5项通过：NGX初始化约7.9秒；main基线同样失败；共享缓存后修复版2/2通过。
+- live presentation（修复版）：默认回放28/0、--overload 3/0、--settings-rebuild 21/0、--reset-rollback 33/0、--inactive-effects 69/0。--source-gap用120秒片源时2过4失败（EOF须90秒内到达而片源太长，首项8秒内12帧赶不上冷启动），main基线完全一致（EOS 2726/2726/2723）。改用40秒切片（`tests/claude-screen-capture-hold-20261029/media/nr-1080p30-40s.mp4`，1200帧，ffmpeg流复制）：冷缓存修复版与main都4过2失败（启动项及EOF快照1199/1198；跨epoch日志“每帧恰好呈现一次”通过），预热后修复版6/0（1200/1200/1200）。
+
+合并提示：引擎、两个头文件与单元测试补丁可直接应用到低延迟分支提交`4edcb49`（临时索引`git apply --cached --check`）；`PresentationPacingTests.cpp`第31行冲突，该分支未提交工作区已有同义`latency-screen`，合并时保留其版本、补上本次1X扣留断言即可。
+
+空间：新增构建411,825,958字节、工作树88,250,651字节、运行目录新文件（4个EXE+着色器）56,796,288字节、40秒切片77,515,754字节、40个证据目录66,153,977字节、日志/回执约0.33MB；基线工作树已恢复为干净后正常移除，基线构建405,895,676字节确认无reparse/进程后删除，每次运行的临时CUDA缓存84,422,224字节已回收。
+
+未做/边界：未用采集卡（物理采集无FG本已就绪呈现，只新增FG关闭后重复epoch的处理，由单元覆盖）；未测串流；运行中切换FG的屏幕采集只做了单元检查；未重编产品`veyra_qml_ui`（同一引擎库已编译通过）及独立probe工程的`veyra_remoteplay_core_tests`（未调用`anchored`）；Present开始是CPU侧观测，不是屏幕端到端延迟；仅本机RTX 5070/320Hz。回执`reports/claude-screen-capture-hold-20261029/`（FINAL.json及各阶段JSON），日志`logs/claude-screen-capture-hold-20261029/`，证据`tests/claude-screen-capture-hold-20261029/`。

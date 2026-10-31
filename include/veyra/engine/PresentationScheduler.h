@@ -14,7 +14,9 @@ public:
     void resetPair(uint64_t epoch,int64_t source,int64_t host,int64_t lookahead,bool paceSourcePts=true) {
         reset(epoch,source,host,lookahead,paceSourcePts);
     }
-    bool anchored(uint64_t epoch)const{return anchored_&&epoch==epoch_;}
+    // An anchor of the other pacing mode is stale: FG on/off rebuilds the graph,
+    // whose epochs restart, so a paced FG pair anchor could outlive FG.
+    bool anchored(uint64_t epoch,bool paceSourcePts=true)const{return anchored_&&epoch==epoch_&&paced_==paceSourcePts;}
     // Unbuffered capture is ready-driven. A late first callback or clock drift
     // must not turn its source timestamps into a persistent presentation hold.
     int64_t deadline(int64_t pts)const{return paced_?host_+(pts-source_)+delay_:host_;}
