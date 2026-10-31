@@ -178,3 +178,13 @@ A/B（GTA VI原生4K两帧，全部质量4，完整表见DUAL_SR_PLAN“复查�
 RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016秒原帧呈现2518，评估补帧2518，生成呈现2420、过期98（约3.89%），邮箱覆盖/无效结果新增均0；GPU补帧P95指标中位5.573ms。另1秒样本原帧+30、生成+20、过期+10、邮箱不变、提交50fps，主要定位到软件生成帧过期路径而非证明采集不稳。源码采集生成帧deadline容忍10ms；优先调查自适应配对相位、ready观察/唤醒与VSync反压，但低频日志尚不能确定每张过期帧的实际GPU完成时刻。
 
 分开处理：部分高档配置3030候选中2302次预算准入跳过，GPU约23ms；后续高档也有接近全执行的段，不能只以23>16.7断言整体吞吐不足。显示接口错误附近Present/输出检查路径单次约0.73–1.38秒，GPU耗时仅约8ms，属于独立显示调用停顿，根触发源未证实；overlay注入存在但不能直接归罪。DLSS段1838无效明确是contentDuplicate，不是providerDisabled；不冒充DLSS错误。起流discontinuity仅source1，无持续断线/device-removed证据。没有旧版同条件对照，不能确认新版回归，也未修复。
+
+## 2026-10-31 继续复核VRR旧问题与4K30上选择60→30
+
+用户指出现象类似已修VRR周期查询，并询问4K30 NV12上选择60→30的影响。只读复核正式v2.1.1与3172262代码及原日志，未改产品/配置/驱动，未运行或占用采集设备。报告E:/项目/Veyra/reports/fg-intermittent-20261031/RECHECK.md，脚本recheck.py/数据vr-recheck.json；源日志SHA未变。用户暂不清楚是肉眼卡顿还是仅FPS数字下降，未把静止画面过滤直接认作可见故障。
+
+原31分钟/3次启动共22次后台显示query，7ui/13session-start/2display-change；271.988秒连续0次query，仍有8150次FG评估及249评估后丢弃，排除旧2秒周期查询复发。10:48首次728.741ms慢呈现开始比对应display-change query早1.842秒，不能颠倒因果。正式版仍在Present owner同步查DXGI统计，和旧NVAPI VRR探测不同；逐帧查询混在callMs、每秒统计位于presentEnd之后，是待单独计时盲点，未证明其为根因。
+
+纠正上一轮表述：generatedExpiredAfterEval合计三种s.dropped（deadline过期、输出限帧跳过、显示容量最多2ms等待失败），98不能全部称为deadline过期。中档84秒中84条限频deadline日志均expired=false，无法据此分解实际每帧原因；当前优先调查60Hz VSync容量2ms策略与限帧，但尚未有用户设备单变量复现。原README同步更正，原计数证据未改。
+
+五次连接均3840x2160 NV12/30.000030，softwareLimiter=0。37条rate日志requested60To30为true30/false7，而active=false37；1610条frame-rate capture60To30=false、rateSkipped=0，未把30变15。源码supported只接受59–61fps。但选项仍以contentRate=5进入图，上层排除Capture60To30的输入去重，下层却仅排除Transport而开启luma SAD重复判定；正式v2.1.1同样存在。DLSS段1838次contentDuplicate、providerDisabled=0与此策略一致，不能因halfRate未激活就说开关完全无影响，也不能无原画认定1838次均误判。VFG中档无invalid/contentDuplicate仍有98评估后丢弃，故不是单一根因。后续若授权修复，须分开丢弃原因与验证未激活半帧模式下的内容合同；本轮未修改软件。
