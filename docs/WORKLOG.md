@@ -192,3 +192,8 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 ## 2026-10-31 用户澄清最初为原始时间戳、未开60→30
 
 现场确认与最初日志一致，不能将后期contentPolicy5重复判定倒推为首发原因。已单列reports/fg-intermittent-20261031/INITIAL_TRANSPORT.md并在README置顶。最早可连续统计VFG高档rev6为contentPolicy0/requested60To30=false、无contentDuplicate，显示Automatic/displayQueuePaced=false/vrrSync=false，故后期VSync容量2ms规则也不解释该段。101.089秒3030候选中2302（75.97%）在评估前被预算准入跳过，GPU FG P95指标约23ms；原帧呈现3030、邮箱新增覆盖0。具体日志remaining17.238ms+10ms不足predicted29.847ms（减已有进度约0.181ms），admitted=false。首发主线应查高档4K VFG的预算与配对相位，尚未证明是成本估计还是相位策略错误；后期中档/同步/去重分开保留。本轮只读分析及文档，不改软件，不运行测试、不发布。
+## 2026-10-31 用户补充任何补帧都一样：跨提供方复核
+
+不得将此前高档VFG预算拒绝当作全局结论。报告reports/fg-intermittent-20261031/MULTI_PROVIDER.md；原日志还含DLSS和XeSS。XeSS行9884（10:30:19.447）Present调用80.881ms、总81.097ms，前置记录提交0.207ms；生成和节奏在代理内部，不能将0.207ms冒充GPU推理耗时。SDK各短阶段有效样本大多58–62fps、cycleMismatches=0，关闭尾窗低FPS不代表播放持续掉帧；普通frame-flow原帧30也不是XeSS最终帧率。
+
+源码明确XeSS生成帧不经Veyra生成子帧预算/10ms期限/2ms容量分支，每帧显示统计trackScanout也排除XeSS（每秒统计仍调用）；上述机制均不能被当作全提供方同症状的唯一原因。调查范围应扩至共用采集、owner调度、呈现入口、Windows/驱动/合成及窗口状态，但现有证据不能确定同一根因。无产品修改/新构建/现场测试/发布。后续需要同设置分提供方的丢弃原因计数及API耗时分解，不能继续把单段关联提升为定论。
