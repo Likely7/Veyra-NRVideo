@@ -40,9 +40,6 @@ int main(int argc, char** argv) {
     expect(i18n::text(QStringLiteral("英伟达低延迟不可用，当前使用低排队（详见日志） · 输出上限：关闭 · 垂直同步：屏幕队列 1 帧，读帧前等待刷新 · 显示同步：垂直同步")),
            QStringLiteral("NVIDIA Low Latency unavailable; using low queue depth (see the log) · Output cap: off · VSync: 1-frame display queue, waits for refresh before reading a frame · Display sync: VSync"),
            "presentation fallback status pieces");
-    expect(i18n::text(QStringLiteral("英伟达低延迟：关 · 显示同步：自动（补帧接近刷新率） · 屏幕队列 1 帧，避免丢帧")),
-           QStringLiteral("NVIDIA Low Latency: Off · Display sync: auto (frame generation near refresh rate) · 1-frame display queue to avoid dropped frames"),
-           "near-refresh status pieces");
     // Unknown text and paths come back unchanged.
     expect(i18n::text(QStringLiteral("D:/视频/我的片子.mkv")), QStringLiteral("D:/视频/我的片子.mkv"), "path untouched");
 

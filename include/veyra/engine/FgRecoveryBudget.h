@@ -69,19 +69,17 @@ public:
     int64_t processingAllowance(int64_t now,int64_t interval)const{
         return int64_t(std::min(double(std::max<int64_t>(0,interval)),baseCost(now).value_or(0)*10000));
     }
-    // graceMs: how late the generated frame may still be shown; the caller
-    // passes the bound presentation uses (liveGeneratedGrace100ns).
-    bool canAdmit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0,double graceMs=10)const{
+    bool canAdmit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0)const{
         const auto cost=predicted(now,warmingHistory);
         // FG has not been submitted at admission. CPU time can at most cover
         // the base work; it must never erase the cost of future FG calls.
         const double queued=std::isfinite(queuedMs)?std::max(0.0,queuedMs):0.0;
         const double progress=std::clamp(elapsed,0.0,queued+baseCost(now).value_or(0));
-        const bool fits=double(deadline-now)/10000+graceMs>=std::max(0.0,queued+cost.value_or(0)-progress)+std::max(0.0,present);
+        const bool fits=double(deadline-now)/10000+10>=std::max(0.0,queued+cost.value_or(0)-progress)+std::max(0.0,present);
         return fits;
     }
-    bool admit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0,double graceMs=10){
-        return recordAdmission(canAdmit(now,deadline,elapsed,present,warmingHistory,queuedMs,graceMs));
+    bool admit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0){
+        return recordAdmission(canAdmit(now,deadline,elapsed,present,warmingHistory,queuedMs));
     }
     // strictFirstOutput=false reproduces the 1.4.0 rule: only the whole group
     // against its last deadline. true additionally requires the first output to
@@ -115,25 +113,40 @@ public:
     }
     bool recovering()const{return limited_&&recoveryPairs_>0;}
 };
-// Live VFG keeps its A/B history across a skipped pair, so the next evaluation
-// is not a warmup sample like a DLSS reseed, and it is not a steady sample
-// either. Field log 2026-10-31 (RTX 5060 Ti, 4K30 VFG High): 23.1-23.6 ms when
-// running continuously, 28.5 ms windowed and 39.6 ms fullscreen after skips,
-// while the budget allowed about 25.9 ms. Each lone probe then measured over
+// Live VFG keeps its A/B history across skipped pairs, so the evaluation that
+// ends a long skip is no DLSS-style warmup, and it is not a steady sample either.
+// Field log 2026-10-31 (RTX 5060 Ti, 4K30 VFG High): 23.1-23.6 ms running
+// continuously, 28.5 ms windowed and 39.6 ms fullscreen after 2 s or more of
+// skipping, while the budget allowed about 25.9 ms. Each lone probe measured over
 // budget and rejected the next pair for 2 s: 30 fps for up to 76 s, until a
-// settings change. The first evaluations after a skip therefore do not enter
-// the FG estimate. A mode that really is too slow is still rejected by the
-// first group after them, so a failed probe costs three groups per 2 s, not one.
+// settings change. After a second without an evaluation the next two are warmup
+// samples, so they raise neither the FG nor the base estimate. One skipped pair
+// changes nothing. A mode that really is too slow is rejected by the group after
+// them, so a probe costs three groups where it cost one: failed probes retry
+// after 2, 4, then every 8 s, where the budget alone would retry every 2 s.
 class FgCostSettling {
-    unsigned left_=0;
+    int64_t lastEvaluated_=0,holdUntil_=0;
+    unsigned left_=0,recorded_=0,failures_=0;
+    bool probing_=false;
 public:
-    static constexpr unsigned kEvaluations=2;
-    void reset(){left_=0;}
-    // Call for each completed group in order; true when its FG time may be used.
-    bool observe(bool skipped,bool evaluated){
-        if(skipped){left_=kEvaluations;return false;}
-        if(!evaluated||!left_)return true;
-        --left_;return false;
+    static constexpr int64_t kIdle100ns=10000000,kRetry100ns=20000000;
+    static constexpr unsigned kEvaluations=2,kProbeGroups=4,kMaxDoublings=2;
+    void reset(){*this=FgCostSettling{};}
+    // Call for each completed group in order; true marks a warmup sample.
+    bool observe(bool skipped,bool evaluated,int64_t now){
+        if(skipped){
+            if(probing_){probing_=false;left_=0;holdUntil_=now+(kRetry100ns<<failures_);failures_=std::min(failures_+1,kMaxDoublings);}
+            return false;
+        }
+        if(!evaluated)return false;
+        const bool idle=lastEvaluated_&&now-lastEvaluated_>=kIdle100ns;
+        lastEvaluated_=now;
+        if(idle){left_=kEvaluations;recorded_=0;probing_=true;}
+        if(left_){--left_;return true;}
+        if(probing_&&++recorded_>=kProbeGroups){probing_=false;failures_=0;}
+        return false;
     }
+    bool holding(int64_t now)const{return now<holdUntil_;}
+    int64_t holdUntil()const{return holdUntil_;}
 };
 }

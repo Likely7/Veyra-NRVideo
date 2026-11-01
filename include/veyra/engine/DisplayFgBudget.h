@@ -24,23 +24,6 @@ namespace veyra::engine {
 //      surplus waits or is dropped, so suggest turning generation off.
 inline constexpr double kDisplayFgFitTolerance=1.02;
 inline constexpr double kDisplayFgFillRatio=0.97;
-// The same rates decide how a live frame reaches the panel. Near the refresh
-// (about one new picture per refresh) capture arrival jitter puts two frames
-// inside one refresh, and each one lost leaves a refresh repeating the last.
-// Field log 2026-10-31 (4K30 2X, 60 Hz, 29.97 x 2 against 60.005 Hz): the two
-// rates beat every 16.5 s and 3-4% of the generated frames went. Model of that
-// display (reports/claude-fg-60hz-pacing-20261031): Present(0,0) loses 3.2% of
-// all frames at ratio 1.0, 11% at 0.8 with a late generated frame, 3.7% at
-// 0.67, nothing at 0.6. Measured on 320 Hz: at least 3-6% from 0.74 to 1.0,
-// at most about 2% at 0.56-0.65 (left as it is), nothing at 0.5.
-inline constexpr double kDisplayFgNearRatio=0.65;
-
-inline bool displayFgOutputFits(double outputFps,double refreshHz){
-    return std::isfinite(outputFps)&&std::isfinite(refreshHz)&&outputFps>0&&refreshHz>0&&outputFps<=refreshHz*kDisplayFgFitTolerance;
-}
-inline bool displayFgOutputNear(double outputFps,double refreshHz){
-    return displayFgOutputFits(outputFps,refreshHz)&&outputFps>=refreshHz*kDisplayFgNearRatio;
-}
 
 // Multipliers the user can pick for the backend (fgMultiplierChoices: XeSS
 // stops at 4X, FSR offers 2X only). Lower values than an accepted request

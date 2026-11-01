@@ -77,7 +77,7 @@ VPage {
     property int selectedEffect: -1
     // engine::ContentRate order.
     readonly property var contentRates: [
-        { id: "0", label: qsTr("采用源时间戳") }, { id: "1", label: qsTr("自动识别内容节奏") },
+        { id: "0", label: qsTr("采用源时间戳") }, { id: "1", label: qsTr("自动剔除重复帧") },
         { id: "2", label: qsTr("识别 30fps 内容") }, { id: "3", label: qsTr("识别 50fps 内容") },
         { id: "4", label: qsTr("识别 60fps 内容") }, { id: "5", label: qsTr("采集 60→30（PS5 30 帧）") }
     ]
@@ -1742,6 +1742,18 @@ VPage {
                                 }
                             }
                             VRow {
+                                label: qsTr("VFG 自动调控")
+                                visible: veyra.fgBackendName === "vfg"
+                                enabled: veyra.vfgQuality !== 0 && veyra.fgMultiplier === 2
+                                opacity: enabled ? 1 : 0.5
+                                hint: qsTr("实时采集 2X 时，当前档来不及赶上屏幕刷新，这一对帧就改用下一档，不丢帧也不加延迟。多占约 2 GB 显存，显存不够时不生效")
+                                VSwitch {
+                                    objectName: "list-vfg-auto-regulate"
+                                    checked: veyra.vfgAutoRegulate
+                                    onToggled: checked => veyra.vfgAutoRegulate = checked
+                                }
+                            }
+                            VRow {
                                 label: qsTr("严格补帧节奏")
                                 hint: qsTr("帧同步 · 默认关闭")
                                 VSwitch {
@@ -1796,7 +1808,7 @@ VPage {
                                 }
                                 VRow {
                                     label: qsTr("内容节奏")
-                                    hint: qsTr("游戏锁 30/40 帧、采集卡输出 60 帧时选“自动识别内容节奏”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧")
+                                    hint: qsTr("游戏锁 30/40 帧、采集卡输出 60 帧时选“自动剔除重复帧”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧")
                                     VSelect {
                                         objectName: "list-content-rate"
                                         implicitWidth: 170

@@ -2066,6 +2066,13 @@
    "ja": "VFG は 1 枚あたり約 %1 ms、現在の負荷で安定するのは約 %2X"
   },
   {
+   "zh": "VFG 自动调控",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "VFG 自動調控",
+   "en": "VFG auto regulation",
+   "ja": "VFG 自動調整"
+  },
+  {
    "zh": "VFG 质量",
    "src": "qml/NodePage.qml",
    "zh-TW": "VFG 品質",
@@ -6547,6 +6554,13 @@
    "ja": "ライブキャプチャー"
   },
   {
+   "zh": "实时采集 2X 时，当前档来不及赶上屏幕刷新，这一对帧就改用下一档，不丢帧也不加延迟。多占约 2 GB 显存，显存不够时不生效",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "即時擷取 2X 時，目前檔位來不及趕上螢幕更新，這一對幀就改用下一檔，不掉幀也不增加延遲。多占約 2 GB 顯示記憶體，不足時不生效",
+   "en": "During live capture at 2X, when the current level cannot make the screen refresh, that frame pair uses the next faster level: no dropped frame and no added latency. Uses about 2 GB more VRAM; does nothing when VRAM is short",
+   "ja": "ライブキャプチャーの 2X で現在の品質が画面のリフレッシュに間に合わないとき、そのフレーム対だけ一段速い品質を使います。フレーム落ちも遅延の増加もありません。VRAM を約 2 GB 多く使い、足りないときは無効です"
+  },
+  {
    "zh": "实时预览，设置对所有文件生效",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "即時預覽，設定對所有檔案生效",
@@ -7154,13 +7168,6 @@
    "zh-TW": "螢幕擷取錯誤 0x{:08X}：{}",
    "en": "Screen capture error 0x{:08X}: {}",
    "ja": "画面キャプチャーのエラー 0x{:08X}：{}"
-  },
-  {
-   "zh": "屏幕队列 1 帧，避免丢帧",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "螢幕佇列 1 幀，避免掉幀",
-   "en": "1-frame display queue to avoid dropped frames",
-   "ja": "画面キュー 1 フレーム、フレーム落ちを防止"
   },
   {
    "zh": "展开本卡片并播放 HDR 输出时测量，每秒最多 4 次",
@@ -8071,6 +8078,13 @@
    "zh-TW": "引擎未接受 DLSS 效能模式，原設定保留",
    "en": "The engine did not accept the DLSS performance mode; the previous setting is kept",
    "ja": "エンジンが DLSS パフォーマンスモードを受け付けませんでした。元の設定を維持します"
+  },
+  {
+   "zh": "引擎未接受 VFG 自动调控，原设置保留",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "引擎未接受 VFG 自動調控，原設定保留",
+   "en": "The engine did not accept VFG auto regulation; the previous setting is kept",
+   "ja": "エンジンが VFG 自動調整を受け付けませんでした。元の設定を維持します"
   },
   {
    "zh": "引擎未接受光流配置，原设置保留",
@@ -10412,13 +10426,6 @@
    "ja": "表示の同期：自動 + 可変リフレッシュ"
   },
   {
-   "zh": "显示同步：自动（补帧接近刷新率）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示同步：自動（補幀接近更新率）",
-   "en": "Display sync: auto (frame generation near refresh rate)",
-   "ja": "表示の同期：自動（フレーム生成がリフレッシュレートに近い）"
-  },
-  {
    "zh": "显示器",
    "src": "qml/ScreenSourceDialog.qml",
    "zh-TW": "顯示器",
@@ -12330,11 +12337,11 @@
    "ja": "ゲームモード：マウス透過を解除"
   },
   {
-   "zh": "游戏锁 30/40 帧、采集卡输出 60 帧时选“自动识别内容节奏”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧",
+   "zh": "游戏锁 30/40 帧、采集卡输出 60 帧时选“自动剔除重复帧”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧",
    "src": "qml/ProPage.qml",
-   "zh-TW": "遊戲鎖 30/40 幀、擷取卡輸出 60 幀時選“自動識別內容節奏”：只去掉與上一張完全相同的畫面，補幀時間均勻；“擷取 60→30”固定每兩幀取一幀，穩定 30 幀",
-   "en": "For a game locked to 30/40 fps behind a 60 fps capture card, choose \"Detect content pacing automatically\": only pictures identical to the previous one are dropped and generated frames stay evenly timed; \"Capture 60→30\" always keeps every second frame for a steady 30",
-   "ja": "ゲームが 30/40 fps 固定でキャプチャーカードが 60 fps を出力する場合は「コンテンツのペーシングを自動判別」を選択：直前とまったく同じ映像だけを除き、補間フレームの間隔を均一にします。「キャプチャー 60→30」は常に 2 フレームごとに 1 フレームを取り、30 fps で安定させます"
+   "zh-TW": "遊戲鎖 30/40 幀、擷取卡輸出 60 幀時選“自動剔除重複幀”：只去掉與上一張完全相同的畫面，補幀時間均勻；“擷取 60→30”固定每兩幀取一幀，穩定 30 幀",
+   "en": "For a game locked to 30/40 fps behind a 60 fps capture card, choose \"Remove duplicate frames automatically\": only pictures identical to the previous one are dropped and generated frames stay evenly timed; \"Capture 60→30\" always keeps every second frame for a steady 30",
+   "ja": "ゲームが 30/40 fps 固定でキャプチャーカードが 60 fps を出力する場合は「重複フレームを自動で除去」を選択：直前とまったく同じ映像だけを除き、補間フレームの間隔を均一にします。「キャプチャー 60→30」は常に 2 フレームごとに 1 フレームを取り、安定した 30 fps にします"
   },
   {
    "zh": "源 %1 fps",
@@ -13975,6 +13982,13 @@
    "ja": "自動推定：キャプチャーカード / PS5 のライブ入力時に有効"
   },
   {
+   "zh": "自动剔除重复帧",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "自動剔除重複幀",
+   "en": "Remove duplicate frames automatically",
+   "ja": "重複フレームを自動で除去"
+  },
+  {
    "zh": "自动去隔行",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "自動去交錯",
@@ -14045,13 +14059,6 @@
    "ja": "入力信号を自動検出 · BMD ネイティブ"
   },
   {
-   "zh": "自动识别内容节奏",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "自動識別內容節奏",
-   "en": "Detect content pacing automatically",
-   "ja": "コンテンツのペーシングを自動判別"
-  },
-  {
    "zh": "自动调控力度",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "自動調控力度",
@@ -14101,11 +14108,11 @@
    "ja": "自動（負荷に応じて）"
   },
   {
-   "zh": "自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低（实时补帧输出接近刷新率时改排 1 帧，避免丢帧） · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线",
+   "zh": "自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线",
    "src": "qml/ProPresentationRows.qml",
-   "zh-TW": "自動（推薦）：不撕裂，也不等待垂直同步，每次更新顯示最新一幀，延遲最低（即時補幀輸出接近更新率時改排 1 幀，避免掉幀） · 垂直同步：每幀都等到更新才顯示，比自動多等最多一次更新 · 允許撕裂：可能出現撕裂線",
-   "en": "Auto (recommended): no tearing and no VSync wait; each refresh shows the newest frame for the lowest latency (live frame generation near the refresh rate queues 1 frame to avoid drops) · VSync: every frame waits for a refresh, at most one refresh longer than Auto · Allow tearing: tear lines may appear",
-   "ja": "自動（推奨）：ティアリングなし、垂直同期を待たず、毎回のリフレッシュで最新フレームを表示し遅延が最小（ライブのフレーム生成がリフレッシュレートに近いときは 1 フレームをキューしてフレーム落ちを防止） · 垂直同期：全フレームがリフレッシュを待って表示され、自動より最大 1 リフレッシュ分長く待つ · ティアリングを許可：ティアリングが発生する場合あり"
+   "zh-TW": "自動（推薦）：不撕裂，也不等待垂直同步，每次更新顯示最新一幀，延遲最低 · 垂直同步：每幀都等到更新才顯示，比自動多等最多一次更新 · 允許撕裂：可能出現撕裂線",
+   "en": "Auto (recommended): no tearing and no VSync wait; each refresh shows the newest frame for the lowest latency · VSync: every frame waits for a refresh, at most one refresh longer than Auto · Allow tearing: tear lines may appear",
+   "ja": "自動（推奨）：ティアリングなし、垂直同期を待たず、毎回のリフレッシュで最新フレームを表示し遅延が最小 · 垂直同期：全フレームがリフレッシュを待って表示され、自動より最大 1 リフレッシュ分長く待つ · ティアリングを許可：ティアリングが発生する場合あり"
   },
   {
    "zh": "自动（独立显卡）",

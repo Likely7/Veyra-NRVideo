@@ -56,9 +56,7 @@ constexpr bool syncNvidiaLowLatencyQueue(PresentationSettings& p,bool nvidiaAdap
 // effective settings: inside the VRR range the panel starts a refresh when
 // the frame arrives, so the wait is about zero and nothing tears; above the
 // range the one-deep VSync queue holds (Microsoft documents VRR through the
-// tearing flag, which only explicit Tearing may use). Automatic is reported as
-// Vsync the same way while live frame generation runs near the refresh, where
-// replacing is what loses frames (VideoPresenter::automaticQueueWanted).
+// tearing flag, which only explicit Tearing may use).
 constexpr bool presentationVsync(const PresentationSettings& s) {
     return s.display==DisplaySync::Vsync;
 }

@@ -21,7 +21,7 @@ public:
     // loads a second effect with the second model on the same CUDA stream.
     bool initialize(gfx::D3D12DeviceContext&,const std::wstring& runtimeRoot,
                     unsigned width,unsigned height,DXGI_FORMAT,unsigned multiplier,unsigned quality,
-                    bool asynchronousSubmission=false);
+                    bool asynchronousSubmission=false,bool fastFallback=false);
     bool created() const;
     // Caller transitions encoded texture to COPY_SOURCE and back to COMMON.
     // Submit this list before generate(). Normal frames never CPU-wait here;
@@ -34,7 +34,11 @@ public:
     // Signals an OWNED producer fence and queues a GPU wait before copyOutput.
     // Preview offloads the serial CUDA wait/run/signal to a bounded worker;
     // synchronous/export callers retain the immediate SDK rejection verdict.
-    bool generate(unsigned parity,unsigned subframe,unsigned multiplier,bool reset);
+    // fast: this pair uses the second effect, see fastReady().
+    bool generate(unsigned parity,unsigned subframe,unsigned multiplier,bool reset,bool fast=false);
+    // A second effect is loaded: a mixed tier's second model, or with fastFallback
+    // the next faster model, for pairs the chosen one would finish too late for.
+    bool fastReady() const;
     // Poll after the corresponding consumer fence. A submitted copy is not
     // proof that the SDK accepted the generated frame.
     SubmissionState submissionState(unsigned slot) const;

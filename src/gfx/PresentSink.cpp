@@ -508,8 +508,17 @@ void PresentSink::sampleDisplayLatency(){
         if(pending.replaceable&&pending.id!=stats.PresentCount)continue;
         if(pending.id!=stats.PresentCount&&(!newestQpc||newestQpc-double(pending.qpc)>double(stats.PresentCount-pending.id)*period*1.25))continue;
         const double ms=(scanout-double(stats.PresentCount-pending.id)*period-double(pending.qpc))*1000.0/frequency;
+        if(pending.id==stats.PresentCount&&ms>=0&&ms<1000)latchMs_=std::min(latchMs_+.001,ms);
         if(ms>=0&&ms<1000&&displayLatencyMs_.size()<4096)displayLatencyMs_.push_back(ms);
     }
+}
+PresentSink::RefreshGrid PresentSink::refreshGrid()const{
+    static const double frequency=[]{LARGE_INTEGER f{};QueryPerformanceFrequency(&f);return double(f.QuadPart);}();
+    RefreshGrid grid;
+    const double period=refreshQpc_>0?refreshQpc_:displayRefreshHz_>=1?frequency/displayRefreshHz_:0;
+    if(!lastSyncQpc_||period<=0)return grid;
+    grid.lastVblank100ns=int64_t(double(lastSyncQpc_)*1e7/frequency);grid.period100ns=period*1e7/frequency;grid.latch100ns=latchMs_*10000;
+    return grid;
 }
 PresentSink::DisplayLatencySummary PresentSink::takeDisplayLatency(){
     DisplayLatencySummary summary;

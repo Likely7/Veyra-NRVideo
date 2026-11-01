@@ -1,6 +1,8 @@
 # Veyra Agent 工作规则
 
-> **2026-10-31 本地main整合（最新）**：用户要求把各分支修复合入main并处理兼容。main现含英伟达低延迟三档、RX7000 NR、补帧接近刷新率修复、屏幕采集无补帧扣留修复、屏幕捕获帧率、采集载波Dolby/DTS、F7/F8、60→30取第一份。Lecram两线和AverMedia诊断存档未并入。活动树在main，下面各段“不合并main”到此结束；未push/Release，正式版仍2.1.1。回执E:/项目/Veyra/reports/claude-main-integration-20261031/FINAL.json。RX7000实卡、真实60 Hz屏/采集卡/5060 Ti、PS5载波音频未验证。
+> **2026-11-01 补帧延迟不增长返工（最新）**：用户不接受10-31修复的延迟增长。分支`claude/fg-no-latency-growth-20261101`（基于main 13016a8，未合并、未push/Release）撤掉自动模式队列、长等待和放宽的VFG预算，改平滑呈现锚点，VFG 2X赶不上刷新时这一对改用下一档模型。真实60 Hz实测见docs/FG_NO_LATENCY_GROWTH_2026-11-01.md，回执E:/项目/Veyra/reports/claude-fg-sidefx-20261101/FINAL.json。`VEYRA_TEST_LEGACY_LIVE_PACING=1`恢复旧规则。真实采集卡和5060 Ti未验证，5060 Ti速度是人为加延迟模拟的。
+
+> **2026-10-31 本地main整合**：用户要求把各分支修复合入main并处理兼容。main现含英伟达低延迟三档、RX7000 NR、补帧接近刷新率修复、屏幕采集无补帧扣留修复、屏幕捕获帧率、采集载波Dolby/DTS、F7/F8、60→30取第一份。Lecram两线和AverMedia诊断存档未并入。活动树在main，下面各段“不合并main”到此结束；未push/Release，正式版仍2.1.1。回执E:/项目/Veyra/reports/claude-main-integration-20261031/FINAL.json。RX7000实卡、真实60 Hz屏/采集卡/5060 Ti、PS5载波音频未验证。
 
 > **2026-10-31 补帧接近刷新率修复**：用户确认“开始修”。分支`claude/fg-60hz-pacing-20261031`（基于c6c28b9）按docs/FG_60HZ_PACING_2026-10-31.md改实时图内补帧：输出在刷新率0.65–1.02倍时自动模式走一帧队列，输出不超过刷新率时生成帧等到下一帧到期，VFG跳帧后前2次不计入成本。`VEYRA_TEST_LEGACY_NEAR_REFRESH=1`恢复旧规则。本机只验证320 Hz，未在真实60 Hz屏/采集卡/5060 Ti验证，不得当作现场已修好。不合并main、不push/Release。
 

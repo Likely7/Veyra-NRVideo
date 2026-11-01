@@ -140,7 +140,7 @@ struct VfgBackend::Impl {
     Microsoft::WRL::ComPtr<ID3D12PipelineState> cutPso;
     Microsoft::WRL::ComPtr<ID3D12Resource> cutResults;
     D3D12_RESOURCE_STATES cutState=D3D12_RESOURCE_STATE_COMMON;
-    struct Job {unsigned parity,sub,multiplier;bool reset;uint64_t revision,value;};
+    struct Job {unsigned parity,sub,multiplier;bool reset;uint64_t revision,value;bool fast;};
     std::array<std::atomic<SubmissionState>,kOutputs> states{};
     std::atomic<bool> failed=false;
     std::mutex jobsMutex,profileMutex;
@@ -150,6 +150,7 @@ struct VfgBackend::Impl {
     bool asynchronous=false,stopping=false;
     unsigned outstanding=0;
     unsigned rejectRun=0,runCount=0; // process-local deterministic failure test
+    double testRunDelayMs=0; // VEYRA_TEST_VFG_DELAY_MS: a slower GPU, on this worker only
     bool profileCpu=false;
     std::array<double,13> cpuSum{},cpuMax{};
     std::array<unsigned,13> cpuSamples{};
@@ -315,7 +316,7 @@ struct VfgBackend::Impl {
         buffer.resource.Reset();
     }
     bool cudaJob(const Job& job){
-        const auto [parity,sub,multiplier,reset,revision,value]=job;
+        const auto [parity,sub,multiplier,reset,revision,value,fast]=job;
         Current current(*this);if(!current.active)return false;
         CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS wait{};wait.params.fence.value=value;
         bool ok=cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync")&&!failed.load();
@@ -334,7 +335,7 @@ struct VfgBackend::Impl {
         if(sub==1||revision!=lastRevision||parity!=lastParity||reset!=lastReset){
             ++pairSerial;lastRevision=revision;lastParity=parity;lastReset=reset;
         }
-        const bool second=mixed&&sub!=engine::vfgPrimarySubframe(multiplier);
+        const bool second=(mixed&&sub!=engine::vfgPrimarySubframe(multiplier))||(fast&&effects[1].handle);
         auto& e=effects[second?1:0];
         if(ok&&e.boundPair!=pairSerial){
             ok=cv(cpuCall(3,[&]{return setImage(e.handle,"SrcImage0",inputs[reset?parity:1-parity].image);}),"SetImage previous")&&
@@ -348,6 +349,10 @@ struct VfgBackend::Impl {
         }
         ok=ok&&cv(cpuCall(5,[&]{return setImage(e.handle,"DstImage0",outputs[parity+2*(sub-1)].image);}),"SetImage output")&&
             cv(cpuCall(8,[&]{return setU32(e.handle,"FrameIndex",sub);}),"SetU32 FrameIndex");
+        if(ok&&testRunDelayMs>0){
+            const auto until=std::chrono::steady_clock::now()+std::chrono::duration<double,std::milli>(testRunDelayMs*(second?.3:1));
+            while(std::chrono::steady_clock::now()<until)std::this_thread::yield();
+        }
         if(ok){
             if(rejectRun&&++runCount==rejectRun){log::warn("vfg","injected VFG Run rejection (test hook)");ok=false;}
             else ok=cv(cpuCall(9,[&]{return run(e.handle,1);}),"NvVFX_Run async");
@@ -392,12 +397,12 @@ struct VfgBackend::Impl {
             {std::lock_guard lock(jobsMutex);--outstanding;}
         }
     }
-    bool handoff(unsigned parity,unsigned sub,unsigned multiplier,bool reset){
+    bool handoff(unsigned parity,unsigned sub,unsigned multiplier,bool reset,bool fast){
         const unsigned slot=parity+2*(sub-1);
         if(!asynchronous){
             const uint64_t value=++signalValue;
             if(!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
-            const bool ok=cudaJob({parity,sub,multiplier,reset,inputRevision,value});
+            const bool ok=cudaJob({parity,sub,multiplier,reset,inputRevision,value,fast});
             if(!ok){
                 failed.store(true);Current current(*this);
                 if(current.active&&stream)cu(cuStreamSynchronizeFn(stream),"rejected synchronous job drain");
@@ -415,7 +420,7 @@ struct VfgBackend::Impl {
         if(!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
         // Allocate the queue entry before adding a GPU dependency. Even a host
         // allocation exception cannot leave a wait with no job to signal it.
-        jobs.push_back({parity,sub,multiplier,reset,inputRevision,value});
+        jobs.push_back({parity,sub,multiplier,reset,inputRevision,value,fast});
         if(!hr(cpuCall(11,[&]{return context->directQueue()->Wait(completion.Get(),value);}),"queue wait VFG completion")){
             jobs.pop_back();return false;
         }
@@ -430,7 +435,7 @@ struct VfgBackend::Impl {
 VfgBackend::VfgBackend():impl_(std::make_unique<Impl>()){}
 VfgBackend::~VfgBackend(){shutdown();}
 
-bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring& root,unsigned width,unsigned height,DXGI_FORMAT format,unsigned multiplier,unsigned quality,bool asynchronousSubmission){
+bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring& root,unsigned width,unsigned height,DXGI_FORMAT format,unsigned multiplier,unsigned quality,bool asynchronousSubmission,bool fastFallback){
     shutdown();
 #ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
     auto& p=*impl_;
@@ -443,6 +448,7 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     p.effects[0].mode=engine::vfgPrimaryMode(quality);p.effects[1].mode=engine::vfgSecondaryMode(quality);
     p.gpuShotChange=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_AUTO_SHOT_CHANGE",nullptr,0)==0;
     p.profileCpu=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_CPU_PROFILE",nullptr,0)>0;
+    {wchar_t delay[16]{};if(GetEnvironmentVariableW(L"VEYRA_TEST_VFG_DELAY_MS",delay,16))p.testRunDelayMs=std::clamp(_wtof(delay),0.0,40.0);}
     wchar_t reject[16]{};
     const auto rejectLength=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",reject,16);
     if(rejectLength&&rejectLength<16)p.rejectRun=unsigned(std::clamp(_wtoi(reject),0,1000000));
@@ -523,17 +529,32 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     // NvVFX_Run wait on the GPU (measured 2026-10-11: host 3.5 ms -> 0.13 ms per
     // 4K Run) and repeated per subframe (+0.2 ms GPU each).
     const unsigned automaticShotChange=p.gpuShotChange?0u:1u;
-    const unsigned effectCount=p.mixed?2u:1u;
-    for(unsigned i=0;i<effectCount;++i){
-        auto& e=p.effects[i];
+    const auto createEffect=[&](Impl::Effect& e,const char* loadName){
         if(!p.cv(p.create("VideoFrameGeneration",&e.handle),"NvVFX_CreateEffect")||
            !p.cv(p.setStream(e.handle,"CudaStream",p.stream),"SetCudaStream")||
            !p.cv(p.setU32(e.handle,"InputWidth",width),"InputWidth")||!p.cv(p.setU32(e.handle,"InputHeight",height),"InputHeight")||
            !p.cv(p.setU32(e.handle,"Mode",e.mode),"Mode")||!p.cv(p.setU32(e.handle,"AutomaticShotChangeDetectionEnabled",automaticShotChange),"AutomaticShotChangeDetectionEnabled")||
            !p.cv(p.setImage(e.handle,"SrcImage0",p.inputs[0].image),"initial previous")||!p.cv(p.setImage(e.handle,"SrcImage1",p.inputs[1].image),"initial current")||
-           !p.cv(p.loadEffect(e.handle),i?"NvVFX_Load second model":"NvVFX_Load")||!p.cv(p.setImage(e.handle,"DstImage0",p.outputs[0].image),"initial output")||
+           !p.cv(p.loadEffect(e.handle),loadName)||!p.cv(p.setImage(e.handle,"DstImage0",p.outputs[0].image),"initial output")||
            !p.cv(p.setU32(e.handle,"FrameMultiplier",multiplier),"initial multiplier"))return false;
-        e.boundMultiplier=multiplier;
+        e.boundMultiplier=multiplier;return true;
+    };
+    for(unsigned i=0;i<(p.mixed?2u:1u);++i)if(!createEffect(p.effects[i],i?"NvVFX_Load second model":"NvVFX_Load"))return false;
+    // Live 2X: the next faster model, for the pairs the engine picks (LivePresentationTiming.h).
+    // Without it the chosen model runs every pair, so a failure here costs nothing else.
+    // It takes about 1.9 GB at 4K, as much again as the chosen model, which D3D's usage
+    // may not count (RTX 5070, 2026-11-01), so 4.3 GB of the budget must be free.
+    uint64_t memoryBudget=0,memoryUsage=0;
+    const bool fastFits=context.videoMemoryInfo(memoryBudget,memoryUsage)&&memoryBudget>memoryUsage+(uint64_t(4300)<<20);
+    if(fastFallback&&!p.mixed&&quality>0&&!fastFits)log::info("vfg",std::format("fast model not loaded: budgetMB={} usageMB={}",memoryBudget>>20,memoryUsage>>20));
+    if(fastFallback&&!p.mixed&&quality>0&&fastFits){
+        auto& e=p.effects[1];e.mode=quality-1;
+        const auto start=std::chrono::steady_clock::now();
+        if(createEffect(e,"NvVFX_Load fast model"))log::info("vfg",std::format("fast model mode={} loadMs={:.0f}",e.mode,std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()));
+        else{
+            if(e.handle){p.destroy(e.handle);e.handle=nullptr;}
+            log::warn("vfg","fast model unavailable; the chosen model runs every pair");
+        }
     }
     if(p.gpuShotChange&&!p.createShotChangeTest())return false;
     p.asynchronous=asynchronousSubmission;
@@ -544,7 +565,7 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     log::info("vfg",std::format("SDK submission={} capacity={} (CUDA work remains serial)",p.asynchronous?"bounded worker":"graph owner",kOutputs));
     p.ready=true;log::info("vfg","native VFG initialized; GPU-only D3D12 buffer/fence bridge");return true;
 #else
-    (void)context;(void)root;(void)width;(void)height;(void)format;(void)multiplier;(void)quality;(void)asynchronousSubmission;
+    (void)context;(void)root;(void)width;(void)height;(void)format;(void)multiplier;(void)quality;(void)asynchronousSubmission;(void)fastFallback;
     log::error("vfg","VFG unavailable: configure VEYRA_CUDA_DRIVER_INCLUDE_DIR");return false;
 #endif
 }
@@ -572,12 +593,19 @@ bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture
     (void)list;(void)texture;(void)parity;(void)comparePrevious;return false;
 #endif
 }
-bool VfgBackend::generate(unsigned parity,unsigned sub,unsigned multiplier,bool reset){
+bool VfgBackend::fastReady()const{
+#ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
+    return impl_->ready&&impl_->effects[1].handle;
+#else
+    return false;
+#endif
+}
+bool VfgBackend::generate(unsigned parity,unsigned sub,unsigned multiplier,bool reset,bool fast){
 #ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
     auto& p=*impl_;if(!p.ready||p.failed.load()||parity>1||multiplier<2||multiplier>p.maxMultiplier||sub<1||sub>=multiplier)return false;
-    return p.handoff(parity,sub,multiplier,reset);
+    return p.handoff(parity,sub,multiplier,reset,fast);
 #else
-    (void)parity;(void)sub;(void)multiplier;(void)reset;return false;
+    (void)parity;(void)sub;(void)multiplier;(void)reset;(void)fast;return false;
 #endif
 }
 VfgBackend::SubmissionState VfgBackend::submissionState(unsigned slot)const{

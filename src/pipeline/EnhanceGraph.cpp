@@ -1276,7 +1276,7 @@ bool EnhanceGraph::initVfg()
     if(!fgEnabled_||desc_.frameGenerationBackend!=engine::FrameGenerationBackend::Vfg)return true;
     failedBackend_=engine::FailedBackend::Fg;
     vfgBackend_=std::make_unique<VfgBackend>();
-    if(!vfgBackend_->initialize(context_,desc_.runtimeAbsPath,workW_,workH_,outputFormat(),desc_.fgMultiplier,desc_.vfgQuality,desc_.vfgAsyncSubmission))return false;
+    if(!vfgBackend_->initialize(context_,desc_.runtimeAbsPath,workW_,workH_,outputFormat(),desc_.fgMultiplier,desc_.vfgQuality,desc_.vfgAsyncSubmission,desc_.vfgFastFallback))return false;
     fgCapsAvailable_=true;fgMultiFrameMax_=int(FrameBatch::Capacity)-1;
     return true;
 }
@@ -3283,6 +3283,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // seed path already runs a single evaluation.
     const bool reduced=decision==FgDecision::Reduced&&!resetFg;
     out.fgReduced=reduced;
+    out.fgFast=vfgBackend_&&!resetFg&&(decision==FgDecision::Fast||decision==FgDecision::FastForBudget);
+    out.fgFastForBudget=out.fgFast&&decision==FgDecision::FastForBudget;
     // A reset has no usable A/B pair. Seed one complete 2X evaluation group;
     // all later subframes would repeat reset work and cannot be presented.
     const uint32_t fgCalls=(resetFg||reduced)?1:fgMultiplier-1;
@@ -3322,7 +3324,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         if(vfgBackend_){
             // GPU producer -> CUDA interpolation -> GPU consumer. No per-frame
             // CPU fence waits/readback; the bounded command ring owns reuse.
-            if(!vfgBackend_->generate(parity,sub,resetFg?2u:outputMultiplier,resetFg)){failedBackend_=engine::FailedBackend::Fg;return false;}
+            if(!vfgBackend_->generate(parity,sub,resetFg?2u:outputMultiplier,resetFg,out.fgFast)){failedBackend_=engine::FailedBackend::Fg;return false;}
             auto* flist=ring_.acquireNext(slot,st);if(!flist)return false;
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
             if(!vfgBackend_->copyOutput(flist,genFrame_[generatedSlot].Get(),generatedSlot)){failedBackend_=engine::FailedBackend::Fg;return false;}
@@ -3542,7 +3544,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     // rebuild instead of accepting a change that cannot take effect in place.
     if((desc_.enableNr&&s.nrRuntime!=desc_.nrRuntime)||
        (desc_.enableFg&&(std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||
-        (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&s.vfgQuality!=desc_.vfgQuality)))||
+        (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&(s.vfgQuality!=desc_.vfgQuality||s.vfgAutoRegulate!=desc_.vfgAutoRegulate))))||
        (desc_.enableSr&&(s.videoSrQuality!=desc_.videoSrQuality||(desc_.videoSrQuality==0&&s.dlssSrModel!=desc_.dlssSrModel)))||
        (s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
     // The colour master switch changes the graph shape (tables + shader branch)
@@ -3663,6 +3665,7 @@ void EnhanceGraph::setNrEnabled(bool on)
 
 ID3D12Fence* EnhanceGraph::contextFence()const{return context_.fence();}
 uint32_t EnhanceGraph::actualFlowPerf()const{return nvof_?nvof_->caps().actualPerfLevel:0;}
+bool EnhanceGraph::vfgFastReady() const { return vfgBackend_&&vfgBackend_->fastReady(); }
 bool EnhanceGraph::fgCreated() const
 {
     return (vfgBackend_&&vfgBackend_->created()) || fsrActive() || (fgBackend_ && fgBackend_->created());

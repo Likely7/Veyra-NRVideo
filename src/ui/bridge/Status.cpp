@@ -362,7 +362,7 @@ void QmlPlayerBridge::updateRunStatus() {
     if(chosen.content!=engine::ContentRate::Transport){
         QString cadence;
         switch(chosen.content){
-        case engine::ContentRate::Auto:cadence=tr("自动识别内容节奏");break;
+        case engine::ContentRate::Auto:cadence=tr("自动剔除重复帧");break;
         case engine::ContentRate::Fps30:cadence=tr("识别 %1 fps 内容").arg(30);break;
         case engine::ContentRate::Fps50:cadence=tr("识别 %1 fps 内容").arg(50);break;
         case engine::ContentRate::Fps60:cadence=tr("识别 %1 fps 内容").arg(60);break;

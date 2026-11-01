@@ -99,16 +99,23 @@ int wmain(int argc,wchar_t** argv){
         if(native){p.nvidiaLowLatency=mode<0?NvidiaLowLatency::Off:mode==2?NvidiaLowLatency::Boost:NvidiaLowLatency::On;engine.requestPresentation(p);}
         if(latency){p.nvidiaLowLatency=mode==1?NvidiaLowLatency::On:mode==2?NvidiaLowLatency::Boost:NvidiaLowLatency::Off;engine.requestPresentation(p);}
         EnhancementSettings effects;effects.multiplier=unsigned(multiplier);if(xess)effects.frameGenerationBackend=FrameGenerationBackend::XeSS;
-        if(scenario==L"native-vfg"||scenario==L"latency-screen-vfg"||scenario==L"screen-vfg")effects.frameGenerationBackend=FrameGenerationBackend::Vfg;
+        // latency-screen-sr-vfg: a mode the budget really rejects, for the failed probe path of live VFG.
+        const bool overBudgetVfg=scenario==L"latency-screen-sr-vfg";
+        if(scenario==L"native-vfg"||scenario==L"latency-screen-vfg"||scenario==L"screen-vfg"||overBudgetVfg)effects.frameGenerationBackend=FrameGenerationBackend::Vfg;
         if(scenario==L"native-fsr")effects.frameGenerationBackend=FrameGenerationBackend::Fsr;
         if(scenario==L"effects"||scenario==L"native-effects"){effects.nr=true;effects.sr=true;effects.srTarget=veyra::pipeline::SrTarget::Qhd;}
-        if(scenario==L"latency-screen-sr"){effects.sr=true;effects.srTarget=veyra::pipeline::SrTarget::Uhd4K;}
+        if(scenario==L"latency-screen-sr"||overBudgetVfg){effects.sr=true;effects.srTarget=veyra::pipeline::SrTarget::Uhd4K;}
+        if(overBudgetVfg)effects.vfgQuality=2;
+        // replay-vfg-low|medium|high: a clip through the live scheduler (with VEYRA_TEST_REPLAY_AS_CARD, paced like a capture card).
+        const bool replayVfg=scenario.starts_with(L"replay-vfg-");
+        if(replayVfg){effects.frameGenerationBackend=FrameGenerationBackend::Vfg;effects.vfgQuality=scenario==L"replay-vfg-high"||scenario==L"replay-vfg-toggle"?2:scenario==L"replay-vfg-medium"?1:0;}
+        if(GetEnvironmentVariableW(L"VEYRA_TEST_VFG_NO_AUTO_REGULATE",nullptr,0)>0)effects.vfgAutoRegulate=false;
         if(physical){effects.nr=true;effects.sr=false;}
-        auto options=PlayerOptions::from(effects);options.captureReplayForTest=scenario==L"replay";
+        auto options=PlayerOptions::from(effects);options.captureReplayForTest=scenario==L"replay"||replayVfg;
         engine.open(window,sourcePath,options);
         auto pump=[] {MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}};
         auto wait=[&](auto predicate,int ms=15000){auto end=Clock::now()+std::chrono::milliseconds(ms);while(Clock::now()<end){pump();auto s=engine.snapshot();if(s.failed)return false;if(predicate(s))return true;std::this_thread::sleep_for(std::chrono::milliseconds(2));}return false;};
-        check(wait([](auto& s){return s.frames>10;},scenario==L"native-effects"||scenario==L"latency-screen-sr"?30000:15000),"first frames");
+        check(wait([](auto& s){return s.frames>10;},scenario==L"native-effects"||scenario==L"latency-screen-sr"||overBudgetVfg?30000:15000),"first frames");
         if(physical){const auto warm=Clock::now();check(wait([&](auto& s){return Clock::now()-warm>=std::chrono::seconds(10)&&s.nrActive&&s.fgActive;},20000),"ten second warmup with NR and DLSS active");}
         std::ofstream samples(dir/L"snapshots.csv");samples<<"wall,position,frames,generated,lateMs,queueReadyMs,presentMs,skipped,effective,mode,sync,revision\n";
         const auto start=Clock::now();auto last=engine.snapshot();const auto first=last;
@@ -129,7 +136,12 @@ int wmain(int argc,wchar_t** argv){
         check(!last.failed&&last.frames>first.frames+10&&speed>.8&&speed<1.2,"sustained playback at media speed");
         // Without FG the ready->Present wait is display capacity only, never a first-frame PTS anchor.
         if(latency&&multiplier==1){std::cout<<"schedulingWaitP95Ms="<<last.schedulingWaitP95Ms<<std::endl;check(last.schedulingWaitP95Ms<1000.0/std::max<DWORD>(dm.dmDisplayFrequency,30)+2,"screen capture without FG is held at most one display refresh");}
-        if(multiplier>1)check(last.fgActive&&last.generated>first.generated,"real provider generated frames during measurement");
+        if(scenario==L"replay-vfg-toggle")for(const bool on:{false,true}){
+            effects.vfgAutoRegulate=on;check(engine.requestSettings(effects),"VFG auto regulation change accepted");
+            const auto changed=Clock::now();
+            check(wait([&](auto& s){return Clock::now()-changed>std::chrono::seconds(3)&&s.applied.vfgAutoRegulate==on&&s.fgActive;},20000),"VFG auto regulation change applied with VFG still running");
+        }
+        if(multiplier>1&&!overBudgetVfg)check(last.fgActive&&last.generated>first.generated,"real provider generated frames during measurement");
         if(scenario==L"effects"||scenario==L"native-effects")check(last.nrActive&&last.srActive&&last.nrEvaluated>first.nrEvaluated,"NR and SR remain active with pacing");
         if(mode>=0&&!xess)check(last.presentationEffective.enabled,"optional pacing active");
         if((native||latency)&&mode>=0&&!xess)check(last.presentationEffective.nvidiaLowLatency==p.nvidiaLowLatency,"requested native NVIDIA low latency mode actually active with or without FG");

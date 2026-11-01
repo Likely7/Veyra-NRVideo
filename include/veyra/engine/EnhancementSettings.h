@@ -399,6 +399,10 @@ struct EnhancementSettings {
     // UI "DLSS 性能模式": NVIDIA's DLSS-G performance mode (ngx/DlssgLite.h),
     // DLSS frame generation only. A global control kept in shell preferences.
     bool dlssgLite=false;
+    // UI "VFG 自动调控": live 2X VFG runs a pair with the next faster model when the
+    // chosen one would miss its refresh or the budget (LivePresentationTiming.h).
+    // A global control kept in shell preferences.
+    bool vfgAutoRegulate=true;
     ContentRate content=ContentRate::Transport;
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
@@ -471,6 +475,7 @@ struct EnhancementSettings {
         if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::XeSS&&motionUsesFlow(fgMotion,frameGenerationBackend)))
             active.fgMotionRefine=defaults.fgMotionRefine;
         if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::Dlss))active.dlssgLite=defaults.dlssgLite;
+        if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::Vfg))active.vfgAutoRegulate=defaults.vfgAutoRegulate;
         return active;
     }
     bool sameActiveVideoParameters(const EnhancementSettings& other) const {

@@ -177,45 +177,96 @@ int main(){
     check(livePairHoldMs(true,10,20)==0,"backwards PTS cannot sleep negatively");
     check(livePairHoldMs(true,std::numeric_limits<double>::infinity(),0)==0,"nonfinite PTS rejected");
     {
-        using veyra::engine::liveGeneratedGrace100ns;
-        check(liveGeneratedGrace100ns(false,166667)==100000,"away from the refresh a generated frame keeps 10 ms");
-        check(liveGeneratedGrace100ns(true,166667)==161667,"60 Hz 2X stays useful until 0.5 ms before the next frame is due");
-        check(liveGeneratedGrace100ns(true,31447)==100000,"a short output interval never shortens the 10 ms bound");
-        using veyra::engine::liveGeneratedCapacityExpired;
-        check(!liveGeneratedCapacityExpired(false,1.3,2.78,0,0)&&liveGeneratedCapacityExpired(false,1.5,2.78,0,0),"above the refresh 6X waits half its interval");
-        check(!liveGeneratedCapacityExpired(false,1.9,16.7,0,0)&&liveGeneratedCapacityExpired(false,2.1,16.7,0,0),"above the refresh the wait stays at most 2 ms");
-        check(!liveGeneratedCapacityExpired(true,5,16.7,1000000,1100000),"output that fits keeps waiting 10 ms before the next frame is due");
-        check(liveGeneratedCapacityExpired(true,5,16.7,1095000,1100000),"output that fits gives up 0.5 ms before the next frame is due");
-        check(!liveGeneratedCapacityExpired(true,1,16.7,2000000,1100000),"a frame that only just started waiting keeps the earlier floor");
-        // A one-deep queue on 60.005 Hz fed with the field log's pairs (29.972 fps,
-        // arrival sd about 1.9 ms). A present flips at the next refresh, which is
-        // when capacity returns. Polls every 0.2 ms as the scheduler does. 100 ns units.
-        struct Replay{unsigned pairs=0,drops=0;double maxRealWait=0;};
-        const auto replay=[](bool fits,double hz,double fps,double sd){
-            const double refresh=1e7/hz,interval=1e7/fps;
-            Replay r;uint32_t seed=7;
-            const auto gauss=[&]{double sum=0;for(int i=0;i<12;++i){seed=seed*1664525u+1013904223u;sum+=double(seed>>8)/double(1u<<24);}return (sum-6)*sd;};
-            double free=-1e18,last=0;
+        using veyra::engine::LiveArrivalSmoother;
+        const int64_t interval=333667,lead=LiveArrivalSmoother::kLead100ns;
+        LiveArrivalSmoother clean;bool exact=true;
+        for(int i=0;i<300;++i)exact&=clean.anchor(i*interval,i*interval+5000000,interval)==i*interval+5000000-lead;
+        check(exact,"callbacks without jitter anchor where they arrive, less the lead");
+        clean.reset();check(clean.anchor(0,7000000,interval)==7000000-lead,"after a reset the first callback is the anchor");
+        // Field log 2026-10-31: 29.972 fps, callback sd 1.87 ms, PTS 800 ppm off the
+        // host clock (either way here). 100 ns units.
+        const auto gaussian=[](uint32_t& seed,double sd){double sum=0;for(int i=0;i<12;++i){seed=seed*1664525u+1013904223u;sum+=double(seed>>8)/double(1u<<24);}return (sum-6)*sd;};
+        for(double ppm:{800.0,-800.0,0.0}){
+            LiveArrivalSmoother smoother;uint32_t seed=7;double shift=0,spread=0,raw=0;unsigned count=0;
             for(unsigned n=0;n<6000;++n){
-                const double real=n*interval+gauss()+interval+34000,generated=real-interval/2;
-                ++r.pairs;
-                double start=std::max(generated,last);bool dropped=false;
-                for(double t=start;t<free;t+=2000)
-                    if(liveGeneratedCapacityExpired(fits,(t-start)/10000,interval/2/10000,int64_t(t),int64_t(real))){dropped=true;break;}
-                if(dropped)++r.drops;
-                else{start=std::max(start,free);last=start;free=(std::floor(start/refresh)+1)*refresh;}
-                start=std::max(real,last);
-                const double presented=std::max(start,free);
-                r.maxRealWait=std::max(r.maxRealWait,(presented-real)/10000);
-                last=presented;free=(std::floor(presented/refresh)+1)*refresh;
+                const double line=n*333643.0+40000,callback=line+gaussian(seed,18700);
+                const auto anchor=smoother.anchor(int64_t(n*333643.0*(1-ppm*1e-6)),int64_t(callback),interval);
+                if(n<300)continue;
+                shift+=double(anchor+lead)-line;spread+=std::abs(double(anchor+lead)-line);raw+=std::abs(callback-line);++count;
             }
+            printf("anchor at %.0f ppm: mean %.3f ms from the callback line, mean distance %.3f ms, callback %.3f ms\n",ppm,shift/count/10000,spread/count/10000,raw/count/10000);
+            check(std::abs(shift/count)<=1000,"the anchor keeps the mean callback whichever clock is faster: no added delay");
+            check(spread*2<raw,"the anchor carries less than half of the callback jitter");
+        }
+        LiveArrivalSmoother jumps;
+        for(int i=0;i<100;++i)jumps.anchor(i*interval,i*interval+50000,interval);
+        check(jumps.anchor(100*interval,100*interval+140000,interval)==100*interval+50000-lead,"one callback 9 ms off the line does not move it");
+        check(jumps.anchor(101*interval,101*interval+50000,interval)==101*interval+50000-lead&&jumps.snaps()==0,"and the next one is back on the line");
+        check(jumps.anchor(102*interval,102*interval+140000,interval)==102*interval+50000-lead&&jumps.anchor(103*interval,103*interval-40000,interval)==103*interval+50000-lead,"callbacks off the line on opposite sides do not move it");
+        check(jumps.anchor(104*interval,104*interval-40000,interval)==104*interval-40000-lead&&jumps.snaps()==1,"a second one on the same side moves it at once");
+        for(int i=105;i<115;++i)jumps.anchor(i*interval,i*interval+10000,interval);
+        int64_t settled=0;
+        for(int i=115;i<195;++i)settled=jumps.anchor(i*interval,i*interval+10000,interval)-i*interval;
+        check(std::abs(settled-(10000-lead))<=1000,"a 5 ms step within the limit is tracked within 90 pairs");
+        LiveArrivalSmoother fast;
+        for(int i=0;i<20;++i)fast.anchor(i*83333,i*83333+50000,83333);
+        check(fast.anchor(20*83333,20*83333+85000,83333)==20*83333+50000-lead&&fast.anchor(21*83333,21*83333+85000,83333)==21*83333+85000-lead,"the limit follows a shorter interval");
+        using veyra::engine::liveGeneratedGrace100ns;
+        check(liveGeneratedGrace100ns(1000000,1000000)==100000&&liveGeneratedGrace100ns(1000000,1010000)==100000,"on time or early callback: a generated frame keeps 10 ms from its due time");
+        check(liveGeneratedGrace100ns(1030000,1000000)==130000,"late callback: its frame expires when it did on the callback anchor");
+        using veyra::engine::liveFramesShareRefresh;
+        const double refresh=166667;
+        check(liveFramesShareRefresh(1020000,1100000,1000000,refresh,10000),"no vblank between the two presents: one refresh shows them");
+        check(!liveFramesShareRefresh(1120000,1300000,1000000,refresh,10000),"a vblank between them: both are shown");
+        check(liveFramesShareRefresh(1160000,1300000,1000000,refresh,10000),"a present inside the latch misses that vblank");
+        check(!liveFramesShareRefresh(1020000,1100000,1000000,0,10000),"no refresh grid selects nothing");
+        check(liveFramesShareRefresh(1300000,1250000,1000000,refresh,10000),"a generated frame ready after its real frame cannot be shown");
+        using veyra::engine::liveSmoothedCapacityWaitMs;
+        check(liveSmoothedCapacityWaitMs(3.125)==2&&liveSmoothedCapacityWaitMs(4.17)==2,"high refresh MFG keeps the 2 ms capacity wait");
+        check(std::abs(liveSmoothedCapacityWaitMs(16.68)-1.03)<.01&&liveSmoothedCapacityWaitMs(33.4)==1,"60 Hz 2X waits about 1 ms, and never less");
+        check(liveSmoothedCapacityWaitMs(8.33)>1.5&&liveSmoothedCapacityWaitMs(8.33)<2,"120 Hz 2X lies between");
+        // Present(0,0) on 60.005 Hz fed with those pairs on the adaptive phase. VFG
+        // medium: generated ready 8.5 ms after the callback, 0.3 ms of wake-up jitter.
+        // The panel shows the last present before each refresh. A real frame replaced
+        // there still reached it inside the next generated frame, so it counts too.
+        struct Shown{unsigned lost=0,lostReal=0,count=0;double mean=0,callbackP95=0;};
+        const auto display=[&](bool smooth,double ppm){
+            const double refresh=1e7/60.0049,source=1e7/29.9722,ready=85000,delay=ready+source/2+5000,latch=3000;
+            struct Item{double time;bool real;double capture,callback;};
+            std::vector<Item> items;items.reserve(36000);uint32_t seed=11;LiveArrivalSmoother smoother;
+            for(unsigned n=0;n<18000;++n){
+                const double capture=n*source,callback=capture+40000+gaussian(seed,18700);
+                const double anchor=smooth?double(smoother.anchor(int64_t(capture*(1-ppm*1e-6)),int64_t(callback),int64_t(source))):callback;
+                const double real=anchor+delay;
+                items.push_back({std::max(real-source/2,callback+ready)+std::abs(gaussian(seed,3000)),false,capture,callback});
+                items.push_back({real+std::abs(gaussian(seed,3000)),true,capture,callback});
+            }
+            std::stable_sort(items.begin(),items.end(),[](const Item& a,const Item& b){return a.time<b.time;});
+            Shown r;std::vector<double> fromCallback;std::vector<const Item*> replaced;const Item* pending=nullptr;double sum=0;
+            double scan=(std::floor((items[0].time+latch)/refresh+1e-9)+1)*refresh;
+            for(const auto& item:items){
+                while(scan<=item.time+latch){
+                    if(pending){
+                        if(pending->real)replaced.push_back(pending);
+                        for(const auto* shown:replaced){sum+=scan-shown->capture;fromCallback.push_back(scan-shown->callback);}
+                    }
+                    pending=nullptr;replaced.clear();scan+=refresh;
+                }
+                if(pending){++r.lost;if(pending->real){++r.lostReal;replaced.push_back(pending);}}
+                pending=&item;
+            }
+            std::sort(fromCallback.begin(),fromCallback.end());
+            r.count=unsigned(items.size());r.mean=sum/fromCallback.size();r.callbackP95=fromCallback[(fromCallback.size()-1)*95/100];
             return r;
         };
-        const auto before=replay(false,60.0049,29.9722,18700),after=replay(true,60.0049,29.9722,18700);
-        printf("near-refresh replay: drops %u -> %u of %u pairs, max real wait %.2f -> %.2f ms\n",before.drops,after.drops,after.pairs,before.maxRealWait,after.maxRealWait);
-        check(before.drops*100>=before.pairs,"field-rate replay: the 2 ms rule drops at least 1% of the pairs");
-        check(after.drops==0,"field-rate replay: no generated frame is dropped when it may wait for the next due time");
-        check(after.maxRealWait<=1000/60.0049,"field-rate replay: the real frame waits at most one refresh");
+        for(double ppm:{800.0,-800.0}){
+            const auto before=display(false,ppm),after=display(true,ppm);
+            printf("60 Hz display at %.0f ppm: lost %.2f%% -> %.2f%%, real %.2f%% -> %.2f%%, capture-to-panel mean %.2f -> %.2f ms, callback P95 %.2f -> %.2f ms\n",ppm,100.0*before.lost/before.count,100.0*after.lost/after.count,100.0*before.lostReal/before.count,100.0*after.lostReal/after.count,before.mean/10000,after.mean/10000,before.callbackP95/10000,after.callbackP95/10000);
+            check(after.lost*10<=before.lost*8,"60 Hz replay: at least a fifth fewer frames are lost");
+            check(after.lostReal*5<=before.lostReal,"60 Hz replay: real frames are hardly lost any more");
+            check(after.mean<=before.mean,"60 Hz replay: capture-to-panel latency does not grow");
+            check(after.callbackP95<=before.callbackP95+2000,"60 Hz replay: the latency this application reports does not grow at P95");
+        }
     }
     {
         // 60 fps window capture without FG (2026-10-29): the first frame was read

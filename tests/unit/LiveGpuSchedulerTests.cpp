@@ -155,46 +155,74 @@ int main(){
     check(!budget.admit(50000002,49800002,1.217,.047,true),"cheap recovery cannot bypass an expired deadline");
     check(budget.predicted(60000002,true)==budget.predicted(60000002),"expired recovery measurement falls back to steady estimate");
     {
-        veyra::engine::FgCostSettling settling;
-        check(settling.observe(false,true),"continuous evaluations enter the FG estimate");
-        check(!settling.observe(true,false)&&!settling.observe(false,true)&&!settling.observe(false,true)&&settling.observe(false,true),"the first two evaluations after a skip stay out of it");
-        settling.observe(true,false);
-        check(settling.observe(false,false)&&!settling.observe(false,true),"a group without FG does not use up the settling evaluations");
-        settling.reset();check(settling.observe(false,true),"settings revision reset clears settling");
+        using veyra::engine::FgCostSettling;
+        FgCostSettling settling;const int64_t pair=333667;int64_t t=100000000;
+        check(!settling.observe(false,true,t),"the first evaluation is a steady sample");
+        check(!settling.observe(false,true,t+=pair),"continuous evaluations are steady samples");
+        check(!settling.observe(true,false,t+=pair)&&!settling.observe(false,true,t+=pair),"one skipped pair hides nothing");
+        check(!settling.observe(false,false,t+=pair),"a group without FG is no sample of FG");
+        t+=FgCostSettling::kIdle100ns;
+        check(settling.observe(false,true,t)&&settling.observe(false,true,t+=pair)&&!settling.observe(false,true,t+=pair),"after a second without an evaluation the next two are warmup");
+        check(!settling.holding(t),"a probe holds nothing until it fails");
+        const auto failProbe=[&]{
+            for(int i=0;i<60&&settling.holding(t);++i)t+=pair;
+            t+=FgCostSettling::kIdle100ns;
+            settling.observe(false,true,t);settling.observe(false,true,t+=pair);settling.observe(false,true,t+=pair);
+            settling.observe(true,false,t+=pair);
+            return settling.holdUntil()-t;
+        };
+        check(settling.observe(true,false,t+=pair)==false&&settling.holdUntil()-t==20000000,"a probe rejected right after settling retries after 2 s");
+        check(failProbe()==40000000&&failProbe()==80000000&&failProbe()==80000000,"further failed probes retry after 4 s, then every 8 s");
+        check(settling.holding(t)&&!settling.holding(t+80000000),"the hold ends on time");
+        t+=80000000+FgCostSettling::kIdle100ns;
+        settling.observe(false,true,t);settling.observe(false,true,t+=pair);
+        for(unsigned i=0;i<FgCostSettling::kProbeGroups;++i)check(!settling.observe(false,true,t+=pair),"evaluations after settling are steady samples");
+        settling.observe(true,false,t+=pair);
+        check(!settling.holding(t),"a probe that ran on clears the failures: a later skip holds nothing");
+        t+=FgCostSettling::kIdle100ns;
+        settling.observe(false,true,t);settling.observe(false,true,t+=pair);settling.observe(false,true,t+=pair);settling.observe(true,false,t+=pair);
+        check(settling.holdUntil()-t==20000000,"the next failed probe starts over at 2 s");
+        settling.reset();check(!settling.holding(t)&&!settling.observe(false,true,t+FgCostSettling::kIdle100ns),"settings revision reset clears everything");
         // Field log 2026-10-31, 4K30 VFG High on an RTX 5060 Ti: base 3.4 ms with FG and
         // 1.45 ms without, 23.1 ms running continuously, 39.6 ms (fullscreen) or 28.5 ms
-        // (window) after skips. One second of FG at 33 ms starts it, as a hiccup did.
-        // Returns the evaluated pairs of the last 20 s out of 60 s (600 pairs at most).
-        const auto replay=[](double continuous,double isolated,bool settle,double graceMs,unsigned& maxPer2s){
-            veyra::engine::FgRecoveryBudget replayBudget;veyra::engine::FgCostSettling cost;
+        // (window) after 2 s of skipping. One second of FG at 33 ms starts it, as a
+        // hiccup did. afterSkip is the cost after one skipped pair; the log has no such
+        // sample, so it is varied. Returns evaluated pairs of the last 20 s of 60 s.
+        const auto replay=[](double continuous,double isolated,double afterSkip,bool settle,unsigned& maxPer2s){
+            veyra::engine::FgRecoveryBudget replayBudget;FgCostSettling cost;
             const int64_t interval=333667;
-            bool previous=true;unsigned evaluated=0,window=0;maxPer2s=0;
+            bool previous=true;int64_t lastEvaluated=100000000;unsigned evaluated=0,window=0;maxPer2s=0;
             for(unsigned n=0;n<1800;++n){
                 const int64_t now=100000000+n*interval;
                 const auto allowance=replayBudget.processingAllowance(now,interval);
-                const bool admitted=replayBudget.admit(now,now+interval/2+allowance-5000,.2,.45,false,0,graceMs);
-                const bool comparable=!settle||cost.observe(!admitted,admitted);
-                if(admitted){const double fg=n<30?33:previous?continuous:isolated;replayBudget.complete(3.4+fg,true,false,now+int64_t(fg*10000),fg,comparable);}
-                else replayBudget.complete(1.45,false,false,now+14500);
+                const bool admitted=(!settle||!cost.holding(now))&&replayBudget.admit(now,now+interval/2+allowance-5000,.2,.45);
+                const double fg=n<30?33:now-lastEvaluated>=10000000?isolated:previous?continuous:afterSkip;
+                const int64_t done=now+int64_t((admitted?3.4+fg:1.45)*10000);
+                const bool warmup=settle&&cost.observe(!admitted,admitted,done);
+                if(admitted){replayBudget.complete(3.4+fg,true,warmup,done,fg);lastEvaluated=done;}
+                else replayBudget.complete(1.45,false,false,done);
                 previous=admitted;
                 if(n>=1200){evaluated+=admitted;window+=admitted;if(n%60==59){maxPer2s=std::max(maxPer2s,window);window=0;}}
             }
             return evaluated;
         };
         unsigned per2s=0;
-        const auto trapped=replay(23.1,39.6,false,10,per2s);
+        const auto trapped=replay(23.1,39.6,23.1,false,per2s);
         printf("VFG trap replay: earlier rule %u of 600 pairs evaluated, most in 2 s %u\n",trapped,per2s);
         check(trapped<=20,"replay: counting the lone probe keeps VFG at 30 fps");
-        const auto recoveredFull=replay(23.1,39.6,true,10,per2s);
+        const auto recoveredFull=replay(23.1,39.6,23.1,true,per2s);
         printf("VFG trap replay: fullscreen %u of 600\n",recoveredFull);
         check(recoveredFull==600,"replay: fullscreen probes at 39.6 ms recover full FG");
-        check(replay(23.1,28.5,true,10,per2s)==600,"replay: windowed probes at 28.5 ms recover full FG");
-        const auto overload=replay(46,46,true,10,per2s);
+        check(replay(23.1,28.5,23.1,true,per2s)==600,"replay: windowed probes at 28.5 ms recover full FG");
+        check(replay(23.1,39.6,39.6,true,per2s)==600,"replay: also if one skipped pair cost as much as a long skip");
+        const auto overload=replay(46,46,46,true,per2s);
         printf("VFG trap replay: really too slow %u of 600, most in 2 s %u\n",overload,per2s);
-        check(overload<=40&&per2s<=4,"replay: a mode that really is too slow stays rejected with a bounded probe");
-        check(replay(29,29,false,10,per2s)<=20,"replay: 29 ms misses the 10 ms bound");
-        check(replay(29,29,true,16.18,per2s)==600,"replay: near a 60 Hz refresh 29 ms still reaches the next frame's due time");
-        check(replay(34,34,true,16.18,per2s)<=40,"replay: near the refresh a group longer than the input interval stays rejected");
+        check(overload<=9&&per2s<=3,"replay: a mode that really is too slow settles at three groups per 8 s");
+        unsigned before2s=0;
+        check(replay(46,46,46,true,per2s)<=replay(46,46,46,false,before2s),"replay: a mode too slow evaluates no more often than the lone probe did");
+        check(replay(29,29,29,true,per2s)<=9,"replay: 29 ms misses the 10 ms bound and stays rejected");
+        check(replay(29,46,46,true,per2s)<=9,"replay: so does 29 ms with a slower first evaluation");
+        check(replay(25.5,25.5,25.5,true,per2s)==600,"replay: 25.5 ms fits the 10 ms bound and runs on");
     }
     veyra::engine::LivePairLatency phase;
     check(phase.select(10000000,420000,333333,4)==420000,"unknown live readiness keeps legacy phase");

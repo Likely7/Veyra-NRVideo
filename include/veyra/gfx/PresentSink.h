@@ -130,6 +130,11 @@ public:
         int compositionMode=-1;
     };
     DisplayLatencySummary takeDisplayLatency();
+    // Host 100 ns (steady_clock). The last vblank in the frame statistics and the
+    // measured period; latch is how long before a vblank a Present still makes it:
+    // the shortest Present to scanout seen lately. Empty before any statistics.
+    struct RefreshGrid { int64_t lastVblank100ns=0; double period100ns=0,latch100ns=0; };
+    RefreshGrid refreshGrid()const;
     double displayRefreshHz()const{return displayRefreshHz_;}
     // The owner re-reads the monitor after a move or mode change.
     void setDisplayRefreshHz(double hz){if(hz>=1.0)displayRefreshHz_=hz;}
@@ -220,7 +225,7 @@ private:
     UINT lastDisplayedPresent_=0,lastSyncRefresh_=0,lastPresentRefresh_=0;
     uint64_t replacedPresents_=0;
     int64_t lastSyncQpc_=0;
-    double refreshQpc_=0;
+    double refreshQpc_=0,latchMs_=2;
     bool displayLatencyEnabled_=true;
     std::vector<double> displayLatencyMs_;
 };

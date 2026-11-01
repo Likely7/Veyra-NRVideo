@@ -224,6 +224,16 @@ void QmlPlayerBridge::setDlssgLite(bool value) {
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "DLSS performance mode not saved");
     emit settingsChanged();
 }
+bool QmlPlayerBridge::vfgAutoRegulate() const { return settings().vfgAutoRegulate; }
+void QmlPlayerBridge::setVfgAutoRegulate(bool value) {
+    auto s = settings();
+    if (s.vfgAutoRegulate == value) return;
+    s.vfgAutoRegulate = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受 VFG 自动调控，原设置保留"), true); return; }
+    impl_->prefs[QStringLiteral("vfgAutoRegulate")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "VFG auto regulation not saved");
+    emit settingsChanged();
+}
 bool QmlPlayerBridge::dlssgLiteAvailable() const {
     static const bool present = ngx::dlssgLiteRuntimePresent(runtime::localRuntimeDirectory());
     return present;

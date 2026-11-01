@@ -2,6 +2,8 @@
 
 日常只从这些入口开始：
 
+进行中（分支，未合并）：[补帧延迟不增长返工](FG_NO_LATENCY_GROWTH_2026-11-01.md)。
+
 最近并入本地 main（未发布）：[补帧接近刷新率的间歇掉帧](FG_60HZ_PACING_2026-10-31.md)、[英伟达低延迟三档](NVIDIA_LOW_LATENCY_2026-10-28.md)、[RX 7000 NR](AMD_RDNA3_NR_PLAN_2026-10-29.md)、[屏幕捕获与采集音频](CAPTURE_FPS_AUDIO_REPORT_2026-10-27.md)。
 
 1. [当前项目状态](CURRENT_STATUS.md)：正式版、活动工作、暂停项、现场问题及验收边界。
