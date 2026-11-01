@@ -319,3 +319,14 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 验证：tmp/claude-fg-sidefx-20261101/regulate_ui.py 真实程序两次启动，默认开、置灰条件、重启保持、中英文新名称都通过，截图 reports/claude-fg-sidefx-20261101/ui-edit.png。hz60 toggle 运行中开→关→开通过。cpu2 12/0，qml 123/0/1跳过，smoke、lifecycle通过。gpu、live未重跑。全量构建340秒，只有两个fsr探针因缺SDK失败（原有）。
 
 注意：用户中途把屏幕调回320 Hz，所以开关这轮是320 Hz，hz60-on/off/toggle.json 的文件名不代表60 Hz，看里面的refreshHz。60 Hz丢帧数据仍是上一节那轮。节点页开关没有点过。
+
+
+## 2026-11-01 用户授权将Claude最新补帧返工合入main（Codex）
+
+识别claude/fg-no-latency-growth-20261101的37个未提交文件，起点main13016a8。先保全到archives/codex-main-integration-20261101（working-files.zip、binary diff、37项SHA），检查与测试后逐字节确认产品文件未被本轮改写，原样提交6e79a5e，main --ff-only合入，无代码冲突。前后checkpoint tags见docs/MAIN_INTEGRATION_2026-11-01.md。后续仅更新文档/AGENTS，保留原分支回溯，未push/Release；正式版仍2.1.1。
+
+本轮构建15个相关目标0.7秒通过，日志logs/codex-main-integration-20261101/build-20261101-053508/compile.log（dirty=true/head旧值为提交前事实，由before.json快照映射到fix提交）。8组CPU合同/设置通过（含repair300、NR模型设置/旧预设兼容）；QtQuick123/0/1既有跳过；GPU三组VFG4K回放运行中开关、DLSS6X、XeSS2X退出0、真实提供方生成/干净退出、无D3D12错误。GPU与offscreen QtQuick有重叠，otherVeyra为本轮测试进程，只作功能回归，不作性能结论。沿用脚本的captureToPresent字段把相对PTS和host相减，数值无意义，未采信为延迟。
+
+真实GUI两次启动、独立profile：列表开关、低档/超过2X置灰、节点实际双向切换及置灰、中文/英文改名、保存重启均通过，无QML错误；补上Claude只加载节点页未点开关的空缺。Main.qml恢复。EXE/worker/shader与构建一致，QML/翻译一致；正式供体1730项、原默认运行组件97项核验，原用户配置7文件SHA未变；i18n2718条缺失/占位符问题0。
+
+证据reports/codex-main-integration-20261101：before/merge/cpu-merge/qml/gpu-merge/ui-regulate/audit/FINAL.json与复现脚本；日志logs同任务；运行目录仍tests/claude-sr-stage-20261028/app。没有重做60Hz性能A/B、实卡采集/5060Ti/RX7000/VRR验收，没有重复全量测试或跑原8K危险组合；Claude的已知source-gap/FSR探针依赖问题边界保持，不冒称全部通过。仅清本轮可再生TEMP，清理逻辑字节和保留路径见cleanup.json；未测物理净回收。

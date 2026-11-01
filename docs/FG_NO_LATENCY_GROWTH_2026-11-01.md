@@ -1,5 +1,7 @@
 # 补帧 60 Hz 修复返工：延迟不增长（2026-11-01）
 
+> 后续：用户于2026-11-01授权合并，本文对应改动已原样提交为`6e79a5e`并快进本地main。合并检查及续接见[MAIN_INTEGRATION_2026-11-01.md](MAIN_INTEGRATION_2026-11-01.md)。下方“未merge/未提交”等为当时施工状态；性能及未验边界仍按原证据理解，未push/Release。
+
 用户看完 10-31 修复的连带问题后要求：“全部都修复，并且保持好低延迟，延迟增长是我不能接受的”。之后又要求“VFG 的问题也要解决”，并把本机显示器调到 60 Hz 让我重测。
 
 分支 `claude/fg-no-latency-growth-20261101`，基于 main `13016a8`。未 merge、未 push、未 Release。证据在 `E:/项目/Veyra/reports/claude-fg-sidefx-20261101`，表格是其中的 `hz60-summary.txt`。
