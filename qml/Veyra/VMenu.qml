@@ -76,9 +76,14 @@ Popup {
         anchorItem = anchor
         placement = place
         checks = items.map(o => o.checked === true)
+        // Finish the nested row/column layouts before the approved spring
+        // starts. Otherwise the first option moves when the title's implicit
+        // height arrives on the first render (14 -> 42 in the regression).
+        contentItem.width = width - leftPadding - rightPadding
+        contentItem.ensurePolished()
+        col.ensurePolished()
         positionAtAnchor()
         open()
-        Qt.callLater(positionAtAnchor)
     }
     onHeightChanged: if (visible && anchorItem) positionAtAnchor()
     onWidthChanged: if (visible && anchorItem) positionAtAnchor()

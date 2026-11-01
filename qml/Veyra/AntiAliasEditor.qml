@@ -20,7 +20,7 @@ ColumnLayout {
 
     Text {
         Layout.fillWidth: true
-        text: qsTr("在源分辨率去除锯齿边缘，适合游戏画面、文字和界面线条；放在超分之前，锯齿不会被一起放大。")
+        text: qsTr("去除锯齿边缘，适合游戏画面、文字和界面线条。列表模式开着 NR 时排在 NR 之后，NR 重新勾出的边缘也会处理；不开 NR 时在源分辨率、超分之前运行，锯齿不会被一起放大。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11; wrapMode: Text.WordWrap
     }
     VRow {

@@ -19,7 +19,12 @@ ColumnLayout {
     signal orderEdited(bool enabled)
     readonly property bool amdNr: layerData.runtime === 4
     property string autoReason: ""
-    function updateAutoReason() { autoReason = veyra.nrAutoSelectionReason(layerData.index) }
+    readonly property bool manualSize: layerData.manualSize ?? false
+    property int lastManualPercent: 100
+    function updateAutoReason() {
+        autoReason = veyra.nrAutoSelectionReason(layerData.index)
+        if (layerData.manualSize) lastManualPercent = layerData.sizePercent ?? 100
+    }
     Component.onCompleted: updateAutoReason()
     onLayerDataChanged: updateAutoReason()
     // The snapshot arrives about 60 times a second and both editor pages stay
@@ -35,9 +40,10 @@ ColumnLayout {
     readonly property var sizeChoices: [
         {id:"2",label:"480p"}, {id:"3",label:"720p"}, {id:"4",label:"900p"},
         {id:"0",label:qsTr("1080p · 默认")}, {id:"5",label:"1440p",disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""}, {id:"1",label:qsTr("原生"),disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""},
-        {id:"6",label:qsTr("自动（按负载）"),disabled:autoReason.length>0,note:autoReason}
+        {id:"6",label:qsTr("自动（按负载）"),disabled:autoReason.length>0,note:autoReason},
+        {id:"manual",label:qsTr("手动")}
     ]
-    readonly property string sizeLabel: sizeChoices.find(o => Number(o.id) === layerData.sizePolicy)?.label ?? qsTr("未知")
+    readonly property string sizeLabel: manualSize ? qsTr("手动") : sizeChoices.find(o => Number(o.id) === layerData.sizePolicy)?.label ?? qsTr("未知")
     spacing: 6
 
     component NrValueRow: VRow {
@@ -123,13 +129,42 @@ ColumnLayout {
         VSelect {
             objectName: "nr-resolution"
             value: editor.sizeLabel; options: editor.sizeChoices
-            onPicked: id => editor.edited(editor.layerData.index, "sizePolicy", Number(id))
+            onPicked: id => id === "manual" ? editor.edited(editor.layerData.index, "sizePercent", editor.lastManualPercent)
+                                             : editor.edited(editor.layerData.index, "sizePolicy", Number(id))
+        }
+    }
+    VRow {
+        objectName: "nr-manual-size-row"
+        visible: editor.manualSize
+        enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
+        opacity: enabled ? 1 : 0.4
+        label: qsTr("处理比例")
+        hint: qsTr("松开后应用 · 宽高同比例")
+        value: Math.round(percentSlider.displayedValue) + "%"
+        VSlider {
+            id: percentSlider
+            objectName: "nr-size-percent"
+            valueFromModel: true
+            resettable: true; defaultValue: 100
+            implicitWidth: 110
+            from: 25; to: 100; stepSize: 1
+            live: false // NR dimensions rebuild GPU features: commit once on release.
+            value: editor.layerData.sizePercent ?? 100
+            onMoved: value => editor.edited(editor.layerData.index, "sizePercent", Math.round(value))
         }
     }
     Text {
         Layout.fillWidth: true
+        visible: editor.manualSize
+        text: editor.amdNr ? qsTr("手动比例以最高 1080p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。")
+                          : qsTr("手动比例缩放该层输入的宽高；50% 约为四分之一像素。适用于预览与视频导出，输出尺寸不变。")
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
+        wrapMode: Text.WordWrap
+    }
+    Text {
+        Layout.fillWidth: true
         visible: editor.layerData.sizePolicy === 6
-        text: qsTr("自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。导出按原生尺寸处理。") +
+        text: qsTr("自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。视频导出固定按最高 1440p 处理，输出尺寸不变。") +
               (veyra.nrAutoStatus.length > 0 ? "\n" + veyra.nrAutoStatus : "")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
@@ -137,7 +172,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         text: editor.amdNr ? qsTr("AMD NR 预览与视频导出最高按内部 1080p 处理，视频保持输出尺寸；图片导出仍需符合模型尺寸预算。")
-                          : qsTr("预览保留比例且不放大小输入；图片/视频导出仍完整处理。")
+                          : qsTr("预览与视频导出都按所选内部分辨率处理，保留比例且不放大小输入，输出尺寸不变；图片导出仍完整处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
@@ -145,7 +180,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: !editor.amdNr && editor.layerCount > 1 &&
                  (!editor.listControls || (veyra.nrLayers.length > 0 && editor.layerData.index === veyra.nrLayers[0].index))
-        text: qsTr("多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，导出仍按原生尺寸处理。")
+        text: qsTr("多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，视频导出同样按各层所选分辨率处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
@@ -159,7 +194,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         visible: editor.amdNr || !Support.available(veyra, "nr" + editor.layerData.runtime)
-        text: !Support.available(veyra, "nr" + editor.layerData.runtime) ? Support.reason(veyra, "nr" + editor.layerData.runtime) : qsTr("AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。HDR 尚未验收。")
+        text: !Support.available(veyra, "nr" + editor.layerData.runtime) ? Support.reason(veyra, "nr" + editor.layerData.runtime) : qsTr("AMD NR（实验）：需要 RX 9000 驱动及 lmxxf 运行组件，内部最高 1080p 像素预算。支持模型强度、残差与保护；风格使用运行时配置。原生 HDR 保留原图基底，通过 SDR 代理增强后还原；AMD 实卡效果仍待验证。")
         color: Theme.t3; font.pixelSize: 11; wrapMode: Text.WordWrap
     }
     VSubGroup {

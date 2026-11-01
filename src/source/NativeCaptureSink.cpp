@@ -11,6 +11,30 @@
 
 namespace veyra::source {
 using Microsoft::WRL::ComPtr;
+std::function<HRESULT(IMediaSample*)> timedCaptureDelivery(std::function<HRESULT(double,IMediaSample*)> deliver){
+    return [deliver=std::move(deliver),untimed=uint64_t{0},pending=uint64_t{0},recoveries=uint64_t{0}](IMediaSample* sample) mutable -> HRESULT {
+        if(!sample)return E_POINTER;
+        REFERENCE_TIME begin=0,end=0;
+        const auto hr=sample->GetTime(&begin,&end);
+        if(hr==VFW_E_SAMPLE_TIME_NOT_SET){
+            ++untimed;++pending;
+            if(untimed==1||untimed%300==0)
+                log::warn("capture-video-time",std::format("untimedSamples={} GetTime hr=0x{:08X} bytes={} acknowledged=1 delivered=0 (waiting for real video timestamps)",untimed,uint32_t(hr),sample->GetActualDataLength()));
+            return S_OK;
+        }
+        if(FAILED(hr)){
+            log::error("capture-video-time",std::format("GetTime hr=0x{:08X}",uint32_t(hr)));
+            return hr;
+        }
+        if(pending){
+            ++recoveries;
+            if(recoveries==1||recoveries%300==0)
+                log::info("capture-video-time",std::format("timed video resumed after {} untimed samples firstPts100ns={} recoveries={} fabricatedPts=0",pending,begin,recoveries));
+            pending=0;
+        }
+        return deliver(double(begin)/1e7,sample);
+    };
+}
 bool nativeCaptureContractsMatch(const AM_MEDIA_TYPE& a,const AM_MEDIA_TYPE& b){
     if(a.subtype!=b.subtype||!equivalentCaptureTypes(a,b))return false;
     const auto fields=[](const AM_MEDIA_TYPE& t){return t.formattype==FORMAT_VideoInfo2&&t.pbFormat&&t.cbFormat>=sizeof(VIDEOINFOHEADER2)?reinterpret_cast<const VIDEOINFOHEADER2*>(t.pbFormat)->dwInterlaceFlags:DWORD(0);};
@@ -71,6 +95,7 @@ class NativeSink final:public IBaseFilter,public IPin,public IMemInputPin,public
     std::function<HRESULT(IMediaSample*)> callback_;
     bool audio_=false;
     bool compressed_=false;
+    uint64_t videoSamples_=0;
     CaptureAllocatorMode allocatorMode_=CaptureAllocatorMode::SinkDefault;
 public:
     NativeSink(const AM_MEDIA_TYPE& type,std::function<HRESULT(IMediaSample*)> cb,bool compressed=false,CaptureAllocatorMode allocatorMode=CaptureAllocatorMode::SinkDefault):callback_(std::move(cb)),allocatorMode_(allocatorMode){
@@ -162,6 +187,10 @@ public:
     // remaining hold covers only validation and pointer publication.
     HRESULT STDMETHODCALLTYPE Receive(IMediaSample* sample)override{
         if(!sample)return E_POINTER;std::lock_guard lock(mutex_);if(flushing_)return S_FALSE;if(state_==State_Stopped)return VFW_E_WRONG_STATE;
+        if(!audio_&&videoSamples_++<3){
+            REFERENCE_TIME begin=0,end=0;const auto timeHr=sample->GetTime(&begin,&end);
+            log::info("capture-video-delivery",std::format("sample={} bytes={} GetTime hr=0x{:08X} start100ns={} end100ns={} compressed={}",videoSamples_,sample->GetActualDataLength(),uint32_t(timeHr),begin,end,compressed_));
+        }
         // A device mode change needs full source/graph recreation, never a
         // silent reinterpretation using the previous frame's pitch/format.
         AM_MEDIA_TYPE* changed=nullptr;const auto typeHr=sample->GetMediaType(&changed);

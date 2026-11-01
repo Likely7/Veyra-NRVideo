@@ -73,7 +73,7 @@ int wmain(int argc,wchar_t** argv){
     bool cycle=false;
     bool featherStack=false,colorProtected=false,hdrProtected=false,srFirst=false,nrFirst=false;
     bool referenceOnly=false,referenceOff=false;
-    bool mixedSizes=false,exportFull=false,stillFull=false;
+    bool mixedSizes=false,exportFull=false,stillFull=false,manualSizes=false;
     if(argc==6&&!videoSr4k){
         const std::wstring_view option(argv[5]);
         if(option.size()<6||option.substr(0,5)!=L"stack"||option[5]<L'1'||option[5]>L'4')return 2;
@@ -83,6 +83,8 @@ int wmain(int argc,wchar_t** argv){
         else if(option.substr(6)==L"-sizes-sr-first"){mixedSizes=true;temporal=false;srFirst=true;}
         else if(option.substr(6)==L"-sizes-export"){mixedSizes=true;temporal=false;exportFull=true;}
         else if(option.substr(6)==L"-sizes-still"){mixedSizes=true;temporal=false;stillFull=true;}
+        else if(option.substr(6)==L"-percent-export"){mixedSizes=true;manualSizes=true;temporal=false;exportFull=true;}
+        else if(option.substr(6)==L"-percent-still"){mixedSizes=true;manualSizes=true;temporal=false;stillFull=true;}
         else if(option.size()==10&&option.substr(6)==L"-raw")temporal=false;
         else if(option.size()==11&&option.substr(6)==L"-edit")liveEdit=true;
         else if(option.substr(6)==L"-protected")protectedStack=true;
@@ -124,7 +126,8 @@ int wmain(int argc,wchar_t** argv){
         node.nr.model.intensity=1.f-.2f*float(layer);node.nr.temporal=temporal;
         node.nr.lowLatencyPairing=nrFirst;
         if(mixedSizes){const pipeline::NrSizePolicy sizes[]={pipeline::NrSizePolicy::P480,pipeline::NrSizePolicy::P720,
-            pipeline::NrSizePolicy::P1440,pipeline::NrSizePolicy::Native};node.nr.sizePolicy=sizes[layer];}
+            pipeline::NrSizePolicy::P1440,pipeline::NrSizePolicy::Native};
+            const unsigned percents[]={50,37,75,100};node.nr.sizePolicy=manualSizes?pipeline::nrSizePolicyForPercent(percents[layer]):sizes[layer];}
     }
     engine::EnhancementSettings pending;engine::fromChain(chain,pending);
     if(protectedStack){pending.protection.enabled=true;pending.protection.featherPixels=12;pending.protection.regions[0]={.25f,.25f,.75f,.75f};}
@@ -137,10 +140,26 @@ int wmain(int argc,wchar_t** argv){
     request.sr=srFirst||nrFirst;
     request.exportJob=exportFull;request.stillImage=stillFull;
     engine::describeStages(request,pending,settings);
-    if(exportFull||stillFull){
+    if(stillFull){
         for(const auto extent:settings.nrLayersExtent)
             if(extent!=pipeline::Extent{settings.workWidth,settings.workHeight})return 2;
-        std::cout<<"fullProcessing=1 exportJob="<<exportFull<<" stillImage="<<stillFull<<std::endl;
+        std::cout<<"fullProcessing=1 exportJob=0 stillImage=1"<<std::endl;
+    }
+    if(exportFull){
+        // Video export follows each layer's size preset (independent formula) at full
+        // output size; at least one reduced layer proves it did not fall back to native.
+        const pipeline::Extent work{settings.workWidth,settings.workHeight};
+        if(work!=pipeline::Extent{info.width,info.height}||settings.nrLayersExtent.size()!=stackLayers)return 2;
+        bool reduced=false;
+        for(unsigned layer=0;layer<stackLayers;++layer){
+            const auto& nr=chain.nodes[layer].nr;
+            const auto expected=pipeline::ResolutionPlan::make(work,false,
+                engine::exportNrSizePolicy(nr.runtime,nr.sizePolicy),false).nr;
+            if(settings.nrLayersExtent[layer]!=expected)return 2;
+            reduced=reduced||expected!=work;
+        }
+        if(!reduced)return 2;
+        std::cout<<"presetProcessing=1 exportJob=1 stillImage=0"<<std::endl;
     }
     // The HDR mode requires the caller to supply a genuinely PQ/HLG-tagged fixture.
     if(hdrProtected){settings.hdrInput=true;settings.hdrOutput=true;}

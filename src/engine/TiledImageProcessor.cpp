@@ -31,7 +31,8 @@ bool TiledImageProcessor::process(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotR
     desc.rgbInput=true;desc.stillImage=true;desc.enableFg=false;desc.enableNvofStandalone=false;
     // A plan compiled for the whole image describes none of these tile extents
     // (the graph refuses it). Tiles run the list-order base: fused / additional
-    // grades as before, enabled anti-aliasing instances at source size.
+    // grades as before, enabled anti-aliasing instances behind NR when NR runs
+    // and at source size otherwise.
     desc.fixedExecutionPlan.reset();desc.fixedExecutionPlanError.clear();desc.runtimeNodeOrder=false;
     pipeline::EnhanceGraph graph(ctx,ring);
     if(!graph.initialize(desc)||!graph.createViews())return false;

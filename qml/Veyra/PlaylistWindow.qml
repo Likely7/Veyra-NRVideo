@@ -68,13 +68,26 @@ Window {
         function onClosing(event) { win.hide() }
     }
     Timer { id: errorTimer; interval: 6000; onTriggered: win.failure = "" }
-    Shortcut { sequence: "Escape"; onActivated: win.hide() }
-    Shortcut { sequence: "Delete"; onActivated: win.removeSelected() }
-    Shortcut {
-        sequence: "Return"
-        onActivated: win.playlist.play(win.playlist.indexOfPath(win.selectedPath))
-    }
-
+    // Window.active also includes an owned activation group and can stay true
+    // while hidden. Handle these keys only along this window's actual focus
+    // path; ShortcutOverride keeps the owner's fullscreen Escape out of it.
+    FocusScope {
+        anchors.fill: parent
+        focus: true
+        Keys.onShortcutOverride: event => {
+            if (win.visible && (event.key === Qt.Key_Escape || event.key === Qt.Key_Delete ||
+                                event.key === Qt.Key_Return || event.key === Qt.Key_Enter))
+                event.accepted = true
+        }
+        Keys.onPressed: event => {
+            if (!win.visible) return
+            if (event.key === Qt.Key_Escape) win.hide()
+            else if (event.key === Qt.Key_Delete) win.removeSelected()
+            else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                win.playlist.play(win.playlist.indexOfPath(win.selectedPath))
+            else return
+            event.accepted = true
+        }
     Rectangle {
         anchors.fill: parent
         radius: Theme.rWindow
@@ -305,5 +318,6 @@ Window {
             cursorShape: modelData.c
             onPressed: win.startSystemResize(modelData.e)
         }
+    }
     }
 }

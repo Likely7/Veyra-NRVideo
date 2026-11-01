@@ -6,11 +6,13 @@
 #include "../../apps/veyra/ui/CapturePreferenceStore.h"
 #include "../../apps/veyra/ui/SourceTitle.h"
 #include "veyra/engine/EngineController.h"
+#include "veyra/engine/EffectChain.h"
 #include "../../apps/veyra/ui/LiveStatusHistory.h"
 #include "veyra/sink/AudioGain.h"
 #include "veyra/engine/PreviewView.h"
 #include "veyra/source/CaptureAudioClock.h"
 #include "veyra/source/DeckLinkInputConnection.h"
+#include "veyra/ui/InterfaceRenderer.h"
 #include <iostream>
 #include <vector>
 #include <stdexcept>
@@ -99,9 +101,68 @@ void outputRateContracts(){
     require(std::wstring(h.rateStatus(s))==L"补帧调度降档","uncapped FG admission shortfall retains its own warning");
     std::cout<<"PASS output-rate policy: dedup, static, half-rate, display sync, caps, provider, speed, comparison, real deficits and resets\n";
 }
+// 设置 → 界面绘制 (2026-10-26): software unless GPU is chosen; the OBS and 监控软件兼容
+// rules and VEYRA_UI_RHI keep the meaning they had before the default changed.
+static void interfaceRendererContracts(){
+    using namespace veyra::ui;
+    using R=InterfaceRendererReason;
+    auto decide=[](bool gpu,bool obs,bool autoCompat,bool overlay,bool restart,bool forced){
+        return decideInterfaceRenderer({gpu,obs,autoCompat,overlay,restart,forced});
+    };
+    auto d=decide(false,false,true,false,false,false);
+    require(d.software&&d.reason==R::Default&&!d.overlayCompat,"a fresh profile draws the interface in software");
+    d=decide(true,false,true,false,false,false);
+    require(!d.software&&d.reason==R::Gpu,"GPU chosen and nothing to stay compatible with: GPU interface");
+    d=decide(true,false,true,true,false,false);
+    require(d.software&&d.reason==R::OverlayCompat&&d.overlayCompat,"GPU chosen, an overlay at start and 监控软件兼容 auto: software as before");
+    d=decide(true,false,false,true,false,false);
+    require(!d.software&&!d.overlayCompat,"GPU chosen with 监控软件兼容 off stays GPU next to an overlay, as before");
+    d=decide(true,false,true,false,true,false);
+    require(d.software&&d.reason==R::OverlayCompat,"an accepted compatibility restart draws in software");
+    for(bool gpu:{false,true})for(bool forced:{false,true}){
+        d=decide(gpu,true,true,true,false,forced);
+        require(d.software&&d.reason==R::ObsGameCapture&&!d.overlayCompat,"OBS game capture always draws in software");
+    }
+    d=decide(false,false,true,true,false,false);
+    require(d.software&&d.reason==R::OverlayCompat&&d.overlayCompat,"software default with an overlay still reports the compatibility rule");
+    for(bool gpu:{false,true})for(bool overlay:{false,true}){
+        d=decide(gpu,false,true,overlay,false,true);
+        require(!d.software&&d.reason==R::Gpu&&!d.overlayCompat,"VEYRA_UI_RHI picks a GPU renderer and skips the compatibility rule");
+    }
+    std::cout<<"PASS interface renderer: software default, GPU choice, OBS / overlay compatibility and VEYRA_UI_RHI precedence\n";
+}
 int wmain(int argc,wchar_t** argv){try{
     using namespace veyra;
     outputRateContracts();
+    interfaceRendererContracts();
+    {
+        engine::EnhancementSettings fresh;
+        engine::ChainGlobalSettings globals;
+        require(fresh.videoSrQuality==4&&globals.videoSrQuality==4,"fresh List and Node SR selections use RTX Video SR high");
+        require(!fresh.sr&&!fresh.nr&&fresh.multiplier==1,"changing the SR model does not enable enhancement");
+    }
+    // Manual turns compose with metadata, including an already-oriented DAR.
+    for(int metadata:{0,90,180,270})for(int mode=0;mode<=6;++mode){
+        engine::PreviewView v;v.rotationDegrees=metadata;v.mode=mode;
+        v.displayAspect=metadata%180?3.0/4:4.0/3;
+        const auto base=v;const auto aspect=v.aspect(1920,1080);
+        for(int n=1;n<=4;++n){
+            v.rotateClockwise();
+            require(v.quarterTurns()==unsigned((metadata/90+n)%4),"manual turn composes with metadata");
+            require(std::abs(v.aspect(1920,1080)-(n%2?1/aspect:aspect))<.00001,"all display ratios follow manual rotation");
+            const auto source=v.sourceUv(.23f,.71f);const auto display=v.displayUv(source.first,source.second);
+            require(std::abs(display.first-.23f)<.00001&&std::abs(display.second-.71f)<.00001,"manual rotation inverse preserves pointer coordinates");
+            const auto anchor=v.sourcePoint(133,91,320,240,1920,1080);
+            v.wheel(2,133,91,320,240,1920,1080);
+            const auto after=v.sourcePoint(133,91,320,240,1920,1080);
+            require(std::abs(anchor.first-after.first)<.00001&&std::abs(anchor.second-after.second)<.00001,"zoom remains anchored after rotation");
+            v.wheel(-2,133,91,320,240,1920,1080);
+        }
+        v.zoom=base.zoom;v.centerX=base.centerX;v.centerY=base.centerY;
+        require(v==base,"four manual turns restore original metadata and display transform");
+        v.zoom=3;v.centerX=.2f;v.rotateClockwise();
+        require(v.zoom==1&&v.centerX==.5f&&v.centerY==.5f,"rotation recentres a zoomed picture");
+    }
     {source::CaptureAudioClock c;require(c.observe({},100,10,false)==100,"untimed audio anchors to arrival");require(c.observe({},170,10,false)==110,"driver arrival jitter cannot stretch untimed PCM");require(c.observe(120,180,10,false)==120,"valid driver timestamp takes precedence");require(c.observe({},190,10,false)==130,"missing timestamps continue from valid samples");require(c.observe({},500,10,true)==500,"discontinuity reanchors untimed audio");require(c.observe(0,510,10,true)==0,"timestamp zero remains valid");}
     {
         ui::live_status::DashboardHistory history;engine::PlayerSnapshot s;
@@ -225,6 +286,12 @@ int wmain(int argc,wchar_t** argv){try{
     // range check. Both silently reset window size, volume and subtitle style.
     {ui::UiPreferences audio;audio.volume=.9f;audio.muted=true;audio.inspector=4;audio.inspectorWidth=380;audio.width=1600;audio.height=900;require(prefs.save(audio,nullptr),"audio-page preferences save");ui::UiPreferenceStore reload(dir);const auto back=reload.load();require(std::abs(back.volume-.9f)<1e-6&&back.inspector==4&&back.inspectorWidth==380&&back.width==1600,"audio page and geometry survive the version 3 round trip");}
     auto setting=loaded.startup({});before.revision=setting.revision;require(setting==before,"all confirmed parameters round trip");
+    for(unsigned selected:{0u,4u,engine::kVideoSrFsr})for(bool enabled:{false,true}){
+        auto chosen=before;chosen.videoSrQuality=selected;chosen.sr=enabled;
+        require(prefs.save(p,&chosen),"explicit SR selection saved");
+        ui::UiPreferenceStore restart(dir);const auto restored=restart.startup({});
+        require(restored.videoSrQuality==selected&&restored.sr==enabled,"saved DLSS / RTX Video / FSR and off state survive new defaults");
+    }
     for(int enabled:{0,1})for(const auto runtime:{engine::NrRuntime::Original,engine::NrRuntime::Community,engine::NrRuntime::Ampere,engine::NrRuntime::NvidiaOriginal}){p.enhancementEnabled=enabled;before.nr=true;before.nrRuntime=runtime;before.nrTemporal=true;require(prefs.save(p,&before),"master and runtime save");ui::UiPreferenceStore restart(dir);require(restart.load().enhancementEnabled==enabled,"master state survives restart");auto restoredSettings=restart.startup({});require(restoredSettings.nr&&restoredSettings.nrRuntime==engine::currentNrRuntime(runtime)&&restoredSettings.nrTemporal,"bypassed effects, selected runtime (legacy migrated) and temporal NR survive restart");}
     for(bool enabled:{false,true})for(unsigned mode=0;mode<3;++mode)for(unsigned sync=0;sync<3;++sync)for(unsigned rate=0;rate<3;++rate){p.presentation={enabled,engine::PacingMode(mode),engine::DisplaySync(sync),engine::OutputRateMode(rate),rate==2?119.88:60.0};require(prefs.save(p,nullptr),"presentation atomic save");ui::UiPreferenceStore restart(dir);require(restart.load().presentation==p.presentation,"all presentation combinations and output caps survive restart");}
     auto path=dir/"ui-preferences.v1";

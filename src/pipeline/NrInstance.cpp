@@ -37,6 +37,13 @@ bool NrInstance::create(ID3D12Device* device, uint32_t width, uint32_t height,
     return true;
 }
 
+bool NrInstance::createAmdHdrProxy(ID3D12Device* device) {
+    if(!device || !created())return false;
+    amdHdrProxy_=makeTexture(device,width_,height_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    amdHdrNeural_=makeTexture(device,width_,height_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    return amdHdrProxy_ && amdHdrNeural_;
+}
+
 void NrInstance::close() {
     amd.reset(); // runtime releases its references before the layer textures
     temporal_.close();
@@ -47,6 +54,8 @@ void NrInstance::close() {
     proxy_.Reset();
     neural_.Reset();
     finalRgba_.Reset();
+    amdHdrProxy_.Reset();
+    amdHdrNeural_.Reset();
     residual_.Reset();
     outputFull_.Reset();
     motion_.Reset();

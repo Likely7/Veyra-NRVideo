@@ -14,6 +14,9 @@
 //   NR graphs with anti-aliasing in node slots. tiled-image: the tiled
 //   full-resolution image path (no compiled plan) matches one whole-image graph.
 //   timing-*: GPU milliseconds of the anti-aliasing span per method.
+//   real-frame: a captured picture (VEYRA_AA_FRAME, binary PPM) through SMAA high
+//   without NR and with a real NR layer before / after it; the outputs go to
+//   VEYRA_AA_FRAME_OUT as PPM for comparison. A diagnostic, not part of a sweep.
 // VEYRA_AA_GPU_DEBUG=1 enables the D3D12 debug layer and fails on its errors.
 #include "veyra/engine/PreviewGpuSession.h"
 #include "veyra/engine/GraphDescription.h"
@@ -29,7 +32,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -492,6 +497,94 @@ engine::ChainNode nrNode() {
     n.nr.sizePolicy = pipeline::NrSizePolicy::Realtime; n.nr.temporal = false; return n;
 }
 
+// ---- a captured picture -----------------------------------------------------------------
+AVFrame* ppmFrame(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    std::string magic; unsigned w = 0, h = 0, maxValue = 0;
+    if (!(in >> magic >> w >> h >> maxValue) || magic != "P6" || maxValue != 255 || !w || !h) return nullptr;
+    in.get();
+    std::vector<uint8_t> rgb(size_t(w) * h * 3);
+    if (!in.read(reinterpret_cast<char*>(rgb.data()), std::streamsize(rgb.size()))) return nullptr;
+    AVFrame* f = av_frame_alloc();
+    if (!f) return nullptr;
+    f->format = AV_PIX_FMT_BGR0; f->width = int(w); f->height = int(h);
+    f->color_range = AVCOL_RANGE_UNSPECIFIED; f->color_trc = AVCOL_TRC_IEC61966_2_1; f->colorspace = AVCOL_SPC_RGB;
+    if (av_frame_get_buffer(f, 32) < 0) { av_frame_free(&f); return nullptr; }
+    for (unsigned y = 0; y < h; ++y)
+        for (unsigned x = 0; x < w; ++x) {
+            const uint8_t* s = rgb.data() + (size_t(y) * w + x) * 3;
+            auto* p = f->data[0] + size_t(y) * f->linesize[0] + size_t(x) * 4;
+            p[0] = s[2]; p[1] = s[1]; p[2] = s[0]; p[3] = 255;
+        }
+    return f;
+}
+bool savePpm(const std::filesystem::path& path, const sink::RgbaImage& image) {
+    std::ofstream out(path, std::ios::binary);
+    out << "P6\n" << image.width << ' ' << image.height << "\n255\n";
+    for (size_t i = 0; i + 3 < image.pixels.size(); i += 4) out.write(reinterpret_cast<const char*>(&image.pixels[i]), 3);
+    return bool(out);
+}
+// One frame through a real node graph (NGX NR), without output dithering.
+bool nodeRender(AVFrame* frame, std::initializer_list<engine::ChainNode> nodes, sink::RgbaImage& image) {
+    auto chain = std::make_unique<engine::EffectChain>(); chain->mode = engine::ChainMode::Node;
+    bool nr = false;
+    for (const auto& n : nodes) { chain->nodes[chain->nodeCount++] = n; nr |= n.type == EffectType::NrEnhance; }
+    engine::EnhancementSettings settings; engine::fromChain(*chain, settings);
+    settings.multiplier = 1; settings.nrMotion = engine::MotionSource::Zero;
+    const auto order = engine::runtimeOrder(*chain);
+    engine::StageRequest request; request.width = unsigned(frame->width); request.height = unsigned(frame->height); request.nr = nr; request.nodeOrder = &*order;
+    pipeline::EnhanceGraphDesc desc; engine::describeStages(request, settings, desc);
+    if (!desc.fixedExecutionPlanError.empty() || !desc.validateFixedExecutionPlan().empty()) return false;
+    desc.rgbInput = true; desc.outputDitherStep = 0; desc.runtimeAbsPath = runtime::localRuntimeDirectory().wstring();
+    engine::PreviewGpuSession session;
+    pipeline::EnhanceGraph::FrameOutputs out;
+    bool ok = session.initialize() && session.graph->initialize(desc) && session.graph->createViews() &&
+              session.graph->process(frame, 0.0, true, out, 1) && session.ring.waitIdle() &&
+              sink::readRgba8(session.context, session.ring, session.graph->videoFrameResource(out.videoSlot), image);
+    ok = ok && (!nr || session.graph->metrics().nrEvaluateCount > 0);
+    out = {};
+    session.ring.drainQueue(); session.graph->shutdown(); session.shutdown();
+    return ok;
+}
+int realFrameCase() {
+    const wchar_t* input = _wgetenv(L"VEYRA_AA_FRAME");
+    const wchar_t* output = _wgetenv(L"VEYRA_AA_FRAME_OUT");
+    if (!input || !output) { std::printf("real-frame: set VEYRA_AA_FRAME (binary PPM) and VEYRA_AA_FRAME_OUT (folder)\n"); return 2; }
+    HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED); (void)com;
+    const std::filesystem::path folder(output);
+    std::filesystem::create_directories(folder);
+    AVFrame* frame = ppmFrame(input);
+    check(frame != nullptr, "real-frame: the picture loads");
+    if (!frame) return 1;
+    const unsigned w = unsigned(frame->width), h = unsigned(frame->height);
+    const auto smaa = aa(AntiAliasMethod::Smaa, 2);
+    AntiAliasSettings disabled = smaa; disabled.enabled = false;
+    sink::RgbaImage plain, aaOnly, nrOnly, nrAgain, aaBefore, aaAfter;
+    auto gpu = std::make_unique<Gpu>();
+    const bool ok = gpu->start(withAa(disabled), w, h, false) && gpu->render(frame, true, plain) &&
+                    gpu->start(withAa(smaa), w, h, false) && gpu->render(frame, true, aaOnly);
+    gpu.reset();
+    check(ok, "real-frame: SMAA high without NR runs");
+    const bool nrOk = ok && nodeRender(frame, {nrNode()}, nrOnly) && nodeRender(frame, {nrNode()}, nrAgain) &&
+                      nodeRender(frame, {aaNode(smaa), nrNode()}, aaBefore) && nodeRender(frame, {nrNode(), aaNode(smaa)}, aaAfter);
+    check(nrOk, "real-frame: NR alone (twice), SMAA before NR and SMAA after NR run");
+    const auto changed = [](const sink::RgbaImage& a, const sink::RgbaImage& b) {
+        size_t n = 0;
+        for (size_t i = 0; a.pixels.size() == b.pixels.size() && i + 3 < a.pixels.size(); i += 4)
+            n += a.pixels[i] != b.pixels[i] || a.pixels[i + 1] != b.pixels[i + 1] || a.pixels[i + 2] != b.pixels[i + 2];
+        return n;
+    };
+    std::printf("METRIC case=real-frame extent=%ux%u aaChanged=%zu nrRepeatChanged=%zu aaBeforeNrChanged=%zu aaAfterNrChanged=%zu\n", w, h,
+                changed(plain, aaOnly), changed(nrOnly, nrAgain), changed(nrOnly, aaBefore), changed(nrOnly, aaAfter));
+    const std::pair<const char*, const sink::RgbaImage*> outputs[] = {
+        {"plain", &plain}, {"aa", &aaOnly}, {"nr", &nrOnly}, {"nr-again", &nrAgain}, {"aa-before-nr", &aaBefore}, {"aa-after-nr", &aaAfter}};
+    bool saved = true;
+    for (const auto& [label, image] : outputs) saved = saved && savePpm(folder / (std::string(label) + ".ppm"), *image);
+    check(ok && nrOk && saved, "real-frame: every output written");
+    av_frame_free(&frame);
+    return failures ? 1 : 0;
+}
+
 // ---- tiled full-resolution image path -------------------------------------------------
 // MLAA only uses integer loads, so tiles with a halo past its reach must match a
 // whole-image graph exactly. SMAA / FXAA search with normalised coordinates;
@@ -602,6 +695,7 @@ std::vector<Case> cases() {
     c.push_back({"node-source-and-tail", [] {
         return nodeCase("node-source-and-tail", {aaNode(aa(AntiAliasMethod::Smaa, 0)), srNode(), nrNode(), aaNode(aa(AntiAliasMethod::Fxaa, 1))}, 2); }});
     c.push_back({"tiled-image", [] { return tiledCase(); }});
+    c.push_back({"real-frame", [] { return realFrameCase(); }});
     c.push_back({"timing-1080p", [] { return timingCase(1920, 1080); }});
     c.push_back({"timing-1440p", [] { return timingCase(2560, 1440); }});
     c.push_back({"timing-2160p", [] { return timingCase(3840, 2160); }});

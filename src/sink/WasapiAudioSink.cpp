@@ -1,5 +1,6 @@
 #include "veyra/sink/AudioGain.h"
 #include "veyra/sink/WasapiAudioSink.h"
+#include "veyra/sink/RecordingAudioTap.h"
 #include "veyra/engine/PlaybackRate.h"
 #include "veyra/media/NetworkInput.h"
 #include <functiondiscoverykeys_devpkey.h>
@@ -900,6 +901,24 @@ bool AudioRenderer::pumpOnce(AudioPcmSource& pipeline, double* firstWrittenPtsMs
     const size_t got = pipeline.pull(chunk_.data(), avail, &firstPts);
     const auto endPts=pipeline.lastPullEndPtsMs();
     if (firstWrittenPtsMs) *firstWrittenPtsMs = firstPts;
+    // Live recording: the source PCM before gain and mute, stamped with the
+    // time its first frame plays. Once the stream runs that comes from the
+    // device clock, which the player's A/V sync follows; frames queued in the
+    // shared buffer alone read ~40 ms early (engine and device latency).
+    // Prefill before Start uses the queue plus the latency measured meanwhile.
+    if(got&&!pausedEndpoint_&&recordingAudioActive()){
+        if(auto tap=recordingAudioSink()){
+            const int64_t queuedUs=recordingClockUs()+int64_t(padding)*1000000/int64_t(sampleRate_);
+            int64_t playoutUs=queuedUs+tapLatencyUs_;
+            UINT64 pos=0,qpc=0;
+            if(started_&&clockFrequency_&&SUCCEEDED(clock_->GetPosition(&pos,&qpc))&&qpc){
+                const double played=double(pos-anchorPos_)*sampleRate_/double(clockFrequency_);
+                playoutUs=int64_t(qpc/10)+int64_t((double(timelineWriteFrame_.load())-played)*1e6/sampleRate_);
+                tapLatencyUs_=std::clamp<int64_t>((tapLatencyUs_*7+(playoutUs-queuedUs))/8,0,250000);
+            }
+            tap->renderedPcm(chunk_.data(),got,inputFormat_,playoutUs,this);
+        }
+    }
     if (!started_ && !got) return checked(render_->ReleaseBuffer(0, 0),"Release empty prefill");
     // File playback owns a continuous media timeline, so it may explicitly
     // fill an empty read with silence. Live capture must not invent media

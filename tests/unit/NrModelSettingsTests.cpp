@@ -94,5 +94,67 @@ int wmain(int argc,wchar_t** argv){
     auto amdSession=std::make_unique<ChainSession>(ChainSession::initial(mixedAmd));ChainSessionStore amdSessions(out/L"amd-session.v1");
     auto amdRestored=std::make_unique<ChainSession>();
     check(amdSessions.save(*amdSession)&&amdSessions.load(*amdRestored)&&*amdSession==*amdRestored,"AMD mixed models survive complete session restore");
+    {
+        using pipeline::Extent;using pipeline::NrSizePolicy;using pipeline::ResolutionPlan;
+        check(int(NrSizePolicy::Auto)==6&&int(NrSizePolicy::Realtime)==0&&int(NrSizePolicy::Native)==1,"manual sizes preserve every existing preset ID");
+        bool allSizes=true;
+        for(unsigned percent=25;percent<=100;++percent){
+            const auto policy=pipeline::nrSizePolicyForPercent(percent);
+            const auto plan=ResolutionPlan::make({3840,2160},false,policy,false);
+            const Extent expected{percent==100?3840u:(3840u*percent/100)&~1u,percent==100?2160u:(2160u*percent/100)&~1u};
+            allSizes&=pipeline::validNrSizePolicy(policy)&&pipeline::nrSizePercent(policy)==percent&&plan.nr==expected&&plan.output==Extent{3840,2160};
+            allSizes&=ResolutionPlan::make({3840,2160},false,policy,true).nr==Extent{3840,2160};
+            allSizes&=ResolutionPlan::make({1,1},false,policy,false).nr==Extent{1,1};
+        }
+        check(allSizes,"all 76 percentages change NR dimensions only, keep full-resolution mode and never make zero textures");
+        check(!pipeline::validNrSizePolicy(pipeline::nrSizePolicyForPercent(24))&&!pipeline::validNrSizePolicy(pipeline::nrSizePolicyForPercent(101))&&
+              !pipeline::validNrSizePolicy(NrSizePolicy(7))&&!pipeline::validNrSizePolicy(NrSizePolicy(124))&&!pipeline::validNrSizePolicy(NrSizePolicy(201)),"invalid manual percentages and reserved policy IDs fail closed");
+        check(ResolutionPlan::make({1080,1920},false,pipeline::nrSizePolicyForPercent(50),false).nr==Extent{540,960},"portrait manual scale applies to width and height");
+        auto manual=s;manual.nrLayers[0].sizePolicy=pipeline::nrSizePolicyForPercent(50);manual.nrLayers[1].sizePolicy=pipeline::nrSizePolicyForPercent(75);
+        EnhancementSettings mr=manual;fromChain(toChain(manual),mr);
+        check(mr.nrLayers[0].sizePolicy==manual.nrLayers[0].sizePolicy&&mr.nrLayers[1].sizePolicy==manual.nrLayers[1].sizePolicy,"two manual layers retain independent settings through the shared chain");
+        StageRequest preview;preview.width=3840;preview.height=2160;preview.nr=true;pipeline::EnhanceGraphDesc md;describeStages(preview,mr,md);
+        check(md.nrLayersExtent==std::vector<Extent>{{1920,1080},{2880,1620}}&&md.workWidth==3840&&md.workHeight==2160&&md.validateFixedExecutionPlan().empty(),"compiled list graph runs independent percentages and retains full output");
+        preview.sr=true;preview.width=1920;preview.height=1080;mr.lowLatency=true;
+        for(auto& n:mr.nrLayers)n.lowLatencyPairing=true;
+        describeStages(preview,mr,md);
+        check(md.nrBeforeSr&&md.nrLayersExtent==std::vector<Extent>{{960,540},{1440,810}}&&md.workWidth==3840,"NR-before-SR percentages use the actual source-sized input");
+        preview.sr=false;preview.width=3840;preview.height=2160;preview.amdNr=true;preview.nvidiaAdapter=false;mr.nrRuntime=NrRuntime::LmxxfAmd;
+        for(auto& n:mr.nrLayers)n.runtime=NrRuntime::LmxxfAmd;
+        describeStages(preview,mr,md);
+        check(md.nrLayersExtent==std::vector<Extent>{{960,540},{1440,810}}&&md.validateFixedExecutionPlan().empty(),"AMD manual preview percentages stay within its existing model budget");
+        preview.exportJob=true;describeStages(preview,mr,md);
+        check(md.nrLayersExtent==std::vector<Extent>{{960,540},{1440,810}}&&md.workWidth==3840,"AMD video export retains both manual percentages within the model budget");
+        mr.nrRuntime=NrRuntime::Ampere;for(auto& n:mr.nrLayers)n.runtime=mr.nrRuntime;preview.amdNr=false;preview.nvidiaAdapter=true;describeStages(preview,mr,md);
+        check(md.nrLayersExtent==std::vector<Extent>{{1920,1080},{2880,1620}}&&md.flowWidth==3840&&md.flowHeight==2160,"NVIDIA video export honors per-layer manual percentages and keeps offline guidance");
+        bool manualExports=true;
+        for(unsigned percent=25;percent<=100;++percent){
+            auto settings=manual;settings.nrLayerCount=1;settings.nrLayers[0].sizePolicy=pipeline::nrSizePolicyForPercent(percent);
+            const auto frozenManual=freezeExportSettings(settings);
+            manualExports&=frozenManual.nrLayer(0).sizePolicy==settings.nrLayers[0].sizePolicy&&settings.nrLayers[0].sizePolicy==pipeline::nrSizePolicyForPercent(percent);
+            StageRequest job;job.nr=true;job.exportJob=true;job.width=7680;job.height=4320;
+            describeStages(job,frozenManual,md);
+            const Extent expected{uint32_t(7680*percent/100)&~1u,uint32_t(4320*percent/100)&~1u};
+            manualExports&=md.nrLayersExtent==std::vector<Extent>{expected}&&md.workWidth==7680&&md.workHeight==4320&&md.flowWidth==7680&&md.flowHeight==4320&&md.validateFixedExecutionPlan().empty();
+            settings.nrRuntime=NrRuntime::LmxxfAmd;settings.nrLayers[0].runtime=NrRuntime::LmxxfAmd;
+            job.nvidiaAdapter=false;job.amdNr=true;describeStages(job,settings,md);
+            const Extent bounded{uint32_t(1920*percent/100)&~1u,uint32_t(1080*percent/100)&~1u};
+            manualExports&=md.nrLayersExtent==std::vector<Extent>{bounded}&&md.flowWidth==1920&&md.flowHeight==1080&&md.workWidth==7680&&md.validateFixedExecutionPlan().empty();
+        }
+        check(manualExports,"all 76 percentages survive export freeze and size real per-layer plans at 8K, with AMD input budget retained");
+        auto invalidManual=manual;invalidManual.nrLayers[0].runtime=NrRuntime::LmxxfAmd;invalidManual.nrLayers[0].sizePolicy=NrSizePolicy(124);
+        check(exportNrSizePolicy(NrRuntime::LmxxfAmd,NrSizePolicy(124))==NrSizePolicy(124)&&
+            !freezeExportSettings(invalidManual).validate().empty(),"invalid manual export policy cannot be normalized into an admitted AMD preset");
+        PresetLibrary ml(out/L"manual-library.v1");ml.setIncludeBuiltins(false);PresetEntry me;me.name=L"manual percentages";me.chain=toChain(manual);
+        const bool saved=ml.load()&&ml.put(me);PresetLibrary mlr(out/L"manual-library.v1");mlr.setIncludeBuiltins(false);
+        check(saved&&mlr.load()&&mlr.entries().size()==1&&mlr.entries()[0]==me,"manual percentages survive an actual disk preset reload");
+        PresetStore ms(out/L"manual-flat.v1");const bool flatSaved=ms.load()&&ms.put(L"manual",manual)&&ms.setDefault(0);PresetStore msr(out/L"manual-flat.v1");
+        check(flatSaved&&msr.load()&&msr.defaultSettings()==manual,"legacy flat store retains each manual layer without a POD schema change");
+        auto session=std::make_unique<ChainSession>(ChainSession::initial(manual));session->select(ChainMode::Node);
+        auto& config=session->configurations[1];auto doc=std::make_shared<NodeEditorDocument>();doc->nodes=config.chain;
+        check(doc->layout.initialize(doc->nodes).accepted,"manual node document initializes");doc->nodes.firstOf(EffectType::NrEnhance)->nr.sizePolicy=pipeline::nrSizePolicyForPercent(37);config.editor=doc;
+        ChainSessionStore sc(out/L"manual-session.v1");auto reload=std::make_unique<ChainSession>();
+        check(sc.save(*session)&&sc.load(*reload)&&*reload==*session,"List, Nodes and detached node drafts retain independent percentages across disk session restore");
+    }
     std::cout<<"NR model settings failures="<<failures<<std::endl;return failures?1:0;
 }

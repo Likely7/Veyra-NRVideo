@@ -52,6 +52,19 @@ int wmain(int argc,wchar_t** argv){
         if(ok)ok=test("rotate90-native",rotated,0,{{152,104,255,0,255},{168,104,255,0,0},{152,136,255,255,255},{168,136,0,255,0}});
     }
     if(ok)ok=test("dar-4-3",{1,.5f,.5f,0,4.0/3},0,{{40,10,255,0,0},{280,10,0,255,0},{40,230,255,0,255}});
+    if(ok){
+        engine::PreviewView manual;
+        manual.rotateClockwise();
+        ok=test("manual90",manual,0,{{40,120,0,0,0},{130,60,255,0,255},{190,60,255,0,0},{130,180,255,255,255},{190,180,0,255,0}});
+        manual.rotateClockwise();
+        if(ok)ok=test("manual180",manual,0,{{40,80,255,255,255},{280,80,255,0,255},{40,160,0,255,0},{280,160,255,0,0}});
+        manual.rotateClockwise();
+        if(ok)ok=test("manual270",manual,0,{{130,60,0,255,0},{190,60,255,255,255},{130,180,255,0,0},{190,180,255,0,255}});
+        manual.rotateClockwise();
+        if(ok)ok=test("manual360",manual,0,{{160,10,0,0,0},{40,80,255,0,0},{280,80,0,255,0},{40,160,255,0,255}});
+        manual.rotationDegrees=90;manual.displayAspect=.5;manual.rotateClockwise();
+        if(ok)ok=test("manual90-plus-metadata90",manual,0,{{40,80,255,255,255},{280,80,255,0,255},{40,160,0,255,0},{280,160,255,0,0}});
+    }
     if(ok)ok=test("stretch",{1,.5f,.5f,3},0,{{40,10,255,0,0},{280,10,0,255,0},{280,230,255,255,255}});
     if(ok)ok=test("forced-16-9",{1,.5f,.5f,4},0,{{160,10,0,0,0},{40,40,255,0,0},{280,200,255,255,255}});
     if(ok)ok=test("native",{1,.5f,.5f,1},0,{{40,80,0,0,0},{145,111,255,0,0},{175,129,255,255,255}});

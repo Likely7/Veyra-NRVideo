@@ -7,6 +7,7 @@ Item {
     property real value: 0
     property real from: 0
     property real to: 1
+    property real stepSize: 0           // opt-in snapping; existing sliders stay continuous
     property bool center: false        // fill from the middle instead of the left
     property bool showCenterFill: false // Colour controls opt in; other pages keep their visuals.
     property bool enabledControl: true
@@ -30,6 +31,8 @@ Item {
         onTriggered: if (drag.active) slider.moved(slider.valueFromModel ? slider.dragValue : slider.value)
     }
     function commitValue(amount) {
+        if (stepSize > 0)
+            amount = Math.max(from, Math.min(to, from + Math.round((amount - from) / stepSize) * stepSize))
         if (!valueFromModel) value = amount
         moved(amount)
     }
@@ -67,7 +70,7 @@ Item {
     // range so wide ranges still move. While focused the arrows belong to the slider, not
     // to the window's seek and volume shortcuts; Esc gives them back.
     activeFocusOnTab: enabledControl
-    readonly property real keyStep: Math.max(Number(typeof veyra !== "undefined" && veyra.preferences ? (veyra.preferences.sliderKeyStep || 0.1) : 0.1), (to - from) / 1000)
+    readonly property real keyStep: Math.max(stepSize, Number(typeof veyra !== "undefined" && veyra.preferences ? (veyra.preferences.sliderKeyStep || 0.1) : 0.1), (to - from) / 1000)
     function nudge(direction) {
         const next = Math.max(from, Math.min(to, value + direction * keyStep))
         // Snap to the step grid so 0.1 steps do not drift into 0.30000000000000004.

@@ -48,7 +48,7 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
     return sameNetwork(a.network, b.network) &&
         a.transport == b.transport && a.sessionId == b.sessionId && a.position == b.position &&
         a.duration == b.duration && a.frames == b.frames && a.generated == b.generated &&
-        a.status == b.status && a.backendWarning == b.backendWarning && a.sourceNotice == b.sourceNotice &&
+        a.status == b.status && a.savedFramePath == b.savedFramePath && a.backendWarning == b.backendWarning && a.sourceNotice == b.sourceNotice &&
         a.applying == b.applying && a.rejectedRevision == b.rejectedRevision &&
         a.desired == b.desired && a.applied == b.applied && a.nrActive == b.nrActive &&
         a.srActive == b.srActive && a.fgActive == b.fgActive && a.failed == b.failed &&

@@ -1031,3 +1031,13 @@ Follow-up: [PR64](https://github.com/Likely7/Veyra-NRVideo/pull/64), fixed commi
 Behavior/API reference: [frostnotfall/BilibiliPotPlayer](https://github.com/frostnotfall/BilibiliPotPlayer), fixed commit `76b89f0f6a30afc31014a61afbe45c93a6074ef8`. No explicit license was found for its main AngelScript playback script. Veyra independently implements the public API behavior in `src/bilibili/` and `src/ui/BilibiliModel.cpp`; none of that project's scripts, DLLs, browser assets, or other source files are copied. The ISO BMFF SIDX to HLS adaptation and Qt interface are new Veyra code under the repository's GPL-3.0 license.
 
 QR encoding: [Nayuki QR Code generator](https://github.com/nayuki/QR-Code-generator), fixed commit `3c6d0b3cefb4e049dc337e82237c9644399716a8`, MIT License. `cpp/qrcodegen.cpp` and `cpp/qrcodegen.hpp` are included without modification as `third_party/qrcodegen/qrcodegen.cpp` and `third_party/qrcodegen/qrcodegen.hpp`. Both preserve their complete copyright and MIT permission notice. Veyra renders the returned QR matrix locally using QImage; no third-party QR service or additional QR runtime binary is used. See `docs/BILIBILI_PLAYBACK_2026-10-25.md` for scope, build instructions, actual validation, and limitations.
+## Community NR export size patch (2026-10-25)
+
+The NR export-size change was adapted from the user-supplied
+`2_EXPORT_NR_PRESET_SIZE_2026-10-25.code(1).patch` and its accompanying note.
+No author name was supplied. The original patch SHA-256 is
+`E4D92E28A35DFE64AE309D6B238B1061CBCDF85A1D25EA04A797C9F9F2480598`.
+It modifies Veyra's existing source; no third-party runtime or model was added.
+Local adaptations preserve the manual 25%–100% policies, AMD's input budget,
+invalid-value rejection, and shared per-layer export planning. Integration and
+verification are recorded in `docs/EXPORT_NR_SCALE_REPORT_2026-10-25.md`.
