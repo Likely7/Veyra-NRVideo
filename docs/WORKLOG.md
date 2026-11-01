@@ -1,5 +1,11 @@
 # WORKLOG
 
+## 2026-11-01 上游 main 同步到 Bilibili 开发分支
+
+从官方上游 `Likely7/Veyra-NRVideo` 通过 SSH 获取 `main` 提交 `27d04bd8`，在 `codex/bilibili-controls-timeshift` 合并。合并提交为 `3491aa91`；保留本分支的 Bilibili 播放、选集/清晰度/音轨、直播时移、测试和第三方许可说明，同时纳入上游 2.1.1、录制、显示状态/VRR、旋转、HDR、导出和界面更新。冲突仅涉及 `THIRD_PARTY_NOTICES.md`、本工作记录和 `qml/Veyra/CineBar.qml`，两边文档均保留；CineBar 使用上游最小宽度 140，并保留 Bilibili 活跃时的 160 宽布局。
+
+验证使用新目录 `E:/Veyra-bilibili-20261025/upstream-sync-20261101`，没有覆盖旧交付包：CMake 配置、`veyra_qml_ui` 主程序编译均退出 0；Bilibili 模块测试 15 passed / 0 failed，QML 测试 3 passed / 0 failed。合并后 EXE SHA-256 为 `0E0028EF27C444B48F38194666F41F0326DF2E2C01D4DD31F0A280AA9A0E8356`。验证脚本与日志位于 `C:/Users/HUYEZ/Documents/ChatGPT/Rea projects/validate_veyra_upstream_sync.py` 和上述 E 盘目录。未重新打包、未修改运行库/模型/驱动或真实用户配置。
+
 ## 2026-10-20 实时录制（处理后画面）功能
 
 用户要求录制处理后的画面、设置页可设位置与码率、专业模式截图按钮旁加带动画与 3 秒倒计时的录制按钮，并给出新测试版实测。
