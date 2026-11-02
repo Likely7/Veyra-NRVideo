@@ -83,7 +83,7 @@ DialogLayer {
                 spacing: 6
                 VButton { text: qsTr("登录 PSN"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnLogin() }
                 VButton { text: qsTr("提交登录结果"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnComplete() }
-                VButton { text: qsTr("退出"); ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.psnReady; onClicked: veyra.ps5PsnForget() }
+                VButton { text: qsTr("退出"); ghost: true; enabled: !veyra.ps5.busy && !!veyra.ps5.psnReady; onClicked: veyra.ps5PsnForget() }
             }
         }
     }

@@ -110,6 +110,11 @@ class QmlPlayerBridge : public QObject {
     // measurement the getter says so (e.g. displayFpsKnown stays false, because
     // a display rate is only real if the system display event can be read - the
     // design requires exactly this distinction rather than reusing submit FPS).
+    Q_PROPERTY(bool fgAutoMultiplierEnabled READ fgAutoMultiplier WRITE setFgAutoMultiplier NOTIFY settingsChanged)
+    Q_PROPERTY(bool fgAutoMultiplierAvailable READ fgAutoMultiplierAvailable NOTIFY settingsChanged)
+    Q_PROPERTY(bool doviFollow READ doviFollow WRITE setDoviFollow NOTIFY settingsChanged)
+    Q_PROPERTY(bool doviP7Compose READ doviP7Compose WRITE setDoviP7Compose NOTIFY settingsChanged)
+    Q_PROPERTY(bool doviFollowAverage READ doviFollowAverage WRITE setDoviFollowAverage NOTIFY settingsChanged)
     Q_PROPERTY(QString outputSummary READ outputSummary NOTIFY snapshotChanged)
     Q_PROPERTY(QString srStageSummary READ srStageSummary NOTIFY snapshotChanged)
     Q_PROPERTY(QString srStageNote READ srStageNote NOTIFY snapshotChanged)
@@ -1528,6 +1533,13 @@ public:
     bool fgAutoMultiplier() const;
 
     void applyFgMultiplier(int multiplier);
+
+    bool doviFollow() const;
+    void setDoviFollow(bool on);
+    bool doviP7Compose() const;
+    void setDoviP7Compose(bool on);
+    bool doviFollowAverage() const;
+    void setDoviFollowAverage(bool on);
 
 signals:
     void bilibiliActionDone(const QString& op, bool ok, const QString& error);
