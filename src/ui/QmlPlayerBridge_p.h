@@ -1042,7 +1042,7 @@ struct QmlPlayerBridge::Impl {
     struct BiliPlayJob {
         std::future<void> query;
         std::shared_ptr<BiliPlayWorkerResult> result;   // worker 写，tick 读
-        uint64_t generation = 0;      // 当前请求的代号，新请求会顶掉旧的
+        uint64_t generation = 0;      // 每次请求自增；resolving 期间新请求被拒绝，不会顶掉旧的
         bool busy = false;
         bool resolving = false;       // 已有一个在解析（保留原有的防重入语义）
         QString bvid;
