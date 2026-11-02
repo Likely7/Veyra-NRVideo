@@ -700,9 +700,24 @@ VPage {
         // on success, and close the picker for the "picker" caller. On failure the state
         // stays put: the server refused, so the button must not pretend otherwise.
         function onBilibiliFavoriteReady(ok, error, add, reason) {
-            if (!ok) return
+            if (!ok) {
+                // 失败要说出来：静默无反应看起来就像按钮坏了。
+                // Say it out loud: a silent no-op looks exactly like a broken button.
+                if (error.length > 0) root.statusText = error
+                return
+            }
             if (reason === "picker") root.favPickerOpen = false
-            if (root.detail && root.detail.bvid) root.requestInteraction(root.detail.bvid)
+            // 先把按钮切到新状态再校准：B 站收藏接口有延迟，成功后立刻拉互动状态
+            // 往往还是旧值，用户会看到「已取消收藏」的提示而按钮仍是「已收藏」。
+            // Flip the button first and reconcile afterwards: the favourite endpoint lags,
+            // so an immediate re-read usually still returns the old value and the button
+            // stays on 已收藏 while the notice says the opposite.
+            if (root.detail && root.detail.bvid) {
+                const next = Object.assign({}, root.interaction)
+                next.favorited = add
+                root.interaction = next
+            }
+            interactionResync.restart()
         }
         // 点赞 / 投币 / 稍后再看 完成后刷新按钮状态。三者形状相同，一个处理器覆盖。
         // Liked / coined / watch-later all finish the same way: re-read the buttons.
@@ -765,7 +780,8 @@ VPage {
                 return
             }
             if (!ok) return
-            if (root.detail && root.detail.bvid) root.requestInteraction(root.detail.bvid)
+            // 点赞/投币同样等接口落定再校准：立刻拉回来常常是旧值，按钮会闪回原样。
+            interactionResync.restart()
         }
         // 评论列表到达。
         // 表情面板到达。
@@ -1182,6 +1198,15 @@ VPage {
     // where it was inserted. This waits before re-fetching so the server's real rpid can be
     // picked up (deleting needs it). Fetching immediately returns a list that does not
     // contain the new comment yet, which is why it vanished until the order was toggled.
+    Timer {
+        id: interactionResync
+        // 点赞/投币/收藏成功后等接口落定再校准按钮状态，避免用旧值把刚切的按钮刷回去。
+        // Re-read the interaction state after the endpoint settles, so a stale reply cannot
+        // undo the button state the user just produced.
+        interval: 600
+        repeat: false
+        onTriggered: if (root.detail && root.detail.bvid) root.requestInteraction(root.detail.bvid)
+    }
     Timer {
         id: replyRefreshTimer
         interval: 2000

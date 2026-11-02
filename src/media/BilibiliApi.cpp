@@ -1146,32 +1146,55 @@ bool biliFavorite(const std::wstring& bvid, bool add, long long folderId,
                    std::wstring& error) {
     const BiliAccount account = biliAccount();
     if (!account.loggedIn) { error = L"收藏需要登录"; return false; }
-    // folderId 0 asks for the account's first folder, which is where the site itself
-    // puts a one-click favourite; the UI passes the folder the user picked instead.
-    long long mediaId = folderId;
-    if (mediaId <= 0) {
-        const std::wstring foldersPath =
-            L"/x/v3/fav/folder/created/list-all?up_mid=" + std::to_wstring(account.mid);
-        std::string folders;
-        if (!httpGet(L"api.bilibili.com", foldersPath, g_cookie, folders, error)) return false;
-        const auto folderRoot = json::parse(folders);
-        if (!checkCode(folderRoot, error, L"收藏夹列表")) return false;
-        const auto first = folderRoot["data"]["list"].elements();
-        if (first.empty()) { error = L"账号下没有收藏夹"; return false; }
-        mediaId = (*first.front())["id"].asInt(0);
-    }
-    if (mediaId <= 0) { error = L"收藏夹 id 无效"; return false; }
 
-    // rid is the video's aid, not its BV id: a non-numeric rid is answered with -400.
+    // 所有收藏夹的 id：添加用选中的那个（或第一个），取消要挨个试。
+    // Every folder id: adding uses the chosen one, cancelling has to try them all
+    // because the API wants the folder that actually holds the video, and the state
+    // endpoint does not tell us which one that is.
+    std::vector<long long> folders;
+    {
+        const std::wstring path =
+            L"/x/v3/fav/folder/created/list-all?up_mid=" + std::to_wstring(account.mid);
+        std::string raw;
+        if (!httpGet(L"api.bilibili.com", path, g_cookie, raw, error)) return false;
+        const auto root = json::parse(raw);
+        if (!checkCode(root, error, L"收藏夹列表")) return false;
+        for (const auto& entry : root["data"]["list"].elements())
+            if (const long long id = (*entry)["id"].asInt(0); id > 0) folders.push_back(id);
+    }
+    if (folders.empty()) { error = L"账号下没有收藏夹"; return false; }
+
     long long aid = 0;
     if (!bvidToAid(bvid, aid, error)) return false;
-    std::string form = "rid=" + std::to_string(aid) + "&type=2&add_media_ids="
-        + (add ? std::to_string(mediaId) : std::string()) + "&del_media_ids="
-        + (add ? std::string() : std::to_string(mediaId));
     const std::string csrf = csrfForm();
     if (csrf.empty()) { error = L"登录信息缺少 csrf 令牌"; return false; }
-    form += "&" + csrf;
-    return postAction(L"/x/v3/fav/resource/deal", form, error, L"收藏");
+
+    auto deal = [&](long long mediaId, std::wstring& dealError) {
+        std::string form = "rid=" + std::to_string(aid) + "&type=2&add_media_ids="
+            + (add ? std::to_string(mediaId) : std::string()) + "&del_media_ids="
+            + (add ? std::string() : std::to_string(mediaId));
+        form += "&" + csrf;
+        return postAction(L"/x/v3/fav/resource/deal", form, dealError, L"收藏");
+    };
+
+    if (add) {
+        const long long mediaId = folderId > 0 ? folderId : folders.front();
+        return deal(mediaId, error);
+    }
+    // 取消：收藏在哪个夹子里是未知的，逐个试。站方对「不在该夹子」的 del 回非零 code，
+    // 所以遍历是幂等且安全的。全部失败才把最后一个错误报出去。
+    // Cancelling: try each folder. A folder that does not hold the video answers with a
+    // non-zero code, so trying them all is safe; only report failure if none worked.
+    std::wstring lastError;
+    bool removedAny = false;
+    for (const long long mediaId : folders) {
+        if (deal(mediaId, lastError)) removedAny = true;
+    }
+    if (removedAny) return true;
+    // 一个视频可以同时收藏在多个夹子里，favorited 只反映「至少有一个」，所以要全删。
+    // A video can live in several folders at once; clear them all.
+    error = lastError.empty() ? std::wstring(L"取消收藏失败") : lastError;
+    return false;
 }
 
 bool biliAddWatchLater(const std::wstring& bvid, bool add, std::wstring& error) {

@@ -354,9 +354,20 @@ void QmlPlayerBridge::tickBiliTasks() {
         // The three earlier async methods now share this path too, so collection
         // logic exists once.
         case BiliOp::InteractionState:
+            veyra::log::info("bilibili", std::format(
+                "interaction {} liked={} coined={} favorited={}",
+                r.bvid.toStdString(),
+                r.object.value(QStringLiteral("liked"), false).toBool(),
+                r.object.value(QStringLiteral("coined"), false).toBool(),
+                r.object.value(QStringLiteral("favorited"), false).toBool()));
             emit bilibiliInteractionReady(r.bvid, r.object, r.generation);
             break;
         case BiliOp::Favorite:
+            // 收藏/取消失败原本是静默的：界面看起来就是「点了没反应」。记一行，
+            // 失败原因（站方 code 转成的中文）才查得到。
+            // Favouriting used to fail silently, which reads as a dead button.
+            veyra::log::info("bilibili", std::format("favorite add={} ok={} error={}",
+                r.add, r.ok, r.error.toStdString()));
             if (r.ok) emit notice(r.add ? tr("已收藏") : tr("已取消收藏"), false);
             emit bilibiliFavoriteReady(r.ok, r.error, r.add, r.reason);
             break;

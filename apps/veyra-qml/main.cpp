@@ -862,6 +862,50 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                     bvid.toStdString(), cid, qn));
                 bridge.bilibiliPlayCid(bvid, cid, qn, false);
             });
+        } else if (a == QLatin1String("--bili-interaction") && hasValue) {
+            // Test switch: read one video's liked/coined/favourited state, so the button
+            // refresh can be checked against the live account without clicking.
+            const QString bvid = args.at(++i);
+            QTimer::singleShot(1200, &bridge, [&bridge, bvid] {
+                veyra::log::info("qml-test", std::format("bili-interaction {}", bvid.toStdString()));
+                bridge.bilibiliRequestInteractionState(bvid);
+            });
+        } else if (a == QLatin1String("--bili-favorite") && hasValue) {
+            // Favourite or un-favourite, then read the state immediately and again after two
+            // seconds - exactly the race the button refresh has to win.
+            const QString bvid = args.at(++i);
+            bool add = true;
+            if (i + 1 < args.size() && !args.at(i + 1).startsWith(QLatin1Char('-')))
+                add = args.at(++i).toInt() != 0;
+            QTimer::singleShot(1200, &bridge, [&bridge, bvid, add] {
+                veyra::log::info("qml-test", std::format("bili-favorite {} add={}", bvid.toStdString(), add));
+                bridge.bilibiliRequestFavorite(bvid, add, 0, QStringLiteral("test"));
+            });
+            QTimer::singleShot(2600, &bridge, [&bridge, bvid] {
+                veyra::log::info("qml-test", "bili-interaction immediately after the write");
+                bridge.bilibiliRequestInteractionState(bvid);
+            });
+            QTimer::singleShot(4600, &bridge, [&bridge, bvid] {
+                veyra::log::info("qml-test", "bili-interaction after 2 s");
+                bridge.bilibiliRequestInteractionState(bvid);
+            });
+        } else if (a == QLatin1String("--bili-like") && hasValue) {
+            const QString bvid = args.at(++i);
+            bool like = true;
+            if (i + 1 < args.size() && !args.at(i + 1).startsWith(QLatin1Char('-')))
+                like = args.at(++i).toInt() != 0;
+            QTimer::singleShot(1200, &bridge, [&bridge, bvid, like] {
+                veyra::log::info("qml-test", std::format("bili-like {} like={}", bvid.toStdString(), like));
+                bridge.bilibiliRequestLike(bvid, like);
+            });
+            QTimer::singleShot(2600, &bridge, [&bridge, bvid] {
+                veyra::log::info("qml-test", "bili-interaction immediately after the write");
+                bridge.bilibiliRequestInteractionState(bvid);
+            });
+            QTimer::singleShot(4600, &bridge, [&bridge, bvid] {
+                veyra::log::info("qml-test", "bili-interaction after 2 s");
+                bridge.bilibiliRequestInteractionState(bvid);
+            });
         } else if (!a.startsWith(QLatin1Char('-'))) {
             openPath = a;
         }
