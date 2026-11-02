@@ -382,3 +382,10 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 47b5e84作为已提交产品快照、PE2.1.2.0；build-recording-handoff.py按上节参数构建12目标87.8秒通过。reports/codex-build-2.1.2-20261102/run.py cpu-merge八组通过、verify.py qml132/0/1、run.py gpu-merge VFG调控切换/DLSS请求6X/XeSS2X三组实际生成/正常停止通过（不作为性能A/B）。i18n2718条缺译/占位符0。package-2.1.2.py stage/seal/cold全部通过；NVIDIA1634项/676470641字节ZIP，AMD2260项/716404207字节ZIP，27项RX7000子集单列清单。主EXE7f9ee826…，两包依赖闭包、默认运行组件SHA和PE2.1.2.0通过；应用源码ZIP和prepared网络源码ZIP、校验文件一并交付，4个未变依赖源码档在原位SHA核验。
 
 冷启动为从ZIP实际解压、最小PATH和独立配置，NVIDIA/AMD各退出0、214/222真实提交、无QML/D3D12错误；RTX5070默认效果关闭，不替代AMD实卡。清理cleanup.ps1先校验每个文件在验证副本和保留目录都等于manifest，再删除两个重复验证目录，共2623969881逻辑字节；保留两个可直接运行目录/ZIP/源码和独立启动脚本，未测净物理回收。stage第一次因自生成未跟踪pyc正确拒绝，精确删除该单个缓存后通过，没有绕过干净源码检查。原配置7文件、旧97运行组件、旧工作树和Git refs保护结果及空间清单在FINAL。准确命令、过程与证据见docs/BUILD_2.1.2_TEST_2026-11-02.md和reports/codex-build-2.1.2-20261102/FINAL.json。后续仅文档提交，不改已打包产品；未推送或发布。
+
+
+## 2026-11-02 用户现场运行只读监测（已按要求停止）
+
+PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外GPU负载、不改设置/驱动/进程。reports/live-monitor-2.1.2-20261102/watch.py只读日志约120秒（UTC10:37:28–10:39:28）；用户要求停止后仅分析已保存数据，没有重启采样。当前4K60、NR1080p、VFG高2X、自动去重、Reflex增强/VRR请求；软件回调59.99–60.01，7120输入、4076有效真实帧全部提交，采集丢弃/邮箱覆盖新增0；625次候选在计算前跳过、6张生成后过期，容量/限帧丢弃新增0，另89对内容重复过滤。输出采样中位60.5、范围45–90，开头数秒45–52；本段错误/告警0、音频欠载增量0、显存3237–3254MiB。不把正常内容去重或提交FPS当物理显示证据。观察脚本的start.latest字典引用导致末态覆盖，已按独立落盘baseline.json复算增量、保留原记录并修正脚本，未采信错误零增量。简单报告及原始证据在上述reports目录。仅本工作日志追加，产品源码、用户设置和运行进程不改。
+
+用户要求标出时间/日志交Claude：已生成reports/live-monitor-2.1.2-20261102/CLAUDE_HANDOFF.md及per-second-deltas/evidence-anchors。只复核保存数据。更正归因：UTC10:37:28–34低45FPS段，fgSkippedBeforeEval和expired增量均0，fgInvalid/contentDuplicate新增89；后段625次预算跳过与6张过期单列，不能混为同一成因。报告含PST/UTC对应、原始完整日志、固定筛选片段与行号、epoch6→7和呈现revision14→15时间。未恢复监测、未修产品或改用户设置。
