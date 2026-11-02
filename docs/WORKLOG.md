@@ -375,3 +375,10 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 用户授权本地合并及构建2.1.2，不发布。开工核对所有20个本地分支/13个工作树和Claude最新会话文件：所有已完成产品分支tip已是main祖先，仅Lecram两条暂停线和AverMedia诊断存档含独立提交；其他旧脏树保护原状。14未提交文件保全到archives/codex-build-2.1.2-20261102，逐SHA和工作树状态在reports同任务/before.json。提交9e836ab后main从8535791 --ff-only快进，无冲突；前态checkpoint/pre-main-2.1.2-20261102。
 
 版本将项目/显示字符串统一到2.1.2，新增当前打包入口和测试说明；按BUILD_2.1.2_TEST_2026-11-02.md复用既有Release构建、并发2。NVIDIA沿用已核验2.1.1默认组件，AMD另加入已授权本地RX7000子集，自有worker单独编译，禁止把测试替身、用户配置和整套SDK入包。所有阶段结果、失败和最终保护核验继续记reports/codex-build-2.1.2-20261102/FINAL.json。
+
+
+### 2.1.2本地测试构建交付完成
+
+47b5e84作为已提交产品快照、PE2.1.2.0；build-recording-handoff.py按上节参数构建12目标87.8秒通过。reports/codex-build-2.1.2-20261102/run.py cpu-merge八组通过、verify.py qml132/0/1、run.py gpu-merge VFG调控切换/DLSS请求6X/XeSS2X三组实际生成/正常停止通过（不作为性能A/B）。i18n2718条缺译/占位符0。package-2.1.2.py stage/seal/cold全部通过；NVIDIA1634项/676470641字节ZIP，AMD2260项/716404207字节ZIP，27项RX7000子集单列清单。主EXE7f9ee826…，两包依赖闭包、默认运行组件SHA和PE2.1.2.0通过；应用源码ZIP和prepared网络源码ZIP、校验文件一并交付，4个未变依赖源码档在原位SHA核验。
+
+冷启动为从ZIP实际解压、最小PATH和独立配置，NVIDIA/AMD各退出0、214/222真实提交、无QML/D3D12错误；RTX5070默认效果关闭，不替代AMD实卡。清理cleanup.ps1先校验每个文件在验证副本和保留目录都等于manifest，再删除两个重复验证目录，共2623969881逻辑字节；保留两个可直接运行目录/ZIP/源码和独立启动脚本，未测净物理回收。stage第一次因自生成未跟踪pyc正确拒绝，精确删除该单个缓存后通过，没有绕过干净源码检查。原配置7文件、旧97运行组件、旧工作树和Git refs保护结果及空间清单在FINAL。准确命令、过程与证据见docs/BUILD_2.1.2_TEST_2026-11-02.md和reports/codex-build-2.1.2-20261102/FINAL.json。后续仅文档提交，不改已打包产品；未推送或发布。

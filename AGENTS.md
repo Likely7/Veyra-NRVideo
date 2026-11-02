@@ -1,6 +1,6 @@
 # Veyra Agent 工作规则
 
-> **2026-11-02 用户授权main整合及2.1.2本地测试包**：最近14文件修复已提交9e836ab并快进main（原8535791）；活动树现main。之前已完成Claude/Codex产品分支均是main祖先；Lecram两线和AverMedia诊断存档继续保留不并。按活动树docs/BUILD_2.1.2_TEST_2026-11-02.md构建NVIDIA/AMD本地包，版本2.1.2；未授权GitHub推送/发布。准确结果见reports/codex-build-2.1.2-20261102/FINAL.json。
+> **2026-11-02 用户授权main整合及2.1.2本地测试包**：最近14文件修复已提交9e836ab并快进main（原8535791）；活动树现main。之前已完成Claude/Codex产品分支均是main祖先；Lecram两线和AverMedia诊断存档继续保留不并。2.1.2测试包已从main产品快照47b5e84构建并验证，PE2.1.2.0；交付test-packages/codex-build-2.1.2-20261102（两GPU包/ZIP/源码/独立配置启动脚本）。8组合同、QML132/0/1、三组GPU短测、ZIP及解压冷启动通过；记录活动树docs/BUILD_2.1.2_TEST_2026-11-02.md，后续仅文档提交。未授权GitHub推送/发布。准确结果见reports/codex-build-2.1.2-20261102/FINAL.json。
 
 > **2026-11-01 极简音量交互修复（最新）**：当前claude/vsync-jitter-wait-20261102工作区同时保留之前补帧修改与本轮QML音量修复，未提交/合并/发布。音量两端/快速拖动、Return/Enter和空白提交、焦点清理及播放条移动手势隔离已验；QtQuick132/0/1，真实Windows极简操作通过。运行目录仍tests/claude-sr-stage-20261028/app，记录活动树docs/MINIMAL_VOLUME_FIX_2026-11-01.md，回执reports/codex-cinema-volume-20261101/FINAL.json。
 
