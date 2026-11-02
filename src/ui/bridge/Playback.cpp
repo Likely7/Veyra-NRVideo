@@ -194,11 +194,12 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // geometry, and only then open. The presenter samples the window's client
     // size once at initialisation; opening before that point is what produced a
     // 1x1 swapchain.
-    // Only leave the current page when the user is choosing a source from home.
-    // Opening a file from the professional page keeps them there, which is what the
-    // design's source menu implies.
-    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home"))
-        emit navigate(QStringLiteral("min"));
+    // From home or the Bilibili page go to the professional page, not the minimal one:
+    // after a video starts the next thing the user reaches for is FG, NR or quality.
+    // Starting from the professional page keeps them where they are.
+    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home")
+        || impl_->currentPage == QLatin1String("bili"))
+        emit navigate(QStringLiteral("pro"));
     if(!network)rememberSource(QStringLiteral("file"), path);
     if (impl_->preOpen) impl_->preOpen();
     auto options = impl_->options;
