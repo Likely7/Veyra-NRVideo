@@ -1,8 +1,8 @@
 # Veyra Agent 工作规则
 
-> **2026-11-02 自动剔除重复帧修复（最新）**：用户要求合并到main并重新打包2.1.2。修复在分支claude/dedup-precise-20261102提交后快进合入main，活动树回到main；未push/Release。重打的2.1.2包放在test-packages/claude-build-2.1.2-dedup-20261102，结果见活动树docs/BUILD_2.1.2_TEST_2026-11-02.md末节。
+> **2026-11-02 自动剔除重复帧修复已入main并重新打包2.1.2（最新）**：修复提交358be8c（之前a90b4a9为Codex监测记录），已由main 30337c8快进合入，活动树在main；未push/Release。新的2.1.2测试包从358be8c构建（PE 2.1.2.0，主EXE 33d8e615…），放在test-packages/claude-build-2.1.2-dedup-20261102，各项检查与冷启动通过，回执reports/claude-build-2.1.2-dedup-20261102/FINAL.json。Codex首个2.1.2包目录及其中的用户配置不动。
 > - 改动：整画面去重容忍约百万分之五的超界分量；删除图内64×36弃帧。
-> - 运行目录tests/claude-sr-stage-20261028/app已换成修复后的EXE fb1e3ad7…；Codex的首个2.1.2包目录（含用户设置）不动。
+> - 运行目录tests/claude-sr-stage-20261028/app的主程序仍是同源的fb1e3ad7…（打包时被用户的测试实例占用，没有替换）。
 > - 记录：活动树docs/DEDUP_PRECISE_2026-11-02.md；回执reports/claude-dedup-precise-20261102/FINAL.json。
 
 > **2026-11-02 用户授权main整合及2.1.2本地测试包**：最近14文件修复已提交9e836ab并快进main（原8535791）；活动树现main。之前已完成Claude/Codex产品分支均是main祖先；Lecram两线和AverMedia诊断存档继续保留不并。2.1.2测试包已从main产品快照47b5e84构建并验证，PE2.1.2.0；交付test-packages/codex-build-2.1.2-20261102（两GPU包/ZIP/源码/独立配置启动脚本）。8组合同、QML132/0/1、三组GPU短测、ZIP及解压冷启动通过；记录活动树docs/BUILD_2.1.2_TEST_2026-11-02.md，后续仅文档提交。未授权GitHub推送/发布。准确结果见reports/codex-build-2.1.2-20261102/FINAL.json。

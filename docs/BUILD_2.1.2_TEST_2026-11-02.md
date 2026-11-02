@@ -65,4 +65,19 @@ NVIDIA ZIP 676470641字节、1634项payload；AMD ZIP716404207字节、2260项pa
 - 步骤与上面相同：`build-recording-handoff.py --task claude-build-2.1.2-dedup-20261102 ...`，随后执行 `package-2.1.2.py --task claude-build-2.1.2-dedup-20261102 stage|seal|cold`。
 - 合同、QtQuick、GPU短测沿用Codex的同组检查。
 
-实际结果在本节之后补记。
+实际结果（2026-11-02）：
+- **提交**：main `30337c8`→`a90b4a9`（Codex未提交的监测记录，原样单独提交）→`358be8c`（去重修复），快进合入；产品源码快照为`358be8c`。
+- **构建**：12个目标61.5秒，回执head `358be8c`、dirty=false。主EXE SHA256 `33d8e615666365ba…`，两包PE文件/产品版本均为2.1.2.0。
+- **检查**：
+  - 8组合同全部通过；QtQuick 132/0/1（1项为既有跳过）。
+  - GPU短测3组（VFG运行中切换自动调控、DLSS 6X、XeSS 2X）均退出0、无D3D12错误。期间用户自己的Veyra测试实例在运行，这是功能短测，不作性能对比。
+- **打包**：
+  - stage 20秒，两包通过。
+  - seal 147秒：NVIDIA ZIP 676472179字节/1634项；AMD ZIP 716405735字节/2260项（含27项RX7000子集）；逐项大小/SHA/CRC通过。
+  - 源码ZIP 73389714字节，网络源码29191字节。
+- **冷启动**：从ZIP重新解压，最小PATH、独立配置。NVIDIA/AMD各约10.5秒退出0，本地播放分别提交214/222帧，无QML/D3D12错误。这仍是RTX5070默认效果关闭的冷启动，不能代替AMD实卡推理。
+- **清理**：两个解压副本逐SHA核对后删除，逻辑字节合计2623978645。
+- **旧包保护**：Codex首个2.1.2包目录、其中用户运行时生成的7个配置文件、4个ZIP，均与打包前快照逐字节一致。
+- **共享开发运行目录**：只替换了`veyra_presentation_pacing_tests.exe`。其中的`veyra_qml_ui.exe`被用户正在用的测试实例占用，仍是同一源码早一次的构建`fb1e3ad7…`。
+- **交付**：`E:/项目/Veyra/test-packages/claude-build-2.1.2-dedup-20261102`，内含两包目录、ZIP、源码、SHA256、DELIVERY.json，以及启动脚本`启动2.1.2-NVIDIA测试.cmd`/`启动2.1.2-AMD测试.cmd`（独立配置在`tests/claude-build-2.1.2-dedup-20261102/interactive-*`）。
+- 回执：`E:/项目/Veyra/reports/claude-build-2.1.2-dedup-20261102/FINAL.json`。未push/Release，公开正式版仍为2.1.1。

@@ -421,3 +421,27 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 
 **未验证**：其他采集卡、其他分辨率、P010实机、更吵的场景；60帧内容下VFG高档的预算跳帧（本次未改）；主观观感。
 记录见docs/DEDUP_PRECISE_2026-11-02.md，回执见E:/项目/Veyra/reports/claude-dedup-precise-20261102/FINAL.json。
+
+## 2026-11-02 去重修复合并main并重新打包2.1.2（Claude）
+
+用户：“那不管他，把修复合并到main，然后重新打包2.1.2吧”（“他”指原有的--source-gap失败）。
+
+**提交与合并**：
+- WORKLOG里Codex未提交的监测记录，用hash-object/update-index单独暂存，原样提交为a90b4a9。
+- 修复、文档和package-2.1.2.py的--task参数一起提交为358be8c。
+- main从30337c8快进到358be8c，活动树回到main。
+- 失败一次：为检查语法跑了py_compile，在scripts/acceptance/__pycache__生成了一个pyc。核对路径后只删除该文件，同目录10-21的旧pyc保留；stage的干净源码检查没有受影响。
+
+**构建与检查**（任务claude-build-2.1.2-dedup-20261102）：
+- build-recording-handoff.py --reconfigure --label 2.1.2，12个目标61.5秒通过，回执head为358be8c、dirty=false，主EXE 33d8e615…。
+- run.py cpu-merge 8/8；verify.py qml 132/0/1；run.py gpu-merge 3/3，无D3D12错误。gpu-merge前只把共享运行目录的veyra_presentation_pacing_tests.exe换成本次构建；用户的测试实例（PID 3384）占着该目录的主程序，没有停止它，GPU短测时它也在运行。
+
+**打包与验证**（package-2.1.2.py --task claude-build-2.1.2-dedup-20261102）：
+- stage：20秒，两包通过。
+- seal：147秒。NVIDIA ZIP 676472179字节/1634项，AMD ZIP 716405735字节/2260项，源码ZIP 73389714字节。
+- cold：55秒。两包各约10.5秒退出0，提交214/222帧，无错误。
+- cleanup.ps1核对后删除两个解压副本，合计2623978645逻辑字节；未测净物理回收。
+- finalize.py：旧2.1.2包、用户配置7个文件、旧ZIP、2.1.1供体均未变。
+
+**未验证**：AMD实卡推理；新包在真实采集卡上的效果（修复本身已在去重任务里用PS5实测）；用户主观观感。
+记录见docs/BUILD_2.1.2_TEST_2026-11-02.md末节，回执见E:/项目/Veyra/reports/claude-build-2.1.2-dedup-20261102/FINAL.json。
