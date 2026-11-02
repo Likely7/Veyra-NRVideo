@@ -192,7 +192,9 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"recordFps", {0, 240}}};
     static const QStringList flags{"recordHevc", "recordAudio", "subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect",
+                                   // Bilibili module: backup CDN, danmaku on by default, return to the detail page after playback.
+                                   "biliAutoCdn", "biliDanmaku", "biliReturnAfterEnd"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -201,6 +203,35 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = n;
     } else if (flags.contains(key)) {
         stored = value.toBool();
+    } else if (key == QLatin1String("biliQuality")) {
+        // Bilibili module: the quality a video opens with. 0 = automatic (the best the
+        // account may use, which is HDR on a video that has an HDR master).
+        bool ok = false;
+        const int n = value.toInt(&ok);
+        static const QList<int> allowed{0, 127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16};
+        if (!ok || !allowed.contains(n)) return false;
+        stored = n;
+    } else if (key == QLatin1String("biliCodec")) {
+        // "auto" takes the HDR-capable one first (HEVC), "avc" forces H.264, "hevc" forces HEVC.
+        const QString v = value.toString();
+        if (v != QLatin1String("auto") && v != QLatin1String("avc") && v != QLatin1String("hevc")) return false;
+        stored = v;
+    } else if (key == QLatin1String("biliAudio")) {
+        // Hi-Res, then Dolby, then the highest-bitrate AAC; falls back to auto rather than going silent.
+        const QString v = value.toString();
+        if (v != QLatin1String("auto") && v != QLatin1String("flac") && v != QLatin1String("dolby")
+            && v != QLatin1String("aac192") && v != QLatin1String("aac132")
+            && v != QLatin1String("aac64")) return false;
+        stored = v;
+    } else if (key == QLatin1String("danmakuScale") || key == QLatin1String("danmakuArea")) {
+        // Danmaku appearance: size 50-250%, area 10-100% of the picture height.
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < (key == QLatin1String("danmakuArea") ? 10 : 50) || n > (key == QLatin1String("danmakuArea") ? 100 : 250)) return false;
+        stored = n;
+    } else if (key == QLatin1String("danmakuOpacity") || key == QLatin1String("danmakuSpeed")) {
+        bool ok = false; const int n = value.toInt(&ok);
+        if (!ok || n < (key == QLatin1String("danmakuSpeed") ? 50 : 10) || n > (key == QLatin1String("danmakuSpeed") ? 200 : 100)) return false;
+        stored = n;
     } else if (key == QLatin1String("screenshotDir")) {
         const QString dir = value.toString();
         if (!dir.isEmpty() && !QFileInfo(dir).isDir()) { emit notice(tr("截图目录不存在：%1").arg(dir), true); return false; }
