@@ -225,6 +225,19 @@ int main(){
         check(liveSmoothedCapacityWaitMs(3.125)==2&&liveSmoothedCapacityWaitMs(4.17)==2,"high refresh MFG keeps the 2 ms capacity wait");
         check(std::abs(liveSmoothedCapacityWaitMs(16.68)-1.03)<.01&&liveSmoothedCapacityWaitMs(33.4)==1,"60 Hz 2X waits about 1 ms, and never less");
         check(liveSmoothedCapacityWaitMs(8.33)>1.5&&liveSmoothedCapacityWaitMs(8.33)<2,"120 Hz 2X lies between");
+        check(liveSmoothedCapacityWaitMs(16.68,0)==liveSmoothedCapacityWaitMs(16.68),"no callback jitter: the same wait");
+        check(liveSmoothedCapacityWaitMs(16.68,.04)<1.2,"a steady card barely waits longer");
+        check(std::abs(liveSmoothedCapacityWaitMs(16.68,.48)-2.5)<.01,"sd 0.6 ms (mean distance 0.48 ms) waits 2.5 ms");
+        check(liveSmoothedCapacityWaitMs(16.68,1.5)==3&&liveSmoothedCapacityWaitMs(33.4,20)==3,"and nothing waits more than 3 ms");
+        check(liveSmoothedCapacityWaitMs(4.17,5)==2&&liveSmoothedCapacityWaitMs(8.33,5)==liveSmoothedCapacityWaitMs(8.33)&&liveSmoothedCapacityWaitMs(12.4,5)==liveSmoothedCapacityWaitMs(12.4),"above 80 fps the wait ignores the jitter");
+        const auto measuredJitter=[&](double sdMs){
+            LiveArrivalSmoother smoother;uint32_t seed=7;
+            for(unsigned n=0;n<2000;++n)smoother.anchor(int64_t(n*333643.0*(1-800e-6)),int64_t(n*333643.0+40000+gaussian(seed,sdMs*10000)),interval);
+            return smoother.jitterMs();
+        };
+        check(liveSmoothedCapacityWaitMs(16.68,measuredJitter(.05))<1.25,"the smoother's measure of sd 0.05 ms stays near 1 ms");
+        check(std::abs(liveSmoothedCapacityWaitMs(16.68,measuredJitter(.6))-2.5)<.4,"its measure of sd 0.6 ms lands near 2.5 ms");
+        check(liveSmoothedCapacityWaitMs(16.68,measuredJitter(1.87))==3,"its measure of sd 1.87 ms reaches the limit");
         // Present(0,0) on 60.005 Hz fed with those pairs on the adaptive phase. VFG
         // medium: generated ready 8.5 ms after the callback, 0.3 ms of wake-up jitter.
         // The panel shows the last present before each refresh. A real frame replaced

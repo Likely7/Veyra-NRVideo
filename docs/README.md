@@ -2,6 +2,8 @@
 
 日常只从这些入口开始：
 
+当前独立分支已完成续接收尾、未提交：[垂直同步等待上限3 ms](VSYNC_JITTER_WAIT_2026-11-02.md)。
+
 最新并入本地main（未发布）：[11-01合并记录](MAIN_INTEGRATION_2026-11-01.md)、[补帧返工与VFG自动调控](FG_NO_LATENCY_GROWTH_2026-11-01.md)。
 
 最近并入本地 main（未发布）：[补帧接近刷新率的间歇掉帧](FG_60HZ_PACING_2026-10-31.md)、[英伟达低延迟三档](NVIDIA_LOW_LATENCY_2026-10-28.md)、[RX 7000 NR](AMD_RDNA3_NR_PLAN_2026-10-29.md)、[屏幕捕获与采集音频](CAPTURE_FPS_AUDIO_REPORT_2026-10-27.md)。

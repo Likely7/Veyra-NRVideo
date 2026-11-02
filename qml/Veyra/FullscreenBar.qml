@@ -4,8 +4,8 @@
 // is drawn above everything in the main window's scene. A bar in the main scene
 // would need a hole cut out of the picture; the design (and D1 in the goal plan)
 // puts it in a separate small window instead. It is owned by the main window
-// (always above it, never above other applications), takes no keyboard focus (the
-// shortcuts stay with the main window), and is hidden outright when the controls
+// (always above it, never above other applications), takes keyboard focus only
+// while typing a parameter, and is hidden outright when the controls
 // hide, so a hidden bar composes nothing over the video.
 //
 // The window is taller than the pill so the preset menu can open upwards inside it;
@@ -30,6 +30,8 @@ Window {
     signal activity()
     readonly property bool hovered: bar.hovered
     readonly property bool menuOpen: bar.menuOpen
+    readonly property bool editing: bar.editing
+    readonly property bool interacting: bar.interacting
     // G3.2 (D1): the same window carries the cinema pill in windowed 极简 mode, where
     // it straddles the picture's bottom edge: its top is pillTop (owner-relative),
     // half over the native video window and half below it. In fullscreen it sits
@@ -38,7 +40,25 @@ Window {
     property real pillTop: 0
 
     transientParent: owner
-    flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
+    // Keep the native flags stable: toggling WindowDoesNotAcceptFocus while
+    // visible can discard the software-rendered translucent window contents.
+    // Ordinary clicks hand activation back to the owner; typing keeps it here.
+    flags: Qt.Tool | Qt.FramelessWindowHint
+    // Clicking the video or another window must commit, too: the QML input
+    // can retain activeFocus inside a window that no longer has OS focus.
+    onActiveChanged: {
+        if (!active && editing) bar.finishEditing()
+        else if (active && !interacting) Qt.callLater(function() {
+            if (win.active && !win.interacting) owner.requestActivate()
+        })
+    }
+    onInteractingChanged: if (!interacting && active) Qt.callLater(function() {
+        if (win.active && !win.interacting) owner.requestActivate()
+    })
+    onShownChanged: {
+        if (!shown && editing) bar.finishEditing()
+        if (shown && cinema) enter()
+    }
     color: "transparent"
 
     // Room for the pill plus the preset menu above it (VMenu is at most 420 tall).
@@ -87,7 +107,6 @@ Window {
     function enter() { barIn.restart() }
     // The cinema pill enters with barIn each time it appears (page shown, dialog
     // closed); the fullscreen one keeps the plain fade and rise.
-    onShownChanged: if (shown && cinema) enter()
     SequentialAnimation {
         id: barIn
         ScriptAction { script: { win.enterDy = 30; win.enterScale = 0.94; win.enterOpacity = 0 } }

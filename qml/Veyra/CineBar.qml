@@ -30,13 +30,16 @@ Rectangle {
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     readonly property bool seekPreviewOpen: seekMouse.containsMouse && seekMouse.enabled
+    readonly property bool editing: volumeSlider.editing
+    readonly property bool interacting: volumeSlider.pressed || editing
+    function finishEditing() { volumeSlider.closeEditor(true) }
     HoverHandler { id: barHover }
     // Buttons, the seek rail and the volume slider take their own presses first; only
     // a drag that starts on empty pill reaches this one.
     DragHandler {
         objectName: "cine-move"
         target: null
-        enabled: !bar.fullscreen
+        enabled: !bar.fullscreen && !volumeSlider.pressed && !volumeSlider.editing
         // Never take a drag over from a control: by default a DragHandler steals the grab
         // from an item once the pointer passes the drag threshold, so scrubbing the seek
         // rail moved the window instead (field report 2026-10-02).
@@ -367,7 +370,7 @@ Rectangle {
 
         // --- right: preset, volume, fullscreen (230px) ---------------
         RowLayout {
-            Layout.preferredWidth: 284; Layout.minimumWidth: 284; Layout.maximumWidth: 284
+            Layout.preferredWidth: 308; Layout.minimumWidth: 308; Layout.maximumWidth: 308
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
             spacing: 6
 
@@ -384,15 +387,22 @@ Rectangle {
             }
 
             Item {
-                implicitWidth: 80
-                implicitHeight: 20
+                implicitWidth: 104
+                implicitHeight: 32
+                Layout.minimumWidth: 104
                 RowLayout {
                     anchors.fill: parent
                     spacing: 6
                     VIcon { name: "vol"; color: Theme.t2 }
                     VSlider {
+                        id: volumeSlider
+                        objectName: "cine-volume"
                         Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.minimumWidth: 72
                         from: 0; to: 1; value: veyra.volume; inputScale: 100
+                        valueFromModel: true
+                        fullKnobHitArea: true
                         onMoved: moved => veyra.volume = moved
                     }
                 }

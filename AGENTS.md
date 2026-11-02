@@ -1,5 +1,9 @@
 # Veyra Agent 工作规则
 
+> **2026-11-01 极简音量交互修复（最新）**：当前claude/vsync-jitter-wait-20261102工作区同时保留之前补帧修改与本轮QML音量修复，未提交/合并/发布。音量两端/快速拖动、Return/Enter和空白提交、焦点清理及播放条移动手势隔离已验；QtQuick132/0/1，真实Windows极简操作通过。运行目录仍tests/claude-sr-stage-20261028/app，记录活动树docs/MINIMAL_VOLUME_FIX_2026-11-01.md，回执reports/codex-cinema-volume-20261101/FINAL.json。
+
+> **2026-11-02 垂直同步等待跟随抖动（最新）**：用户问60 Hz垂直同步为何仍丢帧，选择“上限3 ms”。活动树现在分支`claude/vsync-jitter-wait-20261102`（基于main `8535791`，未提交、未merge、未push/Release）：显式垂直同步、输出不高于80 fps时，生成帧的容量等待随测得的回调抖动增加，上限3 ms；自动模式和高刷规则不变。`VEYRA_TEST_FIXED_CAPACITY_WAIT=1`恢复固定等待。记录`docs/VSYNC_JITTER_WAIT_2026-11-02.md`，分析`E:/项目/Veyra/reports/claude-vsync-slots-20261102/FINDINGS.md`。320 Hz回归通过。真实60 Hz回放注入1.9 ms抖动：DLSS生成帧提交缺口37.7→5.6/分，VFG中档5.6→2.8/分（短样本，非实际显示丢帧）。原上屏格点估算不能证明屏幕延迟，已撤销其验收结论。Codex于本地11-01完成续接、最小复验及配置/运行组件核验，回执reports/codex-vsync-handoff-20261101/FINAL.json；分支仍未提交、未合并。没有用真实采集卡和高抖动实卡验证。
+
 > **2026-11-01 用户授权并入main（最新）**：Claude的补帧延迟返工及VFG自动调控已原样提交为`6e79a5e`，由main `13016a8`快进合入。活动树现在main；覆盖下面该任务“未合并”的旧状态。合并记录`docs/MAIN_INTEGRATION_2026-11-01.md`，回执`E:/项目/Veyra/reports/codex-main-integration-20261101/FINAL.json`。本轮相关构建、8组合同/设置、QtQuick123/0/1、VFG开关/DLSS6X/XeSS2X短测及列表/节点真实开关和重启保存通过；原配置/默认运行组件保持。没有重做60Hz性能A/B、实卡采集或5060Ti验收；未push/Release，正式版仍2.1.1。
 
 > **2026-11-01 补帧延迟不增长返工（最新）**：用户不接受10-31修复的延迟增长。分支`claude/fg-no-latency-growth-20261101`（基于main 13016a8，未合并、未push/Release）撤掉自动模式队列、长等待和放宽的VFG预算，改平滑呈现锚点，VFG 2X赶不上刷新时这一对改用下一档模型。真实60 Hz实测见docs/FG_NO_LATENCY_GROWTH_2026-11-01.md，回执E:/项目/Veyra/reports/claude-fg-sidefx-20261101/FINAL.json。`VEYRA_TEST_LEGACY_LIVE_PACING=1`恢复旧规则。真实采集卡和5060 Ti未验证，5060 Ti速度是人为加延迟模拟的。

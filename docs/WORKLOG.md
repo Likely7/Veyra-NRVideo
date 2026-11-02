@@ -330,3 +330,41 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 真实GUI两次启动、独立profile：列表开关、低档/超过2X置灰、节点实际双向切换及置灰、中文/英文改名、保存重启均通过，无QML错误；补上Claude只加载节点页未点开关的空缺。Main.qml恢复。EXE/worker/shader与构建一致，QML/翻译一致；正式供体1730项、原默认运行组件97项核验，原用户配置7文件SHA未变；i18n2718条缺失/占位符问题0。
 
 证据reports/codex-main-integration-20261101：before/merge/cpu-merge/qml/gpu-merge/ui-regulate/audit/FINAL.json与复现脚本；日志logs同任务；运行目录仍tests/claude-sr-stage-20261028/app。没有重做60Hz性能A/B、实卡采集/5060Ti/RX7000/VRR验收，没有重复全量测试或跑原8K危险组合；Claude的已知source-gap/FSR探针依赖问题边界保持，不冒称全部通过。仅清本轮可再生TEMP，清理逻辑字节和保留路径见cleanup.json；未测物理净回收。
+
+## 2026-11-02 垂直同步容量等待跟随回调抖动（Claude）
+
+用户问60 Hz垂直同步为何仍丢部分帧、有什么办法，看完选项后选“上限3 ms”。分支claude/vsync-jitter-wait-20261102从main 8535791，未提交、未merge、未push/Release。执行记录[VSYNC_JITTER_WAIT_2026-11-02](VSYNC_JITTER_WAIT_2026-11-02.md)，分析reports/claude-vsync-slots-20261102/FINDINGS.md，脚本tmp/claude-vsync-slots-20261102。
+
+分析：现场日志`[capture-callback]`算出回调到达抖动，T911和G50为0.01–0.06 ms，KUHAIMI 4K60 Version（veyra-qml(69).log，4K30）为1.87 ms，所以11-01注入的1.9 ms只代表最后这张卡。先试“预分配刷新格点”，模型显示没有优势，撤回；屏幕刷新率匹配同样无效；只有等待时长能换丢帧，且代价随抖动增加。
+
+改动：`liveSmoothedCapacityWaitMs`增加抖动参数，输出不高于80 fps时等待为`1+3.125×平均偏差`，下限原规则，上限3 ms；自动模式、高刷MFG、内容去重、串流不变。`[live-anchor]`加`capacityWaitMs`，`VEYRA_TEST_FIXED_CAPACITY_WAIT=1`恢复固定等待。
+
+失败与修正：第一次构建失败（error C3493，显式捕获的lambda没有`liveArrival`），因为输出经过管道，后台任务报退出码0，那轮单测跑的是引擎未更新的程序，已作废。补捕获后69.4秒通过，并改为直接核对build.py退出码。
+
+结果（320 Hz）：timing 151项、preview通过；cpu 14项通过，另7项是没传参数的usage退出（名单和上个任务相同）；cpu2 12/0；gpu 20/0；live 5/1，`--source-gap`失败，是已记录的不稳定项，这次没有再查。`wait sanity`注入0.05/0.6/1.9 ms，测得平均偏差0.048/0.514/1.623，等待1.15/2.60/3.00 ms，容量丢帧都是0，面板平均24.15–24.25 ms（固定规则24.33 ms）。320 Hz队列不紧张，这只说明没有副作用。
+
+真实60 Hz（用户切屏，日志核对60.000 Hz；`wait hz60/hz60b/hz60c`共14轮全部退出0，每轮跳过前5秒）：DLSS注入1.9 ms，固定→新，少显示生成帧37.7→5.6/分（各43秒，27→4帧），上屏估算平均30.93→32.20 ms，P95 38.64→39.73，P99 39.97→40.68，最大46.68→41.69。VFG中档注入1.9 ms，5.6→2.8/分（4→2帧，样本少），平均30.78→31.17，P99 39.35→39.73，最大49.30→40.55。DLSS注入0.05 ms（等待1.02→1.15 ms，各9秒），都是0，平均30.05→29.97。上屏时刻是按刷新格点估算的，拟合误差0.16–0.89 ms。中途纠错：第一版统计含DLSS启动段，呈现P95读成34 ms，逐秒看后确认是启动的2–3秒、新旧规则都有，统计改为跳过前5秒。证据reports/claude-vsync-slots-20261102。
+
+未验证：真实采集卡、高抖动实卡、FSR和VFG高档的60 Hz对比。未改真实配置、运行组件、采集卡。
+
+
+## 2026-11-01 Codex接手Claude垂直同步3 ms等待收尾
+
+完整核对最新Claude会话9720f799-88ff-48b9-847a-6fef8a5f00e5的用户选择、切屏确认、测试完成和额度中断。当前claude/vsync-jitter-wait-20261102基于main8535791，7文件原始SHA/ZIP/补丁保全在archives/codex-vsync-handoff-20261101。没有新功能要求，不改算法；头文件注释撤回不成立的物理上屏收益，保持Claude代码/测试主体。
+
+本节纠正上一节“少显示生成帧”和“上屏估算”口径：14轮日志复算，DLSS高抖动稳态真实/生成提交1284/1257→1285/1281，VFG中档1284/1280→1286/1284；分别是提交差27→4、4→2，不是扫描显示计数。原panel_est.py强制每次提交占不同刷新格点，不能验证被替换帧及真实上屏延迟；+1.27/+0.39 ms和重复帧率/P95/P99等推估不作验收。原captureToPresent*混用相对PTS和host时间无意义。有效软件时刻拟合线→Present均值DLSS21.88→21.97 ms、VFG21.85→21.83 ms，不是物理延迟或零增长保证。原始报告保留，正文和当前入口纠正。
+
+命令：python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-vsync-handoff-20261101 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.1-test --jobs 2 veyra_live_timing_tests veyra_realtime_preview_tests veyra_presentation_pacing_tests veyra_qml_ui；11.8秒退出0。reports/codex-vsync-handoff-20261101/verify.py stage/handoff：两组CPU和DLSS/VFG中档8秒实测窗口通过，真实60Hz、预算跟随至3ms、提供方实际生成、干净退出、无D3D12错误。没有重跑全量或更改显示/用户进程；继承Claude的source-gap失败如实保留。
+
+运行目录仍tests/claude-sr-stage-20261028/app，测试入口tests/claude-fg-60hz-pacing-20261031/启动补帧刷新率测试.cmd。最终配置/运行组件SHA、清理、空间与产物在reports/codex-vsync-handoff-20261101/FINAL.json。未提交、未合并main、未push/Release；真实采集卡与物理显示延迟未验。详见docs/VSYNC_JITTER_WAIT_2026-11-02.md。
+
+收尾核验：原用户配置7文件SHA未变、默认运行组件97项一致；EXE/worker/shader均匹配构建。自动审批两次拒绝本轮可再生TEMP清理，仅返回blocked by policy，无具体理由；未删除任何缓存，保留两个run目录共7617338逻辑字节，见cleanup.json。无物理空间回收声明。
+
+
+## 2026-11-01 极简播放条音量交互修复
+
+用户反馈难拖、输入后空白与回车不确认。在当前claude/vsync-jitter-wait-20261102保留此前未提交改动，只修QML与对应测试。FullscreenBar固定可激活标志、交互结束归还焦点，外部失焦/隐藏提交；VSlider完整按下位移、端点命中音量专用扩展、空白被动提交与键盘确认/取消/隐藏焦点清理；CineBar扩大音量区域并禁止其手势触发移动窗口；全屏编辑不自动隐藏。
+
+构建产品与QuickTest最终0.7秒通过（并发2，build-20261101-235611）；新旧夹具分开检查后最终132/0/1既有跳过、33.4秒，包含单次快速/两端拖动、模型绑定、Return/Enter、空白、焦点、Esc及原NR控件。i18n2718条缺失/占位符0，diff检查通过。真实Windows极简窗口操作确认100%→21.95%快速拖、63回车→0.63、41点击空白→0.41，未随之移动窗口，测试观测代码已恢复为产品源码。不是声学音量测试；人工未覆盖全屏。详细记录docs/MINIMAL_VOLUME_FIX_2026-11-01.md，回执reports/codex-cinema-volume-20261101/FINAL.json。
+
+失败/纠正：动态窗口flag导致软件渲染内容丢失，已改稳定flag；一次整轮130/2/1，快速拖改用centroid总位移，公共扩大命中影响NR选择则缩到音量opt-in，最终全过。一个原型测试进程核对PID/EXE/私有data-dir后停止；未停用户进程。首次123项使用旧夹具，未计入新测试证明。原补帧代码及原配置/运行组件保护结果、产物空间见FINAL。未提交、未合并main、未push/Release。

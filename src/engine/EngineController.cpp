@@ -1147,6 +1147,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // VEYRA_TEST_LEGACY_LIVE_PACING=1 restores the callback anchor, the
             // 2 ms capacity wait and the lone VFG probe for A/B runs.
             static const bool legacyLivePacing=GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_LIVE_PACING",nullptr,0)>0;
+            // A/B: the capacity wait before it followed the measured callback jitter.
+            static const bool fixedCapacityWait=GetEnvironmentVariableW(L"VEYRA_TEST_FIXED_CAPACITY_WAIT",nullptr,0)>0;
             LiveArrivalSmoother liveArrival;int64_t liveGeneratedGrace=kLiveGeneratedGrace100ns,nextLiveAnchorLog=0;
             FgCostSettling vfgCostSettling;
             double vfgChosenFgMs=0,vfgFastFgMs=0;uint64_t vfgFastPairs=0,vfgFastBudgetPairs=0,vfgChosenPairs=0;int64_t vfgChosenAt=0,nextVfgFastLog=0;
@@ -2548,7 +2550,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         liveTimeline.resetPair(out.batch.identity.epoch,out.batch.b100ns,presentAnchor,options.fg?pairDelay:0,paceSourcePts);
                         if(smoothAnchor&&host100ns()>=nextLiveAnchorLog){
                             nextLiveAnchorLog=host100ns()+10000000;
-                            veyra::log::info("live-anchor",std::format("revision={} callbackJitterMs={:.3f} clockDriftPpm={:.0f} snaps={} callbackMinusAnchorMs={:.3f} (presentation anchor: source PTS plus a tracked offset to the capture callback, less a 0.5 ms lead)",options.settings.revision,liveArrival.jitterMs(),liveArrival.driftPpm(liveInterval),liveArrival.snaps(),double(liveInputReady-presentAnchor)/10000));
+                            veyra::log::info("live-anchor",std::format("revision={} callbackJitterMs={:.3f} clockDriftPpm={:.0f} snaps={} callbackMinusAnchorMs={:.3f} capacityWaitMs={:.2f} (presentation anchor: source PTS plus a tracked offset to the capture callback, less a 0.5 ms lead; capacity wait applies under explicit VSync)",options.settings.revision,liveArrival.jitterMs(),liveArrival.driftPpm(liveInterval),liveArrival.snaps(),double(liveInputReady-presentAnchor)/10000,liveSmoothedCapacityWaitMs(double(liveInterval)/10000/std::max(1u,previewFgMultiplier),fixedCapacityWait?0:liveArrival.jitterMs())));
                         }
                     }
                     else if(!liveTimeline.anchored(out.batch.identity.epoch,paceSourcePts))liveTimeline.reset(out.batch.identity.epoch,out.batch.b100ns,liveInputReady,options.fg?duration100ns:0,paceSourcePts);
@@ -2598,7 +2600,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_XBOX
                         &xb,
 #endif
-                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&generatedDropCap,&generatedDropCapacity,&generatedDropDeadline,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,generatedGrace=liveGeneratedGrace,smoothAnchor,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
+                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&generatedDropCap,&generatedDropCapacity,&generatedDropDeadline,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&liveArrival,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,generatedGrace=liveGeneratedGrace,smoothAnchor,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
                         using State=LiveGpuScheduler::State;auto& batch=watch->output;auto& s=*step;
                         auto updatePending=[&](LiveStepState*){
                             unsigned left=0;for(unsigned i=s.next;i<batch.batch.count;++i)if(batch.batch.frames[i].kind!=pipeline::FrameKind::Generated||batch.batch.frames[i].validity==pipeline::GenerationValidity::Valid)++left;
@@ -2686,7 +2688,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 if(generated&&!legacyVsyncQueue){
                                     if(!s.capacityStart)s.capacityStart=Clock::now();
                                     const double outputIntervalMs=sourceIntervalMs/std::max(1u,batch.batch.count);
-                                    if(elapsedMs(*s.capacityStart)>std::min(smoothAnchor?liveSmoothedCapacityWaitMs(outputIntervalMs):2.0,outputIntervalMs/2)){++generatedDropCapacity;++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();s.capacityStart.reset();continue;}
+                                    if(elapsedMs(*s.capacityStart)>std::min(smoothAnchor?liveSmoothedCapacityWaitMs(outputIntervalMs,fixedCapacityWait?0:liveArrival.jitterMs()):2.0,outputIntervalMs/2)){++generatedDropCapacity;++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();s.capacityStart.reset();continue;}
                                 }
                                 return {State::Pending,optionalNow+2000};
                             }

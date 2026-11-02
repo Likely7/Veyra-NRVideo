@@ -104,5 +104,17 @@ inline bool liveFramesShareRefresh(int64_t generated,int64_t real,int64_t lastVb
 // 2X model: 2 ms keeps 0.6% more frames but holds real frames 0.7 ms longer on
 // average than 1 ms. 320 Hz A/B: 1 ms loses 3-6% of the presents for nothing at
 // P99, and 2 ms shows no growth against the callback anchor.
-inline double liveSmoothedCapacityWaitMs(double outputIntervalMs){return std::clamp(2-(outputIntervalMs-5)/12,1.0,2.0);}
+// Near 60 Hz the frames this limit loses come from callback jitter, and that differs
+// between cards by two orders: sd 0.01-0.06 ms on MCS T911 and KUHAIMI G50, 1.87 ms
+// on KUHAIMI 4K60 Version at 4K30 (field logs, 2026-11). So there the wait follows
+// the jitter the smoother measures, 1 ms + 2.5 sd (its mean distance is 0.8 sd), to
+// at most 3 ms. Real 60 Hz replay with injected callback jitter reduced missing
+// generated-frame submissions in the short A/B runs. Submission counts and a
+// fitted refresh grid do not establish physical display loss or panel latency;
+// see docs/VSYNC_JITTER_WAIT_2026-11-02.md for evidence and measurement limits.
+inline constexpr double kLiveJitterWaitMinIntervalMs=12.5,kLiveJitterWaitMaxMs=3;
+inline double liveSmoothedCapacityWaitMs(double outputIntervalMs,double callbackJitterMs=0){
+    const double base=std::clamp(2-(outputIntervalMs-5)/12,1.0,2.0);
+    return outputIntervalMs<kLiveJitterWaitMinIntervalMs?base:std::clamp(1+3.125*callbackJitterMs,base,kLiveJitterWaitMaxMs);
+}
 }

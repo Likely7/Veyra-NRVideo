@@ -11,6 +11,9 @@ Item {
     property bool center: false        // fill from the middle instead of the left
     property bool showCenterFill: false // Colour controls opt in; other pages keep their visuals.
     property bool enabledControl: true
+    // Compact standalone rails can include the protruding endpoint knob;
+    // dense parameter rows keep their original hit bounds.
+    property bool fullKnobHitArea: false
     // A containing parameter widget can opt in without changing non-parameter sliders.
     property bool resettable: parent && typeof parent.sliderResetEnabled !== "undefined" && parent.sliderResetEnabled
     property real defaultValue: 0
@@ -25,6 +28,7 @@ Item {
     property bool live: true
     // True while the knob is held (tests read it; the owner may too).
     readonly property bool dragging: drag.active
+    readonly property bool pressed: drag.active || trackTap.pressed
     Timer {
         id: liveTimer
         interval: 40
@@ -51,18 +55,24 @@ Item {
         if (!editable || !enabledControl) return
         editorInput.text = Number((value * inputScale).toFixed(inputDecimals)).toString()
         editor.visible = true
+        if (slider.Window.window) slider.Window.window.requestActivate()
         editorInput.forceActiveFocus()
         editorInput.selectAll()
     }
     function closeEditor(apply) {
         if (!editor.visible) return
+        const heldFocus = editorInput.activeFocus
         editor.visible = false
+        editorInput.focus = false
         if (apply) {
             const typed = Number(editorInput.text.trim().replace(",", "."))
             if (editorInput.text.trim().length > 0 && isFinite(typed))
                 commitValue(Math.max(Math.min(from, to), Math.min(Math.max(from, to), typed / inputScale)))
         }
-        slider.forceActiveFocus()
+        // Losing focus to another editor must not steal it back. Clear hidden
+        // typing focus on explicit confirmation/cancel instead of reopening it.
+        if (heldFocus && slider.Window.window)
+            slider.Window.window.contentItem.forceActiveFocus()
     }
 
     // Keyboard (field request 2026-10-01): a clicked or dragged slider takes focus and the
@@ -82,7 +92,7 @@ Item {
             || (editable && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter))) event.accepted = true
     }
     Keys.onPressed: event => {
-        if (!enabledControl) return
+        if (!enabledControl || editing) return
         if (event.key === Qt.Key_Left || event.key === Qt.Key_Down) { nudge(-1); event.accepted = true }
         else if (event.key === Qt.Key_Right || event.key === Qt.Key_Up) { nudge(1); event.accepted = true }
         else if (event.key === Qt.Key_Escape) { focus = false; event.accepted = true }
@@ -143,36 +153,49 @@ Item {
     }
     Item {
     id: trackInput
-    width: track.width
+    // The endpoint knob protrudes past the rail. Its whole circle must accept
+    // a press, especially at 100% where its centre is just outside the rail.
+    readonly property real hitPadding: slider.fullKnobHitArea ? knob.width / 2 : 0
+    x: -hitPadding
+    width: track.width + 2 * hitPadding
     height: parent.height
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor; enabled: slider.enabledControl }
     DragHandler {
         id: drag
         target: null
         enabled: slider.enabledControl
-        // activeTranslation is measured from the press, so it adds to where the knob
-        // was then, not to where it is now.
+        // Measure from the original press, including the move which crossed the
+        // drag threshold; activeTranslation starts at activation and can be zero
+        // for that move.
         property real startX: 0
-        onActiveTranslationChanged: {
-            const x = Math.max(0, Math.min(track.width, startX + activeTranslation.x))
+        function updateDragValue() {
+            const delta = centroid.position.x - centroid.pressPosition.x
+            const x = Math.max(0, Math.min(track.width, startX + delta))
             slider.dragValue = slider.from + (x / track.width) * (slider.to - slider.from)
             if (!slider.valueFromModel) slider.value = slider.dragValue
             if (slider.live && !liveTimer.running) liveTimer.start()
         }
+        onActiveTranslationChanged: if (active) updateDragValue()
         onActiveChanged: {
             if (active) {
                 slider.forceActiveFocus()
-                slider.dragValue = slider.value
-                startX = track.width * slider.frac
+                // The threshold-crossing move may be the only move in a quick
+                // drag. Apply it now, using the value captured at press time.
+                updateDragValue()
             } else { liveTimer.stop(); slider.commitValue(slider.valueFromModel ? slider.dragValue : slider.value) }
         }
     }
     TapHandler {
+        id: trackTap
         enabled: slider.enabledControl
         // Node cards may overlap: consume track clicks rather than also
         // activating an inspector button on a card underneath this slider.
         gesturePolicy: TapHandler.WithinBounds
         property real beforeTap: 0
+        onPressedChanged: if (pressed) {
+            drag.startX = track.width * slider.frac
+            slider.dragValue = slider.value
+        }
         onTapped: (point, button) => {
             // The second tap of a double-click opens the editor and undoes the first
             // tap's jump, so typing starts from the value the slider had.
@@ -183,7 +206,7 @@ Item {
             }
             beforeTap = slider.value
             slider.forceActiveFocus()
-            const x = Math.max(0, Math.min(track.width, point.position.x))
+            const x = Math.max(0, Math.min(track.width, point.position.x - trackInput.hitPadding))
             slider.commitValue(slider.from + (x / track.width) * (slider.to - slider.from))
         }
     }
@@ -213,10 +236,22 @@ Item {
             font.pixelSize: Theme.fsSmall
             selectByMouse: true
             inputMethodHints: Qt.ImhFormattedNumbersOnly
-            Keys.onReturnPressed: slider.closeEditor(true)
-            Keys.onEnterPressed: slider.closeEditor(true)
-            Keys.onEscapePressed: slider.closeEditor(false)
+            Keys.onShortcutOverride: event => event.accepted = true
+            Keys.onReturnPressed: event => { event.accepted = true; slider.closeEditor(true) }
+            Keys.onEnterPressed: event => { event.accepted = true; slider.closeEditor(true) }
+            Keys.onEscapePressed: event => { event.accepted = true; slider.closeEditor(false) }
             onActiveFocusChanged: if (!activeFocus && editor.visible) slider.closeEditor(true)
+        }
+    }
+    // Empty space often does not take focus. Observe outside presses passively,
+    // so they commit without swallowing the next control's click or drag.
+    TapHandler {
+        parent: slider.Window.window ? slider.Window.window.contentItem : slider
+        enabled: slider.editing
+        gesturePolicy: TapHandler.DragThreshold
+        onPressedChanged: if (pressed) {
+            const p = editor.mapFromItem(parent, point.position.x, point.position.y)
+            if (!editor.contains(p)) slider.closeEditor(true)
         }
     }
     ToolButton {
