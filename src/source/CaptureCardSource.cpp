@@ -941,7 +941,7 @@ void CaptureCardSource::setVerticalFlip(bool enabled){
     log::info("capture-flip",std::format("manual vertical flip={} (applies to the next sample; ingest only)",enabled?1:0));
 }
 void CaptureCardSource::setPictureCompare(bool enabled){
-    if(p_->pictureCompare.exchange(enabled)!=enabled)log::info("capture-dedup",std::format("picture compare={} (whole driver sample against the last new picture, band {} levels of 255; content dedup)",enabled?1:0,pipeline::PictureReference::kBand8));
+    if(p_->pictureCompare.exchange(enabled)!=enabled)log::info("capture-dedup",std::format("picture compare={} (whole driver sample against the last new picture, band {} levels of 255, about 5 per million components may lie beyond it; content dedup)",enabled?1:0,pipeline::PictureReference::kBand8));
 }
 void CaptureCardSource::setCpuUnpack(bool enabled){
     auto& p=*p_;

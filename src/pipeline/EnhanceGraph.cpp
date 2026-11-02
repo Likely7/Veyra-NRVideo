@@ -2295,7 +2295,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         cadence_.observe(ptsMs,sad,previousLuma_.size()==sample.size());
         out.measuredContentRate=cadence_.confirmedRate(desc_.contentRate);
         if(cadence_.conflicts(desc_.contentRate)&&realFrameIndex_%60==0)veyra::log::warn("cadence","requested content-rate identification conflicts with observed motion; preserving source timestamps");
-        out.contentDuplicate=desc_.contentRate!=engine::ContentRate::Transport&&previousLuma_.size()==sample.size()&&sad<0.0001;
+        // This sample once also marked a pair a duplicate (SAD < 0.0001) and
+        // discarded its generated frame after it was computed. 64x36 points
+        // miss small real changes the whole-picture dedup keeps (PictureCompare.h):
+        // a still screen ran at 30 real + 15 generated fps (field log 2026-11-02),
+        // and a pair of equal pictures generates an equal picture anyway.
         // Source ids advance per received/decoded frame, including frames the
         // engine skipped or the capture mailbox replaced; normalise by that step.
         const uint64_t sourceStep=sceneLastSourceId_&&sourceFrameId>sceneLastSourceId_?sourceFrameId-sceneLastSourceId_:1;
@@ -3457,8 +3461,7 @@ bool EnhanceGraph::resolveFrame(FrameOutputs& out,uint32_t index)
         }
     }
     if(fsrActive()||vfgBackend_){
-        frame.validity=out.contentDuplicate?GenerationValidity::Disabled:GenerationValidity::Valid;
-        if(out.contentDuplicate){++metrics_.fgDisabledFrames;++metrics_.fgDuplicateSuppressed;}else ++metrics_.fgGeneratedFrames;
+        frame.validity=GenerationValidity::Valid;++metrics_.fgGeneratedFrames;
         return true;
     }
     // Readback heaps may stay mapped; the 4-byte status is read directly.
@@ -3466,13 +3469,10 @@ bool EnhanceGraph::resolveFrame(FrameOutputs& out,uint32_t index)
     if(!mapped){D3D12_RANGE range{0,4};void* data=nullptr;const HRESULT hr=fgDisableReadback_[frame.lease->slot]->Map(0,&range,&data);
         if(FAILED(hr)){frame.validity=GenerationValidity::Failed;veyra::log::error("fg-status",std::format("Map hr=0x{:X}",unsigned(hr)));return true;}mapped=static_cast<const volatile uint8_t*>(data);}
     const bool disabled=*mapped!=0;
-    const bool rejected=disabled||out.contentDuplicate;
     metrics_.fgProviderDisabled+=disabled;
-    metrics_.fgDuplicateSuppressed+=out.contentDuplicate;
-    metrics_.fgBothDisabled+=disabled&&out.contentDuplicate;
-    frame.validity=rejected?GenerationValidity::Disabled:GenerationValidity::Valid;
-    if(rejected)++metrics_.fgDisabledFrames;else ++metrics_.fgGeneratedFrames;
-    if(veyra::log::verboseFrameLogs())veyra::log::info("fg-status",std::format("batch={} frame={} epoch={} revision={} subframe={} fence={} providerDisabled={} contentDuplicate={} valid={}",out.batch.batchId,out.realFrameIndex,out.batch.identity.epoch,out.batch.identity.settingsRevision,frame.subframe,frame.lease->readyFence,disabled,out.contentDuplicate,!rejected));
+    frame.validity=disabled?GenerationValidity::Disabled:GenerationValidity::Valid;
+    if(disabled)++metrics_.fgDisabledFrames;else ++metrics_.fgGeneratedFrames;
+    if(veyra::log::verboseFrameLogs())veyra::log::info("fg-status",std::format("batch={} frame={} epoch={} revision={} subframe={} fence={} providerDisabled={} valid={}",out.batch.batchId,out.realFrameIndex,out.batch.identity.epoch,out.batch.identity.settingsRevision,frame.subframe,frame.lease->readyFence,disabled,!disabled));
     return true;
 }
 

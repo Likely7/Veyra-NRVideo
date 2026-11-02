@@ -172,6 +172,9 @@ def cold():
         audit(a,flavor);print('COLD PASS',flavor,presented,flush=True)
     write(REPORT/'cold.json',dict(passed=True,results=results,scope='Local RTX5070 startup/playback with default effects off, not AMD inference or physical capture'))
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=['stage','seal','cold']);args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['stage','seal','cold'])
+    # A rebuild of 2.1.2 gets its own task folders; earlier packages and the profiles in them stay untouched.
+    p.add_argument('--task',default=T);args=p.parse_args()
+    T=args.task;O=B/'test-packages'/T;REPORT=B/'reports'/T
     for folder in (O,REPORT):folder.mkdir(parents=True,exist_ok=True)
     dict(stage=stage,seal=seal,cold=cold)[args.mode]()

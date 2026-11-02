@@ -337,6 +337,41 @@ int main(){
         check(!exact.observe(&e1,1,PictureComponents::Exact).repeat,"packed 10-bit / 5-6-bit layouts compare exactly");
         check(!bytes(ref,base,32).repeat,"a different layout is a new picture");
         PictureReference one{1},two{2};check(bytes(one,base).id!=bytes(two,base).id,"picture numbers of different references never collide");
+        check(PictureReference::toleranceFor(3840ull*2160*3/2)==63&&PictureReference::toleranceFor(1920ull*1080*3/2)==15&&PictureReference::toleranceFor(base.size())==0,
+            "outlier tolerance: 63 components in 4K NV12, 15 in 1080p, none in a small picture");
+        // 4K NV12 (T911, 2026-11-02): a repeat now and then has one component 4 levels off.
+        std::vector<uint8_t> luma(3840*2160),chroma(3840*1080);
+        for(size_t i=0;i<luma.size();++i)luma[i]=uint8_t(40+(i*7919+i/3840*31)%160);
+        for(size_t i=0;i<chroma.size();++i)chroma[i]=uint8_t(90+(i*104729)%60);
+        auto nv12=[](PictureReference& r,const std::vector<uint8_t>& y,const std::vector<uint8_t>& uv){
+            PicturePlane planes[2]{{y.data(),3840,3840,2160},{uv.data(),3840,3840,1080}};return r.observe(planes,2,PictureComponents::Bytes);};
+        auto outliers=[&](unsigned count,int levels){auto y=luma;for(unsigned k=0;k<count;++k){auto& v=y[(size_t(k)*1048573+12345)%y.size()];v=uint8_t(v+levels);}return y;};
+        PictureReference card;const auto shown=nv12(card,luma,chroma);
+        const auto one4=nv12(card,outliers(1,4),chroma);
+        check(one4.repeat&&one4.id==shown.id&&one4.over==1&&one4.max8==4,"4K: a repeat with one component 4 levels off keeps its number");
+        const auto many=nv12(card,outliers(63,9),chroma);
+        check(many.repeat&&many.id==shown.id&&many.over==63,"4K: 63 isolated components beyond the band are still the same picture");
+        const auto past=nv12(card,outliers(64,9),chroma);
+        check(!past.repeat&&past.id!=shown.id&&past.over==64,"4K: the 64th makes a new picture");
+        {// The smallest real change seen in the field (a still screen, 156 components) stays a new picture.
+         PictureReference still;nv12(still,luma,chroma);auto y=luma;for(unsigned row=0;row<12;++row)for(unsigned x=0;x<13;++x)y[(1000+row)*3840+2000+x]+=12;
+         const auto r=nv12(still,y,chroma);check(!r.repeat&&r.over==156,"4K: a 13x12 change of a still screen is a new picture");}
+        {// A small element changing on every sample, back and forth (14 components): one picture.
+         PictureReference blink;const auto a=nv12(blink,luma,chroma);bool same=true;
+         for(int k=1;k<8;++k){auto y=luma;if(k%2)for(unsigned x=0;x<14;++x)y[500*3840+300+x]+=60;same&=nv12(blink,y,chroma).id==a.id;}
+         check(same,"4K: a 14-component element blinking every sample is not a new picture");}
+        {// Below the tolerance a change accumulates against the last NEW picture until it counts.
+         PictureReference grow;const auto a=nv12(grow,luma,chroma);auto y=luma;int samples=0;bool fresh=false;
+         while(!fresh&&samples<20){for(unsigned x=0;x<10;++x)y[800*3840+size_t(samples)*10+x]+=20;fresh=!nv12(grow,y,chroma).repeat;++samples;}
+         check(fresh&&samples==7,"4K: a growing 10-component change becomes a new picture once 70 components differ");}
+        {// P010 at 4K: the tolerance counts words, not bytes.
+         std::vector<uint16_t> y16(3840*2160),uv16(3840*1080);for(size_t i=0;i<y16.size();++i)y16[i]=uint16_t((64+(i*31)%800)<<6);for(size_t i=0;i<uv16.size();++i)uv16[i]=uint16_t(512<<6);
+         auto p010=[](PictureReference& r,const std::vector<uint16_t>& y,const std::vector<uint16_t>& uv){
+             PicturePlane planes[2]{{reinterpret_cast<const uint8_t*>(y.data()),7680,7680,2160},{reinterpret_cast<const uint8_t*>(uv.data()),7680,7680,1080}};
+             return r.observe(planes,2,PictureComponents::Words,PictureReference::bandFor(10,6));};
+         PictureReference deep4k;const auto a=p010(deep4k,y16,uv16);auto y=y16;for(unsigned k=0;k<63;++k)y[size_t(k)*99991]=uint16_t(y[size_t(k)*99991]+(20<<6));
+         const auto b=p010(deep4k,y,uv16);y[5]=uint16_t(y[5]+(20<<6));const auto c=p010(deep4k,y,uv16);
+         check(b.repeat&&b.id==a.id&&b.over==63&&!c.repeat&&c.over==64,"4K P010: 63 words beyond the band repeat, 64 are new");}
     }
     {
         // ContentDedup on picture numbers: synthetic pictures sampled at a capture rate.

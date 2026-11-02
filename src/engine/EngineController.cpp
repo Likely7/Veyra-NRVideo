@@ -1119,7 +1119,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             const auto dedupContent=[](ContentRate content){return content!=ContentRate::Transport&&content!=ContentRate::Capture60To30;};
             // CPU frames are compared here; capture-card frames arrive numbered by the callback.
             pipeline::PictureReference enginePictures{2};
-            unsigned dedupRepeatMax8=0;uint64_t dedupNewMinOver=UINT64_MAX;
+            unsigned dedupRepeatMax8=0;uint64_t dedupRepeatMaxOver=0,dedupNewMinOver=UINT64_MAX;
             FrameLineageTracker lineageTracker;
             auto completedProcessing=[&](pipeline::FrameIdentity id){std::lock_guard lock(mutex_);if(snapshot_.applied.revision==id.settingsRevision)++snapshot_.processedCompleted;};
             auto host100ns=[](){return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;};
@@ -2049,7 +2049,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     pipeline::PictureReference::Result picture;
                     const auto compareStart=Clock::now();
                     const bool pictured=pipeline::captureFramePicture(frame,enginePictures,gd.packedInput==6||gd.packedInput==7,picture);
-                    if(pictured&&picture.repeat)dedupRepeatMax8=std::max(dedupRepeatMax8,picture.max8);
+                    if(pictured&&picture.repeat){dedupRepeatMax8=std::max(dedupRepeatMax8,picture.max8);dedupRepeatMaxOver=std::max(dedupRepeatMaxOver,picture.over);}
                     else if(pictured&&picture.over)dedupNewMinOver=std::min(dedupNewMinOver,picture.over);
                     const bool boundary=reset||pipeline::breaksHistory(pkt.flags)||dedupRevision!=options.settings.revision;
                     dedupRevision=options.settings.revision;
@@ -2935,7 +2935,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(veyra::log::verboseFrameLogs()&&Clock::now()>=nextTimingLog){const auto [retained,overwritten]=Logger::instance().frameTraceSize();
                     veyra::log::info("frame-trace",std::format("retained={} capacity=8192 overwritten={} (records available in diagnostic preview)",retained,overwritten));}
                 if(options.settings.multiplier>1&&Clock::now()>=nextTimingLog)
-                    veyra::log::info("fg-validity",std::format("revision={} candidate={} valid={} invalid={} providerDisabled={} contentDuplicate={} both={} contentPolicy={} sourceTransportFps={} backend={} (invalid union=provider+duplicate-both; no automatic content-rate/multiplier rewrite)",options.settings.revision,graphStats.fgSubmittedCandidates,graphStats.fgGeneratedFrames,graphStats.fgDisabledFrames,graphStats.fgProviderDisabled,graphStats.fgDuplicateSuppressed,graphStats.fgBothDisabled,int(options.settings.content),activeSource->info().averageFps,frameGenerationBackendName(options.settings.frameGenerationBackend)));
+                    veyra::log::info("fg-validity",std::format("revision={} candidate={} valid={} invalid={} providerDisabled={} contentPolicy={} sourceTransportFps={} backend={} (invalid = disabled by the provider; no automatic content-rate/multiplier rewrite)",options.settings.revision,graphStats.fgSubmittedCandidates,graphStats.fgGeneratedFrames,graphStats.fgDisabledFrames,graphStats.fgProviderDisabled,int(options.settings.content),activeSource->info().averageFps,frameGenerationBackendName(options.settings.frameGenerationBackend)));
                 if(!isCapture&&Clock::now()>=nextTimingLog){const double playbackSpeedNow=[&]{std::lock_guard lock(mutex_);return snapshot_.playbackSpeed;}();
                 // present-deviation / output-queue are folded into the
                 // player-timing line below (sweep E5); the separate lines stay
@@ -2955,10 +2955,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     veyra::log::info("frame-rate",std::format("revision={} gpuCompletedFps={:.2f} completedReal={} capture60To30={} rateSkipped={} presentSubmitFps={:.2f} windowMs=1000 vramMiB={} budgetMiB={} (not scanout FPS)",options.settings.revision,rates.fps,rates.processedCompleted,rates.captureHalfRate,rates.captureRateSkipped,rates.submissionFps.value_or(0),vramUsage>>20,vramBudget>>20));
                     if(isCapture&&dedupContent(options.settings.content)&&!legacyCadence){
                         const auto& st=contentDedup.stats();
-                        veyra::log::info("content-dedup",std::format("revision={} mode={} observed={} kept={} repeats={} held={} blind={} regular={} irregular={} contentFps={:.2f} maxShiftMs={:.2f} repeatMaxDiff={} newMinOver={} band={} (per second; a repeat has every component of the whole picture within the band of the last new one, dropped before GPU work; kept frames carry content timestamps)",
+                        veyra::log::info("content-dedup",std::format("revision={} mode={} observed={} kept={} repeats={} held={} blind={} regular={} irregular={} contentFps={:.2f} maxShiftMs={:.2f} repeatMaxDiff={} repeatMaxOver={} newMinOver={} band={} (per second; a repeat has at most about 5 per million components of the whole picture beyond the band of the last new one, dropped before GPU work; kept frames carry content timestamps)",
                             options.settings.revision,int(options.settings.content),st.observed-dedupLogged.observed,st.kept-dedupLogged.kept,st.repeats-dedupLogged.repeats,st.held-dedupLogged.held,st.blind-dedupLogged.blind,
-                            st.regular-dedupLogged.regular,st.irregular-dedupLogged.irregular,contentDedup.contentFps(),st.maxShiftMs,dedupRepeatMax8,dedupNewMinOver==UINT64_MAX?0:dedupNewMinOver,pipeline::PictureReference::kBand8));
-                        dedupLogged=st;dedupRepeatMax8=0;dedupNewMinOver=UINT64_MAX;
+                            st.regular-dedupLogged.regular,st.irregular-dedupLogged.irregular,contentDedup.contentFps(),st.maxShiftMs,dedupRepeatMax8,dedupRepeatMaxOver,dedupNewMinOver==UINT64_MAX?0:dedupNewMinOver,pipeline::PictureReference::kBand8));
+                        dedupLogged=st;dedupRepeatMax8=0;dedupRepeatMaxOver=0;dedupNewMinOver=UINT64_MAX;
                     }
                     veyra::log::info("capture-timing",std::format("revision={} received={} processed={} dropped={} callbackFps={:.2f} readAgeMs={:.3f} callbackToPresentReturnP95Ms={:.3f} processCpuP95Ms={:.3f} gpuReadyP95Ms={:.3f} schedulingWaitP95Ms={:.3f} presentCpuP95Ms={:.3f} gpuColorP95Ms={:.3f} gpuSrP95Ms={:.3f} gpuFlowP95Ms={:.3f} gpuNrP95Ms={:.3f} gpuResidualP95Ms={:.3f} gpuFgBatchP95Ms={:.3f} gpuBlitP95Ms={:.3f} slotWaits={} slotWaitMs={:.3f} commandSubmits={} displaySubmits={} expiredGenerated={} nr={} nvof={} generated={} historyResets={} presentationDrains={} presentationCompletedReal={} presentationSkippedGenerated={} presentationCancelledJobs={} singleGpuOwner=1 batchCapacity=2 (not HDMI-to-display latency)",options.settings.revision,captureStats.received,sourceFrames-statsSourceBase,captureStats.dropped,captureStats.callbackFps,captureStats.readAgeMs,ageP95,processTimes.p95(),liveScheduler?completed.readyP95:gpuReadyTimes.p95(),waitP95,presentP95,gpuP95(diagnostics::GpuStage::Color),gpuP95(diagnostics::GpuStage::Sr),gpuP95(diagnostics::GpuStage::Flow),gpuP95(diagnostics::GpuStage::Nr),gpuP95(diagnostics::GpuStage::Residual),gpuP95(diagnostics::GpuStage::FgBatch),gpuP95(diagnostics::GpuStage::Blit),slotWaitCount,slotWaitMilliseconds,commandSubmits,submitted,expired,graphStats.nrEvaluateCount,graphStats.nvofExecuteCount,graphStats.fgGeneratedFrames,historyResets.load(),presentationDrains.load(),presentationCompletedReal.load(),presentationSkippedGenerated.load(),presentationCancelledJobs.load()));
                     nextTimingLog=Clock::now()+std::chrono::seconds(1);

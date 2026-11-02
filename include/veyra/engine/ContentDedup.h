@@ -17,8 +17,9 @@ namespace veyra::engine {
 //
 // A repeat is a sample with the same picture number as the last kept one: the
 // capture callback (or the engine, for CPU frames) compares every component of
-// the whole picture with the last new picture and only a sample entirely within
-// the capture-noise band keeps its number (PictureCompare.h). The first version
+// the whole picture with the last new picture, and a sample within the
+// capture-noise band but for a few isolated components keeps its number
+// (PictureCompare.h). The first version
 // judged 64x36 sampled points with an 8-level gate: a running HDR game seen
 // from a still position lost most real pictures (6-16 kept of 60 per second,
 // field log 2026-10-12). Numbers rather than pictures also keep a picture whose

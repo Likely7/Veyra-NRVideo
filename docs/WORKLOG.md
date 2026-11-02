@@ -389,3 +389,35 @@ RTX5060Ti、4K30 NV12→VFG2X/60Hz，主要稳定段NR/SR关闭。中档84.016�
 PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外GPU负载、不改设置/驱动/进程。reports/live-monitor-2.1.2-20261102/watch.py只读日志约120秒（UTC10:37:28–10:39:28）；用户要求停止后仅分析已保存数据，没有重启采样。当前4K60、NR1080p、VFG高2X、自动去重、Reflex增强/VRR请求；软件回调59.99–60.01，7120输入、4076有效真实帧全部提交，采集丢弃/邮箱覆盖新增0；625次候选在计算前跳过、6张生成后过期，容量/限帧丢弃新增0，另89对内容重复过滤。输出采样中位60.5、范围45–90，开头数秒45–52；本段错误/告警0、音频欠载增量0、显存3237–3254MiB。不把正常内容去重或提交FPS当物理显示证据。观察脚本的start.latest字典引用导致末态覆盖，已按独立落盘baseline.json复算增量、保留原记录并修正脚本，未采信错误零增量。简单报告及原始证据在上述reports目录。仅本工作日志追加，产品源码、用户设置和运行进程不改。
 
 用户要求标出时间/日志交Claude：已生成reports/live-monitor-2.1.2-20261102/CLAUDE_HANDOFF.md及per-second-deltas/evidence-anchors。只复核保存数据。更正归因：UTC10:37:28–34低45FPS段，fgSkippedBeforeEval和expired增量均0，fgInvalid/contentDuplicate新增89；后段625次预算跳过与6张过期单列，不能混为同一成因。报告含PST/UTC对应、原始完整日志、固定筛选片段与行号、epoch6→7和呈现revision14→15时间。未恢复监测、未修产品或改用户设置。
+
+## 2026-11-02 自动剔除重复帧容忍零星噪点（Claude）
+
+用户读完上节监测交接后要求排查，结论是去重把重复帧误判成新帧（E:/项目/Veyra/reports/claude-live-monitor-20261102/FINDINGS.md）。随后用户要求按方案重修、尽量精准；VFG自动调控不要自动开启，即原方案第2项不做；PS5开着，用同一个30帧游戏实测。分支claude/dedup-precise-20261102，基于main 30337c8，未提交。上节Codex的未提交记录原样保留。
+
+**实测**：Veyra关闭、采集卡空闲时，用已安装的ffmpeg 8.1.1以dshow原格式NV12 3840x2160@60读取T911。
+- 5秒NUT原始片段，296帧，3.7GB，分析后已删：重复帧亮度最多差3级，新帧至少10.6万个分量超界。
+- 失败一次：Python从管道读，10秒画面跑了39秒，ffmpeg丢帧，这轮数据作废。改为ffmpeg每秒写一段到SSD、读完即删。
+- 90秒共5401个采样、没有丢帧。同一批画面上旧规则误判5次，都是单点差4级、位于HUD白字边缘；容差64时误判0次，每秒恒为30。
+- cv2.imwrite不支持中文路径，裁图改用imencode后写文件。
+
+**改动**：
+- PictureCompare.h：toleranceFor=分量数/196608（4K NV12为63），超界分量不超过它仍算重复。
+- EnhanceGraph：删除64×36的contentDuplicate弃帧，连同相关字段和计数。
+- EngineController：[content-dedup]增加repeatMaxOver；[fg-validity]去掉contentDuplicate/both。
+- CaptureCardSource：日志文字补上容差。ContentDedup.h：注释同步。时序单测新增8项。
+- 失败一次：EngineController.cpp用Python整体替换时被写成LF，已恢复CRLF，git diff只含实际改动的12行。
+
+**构建与回归**：
+- build.py：veyra_live_timing_tests 19.8秒；veyra_qml_ui加三个呈现测试33.2秒；均exit 0。
+- 时序单测159项全过。
+- verify.py stage：运行目录EXE换为fb1e3ad7…，97个运行组件一致。
+- cpu：14过，另7个缺参数打印用法退出（同前）。cpu2：12/12。gpu：20/20，无D3D12错误。
+- live：5/6，--source-gap失败。gap对照1次：本分支和10-29的旧main基线同样失败，EOS都是1200/1198，属于原有问题。
+
+**实机**：live_run.py把用户2.1.2配置复制到私有目录（原文件不改），VEYRA_VERBOSE_FRAME_LOGS=1，--exit-after 75000。
+- 失败一次：第一次依靠自动恢复来源，因用户会话里恢复是关的，没有打开采集卡，作废。之后改为传入用户采集对话框给出的原样URI。
+- 旧版（与2.1.2同一EXE，7f9ee826…）稳定段51秒：每秒保留30–31，有2秒到32；误判2；跳过0.58%。
+- 新版稳定段57秒：每秒恒30–31；1735张重复帧里86张带超界点（最多30个、差7级），仍判为重复；误判0；跳过0.29%；过期和无效均为0。
+
+**未验证**：其他采集卡、其他分辨率、P010实机、更吵的场景；60帧内容下VFG高档的预算跳帧（本次未改）；主观观感。
+记录见docs/DEDUP_PRECISE_2026-11-02.md，回执见E:/项目/Veyra/reports/claude-dedup-precise-20261102/FINAL.json。

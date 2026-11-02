@@ -54,3 +54,15 @@ NVIDIA ZIP 676470641字节、1634项payload；AMD ZIP716404207字节、2260项pa
 阶段纠正：最初 `py_compile` 生成单个未跟踪pyc，导致stage的干净源码检查正确拒绝；核对绝对路径后只删除该自生成文件，再stage成功，源码ZIP无pyc/测试缓存。没有修改校验规则绕过检查。新27项模型/兼容组件来自此前已授权本地研发的固定子集，原默认运行组件原字节保持；没有新发布授权扩展。
 
 输出根目录 `E:/项目/Veyra/test-packages/codex-build-2.1.2-20261102`；独立启动脚本 `启动2.1.2-NVIDIA测试.cmd` / `启动2.1.2-AMD测试.cmd`，使用 `tests/codex-build-2.1.2-20261102/interactive-*` 配置。原共享开发运行目录也已更新，旧真实配置及所有旧脏树保护核验见FINAL。后续提交只补文档，用户包源码快照和产品二进制仍对应47b5e84；未push/Release，公开正式版仍2.1.1。
+
+## 2026-11-02 重新打包：加入自动剔除重复帧修复（Claude）
+
+用户在去重修复实测后要求“把修复合并到main，然后重新打包2.1.2”。修复见[执行记录](DEDUP_PRECISE_2026-11-02.md)：整画面去重允许约百万分之五的超界分量，并删除图内64×36弃帧。版本仍为2.1.2（PE 2.1.2.0）。
+
+- 新包输出到 `E:/项目/Veyra/test-packages/claude-build-2.1.2-dedup-20261102`，任务名 `claude-build-2.1.2-dedup-20261102`。
+- `package-2.1.2.py` 增加 `--task` 参数，不传时仍为原任务名。
+- 上面Codex的首个2.1.2包目录原样保留，包括用户运行它时生成的 `runtime_local/user-data-2.0.0`。
+- 步骤与上面相同：`build-recording-handoff.py --task claude-build-2.1.2-dedup-20261102 ...`，随后执行 `package-2.1.2.py --task claude-build-2.1.2-dedup-20261102 stage|seal|cold`。
+- 合同、QtQuick、GPU短测沿用Codex的同组检查。
+
+实际结果在本节之后补记。

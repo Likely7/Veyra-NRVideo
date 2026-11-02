@@ -570,7 +570,7 @@ public:
         uint32_t fgCandidates=0,fgEvaluated=0,fgSkippedBeforeEval=0,fgSkippedForReset=0;
         bool historyReset=false,fgRecovery=false,fgBudgetSeed=false,fgReduced=false,fgFast=false,fgFastForBudget=false;
         ResetReason detectedReset=ResetReason::None;
-        bool contentDuplicate=false;int measuredContentRate=0;
+        int measuredContentRate=0;
         double ptsMs = 0.0;
         uint32_t videoSlot = 0;            // videoFrame[videoSlot] holds this real frame
         uint64_t videoFenceValue = 0;      // ring fence covering the video work
@@ -648,7 +648,7 @@ public:
         uint64_t nvofFrameFailures = 0;
         uint64_t fgGeneratedFrames = 0;
         uint64_t fgSubmittedCandidates = 0, fgDisabledFrames = 0;
-        uint64_t fgProviderDisabled = 0, fgDuplicateSuppressed = 0, fgBothDisabled = 0;
+        uint64_t fgProviderDisabled = 0;
         uint64_t nrMotionFrames = 0, sceneCutCount = 0, resetCount = 0;
     };
     const Metrics& metrics() const { return metrics_; }

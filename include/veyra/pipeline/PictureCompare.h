@@ -1,5 +1,6 @@
 #pragma once
-// Repeated-picture detection with a capture-noise band (2026-10-12).
+// Repeated-picture detection with a capture-noise band (2026-10-12) and an
+// outlier tolerance (2026-11-02).
 //
 // Content dedup (ContentDedup.h) has to know whether a sample shows the same
 // picture as the last new one. Two earlier answers failed on a real card:
@@ -10,12 +11,25 @@
 //    few hundred by 2 and at most one by 3, while a new 30 fps game frame seen
 //    from a still position has at least 240 pixels beyond 2 levels and peaks at
 //    6-16 (tests/claude-cadence-exact-20261012/harness/card_diff.py, 173 pairs).
-// A sample repeats the reference only when EVERY component of every plane of
-// the whole picture is within 3 levels on an 8-bit scale (bandFor(): the same
-// fraction of a deeper component); one component beyond it makes a new picture. Packed
-// layouts whose bytes are not components (v210, RGB10, RGB555/565) compare
-// exactly. The reference is the last NEW picture, so a slow change accumulates
-// past the band instead of slipping through it one small step at a time.
+// A component differs when it is more than 3 levels off on an 8-bit scale
+// (bandFor(): the same fraction of a deeper component). Packed layouts whose
+// bytes are not components (v210, RGB10, RGB555/565) compare exactly. The
+// reference is the last NEW picture, so a slow change accumulates past the band
+// instead of slipping through it one small step at a time.
+//
+// One differing component used to make a new picture. At 3840x2160 NV12 the
+// T911 now and then moves a single component of a repeated frame 4 levels, at
+// bright HUD text edges: 5 of 2700 repeats in 90 s of a 30 fps PS5 game
+// (tests/claude-dedup-precise-20261102). Each became a 16.7 ms frame
+// generation pair that VFG High could not fit; the user's session kept up to
+// 18 extra samples a second (field log 2026-11-02).
+// So a sample repeats the reference while at most toleranceFor() components
+// differ, about five per million (63 in 4K NV12). In that session every second
+// that kept extra samples had one with at most 47 differing components, and
+// the smallest real new picture, a still screen, had 156; a moving 30 fps game
+// changes 100 000 and more. A small element that changes on every sample (17 s
+// of 60 kept per second whose smallest change was 14 components) no longer
+// makes every sample a new picture either.
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -41,10 +55,13 @@ public:
     static constexpr unsigned bandFor(unsigned depth, unsigned shift) {
         return depth <= 8 ? kBand8 : ((kBand8 * ((1u << depth) - 1) + 127) / 255) << shift;
     }
+    // Components a repeat may have beyond the band: 63 in 3840x2160 NV12, 15 in
+    // 1920x1080 NV12, none below 196608 components.
+    static constexpr uint64_t toleranceFor(uint64_t components) { return components / 196608; }
     struct Result {
         uint64_t id = 0;       // picture number; equal ids show the same picture
-        bool repeat = false;   // every component within the band of the reference
-        uint64_t over = 0;     // components beyond the band (0 for a repeat)
+        bool repeat = false;   // at most toleranceFor() components beyond the band of the reference
+        uint64_t over = 0;     // components beyond the band
         unsigned max8 = 0;     // largest difference, 8-bit scale
     };
     // Ids of different references never collide (space in the top byte).
@@ -66,7 +83,7 @@ public:
                     else compareBytes(row, ref, planes[p].rowBytes, band, r.over, max);
                 }
             r.max8 = band ? (max * kBand8 + band / 2) / band : max;
-            if (r.over == 0) { r.id = space_ | id_; r.repeat = true; return r; }
+            if (r.over <= toleranceFor(kind == PictureComponents::Words ? total / 2 : total)) { r.id = space_ | id_; r.repeat = true; return r; }
         }
         // A new picture becomes the reference.
         if (reference_.size() < total) reference_.resize(total);
