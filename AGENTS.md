@@ -1,5 +1,7 @@
 # Veyra Agent 工作规则
 
+> **2026-11-02 用户授权main整合及2.1.2本地测试包**：最近14文件修复已提交9e836ab并快进main（原8535791）；活动树现main。之前已完成Claude/Codex产品分支均是main祖先；Lecram两线和AverMedia诊断存档继续保留不并。按活动树docs/BUILD_2.1.2_TEST_2026-11-02.md构建NVIDIA/AMD本地包，版本2.1.2；未授权GitHub推送/发布。准确结果见reports/codex-build-2.1.2-20261102/FINAL.json。
+
 > **2026-11-01 极简音量交互修复（最新）**：当前claude/vsync-jitter-wait-20261102工作区同时保留之前补帧修改与本轮QML音量修复，未提交/合并/发布。音量两端/快速拖动、Return/Enter和空白提交、焦点清理及播放条移动手势隔离已验；QtQuick132/0/1，真实Windows极简操作通过。运行目录仍tests/claude-sr-stage-20261028/app，记录活动树docs/MINIMAL_VOLUME_FIX_2026-11-01.md，回执reports/codex-cinema-volume-20261101/FINAL.json。
 
 > **2026-11-02 垂直同步等待跟随抖动（最新）**：用户问60 Hz垂直同步为何仍丢帧，选择“上限3 ms”。活动树现在分支`claude/vsync-jitter-wait-20261102`（基于main `8535791`，未提交、未merge、未push/Release）：显式垂直同步、输出不高于80 fps时，生成帧的容量等待随测得的回调抖动增加，上限3 ms；自动模式和高刷规则不变。`VEYRA_TEST_FIXED_CAPACITY_WAIT=1`恢复固定等待。记录`docs/VSYNC_JITTER_WAIT_2026-11-02.md`，分析`E:/项目/Veyra/reports/claude-vsync-slots-20261102/FINDINGS.md`。320 Hz回归通过。真实60 Hz回放注入1.9 ms抖动：DLSS生成帧提交缺口37.7→5.6/分，VFG中档5.6→2.8/分（短样本，非实际显示丢帧）。原上屏格点估算不能证明屏幕延迟，已撤销其验收结论。Codex于本地11-01完成续接、最小复验及配置/运行组件核验，回执reports/codex-vsync-handoff-20261101/FINAL.json；分支仍未提交、未合并。没有用真实采集卡和高抖动实卡验证。
