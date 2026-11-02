@@ -19,7 +19,18 @@ void check(bool ok, const char* label) {
 }
 std::filesystem::path scratch(const wchar_t* name) {
     auto dir = std::filesystem::temp_directory_path() / L"veyra-preset-library-tests";
-    std::filesystem::create_directories(dir);
+    // Each library writes sidecar files next to its own path (".field-render",
+    // ".beauty", ".dlss-sr", ...) that outlive the per-name remove() below, and a
+    // leftover sidecar makes the next run of this process fail at load(). Start
+    // from an empty directory once per run; removing it per call would delete the
+    // files of the step that is still running.
+    static const bool cleaned = [&dir] {
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec);
+        std::filesystem::create_directories(dir, ec);
+        return true;
+    }();
+    (void)cleaned;
     auto path = dir / name;
     std::error_code ec;
     std::filesystem::remove(path, ec);
@@ -1078,6 +1089,33 @@ __declspec(noinline) void testDlssSrModels() {
     // Invalid model at the end of the rendering block must not corrupt a good library.
     entry.name=L"invalid model";entry.globals->dlssSrModel=kDlssSrModelCount;
     check(!writer.put(entry),"DLSS presets: invalid model is rejected atomically");
+    // v16「自动」倍率标记：只有用到它的预设才写进格式，且能原样读回。
+    {
+        entry.name=L"auto multiplier";entry.globals->dlssSrModel=0;
+        entry.chain.fgAutoMultiplier=false;
+        check(writer.put(entry,true),"auto multiplier: a plain preset still saves");
+        const auto plainBytes=readBytes(scratch(L"dlss-model-library.v1.dlss-sr"));
+        check(!plainBytes.starts_with("VEYRA_PRESET_LIBRARY 16"),
+              "auto multiplier: a preset without it keeps the older format");
+        entry.chain.fgAutoMultiplier=true;
+        check(writer.put(entry,true),"auto multiplier: save a preset with automatic enabled");
+        PresetLibrary autoReader(scratch(L"dlss-model-library.v1"));
+        autoReader.setIncludeBuiltins(false);
+        const bool autoLoaded=autoReader.load();
+        const auto autoFound=std::find_if(autoReader.entries().begin(),autoReader.entries().end(),
+            [](const auto& e){return e.name==L"auto multiplier";});
+        check(autoLoaded&&autoFound!=autoReader.entries().end()&&autoFound->chain.fgAutoMultiplier,
+              "auto multiplier: the flag survives a save and reload");
+        entry.chain.fgAutoMultiplier=false;
+        check(writer.put(entry,true),"auto multiplier: turning it off saves again");
+        PresetLibrary plainReader(scratch(L"dlss-model-library.v1"));
+        plainReader.setIncludeBuiltins(false);
+        const bool plainLoaded=plainReader.load();
+        const auto offFound=std::find_if(plainReader.entries().begin(),plainReader.entries().end(),
+            [](const auto& e){return e.name==L"auto multiplier";});
+        check(plainLoaded&&offFound!=plainReader.entries().end()&&!offFound->chain.fgAutoMultiplier,
+              "auto multiplier: turning it off survives a save and reload");
+    }
 
     const auto sessionPath=scratch(L"dlss-model-session.v1");
     auto session=std::make_unique<ChainSession>(ChainSession::initial(source));

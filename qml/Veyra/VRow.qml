@@ -10,8 +10,17 @@ Item {
     // Narrow panels with a wide control (导出 输出设置): the hint runs under the
     // whole row instead of being squeezed beside the control.
     property bool hintBelow: false
-    readonly property bool stacked: width > 0 && width - slot.childrenRect.width - (value.length ? 52 : 0) - 12
-        < Math.min(170, labelMetrics.advanceWidth(label))
+    // Uses the children's declared widths, not childrenRect: the latter is a
+    // layout result, and reading it here made `stacked` depend on the layout it
+    // changes (Qt reported a binding loop and logged it on every row).
+    // Deliberately compares the LABEL only. Counting the hint as well stacked
+    // rows whose hint is merely long (补帧方式, VFG 质量) and pushed their control
+    // under the label, which is not how those rows looked before (2026-10-24
+    // regression). A long hint belongs to the row that has it: pass hintBelow
+    // there instead of widening this rule.
+    readonly property real labelNeed: Math.min(170, labelMetrics.advanceWidth(label))
+    readonly property bool stacked: width > 0 && width - slot.declaredWidth - (value.length ? 52 : 0) - 12
+        < labelNeed
     FontMetrics { id: labelMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
     default property alias control: slot.data
     // The row's slider, when its control is one (typed values beside the number).
@@ -50,21 +59,63 @@ Item {
             // and a layout with no filling child cannot grow, which left the control
             // beside the label instead of at the row's right edge.
             // Grow the row for long labels instead of hiding translated text.
-            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: row.label; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; wrapMode: Text.Wrap }
+            // The minimum comes from the Text's OWN implicitWidth, not from
+            // FontMetrics.advanceWidth: the two disagree by a couple of pixels, and
+            // a floor computed the other way left a 26px label in 24px of space,
+            // which wrapped 倍率 into one character per line (2026-10-24 probe).
+            // A long translated label still wraps above that floor instead of
+            // being cut off.
+            Text {
+                Layout.fillWidth: true
+                Layout.minimumWidth: implicitWidth
+                text: row.label
+                color: Theme.t2
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsBody
+                wrapMode: Text.Wrap
+            }
             Text {
                 visible: row.hint.length > 0 && !row.hintBelow
                 text: row.hint
                 color: row.hintColor
                 font.family: Theme.fontUi
                 font.pixelSize: 11
-                wrapMode: Text.Wrap
+                // WordWrap, not Wrap: in a narrow label column Wrap breaks inside
+                // words, which turned a long hint into one character per line
+                // (2026-10-24, the 倍率 row). WordWrap keeps whole words together;
+                // rows whose hint still needs many lines set hintBelow instead.
+                wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
         }
         Item {
             id: slot
+            // Sum of the children's declared widths — stable across layout changes.
+            readonly property real declaredWidth: {
+                let w = 0
+                for (let i = 0; i < children.length; ++i) {
+                    const c = children[i]
+                    if (!c || !c.visible) continue
+                    w += c.implicitWidth > 0 ? c.implicitWidth : 0
+                }
+                return w
+            }
+            // Width from the VISIBLE children only. childrenRect counts every child,
+            // hidden ones included, so a row holding two alternative controls
+            // (倍率: VSeg for DLSS, VSelect for VFG) sized itself to the hidden one
+            // and pushed the visible control off its column: 304px where the other
+            // rows use 150px (2026-10-24 probe).
+            readonly property real visibleWidth: {
+                let w = 0
+                for (let i = 0; i < children.length; ++i) {
+                    const c = children[i]
+                    if (!c || !c.visible) continue
+                    w = Math.max(w, c.x + (c.implicitWidth > 0 ? c.implicitWidth : c.width))
+                }
+                return w
+            }
             implicitHeight: childrenRect.height
-            Layout.preferredWidth: childrenRect.width
+            Layout.preferredWidth: visibleWidth
             Layout.preferredHeight: childrenRect.height
         }
         // A row whose control is a slider: its number can be clicked and typed.

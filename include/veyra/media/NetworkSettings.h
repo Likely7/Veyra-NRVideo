@@ -20,7 +20,19 @@ struct NetworkSettings {
     int startupPrebufferSeconds = -1;   // -1 follows the level, 0 does not wait, >0 seconds
     bool autoReconnect = true;
     CorruptPolicy corrupt = CorruptPolicy::Conceal;
-    bool operator==(const NetworkSettings&) const = default;
+    // Extra HTTP request headers, one "Name: value" per line. Set when the stream
+    // URL comes from a site whose CDN checks the Referer (Bilibili). Excluded from
+    // operator== on purpose: it is per-open state, and comparing it would make every
+    // resolved stream look like a settings change.
+    std::wstring requestHeaders;
+    // The User-Agent for this open. Kept separate from requestHeaders because FFmpeg
+    // has a dedicated option for it: a User-Agent inside the header block is sent
+    // twice and the CDN rejects the request.
+    std::wstring userAgent;
+    bool operator==(const NetworkSettings& other) const {
+        return level == other.level && startupPrebufferSeconds == other.startupPrebufferSeconds
+            && autoReconnect == other.autoReconnect && corrupt == other.corrupt;
+    }
 };
 
 inline const char* networkBufferLevelId(NetworkBufferLevel level) {

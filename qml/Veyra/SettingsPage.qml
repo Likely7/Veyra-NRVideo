@@ -500,37 +500,6 @@ VPage {
                                 }
                             }
                         }
-                        // HDR 元数据: what the display's own tone mapping works from.
-                        VRow {
-                            label: qsTr("HDR 元数据")
-                            hint: qsTr("HDR10 提示；系统或显示器可能忽略")
-                            value: veyra.hdrMetadataEnabled ? qsTr("已启用（HDR10）") : qsTr("已关闭")
-                            VSwitch {
-                                objectName: "hdrmeta-enabled"
-                                checked: veyra.hdrMetadataEnabled
-                                onToggled: checked => veyra.hdrMetadataEnabled = checked
-                            }
-                        }
-                        Repeater {
-                            model: [{key:"masteringPeakNits",label:qsTr("母版峰值 (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源；实际效果取决于显示设备")},
-                                    {key:"maxCllNits",label:qsTr("MaxCLL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")},
-                                    {key:"maxFallNits",label:qsTr("MaxFALL (nit)"),from:0,to:4000,def:0,hint:qsTr("0 = 跟随片源")}]
-                            delegate: VRow {
-                                required property var modelData
-                                label: modelData.label
-                                hint: modelData.hint || ""
-                                value: String(veyra.hdrMetadataParams[modelData.key] ?? "—")
-                                VSlider {
-                                    objectName: "hdrmeta-" + modelData.key
-                                    implicitWidth: 150
-                                    valueFromModel: true
-                                    resettable: true; defaultValue: modelData.def
-                                    from: modelData.from; to: modelData.to
-                                    value: veyra.hdrMetadataParams[modelData.key] ?? modelData.def
-                                    onMoved: value => veyra.setHdrMetadataParameter(modelData.key, Math.round(value))
-                                }
-                            }
-                        }
                         VRow {
                             label: qsTr("字幕默认字号")
                             hint: qsTr("双行不自动缩小；更多样式在字幕设置里")
@@ -627,6 +596,66 @@ VPage {
                             font.pixelSize: 12
                             wrapMode: Text.WordWrap
                             lineHeight: 1.3
+                        }
+                    }
+                    // Bilibili module. The video pipeline is shared with everything else,
+                    // so only what changes *what gets requested* from the site lives here.
+                    VH2 { text: qsTr("B 站") }
+                    Text {
+                        text: qsTr("打开 B 站视频时的默认画质与编码。画质选「自动」时取账号能用的最高档；"
+                                   + "有 HDR 版本的视频会自动播 HDR。")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    VGroup {
+                        VRow {
+                            label: qsTr("默认画质")
+                            hint: qsTr("上限而非精确值：实际取「不高于此档」的最高可用画质；全部高于此档时取最低档")
+                            VSeg {
+                                objectName: "set-bili-quality"
+                                options: [
+                                    { id: "0", label: qsTr("自动") },
+                                    { id: "127", label: "8K" },
+                                    { id: "126", label: qsTr("杜比") },
+                                    { id: "125", label: "HDR" },
+                                    { id: "120", label: "4K" },
+                                    { id: "116", label: "1080P60" },
+                                    { id: "112", label: "1080P+" },
+                                    { id: "80", label: "1080P" },
+                                    { id: "74", label: "720P60" },
+                                    { id: "64", label: "720P" },
+                                    { id: "32", label: "480P" },
+                                    { id: "16", label: "360P" }
+                                ]
+                                current: String(veyra.preferences.biliQuality ?? 0)
+                                onPicked: id => veyra.setPreference("biliQuality", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("视频编码")
+                            hint: qsTr("同画质有多个版本时生效；自动 = 优先 HDR 编码（HEVC），该画质只有一种编码时照常播放")
+                            VSeg {
+                                objectName: "set-bili-codec"
+                                options: [
+                                    { id: "auto", label: qsTr("自动") },
+                                    { id: "avc", label: "H.264" },
+                                    { id: "hevc", label: "HEVC" }
+                                ]
+                                current: veyra.preferences.biliCodec || "auto"
+                                onPicked: id => veyra.setPreference("biliCodec", id)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("备用 CDN")
+                            hint: qsTr("主地址打不开时自动换一个镜像节点；B 站每个画质通常有多个镜像")
+                            VSwitch {
+                                objectName: "set-bili-autocdn"
+                                checked: veyra.preferences.biliAutoCdn !== false
+                                onToggled: veyra.setPreference("biliAutoCdn", checked)
+                            }
                         }
                     }
                 }

@@ -93,6 +93,10 @@ struct EffectChain {
     // Frame-generation detail: the node says whether it runs, this says how many
     // frames it produces. Only meaningful when a frame-generation node is on.
     uint32_t fgMultiplier = 2;
+    // 自动选择倍率开关（2026-10-24）：开启时 fgMultiplier 只是占位/上次手动值，
+    // 真正的档位在运行期由 displayFgAutoMultiplier() 按源帧率和输出上限算出；
+    // 关闭时完全按 fgMultiplier 跑（作者原版逻辑）。
+    bool fgAutoMultiplier = false;
     // Non-stage settings that still belong to a job description (they were in
     // EnhancementSettings before and stay there; copied here for completeness).
     bool fgStrictAdmission = false;

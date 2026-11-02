@@ -813,6 +813,55 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                 QUnifiedTimer::instance()->setSlowdownFactor(factor);
                 testOptions.insert(QStringLiteral("slowAnimations"), factor);
             }
+        } else if (a == QLatin1String("--output-cap") && hasValue) {
+            // Test switch: set the output cap so the automatic multiplier has a target.
+            // `<fps>` = custom cap, `display` = follow the monitor, `off` = disabled.
+            const QString cap = args.at(++i);
+            QTimer::singleShot(0, &bridge, [&bridge, cap] {
+                if (cap == QLatin1String("off")) bridge.setOutputRateMode(0);
+                else if (cap == QLatin1String("display")) bridge.setOutputRateMode(1);
+                else { bridge.setOutputRateMode(2); bridge.setOutputCustomFps(cap.toDouble()); }
+                veyra::log::info("qml-test", std::format("output cap: {}", cap.toStdString()));
+            });
+        } else if (a == QLatin1String("--fg-auto")) {
+            // Test switch: turn the automatic multiplier on (or off with `--fg-auto off`).
+            // Same entry point the 自动选择倍率 switch uses, so the decision path is real.
+            bool on = true;
+            if (hasValue && args.at(i + 1) == QLatin1String("off")) { on = false; ++i; }
+            QTimer::singleShot(0, &bridge, [&bridge, on] { bridge.setFgAutoMultiplier(on); });
+        } else if (a == QLatin1String("--fg-auto-toggle") && hasValue) {
+            // Test switch: after N ms pick a manual multiplier, then switch the automatic
+            // selection back on `back-ms` later. Reproduces 「开→手动→开」without clicking.
+            // Format: --fg-auto-toggle <set-ms> <manual> <back-ms>
+            const int setMs = args.at(++i).toInt();
+            int manual = 4;
+            int backMs = 0;
+            if (i + 1 < args.size()) manual = args.at(++i).toInt();
+            if (i + 1 < args.size()) backMs = args.at(++i).toInt();
+            QTimer::singleShot(setMs, &bridge, [&bridge, manual] {
+                veyra::log::info("qml-test", std::format("fg-auto-toggle: manual {}X", manual));
+                bridge.setFgMultiplier(manual);
+            });
+            if (backMs > 0) {
+                QTimer::singleShot(setMs + backMs, &bridge, [&bridge] {
+                    veyra::log::info("qml-test", "fg-auto-toggle: back to automatic");
+                    bridge.setFgAutoMultiplier(true);
+                });
+            }
+        } else if (a == QLatin1String("--bili-play") && hasValue) {
+            // Test switch: play a Bilibili part so the pre-open multiplier decision can be
+            // checked against a real DASH response. Format: --bili-play <bvid> <cid> [qn]
+            const QString bvid = args.at(++i);
+            qlonglong cid = 0;
+            int qn = 0;
+            if (i + 1 < args.size()) cid = args.at(++i).toLongLong();
+            if (i + 1 < args.size() && !args.at(i + 1).startsWith(QLatin1Char('-')))
+                qn = args.at(++i).toInt();
+            QTimer::singleShot(1200, &bridge, [&bridge, bvid, cid, qn] {
+                veyra::log::info("qml-test", std::format("bili-play {} cid={} qn={}",
+                    bvid.toStdString(), cid, qn));
+                bridge.bilibiliPlayCid(bvid, cid, qn, false);
+            });
         } else if (!a.startsWith(QLatin1Char('-'))) {
             openPath = a;
         }
