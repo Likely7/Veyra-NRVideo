@@ -202,6 +202,7 @@ void QmlPlayerBridge::tickSubtitles() {
         if (!joined.isEmpty()) veyra::log::info("subtitle-overlay", "text=" + joined.toStdString());
         emit subtitleTextChanged();
     }
+    tickDanmaku();
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {
     QVariantList out;

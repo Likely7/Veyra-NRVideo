@@ -1355,4 +1355,33 @@ bool QmlPlayerBridge::doviFollowAverage()const{return settings().doviFollowAvera
 void QmlPlayerBridge::setDoviFollowAverage(bool on){
     auto s=settings();if(s.doviFollowAverage==on)return;s.doviFollowAverage=on;
     commitHdrTuning(std::move(s));}
+// Danmaku rides the same per-frame tick as the subtitle overlay: it reads the
+// engine's own position, so pause, seek and speed changes need no extra wiring.
+void QmlPlayerBridge::tickDanmaku() {
+    auto& i = *impl_;
+    if (!i.danmakuEnabled || !i.danmakuWindow) return;
+    const auto& s = i.snapshot;
+    // Only over a moving picture: a still image or a capture has no video timeline.
+    if (!s.running || s.image || s.capture) { i.danmakuWindow->hide(); return; }
+    if (s.duration <= 0) { i.danmakuWindow->hide(); return; }
+
+    // A jump means a seek: the engine rebuilds its tracks rather than letting old
+    // comments fly in from stale positions.
+    if (i.danmakuLastSeconds >= 0 &&
+        (s.position < i.danmakuLastSeconds - 0.5 || s.position > i.danmakuLastSeconds + 2.0))
+        i.danmakuWindow->noteSeek();
+    i.danmakuLastSeconds = s.position;
+
+    i.danmakuWindow->follow(impl_->videoWindow);
+
+    media::DanmakuView view;
+    view.scale = double(i.prefInt("danmakuScale", 100)) / 100.0;
+    view.opacity = double(i.prefInt("danmakuOpacity", 80)) / 100.0;
+    view.speedFactor = double(i.prefInt("danmakuSpeed", 100)) / 100.0;
+    view.area = double(i.prefInt("danmakuArea", 50)) / 100.0;
+    view.videoWidth = int(s.metrics.resolution.output.width);
+    view.videoHeight = int(s.metrics.resolution.output.height);
+    i.danmakuWindow->render(s.position, view);
+}
+
 } // namespace veyra::ui

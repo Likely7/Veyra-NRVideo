@@ -1656,6 +1656,8 @@ private:
     void rememberPosition(bool flush);
     void refreshSubtitles(const std::wstring& media);
     void tickSubtitles();
+    // Per-frame danmaku update; called from tickSubtitles().
+    void tickDanmaku();
     void tickImageBatch();
     void tickCapture();
     void tickPs5();
