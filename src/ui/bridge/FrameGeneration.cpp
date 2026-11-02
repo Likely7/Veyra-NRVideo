@@ -525,9 +525,16 @@ void QmlPlayerBridge::setFgAutoMultiplier(bool value) {
     if (impl_->chain.fgAutoMultiplier == value) return;
     const auto before = impl_->chain.fgAutoMultiplier;
     impl_->chain.fgAutoMultiplier = value;
+    // 两条链都要改：currentSession() 用的是 activeRuntime()，节点模式下那是 acceptedChain。
+    // 只改 chain 会让 persistSession() 认为「没变化」而提前返回，重启后自动档退回手动。
+    // Both chains: currentSession() reads activeRuntime(), which is acceptedChain in node
+    // mode; changing only `chain` made persistSession() take its early return.
+    impl_->acceptedChain.fgAutoMultiplier = value;
     if (!impl_->revalidate(true)) {
         const auto error = impl_->validation.message;
-        impl_->chain.fgAutoMultiplier = before; impl_->revalidate();
+        impl_->chain.fgAutoMultiplier = before;
+        impl_->acceptedChain.fgAutoMultiplier = before;
+        impl_->revalidate();
         emit notice(uiText(error), true); return;
     }
     // 打开自动选择时，若补帧正被关着就抬到 2X，让下一次播放有档可用。

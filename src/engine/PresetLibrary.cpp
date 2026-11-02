@@ -1058,7 +1058,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=10?16:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=13?18:version>=12?17:version>=10?16:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
         parsed.configurations[i].chain = entries[i].chain;
