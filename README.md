@@ -62,7 +62,9 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ---
 
-**2.1.1 release, 2026-10-27:** processed-picture recording with audio,90° playback rotation, per-layer NR percentage controls and export sizing, event-driven refresh/VRR/HDR queries, AMD HDR+NR handling, AA ordering, capture timestamp handling, NR shutdown, popup layout, screenshots and fullscreen fixes. [All changes since2.1.0](docs/RELEASE_NOTES_2.1.1.md).
+**2.1.2 update:** dual SR, SR-then-downsample, NVIDIA Low Latency, experimental RX 7000 NR and capture/FG/audio/volume fixes. [Full update and migration](docs/RELEASE_NOTES_2.1.2.md).
+
+**2.1.1 historical release, 2026-10-27:** processed-picture recording with audio,90° playback rotation, per-layer NR percentage controls and export sizing, event-driven refresh/VRR/HDR queries, AMD HDR+NR handling, AA ordering, capture timestamp handling, NR shutdown, popup layout, screenshots and fullscreen fixes. [All changes since2.1.0](docs/RELEASE_NOTES_2.1.1.md).
 
 
 **New-effect cost examples:** RTX5070 standard4K anti-aliasing fixtures: FXAA~0.15ms, SMAA/MLAA~0.30ms. Final single-face mesh beauty:1080p~0.93ms,4K~1.42ms. Costs vary with content/hardware; no local AMD speedup percentage was measured. [Conditions and limits](docs/history/releases/RELEASE_NOTES_2.1.0.md).
@@ -78,6 +80,18 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **PC / Xbox streaming:** Moonlight/Sunshine-compatible PC streaming and unofficial experimental Xbox support, alongside PS5, capture cards and screen capture.
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** SF310.9.16 performance/legacy models, NVIDIA original for RTX50 and AMD lmxxf, DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
+
+**Current version: [2.1.2](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.2)** · [Full bilingual update](docs/RELEASE_NOTES_2.1.2.md).
+
+## New in 2.1.2
+
+- **SR:** true dual RTX Video SR with separate second-pass controls, plus SR-then-downsample; ordinary 8K retained, new graphs check VRAM budget.
+- **GPU options:** NVIDIA Low Latency Off / On / On + Boost; experimental RX 7000 RedDuke NR, Small/Original and per-layer scale; separate RX 9000 path retained.
+- **FG:** sparse-noise-tolerant full-frame dedup, remove coarse generated-frame discard, smoothed anchors, optional VFG regulation, adaptive VSync capacity wait capped at 3 ms.
+- **Capture/audio:** WGC high-refresh cadence, ready-immediate no-FG capture, first-copy 60→30, Dolby/DTS carriers on generic PCM pins.
+- **Controls:** F7 screenshot / F8 recording in game mode too; Cinema volume dragging, endpoints, Enter/click-away confirmation and focus.
+
+[All changes since 2.1.1, measurements and migration](docs/RELEASE_NOTES_2.1.2.md) · [Build and corresponding source](docs/BUILD_2.1.2.md).
 
 ## New in 2.1.1
 
@@ -104,13 +118,15 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ## Install and upgrade
 
-Download **Veyra-2.1.1-NVIDIA-win64-portable.zip** or **Veyra-2.1.1-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.1.2-NVIDIA-win64-portable.zip** or **Veyra-2.1.2-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
 **The 1.4.4 UI guide is obsolete.** Version 2.0 uses separate settings. Retain the old version for rollback; do not overwrite the new package with old `veyra.ini`, an entire `runtime_local` folder or mixed DLLs.
 
-**Retain settings when upgrading2.1.0→2.1.1:** close Veyra and back up user data first. Overlay the matching GPU package contents into the existing executable directory to retain its data folder. For a new installation directory on the same PC, open Settings→About→User data in the old version, then close it and copy its `user-data-2.0.0` folder into the new package’s `runtime_local` directory. Copy only the data folder to keep the new runtime files; custom data-directory launches use the location shown in the app.
+**Upgrade 2.1.1→2.1.2:** prefer extracting into a new folder; copy only `runtime_local/user-data-2.0.0` and custom `runtime_local/luts` after closing Veyra. Use Settings→About for custom paths. Same-flavour in-place overlay is possible after exit but leaves stale components. [Steps](docs/RELEASE_NOTES_2.1.2.md#升级并保留设置).
+
+**Historical 2.1.0→2.1.1 migration:** close Veyra and back up user data first. Overlay the matching GPU package contents into the existing executable directory to retain its data folder. For a new installation directory on the same PC, open Settings→About→User data in the old version, then close it and copy its `user-data-2.0.0` folder into the new package’s `runtime_local` directory. Copy only the data folder to keep the new runtime files; custom data-directory launches use the location shown in the app.
 
 ## Using 2.0
 
@@ -125,7 +141,7 @@ Home offers files, capture card, PS5, PC, Xbox and screen capture. Files/images 
 
 ### List mode
 
-The NR version selector offers RTX20–50 · SF310.9.16, RTX50 · NVIDIA original and RX9000 · lmxxf (experimental) in both List and Node mode. SF defaults to performance modelB; disable Use performance model for legacyA. The control is disabled for NVIDIA original; AMD0.44 selects Small when enabled(default) and Original when disabled. Model selection is saved per layer. Lecram/oldSF-v2 settings migrate to SF. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7. Video export uses at most internal 1080p inference and composites to the original output size; this is not native 4K NR and image exports retain the native model pixel budget. Version2.1.1 processes AMD native-HDR NR through an SDR-linear proxy and reconstructs the result over the HDR base ([2.1.1 details](docs/RELEASE_NOTES_2.1.1.md)). See [current runtime identities](docs/history/releases/BUILD_2.1.0.md).
+The NR version selector offers RTX20–50 · SF310.9.16, RTX50 · NVIDIA original and RX 7000 / 9000 · AMD NR (experimental; routed to RedDuke/lmxxf by GPU) in both List and Node mode. SF defaults to performance modelB; disable Use performance model for legacyA. The control is disabled for NVIDIA original; AMD0.44 selects Small when enabled(default) and Original when disabled. Model selection is saved per layer. Lecram/oldSF-v2 settings migrate to SF. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7. Video export uses at most internal 1080p inference and composites to the original output size; this is not native 4K NR and image exports retain the native model pixel budget. Version2.1.1 processes AMD native-HDR NR through an SDR-linear proxy and reconstructs the result over the HDR base ([2.1.1 details](docs/RELEASE_NOTES_2.1.1.md)). See [current runtime identities](docs/history/releases/BUILD_2.1.0.md).
 
 Select List at the top of Professional. Enable SR, NR or RTX Video HDR as needed. Up to four NR layers have independent internal resolution, strength and parameters. The master switch disables all layers and restores their previous enabled states.
 
@@ -205,7 +221,7 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 Developer entry: [current documentation](docs/README.md), [build and validation](docs/DEVELOPMENT.md), [UI code responsibilities](docs/ARCHITECTURE.md). Historical task notes are indexed separately.
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.1.1 build/source](docs/BUILD_2.1.1.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.1.2 build/source](docs/BUILD_2.1.2.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 
@@ -218,7 +234,7 @@ Original code: GPL-3.0. The combined Chiaki streaming application is also subjec
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-7-20261027.png" alt="Veyra community group 7" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-7-20261102.png" alt="Veyra community group 7" width="220">
 </p>
 
-Left: optional donation, no feature restrictions. Right: community group; QR valid **before 2026-11-03** as shown. Check repository updates after expiry.
+Left: optional donation, no feature restrictions. Right: community group; QR valid **before 2026-11-09** as shown. Check repository updates after expiry.
