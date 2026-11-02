@@ -35,6 +35,41 @@
 
 ## 一、按日期（最新在前）
 
+### ✅ 2026-11-02 合并到 2.1.2 之后，十三个样本重测格式识别
+
+**为什么测**：这次合并把桥接层整个搬进了 2.1.2 的拆分架构，杜比视界、HDR10+、Vivid 的
+识别路径都在被搬动的代码里。编译通过和单元测试全绿只能证明算数对，不能证明"打开的
+片子还是被认成原来那个格式"，所以拿真实文件重跑了一遍。
+
+**十三个样本，分两组**
+
+杜比视界（6 个，详见 `docs/DOLBY_VISION.md` §11）：
+
+| 样本 | 配置 | 识别结果 |
+|---|---|---|
+| FEL RPU_EL测试 / FEL TEST ST DL P7 CMV4.0 / [Dolby] … EL Test | P7 + FEL | `profile=7 el=true route=2` |
+| Despicable Me … Dolby Vision | P7 MEL | 同上，走内置 NAL 遍历 |
+| Spider-Man.Brand.New.Day … DV.HDR | P8 | `profile=8 compatibility=1 el=false` |
+| 杜比视界P10_AV1_1080p | P10 (AV1) | `profile=10 level=4`，RPU 读到但不应用 |
+
+非杜比（7 个）：
+
+| 样本 | 实际 | 识别结果 | 判据 |
+|---|---|---|---|
+| hdr10+test_lake_2021 | HDR10+ | `HDR10+ scene metadata peak=395.6 nits` | 场景元数据真的解出来了 |
+| S01E01 … HDR Vivid | Vivid | `HDR Vivid dynamic metadata observed windows=1` | 同上 |
+| Spider-Man No Way Home / Taylor Swift | HDR10 | `masteringMaxNits=1000` + `maxCLL` | 静态元数据 |
+| [Dolby] … Layer Control | **HDR10** | 一行 `[source-dovi]` 都没有 | **文件名骗人**：名字全是 Dolby Vision，实际没有 DV 记录 |
+| TS演唱会 / 2025.iTALiAN | SDR | `hdr=false transfer=2` | 没被误判成 HDR |
+
+**结论**：13/13 全部 `exit=0`、0 条 ERROR，识别与合并前一致。两个容易出错的点都守住了——
+「文件名带 Dolby 但无 DV 配置记录」不再被当 DV，「SDR 片源」不再被当 HDR。
+
+**唯一的异常**：P10 那个 AV1 10bit 样本走 D3D12VA 失败后回退 libdav1d 软解
+（`unsupported-d3d12-surface`）。1080p 软解无压力，4K AV1 10bit 可能吃力；
+这是驱动/FFmpeg 的 AV1 硬解支持问题，不是本链引入的。
+
+
 ### ✅ 2026-10-17 AMD 光流（FidelityFX）从"根本编不进来"到编译通过：一条完整的排查链
 
 ### 现象

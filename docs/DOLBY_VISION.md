@@ -1306,6 +1306,40 @@ EL 残差偏负；残差本身围绕零点对称（实测 −13…+17），不�
 ---
 
 
+### 11. 端到端复测：2.1.2 合并后的 P7 合成（2026-11-02）
+
+合并到 2.1.2 基线（拆分式桥接）之后，把 P7 合成打开（`doviP7Compose=true`）重跑了
+四个 P7 样本，确认重建链在实际播放路径上仍然成立，而不只是单元测试里的奇偶校验。
+
+| 样本 | 配置记录 | EL 提取 | L5 | RPU 映射 |
+|---|---|---|---|---|
+| `FEL RPU_EL测试.mkv` | 748 B | `dovi_split mode=el` | top=275 bottom=276 | `Y=identity Cb=mmr(1,3) Cr=mmr(1,3) → supported` |
+| `FEL TEST ST DL P7 CMV4.0 4000nits V4.mkv` | 23 B | `dovi_split mode=el` | top=0 bottom=0 | 同上 |
+| `[Dolby] … Full Enhancement Layer Test {4K DoVi}` | 795 B | `dovi_split mode=el` | top=275 bottom=276 | 同上 |
+| `Despicable Me … Dolby Vision …`（MEL） | 722 B | **容器无 hvcE，走内置 NAL 遍历** | top=42 bottom=42 | 同上 |
+
+两条 EL 提取路径都覆盖到了：前三个容器的 `dovi_split` 直接给到增强层，第四个只有
+基础层里夹的 NAL，走的是 `MediaFileSource` 里那条兜底遍历。四条都是
+`el=true route=2`，EL 解码器 1920x1080 正常打开（`avgCost` 3.3–7.1 ms/包）。
+
+第三个样本还打出了打包给着色器的重建参数，这一行是 P7 重建真正生效的证据：
+
+```
+[source-dovi-el] reconstruction parameters packed nlqOffset=512 slope=2048
+                 coefDenom=23 modes=0/1/1 mmrOrders=0/3/3
+```
+
+**对照样本**（同一轮，未开 P7 合成时的行为）：
+- P8（`Spider-Man … DV.HDR`）：`profile=8 compatibility=1 bl=true el=false`，基础层钉 PQ，无合成，符合预期
+- P10（`杜比视界P10_AV1_1080p`）：`profile=10 level=4`，RPU 读到但按设计不应用（兼容播放）；
+  该样本的 AV1 10bit 走 D3D12VA 失败后回退 libdav1d 软解，
+  这是驱动/FFmpeg 的 AV1 10bit 硬解支持问题，与本链无关
+
+合成打开后 GPU 上多一路 1920x1080 的 EL 解码与一次全屏重建，4K FEL 片的开销明显高于
+只播基础层——这也是它保持默认关闭、作为独立偏好的原因。
+
+
+
 ## 四、代码位置索引
 
 | 功能 | 文件 |
