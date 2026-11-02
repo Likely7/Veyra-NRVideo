@@ -1,5 +1,9 @@
 # 当前项目状态
 
+**当前正式版2.1.2（2026-11-02）**：用户授权公开发行，main和v2.1.2／v2.1.2-sources已推送；发行准备899590f，程序构建358be8c（EXE33d8e615…），使用Claude最新去重包的原程序字节。两显卡包及源码已发布，服务端摘要、匿名下载、Latest与两张二维码核验通过。[完整更新](RELEASE_NOTES_2.1.2.md) · [构建/源码](BUILD_2.1.2.md) · [发行记录](RELEASE_2.1.2_EXECUTION_2026-11-02.md)。正式产物releases/codex-release-2.1.2-20261102，FINAL回执reports/codex-release-2.1.2-20261102。
+
+以下带日期段落保留施工过程；其中“未发布/本地包”是当时状态，以本段为准。
+
 更新：2026-11-02。这里只描述现在；历史过程见[历史索引](history/INDEX.md)。
 
 **2026-11-02 自动剔除重复帧容忍零星噪点**：用户要求合并到main并重新打包2.1.2。分支`claude/dedup-precise-20261102`（基于main`30337c8`）已提交并快进合入main；未push/Release。已从main `358be8c`重新打包2.1.2（PE 2.1.2.0，主EXE `33d8e615…`），放在`test-packages/claude-build-2.1.2-dedup-20261102`。合同8组、QtQuick 132/0/1、GPU短测3组、ZIP校验及两包解压冷启动均通过；Codex首个2.1.2包及其中的用户配置不变。见[构建记录](BUILD_2.1.2_TEST_2026-11-02.md)末节。
@@ -30,7 +34,7 @@ RX 7000 NR（已并入）：RedDuke 独立网络 worker，Small / Original，兼
 
 ## 正式版与开发基线
 
-- 正式版 **2.1.1**：`v2.1.1` / `v2.1.1-sources` → `2fecacf`，已完整进入main。正式包在`E:/项目/Veyra/releases/release-2.1.1-final-20261027`。
+- 前一正式版 **2.1.1**：`v2.1.1` / `v2.1.1-sources` → `2fecacf`，已完整进入main。正式包在`E:/项目/Veyra/releases/release-2.1.1-final-20261027`。
 - 交付包括：带声音实时录制、AMD关闭SR修正、90°旋转、NR手动内部比例及视频导出兼容、采集音频/准备时间戳修正、补帧显示查询改进、菜单首次布局、AMD原生HDR代理NR、同帧AA/截图/全屏修复；默认软件界面，可选GPU；新SR模型默认RTX视频超分高档，首次效果仍关闭，已有明确选择保留。
 - 完整用户说明：[2.1.1更新](RELEASE_NOTES_2.1.1.md)、[构建与对应源码](BUILD_2.1.1.md)。用户迁移数据在`runtime_local/user-data-2.0.0`，导入LUT另在`runtime_local/luts`。
 
@@ -61,5 +65,5 @@ RX 7000 NR（已并入）：RedDuke 独立网络 worker，Small / Original，兼
 
 - Lecram两条研究线继续暂停，保留原工作树与依赖，不合入产品。
 - 6个旧脏树（516条状态记录）保留原位并已逐字节保全；桌面`.git`仍是所有工作树共用库，不能整体删除桌面工程。
-- 不改SDK/模型/运行库/驱动/真实用户配置；本轮不push、不Release。
+- 不改SDK/模型/运行库/驱动/真实用户配置；2.1.2按本轮明确授权完成push/Release。
 - 依赖真实路径与产物保留规则见根AGENTS及`E:/项目/Veyra/AGENTS.md`。旧CMake缓存、测试环境与guard可能已退休；需重跑历史诊断时先按归档清单恢复环境。
