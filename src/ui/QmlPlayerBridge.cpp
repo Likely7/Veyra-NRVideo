@@ -566,7 +566,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // mirror before the failure is reported. The mirrors are the same
             // rendition on different nodes, so a single unreachable node is the usual
             // cause; the next one normally works.
-            if (had && !wasFailed && s.failed && !impl_->biliMirrors.empty() &&
+            // 首次打开失败也要换节点：B 站 CDN 的 403 多数是单个节点拒绝，换一个通常就好了。
+            // 原来这里还有一个 `had`（之前出过画面）条件，结果「一次都没打开成功」的情况
+            // 一次重试都轮不到 —— 而这恰恰是 403 最常见的场景。
+            // No `had` here: requiring an earlier picture meant a stream that never opened
+            // got zero retries, which is exactly the 403 case.
+            if (!wasFailed && s.failed && !impl_->biliMirrors.empty() &&
                 impl_->biliRetriesLeft > 0 && !impl_->biliRetryPending) {
                 impl_->biliRetryPending = true;
                 --impl_->biliRetriesLeft;
