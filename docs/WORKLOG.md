@@ -1,5 +1,11 @@
 # 当前工作日志
 
+## 2026-11-03 RX7000 cache.zip续查与多GPU映射修复
+
+用户补充cache.zip，52份worker日志相同，NR创建前24GB显存可用、缓存覆盖gfx1100，NGX明确Unsupported GPU architecture 0x0/min0x1b0且m_gpuArch=0xe0。固定ZLUDA NVAPI源码硬编码CUDA设备0，而Veyra按独显上下文运行。使用正式包同SHA转发层及NVAPI实际复现“核显0/独显1”误报核显LUID。分支codex/rdna3-nvapi-luid-20261103基线ecfbb0f，重编译同源开源NVAPI，改用当前上下文设备并显式拒绝歧义/查询失败；不改模型/驱动/原件，未使用二进制补丁。
+
+首次原源码Cargo构建48.5秒，修复2.3秒，从原源码重新套patch的正式构建脚本2.33秒通过；每次并发2，上限880秒，CARGO_HOME/target/TEMP全在E盘。最终DLL215040字节/a7adb043…。13组合同旧8失败、新13通过，双线程64次设备隔离和原NR架构身份保持；CPU夹具不冒充实卡推理。新旧正式两NVAPI原件SHA已与2.1.2 AMD ZIP比对一致。源码/许可证/构建脚本/夹具/来源记录入Git；产品补丁只一个开源DLL，夹具nvcuda.dll绝不随包。未动原app、用户配置、依赖原件、正式ZIP，未合main/push/Release。命令、边界与最终包/清理回执见docs/RDNA3_NVAPI_LUID_2026-11-03.md及reports/rdna3-nvapi-luid-20261103/FINAL.json。后续等该用户实卡确认NR是否成功创建及推理。
+
 ## 2026-11-03 RX7900 XTX的NR初始化失败（只读排查）
 
 用户提供veyra-qml(3).log并确认软件能打开、NR开不了。原日志SHA256 d92fabe719b9c33bf287dc0e81d89b5813e49b2d0413164351ec42c8dc98f8ef，共5381170字节。三个启动会话中52次NR创建均失败，首次UTC10:36:08.991、最后12:00:52.234，全部内部1920×1080；错误为NVSDK_NGX_CUDA_CreateFeature 0xBAD00001（NVIDIA定义FeatureNotSupported）。主程序随后明确回退nr=false；未出现RDNA3 worker ready。不能把错误号等同显卡永久不支持，亦无显存不足证据。

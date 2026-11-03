@@ -1,5 +1,7 @@
 # Veyra Agent 工作规则
 
+> **2026-11-03 RX7000多GPU身份映射修复（本地待实卡）**：用户cache.zip显示7900XTX有gfx1036核显/gfx1100独显，NGX因GPU身份匹配失败报Unsupported GPU architecture 0x0。codex/rdna3-nvapi-luid-20261103基线ecfbb0f，修固定ZLUDA b135e233的nvapi/src/lib.rs：当前CUDA上下文设备LUID代替写死ordinal0，歧义/失败明确报错。只重新编译开源zluda_nvapi.dll，不改NVIDIA模型/驱动/原翻译器或缓存。原正式组件13组8失败，新组件13组全通过（含双线程64次），不等于RX7000推理已验。源码patch、MIT/Apache许可证、构建和夹具测试已记录；更新包test-packages/codex-rdna3-nvapi-luid-20261103，FINAL位于reports/rdna3-nvapi-luid-20261103。未来组RX7000包必须带此更新后的NVAPI并重做manifest，勿从旧供体回退b86425dd…；新DLL身份a7adb043…/215040字节。原app/依赖/正式包保留，不合main、不push/Release。详见docs/RDNA3_NVAPI_LUID_2026-11-03.md。测试用nvcuda.dll绝不能进入产品包。
+
 > **2026-11-03 NVENC导出关键帧修复（本地）**：按用户要求先审第三方诊断，在codex/nvenc-export-keyframes-20261103（基线edad6e9）复现H.264/HEVC MP4仅首帧索引，确认低延迟preset继承无限IDR。显式同步当前codec idrPeriod到原GOP120并记录参数，不采纳I帧一律标KEY。14组生产导出/码流/原始索引及28次像素一致跳转通过；首次HDR合成素材漏PQ元数据已修正测试，保留失败。记录docs/NVENC_EXPORT_KEYFRAMES_2026-11-03.md，回执reports/nvenc-export-keyframes-20261103/FINAL.json，覆盖补丁test-packages/codex-nvenc-export-keyframes-20261103。继承全屏/VFG实验变更，不合main、不push/发布，不改真实配置、驱动或运行组件。
 
 > **2026-11-02 用户授权RTX30 VFG适配（当前施工）**：分支codex/vfg-ampere-20261102，基线4895549，保留全屏进度条修复。按docs/VFG_AMPERE_PLAN_2026-11-02.md移植Xchen991固定07536ab（MIT）：仅VFG模块、SM86设备及当前CUDA上下文，命名导入/私有kernel副本/租约和可验回滚；40/50原生无补丁。复用207321712字节原VFG和模型，不改磁盘DLL/驱动/真实配置。合同/真实模块控制及RTX5070原生回归通过，30实卡未验，UI明确实验。产物test-packages/codex-vfg-ampere-20261102，回执reports/vfg-ampere-20261102/FINAL.json；不合main、不push/发布。后续打包必须带licenses/RTX30-Broadcast-FrameGen-MIT.txt和对应源码差异。

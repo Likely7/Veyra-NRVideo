@@ -1,5 +1,7 @@
 # 当前项目状态
 
+**2026-11-03 RX7000本地兼容补丁**：发现核显+独显设备的NVAPI LUID误报，当前分支codex/rdna3-nvapi-luid-20261103修开源zluda_nvapi.dll并提供独立小更新。原正式组件实测合同失败、新组件13组通过；没有RX7000实卡推理结论，不改模型/缓存/驱动。尚未合main、未发布。[证据及未来打包要求](RDNA3_NVAPI_LUID_2026-11-03.md)。
+
 **2026-11-03 本地导出修复**：codex/nvenc-export-keyframes-20261103显式覆盖NVENC低延迟preset的无限IDR，恢复每120帧真正IDR与封装索引，不把普通I标KEY。14组生产导出、28次跳转通过，继承全屏修复与RTX30 VFG实验兼容；未合main、未push/发布。[审查与证据](NVENC_EXPORT_KEYFRAMES_2026-11-03.md)。
 
 **当前正式版2.1.2（2026-11-02）**：用户授权公开发行，main和v2.1.2／v2.1.2-sources已推送；发行准备899590f，程序构建358be8c（EXE33d8e615…），使用Claude最新去重包的原程序字节。两显卡包及源码已发布，服务端摘要、匿名下载、Latest与两张二维码核验通过。[完整更新](RELEASE_NOTES_2.1.2.md) · [构建/源码](BUILD_2.1.2.md) · [发行记录](RELEASE_2.1.2_EXECUTION_2026-11-02.md)。正式产物releases/codex-release-2.1.2-20261102，FINAL回执reports/codex-release-2.1.2-20261102。
