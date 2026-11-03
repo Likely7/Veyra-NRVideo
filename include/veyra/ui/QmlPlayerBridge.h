@@ -354,11 +354,6 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int thumbnailGeneration READ thumbnailGeneration NOTIFY thumbnailGenerationChanged)
     Q_PROPERTY(QString sourceName READ sourceName NOTIFY snapshotChanged)
     Q_PROPERTY(QString sourceSummary READ sourceSummary NOTIFY snapshotChanged)
-    // 片源的 HDR 格式名（HDR10 / 杜比视界 P7 …）。原来的格式徽章是一个独立的原生窗口，
-    // 它有既存崩溃；现在改由 QML 在画面上画，这个属性就是它的数据源。
-    // The source's HDR format name. The old badge was a native window with a pre-existing
-    // crash, so QML draws it now and this property feeds it.
-    Q_PROPERTY(QString sourceHdrLabel READ sourceHdrLabel NOTIFY snapshotChanged)
     Q_PROPERTY(int sourceWidth READ sourceWidth NOTIFY snapshotChanged)
     Q_PROPERTY(int sourceHeight READ sourceHeight NOTIFY snapshotChanged)
     Q_PROPERTY(double sourceFps READ sourceFps NOTIFY snapshotChanged)
@@ -965,7 +960,6 @@ public:
     QString sourceName() const;
     int thumbnailGeneration() const;
     QString sourceSummary() const;
-    QString sourceHdrLabel() const;
     int sourceWidth() const;
     int sourceHeight() const;
     double sourceFps() const;
