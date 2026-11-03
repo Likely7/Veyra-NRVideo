@@ -1,5 +1,11 @@
 # 当前工作日志
 
+## 2026-11-03 RX7900 XTX的NR初始化失败（只读排查）
+
+用户提供veyra-qml(3).log并确认软件能打开、NR开不了。原日志SHA256 d92fabe719b9c33bf287dc0e81d89b5813e49b2d0413164351ec42c8dc98f8ef，共5381170字节。三个启动会话中52次NR创建均失败，首次UTC10:36:08.991、最后12:00:52.234，全部内部1920×1080；错误为NVSDK_NGX_CUDA_CreateFeature 0xBAD00001（NVIDIA定义FeatureNotSupported）。主程序随后明确回退nr=false；未出现RDNA3 worker ready。不能把错误号等同显卡永久不支持，亦无显存不足证据。
+
+核对Rdna3NrWorker/Backend及固定RedDuke network源：HIP加载、指定D3D12设备/共享预检和network.load/can_share均在CreateFeature之前，主日志只记录子进程返回的最终错误；具体拒绝条件应查软件目录runtime/amd-nr-rdna3/cache中的worker-*.log、gate.log及NGX日志。未提供这些文件，故本轮不猜测修改兼容层/驱动/模型参数，也未构建或运行GPU测试。只读证据回执reports/amd-rdna3-startup-20261103/FINDINGS.json（约17KB），含52个行号及分辨率上下文；原日志、配置、运行组件和源码保持，待补子进程日志继续定位。官方定义来源https://github.com/NVIDIA/DLSS/blob/main/include/nvsdk_ngx_defs.h。
+
 ## 2026-11-03 NVENC导出关键帧审查与修复
 
 用户要求先审第三方报告再修。隔离分支codex/nvenc-export-keyframes-20261103，基线edad6e9，保留全屏/VFG实验改动，无main合并/push/Release。真实270帧H.264/HEVC MP4均复现仅首帧索引，HEVC另有2个CRA；preset实际IDR周期4294967295。仅覆盖当前codec idrPeriod=原GOP120并日志记录，不把非IDR I帧伪装成安全跳转点；码率/HDR/slot/fence和实时录制不改。普通copy重封装旧文件实测仍仅首帧索引。
