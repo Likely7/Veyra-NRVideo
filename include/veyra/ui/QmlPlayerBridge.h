@@ -1508,7 +1508,9 @@ public:
     Q_INVOKABLE void bilibiliRequestInteractionState(const QString& bvid);
     // 手动为某个分P装载字幕（设置页的「重新拉取」按钮用）。播放时也会自动调用。
     // Install subtitles for one part on demand; playback calls this automatically.
-    Q_INVOKABLE void bilibiliRequestSubtitles(const QString& bvid, qlonglong cid);
+    // 只在 C++ 内部用（两个播放入口），不导出给 QML。
+    // Internal only, called from both play entry points; not exported to QML.
+    void bilibiliRequestSubtitles(const QString& bvid, qlonglong cid);
     // 设置页改了底色/透明度后调用：就地刷新正在播放的 B 站字幕样式。
     // Called when the background settings change, so the running track repaints in place.
     Q_INVOKABLE void refreshBiliSubtitleStyle();

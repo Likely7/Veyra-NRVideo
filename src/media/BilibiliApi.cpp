@@ -1223,9 +1223,7 @@ bool biliSubtitleList(const std::wstring& bvid, long long cid, std::vector<BiliS
     for (const auto& entry : root["data"]["subtitle"]["subtitles"].elements()) {
         BiliSubtitle one;
         one.lan = fromUtf8((*entry)["lan"].asString());
-        one.lanDoc = fromUtf8((*entry)["lan_doc"].asString());
         one.url = fromUtf8((*entry)["subtitle_url"].asString());
-        one.ai = (*entry)["ai_type"].asInt(0) != 0;
         if (one.url.empty()) continue;                 // 没有地址的条目用不了
         if (one.url.rfind(L"//", 0) == 0) one.url = L"https:" + one.url;
         out.push_back(std::move(one));

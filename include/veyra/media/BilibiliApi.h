@@ -170,15 +170,13 @@ struct BiliDanmaku {
     std::wstring text;
 };
 
-// 一条字幕轨的元信息。lan 是站方的语言码（zh / en / ai-zh），lanDoc 是给人看的名字。
+// 一条字幕轨的元信息：站方的语言码（zh / en / ai-zh）和可以直接下载的地址。
 // ai 为真表示这条是语音识别的 AI 字幕，通常带错字。
 // One subtitle track as the site describes it. `lan` is the site's language code
-// (zh / en / ai-zh), `lanDoc` is the display name, and `ai` marks speech recognition.
+// (zh / en / ai-zh) plus the absolute URL to fetch it from.
 struct BiliSubtitle {
     std::wstring lan;
-    std::wstring lanDoc;
     std::wstring url;      // absolute https URL; empty when the request was not signed in
-    bool ai = false;
 };
 
 // 站方字幕自带显示参数（BCC 头）。网页版的「白字 + 半透明紫底」就来自这几个字段，
@@ -186,7 +184,7 @@ struct BiliSubtitle {
 // The site ships display parameters in the BCC header; they are what give the web player
 // its white-on-purple look, independent of our own subtitle preferences.
 struct BiliSubtitleStyle {
-    double fontSize = 0.0;          // font_size，站方给的是相对值
+    double fontSize = 0.0;          // 只用来判断头里到底有没有样式块，绘制端没映射
     std::wstring fontColor;         // font_color，形如 "#FFFFFF"
     double backgroundAlpha = 0.0;   // background_alpha，0..1
     std::wstring backgroundColor;   // background_color，形如 "#9C27B0"
