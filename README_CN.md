@@ -189,7 +189,7 @@ Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-7-20261102.png" alt="Veyra 交流群 7" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-8-20261102.png" alt="Veyra 交流群 8" width="220">
 </p>
 
-左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-11-09 前**有效，过期请查看仓库更新。
+左：微信赞助（自愿，不影响功能）；右：交流群 8。群码按图片标注于 **2026-11-09 前**有效，过期请查看仓库更新。
