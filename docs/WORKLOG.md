@@ -1,5 +1,11 @@
 # 当前工作日志
 
+## 2026-11-03 NVENC导出关键帧审查与修复
+
+用户要求先审第三方报告再修。隔离分支codex/nvenc-export-keyframes-20261103，基线edad6e9，保留全屏/VFG实验改动，无main合并/push/Release。真实270帧H.264/HEVC MP4均复现仅首帧索引，HEVC另有2个CRA；preset实际IDR周期4294967295。仅覆盖当前codec idrPeriod=原GOP120并日志记录，不把非IDR I帧伪装成安全跳转点；码率/HDR/slot/fence和实时录制不改。普通copy重封装旧文件实测仍仅首帧索引。
+
+构建scripts/acceptance/build-recording-handoff.py，task codex-nvenc-export-keyframes-20261103、既有build-dir、label2.1.2-test、jobs2，probe和主程序6.5秒通过。新增scripts/acceptance/verify-export-keyframes.py：修改前两用例预期失败，修改后12组SDR及2组HDR10通过，3780帧、28次中/末段跳转逐像素与完整解码一致，MP4原始stss=[1,121,241]、码流3个IDR。首次合成HDR素材未声明PQ导致两断言失败，只修正测试生成及输入校验后补测两HDR组；失败保留。全部命令、源码审查和结果见docs/NVENC_EXPORT_KEYFRAMES_2026-11-03.md及reports/nvenc-export-keyframes-20261103/FINAL.json。日志/测试/临时/补丁均在E盘同名任务目录，未动真实配置或原运行库，未占采集卡。空间和覆盖包身份以FINAL回执为准，不冒充用户原片或其他硬件验收。
+
 完整旧日志：[截至本轮整理前的记录](history/worklog/WORKLOG_before_maintenance_2026-10-27.md)。当前状态见[CURRENT_STATUS](CURRENT_STATUS.md)，历史授权见[历史索引](history/INDEX.md)。
 
 ## 2026-10-27 屏幕捕获帧率、采集对白与后续方向（Claude）

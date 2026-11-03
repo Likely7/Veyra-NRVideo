@@ -36,6 +36,8 @@ struct NvencD3D12Encoder::Impl {
         if(fence->GetCompletedValue()<s.value){if(FAILED(fence->SetEventOnCompletion(s.value,event))||WaitForSingleObject(event,drainTimeoutMs)!=WAIT_OBJECT_0)return false;}
         NV_ENC_LOCK_BITSTREAM lock{};lock.version=NV_ENC_LOCK_BITSTREAM_VER;lock.outputBitstream=&s.out;lock.doNotWait=0;
         if(!check(api.nvEncLockBitstream(encoder,&lock),"LockBitstream"))return false;
+        // A non-IDR I picture does not guarantee a clean random-access point.
+        // Keep muxer sync samples tied to IDR, as in FFmpeg's NVENC backend.
         const bool ok=writer(static_cast<uint8_t*>(lock.bitstreamBufferPtr),lock.bitstreamSizeInBytes,static_cast<int64_t>(lock.outputTimeStamp),lock.pictureType==NV_ENC_PIC_TYPE_IDR);
         const bool unlock=check(api.nvEncUnlockBitstream(encoder,&s.out),"UnlockBitstream");
         s.pending=false;++completed;return ok&&unlock;
@@ -89,6 +91,13 @@ bool NvencD3D12Encoder::open(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     NV_ENC_PRESET_CONFIG preset{};preset.version=NV_ENC_PRESET_CONFIG_VER;preset.presetCfg.version=NV_ENC_CONFIG_VER;
     if(!p.check(p.api.nvEncGetEncodePresetConfigEx(p.encoder,codec,NV_ENC_PRESET_P4_GUID,NV_ENC_TUNING_INFO_LOW_LATENCY,&preset),"GetPreset"))return false;
     preset.presetCfg.frameIntervalP=1;preset.presetCfg.gopLength=120;preset.presetCfg.rcParams.enableLookahead=0;
+    // The low-latency preset can carry an infinite IDR period. Changing only
+    // gopLength then creates periodic non-IDR I/CRA pictures, leaving the muxer
+    // with only the initial sync sample. Override the active codec union member.
+    auto& idrPeriod=hevc?preset.presetCfg.encodeCodecConfig.hevcConfig.idrPeriod:preset.presetCfg.encodeCodecConfig.h264Config.idrPeriod;
+    const uint32_t presetIdrPeriod=idrPeriod;
+    idrPeriod=preset.presetCfg.gopLength;
+    veyra::log::info("nvenc",std::format("random access codec={} presetIdrPeriod={} gopLength={} idrPeriod={}",hevc?"HEVC":"H264",presetIdrPeriod,preset.presetCfg.gopLength,idrPeriod));
     if(config.rateControl==ExportRateControl::Cbr){
         const uint32_t bitsPerSecond=p.bitrateMbps*1000000u;
         preset.presetCfg.rcParams.rateControlMode=NV_ENC_PARAMS_RC_CBR;

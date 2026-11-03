@@ -1,5 +1,7 @@
 # Veyra Agent 工作规则
 
+> **2026-11-03 NVENC导出关键帧修复（本地）**：按用户要求先审第三方诊断，在codex/nvenc-export-keyframes-20261103（基线edad6e9）复现H.264/HEVC MP4仅首帧索引，确认低延迟preset继承无限IDR。显式同步当前codec idrPeriod到原GOP120并记录参数，不采纳I帧一律标KEY。14组生产导出/码流/原始索引及28次像素一致跳转通过；首次HDR合成素材漏PQ元数据已修正测试，保留失败。记录docs/NVENC_EXPORT_KEYFRAMES_2026-11-03.md，回执reports/nvenc-export-keyframes-20261103/FINAL.json，覆盖补丁test-packages/codex-nvenc-export-keyframes-20261103。继承全屏/VFG实验变更，不合main、不push/发布，不改真实配置、驱动或运行组件。
+
 > **2026-11-02 用户授权RTX30 VFG适配（当前施工）**：分支codex/vfg-ampere-20261102，基线4895549，保留全屏进度条修复。按docs/VFG_AMPERE_PLAN_2026-11-02.md移植Xchen991固定07536ab（MIT）：仅VFG模块、SM86设备及当前CUDA上下文，命名导入/私有kernel副本/租约和可验回滚；40/50原生无补丁。复用207321712字节原VFG和模型，不改磁盘DLL/驱动/真实配置。合同/真实模块控制及RTX5070原生回归通过，30实卡未验，UI明确实验。产物test-packages/codex-vfg-ampere-20261102，回执reports/vfg-ampere-20261102/FINAL.json；不合main、不push/发布。后续打包必须带licenses/RTX30-Broadcast-FrameGen-MIT.txt和对应源码差异。
 
 > **2026-11-02 全屏进度条修复（当前施工）**：隔离分支codex/fullscreen-seek-20261102，基线fedd7fc；只改CineBar/Main的焦点交互与隐藏/取消条件，修复按下7ms后被取消的回归。构建通过，QtQuick141/0/0，真实全屏前拖33.770s、后拖5.902s、点击20s正常，观察探针已移除，原用户配置保持。小补丁test-packages/codex-fullscreen-seek-20261102，记录docs/FULLSCREEN_SEEK_FIX_2026-11-02.md与reports/codex-fullscreen-seek-20261102/FINAL.json。本轮不合main、不push、不更新GitHub正式包。
