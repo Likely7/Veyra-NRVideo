@@ -20,6 +20,7 @@
 //
 // Scope note: this exposes what the engine can actually do today. Playback
 // speed measurement and requested file-preview rate are separate values.
+#include "veyra/engine/Subtitles.h"
 #include <QObject>
 #include <QString>
 #include <QRectF>
@@ -57,6 +58,9 @@ enum class BiliOp : uint8_t {
     // Posting a comment. Asynchronous like the other write actions, so a synchronous
     // HTTP call cannot freeze the window.
     Reply, DeleteReply, EmotePanel, AuthorVideos,
+    // 拉取并装载一条 B 站字幕轨：DASH 流里没有字幕，站方是独立接口给的。
+    // Fetches and installs a Bilibili subtitle track; the DASH stream carries none.
+    Subtitles,
     Count,
 };
 // 操作名，供信号传给 QML 分派用。
@@ -64,6 +68,7 @@ enum class BiliOp : uint8_t {
 constexpr const char* biliOpName(BiliOp op) {
     switch (op) {
     case BiliOp::InteractionState: return "interaction";
+    case BiliOp::Subtitles:        return "subtitles";
     case BiliOp::Favorite:         return "favorite";
     case BiliOp::FavFolders:       return "fav-folders";
     case BiliOp::Like:             return "like";
@@ -1501,6 +1506,12 @@ public:
     // bilibiliInteractionReady 回到 QML。
     // worker and the result arrives through bilibiliInteractionReady.
     Q_INVOKABLE void bilibiliRequestInteractionState(const QString& bvid);
+    // 手动为某个分P装载字幕（设置页的「重新拉取」按钮用）。播放时也会自动调用。
+    // Install subtitles for one part on demand; playback calls this automatically.
+    Q_INVOKABLE void bilibiliRequestSubtitles(const QString& bvid, qlonglong cid);
+    // 设置页改了底色/透明度后调用：就地刷新正在播放的 B 站字幕样式。
+    // Called when the background settings change, so the running track repaints in place.
+    Q_INVOKABLE void refreshBiliSubtitleStyle();
     // page lookup inside bilibiliPlay can be skipped. That lookup is a full round trip and
     void flushBiliWatchProgress();
     bool reportBiliWatchProgressAsync();

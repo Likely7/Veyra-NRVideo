@@ -1039,6 +1039,16 @@ struct QmlPlayerBridge::Impl {
     // Sized from the enum so a new operation cannot silently fall off the end; the old
     // literal 12 had to be remembered by hand every time.
     std::array<BiliSlot, static_cast<size_t>(BiliOp::Count)> biliTaskSlots{};
+    // 字幕先存着，等片源真正跑起来再装：打开片源会 refreshSubtitles() 清空轨道，
+    // 早于它的加载会被一起清掉。
+    // Hold the fetched subtitles until playback is running: opening a source calls
+    // refreshSubtitles(), which clears the tracks.
+    QString pendingBiliSub;
+    QVariantMap pendingBiliStyle;
+    // 当前 B 站字幕在 subTracks 里的下标（-1 表示没有）：设置页改颜色时要就地刷。
+    // Index of the Bilibili track inside subTracks (-1 = none), so a colour change can
+    // repaint it in place.
+    int biliSubtitleIndex = -1;
     struct BiliPlayJob {
         std::future<void> query;
         std::shared_ptr<BiliPlayWorkerResult> result;   // worker 写，tick 读

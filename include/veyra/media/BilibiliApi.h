@@ -170,6 +170,50 @@ struct BiliDanmaku {
     std::wstring text;
 };
 
+// 一条字幕轨的元信息。lan 是站方的语言码（zh / en / ai-zh），lanDoc 是给人看的名字。
+// ai 为真表示这条是语音识别的 AI 字幕，通常带错字。
+// One subtitle track as the site describes it. `lan` is the site's language code
+// (zh / en / ai-zh), `lanDoc` is the display name, and `ai` marks speech recognition.
+struct BiliSubtitle {
+    std::wstring lan;
+    std::wstring lanDoc;
+    std::wstring url;      // absolute https URL; empty when the request was not signed in
+    bool ai = false;
+};
+
+// 站方字幕自带显示参数（BCC 头）。网页版的「白字 + 半透明紫底」就来自这几个字段，
+// 和我们自己的全局字幕偏好是两套东西。
+// The site ships display parameters in the BCC header; they are what give the web player
+// its white-on-purple look, independent of our own subtitle preferences.
+struct BiliSubtitleStyle {
+    double fontSize = 0.0;          // font_size，站方给的是相对值
+    std::wstring fontColor;         // font_color，形如 "#FFFFFF"
+    double backgroundAlpha = 0.0;   // background_alpha，0..1
+    std::wstring backgroundColor;   // background_color，形如 "#9C27B0"
+    std::wstring stroke;            // "none" 或更粗；AI 字幕用大写 Stroke
+    int location = 2;               // 2 = 底部居中（同 ASS 的 numpad）
+    bool present = false;           // 头里确实带了这些字段
+};
+
+// 一条字幕文本。时间单位是秒，和站方的 JSON 一致。
+struct BiliSubtitleCue {
+    double from = 0.0;
+    double to = 0.0;
+    std::wstring content;
+};
+
+// 列出某个分P的字幕轨。必须走 wbi 签名端点：未签名的 /x/player/v2 也会返回列表，
+// 但 subtitle_url 是空的，看起来像"这个视频没有字幕"。
+// Lists one part's subtitle tracks. It has to be the wbi-signed endpoint: the unsigned
+// /x/player/v2 returns the list with empty subtitle_url values, which reads as "this
+// video has no subtitles".
+bool biliSubtitleList(const std::wstring& bvid, long long cid, std::vector<BiliSubtitle>& out, std::wstring& error);
+
+// 下载并解析一条字幕。URL 的主机是 CDN（aisubtitle.hdslb.com），不是 api.bilibili.com。
+// Downloads one track. The URL lives on a CDN host, not on api.bilibili.com.
+bool biliSubtitleBody(const std::wstring& url, std::vector<BiliSubtitleCue>& out, std::wstring& error,
+                      BiliSubtitleStyle* style = nullptr);
+
 // The danmaku track for one part. `cid` comes from data.pages[].cid.
 bool biliDanmaku(long long cid, std::vector<BiliDanmaku>& out, std::wstring& error);
 

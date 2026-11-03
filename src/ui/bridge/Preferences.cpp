@@ -182,6 +182,9 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}},
+        // B 站字幕底色不透明度：0..100，覆盖站方 BCC 头里的 background_alpha。
+        // Subtitle background alpha override for Bilibili tracks.
+        {"biliSubtitleBgAlpha", {-1, 100}},   // -1 = 跟随视频自带的 background_alpha
         // 列表模式 parameter panel width (ProPage splitter); QML clamps it to the window.
         {"listInspectorWidth", {376, 4000}},
         // Network sources (#48): seconds to collect before the first picture; -1 follows the buffer level.
@@ -194,7 +197,13 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect",
                                    // Bilibili module: backup CDN, danmaku on by default, return to the detail page after playback.
-                                   "biliAutoCdn", "biliDanmaku", "biliReturnAfterEnd"};
+                                   "biliAutoCdn", "biliDanmaku", "biliReturnAfterEnd",
+                                   // 字幕：默认开；双语默认关（合并两行会改变单行位置）。
+                                   // Subtitles default on; bilingual default off.
+                                   "biliSubtitles", "biliSubtitlesBilingual",
+                                   // 用户在设置页覆盖站方的字幕底色：颜色（#RRGGBB，空=视频默认样式）与不透明度。
+                                   // Overrides for the site-provided subtitle background colour and alpha.
+                                   "biliSubtitles", "biliSubtitlesBilingual"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -288,6 +297,18 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         const QString v = value.toString();
         if (v != QLatin1String("conceal") && v != QLatin1String("keyframe")) return false;
         stored = v;
+    } else if (key == QLatin1String("biliSubtitleBgColor")) {
+        // 字幕底色：固定预设而不是任意取色，空串表示用 BCC 头里的视频默认样式。
+        // Subtitle background colour: fixed presets; empty means "use what the site sent".
+        const QString v = value.toString();
+        // 空串 = 视频默认样式；否则必须是 #RRGGBB（取色器给的就是这个形状）。
+        // Empty means "follow the site"; otherwise it has to be #RRGGBB.
+        if (!v.isEmpty()) {
+            if (v.size() != 7 || v.at(0) != QLatin1Char('#')) return false;
+            for (int k = 1; k < 7; ++k)
+                if (!isxdigit(v.at(k).toLatin1())) return false;
+        }
+        stored = v;
     } else if (key == QLatin1String("rememberPosition") || key == QLatin1String("dockPinned")) {
         stored = value.toBool();
     } else if (key == QLatin1String("language")) {
@@ -310,6 +331,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     if (impl_->prefs.value(key) == stored) return true;
     const auto previous = impl_->prefs;
     impl_->prefs[key] = stored;
+    // 字幕底色类偏好改了就地重刷，正在播放的字幕立刻换色。
+    // Repaint the running Bilibili subtitle right away when a background preference changes.
+    if (key == QLatin1String("biliSubtitleBgColor") || key == QLatin1String("biliSubtitleBgAlpha"))
+        refreshBiliSubtitleStyle();
     if (!impl_->savePrefs()) {
         impl_->prefs = previous;
         emit notice(tr("偏好保存失败，已保留原设置"), true);

@@ -60,6 +60,22 @@ VPage {
     property var favFolderId: 0
     // The folder chooser the 收藏 button opens. A favourite goes into the folder picked
     // there, not silently into the account's first one.
+    property bool bgPickerOpen: false
+    // 不透明度滑块的本地值：跟随偏好，但拖动期间不被写回打断。
+    // Local value for the opacity slider: follows the preference without being cut off
+    // mid-drag by the write-back.
+    // 色盘的明度：黑色只能靠它得到，必须由页面持有。
+    // The wheel's luminance; black is only reachable through it, so the page owns it.
+    property int biliLuminance: -40
+    function applyWheelColor(h, s2, l) {
+        const col = Qt.hsla(h / 360, Math.max(0, Math.min(1, s2 / 100)),
+                            Math.max(0, Math.min(1, (l + 100) / 200)), 1)
+        const hex = '#' + ('0' + Math.round(col.r * 255).toString(16)).slice(-2)
+                        + ('0' + Math.round(col.g * 255).toString(16)).slice(-2)
+                        + ('0' + Math.round(col.b * 255).toString(16)).slice(-2)
+        veyra.setPreference("biliSubtitleBgColor", hex.toUpperCase())
+    }
+    property int subtitleAlphaDraft: veyra.preferences.biliSubtitleBgAlpha ?? -1
     property bool favPickerOpen: false
     property var favPickerFolders: []
     property var favPickerTarget: 0
@@ -121,6 +137,9 @@ VPage {
     // Whether to return to the detail page once playback ends; persisted, off by
     // default. Off leaves the player on screen (the glyph turns back into Play and
     // pressing it replays from the start); turning it on returns to the detail page.
+    readonly property bool subtitlesOn: veyra.preferences.biliSubtitles === undefined
+                                        ? true : !!veyra.preferences.biliSubtitles
+    readonly property bool subtitlesBilingual: !!veyra.preferences.biliSubtitlesBilingual
     readonly property bool returnAfterEnd: veyra.preferences.biliReturnAfterEnd === undefined
                                            || veyra.preferences.biliReturnAfterEnd === null
                                            ? false
@@ -1627,357 +1646,548 @@ VPage {
                 border.width: 1
                 border.color: Theme.stroke
 
-                ColumnLayout {
+                // 内容比窗口高时必须有滚动：以前这里是裸 ColumnLayout，窗口小一点底部就被裁掉。
+                // Needs to scroll: this was a bare ColumnLayout, so a small window cut the bottom off.
+                Flickable {
                     anchors.fill: parent
                     anchors.margins: 20
-                    spacing: 16
-
-                    RowLayout {
-                        Layout.fillWidth: true
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    contentWidth: width
+                    contentHeight: settingsColumn.implicitHeight
+                
+                    ColumnLayout {
+                        id: settingsColumn
+                        width: parent.width
+                        spacing: 16
+    
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text {
+                                text: qsTr("B 站播放设置")
+                                color: Theme.t1
+                                font.family: Theme.fontUi
+                                font.pixelSize: 16
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+    
                         Text {
-                            text: qsTr("B 站播放设置")
-                            color: Theme.t1
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            color: Theme.t3
                             font.family: Theme.fontUi
-                            font.pixelSize: 16
+                            font.pixelSize: 12
+                            text: qsTr("默认画质是「上限」：实际取不高于此档的最高可用画质。"
+                                       + "全部可用画质都高于此档时，取最低档。")
                         }
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                        color: Theme.t3
-                        font.family: Theme.fontUi
-                        font.pixelSize: 12
-                        text: qsTr("默认画质是「上限」：实际取不高于此档的最高可用画质。"
-                                   + "全部可用画质都高于此档时，取最低档。")
-                    }
-
-                    Text { text: qsTr("默认画质"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
-                    Flow {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        Repeater {
-                            model: [
-                                { id: "0", label: qsTr("自动") },
-                                { id: "127", label: "8K" },
-                                { id: "126", label: qsTr("杜比") },
-                                { id: "125", label: "HDR" },
-                                { id: "120", label: "4K" },
-                                { id: "116", label: "1080P60" },
-                                { id: "112", label: "1080P+" },
-                                { id: "80", label: "1080P" },
-                                { id: "74", label: "720P60" },
-                                { id: "64", label: "720P" },
-                                { id: "32", label: "480P" },
-                                { id: "16", label: "360P" }
-                            ]
-                            Rectangle {
-                                readonly property bool active:
-                                    String(veyra.preferences.biliQuality ?? 0) === modelData.id
-                                width: label.implicitWidth + 22
-                                height: 28
-                                radius: 14
-                                color: active ? Theme.accentSoft : Theme.card3
-                                border.width: 1
-                                border.color: active ? Theme.accent : Theme.stroke
-                                Text {
-                                    id: label
-                                    anchors.centerIn: parent
-                                    text: modelData.label
-                                    color: active ? Theme.accent : Theme.t2
-                                    font.family: Theme.fontUi
-                                    font.pixelSize: 12
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: veyra.setPreference("biliQuality", Number(modelData.id))
+    
+                        Text { text: qsTr("默认画质"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Repeater {
+                                model: [
+                                    { id: "0", label: qsTr("自动") },
+                                    { id: "127", label: "8K" },
+                                    { id: "126", label: qsTr("杜比") },
+                                    { id: "125", label: "HDR" },
+                                    { id: "120", label: "4K" },
+                                    { id: "116", label: "1080P60" },
+                                    { id: "112", label: "1080P+" },
+                                    { id: "80", label: "1080P" },
+                                    { id: "74", label: "720P60" },
+                                    { id: "64", label: "720P" },
+                                    { id: "32", label: "480P" },
+                                    { id: "16", label: "360P" }
+                                ]
+                                Rectangle {
+                                    readonly property bool active:
+                                        String(veyra.preferences.biliQuality ?? 0) === modelData.id
+                                    width: label.implicitWidth + 22
+                                    height: 28
+                                    radius: 14
+                                    color: active ? Theme.accentSoft : Theme.card3
+                                    border.width: 1
+                                    border.color: active ? Theme.accent : Theme.stroke
+                                    Text {
+                                        id: label
+                                        anchors.centerIn: parent
+                                        text: modelData.label
+                                        color: active ? Theme.accent : Theme.t2
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: 12
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: veyra.setPreference("biliQuality", Number(modelData.id))
+                                    }
                                 }
                             }
                         }
-                    }
-
-                    Text { text: qsTr("视频编码"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
-                    RowLayout {
-                        spacing: 6
-                        Repeater {
-                            model: [
-                                { id: "auto", label: qsTr("自动") },
-                                { id: "avc", label: "H.264" },
-                                { id: "hevc", label: "HEVC" }
-                            ]
-                            Rectangle {
-                                readonly property bool active:
-                                    (veyra.preferences.biliCodec || "auto") === modelData.id
-                                width: codecLabel.implicitWidth + 22
-                                height: 28
-                                radius: 14
-                                color: active ? Theme.accentSoft : Theme.card3
-                                border.width: 1
-                                border.color: active ? Theme.accent : Theme.stroke
+    
+                        Text { text: qsTr("视频编码"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
+                        RowLayout {
+                            spacing: 6
+                            Repeater {
+                                model: [
+                                    { id: "auto", label: qsTr("自动") },
+                                    { id: "avc", label: "H.264" },
+                                    { id: "hevc", label: "HEVC" }
+                                ]
+                                Rectangle {
+                                    readonly property bool active:
+                                        (veyra.preferences.biliCodec || "auto") === modelData.id
+                                    width: codecLabel.implicitWidth + 22
+                                    height: 28
+                                    radius: 14
+                                    color: active ? Theme.accentSoft : Theme.card3
+                                    border.width: 1
+                                    border.color: active ? Theme.accent : Theme.stroke
+                                    Text {
+                                        id: codecLabel
+                                        anchors.centerIn: parent
+                                        text: modelData.label
+                                        color: active ? Theme.accent : Theme.t2
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: 12
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: veyra.setPreference("biliCodec", modelData.id)
+                                    }
+                                }
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+    
+                        Text { text: qsTr("音频编码"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
+                        RowLayout {
+                            spacing: 6
+                            Repeater {
+                                model: [
+                                    { id: "auto", label: qsTr("自动") },
+                                    { id: "flac", label: "Hi-Res" },
+                                    { id: "dolby", label: qsTr("杜比全景声") },
+                                    { id: "aac192", label: "AAC 192K" },
+                                    { id: "aac132", label: "AAC 132K" },
+                                    { id: "aac64", label: "AAC 64K" }
+                                ]
+                                Rectangle {
+                                    readonly property bool active:
+                                        (veyra.preferences.biliAudio || "auto") === modelData.id
+                                    width: audioLabel.implicitWidth + 22
+                                    height: 28
+                                    radius: 14
+                                    color: active ? Theme.accentSoft : Theme.card3
+                                    border.width: 1
+                                    border.color: active ? Theme.accent : Theme.stroke
+                                    Text {
+                                        id: audioLabel
+                                        anchors.centerIn: parent
+                                        text: modelData.label
+                                        color: active ? Theme.accent : Theme.t2
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: 12
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: veyra.setPreference("biliAudio", modelData.id)
+                                    }
+                                }
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            color: Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 11
+                            text: qsTr("Hi-Res 与杜比全景声需要大会员，且视频本身要有对应音轨；"
+                                       + "选中的音轨不存在时自动回退到最高码率 AAC。")
+                        }
+    
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            CheckBox {
+                                checked: veyra.preferences.biliAutoCdn !== false
+                                onToggled: veyra.setPreference("biliAutoCdn", checked)
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
                                 Text {
-                                    id: codecLabel
-                                    anchors.centerIn: parent
-                                    text: modelData.label
-                                    color: active ? Theme.accent : Theme.t2
+                                    text: qsTr("备用 CDN")
+                                    color: Theme.t2
                                     font.family: Theme.fontUi
                                     font.pixelSize: 12
                                 }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: veyra.setPreference("biliCodec", modelData.id)
-                                }
-                            }
-                        }
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    Text { text: qsTr("音频编码"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
-                    RowLayout {
-                        spacing: 6
-                        Repeater {
-                            model: [
-                                { id: "auto", label: qsTr("自动") },
-                                { id: "flac", label: "Hi-Res" },
-                                { id: "dolby", label: qsTr("杜比全景声") },
-                                { id: "aac192", label: "AAC 192K" },
-                                { id: "aac132", label: "AAC 132K" },
-                                { id: "aac64", label: "AAC 64K" }
-                            ]
-                            Rectangle {
-                                readonly property bool active:
-                                    (veyra.preferences.biliAudio || "auto") === modelData.id
-                                width: audioLabel.implicitWidth + 22
-                                height: 28
-                                radius: 14
-                                color: active ? Theme.accentSoft : Theme.card3
-                                border.width: 1
-                                border.color: active ? Theme.accent : Theme.stroke
                                 Text {
-                                    id: audioLabel
-                                    anchors.centerIn: parent
-                                    text: modelData.label
-                                    color: active ? Theme.accent : Theme.t2
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.Wrap
+                                    text: qsTr("主地址打不开时换用镜像节点")
+                                    color: Theme.t3
                                     font.family: Theme.fontUi
-                                    font.pixelSize: 12
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: veyra.setPreference("biliAudio", modelData.id)
+                                    font.pixelSize: 11
                                 }
                             }
                         }
-                        Item { Layout.fillWidth: true }
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                        color: Theme.t3
-                        font.family: Theme.fontUi
-                        font.pixelSize: 11
-                        text: qsTr("Hi-Res 与杜比全景声需要大会员，且视频本身要有对应音轨；"
-                                   + "选中的音轨不存在时自动回退到最高码率 AAC。")
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
-                        CheckBox {
-                            checked: veyra.preferences.biliAutoCdn !== false
-                            onToggled: veyra.setPreference("biliAutoCdn", checked)
-                        }
+    
+                        // ---- danmaku appearance ----
+                        // The engine already takes these four; they were hardcoded until now.
+                        // Title and switch on one line, the note under it. The switch is the
+                        // master default for the module; everything below it is how that
+                        // danmaku looks once loaded.
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 2
-                            Text {
-                                text: qsTr("备用 CDN")
-                                color: Theme.t2
-                                font.family: Theme.fontUi
-                                font.pixelSize: 12
+                            Layout.topMargin: 8
+                            spacing: 4
+    
+                            RowLayout {
+                                spacing: 8
+                                Text {
+                                    text: qsTr("弹幕")
+                                    color: Theme.t1
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 14
+                                }
+                                VSwitch {
+                                    objectName: "bili-danmaku-default"
+                                    checked: root.danmakuDefault
+                                    onToggled: function (on) {
+                                        // 与详情页按钮共用同一对入口，两边永远同步。
+                                        // 偏好由 enableDanmaku/unloadDanmaku 自己写，
+                                        // 这里不再单独 setPreference，避免两处不一致。
+                                        // Shares the same two entry points as the detail-page
+                                        // button, so the two stay in sync. The preference is
+                                        // written inside them; setting it here as well would
+                                        // be a second source of truth.
+                                        if (on) root.enableDanmaku()
+                                        else root.unloadDanmaku()
+                                    }
+                                }
                             }
+    
                             Text {
                                 Layout.fillWidth: true
-                                wrapMode: Text.Wrap
-                                text: qsTr("主地址打不开时换用镜像节点")
+                                text: qsTr("打开视频即加载弹幕；关闭后新视频不带弹幕，详情页也可以单独开关")
                                 color: Theme.t3
+                                wrapMode: Text.Wrap
                                 font.family: Theme.fontUi
                                 font.pixelSize: 11
                             }
                         }
-                    }
-
-                    // ---- danmaku appearance ----
-                    // The engine already takes these four; they were hardcoded until now.
-                    // Title and switch on one line, the note under it. The switch is the
-                    // master default for the module; everything below it is how that
-                    // danmaku looks once loaded.
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: 8
-                        spacing: 4
-
-                        RowLayout {
+    
+                        // ---- 播放完毕后的行为 ----
+                        // 默认关闭：播完停在播放画面上，按钮图标变回「播放」，再点即从头
+                        // 重播。打开后播完自动回到视频详情。
+                        // Off by default: playback ends on the player, the glyph turns back
+                        // into Play, and pressing it replays from the start. Turning it on
+                        // returns to the detail page when playback ends.
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 8
+                            spacing: 4
+    
+                            RowLayout {
+                                spacing: 8
+                                Text {
+                                    text: qsTr("播放完成后回到视频详情")
+                                    color: Theme.t1
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: 14
+                                }
+                                VSwitch {
+                                    objectName: "bili-return-after-end"
+                                    checked: root.returnAfterEnd
+                                    onToggled: function (on) {
+                                        veyra.setPreference("biliReturnAfterEnd", on)
+                                    }
+                                }
+                            }
+    
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("默认关闭：播放结束停在播放画面，点播放按钮从头重播")
+                                color: Theme.t3
+                                wrapMode: Text.Wrap
+                                font.family: Theme.fontUi
+                                font.pixelSize: 11
+                            }
+                            // 字幕：站方字幕是独立接口给的，DASH 流里本来就没有。默认开，拿不到就静默跳过。
+                            // Subtitles come from a separate endpoint; default on, and a miss is silent.
+                            RowLayout {
                             spacing: 8
                             Text {
-                                text: qsTr("弹幕")
+                                text: qsTr("加载字幕")
                                 color: Theme.t1
                                 font.family: Theme.fontUi
                                 font.pixelSize: 14
                             }
                             VSwitch {
-                                objectName: "bili-danmaku-default"
-                                checked: root.danmakuDefault
-                                onToggled: function (on) {
-                                    // 与详情页按钮共用同一对入口，两边永远同步。
-                                    // 偏好由 enableDanmaku/unloadDanmaku 自己写，
-                                    // 这里不再单独 setPreference，避免两处不一致。
-                                    // Shares the same two entry points as the detail-page
-                                    // button, so the two stay in sync. The preference is
-                                    // written inside them; setting it here as well would
-                                    // be a second source of truth.
-                                    if (on) root.enableDanmaku()
-                                    else root.unloadDanmaku()
-                                }
+                                objectName: "bili-subtitles"
+                                checked: root.subtitlesOn
+                                onToggled: function (on) { veyra.setPreference("biliSubtitles", on) }
                             }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: qsTr("打开视频即加载弹幕；关闭后新视频不带弹幕，详情页也可以单独开关")
-                            color: Theme.t3
-                            wrapMode: Text.Wrap
-                            font.family: Theme.fontUi
-                            font.pixelSize: 11
-                        }
-                    }
-
-                    // ---- 播放完毕后的行为 ----
-                    // 默认关闭：播完停在播放画面上，按钮图标变回「播放」，再点即从头
-                    // 重播。打开后播完自动回到视频详情。
-                    // Off by default: playback ends on the player, the glyph turns back
-                    // into Play, and pressing it replays from the start. Turning it on
-                    // returns to the detail page when playback ends.
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: 8
-                        spacing: 4
-
-                        RowLayout {
-                            spacing: 8
+                            }
                             Text {
-                                text: qsTr("播放完成后回到视频详情")
-                                color: Theme.t1
-                                font.family: Theme.fontUi
-                                font.pixelSize: 14
-                            }
-                            VSwitch {
-                                objectName: "bili-return-after-end"
-                                checked: root.returnAfterEnd
-                                onToggled: function (on) {
-                                    veyra.setPreference("biliReturnAfterEnd", on)
-                                }
-                            }
-                        }
-
-                        Text {
                             Layout.fillWidth: true
-                            text: qsTr("默认关闭：播放结束停在播放画面，点播放按钮从头重播")
+                            text: qsTr("打开视频时自动装入站方字幕（需登录）。视频本身没有字幕时不会有任何提示。")
                             color: Theme.t3
                             wrapMode: Text.Wrap
-                            font.family: Theme.fontUi
-                            font.pixelSize: 11
-                        }
-                    }
-
-                    // A compact stepper: the value is shown between two buttons, which
-                    // keeps a 50..250 range usable without a full-width slider.
-                    component StepRow: RowLayout {
-                        id: stepRow
-                        property string label
-                        property string prefKey
-                        property int current
-                        property int step
-                        property int lowest
-                        property int highest
-                        property string suffix
-
-                        spacing: 8
-                        Text {
-                            Layout.preferredWidth: 84
-                            text: stepRow.label
-                            color: Theme.t2
                             font.family: Theme.fontUi
                             font.pixelSize: 12
-                        }
-                        VButton {
-                            text: "−"
-                            implicitWidth: 34
-                            enabled: stepRow.current > stepRow.lowest
-                            onClicked: veyra.setPreference(stepRow.prefKey,
-                                Math.max(stepRow.lowest, stepRow.current - stepRow.step))
-                        }
-                        Rectangle {
-                            Layout.preferredWidth: 72
-                            Layout.preferredHeight: 28
-                            radius: 6
-                            color: Theme.card3
+                            }
+    
+                            RowLayout {
+                            spacing: 8
                             Text {
-                                anchors.centerIn: parent
-                                text: stepRow.current + stepRow.suffix
+                                text: qsTr("双语字幕")
                                 color: Theme.t1
-                                font.family: Theme.fontMono
-                                font.pixelSize: 12
+                                font.family: Theme.fontUi
+                                font.pixelSize: 14
+                            }
+                            VSwitch {
+                                objectName: "bili-subtitles-bilingual"
+                                checked: root.subtitlesBilingual
+                                onToggled: function (on) { veyra.setPreference("biliSubtitlesBilingual", on) }
+                            }
+                            }
+                            Text {
+                            Layout.fillWidth: true
+                            text: qsTr("显示站方提供的译文行（多数中文字幕第二行是英文）。关掉后只显示中文。")
+                            color: Theme.t3
+                            wrapMode: Text.Wrap
+                            font.family: Theme.fontUi
+                            font.pixelSize: 12
                             }
                         }
-                        VButton {
-                            text: "+"
-                            implicitWidth: 34
-                            enabled: stepRow.current < stepRow.highest
-                            onClicked: veyra.setPreference(stepRow.prefKey,
-                                Math.min(stepRow.highest, stepRow.current + stepRow.step))
+    
+// 标题行：名称、当前色块、两个按钮。
+// Header row: label, current swatch, and the two buttons.
+RowLayout {
+    spacing: 8
+    Text {
+        text: qsTr("字幕底色")
+        color: Theme.t1
+        font.family: Theme.fontUi
+        font.pixelSize: 14
+        Layout.preferredWidth: 84
+    }
+    Rectangle {
+        Layout.preferredWidth: 28
+        Layout.preferredHeight: 20
+        radius: 4
+        border.width: 1
+        border.color: Theme.stroke
+        color: veyra.preferences.biliSubtitleBgColor || "#9C27B0"
+    }
+    VButton {
+        text: qsTr("取色")
+        onClicked: root.bgPickerOpen = !root.bgPickerOpen
+    }
+    VButton {
+        text: qsTr("视频默认样式")
+        onClicked: {
+            veyra.setPreference("biliSubtitleBgColor", "")
+            veyra.setPreference("biliSubtitleBgAlpha", -1)
+            root.subtitleAlphaDraft = -1
+            root.biliLuminance = -40
+        }
+    }
+}
+
+
+// 色盘：只管色相/饱和，明度抽出来和不透明度并排放在下面。
+// The disc owns hue and saturation; luminance moves down next to opacity.
+ColourWheel {
+    id: bgWheel
+    // 缩进到「取色」按钮下方，不要贴右边缘：对齐右下角会跟着窗口宽度跑。
+    // Indented under the 取色 button rather than hugging the right edge, which would
+    // slide with the window width.
+    Layout.alignment: Qt.AlignLeft
+    // 居中在下面两条滑块之间：那一行约 400 宽，中点 200，色盘 132 宽 -> 左边距 134。
+    // Centred over the two sliders below: that row is about 400 wide, its midpoint 200,
+    // and the disc is 132 wide, so the left margin is 134.
+    // 圆盘中心对准「不透明度」的「不」字：明度标签(约22) + 间距 + 滑块(96) + 间距 ≈ 140，
+    // 减去色盘半宽 66，左边距取 74。
+    // Centre the disc over the 「不」 of 不透明度: label + gap + 96 slider ≈ 140, minus
+    // half the disc, so 74.
+    Layout.leftMargin: 74
+    Layout.preferredWidth: 132
+    Layout.maximumWidth: 132
+    visible: root.bgPickerOpen
+    title: qsTr("字幕底色")
+    showLuminanceSlider: false      // 明度改到下面并排，见下一条 RowLayout
+    property color seed: veyra.preferences.biliSubtitleBgColor || "#9C27B0"
+    hue: {
+        const c = seed
+        const mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b), d2 = mx - mn
+        if (d2 === 0) return 0
+        let h = mx === c.r ? ((c.g - c.b) / d2 + (c.g < c.b ? 6 : 0))
+              : mx === c.g ? ((c.b - c.r) / d2 + 2) : ((c.r - c.g) / d2 + 4)
+        return h * 60
+    }
+    saturation: {
+        const c = seed
+        const mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b)
+        return mx === 0 ? 0 : (mx - mn) / mx * 100
+    }
+    luminance: root.biliLuminance
+    onEdited: function(h, s2, l) {
+        root.biliLuminance = Math.round(l)
+        root.applyWheelColor(h, s2, l)
+    }
+}
+
+// 明度与不透明度并排：一个管颜色深浅，一个管透不透。
+// Luminance and opacity side by side: how dark the colour is, and how see-through.
+RowLayout {
+    visible: root.bgPickerOpen
+    spacing: 6
+    Layout.fillWidth: true
+    Text {
+        text: qsTr("明度")
+        color: Theme.t2
+        font.family: Theme.fontUi
+        font.pixelSize: 11
+    }
+    VSlider {
+        objectName: "bili-subtitle-luminance"
+        Layout.preferredWidth: 96
+        valueFromModel: true
+        // 和不透明度同样的观感：中间向外的填充色（VSlider 的 Colour 控件才开）。
+        // Same look as the opacity slider: centre fill, opt-in for colour controls.
+        showCenterFill: true
+        from: -100; to: 100; stepSize: 1; center: true
+        value: root.biliLuminance
+        onMoved: value => {
+            root.biliLuminance = Math.round(value)
+            root.applyWheelColor(bgWheel.hue, bgWheel.saturation, Math.round(value))
+        }
+    }
+    Text {
+        text: qsTr("不透明度")
+        color: Theme.t2
+        font.family: Theme.fontUi
+        font.pixelSize: 11
+    }
+    VSlider {
+        objectName: "bili-subtitle-bg-alpha"
+        Layout.preferredWidth: 96
+        valueFromModel: true
+        from: 0; to: 100; stepSize: 5
+        value: root.subtitleAlphaDraft
+        onMoved: value => {
+            root.subtitleAlphaDraft = Math.round(value)
+            veyra.setPreference("biliSubtitleBgAlpha", Math.round(value))
+        }
+    }
+    Text {
+        text: root.subtitleAlphaDraft < 0 ? qsTr("跟随") : root.subtitleAlphaDraft + "%"
+        color: Theme.t3
+        font.family: Theme.fontUi
+        font.pixelSize: 11
+        Layout.preferredWidth: 30
+    }
+}
+
+
+
+
+    
+                        // A compact stepper: the value is shown between two buttons, which
+                        // keeps a 50..250 range usable without a full-width slider.
+                        component StepRow: RowLayout {
+                            id: stepRow
+                            property string label
+                            property string prefKey
+                            property int current
+                            property int step
+                            property int lowest
+                            property int highest
+                            property string suffix
+    
+                            spacing: 8
+                            Text {
+                                Layout.preferredWidth: 84
+                                text: stepRow.label
+                                color: Theme.t2
+                                font.family: Theme.fontUi
+                                font.pixelSize: 12
+                            }
+                            VButton {
+                                text: "−"
+                                implicitWidth: 34
+                                enabled: stepRow.current > stepRow.lowest
+                                onClicked: veyra.setPreference(stepRow.prefKey,
+                                    Math.max(stepRow.lowest, stepRow.current - stepRow.step))
+                            }
+                            Rectangle {
+                                Layout.preferredWidth: 72
+                                Layout.preferredHeight: 28
+                                radius: 6
+                                color: Theme.card3
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: stepRow.current + stepRow.suffix
+                                    color: Theme.t1
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 12
+                                }
+                            }
+                            VButton {
+                                text: "+"
+                                implicitWidth: 34
+                                enabled: stepRow.current < stepRow.highest
+                                onClicked: veyra.setPreference(stepRow.prefKey,
+                                    Math.min(stepRow.highest, stepRow.current + stepRow.step))
+                            }
+                            Item { Layout.fillWidth: true }
                         }
-                        Item { Layout.fillWidth: true }
+    
+                        StepRow {
+                            label: qsTr("大小")
+                            prefKey: "danmakuScale"
+                            current: veyra.preferences.danmakuScale ?? 100
+                            step: 10; lowest: 50; highest: 250; suffix: "%"
+                        }
+                        StepRow {
+                            label: qsTr("不透明度")
+                            prefKey: "danmakuOpacity"
+                            current: veyra.preferences.danmakuOpacity ?? 80
+                            step: 10; lowest: 10; highest: 100; suffix: "%"
+                        }
+                        StepRow {
+                            label: qsTr("速度")
+                            prefKey: "danmakuSpeed"
+                            current: veyra.preferences.danmakuSpeed ?? 100
+                            step: 10; lowest: 50; highest: 200; suffix: "%"
+                        }
+                        StepRow {
+                            label: qsTr("显示区域")
+                            prefKey: "danmakuArea"
+                            current: veyra.preferences.danmakuArea ?? 50
+                            step: 10; lowest: 10; highest: 100; suffix: "%"
+                        }
+    
+                        Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            color: Theme.t3
+                            font.family: Theme.fontUi
+                            font.pixelSize: 11
+                            text: qsTr("显示区域 = 弹幕最多占用画面上方多高的比例，100% 会盖住整个画面。"
+                                       + "防遮挡需要 B 站的额外蒙版数据，目前未支持。")
+                        }
+    
+                        Item { Layout.fillHeight: true }
                     }
-
-                    StepRow {
-                        label: qsTr("大小")
-                        prefKey: "danmakuScale"
-                        current: veyra.preferences.danmakuScale ?? 100
-                        step: 10; lowest: 50; highest: 250; suffix: "%"
-                    }
-                    StepRow {
-                        label: qsTr("不透明度")
-                        prefKey: "danmakuOpacity"
-                        current: veyra.preferences.danmakuOpacity ?? 80
-                        step: 10; lowest: 10; highest: 100; suffix: "%"
-                    }
-                    StepRow {
-                        label: qsTr("速度")
-                        prefKey: "danmakuSpeed"
-                        current: veyra.preferences.danmakuSpeed ?? 100
-                        step: 10; lowest: 50; highest: 200; suffix: "%"
-                    }
-                    StepRow {
-                        label: qsTr("显示区域")
-                        prefKey: "danmakuArea"
-                        current: veyra.preferences.danmakuArea ?? 50
-                        step: 10; lowest: 10; highest: 100; suffix: "%"
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                        color: Theme.t3
-                        font.family: Theme.fontUi
-                        font.pixelSize: 11
-                        text: qsTr("显示区域 = 弹幕最多占用画面上方多高的比例，100% 会盖住整个画面。"
-                                   + "防遮挡需要 B 站的额外蒙版数据，目前未支持。")
-                    }
-
-                    Item { Layout.fillHeight: true }
                 }
             }
 
@@ -2540,6 +2750,7 @@ VPage {
                         font.family: Theme.fontUi
                         font.pixelSize: 12
                     }
+
 
                     RowLayout {
                         width: detailColumn.width

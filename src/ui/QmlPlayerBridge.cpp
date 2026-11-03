@@ -337,6 +337,66 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(impl_->hdrMemorySaveTimer,&QTimer::timeout,this,[this]{flushHdrMemory();});
     impl_->timer = new QTimer(this);
     connect(impl_->timer, &QTimer::timeout, this, [this] {
+        // 装字幕排到下一轮事件循环：主 tick 里多做一次文件解析会改变徽章等绘制组件
+        // 的相对时序（那条路径有既存缺陷）。
+        // Queue the install for the next event-loop turn: extra work inside this tick
+        // shifts the timing of badge/paint components that have their own defect.
+        // 站方字幕排到下一轮事件循环再装：主 tick 里多做活会改变徽章等绘制组件的
+        // 相对时序（那条路径有既存缺陷）。
+        // Queue the install for the next event-loop turn: extra work inside this tick shifts
+        // the timing of badge/paint components that have their own defect.
+        // 站方字幕：解析和装载都在 GUI 线程（引擎的解析器有全局状态），排到下一轮
+        // 事件循环，避免改变主 tick 里其它绘制组件的时序。
+        // Parse and install on the GUI thread (the engine's parser touches globals), queued for
+        // the next event-loop turn so this tick keeps its rhythm.
+        if (!impl_->pendingBiliSub.isEmpty() && impl_->snapshot.running && !impl_->snapshot.failed) {
+            QTimer::singleShot(0, this, [this] {
+                if (impl_->pendingBiliSub.isEmpty()) return;
+                const QString pendingPath = impl_->pendingBiliSub;
+                const QVariantMap bcc = impl_->pendingBiliStyle;
+        const QString overBgColor = impl_->prefString("biliSubtitleBgColor");
+        const int overBgAlpha = impl_->prefs.contains(QStringLiteral("biliSubtitleBgAlpha"))
+            ? impl_->prefs.value(QStringLiteral("biliSubtitleBgAlpha")).toInt() : -1;
+                impl_->pendingBiliSub.clear();
+                impl_->pendingBiliStyle.clear();
+                auto track = engine::loadSubtitleFile(pendingPath.toStdWString());
+                track.rebuildIndex();
+                if (!track.usable()) return;
+                // 站方样式覆盖：绘制端这几个字段都在用。
+                // Overwrite the style; the painter consumes every one of these fields.
+        // 站方样式 + 用户覆盖：绘制端这几个字段都在用（primary/back/outline/alignment）。
+        // 设置页的「底色」「不透明度」优先于站方 BCC 头；空串/-1 表示用视频默认样式。
+        // Site style plus the user override; every field below is consumed by the painter.
+        engine::SubtitleStyle style = track.styles.empty() ? engine::SubtitleStyle{} : track.styles.front();
+        const bool styled = bcc.value(QStringLiteral("styled")).toBool();
+        unsigned fg = styled ? unsigned(bcc.value(QStringLiteral("fg")).toULongLong() & 0xFFFFFFu) : 0xFFFFFFu;
+        unsigned bgC = styled ? unsigned(bcc.value(QStringLiteral("bg")).toULongLong() & 0xFFFFFFu) : 0x000000u;
+        unsigned alpha = styled ? unsigned(bcc.value(QStringLiteral("alpha")).toInt()) : 0u;
+        if (overBgAlpha >= 0) alpha = unsigned(std::clamp(overBgAlpha, 0, 100) * 255 / 100);
+        if (!overBgColor.isEmpty() && overBgColor.size() >= 7 && overBgColor.at(0) == QLatin1Char('#')) {
+            bool ok = false;
+            const unsigned parsed = overBgColor.mid(1, 6).toUInt(&ok, 16);
+            if (ok) bgC = parsed & 0xFFFFFFu;
+        }
+        style.primary = 0xFF000000u | fg;
+        style.back = (alpha << 24) | bgC;
+        style.background = alpha > 0;
+        style.outlineWidth = (styled && bcc.value(QStringLiteral("hasStroke")).toBool()) ? 1.0 : 0.0;
+        const int align = styled ? bcc.value(QStringLiteral("align")).toInt() : 2;
+        style.alignment = (align >= 1 && align <= 9) ? align : 2;
+        track.styles.assign(1, style);
+                auto& sub = *impl_;
+                sub.subExternal = sub.subTracks.size();
+                sub.subTracks.push_back(std::move(track));
+                sub.subLoaded = 1;
+                sub.subPrimary = int(sub.subExternal);
+        sub.biliSubtitleIndex = int(sub.subExternal);
+        veyra::log::info("bilibili", std::format("subtitles installed cues={} styled={} bg={:08X} alpha={}",
+            int(sub.subTracks[sub.subExternal].cues.size()), styled,
+            sub.subTracks[sub.subExternal].styles.empty() ? 0u : sub.subTracks[sub.subExternal].styles.front().back,
+            int(sub.subTracks[sub.subExternal].styles.empty() ? 0 : (sub.subTracks[sub.subExternal].styles.front().back >> 24))));
+            });
+        }
         const bool had = impl_->haveSnapshot;
         const uint64_t before = impl_->publishedRevision;
         const bool wasRunning = impl_->snapshot.running;

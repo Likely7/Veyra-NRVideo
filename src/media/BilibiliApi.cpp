@@ -1197,6 +1197,81 @@ bool biliFavorite(const std::wstring& bvid, bool add, long long folderId,
     return false;
 }
 
+// ---- 字幕 -------------------------------------------------------------------
+// 站方把字幕放在 danmaku 旁边，也走 wbi 签名。请求形状与 /x/player/v2 相同，
+// 只有签过名才会把 subtitle_url 填出来。
+// Subtitles travel beside the danmaku and need the same wbi signature; only a signed
+// request fills in subtitle_url.
+
+bool biliSubtitleList(const std::wstring& bvid, long long cid, std::vector<BiliSubtitle>& out,
+                      std::wstring& error) {
+    out.clear();
+    const BiliAccount account = biliAccount();
+    if (!account.loggedIn) { error = L"字幕需要登录"; return false; }
+    long long aid = 0;
+    if (!bvidToAid(bvid, aid, error)) return false;
+    std::map<std::string, std::string> params{
+        {"aid", std::to_string(aid)},
+        {"cid", std::to_string(cid)},
+    };
+    const std::string query = signWbi(params);
+    std::string body;
+    if (!httpGet(L"api.bilibili.com", L"/x/player/wbi/v2?" + fromUtf8(query), g_cookie, body, error))
+        return false;
+    const auto root = json::parse(body);
+    if (!checkCode(root, error, L"字幕列表")) return false;
+    for (const auto& entry : root["data"]["subtitle"]["subtitles"].elements()) {
+        BiliSubtitle one;
+        one.lan = fromUtf8((*entry)["lan"].asString());
+        one.lanDoc = fromUtf8((*entry)["lan_doc"].asString());
+        one.url = fromUtf8((*entry)["subtitle_url"].asString());
+        one.ai = (*entry)["ai_type"].asInt(0) != 0;
+        if (one.url.empty()) continue;                 // 没有地址的条目用不了
+        if (one.url.rfind(L"//", 0) == 0) one.url = L"https:" + one.url;
+        out.push_back(std::move(one));
+    }
+    return true;
+}
+
+bool biliSubtitleBody(const std::wstring& url, std::vector<BiliSubtitleCue>& out,
+                      std::wstring& error, BiliSubtitleStyle* style) {
+    out.clear();
+    std::wstring host, path;
+    if (!splitMediaUrl(url, host, path)) { error = L"字幕地址不是 https"; return false; }
+    std::string body;
+    if (!httpGet(host, path, g_cookie, body, error)) return false;
+    const auto root = json::parse(body);
+    // BCC 头里的显示参数：网页版的观感就来自这里。字段可能不存在，缺就保持 present=false。
+    // Display parameters from the BCC header; missing fields leave present=false.
+    if (style) {
+        const auto num = [&](const char* key) { return root[key].asDouble(0.0); };
+        style->fontSize = num("font_size");
+        style->fontColor = fromUtf8(root["font_color"].asString());
+        style->backgroundAlpha = num("background_alpha");
+        style->backgroundColor = fromUtf8(root["background_color"].asString());
+        // AI 字幕写成大写 Stroke，普通字幕是小写 stroke，两种都要认。
+        // AI tracks spell it "Stroke"; ordinary ones use lowercase. Accept both.
+        style->stroke = fromUtf8(root["stroke"].asString());
+        if (style->stroke.empty()) style->stroke = fromUtf8(root["Stroke"].asString());
+        style->present = !style->fontColor.empty() || !style->backgroundColor.empty()
+                         || !style->stroke.empty() || style->fontSize > 0.0;
+        if (!root["body"].elements().empty()) {
+            const auto loc = (*root["body"].elements().front())["location"].asInt(2);
+            if (loc > 0 && loc <= 9) style->location = loc;
+        }
+    }
+    for (const auto& entry : root["body"].elements()) {
+        BiliSubtitleCue cue;
+        cue.from = (*entry)["from"].asDouble(0.0);
+        cue.to = (*entry)["to"].asDouble(0.0);
+        cue.content = fromUtf8((*entry)["content"].asString());
+        if (cue.to <= cue.from || cue.content.empty()) continue;
+        out.push_back(std::move(cue));
+    }
+    if (out.empty()) { error = L"字幕内容为空"; return false; }
+    return true;
+}
+
 bool biliAddWatchLater(const std::wstring& bvid, bool add, std::wstring& error) {
     long long aid = 0;
     if (!bvidToAid(bvid, aid, error)) return false;

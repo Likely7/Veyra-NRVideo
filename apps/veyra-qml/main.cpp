@@ -906,6 +906,17 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                 veyra::log::info("qml-test", "bili-interaction after 2 s");
                 bridge.bilibiliRequestInteractionState(bvid);
             });
+        } else if (a == QLatin1String("--pref-at") && hasValue) {
+            // Test switch: set a preference N ms in, exactly as the settings page would,
+            // so live-update paths can be checked without clicking.
+            // Format: --pref-at <ms> <key> <value>
+            const int atMs = args.at(++i).toInt();
+            const QString pkey = args.at(++i);
+            const QString pval = i + 1 < args.size() ? args.at(++i) : QString();
+            QTimer::singleShot(atMs, &bridge, [&bridge, pkey, pval] {
+                veyra::log::info("qml-test", std::format("pref-at {}={}", pkey.toStdString(), pval.toStdString()));
+                bridge.setPreference(pkey, pval);
+            });
         } else if (!a.startsWith(QLatin1Char('-'))) {
             openPath = a;
         }

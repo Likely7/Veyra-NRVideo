@@ -120,6 +120,11 @@ void FormatBadgeWindow::pushToWindow() {
 }
 
 void FormatBadgeWindow::show(HWND parent, const std::wstring& title, const std::wstring& detail) {
+    // parent 可能已经被销毁（切换片源会重建视频窗口），此时再画就是往一个失效的
+    // 窗口上贴图，实测在这里 0xC0000005。
+    // The parent may already be gone (switching sources rebuilds the video window);
+    // painting into it then is a use-after-free (measured 0xC0000005).
+    if (!parent || !IsWindow(parent)) return;
     if (!hwnd_ && !create(parent)) return;
     if (!parent) return;
     RECT client{};

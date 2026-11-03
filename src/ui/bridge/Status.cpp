@@ -519,6 +519,11 @@ void QmlPlayerBridge::updateRunStatus() {
 
 
 void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
+    // 临时停用：格式徽章窗口在开符号构建下必崩（见 FormatBadgeWindow::show），
+    // 它把真正的崩溃信号盖住了。只停调用，代码留着。
+    // Temporarily disabled: with symbols on, the badge window crashes and masks the real
+    // fault. Only the call is off; the code stays.
+    return;
     impl_->formatBadgeSession = s.sessionId;
     if (impl_->videoWindow == nullptr) return;
     if (!impl_->formatBadge) {

@@ -146,6 +146,150 @@ void QmlPlayerBridge::bilibiliRequestFavorite(const QString& bvid, bool add,
     });
 }
 
+
+// ---- 字幕 -------------------------------------------------------------------
+// 站方字幕是独立接口，DASH 流里没有。这里把它取回来写成一份 SRT，再交给已有的
+// 字幕加载器 —— 渲染、偏移、字号、主副轨道全部复用现成实现，不需要新代码。
+// The site serves subtitles from a separate endpoint (the DASH stream has none). We
+// fetch them, write an SRT, and hand it to the existing subtitle loader, so rendering,
+// offset, sizing and the primary/secondary slots all reuse what is already there.
+
+namespace {
+// SRT 时间戳：HH:MM:SS,mmm
+QString srtStamp(double seconds) {
+    if (seconds < 0) seconds = 0;
+    const int total = int(seconds * 1000.0 + 0.5);
+    return QString::asprintf("%02d:%02d:%02d,%03d",
+                             total / 3600000, (total / 60000) % 60, (total / 1000) % 60, total % 1000);
+}
+}
+
+
+// 设置页改底色后调用：只改样式，不重新下载、不重排轨道。
+// Repaint only: no re-download, no track juggling.
+void QmlPlayerBridge::refreshBiliSubtitleStyle() {
+    auto& i = *impl_;
+    if (i.biliSubtitleIndex < 0 || size_t(i.biliSubtitleIndex) >= i.subTracks.size()) return;
+    auto& track = i.subTracks[size_t(i.biliSubtitleIndex)];
+    if (track.styles.empty()) return;
+    const QString overColor = i.prefString("biliSubtitleBgColor");
+    const int overAlpha = i.prefs.contains(QStringLiteral("biliSubtitleBgAlpha"))
+        ? i.prefs.value(QStringLiteral("biliSubtitleBgAlpha")).toInt() : -1;
+    // 站方原值存在 object 里那份已经用完；这里以当前样式为基准，只覆盖用户明确设置的项。
+    // The site value was consumed at install time; start from the current style and only
+    // overwrite what the user actually set.
+    auto& style = track.styles.front();
+    unsigned alpha = (style.back >> 24) & 0xFFu;
+    unsigned bg = style.back & 0xFFFFFFu;
+    if (overAlpha >= 0) alpha = unsigned(std::clamp(overAlpha, 0, 100) * 255 / 100);
+    if (!overColor.isEmpty() && overColor.size() >= 7 && overColor.at(0) == QLatin1Char('#')) {
+        bool ok = false;
+        const unsigned parsed = overColor.mid(1, 6).toUInt(&ok, 16);
+        if (ok) bg = parsed & 0xFFFFFFu;
+    }
+    style.back = (alpha << 24) | bg;
+    style.background = alpha > 0;
+    veyra::log::info("bilibili", std::format("subtitle style refreshed bg={:08X}", style.back));
+    emit subtitlesChanged();
+}
+
+void QmlPlayerBridge::bilibiliRequestSubtitles(const QString& bvid, qlonglong cid) {
+    if (bvid.isEmpty() || cid <= 0) return;
+    // 开关在这里就短路：关掉之后连请求都不发。
+    // Short-circuit on the switch: when it is off nothing is requested at all.
+    if (!impl_->prefBool("biliSubtitles", true)) return;
+    media::setBiliCookie(media::loadBilibiliCookie());
+    const std::wstring wbvid = bvid.toStdWString();
+    const QString subDir = QString::fromStdWString((impl_->dataDir / L"subs").wstring());
+    const bool bilingual = impl_->prefBool("biliSubtitlesBilingual", false);
+    // 用户在设置页可以覆盖站方的字幕底色；空串/负数表示用视频默认样式。
+    // The user may override the site's subtitle background; empty/-1 follows the site.
+    const QString userBgColor = impl_->prefString("biliSubtitleBgColor");
+    const int userBgAlpha = impl_->prefs.contains(QStringLiteral("biliSubtitleBgAlpha"))
+        ? impl_->prefs.value(QStringLiteral("biliSubtitleBgAlpha")).toInt() : -1;
+    startBiliTask(BiliOp::Subtitles, [wbvid, cid, subDir, bilingual] {
+        BiliTaskResult r;
+        std::wstring error;
+        std::vector<media::BiliSubtitle> tracks;
+        if (!media::biliSubtitleList(wbvid, cid, tracks, error)) {
+            r.error = QString::fromStdWString(error); return r;
+        }
+        if (tracks.empty()) { r.error = QStringLiteral("none"); return r; }   // 没字幕不算错误
+        // 选语言：站方人工中文 zh 优先，其次 AI 中文 ai-zh，再退第一条。
+        auto pick = [&](const std::wstring& want) -> const media::BiliSubtitle* {
+            for (const auto& t : tracks) if (t.lan == want) return &t;
+            return nullptr;
+        };
+        const media::BiliSubtitle* primary = pick(L"zh");
+        if (!primary) primary = pick(L"ai-zh");
+        if (!primary) primary = &tracks.front();
+        std::vector<media::BiliSubtitleCue> main;
+        media::BiliSubtitleStyle bccStyle;
+        if (!media::biliSubtitleBody(primary->url, main, error, &bccStyle)) {
+            r.error = QString::fromStdWString(error); return r;
+        }
+        // 站方的中文字幕一条 cue 内就是「中文⏎英文」，所以「双语字幕」开关只决定第二行
+        // 留不留 —— 不是把两条轨道拼起来。按轨道拼会得到三行、英文重复（实测过）。
+        // The Chinese track already holds "Chinese\nEnglish" in one cue, so the bilingual
+        // switch decides whether the second line survives.
+        if (!bilingual) {
+            for (auto& cue : main) {
+                const auto nl = cue.content.find(L'\n');
+                if (nl != std::wstring::npos) cue.content.resize(nl);
+            }
+        }
+        // 直接构造 SubtitleTrack 而不是转 SRT：SRT 带不了样式，而站方给的描边粗细和
+        // 位置正好是 SubtitleStyle 里已有的字段。颜色/背景目前绘制端只认全局偏好，
+        // 所以这里先映射能映射的两项。
+        // Build the track directly instead of going through SRT: SRT cannot carry style,
+        // and stroke width plus alignment are fields SubtitleStyle already has. Colour and
+        // background are still global-only in the painter, so only these two are mapped.
+        // 只写 SRT 并带回样式字段；解析和装载留在 GUI 线程做 —— 引擎的字幕解析器
+        // 有全局状态，在 worker 里调用会崩（实测）。
+        // Only write the SRT and carry the style numbers back: parsing and installing stay
+        // on the GUI thread because the engine's subtitle parser touches global state.
+        QString srt;
+        for (size_t i = 0; i < main.size(); ++i)
+            srt += QStringLiteral("%1\n%2 --> %3\n%4\n\n")
+                       .arg(i + 1).arg(srtStamp(main[i].from)).arg(srtStamp(main[i].to))
+                       .arg(QString::fromStdWString(main[i].content));
+        QDir().mkpath(subDir);
+        const QString path = QDir(subDir).filePath(QStringLiteral("bili-%1.srt").arg(cid));
+        {
+            QFile file(path);
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                r.error = QStringLiteral("写字幕文件失败"); return r;
+            }
+            file.write(srt.toUtf8());
+        }
+        auto rgbOf = [](const std::wstring& hex, unsigned fallback) -> unsigned {
+            if (hex.size() >= 7 && hex[0] == L'#') {
+                unsigned v = 0;
+                if (swscanf_s(hex.c_str() + 1, L"%06x", &v) == 1) return v & 0xFFFFFFu;
+            }
+            return fallback;
+        };
+        r.object = QVariantMap{
+            {"fg", QVariant::fromValue<qulonglong>(bccStyle.present ? rgbOf(bccStyle.fontColor, 0xFFFFFFu) : 0xFFFFFFu)},
+            {"bg", QVariant::fromValue<qulonglong>(bccStyle.present ? rgbOf(bccStyle.backgroundColor, 0x000000u) : 0x0u)},
+            {"alpha", QVariant::fromValue<int>(bccStyle.present
+                ? int(std::clamp(bccStyle.backgroundAlpha, 0.0, 1.0) * 255.0 + 0.5) : 0)},
+            {"hasStroke", QVariant::fromValue<bool>(bccStyle.present && !bccStyle.stroke.empty()
+                && bccStyle.stroke != L"none")},
+            {"align", QVariant::fromValue<int>(bccStyle.present ? bccStyle.location : 2)},
+            {"styled", QVariant::fromValue<bool>(bccStyle.present)},
+        };
+        r.text = path;
+        r.number = double(main.size());
+        r.bvid = QString::fromStdWString(wbvid);
+        r.ok = true;
+        return r;
+        return r;
+        return r;
+        return r;
+    });
+}
+
 // ---------------------------------------------------------------------------
 // 通用异步 B 站任务：9 个方法共用一套发起 / 回收。每个 op 有自己的槽位，
 // 所以同时发起的请求互不覆盖。
@@ -361,6 +505,19 @@ void QmlPlayerBridge::tickBiliTasks() {
                 r.object.value(QStringLiteral("coined"), false).toBool(),
                 r.object.value(QStringLiteral("favorited"), false).toBool()));
             emit bilibiliInteractionReady(r.bvid, r.object, r.generation);
+            break;
+        case BiliOp::Subtitles:
+            // 存下 SRT 路径和站方样式；主循环在片源跑起来之后再解析装载。
+            // Park the SRT path plus the site style; the main loop parses and installs it
+            // once playback runs.
+            if (r.ok && !r.text.isEmpty()) {
+                veyra::log::info("bilibili", std::format("subtitles ready cues={} styled={}",
+                    int(r.number), r.object.value(QStringLiteral("styled")).toBool()));
+                impl_->pendingBiliSub = r.text;
+                impl_->pendingBiliStyle = r.object;
+            } else if (!r.ok && r.error != QStringLiteral("none")) {
+                veyra::log::warn("bilibili", std::format("subtitles failed: {}", r.error.toStdString()));
+            }
             break;
         case BiliOp::Favorite:
             // 收藏/取消失败原本是静默的：界面看起来就是「点了没反应」。记一行，
@@ -878,6 +1035,8 @@ bool QmlPlayerBridge::bilibiliPlay(const QString& bvid, int pageIndex, int qn, b
         emit notice(tr("分P序号无效"), true);
         return false;
     }
+    bilibiliRequestSubtitles(bvid, page.pages[size_t(pageIndex)].first);
+    // 这个入口手上有完整的分P信息，字幕用同一份 cid。
     return bilibiliPlayResolved(bvid, page.pages[size_t(pageIndex)].first, page.title,
                                 qn, fromStart);
 }
@@ -890,6 +1049,11 @@ bool QmlPlayerBridge::bilibiliPlayCid(const QString& bvid, qlonglong cid, int qn
         emit notice(tr("分P序号无效"), true);
         return false;
     }
+    // 播放一开始就去拉字幕：用户不需要知道字幕是单独接口取的。
+    // 拿不到就安静跳过 —— 大部分视频本来就没有字幕，那不是错误。
+    // Fetch subtitles as playback starts; failing quietly is right because most
+    // videos simply do not have any.
+    bilibiliRequestSubtitles(bvid, cid);
     return bilibiliPlayResolved(bvid, cid, std::wstring(), qn, fromStart);
 }
 
