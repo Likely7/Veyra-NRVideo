@@ -32,6 +32,14 @@ QString QmlPlayerBridge::sourceSummary() const {
     // Reported values only: no upscaling claim, no invented bit depth.
     return QStringLiteral("%1x%2").arg(s.sourceWidth).arg(s.sourceHeight);
 }
+
+// 片源的 HDR 格式名。原来的格式徽章画在一个独立原生窗口上，那个窗口有既存崩溃
+// （FormatBadgeWindow::show），所以徽章改由 QML 画，这里只提供文字。
+// The source's HDR format name. The old badge lived in a native window with a
+// pre-existing crash; QML draws it now and just needs this string.
+QString QmlPlayerBridge::sourceHdrLabel() const {
+    return uiText(impl_->snapshot.sourceHdrLabel);
+}
 int QmlPlayerBridge::sourceWidth() const { return int(impl_->snapshot.sourceWidth); }
 int QmlPlayerBridge::sourceHeight() const { return int(impl_->snapshot.sourceHeight); }
 double QmlPlayerBridge::sourceFps() const { return impl_->snapshot.nominalSourceFps; }
