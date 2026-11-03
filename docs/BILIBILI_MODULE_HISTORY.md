@@ -354,6 +354,68 @@ App 接口 + 无 Cookie   → -101 账号未登录
 
 ---
 
+### 字幕：站方 BCC 的接入与三次失败的实时切换（2026-11-03/04）
+
+**现象**：B 站视频播放时没有字幕，而网页版有，还能切双语。
+
+**根因**：DASH 流里根本没有字幕轨，站方用独立接口按 `aid + cid` 提供，我们从来没请求过。
+
+#### 接口
+
+`GET /x/player/wbi/v2?aid=&cid=`（**必须 wbi 签名**）。未签名的 `/x/player/v2` 也会返回
+轨道列表，但 `subtitle_url` 全是空的——看起来就像"这个视频没有字幕"，很容易误判。
+拿到 URL 后下载的是 JSON（站方叫 BCC）：
+
+```json
+{"font_size":0.4,"font_color":"#FFFFFF","background_alpha":0.5,
+ "background_color":"#9C27B0","Stroke":"none",
+ "body":[{"from":1.01,"to":6.02,"location":2,"content":"大家好\nHello"}]}
+```
+
+#### 两个容易踩的点
+
+**一、中文字幕轨道本身就是双语的**。一条 cue 的 `content` 是「中文⏎英文」，网页版那个
+「双语字幕」开关控制的是**第二行留不留**，不是把两条轨道拼起来。按轨道拼会得到三行、
+英文重复一遍（实测）。
+
+**二、`Stroke` 大小写不一**。AI 字幕用大写 `Stroke`，普通字幕用小写 `stroke`
+（newBV 的 `@JsonNames` 注释也提到了这点）。
+
+#### 实现路径
+
+`biliSubtitleList` → `biliSubtitleBody` → 写 SRT 到 `<data>/subs/bili-{cid}.srt` →
+交给现成的 `loadSubtitleFile`。渲染、偏移、字号、主副轨道全部复用，没有新代码。
+
+样式字段映射（绘制端 `SubtitleOverlay.cpp` 全都在用）：
+`font_color`→`primary`、`background_color`+`background_alpha`→`back`、
+`Stroke`→`outlineWidth`、`location`→`alignment`。
+
+#### 装载时机（踩过）
+
+片源打开时 `refreshSubtitles()` 会清空 `subTracks`。第一版在发起播放请求时就装载，
+结果是「`external loaded tracks=1` 之后 0.47 秒变成 `tracks=0`」——装上了又被清掉。
+现在改成：任务只存路径，主循环在 `snapshot.running` 之后排到下一轮事件循环再解析装载。
+
+#### 三次失败的「播放中实时切换」
+
+目标：改「加载字幕 / 双语字幕」时立即作用于正在播的那一集。三次全部 `0xC0000005`：
+
+| 尝试 | 做法 | 结果 |
+|---|---|---|
+| 1 | 重新请求 + `subTracks.erase()` 摘旧轨 | 崩 |
+| 2 | 重新请求 + 只改 `subPrimary` 不碰容器 | 崩 |
+| 3 | 写两份 SRT（单语/双语）+ 读本地文件原地替换 `subTracks[idx]` | 崩（在开始那一步） |
+
+**共同点不是某一行代码，而是在正在播放的字幕链上做任何额外动作**。这条边界还没摸清。
+目前的行为是：开关改动后**下一次播放**生效。
+
+#### 另一处：格式徽章窗口会崩
+
+调试期间发现 `FormatBadgeWindow::show` 在开符号构建下必崩（`+0x9f`，主线程，
+由 `showFormatBadge` 从主 tick 调起），而且**不含字幕代码的版本同样复现**。禁用这个调用后
+符号构建与生产构建都稳定。代码留着，调用处加了 `return`。
+
+
 ## 二、版本演进（最新在前）
 
 > 从 v23 倒序到 v2。每节记录当时的改动、遇到的问题和验证结果。
