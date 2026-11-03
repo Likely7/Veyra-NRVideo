@@ -214,7 +214,9 @@ void QmlPlayerBridge::bilibiliRequestSubtitles(const QString& bvid, qlonglong ci
         if (!media::biliSubtitleList(wbvid, cid, tracks, error)) {
             r.error = QString::fromStdWString(error); return r;
         }
-        if (tracks.empty()) { r.error = QStringLiteral("none"); return r; }   // 没字幕不算错误
+        // 没有字幕不是错误：留空 error，通用错误处理才不会把它弹成提示。
+        // "No subtitles" is not an error; an empty error keeps the generic handler quiet.
+        if (tracks.empty()) return r;
         // 选语言：站方人工中文 zh 优先，其次 AI 中文 ai-zh，再退第一条。
         auto pick = [&](const std::wstring& want) -> const media::BiliSubtitle* {
             for (const auto& t : tracks) if (t.lan == want) return &t;
@@ -515,7 +517,7 @@ void QmlPlayerBridge::tickBiliTasks() {
                     int(r.number), r.object.value(QStringLiteral("styled")).toBool()));
                 impl_->pendingBiliSub = r.text;
                 impl_->pendingBiliStyle = r.object;
-            } else if (!r.ok && r.error != QStringLiteral("none")) {
+            } else if (!r.ok && !r.error.isEmpty()) {
                 veyra::log::warn("bilibili", std::format("subtitles failed: {}", r.error.toStdString()));
             }
             break;
