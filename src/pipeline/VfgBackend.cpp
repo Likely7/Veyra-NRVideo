@@ -1,4 +1,5 @@
 #include "veyra/pipeline/VfgBackend.h"
+#include "veyra/pipeline/VfgAmpereCompat.h"
 #include "veyra/pipeline/FrameBatch.h"
 #include "veyra/pipeline/GpuPassUtils.h"
 #include "veyra/core/SceneCadenceAnalyzer.h"
@@ -122,6 +123,7 @@ struct VfgBackend::Impl {
     std::array<Effect,2> effects{};
     bool mixed=false;
     std::vector<HMODULE> libraries;
+    VfgAmpereCompat ampereCompat;
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
     uint64_t bytes=0,signalValue=0;
     unsigned width=0,height=0,maxMultiplier=2;
@@ -481,7 +483,9 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     int major=0,minor=0;
     if(!p.cu(p.cuDeviceGetAttributeFn(&major,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,p.device),"compute major")||
        !p.cu(p.cuDeviceGetAttributeFn(&minor,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,p.device),"compute minor"))return false;
-    if(!((major==8&&minor==9)||major==12)){log::error("vfg",std::format("Windows VFG requires Ada/Blackwell; compute={}.{}",major,minor));return false;}
+    if(VfgAmpereCompat::restoreUncertain()){log::error("vfg","VFG import restoration uncertain; restart before using VFG");return false;}
+    const bool ampere=vfgAmpereArchitecture(major,minor);
+    if(!ampere&&!vfgNativeArchitecture(major,minor)){log::error("vfg",std::format("Windows VFG requires SM86 (experimental), Ada or Blackwell; compute={}.{}",major,minor));return false;}
     if(!p.cu(p.cuDevicePrimaryCtxRetainFn(&p.cudaContext,p.device),"cuDevicePrimaryCtxRetain"))return false;p.retained=true;
     Impl::Current current(p);if(!current.active)return false;
     if(!p.cu(p.cuStreamCreateFn(&p.stream,CU_STREAM_NON_BLOCKING),"cuStreamCreate"))return false;
@@ -492,9 +496,15 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     // Keep the original core/plugin/CUDA bytes; unrelated SDK image-processing
     // DLLs are not dependencies of this path (native 8/10-bit tests cover it).
     const std::array<const wchar_t*,5> dependencies={L"cudart64_12.dll",L"NVCVImage.dll",L"nvngxruntime.dll",L"NVVideoEffects.dll",L"nvVFXVideoFrameGeneration.dll"};
-    HMODULE core=nullptr,image=nullptr;
+    HMODULE core=nullptr,image=nullptr,vfg=nullptr;
     for(auto name:dependencies){auto dll=load(runtime/name);if(!dll)return false;p.libraries.push_back(dll);
-        if(std::wstring_view(name)==L"NVVideoEffects.dll")core=dll;if(std::wstring_view(name)==L"NVCVImage.dll")image=dll;}
+        if(std::wstring_view(name)==L"NVVideoEffects.dll")core=dll;if(std::wstring_view(name)==L"NVCVImage.dll")image=dll;
+        if(std::wstring_view(name)==L"nvVFXVideoFrameGeneration.dll")vfg=dll;}
+    if(ampere){
+        std::string why;
+        if(!p.ampereCompat.install(vfg,driver,p.device,why)){log::error("vfg-ampere",why);return false;}
+    }
+    log::info("vfg",std::format("compatibility={} compute={}.{}",ampere?"SM86-experimental":"native-no-patches",major,minor));
 #define BIND_VFX(member,name) if(!bind(core,name,p.member))return false
     BIND_VFX(create,"NvVFX_CreateEffect");BIND_VFX(destroy,"NvVFX_DestroyEffect");BIND_VFX(setU32,"NvVFX_SetU32");BIND_VFX(setImage,"NvVFX_SetImage");
     BIND_VFX(setStream,"NvVFX_SetCudaStream");BIND_VFX(loadEffect,"NvVFX_Load");BIND_VFX(run,"NvVFX_Run");BIND_VFX(getVersion,"NvVFX_GetVersion");
@@ -678,6 +688,7 @@ void VfgBackend::shutdown(){
         }
     }
     if(p.retained)p.cu(p.cuDevicePrimaryCtxReleaseFn(p.device),"cuDevicePrimaryCtxRelease");
+    if(!p.ampereCompat.reset())log::error("vfg-ampere","cannot prove restoration; compatibility modules retained until process exit");
     p.producer.Reset();p.completion.Reset();
     for(auto i=p.libraries.rbegin();i!=p.libraries.rend();++i)FreeLibrary(*i);
     impl_=std::make_unique<Impl>();

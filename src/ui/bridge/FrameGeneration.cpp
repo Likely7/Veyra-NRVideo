@@ -19,7 +19,7 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
         QVariantMap{{"id","xess"},{"label",tr("Intel XeSS · 实验")}},
         QVariantMap{{"id","fsr3"},{"label",tr("FSR 3.1 · 2X")}},
         QVariantMap{{"id","fsr4"},{"label",tr("FSR 4 ML · RX 9000 · 实验")}},
-        QVariantMap{{"id","vfg"},{"label",tr("NVIDIA VFG · RTX 40 / 50")}}
+        QVariantMap{{"id","vfg"},{"label",tr("NVIDIA VFG · RTX 30（实验）/ 40 / 50")}}
     };
     const auto caps = effectCapabilities();
     for (auto& choice : choices) {
@@ -34,8 +34,9 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
 QString QmlPlayerBridge::fgProviderText() const {
     const auto& s=impl_->snapshot;
     if(fgBackendName()==QLatin1String("vfg")){
-        if(!vfgHardwarePossible())return tr("VFG 需要 NVIDIA Ada / Blackwell 显卡（RTX 40 / 50）");
+        if(!vfgHardwarePossible())return tr("VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）");
         if(!effectCapabilities().value("vfg").toMap().value("available").toBool())return tr("未找到 VFG 运行组件，请在组件页核对路径");
+        if(effectGpu().ampere)return tr("RTX 30 VFG 为实验兼容，复用现有模型；支持 2X～8X，实际画质与速度需实卡验证");
         return tr("VFG 支持 2X～8X 和低 / 中 / 高质量；6X～8X 为实验档，高倍高质量会增加处理时间");
     }
     if(engine::fsrFrameGeneration(s.applied.frameGenerationBackend)&&s.applied.multiplier>1&&!s.fsrProviderVersion.empty())
@@ -74,7 +75,7 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
                     : engine::FrameGenerationBackend::Dlss;
     if (s.frameGenerationBackend == want) return;
     if(want==engine::FrameGenerationBackend::Vfg&&(!vfgHardwarePossible()||!pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring()))){
-        emit notice(!vfgHardwarePossible()?tr("VFG 需要 NVIDIA Ada / Blackwell 显卡（RTX 40 / 50）"):tr("未找到 VFG 运行组件，请在组件页核对路径"),true);emit settingsChanged();return;
+        emit notice(!vfgHardwarePossible()?tr("VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）"):tr("未找到 VFG 运行组件，请在组件页核对路径"),true);emit settingsChanged();return;
     }
     if (want == engine::FrameGenerationBackend::Fsr4 && !fsr4Possible()) {
         // Keep the previous choice; the menu snaps back to it.

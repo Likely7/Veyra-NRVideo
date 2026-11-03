@@ -31,6 +31,10 @@ int main() {
     verify(hardwareSupports(HardwareEffect::AmdNr,rdna3Gpu));
     verify(!hardwareSupports(HardwareEffect::Fsr4,rdna3Gpu));
     verify(!hardwareSupports(HardwareEffect::NvidiaNrSf,rdna3Gpu));
+    EffectGpu ampereGpu{};ampereGpu.vendor=0x10DE;ampereGpu.rtx=true;ampereGpu.ampere=true;
+    verify(hardwareSupports(HardwareEffect::Vfg,ampereGpu));
+    verify(!hardwareSupports(HardwareEffect::NvidiaNr50,ampereGpu));
+    ampereGpu.vendor=0x1002;verify(!hardwareSupports(HardwareEffect::Vfg,ampereGpu));
     verify(rdna3::validExtent(1920,1080)&&rdna3::validExtent(2560,800));
     verify(!rdna3::validExtent(3840,2160)&&!rdna3::validExtent(2560,1080)&&!rdna3::validExtent(0,1080));
     rdna3::Evaluate packet;verify(rdna3::validHeader(packet.h,rdna3::Op::Evaluate,sizeof(packet)));

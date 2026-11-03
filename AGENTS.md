@@ -1,5 +1,7 @@
 # Veyra Agent 工作规则
 
+> **2026-11-02 用户授权RTX30 VFG适配（当前施工）**：分支codex/vfg-ampere-20261102，基线4895549，保留全屏进度条修复。按docs/VFG_AMPERE_PLAN_2026-11-02.md移植Xchen991固定07536ab（MIT）：仅VFG模块、SM86设备及当前CUDA上下文，命名导入/私有kernel副本/租约和可验回滚；40/50原生无补丁。复用207321712字节原VFG和模型，不改磁盘DLL/驱动/真实配置。合同/真实模块控制及RTX5070原生回归通过，30实卡未验，UI明确实验。产物test-packages/codex-vfg-ampere-20261102，回执reports/vfg-ampere-20261102/FINAL.json；不合main、不push/发布。后续打包必须带licenses/RTX30-Broadcast-FrameGen-MIT.txt和对应源码差异。
+
 > **2026-11-02 全屏进度条修复（当前施工）**：隔离分支codex/fullscreen-seek-20261102，基线fedd7fc；只改CineBar/Main的焦点交互与隐藏/取消条件，修复按下7ms后被取消的回归。构建通过，QtQuick141/0/0，真实全屏前拖33.770s、后拖5.902s、点击20s正常，观察探针已移除，原用户配置保持。小补丁test-packages/codex-fullscreen-seek-20261102，记录docs/FULLSCREEN_SEEK_FIX_2026-11-02.md与reports/codex-fullscreen-seek-20261102/FINAL.json。本轮不合main、不push、不更新GitHub正式包。
 
 > **2026-11-02 交流群入口更新到8群（用户授权）**：7群已满，当前公开入口使用用户原图 `docs/images/community/group-8-20261102.png`，有效期11月9日前；README双语、RELEASE_SUPPORT、2.1.2更新说明及2.1.2/对应源码两个Release正文同步。原字节复制，不裁剪/重绘；两图仍并排各220，赞助图保持。发布标签/下载包保持原身份，不为换群码重打包。核验回执 `E:/项目/Veyra/reports/codex-group8-qr-20261102/FINAL.json`。下方7群记录仅作发布历史。

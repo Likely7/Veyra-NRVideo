@@ -384,6 +384,7 @@ add_library(veyra_pipeline STATIC
   src/pipeline/LmxxfNrBackend.cpp
   src/pipeline/Rdna3NrBackend.cpp
   src/pipeline/VfgBackend.cpp
+  src/pipeline/VfgAmpereCompat.cpp
 )
 veyra_apply_warnings(veyra_pipeline)
 # FFmpeg/NVOF headers are third-party: /WX stays off for this target.
@@ -476,6 +477,10 @@ target_link_libraries(veyra_pipeline_tests PRIVATE veyra_pipeline)
 add_executable(veyra_vfg_gpu_tests tests/integration/VfgGpuTests.cpp)
 target_compile_features(veyra_vfg_gpu_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_vfg_gpu_tests PRIVATE veyra_pipeline)
+add_executable(veyra_vfg_ampere_tests tests/unit/VfgAmpereTests.cpp)
+target_compile_features(veyra_vfg_ampere_tests PRIVATE cxx_std_20)
+target_compile_options(veyra_vfg_ampere_tests PRIVATE /utf-8)
+target_link_libraries(veyra_vfg_ampere_tests PRIVATE veyra_pipeline)
 
 add_executable(veyra_scene_tests
   tests/unit/SceneCadenceTests.cpp

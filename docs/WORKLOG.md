@@ -478,3 +478,10 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 ## 2026-11-02 全屏进度条修复
 
 在codex/fullscreen-seek-20261102隔离修复。旧版真实Windows按下7ms后MouseArea取消；进度条遗漏于interacting，焦点被交还主窗口。纳入scrubbing、窗口移动排除、预览mask及完整隐藏条件，取消/禁用时清理120ms延迟seek。构建2.2s/最终0.7s通过；新增用例在旧代码5失败；初版完整139/2/0暴露禁用不触发cancel，修复后141/0/0（35.819s）。真实全屏3次分别提交33.770/5.902/20s，无取消，退出全屏正常；原用户配置保留。首轮人工到EOF重开未算通过，日志保全。源QML观察探针逐字节去除，使用小型2.1.2通用补丁交付，不复制完整包，不修改GitHub资产/运行库/真实配置。命令、回执与验证边界见docs/FULLSCREEN_SEEK_FIX_2026-11-02.md，FINAL与日志在E:/项目/Veyra/reports及logs/codex-fullscreen-seek-20261102。无合并main/push/新发布。
+
+
+## 2026-11-02 RTX30 VFG实验兼容
+
+用户授权移植，分支codex/vfg-ampere-20261102基于4895549。来源Xchen991/RTX30-Broadcast-FrameGen固定07536ab32a508b7daa714a4a9bda5b56f031bbc3/MIT，移植CUDA查询和内核元数据重定向，替换固定IAT地址/轮询为按名称发现和生命周期租约；私有副本不写原kernel，选中设备和当前CUDA上下文隔离，退场逐项读回指针与页保护；40/50原生无补丁。菜单、节点、硬件能力和四语提示同步，包含上一轮全屏修复。主程序增量和覆盖补丁按FINAL.json，VFG原DLL/模型不新增不改动。
+
+构建最终4.2s通过；合同180、真实模块/62个fatbin/3轮共享租约342、能力75、VFG设置683、repair300、i18n0失败；QtQuick140/0/1。RTX5070原生GPU各质量/倍率/8与10位回归2425项0失败，最终结果和独立GUI 2X60FPS功能检查见FINAL.json。首次repair因子进程库路径缺失启动失败，补充子进程PATH后通过，失败日志保留。无30系实卡推理/画质/速度结论；不以本机50系代替。临时GUI Loader已去除，原7配置文件和5个VFG运行DLL逐摘要保护，未复制完整包。实际命令、日志、来源与局限见docs/VFG_AMPERE_PLAN_2026-11-02.md，E:/项目/Veyra/reports及logs/vfg-ampere-20261102。本轮不合main、不push/发布。

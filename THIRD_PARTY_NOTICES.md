@@ -1048,3 +1048,11 @@ Local adaptations preserve the manual 25%–100% policies, AMD's input budget,
 invalid-value rejection, and shared per-layer export planning. Integration and
 verification are recorded in `docs/EXPORT_NR_SCALE_REPORT_2026-10-25.md`.
 
+## RTX 30 Video Frame Generation compatibility (2026-11-02)
+
+Source: [Xchen991/RTX30-Broadcast-FrameGen](https://github.com/Xchen991/RTX30-Broadcast-FrameGen), fixed commit `07536ab32a508b7daa714a4a9bda5b56f031bbc3`, MIT, Copyright (c) 2026. Full original permission notice: `licenses/RTX30-Broadcast-FrameGen-MIT.txt`.
+
+Ported from `src/dllmain.cpp`: `Hook_cuDeviceGetAttribute`, `Hook_cuModuleLoadData` and the VFG import-redirection part of `InstallHooksOnVFG`. Adapted in `src/pipeline/VfgAmpereCompat.cpp` / `include/veyra/pipeline/VfgAmpereCompat.h` and connected to `VfgBackend.cpp`. Veyra replaces the fixed import offsets with bounded PE import parsing, rewrites the selected SM86 device's queried minor only within VFG calls, and gates private fatbin/ELF metadata copies on the current CUDA context's device. Kernel instructions are not translated. Original kernel storage and files are never modified. Reference-counted leases, retained module handles and checked IAT restoration cover model coexistence and teardown; uncertain restoration disables later VFG initialization while retaining callback storage. The Broadcast UI patch, version.dll proxy and polling thread are not ported.
+
+Only the recognized VFG runtime receives this experimental SM86 adaptation. RTX 40/50 use their native path without installing these hooks. No SDK, model or proprietary runtime bytes are embedded in Veyra's source or executable, and the existing NVIDIA runtime/model set is reused. Source-level and RTX5070 native regression evidence is not a claim of RTX30 hardware inference, image quality or performance validation. NVIDIA's runtime remains proprietary and is governed separately by its supplied terms.
+
