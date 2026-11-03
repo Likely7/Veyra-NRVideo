@@ -416,6 +416,63 @@ App 接口 + 无 Cookie   → -101 账号未登录
 符号构建与生产构建都稳定。代码留着，调用处加了 `return`。
 
 
+### 全屏/极简模式下点进度条画面不跳（2026-11-04，待上游修）
+
+**现象**：B 站和本地视频都一样
+
+| 状态 | 点进度条 |
+|---|---|
+| 专业模式 **窗口化** | 正常，画面跳 |
+| 专业模式 **全屏** | 不跳 |
+| **极简模式** | 不跳 |
+
+**作者原版同样复现**，不是这边引入的。向作者确认后，他认了这个问题，留给下个版本修。
+
+#### 已确认的事实（有日志，不是推测）
+
+用临时探针（`console.log` + `setWindowMask` 日志）测出来的：
+
+1. **鼠标事件到达了进度条** —— `[seek-probe-cine] pressed x=130 / 70 / 178.5 / 175`
+2. **窗口遮罩是对的** —— `setMask rect=(0,440 860x92)`，而 `CineBar` 就在 `y=440`、高 `92`
+3. **`onReleased` 从没执行** —— 那四次点击之间一条 seek 记录都没有
+4. 引擎侧完全正常：窗口化时同样的点击打出 `seek-latency ... ptsMs=4487458.000`，与目标只差 38 ms
+
+所以不是 seek 链路的问题，是**手势在按下之后被别的 handler 抢走了**，进度条只收到 `onCanceled`。
+
+#### 嫌疑点（未验证）
+
+`CineBar.qml` 里给拖动窗口用的 `DragHandler`：
+
+```qml
+DragHandler {
+    enabled: !bar.fullscreen && !volumeSlider.pressed && !volumeSlider.editing
+    grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType
+                   | PointerHandler.ApprovesTakeOverByAnything
+}
+```
+
+`bar.fullscreen = !win.cinema`，所以极简页和全屏页（`cinema`）里它是**启用的**；而
+`ApprovesTakeOverByAnything` 允许它在指针越过拖动阈值后从任何 handler 手里接管手势。
+窗口化时 `bar.fullscreen = true` 把它关掉，所以那里正常 —— 与实测完全吻合。
+
+它上一行的注释说的正是「Never take a drag over from a control」，但
+`ApprovesTakeOverByAnything` 恰恰允许了这件事，注释和配置是矛盾的。
+
+#### 试过的修法（未验证就回退了）
+
+给那个 `DragHandler` 的 `enabled` 加上 `&& !seekArea.scrubbing`：进度条一按下就为 true，
+拖动窗口让位，松手后归位。没有实测就回退，是因为已经确认由上游修，不想在本地留分叉。
+
+#### 顺带修好的一处（已推送）
+
+排查期间发现 B 站**首次打开失败时一次镜像都不重试**（守卫条件里有 `had`，要求「已经出过画面」），
+而单个 CDN 节点 403 正是这个场景。去掉 `had` 后实测：
+
+```
+open failed 403 -> retrying mirror 2/3 -> 403 -> retrying mirror 3/3 -> 403
+```
+
+
 ## 二、版本演进（最新在前）
 
 > 从 v23 倒序到 v2。每节记录当时的改动、遇到的问题和验证结果。
