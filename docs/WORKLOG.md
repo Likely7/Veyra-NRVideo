@@ -1,5 +1,11 @@
 # 当前工作日志
 
+## 2026-11-03 RX7000补丁后worker退出：新日志与诊断更新
+
+用户veyra-qml(4).log与cache(1).zip表明NVAPI身份修复确实生效（m_gpuArch0x1b0），新失败是12:35之后三次worker管道中断。NGX已进入Small1920×1080网络建立，最后权重heap请求108.6MiB；不能凭末行认定显存不足或具体CUDA错误。当前只更新worker诊断：阶段/请求参数、CRT与Win32 stderr、Rust backtrace、普通未处理SEH独立记录；保持原Windows异常处理、不吞异常。算法/模型/共享GPU同步/主EXE/设置不改，附只读Windows1000/1001事件收集，不包数据库或模型。
+
+构建23.1秒、最终增量4.2秒通过，task codex-rdna3-crash-diagnostics-20261103；最终CPU诊断14项、GPU协议54项通过（不是AMD推理），收集脚本5.1实际查询事件及输出内容/哈希验证通过。重跑旧证据目录一次被合同拒绝exit2，改独立目录；收集脚本Get-FileHash解析失败后改.NET SHA256，失败日志保留。命令/详细结果见docs/RDNA3_WORKER_CRASH_2026-11-03.md，reports/rdna3-crash-diagnostics-20261103/FINAL.json。本地诊断包test-packages/codex-rdna3-crash-diagnostics-20261103，优先收集既有崩溃事件，不让用户反复变更参数。源码/依赖/正式包原件和用户配置保持，未合main/push/Release。尚未修复新的网络创建崩溃。
+
 ## 2026-11-03 RX7000 cache.zip续查与多GPU映射修复
 
 用户补充cache.zip，52份worker日志相同，NR创建前24GB显存可用、缓存覆盖gfx1100，NGX明确Unsupported GPU architecture 0x0/min0x1b0且m_gpuArch=0xe0。固定ZLUDA NVAPI源码硬编码CUDA设备0，而Veyra按独显上下文运行。使用正式包同SHA转发层及NVAPI实际复现“核显0/独显1”误报核显LUID。分支codex/rdna3-nvapi-luid-20261103基线ecfbb0f，重编译同源开源NVAPI，改用当前上下文设备并显式拒绝歧义/查询失败；不改模型/驱动/原件，未使用二进制补丁。

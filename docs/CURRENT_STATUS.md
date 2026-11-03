@@ -1,5 +1,7 @@
 # 当前项目状态
 
+**2026-11-03 RX7000后续诊断**：用户新缓存确认架构识别已经通过；Small网络建立到权重heap请求时worker退出，尚无异常码。当前只补worker阶段/stderr/异常记录与崩溃事件收集，不把诊断更新冒充新的崩溃已修好。[新证据与诊断交付](RDNA3_WORKER_CRASH_2026-11-03.md)。
+
 **2026-11-03 RX7000本地兼容补丁**：发现核显+独显设备的NVAPI LUID误报，当前分支codex/rdna3-nvapi-luid-20261103修开源zluda_nvapi.dll并提供独立小更新。原正式组件实测合同失败、新组件13组通过；没有RX7000实卡推理结论，不改模型/缓存/驱动。尚未合main、未发布。[证据及未来打包要求](RDNA3_NVAPI_LUID_2026-11-03.md)。
 
 **2026-11-03 本地导出修复**：codex/nvenc-export-keyframes-20261103显式覆盖NVENC低延迟preset的无限IDR，恢复每120帧真正IDR与封装索引，不把普通I标KEY。14组生产导出、28次跳转通过，继承全屏修复与RTX30 VFG实验兼容；未合main、未push/发布。[审查与证据](NVENC_EXPORT_KEYFRAMES_2026-11-03.md)。

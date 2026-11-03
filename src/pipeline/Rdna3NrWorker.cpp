@@ -7,6 +7,7 @@
 #include <wrl/client.h>
 #include "veyra/pipeline/Rdna3NrProtocol.h"
 #include "veyra/pipeline/AmdNrProvider.h"
+#include "veyra/pipeline/Rdna3WorkerDiagnostics.h"
 #ifndef VEYRA_RDNA3_CONTRACT_WORKER
 #include "runtime/core/network.h"
 #endif
@@ -56,6 +57,8 @@ struct Worker {
         if(!validHeader(init.h,Op::Init,sizeof(init))||!validExtent(init.width,init.height)||init.reserved||init.h.sequence||
            (init.preset!=1&&init.preset!=2)||!safePath(init.runtime)||!safePath(init.data)||!safePath(init.log)){error="invalid initialization/protocol/model/extent";return false;}
         if(_wfopen_s(&logfile,init.log.data(),L"wb")||!logfile){error="worker diagnostic log could not be created";return false;}
+        if(!diagnostics::begin(logfile,init.log.data())){error="worker stderr/exception diagnostics could not be initialized";return false;}
+        diagnostics::phase("device-and-shared-resource-setup");
         std::error_code ec;std::filesystem::create_directories(std::filesystem::path(init.data.data())/L"tmp",ec);
         const auto tmp=std::filesystem::path(init.data.data())/L"tmp";SetEnvironmentVariableW(L"TEMP",tmp.c_str());SetEnvironmentVariableW(L"TMP",tmp.c_str());
         SetEnvironmentVariableW(L"DLSS5NR_ALLOW_TRANSLATION",nullptr); // packaged cache only, no surprise 30-minute build
@@ -117,19 +120,28 @@ struct Worker {
 #ifndef VEYRA_RDNA3_CONTRACT_WORKER
         dlss5nr::set_network_log(logLine);
         dlss5nr::NetworkPaths paths;paths.runtime_dir=init.runtime.data();paths.snippet=snippet;paths.data_dir=init.data.data();paths.adapter_luid=init.adapterLuid;
-        if(!network.load(paths,error)||!network.can_share(device.Get())){if(error.empty())error="native D3D12/HIP shared images are unavailable; CPU pixel-copy fallback is forbidden";return false;}
+        diagnostics::phase("network-load");
+        if(!network.load(paths,error))return false;
+        diagnostics::phase("shared-memory-preflight");
+        if(!network.can_share(device.Get())){error="native D3D12/HIP shared images are unavailable; CPU pixel-copy fallback is forbidden";return false;}
         network.set_copy_mode(false);controls.preset=int(init.preset);
+        fprintf(logfile,"network create width=%u height=%u preset=%u adapterLuid=0x%llX\n",init.width,init.height,init.preset,static_cast<unsigned long long>(init.adapterLuid));fflush(logfile);
+        diagnostics::phase("create-feature");
         if(!network.create_feature(init.width,init.height,controls,error))return false;
+        diagnostics::phase("import-shared-images");
         for(unsigned i=0;i<4;++i){auto& t=shared[i];t.resource=image[i].Get();t.nt_handle=reinterpret_cast<void*>(uintptr_t(init.handles[i]));t.width=init.width;t.height=init.height;t.dxgi_format=image[i]->GetDesc().Format;t.writable=i==1;
             if(!network.import(t,error))return false;}
         if(hrFailed(__LINE__,device->CreateFence(0,D3D12_FENCE_FLAG_SHARED,IID_PPV_ARGS(&cudaDone)))||hrFailed(__LINE__,device->CreateSharedHandle(cudaDone.Get(),nullptr,GENERIC_ALL,nullptr,&cudaDoneHandle))){error="private CUDA completion fence creation failed";return false;}
+        diagnostics::phase("import-shared-fences");
         if(!network.import_fence(reinterpret_cast<void*>(uintptr_t(init.handles[4])),&producerSem,error)||!network.import_fence(cudaDoneHandle,&doneSem,error))return false;
         dlss5nr::EvaluateDesc warm;warm.color=&shared[0];warm.output=&shared[1];warm.depth=&shared[2];warm.motion=&shared[3];warm.controls=controls;warm.reset=true;
+        diagnostics::phase("warmup-evaluate");
         if(!network.evaluate(warm,error))return false;
         logLine(2,"native Small/Original warm-up complete; shared GPU semaphores required, no async old-frame residual");
 #else
         logLine(2,"CONTRACT TEST WORKER: copies proxy; does not execute NR or validate Radeon inference");
 #endif
+        diagnostics::phase("ready");
         started=true;return true;
     }
     bool publish(uint64_t sequence,bool copy){
@@ -184,7 +196,7 @@ struct Worker {
         if(cudaDoneHandle)CloseHandle(cudaDoneHandle);
 #endif
         for(auto h:init.handles)if(h)CloseHandle(reinterpret_cast<HANDLE>(uintptr_t(h)));
-        if(logfile){fclose(logfile);logfile=nullptr;}
+        if(logfile){diagnostics::finish();fclose(logfile);logfile=nullptr;}
     }
 };
 }
@@ -193,7 +205,7 @@ int wmain(int argc,wchar_t** argv){
     HANDLE input=reinterpret_cast<HANDLE>(uintptr_t(_wcstoui64(argv[1],nullptr,10)));
     HANDLE output=reinterpret_cast<HANDLE>(uintptr_t(_wcstoui64(argv[2],nullptr,10)));
     Worker w;if(!readAll(input,&w.init,sizeof(w.init)))return 3;
-    const bool opened=w.open();if(!answer(output,0,opened?0:1,w.error)||!opened)return 4;
+    const bool opened=w.open();if(!opened)logLine(0,w.error.c_str());if(!answer(output,0,opened?0:1,w.error)||!opened)return 4;
     for(;;){
         Header h;if(!readAll(input,&h,sizeof(h)))return 5;
         if(validHeader(h,Op::Stop,sizeof(h))&&h.sequence==w.last+1){w.close(h.sequence);return 0;}
