@@ -473,3 +473,12 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 ## 2026-11-02 GitHub交流群更新到8群
 
 用户明确授权：7群已满，替换为8群原图。当前README双语、支持区、2.1.2更新说明与2.1.2/源码两个Release正文同步；有效期仍11月9日前，赞助图与双码各220布局保持。只改图片及当前入口，不重写发布标签或打包资产。执行git diff --check，推送后匿名读取当前文档/新图，对比用户原图SHA256，并核对两Release正文和所有资产id/摘要保持；具体结果及原正文保全见reports/codex-group8-qr-20261102/FINAL.json与before.json。文档更新不运行产品构建/测试。
+
+
+## 2026-11-05 撤销补帧延迟预算实验
+
+用户明确删除功能并停止研究，按失败方向记录。`git for-each-ref --contains be3f7ff`确认仅独立分支包含实验；保全未提交探针文本后 `git restore --worktree -- tests/integration/LiveLatencyBudgetProbe.cpp`，`git switch main`，`git branch -D codex/fg-latency-budget-20261104`。main基线fedd7fc，产品7个树哈希未改，未merge/push/Release。
+
+受控清理54个实验程序／启动入口／缓存文件，完整绝对路径及SHA256见reports/fg-latency-retirement-20261105/DELETE_PLAN.json与REMOVAL.json。遍历明确跳过reparse point和用户配置目录，保留SDK、模型、shader、正式包、其他工作树及日志；逻辑文件大小不冒充实测释放空间。共享build.ninja移除，下一次须--reconfigure main。
+
+没有找到可重复的最低差而增加预算稳定满帧案例；早期182→240包含首次加载等待，已剔除。本轮只做撤销和文档，不再运行性能试验；验证采用分支引用、代码接口搜索、产品树哈希与删除清单复核。详见[失败方向与终止记录](FG_LATENCY_BUDGET_RETIRED_2026-11-05.md)。

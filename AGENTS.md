@@ -1,5 +1,8 @@
 # Veyra Agent 工作规则
 
+> **2026-11-05 补帧延迟预算实验已撤销／失败方向（用户决定）**：已删除独立分支 `codex/fg-latency-budget-20261104`，活动施工树 `E:/项目/Veyra/worktrees/screen-recording-fix-20261022` 回到 main；`be3f7ff`／`cd574f0`／`5de305b` 从未合入或发布。没有证明“最低差而自动／＋1稳定完整处理”的可靠收益，目标也未满足“完整处理优先”。182→240初步读数混入首次加载等待，已撤销，不得当作收益证据。停止研究，未经用户重新明确授权不得恢复本实验、另开分支继续或复用其测试包。见 `docs/FG_LATENCY_BUDGET_RETIRED_2026-11-05.md`；撤销回执 `E:/项目/Veyra/reports/fg-latency-retirement-20261105/FINAL.json`。测试程序和入口已删除，配置与日志保留；共享构建下一次必须 `--reconfigure` main。下方11月4日实验“完成／验收／待复审／测试入口”内容均为过期历史，不能据此继续执行。
+
+
 > **2026-11-02 交流群入口更新到8群（用户授权）**：7群已满，当前公开入口使用用户原图 `docs/images/community/group-8-20261102.png`，有效期11月9日前；README双语、RELEASE_SUPPORT、2.1.2更新说明及2.1.2/对应源码两个Release正文同步。原字节复制，不裁剪/重绘；两图仍并排各220，赞助图保持。发布标签/下载包保持原身份，不为换群码重打包。核验回执 `E:/项目/Veyra/reports/codex-group8-qr-20261102/FINAL.json`。下方7群记录仅作发布历史。
 
 > **2026-11-02 2.1.2已正式发布并核验（当前状态）**：main已推送，v2.1.2 / v2.1.2-sources发布准备提交899590f；产品358be8c、EXE33d8e615…未改字节。两个完整显卡包和两份源码/摘要已上传，GitHub服务端SHA256、匿名下载、Latest、二维码核验通过。群码为用户原图group-7-20261102.png（11月9日前），双码各220。正式目录releases/codex-release-2.1.2-20261102；FINAL回执reports/codex-release-2.1.2-20261102/FINAL.json；详情docs/RELEASE_2.1.2_EXECUTION_2026-11-02.md。旧“本地/未发布”段落仅作历史，不覆盖本条。
