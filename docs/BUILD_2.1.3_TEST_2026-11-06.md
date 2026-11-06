@@ -35,3 +35,11 @@
 首轮打包/夹具失败与修正：Windows PowerShell继承PSModulePath导致签名模块不可加载，按原规则只清子进程变量；新脚本误排除了整个qml目录，现只更新qml/Veyra且严格保留Qt模块；设置/协议测试应自行创建输出目录，pacing需完整参数，已纠正。首轮日志和CHECKS-FIRST保留，未放宽产品或验收断言。
 
 本次所有命令、身份、阶段结果见reports/codex-build-2.1.3-20261106。封包后执行ZIP逐项SHA/CRC、独立解压最小PATH冷启动与保护复核；最终包/源码SHA及实际冷启动结果以FINAL.json/DELIVERY.json为准。
+
+## 2.1.3封包与冷启动完成
+
+源码归档快照b19846a，产品构建快照4fde59a；两者产品文件完全一致，后续提交仅补验收文档。NVIDIA ZIP 725403989字节、AMD ZIP 716398805字节，包内PE2.1.3.0；逐项SHA/CRC、原Qt模块/默认运行组件身份核验通过。应用源码73705776字节，RX7000网络源码29191字节，专有运行库/SDK/模型不进入源码Git。完整摘要在test-packages/codex-build-2.1.3-20261106/DELIVERY.json。
+
+从两ZIP重新解压，最小PATH、独立数据/TEMP/CUDA缓存、预热/恢复关闭，本地1080p30播放8秒：NVIDIA12.5s退出0/提交209真实帧，AMD12.61s退出0/提交207真实帧，两者engine/QML错误为空。运行机器均RTX5070、默认效果关闭；不等于AMD NR或实卡验收。核验解压副本后收回，仅保留最终包、源码、当前构建、测试夹具/截图/日志。
+
+16棵其他工作树的原改动摘要均匹配，Claude新菜单四文件只是提交，原字节保留；main只剩Lecram两暂停分支和AverMedia诊断档不在祖先链。原发布ZIP/真实用户配置/共用测试目录未替换。未push或发布GitHub。新启动器在交付目录，使用tests/codex-build-2.1.3-20261106/interactive-NVIDIA或interactive-AMD独立设置，原用户设置仍在原位。
