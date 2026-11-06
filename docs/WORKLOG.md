@@ -693,3 +693,7 @@ build-recording-handoff.py --task codex-build-2.1.3-20261106 --build-dir <共享
 应用源码归档1177696、产品7a2d15d；两ZIP逐文件SHA/CRC与独立解压最小PATH播放通过（NVIDIA=207真实呈现帧, AMD=208真实呈现帧，默认效果关闭，本机RTX5070）。最终包、源代码与网络源码摘要见test-packages/codex-rebuild-2.1.3-20261106/DELIVERY.json。两包无个人配置/日志/测试程序/SDK。临时验证副本逐SHA清理5541文件，新旧交互配置、日志与最终包保留。系统自动生成的本次单测转储经路径与SHA确认已搬至E盘日志。Git仅验收文档在归档后继续更新；未push/Release。完整实际命令、首次失败、修正和日志在本任务reports/logs。
 
 本轮临时副本清理预检首次被Windows PowerShell 5.1按本地编码误读UTF-8无BOM脚本，路径解析失败即退出，未执行删除；只给临时脚本补UTF-8 BOM后预检通过，逐SHA删除5541文件。最终交付文件与源码QML再次逐SHA核对通过，Main.qml无测试Loader残留。
+
+## 2026-11-06 用户授权2.1.3公开发布
+
+目标Likely7/Veyra-NRVideo，发布计划docs/RELEASE_2.1.3_EXECUTION_2026-11-06.md。2.1.2以来提交已逐项核对；原图已查看并原样复制docs/images/2.1.3/sr-comparison.png。保留群8/赞助各220；沿用重构建程序，发行仅更新文档/元数据。报告reports/codex-release-2.1.3-20261106。

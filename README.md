@@ -71,6 +71,8 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 **[Veyra knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)** — community guidance compiled from four group chats, covering software setup, common problems and capture cards.
 
+**2.1.3:** Three RTX Video SR families and independent second-pass models, medium defaults, inline NR web/list editing, RTX30 VFG compatibility, RX7000 multi-GPU and seeking/menu fixes. [Full changes, comparison and migration](docs/RELEASE_NOTES_2.1.3.md).
+
 ## Highlights
 
 **2.0.4 NR controls:** each NR layer's **Enhancement delta → Total strength** now reaches 5. **Picture control** defaults off; enable it and select Automatic or Manual. Automatic values now adapt separately to styles 0/1/2, with an amount slider (0 retains raw strength, 1 applies full correction). The nine manual controls cover hue, chroma, neutral tint, source color retention, lightness retention, shadows, highlights, local compression and temporal stability. **Use this style’s automatic values** provides a manual starting point. Switching modes keeps manual values; turning control off preserves the original residual algorithm. Five extrapolates one inference's residual, and protection reduces the corresponding changes; it cannot promise full gain five with no artifacts on every video. Presets, List/Node sessions, PNGs and video exports share the settings. [Local validation and known limits](docs/history/reports/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md).
@@ -81,7 +83,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** SF310.9.16 performance/legacy models, NVIDIA original for RTX50 and AMD lmxxf, DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-**Current version: [2.1.2](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.2)** · [Full bilingual update](docs/RELEASE_NOTES_2.1.2.md).
+**Current version: [2.1.3](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.3)** · [Full bilingual update](docs/RELEASE_NOTES_2.1.3.md).
 
 ## New in 2.1.2
 
@@ -118,7 +120,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ## Install and upgrade
 
-Download **Veyra-2.1.2-NVIDIA-win64-portable.zip** or **Veyra-2.1.2-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.1.3-NVIDIA-win64-portable.zip** or **Veyra-2.1.3-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
