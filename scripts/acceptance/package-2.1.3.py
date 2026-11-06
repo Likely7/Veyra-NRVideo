@@ -107,7 +107,8 @@ def stage():
     assert not git('diff',receipt['head'],'--','src','include','apps','qml','i18n','shaders','CMakeLists.txt')
     assert sha(NVAPI)==NVAPI_SHA
     identity_script="$rows=@();foreach($n in @('nvVFXVideoSuperRes.dll','nvngx_vsr.dll')){$p=Join-Path $env:VEYRA_VFX_AUDIT_ROOT $n;$s=Get-AuthenticodeSignature -LiteralPath $p;$v=(Get-Item -LiteralPath $p).VersionInfo;$rows += [pscustomobject]@{name=$n;signature=[string]$s.Status;signer=$s.SignerCertificate.Subject;version=$v.FileVersion}};$rows|ConvertTo-Json"
-    identity_env=dict(os.environ,VEYRA_VFX_AUDIT_ROOT=str(VFX))
+    identity_env={k:v for k,v in os.environ.items() if k.upper()!='PSMODULEPATH'}
+    identity_env['VEYRA_VFX_AUDIT_ROOT']=str(VFX)
     identities=json.loads(subprocess.check_output(['powershell.exe','-NoProfile','-NonInteractive','-Command',identity_script],env=identity_env,timeout=30).decode('utf-8-sig'))
     for row in identities:assert row['signature']=='Valid' and 'NVIDIA' in row['signer']
     write(REPORT/'new-vfx-identities.json',identities)

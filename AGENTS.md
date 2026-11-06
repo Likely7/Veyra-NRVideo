@@ -1,3 +1,5 @@
+> **2026-11-06 2.1.3本地整合／待验收**：用户授权合并Claude/Codex修复到main并构建测试包，不含push/Release。基线f1f8298，checkpoint/pre-main-2.1.3-20261106；NR分组网控259ef8f及Claude菜单05181bf已整合，WORKLOG冲突保留两侧。产品4fde59a已构建23目标105.6秒，PE/显示版本2.1.3；实际验收待完成，不能把计划当通过。包从已发布2.1.2不可变ZIP构造；NVIDIA补VideoSuperRes两签名原件，AMD必须带NVAPI a7adb043…和当前worker。读docs/BUILD_2.1.3_TEST_2026-11-06.md及reports/codex-build-2.1.3-20261106。旧脏树、用户配置和已有正式包保护，预算/RIFE撤销，Lecram暂停。
+
 # Veyra Agent 工作规则
 
 > **2026-11-05 NR分组内调节修订（最新）**：继续 `codex/nr-web-editor-20261105`，用户取消独立块和全局接管。当前增强变化量／画面调控手动各有“网状／列表”，四轴+总量滑条、完整九轴；两种视图共用参数规格，其他控件原位可用，不再有灰色整套副本。旧nrWebEditor只作视图选择迁移，新偏好nrResidualView／nrCorrectionView；旧两个包装文件与自动只读map已删。73.9s构建、完整软件Quick170/0/0、GPU Pad13/0/0、真实程序23项及重启通过；说明docs/NR_INLINE_EDITOR_2026-11-05.md，回执reports/nr-inline-editor-20261105/FINAL.json。新手动入口tests/codex-nr-inline-editor-20261105/启动NR分组调节测试.cmd，旧用户实例／配置保持；main未动、未merge/push/Release。下方166项与独立块为第一版历史。共享构建当前2.1.2-nr-inline-test，不冒充正式版。
@@ -110,5 +112,3 @@
 - WORKLOG和本次执行记录写实际命令、结果、失败/修复、产物路径、空间新增/回收、已验与未验。
 - 提交前检查diff、相关构建和回归，不以接口桩、成功counter、仅编译、同帧重复或理论FPS声称功能通过。
 - 用户2026-10-20已确认此前NV显存增长解决、AMD实测无问题，不能把旧调查自动重列为当前缺陷；新改动的硬件验证边界仍按本次证据表述。
-> **2026-11-06 2.1.3本地整合／待验收**：用户授权合并Claude/Codex修复到main并构建测试包，不含push/Release。基线f1f8298，checkpoint/pre-main-2.1.3-20261106；NR分组网控259ef8f及Claude菜单05181bf已整合，WORKLOG冲突保留两侧。产品4fde59a已构建23目标105.6秒，PE/显示版本2.1.3；实际验收待完成，不能把计划当通过。包从已发布2.1.2不可变ZIP构造；NVIDIA补VideoSuperRes两签名原件，AMD必须带NVAPI a7adb043…和当前worker。读docs/BUILD_2.1.3_TEST_2026-11-06.md及reports/codex-build-2.1.3-20261106。旧脏树、用户配置和已有正式包保护，预算/RIFE撤销，Lecram暂停。
-
