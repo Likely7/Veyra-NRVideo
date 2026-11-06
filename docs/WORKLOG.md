@@ -473,3 +473,44 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 ## 2026-11-02 GitHub交流群更新到8群
 
 用户明确授权：7群已满，替换为8群原图。当前README双语、支持区、2.1.2更新说明与2.1.2/源码两个Release正文同步；有效期仍11月9日前，赞助图与双码各220布局保持。只改图片及当前入口，不重写发布标签或打包资产。执行git diff --check，推送后匿名读取当前文档/新图，对比用户原图SHA256，并核对两Release正文和所有资产id/摘要保持；具体结果及原正文保全见reports/codex-group8-qr-20261102/FINAL.json与before.json。文档更新不运行产品构建/测试。
+
+## 2026-11-02 英伟达低延迟“开＋增强”高负载提示（Claude）
+
+用户：“那算了，加个提示好了，建议高负载的情况下开而不是开+增强，增强有概率导致掉帧”。
+
+**依据**：现场 RTX 5090 日志（4K60 采集＋NR＋DLSS FG/VFG，见 `E:/项目/Veyra/reports/claude-ll-boost-field-20261103/FINDINGS.md`）。
+- 增强档下，驱动在每个源帧读取前的 Reflex Sleep 平均 4–18 ms，最长 27 ms；补帧比应有的少 8–21%。
+- “开”档的 Sleep 约 0.003 ms。两档 GPU 耗时相同。
+
+**分支**：
+- 分支 `claude/ll-boost-hint-20261102`，独立工作树 `E:/项目/Veyra/worktrees/ll-boost-hint-20261102`，基于 main `fedd7fc`。
+- 共用施工树当时在 Codex 的 `codex/vfg-ampere-20261102`，Codex 进程在运行，所以没有切换或改动那棵树，也没有动它的构建目录。
+
+**改动**：
+- `qml/Veyra/NvidiaLowLatencyEditor.qml`：
+  - 提示改为“减少处理排队。高负载时建议选「开」而不是「开＋增强」：增强有概率导致掉帧，还会提高 GPU 频率、增加功耗。”
+  - 该行加 objectName，供测试使用。
+- `i18n/catalog.json`：更新同一条目的 zh / zh-TW / en / ja，条目位置不变；格式按 `json.dumps(indent=1)` 校验后写回。
+- `tests/qml/QuickSmokeTests.cpp`：模拟 `veyra` 补 4 个属性（默认值与之前未定义时等价）；注册 NvidiaLowLatencyEditor。
+- 新增 `tests/qml/quick/tst_nvidia_low_latency.qml`，3 项：
+  - 提示引用真实的选项文字。
+  - 提示显示在选项下方。
+  - 不可用时仍显示“需要 NVIDIA 显卡”。
+- `tests/unit/UiLanguageTests.cpp`：新提示的英文译文须精确匹配。
+
+**命令与结果**：
+- `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-ll-boost-hint-20261102 --root <本工作树> --label 2.1.2 veyra_qml_quick_tests veyra_ui_i18n_tests`
+  - 新构建目录 `build/claude-ll-boost-hint-20261102`，46.6 秒通过。
+- `tmp/claude-ll-boost-hint-20261102/run_tests.py`
+  - QtQuick 137/0/1（35.9 秒，含新增 3 项）。
+  - i18n 0 失败。
+- 离屏渲染 `reports/claude-ll-boost-hint-20261102/hint-render.png`：
+  - 第一次中文全是方块：离屏平台没有中文字体。加 `QT_QPA_FONTDIR=C:/Windows/Fonts` 后正常。
+  - 第二次选中高亮还没到位就截图了，等 600 ms 后重渲。
+
+**空间**：新增工作树约 90 MB，构建目录约 47 MB。
+
+**未做**：
+- 没有构建主程序，也没有在真实界面里看。
+- 没有改低延迟或驱动的行为本身。
+- 未提交、未合 main、未 push。
