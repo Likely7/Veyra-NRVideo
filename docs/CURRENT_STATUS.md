@@ -1,4 +1,4 @@
-> **2026-11-06 2.1.3重构建中（最新）**：超分默认中、Boost警告仅选中时红字；旧2.1.3构建包已按用户要求清理。新交付将放test-packages/codex-rebuild-2.1.3-20261106；结果见[本轮记录](REBUILD_2.1.3_DEFAULTS_2026-11-06.md)与同任务FINAL.json。旧用户配置仍在原位，本轮不发布GitHub。
+> **2026-11-06 2.1.3默认中档重构建完成（最新）**：产品7a2d15d；基础/第二次超分默认中档并保留保存值，Boost警告仅选中时红字。Quick173/0/0、设置兼容及实际UI/重启、两ZIP核验和解压播放通过；旧构建产物及本轮临时解压/测试副本已按清单清理，配置/日志保留。新入口`E:/项目/Veyra/test-packages/codex-rebuild-2.1.3-20261106`，证据[重构建记录](REBUILD_2.1.3_DEFAULTS_2026-11-06.md)和同任务FINAL.json。未push/Release，公开版仍2.1.2。
 
 > **2026-11-06 2.1.3已合入本地main并完成测试包**：Claude菜单文字修复、NR分组网状/列表及此前全部保留修复已包含。软件Quick172/0/0、实际UI/重启、SR/双编码导出、两ZIP与解压冷启动通过。冷增强首次加载等待保留。交付`E:/项目/Veyra/test-packages/codex-build-2.1.3-20261106`，读[构建记录](BUILD_2.1.3_TEST_2026-11-06.md)和reports同任务FINAL.json。公开版仍2.1.2，未push/Release。
 

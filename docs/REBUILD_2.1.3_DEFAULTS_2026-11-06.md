@@ -30,3 +30,7 @@
 上一轮产物逐SHA清理9,422文件，逻辑8,000,253,348字节，不等于实际磁盘净释放。旧个人配置/日志、依赖、历史正式包保留。新包路径test-packages/codex-rebuild-2.1.3-20261106，独立启动器使用新的测试配置。ZIP逐文件核验、最小PATH解压播放的后续结果以本任务FINAL.json为准。NVIDIA/AMD两包本机RTX5070默认效果关的冷启动不代替AMD推理或实卡采集验收。未push/Release。
 
 复现命令：`python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-rebuild-2.1.3-20261106 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.3 --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared veyra_qml_ui veyra_amd_nr_worker veyra_qml_quick_tests veyra_ui_contract_tests veyra_ui_i18n_tests veyra_video_ai_settings_tests veyra_effect_chain_tests veyra_preset_library_tests veyra_nr_model_settings_tests`。检查脚本reports/codex-rebuild-2.1.3-20261106/check.py、ui_runner.py/defaults-ui.qml/defaults-restart.qml；实际命令、环境、首败/复测和日志路径在ACCEPTANCE.json及logs同任务。封包命令为`python -X utf8 -B scripts/acceptance/package-2.1.3.py seal`及`cold`。
+
+## 封包与清理实际完成
+
+应用源码归档1177696、产品7a2d15d；两ZIP逐文件SHA/CRC与独立解压最小PATH播放通过（NVIDIA=207真实呈现帧, AMD=208真实呈现帧，默认效果关闭，本机RTX5070）。最终包、源代码与网络源码摘要见test-packages/codex-rebuild-2.1.3-20261106/DELIVERY.json。两包无个人配置/日志/测试程序/SDK。临时验证副本逐SHA清理5541文件，新旧交互配置、日志与最终包保留。系统自动生成的本次单测转储经路径与SHA确认已搬至E盘日志。Git仅验收文档在归档后继续更新；未push/Release。完整实际命令、首次失败、修正和日志在本任务reports/logs。
