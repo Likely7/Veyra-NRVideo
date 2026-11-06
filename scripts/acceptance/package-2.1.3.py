@@ -134,7 +134,7 @@ def stage():
                 if p.is_file():copy(p,a/folder/p.relative_to(R/folder))
         for p in (D/'shaders').glob('*.dxil'):copy(p,a/'shaders'/p.name)
         for name in ('LICENSE','THIRD_PARTY_NOTICES.md','README.md','README_CN.md','README_EN.md'):copy(R/name,a/name)
-        for name in ('BUILD_2.1.3_TEST_2026-11-06.md','AMD_RDNA3_NR_PLAN_2026-10-29.md','RDNA3_NVAPI_LUID_2026-11-03.md','RDNA3_MULTI_GPU_HIP_2026-11-03.md','RTX_VIDEO_SR_FAMILIES_2026-11-05.md','MENU_TEXT_JITTER_2026-11-06.md','NR_INLINE_EDITOR_2026-11-05.md','BUILD_2.1.2.md'):
+        for name in ('REBUILD_2.1.3_DEFAULTS_2026-11-06.md','BUILD_2.1.3_TEST_2026-11-06.md','AMD_RDNA3_NR_PLAN_2026-10-29.md','RDNA3_NVAPI_LUID_2026-11-03.md','RDNA3_MULTI_GPU_HIP_2026-11-03.md','RTX_VIDEO_SR_FAMILIES_2026-11-05.md','MENU_TEXT_JITTER_2026-11-06.md','NR_INLINE_EDITOR_2026-11-05.md','BUILD_2.1.2.md'):
             copy(R/'docs'/name,a/'docs'/name)
         for name in ('README-2.1.3.zh-CN.md','RELEASE_NOTES.md'):copy(R/'docs/TEST_NOTES_2.1.3.md',a/name)
         runtime=donor_json(flavor,'release-runtime-manifest.json')
