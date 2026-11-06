@@ -509,3 +509,42 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 用户授权移植，分支codex/vfg-ampere-20261102基于4895549。来源Xchen991/RTX30-Broadcast-FrameGen固定07536ab32a508b7daa714a4a9bda5b56f031bbc3/MIT，移植CUDA查询和内核元数据重定向，替换固定IAT地址/轮询为按名称发现和生命周期租约；私有副本不写原kernel，选中设备和当前CUDA上下文隔离，退场逐项读回指针与页保护；40/50原生无补丁。菜单、节点、硬件能力和四语提示同步，包含上一轮全屏修复。主程序增量和覆盖补丁按FINAL.json，VFG原DLL/模型不新增不改动。
 
 构建最终4.2s通过；合同180、真实模块/62个fatbin/3轮共享租约342、能力75、VFG设置683、repair300、i18n0失败；QtQuick140/0/1。RTX5070原生GPU各质量/倍率/8与10位回归2425项0失败，最终结果和独立GUI 2X60FPS功能检查见FINAL.json。首次repair因子进程库路径缺失启动失败，补充子进程PATH后通过，失败日志保留。无30系实卡推理/画质/速度结论；不以本机50系代替。临时GUI Loader已去除，原7配置文件和5个VFG运行DLL逐摘要保护，未复制完整包。实际命令、日志、来源与局限见docs/VFG_AMPERE_PLAN_2026-11-02.md，E:/项目/Veyra/reports及logs/vfg-ampere-20261102。本轮不合main、不push/发布。
+
+## 2026-11-03 RX7000 NR：多 GPU 时工作进程只看选中的显卡（Claude）
+
+用户：“直接修复吧”。
+
+**依据**：现场 7900 XTX 加 gfx1036 核显，HIP 0 号是核显。ZLUDA b135e23 有两处默认用 0 号设备：
+- NVAPI 报的 LUID（Codex 已修）；
+- `Context::new` 在 `hipSetDevice` 之前就建了 `alloc_stream`，导致 `cuMemAlloc` 通过核显的流去给独显显存清零。
+
+**工作树**：独立工作树 `worktrees/rdna3-hip-visible-20261103`，分支 `claude/rdna3-hip-visible-20261103`，基于 Codex 的 `77fcd89`。共用施工树（Codex 分支 `codex/rdna3-nvapi-luid-20261103`，Codex 进程在运行）未触碰。
+
+**改动**：
+- 新增 `Rdna3HipDevices.h`：探测、按 LUID 匹配、设置 `HIP_VISIBLE_DEVICES`。
+- 工作进程在加载 HIP 7 之前做设备选择，并新增 `--hip-probe` 模式。
+- 新增 `tests/integration/Rdna3HipDevicesTests.cpp`，以及 CMake 目标。
+
+**命令与结果**：
+- `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-rdna3-hip-visible-20261103 --root <工作树> --label 2.1.2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared veyra_amd_nr_worker veyra_amd_nr_test_worker veyra_rdna3_worker_diagnostics_tests veyra_rdna3_hip_devices_tests`
+  - 新构建目录，43.7 秒通过。
+- `veyra_rdna3_hip_devices_tests`：单元测试 15 项通过，0 失败。
+- 加 `--hip C:\Windows\System32\amdhip64_6.dll`：19 项通过，0 失败。
+  - 本机 gfx1036 的 LUID 0x16583 与 DXGI 一致。
+  - 在进程内设置后，HIP 只剩所选设备。
+  - 设置超出范围的序号后，设备数为 0。
+- `veyra_amd_nr_worker.exe --hip-probe`：
+  - 对 HIP 6：退出码 0，列出 1 块设备。
+  - 对缺失的 HIP 7：输出 `load-failed-win32-126`，退出码 2。
+- `veyra_rdna3_worker_diagnostics_tests`：14 项通过，0 失败。
+- 新旧 worker 的导入 DLL 相同：d3d12、dxgi、kernel32、version。
+
+**打包**：`tmp/claude-rdna3-hip-visible-20261103/package.py`。
+- 输出：`test-packages/claude-rdna3-hip-visible-20261103/Veyra-2.1.2-RX7000-NR-multiGPU-fix2.zip`。
+- 第一次生成的源码补丁带进了 Codex 的 RTX30 VFG CMake 段落，公开源码缺这些文件，会导致配置失败。改为只保留 RX7000 段落后，重放比对通过。
+- 第二次运行报 `PermissionError`：shell 的当前目录停在 verify 目录里。切换目录后重跑成功。
+
+**未做**：
+- 没有在 RX7000 实卡上推理；本机没有 HIP 7。
+- 没有跑 RDNA3 合同测试：改动不进入合同测试 worker。
+- 未提交、未合并、未 push。

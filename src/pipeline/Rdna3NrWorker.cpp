@@ -9,6 +9,7 @@
 #include "veyra/pipeline/AmdNrProvider.h"
 #include "veyra/pipeline/Rdna3WorkerDiagnostics.h"
 #ifndef VEYRA_RDNA3_CONTRACT_WORKER
+#include "veyra/pipeline/Rdna3HipDevices.h"
 #include "runtime/core/network.h"
 #endif
 #include <cstdio>
@@ -33,6 +34,36 @@ bool waitCpu(ID3D12Fence* fence,uint64_t value,DWORD timeout){
     if(fence->GetCompletedValue()>=value)return true;HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!event)return false;
     const bool ok=SUCCEEDED(fence->SetEventOnCompletion(value,event))&&WaitForSingleObject(event,timeout)==WAIT_OBJECT_0;CloseHandle(event);return ok;
 }
+#ifndef VEYRA_RDNA3_CONTRACT_WORKER
+// Before HIP loads: leave only the selected adapter visible to HIP, so ZLUDA's
+// device-0 assumptions name that card (Rdna3HipDevices.h). Never fatal: when
+// the probe cannot tell, every device stays visible, as before.
+void selectHipDevice(const std::filesystem::path& hipPath,uint64_t adapterLuid){
+    char line[512]{};
+    if(const auto outside=hip::outsideVisibility();!outside.empty()){
+        _snprintf_s(line,sizeof(line),_TRUNCATE,"HIP device visibility set outside Veyra (%ls); kept",outside.c_str());logLine(1,line);return;
+    }
+    wchar_t self[MAX_PATH]{};
+    const DWORD length=GetModuleFileNameW(nullptr,self,MAX_PATH);
+    hip::ProbeResult probe;std::string detail;
+    if(!length||length>=MAX_PATH||!hip::runProbe(self,hipPath.wstring(),probe,detail)){
+        _snprintf_s(line,sizeof(line),_TRUNCATE,"HIP device probe failed (%s); every HIP device stays visible",detail.c_str());logLine(1,line);return;
+    }
+    for(const auto& d:probe.devices){auto text=hip::formatDevice(d);text.pop_back();logLine(2,text.c_str());}
+    if(probe.devices.size()<=1){logLine(2,"one HIP device: nothing to hide");return;}
+    const auto index=hip::indexForLuid(probe.devices,adapterLuid);
+    if(!index){
+        _snprintf_s(line,sizeof(line),_TRUNCATE,"selected adapter LUID 0x%016llX is not exactly one HIP device; every HIP device stays visible",
+            static_cast<unsigned long long>(adapterLuid));
+        logLine(1,line);return;
+    }
+    if(!hip::showOnly(*index)){logLine(1,"HIP_VISIBLE_DEVICES could not be set; every HIP device stays visible");return;}
+    const auto chosen=std::find_if(probe.devices.begin(),probe.devices.end(),[&](const hip::Device& d){return d.index==*index;});
+    _snprintf_s(line,sizeof(line),_TRUNCATE,"HIP_VISIBLE_DEVICES=%d: this worker sees only %s (%s); the other %zu HIP device(s) are hidden",
+        *index,chosen->name.c_str(),chosen->arch.c_str(),probe.devices.size()-1);
+    logLine(2,line);
+}
+#endif
 struct Worker {
     Init init;
     ComPtr<ID3D12Device> device;
@@ -78,6 +109,9 @@ struct Worker {
             if(!n||n>=std::size(sdk)||!std::filesystem::path(sdk).is_absolute()){error="AMD HIP7 is unavailable in the driver or HIP_PATH";return false;}
             hip=std::filesystem::path(sdk)/L"bin"/L"amdhip64_7.dll";
         }
+        diagnostics::phase("hip-device-selection");
+        selectHipDevice(hip,init.adapterLuid);
+        diagnostics::phase("device-and-shared-resource-setup");
         if(!LoadLibraryExW(hip.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32)){error="AMD HIP7 load failed win32="+std::to_string(GetLastError());return false;}
         const auto snippet=std::filesystem::path(init.runtime.data())/L"nvngx_dlssnr.dll";
         DWORD ignored=0;const DWORD size=GetFileVersionInfoSizeW(snippet.c_str(),&ignored);std::vector<uint8_t> version(size);VS_FIXEDFILEINFO* info=nullptr;UINT count=0;
@@ -201,6 +235,10 @@ struct Worker {
 };
 }
 int wmain(int argc,wchar_t** argv){
+#ifndef VEYRA_RDNA3_CONTRACT_WORKER
+    // Child of selectHipDevice: list the HIP devices and exit before any Init.
+    if(argc==3&&wcscmp(argv[1],L"--hip-probe")==0)return hip::probeMain(argv[2]);
+#endif
     if(argc!=3)return 2;
     HANDLE input=reinterpret_cast<HANDLE>(uintptr_t(_wcstoui64(argv[1],nullptr,10)));
     HANDLE output=reinterpret_cast<HANDLE>(uintptr_t(_wcstoui64(argv[2],nullptr,10)));
