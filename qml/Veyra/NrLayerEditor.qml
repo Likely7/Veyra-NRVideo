@@ -1,6 +1,5 @@
-// One NR layer's full parameter set, shared by the list page's NR card and the
-// node page's NR node so both edit exactly the same values through the same
-// bridge calls (user decision 2026-09-28: node parameters equal to the list).
+// One NR editor; each parameter group independently chooses web or list.
+// Both views use the same specs, bridge parameters and persistence.
 import QtQuick
 import QtQuick.Layouts
 import "EffectSupport.js" as Support
@@ -13,6 +12,27 @@ ColumnLayout {
     // The list page owns copy/delete and the list-wide NR->SR order; the node
     // page uses its node menu and wiring instead.
     property bool listControls: true
+    // Read the previous global choice only as a migration fallback.
+    function usesWeb(key) {
+        const prefs = veyra.preferences
+        return (prefs[key] ?? (prefs.nrWebEditor === true ? "web" : "list")) === "web"
+    }
+    readonly property bool residualWeb: usesWeb("nrResidualView")
+    readonly property bool correctionWeb: usesWeb("nrCorrectionView")
+    readonly property var residualSpecs: [{key:"total",label:qsTr("总变化强度"),hint:qsTr("整体倍率 · 同时影响四个方向的变化"),min:0,max:5,defaultValue:1},
+               {key:"darken",label:qsTr("暗化变化"),hint:qsTr("增加 NR 带来的暗化，不是直接调低画面亮度。"),min:0,max:2,defaultValue:1},
+               {key:"brighten",label:qsTr("亮化变化"),hint:qsTr("增加 NR 带来的提亮；0 取消这部分变化。"),min:0,max:2,defaultValue:1},
+               {key:"color",label:qsTr("色彩变化"),hint:qsTr("增加 NR 带来的颜色变化；0 取消这部分变化。"),min:0,max:2,defaultValue:1},
+               {key:"luminance",label:qsTr("明度变化"),hint:qsTr("增加 NR 带来的明度变化；0 取消这部分变化。"),min:0,max:2,defaultValue:1}]
+    readonly property var correctionSpecs: [{key:"hueProtection",label:qsTr("色相保护"),hint:qsTr("保留原图色相；没有色相偏移时变化较小"),min:0,max:1,defaultValue:1},
+                    {key:"chromaProtection",label:qsTr("色度保护"),hint:qsTr("软化过量色度变化；小幅变化保留"),min:0,max:1,defaultValue:0.75},
+                    {key:"neutralProtection",label:qsTr("中性色保护"),hint:qsTr("抑制白墙、云和灰色区域的额外染色"),min:0,max:1,defaultValue:0},
+                    {key:"colorRetention",label:qsTr("原图色彩保留"),hint:qsTr("保留原图色相与饱和度；1 为完全保留色彩"),min:0,max:1,defaultValue:0},
+                    {key:"luminanceRetention",label:qsTr("亮度保持"),hint:qsTr("减少 NR 明暗改动；1 为保留原图亮度"),min:0,max:1,defaultValue:0},
+                    {key:"shadowProtection",label:qsTr("暗部保护"),hint:qsTr("减少暗部被进一步压黑，保留提亮细节"),min:0,max:1,defaultValue:0},
+                    {key:"highlightProtection",label:qsTr("高光保护"),hint:qsTr("只压缩向白色溢出的变化，保留高光回暗"),min:0,max:1,defaultValue:1},
+                    {key:"localCompression",label:qsTr("局部压缩"),hint:qsTr("同时软化过大的亮度和颜色变化"),min:0,max:1,defaultValue:0.75},
+                    {key:"temporalStability",label:qsTr("时域稳定"),hint:qsTr("播放时减闪；暂停单帧不体现时域效果"),min:0,max:1,defaultValue:0.8}]
     signal edited(int nodeIndex, string key, double amount)
     signal duplicateRequested(int nodeIndex)
     signal removeRequested(int nodeIndex)
@@ -66,7 +86,7 @@ ColumnLayout {
             implicitWidth: 110
             from: valueRow.spec.min; to: valueRow.spec.max
             value: valueRow.amount
-            onMoved: value => valueRow.edited(value)
+            onMoved: value => { if (valueRow.visible && valueRow.enabled) valueRow.edited(value) }
         }
     }
 
@@ -81,7 +101,7 @@ ColumnLayout {
         VButton {
             objectName: "nr-reset"
             text: qsTr("恢复默认"); ghost: true
-            onClicked: veyra.resetNrLayer(editor.layerData.index)
+            onClicked: if (editor.enabled) veyra.resetNrLayer(editor.layerData.index)
         }
         VButton {
             objectName: "nr-remove"
@@ -123,7 +143,7 @@ ColumnLayout {
             objectName: "nr-motion-source"
             options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]
             current: String(veyra.nrMotionSource)
-            onPicked: id => veyra.nrMotionSource = Number(id)
+            onPicked: id => { if (editor.enabled) veyra.nrMotionSource = Number(id) }
         }
     }
     VRow {
@@ -262,23 +282,39 @@ ColumnLayout {
         objectName: "nr-residual-group"
         Layout.fillWidth: true
         label: qsTr("增强变化量"); count: 5
+        VRow {
+            label: qsTr("调节方式")
+            VSeg {
+                objectName: "nr-residual-view"
+                options: [{id:"web",label:qsTr("网状")},{id:"list",label:qsTr("列表")}]
+                current: editor.residualWeb ? "web" : "list"
+                onPicked: id => veyra.setPreference("nrResidualView", id)
+            }
+        }
         Repeater {
-            model: [{key:"total",label:qsTr("总变化强度"),min:0,max:5},
-                    {key:"darken",label:qsTr("暗化变化"),min:0,max:2},
-                    {key:"brighten",label:qsTr("亮化变化"),min:0,max:2},
-                    {key:"color",label:qsTr("色彩变化"),min:0,max:2},
-                    {key:"luminance",label:qsTr("明度变化"),min:0,max:2}]
+            model: editor.residualSpecs
             delegate: NrValueRow {
                 required property var modelData
+                visible: !editor.residualWeb || modelData.key === "total"
                 spec: modelData; amount: editor.layerData[modelData.key]
-                onEdited: amount => editor.edited(editor.layerData.index,modelData.key,amount)
+                onEdited: amount => editor.edited(editor.layerData.index, modelData.key, amount)
             }
+        }
+        NrWebPad {
+            id: residualPad
+            objectName: "nr-residual-web"
+            Layout.fillWidth: true
+            visible: editor.residualWeb
+            identity: String(editor.layerData.index) + ":" + editor.layerData.runtime
+            axes: editor.residualSpecs.slice(1)
+            values: editor.layerData
+            onEdited: (key, value) => { if (residualPad.visible && residualPad.enabled) editor.edited(editor.layerData.index, key, value) }
         }
     }
     VSubGroup {
         objectName: "nr-correction-group"
         Layout.fillWidth: true
-        label: qsTr("画面调控"); count: editor.layerData.correctionEnabled ? (editor.layerData.correctionAuto ? 3 : 12) : 1
+        label: qsTr("画面调控"); count: editor.layerData.correctionEnabled ? (editor.layerData.correctionAuto ? 1 : 9) : 0
         VRow {
             label: qsTr("开启调控")
             hint: qsTr("关闭时保留原始变化量，最高 5")
@@ -298,19 +334,32 @@ ColumnLayout {
                 onPicked: id => editor.edited(editor.layerData.index,"correctionAuto",Number(id))
             }
         }
+        VRow {
+            visible: (editor.layerData.correctionEnabled ?? false) && !(editor.layerData.correctionAuto ?? true)
+            label: qsTr("调节方式")
+            VSeg {
+                objectName: "nr-correction-view"
+                options: [{id:"web",label:qsTr("网状")},{id:"list",label:qsTr("列表")}]
+                current: editor.correctionWeb ? "web" : "list"
+                onPicked: id => veyra.setPreference("nrCorrectionView", id)
+            }
+        }
+        NrWebPad {
+            id: correctionPad
+            objectName: "nr-correction-web"
+            Layout.fillWidth: true
+            visible: (editor.layerData.correctionEnabled ?? false) && !(editor.layerData.correctionAuto ?? true) && editor.correctionWeb
+            identity: String(editor.layerData.index) + ":" + editor.layerData.runtime
+            axes: editor.correctionSpecs
+            values: editor.layerData
+            onEdited: (key, value) => { if (correctionPad.visible && correctionPad.enabled) editor.edited(editor.layerData.index, key, value) }
+        }
         Repeater {
-            model: [{key:"hueProtection",label:qsTr("色相保护"),hint:qsTr("保留原图色相；没有色相偏移时变化较小"),min:0,max:1,defaultValue:1},
-                    {key:"chromaProtection",label:qsTr("色度保护"),hint:qsTr("软化过量色度变化；小幅变化保留"),min:0,max:1,defaultValue:0.75},
-                    {key:"neutralProtection",label:qsTr("中性色保护"),hint:qsTr("抑制白墙、云和灰色区域的额外染色"),min:0,max:1,defaultValue:0},
-                    {key:"colorRetention",label:qsTr("原图色彩保留"),hint:qsTr("保留原图色相与饱和度；1 为完全保留色彩"),min:0,max:1,defaultValue:0},
-                    {key:"luminanceRetention",label:qsTr("亮度保持"),hint:qsTr("减少 NR 明暗改动；1 为保留原图亮度"),min:0,max:1,defaultValue:0},
-                    {key:"shadowProtection",label:qsTr("暗部保护"),hint:qsTr("减少暗部被进一步压黑，保留提亮细节"),min:0,max:1,defaultValue:0},
-                    {key:"highlightProtection",label:qsTr("高光保护"),hint:qsTr("只压缩向白色溢出的变化，保留高光回暗"),min:0,max:1,defaultValue:1},
-                    {key:"localCompression",label:qsTr("局部压缩"),hint:qsTr("同时软化过大的亮度和颜色变化"),min:0,max:1,defaultValue:0.75},
-                    {key:"temporalStability",label:qsTr("时域稳定"),hint:qsTr("播放时减闪；暂停单帧不体现时域效果"),min:0,max:1,defaultValue:0.8}]
+            model: editor.correctionSpecs
             delegate: NrValueRow {
                 required property var modelData
-                visible: (editor.layerData.correctionEnabled ?? false) && !(editor.layerData.correctionAuto ?? true)
+                visible: (editor.layerData.correctionEnabled ?? false) && !(editor.layerData.correctionAuto ?? true) &&
+                         !editor.correctionWeb
                 spec: modelData; amount: editor.layerData[modelData.key] ?? modelData.defaultValue
                 onEdited: amount => editor.edited(editor.layerData.index,modelData.key,amount)
             }

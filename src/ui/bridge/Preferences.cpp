@@ -201,6 +201,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = n;
     } else if (flags.contains(key)) {
         stored = value.toBool();
+    } else if (key == QLatin1String("nrResidualView") || key == QLatin1String("nrCorrectionView")) {
+        const auto view = value.toString();
+        if (view != QLatin1String("web") && view != QLatin1String("list")) return false;
+        stored = view;
     } else if (key == QLatin1String("screenshotDir")) {
         const QString dir = value.toString();
         if (!dir.isEmpty() && !QFileInfo(dir).isDir()) { emit notice(tr("截图目录不存在：%1").arg(dir), true); return false; }

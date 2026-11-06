@@ -1555,6 +1555,13 @@
    "ja": "NVIDIA RTX のフレーム生成。倍率はランタイムの実際の対応範囲によります"
   },
   {
+   "zh": "NVIDIA VFG · RTX 30（实验）/ 40 / 50",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "NVIDIA VFG · RTX 30（實驗）/ 40 / 50",
+   "en": "NVIDIA VFG · RTX 30 (experimental) / 40 / 50",
+   "ja": "NVIDIA VFG · RTX 30（実験）/ 40 / 50"
+  },
+  {
    "zh": "NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "NVIDIA VFG 未能啟用（需要 Ada / Blackwell 顯示卡、VFG 執行組件和支援的輸出格式），已關閉補幀；原因見日誌",
@@ -1905,6 +1912,13 @@
    "ja": "PSN アカウント"
   },
   {
+   "zh": "RTX 30 VFG 为实验兼容，复用现有模型；支持 2X～8X，实际画质与速度需实卡验证",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "RTX 30 VFG 為實驗相容，重用現有模型；支援 2X～8X，實際畫質與速度需實卡驗證",
+   "en": "RTX 30 VFG compatibility is experimental and reuses existing models; 2X–8X, with image quality and speed requiring hardware validation",
+   "ja": "RTX 30 VFG は既存モデルを再利用する実験的対応です。2X～8X、画質と速度は実機での検証が必要です"
+  },
+  {
    "zh": "RTX 50 · NVIDIA 原版",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "RTX 50 · NVIDIA 原版",
@@ -2094,11 +2108,11 @@
    "ja": "VFG 品質設定が拒否されたため、前の設定を保持しました。"
   },
   {
-   "zh": "VFG 需要 NVIDIA Ada / Blackwell 显卡（RTX 40 / 50）",
+   "zh": "VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）",
    "src": "src/ui/bridge/Chain.cpp",
-   "zh-TW": "VFG 需要 NVIDIA Ada / Blackwell 顯示卡（RTX 40 / 50）",
-   "en": "VFG requires an NVIDIA Ada / Blackwell GPU (RTX 40 / 50).",
-   "ja": "VFG には NVIDIA Ada / Blackwell GPU（RTX 40 / 50）が必要です。"
+   "zh-TW": "VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系為實驗相容）",
+   "en": "VFG requires NVIDIA RTX 30 / 40 / 50 (RTX 30 compatibility is experimental)",
+   "ja": "VFG には NVIDIA RTX 30 / 40 / 50 が必要です（30 シリーズは実験的対応）"
   },
   {
    "zh": "Veyra 开源免费，也需要你的支持",
@@ -5896,6 +5910,34 @@
    "ja": "ウィンドウいっぱいに表示し、はみ出す部分を切り取る"
   },
   {
+   "zh": "增加 NR 带来的提亮；0 取消这部分变化。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "增加 NR 帶來的提亮；0 取消這部分變化。",
+   "en": "Increase brightening introduced by NR; 0 removes this change.",
+   "ja": "NR による明るい方向の変化を増やします。0 でこの変化を除去します。"
+  },
+  {
+   "zh": "增加 NR 带来的明度变化；0 取消这部分变化。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "增加 NR 帶來的明度變化；0 取消這部分變化。",
+   "en": "Increase luminance changes introduced by NR; 0 removes this change.",
+   "ja": "NR による明度の変化を増やします。0 でこの変化を除去します。"
+  },
+  {
+   "zh": "增加 NR 带来的暗化，不是直接调低画面亮度。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "增加 NR 帶來的暗化，不是直接調低畫面亮度。",
+   "en": "Increase darkening introduced by NR, rather than lowering overall brightness.",
+   "ja": "画面全体の明るさではなく、NR による暗い方向の変化を増やします。"
+  },
+  {
+   "zh": "增加 NR 带来的颜色变化；0 取消这部分变化。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "增加 NR 帶來的顏色變化；0 取消這部分變化。",
+   "en": "Increase color changes introduced by NR; 0 removes this change.",
+   "ja": "NR による色の変化を増やします。0 でこの変化を除去します。"
+  },
+  {
    "zh": "增强",
    "src": "qml/ExportPage.qml",
    "zh-TW": "增強",
@@ -6573,6 +6615,13 @@
    "zh-TW": "即時預覽，設定對所有檔案生效",
    "en": "Live preview; settings apply to every file",
    "ja": "リアルタイムプレビュー。設定はすべてのファイルに適用"
+  },
+  {
+   "zh": "实线：当前值 · 虚线：默认值；向外增加该项，并非越大越好。",
+   "src": "qml/NrWebPad.qml",
+   "zh-TW": "實線：目前值 · 虛線：預設值；向外增加該項，並非越大越好。",
+   "en": "Solid: current · Dashed: default. Outward increases the value; higher is not always better.",
+   "ja": "実線：現在値 · 破線：既定値。外側ほど値が増えますが、大きいほど良いとは限りません。"
   },
   {
    "zh": "实际运行：FSR %1 · 2X",
@@ -9361,6 +9410,13 @@
    "ja": "元に戻す"
   },
   {
+   "zh": "撤销上一项调整",
+   "src": "qml/NrWebPad.qml",
+   "zh-TW": "復原上一項調整",
+   "en": "Undo last adjustment",
+   "ja": "直前の調整を元に戻す"
+  },
+  {
    "zh": "播完后播放下一项",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "播完後播放下一項",
@@ -9626,6 +9682,13 @@
    "zh-TW": "整體亮暗",
    "en": "Overall brightness",
    "ja": "全体の明るさ"
+  },
+  {
+   "zh": "整体倍率 · 同时影响四个方向的变化",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "整體倍率 · 同時影響四個方向的變化",
+   "en": "Overall multiplier · Affects all four change directions",
+   "ja": "全体の倍率 · 4 方向すべての変化に作用"
   },
   {
    "zh": "整体强度",
@@ -13688,6 +13751,13 @@
    "ja": "この字幕形式のデコーダーがありません"
   },
   {
+   "zh": "网状",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "網狀",
+   "en": "Web",
+   "ja": "ウェブ"
+  },
+  {
    "zh": "网络",
    "src": "qml/ProPage.qml",
    "zh-TW": "網路",
@@ -15690,6 +15760,13 @@
    "ja": "カラー設定が拒否されました：%1"
   },
   {
+   "zh": "调节方式",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "調節方式",
+   "en": "Adjustment method",
+   "ja": "調整方法"
+  },
+  {
    "zh": "负值 = 声音提前",
    "src": "qml/AudioSettingsDialog.qml",
    "zh-TW": "負值 = 聲音提前",
@@ -17643,18 +17720,18 @@
    "ja": "AMD RX 9000 が必要です"
   },
   {
+   "zh": "需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "需要 NVIDIA RTX 30 / 40 / 50（30 系為實驗相容）",
+   "en": "Requires NVIDIA RTX 30 / 40 / 50 (RTX 30 compatibility is experimental)",
+   "ja": "NVIDIA RTX 30 / 40 / 50 が必要です（30 シリーズは実験的対応）"
+  },
+  {
    "zh": "需要 NVIDIA RTX 30 及更新显卡",
    "src": "src/ui/bridge/Hardware.cpp",
    "zh-TW": "需要 NVIDIA RTX 30 或更新的顯示卡",
    "en": "Requires an NVIDIA RTX 30-series or newer GPU",
    "ja": "NVIDIA RTX 30 シリーズ以降の GPU が必要です"
-  },
-  {
-   "zh": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
-   "src": "src/ui/bridge/Hardware.cpp",
-   "zh-TW": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
-   "en": "Requires NVIDIA RTX 40 / 50 (Ada / Blackwell)",
-   "ja": "NVIDIA RTX 40 / 50（Ada / Blackwell）が必要です"
   },
   {
    "zh": "需要 NVIDIA RTX 50 / Blackwell",
@@ -19097,34 +19174,6 @@
    "zh-TW": "；預設“即時”，同時執行遊戲或其他重負載程式變慢時可改為“高”或“普通”",
    "en": "; Realtime by default. If a game or other heavy program running alongside slows down, choose High or Normal",
    "ja": "；既定は「リアルタイム」。同時に動かすゲームや重い処理が遅くなる場合は「高」か「通常」に変更してください"
-  },
-  {
-   "zh": "NVIDIA VFG · RTX 30（实验）/ 40 / 50",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "NVIDIA VFG · RTX 30（實驗）/ 40 / 50",
-   "en": "NVIDIA VFG · RTX 30 (experimental) / 40 / 50",
-   "ja": "NVIDIA VFG · RTX 30（実験）/ 40 / 50"
-  },
-  {
-   "zh": "VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系為實驗相容）",
-   "en": "VFG requires NVIDIA RTX 30 / 40 / 50 (RTX 30 compatibility is experimental)",
-   "ja": "VFG には NVIDIA RTX 30 / 40 / 50 が必要です（30 シリーズは実験的対応）"
-  },
-  {
-   "zh": "需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）",
-   "src": "src/ui/bridge/Hardware.cpp",
-   "zh-TW": "需要 NVIDIA RTX 30 / 40 / 50（30 系為實驗相容）",
-   "en": "Requires NVIDIA RTX 30 / 40 / 50 (RTX 30 compatibility is experimental)",
-   "ja": "NVIDIA RTX 30 / 40 / 50 が必要です（30 シリーズは実験的対応）"
-  },
-  {
-   "zh": "RTX 30 VFG 为实验兼容，复用现有模型；支持 2X～8X，实际画质与速度需实卡验证",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "RTX 30 VFG 為實驗相容，重用現有模型；支援 2X～8X，實際畫質與速度需實卡驗證",
-   "en": "RTX 30 VFG compatibility is experimental and reuses existing models; 2X–8X, with image quality and speed requiring hardware validation",
-   "ja": "RTX 30 VFG は既存モデルを再利用する実験的対応です。2X～8X、画質と速度は実機での検証が必要です"
   }
  ]
 }
