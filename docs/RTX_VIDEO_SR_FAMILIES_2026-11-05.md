@@ -12,7 +12,7 @@
 | 项目 | 内容 |
 |---|---|
 | 分支 | `claude/vsr-rife-20261105`，基于 main `8eda262`，独立工作树 `worktrees/claude-vsr-rife-20261105`；分支名保留第一轮的写法 |
-| 状态 | **未提交、未合并 main、未 push、未发布、未打包** |
+| 状态 | Claude工作已存档为 `ba00ce3`，2026-11-05整合入本地main，见[整合记录](MAIN_INTEGRATION_2026-11-05.md)；未push、未发布、未打包。下文“不在main”等描述保留原施工时点 |
 | 回执 | `E:/项目/Veyra/reports/claude-vsr-rife-20261105/FINAL.json` |
 | 手动测试入口 | `E:/项目/Veyra/tests/claude-vsr-rife-20261105/启动RTX视频超分测试.cmd`（私有配置、日志、临时目录；运行目录是私有的 `tests/claude-vsr-rife-20261105/app`） |
 

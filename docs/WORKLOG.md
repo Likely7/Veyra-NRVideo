@@ -607,3 +607,13 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 - 没有构建主程序，也没有在真实界面里看。
 - 没有改低延迟或驱动的行为本身。
 - 未提交、未合 main、未 push。
+
+## 2026-11-05 用户授权整合全部保留工作到本地 main，并研究 NR 网状调节
+
+存档点8eda262／checkpoint/pre-main-integration-20261105；Claude三工作树先保存差异和文件摘要，提交3593e52（低延迟提示）、19a8680（HIP选择）、ba00ce3（三类超分，不含RIFE），再经5209442／974fa9f／79d1ac9合并。19a8680继承全屏、VFG30、NVENC及RX7000全部6个待合提交。记录冲突两侧内容，CMake保留两个新后端，能力判断同时保留Ampere VFG和流媒体，另增5条针对性断言。旧脏树不覆盖，暂停Lecram／AverMedia诊断不并，预算与RIFE产品接口扫描为空。
+
+实际命令 `python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-main-integration-20261105 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.2-test --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared <19目标>`，134.4秒通过，能力断言增量1.3秒。恢复了正确main配置及patched FFmpeg。reports/main-integration-20261105/stage-and-test.py、gpu-checks.py记录完整测试命令；日志logs/codex-main-integration-20261105，私有运行tests/codex-main-integration-20261105，临时tmp/codex-main-integration-20261105。
+
+验证：SR设置240、VFG设置683、能力80、VFG模块342、HIP单元15/真实HIP6枚举可见性19、worker诊断14、GPU协议54、原生VFG GPU2425、效果链/预设/NR模型/UI合同/i18n通过。QtQuick最终146/0/0；实际界面15项冷／热两轮通过。7组各60帧SR导出无错位；H.264/HEVC各270帧，IDR0/120/240且原始stss1/121/241。首轮测试参数及Qt模块/截图目录部署缺口保留失败，修正夹具后重测，未为夹具失败修改产品。冷启动新VFX模型12.4秒JIT曾触发无进展诊断；热缓存1.3–1.5秒无engine/QML错误，保留首开停顿限制。没有30系／RX7000本地推理或新超分HDR通过声明。上游许可原文字节保留，其新增文件EOF空行的diff-check提示不擅改许可；本轮其余差异check通过。
+
+合并后仅删除已合入且无工作树检出的本地冗余分支，SHA/分支映射和保护检查见reports/main-integration-20261105；不删旧脏树、依赖、正式包和用户文件。NR仅完成三个设计方向研究及真实参数映射建议，未改NR界面。当前事实及最终状态读docs/MAIN_INTEGRATION_2026-11-05.md和回执FINAL.json；未push/Release。
