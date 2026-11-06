@@ -4272,11 +4272,11 @@
    "ja": "処理の待ち行列を減らす"
   },
   {
-   "zh": "减少处理排队；增强档提高 GPU 频率，可能增加功耗。",
+   "zh": "减少处理排队。高负载时建议选「开」而不是「开＋增强」：增强有概率导致掉帧，还会提高 GPU 频率、增加功耗。",
    "src": "qml/NvidiaLowLatencyEditor.qml",
-   "zh-TW": "減少處理排隊；增強模式提高 GPU 時脈，可能增加功耗。",
-   "en": "Reduce processing queue depth. Boost requests higher GPU clocks and may increase power use.",
-   "ja": "処理の待ち行列を減らします。ブーストは GPU クロックを上げ、消費電力が増える場合があります。"
+   "zh-TW": "減少處理排隊。高負載時建議選「開」而不是「開＋增強」：增強有機率導致掉幀，還會提高 GPU 時脈、增加功耗。",
+   "en": "Reduce processing queue depth. Under heavy load, choose On rather than On + Boost: Boost can drop frames, and it raises GPU clocks and power use.",
+   "ja": "処理の待ち行列を減らします。高負荷時は「オン＋ブースト」ではなく「オン」を推奨します。ブーストはフレーム落ちを起こすことがあり、GPU クロックと消費電力も上がります。"
   },
   {
    "zh": "减少暗部被进一步压黑，保留提亮细节",

@@ -62,6 +62,11 @@ QtObject {
     property real duration: 100
     property bool hasSource: true
     property bool isCapture: false
+    // Off by default, as before these existed: only the low latency test turns them on.
+    property bool nvidiaLowLatencyAvailable: false
+    property int nvidiaLowLatency: 0
+    property bool running: false
+    property string presentationStatus: ""
     signal settingsChanged()
     signal chainChanged()
     signal snapshotChanged()
@@ -82,6 +87,8 @@ QtObject {
             QStringLiteral("qml/Veyra/ProPage.qml"))), "VeyraTest", 1, 0, "ProPage");
         qmlRegisterType(QUrl::fromLocalFile(QDir(QCoreApplication::applicationDirPath()).filePath(
             QStringLiteral("qml/Veyra/ExportPage.qml"))), "VeyraTest", 1, 0, "ExportPage");
+        qmlRegisterType(QUrl::fromLocalFile(QDir(QCoreApplication::applicationDirPath()).filePath(
+            QStringLiteral("qml/Veyra/NvidiaLowLatencyEditor.qml"))), "VeyraTest", 1, 0, "NvidiaLowLatencyEditor");
     }
 };
 
