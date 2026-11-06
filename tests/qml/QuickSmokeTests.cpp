@@ -71,7 +71,14 @@ QtObject {
     signal chainChanged()
     signal snapshotChanged()
     function nrAutoSelectionReason(index) { return "Auto is unavailable in this four-layer UI fixture" }
+    function effectAvailability(id) { return effectCapabilities[id] || {available:true, reason:""} }
     function resetNrLayer(index) {}
+    function setPreference(key, value) {
+        const copy = Object.assign({}, preferences)
+        copy[key] = value
+        preferences = copy
+        return true
+    }
     function logUi(category, text) {}
     function observeHdrCoverage(on) {}
 })qml", QUrl());

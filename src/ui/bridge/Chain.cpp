@@ -46,6 +46,7 @@ QVariantList QmlPlayerBridge::nrLayers() const {
     for(uint32_t i=0;i<impl_->chain.nodeCount;++i){const auto& node=impl_->chain.nodes[i];
         if(node.type!=engine::EffectType::NrEnhance)continue;
         const auto& n=node.nr;
+        const auto correction=n.residual.correction.constants(false,n.model.style);
         out<<QVariantMap{{"index",int(i)},{"enabled",node.enabled},{"sizePolicy",int(n.sizePolicy)},{"runtime",int(engine::currentNrRuntime(n.runtime))},
             {"manualSize",pipeline::manualNrSizePolicy(n.sizePolicy)},{"sizePercent",int(pipeline::nrSizePercent(n.sizePolicy))},
             {"intensity",n.model.intensity},{"tone",n.model.tone},{"structure",n.model.structure},
@@ -60,7 +61,13 @@ QVariantList QmlPlayerBridge::nrLayers() const {
             {"temporalStability",n.residual.correction.stability},
             {"neutralProtection",n.residual.correction.neutral},{"colorRetention",n.residual.correction.colorKeep},
             {"luminanceRetention",n.residual.correction.lumaKeep},{"shadowProtection",n.residual.correction.shadow},
-            {"correctionAmount",n.residual.correction.autoAmount}};
+            {"correctionAmount",n.residual.correction.autoAmount},
+            // The web editor displays the same resolved values as the shader;
+            // automatic mode never substitutes the saved inactive manual values.
+            {"correctionEffective",QVariantMap{{"colorRetention",correction[9]},
+                {"luminanceRetention",correction[10]},{"shadowProtection",correction[11]},
+                {"highlightProtection",correction[3]},{"localCompression",correction[4]},
+                {"temporalStability",correction[5]}}}};
     }
     return out;
 }
