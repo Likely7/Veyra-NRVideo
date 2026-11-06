@@ -190,7 +190,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // cap (0 keeps the presented rate).
         {"recordBitrateMbps", {0, 400}},
         {"recordFps", {0, 240}}};
-    static const QStringList flags{"nrWebEditor", "recordHevc", "recordAudio", "subtitleEnabled", "subtitleBackground", "subtitleFit",
+    static const QStringList flags{"recordHevc", "recordAudio", "subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
     QVariant stored;
@@ -201,6 +201,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = n;
     } else if (flags.contains(key)) {
         stored = value.toBool();
+    } else if (key == QLatin1String("nrResidualView") || key == QLatin1String("nrCorrectionView")) {
+        const auto view = value.toString();
+        if (view != QLatin1String("web") && view != QLatin1String("list")) return false;
+        stored = view;
     } else if (key == QLatin1String("screenshotDir")) {
         const QString dir = value.toString();
         if (!dir.isEmpty() && !QFileInfo(dir).isDir()) { emit notice(tr("截图目录不存在：%1").arg(dir), true); return false; }

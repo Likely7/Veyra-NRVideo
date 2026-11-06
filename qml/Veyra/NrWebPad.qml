@@ -104,7 +104,7 @@ ColumnLayout {
         id: surface
         objectName: pad.objectName + "-surface"
         Layout.fillWidth: true
-        Layout.preferredHeight: Math.min(340, Math.max(270, width))
+        Layout.preferredHeight: pad.axes.length > 6 ? Math.max(330, Math.min(400, width * 1.18)) : Math.min(340, Math.max(270, width))
         readonly property real radius: Math.max(36, Math.min(width / 2 - 67, height / 2 - 53))
         activeFocusOnTab: true
         onWidthChanged: requestPaint()
@@ -175,14 +175,15 @@ ColumnLayout {
                 readonly property point end: pad.pointAt(index, 1)
                 readonly property real dx: Math.cos(pad.angleAt(index))
                 readonly property real dy: Math.sin(pad.angleAt(index))
-                width: Math.min(106, Math.max(76, surface.width * 0.27)); height: 50
-                x: Math.max(0, Math.min(surface.width - width, end.x + dx * 34 - width / 2))
-                y: end.y + dy * 23 - height / 2
+                width: pad.axes.length > 6 ? Math.min(92, Math.max(48, surface.width * 0.25)) : Math.min(106, Math.max(76, surface.width * 0.27))
+                height: pad.axes.length > 6 ? 54 : 50
+                x: Math.max(0, Math.min(surface.width - width, end.x + dx * (pad.axes.length > 6 ? 46 : 34) - width / 2))
+                y: pad.axes.length > 6 ? surface.height / 2 + dy * (surface.height / 2 - height / 2 - 6) - height / 2 : end.y + dy * 23 - height / 2
                 Text {
                     anchors.fill: parent
                     text: modelData.label + "\n" + (pad.dragging && index === pad.selectedAxis ? pad.draft : pad.valueAt(index)).toFixed(2)
                     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                    wrapMode: Text.WordWrap
+                    wrapMode: Text.Wrap
                     color: index === pad.selectedAxis ? Theme.t1 : Theme.t2
                     font.family: Theme.fontUi; font.pixelSize: 11
                 }

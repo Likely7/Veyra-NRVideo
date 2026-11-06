@@ -118,5 +118,35 @@ Item {
             }
             pad.width=400
         }
+        function test_nine_axes_remain_selectable_and_labels_do_not_overlap() {
+            const saved=pad.axes
+            const names=["Hue protection","Chroma protection","Neutral protection","Original color","Luminance keep","Shadow protection","Highlight protection","Local compression","Temporal stability"]
+            try {
+                pad.axes=names.map((label,i)=>({key:"axis"+i,label:label,min:0,max:1,defaultValue:0.5}))
+                for(const width of [240,280,330,500]) {
+                    pad.width=width;verify(waitForPolish(root.Window.window));wait(10)
+                    const labels=pad.axes.map(a=>findChild(pad,"test-web-axis-"+a.key))
+                    for(let i=0;i<9;++i) {
+                        const label=labels[i]
+                        verify(label.x>=0&&label.x+label.width<=pad.width+1)
+                        verify(label.y>=0&&label.y+label.height<=surface().height+1)
+                        for(let j=i+1;j<9;++j){
+                            const other=labels[j]
+                            const overlapX=Math.min(label.x+label.width,other.x+other.width)-Math.max(label.x,other.x)
+                            const overlapY=Math.min(label.y+label.height,other.y+other.height)-Math.max(label.y,other.y)
+                            verify(overlapX<=1||overlapY<=1,"labels overlap at width "+width+": "+i+","+j)
+                        }
+                    }
+                }
+                pad.width=400;verify(waitForPolish(root.Window.window))
+                for(let i=0;i<9;++i){
+                    const label=findChild(pad,"test-web-axis-axis"+i)
+                    mouseClick(label,label.width/2,label.height/2)
+                    compare(pad.selectedAxis,i)
+                    pad.setSelected((i+1)/10)
+                    fuzzyCompare(root.params["axis"+i],(i+1)/10,0.00001)
+                }
+            } finally {pad.axes=saved;pad.width=400}
+        }
     }
 }

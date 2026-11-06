@@ -11,9 +11,7 @@ Item {
         total:1,darken:1,brighten:1,color:1,luminance:1,temporal:false,antiFlicker:2,
         correctionEnabled:true,correctionAuto:false,correctionAmount:1,hueProtection:1,chromaProtection:0.75,
         neutralProtection:0,colorRetention:0.1,luminanceRetention:0.2,shadowProtection:0.3,
-        highlightProtection:1,localCompression:0.75,temporalStability:0.8,
-        correctionEffective:{colorRetention:0.9,luminanceRetention:0.25,shadowProtection:0.55,
-            highlightProtection:1,localCompression:1,temporalStability:1}})
+        highlightProtection:1,localCompression:0.75,temporalStability:0.8})
     property var params: defaults
     property var edits: []
     function apply(index,key,value) {
@@ -25,80 +23,100 @@ Item {
     NrLayerEditor { id: list; width:440; layerData:root.params; onEdited:(i,k,v)=>root.apply(i,k,v) }
     NrLayerEditor { id: nodes; x:500; width:440; layerData:root.params; listControls:false; onEdited:(i,k,v)=>root.apply(i,k,v) }
     TestCase {
-        name:"NrWebEditor"
+        name:"NrInlineEditor"
         when:windowShown
         function initTestCase(){Theme.reduced=true;wait(100);verify(waitForPolish(root.Window.window))}
-        function init(){veyra.setPreference("nrWebEditor",false);root.params=Object.assign({},root.defaults);root.edits=[];wait(20)}
-        function cleanup(){veyra.setPreference("nrWebEditor",false)}
-        function control(parent,name){const item=findChild(parent,name);verify(item!==null,name);return item}
-        function open(){veyra.setPreference("nrWebEditor",true);wait(20);verify(list.webEnabled);verify(nodes.webEnabled)}
-        function web(owner){return control(owner,"nr-web-editor").item}
-        function test_default_and_switch_share_one_model(){
-            verify(!list.webEnabled);verify(control(list,"nr-slider-editor").enabled)
-            const before=JSON.stringify(root.params),toggle=control(list,"nr-web-toggle")
-            mouseClick(toggle,toggle.width/2,toggle.height/2);wait(20)
-            verify(list.webEnabled&&nodes.webEnabled)
-            verify(!control(list,"nr-slider-editor").enabled&&!control(nodes,"nr-slider-editor").enabled)
+        function control(owner,name){const item=findChild(owner,name);verify(item!==null,name);return item}
+        function init(){
+            veyra.setPreference("nrResidualView","list");veyra.setPreference("nrCorrectionView","list")
+            root.params=Object.assign({},root.defaults);root.edits=[]
+            for(const owner of [list,nodes])for(const name of ["nr-residual-group","nr-correction-group","nr-model-group","nr-experimental-group"])control(owner,name).expanded=true
+            wait(20)
+        }
+        function cleanup(){veyra.setPreference("nrResidualView","list");veyra.setPreference("nrCorrectionView","list")}
+        function test_no_global_block_or_duplicate_parameter_editors(){
+            compare(findChild(list,"nr-web-toggle"),null);compare(findChild(list,"nr-slider-editor"),null)
+            verify(control(list,"nr-runtime").enabled);verify(control(list,"nr-tone").enabled)
+            verify(!list.residualWeb&&!list.correctionWeb)
+        }
+        function test_group_views_are_independent_and_shared_across_pages(){
+            const before=JSON.stringify(root.params)
+            control(list,"nr-residual-view").picked("web");wait(20)
+            verify(list.residualWeb&&nodes.residualWeb);verify(!list.correctionWeb&&!nodes.correctionWeb)
+            verify(control(list,"nr-residual-web").visible);verify(!control(list,"nr-darken").visible)
+            verify(control(list,"nr-total").visible&&control(list,"nr-tone").enabled)
+            control(nodes,"nr-correction-view").picked("web");wait(20)
+            verify(list.correctionWeb&&nodes.correctionWeb)
             compare(JSON.stringify(root.params),before)
-            control(list,"nr-slider-editor").edited(1,"tone",0.1);compare(root.edits.length,0)
-            control(web(list),"nr-web-tone").moved(0.35)
-            compare(root.params.tone,0.35);compare(control(nodes,"nr-tone").value,0.35)
-            veyra.setPreference("nrWebEditor",false);wait(20)
-            verify(control(list,"nr-slider-editor").enabled);compare(control(list,"nr-tone").value,0.35)
+            control(list,"nr-residual-view").picked("list");wait(20)
+            verify(list.correctionWeb&&nodes.correctionWeb);verify(control(list,"nr-darken").visible)
         }
-        function test_all_parameters_remain_available_in_web_panel(){
-            open();const w=web(list)
-            const sliderKeys=["intensity","tone","structure","total","size-percent","hueProtection","chromaProtection","neutralProtection","correctionAmount"]
-            for(const key of sliderKeys)control(w,"nr-web-"+key)
-            for(const key of ["runtime","performance","motion-source","resolution","skin-mode","style","autoMask","uiCorrection","temporal","antiflicker","copy","reset","remove","use-auto-defaults"])
-                control(w,"nr-web-"+key)
-            const changes=control(w,"nr-web-changes"),protections=control(w,"nr-web-protections")
-            compare(changes.axes.map(a=>a.key).join(","),"darken,brighten,color,luminance")
-            compare(protections.axes.map(a=>a.key).join(","),"colorRetention,luminanceRetention,shadowProtection,highlightProtection,localCompression,temporalStability")
-            compare(control(w,"nr-web-size-percent").value,37)
-            control(w,"nr-web-size-percent").moved(62);compare(root.params["sizePercent"],62)
-            verify(control(w,"nr-web-model-group").expanded)
-            verify(control(w,"nr-web-correction-group").expanded)
-            verify(control(w,"nr-web-experimental-group").expanded)
-            compare(control(web(nodes),"nr-web-copy").visible,false)
+        function test_all_nine_manual_parameters_roundtrip(){
+            control(list,"nr-correction-view").picked("web");wait(20)
+            const pad=control(list,"nr-correction-web")
+            compare(pad.axes.length,9)
+            compare(pad.axes.map(a=>a.key).join(","),"hueProtection,chromaProtection,neutralProtection,colorRetention,luminanceRetention,shadowProtection,highlightProtection,localCompression,temporalStability")
+            for(let i=0;i<9;++i){pad.selectAxis(i);pad.setSelected((i+1)/10)}
+            control(list,"nr-correction-view").picked("list");wait(20)
+            for(let i=0;i<9;++i){const s=control(list,"nr-"+pad.axes[i].key);verify(s.visible&&s.enabled);fuzzyCompare(s.value,(i+1)/10,0.00001)}
+            control(list,"nr-hueProtection").moved(0.44)
+            control(list,"nr-correction-view").picked("web");wait(20)
+            fuzzyCompare(pad.valueAt(0),0.44,0.00001)
         }
-        function test_auto_displays_effective_values_and_keeps_manual_values(){
-            root.params=Object.assign({},root.defaults,{correctionAuto:true});open()
-            const p=control(web(list),"nr-web-protections")
-            verify(!p.editable);fuzzyCompare(p.valueAt(0),0.9,0.00001)
-            control(web(list),"nr-web-correctionAuto").picked("0");wait(20)
-            verify(p.editable);fuzzyCompare(p.valueAt(0),0.1,0.00001)
-            p.setSelected(0.6);compare(root.params.colorRetention,0.6)
-            control(web(list),"nr-web-correctionAuto").picked("1");wait(20)
-            compare(root.params.colorRetention,0.6);fuzzyCompare(p.valueAt(0),0.9,0.00001)
+        function test_residual_master_stays_a_slider_and_hidden_inputs_do_not_write(){
+            control(list,"nr-residual-view").picked("web");wait(20)
+            const p=control(list,"nr-residual-web")
+            compare(p.axes.length,4);p.selectAxis(2);p.setSelected(0.55)
+            control(list,"nr-total").moved(2.5);compare(root.params.total,2.5)
+            control(list,"nr-color").moved(1.5);compare(root.params.color,0.55)
+            control(list,"nr-residual-view").picked("list");wait(20)
+            p.edited("color",0.9);compare(root.params.color,0.55)
+            control(list,"nr-color").moved(0.75);compare(root.params.color,0.75)
         }
-        function test_amd_keeps_original_model_and_size_restrictions(){
-            root.params=Object.assign({},root.defaults,{runtime:4});open()
-            verify(!control(web(list),"nr-web-model-group").enabled)
-            compare(control(web(list),"nr-web-performance").checked,true)
-            const select=control(web(list),"nr-web-resolution")
-            verify(select.options.find(o=>o.id==="1").disabled)
-            verify(select.options.find(o=>o.id==="5").disabled)
+        function test_auto_hides_manual_editor_without_losing_values_or_view(){
+            control(list,"nr-correction-view").picked("web");wait(20)
+            const p=control(list,"nr-correction-web");p.selectAxis(0);p.setSelected(0.35)
+            control(list,"nr-correctionAuto").picked("1");wait(20)
+            verify(!p.visible&&!control(list,"nr-correction-view").visible)
+            verify(control(list,"nr-correctionAmount").visible)
+            control(list,"nr-correctionAmount").moved(0.7)
+            control(list,"nr-correctionAuto").picked("0");wait(20)
+            verify(p.visible);compare(root.params.hueProtection,0.35);compare(root.params.correctionAmount,0.7)
         }
-        function test_missing_runtime_still_allows_residual_preset_editing(){
+        function test_other_controls_and_amd_rules_stay_in_place(){
+            for(const key of ["runtime","performance","motion-source","resolution","skin-mode","style","autoMask","uiCorrection","temporal","antiflicker","copy","reset","remove","use-auto-defaults"])control(list,"nr-"+key)
+            control(list,"nr-size-percent").moved(62);compare(root.params.sizePercent,62)
+            root.params=Object.assign({},root.defaults,{runtime:4})
+            control(list,"nr-residual-view").picked("web");control(list,"nr-correction-view").picked("web");wait(20)
+            verify(!control(list,"nr-model-group").enabled)
+            verify(control(list,"nr-resolution").options.find(o=>o.id==="1").disabled)
+            verify(control(list,"nr-resolution").options.find(o=>o.id==="5").disabled)
+            compare(control(nodes,"nr-copy").visible,false)
+        }
+        function test_missing_runtime_keeps_residual_preset_editing(){
             const saved=veyra.effectCapabilities
-            try {
-                veyra.effectCapabilities={nr2:{available:false,reason:"Missing runtime fixture"}}
-                compare(control(list,"nr-darken").enabled,true)
-                open()
-                verify(control(web(list),"nr-web-changes").enabled)
-                verify(control(web(list),"nr-web-protections").enabled)
-                verify(!control(web(list),"nr-web-model-group").enabled)
-                control(web(list),"nr-web-changes").setSelected(0.4)
-                compare(root.params.darken,0.4)
-            } finally { veyra.effectCapabilities=saved }
+            try{
+                veyra.effectCapabilities={nr2:{available:false,reason:"Missing runtime"}}
+                control(list,"nr-residual-view").picked("web");control(list,"nr-correction-view").picked("web");wait(20)
+                verify(control(list,"nr-residual-web").enabled);verify(control(list,"nr-correction-web").enabled)
+                verify(!control(list,"nr-model-group").enabled)
+            }finally{veyra.effectCapabilities=saved}
         }
-        function test_switch_off_during_drag_stops_future_writes(){
-            open();const p=control(web(list),"nr-web-changes"),s=control(p,"nr-web-changes-surface")
-            const point=p.pointAt(0,0.5),next=p.pointAt(0,0.8)
-            mousePress(s,point.x,point.y);mouseMove(s,next.x,next.y)
-            veyra.setPreference("nrWebEditor",false);root.edits=[];wait(80)
+        function test_switch_view_during_drag_stops_late_writes(){
+            control(list,"nr-residual-view").picked("web");wait(20)
+            const p=control(list,"nr-residual-web"),s=control(p,"nr-residual-web-surface"),a=p.pointAt(0,0.5),b=p.pointAt(0,0.8)
+            mousePress(s,a.x,a.y);mouseMove(s,b.x,b.y)
+            control(list,"nr-residual-view").picked("list");root.edits=[];wait(80)
             mouseRelease(list,10,10);compare(root.edits.length,0)
+        }
+        function test_old_global_preference_only_migrates_view_choice(){
+            const saved=veyra.preferences
+            try{
+                const prefs=Object.assign({},saved,{nrWebEditor:true});delete prefs.nrResidualView;delete prefs.nrCorrectionView;veyra.preferences=prefs;wait(20)
+                verify(list.residualWeb&&list.correctionWeb);verify(control(list,"nr-runtime").enabled)
+                control(list,"nr-residual-view").picked("list");wait(20)
+                verify(!list.residualWeb&&list.correctionWeb)
+            }finally{veyra.preferences=saved}
         }
     }
 }

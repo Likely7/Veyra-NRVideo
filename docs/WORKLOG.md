@@ -629,3 +629,11 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 失败与修正：逗号声明语法、测试误覆盖Item.data、软件等待帧信号、恢复默认的绑定更新顺序、数字滑条跨层后连续live及release过滤、Flickable阈值后持续移动夹具。完整失败与最终命令均保留。产物tests/codex-nr-web-editor-20261105，logs同名、tmp同名；报告reports/nr-web-editor-20261105。运行库以现有测试供体硬链接只读复用，不新增整包/ZIP或复制工程；实际空间按最终回执，不以逻辑文件大小冒充物理占用。用户配置、主线和其他工作树保持，未merge/push/Release。
 
 最终缺组件对照回归首轮165/1：测试快照只有effectCapabilities map、缺实际EffectSupport调用的effectAvailability方法，导致模拟模型控件始终可用。补齐同义只读查询后验证，不为夹具缺口改变产品可用性逻辑；此轮失败原样保留full-parity-final.log。
+
+## 2026-11-05 NR调节方式归回参数组，补齐九项
+
+用户纠偏后从684d906继续原分支，checkpoint/nr-web-before-inline-20261105存档。取消独立块、全局开关及灰色副本；NrLayerEditor回到一份参数树，两组独立list/web偏好。变化四轴与总量滑条、手动完整九轴与列表使用同一规格数组。删除旧NrParameterEditor/NrWebControls和只读自动map，旧全局偏好只作迁移，原自动控制保持。早期六轴/三滑条拆分不再是当前布局。
+
+使用build-recording-handoff.py --task codex-nr-inline-editor-20261105 --root <活动树> --build-dir <共享构建> --label 2.1.2-nr-inline-test --reconfigure --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared构建五目标，73.9s通过。软件QtQuick170/0/0（38.98s）、GPU Pad13/0/0、分组控件11/0/0；UI合同/i18n/NR模型通过，catalog2739条缺译与占位0。真实主程序23项逐参数读回、模式独立、自动手动保留、截图及重启通过，退出0，engine/QML错误0。
+
+用户旧测试PID23760在开工时运行，所以没有替换旧app或停止进程，另建tests/logs/tmp/codex-nr-inline-editor-20261105和reports/nr-inline-editor-20261105。运行库硬链接只读复用，未再复制完整工程/ZIP；配置迁移只复制白名单到新manual-profile，原配置不改。实际完整截图nr-web-ui.png已查看，九项标签均显示。单组截图保留透明背景，展示以整体深色面板为准。完整命令、最终SHA、空间及保护见FINAL.json；本轮不合main、不push/Release，不变更算法或导出协议，不宣称新的实卡性能收益。
