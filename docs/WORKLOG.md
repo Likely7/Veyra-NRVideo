@@ -665,3 +665,5 @@ build-recording-handoff.py --task codex-build-2.1.3-20261106 --build-dir <共享
 2.1.3修正后QtQuick172/0/0、菜单多DPI、NR GPU13/0+11/0、真实NR界面23项/重启、7组420帧SR对齐、双编码各270帧IDR/stss通过；详见BUILD_2.1.3_TEST_2026-11-06.md实际验证。额外pacing缺参数/输出目录夹具已纠正；冷DLSS初始化首帧15s门槛仍失败，热缓存14.3s生命周期通过、mediaSpeed0.99211；不声称解决冷启动。ACCEPTANCE.json区分首次失败与热结果。GUI观察Loader已逐字节恢复，不修改产品QML。
 
 2.1.3两ZIP封包/逐SHA/CRC、解压最小PATH冷启动均通过（NVIDIA209/AMD207真实帧，12.5/12.61s，退出0、错误为空，RTX5070效果关闭）。SOURCE-FREEZE为b19846a，后续仅验收文档，当前产品与归档一致。最终交付及保护/清理以reports/codex-build-2.1.3-20261106/FINAL.json为准，未push/Release。
+
+自动审批拒绝了验收解压副本递归清理和同批分支引用整理命令（CreateProcess前拒绝，原文仅blocked by policy）。没有执行删除、没有换工具绕过；两份verify副本和两个已合并分支引用仍保留。CLEANUP.json记录路径与逻辑字节，不宣称空间已回收；交付包、源码、main及全部验收结果不受影响。
