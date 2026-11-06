@@ -6,6 +6,8 @@ RedDukeDev/dlss5-nr-amd-custom, fixed commit `ab455d179922adc11f65675d399e1d553b
 
 Veyra adds a per-layer isolated network host with D3D12 shared textures/fences, adapter-LUID selection, bounded queues, same-frame GPU validity markers and failure teardown. Small/Original model selection uses the existing AMD runtime ID and settings. No OptiScaler/ReShade/game wrapper or SR/RR/FG kernels are used. Private ZLUDA compatibility DLLs are not system driver replacements and never load in the player process. NVIDIA's original 310.9.16.0 DLL and translation cache retain their separate rights; local staging and manifest audit do not confer redistribution rights or change the formal Release whitelist. Existing RX 9000 lmxxf integration retains its own notices and ABI.
 
+2026-11-03 local multi-GPU repair: the same pinned ZLUDA `nvapi/src/lib.rs` is patched by [zluda-current-device-luid.patch](third_party/redduke/zluda-current-device-luid.patch) to obtain the adapter LUID from the current CUDA context's device. A context-free fallback is allowed only for one device; ambiguous mappings and LUID failures report errors. This fixes the stand-in reporting ordinal-zero integrated GPU identity while Veyra runs NR on a discrete GPU. `scripts/amd-nr/build-rdna3-nvapi.py` rebuilds only the open-source NVAPI crate; its output is installed as `runtime/amd-nr-rdna3/zluda/zluda_nvapi.dll` behind the original forwarder. No NVIDIA binary, GPU driver or translation cache is modified. Full upstream MIT and Apache-2.0 notices are retained in [licenses/rdna3-nvapi](licenses/rdna3-nvapi). CPU fixture validation is not Radeon inference validation. See [evidence and limits](docs/RDNA3_NVAPI_LUID_2026-11-03.md).
+
 ## Beauty node: face restore and skin smoothing (2026-10-18)
 
 | Source | License | Veyra use |
@@ -1047,4 +1049,12 @@ It modifies Veyra's existing source; no third-party runtime or model was added.
 Local adaptations preserve the manual 25%–100% policies, AMD's input budget,
 invalid-value rejection, and shared per-layer export planning. Integration and
 verification are recorded in `docs/EXPORT_NR_SCALE_REPORT_2026-10-25.md`.
+
+## RTX 30 Video Frame Generation compatibility (2026-11-02)
+
+Source: [Xchen991/RTX30-Broadcast-FrameGen](https://github.com/Xchen991/RTX30-Broadcast-FrameGen), fixed commit `07536ab32a508b7daa714a4a9bda5b56f031bbc3`, MIT, Copyright (c) 2026. Full original permission notice: `licenses/RTX30-Broadcast-FrameGen-MIT.txt`.
+
+Ported from `src/dllmain.cpp`: `Hook_cuDeviceGetAttribute`, `Hook_cuModuleLoadData` and the VFG import-redirection part of `InstallHooksOnVFG`. Adapted in `src/pipeline/VfgAmpereCompat.cpp` / `include/veyra/pipeline/VfgAmpereCompat.h` and connected to `VfgBackend.cpp`. Veyra replaces the fixed import offsets with bounded PE import parsing, rewrites the selected SM86 device's queried minor only within VFG calls, and gates private fatbin/ELF metadata copies on the current CUDA context's device. Kernel instructions are not translated. Original kernel storage and files are never modified. Reference-counted leases, retained module handles and checked IAT restoration cover model coexistence and teardown; uncertain restoration disables later VFG initialization while retaining callback storage. The Broadcast UI patch, version.dll proxy and polling thread are not ported.
+
+Only the recognized VFG runtime receives this experimental SM86 adaptation. RTX 40/50 use their native path without installing these hooks. No SDK, model or proprietary runtime bytes are embedded in Veyra's source or executable, and the existing NVIDIA runtime/model set is reused. Source-level and RTX5070 native regression evidence is not a claim of RTX30 hardware inference, image quality or performance validation. NVIDIA's runtime remains proprietary and is governed separately by its supplied terms.
 

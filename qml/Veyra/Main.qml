@@ -525,7 +525,7 @@ Window {
         interval: 1600
         onTriggered: {
             if (!root.fullscreen || !root.fullControls) return
-            if (fullBar.hovered || fullBar.menuOpen || fullBar.editing || root.test.fullBar === "shown") { restart(); return }
+            if (fullBar.hovered || fullBar.menuOpen || fullBar.interacting || root.test.fullBar === "shown") { restart(); return }
             root.fullControls = false
             veyra.logUi("ui-fullscreen", "controls hidden; video and subtitles only")
         }

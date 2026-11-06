@@ -7,7 +7,9 @@
 #include <wrl/client.h>
 #include "veyra/pipeline/Rdna3NrProtocol.h"
 #include "veyra/pipeline/AmdNrProvider.h"
+#include "veyra/pipeline/Rdna3WorkerDiagnostics.h"
 #ifndef VEYRA_RDNA3_CONTRACT_WORKER
+#include "veyra/pipeline/Rdna3HipDevices.h"
 #include "runtime/core/network.h"
 #endif
 #include <cstdio>
@@ -32,6 +34,36 @@ bool waitCpu(ID3D12Fence* fence,uint64_t value,DWORD timeout){
     if(fence->GetCompletedValue()>=value)return true;HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!event)return false;
     const bool ok=SUCCEEDED(fence->SetEventOnCompletion(value,event))&&WaitForSingleObject(event,timeout)==WAIT_OBJECT_0;CloseHandle(event);return ok;
 }
+#ifndef VEYRA_RDNA3_CONTRACT_WORKER
+// Before HIP loads: leave only the selected adapter visible to HIP, so ZLUDA's
+// device-0 assumptions name that card (Rdna3HipDevices.h). Never fatal: when
+// the probe cannot tell, every device stays visible, as before.
+void selectHipDevice(const std::filesystem::path& hipPath,uint64_t adapterLuid){
+    char line[512]{};
+    if(const auto outside=hip::outsideVisibility();!outside.empty()){
+        _snprintf_s(line,sizeof(line),_TRUNCATE,"HIP device visibility set outside Veyra (%ls); kept",outside.c_str());logLine(1,line);return;
+    }
+    wchar_t self[MAX_PATH]{};
+    const DWORD length=GetModuleFileNameW(nullptr,self,MAX_PATH);
+    hip::ProbeResult probe;std::string detail;
+    if(!length||length>=MAX_PATH||!hip::runProbe(self,hipPath.wstring(),probe,detail)){
+        _snprintf_s(line,sizeof(line),_TRUNCATE,"HIP device probe failed (%s); every HIP device stays visible",detail.c_str());logLine(1,line);return;
+    }
+    for(const auto& d:probe.devices){auto text=hip::formatDevice(d);text.pop_back();logLine(2,text.c_str());}
+    if(probe.devices.size()<=1){logLine(2,"one HIP device: nothing to hide");return;}
+    const auto index=hip::indexForLuid(probe.devices,adapterLuid);
+    if(!index){
+        _snprintf_s(line,sizeof(line),_TRUNCATE,"selected adapter LUID 0x%016llX is not exactly one HIP device; every HIP device stays visible",
+            static_cast<unsigned long long>(adapterLuid));
+        logLine(1,line);return;
+    }
+    if(!hip::showOnly(*index)){logLine(1,"HIP_VISIBLE_DEVICES could not be set; every HIP device stays visible");return;}
+    const auto chosen=std::find_if(probe.devices.begin(),probe.devices.end(),[&](const hip::Device& d){return d.index==*index;});
+    _snprintf_s(line,sizeof(line),_TRUNCATE,"HIP_VISIBLE_DEVICES=%d: this worker sees only %s (%s); the other %zu HIP device(s) are hidden",
+        *index,chosen->name.c_str(),chosen->arch.c_str(),probe.devices.size()-1);
+    logLine(2,line);
+}
+#endif
 struct Worker {
     Init init;
     ComPtr<ID3D12Device> device;
@@ -56,6 +88,8 @@ struct Worker {
         if(!validHeader(init.h,Op::Init,sizeof(init))||!validExtent(init.width,init.height)||init.reserved||init.h.sequence||
            (init.preset!=1&&init.preset!=2)||!safePath(init.runtime)||!safePath(init.data)||!safePath(init.log)){error="invalid initialization/protocol/model/extent";return false;}
         if(_wfopen_s(&logfile,init.log.data(),L"wb")||!logfile){error="worker diagnostic log could not be created";return false;}
+        if(!diagnostics::begin(logfile,init.log.data())){error="worker stderr/exception diagnostics could not be initialized";return false;}
+        diagnostics::phase("device-and-shared-resource-setup");
         std::error_code ec;std::filesystem::create_directories(std::filesystem::path(init.data.data())/L"tmp",ec);
         const auto tmp=std::filesystem::path(init.data.data())/L"tmp";SetEnvironmentVariableW(L"TEMP",tmp.c_str());SetEnvironmentVariableW(L"TMP",tmp.c_str());
         SetEnvironmentVariableW(L"DLSS5NR_ALLOW_TRANSLATION",nullptr); // packaged cache only, no surprise 30-minute build
@@ -75,6 +109,9 @@ struct Worker {
             if(!n||n>=std::size(sdk)||!std::filesystem::path(sdk).is_absolute()){error="AMD HIP7 is unavailable in the driver or HIP_PATH";return false;}
             hip=std::filesystem::path(sdk)/L"bin"/L"amdhip64_7.dll";
         }
+        diagnostics::phase("hip-device-selection");
+        selectHipDevice(hip,init.adapterLuid);
+        diagnostics::phase("device-and-shared-resource-setup");
         if(!LoadLibraryExW(hip.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32)){error="AMD HIP7 load failed win32="+std::to_string(GetLastError());return false;}
         const auto snippet=std::filesystem::path(init.runtime.data())/L"nvngx_dlssnr.dll";
         DWORD ignored=0;const DWORD size=GetFileVersionInfoSizeW(snippet.c_str(),&ignored);std::vector<uint8_t> version(size);VS_FIXEDFILEINFO* info=nullptr;UINT count=0;
@@ -117,19 +154,28 @@ struct Worker {
 #ifndef VEYRA_RDNA3_CONTRACT_WORKER
         dlss5nr::set_network_log(logLine);
         dlss5nr::NetworkPaths paths;paths.runtime_dir=init.runtime.data();paths.snippet=snippet;paths.data_dir=init.data.data();paths.adapter_luid=init.adapterLuid;
-        if(!network.load(paths,error)||!network.can_share(device.Get())){if(error.empty())error="native D3D12/HIP shared images are unavailable; CPU pixel-copy fallback is forbidden";return false;}
+        diagnostics::phase("network-load");
+        if(!network.load(paths,error))return false;
+        diagnostics::phase("shared-memory-preflight");
+        if(!network.can_share(device.Get())){error="native D3D12/HIP shared images are unavailable; CPU pixel-copy fallback is forbidden";return false;}
         network.set_copy_mode(false);controls.preset=int(init.preset);
+        fprintf(logfile,"network create width=%u height=%u preset=%u adapterLuid=0x%llX\n",init.width,init.height,init.preset,static_cast<unsigned long long>(init.adapterLuid));fflush(logfile);
+        diagnostics::phase("create-feature");
         if(!network.create_feature(init.width,init.height,controls,error))return false;
+        diagnostics::phase("import-shared-images");
         for(unsigned i=0;i<4;++i){auto& t=shared[i];t.resource=image[i].Get();t.nt_handle=reinterpret_cast<void*>(uintptr_t(init.handles[i]));t.width=init.width;t.height=init.height;t.dxgi_format=image[i]->GetDesc().Format;t.writable=i==1;
             if(!network.import(t,error))return false;}
         if(hrFailed(__LINE__,device->CreateFence(0,D3D12_FENCE_FLAG_SHARED,IID_PPV_ARGS(&cudaDone)))||hrFailed(__LINE__,device->CreateSharedHandle(cudaDone.Get(),nullptr,GENERIC_ALL,nullptr,&cudaDoneHandle))){error="private CUDA completion fence creation failed";return false;}
+        diagnostics::phase("import-shared-fences");
         if(!network.import_fence(reinterpret_cast<void*>(uintptr_t(init.handles[4])),&producerSem,error)||!network.import_fence(cudaDoneHandle,&doneSem,error))return false;
         dlss5nr::EvaluateDesc warm;warm.color=&shared[0];warm.output=&shared[1];warm.depth=&shared[2];warm.motion=&shared[3];warm.controls=controls;warm.reset=true;
+        diagnostics::phase("warmup-evaluate");
         if(!network.evaluate(warm,error))return false;
         logLine(2,"native Small/Original warm-up complete; shared GPU semaphores required, no async old-frame residual");
 #else
         logLine(2,"CONTRACT TEST WORKER: copies proxy; does not execute NR or validate Radeon inference");
 #endif
+        diagnostics::phase("ready");
         started=true;return true;
     }
     bool publish(uint64_t sequence,bool copy){
@@ -184,16 +230,20 @@ struct Worker {
         if(cudaDoneHandle)CloseHandle(cudaDoneHandle);
 #endif
         for(auto h:init.handles)if(h)CloseHandle(reinterpret_cast<HANDLE>(uintptr_t(h)));
-        if(logfile){fclose(logfile);logfile=nullptr;}
+        if(logfile){diagnostics::finish();fclose(logfile);logfile=nullptr;}
     }
 };
 }
 int wmain(int argc,wchar_t** argv){
+#ifndef VEYRA_RDNA3_CONTRACT_WORKER
+    // Child of selectHipDevice: list the HIP devices and exit before any Init.
+    if(argc==3&&wcscmp(argv[1],L"--hip-probe")==0)return hip::probeMain(argv[2]);
+#endif
     if(argc!=3)return 2;
     HANDLE input=reinterpret_cast<HANDLE>(uintptr_t(_wcstoui64(argv[1],nullptr,10)));
     HANDLE output=reinterpret_cast<HANDLE>(uintptr_t(_wcstoui64(argv[2],nullptr,10)));
     Worker w;if(!readAll(input,&w.init,sizeof(w.init)))return 3;
-    const bool opened=w.open();if(!answer(output,0,opened?0:1,w.error)||!opened)return 4;
+    const bool opened=w.open();if(!opened)logLine(0,w.error.c_str());if(!answer(output,0,opened?0:1,w.error)||!opened)return 4;
     for(;;){
         Header h;if(!readAll(input,&h,sizeof(h)))return 5;
         if(validHeader(h,Op::Stop,sizeof(h))&&h.sequence==w.last+1){w.close(h.sequence);return 0;}

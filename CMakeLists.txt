@@ -384,6 +384,7 @@ add_library(veyra_pipeline STATIC
   src/pipeline/LmxxfNrBackend.cpp
   src/pipeline/Rdna3NrBackend.cpp
   src/pipeline/VfgBackend.cpp
+  src/pipeline/VfgAmpereCompat.cpp
 )
 veyra_apply_warnings(veyra_pipeline)
 # FFmpeg/NVOF headers are third-party: /WX stays off for this target.
@@ -413,6 +414,15 @@ if(EXISTS "${VEYRA_RDNA3_NETWORK_SOURCE_DIR}/runtime/core/network.cpp")
   target_link_libraries(veyra_amd_nr_worker PRIVATE d3d12 dxgi dxguid version)
 endif()
 add_executable(veyra_amd_nr_test_worker src/pipeline/Rdna3NrWorker.cpp)
+add_executable(veyra_rdna3_worker_diagnostics_tests tests/integration/Rdna3WorkerDiagnosticsTests.cpp)
+target_include_directories(veyra_rdna3_worker_diagnostics_tests PRIVATE include)
+target_compile_features(veyra_rdna3_worker_diagnostics_tests PRIVATE cxx_std_20)
+target_compile_definitions(veyra_rdna3_worker_diagnostics_tests PRIVATE NOMINMAX UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+add_executable(veyra_rdna3_hip_devices_tests tests/integration/Rdna3HipDevicesTests.cpp)
+target_include_directories(veyra_rdna3_hip_devices_tests PRIVATE include)
+target_compile_features(veyra_rdna3_hip_devices_tests PRIVATE cxx_std_20)
+target_compile_definitions(veyra_rdna3_hip_devices_tests PRIVATE NOMINMAX UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+target_link_libraries(veyra_rdna3_hip_devices_tests PRIVATE dxgi)
 target_include_directories(veyra_amd_nr_test_worker PRIVATE include)
 target_compile_features(veyra_amd_nr_test_worker PRIVATE cxx_std_20)
 target_compile_definitions(veyra_amd_nr_test_worker PRIVATE NOMINMAX UNICODE _UNICODE WIN32_LEAN_AND_MEAN VEYRA_RDNA3_CONTRACT_WORKER=1)
@@ -476,6 +486,10 @@ target_link_libraries(veyra_pipeline_tests PRIVATE veyra_pipeline)
 add_executable(veyra_vfg_gpu_tests tests/integration/VfgGpuTests.cpp)
 target_compile_features(veyra_vfg_gpu_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_vfg_gpu_tests PRIVATE veyra_pipeline)
+add_executable(veyra_vfg_ampere_tests tests/unit/VfgAmpereTests.cpp)
+target_compile_features(veyra_vfg_ampere_tests PRIVATE cxx_std_20)
+target_compile_options(veyra_vfg_ampere_tests PRIVATE /utf-8)
+target_link_libraries(veyra_vfg_ampere_tests PRIVATE veyra_pipeline)
 
 add_executable(veyra_scene_tests
   tests/unit/SceneCadenceTests.cpp

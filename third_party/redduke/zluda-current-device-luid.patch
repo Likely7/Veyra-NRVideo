@@ -1,0 +1,69 @@
+diff --git a/nvapi/src/lib.rs b/nvapi/src/lib.rs
+index 2a61335..d9e263c 100644
+--- a/nvapi/src/lib.rs
++++ b/nvapi/src/lib.rs
+@@ -675,15 +675,38 @@ unsafe fn cuda_device_luid(luid: &mut [i8; 8], node_mask: &mut u32) -> bool {
+         return false;
+     }
+     let get_luid = winapi_get_proc(nvcuda, b"cuDeviceGetLuid\0");
+-    let device_get = winapi_get_proc(nvcuda, b"cuDeviceGet\0");
+-    if get_luid.is_null() || device_get.is_null() {
++    if get_luid.is_null() {
+         return false;
+     }
+-    let device_get: unsafe extern "C" fn(*mut i32, i32) -> i32 = std::mem::transmute(device_get);
+     let get_luid: unsafe extern "C" fn(*mut i8, *mut u32, i32) -> i32 = std::mem::transmute(get_luid);
++    // Veyra selects the D3D12 adapter before creating the network's CUDA/HIP
++    // context. Ordinal zero may be an iGPU: report the current context's device
++    // so NGX can match its LUID to the adapter that actually runs the network.
++    let ctx_get_device = winapi_get_proc(nvcuda, b"cuCtxGetDevice\0");
+     let mut dev = 0i32;
+-    if device_get(&mut dev, 0) != 0 {
+-        return false;
++    let context_status = if ctx_get_device.is_null() {
++        201 // CUDA_ERROR_INVALID_CONTEXT: no current-context query available
++    } else {
++        let ctx_get_device: unsafe extern "C" fn(*mut i32) -> i32 = std::mem::transmute(ctx_get_device);
++        ctx_get_device(&mut dev)
++    };
++    if context_status != 0 {
++        // Retain context-free single-GPU callers, but never guess ordinal zero
++        // in a multi-GPU process or conceal another context/driver error.
++        if context_status != 201 {
++            return false;
++        }
++        let device_get = winapi_get_proc(nvcuda, b"cuDeviceGet\0");
++        let device_count = winapi_get_proc(nvcuda, b"cuDeviceGetCount\0");
++        if device_get.is_null() || device_count.is_null() {
++            return false;
++        }
++        let device_get: unsafe extern "C" fn(*mut i32, i32) -> i32 = std::mem::transmute(device_get);
++        let device_count: unsafe extern "C" fn(*mut i32) -> i32 = std::mem::transmute(device_count);
++        let mut count = 0i32;
++        if device_count(&mut count) != 0 || count != 1 || device_get(&mut dev, 0) != 0 {
++            return false;
++        }
+     }
+     get_luid(luid.as_mut_ptr(), node_mask, dev) == 0
+ }
+@@ -749,13 +772,14 @@ unsafe extern "C" fn NvAPI_GPU_GetLogicalGpuInfo(
+     if !data.pOSAdapterId.is_null() {
+         let mut luid = [0i8; 8];
+         let mut node_mask: u32 = 0;
+-        if cuda_device_luid(&mut luid, &mut node_mask) {
+-            std::ptr::copy_nonoverlapping(
+-                luid.as_ptr().cast::<u8>(),
+-                data.pOSAdapterId.cast::<u8>(),
+-                8,
+-            );
++        if !cuda_device_luid(&mut luid, &mut node_mask) {
++            return _NvAPI_Status_NVAPI_ERROR;
+         }
++        std::ptr::copy_nonoverlapping(
++            luid.as_ptr().cast::<u8>(),
++            data.pOSAdapterId.cast::<u8>(),
++            8,
++        );
+     }
+     data.physicalGpuCount = 1;
+     data.physicalGpuHandles[0] = FAKE_PHYSICAL_GPU;

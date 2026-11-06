@@ -19027,6 +19027,34 @@
    "zh-TW": "；預設“即時”，同時執行遊戲或其他重負載程式變慢時可改為“高”或“普通”",
    "en": "; Realtime by default. If a game or other heavy program running alongside slows down, choose High or Normal",
    "ja": "；既定は「リアルタイム」。同時に動かすゲームや重い処理が遅くなる場合は「高」か「通常」に変更してください"
+  },
+  {
+   "zh": "NVIDIA VFG · RTX 30（实验）/ 40 / 50",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "NVIDIA VFG · RTX 30（實驗）/ 40 / 50",
+   "en": "NVIDIA VFG · RTX 30 (experimental) / 40 / 50",
+   "ja": "NVIDIA VFG · RTX 30（実験）/ 40 / 50"
+  },
+  {
+   "zh": "VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系為實驗相容）",
+   "en": "VFG requires NVIDIA RTX 30 / 40 / 50 (RTX 30 compatibility is experimental)",
+   "ja": "VFG には NVIDIA RTX 30 / 40 / 50 が必要です（30 シリーズは実験的対応）"
+  },
+  {
+   "zh": "需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "需要 NVIDIA RTX 30 / 40 / 50（30 系為實驗相容）",
+   "en": "Requires NVIDIA RTX 30 / 40 / 50 (RTX 30 compatibility is experimental)",
+   "ja": "NVIDIA RTX 30 / 40 / 50 が必要です（30 シリーズは実験的対応）"
+  },
+  {
+   "zh": "RTX 30 VFG 为实验兼容，复用现有模型；支持 2X～8X，实际画质与速度需实卡验证",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "RTX 30 VFG 為實驗相容，重用現有模型；支援 2X～8X，實際畫質與速度需實卡驗證",
+   "en": "RTX 30 VFG compatibility is experimental and reuses existing models; 2X–8X, with image quality and speed requiring hardware validation",
+   "ja": "RTX 30 VFG は既存モデルを再利用する実験的対応です。2X～8X、画質と速度は実機での検証が必要です"
   }
  ]
 }

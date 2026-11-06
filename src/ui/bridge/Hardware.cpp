@@ -42,7 +42,7 @@ bool vfgHardwarePossible(){
     const auto* d=engineAdapterDesc();
     if(!d)return false;
     const auto name=QString::fromWCharArray(d->Description);
-    return d->VendorId==0x10DE&&(name.contains(QStringLiteral("GeForce RTX 40"),Qt::CaseInsensitive)||
+    return d->VendorId==0x10DE&&(name.contains(QStringLiteral("GeForce RTX 30"),Qt::CaseInsensitive)||name.contains(QStringLiteral("GeForce RTX 40"),Qt::CaseInsensitive)||
         name.contains(QStringLiteral("GeForce RTX 50"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Ada"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Blackwell"),Qt::CaseInsensitive));
 }
 unsigned normalizeFgMultiplier(unsigned value,engine::FrameGenerationBackend backend,unsigned cap){
@@ -61,6 +61,7 @@ ui::EffectGpu effectGpu() {
     result.rtx = name.contains("RTX", Qt::CaseInsensitive);
     result.blackwell = name.contains("RTX 50", Qt::CaseInsensitive) || name.contains("Blackwell", Qt::CaseInsensitive);
     result.ada = name.contains("RTX 40", Qt::CaseInsensitive) || name.contains("Ada", Qt::CaseInsensitive);
+    result.ampere = name.contains("GeForce RTX 30", Qt::CaseInsensitive);
     result.rx9000 = name.contains("RX 90", Qt::CaseInsensitive);
     result.rx7000 = pipeline::amdNrProvider(d->VendorId,d->Description)==pipeline::AmdNrProvider::RedDukeRdna3;
     return result;
@@ -99,7 +100,7 @@ static QVariantMap scanEffectCapabilities() {
     for (int i = 1; i <= 4; ++i) add("sr" + QString::number(i), H::Nvidia, exists(nr / "nvngx_vsr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("sr5", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_upscaler_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add("dlss", H::Nvidia, exists(nr / "nvngx_dlssg.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
-    add("vfg", H::Vfg, pipeline::VfgBackend::runtimeAvailable(nr.wstring()), QObject::tr("需要 NVIDIA RTX 40 / 50（Ada / Blackwell）"));
+    add("vfg", H::Vfg, pipeline::VfgBackend::runtimeAvailable(nr.wstring()), QObject::tr("需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）"));
     add("xess", H::CrossVendor, exists(data / "intel/experimental/libxess_fg.dll") && exists(data / "intel/experimental/libxell.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add("fsr3", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_framegeneration_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add("fsr4", H::Fsr4, fsrLoader && exists(fsr / "amd_fidelityfx_framegeneration_dx12.dll"), QObject::tr("需要 AMD RX 9000"));

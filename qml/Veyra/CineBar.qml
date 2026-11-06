@@ -29,9 +29,11 @@ Rectangle {
     readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible || playbackRate.menuOpen
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
-    readonly property bool seekPreviewOpen: seekMouse.containsMouse && seekMouse.enabled
+    readonly property bool seekPreviewOpen: seekMouse.enabled && (seekMouse.containsMouse || seekArea.scrubbing)
     readonly property bool editing: volumeSlider.editing
-    readonly property bool interacting: volumeSlider.pressed || editing
+    // Keep the control window active until a seek releases its mouse grab, too.
+    // Returning focus to the owner during scrubbing cancels the MouseArea press.
+    readonly property bool interacting: seekArea.scrubbing || volumeSlider.pressed || editing
     function finishEditing() { volumeSlider.closeEditor(true) }
     HoverHandler { id: barHover }
     // Buttons, the seek rail and the volume slider take their own presses first; only
@@ -39,7 +41,7 @@ Rectangle {
     DragHandler {
         objectName: "cine-move"
         target: null
-        enabled: !bar.fullscreen && !volumeSlider.pressed && !volumeSlider.editing
+        enabled: !bar.fullscreen && !bar.interacting
         // Never take a drag over from a control: by default a DragHandler steals the grab
         // from an item once the pointer passes the drag threshold, so scrubbing the seek
         // rail moved the window instead (field report 2026-10-02).
@@ -330,6 +332,10 @@ Rectangle {
                         hoverEnabled: true
                         preventStealing: true
                         enabled: veyra.duration > 0 && !veyra.isCapture
+                        onEnabledChanged: if (!enabled && seekArea.scrubbing) {
+                            scrubSeek.stop()
+                            seekArea.scrubbing = false
+                        }
                         cursorShape: Qt.PointingHandCursor
                         onEntered: thumbnailDelay.restart()
                         onExited: {
@@ -356,7 +362,10 @@ Rectangle {
                             veyra.logUi("ui-seek", "targetSeconds=" + target.toFixed(3))
                             veyra.seekTo(target)
                         }
-                        onCanceled: seekArea.scrubbing = false
+                        onCanceled: {
+                            scrubSeek.stop()
+                            seekArea.scrubbing = false
+                        }
                     }
                 }
                 Text {

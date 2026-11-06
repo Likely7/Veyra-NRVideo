@@ -1,5 +1,29 @@
 # 当前工作日志
 
+## 2026-11-03 RX7000补丁后worker退出：新日志与诊断更新
+
+用户veyra-qml(4).log与cache(1).zip表明NVAPI身份修复确实生效（m_gpuArch0x1b0），新失败是12:35之后三次worker管道中断。NGX已进入Small1920×1080网络建立，最后权重heap请求108.6MiB；不能凭末行认定显存不足或具体CUDA错误。当前只更新worker诊断：阶段/请求参数、CRT与Win32 stderr、Rust backtrace、普通未处理SEH独立记录；保持原Windows异常处理、不吞异常。算法/模型/共享GPU同步/主EXE/设置不改，附只读Windows1000/1001事件收集，不包数据库或模型。
+
+构建23.1秒、最终增量4.2秒通过，task codex-rdna3-crash-diagnostics-20261103；最终CPU诊断14项、GPU协议54项通过（不是AMD推理），收集脚本5.1实际查询事件及输出内容/哈希验证通过。重跑旧证据目录一次被合同拒绝exit2，改独立目录；收集脚本Get-FileHash解析失败后改.NET SHA256，失败日志保留。命令/详细结果见docs/RDNA3_WORKER_CRASH_2026-11-03.md，reports/rdna3-crash-diagnostics-20261103/FINAL.json。本地诊断包test-packages/codex-rdna3-crash-diagnostics-20261103，优先收集既有崩溃事件，不让用户反复变更参数。源码/依赖/正式包原件和用户配置保持，未合main/push/Release。尚未修复新的网络创建崩溃。
+
+## 2026-11-03 RX7000 cache.zip续查与多GPU映射修复
+
+用户补充cache.zip，52份worker日志相同，NR创建前24GB显存可用、缓存覆盖gfx1100，NGX明确Unsupported GPU architecture 0x0/min0x1b0且m_gpuArch=0xe0。固定ZLUDA NVAPI源码硬编码CUDA设备0，而Veyra按独显上下文运行。使用正式包同SHA转发层及NVAPI实际复现“核显0/独显1”误报核显LUID。分支codex/rdna3-nvapi-luid-20261103基线ecfbb0f，重编译同源开源NVAPI，改用当前上下文设备并显式拒绝歧义/查询失败；不改模型/驱动/原件，未使用二进制补丁。
+
+首次原源码Cargo构建48.5秒，修复2.3秒，从原源码重新套patch的正式构建脚本2.33秒通过；每次并发2，上限880秒，CARGO_HOME/target/TEMP全在E盘。最终DLL215040字节/a7adb043…。13组合同旧8失败、新13通过，双线程64次设备隔离和原NR架构身份保持；CPU夹具不冒充实卡推理。新旧正式两NVAPI原件SHA已与2.1.2 AMD ZIP比对一致。源码/许可证/构建脚本/夹具/来源记录入Git；产品补丁只一个开源DLL，夹具nvcuda.dll绝不随包。未动原app、用户配置、依赖原件、正式ZIP，未合main/push/Release。命令、边界与最终包/清理回执见docs/RDNA3_NVAPI_LUID_2026-11-03.md及reports/rdna3-nvapi-luid-20261103/FINAL.json。后续等该用户实卡确认NR是否成功创建及推理。
+
+## 2026-11-03 RX7900 XTX的NR初始化失败（只读排查）
+
+用户提供veyra-qml(3).log并确认软件能打开、NR开不了。原日志SHA256 d92fabe719b9c33bf287dc0e81d89b5813e49b2d0413164351ec42c8dc98f8ef，共5381170字节。三个启动会话中52次NR创建均失败，首次UTC10:36:08.991、最后12:00:52.234，全部内部1920×1080；错误为NVSDK_NGX_CUDA_CreateFeature 0xBAD00001（NVIDIA定义FeatureNotSupported）。主程序随后明确回退nr=false；未出现RDNA3 worker ready。不能把错误号等同显卡永久不支持，亦无显存不足证据。
+
+核对Rdna3NrWorker/Backend及固定RedDuke network源：HIP加载、指定D3D12设备/共享预检和network.load/can_share均在CreateFeature之前，主日志只记录子进程返回的最终错误；具体拒绝条件应查软件目录runtime/amd-nr-rdna3/cache中的worker-*.log、gate.log及NGX日志。未提供这些文件，故本轮不猜测修改兼容层/驱动/模型参数，也未构建或运行GPU测试。只读证据回执reports/amd-rdna3-startup-20261103/FINDINGS.json（约17KB），含52个行号及分辨率上下文；原日志、配置、运行组件和源码保持，待补子进程日志继续定位。官方定义来源https://github.com/NVIDIA/DLSS/blob/main/include/nvsdk_ngx_defs.h。
+
+## 2026-11-03 NVENC导出关键帧审查与修复
+
+用户要求先审第三方报告再修。隔离分支codex/nvenc-export-keyframes-20261103，基线edad6e9，保留全屏/VFG实验改动，无main合并/push/Release。真实270帧H.264/HEVC MP4均复现仅首帧索引，HEVC另有2个CRA；preset实际IDR周期4294967295。仅覆盖当前codec idrPeriod=原GOP120并日志记录，不把非IDR I帧伪装成安全跳转点；码率/HDR/slot/fence和实时录制不改。普通copy重封装旧文件实测仍仅首帧索引。
+
+构建scripts/acceptance/build-recording-handoff.py，task codex-nvenc-export-keyframes-20261103、既有build-dir、label2.1.2-test、jobs2，probe和主程序6.5秒通过。新增scripts/acceptance/verify-export-keyframes.py：修改前两用例预期失败，修改后12组SDR及2组HDR10通过，3780帧、28次中/末段跳转逐像素与完整解码一致，MP4原始stss=[1,121,241]、码流3个IDR。首次合成HDR素材未声明PQ导致两断言失败，只修正测试生成及输入校验后补测两HDR组；失败保留。全部命令、源码审查和结果见docs/NVENC_EXPORT_KEYFRAMES_2026-11-03.md及reports/nvenc-export-keyframes-20261103/FINAL.json。日志/测试/临时/补丁均在E盘同名任务目录，未动真实配置或原运行库，未占采集卡。空间和覆盖包身份以FINAL回执为准，不冒充用户原片或其他硬件验收。
+
 完整旧日志：[截至本轮整理前的记录](history/worklog/WORKLOG_before_maintenance_2026-10-27.md)。当前状态见[CURRENT_STATUS](CURRENT_STATUS.md)，历史授权见[历史索引](history/INDEX.md)。
 
 ## 2026-10-27 屏幕捕获帧率、采集对白与后续方向（Claude）
@@ -482,3 +506,53 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 受控清理54个实验程序／启动入口／缓存文件，完整绝对路径及SHA256见reports/fg-latency-retirement-20261105/DELETE_PLAN.json与REMOVAL.json。遍历明确跳过reparse point和用户配置目录，保留SDK、模型、shader、正式包、其他工作树及日志；逻辑文件大小不冒充实测释放空间。共享build.ninja移除，下一次须--reconfigure main。
 
 没有找到可重复的最低差而增加预算稳定满帧案例；早期182→240包含首次加载等待，已剔除。本轮只做撤销和文档，不再运行性能试验；验证采用分支引用、代码接口搜索、产品树哈希与删除清单复核。详见[失败方向与终止记录](FG_LATENCY_BUDGET_RETIRED_2026-11-05.md)。
+
+## 2026-11-02 全屏进度条修复
+
+在codex/fullscreen-seek-20261102隔离修复。旧版真实Windows按下7ms后MouseArea取消；进度条遗漏于interacting，焦点被交还主窗口。纳入scrubbing、窗口移动排除、预览mask及完整隐藏条件，取消/禁用时清理120ms延迟seek。构建2.2s/最终0.7s通过；新增用例在旧代码5失败；初版完整139/2/0暴露禁用不触发cancel，修复后141/0/0（35.819s）。真实全屏3次分别提交33.770/5.902/20s，无取消，退出全屏正常；原用户配置保留。首轮人工到EOF重开未算通过，日志保全。源QML观察探针逐字节去除，使用小型2.1.2通用补丁交付，不复制完整包，不修改GitHub资产/运行库/真实配置。命令、回执与验证边界见docs/FULLSCREEN_SEEK_FIX_2026-11-02.md，FINAL与日志在E:/项目/Veyra/reports及logs/codex-fullscreen-seek-20261102。无合并main/push/新发布。
+
+
+## 2026-11-02 RTX30 VFG实验兼容
+
+用户授权移植，分支codex/vfg-ampere-20261102基于4895549。来源Xchen991/RTX30-Broadcast-FrameGen固定07536ab32a508b7daa714a4a9bda5b56f031bbc3/MIT，移植CUDA查询和内核元数据重定向，替换固定IAT地址/轮询为按名称发现和生命周期租约；私有副本不写原kernel，选中设备和当前CUDA上下文隔离，退场逐项读回指针与页保护；40/50原生无补丁。菜单、节点、硬件能力和四语提示同步，包含上一轮全屏修复。主程序增量和覆盖补丁按FINAL.json，VFG原DLL/模型不新增不改动。
+
+构建最终4.2s通过；合同180、真实模块/62个fatbin/3轮共享租约342、能力75、VFG设置683、repair300、i18n0失败；QtQuick140/0/1。RTX5070原生GPU各质量/倍率/8与10位回归2425项0失败，最终结果和独立GUI 2X60FPS功能检查见FINAL.json。首次repair因子进程库路径缺失启动失败，补充子进程PATH后通过，失败日志保留。无30系实卡推理/画质/速度结论；不以本机50系代替。临时GUI Loader已去除，原7配置文件和5个VFG运行DLL逐摘要保护，未复制完整包。实际命令、日志、来源与局限见docs/VFG_AMPERE_PLAN_2026-11-02.md，E:/项目/Veyra/reports及logs/vfg-ampere-20261102。本轮不合main、不push/发布。
+
+## 2026-11-03 RX7000 NR：多 GPU 时工作进程只看选中的显卡（Claude）
+
+用户：“直接修复吧”。
+
+**依据**：现场 7900 XTX 加 gfx1036 核显，HIP 0 号是核显。ZLUDA b135e23 有两处默认用 0 号设备：
+- NVAPI 报的 LUID（Codex 已修）；
+- `Context::new` 在 `hipSetDevice` 之前就建了 `alloc_stream`，导致 `cuMemAlloc` 通过核显的流去给独显显存清零。
+
+**工作树**：独立工作树 `worktrees/rdna3-hip-visible-20261103`，分支 `claude/rdna3-hip-visible-20261103`，基于 Codex 的 `77fcd89`。共用施工树（Codex 分支 `codex/rdna3-nvapi-luid-20261103`，Codex 进程在运行）未触碰。
+
+**改动**：
+- 新增 `Rdna3HipDevices.h`：探测、按 LUID 匹配、设置 `HIP_VISIBLE_DEVICES`。
+- 工作进程在加载 HIP 7 之前做设备选择，并新增 `--hip-probe` 模式。
+- 新增 `tests/integration/Rdna3HipDevicesTests.cpp`，以及 CMake 目标。
+
+**命令与结果**：
+- `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-rdna3-hip-visible-20261103 --root <工作树> --label 2.1.2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared veyra_amd_nr_worker veyra_amd_nr_test_worker veyra_rdna3_worker_diagnostics_tests veyra_rdna3_hip_devices_tests`
+  - 新构建目录，43.7 秒通过。
+- `veyra_rdna3_hip_devices_tests`：单元测试 15 项通过，0 失败。
+- 加 `--hip C:\Windows\System32\amdhip64_6.dll`：19 项通过，0 失败。
+  - 本机 gfx1036 的 LUID 0x16583 与 DXGI 一致。
+  - 在进程内设置后，HIP 只剩所选设备。
+  - 设置超出范围的序号后，设备数为 0。
+- `veyra_amd_nr_worker.exe --hip-probe`：
+  - 对 HIP 6：退出码 0，列出 1 块设备。
+  - 对缺失的 HIP 7：输出 `load-failed-win32-126`，退出码 2。
+- `veyra_rdna3_worker_diagnostics_tests`：14 项通过，0 失败。
+- 新旧 worker 的导入 DLL 相同：d3d12、dxgi、kernel32、version。
+
+**打包**：`tmp/claude-rdna3-hip-visible-20261103/package.py`。
+- 输出：`test-packages/claude-rdna3-hip-visible-20261103/Veyra-2.1.2-RX7000-NR-multiGPU-fix2.zip`。
+- 第一次生成的源码补丁带进了 Codex 的 RTX30 VFG CMake 段落，公开源码缺这些文件，会导致配置失败。改为只保留 RX7000 段落后，重放比对通过。
+- 第二次运行报 `PermissionError`：shell 的当前目录停在 verify 目录里。切换目录后重跑成功。
+
+**未做**：
+- 没有在 RX7000 实卡上推理；本机没有 HIP 7。
+- 没有跑 RDNA3 合同测试：改动不进入合同测试 worker。
+- 未提交、未合并、未 push。
