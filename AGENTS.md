@@ -1,4 +1,4 @@
-> **2026-11-06 2.1.3本地整合／待验收**：用户授权合并Claude/Codex修复到main并构建测试包，不含push/Release。基线f1f8298，checkpoint/pre-main-2.1.3-20261106；NR分组网控259ef8f及Claude菜单05181bf已整合，WORKLOG冲突保留两侧。产品4fde59a已构建23目标105.6秒，PE/显示版本2.1.3；实际验收待完成，不能把计划当通过。包从已发布2.1.2不可变ZIP构造；NVIDIA补VideoSuperRes两签名原件，AMD必须带NVAPI a7adb043…和当前worker。读docs/BUILD_2.1.3_TEST_2026-11-06.md及reports/codex-build-2.1.3-20261106。旧脏树、用户配置和已有正式包保护，预算/RIFE撤销，Lecram暂停。
+> **2026-11-06 2.1.3本地main整合（封包验证中）**：Claude菜单05181bf与NR分组网控259ef8f均已合入本地main，23目标构建105.6秒，产品4fde59a/PE2.1.3.0。软件QtQuick172/0/0，菜单软件150/200%各6/0、GPU100/150%各5/0/1，网控GPU13/0及分组11/0；真实UI23项和重启、7组420帧SR对齐、双编码IDR/stss均通过。冷DLSS2X首帧超过15s门槛，热缓存生命周期通过（媒体速度0.99211），不宣称冷启动已修。包从公开2.1.2固定ZIP组装，AMD已换NVAPI a7adb043…和当前worker，NVIDIA已补两签名VFX原件；修正Qt模块漏部署并逐项核对。读docs/BUILD_2.1.3_TEST_2026-11-06.md及reports/codex-build-2.1.3-20261106/FINAL.json；ZIP冷启动结果以最终回执为准。不push/Release，原配置/正式包/旧脏树保护，预算/RIFE撤销，Lecram暂停。
 
 # Veyra Agent 工作规则
 
