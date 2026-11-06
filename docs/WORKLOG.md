@@ -673,3 +673,17 @@ build-recording-handoff.py --task codex-build-2.1.3-20261106 --build-dir <共享
 用户追加要求超分默认中、低延迟警告红字且只在开＋增强出现、删除旧构建产物后重建。产品b143ebf：kDefaultVideoSrQuality=2，双重默认共用；列表/节点fresh及srQualityFor无既有档位回退一致；既有显式选择保留。NvidiaLowLatencyEditor仅available+Boost显示Theme.err警告，Off/On隐藏，缺硬件普通说明保留。更新既有UI合同及QML交互回归，没有改驱动逻辑/运行库。
 新reports/codex-rebuild-2.1.3-20261106/cleanup-old.ps1先生成计划再-Execute，在已核验E盘根范围内只删除SHA匹配的构建文件，不递归删除非空目录、不跨Shell、不停止进程。9422文件逻辑8,000,253,348字节已unlink，旧交付包和验收副本已退休；保留未知/配置/日志、少量测试源码、共享构建缓存、依赖和正式版。净物理回收未测。旧interactive-NVIDIA配置仍在原位。这次有用户明确删除授权并缩小到文件白名单，自动执行通过；上轮拒绝历史保留。
 后续新产物用codex-rebuild-2.1.3-20261106；构建与测试结果待FINAL.json，本记录不假定通过。完整计划docs/REBUILD_2.1.3_DEFAULTS_2026-11-06.md。
+
+## 2026-11-06 默认中档/Boost红字重构建验证
+
+## 本轮实际验证（2026-11-06）
+
+产品源码7a2d15d，PE 2.1.3.0。9目标首构建127.6秒；发现预设写入格式对第二次超分默认值写死4，修正PresetStore/PresetLibrary的五处判定为统一常量后，最终增量构建11.8秒。没有改写已有明确保存的档位。
+
+最终设置、效果链、预设库、NR模型、UI合同/i18n及翻译提取检查通过；完整软件QtQuick173/0/0，GPU低延迟提示6/0/0。实际程序新配置基础/第二次SR均为中档，三种RTX版本在没有原档位时均为中档，明确高档值保留；列表和节点逐项验证关/开不显示警告、开＋增强显示红字。截图已查看。保存4/19与低延迟“开”后重启恢复通过，无引擎/QML错误。
+
+保留失败记录：首次旧默认判定导致设置/预设测试失败（一个测试进程退出生成转储），修正后所有相关检查通过；仅本测试的转储经路径证据和SHA核对搬至E盘日志。中间一次完整Quick有5个既有菜单几何断言失败；同源码/最终程序的菜单独立14/0和完整173/0复测通过，未确定其间歇原因，也不宣称本轮修复菜单。真实UI夹具先误用旧interfaceMode键、继而遗漏节点模式首次空图，已纠正夹具并重新用私有配置验证；不改变产品迁就夹具。
+
+上一轮产物逐SHA清理9,422文件，逻辑8,000,253,348字节，不等于实际磁盘净释放。旧个人配置/日志、依赖、历史正式包保留。新包路径test-packages/codex-rebuild-2.1.3-20261106，独立启动器使用新的测试配置。ZIP逐文件核验、最小PATH解压播放的后续结果以本任务FINAL.json为准。NVIDIA/AMD两包本机RTX5070默认效果关的冷启动不代替AMD推理或实卡采集验收。未push/Release。
+
+复现命令：`python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-rebuild-2.1.3-20261106 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.3 --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared veyra_qml_ui veyra_amd_nr_worker veyra_qml_quick_tests veyra_ui_contract_tests veyra_ui_i18n_tests veyra_video_ai_settings_tests veyra_effect_chain_tests veyra_preset_library_tests veyra_nr_model_settings_tests`。检查脚本reports/codex-rebuild-2.1.3-20261106/check.py、ui_runner.py/defaults-ui.qml/defaults-restart.qml；实际命令、环境、首败/复测和日志路径在ACCEPTANCE.json及logs同任务。封包命令为`python -X utf8 -B scripts/acceptance/package-2.1.3.py seal`及`cold`。
