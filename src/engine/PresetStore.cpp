@@ -54,7 +54,7 @@ std::string PresetStore::serialize()const{
     // second SR quality; older readers reject them. The version implies every
     // earlier field, so it forces the v34 layout.
     const bool videoAi=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return vfxVideoSr(p.settings.videoSrQuality)||vfxVideoSr(p.settings.dualSrQuality);});
-    const bool dual=videoAi||std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.dualSrEnabled||p.settings.dualSrTarget!=pipeline::SrTarget::Uhd4K||p.settings.dualSrQuality!=4;});
+    const bool dual=videoAi||std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.dualSrEnabled||p.settings.dualSrTarget!=pipeline::SrTarget::Uhd4K||p.settings.dualSrQuality!=kDefaultVideoSrQuality;});
     const bool fullSchema=fsr4||higher||rendering||vfg||correction||dlss||nrModel||srStage||dual;
     const bool correctionExtended=dual||srStage||nrModel||dlss||std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
         if(p.settings.residual.correction.extendedControls())return true;

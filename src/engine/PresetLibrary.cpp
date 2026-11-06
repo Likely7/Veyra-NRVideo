@@ -727,14 +727,14 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return beautyChain(e.chain)||(e.nodeConfiguration&&(beautyChain(e.nodeConfiguration->chain)||
             (e.nodeConfiguration->editor&&beautyChain(e.nodeConfiguration->editor->nodes))));});
     // v16: three-step SR prescale / output in any stored globals.
-    const auto srStageOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=4||g.srPrescale!=pipeline::SrPrescale::Off||g.srOutput!=pipeline::SrOutput::Target;};
+    const auto srStageOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=kDefaultVideoSrQuality||g.srPrescale!=pipeline::SrPrescale::Off||g.srOutput!=pipeline::SrOutput::Target;};
     const bool srStage=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
         if(e.globals&&srStageOf(*e.globals))return true;
         if(!e.nodeConfiguration)return false;
         const auto& c=*e.nodeConfiguration;
         return srStageOf(c)||(c.editor&&c.editor->globals&&srStageOf(*c.editor->globals));
     });
-    const auto dualOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=4;};
+    const auto dualOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=kDefaultVideoSrQuality;};
     const bool dual=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){return (e.globals&&dualOf(*e.globals))||(e.nodeConfiguration&&(dualOf(*e.nodeConfiguration)||(e.nodeConfiguration->editor&&e.nodeConfiguration->editor->globals&&dualOf(*e.nodeConfiguration->editor->globals))));});
     // RTX Video SR high bitrate / streaming values (16..23, base or second pass)
     // are rejected by older readers: own version and file.
@@ -979,10 +979,10 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             return n.type==EffectType::Beauty;});};
     const bool beauty=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
         return beautyChain(c.chain)||(c.editor&&beautyChain(c.editor->nodes));});
-    const auto srStageOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=4||g.srPrescale!=pipeline::SrPrescale::Off||g.srOutput!=pipeline::SrOutput::Target;};
+    const auto srStageOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=kDefaultVideoSrQuality||g.srPrescale!=pipeline::SrPrescale::Off||g.srOutput!=pipeline::SrOutput::Target;};
     const bool srStage=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
         return srStageOf(c)||(c.editor&&c.editor->globals&&srStageOf(*c.editor->globals));});
-    const auto dualOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=4;};
+    const auto dualOf=[](const ChainGlobalSettings& g){return g.dualSrEnabled||g.dualSrTarget!=pipeline::SrTarget::Uhd4K||g.dualSrQuality!=kDefaultVideoSrQuality;};
     const bool dual=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return dualOf(c)||(c.editor&&c.editor->globals&&dualOf(*c.editor->globals));});
     const auto videoAiOf=[](const ChainGlobalSettings& g){return vfxVideoSr(g.videoSrQuality)||vfxVideoSr(g.dualSrQuality);};
     const bool videoAi=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return videoAiOf(c)||(c.editor&&c.editor->globals&&videoAiOf(*c.editor->globals));});
