@@ -128,8 +128,19 @@ borrowed pixel ownership; no proprietary SDK struct or header is copied into Git
 The local runtime is the unmodified official `nvidia-vfx` 0.2.0.0 Windows wheel,
 `nvidia_vfx-0.2.0.0-cp311-cp311-win_amd64.whl`, 435809365 bytes, SHA-256
 `5aaf6a42bc6b6dbbf52fcb714194c994a6893cbbf7ada38bc2165a1f83e4a6fc`.
-Only the five VFG-required native dependencies are used; nine unrelated NPP libraries are omitted; Python and its extension
+The existing VFG path uses five native dependencies; nine unrelated NPP libraries are omitted; Python and its extension
 are not a product dependency. This proprietary runtime is **not MIT**.
+The 2.1.3 local NVIDIA test package also includes the unmodified wheel's
+`nvVFXVideoSuperRes.dll` (42608 bytes, SHA-256
+`93601175949d0f5b5c033d6c9e58ca465a45ef1dd961eaea34d4ffb979f72850`)
+and its `nvngx_vsr.dll` (1.8.3.0, 59120752 bytes, SHA-256
+`0cc98643a76c05ca6d73ec81a898d545b18e5c080667d72854a1bfaebd56e1ed`)
+for the high-bitrate and streaming VideoSuperRes modes. Both retain valid
+NVIDIA signatures; the existing NGX 1.6.0.0 VSR stays in its separate directory.
+`VfxSrBackend` is Veyra's adapter for this public C API. The NVIDIA software,
+AI-product, model terms and third-party notices remain under `licenses/nvidia-vfg`.
+The local test packaging manifest records these separately and does not imply
+a new public release. No SDK, Python extension or model is added to source Git.
 The 2.0.3 NVIDIA package carries its NVIDIA software/AI/model terms and third-party
 notices with a separate `vfg-runtime-manifest.json`. The user explicitly authorized
 this experimental Release distribution; this is not vendor certification or a general
