@@ -63,6 +63,10 @@ def audit(app,flavor):
     assert m['version']==V and m['localOnly'] and not m['published']
     assert sha(app/'veyra_qml_ui.exe')==sha(D/'veyra_qml_ui.exe')==m['exeSha256']
     pe_version=version(app/'veyra_qml_ui.exe');names={r['path'] for r in rows};pkg.check_models(app)
+    # App QML is replaced, while every deployed Qt module remains the pinned donor's.
+    for row in donor_json(flavor,'package-manifest.json')['files']:
+        if row['path'].startswith('qml/') and not row['path'].startswith('qml/Veyra/'):
+            assert row['path'] in names and sha(app/row['path'])==row['sha256'].lower(),('Missing or changed Qt module',row['path'])
     if flavor=='NVIDIA':
         assert not any(n.startswith(('runtime/amd-nr/','runtime/amd-nr-rdna3/')) for n in names)
         assert 'runtime/nvidia-vfg/nvVFXVideoFrameGeneration.dll' in names
@@ -120,7 +124,7 @@ def stage():
             assert set(z.namelist())=={prefix+r['path'] for r in old['files']}|{prefix+'package-manifest.json'}
             for row in old['files']:
                 n=row['path']
-                if n in {'RELEASE_NOTES.md','GPU-PACKAGE.txt','README-2.1.2.zh-CN.md','veyra_qml_ui.exe','release-runtime-manifest.json','runtime/experimental/release-runtime-manifest.json'} or n.startswith(('docs/','qml/','i18n/','shaders/')):continue
+                if n in {'RELEASE_NOTES.md','GPU-PACKAGE.txt','README-2.1.2.zh-CN.md','veyra_qml_ui.exe','release-runtime-manifest.json','runtime/experimental/release-runtime-manifest.json'} or n.startswith(('docs/','qml/Veyra/','i18n/','shaders/')):continue
                 target=a/n;target.parent.mkdir(parents=True,exist_ok=True)
                 with z.open(prefix+n) as source,target.open('wb') as dest:shutil.copyfileobj(source,dest)
                 assert target.stat().st_size==row['size'] and sha(target)==row['sha256'].lower(),n

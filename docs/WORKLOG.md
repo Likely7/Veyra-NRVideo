@@ -659,3 +659,5 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 用户授权把Claude与Codex修复合入main并构建2.1.3测试。17工作树状态与改动SHA已保存reports/codex-build-2.1.3-20261106/BEFORE.json；Claude四文件原补丁/ZIP在archives同名目录。新菜单05181bf、NR259ef8f经e1bfbde/3556608整合，只在WORKLOG追加冲突保留双方；版本快照4fde59a，main已快进3e532a9。旧脏树不覆盖，撤销/暂停方向不恢复。
 build-recording-handoff.py --task codex-build-2.1.3-20261106 --build-dir <共享构建> --reconfigure --label 2.1.3 --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=<prepared> 共23目标105.6秒通过，日志logs同名/build-20261106-041552，receipt为干净产品快照。后续只改打包脚本/文档，不改产品。
 首次package-2.1.3.py stage在签名检查拒绝：当前PowerShell7继承的PSModulePath导致子Windows PowerShell无法加载Security模块；之前从当前shell直接核验两DLL签名均Valid。已按既有stage脚本清除该子进程PSMODULEPATH，不修改全局环境或放宽签名校验，随后重新执行。此时尚未生成app目录。验收最终结果待记录。
+
+2.1.3打包首轮QtQuick发现QtQuick.Layouts/Shapes等模块缺失：新脚本原先排除了整个qml目录，错误地把Qt部署模块也排除。改为仅替换qml/Veyra，新增按正式供体逐项校验Qt模块；对尚未交付的两包只补回经SHA核对的原Qt模块，不重拷整包。第一轮日志/CHECKS-FIRST及payload-first保留。两个设置测试另因夹具提前创建了测试要求的新目录退出2，修正为单独output子目录；未修改产品逻辑或测试断言。
