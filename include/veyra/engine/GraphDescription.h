@@ -65,16 +65,16 @@ struct StageRequest {
     const ChainRuntimeOrder* nodeOrder=nullptr; // paired with this settings transaction
 };
 
-// Double SR runs on RTX Video SR (NVIDIA) only; every other backend keeps
-// its existing single pass, regardless of saved second-pass fields.
+// Double SR runs on RTX Video SR (NVIDIA, every model family) only; every other
+// backend keeps its existing single pass, regardless of saved second-pass fields.
 inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter){
-    return nvidiaAdapter&&srStageBackend(s.videoSrQuality)&&s.dualSrEnabled?s.srPrescale:pipeline::SrPrescale::Off;
+    return nvidiaAdapter&&rtxVideoSr(s.videoSrQuality)&&s.dualSrEnabled?s.srPrescale:pipeline::SrPrescale::Off;
 }
 // Supersampling (user 2026-10-28): one RTX Video SR pass evaluates at its target
 // and the result is area-shrunk into srOutput before every later effect. Double
 // SR has its own second target, so the shrink is inactive there.
 inline pipeline::SrOutput runningSrOutput(const EnhancementSettings& s,bool nvidiaAdapter){
-    return nvidiaAdapter&&srStageBackend(s.videoSrQuality)&&!s.dualSrEnabled?s.srOutput:pipeline::SrOutput::Target;
+    return nvidiaAdapter&&rtxVideoSr(s.videoSrQuality)&&!s.dualSrEnabled?s.srOutput:pipeline::SrOutput::Target;
 }
 
 // Fills the stage, size and parameter fields of `desc` from `settings`.
@@ -126,7 +126,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         boundedAmd?pipeline::NrSizePolicy::Realtime:policy,
         (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency,
         request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput,
-        settings.dualSrEnabled&&request.nvidiaAdapter&&srStageBackend(settings.videoSrQuality),settings.dualSrTarget);
+        settings.dualSrEnabled&&request.nvidiaAdapter&&rtxVideoSr(settings.videoSrQuality),settings.dualSrTarget);
     if(request.exportJob&&!request.stillImage)
         plan.nr=exportNrProcessingExtent(plan.base,settings.nrRuntime,policy);
     desc.sourceWidth=request.width;desc.sourceHeight=request.height;
@@ -137,12 +137,13 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.firstSrWidth=plan.firstSrOutput.width;desc.firstSrHeight=plan.firstSrOutput.height;
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
     desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
-    // RTX Video SR can restore compressed video at its original resolution.
+    // Standard RTX Video SR can restore compressed video at its original resolution
+    // (the Video Effects families only enlarge).
     // ResolutionPlan::srApplied describes enlargement, not SDK execution. Raw capture has
     // no compression artifacts: there a source already at the target skips SR as in 2.0.6
     // (5090 field log 57: 4K->4K VSR cost ~8.7 ms a frame and pushed 60 fps over budget).
     const bool nativeVideoRestore=request.sr&&!request.stillImage&&!request.uncompressedSource&&request.nvidiaAdapter&&
-        settings.videoSrQuality>=1&&settings.videoSrQuality<=4;
+        ngxVideoSr(settings.videoSrQuality);
     desc.enableSr=(plan.srApplied||nativeVideoRestore)&&(request.nvidiaAdapter||settings.videoSrQuality==kVideoSrFsr);
     desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);
     desc.nrBeforeSr=!request.stillImage&&!request.exportJob&&lowLatency&&desc.enableNr&&desc.enableSr;

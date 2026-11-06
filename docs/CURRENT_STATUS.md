@@ -1,5 +1,7 @@
 # 当前项目状态
 
+**2026-11-05 RTX 视频超分三个版本与双重超分（未合并）**：分支 `claude/vsr-rife-20261105`（基于 main `8eda262`）把超分整理为标准 / 高码率 / 流媒体加档位，双重超分和超采样适配三个版本；RIFE 已按用户要求删除。本机 RTX 5070 导出、实际界面与回归测试通过；未提交、未合并 main、未打包或发布。详见[记录](RTX_VIDEO_SR_FAMILIES_2026-11-05.md)，回执 `E:/项目/Veyra/reports/claude-vsr-rife-20261105/FINAL.json`。
+
 **2026-11-05 补帧延迟预算实验终止**：用户决定按失败方向删除；独立分支和测试入口已移除，未进入main／正式包。活动树回main，产品代码保持fedd7fc，仅记录终止结论。停止研究，不再把“预读生效”当作性能收益。详见[终止记录](FG_LATENCY_BUDGET_RETIRED_2026-11-05.md)。
 
 **当前正式版2.1.2（2026-11-02）**：用户授权公开发行，main和v2.1.2／v2.1.2-sources已推送；发行准备899590f，程序构建358be8c（EXE33d8e615…），使用Claude最新去重包的原程序字节。两显卡包及源码已发布，服务端摘要、匿名下载、Latest与两张二维码核验通过。[完整更新](RELEASE_NOTES_2.1.2.md) · [构建/源码](BUILD_2.1.2.md) · [发行记录](RELEASE_2.1.2_EXECUTION_2026-11-02.md)。正式产物releases/codex-release-2.1.2-20261102，FINAL回执reports/codex-release-2.1.2-20261102。

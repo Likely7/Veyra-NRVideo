@@ -34,6 +34,9 @@ QString QmlPlayerBridge::srStageNote() const {
     QStringList notes;
     if (plan.srPrescaleIneffective) notes << tr("第二次超分未执行：再次降低后的尺寸须小于基础超分结果及第二次目标。");
     if (plan.srOutputIneffective) notes << tr("超分后缩回未生效：超分须先放大画面，且缩回尺寸要小于超分结果。");
+    // Only the standard family restores a source already at the target size.
+    if (s.applied.sr && engine::vfxVideoSr(s.applied.videoSrQuality) && !plan.srApplied)
+        notes << tr("高码率和流媒体只做放大：片源已达到目标尺寸，所以没有运行；同尺寸修复请用标准。");
     return notes.join(QStringLiteral("；"));
 }
 

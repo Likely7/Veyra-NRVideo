@@ -384,6 +384,7 @@ add_library(veyra_pipeline STATIC
   src/pipeline/LmxxfNrBackend.cpp
   src/pipeline/Rdna3NrBackend.cpp
   src/pipeline/VfgBackend.cpp
+  src/pipeline/VfxSrBackend.cpp
 )
 veyra_apply_warnings(veyra_pipeline)
 # FFmpeg/NVOF headers are third-party: /WX stays off for this target.
@@ -1457,6 +1458,10 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_compile_features(veyra_vfg_export_probe PRIVATE cxx_std_20)
   target_compile_options(veyra_vfg_export_probe PRIVATE /utf-8)
   target_link_libraries(veyra_vfg_export_probe PRIVATE veyra_engine)
+  add_executable(veyra_video_ai_export_probe tests/integration/VideoAiExportProbe.cpp)
+  target_compile_features(veyra_video_ai_export_probe PRIVATE cxx_std_20)
+  target_compile_options(veyra_video_ai_export_probe PRIVATE /utf-8)
+  target_link_libraries(veyra_video_ai_export_probe PRIVATE veyra_engine)
   add_executable(veyra_preset_library_tests tests/unit/PresetLibraryTests.cpp src/engine/PresetLibrary.cpp src/engine/EffectChain.cpp)
 target_link_options(veyra_preset_library_tests PRIVATE /STACK:33554432) # Preset apply recurses over 21 KB ChainConfiguration frames; the default 1 MB stack is too close to the edge.
 add_executable(veyra_hdr_tuning_tests tests/unit/HdrOutputTuningTests.cpp src/engine/PresetLibrary.cpp src/engine/EffectChain.cpp)
@@ -1474,6 +1479,13 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_definitions(veyra_vfg_settings_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_vfg_settings_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_vfg_settings_tests PRIVATE veyra_base)
+  add_executable(veyra_video_ai_settings_tests tests/unit/VideoAiSettingsTests.cpp src/engine/PresetLibrary.cpp src/engine/PresetStore.cpp src/engine/EffectChain.cpp)
+  target_compile_features(veyra_video_ai_settings_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_video_ai_settings_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_video_ai_settings_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_include_directories(veyra_video_ai_settings_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_video_ai_settings_tests PRIVATE veyra_base)
+  target_link_options(veyra_video_ai_settings_tests PRIVATE /STACK:33554432)
   add_executable(veyra_effect_availability_tests tests/unit/EffectAvailabilityTests.cpp)
   target_compile_features(veyra_effect_availability_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_effect_availability_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

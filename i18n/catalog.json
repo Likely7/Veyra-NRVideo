@@ -295,13 +295,6 @@
    "ja": " · 範囲内の候補（接続時に検証）"
   },
   {
-   "zh": " · 质量 ",
-   "src": "qml/ProPage.qml",
-   "zh-TW": " · 品質 ",
-   "en": " · quality ",
-   "ja": " · 品質 "
-  },
-  {
    "zh": " · 还原",
    "src": "qml/ColourPanel.qml",
    "zh-TW": " · 還原",
@@ -1947,11 +1940,25 @@
    "ja": "RTX ビデオ超解像"
   },
   {
-   "zh": "RTX 视频超分，独立于基础超分质量",
-   "src": "qml/SrStageEditor.qml",
-   "zh-TW": "RTX 視訊超分，獨立於基礎超分品質",
-   "en": "RTX Video SR, independent of the base SR quality",
-   "ja": "RTX Video SR。基本超解像とは独立した品質設定"
+   "zh": "RTX 视频超分 · 标准",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "RTX 影片超解析 · 標準",
+   "en": "RTX Video SR · Standard",
+   "ja": "RTX 超解像 · 標準"
+  },
+  {
+   "zh": "RTX 视频超分 · 流媒体",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "RTX 影片超解析 · 流媒體",
+   "en": "RTX Video SR · Streaming",
+   "ja": "RTX 超解像 · ストリーミング"
+  },
+  {
+   "zh": "RTX 视频超分 · 高码率",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "RTX 影片超解析 · 高位元率",
+   "en": "RTX Video SR · High bitrate",
+   "ja": "RTX 超解像 · 高ビットレート"
   },
   {
    "zh": "RX 7000 / 9000 · AMD NR（实验）",
@@ -11252,6 +11259,13 @@
    "ja": "フォーマットと映像"
   },
   {
+   "zh": "档位",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "檔位",
+   "en": "Tier",
+   "ja": "段階"
+  },
+  {
    "zh": "检查",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "檢查",
@@ -12134,6 +12148,13 @@
    "ja": "マゼンタ"
   },
   {
+   "zh": "流媒体",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "流媒體",
+   "en": "Streaming",
+   "ja": "ストリーミング"
+  },
+  {
    "zh": "流畅",
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "流暢",
@@ -12524,6 +12545,13 @@
    "zh-TW": "狀態: %1",
    "en": "Status: %1",
    "ja": "状態：%1"
+  },
+  {
+   "zh": "独立于基础超分，可以换成另一种 RTX 视频超分。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "獨立於基礎超解析，可以換成另一種 RTX 影片超解析。",
+   "en": "Independent of the base SR; it can use another RTX Video Super Resolution model.",
+   "ja": "基本の超解像とは独立しており、別の RTX ビデオ超解像を選べます。"
   },
   {
    "zh": "独立采集音频配置失败；BMD 原生视频继续运行",
@@ -13240,11 +13268,18 @@
    "ja": "2回目の超解像は未実行です。縮小後の入力は、基本結果と2回目の目標より小さくする必要があります。"
   },
   {
-   "zh": "第二次超分质量",
+   "zh": "第二次超分档位",
    "src": "qml/SrStageEditor.qml",
-   "zh-TW": "第二次超分品質",
-   "en": "Second SR quality",
-   "ja": "2回目の超解像品質"
+   "zh-TW": "第二次超解析檔位",
+   "en": "Second SR tier",
+   "ja": "2回目の超解像段階"
+  },
+  {
+   "zh": "第二次超分算法",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "第二次超解析算法",
+   "en": "Second SR algorithm",
+   "ja": "2回目のアップスケーリング方式"
   },
   {
    "zh": "等待 PS5 登录 PIN 超时，请重新连接。",
@@ -15837,6 +15872,13 @@
    "ja": "スーパーサンプリング：目標サイズまで超解像して正確に縮小します。より自然で少し柔らかく、ビデオメモリ使用量が増えます。ノイズ除去とフレーム生成は縮小後のサイズで実行します。"
   },
   {
+   "zh": "超高",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "超高",
+   "en": "Ultra",
+   "ja": "超高"
+  },
+  {
    "zh": "越小越敏感，越大稳得越多",
    "src": "qml/ProPage.qml",
    "zh-TW": "越小越敏感，越大穩得越多",
@@ -15856,6 +15898,13 @@
    "zh-TW": "越高越平滑，運動拖影也越多",
    "en": "Higher is smoother but ghosts more on motion",
    "ja": "高いほど滑らかですが、動きの残像も増えます"
+  },
+  {
+   "zh": "越高越清晰、越耗时；流媒体只有中和超高两档。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "越高越清晰、越耗時；流媒體只有中和超高兩檔。",
+   "en": "Higher tiers are sharper and take longer; Streaming has only Medium and Ultra.",
+   "ja": "段階が高いほど鮮明になり、処理時間も増えます。ストリーミングは中と超高の2段階のみです。"
   },
   {
    "zh": "越高越稳，过高会显得发闷",
@@ -17594,6 +17643,13 @@
    "ja": "AMD RX 9000 が必要です"
   },
   {
+   "zh": "需要 NVIDIA RTX 30 及更新显卡",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "需要 NVIDIA RTX 30 或更新的顯示卡",
+   "en": "Requires an NVIDIA RTX 30-series or newer GPU",
+   "ja": "NVIDIA RTX 30 シリーズ以降の GPU が必要です"
+  },
+  {
    "zh": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
    "src": "src/ui/bridge/Hardware.cpp",
    "zh-TW": "需要 NVIDIA RTX 40 / 50（Ada / Blackwell）",
@@ -18698,6 +18754,20 @@
    "zh-TW": "高延遲·需 CPU 拆包",
    "en": "high latency · needs CPU unpacking",
    "ja": "高遅延 · CPU での展開が必要"
+  },
+  {
+   "zh": "高码率",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "高位元率",
+   "en": "High bitrate",
+   "ja": "高ビットレート"
+  },
+  {
+   "zh": "高码率和流媒体只做放大：片源已达到目标尺寸，所以没有运行；同尺寸修复请用标准。",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "高位元率和流媒體只做放大：片源已達到目標尺寸，所以沒有執行；同尺寸修復請用標準。",
+   "en": "High bitrate and Streaming only upscale. The source already reaches the target size, so they did not run; use Standard to restore at the same size.",
+   "ja": "高ビットレートとストリーミングは拡大専用です。ソースがすでに目標サイズのため実行されませんでした。同じサイズでの修復には標準を使ってください。"
   },
   {
    "zh": "高级设置：技术参数",

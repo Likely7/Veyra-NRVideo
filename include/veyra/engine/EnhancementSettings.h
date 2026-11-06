@@ -75,8 +75,31 @@ inline constexpr uint32_t kVideoSrFsr=5;
 // Fresh SR selections use RTX Video SR high; explicit saved selections retain
 // their numeric IDs. The UI seeds FSR separately on AMD/Intel adapters.
 inline constexpr uint32_t kDefaultVideoSrQuality=4;
-// Three-step SR (prescale / SR / output fit) runs on RTX Video SR only so far.
-constexpr bool srStageBackend(uint32_t videoSrQuality){return videoSrQuality>=1&&videoSrQuality<=4;}
+// RTX Video SR comes in three model families, each chosen by tier (1 low,
+// 2 medium, 3 high, 4 ultra). Stored values keep the SDK numbers:
+// - standard 1..4: RTX Video SDK through NGX, trained on compressed video;
+// - high bitrate 16..19 and streaming 21/23 (medium/ultra only, Ampere or
+//   newer): NVIDIA Video Effects VideoSuperRes. High bitrate skips the
+//   compression clean-up to keep clean detail; streaming cleans hardest.
+// Every family runs double SR and the supersample shrink. Only the standard
+// family restores a source already at the target size.
+enum class VideoSrFamily : uint32_t { Standard = 0, HighBitrate = 1, Streaming = 2 };
+inline constexpr uint32_t kVideoSrFamilyCount=3;
+constexpr bool ngxVideoSr(uint32_t q){return q>=1&&q<=4;}
+constexpr bool vfxVideoSr(uint32_t q){return (q>=16&&q<=19)||q==21||q==23;}
+constexpr bool vfxVideoSrNeedsAmpere(uint32_t q){return q==21||q==23;}
+constexpr bool rtxVideoSr(uint32_t q){return ngxVideoSr(q)||vfxVideoSr(q);}
+constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q);}
+inline constexpr uint32_t kVfxVideoSrQualities[]={16,17,18,19,21,23};
+constexpr VideoSrFamily videoSrFamily(uint32_t q){
+    return q>=16&&q<=19?VideoSrFamily::HighBitrate:q==21||q==23?VideoSrFamily::Streaming:VideoSrFamily::Standard;
+}
+constexpr uint32_t videoSrTier(uint32_t q){return q>=16&&q<=19?q-15:q==21?2u:q==23?4u:q;}
+// Streaming has no low or high tier: low and medium give medium, high and ultra give ultra.
+constexpr uint32_t videoSrQualityFor(VideoSrFamily family,uint32_t tier){
+    tier=tier<1?1u:tier>4?4u:tier;
+    return family==VideoSrFamily::HighBitrate?15u+tier:family==VideoSrFamily::Streaming?(tier<=2?21u:23u):tier;
+}
 // DLSS SR model (videoSrQuality 0 only): 0 = DLSS 4 transformer (preset K,
 // what DLSS SR always used here), 1 = DLSS 4.5 second-generation transformer
 // (preset M), 2 = DLSS 4.5 Ultra Performance model (preset L). Both 4.5
@@ -339,7 +362,7 @@ struct EnhancementSettings {
     HdrMetadataSettings hdrMetadata;
     bool useHdrPreview(bool hdrInput,bool hdrDisplayActive)const{return (hdrInput||videoHdr.enabled)&&hdrDisplayActive&&!forceSdrPreview;}
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
-    uint32_t videoSrQuality=kDefaultVideoSrQuality; // 0 DLSS SR; 1–4 RTX Video SR
+    uint32_t videoSrQuality=kDefaultVideoSrQuality; // 0 DLSS SR; 5 FSR; RTX Video SR family/tier values (videoSrFamily)
     uint32_t dlssSrModel=0;    // DLSS SR only; see kDlssSrModelCount
     // Base SR uses srTarget; the optional second SR has its own target/quality.
     // srPrescale now lowers the first AI result only when dualSrEnabled.
@@ -349,7 +372,7 @@ struct EnhancementSettings {
     pipeline::SrOutput srOutput=pipeline::SrOutput::Target;
     bool dualSrEnabled=false;
     pipeline::SrTarget dualSrTarget=pipeline::SrTarget::Uhd4K;
-    uint32_t dualSrQuality=4;
+    uint32_t dualSrQuality=4; // any RTX Video SR value, independent of the base family
     uint32_t multiplier=1;
     FrameGenerationBackend frameGenerationBackend=FrameGenerationBackend::Dlss;
     // NvVFX Mode: Low=0, Medium=1 (default), High=2; mixed tiers 3-5, see vfgPrimaryMode().
@@ -435,12 +458,12 @@ struct EnhancementSettings {
         if(!nr||!protection.enabled)active.protection=defaults.protection;
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
         if(!sr||videoSrQuality!=0)active.dlssSrModel=defaults.dlssSrModel;
-        if(!sr||!srStageBackend(videoSrQuality)||!dualSrEnabled){
+        if(!sr||!rtxVideoSr(videoSrQuality)||!dualSrEnabled){
             active.srPrescale=defaults.srPrescale;
             active.dualSrEnabled=false;active.dualSrTarget=defaults.dualSrTarget;active.dualSrQuality=defaults.dualSrQuality;
         }
         // The supersample shrink belongs to a single RTX Video SR pass.
-        if(!sr||!srStageBackend(videoSrQuality)||dualSrEnabled)active.srOutput=defaults.srOutput;
+        if(!sr||!rtxVideoSr(videoSrQuality)||dualSrEnabled)active.srOutput=defaults.srOutput;
         if(multiplier<=1){
             active.frameGenerationBackend=defaults.frameGenerationBackend;active.vfgQuality=defaults.vfgQuality;
             active.fgMotion=defaults.fgMotion;active.fgStrictAdmission=defaults.fgStrictAdmission;
@@ -578,12 +601,12 @@ struct EnhancementSettings {
         // The AMD 3.1.x provider delivers one generated frame per present; the
         // probe measured the same count for 2/3/4 requested frames.
         if(fsrFrameGeneration(frameGenerationBackend)&&multiplier>2)return "AMD FSR frame generation supports up to 2X";
-        if(videoSrQuality>kVideoSrFsr)return "invalid video SR quality";
+        if(!validVideoSrQuality(videoSrQuality))return "invalid video SR quality";
         if(dlssSrModel>=kDlssSrModelCount)return "invalid DLSS SR model";
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";
         if(!pipeline::validSrPrescale(srPrescale))return "invalid SR prescale";
         if(!pipeline::validSrOutput(srOutput))return "invalid SR output";
-        if(!pipeline::validSrTarget(dualSrTarget)||dualSrQuality<1||dualSrQuality>4)return "invalid second SR target or quality";
+        if(!pipeline::validSrTarget(dualSrTarget)||!rtxVideoSr(dualSrQuality))return "invalid second SR target or quality";
         if(opticalFlowBackend!=OpticalFlowBackend::Nvidia&&opticalFlowBackend!=OpticalFlowBackend::AmdFidelityFx&&opticalFlowBackend!=OpticalFlowBackend::GpuDis)return "invalid optical flow backend";
         if(multiplier<1||multiplier>(frameGenerationBackend==FrameGenerationBackend::Vfg?8u:6u))return "unsupported multiplier";
         // 0 = auto quality; explicit values are capped at 300 Mbps so a typo
