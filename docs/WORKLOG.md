@@ -637,3 +637,19 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 使用build-recording-handoff.py --task codex-nr-inline-editor-20261105 --root <活动树> --build-dir <共享构建> --label 2.1.2-nr-inline-test --reconfigure --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared构建五目标，73.9s通过。软件QtQuick170/0/0（38.98s）、GPU Pad13/0/0、分组控件11/0/0；UI合同/i18n/NR模型通过，catalog2739条缺译与占位0。真实主程序23项逐参数读回、模式独立、自动手动保留、截图及重启通过，退出0，engine/QML错误0。
 
 用户旧测试PID23760在开工时运行，所以没有替换旧app或停止进程，另建tests/logs/tmp/codex-nr-inline-editor-20261105和reports/nr-inline-editor-20261105。运行库硬链接只读复用，未再复制完整工程/ZIP；配置迁移只复制白名单到新manual-profile，原配置不改。实际完整截图nr-web-ui.png已查看，九项标签均显示。单组截图保留透明背景，展示以整体深色面板为准。完整命令、最终SHA、空间及保护见FINAL.json；本轮不合main、不push/Release，不变更算法或导出协议，不宣称新的实卡性能收益。
+## 2026-11-06 选框弹出文字“抖两下”（Claude）
+
+分支 `claude/menu-jitter-20261106`，基线 main `f1f8298`，未提交。
+
+**原因**：软件绘制（2.1.1 起默认）把文字横坐标向下取整到整像素。VMenu 打开的弹簧缩放在终点附近越过 1 三次（约 87、181、266 ms），每次越过都把选项文字左移 1 像素再移回，共两次。GPU 绘制下同一段弹簧是不到半像素的平滑移动，不跳。
+
+**改动**：只在软件绘制下，弹簧第一次到达终点后，缩放和位移就停在终点；GPU 绘制以及 enter/exit 的曲线和时长不变。用户一度误以为弹簧被改掉、叫停，撤回后又确认“修复效果是正确的”，恢复原补丁。
+
+**验证**：
+- 菜单 QtQuick 测试：软件 100/150/200% 各 6/0，d3d12 100/150% 各 5/0/1。
+- 全套 QtQuick：147/0/1；截图用例单独 3/0。
+- 240 fps 录屏：软件原版 3 次都左跳 1 像素来回两次；修复后 3 次都一路靠拢、无回跳。GPU 修复后与原版相同。
+
+**入口与记录**：手动入口 `tests/claude-menu-jitter-20261106/启动选框修复测试.cmd`。执行记录 `docs/MENU_TEXT_JITTER_2026-11-06.md`，回执 `E:/项目/Veyra/reports/claude-menu-jitter-20261106/FINAL.json`。
+
+**未验证**：真实程序只在 100% 缩放下录屏；对话框等同类弹簧缩放没有测，也没有改。

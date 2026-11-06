@@ -74,6 +74,9 @@ Item {
                 for(const animation of group.animations || [])
                     if(animation.property==="s")motion=animation.target
             verify(motion!==null)
+            // These frames draw the named scales, so keep software drawing off its hold.
+            const keepHold=menu.holdLanding
+            menu.holdLanding=false
             let frames=[]
             for(const scale of [1,0.9,0.95,0.99,1.02,1.04]) {
                 motion.s=scale;motion.dy=0
@@ -85,7 +88,74 @@ Item {
             }
             console.log("MENU_RASTER_FRAMES "+JSON.stringify(frames))
             motion.s=1;motion.dy=0
+            menu.holdLanding=keepHold
             menu.close();tryCompare(menu,"visible",false)
+        }
+        // Software drawing puts labels on whole pixels, so the spring's tail
+        // around its end moved them 1 px sideways and back twice per opening.
+        function test_open_spring_lands_once_data() {
+            return [{tag:"software hold",hold:true},{tag:"full spring",hold:false}]
+        }
+        function test_open_spring_lands_once(data) {
+            root.Window.window.width=900;root.Window.window.height=600
+            root.width=900;root.height=600
+            let popup=null
+            for(const child of warningSelect.data)
+                if(child instanceof VMenu) popup=child
+            verify(popup!==null)
+            const software=root.GraphicsInfo.api===GraphicsInfo.Software
+            if(data.hold&&!software) skip("the hold belongs to software drawing")
+            const keepHold=popup.holdLanding
+            // The menu was shown by the earlier tests, so its binding knows the renderer.
+            compare(keepHold,software,"the hold follows the renderer")
+            // The software row keeps the menu's own binding, the other turns it off.
+            if(!data.hold) popup.holdLanding=false
+            mouseClick(warningSelect,warningSelect.width/2,warningSelect.height/2)
+            tryVerify(()=>popup.visible)
+            compare(popup.holdLanding,data.hold)
+            const label=labels(popup.contentItem,[])[0]
+            const scale=popup.contentItem.transform[0],lift=popup.contentItem.transform[1]
+            // Wait for the transition's first tick (motion.s keeps the last value until then).
+            for(let i=0;i<200&&popup.motionScale>=1;++i) wait(1)
+            let frames=[]
+            while(!popup.opened&&frames.length<600) {
+                const p=label.mapToItem(null,0,0)
+                frames.push({raw:popup.motionScale,s:scale.xScale,dy:lift.y,x:p.x,y:p.y})
+                wait(2)
+            }
+            verify(popup.opened)
+            const end=label.mapToItem(null,0,0)
+            verify(frames.length>4,"sampled "+frames.length+" frames")
+            verify(Math.max(...frames.map(f=>f.raw))>1.001,"the approved spring must still overshoot")
+            if(data.hold) {
+                let landed=false
+                for(let i=0;i<frames.length;++i) {
+                    const f=frames[i]
+                    verify(f.s<=1&&f.dy>=0,"frame "+i+" went past the end: "+JSON.stringify(f))
+                    if(i>0) {
+                        const g=frames[i-1]
+                        verify(Math.abs(f.x-end.x)<=Math.abs(g.x-end.x)+1e-6&&Math.abs(f.y-end.y)<=Math.abs(g.y-end.y)+1e-6,
+                               "label moved away from its place: "+JSON.stringify([g,f,end]))
+                    }
+                    if(landed) {
+                        compare(f.s,1);compare(f.dy,0)
+                        fuzzyCompare(f.x,end.x,1e-6);fuzzyCompare(f.y,end.y,1e-6)
+                    }
+                    landed=landed||f.s===1
+                }
+                verify(frames.some(f=>f.s===1&&f.raw>1.001),"the hold must cover the spring's overshoot")
+            } else {
+                for(const f of frames)
+                    compare(f.s,f.raw,"without the hold the drawn scale is the spring")
+                verify(Math.max(...frames.map(f=>f.s))>1.001,"GPU drawing keeps the whole spring")
+            }
+            console.log("MENU_SPRING_LANDING "+data.tag+" frames="+frames.length+" software="+software)
+            popup.close()
+            let exitMin=1
+            while(popup.visible&&exitMin>0.95) { exitMin=Math.min(exitMin,scale.xScale);wait(2) }
+            verify(exitMin<=0.95,"closing must still scale the menu down: "+exitMin)
+            tryCompare(popup,"visible",false)
+            if(!data.hold) popup.holdLanding=keepHold
         }
         function test_mjpeg_warning() {
             compare(warningSelect.valueColor,Theme.err)
