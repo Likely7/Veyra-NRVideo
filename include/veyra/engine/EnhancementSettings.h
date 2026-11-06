@@ -72,9 +72,9 @@ inline size_t exportBitrateIndex(uint32_t mbps){for(size_t i=0;i<kExportBitrateC
 // videoSrQuality values: 0 = DLSS SR, 1..4 = RTX video SR quality steps,
 // 5 = AMD FSR upscaling (vendor neutral; verified on an NVIDIA adapter).
 inline constexpr uint32_t kVideoSrFsr=5;
-// Fresh SR selections use RTX Video SR high; explicit saved selections retain
+// Fresh SR selections use RTX Video SR medium; explicit saved selections retain
 // their numeric IDs. The UI seeds FSR separately on AMD/Intel adapters.
-inline constexpr uint32_t kDefaultVideoSrQuality=4;
+inline constexpr uint32_t kDefaultVideoSrQuality=2;
 // RTX Video SR comes in three model families, each chosen by tier (1 low,
 // 2 medium, 3 high, 4 ultra). Stored values keep the SDK numbers:
 // - standard 1..4: RTX Video SDK through NGX, trained on compressed video;
@@ -372,7 +372,7 @@ struct EnhancementSettings {
     pipeline::SrOutput srOutput=pipeline::SrOutput::Target;
     bool dualSrEnabled=false;
     pipeline::SrTarget dualSrTarget=pipeline::SrTarget::Uhd4K;
-    uint32_t dualSrQuality=4; // any RTX Video SR value, independent of the base family
+    uint32_t dualSrQuality=kDefaultVideoSrQuality; // any RTX Video SR value, independent of the base family
     uint32_t multiplier=1;
     FrameGenerationBackend frameGenerationBackend=FrameGenerationBackend::Dlss;
     // NvVFX Mode: Low=0, Medium=1 (default), High=2; mixed tiers 3-5, see vfgPrimaryMode().

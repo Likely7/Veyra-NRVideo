@@ -216,7 +216,7 @@ struct ChainGlobalSettings {
     pipeline::SrOutput srOutput = pipeline::SrOutput::Target;      // EnhancementSettings::srOutput
     bool dualSrEnabled = false;
     pipeline::SrTarget dualSrTarget = pipeline::SrTarget::Uhd4K;
-    uint32_t dualSrQuality = 4;
+    uint32_t dualSrQuality = kDefaultVideoSrQuality;
     FrameGenerationBackend fgBackend = FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;
     FlowQuality flow = FlowQuality::Balanced;

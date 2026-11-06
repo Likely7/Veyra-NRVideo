@@ -130,7 +130,7 @@ struct EnhanceGraphDesc {
     // writes before the output fit. Zero: SR reads the source and writes the work extent.
     uint32_t srInputWidth=0,srInputHeight=0,srOutputWidth=0,srOutputHeight=0;
     bool dualSr=false;
-    uint32_t firstSrWidth=0,firstSrHeight=0,dualSrQuality=4;
+    uint32_t firstSrWidth=0,firstSrHeight=0,dualSrQuality=engine::kDefaultVideoSrQuality;
     uint32_t fgMultiplier=2;
     engine::FrameGenerationBackend frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;

@@ -7,7 +7,7 @@ from pathlib import Path
 import argparse,hashlib,importlib.util,json,os,re,shutil,stat,subprocess,time,zipfile
 import pefile
 
-R=Path(__file__).resolve().parents[2];B=Path('E:/项目/Veyra');T='codex-build-2.1.3-20261106';V='2.1.3'
+R=Path(__file__).resolve().parents[2];B=Path('E:/项目/Veyra');T='codex-rebuild-2.1.3-20261106';V='2.1.3'
 D=B/'build/claude-screen-recording-20261022';O=B/'test-packages'/T;REPORT=B/'reports'/T
 DONOR=B/'releases/codex-release-2.1.2-20261102';DEP=B/'deps/amd-rdna3-nr-20261029'
 NVAPI=B/'build/rdna3-nvapi-luid-20261103/zluda_nvapi.dll'

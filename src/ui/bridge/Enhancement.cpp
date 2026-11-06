@@ -82,12 +82,12 @@ int QmlPlayerBridge::srTierOf(int quality) const {
     return quality>=0&&engine::rtxVideoSr(unsigned(quality))?int(engine::videoSrTier(unsigned(quality))):0;
 }
 // The stored quality for an algorithm at a tier. Coming from DLSS SR or FSR
-// there is no tier yet, so an RTX family starts at ultra.
+// there is no tier yet, so an RTX family starts at the default medium tier.
 int QmlPlayerBridge::srQualityFor(const QString& algorithm,int tier) const {
     const auto family=algorithm==QLatin1String("rtx")?std::optional(engine::VideoSrFamily::Standard):
         algorithm==QLatin1String("rtx-hb")?std::optional(engine::VideoSrFamily::HighBitrate):
         algorithm==QLatin1String("rtx-st")?std::optional(engine::VideoSrFamily::Streaming):std::nullopt;
-    if(family)return int(engine::videoSrQualityFor(*family,tier>=1&&tier<=4?unsigned(tier):4u));
+    if(family)return int(engine::videoSrQualityFor(*family,tier>=1&&tier<=4?unsigned(tier):engine::kDefaultVideoSrQuality));
     bool ok=false;const int value=algorithm.toInt(&ok);
     return ok&&value>=0&&engine::validVideoSrQuality(unsigned(value))?value:-1;
 }

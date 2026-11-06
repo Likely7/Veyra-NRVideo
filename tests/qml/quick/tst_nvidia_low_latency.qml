@@ -12,7 +12,7 @@ Item {
     TestCase {
         name: "NvidiaLowLatencyHint"
         when: windowShown
-        function init(){veyra.nvidiaLowLatencyAvailable=true;veyra.nvidiaLowLatency=1}
+        function init(){veyra.nvidiaLowLatencyAvailable=true;veyra.nvidiaLowLatency=2}
         function cleanup(){veyra.nvidiaLowLatencyAvailable=false;veyra.nvidiaLowLatency=0}
         function control(name){const child=findChild(editor,name);verify(child!==null,name);return child}
         function shownText(item,text){
@@ -34,13 +34,24 @@ Item {
             verify(row.hintBelow)
             const text=shownText(row,row.hint)
             verify(text!==null,"hint text visible")
+            compare(text.color,Theme.err,"boost warning is red")
             const choice=control("test-nvidia-low-latency")
             verify(text.mapToItem(row,0,0).y>=choice.mapToItem(row,0,0).y+choice.height,"hint sits below the choice")
+        }
+        function test_off_and_on_hide_warning(){
+            const row=control("test-nvidia-low-latency-row")
+            const warning=row.hint
+            for(const mode of [0,1,2,1,0]){
+                veyra.nvidiaLowLatency=mode
+                compare(row.hint,mode===2?warning:"")
+                compare(shownText(row,warning)!==null,mode===2,"warning follows the actual selection")
+            }
         }
         function test_unavailable_keeps_its_own_hint(){
             veyra.nvidiaLowLatencyAvailable=false
             const row=control("test-nvidia-low-latency-row")
             compare(row.hint,"需要 NVIDIA 显卡")
+            compare(row.hintColor,Theme.t3,"unavailable hardware hint is not a boost warning")
             compare(control("test-nvidia-low-latency").enabled,false)
         }
     }
