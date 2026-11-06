@@ -667,3 +667,9 @@ build-recording-handoff.py --task codex-build-2.1.3-20261106 --build-dir <共享
 2.1.3两ZIP封包/逐SHA/CRC、解压最小PATH冷启动均通过（NVIDIA209/AMD207真实帧，12.5/12.61s，退出0、错误为空，RTX5070效果关闭）。SOURCE-FREEZE为b19846a，后续仅验收文档，当前产品与归档一致。最终交付及保护/清理以reports/codex-build-2.1.3-20261106/FINAL.json为准，未push/Release。
 
 自动审批拒绝了验收解压副本递归清理和同批分支引用整理命令（CreateProcess前拒绝，原文仅blocked by policy）。没有执行删除、没有换工具绕过；两份verify副本和两个已合并分支引用仍保留。CLEANUP.json记录路径与逻辑字节，不宣称空间已回收；交付包、源码、main及全部验收结果不受影响。
+
+## 2026-11-06 2.1.3默认中档／Boost红字重构建
+
+用户追加要求超分默认中、低延迟警告红字且只在开＋增强出现、删除旧构建产物后重建。产品b143ebf：kDefaultVideoSrQuality=2，双重默认共用；列表/节点fresh及srQualityFor无既有档位回退一致；既有显式选择保留。NvidiaLowLatencyEditor仅available+Boost显示Theme.err警告，Off/On隐藏，缺硬件普通说明保留。更新既有UI合同及QML交互回归，没有改驱动逻辑/运行库。
+新reports/codex-rebuild-2.1.3-20261106/cleanup-old.ps1先生成计划再-Execute，在已核验E盘根范围内只删除SHA匹配的构建文件，不递归删除非空目录、不跨Shell、不停止进程。9422文件逻辑8,000,253,348字节已unlink，旧交付包和验收副本已退休；保留未知/配置/日志、少量测试源码、共享构建缓存、依赖和正式版。净物理回收未测。旧interactive-NVIDIA配置仍在原位。这次有用户明确删除授权并缩小到文件白名单，自动执行通过；上轮拒绝历史保留。
+后续新产物用codex-rebuild-2.1.3-20261106；构建与测试结果待FINAL.json，本记录不假定通过。完整计划docs/REBUILD_2.1.3_DEFAULTS_2026-11-06.md。
