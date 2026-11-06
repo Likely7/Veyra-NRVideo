@@ -66,7 +66,7 @@ Item {
                 if(!settled())return
                 check(veyra.srTargetIndex===2&&veyra.videoSrQuality===1&&veyra.dualSrTargetIndex===1&&veyra.dualSrQuality===2,"second controls do not change base target or quality")
                 check(veyra.outputSummary==="2560x1440","second target owns the final output")
-                check(find("list-sr").summary.indexOf("4K→1080p→2K")>=0&&find("list-sr").summary.indexOf("质量 1/2")>=0,"the card summary follows the second target and quality: "+find("list-sr").summary)
+                check(find("list-sr").summary.indexOf("4K→1080p→2K")>=0&&find("list-sr").summary.indexOf("低 / 标准 中")>=0,"the card summary follows the second target, family and tier: "+find("list-sr").summary)
                 if(test.shot.length>0)test.parent.parent.grabToImage(r=>{r.saveToFile(test.shot);test.saved=true})
                 else test.saved=true
                 next(45);return

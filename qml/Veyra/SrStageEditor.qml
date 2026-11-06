@@ -6,7 +6,9 @@ ColumnLayout {
     id: editor
     property string namePrefix: "list"
     spacing: 6
-    readonly property bool supported: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4 && Support.available(veyra,"sr")
+    // Any RTX Video SR family (standard / high bitrate / streaming) runs the stages below.
+    readonly property bool supported: veyra.srAlgorithmOf(veyra.videoSrQuality).startsWith("rtx") && Support.available(veyra,"sr")
+    readonly property var rtxFamilies: (veyra.srBackendChoices || []).filter(o => o.id.startsWith("rtx"))
     readonly property bool manual: veyra.srPrescale >= 150 && veyra.srPrescale <= 190
     readonly property var targets: [{id:"1",label:"2K"},{id:"2",label:"4K"},{id:"4",label:"5K"},{id:"5",label:"6K"},{id:"6",label:"7K"},{id:"3",label:"8K"}]
     VRow {
@@ -20,9 +22,15 @@ ColumnLayout {
         VSeg { options:[{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current:String(veyra.srMotionSource); onPicked:id=>veyra.srMotionSource=Number(id) }
     }
     VRow {
-        label: qsTr("质量")
+        label: qsTr("档位")
+        hint: qsTr("越高越清晰、越耗时；流媒体只有中和超高两档。")
         enabled: editor.supported; opacity: enabled ? 1 : 0.4
-        VSeg { objectName:editor.namePrefix+"-sr-quality"; options:[{id:"1",label:"1"},{id:"2",label:"2"},{id:"3",label:"3"},{id:"4",label:"4"}]; current:String(veyra.videoSrQuality); onPicked:id=>veyra.videoSrQuality=Number(id) }
+        VSeg {
+            objectName: editor.namePrefix+"-sr-quality"
+            options: veyra.srTierChoices(veyra.videoSrQuality)
+            current: String(veyra.srTierOf(veyra.videoSrQuality))
+            onPicked: id => veyra.videoSrQuality = veyra.srQualityFor(veyra.srAlgorithmOf(veyra.videoSrQuality), Number(id))
+        }
     }
     // Supersampling: a single RTX Video SR pass at the target, shrunk into this size.
     VRow {
@@ -78,9 +86,24 @@ ColumnLayout {
             VSeg { objectName: editor.namePrefix+"-dual-sr-target"; options: editor.targets; current: String(veyra.dualSrTargetIndex); onPicked: id=>veyra.dualSrTargetIndex=Number(id) }
         }
         VRow {
-            label: qsTr("第二次超分质量")
-            hint: qsTr("RTX 视频超分，独立于基础超分质量")
-            VSeg { objectName: editor.namePrefix+"-dual-sr-quality"; options:[{id:"1",label:"1"},{id:"2",label:"2"},{id:"3",label:"3"},{id:"4",label:"4"}]; current:String(veyra.dualSrQuality); onPicked:id=>veyra.dualSrQuality=Number(id) }
+            label: qsTr("第二次超分算法")
+            hint: qsTr("独立于基础超分，可以换成另一种 RTX 视频超分。")
+            VSelect {
+                objectName: editor.namePrefix+"-dual-sr-algorithm"
+                implicitWidth: 210
+                options: editor.rtxFamilies
+                value: options.find(o => o.id === veyra.srAlgorithmOf(veyra.dualSrQuality))?.label || ""
+                onPicked: id => veyra.dualSrQuality = veyra.srQualityFor(id, veyra.srTierOf(veyra.dualSrQuality))
+            }
+        }
+        VRow {
+            label: qsTr("第二次超分档位")
+            VSeg {
+                objectName: editor.namePrefix+"-dual-sr-quality"
+                options: veyra.srTierChoices(veyra.dualSrQuality)
+                current: String(veyra.srTierOf(veyra.dualSrQuality))
+                onPicked: id => veyra.dualSrQuality = veyra.srQualityFor(veyra.srAlgorithmOf(veyra.dualSrQuality), Number(id))
+            }
         }
     }
     // Running sizes of double SR or supersampling, and why a choice did not apply.

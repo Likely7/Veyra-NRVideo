@@ -26,6 +26,16 @@
 
 完整旧日志：[截至本轮整理前的记录](history/worklog/WORKLOG_before_maintenance_2026-10-27.md)。当前状态见[CURRENT_STATUS](CURRENT_STATUS.md)，历史授权见[历史索引](history/INDEX.md)。
 
+## 2026-11-05 RTX 视频超分三个版本与双重超分（Claude，未提交）
+
+分支 `claude/vsr-rife-20261105`（基于 main `8eda262`，独立工作树），未提交、未合并、不 push/Release。记录见 [RTX_VIDEO_SR_FAMILIES_2026-11-05](RTX_VIDEO_SR_FAMILIES_2026-11-05.md)。
+
+- 第一轮加入了 Video Effects VideoSuperRes 和 RIFE。用户实测 RIFE 在 4K 比 VFG 高档贵得多（本机 4K 每源帧 +32 ms，VFG 高 +13 ms，中 +7 ms），且 30 系 VFG 兼容已在 `codex/vfg-ampere-20261102`，按用户要求整个删除 RIFE，补帧代码回到 main 原样。
+- 超分算法改为 RTX 视频超分 · 标准 / 高码率 / 流媒体，各自选档位（低中高超高，流媒体只有中和超高），原 1234 改为低中高超高。
+- 双重超分和超采样适配三个版本，第二次超分可选不同版本；每次超分各自走 NGX 或 Video Effects，第一次不放大时直接复制。VideoSuperRes 必须用阻塞 CUDA 流（第一轮发现并修复的错帧）。
+- 验证：导出 9 组（含四种双重运行库组合）全部逐帧对齐；实际界面新夹具 15 项、原双重夹具 21 项通过；新单测 240/0，VFG 设置 683/0，QtQuick 132/0/1，补帧集成两种模式通过。
+- 未做：打包清单、其他显卡、HDR 内容；RIFE 下载与依赖约 1.6 GB 仍在本机，待用户决定是否删除。
+
 ## 2026-10-27 屏幕捕获帧率、采集对白与后续方向（Claude）
 
 用户要求：屏幕捕获60帧只有55（日志67）、采集对白很轻（日志68）、后续方向只调研。分支claude/capture-fps-audio-20261027从main 7b0b64b；用户Veyra运行中，未停止、未占采集卡；不push/Release。报告[CAPTURE_FPS_AUDIO_REPORT_2026-10-27](CAPTURE_FPS_AUDIO_REPORT_2026-10-27.md)，证据reports/claude-capture-fps-audio-20261027。

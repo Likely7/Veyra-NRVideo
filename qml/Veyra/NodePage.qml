@@ -1512,9 +1512,10 @@ VPage {
                     label: qsTr("超分算法")
                     VSelect {
                         objectName: "node-sr-backend"
+                        implicitWidth: 210 // the RTX Video SR family names need more than the default 150
                         options: veyra.srBackendChoices || []
-                        value: options.find(o => o.id === String(veyra.videoSrQuality === 0 || veyra.videoSrQuality === 5 ? veyra.videoSrQuality : 4))?.label || ""
-                        onPicked: id => veyra.videoSrQuality = Number(id)
+                        value: options.find(o => o.id === veyra.srAlgorithmOf(veyra.videoSrQuality))?.label || ""
+                        onPicked: id => veyra.videoSrQuality = veyra.srQualityFor(id, veyra.srTierOf(veyra.videoSrQuality))
                     }
                 }
                 VRow {

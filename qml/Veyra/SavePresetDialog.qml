@@ -16,7 +16,7 @@ DialogLayer {
     // node, with the parameters that matter.
     function nodeSummary(n) {
         switch (n.type) {
-        case "sr": return veyra.srTargetLabel + (veyra.videoSrQuality > 0 ? qsTr(" · 质量 ") + veyra.videoSrQuality : "")
+        case "sr": return veyra.srTargetLabel + (veyra.srQualityLabel(veyra.videoSrQuality, true) ? " · " + veyra.srQualityLabel(veyra.videoSrQuality, true) : "")
         case "nr": { const l = veyra.nrLayers.find(x => x.index === n.index); return l ? qsTr("强度 ") + l.intensity.toFixed(2) : "NR" }
         case "video-hdr": return qsTr("峰值 ") + (veyra.videoHdrParams.peakNits || 1000) + " nits"
         case "protection": return veyra.protectionRegions.length + qsTr(" / 4 个区域")

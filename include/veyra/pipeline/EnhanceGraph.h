@@ -49,7 +49,7 @@ struct SwsContext;
 struct NVSDK_NGX_Parameter;
 struct NVSDK_NGX_Handle;
 namespace veyra::guidance { class AmdOpticalFlow; class GpuDisOpticalFlow; }
-namespace veyra::pipeline { class VfgBackend; }
+namespace veyra::pipeline { class VfgBackend; class VfxSrBackend; }
 
 namespace veyra::gfx {
 class D3D12DeviceContext;
@@ -1039,6 +1039,10 @@ private:
     std::unique_ptr<guidance::GpuDisOpticalFlow> gpuDis_;
     std::unique_ptr<ngx::VideoSrBackend> videoSrBackend_;
     std::unique_ptr<ngx::VideoSrBackend> firstVideoSrBackend_;
+    // Video Effects VideoSuperRes (high bitrate / streaming families): the final
+    // pass and, under double SR, the first pass when that family is chosen there.
+    std::unique_ptr<VfxSrBackend> vfxSrBackend_;
+    std::unique_ptr<VfxSrBackend> firstVfxSrBackend_;
     std::unique_ptr<ngx::TrueHdrBackend> videoHdrBackend_;
     std::unique_ptr<ngx::DlssFgBackend> fgBackend_;
     std::unique_ptr<gfx::FsrFgPresenter> fsrFgBackend_;
