@@ -164,8 +164,48 @@ void QmlPlayerBridge::tickPlaylist() {
 }
 
 void QmlPlayerBridge::openPath(const QString& path) {
+    // 观看进度由 tickBiliPlay 的 worker 负责上报（B 站那次打开会先把状态取走）。
+    // 只有非 B 站打开才在这里上报，因为那条路径没有 worker 替它做。
+    // 保留这个入口的理由：openPath 是所有打开方式的汇合点。
+    // The Bilibili open already reports through its worker; every other open ends
+    // here, so this is the one place a flushed position is seen.
+    flushBiliWatchProgress();
+    // Consumed up front: an empty path must not leave the flag set for the next open.
+    const bool keepBilibiliStream = impl_->bilibiliOpenPending;
+    impl_->bilibiliOpenPending = false;
+    // Any open supersedes a mirror retry that is still waiting on its timer.
+    ++impl_->biliOpenGen;
     if (path.isEmpty()) return;
     flushHdrMemory();impl_->hdrTitleApplied.clear();
+    // A local file or an unrelated URL must not inherit the last video's DASH audio
+    // address or the site's Referer/UA: separateAudio reads audioPath alone, so a
+    // stale value makes the engine open the previous Bilibili track as this source's
+    // audio. The Bilibili branches write these immediately before calling openPath
+    // and raise bilibiliOpenPending, so the open they asked for keeps them.
+    // 非 B 站打开：清掉上一次 B 站打开留下的来源、重播身份、镜像重试与弹幕状态，
+    // 否则播完点「播放」会跳回上一部 B 站视频、本地文件会继承它的音频地址。
+    // 这段在 2.1.2 拆桥接层时丢过（814ec867），2026-11-07 补回。
+    if (!keepBilibiliStream) {
+        impl_->biliSourceActive = false;
+        impl_->biliReplayBvid.clear();
+        impl_->biliReplayCid = 0;
+        impl_->fgAutoPlanned = false;
+        impl_->pendingHeaders.clear();
+        impl_->pendingUserAgent.clear();
+        impl_->pendingAudioPath.clear();
+        // The mirror retry belongs to the source that was being opened, not to this one.
+        impl_->biliMirrors.clear();
+        impl_->biliMirrorIndex = 0;
+        impl_->biliRetriesLeft = 0;
+        impl_->biliRetryPending = false;
+        // Danmaku belongs to the Bilibili track it was loaded for: a local file, a plain
+        // URL, a capture or a stream must not keep drawing the previous video's comments.
+        if (impl_->danmakuEnabled) bilibiliDisableDanmaku();
+        // A history position belongs to the Bilibili video it was read for. Opening
+        // anything else must not seek that other source to it.
+        impl_->biliResumeAt = -1.0;
+        impl_->biliResumeSession = 0;
+    }
     const bool network=media::networkMediaInput(wideOf(path));
     if (QFileInfo(path).isDir()) {
         impl_->playlist->addPaths({path}); emit playlistRequested(); return;
@@ -239,6 +279,26 @@ void QmlPlayerBridge::togglePlayPause() {
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    // B 站视频的播完/恢复必须最先处理：它的来源也是网络地址（liveKind=="url"），
+    // 下面的网络地址重开会拿 sourceLabel 重新连接 —— 而那是带时效签名的 CDN 地址，
+    // 早已过期，只会 403。这里按记住的 bvid/cid/画质重新解析一次，拿到全新地址。
+    // 从头播：播完时位置就在结尾，沿用续播位置会立刻再次结束。
+    // A finished Bilibili video must be handled before everything else: its source is
+    // also a network address (liveKind=="url"), and the branch below reconnects from
+    // sourceLabel - a CDN URL with an expiry signature that only 403s by then. Re-resolve
+    // from the remembered bvid/cid/quality instead. From the start: the position sits at
+    // the end when the video finished, so a resume point would end it immediately again.
+    // 这段在 2.1.2 拆桥接层时丢过（814ec867），2026-11-07 补回。
+    if (impl_->biliSourceActive && !impl_->biliReplayBvid.isEmpty() && impl_->biliReplayCid > 0
+        && (s.transport == T::Ended || !s.running)) {
+        veyra::log::info("ui-transport", std::format(
+            "ended Bilibili video: re-resolving bvid={} cid={} qn={} from the start",
+            impl_->biliReplayBvid.toStdString(), impl_->biliReplayCid,
+            impl_->biliReplayQuality));
+        bilibiliPlayCid(impl_->biliReplayBvid, impl_->biliReplayCid,
+                        impl_->biliReplayQuality, /*fromStart=*/true);
+        return;
+    }
     if(impl_->liveKind==QLatin1String("url")&&(s.transport==T::Ended||(s.transport==T::Paused&&s.duration<=0))){
         openNetworkAddress(QString::fromStdWString(impl_->sourceLabel));return;
     }
