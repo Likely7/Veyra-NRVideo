@@ -26,7 +26,16 @@ if(MSVC AND CMAKE_GENERATOR MATCHES "Ninja")
   if(NOT VEYRA_INCLUDE_RESULT EQUAL 0 OR NOT VEYRA_INCLUDE_OUTPUT MATCHES "(^|[\r\n])([^\r\n]*: )[ ]*[A-Za-z]:[^\r\n]*veyra-include-probe.h")
     message(FATAL_ERROR "Unable to verify MSVC/Ninja header dependency prefix")
   endif()
-  set(CMAKE_CL_SHOWINCLUDES_PREFIX "${CMAKE_MATCH_2}")
+  # CMake writes the prefix into rules.ninja as UTF-8. A localized cl.exe prints
+  # a non-UTF-8 prefix (GBK "注意: 包含文件: " on a Chinese Windows), CMake then
+  # cannot write CMakeFiles/rules.ninja, and ninja rejects the whole build.ninja
+  # with "unknown build rule CXX_COMPILER__*_unscanned_*". Keep the probe as a
+  # check, but only forward a pure ASCII prefix; on a localized install the
+  # English default is the safe fallback (header deps get no useful prefix, but
+  # the build itself works).
+  if(CMAKE_MATCH_2 MATCHES "^[ -~]*$")
+    set(CMAKE_CL_SHOWINCLUDES_PREFIX "${CMAKE_MATCH_2}")
+  endif()
 endif()
 
 # ---------------------------------------------------------------------------
