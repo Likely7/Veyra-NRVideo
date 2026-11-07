@@ -75,3 +75,22 @@ D:\Program\Veyra-2.1.3-NVIDIA-win64-portable\
 - 用户 2.1.2 的数据（`runtime_local\user-data-2.0.0-p5`、`runtime_local\luts`）尚未迁移到 2.1.3 目录，需要用户确认后复制。
 - 旧目录 `D:\Program\Veyra-2.1.2-NVIDIA-win64-portable` 保持原样未动，可随时回退。
 - 代码只在本地提交，未 push。
+
+## 合并遗漏审计与修复（2026-11-07，用户验收通过）
+
+`814ec867`（把定制从 2.1.1 搬到 2.1.2、同时拆分 `QmlPlayerBridge.cpp` → `src/ui/bridge/*`）丢了 8 段代码。2.1.3 merge 本身没有额外丢失——PR #80 分支（`7b72a241`）同样缺这 8 段，说明丢失早于这次 merge。
+
+| # | 位置 | 后果 | 提交 |
+|---|---|---|---|
+| 1 | `tickSubtitles()` 位置追踪 | 从不写真实进度，详情页不能续播 | `598b1a54` |
+| 2 | `togglePlayPause()` 播完 B 站分支 | 用过期 CDN 地址重连，403 | `2fb53b61` |
+| 3 | `openPath()` B 站状态清理 | 本地文件继承上一部音频/Referer；弹幕不清 | `2fb53b61` |
+| 4 | `openPath()` options 泄漏 | 同上（本仓库直接写 `impl_->options` 导致） | `37349c5c` |
+| 5 | `openSourceUri()` 镜像重试重置 | 采集/串流打开不取消待触发的镜像重试 | `37349c5c` |
+| 6 | `hdrSourceInfo()` DV 字段 | HDR 页看不到 profile/RPU/峰值/HDR10+ | `37349c5c` |
+| 7 | `store/loadHdrTitleProfile()` | 路径归一化与 doviFollow/doviP7Compose 每片记忆丢失 | `37349c5c` |
+| 8 | `openNetworkAddress()` B 站 URL 解析 | 粘贴 B 站链接不播放 | `37349c5c` |
+
+同时清理了 2.1.1 遗留的 `pendingHeaders/pendingUserAgent/pendingAudioPath`（B 站改直写 `impl_->options` 后只剩赋值与 clear，无读取）。编译器 `/W4 /WX`、61 个偏好键白名单、505 个 QML 桥接成员均通过检查。
+
+用户 2026-11-07 验收：8 项（续播、播完重播、本地文件音频、采集/捕获切换、DV 源信息、HDR 每片记忆、B 站链接播放）全部通过。部署 exe `78c0a584…`；未 push。
