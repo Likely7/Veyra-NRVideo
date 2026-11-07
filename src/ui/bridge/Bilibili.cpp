@@ -1250,10 +1250,7 @@ void QmlPlayerBridge::tickBiliPlay() {
     // This open is a Bilibili source, so remember it: after the video ends, Play must
     // not reopen the stale address.
     i.biliSourceActive = true;
-    // Kept on impl_ as well: openPath() re-applies them after rebuilding options.
-    i.pendingHeaders = urls.headers;
-    i.pendingUserAgent = urls.userAgent;
-    i.pendingAudioPath = urls.audioUrl;
+    // Kept on impl_ as well: the open reads impl_->options directly.
     i.bilibiliOpenPending = true;
     i.options.network.requestHeaders = urls.headers;
     i.options.network.userAgent = urls.userAgent;

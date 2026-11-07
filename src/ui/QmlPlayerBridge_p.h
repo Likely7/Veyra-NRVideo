@@ -964,13 +964,11 @@ struct QmlPlayerBridge::Impl {
 #endif
 
     // Set by the Bilibili resolver for the next open: the page title and the HTTP
-    // headers the CDN requires. These live here rather than only in `options`
-    // because PlayerOptions::from() rebuilds the whole struct on every settings
-    // change and would wipe them; openPath() copies them back in before the open.
+    // The title of the Bilibili page being opened (shown until the engine reports one).
+    // The old pending* hand-off for headers/audio is gone: the Bilibili branch writes
+    // impl_->options directly since 2.1.2, and openPath() now strips those fields for
+    // every non-Bilibili source instead of copying them in.
     std::wstring pendingTitle;
-    std::wstring pendingHeaders;
-    std::wstring pendingUserAgent;
-    std::wstring pendingAudioPath;
     // True only between a Bilibili branch writing the pending* fields above and the
     // openPath call it makes, so openPath knows to keep them instead of clearing.
     bool bilibiliOpenPending = false;

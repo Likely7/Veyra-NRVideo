@@ -190,9 +190,6 @@ void QmlPlayerBridge::openPath(const QString& path) {
         impl_->biliReplayBvid.clear();
         impl_->biliReplayCid = 0;
         impl_->fgAutoPlanned = false;
-        impl_->pendingHeaders.clear();
-        impl_->pendingUserAgent.clear();
-        impl_->pendingAudioPath.clear();
         // The mirror retry belongs to the source that was being opened, not to this one.
         impl_->biliMirrors.clear();
         impl_->biliMirrorIndex = 0;
@@ -244,6 +241,17 @@ void QmlPlayerBridge::openPath(const QString& path) {
     if(!network)rememberSource(QStringLiteral("file"), path);
     if (impl_->preOpen) impl_->preOpen();
     auto options = impl_->options;
+    // B 站那次打开要保留它的 DASH 音频地址与 Referer/UA；其他来源必须清掉。
+    // impl_->options 从 2.1.2 起由 B 站直接写入（不再走 pending* 中转），这里不清
+    // 就会把上一部 B 站视频的音频 URL 当成这个本地文件的音轨。
+    // Bilibili writes impl_->options directly since 2.1.2 (no pending* hand-off any
+    // more); without this an unrelated file inherits the previous video's DASH audio
+    // URL and Referer/UA.
+    if (!keepBilibiliStream) {
+        options.audioPath.clear();
+        options.network.requestHeaders.clear();
+        options.network.userAgent.clear();
+    }
     options.softwareDecode = impl_->prefString("decode") == QLatin1String("software");
     options.hardwareDecodeOnly = impl_->prefString("decode") == QLatin1String("hardware");
     options.deinterlace=deinterlaceAvailable()&&impl_->prefBool("deinterlace",true);
@@ -266,7 +274,37 @@ void QmlPlayerBridge::openPath(const QString& path) {
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
 void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
 bool QmlPlayerBridge::openNetworkAddress(const QString& address){
-    const QUrl url(address.trimmed(),QUrl::StrictMode);
+    const QString trimmed = address.trimmed();
+    // A Bilibili page URL is not a media URL: resolve it to the CDN stream first.
+    // 粘贴 B 站页面地址直接播放：解析成 CDN 流，再带上 Referer/UA 与 DASH 音频打开。
+    // 这段在 2.1.2 拆桥接层时丢失（isBilibiliPageUrl 变成无人调用的死函数）。
+    if (media::isBilibiliPageUrl(trimmed.toStdWString())) {
+        // Send the stored session so member renditions are available.
+        const std::wstring cookie = media::loadBilibiliCookie();
+        const auto stream = media::resolveBilibiliStream(trimmed.toStdWString(), cookie);
+        if (!stream.ok) {
+            emit notice(QString::fromStdWString(stream.error), true);
+            veyra::log::warn("bilibili", QString::fromStdWString(stream.error).toStdString());
+            return false;
+        }
+        if (!stream.title.empty()) impl_->pendingTitle = stream.title;
+        // The CDN needs the site's Referer/User-Agent; carry them on the open
+        // options so the demuxer sends them (see networkMediaHeaders).
+        impl_->options.network.requestHeaders = stream.headers;
+        impl_->options.network.userAgent = stream.userAgent;
+        // DASH keeps audio in its own stream; the video address carries none.
+        impl_->options.audioPath = stream.audioUrl;
+        impl_->bilibiliOpenPending = true;
+        QString info = QStringLiteral("%1 × %2  %3")
+            .arg(stream.width).arg(stream.height)
+            .arg(QString::fromStdWString(stream.codec));
+        if (stream.audioUrl.empty()) info += QStringLiteral("  ") + tr("无音频");
+        if (!media::bilibiliCookieLooksSignedIn(cookie)) info += QStringLiteral("  ") + tr("（未登录，画质受限）");
+        emit notice(tr("正在播放：") + QString::fromStdWString(stream.title) + QStringLiteral("  ") + info, false);
+        openPath(QString::fromStdWString(stream.url));
+        return true;
+    }
+    const QUrl url(trimmed,QUrl::StrictMode);
     if(!url.isValid()||url.host().isEmpty()||!media::networkMediaInput(wideOf(url.scheme()+QStringLiteral(":")))){
         emit notice(tr("请输入有效的 HTTP、HTTPS 或 RTSP 视频地址"),true);return false;
     }

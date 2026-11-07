@@ -424,9 +424,13 @@ void QmlPlayerBridge::syncHdrTitleProfile(){
 
 bool QmlPlayerBridge::loadHdrTitleProfile(const QString& title){
   const auto list=impl_->prefs.value(QStringLiteral("hdrTitles")).toList();
+  // Path separators must not decide whether a memory matches: canonicalFilePath()
+  // hands back '/', while entries written by older builds stored '\'.
+  const auto normalized=[](QString v){v.replace(QLatin1Char('\\'),QLatin1Char('/'));return v;};
+  const QString wanted=normalized(title);
   for(const auto& item:list){
     const auto stored=item.toMap();
-    if(stored.value(QStringLiteral("key")).toString()!=title)continue;
+    if(normalized(stored.value(QStringLiteral("key")).toString())!=wanted)continue;
     auto s=settings();
     const auto number=[&](const char* key,int fallback){
       return stored.contains(QLatin1String(key))?stored.value(QLatin1String(key)).toInt():fallback;};
@@ -438,6 +442,10 @@ bool QmlPlayerBridge::loadHdrTitleProfile(const QString& title){
     s.hdrCurve.rollOffPercent=unsigned(std::clamp(number("rollOffPercent",int(s.hdrCurve.rollOffPercent)),10,200));
     s.hdrCurve.peakCapNits=unsigned(std::clamp(number("peakCapNits",int(s.hdrCurve.peakCapNits)),0,4000));
     s.hdrCurve.strengthPercent=unsigned(std::clamp(number("strengthPercent",int(s.hdrCurve.strengthPercent)),0,200));
+    // Custom: the Dolby Vision follow belongs to the same per-film look, so it is
+    // remembered with it. Entries written before it existed keep the current value.
+    s.doviFollow=stored.value(QStringLiteral("doviFollow"),s.doviFollow).toBool();
+    s.doviP7Compose=stored.value(QStringLiteral("doviP7Compose"),s.doviP7Compose).toBool();
     QScopedValueRollback<bool> restoring(impl_->hdrRestoring,true);
     return commitHdrTuning(std::move(s));
   }
@@ -458,10 +466,14 @@ bool QmlPlayerBridge::storeHdrTitleProfile(const QString& title){
   entry[QStringLiteral("rollOffPercent")]=int(c.rollOffPercent);
   entry[QStringLiteral("peakCapNits")]=int(c.peakCapNits);
   entry[QStringLiteral("strengthPercent")]=int(c.strengthPercent);
+  entry[QStringLiteral("doviFollow")]=doviFollow();
+  entry[QStringLiteral("doviP7Compose")]=doviP7Compose();
   auto list=i.prefs.value(QStringLiteral("hdrTitles")).toList();
-  for(const auto& item:list)if(item.toMap().value(QStringLiteral("key")).toString()==title&&item.toMap()==entry)return false;
+  const auto normalized=[](QString v){v.replace(QLatin1Char('\\'),QLatin1Char('/'));return v;};
+  const QString wanted=normalized(title);
+  for(const auto& item:list)if(normalized(item.toMap().value(QStringLiteral("key")).toString())==wanted&&item.toMap()==entry)return false;
   for(int n=list.size()-1;n>=0;--n)
-    if(list[n].toMap().value(QStringLiteral("key")).toString()==title)list.removeAt(n);
+    if(normalized(list[n].toMap().value(QStringLiteral("key")).toString())==wanted)list.removeAt(n);
   list.append(entry);
   // Bounded list: the oldest titles fall off the front.
   while(list.size()>i.kHdrTitleProfileLimit)list.removeFirst();
@@ -569,7 +581,12 @@ QVariantMap QmlPlayerBridge::hdrSourceInfo() const {
   const unsigned cll=snap.sourceMaxCllNits,fall=snap.sourceMaxFallNits;
   const bool valid=snap.sourceHdr&&(mastering||cll||fall);
   return {{"valid",valid},{"masteringPeakNits",int(mastering)},
-          {"maxCllNits",int(cll)},{"maxFallNits",int(fall)}};
+          {"maxCllNits",int(cll)},{"maxFallNits",int(fall)},
+          {"doviProfile",int(snap.sourceDoviProfile)},
+          {"doviRpu",snap.sourceDoviRpu},
+          {"doviMaxNits",int(snap.sourceDoviMaxNits)},
+          {"doviEnhancement",snap.sourceDoviEnhancement},
+          {"hdr10Plus",snap.sourceHdr10Plus}};
 }
 
 bool QmlPlayerBridge::sourceIsSdr() const {
