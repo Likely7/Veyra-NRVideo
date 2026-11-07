@@ -1,3 +1,5 @@
+> 后续更新：Claude已复现同路径、相同ZIP时间戳时Qt复用旧编译缓存，修复已并本地main。见[合并验收](CLAUDE_FIXES_MERGE_2026-11-06.md)与[缓存修复](QML_CACHE_PER_BUILD_2026-11-06.md)。下文保留本次初步排查过程。
+
 # 2.1.3 RTX三模型选择跳回DLSS：日志诊断
 
 用户日志35447行，SHA256 2975caad86b74be9ce09be500176a700bbbcc345db1e6eea7b6fd58df8c91df3；RTX3080 10GB，驱动32.0.16.2101。用户明确新目录解压，不归因覆盖残留。

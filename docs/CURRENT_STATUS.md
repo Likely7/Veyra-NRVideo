@@ -1,3 +1,5 @@
+> **2026-11-06 Claude最新两项修复已合本地main**：QML按内容隔离编译缓存(a66f7e9→a625787)、Issue88 AMD HIP子进程自检保护(b15152b→f3b103d)，唯一WORKLOG冲突已保留双方追加。8目标86.8s、Quick173/0/0、缓存/HIP/合同/i18n、AMD合成128/0与ABI66/0、主程序HIP子模式及开启缓存真实菜单首次/复用通过。读docs/CLAUDE_FIXES_MERGE_2026-11-06.md和reports/codex-claude-merge-20261106/FINAL.json。共享构建标签2.1.3-integration-test，未制作/替换正式包、未push；公开仍v2.1.3。RX9060XT/HIP7现场待验，不称根治；此前禁用缓存漏测教训已记录，后续升级验收必须保留缓存/覆盖跨版。下方Claude“未提交/未合并”为当时记录；NR隔帧仅调研，未实施。
+
 > **正式版2.1.3（2026-11-06）**：已发布至Likely7/Veyra-NRVideo，Latest=v2.1.3。三类超分/独立第二次模型、NR组内网控、RTX30 VFG实验、RX7000多GPU及播放导出菜单修复，默认中档与Boost红字提示均包含。产品7a2d15d、发布源码0a09d37；两包/源码/对比图/二维码远端核验通过。[完整更新与迁移](RELEASE_NOTES_2.1.3.md) · [发布记录](RELEASE_2.1.3_EXECUTION_2026-11-06.md)。
 
 > **2026-11-06 2.1.3默认中档重构建完成（最新）**：产品7a2d15d；基础/第二次超分默认中档并保留保存值，Boost警告仅选中时红字。Quick173/0/0、设置兼容及实际UI/重启、两ZIP核验和解压播放通过；旧构建产物及本轮临时解压/测试副本已按清单清理，配置/日志保留。新入口`E:/项目/Veyra/test-packages/codex-rebuild-2.1.3-20261106`，证据[重构建记录](REBUILD_2.1.3_DEFAULTS_2026-11-06.md)和同任务FINAL.json。未push/Release，公开版仍2.1.2。
