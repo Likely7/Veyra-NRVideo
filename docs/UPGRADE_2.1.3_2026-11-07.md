@@ -6,7 +6,7 @@
 
 - 定制源码分支：`test/merge-213`（`ae1c95b1` Merge v2.1.3 into the local custom line），基于 `test/merge-212` 的 18 个定制提交合并上游 `v2.1.3`（`0a09d376`）。
 - 部署目录：`D:\Program\Veyra-2.1.3-NVIDIA-win64-portable`，含两个启动脚本与 `.orig` / `.custom` 两套备份。
-- 定制 exe：`f1a30ca3a2d678368f2c2916f835487c4d0a303cd12151800afa8de15e3863b1`，8,119,296 字节，PE 2.1.3。
+- 定制 exe：`c1e130ec09c2ea7ec28fdd106133a21f…`（Ninja 构建，`build/`），PE 2.1.3。曾先用 VS 生成器构建 `f1a30ca3…` 应急，Ninja 修复后已整体换成 Ninja 产物，VS 构建目录 `build-vs213` 已删除。
 - 作者 exe：`76c4a44ee582dcd4150152c4e32e5e45f61fee1a35a285818dc7ee1464940f7a`（与作者包一致）。
 - 两个启动脚本实测互切并各自启动成功（见下）。
 
