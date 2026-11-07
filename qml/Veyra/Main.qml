@@ -170,17 +170,19 @@ Window {
         const prev = shownPage
         if (prev === page) return
         leavingPage = Theme.reduced || prev === "" || instantPage ? "" : prev
-        // Leaving a page without a picture (home, settings): an open may follow in
-        // the same call (openPath navigates, then opens) and the engine samples the
-        // host size once, so the rect is placed now, not 150 ms later. There is no
-        // picture on the old page to fade against.
-        if (prev === "home" || prev === "set") videoHost.syncRect()
+        // Leaving a page without a picture (home, settings, the Bilibili browser): an
+        // open may follow in the same call (openPath navigates, then opens) and the
+        // engine samples the host size once, so the rect is placed now, not 150 ms
+        // later. There is no picture on the old page to fade against. "bili" belongs
+        // here too: its own videoRect is zero-sized, so without this the open read a
+        // 0x0 host and the native window was never placed.
+        if (prev === "home" || prev === "set" || prev === "bili") videoHost.syncRect()
         if (leavingPage !== "") { leaveAnim.restart(); showTimer.restart() }
         else showPage(false)
     }
     // The page on screen (entering or settled) and the one sinking out.
     property string shownPage: "home"
-    readonly property var pageItems: [homePage, minPage, proPage, nodePage, exportPage, settingsPage]
+    readonly property var pageItems: [homePage, minPage, proPage, nodePage, exportPage, settingsPage, biliPage]
     property string leavingPage: ""
     function showPage(animated) {
         shownPage = page
@@ -233,7 +235,11 @@ Window {
             return veyra.gameVideoRect
         // Fullscreen is a video-only viewport (AppShell): the picture is the screen
         // and the controls float above it in their own window (FullscreenBar).
-        if ((fullscreen || (maximized && page === "min")) && page !== "home" && page !== "set")
+        // "bili" is excluded like home/settings: that page is a browser, its own case
+        // below already hides the picture, and taking the whole-screen rect instead
+        // covered the list with the native window so it could not be clicked at all.
+        if ((fullscreen || (maximized && page === "min")) && page !== "home" && page !== "set"
+            && page !== "bili")
             return { x: 0, y: 0, width: width, height: height }
         switch (page) {
         case "min":
@@ -245,6 +251,12 @@ Window {
             return proPage.videoViewport
         case "node":
             return nodePage.videoViewport
+        case "bili":
+            // This page is a browser, not a player. Playback moves the user to 极简
+            // (openPath navigates there), so returning here must hide the picture
+            // rather than draw it over the list: a zero-sized rect takes the native
+            // video window out of the way while the audio and engine keep running.
+            return { x: 0, y: 0, width: 0, height: 0 }
         case "exp":
             return ExportLayout.calculate(width, height, exportPage.compactTab).video
         default:
@@ -260,7 +272,7 @@ Window {
         // In fullscreen the picture covers the page, and the native video window
         // passes the pointer through: a hidden page control must not take a click
         // meant for the picture.
-        visible: !root.fullscreen || root.page === "home" || root.page === "set" || root.quickPanelShown
+        visible: !root.fullscreen || root.page === "home" || root.page === "set" || root.page === "bili" || root.quickPanelShown
         // Each page is shown while current or while sinking out; the sinking one
         // takes no input (.page.leave { pointer-events: none }).
         HomePage { id: homePage; pageId: "home"; home: pages; onRequestPage: p => root.goPage(p); onRequestSponsor: root.showSponsor() }
@@ -306,6 +318,7 @@ Window {
         }
         ExportPage { id: exportPage; pageId: "exp"; home: pages; onRequestPage: p => root.goPage(p) }
         SettingsPage { id: settingsPage; pageId: "set"; home: pages; onRequestPage: p => root.goPage(p) }
+        BilibiliPage { id: biliPage; pageId: "bili"; home: pages; onRequestPage: p => root.goPage(p) }
     }
 
     // The five dialogs sit above the pages and below the dock's own tooltips.

@@ -8,6 +8,9 @@ ColumnLayout {
     property real hue: 0
     property real saturation: 0
     property real luminance: 0
+    // 有些调用点只要色盘、自己提供另一个滑块（比如字幕底色用它配不透明度）。
+    // Some callers want just the disc and supply their own slider (subtitle background).
+    property bool showLuminanceSlider: true
     signal edited(real hue, real saturation, real luminance)
     spacing: 6
     Text { Layout.alignment:Qt.AlignHCenter; text:root.title; color:Theme.t2; font.pixelSize:12 }
@@ -52,11 +55,17 @@ ColumnLayout {
         }
     }
     VSlider {
+        visible: root.showLuminanceSlider
+        // 圆点在两端时圆心落在轨道端点上，不给余量就会被父容器边缘切掉一半。
+        // The knob centre sits on the track end, so without room the edge clips it.
+        Layout.leftMargin: 12
+        Layout.rightMargin: 12
         objectName:"colour-wheel-luminance"
         Layout.fillWidth:true;from:-100;to:100;center:true;value:root.luminance
         onMoved:value=>root.edited(root.hue,root.saturation,Math.round(value))
     }
     Text {
+        visible: root.showLuminanceSlider
         Layout.alignment:Qt.AlignHCenter
         text:"H "+Math.round(root.hue)+"° · S "+Math.round(root.saturation)+" · L "+Math.round(root.luminance)
         color:Theme.t3;font.pixelSize:10

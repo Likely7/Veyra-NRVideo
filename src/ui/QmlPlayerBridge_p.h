@@ -1,11 +1,16 @@
 #pragma once
 // Private bridge state shared by cohesive implementation modules.
 // Public QML API, ownership, polling and settings contracts remain in QmlPlayerBridge.h.
+#include "veyra/media/BilibiliApi.h"
+#include "veyra/media/BiliJson.h"
+#include "veyra/media/BilibiliResolver.h"
 #include "veyra/media/FFmpegDeinterlacer.h"
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/gfx/PresentSink.h"
 #include "veyra/gfx/NvidiaVrr.h"
 #include "veyra/media/NetworkInput.h"
+#include "veyra/media/FormatBadgeWindow.h"
+#include "veyra/media/DanmakuWindow.h"
 #include "veyra/ngx/DlssgLite.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/ui/GamePassthrough.h"
@@ -199,6 +204,16 @@ struct DisplayChangeFilter final : QAbstractNativeEventFilter {
     }
 };
 } // namespace bridge_detail
+
+struct BiliPlayWorkerResult {
+media::BiliPlayUrls urls;
+bool reportOk = false;
+std::wstring reportBvid;
+long long reportCid = 0;
+int reportPlayed = 0;
+double resumeAt = -1.0;
+std::atomic<bool> done{false};
+};
 
 struct QmlPlayerBridge::Impl {
     // Per-layer on/off before the NR master switch turned them all off.
@@ -947,6 +962,180 @@ struct QmlPlayerBridge::Impl {
     int xboxStatsTicks = 0;
     std::unique_ptr<ui::XboxModel> xbox;   // last: joins its worker first
 #endif
+
+    // Set by the Bilibili resolver for the next open: the page title and the HTTP
+    // The title of the Bilibili page being opened (shown until the engine reports one).
+    // The old pending* hand-off for headers/audio is gone: the Bilibili branch writes
+    // impl_->options directly since 2.1.2, and openPath() now strips those fields for
+    // every non-Bilibili source instead of copying them in.
+    std::wstring pendingTitle;
+    // True only between a Bilibili branch writing the pending* fields above and the
+    // openPath call it makes, so openPath knows to keep them instead of clearing.
+    bool bilibiliOpenPending = false;
+    // True while bilibiliPlay is resolving. That call makes three blocking requests
+    // (progress report, page lookup, playurl); a second click during them used to queue a
+    // whole second set on the GUI thread, which is what made rapid switching feel stuck.
+    bool biliPlayResolving = false;
+    // QR sign-in key while a scan is pending.
+    std::wstring bilibiliQrKey;
+    // The URL the pending code encodes; the page renders it as a QR image.
+    std::wstring bilibiliQrUrl;
+    // Last Bilibili module failure, surfaced by bilibiliLastError().
+    std::wstring bilibiliError;
+    // 列表请求按「用途」分成四个独立槽位，互不顶替。
+    // 打开详情页时会同时发起 qualities 和 related 两个请求，而它们只相隔一个计时器
+    // 周期；共用一个槽位时后发的会覆盖先发的 future，先发的回复永远不会发出 ——
+    // 表现就是画质菜单一直只有「自动」，尽管请求确实发出去并拿到了数据。
+    // List requests get four independent slots grouped by purpose. Opening the detail
+    // page starts qualities and related one timer tick apart; a single shared slot let
+    // the later request overwrite the earlier one's future, so that reply never
+    // arrived - which showed as a quality menu stuck on 自动 even though the request
+    // ran and returned data.
+    enum class ListSlot : size_t { Cards = 0, Qualities, Related, Detail, Count };
+    // 一个排队中的请求：只记 kind 和它的代号，等前一个回收完再启动。
+    // A queued request: just the kind and its generation, started after the previous
+    // one in the same slot has been collected.
+    struct PendingListRequest {
+        QString kind;
+        int generation = 0;
+    };
+    struct ListSlotState {
+        std::future<QmlPlayerBridge::ListFetchResult> query;
+        bool busy = false;
+        QString kind;
+        int generation = 0;
+        std::vector<PendingListRequest> pending;
+    };
+    std::array<ListSlotState, size_t(ListSlot::Count)> biliListSlots{};
+    int biliListGeneration = 0;
+    // 把一个 kind 归到它该用的槽位。（QString::startsWith 不是 constexpr，故不加。）
+    // Map a kind onto the slot it belongs to. (Not constexpr: startsWith is not.)
+    static ListSlot listSlotOf(const QString& kind) {
+        if (kind.startsWith(QLatin1String("qualities:"))) return ListSlot::Qualities;
+        if (kind.startsWith(QLatin1String("related:"))) return ListSlot::Related;
+        if (kind.startsWith(QLatin1String("detail:"))) return ListSlot::Detail;
+        return ListSlot::Cards;
+    }
+    // 互动状态请求的代号：每发起一次递增，用来丢弃过期回复。
+    // Generation counter for interaction-state requests, used to drop late replies.
+    int biliInteractionGeneration = 0;
+    // 通用异步任务的槽位：每个操作一个，互不覆盖。打开详情页时会同时发起
+    // 互动状态、续播位置、评论等请求，共用一个槽位会让后发起的顶掉先发起的，
+    // 那个请求就永远收不到结果。
+    // One slot per Bilibili operation so requests never evict each other: opening the
+    // detail page starts interaction state, resume point and comments together, and a
+    // shared slot would make the last one cancel the others.
+    struct BiliSlot {
+        std::future<BiliTaskResult> query;
+        bool busy = false;
+    };
+    // 12 个操作各一个槽位，索引就是枚举值，因此同时发起的请求互不覆盖。
+    // One slot per operation, indexed by the enum value, so requests started together
+    // never evict one another.
+    // 大小取自枚举：以后再加操作不会漏掉一个槽位（原先写死 12，这次加
+    // ReportProgress 才需要改）。越界会静默踩到相邻字段，所以用枚举算。
+    // Sized from the enum so a new operation cannot silently fall off the end; the old
+    // literal 12 had to be remembered by hand every time.
+    std::array<BiliSlot, static_cast<size_t>(BiliOp::Count)> biliTaskSlots{};
+    // 字幕先存着，等片源真正跑起来再装：打开片源会 refreshSubtitles() 清空轨道，
+    // 早于它的加载会被一起清掉。
+    // Hold the fetched subtitles until playback is running: opening a source calls
+    // refreshSubtitles(), which clears the tracks.
+    QString pendingBiliSub;
+    QVariantMap pendingBiliStyle;
+    // 当前 B 站字幕在 subTracks 里的下标（-1 表示没有）：设置页改颜色时要就地刷。
+    // Index of the Bilibili track inside subTracks (-1 = none), so a colour change can
+    // repaint it in place.
+    int biliSubtitleIndex = -1;
+    struct BiliPlayJob {
+        std::future<void> query;
+        std::shared_ptr<BiliPlayWorkerResult> result;   // worker 写，tick 读
+        uint64_t generation = 0;      // 每次请求自增；resolving 期间新请求被拒绝，不会顶掉旧的
+        bool busy = false;
+        bool resolving = false;       // 已有一个在解析（保留原有的防重入语义）
+        QString bvid;
+        long long cid = 0;
+        std::wstring pageTitle;
+        int qn = 0;
+        bool fromStart = false;
+        bool plannedResume = false;
+    };
+    BiliPlayJob biliPlayJob;
+    // 丹�� overlay: created lazily, only while comments are enabled.
+    std::unique_ptr<media::DanmakuWindow> danmakuWindow;
+    // Custom (format badge): the start-up announcement drawn over the picture.
+    // Created lazily on the first session that reaches Playing.
+    std::unique_ptr<media::FormatBadgeWindow> formatBadge;
+    uint64_t formatBadgeSession = 0;
+    bool danmakuEnabled = false;
+    bool danmakuFailed = false;
+    // Last position fed to the engine, to notice a seek.
+    double danmakuLastSeconds = -1.0;
+    // Backup CDN retry: the resolved mirrors of the current video, which one is in
+    // use, and how many attempts have already failed. Bilibili lists several mirrors
+    // of the same rendition; a node that cannot be opened is simply the usual
+    // reason a play fails, so the next one is tried instead of giving up.
+    std::vector<std::wstring> biliMirrors;
+    size_t biliMirrorIndex = 0;
+    int biliRetriesLeft = 0;
+    bool biliRetryPending = false;
+    std::wstring biliVideoUrl;   // the URL currently open, for context on retry
+    // Bumped by every openPath. A delayed mirror retry checks it and gives up when the
+    // user opened something else in the meantime: without this the retry reopened a CDN
+    // address over the user's new source, and because openPath had already cleared the
+    // pending headers the retried open went out without a Referer (403).
+    int biliOpenGen = 0;
+    // What was last played from the Bilibili page, so the watch progress can be reported
+    // to the account's history when the user moves on or closes the window. Reporting is
+    // done at those two points only, not on a timer: every Bilibili request runs on the
+    // GUI thread, and a 15 s heartbeat would freeze the interface a little each time.
+    std::wstring biliWatchBvid;
+    long long biliWatchCid = 0;
+    // The last position seen while this video was actually playing, refreshed by the
+    // 16 ms tick. Reported from here rather than read from the engine snapshot at flush
+    // time: by then the engine has already torn the old session down and reports a
+    // transport state and position that no longer describe what the user watched.
+    double biliWatchLastPos = -1.0;
+    double biliWatchDuration = 0.0;
+    // Where the account left this video, read from the site's history before the open.
+    // Negative means "no resume point": the tick below turns it into a seek once the
+    // engine has a running session to seek.
+    double biliResumeAt = -1.0;
+    uint64_t biliResumeSession = 0;
+    // 发起这次播放时引擎正在用的会话号。续播 seek 必须等到会话号变成别的值才发：
+    // 点击后引擎还没开始新会话，impl_->snapshot 里仍是上一个视频的 position/duration，
+    // 此时发出的 seek 打在正要被拆掉的旧会话上，永远不会被引擎取走（实测 5 次
+    // 连续全丢），而 biliResumeAt 已被清空，于是新会话从头播。
+    // The session id the engine was using when this play was requested. The resume seek
+    // must wait until the session id changes: right after the click the engine has not
+    // started the new session yet, so impl_->snapshot still holds the previous video's
+    // position/duration. A seek issued then targets the session being torn down and is
+    // never drained by the engine (measured: five in a row lost), while biliResumeAt has
+    // already been cleared - so the new session plays from the beginning.
+    uint64_t biliResumeAfterSession = 0;
+    // 当前正在播的是 B 站视频。B 站给的是带时效签名的 CDN 地址，播完再拿它重开
+    // 必然 403，所以结束后的「播放」不能重开 sourceLabel —— 那里记的就是那条过期
+    // 地址。打开任何非 B 站来源时清掉。
+    // The source currently playing is a Bilibili video. Bilibili hands out CDN URLs
+    // with an expiry signature, so reopening sourceLabel after the video ends is
+    // guaranteed to 403 - that label holds exactly that stale address. Cleared whenever
+    // a non-Bilibili source is opened.
+    bool biliSourceActive = false;
+    // 重播身份：视频播完后点「播放」要重新解析地址，所以必须记住「要播什么」，
+    // 而不只是「上次从哪播」—— 后者是带时效签名的地址，过期就 403。
+    // Replay identity: after a video ends, Play has to resolve a fresh address, so the
+    // bridge remembers *what* to play rather than *where it played from* - the latter is
+    // a signed URL that expires and then only 403s.
+    QString biliReplayBvid;
+    long long biliReplayCid = 0;
+    int biliReplayQuality = 0;
+
+    // Last published snapshot and the revision it came from. Polling compares
+    // revisions, so an unchanged snapshot costs one comparison per tick.
+
+    // The chain the UI edits, kept in step with the facade's pending settings.
+    uint64_t fgAutoSession = 0;       // 已为哪个会话决定过档位
+    bool fgAutoPlanned = false;
 };
 
 

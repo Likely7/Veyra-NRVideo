@@ -36,6 +36,11 @@ PresentSink::DisplayPeakInfo peakOf(const DXGI_OUTPUT_DESC1& desc){
         ?unsigned(std::lround(std::min(desc.MaxFullFrameLuminance,10000.0f))):0;
     info.minNits=std::isfinite(desc.MinLuminance)&&desc.MinLuminance>=0?desc.MinLuminance:0;
     info.valid=info.peakNits>0;
+    // A full-scale peak paired with an idealised black is a ceiling declaration, not a
+    // measurement (see DisplayPeakInfo::plausible). Kept from the custom branch; the
+    // upstream refactor moved the parsing into this helper and the field would otherwise
+    // stay false forever.
+    info.plausible=info.valid&&!(info.peakNits>=4000&&info.minNits<0.01);
     return info;
 }
 }

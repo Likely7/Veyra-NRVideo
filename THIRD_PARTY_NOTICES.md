@@ -330,6 +330,14 @@ The Qt/QML interface (2026-09-26) draws the Lucide geometry that the approved pr
 The sponsor page (2026-10-19) adds Lucide `coffee` and `external-link` (as `external`) from lucide-static 1.51.0 to the same
 `icons.js`, under the same ISC notice.
 
+## QR code generation for Bilibili sign-in (2026-11-07)
+
+Project Nayuki, QR Code generator library (C++): https://github.com/nayuki/QR-Code-generator.
+`third_party/qrcodegen/qrcodegen.cpp` and `third_party/qrcodegen/qrcodegen.hpp` are imported
+verbatim; both files keep their upstream header with the full MIT notice ("Copyright (c) Project
+Nayuki"). Used by `src/media/QrImage.cpp` to encode the Bilibili sign-in URL into the QR image the
+Bilibili page shows. No modification.
+
 ## Simple Icons brand glyphs (sponsor page, 2026-10-19)
 
 设置 → 赞助作者 draws the Bilibili, TikTok (Douyin uses the same mark), X, GitHub, YouTube, Ko-fi, WeChat and Alipay

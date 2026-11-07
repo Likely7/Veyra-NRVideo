@@ -348,6 +348,9 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
     std::string name = utf8(path_);
     if (network_) {
         networkMediaOptions(&options);
+        // Site headers and UA go through the shared helper, so the demuxer and the
+        // audio pipeline cannot drift apart on how they are spelled.
+        networkMediaHeaders(&options, settings_.requestHeaders, settings_.userAgent);
         // Short drops are retried inside FFmpeg's HTTP layer first; this session's
         // reconnect (recover()) only takes over when they run out.
         av_dict_set(&options, "reconnect", "1", 0);
@@ -583,7 +586,15 @@ double DemuxSession::resumeTargetLocked() const {
     target = std::min(target, std::max(cap, plan_.startSeconds));
     // A live stream that has just come back restarts with half a second: the jitter buffer refills while it plays.
     if (liveBackCap_ > 0) target = std::min(target, liveBackCap_);
-    return std::min(target, std::max(1.0, aheadSecondsLocked() - 0.5));
+    target = std::min(target, std::max(1.0, aheadSecondsLocked() - 0.5));
+    // 服务器供不上时，上面算出的目标要等几十秒才攒得到，而攒够之后只够播十几秒又耗尽
+    // —— 观感是画面长期死等（现场 2026-10-24：server 0.81 MB/s 对 bitrate 1.75 MB/s，
+    // 目标 20 秒、实际只到 10.91 秒，一直停在「缓冲中」）。
+    // 这种情形改成「够一小段就继续播」：把等待压回 startSeconds 的量级，让画面和声音
+    // 都往前走，代价是停顿更频繁。反复短暂停顿比长期冻结更诚实，也更容易让用户想降画质。
+    if (bandwidthLow_ && target > plan_.startSeconds * 2.0)
+        target = std::max(plan_.startSeconds, std::min(target, plan_.startSeconds * 2.0));
+    return target;
 }
 
 void DemuxSession::enterPhaseLocked(Phase phase, const char* why) {
@@ -743,6 +754,19 @@ bool DemuxSession::seek(int64_t targetUs) {
     std::unique_lock lock(m_);
     if (failed_ && !settings_.autoReconnect) return false;
     seekTargetUs_ = std::max<int64_t>(0, targetUs);
+    // A seek that is already running is retargeted rather than interrupted: raising
+    // command again would abort its av_seek_frame with AVERROR_EXIT, and dragging the
+    // scrubber produces exactly that burst of requests. seekDone_ is false from the
+    // request until the demux thread finishes, which is what marks one as running.
+    if (!seekDone_) {
+        seekPending_ = true;
+        producerCv_.notify_all();
+        while (!seekDone_) {
+            if (stop_.load() || (cancelled_ && cancelled_->load())) return false;
+            seekCv_.wait_for(lock, std::chrono::milliseconds(50));
+        }
+        return seekOk_;
+    }
     seekPending_ = true;
     seekDone_ = false;
     seekOk_ = false;
@@ -766,8 +790,12 @@ void DemuxSession::requestReconnect(const char* reason) {
 }
 
 bool DemuxSession::holding() const {
+    // 只读当前阶段，不重算。phase_ 由解码线程在 updatePhaseLocked() 里维护，而这里
+    // 会被音频线程每 2–10 ms 调一次（WasapiAudioSink 的 runOnAudioThread 循环）：
+    // 原来每次调用都执行 updatePhaseLocked()，等于让音频线程反复替解码线程判阶段，
+    // 既和白天的读循环抢锁，也会把刚刚判定的 Buffering 又算回 Playing —— 音频于是
+    // 在 pause / resume 之间抖动，表现成「时钟在走、画面不动」（现场 2026-10-24）。
     std::lock_guard lock(m_);
-    const_cast<DemuxSession*>(this)->updatePhaseLocked();
     return phase_ != Phase::Playing;
 }
 
@@ -1233,7 +1261,13 @@ void DemuxSession::doSeek() {
         rateSamples_.clear();
         contentBytes_ = 0;
         afterSeek_ = true;
-        targetSeconds_ = plan_.holds ? std::min(plan_.startSeconds, 5.0) : 0.0;
+        // After a seek the decoder has to walk from the keyframe up to the target, and
+        // that walk stalls whenever the download falls behind. Waiting a little longer
+        // before the first frame is cheaper than decoding in fits and starts: measured
+        // 1.1-2.1 s of "after demux" time with the old 3 s gate, most of it waiting on
+        // the network rather than decoding. Bounded by the level's own start value so a
+        // deliberately small buffer setting still behaves.
+        targetSeconds_ = plan_.holds ? std::min(std::max(plan_.startSeconds, 6.0), 10.0) : 0.0;
         phase_ = targetSeconds_ > 0 ? Phase::Prebuffering : Phase::Playing;
         phaseSinceNs_ = nowNs();
     }
@@ -1263,6 +1297,14 @@ void DemuxSession::doSeek() {
     {
         std::lock_guard lock(m_);
         seekOk_ = ok;
+        // A successful seek reopened the source if it had been closed (the loop above
+        // calls openContext), so a session that had been marked dead is usable again.
+        // Clearing the latch here is what lets a failed session be rescued by seeking
+        // instead of forcing the user to reopen the file.
+        if (ok) {
+            failed_ = false;
+            failure_.clear();
+        }
         seekDone_ = true;
         seekCv_.notify_all();
         updatePhaseLocked();
@@ -1342,6 +1384,11 @@ bool DemuxSession::recover(int code, const char* why) {
             reconnectAttempt_ = 0;
             ++reconnects_;
             eof_ = false;
+            // The session is alive again: fail() had marked it dead, and without this the
+            // latch stayed set forever, so popVideo/popAudio kept returning Pop::Failed
+            // and the only way out was reopening the file.
+            failed_ = false;
+            failure_.clear();
             liveBackCap_ = live_ && plan_.holds ? 0.5 : 0.0;
             log::info("net-session", std::format("reconnected after {} attempt(s), {} ms; reconnects={} live={}", attempt,
                 std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - begin).count(), reconnects_, live_));

@@ -1,4 +1,5 @@
 // QML bridge: Colour responsibilities.
+#include "veyra/engine/EnhancementSettings.h"
 #include "../QmlPlayerBridge_p.h"
 
 namespace veyra::ui {
@@ -467,5 +468,37 @@ bool QmlPlayerBridge::exportColourLook(int index, const QString& path) {
     return true;
 }
 
+
+bool QmlPlayerBridge::doviFollow()const{return settings().doviFollow;}
+
+void QmlPlayerBridge::setDoviFollow(bool on){
+    auto s=settings();if(s.doviFollow==on)return;s.doviFollow=on;
+    // The shell preference is the global fallback: it re-applies at the next start
+    // even for a source that has no stored per-film profile yet.
+    auto& i=*impl_;
+    i.prefs[QStringLiteral("doviFollow")]=on;
+    if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision follow flag not saved");
+    commitHdrTuning(std::move(s));
+}
+
+bool QmlPlayerBridge::doviP7Compose()const{return settings().doviP7Compose;}
+
+void QmlPlayerBridge::setDoviP7Compose(bool on){
+    auto s=settings();if(s.doviP7Compose==on)return;s.doviP7Compose=on;
+    // Lives with the shell preference like the Level 1 follow flag, so it survives
+    // a restart and applies before the next file is opened.
+    auto& i=*impl_;
+    i.prefs[QStringLiteral("doviP7Compose")]=on;
+    if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision p7 compose flag not saved");
+    commitHdrTuning(std::move(s));
+}
+
+bool QmlPlayerBridge::doviFollowAverage()const{return settings().doviFollowAverage;}
+
+void QmlPlayerBridge::setDoviFollowAverage(bool on){
+    auto s=settings();if(s.doviFollowAverage==on)return;s.doviFollowAverage=on;
+    commitHdrTuning(std::move(s));}
+// Danmaku rides the same per-frame tick as the subtitle overlay: it reads the
+// engine's own position, so pause, seek and speed changes need no extra wiring.
 
 } // namespace veyra::ui
