@@ -44,7 +44,11 @@
 
 `build-vs213`，Visual Studio 17 2022 生成器 + 8 路并行（`UseMultiToolTask`），Release x64，参数与 2.1.2 一致：QML UI、DLSSNR、DLSS SR/FG、NVOF、CUDA driver 头、FFmpeg、Qt 6.8.3、D3D12 调试层。
 
-**为什么不用原来的 Ninja 构建目录**：在本机对 `D:\Program\Veyra\src` 反复 configure（含干净目录、VS 自带 CMake 3.31.6、删除 `CMakeFiles/rules.ninja` 重生成）时，CMake 生成的 `build.ninja` 引用 `CXX_COMPILER__*_unscanned_Release` 规则，但始终不生成 `CMakeFiles/rules.ninja`，ninja 报 `unknown build rule`；期间 `--fresh` 还覆盖过一次 `CMakeCache.txt`。改用 VS 生成器后正常。**下次构建前建议先查一下这个 Ninja 规则文件问题是否仍然存在**，否则会再次卡住。
+**Ninja 规则文件问题（已修复，2026-11-07）**：本机上 CMake 生成的 `build.ninja` 引用 `CXX_COMPILER__*_unscanned_Release`，却不写 `CMakeFiles/rules.ninja`，ninja 报 `unknown build rule`。与中文路径无关（纯 ASCII 全新目录可复现，CMake 3.30.9 / 3.31.6 / 4.4.5 都一样），最小项目正常。
+
+根因在 `CMakeLists.txt` 第 19–30 行的 MSVC include 前缀探测：`cl.exe` 在中文 Windows 上输出 **GBK 字节**的 `注意: 包含文件: `（实测 `d7a2d2e2 3a20 b0fcbaac cec4bcfe 3a20`），这段被 `set(CMAKE_CL_SHOWINCLUDES_PREFIX "${CMAKE_MATCH_2}")` 交给 CMake；CMake 写 `rules.ninja` 时按 UTF-8 处理，写不出来就删掉临时文件且不报错，于是只剩一个引用空规则的 `build.ninja`。
+
+修法：探测保留，但只转发**纯 ASCII** 前缀（`if(CMAKE_MATCH_2 MATCHES "^[ -~]*$")`）；中文环境回退到 CMake 默认英文前缀。代价是本地化环境下头文件依赖前缀不匹配（改头文件不触发重编），构建本身正常。修复后 `rules.ninja` 511 KB / 1044 条规则，`veyra_base` 与 `veyra_qml_ui` 均编译通过。提交 `acbc7b84`。
 
 ## 部署与验证
 
