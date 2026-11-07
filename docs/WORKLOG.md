@@ -794,3 +794,7 @@ Veyra-2.1.3-AMD-win64-portable.zip：717577602 bytes，SHA256 `dc1223f0aff0feb39
 
 此前Codex私有UI测试设置QML_DISABLE_DISK_CACHE=1，验证了ID映射却漏掉升级缓存条件。Claude在保留缓存的真实跨版路径复现了旧ProPage执行Number(id)并产生0/0/0。今后界面升级验收至少包含开启缓存的首次/再次启动及同路径跨版升级，不以禁用缓存的孤立通过替代。
 
+
+## 2026-11-06 项目产物安全清理
+
+删除122372文件，逻辑53.72 GiB，E盘实测可用净增33.73 GiB；项目路径累计152.89→99.28 GiB。34关键文件/正式与源码ZIP SHA不变，19工作树原HEAD/修改清单不变，依赖/Junction/用户配置/当前build与app保留。只清编译中间文件、旧测试部署与未发布包、私有缓存、旧性能读回；保留修改与用户数据候选315项，首次预检20个Profile命名obj保守排除。单文件1.4.0旧下载ZIP删除被自动审批blocked by policy拒绝，未执行、未绕过，仍保留。详情docs/PROJECT_CLEANUP_2026-11-06.md和reports/codex-project-cleanup-20261106/FINAL.json，命令及逐文件证据在同任务。产品代码/正式包不改，未push/发布。
