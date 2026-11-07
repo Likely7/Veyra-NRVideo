@@ -1,4 +1,5 @@
 # RX7000 NR启动失败：核显/独显LUID映射
+> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户补充cache.zip后续接原排查。分支codex/rdna3-nvapi-luid-20261103，基线ecfbb0f（继承本地NVENC导出修复、全屏及VFG实验）。不合main、不push/Release；不修改真实配置、AMD驱动、NVIDIA网络DLL、原ZLUDA/CUDA翻译器或已发布资产。
 

@@ -1,4 +1,5 @@
 # 补帧 60 Hz 修复返工：延迟不增长（2026-11-01）
+> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 > 后续：用户于2026-11-01授权合并，本文对应改动已原样提交为`6e79a5e`并快进本地main。合并检查及续接见[MAIN_INTEGRATION_2026-11-01.md](MAIN_INTEGRATION_2026-11-01.md)。下方“未merge/未提交”等为当时施工状态；性能及未验边界仍按原证据理解，未push/Release。
 

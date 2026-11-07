@@ -1,4 +1,5 @@
 # RTX 30 系 VFG 兼容接入
+> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户2026-11-02明确授权移植RTX30-Broadcast-FrameGen。隔离分支 `codex/vfg-ampere-20261102`，基线4895549，包含上一轮全屏进度条修复，不合main、不push/发布。本机RTX5070，不能宣称RTX30实卡已验证。
 

@@ -1,4 +1,5 @@
 # 2026-11-05 本地 main 整合与分支整理
+> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 ## 范围和存档
 

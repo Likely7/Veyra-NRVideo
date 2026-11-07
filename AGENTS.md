@@ -1,3 +1,5 @@
+> **2026-11-07 定制版升级到 2.1.3（最新）**：用户要求跟上作者 2.1.3 并保留双切换。`test/merge-213` merge `v2.1.3`（`0a09d376`），冲突 4 文件（i18n/CineBar/PresetLibrary/Preferences）；预设库 18 / 会话 13 被上游占用，本地「自动补帧倍数」改 19/14 并新增 `.auto-fg`。部署 `D:\Program\Veyra-2.1.3-NVIDIA-win64-portable`（定制 exe `78c0a584…`、作者 `76c4a44e…`），两个启动脚本互切实测通过。构建恢复 Ninja（修复 CMake 本地化 include 前缀导致 `rules.ninja` 不写）。审计 814ec867 拆分时丢的 8 段代码并修复（续播、播完重播、来源切换清理、DV 源信息、每片 HDR 记忆、粘贴 B 站链接等），用户 8 项验收通过。PR #80 已基于 2.1.3 更新（`795b16d5`，MERGEABLE）。未发版。详见 `docs/UPGRADE_2.1.3_2026-11-07.md`。
+
 > **2026-11-06 2.1.3已公开发布（最新）**：用户明确授权发布；main与v2.1.3/v2.1.3-sources已推送，发行准备0a09d37、产品7a2d15d/PE2.1.3.0，发布仅更新文档/原图/元数据，程序和运行组件字节保持重构建验收身份。两显卡包、应用/网络源码、摘要和用户超分原图已上传；服务端SHA256/大小、匿名下载、二维码各220与图片字节、标签和Latest核验通过。更新报告docs/RELEASE_NOTES_2.1.3.md，构建docs/BUILD_2.1.3.md，执行docs/RELEASE_2.1.3_EXECUTION_2026-11-06.md，发行产物releases/codex-release-2.1.3-20261106，证据reports同任务FINAL.json。原配置/测试供体/依赖保持；群公告仅文字交付。下方本地包未push等为当时状态。
 
 > **2026-11-06 2.1.3默认中档重构建已交付（最新）**：本地main产品7a2d15d，源码归档1177696，后续仅验收文档。基础/第二次RTX超分及无旧档位切入三版本均默认中档，保存档位保留；低延迟警告仅“开＋增强”显示红字。9目标最终构建通过，设置/预设/合同/i18n、软件Quick173/0/0、GPU提示6/0、真实列表/节点/保存重启通过；旧默认写死造成的格式回归已修正。中间菜单5个几何断言失败后独立14/0与完整173/0复测通过，未确定间歇原因，不宣称修复。两ZIP逐SHA/CRC及最小PATH解压播放通过，均本机RTX5070效果关闭，不冒充AMD推理。旧2.1.3已按SHA清理9422文件（逻辑8,000,253,348字节，非净物理回收），本轮临时测试/解压副本也已清理；旧配置/日志、依赖、正式包保留。交付test-packages/codex-rebuild-2.1.3-20261106（新独立配置启动器），报告同任务FINAL.json，读docs/REBUILD_2.1.3_DEFAULTS_2026-11-06.md。不push/Release；旧codex-build-2.1.3-20261106入口已退休。
@@ -65,8 +67,8 @@
 
 ## 现在从哪里开始
 
-- 当前正式版 **2.1.2**，发行标签 `v2.1.2` / 源码标签 `v2.1.2-sources`，发行准备提交 `899590f`，产品提交 `358be8c`，已进入远端main。
-- 当前施工树：`E:/项目/Veyra/worktrees/screen-recording-fix-20261022`。通用Git库仍在桌面旧工程`.git`，不可把桌面当普通副本删除。
+- 当前正式版 **2.1.3**（2026-11-06 发布），标签 `v2.1.3` / `v2.1.3-sources`，发布提交 `8fa2d2fc`，产品提交 `7a2d15d`。本地定制分支 `test/merge-213` 在其上叠加 B 站 / 杜比视界 / 站点字幕 / 缓冲门控等定制与 8 处修复。
+- 当前施工树：`D:\Program\Veyra\src`（分支 `test/merge-213`），Git 库在仓库根。桌面的旧工程与 E 盘路径都不存在了。
 - 先读 [当前状态](docs/CURRENT_STATUS.md)、[开发与验证](docs/DEVELOPMENT.md)、本任务执行记录及 [WORKLOG](docs/WORKLOG.md)。按任务需要阅读具体报告、运行库身份与许可证，不再要求每轮通读所有历史方案。
 - 用户于2026-10-27明确授权执行项目整理1–4：清过时产物、收拢分支、归档文档、分职责整理桥接/QML并回归。本轮基线main `7bf02d4`，结构整理提交`d4b1034`已验证，后续从main继续，准确整合HEAD见本轮FINAL回执。**不push、不发布**，Lecram继续暂停。
 - 完整历史授权与原规则在 [历史索引](docs/history/INDEX.md)；旧“未合并/未发布/冻结”按当时日期理解，不能覆盖用户后续明确授权。
@@ -83,9 +85,9 @@
 
 ## 产物、依赖与清理
 
-- 全部新构建、下载、日志、测试、解压、临时和打包产物统一放`E:/项目/Veyra/{build,tests,logs,tmp,downloads,deps,test-packages,releases,verify,reports,archives,worktrees}`对应任务目录。源码、受控脚本/文档留Git；不要向桌面、C盘或系统Temp新增研发产物。
-- 依赖实体`E:/项目/Veyra/deps/core`；Qt实体`E:/项目/Veyra/deps/qt/6.8.3/msvc2022_64`。`C:/veyra-deps`和`deps/core/qt-veyra`是兼容Junction，保留入口，不在C盘重建依赖。清单`E:/项目/Veyra/deps/DEPENDENCY_ROOTS.json`。
-- 当前可复用构建`E:/项目/Veyra/build/claude-screen-recording-20261022`；2.1.1正式归档`E:/项目/Veyra/releases/release-2.1.1-final-20261027`。打包供体与必要源码依赖按开发指南核对。
+- 全部新构建、下载、日志、测试、解压、临时和打包产物统一放`D:\Program\Veyra\{build,deps,tests,logs,tmp,test-packages,releases,reports,archives}`对应任务目录；临时工作目录放`D:\DSH\.dsh-tmp`。源码、受控脚本/文档留Git；不要向桌面、C盘或系统Temp新增研发产物。
+- 依赖实体`D:\Program\Veyra\deps`（FFmpeg 等）；Qt实体`D:\Program Files\Qt\6.8.3\msvc2022_64`。C 盘上的旧 Junction 随旧工程一起消失，不要重建。
+- 当前可复用构建`D:\Program\Veyra\build`（Ninja，增量约 2 秒）；部署`D:\Program\Veyra-2.1.3-NVIDIA-win64-portable`（定制版 / 作者版双切换）。旧 E 盘的构建与发行目录不再存在。
 - FFmpeg保持实际patched版本（PS5 H.264 slices256、dav1d、压缩PGS所需zlib），并保留实际对应源码、补丁、构建记录及许可证；不可退回未打补丁底包。
 - 正式归档保留2.0.7及以后已发布资产和对应源码。一个任务共享一份运行目录，以data-dir/log隔离用例；结束后清掉重复运行/解压副本，保留最终交付和必要证据。
 - 清理前核对绝对目标、父链reparse、当前进程、hash/文件身份和恢复清单；不把硬链接路径长度相加当实际回收。不修改历史guard/start来制造通过。

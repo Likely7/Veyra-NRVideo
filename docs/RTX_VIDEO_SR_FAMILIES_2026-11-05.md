@@ -1,4 +1,5 @@
 # RTX 视频超分三个版本（标准 / 高码率 / 流媒体）与双重超分（2026-11-05，Claude）
+> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 ## 用户要求与当前状态
 

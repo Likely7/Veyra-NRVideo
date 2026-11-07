@@ -1,4 +1,5 @@
 # 全屏进度条拖动修复
+> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户2026-11-02反馈全屏不能拖动进度条。隔离分支 `codex/fullscreen-seek-20261102`，基线 `fedd7fc`，仅修共享播放条和全屏隐藏条件；不推送、合并或替换GitHub发布资产。
 

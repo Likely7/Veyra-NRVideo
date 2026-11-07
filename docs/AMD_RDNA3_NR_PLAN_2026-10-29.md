@@ -1,4 +1,5 @@
 # RX7000 NR接入执行记录
+> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户2026-10-29授权加入RX7000支持，包含Small性能模型。基线e7a9ae1，分支codex/amd-rdna3-nr-20261029，checkpoint/pre-amd-rdna3-nr-20261029；不合并main、不push/Release。保留RX9000 lmxxf路径，不改真实配置/驱动/已有SDK与运行组件。
 
