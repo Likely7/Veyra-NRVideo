@@ -747,3 +747,31 @@ Veyra-2.1.3-AMD-win64-portable.zip：717577602 bytes，SHA256 `dc1223f0aff0feb39
 **记录**：`docs/QML_CACHE_PER_BUILD_2026-11-06.md`，回执 `E:/项目/Veyra/reports/claude-qmlcache-20261106/FINAL.json`。
 
 **未验证**：未在用户 RTX 3080 上验证，代码页回退分支未实测，未重跑全套 QtQuick。
+
+
+## 2026-11-06 Issue #88：RX 9060 XT 开 AMD NR 第一帧崩溃，改为 HIP 子进程自检（Claude）
+
+**状态**：分支 `claude/issue88-hip-preflight-20261106`，基线 main `edd901e`（代码与 2.1.3 `7a2d15d` 相同），未提交，未在 issue 上回复。
+
+**证据**（报告人 zip）：14 次崩溃都在 `amdhip64_7.dll+0x4A40A0`，都是读地址 0x390。
+- 自写 minidump 读取脚本显示，崩溃线程是 HIP 内部线程；同一时刻，播放线程停在 lmxxf 网络初始化的 `hipStreamCreate`（`LmxxfNrRuntime.dll+0xA4A2E`，前后操作名 hipInit/device/stream）。
+- HIP 和 COMGR 都来自驱动的 System32。
+- 上游 lmxxf issue 18：另一台 RX 9060 XT 在 Magpie 里能正常跑同一套内核。Veyra 进程默认处于 Realtime GPU 调度等级，是最可疑的差异，未证实。
+- 本机核显 + HIP 6 在四种进程状态下创建流都正常，不能代表 RDNA4。
+
+**修复**：新增 `AmdHipPreflight`。
+- `LmxxfNrBackend::open` 在 Create 之前，让本程序以 `--amd-hip-preflight` 子进程模式先在同一块卡上执行 D3D12、调度等级、hipInit、按 LUID 选卡、hipSetDevice、hipStreamCreate、显存清零。
+- 当前等级失败时依次试 High、Normal，第一个通过的等级通过新的 `setGpuPriorityComputeCap` 应用到本进程。
+- 全部失败则拒绝 AMD NR，播放继续。
+
+**验证**：
+- 构建 295.5 秒，增量 9.6 秒。
+- 新单测在本机核显上全部通过：真实调度等级 5→4→2→5；正常、只在 Realtime 崩溃、每档都崩溃、缓存、缺库。
+- 原 AMD 合成图 128/0、lmxxf ABI 66/0。
+- 真实 exe 子进程模式无钩子退出码 0，加钩子 0xC0000005；普通启动冒烟正常。
+
+**交付**：测试补丁 `test-packages/claude-issue88-20261106/Veyra-2.1.3-issue88-test.zip`。
+
+**记录**：`docs/ISSUE88_AMD_HIP_PREFLIGHT_2026-11-06.md`，报告 `E:/项目/Veyra/reports/claude-issue88-20261106/`。
+
+**未验证**：RDNA4/HIP 7 实卡结果要等报告人运行；本机走不到 lmxxf 真实路径。

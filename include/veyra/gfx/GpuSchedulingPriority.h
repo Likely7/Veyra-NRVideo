@@ -20,4 +20,7 @@ GpuPriorityStatus gpuPriorityStatus();
 // Highest class to use while another program shares the GPU (Realtime = no cap). The
 // class applied is the lower of the request and the cap; `requested` keeps the request.
 void setGpuPriorityCap(GpuPriority cap);
+// Highest class an in-process compute runtime survives here (AMD HIP self-test,
+// AmdHipPreflight.h). Independent of the cap above; the lowest of the three applies.
+void setGpuPriorityComputeCap(GpuPriority cap);
 }
