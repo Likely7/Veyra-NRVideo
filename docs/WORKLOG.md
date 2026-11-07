@@ -722,3 +722,28 @@ Veyra-2.1.3-AMD-win64-portable.zip：717577602 bytes，SHA256 `dc1223f0aff0feb39
 首个QtTest夹具when:windowShown在独立应用中未触发，已停止唯一私有路径测试进程并改Timer显式调用测试方法；两次有效检查均exit0，无engine/QML错误。未碰用户运行进程、配置和原日志。仅作为受控对照把旧处理器放入私有QML，已恢复原字节。
 
 本轮删除SHA白名单隔离测试副本的命令被自动审批以blocked by policy拒绝，未执行；保留tests/sr-menu-investigation-20261106/app，不改shell/工具绕过，配置和日志保留。证据CLEANUP.json。产品代码和已发布包均未修改。
+
+## 2026-11-06 2.1.3 选不了三种 RTX 视频超分：每个构建使用自己的界面编译缓存（Claude）
+
+**状态**：分支 `claude/qmlcache-20261106`，基线 main `edd901e`，未提交。
+
+**排查**：见 `E:/项目/Veyra/reports/claude-sr-qmlcache-20261106/FINDINGS.md`。
+- 发布 ZIP 把文件时间统一成 1980-01-01，而 Qt 界面编译缓存只按“路径＋时间”判断是否过期。
+- 所以 2.1.3 覆盖 2.1.2 后，沿用 2.1.2 编译的 ProPage，`Number(id)` 把三种 RTX 模型变成 DLSS。
+
+**修复**：新增 `QmlDiskCache`。
+- 启动时按 `qml/Veyra` 的内容摘要，把 `QML_DISK_CACHE_PATH` 设为 `<缓存>/qmlcache-<摘要>`。
+- 外部明确设置的路径或关闭缓存的设置保留。
+- 系统代码页无法表示路径时关闭缓存。
+- 日志新增 `[qml-cache]` 一行。
+
+**验证**：
+- 构建 301.0 秒通过；`veyra_qml_cache_tests` 通过。
+- 真实程序在“2.1.2 → 2.1.3 原地覆盖”的安装里：
+  - 未修复程序：宽 150，提交 0/0/0；
+  - 修复版：首次重新编译、宽 210，提交 17/2/21；第二次复用缓存；
+  - 同大小、同时间地改动 ProPage 后，立即换目录并生效；改回后复用原目录。
+
+**记录**：`docs/QML_CACHE_PER_BUILD_2026-11-06.md`，回执 `E:/项目/Veyra/reports/claude-qmlcache-20261106/FINAL.json`。
+
+**未验证**：未在用户 RTX 3080 上验证，代码页回退分支未实测，未重跑全套 QtQuick。
