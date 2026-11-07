@@ -1,6 +1,40 @@
 # 当前工作日志
 
+## 2026-11-03 RX7000补丁后worker退出：新日志与诊断更新
+
+用户veyra-qml(4).log与cache(1).zip表明NVAPI身份修复确实生效（m_gpuArch0x1b0），新失败是12:35之后三次worker管道中断。NGX已进入Small1920×1080网络建立，最后权重heap请求108.6MiB；不能凭末行认定显存不足或具体CUDA错误。当前只更新worker诊断：阶段/请求参数、CRT与Win32 stderr、Rust backtrace、普通未处理SEH独立记录；保持原Windows异常处理、不吞异常。算法/模型/共享GPU同步/主EXE/设置不改，附只读Windows1000/1001事件收集，不包数据库或模型。
+
+构建23.1秒、最终增量4.2秒通过，task codex-rdna3-crash-diagnostics-20261103；最终CPU诊断14项、GPU协议54项通过（不是AMD推理），收集脚本5.1实际查询事件及输出内容/哈希验证通过。重跑旧证据目录一次被合同拒绝exit2，改独立目录；收集脚本Get-FileHash解析失败后改.NET SHA256，失败日志保留。命令/详细结果见docs/RDNA3_WORKER_CRASH_2026-11-03.md，reports/rdna3-crash-diagnostics-20261103/FINAL.json。本地诊断包test-packages/codex-rdna3-crash-diagnostics-20261103，优先收集既有崩溃事件，不让用户反复变更参数。源码/依赖/正式包原件和用户配置保持，未合main/push/Release。尚未修复新的网络创建崩溃。
+
+## 2026-11-03 RX7000 cache.zip续查与多GPU映射修复
+
+用户补充cache.zip，52份worker日志相同，NR创建前24GB显存可用、缓存覆盖gfx1100，NGX明确Unsupported GPU architecture 0x0/min0x1b0且m_gpuArch=0xe0。固定ZLUDA NVAPI源码硬编码CUDA设备0，而Veyra按独显上下文运行。使用正式包同SHA转发层及NVAPI实际复现“核显0/独显1”误报核显LUID。分支codex/rdna3-nvapi-luid-20261103基线ecfbb0f，重编译同源开源NVAPI，改用当前上下文设备并显式拒绝歧义/查询失败；不改模型/驱动/原件，未使用二进制补丁。
+
+首次原源码Cargo构建48.5秒，修复2.3秒，从原源码重新套patch的正式构建脚本2.33秒通过；每次并发2，上限880秒，CARGO_HOME/target/TEMP全在E盘。最终DLL215040字节/a7adb043…。13组合同旧8失败、新13通过，双线程64次设备隔离和原NR架构身份保持；CPU夹具不冒充实卡推理。新旧正式两NVAPI原件SHA已与2.1.2 AMD ZIP比对一致。源码/许可证/构建脚本/夹具/来源记录入Git；产品补丁只一个开源DLL，夹具nvcuda.dll绝不随包。未动原app、用户配置、依赖原件、正式ZIP，未合main/push/Release。命令、边界与最终包/清理回执见docs/RDNA3_NVAPI_LUID_2026-11-03.md及reports/rdna3-nvapi-luid-20261103/FINAL.json。后续等该用户实卡确认NR是否成功创建及推理。
+
+## 2026-11-03 RX7900 XTX的NR初始化失败（只读排查）
+
+用户提供veyra-qml(3).log并确认软件能打开、NR开不了。原日志SHA256 d92fabe719b9c33bf287dc0e81d89b5813e49b2d0413164351ec42c8dc98f8ef，共5381170字节。三个启动会话中52次NR创建均失败，首次UTC10:36:08.991、最后12:00:52.234，全部内部1920×1080；错误为NVSDK_NGX_CUDA_CreateFeature 0xBAD00001（NVIDIA定义FeatureNotSupported）。主程序随后明确回退nr=false；未出现RDNA3 worker ready。不能把错误号等同显卡永久不支持，亦无显存不足证据。
+
+核对Rdna3NrWorker/Backend及固定RedDuke network源：HIP加载、指定D3D12设备/共享预检和network.load/can_share均在CreateFeature之前，主日志只记录子进程返回的最终错误；具体拒绝条件应查软件目录runtime/amd-nr-rdna3/cache中的worker-*.log、gate.log及NGX日志。未提供这些文件，故本轮不猜测修改兼容层/驱动/模型参数，也未构建或运行GPU测试。只读证据回执reports/amd-rdna3-startup-20261103/FINDINGS.json（约17KB），含52个行号及分辨率上下文；原日志、配置、运行组件和源码保持，待补子进程日志继续定位。官方定义来源https://github.com/NVIDIA/DLSS/blob/main/include/nvsdk_ngx_defs.h。
+
+## 2026-11-03 NVENC导出关键帧审查与修复
+
+用户要求先审第三方报告再修。隔离分支codex/nvenc-export-keyframes-20261103，基线edad6e9，保留全屏/VFG实验改动，无main合并/push/Release。真实270帧H.264/HEVC MP4均复现仅首帧索引，HEVC另有2个CRA；preset实际IDR周期4294967295。仅覆盖当前codec idrPeriod=原GOP120并日志记录，不把非IDR I帧伪装成安全跳转点；码率/HDR/slot/fence和实时录制不改。普通copy重封装旧文件实测仍仅首帧索引。
+
+构建scripts/acceptance/build-recording-handoff.py，task codex-nvenc-export-keyframes-20261103、既有build-dir、label2.1.2-test、jobs2，probe和主程序6.5秒通过。新增scripts/acceptance/verify-export-keyframes.py：修改前两用例预期失败，修改后12组SDR及2组HDR10通过，3780帧、28次中/末段跳转逐像素与完整解码一致，MP4原始stss=[1,121,241]、码流3个IDR。首次合成HDR素材未声明PQ导致两断言失败，只修正测试生成及输入校验后补测两HDR组；失败保留。全部命令、源码审查和结果见docs/NVENC_EXPORT_KEYFRAMES_2026-11-03.md及reports/nvenc-export-keyframes-20261103/FINAL.json。日志/测试/临时/补丁均在E盘同名任务目录，未动真实配置或原运行库，未占采集卡。空间和覆盖包身份以FINAL回执为准，不冒充用户原片或其他硬件验收。
+
 完整旧日志：[截至本轮整理前的记录](history/worklog/WORKLOG_before_maintenance_2026-10-27.md)。当前状态见[CURRENT_STATUS](CURRENT_STATUS.md)，历史授权见[历史索引](history/INDEX.md)。
+
+## 2026-11-05 RTX 视频超分三个版本与双重超分（Claude，未提交）
+
+分支 `claude/vsr-rife-20261105`（基于 main `8eda262`，独立工作树），未提交、未合并、不 push/Release。记录见 [RTX_VIDEO_SR_FAMILIES_2026-11-05](RTX_VIDEO_SR_FAMILIES_2026-11-05.md)。
+
+- 第一轮加入了 Video Effects VideoSuperRes 和 RIFE。用户实测 RIFE 在 4K 比 VFG 高档贵得多（本机 4K 每源帧 +32 ms，VFG 高 +13 ms，中 +7 ms），且 30 系 VFG 兼容已在 `codex/vfg-ampere-20261102`，按用户要求整个删除 RIFE，补帧代码回到 main 原样。
+- 超分算法改为 RTX 视频超分 · 标准 / 高码率 / 流媒体，各自选档位（低中高超高，流媒体只有中和超高），原 1234 改为低中高超高。
+- 双重超分和超采样适配三个版本，第二次超分可选不同版本；每次超分各自走 NGX 或 Video Effects，第一次不放大时直接复制。VideoSuperRes 必须用阻塞 CUDA 流（第一轮发现并修复的错帧）。
+- 验证：导出 9 组（含四种双重运行库组合）全部逐帧对齐；实际界面新夹具 15 项、原双重夹具 21 项通过；新单测 240/0，VFG 设置 683/0，QtQuick 132/0/1，补帧集成两种模式通过。
+- 未做：打包清单、其他显卡、HDR 内容；RIFE 下载与依赖约 1.6 GB 仍在本机，待用户决定是否删除。
 
 ## 2026-10-27 屏幕捕获帧率、采集对白与后续方向（Claude）
 
@@ -468,3 +502,198 @@ PID61528，用户直接运行2.1.2 NVIDIA包；不激活窗口、不启动额外
 发布编排曾遇REST按tag查询草稿返回404，已改用认证release列表取得ID后操作，未误报发布成功或修改二进制。产品源码无变动，沿用Claude同一构建的针对性测试，没有重复占用采集卡。保留最新正式ZIP及对应源码、摘要和必要报告；本轮无解压副本，新增发行文件约1.37GiB，不声称测量了物理回收量。原测试包/用户配置保留。
 
 群公告990字符，保存reports/codex-release-2.1.2-20261102/GROUP_ANNOUNCEMENT.txt，仅交付文字，未向群聊发送。
+
+
+## 2026-11-02 GitHub交流群更新到8群
+
+用户明确授权：7群已满，替换为8群原图。当前README双语、支持区、2.1.2更新说明与2.1.2/源码两个Release正文同步；有效期仍11月9日前，赞助图与双码各220布局保持。只改图片及当前入口，不重写发布标签或打包资产。执行git diff --check，推送后匿名读取当前文档/新图，对比用户原图SHA256，并核对两Release正文和所有资产id/摘要保持；具体结果及原正文保全见reports/codex-group8-qr-20261102/FINAL.json与before.json。文档更新不运行产品构建/测试。
+
+
+## 2026-11-05 撤销补帧延迟预算实验
+
+用户明确删除功能并停止研究，按失败方向记录。`git for-each-ref --contains be3f7ff`确认仅独立分支包含实验；保全未提交探针文本后 `git restore --worktree -- tests/integration/LiveLatencyBudgetProbe.cpp`，`git switch main`，`git branch -D codex/fg-latency-budget-20261104`。main基线fedd7fc，产品7个树哈希未改，未merge/push/Release。
+
+受控清理54个实验程序／启动入口／缓存文件，完整绝对路径及SHA256见reports/fg-latency-retirement-20261105/DELETE_PLAN.json与REMOVAL.json。遍历明确跳过reparse point和用户配置目录，保留SDK、模型、shader、正式包、其他工作树及日志；逻辑文件大小不冒充实测释放空间。共享build.ninja移除，下一次须--reconfigure main。
+
+没有找到可重复的最低差而增加预算稳定满帧案例；早期182→240包含首次加载等待，已剔除。本轮只做撤销和文档，不再运行性能试验；验证采用分支引用、代码接口搜索、产品树哈希与删除清单复核。详见[失败方向与终止记录](FG_LATENCY_BUDGET_RETIRED_2026-11-05.md)。
+
+## 2026-11-02 全屏进度条修复
+
+在codex/fullscreen-seek-20261102隔离修复。旧版真实Windows按下7ms后MouseArea取消；进度条遗漏于interacting，焦点被交还主窗口。纳入scrubbing、窗口移动排除、预览mask及完整隐藏条件，取消/禁用时清理120ms延迟seek。构建2.2s/最终0.7s通过；新增用例在旧代码5失败；初版完整139/2/0暴露禁用不触发cancel，修复后141/0/0（35.819s）。真实全屏3次分别提交33.770/5.902/20s，无取消，退出全屏正常；原用户配置保留。首轮人工到EOF重开未算通过，日志保全。源QML观察探针逐字节去除，使用小型2.1.2通用补丁交付，不复制完整包，不修改GitHub资产/运行库/真实配置。命令、回执与验证边界见docs/FULLSCREEN_SEEK_FIX_2026-11-02.md，FINAL与日志在E:/项目/Veyra/reports及logs/codex-fullscreen-seek-20261102。无合并main/push/新发布。
+
+
+## 2026-11-02 RTX30 VFG实验兼容
+
+用户授权移植，分支codex/vfg-ampere-20261102基于4895549。来源Xchen991/RTX30-Broadcast-FrameGen固定07536ab32a508b7daa714a4a9bda5b56f031bbc3/MIT，移植CUDA查询和内核元数据重定向，替换固定IAT地址/轮询为按名称发现和生命周期租约；私有副本不写原kernel，选中设备和当前CUDA上下文隔离，退场逐项读回指针与页保护；40/50原生无补丁。菜单、节点、硬件能力和四语提示同步，包含上一轮全屏修复。主程序增量和覆盖补丁按FINAL.json，VFG原DLL/模型不新增不改动。
+
+构建最终4.2s通过；合同180、真实模块/62个fatbin/3轮共享租约342、能力75、VFG设置683、repair300、i18n0失败；QtQuick140/0/1。RTX5070原生GPU各质量/倍率/8与10位回归2425项0失败，最终结果和独立GUI 2X60FPS功能检查见FINAL.json。首次repair因子进程库路径缺失启动失败，补充子进程PATH后通过，失败日志保留。无30系实卡推理/画质/速度结论；不以本机50系代替。临时GUI Loader已去除，原7配置文件和5个VFG运行DLL逐摘要保护，未复制完整包。实际命令、日志、来源与局限见docs/VFG_AMPERE_PLAN_2026-11-02.md，E:/项目/Veyra/reports及logs/vfg-ampere-20261102。本轮不合main、不push/发布。
+
+## 2026-11-03 RX7000 NR：多 GPU 时工作进程只看选中的显卡（Claude）
+
+用户：“直接修复吧”。
+
+**依据**：现场 7900 XTX 加 gfx1036 核显，HIP 0 号是核显。ZLUDA b135e23 有两处默认用 0 号设备：
+- NVAPI 报的 LUID（Codex 已修）；
+- `Context::new` 在 `hipSetDevice` 之前就建了 `alloc_stream`，导致 `cuMemAlloc` 通过核显的流去给独显显存清零。
+
+**工作树**：独立工作树 `worktrees/rdna3-hip-visible-20261103`，分支 `claude/rdna3-hip-visible-20261103`，基于 Codex 的 `77fcd89`。共用施工树（Codex 分支 `codex/rdna3-nvapi-luid-20261103`，Codex 进程在运行）未触碰。
+
+**改动**：
+- 新增 `Rdna3HipDevices.h`：探测、按 LUID 匹配、设置 `HIP_VISIBLE_DEVICES`。
+- 工作进程在加载 HIP 7 之前做设备选择，并新增 `--hip-probe` 模式。
+- 新增 `tests/integration/Rdna3HipDevicesTests.cpp`，以及 CMake 目标。
+
+**命令与结果**：
+- `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-rdna3-hip-visible-20261103 --root <工作树> --label 2.1.2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared veyra_amd_nr_worker veyra_amd_nr_test_worker veyra_rdna3_worker_diagnostics_tests veyra_rdna3_hip_devices_tests`
+  - 新构建目录，43.7 秒通过。
+- `veyra_rdna3_hip_devices_tests`：单元测试 15 项通过，0 失败。
+- 加 `--hip C:\Windows\System32\amdhip64_6.dll`：19 项通过，0 失败。
+  - 本机 gfx1036 的 LUID 0x16583 与 DXGI 一致。
+  - 在进程内设置后，HIP 只剩所选设备。
+  - 设置超出范围的序号后，设备数为 0。
+- `veyra_amd_nr_worker.exe --hip-probe`：
+  - 对 HIP 6：退出码 0，列出 1 块设备。
+  - 对缺失的 HIP 7：输出 `load-failed-win32-126`，退出码 2。
+- `veyra_rdna3_worker_diagnostics_tests`：14 项通过，0 失败。
+- 新旧 worker 的导入 DLL 相同：d3d12、dxgi、kernel32、version。
+
+**打包**：`tmp/claude-rdna3-hip-visible-20261103/package.py`。
+- 输出：`test-packages/claude-rdna3-hip-visible-20261103/Veyra-2.1.2-RX7000-NR-multiGPU-fix2.zip`。
+- 第一次生成的源码补丁带进了 Codex 的 RTX30 VFG CMake 段落，公开源码缺这些文件，会导致配置失败。改为只保留 RX7000 段落后，重放比对通过。
+- 第二次运行报 `PermissionError`：shell 的当前目录停在 verify 目录里。切换目录后重跑成功。
+
+**未做**：
+- 没有在 RX7000 实卡上推理；本机没有 HIP 7。
+- 没有跑 RDNA3 合同测试：改动不进入合同测试 worker。
+- 未提交、未合并、未 push。
+
+## 2026-11-02 英伟达低延迟“开＋增强”高负载提示（Claude）
+
+用户：“那算了，加个提示好了，建议高负载的情况下开而不是开+增强，增强有概率导致掉帧”。
+
+**依据**：现场 RTX 5090 日志（4K60 采集＋NR＋DLSS FG/VFG，见 `E:/项目/Veyra/reports/claude-ll-boost-field-20261103/FINDINGS.md`）。
+- 增强档下，驱动在每个源帧读取前的 Reflex Sleep 平均 4–18 ms，最长 27 ms；补帧比应有的少 8–21%。
+- “开”档的 Sleep 约 0.003 ms。两档 GPU 耗时相同。
+
+**分支**：
+- 分支 `claude/ll-boost-hint-20261102`，独立工作树 `E:/项目/Veyra/worktrees/ll-boost-hint-20261102`，基于 main `fedd7fc`。
+- 共用施工树当时在 Codex 的 `codex/vfg-ampere-20261102`，Codex 进程在运行，所以没有切换或改动那棵树，也没有动它的构建目录。
+
+**改动**：
+- `qml/Veyra/NvidiaLowLatencyEditor.qml`：
+  - 提示改为“减少处理排队。高负载时建议选「开」而不是「开＋增强」：增强有概率导致掉帧，还会提高 GPU 频率、增加功耗。”
+  - 该行加 objectName，供测试使用。
+- `i18n/catalog.json`：更新同一条目的 zh / zh-TW / en / ja，条目位置不变；格式按 `json.dumps(indent=1)` 校验后写回。
+- `tests/qml/QuickSmokeTests.cpp`：模拟 `veyra` 补 4 个属性（默认值与之前未定义时等价）；注册 NvidiaLowLatencyEditor。
+- 新增 `tests/qml/quick/tst_nvidia_low_latency.qml`，3 项：
+  - 提示引用真实的选项文字。
+  - 提示显示在选项下方。
+  - 不可用时仍显示“需要 NVIDIA 显卡”。
+- `tests/unit/UiLanguageTests.cpp`：新提示的英文译文须精确匹配。
+
+**命令与结果**：
+- `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-ll-boost-hint-20261102 --root <本工作树> --label 2.1.2 veyra_qml_quick_tests veyra_ui_i18n_tests`
+  - 新构建目录 `build/claude-ll-boost-hint-20261102`，46.6 秒通过。
+- `tmp/claude-ll-boost-hint-20261102/run_tests.py`
+  - QtQuick 137/0/1（35.9 秒，含新增 3 项）。
+  - i18n 0 失败。
+- 离屏渲染 `reports/claude-ll-boost-hint-20261102/hint-render.png`：
+  - 第一次中文全是方块：离屏平台没有中文字体。加 `QT_QPA_FONTDIR=C:/Windows/Fonts` 后正常。
+  - 第二次选中高亮还没到位就截图了，等 600 ms 后重渲。
+
+**空间**：新增工作树约 90 MB，构建目录约 47 MB。
+
+**未做**：
+- 没有构建主程序，也没有在真实界面里看。
+- 没有改低延迟或驱动的行为本身。
+- 未提交、未合 main、未 push。
+
+## 2026-11-05 用户授权整合全部保留工作到本地 main，并研究 NR 网状调节
+
+存档点8eda262／checkpoint/pre-main-integration-20261105；Claude三工作树先保存差异和文件摘要，提交3593e52（低延迟提示）、19a8680（HIP选择）、ba00ce3（三类超分，不含RIFE），再经5209442／974fa9f／79d1ac9合并。19a8680继承全屏、VFG30、NVENC及RX7000全部6个待合提交。记录冲突两侧内容，CMake保留两个新后端，能力判断同时保留Ampere VFG和流媒体，另增5条针对性断言。旧脏树不覆盖，暂停Lecram／AverMedia诊断不并，预算与RIFE产品接口扫描为空。
+
+实际命令 `python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-main-integration-20261105 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.2-test --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared <19目标>`，134.4秒通过，能力断言增量1.3秒。恢复了正确main配置及patched FFmpeg。reports/main-integration-20261105/stage-and-test.py、gpu-checks.py记录完整测试命令；日志logs/codex-main-integration-20261105，私有运行tests/codex-main-integration-20261105，临时tmp/codex-main-integration-20261105。
+
+验证：SR设置240、VFG设置683、能力80、VFG模块342、HIP单元15/真实HIP6枚举可见性19、worker诊断14、GPU协议54、原生VFG GPU2425、效果链/预设/NR模型/UI合同/i18n通过。QtQuick最终146/0/0；实际界面15项冷／热两轮通过。7组各60帧SR导出无错位；H.264/HEVC各270帧，IDR0/120/240且原始stss1/121/241。首轮测试参数及Qt模块/截图目录部署缺口保留失败，修正夹具后重测，未为夹具失败修改产品。冷启动新VFX模型12.4秒JIT曾触发无进展诊断；热缓存1.3–1.5秒无engine/QML错误，保留首开停顿限制。没有30系／RX7000本地推理或新超分HDR通过声明。上游许可原文字节保留，其新增文件EOF空行的diff-check提示不擅改许可；本轮其余差异check通过。
+
+合并后仅删除已合入且无工作树检出的本地冗余分支，SHA/分支映射和保护检查见reports/main-integration-20261105；不删旧脏树、依赖、正式包和用户文件。NR仅完成三个设计方向研究及真实参数映射建议，未改NR界面。当前事实及最终状态读docs/MAIN_INTEGRATION_2026-11-05.md和回执FINAL.json；未push/Release。
+
+## 2026-11-05 NR网状调节器实施
+
+用户授权按分组网方案开分支，要求原滑条保留、开网后置灰，全部功能统一到网状面板。基线main f1f8298，分支codex/nr-web-editor-20261105。NrLayerEditor只管理所有权，完整参数提取到共享NrParameterEditor；四轴变化、六轴保护、总倍率/本层旁路在NrWebControls；NrWebPad处理拖动/键盘/数值/默认/撤销/取消。既有参数与预设结构不变，只新增UI偏好布尔白名单和只读有效保护map。没有改引擎/Shader/Runtime。
+
+构建命令及五目标见docs/NR_WEB_EDITOR_PLAN_2026-11-05.md；首次--reconfigure121.4秒通过，快照增量1.1秒。reports/nr-web-editor-20261105/check.py记录私有部署和测试：GPU完整首轮163/0/0；加入滚动与跨层数字拖动后软件完整166/0/0，GPU Pad最终12/0/0；UI合同、i18n、NR模型均0失败，16条新增文案三语完整，extract2746条缺译/占位均0。
+
+真实主程序nr-web-ui.qml13项及nr-web-restart.qml通过，开启SF NR CreateFeature18成功，内部792x446/输出1280x720；最后一轮engine/QML错误为空。原滑条同步、两网实际修改、自动真实系数、手动值保留、尺寸/模型额外滑条和重启恢复已验。截图nr-web-ui-final.png已查看。第一次启用SDK约8秒等待时诊断栈在nvapi/nvngx_dlssd，后恢复；保留首轮，未改无关SDK。Quick中的原PlaybackRate快照两条undefined范围警告仍在，实际程序无QML错误。
+
+失败与修正：逗号声明语法、测试误覆盖Item.data、软件等待帧信号、恢复默认的绑定更新顺序、数字滑条跨层后连续live及release过滤、Flickable阈值后持续移动夹具。完整失败与最终命令均保留。产物tests/codex-nr-web-editor-20261105，logs同名、tmp同名；报告reports/nr-web-editor-20261105。运行库以现有测试供体硬链接只读复用，不新增整包/ZIP或复制工程；实际空间按最终回执，不以逻辑文件大小冒充物理占用。用户配置、主线和其他工作树保持，未merge/push/Release。
+
+最终缺组件对照回归首轮165/1：测试快照只有effectCapabilities map、缺实际EffectSupport调用的effectAvailability方法，导致模拟模型控件始终可用。补齐同义只读查询后验证，不为夹具缺口改变产品可用性逻辑；此轮失败原样保留full-parity-final.log。
+
+## 2026-11-05 NR调节方式归回参数组，补齐九项
+
+用户纠偏后从684d906继续原分支，checkpoint/nr-web-before-inline-20261105存档。取消独立块、全局开关及灰色副本；NrLayerEditor回到一份参数树，两组独立list/web偏好。变化四轴与总量滑条、手动完整九轴与列表使用同一规格数组。删除旧NrParameterEditor/NrWebControls和只读自动map，旧全局偏好只作迁移，原自动控制保持。早期六轴/三滑条拆分不再是当前布局。
+
+使用build-recording-handoff.py --task codex-nr-inline-editor-20261105 --root <活动树> --build-dir <共享构建> --label 2.1.2-nr-inline-test --reconfigure --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared构建五目标，73.9s通过。软件QtQuick170/0/0（38.98s）、GPU Pad13/0/0、分组控件11/0/0；UI合同/i18n/NR模型通过，catalog2739条缺译与占位0。真实主程序23项逐参数读回、模式独立、自动手动保留、截图及重启通过，退出0，engine/QML错误0。
+
+用户旧测试PID23760在开工时运行，所以没有替换旧app或停止进程，另建tests/logs/tmp/codex-nr-inline-editor-20261105和reports/nr-inline-editor-20261105。运行库硬链接只读复用，未再复制完整工程/ZIP；配置迁移只复制白名单到新manual-profile，原配置不改。实际完整截图nr-web-ui.png已查看，九项标签均显示。单组截图保留透明背景，展示以整体深色面板为准。完整命令、最终SHA、空间及保护见FINAL.json；本轮不合main、不push/Release，不变更算法或导出协议，不宣称新的实卡性能收益。
+## 2026-11-06 选框弹出文字“抖两下”（Claude）
+
+分支 `claude/menu-jitter-20261106`，基线 main `f1f8298`，未提交。
+
+**原因**：软件绘制（2.1.1 起默认）把文字横坐标向下取整到整像素。VMenu 打开的弹簧缩放在终点附近越过 1 三次（约 87、181、266 ms），每次越过都把选项文字左移 1 像素再移回，共两次。GPU 绘制下同一段弹簧是不到半像素的平滑移动，不跳。
+
+**改动**：只在软件绘制下，弹簧第一次到达终点后，缩放和位移就停在终点；GPU 绘制以及 enter/exit 的曲线和时长不变。用户一度误以为弹簧被改掉、叫停，撤回后又确认“修复效果是正确的”，恢复原补丁。
+
+**验证**：
+- 菜单 QtQuick 测试：软件 100/150/200% 各 6/0，d3d12 100/150% 各 5/0/1。
+- 全套 QtQuick：147/0/1；截图用例单独 3/0。
+- 240 fps 录屏：软件原版 3 次都左跳 1 像素来回两次；修复后 3 次都一路靠拢、无回跳。GPU 修复后与原版相同。
+
+**入口与记录**：手动入口 `tests/claude-menu-jitter-20261106/启动选框修复测试.cmd`。执行记录 `docs/MENU_TEXT_JITTER_2026-11-06.md`，回执 `E:/项目/Veyra/reports/claude-menu-jitter-20261106/FINAL.json`。
+
+**未验证**：真实程序只在 100% 缩放下录屏；对话框等同类弹簧缩放没有测，也没有改。
+
+## 2026-11-06 2.1.3整合与测试构建（进行中）
+
+用户授权把Claude与Codex修复合入main并构建2.1.3测试。17工作树状态与改动SHA已保存reports/codex-build-2.1.3-20261106/BEFORE.json；Claude四文件原补丁/ZIP在archives同名目录。新菜单05181bf、NR259ef8f经e1bfbde/3556608整合，只在WORKLOG追加冲突保留双方；版本快照4fde59a，main已快进3e532a9。旧脏树不覆盖，撤销/暂停方向不恢复。
+build-recording-handoff.py --task codex-build-2.1.3-20261106 --build-dir <共享构建> --reconfigure --label 2.1.3 --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=<prepared> 共23目标105.6秒通过，日志logs同名/build-20261106-041552，receipt为干净产品快照。后续只改打包脚本/文档，不改产品。
+首次package-2.1.3.py stage在签名检查拒绝：当前PowerShell7继承的PSModulePath导致子Windows PowerShell无法加载Security模块；之前从当前shell直接核验两DLL签名均Valid。已按既有stage脚本清除该子进程PSMODULEPATH，不修改全局环境或放宽签名校验，随后重新执行。此时尚未生成app目录。验收最终结果待记录。
+
+2.1.3打包首轮QtQuick发现QtQuick.Layouts/Shapes等模块缺失：新脚本原先排除了整个qml目录，错误地把Qt部署模块也排除。改为仅替换qml/Veyra，新增按正式供体逐项校验Qt模块；对尚未交付的两包只补回经SHA核对的原Qt模块，不重拷整包。第一轮日志/CHECKS-FIRST及payload-first保留。两个设置测试另因夹具提前创建了测试要求的新目录退出2，修正为单独output子目录；未修改产品逻辑或测试断言。
+
+2.1.3修正后QtQuick172/0/0、菜单多DPI、NR GPU13/0+11/0、真实NR界面23项/重启、7组420帧SR对齐、双编码各270帧IDR/stss通过；详见BUILD_2.1.3_TEST_2026-11-06.md实际验证。额外pacing缺参数/输出目录夹具已纠正；冷DLSS初始化首帧15s门槛仍失败，热缓存14.3s生命周期通过、mediaSpeed0.99211；不声称解决冷启动。ACCEPTANCE.json区分首次失败与热结果。GUI观察Loader已逐字节恢复，不修改产品QML。
+
+2.1.3两ZIP封包/逐SHA/CRC、解压最小PATH冷启动均通过（NVIDIA209/AMD207真实帧，12.5/12.61s，退出0、错误为空，RTX5070效果关闭）。SOURCE-FREEZE为b19846a，后续仅验收文档，当前产品与归档一致。最终交付及保护/清理以reports/codex-build-2.1.3-20261106/FINAL.json为准，未push/Release。
+
+自动审批拒绝了验收解压副本递归清理和同批分支引用整理命令（CreateProcess前拒绝，原文仅blocked by policy）。没有执行删除、没有换工具绕过；两份verify副本和两个已合并分支引用仍保留。CLEANUP.json记录路径与逻辑字节，不宣称空间已回收；交付包、源码、main及全部验收结果不受影响。
+
+## 2026-11-06 2.1.3默认中档／Boost红字重构建
+
+用户追加要求超分默认中、低延迟警告红字且只在开＋增强出现、删除旧构建产物后重建。产品b143ebf：kDefaultVideoSrQuality=2，双重默认共用；列表/节点fresh及srQualityFor无既有档位回退一致；既有显式选择保留。NvidiaLowLatencyEditor仅available+Boost显示Theme.err警告，Off/On隐藏，缺硬件普通说明保留。更新既有UI合同及QML交互回归，没有改驱动逻辑/运行库。
+新reports/codex-rebuild-2.1.3-20261106/cleanup-old.ps1先生成计划再-Execute，在已核验E盘根范围内只删除SHA匹配的构建文件，不递归删除非空目录、不跨Shell、不停止进程。9422文件逻辑8,000,253,348字节已unlink，旧交付包和验收副本已退休；保留未知/配置/日志、少量测试源码、共享构建缓存、依赖和正式版。净物理回收未测。旧interactive-NVIDIA配置仍在原位。这次有用户明确删除授权并缩小到文件白名单，自动执行通过；上轮拒绝历史保留。
+后续新产物用codex-rebuild-2.1.3-20261106；构建与测试结果待FINAL.json，本记录不假定通过。完整计划docs/REBUILD_2.1.3_DEFAULTS_2026-11-06.md。
+
+## 2026-11-06 默认中档/Boost红字重构建验证
+
+## 本轮实际验证（2026-11-06）
+
+产品源码7a2d15d，PE 2.1.3.0。9目标首构建127.6秒；发现预设写入格式对第二次超分默认值写死4，修正PresetStore/PresetLibrary的五处判定为统一常量后，最终增量构建11.8秒。没有改写已有明确保存的档位。
+
+最终设置、效果链、预设库、NR模型、UI合同/i18n及翻译提取检查通过；完整软件QtQuick173/0/0，GPU低延迟提示6/0/0。实际程序新配置基础/第二次SR均为中档，三种RTX版本在没有原档位时均为中档，明确高档值保留；列表和节点逐项验证关/开不显示警告、开＋增强显示红字。截图已查看。保存4/19与低延迟“开”后重启恢复通过，无引擎/QML错误。
+
+保留失败记录：首次旧默认判定导致设置/预设测试失败（一个测试进程退出生成转储），修正后所有相关检查通过；仅本测试的转储经路径证据和SHA核对搬至E盘日志。中间一次完整Quick有5个既有菜单几何断言失败；同源码/最终程序的菜单独立14/0和完整173/0复测通过，未确定其间歇原因，也不宣称本轮修复菜单。真实UI夹具先误用旧interfaceMode键、继而遗漏节点模式首次空图，已纠正夹具并重新用私有配置验证；不改变产品迁就夹具。
+
+上一轮产物逐SHA清理9,422文件，逻辑8,000,253,348字节，不等于实际磁盘净释放。旧个人配置/日志、依赖、历史正式包保留。新包路径test-packages/codex-rebuild-2.1.3-20261106，独立启动器使用新的测试配置。ZIP逐文件核验、最小PATH解压播放的后续结果以本任务FINAL.json为准。NVIDIA/AMD两包本机RTX5070默认效果关的冷启动不代替AMD推理或实卡采集验收。未push/Release。
+
+复现命令：`python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-rebuild-2.1.3-20261106 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.3 --jobs 2 --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared veyra_qml_ui veyra_amd_nr_worker veyra_qml_quick_tests veyra_ui_contract_tests veyra_ui_i18n_tests veyra_video_ai_settings_tests veyra_effect_chain_tests veyra_preset_library_tests veyra_nr_model_settings_tests`。检查脚本reports/codex-rebuild-2.1.3-20261106/check.py、ui_runner.py/defaults-ui.qml/defaults-restart.qml；实际命令、环境、首败/复测和日志路径在ACCEPTANCE.json及logs同任务。封包命令为`python -X utf8 -B scripts/acceptance/package-2.1.3.py seal`及`cold`。
+
+## 封包与清理实际完成
+
+应用源码归档1177696、产品7a2d15d；两ZIP逐文件SHA/CRC与独立解压最小PATH播放通过（NVIDIA=207真实呈现帧, AMD=208真实呈现帧，默认效果关闭，本机RTX5070）。最终包、源代码与网络源码摘要见test-packages/codex-rebuild-2.1.3-20261106/DELIVERY.json。两包无个人配置/日志/测试程序/SDK。临时验证副本逐SHA清理5541文件，新旧交互配置、日志与最终包保留。系统自动生成的本次单测转储经路径与SHA确认已搬至E盘日志。Git仅验收文档在归档后继续更新；未push/Release。完整实际命令、首次失败、修正和日志在本任务reports/logs。
+
+本轮临时副本清理预检首次被Windows PowerShell 5.1按本地编码误读UTF-8无BOM脚本，路径解析失败即退出，未执行删除；只给临时脚本补UTF-8 BOM后预检通过，逐SHA删除5541文件。最终交付文件与源码QML再次逐SHA核对通过，Main.qml无测试Loader残留。
+
+## 2026-11-06 用户授权2.1.3公开发布
+
+目标Likely7/Veyra-NRVideo，发布计划docs/RELEASE_2.1.3_EXECUTION_2026-11-06.md。2.1.2以来提交已逐项核对；原图已查看并原样复制docs/images/2.1.3/sr-comparison.png。保留群8/赞助各220；沿用重构建程序，发行仅更新文档/元数据。报告reports/codex-release-2.1.3-20261106。

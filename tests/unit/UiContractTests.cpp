@@ -138,7 +138,8 @@ int wmain(int argc,wchar_t** argv){try{
     {
         engine::EnhancementSettings fresh;
         engine::ChainGlobalSettings globals;
-        require(fresh.videoSrQuality==4&&globals.videoSrQuality==4,"fresh List and Node SR selections use RTX Video SR high");
+        require(fresh.videoSrQuality==2&&globals.videoSrQuality==2&&fresh.dualSrQuality==2&&globals.dualSrQuality==2,
+                "fresh List and Node SR selections use medium for both RTX Video SR passes");
         require(!fresh.sr&&!fresh.nr&&fresh.multiplier==1,"changing the SR model does not enable enhancement");
     }
     // Manual turns compose with metadata, including an already-oriented DAR.

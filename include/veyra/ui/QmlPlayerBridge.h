@@ -698,6 +698,12 @@ public:
     QVariantMap effectCapabilities() const;
     QVariantList nrRuntimeChoices() const;
     QVariantList srBackendChoices() const;
+    // RTX Video SR family / tier helpers for the SR lists (see Enhancement.cpp).
+    Q_INVOKABLE QString srAlgorithmOf(int quality) const;
+    Q_INVOKABLE int srTierOf(int quality) const;
+    Q_INVOKABLE int srQualityFor(const QString& algorithm,int tier) const;
+    Q_INVOKABLE QVariantList srTierChoices(int quality) const;
+    Q_INVOKABLE QString srQualityLabel(int quality,bool withFamily) const;
     Q_INVOKABLE QVariantMap effectAvailability(const QString& id) const;
     // `engine` must outlive the bridge. `dataDirectory` holds ui-session.v1 and
     // the preset library; empty means the default user data directory.

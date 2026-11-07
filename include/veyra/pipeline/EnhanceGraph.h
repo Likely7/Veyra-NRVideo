@@ -49,7 +49,7 @@ struct SwsContext;
 struct NVSDK_NGX_Parameter;
 struct NVSDK_NGX_Handle;
 namespace veyra::guidance { class AmdOpticalFlow; class GpuDisOpticalFlow; }
-namespace veyra::pipeline { class VfgBackend; }
+namespace veyra::pipeline { class VfgBackend; class VfxSrBackend; }
 
 namespace veyra::gfx {
 class D3D12DeviceContext;
@@ -134,7 +134,7 @@ struct EnhanceGraphDesc {
     // writes before the output fit. Zero: SR reads the source and writes the work extent.
     uint32_t srInputWidth=0,srInputHeight=0,srOutputWidth=0,srOutputHeight=0;
     bool dualSr=false;
-    uint32_t firstSrWidth=0,firstSrHeight=0,dualSrQuality=4;
+    uint32_t firstSrWidth=0,firstSrHeight=0,dualSrQuality=engine::kDefaultVideoSrQuality;
     uint32_t fgMultiplier=2;
     engine::FrameGenerationBackend frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;
@@ -1073,6 +1073,10 @@ private:
     std::unique_ptr<guidance::GpuDisOpticalFlow> gpuDis_;
     std::unique_ptr<ngx::VideoSrBackend> videoSrBackend_;
     std::unique_ptr<ngx::VideoSrBackend> firstVideoSrBackend_;
+    // Video Effects VideoSuperRes (high bitrate / streaming families): the final
+    // pass and, under double SR, the first pass when that family is chosen there.
+    std::unique_ptr<VfxSrBackend> vfxSrBackend_;
+    std::unique_ptr<VfxSrBackend> firstVfxSrBackend_;
     std::unique_ptr<ngx::TrueHdrBackend> videoHdrBackend_;
     std::unique_ptr<ngx::DlssFgBackend> fgBackend_;
     std::unique_ptr<gfx::FsrFgPresenter> fsrFgBackend_;

@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.1.2 LANGUAGES C CXX RC)
+project(veyra VERSION 2.1.3 LANGUAGES C CXX RC)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.1.2" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.1.3" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -384,6 +384,8 @@ add_library(veyra_pipeline STATIC
   src/pipeline/LmxxfNrBackend.cpp
   src/pipeline/Rdna3NrBackend.cpp
   src/pipeline/VfgBackend.cpp
+  src/pipeline/VfgAmpereCompat.cpp
+  src/pipeline/VfxSrBackend.cpp
 )
 veyra_apply_warnings(veyra_pipeline)
 # FFmpeg/NVOF headers are third-party: /WX stays off for this target.
@@ -413,6 +415,15 @@ if(EXISTS "${VEYRA_RDNA3_NETWORK_SOURCE_DIR}/runtime/core/network.cpp")
   target_link_libraries(veyra_amd_nr_worker PRIVATE d3d12 dxgi dxguid version)
 endif()
 add_executable(veyra_amd_nr_test_worker src/pipeline/Rdna3NrWorker.cpp)
+add_executable(veyra_rdna3_worker_diagnostics_tests tests/integration/Rdna3WorkerDiagnosticsTests.cpp)
+target_include_directories(veyra_rdna3_worker_diagnostics_tests PRIVATE include)
+target_compile_features(veyra_rdna3_worker_diagnostics_tests PRIVATE cxx_std_20)
+target_compile_definitions(veyra_rdna3_worker_diagnostics_tests PRIVATE NOMINMAX UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+add_executable(veyra_rdna3_hip_devices_tests tests/integration/Rdna3HipDevicesTests.cpp)
+target_include_directories(veyra_rdna3_hip_devices_tests PRIVATE include)
+target_compile_features(veyra_rdna3_hip_devices_tests PRIVATE cxx_std_20)
+target_compile_definitions(veyra_rdna3_hip_devices_tests PRIVATE NOMINMAX UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+target_link_libraries(veyra_rdna3_hip_devices_tests PRIVATE dxgi)
 target_include_directories(veyra_amd_nr_test_worker PRIVATE include)
 target_compile_features(veyra_amd_nr_test_worker PRIVATE cxx_std_20)
 target_compile_definitions(veyra_amd_nr_test_worker PRIVATE NOMINMAX UNICODE _UNICODE WIN32_LEAN_AND_MEAN VEYRA_RDNA3_CONTRACT_WORKER=1)
@@ -476,6 +487,10 @@ target_link_libraries(veyra_pipeline_tests PRIVATE veyra_pipeline)
 add_executable(veyra_vfg_gpu_tests tests/integration/VfgGpuTests.cpp)
 target_compile_features(veyra_vfg_gpu_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_vfg_gpu_tests PRIVATE veyra_pipeline)
+add_executable(veyra_vfg_ampere_tests tests/unit/VfgAmpereTests.cpp)
+target_compile_features(veyra_vfg_ampere_tests PRIVATE cxx_std_20)
+target_compile_options(veyra_vfg_ampere_tests PRIVATE /utf-8)
+target_link_libraries(veyra_vfg_ampere_tests PRIVATE veyra_pipeline)
 
 add_executable(veyra_scene_tests
   tests/unit/SceneCadenceTests.cpp
@@ -1505,6 +1520,10 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_compile_features(veyra_vfg_export_probe PRIVATE cxx_std_20)
   target_compile_options(veyra_vfg_export_probe PRIVATE /utf-8)
   target_link_libraries(veyra_vfg_export_probe PRIVATE veyra_engine)
+  add_executable(veyra_video_ai_export_probe tests/integration/VideoAiExportProbe.cpp)
+  target_compile_features(veyra_video_ai_export_probe PRIVATE cxx_std_20)
+  target_compile_options(veyra_video_ai_export_probe PRIVATE /utf-8)
+  target_link_libraries(veyra_video_ai_export_probe PRIVATE veyra_engine)
   add_executable(veyra_preset_library_tests tests/unit/PresetLibraryTests.cpp src/engine/PresetLibrary.cpp src/engine/EffectChain.cpp)
 target_link_options(veyra_preset_library_tests PRIVATE /STACK:33554432) # Preset apply recurses over 21 KB ChainConfiguration frames; the default 1 MB stack is too close to the edge.
 add_executable(veyra_hdr_tuning_tests tests/unit/HdrOutputTuningTests.cpp src/engine/PresetLibrary.cpp src/engine/EffectChain.cpp)
@@ -1522,6 +1541,13 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_definitions(veyra_vfg_settings_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_vfg_settings_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_vfg_settings_tests PRIVATE veyra_base)
+  add_executable(veyra_video_ai_settings_tests tests/unit/VideoAiSettingsTests.cpp src/engine/PresetLibrary.cpp src/engine/PresetStore.cpp src/engine/EffectChain.cpp)
+  target_compile_features(veyra_video_ai_settings_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_video_ai_settings_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_video_ai_settings_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_include_directories(veyra_video_ai_settings_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_video_ai_settings_tests PRIVATE veyra_base)
+  target_link_options(veyra_video_ai_settings_tests PRIVATE /STACK:33554432)
   add_executable(veyra_effect_availability_tests tests/unit/EffectAvailabilityTests.cpp)
   target_compile_features(veyra_effect_availability_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_effect_availability_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

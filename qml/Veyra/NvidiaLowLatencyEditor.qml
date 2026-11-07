@@ -4,12 +4,17 @@ ColumnLayout {
     id: root
     property string namePrefix: "list"
     readonly property bool available: veyra.nvidiaLowLatencyAvailable === true
+    readonly property bool boostWarning: available && veyra.nvidiaLowLatency === 2
     Layout.fillWidth: true
     spacing: 4
     VRow {
+        objectName: root.namePrefix+"-nvidia-low-latency-row"
         label: qsTr("英伟达低延迟")
         hintBelow: true
-        hint: root.available ? qsTr("减少处理排队；增强档提高 GPU 频率，可能增加功耗。") : qsTr("需要 NVIDIA 显卡")
+        // Field 2026-11-02 (RTX 5090, NR + VFG): Boost made the driver hold the
+        // per-source Sleep 4-18 ms and 8-21% of generated frames missed their slot.
+        hint: !root.available ? qsTr("需要 NVIDIA 显卡") : root.boostWarning ? qsTr("减少处理排队。高负载时建议选「开」而不是「开＋增强」：增强有概率导致掉帧，还会提高 GPU 频率、增加功耗。") : ""
+        hintColor: root.boostWarning ? Theme.err : Theme.t3
         VSeg {
             objectName: root.namePrefix+"-nvidia-low-latency"
             enabled: root.available

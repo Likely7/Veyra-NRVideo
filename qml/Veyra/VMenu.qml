@@ -103,6 +103,18 @@ Popup {
     property real originX: width / 2
     // For the motion probe.
     readonly property real motionScale: motion.s
+    // Software drawing (the default since 2.1.1) puts every glyph on a whole
+    // pixel, and a label left of its place by any fraction lands a full pixel
+    // left. The spring's tail swings scale and lift past their end values and
+    // back (1.043, 0.99 and 1.001 of the way at 24%, 44% and 61%), under half
+    // a pixel on a normal menu, so each opening moved every label 1 px
+    // sideways and back twice (screen recordings, 2026-11-06). With software
+    // drawing the opening therefore stops where the spring first reaches its
+    // end; GPU drawing still draws the whole spring.
+    property bool holdLanding: (typeof vySoftwareUi !== "undefined" && vySoftwareUi)
+        || contentItem.GraphicsInfo.api === GraphicsInfo.Software
+    onAboutToShow: { motion.opening = true; motion.landed = false }
+    onAboutToHide: { motion.opening = false; motion.landed = false }
 
     parent: Overlay.overlay
     padding: 0
@@ -127,7 +139,16 @@ Popup {
             NumberAnimation { target: motion; property: "dy"; to: 8; duration: Theme.d(450); easing.bezierCurve: Theme.spring }
         }
     }
-    QtObject { id: motion; property real s: 1; property real dy: 0 }
+    QtObject {
+        id: motion
+        property real s: 1
+        property real dy: 0
+        // Set once the opening spring first reaches 1; holdLanding keeps it there.
+        property bool opening: false
+        property bool landed: false
+        onSChanged: if (opening && s >= 1) landed = true
+        readonly property bool held: landed && pop.holdLanding
+    }
 
     // Popup itself is not an Item, so one content item carries the shadow, the panel
     // and the list, and the scale/translate motion with them.
@@ -139,10 +160,10 @@ Popup {
             Scale {
                 origin.x: pop.originX
                 origin.y: pop.above ? pop.height : 0
-                xScale: motion.s
-                yScale: motion.s
+                xScale: motion.held ? 1 : motion.s
+                yScale: motion.held ? 1 : motion.s
             },
-            Translate { y: motion.dy }
+            Translate { y: motion.held ? 0 : motion.dy }
         ]
         // box-shadow: 0 24px 50px -12px rgba(0,0,0,.8): the -12px spread insets the
         // shadow's shape, the offset and blur come from the effect.

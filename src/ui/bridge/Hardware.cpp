@@ -2,6 +2,7 @@
 #include "../QmlPlayerBridge_p.h"
 #include "veyra/pipeline/Rdna3NrBackend.h"
 #include "veyra/pipeline/AmdNrProvider.h"
+#include "veyra/pipeline/VfxSrBackend.h"
 
 namespace veyra::ui {
 
@@ -42,7 +43,7 @@ bool vfgHardwarePossible(){
     const auto* d=engineAdapterDesc();
     if(!d)return false;
     const auto name=QString::fromWCharArray(d->Description);
-    return d->VendorId==0x10DE&&(name.contains(QStringLiteral("GeForce RTX 40"),Qt::CaseInsensitive)||
+    return d->VendorId==0x10DE&&(name.contains(QStringLiteral("GeForce RTX 30"),Qt::CaseInsensitive)||name.contains(QStringLiteral("GeForce RTX 40"),Qt::CaseInsensitive)||
         name.contains(QStringLiteral("GeForce RTX 50"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Ada"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Blackwell"),Qt::CaseInsensitive));
 }
 unsigned normalizeFgMultiplier(unsigned value,engine::FrameGenerationBackend backend,unsigned cap){
@@ -61,6 +62,7 @@ ui::EffectGpu effectGpu() {
     result.rtx = name.contains("RTX", Qt::CaseInsensitive);
     result.blackwell = name.contains("RTX 50", Qt::CaseInsensitive) || name.contains("Blackwell", Qt::CaseInsensitive);
     result.ada = name.contains("RTX 40", Qt::CaseInsensitive) || name.contains("Ada", Qt::CaseInsensitive);
+    result.ampere = name.contains("GeForce RTX 30", Qt::CaseInsensitive);
     result.rx9000 = name.contains("RX 90", Qt::CaseInsensitive);
     result.rx7000 = pipeline::amdNrProvider(d->VendorId,d->Description)==pipeline::AmdNrProvider::RedDukeRdna3;
     return result;
@@ -97,9 +99,13 @@ static QVariantMap scanEffectCapabilities() {
     }
     add("sr0", H::Nvidia, exists(nr / "nvngx_dlss.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     for (int i = 1; i <= 4; ++i) add("sr" + QString::number(i), H::Nvidia, exists(nr / "nvngx_vsr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
+    // RTX Video SR high bitrate / streaming: Video Effects VideoSuperRes, from the VFG runtime directory.
+    const bool vfxSr = pipeline::VfxSrBackend::runtimeAvailable(nr.wstring());
+    for (int q : {16, 17, 18, 19}) add("sr" + QString::number(q), H::Nvidia, vfxSr, QObject::tr("需要 NVIDIA RTX 显卡"));
+    for (int q : {21, 23}) add("sr" + QString::number(q), H::NvidiaAmpere, vfxSr, QObject::tr("需要 NVIDIA RTX 30 及更新显卡"));
     add("sr5", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_upscaler_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add("dlss", H::Nvidia, exists(nr / "nvngx_dlssg.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
-    add("vfg", H::Vfg, pipeline::VfgBackend::runtimeAvailable(nr.wstring()), QObject::tr("需要 NVIDIA RTX 40 / 50（Ada / Blackwell）"));
+    add("vfg", H::Vfg, pipeline::VfgBackend::runtimeAvailable(nr.wstring()), QObject::tr("需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）"));
     add("xess", H::CrossVendor, exists(data / "intel/experimental/libxess_fg.dll") && exists(data / "intel/experimental/libxell.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add("fsr3", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_framegeneration_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add("fsr4", H::Fsr4, fsrLoader && exists(fsr / "amd_fidelityfx_framegeneration_dx12.dll"), QObject::tr("需要 AMD RX 9000"));
@@ -135,6 +141,8 @@ QString unavailableEffects(const engine::EnhancementSettings& settings) {
     QStringList requested;
     if (settings.nr) requested << "nr" + QString::number(int(engine::currentNrRuntime(settings.nrRuntime)));
     if (settings.sr) requested << "sr" + QString::number(settings.videoSrQuality);
+    // Double SR runs a second RTX Video SR pass with its own family and tier.
+    if (settings.sr && settings.dualSrEnabled && engine::rtxVideoSr(settings.videoSrQuality)) requested << "sr" + QString::number(settings.dualSrQuality);
     if (settings.multiplier > 1) requested << fgEffectId(settings.frameGenerationBackend);
     if (settings.videoHdr.enabled) requested << "hdr";
     for (const auto& id : requested) {
@@ -217,9 +225,14 @@ QVariantList QmlPlayerBridge::nrRuntimeChoices() const {
 QVariantList QmlPlayerBridge::srBackendChoices() const {
     QVariantList choices;
     const auto caps = effectCapabilities();
-    for (const auto& entry : std::initializer_list<std::pair<int, QString>>{{0, "DLSS SR"}, {4, tr("RTX 视频超分")}, {5, effectGpu().vendor == 0x1002 ? tr("FSR 3.1 / 4 · 自动兼容") : QString("FSR 3.1")}}) {
-        const auto cap = caps.value("sr" + QString::number(entry.first)).toMap();
-        choices << QVariantMap{{"id", QString::number(entry.first)}, {"label", entry.second}, {"disabled", !cap.value("available").toBool()}, {"note", cap.value("reason")}};
+    // RTX Video SR families take string ids (srAlgorithmOf); the tier is chosen
+    // separately. Availability follows each family's runtime.
+    struct Entry { QString id; int capability; QString label; };
+    for (const auto& entry : std::initializer_list<Entry>{{"0", 0, "DLSS SR"}, {"rtx", 4, tr("RTX 视频超分 · 标准")},
+            {"rtx-hb", 16, tr("RTX 视频超分 · 高码率")}, {"rtx-st", 21, tr("RTX 视频超分 · 流媒体")},
+            {"5", 5, effectGpu().vendor == 0x1002 ? tr("FSR 3.1 / 4 · 自动兼容") : QString("FSR 3.1")}}) {
+        const auto cap = caps.value("sr" + QString::number(entry.capability)).toMap();
+        choices << QVariantMap{{"id", entry.id}, {"label", entry.label}, {"disabled", !cap.value("available").toBool()}, {"note", cap.value("reason")}};
     }
     return choices;
 }

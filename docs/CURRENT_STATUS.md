@@ -1,4 +1,20 @@
+> **2026-11-06 2.1.3默认中档重构建完成（最新）**：产品7a2d15d；基础/第二次超分默认中档并保留保存值，Boost警告仅选中时红字。Quick173/0/0、设置兼容及实际UI/重启、两ZIP核验和解压播放通过；旧构建产物及本轮临时解压/测试副本已按清单清理，配置/日志保留。新入口`E:/项目/Veyra/test-packages/codex-rebuild-2.1.3-20261106`，证据[重构建记录](REBUILD_2.1.3_DEFAULTS_2026-11-06.md)和同任务FINAL.json。未push/Release，公开版仍2.1.2。
+
+> **2026-11-06 2.1.3已合入本地main并完成测试包**：Claude菜单文字修复、NR分组网状/列表及此前全部保留修复已包含。软件Quick172/0/0、实际UI/重启、SR/双编码导出、两ZIP与解压冷启动通过。冷增强首次加载等待保留。交付`E:/项目/Veyra/test-packages/codex-build-2.1.3-20261106`，读[构建记录](BUILD_2.1.3_TEST_2026-11-06.md)和reports同任务FINAL.json。公开版仍2.1.2，未push/Release。
+
 # 当前项目状态
+
+**2026-11-05 本地 main 整合（当前）**：全屏拖动、RTX30 VFG、NVENC导出关键帧、RX7000多GPU修复与Claude的HIP设备选择、低延迟提示、三类RTX视频超分及混合双重超分均已合入。构建和针对性回归通过：QtQuick146/0/0、7组420帧超分对齐、H.264/HEVC周期IDR与索引等；本地RTX5070验证，不代替30系／RX7000实卡和新超分HDR验收。新VFX首次冷加载可能有较长JIT等待，热缓存复测无错误。未push、未发布新包，正式版仍为下方2.1.2。[整合及分支整理](MAIN_INTEGRATION_2026-11-05.md) · [NR网状调节研究](NR_WEB_CONTROL_RESEARCH_2026-11-05.md)。以下带日期的“未提交／未合入”等描述是当时状态。
+
+**2026-11-05 RTX 视频超分三个版本与双重超分**：Claude原工作已提交 `ba00ce3` 并纳入上述本地main整合。标准 / 高码率 / 流媒体加档位，双重超分和超采样适配三个版本；RIFE保持删除。详见[记录](RTX_VIDEO_SR_FAMILIES_2026-11-05.md)，原始回执 `E:/项目/Veyra/reports/claude-vsr-rife-20261105/FINAL.json`。
+
+**2026-11-05 补帧延迟预算实验终止**：用户决定按失败方向删除；独立分支和测试入口已移除，未进入main／正式包。活动树回main，产品代码保持fedd7fc，仅记录终止结论。停止研究，不再把“预读生效”当作性能收益。详见[终止记录](FG_LATENCY_BUDGET_RETIRED_2026-11-05.md)。
+
+**2026-11-03 RX7000后续诊断**：用户新缓存确认架构识别已经通过；Small网络建立到权重heap请求时worker退出，尚无异常码。当前只补worker阶段/stderr/异常记录与崩溃事件收集，不把诊断更新冒充新的崩溃已修好。[新证据与诊断交付](RDNA3_WORKER_CRASH_2026-11-03.md)。
+
+**2026-11-03 RX7000本地兼容补丁**：发现核显+独显设备的NVAPI LUID误报，当前分支codex/rdna3-nvapi-luid-20261103修开源zluda_nvapi.dll并提供独立小更新。原正式组件实测合同失败、新组件13组通过；没有RX7000实卡推理结论，不改模型/缓存/驱动。尚未合main、未发布。[证据及未来打包要求](RDNA3_NVAPI_LUID_2026-11-03.md)。
+
+**2026-11-03 本地导出修复**：codex/nvenc-export-keyframes-20261103显式覆盖NVENC低延迟preset的无限IDR，恢复每120帧真正IDR与封装索引，不把普通I标KEY。14组生产导出、28次跳转通过，继承全屏修复与RTX30 VFG实验兼容；未合main、未push/发布。[审查与证据](NVENC_EXPORT_KEYFRAMES_2026-11-03.md)。
 
 **当前正式版2.1.2（2026-11-02）**：用户授权公开发行，main和v2.1.2／v2.1.2-sources已推送；发行准备899590f，程序构建358be8c（EXE33d8e615…），使用Claude最新去重包的原程序字节。两显卡包及源码已发布，服务端摘要、匿名下载、Latest与两张二维码核验通过。[完整更新](RELEASE_NOTES_2.1.2.md) · [构建/源码](BUILD_2.1.2.md) · [发行记录](RELEASE_2.1.2_EXECUTION_2026-11-02.md)。正式产物releases/codex-release-2.1.2-20261102，FINAL回执reports/codex-release-2.1.2-20261102。
 

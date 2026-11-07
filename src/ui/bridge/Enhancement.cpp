@@ -1,5 +1,6 @@
 // QML bridge: Enhancement responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include <optional>
 
 namespace veyra::ui {
 // --- settings ---------------------------------------------------------------
@@ -43,7 +44,7 @@ int QmlPlayerBridge::srPrescale() const { return int(settings().srPrescale); }
 bool QmlPlayerBridge::dualSrEnabled() const { return settings().dualSrEnabled; }
 void QmlPlayerBridge::setDualSrEnabled(bool enabled){
     auto s=settings();if(s.dualSrEnabled==enabled)return;
-    if(enabled&&!engine::srStageBackend(s.videoSrQuality))return;
+    if(enabled&&!engine::rtxVideoSr(s.videoSrQuality))return;
     s.dualSrEnabled=enabled;
     // A kept supersample shrink is inactive under double SR and returns when it is off.
     if(enabled&&s.srPrescale==pipeline::SrPrescale::Off)s.srPrescale=pipeline::SrPrescale::P1080;
@@ -58,16 +59,64 @@ void QmlPlayerBridge::setDualSrTargetIndex(int index){
     auto s=settings();s.dualSrTarget=targets[index-1];if(impl_->commit(s))emit settingsChanged();
 }
 int QmlPlayerBridge::dualSrQuality() const {return int(settings().dualSrQuality);}
-void QmlPlayerBridge::setDualSrQuality(int quality){if(quality<1||quality>4)return;auto s=settings();s.dualSrQuality=uint32_t(quality);if(impl_->commit(s))emit settingsChanged();}
+// The second pass may use any RTX Video SR family and tier, independent of the base.
+void QmlPlayerBridge::setDualSrQuality(int quality){
+    if(quality<0||!engine::rtxVideoSr(unsigned(quality)))return;
+    const auto cap=effectCapabilities().value("sr"+QString::number(quality)).toMap();
+    if(!cap.value("available").toBool()){emit notice(cap.value("reason").toString(),true);return;}
+    auto s=settings();if(int(s.dualSrQuality)==quality)return;
+    s.dualSrQuality=uint32_t(quality);if(impl_->commit(s))emit settingsChanged();
+}
+// Algorithm ids of the SR lists: "rtx" standard, "rtx-hb" high bitrate and
+// "rtx-st" streaming RTX Video SR (each with tiers 1 low .. 4 ultra); DLSS SR
+// and FSR keep their numeric ids.
+QString QmlPlayerBridge::srAlgorithmOf(int quality) const {
+    if(quality<0||!engine::rtxVideoSr(unsigned(quality)))return QString::number(quality);
+    switch(engine::videoSrFamily(unsigned(quality))){
+    case engine::VideoSrFamily::HighBitrate:return QStringLiteral("rtx-hb");
+    case engine::VideoSrFamily::Streaming:return QStringLiteral("rtx-st");
+    default:return QStringLiteral("rtx");
+    }
+}
+int QmlPlayerBridge::srTierOf(int quality) const {
+    return quality>=0&&engine::rtxVideoSr(unsigned(quality))?int(engine::videoSrTier(unsigned(quality))):0;
+}
+// The stored quality for an algorithm at a tier. Coming from DLSS SR or FSR
+// there is no tier yet, so an RTX family starts at the default medium tier.
+int QmlPlayerBridge::srQualityFor(const QString& algorithm,int tier) const {
+    const auto family=algorithm==QLatin1String("rtx")?std::optional(engine::VideoSrFamily::Standard):
+        algorithm==QLatin1String("rtx-hb")?std::optional(engine::VideoSrFamily::HighBitrate):
+        algorithm==QLatin1String("rtx-st")?std::optional(engine::VideoSrFamily::Streaming):std::nullopt;
+    if(family)return int(engine::videoSrQualityFor(*family,tier>=1&&tier<=4?unsigned(tier):engine::kDefaultVideoSrQuality));
+    bool ok=false;const int value=algorithm.toInt(&ok);
+    return ok&&value>=0&&engine::validVideoSrQuality(unsigned(value))?value:-1;
+}
+// Streaming has only the medium and ultra tiers.
+QVariantList QmlPlayerBridge::srTierChoices(int quality) const {
+    const bool streaming=quality>=0&&engine::rtxVideoSr(unsigned(quality))&&engine::videoSrFamily(unsigned(quality))==engine::VideoSrFamily::Streaming;
+    const QString labels[]={tr("低"),tr("中"),tr("高"),tr("超高")};
+    QVariantList out;
+    for(int tier=1;tier<=4;++tier)if(!streaming||tier==2||tier==4)out<<QVariantMap{{"id",QString::number(tier)},{"label",labels[tier-1]}};
+    return out;
+}
+// "超高", or "高码率 超高" with the family. Empty for DLSS SR and FSR.
+QString QmlPlayerBridge::srQualityLabel(int quality,bool withFamily) const {
+    if(quality<0||!engine::rtxVideoSr(unsigned(quality)))return {};
+    const QString tiers[]={tr("低"),tr("中"),tr("高"),tr("超高")};
+    const QString tier=tiers[engine::videoSrTier(unsigned(quality))-1];
+    if(!withFamily)return tier;
+    const auto family=engine::videoSrFamily(unsigned(quality));
+    return (family==engine::VideoSrFamily::HighBitrate?tr("高码率"):family==engine::VideoSrFamily::Streaming?tr("流媒体"):tr("标准"))+QLatin1Char(' ')+tier;
+}
 int QmlPlayerBridge::srOutput() const { return int(settings().srOutput); }
-// Double SR and the supersample shrink run on RTX Video SR only; other backends
-// keep the single step.
+// Double SR and the supersample shrink run on RTX Video SR (every family) only;
+// other backends keep the single step.
 void QmlPlayerBridge::setSrPrescale(int value) {
     const auto want = pipeline::SrPrescale(uint32_t(value));
     if (value < 0 || !pipeline::validSrPrescale(want)) return;
     auto s = settings();
     if (s.srPrescale == want) return;
-    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("双重超分目前仅 RTX 视频超分支持"), true); return; }
+    if (!engine::rtxVideoSr(s.videoSrQuality)) { emit notice(tr("双重超分目前仅 RTX 视频超分支持"), true); return; }
     s.srPrescale = want;
     if (impl_->commit(s)) emit settingsChanged();
 }
@@ -76,12 +125,12 @@ void QmlPlayerBridge::setSrOutput(int value) {
     if (value < 0 || !pipeline::validSrOutput(want)) return;
     auto s = settings();
     if (s.srOutput == want) return;
-    if (!engine::srStageBackend(s.videoSrQuality)) { emit notice(tr("超分后缩回目前仅 RTX 视频超分支持"), true); return; }
+    if (!engine::rtxVideoSr(s.videoSrQuality)) { emit notice(tr("超分后缩回目前仅 RTX 视频超分支持"), true); return; }
     s.srOutput = want;
     if (impl_->commit(s)) emit settingsChanged();
 }
 void QmlPlayerBridge::setVideoSrQuality(int value) {
-    if (value < 0 || value > 5) return;
+    if (value < 0 || !engine::validVideoSrQuality(unsigned(value))) return;
     const auto cap = effectCapabilities().value("sr" + QString::number(value)).toMap();
     if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return; }
     auto s = settings();

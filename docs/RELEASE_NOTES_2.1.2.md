@@ -78,11 +78,11 @@
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-7-20261102.png" alt="Veyra 交流群 7" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-8-20261102.png" alt="Veyra 交流群 8" width="220">
 </p>
 
-左：微信赞助（自愿，不影响功能）；右：交流群。群码按图片标注于 **2026-11-09 前**有效，过期请查看仓库更新。
+左：微信赞助（自愿，不影响功能）；右：交流群 8。群码按图片标注于 **2026-11-09 前**有效，过期请查看仓库更新。
 
-Left: optional donation; right: community group. QR valid before 2026-11-09.
+Left: optional donation; right: community group 8. QR valid before 2026-11-09.
 
 [Veyra 软件知识库 / Knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)：四个群聊汇总的使用文档，涵盖软件与采集卡常见问题。
