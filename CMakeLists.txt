@@ -1244,7 +1244,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # WIN32: a GUI subsystem binary. Without it a console window follows the app
   # around, which is not what a player should look like. Diagnostics still reach
   # the log file through the logger.
-  add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp src/ui/QmlDataDirectory.cpp)
+  add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp src/ui/QmlDataDirectory.cpp src/ui/QmlDiskCache.cpp)
   # The QML copy is its own always-run step rather than a POST_BUILD of the link:
   # its two long E:/项目 paths on the link statement pushed that command past
   # CMake's response-file threshold, and link.exe reads response files in the
@@ -1290,6 +1290,12 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_link_libraries(veyra_subtitle_cache_tests PRIVATE veyra_engine)
   target_compile_features(veyra_qml_data_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_qml_data_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  # The per-build QML disk cache folder (QmlDiskCache.h).
+  add_executable(veyra_qml_cache_tests tests/unit/QmlDiskCacheTests.cpp src/ui/QmlDiskCache.cpp)
+  target_compile_features(veyra_qml_cache_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_qml_cache_tests PRIVATE /utf-8)
+  target_include_directories(veyra_qml_cache_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_qml_cache_tests PRIVATE Qt6::Core)
 
   # G0.6: Theme easing curves read back through QML against the design's CSS curves.
   # Loads qml/ from the source tree; runs offscreen with the Qt bin directory on PATH.
