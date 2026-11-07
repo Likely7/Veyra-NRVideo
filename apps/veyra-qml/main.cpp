@@ -53,6 +53,7 @@
 #include "veyra/engine/ExportJobManager.h"
 #include "veyra/engine/PresentationGeometry.h"
 #include "veyra/gfx/PresentationHooks.h"
+#include "veyra/pipeline/AmdHipPreflight.h"
 #include "veyra/ui/InterfaceRenderer.h"
 #include "veyra/ui/QmlDataDirectory.h"
 #include "veyra/ui/QmlPlayerBridge.h"
@@ -1104,6 +1105,20 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
 }
 
 int main(int argc, char** argv) {
+    // A child for the AMD HIP self-test (AmdHipPreflight.h): no Qt, no window and
+    // no player state, only the HIP calls and their result lines on the pipe.
+    if (argc >= 2 && std::strcmp(argv[1], "--amd-hip-preflight") == 0) {
+        int count = 0;
+        wchar_t** wide = CommandLineToArgvW(GetCommandLineW(), &count);
+        const int code = wide ? veyra::pipeline::amdhip::preflightMain(count, wide) : 2;
+        if (wide) LocalFree(wide);
+        return code;
+    }
+    {
+        std::wstring self(32768, L'\0');
+        self.resize(GetModuleFileNameW(nullptr, self.data(), DWORD(self.size())));
+        veyra::pipeline::amdhip::setPreflightExecutable(self);
+    }
     QString program;
     QStringList arguments;
     const int result = runApplication(argc, argv, program, arguments);

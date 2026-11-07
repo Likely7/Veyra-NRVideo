@@ -381,6 +381,7 @@ add_library(veyra_pipeline STATIC
   src/pipeline/AntiAliasPass.cpp
   src/pipeline/SmaaLookupTables.cpp
   src/pipeline/NrInstance.cpp
+  src/pipeline/AmdHipPreflight.cpp
   src/pipeline/LmxxfNrBackend.cpp
   src/pipeline/Rdna3NrBackend.cpp
   src/pipeline/VfgBackend.cpp
@@ -449,6 +450,10 @@ add_executable(veyra_lmxxf_nr_tests tests/unit/LmxxfNrTests.cpp)
 target_compile_features(veyra_lmxxf_nr_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_lmxxf_nr_tests PRIVATE veyra_pipeline)
 add_dependencies(veyra_lmxxf_nr_tests veyra_lmxxf_fake_runtime veyra_lmxxf_fake_original_runtime)
+# Issue 88: the AMD HIP self-test child, its class ladder and its result lines.
+add_executable(veyra_amd_hip_preflight_tests tests/unit/AmdHipPreflightTests.cpp)
+target_compile_features(veyra_amd_hip_preflight_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_amd_hip_preflight_tests PRIVATE veyra_pipeline)
 add_executable(veyra_lmxxf_runtime_metadata_tests tests/integration/LmxxfNrRuntimeMetadataTests.cpp)
 target_compile_features(veyra_lmxxf_runtime_metadata_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_lmxxf_runtime_metadata_tests PRIVATE veyra_pipeline)

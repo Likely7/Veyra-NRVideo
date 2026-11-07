@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "veyra/pipeline/LmxxfNrBackend.h"
 #include "veyra/Log.h"
+#include "veyra/gfx/GpuSchedulingPriority.h"
+#include "veyra/pipeline/AmdHipPreflight.h"
 #include <atomic>
 #include <format>
 #include <algorithm>
@@ -68,6 +70,27 @@ bool LmxxfNrBackend::open(const std::filesystem::path& directory, ID3D12Device* 
         log::error("amd-nr",error_);close();return false;
     };
     if(!compatibleEnvironment()||!controlsCompatible())return rejectEnvironment();
+    // HIP reaches this process only after a child made its first calls on this
+    // adapter (AmdHipPreflight.h, issue 88). The class that passed caps this
+    // process from here on; when none passed AMD NR stays off instead of crashing.
+    if (!amdhip::preflightExecutable().empty()) {
+        const LUID adapter = device->GetAdapterLuid();
+        const uint64_t luid = (uint64_t(uint32_t(adapter.HighPart)) << 32) | adapter.LowPart;
+        const int current = gfx::gpuPriorityStatus().actual;
+        const auto outcome = amdhip::preflightOnce(luid, current);
+        if (!outcome.ok) {
+            error_ = "AMD HIP self-test failed, AMD NR stays off so playback continues (" + outcome.summary +
+                     "). Update the AMD driver and send this log";
+            log::error("amd-nr", error_); close(); return false;
+        }
+        if (outcome.priority > 0 && current > outcome.priority) {
+            gfx::setGpuPriorityComputeCap(gfx::GpuPriority(outcome.priority));
+            log::warn("amd-nr", std::format("HIP failed at GPU scheduling class {} and passed at {}; this process stays at {} ({})",
+                current, outcome.priority, gfx::gpuPriorityStatus().actual, outcome.summary));
+        } else {
+            log::info("amd-nr", std::format("HIP self-test passed at GPU scheduling class {} ({})", outcome.priority, outcome.summary));
+        }
+    }
     LmxxfNrCreateInfo info{}; info.struct_size = sizeof(info); info.device = device; info.queue = queue;
     info.assets_directory = assets.c_str(); // flags=0: a failed network is never passed off as NR
     if (!result(api_.Create(&info, &context_), "Create") || !context_) { close(); return false; }
