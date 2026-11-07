@@ -697,3 +697,13 @@ build-recording-handoff.py --task codex-build-2.1.3-20261106 --build-dir <共享
 ## 2026-11-06 用户授权2.1.3公开发布
 
 目标Likely7/Veyra-NRVideo，发布计划docs/RELEASE_2.1.3_EXECUTION_2026-11-06.md。2.1.2以来提交已逐项核对；原图已查看并原样复制docs/images/2.1.3/sr-comparison.png。保留群8/赞助各220；沿用重构建程序，发行仅更新文档/元数据。报告reports/codex-release-2.1.3-20261106。
+
+## 实际公开与远端核验完成
+
+发行准备0a09d376a7d0a185bdb1d1a54b1b666dc25e7a60，产品7a2d15d9222a98fac69e5343c01b443e1d7060be。main与v2.1.3/v2.1.3-sources已原子推送；两个Release均为公开正式发布，运行版为Latest。7个资产服务端SHA256/大小/状态及匿名下载HEAD200、群8/赞助各width220、超分原图字节、远端README/标签/Latest核验通过；4份固定依赖对应源码摘要和可访问性核验通过。
+
+Veyra-2.1.3-NVIDIA-win64-portable.zip：726570478 bytes，SHA256 `464a46ac1874acf36e43f7d3f53db336c3e7a0c59f156237d8226d94e63f7b7f`。
+
+Veyra-2.1.3-AMD-win64-portable.zip：717577602 bytes，SHA256 `dc1223f0aff0feb397f2c40706a3f608b9e147d5390892d7631295759e17a692`。
+
+应用源码SHA256 `52e73bfa40422238f3fe35f7d3fbb0188c2ff759671cb6bda90a782824161d5b`。实际执行scripts/acceptance/release-2.1.3.py；git push --atomic nrvideo main refs/tags/v2.1.3 refs/tags/v2.1.3-sources；reports同任务publish.py body/drafts/sources/packages/publish/verify。AMD首次上传被原300秒脚本上限中断，服务端无残留；延长至1800秒重试，既有NVIDIA资产按摘要跳过。每个上传先核验远端摘要，再公开；源码先公开，运行版后设Latest。产品字节与供体ZIP逐文件一致，不重复占用采集卡；新产物仅在E盘。全部ZIP清单与SOURCE校验通过，无专有二进制/SDK混入源码Git，无用户配置进入运行包。群公告810字符，文件reports同任务GROUP_ANNOUNCEMENT.txt，未代发群消息。
