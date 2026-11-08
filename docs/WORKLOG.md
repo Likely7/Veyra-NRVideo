@@ -798,3 +798,16 @@ Veyra-2.1.3-AMD-win64-portable.zip：717577602 bytes，SHA256 `dc1223f0aff0feb39
 ## 2026-11-06 项目产物安全清理
 
 删除122372文件，逻辑53.72 GiB，E盘实测可用净增33.73 GiB；项目路径累计152.89→99.28 GiB。34关键文件/正式与源码ZIP SHA不变，19工作树原HEAD/修改清单不变，依赖/Junction/用户配置/当前build与app保留。只清编译中间文件、旧测试部署与未发布包、私有缓存、旧性能读回；保留修改与用户数据候选315项，首次预检20个Profile命名obj保守排除。单文件1.4.0旧下载ZIP删除被自动审批blocked by policy拒绝，未执行、未绕过，仍保留。详情docs/PROJECT_CLEANUP_2026-11-06.md和reports/codex-project-cleanup-20261106/FINAL.json，命令及逐文件证据在同任务。产品代码/正式包不改，未push/发布。
+
+
+## 2026-11-08 接手Claude：音量记忆与全后端双重超分
+
+读取Claude最新会话9720f799，原任务为“音量每次回100%”“其他超分也支持双重”。独立树worktrees/claude-volume-dual-sr-20261108，分支claude/volume-dual-sr-20261108，基线0079ed9；原20文件逐SHA核对未改字节，保存产品提交356013b。音量500ms防抖及退出保存；双重SR扩展DLSS/FSR，两个独立时域实例/历史、运动坐标、生命周期和内存估算，UI两模式共用并支持混合算法，新格式与旁文件保护旧设置。
+
+Claude初次构建305.9s，原完整Quick172/0/1、25 GPU用例、原双重/超采样、真实UI、设置事务及导出通过；本机RTX5070。Codex补真实程序音量23%立刻退出/重启/越界值，保持编译缓存；设置274/0、效果链和预设库通过；给单个跳过的栅格测试显式目录后成功保存6图。六组既有NVENC导出重新比对360帧，错位0，不冒充画质全面验收。原启动器cmd引号/控制字符/工作目录问题已修并实际运行、独立配置、定时退出通过。未改用户配置/其他进程/运行库或驱动。
+
+最终命令build-recording-handoff.py --task claude-volume-dual-sr-20261108 --root E:/项目/Veyra/worktrees/claude-volume-dual-sr-20261108 --label 2.1.3-volume-dual-sr-test --jobs 2，12目标，干净产品提交增量1.0s通过；完整目标及receipt见docs/VOLUME_DUAL_SR_2026-11-08.md和logs同任务/build-20261108-023124。EXE91b93b45…与既有验收字节相同，未因文档变化盲目重测全套。
+
+独立命令：python -X utf8 -B E:/项目/Veyra/reports/claude-volume-dual-sr-20261108/codex_verify.py --remaining；full_align.py 对六个tests同任务/out/*.mp4与源pan720p-16s.mp4比较。首个设置测试误先建scratch触发exit2，改为不存在路径后274/0；之前失败日志保留。Claude旧RTX-only断言、默认档位和错误尺寸测试输入的修正也保留记录。
+
+报告reports/claude-volume-dual-sr-20261108/FINAL.json；手动入口tests同任务/启动音量与双重超分测试.cmd，manual-profile独立；docs/VOLUME_DUAL_SR_2026-11-08.md说明限制。只保留任务现有可用stage/build/证据，未多做重复整包。本轮未合main、未push/Release；NR推理复用独立分支保持原状态，无AMD实卡验收，不重跑历史8K+NR+VFG卡死组合。
