@@ -129,8 +129,16 @@ struct EnhanceGraphDesc {
     // Three-step SR (RTX Video SR): what SR reads after the prescale and what it
     // writes before the output fit. Zero: SR reads the source and writes the work extent.
     uint32_t srInputWidth=0,srInputHeight=0,srOutputWidth=0,srOutputHeight=0;
+    // Double SR: the first pass (videoSrQuality) writes firstSr*, the second
+    // (dualSrQuality) reads its reduction. Each pass has its own backend: DLSS SR,
+    // FSR or any RTX Video SR family (user 2026-11-08).
     bool dualSr=false;
     uint32_t firstSrWidth=0,firstSrHeight=0,dualSrQuality=engine::kDefaultVideoSrQuality;
+    uint32_t finalSrQuality()const{return dualSr?dualSrQuality:videoSrQuality;}
+    bool firstSrEnlarges()const{return firstSrWidth!=sourceWidth||firstSrHeight!=sourceHeight;}
+    // A first DLSS SR / FSR pass runs only when it enlarges; at the source size
+    // its result is the source (as for the Video Effects families).
+    bool firstSrRuns(uint32_t quality)const{return dualSr&&videoSrQuality==quality&&firstSrEnlarges();}
     uint32_t fgMultiplier=2;
     engine::FrameGenerationBackend frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;
@@ -699,7 +707,9 @@ public:
     bool presentSinkFg() const { return xessEnabled(); }
     // AMD FSR upscaling replaces the SR stage; it is a FidelityFX effect, not
     // an NGX feature, so it also works on non-NVIDIA adapters.
-    bool fsrSrRequested() const { return desc_.enableSr && !desc_.stillImage && desc_.videoSrQuality==engine::kVideoSrFsr; }
+    // Double SR may run FSR in either pass; each pass is its own FidelityFX context.
+    bool fsrSrRequested() const { return desc_.enableSr && !desc_.stillImage &&
+        (desc_.finalSrQuality()==engine::kVideoSrFsr || desc_.firstSrRuns(engine::kVideoSrFsr)); }
     // Out of line: the backend type is only forward declared here.
     bool fsrSrEnabled() const;
     // Requested output multiplier (2 = one generated frame). Consumed by the
@@ -848,6 +858,11 @@ private:
     ComPtr<ID3D12Resource> videoSrInput_,videoSrOutput_;
     ComPtr<ID3D12Resource> srPrescaled_; // linear second-SR input: the double SR reduction of the first result
     ComPtr<ID3D12Resource> firstSrInput_,firstSrOutput_,firstSrLinear_;
+    // Double SR temporal passes: a first DLSS SR pass takes motion in its output
+    // pixels (first result), a second FSR pass in its render pixels (SR input).
+    ComPtr<ID3D12Resource> firstSrFlow_,secondSrFlow_;
+    UINT firstSrFlowSet()const{return 3+UINT(nrInstances_.size());}
+    UINT secondSrFlowSet()const{return 4+UINT(nrInstances_.size());}
     ComPtr<ID3D12Resource> videoHdrInput_,videoHdrOutput_;
     ComPtr<ID3D12Resource> residualRgba_,nrFlow_,baseFlow_;
     ComPtr<ID3D12Resource> preSrProtectionRgba_;
@@ -1047,8 +1062,15 @@ private:
     std::unique_ptr<ngx::DlssFgBackend> fgBackend_;
     std::unique_ptr<gfx::FsrFgPresenter> fsrFgBackend_;
     std::unique_ptr<gfx::FsrSrBackend> fsrSrBackend_;
+    // Double SR first passes on DLSS SR / FSR (the final pass keeps the members above).
+    std::unique_ptr<ngx::DlssSrBackend> firstDlssSrBackend_;
+    std::unique_ptr<gfx::FsrSrBackend> firstFsrSrBackend_;
+    // Constant far depth and zero motion for the temporal SR passes. The source
+    // extent for a single FSR pass; under double SR the largest render/motion
+    // extent of its DLSS SR / FSR passes (larger inputs are read in their subrect).
     ComPtr<ID3D12Resource> fsrSrDepth_, upFsrSrDepth_, fsrSrZeroMotion_, upFsrSrZeroMotion_;
     size_t fsrSrDepthPitch_=0;
+    uint32_t fsrAuxW_=0,fsrAuxH_=0;
     NVSDK_NGX_Parameter* ngxParams_ = nullptr;
     uint64_t nrResult_ = 0;
     uint64_t fgInitResult_ = 0;

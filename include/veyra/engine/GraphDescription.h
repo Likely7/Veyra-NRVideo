@@ -65,10 +65,17 @@ struct StageRequest {
     const ChainRuntimeOrder* nodeOrder=nullptr; // paired with this settings transaction
 };
 
-// Double SR runs on RTX Video SR (NVIDIA, every model family) only; every other
-// backend keeps its existing single pass, regardless of saved second-pass fields.
-inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter){
-    return nvidiaAdapter&&rtxVideoSr(s.videoSrQuality)&&s.dualSrEnabled?s.srPrescale:pipeline::SrPrescale::Off;
+// Double SR (user 2026-11-08): each pass uses DLSS SR, FSR or any RTX Video SR
+// family. It runs where both passes' backends exist - FSR on every adapter, the
+// others on NVIDIA - and not on a still image with an FSR pass (FSR skips still
+// images). Otherwise the base keeps its single pass, saved second fields intact.
+inline bool dualSrRuns(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false){
+    const auto runs=[nvidiaAdapter](uint32_t quality){return nvidiaAdapter||quality==kVideoSrFsr;};
+    return s.dualSrEnabled&&runs(s.videoSrQuality)&&runs(s.dualSrQuality)&&
+        !(stillImage&&(s.videoSrQuality==kVideoSrFsr||s.dualSrQuality==kVideoSrFsr));
+}
+inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false){
+    return dualSrRuns(s,nvidiaAdapter,stillImage)?s.srPrescale:pipeline::SrPrescale::Off;
 }
 // Supersampling (user 2026-10-28): one RTX Video SR pass evaluates at its target
 // and the result is area-shrunk into srOutput before every later effect. Double
@@ -111,7 +118,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     const bool boundedAmd=request.exportJob&&!request.stillImage&&request.amdNr&&
         currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd;
     const auto policy=request.exportJob?exportNrSizePolicy(settings.nrRuntime,settings.nrPolicy):settings.nrPolicy;
-    const auto srPrescale=runningSrPrescale(settings,request.nvidiaAdapter);
+    const auto srPrescale=runningSrPrescale(settings,request.nvidiaAdapter,request.stillImage);
     const auto srOutput=runningSrOutput(settings,request.nvidiaAdapter);
     if(!pipeline::Extent{request.width,request.height}.valid()||!pipeline::validSrTarget(settings.srTarget)||
        !pipeline::validNrSizePolicy(policy)||!pipeline::validSrPrescale(srPrescale)||!pipeline::validSrOutput(srOutput)){
@@ -126,7 +133,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         boundedAmd?pipeline::NrSizePolicy::Realtime:policy,
         (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency,
         request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput,
-        settings.dualSrEnabled&&request.nvidiaAdapter&&rtxVideoSr(settings.videoSrQuality),settings.dualSrTarget);
+        dualSrRuns(settings,request.nvidiaAdapter,request.stillImage),settings.dualSrTarget);
     if(request.exportJob&&!request.stillImage)
         plan.nr=exportNrProcessingExtent(plan.base,settings.nrRuntime,policy);
     desc.sourceWidth=request.width;desc.sourceHeight=request.height;

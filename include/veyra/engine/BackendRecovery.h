@@ -66,7 +66,8 @@ inline bool disableFailedBackend(EnhancementSettings& settings,FailedBackend bac
         break;
     case FailedBackend::OpticalFlow:
         settings.nr=false;settings.multiplier=1;
-        if(!settings.videoSrQuality)settings.sr=false;
+        // DLSS SR as the base or the second of a double SR.
+        if(!settings.videoSrQuality||(settings.dualSrEnabled&&!settings.dualSrQuality))settings.sr=false;
         break;
     default:return false;
     }

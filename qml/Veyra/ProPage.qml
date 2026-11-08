@@ -1321,13 +1321,17 @@ VPage {
                                      + " · " + veyra.srTargetLabel
                                      + (supersampleShown ? "→" + (veyra.srOutput === 1 ? qsTr("片源尺寸") : ["", "", "2K", "4K", "5K", "6K", "7K"][veyra.srOutput]) : "")
                                      + (dualShown ? "→" + (veyra.srPrescale >= 150 ? (veyra.srPrescale - 100) + "%" : ["", "720p", "900p", "1080p", "1440p"][veyra.srPrescale]) + "→" + ["", "2K", "4K", "8K", "5K", "6K", "7K"][veyra.dualSrTargetIndex] : "")
-                                     + (rtxVideoSr ? " · " + veyra.srQualityLabel(veyra.videoSrQuality, false) + (dualShown ? " / " + veyra.srQualityLabel(veyra.dualSrQuality, true) : "") : "")
-                            // Base target, then the supersample shrink, or the double SR reduction
-                            // and second target while double SR is on (RTX Video SR), then the tier
-                            // (and the second family and tier). Each kept value is hidden while its mode is off.
+                                     + (rtxVideoSr ? " · " + veyra.srQualityLabel(veyra.videoSrQuality, false) + (dualShown ? " / " + secondLabel : "")
+                                        : dualShown ? " · " + qsTr("第二次 %1").arg(secondLabel) : "")
+                            // Base target, then the supersample shrink (RTX Video SR), or the double SR
+                            // reduction and second target while double SR is on (any algorithm), then the
+                            // tier and the second algorithm. Each kept value is hidden while its mode is off.
                             readonly property bool rtxVideoSr: veyra.srAlgorithmOf(veyra.videoSrQuality).startsWith("rtx")
                             readonly property bool supersampleShown: !veyra.dualSrEnabled && veyra.srOutput > 0 && rtxVideoSr
-                            readonly property bool dualShown: veyra.dualSrEnabled && veyra.srPrescale > 0 && rtxVideoSr
+                            readonly property bool dualShown: veyra.dualSrEnabled && veyra.srPrescale > 0
+                            // "高码率 超高" for an RTX family, the algorithm name for DLSS SR / FSR.
+                            readonly property string secondLabel: veyra.srQualityLabel(veyra.dualSrQuality, true)
+                                || veyra.srBackendChoices?.find(o => o.id === veyra.srAlgorithmOf(veyra.dualSrQuality))?.label || ""
                             on: veyra.srEnabled
                             open: true
                             onToggled: on => veyra.srEnabled = on
@@ -1346,7 +1350,8 @@ VPage {
                             VRow {
                                 label: qsTr("DLSS 模型")
                                 hint: qsTr("K 保留原有模型；M、L 为 DLSS 4.5。L 针对较低输入分辨率，实际画质与耗时取决于片源。")
-                                visible: veyra.videoSrQuality === 0
+                                // Also the model of a DLSS SR second pass under double SR.
+                                visible: veyra.videoSrQuality === 0 || (veyra.dualSrEnabled && veyra.dualSrQuality === 0)
                                 enabled: Support.available(veyra, "sr0")
                                 VSelect {
                                     objectName: "list-dlss-sr-model"

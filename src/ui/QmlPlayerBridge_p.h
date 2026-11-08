@@ -249,6 +249,8 @@ struct QmlPlayerBridge::Impl {
     engine::ChainSession session;
     engine::ChainSession savedSession;
     QTimer* sessionSaveTimer = nullptr;
+    // 音量 is a shell preference (2026-11-08); a drag is written once it settles.
+    QTimer* volumeSaveTimer = nullptr;
     int selectedNr=-1;
     int nrIndex() const {
         if(selectedNr>=0&&uint32_t(selectedNr)<chain.nodeCount&&

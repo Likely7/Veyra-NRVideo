@@ -73,6 +73,17 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
+    // The last volume (user 2026-11-08: it came back at 100% every launch).
+    // Mute stays per session; profiles without the key keep 100%.
+    if (impl_->prefs.contains(QStringLiteral("volume"))) {
+        bool ok = false;
+        const double saved = impl_->prefs.value(QStringLiteral("volume")).toDouble(&ok);
+        if (ok && std::isfinite(saved) && saved >= 0.0 && saved <= 1.0) {
+            impl_->engine.setVolume(float(saved), false);
+            impl_->snapshot.volume = float(saved);
+            veyra::log::info("ui-prefs", std::format("volume restored={:.3f}", saved));
+        }
+    }
     applyGameHotkeys();
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
@@ -319,6 +330,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     impl_->hdrMemorySaveTimer=new QTimer(this);
     impl_->hdrMemorySaveTimer->setSingleShot(true);impl_->hdrMemorySaveTimer->setInterval(400);
     connect(impl_->hdrMemorySaveTimer,&QTimer::timeout,this,[this]{flushHdrMemory();});
+    impl_->volumeSaveTimer=new QTimer(this);
+    impl_->volumeSaveTimer->setSingleShot(true);impl_->volumeSaveTimer->setInterval(500);
+    connect(impl_->volumeSaveTimer,&QTimer::timeout,this,[this]{
+        if(impl_->savePrefs())veyra::log::info("ui-prefs",std::format("volume={:.3f} saved",impl_->prefs.value(QStringLiteral("volume")).toDouble()));
+        else veyra::log::warn("ui-prefs","volume not saved");
+    });
     impl_->timer = new QTimer(this);
     connect(impl_->timer, &QTimer::timeout, this, [this] {
         const bool had = impl_->haveSnapshot;
@@ -637,6 +654,8 @@ QmlPlayerBridge::~QmlPlayerBridge() {
     flushHdrMemory();
     if (qApp) qApp->removeEventFilter(this);
     if (qApp) qApp->removeNativeEventFilter(&impl_->displayChangeFilter);
+    // rememberPosition(true) writes every preference, a pending volume included.
+    if (impl_->volumeSaveTimer) impl_->volumeSaveTimer->stop();
     rememberPosition(true);
     if (impl_->sessionSaveTimer) impl_->sessionSaveTimer->stop();
     if (!impl_->persistSession())

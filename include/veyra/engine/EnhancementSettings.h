@@ -81,8 +81,9 @@ inline constexpr uint32_t kDefaultVideoSrQuality=2;
 // - high bitrate 16..19 and streaming 21/23 (medium/ultra only, Ampere or
 //   newer): NVIDIA Video Effects VideoSuperRes. High bitrate skips the
 //   compression clean-up to keep clean detail; streaming cleans hardest.
-// Every family runs double SR and the supersample shrink. Only the standard
-// family restores a source already at the target size.
+// Every family runs the supersample shrink; double SR takes every SR backend
+// (DLSS SR and FSR too, 2026-11-08). Only the standard family restores a source
+// already at the target size.
 enum class VideoSrFamily : uint32_t { Standard = 0, HighBitrate = 1, Streaming = 2 };
 inline constexpr uint32_t kVideoSrFamilyCount=3;
 constexpr bool ngxVideoSr(uint32_t q){return q>=1&&q<=4;}
@@ -90,6 +91,8 @@ constexpr bool vfxVideoSr(uint32_t q){return (q>=16&&q<=19)||q==21||q==23;}
 constexpr bool vfxVideoSrNeedsAmpere(uint32_t q){return q==21||q==23;}
 constexpr bool rtxVideoSr(uint32_t q){return ngxVideoSr(q)||vfxVideoSr(q);}
 constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q);}
+// DLSS SR and FSR are temporal: they read the SR motion source. RTX Video SR is spatial.
+constexpr bool temporalVideoSr(uint32_t q){return q==0||q==kVideoSrFsr;}
 inline constexpr uint32_t kVfxVideoSrQualities[]={16,17,18,19,21,23};
 constexpr VideoSrFamily videoSrFamily(uint32_t q){
     return q>=16&&q<=19?VideoSrFamily::HighBitrate:q==21||q==23?VideoSrFamily::Streaming:VideoSrFamily::Standard;
@@ -372,7 +375,9 @@ struct EnhancementSettings {
     pipeline::SrOutput srOutput=pipeline::SrOutput::Target;
     bool dualSrEnabled=false;
     pipeline::SrTarget dualSrTarget=pipeline::SrTarget::Uhd4K;
-    uint32_t dualSrQuality=kDefaultVideoSrQuality; // any RTX Video SR value, independent of the base family
+    uint32_t dualSrQuality=kDefaultVideoSrQuality; // any SR value (DLSS SR, RTX Video SR family/tier, FSR), independent of the base
+    // A DLSS SR / FSR pass reads srMotion: the base, or the second of a double SR.
+    bool temporalSr() const { return temporalVideoSr(videoSrQuality)||(dualSrEnabled&&temporalVideoSr(dualSrQuality)); }
     uint32_t multiplier=1;
     FrameGenerationBackend frameGenerationBackend=FrameGenerationBackend::Dlss;
     // NvVFX Mode: Low=0, Medium=1 (default), High=2; mixed tiers 3-5, see vfgPrimaryMode().
@@ -457,8 +462,9 @@ struct EnhancementSettings {
         if(!nr||!sr)active.lowLatency=defaults.lowLatency;
         if(!nr||!protection.enabled)active.protection=defaults.protection;
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
-        if(!sr||videoSrQuality!=0)active.dlssSrModel=defaults.dlssSrModel;
-        if(!sr||!rtxVideoSr(videoSrQuality)||!dualSrEnabled){
+        // The DLSS SR model serves every DLSS SR pass, the second of a double SR too.
+        if(!sr||(videoSrQuality!=0&&!(dualSrEnabled&&dualSrQuality==0)))active.dlssSrModel=defaults.dlssSrModel;
+        if(!sr||!dualSrEnabled){
             active.srPrescale=defaults.srPrescale;
             active.dualSrEnabled=false;active.dualSrTarget=defaults.dualSrTarget;active.dualSrQuality=defaults.dualSrQuality;
         }
@@ -491,7 +497,7 @@ struct EnhancementSettings {
         // Flow is shared. Turning off one effect does not make it inactive
         // while another consumer still needs it (VFG has its own flow).
         const bool flowUsed=(nr&&(motionUsesFlow(nrMotion)||usesNrTemporal()))||
-            (sr&&(videoSrQuality==0||videoSrQuality==kVideoSrFsr)&&motionUsesFlow(srMotion))||
+            (sr&&temporalSr()&&motionUsesFlow(srMotion))||
             (multiplier>1&&motionUsesFlow(fgMotion,frameGenerationBackend));
         if(!flowUsed){active.flow=defaults.flow;active.opticalFlowBackend=defaults.opticalFlowBackend;active.amdFlowHalfResolution=defaults.amdFlowHalfResolution;}
         // Only XeSS frame generation with optical-flow motion reads the refined vectors.
@@ -606,7 +612,7 @@ struct EnhancementSettings {
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";
         if(!pipeline::validSrPrescale(srPrescale))return "invalid SR prescale";
         if(!pipeline::validSrOutput(srOutput))return "invalid SR output";
-        if(!pipeline::validSrTarget(dualSrTarget)||!rtxVideoSr(dualSrQuality))return "invalid second SR target or quality";
+        if(!pipeline::validSrTarget(dualSrTarget)||!validVideoSrQuality(dualSrQuality))return "invalid second SR target or quality";
         if(opticalFlowBackend!=OpticalFlowBackend::Nvidia&&opticalFlowBackend!=OpticalFlowBackend::AmdFidelityFx&&opticalFlowBackend!=OpticalFlowBackend::GpuDis)return "invalid optical flow backend";
         if(multiplier<1||multiplier>(frameGenerationBackend==FrameGenerationBackend::Vfg?8u:6u))return "unsupported multiplier";
         // 0 = auto quality; explicit values are capped at 300 Mbps so a typo

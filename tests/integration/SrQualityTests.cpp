@@ -370,6 +370,83 @@ int capabilities(const std::filesystem::path& directory){
     }
     ring.shutdown();ctx.shutdown();std::cout<<"DUAL_CAPABILITIES cases="<<cases<<" passed="<<ok<<std::endl;return ok?0:1;
 }
+// Double SR with DLSS SR / FSR passes (user 2026-11-08). Settings for one pair;
+// unlike vsr(), quality 0 here is DLSS SR.
+engine::EnhancementSettings mixed(unsigned first,unsigned second,pipeline::SrTarget target,pipeline::SrPrescale reduce,pipeline::SrTarget secondTarget,bool flow){
+    engine::EnhancementSettings s;s.nr=false;s.sr=true;s.multiplier=1;s.videoSrQuality=first;s.srTarget=target;
+    s.dualSrEnabled=true;s.dualSrQuality=second;s.srPrescale=reduce;s.dualSrTarget=secondTarget;
+    s.srMotion=flow?engine::MotionSource::OpticalFlow:engine::MotionSource::Zero;s.hdrOutputMode=engine::HdrOutputMode::ScRgb;
+    return s;
+}
+// Mean linear value of an output (RGBA8 sRGB or FP16) and whether every texel is finite.
+std::pair<double,bool> meanLinear(const sink::RgbaImage& img){
+    const size_t texels=size_t(img.width)*img.height;if(!texels)return {0,false};
+    const bool fp16=img.pixels.size()==texels*8;double sum=0;bool finite=true;
+    for(size_t p=0;p<texels;++p)for(unsigned c=0;c<3;++c){
+        const double v=fp16?half(img,p*4+c):decode(img.pixels[p*4+c]);
+        if(!std::isfinite(v)){finite=false;continue;}sum+=v;
+    }
+    return {sum/(texels*3),finite};
+}
+// Every backend pair with real SDK evaluations of both passes, zero and optical
+// flow motion: sizes, two evaluations per frame, finite output with the source's
+// mean brightness. Then a first DLSS SR pass with nothing to enlarge (a copy of
+// the source), DLSS SR pairs on HDR, and FSR's HDR refusal reported the way the
+// engine detects it (fsrSrRequested && !fsrSrEnabled disables SR with a notice).
+int any(const std::filesystem::path& directory){
+    std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
+    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
+    if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
+    using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::Extent;
+    const auto fhdImage=pattern(1920,1080),uhdImage=pattern(3840,2160);
+    const auto fhd=sdrFrame(fhdImage),uhd=sdrFrame(uhdImage),hdr=hdrFrame(fhdImage);if(!fhd||!uhd||!hdr)return 2;
+    const double sourceMean=meanLinear(fhdImage).first;
+    bool ok=true;unsigned cases=0;
+    // runtime/experimental is the NGX directory; Video Effects sits beside it.
+    const auto vfx=std::filesystem::exists(runtime::localRuntimeDirectory().parent_path()/L"nvidia-vfg"/L"nvVFXVideoSuperRes.dll");
+    struct Pair{unsigned first,second;};
+    for(const auto pair:{Pair{0,0},Pair{0,2},Pair{2,0},Pair{0,5},Pair{5,0},Pair{5,5},Pair{5,2},Pair{2,5},Pair{17,0},Pair{0,19}}){
+        if(!vfx&&(engine::vfxVideoSr(pair.first)||engine::vfxVideoSr(pair.second))){
+            std::cout<<"DUAL_ANY first="<<pair.first<<" second="<<pair.second<<" skipped=no-video-effects-runtime"<<std::endl;continue;}
+        for(bool flow:{false,true}){
+            const auto r=run(ctx,ring,fhd.get(),false,mixed(pair.first,pair.second,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,flow),false,false,false,4,true);
+            const auto [mean,finite]=meanLinear(r.output);
+            const bool passed=r.ok&&r.enabled&&r.evaluations==8&&r.first==Extent{3840,2160}&&r.srIn==Extent{1920,1080}&&r.work==Extent{3840,2160}&&
+                r.firstLinear.width==3840&&r.output.width==3840&&finite&&std::abs(mean-sourceMean)<0.03;
+            std::cout<<"DUAL_ANY first="<<pair.first<<" second="<<pair.second<<" flow="<<flow<<" evaluations="<<r.evaluations
+                     <<" mean="<<mean<<" source="<<sourceMean<<" srMs="<<r.srMs<<" passed="<<passed<<std::endl;
+            ok=ok&&passed;++cases;
+        }
+    }
+    {
+        // A 4K source at the 4K base target: the first DLSS SR pass has nothing to enlarge.
+        const auto copy=run(ctx,ring,uhd.get(),false,mixed(0,0,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false),false,false,false,3,true);
+        double worst=0;bool sized=copy.ok&&copy.firstLinear.width==3840&&copy.firstLinear.height==2160;
+        for(size_t p=0;sized&&p<size_t(3840)*2160;++p)for(unsigned c=0;c<3;++c)
+            worst=std::max(worst,std::abs(double(half(copy.firstLinear,p*4+c))-decode(uhdImage.pixels[p*4+c])));
+        const bool passed=sized&&copy.evaluations==6&&copy.work==Extent{3840,2160}&&worst<0.002;
+        std::cout<<"DUAL_ANY copy first=0 second=0 evaluations="<<copy.evaluations<<" worst="<<worst<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
+    }
+    for(const auto pair:{Pair{0,0},Pair{2,0},Pair{0,2}}){
+        const auto h=run(ctx,ring,hdr.get(),true,mixed(pair.first,pair.second,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false),false,false,false,3,true);
+        const auto [mean,finite]=meanLinear(h.output);
+        const bool passed=h.ok&&h.evaluations==6&&h.firstLinear.width==3840&&h.output.width==3840&&finite&&mean>0;
+        std::cout<<"DUAL_ANY hdr first="<<pair.first<<" second="<<pair.second<<" evaluations="<<h.evaluations<<" mean="<<mean<<" passed="<<passed<<std::endl;
+        ok=ok&&passed;++cases;
+    }
+    {
+        engine::StageRequest request;request.width=1920;request.height=1080;request.sr=true;
+        auto settings=mixed(2,engine::kVideoSrFsr,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false);
+        pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
+        desc.hdrInput=desc.hdrOutput=true;desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
+        pipeline::EnhanceGraph graph(ctx,ring);
+        const bool built=graph.initialize(desc);
+        const bool passed=desc.dualSr&&built&&graph.fsrSrRequested()&&!graph.fsrSrEnabled();
+        std::cout<<"DUAL_ANY hdr-fsr second=5 requested="<<graph.fsrSrRequested()<<" enabled="<<graph.fsrSrEnabled()<<" passed="<<passed<<std::endl;
+        ok=ok&&passed;++cases;ring.drainQueue();graph.shutdown();
+    }
+    ring.shutdown();ctx.shutdown();std::cout<<"DUAL_ANY cases="<<cases<<" passed="<<ok<<std::endl;return ok?0:1;
+}
 // Supersampling: one RTX Video SR pass at 8K shrunk to 4K equals the CPU area
 // average of the same graph's 8K result (SDR in sRGB; HDR after the per-texel
 // restore), the exact source size and a non-integer 2K shrink run, and double
@@ -467,6 +544,7 @@ int wmain(int argc,wchar_t** argv){
     if(argc==3&&std::wstring_view(argv[2])==L"dual-restore"){const int result=stage::restore(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual-boundaries"){const int result=stage::boundaries(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual-capabilities"){const int result=stage::capabilities(argv[1]);CoUninitialize();return result;}
+    if(argc==3&&std::wstring_view(argv[2])==L"dual-any"){const int result=stage::any(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"supersample"){const int result=stage::supersample(argv[1]);CoUninitialize();return result;}
     if(argc>=11&&std::wstring_view(argv[2])==L"sr-image"){
         const int result=stage::image(argv[1],argv[3],argv[4],unsigned(std::stoi(argv[5])),argv[6],argv[7],argv[8],argv[9],unsigned(std::stoi(argv[10])),argc>11?argv[11]:L"video");

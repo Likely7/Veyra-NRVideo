@@ -1,6 +1,8 @@
 import QtQuick
 // RTX Video SR families in the real list page: algorithm (standard / high bitrate /
 // streaming) and tier selection, double SR with a second family, and the card summary.
+// Since 2026-11-08 the second pass offers every SR algorithm: steps 10-12 run a DLSS SR
+// second pass (no tiers, DLSS model shown), then DLSS SR -> FSR.
 // Runner: the same Loader injection as sr-stage-ui.py; expects a 720p clip of 30 s or more.
 Item {
     id: test
@@ -61,14 +63,15 @@ Item {
                 check(veyra.dualSrEnabled&&find("list-dual-sr-panel").visible,"double SR opens on the streaming family")
                 check(veyra.srStageSummary==="1280x720 → 3840x2160 → 1920x1080 → 3840x2160","streaming base, reduction, second pass: "+veyra.srStageSummary)
                 const algo=find("list-dual-sr-algorithm")
-                check(algo!==null&&ids(algo.options)==="rtx,rtx-hb,rtx-st","second pass offers the three RTX Video SR families")
+                check(algo!==null&&ids(algo.options)==="0,rtx,rtx-hb,rtx-st,5","second pass offers every SR algorithm ("+ids(algo.options)+")")
                 algo.picked("rtx-hb");next(6);return
             }
             if(step===6){
                 if(!settled())return
-                check(veyra.videoSrQuality===21&&veyra.dualSrQuality===19,"the second family changes only the second pass")
+                // The second pass starts at the medium default (2.1.3, 2026-11-06), so high bitrate is 17.
+                check(veyra.videoSrQuality===21&&veyra.dualSrQuality===17,"the second family changes only the second pass ("+veyra.dualSrQuality+")")
                 check(veyra.srActive&&veyra.srStageSummary==="1280x720 → 3840x2160 → 1920x1080 → 3840x2160","streaming + high bitrate double SR runs")
-                check(find("list-sr").summary.indexOf("中 / 高码率 超高")>=0,"card summary shows both passes: "+find("list-sr").summary)
+                check(find("list-sr").summary.indexOf("中 / 高码率 中")>=0,"card summary shows both passes: "+find("list-sr").summary)
                 test.saved=false
                 if(test.shot.length>0)test.parent.parent.grabToImage(r=>{r.saveToFile(test.shot);test.saved=true})
                 else test.saved=true
@@ -87,6 +90,27 @@ Item {
                 if(!settled())return
                 check(veyra.videoSrQuality===2&&veyra.dualSrEnabled&&veyra.dualSrQuality===16&&veyra.srActive,
                       "back to the standard family at the same tier; the high bitrate second pass stays")
+                find("list-dual-sr-algorithm").picked("0");next(10);return
+            }
+            if(step===10){
+                if(!settled())return
+                check(veyra.dualSrQuality===0&&veyra.videoSrQuality===2&&veyra.srActive&&
+                      veyra.srStageSummary==="1280x720 → 3840x2160 → 1920x1080 → 3840x2160","standard base with a DLSS SR second pass runs: "+veyra.srStageSummary)
+                check(!find("list-dual-sr-quality").visible&&find("list-dlss-sr-model").visible,"a DLSS SR second pass hides the tiers and shows the DLSS model")
+                check(find("list-sr").summary.indexOf("中 / DLSS SR")>=0,"card summary names the DLSS SR second pass: "+find("list-sr").summary)
+                find("list-sr-backend").picked("0");next(11);return
+            }
+            if(step===11){
+                if(!settled())return
+                check(veyra.videoSrQuality===0&&veyra.dualSrEnabled&&veyra.dualSrQuality===0&&veyra.srActive,"DLSS SR -> DLSS SR runs")
+                check(find("list-sr").summary.indexOf("第二次 DLSS SR")>=0,"card summary without a base tier: "+find("list-sr").summary)
+                find("list-dual-sr-algorithm").picked("5");next(12);return
+            }
+            if(step===12){
+                if(!settled())return
+                check(veyra.videoSrQuality===0&&veyra.dualSrQuality===5&&veyra.srActive&&
+                      veyra.srStageSummary==="1280x720 → 3840x2160 → 1920x1080 → 3840x2160","DLSS SR -> FSR runs: "+veyra.srStageSummary)
+                check(!find("list-dual-sr-quality").visible&&find("list-sr").summary.indexOf("第二次 FSR")>=0,"FSR second pass: no tiers, card "+find("list-sr").summary)
                 veyra.logUi("sr-stage-test","SR_STAGE_UI_PASS");console.log("SR_STAGE_UI_PASS");Qt.quit()
             }
         }catch(e){veyra.logUi("sr-stage-test","SR_STAGE_UI_FAIL "+e.message);console.log("SR_STAGE_UI_FAIL "+e.message);Qt.quit()}}

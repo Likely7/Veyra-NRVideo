@@ -141,8 +141,8 @@ QString unavailableEffects(const engine::EnhancementSettings& settings) {
     QStringList requested;
     if (settings.nr) requested << "nr" + QString::number(int(engine::currentNrRuntime(settings.nrRuntime)));
     if (settings.sr) requested << "sr" + QString::number(settings.videoSrQuality);
-    // Double SR runs a second RTX Video SR pass with its own family and tier.
-    if (settings.sr && settings.dualSrEnabled && engine::rtxVideoSr(settings.videoSrQuality)) requested << "sr" + QString::number(settings.dualSrQuality);
+    // Double SR runs a second pass with its own backend (any SR algorithm).
+    if (settings.sr && settings.dualSrEnabled) requested << "sr" + QString::number(settings.dualSrQuality);
     if (settings.multiplier > 1) requested << fgEffectId(settings.frameGenerationBackend);
     if (settings.videoHdr.enabled) requested << "hdr";
     for (const auto& id : requested) {
@@ -190,6 +190,16 @@ QString disableUnavailableEffects(engine::ChainConfiguration& configuration) {
         if (globals.opticalFlowBackend == engine::OpticalFlowBackend::Nvidia &&
             !caps.value("flow0").toMap().value("available").toBool())
             globals.opticalFlowBackend = engine::OpticalFlowBackend::AmdFidelityFx;
+        // A double SR second algorithm this card cannot run (a profile moved from
+        // an NVIDIA card) follows the base algorithm, or double SR turns off.
+        const auto runs = [&](uint32_t quality) { return caps.value("sr" + QString::number(quality)).toMap().value("available").toBool(); };
+        if (globals.dualSrEnabled && !runs(globals.dualSrQuality)) {
+            const auto saved = globals.dualSrQuality;
+            if (runs(globals.videoSrQuality)) globals.dualSrQuality = globals.videoSrQuality;
+            else globals.dualSrEnabled = false;
+            veyra::log::warn("effect-availability", std::format("double SR second quality={} unavailable; second={} enabled={}",
+                saved, globals.dualSrQuality, globals.dualSrEnabled));
+        }
     };
     sanitize(configuration.chain, configuration);
     if (configuration.editor) {

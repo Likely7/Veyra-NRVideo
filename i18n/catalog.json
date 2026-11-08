@@ -5077,20 +5077,6 @@
    "ja": "2段階超解像がオンの間は使用されません。オフにすると戻ります。"
   },
   {
-   "zh": "双重超分目前仅 RTX 视频超分支持",
-   "src": "src/ui/bridge/Enhancement.cpp",
-   "zh-TW": "雙重超解析目前僅 RTX 影片超解析支援",
-   "en": "Double SR is currently supported by RTX Video SR only",
-   "ja": "2段階超解像は現在RTX Video SRのみ対応しています"
-  },
-  {
-   "zh": "双重超分目前使用 RTX 视频超分",
-   "src": "qml/SrStageEditor.qml",
-   "zh-TW": "雙重超分目前使用 RTX 視訊超分",
-   "en": "Double SR currently uses RTX Video SR",
-   "ja": "2段階超解像は現在RTX Video SRを使用します"
-  },
-  {
    "zh": "反馈问题",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "反饋問題",
@@ -12610,11 +12596,11 @@
    "ja": "状態：%1"
   },
   {
-   "zh": "独立于基础超分，可以换成另一种 RTX 视频超分。",
+   "zh": "独立于基础超分，可以选任意一种超分；DLSS SR 两次共用上面的 DLSS 模型，FSR 不支持 HDR。",
    "src": "qml/SrStageEditor.qml",
-   "zh-TW": "獨立於基礎超解析，可以換成另一種 RTX 影片超解析。",
-   "en": "Independent of the base SR; it can use another RTX Video Super Resolution model.",
-   "ja": "基本の超解像とは独立しており、別の RTX ビデオ超解像を選べます。"
+   "zh-TW": "獨立於基礎超解析，可以選任意一種超解析；DLSS SR 兩次共用上面的 DLSS 模型，FSR 不支援 HDR。",
+   "en": "Independent of the base SR; any SR algorithm works. Both DLSS SR passes use the DLSS model above; FSR does not support HDR.",
+   "ja": "基本の超解像とは独立して任意の超解像を選べます。DLSS SR は 2 回とも上の DLSS モデルを使い、FSR は HDR に対応していません。"
   },
   {
    "zh": "独立采集音频配置失败；BMD 原生视频继续运行",
@@ -13315,6 +13301,13 @@
    "zh-TW": "端點已開啟",
    "en": "Endpoint open",
    "ja": "エンドポイントを開きました"
+  },
+  {
+   "zh": "第二次 %1",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "第二次 %1",
+   "en": "second pass %1",
+   "ja": "2回目 %1"
   },
   {
    "zh": "第二次超分到",
