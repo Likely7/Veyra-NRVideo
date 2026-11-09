@@ -14,7 +14,7 @@
 
 Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
 
-**GitHub Release 累计下载已超过 3.8 万次**（[2026-10-20 数据快照](https://git.hiwiki.org/zh-CN/repo/likely7/veyra-nrvideo)，下载次数不等于独立用户数）。
+**Veyra Windows 免安装软件包累计下载 7.9 万+ 次**（截至 2026-11-08，79,332 次）；**GitHub Release 全部附件累计下载 10.3 万+ 次**（103,337 次，包含源码包、校验文件及图片等）。[GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · 下载次数不是独立用户数。
 
 [下载2.1.3免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.3) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.3.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
