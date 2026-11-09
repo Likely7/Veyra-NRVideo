@@ -940,3 +940,12 @@ VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找�
 执行 `reports/codex-release-2.1.4-20261109/verify.py contracts` 和 `portable`。Qt Quick 175/0/0，WASAPI 合同 19/0、防回灌 2/0，合成 PCM 经真实 WASAPI 的手动偏移 100 ms。两包最小 PATH 冷启动各呈现 90 个真实文件帧。RTX 5070 上 NR 复用、DLAA 1440p 光流及 DLAA/FSR/DLSS HDR 回归通过。采集音频面板识别既有驱动，取消与断开后确认通过。私有目录从 2.1.3 同目录覆盖到 2.1.4，旧缓存保留，新缓存 81 个文件第二次复用。临时解压清理首次遇 Windows 文件占用，重试已全部移除。AMD 包仅在本机验证启动与播放，无本轮 AMD 实卡推理或驱动重装验收。
 
 交付目录 `E:/项目/Veyra/releases/codex-release-2.1.4-20261109`，含 NVIDIA、AMD、应用源码、RX 7000 网络源码、校验和与双语更新说明。最终回执 `E:/项目/Veyra/reports/codex-release-2.1.4-20261109/FINAL.json`。本地待发布，未合并 main 或执行 GitHub 发布。
+
+
+## 2026-11-09 2.1.4 GitHub 正式发布
+
+已发布 [2.1.4 便携包](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.4) 与 [对应源码](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.4-sources)，便携包为 Latest。产品构建提交 `6c84bd2`，两个发布标签指向 `560cf8e`。远端已有的 Wiki 入口和 Star 历史图改动保留。README 与两个 Release 更新到 8 群新码及 Discord 邀请。群码按图在 11 月 16 日前有效，两张二维码各 220 px。
+
+执行 `git push --atomic nrvideo main refs/tags/v2.1.4 refs/tags/v2.1.4-sources`，随后用 `promote.py` 从已验收包更新文档、社区图和发布清单，程序及运行组件逐文件哈希一致。第一次打包遇到 Markdown CRLF 导致中英分段失败，读取时统一换行后通过。上传到草稿并验证 GitHub 资产 SHA-256 和大小后，先公开对应源码，再把应用 Release 设为 Latest。执行 `verify-github.py docs/draft/published` 核对正文、两个标签、六个公开资产下载 HTTP 200、两个二维码、Discord 邀请及四个历史固定依赖源码链接。
+
+正式包目录 `E:/项目/Veyra/releases/codex-publish-2.1.4-20261109`，逐项校验及发布回执 `E:/项目/Veyra/reports/codex-publish-2.1.4-20261109/FINAL.json`。群公告在同目录 `GROUP_ANNOUNCEMENT.txt`，正文 802 字符。

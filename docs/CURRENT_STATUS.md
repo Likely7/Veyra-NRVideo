@@ -1,3 +1,5 @@
+> **正式版 2.1.4（2026-11-09）** 已发布至 Likely7/Veyra-NRVideo。新增 VB-CABLE 音频转接、跨后端双重超分、DLAA、HDR 广色域恢复、NR 推理复用与 1% low。两种便携包、对应源码和校验表已公开。详细变更见 [更新说明](RELEASE_NOTES_2.1.4.md)，发布与核验见 [工作记录](WORKLOG.md)。
+
 > **2026-11-06 项目清理**：E盘可用实测增加33.73 GiB，项目路径累计152.89→99.28 GiB。源码/依赖/正式包/配置及当前main构建保留，历史app和旧build大多退役。详情[清理记录](PROJECT_CLEANUP_2026-11-06.md)。产品代码与公开v2.1.3不变。
 
 > **2026-11-06 Claude最新两项修复已合本地main**：QML按内容隔离编译缓存(a66f7e9→a625787)、Issue88 AMD HIP子进程自检保护(b15152b→f3b103d)，唯一WORKLOG冲突已保留双方追加。8目标86.8s、Quick173/0/0、缓存/HIP/合同/i18n、AMD合成128/0与ABI66/0、主程序HIP子模式及开启缓存真实菜单首次/复用通过。读docs/CLAUDE_FIXES_MERGE_2026-11-06.md和reports/codex-claude-merge-20261106/FINAL.json。共享构建标签2.1.3-integration-test，未制作/替换正式包、未push；公开仍v2.1.3。RX9060XT/HIP7现场待验，不称根治；此前禁用缓存漏测教训已记录，后续升级验收必须保留缓存/覆盖跨版。下方Claude“未提交/未合并”为当时记录；NR隔帧仅调研，未实施。
