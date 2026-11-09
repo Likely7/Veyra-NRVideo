@@ -879,3 +879,12 @@ Claude初次构建305.9s，原完整Quick172/0/1、25 GPU用例、原双重/超�
 验收运行 `python -X utf8 -B E:/项目/Veyra/reports/claude-record-hdr-dlaa-20261108/audit_checks.py` 与 `quick_run.py suite-audit`。30次调用通过，QtQuick175/0/0，设置274/0，设置事务D3D12错误0，1440p DLAA 3个历史帧获得光流，DLSS/FSR HDR色块通过，8组HDR双重超分通过。先前合并运行SDR后超时，分算法对重跑并独立执行事务检查。预设同TEMP两次通过。真实F8开停各记录Qt Quick实际事件，进出全屏无额外录制请求，431帧及文件完整性核对通过。现场旧日志不含触发源，AMD实卡和采集卡现场未验。
 
 独立配置入口 `E:/项目/Veyra/tests/claude-record-hdr-dlaa-20261108/启动录制HDR与DLAA测试.cmd`。新增约9.1 MB录制证据及测试日志，复用单份当前测试程序。已核验旧app213重复副本1,079,122,186字节，自动审批blocked by policy拒绝删除，未绕过。最终回执同任务FINAL.json。未合main、未推送、未发布。用户要求汇报后正常关机。
+
+
+## 2026-11-08 当前修复整合到本地 main
+
+用户暂停防闪烁并授权本地合并。main从0079ed9，经8123c82（含356013b、84e2cb5）与原39文件a375afa整合成77d6c09。WORKLOG保留两边追加；合并显存估算，DLAA保留相邻帧光流，NR历史可使用跨帧运动。
+
+执行 `python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-main-fixes-20261108 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.3-main-fixes-test --jobs 2 --reconfigure --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared`，16目标清单在build-20261108-214335/receipt.json，147.7s。实际命令与结果另见reports同任务verify.py、quick_retry.py、CHECKS.json、QUICK-RETRY.json、EXPORT-ALIGNMENT.txt和FINAL.json。
+
+首轮QtQuick退出0xC0000409，固定SDK环境独立复跑175/0/0；不推断原因。真实1440p/4K SR＋DLAA＋NR复用通过，音量29%重启通过；设置事务0 D3D错误，AMD模拟128/0，混合4K导出60帧无错位。复用原build及测试app，101运行DLL核验，保留现有测试和证据；无新完整包。文档docs/MAIN_FIXES_INTEGRATION_2026-11-08.md，入口tests/codex-main-fixes-20261108/启动main组合测试.cmd。
