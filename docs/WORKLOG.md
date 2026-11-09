@@ -926,3 +926,7 @@ MSVC 2022 在 `build/claude-screen-recording-20261022` 执行 `cmake --build <bu
 覆盖包 `E:/项目/Veyra/test-packages/virtual-audio-controls-20261109/Veyra-2.1.4-virtual-audio-controls-win64-overlay.zip` 含 EXE 与两个 QML 文件，校验两个 2.1.4 原包均有对应位置，逐文件比对和 ZIP 校验通过，内嵌 VB-CABLE ZIP 与原包字节一致。独立测试入口 `tests/virtual-audio-controls-20261109/启动虚拟扬声器面板测试.cmd`。用户正在运行的目录不变。
 
 VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找到可修改的 VB-CABLE 源码。独立 Veyra 播放端点可参考 Microsoft SysVAD 的 WaveRT 播放部分，使用 Windows 共享模式 WASAPI 软件回录，继续接入 Veyra 现有同步管线。VirtualDrivers 的播放端点为另一源码参考，其 Microsoft 衍生部分仍为 MS-PL。此轮只核实可行性，本机 SDK 未见 WDK 内核头和 Inf2Cat，Secure Boot 已开启。独立驱动的构建、签名与安装验收单独进行。
+
+## 2026-11-09 用户决定继续使用 VB-Audio
+
+后续虚拟扬声器工作沿用本分支的原版 VB-CABLE Pack46、应用内离线安装及现有 WASAPI 回录。已安装的设备随 Veyra 升级继续复用。自研驱动原型留在独立分支 `codex/veyra-native-audio-20261109`（`f562770`）作为存档，暂停推进，不纳入后续构建或合并。可用的 2.1.4 面板覆盖包见上一节。
