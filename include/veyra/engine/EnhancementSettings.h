@@ -31,6 +31,16 @@ enum class NrAntiFlicker : uint8_t { Off, Static, Flow, FlowPlus, LowFrequency }
 inline bool validNrAntiFlicker(NrAntiFlicker v) {
     return v>=NrAntiFlicker::Off&&v<=NrAntiFlicker::LowFrequency;
 }
+// NR inference reuse, realtime preview only (docs/NR_INFERENCE_REUSE_2026-11-07.md).
+// A reused frame skips NR inference and carries the previous frame's NR change
+// along the optical flow; the next frame always infers again. Off infers every
+// frame. Auto reuses only while the preview cannot keep up. Half, Third and
+// Quarter reuse one frame in every 2, 3 and 4. Export, paused frames and
+// images always infer every frame whatever this says.
+enum class NrReuseMode : uint8_t { Off, Auto, Half, Third, Quarter };
+inline bool validNrReuseMode(NrReuseMode v) {
+    return v>=NrReuseMode::Off&&v<=NrReuseMode::Quarter;
+}
 // Preserve persisted values 0/1/2; the old Fsr value now explicitly selects
 // the 3.1 provider. Fsr4 requires a real ML provider, never an auto fallback.
 enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4 };
@@ -412,6 +422,8 @@ struct EnhancementSettings {
     // tuned against (see shaders/NrHold.hlsl).
     float nrHoldStrength=0.0f;
     float nrHoldTolerance=0.02f;
+    // Preview only; see NrReuseMode. Off by default.
+    NrReuseMode nrReuse=NrReuseMode::Off;
     pipeline::NrSizePolicy nrPolicy=pipeline::NrSizePolicy::Realtime;
     FlowQuality flow=FlowQuality::Balanced;
     OpticalFlowBackend opticalFlowBackend=OpticalFlowBackend::Nvidia;
@@ -480,6 +492,7 @@ struct EnhancementSettings {
             active.additionalBeauty[i]=i<additionalBeautyCount?additionalBeauty[i].active():BeautySettings{};
         if(!beautyEnabled())active.beautyDetection=defaults.beautyDetection;
         if(nrHoldStrength==0)active.nrHoldTolerance=defaults.nrHoldTolerance;
+        if(!nr)active.nrReuse=defaults.nrReuse;
         if(!hdrCurve.enabled){
             active.hdrCurve=defaults.hdrCurve;
             // Display peak also rescales enabled HDR10 metadata, independently
@@ -570,6 +583,7 @@ struct EnhancementSettings {
         // a relative box-luma delta, so anything above 1 would hold every pixel.
         if(!range(nrHoldStrength,1))return "output stabiliser strength out of range";
         if(!range(nrHoldTolerance,1))return "output stabiliser tolerance out of range";
+        if(!validNrReuseMode(nrReuse))return "invalid NR inference reuse mode";
         if(!range(model.intensity,1)||!range(model.tone,1)||!range(model.structure,1))return "model parameter out of range";
         if(model.skin!=-1&&!range(model.skin,2))return "skin parameter out of range";
         if(model.style<0||model.style>2||model.autoMask<0||model.autoMask>1||model.uiCorrection<0||model.uiCorrection>1)return "invalid experimental parameter";

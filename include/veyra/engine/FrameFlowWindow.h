@@ -15,6 +15,7 @@ class FrameCompletionRates {
     mutable std::mutex mutex_;
     FrameRateWindow generated_,presented_,source_,output_,xess_;
     FrameRateWindow realPresented_,generatedPresented_;
+    FramePaceWindow presentPace_;
     int64_t start_;
 public:
     explicit FrameCompletionRates(int64_t now):start_(now){
@@ -26,12 +27,13 @@ public:
         if(real){source_.complete(now);output_.complete(now);}
         for(unsigned i=0;i<valid;++i){generated_.complete(now);output_.complete(now);}
     }
-    void presented(bool generated,int64_t now){std::lock_guard lock(mutex_);presented_.complete(now);(generated?generatedPresented_:realPresented_).complete(now);}
+    void presented(bool generated,int64_t now){std::lock_guard lock(mutex_);presented_.complete(now);presentPace_.complete(now);(generated?generatedPresented_:realPresented_).complete(now);}
     void xess(uint64_t count,int64_t now){std::lock_guard lock(mutex_);for(uint64_t i=0;i<count;++i)xess_.complete(now);}
     void snapshot(diagnostics::FrameFlowMetrics& m,int64_t now)const{
         std::lock_guard lock(mutex_);m.validGeneratedFps=generated_.rate(now);m.presentSubmitFps=presented_.rate(now);
         m.sourceCompletedFps=source_.rate(now);m.outputCompletedFps=output_.rate(now);m.xessSdkSubmitFps=xess_.rate(now);m.rateWindowReady=now-start_>=10000000;
         m.realPresentFps=realPresented_.rate(now);m.generatedPresentFps=generatedPresented_.rate(now);
+        m.presentLow1Fps=presentPace_.lowFps(now);
     }
 };
 // Each asynchronous job retains its own window. Replacing the current window

@@ -1227,6 +1227,20 @@ void QmlPlayerBridge::setNrHoldStrength(double value) {
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "output stabiliser strength not saved");
     emit settingsChanged();
 }
+// NR inference reuse (pipeline/NrReuse.h), realtime preview only. 0 off,
+// 1 Auto, 2/3/4 reuse one frame in every 2/3/4. Global like the stabiliser.
+int QmlPlayerBridge::nrReuseMode() const { return int(settings().nrReuse); }
+void QmlPlayerBridge::setNrReuseMode(int value) {
+    const auto mode = static_cast<engine::NrReuseMode>(value);
+    if (value < 0 || !engine::validNrReuseMode(mode)) return;
+    auto s = settings();
+    if (s.nrReuse == mode) return;
+    s.nrReuse = mode;
+    if (!impl_->commit(std::move(s))) return;
+    impl_->prefs[QStringLiteral("nrReuse")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "NR inference reuse mode not saved");
+    emit settingsChanged();
+}
 double QmlPlayerBridge::nrHoldTolerance() const { return double(settings().nrHoldTolerance); }
 void QmlPlayerBridge::setNrHoldTolerance(double value) {
     auto s = settings();

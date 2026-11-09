@@ -307,6 +307,9 @@ veyra_add_compute_shader(veyra_shader_nr_residual NrResidualComposite)
 veyra_add_compute_shader(veyra_shader_nr_temporal NrTemporal)
 # Stage-5 output stabiliser (anti-flicker, default off).
 veyra_add_compute_shader(veyra_shader_nr_hold NrHold)
+# NR inference reuse (realtime preview only, default off).
+veyra_add_compute_shader(veyra_shader_nr_reuse_compose NrReuseCompose)
+veyra_add_compute_shader(veyra_shader_nr_reuse_warp NrReuseWarp)
 veyra_add_compute_shader(veyra_shader_flow_adapt FlowAdapt)
 veyra_add_compute_shader(veyra_shader_flow_refine FlowRefine)
 veyra_add_compute_shader(veyra_shader_flow_fill FlowFill)
@@ -567,7 +570,7 @@ endif()
 # EnhanceGraph (the real GPU chain) needs the NGX + NVOF backends; wire it
 # into veyra_pipeline only when both exist so bare contract builds still work.
 if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
-  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/core/SceneCadenceAnalyzer.cpp)
+  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/pipeline/NrReusePass.cpp src/core/SceneCadenceAnalyzer.cpp)
   target_include_directories(veyra_pipeline PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_pipeline PRIVATE veyra_ngx veyra_nvof ${FFMPEG_LIBRARIES})
   add_dependencies(veyra_pipeline
@@ -662,7 +665,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
@@ -1361,12 +1364,24 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   add_executable(veyra_nr_hold_gpu_tests tests/integration/NrHoldGpuTests.cpp)
   target_compile_features(veyra_nr_hold_gpu_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_nr_hold_gpu_tests PRIVATE veyra_pipeline)
+  # NR inference reuse: frame selection, Auto controller and settings (GPU-free),
+  # and the reuse pass on real D3D12 dispatches.
+  add_executable(veyra_nr_reuse_tests tests/unit/NrReuseTests.cpp)
+  target_compile_features(veyra_nr_reuse_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_nr_reuse_tests PRIVATE veyra_engine)
+  add_executable(veyra_nr_reuse_gpu_tests tests/integration/NrReuseGpuTests.cpp)
+  target_compile_features(veyra_nr_reuse_gpu_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_nr_reuse_gpu_tests PRIVATE veyra_pipeline)
   add_executable(veyra_nr_runtime_assertion_tests tests/integration/NrRuntimeAssertionTests.cpp)
   target_compile_features(veyra_nr_runtime_assertion_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_nr_runtime_assertion_tests PRIVATE veyra_pipeline)
   add_executable(veyra_nr_video_quality_probe tests/integration/NrVideoQualityProbe.cpp)
   target_compile_features(veyra_nr_video_quality_probe PRIVATE cxx_std_20)
   target_link_libraries(veyra_nr_video_quality_probe PRIVATE veyra_engine)
+  # NR inference reuse against full inference on a real video (offline readbacks).
+  add_executable(veyra_nr_reuse_quality_probe tests/integration/NrReuseQualityProbe.cpp)
+  target_compile_features(veyra_nr_reuse_quality_probe PRIVATE cxx_std_20)
+  target_link_libraries(veyra_nr_reuse_quality_probe PRIVATE veyra_engine)
   add_executable(veyra_nr_dynamic_size_experiment tests/perf/NrDynamicSizeExperiment.cpp)
   target_compile_features(veyra_nr_dynamic_size_experiment PRIVATE cxx_std_20)
   target_compile_options(veyra_nr_dynamic_size_experiment PRIVATE /utf-8)

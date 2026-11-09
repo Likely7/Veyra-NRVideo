@@ -15,6 +15,7 @@
 #include "veyra/engine/TimingWindow.h"
 #include "veyra/engine/FrameFlowWindow.h"
 #include "veyra/engine/AutoNrController.h"
+#include "veyra/engine/AutoNrReuseController.h"
 #include "veyra/engine/LiveFgAdmission.h"
 #include "veyra/engine/FgRecoveryBudget.h"
 #include "veyra/engine/VfgQueueBudget.h"
@@ -445,8 +446,8 @@ PlayerSnapshot EngineController::snapshot()const{
     }
 #endif
     auto& flow=copy.metrics.flow;
-    if(!playing){flow.sourceCompletedFps=flow.outputCompletedFps=flow.validGeneratedFps=flow.presentSubmitFps=flow.xessSdkSubmitFps=0;}
-    copy.fps=flow.sourceCompletedFps;copy.submissionFps=flow.presentSubmitFps;
+    if(!playing){flow.sourceCompletedFps=flow.outputCompletedFps=flow.validGeneratedFps=flow.presentSubmitFps=flow.xessSdkSubmitFps=0;flow.presentLow1Fps.reset();}
+    copy.fps=flow.sourceCompletedFps;copy.submissionFps=flow.presentSubmitFps;copy.submissionLow1Fps=flow.presentLow1Fps;
     return copy;
 }
 void EngineController::status(const std::wstring& s,bool failed){std::lock_guard lock(mutex_);snapshot_.status=s;snapshot_.failed=failed;if(failed)snapshot_.transport=TransportState::Failed;}
@@ -793,6 +794,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         GetEnvironmentVariableW(L"VEYRA_TEST_VFG_SYNC_SUBMIT",nullptr,0)==0;
                     desc.vfgFastFallback=desc.vfgAsyncSubmission&&selected.settings.vfgAutoRegulate&&(physicalCapture||isScreen||testReplayAsCard)&&selected.settings.multiplier==2&&
                         GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_LIVE_PACING",nullptr,0)==0;
+                    // NR inference reuse belongs to the realtime preview only:
+                    // export, the image path and the paused frame infer every frame.
+                    desc.nrReusePreview=!isImage;
                     desc.videoHdr=selected.settings.videoHdr;
                     desc.hdrOutput=selected.settings.useHdrPreview(desc.hdrInput,displayHdrActive());
                     // Auto is optional and preview-only; fixed/export policies
@@ -805,6 +809,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                        !nrAutoPoolUnavailable&&selected.settings.activeNrLayerCount()<=2&&
                        !isCapture&&!isImage&&desc.enableNr&&!desc.enableSr&&!desc.enableFg&&
                        !desc.hdrWorking()&&!desc.videoHdr.enabled&&!desc.color.enabled&&!desc.additionalColorCount&&!desc.antiAliasActive()&&!desc.beautyActive()&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
+                       desc.nrReuse==NrReuseMode::Off&&
                        currentNrRuntime(desc.nrRuntime)==NrRuntime::Ampere&&desc.opticalFlowBackend==OpticalFlowBackend::Nvidia&&
                        desc.nrMotion==MotionSource::OpticalFlow&&
                        nvidiaAdapter&&ctx.adapter().deviceId==0x2f04&&desc.workWidth==1920&&desc.workHeight==1080&&
@@ -1501,6 +1506,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // the lambdas reference below this line.
             AutoNrController autoNrControl;autoNrControl.reset(host100ns());
             uint64_t autoNrRevision=options.settings.revision;int64_t autoNrLogAt=0;
+            AutoNrReuseController nrReuseControl;nrReuseControl.reset(host100ns());
+            uint64_t nrReuseRevision=options.settings.revision;int64_t nrReuseLogAt=0;
             // A simultaneous seek/speed change may discard the cached frame
             // after a successful rebuild. Keep its status acknowledgement
             // until the first successfully processed frame, across loop turns.
@@ -1804,6 +1811,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // reaches the picture if the cached source frame is pushed
                     // through the graph again: the grade is fused into the ingest
                     // dispatch, so nothing else would upload the new tables.
+                    // NR inference reuse is a realtime-preview strategy only: the
+                    // paused picture must be a fully inferred frame, so a reused
+                    // last frame is re-rendered once when the pause begins.
+                    if(!wasPaused&&graph->nrReuseActive()){
+                        const bool reusedLast=graph->nrReuseLastFrameReused();
+                        if(reusedLast)refreshPausedFrame_=true;
+                        veyra::log::info("nr-reuse",std::format("pause began lastFrameReused={}{}",reusedLast,reusedLast?"; re-rendering it with full inference":""));
+                    }
                     if(refreshPausedFrame_){
                         refreshPausedFrame_=false;
                         if(cachedFrame){
@@ -1910,6 +1925,35 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         veyra::log::info("nr-auto",std::format("level={} budgetMs={:.3f} p95Ms={:.3f} reason={} boundaryMs={:.3f} cancelledJobs={}",
                             AutoNrController::percent(*next),budget,timing.p95.value_or(0),timing.p95.value_or(0)>budget?"over-budget":"sustained-headroom",
                             elapsedMs(started),presentationCancelledJobs.load()));
+                    }
+                }
+                // NR inference reuse, Auto: a level change is a scheduling choice
+                // inside the graph, so nothing drains or rebuilds (AutoNrReuseController).
+                if(graph->nrReuseAutomatic()&&frameFlow&&!transaction&&!paused_){
+                    const auto now=host100ns();
+                    if(nrReuseRevision!=options.settings.revision||nrReuseControl.level()!=graph->nrReuseLevel()){
+                        nrReuseControl.reset(now,graph->nrReuseLevel());nrReuseRevision=options.settings.revision;
+                    }
+                    if(reset)nrReuseControl.discardObservations(now);
+                    const auto flow=frameFlow->snapshot(now);
+                    std::optional<double> nrMs;
+                    for(auto stage:{diagnostics::GpuStage::NrLayer0,diagnostics::GpuStage::NrLayer1,diagnostics::GpuStage::NrLayer2,diagnostics::GpuStage::NrLayer3}){
+                        const auto& a=flow.gpuTiming[size_t(stage)];
+                        // Reused frames add zero-length samples, so the mean is per
+                        // source frame; the P95 is the cost of one inference.
+                        if(a.samples&&a.p95&&std::isfinite(*a.p95))nrMs=nrMs.value_or(0)+*a.p95;
+                    }
+                    const double transportFps=activeSource->info().averageFps*playbackRate;
+                    const double budget=std::isfinite(transportFps)&&transportFps>0?800.0/transportFps:0;
+                    const auto& timing=flow.enhancementProcessing;
+                    if(const auto next=nrReuseControl.observe(now,timing.mean,timing.samples,nrMs,budget)){
+                        graph->setNrReuseLevel(*next);
+                        veyra::log::info("nr-reuse",std::format("auto level={} framesPerReuse={} meanMs={:.3f} nrMs={:.3f} budgetMs={:.3f} samples={}",
+                            *next,pipeline::NrReuseScheduler::framesPerReuse(*next),timing.mean.value_or(0),nrMs.value_or(0),budget,timing.samples));
+                    }else if(now>=nrReuseLogAt){
+                        veyra::log::info("nr-reuse",std::format("auto observe level={} meanMs={:.3f} nrMs={:.3f} budgetMs={:.3f} samples={} reused={}",
+                            graph->nrReuseLevel(),timing.mean.value_or(0),nrMs.value_or(0),budget,timing.samples,graph->metrics().nrReuseFrames));
+                        nrReuseLogAt=now+100000000;
                     }
                 }
                 // Wait before selecting the latest sample, not after enhancement.
@@ -2919,6 +2963,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.nrAutoPercent=graph->autoNrPoolReady()?AutoNrController::percent(graph->autoNrLevel()):0;
                     const auto autoExtent=graph->autoNrExtent();snapshot_.nrAutoWidth=autoExtent.width;snapshot_.nrAutoHeight=autoExtent.height;
                     snapshot_.nrAutoStatus=nrAutoStatus;
+                    snapshot_.nrReuseActive=graph->nrReuseActive();snapshot_.nrReuseAutomatic=graph->nrReuseAutomatic();
+                    snapshot_.nrReuseLevel=graph->nrReuseActive()?graph->nrReuseLevel():0;
+                    snapshot_.nrReuseFrames=graphStats.nrReuseFrames;snapshot_.nrReuseUnavailable=graph->nrReuseUnavailable();
                     snapshot_.audioRebuffering=audioRebuffering;
                     snapshot_.audioVideoWaits=audioPipe.videoWaitCount();
                     snapshot_.srActive=gd.enableSr&&graphStats.srEvaluateCount>0;

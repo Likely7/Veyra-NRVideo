@@ -677,7 +677,12 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const bool vfxFirst=srEnabled_&&vfxFirstSrPass(desc_);
     const uint64_t vfxSrBytes=(vfxFinal?uint64_t(srInW_)*srInH_*4u+uint64_t(srOutW_)*srOutH_*4u:0)+
         (vfxFirst?uint64_t(srcW_)*srcH_*4u+uint64_t(desc_.firstSrWidth)*desc_.firstSrHeight*4u:0);
-    const uint64_t estimate=vfxSrBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
+    // NR inference reuse keeps one inferred chain output and input plus motion
+    // at the flow extent (createNrReusePass); only a preview graph asks for it.
+    const bool reuseRequested=desc_.nrReusePreview&&desc_.enableNr&&desc_.nrReuse!=engine::NrReuseMode::Off;
+    const uint64_t reuseBytes=reuseRequested?uint64_t(desc_.finalNrAfterSr()?workW_:srcW_)*(desc_.finalNrAfterSr()?workH_:srcH_)*16u+
+        uint64_t(nvofW_)*nvofH_*20u:0;
+    const uint64_t estimate=reuseBytes+vfxSrBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
         +nrTextureBytes+fullLayerBytes
         +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes
         +(flowRefine_?uint64_t(nvofW_)*nvofH_*(flowConsistency_?13u:flowClaims_?18u:12u)+uint64_t(workW_)*workH_*4u:0);
@@ -1799,6 +1804,65 @@ bool EnhanceGraph::createNrHoldPass()
     return true;
 }
 
+// The first version carries one finished chain output on the source side of
+// SR. Anything that would make that output depend on more than this frame's
+// chain input is refused with a reason instead of guessed at.
+std::string EnhanceGraph::nrReuseIneligibility() const
+{
+    if(!desc_.nrReusePreview)return "not a realtime preview graph";
+    if(desc_.stillImage)return "still image";
+    if(!nrEnabled_||!nrCreated())return "NR not created";
+    if(lmxxfNr_||!context_.adapter().isNvidia)return "NVIDIA NGX NR only";
+    for(const auto& layer:nrInstances_)if(layer->amd||layer->handle()==nullptr)return "NVIDIA NGX NR only";
+    if(desc_.hdrWorking())return "SDR only";
+    if(!desc_.nrUsesFlow()||!nvofStandalone_)return "NR motion must use optical flow";
+    if(desc_.splitNrAcrossSr())return "NR split across SR";
+    if(preSrProtectionRgba_||interNrProtectionRgba_)return "protection between NR stages";
+    if(desc_.runtimeNodeOrder)return "node mode";
+    if(desc_.nrAutoPoolLayer)return "automatic NR size pool";
+    if(!residualRgba_||!flowTex_||!nrFlow_)return "missing graph textures";
+    return {};
+}
+
+bool EnhanceGraph::createNrReusePass()
+{
+    nrReusePass_.reset();nrReuseScheduler_.reset();nrReuseKeyValid_=false;nrReuseUnavailable_.clear();
+    if(desc_.nrReuse==engine::NrReuseMode::Off||!desc_.nrReusePreview)return true;
+    if(auto reason=nrReuseIneligibility();!reason.empty()){
+        nrReuseUnavailable_=reason;
+        veyra::log::info("nr-reuse",std::format("requested mode={} inactive reason=\"{}\"",int(desc_.nrReuse),reason));
+        return true; // the preview keeps inferring every frame
+    }
+    std::vector<NrReusePass::MotionTarget> targets{{nrFlow_.Get(),nrW_,nrH_}};
+    for(const auto& layer:nrInstances_)
+        if(layer->motion()!=nrFlow_.Get())targets.push_back({layer->motion(),layer->width(),layer->height()});
+    auto* source=nrBaseInput();
+    const auto extent=residualRgba_->GetDesc();
+    auto pass=std::make_unique<NrReusePass>();
+    if(!pass->initialize(context_.device(),uint32_t(extent.Width),extent.Height,nvofW_,nvofH_,
+                         source,residualRgba_.Get(),flowTex_.Get(),targets)){
+        nrReuseUnavailable_="reuse resources unavailable";
+        veyra::log::warn("nr-reuse","resources unavailable; the preview keeps inferring every frame");
+        return true; // never fail the graph for an optional speed-up
+    }
+    nrReusePass_=std::move(pass);
+    nrReuseScheduler_.setLevel(NrReuseScheduler::levelFor(desc_.nrReuse));
+    veyra::log::info("nr-reuse",std::format("active mode={} level={} framesPerReuse={} chain={}x{} flow={}x{} layers={} motionTargets={} bytes={}MiB",
+        int(desc_.nrReuse),nrReuseScheduler_.level(),NrReuseScheduler::framesPerReuse(nrReuseScheduler_.level()),
+        uint32_t(extent.Width),extent.Height,nvofW_,nvofH_,nrInstances_.size(),targets.size(),nrReusePass_->bytes()>>20));
+    return true;
+}
+
+void EnhanceGraph::setNrReuseLevel(unsigned level)
+{
+    if(!nrReuseAutomatic())return;
+    const unsigned previous=nrReuseScheduler_.level();
+    nrReuseScheduler_.setLevel(level);
+    if(nrReuseScheduler_.level()!=previous)
+        veyra::log::info("nr-reuse",std::format("automatic level={} framesPerReuse={} previous={}",
+            nrReuseScheduler_.level(),NrReuseScheduler::framesPerReuse(nrReuseScheduler_.level()),previous));
+}
+
 bool EnhanceGraph::createComputePasses()
 {
     std::vector<uint8_t> cs;
@@ -1834,6 +1898,9 @@ bool EnhanceGraph::createComputePasses()
     // previous graph, which otherwise kept copying its last frame over the
     // live output (picture frozen after turning it off, 2026-10-02).
     if(!createNrHoldPass())return false;
+    // NR inference reuse: like the stabiliser, always called so a rebuild
+    // without it releases the previous graph's pass.
+    if(!createNrReusePass())return false;
     // Keep the legacy ingress root signature when no independent colour grade
     // needs the FP32 side output. The extra UAV is part of the R5.3 contract
     // only for graphs that actually allocate preGradeRgba_.
@@ -1977,7 +2044,10 @@ bool EnhanceGraph::createViews()
             // descriptor first bound a null resource, so the composite went
             // nowhere and the final texture was never touched.
             if (layer->stabilised &&
-                !layer->temporal().initialize(context_.device(), base, flowTex_.Get(), target,
+                // With inference reuse the stabiliser reads the reuse pass's motion: the
+                // ordinary flow after an inferred frame, the chained motion after a
+                // reused one, so its history is always reprojected from where it was made.
+                !layer->temporal().initialize(context_.device(), base, nrReusePass_?nrReusePass_->motion():flowTex_.Get(), target,
                     layerIndex < desc_.nrLayersAntiFlicker.size()
                         ? desc_.nrLayersAntiFlicker[layerIndex] : desc_.nrAntiFlicker)) return false;
             makeUav(context_.device(),
@@ -2892,6 +2962,24 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             if(layer->motion()!=nrFlow_.Get())adapt(layer->motion(),layer->width(),layer->height(),3+UINT(i));
         }
     }
+    // NR inference reuse (NrReuse.h), decided after this frame's flow and before
+    // any NR layer records work: a reused frame skips the whole NR chain. Only a
+    // preview graph that asked for it has the pass; every other graph is unchanged.
+    bool nrReuseFrame=false,nrAfterReuse=false;
+    if(nrReusePass_&&nrEnabled_&&nrCreated()){
+        if(reset){nrReuseScheduler_.reset();nrReuseKeyValid_=false;}
+        nrAfterReuse=nrReuseScheduler_.lastReused();
+        if(haveFlow){
+            nrReusePass_->compose(list,tracker_,nrAfterReuse);
+            nrReuseFrame=nrReuseScheduler_.next(nrReuseKeyValid_&&!reset&&!pausedResidualRefresh&&!reusePausedNr);
+            // The inferred frame after a reused one: NR's own history is the
+            // frame before the reused one, so its motion input is the chained
+            // motion back to that frame, not this frame's one-step flow.
+            if(!nrReuseFrame&&nrAfterReuse&&desc_.nrUsesFlow()){
+                nrReusePass_->writeMotionTargets(list,tracker_);++metrics_.nrReuseChainedMotion;
+            }
+        }else nrReuseScheduler_.next(false);
+    }
     if(reset){++metrics_.resetCount;++epoch_;}
     out.historyReset=reset;
     out.batch.batchId=realFrameIndex_+1;out.batch.identity={epoch_,desc_.settingsRevision,sourceFrameId};
@@ -3009,7 +3097,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         list->Dispatch((layer->fullWidth()+15)/16,(layer->fullHeight()+15)/16,1);
         tracker_.uavBarrier(list,destination);
         tracker_.transition(list,destination,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        if(temporallyStabilised)layer->temporal().run(list,tracker_,reset,haveFlow,ptsMs-prevPtsMs_,r.total,protection,r.correction,desc_.hdrWorking());
+        // After a reused frame the stabiliser's history is two source frames old.
+        const double sinceHistoryMs=nrAfterReuse?ptsMs-nrReuseInferredPts_:ptsMs-prevPtsMs_;
+        if(temporallyStabilised)layer->temporal().run(list,tracker_,reset,haveFlow,sinceHistoryMs,r.total,protection,r.correction,desc_.hdrWorking());
     };
 
     // 4. NR layers, in order. Each layer encodes its input to the 8-bit parity
@@ -3027,7 +3117,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         ++metrics_.pausedNrResidualReuses;
         log::info("paused-nr-cache",std::format("event=reuse source={} revision={} count={}",sourceFrameId,desc_.settingsRevision,metrics_.pausedNrResidualReuses));
     }
-    if (nrEnabled_ && nrCreated()&&!reusePausedNr) {
+    if (nrEnabled_ && nrCreated()&&!reusePausedNr&&!nrReuseFrame) {
         for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
             const bool preSrProtection=preSrProtectionRgba_&&layerIndex==desc_.nrBeforeSrLayerCount();
             const bool interNrProtection=interNrProtectionRgba_&&layerIndex==desc_.interNrProtectionTarget();
@@ -3233,8 +3323,21 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // their consumers above. Keep the single-layer command order unchanged.
     if(nrEnabled_&&nrCreated()){
         gpuTimer_.mark(list,GpuStage::Residual);
-        if(!nrInstances_.empty())compositeNrLayer(nrInstances_.size()-1);
-        if(nrInstances_.size()>1){
+        // A reused frame writes the chain output itself: its own source plus
+        // the previous frame's NR change carried along the flow.
+        if(nrReuseFrame){
+            // A zero-length NR sample per layer: the stage means then show the
+            // NR time per source frame (what reuse saves), while the P95 keeps
+            // the cost of one inference.
+            for(size_t i=0;i<nrInstances_.size();++i){
+                gpuTimer_.mark(list,diagnostics::nrLayerStage(unsigned(i)));
+                gpuTimer_.mark(list,diagnostics::nrLayerStage(unsigned(i)),true);
+            }
+            gpuTimer_.mark(list,GpuStage::Nr);gpuTimer_.mark(list,GpuStage::Nr,true);
+            nrReusePass_->reuse(list,tracker_,desc_.protection);++metrics_.nrReuseFrames;
+        }
+        if(!nrReuseFrame&&!nrInstances_.empty())compositeNrLayer(nrInstances_.size()-1);
+        if(!nrReuseFrame&&nrInstances_.size()>1){
             auto* final=nrInstances_.back()->fullTarget();
             if(desc_.protection.enabled&&!preSrProtectionRgba_&&!interNrProtectionRgba_){
                 auto* original=nrBaseInput();
@@ -3258,6 +3361,14 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 tracker_.transition(list,final,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             }
             tracker_.transition(list,residualRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        }
+        // Keep an inferred frame's chain output and input, before the
+        // stabiliser changes the output, while a following frame may reuse it.
+        if(nrReusePass_){
+            const bool keep=!nrReuseFrame&&nrReuseScheduler_.reuseMayFollow();
+            if(keep)nrReusePass_->store(list,tracker_);
+            nrReuseKeyValid_=keep;
+            if(!nrReuseFrame)nrReuseInferredPts_=ptsMs;
         }
         // The stabiliser below closes this span: a second Residual pair would
         // overwrite the composite's timestamps and drop its time from the load.
@@ -3638,6 +3749,9 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     // tolerance are uniforms. Neither used to reach a running graph (field report
     // 2026-10-01: switching it on mid-play did nothing until something else rebuilt).
     if((s.nrHoldStrength>0.0f)!=(desc_.nrHoldStrength>0.0f))return false;
+    // NR inference reuse: a preview graph allocates its pass only when built
+    // with reuse on, so on/off rebuilds; Auto and the manual ratios are live.
+    if(desc_.nrReusePreview&&s.nr&&(s.nrReuse!=engine::NrReuseMode::Off)!=(desc_.nrReuse!=engine::NrReuseMode::Off))return false;
     // Switching the referenced .cube re-stages a descriptor, which needs the
     // queue drained: treat it as a rebuild (parameters stay live).
     if(s.color.enabled&&(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace))return false;
@@ -3681,6 +3795,18 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(faceTracker_)faceTracker_->configure(desc_.beautyDetection,beautyMinConfidence());
     desc_.contentRate=s.content;desc_.model=s.model;desc_.residual=s.residual;desc_.protection=s.protection;desc_.settingsRevision=s.revision;
     desc_.nrHoldStrength=s.nrHoldStrength;desc_.nrHoldTolerance=s.nrHoldTolerance;
+    if(desc_.nrReusePreview&&s.nr){
+        const auto previousReuse=desc_.nrReuse;desc_.nrReuse=s.nrReuse;
+        if(nrReusePass_&&desc_.nrReuse!=previousReuse){
+            // A manual ratio pins the level; Auto starts from inferring every
+            // frame and lets the engine's controller raise it.
+            nrReuseScheduler_.setLevel(NrReuseScheduler::levelFor(desc_.nrReuse));
+            veyra::log::info("nr-reuse",std::format("live mode={} level={}",int(desc_.nrReuse),nrReuseScheduler_.level()));
+        }
+    }
+    // Every live change resets NR's own history below, so the next frame
+    // infers instead of carrying a change made with the old parameters.
+    nrReuseScheduler_.reset();nrReuseKeyValid_=false;
     desc_.nrLayersModel=std::move(nextNr.nrLayersModel);
     desc_.nrLayersResidual=std::move(nextNr.nrLayersResidual);
     desc_.nrLayersTemporal=std::move(nextNr.nrLayersTemporal);
@@ -3945,6 +4071,7 @@ void EnhanceGraph::shutdown()
     preGradeRgba_.Reset();srcRgba_.Reset();videoSrInput_.Reset();videoSrOutput_.Reset();srPrescaled_.Reset();
     firstSrInput_.Reset();firstSrOutput_.Reset();firstSrLinear_.Reset();
     nrHoldPass_.reset();
+    nrReusePass_.reset();
     colorDetail_.close();
     chromaTex_.Reset();
     lumaTex_.Reset();
