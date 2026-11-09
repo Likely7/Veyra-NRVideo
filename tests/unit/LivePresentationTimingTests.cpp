@@ -447,5 +447,32 @@ int main(){
          ContentDedup dedup;int kept=0;for(int i=0;i<60;++i)kept+=dedup.observe(nullptr,i*166667+1000,166667,i==0).keep;
          check(kept==60,"dedup without a picture keeps every sample");}
     }
+    {// 1% low of the presents (FramePaceWindow), as RTSS/PresentMon compute it.
+        using veyra::engine::FramePaceWindow;
+        FramePaceWindow pace;int64_t t=1000000;
+        for(int i=0;i<60;++i){pace.complete(t);t+=166667;}
+        check(!pace.lowFps(t),"1% low stays unknown until 100 present intervals");
+        for(int i=0;i<600;++i){pace.complete(t);t+=166667;}
+        const auto steady=pace.lowFps(t);
+        check(steady&&std::abs(*steady-60.0)<0.1,"steady 60 Hz presents give a 60 fps 1% low");
+        // 1 in 50 presents takes 50 ms: 2% of intervals, so the 99th percentile is one of them.
+        FramePaceWindow hitch;t=1000000;
+        for(int i=0;i<600;++i){hitch.complete(t);t+=(i%50==49)?500000:166667;}
+        const auto low=hitch.lowFps(t);
+        check(low&&std::abs(*low-20.0)<0.1,"hitches every 50 frames drag the 1% low to 20 fps");
+        // A pause is not a slow frame: the gap is dropped and the run restarts.
+        FramePaceWindow paused;t=1000000;
+        for(int i=0;i<300;++i){paused.complete(t);t+=166667;}
+        t+=30000000;
+        for(int i=0;i<300;++i){paused.complete(t);t+=166667;}
+        const auto resumed=paused.lowFps(t);
+        check(resumed&&std::abs(*resumed-60.0)<0.1,"a three-second pause does not count as a slow frame");
+        // Only the last ten seconds count.
+        FramePaceWindow old;t=1000000;
+        for(int i=0;i<300;++i){old.complete(t);t+=333333;}
+        for(int i=0;i<700;++i){old.complete(t);t+=166667;}
+        const auto recent=old.lowFps(t);
+        check(recent&&std::abs(*recent-60.0)<0.1,"intervals older than ten seconds leave the 1% low");
+    }
     return failed?1:0;
 }

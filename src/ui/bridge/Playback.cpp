@@ -1,5 +1,6 @@
 // QML bridge: Playback responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/pipeline/NrReuse.h"
 
 namespace veyra::ui {
 // --- playback ---------------------------------------------------------------
@@ -69,6 +70,10 @@ double QmlPlayerBridge::submitFps() const {
     return xessPresenting(s) ? s.metrics.flow.xessSdkSubmitFps : s.submissionFps.value_or(0.0);
 }
 bool QmlPlayerBridge::submitFpsKnown() const { return xessPresenting(impl_->snapshot) || impl_->snapshot.submissionFps.has_value(); }
+// Our own presents only: while the XeSS SDK presents its frames itself the
+// intervals between them are not observed here, so there is no 1% low.
+double QmlPlayerBridge::submitLowFps() const { return submitLowFpsKnown() ? *impl_->snapshot.submissionLow1Fps : 0.0; }
+bool QmlPlayerBridge::submitLowFpsKnown() const { return !xessPresenting(impl_->snapshot) && impl_->snapshot.submissionLow1Fps.has_value(); }
 QString QmlPlayerBridge::submitFpsLabel() const { return xessPresenting(impl_->snapshot) ? tr("SDK 提交") : tr("提交"); }
 double QmlPlayerBridge::lateMs() const { return impl_->snapshot.lateMs; }
 double QmlPlayerBridge::lateP95Ms() const { return impl_->snapshot.lateP95Ms; }
@@ -89,6 +94,34 @@ QString QmlPlayerBridge::nrAutoStatus() const {
     if(s.nrAutoStatus==L"自动NR实例池不可用，保留1080p NR")return tr("自动 NR 实例池不可用，保留固定 1080p 档");
     if(!s.nrAutoStatus.empty())return tr("当前配置未启用自动 NR，保留固定 1080p 档");
     return {};
+}
+// NR inference reuse: what the running preview graph actually does. Nothing
+// while the mode is off or nothing plays; a reason when the mode is on but
+// this chain cannot reuse (EnhanceGraph::nrReuseIneligibility, ASCII).
+bool QmlPlayerBridge::nrReuseActive() const { return impl_->snapshot.nrReuseActive; }
+QString QmlPlayerBridge::nrReuseStatus() const {
+    const auto& s=impl_->snapshot;
+    if(settings().nrReuse==engine::NrReuseMode::Off)return {};
+    if(s.nrReuseActive){
+        const unsigned every=pipeline::NrReuseScheduler::framesPerReuse(s.nrReuseLevel);
+        const QString state=every==0?tr("跟得上，每帧都推理"):tr("每 %1 帧复用 1 帧").arg(every);
+        // No running count: hours of play reach millions of frames.
+        return s.nrReuseAutomatic?tr("自动 · ")+state:state;
+    }
+    const auto& why=s.nrReuseUnavailable;
+    if(why.empty())return {};
+    QString reason;
+    if(why=="not a realtime preview graph"||why=="still image")reason=tr("只在实时预览生效");
+    else if(why=="NR not created")reason=tr("NR 未运行");
+    else if(why=="NVIDIA NGX NR only")reason=tr("仅支持英伟达 NR");
+    else if(why=="SDR only")reason=tr("HDR 处理时不复用");
+    else if(why=="NR motion must use optical flow")reason=tr("NR 运动来源需为光流");
+    else if(why=="NR split across SR")reason=tr("NR 分在超分前后时不复用");
+    else if(why=="protection between NR stages")reason=tr("NR 层之间有保护区域时不复用");
+    else if(why=="node mode")reason=tr("节点模式暂不支持");
+    else if(why=="automatic NR size pool")reason=tr("自动 NR 尺寸开启时不复用");
+    else reason=tr("资源不足");
+    return tr("未生效：")+reason;
 }
 bool QmlPlayerBridge::srActive() const { return impl_->snapshot.srActive; }
 bool QmlPlayerBridge::fgActive() const { return impl_->snapshot.fgActive; }

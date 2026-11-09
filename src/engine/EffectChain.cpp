@@ -730,6 +730,9 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if (previous.lowLatency != next.lowLatency) return true;
     // The output stabiliser's pass exists only when it is on (EnhanceGraph::createNrHoldPass).
     if ((previous.nrHoldStrength > 0.0f) != (next.nrHoldStrength > 0.0f)) return true;
+    // NR inference reuse allocates its pass only when on (EnhanceGraph::createNrReusePass);
+    // Auto and the manual ratios switch live.
+    if ((previous.nrReuse != NrReuseMode::Off) != (next.nrReuse != NrReuseMode::Off)) return true;
     if (previous.nrPolicy != next.nrPolicy) return true;
     if (previous.srTarget != next.srTarget) return true;
     // The double SR reduction and the supersample shrink change what SR reads and writes.

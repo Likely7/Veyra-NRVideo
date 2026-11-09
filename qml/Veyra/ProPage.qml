@@ -93,7 +93,7 @@ VPage {
             if (chip.type === "sr") target = "list-sr"
             else if (chip.type === "aa") target = "list-anti-alias"
             else if (chip.type === "video-hdr") target = "list-video-hdr"
-            else if (chip.type === "protection") target = "list-global-protection"
+            else if (chip.type === "protection") { nrStage.open = true; target = "list-global-protection" }
             else if (chip.type === "beauty") {
                 beautyStage.open = true
                 let ordinal = 0
@@ -940,29 +940,31 @@ VPage {
                         spacing: 6
                         VEyebrow { text: qsTr("帧率与节奏") }
 
-                        // The design puts "显示 fps" first and "提交 fps" after it, and its
-                        // own note is explicit: a display rate is only real if the system
-                        // display event can be read, and when it cannot it must say 未测
-                        // rather than reuse the submit rate.
+                        // The submit rate is the headline, as an overlay such as RTSS shows
+                        // it: both count Present calls. Panel scanout is not measured, so
+                        // there is no separate display rate (it only ever said 未测). The
+                        // 1% low is the 99th-percentile present interval of the last 10 s.
                         RowLayout {
                             spacing: 6
                             Text {
-                                text: veyra.displayFpsKnown ? veyra.displayFps.toFixed(1) : qsTr("未测")
-                                color: veyra.displayFpsKnown ? Theme.ok : Theme.t3
+                                objectName: "fps-submit"
+                                text: veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) : qsTr("未测")
+                                color: veyra.submitFpsKnown ? Theme.ok : Theme.t3
                                 font.family: Theme.fontMono
                                 font.pixelSize: 22
                                 font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                             }
-                            Text { text: qsTr("显示 fps"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11 }
+                            Text { text: veyra.submitFpsLabel + " fps"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11 }
                             Rectangle { implicitWidth: 1; implicitHeight: 12; color: Theme.stroke2 }
                             Text {
-                                text: veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) : qsTr("未测")
+                                objectName: "fps-low1"
+                                text: veyra.submitLowFpsKnown ? veyra.submitLowFps.toFixed(1) : "—"
                                 color: Theme.t1
                                 font.family: Theme.fontMono
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                             }
-                            Text { text: veyra.submitFpsLabel; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11 }
+                            Text { text: qsTr("1% low"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11 }
                         }
                         // Frame-time line (design .spark): submit interval over the last
                         // 12 s, the dashed line is the source frame budget.
@@ -1474,123 +1476,171 @@ VPage {
                                 note: full ? qsTr("（最多 4 层）") : qsTr("（加在 NR ") + veyra.nrLayers.length + qsTr(" 之后 · 最多 4 层）")
                                 onAdd: { root.markPop(veyra.nrLayers.length + 1); root.selectedEffect = veyra.addEffect("nr") }
                             }
-                        }
 
-                        // Stage-5 output stabiliser. Global, not per-layer: it
-                        // runs once after the whole NR stack. Default off, and
-                        // off means the pass is never even dispatched.
-                        VAccordion {
-                            objectName: "list-output-stabiliser"
-                            Layout.fillWidth: true
-                            visible: veyra.nodeMode === 0
-                            title: qsTr("输出稳定器 · 抗闪烁")
-                            glyph: "shield"; hue: Theme.accent
-                            summary: veyra.nrHoldStrength > 0
-                                     ? qsTr("已开启 · 强度 ") + Math.round(veyra.nrHoldStrength * 100) + "%"
-                                     : qsTr("默认关闭 · 只稳住没变化的画面，动的地方不拖影")
-                            on: veyra.nrHoldStrength > 0
-                            onToggled: on => veyra.nrHoldStrength = on ? 0.8 : 0
-                            Text {
+                            // Global NR options sit inside the NR stage, beside its layers
+                            // (field request 2026-11-07): each runs once over the whole stack.
+                            // Stage-5 output stabiliser. Global, not per-layer: it
+                            // runs once after the whole NR stack. Default off, and
+                            // off means the pass is never even dispatched.
+                            VAccordion {
+                                objectName: "list-output-stabiliser"
                                 Layout.fillWidth: true
-                                text: qsTr("比较源画面与上一帧：没有明显变化的像素沿用上一帧输出，明显变化的位置直接用新结果。") +
-                                      qsTr("不重投影、不用光流，所以运动区域不会拖影。放在最后一层 NR 之后、超分与补帧之前。")
-                                wrapMode: Text.WordWrap
-                                color: Theme.t3
-                                font.family: Theme.fontUi; font.pixelSize: 11
-                            }
-                            VRow {
-                                label: qsTr("稳定强度")
-                                hint: qsTr("越高越稳，过高会显得发闷")
-                                visible: veyra.nrHoldStrength > 0
-                                value: Math.round(veyra.nrHoldStrength * 100) + "%"
-                                VSlider {
-                                    objectName: "list-hold-strength"
-                                    implicitWidth: 110
-                                    from: 0.1; to: 1.0; inputScale: 100
-                                    value: veyra.nrHoldStrength
-                                    onMoved: value => veyra.nrHoldStrength = value
+                                Layout.topMargin: 4
+                                visible: veyra.nodeMode === 0
+                                title: qsTr("输出稳定器 · 抗闪烁")
+                                glyph: "shield"; hue: Theme.accent
+                                summary: veyra.nrHoldStrength > 0
+                                         ? qsTr("已开启 · 强度 ") + Math.round(veyra.nrHoldStrength * 100) + "%"
+                                         : qsTr("默认关闭 · 只稳住没变化的画面，动的地方不拖影")
+                                on: veyra.nrHoldStrength > 0
+                                onToggled: on => veyra.nrHoldStrength = on ? 0.8 : 0
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: qsTr("比较源画面与上一帧：没有明显变化的像素沿用上一帧输出，明显变化的位置直接用新结果。") +
+                                          qsTr("不重投影、不用光流，所以运动区域不会拖影。放在最后一层 NR 之后、超分与补帧之前。")
+                                    wrapMode: Text.WordWrap
+                                    color: Theme.t3
+                                    font.family: Theme.fontUi; font.pixelSize: 11
                                 }
-                            }
-                            VRow {
-                                label: qsTr("变化容差")
-                                hint: qsTr("越小越敏感，越大稳得越多")
-                                visible: veyra.nrHoldStrength > 0
-                                value: Number(veyra.nrHoldTolerance).toFixed(3)
-                                VSlider {
-                                    objectName: "list-hold-tolerance"
-                                    implicitWidth: 110
-                                    inputDecimals: 3
-                                    from: 0.005; to: 0.10
-                                    value: veyra.nrHoldTolerance
-                                    onMoved: value => veyra.nrHoldTolerance = value
+                                VRow {
+                                    label: qsTr("稳定强度")
+                                    hint: qsTr("越高越稳，过高会显得发闷")
+                                    visible: veyra.nrHoldStrength > 0
+                                    value: Math.round(veyra.nrHoldStrength * 100) + "%"
+                                    VSlider {
+                                        objectName: "list-hold-strength"
+                                        implicitWidth: 110
+                                        from: 0.1; to: 1.0; inputScale: 100
+                                        value: veyra.nrHoldStrength
+                                        onMoved: value => veyra.nrHoldStrength = value
+                                    }
                                 }
-                            }
-                        }
-
-                        VAccordion {
-                            objectName: "list-global-protection"
-                            Layout.fillWidth: true
-                            visible: veyra.nodeMode === 0
-                            title: qsTr("NR 全局保护区域")
-                            glyph: "shield"; hue: Theme.accent
-                            summary: qsTr("区域内排除所有 NR 层 · 仅列表模式")
-                            on: veyra.protectionEnabled
-                            onToggled: on => veyra.protectionEnabled = on
-                            Text {
-                                Layout.fillWidth: true
-                                text: veyra.protectionDrawShape.length > 0
-                                      ? qsTr("在画面上按住左键拖出") + (veyra.protectionDrawShape === "ellipse" ? qsTr("圆形 / 椭圆") : qsTr("矩形")) + qsTr("区域 · Esc 取消")
-                                      : qsTr("在画面上画出矩形或圆形区域（最多 4 个），区域内的画面不做任何一层 NR 处理。")
-                                wrapMode: Text.WordWrap
-                                color: veyra.protectionDrawShape.length > 0 ? Theme.accent : Theme.t3
-                                font.family: Theme.fontUi; font.pixelSize: 11
-                            }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 6
-                                VButton {
-                                    objectName: "list-protection-draw-rect"
-                                    text: qsTr("画矩形")
-                                    primary: veyra.protectionDrawShape === "rect"
-                                    onClicked: veyra.beginProtectionDraw(veyra.protectionDrawShape === "rect" ? "" : "rect")
-                                }
-                                VButton {
-                                    objectName: "list-protection-draw-ellipse"
-                                    text: qsTr("画圆形")
-                                    primary: veyra.protectionDrawShape === "ellipse"
-                                    onClicked: veyra.beginProtectionDraw(veyra.protectionDrawShape === "ellipse" ? "" : "ellipse")
-                                }
-                                Item { Layout.fillWidth: true }
-                                VButton {
-                                    text: qsTr("清空"); ghost: true
-                                    visible: veyra.protectionRegions.length > 0
-                                    onClicked: veyra.clearProtectionRegions()
-                                }
-                            }
-                            Repeater {
-                                model: veyra.protectionRegions
-                                delegate: VRow {
-                                    required property var modelData
-                                    required property int index
-                                    label: (modelData.ellipse ? qsTr("圆形 ") : qsTr("矩形 ")) + (index + 1)
-                                    value: Math.round(modelData.left * 100) + "," + Math.round(modelData.top * 100) + " → "
-                                           + Math.round(modelData.right * 100) + "," + Math.round(modelData.bottom * 100) + " %"
-                                    VButton {
-                                        objectName: "list-protection-remove-" + index
-                                        icon: true; ghost: true; iconName: "x"
-                                        onClicked: veyra.removeProtectionRegion(modelData.index)
+                                VRow {
+                                    label: qsTr("变化容差")
+                                    hint: qsTr("越小越敏感，越大稳得越多")
+                                    visible: veyra.nrHoldStrength > 0
+                                    value: Number(veyra.nrHoldTolerance).toFixed(3)
+                                    VSlider {
+                                        objectName: "list-hold-tolerance"
+                                        implicitWidth: 110
+                                        inputDecimals: 3
+                                        from: 0.005; to: 0.10
+                                        value: veyra.nrHoldTolerance
+                                        onMoved: value => veyra.nrHoldTolerance = value
                                     }
                                 }
                             }
-                            VRow {
-                                label: qsTr("羽化像素")
-                                value: Number(veyra.protectionState.feather).toFixed(0) + " px"
-                                VSlider {
-                                    objectName: "list-protection-feather"
-                                    implicitWidth: 110
-                                    from: 0; to: 64
-                                    value: veyra.protectionState.feather
-                                    onMoved: value => veyra.setProtectionFeather(Math.round(value))
+
+                            // NR inference reuse (src/pipeline/NrReuse.h). Global like the
+                            // stabiliser and realtime preview only; default off, and off
+                            // builds no reuse pass at all.
+                            VAccordion {
+                                objectName: "list-nr-reuse"
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                                visible: veyra.nodeMode === 0
+                                title: qsTr("NR 自动推理复用")
+                                glyph: "zap"; hue: Theme.accent
+                                summary: veyra.nrReuseMode === 0
+                                         ? qsTr("默认关闭 · 跟不上时让部分帧沿用上一帧的 NR 结果")
+                                         : veyra.nrReuseStatus.length > 0 ? veyra.nrReuseStatus
+                                         : veyra.nrReuseMode === 1 ? qsTr("已开启 · 自动")
+                                         : qsTr("已开启 · 每 ") + veyra.nrReuseMode + qsTr(" 帧复用 1 帧")
+                                on: veyra.nrReuseMode !== 0
+                                onToggled: on => veyra.nrReuseMode = on ? 1 : 0
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: qsTr("只在实时预览生效：被复用的帧不跑 NR 推理，改用上一帧的 NR 变化按光流对齐后叠加，下一帧一定重新推理；对不齐的地方显示原画面。") +
+                                          qsTr("导出、暂停单帧和图片照常逐帧完整推理。目前支持英伟达 NR、SDR 和列表模式。")
+                                    wrapMode: Text.WordWrap
+                                    color: Theme.t3
+                                    font.family: Theme.fontUi; font.pixelSize: 11
+                                }
+                                VRow {
+                                    label: qsTr("复用方式")
+                                    hint: qsTr("自动：只在跟不上时复用，最多每 2 帧复用 1 帧；手动：固定比例")
+                                    visible: veyra.nrReuseMode !== 0
+                                    VSelect {
+                                        objectName: "list-nr-reuse-mode"
+                                        implicitWidth: 210
+                                        options: [
+                                            { id: "1", label: qsTr("自动") },
+                                            { id: "2", label: qsTr("手动 1/2 · 每 2 帧复用 1 帧") },
+                                            { id: "3", label: qsTr("手动 1/3 · 每 3 帧复用 1 帧") },
+                                            { id: "4", label: qsTr("手动 1/4 · 每 4 帧复用 1 帧") }
+                                        ]
+                                        value: (options.find(o => o.id === String(veyra.nrReuseMode)) || options[0]).label
+                                        onPicked: id => veyra.nrReuseMode = Number(id)
+                                    }
+                                }
+                            }
+
+                            VAccordion {
+                                objectName: "list-global-protection"
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                                visible: veyra.nodeMode === 0
+                                title: qsTr("NR 全局保护区域")
+                                glyph: "shield"; hue: Theme.accent
+                                summary: qsTr("区域内排除所有 NR 层 · 仅列表模式")
+                                on: veyra.protectionEnabled
+                                onToggled: on => veyra.protectionEnabled = on
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: veyra.protectionDrawShape.length > 0
+                                          ? qsTr("在画面上按住左键拖出") + (veyra.protectionDrawShape === "ellipse" ? qsTr("圆形 / 椭圆") : qsTr("矩形")) + qsTr("区域 · Esc 取消")
+                                          : qsTr("在画面上画出矩形或圆形区域（最多 4 个），区域内的画面不做任何一层 NR 处理。")
+                                    wrapMode: Text.WordWrap
+                                    color: veyra.protectionDrawShape.length > 0 ? Theme.accent : Theme.t3
+                                    font.family: Theme.fontUi; font.pixelSize: 11
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    VButton {
+                                        objectName: "list-protection-draw-rect"
+                                        text: qsTr("画矩形")
+                                        primary: veyra.protectionDrawShape === "rect"
+                                        onClicked: veyra.beginProtectionDraw(veyra.protectionDrawShape === "rect" ? "" : "rect")
+                                    }
+                                    VButton {
+                                        objectName: "list-protection-draw-ellipse"
+                                        text: qsTr("画圆形")
+                                        primary: veyra.protectionDrawShape === "ellipse"
+                                        onClicked: veyra.beginProtectionDraw(veyra.protectionDrawShape === "ellipse" ? "" : "ellipse")
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    VButton {
+                                        text: qsTr("清空"); ghost: true
+                                        visible: veyra.protectionRegions.length > 0
+                                        onClicked: veyra.clearProtectionRegions()
+                                    }
+                                }
+                                Repeater {
+                                    model: veyra.protectionRegions
+                                    delegate: VRow {
+                                        required property var modelData
+                                        required property int index
+                                        label: (modelData.ellipse ? qsTr("圆形 ") : qsTr("矩形 ")) + (index + 1)
+                                        value: Math.round(modelData.left * 100) + "," + Math.round(modelData.top * 100) + " → "
+                                               + Math.round(modelData.right * 100) + "," + Math.round(modelData.bottom * 100) + " %"
+                                        VButton {
+                                            objectName: "list-protection-remove-" + index
+                                            icon: true; ghost: true; iconName: "x"
+                                            onClicked: veyra.removeProtectionRegion(modelData.index)
+                                        }
+                                    }
+                                }
+                                VRow {
+                                    label: qsTr("羽化像素")
+                                    value: Number(veyra.protectionState.feather).toFixed(0) + " px"
+                                    VSlider {
+                                        objectName: "list-protection-feather"
+                                        implicitWidth: 110
+                                        from: 0; to: 64
+                                        value: veyra.protectionState.feather
+                                        onMoved: value => veyra.setProtectionFeather(Math.round(value))
+                                    }
                                 }
                             }
                         }

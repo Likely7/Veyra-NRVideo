@@ -386,6 +386,13 @@
    "ja": " フレーム"
   },
   {
+   "zh": " 帧复用 1 帧",
+   "src": "qml/ProPage.qml",
+   "zh-TW": " 幀復用 1 幀",
+   "en": " frames",
+   "ja": "フレームごとに 1 回再利用"
+  },
+  {
    "zh": " 次数=",
    "src": "src/base/Log.cpp",
    "zh-TW": " 次數=",
@@ -1205,6 +1212,13 @@
    "ja": "HDR メタデータ"
   },
   {
+   "zh": "HDR 处理时不复用",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "HDR 處理時不復用",
+   "en": "not used for HDR processing",
+   "ja": "HDR 処理中は再利用しません"
+  },
+  {
    "zh": "HDR 片源也按 SDR 显示；与采集卡的“转为 SDR 显示”是同一设置",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "HDR 片源也按 SDR 顯示；與擷取卡的“轉為 SDR 顯示”是同一設定",
@@ -1464,11 +1478,32 @@
    "ja": "NR の内部処理解像度が不正です"
   },
   {
+   "zh": "NR 分在超分前后时不复用",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "NR 分在超解析前後時不復用",
+   "en": "not used when NR is split around super resolution",
+   "ja": "NR が超解像の前後に分かれているときは再利用しません"
+  },
+  {
    "zh": "NR 层 ",
    "src": "qml/ProPage.qml",
    "zh-TW": "NR 層 ",
    "en": "NR layer ",
    "ja": "NR 層 "
+  },
+  {
+   "zh": "NR 层之间有保护区域时不复用",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "NR 層之間有保護區域時不復用",
+   "en": "not used with protected areas between NR layers",
+   "ja": "NR レイヤー間に保護領域があるときは再利用しません"
+  },
+  {
+   "zh": "NR 未运行",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "NR 未執行",
+   "en": "NR is not running",
+   "ja": "NR が動作していません"
   },
   {
    "zh": "NR 求值 %1 / NVOF %2",
@@ -1534,11 +1569,25 @@
    "ja": "NR 自動 %1% · %2×%3"
   },
   {
+   "zh": "NR 自动推理复用",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "NR 自動推理復用",
+   "en": "NR automatic inference reuse",
+   "ja": "NR 推論の自動再利用"
+  },
+  {
    "zh": "NR 运动来源",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "NR 運動來源",
    "en": "NR motion source",
    "ja": "NR のモーション入力"
+  },
+  {
+   "zh": "NR 运动来源需为光流",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "NR 運動來源需為光流",
+   "en": "the NR motion source must be optical flow",
+   "ja": "NR のモーション入力をオプティカルフローにしてください"
   },
   {
    "zh": "NR运行版本切换失败，已恢复上一套参数",
@@ -3403,6 +3452,13 @@
    "ja": "ドライバーのサイズ範囲と刻みに合う値のみ使用できます。実際の形式は接続時に確認します"
   },
   {
+   "zh": "仅支持英伟达 NR",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "僅支援英偉達 NR",
+   "en": "NVIDIA NR only",
+   "ja": "NVIDIA NR のみ対応"
+  },
+  {
    "zh": "仅清空列表，不删除硬盘文件",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "僅清空清單，不刪除硬碟檔案",
@@ -5224,6 +5280,20 @@
    "ja": "「インターフェース描画」が GPU のときだけ有効です。ソフトウェア描画では RTSS の OSD は映像にだけ表示されます"
   },
   {
+   "zh": "只在实时预览生效",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "只在即時預覽生效",
+   "en": "live preview only",
+   "ja": "リアルタイムプレビューのみ有効"
+  },
+  {
+   "zh": "只在实时预览生效：被复用的帧不跑 NR 推理，改用上一帧的 NR 变化按光流对齐后叠加，下一帧一定重新推理；对不齐的地方显示原画面。",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "只在即時預覽生效：被復用的幀不跑 NR 推理，改用上一幀的 NR 變化按光流對齊後疊加，下一幀一定重新推理；對不齊的地方顯示原畫面。",
+   "en": "Live preview only: a reused frame skips NR inference and applies the previous frame's NR change, aligned by optical flow; the next frame always runs inference again. Where the alignment does not match, the original picture is shown.",
+   "ja": "リアルタイムプレビューのみ有効：再利用するフレームは NR 推論を行わず、前のフレームの NR による変化をオプティカルフローで位置合わせして重ねます。次のフレームでは必ず推論し直します。位置が合わない部分は元の画面を表示します。"
+  },
+  {
    "zh": "只在这个亮度以下的暗部生效",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "只在這個亮度以下的暗部生效",
@@ -6218,6 +6288,13 @@
    "ja": "トラックパラメーターのコピー"
   },
   {
+   "zh": "复用方式",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "復用方式",
+   "en": "Reuse mode",
+   "ja": "再利用の方式"
+  },
+  {
    "zh": "外挂",
    "src": "src/ui/bridge/Subtitles.cpp",
    "zh-TW": "外掛",
@@ -6839,6 +6916,13 @@
    "zh-TW": "匯出 ",
    "en": "Export ",
    "ja": "書き出し "
+  },
+  {
+   "zh": "导出、暂停单帧和图片照常逐帧完整推理。目前支持英伟达 NR、SDR 和列表模式。",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "匯出、暫停單幀和圖片照常逐幀完整推理。目前支援英偉達 NR、SDR 和列表模式。",
+   "en": "Export, paused frames and images still run full inference on every frame. Currently NVIDIA NR, SDR and list mode only.",
+   "ja": "書き出し、一時停止中のフレーム、画像はこれまでどおり全フレームで推論します。現在は NVIDIA NR、SDR、リストモードのみ対応です。"
   },
   {
    "zh": "导出「",
@@ -7609,6 +7693,20 @@
    "zh-TW": "已開啟 · 強度 ",
    "en": "On · strength ",
    "ja": "オン · 強度 "
+  },
+  {
+   "zh": "已开启 · 每 ",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "已開啟 · 每 ",
+   "en": "On · 1 reused in every ",
+   "ja": "オン · "
+  },
+  {
+   "zh": "已开启 · 自动",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "已開啟 · 自動",
+   "en": "On · automatic",
+   "ja": "オン · 自動"
   },
   {
    "zh": "已开启，将在播放时请求可变刷新；是否生效以驱动报告为准",
@@ -8883,6 +8981,27 @@
    "zh-TW": "手動",
    "en": "Manual",
    "ja": "手動"
+  },
+  {
+   "zh": "手动 1/2 · 每 2 帧复用 1 帧",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "手動 1/2 · 每 2 幀復用 1 幀",
+   "en": "Manual 1/2 · reuse 1 frame in 2",
+   "ja": "手動 1/2 · 2 フレームに 1 回再利用"
+  },
+  {
+   "zh": "手动 1/3 · 每 3 帧复用 1 帧",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "手動 1/3 · 每 3 幀復用 1 幀",
+   "en": "Manual 1/3 · reuse 1 frame in 3",
+   "ja": "手動 1/3 · 3 フレームに 1 回再利用"
+  },
+  {
+   "zh": "手动 1/4 · 每 4 帧复用 1 帧",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "手動 1/4 · 每 4 幀復用 1 幀",
+   "en": "Manual 1/4 · reuse 1 frame in 4",
+   "ja": "手動 1/4 · 4 フレームに 1 回再利用"
   },
   {
    "zh": "手动 HDR 需要 P010/P016 格式；SDR 信号请选择自动或 Rec.709。",
@@ -10461,13 +10580,6 @@
    "ja": "表示"
   },
   {
-   "zh": "显示 fps",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "顯示 fps",
-   "en": "Display fps",
-   "ja": "表示 fps"
-  },
-  {
    "zh": "显示全部可用帧率",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "顯示全部可用幀率",
@@ -10564,13 +10676,6 @@
    "zh-TW": "顯示峰值",
    "en": "Display peak",
    "ja": "ディスプレイのピーク"
-  },
-  {
-   "zh": "显示帧率",
-   "src": "qml/ProDisplayPanel.qml",
-   "zh-TW": "顯示幀率",
-   "en": "Show frame rate",
-   "ja": "フレームレートを表示"
   },
   {
    "zh": "显示播放条",
@@ -10867,6 +10972,13 @@
    "ja": "最近"
   },
   {
+   "zh": "最近 10 秒里最慢的 1% 提交间隔折算的帧率，和 RTSS 等叠加工具的算法相同",
+   "src": "qml/ProDisplayPanel.qml",
+   "zh-TW": "最近 10 秒裡最慢的 1% 提交間隔折算的幀率，和 RTSS 等疊加工具的算法相同",
+   "en": "The frame rate of the slowest 1% of submit intervals in the last 10 s, computed the same way as overlays such as RTSS",
+   "ja": "直近 10 秒で最も遅い 1% の提出間隔から求めたフレームレート。RTSS などのオーバーレイと同じ計算方法です"
+  },
+  {
    "zh": "有效目标 %1 fps",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "有效目標 %1 fps",
@@ -11061,6 +11173,13 @@
    "zh-TW": "未添加美顏層 · 人臉原畫保護與磨皮",
    "en": "No beauty layer · original face restore and skin smoothing",
    "ja": "美顔層なし · 顔のオリジナル保護と美肌"
+  },
+  {
+   "zh": "未生效：",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "未生效：",
+   "en": "Inactive: ",
+   "ja": "無効："
   },
   {
    "zh": "未登录",
@@ -12062,6 +12181,13 @@
    "zh-TW": "母版峰值偏低（老片 / 轉制片）",
    "en": "Low mastering peak (older or converted title)",
    "ja": "マスタリングのピークが低い作品（旧作・変換版）"
+  },
+  {
+   "zh": "每 %1 帧复用 1 帧",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "每 %1 幀復用 1 幀",
+   "en": "reusing 1 frame in %1",
+   "ja": "%1 フレームに 1 回再利用"
   },
   {
    "zh": "每帧识别 · 320 像素，最省；远处的小脸可能识别不到",
@@ -14073,11 +14199,25 @@
    "ja": "自動 NR のインスタンスプールを使用できません。固定 1080p 設定を維持します"
   },
   {
+   "zh": "自动 NR 尺寸开启时不复用",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "自動 NR 尺寸開啟時不復用",
+   "en": "not used with automatic NR size",
+   "ja": "NR サイズの自動調整中は再利用しません"
+  },
+  {
    "zh": "自动 NR 当前仅验证 RTX 5070",
    "src": "src/ui/bridge/Hardware.cpp",
    "zh-TW": "自動 NR 目前僅驗證 RTX 5070",
    "en": "Auto NR is currently verified only on RTX 5070",
    "ja": "自動 NR は現在 RTX 5070 のみで検証済みです"
+  },
+  {
+   "zh": "自动 · ",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "自動 · ",
+   "en": "Automatic · ",
+   "ja": "自動 · "
   },
   {
    "zh": "自动 · 恒定质量",
@@ -14281,6 +14421,13 @@
    "zh-TW": "自動：優先 HEVC，主機不支援時用 H.264",
    "en": "Auto: HEVC first, H.264 when the host does not support it",
    "ja": "自動：HEVC を優先し、ホストが非対応なら H.264"
+  },
+  {
+   "zh": "自动：只在跟不上时复用，最多每 2 帧复用 1 帧；手动：固定比例",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "自動：只在跟不上時復用，最多每 2 幀復用 1 幀；手動：固定比例",
+   "en": "Automatic: reuses only when the preview cannot keep up, at most 1 frame in 2. Manual: a fixed ratio",
+   "ja": "自動：処理が追いつかないときだけ再利用し、最大で 2 フレームに 1 回。手動：固定の割合"
   },
   {
    "zh": "自定义",
@@ -14610,6 +14757,13 @@
    "zh-TW": "節點模式按連線順序真實執行；離線匯出僅支援列表模式。",
    "en": "Node mode really runs in link order; offline export supports list mode only.",
    "ja": "ノードモードは接続順に実際に処理します。オフラインの書き出しはリストモードのみ対応です。"
+  },
+  {
+   "zh": "节点模式暂不支持",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "節點模式暫不支援",
+   "en": "not available in node mode yet",
+   "ja": "ノードモードはまだ非対応です"
   },
   {
    "zh": "节点模式请用节点的复制",
@@ -15879,6 +16033,13 @@
    "ja": "リソースを使用できません"
   },
   {
+   "zh": "资源不足",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "資源不足",
+   "en": "not enough resources",
+   "ja": "リソースが不足しています"
+  },
+  {
    "zh": "赞助作者",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "贊助作者",
@@ -16038,6 +16199,13 @@
    "zh-TW": "越高靜止時越穩；人物移動時都會緊跟",
    "en": "Higher is steadier at rest; moving faces are followed closely either way",
    "ja": "高いほど静止時に安定します。動く顔はどの設定でもしっかり追従します"
+  },
+  {
+   "zh": "跟得上，每帧都推理",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "跟得上，每幀都推理",
+   "en": "keeping up, inferring every frame",
+   "ja": "追いついています。全フレームで推論中"
   },
   {
    "zh": "跟踪平滑",
@@ -17846,13 +18014,6 @@
    "ja": "メディアの直接 URL が必要です。通常の Web ページやブラウザーでのログインが必要なページは直接再生できません。ライブ配信では通常シークできません。"
   },
   {
-   "zh": "需要系统显示事件才能测得真实值；取不到时显示未测",
-   "src": "qml/ProDisplayPanel.qml",
-   "zh-TW": "需要系統顯示事件才能測得真實值；取不到時顯示未測",
-   "en": "Real values need system display events; shows Not measured when they are unavailable",
-   "ja": "実際の値にはシステムの表示イベントが必要です。取得できない場合は「未計測」と表示します"
-  },
-  {
    "zh": "需要重启软件",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "需要重新啟動軟體",
@@ -18971,6 +19132,13 @@
    "zh-TW": "預設關閉 · 只穩住沒變化的畫面，動的地方不拖影",
    "en": "Off by default · only steadies parts of the picture that do not change; moving parts do not smear",
    "ja": "既定はオフ · 変化していない部分だけを安定させ、動く部分に残像は出ません"
+  },
+  {
+   "zh": "默认关闭 · 跟不上时让部分帧沿用上一帧的 NR 结果",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "預設關閉 · 跟不上時讓部分幀沿用上一幀的 NR 結果",
+   "en": "Off by default · when the preview cannot keep up, some frames reuse the previous frame's NR result",
+   "ja": "既定はオフ · 処理が追いつかないとき、一部のフレームで前のフレームの NR 結果を再利用します"
   },
   {
    "zh": "默认关闭。仅 NVIDIA HDR10 补帧时生效；4K 额外约 32 MiB 显存，可能增加 GPU 开销。切换时画面可能短暂停顿。",

@@ -290,6 +290,11 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         };
         restoreHold("nrHoldStrength", s.nrHoldStrength);
         restoreHold("nrHoldTolerance", s.nrHoldTolerance);
+        if (p.contains(QStringLiteral("nrReuse"))) {
+            const int value = p.value(QStringLiteral("nrReuse")).toInt();
+            const auto mode = static_cast<engine::NrReuseMode>(value);
+            if (value >= 0 && engine::validNrReuseMode(mode) && s.nrReuse != mode) { s.nrReuse = mode; changed = true; }
+        }
         for(const auto& pair : {std::pair{"captureFlipVertical",&s.captureFlipVertical},std::pair{"captureForceSdr",&s.forceSdrPreview}})
             if(p.contains(QLatin1String(pair.first))){const bool value=p.value(QLatin1String(pair.first)).toBool();changed|=*pair.second!=value;*pair.second=value;}
         if(p.contains("captureAudioIngress")){const int value=p.value("captureAudioIngress").toInt();if(value>=0&&value<=2){changed|=int(s.captureAudio)!=value;s.captureAudio=static_cast<engine::CaptureAudioIngress>(value);}}

@@ -26,6 +26,9 @@ bool PreviewGpuSession::requestAllowed(const EnhancementSettings& settings){
         currentNrRuntime(settings.nrRuntime)==NrRuntime::Ampere&&settings.activeNrLayerCount()<=1&&!settings.activeAutoNrLayerCount()&&
         !settings.videoHdr.enabled&&!settings.color.enabled&&settings.additionalColorCount==0&&
         !settings.antiAlias.enabled&&settings.additionalAntiAliasCount==0&&!settings.beautyEnabled()&&
+        // A prewarmed graph is built without the preview-only reuse pass, so it
+        // must never be adopted for a session that asked for reuse.
+        settings.nrReuse==NrReuseMode::Off&&
         (settings.videoSrQuality==0||settings.videoSrQuality==4);
 }
 bool PreviewGpuSession::computeAllowed(const gfx::AdapterInfo& adapter,const pipeline::EnhanceGraphDesc& desc){
@@ -38,7 +41,7 @@ bool PreviewGpuSession::computeAllowed(const gfx::AdapterInfo& adapter,const pip
         desc.nrRuntime==NrRuntime::Original&&desc.nrLayersExtent.size()==2&&
         desc.nrLayersExtent[0]==pipeline::Extent{1920,1080}&&desc.nrLayersExtent[1]==pipeline::Extent{1920,1080}&&
         !desc.nrBeforeSr&&!desc.runtimeNodeOrder&&!desc.hdrInput&&!desc.hdrOutput&&!desc.videoHdr.enabled&&
-        !desc.color.enabled&&!desc.additionalColorCount&&!desc.antiAliasActive()&&!desc.beautyActive()&&!desc.nrHoldStrength&&
+        !desc.color.enabled&&!desc.additionalColorCount&&!desc.antiAliasActive()&&!desc.beautyActive()&&!desc.nrHoldStrength&&desc.nrReuse==NrReuseMode::Off&&
         !desc.nrTemporal&&std::none_of(desc.nrLayersTemporal.begin(),desc.nrLayersTemporal.end(),[](bool enabled){return enabled;})&&
         desc.opticalFlowBackend==OpticalFlowBackend::Nvidia&&desc.enableFg&&
         desc.frameGenerationBackend==FrameGenerationBackend::Dlss&&(desc.fgMultiplier==2||desc.fgMultiplier==3);

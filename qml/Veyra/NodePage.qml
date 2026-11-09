@@ -474,8 +474,8 @@ VPage {
                             model: [
                                 { k: qsTr("输入"), v: veyra.sourceSummary, hi: false },
                                 { k: qsTr("输出"), v: veyra.outputSummary.length > 0 ? veyra.outputSummary : qsTr("未测"), hi: false },
-                                { k: qsTr("显示 fps"), v: veyra.displayFpsKnown ? veyra.displayFps.toFixed(1) : qsTr("未测"), hi: true },
-                                { k: veyra.submitFpsLabel + " fps", v: veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) : qsTr("未测"), hi: false },
+                                { k: veyra.submitFpsLabel + " fps", v: veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) : qsTr("未测"), hi: true },
+                                { k: qsTr("1% low"), v: veyra.submitLowFpsKnown ? veyra.submitLowFps.toFixed(1) : "—", hi: false },
                                 { k: qsTr("待呈现"), v: veyra.queuedFramesKnown ? veyra.queuedFrames.toFixed(0) + qsTr(" 帧") : qsTr("未测"), hi: false }
                             ]
                             delegate: RowLayout {
@@ -495,7 +495,7 @@ VPage {
                                 }
                                 Text {
                                     text: modelData.v.length > 0 ? modelData.v : "—"
-                                    color: modelData.hi && veyra.displayFpsKnown ? Theme.ok : Theme.t1
+                                    color: modelData.hi && veyra.submitFpsKnown ? Theme.ok : Theme.t1
                                     font.family: Theme.fontMono
                                     font.pixelSize: modelData.hi ? 14 : 12
                                     font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold

@@ -11,6 +11,8 @@
 #include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/pipeline/NrTemporalPass.h"
 #include "veyra/pipeline/NrHoldPass.h"
+#include "veyra/pipeline/NrReuse.h"
+#include "veyra/pipeline/NrReusePass.h"
 #include "veyra/pipeline/FramePacket.h" // ColorDescription, for the HDR display metadata
 
 // EnhanceGraph - the real unified processing graph (Playbook R3.2).
@@ -175,6 +177,11 @@ struct EnhanceGraphDesc {
     // without it. See shaders/NrHold.hlsl.
     float nrHoldStrength=0.0f;
     float nrHoldTolerance=0.02f;
+    // NR inference reuse (NrReuse.h). Only the realtime preview builder sets
+    // nrReusePreview; export, image and diagnostic graphs leave it false and
+    // infer every frame whatever nrReuse says. Off creates no reuse pass.
+    bool nrReusePreview=false;
+    engine::NrReuseMode nrReuse=engine::NrReuseMode::Off;
     // Colour grade (plan v4). When color.enabled is false the stage does not
     // exist: no tables are allocated, no constants are packed and the ingest
     // shaders return their linear RGB untouched.
@@ -638,6 +645,17 @@ public:
     bool selectAutoNrLevel(unsigned level);
     bool autoNrPoolReady()const{return nrAutoPoolReady_;}
     unsigned autoNrLevel()const{return nrAutoLevel_;}
+    // NR inference reuse (NrReuse.h): active only in a preview graph built with
+    // a mode other than Off and a supported NR chain. Auto takes its level
+    // from the engine; a manual mode pins it. Empty reason: active or not asked.
+    bool nrReuseActive()const{return nrReusePass_!=nullptr;}
+    bool nrReuseAutomatic()const{return nrReusePass_&&desc_.nrReuse==engine::NrReuseMode::Auto;}
+    unsigned nrReuseLevel()const{return nrReuseScheduler_.level();}
+    // The last processed frame reused instead of inferring. A paused picture
+    // must be fully inferred, so the engine re-renders such a frame on pause.
+    bool nrReuseLastFrameReused()const{return nrReusePass_&&nrReuseScheduler_.lastReused();}
+    void setNrReuseLevel(unsigned level);
+    const std::string& nrReuseUnavailable()const{return nrReuseUnavailable_;}
     Extent autoNrExtent()const{return nrAutoPoolReady_&&desc_.nrAutoPoolLayer?desc_.nrLayersExtent[*desc_.nrAutoPoolLayer]:Extent{};}
 
     // s10 ownership-order teardown: NVOF fence drain must happen BEFORE this
@@ -658,6 +676,7 @@ public:
         uint64_t fgSubmittedCandidates = 0, fgDisabledFrames = 0;
         uint64_t fgProviderDisabled = 0;
         uint64_t nrMotionFrames = 0, sceneCutCount = 0, resetCount = 0;
+        uint64_t nrReuseFrames = 0, nrReuseChainedMotion = 0;
     };
     const Metrics& metrics() const { return metrics_; }
     const std::string& mvecSource() const { return mvecSource_; }
@@ -936,6 +955,15 @@ private:
     // setting is non-zero; a default (0) session never allocates it and the
     // dispatch is skipped, so the disabled path is unchanged.
     std::unique_ptr<NrHoldPass> nrHoldPass_;
+    // NR inference reuse: constructed only for a preview graph that asked for
+    // it and whose NR chain qualifies (createNrReusePass), so every other
+    // graph records exactly the commands it did before.
+    std::unique_ptr<NrReusePass> nrReusePass_;
+    NrReuseScheduler nrReuseScheduler_;
+    bool nrReuseKeyValid_=false; // the previous frame inferred and stored its chain
+    double nrReuseInferredPts_=0; // PTS of the last frame that ran NR inference
+    std::string nrReuseUnavailable_;
+    std::string nrReuseIneligibility() const;
     // 纹理 / 清晰度 / 去朦胧 of the list grade fused into input conversion (srcRgba_).
     ColorDetailPass colorDetail_;
     // The texture the rest of the graph reads as "the NR result". Without the
@@ -943,6 +971,7 @@ private:
     // produces. Set once per frame, read by the SR/FG/tail bindings below.
     ID3D12Resource* nrOutputView_=nullptr;
     bool createNrHoldPass();
+    bool createNrReusePass();
     // --- colour grade (v4): CPU-baked tables read by the ingest shaders -----
     bool colorActive_=false;
     std::wstring colorLutNotice_;
