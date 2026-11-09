@@ -949,3 +949,8 @@ VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找�
 执行 `git push --atomic nrvideo main refs/tags/v2.1.4 refs/tags/v2.1.4-sources`，随后用 `promote.py` 从已验收包更新文档、社区图和发布清单，程序及运行组件逐文件哈希一致。第一次打包遇到 Markdown CRLF 导致中英分段失败，读取时统一换行后通过。上传到草稿并验证 GitHub 资产 SHA-256 和大小后，先公开对应源码，再把应用 Release 设为 Latest。执行 `verify-github.py docs/draft/published` 核对正文、两个标签、六个公开资产下载 HTTP 200、两个二维码、Discord 邀请及四个历史固定依赖源码链接。
 
 正式包目录 `E:/项目/Veyra/releases/codex-publish-2.1.4-20261109`，逐项校验及发布回执 `E:/项目/Veyra/reports/codex-publish-2.1.4-20261109/FINAL.json`。群公告在同目录 `GROUP_ANNOUNCEMENT.txt`，正文 802 字符。
+
+
+## 2026-11-09 2.1.4 NR 推理复用致谢
+
+按用户要求，在 GitHub Release 和版本说明中补充 Magpie Experimental v0.6.12 的 DLSSNR「隔帧」模式、SAOG0721 与 yejincheng420 的贡献，并标明 Veyra 的独立实现。用 gh release edit 更新正文，复查公开正文、资产 ID/大小/SHA-256 和 Latest。群公告同步更新。
