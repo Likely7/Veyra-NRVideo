@@ -906,3 +906,11 @@ Claude初次构建305.9s，原完整Quick172/0/1、25 GPU用例、原双重/超�
 构建选项 `-DVEYRA_VB_CABLE_PACKAGE=E:/项目/Veyra/deps/vb-audio/pack46/VBCABLE_Driver_Pack46.zip` 将 SHA-256 固定的 1,324,680 字节原 ZIP 编入 `veyra_qml_ui.exe`。使用 [VB-Audio 原包](https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip) 和厂商署名说明。正式和测试打包都沿用已编入资源的 EXE。纯源码构建可以留空此选项，此时没有离线安装包。应用内安装和卸载读取同一内置资源，确认前不会启动安装器，安装包不进入源码 Git。
 
 MSVC/CMake 使用共享构建目录按上述选项重新配置，再以 `--parallel 2 --target veyra_qml_ui` 构建成功。字节比对证实原 ZIP 在 EXE 中恰好出现一次且完整一致。真实 QML 验证离线资源可读、名称与说明、安装与卸载确认，以及取消无安装动作。多语言目录无缺失和占位符错误。日志 `E:/项目/Veyra/logs/offline-virtual-capture-audio-20261109`。本机入口 `E:/项目/Veyra/tests/offline-virtual-capture-audio-20261109/启动离线虚拟扬声器测试.cmd`。本轮未在系统安装驱动或修改 Windows 端点名称。
+
+## 2026-11-09 2.1.4 本地测试包与虚拟音频实机验收进度
+
+产品提交 `5ca4b82`。共享构建用 MSVC 2022 和 CMake 重新配置 `-DVEYRA_DISPLAY_VERSION=2.1.4` 与固定的 `VEYRA_VB_CABLE_PACKAGE`，以两路并发构建 QML、WASAPI、UI contract 和 QtQuick，另构建 capture audio 测试。PE 文件与产品版本均为 2.1.4。QtQuick 175/0/0，WASAPI 离线 19/0、防回灌 2/0，UI contract 通过。合成采集 PCM 经真实 WASAPI 输出的同步测试通过，手动补偿为 100 ms。该测试覆盖现有 PCM 同步管线。
+
+在实际软件的采集卡面板确认安装，内置 ZIP 经校验和解压后成功启动 VB-Audio 2.1.5.8 安装器。对 Install Driver 的两次桌面自动点击未推进安装，系统未注册 CABLE 端点。已把按钮交给用户操作。独立 FFmpeg DirectShow 测试 T911 HDMI 3 秒得到 308700 个样本，最大 −80.8 dBFS。未观察到可用于比较延迟的节目声音。未把安装器启动或合成 PCM 测试计为故障采集卡的侦听取音验收。
+
+从哈希锁定的 2.1.3 NVIDIA 和 AMD 正式便携 ZIP 复用供应商运行时。替换本轮构建的 EXE、QML、着色器、翻译和本地测试说明，逐文件核验两个新 ZIP 的大小和 SHA-256。两个解压形态在最小 PATH 与独立配置下均播放 H.264 测试素材并提交 90 个真实源帧。档案在 `E:/项目/Veyra/test-packages/2.1.4-virtual-audio-20261109`。打包脚本与最终回执在 `reports/virtual-capture-acceptance-2.1.4-20261109`，构建和测试日志在同名 `logs` 目录。核验后清理了重复的临时解压目录。当前为本地隔离分支测试包。
