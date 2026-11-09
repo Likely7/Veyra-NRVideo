@@ -98,6 +98,7 @@ void PresetLibrary::addBuiltins() {
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
     const auto directVideoAi=std::filesystem::path(path_).concat(L".video-ai");
     const auto directDual=std::filesystem::path(path_).concat(L".dual-sr");
@@ -151,6 +152,9 @@ bool PresetLibrary::load() {
     // DLSS SR / FSR as the second double SR pass (library v19, session v14).
     const auto anySrPath=std::filesystem::path(path_).concat(L".dual-sr-any");
     if(std::filesystem::exists(directAnySr))path_=directAnySr;else if(std::filesystem::exists(anySrPath))path_=anySrPath;
+    // DLAA anti-aliasing nodes (library v20, session v15).
+    const auto dlaaPath=std::filesystem::path(path_).concat(L".dlaa");
+    if(std::filesystem::exists(directDlaa))path_=directDlaa;else if(std::filesystem::exists(dlaaPath))path_=dlaaPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -247,6 +251,8 @@ bool PresetLibrary::save() {
     // Opting into a new model must leave the older build's library intact.
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
+    if(data.starts_with("VEYRA_PRESET_LIBRARY 20")&&!path_.wstring().ends_with(L".dlaa"))path_=std::filesystem::path(path_).concat(L".dlaa");
+    if(!path_.wstring().ends_with(L".dlaa")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 19")&&!path_.wstring().ends_with(L".dual-sr-any"))path_=std::filesystem::path(path_).concat(L".dual-sr-any");
     if(!path_.wstring().ends_with(L".dual-sr-any")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 18")&&!path_.wstring().ends_with(L".video-ai"))path_=std::filesystem::path(path_).concat(L".video-ai");
@@ -276,6 +282,7 @@ bool PresetLibrary::save() {
             return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
         }) && !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     }
     }
     }
@@ -751,7 +758,15 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
     // reject a second value outside RTX Video SR, so it has its own version and file.
     const auto anySrOf=[](const ChainGlobalSettings& g){return !rtxVideoSr(g.dualSrQuality);};
     const bool anySr=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){return (e.globals&&anySrOf(*e.globals))||(e.nodeConfiguration&&(anySrOf(*e.nodeConfiguration)||(e.nodeConfiguration->editor&&e.nodeConfiguration->editor->globals&&anySrOf(*e.nodeConfiguration->editor->globals))));});
-    const int version=std::max(minimumVersion, anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    // DLAA anti-aliasing nodes (2026-11-08): readers up to v19 / session v14 refuse
+    // method 3, so a library holding one has its own version and file.
+    const auto dlaaChain=[](const EffectChain& chain){
+        return std::any_of(chain.nodes.begin(),chain.nodes.begin()+chain.nodeCount,[](const auto& n){
+            return n.type==EffectType::AntiAliasing&&n.aa.method==AntiAliasMethod::Dlaa;});};
+    const bool dlaa=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
+        return dlaaChain(e.chain)||(e.nodeConfiguration&&(dlaaChain(e.nodeConfiguration->chain)||
+            (e.nodeConfiguration->editor&&dlaaChain(e.nodeConfiguration->editor->nodes))));});
+    const int version=std::max(minimumVersion, dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -825,7 +840,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,19):19;
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,20):20;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
@@ -897,6 +912,10 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             }
             if (version >= 14 && node.type == EffectType::AntiAliasing && !readAntiAlias(in, node.aa)) {
                 error = L"预设库节点抗锯齿参数损坏"; return false;
+            }
+            // DLAA exists from v20 on: an older header cannot carry it.
+            if (version < 20 && node.type == EffectType::AntiAliasing && node.aa.usesDlaa()) {
+                error = L"预设库版本不支持 DLAA 抗锯齿"; return false;
             }
             if (version >= 15 && node.type == EffectType::Beauty && !readBeauty(in, node.beauty)) {
                 error = L"预设库节点美颜参数损坏"; return false;
@@ -999,7 +1018,14 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const bool videoAi=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return videoAiOf(c)||(c.editor&&c.editor->globals&&videoAiOf(*c.editor->globals));});
     const auto anySrOf=[](const ChainGlobalSettings& g){return !rtxVideoSr(g.dualSrQuality);};
     const bool anySr=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return anySrOf(c)||(c.editor&&c.editor->globals&&anySrOf(*c.editor->globals));});
-    const int version = anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    // DLAA anti-aliasing nodes (2026-11-08): readers up to v19 / session v14 refuse
+    // method 3, so a library holding one has its own version and file.
+    const auto dlaaChain=[](const EffectChain& chain){
+        return std::any_of(chain.nodes.begin(),chain.nodes.begin()+chain.nodeCount,[](const auto& n){
+            return n.type==EffectType::AntiAliasing&&n.aa.method==AntiAliasMethod::Dlaa;});};
+    const bool dlaa=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
+        return dlaaChain(c.chain)||(c.editor&&dlaaChain(c.editor->nodes));});
+    const int version = dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -1053,7 +1079,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 14) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 15) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -1068,7 +1094,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
         parsed.configurations[i].chain = entries[i].chain;
@@ -1102,7 +1128,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         }
         if (!(in >> std::quoted(body))) return false;
         entries.clear(); def.clear(); error.clear();
-        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 1 ||
+        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 1 ||
             !def.empty() || entries[0].kind != ChainMode::Node || entries[0].chain.nodeCount != count) return false;
         editor->nodes = std::move(entries[0].chain);
         for (uint32_t i = 0; i < count; ++i) {
@@ -1119,6 +1145,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
 }
 
 bool ChainSessionStore::load(ChainSession& session) {
+    const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
     const auto directVideoAi=std::filesystem::path(path_).concat(L".video-ai");
     const auto directDual=std::filesystem::path(path_).concat(L".dual-sr");
@@ -1170,6 +1197,9 @@ bool ChainSessionStore::load(ChainSession& session) {
     // DLSS SR / FSR as the second double SR pass (library v19, session v14).
     const auto anySrPath=std::filesystem::path(path_).concat(L".dual-sr-any");
     if(std::filesystem::exists(directAnySr))path_=directAnySr;else if(std::filesystem::exists(anySrPath))path_=anySrPath;
+    // DLAA anti-aliasing nodes (library v20, session v15).
+    const auto dlaaPath=std::filesystem::path(path_).concat(L".dlaa");
+    if(std::filesystem::exists(directDlaa))path_=directDlaa;else if(std::filesystem::exists(dlaaPath))path_=dlaaPath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1199,6 +1229,8 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    if(data.starts_with("VEYRA_CHAIN_SESSION 15")&&!path_.wstring().ends_with(L".dlaa"))path_=std::filesystem::path(path_).concat(L".dlaa");
+    if(!path_.wstring().ends_with(L".dlaa")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 14")&&!path_.wstring().ends_with(L".dual-sr-any"))path_=std::filesystem::path(path_).concat(L".dual-sr-any");
     if(!path_.wstring().ends_with(L".dual-sr-any")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 13")&&!path_.wstring().ends_with(L".video-ai"))path_=std::filesystem::path(path_).concat(L".video-ai");
@@ -1228,6 +1260,7 @@ bool ChainSessionStore::save(const ChainSession& session) {
     if (session.configurations[1].editor && session.configurations[1].editor->globals &&
         !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     }
     }
     }

@@ -142,7 +142,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             emit gameModeStopped(tr("界面卡住超过 3 秒，已退出游戏模式")); break;
         // The game has the keyboard in game mode; the hook hands these over.
         case E::ScreenshotHotkey: takeScreenshot(); break;
-        case E::RecordHotkey: toggleRecording(); break;
+        case E::RecordHotkey: toggleRecording(QStringLiteral("game-hotkey")); break;
         }
     };
     auto* gameBeat = new QTimer(this);

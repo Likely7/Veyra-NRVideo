@@ -484,6 +484,16 @@ void QmlPlayerBridge::applyGameHotkeys() {
     const auto keys = shortcuts();
     const auto key = [&keys](const char* action) { return ui::gameKey(QKeySequence(keys.value(action).toString(), QKeySequence::PortableText)); };
     impl_->game.setHotkeys(key("gamePanel"), key("gameExit"), key("screenshot"), key("record"));
+    // At start and after every change: a field log then says which key each
+    // action answers to (the 2026-11-08 recording report had no way to tell).
+    const auto custom = impl_->prefs.value("shortcuts").toMap();
+    std::string line, changed;
+    for (auto it = keys.begin(); it != keys.end(); ++it) {
+        line += std::format("{}{}={}", line.empty() ? "" : " ", it.key().toStdString(),
+                            it.value().toString().isEmpty() ? std::string("none") : it.value().toString().toStdString());
+        if (custom.contains(it.key())) changed += (changed.empty() ? "" : ",") + it.key().toStdString();
+    }
+    veyra::log::info("ui-shortcuts", std::format("{} custom={}", line, changed.empty() ? std::string("none") : changed));
 }
 bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence) {
     if (!shortcutDefaults().contains(action)) return false;
@@ -596,6 +606,15 @@ bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
             impl_->game.attach(reinterpret_cast<HWND>(impl_->gameWindow->winId()));
             updateGameGeometry(); updateGameMode();
         }, Qt::QueuedConnection);
+    }
+    // Remembered for the record trigger log only; the event goes on unchanged.
+    if (type == QEvent::ShortcutOverride) {
+        const auto* key = static_cast<QKeyEvent*>(event);
+        auto& seen = impl_->lastShortcutKey;
+        seen.key = key->key(); seen.modifiers = int(key->modifiers());
+        seen.virtualKey = key->nativeVirtualKey(); seen.scanCode = key->nativeScanCode();
+        seen.autoRepeat = key->isAutoRepeat(); seen.atMs = QDateTime::currentMSecsSinceEpoch();
+        seen.window = watched->objectName().isEmpty() ? QString::fromLatin1(watched->metaObject()->className()) : watched->objectName();
     }
     if (type == QEvent::KeyPress || type == QEvent::KeyRelease) {
         auto* key = static_cast<QKeyEvent*>(event);

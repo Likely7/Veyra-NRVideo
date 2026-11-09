@@ -2,7 +2,7 @@
 #include "veyra/engine/EnhancementSettings.h"
 
 namespace veyra::engine {
-enum class FailedBackend { None, Infrastructure, OpticalFlow, NgxCore, Nr, Sr, Fg, VideoHdr };
+enum class FailedBackend { None, Infrastructure, OpticalFlow, NgxCore, Nr, Sr, Fg, VideoHdr, Dlaa };
 // NGX 310.9.1 definitions. A failure on 566.07 alone does not establish a
 // universal minimum driver. Preserve the real result and suggest recovery.
 constexpr const wchar_t* ngxFailureHint(uint64_t result) {
@@ -47,6 +47,7 @@ inline const wchar_t* backendFailureName(FailedBackend backend) {
     case FailedBackend::Sr:return L"超分";
     case FailedBackend::Fg:return L"帧生成";
     case FailedBackend::VideoHdr:return L"RTX Video HDR";
+    case FailedBackend::Dlaa:return L"DLAA";
     default:return L"GPU / 输入 / 显示资源";
     }
 }
@@ -54,17 +55,25 @@ inline const wchar_t* backendFailureName(FailedBackend backend) {
 // motion for a failed optical-flow backend while claiming normal enhancement.
 inline bool disableFailedBackend(EnhancementSettings& settings,FailedBackend backend){
     const auto before=settings;
+    const auto disableDlaa=[&] {
+        if(settings.antiAlias.usesDlaa())settings.antiAlias.enabled=false;
+        for(auto& aa:settings.additionalAntiAlias)
+            if(aa.usesDlaa())aa.enabled=false;
+    };
     switch(backend){
+    case FailedBackend::Dlaa:disableDlaa();break;
     case FailedBackend::VideoHdr:settings.videoHdr.enabled=false;break;
     case FailedBackend::Nr:settings.nr=false;break;
     case FailedBackend::Sr:settings.sr=false;break;
     case FailedBackend::Fg:settings.multiplier=1;break;
     case FailedBackend::NgxCore:
+        disableDlaa();
         settings.videoHdr.enabled=false;
         settings.nr=settings.sr=false;
         if(settings.frameGenerationBackend==FrameGenerationBackend::Dlss)settings.multiplier=1;
         break;
     case FailedBackend::OpticalFlow:
+        disableDlaa();
         settings.nr=false;settings.multiplier=1;
         // DLSS SR as the base or the second of a double SR.
         if(!settings.videoSrQuality||(settings.dualSrEnabled&&!settings.dualSrQuality))settings.sr=false;

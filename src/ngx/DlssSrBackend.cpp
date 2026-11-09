@@ -90,6 +90,13 @@ bool DlssSrBackend::create(NgxCoreHost& coreHost,
     inputHeight_ = desc.inputHeight;
     outputWidth_ = desc.outputWidth;
     outputHeight_ = desc.outputHeight;
+    nativeResolution_ = desc.nativeResolution;
+    if (nativeResolution_ && (desc.inputWidth != desc.outputWidth || desc.inputHeight != desc.outputHeight)) {
+        log::error("ngx", std::format("sr-backend: DLAA needs input == output, got {}x{} -> {}x{}",
+            desc.inputWidth, desc.inputHeight, desc.outputWidth, desc.outputHeight));
+        status = Status::InvalidArgument;
+        return false;
+    }
 
     // 1:1 bypass: never create SR for same-resolution (Playbook section 11).
     // Check BOTH dimensions for non-uniform extent correctness.
@@ -104,7 +111,8 @@ bool DlssSrBackend::create(NgxCoreHost& coreHost,
     createParams.Feature.InHeight = desc.inputHeight;
     createParams.Feature.InTargetWidth = desc.outputWidth;
     createParams.Feature.InTargetHeight = desc.outputHeight;
-    createParams.Feature.InPerfQualityValue = static_cast<NVSDK_NGX_PerfQuality_Value>(desc.perfQuality);
+    createParams.Feature.InPerfQualityValue = nativeResolution_ ? NVSDK_NGX_PerfQuality_Value_DLAA
+                                                                : static_cast<NVSDK_NGX_PerfQuality_Value>(desc.perfQuality);
     // Linear RGBA16F requires IsHDR even for SDR media (NGX guide 3.1).
     // Video has no renderer exposure texture; use the documented GPU estimator.
     createParams.InFeatureCreateFlags = NVSDK_NGX_DLSS_Feature_Flags_IsHDR |
@@ -130,8 +138,8 @@ bool DlssSrBackend::create(NgxCoreHost& coreHost,
         params, &createParams, sehCode);
     createResult_ = static_cast<uint64_t>(result);
 
-    log::info("ngx", std::format("sr-backend: Create DLSS {}x{} -> {}x{} result={} handle={} seh={}",
-        desc.inputWidth, desc.inputHeight, desc.outputWidth, desc.outputHeight,
+    log::info("ngx", std::format("sr-backend: Create DLSS {}x{} -> {}x{}{} result={} handle={} seh={}",
+        desc.inputWidth, desc.inputHeight, desc.outputWidth, desc.outputHeight, nativeResolution_ ? " DLAA" : "",
         ngxResultString(createResult_), handle_ != nullptr ? "non-null" : "null", sehCode));
 
     if (result != NVSDK_NGX_Result_Success) {

@@ -89,7 +89,7 @@ ColumnLayout {
         }
         VRow {
             label: qsTr("第二次超分算法")
-            hint: qsTr("独立于基础超分，可以选任意一种超分；DLSS SR 两次共用上面的 DLSS 模型，FSR 不支持 HDR。")
+            hint: qsTr("独立于基础超分，可以选任意一种超分；DLSS SR 两次共用上面的 DLSS 模型。")
             VSelect {
                 objectName: editor.namePrefix+"-dual-sr-algorithm"
                 implicitWidth: 210

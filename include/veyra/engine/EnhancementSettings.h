@@ -378,6 +378,12 @@ struct EnhancementSettings {
     uint32_t dualSrQuality=kDefaultVideoSrQuality; // any SR value (DLSS SR, RTX Video SR family/tier, FSR), independent of the base
     // A DLSS SR / FSR pass reads srMotion: the base, or the second of a double SR.
     bool temporalSr() const { return temporalVideoSr(videoSrQuality)||(dualSrEnabled&&temporalVideoSr(dualSrQuality)); }
+    bool usesDlaa() const {
+        if(antiAlias.enabled&&antiAlias.usesDlaa())return true;
+        for(unsigned i=0;i<additionalAntiAliasCount;++i)
+            if(additionalAntiAlias[i].enabled&&additionalAntiAlias[i].usesDlaa())return true;
+        return false;
+    }
     uint32_t multiplier=1;
     FrameGenerationBackend frameGenerationBackend=FrameGenerationBackend::Dlss;
     // NvVFX Mode: Low=0, Medium=1 (default), High=2; mixed tiers 3-5, see vfgPrimaryMode().
@@ -463,7 +469,7 @@ struct EnhancementSettings {
         if(!nr||!protection.enabled)active.protection=defaults.protection;
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
         // The DLSS SR model serves every DLSS SR pass, the second of a double SR too.
-        if(!sr||(videoSrQuality!=0&&!(dualSrEnabled&&dualSrQuality==0)))active.dlssSrModel=defaults.dlssSrModel;
+        if(!usesDlaa()&&(!sr||(videoSrQuality!=0&&!(dualSrEnabled&&dualSrQuality==0))))active.dlssSrModel=defaults.dlssSrModel;
         if(!sr||!dualSrEnabled){
             active.srPrescale=defaults.srPrescale;
             active.dualSrEnabled=false;active.dualSrTarget=defaults.dualSrTarget;active.dualSrQuality=defaults.dualSrQuality;
@@ -496,7 +502,7 @@ struct EnhancementSettings {
         if(!hdrMetadata.enabled)active.hdrMetadata=defaults.hdrMetadata;
         // Flow is shared. Turning off one effect does not make it inactive
         // while another consumer still needs it (VFG has its own flow).
-        const bool flowUsed=(nr&&(motionUsesFlow(nrMotion)||usesNrTemporal()))||
+        const bool flowUsed=usesDlaa()||(nr&&(motionUsesFlow(nrMotion)||usesNrTemporal()))||
             (sr&&temporalSr()&&motionUsesFlow(srMotion))||
             (multiplier>1&&motionUsesFlow(fgMotion,frameGenerationBackend));
         if(!flowUsed){active.flow=defaults.flow;active.opticalFlowBackend=defaults.opticalFlowBackend;active.amdFlowHalfResolution=defaults.amdFlowHalfResolution;}

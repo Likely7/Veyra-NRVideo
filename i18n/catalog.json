@@ -946,6 +946,27 @@
    "ja": "D3D12 の初期化に失敗しました。診断を確認してください"
   },
   {
+   "zh": "DLAA 不可用：%1",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "DLAA 無法使用：%1",
+   "en": "DLAA unavailable: %1",
+   "ja": "DLAA は使用できません：%1"
+  },
+  {
+   "zh": "DLAA 需要支持 DLSS 的 NVIDIA RTX 显卡",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "DLAA 需要支援 DLSS 的 NVIDIA RTX 顯示卡",
+   "en": "DLAA needs an NVIDIA RTX GPU with DLSS support",
+   "ja": "DLAA には DLSS 対応の NVIDIA RTX GPU が必要です"
+  },
+  {
+   "zh": "DLAA：NVIDIA DLSS 在原分辨率运行，按光流跨帧重建边缘；用 DLSS SR 的模型，比其他方式更耗时。采集画面没有游戏那样的抖动采样，效果比游戏内 DLAA 弱",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "DLAA：NVIDIA DLSS 以原解析度執行，依光流跨影格重建邊緣；使用 DLSS SR 的模型，比其他方式更耗時。擷取畫面沒有遊戲那樣的抖動取樣，效果比遊戲內 DLAA 弱",
+   "en": "DLAA: NVIDIA DLSS at the native resolution, rebuilding edges across frames along the optical flow; it uses the DLSS SR model and costs more than the other methods. Captured pictures have no jittered samples like a game's, so the effect is weaker than in-game DLAA",
+   "ja": "DLAA：NVIDIA DLSS をネイティブ解像度で実行し、オプティカルフローに沿ってフレーム間でエッジを再構成します。DLSS SR のモデルを使い、他の方式より負荷が高くなります。キャプチャ映像にはゲームのようなジッターサンプルがないため、ゲーム内 DLAA より効果は弱くなります"
+  },
+  {
    "zh": "DLSS 帧生成",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "DLSS 幀生成",
@@ -5637,6 +5658,13 @@
    "ja": "画像の GPU 準備がタイムアウトしました"
   },
   {
+   "zh": "图片不支持 DLAA",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "圖片不支援 DLAA",
+   "en": "DLAA does not run on images",
+   "ja": "画像では DLAA は使えません"
+  },
+  {
    "zh": "图片保存失败（目标可能已存在）",
    "src": "src/engine/EngineControllerImage.cpp",
    "zh-TW": "圖片儲存失敗（目標可能已存在）",
@@ -5943,6 +5971,13 @@
    "zh-TW": "增強前底圖",
    "en": "Before enhancement",
    "ja": "補正前のベース"
+  },
+  {
+   "zh": "增强功能已关闭",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "增強功能已關閉",
+   "en": "enhancements are off",
+   "ja": "補正機能はオフです"
   },
   {
    "zh": "增强变化量",
@@ -9156,6 +9191,20 @@
    "zh-TW": "抗鋸齒 2",
    "en": "Anti-aliasing 2",
    "ja": "アンチエイリアス 2"
+  },
+  {
+   "zh": "抗锯齿实例 {} DLAA 创建失败，画面原样通过。",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "抗鋸齒實例 {} DLAA 建立失敗，畫面原樣通過。",
+   "en": "Anti-aliasing instance {}: DLAA could not be created; the picture passes through unchanged.",
+   "ja": "アンチエイリアス {}：DLAA を作成できなかったため、映像はそのまま通過します。"
+  },
+  {
+   "zh": "抗锯齿实例 {} DLAA 未运行（{}），画面原样通过。",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "抗鋸齒實例 {} DLAA 未執行（{}），畫面原樣通過。",
+   "en": "Anti-aliasing instance {}: DLAA is not running ({}); the picture passes through unchanged.",
+   "ja": "アンチエイリアス {}：DLAA は動作していません（{}）。映像はそのまま通過します。"
   },
   {
    "zh": "抗闪烁档位",
@@ -12596,11 +12645,11 @@
    "ja": "状態：%1"
   },
   {
-   "zh": "独立于基础超分，可以选任意一种超分；DLSS SR 两次共用上面的 DLSS 模型，FSR 不支持 HDR。",
+   "zh": "独立于基础超分，可以选任意一种超分；DLSS SR 两次共用上面的 DLSS 模型。",
    "src": "qml/SrStageEditor.qml",
-   "zh-TW": "獨立於基礎超解析，可以選任意一種超解析；DLSS SR 兩次共用上面的 DLSS 模型，FSR 不支援 HDR。",
-   "en": "Independent of the base SR; any SR algorithm works. Both DLSS SR passes use the DLSS model above; FSR does not support HDR.",
-   "ja": "基本の超解像とは独立して任意の超解像を選べます。DLSS SR は 2 回とも上の DLSS モデルを使い、FSR は HDR に対応していません。"
+   "zh-TW": "獨立於基礎超解析，可以選任意一種超解析；DLSS SR 兩次共用上面的 DLSS 模型。",
+   "en": "Independent of the base SR; any SR algorithm works. Both DLSS SR passes use the DLSS model above.",
+   "ja": "基本の超解像とは独立して任意の超解像を選べます。DLSS SR は 2 回とも上の DLSS モデルを使います。"
   },
   {
    "zh": "独立采集音频配置失败；BMD 原生视频继续运行",
@@ -17735,7 +17784,7 @@
   },
   {
    "zh": "需要 NVIDIA RTX 显卡",
-   "src": "src/ui/bridge/Hardware.cpp",
+   "src": "src/pipeline/EnhanceGraph.cpp",
    "zh-TW": "需要 NVIDIA RTX 顯示卡",
    "en": "Requires an NVIDIA RTX GPU",
    "ja": "NVIDIA RTX GPU が必要です"
@@ -18362,6 +18411,13 @@
    "zh-TW": "預設庫格式或版本不支援",
    "en": "Preset library format or version not supported",
    "ja": "プリセットライブラリの形式またはバージョンに対応していません"
+  },
+  {
+   "zh": "预设库版本不支持 DLAA 抗锯齿",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫版本不支援 DLAA 抗鋸齒",
+   "en": "This preset library version does not support DLAA anti-aliasing",
+   "ja": "このプリセットライブラリのバージョンは DLAA アンチエイリアスに対応していません"
   },
   {
    "zh": "预设库美颜人脸识别字段损坏",

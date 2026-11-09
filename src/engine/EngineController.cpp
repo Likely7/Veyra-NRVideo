@@ -2895,6 +2895,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // A rejected LUT input space must be visible, not only logged
                     // (plan v5.2: never apply a mismatched LUT silently).
                     if(!graph->colorLutNotice().empty())snapshot_.colorStatus+=L"；"+graph->colorLutNotice();
+                    if(!graph->antiAliasNotice().empty())snapshot_.colorStatus+=L"；"+graph->antiAliasNotice();
                     const auto speedNow=Clock::now();
                     if(playbackSpeedLastWall==Clock::time_point()||pts+0.5<playbackSpeedLastPts){playbackSpeedLastPts=pts;playbackSpeedLastWall=speedNow;}
                     else if(std::chrono::duration<double>(speedNow-playbackSpeedLastWall).count()>=0.9){

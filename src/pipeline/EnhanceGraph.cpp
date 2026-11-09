@@ -450,6 +450,30 @@ bool EnhanceGraph::createNodeColorResources(){
 }
 
 bool EnhanceGraph::createAntiAlias(uint32_t parameter,uint32_t width,uint32_t height){
+    if(desc_.antiAlias[parameter].usesDlaa()){
+        // DLAA: the output and constant zero motion / depth at this size; the DLSS
+        // feature is created with the NGX features (initNgxFeatures).
+        auto& d=dlaa_[parameter];d={};d.width=width;d.height=height;
+        antiAliasOutputs_[parameter]=makeTexture(context_.device(),width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+        // DLSS is temporal and NVIDIA RTX only: a still image or another adapter
+        // passes the picture through, and the status says why.
+        const wchar_t* why=desc_.stillImage?L"图片不支持 DLAA":!context_.adapter().isNvidia?L"需要 NVIDIA RTX 显卡":
+            (desc_.noFeatures||desc_.noNgx)?L"增强功能已关闭":nullptr;
+        if(why){d.copy=true;antiAliasNotice_+=std::format(L"抗锯齿实例 {} DLAA 未运行（{}），画面原样通过。",parameter+1,why);}
+        bool created=antiAliasOutputs_[parameter]!=nullptr;
+        if(created&&!d.copy){
+            d.zeroMotion=makeTexture(context_.device(),width,height,DXGI_FORMAT_R16G16_FLOAT,false);
+            d.depth=makeTexture(context_.device(),width,height,DXGI_FORMAT_R32_FLOAT,false);
+            const bool sharedMotion=(width==nvofW_&&height==nvofH_)||
+                (baseFlow_&&width==workW_&&height==workH_)||(nrFlow_&&width==nrW_&&height==nrH_);
+            if(!sharedMotion)d.adaptedMotion=makeTexture(context_.device(),width,height,DXGI_FORMAT_R16G16_FLOAT,true);
+            created=d.zeroMotion&&d.depth&&(sharedMotion||d.adaptedMotion)&&
+                (!desc_.hdrWorking()||createSignedHdrRestore(d.hdr,width,height));
+        }
+        veyra::log::info("anti-alias",std::format("instance={} DLAA extent={}x{} hdr={} mode={}{}",parameter,width,height,desc_.hdrWorking(),
+            d.copy?"copy":"dlss",created?"":" (texture creation failed)"));
+        return created;
+    }
     auto& pass=antiAliasPasses_[parameter];
     pass=std::make_unique<AntiAliasPass>();
     antiAliasOutputs_[parameter]=makeTexture(context_.device(),width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
@@ -457,6 +481,93 @@ bool EnhanceGraph::createAntiAlias(uint32_t parameter,uint32_t width,uint32_t he
     if(created)veyra::log::info("anti-alias",std::format("instance={} {} extent={}x{} hdr={}",parameter,pass->describe(),width,height,desc_.hdrWorking()));
     else veyra::log::error("anti-alias",std::format("instance={} {} extent={}x{}: creation failed",parameter,pass->describe(),width,height));
     return created;
+}
+
+bool EnhanceGraph::dlaaRequested() const {
+    return std::any_of(dlaa_.begin(),dlaa_.end(),[](const DlaaInstance& d){return d.width&&!d.copy;});
+}
+bool EnhanceGraph::sourcePostAfterFlow() const {
+    return std::any_of(sourcePostPasses_.begin(),sourcePostPasses_.end(),[this](const SlotPass& p){
+        return p.type==engine::EffectType::AntiAliasing&&dlaa_[p.parameter].width&&!dlaa_[p.parameter].copy;});
+}
+uint64_t EnhanceGraph::dlaaEvaluateCount() const {
+    uint64_t n=0;for(const auto& d:dlaa_)n+=d.evaluations;return n;
+}
+uint64_t EnhanceGraph::dlaaMotionEvaluateCount() const {
+    uint64_t n=0;
+    for(const auto& d:dlaa_)n+=d.evaluations-std::min(d.evaluations,d.motionless);
+    return n;
+}
+bool EnhanceGraph::createSignedHdrRestore(SignedHdrRestore& restore,uint32_t width,uint32_t height){
+    std::vector<uint8_t> shader;
+    restore.raw=makeTexture(context_.device(),width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    return restore.raw&&restore.pass.loadShader("DlaaHdrRestore.dxil",shader)&&
+        restore.pass.create(context_.device(),shader,3,2,1);
+}
+void EnhanceGraph::bindSignedHdrRestore(SignedHdrRestore& restore,ID3D12Resource* input,ID3D12Resource* output){
+    if(!restore.raw)return;
+    stager_.stageSrv(input,nullptr,restore.pass.heap.Get(),0);
+    stager_.stageSrv(restore.raw.Get(),nullptr,restore.pass.heap.Get(),1);
+    makeUav(context_.device(),output,DXGI_FORMAT_R16G16B16A16_FLOAT,cpuHandleOf(restore.pass,2));
+}
+void EnhanceGraph::finishTemporalOutput(ID3D12GraphicsCommandList* list,SignedHdrRestore& restore,ID3D12Resource* output){
+    if(restore.raw){
+        tracker_.uavBarrier(list,restore.raw.Get());
+        tracker_.transition(list,restore.raw.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        tracker_.transition(list,output,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        const float constants[8]{};
+        restore.pass.bind(list,constants,gpuHandleOf(restore.pass,0).ptr,gpuHandleOf(restore.pass,2).ptr);
+        const auto extent=output->GetDesc();
+        list->Dispatch((UINT(extent.Width)+15)/16,(extent.Height+15)/16,1);
+    }
+    tracker_.uavBarrier(list,output);
+    tracker_.transition(list,output,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+}
+// One DLAA instance: DLSS at the instance's size, or a copy where it cannot run.
+// Motion is this frame's flow field of the same size (the optical flow itself, or
+// its adaptation to the work / NR size); without one the frame is evaluated with
+// zero motion and a reset, so no earlier frame is blended in at a wrong place.
+bool EnhanceGraph::dispatchDlaa(ID3D12GraphicsCommandList* list,const SlotPass& pass,bool reset){
+    auto& d=dlaa_[pass.parameter];
+    if(!d.input||!pass.output)return false;
+    if(d.copy||!d.backend||!d.backend->created()){
+        tracker_.transition(list,d.input,D3D12_RESOURCE_STATE_COPY_SOURCE);
+        tracker_.transition(list,pass.output,D3D12_RESOURCE_STATE_COPY_DEST);
+        list->CopyResource(pass.output,d.input);
+        tracker_.transition(list,d.input,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        tracker_.transition(list,pass.output,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        return true;
+    }
+    ID3D12Resource* motion=nullptr;const char* field="none";
+    if(frameFlowValid_){
+        if(flowTex_&&d.width==nvofW_&&d.height==nvofH_){motion=flowTex_.Get();field="optical flow";}
+        else if(baseFlow_&&d.width==workW_&&d.height==workH_){motion=baseFlow_.Get();field="work-size flow";}
+        else if(nrFlow_&&d.width==nrW_&&d.height==nrH_){motion=nrFlow_.Get();field="NR-size flow";}
+        else if(d.adaptedMotion){motion=d.adaptedMotion.Get();field="DLAA-size flow";}
+    }
+    const bool motionValid=motion!=nullptr;
+    if(!motionValid){motion=d.zeroMotion.Get();++d.motionless;}
+    if(!d.motionLogged&&frameFlowValid_){
+        d.motionLogged=true;
+        veyra::log::info("anti-alias",std::format("instance={} DLAA motion={} extent={}x{} flow={}x{}",pass.parameter,field,d.width,d.height,nvofW_,nvofH_));
+    }
+    tracker_.transition(list,d.input,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    tracker_.transition(list,motion,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    tracker_.transition(list,d.depth.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    auto* target=d.hdr.raw?d.hdr.raw.Get():pass.output;
+    tracker_.transition(list,target,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    ngx::DlssSrBackend::EvalDesc ed{};
+    ed.color=d.input;ed.output=target;ed.depth=d.depth.Get();ed.motionVectors=motion;
+    ed.reset=reset||!motionValid;
+    Status st=Status::Ok;
+    if(!d.backend->evaluate(list,ngxParams_,ed,st)){
+        failedBackend_=engine::FailedBackend::Dlaa;
+        veyra::log::error("anti-alias",std::format("instance={} DLAA evaluate failed",pass.parameter));
+        return false;
+    }
+    ++d.evaluations;
+    finishTemporalOutput(list,d.hdr,pass.output);
+    return true;
 }
 
 bool EnhanceGraph::createBeauty(uint32_t parameter,uint32_t width,uint32_t height){
@@ -512,7 +623,14 @@ bool EnhanceGraph::createBeautyShared(){
 
 void EnhanceGraph::bindSlotPassInput(const SlotPass& pass,ID3D12Resource* input){
     if(pass.type==engine::EffectType::Color)nodeColorInstances_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output);
-    else if(pass.type==engine::EffectType::AntiAliasing)antiAliasPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output);
+    else if(pass.type==engine::EffectType::AntiAliasing){
+        auto& d=dlaa_[pass.parameter];
+        if(d.width){
+            d.input=input; // NGX takes resources; only the HDR restore needs views
+            bindSignedHdrRestore(d.hdr,input,pass.output);
+        }
+        else antiAliasPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output);
+    }
     else if(pass.type==engine::EffectType::Beauty)
         beautyPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output,beautyOriginalSource_,beautyFaces(),beautyShapes());
 }
@@ -536,7 +654,8 @@ bool EnhanceGraph::dispatchSlotPasses(ID3D12GraphicsCommandList* list,const std:
             gpuTimer_.mark(list,diagnostics::colorNodeStage(pass.parameter),true);
         }else if(pass.type==engine::EffectType::AntiAliasing){
             gpuTimer_.mark(list,diagnostics::aaNodeStage(pass.parameter));
-            if(!antiAliasPasses_[pass.parameter]->dispatch(list,tracker_,desc_.hdrWorking(),reset))return false;
+            if(dlaa_[pass.parameter].width){if(!dispatchDlaa(list,pass,reset))return false;}
+            else if(!antiAliasPasses_[pass.parameter]->dispatch(list,tracker_,desc_.hdrWorking(),reset))return false;
             gpuTimer_.mark(list,diagnostics::aaNodeStage(pass.parameter),true);
         }else if(pass.type==engine::EffectType::Beauty){
             gpuTimer_.mark(list,diagnostics::beautyNodeStage(pass.parameter));
@@ -709,7 +828,20 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const bool vfxFirst=srEnabled_&&vfxFirstSrPass(desc_);
     const uint64_t vfxSrBytes=(vfxFinal?uint64_t(srInW_)*srInH_*4u+uint64_t(srOutW_)*srOutH_*4u:0)+
         (vfxFirst?uint64_t(srcW_)*srcH_*4u+uint64_t(desc_.firstSrWidth)*desc_.firstSrHeight*4u:0);
-    const uint64_t estimate=vfxSrBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
+    // A bypass still needs its output, but owns neither guidance nor a model.
+    unsigned dlaaInstances=0, dlaaCopies=0;
+    const bool canRunDlaa=context_.adapter().isNvidia&&!desc_.stillImage&&!desc_.noFeatures&&!desc_.noNgx;
+    for(const auto& aa:desc_.antiAlias){
+        if(!aa.enabled||!aa.usesDlaa())continue;
+        if(canRunDlaa)++dlaaInstances;else ++dlaaCopies;
+    }
+    const uint64_t dlaaPixels=uint64_t(std::max(workW_,srcW_))*std::max(workH_,srcH_);
+    // Output, depth, zero/optional adapted motion, and raw HDR output.
+    const uint64_t dlaaBytes=dlaaPixels*(dlaaCopies*8u+dlaaInstances*(desc_.hdrWorking()?28u:20u));
+    const uint64_t temporalHdrBytes=desc_.hdrWorking()&&srEnabled_?
+        (temporalSrQuality(desc_.finalSrQuality())?uint64_t(workW_)*workH_*8u:0)+
+        ((desc_.firstSrRuns(0)||desc_.firstSrRuns(engine::kVideoSrFsr))?uint64_t(desc_.firstSrWidth)*desc_.firstSrHeight*8u:0):0;
+    const uint64_t estimate=temporalHdrBytes+dlaaBytes+vfxSrBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
         +nrTextureBytes+fullLayerBytes
         +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes
         +(flowRefine_?uint64_t(nvofW_)*nvofH_*(flowConsistency_?13u:flowClaims_?18u:12u)+uint64_t(workW_)*workH_*4u:0);
@@ -727,8 +859,9 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         const unsigned temporalModels=srEnabled_?unsigned(temporalSrQuality(finalVideoSrQuality(desc_)))+
             unsigned(desc_.firstSrRuns(0))+unsigned(desc_.firstSrRuns(engine::kVideoSrFsr)):0u;
         const uint64_t srModels=std::max(1u,unsigned(vfxFinal)+unsigned(vfxFirst)+unsigned(srEnabled_&&ngxVideoSrPass(desc_))+temporalModels);
-        const uint64_t sdkReserve=stagedSr?((nrEnabled_?(1024ull<<20):0)+
+        const uint64_t stagedReserve=stagedSr?((nrEnabled_?(1024ull<<20):0)+
             (vfg?uint64_t(workW_)*workH_*128u:0)+srModels*(256ull<<20)):0;
+        const uint64_t sdkReserve=stagedReserve+dlaaInstances*(256ull<<20);
         const uint64_t required=estimate+sdkReserve;
         const uint64_t available=budget>usage?budget-usage:0;
         veyra::log::info("memory",std::format("admission textures={}MiB sdkReserve={}MiB available={}MiB headroom={}%",estimate>>20,sdkReserve>>20,available>>20,stagedSr?20:0));
@@ -757,6 +890,12 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     }
     if (!initNgxFeatures()) return false;
     failedBackend_=engine::FailedBackend::Infrastructure;
+    if(desc_.hdrWorking()){
+        const bool finalTemporal=fsrSrBackend_||(srBackend_&&srBackend_->created());
+        const bool firstTemporal=firstFsrSrBackend_||(firstDlssSrBackend_&&firstDlssSrBackend_->created());
+        if(finalTemporal&&!createSignedHdrRestore(srHdrRestore_,workW_,workH_))return false;
+        if(firstTemporal&&!createSignedHdrRestore(firstSrHdrRestore_,desc_.firstSrWidth,desc_.firstSrHeight))return false;
+    }
     if (!createComputePasses()) return false;
 
     initialized_ = true;
@@ -1055,6 +1194,28 @@ bool EnhanceGraph::initZeroAndDepthTextures()
     uploadTex(depthTex_.Get(), upDepth_, DXGI_FORMAT_R32_FLOAT);
     uploadTex(nrZeroDepth_.Get(), upZeroDepth_, DXGI_FORMAT_R32_FLOAT);
     uploadTex(nrZeroMotion_.Get(), upZeroMotion_, DXGI_FORMAT_R16G16_FLOAT);
+    // These are separate native-size resources, not aliases of NR guidance.
+    // Keep uploads alive through the existing one-time initialization fence.
+    std::vector<ComPtr<ID3D12Resource>> dlaaUploads;
+    for(const auto& instance:dlaa_){
+        if(!instance.width||instance.copy)continue;
+        const size_t pitch=(size_t(instance.width)*4+255)&~size_t(255);
+        for(bool depth:{false,true}){
+            auto upload=makeUploadBuffer(context_.device(),pitch*instance.height);
+            void* bytes=nullptr;
+            if(!upload||FAILED(upload->Map(0,nullptr,&bytes))||!bytes)return false;
+            std::memset(bytes,0,pitch*instance.height);
+            if(depth)for(uint32_t y=0;y<instance.height;++y){
+                auto* row=reinterpret_cast<float*>(static_cast<uint8_t*>(bytes)+y*pitch);
+                std::fill_n(row,instance.width,0.9f);
+            }
+            upload->Unmap(0,nullptr);
+            uploadTex(depth?instance.depth.Get():instance.zeroMotion.Get(),upload,
+                depth?DXGI_FORMAT_R32_FLOAT:DXGI_FORMAT_R16G16_FLOAT,instance.width,instance.height,pitch);
+            dlaaUploads.push_back(std::move(upload));
+        }
+        veyra::log::info("anti-alias",std::format("DLAA guidance initialized extent={}x{} depth=0.9 motion=0",instance.width,instance.height));
+    }
     if(fsrSrZeroMotion_){void* data=nullptr;D3D12_RANGE read{0,0};if(FAILED(upFsrSrZeroMotion_->Map(0,&read,&data))||!data)return false;std::memset(data,0,fsrSrDepthPitch_*fsrAuxH_);upFsrSrZeroMotion_->Unmap(0,nullptr);uploadTex(fsrSrZeroMotion_.Get(),upFsrSrZeroMotion_,DXGI_FORMAT_R16G16_FLOAT,fsrAuxW_,fsrAuxH_,fsrSrDepthPitch_);}
     if(fsrSrDepth_!=nullptr&&upFsrSrDepth_!=nullptr){
         D3D12_RESOURCE_BARRIER b{};
@@ -1093,7 +1254,8 @@ bool EnhanceGraph::initNvof()
     // Keep the zero-motion and VFG paths free of an unused optical-flow session.
     const bool inGraphFgFlow=fgEnabled_&&desc_.fgUsesFlow()&&
         (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss||engine::fsrFrameGeneration(desc_.frameGenerationBackend));
-    if (desc_.noFeatures || !(nvofStandalone_ || (presentSinkFg()&&desc_.fgUsesFlow()) || inGraphFgFlow || (srEnabled_&&desc_.srUsesFlow()&&temporalSrPass(desc_)))) {
+    // DLAA takes its motion from the same flow.
+    if (desc_.noFeatures || !(nvofStandalone_ || (presentSinkFg()&&desc_.fgUsesFlow()) || inGraphFgFlow || (srEnabled_&&desc_.srUsesFlow()&&temporalSrPass(desc_)) || dlaaRequested())) {
         mvecSource_="zero motion (no external flow consumer)";
         veyra::log::info("graph", "optical-flow session skipped: no external motion consumer");
         return true;
@@ -1305,13 +1467,13 @@ bool EnhanceGraph::initFsrSr()
         veyra::log::warn("fsr-sr", "feature-disabled configuration: AMD FSR upscaling skipped");
         return true;
     }
-    if (desc_.hdrWorking()) {
-        // The working color here is linear FP16 with Veyra's own HDR contract;
-        // feeding that to the FSR HDR path without a verified transfer contract
-        // would be a guess. Refuse the stage instead of shipping a wrong image.
-        veyra::log::warn("fsr-sr", "HDR output is not supported by the AMD FSR upscaling stage yet; continuing without it");
-        return true;
-    }
+    // HDR (field report 2026-11-08: an HDR source turned FSR SR off). The
+    // working color is linear BT.709 scRGB FP16, 1 = 80 nits, the same texture
+    // DLSS SR takes with its HDR flag; FSR takes it with its high-dynamic-range
+    // flag and returns the same linear contract (checked against the source by
+    // exact-area reduction, out-of-BT.709 colours included:
+    // docs/RECORD_HDR_DLAA_2026-11-08.md).
+    const bool hdr=desc_.hdrWorking();
     failedBackend_=engine::FailedBackend::Sr;
     // Double SR may run FSR in either pass, each with its own context and history:
     // the final pass renders the reduced first result, the first pass the source.
@@ -1319,7 +1481,7 @@ bool EnhanceGraph::initFsrSr()
     const uint32_t renderW=desc_.dualSr?srInW_:srcW_,renderH=desc_.dualSr?srInH_:srcH_;
     const auto create=[&](std::unique_ptr<gfx::FsrSrBackend>& backend,uint32_t inW,uint32_t inH,uint32_t outW,uint32_t outH,const char* pass){
         backend=std::make_unique<gfx::FsrSrBackend>();
-        if(!backend->initialize(context_.device(),inW,inH,outW,outH,false)){
+        if(!backend->initialize(context_.device(),inW,inH,outW,outH,hdr)){
             backend.reset();
             // The engine checks fsrSrRequested() && !fsrSrEnabled() after the graph
             // is created and disables the stage with a user-visible warning, so a
@@ -1327,7 +1489,7 @@ bool EnhanceGraph::initFsrSr()
             veyra::log::error("fsr-sr", std::format("AMD FSR upscaling unavailable{}; the engine will disable the stage",pass));
             return false;
         }
-        veyra::log::info("fsr-sr", std::format("selected{} render={}x{} output={}x{} provider={}",pass,inW,inH,outW,outH,backend->providerVersion()));
+        veyra::log::info("fsr-sr", std::format("selected{} render={}x{} output={}x{} provider={} hdr={}",pass,inW,inH,outW,outH,backend->providerVersion(),hdr));
         return true;
     };
     if(finalFsr&&!create(fsrSrBackend_,renderW,renderH,workW_,workH_,desc_.dualSr?" second pass":"")){failedBackend_=engine::FailedBackend::None;return true;}
@@ -1390,14 +1552,14 @@ bool EnhanceGraph::initNgxFeatures()
         if(!coreCache_->prepare(std::move(key),enabled))return false;
     }
     if(desc_.convertVideoHdr()&&(desc_.noNgx||desc_.noFeatures)){failedBackend_=engine::FailedBackend::VideoHdr;return false;}
-    if ((desc_.noNgx && !lmxxfNr_) || desc_.noFeatures || (!nrEnabled_&&!srEnabled_&&!fgEnabled_&&!desc_.convertVideoHdr())) {
+    if ((desc_.noNgx && !lmxxfNr_) || desc_.noFeatures || (!nrEnabled_&&!srEnabled_&&!fgEnabled_&&!desc_.convertVideoHdr()&&!dlaaRequested())) {
         veyra::log::info("graph", "NGX core/features skipped by disabled-feature configuration");
         return true;
     }
     // FSR upscaling is a FidelityFX effect: a session whose only feature is
     // FSR SR must not require (or fail on) the NGX core.
     const bool needNgxCore = (nrEnabled_ && !lmxxfNr_) || (fgEnabled_ && !fsrEnabled() && !vfgBackend_) || desc_.convertVideoHdr() ||
-        (srEnabled_ && (desc_.finalSrQuality()==0 || desc_.firstSrRuns(0) || ngxVideoSrPass(desc_)));
+        (srEnabled_ && (desc_.finalSrQuality()==0 || desc_.firstSrRuns(0) || ngxVideoSrPass(desc_))) || dlaaRequested();
     if (!needNgxCore) {
         veyra::log::info("graph", "NGX core skipped: lmxxf NR / AMD FSR stages use their own runtimes");
     }
@@ -1685,6 +1847,29 @@ bool EnhanceGraph::initNgxFeatures()
             first,srRuntimeName(desc_.dualSrQuality)));
     }
 
+    // DLAA instances: one DLSS feature each at its own size, with the DLSS SR
+    // model. One that cannot be created passes the picture through with a
+    // notice; playback and every other effect go on.
+    for(uint32_t i=0;i<dlaa_.size();++i){
+        auto& d=dlaa_[i];
+        if(!d.width||d.copy)continue;
+        ngx::DlssSrBackend::CreateDesc dd{};
+        dd.inputWidth=dd.outputWidth=d.width;dd.inputHeight=dd.outputHeight=d.height;
+        dd.perfQuality=1;dd.enableOutputSubrects=false;dd.model=desc_.dlssSrModel;dd.nativeResolution=true;
+        ID3D12GraphicsCommandList* list=ring_.acquire(0,st);
+        if(list==nullptr){failedBackend_=engine::FailedBackend::Infrastructure;return false;}
+        d.backend=std::make_unique<ngx::DlssSrBackend>();
+        const bool created=d.backend->create(*coreHost_,list,ngxParams_,dd,st)&&d.backend->created();
+        if(!ring_.submitAndSignal(0)||!ring_.waitIdle())return false;
+        if(!created){
+            d.backend.reset();d.copy=true;st=Status::Ok;
+            antiAliasNotice_+=std::format(L"抗锯齿实例 {} DLAA 创建失败，画面原样通过。",i+1);
+            veyra::log::error("anti-alias",std::format("instance={} DLAA create failed; the instance passes the picture through",i));
+            continue;
+        }
+        veyra::log::info("anti-alias",std::format("instance={} DLAA feature {}x{} model={}",i,d.width,d.height,desc_.dlssSrModel));
+    }
+
     // Still images have no temporal pair and must not depend on FG support.
     // FG create + warm-up evaluate BEFORE descriptor views (the runtime
     // allocates internals at the first evaluate and would fail after views
@@ -1890,7 +2075,7 @@ bool EnhanceGraph::createComputePasses()
         if(nrInstances_.size()>1&&!stackProtectionPass_.create(context_.device(),cs,4,3,1,40))return false;
     }
     // Sets: 0 source flow, 1 NR, 2 work, 3.. NR layers, then the double SR pass motions.
-    if(!flowAdaptPass_.loadShader("FlowAdapt.dxil",cs)||!flowAdaptPass_.create(context_.device(),cs,secondSrFlowSet()+1,1,1))return false;
+    if(!flowAdaptPass_.loadShader("FlowAdapt.dxil",cs)||!flowAdaptPass_.create(context_.device(),cs,dlaaFlowSet(UINT(dlaa_.size())),1,1))return false;
     if(flowRefine_){
         if(!fgFlowAdaptPass_.create(context_.device(),cs,2,1,1))return false;
         if(!flowRefinePass_.loadShader("FlowRefine.dxil",cs)||!flowRefinePass_.create(context_.device(),cs,6,5,1))return false;
@@ -1948,6 +2133,8 @@ bool EnhanceGraph::submitGraph(uint32_t slot) {
 
 bool EnhanceGraph::createViews()
 {
+    bindSignedHdrRestore(firstSrHdrRestore_,srStageInput(),firstSrLinear_.Get());
+    bindSignedHdrRestore(srHdrRestore_,desc_.dualSr?srPrescaled_.Get():srStageInput(),workRgba_.Get());
     // Descriptor initialization is DEFAULT ON since the RAW-upload-SRV removal
     // (2026-09-06): texture SRV/UAV views keep the device alive and NVOF
     // executing (r33b-tu: 599/599 executes, real motion/confidence, 0
@@ -2072,6 +2259,8 @@ bool EnhanceGraph::createViews()
         makeUav(context_.device(),nrInstances_[i]->motion(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,3+UINT(i)));
     if(firstSrFlow_)makeUav(context_.device(),firstSrFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,firstSrFlowSet()));
     if(secondSrFlow_)makeUav(context_.device(),secondSrFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,secondSrFlowSet()));
+    for(UINT i=0;i<dlaa_.size();++i)if(dlaa_[i].adaptedMotion)
+        makeUav(context_.device(),dlaa_[i].adaptedMotion.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,dlaaFlowSet(i)));
     if(flowRefine_){
         // FlowRefine: 0 raw grid vectors, 1 previous, 2 current, 3 NVOF backward grid vectors,
         // 4 FidelityFX scene changes (3/4 null when unused); 5 refined. FlowClaim: 0 refined;
@@ -2294,6 +2483,7 @@ bool EnhanceGraph::createViews()
 bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh)
 {
     reset=reset||nrAutoResetPending_;nrAutoResetPending_=false;
+    frameFlowValid_=false;
     // Whole-chain duplicate reuse failed the unchanged-output experiment.
     // This narrower path only handles repeated edits of the SAME paused
     // frame, after one complete reset evaluation under this configuration.
@@ -2740,7 +2930,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             if (desc_.stageMark) desc_.stageMark("beauty-faces");
         }
     }
-    if(!sourcePostPasses_.empty()){
+    if(!sourcePostPasses_.empty()&&!sourcePostAfterFlow()){
         if(!dispatchSlotPasses(list,sourcePostPasses_,slot,"source-size",!sourcePostExecutionLogged_,reset))return false;
         tracker_.transition(list,sourcePostOutput_,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         sourcePostExecutionLogged_=true;
@@ -2841,7 +3031,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     };
     // Guidance from original source-space color before SR/NR. Queue waits are GPU-side.
     bool haveFlow = false;
-    const bool runMotion = nvofStandalone_ || (presentSinkFg()&&desc_.fgUsesFlow()) || (fgEnabled_&&desc_.fgUsesFlow()) || (srEnabled_&&desc_.srUsesFlow()&&temporalSrPass(desc_));
+    const bool runMotion = nvofStandalone_ || (presentSinkFg()&&desc_.fgUsesFlow()) || (fgEnabled_&&desc_.fgUsesFlow()) || (srEnabled_&&desc_.srUsesFlow()&&temporalSrPass(desc_)) || dlaaRequested();
     if (runMotion && (gpuDis_ || amdOf_ || (nvof_ && nvof_->initialized()))) {
         const float dims[8] = {uintBits(nvofW_),uintBits(nvofH_),uintBits(nvofW_),uintBits(nvofH_),0,0,0,0};
         if (prevValid_) {
@@ -2972,6 +3162,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // a second FSR pass in SR-input (render) pixels.
         if(firstSrFlow_)adapt(firstSrFlow_.Get(),desc_.firstSrWidth,desc_.firstSrHeight,firstSrFlowSet());
         if(secondSrFlow_)adapt(secondSrFlow_.Get(),srInW_,srInH_,secondSrFlowSet());
+        for(UINT i=0;i<dlaa_.size();++i){
+            const auto& d=dlaa_[i];
+            if(d.adaptedMotion&&!d.copy)adapt(d.adaptedMotion.Get(),d.width,d.height,dlaaFlowSet(i));
+        }
         if(flowRefine_){
             tracker_.transition(list,fgBaseFlow_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const float c[8]={uintBits(nvofW_),uintBits(nvofH_),uintBits(workW_),uintBits(workH_),0,0,0,0};
@@ -2985,6 +3179,16 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         for(size_t i=0;i<nrInstances_.size();++i){const auto* layer=nrInstances_[i].get();
             if(layer->motion()!=nrFlow_.Get())adapt(layer->motion(),layer->width(),layer->height(),3+UINT(i));
         }
+    }
+    frameFlowValid_=haveFlow;
+    // A source-size slot with DLAA runs here, with this frame's motion. Nothing
+    // above reads its output: the optical flow encodes the converted input.
+    if(!sourcePostPasses_.empty()&&sourcePostAfterFlow()){
+        if(!dispatchSlotPasses(list,sourcePostPasses_,slot,"source-size",!sourcePostExecutionLogged_,reset))return false;
+        tracker_.transition(list,sourcePostOutput_,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        sourcePostExecutionLogged_=true;
+        if (desc_.stageMark) desc_.stageMark("source-size-pass");
+        cpuTrace.mark("sourcePass");
     }
     if(reset){++metrics_.resetCount;++epoch_;}
     out.historyReset=reset;
@@ -3003,18 +3207,24 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         auto readable=[&](std::initializer_list<ID3D12Resource*> resources){for(auto* r:resources)tracker_.transition(list,r,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);};
         auto written=[&](ID3D12Resource* output){tracker_.uavBarrier(list,output);tracker_.transition(list,output,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);};
         auto dlss=[&](ngx::DlssSrBackend& backend,ID3D12Resource* color,ID3D12Resource* motion,ID3D12Resource* output)->bool{
-            readable({color,motion,fsrSrDepth_.Get()});tracker_.transition(list,output,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            auto& restore=output==firstSrLinear_.Get()?firstSrHdrRestore_:srHdrRestore_;
+            auto* target=restore.raw?restore.raw.Get():output;
+            readable({color,motion,fsrSrDepth_.Get()});tracker_.transition(list,target,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             ngx::DlssSrBackend::EvalDesc ed{};
-            ed.color=color;ed.output=output;ed.depth=fsrSrDepth_.Get();ed.motionVectors=motion;ed.reset=reset;
+            ed.color=color;ed.output=target;ed.depth=fsrSrDepth_.Get();ed.motionVectors=motion;ed.reset=reset;
             if(!backend.evaluate(list,ngxParams_,ed,st)){failedBackend_=engine::FailedBackend::Sr;veyra::log::error("dual-sr","DLSS SR evaluate failed");return false;}
-            written(output);return true;
+            finishTemporalOutput(list,restore,output);return true;
         };
         auto fsr=[&](gfx::FsrSrBackend& backend,ID3D12Resource* color,ID3D12Resource* motion,ID3D12Resource* output,uint32_t inW,uint32_t inH,uint32_t outW,uint32_t outH)->bool{
-            readable({color,motion,fsrSrDepth_.Get()});tracker_.transition(list,output,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            if(!backend.evaluate(list,color,motion,fsrSrDepth_.Get(),output,inW,inH,outW,outH,fsrReset,float(deltaMs))){
+            const bool first=output==firstSrLinear_.Get();
+            auto& restore=first?firstSrHdrRestore_:srHdrRestore_;
+            auto* target=restore.raw?restore.raw.Get():output;
+            readable({color,motion,fsrSrDepth_.Get()});tracker_.transition(list,target,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            if(!backend.evaluate(list,color,motion,fsrSrDepth_.Get(),target,inW,inH,outW,outH,fsrReset,float(deltaMs))){
                 failedBackend_=engine::FailedBackend::Sr;veyra::log::error("dual-sr","FSR evaluate failed");return false;
             }
-            written(output);return true;
+            finishTemporalOutput(list,restore,output);
+            return true;
         };
         auto* zero=fsrSrZeroMotion_.Get();
         // 1. Source -> linear first result.
@@ -3081,24 +3291,26 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         auto* srMotion=validMotion?flowTex_.Get():fsrSrZeroMotion_.Get();
         tracker_.transition(list,srMotion,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list,fsrSrDepth_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        if(!fsrSrBackend_->evaluate(list,srInput,srMotion,fsrSrDepth_.Get(),workRgba_.Get(),
+        auto* fsrTarget=srHdrRestore_.raw?srHdrRestore_.raw.Get():workRgba_.Get();
+        tracker_.transition(list,fsrTarget,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        if(!fsrSrBackend_->evaluate(list,srInput,srMotion,fsrSrDepth_.Get(),fsrTarget,
                                     srcW_,srcH_,workW_,workH_,reset||(desc_.srUsesFlow()&&!haveFlow),float(deltaMs))){
             failedBackend_=engine::FailedBackend::Sr;
             return false;
         }
-        ++metrics_.srEvaluateCount;gpuTimer_.mark(list,GpuStage::Sr,true);
-        tracker_.uavBarrier(list,workRgba_.Get());
-        tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        ++metrics_.srEvaluateCount;
+        finishTemporalOutput(list,srHdrRestore_,workRgba_.Get());
+        gpuTimer_.mark(list,GpuStage::Sr,true);
     } else if(!mixed&&srEnabled_&&(videoSrBackend_||vfxSrBackend_)){
         if(!runVideoSr())return false;
     } else if (!mixed && srEnabled_ && srBackend_ && srBackend_->created()) {
         gpuTimer_.mark(list,GpuStage::Sr);
-        tracker_.transition(list, workRgba_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        auto* target=srHdrRestore_.raw?srHdrRestore_.raw.Get():workRgba_.Get();
+        tracker_.transition(list,target,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         ngx::DlssSrBackend::EvalDesc ed{};
         ed.color = srStageInput();
         tracker_.transition(list,ed.color,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        ed.output = workRgba_.Get();
+        ed.output = target;
         ed.depth = nrZeroDepth_.Get();
         ed.motionVectors = haveFlow&&desc_.srUsesFlow()?baseFlow_.Get():nrZeroMotion_.Get();
         if(desc_.srMotionProbe)ed.motionVectors=desc_.srMotionProbe;
@@ -3109,8 +3321,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             return false;
         }
         ++metrics_.srEvaluateCount;gpuTimer_.mark(list,GpuStage::Sr,true);
-        tracker_.uavBarrier(list, workRgba_.Get());
-        tracker_.transition(list, workRgba_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        finishTemporalOutput(list,srHdrRestore_,workRgba_.Get());
     } else if(workRgba_.Get()!=srcRgba_.Get()) {
         tracker_.transition(list,srStageInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list, workRgba_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -3769,7 +3980,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(s.nr&&desc_.enableNr&&!nrCreated())return false;
     const auto requestedFlow=context_.adapter().vendorId==0x1002&&s.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia
         ?engine::OpticalFlowBackend::AmdFidelityFx:s.opticalFlowBackend;
-    const bool usesSharedFlow=nvofStandalone_||(desc_.enableFg&&desc_.fgUsesFlow())||
+    const bool usesSharedFlow=dlaaRequested()||nvofStandalone_||(desc_.enableFg&&desc_.fgUsesFlow())||
         (srEnabled_&&desc_.srUsesFlow()&&temporalSrPass(desc_));
     if(usesSharedFlow&&(requestedFlow!=desc_.opticalFlowBackend||s.amdFlowHalfResolution!=desc_.amdFlowHalfResolution))return false;
     // The XeSS motion refinement owns textures, passes and NVOF's direction.
@@ -3782,7 +3993,9 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if((desc_.enableNr&&s.nrRuntime!=desc_.nrRuntime)||
        (desc_.enableFg&&(std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||
         (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&(s.vfgQuality!=desc_.vfgQuality||s.vfgAutoRegulate!=desc_.vfgAutoRegulate))))||
-       (desc_.enableSr&&(s.videoSrQuality!=desc_.videoSrQuality||(desc_.videoSrQuality==0&&s.dlssSrModel!=desc_.dlssSrModel)))||
+       (desc_.enableSr&&(s.videoSrQuality!=desc_.videoSrQuality||
+         ((desc_.videoSrQuality==0||(desc_.dualSr&&desc_.dualSrQuality==0))&&s.dlssSrModel!=desc_.dlssSrModel)))||
+       (dlaaRequested()&&s.dlssSrModel!=desc_.dlssSrModel)||
        (s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
     // The colour master switch changes the graph shape (tables + shader branch)
     // and must rebuild; every other colour field is a live uniform update.
@@ -3989,6 +4202,7 @@ void EnhanceGraph::shutdown()
     videoHdrBackend_.reset();videoHdrInput_.Reset();videoHdrOutput_.Reset();
     if (srBackend_) featuresReleased=srBackend_->release()&&featuresReleased;
     if(firstDlssSrBackend_){featuresReleased=firstDlssSrBackend_->release()&&featuresReleased;firstDlssSrBackend_.reset();}
+    for(auto& d:dlaa_)if(d.backend){featuresReleased=d.backend->release()&&featuresReleased;d.backend.reset();}
 
     // NVOF teardown in THREE phases (ownership rule proven by t10-L0-r2):
     // a. unregisterAll() while the textures are still alive;
@@ -4080,6 +4294,8 @@ void EnhanceGraph::shutdown()
     for(auto& passes:interNrPasses_)passes.clear();
     for(auto& pass:antiAliasPasses_)pass.reset();
     antiAliasOutputs_={};
+    dlaa_={};antiAliasNotice_.clear();frameFlowValid_=false;
+    srHdrRestore_={};firstSrHdrRestore_={};
     for(auto& pass:beautyPasses_)pass.reset();
     beautyOutputs_={};
     if(faceTracker_)faceTracker_->shutdown();

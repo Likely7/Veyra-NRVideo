@@ -811,3 +811,14 @@ Claude初次构建305.9s，原完整Quick172/0/1、25 GPU用例、原双重/超�
 独立命令：python -X utf8 -B E:/项目/Veyra/reports/claude-volume-dual-sr-20261108/codex_verify.py --remaining；full_align.py 对六个tests同任务/out/*.mp4与源pan720p-16s.mp4比较。首个设置测试误先建scratch触发exit2，改为不存在路径后274/0；之前失败日志保留。Claude旧RTX-only断言、默认档位和错误尺寸测试输入的修正也保留记录。
 
 报告reports/claude-volume-dual-sr-20261108/FINAL.json；手动入口tests同任务/启动音量与双重超分测试.cmd，manual-profile独立；docs/VOLUME_DUAL_SR_2026-11-08.md说明限制。只保留任务现有可用stage/build/证据，未多做重复整包。本轮未合main、未push/Release；NR推理复用独立分支保持原状态，无AMD实卡验收，不重跑历史8K+NR+VFG卡死组合。
+
+
+## 2026-11-08 录制、HDR超分、DLAA交接与11条审查修复
+
+工作树 `E:/项目/Veyra/worktrees/claude-record-hdr-dlaa-20261108`，分支 `claude/record-hdr-dlaa-20261108`，基线 `84e2cb5`。Claude主体完成后接手，原23文件SHA快照在任务报告目录。最新用户追加要求修复Claude审查的11条。原始审查与处理逐项见 `reports/claude-record-hdr-dlaa-20261108/CLAUDE-REVIEW.json` 和 `AUDIT-RESOLUTION.json`，细节见 `docs/RECORD_HDR_DLAA_2026-11-08.md`。
+
+构建 `python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task claude-record-hdr-dlaa-20261108 --root E:/项目/Veyra/worktrees/claude-record-hdr-dlaa-20261108 --label 2.1.3-record-hdr-dlaa-test --jobs 2 veyra_qml_ui veyra_anti_alias_gpu_tests veyra_preset_library_tests veyra_effect_chain_tests veyra_video_ai_settings_tests veyra_ui_contract_tests veyra_settings_transaction_tests veyra_qml_quick_tests veyra_ui_i18n_tests veyra_sr_quality_tests`。初次Codex构建118.3s，审查后增量72.3s。主程序 `52a86650…`，同任务build和app，不制作额外发布包。
+
+验收运行 `python -X utf8 -B E:/项目/Veyra/reports/claude-record-hdr-dlaa-20261108/audit_checks.py` 与 `quick_run.py suite-audit`。30次调用通过，QtQuick175/0/0，设置274/0，设置事务D3D12错误0，1440p DLAA 3个历史帧获得光流，DLSS/FSR HDR色块通过，8组HDR双重超分通过。先前合并运行SDR后超时，分算法对重跑并独立执行事务检查。预设同TEMP两次通过。真实F8开停各记录Qt Quick实际事件，进出全屏无额外录制请求，431帧及文件完整性核对通过。现场旧日志不含触发源，AMD实卡和采集卡现场未验。
+
+独立配置入口 `E:/项目/Veyra/tests/claude-record-hdr-dlaa-20261108/启动录制HDR与DLAA测试.cmd`。新增约9.1 MB录制证据及测试日志，复用单份当前测试程序。已核验旧app213重复副本1,079,122,186字节，自动审批blocked by policy拒绝删除，未绕过。最终回执同任务FINAL.json。未合main、未推送、未发布。用户要求汇报后正常关机。

@@ -1326,9 +1326,10 @@ public:
     Q_INVOKABLE void takeScreenshot();
     // Recording: the 3 second countdown lives in the interface, the engine
     // only opens the file when the request reaches it.
-    Q_INVOKABLE void startRecording();
-    Q_INVOKABLE void stopRecording();
-    Q_INVOKABLE void toggleRecording();
+    // source names the trigger in the log ("shortcut", "pro-button", "game-hotkey").
+    Q_INVOKABLE void startRecording(const QString& source = QString());
+    Q_INVOKABLE void stopRecording(const QString& source = QString());
+    Q_INVOKABLE void toggleRecording(const QString& source = QString());
     Q_INVOKABLE void chooseRecordingDirectory();
     Q_INVOKABLE void openRecordingDirectory();
     bool recording() const;
@@ -1462,6 +1463,8 @@ private:
     void updateGameGeometry();
     // Game mode's keyboard hook gets the current panel, exit, screenshot and record keys.
     void applyGameHotkeys();
+    // DLAA anti-aliasing needs the DLSS SR runtime and adapter; false (with a notice) otherwise.
+    bool dlaaAllowed();
     // 抖音直播伴侣 running (gfx/PresentationHooks.h): Realtime GPU priority is capped at
     // High while it runs and restored when it exits; 监控软件兼容 "off" leaves it alone.
     void updateLiveCompanionCompat();

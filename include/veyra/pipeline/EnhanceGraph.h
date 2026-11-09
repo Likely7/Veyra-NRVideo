@@ -754,6 +754,11 @@ public:
     // does not match the content domain). The engine surfaces this in the
     // status panel so the refusal is visible, not only logged.
     const std::wstring& colorLutNotice() const { return colorLutNotice_; }
+    // DLAA instances that pass the picture through instead (shown with the
+    // colour status, like a refused LUT), and how many DLAA evaluations ran.
+    const std::wstring& antiAliasNotice() const { return antiAliasNotice_; }
+    uint64_t dlaaEvaluateCount() const;
+    uint64_t dlaaMotionEvaluateCount() const;
     // Beauty nodes: a problem that disables them (shown, never only logged), and the
     // faces the shared tracker found a few frames ago (status only; the picture
     // uses this frame's GPU result).
@@ -863,6 +868,7 @@ private:
     ComPtr<ID3D12Resource> firstSrFlow_,secondSrFlow_;
     UINT firstSrFlowSet()const{return 3+UINT(nrInstances_.size());}
     UINT secondSrFlowSet()const{return 4+UINT(nrInstances_.size());}
+    UINT dlaaFlowSet(UINT index)const{return secondSrFlowSet()+1+index;}
     ComPtr<ID3D12Resource> videoHdrInput_,videoHdrOutput_;
     ComPtr<ID3D12Resource> residualRgba_,nrFlow_,baseFlow_;
     ComPtr<ID3D12Resource> preSrProtectionRgba_;
@@ -982,6 +988,33 @@ private:
     std::array<std::unique_ptr<AntiAliasPass>,engine::kMaxAntiAliasInstances> antiAliasPasses_{};
     std::array<ComPtr<ID3D12Resource>,engine::kMaxAntiAliasInstances> antiAliasOutputs_{};
     bool createAntiAlias(uint32_t parameter,uint32_t width,uint32_t height);
+    // DLAA instances (user request 2026-11-08), by the same parameter ordinal:
+    // DLSS SR created at the instance's own size in its DLAA mode. Motion is this
+    // frame's optical-flow field of that size (none: zero motion and a reset, so
+    // no history is reused); a copy where DLSS cannot run (still images, no NGX
+    // feature), and antiAliasNotice_ says so.
+    struct SignedHdrRestore { ComPtr<ID3D12Resource> raw; ComputePass pass; };
+    bool createSignedHdrRestore(SignedHdrRestore& restore,uint32_t width,uint32_t height);
+    void bindSignedHdrRestore(SignedHdrRestore& restore,ID3D12Resource* input,ID3D12Resource* output);
+    void finishTemporalOutput(ID3D12GraphicsCommandList* list,SignedHdrRestore& restore,ID3D12Resource* output);
+    struct DlaaInstance {
+        std::unique_ptr<ngx::DlssSrBackend> backend;
+        ComPtr<ID3D12Resource> zeroMotion,depth,adaptedMotion;
+        SignedHdrRestore hdr;
+        ID3D12Resource* input=nullptr;
+        uint32_t width=0,height=0;
+        bool copy=false,motionLogged=false;
+        uint64_t evaluations=0,motionless=0;
+    };
+    std::array<DlaaInstance,engine::kMaxAntiAliasInstances> dlaa_{};
+    std::wstring antiAliasNotice_;
+    // This frame's flow fields are written (the frame's haveFlow), for DLAA motion.
+    bool frameFlowValid_=false;
+    // An enabled DLAA instance that will run DLSS (not a still image, NVIDIA).
+    bool dlaaRequested() const;
+    // The source-size slot runs after the optical flow when it holds DLAA.
+    bool sourcePostAfterFlow() const;
+    bool dispatchDlaa(ID3D12GraphicsCommandList* list,const SlotPass& pass,bool reset);
     // Beauty nodes by parameter ordinal, plus what they share: the face tracker,
     // the faces buffer (a zero buffer when the detector is unavailable) and this
     // frame's original - the picture before every effect node. Without a fused
@@ -1065,6 +1098,7 @@ private:
     // Double SR first passes on DLSS SR / FSR (the final pass keeps the members above).
     std::unique_ptr<ngx::DlssSrBackend> firstDlssSrBackend_;
     std::unique_ptr<gfx::FsrSrBackend> firstFsrSrBackend_;
+    SignedHdrRestore srHdrRestore_,firstSrHdrRestore_;
     // Constant far depth and zero motion for the temporal SR passes. The source
     // extent for a single FSR pass; under double SR the largest render/motion
     // extent of its DLSS SR / FSR passes (larger inputs are read in their subrect).

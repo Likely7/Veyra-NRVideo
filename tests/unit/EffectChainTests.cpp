@@ -2,6 +2,7 @@
 // modes must obey. These are the guards for the multi-NR and node-mode work.
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/GraphDescription.h"
+#include "veyra/engine/BackendRecovery.h"
 #include <type_traits>
 #include <algorithm>
 #include <random>
@@ -1568,6 +1569,23 @@ static void testSupersampleSr(){
 }
 
 int main() {
+    {
+        EnhancementSettings before;before.nr=before.sr=false;
+        before.antiAlias.enabled=true;before.antiAlias.method=AntiAliasMethod::Dlaa;before.antiAlias.quality=0;
+        auto after=before;after.dlssSrModel=1;
+        check(requiresGraphRebuild(before,after),"DLAA: model edits rebuild even when SR is disabled");
+        after=before;after.flow=FlowQuality::Quality;
+        check(!(before.activeVideoSettings()==after.activeVideoSettings()),"DLAA: flow tuning stays active with no other flow consumer");
+        before.antiAlias.enabled=false;after=before;after.dlssSrModel=1;
+        check(!requiresGraphRebuild(before,after),"DLAA: disabled instance does not activate the model");
+        for(auto failure:{FailedBackend::Dlaa,FailedBackend::NgxCore,FailedBackend::OpticalFlow}){
+            auto failed=before;
+            failed.antiAlias.enabled=true;
+            failed.additionalAntiAliasCount=1;failed.additionalAntiAlias[0].enabled=true;
+            check(disableFailedBackend(failed,failure)&&!failed.usesDlaa()&&failed.additionalAntiAlias[0].enabled,
+                  "DLAA: recovery removes the failed consumer and leaves spatial anti-aliasing enabled");
+        }
+    }
     {
         using namespace veyra;using namespace veyra::engine;
         EnhancementSettings original;original.nr=false;original.sr=true;original.videoSrQuality=0;

@@ -391,9 +391,8 @@ std::pair<double,bool> meanLinear(const sink::RgbaImage& img){
 // Every backend pair with real SDK evaluations of both passes, zero and optical
 // flow motion: sizes, two evaluations per frame, finite output with the source's
 // mean brightness. Then a first DLSS SR pass with nothing to enlarge (a copy of
-// the source), DLSS SR pairs on HDR, and FSR's HDR refusal reported the way the
-// engine detects it (fsrSrRequested && !fsrSrEnabled disables SR with a notice).
-int any(const std::filesystem::path& directory){
+// the source), and HDR backend pairs including FSR in either or both passes.
+int any(const std::filesystem::path& directory,bool onlyHdr=false,bool onlySdr=false,int first=-1,int second=-1){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
     if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
@@ -405,7 +404,9 @@ int any(const std::filesystem::path& directory){
     // runtime/experimental is the NGX directory; Video Effects sits beside it.
     const auto vfx=std::filesystem::exists(runtime::localRuntimeDirectory().parent_path()/L"nvidia-vfg"/L"nvVFXVideoSuperRes.dll");
     struct Pair{unsigned first,second;};
-    for(const auto pair:{Pair{0,0},Pair{0,2},Pair{2,0},Pair{0,5},Pair{5,0},Pair{5,5},Pair{5,2},Pair{2,5},Pair{17,0},Pair{0,19}}){
+    const auto selected=[&](Pair p){return first<0||(p.first==unsigned(first)&&p.second==unsigned(second));};
+    if(!onlyHdr)for(const auto pair:{Pair{0,0},Pair{0,2},Pair{2,0},Pair{0,5},Pair{5,0},Pair{5,5},Pair{5,2},Pair{2,5},Pair{17,0},Pair{0,19}}){
+        if(!selected(pair))continue;
         if(!vfx&&(engine::vfxVideoSr(pair.first)||engine::vfxVideoSr(pair.second))){
             std::cout<<"DUAL_ANY first="<<pair.first<<" second="<<pair.second<<" skipped=no-video-effects-runtime"<<std::endl;continue;}
         for(bool flow:{false,true}){
@@ -418,7 +419,7 @@ int any(const std::filesystem::path& directory){
             ok=ok&&passed;++cases;
         }
     }
-    {
+    if(!onlyHdr&&first<0){
         // A 4K source at the 4K base target: the first DLSS SR pass has nothing to enlarge.
         const auto copy=run(ctx,ring,uhd.get(),false,mixed(0,0,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false),false,false,false,3,true);
         double worst=0;bool sized=copy.ok&&copy.firstLinear.width==3840&&copy.firstLinear.height==2160;
@@ -427,24 +428,26 @@ int any(const std::filesystem::path& directory){
         const bool passed=sized&&copy.evaluations==6&&copy.work==Extent{3840,2160}&&worst<0.002;
         std::cout<<"DUAL_ANY copy first=0 second=0 evaluations="<<copy.evaluations<<" worst="<<worst<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
     }
-    for(const auto pair:{Pair{0,0},Pair{2,0},Pair{0,2}}){
+    if(!onlySdr)for(const auto pair:{Pair{0,0},Pair{2,0},Pair{0,2},Pair{5,5},Pair{2,5},Pair{5,2},Pair{0,5},Pair{5,0}}){
+        if(!selected(pair))continue;
         const auto h=run(ctx,ring,hdr.get(),true,mixed(pair.first,pair.second,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false),false,false,false,3,true);
         const auto [mean,finite]=meanLinear(h.output);
         const bool passed=h.ok&&h.evaluations==6&&h.firstLinear.width==3840&&h.output.width==3840&&finite&&mean>0;
         std::cout<<"DUAL_ANY hdr first="<<pair.first<<" second="<<pair.second<<" evaluations="<<h.evaluations<<" mean="<<mean<<" passed="<<passed<<std::endl;
         ok=ok&&passed;++cases;
     }
-    {
+    if(!onlySdr&&first<0){
         engine::StageRequest request;request.width=1920;request.height=1080;request.sr=true;
         auto settings=mixed(2,engine::kVideoSrFsr,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false);
         pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
         desc.hdrInput=desc.hdrOutput=true;desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
         pipeline::EnhanceGraph graph(ctx,ring);
         const bool built=graph.initialize(desc);
-        const bool passed=desc.dualSr&&built&&graph.fsrSrRequested()&&!graph.fsrSrEnabled();
+        const bool passed=desc.dualSr&&built&&graph.fsrSrRequested()&&graph.fsrSrEnabled();
         std::cout<<"DUAL_ANY hdr-fsr second=5 requested="<<graph.fsrSrRequested()<<" enabled="<<graph.fsrSrEnabled()<<" passed="<<passed<<std::endl;
         ok=ok&&passed;++cases;ring.drainQueue();graph.shutdown();
     }
+    ok=ok&&cases>0;
     ring.shutdown();ctx.shutdown();std::cout<<"DUAL_ANY cases="<<cases<<" passed="<<ok<<std::endl;return ok?0:1;
 }
 // Supersampling: one RTX Video SR pass at 8K shrunk to 4K equals the CPU area
@@ -545,6 +548,11 @@ int wmain(int argc,wchar_t** argv){
     if(argc==3&&std::wstring_view(argv[2])==L"dual-boundaries"){const int result=stage::boundaries(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual-capabilities"){const int result=stage::capabilities(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual-any"){const int result=stage::any(argv[1]);CoUninitialize();return result;}
+    if((argc==3||argc==5)&&(std::wstring_view(argv[2])==L"dual-any-hdr"||std::wstring_view(argv[2])==L"dual-any-sdr")){
+        const bool hdr=std::wstring_view(argv[2])==L"dual-any-hdr";
+        const int result=stage::any(argv[1],hdr,!hdr,argc==5?std::stoi(argv[3]):-1,argc==5?std::stoi(argv[4]):-1);
+        CoUninitialize();return result;
+    }
     if(argc==3&&std::wstring_view(argv[2])==L"supersample"){const int result=stage::supersample(argv[1]);CoUninitialize();return result;}
     if(argc>=11&&std::wstring_view(argv[2])==L"sr-image"){
         const int result=stage::image(argv[1],argv[3],argv[4],unsigned(std::stoi(argv[5])),argv[6],argv[7],argv[8],argv[9],unsigned(std::stoi(argv[10])),argc>11?argv[11]:L"video");

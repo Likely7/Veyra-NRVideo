@@ -710,6 +710,7 @@ namespace {
 // Spatial anti-aliasing (#53): one node's values for the editors, and the edits they send.
 QString antiAliasSummary(const engine::AntiAliasSettings& a) {
     using engine::AntiAliasMethod;
+    if (a.method == AntiAliasMethod::Dlaa) return QStringLiteral("DLAA");
     if (a.method == AntiAliasMethod::Mlaa)
         return QStringLiteral("MLAA · ") + QmlPlayerBridge::tr("阈值 %1").arg(double(a.mlaaThreshold), 0, 'f', 2);
     const QStringList fxaa{QmlPlayerBridge::tr("中"), QmlPlayerBridge::tr("高"), QmlPlayerBridge::tr("极高")};
@@ -742,7 +743,7 @@ bool applyAntiAliasKey(engine::AntiAliasSettings& a, bool& enabled, const QStrin
     const int whole = int(std::lround(value));
     if (key == "enabled") { enabled = value != 0; return true; }
     if (key == "method") {
-        if (whole < 0 || whole > 2) return false;
+        if (whole < 0 || whole > 3) return false;
         const auto method = AntiAliasMethod(whole);
         if (method != a.method) { a.method = method; a.quality = defaultAntiAliasQuality(method); }
         if (method != AntiAliasMethod::Smaa) a.temporal = AntiAliasTemporal::Off;
@@ -765,6 +766,15 @@ bool applyAntiAliasKey(engine::AntiAliasSettings& a, bool& enabled, const QStrin
     return false;
 }
 }
+// DLAA is DLSS SR at the picture's own size: available exactly where DLSS SR is,
+// with the same reason shown when it is not.
+bool QmlPlayerBridge::dlaaAllowed() {
+    const auto dlss = effectCapabilities().value(QStringLiteral("sr0")).toMap();
+    if (dlss.value(QStringLiteral("available")).toBool()) return true;
+    const QString reason = dlss.value(QStringLiteral("reason")).toString();
+    emit notice(reason.isEmpty() ? tr("DLAA 需要支持 DLSS 的 NVIDIA RTX 显卡") : tr("DLAA 不可用：%1").arg(reason), true);
+    return false;
+}
 bool QmlPlayerBridge::antiAliasEnabled() const {
     const auto* node = impl_->chain.firstOf(engine::EffectType::AntiAliasing);
     return node && node->enabled;
@@ -783,6 +793,7 @@ QVariantMap QmlPlayerBridge::antiAliasParamsAt(int index) const {
     return antiAliasMap(&impl_->chain.nodes[index], index);
 }
 bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
+    if (key == QLatin1String("method") && std::lround(value) == int(engine::AntiAliasMethod::Dlaa) && !dlaaAllowed()) return false;
     auto& c = impl_->chain;
     for (uint32_t i = 0; i < c.nodeCount; ++i)
         if (c.nodes[i].type == engine::EffectType::AntiAliasing) return setAntiAliasParameterAt(int(i), key, value);
@@ -813,6 +824,7 @@ bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
     return true;
 }
 bool QmlPlayerBridge::setAntiAliasParameterAt(int index, const QString& key, double value) {
+    if (key == QLatin1String("method") && std::lround(value) == int(engine::AntiAliasMethod::Dlaa) && !dlaaAllowed()) return false;
     auto& c = impl_->chain;
     if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::AntiAliasing) return false;
     auto& node = c.nodes[index];

@@ -385,7 +385,7 @@ VPage {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        if (veyra.recording) { veyra.stopRecording(); recordControl.countdown = 0; recordTick.stop(); return }
+                        if (veyra.recording) { veyra.stopRecording("pro-button"); recordControl.countdown = 0; recordTick.stop(); return }
                         if (recordControl.countdown > 0) { recordControl.countdown = 0; recordTick.stop(); return }
                         recordControl.countdown = 3
                         recordTick.restart()
@@ -412,7 +412,7 @@ VPage {
                         if (recordControl.countdown <= 0) {
                             recordControl.countdown = 0
                             recordTick.stop()
-                            veyra.startRecording()
+                            veyra.startRecording("pro-button")
                         }
                     }
                 }

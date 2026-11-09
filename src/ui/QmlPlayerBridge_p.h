@@ -384,6 +384,16 @@ struct QmlPlayerBridge::Impl {
     QString pendingScreenshot;
     qint64 pendingScreenshotDeadline=0;
     bool holdKeyDown = false;
+    // The last key the shortcut map was offered (ShortcutOverride), named in the
+    // record trigger log: field report 2026-11-08 of recording that toggled on
+    // and off with nothing in the log saying which key or button did it.
+    struct ShortcutKeySeen {
+        int key = 0, modifiers = 0;
+        quint32 virtualKey = 0, scanCode = 0;
+        bool autoRepeat = false;
+        qint64 atMs = 0;
+        QString window;
+    } lastShortcutKey;
     int positionTicks = 0;
     // A reopened file resumes here once its session is running.
     uint64_t resumeSession = 0;

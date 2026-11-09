@@ -14,6 +14,9 @@ ColumnLayout {
     readonly property int method: params.method ?? 1
     readonly property int quality: params.quality ?? 2
     readonly property int temporal: params.temporal ?? 0
+    // DLAA runs where DLSS SR does (same runtime and adapters).
+    readonly property var dlssCapability: (veyra.effectCapabilities || {}).sr0 || {}
+    readonly property bool dlaaAvailable: dlssCapability.available === true
     readonly property var qualityChoices: method === 0
         ? [{id: "0", label: qsTr("中")}, {id: "1", label: qsTr("高")}, {id: "2", label: qsTr("极高")}]
         : [{id: "0", label: qsTr("低")}, {id: "1", label: qsTr("中")}, {id: "2", label: qsTr("高")}, {id: "3", label: qsTr("极高")}]
@@ -27,17 +30,19 @@ ColumnLayout {
         label: qsTr("方式")
         hint: editor.method === 0 ? qsTr("FXAA：最快，整体略柔")
             : editor.method === 1 ? qsTr("SMAA：边缘判断更准，细节保留更好")
+            : editor.method === 3 ? qsTr("DLAA：NVIDIA DLSS 在原分辨率运行，按光流跨帧重建边缘；用 DLSS SR 的模型，比其他方式更耗时。采集画面没有游戏那样的抖动采样，效果比游戏内 DLAA 弱")
             : qsTr("MLAA：形态学抗锯齿，阈值与强度可调")
         VSeg {
             objectName: editor.namePrefix + "-method"
-            options: [{id: "0", label: "FXAA"}, {id: "1", label: "SMAA"}, {id: "2", label: "MLAA"}]
+            options: [{id: "0", label: "FXAA"}, {id: "1", label: "SMAA"}, {id: "2", label: "MLAA"},
+                      {id: "3", label: "DLAA", disabled: !editor.dlaaAvailable}]
             current: String(editor.method)
             onPicked: id => editor.edited("method", Number(id))
         }
     }
     VRow {
         label: qsTr("质量")
-        visible: editor.method !== 2
+        visible: editor.method !== 2 && editor.method !== 3
         VSeg {
             objectName: editor.namePrefix + "-quality"
             options: editor.qualityChoices
