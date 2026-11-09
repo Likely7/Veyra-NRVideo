@@ -914,3 +914,15 @@ MSVC/CMake 使用共享构建目录按上述选项重新配置，再以 `--paral
 在实际软件的采集卡面板确认安装，内置 ZIP 经校验和解压后成功启动 VB-Audio 2.1.5.8 安装器。对 Install Driver 的两次桌面自动点击未推进安装，系统未注册 CABLE 端点。已把按钮交给用户操作。独立 FFmpeg DirectShow 测试 T911 HDMI 3 秒得到 308700 个样本，最大 −80.8 dBFS。未观察到可用于比较延迟的节目声音。未把安装器启动或合成 PCM 测试计为故障采集卡的侦听取音验收。
 
 从哈希锁定的 2.1.3 NVIDIA 和 AMD 正式便携 ZIP 复用供应商运行时。替换本轮构建的 EXE、QML、着色器、翻译和本地测试说明，逐文件核验两个新 ZIP 的大小和 SHA-256。两个解压形态在最小 PATH 与独立配置下均播放 H.264 测试素材并提交 90 个真实源帧。档案在 `E:/项目/Veyra/test-packages/2.1.4-virtual-audio-20261109`。打包脚本与最终回执在 `reports/virtual-capture-acceptance-2.1.4-20261109`，构建和测试日志在同名 `logs` 目录。核验后清理了重复的临时解压目录。当前为本地隔离分支测试包。
+
+## 2026-11-09 虚拟扬声器面板与独立端点可行性
+
+采集卡面板独立显示安装状态、使用说明和卸载。采集运行时允许查看卸载说明，确认按钮在采集结束前禁用。弹窗内的断开动作由用户触发，后端在打开卸载器前复查最新引擎状态。安装器运行期间禁止以同一虚拟端点开始采集。
+
+MSVC 2022 在 `build/claude-screen-recording-20261022` 执行 `cmake --build <build-dir> --parallel 2 --target veyra_qml_ui veyra_qml_quick_tests`，成功。QtQuick 175/0/0，翻译检查 0 缺失、0 占位错误。执行 `python -X utf8 -B E:/项目/Veyra/tests/virtual-audio-controls-20261109/run-controls-test.py`。真实安装检测和 Windows 小窗口采集覆盖查看说明、取消仍采集、主动断开、停止状态后启用确认。未安装界面使用独立 QML 副本模拟，确认入口和取消通过。各测试使用独立配置，未执行系统驱动卸载。证据在 `E:/项目/Veyra/logs/virtual-audio-controls-20261109`。
+
+用户已运行的 2.1.4 现场日志 `test-packages/2.1.4-virtual-audio-20261109/Veyra-2.1.4-NVIDIA-win64-portable/logs/veyra-qml.log` 第 2024、2066、4705、4710 行表明虚拟端点回录已启动、Realtek 输出已打开、累计 25000 个 WASAPI 数据包且该时刻 PCM 电平非零、无欠载。音画补偿为 0 ms，现场未测手动偏移和物理端到端延迟。
+
+覆盖包 `E:/项目/Veyra/test-packages/virtual-audio-controls-20261109/Veyra-2.1.4-virtual-audio-controls-win64-overlay.zip` 含 EXE 与两个 QML 文件，校验两个 2.1.4 原包均有对应位置，逐文件比对和 ZIP 校验通过，内嵌 VB-CABLE ZIP 与原包字节一致。独立测试入口 `tests/virtual-audio-controls-20261109/启动虚拟扬声器面板测试.cmd`。用户正在运行的目录不变。
+
+VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找到可修改的 VB-CABLE 源码。独立 Veyra 播放端点可参考 Microsoft SysVAD 的 WaveRT 播放部分，使用 Windows 共享模式 WASAPI 软件回录，继续接入 Veyra 现有同步管线。VirtualDrivers 的播放端点为另一源码参考，其 Microsoft 衍生部分仍为 MS-PL。此轮只核实可行性，本机 SDK 未见 WDK 内核头和 Inf2Cat，Secure Boot 已开启。独立驱动的构建、签名与安装验收单独进行。

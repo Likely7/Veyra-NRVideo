@@ -281,11 +281,23 @@ QString QmlPlayerBridge::captureMagewellStatus() const {
     return veyra::ui::i18n::text(source::magewell::statusText());
 }
 bool QmlPlayerBridge::captureVirtualAudioInstalled() const { return impl_->captureVirtualAudioInstalled; }
+static bool captureVirtualAudioRemovalBlockedBy(const engine::PlayerSnapshot& snapshot) {
+    return snapshot.transport == engine::TransportState::Opening ||
+           snapshot.transport == engine::TransportState::Stopping ||
+           (snapshot.capture && snapshot.running);
+}
+bool QmlPlayerBridge::captureVirtualAudioRemovalBlocked() const {
+    return impl_->openingSource || captureVirtualAudioRemovalBlockedBy(impl_->snapshot);
+}
 bool QmlPlayerBridge::captureVirtualAudioBusy() const {
     return impl_->captureVirtualAudioSetup && impl_->captureVirtualAudioSetup->busy();
 }
 void QmlPlayerBridge::setupCaptureVirtualAudio(bool uninstall) {
     if (captureVirtualAudioBusy()) return;
+    if (uninstall && (impl_->openingSource || captureVirtualAudioRemovalBlockedBy(impl_->engine.snapshot()))) {
+        emit notice(tr("请先断开采集并等待连接结束"), true);
+        return;
+    }
     auto& i = *impl_;
     i.captureVirtualAudioInstalled = !source::WasapiAudioInput::devices(true,true).empty();
     emit captureChanged();
@@ -455,6 +467,10 @@ bool QmlPlayerBridge::startCaptureSession() {
     const int audio = i.captureAudioChoice;
     const source::CaptureDevice* audioDevice = audio >= 0 && size_t(audio) < i.captureAudio.size() ? &i.captureAudio[size_t(audio)] : nullptr;
     if (audioDevice && audioDevice->virtualSpeaker) {
+        if (captureVirtualAudioBusy()) {
+            emit notice(tr("正在处理 VB-CABLE 安装器…"), true);
+            return false;
+        }
         const auto outputs = sink::enumerateRenderEndpoints();
         const auto preferred = wideOf(i.prefString("audioDevice"));
         auto output = std::find_if(outputs.begin(), outputs.end(), [&](const auto& device) { return device.id == preferred; });

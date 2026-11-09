@@ -315,17 +315,24 @@ DialogLayer {
                 spacing: 6
                 VButton {
                     objectName: "capture-virtual-audio-setup"
-                    text: veyra.captureVirtualAudioInstalled ? qsTr("使用说明") : qsTr("安装…")
+                    text: veyra.captureVirtualAudioInstalled ? qsTr("已安装") : qsTr("安装…")
+                    ghost: true
+                    enabled: !veyra.captureVirtualAudioBusy && !veyra.captureVirtualAudioInstalled
+                    onClicked: virtualAudioGuide.showFor(1)
+                }
+                VButton {
+                    objectName: "capture-virtual-audio-instructions"
+                    text: qsTr("使用说明")
                     ghost: true
                     enabled: !veyra.captureVirtualAudioBusy
-                    onClicked: virtualAudioGuide.showFor(veyra.captureVirtualAudioInstalled ? 0 : 1)
+                    onClicked: virtualAudioGuide.showFor(0)
                 }
                 VButton {
                     objectName: "capture-virtual-audio-remove"
                     visible: veyra.captureVirtualAudioInstalled
                     text: qsTr("卸载…")
                     ghost: true
-                    enabled: !veyra.captureVirtualAudioBusy && !captureDialog.live
+                    enabled: !veyra.captureVirtualAudioBusy
                     onClicked: virtualAudioGuide.showFor(2)
                 }
             }
@@ -346,13 +353,20 @@ DialogLayer {
         objectName: "capture-virtual-audio-confirm"
         cardWidth: 510
         property int operation: 0
-        function showFor(value) { operation = value; open() }
+        property bool disconnectRequested: false
+        readonly property bool removalBlocked: shown && operation === 2 && veyra.captureVirtualAudioRemovalBlocked
+        function showFor(value) {
+            operation = value
+            disconnectRequested = false
+            open()
+        }
         title: operation === 2 ? qsTr("卸载 Veyra 虚拟扬声器")
             : operation === 1 ? qsTr("安装 Veyra 虚拟扬声器") : qsTr("Veyra 虚拟扬声器使用说明")
         text: operation === 2
             ? qsTr("先在 Windows 中关闭采集卡的“侦听此设备”，或把目标改回原设备。确认后打开 VB-Audio 安装器，选择 Remove Driver 并按提示重启。其他使用 VB-CABLE 的软件也会失去这条音频通路。")
             : qsTr("此功能使用 VB-Audio 的 VB-CABLE（捐赠软件），可从内置安装包离线安装。首次安装需管理员确认，完成后按提示重启。\n\n1. 在 Windows“录制”里打开采集卡音频的属性，勾选“侦听此设备”，播放目标选 CABLE Input。如果已改名，请选择改后的名称。")
         acceptText: operation === 2 ? qsTr("确认卸载") : operation === 1 ? qsTr("确认安装") : qsTr("完成")
+        acceptEnabled: !veyra.captureVirtualAudioBusy && !removalBlocked
         onAccepted: { if (operation !== 0) veyra.setupCaptureVirtualAudio(operation === 2) }
         Connections {
             target: captureDialog.dialogHost
@@ -370,6 +384,29 @@ DialogLayer {
                 text: qsTr("VB-Audio 官网")
                 ghost: true
                 onClicked: veyra.openCaptureVirtualAudioVendor()
+            }
+        }
+        RowLayout {
+            visible: virtualAudioGuide.removalBlocked
+            Layout.fillWidth: true
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("请先断开采集并等待连接结束")
+                color: Theme.t2
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsBody
+                wrapMode: Text.WordWrap
+            }
+            VButton {
+                objectName: "capture-virtual-audio-disconnect"
+                visible: captureDialog.live
+                text: qsTr("断开采集")
+                ghost: true
+                enabled: !virtualAudioGuide.disconnectRequested
+                onClicked: {
+                    virtualAudioGuide.disconnectRequested = true
+                    veyra.stopPlayback()
+                }
             }
         }
         Text {

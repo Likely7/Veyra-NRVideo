@@ -7765,6 +7765,13 @@
    "ja": "既存のノード（未接続を含む）が上限を超えています"
   },
   {
+   "zh": "已安装",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "已安裝",
+   "en": "Installed",
+   "ja": "インストール済み"
+  },
+  {
    "zh": "已完成",
    "src": "qml/ExportPage.qml",
    "zh-TW": "已完成",
@@ -10137,6 +10144,13 @@
    "zh-TW": "斷開",
    "en": "Disconnect",
    "ja": "切断"
+  },
+  {
+   "zh": "断开采集",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "中斷擷取",
+   "en": "Disconnect capture",
+   "ja": "キャプチャを切断"
   },
   {
    "zh": "断线自动重连",
@@ -15835,6 +15849,13 @@
    "zh-TW": "請先開啟影片，再在畫面上繪制保護區域",
    "en": "Open a video first, then draw protected areas on the picture",
    "ja": "先に動画を開いてから、映像上に保護領域を描いてください"
+  },
+  {
+   "zh": "请先断开采集并等待连接结束",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "請先中斷擷取並等待連線結束",
+   "en": "Disconnect capture and wait for the connection to close.",
+   "ja": "キャプチャを切断し、接続が終了するまでお待ちください。"
   },
   {
    "zh": "请先添加 RTX Video HDR 节点",

@@ -13,6 +13,7 @@ Item {
     property string text: ""
     property string glyph: "info"
     property string acceptText: qsTr("确定")
+    property bool acceptEnabled: true
     property string rejectText: qsTr("取消")
     property bool shown: false
     // Wider cards and custom content (the design's 列表 / 节点 comparison) go
@@ -116,6 +117,7 @@ Item {
                 VButton {
                     objectName: box.objectName + "-accept"
                     text: box.acceptText
+                    enabled: box.acceptEnabled
                     iconName: box.acceptIcon
                     primary: true
                     onClicked: { box.close(); box.accepted() }
