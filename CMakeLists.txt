@@ -1268,6 +1268,16 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Interface translations (设置 → 界面语言): one catalog, compiled in so a package
   # cannot ship without it. scripts/i18n/ builds it from the source strings.
   qt_add_resources(veyra_qml_ui "veyra_i18n" PREFIX "/i18n" BASE "${CMAKE_CURRENT_SOURCE_DIR}/i18n" FILES i18n/catalog.json)
+  set(VEYRA_VB_CABLE_PACKAGE "" CACHE FILEPATH "Original VB-Audio Pack46 ZIP to include for optional offline installation")
+  if(VEYRA_VB_CABLE_PACKAGE)
+    file(SHA256 "${VEYRA_VB_CABLE_PACKAGE}" veyra_vb_cable_sha256)
+    if(NOT veyra_vb_cable_sha256 STREQUAL "bc44e8974191a5a2427d6c979e2dab08dbb09925f3f435dfa2f0ba3e45b6eb90")
+      message(FATAL_ERROR "VEYRA_VB_CABLE_PACKAGE must be the original VB-Audio Pack46 ZIP")
+    endif()
+    set_source_files_properties("${VEYRA_VB_CABLE_PACKAGE}" PROPERTIES QT_RESOURCE_ALIAS "VBCABLE_Driver_Pack46.zip")
+    qt_add_resources(veyra_qml_ui "veyra_optional_vb_cable" PREFIX "/optional-drivers"
+      FILES "${VEYRA_VB_CABLE_PACKAGE}" OPTIONS -no-compress)
+  endif()
   target_compile_features(veyra_qml_ui PRIVATE cxx_std_20)
   # Every thread without an explicit size (UI, engine, export worker) reserves the
   # image default. The 32-node EffectChain is 45 KB and the bridge, preset and

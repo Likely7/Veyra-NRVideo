@@ -3,15 +3,13 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <windows.h>
 #include <shellapi.h>
 
 namespace veyra::ui {
 namespace {
-constexpr qsizetype downloadLimit = 2 * 1024 * 1024;
-constexpr auto packageUrl = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip";
+constexpr qsizetype packageLimit = 2 * 1024 * 1024;
+constexpr auto packageResource = ":/optional-drivers/VBCABLE_Driver_Pack46.zip";
 constexpr auto packageHash = "bc44e8974191a5a2427d6c979e2dab08dbb09925f3f435dfa2f0ba3e45b6eb90";
 constexpr auto installerHash = "734c35dfa6d98f48782a451633ceb471166ec70d60482fd89a1123d0ee3c4f41";
 
@@ -25,8 +23,7 @@ QString systemProgram(const QString& name) {
 VirtualCaptureAudioSetup::VirtualCaptureAudioSetup(QObject* parent) : QObject(parent) {
     deadline_.setSingleShot(true);
     connect(&deadline_, &QTimer::timeout, this, [this] {
-        if (reply_) reply_->abort();
-        else if (extractor_.state() != QProcess::NotRunning) extractor_.kill();
+        if (extractor_.state() != QProcess::NotRunning) extractor_.kill();
     });
     connect(&extractor_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart)
@@ -51,10 +48,6 @@ VirtualCaptureAudioSetup::VirtualCaptureAudioSetup(QObject* parent) : QObject(pa
 }
 
 VirtualCaptureAudioSetup::~VirtualCaptureAudioSetup() {
-    if (reply_) {
-        reply_->disconnect(this);
-        reply_->abort();
-    }
     extractor_.disconnect(this);
     if (extractor_.state() != QProcess::NotRunning) {
         extractor_.kill();
@@ -71,6 +64,16 @@ VirtualCaptureAudioSetup::~VirtualCaptureAudioSetup() {
 
 void VirtualCaptureAudioSetup::start(const QString& dataDirectory) {
     if (busy()) return;
+    QFile package(QString::fromLatin1(packageResource));
+    if (!package.open(QIODevice::ReadOnly)) {
+        emit completed(tr("此构建未内置 VB-CABLE 安装包"), true);
+        return;
+    }
+    const auto bytes = package.read(packageLimit + 1);
+    if (QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex() != packageHash) {
+        emit completed(tr("内置 VB-CABLE 安装包校验失败"), true);
+        return;
+    }
     if (!QDir().mkpath(dataDirectory)) {
         emit completed(tr("无法创建虚拟扬声器安装目录"), true);
         return;
@@ -80,46 +83,14 @@ void VirtualCaptureAudioSetup::start(const QString& dataDirectory) {
         finish(tr("无法创建虚拟扬声器安装目录"), true);
         return;
     }
-    QNetworkRequest request{QUrl(QString::fromLatin1(packageUrl))};
-    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
-    request.setRawHeader("User-Agent", "Veyra-Virtual-Audio-Setup");
-    reply_ = network_.get(request);
-    reply_->setReadBufferSize(downloadLimit + 1);
-    connect(reply_, &QIODevice::readyRead, this, [this] {
-        download_ += reply_->read(downloadLimit + 1 - download_.size());
-        if (download_.size() > downloadLimit) reply_->abort();
-    });
-    connect(reply_, &QNetworkReply::finished, this, &VirtualCaptureAudioSetup::downloadFinished);
-    deadline_.start(30000);
-    emit busyChanged();
-}
-
-void VirtualCaptureAudioSetup::downloadFinished() {
-    deadline_.stop();
-    auto* reply = reply_;
-    reply_ = nullptr;
-    if (reply->isOpen() && download_.size() <= downloadLimit)
-        download_ += reply->read(downloadLimit + 1 - download_.size());
-    const bool ok = reply->error() == QNetworkReply::NoError &&
-        reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 200;
-    reply->deleteLater();
-    if (!ok) {
-        finish(tr("下载 VB-Audio 安装包失败，请检查网络后重试"), true);
-        return;
-    }
-    if (QCryptographicHash::hash(download_, QCryptographicHash::Sha256).toHex() != packageHash) {
-        finish(tr("VB-Audio 安装包校验失败，请从官网获取"), true);
-        return;
-    }
     const auto archive = staging_->filePath(QStringLiteral("driver.zip"));
     QFile file(archive);
-    if (!file.open(QIODevice::WriteOnly) || file.write(download_) != download_.size() || !file.flush()) {
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.flush()) {
         file.close();
         finish(tr("无法保存虚拟扬声器安装包"), true);
         return;
     }
     file.close();
-    download_.clear();
     const auto tar = systemProgram(QStringLiteral("tar.exe"));
     if (tar.isEmpty()) {
         finish(tr("找不到 Windows 解压工具"), true);
@@ -127,6 +98,7 @@ void VirtualCaptureAudioSetup::downloadFinished() {
     }
     deadline_.start(15000);
     extractor_.start(tar, {QStringLiteral("-xf"), archive, QStringLiteral("-C"), staging_->path()});
+    if (busy()) emit busyChanged();
 }
 
 void VirtualCaptureAudioSetup::launchInstaller() {
@@ -162,7 +134,6 @@ void VirtualCaptureAudioSetup::launchInstaller() {
 
 void VirtualCaptureAudioSetup::finish(const QString& message, bool warning) {
     deadline_.stop();
-    download_.clear();
     staging_.reset();
     emit busyChanged();
     emit completed(message, warning);

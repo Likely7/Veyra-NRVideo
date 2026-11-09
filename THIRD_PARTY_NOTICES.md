@@ -1069,3 +1069,7 @@ Ported from `src/dllmain.cpp`: `Hook_cuDeviceGetAttribute`, `Hook_cuModuleLoadDa
 
 Only the recognized VFG runtime receives this experimental SM86 adaptation. RTX 40/50 use their native path without installing these hooks. No SDK, model or proprietary runtime bytes are embedded in Veyra's source or executable, and the existing NVIDIA runtime/model set is reused. Source-level and RTX5070 native regression evidence is not a claim of RTX30 hardware inference, image quality or performance validation. NVIDIA's runtime remains proprietary and is governed separately by its supplied terms.
 
+## VB-Audio VB-CABLE (optional capture audio)
+
+Veyra Virtual Speaker uses the original VB-Audio VB-CABLE Pack46 for Windows. Builds configured with `VEYRA_VB_CABLE_PACKAGE` include the unmodified vendor ZIP for offline installation. Veyra opens the vendor setup only after the user confirms installation or removal. VB-CABLE is VB-Audio donationware. Users can support VB-Audio from the vendor site. See [VB-CABLE](https://vb-audio.com/Cable/) and [VB-Audio distribution terms](https://vb-audio.com/Services/licensing.htm).
+

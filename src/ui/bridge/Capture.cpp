@@ -196,7 +196,7 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
                                {"label", d.hasEmbeddedAudio ? tr("视频设备内置音频（已检测）") : tr("尝试视频设备内置音频")}};
     for (size_t i = 0; i < impl_->captureAudio.size(); ++i) {
         const auto& device = impl_->captureAudio[i];
-        const auto label = device.virtualSpeaker ? tr("虚拟扬声器回录 · %1").arg(utf8Of(device.name))
+        const auto label = device.virtualSpeaker ? tr("Veyra 虚拟扬声器 · %1").arg(utf8Of(device.name))
             : QStringLiteral("[%1] %2").arg(device.wasapi ? QStringLiteral("WASAPI") : QStringLiteral("DirectShow"), utf8Of(device.name));
         out << QVariantMap{{"id", int(i)}, {"label", label}};
     }

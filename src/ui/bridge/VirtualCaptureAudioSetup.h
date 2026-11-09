@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QNetworkAccessManager>
 #include <QObject>
 #include <QProcess>
 #include <QTemporaryDir>
@@ -22,13 +21,9 @@ signals:
     void busyChanged();
     void completed(const QString& message, bool warning);
 private:
-    void downloadFinished();
     void launchInstaller();
     void finish(const QString& message, bool warning);
 
-    QNetworkAccessManager network_;
-    QNetworkReply* reply_ = nullptr;
-    QByteArray download_;
     QProcess extractor_;
     QTimer deadline_;
     QWinEventNotifier installer_;

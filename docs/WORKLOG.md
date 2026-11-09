@@ -898,3 +898,11 @@ Claude初次构建305.9s，原完整Quick172/0/1、25 GPU用例、原双重/超�
 使用 MSVC 2022 的 CMake 对 `build/claude-screen-recording-20261022` 执行 `--build --parallel 2 --target veyra_qml_ui veyra_wasapi_input_tests veyra_qml_quick_tests veyra_ui_contract_tests`，最终增量通过。WASAPI `--offline` 19/0，`--blocked-output` 2/0 且提交音频帧为零，UI contract 包含新模式端点保存和加载。QtQuick 软件渲染 175/0/0。首次 QuickTest 用错 Qt 导入环境，按实际 Qt SDK 路径重新运行。真实 QML 实例核对未安装状态、安装说明、取消不启动安装、卸载确认。快捷按钮实际打开 Windows 录制标签，验证后关闭窗口。翻译目录检查无缺失和占位符错误。
 
 日志位于 `E:/项目/Veyra/logs/virtual-capture-audio-20261108`。本机测试入口为 `E:/项目/Veyra/tests/virtual-capture-audio-20261108/启动虚拟扬声器测试.cmd`，使用独立配置与现有运行时供体。验收没有实际安装或移除系统驱动，故障采集卡的侦听转接和端到端听感仍需实卡复测。本轮在本地隔离分支交付。
+
+## 2026-11-09 虚拟扬声器离线安装
+
+在 `codex/virtual-capture-audio-20261108` 续作。Veyra 里显示「Veyra 虚拟扬声器」。Windows 继续注册 VB-Audio 原签名驱动的播放端点，使用说明提供从播放设备属性将 CABLE Input 改名为「Veyra 采集音频」的步骤。设备识别继续按适配器名称，音频选择仍按稳定端点 ID 保存。
+
+构建选项 `-DVEYRA_VB_CABLE_PACKAGE=E:/项目/Veyra/deps/vb-audio/pack46/VBCABLE_Driver_Pack46.zip` 将 SHA-256 固定的 1,324,680 字节原 ZIP 编入 `veyra_qml_ui.exe`。使用 [VB-Audio 原包](https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip) 和厂商署名说明。正式和测试打包都沿用已编入资源的 EXE。纯源码构建可以留空此选项，此时没有离线安装包。应用内安装和卸载读取同一内置资源，确认前不会启动安装器，安装包不进入源码 Git。
+
+MSVC/CMake 使用共享构建目录按上述选项重新配置，再以 `--parallel 2 --target veyra_qml_ui` 构建成功。字节比对证实原 ZIP 在 EXE 中恰好出现一次且完整一致。真实 QML 验证离线资源可读、名称与说明、安装与卸载确认，以及取消无安装动作。多语言目录无缺失和占位符错误。日志 `E:/项目/Veyra/logs/offline-virtual-capture-audio-20261109`。本机入口 `E:/项目/Veyra/tests/offline-virtual-capture-audio-20261109/启动离线虚拟扬声器测试.cmd`。本轮未在系统安装驱动或修改 Windows 端点名称。

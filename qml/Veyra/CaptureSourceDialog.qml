@@ -307,7 +307,7 @@ DialogLayer {
             }
         }
         VRow {
-            label: qsTr("虚拟扬声器")
+            label: qsTr("Veyra 虚拟扬声器")
             hint: veyra.captureVirtualAudioBusy ? qsTr("正在处理 VB-CABLE 安装器…")
                 : veyra.captureVirtualAudioInstalled ? qsTr("已检测到 VB-CABLE · 用于转接 Windows 侦听")
                 : qsTr("可选 · 采集卡直采无声时使用")
@@ -347,11 +347,11 @@ DialogLayer {
         cardWidth: 510
         property int operation: 0
         function showFor(value) { operation = value; open() }
-        title: operation === 2 ? qsTr("卸载虚拟扬声器")
-            : operation === 1 ? qsTr("安装虚拟扬声器") : qsTr("虚拟扬声器使用说明")
+        title: operation === 2 ? qsTr("卸载 Veyra 虚拟扬声器")
+            : operation === 1 ? qsTr("安装 Veyra 虚拟扬声器") : qsTr("Veyra 虚拟扬声器使用说明")
         text: operation === 2
             ? qsTr("先在 Windows 中关闭采集卡的“侦听此设备”，或把目标改回原设备。确认后打开 VB-Audio 安装器，选择 Remove Driver 并按提示重启。其他使用 VB-CABLE 的软件也会失去这条音频通路。")
-            : qsTr("此功能使用 VB-Audio 的 VB-CABLE（捐赠软件）。首次安装需管理员确认，完成后按安装器提示重启。\n\n1. 在 Windows“录制”里打开采集卡音频的属性，在“侦听”中勾选“侦听此设备”，播放目标选 CABLE Input。")
+            : qsTr("此功能使用 VB-Audio 的 VB-CABLE（捐赠软件），可从内置安装包离线安装。首次安装需管理员确认，完成后按提示重启。\n\n1. 在 Windows“录制”里打开采集卡音频的属性，勾选“侦听此设备”，播放目标选 CABLE Input。如果已改名，请选择改后的名称。")
         acceptText: operation === 2 ? qsTr("确认卸载") : operation === 1 ? qsTr("确认安装") : qsTr("完成")
         onAccepted: { if (operation !== 0) veyra.setupCaptureVirtualAudio(operation === 2) }
         Connections {
@@ -376,7 +376,7 @@ DialogLayer {
             objectName: "capture-virtual-audio-follow-up"
             visible: virtualAudioGuide.operation !== 2
             Layout.fillWidth: true
-            text: qsTr("2. 回到 Veyra，在“音频监听”选“虚拟扬声器回录”，再连接采集。\n3. 在 Veyra 的音频设置中选真实耳机或音箱，可继续使用音画同步。")
+            text: qsTr("2. 回到 Veyra，在“音频监听”选“Veyra 虚拟扬声器”，再连接采集。音频输出选真实耳机或音箱，即可使用音画同步。\n\n可选改名：在 Windows 声音的“播放”页打开 CABLE Input 的属性，在“常规”里改成“Veyra 采集音频”。")
             color: Theme.t2
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsBody

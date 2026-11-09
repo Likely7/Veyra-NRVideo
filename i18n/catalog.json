@@ -617,11 +617,11 @@
    "ja": "2 項目"
   },
   {
-   "zh": "2. 回到 Veyra，在“音频监听”选“虚拟扬声器回录”，再连接采集。\n3. 在 Veyra 的音频设置中选真实耳机或音箱，可继续使用音画同步。",
+   "zh": "2. 回到 Veyra，在“音频监听”选“Veyra 虚拟扬声器”，再连接采集。音频输出选真实耳机或音箱，即可使用音画同步。\n\n可选改名：在 Windows 声音的“播放”页打开 CABLE Input 的属性，在“常规”里改成“Veyra 采集音频”。",
    "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "2. 回到 Veyra，在“音訊監聽”選“虛擬揚聲器回錄”，再連接擷取。\n3. 在 Veyra 的音訊設定中選真實耳機或音箱，可繼續使用音畫同步。",
-   "en": "2. In Veyra, select Virtual speaker loopback under Audio monitoring, then connect the capture card.\n3. Select your physical headphones or speakers in Veyra’s audio settings. Audio/video sync remains available.",
-   "ja": "2. Veyra の「音声モニター」で「仮想スピーカーのループバック」を選んでから接続します。\n3. Veyra の音声設定で実際のヘッドホンまたはスピーカーを選びます。映像と音声の同期も利用できます。"
+   "zh-TW": "2. 回到 Veyra，在“音訊監聽”選“Veyra 虛擬揚聲器”，再連接擷取。音訊輸出選真實耳機或音箱，即可使用音畫同步。\n\n可選改名：在 Windows 聲音的“播放”頁開啟 CABLE Input 的屬性，在“常規”裡改成“Veyra 擷取音訊”。",
+   "en": "2. In Veyra, select Veyra Virtual Speaker under Audio monitoring, then connect the capture card. Select your physical headphones or speakers as the output to use audio/video sync.\n\nOptional rename: On the Playback tab in Windows Sound, open CABLE Input properties. On General, rename it to Veyra Capture Audio.",
+   "ja": "2. Veyra の「音声モニター」で「Veyra 仮想スピーカー」を選んでから接続します。出力先に実際のヘッドホンまたはスピーカーを選ぶと、映像と音声の同期を利用できます。\n\n名前を変更する場合は、Windows の「サウンド」の「再生」で CABLE Input のプロパティを開き、「全般」で Veyra キャプチャ音声に変更します。"
   },
   {
    "zh": "203 = 中性；调高整体变亮，峰值不变",
@@ -2143,13 +2143,6 @@
    "ja": "UI 補正 · 未検証"
   },
   {
-   "zh": "VB-Audio 安装包校验失败，请从官网获取",
-   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
-   "zh-TW": "VB-Audio 安裝包校驗失敗，請從官網獲取",
-   "en": "VB-Audio package verification failed. Get the package from the official website.",
-   "ja": "VB-Audio パッケージの検証に失敗しました。公式サイトから入手してください。"
-  },
-  {
    "zh": "VB-Audio 安装器未完成操作（%1）",
    "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
    "zh-TW": "VB-Audio 安裝器未完成操作（%1）",
@@ -2232,6 +2225,27 @@
    "zh-TW": "Veyra 本地診斷（複製前脫敏預覽；不會上傳）\n",
    "en": "Veyra local diagnostics (redacted preview before copying; nothing is uploaded)\n",
    "ja": "Veyra ローカル診断（コピー前に匿名化してプレビュー。アップロードはしません）\n"
+  },
+  {
+   "zh": "Veyra 虚拟扬声器",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "Veyra 虛擬揚聲器",
+   "en": "Veyra Virtual Speaker",
+   "ja": "Veyra 仮想スピーカー"
+  },
+  {
+   "zh": "Veyra 虚拟扬声器 · %1",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "Veyra 虛擬揚聲器 · %1",
+   "en": "Veyra Virtual Speaker · %1",
+   "ja": "Veyra 仮想スピーカー · %1"
+  },
+  {
+   "zh": "Veyra 虚拟扬声器使用说明",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "Veyra 虛擬揚聲器使用說明",
+   "en": "Veyra Virtual Speaker instructions",
+   "ja": "Veyra 仮想スピーカーの使い方"
   },
   {
    "zh": "Veyra 预设 (*.vpreset)",
@@ -2764,13 +2778,6 @@
    "zh-TW": "下載 %1 MB/s",
    "en": "Download %1 MB/s",
    "ja": "ダウンロード %1 MB/s"
-  },
-  {
-   "zh": "下载 VB-Audio 安装包失败，请检查网络后重试",
-   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
-   "zh-TW": "下載 VB-Audio 安裝包失敗，請檢查網路後重試",
-   "en": "Could not download the VB-Audio package. Check your connection and try again.",
-   "ja": "VB-Audio パッケージをダウンロードできません。接続を確認して再試行してください。"
   },
   {
    "zh": "下载 —",
@@ -4314,6 +4321,13 @@
    "ja": "内蔵"
   },
   {
+   "zh": "内置 VB-CABLE 安装包校验失败",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "內建 VB-CABLE 安裝包校驗失敗",
+   "en": "Bundled VB-CABLE package verification failed",
+   "ja": "同梱の VB-CABLE パッケージの検証に失敗しました"
+  },
+  {
    "zh": "内置预设不能删除，可以另存一份",
    "src": "src/ui/bridge/Chain.cpp",
    "zh-TW": "內建預設不能刪除，可以另存一份",
@@ -4951,18 +4965,18 @@
    "ja": "映像をクリック"
   },
   {
+   "zh": "卸载 Veyra 虚拟扬声器",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "解除安裝 Veyra 虛擬揚聲器",
+   "en": "Uninstall Veyra Virtual Speaker",
+   "ja": "Veyra 仮想スピーカーのアンインストール"
+  },
+  {
    "zh": "卸载…",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "解除安裝…",
    "en": "Uninstall…",
    "ja": "アンインストール…"
-  },
-  {
-   "zh": "卸载虚拟扬声器",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "解除安裝虛擬揚聲器",
-   "en": "Uninstall virtual speaker",
-   "ja": "仮想スピーカーのアンインストール"
   },
   {
    "zh": "历史拒绝",
@@ -6701,6 +6715,13 @@
    "ja": "範囲内"
   },
   {
+   "zh": "安装 Veyra 虚拟扬声器",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "安裝 Veyra 虛擬揚聲器",
+   "en": "Install Veyra Virtual Speaker",
+   "ja": "Veyra 仮想スピーカーのインストール"
+  },
+  {
    "zh": "安装…",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "安裝…",
@@ -6713,13 +6734,6 @@
    "zh-TW": "安裝器已關閉。若已完成安裝或解除安裝，請按 VB-Audio 提示重啟 Windows",
    "en": "Setup closed. If installation or removal completed, follow VB-Audio’s instructions to restart Windows.",
    "ja": "セットアップが終了しました。インストールまたは削除が完了した場合は、VB-Audio の指示に従って Windows を再起動してください。"
-  },
-  {
-   "zh": "安装虚拟扬声器",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "安裝虛擬揚聲器",
-   "en": "Install virtual speaker",
-   "ja": "仮想スピーカーのインストール"
   },
   {
    "zh": "宋体",
@@ -12288,11 +12302,11 @@
    "ja": "正常"
   },
   {
-   "zh": "此功能使用 VB-Audio 的 VB-CABLE（捐赠软件）。首次安装需管理员确认，完成后按安装器提示重启。\n\n1. 在 Windows“录制”里打开采集卡音频的属性，在“侦听”中勾选“侦听此设备”，播放目标选 CABLE Input。",
+   "zh": "此功能使用 VB-Audio 的 VB-CABLE（捐赠软件），可从内置安装包离线安装。首次安装需管理员确认，完成后按提示重启。\n\n1. 在 Windows“录制”里打开采集卡音频的属性，勾选“侦听此设备”，播放目标选 CABLE Input。如果已改名，请选择改后的名称。",
    "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "此功能使用 VB-Audio 的 VB-CABLE（捐贈軟體）。首次安裝需管理員確認，完成後按安裝器提示重啟。\n\n1. 在 Windows“錄制”裡開啟擷取卡音訊的屬性，在“偵聽”中勾選“偵聽此裝置”，播放目標選 CABLE Input。",
-   "en": "This feature uses VB-CABLE by VB-Audio (donationware). First-time installation requires administrator approval. Restart Windows if prompted.\n\n1. In Windows Recording settings, open the capture card’s audio properties. On Listen, enable Listen to this device and set the playback target to CABLE Input.",
-   "ja": "この機能は VB-Audio の VB-CABLE（ドネーションウェア）を使用します。初回は管理者の承認が必要です。指示に従って Windows を再起動してください。\n\n1. Windows の「録音」でキャプチャカードの音声プロパティを開き、「聴く」で「このデバイスを聴く」を有効にして再生先を CABLE Input にします。"
+   "zh-TW": "此功能使用 VB-Audio 的 VB-CABLE（捐贈軟體），可從內建安裝包離線安裝。首次安裝需管理員確認，完成後按提示重啟。\n\n1. 在 Windows“錄制”裡開啟擷取卡音訊的屬性，勾選“偵聽此裝置”，播放目標選 CABLE Input。如果已改名，請選擇改後的名稱。",
+   "en": "This feature uses VB-CABLE by VB-Audio (donationware). Install it offline from the bundled package. First-time installation requires administrator approval. Restart Windows if prompted.\n\n1. In Windows Recording settings, open the capture card’s audio properties, enable Listen to this device, and select CABLE Input. If you renamed it, select the new name.",
+   "ja": "この機能は VB-Audio の VB-CABLE（ドネーションウェア）を使用します。同梱のパッケージからオフラインでインストールできます。初回は管理者の承認が必要です。指示に従って Windows を再起動してください。\n\n1. Windows の「録音」でキャプチャカードの音声プロパティを開き、「このデバイスを聴く」を有効にして再生先を CABLE Input にします。名前を変更した場合は新しい名前を選びます。"
   },
   {
    "zh": "此显卡最多支持 {}X 帧生成；请求未应用",
@@ -12300,6 +12314,13 @@
    "zh-TW": "此顯示卡最多支援 {}X 幀生成；請求未應用",
    "en": "This GPU supports up to {}X frame generation; request not applied",
    "ja": "この GPU のフレーム生成は最大 {}X です。要求は適用されていません"
+  },
+  {
+   "zh": "此构建未内置 VB-CABLE 安装包",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "此構建未內建 VB-CABLE 安裝包",
+   "en": "This build does not include the VB-CABLE setup package",
+   "ja": "このビルドには VB-CABLE のセットアップパッケージが同梱されていません"
   },
   {
    "zh": "此版本不含 PC 串流",
@@ -15156,27 +15177,6 @@
    "zh-TW": "藍色為原畫保護區域，洋紅為磨皮區域；匯出時自動關閉",
    "en": "Blue: original restore area; magenta: smoothing area. Turned off automatically for export",
    "ja": "青はオリジナル保護の範囲、マゼンタは美肌の範囲です。書き出し時は自動でオフになります"
-  },
-  {
-   "zh": "虚拟扬声器",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "虛擬揚聲器",
-   "en": "Virtual speaker",
-   "ja": "仮想スピーカー"
-  },
-  {
-   "zh": "虚拟扬声器使用说明",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "虛擬揚聲器使用說明",
-   "en": "Virtual speaker instructions",
-   "ja": "仮想スピーカーの使い方"
-  },
-  {
-   "zh": "虚拟扬声器回录 · %1",
-   "src": "src/ui/bridge/Capture.cpp",
-   "zh-TW": "虛擬揚聲器回錄 · %1",
-   "en": "Virtual speaker loopback · %1",
-   "ja": "仮想スピーカーのループバック · %1"
   },
   {
    "zh": "虚拟扬声器回录需要将音频输出设为真实耳机或音箱",
