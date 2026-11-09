@@ -20,7 +20,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 <br>
 
-**38K+ cumulative GitHub Release downloads** ([2026-10-20 snapshot](https://git.hiwiki.org/zh-CN/repo/likely7/veyra-nrvideo); download counts are not unique users)
+**79K+ cumulative Veyra portable-package downloads** (79,332 as of 2026-11-08) · **103K+ downloads across all GitHub Release assets** (103,337 including source archives, checksums and images). [GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · Counts are download events, not unique users.
 
 <br>
 
