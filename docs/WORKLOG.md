@@ -930,3 +930,13 @@ VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找�
 ## 2026-11-09 用户决定继续使用 VB-Audio
 
 后续虚拟扬声器工作沿用本分支的原版 VB-CABLE Pack46、应用内离线安装及现有 WASAPI 回录。已安装的设备随 Veyra 升级继续复用。自研驱动原型留在独立分支 `codex/veyra-native-audio-20261109`（`f562770`）作为存档，暂停推进，不纳入后续构建或合并。可用的 2.1.4 面板覆盖包见上一节。
+
+## 2026-11-09 2.1.4 本地待发布重构建
+
+基线 `6c84bd2a84a2e97b85de3d75dfe3d08b9dcd243d`，包含本地 main `34a72ee` 及其后 VB-CABLE 面板修复。执行 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.1.4-20261109 --label 2.1.4 --jobs 2`，使用新构建目录和固定 AMD 网络源码及 Pack46。14 目标干净构建 306.6 秒，PE 2.1.4.0。EXE SHA-256 `f3201556663aca24880e172d0155207e951f4a212f59c449c495a84a8a9a750f`。补编此前随包的 `veyra_shader_test_pattern` 后重新打包。构建回执 `logs/codex-release-2.1.4-20261109/build-20261109-071334/receipt.json`。
+
+两套正式 2.1.3 ZIP 作为哈希锁定的运行库供体，保留其对应源码及许可。本轮替换为新 EXE、QML、翻译和着色器，内嵌 Pack46 原 ZIP 核对通过，安装器 Authenticode Valid。逐文件比对验证 NVIDIA 1655 项、AMD 2279 项，含各自运行时和源资产清单。无自研驱动、用户配置、日志或测试程序进入 ZIP。应用源码 ZIP 精确对应产品提交，RX 7000 网络源码沿用上版同一字节内容。
+
+执行 `reports/codex-release-2.1.4-20261109/verify.py contracts` 和 `portable`。Qt Quick 175/0/0，WASAPI 合同 19/0、防回灌 2/0，合成 PCM 经真实 WASAPI 的手动偏移 100 ms。两包最小 PATH 冷启动各呈现 90 个真实文件帧。RTX 5070 上 NR 复用、DLAA 1440p 光流及 DLAA/FSR/DLSS HDR 回归通过。采集音频面板识别既有驱动，取消与断开后确认通过。私有目录从 2.1.3 同目录覆盖到 2.1.4，旧缓存保留，新缓存 81 个文件第二次复用。临时解压清理首次遇 Windows 文件占用，重试已全部移除。AMD 包仅在本机验证启动与播放，无本轮 AMD 实卡推理或驱动重装验收。
+
+交付目录 `E:/项目/Veyra/releases/codex-release-2.1.4-20261109`，含 NVIDIA、AMD、应用源码、RX 7000 网络源码、校验和与双语更新说明。最终回执 `E:/项目/Veyra/reports/codex-release-2.1.4-20261109/FINAL.json`。本地待发布，未合并 main 或执行 GitHub 发布。
