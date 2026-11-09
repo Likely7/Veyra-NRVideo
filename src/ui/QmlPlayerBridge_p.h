@@ -137,6 +137,7 @@ namespace Gdiplus { using std::min; using std::max; }
 #include "veyra/source/ScreenCaptureSource.h"
 
 namespace veyra::ui {
+class VirtualCaptureAudioSetup;
 namespace bridge_detail {
 inline QString utf8Of(std::string_view s) { return QString::fromUtf8(s.data(), int(s.size())); }
 inline QString utf8Of(const std::wstring& w) { return QString::fromWCharArray(w.c_str(), int(w.size())); }
@@ -446,6 +447,8 @@ struct QmlPlayerBridge::Impl {
     std::wstring captureResolutionChoice, captureRateChoice;
     std::wstring captureRequestedResolution;
     int captureAudioChoice = source::kCaptureAudioDisabled;
+    bool captureVirtualAudioInstalled = false;
+    VirtualCaptureAudioSetup* captureVirtualAudioSetup = nullptr;
     bool captureAudioMissing = false;
     unsigned captureColor = 0;
     double captureFps = 0;
@@ -658,7 +661,7 @@ struct QmlPlayerBridge::Impl {
         else if(!capturePrefs.audioPath.empty()){
             captureAudioMissing=true;
             for(size_t k=0;k<captureAudio.size();++k)
-                if(captureAudio[k].path==capturePrefs.audioPath&&captureAudio[k].wasapi==(capturePrefs.audioMode==source::kCaptureAudioWasapi)){
+                if(captureAudio[k].path==capturePrefs.audioPath&&captureAudio[k].audioMode()==capturePrefs.audioMode){
                     captureAudioChoice=int(k);captureAudioMissing=false;break;
                 }
         }
@@ -683,7 +686,7 @@ struct QmlPlayerBridge::Impl {
         if(!captureAudioMissing){
             const auto* audio=captureAudioChoice>=0&&size_t(captureAudioChoice)<captureAudio.size()?&captureAudio[size_t(captureAudioChoice)]:nullptr;
             capturePrefs.audioPath=audio?audio->path:std::wstring{};
-            capturePrefs.audioMode=audio?(audio->wasapi?source::kCaptureAudioWasapi:0):captureAudioChoice;
+            capturePrefs.audioMode=audio?audio->audioMode():captureAudioChoice;
         }
         if(ui::CapturePreferenceStore(dataDir).save(capturePrefs))return true;
         veyra::log::error("capture-ui","capture settings could not be saved");return false;

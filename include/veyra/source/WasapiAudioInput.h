@@ -32,8 +32,8 @@ private:
 class WasapiAudioInput {
 public:
     WasapiAudioInput();~WasapiAudioInput();
-    static std::vector<WasapiInputDevice> devices(); // enumerate only, never capture
-    bool configure(std::wstring endpointId);
+    static std::vector<WasapiInputDevice> devices(bool virtualSpeaker=false, bool includeDisabled=false); // enumerate only, never capture
+    bool configure(std::wstring endpointId, bool virtualSpeaker=false);
     bool start();void stop();
     void setGain(float);void setSync(unsigned,int);
     void videoPresented(double hostAxisPtsMs,int64_t host100ns,std::optional<int64_t> arrival100ns={});

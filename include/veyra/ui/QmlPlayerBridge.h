@@ -144,6 +144,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString capturePixelId READ capturePixelId WRITE setCapturePixelId NOTIFY captureChanged)
     Q_PROPERTY(QVariantList captureAudioInputs READ captureAudioInputs NOTIFY captureChanged)
     Q_PROPERTY(int captureAudioChoice READ captureAudioChoice WRITE setCaptureAudioChoice NOTIFY captureChanged)
+    Q_PROPERTY(bool captureVirtualAudioInstalled READ captureVirtualAudioInstalled NOTIFY captureChanged)
+    Q_PROPERTY(bool captureVirtualAudioBusy READ captureVirtualAudioBusy NOTIFY captureChanged)
     Q_PROPERTY(int captureColorSpace READ captureColorSpace WRITE setCaptureColorSpace NOTIFY captureChanged)
     Q_PROPERTY(int captureColorRange READ captureColorRange WRITE setCaptureColorRange NOTIFY captureChanged)
     Q_PROPERTY(double captureRequestedFps READ captureRequestedFps WRITE setCaptureRequestedFps NOTIFY captureChanged)
@@ -751,6 +753,11 @@ public:
     // private to QML ("is not a function").
     Q_INVOKABLE void refreshCaptureTargets();
     Q_INVOKABLE void refreshCaptureDevices();
+    bool captureVirtualAudioInstalled() const;
+    bool captureVirtualAudioBusy() const;
+    Q_INVOKABLE void setupCaptureVirtualAudio(bool uninstall);
+    Q_INVOKABLE void openCaptureWindowsListen();
+    Q_INVOKABLE void openCaptureVirtualAudioVendor();
     Q_INVOKABLE bool openCaptureDriverSettings(bool inputSelector = false);
     Q_INVOKABLE bool startCaptureSession();
     Q_INVOKABLE bool setScreenOption(const QString& key, const QVariant& value);

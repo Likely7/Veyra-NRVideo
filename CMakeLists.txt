@@ -1151,6 +1151,8 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     src/ui/bridge/Colour.cpp
     src/ui/bridge/Preferences.cpp
     src/ui/bridge/Capture.cpp
+    src/ui/bridge/VirtualCaptureAudioSetup.cpp
+    src/ui/bridge/VirtualCaptureAudioSetup.h
     src/ui/bridge/RemotePlay.cpp
     src/ui/bridge/Export.cpp
     src/ui/bridge/Subtitles.cpp
@@ -1206,7 +1208,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Widgets is needed only for QFileDialog: the native file picker is the one
   # piece of the old shell worth keeping, and its own dialog is what users
   # expect from a desktop app. No QWidget UI is created.
-  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets)
+  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets PRIVATE shell32)
   add_executable(veyra_playlist_tests tests/unit/PlaylistModelTests.cpp src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h)
   set_target_properties(veyra_playlist_tests PROPERTIES AUTOMOC ON)
   target_compile_features(veyra_playlist_tests PRIVATE cxx_std_20)

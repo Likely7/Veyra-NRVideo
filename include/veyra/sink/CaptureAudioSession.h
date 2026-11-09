@@ -35,7 +35,7 @@ public:
     ~CaptureAudioSession();
     bool configure(const WavePcmFormat&);
     bool configure(const WAVEFORMATEX&,size_t formatBytes=sizeof(WAVEFORMATEX));
-    bool start();
+    bool start(std::wstring excludedEndpoint={});
     void stop();
     bool push(const void* data,size_t bytes,double ptsMs,bool discontinuity);
     // Arrival is the matching original capture frame, not the latest callback.

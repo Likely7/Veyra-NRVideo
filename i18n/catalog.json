@@ -617,6 +617,13 @@
    "ja": "2 項目"
   },
   {
+   "zh": "2. 回到 Veyra，在“音频监听”选“虚拟扬声器回录”，再连接采集。\n3. 在 Veyra 的音频设置中选真实耳机或音箱，可继续使用音画同步。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "2. 回到 Veyra，在“音訊監聽”選“虛擬揚聲器回錄”，再連接擷取。\n3. 在 Veyra 的音訊設定中選真實耳機或音箱，可繼續使用音畫同步。",
+   "en": "2. In Veyra, select Virtual speaker loopback under Audio monitoring, then connect the capture card.\n3. Select your physical headphones or speakers in Veyra’s audio settings. Audio/video sync remains available.",
+   "ja": "2. Veyra の「音声モニター」で「仮想スピーカーのループバック」を選んでから接続します。\n3. Veyra の音声設定で実際のヘッドホンまたはスピーカーを選びます。映像と音声の同期も利用できます。"
+  },
+  {
    "zh": "203 = 中性；调高整体变亮，峰值不变",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "203 = 中性；調高整體變亮，峰值不變",
@@ -2136,6 +2143,34 @@
    "ja": "UI 補正 · 未検証"
   },
   {
+   "zh": "VB-Audio 安装包校验失败，请从官网获取",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "VB-Audio 安裝包校驗失敗，請從官網獲取",
+   "en": "VB-Audio package verification failed. Get the package from the official website.",
+   "ja": "VB-Audio パッケージの検証に失敗しました。公式サイトから入手してください。"
+  },
+  {
+   "zh": "VB-Audio 安装器未完成操作（%1）",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "VB-Audio 安裝器未完成操作（%1）",
+   "en": "VB-Audio Setup did not complete the operation (%1)",
+   "ja": "VB-Audio セットアップが操作を完了できませんでした（%1）"
+  },
+  {
+   "zh": "VB-Audio 安装器校验失败",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "VB-Audio 安裝器校驗失敗",
+   "en": "VB-Audio Setup verification failed",
+   "ja": "VB-Audio セットアップの検証に失敗しました"
+  },
+  {
+   "zh": "VB-Audio 官网",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "VB-Audio 官網",
+   "en": "VB-Audio website",
+   "ja": "VB-Audio 公式サイト"
+  },
+  {
    "zh": "VFG 中间帧约 %1 ms、其余每张约 %2 ms，当前负载约可稳定 %3X",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "VFG 中間影格約 %1 ms、其餘每張約 %2 ms，目前負載約可穩定 %3X",
@@ -2729,6 +2764,13 @@
    "zh-TW": "下載 %1 MB/s",
    "en": "Download %1 MB/s",
    "ja": "ダウンロード %1 MB/s"
+  },
+  {
+   "zh": "下载 VB-Audio 安装包失败，请检查网络后重试",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "下載 VB-Audio 安裝包失敗，請檢查網路後重試",
+   "en": "Could not download the VB-Audio package. Check your connection and try again.",
+   "ja": "VB-Audio パッケージをダウンロードできません。接続を確認して再試行してください。"
   },
   {
    "zh": "下载 —",
@@ -3634,6 +3676,13 @@
    "ja": "余裕 "
   },
   {
+   "zh": "使用说明",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "使用說明",
+   "en": "Instructions",
+   "ja": "使い方"
+  },
+  {
    "zh": "例如调色或增强后脸色不自然时，让人脸回到原画",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "例如調色或增強後臉色不自然時，讓人臉回到原畫",
@@ -3870,6 +3919,13 @@
    "zh-TW": "允許撕裂",
    "en": "Allow tearing",
    "ja": "ティアリングを許可"
+  },
+  {
+   "zh": "先在 Windows 中关闭采集卡的“侦听此设备”，或把目标改回原设备。确认后打开 VB-Audio 安装器，选择 Remove Driver 并按提示重启。其他使用 VB-CABLE 的软件也会失去这条音频通路。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "先在 Windows 中關閉擷取卡的“偵聽此裝置”，或把目標改回原裝置。確認後開啟 VB-Audio 安裝器，選擇 Remove Driver 並按提示重啟。其他使用 VB-CABLE 的軟體也會失去這條音訊通路。",
+   "en": "First turn off Listen to this device for the capture card in Windows, or restore its previous playback target. After confirming, choose Remove Driver in VB-Audio Setup and restart if prompted. Other software using VB-CABLE will lose this audio route.",
+   "ja": "先に Windows でキャプチャカードの「このデバイスを聴く」をオフにするか、再生先を元に戻してください。確認後、VB-Audio セットアップで「Remove Driver」を選び、指示に従って再起動してください。VB-CABLE を使う他のアプリにも影響します。"
   },
   {
    "zh": "先完成基础超分，再将结果降低分辨率并执行第二次超分；两次执行独立，会增加耗时和显存。",
@@ -4895,6 +4951,20 @@
    "ja": "映像をクリック"
   },
   {
+   "zh": "卸载…",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "解除安裝…",
+   "en": "Uninstall…",
+   "ja": "アンインストール…"
+  },
+  {
+   "zh": "卸载虚拟扬声器",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "解除安裝虛擬揚聲器",
+   "en": "Uninstall virtual speaker",
+   "ja": "仮想スピーカーのアンインストール"
+  },
+  {
    "zh": "历史拒绝",
    "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "歷史拒絕",
@@ -5411,6 +5481,13 @@
    "zh-TW": "可用",
    "en": "Available",
    "ja": "使用可"
+  },
+  {
+   "zh": "可选 · 采集卡直采无声时使用",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "可選 · 擷取卡直采無聲時使用",
+   "en": "Optional · For capture cards with silent direct audio",
+   "ja": "オプション · キャプチャカードの直接入力が無音の場合に使用"
   },
   {
    "zh": "右键空白添加 · 拖到连线上插入 · 拖远（上下超过一截）或按住 Alt 松手即断开 · 端口拖拽/点击连线 · 中键平移 · 滚轮缩放",
@@ -6624,6 +6701,27 @@
    "ja": "範囲内"
   },
   {
+   "zh": "安装…",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "安裝…",
+   "en": "Install…",
+   "ja": "インストール…"
+  },
+  {
+   "zh": "安装器已关闭。若已完成安装或卸载，请按 VB-Audio 提示重启 Windows",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "安裝器已關閉。若已完成安裝或解除安裝，請按 VB-Audio 提示重啟 Windows",
+   "en": "Setup closed. If installation or removal completed, follow VB-Audio’s instructions to restart Windows.",
+   "ja": "セットアップが終了しました。インストールまたは削除が完了した場合は、VB-Audio の指示に従って Windows を再起動してください。"
+  },
+  {
+   "zh": "安装虚拟扬声器",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "安裝虛擬揚聲器",
+   "en": "Install virtual speaker",
+   "ja": "仮想スピーカーのインストール"
+  },
+  {
    "zh": "宋体",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "宋體",
@@ -7562,6 +7660,13 @@
    "ja": "サインインをキャンセルしました。"
   },
   {
+   "zh": "已取消管理员授权",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "已取消管理員授權",
+   "en": "Administrator approval cancelled",
+   "ja": "管理者の承認がキャンセルされました"
+  },
+  {
    "zh": "已取消配对",
    "src": "src/ui/bridge/RemotePlay.cpp",
    "zh-TW": "已取消配對",
@@ -7777,6 +7882,20 @@
    "zh-TW": "已有同名預設，換一個名稱才能儲存",
    "en": "A preset with this name already exists; choose another name to save",
    "ja": "同じ名前のプリセットがあります。別の名前にすると保存できます"
+  },
+  {
+   "zh": "已检测到 VB-CABLE · 用于转接 Windows 侦听",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "已檢測到 VB-CABLE · 用於轉接 Windows 偵聽",
+   "en": "VB-CABLE detected · Receives Windows monitoring audio",
+   "ja": "VB-CABLE を検出 · Windows のモニター音声を受信"
+  },
+  {
+   "zh": "已检测到 VB-CABLE，无需重复安装",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "已檢測到 VB-CABLE，無需重複安裝",
+   "en": "VB-CABLE is already installed",
+   "ja": "VB-CABLE はインストール済みです"
   },
   {
    "zh": "已添加 %1 项 · 列表共 %2 项",
@@ -9095,6 +9214,13 @@
    "ja": "GitHub Issues を開きます。診断情報は自動でコピーされています"
   },
   {
+   "zh": "打开 Windows 录制设置",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "開啟 Windows 錄制設定",
+   "en": "Open Windows recording settings",
+   "ja": "Windows の録音設定を開く"
+  },
+  {
    "zh": "打开字幕编码器",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "開啟字幕編碼器",
@@ -9226,6 +9352,13 @@
    "zh-TW": "批量處理圖片…",
    "en": "Process images in a batch…",
    "ja": "画像を一括処理…"
+  },
+  {
+   "zh": "找不到 Windows 解压工具",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "找不到 Windows 解壓工具",
+   "en": "Windows archive tool not found",
+   "ja": "Windows の展開ツールが見つかりません"
   },
   {
    "zh": "找不到与所选设备对应的美乐威 Pro Capture 通道",
@@ -10048,6 +10181,13 @@
    "ja": "今回の書き出し用の一時ファイルを確保できませんでした"
   },
   {
+   "zh": "无法保存虚拟扬声器安装包",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "無法儲存虛擬揚聲器安裝包",
+   "en": "Could not save the virtual speaker package",
+   "ja": "仮想スピーカーのパッケージを保存できません"
+  },
+  {
    "zh": "无法保存解码帧，已停止播放",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "無法儲存解碼幀，已停止播放",
@@ -10153,6 +10293,13 @@
    "ja": "結合出力を作成できません"
   },
   {
+   "zh": "无法创建虚拟扬声器安装目录",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "無法建立虛擬揚聲器安裝目錄",
+   "en": "Could not create the virtual speaker setup folder",
+   "ja": "仮想スピーカーのセットアップ用フォルダーを作成できません"
+  },
+  {
    "zh": "无法创建音频线程",
    "src": "src/sink/CaptureAudioSession.cpp",
    "zh-TW": "無法建立音訊執行緒",
@@ -10179,6 +10326,13 @@
    "zh-TW": "無法初始化匯出處理程序",
    "en": "Could not initialize the export process",
    "ja": "書き出しプロセスを初期化できませんでした"
+  },
+  {
+   "zh": "无法启动 Windows 解压工具",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "無法啟動 Windows 解壓工具",
+   "en": "Could not start the Windows archive tool",
+   "ja": "Windows の展開ツールを起動できません"
   },
   {
    "zh": "无法启动导出进程",
@@ -10228,6 +10382,27 @@
    "zh-TW": "無法開啟",
    "en": "Could not open",
    "ja": "開けません"
+  },
+  {
+   "zh": "无法打开 VB-Audio 安装器（%1）",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "無法開啟 VB-Audio 安裝器（%1）",
+   "en": "Could not open VB-Audio Setup (%1)",
+   "ja": "VB-Audio セットアップを開けません（%1）"
+  },
+  {
+   "zh": "无法打开 VB-Audio 官网",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "無法開啟 VB-Audio 官網",
+   "en": "Could not open the VB-Audio website",
+   "ja": "VB-Audio の公式サイトを開けません"
+  },
+  {
+   "zh": "无法打开 Windows 录制设备，请在声音控制面板打开“录制”",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "無法開啟 Windows 錄制裝置，請在聲音控制面板開啟“錄制”",
+   "en": "Could not open Windows recording devices. Open the Recording tab in the Sound Control Panel.",
+   "ja": "Windows の録音デバイスを開けません。「サウンド」コントロールパネルの「録音」を開いてください。"
   },
   {
    "zh": "无法打开媒体",
@@ -11126,6 +11301,13 @@
    "ja": "顔が検出されていません"
   },
   {
+   "zh": "未检测到已安装的 VB-CABLE",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "未檢測到已安裝的 VB-CABLE",
+   "en": "No VB-CABLE installation detected",
+   "ja": "VB-CABLE が見つかりません"
+  },
+  {
    "zh": "未检测到手柄",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "未偵測到手把",
@@ -11784,6 +11966,13 @@
    "ja": "処理中 %1 / %2：%3"
   },
   {
+   "zh": "正在处理 VB-CABLE 安装器…",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "正在處理 VB-CABLE 安裝器…",
+   "en": "Working with VB-CABLE Setup…",
+   "ja": "VB-CABLE セットアップを処理中…"
+  },
+  {
    "zh": "正在处理…可随时取消",
    "src": "src/ui/bridge/RemotePlay.cpp",
    "zh-TW": "正在處理…可隨時取消",
@@ -12097,6 +12286,13 @@
    "zh-TW": "正常",
    "en": "Normal",
    "ja": "正常"
+  },
+  {
+   "zh": "此功能使用 VB-Audio 的 VB-CABLE（捐赠软件）。首次安装需管理员确认，完成后按安装器提示重启。\n\n1. 在 Windows“录制”里打开采集卡音频的属性，在“侦听”中勾选“侦听此设备”，播放目标选 CABLE Input。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "此功能使用 VB-Audio 的 VB-CABLE（捐贈軟體）。首次安裝需管理員確認，完成後按安裝器提示重啟。\n\n1. 在 Windows“錄制”裡開啟擷取卡音訊的屬性，在“偵聽”中勾選“偵聽此裝置”，播放目標選 CABLE Input。",
+   "en": "This feature uses VB-CABLE by VB-Audio (donationware). First-time installation requires administrator approval. Restart Windows if prompted.\n\n1. In Windows Recording settings, open the capture card’s audio properties. On Listen, enable Listen to this device and set the playback target to CABLE Input.",
+   "ja": "この機能は VB-Audio の VB-CABLE（ドネーションウェア）を使用します。初回は管理者の承認が必要です。指示に従って Windows を再起動してください。\n\n1. Windows の「録音」でキャプチャカードの音声プロパティを開き、「聴く」で「このデバイスを聴く」を有効にして再生先を CABLE Input にします。"
   },
   {
    "zh": "此显卡最多支持 {}X 帧生成；请求未应用",
@@ -13329,6 +13525,20 @@
    "zh-TW": "確定",
    "en": "OK",
    "ja": "OK"
+  },
+  {
+   "zh": "确认卸载",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "確認解除安裝",
+   "en": "Confirm uninstall",
+   "ja": "アンインストールを確認"
+  },
+  {
+   "zh": "确认安装",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "確認安裝",
+   "en": "Confirm installation",
+   "ja": "インストールを確認"
   },
   {
    "zh": "磁盘写入跟不上录制，已停止录制（请换更快的磁盘或降低码率）",
@@ -14946,6 +15156,41 @@
    "zh-TW": "藍色為原畫保護區域，洋紅為磨皮區域；匯出時自動關閉",
    "en": "Blue: original restore area; magenta: smoothing area. Turned off automatically for export",
    "ja": "青はオリジナル保護の範囲、マゼンタは美肌の範囲です。書き出し時は自動でオフになります"
+  },
+  {
+   "zh": "虚拟扬声器",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "虛擬揚聲器",
+   "en": "Virtual speaker",
+   "ja": "仮想スピーカー"
+  },
+  {
+   "zh": "虚拟扬声器使用说明",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "虛擬揚聲器使用說明",
+   "en": "Virtual speaker instructions",
+   "ja": "仮想スピーカーの使い方"
+  },
+  {
+   "zh": "虚拟扬声器回录 · %1",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "虛擬揚聲器回錄 · %1",
+   "en": "Virtual speaker loopback · %1",
+   "ja": "仮想スピーカーのループバック · %1"
+  },
+  {
+   "zh": "虚拟扬声器回录需要将音频输出设为真实耳机或音箱",
+   "src": "src/sink/CaptureAudioSession.cpp",
+   "zh-TW": "虛擬揚聲器回錄需要將音訊輸出設為真實耳機或音箱",
+   "en": "Select physical headphones or speakers to use virtual speaker loopback",
+   "ja": "仮想スピーカーのループバックを使うには、実際のヘッドホンまたはスピーカーを選択してください"
+  },
+  {
+   "zh": "虚拟扬声器安装包解压失败",
+   "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
+   "zh-TW": "虛擬揚聲器安裝包解壓失敗",
+   "en": "Could not extract the virtual speaker package",
+   "ja": "仮想スピーカーのパッケージを展開できません"
   },
   {
    "zh": "补帧",

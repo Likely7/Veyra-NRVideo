@@ -281,8 +281,8 @@ bool parseCapturePath(std::wstring_view path,CaptureSelection& selection){
         std::array<std::wstring_view,5> fields{};size_t cursor=prefix.size();
         for(size_t i=0;i<fields.size();++i){const size_t end=path.find(L':',cursor);if(i+1<fields.size()){if(end==std::wstring_view::npos)return false;fields[i]=path.substr(cursor,end-cursor);cursor=end+1;}else{if(end!=std::wstring_view::npos)return false;fields[i]=path.substr(cursor);}}
         if(fields[0].empty()||!decodePath(fields[0],selection.videoPath)||!parseInt(fields[1],selection.format)||!parseInt(fields[2],selection.audio)||!decodePath(fields[3],selection.audioPath)||!parseUnsigned(fields[4],selection.colorOverride)||selection.format<0||!validCaptureColorOverride(selection.colorOverride))return false;
-        if(selection.audio!=kCaptureAudioDisabled&&selection.audio!=kCaptureAudioFromVideoDevice&&selection.audio!=kCaptureAudioWasapi&&selection.audio<0)return false;
-        if((selection.audio>=0||selection.audio==kCaptureAudioWasapi)&&selection.audioPath.empty())return false;selection.stable=true;return true;
+        if(selection.audio!=kCaptureAudioDisabled&&selection.audio!=kCaptureAudioFromVideoDevice&&!captureAudioIsWasapi(selection.audio)&&selection.audio<0)return false;
+        if((selection.audio>=0||captureAudioIsWasapi(selection.audio))&&selection.audioPath.empty())return false;selection.stable=true;return true;
     }
     unsigned videoIndex=0,colorOverride=0;int format=0,audio=kCaptureAudioDisabled;const std::wstring legacy(path);
     const int fields=swscanf_s(legacy.c_str(),L"capture:%u:%d:%d:%u",&videoIndex,&format,&audio,&colorOverride);
@@ -793,7 +793,7 @@ std::wstring CaptureCardSource::makeCapturePath(unsigned videoIndex,const Captur
     const auto suffix=capturePathOptions(requestedFps,encodePath(formatKey));
     if(audio&&audio->wasapi){
         if(video.path.empty()||audio->path.empty())return {};
-        return std::format(L"capture2:{}:{}:{}:{}:{}{}",encodePath(video.path),format,kCaptureAudioWasapi,encodePath(audio->path),colorOverride,suffix);
+        return std::format(L"capture2:{}:{}:{}:{}:{}{}",encodePath(video.path),format,audio->audioMode(),encodePath(audio->path),colorOverride,suffix);
     }
     if(video.path.empty()||(audioMode>=0&&(!audio||audio->path.empty())))return std::format(L"capture:{}:{}:{}:{}{}",videoIndex,format,audioMode,colorOverride,suffix);
     return std::format(L"capture2:{}:{}:{}:{}:{}{}",encodePath(video.path),format,audioMode,audioMode>=0?encodePath(audio->path):L"",colorOverride,suffix);
@@ -1008,9 +1008,9 @@ bool CaptureCardSource::configureDeckLink(const SourceOpenDesc& desc){
         WAVEFORMATEX wave{};wave.wFormatTag=WAVE_FORMAT_PCM;wave.nChannels=2;wave.nSamplesPerSec=48000;wave.wBitsPerSample=16;wave.nBlockAlign=4;wave.nAvgBytesPerSec=192000;
         p.audioSession=std::make_unique<sink::CaptureAudioSession>();
         if(!p.audioSession->configure(wave,sizeof(wave))){p.audioSession.reset();p.audioError=L"BMD PCM 音频配置失败；视频继续运行";}
-    }else if(selection.audio==kCaptureAudioWasapi){
+    }else if(captureAudioIsWasapi(selection.audio)){
         p.wasapi=std::make_unique<WasapiAudioInput>();
-        if(!p.wasapi->configure(selection.audioPath)){p.wasapi.reset();p.audioError=L"WASAPI 音频端点无效；视频继续运行";}
+        if(!p.wasapi->configure(selection.audioPath,selection.audio==kCaptureAudioVirtualSpeaker)){p.wasapi.reset();p.audioError=L"WASAPI 音频端点无效；视频继续运行";}
     }else if(selection.audio>=0){
         // Optional independent DirectShow audio, retaining the user's explicit
         // endpoint. Native video never opens a second DirectShow video stream.
@@ -1275,10 +1275,10 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     if(p.info.color.isHdrPath())log::info("capture-color",std::format("HDR input transfer={} matrix={} assumed={} primaries={} assumed={}",int(p.info.color.transfer),int(p.info.color.matrix),p.info.color.matrixAssumed,int(p.info.color.primaries),p.info.color.primariesAssumed));
     p.nominalDuration100ns=p.layout.duration;
     log::info("capture-color",std::format("format={} stride={} rowBytes={} bytes={} bottomUp={} matrix={} assumed={} range={} assumed={} workingTransfer={} assumed={} (explicit transfer contract)",int(p.layout.format),p.layout.stride,p.layout.rowBytes,p.layout.sampleBytes,p.layout.bottomUp,int(p.info.color.matrix),p.info.color.matrixAssumed,int(p.info.color.range),p.info.color.rangeAssumed,int(p.info.color.transfer),p.info.color.transferAssumed));
-    if(audio==kCaptureAudioWasapi){
+    if(captureAudioIsWasapi(audio)){
         p.wasapi=std::make_unique<WasapiAudioInput>();
-        if(!p.wasapi->configure(selection.audioPath)){p.wasapi.reset();p.audioError=L"WASAPI 音频端点ID无效；视频继续运行";}
-        log::info("capture-audio","binding=wasapi shared=1 explicitEndpoint=1 videoClock=ingress-host-estimate");
+        if(!p.wasapi->configure(selection.audioPath,selection.audio==kCaptureAudioVirtualSpeaker)){p.wasapi.reset();p.audioError=L"WASAPI 音频端点ID无效；视频继续运行";}
+        log::info("capture-audio",selection.audio==kCaptureAudioVirtualSpeaker ? "binding=virtual-speaker loopback=1 explicitEndpoint=1" : "binding=wasapi shared=1 explicitEndpoint=1 videoClock=ingress-host-estimate");
     }else if(audio!=kCaptureAudioDisabled){
         std::wstring wantedName,wantedPath;
         if(audio>=0){
@@ -1876,7 +1876,7 @@ void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
         p.audioError=L"AVerMedia audio graph failed; trying the original DirectShow audio input";
         log::warn("capture-audio-vendor","vendor recovery exhausted; reconnecting the original DirectShow audio input");
     }
-    CaptureSelection selection;if(!parseCapturePath(reconnectDesc_.path,selection)||!selection.stable||selection.audio==kCaptureAudioDisabled||selection.audio==kCaptureAudioWasapi)return;
+    CaptureSelection selection;if(!parseCapturePath(reconnectDesc_.path,selection)||!selection.stable||selection.audio==kCaptureAudioDisabled||captureAudioIsWasapi(selection.audio))return;
     // A video filter without an audio pin can never recover: in the field log
     // this retried seven times over twenty seconds with an identical failure.
     if(selection.audio==kCaptureAudioFromVideoDevice&&p.embeddedAudioUnavailable){

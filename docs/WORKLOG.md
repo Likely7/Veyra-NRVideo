@@ -888,3 +888,13 @@ Claude初次构建305.9s，原完整Quick172/0/1、25 GPU用例、原双重/超�
 执行 `python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-main-fixes-20261108 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.3-main-fixes-test --jobs 2 --reconfigure --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared`，16目标清单在build-20261108-214335/receipt.json，147.7s。实际命令与结果另见reports同任务verify.py、quick_retry.py、CHECKS.json、QUICK-RETRY.json、EXPORT-ALIGNMENT.txt和FINAL.json。
 
 首轮QtQuick退出0xC0000409，固定SDK环境独立复跑175/0/0；不推断原因。真实1440p/4K SR＋DLAA＋NR复用通过，音量29%重启通过；设置事务0 D3D错误，AMD模拟128/0，混合4K导出60帧无错位。复用原build及测试app，101运行DLL核验，保留现有测试和证据；无新完整包。文档docs/MAIN_FIXES_INTEGRATION_2026-11-08.md，入口tests/codex-main-fixes-20261108/启动main组合测试.cmd。
+
+## 2026-11-08 可选虚拟扬声器
+
+隔离分支 `codex/virtual-capture-audio-20261108` 从本地 main `34a72ee` 开始。采集卡面板按系统播放端点识别基础版 VB-CABLE。安装和卸载均从说明及确认弹窗启动 VB-Audio 原安装器。确认后才从官网下载 Pack46，核验 ZIP 和安装器 SHA-256。Authenticode 实查为 Valid，核验结果在 `logs/virtual-capture-audio-20261108/vendor-verification.json`。驱动独立于 Veyra 版本，启动或更新不会触发安装。使用说明从 Windows「声音 → 录制」进入所选采集音频设备的「侦听」属性。
+
+新增专用 eRender Loopback，明确选择 VB-CABLE 播放端点后接入既有 CaptureAudioSession。保留音画同步、输出路由和音频选择持久化。渲染器在实际解析输出后仍禁止回灌同一端点。普通录音设备、DirectShow 和原有连接串继续使用各自的路径。
+
+使用 MSVC 2022 的 CMake 对 `build/claude-screen-recording-20261022` 执行 `--build --parallel 2 --target veyra_qml_ui veyra_wasapi_input_tests veyra_qml_quick_tests veyra_ui_contract_tests`，最终增量通过。WASAPI `--offline` 19/0，`--blocked-output` 2/0 且提交音频帧为零，UI contract 包含新模式端点保存和加载。QtQuick 软件渲染 175/0/0。首次 QuickTest 用错 Qt 导入环境，按实际 Qt SDK 路径重新运行。真实 QML 实例核对未安装状态、安装说明、取消不启动安装、卸载确认。快捷按钮实际打开 Windows 录制标签，验证后关闭窗口。翻译目录检查无缺失和占位符错误。
+
+日志位于 `E:/项目/Veyra/logs/virtual-capture-audio-20261108`。本机测试入口为 `E:/项目/Veyra/tests/virtual-capture-audio-20261108/启动虚拟扬声器测试.cmd`，使用独立配置与现有运行时供体。验收没有实际安装或移除系统驱动，故障采集卡的侦听转接和端到端听感仍需实卡复测。本轮在本地隔离分支交付。

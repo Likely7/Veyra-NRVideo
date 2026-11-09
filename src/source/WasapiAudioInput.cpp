@@ -22,20 +22,31 @@ bool checked(HRESULT hr,const char* operation){
     if(FAILED(hr))log::error("wasapi-input",std::format("{} hr=0x{:08X}",operation,uint32_t(hr)));
     return SUCCEEDED(hr);
 }
+bool isVbCable(IPropertyStore* properties){
+    PROPVARIANT description{};
+    const bool matches=SUCCEEDED(properties->GetValue(PKEY_DeviceInterface_FriendlyName,&description)) &&
+        description.vt==VT_LPWSTR && description.pwszVal &&
+        _wcsicmp(description.pwszVal,L"VB-Audio Virtual Cable")==0;
+    PropVariantClear(&description);
+    return matches;
 }
-std::vector<WasapiInputDevice> WasapiAudioInput::devices(){
+}
+std::vector<WasapiInputDevice> WasapiAudioInput::devices(bool virtualSpeaker, bool includeDisabled){
     ComScope apartment;std::vector<WasapiInputDevice> result;
     if(FAILED(apartment.hr)&&apartment.hr!=RPC_E_CHANGED_MODE){checked(apartment.hr,"enumeration COM");return result;}
     ComPtr<IMMDeviceEnumerator> enumerator;ComPtr<IMMDeviceCollection> collection;
     if(!checked(CoCreateInstance(__uuidof(MMDeviceEnumerator),nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&enumerator)),"enumerator")||
-       !checked(enumerator->EnumAudioEndpoints(eCapture,DEVICE_STATE_ACTIVE,&collection),"EnumAudioEndpoints capture"))return result;
+       !checked(enumerator->EnumAudioEndpoints(virtualSpeaker?eRender:eCapture,
+           DEVICE_STATE_ACTIVE | (includeDisabled?DEVICE_STATE_DISABLED:0),&collection),"EnumAudioEndpoints"))return result;
     UINT count=0;if(!checked(collection->GetCount(&count),"GetCount"))return result;
     for(UINT i=0;i<count;++i){
         ComPtr<IMMDevice> device;ComPtr<IPropertyStore> properties;LPWSTR raw=nullptr;
         if(!checked(collection->Item(i,&device),"Item")||!checked(device->GetId(&raw),"GetId"))continue;
         WasapiInputDevice input{L"WASAPI recording endpoint",raw};CoTaskMemFree(raw);
+        const bool haveProperties=SUCCEEDED(device->OpenPropertyStore(STGM_READ,&properties));
+        if(virtualSpeaker&&(!haveProperties||!isVbCable(properties.Get())))continue;
         PROPVARIANT name;PropVariantInit(&name);
-        if(SUCCEEDED(device->OpenPropertyStore(STGM_READ,&properties))&&SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName,&name))&&name.vt==VT_LPWSTR&&name.pwszVal)input.name=name.pwszVal;
+        if(haveProperties&&SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName,&name))&&name.vt==VT_LPWSTR&&name.pwszVal)input.name=name.pwszVal;
         PropVariantClear(&name);result.push_back(std::move(input));
     }
     return result;
@@ -45,7 +56,7 @@ struct WasapiAudioInput::Impl {
     std::wstring id,error;std::thread worker;Handle stopEvent;std::atomic<bool> stopping{true};
     float gain=1;unsigned mode=0;int offset=0;double videoPts=0;int64_t videoHost=0;bool haveVideo=false;
     std::optional<int64_t> videoArrival;
-    WasapiInputMetrics metrics;bool injectedLoss=false;
+    WasapiInputMetrics metrics;bool injectedLoss=false,virtualSpeaker=false;
     HRESULT stream(){
         ComPtr<IMMDeviceEnumerator> enumerator;ComPtr<IMMDevice> device;ComPtr<IMMEndpoint> endpoint;
         ComPtr<IAudioClient> client;ComPtr<IAudioCaptureClient> capture;Handle ready;
@@ -54,7 +65,13 @@ struct WasapiAudioInput::Impl {
         hr=enumerator->GetDevice(id.c_str(),&device);if(!checked(hr,"selected endpoint GetDevice"))return hr;
         hr=device.As(&endpoint);if(!checked(hr,"IMMEndpoint"))return hr;
         EDataFlow flow=eAll;hr=endpoint->GetDataFlow(&flow);if(!checked(hr,"GetDataFlow"))return hr;
-        if(flow!=eCapture){checked(E_INVALIDARG,"render/loopback endpoint rejected");return E_INVALIDARG;}
+        if(flow!=(virtualSpeaker?eRender:eCapture)){checked(E_INVALIDARG,"incorrect audio endpoint direction");return E_INVALIDARG;}
+        if(virtualSpeaker){
+            ComPtr<IPropertyStore> properties;
+            if(FAILED(device->OpenPropertyStore(STGM_READ,&properties))||!isVbCable(properties.Get())){
+                checked(E_INVALIDARG,"loopback requires the dedicated VB-CABLE playback endpoint");return E_INVALIDARG;
+            }
+        }
         hr=device->Activate(__uuidof(IAudioClient),CLSCTX_INPROC_SERVER,nullptr,reinterpret_cast<void**>(client.GetAddressOf()));
         if(!checked(hr,"Activate capture client"))return hr;
         WAVEFORMATEX* raw=nullptr;hr=client->GetMixFormat(&raw);
@@ -62,7 +79,8 @@ struct WasapiAudioInput::Impl {
         auto freeWave=[](WAVEFORMATEX* value){CoTaskMemFree(value);};std::unique_ptr<WAVEFORMATEX,decltype(freeWave)> wave(raw,freeWave);
         sink::WavePcmFormat format;
         if(!raw||!sink::parseWavePcm(raw,sizeof(WAVEFORMATEX)+raw->cbSize,format)){checked(AUDCLNT_E_UNSUPPORTED_FORMAT,"mix PCM format");return AUDCLNT_E_UNSUPPORTED_FORMAT;}
-        hr=client->Initialize(AUDCLNT_SHAREMODE_SHARED,AUDCLNT_STREAMFLAGS_EVENTCALLBACK,200000,0,raw,nullptr);
+        const DWORD flags=AUDCLNT_STREAMFLAGS_EVENTCALLBACK | (virtualSpeaker?AUDCLNT_STREAMFLAGS_LOOPBACK:0);
+        hr=client->Initialize(AUDCLNT_SHAREMODE_SHARED,flags,200000,0,raw,nullptr);
         if(!checked(hr,"Initialize shared capture"))return hr;
         ready.value=CreateEventW(nullptr,FALSE,FALSE,nullptr);
         if(!ready.value)return HRESULT_FROM_WIN32(GetLastError());
@@ -80,13 +98,13 @@ struct WasapiAudioInput::Impl {
             std::lock_guard lock(mutex);session=std::make_unique<sink::CaptureAudioSession>();
             if(!session->configure(format)){session.reset();return AUDCLNT_E_UNSUPPORTED_FORMAT;}
             session->setGain(gain);session->setSync(mode,offset);
-            if(!session->start()){session.reset();return E_FAIL;}
+            if(!session->start(virtualSpeaker?id:std::wstring{})){session.reset();return E_FAIL;}
             if(haveVideo)session->videoPresented(videoPts,videoHost,videoArrival);
         }
         hr=client->Start();if(!checked(hr,"Start capture"))return hr;
         struct StopClient {IAudioClient* client;~StopClient(){checked(client->Stop(),"Stop capture");}} stopClient{client.Get()};
         {std::lock_guard lock(mutex);error.clear();}
-        log::info("wasapi-input",std::format("capture started shared=1 loopback=0 rate={} channels={} bits={} validBits={} capacity={} timestamp=QPC-host-axis",raw->nSamplesPerSec,raw->nChannels,raw->wBitsPerSample,format.validBits,capacity));
+        log::info("wasapi-input",std::format("capture started shared=1 loopback={} rate={} channels={} bits={} validBits={} capacity={} timestamp=QPC-host-axis",int(virtualSpeaker),raw->nSamplesPerSec,raw->nChannels,raw->wBitsPerSample,format.validBits,capacity));
         HANDLE events[]={stopEvent.value,ready.value};uint64_t packets=0,estimated=0,gaps=0;double lastPacket=hostMs();
         const bool injectLoss=GetEnvironmentVariableW(L"VEYRA_TEST_WASAPI_INPUT_LOSS",nullptr,0)>0;
         while(!stopping){
@@ -95,7 +113,7 @@ struct WasapiAudioInput::Impl {
             if(wait==WAIT_FAILED)return HRESULT_FROM_WIN32(GetLastError());
             // Also inspect on timeout: some drivers lose notifications.
             UINT next=0;hr=capture->GetNextPacketSize(&next);if(!checked(hr,"GetNextPacketSize"))return hr;
-            if(!next&&hostMs()-lastPacket>3000){checked(HRESULT_FROM_WIN32(ERROR_TIMEOUT),"no input packets for 3s");return HRESULT_FROM_WIN32(ERROR_TIMEOUT);}
+            if(!virtualSpeaker&&!next&&hostMs()-lastPacket>3000){checked(HRESULT_FROM_WIN32(ERROR_TIMEOUT),"no input packets for 3s");return HRESULT_FROM_WIN32(ERROR_TIMEOUT);}
             while(next&&!stopping){
                 BYTE* data=nullptr;UINT frames=0;DWORD flags=0;UINT64 position=0,timestamp=0;
                 hr=capture->GetBuffer(&data,&frames,&flags,&position,&timestamp);if(!checked(hr,"GetBuffer"))return hr;
@@ -138,7 +156,10 @@ struct WasapiAudioInput::Impl {
 };
 WasapiAudioInput::WasapiAudioInput():p_(std::make_unique<Impl>()){}
 WasapiAudioInput::~WasapiAudioInput(){stop();}
-bool WasapiAudioInput::configure(std::wstring id){if(p_->worker.joinable()||id.empty())return false;p_->id=std::move(id);return true;}
+bool WasapiAudioInput::configure(std::wstring id,bool virtualSpeaker){
+    if(p_->worker.joinable()||id.empty())return false;
+    p_->id=std::move(id);p_->virtualSpeaker=virtualSpeaker;return true;
+}
 bool WasapiAudioInput::start(){
     if(p_->worker.joinable()||p_->id.empty())return false;
     if(p_->stopEvent.value)CloseHandle(p_->stopEvent.value);

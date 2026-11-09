@@ -246,7 +246,7 @@ private:
 class AudioRenderer {
 public:
     ~AudioRenderer(){shutdown();}
-    bool start(AudioFormat input = {},double requestedBufferMs=10.0);
+    bool start(AudioFormat input = {},double requestedBufferMs=10.0,std::wstring_view excludedEndpoint={});
     AudioFormat outputFormat()const{std::lock_guard lock(endpointMutex_);return outputFormat_;}
     void setGain(float value){gain_.store(value);}
 
