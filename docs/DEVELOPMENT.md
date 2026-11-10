@@ -46,6 +46,17 @@ cmake -S D:\Program\Veyra\src -B D:\Program\Veyra\build -G Ninja `
 
 ## 验证
 
+**构建后必跑**（2026-11-10 起）：`scripts/verify-build.ps1` 把四件事做成一次检查——构建、三个单元测试、部署一致性（部署 exe 必须等于刚构建的 exe）、运行时启动/退出并只看本次新增日志。任何一项失败退出码为 1。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\Program\Veyra\src\scripts\verify-build.ps1
+# 只跑检查、不重新构建：
+powershell -ExecutionPolicy Bypass -File D:\Program\Veyra\src\scripts\verify-build.ps1 -SkipBuild
+```
+
+脚本会从 `CMakeCache.txt` 的 `VEYRA_FFMPEG_ROOT` 取 FFmpeg `bin` 注入 PATH（部分测试动态链接 FFmpeg，缺 DLL 会以 0xC0000135 退出），并在构建目录内运行测试。它只判 `[ERROR]` 为失败，`[WARN]` 计数后交人工判断。
+
+
 - 先构建产品与改动相关目标，再跑相应 unit/contract/QML/实际启动检查；每进程 ≤300 秒。
 - 桥接/QML 结构变更应覆盖 UI 合同、翻译、QtQuick、设置/预设保存恢复、采集对话框与私有配置启动，确保无绑定/创建错误。
 - 处理图、补帧、音频、导出行为变更时再加对应 GPU/输出检查。
