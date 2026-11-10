@@ -2685,9 +2685,9 @@ VPage {
                                 value: veyra.submitFpsKnown ? veyra.submitFps.toFixed(2) : qsTr("未测量")
                             }
                             VRow {
-                                label: qsTr("显示帧率")
-                                hint: qsTr("需要系统显示事件才能测得真实值；取不到时显示未测")
-                                value: veyra.displayFpsKnown ? veyra.displayFps.toFixed(2) : qsTr("未测")
+                                label: qsTr("1% low")
+                                hint: qsTr("最近 10 秒内呈现提交间隔估算；只统计提交，不代表屏幕扫描")
+                                value: veyra.submitLowFpsKnown ? veyra.submitLowFps.toFixed(1) : "—"
                             }
                             VRow {
                                 label: qsTr("晚点 P95")
