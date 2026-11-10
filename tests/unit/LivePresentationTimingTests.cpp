@@ -4,6 +4,7 @@
 #include "veyra/engine/LivePresentationResetPolicy.h"
 #include "veyra/source/CaptureTiming.h"
 #include "veyra/engine/CaptureHalfRate.h"
+#include "veyra/engine/CapturePreviewClock.h"
 #include "veyra/engine/ContentDedup.h"
 #include "veyra/pipeline/PictureCompare.h"
 #include "veyra/pipeline/FrameBatch.h"
@@ -89,6 +90,59 @@ int main(){
     check(rate.rate(10000000)==1000,"completion rate has no 60 or 120fps cap");
     using veyra::source::captureDuration;using veyra::engine::liveSourceInterval100ns;
     using veyra::source::captureDiscontinuity;
+    {
+        using veyra::engine::CapturePreviewClock;
+        constexpr int64_t period=166834, hostStart=10000000, wrongPeriod=208333;
+        CapturePreviewClock normal, vrr, broken;
+        CaptureHalfRate rawSampler, fixedSampler;
+        bool original=true, variable=true, stable=true;
+        unsigned transitions=0, rawKept=0, fixedKept=0;
+        int64_t lastFixed=0, vrrPts=0;
+        for(uint64_t i=1;i<=1200;++i){
+            const auto frame=static_cast<int64_t>(i);
+            const auto jitter=(frame%3-1)*2500;
+            const auto correctPts=frame*period;
+            const auto arrival=hostStart+correctPts+jitter;
+            const auto raw=frame*wrongPeriod;
+            const auto unchanged=normal.observe(i,correctPts,arrival,period,false);
+            original&=!unchanged.corrected&&!unchanged.discontinuity&&unchanged.pts==correctPts;
+            vrrPts+=frame%2?208333:166834;
+            const auto variableFrame=vrr.observe(i,vrrPts,hostStart+vrrPts,period,false);
+            variable&=!variableFrame.corrected&&!variableFrame.discontinuity&&variableFrame.pts==vrrPts;
+            const auto fixed=broken.observe(i,raw,arrival,period,false);
+            if(fixed.discontinuity){++transitions;fixedSampler.reset();}
+            if(i>120){
+                stable&=fixed.corrected&&std::llabs(fixed.pts-lastFixed-period)<=period/64;
+                rawKept+=rawSampler.accept(raw,period,false);
+                fixedKept+=fixedSampler.accept(fixed.pts,period,false);
+            }
+            lastFixed=fixed.pts;
+        }
+        check(original,"capture preview clock leaves normal 59.94 PTS intact");
+        check(variable,"capture preview clock preserves genuine varying arrival and PTS intervals");
+        check(stable&&transitions==1&&fixedKept==540&&rawKept>=670,
+              "capture preview clock restores 59.94 and 29.97 sampling with 20.83 ms driver PTS");
+        const auto stalled=broken.observe(1201,1200*wrongPeriod+10000,hostStart+1200*period+5310000,period,false);
+        check(!stalled.corrected&&stalled.discontinuity,"capture preview clock preserves a real 531 ms stall even when PTS hides it");
+
+        CapturePreviewClock recovered;
+        for(uint64_t i=1;i<=64;++i)recovered.observe(i,int64_t(i)*wrongPeriod,hostStart+int64_t(i)*period,period,false);
+        bool restored=false;
+        for(uint64_t i=65;i<=112;++i){
+            const int64_t raw=64*wrongPeriod+int64_t(i-64)*period;
+            const auto f=recovered.observe(i,raw,hostStart+int64_t(i)*period,period,false);
+            restored|=f.discontinuity&&!f.corrected&&f.pts==raw;
+        }
+        check(restored&&!recovered.correcting(),"capture preview clock returns to recovered driver timing");
+
+        CapturePreviewClock skipped;
+        bool corrected=false;
+        for(uint64_t i=1;i<=64;++i){
+            if(i%4==0)continue;
+            corrected=skipped.observe(i,int64_t(i)*wrongPeriod,hostStart+int64_t(i)*period,period,false).corrected;
+        }
+        check(corrected,"capture preview clock accounts for skipped mailbox sequence numbers");
+    }
     veyra::source::CaptureDriverDiscontinuity driverFlag;
     auto flag=[&](bool flagged=true,bool native=true,bool timed=true,double pts=1.0/60,double arrival=1.0/60){
         return driverFlag.observe(flagged,native,timed,true,pts,arrival,60);

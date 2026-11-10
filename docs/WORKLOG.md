@@ -967,3 +967,14 @@ VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找�
 回执 `E:/项目/Veyra/reports/codex-capture-dedup-pacing-20261110/FINAL.json`，逐帧日志在同任务 `logs` 目录。独立启动入口 `E:/项目/Veyra/tests/codex-capture-dedup-pacing-20261110/启动去重补帧测试.cmd`。验收后核对 QML 探针已恢复，E:/App 的正式 EXE 哈希保持发布值。
 
 用户恢复画面后复测。初轮输入几乎静止，补帧状态退出导致夹具终止。重测的起始信号切换期有 8 次采集丢弃记录，未纳入稳态。04:41:32.000–04:42:01.809（PST）稳态 29.809 秒，采集内容 40.02 FPS、提交 119.90 FPS、1% low 中位 109.75、提交间隔 P99 9.11 ms，采集丢弃、邮箱覆盖、补帧降档和过期均无新增。复测日志 logs/codex-capture-dedup-pacing-20261110/fixed-soak-retry/engine.log，同任务 FINAL.json 已补充逐帧统计。
+
+
+## 2026-11-10 59.94 采集的异常预览时间戳校正
+
+隔离分支 `codex/capture-pts-clock-20261110` 基于已验的去重呈现分支 `8b20d55`。针对原生 59–61 FPS 物理采集预览，在内容去重及 60→30 之前比较驱动 PTS、序号和单调回调时间。协商速率附近的稳定回调在跨 16 个采集序号的窗口内，与 PTS 累计跨度偏差达到 12.5% 才锁定校正。校正时间轴以采集序号推进，缓慢跟随回调时钟并抑制单帧抖动。正常 PTS 保留，持续恢复正常或真实断档时退回原时间轴并显式断开图历史。音频路径仍使用驱动原始时间和到达时间。
+
+复用 `build/codex-capture-dedup-pacing-20261110`，用 `scripts/acceptance/build-recording-handoff.py` 固定依赖重新配置显示版号 2.1.4-capture-clock-test，构建 veyra_qml_ui 和 veyra_live_timing_tests。首次 82.7 秒，恢复无注入版本后增量 13.4 秒。时序 172 项通过，包含正常 59.94、真实可变到达、20.83 ms 错标、531 ms 断流、原 PTS 恢复和邮箱跳号。
+
+T911 实卡 4K NV12 接受指定 59.94，协商 59.939820，正常回调和驱动帧长约 16.68 ms。默认格式协商 60.000240，实际回调也约 60。两个正常输入都没有触发校正。保持 T911 59.94 回调、60→30、FSR 3.1 2X，用独立测试编译把视频 PTS 改成 20.8333 ms。20 秒 A/B 原帧 749→600，提交 67.884→59.942 FPS，提交间隔 P99 27.33→17.33 ms，生成帧过期 135→0。最终测试程序不含注入代码，独立 QML 探针已恢复。未复测故障用户的 Elgato/AMD 或物理屏幕扫描。
+
+入口 `E:/项目/Veyra/tests/codex-capture-pts-clock-20261110/启动采集时钟测试.cmd`。回执 `E:/项目/Veyra/reports/codex-capture-pts-clock-20261110/FINAL.json`，原始逐帧日志在同任务 logs 目录。

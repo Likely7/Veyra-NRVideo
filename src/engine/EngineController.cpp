@@ -24,6 +24,7 @@
 #include "veyra/engine/RealtimePreviewScheduling.h"
 #include "veyra/engine/CaptureHalfRate.h"
 #include "veyra/engine/ContentDedup.h"
+#include "veyra/engine/CapturePreviewClock.h"
 #include "veyra/engine/DisplayFgBudget.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/source/CaptureCardSource.h"
@@ -1109,6 +1110,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             uint64_t fedXessPresented=0,fedXessGenerated=0;
             double playbackSpeedLastPts=0;Clock::time_point playbackSpeedLastWall{};
             CaptureHalfRate captureSampler;
+            CapturePreviewClock capturePreviewClock;
             // Content cadence for live sources (ContentDedup.h): in the auto / 30 / 50 /
             // 60 fps content modes, repeated pictures (every component within the
             // capture-noise band, PictureCompare.h) are dropped before any GPU work and
@@ -2087,10 +2089,28 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const bool dedupActive=isCapture&&!isImage&&!legacyCadence&&dedupContent(options.settings.content);
                 // The callback compares whole pictures only while dedup or the 60->30 phase needs them.
                 if(physicalCapture)captureSource.setPictureCompare(dedupActive||halfRate);
+                const int64_t driverPts100ns=pkt.pts.isUnknown()?0:pkt.pts.to100ns();
+                const auto capturePeriod=liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps);
+                bool captureClockCorrected=false;
+                if(physicalCapture&&!nativeCapture&&!captureSource.compressedVideo()&&!rereadCached&&
+                   CaptureHalfRate::supported(activeSource->info().averageFps)&&!pkt.pts.isUnknown()&&pkt.arrivalHost100ns>0){
+                    const bool wasCorrecting=capturePreviewClock.correcting();
+                    const auto flagsWithoutDrop=pkt.flags&~static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Drop);
+                    const auto clock=capturePreviewClock.observe(pkt.sequence,driverPts100ns,pkt.arrivalHost100ns,capturePeriod,
+                        pipeline::breaksHistory(flagsWithoutDrop)||pipeline::hasFrameFlag(pkt.flags,pipeline::FrameFlagBits::Open));
+                    captureClockCorrected=clock.corrected;
+                    if(clock.discontinuity)pkt.flags|=static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Discontinuity);
+                    if(wasCorrecting!=clock.corrected)
+                        veyra::log::info("capture-preview-clock",std::format("source={} corrected={} driverPts100ns={} previewPts100ns={} nominalPeriod100ns={} (video scheduling only)",pkt.sequence,clock.corrected,driverPts100ns,clock.pts,capturePeriod));
+                    if(clock.corrected){
+                        pkt.pts={clock.pts,10000000};
+                        pkt.duration={capturePeriod,10000000};
+                    }
+                }
                 if(reset||pipeline::breaksHistory(pkt.flags))captureSampler.reset();
-                const int64_t samplePts100ns=pkt.pts.isUnknown()?0:pkt.pts.to100ns();
+                const int64_t samplePts100ns=captureClockCorrected?pkt.pts.to100ns():driverPts100ns;
                 if(dedupActive&&!rereadCached&&!pkt.pts.isUnknown()){
-                    const auto interval=liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps);
+                    const auto interval=capturePeriod;
                     pipeline::PictureReference::Result picture;
                     const auto compareStart=Clock::now();
                     const bool pictured=pipeline::captureFramePicture(frame,enginePictures,gd.packedInput==6||gd.packedInput==7,picture);
@@ -2108,10 +2128,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     pkt.pts={decision.contentPts,10000000};
                     if(decision.interval>0)pkt.duration={decision.interval,10000000};
                 }else if(halfRate&&!rereadCached){
-                    // 60->30: every second sample by timestamp, original PTS, a steady 30.
+                    // 60->30: every second sample on the effective capture clock.
                     // Only a number the capture callback already computed is used, so the
                     // engine thread never compares a whole picture for this.
-                    const auto interval=liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps);
+                    const auto interval=capturePeriod;
                     const auto* upload=pipeline::captureUploadFrame(frame);
                     const uint64_t* picture=upload&&upload->pictureValid?&upload->pictureId:nullptr;
                     const auto shifts=captureSampler.shifts();
@@ -2125,7 +2145,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 if(!halfRate)captureSampler.reset();
                 if(isCapture&&!rereadCached&&veyra::log::verboseFrameLogs())
-                    veyra::log::info("cadence-input",std::format("source={} samplePts100ns={} pts100ns={} dedup={} halfRate={}",pkt.sequence,samplePts100ns,pkt.pts.isUnknown()?0:pkt.pts.to100ns(),dedupActive,halfRate));
+                    veyra::log::info("cadence-input",std::format("source={} driverPts100ns={} samplePts100ns={} pts100ns={} clockCorrected={} dedup={} halfRate={}",pkt.sequence,driverPts100ns,samplePts100ns,pkt.pts.isUnknown()?0:pkt.pts.to100ns(),captureClockCorrected,dedupActive,halfRate));
                 if(isImage)pkt.sequence=1;
 #ifdef VEYRA_ENABLE_XBOX
                 if(xb&&!rereadCached)xboxReconnectBudget.decoded(monotonic100ns());
@@ -2592,7 +2612,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 previewSkippedSinceSubmit=0;
                 if(transaction||frames==0){
                     std::lock_guard lock(mutex_);snapshot_.captureHalfRate=halfRate;
-                    veyra::log::info("capture-rate",std::format("revision={} requested60To30={} active={} transportFps={} originalPtsPreserved=true",options.settings.revision,options.settings.content==ContentRate::Capture60To30,halfRate,isCapture?activeSource->info().averageFps:0));
+                    veyra::log::info("capture-rate",std::format("revision={} requested60To30={} active={} transportFps={} originalPtsPreserved={}",options.settings.revision,options.settings.content==ContentRate::Capture60To30,halfRate,isCapture?activeSource->info().averageFps:0,!captureClockCorrected));
                 }
                 const bool pairPacing=pairAnchoredLive&&options.fg;
                 // File replay has no device pacing and still needs its PTS clock.
@@ -2659,7 +2679,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_XBOX
                         &xb,
 #endif
-                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&generatedDropCap,&generatedDropCapacity,&generatedDropDeadline,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&liveArrival,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,generatedGrace=liveGeneratedGrace,smoothTransportAnchor,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
+                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&generatedDropCap,&generatedDropCapacity,&generatedDropDeadline,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&liveArrival,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,generatedGrace=liveGeneratedGrace,smoothTransportAnchor,captureClockCorrected,driverPts100ns,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
                         using State=LiveGpuScheduler::State;auto& batch=watch->output;auto& s=*step;
                         auto updatePending=[&](LiveStepState*){
                             unsigned left=0;for(unsigned i=s.next;i<batch.batch.count;++i)if(batch.batch.frames[i].kind!=pipeline::FrameKind::Generated||batch.batch.frames[i].validity==pipeline::GenerationValidity::Valid)++left;
@@ -2812,7 +2832,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             }
                             // Real B owns captureArrival. Generated A/B frames and
                             // paused cached frames must not invent input anchors.
-                            if(didPresent&&physicalCapture&&!generated&&!rereadCached)captureSource.videoPresented(double(item.pts100ns)/10000,host100ns(),captureArrival);
+                            if(didPresent&&physicalCapture&&!generated&&!rereadCached)captureSource.videoPresented(double(captureClockCorrected?driverPts100ns:item.pts100ns)/10000,host100ns(),captureArrival);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                             if(didPresent&&remote)remote->videoPresented(double(item.pts100ns)/10000,host100ns());
 #endif
