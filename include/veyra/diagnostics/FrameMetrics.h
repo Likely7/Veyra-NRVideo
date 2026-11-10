@@ -100,7 +100,7 @@ struct FrameMetrics {
     pipeline::FrameIdentity identity;
     pipeline::ResolutionPlan resolution;
     std::array<GpuSample,size_t(GpuStage::Count)> gpu{};
-    std::optional<double> decodeCpuMs,submitCpuMs,gpuWaitCpuMs,deadlineWaitCpuMs,presentCpuMs;
+    std::optional<double> decodeCpuMs,submitCpuMs,gpuWaitCpuMs,deadlineWaitCpuMs,presentCpuMs,displayFps;
     uint64_t sourceFrames=0,validGenerated=0,submitted=0,expired=0;
     uint32_t queueWatermark=0;
     FrameFlowMetrics flow;
