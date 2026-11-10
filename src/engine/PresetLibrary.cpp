@@ -855,7 +855,9 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,20):20;
+    // v21 is the local auto-multiplier marker (upstream owns 19/20); keep the hard
+    // ceiling in step with it or encode->decode self-check rejects our own file.
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,21):21;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
