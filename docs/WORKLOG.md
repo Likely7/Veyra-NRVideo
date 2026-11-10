@@ -978,3 +978,14 @@ VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找�
 T911 实卡 4K NV12 接受指定 59.94，协商 59.939820，正常回调和驱动帧长约 16.68 ms。默认格式协商 60.000240，实际回调也约 60。两个正常输入都没有触发校正。保持 T911 59.94 回调、60→30、FSR 3.1 2X，用独立测试编译把视频 PTS 改成 20.8333 ms。20 秒 A/B 原帧 749→600，提交 67.884→59.942 FPS，提交间隔 P99 27.33→17.33 ms，生成帧过期 135→0。最终测试程序不含注入代码，独立 QML 探针已恢复。未复测故障用户的 Elgato/AMD 或物理屏幕扫描。
 
 入口 `E:/项目/Veyra/tests/codex-capture-pts-clock-20261110/启动采集时钟测试.cmd`。回执 `E:/项目/Veyra/reports/codex-capture-pts-clock-20261110/FINAL.json`，原始逐帧日志在同任务 logs 目录。
+
+
+## 2026-11-10 Veyra 2.1.5 GitHub 正式发布
+
+按用户授权，将已验证的采集去重节奏和异常采集时间戳修复快进合入 main，发布 NVIDIA、AMD 便携包、对应源码和 SHA-256 校验表。构建产品提交 01dc81b3b4acc15f525b3865e62a54a052ce8219，PE 2.1.5.0。标签 v2.1.5 与 v2.1.5-sources 指向 dc6f6e1e5e51b31d027e4d369949332c130238de。版本说明、README 中英文及两个 Release 更新为 9 群原图，图示 11 月 17 日前有效。核对 GitHub 原图字节、赞助图和 Discord 链接。
+
+使用 scripts/acceptance/build-recording-handoff.py，任务 codex-release-2.1.5-20261110，显示版号 2.1.5，14 目标，构建 246.3 秒。首次 CMake 配置中旧 pkg-config 将 E 盘中文依赖路径解码错误，清除本任务的失败 CMakeCache 后沿用已有 ASCII 兼容入口，通过配置与构建。回执 logs/codex-release-2.1.5-20261110/build-20261110-071859/receipt.json，失败缓存及日志保留。使用上版正式 ZIP 的已核验运行组件，应用 EXE 更新，内置原版 VB-CABLE 与 RX 7000 对应网络源码保持同一身份。
+
+执行 reports/codex-release-2.1.5-20261110/verify.py contracts 和 portable。采集时序 172 项、Qt Quick 175 项、WASAPI 离线 19 项和防回灌 2 项通过。两包在本机 RTX 5070 独立环境各播放 90 帧，2.1.4 覆盖升级复用 81 个 QML 缓存文件。T911 采集实测来自前置功能分支，见本日志前两节。AMD 包在本机验证基础播放，未做 AMD 实卡增强验收。
+
+执行 git push --atomic nrvideo main refs/tags/v2.1.5 refs/tags/v2.1.5-sources。草稿核对资产后先公开源码，应用 Release 设为 Latest。verify-github.py draft 和 published 核对标签、正文、全部资产大小和服务端 SHA-256、匿名下载及群码。交付 releases/codex-release-2.1.5-20261110，最终回执 reports/codex-release-2.1.5-20261110/FINAL.json。自动审批拒绝移除本轮约 7 MB 测试配置与缓存目录，保留在任务 tmp 下。临时解压目录已由测试流程自行清空。
