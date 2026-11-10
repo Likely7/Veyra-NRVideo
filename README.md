@@ -73,6 +73,8 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 **📖 [English User Guide / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki)** — installation, software setup, capture card compatibility, troubleshooting, and community-tested solutions. [中文知识库（飞书）](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home).
 
+**2.1.5:** Smoother frame pacing after capture deduplication and preview correction for invalid capture timestamps. [Full changes](docs/RELEASE_NOTES_2.1.5.md).
+
 **2.1.4:** Optional VB-CABLE capture audio, DLSS/FSR/RTX dual super resolution, NVIDIA DLAA, HDR wide-gamut restoration, NR inference reuse, 1% low FPS, and recording and compatibility fixes. [Full changes and settings migration](docs/RELEASE_NOTES_2.1.4.md).
 
 **2.1.3:** Three RTX Video SR families and independent second-pass models, medium defaults, inline NR web/list editing, RTX30 VFG compatibility, RX7000 multi-GPU and seeking/menu fixes. [Full changes, comparison and migration](docs/RELEASE_NOTES_2.1.3.md).
@@ -87,7 +89,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** SF310.9.16 performance/legacy models, NVIDIA original for RTX50 and AMD lmxxf, DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-**Current version: [2.1.4](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.4)** · [Full bilingual update](docs/RELEASE_NOTES_2.1.4.md).
+**Current version: [2.1.5](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.5)** · [Full bilingual update](docs/RELEASE_NOTES_2.1.5.md).
 
 ## New in 2.1.2
 
@@ -124,7 +126,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ## Install and upgrade
 
-Download **Veyra-2.1.4-NVIDIA-win64-portable.zip** or **Veyra-2.1.4-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.1.5-NVIDIA-win64-portable.zip** or **Veyra-2.1.5-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -240,7 +242,7 @@ Original code: GPL-3.0. The combined Chiaki streaming application is also subjec
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-8-20261109.png" alt="Veyra community group 8" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-9-20261110.png" alt="Veyra community group 9" width="220">
 </p>
 
-Left: optional donation, no feature restrictions. Right: community group; QR valid **before 2026-11-16** as shown. Check repository updates after expiry.
+Left: optional donation, no feature restrictions. Right: community group 9; QR valid **before 2026-11-17** as shown. Check repository updates after expiry.
