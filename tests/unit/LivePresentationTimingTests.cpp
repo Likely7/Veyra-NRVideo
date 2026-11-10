@@ -1,10 +1,12 @@
 #define NOMINMAX
 #include "veyra/engine/LivePresentationTiming.h"
+#include "veyra/engine/LivePairLatency.h"
 #include "veyra/engine/LivePresentationResetPolicy.h"
 #include "veyra/source/CaptureTiming.h"
 #include "veyra/engine/CaptureHalfRate.h"
 #include "veyra/engine/ContentDedup.h"
 #include "veyra/pipeline/PictureCompare.h"
+#include "veyra/pipeline/FrameBatch.h"
 #include <algorithm>
 #include <array>
 #include <vector>
@@ -417,6 +419,56 @@ int main(){
         {const auto r=run(60.0,[](int i){return int64_t(std::floor(i*40.0/60.0+1e-9));},n,0,0,250000);
          check(r.keptRepeats==0&&r.droppedReal==0&&std::abs(r.kept-n*2/3)<=1,"dedup 40-in-60: all real pictures kept, no repeats");
          check(r.monotonic&&r.neverLate&&r.regularSpans*100>=r.spans*95,"dedup 40-in-60: alternating 33/17 ms samples become even 25 ms content spans");}
+        {
+            // 40 unique pictures sampled at 60 Hz, with a two-step 3X GPU batch.
+            // The presentation deadline of each batch must follow content PTS,
+            // while readiness still depends on when the sampled picture arrives.
+            struct TimingRun { double lowFps; int missed; };
+            const auto present=[&](bool smooth, int contentRate){
+                using namespace veyra::engine;
+                ContentDedup cadence;
+                LiveArrivalSmoother arrival;
+                LivePairLatency phase;
+                PresentationScheduler scheduler;
+                FramePaceWindow window;
+                constexpr int64_t transport=166667, hostStart=1000000;
+                constexpr std::array<int64_t,3> gpuReady{60000,100000,25000};
+                int64_t prevPts=0, prevPresent=0;
+                int missed=0;
+                for(int i=0;i<n;++i){
+                    const int64_t sample=i*transport;
+                    const uint64_t id=uint64_t(i*contentRate/60);
+                    const auto frame=cadence.observe(&id,sample,transport,i==0);
+                    if(!frame.keep)continue;
+                    const auto callback=hostStart+sample;
+                    const auto anchor=smooth?arrival.contentAnchor(frame.contentPts,sample,callback,transport):callback;
+                    if(!frame.interval){prevPts=frame.contentPts;continue;}
+                    const auto delay=phase.select(callback,frame.interval,frame.interval,3,smooth?transport/2:0);
+                    scheduler.resetPair(1,frame.contentPts,anchor,delay);
+                    int64_t requiredDelay=0;
+                    for(unsigned j=0;j<gpuReady.size();++j){
+                        const auto pts=j==2?frame.contentPts:
+                            veyra::pipeline::FrameBatch::interpolate(prevPts,frame.contentPts,j+1,3);
+                        const auto deadline=scheduler.deadline(pts);
+                        const auto ready=callback+gpuReady[j];
+                        requiredDelay=std::max(requiredDelay,ready-anchor+frame.contentPts-pts);
+                        if(i>120){
+                            missed+=ready>deadline;
+                            prevPresent=std::max({prevPresent+1,deadline,ready});
+                            window.complete(prevPresent);
+                        }
+                    }
+                    phase.observe(callback,requiredDelay);
+                    prevPts=frame.contentPts;
+                }
+                return TimingRun{window.lowFps(prevPresent).value_or(0),missed};
+            };
+            const auto legacy=present(false,40), fixed=present(true,40);
+            check(legacy.lowFps<70&&fixed.lowFps>105&&fixed.missed==0,
+                "dedup 40-in-60 3X: content anchor removes cross-batch stutter and retains readiness");
+            const auto steady=present(true,30);
+            check(steady.lowFps>88&&steady.missed==0,"dedup 30-in-60 3X: steady cadence stays smooth");
+        }
         {const auto r=run(60.0,[](int i){return int64_t(i);},n,0,0,166667);
          check(r.kept==n&&r.regularSpans==r.spans,"dedup true 60: nothing dropped, timing unchanged");}
         {// +-1 per sample: two samples of one picture differ by up to 2, like the T911 (card_diff.py).

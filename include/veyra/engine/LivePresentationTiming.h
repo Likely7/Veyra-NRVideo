@@ -51,7 +51,7 @@ inline double livePairHoldMs(bool hasGenerated,double realPtsMs,double generated
 // 0.5% more late generated frames (reports/claude-fg-sidefx-20261101/sim_final).
 // One callback beyond min(interval/3, 8 ms) does not move the line; a second on
 // the same side moves it there at once. The FG budget, generated-frame expiry
-// and LivePairLatency stay on the callback itself.
+// stays tied to the callback. Deduplicated capture also learns GPU readiness on the content clock.
 class LiveArrivalSmoother {
     double offset_=0,drift_=0,jitter_=0,outside_=0;
     unsigned samples_=0;
@@ -75,6 +75,11 @@ public:
             jitter_+=.02*(std::abs(error)-jitter_);
         }
         return source+std::llround(offset_)-kLead100ns;
+    }
+    // Reuse the capture clock offset for content timestamps. Center the
+    // one-slot sampling uncertainty so a late sample can still reach its first deadline.
+    int64_t contentAnchor(int64_t contentPts,int64_t samplePts,int64_t callback,int64_t transportInterval){
+        return anchor(samplePts,callback,transportInterval)+(contentPts-samplePts)+transportInterval/2;
     }
     // Diagnostics: mean distance of a callback from the line, the clock difference, jumps.
     double jitterMs()const{return jitter_/10000;}

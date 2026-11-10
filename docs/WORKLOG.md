@@ -954,3 +954,14 @@ VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找�
 ## 2026-11-09 2.1.4 NR 推理复用致谢
 
 按用户要求，在 GitHub Release 和版本说明中补充 Magpie Experimental v0.6.12 的 DLSSNR「隔帧」模式、SAOG0721 与 yejincheng420 的贡献，并标明 Veyra 的独立实现。用 gh release edit 更新正文，复查公开正文、资产 ID/大小/SHA-256 和 Latest。群公告同步更新。
+
+
+## 2026-11-10 采集去重后的 40 帧补帧送帧修复
+
+独立分支 `codex/capture-dedup-pacing-20261110`，起点 `c5782a5`。40 帧在 60 Hz 采样后的有效回调间隔交替约 17/33 ms。原先组内按校正 PTS 插值，组间仍按回调重新锚定。现在物理采集卡的图内补帧把去重内容 PTS 映射到平滑采集时钟，自适应相位按同一个锚点统计 GPU 就绪时间。保留两批队列、原始采集时间、原判重和倍率。去重以外的 VFG 模型快档及垂直同步等待逻辑保持原合同。
+
+运行 `scripts/acceptance/build-recording-handoff.py --task codex-capture-dedup-pacing-20261110 --label 2.1.4-dedup-pacing-test --jobs 2 veyra_qml_ui veyra_live_timing_tests`，首次 278.0 秒，最终增量 11.9 秒。时序测试 166 项通过，含 40-in-60/30-in-60 3X 的实际时序组件模拟。先只启用去重时间戳平滑的首轮实卡 P99 14.16 ms，仍有首张生成帧晚于期限。最终版改用采集时钟映射并给自适应相位保留有界采样余量。
+
+用户退出正式版后，用隔离 NVIDIA 包对 MCS 4K-T911 的 4K60 NV12、约 40 FPS 内容、VFG 中档 3X 做 20 秒 A/B。使用同一程序的 `VEYRA_TEST_LEGACY_LIVE_PACING=1` 对照原去重路径。提交 119.95→119.93 FPS，界面 1% low 中位 57.66→110.03，逐帧提交间隔 P99 17.33→9.04 ms。真实帧回调到提交返回的中位 24.12→31.54 ms，P95 24.81→37.69 ms。稳定采样窗内两轮均无邮箱覆盖、降档、生成过期或容量丢弃增量。固定 60→30 复测 90.00 FPS，P99 11.87 ms，未走新去重锚点。未测物理屏幕扫描或手柄到屏幕延迟。
+
+回执 `E:/项目/Veyra/reports/codex-capture-dedup-pacing-20261110/FINAL.json`，逐帧日志在同任务 `logs` 目录。独立启动入口 `E:/项目/Veyra/tests/codex-capture-dedup-pacing-20261110/启动去重补帧测试.cmd`。验收后核对 QML 探针已恢复，E:/App 的正式 EXE 哈希保持发布值。
