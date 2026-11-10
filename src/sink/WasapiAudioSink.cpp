@@ -911,7 +911,7 @@ void AudioRenderer::unregisterEndpointNotification(){
     if(enum_)enum_->UnregisterEndpointNotificationCallback(notifier_);
     notifier_->Release();notifier_=nullptr;
 }
-bool AudioRenderer::start(AudioFormat input,double requestedBufferMs)
+bool AudioRenderer::start(AudioFormat input,double requestedBufferMs,std::wstring_view excludedEndpoint)
 {
     std::lock_guard endpointLock(endpointMutex_);
     if(client_||enum_)return checked(E_UNEXPECTED,"Endpoint already initialized");
@@ -947,6 +947,11 @@ bool AudioRenderer::start(AudioFormat input,double requestedBufferMs)
         if (!checked(hr,"GetDefaultAudioEndpoint")) return false;
     }
     deviceId_=endpointId(device_);
+    // A dedicated loopback session must never feed its own source, including
+    // when a saved speaker is missing and Windows falls back to the default.
+    if(!excludedEndpoint.empty()&&(deviceId_.empty()||
+        CompareStringOrdinal(deviceId_.data(),int(deviceId_.size()),excludedEndpoint.data(),int(excludedEndpoint.size()),TRUE)==CSTR_EQUAL))
+        return checked(HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY),"Choose a real output for virtual speaker audio");
     const std::wstring deviceName=endpointName(device_);
     registerEndpointNotification();
     hr = device_->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,

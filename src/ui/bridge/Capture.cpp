@@ -1,8 +1,16 @@
 // QML bridge: Capture responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/source/WasapiAudioInput.h"
+#include "VirtualCaptureAudioSetup.h"
 
 namespace veyra::ui {
 // --- capture dialog ----------------------------------------------------------
+static std::vector<source::CaptureDevice> captureAudioDeviceDetails() {
+    auto devices = source::CaptureCardSource::deviceDetails(true);
+    for (auto& endpoint : source::WasapiAudioInput::devices(true))
+        devices.push_back({std::move(endpoint.name), std::move(endpoint.id), false, true, true});
+    return devices;
+}
 static QString captureDeviceUiLabel(const source::CaptureDevice& device) {
     return source::decklink::isPath(device.path)
         ? uiText(device.name).replace(QStringLiteral("跟随驱动输入"), uiText(L"跟随驱动输入")) : utf8Of(device.name);
@@ -186,8 +194,12 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
         if (d.path == impl_->captureDevice)
             out << QVariantMap{{"id", source::kCaptureAudioFromVideoDevice},
                                {"label", d.hasEmbeddedAudio ? tr("视频设备内置音频（已检测）") : tr("尝试视频设备内置音频")}};
-    for (size_t i = 0; i < impl_->captureAudio.size(); ++i)
-        out << QVariantMap{{"id", int(i)}, {"label", QStringLiteral("[%1] %2").arg(impl_->captureAudio[i].wasapi ? QStringLiteral("WASAPI") : QStringLiteral("DirectShow"), utf8Of(impl_->captureAudio[i].name))}};
+    for (size_t i = 0; i < impl_->captureAudio.size(); ++i) {
+        const auto& device = impl_->captureAudio[i];
+        const auto label = device.virtualSpeaker ? tr("Veyra 虚拟扬声器 · %1").arg(utf8Of(device.name))
+            : QStringLiteral("[%1] %2").arg(device.wasapi ? QStringLiteral("WASAPI") : QStringLiteral("DirectShow"), utf8Of(device.name));
+        out << QVariantMap{{"id", int(i)}, {"label", label}};
+    }
     return out;
 }
 int QmlPlayerBridge::captureAudioChoice() const { return impl_->captureAudioMissing?-4:impl_->captureAudioChoice; }
@@ -268,8 +280,55 @@ QString QmlPlayerBridge::captureMagewellStatus() const {
         return tr("找不到美乐威运行库 LibMWCapture.dll（应在软件的 runtime\\magewell 文件夹里，或装美乐威驱动/SDK）");
     return veyra::ui::i18n::text(source::magewell::statusText());
 }
+bool QmlPlayerBridge::captureVirtualAudioInstalled() const { return impl_->captureVirtualAudioInstalled; }
+static bool captureVirtualAudioRemovalBlockedBy(const engine::PlayerSnapshot& snapshot) {
+    return snapshot.transport == engine::TransportState::Opening ||
+           snapshot.transport == engine::TransportState::Stopping ||
+           (snapshot.capture && snapshot.running);
+}
+bool QmlPlayerBridge::captureVirtualAudioRemovalBlocked() const {
+    return impl_->openingSource || captureVirtualAudioRemovalBlockedBy(impl_->snapshot);
+}
+bool QmlPlayerBridge::captureVirtualAudioBusy() const {
+    return impl_->captureVirtualAudioSetup && impl_->captureVirtualAudioSetup->busy();
+}
+void QmlPlayerBridge::setupCaptureVirtualAudio(bool uninstall) {
+    if (captureVirtualAudioBusy()) return;
+    if (uninstall && (impl_->openingSource || captureVirtualAudioRemovalBlockedBy(impl_->engine.snapshot()))) {
+        emit notice(tr("请先断开采集并等待连接结束"), true);
+        return;
+    }
+    auto& i = *impl_;
+    i.captureVirtualAudioInstalled = !source::WasapiAudioInput::devices(true,true).empty();
+    emit captureChanged();
+    if (i.captureVirtualAudioInstalled != uninstall) {
+        emit notice(uninstall ? tr("未检测到已安装的 VB-CABLE") : tr("已检测到 VB-CABLE，无需重复安装"), false);
+        refreshCaptureDevices();
+        return;
+    }
+    if (!i.captureVirtualAudioSetup) {
+        i.captureVirtualAudioSetup = new VirtualCaptureAudioSetup(this);
+        connect(i.captureVirtualAudioSetup, &VirtualCaptureAudioSetup::busyChanged, this, &QmlPlayerBridge::captureChanged);
+        connect(i.captureVirtualAudioSetup, &VirtualCaptureAudioSetup::completed, this,
+            [this](const QString& message, bool warning) {
+                emit notice(message, warning);
+                refreshCaptureDevices();
+            });
+    }
+    i.captureVirtualAudioSetup->start(dataDirectory());
+}
+void QmlPlayerBridge::openCaptureWindowsListen() {
+    if (!VirtualCaptureAudioSetup::openRecordingSettings())
+        emit notice(tr("无法打开 Windows 录制设备，请在声音控制面板打开“录制”"), true);
+}
+void QmlPlayerBridge::openCaptureVirtualAudioVendor() {
+    if (!QDesktopServices::openUrl(QUrl(QStringLiteral("https://vb-audio.com/Cable/"))))
+        emit notice(tr("无法打开 VB-Audio 官网"), true);
+}
+
 void QmlPlayerBridge::refreshCaptureDevices() {
     if (impl_->captureDriverSettingsOpen) return;
+    impl_->captureVirtualAudioInstalled = !source::WasapiAudioInput::devices(true,true).empty();
     impl_->capturePrefs = ui::CapturePreferenceStore(impl_->dataDir).load();
     queryCapture(0, {});
 }
@@ -288,9 +347,9 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
         const auto initialized=CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         if(FAILED(initialized)){q.info.code=initialized;q.info.stage=L"COM initialization";return q;}
         try {
-            if (kind == 0) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = source::CaptureCardSource::deviceDetails(true); }
+            if (kind == 0) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = captureAudioDeviceDetails(); }
             else {
-                if (kind == 2) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = source::CaptureCardSource::deviceDetails(true); }
+                if (kind == 2) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = captureAudioDeviceDetails(); }
                 q.formats = source::CaptureCardSource::formatsByPath(device,&q.info,preferred,requested);
             }
         } catch (...) {q.info.code=E_FAIL;q.info.stage=L"Capture capability exception";}
@@ -407,6 +466,21 @@ bool QmlPlayerBridge::startCaptureSession() {
     if(i.captureAudioMissing){emit notice(tr("上次的音频输入未连接，请插回设备或重新选择音频监听"),true);return false;}
     const int audio = i.captureAudioChoice;
     const source::CaptureDevice* audioDevice = audio >= 0 && size_t(audio) < i.captureAudio.size() ? &i.captureAudio[size_t(audio)] : nullptr;
+    if (audioDevice && audioDevice->virtualSpeaker) {
+        if (captureVirtualAudioBusy()) {
+            emit notice(tr("正在处理 VB-CABLE 安装器…"), true);
+            return false;
+        }
+        const auto outputs = sink::enumerateRenderEndpoints();
+        const auto preferred = wideOf(i.prefString("audioDevice"));
+        auto output = std::find_if(outputs.begin(), outputs.end(), [&](const auto& device) { return device.id == preferred; });
+        if (output == outputs.end())
+            output = std::find_if(outputs.begin(), outputs.end(), [](const auto& device) { return device.isDefault; });
+        if (output != outputs.end() && output->id == audioDevice->path) {
+            emit notice(tr("虚拟扬声器回录需要将音频输出设为真实耳机或音箱"), true);
+            return false;
+        }
+    }
     const auto path = source::CaptureCardSource::makeCapturePath(unsigned(device), i.captureVideo[size_t(device)], format->index, audio,
                                                                  audioDevice, i.captureColor, i.captureFps, format->key);
     if (path.empty()) { emit notice(tr("无法生成采集连接参数"), true); return false; }

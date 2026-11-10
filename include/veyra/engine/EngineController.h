@@ -89,6 +89,14 @@ struct PlayerSnapshot {
     bool nrAutoActive=false;
     uint32_t nrAutoPercent=0,nrAutoWidth=0,nrAutoHeight=0;
     std::wstring nrAutoStatus;
+    // NR inference reuse: whether the preview graph runs it, whether Auto
+    // chooses the level, the level (0 infers every frame, 1/2/3 reuse one
+    // frame in every 4/3/2), frames reused so far, and why a requested mode is
+    // not running (ASCII reason from EnhanceGraph::nrReuseIneligibility).
+    bool nrReuseActive=false,nrReuseAutomatic=false;
+    uint32_t nrReuseLevel=0;
+    uint64_t nrReuseFrames=0;
+    std::string nrReuseUnavailable;
     bool videoHdrActive=false; // TrueHDR actually running this graph (needs an HDR display path)
     std::wstring backendWarning;
     std::wstring sourceNotice;
@@ -150,6 +158,7 @@ struct PlayerSnapshot {
     uint32_t posterWidth=0,posterHeight=0;
     diagnostics::FrameMetrics metrics;
     std::optional<double> submissionFps;
+    std::optional<double> submissionLow1Fps; // 1% low of the presents, as an overlay reports it
     uint32_t flowPerf=0;int contentFps=0;
     uint64_t frames=0,generated=0;
     uint64_t captureReceived=0,captureDropped=0,nrEvaluated=0,nvofExecuted=0;

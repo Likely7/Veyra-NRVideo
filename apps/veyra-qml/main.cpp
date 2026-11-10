@@ -32,8 +32,10 @@
 #include <QDebug>
 #include <QAbstractNativeEventFilter>
 #include <QFile>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStandardPaths>
 
 #include <windows.h>
 #include <shellapi.h>
@@ -41,6 +43,7 @@
 #include <dbghelp.h>
 #include <d3d12.h>
 
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -53,8 +56,10 @@
 #include "veyra/engine/ExportJobManager.h"
 #include "veyra/engine/PresentationGeometry.h"
 #include "veyra/gfx/PresentationHooks.h"
+#include "veyra/pipeline/AmdHipPreflight.h"
 #include "veyra/ui/InterfaceRenderer.h"
 #include "veyra/ui/QmlDataDirectory.h"
+#include "veyra/ui/QmlDiskCache.h"
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/ui/ThumbnailProvider.h"
 
@@ -712,6 +717,35 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         }
     });
 
+    // Compiled QML goes to a cache folder of this build's own QML (see
+    // QmlDiskCache.h): with Qt's shared folder, 2.1.3 extracted over 2.1.2 ran
+    // the 2.1.2 pages. Qt reads QML_DISK_CACHE_PATH once, at the first QML load,
+    // with fromLocal8Bit; a folder the ANSI code page cannot spell turns the disk
+    // cache off rather than letting Qt fall back to the shared one.
+    {
+        const auto started = std::chrono::steady_clock::now();
+        const QString testRoot = qEnvironmentVariable("VEYRA_TEST_QML_CACHE_ROOT");
+        const auto cache = ui::chooseQmlDiskCache(
+            QCoreApplication::applicationDirPath() + QStringLiteral("/qml/Veyra"),
+            testRoot.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::CacheLocation) : testRoot,
+            qgetenv("QML_DISK_CACHE_PATH"), qgetenv("QML_DISABLE_DISK_CACHE"));
+        QString outcome = cache.note;
+        if (!cache.directory.isEmpty()) {
+            const QString folder = QDir::toNativeSeparators(cache.directory);
+            const QByteArray local = folder.toLocal8Bit();
+            if (QString::fromLocal8Bit(local) == folder) {
+                qputenv("QML_DISK_CACHE_PATH", local);
+                outcome = QStringLiteral("folder=") + folder;
+            } else {
+                qputenv("QML_DISABLE_DISK_CACHE", "1");
+                outcome = QStringLiteral("disk cache off: the code page cannot spell ") + folder;
+            }
+        }
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+        veyra::log::info("qml-cache", std::format("{} digest={} files={} bytes={} ms={:.1f}",
+            outcome.toStdString(), cache.digest.isEmpty() ? "none" : cache.digest.toStdString(), cache.files, cache.bytes, ms));
+    }
+
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("vySoftwareUi"), softwareUi);
     auto* thumbnails = new ui::ThumbnailProvider;
@@ -1208,6 +1242,20 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
 }
 
 int main(int argc, char** argv) {
+    // A child for the AMD HIP self-test (AmdHipPreflight.h): no Qt, no window and
+    // no player state, only the HIP calls and their result lines on the pipe.
+    if (argc >= 2 && std::strcmp(argv[1], "--amd-hip-preflight") == 0) {
+        int count = 0;
+        wchar_t** wide = CommandLineToArgvW(GetCommandLineW(), &count);
+        const int code = wide ? veyra::pipeline::amdhip::preflightMain(count, wide) : 2;
+        if (wide) LocalFree(wide);
+        return code;
+    }
+    {
+        std::wstring self(32768, L'\0');
+        self.resize(GetModuleFileNameW(nullptr, self.data(), DWORD(self.size())));
+        veyra::pipeline::amdhip::setPreflightExecutable(self);
+    }
     QString program;
     QStringList arguments;
     const int result = runApplication(argc, argv, program, arguments);

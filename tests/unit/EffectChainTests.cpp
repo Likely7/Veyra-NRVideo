@@ -2,6 +2,7 @@
 // modes must obey. These are the guards for the multi-NR and node-mode work.
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/GraphDescription.h"
+#include "veyra/engine/BackendRecovery.h"
 #include <type_traits>
 #include <algorithm>
 #include <random>
@@ -1490,12 +1491,16 @@ static void testThreeStepSr(){
         request.exportJob=false;request.stillImage=true;describeStages(request,s,desc);
         check(desc.enableSr&&desc.srInputWidth==1920&&desc.validateFixedExecutionPlan().empty(),"three-step SR: still images run it too");
         request.stillImage=false;
+        // Since 2026-11-08 a DLSS SR or FSR base runs double SR as well.
         for(const unsigned backend:{0u,kVideoSrFsr}){
             auto other=s;other.videoSrQuality=backend;describeStages(request,other,desc);
-            check(desc.srInputWidth==3840&&desc.srOutputWidth==3840&&!desc.enableSr,"three-step SR: DLSS SR and FSR keep the single step");
+            check(desc.enableSr&&desc.dualSr&&desc.srInputWidth==1920&&desc.srOutputWidth==3840&&desc.validateFixedExecutionPlan().empty(),
+                  "double SR: DLSS SR and FSR bases run both steps");
         }
         request.nvidiaAdapter=false;describeStages(request,s,desc);
         check(desc.srInputWidth==3840&&desc.srOutputWidth==desc.workWidth,"three-step SR: other adapters keep the single step");
+        auto fsrPair=s;fsrPair.videoSrQuality=kVideoSrFsr;fsrPair.dualSrQuality=kVideoSrFsr;describeStages(request,fsrPair,desc);
+        check(desc.enableSr&&desc.dualSr&&desc.srInputWidth==1920,"double SR: FSR -> FSR runs on other adapters");
         request.nvidiaAdapter=true;request.width=2560;request.height=1440;
         auto fit=s;fit.srPrescale=SrPrescale::P1080;fit.srTarget=SrTarget::Uhd8K;fit.srOutput=SrOutput::Uhd4K;describeStages(request,fit,desc);
         check(desc.enableSr&&desc.dualSr&&desc.firstSrWidth==7680&&desc.srInputWidth==1920&&desc.srOutputWidth==3840&&desc.srOutputHeight==2160&&desc.workWidth==3840&&
@@ -1509,15 +1514,17 @@ static void testThreeStepSr(){
         bad=s;bad.srOutput=SrOutput(7);check(!bad.validate().empty(),"three-step SR: an invalid output is rejected");
         check(s.activeVideoSettings().srPrescale==SrPrescale::P1080,"three-step SR: RTX Video SR keeps the prescale");
         auto off=s;off.sr=false;auto dlss=s;dlss.videoSrQuality=0;
-        check(off.activeVideoSettings().srPrescale==SrPrescale::Off&&dlss.activeVideoSettings().srPrescale==SrPrescale::Off,
-              "three-step SR: SR off and other backends normalize the fields");
+        check(off.activeVideoSettings().srPrescale==SrPrescale::Off&&dlss.activeVideoSettings().srPrescale==SrPrescale::P1080,
+              "three-step SR: SR off normalizes the fields, a DLSS SR base keeps the double SR reduction");
         auto before=s;before.srPrescale=SrPrescale::Off;auto output=s;output.srOutput=SrOutput::Qhd;
         check(requiresGraphRebuild(before,s)&&!requiresGraphRebuild(s,output),"double SR: reduction rebuilds, the kept shrink is inactive under double SR");
         auto single=s;single.dualSrEnabled=false;auto shrunk=single;shrunk.srOutput=SrOutput::Uhd4K;
         check(requiresGraphRebuild(single,shrunk)&&shrunk.activeVideoSettings().srOutput==SrOutput::Uhd4K&&
               output.activeVideoSettings().srOutput==SrOutput::Target,"supersample: the shrink rebuilds a single RTX Video SR pass only");
         auto dlssBefore=before;dlssBefore.videoSrQuality=0;
-        check(!requiresGraphRebuild(dlssBefore,dlss),"three-step SR: inactive edits do not rebuild the graph");
+        check(requiresGraphRebuild(dlssBefore,dlss),"double SR: a DLSS SR base's reduction rebuilds the graph too");
+        auto idle=dlssBefore;idle.dualSrEnabled=false;auto idleEdit=idle;idleEdit.srPrescale=SrPrescale::P1080;
+        check(!requiresGraphRebuild(idle,idleEdit),"three-step SR: inactive edits do not rebuild the graph");
         EnhancementSettings restored;ChainGlobalSettings::capture(output).apply(restored);
         check(restored.srPrescale==SrPrescale::P1080&&restored.srOutput==SrOutput::Qhd,"three-step SR: chain globals carry both fields");
         auto a=ChainConfiguration::capture(toChain(s),s,-1,-1);auto b=a;b.srOutput=SrOutput::Qhd;
@@ -1567,6 +1574,23 @@ static void testSupersampleSr(){
 }
 
 int main() {
+    {
+        EnhancementSettings before;before.nr=before.sr=false;
+        before.antiAlias.enabled=true;before.antiAlias.method=AntiAliasMethod::Dlaa;before.antiAlias.quality=0;
+        auto after=before;after.dlssSrModel=1;
+        check(requiresGraphRebuild(before,after),"DLAA: model edits rebuild even when SR is disabled");
+        after=before;after.flow=FlowQuality::Quality;
+        check(!(before.activeVideoSettings()==after.activeVideoSettings()),"DLAA: flow tuning stays active with no other flow consumer");
+        before.antiAlias.enabled=false;after=before;after.dlssSrModel=1;
+        check(!requiresGraphRebuild(before,after),"DLAA: disabled instance does not activate the model");
+        for(auto failure:{FailedBackend::Dlaa,FailedBackend::NgxCore,FailedBackend::OpticalFlow}){
+            auto failed=before;
+            failed.antiAlias.enabled=true;
+            failed.additionalAntiAliasCount=1;failed.additionalAntiAlias[0].enabled=true;
+            check(disableFailedBackend(failed,failure)&&!failed.usesDlaa()&&failed.additionalAntiAlias[0].enabled,
+                  "DLAA: recovery removes the failed consumer and leaves spatial anti-aliasing enabled");
+        }
+    }
     {
         using namespace veyra;using namespace veyra::engine;
         EnhancementSettings original;original.nr=false;original.sr=true;original.videoSrQuality=0;
@@ -1665,11 +1689,13 @@ int main() {
         check(requiresGraphRebuild(disabled,s),"enabling the second actual SR pass rebuilds");
         auto g=ChainGlobalSettings::capture(s);EnhancementSettings restored;g.apply(restored);
         check(restored.dualSrEnabled&&restored.dualSrTarget==s.dualSrTarget&&restored.dualSrQuality==s.dualSrQuality,"chain globals retain independent second-stage settings");
-        auto invalid=s;invalid.dualSrQuality=0;check(!invalid.validate().empty(),"reject invalid second SR quality before any GPU work");
+        auto invalid=s;invalid.dualSrQuality=6;check(!invalid.validate().empty(),"reject invalid second SR quality before any GPU work");
         invalid=s;invalid.dualSrTarget=SrTarget(99);check(!invalid.validate().empty(),"reject invalid second SR target");
         ChainExecutionRequest badRequest{{2560,1440},s.srTarget};badRequest.dualSrEnabled=true;badRequest.dualSrTarget=SrTarget(99);
         ChainExecutionPlan rejected;check(!compileChainExecutionPlan(toChain(s),badRequest,rejected).accepted,"invalid second target returns a rejected plan rather than throwing");
-        s.videoSrQuality=kVideoSrFsr;describeStages(r,s,d);check(!d.dualSr&&!s.activeVideoSettings().dualSrEnabled,"other base backends keep their existing single-stage path");
+        // Every SR backend runs double SR since 2026-11-08 (FSR base, standard second pass here).
+        s.videoSrQuality=kVideoSrFsr;describeStages(r,s,d);check(d.dualSr&&s.activeVideoSettings().dualSrEnabled&&d.videoSrQuality==kVideoSrFsr&&d.dualSrQuality==1,
+            "an FSR base runs double SR with its own second pass");
     }
     std::printf(failures ? "effect chain: %d FAILURES\n" : "effect chain: all checks passed\n", failures);
     return failures ? 1 : 0;

@@ -11,6 +11,8 @@
 #include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/pipeline/NrTemporalPass.h"
 #include "veyra/pipeline/NrHoldPass.h"
+#include "veyra/pipeline/NrReuse.h"
+#include "veyra/pipeline/NrReusePass.h"
 #include "veyra/pipeline/FramePacket.h" // ColorDescription, for the HDR display metadata
 
 // EnhanceGraph - the real unified processing graph (Playbook R3.2).
@@ -133,8 +135,16 @@ struct EnhanceGraphDesc {
     // Three-step SR (RTX Video SR): what SR reads after the prescale and what it
     // writes before the output fit. Zero: SR reads the source and writes the work extent.
     uint32_t srInputWidth=0,srInputHeight=0,srOutputWidth=0,srOutputHeight=0;
+    // Double SR: the first pass (videoSrQuality) writes firstSr*, the second
+    // (dualSrQuality) reads its reduction. Each pass has its own backend: DLSS SR,
+    // FSR or any RTX Video SR family (user 2026-11-08).
     bool dualSr=false;
     uint32_t firstSrWidth=0,firstSrHeight=0,dualSrQuality=engine::kDefaultVideoSrQuality;
+    uint32_t finalSrQuality()const{return dualSr?dualSrQuality:videoSrQuality;}
+    bool firstSrEnlarges()const{return firstSrWidth!=sourceWidth||firstSrHeight!=sourceHeight;}
+    // A first DLSS SR / FSR pass runs only when it enlarges; at the source size
+    // its result is the source (as for the Video Effects families).
+    bool firstSrRuns(uint32_t quality)const{return dualSr&&videoSrQuality==quality&&firstSrEnlarges();}
     uint32_t fgMultiplier=2;
     engine::FrameGenerationBackend frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;
@@ -171,6 +181,11 @@ struct EnhanceGraphDesc {
     // without it. See shaders/NrHold.hlsl.
     float nrHoldStrength=0.0f;
     float nrHoldTolerance=0.02f;
+    // NR inference reuse (NrReuse.h). Only the realtime preview builder sets
+    // nrReusePreview; export, image and diagnostic graphs leave it false and
+    // infer every frame whatever nrReuse says. Off creates no reuse pass.
+    bool nrReusePreview=false;
+    engine::NrReuseMode nrReuse=engine::NrReuseMode::Off;
     // Colour grade (plan v4). When color.enabled is false the stage does not
     // exist: no tables are allocated, no constants are packed and the ingest
     // shaders return their linear RGB untouched.
@@ -634,6 +649,17 @@ public:
     bool selectAutoNrLevel(unsigned level);
     bool autoNrPoolReady()const{return nrAutoPoolReady_;}
     unsigned autoNrLevel()const{return nrAutoLevel_;}
+    // NR inference reuse (NrReuse.h): active only in a preview graph built with
+    // a mode other than Off and a supported NR chain. Auto takes its level
+    // from the engine; a manual mode pins it. Empty reason: active or not asked.
+    bool nrReuseActive()const{return nrReusePass_!=nullptr;}
+    bool nrReuseAutomatic()const{return nrReusePass_&&desc_.nrReuse==engine::NrReuseMode::Auto;}
+    unsigned nrReuseLevel()const{return nrReuseScheduler_.level();}
+    // The last processed frame reused instead of inferring. A paused picture
+    // must be fully inferred, so the engine re-renders such a frame on pause.
+    bool nrReuseLastFrameReused()const{return nrReusePass_&&nrReuseScheduler_.lastReused();}
+    void setNrReuseLevel(unsigned level);
+    const std::string& nrReuseUnavailable()const{return nrReuseUnavailable_;}
     Extent autoNrExtent()const{return nrAutoPoolReady_&&desc_.nrAutoPoolLayer?desc_.nrLayersExtent[*desc_.nrAutoPoolLayer]:Extent{};}
 
     // s10 ownership-order teardown: NVOF fence drain must happen BEFORE this
@@ -654,6 +680,7 @@ public:
         uint64_t fgSubmittedCandidates = 0, fgDisabledFrames = 0;
         uint64_t fgProviderDisabled = 0;
         uint64_t nrMotionFrames = 0, sceneCutCount = 0, resetCount = 0;
+        uint64_t nrReuseFrames = 0, nrReuseChainedMotion = 0;
     };
     const Metrics& metrics() const { return metrics_; }
     const std::string& mvecSource() const { return mvecSource_; }
@@ -733,7 +760,9 @@ public:
     bool presentSinkFg() const { return xessEnabled(); }
     // AMD FSR upscaling replaces the SR stage; it is a FidelityFX effect, not
     // an NGX feature, so it also works on non-NVIDIA adapters.
-    bool fsrSrRequested() const { return desc_.enableSr && !desc_.stillImage && desc_.videoSrQuality==engine::kVideoSrFsr; }
+    // Double SR may run FSR in either pass; each pass is its own FidelityFX context.
+    bool fsrSrRequested() const { return desc_.enableSr && !desc_.stillImage &&
+        (desc_.finalSrQuality()==engine::kVideoSrFsr || desc_.firstSrRuns(engine::kVideoSrFsr)); }
     // Out of line: the backend type is only forward declared here.
     bool fsrSrEnabled() const;
     // Requested output multiplier (2 = one generated frame). Consumed by the
@@ -778,6 +807,11 @@ public:
     // does not match the content domain). The engine surfaces this in the
     // status panel so the refusal is visible, not only logged.
     const std::wstring& colorLutNotice() const { return colorLutNotice_; }
+    // DLAA instances that pass the picture through instead (shown with the
+    // colour status, like a refused LUT), and how many DLAA evaluations ran.
+    const std::wstring& antiAliasNotice() const { return antiAliasNotice_; }
+    uint64_t dlaaEvaluateCount() const;
+    uint64_t dlaaMotionEvaluateCount() const;
     // Beauty nodes: a problem that disables them (shown, never only logged), and the
     // faces the shared tracker found a few frames ago (status only; the picture
     // uses this frame's GPU result).
@@ -882,6 +916,12 @@ private:
     ComPtr<ID3D12Resource> videoSrInput_,videoSrOutput_;
     ComPtr<ID3D12Resource> srPrescaled_; // linear second-SR input: the double SR reduction of the first result
     ComPtr<ID3D12Resource> firstSrInput_,firstSrOutput_,firstSrLinear_;
+    // Double SR temporal passes: a first DLSS SR pass takes motion in its output
+    // pixels (first result), a second FSR pass in its render pixels (SR input).
+    ComPtr<ID3D12Resource> firstSrFlow_,secondSrFlow_;
+    UINT firstSrFlowSet()const{return 3+UINT(nrInstances_.size());}
+    UINT secondSrFlowSet()const{return 4+UINT(nrInstances_.size());}
+    UINT dlaaFlowSet(UINT index)const{return secondSrFlowSet()+1+index;}
     ComPtr<ID3D12Resource> videoHdrInput_,videoHdrOutput_;
     ComPtr<ID3D12Resource> residualRgba_,nrFlow_,baseFlow_;
     ComPtr<ID3D12Resource> preSrProtectionRgba_;
@@ -949,6 +989,15 @@ private:
     // setting is non-zero; a default (0) session never allocates it and the
     // dispatch is skipped, so the disabled path is unchanged.
     std::unique_ptr<NrHoldPass> nrHoldPass_;
+    // NR inference reuse: constructed only for a preview graph that asked for
+    // it and whose NR chain qualifies (createNrReusePass), so every other
+    // graph records exactly the commands it did before.
+    std::unique_ptr<NrReusePass> nrReusePass_;
+    NrReuseScheduler nrReuseScheduler_;
+    bool nrReuseKeyValid_=false; // the previous frame inferred and stored its chain
+    double nrReuseInferredPts_=0; // PTS of the last frame that ran NR inference
+    std::string nrReuseUnavailable_;
+    std::string nrReuseIneligibility() const;
     // 纹理 / 清晰度 / 去朦胧 of the list grade fused into input conversion (srcRgba_).
     ColorDetailPass colorDetail_;
     // The texture the rest of the graph reads as "the NR result". Without the
@@ -956,6 +1005,7 @@ private:
     // produces. Set once per frame, read by the SR/FG/tail bindings below.
     ID3D12Resource* nrOutputView_=nullptr;
     bool createNrHoldPass();
+    bool createNrReusePass();
     // --- colour grade (v4): CPU-baked tables read by the ingest shaders -----
     bool colorActive_=false;
     std::wstring colorLutNotice_;
@@ -1001,6 +1051,33 @@ private:
     std::array<std::unique_ptr<AntiAliasPass>,engine::kMaxAntiAliasInstances> antiAliasPasses_{};
     std::array<ComPtr<ID3D12Resource>,engine::kMaxAntiAliasInstances> antiAliasOutputs_{};
     bool createAntiAlias(uint32_t parameter,uint32_t width,uint32_t height);
+    // DLAA instances (user request 2026-11-08), by the same parameter ordinal:
+    // DLSS SR created at the instance's own size in its DLAA mode. Motion is this
+    // frame's optical-flow field of that size (none: zero motion and a reset, so
+    // no history is reused); a copy where DLSS cannot run (still images, no NGX
+    // feature), and antiAliasNotice_ says so.
+    struct SignedHdrRestore { ComPtr<ID3D12Resource> raw; ComputePass pass; };
+    bool createSignedHdrRestore(SignedHdrRestore& restore,uint32_t width,uint32_t height);
+    void bindSignedHdrRestore(SignedHdrRestore& restore,ID3D12Resource* input,ID3D12Resource* output);
+    void finishTemporalOutput(ID3D12GraphicsCommandList* list,SignedHdrRestore& restore,ID3D12Resource* output);
+    struct DlaaInstance {
+        std::unique_ptr<ngx::DlssSrBackend> backend;
+        ComPtr<ID3D12Resource> zeroMotion,depth,adaptedMotion;
+        SignedHdrRestore hdr;
+        ID3D12Resource* input=nullptr;
+        uint32_t width=0,height=0;
+        bool copy=false,motionLogged=false;
+        uint64_t evaluations=0,motionless=0;
+    };
+    std::array<DlaaInstance,engine::kMaxAntiAliasInstances> dlaa_{};
+    std::wstring antiAliasNotice_;
+    // This frame's flow fields are written (the frame's haveFlow), for DLAA motion.
+    bool frameFlowValid_=false;
+    // An enabled DLAA instance that will run DLSS (not a still image, NVIDIA).
+    bool dlaaRequested() const;
+    // The source-size slot runs after the optical flow when it holds DLAA.
+    bool sourcePostAfterFlow() const;
+    bool dispatchDlaa(ID3D12GraphicsCommandList* list,const SlotPass& pass,bool reset);
     // Beauty nodes by parameter ordinal, plus what they share: the face tracker,
     // the faces buffer (a zero buffer when the detector is unavailable) and this
     // frame's original - the picture before every effect node. Without a fused
@@ -1081,8 +1158,16 @@ private:
     std::unique_ptr<ngx::DlssFgBackend> fgBackend_;
     std::unique_ptr<gfx::FsrFgPresenter> fsrFgBackend_;
     std::unique_ptr<gfx::FsrSrBackend> fsrSrBackend_;
+    // Double SR first passes on DLSS SR / FSR (the final pass keeps the members above).
+    std::unique_ptr<ngx::DlssSrBackend> firstDlssSrBackend_;
+    std::unique_ptr<gfx::FsrSrBackend> firstFsrSrBackend_;
+    SignedHdrRestore srHdrRestore_,firstSrHdrRestore_;
+    // Constant far depth and zero motion for the temporal SR passes. The source
+    // extent for a single FSR pass; under double SR the largest render/motion
+    // extent of its DLSS SR / FSR passes (larger inputs are read in their subrect).
     ComPtr<ID3D12Resource> fsrSrDepth_, upFsrSrDepth_, fsrSrZeroMotion_, upFsrSrZeroMotion_;
     size_t fsrSrDepthPitch_=0;
+    uint32_t fsrAuxW_=0,fsrAuxH_=0;
     NVSDK_NGX_Parameter* ngxParams_ = nullptr;
     uint64_t nrResult_ = 0;
     uint64_t fgInitResult_ = 0;

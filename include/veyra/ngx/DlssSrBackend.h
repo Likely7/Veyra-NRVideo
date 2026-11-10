@@ -35,6 +35,9 @@ public:
         // 1 DLSS 4.5 second-generation transformer (preset M), 2 DLSS 4.5 Ultra
         // Performance (preset L). Applied to every perf mode as a render preset hint.
         uint32_t model = 0;
+        // DLAA: the feature runs at its own size (input == output) in the DLAA perf
+        // mode instead of the 1:1 bypass below.
+        bool nativeResolution = false;
     };
 
     struct EvalDesc {
@@ -68,16 +71,16 @@ public:
     uint64_t createResult() const { return createResult_; }
     uint64_t evaluateCount() const { return evaluateCount_; }
     uint64_t bypassCount() const { return bypassCount_; }
-    bool isBypass() const; // true when input == output extent
+    bool isBypass() const; // true when input == output extent (never for DLAA)
 
     // 1:1 bypass: the entire SR backend is skipped (Playbook section 11).
     // Checks BOTH dimensions to handle non-uniform extents correctly.
     bool shouldBypass(uint32_t inW, uint32_t inH, uint32_t outW, uint32_t outH) const {
-        return inW == outW && inH == outH;
+        return !nativeResolution_ && inW == outW && inH == outH;
     }
     // Convenience overload for width-only check (backward compat).
     bool shouldBypass(uint32_t inputWidth, uint32_t outputWidth) const {
-        return inputWidth == outputWidth;
+        return !nativeResolution_ && inputWidth == outputWidth;
     }
 
 private:
@@ -89,6 +92,7 @@ private:
     uint32_t inputHeight_ = 0;
     uint32_t outputWidth_ = 0;
     uint32_t outputHeight_ = 0;
+    bool nativeResolution_ = false;
 };
 
 } // namespace veyra::ngx

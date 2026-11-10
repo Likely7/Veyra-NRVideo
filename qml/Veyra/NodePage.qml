@@ -474,8 +474,8 @@ VPage {
                             model: [
                                 { k: qsTr("输入"), v: veyra.sourceSummary, hi: false },
                                 { k: qsTr("输出"), v: veyra.outputSummary.length > 0 ? veyra.outputSummary : qsTr("未测"), hi: false },
-                                { k: qsTr("显示 fps"), v: veyra.displayFpsKnown ? veyra.displayFps.toFixed(1) : qsTr("未测"), hi: true },
-                                { k: veyra.submitFpsLabel + " fps", v: veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) : qsTr("未测"), hi: false },
+                                { k: veyra.submitFpsLabel + " fps", v: veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) : qsTr("未测"), hi: true },
+                                { k: qsTr("1% low"), v: veyra.submitLowFpsKnown ? veyra.submitLowFps.toFixed(1) : "—", hi: false },
                                 { k: qsTr("待呈现"), v: veyra.queuedFramesKnown ? veyra.queuedFrames.toFixed(0) + qsTr(" 帧") : qsTr("未测"), hi: false }
                             ]
                             delegate: RowLayout {
@@ -495,7 +495,7 @@ VPage {
                                 }
                                 Text {
                                     text: modelData.v.length > 0 ? modelData.v : "—"
-                                    color: modelData.hi && veyra.displayFpsKnown ? Theme.ok : Theme.t1
+                                    color: modelData.hi && veyra.submitFpsKnown ? Theme.ok : Theme.t1
                                     font.family: Theme.fontMono
                                     font.pixelSize: modelData.hi ? 14 : 12
                                     font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
@@ -1521,7 +1521,8 @@ VPage {
                 VRow {
                     label: qsTr("DLSS 模型")
                     hint: qsTr("K 保留原有模型；M、L 为 DLSS 4.5。L 针对较低输入分辨率，实际画质与耗时取决于片源。")
-                    visible: veyra.videoSrQuality === 0
+                    // Also the model of a DLSS SR second pass under double SR.
+                    visible: veyra.videoSrQuality === 0 || (veyra.dualSrEnabled && veyra.dualSrQuality === 0)
                     enabled: Support.available(veyra, "sr0")
                     VSelect {
                         objectName: "node-dlss-sr-model"

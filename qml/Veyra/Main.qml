@@ -730,7 +730,7 @@ Window {
     Shortcut { sequence: veyra.shortcuts.playPause; onActivated: veyra.togglePlayPause() }
     Shortcut { sequence: veyra.shortcuts.fullscreen; onActivated: root.toggleFullscreen() }
     Shortcut { sequence: veyra.shortcuts.screenshot; onActivated: veyra.takeScreenshot() }
-    Shortcut { sequence: veyra.shortcuts.record; onActivated: veyra.toggleRecording() }
+    Shortcut { sequence: veyra.shortcuts.record; autoRepeat: false; onActivated: veyra.toggleRecording("shortcut") } // a held key must not toggle at the repeat rate
     Shortcut {
         sequence: veyra.shortcuts.toggleMode
         enabled: dialogs.dialog === ""

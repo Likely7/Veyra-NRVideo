@@ -20,9 +20,30 @@ bool QmlPlayerBridge::recordingAudio() const { return impl_->prefBool("recordAud
 bool QmlPlayerBridge::recording() const { return impl_->recordingState.value("active").toBool(); }
 QVariantMap QmlPlayerBridge::recordingState() const { return impl_->recordingState; }
 
-void QmlPlayerBridge::startRecording() {
-    if (recording()) { emit notice(tr("录制已在进行中"), true); return; }
-    if (!hasSource()) { emit notice(tr("没有正在播放的画面，无法录制"), true); return; }
+// Every start and stop names its trigger, and a shortcut also the key the
+// shortcut map was offered just before (field report 2026-11-08: recording
+// toggled on and off around clicks and window activation, and the log could not
+// tell a key from the 专业 button).
+// (A template so the private Impl's key record is passed without naming it.)
+template <class Key>
+static void logRecordingRequest(const char* what, const QString& source, const QString& binding, const Key& k, const char* outcome) {
+    std::string detail;
+    if (source.startsWith(QStringLiteral("shortcut"))) {
+        const qint64 age = k.atMs ? QDateTime::currentMSecsSinceEpoch() - k.atMs : -1;
+        const QKeySequence pressed(QKeyCombination(Qt::KeyboardModifiers(k.modifiers & ~Qt::KeypadModifier), Qt::Key(k.key)));
+        detail = std::format(" binding={}",binding.toStdString());
+        if(age>=0&&age<=1000&&pressed==QKeySequence(binding,QKeySequence::PortableText)){
+            detail += std::format(" key={} vk=0x{:X} scan=0x{:X} repeat={} receiver={} ageMs={}",
+                                  binding.toStdString(),k.virtualKey,k.scanCode,k.autoRepeat,k.window.toStdString(),age);
+        }else detail += " keyEvent=unobserved";
+    }
+    veyra::log::info("ui-record", std::format("{} source={}{} {}", what, source.isEmpty() ? std::string("unnamed") : source.toStdString(), detail, outcome));
+}
+void QmlPlayerBridge::startRecording(const QString& source) {
+    const QString binding=source==QLatin1String("shortcut")?shortcuts().value("record").toString():QString();
+    if (recording()) { logRecordingRequest("start", source, binding, impl_->lastShortcutKey, "refused=already-recording"); emit notice(tr("录制已在进行中"), true); return; }
+    if (!hasSource()) { logRecordingRequest("start", source, binding, impl_->lastShortcutKey, "refused=no-source"); emit notice(tr("没有正在播放的画面，无法录制"), true); return; }
+    logRecordingRequest("start", source, binding, impl_->lastShortcutKey, "requested");
     engine::RecordingSettings options;
     options.directory = wideOf(recordingDirectory());
     options.bitrateMbps = uint32_t(recordingBitrateMbps());
@@ -36,13 +57,15 @@ void QmlPlayerBridge::startRecording() {
     impl_->recordingState["failed"] = false;
     emit recordingChanged();
 }
-void QmlPlayerBridge::stopRecording() {
-    if (!recording()) return;
+void QmlPlayerBridge::stopRecording(const QString& source) {
+    const QString binding=source==QLatin1String("shortcut")?shortcuts().value("record").toString():QString();
+    if (!recording()) { logRecordingRequest("stop", source, binding, impl_->lastShortcutKey, "refused=not-recording"); return; }
+    logRecordingRequest("stop", source, binding, impl_->lastShortcutKey, "requested");
     impl_->engine.stopRecording();
     impl_->recordingState["active"] = false;
     emit recordingChanged();
 }
-void QmlPlayerBridge::toggleRecording() { if (recording()) stopRecording(); else startRecording(); }
+void QmlPlayerBridge::toggleRecording(const QString& source) { if (recording()) stopRecording(source); else startRecording(source); }
 void QmlPlayerBridge::chooseRecordingDirectory() {
     const QString dir = QFileDialog::getExistingDirectory(nullptr, tr("选择录制保存位置"), recordingDirectory());
     if (!dir.isEmpty()) setPreference(QStringLiteral("recordDir"), dir);

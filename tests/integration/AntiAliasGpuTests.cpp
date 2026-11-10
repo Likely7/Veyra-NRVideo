@@ -17,6 +17,7 @@
 //   real-frame: a captured picture (VEYRA_AA_FRAME, binary PPM) through SMAA high
 //   without NR and with a real NR layer before / after it; the outputs go to
 //   VEYRA_AA_FRAME_OUT as PPM for comparison. A diagnostic, not part of a sweep.
+// dlaa-*: DLAA through real NGX graphs (see the block above the case list).
 // VEYRA_AA_GPU_DEBUG=1 enables the D3D12 debug layer and fails on its errors.
 #include "veyra/engine/PreviewGpuSession.h"
 #include "veyra/engine/GraphDescription.h"
@@ -676,6 +677,220 @@ int timingCase(unsigned width, unsigned height, bool dense = false) {
     return failures ? 1 : 0;
 }
 
+
+// ---- DLAA (user request 2026-11-08): NGX DLSS at the picture's own size ---------------
+// dlaa-sdr: the list chain's anti-aliasing at the source size (NR and SR off), a
+//   scene panning one pixel a frame: every frame runs DLSS in its DLAA mode with
+//   optical-flow motion, flat areas stay close, edges change. dlaa-sr: the same in
+//   front of DLSS SR. dlaa-hdr: P010 PQ input, scRGB output, no NaN/Inf, the flat
+//   highlight patch and out-of-709 colours kept. dlaa-still: a still image passes
+//   through bit-identical, with the notice, and DLSS never runs.
+AVFrame* shiftedFrame(const Scene& scene, double dx) {
+    AVFrame* f = av_frame_alloc();
+    if (!f) return nullptr;
+    f->format = AV_PIX_FMT_BGR0; f->width = int(scene.width); f->height = int(scene.height);
+    f->color_range = AVCOL_RANGE_UNSPECIFIED; f->color_trc = AVCOL_TRC_IEC61966_2_1; f->colorspace = AVCOL_SPC_RGB;
+    if (av_frame_get_buffer(f, 32) < 0) { av_frame_free(&f); return nullptr; }
+    for (unsigned y = 0; y < scene.height; ++y)
+        for (unsigned x = 0; x < scene.width; ++x) {
+            const int l = scene.label(x + 0.5 - dx, y + 0.5);
+            const uint8_t* c = l == 1 ? kShape : l == 2 ? kLine : kBackground;
+            auto* p = f->data[0] + size_t(y) * f->linesize[0] + size_t(x) * 4;
+            p[0] = c[2]; p[1] = c[1]; p[2] = c[0]; p[3] = 255;
+        }
+    return f;
+}
+bool readHalfFrom(gfx::D3D12DeviceContext& ctx, gfx::CommandSlotRing& ring, ID3D12Resource* texture, std::vector<float>& rgba) {
+    const auto d = texture->GetDesc();
+    if (d.Format != DXGI_FORMAT_R16G16B16A16_FLOAT) return false;
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{}; UINT64 bytes = 0;
+    ctx.device()->GetCopyableFootprints(&d, 0, 1, 0, &fp, nullptr, nullptr, &bytes);
+    D3D12_HEAP_PROPERTIES heap{}; heap.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC buffer{}; buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; buffer.Width = bytes;
+    buffer.Height = 1; buffer.DepthOrArraySize = 1; buffer.MipLevels = 1; buffer.SampleDesc.Count = 1;
+    buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    Microsoft::WRL::ComPtr<ID3D12Resource> readback;
+    if (FAILED(ctx.device()->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readback)))) return false;
+    Status st = Status::Ok; const auto slot = ring.slotCount() - 1; auto* list = ring.acquire(slot, st);
+    if (!list) return false;
+    D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    b.Transition = {texture, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE};
+    list->ResourceBarrier(1, &b);
+    D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
+    src.pResource = texture; src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    dst.pResource = readback.Get(); dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT; dst.PlacedFootprint = fp;
+    list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+    std::swap(b.Transition.StateBefore, b.Transition.StateAfter); list->ResourceBarrier(1, &b);
+    if (!ring.submitAndSignal(slot) || !ring.waitIdle()) return false;
+    uint8_t* data = nullptr; D3D12_RANGE range{0, SIZE_T(bytes)};
+    if (FAILED(readback->Map(0, &range, reinterpret_cast<void**>(&data)))) return false;
+    rgba.resize(size_t(d.Width) * d.Height * 4);
+    for (UINT y = 0; y < d.Height; ++y) {
+        const auto* row = reinterpret_cast<const DirectX::PackedVector::HALF*>(data + fp.Offset + size_t(y) * fp.Footprint.RowPitch);
+        for (UINT x = 0; x < UINT(d.Width) * 4; ++x) rgba[size_t(y) * d.Width * 4 + x] = DirectX::PackedVector::XMConvertHalfToFloat(row[x]);
+    }
+    D3D12_RANGE empty{}; readback->Unmap(0, &empty);
+    return true;
+}
+struct DlaaRun { bool ok = false,modelRebuild=false,flowRebuild=false; uint64_t dlaa = 0, motion = 0, sr = 0; std::wstring notice; sink::RgbaImage last; std::vector<float> lastHalf; };
+// `frames` frames through a real graph (NGX), the scene moving `step` pixels a frame.
+DlaaRun dlaaRun(const AntiAliasSettings& a, unsigned frames, double step, bool sr, bool hdr, bool still,unsigned srQuality=0,bool two=false,bool large=false) {
+    DlaaRun r;
+    HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED); (void)com;
+    engine::EnhancementSettings settings; settings.antiAlias = a; settings.multiplier = 1;
+    if (hdr) settings.hdrOutputMode = engine::HdrOutputMode::ScRgb;
+    if (sr) { settings.srTarget = large?pipeline::SrTarget::Uhd4K:pipeline::SrTarget::Qhd; settings.videoSrQuality = srQuality; }
+    if(two){settings.additionalAntiAliasCount=1;settings.additionalAntiAlias[0]=a;}
+    const Scene scene(large?2560:640,large?1440:360);
+    engine::StageRequest request; request.width = scene.width; request.height = scene.height; request.sr = sr; request.stillImage = still;
+    pipeline::EnhanceGraphDesc desc; engine::describeStages(request, settings, desc);
+    if (!desc.fixedExecutionPlanError.empty()) { std::cout << "plan error: " << desc.fixedExecutionPlanError << std::endl; return r; }
+    desc.rgbInput = !hdr; desc.hdrInput = hdr; desc.hdrOutput = hdr; desc.stillImage = still; desc.outputDitherStep = 0;
+    if(large){desc.flowWidth=1920;desc.flowHeight=1080;}
+    desc.runtimeAbsPath = runtime::localRuntimeDirectory().wstring();
+    engine::PreviewGpuSession session;
+    gfx::DeviceContextDesc device;device.enableDebugLayer=std::getenv("VEYRA_AA_GPU_DEBUG")!=nullptr;
+    Status status=Status::Ok;
+    bool ok=session.context.initialize(device,status)&&session.ring.initialize(session.context.device(),session.context.directQueue(),
+        session.context.fence(),session.context.fenceEvent(),4,status);
+    gfx::ComPtr<ID3D12InfoQueue> messages;
+    if(device.enableDebugLayer&&ok)session.context.device()->QueryInterface(IID_PPV_ARGS(&messages));
+    if(messages)messages->ClearStoredMessages();
+    ok=ok&&session.graph->initialize(desc)&&session.graph->createViews();
+    for (unsigned i = 0; ok && i < frames; ++i) {
+        AVFrame* frame = hdr ? hdrFrame(scene) : shiftedFrame(scene, step * i);
+        pipeline::EnhanceGraph::FrameOutputs out;
+        ok = frame && session.graph->process(frame, double(i) * 1000.0 / 30.0, i == 0, out, i + 1) && session.ring.waitIdle();
+        if (ok && i + 1 == frames) {
+            auto* texture = session.graph->videoFrameResource(out.videoSlot);
+            ok = texture && (hdr ? readHalfFrom(session.context, session.ring, texture, r.lastHalf)
+                                 : sink::readRgba8(session.context, session.ring, texture, r.last));
+        }
+        av_frame_free(&frame);
+    }
+    if (ok) {
+        r.dlaa = session.graph->dlaaEvaluateCount(); r.motion=session.graph->dlaaMotionEvaluateCount();
+        r.sr = session.graph->metrics().srEvaluateCount; r.notice = session.graph->antiAliasNotice();
+        if(a.enabled&&a.usesDlaa()&&!still){
+            auto changed=settings;changed.dlssSrModel=1;
+            r.modelRebuild=!session.graph->applySettings(changed);
+            changed=settings;changed.opticalFlowBackend=engine::OpticalFlowBackend::GpuDis;
+            r.flowRebuild=!session.graph->applySettings(changed);
+        }
+    }
+    r.ok = ok;
+    session.ring.drainQueue(); session.graph->shutdown(); session.shutdown();
+    if(messages){
+        size_t errors=0;
+        for(UINT64 i=0;i<messages->GetNumStoredMessagesAllowedByRetrievalFilter();++i){
+            SIZE_T bytes=0;messages->GetMessage(i,nullptr,&bytes);std::vector<uint8_t> storage(bytes);
+            auto* m=reinterpret_cast<D3D12_MESSAGE*>(storage.data());messages->GetMessage(i,m,&bytes);
+            if(m->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;std::printf("D3D_ERROR %s\n",m->pDescription);}
+        }
+        check(errors==0,"DLAA/FSR graph: D3D12 debug layer reports zero errors");r.ok=r.ok&&errors==0;
+    }
+    return r;
+}
+int dlaaCase(const std::string& name, bool sr,bool two=false) {
+    const auto dlaa = aa(AntiAliasMethod::Dlaa, 0);
+    AntiAliasSettings off = dlaa; off.enabled = false;
+    constexpr unsigned frames = 12;
+    const auto on = dlaaRun(dlaa, frames, 1.0, sr, false, false,0,two), base = dlaaRun(off, frames, 1.0, sr, false, false,0,two);
+    check(on.ok && base.ok && on.last.pixels.size() == base.last.pixels.size(), name + ": real graph runs with DLAA on and off");
+    if (!on.ok || !base.ok || on.last.pixels.size() != base.last.pixels.size()) return 1;
+    std::printf("METRIC case=%s dlaaEvaluations=%llu srEvaluations=%llu out=%ux%u notice=%zu\n", name.c_str(),
+                (unsigned long long)on.dlaa, (unsigned long long)on.sr, on.last.width, on.last.height, on.notice.size());
+    check(on.dlaa == frames*(two?2:1) && on.notice.empty(), name + ": DLSS ran in its DLAA mode on every frame and instance");
+    check(on.modelRebuild&&on.flowRebuild,name+": model and flow backend changes require rebuilding the native features");
+    check(!sr || (on.sr > 0 && base.sr > 0), name + ": DLSS SR ran behind it");
+    if (!sr) {
+        // The last frame's scene: flat pixels nearly unchanged, edges changed.
+        const Scene scene; std::vector<uint8_t> labels(size_t(scene.width) * scene.height);
+        for (unsigned y = 0; y < scene.height; ++y)
+            for (unsigned x = 0; x < scene.width; ++x) labels[size_t(y) * scene.width + x] = uint8_t(scene.label(x + 0.5 - double(frames - 1), y + 0.5));
+        double flatDiff = 0, edgeDiff = 0; size_t flat = 0, edges = 0;
+        for (int y = 4; y + 4 < int(scene.height); ++y)
+            for (int x = 4; x + 4 < int(scene.width); ++x) {
+                const auto l = labels[size_t(y) * scene.width + x]; bool same = true, nearEdge = false;
+                for (int dy = -4; dy <= 4; ++dy)
+                    for (int dx = -4; dx <= 4; ++dx) {
+                        const bool s = labels[size_t(y + dy) * scene.width + x + dx] == l;
+                        same &= s; if (std::abs(dx) <= 1 && std::abs(dy) <= 1) nearEdge |= !s;
+                    }
+                double d = 0; const size_t i = (size_t(y) * scene.width + x) * 4;
+                for (unsigned c = 0; c < 3; ++c) d += std::abs(double(on.last.pixels[i + c]) - base.last.pixels[i + c]) / 3.0;
+                if (same) { flatDiff += d; ++flat; }
+                if (nearEdge) { edgeDiff += d; ++edges; }
+            }
+        flatDiff /= double(std::max<size_t>(flat, 1)); edgeDiff /= double(std::max<size_t>(edges, 1));
+        std::printf("METRIC case=%s flatMeanDiff=%.3f (n=%zu) edgeMeanDiff=%.3f (n=%zu) 8-bit\n", name.c_str(), flatDiff, flat, edgeDiff, edges);
+        check(flatDiff < 1.5, name + ": flat areas stay within 1.5/255 of the input on average");
+        check(edgeDiff > 2 * flatDiff && edgeDiff > 0.5, name + ": edges change more than flat areas");
+    }
+    return failures ? 1 : 0;
+}
+int dlaaHdrCase() {
+    const auto on = dlaaRun(aa(AntiAliasMethod::Dlaa, 0), 8, 0.0, false, true, false);
+    AntiAliasSettings offSettings = aa(AntiAliasMethod::Dlaa, 0); offSettings.enabled = false;
+    const auto off = dlaaRun(offSettings, 8, 0.0, false, true, false);
+    check(on.ok && off.ok && on.lastHalf.size() == off.lastHalf.size() && !on.lastHalf.empty(), "dlaa-hdr: real graph runs with HDR input and scRGB output");
+    if (!on.ok || !off.ok || on.lastHalf.size() != off.lastHalf.size() || on.lastHalf.empty()) return 1;
+    size_t bad = 0; double patchOn = 0, patchOff = 0; size_t patch = 0, negativeOff = 0, negativeOn = 0;
+    const Scene scene;
+    for (unsigned y = 0; y < scene.height; ++y)
+        for (unsigned x = 0; x < scene.width; ++x) {
+            const size_t i = (size_t(y) * scene.width + x) * 4;
+            for (unsigned c = 0; c < 3; ++c) bad += !std::isfinite(on.lastHalf[i + c]);
+            const bool negOff = std::min({off.lastHalf[i], off.lastHalf[i + 1], off.lastHalf[i + 2]}) < -1e-3f;
+            negativeOff += negOff; negativeOn += negOff && std::min({on.lastHalf[i], on.lastHalf[i + 1], on.lastHalf[i + 2]}) < -1e-3f;
+            if (inPatch(x, y) && inPatch(x - 4, y - 4) && inPatch(x + 4, y + 4)) {
+                patchOn += 0.2126 * on.lastHalf[i] + 0.7152 * on.lastHalf[i + 1] + 0.0722 * on.lastHalf[i + 2];
+                patchOff += 0.2126 * off.lastHalf[i] + 0.7152 * off.lastHalf[i + 1] + 0.0722 * off.lastHalf[i + 2]; ++patch;
+            }
+        }
+    const double ratio = patch && patchOff > 0 ? patchOn / patchOff : 0;
+    std::printf("METRIC case=dlaa-hdr dlaaEvaluations=%llu nonFinite=%zu highlightPatch=%zu ratio=%.4f negativeOff=%zu negativeKept=%zu\n",
+                (unsigned long long)on.dlaa, bad, patch, ratio, negativeOff, negativeOn);
+    check(on.dlaa == 8 && on.notice.empty(), "dlaa-hdr: DLSS ran in its DLAA mode on every frame");
+    check(bad == 0, "dlaa-hdr: no NaN / Inf in the scRGB output");
+    check(patch > 0 && std::abs(ratio - 1.0) < 0.02, "dlaa-hdr: the flat highlight patch keeps its luminance within 2%");
+    check(negativeOff > 0 && negativeOn == negativeOff, "dlaa-hdr: out-of-709 colours keep their negative components");
+    return failures ? 1 : 0;
+}
+int dlaaStillCase() {
+    const auto on = dlaaRun(aa(AntiAliasMethod::Dlaa, 0), 1, 0.0, false, false, true);
+    AntiAliasSettings offSettings = aa(AntiAliasMethod::Dlaa, 0); offSettings.enabled = false;
+    const auto off = dlaaRun(offSettings, 1, 0.0, false, false, true);
+    check(on.ok && off.ok, "dlaa-still: still-image graphs run");
+    check(on.ok && off.ok && on.last.pixels == off.last.pixels, "dlaa-still: the picture passes through bit-identical");
+    check(on.ok && on.dlaa == 0 && !on.notice.empty(), "dlaa-still: DLSS never runs and the notice says why");
+    return failures ? 1 : 0;
+}
+
+int temporalSrHdrCase(const char* name,unsigned quality){
+    AntiAliasSettings disabled;
+    const auto on=dlaaRun(disabled,4,0,true,true,false,quality);
+    const auto off=dlaaRun(disabled,4,0,false,true,false);
+    check(on.ok&&off.ok&&on.sr==4,std::string(name)+": HDR upscaling evaluates every source frame");
+    const Scene scene;
+    if(!on.ok||!off.ok||on.lastHalf.size()!=size_t(scene.width)*scene.height*64)return 1;
+    double error=0,lumaOn=0,lumaOff=0;size_t count=0,bad=0;
+    for(float v:on.lastHalf)bad+=!std::isfinite(v);
+    for(unsigned y=4;y+4<scene.height;++y)for(unsigned x=4;x+4<scene.width;++x){
+        if(!inPatch(x-4,y-4)||!inPatch(x+4,y+4))continue;
+        const auto b=(size_t(y)*scene.width+x)*4;
+        const auto a=(size_t(y*4+2)*(scene.width*4)+x*4+2)*4;
+        for(unsigned c=0;c<3;++c)error+=std::abs(on.lastHalf[a+c]-off.lastHalf[b+c]);
+        lumaOn+=0.2126*on.lastHalf[a]+0.7152*on.lastHalf[a+1]+0.0722*on.lastHalf[a+2];
+        lumaOff+=0.2126*off.lastHalf[b]+0.7152*off.lastHalf[b+1]+0.0722*off.lastHalf[b+2];
+        ++count;
+    }
+    const double mean=count?error/(count*3):1e9,ratio=lumaOff>0?lumaOn/lumaOff:0;
+    std::printf("METRIC %s nonFinite=%zu patch=%zu signedColorMeanError=%.6f lumaRatio=%.6f\n",name,bad,count,mean,ratio);
+    check(bad==0&&count>0&&mean<0.02&&std::abs(ratio-1)<0.02,std::string(name)+": saturated BT2020 patch preserves signed scRGB colour and luminance");
+    return failures?1:0;
+}
+
 struct Case { std::string name; std::function<int()> run; };
 std::vector<Case> cases() {
     std::vector<Case> c;
@@ -694,6 +909,20 @@ std::vector<Case> cases() {
     c.push_back({"node-prenr", [] { return nodeCase("node-prenr", {srNode(), aaNode(aa(AntiAliasMethod::Smaa, 2)), nrNode()}, 1); }});
     c.push_back({"node-source-and-tail", [] {
         return nodeCase("node-source-and-tail", {aaNode(aa(AntiAliasMethod::Smaa, 0)), srNode(), nrNode(), aaNode(aa(AntiAliasMethod::Fxaa, 1))}, 2); }});
+    c.push_back({"dlaa-sdr", [] { return dlaaCase("dlaa-sdr", false); }});
+    c.push_back({"dlaa-sr", [] { return dlaaCase("dlaa-sr", true); }});
+    c.push_back({"dlaa-two", [] { return dlaaCase("dlaa-two",false,true); }});
+    c.push_back({"fsr-hdr", [] { return temporalSrHdrCase("fsr-hdr",engine::kVideoSrFsr); }});
+    c.push_back({"dlss-hdr", [] { return temporalSrHdrCase("dlss-hdr",0); }});
+    c.push_back({"dlaa-1440p-flow", [] {
+        const auto r=dlaaRun(aa(AntiAliasMethod::Dlaa,0),4,2,true,false,false,2,false,true);
+        std::printf("METRIC dlaa-1440p-flow evaluations=%llu withMotion=%llu sr=%llu\n",
+            (unsigned long long)r.dlaa,(unsigned long long)r.motion,(unsigned long long)r.sr);
+        check(r.ok&&r.dlaa==4&&r.motion==3&&r.sr==4&&r.last.width==3840,"1440p DLAA uses the adapted 1080p flow with 4K SR active");
+        return failures?1:0;
+    }});
+    c.push_back({"dlaa-hdr", [] { return dlaaHdrCase(); }});
+    c.push_back({"dlaa-still", [] { return dlaaStillCase(); }});
     c.push_back({"tiled-image", [] { return tiledCase(); }});
     c.push_back({"real-frame", [] { return realFrameCase(); }});
     c.push_back({"timing-1080p", [] { return timingCase(1920, 1080); }});

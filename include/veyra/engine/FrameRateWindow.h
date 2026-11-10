@@ -1,7 +1,12 @@
 #pragma once
 #include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
+#include <utility>
+#include <vector>
 namespace veyra::engine {
 // Completion events, not source arrivals or generated-frame multipliers.
 // Call under the owning controller's mutex. All times use monotonic 100 ns.
@@ -22,5 +27,34 @@ private:
     static constexpr int64_t window=10000000;
     int64_t start_=0;
     std::deque<int64_t> times_;
+};
+// The "1% low" a frame-time overlay (RTSS, PresentMon) reports for an
+// application: the 99th-percentile interval between consecutive presents over
+// the last ten seconds, as a frame rate. Like those tools it measures Present
+// calls, the same events as the submit rate, not panel scanout. A gap over half
+// a second is a pause or a seek rather than a slow frame: it is not counted and
+// the next present starts a new run.
+class FramePaceWindow {
+public:
+    void reset(){last_=0;intervals_.clear();}
+    void complete(int64_t now){
+        if(last_>0&&now>last_&&now-last_<=kGap)intervals_.push_back({now,now-last_});
+        last_=now;
+        while(intervals_.size()>16384||(!intervals_.empty()&&intervals_.front().first<=now-kWindow))intervals_.pop_front();
+    }
+    std::optional<double> lowFps(int64_t now)const{
+        std::vector<int64_t> recent;recent.reserve(intervals_.size());
+        for(const auto& entry:intervals_)if(entry.first>now-kWindow)recent.push_back(entry.second);
+        if(recent.size()<kMinIntervals)return {};
+        const size_t at=size_t(std::ceil(0.99*double(recent.size())))-1;
+        std::nth_element(recent.begin(),recent.begin()+std::ptrdiff_t(at),recent.end());
+        if(recent[at]<=0)return {};
+        return 10000000.0/double(recent[at]);
+    }
+    static constexpr int64_t kWindow=100000000,kGap=5000000;
+    static constexpr size_t kMinIntervals=100;
+private:
+    int64_t last_=0;
+    std::deque<std::pair<int64_t,int64_t>> intervals_; // present time, interval since the previous one
 };
 }

@@ -11,18 +11,23 @@ namespace veyra::engine {
 // behind super resolution.
 inline constexpr uint32_t kMaxAntiAliasInstances = 2;
 
-enum class AntiAliasMethod : uint8_t { Fxaa = 0, Smaa = 1, Mlaa = 2 };
+enum class AntiAliasMethod : uint8_t { Fxaa = 0, Smaa = 1, Mlaa = 2, Dlaa = 3 };
+// DLAA (user request 2026-11-08): NVIDIA DLSS run at the instance's own size in
+// its DLAA mode, with optical-flow motion. NVIDIA RTX only; captured frames carry
+// no jitter, so it is temporal reconstruction without the sub-pixel samples a
+// game gives DLAA. No tiers; the model is the DLSS SR model setting.
 // Experimental temporal accumulation on top of SMAA (captured frames cannot be
 // jittered, so these are the "no jitter" approximations of SMAA T2x / 4x).
 enum class AntiAliasTemporal : uint8_t { Off = 0, T2x = 1, X4 = 2 };
 
 // Quality tiers per method. FXAA: 0 medium (preset 3), 1 high (4), 2 ultra (5).
-// SMAA: 0 low, 1 medium, 2 high, 3 ultra. MLAA has no tiers.
+// SMAA: 0 low, 1 medium, 2 high, 3 ultra. MLAA and DLAA have no tiers.
 constexpr uint32_t antiAliasQualityCount(AntiAliasMethod method) {
     return method == AntiAliasMethod::Fxaa ? 3u : method == AntiAliasMethod::Smaa ? 4u : 1u;
 }
 constexpr bool validAntiAliasMethod(AntiAliasMethod method) {
-    return method == AntiAliasMethod::Fxaa || method == AntiAliasMethod::Smaa || method == AntiAliasMethod::Mlaa;
+    return method == AntiAliasMethod::Fxaa || method == AntiAliasMethod::Smaa || method == AntiAliasMethod::Mlaa ||
+           method == AntiAliasMethod::Dlaa;
 }
 
 struct AntiAliasSettings {
@@ -42,6 +47,7 @@ struct AntiAliasSettings {
     // presets and sessions saved without it keep their older format version.
     bool configured() const { return *this != AntiAliasSettings{}; }
     bool usesMlaaParameters() const { return method == AntiAliasMethod::Mlaa; }
+    bool usesDlaa() const { return method == AntiAliasMethod::Dlaa; }
     bool usesTemporal() const { return method == AntiAliasMethod::Smaa && temporal != AntiAliasTemporal::Off; }
     // The values that matter to the running effect: a disabled instance and the
     // parameters of a method that is not selected compare equal to the defaults.
@@ -50,7 +56,7 @@ struct AntiAliasSettings {
         AntiAliasSettings value = *this;
         const AntiAliasSettings defaults;
         if (!usesMlaaParameters()) { value.mlaaThreshold = defaults.mlaaThreshold; value.mlaaStrength = defaults.mlaaStrength; }
-        if (method == AntiAliasMethod::Mlaa) value.quality = 0;
+        if (method == AntiAliasMethod::Mlaa || method == AntiAliasMethod::Dlaa) value.quality = 0;
         if (!usesTemporal()) {
             value.temporal = AntiAliasTemporal::Off;
             value.historyWeight = defaults.historyWeight;
@@ -79,6 +85,7 @@ struct AntiAliasSettings {
 };
 
 // Preset library v14 / chain session v9: one appended block per anti-aliasing node.
+// DLAA (method 3) only in library v20 / session v15: older readers refuse it.
 inline void writeAntiAlias(std::ostream& out, const AntiAliasSettings& a) {
     out << (a.enabled ? 1 : 0) << ' ' << int(a.method) << ' ' << int(a.quality) << ' ' << a.mlaaThreshold << ' ' << a.mlaaStrength
         << ' ' << int(a.temporal) << ' ' << a.historyWeight << ' ' << a.historyRejection;
@@ -86,7 +93,7 @@ inline void writeAntiAlias(std::ostream& out, const AntiAliasSettings& a) {
 inline bool readAntiAlias(std::istream& in, AntiAliasSettings& a) {
     int enabled = 0, method = 0, quality = 0, temporal = 0;
     if (!(in >> enabled >> method >> quality >> a.mlaaThreshold >> a.mlaaStrength >> temporal >> a.historyWeight >> a.historyRejection)) return false;
-    if (enabled < 0 || enabled > 1 || method < 0 || method > 2 || quality < 0 || quality > 255 || temporal < 0 || temporal > 2) return false;
+    if (enabled < 0 || enabled > 1 || method < 0 || method > 3 || quality < 0 || quality > 255 || temporal < 0 || temporal > 2) return false;
     a.enabled = enabled != 0;
     a.method = static_cast<AntiAliasMethod>(method);
     a.quality = static_cast<uint8_t>(quality);

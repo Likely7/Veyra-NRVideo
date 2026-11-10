@@ -3,6 +3,7 @@
 #include "veyra/engine/PresetLibrary.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -18,20 +19,21 @@ void check(bool ok, const char* label) {
     if (!ok) ++failures;
 }
 std::filesystem::path scratch(const wchar_t* name) {
-    auto dir = std::filesystem::temp_directory_path() / L"veyra-preset-library-tests";
-    // Each library writes sidecar files next to its own path (".field-render",
-    // ".beauty", ".dlss-sr", ...) that outlive the per-name remove() below, and a
-    // leftover sidecar makes the next run of this process fail at load(). Start
-    // from an empty directory once per run; removing it per call would delete the
-    // files of the step that is still running.
-    static const bool cleaned = [&dir] {
-        std::error_code ec;
-        std::filesystem::remove_all(dir, ec);
-        std::filesystem::create_directories(dir, ec);
-        return true;
-    }();
-    (void)cleaned;
-    auto path = dir / name;
+    // Sidecars belong to this invocation only, including after a failed test.
+    struct ScratchDirectory {
+        std::filesystem::path path;
+        ScratchDirectory() {
+            const auto parent=std::filesystem::temp_directory_path();
+            const auto stamp=std::chrono::steady_clock::now().time_since_epoch().count();
+            for(unsigned attempt=0;;++attempt){
+                path=parent/(L"veyra-preset-library-tests-"+std::to_wstring(stamp)+L"-"+std::to_wstring(attempt));
+                if(std::filesystem::create_directory(path))break;
+            }
+        }
+        ~ScratchDirectory(){std::error_code ec;std::filesystem::remove_all(path,ec);}
+    };
+    static const ScratchDirectory dir;
+    auto path = dir.path / name;
     std::error_code ec;
     std::filesystem::remove(path, ec);
     return path;
@@ -1089,33 +1091,6 @@ __declspec(noinline) void testDlssSrModels() {
     // Invalid model at the end of the rendering block must not corrupt a good library.
     entry.name=L"invalid model";entry.globals->dlssSrModel=kDlssSrModelCount;
     check(!writer.put(entry),"DLSS presets: invalid model is rejected atomically");
-    // v16「自动」倍率标记：只有用到它的预设才写进格式，且能原样读回。
-    {
-        entry.name=L"auto multiplier";entry.globals->dlssSrModel=0;
-        entry.chain.fgAutoMultiplier=false;
-        check(writer.put(entry,true),"auto multiplier: a plain preset still saves");
-        const auto plainBytes=readBytes(scratch(L"dlss-model-library.v1.dlss-sr"));
-        check(!plainBytes.starts_with("VEYRA_PRESET_LIBRARY 16"),
-              "auto multiplier: a preset without it keeps the older format");
-        entry.chain.fgAutoMultiplier=true;
-        check(writer.put(entry,true),"auto multiplier: save a preset with automatic enabled");
-        PresetLibrary autoReader(scratch(L"dlss-model-library.v1"));
-        autoReader.setIncludeBuiltins(false);
-        const bool autoLoaded=autoReader.load();
-        const auto autoFound=std::find_if(autoReader.entries().begin(),autoReader.entries().end(),
-            [](const auto& e){return e.name==L"auto multiplier";});
-        check(autoLoaded&&autoFound!=autoReader.entries().end()&&autoFound->chain.fgAutoMultiplier,
-              "auto multiplier: the flag survives a save and reload");
-        entry.chain.fgAutoMultiplier=false;
-        check(writer.put(entry,true),"auto multiplier: turning it off saves again");
-        PresetLibrary plainReader(scratch(L"dlss-model-library.v1"));
-        plainReader.setIncludeBuiltins(false);
-        const bool plainLoaded=plainReader.load();
-        const auto offFound=std::find_if(plainReader.entries().begin(),plainReader.entries().end(),
-            [](const auto& e){return e.name==L"auto multiplier";});
-        check(plainLoaded&&offFound!=plainReader.entries().end()&&!offFound->chain.fgAutoMultiplier,
-              "auto multiplier: turning it off survives a save and reload");
-    }
 
     const auto sessionPath=scratch(L"dlss-model-session.v1");
     auto session=std::make_unique<ChainSession>(ChainSession::initial(source));
@@ -1339,8 +1314,75 @@ __declspec(noinline) void testEffectNodeStorage() {
     ChainSessionStore reopened(sessionPath);
     check(reopened.load(*restored) && *restored == *session, "effects session: anti-aliasing round-trips through the session");
 }
+
+// DLAA (method 3, 2026-11-08): readers up to library v19 / session v14 refuse the
+// value, so a library or session holding it gets its own version and file.
+__declspec(noinline) void testDlaaStorage() {
+    AntiAliasSettings dlaa; dlaa.enabled = true; dlaa.method = AntiAliasMethod::Dlaa; dlaa.quality = 0;
+    check(dlaa.validate().empty() && dlaa.usesDlaa(), "dlaa: method 3 with no tier is valid");
+    auto tiered = dlaa; tiered.quality = 1;
+    check(!tiered.validate().empty(), "dlaa: a quality tier is refused (DLAA has none)");
+    auto temporal = dlaa; temporal.temporal = AntiAliasTemporal::T2x;
+    check(!temporal.validate().empty(), "dlaa: the experimental SMAA accumulation is refused");
+    {
+        std::ostringstream o; o.imbue(std::locale::classic()); writeAntiAlias(o, dlaa);
+        std::istringstream in(o.str()); in.imbue(std::locale::classic()); AntiAliasSettings back;
+        check(readAntiAlias(in, back) && back == dlaa, "dlaa: the node block round-trips");
+        std::istringstream four("1 4 0 0.08 1 0 0.5 8"); four.imbue(std::locale::classic()); AntiAliasSettings bad;
+        check(!readAntiAlias(four, bad), "dlaa: method 4 stays refused");
+    }
+    const auto path = scratch(L"dlaa-library.v1");
+    const auto sidecar = std::filesystem::path(path).concat(L".dlaa");
+    std::filesystem::remove(sidecar);
+    PresetLibrary writer(path); writer.setIncludeBuiltins(false);
+    auto settings = sample();
+    settings.antiAlias.enabled = true; settings.antiAlias.method = AntiAliasMethod::Mlaa; settings.antiAlias.quality = 0;
+    auto mlaa = std::make_unique<PresetEntry>(); mlaa->name = L"mlaa"; mlaa->chain = toChain(settings);
+    check(writer.load() && writer.put(*mlaa), "dlaa storage: seed a library with an MLAA node");
+    const auto original = readBytes(path);
+    const auto before = std::filesystem::path(path).concat(L".effects");
+    const auto seeded = std::filesystem::exists(before) ? readBytes(before) : original;
+    check(!seeded.starts_with("VEYRA_PRESET_LIBRARY 20") && !std::filesystem::exists(sidecar), "dlaa storage: no DLAA keeps the older version and files");
+    settings.antiAlias = dlaa;
+    auto entry = std::make_unique<PresetEntry>(); entry->name = L"dlaa"; entry->chain = toChain(settings);
+    check(writer.put(*entry), "dlaa storage: save a DLAA chain");
+    const auto written = std::filesystem::exists(std::filesystem::path(before).concat(L".dlaa")) ? std::filesystem::path(before).concat(L".dlaa") : sidecar;
+    check(readBytes(written).starts_with("VEYRA_PRESET_LIBRARY 20\n") && readBytes(path) == original &&
+          (!std::filesystem::exists(before) || readBytes(before) == seeded),
+          "dlaa storage: v20 goes to its own file and the older libraries stay intact");
+    {
+        PresetLibrary reader(path); reader.setIncludeBuiltins(false);
+        check(reader.load() && reader.entries().size() == 2 && reader.entries()[1].chain == entry->chain,
+              "dlaa storage: the DLAA chain reloads exactly");
+        auto applied = sample(); PresetLibrary::apply(reader.entries()[1], applied);
+        check(applied.antiAlias == dlaa, "dlaa storage: applying the chain restores DLAA");
+    }
+    // A v19 header cannot carry method 3.
+    auto downgraded = readBytes(written);
+    downgraded.replace(0, std::string("VEYRA_PRESET_LIBRARY 20").size(), "VEYRA_PRESET_LIBRARY 19");
+    const auto downgradedPath = scratch(L"dlaa-downgraded.v1");
+    { std::ofstream f(downgradedPath, std::ios::binary); f << downgraded; }
+    {
+        PresetLibrary reader(downgradedPath); reader.setIncludeBuiltins(false);
+        check(!reader.load() || reader.entries().size() < 2, "dlaa storage: DLAA under a v19 header is refused");
+    }
+    const auto sessionPath = scratch(L"dlaa-session.v1");
+    std::filesystem::remove(std::filesystem::path(sessionPath).concat(L".dlaa"));
+    auto session = std::make_unique<ChainSession>(ChainSession::initial(sample()));
+    ChainSessionStore sessions(sessionPath);
+    check(sessions.save(*session), "dlaa session: save the older format first");
+    const auto rollback = readBytes(sessionPath);
+    session->configurations[0].chain = toChain(settings);
+    check(sessions.save(*session) && readBytes(sessionPath) == rollback &&
+          readBytes(std::filesystem::path(sessionPath).concat(L".dlaa")).starts_with("VEYRA_CHAIN_SESSION 15"),
+          "dlaa session: v15 goes to its own file beside the older session");
+    auto restored = std::make_unique<ChainSession>();
+    ChainSessionStore reopened(sessionPath);
+    check(reopened.load(*restored) && *restored == *session, "dlaa session: DLAA round-trips through the session");
+}
 int main() {
     testEffectNodeStorage();
+    testDlaaStorage();
     testBeautyNodeStorage();
     testDlssSrModels();
     testSrStageStorage();

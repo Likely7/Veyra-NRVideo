@@ -222,6 +222,12 @@ int wmain(int argc,wchar_t** argv){try{
         ui::CapturePreferenceStore store(argv[1]);ui::CapturePreferences p{L"\\\\?\\usb#video-\u91c7\u96c6",L"1920:1080:166833:{SUBTYPE}:RGB32",L"{audio-endpoint}",-3,2};
         require(store.load().videoPath.empty(),"fresh capture preference empty");require(store.save(p),"capture preference atomic save");
         const auto restored=store.load();require(restored.videoPath==p.videoPath&&restored.formatKey==p.formatKey&&restored.audioPath==p.audioPath&&restored.audioMode==p.audioMode&&restored.colorOverride==p.colorOverride,"capture stable identifiers and Unicode round trip");
+        auto virtualSpeaker=p;
+        virtualSpeaker.audioMode=source::kCaptureAudioVirtualSpeaker;
+        require(store.save(virtualSpeaker),"save explicit virtual speaker audio");
+        const auto virtualRestored=store.load();
+        require(virtualRestored.audioMode==source::kCaptureAudioVirtualSpeaker&&virtualRestored.audioPath==virtualSpeaker.audioPath,
+                "virtual speaker transport and endpoint survive reopening preferences");
         for(uint32_t connection:{1u,2u}){
             auto native=p;native.videoPath=source::decklink::inputConnectionPath(L"decklink-native:p:0000000000000123:0",connection);native.formatKey=L"decklink:auto";
             require(store.save(native),"save BMD explicit connection using existing preference format");

@@ -6,9 +6,11 @@ ColumnLayout {
     id: editor
     property string namePrefix: "list"
     spacing: 6
-    // Any RTX Video SR family (standard / high bitrate / streaming) runs the stages below.
-    readonly property bool supported: veyra.srAlgorithmOf(veyra.videoSrQuality).startsWith("rtx") && Support.available(veyra,"sr")
-    readonly property var rtxFamilies: (veyra.srBackendChoices || []).filter(o => o.id.startsWith("rtx"))
+    // Tiers and the supersample shrink belong to the RTX Video SR families
+    // (standard / high bitrate / streaming); double SR takes every SR algorithm.
+    readonly property bool srAvailable: Support.available(veyra,"sr")
+    readonly property bool supported: veyra.srAlgorithmOf(veyra.videoSrQuality).startsWith("rtx") && srAvailable
+    readonly property bool secondRtx: veyra.srAlgorithmOf(veyra.dualSrQuality).startsWith("rtx")
     readonly property bool manual: veyra.srPrescale >= 150 && veyra.srPrescale <= 190
     readonly property var targets: [{id:"1",label:"2K"},{id:"2",label:"4K"},{id:"4",label:"5K"},{id:"5",label:"6K"},{id:"6",label:"7K"},{id:"3",label:"8K"}]
     VRow {
@@ -49,15 +51,15 @@ ColumnLayout {
     }
     VRow {
         label: qsTr("双重超分")
-        hint: editor.supported ? qsTr("先完成基础超分，再将结果降低分辨率并执行第二次超分；两次执行独立，会增加耗时和显存。") : qsTr("双重超分目前使用 RTX 视频超分")
-        enabled: editor.supported
+        hint: qsTr("先完成基础超分，再将结果降低分辨率并执行第二次超分；两次执行独立，会增加耗时和显存。")
+        enabled: editor.srAvailable
         opacity: enabled ? 1 : 0.4
         VSwitch { objectName: editor.namePrefix+"-dual-sr-toggle"; checked: veyra.dualSrEnabled; onToggled: checked => veyra.dualSrEnabled=checked }
     }
     ColumnLayout {
         objectName: editor.namePrefix+"-dual-sr-panel"
         visible: veyra.dualSrEnabled
-        enabled: editor.supported
+        enabled: editor.srAvailable
         Layout.fillWidth: true
         spacing: 6
         VRow {
@@ -87,16 +89,18 @@ ColumnLayout {
         }
         VRow {
             label: qsTr("第二次超分算法")
-            hint: qsTr("独立于基础超分，可以换成另一种 RTX 视频超分。")
+            hint: qsTr("独立于基础超分，可以选任意一种超分；DLSS SR 两次共用上面的 DLSS 模型。")
             VSelect {
                 objectName: editor.namePrefix+"-dual-sr-algorithm"
                 implicitWidth: 210
-                options: editor.rtxFamilies
+                options: veyra.srBackendChoices || []
                 value: options.find(o => o.id === veyra.srAlgorithmOf(veyra.dualSrQuality))?.label || ""
+                // Switching between RTX families keeps the tier; DLSS SR and FSR have none.
                 onPicked: id => veyra.dualSrQuality = veyra.srQualityFor(id, veyra.srTierOf(veyra.dualSrQuality))
             }
         }
         VRow {
+            visible: editor.secondRtx
             label: qsTr("第二次超分档位")
             VSeg {
                 objectName: editor.namePrefix+"-dual-sr-quality"

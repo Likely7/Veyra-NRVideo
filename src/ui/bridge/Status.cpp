@@ -41,13 +41,6 @@ QString QmlPlayerBridge::srStageNote() const {
     return notes.join(QStringLiteral("；"));
 }
 
-// A display rate is only real when the system's display event can be read. No
-// counter is wired in this build, so it reports unknown and the UI shows "未测" -
-// which is exactly what the design requires instead of passing the submit rate off
-// as a measurement that was never taken.
-double QmlPlayerBridge::displayFps() const { return 0.0; }
-bool QmlPlayerBridge::displayFpsKnown() const { return false; }
-
 double QmlPlayerBridge::queuedFrames() const {
     // Valid output opportunities held by presenter jobs, not cumulative skips
     // and not the OS/display queue. Zero is meaningful only with a live window.

@@ -72,6 +72,17 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
+    // The last volume (user 2026-11-08: it came back at 100% every launch).
+    // Mute stays per session; profiles without the key keep 100%.
+    if (impl_->prefs.contains(QStringLiteral("volume"))) {
+        bool ok = false;
+        const double saved = impl_->prefs.value(QStringLiteral("volume")).toDouble(&ok);
+        if (ok && std::isfinite(saved) && saved >= 0.0 && saved <= 1.0) {
+            impl_->engine.setVolume(float(saved), false);
+            impl_->snapshot.volume = float(saved);
+            veyra::log::info("ui-prefs", std::format("volume restored={:.3f}", saved));
+        }
+    }
     applyGameHotkeys();
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
@@ -130,7 +141,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             emit gameModeStopped(tr("界面卡住超过 3 秒，已退出游戏模式")); break;
         // The game has the keyboard in game mode; the hook hands these over.
         case E::ScreenshotHotkey: takeScreenshot(); break;
-        case E::RecordHotkey: toggleRecording(); break;
+        case E::RecordHotkey: toggleRecording(QStringLiteral("game-hotkey")); break;
         }
     };
     auto* gameBeat = new QTimer(this);
@@ -295,6 +306,11 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         };
         restoreHold("nrHoldStrength", s.nrHoldStrength);
         restoreHold("nrHoldTolerance", s.nrHoldTolerance);
+        if (p.contains(QStringLiteral("nrReuse"))) {
+            const int value = p.value(QStringLiteral("nrReuse")).toInt();
+            const auto mode = static_cast<engine::NrReuseMode>(value);
+            if (value >= 0 && engine::validNrReuseMode(mode) && s.nrReuse != mode) { s.nrReuse = mode; changed = true; }
+        }
         for(const auto& pair : {std::pair{"captureFlipVertical",&s.captureFlipVertical},std::pair{"captureForceSdr",&s.forceSdrPreview}})
             if(p.contains(QLatin1String(pair.first))){const bool value=p.value(QLatin1String(pair.first)).toBool();changed|=*pair.second!=value;*pair.second=value;}
         if(p.contains("captureAudioIngress")){const int value=p.value("captureAudioIngress").toInt();if(value>=0&&value<=2){changed|=int(s.captureAudio)!=value;s.captureAudio=static_cast<engine::CaptureAudioIngress>(value);}}
@@ -335,6 +351,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     impl_->hdrMemorySaveTimer=new QTimer(this);
     impl_->hdrMemorySaveTimer->setSingleShot(true);impl_->hdrMemorySaveTimer->setInterval(400);
     connect(impl_->hdrMemorySaveTimer,&QTimer::timeout,this,[this]{flushHdrMemory();});
+    impl_->volumeSaveTimer=new QTimer(this);
+    impl_->volumeSaveTimer->setSingleShot(true);impl_->volumeSaveTimer->setInterval(500);
+    connect(impl_->volumeSaveTimer,&QTimer::timeout,this,[this]{
+        if(impl_->savePrefs())veyra::log::info("ui-prefs",std::format("volume={:.3f} saved",impl_->prefs.value(QStringLiteral("volume")).toDouble()));
+        else veyra::log::warn("ui-prefs","volume not saved");
+    });
     impl_->timer = new QTimer(this);
     connect(impl_->timer, &QTimer::timeout, this, [this] {
         // 装字幕排到下一轮事件循环：主 tick 里多做一次文件解析会改变徽章等绘制组件
@@ -909,6 +931,8 @@ QmlPlayerBridge::~QmlPlayerBridge() {
     flushHdrMemory();
     if (qApp) qApp->removeEventFilter(this);
     if (qApp) qApp->removeNativeEventFilter(&impl_->displayChangeFilter);
+    // rememberPosition(true) writes every preference, a pending volume included.
+    if (impl_->volumeSaveTimer) impl_->volumeSaveTimer->stop();
     rememberPosition(true);
     if (impl_->sessionSaveTimer) impl_->sessionSaveTimer->stop();
     if (!impl_->persistSession())

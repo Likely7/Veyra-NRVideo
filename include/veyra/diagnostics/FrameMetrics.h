@@ -75,6 +75,8 @@ struct FrameFlowMetrics {
     double validGeneratedFps=0,presentSubmitFps=0,sourceCompletedFps=0,outputCompletedFps=0,xessSdkSubmitFps=0;
     double realPresentFps=0,generatedPresentFps=0;
     bool rateWindowReady=false;
+    // 1% low of the present rate (FramePaceWindow); unknown until enough presents.
+    std::optional<double> presentLow1Fps;
     std::optional<double> softwareLatencyMs,softwareLatencyP95Ms,slotWaitPerFrameMs;
     uint64_t latencySamples=0;
     uint32_t pendingOutputFrames=0; // valid frame opportunities retained by presenter jobs

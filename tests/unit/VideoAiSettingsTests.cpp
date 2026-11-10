@@ -3,6 +3,9 @@
 // persistence. Older readers reject the Video Effects values, so files that use
 // them (as the base or the second SR) get a new version (settings presets) or a
 // .video-ai sidecar (preset library, mode session); the older file stays as it was.
+// Since 2026-11-08 double SR also takes DLSS SR and FSR in either pass; a DLSS SR /
+// FSR second pass gets its own version again (v36, library v19 / session v14 in
+// a .dual-sr-any sidecar).
 #include "veyra/engine/GraphDescription.h"
 #include "veyra/engine/PresetStore.h"
 #include "veyra/engine/PresetLibrary.h"
@@ -18,7 +21,7 @@ namespace {
 unsigned checks=0,failures=0;
 void check(bool ok,const char* why){++checks;if(!ok){++failures;std::cout<<"FAIL "<<why<<'\n';}}
 std::string bytes(const std::filesystem::path& p){std::ifstream f(p,std::ios::binary);return {(std::istreambuf_iterator<char>(f)),{}};}
-std::filesystem::path sidecar(const std::filesystem::path& p){return std::filesystem::path(p).concat(L".video-ai");}
+std::filesystem::path sidecar(const std::filesystem::path& p,const wchar_t* suffix=L".video-ai"){return std::filesystem::path(p).concat(suffix);}
 // Every file of one library: the base name plus the sidecars older versions chained onto it.
 std::map<std::wstring,std::string> files(const std::filesystem::path& base){
     std::map<std::wstring,std::string> out;
@@ -29,8 +32,9 @@ std::map<std::wstring,std::string> files(const std::filesystem::path& base){
 bool kept(const std::map<std::wstring,std::string>& before,const std::map<std::wstring,std::string>& after){
     return std::all_of(before.begin(),before.end(),[&](const auto& f){const auto it=after.find(f.first);return it!=after.end()&&it->second==f.second;});
 }
-veyra::pipeline::EnhanceGraphDesc describe(const EnhancementSettings& s,uint32_t width,uint32_t height,veyra::pipeline::ResolutionPlan* plan=nullptr){
-    StageRequest request;request.sr=s.sr;request.width=width;request.height=height;
+veyra::pipeline::EnhanceGraphDesc describe(const EnhancementSettings& s,uint32_t width,uint32_t height,veyra::pipeline::ResolutionPlan* plan=nullptr,
+                                           bool nvidia=true,bool still=false){
+    StageRequest request;request.sr=s.sr;request.width=width;request.height=height;request.nvidiaAdapter=nvidia;request.stillImage=still;
     veyra::pipeline::EnhanceGraphDesc desc;const auto p=describeStages(request,s,desc);
     if(plan)*plan=p;
     return desc;
@@ -71,10 +75,19 @@ int wmain(int argc,wchar_t** argv){
         check(s.validate().empty(),"high bitrate base with a streaming second pass");
         auto active=s.activeVideoSettings();
         check(active.dualSrEnabled&&active.dualSrQuality==23&&active.srPrescale==SrPrescale::P1080,"double SR stays active on high bitrate");
-        for(uint32_t bad2:{0u,5u,20u,22u,24u}){auto bad=s;bad.dualSrQuality=bad2;check(!bad.validate().empty(),"second SR must be an RTX Video SR value");}
+        for(uint32_t bad2:{6u,15u,20u,22u,24u}){auto bad=s;bad.dualSrQuality=bad2;check(!bad.validate().empty(),"second SR must be a stored SR value");}
+        for(uint32_t good2:{0u,kVideoSrFsr}){auto good=s;good.dualSrQuality=good2;check(good.validate().empty(),"DLSS SR and FSR are valid second passes");}
         s.videoSrQuality=4;s.dualSrQuality=17;check(s.validate().empty()&&s.activeVideoSettings().dualSrEnabled,"standard base with a high bitrate second pass");
-        s.videoSrQuality=0;check(!s.activeVideoSettings().dualSrEnabled,"DLSS SR keeps its single pass");
-        s.videoSrQuality=kVideoSrFsr;check(!s.activeVideoSettings().dualSrEnabled,"FSR keeps its single pass");
+        s.videoSrQuality=0;check(s.activeVideoSettings().dualSrEnabled,"a DLSS SR base runs double SR");
+        s.videoSrQuality=kVideoSrFsr;check(s.activeVideoSettings().dualSrEnabled,"an FSR base runs double SR");
+        // The DLSS SR model belongs to every DLSS SR pass, the second one too.
+        auto model=s;model.videoSrQuality=4;model.dualSrQuality=0;model.dlssSrModel=1;
+        check(model.activeVideoSettings().dlssSrModel==1,"a DLSS SR second pass keeps the DLSS SR model");
+        model.dualSrQuality=17;check(model.activeVideoSettings().dlssSrModel==0,"without a DLSS SR pass the model is inactive");
+        // DLSS SR / FSR passes read the SR motion source, RTX Video SR passes do not.
+        auto motion=s;motion.videoSrQuality=4;motion.dualSrQuality=kVideoSrFsr;
+        auto spatial=motion;spatial.dualSrQuality=17;
+        check(motion.temporalSr()&&!spatial.temporalSr(),"a temporal second pass needs the SR motion source");
         EnhancementSettings ss;ss.sr=true;ss.videoSrQuality=16;ss.srOutput=SrOutput::Source;
         check(ss.activeVideoSettings().srOutput==SrOutput::Source,"supersample shrink stays on high bitrate");
         ss.videoSrQuality=0;check(ss.activeVideoSettings().srOutput==SrOutput::Target,"DLSS SR drops the supersample shrink");
@@ -89,7 +102,23 @@ int wmain(int argc,wchar_t** argv){
               desc.srOutputWidth==3840&&desc.srOutputHeight==2160&&desc.workWidth==3840,"double SR sizes: 720p -> 4K -> 1080p -> 4K");
         s.videoSrQuality=4;s.dualSrQuality=16;
         check(describe(s,1280,720).dualSr,"standard base with high bitrate second pass plans two passes");
-        s.videoSrQuality=0;check(!describe(s,1280,720).dualSr,"DLSS SR plans one pass");
+        // DLSS SR and FSR in either pass (2026-11-08).
+        s.videoSrQuality=0;s.dualSrQuality=0;
+        const auto dlss=describe(s,1280,720);
+        check(dlss.dualSr&&dlss.videoSrQuality==0&&dlss.dualSrQuality==0&&dlss.firstSrWidth==3840&&dlss.srInputWidth==1920&&dlss.workWidth==3840,
+              "DLSS SR -> DLSS SR plans 720p -> 4K -> 1080p -> 4K");
+        s.dualSrQuality=kVideoSrFsr;check(describe(s,1280,720).dualSr,"DLSS SR base with an FSR second pass");
+        s.videoSrQuality=kVideoSrFsr;s.dualSrQuality=19;check(describe(s,1280,720).dualSr,"FSR base with a high bitrate second pass");
+        s.videoSrQuality=17;s.dualSrQuality=0;check(describe(s,1280,720).dualSr,"high bitrate base with a DLSS SR second pass");
+        // Adapters: FSR runs everywhere, the others on NVIDIA only.
+        s.videoSrQuality=kVideoSrFsr;s.dualSrQuality=kVideoSrFsr;
+        const auto amd=describe(s,1280,720,nullptr,false);
+        check(amd.enableSr&&amd.dualSr&&amd.srInputWidth==1920,"FSR -> FSR double SR runs on a non-NVIDIA adapter");
+        s.dualSrQuality=2;const auto amdSingle=describe(s,1280,720,nullptr,false);
+        check(!amdSingle.dualSr&&amdSingle.enableSr,"a non-NVIDIA adapter keeps the single FSR pass when the second pass needs NVIDIA");
+        // FSR skips still images, so a double SR with an FSR pass keeps one pass there.
+        s.dualSrQuality=kVideoSrFsr;check(!describe(s,1280,720,nullptr,true,true).dualSr,"no double SR with FSR on a still image");
+        s.videoSrQuality=0;s.dualSrQuality=0;check(describe(s,1280,720,nullptr,true,true).dualSr,"DLSS SR double SR on a still image");
         EnhancementSettings ss;ss.sr=true;ss.videoSrQuality=17;ss.srTarget=SrTarget::Uhd4K;ss.srOutput=SrOutput::Qhd;
         const auto sd=describe(ss,1280,720);
         check(sd.enableSr&&!sd.dualSr&&sd.srOutputWidth==3840&&sd.workWidth==2560&&sd.workHeight==1440,"high bitrate supersample: SR to 4K, shrink to 1440p");
@@ -101,6 +130,11 @@ int wmain(int argc,wchar_t** argv){
     EnhancementSettings vsr;vsr.sr=true;vsr.videoSrQuality=23;vsr.srTarget=SrTarget::Qhd;
     EnhancementSettings second;second.sr=true;second.videoSrQuality=4;second.dualSrEnabled=true;second.dualSrQuality=18;second.srPrescale=SrPrescale::P900;
     EnhancementSettings both=vsr;both.videoSrQuality=19;both.dualSrEnabled=true;both.dualSrQuality=21;both.srPrescale=SrPrescale::P1080;
+    // DLSS SR / FSR second passes (2026-11-08).
+    EnhancementSettings dlssSecond;dlssSecond.sr=true;dlssSecond.videoSrQuality=4;dlssSecond.dualSrEnabled=true;dlssSecond.dualSrQuality=0;
+    dlssSecond.dlssSrModel=1;dlssSecond.srPrescale=SrPrescale::P1080;
+    EnhancementSettings fsrSecond;fsrSecond.sr=true;fsrSecond.videoSrQuality=0;fsrSecond.dualSrEnabled=true;fsrSecond.dualSrQuality=kVideoSrFsr;
+    fsrSecond.srPrescale=SrPrescale::P900;fsrSecond.srTarget=SrTarget::Uhd8K;
 
     // Settings presets: v35 only when a Video Effects value is stored.
     {
@@ -119,6 +153,19 @@ int wmain(int argc,wchar_t** argv){
         check(a&&a->sr&&a->videoSrQuality==23&&a->srTarget==SrTarget::Qhd,"v35 restores the base family and tier");
         check(b&&b->videoSrQuality==4&&b->dualSrEnabled&&b->dualSrQuality==18&&b->srPrescale==SrPrescale::P900,"v35 restores a Video Effects second pass");
         check(c&&c->videoSrQuality==19&&c->dualSrQuality==21&&c->srPrescale==SrPrescale::P1080,"v35 restores both passes");
+        // A DLSS SR / FSR second pass: v36, older (v35) readers reject the file whole.
+        PresetStore anySr(root/L"any-sr.txt");
+        check(anySr.load()&&anySr.put(L"dlss",dlssSecond)&&anySr.put(L"fsr",fsrSecond),"settings presets with DLSS SR / FSR second passes");
+        check(bytes(root/L"any-sr.txt").starts_with("VEYRA_PRESETS 36"),"a DLSS SR / FSR second pass writes v36");
+        PresetStore anyReader(root/L"any-sr.txt");check(anyReader.load()&&anyReader.entries().size()==2,"v36 reload");
+        for(const auto& e:anyReader.entries()){
+            const auto& want=e.name==L"dlss"?dlssSecond:fsrSecond;
+            check(e.settings.videoSrQuality==want.videoSrQuality&&e.settings.dualSrEnabled&&e.settings.dualSrQuality==want.dualSrQuality&&
+                  e.settings.srPrescale==want.srPrescale&&e.settings.dlssSrModel==want.dlssSrModel&&e.settings.srTarget==want.srTarget,"v36 restores both passes");
+        }
+        PresetStore mixed(root/L"video-ai.txt");check(mixed.load()&&mixed.put(L"dlss",dlssSecond)&&bytes(root/L"video-ai.txt").starts_with("VEYRA_PRESETS 36"),
+              "adding a DLSS SR second pass upgrades a v35 store to v36");
+        PresetStore mixedReader(root/L"video-ai.txt");check(mixedReader.load()&&mixedReader.entries().size()==4,"v36 keeps the Video Effects entries");
     }
 
     // Preset library: new entries go to a v18 .video-ai sidecar; the older files stay.
@@ -164,6 +211,40 @@ int wmain(int argc,wchar_t** argv){
         check(kept(before,removed)&&removed.size()==before.size()+1,"removal writes the sidecar, not the older file");
     }
 
+    // Preset library with DLSS SR / FSR second passes: v19 in a .dual-sr-any sidecar.
+    {
+        const auto path=root/L"any-sr.preset";
+        {
+            PresetLibrary old(path);old.setIncludeBuiltins(false);
+            auto e=std::make_unique<PresetEntry>();e->name=L"old";e->chain=toChain(vsr);e->globals=ChainGlobalSettings::capture(vsr);
+            check(old.load()&&old.put(*e),"library entry with a Video Effects value");
+        }
+        const auto before=files(path);
+        check(before.size()==1&&before.begin()->first.ends_with(L".video-ai")&&before.begin()->second.starts_with("VEYRA_PRESET_LIBRARY 18"),
+              "a Video Effects library stays v18 in its sidecar");
+        std::vector<std::unique_ptr<PresetEntry>> saved;
+        for(const auto& [name,settings]:{std::pair{L"dlss",&dlssSecond},std::pair{L"fsr",&fsrSecond}}){
+            PresetLibrary library(path);library.setIncludeBuiltins(false);check(library.load(),"library reload before save");
+            auto e=std::make_unique<PresetEntry>();e->name=name;e->chain=toChain(*settings);e->globals=ChainGlobalSettings::capture(*settings);
+            check(library.put(*e),"save an entry with a DLSS SR / FSR second pass");saved.push_back(std::move(e));
+        }
+        const auto after=files(path);
+        check(kept(before,after),"older library files untouched");
+        check(after.size()==before.size()+1&&std::any_of(after.begin(),after.end(),[&](const auto& f){
+            return !before.contains(f.first)&&f.first.ends_with(L".dual-sr-any")&&f.second.starts_with("VEYRA_PRESET_LIBRARY 19");}),
+              "library writes v19 to one new .dual-sr-any sidecar");
+        PresetLibrary reloaded(path);reloaded.setIncludeBuiltins(false);
+        check(reloaded.load()&&reloaded.entries().size()==3,"library reload reads the newest sidecar");
+        for(const auto& e:saved){
+            const auto it=std::find_if(reloaded.entries().begin(),reloaded.entries().end(),[&](const auto& r){return r.name==e->name;});
+            check(it!=reloaded.entries().end()&&*it==*e,"library restores the full DLSS SR / FSR entry");
+            if(it==reloaded.entries().end()||!e->globals)continue;
+            EnhancementSettings applied;PresetLibrary::apply(*it,applied);
+            check(applied.dualSrEnabled&&applied.dualSrQuality==e->globals->dualSrQuality&&applied.videoSrQuality==e->globals->videoSrQuality&&
+                  applied.validate().empty(),"applying restores a DLSS SR / FSR second pass");
+        }
+    }
+
     // Mode session (node mode, high bitrate base with a streaming second pass).
     {
         auto session=std::make_unique<ChainSession>(ChainSession::initial(both));check(session->select(ChainMode::Node),"node mode initializes");
@@ -178,6 +259,13 @@ int wmain(int argc,wchar_t** argv){
         auto plain=std::make_unique<ChainSession>(ChainSession::initial(EnhancementSettings{}));
         const auto plainPath=root/L"plain.session";ChainSessionStore plainWriter(plainPath);
         check(plainWriter.save(*plain)&&std::filesystem::exists(plainPath)&&!std::filesystem::exists(sidecar(plainPath)),"plain session keeps the older file");
+        // A DLSS SR second pass: v14 in the .dual-sr-any sidecar, nothing else written.
+        auto anySession=std::make_unique<ChainSession>(ChainSession::initial(dlssSecond));
+        const auto anyPath=root/L"any-sr.session";ChainSessionStore anyWriter(anyPath);
+        check(anyWriter.save(*anySession)&&!std::filesystem::exists(anyPath)&&!std::filesystem::exists(sidecar(anyPath))&&
+              bytes(sidecar(anyPath,L".dual-sr-any")).starts_with("VEYRA_CHAIN_SESSION 14"),"session writes v14 to the .dual-sr-any sidecar only");
+        auto anyRestored=std::make_unique<ChainSession>();ChainSessionStore anyReader(anyPath);
+        check(anyReader.load(*anyRestored)&&*anySession==*anyRestored,"session restart restores the DLSS SR second pass");
     }
 
     std::cout<<"Video AI settings "<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;

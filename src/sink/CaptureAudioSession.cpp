@@ -19,6 +19,7 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
     diagnostics::CapturePcmRecording recording;
     struct Chunk {std::vector<uint8_t> bytes;double pts=0;bool discontinuity=false;};
     WAVEFORMATEX format{};
+    std::wstring excludedEndpoint;
     AudioFormat layout;unsigned validBits=0;bool floating=false;
     AudioFormat pcmFormat()const override{return layout;}
     mutable std::mutex mutex;
@@ -136,7 +137,9 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             std::lock_guard lock(mutex);input.clear();inputBytes=convertingBytes=0;pendingReset=false;haveVideo=false;
             state.available=false;state.running=false;state.skewMs.reset();state.endpointBufferedMs=0;
             state.outputRecovering=true;
-            state.error=L"音频输出断开，正在重连（"+std::to_wstring(unsigned(error))+L"）";queueChanged();return true;
+            state.error=error==HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY)
+                ? L"虚拟扬声器回录需要将音频输出设为真实耳机或音箱"
+                : L"音频输出断开，正在重连（"+std::to_wstring(unsigned(error))+L"）";queueChanged();return true;
         };
         while(!stop){
             if(!endpointReady){
@@ -148,7 +151,7 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                     std::unique_lock lock(mutex);wake.wait_for(lock,std::chrono::milliseconds(650),[&]{return stop.load();});
                     if(stop)break;
                 }
-                if(!renderer.start(layout,20.0)){if(!recoverEndpoint())break;continue;}
+                if(!renderer.start(layout,20.0,excludedEndpoint)){if(!recoverEndpoint())break;continue;}
                 endpointReady=true;lastUnderruns=renderer.underruns();
                 lastUnderrunFrames=renderer.underrunFrames();lastSilenceFrames=renderer.silenceFrames();starvationSince=0;
                 {std::lock_guard lock(mutex);state.error.clear();state.outputRecovering=false;state.inputChannels=layout.channels;state.inputChannelMask=layout.mask;const auto output=renderer.outputFormat();state.outputChannels=output.channels;state.outputChannelMask=output.mask;pendingReset=true;}
@@ -436,10 +439,11 @@ bool CaptureAudioSession::configure(const WAVEFORMATEX& f,size_t bytes){
     if(!parseWavePcm(&f,bytes,parsed))return false;
     return configure(parsed);
 }
-bool CaptureAudioSession::start(){
+bool CaptureAudioSession::start(std::wstring excludedEndpoint){
     if(!p_->format.nBlockAlign||p_->thread.joinable())return false;
     {std::lock_guard lock(p_->mutex);p_->input.clear();p_->inputBytes=p_->convertingBytes=0;p_->clearPcmLocked();p_->haveHead=p_->haveVideo=p_->haveIngress=p_->pendingReset=false;p_->lastArrival=0;p_->state={};p_->state.inputChannels=p_->layout.channels;p_->state.inputChannelMask=p_->layout.mask;p_->state.inputSampleRate=p_->format.nSamplesPerSec;p_->state.inputContainerBits=p_->format.wBitsPerSample;p_->state.inputValidBits=p_->validBits;p_->state.inputFloating=p_->floating;}
     p_->stop=false;
+    p_->excludedEndpoint=std::move(excludedEndpoint);
     try{p_->thread=std::thread([this]{try{p_->run();}catch(const std::exception& e){log::error("capture-audio",std::format("audio thread failed: {}",e.what()));p_->fail(L"音频线程异常，请重新打开采集");}});}
     catch(const std::exception& e){log::error("capture-audio",std::format("audio thread start failed: {}",e.what()));p_->fail(L"无法创建音频线程");return false;}
     return true;

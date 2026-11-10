@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.1.3 LANGUAGES C CXX RC)
+project(veyra VERSION 2.1.4 LANGUAGES C CXX RC)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.1.3" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.1.4" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -316,6 +316,9 @@ veyra_add_compute_shader(veyra_shader_nr_residual NrResidualComposite)
 veyra_add_compute_shader(veyra_shader_nr_temporal NrTemporal)
 # Stage-5 output stabiliser (anti-flicker, default off).
 veyra_add_compute_shader(veyra_shader_nr_hold NrHold)
+# NR inference reuse (realtime preview only, default off).
+veyra_add_compute_shader(veyra_shader_nr_reuse_compose NrReuseCompose)
+veyra_add_compute_shader(veyra_shader_nr_reuse_warp NrReuseWarp)
 veyra_add_compute_shader(veyra_shader_flow_adapt FlowAdapt)
 veyra_add_compute_shader(veyra_shader_flow_refine FlowRefine)
 veyra_add_compute_shader(veyra_shader_flow_fill FlowFill)
@@ -390,6 +393,7 @@ add_library(veyra_pipeline STATIC
   src/pipeline/AntiAliasPass.cpp
   src/pipeline/SmaaLookupTables.cpp
   src/pipeline/NrInstance.cpp
+  src/pipeline/AmdHipPreflight.cpp
   src/pipeline/LmxxfNrBackend.cpp
   src/pipeline/Rdna3NrBackend.cpp
   src/pipeline/VfgBackend.cpp
@@ -458,6 +462,10 @@ add_executable(veyra_lmxxf_nr_tests tests/unit/LmxxfNrTests.cpp)
 target_compile_features(veyra_lmxxf_nr_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_lmxxf_nr_tests PRIVATE veyra_pipeline)
 add_dependencies(veyra_lmxxf_nr_tests veyra_lmxxf_fake_runtime veyra_lmxxf_fake_original_runtime)
+# Issue 88: the AMD HIP self-test child, its class ladder and its result lines.
+add_executable(veyra_amd_hip_preflight_tests tests/unit/AmdHipPreflightTests.cpp)
+target_compile_features(veyra_amd_hip_preflight_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_amd_hip_preflight_tests PRIVATE veyra_pipeline)
 add_executable(veyra_lmxxf_runtime_metadata_tests tests/integration/LmxxfNrRuntimeMetadataTests.cpp)
 target_compile_features(veyra_lmxxf_runtime_metadata_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_lmxxf_runtime_metadata_tests PRIVATE veyra_pipeline)
@@ -479,10 +487,12 @@ veyra_add_compute_shader(veyra_shader_aa_temporal AaTemporalResolve)
 veyra_add_compute_shader(veyra_shader_aa_mlaa_edges AaMlaaEdges)
 veyra_add_compute_shader(veyra_shader_aa_mlaa_counts AaMlaaCounts)
 veyra_add_compute_shader(veyra_shader_aa_mlaa_blend AaMlaaBlend)
+# DLAA in HDR: adds the input's out-of-BT.709 part back to the DLSS result.
+veyra_add_compute_shader(veyra_shader_dlaa_hdr_restore DlaaHdrRestore)
 add_dependencies(veyra_pipeline veyra_shader_aa_luma veyra_shader_aa_fxaa3 veyra_shader_aa_fxaa4 veyra_shader_aa_fxaa5
   veyra_shader_aa_smaa_edges veyra_shader_aa_smaa_weights_low veyra_shader_aa_smaa_weights_medium
   veyra_shader_aa_smaa_weights_high veyra_shader_aa_smaa_weights_ultra veyra_shader_aa_smaa_blend veyra_shader_aa_temporal
-  veyra_shader_aa_mlaa_edges veyra_shader_aa_mlaa_counts veyra_shader_aa_mlaa_blend)
+  veyra_shader_aa_mlaa_edges veyra_shader_aa_mlaa_counts veyra_shader_aa_mlaa_blend veyra_shader_dlaa_hdr_restore)
 
 add_executable(veyra_pipeline_tests
   tests/unit/PipelineContractTests.cpp
@@ -571,7 +581,7 @@ endif()
 # EnhanceGraph (the real GPU chain) needs the NGX + NVOF backends; wire it
 # into veyra_pipeline only when both exist so bare contract builds still work.
 if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
-  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/core/SceneCadenceAnalyzer.cpp)
+  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/pipeline/NrReusePass.cpp src/core/SceneCadenceAnalyzer.cpp)
   target_include_directories(veyra_pipeline PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_pipeline PRIVATE veyra_ngx veyra_nvof ${FFMPEG_LIBRARIES})
   add_dependencies(veyra_pipeline
@@ -670,7 +680,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
@@ -1196,6 +1206,8 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     src/ui/bridge/Colour.cpp
     src/ui/bridge/Preferences.cpp
     src/ui/bridge/Capture.cpp
+    src/ui/bridge/VirtualCaptureAudioSetup.cpp
+    src/ui/bridge/VirtualCaptureAudioSetup.h
     src/ui/bridge/RemotePlay.cpp
     src/ui/bridge/Export.cpp
     src/ui/bridge/Subtitles.cpp
@@ -1253,7 +1265,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Widgets is needed only for QFileDialog: the native file picker is the one
   # piece of the old shell worth keeping, and its own dialog is what users
   # expect from a desktop app. No QWidget UI is created.
-  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets)
+  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets PRIVATE shell32)
   add_executable(veyra_playlist_tests tests/unit/PlaylistModelTests.cpp src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h)
   set_target_properties(veyra_playlist_tests PROPERTIES AUTOMOC ON)
   target_compile_features(veyra_playlist_tests PRIVATE cxx_std_20)
@@ -1301,7 +1313,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # WIN32: a GUI subsystem binary. Without it a console window follows the app
   # around, which is not what a player should look like. Diagnostics still reach
   # the log file through the logger.
-  add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp src/ui/QmlDataDirectory.cpp)
+  add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp src/ui/QmlDataDirectory.cpp src/ui/QmlDiskCache.cpp)
   # The QML copy is its own always-run step rather than a POST_BUILD of the link:
   # its two long E:/项目 paths on the link statement pushed that command past
   # CMake's response-file threshold, and link.exe reads response files in the
@@ -1313,6 +1325,16 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Interface translations (设置 → 界面语言): one catalog, compiled in so a package
   # cannot ship without it. scripts/i18n/ builds it from the source strings.
   qt_add_resources(veyra_qml_ui "veyra_i18n" PREFIX "/i18n" BASE "${CMAKE_CURRENT_SOURCE_DIR}/i18n" FILES i18n/catalog.json)
+  set(VEYRA_VB_CABLE_PACKAGE "" CACHE FILEPATH "Original VB-Audio Pack46 ZIP to include for optional offline installation")
+  if(VEYRA_VB_CABLE_PACKAGE)
+    file(SHA256 "${VEYRA_VB_CABLE_PACKAGE}" veyra_vb_cable_sha256)
+    if(NOT veyra_vb_cable_sha256 STREQUAL "bc44e8974191a5a2427d6c979e2dab08dbb09925f3f435dfa2f0ba3e45b6eb90")
+      message(FATAL_ERROR "VEYRA_VB_CABLE_PACKAGE must be the original VB-Audio Pack46 ZIP")
+    endif()
+    set_source_files_properties("${VEYRA_VB_CABLE_PACKAGE}" PROPERTIES QT_RESOURCE_ALIAS "VBCABLE_Driver_Pack46.zip")
+    qt_add_resources(veyra_qml_ui "veyra_optional_vb_cable" PREFIX "/optional-drivers"
+      FILES "${VEYRA_VB_CABLE_PACKAGE}" OPTIONS -no-compress)
+  endif()
   target_compile_features(veyra_qml_ui PRIVATE cxx_std_20)
   # Every thread without an explicit size (UI, engine, export worker) reserves the
   # image default. The 32-node EffectChain is 45 KB and the bridge, preset and
@@ -1347,6 +1369,12 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_link_libraries(veyra_subtitle_cache_tests PRIVATE veyra_engine)
   target_compile_features(veyra_qml_data_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_qml_data_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  # The per-build QML disk cache folder (QmlDiskCache.h).
+  add_executable(veyra_qml_cache_tests tests/unit/QmlDiskCacheTests.cpp src/ui/QmlDiskCache.cpp)
+  target_compile_features(veyra_qml_cache_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_qml_cache_tests PRIVATE /utf-8)
+  target_include_directories(veyra_qml_cache_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_qml_cache_tests PRIVATE Qt6::Core)
 
   # G0.6: Theme easing curves read back through QML against the design's CSS curves.
   # Loads qml/ from the source tree; runs offscreen with the Qt bin directory on PATH.
@@ -1407,12 +1435,24 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   add_executable(veyra_nr_hold_gpu_tests tests/integration/NrHoldGpuTests.cpp)
   target_compile_features(veyra_nr_hold_gpu_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_nr_hold_gpu_tests PRIVATE veyra_pipeline)
+  # NR inference reuse: frame selection, Auto controller and settings (GPU-free),
+  # and the reuse pass on real D3D12 dispatches.
+  add_executable(veyra_nr_reuse_tests tests/unit/NrReuseTests.cpp)
+  target_compile_features(veyra_nr_reuse_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_nr_reuse_tests PRIVATE veyra_engine)
+  add_executable(veyra_nr_reuse_gpu_tests tests/integration/NrReuseGpuTests.cpp)
+  target_compile_features(veyra_nr_reuse_gpu_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_nr_reuse_gpu_tests PRIVATE veyra_pipeline)
   add_executable(veyra_nr_runtime_assertion_tests tests/integration/NrRuntimeAssertionTests.cpp)
   target_compile_features(veyra_nr_runtime_assertion_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_nr_runtime_assertion_tests PRIVATE veyra_pipeline)
   add_executable(veyra_nr_video_quality_probe tests/integration/NrVideoQualityProbe.cpp)
   target_compile_features(veyra_nr_video_quality_probe PRIVATE cxx_std_20)
   target_link_libraries(veyra_nr_video_quality_probe PRIVATE veyra_engine)
+  # NR inference reuse against full inference on a real video (offline readbacks).
+  add_executable(veyra_nr_reuse_quality_probe tests/integration/NrReuseQualityProbe.cpp)
+  target_compile_features(veyra_nr_reuse_quality_probe PRIVATE cxx_std_20)
+  target_link_libraries(veyra_nr_reuse_quality_probe PRIVATE veyra_engine)
   add_executable(veyra_nr_dynamic_size_experiment tests/perf/NrDynamicSizeExperiment.cpp)
   target_compile_features(veyra_nr_dynamic_size_experiment PRIVATE cxx_std_20)
   target_compile_options(veyra_nr_dynamic_size_experiment PRIVATE /utf-8)

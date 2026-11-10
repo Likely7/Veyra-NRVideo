@@ -112,9 +112,11 @@ class QmlPlayerBridge : public QObject {
     Q_OBJECT
     // --- professional-page readouts ---------------------------------------
     // Every one of these reports an engine value. Where the engine has no
-    // measurement the getter says so (e.g. displayFpsKnown stays false, because
-    // a display rate is only real if the system display event can be read - the
-    // design requires exactly this distinction rather than reusing submit FPS).
+    // measurement the getter says so. There is no "display fps": panel scanout
+    // is not measured, and overlays such as RTSS also count Present calls, which
+    // is the submit rate below (with its 1% low).
+    // Custom (Bilibili / Dolby Vision): automatic frame-generation multiplier and
+    // the Dolby Vision follow / P7 composite switches.
     Q_PROPERTY(bool fgAutoMultiplierEnabled READ fgAutoMultiplier WRITE setFgAutoMultiplier NOTIFY settingsChanged)
     Q_PROPERTY(bool fgAutoMultiplierAvailable READ fgAutoMultiplierAvailable NOTIFY settingsChanged)
     Q_PROPERTY(bool doviFollow READ doviFollow WRITE setDoviFollow NOTIFY settingsChanged)
@@ -124,8 +126,6 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString srStageSummary READ srStageSummary NOTIFY snapshotChanged)
     Q_PROPERTY(QString srStageNote READ srStageNote NOTIFY snapshotChanged)
     Q_PROPERTY(bool fullscreenMemorySafe READ fullscreenMemorySafe NOTIFY snapshotChanged)
-    Q_PROPERTY(double displayFps READ displayFps NOTIFY snapshotChanged)
-    Q_PROPERTY(bool displayFpsKnown READ displayFpsKnown NOTIFY snapshotChanged)
     Q_PROPERTY(double queuedFrames READ queuedFrames NOTIFY snapshotChanged)
     Q_PROPERTY(bool queuedFramesKnown READ queuedFramesKnown NOTIFY snapshotChanged)
     Q_PROPERTY(int skippedFrames READ skippedFrames NOTIFY snapshotChanged)
@@ -218,6 +218,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString capturePixelId READ capturePixelId WRITE setCapturePixelId NOTIFY captureChanged)
     Q_PROPERTY(QVariantList captureAudioInputs READ captureAudioInputs NOTIFY captureChanged)
     Q_PROPERTY(int captureAudioChoice READ captureAudioChoice WRITE setCaptureAudioChoice NOTIFY captureChanged)
+    Q_PROPERTY(bool captureVirtualAudioInstalled READ captureVirtualAudioInstalled NOTIFY captureChanged)
+    Q_PROPERTY(bool captureVirtualAudioRemovalBlocked READ captureVirtualAudioRemovalBlocked NOTIFY snapshotChanged)
+    Q_PROPERTY(bool captureVirtualAudioBusy READ captureVirtualAudioBusy NOTIFY captureChanged)
     Q_PROPERTY(int captureColorSpace READ captureColorSpace WRITE setCaptureColorSpace NOTIFY captureChanged)
     Q_PROPERTY(int captureColorRange READ captureColorRange WRITE setCaptureColorRange NOTIFY captureChanged)
     Q_PROPERTY(double captureRequestedFps READ captureRequestedFps WRITE setCaptureRequestedFps NOTIFY captureChanged)
@@ -370,6 +373,9 @@ class QmlPlayerBridge : public QObject {
     // number we cannot measure must not be shown as if we measured it).
     Q_PROPERTY(double submitFps READ submitFps NOTIFY snapshotChanged)
     Q_PROPERTY(bool submitFpsKnown READ submitFpsKnown NOTIFY snapshotChanged)
+    // 1% low of the presents over the last ten seconds (FramePaceWindow).
+    Q_PROPERTY(double submitLowFps READ submitLowFps NOTIFY snapshotChanged)
+    Q_PROPERTY(bool submitLowFpsKnown READ submitLowFpsKnown NOTIFY snapshotChanged)
     Q_PROPERTY(double lateMs READ lateMs NOTIFY snapshotChanged)
     Q_PROPERTY(double lateP95Ms READ lateP95Ms NOTIFY snapshotChanged)
     Q_PROPERTY(QString metricsSummary READ metricsSummary NOTIFY snapshotChanged)
@@ -395,6 +401,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool lowLatency READ lowLatency WRITE setLowLatency NOTIFY settingsChanged)
     Q_PROPERTY(bool nrTemporal READ nrTemporal WRITE setNrTemporal NOTIFY settingsChanged)
     Q_PROPERTY(double nrHoldStrength READ nrHoldStrength WRITE setNrHoldStrength NOTIFY settingsChanged)
+    Q_PROPERTY(int nrReuseMode READ nrReuseMode WRITE setNrReuseMode NOTIFY settingsChanged)
+    Q_PROPERTY(bool nrReuseActive READ nrReuseActive NOTIFY snapshotChanged)
+    Q_PROPERTY(QString nrReuseStatus READ nrReuseStatus NOTIFY snapshotChanged)
     Q_PROPERTY(double nrHoldTolerance READ nrHoldTolerance WRITE setNrHoldTolerance NOTIFY settingsChanged)
     Q_PROPERTY(bool videoHdr READ videoHdr WRITE setVideoHdr NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY videoHdrParamsChanged)
@@ -714,8 +723,6 @@ public:
     QString outputSummary() const;
     QString srStageSummary() const;
     QString srStageNote() const;
-    double displayFps() const;
-    bool displayFpsKnown() const;
     double queuedFrames() const;
     bool queuedFramesKnown() const;
     int skippedFrames() const;
@@ -821,6 +828,12 @@ public:
     // private to QML ("is not a function").
     Q_INVOKABLE void refreshCaptureTargets();
     Q_INVOKABLE void refreshCaptureDevices();
+    bool captureVirtualAudioInstalled() const;
+    bool captureVirtualAudioRemovalBlocked() const;
+    bool captureVirtualAudioBusy() const;
+    Q_INVOKABLE void setupCaptureVirtualAudio(bool uninstall);
+    Q_INVOKABLE void openCaptureWindowsListen();
+    Q_INVOKABLE void openCaptureVirtualAudioVendor();
     Q_INVOKABLE bool openCaptureDriverSettings(bool inputSelector = false);
     Q_INVOKABLE bool startCaptureSession();
     Q_INVOKABLE bool setScreenOption(const QString& key, const QVariant& value);
@@ -977,6 +990,8 @@ public:
 
     double submitFps() const;
     bool submitFpsKnown() const;
+    double submitLowFps() const;
+    bool submitLowFpsKnown() const;
     double lateMs() const;
     double lateP95Ms() const;
     QString metricsSummary() const;
@@ -1017,6 +1032,10 @@ public:
     // Stage-5 output stabiliser (anti-flicker). Global rather than per-node:
     // it runs once, after the whole NR stack and the residual composite.
     double nrHoldStrength() const;
+    int nrReuseMode() const;
+    void setNrReuseMode(int value);
+    bool nrReuseActive() const;
+    QString nrReuseStatus() const;
     void setNrHoldStrength(double value);
     double nrHoldTolerance() const;
     void setNrHoldTolerance(double value);
@@ -1398,9 +1417,10 @@ public:
     Q_INVOKABLE void takeScreenshot();
     // Recording: the 3 second countdown lives in the interface, the engine
     // only opens the file when the request reaches it.
-    Q_INVOKABLE void startRecording();
-    Q_INVOKABLE void stopRecording();
-    Q_INVOKABLE void toggleRecording();
+    // source names the trigger in the log ("shortcut", "pro-button", "game-hotkey").
+    Q_INVOKABLE void startRecording(const QString& source = QString());
+    Q_INVOKABLE void stopRecording(const QString& source = QString());
+    Q_INVOKABLE void toggleRecording(const QString& source = QString());
     Q_INVOKABLE void chooseRecordingDirectory();
     Q_INVOKABLE void openRecordingDirectory();
     bool recording() const;
@@ -1641,6 +1661,8 @@ private:
     void updateGameGeometry();
     // Game mode's keyboard hook gets the current panel, exit, screenshot and record keys.
     void applyGameHotkeys();
+    // DLAA anti-aliasing needs the DLSS SR runtime and adapter; false (with a notice) otherwise.
+    bool dlaaAllowed();
     // 抖音直播伴侣 running (gfx/PresentationHooks.h): Realtime GPU priority is capped at
     // High while it runs and restored when it exits; 监控软件兼容 "off" leaves it alone.
     void updateLiveCompanionCompat();

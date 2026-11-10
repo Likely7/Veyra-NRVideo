@@ -18,7 +18,11 @@ struct Api {
 std::mutex mutex;
 GpuPriorityStatus current;
 GpuPriority cap=GpuPriority::Realtime;
-GpuPriority effective(){return int(current.requested)<=int(cap)?current.requested:cap;}
+GpuPriority computeCap=GpuPriority::Realtime;
+GpuPriority effective(){
+    const GpuPriority limit=int(cap)<=int(computeCap)?cap:computeCap;
+    return int(current.requested)<=int(limit)?current.requested:limit;
+}
 void publish(GpuPriorityState state,int actual,uint32_t status){
     const bool capped=effective()!=current.requested;
     if(current.state==state&&current.actual==actual&&current.status==status&&current.capped==capped)return;
@@ -69,6 +73,13 @@ void setGpuPriorityCap(GpuPriority value){
     std::lock_guard lock(mutex);
     if(cap==value)return;
     cap=value;++current.revision;
+    applyLocked();
+}
+void setGpuPriorityComputeCap(GpuPriority value){
+    if(value!=GpuPriority::Normal&&value!=GpuPriority::High&&value!=GpuPriority::Realtime)return;
+    std::lock_guard lock(mutex);
+    if(computeCap==value)return;
+    computeCap=value;++current.revision;
     applyLocked();
 }
 GpuPriorityStatus gpuPriorityStatus(){std::lock_guard lock(mutex);return current;}

@@ -708,3 +708,236 @@ Veyra-2.1.3-NVIDIA-win64-portable.zip：726570478 bytes，SHA256 `464a46ac1874ac
 Veyra-2.1.3-AMD-win64-portable.zip：717577602 bytes，SHA256 `dc1223f0aff0feb397f2c40706a3f608b9e147d5390892d7631295759e17a692`。
 
 应用源码SHA256 `52e73bfa40422238f3fe35f7d3fbb0188c2ff759671cb6bda90a782824161d5b`。实际执行scripts/acceptance/release-2.1.3.py；git push --atomic nrvideo main refs/tags/v2.1.3 refs/tags/v2.1.3-sources；reports同任务publish.py body/drafts/sources/packages/publish/verify。AMD首次上传被原300秒脚本上限中断，服务端无残留；延长至1800秒重试，既有NVIDIA资产按摘要跳过。每个上传先核验远端摘要，再公开；源码先公开，运行版后设Latest。产品字节与供体ZIP逐文件一致，不重复占用采集卡；新产物仅在E盘。全部ZIP清单与SOURCE校验通过，无专有二进制/SDK混入源码Git，无用户配置进入运行包。群公告810字符，文件reports同任务GROUP_ANNOUNCEMENT.txt，未代发群消息。
+
+## 2026-11-06 RTX3080三种RTX超分跳回DLSS日志诊断
+
+
+用户日志35447行，SHA256 2975caad86b74be9ce09be500176a700bbbcc345db1e6eea7b6fd58df8c91df3；RTX3080 10GB，驱动32.0.16.2101。用户明确新目录解压，不归因覆盖残留。
+
+日志第996行选择高码率，997行却accepted quality=0；第20228行从FSR选标准，20229行同样accepted quality=0。其他RTX点击没有提交对应2/17/21，未看到RTX模型创建失败。DLSS/FSR正常提交和创建。注意日志Z时间为UTC11月7日，对应客户端太平洋时间11月6日；原证据保持UTC。
+
+源码与已发布NVIDIA ZIP核对，ProPage/NodePage均使用srQualityFor(string family,tier)；旧2.1.2 ProPage则Number(id)。本地RTX5070私有应用关闭所有效果、不打开媒体，实际菜单点击RTX三种与DLSS/FSR分别得到2/17/21/0/5，全部通过。只在私有ProPage换回旧Number(id)处理器，同样真实菜单点击得到0/0/0/0/5，与用户日志高度吻合。正式包无qmlc/jsc文件。此对照不是用户实际文件内容的证明，也不是RTX3080推理验收。
+
+当前定位为模型ID在选择链路被错误转换的强证据，不能把责任归于GPU算力、驱动或缺DLL；下一步核对用户实际加载的qml/Veyra/ProPage.qml、NodePage.qml及EXE SHA256，确认文件和加载来源。未改产品、不发覆盖补丁、不推送或发布；不要求反复换驱动/重跑模型。证据reports/sr-menu-investigation-20261106/FINDINGS.json，命令ui_runner.py配menu-real.qml/menu-legacy.qml，实际日志logs同任务。
+
+首个QtTest夹具when:windowShown在独立应用中未触发，已停止唯一私有路径测试进程并改Timer显式调用测试方法；两次有效检查均exit0，无engine/QML错误。未碰用户运行进程、配置和原日志。仅作为受控对照把旧处理器放入私有QML，已恢复原字节。
+
+本轮删除SHA白名单隔离测试副本的命令被自动审批以blocked by policy拒绝，未执行；保留tests/sr-menu-investigation-20261106/app，不改shell/工具绕过，配置和日志保留。证据CLEANUP.json。产品代码和已发布包均未修改。
+
+## 2026-11-06 2.1.3 选不了三种 RTX 视频超分：每个构建使用自己的界面编译缓存（Claude）
+
+**状态**：分支 `claude/qmlcache-20261106`，基线 main `edd901e`，未提交。
+
+**排查**：见 `E:/项目/Veyra/reports/claude-sr-qmlcache-20261106/FINDINGS.md`。
+- 发布 ZIP 把文件时间统一成 1980-01-01，而 Qt 界面编译缓存只按“路径＋时间”判断是否过期。
+- 所以 2.1.3 覆盖 2.1.2 后，沿用 2.1.2 编译的 ProPage，`Number(id)` 把三种 RTX 模型变成 DLSS。
+
+**修复**：新增 `QmlDiskCache`。
+- 启动时按 `qml/Veyra` 的内容摘要，把 `QML_DISK_CACHE_PATH` 设为 `<缓存>/qmlcache-<摘要>`。
+- 外部明确设置的路径或关闭缓存的设置保留。
+- 系统代码页无法表示路径时关闭缓存。
+- 日志新增 `[qml-cache]` 一行。
+
+**验证**：
+- 构建 301.0 秒通过；`veyra_qml_cache_tests` 通过。
+- 真实程序在“2.1.2 → 2.1.3 原地覆盖”的安装里：
+  - 未修复程序：宽 150，提交 0/0/0；
+  - 修复版：首次重新编译、宽 210，提交 17/2/21；第二次复用缓存；
+  - 同大小、同时间地改动 ProPage 后，立即换目录并生效；改回后复用原目录。
+
+**记录**：`docs/QML_CACHE_PER_BUILD_2026-11-06.md`，回执 `E:/项目/Veyra/reports/claude-qmlcache-20261106/FINAL.json`。
+
+**未验证**：未在用户 RTX 3080 上验证，代码页回退分支未实测，未重跑全套 QtQuick。
+
+
+## 2026-11-06 Issue #88：RX 9060 XT 开 AMD NR 第一帧崩溃，改为 HIP 子进程自检（Claude）
+
+**状态**：分支 `claude/issue88-hip-preflight-20261106`，基线 main `edd901e`（代码与 2.1.3 `7a2d15d` 相同），未提交，未在 issue 上回复。
+
+**证据**（报告人 zip）：14 次崩溃都在 `amdhip64_7.dll+0x4A40A0`，都是读地址 0x390。
+- 自写 minidump 读取脚本显示，崩溃线程是 HIP 内部线程；同一时刻，播放线程停在 lmxxf 网络初始化的 `hipStreamCreate`（`LmxxfNrRuntime.dll+0xA4A2E`，前后操作名 hipInit/device/stream）。
+- HIP 和 COMGR 都来自驱动的 System32。
+- 上游 lmxxf issue 18：另一台 RX 9060 XT 在 Magpie 里能正常跑同一套内核。Veyra 进程默认处于 Realtime GPU 调度等级，是最可疑的差异，未证实。
+- 本机核显 + HIP 6 在四种进程状态下创建流都正常，不能代表 RDNA4。
+
+**修复**：新增 `AmdHipPreflight`。
+- `LmxxfNrBackend::open` 在 Create 之前，让本程序以 `--amd-hip-preflight` 子进程模式先在同一块卡上执行 D3D12、调度等级、hipInit、按 LUID 选卡、hipSetDevice、hipStreamCreate、显存清零。
+- 当前等级失败时依次试 High、Normal，第一个通过的等级通过新的 `setGpuPriorityComputeCap` 应用到本进程。
+- 全部失败则拒绝 AMD NR，播放继续。
+
+**验证**：
+- 构建 295.5 秒，增量 9.6 秒。
+- 新单测在本机核显上全部通过：真实调度等级 5→4→2→5；正常、只在 Realtime 崩溃、每档都崩溃、缓存、缺库。
+- 原 AMD 合成图 128/0、lmxxf ABI 66/0。
+- 真实 exe 子进程模式无钩子退出码 0，加钩子 0xC0000005；普通启动冒烟正常。
+
+**交付**：测试补丁 `test-packages/claude-issue88-20261106/Veyra-2.1.3-issue88-test.zip`。
+
+**记录**：`docs/ISSUE88_AMD_HIP_PREFLIGHT_2026-11-06.md`，报告 `E:/项目/Veyra/reports/claude-issue88-20261106/`。
+
+**未验证**：RDNA4/HIP 7 实卡结果要等报告人运行；本机走不到 lmxxf 真实路径。
+
+# Claude两项修复合并与组合验收（2026-11-06）
+
+用户要求合并Claude最新修复到main。开工main edd901e，存档checkpoint/pre-claude-fixes-merge-20261106。工作树仍为E:/项目/Veyra/worktrees/screen-recording-fix-20261022。
+
+- claude/qmlcache-20261106：将原未提交7文件保存为a66f7e9，merge a625787。QML内容摘要隔离编译缓存；保留外部环境设置，不删除旧缓存。
+- claude/issue88-hip-preflight-20261106：原未提交10文件保存为b15152b，merge f3b103d。AMD lmxxf建立前运行独立HIP自检，按通过的等级限制调度，全部失败拒绝开启NR。RX9060XT现场根因仍未证明为Realtime，属于崩溃前置防护，不宣称已在该卡治愈。
+- CMake/main.cpp自动合并成功；唯一WORKLOG冲突按原始共同前缀保留两边完整追加内容。原两个工作树干净，无SDK/DLL/模型入Git，不恢复暂停Lecram或撤销预算/RIFE。外部NR优化只是调研，没有产品代码可合。
+
+组合构建f3b103d，8目标86.8秒通过，标签2.1.3-integration-test，复用build/claude-screen-recording-20261022；不是公开正式包。实际命令在logs/codex-claude-merge-20261106/build-20261106-204917/receipt.json，入口build-recording-handoff.py --reconfigure --jobs 2，目标qml_ui/qml_cache_tests/amd_hip_preflight_tests/lmxxf_nr_tests/amd_nr_graph_tests/qml_quick_tests/ui_contract_tests/ui_i18n_tests。
+
+验收：QML缓存单测通过；HIP自检本机核显/HIP6真实子进程及调度5→4→2→5、单档崩溃降级、全部崩溃拒绝、缓存和缺库路径通过；UI合同、i18n/提取通过；完整软件Quick173/0/0。AMD合成图128/0（HDR108、D3D12调试层0错误）、lmxxf ABI66/0，不是RDNA4推理。
+
+合并主程序实际--amd-hip-preflight：正常exit0/done ok，受控stream崩溃exit0xC0000005，未启动Qt界面。实际普通程序使用隔离配置、关闭所有效果且不打开视频，开启QML编译缓存进行真实下拉点击，首次和再次均为RTX标准2/高码率17/流媒体21，DLSS0、FSR5；无engine/QML错误。再次启动的ProPage缓存mtime与SHA完全不变，证实复用。私有Main探针已恢复源码原字节。命令check.py、amd-regression.py gpu --task codex-claude-merge-20261106、ui_runner.py配menu-real.qml；日志和JSON在reports/logs同任务。
+
+本轮首个缓存单测调用漏传必需的新scratch目录，exit2 usage，已补参数单独复测通过，保留CHECKS.json首败与QML-CACHE-CORRECTED.json，不重跑已通过无关检查。未碰用户运行进程/配置，未发布新包、未push；当前GitHub仍2.1.3。现有测试副本保留作本轮可用组合构建，不声称删除或回收。真实RX9060XT/HIP7推理仍需现场验收。
+
+此前Codex私有UI测试设置QML_DISABLE_DISK_CACHE=1，验证了ID映射却漏掉升级缓存条件。Claude在保留缓存的真实跨版路径复现了旧ProPage执行Number(id)并产生0/0/0。今后界面升级验收至少包含开启缓存的首次/再次启动及同路径跨版升级，不以禁用缓存的孤立通过替代。
+
+
+## 2026-11-06 项目产物安全清理
+
+删除122372文件，逻辑53.72 GiB，E盘实测可用净增33.73 GiB；项目路径累计152.89→99.28 GiB。34关键文件/正式与源码ZIP SHA不变，19工作树原HEAD/修改清单不变，依赖/Junction/用户配置/当前build与app保留。只清编译中间文件、旧测试部署与未发布包、私有缓存、旧性能读回；保留修改与用户数据候选315项，首次预检20个Profile命名obj保守排除。单文件1.4.0旧下载ZIP删除被自动审批blocked by policy拒绝，未执行、未绕过，仍保留。详情docs/PROJECT_CLEANUP_2026-11-06.md和reports/codex-project-cleanup-20261106/FINAL.json，命令及逐文件证据在同任务。产品代码/正式包不改，未push/发布。
+
+## 2026-11-07 NR 推理复用（自动推理复用，Claude，未提交）
+
+**来由**：用户不复制、不移植 SAOG0721/Magpie 代码，选了自研方案 A，要求开关名为“自动推理复用”，另提供手动 1/2、1/3、1/4。
+
+- 分支 `claude/nr-reuse-20261107`，基于 main 0079ed9；
+- 工作树 `worktrees/claude-nr-reuse-20261107`，构建目录 `build/claude-nr-reuse-20261107`；
+- 没有动共用施工树和当前可用构建。
+
+**行为**：
+
+- 只用于实时预览。复用帧不跑 NR，输出“本帧源 + 上一推理帧的 NR 变化”，变化按光流搬运。
+- 变化拆成两部分：邻域均值按 3×3 邻域是否匹配决定是否搬；细节只在本像素细节也一致时才搬。对不上、出界或在保护区内时显示原图。
+- 复用帧之后一定重新推理。那一帧给 NR 和时域稳定器的运动换成串接后的运动。
+- 手动 1/2、1/3、1/4 表示每 2/3/4 帧复用 1 帧。
+- 自动由 AutoNrReuseController 选档：平均增强耗时对比 80% 帧间隔，超预算 0.5 秒升档；预测降档仍低于 0.85 倍预算并持续 3 秒才降档；最多每 2 帧复用 1 帧。
+- 开关切换会重建图，档位之间实时切换。
+- 暂停时若最后一帧是复用帧，补做一次完整推理重绘。
+- 导出、图片、预热图、最近图缓存、COMPUTE 准入和自动 NR 尺寸池都不收复用配置。
+
+**验证**：
+
+- 新单测 33/0，新 GPU 测试 7/0（调试层 0）；
+- QtQuick 172/0/1；
+- 设置、预设、合同、翻译、抗闪烁、稳定器 GPU 回归通过；设置事务和 AMD 合成图 128/0 在运行目录内通过。
+- 真实程序：
+  - 1 层 4K60，1/2 时平均增强耗时 4.49 → 3.11 ms；
+  - 4 层超载，自动约 2 秒升到每 4 帧复用 1 帧，15.24 → 11.64 ms，跳帧停止；
+  - 实时切档和暂停重绘通过。
+- 画质（对比每帧推理）：720p 真实平移，复用帧平均差 0.70/255、PSNR 45.7 dB；合成测试卡上差异集中在随机噪点块和移动细线。
+
+**记录**：`docs/NR_INFERENCE_REUSE_2026-11-07.md`，回执 `E:/项目/Veyra/reports/claude-nr-reuse-20261107/FINAL.json`。手动入口 `tests/claude-nr-reuse-20261107/启动推理复用测试.cmd`，独立配置。
+
+**范围**：未打包、未提交、未合 main、未 push。只在本机 RTX 5070 验证，其他显卡、HDR、节点模式、采集卡未验证。
+
+## 2026-11-07 NR 推理复用界面调整、提交 fps 的 1% low、色温冷端修正（Claude，未提交）
+
+同一工作树 `worktrees/claude-nr-reuse-20261107`，按用户截图反馈修改：
+
+- **NR 推理复用**：
+  - 去掉“已复用 N 帧”；
+  - 卡片改名“NR 自动推理复用”；
+  - “输出稳定器 · 抗闪烁”“NR 自动推理复用”“NR 全局保护区域”挪进“NR 画面增强”，与 NR 层并列；
+  - 复用帧给 NR 阶段记零长度计时样本，底部阶段耗时的平均随复用实时下降（4 层 4K60：NR 第4层 3.50 → 1.77 ms，总 16.24 → 8.36 ms），P95 仍是单次推理；自动档改用 P95 估算单次推理成本。
+- **图标**：两张卡的 `shield` 图标原本不在图标库，一直空白，已补 Lucide shield 并重新生成 IconData。
+- **帧率卡**：“显示 fps”从未接入测量、永远未测，已删除。RTSS 也是按 Present 计帧，等同于提交 fps。
+  - 现在提交 fps 是主数字，旁边显示 1% low，算法为最近 10 秒 Present 间隔的第 99 百分位；三处界面统一；
+  - 实测“60.0 提交 fps | 39.5 1% low”。
+- **色温**：普朗克曲线 2222–4000 K 段 y 常数项写错（−0.0317，应为 −0.1675），−100 时蓝通道 ×23、在约 −70 处突跳。已修正，并把冷端按迈尔德与暖端镜像（−100 = 4333 K），暖端不变；真实画面 −100 偏冷但不爆。
+
+**验证**：
+- 新单测：NR 复用 33/0、播放计时 164（含 1% low 5 项）、色彩表 54（含色温 3 项）；
+- 色彩 GPU 通过，slot 回归在运行目录内 12/12，QtQuick 172/0/1，翻译 0 缺失。
+
+**记录**：`docs/NR_INFERENCE_REUSE_2026-11-07.md`、`docs/FPS_LOW1_AND_COLOR_TEMPERATURE_2026-11-07.md`，回执 `E:/项目/Veyra/reports/claude-nr-reuse-20261107/FINAL.json`。
+
+**范围**：未提交、未合 main、未 push；只在本机 RTX 5070 验证，没有与 RTSS 读数逐帧对照。
+
+
+## 2026-11-08 接手Claude：音量记忆与全后端双重超分
+
+读取Claude最新会话9720f799，原任务为“音量每次回100%”“其他超分也支持双重”。独立树worktrees/claude-volume-dual-sr-20261108，分支claude/volume-dual-sr-20261108，基线0079ed9；原20文件逐SHA核对未改字节，保存产品提交356013b。音量500ms防抖及退出保存；双重SR扩展DLSS/FSR，两个独立时域实例/历史、运动坐标、生命周期和内存估算，UI两模式共用并支持混合算法，新格式与旁文件保护旧设置。
+
+Claude初次构建305.9s，原完整Quick172/0/1、25 GPU用例、原双重/超采样、真实UI、设置事务及导出通过；本机RTX5070。Codex补真实程序音量23%立刻退出/重启/越界值，保持编译缓存；设置274/0、效果链和预设库通过；给单个跳过的栅格测试显式目录后成功保存6图。六组既有NVENC导出重新比对360帧，错位0，不冒充画质全面验收。原启动器cmd引号/控制字符/工作目录问题已修并实际运行、独立配置、定时退出通过。未改用户配置/其他进程/运行库或驱动。
+
+最终命令build-recording-handoff.py --task claude-volume-dual-sr-20261108 --root E:/项目/Veyra/worktrees/claude-volume-dual-sr-20261108 --label 2.1.3-volume-dual-sr-test --jobs 2，12目标，干净产品提交增量1.0s通过；完整目标及receipt见docs/VOLUME_DUAL_SR_2026-11-08.md和logs同任务/build-20261108-023124。EXE91b93b45…与既有验收字节相同，未因文档变化盲目重测全套。
+
+独立命令：python -X utf8 -B E:/项目/Veyra/reports/claude-volume-dual-sr-20261108/codex_verify.py --remaining；full_align.py 对六个tests同任务/out/*.mp4与源pan720p-16s.mp4比较。首个设置测试误先建scratch触发exit2，改为不存在路径后274/0；之前失败日志保留。Claude旧RTX-only断言、默认档位和错误尺寸测试输入的修正也保留记录。
+
+报告reports/claude-volume-dual-sr-20261108/FINAL.json；手动入口tests同任务/启动音量与双重超分测试.cmd，manual-profile独立；docs/VOLUME_DUAL_SR_2026-11-08.md说明限制。只保留任务现有可用stage/build/证据，未多做重复整包。本轮未合main、未push/Release；NR推理复用独立分支保持原状态，无AMD实卡验收，不重跑历史8K+NR+VFG卡死组合。
+
+
+## 2026-11-08 录制、HDR超分、DLAA交接与11条审查修复
+
+工作树 `E:/项目/Veyra/worktrees/claude-record-hdr-dlaa-20261108`，分支 `claude/record-hdr-dlaa-20261108`，基线 `84e2cb5`。Claude主体完成后接手，原23文件SHA快照在任务报告目录。最新用户追加要求修复Claude审查的11条。原始审查与处理逐项见 `reports/claude-record-hdr-dlaa-20261108/CLAUDE-REVIEW.json` 和 `AUDIT-RESOLUTION.json`，细节见 `docs/RECORD_HDR_DLAA_2026-11-08.md`。
+
+构建 `python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task claude-record-hdr-dlaa-20261108 --root E:/项目/Veyra/worktrees/claude-record-hdr-dlaa-20261108 --label 2.1.3-record-hdr-dlaa-test --jobs 2 veyra_qml_ui veyra_anti_alias_gpu_tests veyra_preset_library_tests veyra_effect_chain_tests veyra_video_ai_settings_tests veyra_ui_contract_tests veyra_settings_transaction_tests veyra_qml_quick_tests veyra_ui_i18n_tests veyra_sr_quality_tests`。初次Codex构建118.3s，审查后增量72.3s。主程序 `52a86650…`，同任务build和app，不制作额外发布包。
+
+验收运行 `python -X utf8 -B E:/项目/Veyra/reports/claude-record-hdr-dlaa-20261108/audit_checks.py` 与 `quick_run.py suite-audit`。30次调用通过，QtQuick175/0/0，设置274/0，设置事务D3D12错误0，1440p DLAA 3个历史帧获得光流，DLSS/FSR HDR色块通过，8组HDR双重超分通过。先前合并运行SDR后超时，分算法对重跑并独立执行事务检查。预设同TEMP两次通过。真实F8开停各记录Qt Quick实际事件，进出全屏无额外录制请求，431帧及文件完整性核对通过。现场旧日志不含触发源，AMD实卡和采集卡现场未验。
+
+独立配置入口 `E:/项目/Veyra/tests/claude-record-hdr-dlaa-20261108/启动录制HDR与DLAA测试.cmd`。新增约9.1 MB录制证据及测试日志，复用单份当前测试程序。已核验旧app213重复副本1,079,122,186字节，自动审批blocked by policy拒绝删除，未绕过。最终回执同任务FINAL.json。未合main、未推送、未发布。用户要求汇报后正常关机。
+
+
+## 2026-11-08 当前修复整合到本地 main
+
+用户暂停防闪烁并授权本地合并。main从0079ed9，经8123c82（含356013b、84e2cb5）与原39文件a375afa整合成77d6c09。WORKLOG保留两边追加；合并显存估算，DLAA保留相邻帧光流，NR历史可使用跨帧运动。
+
+执行 `python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-main-fixes-20261108 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.3-main-fixes-test --jobs 2 --reconfigure --option VEYRA_RDNA3_NETWORK_SOURCE_DIR=E:/项目/Veyra/deps/amd-rdna3-nr-20261029/prepared`，16目标清单在build-20261108-214335/receipt.json，147.7s。实际命令与结果另见reports同任务verify.py、quick_retry.py、CHECKS.json、QUICK-RETRY.json、EXPORT-ALIGNMENT.txt和FINAL.json。
+
+首轮QtQuick退出0xC0000409，固定SDK环境独立复跑175/0/0；不推断原因。真实1440p/4K SR＋DLAA＋NR复用通过，音量29%重启通过；设置事务0 D3D错误，AMD模拟128/0，混合4K导出60帧无错位。复用原build及测试app，101运行DLL核验，保留现有测试和证据；无新完整包。文档docs/MAIN_FIXES_INTEGRATION_2026-11-08.md，入口tests/codex-main-fixes-20261108/启动main组合测试.cmd。
+
+## 2026-11-08 可选虚拟扬声器
+
+隔离分支 `codex/virtual-capture-audio-20261108` 从本地 main `34a72ee` 开始。采集卡面板按系统播放端点识别基础版 VB-CABLE。安装和卸载均从说明及确认弹窗启动 VB-Audio 原安装器。确认后才从官网下载 Pack46，核验 ZIP 和安装器 SHA-256。Authenticode 实查为 Valid，核验结果在 `logs/virtual-capture-audio-20261108/vendor-verification.json`。驱动独立于 Veyra 版本，启动或更新不会触发安装。使用说明从 Windows「声音 → 录制」进入所选采集音频设备的「侦听」属性。
+
+新增专用 eRender Loopback，明确选择 VB-CABLE 播放端点后接入既有 CaptureAudioSession。保留音画同步、输出路由和音频选择持久化。渲染器在实际解析输出后仍禁止回灌同一端点。普通录音设备、DirectShow 和原有连接串继续使用各自的路径。
+
+使用 MSVC 2022 的 CMake 对 `build/claude-screen-recording-20261022` 执行 `--build --parallel 2 --target veyra_qml_ui veyra_wasapi_input_tests veyra_qml_quick_tests veyra_ui_contract_tests`，最终增量通过。WASAPI `--offline` 19/0，`--blocked-output` 2/0 且提交音频帧为零，UI contract 包含新模式端点保存和加载。QtQuick 软件渲染 175/0/0。首次 QuickTest 用错 Qt 导入环境，按实际 Qt SDK 路径重新运行。真实 QML 实例核对未安装状态、安装说明、取消不启动安装、卸载确认。快捷按钮实际打开 Windows 录制标签，验证后关闭窗口。翻译目录检查无缺失和占位符错误。
+
+日志位于 `E:/项目/Veyra/logs/virtual-capture-audio-20261108`。本机测试入口为 `E:/项目/Veyra/tests/virtual-capture-audio-20261108/启动虚拟扬声器测试.cmd`，使用独立配置与现有运行时供体。验收没有实际安装或移除系统驱动，故障采集卡的侦听转接和端到端听感仍需实卡复测。本轮在本地隔离分支交付。
+
+## 2026-11-09 虚拟扬声器离线安装
+
+在 `codex/virtual-capture-audio-20261108` 续作。Veyra 里显示「Veyra 虚拟扬声器」。Windows 继续注册 VB-Audio 原签名驱动的播放端点，使用说明提供从播放设备属性将 CABLE Input 改名为「Veyra 采集音频」的步骤。设备识别继续按适配器名称，音频选择仍按稳定端点 ID 保存。
+
+构建选项 `-DVEYRA_VB_CABLE_PACKAGE=E:/项目/Veyra/deps/vb-audio/pack46/VBCABLE_Driver_Pack46.zip` 将 SHA-256 固定的 1,324,680 字节原 ZIP 编入 `veyra_qml_ui.exe`。使用 [VB-Audio 原包](https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip) 和厂商署名说明。正式和测试打包都沿用已编入资源的 EXE。纯源码构建可以留空此选项，此时没有离线安装包。应用内安装和卸载读取同一内置资源，确认前不会启动安装器，安装包不进入源码 Git。
+
+MSVC/CMake 使用共享构建目录按上述选项重新配置，再以 `--parallel 2 --target veyra_qml_ui` 构建成功。字节比对证实原 ZIP 在 EXE 中恰好出现一次且完整一致。真实 QML 验证离线资源可读、名称与说明、安装与卸载确认，以及取消无安装动作。多语言目录无缺失和占位符错误。日志 `E:/项目/Veyra/logs/offline-virtual-capture-audio-20261109`。本机入口 `E:/项目/Veyra/tests/offline-virtual-capture-audio-20261109/启动离线虚拟扬声器测试.cmd`。本轮未在系统安装驱动或修改 Windows 端点名称。
+
+## 2026-11-09 2.1.4 本地测试包与虚拟音频实机验收进度
+
+产品提交 `5ca4b82`。共享构建用 MSVC 2022 和 CMake 重新配置 `-DVEYRA_DISPLAY_VERSION=2.1.4` 与固定的 `VEYRA_VB_CABLE_PACKAGE`，以两路并发构建 QML、WASAPI、UI contract 和 QtQuick，另构建 capture audio 测试。PE 文件与产品版本均为 2.1.4。QtQuick 175/0/0，WASAPI 离线 19/0、防回灌 2/0，UI contract 通过。合成采集 PCM 经真实 WASAPI 输出的同步测试通过，手动补偿为 100 ms。该测试覆盖现有 PCM 同步管线。
+
+在实际软件的采集卡面板确认安装，内置 ZIP 经校验和解压后成功启动 VB-Audio 2.1.5.8 安装器。对 Install Driver 的两次桌面自动点击未推进安装，系统未注册 CABLE 端点。已把按钮交给用户操作。独立 FFmpeg DirectShow 测试 T911 HDMI 3 秒得到 308700 个样本，最大 −80.8 dBFS。未观察到可用于比较延迟的节目声音。未把安装器启动或合成 PCM 测试计为故障采集卡的侦听取音验收。
+
+从哈希锁定的 2.1.3 NVIDIA 和 AMD 正式便携 ZIP 复用供应商运行时。替换本轮构建的 EXE、QML、着色器、翻译和本地测试说明，逐文件核验两个新 ZIP 的大小和 SHA-256。两个解压形态在最小 PATH 与独立配置下均播放 H.264 测试素材并提交 90 个真实源帧。档案在 `E:/项目/Veyra/test-packages/2.1.4-virtual-audio-20261109`。打包脚本与最终回执在 `reports/virtual-capture-acceptance-2.1.4-20261109`，构建和测试日志在同名 `logs` 目录。核验后清理了重复的临时解压目录。当前为本地隔离分支测试包。
+
+## 2026-11-09 虚拟扬声器面板与独立端点可行性
+
+采集卡面板独立显示安装状态、使用说明和卸载。采集运行时允许查看卸载说明，确认按钮在采集结束前禁用。弹窗内的断开动作由用户触发，后端在打开卸载器前复查最新引擎状态。安装器运行期间禁止以同一虚拟端点开始采集。
+
+MSVC 2022 在 `build/claude-screen-recording-20261022` 执行 `cmake --build <build-dir> --parallel 2 --target veyra_qml_ui veyra_qml_quick_tests`，成功。QtQuick 175/0/0，翻译检查 0 缺失、0 占位错误。执行 `python -X utf8 -B E:/项目/Veyra/tests/virtual-audio-controls-20261109/run-controls-test.py`。真实安装检测和 Windows 小窗口采集覆盖查看说明、取消仍采集、主动断开、停止状态后启用确认。未安装界面使用独立 QML 副本模拟，确认入口和取消通过。各测试使用独立配置，未执行系统驱动卸载。证据在 `E:/项目/Veyra/logs/virtual-audio-controls-20261109`。
+
+用户已运行的 2.1.4 现场日志 `test-packages/2.1.4-virtual-audio-20261109/Veyra-2.1.4-NVIDIA-win64-portable/logs/veyra-qml.log` 第 2024、2066、4705、4710 行表明虚拟端点回录已启动、Realtek 输出已打开、累计 25000 个 WASAPI 数据包且该时刻 PCM 电平非零、无欠载。音画补偿为 0 ms，现场未测手动偏移和物理端到端延迟。
+
+覆盖包 `E:/项目/Veyra/test-packages/virtual-audio-controls-20261109/Veyra-2.1.4-virtual-audio-controls-win64-overlay.zip` 含 EXE 与两个 QML 文件，校验两个 2.1.4 原包均有对应位置，逐文件比对和 ZIP 校验通过，内嵌 VB-CABLE ZIP 与原包字节一致。独立测试入口 `tests/virtual-audio-controls-20261109/启动虚拟扬声器面板测试.cmd`。用户正在运行的目录不变。
+
+VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找到可修改的 VB-CABLE 源码。独立 Veyra 播放端点可参考 Microsoft SysVAD 的 WaveRT 播放部分，使用 Windows 共享模式 WASAPI 软件回录，继续接入 Veyra 现有同步管线。VirtualDrivers 的播放端点为另一源码参考，其 Microsoft 衍生部分仍为 MS-PL。此轮只核实可行性，本机 SDK 未见 WDK 内核头和 Inf2Cat，Secure Boot 已开启。独立驱动的构建、签名与安装验收单独进行。
+
+## 2026-11-09 用户决定继续使用 VB-Audio
+
+后续虚拟扬声器工作沿用本分支的原版 VB-CABLE Pack46、应用内离线安装及现有 WASAPI 回录。已安装的设备随 Veyra 升级继续复用。自研驱动原型留在独立分支 `codex/veyra-native-audio-20261109`（`f562770`）作为存档，暂停推进，不纳入后续构建或合并。可用的 2.1.4 面板覆盖包见上一节。
+
+## 2026-11-09 2.1.4 本地待发布重构建
+
+基线 `6c84bd2a84a2e97b85de3d75dfe3d08b9dcd243d`，包含本地 main `34a72ee` 及其后 VB-CABLE 面板修复。执行 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.1.4-20261109 --label 2.1.4 --jobs 2`，使用新构建目录和固定 AMD 网络源码及 Pack46。14 目标干净构建 306.6 秒，PE 2.1.4.0。EXE SHA-256 `f3201556663aca24880e172d0155207e951f4a212f59c449c495a84a8a9a750f`。补编此前随包的 `veyra_shader_test_pattern` 后重新打包。构建回执 `logs/codex-release-2.1.4-20261109/build-20261109-071334/receipt.json`。
+
+两套正式 2.1.3 ZIP 作为哈希锁定的运行库供体，保留其对应源码及许可。本轮替换为新 EXE、QML、翻译和着色器，内嵌 Pack46 原 ZIP 核对通过，安装器 Authenticode Valid。逐文件比对验证 NVIDIA 1655 项、AMD 2279 项，含各自运行时和源资产清单。无自研驱动、用户配置、日志或测试程序进入 ZIP。应用源码 ZIP 精确对应产品提交，RX 7000 网络源码沿用上版同一字节内容。
+
+执行 `reports/codex-release-2.1.4-20261109/verify.py contracts` 和 `portable`。Qt Quick 175/0/0，WASAPI 合同 19/0、防回灌 2/0，合成 PCM 经真实 WASAPI 的手动偏移 100 ms。两包最小 PATH 冷启动各呈现 90 个真实文件帧。RTX 5070 上 NR 复用、DLAA 1440p 光流及 DLAA/FSR/DLSS HDR 回归通过。采集音频面板识别既有驱动，取消与断开后确认通过。私有目录从 2.1.3 同目录覆盖到 2.1.4，旧缓存保留，新缓存 81 个文件第二次复用。临时解压清理首次遇 Windows 文件占用，重试已全部移除。AMD 包仅在本机验证启动与播放，无本轮 AMD 实卡推理或驱动重装验收。
+
+交付目录 `E:/项目/Veyra/releases/codex-release-2.1.4-20261109`，含 NVIDIA、AMD、应用源码、RX 7000 网络源码、校验和与双语更新说明。最终回执 `E:/项目/Veyra/reports/codex-release-2.1.4-20261109/FINAL.json`。本地待发布，未合并 main 或执行 GitHub 发布。

@@ -42,12 +42,18 @@ void QmlPlayerBridge::setDlssSrModel(int value) {
 }
 int QmlPlayerBridge::srPrescale() const { return int(settings().srPrescale); }
 bool QmlPlayerBridge::dualSrEnabled() const { return settings().dualSrEnabled; }
+// Double SR takes every SR backend (user 2026-11-08: DLSS SR and FSR as well).
 void QmlPlayerBridge::setDualSrEnabled(bool enabled){
     auto s=settings();if(s.dualSrEnabled==enabled)return;
-    if(enabled&&!engine::rtxVideoSr(s.videoSrQuality))return;
     s.dualSrEnabled=enabled;
-    // A kept supersample shrink is inactive under double SR and returns when it is off.
-    if(enabled&&s.srPrescale==pipeline::SrPrescale::Off)s.srPrescale=pipeline::SrPrescale::P1080;
+    if(enabled){
+        // A kept second algorithm this adapter cannot run follows the base
+        // (an AMD card starts FSR -> FSR instead of a dead RTX choice).
+        const auto cap=effectCapabilities().value("sr"+QString::number(s.dualSrQuality)).toMap();
+        if(!cap.value("available").toBool())s.dualSrQuality=s.videoSrQuality;
+        // A kept supersample shrink is inactive under double SR and returns when it is off.
+        if(s.srPrescale==pipeline::SrPrescale::Off)s.srPrescale=pipeline::SrPrescale::P1080;
+    }
     if(impl_->commit(s))emit settingsChanged();
 }
 int QmlPlayerBridge::dualSrTargetIndex() const {
@@ -59,9 +65,10 @@ void QmlPlayerBridge::setDualSrTargetIndex(int index){
     auto s=settings();s.dualSrTarget=targets[index-1];if(impl_->commit(s))emit settingsChanged();
 }
 int QmlPlayerBridge::dualSrQuality() const {return int(settings().dualSrQuality);}
-// The second pass may use any RTX Video SR family and tier, independent of the base.
+// The second pass may use any SR backend - DLSS SR, an RTX Video SR family and
+// tier, or FSR - independent of the base.
 void QmlPlayerBridge::setDualSrQuality(int quality){
-    if(quality<0||!engine::rtxVideoSr(unsigned(quality)))return;
+    if(quality<0||!engine::validVideoSrQuality(unsigned(quality)))return;
     const auto cap=effectCapabilities().value("sr"+QString::number(quality)).toMap();
     if(!cap.value("available").toBool()){emit notice(cap.value("reason").toString(),true);return;}
     auto s=settings();if(int(s.dualSrQuality)==quality)return;
@@ -109,14 +116,13 @@ QString QmlPlayerBridge::srQualityLabel(int quality,bool withFamily) const {
     return (family==engine::VideoSrFamily::HighBitrate?tr("高码率"):family==engine::VideoSrFamily::Streaming?tr("流媒体"):tr("标准"))+QLatin1Char(' ')+tier;
 }
 int QmlPlayerBridge::srOutput() const { return int(settings().srOutput); }
-// Double SR and the supersample shrink run on RTX Video SR (every family) only;
-// other backends keep the single step.
+// The double SR reduction works with every SR backend; the supersample shrink
+// runs on RTX Video SR (every family) only.
 void QmlPlayerBridge::setSrPrescale(int value) {
     const auto want = pipeline::SrPrescale(uint32_t(value));
     if (value < 0 || !pipeline::validSrPrescale(want)) return;
     auto s = settings();
     if (s.srPrescale == want) return;
-    if (!engine::rtxVideoSr(s.videoSrQuality)) { emit notice(tr("双重超分目前仅 RTX 视频超分支持"), true); return; }
     s.srPrescale = want;
     if (impl_->commit(s)) emit settingsChanged();
 }
@@ -721,6 +727,7 @@ namespace {
 // Spatial anti-aliasing (#53): one node's values for the editors, and the edits they send.
 QString antiAliasSummary(const engine::AntiAliasSettings& a) {
     using engine::AntiAliasMethod;
+    if (a.method == AntiAliasMethod::Dlaa) return QStringLiteral("DLAA");
     if (a.method == AntiAliasMethod::Mlaa)
         return QStringLiteral("MLAA · ") + QmlPlayerBridge::tr("阈值 %1").arg(double(a.mlaaThreshold), 0, 'f', 2);
     const QStringList fxaa{QmlPlayerBridge::tr("中"), QmlPlayerBridge::tr("高"), QmlPlayerBridge::tr("极高")};
@@ -753,7 +760,7 @@ bool applyAntiAliasKey(engine::AntiAliasSettings& a, bool& enabled, const QStrin
     const int whole = int(std::lround(value));
     if (key == "enabled") { enabled = value != 0; return true; }
     if (key == "method") {
-        if (whole < 0 || whole > 2) return false;
+        if (whole < 0 || whole > 3) return false;
         const auto method = AntiAliasMethod(whole);
         if (method != a.method) { a.method = method; a.quality = defaultAntiAliasQuality(method); }
         if (method != AntiAliasMethod::Smaa) a.temporal = AntiAliasTemporal::Off;
@@ -776,6 +783,15 @@ bool applyAntiAliasKey(engine::AntiAliasSettings& a, bool& enabled, const QStrin
     return false;
 }
 }
+// DLAA is DLSS SR at the picture's own size: available exactly where DLSS SR is,
+// with the same reason shown when it is not.
+bool QmlPlayerBridge::dlaaAllowed() {
+    const auto dlss = effectCapabilities().value(QStringLiteral("sr0")).toMap();
+    if (dlss.value(QStringLiteral("available")).toBool()) return true;
+    const QString reason = dlss.value(QStringLiteral("reason")).toString();
+    emit notice(reason.isEmpty() ? tr("DLAA 需要支持 DLSS 的 NVIDIA RTX 显卡") : tr("DLAA 不可用：%1").arg(reason), true);
+    return false;
+}
 bool QmlPlayerBridge::antiAliasEnabled() const {
     const auto* node = impl_->chain.firstOf(engine::EffectType::AntiAliasing);
     return node && node->enabled;
@@ -794,6 +810,7 @@ QVariantMap QmlPlayerBridge::antiAliasParamsAt(int index) const {
     return antiAliasMap(&impl_->chain.nodes[index], index);
 }
 bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
+    if (key == QLatin1String("method") && std::lround(value) == int(engine::AntiAliasMethod::Dlaa) && !dlaaAllowed()) return false;
     auto& c = impl_->chain;
     for (uint32_t i = 0; i < c.nodeCount; ++i)
         if (c.nodes[i].type == engine::EffectType::AntiAliasing) return setAntiAliasParameterAt(int(i), key, value);
@@ -824,6 +841,7 @@ bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
     return true;
 }
 bool QmlPlayerBridge::setAntiAliasParameterAt(int index, const QString& key, double value) {
+    if (key == QLatin1String("method") && std::lround(value) == int(engine::AntiAliasMethod::Dlaa) && !dlaaAllowed()) return false;
     auto& c = impl_->chain;
     if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::AntiAliasing) return false;
     auto& node = c.nodes[index];
@@ -1244,6 +1262,20 @@ void QmlPlayerBridge::setNrHoldStrength(double value) {
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "output stabiliser strength not saved");
     emit settingsChanged();
 }
+// NR inference reuse (pipeline/NrReuse.h), realtime preview only. 0 off,
+// 1 Auto, 2/3/4 reuse one frame in every 2/3/4. Global like the stabiliser.
+int QmlPlayerBridge::nrReuseMode() const { return int(settings().nrReuse); }
+void QmlPlayerBridge::setNrReuseMode(int value) {
+    const auto mode = static_cast<engine::NrReuseMode>(value);
+    if (value < 0 || !engine::validNrReuseMode(mode)) return;
+    auto s = settings();
+    if (s.nrReuse == mode) return;
+    s.nrReuse = mode;
+    if (!impl_->commit(std::move(s))) return;
+    impl_->prefs[QStringLiteral("nrReuse")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "NR inference reuse mode not saved");
+    emit settingsChanged();
+}
 double QmlPlayerBridge::nrHoldTolerance() const { return double(settings().nrHoldTolerance); }
 void QmlPlayerBridge::setNrHoldTolerance(double value) {
     auto s = settings();
@@ -1263,7 +1295,15 @@ bool QmlPlayerBridge::applying() const { return impl_->facade.applying(); }
 // the engine did, not what it asked for.
 double QmlPlayerBridge::volume() const { return double(impl_->snapshot.volume); }
 void QmlPlayerBridge::setVolume(double value) {
-    impl_->engine.setVolume(float(std::clamp(value, 0.0, 1.0)), impl_->snapshot.muted);
+    if (!std::isfinite(value)) return;
+    const double volume = std::clamp(value, 0.0, 1.0);
+    impl_->engine.setVolume(float(volume), impl_->snapshot.muted);
+    // Kept for the next launch (user 2026-11-08). A slider drag calls this for
+    // every move, so the file is written 0.5 s after the last change and on exit.
+    const QString key = QStringLiteral("volume");
+    if (impl_->prefs.contains(key) && impl_->prefs.value(key).toDouble() == volume) return;
+    impl_->prefs[key] = volume;
+    if (impl_->volumeSaveTimer) impl_->volumeSaveTimer->start();
 }
 bool QmlPlayerBridge::muted() const { return impl_->snapshot.muted; }
 void QmlPlayerBridge::setMuted(bool value) {

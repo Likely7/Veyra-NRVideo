@@ -14,9 +14,9 @@
 
 Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
 
-**GitHub Release 累计下载已超过 3.8 万次**（[2026-10-20 数据快照](https://git.hiwiki.org/zh-CN/repo/likely7/veyra-nrvideo)，下载次数不等于独立用户数）。
+**Veyra Windows 免安装软件包累计下载 7.9 万+ 次**（截至 2026-11-08，79,332 次）；**GitHub Release 全部附件累计下载 10.3 万+ 次**（103,337 次，包含源码包、校验文件及图片等）。[GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · 下载次数不是独立用户数。
 
-[下载2.1.3免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.3) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.3.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
+[下载2.1.4免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.4) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.4.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
 **2.1.2 更新：** 双重超分、超采样、英伟达低延迟与 RX 7000 实验 NR；补帧去重／节奏、捕获音频与极简音量修复。[完整更新与迁移](docs/RELEASE_NOTES_2.1.2.md)。
 
@@ -25,7 +25,11 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 **本机新增效果开销示例：** RTX5070，4K标准测试抗锯齿FXAA约0.15ms、SMAA/MLAA约0.30ms；最终网格美颜一张脸1080p约0.93ms、4K约1.42ms。不同素材/显卡会变化；AMD新模型没有本机实卡性能百分比。[条件与限制](docs/history/releases/RELEASE_NOTES_2.1.0.md)。
 
-**[Veyra软件知识库](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)**：整理四个群聊的消息汇总成的Veyra使用文档，大部分软件问题、采集卡问题都可以先在里面查找答案。
+**[Veyra 中文知识库（飞书）](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)**：整理四个群聊的消息汇总成的 Veyra 使用文档，大部分软件问题、采集卡问题可以先在里面查找答案。
+
+**📖 [English Documentation / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki)**：供海外用户查看英文安装指南、采集卡兼容性、常见故障与群友实测经验。
+
+**2.1.4：** 可选的 VB-CABLE 采集卡音频转接、双重超分混搭 DLSS/FSR/RTX、NVIDIA DLAA、HDR 广色域恢复、NR 推理复用、1% low 帧率及录制和兼容修复。[完整更新与设置迁移](docs/RELEASE_NOTES_2.1.4.md)。
 
 **2.1.3：** 三类 RTX 视频超分与独立第二次模型、默认中档；NR 组内网状／列表九项完整调节；RTX30 VFG 实验兼容、RX7000 多 GPU 修复；全屏拖动、导出跳转、菜单抖动及低延迟提示更新。[完整更新、对比图与迁移](docs/RELEASE_NOTES_2.1.3.md)。
 
@@ -74,7 +78,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 ## 下载、启动与升级
 
-1. 按 Veyra 实际使用的显卡下载 **Veyra-2.1.3-NVIDIA-win64-portable.zip** 或 **Veyra-2.1.3-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
+1. 按 Veyra 实际使用的显卡下载 **Veyra-2.1.4-NVIDIA-win64-portable.zip** 或 **Veyra-2.1.4-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
 2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
 3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
 4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
@@ -183,7 +187,7 @@ Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3
 ## 支持与反馈
 
 <p align="center">
-  <a href="https://discord.gg/c9aREyMj8"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Veyra on Discord" height="36"></a>
+  <a href="https://discord.gg/qetVZTRkC"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Veyra on Discord" height="36"></a>
   &nbsp;&nbsp;
   <a href="https://ko-fi.com/likely7"><img src="https://storage.ko-fi.com/cdn/kofi5.png?v=6" alt="Support Veyra on Ko-fi" height="36"></a>
 </p>
@@ -191,7 +195,7 @@ Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-8-20261102.png" alt="Veyra 交流群 8" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-8-20261109.png" alt="Veyra 交流群 8" width="220">
 </p>
 
-左：微信赞助（自愿，不影响功能）；右：交流群 8。群码按图片标注于 **2026-11-09 前**有效，过期请查看仓库更新。
+左：微信赞助（自愿，不影响功能）；右：交流群 8。群码按图片标注于 **2026-11-16 前**有效，过期请查看仓库更新。

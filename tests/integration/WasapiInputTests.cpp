@@ -1,5 +1,7 @@
 #include "veyra/source/WasapiAudioInput.h"
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/sink/WasapiAudioSink.h"
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -26,6 +28,15 @@ int wmain(int argc,wchar_t** argv){
         check(input.metrics().retries>=4&&input.metrics().retries<=5,"selected endpoint keeps retrying beyond old limit with bounded backoff");
         check(input.start(),"invalid endpoint can explicitly restart");std::this_thread::sleep_for(std::chrono::milliseconds(200));
         const auto before=std::chrono::steady_clock::now();input.stop();check(std::chrono::steady_clock::now()-before<std::chrono::milliseconds(500),"stop interrupts reconnect backoff");
+    }else if(argc==2&&wcscmp(argv[1],L"--blocked-output")==0){
+        const auto outputs=veyra::sink::enumerateRenderEndpoints();
+        const auto defaultOutput=std::find_if(outputs.begin(),outputs.end(),[](const auto& e){return e.isDefault;});
+        if(defaultOutput==outputs.end()){printf("No system default render endpoint available.\n");return 2;}
+        veyra::sink::AudioRenderer renderer;
+        check(!renderer.start({},20.0,defaultOutput->id)&&
+              renderer.lastError()==HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY),
+              "refuse to open the render endpoint used for loopback");
+        check(!renderer.started()&&renderer.framesWritten()==0,"no feedback PCM submitted");
     }else if(argc==2&&wcscmp(argv[1],L"--offline")==0){
         WasapiPacketClock clock;clock.reset(48000,50);
         auto a=clock.stamp(0,10000000,480,false,false,2000);check(a.ptsMs==1050&&a.discontinuity&&!a.estimated,"QPC 100ns maps to host axis; first epoch resets");
@@ -40,6 +51,9 @@ int wmain(int argc,wchar_t** argv){
         clock.reset(44100,0);auto e=clock.stamp(0,0,441,false,true,1000);check(e.ptsMs==990&&e.estimated&&e.discontinuity,"first invalid timestamp estimated from packet duration");
         CaptureDevice video{L"Video",L"video:path"},audio{L"Audio",L"endpoint:id",false,true};
         auto path=CaptureCardSource::makeCapturePath(0,video,0,0,&audio);check(path.starts_with(L"capture2:")&&path.find(L":-3:")!=std::wstring::npos,"WASAPI provider encoded with explicit stable ID");
+        audio.virtualSpeaker=true;
+        check(CaptureCardSource::makeCapturePath(0,video,0,0,&audio).find(L":-5:")!=std::wstring::npos,
+              "virtual speaker is a separate capture2 transport");
         audio.path.clear();check(CaptureCardSource::makeCapturePath(0,video,0,0,&audio).empty(),"no endpoint ID cannot become default input");
         audio={L"DShow",L"ds:audio"};check(CaptureCardSource::makeCapturePath(0,video,0,0,&audio).find(L":0:")!=std::wstring::npos,"DirectShow connection retained");
         video.path.clear();check(CaptureCardSource::makeCapturePath(0,video,0,-2,nullptr)==L"capture:0:0:-2:0","legacy embedded path retained");
@@ -49,6 +63,6 @@ int wmain(int argc,wchar_t** argv){
         check(!wasapiPacketData(nullptr,4,false,zeros),"null non-silent packet rejected");
         check(!wasapiPacketData(data,3841,false,zeros),"oversized packet rejected");
         check(!wasapiPacketData(data,0,false,zeros),"empty packet rejected");
-    }else {printf("Use --offline, --list, --invalid, or --endpoint <explicit capture ID>. No default recording.\n");return 2;}
+    }else {printf("Use --offline, --list, --invalid, --blocked-output, or --endpoint <explicit capture ID>. No default recording.\n");return 2;}
     printf("WASAPI_INPUT checks=%d failures=%d\n",checks,failures);return failures?1:0;
 }

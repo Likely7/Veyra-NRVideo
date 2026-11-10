@@ -73,6 +73,24 @@ int main(){
         const auto c=applyMatrix(ColorGradeTables::bake(cool),{0.18f,0.18f,0.18f});
         check(w[0]>w[2]*1.01f,"positive temperature warms the image (red above blue)");
         check(c[0]<c[2]*0.99f,"negative temperature cools the image (blue above red)");
+        // The cool end must be continuous, bounded and as strong as the warm end
+        // (field report 2026-11-07: -100 multiplied blue by ~23 and blew the picture out).
+        double previous=0;bool smooth=true,monotone=true;
+        for(int v=0;v>=-100;--v){
+            ColorSettings c;c.enabled=true;c.temperature=float(v);
+            const auto m=applyMatrix(ColorGradeTables::bake(c),{0.18f,0.18f,0.18f});
+            const double blueOverRed=double(m[2])/double(m[0]);
+            if(v<0){smooth=smooth&&blueOverRed<previous*1.06;monotone=monotone&&blueOverRed>previous;}
+            previous=blueOverRed;
+        }
+        check(smooth&&monotone,"cool temperature grows smoothly, one step at a time, from 0 to -100");
+        ColorSettings warmest;warmest.enabled=true;warmest.temperature=100;
+        ColorSettings coolest;coolest.enabled=true;coolest.temperature=-100;
+        const auto hot=applyMatrix(ColorGradeTables::bake(warmest),{0.18f,0.18f,0.18f});
+        const auto cold=applyMatrix(ColorGradeTables::bake(coolest),{0.18f,0.18f,0.18f});
+        const double warmShift=std::log(double(hot[0])/double(hot[2])),coolShift=std::log(double(cold[2])/double(cold[0]));
+        check(std::abs(coolShift/warmShift-1.0)<0.3,"-100 and +100 shift the white balance about equally");
+        check(cold[0]>0.18f*0.5f&&cold[2]<0.18f*2.0f&&cold[1]<0.18f*1.2f,"-100 keeps mid grey within a 2x channel range");
         ColorSettings green;green.enabled=true;green.tint=80;
         const auto g=applyMatrix(ColorGradeTables::bake(green),{0.18f,0.18f,0.18f});
         check(g[1]<g[0]&&g[1]<g[2],"positive tint shifts mid grey towards magenta");

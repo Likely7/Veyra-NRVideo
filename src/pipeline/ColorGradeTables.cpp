@@ -8,12 +8,16 @@ constexpr double kD65x=0.3127,kD65y=0.3290;
 using Mat3=std::array<double,9>;
 
 // Planckian locus, Kim et al. cubic approximation (valid 1667..25000 K):
-// x is a cubic in 1/T, y is a cubic in x.
+// x is a cubic in 1/T, y is a cubic in x, with three y pieces.
+// The 2222..4000 K piece once ended in -0.0316772744 instead of -0.16748867:
+// below 4000 K the white point jumped towards yellow-green, and adapting it to
+// D65 multiplied blue by about 23 at -100 (field report 2026-11-07).
 void planckianXy(double kelvin,double& x,double& y){
     const double t=std::clamp(kelvin,1667.0,25000.0);
     if(t<=4000.0){
         x=-0.2661239e9/(t*t*t)-0.2343589e6/(t*t)+0.8776956e3/t+0.179910;
-        y=-0.9549476*x*x*x-1.37418593*x*x+2.09137015*x-0.0316772744;
+        y=t<=2222.0?-1.1063814*x*x*x-1.34811020*x*x+2.18555832*x-0.20219683
+                   :-0.9549476*x*x*x-1.37418593*x*x+2.09137015*x-0.16748867;
     }else{
         x=-3.0258469e9/(t*t*t)+2.1070379e6/(t*t)+0.2226347e3/t+0.240390;
         y=3.0817580*x*x*x-5.87338670*x*x+3.75112997*x-0.37001483;
@@ -175,8 +179,14 @@ ColorGradeTables ColorGradeTables::bake(const engine::ColorSettings& s){
     double wx=kD65x,wy=kD65y;
     if(s.temperature!=0||s.tint!=0){
         // Temperature is relative: +100 assumes a much cooler illuminant, which
-        // makes the image warmer (Lightroom's slider direction).
-        planckianXy(6500.0*std::exp2(double(s.temperature)/100.0),wx,wy);
+        // makes the image warmer (Lightroom's slider direction). The warm side
+        // keeps its curve, 6500 K x 2^(t/100), +100 = 13000 K. The cool side
+        // mirrors it in mireds, so -100 moves the white point exactly as far as
+        // +100 does (4333 K). 6500 x 2^(t/100) put -100 at 3250 K, twice as far,
+        // and the cool end overwhelmed the picture.
+        const double t=double(s.temperature)/100.0,neutralMired=1e6/6500.0;
+        const double mired=t>=0.0?neutralMired/std::exp2(t):neutralMired*(2.0-std::exp2(t));
+        planckianXy(1e6/mired,wx,wy);
         wy=std::clamp(wy+double(s.tint)*0.00025,0.05,0.95);
     }
     // Adaption direction: the slider states which illuminant the image was shot
