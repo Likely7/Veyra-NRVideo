@@ -25,6 +25,7 @@
 // would then fail to link under its C++ mangled name.
 extern "C" {
 #include <libavutil/dovi_meta.h>
+#include <libavutil/mem.h>
 #include <libdovi/rpu_parser.h>
 }
 
@@ -89,6 +90,8 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
     hdr->disable_residual_flag = header->disable_residual_flag;
     hdr->ext_mapping_idc_0_4 = 0;
     hdr->ext_mapping_idc_5_7 = 0;
+    // Needed when rebuilding fixed-point coefficients (poly_coef = int << denom + frac).
+    const int coefLog2Denom = int(header->coefficient_log2_denom);
     dovi_rpu_free_header(header);
     if (FILE* f = fopen("D:/DSH/.dsh-tmp/libdovi-stage.log", "a")) { fprintf(f, "headerCopied\n"); fclose(f); }
 
@@ -137,10 +140,20 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
                 // anything larger would write past the row.
                 if (order < 1 || order > 2) break;
                 curve->poly_order[i] = uint8_t(order);
-                if (size_t(i) < poly->poly_coef.len) {
-                    const DoviU64Data& coef = *poly->poly_coef.list[i];
-                    for (int k = 0; k <= order && size_t(k) < coef.len; ++k)
-                        curve->poly_coef[i][k] = int64_t(coef.data[k]);
+                // libdovi splits a fixed-point coefficient into an integer part
+                // (poly_coef_int) and a fractional part (poly_coef). Reading only
+                // the fraction turned an identity curve (0, 1, 0) into (0, 0, 0),
+                // which zeroed luma on the AVS material.
+                const DoviI64Data* intCoef = size_t(i) < poly->poly_coef_int.len
+                    ? poly->poly_coef_int.list[i] : nullptr;
+                const DoviU64Data* fracCoef = size_t(i) < poly->poly_coef.len
+                    ? poly->poly_coef.list[i] : nullptr;
+                for (int k = 0; k <= order; ++k) {
+                    const int64_t iv = (intCoef != nullptr && size_t(k) < intCoef->len)
+                        ? int64_t(intCoef->data[k]) : 0;
+                    const int64_t fv = (fracCoef != nullptr && size_t(k) < fracCoef->len)
+                        ? int64_t(fracCoef->data[k]) : 0;
+                    curve->poly_coef[i][k] = (iv << coefLog2Denom) + fv;
                 }
             }
         } else if (src.mapping_idc == AV_DOVI_MAPPING_MMR) {
