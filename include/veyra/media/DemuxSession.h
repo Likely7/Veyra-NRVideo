@@ -149,7 +149,7 @@ private:
     void applyDiscardFlags();
     bool verifyStreams();
     void onPacket(AVPacket* packet);
-    bool pushLocked(Item&& item, bool video);
+    bool pushLocked(Item&& item, bool video, bool el = false);
     bool recover(int code, const char* why);
     void doSeek();
     bool flowBlockedLocked() const;

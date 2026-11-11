@@ -414,6 +414,14 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
     // must report "no EL for this frame" so the caller does not reuse the texture
     // uploaded for the previous one.
     ++elFeedCalls_;
+    {
+        static unsigned feDbg = 0;
+        if (feDbg < 3) {
+            ++feDbg;
+            log::info("source-dovi-el", std::format("feed call={} fromStream={} streamIndex={} enabled={}",
+                elFeedCalls_, elFromStream_ ? 1 : 0, elStreamIndex_, elLayerEnabled_ ? 1 : 0));
+        }
+    }
     AVPacket* elPacket = nullptr;
     if (elFromStream_) {
         // The layer is a real stream: its packets are already demuxed and carry
@@ -421,31 +429,39 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
         if (!demuxer_.takeElPacket(&elPacket)) return false;
 #if VEYRA_HAVE_LIBDOVI
         {
+            // The stream's packets are length-prefixed (4-byte) NAL units, not
+            // Annex B: the RPU is a type-62 NAL inside that frame.
             static unsigned rpuReported = 0;
             const uint8_t* p = elPacket->data;
             const size_t n = size_t(elPacket->size);
-            for (size_t i = 0; i + 4 < n; ++i) {
-                if (!(p[i] == 0 && p[i + 1] == 0 && p[i + 3] == 1) && !(p[i] == 0 && p[i + 1] == 0 && p[i + 2] == 1)) continue;
-                const size_t hdr = (p[i + 2] == 1) ? i + 3 : i + 3;
-                if (hdr >= n) break;
-                if (((p[hdr] >> 1) & 0x3F) != 62) continue;
-                size_t end = n;
-                for (size_t j = hdr + 1; j + 3 < n; ++j) {
-                    if (p[j] == 0 && p[j + 1] == 0 && p[j + 2] == 1) { end = j; break; }
+            size_t pos = 0;
+            while (pos + 5 <= n) {
+                const uint32_t len = (uint32_t(p[pos]) << 24) | (uint32_t(p[pos + 1]) << 16) |
+                                     (uint32_t(p[pos + 2]) << 8) | uint32_t(p[pos + 3]);
+                pos += 4;
+                if (len == 0 || pos + len > n) break;
+                const uint8_t* nal = p + pos;
+                if (((nal[0] >> 1) & 0x3F) == 62) {
+                    if (elDoviMeta_ == nullptr) {
+                        size_t allocSize = 0;
+                        elDoviMeta_ = av_dovi_metadata_alloc(&allocSize);
+                    }
+                    const bool ok = elDoviMeta_ != nullptr &&
+                        source::decodeRpuWithLibDovi(nal, len, elDoviMeta_);
+                    if (ok) elDoviMetaValid_ = true;
+                    if (rpuReported < 3) {
+                        ++rpuReported;
+                        log::info("source-dovi-el", std::format(
+                            "libdovi: RPU from EL stream packet ({} bytes) parse={}", len, ok ? 1 : 0));
+                    }
+                    break;
                 }
-                if (elDoviMeta_ == nullptr) {
-                    size_t allocSize = 0;
-                    elDoviMeta_ = av_dovi_metadata_alloc(&allocSize);
-                }
-                const bool ok = elDoviMeta_ != nullptr &&
-                    source::decodeRpuWithLibDovi(p + hdr, end - hdr, elDoviMeta_);
-                if (ok) elDoviMetaValid_ = true;
-                if (rpuReported < 3) {
-                    ++rpuReported;
-                    log::info("source-dovi-el", std::format(
-                        "libdovi: RPU from EL stream packet ({} bytes) parse={}", end - hdr, ok ? 1 : 0));
-                }
-                break;
+                pos += len;
+            }
+            if (rpuReported == 0) {
+                static unsigned scanDbg = 0;
+                if (++scanDbg <= 2) log::info("source-dovi-el",
+                    std::format("EL stream packet ({} bytes) carries no type-62 RPU", n));
             }
         }
 #endif

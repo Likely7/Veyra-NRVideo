@@ -1100,6 +1100,10 @@ void DemuxSession::onPacket(AVPacket* pkt) {
     const bool isVideo = index == videoIndex_;
     const bool isAudio = index == audioIndex_.load();
     const bool isEl = index == elIndex_;
+    if (isEl) {
+        static unsigned elSeen = 0;
+        if (++elSeen <= 3) log::info("net-session", std::format("EL packet seen index={} size={} elIndex={}", index, pkt->size, elIndex_));
+    }
     const SessionStreamInfo* info = stream(index);
     if (!info || (!isVideo && !isAudio && !isEl)) {
         av_packet_unref(pkt);
@@ -1241,11 +1245,11 @@ void DemuxSession::onPacket(AVPacket* pkt) {
     }
     item.dtsUs = dtsUs;
     std::lock_guard lock(m_);
-    pushLocked(std::move(item), isVideo);
+    pushLocked(std::move(item), isVideo, isEl);
 }
 
-bool DemuxSession::pushLocked(Item&& item, bool video) {
-    Queue& queue = video ? video_ : audio_;
+bool DemuxSession::pushLocked(Item&& item, bool video, bool el) {
+    Queue& queue = el ? el_ : (video ? video_ : audio_);
     if (item.packet->flags & AV_PKT_FLAG_CORRUPT) {
         if (video) ++corruptPackets_;
     }
@@ -1284,6 +1288,7 @@ void DemuxSession::doSeek() {
         std::lock_guard lock(m_);
         video_.clear();
         audio_.clear();
+        el_.clear();
         for (auto& item : pendingAudio_) av_packet_free(&item.packet);
         pendingAudio_.clear();
         pendingAudioBytes_ = 0;

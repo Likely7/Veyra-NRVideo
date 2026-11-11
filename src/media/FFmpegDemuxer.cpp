@@ -455,7 +455,10 @@ bool FFmpegDemuxer::takeElPacket(AVPacket** out) {
     // A short wait, not zero: in a transport stream the base and enhancement
     // packets interleave, so the layer's packet for this frame often lands just
     // after the base one that triggered the call.
-    if (session_->popEl(packet, meta, 10) != DemuxSession::Pop::Packet) {
+    const auto pop = session_->popEl(packet, meta, 10);
+    if (pop != DemuxSession::Pop::Packet) {
+        static unsigned missDbg = 0;
+        if (++missDbg <= 3) log::info("dovi-el", std::format("takeElPacket miss pop={} elIndex={}", int(pop), session_->elIndex()));
         av_packet_free(&packet);
         return false;
     }
