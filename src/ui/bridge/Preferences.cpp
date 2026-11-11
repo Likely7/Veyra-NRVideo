@@ -577,7 +577,8 @@ bool QmlPlayerBridge::openSponsorLink(const QString& id) {
         {"x", "https://x.com/likely2002"},
         {"github", "https://github.com/Likely7"},
         {"youtube", "https://www.youtube.com/@Likely7Ai"},
-        {"kofi", "https://ko-fi.com/likely7"},
+        {"patreon", "https://www.patreon.com/cw/Likely7"},
+        {"patreonCoffee", "https://www.patreon.com/Likely7/posts/buy-me-coffee-175018110"},
     };
     for (const auto& [name, url] : links) {
         if (id != QLatin1StringView(name)) continue;

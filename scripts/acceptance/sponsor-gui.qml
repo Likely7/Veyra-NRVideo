@@ -15,7 +15,7 @@ Item {
     property int waitUntil: 0
     property int linkIndex: 0
     property bool saving: false
-    readonly property var links: ["bilibili", "douyin", "x", "github", "youtube", "kofi"]
+    readonly property var links: ["bilibili", "douyin", "x", "github", "youtube", "patreon", "patreonCoffee"]
     function require(ok, message) {
         if (!ok) throw new Error(message)
         console.log("SPONSOR_UI_CHECK", message)
@@ -90,8 +90,8 @@ Item {
                 }
                 test.fits(panel, "sponsor panel")
                 const y = name => test.find(panel, name).mapToItem(panel, 0, 0).y
-                test.require(y("sponsor-link-kofi") < y("sponsor-mainland") && y("sponsor-mainland") < y("sponsor-code-wechat"),
-                             "Ko-fi comes first, then 中国大陆用户 and the codes")
+                test.require(y("sponsor-link-patreon") < y("sponsor-mainland") && y("sponsor-link-patreonCoffee") < y("sponsor-mainland") && y("sponsor-mainland") < y("sponsor-code-wechat"),
+                             "Patreon comes first, then 中国大陆用户 and the codes")
                 test.waitUntil = test.ticks + 2
                 test.shot(test.window(), "settings", 3); return
             }
@@ -104,7 +104,7 @@ Item {
                 test.shot(test.find(test.window(), "sponsor-code-" + id), "code-" + id, test.step === 31 ? 32 : 4); return
             }
             if (test.step === 4) {
-                // Every card and the Ko-fi button, one click each.
+                // Every card and the Patreon buttons, one click each.
                 const panel = test.find(test.window(), "set-sponsor")
                 const card = test.find(panel, "sponsor-link-" + test.links[test.linkIndex])
                 test.reveal(card)

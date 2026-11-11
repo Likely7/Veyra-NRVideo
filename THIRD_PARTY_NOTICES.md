@@ -339,6 +339,10 @@ the Ko-fi glyph is split into its subpaths to colour the cup the way Ko-fi's own
 drawings only: the logos remain trademarks of their owners and are used solely to link to the author's own
 pages; no endorsement is implied.
 
+The Patreon glyph used by the sponsor page and documentation buttons (2026-11-11) is from
+[Simple Icons at cd796c98565fc466923fc1128b962e133fa3c612](https://github.com/simple-icons/simple-icons/blob/cd796c98565fc466923fc1128b962e133fa3c612/icons/patreon.svg),
+under CC0 1.0. Its original path is retained in the SVG files with source metadata.
+
 ## RTX Video SDK 1.1 local VSR adapter
 
 User-provided official SDK from https://developer.nvidia.com/rtx-video-sdk/getting-started, kept under ignored third_party_local/nvidia/RTX_Video_SDK_1.1.0. Its NVIDIA RTX SDK license remains applicable. VideoSrBackend is independently authored against the documented VSR parameter ABI; no SDK sample implementation or proprietary header is copied into the repository. Local nvngx_vsr.dll remains excluded from Git. Under the user-authorized 2026-09-09 Release Runtime Pack policy, its pinned signed release copy may be included only as a Release asset alongside the applicable SDK license and manifest; it is never committed to source control.

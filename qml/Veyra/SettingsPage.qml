@@ -1137,7 +1137,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("赞助作者")
-                            hint: qsTr("Ko-fi、微信与支付宝")
+                            hint: qsTr("Patreon、微信与支付宝")
                             VButton { objectName: "about-sponsor"; text: qsTr("前往"); onClicked: root.section = "sponsor" }
                         }
                         VRow {

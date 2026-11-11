@@ -1352,13 +1352,6 @@
    "ja": "K は従来モデル、M・L は DLSS 4.5 です。L は低い入力解像度向けです。画質と処理時間は映像により異なります。"
   },
   {
-   "zh": "Ko-fi、微信与支付宝",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "Ko-fi、微信與支付寶",
-   "en": "Ko-fi, WeChat and Alipay",
-   "ja": "Ko-fi・WeChat・Alipay"
-  },
-  {
    "zh": "LUT 不可用：%1",
    "src": "src/ui/bridge/Colour.cpp",
    "zh-TW": "LUT 不可用：%1",
@@ -1989,6 +1982,27 @@
    "ja": "PSN アカウント"
   },
   {
+   "zh": "Patreon 主页",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "Patreon 主頁",
+   "en": "Patreon home",
+   "ja": "Patreon ホーム"
+  },
+  {
+   "zh": "Patreon 主页查看作者动态，咖啡赞助为 US$5。",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "Patreon 主頁查看作者動態，咖啡贊助為 US$5。",
+   "en": "Visit Patreon for creator updates, or buy me a coffee for US$5.",
+   "ja": "Patreon で作者の近況をチェック。コーヒー支援は US$5 です。"
+  },
+  {
+   "zh": "Patreon、微信与支付宝",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "Patreon、微信與支付寶",
+   "en": "Patreon, WeChat and Alipay",
+   "ja": "Patreon・WeChat・Alipay"
+  },
+  {
    "zh": "RTX 30 VFG 为实验兼容，复用现有模型；支持 2X～8X，实际画质与速度需实卡验证",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "RTX 30 VFG 為實驗相容，重用現有模型；支援 2X～8X，實際畫質與速度需實卡驗證",
@@ -2596,6 +2610,13 @@
    "zh-TW": "{}顯示卡重置 {} 次，已分 {} 段匯出並無損拼接",
    "en": "{}GPU reset {} time(s); exported in {} parts and joined without re-encoding",
    "ja": "{}GPU リセット {} 回、{} 分割で書き出し再エンコードなしで結合しました"
+  },
+  {
+   "zh": "☕ 请作者喝杯咖啡 · US$5",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "☕ 請作者喝杯咖啡 · US$5",
+   "en": "☕ Buy me a coffee · US$5",
+   "ja": "☕ コーヒーで支援 · US$5"
   },
   {
    "zh": "一键推荐",
@@ -17984,13 +18005,6 @@
    "zh-TW": "重連中",
    "en": "Reconnecting",
    "ja": "再接続中"
-  },
-  {
-   "zh": "金额随意，每一份支持都是很大的鼓励",
-   "src": "qml/SponsorPanel.qml",
-   "zh-TW": "金額隨意，每一份支持都是很大的鼓勵",
-   "en": "Any amount is welcome, and every bit of support means a lot",
-   "ja": "金額は自由です。どんな支援も大きな励みになります"
   },
   {
    "zh": "链路中固定为最后一步；画布上可移动",
