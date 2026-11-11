@@ -491,6 +491,14 @@ void QmlPlayerBridge::setDoviP7Compose(bool on){
     i.prefs[QStringLiteral("doviP7Compose")]=on;
     if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision p7 compose flag not saved");
     commitHdrTuning(std::move(s));
+    // Custom: the enhancement layer is enabled when the source opens (the
+    // descriptor is fixed then), so toggling during playback cannot change the
+    // picture. Say that explicitly instead of leaving the viewer to wonder why
+    // the switch did nothing.
+    if (i.snapshot.running) {
+        emit notice(on ? tr("增强层已开启：重新打开当前文件后生效")
+                       : tr("增强层已关闭：重新打开当前文件后生效"), false);
+    }
 }
 
 bool QmlPlayerBridge::doviFollowAverage()const{return settings().doviFollowAverage;}
