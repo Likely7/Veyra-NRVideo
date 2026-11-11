@@ -278,7 +278,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
-            if (rate >= 0 && rate <= int(engine::ContentRate::Capture60To30) && int(s.content) != rate) { s.content = static_cast<engine::ContentRate>(rate); changed = true; }
+            if(rate>=0&&rate<=int(engine::ContentRate::Capture60To30)){
+                const auto mode=engine::currentContentRate(static_cast<engine::ContentRate>(rate));
+                if(s.content!=mode){s.content=mode;changed=true;}
+                if(rate!=int(mode)){
+                    impl_->prefs[QStringLiteral("contentRate")]=int(mode);
+                    if(!impl_->savePrefs())veyra::log::warn("ui-prefs","duplicate-removal mode migration not saved");
+                }
+            }
         }
         auto restoreHold = [&](const char* key, float& target) {
             if (!p.contains(QLatin1String(key))) return;

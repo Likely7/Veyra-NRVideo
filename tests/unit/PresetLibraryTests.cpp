@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <string_view>
 
 using namespace veyra::engine;
 
@@ -1013,7 +1014,7 @@ __declspec(noinline) void testFlowApplication() {
     entry.color=source.color;entry.globals=ChainGlobalSettings::capture(source);entry.fg={4,FrameGenerationBackend::Dlss,1};
     entry.audioSync=source.audioSync;entry.audioOffsetMs=source.audioOffsetMs;entry.flow=PresetFlowSettings::capture(source);
     for(uint32_t mask=0;mask<=kPresetAllContent;++mask){
-        auto target=sample();target.flow=FlowQuality::Performance;target.content=ContentRate::Fps50;
+        auto target=sample();target.flow=FlowQuality::Performance;target.content=ContentRate::Auto;
         target.opticalFlowBackend=OpticalFlowBackend::GpuDis;target.amdFlowHalfResolution=false;
         const auto before=PresetFlowSettings::capture(target);entry.contents=mask;
         auto chain=toChain(target);const auto result=PresetLibrary::applyToChain(entry,chain,target);
@@ -1033,7 +1034,7 @@ __declspec(noinline) void testFlowApplication() {
     removeLegacyNodeProtection(entry.chain);
     entry.flow=PresetFlowSettings::capture(source);
     for(uint32_t mask=0;mask<=kPresetAllContent;++mask){
-        auto target=sample();target.flow=FlowQuality::Performance;target.content=ContentRate::Fps50;
+        auto target=sample();target.flow=FlowQuality::Performance;target.content=ContentRate::Auto;
         target.opticalFlowBackend=OpticalFlowBackend::GpuDis;
         auto doc=std::make_unique<NodeEditorDocument>();doc->nodes=toChain(target);doc->nodes.mode=ChainMode::Node;
         removeLegacyNodeProtection(doc->nodes);
@@ -1424,7 +1425,46 @@ __declspec(noinline) void testOutputControlStorage() {
     check(finalReader.load()&&finalReader.entries().size()==1&&finalReader.entries()[0]==entry,
           "output controls: deleting all new nodes also survives restart");
 }
-int main() {
+__declspec(noinline) void testDedupModeMigration() {
+    check(int(ContentRate::Transport)==0&&int(ContentRate::Auto)==1&&int(ContentRate::Capture60To30)==5,
+          "dedup migration: persisted off/auto/half IDs remain 0/1/5");
+    check(EnhancementSettings{}.content==ContentRate::Transport,
+          "dedup migration: fresh settings still keep duplicate removal off");
+    for(int stored=0;stored<=5;++stored){
+        const auto path=scratch((L"legacy-content-"+std::to_wstring(stored)+L".v1").c_str());
+        PresetLibrary writer(path);writer.setIncludeBuiltins(false);check(writer.load(),"dedup migration: create fixture");
+        PresetEntry entry;entry.name=L"legacy content";entry.contents=presetContentMask(PresetContent::Flow);
+        entry.chain=toChain({});
+        entry.flow=PresetFlowSettings{OpticalFlowBackend::AmdFidelityFx,FlowQuality::Quality,true,ContentRate(stored)};
+        check(writer.put(entry),"dedup migration: write historical numeric mode");
+        const auto original=readBytes(path);
+        PresetLibrary reader(path);reader.setIncludeBuiltins(false);
+        const bool loaded=reader.load()&&reader.entries().size()==1;
+        check(loaded,"dedup migration: historical preset is readable");
+        if(!loaded)continue;
+        check(reader.entries()[0].flow->content==ContentRate(stored)&&readBytes(path)==original,
+              "dedup migration: reading preserves the old file and its numeric payload");
+        EnhancementSettings target;target.audioOffsetMs=37;target.color.enabled=true;target.color.exposure=.25f;
+        auto chain=toChain(target);
+        const auto result=PresetLibrary::applyToChain(reader.entries()[0],chain,target);
+        const int expected=stored==0?0:stored==5?5:1;
+        check(result.accepted&&int(target.content)==expected,
+              "dedup migration: applied legacy modes become auto; off and 60-to-30 stay exact");
+        check(target.audioOffsetMs==37&&target.color.exposure==.25f&&
+              target.opticalFlowBackend==OpticalFlowBackend::AmdFidelityFx&&target.flow==FlowQuality::Quality&&target.amdFlowHalfResolution,
+              "dedup migration: unrelated controls and other selected flow controls survive");
+        check(int(PresetFlowSettings::capture(target).content)==expected,
+              "dedup migration: newly captured presets contain the current mode");
+        auto invalid=reader.entries()[0];invalid.flow->content=ContentRate(99);
+        check(!reader.put(invalid,true)&&readBytes(path)==original,
+              "dedup migration: an unknown mode is refused without overwriting the valid preset");
+    }
+}
+int main(int argc,char** argv) {
+    if(argc==2&&std::string_view(argv[1])=="--dedup-migration"){
+        testDedupModeMigration();testFlowStorage();testFlowApplication();return failures?1:0;
+    }
+    testDedupModeMigration();
     testOutputControlStorage();
     testEffectNodeStorage();
     testDlaaStorage();

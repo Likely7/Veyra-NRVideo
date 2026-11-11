@@ -357,16 +357,9 @@ void QmlPlayerBridge::updateRunStatus() {
     else if (s.transport == engine::TransportState::Paused) status = tr("已暂停");
     QStringList options;
     const auto chosen=settings();
-    if(chosen.content!=engine::ContentRate::Transport){
-        QString cadence;
-        switch(chosen.content){
-        case engine::ContentRate::Auto:cadence=tr("自动剔除重复帧");break;
-        case engine::ContentRate::Fps30:cadence=tr("识别 %1 fps 内容").arg(30);break;
-        case engine::ContentRate::Fps50:cadence=tr("识别 %1 fps 内容").arg(50);break;
-        case engine::ContentRate::Fps60:cadence=tr("识别 %1 fps 内容").arg(60);break;
-        case engine::ContentRate::Capture60To30:cadence=tr("采集 60→30");break;
-        default:break;
-        }
+    const auto content=engine::currentContentRate(chosen.content);
+    if(content!=engine::ContentRate::Transport){
+        const auto cadence=content==engine::ContentRate::Capture60To30?QStringLiteral("60→30"):tr("自动去除");
         if(s.running&&rate.halfRate)options<<tr("%1 · 当前约 %2 fps").arg(cadence).arg(rate.contentFps,0,'f',0);
         else if(s.running&&rate.deduplicating)options<<tr("%1 · 去重后约 %2 fps").arg(cadence).arg(rate.contentFps,0,'f',0);
         else if(s.running&&!s.capture)options<<tr("%1 · 当前来源未去重").arg(cadence);

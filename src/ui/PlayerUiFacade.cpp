@@ -135,8 +135,10 @@ PlayerUiFacade::Frame PlayerUiFacade::poll() {
     return frame;
 }
 
-bool PlayerUiFacade::applySettings(const veyra::engine::EnhancementSettings& settings,
+bool PlayerUiFacade::applySettings(const veyra::engine::EnhancementSettings& savedSettings,
                                   std::optional<veyra::engine::ChainRuntimeOrder> order) {
+    auto settings=savedSettings;
+    settings.content=veyra::engine::currentContentRate(settings.content);
     uint64_t acceptedRevision=0;
     if (!engine_.requestSettings(settings, order,&acceptedRevision)) return false;
     veyra::log::info("ui-settings-request", std::format(

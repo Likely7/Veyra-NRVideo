@@ -659,6 +659,13 @@
    "ja": "6 項目"
   },
   {
+   "zh": "60→30：固定每两帧保留一帧。自动去除：检测并跳过重复画面。",
+   "src": "qml/DedupModeRow.qml",
+   "zh-TW": "60→30：固定每兩幀保留一幀。自動去除：偵測並跳過重複畫面。",
+   "en": "60→30 keeps every other frame. Automatic removal detects and skips duplicate images.",
+   "ja": "60→30 は2フレームに1枚を保持します。自動除去は重複した映像を検出してスキップします。"
+  },
+  {
    "zh": "8 位配对码",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "8 位配對碼",
@@ -3998,11 +4005,11 @@
    "ja": "オプティカルフロー · 動き推定"
   },
   {
-   "zh": "光流与内容节奏",
+   "zh": "光流与去除重复帧",
    "src": "src/ui/bridge/Chain.cpp",
-   "zh-TW": "光流與內容節奏",
-   "en": "Optical flow and content cadence",
-   "ja": "オプティカルフローとコンテンツのフレームレート"
+   "zh-TW": "光流與去除重複幀",
+   "en": "Optical flow and duplicate removal",
+   "ja": "オプティカルフローと重複フレーム除去"
   },
   {
    "zh": "光流宽高减半，更省但更糙",
@@ -4277,13 +4284,6 @@
    "zh-TW": "內容亮度遠超顯示裝置能力",
    "en": "Content brightness far exceeds the display capability",
    "ja": "コンテンツの輝度がディスプレイの能力を大幅に上回ります"
-  },
-  {
-   "zh": "内容节奏",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "內容節奏",
-   "en": "Content pacing",
-   "ja": "コンテンツのペーシング"
   },
   {
    "zh": "内容：两头极端",
@@ -5145,6 +5145,20 @@
    "zh-TW": "去配對",
    "en": "Pair",
    "ja": "ペアリングへ"
+  },
+  {
+   "zh": "去重关闭",
+   "src": "src/ui/bridge/Chain.cpp",
+   "zh-TW": "去重關閉",
+   "en": "Duplicate removal off",
+   "ja": "重複除去オフ"
+  },
+  {
+   "zh": "去除重复帧",
+   "src": "qml/DedupModeRow.qml",
+   "zh-TW": "去除重複幀",
+   "en": "Remove duplicate frames",
+   "ja": "重複フレームを除去"
   },
   {
    "zh": "去除锯齿边缘，适合游戏画面、文字和界面线条。列表模式开着 NR 时排在 NR 之后，NR 重新勾出的边缘也会处理；不开 NR 时在源分辨率、超分之前运行，锯齿不会被一起放大。",
@@ -8423,11 +8437,11 @@
    "ja": "エンジンがオプティカルフロー設定を受け付けなかったため、元の設定のままです"
   },
   {
-   "zh": "引擎未接受内容节奏，原设置保留",
+   "zh": "引擎未接受去除重复帧设置，原设置保留",
    "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "引擎未接受內容節奏，原設定保留",
-   "en": "The engine did not accept content pacing; previous setting kept",
-   "ja": "エンジンがコンテンツのペーシングを受け付けなかったため、元の設定のままです"
+   "zh-TW": "引擎未接受去除重複幀設定，保留原設定",
+   "en": "The engine rejected the duplicate-removal setting. The previous setting was kept.",
+   "ja": "重複フレーム除去の設定が拒否されました。以前の設定を維持します。"
   },
   {
    "zh": "引擎未接受模式设置，当前配置不变",
@@ -12799,13 +12813,6 @@
    "ja": "ゲームモード：マウス透過を解除"
   },
   {
-   "zh": "游戏锁 30/40 帧、采集卡输出 60 帧时选“自动剔除重复帧”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "遊戲鎖 30/40 幀、擷取卡輸出 60 幀時選“自動剔除重複幀”：只去掉與上一張完全相同的畫面，補幀時間均勻；“擷取 60→30”固定每兩幀取一幀，穩定 30 幀",
-   "en": "For a game locked to 30/40 fps behind a 60 fps capture card, choose \"Remove duplicate frames automatically\": only pictures identical to the previous one are dropped and generated frames stay evenly timed; \"Capture 60→30\" always keeps every second frame for a steady 30",
-   "ja": "ゲームが 30/40 fps 固定でキャプチャーカードが 60 fps を出力する場合は「重複フレームを自動で除去」を選択：直前とまったく同じ映像だけを除き、補間フレームの間隔を均一にします。「キャプチャー 60→30」は常に 2 フレームごとに 1 フレームを取り、安定した 30 fps にします"
-  },
-  {
    "zh": "源 %1 fps",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "源 %1 fps",
@@ -14500,11 +14507,11 @@
    "ja": "自動推定：キャプチャーカード / PS5 のライブ入力時に有効"
   },
   {
-   "zh": "自动剔除重复帧",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "自動剔除重複幀",
-   "en": "Remove duplicate frames automatically",
-   "ja": "重複フレームを自動で除去"
+   "zh": "自动去除",
+   "src": "qml/DedupModeRow.qml",
+   "zh-TW": "自動去除",
+   "en": "Automatic removal",
+   "ja": "自動除去"
   },
   {
    "zh": "自动去隔行",
@@ -15681,34 +15688,6 @@
    "zh-TW": "設定還原呈現排空失敗，已停止",
    "en": "Could not drain presentation to restore settings. Playback stopped.",
    "ja": "設定復元時に描画処理を完了できなかったため、再生を停止しました。"
-  },
-  {
-   "zh": "识别 %1 fps 内容",
-   "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "辨識 %1 fps 內容",
-   "en": "Detect %1 fps content",
-   "ja": "%1 fps のコンテンツを検出"
-  },
-  {
-   "zh": "识别 30fps 内容",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "識別 30fps 內容",
-   "en": "Detect 30 fps content",
-   "ja": "30fps コンテンツを判別"
-  },
-  {
-   "zh": "识别 50fps 内容",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "識別 50fps 內容",
-   "en": "Detect 50 fps content",
-   "ja": "50fps コンテンツを判別"
-  },
-  {
-   "zh": "识别 60fps 内容",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "識別 60fps 內容",
-   "en": "Detect 60 fps content",
-   "ja": "60fps コンテンツを判別"
   },
   {
    "zh": "识别档位",
@@ -17573,32 +17552,11 @@
    "ja": "現在のスタイルの自動値を使う"
   },
   {
-   "zh": "采用源时间戳",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "采用源時間戳",
-   "en": "Use source timestamps",
-   "ja": "ソースのタイムスタンプを使用"
-  },
-  {
    "zh": "采集",
    "src": "qml/ScreenSourceDialog.qml",
    "zh-TW": "擷取",
    "en": "Capture",
    "ja": "キャプチャー"
-  },
-  {
-   "zh": "采集 60→30",
-   "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "擷取 60→30",
-   "en": "Capture 60→30",
-   "ja": "キャプチャ 60→30"
-  },
-  {
-   "zh": "采集 60→30（PS5 30 帧）",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "擷取 60→30（PS5 30 幀）",
-   "en": "Capture 60→30 (PS5 at 30 fps)",
-   "ja": "キャプチャー 60→30（PS5 30 フレーム）"
   },
   {
    "zh": "采集: 接收 %1 丢弃 %2 速率 %3 fps",
@@ -18553,11 +18511,11 @@
    "ja": "プリセットのオプティカルフロー設定が破損しています"
   },
   {
-   "zh": "预设光流或内容节奏无效",
+   "zh": "预设光流或去除重复帧设置无效",
    "src": "src/engine/PresetLibrary.cpp",
-   "zh-TW": "預設光流或內容節奏無效",
-   "en": "Invalid preset optical flow or content cadence",
-   "ja": "プリセットのオプティカルフローまたはコンテンツのフレームレートが無効です"
+   "zh-TW": "預設的光流或去除重複幀設定無效",
+   "en": "Invalid optical-flow or duplicate-removal preset settings",
+   "ja": "プリセットのオプティカルフローまたは重複除去の設定が無効です"
   },
   {
    "zh": "预设内容类型无效",

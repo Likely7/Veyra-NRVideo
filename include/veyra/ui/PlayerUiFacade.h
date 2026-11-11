@@ -45,7 +45,10 @@ public:
     bool applySettings(const veyra::engine::EnhancementSettings& settings,
                        std::optional<veyra::engine::ChainRuntimeOrder> order = std::nullopt);
     veyra::engine::EnhancementSettings pendingSettings() const { return pending_; }
-    void setPending(veyra::engine::EnhancementSettings settings) { pending_ = std::move(settings); }
+    void setPending(veyra::engine::EnhancementSettings settings) {
+        settings.content=veyra::engine::currentContentRate(settings.content);
+        pending_ = std::move(settings);
+    }
     // True while the engine has not yet applied what the UI asked for.
     bool applying() const;
 

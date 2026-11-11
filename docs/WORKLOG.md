@@ -1031,3 +1031,12 @@ qmllint检查ProPage/Ps5SourceDialog/SettingsPage无语法错误，有动态上�
 执行 E:/项目/Veyra/reports/codex-group10-qr-20261111/update.py prepare、releases fdc626547b4020b888efd8d420d6dc28743b0d88、verify。两个含旧9群码的Release（v2.1.5和v2.1.5-sources）只替换群图URL、群号和图示11月18日前有效的说明；逐字反向还原验证其余正文不变。Release使用图提交的固定URL，README和模板引用main。赞助与群图仍各220，Patreon两个入口和Discord保持。匿名GET核对群图原字节和赞助图可达，API核对文档Git blob、Latest2.1.5、资产ID/大小/digest及发布元数据不变。首次将GitHub LF文本与Windows CRLF工作副本直接比较导致误报；改为比较提交blob后通过，无需改远端内容。
 
 报告、前后Release快照及patch、图片身份和更新脚本在 E:/项目/Veyra/reports/codex-group10-qr-20261111，最终回执FINAL.json。用户原图不裁剪、不重绘、不改像素；不修改发布标签、产品配置或运行库，不代发群消息。
+
+
+## 2026-11-11 去除重复帧：精简为60→30与自动去除
+
+用户要求将内容节奏改名去除重复帧、只留60→30和自动去除。分支codex/dedup-mode-simplify-20261111从288772b继续，保留此前软件工作。两页统一DedupModeRow，独立开关保持默认关闭，下拉只含5和1两个ID，按ID查值而不是数组下标，关后在当前界面保留上一次模式。UI偏好、待定/提交设置、旧预设应用统一currentContentRate；旧2/3/4变自动，0关闭与5隔帧原意不变，不重排存储枚举、不改变偏好键或worker ABI，不改去重/采集/补帧算法。同步状态、预设摘要及多语言。
+
+执行reports/codex-dedup-modes-20261111/check_syntax.py，8个MSVC /Zs单元通过。执行native_tests.py，单独编译/链接预设测试工具（3个翻译单元、复用现有未改veyra_base.lib），--dedup-migration共251项通过，覆盖旧预设实际保存/读取/不覆盖/应用、非法ID拒绝、全部32个内容组合和后端质量组合；不是应用构建或GPU测试。qmltestrunner离屏软件，tests/qml/quick/tst_dedup_modes.qml：7/0/0，无QWARN，含开关与默认、稀疏ID5、同步、旧值和240px布局。QML静态无语法错误但有动态上下文警告；i18n2797条、繁体/英文/日文缺失0、占位符错误0，git diff --check通过。所有TEMP/TMP/QML缓存定向本任务E盘目录。
+
+方案docs/DEDUP_MODES_2026-11-11.md；证据E:/项目/Veyra/{reports,logs,tmp,tests}/codex-dedup-modes-20261111。本轮不构建应用、不运行真实采集/GPU、不合main/push/发布。用户追加“搞好电脑关机”，在提交与证据落盘后执行正常关机；最终关机调用状态单独写入任务报告，不将计划冒充已断电。

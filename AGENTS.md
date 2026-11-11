@@ -1,3 +1,5 @@
+> **2026-11-11 去除重复帧选项精简（源码阶段）**：分支 `codex/dedup-mode-simplify-20261111`，基线288772b包含前轮未发布软件修改。列表/节点共用“去除重复帧”，下拉仅60→30和自动去除，关闭改为独立开关，默认仍关。编号0/1/5保持，旧2/3/4在偏好和预设应用时迁为自动，旧预设文件保留；算法不变。离屏QML7/0/0、原生预设存储/应用251项、MSVC语法8单元及i18n通过；仅构建测试工具，不构建应用或做GPU验收。读docs/DEDUP_MODES_2026-11-11.md、reports/codex-dedup-modes-20261111/FINAL.json。用户本轮追加完成后关机，提交与记录完成后执行。未合main/push/发布。
+
 > **2026-11-11 交流群更新到 10 群（已公开核验）**：用户指定9群已满，本轮将两份README、RELEASE_SUPPORT和2.1.5应用/源码两个Release换成10群原图，图示11月18日前有效，宽度仍各220。原PNG 75186字节、314×470，SHA256 `0dcc82e304b5313b37049ec0cb6102877a9391fc5802610cb69886b12bbdad92`。赞助图、Patreon/Discord、发布标签与全部安装包资产保持；只推文档和图片，不包含本地未发布软件代码。图提交 `fdc6265`；执行见 `docs/GROUP10_QR_2026-11-11.md` 和 `E:/项目/Veyra/reports/codex-group10-qr-20261111/FINAL.json`。
 
 > **2026-11-11 美颜删除与 PSNTools（源码阶段）**：分支 `codex/beauty-delete-psn-checker-20261111`，基线 `3e179db` 含前轮遮罩与 Patreon。列表删除统一提交运行链，美颜新增垃圾桶，移除删除前淡出以保留拒绝时的卡片。PSN OAuth 实现及界面已删除，改为用户指定 PSNTools 网页获取 Account ID 后手动配对；旧授权文件/主机数据不删除。离屏 QML 美颜6/0/0、PS5入口5/0/0，旧版对照3/3；MSVC语法4单元及i18n通过。未构建应用或真实主机验收，网站自动读取403。读 `docs/BEAUTY_DELETE_PSN_CHECKER_2026-11-11.md` 与 `reports/codex-beauty-psn-20261111/FINAL.json`；未合main/push/发布。

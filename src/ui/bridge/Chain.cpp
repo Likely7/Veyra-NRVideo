@@ -1028,13 +1028,14 @@ QVariantList QmlPlayerBridge::presetSaveParts() const {
         s.audioOffsetMs != 0);
     const QStringList flowNames{QStringLiteral("NVIDIA NVOF"), tr("AMD 光流"), QStringLiteral("GPU DIS")};
     const QStringList qualityNames{tr("性能"), tr("平衡"), tr("质量")};
-    const QStringList cadenceNames{tr("采用源时间戳"), tr("自动剔除重复帧"), tr("识别 30fps 内容"),
-        tr("识别 50fps 内容"), tr("识别 60fps 内容"), tr("采集 60→30（PS5 30 帧）")};
+    const auto content=engine::currentContentRate(s.content);
+    const auto cadenceName=content==engine::ContentRate::Transport?tr("去重关闭"):
+        content==engine::ContentRate::Capture60To30?QStringLiteral("60→30"):tr("自动去除");
     QString flowSummary = flowNames.value(int(s.opticalFlowBackend)) + QStringLiteral(" · ") +
-        qualityNames.value(int(s.flow)) + QStringLiteral(" · ") + cadenceNames.value(int(s.content));
+        qualityNames.value(int(s.flow)) + QStringLiteral(" · ") + cadenceName;
     if (s.opticalFlowBackend == engine::OpticalFlowBackend::AmdFidelityFx && s.amdFlowHalfResolution)
         flowSummary += QStringLiteral(" · ") + tr("半分辨率");
-    add("flow", tr("光流与内容节奏"), flowSummary,
+    add("flow", tr("光流与去除重复帧"), flowSummary,
         engine::PresetFlowSettings::capture(s) != engine::PresetFlowSettings{});
     return out;
 }

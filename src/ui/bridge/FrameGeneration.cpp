@@ -246,13 +246,14 @@ QString QmlPlayerBridge::dlssgLiteHint() const {
     if (s.running && s.dlssgLiteState == 1) return tr("生效中：NVIDIA DLSS 帧生成性能模式（测试版）");
     return tr("NVIDIA 新增的性能模式（测试版）：补帧更省 GPU，高倍率更稳，画质可能略降；导出仍用标准模式");
 }
-int QmlPlayerBridge::contentRate() const { return int(settings().content); }
+int QmlPlayerBridge::contentRate() const { return int(engine::currentContentRate(settings().content)); }
 void QmlPlayerBridge::setContentRate(int value) {
     if (value < 0 || value > int(engine::ContentRate::Capture60To30)) return;
+    value=int(engine::currentContentRate(static_cast<engine::ContentRate>(value)));
     auto s = settings();
     if (int(s.content) == value) return;
     s.content = static_cast<engine::ContentRate>(value);
-    if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受内容节奏，原设置保留"), true); return; }
+    if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受去除重复帧设置，原设置保留"), true); return; }
     // Shared cadence stays in shell preferences and can be included in presets.
     impl_->prefs[QStringLiteral("contentRate")] = value;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "content cadence not saved");

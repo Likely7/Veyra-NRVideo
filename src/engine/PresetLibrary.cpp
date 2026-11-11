@@ -984,7 +984,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if(!(in>>backend>>quality>>half>>content)||half<0||half>1){error=L"预设光流字段损坏";return false;}
                 PresetFlowSettings f{OpticalFlowBackend(backend),FlowQuality(quality),half!=0,ContentRate(content)};
                 EnhancementSettings contract;f.apply(contract);
-                if(!contract.validate().empty()){error=L"预设光流或内容节奏无效";return false;}
+                if(!contract.validate().empty()){error=L"预设光流或去除重复帧设置无效";return false;}
                 e.flow=f;
             }
         }

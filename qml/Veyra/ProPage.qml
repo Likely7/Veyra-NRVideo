@@ -75,12 +75,6 @@ VPage {
     // Design's st.tab: quality / fg / color / audio / display.
     property string tab: "quality"
     property int selectedEffect: -1
-    // engine::ContentRate order.
-    readonly property var contentRates: [
-        { id: "0", label: qsTr("采用源时间戳") }, { id: "1", label: qsTr("自动剔除重复帧") },
-        { id: "2", label: qsTr("识别 30fps 内容") }, { id: "3", label: qsTr("识别 50fps 内容") },
-        { id: "4", label: qsTr("识别 60fps 内容") }, { id: "5", label: qsTr("采集 60→30（PS5 30 帧）") }
-    ]
     // 处理顺序 "点击定位": switch to the chip's tab, open its card and scroll
     // the inspector so the card sits at the top.
     function locateNode(chip) {
@@ -1829,17 +1823,7 @@ VPage {
                                         onPicked: id => veyra.flowQuality = Number(id)
                                     }
                                 }
-                                VRow {
-                                    label: qsTr("内容节奏")
-                                    hint: qsTr("游戏锁 30/40 帧、采集卡输出 60 帧时选“自动剔除重复帧”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧")
-                                    VSelect {
-                                        objectName: "list-content-rate"
-                                        implicitWidth: 170
-                                        options: root.contentRates
-                                        value: (root.contentRates[veyra.contentRate] || root.contentRates[0]).label
-                                        onPicked: id => veyra.contentRate = Number(id)
-                                    }
-                                }
+                                DedupModeRow { backend: veyra; namePrefix: "list" }
                             }
                             NvidiaLowLatencyEditor { namePrefix: "list" }
                             VRow {

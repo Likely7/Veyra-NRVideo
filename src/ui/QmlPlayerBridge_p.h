@@ -848,6 +848,7 @@ struct QmlPlayerBridge::Impl {
     // The chain is the source of truth for the stage settings; every commit
     // writes it back over the struct so the two can never disagree.
     bool commit(engine::EnhancementSettings settings) {
+        settings.content=engine::currentContentRate(settings.content);
         // Custom: the static HDR output tuning belongs to neither transaction, so
         // keep the draft globals in sync in BOTH modes. Only the node branch below
         // refreshed them, which is why a change made in list mode took effect and
@@ -924,6 +925,7 @@ struct QmlPlayerBridge::Impl {
             }
         }
         engine::fromChain(*projected, s);
+        s.content=engine::currentContentRate(s.content);
         if(const auto error=s.validate();!error.empty()){
             veyra::log::error("qml-settings",error);
             validation={false,"效果参数无效，未提交；详见诊断日志"};return false;

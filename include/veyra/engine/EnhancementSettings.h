@@ -155,7 +155,12 @@ constexpr std::string_view nrRuntimeName(NrRuntime runtime) {
 }
 enum class FlowQuality { Performance, Balanced, Quality };
 enum class OpticalFlowBackend { Nvidia, AmdFidelityFx, GpuDis };
-enum class ContentRate { Transport, Auto, Fps30, Fps50, Fps60, Capture60To30 };
+// Persisted IDs must stay stable. 2..4 are legacy identification hints, no longer
+// offered by the UI; importing/applying one uses automatic duplicate removal.
+enum class ContentRate { Transport=0, Auto=1, Fps30=2, Fps50=3, Fps60=4, Capture60To30=5 };
+constexpr ContentRate currentContentRate(ContentRate mode) {
+    return mode>=ContentRate::Fps30&&mode<=ContentRate::Fps60?ContentRate::Auto:mode;
+}
 enum class AudioSyncMode { Automatic, Manual, Off };
 enum class HdrOutputMode { Hdr10, ScRgb };
 enum class MotionSource { Zero, OpticalFlow, Automatic };

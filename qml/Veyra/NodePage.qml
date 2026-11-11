@@ -731,15 +731,7 @@ VPage {
                             NodeLabel { Layout.fillWidth: true; text: qsTr("AMD 性能档（宽高减半）") }
                             VSwitch { objectName: "node-amd-half"; checked: veyra.amdFlowHalf; onToggled: checked => veyra.amdFlowHalf = checked }
                         }
-                        NodeLabel { text: qsTr("内容节奏") }
-                        VSelect {
-                            objectName: "node-content-rate"
-                            Layout.fillWidth: true
-                            title: qsTr("内容节奏")
-                            options: root.contentRates
-                            value: (root.contentRates[veyra.contentRate] || root.contentRates[0]).label
-                            onPicked: id => veyra.contentRate = Number(id)
-                        }
+                        DedupModeRow { backend: veyra; namePrefix: "node"; showHelp: false }
                         Text {
                             Layout.fillWidth: true
                             text: qsTr("补帧与 NR 共用，输入后计算一次，不随节点重复。")
@@ -1148,12 +1140,6 @@ VPage {
         font.family: Theme.fontUi
         font.pixelSize: 10
     }
-    // engine::ContentRate order (same list as the professional page).
-    readonly property var contentRates: [
-        { id: "0", label: qsTr("采用源时间戳") }, { id: "1", label: qsTr("自动剔除重复帧") },
-        { id: "2", label: qsTr("识别 30fps 内容") }, { id: "3", label: qsTr("识别 50fps 内容") },
-        { id: "4", label: qsTr("识别 60fps 内容") }, { id: "5", label: qsTr("采集 60→30（PS5 30 帧）") }
-    ]
     // A draggable fixed box (输入 / 光流 / 输出). The top strip (or the whole box
     // when it has no controls) is the drag handle.
     component AnchorBox: Rectangle {
