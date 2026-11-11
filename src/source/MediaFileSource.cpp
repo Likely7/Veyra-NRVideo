@@ -1412,7 +1412,7 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         errorMessage_=L"检测到 Dolby Vision RPU，但缺少基础层兼容声明，无法确认颜色，已停止";
         return SourceReadStatus::Error;
     }
-    if(hasRpu&&!dv.rpuObserved){dv.rpuObserved=true;log::info("source-dovi","decoded RPU observed; compatibility playback does not apply dynamic metadata");}
+    if(hasRpu&&!dv.rpuObserved){dv.rpuObserved=true;log::info("source-dovi","decoded RPU observed; dynamic metadata (L1) drives the HDR curve only when the Dolby Vision follow switch is on (ProPage), otherwise the static curve is used");}
     if(!dv.matches(out.colorInfo)){
         errorMessage_=L"Dolby Vision 基础层颜色与兼容声明不匹配，已停止以避免错误颜色";
         return SourceReadStatus::Error;
