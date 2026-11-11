@@ -15,8 +15,14 @@
 // config record exists.
 
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
+// NOTE: <libavutil/dovi_meta.h> must already be visible through an
+// `extern "C"` include (FFmpeg marks its entry points with C linkage only when
+// the caller wraps the header). Including it here would not add C linkage when
+// another translation-unit header pulled it in first, and av_dovi_metadata_alloc
+// would then fail to link under its C++ mangled name.
 extern "C" {
 #include <libavutil/dovi_meta.h>
 #include <libdovi/rpu_parser.h>
@@ -24,16 +30,47 @@ extern "C" {
 
 namespace veyra::source {
 
+// Equivalent of av_dovi_metadata_alloc() without its exported symbol (the header
+// reaches this translation unit through a dependency that does not wrap it in
+// extern "C", so the import name would be C++-mangled). Layout follows
+// libavutil/dovi_meta.h: the struct is a header holding offsets, the payload
+// lives behind it.
+inline AVDOVIMetadata* allocDoviMetadata() {
+    const size_t headerBytes = sizeof(AVDOVIRpuDataHeader);
+    const size_t mappingBytes = sizeof(AVDOVIDataMapping);
+    const size_t colorBytes = sizeof(AVDOVIColorMetadata);
+    const size_t total = sizeof(AVDOVIMetadata) + headerBytes + mappingBytes + colorBytes;
+    auto* meta = static_cast<AVDOVIMetadata*>(av_mallocz(total));
+    if (meta == nullptr) return nullptr;
+    meta->header_offset = sizeof(AVDOVIMetadata);
+    meta->mapping_offset = meta->header_offset + headerBytes;
+    meta->color_offset = meta->mapping_offset + mappingBytes;
+    meta->ext_block_offset = meta->color_offset + colorBytes;
+    meta->ext_block_size = 0;
+    meta->num_ext_blocks = 0;
+    return meta;
+}
+
 // Copies libdovi's parsed fields into `out` (allocated with
 // av_dovi_metadata_alloc by the caller). Returns false when the payload is not a
 // type-2 HEVC RPU or the mapping is absent.
 inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadata* out) {
+    if (FILE* f = fopen("D:/DSH/.dsh-tmp/libdovi-stage.log", "a")) {
+        fprintf(f, "enter size=%zu first=%02x out=%p\n", size, size ? data[0] : 0, (void*)out);
+        fclose(f);
+    }
     if (data == nullptr || out == nullptr || size < 5) return false;
     DoviRpuOpaque* rpu = dovi_parse_unspec62_nalu(data, size);
+    if (FILE* f = fopen("D:/DSH/.dsh-tmp/libdovi-stage.log", "a")) {
+        fprintf(f, "parsed rpu=%p\n", (void*)rpu);
+        fclose(f);
+    }
     if (rpu == nullptr) return false;
     const DoviRpuDataHeader* header = dovi_rpu_get_header(rpu);
+    if (FILE* f = fopen("D:/DSH/.dsh-tmp/libdovi-stage.log", "a")) { fprintf(f, "header=%p\n", (void*)header); fclose(f); }
     if (header == nullptr) { dovi_rpu_free(rpu); return false; }
     auto* hdr = av_dovi_get_header(out);
+    if (FILE* f = fopen("D:/DSH/.dsh-tmp/libdovi-stage.log", "a")) { fprintf(f, "dstHeader=%p\n", (void*)hdr); fclose(f); }
     if (hdr == nullptr) { dovi_rpu_free_header(header); dovi_rpu_free(rpu); return false; }
     hdr->rpu_type = header->rpu_type;
     hdr->rpu_format = header->rpu_format;
@@ -53,10 +90,13 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
     hdr->ext_mapping_idc_0_4 = 0;
     hdr->ext_mapping_idc_5_7 = 0;
     dovi_rpu_free_header(header);
+    if (FILE* f = fopen("D:/DSH/.dsh-tmp/libdovi-stage.log", "a")) { fprintf(f, "headerCopied\n"); fclose(f); }
 
     const DoviRpuDataMapping* mapping = dovi_rpu_get_data_mapping(rpu);
+    if (FILE* f = fopen("D:/DSH/.dsh-tmp/libdovi-stage.log", "a")) { fprintf(f, "mapping=%p\n", (void*)mapping); fclose(f); }
     if (mapping == nullptr) { dovi_rpu_free(rpu); return false; }
     auto* dst = av_dovi_get_mapping(out);
+    if (FILE* f = fopen("D:/DSH/.dsh-tmp/libdovi-stage.log", "a")) { fprintf(f, "dstMapping=%p\n", (void*)dst); fclose(f); }
     if (dst == nullptr) { dovi_rpu_free_data_mapping(mapping); dovi_rpu_free(rpu); return false; }
     dst->vdr_rpu_id = uint8_t(mapping->vdr_rpu_id);
     dst->mapping_color_space = uint8_t(mapping->mapping_color_space);
@@ -122,6 +162,7 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
         }
     }
     dovi_rpu_free_data_mapping(mapping);
+    if (FILE* f = fopen("D:/DSH/.dsh-tmp/libdovi-stage.log", "a")) { fprintf(f, "mappingCopied\n"); fclose(f); }
 
     // Colour metadata (P5 needs it; P7's reconstruction ignores it).
     const DoviVdrDmData* dm = dovi_rpu_get_vdr_dm_data(rpu);

@@ -1,9 +1,6 @@
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/pipeline/ColorMetadata.h"
 #include "veyra/source/DolbyVisionRpu.h"
-#if VEYRA_HAVE_LIBDOVI
-#include "veyra/source/LibDoviBridge.h"
-#endif
 #include "veyra/pipeline/DolbyVisionP7.h"
 #include "veyra/pipeline/PqTransfer.h"
 
@@ -31,6 +28,10 @@ extern "C" {
 #include <libavutil/mastering_display_metadata.h>
 #include <libavutil/hwcontext_d3d12va.h>
 }
+#if VEYRA_HAVE_LIBDOVI
+// After the extern "C" block so <libavutil/dovi_meta.h> has C linkage here.
+#include "veyra/source/LibDoviBridge.h"
+#endif
 
 #include <thread>
 #include <algorithm>
@@ -323,7 +324,7 @@ AVPacket* MediaFileSource::buildEnhancementPacket(const AVPacket* packet) {
             if (nal.size() < 2) continue;
             if (((nal[0] >> 1) & 0x3F) != 62) continue;
             if (elDoviMeta_ == nullptr) {
-                elDoviMeta_ = static_cast<AVDOVIMetadata*>(av_mallocz(sizeof(AVDOVIMetadata)));
+                elDoviMeta_ = source::allocDoviMetadata();
             }
             const bool ok = elDoviMeta_ != nullptr &&
                 source::decodeRpuWithLibDovi(nal.data(), nal.size(), elDoviMeta_);
@@ -427,50 +428,10 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
         // The layer is a real stream: its packets are already demuxed and carry
         // the RPU (type 62) as well as the residual pictures.
         if (!demuxer_.takeElPacket(&elPacket)) return false;
-        {
-            static unsigned pktDbg = 0;
-            if (pktDbg < 3) {
-                ++pktDbg;
-                std::string head;
-                const size_t show = std::min<size_t>(8, elPacket->size);
-                for (size_t i = 0; i < show; ++i) head += std::format("{:02x}", elPacket->data[i]);
-                log::info("source-dovi-el", std::format("EL packet size={} head={}", elPacket->size, head));
-            }
-        }
 #if VEYRA_HAVE_LIBDOVI
         {
             const uint8_t* p = elPacket->data;
             const size_t n = size_t(elPacket->size);
-            static unsigned scanEntry = 0;
-            if (scanEntry < 1) { ++scanEntry; log::info("source-dovi-el", "EL scan entry (libdovi enabled)"); }
-            {
-                // Compact one-line inventory for the first few packets, plus the
-                // first large one (the pictures live there).
-                static unsigned inventory = 0;
-                static bool bigSeen = false;
-                const bool wanted = inventory < 2 || (!bigSeen && n > 10000);
-                if (wanted) {
-                    std::string types;
-                    size_t q = 0;
-                    int guard = 0;
-                    while (q + 4 < n && guard < 64) {
-                        if (!(p[q] == 0 && p[q + 1] == 0 && p[q + 2] == 1)) { ++q; continue; }
-                        const size_t h = q + 3;
-                        if (h >= n) break;
-                        types += std::to_string((p[h] >> 1) & 0x3F);
-                        types += ' ';
-                        ++guard;
-                        size_t e = n;
-                        for (size_t j = h + 1; j + 3 < n; ++j) {
-                            if (p[j] == 0 && p[j + 1] == 0 && p[j + 2] == 1) { e = j; break; }
-                        }
-                        q = e;
-                    }
-                    if (inventory < 2) ++inventory;
-                    if (n > 10000) bigSeen = true;
-                    log::info("source-dovi-el", std::format("EL packet size={} nals=[{}]", n, types));
-                }
-            }
             // The stream's packets are Annex B (00 00 01 / 00 00 00 01): walk the
             // NAL units and hand the type-62 one to libdovi.
             static unsigned rpuReported = 0;
@@ -485,30 +446,24 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
                     if (p[j] == 0 && p[j + 1] == 0 && p[j + 2] == 1) { end = j; break; }
                 }
                 const int nalType = (p[hdr] >> 1) & 0x3F;
-                if (n > 10000) {
-                    static unsigned walkDbg = 0;
-                    if (walkDbg < 12) { ++walkDbg; log::info("source-dovi-el",
-                        std::format("EL walk size={} pos={} type={} end={}", n, pos, nalType, end)); }
-                }
                 if (nalType == 62) {
-                    // File trace, independent of the log pipeline: proves whether
-                    // this branch runs at all.
-                    if (FILE* trace = fopen("D:/DSH/.dsh-tmp/el62.log", "a")) {
-                        fprintf(trace, "hit pos=%zu hdr=%zu end=%zu size=%zu\n", pos, hdr, end, n);
-                        fclose(trace);
-                    }
                     if (elDoviMeta_ == nullptr) {
-                        elDoviMeta_ = static_cast<AVDOVIMetadata*>(av_mallocz(sizeof(AVDOVIMetadata)));
+                        elDoviMeta_ = source::allocDoviMetadata();
                     }
                     // Skip the 2-byte NAL header: libdovi wants the RBSP payload,
                     // which starts with the 0x19 unspec62 prefix.
                     const size_t payloadOff = hdr + 2;
-                    const bool ok = elDoviMeta_ != nullptr && payloadOff < end &&
-                        source::decodeRpuWithLibDovi(p + payloadOff, end - payloadOff, elDoviMeta_);
-                    if (FILE* trace = fopen("D:/DSH/.dsh-tmp/el62.log", "a")) {
-                        fprintf(trace, "decode ok=%d payload=%zu first=%02x\n", ok ? 1 : 0, end - payloadOff,
-                            payloadOff < end ? p[payloadOff] : 0);
-                        fclose(trace);
+                    bool ok = false;
+                    if (elDoviMeta_ != nullptr && payloadOff < end) {
+                        // Copy into a fresh buffer: libdovi must not read inside the
+                        // FFmpeg packet allocation, whose tail padding is not ours.
+                        const size_t payloadBytes = end - payloadOff;
+                        uint8_t* copy = static_cast<uint8_t*>(av_mallocz(payloadBytes + AV_INPUT_BUFFER_PADDING_SIZE));
+                        if (copy != nullptr) {
+                            memcpy(copy, p + payloadOff, payloadBytes);
+                            ok = source::decodeRpuWithLibDovi(copy, payloadBytes, elDoviMeta_);
+                            av_free(copy);
+                        }
                     }
                     if (ok) elDoviMetaValid_ = true;
                     sawRpu = true;
@@ -519,11 +474,6 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
                     break;
                 }
                 pos = end;
-            }
-            if (!sawRpu) {
-                static unsigned scanDbg = 0;
-                if (++scanDbg <= 2) log::info("source-dovi-el",
-                    std::format("EL stream packet ({} bytes) carries no type-62 RPU", n));
             }
         }
 #endif

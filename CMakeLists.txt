@@ -751,9 +751,13 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_include_directories(veyra_sources PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_sources PUBLIC veyra_pipeline veyra_media veyra_base)
   target_link_libraries(veyra_sources PRIVATE ${FFMPEG_LIBRARIES} strmiids ole32 oleaut32 d3d12 dxgi)
-  # av_dovi_metadata_alloc resolves from avutil; repeat the dependency after
-  # veyra_sources.lib in the link line so the static library's new user wins.
-  target_link_libraries(veyra_sources PRIVATE ${FFMPEG_LIBRARIES})
+  # av_dovi_metadata_alloc/av_dovi_find_level live in avutil, and veyra_sources
+  # references them directly: link the import library here so the final link
+  # resolves it regardless of where veyra_media sits in the order.
+  if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/lib/avutil.lib")
+    target_link_libraries(veyra_sources PRIVATE "${VEYRA_FFMPEG_ROOT}/lib/avutil.lib")
+    target_include_directories(veyra_sources PRIVATE "${VEYRA_FFMPEG_ROOT}/include")
+  endif()
   # libdovi lives in the source layer (MediaFileSource): headers + the macro here,
   # the import library comes in through veyra_media's PUBLIC link.
   if(EXISTS "${CMAKE_SOURCE_DIR}/deps/libdovi/lib/dovi.lib")
