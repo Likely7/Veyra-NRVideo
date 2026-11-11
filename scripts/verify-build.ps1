@@ -32,7 +32,7 @@
 [CmdletBinding()]
 param(
     [string]$BuildDir  = 'D:\Program\Veyra\build',
-    [string]$DeployDir = 'D:\Program\Veyra-2.1.4-NVIDIA-win64-portable',
+    [string]$DeployDir = 'D:\Program\Veyra-2.1.5-NVIDIA-win64-portable',
     [switch]$SkipBuild,
     [int]$RunSeconds = 8
 )

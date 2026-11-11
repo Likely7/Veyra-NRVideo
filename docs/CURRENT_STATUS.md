@@ -1,3 +1,5 @@
+> **2026-11-11 升级到 2.1.5（定制版 + 作者版双切换）**：merge `v2.1.5`（`dc6f6e1e`）到 `test/merge-215`（`eee01fbe`），冲突 2 个（CURRENT_STATUS、EngineController 的 liveLoop 捕获列表：上游改名 smoothTransportAnchor 并新增 captureClockCorrected/driverPts100ns，本地保留 seekDemuxDone）。部署 `D:\Program\Veyra-2.1.5-NVIDIA-win64-portable`：定制 exe `1f5b2016…`、作者 `87d6b491…`，双切换实测通过；`scripts/verify-build.ps1` 全过（567/462/334、运行时 0 ERROR）。2.1.5 的采集预览改进无采集卡未实测。详见 [升级记录](UPGRADE_2.1.5_2026-11-11.md)。
+
 > **2.1.5（2026-11-10）** 采集预览小更新。改善去重后补帧的送帧节奏，并校正部分采集设备的异常时间戳。详见 [更新说明](RELEASE_NOTES_2.1.5.md) 和 [构建与对应源码](BUILD_2.1.5.md)。
 
 > **正式版 2.1.4（2026-11-09）** 已发布至 Likely7/Veyra-NRVideo。新增 VB-CABLE 音频转接、跨后端双重超分、DLAA、HDR 广色域恢复、NR 推理复用与 1% low。两种便携包、对应源码和校验表已公开。详细变更见 [更新说明](RELEASE_NOTES_2.1.4.md)，发布与核验见 [工作记录](WORKLOG.md)。
