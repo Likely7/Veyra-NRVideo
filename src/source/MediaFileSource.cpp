@@ -427,6 +427,9 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
     if (elFromStream_) {
         // The layer is a real stream: its packets are already demuxed and carry
         // the RPU (type 62) as well as the residual pictures.
+        // Validity is per frame: a packet without a type-62 NAL (parameter sets,
+        // recovery points) must not leave the previous frame's curve in place.
+        elDoviMetaValid_ = false;
         if (!demuxer_.takeElPacket(&elPacket)) return false;
 #if VEYRA_HAVE_LIBDOVI
         {
@@ -832,6 +835,10 @@ pipeline::ColorDescription MediaFileSource::parseColor(const AVCodecParameters* 
 bool MediaFileSource::open(const SourceOpenDesc& desc)
 {
     close();
+    // A previous file's enhancement layer must not leak into this one: the
+    // fallback below only assigns these when it actually finds a second stream.
+    elStreamIndex_ = -1;
+    elFromStream_ = false;
     path_ = desc.path;
     cancelled_ = desc.cancelled;
     deinterlaceEnabled_=desc.deinterlace;filterDraining_=false;

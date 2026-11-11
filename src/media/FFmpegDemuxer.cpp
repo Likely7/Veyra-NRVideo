@@ -417,6 +417,12 @@ bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
         }
         if (packet_->stream_index != videoStreamIndex_) {
             if (elStreamIndex_ >= 0 && packet_->stream_index == elStreamIndex_) {
+                // Bounded: when the layer runs ahead of the base stream the queue
+                // must not grow for the whole film.
+                if (elPending_.size() >= 8) {
+                    av_packet_free(&elPending_.front());
+                    elPending_.pop_front();
+                }
                 elPending_.push_back(av_packet_clone(packet_));
                 static unsigned elQ = 0;
                 if (++elQ <= 3) log::info("source-dovi-el", std::format(

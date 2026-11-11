@@ -133,6 +133,9 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
             if (poly == nullptr) continue;
             for (int i = 0; i < pieces; ++i) {
                 const int order = int(poly->poly_order_minus1.data[i]) + 1;
+                // AVDOVIReshapingCurve::poly_coef holds three coefficients (x^0..x^2);
+                // anything larger would write past the row.
+                if (order < 1 || order > 2) break;
                 curve->poly_order[i] = uint8_t(order);
                 if (size_t(i) < poly->poly_coef.len) {
                     const DoviU64Data& coef = *poly->poly_coef.list[i];
@@ -145,6 +148,8 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
             if (mmr == nullptr) continue;
             for (int i = 0; i < pieces; ++i) {
                 const int order = int(mmr->mmr_order_minus1.data[i]) + 1;
+                // mmr_coef's second dimension is three (order - 1).
+                if (order < 1 || order > 3) break;
                 curve->mmr_order[i] = uint8_t(order);
                 if (size_t(i) < mmr->mmr_constant.len)
                     curve->mmr_constant[i] = int64_t(mmr->mmr_constant.data[i]);
