@@ -1022,3 +1022,12 @@ Patreon 软件入口基线提交 37f13a0，位于前一分支 codex/patreon-spon
 qmllint检查ProPage/Ps5SourceDialog/SettingsPage无语法错误，有动态上下文等警告；python -B scripts/i18n/extract.py --check：2803条、三语言缺失0、占位符错误0。git diff --check及旧OAuth引用清除检查通过。外部网页自动读取HTTP403，没有登录或查询真实账号。继续遵守暂缓构建，不构建/启动应用、不运行C++回归程序、不合main/push/发布。方案docs/BEAUTY_DELETE_PSN_CHECKER_2026-11-11.md；证据和日志 E:/项目/Veyra/{reports,logs,tmp,tests}/codex-beauty-psn-20261111。
 
 补充：最终Qt复测使用任务专用QML_DISK_CACHE_PATH。初轮未指定该项，Qt默认共享缓存目录现有72文件/1,647,592字节；没有假定全部属于本轮，也未删除共享缓存，清单reports/codex-beauty-psn-20261111/qt-cache.json。
+
+
+## 2026-11-11 GitHub 交流群更换为 10 群
+
+用户提供10群原图，明确9群已满。原图314×470、75186字节、SHA256 0dcc82e304b5313b37049ec0cb6102877a9391fc5802610cb69886b12bbdad92，原字节保存docs/images/community/group-10-20261111.png。独立文档分支codex/group10-qr-20261111从远端main e91882a创建，图与README双语/RELEASE_SUPPORT提交fdc6265后推送main；没有发布尚未验收的软件源码或重构建安装包。
+
+执行 E:/项目/Veyra/reports/codex-group10-qr-20261111/update.py prepare、releases fdc626547b4020b888efd8d420d6dc28743b0d88、verify。两个含旧9群码的Release（v2.1.5和v2.1.5-sources）只替换群图URL、群号和图示11月18日前有效的说明；逐字反向还原验证其余正文不变。Release使用图提交的固定URL，README和模板引用main。赞助与群图仍各220，Patreon两个入口和Discord保持。匿名GET核对群图原字节和赞助图可达，API核对文档Git blob、Latest2.1.5、资产ID/大小/digest及发布元数据不变。首次将GitHub LF文本与Windows CRLF工作副本直接比较导致误报；改为比较提交blob后通过，无需改远端内容。
+
+报告、前后Release快照及patch、图片身份和更新脚本在 E:/项目/Veyra/reports/codex-group10-qr-20261111，最终回执FINAL.json。用户原图不裁剪、不重绘、不改像素；不修改发布标签、产品配置或运行库，不代发群消息。

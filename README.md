@@ -249,7 +249,7 @@ Original code: GPL-3.0. The combined Chiaki streaming application is also subjec
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-9-20261110.png" alt="Veyra community group 9" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-10-20261111.png" alt="Veyra community group 10" width="220">
 </p>
 
-Left: optional donation, no feature restrictions. Right: community group 9; QR valid **before 2026-11-17** as shown. Check repository updates after expiry.
+Left: optional donation, no feature restrictions. Right: community group 10; QR valid **before 2026-11-18** as shown. Check repository updates after expiry.
