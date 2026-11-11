@@ -57,7 +57,7 @@ if ($SkipBuild) {
 } else {
     $vcvars = 'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat'
     if (-not (Test-Path $vcvars)) { Fail "找不到 vcvars64.bat: $vcvars" }
-    $targets = 'veyra_qml_ui veyra_preset_library_tests veyra_effect_chain_tests veyra_repair_contract_tests'
+    $targets = 'veyra_qml_ui veyra_preset_library_tests veyra_effect_chain_tests veyra_repair_contract_tests veyra_live_timing_tests'
     $cmd = "call `"$vcvars`" >nul && cmake --build `"$BuildDir`" --target $targets -j 8"
     cmd /c $cmd
     if ($LASTEXITCODE -ne 0) { Fail "构建失败（exit $LASTEXITCODE）" } else { Ok '构建通过' }
@@ -84,7 +84,7 @@ if ($ffmpegBin) {
 } else {
     Info '未找到 FFmpeg bin，若测试报 0xC0000135 请检查 CMakeCache 的 VEYRA_FFMPEG_ROOT'
 }
-$tests = @('veyra_preset_library_tests', 'veyra_effect_chain_tests', 'veyra_repair_contract_tests')
+$tests = @('veyra_preset_library_tests', 'veyra_effect_chain_tests', 'veyra_repair_contract_tests', 'veyra_live_timing_tests')
 foreach ($t in $tests) {
     $exe = Join-Path $BuildDir "$t.exe"
     if (-not (Test-Path $exe)) { Fail "$t.exe 不存在"; continue }
