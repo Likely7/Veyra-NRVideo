@@ -81,3 +81,18 @@
 - `doviFollow` 默认关，改默认值会影响所有 HDR 片源的观感，**需要用户确认**；
 - `peakCapNits` 跟随峰值可能让很亮的场景压得更狠（用户可能觉得“变暗”），必须保留用户静态值作为上限；
 - L1 来自帧侧数据，HDR10+ 片源走同一个 `DoviFrameInfo`（`profile == kHdr10PlusProfile`），改动会同时影响 HDR10+ 的跟随逻辑，注意别把两条路径混在一起。
+
+## 结论（2026-11-11 更新，本任务收尾）
+
+L1 的解析与应用**已经按设计完成**，不需要补实现：
+
+- `doviCurveFromLevel1()` **只跟随 `highlightStartNits`**；
+- `peakCapNits` / `midGrayNits` **刻意不跟随**（它们是中灰 gamma 的锚点，跟随后实测某预设 1 nit 处丢 78%，`RepairContractTests` 的
+  “leaves the user peak ceiling exactly as set” / “keeps the ceiling and mid-gray of a real preset” 锁住了这个行为）；
+- `doviFollow` 默认关，用户在 ProPage 手动开。
+
+本轮只做了用户选定的 **B**：把容易误解的日志改为
+`decoded RPU observed; dynamic metadata (L1) drives the HDR curve only when the Dolby Vision follow switch is on (ProPage), otherwise the static curve is used`
+（提交 `af1e99d1`，部署 exe `94317343…`）。
+
+**A（默认开启）未做**：会改变所有 HDR 片源的默认观感，需要用户另行决定。
