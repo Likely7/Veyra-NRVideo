@@ -77,38 +77,75 @@ inline bool doviP7CurveIsIdentity(const AVDOVIReshapingCurve& curve, int coefLog
 // than approximated: those frames keep the plain base layer.
 inline bool doviP7PackCurve(const AVDOVIReshapingCurve& curve, int coefLog2Denom,
                             int component, DoviP7Constants& out, DoviP7CurveReport& report) {
-    report.pieces[component] = curve.num_pivots > 0 ? uint8_t(curve.num_pivots - 1) : uint8_t(0);
+    const int pieces = curve.num_pivots > 0 ? int(curve.num_pivots) - 1 : 0;
+    report.pieces[component] = uint8_t(pieces);
     if (doviP7CurveIsIdentity(curve, coefLog2Denom)) {
         report.kind[component] = DoviP7CurveReport::Kind::Identity;
         out.params[21 + component] = float(DoviP7CurveIdentity);
         out.params[24 + component] = 0.0f;
         return true;
     }
-    // Single-piece MMR is what a real FEL stream uses for the chroma components.
-    if (curve.num_pivots == 2 && curve.mapping_idc[0] == AV_DOVI_MAPPING_MMR) {
-        const int order = int(curve.mmr_order[0]);
-        if (order >= 1 && order <= 3) {
-            report.kind[component] = DoviP7CurveReport::Kind::SingleMmr;
-            report.mmrOrder[component] = uint8_t(order);
-            const float scale = 1.0f / float(int64_t(1) << coefLog2Denom);
-            out.params[18 + component] = scale * float(curve.mmr_constant[0]);
-            out.params[21 + component] = float(DoviP7CurveMmr);
-            out.params[24 + component] = float(order);
-            for (int j = 0; j < order; ++j) {
-                // Two vec4s per order, seven weights in total, exactly the order the
-                // shader's MmrEvaluate() reads them back.
-                for (int k = 0; k < 3; ++k) out.curve[component][j * 2][k] = scale * float(curve.mmr_coef[0][j][k]);
-                for (int k = 0; k < 4; ++k) out.curve[component][j * 2 + 1][k] = scale * float(curve.mmr_coef[0][j][3 + k]);
-            }
-            return true;
-        }
+    // Segment layout inside curve[component][*][*]:
+    //   [seg*6 + 0..5]  MMR coefficients (two vec4s per order) or the polynomial
+    //                   coefficients in lane .x of the first three rows
+    //   [seg*6 + 0].w   segment kind (0 = polynomial, 1 = MMR)
+    //   [seg*6 + 1].w   order (polynomial 1..2, MMR 1..3)
+    //   [18..20]        normalised pivots, [20].w = segment count
+    // The first segment starts at row 0, so a single-piece curve keeps the exact
+    // layout the shader already consumed.
+    if (pieces < 1 || pieces > kDoviP7CurveSegments) {
         report.kind[component] = DoviP7CurveReport::Kind::Unsupported;
         return false;
     }
-    report.kind[component] = report.pieces[component] > 1
-        ? DoviP7CurveReport::Kind::MultiPiece
-        : DoviP7CurveReport::Kind::Unsupported;
-    return false;
+    const float scale = 1.0f / float(int64_t(1) << coefLog2Denom);
+    bool anyMmr = false, anyPoly = false;
+    for (int seg = 0; seg < pieces; ++seg) {
+        const int base = seg * 6;
+        if (curve.mapping_idc[seg] == AV_DOVI_MAPPING_POLYNOMIAL) {
+            const int order = int(curve.poly_order[seg]);
+            if (order < 1 || order > 2) {
+                report.kind[component] = DoviP7CurveReport::Kind::Unsupported;
+                return false;
+            }
+            for (int k = 0; k <= order; ++k)
+                out.curve[component][base + k][0] = scale * float(curve.poly_coef[seg][k]);
+            out.curve[component][base + 0][3] = 0.0f;
+            out.curve[component][base + 1][3] = float(order);
+            anyPoly = true;
+        } else if (curve.mapping_idc[seg] == AV_DOVI_MAPPING_MMR) {
+            const int order = int(curve.mmr_order[seg]);
+            if (order < 1 || order > 3) {
+                report.kind[component] = DoviP7CurveReport::Kind::Unsupported;
+                return false;
+            }
+            out.curve[component][base + 0][3] = 1.0f;
+            out.curve[component][base + 1][3] = float(order);
+            if (seg == 0) out.params[18 + component] = scale * float(curve.mmr_constant[0]);
+            for (int j = 0; j < order; ++j) {
+                for (int k = 0; k < 3; ++k)
+                    out.curve[component][base + j * 2][k] = scale * float(curve.mmr_coef[seg][j][k]);
+                for (int k = 0; k < 4; ++k)
+                    out.curve[component][base + j * 2 + 1][k] = scale * float(curve.mmr_coef[seg][j][3 + k]);
+            }
+            anyMmr = true;
+        } else {
+            report.kind[component] = DoviP7CurveReport::Kind::Unsupported;
+            return false;
+        }
+    }
+    // Normalised pivots (codes / 1023) so the shader compares them against its own
+    // 0..1 signal without knowing the base-layer bit depth.
+    constexpr float kPivotScale = 1.0f / 1023.0f;
+    for (int i = 0; i < curve.num_pivots && i < 9; ++i)
+        out.curve[component][18 + i / 4][i % 4] = float(curve.pivots[i]) * kPivotScale;
+    out.curve[component][20][3] = float(pieces);
+    out.params[21 + component] = float(pieces > 1 ? DoviP7CurveMulti : (anyMmr ? DoviP7CurveMmr : DoviP7CurveIdentity));
+    out.params[24 + component] = float(pieces > 1 ? 0.0f : (anyMmr ? int(curve.mmr_order[0]) : int(curve.poly_order[0])));
+    report.kind[component] = pieces > 1 ? DoviP7CurveReport::Kind::MultiPiece
+                           : anyMmr ? DoviP7CurveReport::Kind::SingleMmr
+                                    : DoviP7CurveReport::Kind::Unsupported;
+    report.mmrOrder[component] = uint8_t(anyMmr ? curve.mmr_order[0] : 0);
+    return true;
 }
 
 // Supported so far: LINEAR_DZ quantisation on every component and an inverse

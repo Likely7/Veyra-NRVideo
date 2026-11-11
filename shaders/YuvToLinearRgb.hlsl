@@ -233,9 +233,11 @@ int P7Residual(int e, float4 nlq, int elBitDepth, int coefLog2Denom)
 // One component of the base layer's inverse reshaping, evaluated the way
 // libplacebo's reshape_mmr() does: the seven weights of an order are packed into
 // two float4s, and the cross terms are the same r*g, r*b, g*b, r*g*b products.
-float MmrEvaluate(int component, float3 sig, float constant, int order)
+// `segment` selects which piece of the curve is being evaluated; single-piece
+// curves keep segment 0, so their layout is unchanged.
+float MmrEvaluate(int component, int segment, float3 sig, float constant, int order)
 {
-    const int base = component * 6;
+    const int base = component * 21 + segment * 6;
     float4 sigX;
     sigX.xyz = sig.xxy * sig.yzz;   // (r*g, r*b, g*b)
     sigX.w = sigX.x * sig.z;        // r*g*b
@@ -253,6 +255,44 @@ float MmrEvaluate(int component, float3 sig, float constant, int order)
         }
     }
     return saturate(s);
+}
+
+// Piece-wise polynomial segment: coefficients in code domain (0..1023), so the
+// normalised signal is scaled in and out.
+float PolyEvaluate(int component, int segment, float s)
+{
+    const int base = component * 21 + segment * 6;
+    const float code = s * 1023.0;
+    const float3 coef = elCurvePlane.Load(int3(base + 0, 0, 0)).xyz;
+    return saturate((coef.x + coef.y * code + coef.z * code * code) / 1023.0);
+}
+
+// Which piece of a component's curve a normalised signal falls into. Pivots live
+// in rows [18..20] of the component's block, normalised to 0..1.
+int PickSegment(int component, float s)
+{
+    const int base = component * 21;
+    const float4 p0 = elCurvePlane.Load(int3(base + 18, 0, 0));
+    const float4 p1 = elCurvePlane.Load(int3(base + 19, 0, 0));
+    const float4 p2 = elCurvePlane.Load(int3(base + 20, 0, 0));
+    const float pivots[9] = { p0.x, p0.y, p0.z, p0.w, p1.x, p1.y, p1.z, p1.w, p2.x };
+    const int pieces = int(p2.w + 0.5);
+    int seg = 0;
+    [unroll]
+    for (int i = 0; i < 8; ++i) {
+        if (i < pieces && s >= pivots[i]) seg = i;
+    }
+    return min(seg, max(pieces - 1, 0));
+}
+
+// Segment kind and order for one component/piece.
+float SegmentKind(int component, int segment)
+{
+    return elCurvePlane.Load(int3(component * 21 + segment * 6, 0, 0)).w;
+}
+int SegmentOrder(int component, int segment)
+{
+    return int(elCurvePlane.Load(int3(component * 21 + segment * 6 + 1, 0, 0)).w + 0.5);
 }
 
 // dv4 = (elWidth, elHeight, mmrConstant[0], mmrConstant[1])
@@ -277,17 +317,30 @@ float3 ReconstructP7(float3 sig, uint2 tid, out int3 residualOut)
     // whose mapping is the identity still goes through the same 16-bit domain so
     // the sum below has one unit.
     //
-    // Lane map (see DolbyVisionP7.h): mode[0..2] is dv5.y/.z/.w, the MMR constant
-    // is dv4.z / dv4.w / dv5.x, the order is dv6.x/.y/.z. Each component reads its
-    // OWN triple: an earlier version indexed one component off, which silently
-    // skipped Cb's mapping because it tested the luma mode flag.
+    // Lane map (see DolbyVisionP7.h): mode[0..2] is dv5.y/.z/.w. Mode 1 is a
+    // single-piece MMR (constant in dv4.z/w/dv5.x, order in dv6.x/y/z, weights at
+    // row 0). Mode 2 is segmented: kind and order come from the block, and the
+    // segment is selected by the normalised signal against the pivots.
     float3 base = sig;
-    if (dv5.y > 0.5) base.x = MmrEvaluate(0, sig, dv4.z, int(dv6.x + 0.5));
-    if (dv5.z > 0.5) base.y = MmrEvaluate(1, sig, dv4.w, int(dv6.y + 0.5));
-    if (dv5.w > 0.5) base.z = MmrEvaluate(2, sig, dv5.x, int(dv6.z + 0.5));
-    int3 hh = int3(round(base * 65535.0)) + residual + (1 << (15 - outBitDepth));
+    [unroll]
+    for (int c = 0; c < 3; ++c) {
+        const float mode = c == 0 ? dv5.y : (c == 1 ? dv5.z : dv5.w);
+        if (mode < 0.5) continue;
+        float s = c == 0 ? sig.x : (c == 1 ? sig.y : sig.z);
+        const float constant = c == 0 ? dv4.z : (c == 1 ? dv4.w : dv5.x);
+        if (mode > 1.5) {
+            const int seg = PickSegment(c, s);
+            s = SegmentKind(c, seg) > 0.5
+                ? MmrEvaluate(c, seg, sig, constant, SegmentOrder(c, seg))
+                : PolyEvaluate(c, seg, s);
+        } else {
+            s = MmrEvaluate(c, 0, sig, constant, int(dv6[c] + 0.5));
+        }
+        if (c == 0) base.x = s; else if (c == 1) base.y = s; else base.z = s;
+    }
+    int3 hh = int3(round(base * 65535.0)) + residual + (int(1) << (15 - outBitDepth));
     hh = hh >> (16 - outBitDepth);
-    const int maxOut = (1 << outBitDepth) - 1;
+    const int maxOut = (int(1) << outBitDepth) - 1;
     return float3(clamp(hh, 0, maxOut)) / float(maxOut);
 }
 

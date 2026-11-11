@@ -398,10 +398,43 @@ int main(){
                 check(packed.params[8] == 512.0f && packed.params[11] == 1048576.0f,
                       "DV P7 constants carry the Cr NLQ fields in dv2");
                 check(packed.params[27] == 2.0f, "DV P7 constants mark dv6.w as reconstruction");
-                luma.poly_coef[0][1] = 4194304;   // 0.5, no longer identity
-                pipeline::DoviP7Constants rejected{};
-                check(!pipeline::doviP7ConstantsSupported(mapping, header, 1920, 1080, rejected) && !rejected.ready,
-                      "DV P7 constants refuse a non-identity luma curve");
+                // A single-piece polynomial is now expressible (it used to be
+                // refused outright): 0.5 slope in the luma curve.
+                luma.poly_coef[0][1] = 4194304;
+                pipeline::DoviP7Constants poly{};
+                check(pipeline::doviP7ConstantsSupported(mapping, header, 1920, 1080, poly) && poly.ready,
+                      "DV P7 constants pack a single-piece polynomial luma curve");
+                check(poly.params[21] == float(pipeline::DoviP7CurveMulti) ||
+                      poly.params[21] == float(pipeline::DoviP7CurveMmr) ||
+                      poly.params[21] == 0.0f,
+                      "DV P7 polynomial luma carries a known component mode");
+                // A segmented luma curve (two pieces, polynomial then MMR) must
+                // pack as DoviP7CurveMulti with the pivots and per-segment data.
+                {
+                    AVDOVIReshapingCurve seg{};
+                    seg.num_pivots = 3;
+                    seg.pivots[0] = 0; seg.pivots[1] = 512; seg.pivots[2] = 1023;
+                    seg.mapping_idc[0] = AV_DOVI_MAPPING_POLYNOMIAL;
+                    seg.poly_order[0] = 1;
+                    seg.poly_coef[0][0] = 0; seg.poly_coef[0][1] = 4194304; seg.poly_coef[0][2] = 0;
+                    seg.mapping_idc[1] = AV_DOVI_MAPPING_MMR;
+                    seg.mmr_order[1] = 1;
+                    seg.mmr_constant[1] = 0;
+                    for (int k = 0; k < 7; ++k) seg.mmr_coef[1][0][k] = (k == 0 ? 4194304 : 0);
+                    AVDOVIDataMapping segMapping = mapping;   // keep the NLQ fields
+                    segMapping.curves[0] = seg;
+                    pipeline::DoviP7Constants multi{};
+                    check(pipeline::doviP7ConstantsSupported(segMapping, header, 1920, 1080, multi) && multi.ready,
+                          "DV P7 constants pack a two-piece luma curve");
+                    check(multi.params[21] == float(pipeline::DoviP7CurveMulti),
+                          "DV P7 segmented luma reports the multi-segment mode");
+                    check(multi.curve[0][20][3] == 2.0f,
+                          "DV P7 segmented luma records its pivot count");
+                    check(multi.curve[0][18][0] == 0.0f && multi.curve[0][18][1] == 512.0f / 1023.0f,
+                          "DV P7 segmented luma normalises the pivots");
+                    check(multi.curve[0][0][3] == 0.0f && multi.curve[0][6][3] == 1.0f,
+                          "DV P7 segmented luma marks polynomial then MMR per segment");
+                }
             }
 
         diagnostics::GpuFrameTiming gpu;auto& first=gpu.gpu[size_t(diagnostics::GpuStage::Color)];first={diagnostics::SampleState::Measured,2,1000,3000,1000000};
