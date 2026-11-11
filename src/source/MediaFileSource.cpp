@@ -852,12 +852,18 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     info_.videoPixelFormatName = params->format >= 0 && av_get_pix_fmt_name(static_cast<AVPixelFormat>(params->format))
         ? av_get_pix_fmt_name(static_cast<AVPixelFormat>(params->format)) : "unknown";
     info_.color = parseColor(params);
+    // Dolby Vision identification has two entry points: FFmpeg's DOVI
+    // configuration record (from the base-layer SPS) and - when that record is
+    // absent - a separate HEVC enhancement-layer stream, which only profile 7
+    // has. Some profile-7 test encodes carry the EL and the RPU but never write
+    // dolby_vision_configuration into the BL SPS, so they read as plain HDR10.
+    auto& dv=info_.dolbyVision;
     if(const auto* side=av_packet_side_data_get(params->coded_side_data,params->nb_coded_side_data,AV_PKT_DATA_DOVI_CONF)){
         if(side->size<offsetof(AVDOVIDecoderConfigurationRecord,dv_bl_signal_compatibility_id)+sizeof(uint8_t)){
             errorMessage_=L"Dolby Vision 配置信息不完整";return false;
         }
         const auto& config=*reinterpret_cast<const AVDOVIDecoderConfigurationRecord*>(side->data);
-        auto& dv=info_.dolbyVision;dv.present=true;dv.profile=config.dv_profile;dv.level=config.dv_level;
+        dv.present=true;dv.profile=config.dv_profile;dv.level=config.dv_level;
         dv.baseLayer=config.bl_present_flag!=0;dv.enhancementLayer=config.el_present_flag!=0;
         dv.rpuDeclared=config.rpu_present_flag!=0;dv.compatibility=config.dv_bl_signal_compatibility_id;
         log::info("source-dovi",std::format("profile={} level={} compatibility={} bl={} el={} rpuDeclared={} route={} nativeOutput=0 rpuApplied=0",dv.profile,dv.level,dv.compatibility,dv.baseLayer,dv.enhancementLayer,dv.rpuDeclared,int(dv.route())));
@@ -882,39 +888,61 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
             log::info("source-dovi",std::format("base layer pinned to {} for profile {} (8.1 is a PQ base, 8.4 is an HLG base)",
                 dv.route()==DolbyBaseLayer::Hlg?"HLG":"PQ", int(dv.profile)));
         }
-        // Custom (P5): bring-up switch for the enhancement layer. Off unless the
-        // environment asks for it, so BL playback stays byte identical until the
-        // compositing path is complete.
-        elLayerEnabled_ = dv.profile == 7 && dv.enhancementLayer && desc.decodeDolbyEnhancementLayer;
-        if (elLayerEnabled_) {
-            // The pairing path keeps up to three base frames in baseWaiting_ plus
-            // the one handed to the caller, on top of whatever the decode loop
-            // already retains. d3d11va allocates a FIXED surface array sized for
-            // the codec alone, so the pool runs dry a dozen frames into playback
-            // and avcodec_send_packet fails with ENOMEM (-12). Reserve headroom
-            // before the first frame creates the hardware frames context.
-            decoder_.setExtraHardwareFrames(10);
-            // The EL frame inherits the base packet's timestamp, so pairing only
-            // has to absorb a rounding difference, not a whole frame interval.
-            elMatchTolerance_ = 2;
-            elMelStrikes_ = 0;
-            elMelDrop_ = false;
-            p7CurveReported_ = false;
-            p7CurveReady_ = false;
-            doviExtReported_ = false;
-            p7CurveSupportedFrames_ = 0;
-            p7CurveRefusedFrames_ = 0;
-            // Prefer FFmpeg's splitter: it also supplies the EL's own parameter
-            // sets, which the walk below can only sniff from the first access unit
-            // that happens to carry them (and cannot recover after a seek).
-            if (openEnhancementSplitter(params) &&
-                !openEnhancementDecoder(elSplitter_->par_out,
-                    demuxer_.videoTimeBaseNum(), demuxer_.videoTimeBaseDen())) {
-                closeEnhancementSplitter();
-                elLayerEnabled_ = false;
-            }
-            if (elLayerEnabled_) log::info("source-dovi-el", "enhancement layer decode requested");
+    } else if(params->codec_id==AV_CODEC_ID_HEVC){
+        // Fallback: a second HEVC video stream is the enhancement layer, which
+        // only profile 7 carries. The RPU (SEI) drives the per-frame curve; the
+        // base layer is a normal HDR10 encoding.
+        int elIndex=-1;
+        const AVCodecParameters* elParams=nullptr;
+        for(int index=0;index<demuxer_.streamCount();++index){
+            if(index==demuxer_.videoStreamIndex())continue;
+            const auto* params=demuxer_.streamParameters(index);
+            if(params==nullptr||params->codec_type!=AVMEDIA_TYPE_VIDEO)continue;
+            if(params->codec_id!=AV_CODEC_ID_HEVC)continue;
+            elIndex=index;elParams=params;break;
         }
+        if(elIndex>=0){
+            dv.present=true;dv.profile=7;dv.level=0;
+            dv.baseLayer=true;dv.enhancementLayer=true;dv.rpuDeclared=false;
+            dv.compatibility=6;   // profile 7's base layer is an HDR10 encoding
+            log::info("source-dovi",std::format("no DOVI config in the base-layer SPS; EL stream {} ({}x{}) implies profile 7 route={}",
+                elIndex,elParams?elParams->width:0,elParams?elParams->height:0,int(dv.route())));
+        }
+    }
+    // Enhancement-layer playback applies to any profile-7 stream, whichever path
+    // above identified it.
+    // Custom (P5): bring-up switch for the enhancement layer. Off unless the
+    // environment asks for it, so BL playback stays byte identical until the
+    // compositing path is complete.
+    elLayerEnabled_ = dv.profile == 7 && dv.enhancementLayer && desc.decodeDolbyEnhancementLayer;
+    if (elLayerEnabled_) {
+        // The pairing path keeps up to three base frames in baseWaiting_ plus
+        // the one handed to the caller, on top of whatever the decode loop
+        // already retains. d3d11va allocates a FIXED surface array sized for
+        // the codec alone, so the pool runs dry a dozen frames into playback
+        // and avcodec_send_packet fails with ENOMEM (-12). Reserve headroom
+        // before the first frame creates the hardware frames context.
+        decoder_.setExtraHardwareFrames(10);
+        // The EL frame inherits the base packet's timestamp, so pairing only
+        // has to absorb a rounding difference, not a whole frame interval.
+        elMatchTolerance_ = 2;
+        elMelStrikes_ = 0;
+        elMelDrop_ = false;
+        p7CurveReported_ = false;
+        p7CurveReady_ = false;
+        doviExtReported_ = false;
+        p7CurveSupportedFrames_ = 0;
+        p7CurveRefusedFrames_ = 0;
+        // Prefer FFmpeg's splitter: it also supplies the EL's own parameter
+        // sets, which the walk below can only sniff from the first access unit
+        // that happens to carry them (and cannot recover after a seek).
+        if (openEnhancementSplitter(params) &&
+            !openEnhancementDecoder(elSplitter_->par_out,
+                demuxer_.videoTimeBaseNum(), demuxer_.videoTimeBaseDen())) {
+            closeEnhancementSplitter();
+            elLayerEnabled_ = false;
+        }
+        if (elLayerEnabled_) log::info("source-dovi-el", "enhancement layer decode requested");
     }
     // Profile-5 conversion state belongs to the stream position, never to the
     // previous open: a stale value would let a fresh play start from parameters

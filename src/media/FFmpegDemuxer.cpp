@@ -287,6 +287,20 @@ int FFmpegDemuxer::rotationDegrees() const
     return rotationFrom(stream->codecpar, rotate != nullptr ? rotate->value : nullptr);
 }
 
+int FFmpegDemuxer::streamCount() const {
+    if (session_) return int(session_->streams().size());
+    return context_ ? int(context_->nb_streams) : 0;
+}
+
+const AVCodecParameters* FFmpegDemuxer::streamParameters(int index) const {
+    if (session_) {
+        const auto* info = session_->stream(index);
+        return info ? info->parameters.get() : nullptr;
+    }
+    if (!context_ || index < 0 || index >= int(context_->nb_streams)) return nullptr;
+    return context_->streams[index]->codecpar;
+}
+
 const AVCodecParameters* FFmpegDemuxer::videoCodecParameters() const
 {
     if (session_) {

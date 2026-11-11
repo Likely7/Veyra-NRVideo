@@ -50,6 +50,11 @@ public:
     int nominalRateNum() const;
     int nominalRateDen() const;
     const AVCodecParameters* videoCodecParameters() const;
+    // All streams, for probing. Dolby Vision profile-7 detection needs to know
+    // whether a second HEVC video stream (the enhancement layer) exists, which
+    // only shows up at container level.
+    int streamCount() const;
+    const AVCodecParameters* streamParameters(int index) const;
     int videoTimeBaseNum() const; // stream time_base for frame PTS conversion
     int videoTimeBaseDen() const;
     std::string formatName() const;
