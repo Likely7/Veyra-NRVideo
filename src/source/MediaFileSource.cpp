@@ -12,6 +12,7 @@
 #include <cmath>
 #include <chrono>
 #include <cstring>
+#include <cstdio>
 #include <format>
 #include <fstream>
 #include <string_view>
@@ -490,11 +491,25 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
                         std::format("EL walk size={} pos={} type={} end={}", n, pos, nalType, end)); }
                 }
                 if (nalType == 62) {
+                    // File trace, independent of the log pipeline: proves whether
+                    // this branch runs at all.
+                    if (FILE* trace = fopen("D:/DSH/.dsh-tmp/el62.log", "a")) {
+                        fprintf(trace, "hit pos=%zu hdr=%zu end=%zu size=%zu\n", pos, hdr, end, n);
+                        fclose(trace);
+                    }
                     if (elDoviMeta_ == nullptr) {
                         elDoviMeta_ = static_cast<AVDOVIMetadata*>(av_mallocz(sizeof(AVDOVIMetadata)));
                     }
-                    const bool ok = elDoviMeta_ != nullptr &&
-                        source::decodeRpuWithLibDovi(p + hdr, end - hdr, elDoviMeta_);
+                    // Skip the 2-byte NAL header: libdovi wants the RBSP payload,
+                    // which starts with the 0x19 unspec62 prefix.
+                    const size_t payloadOff = hdr + 2;
+                    const bool ok = elDoviMeta_ != nullptr && payloadOff < end &&
+                        source::decodeRpuWithLibDovi(p + payloadOff, end - payloadOff, elDoviMeta_);
+                    if (FILE* trace = fopen("D:/DSH/.dsh-tmp/el62.log", "a")) {
+                        fprintf(trace, "decode ok=%d payload=%zu first=%02x\n", ok ? 1 : 0, end - payloadOff,
+                            payloadOff < end ? p[payloadOff] : 0);
+                        fclose(trace);
+                    }
                     if (ok) elDoviMetaValid_ = true;
                     sawRpu = true;
                     ++rpuReported;
