@@ -69,6 +69,10 @@ public:
     const std::vector<SessionStreamInfo>& streams() const { return streams_; }
     const SessionStreamInfo* stream(int index) const { return index >= 0 && size_t(index) < streams_.size() ? &streams_[size_t(index)] : nullptr; }
     int videoStream() const { return videoIndex_; }
+    // Container start time in microseconds (0 when unset). Packet PTS values are
+    // absolute in the container timeline; subtracting this yields media-relative
+    // time, which is what duration and seeking use.
+    int64_t startTimeUs() const { return startTimeUs_; }
     int audioStream() const { return audioIndex_.load(); }
     bool live() const { return live_; }
     bool seekable() const { return !live_; }
@@ -179,6 +183,7 @@ private:
     std::unique_ptr<Interrupt> irq_;
     std::unique_ptr<FileAvio> file_;
     AVFormatContext* context_ = nullptr;   // demux thread only
+    int64_t startTimeUs_ = 0;
     bool network_ = false;                 // http/https/rtsp (otherwise a file)
 
     Queue video_, audio_;

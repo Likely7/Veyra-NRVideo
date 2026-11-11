@@ -55,6 +55,9 @@ public:
     // only shows up at container level.
     int streamCount() const;
     const AVCodecParameters* streamParameters(int index) const;
+    // Container start time in microseconds (0 when unset); packet PTS values are
+    // absolute, so seeking adds this and frame timestamps subtract it.
+    int64_t startTimeUs() const;
     int videoTimeBaseNum() const; // stream time_base for frame PTS conversion
     int videoTimeBaseDen() const;
     std::string formatName() const;

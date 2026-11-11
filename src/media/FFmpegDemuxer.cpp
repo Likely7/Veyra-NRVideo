@@ -287,6 +287,12 @@ int FFmpegDemuxer::rotationDegrees() const
     return rotationFrom(stream->codecpar, rotate != nullptr ? rotate->value : nullptr);
 }
 
+int64_t FFmpegDemuxer::startTimeUs() const {
+    if (session_) return session_->startTimeUs();
+    if (!context_ || context_->start_time == AV_NOPTS_VALUE) return 0;
+    return av_rescale_q(context_->start_time, AV_TIME_BASE_Q, AVRational{1, 1000000});
+}
+
 int FFmpegDemuxer::streamCount() const {
     if (session_) return int(session_->streams().size());
     return context_ ? int(context_->nb_streams) : 0;
@@ -474,7 +480,7 @@ bool FFmpegDemuxer::seekToUs(int64_t targetUs)
     if (context_ == nullptr) {
         return false;
     }
-    const int64_t target = av_rescale_q(targetUs, { 1, 1000000 },
+    const int64_t target = av_rescale_q(targetUs + startTimeUs(), { 1, 1000000 },
         context_->streams[videoStreamIndex_]->time_base);
     interrupt_.arm();
     const int result = av_seek_frame(context_, videoStreamIndex_, target, AVSEEK_FLAG_BACKWARD);

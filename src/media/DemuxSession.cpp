@@ -408,6 +408,8 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
         if (error) *error = irq_->cancelled() ? L"已取消" : probeTimedOut ? L"读取媒体信息超时（30 秒），服务器太慢或不是视频流" : L"无法读取媒体信息，地址可能不是视频";
         return false;
     }
+    startTimeUs_ = context->start_time != AV_NOPTS_VALUE
+        ? av_rescale_q(context->start_time, AV_TIME_BASE_Q, AVRational{1, 1000000}) : 0;
     context_ = context;
     ++connections_;
     return true;
@@ -1283,7 +1285,7 @@ void DemuxSession::doSeek() {
             }
         }
         const auto& v = streams_[size_t(videoIndex_)];
-        const int64_t ts = av_rescale_q(target, AV_TIME_BASE_Q, AVRational{v.timeBaseNum, v.timeBaseDen});
+        const int64_t ts = av_rescale_q(target + startTimeUs_, AV_TIME_BASE_Q, AVRational{v.timeBaseNum, v.timeBaseDen});
         irq_->arm(kConnectTimeoutMs + kReadTimeoutVodMs);
         const int result = av_seek_frame(context_, videoIndex_, ts, AVSEEK_FLAG_BACKWARD);
         irq_->disarm();

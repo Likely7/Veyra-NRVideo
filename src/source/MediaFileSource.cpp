@@ -191,6 +191,8 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
     }
     info_.videoDecodePath = "software";
     info_.containerName = demuxer_.formatName();
+    startTimeUs_ = demuxer_.startTimeUs();
+    veyra::log::info("source-file", std::format("container start_us={} (PTS are absolute; frame timestamps subtract this)", startTimeUs_));
     info_.videoPixelFormatName = params->format >= 0 && av_get_pix_fmt_name(static_cast<AVPixelFormat>(params->format))
         ? av_get_pix_fmt_name(static_cast<AVPixelFormat>(params->format)) : "unknown";
     draining_ = false;
@@ -851,6 +853,8 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     info_.videoCodecName = avcodec_get_name(params->codec_id);
     info_.videoPixelFormatName = params->format >= 0 && av_get_pix_fmt_name(static_cast<AVPixelFormat>(params->format))
         ? av_get_pix_fmt_name(static_cast<AVPixelFormat>(params->format)) : "unknown";
+    startTimeUs_ = demuxer_.startTimeUs();
+    veyra::log::info("source-file", std::format("container start_us={} (PTS are absolute; frame timestamps subtract this)", startTimeUs_));
     info_.color = parseColor(params);
     // Dolby Vision identification has two entry points: FFmpeg's DOVI
     // configuration record (from the base-layer SPS) and - when that record is
@@ -1177,7 +1181,12 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         : frame->best_effort_timestamp != AV_NOPTS_VALUE ? frame->best_effort_timestamp
         : frame->pkt_dts;
     if (stamp != AV_NOPTS_VALUE && tbDen > 0) {
-        out.pts = pipeline::Rational{stamp * static_cast<int64_t>(tbNum), tbDen};
+        // PTS is absolute in the container timeline (m2ts starts at e.g. 4200 s), while
+        // duration and seeking are relative: subtract the container start time so the
+        // position readout and the scrubber agree with the media's own 0..duration.
+        const int64_t startStamp = startTimeUs_ > 0
+            ? av_rescale_q(startTimeUs_, AVRational{1, 1000000}, AVRational{tbNum, tbDen}) : 0;
+        out.pts = pipeline::Rational{(stamp - startStamp) * static_cast<int64_t>(tbNum), tbDen};
         if (frame->pts == AV_NOPTS_VALUE && (ptsFallbacks_++ % 300) == 0)
             veyra::log::info("source-file", std::format("frame pts missing; using {} (count={})", frame->best_effort_timestamp != AV_NOPTS_VALUE ? "best_effort_timestamp" : "pkt_dts", ptsFallbacks_));
     } else {

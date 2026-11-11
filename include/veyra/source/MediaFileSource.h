@@ -155,6 +155,9 @@ private:
     bool eofSignalled_ = false;
     std::wstring errorMessage_;
     int64_t lastPtsUs_ = INT64_MIN;
+    // Container start time in microseconds: PTS values are absolute, so subtracting
+    // it makes frame timestamps media-relative (0..duration) like every other source.
+    int64_t startTimeUs_ = 0;
     std::wstring path_;
     bool preferHardwareDecode_ = false;
     bool requireHardwareDecode_ = false; // "强制硬解": never fall back to software

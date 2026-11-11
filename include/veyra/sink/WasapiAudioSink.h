@@ -239,6 +239,9 @@ private:
     media::InputInterrupt inputInterrupt_;
     AVCodecContext* codecCtx_ = nullptr;
     AVRational streamTimeBase_{1, 1000};
+    // Container start time in microseconds: audio PTS is absolute, while the
+    // engine speaks media-relative time (0..duration).
+    int64_t startTimeUs_ = 0;
     AVPacket* packet_ = nullptr;
     int swrInputRate_=0,swrInputFormat_=-1;
     SwrContext* swr_ = nullptr;

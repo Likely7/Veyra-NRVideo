@@ -163,6 +163,9 @@ bool AudioPipeline::selectTrack(int si)
         avcodec_free_context(&candidate);return false;
     }
     avcodec_free_context(&codecCtx_);codecCtx_=candidate;streamIndex_=si;streamTimeBase_=timeBase;pcmFormat_=format;
+    startTimeUs_ = session_ ? session_->startTimeUs()
+        : (fmt_ && fmt_->start_time != AV_NOPTS_VALUE
+            ? av_rescale_q(fmt_->start_time, AV_TIME_BASE_Q, AVRational{1, 1000000}) : 0);
     sessionDiscontinuity_=false;
     if(swr_)swr_free(&swr_);
     resetTempo();
@@ -253,8 +256,10 @@ int AudioPipeline::readPacket(AVPacket* packet)
     inputInterrupt_.disarm();
     const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
     for(double seen=maxReadMs_.load();ms>seen&&!maxReadMs_.compare_exchange_weak(seen,ms);){}
-    if(result>=0&&packet->pts!=AV_NOPTS_VALUE)
-        lastGoodReadMs_.store(packet->pts*av_q2d(streamTimeBase_)*1000.0);
+    if(result>=0&&packet->pts!=AV_NOPTS_VALUE){
+        const int64_t startTicks = av_rescale_q(startTimeUs_, AVRational{1, 1000000}, streamTimeBase_);
+        lastGoodReadMs_.store((packet->pts - startTicks)*av_q2d(streamTimeBase_)*1000.0);
+    }
     // 返回 av_read_frame 的原始结果，而不是把它压成 bool：调用方必须能区分「流真的
     // 结束了」和「这一次没读到」。网络源的瞬时失败（超时、连接抖动）如果被当成 EOF，
     // 音频线程就会认为整条音轨播完了 —— 表现是画面继续、声音永久消失。
@@ -480,7 +485,8 @@ void AudioPipeline::pushDecoded(const AVFrame* frame)
     const auto timestamp = frame->best_effort_timestamp != AV_NOPTS_VALUE
         ? frame->best_effort_timestamp : frame->pts;
     if (timestamp != AV_NOPTS_VALUE) {
-        const double ptsMs = timestamp * av_q2d(streamTimeBase_) * 1000.0;
+        const int64_t startTicks = av_rescale_q(startTimeUs_, AVRational{1, 1000000}, streamTimeBase_);
+        const double ptsMs = (timestamp - startTicks) * av_q2d(streamTimeBase_) * 1000.0;
         nextPtsMs_ = ptsMs - 1000.0 * swr_get_delay(swr_, frame->sample_rate) / frame->sample_rate;
     }
     const auto capacity = swr_get_out_samples(swr_, frame->nb_samples);
@@ -1298,7 +1304,7 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
             const int video=av_find_best_stream(fmt_,AVMEDIA_TYPE_VIDEO,-1,-1,nullptr,0);
             const int seekStream=video>=0?video:streamIndex_;
             const auto tb=fmt_->streams[seekStream]->time_base;
-            const int64_t tbTarget=av_rescale_q(int64_t(target*1000),{1,1000000},tb);
+            const int64_t tbTarget=av_rescale_q(int64_t(target*1000)+startTimeUs_,{1,1000000},tb);
             int result=av_seek_frame(fmt_,seekStream,tbTarget,AVSEEK_FLAG_BACKWARD);
             // B 站这类 DASH 源的音轨是单独的 m4a，容器里没有视频流，而它的 duration
             // 元数据只覆盖 sidx 声明的范围（实测标称十几秒，视频本体 97 秒）。往后拖时
