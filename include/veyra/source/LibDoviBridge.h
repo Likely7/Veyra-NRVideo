@@ -121,8 +121,6 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
                 (n->linear_deadzone_threshold_int[c] << coefLog2Denom) + n->linear_deadzone_threshold[c];
         }
     }
-    auto* nlq = dovi_rpu_get_vdr_dm_data(rpu);     // not needed; free below
-    if (nlq != nullptr) dovi_rpu_free_vdr_dm_data(nlq);
 
     for (int c = 0; c < 3; ++c) {
         const DoviReshapingCurve& src = mapping->curves[c];

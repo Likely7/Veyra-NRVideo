@@ -526,6 +526,10 @@ bool FFmpegDemuxer::seekToUs(int64_t targetUs)
     // layer (stream 1) seeking only the base stream left the layer reading from
     // its old position, and the PTS pairing then failed for every frame after
     // the seek. -1 means "all streams" and takes an AV_TIME_BASE timestamp.
+    // Packets queued before the seek carry the old timeline; keeping them would
+    // make the first frames after a seek pair against stale layer pictures.
+    for (auto*& stale : elPending_) av_packet_free(&stale);
+    elPending_.clear();
     const int64_t target = av_rescale_q(targetUs + startTimeUs(), { 1, 1000000 },
         AVRational{1, AV_TIME_BASE});
     interrupt_.arm();
