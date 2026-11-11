@@ -506,54 +506,10 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
         }
         return true;
     }
-    bool gotFrame = false;
-    for (;;) {
-        const AVFrame* decoded = elDecoder_.receiveFrame();
-        if (decoded == nullptr) break;
-        // Custom (P5): queue by timestamp; the base frame that owns this layer may
-        // still be in flight (the EL decoder runs a frame behind).
-        AVFrame* copy = av_frame_clone(decoded);
-        if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
-            static unsigned storeDbg = 0;
-            if (++storeDbg <= 8) {
-                const int64_t rawBet = decoded->best_effort_timestamp;
-                const int64_t rawPts = decoded->pts;
-                const int64_t chosen = rawBet != AV_NOPTS_VALUE ? rawBet : rawPts;
-                log::info("source-dovi-el", std::format(
-                    "store candidate clone={} bet={} pts={} chosen={} cache={}",
-                    copy ? 1 : 0, rawBet, rawPts, chosen, elByPts_.size()));
-            }
-        }
-        if (copy != nullptr) {
-            elLastWidth_ = uint32_t(copy->width);
-            elLastHeight_ = uint32_t(copy->height);
-            const int64_t elPts = copy->best_effort_timestamp != AV_NOPTS_VALUE
-                ? copy->best_effort_timestamp : copy->pts;
-            if (elPts != AV_NOPTS_VALUE) {
-                auto it = elByPts_.find(elPts);
-                if (it != elByPts_.end()) av_frame_free(&it->second);
-                elByPts_[elPts] = copy;
-                while (elByPts_.size() > 8) {
-                    av_frame_free(&elByPts_.begin()->second);
-                    elByPts_.erase(elByPts_.begin());
-                }
-            } else {
-                av_frame_free(&copy);
-            }
-            ++elLayerFrames_;
-            gotFrame = true;
-            if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
-                const int64_t fp = decoded->best_effort_timestamp != AV_NOPTS_VALUE
-                    ? decoded->best_effort_timestamp : decoded->pts;
-                if (packet->pts != AV_NOPTS_VALUE && fp != packet->pts) {
-                    static unsigned mismatches = 0;
-                    if (++mismatches <= 5)
-                        log::warn("source-dovi-el", std::format(
-                            "EL frame pts {} != packet pts {}", fp, packet->pts));
-                }
-            }
-        }
-    }
+    // Frames are drained in one place only (drainElFrames): a second receiveFrame
+    // loop here competed for the decoder's single output slot, which left the
+    // pairing map empty on most frames.
+    drainElFrames();
     // Custom (P5): once, report what the enhancement layer actually contains. A
     // frame of pure 512 would mean "zero residual" and the composite would have to
     // be identical to the base layer, so this distinguishes "no EL on this frame"
@@ -596,7 +552,9 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
             elFrame_ ? elFrame_->width : 0, elFrame_ ? elFrame_->height : 0,
             elPackets ? elTotalMs / double(elPackets) : 0.0, elPackets,
             deliveredHeld_ != nullptr ? 1 : 0, baseWaiting_.size()));
-    return gotFrame;
+    // The packet carried layer data; whether its frame has decoded yet is what
+    // drainElFrames reports through the pairing table.
+    return true;
 }
 
 void MediaFileSource::closeEnhancementLayer() {
@@ -1044,9 +1002,12 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         // and avcodec_send_packet fails with ENOMEM (-12). Reserve headroom
         // before the first frame creates the hardware frames context.
         decoder_.setExtraHardwareFrames(10);
-        // The EL frame inherits the base packet's timestamp, so pairing only
-        // has to absorb a rounding difference, not a whole frame interval.
-        elMatchTolerance_ = 2;
+        // The EL frame inherits the base packet's timestamp, but the layer's own
+        // time base differs from the base stream's by a few milliseconds after
+        // rescaling (measured ~3753 us on the AVS test material). Half a frame is
+        // still smaller than the frame interval, so a tolerance that wide cannot
+        // pair a neighbouring picture.
+        elMatchTolerance_ = 20000;
         elMelStrikes_ = 0;
         elMelDrop_ = false;
         p7CurveReported_ = false;
