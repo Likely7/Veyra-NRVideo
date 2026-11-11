@@ -10,10 +10,10 @@ inline constexpr int kDoviP7FloatCount = 28;
 // MMR weighting: per component, up to three orders, two float4s each (seven
 // coefficients per order, the trailing lane unused). Same packing libplacebo's
 // reshape shader consumes, so the GLSL and HLSL can be read side by side.
-// Three segments of seven vec4s each (six for MMR coefficients, one for the
+// Eight segments of seven vec4s each (six for MMR coefficients, one for the
 // segment kind/order), followed by three vec4s holding the pivots.
-inline constexpr int kDoviP7CurveVec4 = 24;
-inline constexpr int kDoviP7CurveSegments = 3;
+inline constexpr int kDoviP7CurveVec4 = 59;
+inline constexpr int kDoviP7CurveSegments = 8;
 inline constexpr int kDoviP7Components = 3;
 
 // Component modes, stored in params[21..23].

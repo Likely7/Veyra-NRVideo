@@ -237,7 +237,7 @@ int P7Residual(int e, float4 nlq, int elBitDepth, int coefLog2Denom)
 // curves keep segment 0, so their layout is unchanged.
 float MmrEvaluate(int component, int segment, float3 sig, float constant, int order)
 {
-    const int base = component * 24 + segment * 7;
+    const int base = component * 59 + segment * 7;
     float4 sigX;
     sigX.xyz = sig.xxy * sig.yzz;   // (r*g, r*b, g*b)
     sigX.w = sigX.x * sig.z;        // r*g*b
@@ -261,7 +261,7 @@ float MmrEvaluate(int component, int segment, float3 sig, float constant, int or
 // normalised signal is scaled in and out.
 float PolyEvaluate(int component, int segment, float s)
 {
-    const int base = component * 24 + segment * 7;
+    const int base = component * 59 + segment * 7;
     const float code = s * 1023.0;
     const float3 coef = elCurvePlane.Load(int3(base + 0, 0, 0)).xyz;
     return saturate((coef.x + coef.y * code + coef.z * code * code) / 1023.0);
@@ -271,10 +271,10 @@ float PolyEvaluate(int component, int segment, float s)
 // in rows [18..20] of the component's block, normalised to 0..1.
 int PickSegment(int component, float s)
 {
-    const int base = component * 24;
-    const float4 p0 = elCurvePlane.Load(int3(base + 21, 0, 0));
-    const float4 p1 = elCurvePlane.Load(int3(base + 22, 0, 0));
-    const float4 p2 = elCurvePlane.Load(int3(base + 23, 0, 0));
+    const int base = component * 59;
+    const float4 p0 = elCurvePlane.Load(int3(base + 56, 0, 0));
+    const float4 p1 = elCurvePlane.Load(int3(base + 57, 0, 0));
+    const float4 p2 = elCurvePlane.Load(int3(base + 58, 0, 0));
     const float pivots[9] = { p0.x, p0.y, p0.z, p0.w, p1.x, p1.y, p1.z, p1.w, p2.x };
     const int pieces = int(p2.w + 0.5);
     int seg = 0;
@@ -288,11 +288,11 @@ int PickSegment(int component, float s)
 // Segment kind and order for one component/piece.
 float SegmentKind(int component, int segment)
 {
-    return elCurvePlane.Load(int3(component * 24 + segment * 7 + 6, 0, 0)).x;
+    return elCurvePlane.Load(int3(component * 59 + segment * 7 + 6, 0, 0)).x;
 }
 int SegmentOrder(int component, int segment)
 {
-    return int(elCurvePlane.Load(int3(component * 24 + segment * 7 + 6, 0, 0)).y + 0.5);
+    return int(elCurvePlane.Load(int3(component * 59 + segment * 7 + 6, 0, 0)).y + 0.5);
 }
 
 // dv4 = (elWidth, elHeight, mmrConstant[0], mmrConstant[1])

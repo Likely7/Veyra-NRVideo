@@ -141,8 +141,8 @@ inline bool doviP7PackCurve(const AVDOVIReshapingCurve& curve, int coefLog2Denom
     // 0..1 signal without knowing the base-layer bit depth.
     constexpr float kPivotScale = 1.0f / 1023.0f;
     for (int i = 0; i < curve.num_pivots && i < 9; ++i)
-        out.curve[component][21 + i / 4][i % 4] = float(curve.pivots[i]) * kPivotScale;
-    out.curve[component][23][3] = float(pieces);
+        out.curve[component][kDoviP7CurveSegments * 7 + i / 4][i % 4] = float(curve.pivots[i]) * kPivotScale;
+    out.curve[component][kDoviP7CurveVec4 - 1][3] = float(pieces);
     // A single-piece polynomial is NOT the identity: it has to go through the
     // segmented path so the shader evaluates PolyEvaluate instead of skipping the
     // component. (Writing Identity here meant non-identity luma curves packed

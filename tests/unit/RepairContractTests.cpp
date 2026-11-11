@@ -429,9 +429,9 @@ int main(){
                           "DV P7 constants pack a two-piece luma curve");
                     check(multi.params[21] == float(pipeline::DoviP7CurveMulti),
                           "DV P7 segmented luma reports the multi-segment mode");
-                    check(multi.curve[0][23][3] == 2.0f,
+                    check(multi.curve[0][58][3] == 2.0f,
                           "DV P7 segmented luma records its pivot count");
-                    check(multi.curve[0][21][0] == 0.0f && multi.curve[0][21][1] == 512.0f / 1023.0f,
+                    check(multi.curve[0][56][0] == 0.0f && multi.curve[0][56][1] == 512.0f / 1023.0f,
                           "DV P7 segmented luma normalises the pivots");
                     check(multi.curve[0][6][0] == 0.0f && multi.curve[0][13][0] == 1.0f,
                           "DV P7 segmented luma marks polynomial then MMR per segment");
