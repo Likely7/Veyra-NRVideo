@@ -438,16 +438,44 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
         }
 #if VEYRA_HAVE_LIBDOVI
         {
+            const uint8_t* p = elPacket->data;
+            const size_t n = size_t(elPacket->size);
             static unsigned scanEntry = 0;
             if (scanEntry < 1) { ++scanEntry; log::info("source-dovi-el", "EL scan entry (libdovi enabled)"); }
+            {
+                // Compact one-line inventory for the first few packets, plus the
+                // first large one (the pictures live there).
+                static unsigned inventory = 0;
+                static bool bigSeen = false;
+                const bool wanted = inventory < 2 || (!bigSeen && n > 10000);
+                if (wanted) {
+                    std::string types;
+                    size_t q = 0;
+                    int guard = 0;
+                    while (q + 4 < n && guard < 64) {
+                        if (!(p[q] == 0 && p[q + 1] == 0 && p[q + 2] == 1)) { ++q; continue; }
+                        const size_t h = q + 3;
+                        if (h >= n) break;
+                        types += std::to_string((p[h] >> 1) & 0x3F);
+                        types += ' ';
+                        ++guard;
+                        size_t e = n;
+                        for (size_t j = h + 1; j + 3 < n; ++j) {
+                            if (p[j] == 0 && p[j + 1] == 0 && p[j + 2] == 1) { e = j; break; }
+                        }
+                        q = e;
+                    }
+                    if (inventory < 2) ++inventory;
+                    if (n > 10000) bigSeen = true;
+                    log::info("source-dovi-el", std::format("EL packet size={} nals=[{}]", n, types));
+                }
+            }
             // The stream's packets are Annex B (00 00 01 / 00 00 00 01): walk the
             // NAL units and hand the type-62 one to libdovi.
             static unsigned rpuReported = 0;
-            const uint8_t* p = elPacket->data;
-            const size_t n = size_t(elPacket->size);
             size_t pos = 0;
             bool sawRpu = false;
-            while (pos + 4 < n) {
+            while (pos + 3 < n) {
                 if (!(p[pos] == 0 && p[pos + 1] == 0 && p[pos + 2] == 1)) { ++pos; continue; }
                 const size_t hdr = pos + 3;
                 if (hdr >= n) break;
@@ -456,10 +484,10 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
                     if (p[j] == 0 && p[j + 1] == 0 && p[j + 2] == 1) { end = j; break; }
                 }
                 const int nalType = (p[hdr] >> 1) & 0x3F;
-                {
+                if (n > 10000) {
                     static unsigned walkDbg = 0;
-                    if (walkDbg < 5) { ++walkDbg; log::info("source-dovi-el",
-                        std::format("EL walk pos={} type={} end={}", pos, nalType, end)); }
+                    if (walkDbg < 12) { ++walkDbg; log::info("source-dovi-el",
+                        std::format("EL walk size={} pos={} type={} end={}", n, pos, nalType, end)); }
                 }
                 if (nalType == 62) {
                     if (elDoviMeta_ == nullptr) {
@@ -469,11 +497,10 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
                         source::decodeRpuWithLibDovi(p + hdr, end - hdr, elDoviMeta_);
                     if (ok) elDoviMetaValid_ = true;
                     sawRpu = true;
-                    if (rpuReported < 3) {
-                        ++rpuReported;
-                        log::info("source-dovi-el", std::format(
-                            "libdovi: RPU from EL stream NAL ({} bytes) parse={}", end - hdr, ok ? 1 : 0));
-                    }
+                    ++rpuReported;
+                    log::info("source-dovi-el", std::format(
+                        "libdovi: RPU from EL stream NAL ({} bytes) parse={} total={}",
+                        end - hdr, ok ? 1 : 0, rpuReported));
                     break;
                 }
                 pos = end;
