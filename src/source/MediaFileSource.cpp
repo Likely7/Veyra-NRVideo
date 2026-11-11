@@ -994,6 +994,7 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         }
         if(elIndex>=0){
             elStreamIndex_=elIndex;
+            demuxer_.setElStreamIndex(elIndex);
             dv.present=true;dv.profile=7;dv.level=0;
             dv.baseLayer=true;dv.enhancementLayer=true;dv.rpuDeclared=false;
             dv.compatibility=6;   // profile 7's base layer is an HDR10 encoding

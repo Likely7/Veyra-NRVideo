@@ -186,6 +186,9 @@ bool FFmpegDemuxer::open(const std::wstring& path,const std::atomic<bool>* cance
 
 void FFmpegDemuxer::close()
 {
+    for (auto*& packet : elPending_) av_packet_free(&packet);
+    elPending_.clear();
+    elStreamIndex_ = -1;
     if (packet_ != nullptr) {
         av_packet_free(&packet_);
     }
@@ -413,6 +416,12 @@ bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
             return false;
         }
         if (packet_->stream_index != videoStreamIndex_) {
+            if (elStreamIndex_ >= 0 && packet_->stream_index == elStreamIndex_) {
+                elPending_.push_back(av_packet_clone(packet_));
+                static unsigned elQ = 0;
+                if (++elQ <= 3) log::info("source-dovi-el", std::format(
+                    "EL packet queued size={} pending={}", packet_->size, elPending_.size()));
+            }
             av_packet_unref(packet_);
             continue;
         }
@@ -448,7 +457,13 @@ bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
 bool FFmpegDemuxer::takeElPacket(AVPacket** out) {
     if (out == nullptr) return false;
     *out = nullptr;
-    if (!session_) return false;   // only the shared session carries a second video stream
+    if (!session_) {
+        // Direct mode (local files): the reader queues the layer's packets.
+        if (elPending_.empty()) return false;
+        *out = elPending_.front();
+        elPending_.pop_front();
+        return true;
+    }
     AVPacket* packet = av_packet_alloc();
     if (packet == nullptr) return false;
     DemuxSession::Meta meta;
@@ -458,7 +473,7 @@ bool FFmpegDemuxer::takeElPacket(AVPacket** out) {
     const auto pop = session_->popEl(packet, meta, 10);
     if (pop != DemuxSession::Pop::Packet) {
         static unsigned missDbg = 0;
-        if (++missDbg <= 3) log::info("dovi-el", std::format("takeElPacket miss pop={} elIndex={}", int(pop), session_->elIndex()));
+        if (++missDbg <= 3) log::info("source-dovi-el", std::format("takeElPacket miss pop={} elIndex={}", int(pop), session_->elIndex()));
         av_packet_free(&packet);
         return false;
     }

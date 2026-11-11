@@ -9,6 +9,7 @@
 // audio pipeline (network sources and files on a server, #48).
 
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <string>
 #include "veyra/media/DemuxSession.h"
@@ -75,6 +76,9 @@ public:
     // Enhancement-layer stream packet (second HEVC video stream), when the
     // container carries one. Returns false when this source has none.
     bool takeElPacket(AVPacket** out);
+    // Tell the direct reader which stream is the enhancement layer so its packets
+    // are queued instead of dropped (the shared session detects it on its own).
+    void setElStreamIndex(int index) { elStreamIndex_ = index; }
 
     // Playback read. Direct mode behaves like readVideoPacket. Shared mode waits at
     // most waitMs and, with honourHold, reports Waiting while playback is paused
@@ -97,6 +101,8 @@ private:
     AVFormatContext* context_ = nullptr;
     std::shared_ptr<DemuxSession> session_;
     AVPacket* packet_ = nullptr;
+    int elStreamIndex_ = -1;
+    std::deque<AVPacket*> elPending_;   // direct mode: queued enhancement-layer packets
     int videoStreamIndex_ = -1;
     DemuxerStats stats_{};
     bool havePendingPacket_ = false;
