@@ -1,10 +1,13 @@
 #define NOMINMAX
 #include "veyra/engine/LivePresentationTiming.h"
+#include "veyra/engine/LivePairLatency.h"
 #include "veyra/engine/LivePresentationResetPolicy.h"
 #include "veyra/source/CaptureTiming.h"
 #include "veyra/engine/CaptureHalfRate.h"
+#include "veyra/engine/CapturePreviewClock.h"
 #include "veyra/engine/ContentDedup.h"
 #include "veyra/pipeline/PictureCompare.h"
+#include "veyra/pipeline/FrameBatch.h"
 #include <algorithm>
 #include <array>
 #include <vector>
@@ -87,6 +90,59 @@ int main(){
     check(rate.rate(10000000)==1000,"completion rate has no 60 or 120fps cap");
     using veyra::source::captureDuration;using veyra::engine::liveSourceInterval100ns;
     using veyra::source::captureDiscontinuity;
+    {
+        using veyra::engine::CapturePreviewClock;
+        constexpr int64_t period=166834, hostStart=10000000, wrongPeriod=208333;
+        CapturePreviewClock normal, vrr, broken;
+        CaptureHalfRate rawSampler, fixedSampler;
+        bool original=true, variable=true, stable=true;
+        unsigned transitions=0, rawKept=0, fixedKept=0;
+        int64_t lastFixed=0, vrrPts=0;
+        for(uint64_t i=1;i<=1200;++i){
+            const auto frame=static_cast<int64_t>(i);
+            const auto jitter=(frame%3-1)*2500;
+            const auto correctPts=frame*period;
+            const auto arrival=hostStart+correctPts+jitter;
+            const auto raw=frame*wrongPeriod;
+            const auto unchanged=normal.observe(i,correctPts,arrival,period,false);
+            original&=!unchanged.corrected&&!unchanged.discontinuity&&unchanged.pts==correctPts;
+            vrrPts+=frame%2?208333:166834;
+            const auto variableFrame=vrr.observe(i,vrrPts,hostStart+vrrPts,period,false);
+            variable&=!variableFrame.corrected&&!variableFrame.discontinuity&&variableFrame.pts==vrrPts;
+            const auto fixed=broken.observe(i,raw,arrival,period,false);
+            if(fixed.discontinuity){++transitions;fixedSampler.reset();}
+            if(i>120){
+                stable&=fixed.corrected&&std::llabs(fixed.pts-lastFixed-period)<=period/64;
+                rawKept+=rawSampler.accept(raw,period,false);
+                fixedKept+=fixedSampler.accept(fixed.pts,period,false);
+            }
+            lastFixed=fixed.pts;
+        }
+        check(original,"capture preview clock leaves normal 59.94 PTS intact");
+        check(variable,"capture preview clock preserves genuine varying arrival and PTS intervals");
+        check(stable&&transitions==1&&fixedKept==540&&rawKept>=670,
+              "capture preview clock restores 59.94 and 29.97 sampling with 20.83 ms driver PTS");
+        const auto stalled=broken.observe(1201,1200*wrongPeriod+10000,hostStart+1200*period+5310000,period,false);
+        check(!stalled.corrected&&stalled.discontinuity,"capture preview clock preserves a real 531 ms stall even when PTS hides it");
+
+        CapturePreviewClock recovered;
+        for(uint64_t i=1;i<=64;++i)recovered.observe(i,int64_t(i)*wrongPeriod,hostStart+int64_t(i)*period,period,false);
+        bool restored=false;
+        for(uint64_t i=65;i<=112;++i){
+            const int64_t raw=64*wrongPeriod+int64_t(i-64)*period;
+            const auto f=recovered.observe(i,raw,hostStart+int64_t(i)*period,period,false);
+            restored|=f.discontinuity&&!f.corrected&&f.pts==raw;
+        }
+        check(restored&&!recovered.correcting(),"capture preview clock returns to recovered driver timing");
+
+        CapturePreviewClock skipped;
+        bool corrected=false;
+        for(uint64_t i=1;i<=64;++i){
+            if(i%4==0)continue;
+            corrected=skipped.observe(i,int64_t(i)*wrongPeriod,hostStart+int64_t(i)*period,period,false).corrected;
+        }
+        check(corrected,"capture preview clock accounts for skipped mailbox sequence numbers");
+    }
     veyra::source::CaptureDriverDiscontinuity driverFlag;
     auto flag=[&](bool flagged=true,bool native=true,bool timed=true,double pts=1.0/60,double arrival=1.0/60){
         return driverFlag.observe(flagged,native,timed,true,pts,arrival,60);
@@ -417,6 +473,56 @@ int main(){
         {const auto r=run(60.0,[](int i){return int64_t(std::floor(i*40.0/60.0+1e-9));},n,0,0,250000);
          check(r.keptRepeats==0&&r.droppedReal==0&&std::abs(r.kept-n*2/3)<=1,"dedup 40-in-60: all real pictures kept, no repeats");
          check(r.monotonic&&r.neverLate&&r.regularSpans*100>=r.spans*95,"dedup 40-in-60: alternating 33/17 ms samples become even 25 ms content spans");}
+        {
+            // 40 unique pictures sampled at 60 Hz, with a two-step 3X GPU batch.
+            // The presentation deadline of each batch must follow content PTS,
+            // while readiness still depends on when the sampled picture arrives.
+            struct TimingRun { double lowFps; int missed; };
+            const auto present=[&](bool smooth, int contentRate){
+                using namespace veyra::engine;
+                ContentDedup cadence;
+                LiveArrivalSmoother arrival;
+                LivePairLatency phase;
+                PresentationScheduler scheduler;
+                FramePaceWindow window;
+                constexpr int64_t transport=166667, hostStart=1000000;
+                constexpr std::array<int64_t,3> gpuReady{60000,100000,25000};
+                int64_t prevPts=0, prevPresent=0;
+                int missed=0;
+                for(int i=0;i<n;++i){
+                    const int64_t sample=i*transport;
+                    const uint64_t id=uint64_t(i*contentRate/60);
+                    const auto frame=cadence.observe(&id,sample,transport,i==0);
+                    if(!frame.keep)continue;
+                    const auto callback=hostStart+sample;
+                    const auto anchor=smooth?arrival.contentAnchor(frame.contentPts,sample,callback,transport):callback;
+                    if(!frame.interval){prevPts=frame.contentPts;continue;}
+                    const auto delay=phase.select(callback,frame.interval,frame.interval,3,smooth?transport/2:0);
+                    scheduler.resetPair(1,frame.contentPts,anchor,delay);
+                    int64_t requiredDelay=0;
+                    for(unsigned j=0;j<gpuReady.size();++j){
+                        const auto pts=j==2?frame.contentPts:
+                            veyra::pipeline::FrameBatch::interpolate(prevPts,frame.contentPts,j+1,3);
+                        const auto deadline=scheduler.deadline(pts);
+                        const auto ready=callback+gpuReady[j];
+                        requiredDelay=std::max(requiredDelay,ready-anchor+frame.contentPts-pts);
+                        if(i>120){
+                            missed+=ready>deadline;
+                            prevPresent=std::max({prevPresent+1,deadline,ready});
+                            window.complete(prevPresent);
+                        }
+                    }
+                    phase.observe(callback,requiredDelay);
+                    prevPts=frame.contentPts;
+                }
+                return TimingRun{window.lowFps(prevPresent).value_or(0),missed};
+            };
+            const auto legacy=present(false,40), fixed=present(true,40);
+            check(legacy.lowFps<70&&fixed.lowFps>105&&fixed.missed==0,
+                "dedup 40-in-60 3X: content anchor removes cross-batch stutter and retains readiness");
+            const auto steady=present(true,30);
+            check(steady.lowFps>88&&steady.missed==0,"dedup 30-in-60 3X: steady cadence stays smooth");
+        }
         {const auto r=run(60.0,[](int i){return int64_t(i);},n,0,0,166667);
          check(r.kept==n&&r.regularSpans==r.spans,"dedup true 60: nothing dropped, timing unchanged");}
         {// +-1 per sample: two samples of one picture differ by up to 2, like the T911 (card_diff.py).

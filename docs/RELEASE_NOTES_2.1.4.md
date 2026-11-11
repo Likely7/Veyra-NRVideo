@@ -16,6 +16,8 @@
 
 ## NR 推理复用与监控
 
+**灵感来源**　Veyra 的 NR 推理复用受 Magpie Experimental v0.6.12 的 DLSSNR「隔帧」模式启发，感谢 SAOG0721 的实验版和 yejincheng420 分享的隔帧处理思路。Veyra 基于自身的光流与增强残差管线独立实现。[Magpie Experimental v0.6.12 发布说明](https://github.com/SAOG0721/Magpie/releases/tag/v0.6.12-experimental)
+
 - **NR 自动推理复用**位于专业列表的「NR 画面增强」，默认关闭。手动 1/2、1/3、1/4 分别表示每 2、3、4 帧复用 1 帧。自动档根据增强耗时选择复用频率。复用时用光流把上一推理帧的增强变化对齐到当前帧，并在内容不匹配、出界或保护区域降低权重。
 - 该选项用于符合条件的 NVIDIA NR、SDR 光流预览。暂停单帧和导出会完整推理。输出稳定器和 NR 全局保护区域归到 NR 画面增强下，补全相关图标。阶段耗时按每个源帧统计 NR 平均用时，悬停 P95 仍反映推理帧的耗时。 [NR 复用条件与实现](NR_INFERENCE_REUSE_2026-11-07.md)
 - 帧率卡显示 **提交 FPS 与 1% low**。1% low 由最近 10 秒内的呈现提交间隔估算。调色的负色温响应更平滑，减轻冷端拉满时的过强蓝偏。 [帧率指标与色温修正](FPS_LOW1_AND_COLOR_TEMPERATURE_2026-11-07.md)
@@ -49,6 +51,7 @@
 
 - Optional capture-card audio routing through the bundled, original VB-Audio VB-CABLE installer. Select **CABLE Input** as the Windows **Listen to this device** target, select the virtual speaker in Veyra, and use real speakers or headphones as the output. Veyra applies its existing A/V sync and manual offset to the captured audio.
 - Dual super resolution supports independent DLSS SR, FSR 3.1 and RTX Video SR passes. NVIDIA DLAA is available under anti-aliasing. DLAA, DLSS SR and FSR share HDR wide-gamut restoration.
+- The NR inference reuse feature was inspired by the DLSSNR alternating-frame mode in Magpie Experimental v0.6.12. Thanks to SAOG0721 and yejincheng420 for sharing the approach. Veyra implements it independently using its own optical-flow and residual pipeline. [Magpie Experimental v0.6.12 release notes](https://github.com/SAOG0721/Magpie/releases/tag/v0.6.12-experimental)
 - Real-time NVIDIA NR inference reuse is off by default and offers automatic, 1/2, 1/3 and 1/4 modes. Frame-rate monitoring now shows presentation-submission FPS and 1% low. Cool color-temperature adjustments are smoother.
 - Volume persists across restarts. Recording shortcuts filter key repeats and log the trigger source. Content-based QML cache isolation fixes RTX Video SR selections reverting to DLSS SR after some upgrades. AMD lmxxf NR uses a HIP preflight before initializing in the player process.
 - Extract the matching GPU package and run `veyra_qml_ui.exe`. For settings migration, exit both versions and copy `runtime_local/user-data-2.0.0` and any custom `runtime_local/luts`. For a custom data directory, use the path shown in Settings → About.

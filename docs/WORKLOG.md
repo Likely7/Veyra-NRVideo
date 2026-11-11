@@ -941,3 +941,41 @@ VB-Audio 许可允许在符合捐赠软件条款时附带原安装包，未找�
 执行 `reports/codex-release-2.1.4-20261109/verify.py contracts` 和 `portable`。Qt Quick 175/0/0，WASAPI 合同 19/0、防回灌 2/0，合成 PCM 经真实 WASAPI 的手动偏移 100 ms。两包最小 PATH 冷启动各呈现 90 个真实文件帧。RTX 5070 上 NR 复用、DLAA 1440p 光流及 DLAA/FSR/DLSS HDR 回归通过。采集音频面板识别既有驱动，取消与断开后确认通过。私有目录从 2.1.3 同目录覆盖到 2.1.4，旧缓存保留，新缓存 81 个文件第二次复用。临时解压清理首次遇 Windows 文件占用，重试已全部移除。AMD 包仅在本机验证启动与播放，无本轮 AMD 实卡推理或驱动重装验收。
 
 交付目录 `E:/项目/Veyra/releases/codex-release-2.1.4-20261109`，含 NVIDIA、AMD、应用源码、RX 7000 网络源码、校验和与双语更新说明。最终回执 `E:/项目/Veyra/reports/codex-release-2.1.4-20261109/FINAL.json`。本地待发布，未合并 main 或执行 GitHub 发布。
+
+
+## 2026-11-09 2.1.4 GitHub 正式发布
+
+已发布 [2.1.4 便携包](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.4) 与 [对应源码](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.4-sources)，便携包为 Latest。产品构建提交 `6c84bd2`，两个发布标签指向 `560cf8e`。远端已有的 Wiki 入口和 Star 历史图改动保留。README 与两个 Release 更新到 8 群新码及 Discord 邀请。群码按图在 11 月 16 日前有效，两张二维码各 220 px。
+
+执行 `git push --atomic nrvideo main refs/tags/v2.1.4 refs/tags/v2.1.4-sources`，随后用 `promote.py` 从已验收包更新文档、社区图和发布清单，程序及运行组件逐文件哈希一致。第一次打包遇到 Markdown CRLF 导致中英分段失败，读取时统一换行后通过。上传到草稿并验证 GitHub 资产 SHA-256 和大小后，先公开对应源码，再把应用 Release 设为 Latest。执行 `verify-github.py docs/draft/published` 核对正文、两个标签、六个公开资产下载 HTTP 200、两个二维码、Discord 邀请及四个历史固定依赖源码链接。
+
+正式包目录 `E:/项目/Veyra/releases/codex-publish-2.1.4-20261109`，逐项校验及发布回执 `E:/项目/Veyra/reports/codex-publish-2.1.4-20261109/FINAL.json`。群公告在同目录 `GROUP_ANNOUNCEMENT.txt`，正文 802 字符。
+
+
+## 2026-11-09 2.1.4 NR 推理复用致谢
+
+按用户要求，在 GitHub Release 和版本说明中补充 Magpie Experimental v0.6.12 的 DLSSNR「隔帧」模式、SAOG0721 与 yejincheng420 的贡献，并标明 Veyra 的独立实现。用 gh release edit 更新正文，复查公开正文、资产 ID/大小/SHA-256 和 Latest。群公告同步更新。
+
+
+## 2026-11-10 采集去重后的 40 帧补帧送帧修复
+
+独立分支 `codex/capture-dedup-pacing-20261110`，起点 `c5782a5`。40 帧在 60 Hz 采样后的有效回调间隔交替约 17/33 ms。原先组内按校正 PTS 插值，组间仍按回调重新锚定。现在物理采集卡的图内补帧把去重内容 PTS 映射到平滑采集时钟，自适应相位按同一个锚点统计 GPU 就绪时间。保留两批队列、原始采集时间、原判重和倍率。去重以外的 VFG 模型快档及垂直同步等待逻辑保持原合同。
+
+运行 `scripts/acceptance/build-recording-handoff.py --task codex-capture-dedup-pacing-20261110 --label 2.1.4-dedup-pacing-test --jobs 2 veyra_qml_ui veyra_live_timing_tests`，首次 278.0 秒，最终增量 11.9 秒。时序测试 166 项通过，含 40-in-60/30-in-60 3X 的实际时序组件模拟。先只启用去重时间戳平滑的首轮实卡 P99 14.16 ms，仍有首张生成帧晚于期限。最终版改用采集时钟映射并给自适应相位保留有界采样余量。
+
+用户退出正式版后，用隔离 NVIDIA 包对 MCS 4K-T911 的 4K60 NV12、约 40 FPS 内容、VFG 中档 3X 做 20 秒 A/B。使用同一程序的 `VEYRA_TEST_LEGACY_LIVE_PACING=1` 对照原去重路径。提交 119.95→119.93 FPS，界面 1% low 中位 57.66→110.03，逐帧提交间隔 P99 17.33→9.04 ms。真实帧回调到提交返回的中位 24.12→31.54 ms，P95 24.81→37.69 ms。稳定采样窗内两轮均无邮箱覆盖、降档、生成过期或容量丢弃增量。固定 60→30 复测 90.00 FPS，P99 11.87 ms，未走新去重锚点。未测物理屏幕扫描或手柄到屏幕延迟。
+
+回执 `E:/项目/Veyra/reports/codex-capture-dedup-pacing-20261110/FINAL.json`，逐帧日志在同任务 `logs` 目录。独立启动入口 `E:/项目/Veyra/tests/codex-capture-dedup-pacing-20261110/启动去重补帧测试.cmd`。验收后核对 QML 探针已恢复，E:/App 的正式 EXE 哈希保持发布值。
+
+用户恢复画面后复测。初轮输入几乎静止，补帧状态退出导致夹具终止。重测的起始信号切换期有 8 次采集丢弃记录，未纳入稳态。04:41:32.000–04:42:01.809（PST）稳态 29.809 秒，采集内容 40.02 FPS、提交 119.90 FPS、1% low 中位 109.75、提交间隔 P99 9.11 ms，采集丢弃、邮箱覆盖、补帧降档和过期均无新增。复测日志 logs/codex-capture-dedup-pacing-20261110/fixed-soak-retry/engine.log，同任务 FINAL.json 已补充逐帧统计。
+
+
+## 2026-11-10 59.94 采集的异常预览时间戳校正
+
+隔离分支 `codex/capture-pts-clock-20261110` 基于已验的去重呈现分支 `8b20d55`。针对原生 59–61 FPS 物理采集预览，在内容去重及 60→30 之前比较驱动 PTS、序号和单调回调时间。协商速率附近的稳定回调在跨 16 个采集序号的窗口内，与 PTS 累计跨度偏差达到 12.5% 才锁定校正。校正时间轴以采集序号推进，缓慢跟随回调时钟并抑制单帧抖动。正常 PTS 保留，持续恢复正常或真实断档时退回原时间轴并显式断开图历史。音频路径仍使用驱动原始时间和到达时间。
+
+复用 `build/codex-capture-dedup-pacing-20261110`，用 `scripts/acceptance/build-recording-handoff.py` 固定依赖重新配置显示版号 2.1.4-capture-clock-test，构建 veyra_qml_ui 和 veyra_live_timing_tests。首次 82.7 秒，恢复无注入版本后增量 13.4 秒。时序 172 项通过，包含正常 59.94、真实可变到达、20.83 ms 错标、531 ms 断流、原 PTS 恢复和邮箱跳号。
+
+T911 实卡 4K NV12 接受指定 59.94，协商 59.939820，正常回调和驱动帧长约 16.68 ms。默认格式协商 60.000240，实际回调也约 60。两个正常输入都没有触发校正。保持 T911 59.94 回调、60→30、FSR 3.1 2X，用独立测试编译把视频 PTS 改成 20.8333 ms。20 秒 A/B 原帧 749→600，提交 67.884→59.942 FPS，提交间隔 P99 27.33→17.33 ms，生成帧过期 135→0。最终测试程序不含注入代码，独立 QML 探针已恢复。未复测故障用户的 Elgato/AMD 或物理屏幕扫描。
+
+入口 `E:/项目/Veyra/tests/codex-capture-pts-clock-20261110/启动采集时钟测试.cmd`。回执 `E:/项目/Veyra/reports/codex-capture-pts-clock-20261110/FINAL.json`，原始逐帧日志在同任务 logs 目录。
