@@ -38,6 +38,7 @@ namespace veyra::pipeline {
 struct DoviP7CurveReport {
     enum class Kind : uint8_t {
         Identity,      // codes pass through unchanged
+        SinglePoly,    // one piece, polynomial order 1..2
         SingleMmr,     // one piece, MMR, order 1..3 (what Veyra can evaluate)
         MultiPiece,    // more than one piece, or per-piece methods differ
         Unsupported,   // a single non-identity piece that is not MMR
@@ -51,6 +52,7 @@ struct DoviP7CurveReport {
     };
     Kind kind[3] = {Kind::Identity, Kind::Identity, Kind::Identity};
     uint8_t pieces[3] = {};      // num_pivots - 1
+    uint8_t polyOrder[3] = {};
     uint8_t mmrOrder[3] = {};
     bool packable = false;       // every component was accepted
     Refusal refusal = Refusal::None;
@@ -100,17 +102,19 @@ inline bool doviP7PackCurve(const AVDOVIReshapingCurve& curve, int coefLog2Denom
     const float scale = 1.0f / float(int64_t(1) << coefLog2Denom);
     bool anyMmr = false, anyPoly = false;
     for (int seg = 0; seg < pieces; ++seg) {
-        const int base = seg * 6;
+        const int base = seg * 7;
         if (curve.mapping_idc[seg] == AV_DOVI_MAPPING_POLYNOMIAL) {
             const int order = int(curve.poly_order[seg]);
             if (order < 1 || order > 2) {
                 report.kind[component] = DoviP7CurveReport::Kind::Unsupported;
                 return false;
             }
+            // Coefficients share row 0 of the segment (.x/.y/.z = x^0/x^1/x^2),
+            // matching PolyEvaluate(); .w stays the segment kind.
             for (int k = 0; k <= order; ++k)
-                out.curve[component][base + k][0] = scale * float(curve.poly_coef[seg][k]);
-            out.curve[component][base + 0][3] = 0.0f;
-            out.curve[component][base + 1][3] = float(order);
+                out.curve[component][base][k] = scale * float(curve.poly_coef[seg][k]);
+            out.curve[component][base + 6][0] = 0.0f;
+            out.curve[component][base + 6][1] = float(order);
             anyPoly = true;
         } else if (curve.mapping_idc[seg] == AV_DOVI_MAPPING_MMR) {
             const int order = int(curve.mmr_order[seg]);
@@ -118,8 +122,8 @@ inline bool doviP7PackCurve(const AVDOVIReshapingCurve& curve, int coefLog2Denom
                 report.kind[component] = DoviP7CurveReport::Kind::Unsupported;
                 return false;
             }
-            out.curve[component][base + 0][3] = 1.0f;
-            out.curve[component][base + 1][3] = float(order);
+            out.curve[component][base + 6][0] = 1.0f;
+            out.curve[component][base + 6][1] = float(order);
             if (seg == 0) out.params[18 + component] = scale * float(curve.mmr_constant[0]);
             for (int j = 0; j < order; ++j) {
                 for (int k = 0; k < 3; ++k)
@@ -137,13 +141,19 @@ inline bool doviP7PackCurve(const AVDOVIReshapingCurve& curve, int coefLog2Denom
     // 0..1 signal without knowing the base-layer bit depth.
     constexpr float kPivotScale = 1.0f / 1023.0f;
     for (int i = 0; i < curve.num_pivots && i < 9; ++i)
-        out.curve[component][18 + i / 4][i % 4] = float(curve.pivots[i]) * kPivotScale;
-    out.curve[component][20][3] = float(pieces);
-    out.params[21 + component] = float(pieces > 1 ? DoviP7CurveMulti : (anyMmr ? DoviP7CurveMmr : DoviP7CurveIdentity));
-    out.params[24 + component] = float(pieces > 1 ? 0.0f : (anyMmr ? int(curve.mmr_order[0]) : int(curve.poly_order[0])));
+        out.curve[component][21 + i / 4][i % 4] = float(curve.pivots[i]) * kPivotScale;
+    out.curve[component][23][3] = float(pieces);
+    // A single-piece polynomial is NOT the identity: it has to go through the
+    // segmented path so the shader evaluates PolyEvaluate instead of skipping the
+    // component. (Writing Identity here meant non-identity luma curves packed
+    // "successfully" and then did nothing.)
+    const bool segmented = pieces > 1 || anyPoly;
+    out.params[21 + component] = float(segmented ? DoviP7CurveMulti : DoviP7CurveMmr);
+    out.params[24 + component] = float(segmented ? 0.0f : int(curve.mmr_order[0]));
     report.kind[component] = pieces > 1 ? DoviP7CurveReport::Kind::MultiPiece
-                           : anyMmr ? DoviP7CurveReport::Kind::SingleMmr
-                                    : DoviP7CurveReport::Kind::Unsupported;
+                           : anyPoly ? DoviP7CurveReport::Kind::SinglePoly
+                                     : DoviP7CurveReport::Kind::SingleMmr;
+    if (anyPoly) report.polyOrder[component] = uint8_t(curve.poly_order[0]);
     report.mmrOrder[component] = uint8_t(anyMmr ? curve.mmr_order[0] : 0);
     return true;
 }
@@ -200,6 +210,8 @@ inline std::string doviP7CurveSummary(const DoviP7CurveReport& report, const AVD
     const auto one = [&](int c) {
         switch (report.kind[c]) {
         case DoviP7CurveReport::Kind::Identity: return std::string("identity");
+        case DoviP7CurveReport::Kind::SinglePoly:
+            return std::format("poly(1piece,order{})", int(report.polyOrder[c]));
         case DoviP7CurveReport::Kind::SingleMmr:
             return std::format("mmr(1piece,order{})", int(report.mmrOrder[c]));
         case DoviP7CurveReport::Kind::MultiPiece:

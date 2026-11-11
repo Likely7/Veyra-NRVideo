@@ -404,10 +404,11 @@ int main(){
                 pipeline::DoviP7Constants poly{};
                 check(pipeline::doviP7ConstantsSupported(mapping, header, 1920, 1080, poly) && poly.ready,
                       "DV P7 constants pack a single-piece polynomial luma curve");
-                check(poly.params[21] == float(pipeline::DoviP7CurveMulti) ||
-                      poly.params[21] == float(pipeline::DoviP7CurveMmr) ||
-                      poly.params[21] == 0.0f,
-                      "DV P7 polynomial luma carries a known component mode");
+                check(poly.params[21] == float(pipeline::DoviP7CurveMulti),
+                      "DV P7 single-piece polynomial routes through the segmented path");
+                check(poly.curve[0][0][0] == 0.0f &&
+                      poly.curve[0][0][1] == 4194304.0f / float(int64_t(1) << 23),
+                      "DV P7 polynomial coefficients share row 0 (.x/.y)");
                 // A segmented luma curve (two pieces, polynomial then MMR) must
                 // pack as DoviP7CurveMulti with the pivots and per-segment data.
                 {
@@ -428,12 +429,14 @@ int main(){
                           "DV P7 constants pack a two-piece luma curve");
                     check(multi.params[21] == float(pipeline::DoviP7CurveMulti),
                           "DV P7 segmented luma reports the multi-segment mode");
-                    check(multi.curve[0][20][3] == 2.0f,
+                    check(multi.curve[0][23][3] == 2.0f,
                           "DV P7 segmented luma records its pivot count");
-                    check(multi.curve[0][18][0] == 0.0f && multi.curve[0][18][1] == 512.0f / 1023.0f,
+                    check(multi.curve[0][21][0] == 0.0f && multi.curve[0][21][1] == 512.0f / 1023.0f,
                           "DV P7 segmented luma normalises the pivots");
-                    check(multi.curve[0][0][3] == 0.0f && multi.curve[0][6][3] == 1.0f,
+                    check(multi.curve[0][6][0] == 0.0f && multi.curve[0][13][0] == 1.0f,
                           "DV P7 segmented luma marks polynomial then MMR per segment");
+                    check(multi.curve[0][6][1] == 1.0f && multi.curve[0][13][1] == 1.0f,
+                          "DV P7 segmented luma records each segment's order");
                 }
             }
 
