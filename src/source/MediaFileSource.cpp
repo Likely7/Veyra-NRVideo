@@ -678,7 +678,7 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
             bool withLayer = false;
             if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
                 static unsigned waitDbg = 0;
-                if (++waitDbg <= 10) {
+                if (++waitDbg <= 10 || waitDbg % 100 == 0) {
                     std::string keys;
                     for (const auto& kv : elByPts_) keys += std::format("{} ", kv.first);
                     log::info("source-dovi-el", std::format("wait check pts={} cached=[{}] held={}",

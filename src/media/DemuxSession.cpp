@@ -1320,10 +1320,14 @@ void DemuxSession::doSeek() {
                 break;
             }
         }
-        const auto& v = streams_[size_t(videoIndex_)];
-        const int64_t ts = av_rescale_q(target + startTimeUs_, AV_TIME_BASE_Q, AVRational{v.timeBaseNum, v.timeBaseDen});
+        // -1 below means "all streams", so the timestamp must be in AV_TIME_BASE
+        // (microseconds), not the video stream's time base.
+        const int64_t ts = target + startTimeUs_;
         irq_->arm(kConnectTimeoutMs + kReadTimeoutVodMs);
-        const int result = av_seek_frame(context_, videoIndex_, ts, AVSEEK_FLAG_BACKWARD);
+        // All streams: the enhancement layer (a second video stream) has to move
+        // with the base stream or the PTS pairing breaks after every seek.
+        (void)videoIndex_;
+        const int result = av_seek_frame(context_, -1, ts, AVSEEK_FLAG_BACKWARD);
         irq_->disarm();
         ok = result >= 0;
         if (!ok) {

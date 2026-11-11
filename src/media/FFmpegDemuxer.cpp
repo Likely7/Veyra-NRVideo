@@ -522,10 +522,14 @@ bool FFmpegDemuxer::seekToUs(int64_t targetUs)
     if (context_ == nullptr) {
         return false;
     }
+    // Seek every stream, not just the video one: with a separate enhancement
+    // layer (stream 1) seeking only the base stream left the layer reading from
+    // its old position, and the PTS pairing then failed for every frame after
+    // the seek. -1 means "all streams" and takes an AV_TIME_BASE timestamp.
     const int64_t target = av_rescale_q(targetUs + startTimeUs(), { 1, 1000000 },
-        context_->streams[videoStreamIndex_]->time_base);
+        AVRational{1, AV_TIME_BASE});
     interrupt_.arm();
-    const int result = av_seek_frame(context_, videoStreamIndex_, target, AVSEEK_FLAG_BACKWARD);
+    const int result = av_seek_frame(context_, -1, target, AVSEEK_FLAG_BACKWARD);
     interrupt_.disarm();
     if (result < 0) {
         char errorText[AV_ERROR_MAX_STRING_SIZE]{};
