@@ -613,9 +613,15 @@ void MediaFileSource::closeEnhancementLayer() {
 // Custom (P5): pull every decodable enhancement frame into the PTS table.
 void MediaFileSource::drainElFrames() {
     if (!elLayerOpen_) return;
+    static unsigned drainDbg = 0;
     for (;;) {
         const AVFrame* decoded = elDecoder_.receiveFrame();
-        if (decoded == nullptr) break;
+        if (decoded == nullptr) {
+            if (drainDbg < 6 || drainDbg % 500 == 0)
+                log::info("source-dovi-el", std::format("drain: empty call={} cache={}", drainDbg, elByPts_.size()));
+            ++drainDbg;
+            break;
+        }
         AVFrame* copy = av_frame_clone(decoded);
         if (copy == nullptr) continue;
         const int64_t elPts = copy->best_effort_timestamp != AV_NOPTS_VALUE
@@ -624,6 +630,9 @@ void MediaFileSource::drainElFrames() {
         auto it = elByPts_.find(elPts);
         if (it != elByPts_.end()) av_frame_free(&it->second);
         elByPts_[elPts] = copy;
+        if (drainDbg < 6 || drainDbg % 500 == 0)
+            log::info("source-dovi-el", std::format("drain: got elPts={} cache={}", elPts, elByPts_.size()));
+        ++drainDbg;
         while (elByPts_.size() > 8) {
             av_frame_free(&elByPts_.begin()->second);
             elByPts_.erase(elByPts_.begin());
