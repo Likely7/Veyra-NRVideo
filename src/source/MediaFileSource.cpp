@@ -456,6 +456,11 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
                     if (p[j] == 0 && p[j + 1] == 0 && p[j + 2] == 1) { end = j; break; }
                 }
                 const int nalType = (p[hdr] >> 1) & 0x3F;
+                {
+                    static unsigned walkDbg = 0;
+                    if (walkDbg < 5) { ++walkDbg; log::info("source-dovi-el",
+                        std::format("EL walk pos={} type={} end={}", pos, nalType, end)); }
+                }
                 if (nalType == 62) {
                     if (elDoviMeta_ == nullptr) {
                         elDoviMeta_ = static_cast<AVDOVIMetadata*>(av_mallocz(sizeof(AVDOVIMetadata)));
