@@ -107,6 +107,20 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
     dst->num_x_partitions = uint32_t(mapping->num_x_partitions_minus1 + 1);
     dst->num_y_partitions = uint32_t(mapping->num_y_partitions_minus1 + 1);
     dst->nlq_method_idc = AV_DOVI_NLQ_LINEAR_DZ;   // the only method real streams use
+    // Non-linear quantisation: P7Residual() divides by these, so leaving them zero
+    // (the memset default) silently dropped every enhancement residual.
+    if (mapping->nlq != nullptr) {
+        const DoviRpuDataNlq* n = mapping->nlq;
+        for (int c = 0; c < 3; ++c) {
+            dst->nlq[c].nlq_offset = uint16_t(n->nlq_offset[c]);
+            dst->nlq[c].vdr_in_max =
+                (n->vdr_in_max_int[c] << coefLog2Denom) + n->vdr_in_max[c];
+            dst->nlq[c].linear_deadzone_slope =
+                (n->linear_deadzone_slope_int[c] << coefLog2Denom) + n->linear_deadzone_slope[c];
+            dst->nlq[c].linear_deadzone_threshold =
+                (n->linear_deadzone_threshold_int[c] << coefLog2Denom) + n->linear_deadzone_threshold[c];
+        }
+    }
     auto* nlq = dovi_rpu_get_vdr_dm_data(rpu);     // not needed; free below
     if (nlq != nullptr) dovi_rpu_free_vdr_dm_data(nlq);
 
