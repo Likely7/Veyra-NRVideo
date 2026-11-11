@@ -998,3 +998,12 @@ T911 实卡 4K NV12 接受指定 59.94，协商 59.939820，正常回调和驱�
 执行 reports/codex-patreon-support-20261111/update.py prepare、assets、releases、verify。GitHub Markdown 渲染、两图 SVG 格式/尺寸与公开 HTTP200、12份公开文件内容核对通过。扫描41条 Release，将其中21条的旧赞助按钮替换为两个 Patreon 入口。更新逐条比较完整正文并核对资产ID/大小/摘要、发布日期和标签身份。首次核验遇旧Release混合CRLF/LF，被错误的通用换行读取触发断言；按原始字节读取后通过，并支持已完成项续验。Latest 核对仍为 v2.1.5。
 
 Patreon 主页 HTTP200。咖啡页面自动访问返回HTTP403，按用户给定原链接接入，未作付款流程验收。初始远程徽章服务HTTP403后，按钮改用仓库内自包含SVG。所有快照、21份新正文、原始图标和CC0许可、渲染HTML与核验回执位于 E:/项目/Veyra/reports/codex-patreon-support-20261111。最终回执 FINAL.json。
+
+
+## 2026-11-11 GitHub 交流群更换为 10 群
+
+用户提供10群原图，明确9群已满。原图314×470、75186字节、SHA256 0dcc82e304b5313b37049ec0cb6102877a9391fc5802610cb69886b12bbdad92，原字节保存docs/images/community/group-10-20261111.png。独立文档分支codex/group10-qr-20261111从远端main e91882a创建，图与README双语/RELEASE_SUPPORT提交fdc6265后推送main；没有发布尚未验收的软件源码或重构建安装包。
+
+执行 E:/项目/Veyra/reports/codex-group10-qr-20261111/update.py prepare、releases fdc626547b4020b888efd8d420d6dc28743b0d88、verify。两个含旧9群码的Release（v2.1.5和v2.1.5-sources）只替换群图URL、群号和图示11月18日前有效的说明；逐字反向还原验证其余正文不变。Release使用图提交的固定URL，README和模板引用main。赞助与群图仍各220，Patreon两个入口和Discord保持。匿名GET核对群图原字节和赞助图可达，API核对文档Git blob、Latest2.1.5、资产ID/大小/digest及发布元数据不变。首次将GitHub LF文本与Windows CRLF工作副本直接比较导致误报；改为比较提交blob后通过，无需改远端内容。
+
+报告、前后Release快照及patch、图片身份和更新脚本在 E:/项目/Veyra/reports/codex-group10-qr-20261111，最终回执FINAL.json。用户原图不裁剪、不重绘、不改像素；不修改发布标签、产品配置或运行库，不代发群消息。
