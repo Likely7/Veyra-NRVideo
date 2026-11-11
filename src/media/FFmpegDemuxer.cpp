@@ -445,6 +445,24 @@ bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
     }
 }
 
+bool FFmpegDemuxer::takeElPacket(AVPacket** out) {
+    if (out == nullptr) return false;
+    *out = nullptr;
+    if (!session_) return false;   // only the shared session carries a second video stream
+    AVPacket* packet = av_packet_alloc();
+    if (packet == nullptr) return false;
+    DemuxSession::Meta meta;
+    // A short wait, not zero: in a transport stream the base and enhancement
+    // packets interleave, so the layer's packet for this frame often lands just
+    // after the base one that triggered the call.
+    if (session_->popEl(packet, meta, 10) != DemuxSession::Pop::Packet) {
+        av_packet_free(&packet);
+        return false;
+    }
+    *out = packet;
+    return true;
+}
+
 FFmpegDemuxer::ReadResult FFmpegDemuxer::readVideoPacketEx(int waitMs, bool honourHold)
 {
     if (!session_) {

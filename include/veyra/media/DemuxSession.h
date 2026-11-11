@@ -93,6 +93,11 @@ public:
     // waitMs for one. Video honours the buffering hold (Empty while playback is
     // paused for buffering) only when asked: offline readers pass false.
     Pop popVideo(AVPacket* dst, Meta& meta, int waitMs, bool honourHold);
+    // Enhancement-layer stream (a second HEVC video stream): some Dolby test
+    // material keeps the layer as its own stream instead of type-63 NALs inside
+    // the base stream. Popped without the buffering hold: it is a side channel.
+    Pop popEl(AVPacket* dst, Meta& meta, int waitMs);
+    int elIndex() const { return elIndex_; }
     Pop popAudio(AVPacket* dst, Meta& meta, int waitMs);
     // Audio packets are queued only for the selected stream; -1 drops them all.
     bool selectAudioStream(int index);
@@ -186,7 +191,8 @@ private:
     int64_t startTimeUs_ = 0;
     bool network_ = false;                 // http/https/rtsp (otherwise a file)
 
-    Queue video_, audio_;
+    Queue video_, audio_, el_;
+    int elIndex_ = -1;
     Phase phase_ = Phase::Prebuffering;
     double targetSeconds_ = 0;
     // Where this session should start, in seconds; set once at open and used to position

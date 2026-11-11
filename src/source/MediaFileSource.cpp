@@ -414,7 +414,44 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
     // must report "no EL for this frame" so the caller does not reuse the texture
     // uploaded for the previous one.
     ++elFeedCalls_;
-    AVPacket* elPacket = elSplitterActive_ ? splitEnhancementPacket(packet) : buildEnhancementPacket(packet);
+    AVPacket* elPacket = nullptr;
+    if (elFromStream_) {
+        // The layer is a real stream: its packets are already demuxed and carry
+        // the RPU (type 62) as well as the residual pictures.
+        if (!demuxer_.takeElPacket(&elPacket)) return false;
+#if VEYRA_HAVE_LIBDOVI
+        {
+            static unsigned rpuReported = 0;
+            const uint8_t* p = elPacket->data;
+            const size_t n = size_t(elPacket->size);
+            for (size_t i = 0; i + 4 < n; ++i) {
+                if (!(p[i] == 0 && p[i + 1] == 0 && p[i + 3] == 1) && !(p[i] == 0 && p[i + 1] == 0 && p[i + 2] == 1)) continue;
+                const size_t hdr = (p[i + 2] == 1) ? i + 3 : i + 3;
+                if (hdr >= n) break;
+                if (((p[hdr] >> 1) & 0x3F) != 62) continue;
+                size_t end = n;
+                for (size_t j = hdr + 1; j + 3 < n; ++j) {
+                    if (p[j] == 0 && p[j + 1] == 0 && p[j + 2] == 1) { end = j; break; }
+                }
+                if (elDoviMeta_ == nullptr) {
+                    size_t allocSize = 0;
+                    elDoviMeta_ = av_dovi_metadata_alloc(&allocSize);
+                }
+                const bool ok = elDoviMeta_ != nullptr &&
+                    source::decodeRpuWithLibDovi(p + hdr, end - hdr, elDoviMeta_);
+                if (ok) elDoviMetaValid_ = true;
+                if (rpuReported < 3) {
+                    ++rpuReported;
+                    log::info("source-dovi-el", std::format(
+                        "libdovi: RPU from EL stream packet ({} bytes) parse={}", end - hdr, ok ? 1 : 0));
+                }
+                break;
+            }
+        }
+#endif
+    } else {
+        elPacket = elSplitterActive_ ? splitEnhancementPacket(packet) : buildEnhancementPacket(packet);
+    }
     if (elPacket == nullptr) return false;
     ++elPacketHits_;
     // Report the layer's coverage and the pairing loss every 300 access units: a
@@ -940,6 +977,7 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
             elIndex=index;elParams=params;break;
         }
         if(elIndex>=0){
+            elStreamIndex_=elIndex;
             dv.present=true;dv.profile=7;dv.level=0;
             dv.baseLayer=true;dv.enhancementLayer=true;dv.rpuDeclared=false;
             dv.compatibility=6;   // profile 7's base layer is an HDR10 encoding
@@ -974,11 +1012,26 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         // Prefer FFmpeg's splitter: it also supplies the EL's own parameter
         // sets, which the walk below can only sniff from the first access unit
         // that happens to carry them (and cannot recover after a seek).
-        if (openEnhancementSplitter(params) &&
-            !openEnhancementDecoder(elSplitter_->par_out,
-                demuxer_.videoTimeBaseNum(), demuxer_.videoTimeBaseDen())) {
-            closeEnhancementSplitter();
-            elLayerEnabled_ = false;
+        bool elDecoderOpened = false;
+        if (openEnhancementSplitter(params)) {
+            elDecoderOpened = openEnhancementDecoder(elSplitter_->par_out,
+                demuxer_.videoTimeBaseNum(), demuxer_.videoTimeBaseDen());
+            if (!elDecoderOpened) closeEnhancementSplitter();
+        } else if (elStreamIndex_ >= 0) {
+            // The layer is its own stream (no hvcE record for FFmpeg's splitter):
+            // open the decoder from that stream's parameters and let
+            // feedEnhancementLayer pop those packets directly.
+            const AVCodecParameters* elParams = demuxer_.streamParameters(elStreamIndex_);
+            if (elParams != nullptr &&
+                openEnhancementDecoder(elParams, demuxer_.videoTimeBaseNum(), demuxer_.videoTimeBaseDen())) {
+                elDecoderOpened = true;
+                elFromStream_ = true;
+            }
+        }
+        if (!elDecoderOpened && !elFromStream_) {
+            // Neither route produced a decoder: the built-in NAL walk still gets a
+            // chance when the layer rides inside the base packets.
+            if (elSplitterActive_) { elLayerEnabled_ = false; }
         }
         if (elLayerEnabled_) log::info("source-dovi-el", "enhancement layer decode requested");
     }

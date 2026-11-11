@@ -72,6 +72,9 @@ public:
     // and remains valid until the next call. In shared mode this waits for data
     // (and never pauses for buffering); false with endOfFile=false is a failure.
     bool readVideoPacket(bool& endOfFile);
+    // Enhancement-layer stream packet (second HEVC video stream), when the
+    // container carries one. Returns false when this source has none.
+    bool takeElPacket(AVPacket** out);
 
     // Playback read. Direct mode behaves like readVideoPacket. Shared mode waits at
     // most waitMs and, with honourHold, reports Waiting while playback is paused

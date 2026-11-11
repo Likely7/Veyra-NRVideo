@@ -85,6 +85,10 @@ private:
     // FFmpeg never exposes AV_FRAME_DATA_DOVI_METADATA for it.
     AVDOVIMetadata* elDoviMeta_ = nullptr;
     bool elDoviMetaValid_ = false;
+    // Index of the enhancement layer when it travels as its own video stream
+    // (Dolby test material); -1 when the layer rides inside the base packets.
+    int elStreamIndex_ = -1;
+    bool elFromStream_ = false;   // layer packets come from their own stream
     // Custom (P7): FFmpeg's dovi_split bitstream filter produces the enhancement
     // layer bitstream out of the same access units. When the container also
     // carries the EL's own parameter sets (Matroska hvcE, surfaced by libavformat

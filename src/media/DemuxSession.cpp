@@ -456,6 +456,15 @@ std::shared_ptr<DemuxSession> DemuxSession::open(const OpenParams& params, std::
     if (audio == -2) audio = av_find_best_stream(context, AVMEDIA_TYPE_AUDIO, -1, video, nullptr, 0);
     if (audio < 0 || unsigned(audio) >= context->nb_streams || context->streams[audio]->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) audio = -1;
     s.videoIndex_ = video;
+    // A second HEVC video stream is an enhancement layer (Dolby test material).
+    for (unsigned i = 0; i < context->nb_streams; ++i) {
+        if (int(i) == video) continue;
+        const auto* p = context->streams[i]->codecpar;
+        if (p->codec_type == AVMEDIA_TYPE_VIDEO && p->codec_id == AV_CODEC_ID_HEVC) {
+            s.elIndex_ = int(i);
+            break;
+        }
+    }
     s.audioIndex_.store(audio);
     s.streams_.resize(context->nb_streams);
     for (unsigned i = 0; i < context->nb_streams; ++i) {
@@ -751,6 +760,26 @@ void DemuxSession::setPlaybackPositionUs(int64_t us) {
     producerCv_.notify_one();
 }
 
+DemuxSession::Pop DemuxSession::popEl(AVPacket* dst, Meta& meta, int waitMs) {
+    std::unique_lock lock(m_);
+    const auto deadline = Clock::now() + std::chrono::milliseconds(std::max(waitMs, 0));
+    for (;;) {
+        if (stop_.load() || (cancelled_ && cancelled_->load())) return Pop::Cancelled;
+        if (!el_.items.empty()) {
+            Item item = std::move(el_.items.front());
+            el_.items.pop_front();
+            el_.bytes -= item.bytes;
+            av_packet_move_ref(dst, item.packet);
+            av_packet_free(&item.packet);
+            meta.discontinuity = item.discontinuity;
+            meta.generation = item.generation;
+            return Pop::Packet;
+        }
+        if (el_.items.empty() && endedLocked()) return failed_ ? Pop::Failed : Pop::Eof;
+        if (consumerCv_.wait_until(lock, deadline) == std::cv_status::timeout) return Pop::Empty;
+    }
+}
+
 bool DemuxSession::seek(int64_t targetUs) {
     if (live_) return false;
     std::unique_lock lock(m_);
@@ -1019,6 +1048,7 @@ void DemuxSession::threadMain() {
             eof_ = true;
             video_.ended = true;
             audio_.ended = true;
+            el_.ended = true;
             log::info("net-session", std::format("end of stream: video queued {} audio queued {}", video_.items.size(), audio_.items.size()));
             updatePhaseLocked();
             consumerCv_.notify_all();
@@ -1069,8 +1099,9 @@ void DemuxSession::onPacket(AVPacket* pkt) {
     const int index = pkt->stream_index;
     const bool isVideo = index == videoIndex_;
     const bool isAudio = index == audioIndex_.load();
+    const bool isEl = index == elIndex_;
     const SessionStreamInfo* info = stream(index);
-    if (!info || (!isVideo && !isAudio)) {
+    if (!info || (!isVideo && !isAudio && !isEl)) {
         av_packet_unref(pkt);
         return;
     }
@@ -1090,7 +1121,7 @@ void DemuxSession::onPacket(AVPacket* pkt) {
             durationUs = params && params->frame_size > 0 && params->sample_rate > 0 ? int64_t(1e6 * params->frame_size / params->sample_rate) : 21333;
         }
     }
-    Queue& queue = isVideo ? video_ : audio_;
+    Queue& queue = isVideo ? video_ : (isEl ? el_ : audio_);
     // ---- a timeline that leaps: a restarted stream, damaged stamps ----
     // Live streams are re-anchored like a reconnect: the next video keyframe continues the old timeline, so the
     // consumers (picture clock, audio) never see time run backwards or jump ahead; before this a restarted stream
