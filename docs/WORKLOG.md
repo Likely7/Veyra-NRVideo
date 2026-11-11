@@ -1009,3 +1009,16 @@ Patreon 软件入口基线提交 37f13a0，位于前一分支 codex/patreon-spon
 执行 reports/codex-effect-exclusion-nodes-20261111/check_syntax.py：18个翻译单元 MSVC /Zs全部通过，不生成OBJ/链接程序。Qt6.8.3 qmltestrunner -input tests/qml/quick/tst_mask_editor.qml -import qml，QT_QPA_PLATFORM=offscreen、QT_QUICK_BACKEND=software，6/0/0。qmllint检查MaskEditor/ProPage/NodePage无语法错误，存在动态上下文等警告；两着色器DXC -Fo NUL通过，不更新程序着色器。python -B scripts/i18n/extract.py --check：2812条，三语言缺失0、占位符错误0；git diff --check通过。首次ComPtr重载取址和HLSL保留字错误修复后复查；不支持的DXC语法检查参数和首次错误日志保留。
 
 本轮不构建、打包、运行Veyra，不改真实配置、运行库或驱动，未合main或推送。新增C++回归用例仅语法通过，未执行；真实GPU画面、补帧帧节奏（特别是XeSS相位/HDR羽化）、播放/采集/导出、生命周期及显存压力待后续应用构建验收。方案 docs/EFFECT_EXCLUSION_NODES_2026-11-11.md，证据 E:/项目/Veyra/reports/codex-effect-exclusion-nodes-20261111，日志 E:/项目/Veyra/logs/codex-effect-exclusion-nodes-20261111，临时响应文件 E:/项目/Veyra/tmp/codex-effect-exclusion-nodes-20261111。
+
+
+## 2026-11-11 列表美颜删除与 PSNTools Account ID
+
+用户追加两项：列表美颜只能添加不能删除，废弃失效的内置PSN登录，改用 https://www.psntools.com/psn/checker。分支 codex/beauty-delete-psn-checker-20261111，基线3e179db。检查发现removeEffect仅对节点/NR/调色调用实时提交，美颜只更新待定设置；改为所有删除均revalidate(true)，保留拒绝回滚。每层新增直接删除按钮，菜单不再先淡出，避免拒绝时卡片永久透明。旧版对照确认拒绝后opacity0；中间层复用隐藏在测试中未复现，未当成根因。
+
+删除PSN OAuth源码/头文件、CMake目标/专属JSON导入、桥接登录/回调/刷新/ready状态和失效专用测试。串流与设置页面改为浏览器打开用户给定固定网址，不带账号参数；手动填写数字/Base64 Account ID与八位配对码，保留已有配对、唤醒和设备登录PIN。主机配对实现及原用户数据保持，历史psn.auth不自动删除。README双语、i18n、历史来源标注同步。
+
+执行 reports/codex-beauty-psn-20261111/check_syntax.py，MSVC /Zs四单元（含启用REMOTEPLAY的实际编译宏）通过，不生成程序。Qt6.8.3 qmltestrunner离屏软件后端，美颜6/0/0、PS5窗口5/0/0，均无QWARN；包含启用/关闭最后一层真实鼠标点击、中间层菜单删除、拒绝保留、网页按钮路由和Account ID编辑信号。模拟桥接，不等于实时GPU或PS5串流验证。旧3e179db QML对照3pass/3fail，首轮因私有组件导入缺失失败，补齐导入后复测，原日志保留。测试VeyraTest qmldir直接指向源码，不修改现有应用/构建目录。
+
+qmllint检查ProPage/Ps5SourceDialog/SettingsPage无语法错误，有动态上下文等警告；python -B scripts/i18n/extract.py --check：2803条、三语言缺失0、占位符错误0。git diff --check及旧OAuth引用清除检查通过。外部网页自动读取HTTP403，没有登录或查询真实账号。继续遵守暂缓构建，不构建/启动应用、不运行C++回归程序、不合main/push/发布。方案docs/BEAUTY_DELETE_PSN_CHECKER_2026-11-11.md；证据和日志 E:/项目/Veyra/{reports,logs,tmp,tests}/codex-beauty-psn-20261111。
+
+补充：最终Qt复测使用任务专用QML_DISK_CACHE_PATH。初轮未指定该项，Qt默认共享缓存目录现有72文件/1,647,592字节；没有假定全部属于本轮，也未删除共享缓存，清单reports/codex-beauty-psn-20261111/qt-cache.json。

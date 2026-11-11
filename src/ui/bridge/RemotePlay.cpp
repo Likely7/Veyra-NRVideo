@@ -16,7 +16,6 @@ QVariantMap QmlPlayerBridge::ps5() const {
     out["profile"] = QString::fromStdWString(impl_->ps5Profile);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     out["available"] = true;
-    out["psnReady"] = remoteplay::loadPsnAuthorization().has_value();
     const auto& s = impl_->snapshot;
     out["active"] = s.remotePlay && (s.running || s.transport == engine::TransportState::Opening || s.transport == engine::TransportState::Stopping);
     const auto c = impl_->controller.capabilities();
@@ -510,43 +509,13 @@ void QmlPlayerBridge::ps5Forget() {
     ps5Load();
 #endif
 }
-void QmlPlayerBridge::ps5PsnLogin() {
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-    if (QDesktopServices::openUrl(QUrl(QString::fromStdWString(remoteplay::psnLoginUrl())))) {
-        impl_->psnLoginStarted = GetTickCount64();
-        impl_->ps5Status = tr("在 Sony 网页完成登录，复制最终回调地址，再点“提交登录结果”。");
-    } else impl_->ps5Status = tr("无法打开浏览器，请检查默认浏览器设置。");
+void QmlPlayerBridge::ps5OpenAccountChecker() {
+    // Fixed public URL; no account IDs, pairing credentials or login tokens leave Veyra.
+    const bool opened=QDesktopServices::openUrl(QUrl(QStringLiteral("https://www.psntools.com/psn/checker")));
+    impl_->ps5Status=opened
+        ? tr("在网页获取 PSN Account ID 后，复制到配对栏，再填写主机的 8 位配对码。")
+        : tr("无法打开浏览器，请检查默认浏览器设置。");
     emit ps5Changed();
-#endif
-}
-void QmlPlayerBridge::ps5PsnComplete() {
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-    if (impl_->ps5Busy) return;
-    if (!impl_->psnLoginStarted || GetTickCount64() - impl_->psnLoginStarted > 600000) {
-        impl_->ps5Status = tr("请先点登录 PSN，完成网页授权后再提交。"); emit ps5Changed(); return;
-    }
-    std::wstring callback = QGuiApplication::clipboard() ? QGuiApplication::clipboard()->text().left(8192).toStdWString() : std::wstring{};
-    if (!remoteplay::validPsnCallback(callback)) {
-        SecureZeroMemory(callback.data(), callback.size() * sizeof(wchar_t));
-        impl_->ps5Status = tr("剪贴板不是有效的 Sony 授权回调地址。请复制登录完成后的完整 URL。"); emit ps5Changed(); return;
-    }
-    impl_->psnLoginStarted = 0;
-    auto work = [callback = std::move(callback)](std::stop_token stop) mutable {
-        auto result = remoteplay::authorizePsn(std::move(callback), stop); Impl::Ps5Outcome out;
-        if (result.account) out.account = remoteplay::accountIdToBase64(*result.account);
-        out.message = result.ok ? L"PSN 登录已保存，Account ID 已填入。首次仍需配对；已配对主机直接连接。"
-                                : std::format(L"PSN 授权失败（{}）；原有配对不受影响，可重新登录。", result.error);
-        return out;
-    };
-    VEYRA_PS5_LAUNCH(work);
-#endif
-}
-void QmlPlayerBridge::ps5PsnForget() {
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-    if (impl_->ps5Busy) return;
-    impl_->ps5Status = remoteplay::forgetPsnAuthorization() ? tr("PSN 授权已删除，局域网配对保留。") : tr("删除授权失败，请检查目录权限。");
-    emit ps5Changed();
-#endif
 }
 void QmlPlayerBridge::ps5SendLoginPin(const QString& pin) {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
@@ -578,7 +547,6 @@ void QmlPlayerBridge::tickPs5() {
         i.ps5Busy = false;
         Impl::Ps5Outcome r; { std::lock_guard lock(i.ps5Mutex); r = std::move(i.ps5Outcome); }
         i.ps5Status = veyra::ui::i18n::text(r.message);
-        if (!r.account.empty()) i.ps5Form["account"] = QString::fromStdString(r.account);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
         if (!r.savedPath.empty()) {
             i.ps5Profile = r.savedPath;

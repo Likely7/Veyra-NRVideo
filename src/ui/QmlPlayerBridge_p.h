@@ -90,7 +90,6 @@
 #include "veyra/remoteplay/ControllerInput.h"
 #include "veyra/remoteplay/Discovery.h"
 #include "veyra/remoteplay/ProfileStore.h"
-#include "veyra/remoteplay/PsnAuth.h"
 #include "veyra/source/RemotePlaySource.h"
 #endif
 #ifdef VEYRA_ENABLE_XBOX
@@ -459,9 +458,8 @@ struct QmlPlayerBridge::Impl {
     QString ps5Status;
     std::wstring ps5Profile;                 // file name inside profileDirectory()
     QVariantList ps5ProfileList;
-    uint64_t psnLoginStarted = 0;
     bool ps5Watching = false;
-    struct Ps5Outcome { std::wstring message; std::vector<std::pair<std::string, std::string>> hosts; std::wstring savedPath; std::string account; bool refreshProfiles = false; };
+    struct Ps5Outcome { std::wstring message; std::vector<std::pair<std::string, std::string>> hosts; std::wstring savedPath; bool refreshProfiles = false; };
     std::mutex ps5Mutex;
     Ps5Outcome ps5Outcome;
     std::atomic<bool> ps5Done{false};

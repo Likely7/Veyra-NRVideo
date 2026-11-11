@@ -876,7 +876,7 @@ VPage {
                     visible: root.section === "ps5"
                     VH1 { text: qsTr("PS5 串流") }
                     Text {
-                        text: qsTr("主机与 PSN 凭据加密保存在用户数据目录。")
+                        text: qsTr("主机配对凭据加密保存在用户数据目录。")
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -922,13 +922,12 @@ VPage {
                         }
                         VRow {
                             label: qsTr("PSN 账号")
-                            hint: veyra.ps5.psnReady ? qsTr("已登录") : qsTr("未登录 · 在 PS5 串流窗口里登录")
-                            VButton {
-                                objectName: "set-ps5-psn-logout"
-                                text: veyra.ps5.psnReady ? qsTr("退出") : qsTr("去登录")
-                                ghost: true
-                                enabled: !veyra.ps5.busy
-                                onClicked: veyra.ps5.psnReady ? veyra.ps5PsnForget() : veyra.openPs5Dialog()
+                            hint: qsTr("在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。")
+                            hintBelow: true
+                            RowLayout {
+                                spacing: 6
+                                VButton { objectName: "set-ps5-account-lookup"; text: qsTr("获取 Account ID"); ghost: true; onClicked: veyra.ps5OpenAccountChecker() }
+                                VButton { objectName: "set-ps5-pairing"; text: qsTr("配对设置"); ghost: true; onClicked: veyra.openPs5Dialog() }
                             }
                         }
                     }

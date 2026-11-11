@@ -373,6 +373,8 @@ Veyra calls the pinned Chiaki orientation tracker API (AGPL-3.0-only with OpenSS
 
 ### PSN browser authorization adapter (2026-09-12)
 
+Historical attribution: this adapter was removed on 2026-11-11. Current Veyra opens the user-selected PSNTools website for manual Account ID lookup; it does not implement the old OAuth/token flow. Existing Chiaki protocol and dependency notices below still apply.
+
 `src/remoteplay/PsnAuth.cpp` adapts the OAuth request contract and public client identifiers from chiaki-ng, commit `0e16950165f06e5c3291537c2eeba6e852be7120`, `gui/src/psnaccountid.cpp`, `gui/include/psnaccountid.h`, and `gui/src/psntoken.cpp`. Upstream credits the Account ID script to grill2010. License: AGPL-3.0-only with the upstream OpenSSL exception. The Windows HTTP, protected storage and UI integration are Veyra code. This is an unofficial client, not Sony endorsement. json-c remains an existing Chiaki dependency; its license/notice must remain in binary distributions.
 
 Static dependency notices and installed SPDX records: licenses/remoteplay/{json-c,libevent,miniupnpc,openssl,opus,sdl3}/. Upstream curl, nanopb, Jerasure and gf-complete notices are in the same directory. Their corresponding sources and port recipes accompany the RemotePlay-source release asset.
@@ -397,7 +399,7 @@ Thank you to these projects and their contributors. Integrated code, dependencie
 
 | Project | Contribution to Veyra |
 | --- | --- |
-| [chiaki-ng](https://github.com/streetpea/chiaki-ng) | PS5 Remote Play protocol, pairing and sessions; controller, haptics and PSN authorization integration and adaptations. Also credit to grill2010 for the upstream Account ID approach. |
+| [chiaki-ng](https://github.com/streetpea/chiaki-ng) | PS5 Remote Play protocol, pairing and sessions; controller and haptics integration; historical PSN authorization adapter. Also credit to grill2010 for the upstream Account ID approach. |
 | [XeSS-GPU-Motion](https://github.com/gggz114514-oss/XeSS-GPU-Motion) / [OpenCV](https://github.com/opencv/opencv) | Ported GPU DIS provider and shaders, retaining attribution and licenses for the OpenCV DIS-derived portions. |
 | [FFmpeg](https://github.com/FFmpeg/FFmpeg) / [nv-codec-headers](https://github.com/FFmpeg/nv-codec-headers) | Media demuxing, decoding, muxing and NVENC API declarations. Releases provide the actual FFmpeg patches and corresponding source. |
 | [SDL](https://github.com/libsdl-org/SDL) | PC controller input, DualSense support and haptic audio output. |

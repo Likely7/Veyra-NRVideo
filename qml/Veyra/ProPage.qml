@@ -224,12 +224,22 @@ VPage {
                 font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
             }
         }
-        headerActions: VButton {
-            objectName: "beauty-card-more-" + card.layerNumber
-            icon: true; ghost: true; iconName: "dup"
-            implicitWidth: 26; implicitHeight: 26
-            tip: qsTr("复制 · 移动 · 恢复默认 · 删除")
-            onClicked: { beautyLayerMenu.layer = card; beautyLayerMenu.openAt(this, "down") }
+        headerActions: RowLayout {
+            spacing: 2
+            VButton {
+                objectName: "beauty-card-more-" + card.layerNumber
+                icon: true; ghost: true; iconName: "dup"
+                implicitWidth: 26; implicitHeight: 26
+                tip: qsTr("复制 · 移动 · 恢复默认 · 删除")
+                onClicked: { beautyLayerMenu.layer = card; beautyLayerMenu.openAt(this, "down") }
+            }
+            VButton {
+                objectName: "beauty-card-delete-" + card.layerNumber
+                icon: true; ghost: true; iconName: "trash"
+                implicitWidth: 26; implicitHeight: 26
+                tip: qsTr("删除这一层")
+                onClicked: veyra.removeEffect(card.layerData.index)
+            }
         }
         readonly property var timing: veyra.nodeTimings[String(layerData.index + 2)] || ({})
         readonly property string timingText: timing.state === "measured" ? timing.ms.toFixed(2) + " ms"
@@ -2022,7 +2032,9 @@ VPage {
             else if (o.act === "up") veyra.moveBeautyLayer(nodeIndex, -1)
             else if (o.act === "down") veyra.moveBeautyLayer(nodeIndex, 1)
             else if (o.act === "reset") veyra.resetBeautyLayer(nodeIndex)
-            else if (o.act === "del") card.bye(() => veyra.removeEffect(nodeIndex))
+            // Let the model remove the card only after acceptance; a fade also
+            // hides a retained layer when the engine refuses deletion.
+            else if (o.act === "del") veyra.removeEffect(nodeIndex)
         }
     }
 

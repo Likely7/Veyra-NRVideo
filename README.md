@@ -175,7 +175,7 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 | Source | Setup |
 |---|---|
 | Capture card | Select device, resolution, rate, then a supported pixel format and audio input. Close competing apps. Match PQ/HLG/709 and Limited/Full to the signal. Magewell Pro Capture has a dedicated low-latency option. |
-| PS5 | Enable Remote Play, discover/enter IP, use PSN Account ID and the console's eight-digit pairing code; reconnect saved hosts. |
+| PS5 | Enable Remote Play and discover/enter the console IP. Click **Get Account ID** to open [PSNTools](https://www.psntools.com/psn/checker), copy the numeric or Base64 Account ID back into Veyra, then enter the console’s eight-digit pairing code. Saved consoles reconnect directly. |
 | PC | Install/configure Sunshine yourself; discover/add the host, PIN-pair, select app/desktop and connect. Sunshine is not bundled. |
 | Xbox | Follow device-code sign-in and select a console with remote features enabled. Unofficial/experimental; account, service and console restrictions apply. |
 | Screen | Select a window/display; avoid recursively capturing Veyra itself. |

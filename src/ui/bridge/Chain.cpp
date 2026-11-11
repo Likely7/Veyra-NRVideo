@@ -685,7 +685,6 @@ bool QmlPlayerBridge::removeEffect(int index) {
     if (index < 0 || uint32_t(index) >= c.nodeCount) return false;
     const auto& info = engine::effectInfo(c.nodes[index].type);
     if (info.mustBeLast) { emit notice(tr("补帧固定为最后一步，不能删除"), true); return false; }
-    const bool live=c.mode==engine::ChainMode::Node||c.nodes[index].type==engine::EffectType::NrEnhance||c.nodes[index].type==engine::EffectType::Color;
     const auto before=c; const int selected=impl_->selectedNr,colourSelected=impl_->selectedColour;
     const auto previousLayout = impl_->layout;
     if (c.mode == engine::ChainMode::Node) {
@@ -699,7 +698,8 @@ bool QmlPlayerBridge::removeEffect(int index) {
     else if(impl_->selectedNr>index)--impl_->selectedNr;
     if(impl_->selectedColour==index)impl_->selectedColour=-1;
     else if(impl_->selectedColour>index)--impl_->selectedColour;
-    if(!impl_->revalidate(live)){
+    // All removals must update the running graph, including list-mode beauty.
+    if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;c=before;impl_->layout=previousLayout;impl_->selectedNr=selected;
         impl_->selectedColour=colourSelected;
         impl_->revalidate();emit notice(uiText(error),true);return false;

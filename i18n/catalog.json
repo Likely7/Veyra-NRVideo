@@ -1961,29 +1961,8 @@
    "ja": "PS5 の接続に失敗しました。診断を確認してください"
   },
   {
-   "zh": "PSN 授权失败（{}）；原有配对不受影响，可重新登录。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "PSN 授權失敗（{}）；原有配對不受影響，可重新登入。",
-   "en": "PSN authorization failed ({}); existing pairing is unaffected, you can sign in again.",
-   "ja": "PSN の認証に失敗しました（{}）。既存のペアリングには影響ありません。再度サインインできます。"
-  },
-  {
-   "zh": "PSN 授权已删除，局域网配对保留。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "PSN 授權已刪除，區域網路配對保留。",
-   "en": "PSN authorization removed; LAN pairing kept.",
-   "ja": "PSN の認証を削除しました。LAN のペアリングは保持されます。"
-  },
-  {
-   "zh": "PSN 登录已保存，Account ID 已填入。首次仍需配对；已配对主机直接连接。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "PSN 登入已儲存，Account ID 已填入。首次仍需配對；已配對主機直接連接。",
-   "en": "PSN sign-in saved and the Account ID filled in. First use still needs pairing; paired consoles connect directly.",
-   "ja": "PSN のサインインを保存し、Account ID を入力しました。初回はペアリングが必要です。ペアリング済みの本体はそのまま接続できます。"
-  },
-  {
    "zh": "PSN 账号",
-   "src": "qml/Ps5SourceDialog.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "PSN 帳號",
    "en": "PSN account",
    "ja": "PSN アカウント"
@@ -3256,13 +3235,6 @@
    "ja": "ホストがこの PC を認識していません。再ペアリングしてください。"
   },
   {
-   "zh": "主机与 PSN 凭据加密保存在用户数据目录。",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "主機與 PSN 憑據加密儲存在使用者資料目錄。",
-   "en": "Hosts and PSN credentials are stored encrypted in the user data folder.",
-   "ja": "ホストと PSN の認証情報はユーザーデータフォルダーに暗号化して保存されます。"
-  },
-  {
    "zh": "主机列表",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "主機列表",
@@ -3401,6 +3373,13 @@
    "zh-TW": "主機連上了，但沒有完成握手。請重試。",
    "en": "Connected to the host, but the handshake did not complete. Try again.",
    "ja": "ホストに接続しましたが、ハンドシェイクが完了しませんでした。再試行してください。"
+  },
+  {
+   "zh": "主机配对凭据加密保存在用户数据目录。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "主機配對憑證加密儲存在使用者資料目錄。",
+   "en": "Console pairing credentials are encrypted in the user data directory.",
+   "ja": "本体のペアリング情報はユーザーデータフォルダーに暗号化して保存されます。"
   },
   {
    "zh": "主机长时间没有准备好串流。请确认主机开着并且网络正常。",
@@ -4769,13 +4748,6 @@
    "ja": "削除に失敗しました。フォルダーの権限を確認してください。"
   },
   {
-   "zh": "删除授权失败，请检查目录权限。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "刪除授權失敗，請檢查目錄權限。",
-   "en": "Could not delete the authorization; check folder permissions.",
-   "ja": "認証情報を削除できませんでした。フォルダーの権限を確認してください。"
-  },
-  {
    "zh": "删除此层",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "刪除此層",
@@ -4865,13 +4837,6 @@
    "zh-TW": "前往主頁",
    "en": "Visit page",
    "ja": "ページを開く"
-  },
-  {
-   "zh": "剪贴板不是有效的 Sony 授权回调地址。请复制登录完成后的完整 URL。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "剪貼簿不是有效的 Sony 授權回調地址。請複製登入完成後的完整 URL。",
-   "en": "The clipboard does not hold a valid Sony authorization callback URL. Copy the full URL after signing in.",
-   "ja": "クリップボードの内容は有効な Sony 認証コールバック URL ではありません。サインイン完了後の URL を丸ごとコピーしてください。"
   },
   {
    "zh": "剪辑入点已超过源视频时长",
@@ -5173,13 +5138,6 @@
    "zh-TW": "去朦朧",
    "en": "Dehaze",
    "ja": "かすみの除去"
-  },
-  {
-   "zh": "去登录",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "去登入",
-   "en": "Sign in",
-   "ja": "サインインへ"
   },
   {
    "zh": "去配对",
@@ -5973,18 +5931,11 @@
    "ja": "円 "
   },
   {
-   "zh": "在 Sony 网页完成登录，复制最终回调地址，再点“提交登录结果”。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "在 Sony 網頁完成登入，複製最終回調地址，再點“提交登入結果”。",
-   "en": "Sign in on the Sony web page, copy the final callback URL, then click \"Submit sign-in result\".",
-   "ja": "Sony の Web ページでサインインし、最後のコールバック URL をコピーしてから「サインイン結果を送信」を押してください。"
-  },
-  {
-   "zh": "在 Sony 网页登录后复制回调地址再提交；软件不接触密码",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "在 Sony 網頁登入後複製回調地址再提交；軟體不接觸密碼",
-   "en": "Sign in on the Sony page, then copy the callback URL and submit it; the app never sees your password",
-   "ja": "Sony のページでサインイン後、コールバック URL をコピーして送信します。アプリはパスワードに触れません"
+   "zh": "在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "在 PSNTools 網頁取得 Account ID，再到 PS5 串流視窗填入並配對。",
+   "en": "Get your Account ID on PSNTools, then enter it in the PS5 streaming window to pair.",
+   "ja": "PSNTools で Account ID を取得し、PS5 ストリーミング画面に入力してペアリングします。"
   },
   {
    "zh": "在主机上打开 Sunshine 网页（https://主机IP:47990），进入「PIN」页，输入下面的数字并提交：",
@@ -6055,6 +6006,13 @@
    "zh-TW": "在線 · 有遊戲在執行",
    "en": "Online · a game is running",
    "ja": "オンライン · ゲーム実行中"
+  },
+  {
+   "zh": "在网页获取 PSN Account ID 后，复制到配对栏，再填写主机的 8 位配对码。",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "在網頁取得 PSN Account ID 後，複製到配對欄，再填入主機的 8 位配對碼。",
+   "en": "Copy the PSN Account ID from the website into the pairing field, then enter the console’s 8-digit pairing code.",
+   "ja": "ウェブサイトで取得した PSN Account ID をペアリング欄に貼り付け、本体の8桁のペアリングコードを入力してください。"
   },
   {
    "zh": "地址格式不对。",
@@ -8011,7 +7969,7 @@
   },
   {
    "zh": "已登录",
-   "src": "qml/Ps5SourceDialog.qml",
+   "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "已登入",
    "en": "Signed in",
    "ja": "サインイン済み"
@@ -9716,13 +9674,6 @@
    "zh-TW": "提交幀率",
    "en": "Submit rate",
    "ja": "送信フレームレート"
-  },
-  {
-   "zh": "提交登录结果",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "提交登入結果",
-   "en": "Submit sign-in result",
-   "ja": "サインイン結果を送信"
   },
   {
    "zh": "提亮暗部与中间调，保留高光峰值。",
@@ -11435,17 +11386,10 @@
   },
   {
    "zh": "未登录",
-   "src": "qml/Ps5SourceDialog.qml",
+   "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "未登入",
    "en": "Not signed in",
    "ja": "未サインイン"
-  },
-  {
-   "zh": "未登录 · 在 PS5 串流窗口里登录",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "未登入 · 在 PS5 串流視窗裡登入",
-   "en": "Not signed in · sign in from the PS5 streaming window",
-   "ja": "未サインイン · PS5 ストリーミングのウィンドウでサインイン"
   },
   {
    "zh": "未知",
@@ -12967,6 +12911,13 @@
    "ja": "映像をクリックしてソースを選択"
   },
   {
+   "zh": "点击获取 Account ID，在网页查询后复制到这里。支持数字 ID 或 8 字节 Base64，不是 PSN 昵称。",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "點選取得 Account ID，在網頁查詢後複製到這裡。支援數字 ID 或 8 位元組 Base64，不是 PSN 暱稱。",
+   "en": "Click Get Account ID and copy the result here. Accepts a numeric ID or 8-byte Base64, not your PSN nickname.",
+   "ja": "「Account ID を取得」から調べた ID をここに貼り付けてください。数字の ID または8バイトの Base64 に対応しています。PSN のニックネームではありません。"
+  },
+  {
    "zh": "点左侧文件可重新预览（会和导出抢显卡）",
    "src": "qml/ExportPage.qml",
    "zh-TW": "點左側檔案可重新預覽（會和匯出搶顯示卡）",
@@ -13378,13 +13329,6 @@
    "zh-TW": "登入 PIN 必須為數字。",
    "en": "The sign-in PIN must be digits.",
    "ja": "サインイン PIN は数字で入力してください。"
-  },
-  {
-   "zh": "登录 PSN",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "登入 PSN",
-   "en": "Sign in to PSN",
-   "ja": "PSN にサインイン"
   },
   {
    "zh": "登录信息加密保存在本机；退出会删除它",
@@ -15193,6 +15137,13 @@
    "ja": "下書きは未実行"
   },
   {
+   "zh": "获取 Account ID",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "取得 Account ID",
+   "en": "Get Account ID",
+   "ja": "Account ID を取得"
+  },
+  {
    "zh": "蓝",
    "src": "qml/ColourCurve.qml",
    "zh-TW": "藍",
@@ -15921,13 +15872,6 @@
    "ja": "先に超解像ノードを追加してください"
   },
   {
-   "zh": "请先点登录 PSN，完成网页授权后再提交。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "請先點登入 PSN，完成網頁授權後再提交。",
-   "en": "Click Sign in to PSN, finish the web authorization, then submit.",
-   "ja": "先に「PSN にサインイン」を押し、Web での認証を完了してから送信してください。"
-  },
-  {
    "zh": "请先登录 Xbox 账号。",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "請先登入 Xbox 帳號。",
@@ -16276,13 +16220,6 @@
    "zh-TW": "帳號",
    "en": "Account",
    "ja": "アカウント"
-  },
-  {
-   "zh": "账号数字 ID 或 8 字节 Base64，不是昵称；登录 PSN 后自动填入",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "帳號數字 ID 或 8 字節 Base64，不是昵稱；登入 PSN 後自動填入",
-   "en": "The account's numeric ID or 8-byte Base64, not the nickname; filled in automatically after signing in to PSN",
-   "ja": "アカウントの数値 ID または 8 バイトの Base64 で、ニックネームではありません。PSN にサインインすると自動で入力されます"
   },
   {
    "zh": "账号登录 · 实验",
@@ -17398,13 +17335,6 @@
    "ja": "デバイスを接続したら、まず補正をオフにして元の映像を確認し、必要に応じてオンにしてください"
   },
   {
-   "zh": "退出",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "退出",
-   "en": "Quit",
-   "ja": "終了"
-  },
-  {
    "zh": "退出全屏，恢复普通窗口操作",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "退出全螢幕，恢復一般視窗操作",
@@ -17599,6 +17529,13 @@
    "zh-TW": "配對成功，但儲存失敗；請檢查使用者目錄權限。",
    "en": "Paired, but saving failed; check the user folder permissions.",
    "ja": "ペアリングしましたが保存に失敗しました。ユーザーフォルダーの権限を確認してください。"
+  },
+  {
+   "zh": "配对设置",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "配對設定",
+   "en": "Pairing settings",
+   "ja": "ペアリング設定"
   },
   {
    "zh": "配对（首次）",

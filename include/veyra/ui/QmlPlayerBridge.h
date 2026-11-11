@@ -195,7 +195,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString remotePlayHost READ remotePlayHost WRITE setRemotePlayHost NOTIFY settingsChanged)
     Q_PROPERTY(QString remotePlayPin READ remotePlayPin WRITE setRemotePlayPin NOTIFY settingsChanged)
     // P4-e PS5 Remote Play, ported from the 1.4.4 panel: saved pairings (shared
-    // %LOCALAPPDATA%\Veyra\remoteplay, encrypted), discovery, pairing, PSN login,
+    // %LOCALAPPDATA%\Veyra\remoteplay, encrypted), discovery, pairing, Account ID lookup,
     // wake, stream profile, decode/sampling, view-only, login PIN, controller
     // forwarding and gyro calibration. `ps5` carries the form state.
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
@@ -823,9 +823,7 @@ public:
     Q_INVOKABLE bool ps5Connect();
     Q_INVOKABLE void ps5Wake();
     Q_INVOKABLE void ps5Forget();
-    Q_INVOKABLE void ps5PsnLogin();
-    Q_INVOKABLE void ps5PsnComplete();
-    Q_INVOKABLE void ps5PsnForget();
+    Q_INVOKABLE void ps5OpenAccountChecker();
     Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
