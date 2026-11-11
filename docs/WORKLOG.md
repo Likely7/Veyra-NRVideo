@@ -998,3 +998,14 @@ T911 实卡 4K NV12 接受指定 59.94，协商 59.939820，正常回调和驱�
 执行 reports/codex-patreon-support-20261111/update.py prepare、assets、releases、verify。GitHub Markdown 渲染、两图 SVG 格式/尺寸与公开 HTTP200、12份公开文件内容核对通过。扫描41条 Release，将其中21条的旧赞助按钮替换为两个 Patreon 入口。更新逐条比较完整正文并核对资产ID/大小/摘要、发布日期和标签身份。首次核验遇旧Release混合CRLF/LF，被错误的通用换行读取触发断言；按原始字节读取后通过，并支持已完成项续验。Latest 核对仍为 v2.1.5。
 
 Patreon 主页 HTTP200。咖啡页面自动访问返回HTTP403，按用户给定原链接接入，未作付款流程验收。初始远程徽章服务HTTP403后，按钮改用仓库内自包含SVG。所有快照、21份新正文、原始图标和CC0许可、渲染HTML与核验回执位于 E:/项目/Veyra/reports/codex-patreon-support-20261111。最终回执 FINAL.json。
+
+
+## 2026-11-11 软件内 Patreon 与全效果遮罩/独立 NR 节点
+
+Patreon 软件入口基线提交 37f13a0，位于前一分支 codex/patreon-sponsor-20261111，设置页/赞助页双入口、图标和多语言已更新。前一轮应用构建119.3秒，Qt Quick175/0/0、合同与i18n通过；用户随后要求暂缓构建并新增遮罩，实际赞助窗口未验。证据 E:/项目/Veyra/reports/codex-patreon-sponsor-20261111。
+
+当前分支 codex/effect-exclusion-nodes-20261111。用户明确遮罩连补帧也排除、区域内保持原始帧节奏。实现全效果剔除（最多四个矩形/圆形/椭圆、羽化0–64像素），图内生成帧恢复A、真实帧恢复B，XeSS接UI/HUD-less合成接口；保留未遮罩补帧历史。恢复独立NR保护区域、NR输出稳定器节点和节点存储，停止自动删除保护节点。共享列表/节点编辑器，保护/稳定器滑条独立通知、不刷新整图。预设库21/会话16旁文件、平面预设37及导出worker15；旧文件保留，删除新节点后也不丢后续存储。
+
+执行 reports/codex-effect-exclusion-nodes-20261111/check_syntax.py：18个翻译单元 MSVC /Zs全部通过，不生成OBJ/链接程序。Qt6.8.3 qmltestrunner -input tests/qml/quick/tst_mask_editor.qml -import qml，QT_QPA_PLATFORM=offscreen、QT_QUICK_BACKEND=software，6/0/0。qmllint检查MaskEditor/ProPage/NodePage无语法错误，存在动态上下文等警告；两着色器DXC -Fo NUL通过，不更新程序着色器。python -B scripts/i18n/extract.py --check：2812条，三语言缺失0、占位符错误0；git diff --check通过。首次ComPtr重载取址和HLSL保留字错误修复后复查；不支持的DXC语法检查参数和首次错误日志保留。
+
+本轮不构建、打包、运行Veyra，不改真实配置、运行库或驱动，未合main或推送。新增C++回归用例仅语法通过，未执行；真实GPU画面、补帧帧节奏（特别是XeSS相位/HDR羽化）、播放/采集/导出、生命周期及显存压力待后续应用构建验收。方案 docs/EFFECT_EXCLUSION_NODES_2026-11-11.md，证据 E:/项目/Veyra/reports/codex-effect-exclusion-nodes-20261111，日志 E:/项目/Veyra/logs/codex-effect-exclusion-nodes-20261111，临时响应文件 E:/项目/Veyra/tmp/codex-effect-exclusion-nodes-20261111。

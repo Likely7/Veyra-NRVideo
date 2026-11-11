@@ -1457,13 +1457,6 @@
    "ja": "NR 保護領域"
   },
   {
-   "zh": "NR 保护区域仅在列表模式可用",
-   "src": "src/ui/bridge/Enhancement.cpp",
-   "zh-TW": "NR 保護區域僅在列表模式可用",
-   "en": "NR protected areas are available in list mode only",
-   "ja": "NR 保護領域はリストモードでのみ使えます"
-  },
-  {
    "zh": "NR 全局保护区域",
    "src": "qml/ProPage.qml",
    "zh-TW": "NR 全域保護區域",
@@ -1534,6 +1527,13 @@
    "ja": "NR 画質補正 · 第 %1 層"
   },
   {
+   "zh": "NR 稳定器必须位于最后一层 NR 与 NR 保护区域之后",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "NR 穩定器必須位於最後一層 NR 與 NR 保護區域之後",
+   "en": "Place the NR stabilizer after the final NR layer and NR protection.",
+   "ja": "NR 安定化は最後の NR レイヤーと NR 保護領域の後に置いてください。"
+  },
+  {
    "zh": "NR 第1层",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "NR 第1層",
@@ -1574,6 +1574,13 @@
    "zh-TW": "NR 自動推理復用",
    "en": "NR automatic inference reuse",
    "ja": "NR 推論の自動再利用"
+  },
+  {
+   "zh": "NR 输出稳定器",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "NR 輸出穩定器",
+   "en": "NR output stabilizer",
+   "ja": "NR 出力安定化"
   },
   {
    "zh": "NR 运动来源",
@@ -2017,11 +2024,11 @@
    "ja": "RTX 50 · NVIDIA オリジナル"
   },
   {
-   "zh": "RTX Video HDR 之后只能接补帧",
+   "zh": "RTX Video HDR 之后只能接全效果剔除与补帧",
    "src": "src/engine/EffectChain.cpp",
-   "zh-TW": "RTX Video HDR 之後只能接補幀",
-   "en": "Only frame generation can follow RTX Video HDR",
-   "ja": "RTX Video HDR の後に置けるのはフレーム生成だけです"
+   "zh-TW": "RTX Video HDR 之後只能接全效果剔除與補幀",
+   "en": "Only effect exclusion and frame generation may follow RTX Video HDR.",
+   "ja": "RTX Video HDR の後には効果除外とフレーム生成のみ接続できます。"
   },
   {
    "zh": "RTX Video HDR 只能放在补帧前面",
@@ -3823,6 +3830,13 @@
    "ja": "プリセットの保存に失敗しました：%1"
   },
   {
+   "zh": "保护区域参数无效",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "保護區域參數無效",
+   "en": "Invalid protection region parameters.",
+   "ja": "保護領域のパラメーターが無効です。"
+  },
+  {
    "zh": "保护强度",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "保護強度",
@@ -4094,6 +4108,20 @@
    "zh-TW": "全螢幕（雙擊畫面 / F11）· 全螢幕後按 %1 開啟快速調整",
    "en": "Fullscreen (double-click / F11) · Press %1 for quick adjustments",
    "ja": "全画面（ダブルクリック / F11）· %1 でクイック調整"
+  },
+  {
+   "zh": "全效果剔除",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "全效果剔除",
+   "en": "Exclude all effects",
+   "ja": "すべての効果を除外"
+  },
+  {
+   "zh": "全效果剔除必须位于其他画质效果之后、补帧之前",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "全效果剔除必須位於其他畫質效果之後、補幀之前",
+   "en": "Place effect exclusion after image effects and before frame generation.",
+   "ja": "効果除外は画質効果の後、フレーム生成の前に置いてください。"
   },
   {
    "zh": "全部显卡",
@@ -4923,18 +4951,32 @@
    "ja": "含む"
   },
   {
-   "zh": "区域 · Esc 取消",
+   "zh": "区域内恢复原始画面与帧率",
    "src": "qml/ProPage.qml",
-   "zh-TW": "區域 · Esc 取消",
-   "en": "area · Esc to cancel",
-   "ja": "領域 · Esc でキャンセル"
+   "zh-TW": "區域內恢復原始畫面與幀率",
+   "en": "Restore source picture and frame cadence inside the regions",
+   "ja": "領域内を元の映像とフレーム周期に戻す"
   },
   {
-   "zh": "区域内排除所有 NR 层 · 仅列表模式",
+   "zh": "区域内恢复原始画面，补帧也不参与，按原始帧节奏更新。最多 4 个区域。",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "區域內恢復原始畫面，補幀也不參與，按原始幀節奏更新。最多 4 個區域。",
+   "en": "Restore the source picture inside each region, updating only at the source frame cadence. Up to 4 regions.",
+   "ja": "領域内を元の映像に戻し、元のフレーム周期で更新します。最大 4 領域。"
+  },
+  {
+   "zh": "区域内排除 NR 处理。最多 4 个区域。",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "區域內排除 NR 處理。最多 4 個區域。",
+   "en": "Exclude NR processing inside the regions. Up to 4 regions.",
+   "ja": "領域内の NR 処理を除外します。最大 4 領域。"
+  },
+  {
+   "zh": "区域内排除所有 NR 层",
    "src": "qml/ProPage.qml",
-   "zh-TW": "區域內排除所有 NR 層 · 僅列表模式",
-   "en": "Excludes the area from every NR layer · list mode only",
-   "ja": "領域内をすべての NR 層から除外 · リストモードのみ"
+   "zh-TW": "區域內排除所有 NR 層",
+   "en": "Exclude every NR layer inside the regions",
+   "ja": "領域内のすべての NR レイヤーを除外"
   },
   {
    "zh": "区域扩展",
@@ -5344,7 +5386,7 @@
   },
   {
    "zh": "变化容差",
-   "src": "qml/ProPage.qml",
+   "src": "qml/NodePage.qml",
    "zh-TW": "變化容差",
    "en": "Change tolerance",
    "ja": "変化の許容幅"
@@ -5925,17 +5967,10 @@
   },
   {
    "zh": "圆形 ",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "圓形 ",
    "en": "Circle ",
    "ja": "円 "
-  },
-  {
-   "zh": "圆形 / 椭圆",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "圓形 / 橢圓",
-   "en": "Circle / ellipse",
-   "ja": "円 / 楕円"
   },
   {
    "zh": "在 Sony 网页完成登录，复制最终回调地址，再点“提交登录结果”。",
@@ -5980,6 +6015,13 @@
    "ja": "スマートフォンまたはブラウザーで %1 を開き、上のコードを入力して Xbox（Microsoft）アカウントでサインインしてください。完了すると自動で続行します。"
   },
   {
+   "zh": "在最后一层 NR 之后稳住未变化的像素。",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "在最後一層 NR 之後穩住未變化的像素。",
+   "en": "Stabilize unchanged pixels after the final NR layer.",
+   "ja": "最後の NR レイヤーの後で、変化のないピクセルを安定させます。"
+  },
+  {
    "zh": "在浏览器打开登录页",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "在瀏覽器開啟登入頁",
@@ -5987,11 +6029,11 @@
    "ja": "ブラウザーでサインインページを開く"
   },
   {
-   "zh": "在画面上按住左键拖出",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "在畫面上按住左鍵拖出",
-   "en": "Hold the left button and drag on the picture",
-   "ja": "映像上で左ボタンを押したままドラッグ"
+   "zh": "在画面上拖出区域，Esc 取消",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "在畫面上拖出區域，Esc 取消",
+   "en": "Drag a region on the picture. Press Esc to cancel.",
+   "ja": "映像上をドラッグして領域を作成。Esc でキャンセル。"
   },
   {
    "zh": "在画面上按住左键拖动分割线：左边原画、右边增强。",
@@ -5999,13 +6041,6 @@
    "zh-TW": "在畫面上按住左鍵拖曳分割線：左邊原畫、右邊增強。",
    "en": "Hold the left button on the picture and drag the divider: original on the left, enhanced on the right.",
    "ja": "映像上で左ボタンを押したまま分割線をドラッグ：左がオリジナル、右が補正後です。"
-  },
-  {
-   "zh": "在画面上画出矩形或圆形区域（最多 4 个），区域内的画面不做任何一层 NR 处理。",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "在畫面上畫出矩形或圓形區域（最多 4 個），區域內的畫面不做任何一層 NR 處理。",
-   "en": "Draw rectangles or circles on the picture (up to 4); the picture inside them gets no NR at all.",
-   "ja": "映像上に四角形または円を描きます（最大 4 個）。領域内はどの NR 層の処理も受けません。"
   },
   {
    "zh": "在线",
@@ -6275,7 +6310,7 @@
   },
   {
    "zh": "处理链中没有 NR 保护节点，未更改设置",
-   "src": "src/ui/bridge/Enhancement.cpp",
+   "src": "src/ui/bridge/View.cpp",
    "zh-TW": "處理鏈中沒有 NR 保護節點，未更改設定",
    "en": "The chain has no NR protection node; settings unchanged",
    "ja": "処理チェーンに NR 保護ノードがないため、設定は変更していません"
@@ -10657,20 +10692,6 @@
    "ja": "従来の形式選択"
   },
   {
-   "zh": "旧节点配置的 NR 保护区域已移除；列表保护及其他节点参数保留，后续保存到 .p3-node 文件，原文件不覆盖",
-   "src": "src/engine/PresetLibrary.cpp",
-   "zh-TW": "舊節點設定的 NR 保護區域已移除；列表保護及其他節點參數保留，後續儲存到 .p3-node 檔案，原檔案不覆蓋",
-   "en": "NR protected areas from the old node configuration were removed; list protection and other node settings are kept and saved to a .p3-node file from now on; the original file is not overwritten",
-   "ja": "旧ノード構成の NR 保護領域を削除しました。リストの保護とその他のノード設定は保持し、今後は .p3-node ファイルに保存します。元のファイルは上書きしません"
-  },
-  {
-   "zh": "旧节点预设的 NR 保护区域已移除；其余参数保留，后续保存到 .p3-node 文件，原文件不覆盖",
-   "src": "src/engine/PresetLibrary.cpp",
-   "zh-TW": "舊節點預設的 NR 保護區域已移除；其餘參數保留，後續儲存到 .p3-node 檔案，原檔案不覆蓋",
-   "en": "NR protected areas from the old node preset were removed; other settings are kept and saved to a .p3-node file from now on; the original file is not overwritten",
-   "ja": "旧ノードプリセットの NR 保護領域を削除しました。その他の設定は保持し、今後は .p3-node ファイルに保存します。元のファイルは上書きしません"
-  },
-  {
    "zh": "时域稳定",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "時域穩定",
@@ -13108,14 +13129,14 @@
   },
   {
    "zh": "画圆形",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "畫圓形",
    "en": "Draw circle",
    "ja": "円を描く"
   },
   {
    "zh": "画矩形",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "畫矩形",
    "en": "Draw rectangle",
    "ja": "四角形を描く"
@@ -13534,15 +13555,8 @@
    "ja": "スリープ（起動可能）"
   },
   {
-   "zh": "矩形",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "矩形",
-   "en": "Rectangle",
-   "ja": "四角形"
-  },
-  {
    "zh": "矩形 ",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "矩形 ",
    "en": "Rectangle ",
    "ja": "四角形 "
@@ -13660,8 +13674,15 @@
    "ja": "後で"
   },
   {
+   "zh": "稳定器参数超出范围",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "穩定器參數超出範圍",
+   "en": "Stabilizer parameters are out of range.",
+   "ja": "安定化のパラメーターが範囲外です。"
+  },
+  {
    "zh": "稳定强度",
-   "src": "qml/ProPage.qml",
+   "src": "qml/NodePage.qml",
    "zh-TW": "穩定強度",
    "en": "Stabilization strength",
    "ja": "安定化の強さ"
@@ -14375,7 +14396,7 @@
   },
   {
    "zh": "羽化像素",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "羽化像素",
    "en": "Feather (pixels)",
    "ja": "ぼかし（ピクセル）"
@@ -15002,20 +15023,6 @@
    "zh-TW": "節點模式尚未接入大圖分塊處理，請切換列表模式後開啟",
    "en": "Node mode does not do tiled processing of large images yet; switch to list mode and open it again",
    "ja": "ノードモードは大きな画像の分割処理にまだ対応していません。リストモードに切り替えて開いてください"
-  },
-  {
-   "zh": "节点模式已取消 NR 保护区域，请迁移旧节点配置",
-   "src": "src/engine/EffectChain.cpp",
-   "zh-TW": "節點模式已取消 NR 保護區域，請遷移舊節點設定",
-   "en": "Node mode no longer has NR protected areas; migrate the old node configuration",
-   "ja": "ノードモードでは NR 保護領域を廃止しました。旧ノード構成を移行してください"
-  },
-  {
-   "zh": "节点模式已取消 NR 保护区域；请在列表模式使用全局保护",
-   "src": "src/ui/bridge/Chain.cpp",
-   "zh-TW": "節點模式已取消 NR 保護區域；請在列表模式使用全域保護",
-   "en": "Node mode no longer has NR protected areas; use global protection in list mode",
-   "ja": "ノードモードでは NR 保護領域を廃止しました。リストモードの全体保護を使ってください"
   },
   {
    "zh": "节点模式按连线顺序真实执行；离线导出仅支持列表模式。",
@@ -16902,7 +16909,7 @@
   },
   {
    "zh": "输出稳定器 · 抗闪烁",
-   "src": "qml/NodePage.qml",
+   "src": "qml/ProPage.qml",
    "zh-TW": "輸出穩定器 · 抗閃爍",
    "en": "Output stabilizer · anti-flicker",
    "ja": "出力スタビライザー · ちらつき防止"
@@ -18859,6 +18866,13 @@
    "zh-TW": "預設庫版本不支援 DLAA 抗鋸齒",
    "en": "This preset library version does not support DLAA anti-aliasing",
    "ja": "このプリセットライブラリのバージョンは DLAA アンチエイリアスに対応していません"
+  },
+  {
+   "zh": "预设库稳定器字段损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫穩定器欄位損壞",
+   "en": "Invalid preset stabilizer data.",
+   "ja": "プリセットの安定化データが無効です。"
   },
   {
    "zh": "预设库美颜人脸识别字段损坏",

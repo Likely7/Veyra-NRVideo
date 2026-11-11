@@ -152,11 +152,32 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     emit settingsChanged();emitParameterChanged(&QmlPlayerBridge::nrLayersChanged,wasValid);return accepted;
 }
 
+QVariantMap QmlPlayerBridge::nrStabilizerState() const {
+    const auto* node=impl_->chain.firstOf(engine::EffectType::NrStabilizer);
+    return {{"enabled",node&&node->enabled},{"strength",node?node->holdStrength:.8f},
+        {"tolerance",node?node->holdTolerance:.02f}};
+}
+bool QmlPlayerBridge::setStabilizerParameter(int index,const QString& key,double value) {
+    if(index<0||uint32_t(index)>=impl_->chain.nodeCount||!std::isfinite(value)||value<0||value>1)return false;
+    auto& node=impl_->chain.nodes[uint32_t(index)];
+    if(node.type!=engine::EffectType::NrStabilizer)return false;
+    const auto previous=node;
+    const bool wasValid=chainValid();
+    if(key==QLatin1String("strength"))node.holdStrength=float(value);
+    else if(key==QLatin1String("tolerance"))node.holdTolerance=float(value);
+    else return false;
+    if(node==previous)return true;
+    if(!impl_->revalidate(true)){
+        const auto error=impl_->validation.message;node=previous;impl_->revalidate();
+        emit notice(uiText(error),true);return false;
+    }
+    emit settingsChanged();emitParameterChanged(&QmlPlayerBridge::nrStabilizerChanged,wasValid);return true;
+}
+
 QVariantList QmlPlayerBridge::effectCatalog() const {
     QVariantList out;
     for (const auto& info : engine::effectCatalog()) {
-        if (info.hidden) continue;
-        if (impl_->chain.mode == engine::ChainMode::Node && info.type == engine::EffectType::Protection) continue;
+        if (info.hidden||(impl_->chain.mode==engine::ChainMode::List&&info.type==engine::EffectType::NrStabilizer))continue;
         if (impl_->chain.mode == engine::ChainMode::Node && info.type == engine::EffectType::FrameGeneration) {
             for(const auto& choice : fgBackendChoices()) {
                 const auto option=choice.toMap();const auto backend=option.value("id").toString();
@@ -192,8 +213,12 @@ QVariantList QmlPlayerBridge::effectCatalog() const {
 
 QString QmlPlayerBridge::chainError() const { return uiText(impl_->validation.message); }
 void QmlPlayerBridge::emitChainChanged() {
+    // A pending drawing belongs to the old document. A mode/preset change or
+    // node deletion must not commit it into another mask or recreate that node.
+    if(!impl_->protDraw.isEmpty())beginProtectionDraw(QString{});
     emit chainChanged(); emit nrLayersChanged(); emit videoHdrParamsChanged();
     emit antiAliasChanged(); emit beautyChanged(); emit colourParamsChanged(); emit protectionChanged();
+    emit nrStabilizerChanged();
 }
 // Every chainChanged re-evaluated all chain-bound bindings on every page (the pro
 // and node pages stay loaded) and repainted the node wires: 65-80 ms of interface
@@ -372,7 +397,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         const engine::EffectInfo* info = nullptr;
         for (const auto& item : engine::effectCatalog())
             if ((fg && item.type == engine::EffectType::FrameGeneration) || utf8Of(item.id) == type) info = &item;
-        if (!info || info->hidden || info->type == engine::EffectType::Protection) {
+        if (!info || info->hidden) {
             emit notice(tr("节点模式不支持该效果类型"), true); return -1;
         }
         auto& c = impl_->chain;
@@ -404,8 +429,23 @@ int QmlPlayerBridge::addEffect(const QString& type) {
                     const int at = impl_->layout.indexOf(c, next);
                     const auto t = c.nodes[at].type;
                     if (t == engine::EffectType::FrameGeneration ||
-                        (info->type != engine::EffectType::FrameGeneration && t == engine::EffectType::VideoHdr)) break;
+                        (info->type==engine::EffectType::NrEnhance&&
+                         (t==engine::EffectType::Protection||t==engine::EffectType::NrStabilizer))||
+                        (info->type!=engine::EffectType::FrameGeneration&&info->type!=engine::EffectType::Exclusion&&
+                         (t==engine::EffectType::VideoHdr||t==engine::EffectType::Exclusion)))break;
                     predecessor = next; next = impl_->layout.next[at];
+                }
+                if(info->type==engine::EffectType::NrStabilizer||info->type==engine::EffectType::Protection){
+                    uint32_t current=impl_->layout.inputNext;
+                    while(current>1){
+                        const auto at=impl_->layout.indexOf(c,current);
+                        const auto type=c.nodes[size_t(at)].type;
+                        if(type==engine::EffectType::NrEnhance||
+                           (info->type==engine::EffectType::NrStabilizer&&type==engine::EffectType::Protection)){
+                            predecessor=current;next=impl_->layout.next[size_t(at)];
+                        }
+                        current=impl_->layout.next[size_t(at)];
+                    }
                 }
                 if (predecessor == 0) impl_->layout.inputNext = id;
                 else impl_->layout.next[size_t(impl_->layout.indexOf(c, predecessor))] = id;
@@ -456,9 +496,6 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         }
     }
     if (!found) { emit notice(tr("未知的效果: %1").arg(type), true); return -1; }
-    if (impl_->chain.mode == engine::ChainMode::Node && wanted == engine::EffectType::Protection) {
-        emit notice(tr("节点模式已取消 NR 保护区域；请在列表模式使用全局保护"), true); return -1;
-    }
 
     auto& c = impl_->chain;
     if (c.nodeCount >= engine::kMaxChainNodes) { emit notice(tr("效果链已满"), true); return -1; }
@@ -475,11 +512,14 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     if (wanted != engine::EffectType::FrameGeneration) {
         for (uint32_t i = 0; i < c.nodeCount; ++i) {
             const auto& nodeInfo = engine::effectInfo(c.nodes[i].type);
-            if (nodeInfo.mustBeLast||((wanted==engine::EffectType::Color||wanted==engine::EffectType::Beauty)&&c.nodes[i].type==engine::EffectType::VideoHdr)||
+            if (nodeInfo.mustBeLast||(wanted!=engine::EffectType::Exclusion&&c.nodes[i].type==engine::EffectType::Exclusion)||((wanted==engine::EffectType::Color||wanted==engine::EffectType::Beauty)&&c.nodes[i].type==engine::EffectType::VideoHdr)||
                 (wanted==engine::EffectType::NrEnhance&&
-                (c.nodes[i].type==engine::EffectType::Protection||c.nodes[i].type==engine::EffectType::VideoHdr))) { insertAt = i; break; }
+                (c.nodes[i].type==engine::EffectType::Protection||c.nodes[i].type==engine::EffectType::NrStabilizer||c.nodes[i].type==engine::EffectType::VideoHdr))) { insertAt = i; break; }
         }
     }
+    if(wanted==engine::EffectType::NrStabilizer)
+        for(uint32_t i=0;i<c.nodeCount;++i)
+            if(c.nodes[i].type==engine::EffectType::NrEnhance||c.nodes[i].type==engine::EffectType::Protection)insertAt=i+1;
     for (uint32_t i = c.nodeCount; i > insertAt; --i) c.nodes[i] = c.nodes[i - 1];
     if(impl_->selectedNr>=int(insertAt))++impl_->selectedNr;
     if(impl_->selectedColour>=int(insertAt))++impl_->selectedColour;

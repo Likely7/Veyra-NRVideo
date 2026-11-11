@@ -239,6 +239,8 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
             if (!xess && live && flow.counters.fgSkippedBeforeEval > 0 && flow.counters.fgEvaluated < flow.counters.fgCandidate)
                 waiting = QStringLiteral("fg-skipped");
             break;
+        case engine::EffectType::NrStabilizer:
+        case engine::EffectType::Exclusion:
         default: waiting = QStringLiteral("untimed"); break;
         }
         if (!n.enabled) { publish(i, QStringLiteral("disabled"), std::nullopt); continue; }

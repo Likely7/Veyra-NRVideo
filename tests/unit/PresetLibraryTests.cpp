@@ -107,7 +107,7 @@ __declspec(noinline) void testNodeEditorSession() {
           "editor session: reloaded partial graph must not replace runtime");
     const auto validBytes = readBytes(sidecar);
     // Faults: duplicate ID, dangling edge, detached cycle, merge, and an
-    // unsupported detached Protection node. Rejection is not migration.
+    // duplicate singleton Protection node, including when detached.
     for (int fault = 0; fault < 5; ++fault) {
         auto damaged = std::make_unique<ChainSession>(*session);
         auto graph = std::make_shared<NodeEditorDocument>(*document);
@@ -122,7 +122,7 @@ __declspec(noinline) void testNodeEditorSession() {
         }
         if (fault == 4) graph->nodes.nodes[detached].type = EffectType::Protection;
         check(!writer.save(*damaged) && readBytes(sidecar) == validBytes, __FUNCTION__);
-        // Protection save refusal does not establish old sidecar migration.
+        // The duplicate singleton is rejected without rewriting either document.
         if (fault == 4) continue;
         std::istringstream source(validBytes);
         std::string headers[4], runtimeBody, editorBody;
@@ -193,25 +193,20 @@ __declspec(noinline) void testLegacyProtectionMigration() {
         for (uint32_t i = index; i > uint32_t(position); --i) fixture.nodes[i] = fixture.nodes[i - 1];
         fixture.nodes[position] = protection;
         auto expected = fixture; expected.mode = ChainMode::Node;
-        uint32_t count = 0;
-        for (uint32_t i = 0; i < fixture.nodeCount; ++i)
-            if (fixture.nodes[i].type != EffectType::Protection) expected.nodes[count++] = fixture.nodes[i];
-        for (uint32_t i = count; i < expected.nodeCount; ++i) expected.nodes[i] = {};
-        expected.nodeCount = count;
         check(writer.put(entry), "create historical library fixture through list serializer");
         auto legacy = readBytes(path); const auto start = legacy.find("\"legacy-protection\"");
         const auto end = legacy.find('\n', start);
         legacy.replace(start, end - start, legacyNodeLine(legacy.substr(start, end - start)));
         { std::ofstream file(path, std::ios::binary | std::ios::trunc); file << legacy; }
         PresetLibrary migrated(path);
-        check(migrated.load() && !migrated.error().empty(), "legacy node library reports explicit protection removal notice");
+        check(migrated.load() && migrated.error().empty(), "legacy node library loads without deleting protection");
         const auto& restored = migrated.entries().back().chain;
-        check(restored == expected && restored.mode == ChainMode::Node && restored.countOf(EffectType::Protection) == 0 &&
+        check(restored == expected && restored.mode == ChainMode::Node && restored.countOf(EffectType::Protection) == 1 &&
               restored.firstOf(EffectType::NrEnhance)->viewX == 481 &&
               restored.firstOf(EffectType::NrEnhance)->nr.model.tone == .37f,
-              "library migration preserves layout and non-protection parameters");
-        check(migrated.save() && readBytes(path) == legacy && std::filesystem::exists(sidecar),
-              "migrated library saves separately without rewriting original bytes");
+              "library retains protection payload, layout and other parameters");
+        check(migrated.save() && !std::filesystem::exists(sidecar),
+              "saving a legacy node no longer creates a protection-removal sidecar");
         PresetLibrary reopened(path);
         check(reopened.load() && reopened.entries() == migrated.entries(), "restart prefers validated migrated library");
     }
@@ -233,13 +228,13 @@ __declspec(noinline) void testLegacyProtectionMigration() {
         const auto legacy = bytes.str();
         { std::ofstream file(path, std::ios::binary | std::ios::trunc); file << legacy; }
         ChainSessionStore migrated(path); auto restored = ChainSession::initial({});
-        check(migrated.load(restored) && !migrated.error().empty(), "legacy session migration reports its compatibility action");
+        check(migrated.load(restored) && migrated.error().empty(), "legacy session keeps its protection nodes");
         check(restored.configurations[0].chain == session.configurations[0].chain &&
-              restored.configurations[1].chain.countOf(EffectType::Protection) == 0 &&
+              restored.configurations[1].chain.countOf(EffectType::Protection) == 1 &&
               restored.configurations[1].chain.firstOf(EffectType::NrEnhance)->viewX == 731,
-              "session migration keeps list protection and node layout independent");
-        check(migrated.save(restored) && readBytes(path) == legacy && std::filesystem::exists(sidecar),
-              "migrated session saves sidecar and preserves original file exactly");
+              "session keeps list protection and node protection independent");
+        check(migrated.save(restored) && !std::filesystem::exists(sidecar),
+              "session saving does not silently strip the node mask");
         ChainSessionStore reopened(path); auto restarted = ChainSession::initial({});
         check(reopened.load(restarted) && restarted == restored, "new session process selects migrated sidecar");
     }
@@ -1380,7 +1375,57 @@ __declspec(noinline) void testDlaaStorage() {
     ChainSessionStore reopened(sessionPath);
     check(reopened.load(*restored) && *restored == *session, "dlaa session: DLAA round-trips through the session");
 }
+__declspec(noinline) void testOutputControlStorage() {
+    EnhancementSettings settings;settings.nr=true;settings.multiplier=3;
+    settings.exclusion.enabled=true;settings.exclusion.featherPixels=29;
+    settings.exclusion.regions[0]={.1f,.2f,.6f,.8f,true};
+    settings.nrHoldStrength=.67f;settings.nrHoldTolerance=.03f;
+    auto session=std::make_unique<ChainSession>(ChainSession::initial(settings));
+    check(session->select(ChainMode::Node),"output controls: initialize node mode");
+    auto editor=std::make_shared<NodeEditorDocument>();
+    editor->nodes=session->configurations[1].chain;
+    check(editor->layout.initialize(editor->nodes).accepted,"output controls: stable IDs");
+    editor->layout.inputNext=0; // unfinished wiring must still save every parameter
+    editor->nodes.firstOf(EffectType::NrStabilizer)->viewX=543;
+    session->configurations[1].editor=editor;
+    const auto sessionPath=scratch(L"output-controls-session.v1");
+    ChainSessionStore writer(sessionPath);
+    auto baseline=std::make_unique<ChainSession>(ChainSession::initial({}));
+    check(writer.save(*baseline),"output controls: old session rollback point");
+    const auto original=readBytes(sessionPath);
+    const auto sessionSidecar=std::filesystem::path(sessionPath).concat(L".output-controls");
+    check(writer.save(*session)&&readBytes(sessionPath)==original&&
+          readBytes(sessionSidecar).starts_with("VEYRA_CHAIN_SESSION 16"),
+          "output controls: session16 sidecar preserves old session");
+    auto restored=std::make_unique<ChainSession>();ChainSessionStore reader(sessionPath);
+    check(reader.load(*restored)&&*restored==*session,
+          "output controls: detached mask and stabilizer payloads survive restart");
+    check(writer.save(*baseline),"output controls: remove nodes after upgrade");
+    ChainSessionStore rereader(sessionPath);
+    check(rereader.load(*restored)&&*restored==*baseline,
+          "output controls: subsequent deletion stays in the preferred sidecar");
+    const auto libraryPath=scratch(L"output-controls-library.v1");
+    PresetLibrary library(libraryPath);library.setIncludeBuiltins(false);library.load();
+    PresetEntry entry;entry.name=L"output controls";entry.kind=ChainMode::Node;
+    entry.chain=baseline->configurations[0].chain;entry.chain.mode=ChainMode::Node;
+    check(library.put(entry),"output controls: old library rollback point");
+    const auto libraryOriginal=readBytes(libraryPath);
+    entry.chain=session->configurations[1].chain;entry.nodeConfiguration=session->configurations[1];
+    const auto librarySidecar=std::filesystem::path(libraryPath).concat(L".output-controls");
+    check(library.put(entry,true)&&readBytes(libraryPath)==libraryOriginal&&
+          readBytes(librarySidecar).starts_with("VEYRA_PRESET_LIBRARY 21"),
+          "output controls: library21 with editor uses one upgrade sidecar");
+    PresetLibrary reopened(libraryPath);reopened.setIncludeBuiltins(false);
+    check(reopened.load()&&reopened.entries().size()==1&&reopened.entries()[0]==entry,
+          "output controls: library restores editor IDs, masks and hold values");
+    entry.nodeConfiguration.reset();entry.chain=baseline->configurations[0].chain;entry.chain.mode=ChainMode::Node;
+    check(library.put(entry,true),"output controls: remove library controls");
+    PresetLibrary finalReader(libraryPath);finalReader.setIncludeBuiltins(false);
+    check(finalReader.load()&&finalReader.entries().size()==1&&finalReader.entries()[0]==entry,
+          "output controls: deleting all new nodes also survives restart");
+}
 int main() {
+    testOutputControlStorage();
     testEffectNodeStorage();
     testDlaaStorage();
     testBeautyNodeStorage();

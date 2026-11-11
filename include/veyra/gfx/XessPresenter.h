@@ -22,7 +22,7 @@ public:
     bool endProcessing(uint32_t frameId);
     bool beginFrame(uint32_t preparedFrameId=0,pipeline::FrameIdentity identity={});
     bool tag(ID3D12GraphicsCommandList*,ID3D12Resource* color,ID3D12Resource* motion,ID3D12Resource* depth,
-             RECT region,bool enabled,bool reset,float elapsedMs);
+             RECT region,bool enabled,bool reset,float elapsedMs,ID3D12Resource* ui=nullptr,ID3D12Resource* hudless=nullptr);
     bool beforePresent();
     bool afterPresent();
     uint64_t generatedCount() const;

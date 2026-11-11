@@ -1579,70 +1579,26 @@ VPage {
                                 objectName: "list-global-protection"
                                 Layout.fillWidth: true
                                 Layout.topMargin: 4
-                                visible: veyra.nodeMode === 0
+                                visible: veyra.nodeMode===0
                                 title: qsTr("NR 全局保护区域")
                                 glyph: "shield"; hue: Theme.accent
-                                summary: qsTr("区域内排除所有 NR 层 · 仅列表模式")
+                                summary: qsTr("区域内排除所有 NR 层")
                                 on: veyra.protectionEnabled
-                                onToggled: on => veyra.protectionEnabled = on
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: veyra.protectionDrawShape.length > 0
-                                          ? qsTr("在画面上按住左键拖出") + (veyra.protectionDrawShape === "ellipse" ? qsTr("圆形 / 椭圆") : qsTr("矩形")) + qsTr("区域 · Esc 取消")
-                                          : qsTr("在画面上画出矩形或圆形区域（最多 4 个），区域内的画面不做任何一层 NR 处理。")
-                                    wrapMode: Text.WordWrap
-                                    color: veyra.protectionDrawShape.length > 0 ? Theme.accent : Theme.t3
-                                    font.family: Theme.fontUi; font.pixelSize: 11
-                                }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 6
-                                    VButton {
-                                        objectName: "list-protection-draw-rect"
-                                        text: qsTr("画矩形")
-                                        primary: veyra.protectionDrawShape === "rect"
-                                        onClicked: veyra.beginProtectionDraw(veyra.protectionDrawShape === "rect" ? "" : "rect")
-                                    }
-                                    VButton {
-                                        objectName: "list-protection-draw-ellipse"
-                                        text: qsTr("画圆形")
-                                        primary: veyra.protectionDrawShape === "ellipse"
-                                        onClicked: veyra.beginProtectionDraw(veyra.protectionDrawShape === "ellipse" ? "" : "ellipse")
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                    VButton {
-                                        text: qsTr("清空"); ghost: true
-                                        visible: veyra.protectionRegions.length > 0
-                                        onClicked: veyra.clearProtectionRegions()
-                                    }
-                                }
-                                Repeater {
-                                    model: veyra.protectionRegions
-                                    delegate: VRow {
-                                        required property var modelData
-                                        required property int index
-                                        label: (modelData.ellipse ? qsTr("圆形 ") : qsTr("矩形 ")) + (index + 1)
-                                        value: Math.round(modelData.left * 100) + "," + Math.round(modelData.top * 100) + " → "
-                                               + Math.round(modelData.right * 100) + "," + Math.round(modelData.bottom * 100) + " %"
-                                        VButton {
-                                            objectName: "list-protection-remove-" + index
-                                            icon: true; ghost: true; iconName: "x"
-                                            onClicked: veyra.removeProtectionRegion(modelData.index)
-                                        }
-                                    }
-                                }
-                                VRow {
-                                    label: qsTr("羽化像素")
-                                    value: Number(veyra.protectionState.feather).toFixed(0) + " px"
-                                    VSlider {
-                                        objectName: "list-protection-feather"
-                                        implicitWidth: 110
-                                        from: 0; to: 64
-                                        value: veyra.protectionState.feather
-                                        onMoved: value => veyra.setProtectionFeather(Math.round(value))
-                                    }
-                                }
+                                onToggled: on=>veyra.protectionEnabled=on
+                                MaskEditor { namePrefix: "list-protection" }
                             }
+                        }
+
+                        VAccordion {
+                            objectName: "list-effect-exclusion"
+                            Layout.fillWidth: true
+                            visible: veyra.nodeMode===0
+                            title: qsTr("全效果剔除")
+                            glyph: "shield"; hue: Theme.accent
+                            summary: qsTr("区域内恢复原始画面与帧率")
+                            on: veyra.exclusionState.enabled===true
+                            onToggled: on=>veyra.setMaskEnabled(true,on)
+                            MaskEditor { allEffects: true; namePrefix: "list-exclusion" }
                         }
 
                         // Beauty: face restore and skin smoothing, after the whole NR group

@@ -134,6 +134,8 @@ private:
     // One bounded GPU-only composition surface, shared by sequential lists on
     // the presentation queue. Recreated only after that queue has drained.
     Microsoft::WRL::ComPtr<ID3D12Resource> compositeTarget_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> exclusionUiTarget_,exclusionHudlessTarget_;
+    bool exclusionUiEnabled_=false;
     bool copyBeforePresent_=false,copyEligible_=false;
     unsigned inc_=0;
     static constexpr unsigned kProbeWidth=64,kProbeHeight=36,kProbeStatsBytes=5*sizeof(uint32_t);

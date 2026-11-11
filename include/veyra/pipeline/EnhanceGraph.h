@@ -172,6 +172,7 @@ struct EnhanceGraphDesc {
     std::vector<engine::NrAntiFlicker> nrLayersAntiFlicker;
     std::vector<engine::ProtectionSettings> nrLayersProtection;
     engine::ProtectionSettings protection;
+    engine::ProtectionSettings exclusion;
     // Stage-5 output stabiliser (anti-flicker). 0 keeps the pass unallocated and
     // the dispatch skipped, so a default session is byte-identical to a build
     // without it. See shaders/NrHold.hlsl.
@@ -514,6 +515,8 @@ struct EnhanceGraphDesc {
                 if(step.type==EffectType::VideoHdr)rank=7;
                 if(step.type==EffectType::FrameGeneration)rank=8;
             }
+            if(step.type==EffectType::NrStabilizer)rank=split?5:nrBeforeSr?2:3;
+            if(step.type==EffectType::Exclusion)rank=split?7:runtimeNodeOrder?5:4;
             if(rank<lastRank)return "ordered node execution is not supported by fixed dispatcher";
             lastRank=rank;
             if(step.input!=cursor||!step.processing.valid()||!step.output.valid()||
@@ -698,6 +701,9 @@ public:
     ID3D12Fence* contextFence() const;
     ID3D12Resource* baseReference(unsigned slot=0)const{return baseReferences_[slot%2].Get();}
     ID3D12Resource* sourceReference(unsigned slot=0)const{return sourceReferences_[slot%2].Get();}
+    ID3D12Resource* exclusionUi(unsigned slot)const{return exclusionUi_[slot%2].Get();}
+    ID3D12Resource* unmaskedVideo(unsigned slot)const{return videoFrame_[slot%2].Get();}
+    bool exclusionEnabled()const{return desc_.exclusion.enabled;}
     bool srEnabled() const { return srEnabled_; }
     bool nrEnabled() const { return nrEnabled_; }
     bool fgEnabled() const { return fgEnabled_; }
@@ -931,6 +937,9 @@ private:
     ComPtr<ID3D12Resource> flowTex_;
     ComPtr<ID3D12Resource> depthTex_;
     ComPtr<ID3D12Resource> genFrame_[kGeneratedPoolSlots];
+    ComPtr<ID3D12Resource> exclusionVideo_[2],exclusionScratch_,exclusionUi_[2];
+    ComputePass exclusionPass_;
+    bool composeExclusion(ID3D12GraphicsCommandList*,unsigned outputIndex,unsigned rawParity,bool ui);
     ComPtr<ID3D12Resource> fgDisable_[kGeneratedPoolSlots],fgDisableReadback_[kGeneratedPoolSlots],fgDisableInit_;
     std::array<const volatile uint8_t*,kGeneratedPoolSlots> fgDisableMapped_{};
     ComPtr<ID3D12Resource> nrZeroMotion_;

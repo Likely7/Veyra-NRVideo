@@ -84,6 +84,8 @@ VPage {
         case "beauty": return "#FF8FBF"
         case "nr": return "#FF8A3D"
         case "protection": return "#8A8A96"
+        case "nr-stabilizer": return "#5DCCA1"
+        case "exclusion": return "#E7B868"
         case "video-hdr": return "#FFB547"
         case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": return "#3DDC84"
         }
@@ -887,31 +889,7 @@ VPage {
                             options: veyra.audioDevices
                             onPicked: id => veyra.setPreference("audioDevice", id)
                         }
-                        // The list page's 输出稳定器 · 抗闪烁 (field request 2026-10-01: missing
-                        // in node mode). One global stage after the last NR, before SR and FG.
-                        NodeLabel { text: qsTr("输出稳定器 · 抗闪烁") }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 6
-                            VSwitch {
-                                objectName: "node-out-stabiliser"
-                                checked: veyra.nrHoldStrength > 0
-                                onToggled: checked => veyra.nrHoldStrength = checked ? 0.8 : 0
-                            }
-                            VSlider {
-                                id: nodeHoldStrength
-                                objectName: "node-out-hold-strength"
-                                Layout.fillWidth: true
-                                visible: veyra.nrHoldStrength > 0
-                                from: 0.1; to: 1.0; value: veyra.nrHoldStrength; inputScale: 100
-                                onMoved: value => veyra.nrHoldStrength = value
-                            }
-                            VSliderValue {
-                                visible: veyra.nrHoldStrength > 0
-                                slider: nodeHoldStrength
-                                text: Math.round(veyra.nrHoldStrength * 100) + "%"
-                                color: Theme.t2; pixelSize: 10
-                            }
-                        }
+
                     }
                 }
             }
@@ -1243,7 +1221,7 @@ VPage {
         onHeightChanged: { wires.requestPaint(); if (!headDrag.active) settleTimer.restart() }
         onWidthChanged: settleTimer.restart()
         z: root.selectedId === node.id ? 3 : (headDrag.active ? 4 : 1)
-        width: node.type === "color" ? 360 : node.type === "nr" ? 320 : 272
+        width: node.type === "color" ? 360 : ["nr", "protection", "exclusion"].indexOf(node.type)>=0 ? 320 : 272
         height: body.implicitHeight
         radius: 10
         color: "#1D1D22"
@@ -1484,6 +1462,9 @@ VPage {
                                : card.node.type === "aa" ? aaEditor
                                : card.node.type === "beauty" ? beautyEditor
                                : card.node.type === "video-hdr" ? hdrEditor
+                               : card.node.type === "protection" ? protectionEditor
+                               : card.node.type === "exclusion" ? exclusionEditor
+                               : card.node.type === "nr-stabilizer" ? stabilizerEditor
                                : card.node.type === "frame-generation" ? fgEditor : null
             }
             Item { implicitHeight: card.collapsed ? 0 : 4 }
@@ -1497,6 +1478,49 @@ VPage {
                 layerData: card.nr || ({index: card.node.index, sizePolicy: 0, intensity: 0, tone: 0, structure: 0, skin: -1, style: 0, autoMask: false, uiCorrection: false, total: 0, darken: 0, brighten: 0, color: 0, luminance: 0, temporal: false})
                 layerCount: veyra.nrLayers.length
                 onEdited: (i, k, v) => veyra.setNrLayerParameter(i, k, v)
+            }
+        }
+        Component {
+            id: protectionEditor
+            MaskEditor { namePrefix: "node-protection" }
+        }
+        Component {
+            id: exclusionEditor
+            MaskEditor { allEffects: true; namePrefix: "node-exclusion" }
+        }
+        Component {
+            id: stabilizerEditor
+            ColumnLayout {
+                Layout.fillWidth: true
+                NodeLabel {
+                    Layout.fillWidth: true
+                    text: qsTr("在最后一层 NR 之后稳住未变化的像素。")
+                    wrapMode: Text.WordWrap
+                }
+                VRow {
+                    label: qsTr("稳定强度")
+                    value: Math.round(veyra.nrStabilizerState.strength*100)+"%"
+                    VSlider {
+                        objectName: "node-hold-strength"
+                        implicitWidth: 110
+                        valueFromModel: true
+                        from: 0.1; to: 1; inputScale: 100
+                        value: veyra.nrStabilizerState.strength
+                        onMoved: value=>veyra.setStabilizerParameter(card.node.index,"strength",value)
+                    }
+                }
+                VRow {
+                    label: qsTr("变化容差")
+                    value: (veyra.nrStabilizerState.tolerance*100).toFixed(1)+"%"
+                    VSlider {
+                        objectName: "node-hold-tolerance"
+                        implicitWidth: 110
+                        valueFromModel: true
+                        from: 0; to: 1; inputScale: 100
+                        value: veyra.nrStabilizerState.tolerance
+                        onMoved: value=>veyra.setStabilizerParameter(card.node.index,"tolerance",value)
+                    }
+                }
             }
         }
         Component {

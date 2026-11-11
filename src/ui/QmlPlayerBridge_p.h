@@ -509,6 +509,7 @@ struct QmlPlayerBridge::Impl {
     int audioPollTicks = 0;
     // --- protection drawing (#8) ---
     QString protDraw;                         // "" | rect | ellipse
+    bool protExclusion=false;
     HWND protOverlay = nullptr;
     // --- performance orbs / status light (#13) ---
     ui::live_status::DashboardHistory history;

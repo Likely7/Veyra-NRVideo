@@ -888,27 +888,22 @@ static void testNodePreSrProtectionDescription(){
         chain.nodes[i].nr.sizePolicy=pipeline::NrSizePolicy::Native;
         chain.nodes[i].color.enabled=true;
     }
-    const auto original = chain;
-    int selectedNr = 6, selectedColour = 3;
-    check(!validateChain(chain).accepted, "new node chains refuse Protection even at a formerly legal boundary");
-    check(removeLegacyNodeProtection(chain, &selectedNr, &selectedColour) == 1 &&
-          selectedNr == 5 && selectedColour == 2 && chain.nodes[5] == original.nodes[6] &&
-          chain.nodes[2] == original.nodes[3], "legacy cleanup retains payload and remaps selected instances");
+    chain.nodes[2].protection.enabled=true;
+    chain.nodes[2].protection.regions[0]={.1f,.2f,.4f,.6f};
+    check(validateChain(chain).accepted, "node Protection is supported at its pre-SR boundary");
     EnhancementSettings settings;fromChain(chain,settings);settings.srTarget=pipeline::SrTarget::Qhd;
     auto order=runtimeOrder(chain);StageRequest request;
     request.width=640;request.height=360;request.sr=true;request.nr=true;request.nodeOrder=&*order;
     pipeline::EnhanceGraphDesc desc;describeStages(request,settings,desc);
-    check(desc.validateFixedExecutionPlan().empty()&&!desc.protectionBeforeSr()&&!desc.protection.enabled&&
+    check(desc.validateFixedExecutionPlan().empty()&&desc.protectionBeforeSr()&&desc.protection.enabled&&
           desc.nrBeforeSrLayerCount()==2&&desc.preSrColor(0),
-          "migrated split chain retains Color and SR without any protection execution");
-    check(desc.fixedExecutionPlan->steps[2].input==pipeline::Extent{640,360}&&
+          "split chain retains its independent pre-SR protection and Color");
+    check(desc.fixedExecutionPlan->steps[3].input==pipeline::Extent{640,360}&&
           desc.nrFullExtent(2)==pipeline::Extent{2560,1440},
-          "migrated Color and post-SR NR retain their declared extents");
-    auto legacyDisabled = original; legacyDisabled.nodes[2].enabled = false;
-    check(!validateChain(legacyDisabled).accepted && removeLegacyNodeProtection(legacyDisabled) == 1 &&
-          legacyDisabled == chain, "disabled legacy Protection is removed too, not hidden or retained");
-    auto list = original; list.mode = ChainMode::List; const auto listBefore = list;
-    check(removeLegacyNodeProtection(list) == 0 && list == listBefore, "node cleanup never edits list protection");
+          "Color and post-SR NR retain their declared extents");
+    auto disabled=chain;disabled.nodes[2].enabled=false;
+    check(validateChain(disabled).accepted&&disabled.countOf(EffectType::Protection)==1,
+          "disabled protection remains an editable independent node");
 }
 
 static void testNodeInterNrProtectionDescription(){
@@ -927,25 +922,25 @@ static void testNodeInterNrProtectionDescription(){
             if(types[i]==mask)maskIndex=i;
             if(types[i]==nr&&!maskIndex)++nrPrefix;
         }
-        const auto original = chain;
-        check(!validateChain(chain).accepted && removeLegacyNodeProtection(chain) == 1,
-              "legacy inter-NR Protection must migrate before it can be submitted");
+        chain.nodes[maskIndex].protection.enabled=true;
+        chain.nodes[maskIndex].protection.regions[0]={.1f,.2f,.4f,.6f};
+        check(validateChain(chain).accepted,"independent inter-NR Protection is retained");
         EnhancementSettings settings;fromChain(chain,settings);settings.srTarget=pipeline::SrTarget::Qhd;
         auto order=runtimeOrder(chain);StageRequest request;
         request.width=640;request.height=360;request.nr=true;
         request.sr=std::find(types.begin(),types.end(),sr)!=types.end();request.nodeOrder=&*order;
         pipeline::EnhanceGraphDesc desc;describeStages(request,settings,desc);
-        check(desc.validateFixedExecutionPlan().empty()&&!desc.protection.enabled&&
-              desc.interNrProtectionTarget()==kMaxNrInstances,
-              "migrated inter-NR chains execute with no Protection resource");
+        check(desc.validateFixedExecutionPlan().empty()&&desc.protection.enabled&&
+              desc.interNrProtectionTarget()==nrPrefix,
+              "inter-NR protection restores the original before the next layer");
         if(std::find(types.begin(),types.end(),color)!=types.end())
             check(desc.interNrColorTarget(0)==nrPrefix,
-                  "surviving inter-NR Color still feeds the next NR");
+                  "inter-NR Color still feeds the next NR");
         check(desc.nrFullExtent(nrPrefix)==desc.fixedExecutionPlan->steps[maskIndex].output,
-              "migrated downstream consumer retains its extent");
-        auto disabled = original; disabled.nodes[maskIndex].enabled = false;
-        check(removeLegacyNodeProtection(disabled) == 1 && disabled == chain,
-              "disabled protection migration preserves all other node data");
+              "downstream consumer retains its extent");
+        auto disabled=chain;disabled.nodes[maskIndex].enabled=false;
+        check(validateChain(disabled).accepted&&disabled.countOf(mask)==1,
+              "disabled inter-NR protection keeps its stored regions");
     }
     EffectChain split;split.mode=ChainMode::Node;split.nodeCount=5;
     const EffectType unsafe[]={nr,sr,nr,mask,nr};
@@ -953,8 +948,42 @@ static void testNodeInterNrProtectionDescription(){
     EnhancementSettings settings;fromChain(split,settings);auto order=runtimeOrder(split);
     StageRequest request;request.width=640;request.height=360;request.nr=request.sr=true;request.nodeOrder=&*order;
     pipeline::EnhanceGraphDesc desc;describeStages(request,settings,desc);
-    check(!desc.validateFixedExecutionPlan().empty()&&!settings.protection.enabled,
-          "unmigrated cross-SR Protection cannot enter production or inherit a list mask");
+    check(!desc.validateFixedExecutionPlan().empty()&&settings.protection.enabled,
+          "unsupported cross-SR protection is rejected instead of silently deleted");
+}
+
+static void testOutputControlNodes(){
+    using namespace veyra;using namespace veyra::engine;
+    EnhancementSettings s;s.nr=true;s.sr=true;s.multiplier=3;
+    s.nrHoldStrength=.63f;s.nrHoldTolerance=.04f;
+    s.exclusion.enabled=true;s.exclusion.featherPixels=17;
+    s.exclusion.regions[0]={.1f,.2f,.5f,.7f,true};
+    auto chain=toChain(s);chain.mode=ChainMode::Node;
+    check(validateChain(chain).accepted&&chain.countOf(EffectType::NrStabilizer)==1&&
+          chain.countOf(EffectType::Exclusion)==1,"output controls have independent node types");
+    EnhancementSettings restored;fromChain(chain,restored);
+    check(restored.exclusion==s.exclusion&&restored.nrHoldStrength==s.nrHoldStrength&&
+          restored.nrHoldTolerance==s.nrHoldTolerance,"mask and stabilizer retain independent payloads");
+    const auto order=runtimeOrder(chain);
+    StageRequest request;request.width=640;request.height=360;request.nr=request.sr=request.fg=true;request.fgMultiplier=3;request.nodeOrder=&*order;
+    pipeline::EnhanceGraphDesc desc;describeStages(request,restored,desc);
+    check(desc.validateFixedExecutionPlan().empty()&&desc.exclusion==s.exclusion,
+          "mask and stabilizer compile alongside NR SR and frame generation");
+    auto changed=s;changed.exclusion.featherPixels=18;
+    check(!requiresGraphRebuild(s,changed),"mask geometry and feather edit live");
+    changed.exclusion.enabled=false;
+    check(requiresGraphRebuild(s,changed),"mask allocation is rebuilt on enable transitions");
+    for(uint32_t i=0;i<chain.nodeCount;++i)
+        if(chain.nodes[i].type==EffectType::NrStabilizer||chain.nodes[i].type==EffectType::Exclusion){
+            chain.nodes[i].enabled=false;chain.nodes[i].protection={};
+        }
+    fromChain(chain,restored);EffectChain reopened;
+    check(restoreRuntimeOrder(restored,*order,reopened).accepted&&
+          reopened.countOf(EffectType::NrStabilizer)==1&&reopened.countOf(EffectType::Exclusion)==1,
+          "disabled untouched output controls survive runtime order reconstruction");
+    auto invalid=chain;
+    invalid.firstOf(EffectType::NrStabilizer)->holdStrength=std::numeric_limits<float>::quiet_NaN();
+    check(!validateChain(invalid).accepted,"invalid stabilizer payload is rejected even when disabled");
 }
 
 void testNrCorrectionDescription(){
@@ -1653,6 +1682,7 @@ int main() {
     testNodeSplitNrDescription();
     testNodePreSrProtectionDescription();
     testNodeInterNrProtectionDescription();
+    testOutputControlNodes();
     testNativeVideoSrPolicy();
     testAntiAliasSettingsChain();
     testSameSizeSlots();

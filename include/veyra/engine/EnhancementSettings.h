@@ -289,6 +289,7 @@ struct EnhancementSettings {
     NrSettings model;
     ResidualSettings residual;
     ProtectionSettings protection;
+    ProtectionSettings exclusion; // final raw-source mask, including generated frames
     bool nr=false,sr=false;
     bool lowLatency=false; // preview only: NR before SR, opt-in
     NrRuntime nrRuntime=NrRuntime::Ampere;
@@ -479,6 +480,7 @@ struct EnhancementSettings {
         }
         if(!nr||!sr)active.lowLatency=defaults.lowLatency;
         if(!nr||!protection.enabled)active.protection=defaults.protection;
+        if(!exclusion.enabled)active.exclusion=defaults.exclusion;
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
         // The DLSS SR model serves every DLSS SR pass, the second of a double SR too.
         if(!usesDlaa()&&(!sr||(videoSrQuality!=0&&!(dualSrEnabled&&dualSrQuality==0))))active.dlssSrModel=defaults.dlssSrModel;
@@ -586,6 +588,7 @@ struct EnhancementSettings {
         if(!hdrMetadata.valid())return "invalid HDR metadata parameters";
         auto range=[](float v,float hi){return std::isfinite(v)&&v>=0&&v<=hi;};
         if(auto error=protection.validate();!error.empty())return error;
+        if(auto error=exclusion.validate();!error.empty())return error;
         if(!revision)return "settingsRevision must be nonzero";
         if(!validNrRuntime(nrRuntime))return "invalid NR runtime";
         if(captureAudio<CaptureAudioIngress::Auto||captureAudio>CaptureAudioIngress::BitstreamPreferred)return "invalid capture audio ingress mode";
