@@ -588,6 +588,7 @@ void MediaFileSource::drainElFrames() {
         auto it = elByPts_.find(elPts);
         if (it != elByPts_.end()) av_frame_free(&it->second);
         elByPts_[elPts] = copy;
+        ++elLayerFrames_;   // stats moved here with the single-consumer change
         if (drainDbg < 6 || drainDbg % 500 == 0)
             log::info("source-dovi-el", std::format("drain: got elPts={} cache={}", elPts, elByPts_.size()));
         ++drainDbg;
