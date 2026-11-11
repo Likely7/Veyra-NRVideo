@@ -626,6 +626,16 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_include_directories(veyra_media PUBLIC ${FFMPEG_INCLUDE_DIRS})
   target_link_directories(veyra_media PUBLIC ${FFMPEG_LIBRARY_DIRS})
   target_link_libraries(veyra_media PUBLIC ${FFMPEG_LIBRARIES})
+  # libdovi (MIT): parses the RPU payload itself, including streams whose RPU sits
+  # in the enhancement layer with no dovi_config record for FFmpeg to follow.
+  if(EXISTS "${CMAKE_SOURCE_DIR}/deps/libdovi/lib/dovi.lib")
+    target_include_directories(veyra_media PRIVATE "${CMAKE_SOURCE_DIR}/deps/libdovi/include")
+    target_link_libraries(veyra_media PUBLIC "${CMAKE_SOURCE_DIR}/deps/libdovi/lib/dovi.lib")
+    target_compile_definitions(veyra_media PRIVATE VEYRA_HAVE_LIBDOVI=1)
+    message(STATUS "libdovi: ${CMAKE_SOURCE_DIR}/deps/libdovi")
+  else()
+    message(STATUS "libdovi: not found, RPU-in-EL streams stay unparsed")
+  endif()
 
   add_executable(veyra_media_probe
     tools/media_probe/main.cpp

@@ -1,6 +1,9 @@
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/pipeline/ColorMetadata.h"
 #include "veyra/source/DolbyVisionRpu.h"
+#if VEYRA_HAVE_LIBDOVI
+#include "veyra/source/LibDoviBridge.h"
+#endif
 #include "veyra/pipeline/DolbyVisionP7.h"
 #include "veyra/pipeline/PqTransfer.h"
 
@@ -307,6 +310,34 @@ AVPacket* MediaFileSource::buildEnhancementPacket(const AVPacket* packet) {
             return nullptr;
         }
     }
+#if VEYRA_HAVE_LIBDOVI
+    // Dolby's own test material keeps the RPU in the enhancement layer (type 62
+    // NAL) and ships no dovi_config, so FFmpeg never exposes
+    // AV_FRAME_DATA_DOVI_METADATA for it. Parse that NAL with libdovi here: the
+    // packet built below deliberately carries only VCL NALs, so this is the last
+    // point where the RPU is still visible.
+    {
+        static unsigned rpuReported = 0;
+        for (const auto& nal : nals) {
+            if (nal.size() < 2) continue;
+            if (((nal[0] >> 1) & 0x3F) != 62) continue;
+            if (elDoviMeta_ == nullptr) {
+                size_t allocSize = 0;
+                elDoviMeta_ = av_dovi_metadata_alloc(&allocSize);
+            }
+            const bool ok = elDoviMeta_ != nullptr &&
+                source::decodeRpuWithLibDovi(nal.data(), nal.size(), elDoviMeta_);
+            if (ok) elDoviMetaValid_ = true;
+            if (rpuReported < 3) {
+                ++rpuReported;
+                log::info("source-dovi-el", std::format(
+                    "libdovi: RPU from EL type-62 NAL ({} bytes) parse={} head={:02x}{:02x}",
+                    nal.size(), ok ? 1 : 0, int(nal[0]), nal.size() > 1 ? int(nal[1]) : 0));
+            }
+            break;
+        }
+    }
+#endif
     std::vector<uint8_t> accessUnit;
     // Only VCL NALs (types 0-31) belong in the packet stream. The type 63 payloads
     // also carry SEI and other private data; handing those to the decoder made it
@@ -503,6 +534,9 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
 void MediaFileSource::closeEnhancementLayer() {
     elDecoder_.close();
     if (elFrame_ != nullptr) { av_frame_free(&elFrame_); elFrame_ = nullptr; }
+#if VEYRA_HAVE_LIBDOVI
+    if (elDoviMeta_ != nullptr) { av_free(elDoviMeta_); elDoviMeta_ = nullptr; elDoviMetaValid_ = false; }
+#endif
     elParamSets_.clear();
     elLayerOpen_ = false;
 }
@@ -1247,9 +1281,19 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
     // the enhancement frame: pairing happens one layer up, so out.doviEl is still
     // null at this point even when this frame will get one.
     {
+        const AVDOVIMetadata* metaPtr = nullptr;
         if (const auto* metaSide = av_frame_get_side_data(frame, AV_FRAME_DATA_DOVI_METADATA);
             metaSide != nullptr && metaSide->size >= sizeof(AVDOVIMetadata)) {
-            const auto& meta = *reinterpret_cast<const AVDOVIMetadata*>(metaSide->data);
+            metaPtr = reinterpret_cast<const AVDOVIMetadata*>(metaSide->data);
+        }
+#if VEYRA_HAVE_LIBDOVI
+        else if (elDoviMetaValid_ && elDoviMeta_ != nullptr) {
+            // RPU came from the enhancement layer via libdovi (see attachEnhancementLayer).
+            metaPtr = elDoviMeta_;
+        }
+#endif
+        if (metaPtr != nullptr) {
+            const auto& meta = *metaPtr;
             // Custom (DV extension blocks): which metadata levels this stream
             // declares, and the L5 active-area rectangle when there is one. L5 says
             // where the real picture sits inside the coded frame, which is what a

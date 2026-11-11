@@ -7,6 +7,10 @@
 // implementation exists here: FFmpegDemuxer + FFmpegVideoDecoder do the
 // work; this class owns contract translation (PTS/duration/color/flags/
 // epoch) and the seek protocol.
+// Forward declaration: the RPU parsed by libdovi from the EL stream (see the
+// elDoviMeta_ member). FFmpeg owns the struct layout; only a pointer is stored here.
+struct AVDOVIMetadata;
+
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -76,6 +80,11 @@ private:
     // Custom (P5): decoded EL frames keyed by timestamp, waiting for their base frame.
     std::map<int64_t, AVFrame*> elByPts_;
     uint32_t elLastWidth_ = 0, elLastHeight_ = 0;   // last decoded EL extent
+    // RPU parsed by libdovi straight from the enhancement layer. Some Dolby test
+    // material (FEL_test_for_AVS) keeps the RPU there and ships no dovi_config, so
+    // FFmpeg never exposes AV_FRAME_DATA_DOVI_METADATA for it.
+    AVDOVIMetadata* elDoviMeta_ = nullptr;
+    bool elDoviMetaValid_ = false;
     // Custom (P7): FFmpeg's dovi_split bitstream filter produces the enhancement
     // layer bitstream out of the same access units. When the container also
     // carries the EL's own parameter sets (Matroska hvcE, surfaced by libavformat
