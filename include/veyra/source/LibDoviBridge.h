@@ -168,12 +168,22 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
                     curve->mmr_constant[i] = int64_t(mmr->mmr_constant.data[i]);
                 // mmr_coef is a 3D buffer: per piece, an array of per-order weight
                 // arrays (seven weights each).
+                // Same split as the polynomial coefficients: mmr_coef holds the
+                // fractional part, mmr_coef_int the integer part.
+                const DoviI64Data2D* intSeg = size_t(i) < mmr->mmr_coef_int.len
+                    ? mmr->mmr_coef_int.list[i] : nullptr;
                 if (size_t(i) < mmr->mmr_coef.len) {
                     const DoviU64Data2D& seg = *mmr->mmr_coef.list[i];
                     for (int j = 0; j < order && size_t(j) < seg.len; ++j) {
                         const DoviU64Data& coef = *seg.list[j];
-                        for (int k = 0; k < 7 && size_t(k) < coef.len; ++k)
-                            curve->mmr_coef[i][j][k] = int64_t(coef.data[k]);
+                        const DoviI64Data* intCoef = (intSeg != nullptr && size_t(j) < intSeg->len)
+                            ? intSeg->list[j] : nullptr;
+                        for (int k = 0; k < 7; ++k) {
+                            const int64_t iv = (intCoef != nullptr && size_t(k) < intCoef->len)
+                                ? int64_t(intCoef->data[k]) : 0;
+                            const int64_t fv = (size_t(k) < coef.len) ? int64_t(coef.data[k]) : 0;
+                            curve->mmr_coef[i][j][k] = (iv << coefLog2Denom) + fv;
+                        }
                     }
                 }
             }
