@@ -322,8 +322,7 @@ AVPacket* MediaFileSource::buildEnhancementPacket(const AVPacket* packet) {
             if (nal.size() < 2) continue;
             if (((nal[0] >> 1) & 0x3F) != 62) continue;
             if (elDoviMeta_ == nullptr) {
-                size_t allocSize = 0;
-                elDoviMeta_ = av_dovi_metadata_alloc(&allocSize);
+                elDoviMeta_ = static_cast<AVDOVIMetadata*>(av_mallocz(sizeof(AVDOVIMetadata)));
             }
             const bool ok = elDoviMeta_ != nullptr &&
                 source::decodeRpuWithLibDovi(nal.data(), nal.size(), elDoviMeta_);
@@ -427,38 +426,54 @@ bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
         // The layer is a real stream: its packets are already demuxed and carry
         // the RPU (type 62) as well as the residual pictures.
         if (!demuxer_.takeElPacket(&elPacket)) return false;
+        {
+            static unsigned pktDbg = 0;
+            if (pktDbg < 3) {
+                ++pktDbg;
+                std::string head;
+                const size_t show = std::min<size_t>(8, elPacket->size);
+                for (size_t i = 0; i < show; ++i) head += std::format("{:02x}", elPacket->data[i]);
+                log::info("source-dovi-el", std::format("EL packet size={} head={}", elPacket->size, head));
+            }
+        }
 #if VEYRA_HAVE_LIBDOVI
         {
-            // The stream's packets are length-prefixed (4-byte) NAL units, not
-            // Annex B: the RPU is a type-62 NAL inside that frame.
+            static unsigned scanEntry = 0;
+            if (scanEntry < 1) { ++scanEntry; log::info("source-dovi-el", "EL scan entry (libdovi enabled)"); }
+            // The stream's packets are Annex B (00 00 01 / 00 00 00 01): walk the
+            // NAL units and hand the type-62 one to libdovi.
             static unsigned rpuReported = 0;
             const uint8_t* p = elPacket->data;
             const size_t n = size_t(elPacket->size);
             size_t pos = 0;
-            while (pos + 5 <= n) {
-                const uint32_t len = (uint32_t(p[pos]) << 24) | (uint32_t(p[pos + 1]) << 16) |
-                                     (uint32_t(p[pos + 2]) << 8) | uint32_t(p[pos + 3]);
-                pos += 4;
-                if (len == 0 || pos + len > n) break;
-                const uint8_t* nal = p + pos;
-                if (((nal[0] >> 1) & 0x3F) == 62) {
+            bool sawRpu = false;
+            while (pos + 4 < n) {
+                if (!(p[pos] == 0 && p[pos + 1] == 0 && p[pos + 2] == 1)) { ++pos; continue; }
+                const size_t hdr = pos + 3;
+                if (hdr >= n) break;
+                size_t end = n;
+                for (size_t j = hdr + 1; j + 3 < n; ++j) {
+                    if (p[j] == 0 && p[j + 1] == 0 && p[j + 2] == 1) { end = j; break; }
+                }
+                const int nalType = (p[hdr] >> 1) & 0x3F;
+                if (nalType == 62) {
                     if (elDoviMeta_ == nullptr) {
-                        size_t allocSize = 0;
-                        elDoviMeta_ = av_dovi_metadata_alloc(&allocSize);
+                        elDoviMeta_ = static_cast<AVDOVIMetadata*>(av_mallocz(sizeof(AVDOVIMetadata)));
                     }
                     const bool ok = elDoviMeta_ != nullptr &&
-                        source::decodeRpuWithLibDovi(nal, len, elDoviMeta_);
+                        source::decodeRpuWithLibDovi(p + hdr, end - hdr, elDoviMeta_);
                     if (ok) elDoviMetaValid_ = true;
+                    sawRpu = true;
                     if (rpuReported < 3) {
                         ++rpuReported;
                         log::info("source-dovi-el", std::format(
-                            "libdovi: RPU from EL stream packet ({} bytes) parse={}", len, ok ? 1 : 0));
+                            "libdovi: RPU from EL stream NAL ({} bytes) parse={}", end - hdr, ok ? 1 : 0));
                     }
                     break;
                 }
-                pos += len;
+                pos = end;
             }
-            if (rpuReported == 0) {
+            if (!sawRpu) {
                 static unsigned scanDbg = 0;
                 if (++scanDbg <= 2) log::info("source-dovi-el",
                     std::format("EL stream packet ({} bytes) carries no type-62 RPU", n));
