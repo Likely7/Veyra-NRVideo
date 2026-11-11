@@ -1,5 +1,4 @@
 # 分支与工作树归档
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 122个旧分支的完整tip保存在下表及已verify的bundle中，89个干净工作树已经退休。远端分支和发行标签没有删除。
 

@@ -1,5 +1,4 @@
 # 当前工作日志
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 ## 2026-11-03 RX7000补丁后worker退出：新日志与诊断更新
 

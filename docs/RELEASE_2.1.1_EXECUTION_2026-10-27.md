@@ -1,5 +1,4 @@
 # 2.1.1最终整合、重建与发布记录
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户要求合并Claude软件绘制分支，将默认超分模型改为RTX视频超分，重新构建2.1.1并发布GitHub。主Release保留两完整运行包，应用及依赖对应源码另页；群公告只拟稿。准确资产URL/状态/服务端摘要见reports/codex-release-2.1.1-final-20261027/FINAL.json，发布前此记录不推断发布完成。
 

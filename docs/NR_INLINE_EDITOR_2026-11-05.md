@@ -1,5 +1,4 @@
 # NR 分组内网状／列表修订
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户撤销独立网状调节器布局，要求直接放在“增强变化量”和“画面调控”的手动区域，补齐九项调控。本次继续 `codex/nr-web-editor-20261105`，起点684d906，存档 `checkpoint/nr-web-before-inline-20261105`；不合main／push／发布。
 

@@ -1,5 +1,4 @@
 # RX7000 NR：多 GPU 时工作进程只看选中的显卡（2026-11-03，Claude）
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户：“直接修复吧”。排查见 `E:/项目/Veyra/reports/claude-rdna3-nr-field-20261103/FINDINGS.md`。
 

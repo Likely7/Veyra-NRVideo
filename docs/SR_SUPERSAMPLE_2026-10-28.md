@@ -1,5 +1,4 @@
 # 超采样选项：超分后缩回（2026-10-28）
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 ## 用户合同
 

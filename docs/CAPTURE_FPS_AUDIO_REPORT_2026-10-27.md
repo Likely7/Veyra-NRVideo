@@ -1,5 +1,4 @@
 # 屏幕捕获帧率、采集对白与后续方向（2026-10-27）
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 Claude，任务 `claude-capture-fps-audio-20261027`。分支 `claude/capture-fps-audio-20261027` 从 main `7b0b64b` 开出，提交 `6376564`（屏幕捕获）、`75444b3`（采集音频）和本文档。没有合入 main，没有 push、Release 或打包。用户自己的 Veyra 一直在运行，没有停止它，也没有占用采集卡。证据在 `E:/项目/Veyra/reports/claude-capture-fps-audio-20261027`，日志在 `logs/claude-capture-fps-audio-20261027`。
 

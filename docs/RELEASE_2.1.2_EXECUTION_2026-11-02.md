@@ -1,5 +1,4 @@
 # 2.1.2 发布执行记录 — 2026-11-02
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户明确授权将 Claude 最新去重修复包公开发布到 Likely7/Veyra-NRVideo，更新群码并整理2.1.1以来全部更新。未授权代发群消息；群公告作为文字交付。
 

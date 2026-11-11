@@ -1,5 +1,4 @@
 # NVENC导出关键帧审查与修复
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户要求先审第三方诊断、再修，不盲改。分支`codex/nvenc-export-keyframes-20261103`，基线`edad6e9`；继承RTX30 VFG实验兼容与全屏进度条修复，不合main、不push/发布。不改用户配置、驱动、SDK、运行库、模型或实时录制。
 

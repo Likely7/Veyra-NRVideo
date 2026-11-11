@@ -1,5 +1,4 @@
 # Veyra 2.1.3 构建与对应源码
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 产品源码 `7a2d15d9222a98fac69e5343c01b443e1d7060be`，PE2.1.3.0，EXE SHA256 `76c4a44ee582dcd4150152c4e32e5e45f61fee1a35a285818dc7ee1464940f7a`。沿用已验2.1.3重构建ZIP原程序，发布仅更新文档、对比原图和发行元数据，不改程序/QML/shader/DLL/模型。
 

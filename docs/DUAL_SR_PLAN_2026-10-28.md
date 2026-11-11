@@ -1,5 +1,4 @@
 # 真正的双重超分：纠偏与交付（2026-10-28）
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 > 2026-11-08 扩展：独立分支 `claude/volume-dual-sr-20261108` 已加入 DLSS SR／FSR 作为第一或第二算法。最新实现、适用限制与本机验收见 [VOLUME_DUAL_SR_2026-11-08.md](VOLUME_DUAL_SR_2026-11-08.md)。下文 RTX-only 是首次交付的历史范围，不能覆盖后续扩展；新分支尚未合 main。
 

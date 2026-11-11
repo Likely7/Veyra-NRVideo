@@ -1,5 +1,4 @@
 # Veyra 2.1.1 基线核对与项目整理方案
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 > 本文数字是执行前快照。用户随后已授权全部实施；现在的完成状态、保留项与回收量看[执行记录](PROJECT_MAINTENANCE_EXECUTION_2026-10-27.md)，不把下文132分支/101工作树误读为当前剩余规模。
 

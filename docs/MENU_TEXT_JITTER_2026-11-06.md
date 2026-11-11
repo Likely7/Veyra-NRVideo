@@ -1,5 +1,4 @@
 # 选框弹出时文字“抖两下”：软件绘制下弹簧到终点即停（2026-11-06）
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 - **分支**：`claude/menu-jitter-20261106`，工作树 `E:/项目/Veyra/worktrees/claude-menu-jitter-20261106`。
 - **基线**：main `f1f8298`。

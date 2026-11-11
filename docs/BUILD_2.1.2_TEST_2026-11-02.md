@@ -1,5 +1,4 @@
 # 2.1.2 本地 main 整合与测试构建
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户授权：合并当前各修复（含 Claude）到 main，构建 2.1.2 供测试；不包含 GitHub 推送或发布。
 

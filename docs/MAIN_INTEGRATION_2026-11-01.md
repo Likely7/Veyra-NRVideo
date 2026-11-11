@@ -1,5 +1,4 @@
 # Claude最新补帧修复合入本地main
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 用户2026-11-01授权“刚刚Claude那边做了一些修复，你给合并到Main”。本轮范围是`claude/fg-no-latency-growth-20261101`在main `13016a8`上的37个未提交文件；其余此前整合内容main已有，不再次搬运，Lecram暂停线不动。没有push或Release授权。
 

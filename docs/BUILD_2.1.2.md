@@ -1,5 +1,4 @@
 # Veyra 2.1.2 构建与对应源码
-> ⚠️ 路径提示：文中 `E:/项目/Veyra/...` 是迁移前的记录（现为 `D:\Program\Veyra`），按日期理解；当前入口见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 应用版本 2.1.2，PE 2.1.2.0。产品源码提交 `358be8cfe82a1563cc05fdeca34f684a0e95b6fc`；主 EXE SHA256 `33d8e615666365ba84f1cfebbc6ffef4bb6c2dbaf08119bdad6648e7d9cefa44`。
 
