@@ -20,6 +20,7 @@
 //
 // Scope note: this exposes what the engine can actually do today. Playback
 // speed measurement and requested file-preview rate are separate values.
+#include "veyra/engine/Subtitles.h"
 #include <QObject>
 #include <QString>
 #include <QRectF>
@@ -41,6 +42,72 @@ namespace veyra::ui {
 class MoonlightModel;
 class XboxModel;
 
+enum class BiliOp : uint8_t {
+    InteractionState, Favorite, FavFolders,
+    Like, Coin, WatchLater,
+    Comments, EnableDanmaku, ResumeAtCid,
+    QrStart, QrPoll, Account,
+    // 播放结束时把观看进度写回账号历史。单独做成一个异步操作，因为
+    // media::biliReportWatchProgress 内部是同步 HTTP POST —— 在 GUI tick 里直接调
+    // 会把界面卡住几百毫秒。
+    // Writing the watched position back to the account's history when playback ends.
+    // It is asynchronous because media::biliReportWatchProgress does a synchronous HTTP
+    // POST; calling it straight from the GUI tick would freeze the window for that long.
+    ReportProgress,
+    // 发评论。与其它写操作一样走异步任务，避免同步 HTTP 卡住界面。
+    // Posting a comment. Asynchronous like the other write actions, so a synchronous
+    // HTTP call cannot freeze the window.
+    Reply, DeleteReply, EmotePanel, AuthorVideos,
+    // 拉取并装载一条 B 站字幕轨：DASH 流里没有字幕，站方是独立接口给的。
+    // Fetches and installs a Bilibili subtitle track; the DASH stream carries none.
+    Subtitles,
+    Count,
+};
+// 操作名，供信号传给 QML 分派用。
+// The action name, passed to QML so one handler can serve several actions.
+constexpr const char* biliOpName(BiliOp op) {
+    switch (op) {
+    case BiliOp::InteractionState: return "interaction";
+    case BiliOp::Subtitles:        return "subtitles";
+    case BiliOp::Favorite:         return "favorite";
+    case BiliOp::FavFolders:       return "fav-folders";
+    case BiliOp::Like:             return "like";
+    case BiliOp::Coin:             return "coin";
+    case BiliOp::WatchLater:       return "watchlater";
+    case BiliOp::Comments:         return "comments";
+    case BiliOp::EnableDanmaku:    return "enable-danmaku";
+    case BiliOp::ResumeAtCid:      return "resume-at-cid";
+    case BiliOp::QrStart:          return "qr-start";
+    case BiliOp::QrPoll:           return "qr-poll";
+    case BiliOp::Account:          return "account";
+    case BiliOp::ReportProgress:   return "report-progress";
+    case BiliOp::Reply:            return "reply";
+    case BiliOp::DeleteReply:      return "delete-reply";
+    case BiliOp::EmotePanel:       return "emote-panel";
+    case BiliOp::AuthorVideos:     return "author-videos";
+    case BiliOp::Count:            break;
+    }
+    return "unknown";
+}
+// 一次异步任务的结果信封。worker 只填这里，GUI tick 取走后发信号。
+// The result envelope of one async task: the worker only fills this, and the GUI tick
+// reads it and emits the signal.
+struct BiliTaskResult {
+    BiliOp op = BiliOp::Account;
+    bool ok = false;
+    QString error;
+    QVariantMap object;      // account / qr-start / interaction 这类单对象
+    QVariantList list;       // comments / fav-folders 这类列表
+    double number = -1.0;    // resume-at-cid 的秒数 / 弹幕条数
+    QString text;            // qr-start 的地址、qr-poll 的状态
+    // 三个方法需要回带自己的输入，才能把结果路由回正确的调用点。
+    // Three methods carry their own inputs back so the reply reaches the right caller.
+    QString bvid;
+    int generation = 0;
+    QString reason;          // fav-folders / favorite 区分调用点
+    bool add = false;        // favorite 的方向
+};
+
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
     // --- professional-page readouts ---------------------------------------
@@ -48,6 +115,13 @@ class QmlPlayerBridge : public QObject {
     // measurement the getter says so. There is no "display fps": panel scanout
     // is not measured, and overlays such as RTSS also count Present calls, which
     // is the submit rate below (with its 1% low).
+    // Custom (Bilibili / Dolby Vision): automatic frame-generation multiplier and
+    // the Dolby Vision follow / P7 composite switches.
+    Q_PROPERTY(bool fgAutoMultiplierEnabled READ fgAutoMultiplier WRITE setFgAutoMultiplier NOTIFY settingsChanged)
+    Q_PROPERTY(bool fgAutoMultiplierAvailable READ fgAutoMultiplierAvailable NOTIFY settingsChanged)
+    Q_PROPERTY(bool doviFollow READ doviFollow WRITE setDoviFollow NOTIFY settingsChanged)
+    Q_PROPERTY(bool doviP7Compose READ doviP7Compose WRITE setDoviP7Compose NOTIFY settingsChanged)
+    Q_PROPERTY(bool doviFollowAverage READ doviFollowAverage WRITE setDoviFollowAverage NOTIFY settingsChanged)
     Q_PROPERTY(QString outputSummary READ outputSummary NOTIFY snapshotChanged)
     Q_PROPERTY(QString srStageSummary READ srStageSummary NOTIFY snapshotChanged)
     Q_PROPERTY(QString srStageNote READ srStageNote NOTIFY snapshotChanged)
@@ -1414,7 +1488,114 @@ public:
     // Re-reads the runtime manifest (Settings → 组件与许可 calls it when shown).
     Q_INVOKABLE void refreshComponentList();
 
+    struct ListFetchResult {
+    bool ok = false;
+    std::wstring error;
+    QVariantList items;
+    // Set instead of items when the request was a single object ("detail:<bvid>"),
+    // because the video detail page is one map, not a list of cards.
+    QVariantMap object;
+    };
+
+    Q_INVOKABLE void bilibiliSignOut();
+    // QR sign-in is asynchronous: bilibiliRequestQrStart() fetches a code and
+    // bilibiliRequestQrPoll() asks once per second until the phone confirms; the page
+    // renders whatever bilibiliQrImage() returns and reacts to bilibiliQrStarted /
+    // bilibiliQrPolled. The code stays in this process; no browser window is involved.
+    // failed or had no results; bilibiliLastError() says which.
+    // These start the fetch on a worker and publish the result through bilibiliListReady.
+    Q_INVOKABLE int bilibiliLoadList(const QString& kind);
+    void tickBiliList();
+    void startListWorker(const QString& kind, int generation);
+    // 异步版：主线程只发起，结果为通过 bilibiliFavFoldersReady 回到 QML。
+    // bilibiliFavFoldersReady.
+    Q_INVOKABLE void bilibiliRequestFavFolders(const QString& reason = QString());
+    Q_INVOKABLE void bilibiliDisableDanmaku();
+    Q_INVOKABLE void bilibiliRequestLike(const QString& bvid, bool like);
+    Q_INVOKABLE void bilibiliRequestCoin(const QString& bvid, int count);
+    // 发评论。结果通过 bilibiliActionDone("reply", ok, error) 回到界面。
+    Q_INVOKABLE void bilibiliPostReply(const QString& bvid, const QString& message);
+    Q_INVOKABLE void bilibiliDeleteReply(const QString& bvid, qlonglong rpid);
+    // 拉评论表情面板，结果通过 bilibiliEmotePanelReady 回到界面。
+    // Fetch the reply emote panel; the result arrives as bilibiliEmotePanelReady.
+    Q_INVOKABLE void bilibiliRequestEmotePanel();
+    // 某个 UP 主的投稿（最新在前）。结果通过 bilibiliLoadList 的
+    // bilibiliLoadList channel with the "author:<mid>:<page>" prefix.
+    Q_INVOKABLE int bilibiliLoadAuthorVideos(qlonglong mid, int page);
+    Q_INVOKABLE void bilibiliRequestWatchLater(const QString& bvid, bool add);
+    Q_INVOKABLE void bilibiliRequestComments(const QString& bvid, int page, int sort = 0);
+    Q_INVOKABLE void bilibiliRequestEnableDanmaku(const QString& bvid, int pageIndex);
+    Q_INVOKABLE void bilibiliRequestResumeAt(const QString& bvid, qlonglong cid);
+    Q_INVOKABLE void bilibiliRequestAccount();
+    // 异步版：发起后立即返回，结果通过 bilibiliFavoriteReady 回来。
+    // bilibiliFavoriteReady. `reason` tells the two callers apart ("toggle" for
+    // bilibiliInteractionReady 回到 QML。
+    // worker and the result arrives through bilibiliInteractionReady.
+    Q_INVOKABLE void bilibiliRequestInteractionState(const QString& bvid);
+    // 手动为某个分P装载字幕（设置页的「重新拉取」按钮用）。播放时也会自动调用。
+    // Install subtitles for one part on demand; playback calls this automatically.
+    // 只在 C++ 内部用（两个播放入口），不导出给 QML。
+    // Internal only, called from both play entry points; not exported to QML.
+    void bilibiliRequestSubtitles(const QString& bvid, qlonglong cid);
+    // 设置页改了底色/透明度后调用：就地刷新正在播放的 B 站字幕样式。
+    // Called when the background settings change, so the running track repaints in place.
+    Q_INVOKABLE void refreshBiliSubtitleStyle();
+    // page lookup inside bilibiliPlay can be skipped. That lookup is a full round trip and
+    void flushBiliWatchProgress();
+    bool reportBiliWatchProgressAsync();
+    bool reportBiliWatchStartedAsync(const std::wstring& bvid, long long cid, int played);
+    // 设置 → 赞助作者: opens the author's page for `id` (bilibili, douyin, x, github,
+    void tickBiliPlay();
+    bool startBiliTask(BiliOp op, std::function<BiliTaskResult()> work);
+    void tickBiliTasks();
+    void showFormatBadge(const engine::PlayerSnapshot& snapshot);
+
+    Q_INVOKABLE void bilibiliRequestQrStart();
+    Q_INVOKABLE void bilibiliRequestQrPoll();
+    Q_INVOKABLE void bilibiliRequestFavorite(const QString& bvid, bool add,
+                                             qlonglong folderId, const QString& reason);
+    Q_INVOKABLE QString bilibiliQrImage(int size = 320);
+    bool bilibiliPlayResolved(const QString& bvid, qlonglong cid,
+                              const std::wstring& pageTitle, int qn, bool fromStart);
+    Q_INVOKABLE bool bilibiliPlayCid(const QString& bvid, qlonglong cid, int qn,
+                                     bool fromStart = false);
+    Q_INVOKABLE bool bilibiliPlay(const QString& bvid, int pageIndex, int qn,
+                                 bool fromStart = false);
+    Q_INVOKABLE QString bilibiliLastError() const;
+
+    bool planFgAutoMultiplierBeforeOpen(double sourceFps);
+    void maybeApplyFgAutoMultiplier();
+    bool takeBiliWatchProgress(std::wstring& bvid, long long& cid, int& played);
+
+    void setFgAutoMultiplier(bool value);
+    bool fgAutoMultiplierAvailable() const;
+    bool fgAutoMultiplier() const;
+
+    void applyFgMultiplier(int multiplier);
+
+    bool doviFollow() const;
+    void setDoviFollow(bool on);
+    bool doviP7Compose() const;
+    void setDoviP7Compose(bool on);
+    bool doviFollowAverage() const;
+    void setDoviFollowAverage(bool on);
+
 signals:
+    void bilibiliActionDone(const QString& op, bool ok, const QString& error);
+    void bilibiliListReady(const QString& kind, const QVariantList& items, int generation);
+    void bilibiliObjectReady(const QString& kind, const QVariantMap& object, int generation);
+    void bilibiliInteractionReady(const QString& bvid, const QVariantMap& state, int generation);
+    void bilibiliFavFoldersReady(const QVariantList& folders, const QString& reason);
+    void bilibiliFavoriteReady(bool ok, const QString& error, bool add, const QString& reason);
+    void bilibiliEmotePanelReady(const QStringList& items, bool ok, const QString& error);
+    void bilibiliCommentsReady(const QVariantList& comments, qlonglong total, bool ok,
+                               const QString& error);
+    void bilibiliDanmakuReady(bool ok, const QString& error, int lineCount);
+    void bilibiliResumeReady(double seconds);
+    void bilibiliQrStarted(const QString& qrUrl, bool ok, const QString& error);
+    void bilibiliQrPolled(const QString& state);
+    void bilibiliAccountReady(const QVariantMap& account, bool ok);
+
     void playlistRequested();
     void nodeAnchorsChanged();
     void ps5Changed();
@@ -1516,6 +1697,8 @@ private:
     void rememberPosition(bool flush);
     void refreshSubtitles(const std::wstring& media);
     void tickSubtitles();
+    // Per-frame danmaku update; called from tickSubtitles().
+    void tickDanmaku();
     void tickImageBatch();
     void tickCapture();
     void tickPs5();

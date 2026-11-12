@@ -33,6 +33,7 @@ QString QmlPlayerBridge::sourceSummary() const {
     // Reported values only: no upscaling claim, no invented bit depth.
     return QStringLiteral("%1x%2").arg(s.sourceWidth).arg(s.sourceHeight);
 }
+
 int QmlPlayerBridge::sourceWidth() const { return int(impl_->snapshot.sourceWidth); }
 int QmlPlayerBridge::sourceHeight() const { return int(impl_->snapshot.sourceHeight); }
 double QmlPlayerBridge::sourceFps() const { return impl_->snapshot.nominalSourceFps; }
@@ -196,8 +197,45 @@ void QmlPlayerBridge::tickPlaylist() {
 }
 
 void QmlPlayerBridge::openPath(const QString& path) {
+    // 观看进度由 tickBiliPlay 的 worker 负责上报（B 站那次打开会先把状态取走）。
+    // 只有非 B 站打开才在这里上报，因为那条路径没有 worker 替它做。
+    // 保留这个入口的理由：openPath 是所有打开方式的汇合点。
+    // The Bilibili open already reports through its worker; every other open ends
+    // here, so this is the one place a flushed position is seen.
+    flushBiliWatchProgress();
+    // Consumed up front: an empty path must not leave the flag set for the next open.
+    const bool keepBilibiliStream = impl_->bilibiliOpenPending;
+    impl_->bilibiliOpenPending = false;
+    // Any open supersedes a mirror retry that is still waiting on its timer.
+    ++impl_->biliOpenGen;
     if (path.isEmpty()) return;
     flushHdrMemory();impl_->hdrTitleApplied.clear();
+    // A local file or an unrelated URL must not inherit the last video's DASH audio
+    // address or the site's Referer/UA: separateAudio reads audioPath alone, so a
+    // stale value makes the engine open the previous Bilibili track as this source's
+    // audio. The Bilibili branches write these immediately before calling openPath
+    // and raise bilibiliOpenPending, so the open they asked for keeps them.
+    // 非 B 站打开：清掉上一次 B 站打开留下的来源、重播身份、镜像重试与弹幕状态，
+    // 否则播完点「播放」会跳回上一部 B 站视频、本地文件会继承它的音频地址。
+    // 这段在 2.1.2 拆桥接层时丢过（814ec867），2026-11-07 补回。
+    if (!keepBilibiliStream) {
+        impl_->biliSourceActive = false;
+        impl_->biliReplayBvid.clear();
+        impl_->biliReplayCid = 0;
+        impl_->fgAutoPlanned = false;
+        // The mirror retry belongs to the source that was being opened, not to this one.
+        impl_->biliMirrors.clear();
+        impl_->biliMirrorIndex = 0;
+        impl_->biliRetriesLeft = 0;
+        impl_->biliRetryPending = false;
+        // Danmaku belongs to the Bilibili track it was loaded for: a local file, a plain
+        // URL, a capture or a stream must not keep drawing the previous video's comments.
+        if (impl_->danmakuEnabled) bilibiliDisableDanmaku();
+        // A history position belongs to the Bilibili video it was read for. Opening
+        // anything else must not seek that other source to it.
+        impl_->biliResumeAt = -1.0;
+        impl_->biliResumeSession = 0;
+    }
     const bool network=media::networkMediaInput(wideOf(path));
     if (QFileInfo(path).isDir()) {
         impl_->playlist->addPaths({path}); emit playlistRequested(); return;
@@ -227,14 +265,26 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // geometry, and only then open. The presenter samples the window's client
     // size once at initialisation; opening before that point is what produced a
     // 1x1 swapchain.
-    // Only leave the current page when the user is choosing a source from home.
-    // Opening a file from the professional page keeps them there, which is what the
-    // design's source menu implies.
-    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home"))
-        emit navigate(QStringLiteral("min"));
+    // From home or the Bilibili page go to the professional page, not the minimal one:
+    // after a video starts the next thing the user reaches for is FG, NR or quality.
+    // Starting from the professional page keeps them where they are.
+    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home")
+        || impl_->currentPage == QLatin1String("bili"))
+        emit navigate(QStringLiteral("pro"));
     if(!network)rememberSource(QStringLiteral("file"), path);
     if (impl_->preOpen) impl_->preOpen();
     auto options = impl_->options;
+    // B 站那次打开要保留它的 DASH 音频地址与 Referer/UA；其他来源必须清掉。
+    // impl_->options 从 2.1.2 起由 B 站直接写入（不再走 pending* 中转），这里不清
+    // 就会把上一部 B 站视频的音频 URL 当成这个本地文件的音轨。
+    // Bilibili writes impl_->options directly since 2.1.2 (no pending* hand-off any
+    // more); without this an unrelated file inherits the previous video's DASH audio
+    // URL and Referer/UA.
+    if (!keepBilibiliStream) {
+        options.audioPath.clear();
+        options.network.requestHeaders.clear();
+        options.network.userAgent.clear();
+    }
     options.softwareDecode = impl_->prefString("decode") == QLatin1String("software");
     options.hardwareDecodeOnly = impl_->prefString("decode") == QLatin1String("hardware");
     options.deinterlace=deinterlaceAvailable()&&impl_->prefBool("deinterlace",true);
@@ -257,7 +307,37 @@ void QmlPlayerBridge::openPath(const QString& path) {
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
 void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
 bool QmlPlayerBridge::openNetworkAddress(const QString& address){
-    const QUrl url(address.trimmed(),QUrl::StrictMode);
+    const QString trimmed = address.trimmed();
+    // A Bilibili page URL is not a media URL: resolve it to the CDN stream first.
+    // 粘贴 B 站页面地址直接播放：解析成 CDN 流，再带上 Referer/UA 与 DASH 音频打开。
+    // 这段在 2.1.2 拆桥接层时丢失（isBilibiliPageUrl 变成无人调用的死函数）。
+    if (media::isBilibiliPageUrl(trimmed.toStdWString())) {
+        // Send the stored session so member renditions are available.
+        const std::wstring cookie = media::loadBilibiliCookie();
+        const auto stream = media::resolveBilibiliStream(trimmed.toStdWString(), cookie);
+        if (!stream.ok) {
+            emit notice(QString::fromStdWString(stream.error), true);
+            veyra::log::warn("bilibili", QString::fromStdWString(stream.error).toStdString());
+            return false;
+        }
+        if (!stream.title.empty()) impl_->pendingTitle = stream.title;
+        // The CDN needs the site's Referer/User-Agent; carry them on the open
+        // options so the demuxer sends them (see networkMediaHeaders).
+        impl_->options.network.requestHeaders = stream.headers;
+        impl_->options.network.userAgent = stream.userAgent;
+        // DASH keeps audio in its own stream; the video address carries none.
+        impl_->options.audioPath = stream.audioUrl;
+        impl_->bilibiliOpenPending = true;
+        QString info = QStringLiteral("%1 × %2  %3")
+            .arg(stream.width).arg(stream.height)
+            .arg(QString::fromStdWString(stream.codec));
+        if (stream.audioUrl.empty()) info += QStringLiteral("  ") + tr("无音频");
+        if (!media::bilibiliCookieLooksSignedIn(cookie)) info += QStringLiteral("  ") + tr("（未登录，画质受限）");
+        emit notice(tr("正在播放：") + QString::fromStdWString(stream.title) + QStringLiteral("  ") + info, false);
+        openPath(QString::fromStdWString(stream.url));
+        return true;
+    }
+    const QUrl url(trimmed,QUrl::StrictMode);
     if(!url.isValid()||url.host().isEmpty()||!media::networkMediaInput(wideOf(url.scheme()+QStringLiteral(":")))){
         emit notice(tr("请输入有效的 HTTP、HTTPS 或 RTSP 视频地址"),true);return false;
     }
@@ -270,6 +350,26 @@ void QmlPlayerBridge::togglePlayPause() {
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    // B 站视频的播完/恢复必须最先处理：它的来源也是网络地址（liveKind=="url"），
+    // 下面的网络地址重开会拿 sourceLabel 重新连接 —— 而那是带时效签名的 CDN 地址，
+    // 早已过期，只会 403。这里按记住的 bvid/cid/画质重新解析一次，拿到全新地址。
+    // 从头播：播完时位置就在结尾，沿用续播位置会立刻再次结束。
+    // A finished Bilibili video must be handled before everything else: its source is
+    // also a network address (liveKind=="url"), and the branch below reconnects from
+    // sourceLabel - a CDN URL with an expiry signature that only 403s by then. Re-resolve
+    // from the remembered bvid/cid/quality instead. From the start: the position sits at
+    // the end when the video finished, so a resume point would end it immediately again.
+    // 这段在 2.1.2 拆桥接层时丢过（814ec867），2026-11-07 补回。
+    if (impl_->biliSourceActive && !impl_->biliReplayBvid.isEmpty() && impl_->biliReplayCid > 0
+        && (s.transport == T::Ended || !s.running)) {
+        veyra::log::info("ui-transport", std::format(
+            "ended Bilibili video: re-resolving bvid={} cid={} qn={} from the start",
+            impl_->biliReplayBvid.toStdString(), impl_->biliReplayCid,
+            impl_->biliReplayQuality));
+        bilibiliPlayCid(impl_->biliReplayBvid, impl_->biliReplayCid,
+                        impl_->biliReplayQuality, /*fromStart=*/true);
+        return;
+    }
     if(impl_->liveKind==QLatin1String("url")&&(s.transport==T::Ended||(s.transport==T::Paused&&s.duration<=0))){
         openNetworkAddress(QString::fromStdWString(impl_->sourceLabel));return;
     }

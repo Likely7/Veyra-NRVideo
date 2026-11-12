@@ -1,18 +1,29 @@
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/pipeline/ColorMetadata.h"
+#include "veyra/source/DolbyVisionRpu.h"
+#include "veyra/pipeline/DolbyVisionP7.h"
+#include "veyra/pipeline/PqTransfer.h"
 
 #include <climits>
 #include <cstddef>
 #include <cmath>
+#include <chrono>
+#include <cstring>
 #include <format>
+#include <fstream>
 #include <string_view>
+#include <vector>
 
 #include "veyra/Log.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/bsf.h>
+#include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/dovi_meta.h>
+#include <libavutil/hdr_dynamic_metadata.h>
+#include <libavutil/hdr_dynamic_vivid_metadata.h>
 #include <libavutil/mastering_display_metadata.h>
 #include <libavutil/hwcontext_d3d12va.h>
 }
@@ -21,6 +32,64 @@ extern "C" {
 #include <algorithm>
 namespace veyra::source {
 namespace {
+// Custom (P5): dump the RPU compositing parameters of the first frames so the
+// BL+EL reconstruction can be prototyped and validated outside the renderer.
+// Gated by VEYRA_DOVI_MAPPING_DUMP=<path>; never on in production.
+void dumpDoviMapping(const AVDOVIMetadata& meta, unsigned frameIndex) {
+    static const char* path = std::getenv("VEYRA_DOVI_MAPPING_DUMP");
+    static std::ofstream out;
+    static bool opened = false;
+    static unsigned written = 0;
+    if (path == nullptr || path[0] == '\0') return;
+    if (!opened) { out.open(path, std::ios::trunc); opened = true; }
+    if (!out || written >= 12) return;
+    ++written;
+    const auto& h = *av_dovi_get_header(&meta);
+    const auto& m = *av_dovi_get_mapping(&meta);
+    out << "{\"frame\":" << frameIndex
+        << ",\"coefLog2Denom\":" << int(h.coef_log2_denom)
+        << ",\"blBitDepth\":" << int(h.bl_bit_depth)
+        << ",\"elBitDepth\":" << int(h.el_bit_depth)
+        << ",\"vdrBitDepth\":" << int(h.vdr_bit_depth)
+        << ",\"disableResidual\":" << int(h.disable_residual_flag)
+        << ",\"extMappingIdc\":" << int(h.ext_mapping_idc_0_4)
+        << ",\"blFullRange\":" << int(h.bl_video_full_range_flag)
+        << ",\"nlqMethod\":" << int(m.nlq_method_idc)
+        << ",\"curves\":[";
+    for (int c = 0; c < 3; ++c) {
+        const auto& cv = m.curves[c];
+        const int pieces = cv.num_pivots > 0 ? cv.num_pivots - 1 : 0;
+        if (c) out << ',';
+        out << "{\"numPivots\":" << int(cv.num_pivots) << ",\"pivots\":[";
+        for (int i = 0; i < int(cv.num_pivots); ++i) { if (i) out << ','; out << cv.pivots[i]; }
+        out << "],\"mappingIdc\":[";
+        for (int i = 0; i < pieces; ++i) { if (i) out << ','; out << int(cv.mapping_idc[i]); }
+        out << "],\"polyOrder\":[";
+        for (int i = 0; i < pieces; ++i) { if (i) out << ','; out << int(cv.poly_order[i]); }
+        out << "],\"polyCoef\":[";
+        for (int i = 0; i < pieces; ++i)
+            for (int k = 0; k < 3; ++k) { out << (i || k ? "," : "") << cv.poly_coef[i][k]; }
+        out << "],\"mmrOrder\":[";
+        for (int i = 0; i < pieces; ++i) { if (i) out << ','; out << int(cv.mmr_order[i]); }
+        out << "],\"mmrConstant\":[";
+        for (int i = 0; i < pieces; ++i) { if (i) out << ','; out << cv.mmr_constant[i]; }
+        out << "],\"mmrCoef\":[";
+        for (int i = 0; i < pieces; ++i)
+            for (int o = 0; o < 3; ++o)
+                for (int j = 0; j < 7; ++j) out << (i || o || j ? "," : "") << cv.mmr_coef[i][o][j];
+        out << "]}";
+    }
+    out << "],\"nlq\":[";
+    for (int c = 0; c < 3; ++c) {
+        const auto& n = m.nlq[c];
+        if (c) out << ',';
+        out << "{\"offset\":" << n.nlq_offset << ",\"inMax\":" << n.vdr_in_max
+            << ",\"slope\":" << n.linear_deadzone_slope
+            << ",\"threshold\":" << n.linear_deadzone_threshold << "}";
+    }
+    out << "]}\n";
+}
+
 // File playback software decode: frame threading up to four workers regardless
 // of resolution (1080p60 H.264/HEVC on one thread fell below real time when
 // hardware decode was unavailable, sweep 2026-09-22 C2). Live capture keeps
@@ -39,6 +108,28 @@ int64_t rationalToUs(const pipeline::Rational& r)
     if (!r.known || r.den == 0) { return 0; }
     return static_cast<int64_t>(static_cast<long double>(r.num) * 1000000.0L
         / static_cast<long double>(r.den) + (r.num >= 0 ? 0.5L : -0.5L));
+}
+
+// Custom (P5): the Dolby Vision enhancement layer travels inside each access unit
+// as private NAL type 63, framed as 0x7E 0x01 followed by a complete standard NAL.
+// Strip the framing and hand the decoder only the inner NALs.
+std::vector<std::vector<uint8_t>> extractEnhancementNals(const uint8_t* data, int size, unsigned lengthSize) {
+    std::vector<std::vector<uint8_t>> out;
+    if (data == nullptr || size < 8 || lengthSize < 1 || lengthSize > 4) return out;
+    int pos = 0;
+    while (pos + int(lengthSize) + 3 <= size) {
+        uint32_t length = 0;
+        for (unsigned b = 0; b < lengthSize; ++b) length = (length << 8) | data[pos + b];
+        pos += int(lengthSize);
+        if (length == 0 || pos + int(length) > size) break;
+        const uint8_t* nal = data + pos;
+        if (((nal[0] >> 1) & 0x3F) == 63 && length >= 4 && nal[0] == 0x7E && nal[1] == 0x01) {
+            const int inner = int(length) - 2;
+            if (pos + 2 + inner <= size) out.emplace_back(data + pos + 2, data + pos + 2 + inner);
+        }
+        pos += int(length);
+    }
+    return out;
 }
 
 } // namespace
@@ -66,6 +157,12 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
     veyra::log::warn("source-file", std::format(
         "D3D12VA {} fallback to software reason={} path=redacted resumeUs={}", midStream ? "mid-stream" : "first-frame", reason, resumeUs));
     deinterlacer_.close();filterDraining_=false;
+    // Custom (P7 fix): the frames held for pairing belong to the hardware decoder
+    // that is about to be destroyed, and each one pins one of its d3d11va
+    // surfaces. Drop them before the device goes away.
+    for (auto& held : baseWaiting_) av_frame_free(&held.second);
+    baseWaiting_.clear();
+    if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
     decoder_.close();
     if (!demuxer_.shared()) {
         demuxer_.close();
@@ -103,9 +200,478 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
     return true;
 }
 
+// Custom (P7): FFmpeg's own Dolby Vision splitter. It emits exactly the
+// enhancement layer bitstream (private NAL type 63 with its two-byte wrapper
+// stripped), takes the EL's parameter sets from the container's hvcE record and
+// halves the extent for a 4K base layer. Nothing has to be re-derived from the
+// stream, so the EL decoder also survives a seek without losing its parameter
+// sets. Requires libavformat to have surfaced AV_PKT_DATA_HEVC_CONF.
+bool MediaFileSource::openEnhancementSplitter(const AVCodecParameters* params) {
+    closeEnhancementSplitter();
+    if (params == nullptr) return false;
+    const AVBitStreamFilter* filter = av_bsf_get_by_name("dovi_split");
+    if (filter == nullptr) {
+        veyra::log::info("source-dovi-el", "dovi_split bitstream filter unavailable; using the built-in NAL walk");
+        return false;
+    }
+    AVBSFContext* context = nullptr;
+    if (av_bsf_alloc(filter, &context) < 0) return false;
+    const auto fail = [&context]() {
+        av_bsf_free(&context);
+        return false;
+    };
+    if (avcodec_parameters_copy(context->par_in, params) < 0) return fail();
+    // Without the enhancement layer's own configuration record the filter would
+    // hand the EL decoder the base layer's hvcC: the wrong extent and the wrong
+    // parameter sets. The walk sniffs them from the stream instead.
+    if (av_packet_side_data_get(context->par_in->coded_side_data,
+            context->par_in->nb_coded_side_data, AV_PKT_DATA_HEVC_CONF) == nullptr) {
+        veyra::log::info("source-dovi-el", "container carries no hvcE record; using the built-in NAL walk");
+        return fail();
+    }
+    context->time_base_in = AVRational{demuxer_.videoTimeBaseNum(), demuxer_.videoTimeBaseDen()};
+    if (av_opt_set(context, "mode", "el", AV_OPT_SEARCH_CHILDREN) < 0) return fail();
+    if (av_bsf_init(context) < 0) return fail();
+    elSplitter_ = context;
+    elSplitterActive_ = true;
+    veyra::log::info("source-dovi-el", std::format("dovi_split filter ready mode=el EL {}x{} extradata={} bytes",
+        context->par_out->width, context->par_out->height, context->par_out->extradata_size));
+    return true;
+}
+
+void MediaFileSource::closeEnhancementSplitter() {
+    av_bsf_free(&elSplitter_);
+    elSplitterActive_ = false;
+}
+
+// Owned packet with this access unit's enhancement layer, or null when the unit
+// carries none (the filter reports EAGAIN, which is the normal sparse case).
+AVPacket* MediaFileSource::splitEnhancementPacket(const AVPacket* packet) {
+    if (elSplitter_ == nullptr || packet == nullptr) return nullptr;
+    AVPacket* input = av_packet_clone(packet);
+    if (input == nullptr) return nullptr;
+    const int sent = av_bsf_send_packet(elSplitter_, input);
+    av_packet_free(&input);   // the filter holds the reference either way
+    if (sent < 0) {
+        av_bsf_flush(elSplitter_);
+        return nullptr;
+    }
+    AVPacket* el = av_packet_alloc();
+    if (el == nullptr) return nullptr;
+    const int received = av_bsf_receive_packet(elSplitter_, el);
+    if (received < 0) {
+        if (received != AVERROR(EAGAIN) && received != AVERROR_EOF) av_bsf_flush(elSplitter_);
+        av_packet_free(&el);
+        return nullptr;
+    }
+    return el;
+}
+
+// Fallback splitter: the enhancement layer travels as private NAL type 63 framed
+// as 0x7E 0x01 followed by a complete standard NAL, and its VPS/SPS/PPS appear in
+// the first access unit that carries one.
+AVPacket* MediaFileSource::buildEnhancementPacket(const AVPacket* packet) {
+    if (packet == nullptr || packet->data == nullptr) return nullptr;
+    const auto nals = extractEnhancementNals(packet->data, packet->size, 4);
+    if (nals.empty()) return nullptr;
+    if (!elLayerOpen_) {
+        std::vector<const std::vector<uint8_t>*> sets;
+        for (const auto& nal : nals) {
+            if (nal.size() < 2) continue;
+            const unsigned type = (nal[0] >> 1) & 0x3F;
+            if (type == 32 || type == 33 || type == 34) sets.push_back(&nal);
+        }
+        if (sets.size() < 3) return nullptr;  // parameter sets not complete yet
+        std::vector<uint8_t> extradata;
+        for (const auto* set : sets) {
+            elParamSets_.push_back(*set);
+            const uint8_t startCode[4] = {0, 0, 0, 1};
+            extradata.insert(extradata.end(), startCode, startCode + 4);
+            extradata.insert(extradata.end(), set->begin(), set->end());
+        }
+        AVCodecParameters* par = avcodec_parameters_alloc();
+        if (par == nullptr) return nullptr;
+        par->codec_type = AVMEDIA_TYPE_VIDEO;
+        par->codec_id = AV_CODEC_ID_HEVC;
+        par->format = AV_PIX_FMT_YUV420P10LE;
+        par->extradata = static_cast<uint8_t*>(av_mallocz(extradata.size() + AV_INPUT_BUFFER_PADDING_SIZE));
+        if (par->extradata == nullptr) { avcodec_parameters_free(&par); return nullptr; }
+        std::memcpy(par->extradata, extradata.data(), extradata.size());
+        par->extradata_size = int(extradata.size());
+        const bool opened = openEnhancementDecoder(par, 0, 0);
+        avcodec_parameters_free(&par);
+        if (!opened) {
+            elLayerEnabled_ = false;
+            return nullptr;
+        }
+    }
+    std::vector<uint8_t> accessUnit;
+    // Only VCL NALs (types 0-31) belong in the packet stream. The type 63 payloads
+    // also carry SEI and other private data; handing those to the decoder made it
+    // discard whole access units.
+    for (const auto& nal : nals) {
+        if (nal.size() < 2) continue;
+        const unsigned type = (nal[0] >> 1) & 0x3F;
+        if (type > 31) continue;
+        const uint8_t startCode[4] = {0, 0, 0, 1};
+        accessUnit.insert(accessUnit.end(), startCode, startCode + 4);
+        accessUnit.insert(accessUnit.end(), nal.begin(), nal.end());
+    }
+    if (accessUnit.empty()) return nullptr;
+    AVPacket* elPacket = av_packet_alloc();
+    if (elPacket == nullptr) return nullptr;
+    if (av_new_packet(elPacket, int(accessUnit.size())) < 0) { av_packet_free(&elPacket); return nullptr; }
+    std::memcpy(elPacket->data, accessUnit.data(), accessUnit.size());
+    elPacket->pts = packet->pts;
+    elPacket->dts = packet->dts;
+    return elPacket;
+}
+
+bool MediaFileSource::openEnhancementDecoder(const AVCodecParameters* elParams, int timeBaseNum, int timeBaseDen) {
+    if (elParams == nullptr) return false;
+    // lowLatency: frame-level threading buffers frames before emitting them, which
+    // made the decoded enhancement layer lag the base frame by one or two and
+    // painted stale residuals onto the picture. tolerateErrors: the residual stream
+    // is sparse by design, so its reference chain is incomplete on purpose.
+    elLayerOpen_ = elDecoder_.openSoftware(elParams, timeBaseNum, timeBaseDen, 2,
+        /*lowLatency=*/true, /*tolerateErrors=*/true);
+    if (!elLayerOpen_) {
+        veyra::log::error("source-dovi-el", "enhancement layer decoder refused the parameter sets");
+        return false;
+    }
+    veyra::log::info("source-dovi-el", std::format("enhancement layer decoder opened extradata={} bytes {}x{}",
+        elParams->extradata_size, elDecoder_.width(), elDecoder_.height()));
+    return true;
+}
+
+// Custom (P7): pairing tolerance instead of exact equality. The EL decoder runs
+// one frame behind the base decoder by construction, so the oldest waiting base
+// frame is the one that gets its layer first; see read().
+bool MediaFileSource::takeElNear(int64_t pts, AVFrame** outFrame) {
+    if (outFrame == nullptr || pts == AV_NOPTS_VALUE) return false;
+    const auto it = elByPts_.lower_bound(pts - elMatchTolerance_);
+    if (it == elByPts_.end() || it->first - elMatchTolerance_ > pts) return false;
+    av_frame_free(outFrame);
+    *outFrame = it->second;
+    elByPts_.erase(it);
+    return true;
+}
+
+// Custom (P7): an enhancement frame older than the OLDEST waiting base frame can
+// never be used again: its own base picture has already been delivered. The bound
+// has to be the oldest waiting frame, not whichever frame is being probed, or the
+// layer of an older frame still in the queue would be thrown away.
+void MediaFileSource::dropStaleEl(int64_t oldestBasePts) {
+    if (oldestBasePts == AV_NOPTS_VALUE) return;
+    while (!elByPts_.empty() && elByPts_.begin()->first + elMatchTolerance_ < oldestBasePts) {
+        av_frame_free(&elByPts_.begin()->second);
+        elByPts_.erase(elByPts_.begin());
+    }
+}
+
+// Custom (P5): decode the Dolby Vision enhancement layer that rides inside the
+// same access units as the base layer. Any failure disables the path instead of
+// disturbing playback.
+bool MediaFileSource::feedEnhancementLayer(const AVPacket* packet) {
+    const auto elStart = std::chrono::steady_clock::now();
+
+    if (!elLayerEnabled_ || packet == nullptr || packet->data == nullptr || packet->size <= 0) return true;
+    // The enhancement layer is sparse by design here: only about half the base
+    // frames carry one, in a repeating pattern. An empty packet is normal, and it
+    // must report "no EL for this frame" so the caller does not reuse the texture
+    // uploaded for the previous one.
+    ++elFeedCalls_;
+    AVPacket* elPacket = elSplitterActive_ ? splitEnhancementPacket(packet) : buildEnhancementPacket(packet);
+    if (elPacket == nullptr) return false;
+    ++elPacketHits_;
+    // Report the layer's coverage and the pairing loss every 300 access units: a
+    // FEL disc is expected to carry EL on (nearly) every frame, so a low hit rate
+    // means the splitter is not extracting it and a low pairing rate means the
+    // queue gives up too early. Both look like flicker on screen.
+    if (elFeedCalls_ % 300 == 0) {
+        veyra::log::info("source-dovi-el", std::format(
+            "EL coverage feed={} carried={} ({:.1f}%) delivered_without_layer={}",
+            elFeedCalls_, elPacketHits_,
+            elFeedCalls_ ? 100.0 * double(elPacketHits_) / double(elFeedCalls_) : 0.0,
+            elForcedDeliveries_));
+    }
+    const bool sent = elDecoder_.sendPacket(elPacket);
+    av_packet_free(&elPacket);
+    if (!sent) {
+        if (++elLayerMisses_ == 30) {
+            veyra::log::warn("source-dovi-el", "enhancement layer decoder rejects packets; disabling");
+            elLayerEnabled_ = false;
+            closeEnhancementLayer();
+        }
+        return true;
+    }
+    bool gotFrame = false;
+    for (;;) {
+        const AVFrame* decoded = elDecoder_.receiveFrame();
+        if (decoded == nullptr) break;
+        // Custom (P5): queue by timestamp; the base frame that owns this layer may
+        // still be in flight (the EL decoder runs a frame behind).
+        AVFrame* copy = av_frame_clone(decoded);
+        if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
+            static unsigned storeDbg = 0;
+            if (++storeDbg <= 8) {
+                const int64_t rawBet = decoded->best_effort_timestamp;
+                const int64_t rawPts = decoded->pts;
+                const int64_t chosen = rawBet != AV_NOPTS_VALUE ? rawBet : rawPts;
+                log::info("source-dovi-el", std::format(
+                    "store candidate clone={} bet={} pts={} chosen={} cache={}",
+                    copy ? 1 : 0, rawBet, rawPts, chosen, elByPts_.size()));
+            }
+        }
+        if (copy != nullptr) {
+            elLastWidth_ = uint32_t(copy->width);
+            elLastHeight_ = uint32_t(copy->height);
+            const int64_t elPts = copy->best_effort_timestamp != AV_NOPTS_VALUE
+                ? copy->best_effort_timestamp : copy->pts;
+            if (elPts != AV_NOPTS_VALUE) {
+                auto it = elByPts_.find(elPts);
+                if (it != elByPts_.end()) av_frame_free(&it->second);
+                elByPts_[elPts] = copy;
+                while (elByPts_.size() > 8) {
+                    av_frame_free(&elByPts_.begin()->second);
+                    elByPts_.erase(elByPts_.begin());
+                }
+            } else {
+                av_frame_free(&copy);
+            }
+            ++elLayerFrames_;
+            gotFrame = true;
+            if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
+                const int64_t fp = decoded->best_effort_timestamp != AV_NOPTS_VALUE
+                    ? decoded->best_effort_timestamp : decoded->pts;
+                if (packet->pts != AV_NOPTS_VALUE && fp != packet->pts) {
+                    static unsigned mismatches = 0;
+                    if (++mismatches <= 5)
+                        log::warn("source-dovi-el", std::format(
+                            "EL frame pts {} != packet pts {}", fp, packet->pts));
+                }
+            }
+        }
+    }
+    // Custom (P5): once, report what the enhancement layer actually contains. A
+    // frame of pure 512 would mean "zero residual" and the composite would have to
+    // be identical to the base layer, so this distinguishes "no EL on this frame"
+    // from "EL present but ignored".
+    {
+        static bool residualLogged = false;
+        if (!residualLogged && elFrame_ != nullptr && elFrame_->data[0] != nullptr &&
+            elFrame_->format == AV_PIX_FMT_YUV420P10LE) {
+            const auto* row = reinterpret_cast<const uint16_t*>(elFrame_->data[0]);
+            const int stridePx = elFrame_->linesize[0] / 2;
+            int minV = 1 << 20, maxV = -(1 << 20);
+            int64_t sum = 0, count = 0;
+            for (int y = 0; y < elFrame_->height; y += 8) {
+                for (int x = 0; x < elFrame_->width; x += 8) {
+                    const int v = int(row[size_t(y) * stridePx + x]) & 0x3FF;
+                    minV = std::min(minV, v);
+                    maxV = std::max(maxV, v);
+                    sum += v;
+                    ++count;
+                }
+            }
+            // Frames without an EL decode to a flat 512 (zero residual), so keep
+            // looking until one actually carries a signal.
+            if (count > 0 && maxV > minV) {
+                residualLogged = true;
+                log::info("source-dovi-el", std::format(
+                    "EL luma samples: min={} max={} mean={:.1f} (offset {} => residual {}..{})",
+                    minV, maxV, double(sum) / double(count), 512, minV - 512, maxV - 512));
+            }
+        }
+    }
+    static double elTotalMs = 0.0;
+    static unsigned elPackets = 0;
+    elTotalMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - elStart).count();
+    ++elPackets;
+    if (elLayerFrames_ <= 3 || (elLayerFrames_ && elLayerFrames_ % 100 == 0))
+        veyra::log::info("source-dovi-el", std::format("decoded={} status={} format={} {}x{} avgCost={:.2f}ms over {} packets held={} waiting={}",
+            elLayerFrames_, int(elDecoder_.receiveStatus()),
+            elFrame_ ? int(elFrame_->format) : -1,
+            elFrame_ ? elFrame_->width : 0, elFrame_ ? elFrame_->height : 0,
+            elPackets ? elTotalMs / double(elPackets) : 0.0, elPackets,
+            deliveredHeld_ != nullptr ? 1 : 0, baseWaiting_.size()));
+    return gotFrame;
+}
+
+void MediaFileSource::closeEnhancementLayer() {
+    elDecoder_.close();
+    if (elFrame_ != nullptr) { av_frame_free(&elFrame_); elFrame_ = nullptr; }
+    elParamSets_.clear();
+    elLayerOpen_ = false;
+}
+
+
+// Custom (P5): pull every decodable enhancement frame into the PTS table.
+void MediaFileSource::drainElFrames() {
+    if (!elLayerOpen_) return;
+    for (;;) {
+        const AVFrame* decoded = elDecoder_.receiveFrame();
+        if (decoded == nullptr) break;
+        AVFrame* copy = av_frame_clone(decoded);
+        if (copy == nullptr) continue;
+        const int64_t elPts = copy->best_effort_timestamp != AV_NOPTS_VALUE
+            ? copy->best_effort_timestamp : copy->pts;
+        if (elPts == AV_NOPTS_VALUE) { av_frame_free(&copy); continue; }
+        auto it = elByPts_.find(elPts);
+        if (it != elByPts_.end()) av_frame_free(&it->second);
+        elByPts_[elPts] = copy;
+        while (elByPts_.size() > 8) {
+            av_frame_free(&elByPts_.begin()->second);
+            elByPts_.erase(elByPts_.begin());
+        }
+    }
+}
+
+// Custom (P5): hold a base frame for at most a couple of frames while its
+// enhancement layer catches up, then deliver it without one. This is the only way
+// to pair them: the EL decoder reorders, so the layer for frame N is only decoded
+// after frame N has already been produced by the base decoder.
+SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame** decodedFrame) {
+    if (decodedFrame != nullptr) *decodedFrame = nullptr;
+    // Custom (P7 fix): the caller has finished with the frame it borrowed from
+    // the previous call. Releasing it here is what keeps the fixed d3d11va
+    // surface array from running dry; see the member comment in the header.
+    if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
+    if (!elLayerEnabled_) return readBase(out, decodedFrame);
+
+    // Custom (P7): a MEL layer declares in its RPU that the layer carries no
+    // residual at all, so composing it only burns decode time. readBase() raises
+    // the flag once the evidence is consistent, and the EL path is dropped here,
+    // before anything is handed out.
+    if (elMelDrop_) {
+        elMelDrop_ = false;
+        elLayerEnabled_ = false;
+        veyra::log::info("source-dovi-el",
+            "RPU declares no usable residual on the observed frames; MEL layer, composing skipped");
+        closeEnhancementLayer();
+        for (auto& entry : elByPts_) av_frame_free(&entry.second);
+        elByPts_.clear();
+        return readBase(out, decodedFrame);
+    }
+
+    auto ptsOf = [](const AVFrame* f) -> int64_t {
+        if (f == nullptr) return AV_NOPTS_VALUE;
+        return f->best_effort_timestamp != AV_NOPTS_VALUE ? f->best_effort_timestamp : f->pts;
+    };
+
+    for (int spin = 0; spin < 4; ++spin) {
+        drainElFrames();
+        // Only the OLDEST waiting base frame may be delivered. Handing out a newer
+        // one because it happens to have its layer reorders the picture, and on a
+        // stream where only half the frames carry a layer that is exactly what the
+        // viewer sees as a frame jumping back and forth. mpv's pairing filter keeps
+        // the same rule for the same reason.
+        if (!baseWaiting_.empty()) {
+            const int64_t headPts = ptsOf(baseWaiting_.front().second);
+            dropStaleEl(headPts);   // anything older than the head can never be used
+            AVFrame* el = nullptr;
+            bool deliver = false;
+            bool withLayer = false;
+            if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
+                static unsigned waitDbg = 0;
+                if (++waitDbg <= 10) {
+                    std::string keys;
+                    for (const auto& kv : elByPts_) keys += std::format("{} ", kv.first);
+                    log::info("source-dovi-el", std::format("wait check pts={} cached=[{}] held={}",
+                        headPts, keys, baseWaiting_.size()));
+                }
+            }
+            if (takeElNear(headPts, &el)) {
+                deliver = true;
+                withLayer = true;
+            } else if (!elByPts_.empty() && elByPts_.begin()->first > headPts + elMatchTolerance_) {
+                // The layer stream is ordered and has already moved past this frame, so
+                // its layer is never coming: this base frame genuinely has none. Deliver
+                // it now instead of waiting for the queue to overflow - waiting would
+                // cost three frames of latency and still force the same decision.
+                deliver = true;
+            } else if (baseWaiting_.size() >= 3) {
+                deliver = true;   // safety valve: never stall playback for a layer
+            }
+            if (deliver) {
+                if (withLayer) {
+                    if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
+                        static unsigned okDbg = 0;
+                        if (++okDbg <= 8)
+                            log::info("source-dovi-el", std::format("PAIRED held pts={} el=1", headPts));
+                    }
+                    // Ownership moves to the member: takeElNear removed it from the
+                    // table, so someone has to free it on the next match.
+                    if (elFrame_ != nullptr) av_frame_free(&elFrame_);
+                    elFrame_ = el;
+                } else {
+                    ++elForcedDeliveries_;
+                }
+                out = baseWaiting_.front().first;
+                out.doviEl = withLayer ? elFrame_ : nullptr;
+                if (decodedFrame != nullptr) *decodedFrame = baseWaiting_.front().second;
+                deliveredHeld_ = baseWaiting_.front().second;   // freed on the next read()
+                baseWaiting_.pop_front();
+                return SourceReadStatus::Frame;
+            }
+        }
+
+
+        pipeline::FramePacket pkt{};
+        const AVFrame* frame = nullptr;
+        const auto status = readBase(pkt, &frame);
+        if (status != SourceReadStatus::Frame) return status;
+        drainElFrames();
+
+        AVFrame* el = nullptr;
+        {
+            static unsigned dbg = 0;
+            if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr && ++dbg <= 12) {
+                const int64_t bp = ptsOf(frame);
+                std::string keys;
+                for (const auto& kv : elByPts_) keys += std::format("{} ", kv.first);
+                log::info("source-dovi-el", std::format("attempt base_pts={} cached=[{}] held={}", bp, keys, baseWaiting_.size()));
+            }
+        }
+        if (takeElNear(ptsOf(frame), &el)) {
+            if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr) {
+                static unsigned okDbg2 = 0;
+                if (++okDbg2 <= 8)
+                    log::info("source-dovi-el", std::format("PAIRED direct pts={} el={}", ptsOf(frame), el?1:0));
+            }
+            if (elFrame_ != nullptr) av_frame_free(&elFrame_);
+            elFrame_ = el;
+            pkt.doviEl = elFrame_;
+            out = pkt;
+            if (decodedFrame != nullptr) *decodedFrame = frame;
+            return SourceReadStatus::Frame;
+        }
+
+        // No layer yet: keep this frame and fetch the next one so the EL decoder
+        // advances. The caller sees the frames in the same order, one frame later.
+        AVFrame* held = av_frame_clone(frame);
+        if (held == nullptr) {
+            out = pkt;
+            if (decodedFrame != nullptr) *decodedFrame = frame;
+            return SourceReadStatus::Frame;
+        }
+        baseWaiting_.emplace_back(std::move(pkt), held);
+    }
+
+    // Defensive: deliver whatever is oldest so playback cannot stall.
+    if (!baseWaiting_.empty()) {
+        out = baseWaiting_.front().first;
+        out.doviEl = nullptr;
+        if (decodedFrame != nullptr) *decodedFrame = baseWaiting_.front().second;
+        deliveredHeld_ = baseWaiting_.front().second;
+        baseWaiting_.pop_front();
+        return SourceReadStatus::Frame;
+    }
+    return readBase(out, decodedFrame);
+}
+
 pipeline::ColorDescription MediaFileSource::parseColor(const AVCodecParameters* params) const
-{
-    pipeline::ColorDescription cd;
+{    pipeline::ColorDescription cd;
     switch (params->format) {
     case AV_PIX_FMT_NV12: cd.pixelFormat = pipeline::SourcePixelFormat::NV12; break;
     case AV_PIX_FMT_P010: cd.pixelFormat = pipeline::SourcePixelFormat::P010; break;
@@ -195,11 +761,15 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     // Damaged data is tolerated on the player's network sources and MPEG-TS; export
     // and every offline user keep the strict stop.
     tolerant_ = desc.tolerateCorruption && (media::networkMediaInput(desc.path) || demuxer_.formatName().find("mpegts") != std::string::npos);
+    veyra::log::info("source-file", "stage: demux opened, reading codec parameters");
     const AVCodecParameters* params = demuxer_.videoCodecParameters();
     if (params == nullptr) {
         veyra::log::error("source-file", "no video codec parameters");
         return false;
     }
+    veyra::log::info("source-file", std::format("stage: codec={} {}x{} preferHw={} device={}",
+        avcodec_get_name(params->codec_id), params->width, params->height,
+        desc.preferHardwareDecode ? 1 : 0, desc.d3d12Device ? 1 : 0));
 
     bool decoderOpen = false;
     if (desc.preferHardwareDecode && desc.d3d12Device != nullptr && desc.d3d12Queue != nullptr) {
@@ -292,7 +862,64 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         dv.rpuDeclared=config.rpu_present_flag!=0;dv.compatibility=config.dv_bl_signal_compatibility_id;
         log::info("source-dovi",std::format("profile={} level={} compatibility={} bl={} el={} rpuDeclared={} route={} nativeOutput=0 rpuApplied=0",dv.profile,dv.level,dv.compatibility,dv.baseLayer,dv.enhancementLayer,dv.rpuDeclared,int(dv.route())));
         if(dv.route()==DolbyBaseLayer::Unsupported){errorMessage_=dv.description();return false;}
+        // Profile 5 (and any routed DoVi whose base layer omits VUI color tags)
+        // keeps the real color in the RPU, which compatibility playback does
+        // not apply. Pin the base layer to the routed HDR container instead of
+        // letting it fall back to BT.709 SDR (which then mismatches / washes
+        // out). Explicit, non-assumed tags from P7/P8/P10 are left untouched.
+        // Profile 8.4 routes to HLG, not PQ: its base layer is an HLG encoding and
+        // pinning it to PQ would invert the transfer and wash the picture out.
+        if(dv.route()==DolbyBaseLayer::Hdr10||dv.route()==DolbyBaseLayer::Hlg){
+            auto& c=info_.color;
+            const auto routed=dv.route()==DolbyBaseLayer::Hlg
+                ?pipeline::TransferFunction::HLG:pipeline::TransferFunction::PQ;
+            if(c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
+                c.transfer=routed;c.transferAssumed=true;}
+            if(c.matrix==pipeline::YuvMatrix::Unknown||c.matrixAssumed){
+                c.matrix=pipeline::YuvMatrix::BT2020NCL;c.matrixAssumed=true;}
+            if(c.primaries==pipeline::ColorPrimaries::Unknown||c.primariesAssumed){
+                c.primaries=pipeline::ColorPrimaries::BT2020;c.primariesAssumed=true;}
+            log::info("source-dovi",std::format("base layer pinned to {} for profile {} (8.1 is a PQ base, 8.4 is an HLG base)",
+                dv.route()==DolbyBaseLayer::Hlg?"HLG":"PQ", int(dv.profile)));
+        }
+        // Custom (P5): bring-up switch for the enhancement layer. Off unless the
+        // environment asks for it, so BL playback stays byte identical until the
+        // compositing path is complete.
+        elLayerEnabled_ = dv.profile == 7 && dv.enhancementLayer && desc.decodeDolbyEnhancementLayer;
+        if (elLayerEnabled_) {
+            // The pairing path keeps up to three base frames in baseWaiting_ plus
+            // the one handed to the caller, on top of whatever the decode loop
+            // already retains. d3d11va allocates a FIXED surface array sized for
+            // the codec alone, so the pool runs dry a dozen frames into playback
+            // and avcodec_send_packet fails with ENOMEM (-12). Reserve headroom
+            // before the first frame creates the hardware frames context.
+            decoder_.setExtraHardwareFrames(10);
+            // The EL frame inherits the base packet's timestamp, so pairing only
+            // has to absorb a rounding difference, not a whole frame interval.
+            elMatchTolerance_ = 2;
+            elMelStrikes_ = 0;
+            elMelDrop_ = false;
+            p7CurveReported_ = false;
+            p7CurveReady_ = false;
+            doviExtReported_ = false;
+            p7CurveSupportedFrames_ = 0;
+            p7CurveRefusedFrames_ = 0;
+            // Prefer FFmpeg's splitter: it also supplies the EL's own parameter
+            // sets, which the walk below can only sniff from the first access unit
+            // that happens to carry them (and cannot recover after a seek).
+            if (openEnhancementSplitter(params) &&
+                !openEnhancementDecoder(elSplitter_->par_out,
+                    demuxer_.videoTimeBaseNum(), demuxer_.videoTimeBaseDen())) {
+                closeEnhancementSplitter();
+                elLayerEnabled_ = false;
+            }
+            if (elLayerEnabled_) log::info("source-dovi-el", "enhancement layer decode requested");
+        }
     }
+    // Profile-5 conversion state belongs to the stream position, never to the
+    // previous open: a stale value would let a fresh play start from parameters
+    // this file did not provide.
+    info_.color.dolbyVisionP5 = {};
 
     sequence_ = 0;
     framesRead_ = 0;
@@ -315,7 +942,7 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     return true;
 }
 
-SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame** decodedFrame)
+SourceReadStatus MediaFileSource::readBase(pipeline::FramePacket& out, const AVFrame** decodedFrame)
 {
     if (decodedFrame != nullptr) { *decodedFrame = nullptr; }
     out = pipeline::FramePacket{};
@@ -329,6 +956,9 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
     }
 readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fetch the next one
     const AVFrame* frame = nullptr;
+    // Whether the packet that produced this frame carried enhancement layer data;
+    // stale EL must not be reused for a frame that has none.
+    bool lastFrameHadEnhancementLayer = false;
     for (;;) {
         if(deinterlacer_.active()){
             const int result=deinterlacer_.receive(&frame);
@@ -453,6 +1083,10 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
             if (!clean) veyra::log::warn("source-file", "no clean keyframe within 5 s after damaged data; decoding continues without waiting");
             waitKeyframe_ = false;
         }
+        // Custom (P5): feed the enhancement layer BEFORE the base layer so its
+        // decoder has one frame of head start; otherwise the decoded EL frame lags
+        // the base frame and stale residuals land on the picture.
+        lastFrameHadEnhancementLayer = feedEnhancementLayer(packet);
         if (!decoder_.sendPacket(packet)) {
             if (tolerant_ && tolerateDecoderError()) {
                 continue;
@@ -531,6 +1165,211 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
     out.sourceKind = pipeline::SourceKind::File;
     out.colorInfo = pipeline::resolveFrameColor(*frame,info_.color);
     auto& dv=info_.dolbyVision;
+    // Level 1 (per-frame brightness). Read for every Dolby Vision profile and
+    // logged under VEYRA_DOVI_TRACE so the wiring is provable.
+    // The value belongs to THIS frame: assigning it before the extraction made
+    // every frame carry the previous one's brightness, which the curve then
+    // followed one frame late (and the first frame had none at all).
+    doviFrameInfo = pipeline::DoviFrameInfo{};
+    if (dv.present) {
+        if (const auto* l1Side = av_frame_get_side_data(frame, AV_FRAME_DATA_DOVI_METADATA);
+            l1Side != nullptr && l1Side->size >= sizeof(AVDOVIMetadata)) {
+            doviFrameInfo = extractDoviFrameInfo(
+                *reinterpret_cast<const AVDOVIMetadata*>(l1Side->data), dv.profile);
+            dumpDoviMapping(*reinterpret_cast<const AVDOVIMetadata*>(l1Side->data), sequence_);
+        }
+    }
+    // Custom (P5): compare the base frame's timestamp with the enhancement frame''s.
+    if (std::getenv("VEYRA_DOVI_EL_PTS") != nullptr && elFrame_ != nullptr && frame != nullptr) {
+        static unsigned ptsPairs = 0;
+        if (++ptsPairs <= 6) {
+            const int64_t bp = frame->best_effort_timestamp != AV_NOPTS_VALUE
+                ? frame->best_effort_timestamp : frame->pts;
+            const int64_t ep = elFrame_->best_effort_timestamp != AV_NOPTS_VALUE
+                ? elFrame_->best_effort_timestamp : elFrame_->pts;
+            log::info("source-dovi-el", std::format("pair base_pts={} el_pts={} match={}",
+                bp, ep, bp == ep ? 1 : 0));
+        }
+    }
+    out.dovi = doviFrameInfo;
+    // Custom (P5): hand the enhancement layer to whoever renders this frame. Null
+    // for the base frames that carry none, which the reconstruction treats as zero
+    // residual, and null entirely unless the EL path is enabled.
+    out.doviEl = nullptr;
+    if (elLayerEnabled_ && lastFrameHadEnhancementLayer && elFrame_ != nullptr && frame != nullptr) {
+        const int64_t basePts = frame->best_effort_timestamp != AV_NOPTS_VALUE
+            ? frame->best_effort_timestamp : frame->pts;
+        const int64_t elPts = elFrame_->best_effort_timestamp != AV_NOPTS_VALUE
+            ? elFrame_->best_effort_timestamp : elFrame_->pts;
+        // Only a frame-for-frame match is usable. A lagging or repeated EL frame
+        // would paint residuals from another picture onto this one.
+        if (basePts != AV_NOPTS_VALUE && basePts == elPts) out.doviEl = elFrame_;
+    }
+    // Custom (P5): pack the reconstruction parameters now, where the RPU metadata
+    // is still alive, so the renderer only has to read them. This must not depend on
+    // the enhancement frame: pairing happens one layer up, so out.doviEl is still
+    // null at this point even when this frame will get one.
+    {
+        if (const auto* metaSide = av_frame_get_side_data(frame, AV_FRAME_DATA_DOVI_METADATA);
+            metaSide != nullptr && metaSide->size >= sizeof(AVDOVIMetadata)) {
+            const auto& meta = *reinterpret_cast<const AVDOVIMetadata*>(metaSide->data);
+            // Custom (DV extension blocks): which metadata levels this stream
+            // declares, and the L5 active-area rectangle when there is one. L5 says
+            // where the real picture sits inside the coded frame, which is what a
+            // letterbox mask or crop would use. Nothing applies it yet: this is the
+            // measurement that decides whether applying it is worth doing.
+            if (!doviExtReported_ && meta.num_ext_blocks > 0) {
+                std::string levels;
+                bool sawL5 = false;
+                for (int i = 0; i < meta.num_ext_blocks; ++i) {
+                    const auto* block = av_dovi_get_ext(&meta, i);
+                    if (block == nullptr) continue;
+                    if (!levels.empty()) levels += ',';
+                    levels += std::to_string(int(block->level));
+                    if (block->level != 5) continue;
+                    sawL5 = true;
+                    log::info("source-dovi", std::format(
+                        "L5 active area left={} right={} top={} bottom={} of {}x{} (recorded only; not applied)",
+                        block->l5.left_offset, block->l5.right_offset,
+                        block->l5.top_offset, block->l5.bottom_offset,
+                        info_.width, info_.height));
+                }
+                doviExtReported_ = true;
+                log::info("source-dovi", std::format("extension blocks={} levels=[{}] L5={}",
+                    meta.num_ext_blocks, levels, sawL5 ? 1 : 0));
+            }
+            // Profile 5 also carries a reshaping curve in its RPU, and for a frame
+            // whose curve happens to be identity or single-piece MMR it would pass the
+            // check below and overwrite the profile 5 conversion constants. It is only
+            // safe today because profile 5 has no enhancement layer to bind, which is
+            // an indirect guarantee - exclude it explicitly instead.
+            pipeline::DoviP7CurveReport curveReport;
+            const bool curveOk = info_.dolbyVision.profile == 7 &&
+                pipeline::doviP7ConstantsSupported(
+                *av_dovi_get_mapping(&meta), *av_dovi_get_header(&meta),
+                elLastWidth_ != 0 ? elLastWidth_ : uint32_t(elFrame_ ? elFrame_->width : 1920),
+                elLastHeight_ != 0 ? elLastHeight_ : uint32_t(elFrame_ ? elFrame_->height : 1080),
+                out.doviP7, &curveReport);
+            // Custom (P7): count usable and refused frames. A stream that alternates
+            // between an evaluable curve and a multi-piece one composites some frames
+            // and not others, which is visible as flicker; the ratio says whether
+            // supporting the rest is worth the work rather than a guess.
+            // Only profile 7 has a reconstruction curve, so only profile 7 can be
+            // "refused": without this guard a profile 8.4 stream reported
+            // "refused=300 (100.0% base-layer-only)", which reads as a defect when it
+            // simply has no enhancement layer to evaluate.
+            if (info_.dolbyVision.profile == 7) {
+                if (curveOk) ++p7CurveSupportedFrames_; else ++p7CurveRefusedFrames_;
+                const uint64_t total = p7CurveSupportedFrames_ + p7CurveRefusedFrames_;
+                if (total % 300 == 0) {
+                    log::info("source-dovi-el", std::format(
+                        "P7 mapping frames supported={} refused={} ({:.1f}% base-layer-only)",
+                        p7CurveSupportedFrames_, p7CurveRefusedFrames_,
+                        total != 0 ? 100.0 * double(p7CurveRefusedFrames_) / double(total) : 0.0));
+                }
+            }
+            // Custom (P7): say WHY the mapping was accepted or refused. A bare "not
+            // ready" left MEL, multi-piece curves and unsupported methods looking
+            // identical in the log.
+            // Only profile 7 has a curve worth reporting. The packer is short-circuited
+            // for other profiles, so its report is a default-constructed "supported"
+            // that would read as a claim about a stream that has no enhancement layer.
+            if (info_.dolbyVision.profile == 7 && (!p7CurveReported_ || curveOk != p7CurveReady_)) {
+                p7CurveReported_ = true;
+                p7CurveReady_ = curveOk;
+                log::info("source-dovi-el", std::format("RPU mapping {}",
+                    pipeline::doviP7CurveSummary(curveReport, *av_dovi_get_header(&meta))));
+            }
+            if (out.doviP7.ready) {
+                static bool p7Logged = false;
+                if (!p7Logged) {
+                    p7Logged = true;
+                    log::info("source-dovi-el", std::format("reconstruction parameters packed nlqOffset={:.0f} slope={:.0f} coefDenom={:.0f} modes={:.0f}/{:.0f}/{:.0f} mmrOrders={:.0f}/{:.0f}/{:.0f}",
+                        out.doviP7.params[0], out.doviP7.params[1], out.doviP7.params[12],
+                        out.doviP7.params[21], out.doviP7.params[22], out.doviP7.params[23],
+                        out.doviP7.params[24], out.doviP7.params[25], out.doviP7.params[26]));
+                }
+            }
+            // Custom (P7): MEL versus FEL. A MEL layer sets disable_residual_flag,
+            // which means the layer carries no correction at all: decoding and
+            // compositing it is pure cost. Require a consistent run before telling
+            // read() to drop the path.
+            if (elLayerEnabled_ && frame != nullptr) {
+                if (av_dovi_get_header(&meta)->disable_residual_flag != 0) {
+                    if (++elMelStrikes_ >= 24) elMelDrop_ = true;
+                } else {
+                    elMelStrikes_ = 0;
+                }
+            }
+        }
+    }
+    if (std::getenv("VEYRA_DOVI_TRACE")) {
+        static int doviProbeCount = 0;
+        if (doviProbeCount < 3 || doviProbeCount % 200 == 0) {
+            log::info("dovi-probe", std::format("n={} present={} profile={} valid={} maxPq={:.4f}",
+                      doviProbeCount++, dv.present ? 1 : 0, static_cast<int>(dv.profile),
+                      doviFrameInfo.valid ? 1 : 0, doviFrameInfo.maxPq));
+        }
+    }
+    // Profile 5: the base layer is IPT-PQ-C2 and only the RPU says how to reach
+    // display colour, so carry the per-frame conversion parameters the YUV pass
+    // needs. Every other profile leaves this inactive and keeps the old path.
+    // The shaping curves are re-sent per scene refresh, so this runs per frame;
+    // the matrices arrive with them and are stable, but re-reading is cheap.
+    if(dv.present&&dv.profile==5&&dv.baseLayer){
+        // Per frame, from the identity: nothing another frame established may
+        // leak into this one, so a frame converts the same way no matter how
+        // playback reached it.
+        info_.color.dolbyVisionP5=pipeline::DolbyVisionP5{};
+        bool usable=false;
+        if(const auto* side=av_frame_get_side_data(frame,AV_FRAME_DATA_DOVI_METADATA);
+           side!=nullptr&&side->size>=sizeof(AVDOVIMetadata)){
+            const auto* meta=reinterpret_cast<const AVDOVIMetadata*>(side->data);
+            const auto built=buildDolbyVisionP5(*meta,info_.color.dolbyVisionP5);
+		doviFrameInfo=extractDoviFrameInfo(*meta,info_.dolbyVision.profile);
+		if(doviFrameInfo.valid&&std::getenv("VEYRA_DOVI_TRACE"))
+			log::info("dovi-trace",std::format("profile={} minPq={:.4f} maxPq={:.4f} avgPq={:.4f}",
+			           static_cast<int>(doviFrameInfo.profile),doviFrameInfo.minPq,doviFrameInfo.maxPq,doviFrameInfo.avgPq));
+            usable=built.usable;
+            if(built.usable&&!dv.profile5Converted){
+                // Only reported once the parameters really reproduce the RPU, so
+                // the status line never claims a conversion that is not running.
+                dv.profile5Converted=true;
+                log::info("source-dovi","profile 5 base layer converted as IPT-PQ-C2: RPU reshaping (per-frame, projected on {1,sqrt(x),x}) -> RPU ycc_to_rgb -> PQ EOTF -> RPU rgb_to_lms x fixed HPE LMS->BT.2020 -> PQ OETF; the routed HDR10/SDR path then consumes it unchanged");
+                const auto& p=info_.color.dolbyVisionP5;
+                log::info("source-dovi",std::format(
+                    "profile 5 constants ycc_to_rgb=[{:.6f},{:.6f},{:.6f}|{:.6f},{:.6f},{:.6f}|{:.6f},{:.6f},{:.6f}] "
+                    "lms_to_rgb=[{:.6f},{:.6f},{:.6f}|{:.6f},{:.6f},{:.6f}|{:.6f},{:.6f},{:.6f}] "
+                    "curve0=[{:.6f},{:.6f},{:.6f}] curve1=[{:.6f},{:.6f},{:.6f}] curve2=[{:.6f},{:.6f},{:.6f}]",
+                    p.yccToRgb[0],p.yccToRgb[1],p.yccToRgb[2],p.yccToRgb[3],p.yccToRgb[4],p.yccToRgb[5],p.yccToRgb[6],p.yccToRgb[7],p.yccToRgb[8],
+                    p.lmsToRgb[0],p.lmsToRgb[1],p.lmsToRgb[2],p.lmsToRgb[3],p.lmsToRgb[4],p.lmsToRgb[5],p.lmsToRgb[6],p.lmsToRgb[7],p.lmsToRgb[8],
+                    p.curve[0][0],p.curve[0][1],p.curve[0][2],p.curve[1][0],p.curve[1][1],p.curve[1][2],p.curve[2][0],p.curve[2][1],p.curve[2][2]));
+            }
+            if(built.colorMetadataMissing&&!dv.profile5MissingColor){
+                dv.profile5MissingColor=true;
+                log::warn("source-dovi","profile 5 RPU carries no colour block; the base layer colour is undefined and the frame is refused");
+            }
+            if(built.unsupportedMapping&&!dv.profile5UnsupportedMapping){
+                dv.profile5UnsupportedMapping=true;
+                log::warn("source-dovi","profile 5 reshaping uses a mapping method this decoder cannot reproduce; such a frame is refused instead of converted with the identity");
+            }
+            if(built.placeholderMapping&&!dv.profile5Placeholder){
+                dv.profile5Placeholder=true;
+                log::info("source-dovi","profile 5 RPU carries a flat (placeholder) reshaping on this frame; the affected components use the identity");
+            }
+        }
+        // A profile-5 base layer is IPT-PQ-C2 and carries no usable VUI colour:
+        // reading it with the ordinary YUV matrix is what renders it green. The
+        // tags pinned in open() only satisfy matches(), they convert nothing, so
+        // refuse the frame when the RPU did not supply usable parameters instead
+        // of silently returning a wrong picture.
+        if(!usable){
+            errorMessage_=L"Dolby Vision P5：这一帧没有可用的 RPU 转换参数（缺少 RPU、颜色块为空或整形方式不受支持），无法正确转换，已停止以避免错误颜色";
+            log::error("source-dovi","profile 5 base layer has no usable RPU conversion parameters; refusing the ordinary YUV fallback");
+            return SourceReadStatus::Error;
+        }
+        out.colorInfo.dolbyVisionP5=info_.color.dolbyVisionP5;
+    }
     const bool hasRpu=av_frame_get_side_data(frame,AV_FRAME_DATA_DOVI_METADATA)||av_frame_get_side_data(frame,AV_FRAME_DATA_DOVI_RPU_BUFFER);
     if(hasRpu&&!dv.present){
         errorMessage_=L"检测到 Dolby Vision RPU，但缺少基础层兼容声明，无法确认颜色，已停止";
@@ -550,6 +1389,77 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
             ? pipeline::SourcePixelFormat::P010 : pipeline::SourcePixelFormat::NV12;
     }
     info_.color = out.colorInfo;
+    // Custom (HDR Vivid): the HEVC parser attaches the CUVA 005.1 dynamic metadata
+    // to the frame it belongs to. Report the stream as carrying it; the colour
+    // chain deliberately stays on the static curve (no Vivid tone mapping yet),
+    // and this only states what the bitstream contains.
+    if (const auto* vivid = av_frame_get_side_data(frame, AV_FRAME_DATA_DYNAMIC_HDR_VIVID);
+        vivid != nullptr && vivid->size >= sizeof(AVDynamicHDRVivid)) {
+        const auto& meta = *reinterpret_cast<const AVDynamicHDRVivid*>(vivid->data);
+        auto& info = info_.hdrVivid;
+        info.systemStartCode = meta.system_start_code;
+        info.numWindows = meta.num_windows;
+        ++info.framesWithMetadata;
+        const auto& window = meta.params[0];
+        auto level = [](const AVRational& value) {
+            return value.den > 0 ? av_q2d(value) : -1.0;
+        };
+        if (!info.present) {
+            info.present = true;
+            log::info("source-hdr", std::format(
+                "HDR Vivid dynamic metadata observed startCode={} windows={} minMaxRgb={:.4f} averageMaxRgb={:.4f} maxMaxRgb={:.4f} toneMapping={} toneMapParams={} saturation={} satParams={} (identification only; the static curve still drives the mapping)",
+                int(meta.system_start_code), int(meta.num_windows),
+                level(window.minimum_maxrgb), level(window.average_maxrgb), level(window.maximum_maxrgb),
+                window.tone_mapping_mode_flag, window.tone_mapping_param_num,
+                window.color_saturation_mapping_flag, window.color_saturation_num));
+        } else if (info.framesWithMetadata % 600 == 0) {
+            // The window levels move with the picture; that is what makes this
+            // dynamic metadata rather than a static declaration.
+            log::info("source-hdr", std::format(
+                "HDR Vivid frames={} window0 minMaxRgb={:.4f} averageMaxRgb={:.4f} maxMaxRgb={:.4f}",
+                info.framesWithMetadata, level(window.minimum_maxrgb),
+                level(window.average_maxrgb), level(window.maximum_maxrgb)));
+        }
+    }
+    // Custom (HDR10+): SMPTE ST 2094-40 metadata arrives the same way.
+    if (const auto* plusSide = av_frame_get_side_data(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+        plusSide != nullptr && plusSide->size >= sizeof(AVDynamicHDRPlus)) {
+        auto& info = info_.hdr10Plus;
+        ++info.framesWithMetadata;
+        const auto& plus = *reinterpret_cast<const AVDynamicHDRPlus*>(plusSide->data);
+        // Custom (HDR10+): SMPTE ST 2094-40 scene metadata. maxscl[] and
+        // average_maxrgb are linear, normalised to 10000 nits; DoviFrameInfo carries
+        // PQ because that is what the Dolby path feeds the same follow logic.
+        // Never set when an RPU is present - the two must not both drive one frame.
+        if (!out.dovi.valid && plus.num_windows > 0) {
+            const auto& win = plus.params[0];
+            // av_q2d divides by den, and these streams do contain {num, 0} rationals.
+            // That produced +inf, which nitsToPq then pinned to 1.0 - a "10000 nit"
+            // frame appearing out of nowhere every 10 s on the FF Pictures test clip.
+            const auto ratio = [](const AVRational& r) {
+                return r.den != 0 ? double(r.num) / double(r.den) : 0.0;
+            };
+            const double peakLinear = std::max({ratio(win.maxscl[0]), ratio(win.maxscl[1]), ratio(win.maxscl[2])});
+            const double avgLinear = ratio(win.average_maxrgb);
+            if (peakLinear > 0.0) {
+                const double peakNits = peakLinear * 10000.0;
+                const double avgNits = avgLinear * 10000.0;
+                out.dovi.valid = true;
+                out.dovi.profile = pipeline::kHdr10PlusProfile;
+                out.dovi.minPq = 0.0f;
+                out.dovi.maxPq = float(pipeline::nitsToPq(peakNits));
+                out.dovi.avgPq = float(pipeline::nitsToPq(avgNits));
+                if (!info.present) {
+                    info.present = true;
+                    log::info("source-hdr", std::format(
+                        "HDR10+ scene metadata peak={:.1f} nits avg={:.1f} nits (maxscl raw {}/{}/{} avg raw {}/{}; drives the HDR curve while the follow switch is on)",
+                        peakNits, avgNits,
+                        win.maxscl[0].num, win.maxscl[1].num, win.maxscl[2].num,
+                        win.average_maxrgb.num, win.average_maxrgb.den));
+                }
+            }
+        }
+    }
     if (frame->format == AV_PIX_FMT_D3D12) {
         info_.videoPixelFormatName = out.colorInfo.pixelFormat == pipeline::SourcePixelFormat::P010 ? "p010(d3d12)" : "nv12(d3d12)";
     } else if (const auto* name = av_get_pix_fmt_name(static_cast<AVPixelFormat>(frame->format))) {
@@ -721,8 +1631,29 @@ bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
     }
     const int64_t targetUs = rationalToUs(targetSeconds);
     if (!demuxer_.seekToUs(targetUs)) { return false; }
+        // Custom (P5): the enhancement decoder keeps state across a seek too, and a
+        // stale reference chain there produces garbage on the first new frame.
+        if (elLayerOpen_) elDecoder_.flushBuffers();
+        // Custom (P7): the splitter holds one packet in flight; a seek invalidates it.
+        if (elSplitter_ != nullptr) av_bsf_flush(elSplitter_);
+    // Custom (P7 fix): every frame decoded before the seek belongs to the old
+    // position and is never delivered again, and each held clone keeps one
+    // d3d11va surface checked out for the rest of the session.
+    for (auto& held : baseWaiting_) av_frame_free(&held.second);
+    baseWaiting_.clear();
+    if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
+    for (auto& entry : elByPts_) av_frame_free(&entry.second);
+    elByPts_.clear();
+    // Report the curves again after a jump: the new position may land in a
+    // segment with a different reshaping.
+    p7CurveReported_ = false;
+    p7CurveReady_ = false;
+    doviExtReported_ = false;
     deinterlacer_.close();filterDraining_=false;
     decoder_.flushBuffers();
+    // No profile-5 conversion state survives a seek: the next frame has to
+    // convert from its own RPU, exactly like the same frame after a fresh open.
+    info_.color.dolbyVisionP5 = {};
     errorMessage_.clear();
     draining_ = false;
     eofSignalled_ = false;
@@ -741,6 +1672,16 @@ void MediaFileSource::close() noexcept
 {
     errorMessage_.clear();
     deinterlacer_.close();filterDraining_=false;
+    closeEnhancementLayer();       // Custom (P5): release the EL decoder and its frame
+    closeEnhancementSplitter();    // Custom (P7): and the bitstream filter feeding it
+    for (auto& entry : elByPts_) av_frame_free(&entry.second);
+    elByPts_.clear();
+    for (auto& held : baseWaiting_) av_frame_free(&held.second);
+    baseWaiting_.clear();
+    if (deliveredHeld_ != nullptr) av_frame_free(&deliveredHeld_);
+    elLayerEnabled_ = false;
+    elLayerFrames_ = 0;
+    elLayerMisses_ = 0;
     decoder_.close();
     demuxer_.close();
     info_ = SourceInfo{};

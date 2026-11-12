@@ -7,7 +7,11 @@
 // (owner slot, expected state, ready fence value, extent, format).
 #include <cstdint>
 #include <d3d12.h>
+
+#include "veyra/pipeline/DoviP7Constants.h"
 #include <dxgiformat.h>
+
+struct AVFrame;   // Custom (P5): FFmpeg frame, borrowed for the EL; not owned here
 
 namespace veyra::pipeline {
 
@@ -107,6 +111,29 @@ struct SampleAspectRatio {
     uint32_t den = 1;
 };
 
+// Dolby Vision profile 5 ("IPT-PQ-C2"): the base layer is not BT.2020 YCbCr, so
+// the usual matrix/transfer tags cannot describe it and treating it as HDR10
+// renders a green picture. Only the RPU states how to reach display colour, so
+// the values below are carried per frame from AV_FRAME_DATA_DOVI_METADATA and
+// applied by YuvToLinearRgb.hlsl before the normal PQ pipeline takes over.
+// Built by include/veyra/source/DolbyVisionRpu.h, packed by DolbyVisionP5.h.
+struct DolbyVisionP5 {
+    // False leaves every other path byte-identical to the upstream player.
+    bool active = false;
+    // ycc_to_rgb: RPU matrix turning base-layer Y/Cb/Cr (chroma centred on 0.5,
+    // full range) into the PQ-domain RGB that the profile-5 pipeline expects.
+    float yccToRgb[9] = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    // The RPU's rgb_to_lms crosstalk matrix composed with the fixed
+    // Hunt-Pointer-Estevez LMS -> BT.2020 RGB matrix. Both are linear and
+    // adjacent (nothing non-linear sits between them), so one matrix carries
+    // the pair and the shader needs a single multiply.
+    float lmsToRgb[9] = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    // Per-component RPU reshaping curve, projected onto the basis
+    // {1, sqrt(x), x}: curve[c][k] with x the normalised full-range code value.
+    // {0,0,1} is the identity, i.e. "no reshaping".
+    float curve[3][3] = {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}};
+};
+
 // Full ingress color metadata. Assumed flags must be set when a value was
 // derived from a documented default (SD->601, HD SDR->709) rather than the
 // container; the UI surfaces these.
@@ -138,6 +165,8 @@ struct ColorDescription {
     // declarations, not measured frame peaks or dynamic Dolby Vision metadata.
     float hdrMaxCllNits = 0, hdrMaxFallNits = 0, hdrMasteringPeakNits = 0;
     bool scRgb = false; // Explicit WGC FP16 linear BT.709, 1.0 = 80 nits.
+    // Active only for Dolby Vision profile 5 base layers; see DolbyVisionP5.
+    DolbyVisionP5 dolbyVisionP5;
     // Limited-range luma with full-range chroma: Elgato cards other than the
     // 4K60 Pro MK.2 encode HDR P010 this way (Nitlink, measured against the
     // console on the TV). Decoding that chroma as limited over-saturates it.
@@ -216,7 +245,39 @@ struct HardwareSurfaceInput {
     bool present() const { return texture != nullptr; }
 };
 
+// Dolby Vision per-frame brightness metadata (RPU level 1).
+//
+// Purely additive: `valid` stays false for every source that does not
+// carry a Dolby Vision RPU, so nothing downstream changes unless a caller
+// opts in. Values are normalised to 0..1 PQ (raw 12-bit / 4095), matching
+// libplacebo's pl_hdr_metadata.max_pq_y / avg_pq_y.
+// Dynamic brightness metadata for the current frame, whichever format supplied it.
+// The curve follow only needs a peak and an average, so HDR10+ scene metadata is
+// carried here as well instead of threading a second structure through the graph;
+// `profile == kHdr10PlusProfile` marks the provenance, and 0 means "none".
+struct DoviFrameInfo {
+    bool valid=false;
+    uint8_t profile=0;
+    float minPq=0.0f, maxPq=0.0f, avgPq=0.0f;
+};
+
+// Sentinel for DoviFrameInfo::profile when the values came from an HDR10+
+// (SMPTE ST 2094-40) SEI rather than a Dolby RPU. No Dolby profile uses 100.
+inline constexpr uint8_t kHdr10PlusProfile = 100;
+
+// Custom (P5): the decoded Dolby Vision Profile 7 enhancement layer for this
+// frame, when the source produced one. Borrowed for the lifetime of the next
+// read (the source keeps it alive); null for every other source and for the base
+// frames that carry no EL, which the reconstruction treats as zero residual.
+// (::AVFrame is declared before the namespace below; a declaration in here would
+// create an unrelated veyra::pipeline::AVFrame.)
+
 struct FramePacket {
+    DoviFrameInfo dovi{};   // Dolby Vision L1; invalid unless the source carries an RPU
+    const AVFrame* doviEl = nullptr; // Profile 7 enhancement layer, borrowed (see above)
+    // Custom (P5): reconstruction parameters for this frame; ready only when the
+    // RPU is one this path can express exactly.
+    DoviP7Constants doviP7{};
     uint64_t sequence = 0;        // monotonic per source (0 reserved as invalid)
     Rational pts;
     Rational duration=Rational::unknown();

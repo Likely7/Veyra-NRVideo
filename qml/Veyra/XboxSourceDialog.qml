@@ -50,7 +50,7 @@ DialogLayer {
                 spacing: 6
                 VSpinner { visible: xbDialog.st.busy === true; Layout.alignment: Qt.AlignVCenter }
                 VButton { objectName: "xbox-signin"; visible: !xbDialog.st.signedIn; text: qsTr("登录"); primary: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signIn() }
-                VButton { visible: xbDialog.st.signedIn; text: qsTr("退出登录"); ghost: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signOut() }
+                VButton { visible: !!xbDialog.st.signedIn; text: qsTr("退出登录"); ghost: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.signOut() }
             }
         }
     }

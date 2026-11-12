@@ -1,4 +1,5 @@
 // QML bridge: Status responsibilities.
+#include "veyra/media/FormatBadgeWindow.h"
 #include "../QmlPlayerBridge_p.h"
 
 namespace veyra::ui {
@@ -512,5 +513,33 @@ void QmlPlayerBridge::updateRunStatus() {
     if (!recheckNotice.isEmpty()) emit notice(recheckNotice, recheckFailed);
 }
 
+
+void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
+    // 临时停用：格式徽章窗口在开符号构建下必崩（见 FormatBadgeWindow::show），
+    // 它把真正的崩溃信号盖住了。只停调用，代码留着。
+    impl_->formatBadgeSession = s.sessionId;
+    if (impl_->videoWindow == nullptr) return;
+    if (!impl_->formatBadge) {
+        impl_->formatBadge = std::make_unique<media::FormatBadgeWindow>();
+        if (!impl_->formatBadge->create(impl_->videoWindow)) {
+            impl_->formatBadge.reset();
+            return;
+        }
+    }
+    const QString label = uiText(s.sourceHdrLabel);
+    const QString title = label.isEmpty() ? QStringLiteral("SDR") : label;
+    QStringList detailParts;
+    const QString rate = sourceRateText();
+    if (!rate.isEmpty()) detailParts << rate;
+    QString summary = sourceSummary();
+    if (!summary.isEmpty()) detailParts << summary.replace(QLatin1Char('x'), QString::fromUtf8("×"));
+    const QString detail = detailParts.join(QString::fromUtf8(" · "));
+    impl_->formatBadge->show(impl_->videoWindow, title.toStdWString(), detail.toStdWString());
+    veyra::log::info("format-badge", std::format("shown title={} detail={} session={}",
+        title.toStdString(), detail.toStdString(), s.sessionId));
+    QTimer::singleShot(3200, this, [this]() {
+        if (impl_->formatBadge) impl_->formatBadge->hide();
+    });
+}
 
 } // namespace veyra::ui
