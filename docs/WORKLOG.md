@@ -1068,3 +1068,16 @@ migration.py：真实应用旧2→1写回、实际列表两选项、桥接请求
 身份脚本identity.py：128组件/便携DLL与既有清单SHA256/大小一致，旧供体EXE不变、QML探针已恢复。入口E:/项目/Veyra/tests/codex-live-deadline-20261112/启动送帧与采集延迟测试.cmd，manual-profile独立，原应用/配置/运行组件不改。证据与脚本在reports同任务，原始日志在logs同任务，临时文件在tmp同任务；清理/逻辑占用和保留清单见CLEANUP.json，不把硬链接逻辑大小当卷实占。方案与结果：docs/LIVE_DEADLINE_LATENCY_PLAN_2026-11-12.md、docs/LIVE_DEADLINE_LATENCY_2026-11-12.md，最终FINAL.json。未合main、未推送发布，不关机；本轮为自审，没有独立Reviewer。
 
 收尾：系统自动审批以blocked by policy拒绝删除6个已核验的本轮测试EXE（22,372,352字节），未给出更具体原因。未执行删除，未尝试替代方式；工具/缓存/原始日志保留，CLEANUP.json记录路径与逻辑字节，不声称回收。手动启动入口实际启动版本正确、私有配置session0未自动连接，随后正常退出；遮挡的截图不作视觉验收。最终产品源码提交5ab263b，后续仅补充这条收尾文档。
+
+
+## 2026-11-12 两份用户附件的间歇卡顿日志诊断
+
+用户提供 logs fg-probe(1).zip 与 logs(1).rar，要求排查玩着玩着突然卡一下。活动树 codex/live-deadline-latency-20261112 / cefce81 起始干净，未停止或启动用户程序；本轮只读分析日志与源码，无产品修改、构建、GPU/采集卡实测或发布。
+
+原件只读复制后逐 SHA256 核验；ZIP 路径/类型检查后 Python 解压，RAR 先 tar -tf 确认仅目录和日志后固定 E 盘目录解压，不执行附件。5 日志共277322行；ZIP中7个旧dump的日期为10月24日至11月8日，不能作为当前卡顿调用栈。报告 reports/codex-user-stutter-logs-20261112/INPUT.json、INVENTORY.json、EVENTS.json、STALL_ANALYSIS.json、FINDINGS.md、FINAL.json，原始解压 logs/codex-user-stutter-logs-20261112，临时 tmp 同任务为空。
+
+执行 py -3.11 -X utf8 -B -I reports/<task>/analyze.py 及 verify_analysis.py，通过原件/副本SHA和所有数值锚点断言：381条engine-stall中，≥90ms的29条有28条与图重建对应；5070旧日志313条约50ms停在frame666且前有live pause。实际异常分开报告：①5070最新日志12:08:46.175Z回调间隔1282.3259ms、PTS跳2575.914ms，随后几秒调度等待约87ms、VFG延后探测；不能从中判定USB/HDMI/硬件/驱动/回调阻塞哪项是根因，也未证去重误判。②5080旧日志11月10日19:03:01.854Z播放线程348.092ms，control346.080ms，GPU span18.667ms；相邻fg-deadline/fg-drops日志差328ms，源码同步日志持全局锁并flush，日志I/O/锁或线程失去调度是重点嫌疑，未抓栈不称唯一根因证明。③5080最新12:42:00.126–12:42:59.962，同revision/epoch，输入+3591、处理+2872、mailbox覆盖+718、图前去重/跳过+1、生成后过期+0，即60输入/48处理/96提交，确有处理或调度欠速，不能称该分钟主要是去重或生成帧过期。
+
+Reflex Sleep汇总不足以解释数百ms突停；两机overlay已注入但无因果证据；未见对应GPU移除或frame-ready超时。部分最初源码路径检索不存在，改用rg --files定位实际src/base/Log.cpp并复核v2.1.5与当前实现；未把检索失败当检查通过。现场EXE精确哈希/提交未知，不用附件证明刚交付latency-test已解决现场问题。具体原始行号、下一步需抓日志锁/stdout/file flush调用栈及输入断点恢复时钟的范围见FINDINGS.md。本轮为单Agent自审，没有独立Reviewer。
+
+必要原附件副本/解压证据/分析约123.4MiB逻辑字节保留，不代表物理卷新增空间；无重复运行包或缓存需回收，无删除操作。未改真实配置/驱动/运行库，无merge/push/Release或关机。诊断已交付，全部随机卡顿的最终根因和现场修复仍未证明。
