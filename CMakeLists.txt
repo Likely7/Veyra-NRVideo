@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.1.5 LANGUAGES C CXX RC)
+project(veyra VERSION 2.1.5 LANGUAGES C CXX)
+
+# The Windows runtime needs the resource compiler; Linux does not have one.
+if(WIN32)
+  enable_language(RC)
+endif()
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
@@ -12,6 +17,16 @@ set(VEYRA_DISPLAY_VERSION "2.1.5" CACHE STRING "Human-readable version string")
 if(NOT VEYRA_DISPLAY_VERSION MATCHES "^${PROJECT_VERSION}")
   message(STATUS "VEYRA_DISPLAY_VERSION ${VEYRA_DISPLAY_VERSION} does not match project ${PROJECT_VERSION}; using ${PROJECT_VERSION}")
   set(VEYRA_DISPLAY_VERSION "${PROJECT_VERSION}" CACHE STRING "Human-readable version string" FORCE)
+endif()
+
+# ---------------------------------------------------------------------------
+# Linux: the OBS filter module only. Every target below is COM / D3D11 / D3D12
+# / Win32 bound, so the portable part of the pipeline lives in linux/ instead
+# of growing ifdefs through 100k lines of Windows code. See docs/OBS_FILTER.md.
+# ---------------------------------------------------------------------------
+if(NOT WIN32)
+  add_subdirectory(linux/obs)
+  return()
 endif()
 
 # Match the compiler's actual bytes, including on localized Windows installs.
