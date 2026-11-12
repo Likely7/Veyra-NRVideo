@@ -1065,4 +1065,6 @@ migration.py：真实应用旧2→1写回、实际列表两选项、桥接请求
 
 最初夹具重复每帧stdout到console.log，Logger在全局锁内每条fflush；连续批测有100–300ms CPU停顿与源丢弃，控制PASS未算性能通过，失败数据完整保留。仅改夹具stdout→NUL、保留引擎文件与stderr后，9组18段全部满足逐帧帧率/长迟到/错误检查；另补同条件VFG2段及VFG40秒稳定样本。该结果与重复输出I/O干扰相符；三轮监测未捕到原停顿栈，不能称唯一根因已由栈证明。实验第二版唤醒后直接advance捷径撤掉，不拿其116读数作交付。PresentMon权限不足，没有改系统权限或编造独立上屏状态。原始Claude run1全屏DXGI等待约1.9ms，不沿用“始终合成”的未分析结论。
 
-身份脚本identity.py：128组件/便携DLL与既有清单SHA256/大小一致，旧供体EXE不变、QML探针已恢复。入口E:/项目/Veyra/tests/codex-live-deadline-20261112/启动送帧与采集延迟测试.cmd，manual-profile独立，原应用/配置/运行组件不改。证据与脚本在reports同任务，日志在logs同任务（压缩保留SHA），临时文件在tmp同任务；清理/逻辑占用和保留清单见CLEANUP.json，不把硬链接逻辑大小当卷实占。方案与结果：docs/LIVE_DEADLINE_LATENCY_PLAN_2026-11-12.md、docs/LIVE_DEADLINE_LATENCY_2026-11-12.md，最终FINAL.json。未合main、未推送发布，不关机；本轮为自审，没有独立Reviewer。
+身份脚本identity.py：128组件/便携DLL与既有清单SHA256/大小一致，旧供体EXE不变、QML探针已恢复。入口E:/项目/Veyra/tests/codex-live-deadline-20261112/启动送帧与采集延迟测试.cmd，manual-profile独立，原应用/配置/运行组件不改。证据与脚本在reports同任务，原始日志在logs同任务，临时文件在tmp同任务；清理/逻辑占用和保留清单见CLEANUP.json，不把硬链接逻辑大小当卷实占。方案与结果：docs/LIVE_DEADLINE_LATENCY_PLAN_2026-11-12.md、docs/LIVE_DEADLINE_LATENCY_2026-11-12.md，最终FINAL.json。未合main、未推送发布，不关机；本轮为自审，没有独立Reviewer。
+
+收尾：系统自动审批以blocked by policy拒绝删除6个已核验的本轮测试EXE（22,372,352字节），未给出更具体原因。未执行删除，未尝试替代方式；工具/缓存/原始日志保留，CLEANUP.json记录路径与逻辑字节，不声称回收。手动启动入口实际启动版本正确、私有配置session0未自动连接，随后正常退出；遮挡的截图不作视觉验收。最终产品源码提交5ab263b，后续仅补充这条收尾文档。

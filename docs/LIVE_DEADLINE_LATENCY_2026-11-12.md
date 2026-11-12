@@ -2,7 +2,7 @@
 
 分支 `codex/live-deadline-latency-20261112`，基线 `1cd2ff7`，最终应用 `2.1.5-latency-test`，EXE SHA256 `4b0e2b7b82250ad22747cd71014c06a1938804a7094ccdf8bcf04a854a212a20`。本地测试交付，未合 main、未 push/Release，不关机。
 
-用户要求沿 Claude 的未完成排查继续做完。依据是 `E:/项目/Veyra/reports/claude-low-latency-audit-20261112/FINDINGS.md` 及原始 run1；方案见 [施工与审查判据](LIVE_DEADLINE_LATENCY_PLAN_2026-11-12.md)。本轮完整回执、原始/压缩日志和复算脚本分别在 `E:/项目/Veyra/{reports,logs}/codex-live-deadline-20261112`。
+用户要求沿 Claude 的未完成排查继续做完。依据是 `E:/项目/Veyra/reports/claude-low-latency-audit-20261112/FINDINGS.md` 及原始 run1；方案见 [施工与审查判据](LIVE_DEADLINE_LATENCY_PLAN_2026-11-12.md)。本轮完整回执、原始日志和复算脚本分别在 `E:/项目/Veyra/{reports,logs}/codex-live-deadline-20261112`。
 
 ## 最终改动
 
@@ -46,6 +46,6 @@ DLSS 同条件 CPU 采样约增加 0.06–0.13 个逻辑核，折合本机 16 �
 
 `IDENTITY.json` 核验 128 个运行组件/便携 DLL 与已有清单 SHA256/大小一致，旧供体 EXE 仍为 `787cf3e8…`，QML 临时探针已移除。测试 app 沿用只读硬链接依赖，仅替换本任务 EXE、Main 和本地测试元数据。许可和默认组件保持。
 
-入口：`E:/项目/Veyra/tests/codex-live-deadline-20261112/启动送帧与采集延迟测试.cmd`。独立 manual-profile，不覆盖正式应用或原用户设置。构建继续复用 `E:/项目/Veyra/build/claude-screen-recording-20261022`。清理/占用结果在同任务 `CLEANUP.json`；日志和失败证据保留，临时缓存、重复工具和不再需要的解压副本按清单退役。
+入口：`E:/项目/Veyra/tests/codex-live-deadline-20261112/启动送帧与采集延迟测试.cmd`。独立 manual-profile，不覆盖正式应用或原用户设置。构建继续复用 `E:/项目/Veyra/build/claude-screen-recording-20261022`。清理/占用结果在同任务 `CLEANUP.json`。系统自动审批以 `blocked by policy` 拒绝删除 6 个本轮复制的测试工具（22,372,352 字节），未给出更具体原因；本轮没有执行该清理，也未尝试替代删除方式。原始日志、私有配置、临时缓存和工具均保留在本任务目录。依赖约 1.06 GB 是共享硬链接的路径逻辑大小，不是本轮新增卷实占或回收空间。启动器已实际启动，独立配置无自动采集，随后观察到正常退出；界面截图被遮挡未用作通过证据。
 
 本轮为自审和实测，没有独立 Reviewer 验收声明。
