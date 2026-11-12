@@ -1039,4 +1039,4 @@ qmllint检查ProPage/Ps5SourceDialog/SettingsPage无语法错误，有动态上�
 
 执行reports/codex-dedup-modes-20261111/check_syntax.py，8个MSVC /Zs单元通过。执行native_tests.py，单独编译/链接预设测试工具（3个翻译单元、复用现有未改veyra_base.lib），--dedup-migration共251项通过，覆盖旧预设实际保存/读取/不覆盖/应用、非法ID拒绝、全部32个内容组合和后端质量组合；不是应用构建或GPU测试。qmltestrunner离屏软件，tests/qml/quick/tst_dedup_modes.qml：7/0/0，无QWARN，含开关与默认、稀疏ID5、同步、旧值和240px布局。QML静态无语法错误但有动态上下文警告；i18n2797条、繁体/英文/日文缺失0、占位符错误0，git diff --check通过。所有TEMP/TMP/QML缓存定向本任务E盘目录。
 
-方案docs/DEDUP_MODES_2026-11-11.md；证据E:/项目/Veyra/{reports,logs,tmp,tests}/codex-dedup-modes-20261111。本轮不构建应用、不运行真实采集/GPU、不合main/push/发布。用户追加“搞好电脑关机”，在提交与证据落盘后执行正常关机；最终关机调用状态单独写入任务报告，不将计划冒充已断电。
+方案docs/DEDUP_MODES_2026-11-11.md；证据E:/项目/Veyra/{reports,logs,tmp,tests}/codex-dedup-modes-20261111。本轮不构建应用、不运行真实采集/GPU、不合main/push/发布。用户曾追加“搞好电脑关机”，随后明确“不要关机了”，关机授权已撤回。shutdown /a 返回1116（无正在执行的关机），本任务目录关联关机辅助进程为0；未启动关机。取消回执在任务报告shutdown-cancelled.json。
