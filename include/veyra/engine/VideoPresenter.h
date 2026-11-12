@@ -55,6 +55,9 @@ public:
     // True while XeSS owns Present: the low-latency queue and the output
     // cap cannot reach provider-generated frames, so the UI greys them out.
     bool providerOwnedPresentation()const{return providerOwnedPresentation_;}
+    // Native presentation has its own command ring and a GPU-side producer
+    // fence wait. XeSS shares the graph ring and must not re-enter it.
+    bool independentQueue()const{return presentationQueue_!=nullptr;}
 
     bool reflexActive()const{return reflex_.active();}
     bool reflexDisablePending()const{return reflex_.disablePending();}

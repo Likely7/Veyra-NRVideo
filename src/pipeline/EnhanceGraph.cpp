@@ -2623,7 +2623,7 @@ bool EnhanceGraph::composeExclusion(ID3D12GraphicsCommandList* list,unsigned out
     return true;
 }
 
-bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh)
+bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh, const std::function<void()>& previewCheckpoint)
 {
     retainReferences=retainReferences||desc_.exclusion.enabled;
     reset=reset||nrAutoResetPending_;nrAutoResetPending_=false;
@@ -2983,6 +2983,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     }
     if (desc_.stageMark) desc_.stageMark("upload");
     cpuTrace.mark("upload");
+    if(previewCheckpoint&&!reset)previewCheckpoint();
 
     // 2. YUV -> RGBA16F.
     if(colorActive_&&colorDirty_&&!uploadColorTables(list,slot))return false;
@@ -3053,6 +3054,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     gpuTimer_.mark(list,GpuStage::Color,true);
     if (desc_.stageMark) desc_.stageMark("yuv");
     cpuTrace.mark("color");
+    if(previewCheckpoint&&!reset)previewCheckpoint();
     // Beauty: this frame's original, then faces for every beauty node, before any
     // effect node runs. Detection reads the original when it holds this frame.
     beautyOriginalValid_=false;
@@ -3294,6 +3296,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
 
     // 3. SR into workRgba (or 1:1 blit bypass).
     cpuTrace.mark("flowFinish");
+    if(previewCheckpoint&&!reset)previewCheckpoint();
     if(haveFlow){
         auto adapt=[&](ID3D12Resource* output,uint32_t w,uint32_t h,uint32_t descriptor){
             tracker_.transition(list,output,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -3497,6 +3500,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     }
     if (desc_.stageMark) desc_.stageMark("sr");
     cpuTrace.mark("sr");
+    if(previewCheckpoint&&!reset)previewCheckpoint();
     return true;};
     auto runBoundaryColor=[&](bool beforeSr)->bool{
     const auto& passes=beforeSr?preSrPasses_:preNrPasses_;
@@ -3731,6 +3735,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 gpuTimer_.mark(nlist, diagnostics::nrLayerStage(unsigned(layerIndex)));
                 uint64_t er = 0; uint32_t es = 0;
                 cpuTrace.mark("nrParameters");
+                if(previewCheckpoint&&!reset)previewCheckpoint();
                 if (!nrAdapter_->snippetEvaluateFeature(nlist, layer->handle(), layer->parameters(), er, es) ||
                     er != static_cast<uint64_t>(NVSDK_NGX_Result_Success)) {
                     diagnostic.stage = "NR Evaluate"; diagnostic.ngx = er; diagnostic.seh = es;
@@ -3740,6 +3745,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                     return false;
                 }
                 cpuTrace.mark("nrEvaluate");
+                if(previewCheckpoint&&!reset)previewCheckpoint();
                 gpuTimer_.mark(nlist, GpuStage::Nr, true);
                 ++metrics_.nrEvaluateCount;
                 if (haveFlow) ++metrics_.nrMotionFrames;
@@ -3769,6 +3775,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     }
     if (desc_.stageMark) desc_.stageMark("nr");
     cpuTrace.mark("nr");
+    if(previewCheckpoint&&!reset)previewCheckpoint();
 
     // 5. Final residual composite. Intermediate layers were composed before
     // their consumers above. Keep the single-layer command order unchanged.
@@ -4011,6 +4018,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         if(sub==1)gpuTimer_.mark(flist,GpuStage::FgBatch);
         const auto timingStage=static_cast<GpuStage>(unsigned(GpuStage::Fg1)+sub-1);gpuTimer_.mark(flist,timingStage);
         cpuTrace.mark("fgPrepare");
+        if(previewCheckpoint&&!reset)previewCheckpoint();
         if(fsrFgBackend_){
             // The SDK restores all externally registered textures to COMMON.
             tracker_.transition(flist,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
@@ -4024,6 +4032,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             }
         }else if(!fgBackend_->evaluate(flist,ngxParams_,fe,st)){failedBackend_=engine::FailedBackend::Fg;return false;}
         cpuTrace.mark("fgEvaluate");
+        if(previewCheckpoint&&!reset)previewCheckpoint();
         ++out.fgEvaluated;
         gpuTimer_.mark(flist,timingStage,true);if(sub==fgCalls)gpuTimer_.mark(flist,GpuStage::FgBatch,true);
         tracker_.uavBarrier(flist,genFrame_[generatedSlot].Get());

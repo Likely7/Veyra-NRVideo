@@ -17,6 +17,7 @@ public:
     // An anchor of the other pacing mode is stale: FG on/off rebuilds the graph,
     // whose epochs restart, so a paced FG pair anchor could outlive FG.
     bool anchored(uint64_t epoch,bool paceSourcePts=true)const{return anchored_&&epoch==epoch_&&paced_==paceSourcePts;}
+    bool paced()const{return paced_;}
     // Unbuffered capture is ready-driven. A late first callback or clock drift
     // must not turn its source timestamps into a persistent presentation hold.
     int64_t deadline(int64_t pts)const{return paced_?host_+(pts-source_)+delay_:host_;}

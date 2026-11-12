@@ -1053,3 +1053,16 @@ python E:/项目/Veyra/reports/codex-reflex-fullscreen-20261111/live.py baseline
 原用户ZIP c75fe89a…：07:06:33–51Z输入稳定59.94、VFG GPU批次P95读数约1.44ms、Present CPU P95约0.65ms，而提交中位31（30–61）。对应Reflex Sleep均值25.964ms、最大27.497ms，补帧期限为负而不准入；退出全屏后短等恢复120。定位到读帧前驱动长等待；不是仅数字显示假象，不支持归因采集输入不稳。没有普通开有效对照，不证明增强开关是唯一根因；为何该驱动在特定全屏组合下等待仍未证实。原文行号见user-evidence.json、user-reflex-intervals.json，不额外修调度。
 
 migration.py：真实应用旧2→1写回、实际列表两选项、桥接请求2仍1、同配置重启再验通过。源码docs/NVIDIA_BOOST_REMOVAL_FULLSCREEN_2026-11-12.md，外部报告/日志/测试/tmp统一E:/项目/Veyra相应子目录/codex-reflex-fullscreen-20261111；FINAL.json、LIVE.json、QA-final.json、migration.json。用户ZIP自存原字节，10大日志SHA核验gzip，展开与重复日志逻辑减少207.4MiB（非卷净回收）；程序/依赖不重复整份复制，共享只读依赖改动用新文件替换。可启动入口tests同任务/启动低延迟移除测试.cmd，EXE787cf3e8…；不合main/push/发布，不关机。
+
+
+## 2026-11-12 Claude送帧时序与采集延迟续接
+
+用户要求继续Claude未完成的两项排查，随后确认保持PS5信号继续实测。基线1cd2ff7，新分支codex/live-deadline-latency-20261112，保留原桌面脏树和其他分支。单owner精确等待仅限已就绪实时原生帧，尾段≤1ms，可由到帧/围栏/停止/暂停/seek退出；GPU/显示容量轮询不自旋。SDR实时FG图检查点只呈现旧租约，独立ring，不重入图/收查询/改结构设置；XeSS、HDR输出、文件、图片、导出、reset不进入。物理采集无FG沿用GPU队列Wait提前提交，完成观察和租约保持；修正无期限/未知ready日志语义。输出队列/PTS/1%low统计公式保持。
+
+执行scripts/acceptance/build-recording-handoff.py --task codex-live-deadline-20261112 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.5-latency-test --jobs 2；首次--reconfigure六目标103.4s，最终产品/呈现/合同29.2s、AMD图8.7s。最终EXE SHA256 4b0e2b7b82250ad22747cd71014c06a1938804a7094ccdf8bcf04a854a212a20。scheduler156、时序172、预览57、合同301、等待/事件9通过，AMD模拟图128/0、D3D12 Debug0（不是HIP实卡推理）；原生文件DLSS生命周期及VFG播放通过。等待微测旧P99 0.988ms→新0.010ms。AMD夹具缺测试DLL、文件生命周期错传Off及FFmpeg DLL-only前缀无CLI的首次失败保留，纠正参数/夹具后复测通过；合成输入由本机CLI生成，产品patched FFmpeg保持。
+
+实卡命令reports/codex-live-deadline-20261112/live.py、quiet_matrix.py；T911 3840x2160 60NV12、一层1080p NR，RTX5070/9700X/320Hz，独立配置。旧版为上轮去Boost测试EXE787cf3e8…。相同8秒稳定测量：DLSS2X窗口/全屏1%low105.39/106.66→115.19/115.76，原帧迟到P50 0.954/0.922→0.095/0.091ms；VFG107.08/109.10→114.67/115.36，迟到P50 0.304→0.001ms；均约120提交fps。无FG回调到Present返回1.548/1.564→1.067/1.081ms，约60fps。DLSS4X/60→30、FSR3.1+Vsync、XeSS+VRR、VFG+普通Reflex/VRR及自动去重、暂停/恢复/停止/重启实测完成。非物理刷新或光学延迟，不扩展成4070TiSUPER/160Hz现场根治、其他卡或HDR收益。
+
+最初夹具重复每帧stdout到console.log，Logger在全局锁内每条fflush；连续批测有100–300ms CPU停顿与源丢弃，控制PASS未算性能通过，失败数据完整保留。仅改夹具stdout→NUL、保留引擎文件与stderr后，9组18段全部满足逐帧帧率/长迟到/错误检查；另补同条件VFG2段及VFG40秒稳定样本。该结果与重复输出I/O干扰相符；三轮监测未捕到原停顿栈，不能称唯一根因已由栈证明。实验第二版唤醒后直接advance捷径撤掉，不拿其116读数作交付。PresentMon权限不足，没有改系统权限或编造独立上屏状态。原始Claude run1全屏DXGI等待约1.9ms，不沿用“始终合成”的未分析结论。
+
+身份脚本identity.py：128组件/便携DLL与既有清单SHA256/大小一致，旧供体EXE不变、QML探针已恢复。入口E:/项目/Veyra/tests/codex-live-deadline-20261112/启动送帧与采集延迟测试.cmd，manual-profile独立，原应用/配置/运行组件不改。证据与脚本在reports同任务，日志在logs同任务（压缩保留SHA），临时文件在tmp同任务；清理/逻辑占用和保留清单见CLEANUP.json，不把硬链接逻辑大小当卷实占。方案与结果：docs/LIVE_DEADLINE_LATENCY_PLAN_2026-11-12.md、docs/LIVE_DEADLINE_LATENCY_2026-11-12.md，最终FINAL.json。未合main、未推送发布，不关机；本轮为自审，没有独立Reviewer。

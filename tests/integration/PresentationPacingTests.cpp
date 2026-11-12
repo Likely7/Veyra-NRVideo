@@ -7,6 +7,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include "DeadlineWaitChecks.h"
 static HWND movingInput(){
     WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraPacingInput";
     wc.lpfnWndProc=[](HWND w,UINT m,WPARAM a,LPARAM b)->LRESULT{
@@ -21,6 +22,7 @@ static HWND movingInput(){
 }
 int wmain(int argc,wchar_t** argv){
     using namespace veyra::engine;using Clock=std::chrono::steady_clock;
+    if(argc==2&&std::wstring(argv[1])==L"--deadline-wait")return deadlineWaitChecks();
     if(argc==2&&std::wstring(argv[1])==L"--capture-input"){
         auto w=movingInput();const auto end=Clock::now()+std::chrono::seconds(240);
         // A chosen capture rate needs a window that changes faster than the
