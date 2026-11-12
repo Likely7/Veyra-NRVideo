@@ -14,12 +14,12 @@ inline int __cdecl notify(ID3D12CommandQueue*,uint32_t type){return type==3&&!fa
 template<class Check>void run(Check check){
     using namespace veyra::engine;
     PresentationSettings p;check(p.valid()&&p.nvidiaLowLatency==NvidiaLowLatency::Off,"NVIDIA low latency defaults off");
-    p.nvidiaLowLatency=NvidiaLowLatency(3);check(!p.valid(),"invalid NVIDIA low latency mode rejected");
-    check(savedNvidiaLowLatency(-1)==NvidiaLowLatency::Off&&savedNvidiaLowLatency(99)==NvidiaLowLatency::Off&&savedNvidiaLowLatency(2)==NvidiaLowLatency::Boost,"invalid saved mode falls back to off rather than accidentally enabling Boost");
+    p.nvidiaLowLatency=NvidiaLowLatency(2);check(!p.valid(),"invalid NVIDIA low latency mode rejected");
+    check(savedNvidiaLowLatency(-1)==NvidiaLowLatency::Off&&savedNvidiaLowLatency(99)==NvidiaLowLatency::Off&&savedNvidiaLowLatency(0)==NvidiaLowLatency::Off&&savedNvidiaLowLatency(1)==NvidiaLowLatency::On&&savedNvidiaLowLatency(2)==NvidiaLowLatency::On,"legacy Boost migrates to On; unknown saved modes stay off");
     {
-        PresentationSettings kept;kept.nvidiaLowLatency=NvidiaLowLatency::Boost;
-        check(!syncNvidiaLowLatencyQueue(kept,false)&&!kept.enabled&&kept.nvidiaLowLatency==NvidiaLowLatency::Boost,"another adapter keeps its plain low-queue switch off and only retains the NVIDIA choice");
-        check(syncNvidiaLowLatencyQueue(kept,true)&&kept.enabled,"back on NVIDIA the retained Boost owns the low queue again");
+        PresentationSettings kept;kept.nvidiaLowLatency=NvidiaLowLatency::On;
+        check(!syncNvidiaLowLatencyQueue(kept,false)&&!kept.enabled&&kept.nvidiaLowLatency==NvidiaLowLatency::On,"another adapter keeps its plain low-queue switch off and only retains the NVIDIA choice");
+        check(syncNvidiaLowLatencyQueue(kept,true)&&kept.enabled,"back on NVIDIA the retained On owns the low queue again");
         PresentationSettings plain;plain.enabled=true;
         check(!syncNvidiaLowLatencyQueue(plain,false)&&plain.enabled,"another adapter keeps its plain low queue on");
         check(syncNvidiaLowLatencyQueue(plain,true)&&!plain.enabled,"NVIDIA 关 never leaves a hidden low queue running");
@@ -32,7 +32,7 @@ template<class Check>void run(Check check){
     const auto id=r.begin();check(id&&events.size()==1&&events[0].type==0,"input starts with simulation marker only");
     r.renderStart(id);r.renderEnd(id);r.blitStart(id);r.blitEnd(id);r.presentStart(id,false);r.presentEnd(id,false);
     check(events.size()==6&&events[1].type==1&&events[2].type==2&&events[3].type==3&&events[4].type==4&&events[5].type==5,"legacy driver source markers follow actual processing and Present boundaries");
-    check(r.enable(device,true,true,queue)&&modes.back().boost&&r.boost(),"Boost plus FG enables native Boost and out-of-band queue tracking");
+    check(r.enable(device,true,queue)&&modes.back().low&&!modes.back().boost,"FG enables out-of-band queue tracking with the driver Boost field zero");
     const auto next=r.begin();r.renderStart(next);r.renderEnd(next);
     for(unsigned i=0;i<5;++i){r.blitStart(next);r.blitEnd(next);r.presentStart(next,true);r.presentEnd(next,true);}
     r.blitStart(next);r.blitEnd(next);r.presentStart(next,false);r.presentEnd(next,false);
@@ -42,14 +42,14 @@ template<class Check>void run(Check check){
     check(valid&&generated==5,"out-of-band markers retain source ID and leave driver-internal Present fields zero");
     check(r.disable()&&!r.active()&&!modes.back().low&&!modes.back().boost,"off revokes low latency and Boost together");
     const auto count=events.size();r.presentStart(next,true);r.begin();check(events.size()==count&&sleeps==2,"disabled mode stops periodic Sleep and markers");
-    check(r.enable(device,false,true,queue),"re-enable after off");const auto stale=events.size();r.mark(next,4);check(events.size()==stale,"stale in-flight marker IDs ignored after a mode change");
+    check(r.enable(device,true,queue),"re-enable after off");const auto stale=events.size();r.mark(next,4);check(events.size()==stale,"stale in-flight marker IDs ignored after a mode change");
     failSleep=true;check(r.begin()==0&&!r.active()&&r.failed()&&!r.disablePending(),"Sleep failure disables driver mode and reports fallback");failSleep=false;
-    check(r.enable(device,true,true,queue),"retry native mode after failure");const auto failed=r.begin();failQueue=true;r.blitStart(failed);check(!r.active()&&r.failed(),"out-of-band marker failure stops native mode");failQueue=false;
+    check(r.enable(device,true,queue),"retry native mode after failure");const auto failed=r.begin();failQueue=true;r.blitStart(failed);check(!r.active()&&r.failed(),"out-of-band marker failure stops native mode");failQueue=false;
     check(r.enable(device),"enable before disable failure");failDisable=true;
     check(!r.disable()&&r.disablePending()&&!r.enable(device,true),"failed disable is not reported as off or re-enabled over pending state");
     failDisable=false;check(r.disable()&&!r.disablePending(),"failed disable can be retried cleanly");
     failNotify=true;
-    check(r.enable(device,true,false,queue)&&r.active(),"without frame generation a refused queue notification keeps native Sleep and markers");
+    check(r.enable(device,false,queue)&&r.active(),"without frame generation a refused queue notification keeps native Sleep and markers");
     {
         const auto id=r.begin();const auto before=events.size();
         r.renderStart(id);r.renderEnd(id);r.blitStart(id);r.blitEnd(id);r.presentStart(id,false);r.presentEnd(id,false);
@@ -57,8 +57,9 @@ template<class Check>void run(Check check){
         for(auto k=before;inBand&&k<events.size();++k)inBand=!events[k].async&&events[k].type==k-before+1;
         check(inBand,"a refused queue notification falls back to in-band submit and Present markers");
     }
-    check(!r.enable(device,true,true,queue)&&!r.active(),"frame generation still requires the out-of-band queue");
+    check(!r.enable(device,true,queue)&&!r.active(),"frame generation still requires the out-of-band queue");
     failNotify=false;
-    R old({set,sleep,marker,nullptr});check(!old.enable(device,false,true,queue)&&!old.active(),"FG does not masquerade as enabled on a driver without out-of-band queue notification");
+    check(std::all_of(modes.begin(),modes.end(),[](const auto& p){return p.boost==0;}),"every enable, disable and failure-recovery NVAPI call leaves Boost off");
+    R old({set,sleep,marker,nullptr});check(!old.enable(device,true,queue)&&!old.active(),"FG does not masquerade as enabled on a driver without out-of-band queue notification");
 }
 }

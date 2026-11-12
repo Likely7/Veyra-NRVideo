@@ -27,7 +27,6 @@ public:
     ReflexSession& operator=(const ReflexSession&)=delete;
     ~ReflexSession(){close();}
     bool active()const{return active_;}
-    bool boost()const{return active_&&boost_;}
     bool disablePending()const{return driverEnabled_&&!active_;}
     bool failed()const{return failed_;}
     uint64_t sleepCount()const{return sleeps_;}
@@ -46,10 +45,10 @@ public:
         }
         return true;
     }
-    bool enable(ID3D12Device* device,bool boost=false,bool generated=false,ID3D12CommandQueue* queue=nullptr){
-        if(active_&&device_==device&&boost_==boost&&generated_==generated&&queue_==queue)return true;
+    bool enable(ID3D12Device* device,bool generated=false,ID3D12CommandQueue* queue=nullptr){
+        if(active_&&device_==device&&generated_==generated&&queue_==queue)return true;
         if(!disable())return false;
-        device_=device;queue_=queue;failed_=false;queueMarkers_=false;boost_=boost;generated_=generated;
+        device_=device;queue_=queue;failed_=false;queueMarkers_=false;generated_=generated;
         if(!load()||!api_.set||!api_.sleep||!api_.marker){log::warn("reflex","required system-driver low-latency interfaces unavailable");return false;}
         if(generated&&(!api_.notify||!queue)){
             log::warn("reflex","frame generation needs out-of-band notification and an owned presentation queue");return false;
@@ -62,9 +61,9 @@ public:
             if(r&&generated)return false;
             queueMarkers_=r==0;
         }
-        SleepParams p{};p.version=sizeof(p)|(1u<<16);p.low=1;p.boost=boost;p.markers=1;
+        SleepParams p{};p.version=sizeof(p)|(1u<<16);p.low=1;p.boost=0;p.markers=1; // Boost is deliberately unavailable; keep the NVAPI ABI field zero.
         const int r=api_.set(device_,&p);
-        log::info("reflex",std::format("enable status={} intervalUs=0 boost={} frameGeneration={} queueMarkers={}",r,boost,generated,queueMarkers_));
+        log::info("reflex",std::format("enable status={} intervalUs=0 boost={} frameGeneration={} queueMarkers={}",r,false,generated,queueMarkers_));
         sleeps_=sleepUs_=maxSleepUs_=markers_=oobMarkers_=realPresents_=generatedPresents_=0;firstFrame_=next_+1;
         return active_=driverEnabled_=r==0;
     }
@@ -123,7 +122,7 @@ private:
         if(!init)return false;const int r=init();initialized_=r==0;if(r)log::warn("reflex",std::format("initialize status={}",r));return initialized_;
     }
     DriverApi api_{};HMODULE module_=nullptr;ID3D12Device* device_=nullptr;ID3D12CommandQueue* queue_=nullptr;
-    bool initialized_=false,active_=false,driverEnabled_=false,boost_=false,generated_=false,queueMarkers_=false,failed_=false;
+    bool initialized_=false,active_=false,driverEnabled_=false,generated_=false,queueMarkers_=false,failed_=false;
     uint64_t next_=0,firstFrame_=1,presentId_=0,sleeps_=0,sleepUs_=0,maxSleepUs_=0,markers_=0,oobMarkers_=0,realPresents_=0,generatedPresents_=0;
 };
 }

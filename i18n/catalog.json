@@ -4468,13 +4468,6 @@
    "ja": "処理の待ち行列を減らす"
   },
   {
-   "zh": "减少处理排队。高负载时建议选「开」而不是「开＋增强」：增强有概率导致掉帧，还会提高 GPU 频率、增加功耗。",
-   "src": "qml/NvidiaLowLatencyEditor.qml",
-   "zh-TW": "減少處理排隊。高負載時建議選「開」而不是「開＋增強」：增強有機率導致掉幀，還會提高 GPU 時脈、增加功耗。",
-   "en": "Reduce processing queue depth. Under heavy load, choose On rather than On + Boost: Boost can drop frames, and it raises GPU clocks and power use.",
-   "ja": "処理の待ち行列を減らします。高負荷時は「オン＋ブースト」ではなく「オン」を推奨します。ブーストはフレーム落ちを起こすことがあり、GPU クロックと消費電力も上がります。"
-  },
-  {
    "zh": "减少暗部被进一步压黑，保留提亮细节",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "減少暗部被進一步壓黑，保留提亮細節",
@@ -8386,13 +8379,6 @@
    "zh-TW": "開機",
    "en": "Power on",
    "ja": "電源オン"
-  },
-  {
-   "zh": "开＋增强",
-   "src": "qml/NvidiaLowLatencyEditor.qml",
-   "zh-TW": "開＋增強",
-   "en": "On + Boost",
-   "ja": "オン＋ブースト"
   },
   {
    "zh": "引擎异常，请查看诊断",
@@ -15067,13 +15053,6 @@
    "ja": "NVIDIA 低遅延 · オン"
   },
   {
-   "zh": "英伟达低延迟 · 开＋增强",
-   "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "NVIDIA 低延遲 · 開＋增強",
-   "en": "NVIDIA Low Latency · On + Boost",
-   "ja": "NVIDIA 低遅延 · オン＋ブースト"
-  },
-  {
    "zh": "英伟达低延迟 · 当前未生效",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "NVIDIA 低延遲 · 目前未生效",
@@ -15121,13 +15100,6 @@
    "zh-TW": "NVIDIA 低延遲：開（已啟用）",
    "en": "NVIDIA Low Latency: On (active)",
    "ja": "NVIDIA 低遅延：オン（有効）"
-  },
-  {
-   "zh": "英伟达低延迟：开＋增强（已启用）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "NVIDIA 低延遲：開＋增強（已啟用）",
-   "en": "NVIDIA Low Latency: On + Boost (active)",
-   "ja": "NVIDIA 低遅延：オン＋ブースト（有効）"
   },
   {
    "zh": "范围 0.25～4.00 倍，保持原有音调",

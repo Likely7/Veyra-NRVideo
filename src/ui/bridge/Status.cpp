@@ -412,10 +412,10 @@ void QmlPlayerBridge::updateRunStatus() {
             options<<tr("输出限帧 · 跟随屏幕");
         else options<<tr("输出限帧 · %1 fps").arg(i.presentation.customFps,0,'f',1);
     }
-    // On NVIDIA the three states own the low queue, so the summary names them.
+    // On NVIDIA the low-latency choice owns the low queue.
     if(nvidiaLowLatencyAvailable()&&i.presentation.nvidiaLowLatency!=engine::NvidiaLowLatency::Off){
         if(s.running&&s.presentationEffective.nvidiaLowLatency==engine::NvidiaLowLatency::Off)options<<tr("英伟达低延迟 · 当前未生效");
-        else options<<(i.presentation.nvidiaLowLatency==engine::NvidiaLowLatency::Boost?tr("英伟达低延迟 · 开＋增强"):tr("英伟达低延迟 · 开"));
+        else options<<tr("英伟达低延迟 · 开");
     }
     else if(i.presentation.enabled)options<<(s.running&&!s.presentationEffective.enabled?tr("低延迟队列 · 当前未生效"):tr("低延迟队列"));
     if(!s.capture&&std::abs(s.playbackRate-1.0)>.001)options<<tr("播放速度 %1×").arg(s.playbackRate,0,'f',2);

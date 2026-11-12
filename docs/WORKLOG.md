@@ -1040,3 +1040,16 @@ qmllint检查ProPage/Ps5SourceDialog/SettingsPage无语法错误，有动态上�
 执行reports/codex-dedup-modes-20261111/check_syntax.py，8个MSVC /Zs单元通过。执行native_tests.py，单独编译/链接预设测试工具（3个翻译单元、复用现有未改veyra_base.lib），--dedup-migration共251项通过，覆盖旧预设实际保存/读取/不覆盖/应用、非法ID拒绝、全部32个内容组合和后端质量组合；不是应用构建或GPU测试。qmltestrunner离屏软件，tests/qml/quick/tst_dedup_modes.qml：7/0/0，无QWARN，含开关与默认、稀疏ID5、同步、旧值和240px布局。QML静态无语法错误但有动态上下文警告；i18n2797条、繁体/英文/日文缺失0、占位符错误0，git diff --check通过。所有TEMP/TMP/QML缓存定向本任务E盘目录。
 
 方案docs/DEDUP_MODES_2026-11-11.md；证据E:/项目/Veyra/{reports,logs,tmp,tests}/codex-dedup-modes-20261111。本轮不构建应用、不运行真实采集/GPU、不合main/push/发布。用户曾追加“搞好电脑关机”，随后明确“不要关机了”，关机授权已撤回。shutdown /a 返回1116（无正在执行的关机），本任务目录关联关机辅助进程为0；未启动关机。取消回执在任务报告shutdown-cancelled.json。
+
+
+## 2026-11-12 NVIDIA低延迟增强档移除、全屏日志与真实T911验收
+
+用户要求移除开＋增强并排查全屏1% low降30，随后明确本机实测（覆盖此前暂缓构建）；保持取消关机。基线0fd8a68，分支codex/remove-reflex-boost-fullscreen-20261111。UI关/开，旧偏好2迁1并写回，桥接别名2只解释为1；删除Boost枚举/启用参数，NVAPI ABI字段固定0，不改全屏/补帧节奏或统计。
+
+python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-reflex-fullscreen-20261111 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.5-reflex-test --jobs 2 veyra_qml_ui veyra_qml_quick_tests veyra_repair_contract_tests veyra_presentation_pacing_tests veyra_live_timing_tests veyra_preset_library_tests：81步骤、131.9s通过；补充veyra_ui_i18n_tests 3.2s通过。当前QtQuick199/0/0、合同301、计时172、预设629项，MSVC/Zs7单元、i18n2793缺失/占位0，git diff --check通过。原合同启动缺DLL搜索路径、Quick暂存旧测试、独立runner测试类型导入、诊断helper路径/导入/未创建节点编辑器问题均保留首次证据并纠正复测，不包装成产品失败或通过。
+
+python E:/项目/Veyra/reports/codex-reflex-fullscreen-20261111/live.py baseline-vfg-signal、baseline-dlss-signal、fixed-vfg-signal、fixed-dlss-signal：真实T911 3840x2160 60NV12，1080p NR一层实际启用，DLSS/VFG2X、VFG中，自动显示同步、VRR开关关、输出不限。首轮无信号且新NR未启用不算验收，用户接通后重测，Computer Use看见游戏与全屏画面。旧增强各窗口/全屏/窗口，新版关/开各同组三段，4s稳定+12s采样，18段共25922个提交样本、6次进全屏。新VFG全屏关/开120.005/120.003提交fps，折算1% low108.630/108.661；DLSS120.010/120.007，105.817/105.649。每段NR/FG均活动、mailbox覆盖增量0。本机RTX5070/320Hz也未复现旧增强掉30，不能冒充4070TiSUPER/160Hz现场根治或物理刷新/屏幕延迟验收。
+
+原用户ZIP c75fe89a…：07:06:33–51Z输入稳定59.94、VFG GPU批次P95读数约1.44ms、Present CPU P95约0.65ms，而提交中位31（30–61）。对应Reflex Sleep均值25.964ms、最大27.497ms，补帧期限为负而不准入；退出全屏后短等恢复120。定位到读帧前驱动长等待；不是仅数字显示假象，不支持归因采集输入不稳。没有普通开有效对照，不证明增强开关是唯一根因；为何该驱动在特定全屏组合下等待仍未证实。原文行号见user-evidence.json、user-reflex-intervals.json，不额外修调度。
+
+migration.py：真实应用旧2→1写回、实际列表两选项、桥接请求2仍1、同配置重启再验通过。源码docs/NVIDIA_BOOST_REMOVAL_FULLSCREEN_2026-11-12.md，外部报告/日志/测试/tmp统一E:/项目/Veyra相应子目录/codex-reflex-fullscreen-20261111；FINAL.json、LIVE.json、QA-final.json、migration.json。用户ZIP自存原字节，10大日志SHA核验gzip，展开与重复日志逻辑减少207.4MiB（非卷净回收）；程序/依赖不重复整份复制，共享只读依赖改动用新文件替换。可启动入口tests同任务/启动低延迟移除测试.cmd，EXE787cf3e8…；不合main/push/发布，不关机。

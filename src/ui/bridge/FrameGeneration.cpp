@@ -172,8 +172,8 @@ bool QmlPlayerBridge::nvidiaLowLatencyAvailable()const{return primaryGpuVendor()
 void QmlPlayerBridge::setNvidiaLowLatency(int value){
     const bool nvidia=nvidiaLowLatencyAvailable();
     if(value<0||value>2||(!nvidia&&value!=0))return;
-    // On NVIDIA the three states own the low queue; elsewhere only the kept choice changes.
-    auto p=impl_->presentation;p.nvidiaLowLatency=engine::NvidiaLowLatency(value);
+    // Legacy UI value 2 migrates to On; no UI/API request can enable Boost.
+    auto p=impl_->presentation;p.nvidiaLowLatency=engine::savedNvidiaLowLatency(value);
     engine::syncNvidiaLowLatencyQueue(p,nvidia);
     if(p==impl_->presentation)return;
     impl_->presentation=p;applyPresentation();

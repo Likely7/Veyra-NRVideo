@@ -721,8 +721,8 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     // carries out-of-band markers, never another source-frame Sleep.
     std::wstring latency=L"低延迟队列：已开启";
     if(requested.nvidiaLowLatency!=NvidiaLowLatency::Off){
-        if(reflex_.enable(ctx.device(),requested.nvidiaLowLatency==NvidiaLowLatency::Boost,fg,presentationQueue_.Get()))
-            latency=requested.nvidiaLowLatency==NvidiaLowLatency::Boost?L"英伟达低延迟：开＋增强（已启用）":L"英伟达低延迟：开（已启用）";
+        if(reflex_.enable(ctx.device(),fg,presentationQueue_.Get()))
+            latency=L"英伟达低延迟：开（已启用）";
         else{effective.nvidiaLowLatency=NvidiaLowLatency::Off;latency=L"英伟达低延迟不可用，当前使用低排队（详见日志）";}
     }
     status=join({latency,cap,queue,syncMode,syncDetail});
