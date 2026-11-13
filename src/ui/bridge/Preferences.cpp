@@ -1,5 +1,6 @@
 // QML bridge: Preferences responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/ngx/AnrProvider.h"
 
 namespace veyra::ui {
 // --- shell preferences -------------------------------------------------------
@@ -76,6 +77,9 @@ QVariantList QmlPlayerBridge::readComponentList() const {
     // Read from the runtime manifest the build produces rather than a list written
     // by hand here, so the page cannot claim a component the package lacks.
     QVariantList out;
+    const auto anrDirectory=ngx::AnrProvider::directory(runtime::localRuntimeDirectory().wstring());
+    out<<QVariantMap{{"name",QStringLiteral("ANR FG")},{"detail",QString::fromStdWString(anrDirectory)},
+        {"loaded",ngx::AnrProvider::available(runtime::localRuntimeDirectory().wstring())},{"experimental",true}};
     const auto vfgDirectory=pipeline::VfgBackend::runtimeDirectory(runtime::localRuntimeDirectory().wstring());
     const bool vfgAvailable=pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring());
     out<<QVariantMap{{"name",QStringLiteral("NVIDIA VFG")},{"detail",QString::fromStdWString(vfgDirectory)},

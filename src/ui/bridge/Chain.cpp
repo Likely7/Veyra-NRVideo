@@ -383,8 +383,8 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     const auto cap = effectAvailability(type);
     if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return -1; }
     const bool fgType=type==QLatin1String("dlss-fg")||type==QLatin1String("xess-fg")||
-        type==QLatin1String("fsr3-fg")||type==QLatin1String("fsr4-fg")||type==QLatin1String("vfg-fg");
-    const auto fgBackend=type==QLatin1String("vfg-fg")?engine::FrameGenerationBackend::Vfg:type==QLatin1String("fsr4-fg")?engine::FrameGenerationBackend::Fsr4:
+        type==QLatin1String("fsr3-fg")||type==QLatin1String("fsr4-fg")||type==QLatin1String("vfg-fg")||type==QLatin1String("anr-fg");
+    const auto fgBackend=type==QLatin1String("anr-fg")?engine::FrameGenerationBackend::Anr:type==QLatin1String("vfg-fg")?engine::FrameGenerationBackend::Vfg:type==QLatin1String("fsr4-fg")?engine::FrameGenerationBackend::Fsr4:
         type==QLatin1String("fsr3-fg")?engine::FrameGenerationBackend::Fsr:
         type==QLatin1String("xess-fg")?engine::FrameGenerationBackend::XeSS:engine::FrameGenerationBackend::Dlss;
     const auto fgCeiling=engine::fsrFrameGeneration(fgBackend)?2u:

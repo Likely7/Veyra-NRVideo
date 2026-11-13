@@ -1099,3 +1099,17 @@ ContentDedup将独立滚动内容率与固定周期拟合分开；回调picture 
 失败证据完整保留：旧实现先失败两项新回归；Logger测试对象过大在启动前0xC00000FD，改堆分配后12项通过，生产单例未因此改造；365次scene cut的首版随机图夹具改为连续运动，未关闭检测；冷缓存NR+FG约10s超过最初8s测试启动窗，放宽启动至30s后仍要求第12帧同一400ms等待内进展；源尾帧快照1798实际1800属于产品统计缺口，最终补发真实快照通过。第三方ANSI日志解码的首次失败、QML空输出不算通过、cmd多嵌套引号及Unicode/管道观察失败分别留回执后纠正，没有隐藏。已确认Logger首败PID27168／dump UTC与回执相同秒，SHA25680e69bd1…迁到E盘logs同任务/logger-first-stack-overflow-27168.dmp，C盘该系统自动dump入口移除，其他用户dump不动。
 
 最终启动入口E:/项目/Veyra/tests/codex-dedup-stutter-20261112/启动自动与60转30修复测试.cmd，manual-profile独立，默认无输入连接；实际cmd启动/进程路径/退出0已核对，无ERROR，104个QML文件与源码一致，无测试探针。97运行组件与供体逐字节一致，产品与测试EXE私有拷贝，其余只读运行库／资源硬链接，无SDK/模型/二进制入Git。产物统一E:/项目/Veyra/{tests,logs,reports,tmp}/codex-dedup-stutter-20261112；CLEANUP.json按逻辑字节与硬链接分别记账，保留当前构建／视频真值／失败与最终证据，未做重复整包。源码方案／验收见DEDUP_STUTTER_REPAIR_PLAN_2026-11-12.md、DEDUP_STUTTER_REPAIR_2026-11-12.md，最终提交与回执见reports同任务/SOURCE-COMMIT.json、FINAL.json。未合main、未推送或发布，不关机。
+
+## 2026-11-12 ANR FG 全功能本地实验
+
+用户要求开分支并完整接入上游现有FG，不交只支持SDR2X的菜单演示。单Agent，起点6e3747a，独立工作树/分支anr-fg-experiment-20261112、checkpoint/pre-anr-fg-20261112；未改Claude脏树和共享build，未合main/push/Release/关机。
+
+实现与事实见 `docs/ANR_FG_EXPERIMENT_PLAN_2026-11-12.md`、`docs/ANR_FG_EXPERIMENT_2026-11-12.md`、`THIRD_PARTY_NOTICES.md`。官方FG-V.B15 addon原件19文件只在任务私有运行目录，未入Git；核心未公开/明确分发许可未找到，不复制无许可核心。自主直连AnrProvider，共享增强/输出/导出图，实际能力2–6X、完整持久化和界面、SDR/HDR、NR/SR共存与故障回退。精确平移揭示ANR像素运动契约与DLSS归一化反向不同；D3D12严格调试揭示depth/motion的COPY_DEST边界，转换和恢复后0错误。共享模块最后释放和新Init串行，防旧图销毁关闭替换图。
+
+产物全部 `E:/项目/Veyra/{build,tests,logs,reports,tmp}/codex-anr-fg-20261112`。构建命令 `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-anr-fg-20261112 --root E:/项目/Veyra/worktrees/anr-fg-experiment-20261112 --label 2.1.5-anr-test --jobs 2 veyra_qml_ui veyra_repair_fg_tests veyra_live_presentation_tests veyra_hdr_enhancement_tests veyra_vfg_export_probe veyra_fg_lifecycle_tests`，首次235.3s/最终6.7s通过，日志build-20261112-233112。i18n/extract.py --check：2796条、三语缺失0/占位错误0。
+
+48项ANR设置、301合同、251预设、683 VFG和230时序通过。SDR全倍率176生成帧像素/PTS真值，HDR全倍率270生成帧＋20NR/20SR每例＋JXR对比通过；最新HDR6X再次90帧正确。原生DLSS/ANR双向共存和双ANR中途释放，6→2→5→3→4→6/尺寸/reset均通过。GUI列表/节点/暂停改倍率/跨后端切换/保存重启、非法尺寸回退继续播放、ANR5X独立导出worker通过。六输出独立解码/帧数/时间戳/非黑/HDR元数据通过。4组最新回放与完整60秒3600决策覆盖无新画面误丢/重复；60→30约59.95提交FPS/P99 17.35ms，有界NR+SR回放仍有一次33.45ms间隔，不宣称零卡顿。T911三组（普通/自动/半速）静态4K60＋NR1080＋ANR2X及重启通过；当前输入完全不变，不能替代动态PS5验收。未验证其他GPU/远端串流/光学延迟，不承诺ANR质量优于DLSS。
+
+失败原始记录全部保留：低于640×360；初始运动单位错误但API成功；调试层27项错误；非法SDR/HDR夹具；HDR夹具漏out目录、VFG单测漏目录参数；独立解码首版误用绝对恒定帧间隔门槛（修正为真实源PTS插值真值，误差≤0.667us）。修复后相关复测通过，没有删日志或造通过。诊断GPU回读仅测试，产品未新增像素回读/CPU逐帧等待。
+
+97既有运行二进制和19ANR原件SHA不变；104QML恢复、Claude脏树branch/head/diff/status开工至收尾一致；自有独立启动器实启/子进程退出0。无中间分发包或整工程备份；保留当前独立构建、必要原始失败/验收证据和源码。入口tests同任务/启动ANR补帧测试.cmd，预选ANR2X、其他效果默认关闭且不自动连接输入。EXE ffee8327c84e86b70b37ac42fbe7f0c95a2911360458e1ce40e60a256223a752。来源提交与最终状态在报告FINAL.json；本轮自审，未称独立Reviewer。

@@ -729,11 +729,32 @@
    "ja": "AMD パフォーマンス（縦横半分）"
   },
   {
+   "zh": "ANR FG · 本地实验",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "ANR FG · 本機實驗",
+   "en": "ANR FG · Local experiment",
+   "ja": "ANR FG · ローカル実験"
+  },
+  {
+   "zh": "ANR 帧生成未能启用，已关闭补帧；请检查运行组件、驱动与工作尺寸（至少 640×360），详细原因见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "ANR 畫格生成無法啟用，已關閉補幀；請檢查執行元件、驅動程式與處理尺寸（至少 640×360），詳細原因請見日誌",
+   "en": "ANR frame generation could not start and has been turned off. Check its runtime, driver and processing size (at least 640×360); see the log for details.",
+   "ja": "ANR フレーム生成を開始できないためオフにしました。ランタイム、ドライバー、処理解像度（640×360以上）を確認してください。詳細はログにあります。"
+  },
+  {
    "zh": "AV1 需要主机显卡能编码、本机显卡能解码",
    "src": "qml/PcSourceDialog.qml",
    "zh-TW": "AV1 需要主機顯示卡能編碼、本機顯示卡能解碼",
    "en": "AV1 needs a host GPU that can encode it and a local GPU that can decode it",
    "ja": "AV1 にはホスト GPU のエンコード対応と、この PC の GPU のデコード対応が必要です"
+  },
+  {
+   "zh": "Apex Neural Rendering · 2X～6X · 视频估算输入，效果与速度以实际运行结果为准",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "Apex Neural Rendering · 2X～6X · 影片估算輸入，效果與速度以實際執行結果為準",
+   "en": "Apex Neural Rendering · 2X–6X · Estimated video inputs; quality and speed depend on actual results",
+   "ja": "Apex Neural Rendering · 2X～6X · 映像から推定した入力を使用。画質と速度は実際の動作によります"
   },
   {
    "zh": "BMD HDR 帧的 EOTF 不受支持；仅接受 SDR、PQ 或 HLG，拒绝猜测颜色传递",

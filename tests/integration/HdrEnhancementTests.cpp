@@ -79,6 +79,7 @@ int wmain(int argc,wchar_t** argv){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;gfx::DeviceContextDesc dd;
     if(!ctx.initialize(dd,status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
     if(!shaderIdentity(ctx,ring))return 3;if(!mode)return 0;
+    const bool anr=mode>=7&&mode<=11;
     const bool fileInput=argc>3,hardware=argc>4&&_wtoi(argv[4])!=0;
     source::MediaFileSource source;
     if(fileInput){source::SourceOpenDesc od;od.path=argv[3];od.preferHardwareDecode=hardware;od.d3d12Device=ctx.device();od.d3d12Queue=ctx.directQueue();
@@ -86,6 +87,7 @@ int wmain(int argc,wchar_t** argv){
     }
     EnhanceGraph graph(ctx,ring);EnhanceGraphDesc gd;gd.sourceWidth=1920;gd.sourceHeight=1080;gd.workWidth=mode>1?2560:1920;gd.workHeight=mode>1?1440:1080;gd.nrWidth=1920;gd.nrHeight=1080;
     gd.hdrInput=gd.hdrOutput=true;gd.enableNr=true;gd.enableSr=mode>1;gd.enableFg=mode>1;gd.videoSrQuality=(mode==3||mode==4)?1:0;gd.nrBeforeSr=mode==4||mode==6;gd.enableNvofStandalone=true;gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
+    if(anr){gd.frameGenerationBackend=engine::FrameGenerationBackend::Anr;gd.fgMultiplier=unsigned(mode-5);}
     if(argc>2)gd.nrRuntime=engine::NrRuntime(_wtoi(argv[2]));
     if(mode==5)gd.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;
     if(!graph.initialize(gd))return 4;
@@ -105,10 +107,11 @@ int wmain(int argc,wchar_t** argv){
         if(ok){highlight=pixels[(size_t(gd.workHeight/2)*gd.workWidth+gd.workWidth*7/8)*3];ok=highlight>11.5&&highlight<13.5&&std::all_of(pixels.begin(),pixels.end(),[](float v){return std::isfinite(v)&&std::abs(v)<150;});}
         if(frame==19&&ok){const auto target=std::filesystem::path(L"out")/(L"hdr-test-"+std::to_wstring(GetTickCount64())+L".jxr");ok=sink::saveHdrScreenshot(target.wstring(),ctx,ring,graph.videoFrameResource(out.videoSlot))&&verifyJxr(target,pixels,gd.workWidth,gd.workHeight,graph.hdr10Output());}
         if(mode==5&&ok){ok=presenter.present(ctx,ring,graph,out.videoSlot,false,true,0,false,.5f,out.batch.identity);Sleep(17);}
-        if(mode>1&&mode!=5&&ok){ok=graph.resolveGeneration(out);if(ok&&out.hasGenerated){std::vector<float> middle;ok=read(ctx,ring,graph.generatedFrameResource(out.genSlot),middle)&&std::all_of(middle.begin(),middle.end(),[](float v){return std::isfinite(v)&&std::abs(v)<150;});if(ok){const auto h=middle[(size_t(gd.workHeight/2)*gd.workWidth+gd.workWidth*7/8)*3];ok=h>11.5&&h<13.5;}++generated;}}
+        if(mode>1&&mode!=5&&ok){ok=ring.waitIdle()&&graph.resolveGeneration(out);if(ok&&out.hasGenerated){for(unsigned j=0;j<out.batch.count&&ok;++j){const auto& item=out.batch.frames[j];if(item.kind!=FrameKind::Generated||item.validity!=GenerationValidity::Valid)continue;std::vector<float> middle;ok=read(ctx,ring,graph.generatedFrameResource(item.lease->slot),middle)&&std::all_of(middle.begin(),middle.end(),[](float v){return std::isfinite(v)&&std::abs(v)<150;});if(ok){const auto h=middle[(size_t(gd.workHeight/2)*gd.workWidth+gd.workWidth*7/8)*3];ok=h>11.5&&h<13.5;}++generated;}}}
     }
     if(mode==5)generated=unsigned(presenter.xessGeneratedCount());
     ok=ok&&graph.metrics().nrEvaluateCount==20&&(mode==1||generated>0);
+    if(anr)ok=ok&&generated==18*(gd.fgMultiplier-1);
     std::cout<<"HDR_ENHANCEMENT file="<<fileInput<<" hardware="<<hardware<<" mode="<<mode<<" nr="<<graph.metrics().nrEvaluateCount<<" sr="<<graph.metrics().srEvaluateCount<<" generated="<<generated<<" highlight_nits="<<highlight*80<<" pass="<<ok<<std::endl;
     ring.drainQueue();presenter.close();if(window)DestroyWindow(window);graph.shutdown();av_frame_free(&f);ring.shutdown();ctx.shutdown();CoUninitialize();return ok?0:8;
 }

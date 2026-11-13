@@ -43,12 +43,12 @@ inline bool validNrReuseMode(NrReuseMode v) {
 }
 // Preserve persisted values 0/1/2; the old Fsr value now explicitly selects
 // the 3.1 provider. Fsr4 requires a real ML provider, never an auto fallback.
-enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4 };
+enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4, Anr = 5 };
 constexpr bool fsrFrameGeneration(FrameGenerationBackend backend) {
     return backend == FrameGenerationBackend::Fsr || backend == FrameGenerationBackend::Fsr4;
 }
 constexpr bool crossVendorFrameGeneration(FrameGenerationBackend backend) {
-    return backend == FrameGenerationBackend::XeSS || fsrFrameGeneration(backend);
+    return backend == FrameGenerationBackend::Anr || backend == FrameGenerationBackend::XeSS || fsrFrameGeneration(backend);
 }
 // Frame generation that runs inside the present sink (external frame
 // interpolation swapchain) instead of the in-graph DLSSG backend.
@@ -58,6 +58,7 @@ constexpr bool presentSinkFrameGeneration(FrameGenerationBackend backend) {
 // Multipliers the UI offers. 5X is intentionally absent: the DLSS runtime
 // exposes 2/3/4/6 and MFG buyers pick from those; 1 = generation off.
 inline constexpr uint32_t kFgMultiplierChoices[]={1,2,3,4,6};
+inline constexpr uint32_t kAnrMultiplierChoices[]={1,2,3,4,5,6};
 inline constexpr uint32_t kVfgMultiplierChoices[]={1,2,3,4,5,6,7,8};
 // VFG quality: 0-2 run one NvVFX model (Low/Medium/High) for every subframe.
 // 3-5 are mixed tiers (3 High+Medium, 4 High+Low, 5 Medium+Low): one subframe
@@ -175,6 +176,7 @@ constexpr std::string_view frameGenerationBackendName(FrameGenerationBackend bac
     case FrameGenerationBackend::Fsr: return "AMD-FSR";
     case FrameGenerationBackend::Fsr4: return "AMD-FSR4-ML";
     case FrameGenerationBackend::Vfg: return "NVIDIA-VFG";
+    case FrameGenerationBackend::Anr: return "ANR-FG";
     }
     return "unknown";
 }
@@ -626,7 +628,7 @@ struct EnhancementSettings {
                 return "active NR layers must share runtime and NR/SR order";
         }
         if(nr&&nrLayerCount&&!activeNrLayerCount())return "enabled NR stack has no active layer";
-        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::Vfg)return "invalid frame generation backend";
+        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::Anr)return "invalid frame generation backend";
         if(vfgQuality>=kVfgQualityCount)return "invalid VFG quality";
         // The XeSS provider reports its own generated-frame ceiling at session
         // start; the engine clamps/rejects above it, so validation only guards

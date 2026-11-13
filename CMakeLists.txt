@@ -160,6 +160,7 @@ add_library(veyra_ngx STATIC
   src/ngx/DlssSrBackend.cpp
     src/ngx/VideoSrBackend.cpp
     src/ngx/TrueHdrBackend.cpp
+  src/ngx/AnrProvider.cpp
   src/ngx/DlssFgBackend.cpp
   src/ngx/FgCompatibilitySession.cpp
   src/ngx/compat/hde/hde64.c
@@ -1533,6 +1534,11 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_features(veyra_preset_library_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_preset_library_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_preset_library_tests PRIVATE veyra_base)
+  add_executable(veyra_anr_settings_tests tests/unit/AnrSettingsTests.cpp src/engine/PresetLibrary.cpp src/engine/PresetStore.cpp src/engine/EffectChain.cpp)
+  target_compile_features(veyra_anr_settings_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_anr_settings_tests PRIVATE veyra_base)
+  target_compile_options(veyra_anr_settings_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_anr_settings_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   add_executable(veyra_vfg_settings_tests tests/unit/VfgSettingsTests.cpp src/engine/PresetLibrary.cpp src/engine/PresetStore.cpp src/engine/EffectChain.cpp)
   target_compile_features(veyra_vfg_settings_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_vfg_settings_tests PRIVATE /utf-8)

@@ -10,7 +10,7 @@ extern "C" {
 #include <libavutil/pixfmt.h>
 }
 
-int main(int argc,char** argv) {
+int wmain(int argc,wchar_t** argv) {
     using namespace veyra;
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;pipeline::EnhanceGraph graph(ctx,ring);
@@ -19,7 +19,10 @@ int main(int argc,char** argv) {
     pipeline::EnhanceGraphDesc desc;desc.sourceWidth=desc.workWidth=640;
     desc.enableNr=desc.enableSr=false;desc.enableFg=true;desc.rgbInput=true;
     desc.runtimeAbsPath=(std::filesystem::path(VEYRA_PROJECT_ROOT)/"runtime_local/nvidia").wstring();
-    const bool initFailure=argc>1&&std::string_view(argv[1])=="init-failure";
+    const bool anr=argc>1&&std::wstring_view(argv[1])==L"anr";
+    if(anr)desc.frameGenerationBackend=engine::FrameGenerationBackend::Anr;
+    if(argc>2)desc.runtimeAbsPath=argv[2];
+    const bool initFailure=argc>1&&std::wstring_view(argv[1])==L"init-failure";
     if(ok&&initFailure){
         desc.sourceHeight=desc.workHeight=360;
         SetEnvironmentVariableW(L"VEYRA_TEST_NGX_INIT_FAILURE",L"1");
@@ -54,9 +57,9 @@ int main(int argc,char** argv) {
             ok=ok&&count==(reset?0:multiplier-1);generated+=count;
         }
         av_frame_free(&frame);ok=ring.drainQueue()&&ok;
-        if(argc>1&&!initFailure)SetEnvironmentVariableW(L"VEYRA_TEST_PATCH_RESTORE_FAIL",L"1");
+        if(argc>1&&!initFailure&&!anr)SetEnvironmentVariableW(L"VEYRA_TEST_PATCH_RESTORE_FAIL",L"1");
         graph.shutdown();
-        if(argc>1&&!initFailure){
+        if(argc>1&&!initFailure&&!anr){
             SetEnvironmentVariableW(L"VEYRA_TEST_PATCH_RESTORE_FAIL",nullptr);
             const bool rejected=!ngx::FgCompatibilitySession::processHealthy()&&!graph.initialize(desc);
             std::cout<<"ROLLBACK failure-retains-storage-and-rejects-reinit="<<rejected<<'\n';

@@ -10,11 +10,13 @@ QString QmlPlayerBridge::fgBackendName() const {
     case engine::FrameGenerationBackend::Fsr:return QStringLiteral("fsr3");
     case engine::FrameGenerationBackend::Fsr4:return QStringLiteral("fsr4");
     case engine::FrameGenerationBackend::Vfg:return QStringLiteral("vfg");
+    case engine::FrameGenerationBackend::Anr:return QStringLiteral("anr");
     }
     return {};
 }
 QVariantList QmlPlayerBridge::fgBackendChoices() const {
     QVariantList choices = {
+        QVariantMap{{"id","anr"},{"label",tr("ANR FG · 本地实验")}},
         QVariantMap{{"id","dlss"},{"label",tr("DLSS 帧生成")}},
         QVariantMap{{"id","xess"},{"label",tr("Intel XeSS · 实验")}},
         QVariantMap{{"id","fsr3"},{"label",tr("FSR 3.1 · 2X")}},
@@ -32,6 +34,7 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
     return choices;
 }
 QString QmlPlayerBridge::fgProviderText() const {
+    if(fgBackendName()==QLatin1String("anr"))return tr("Apex Neural Rendering · 2X～6X · 视频估算输入，效果与速度以实际运行结果为准");
     const auto& s=impl_->snapshot;
     if(fgBackendName()==QLatin1String("vfg")){
         if(!vfgHardwarePossible())return tr("VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）");
@@ -64,11 +67,12 @@ int xessCeiling(const engine::PlayerSnapshot& s) {
     return std::max(cap, seen);
 }
 void QmlPlayerBridge::setFgBackendName(const QString& value) {
-    if(value!=QLatin1String("dlss")&&value!=QLatin1String("xess")&&value!=QLatin1String("fsr3")&&value!=QLatin1String("fsr4")&&value!=QLatin1String("vfg")){emit notice(tr("未知补帧后端"),true);return;}
+    if(value!=QLatin1String("anr")&&value!=QLatin1String("dlss")&&value!=QLatin1String("xess")&&value!=QLatin1String("fsr3")&&value!=QLatin1String("fsr4")&&value!=QLatin1String("vfg")){emit notice(tr("未知补帧后端"),true);return;}
     const auto availability = effectCapabilities().value(value).toMap();
     if (!availability.value("available").toBool()) { emit notice(availability.value("reason").toString(), true); emit settingsChanged(); return; }
     auto s = settings();
-    const auto want = value == QLatin1String("xess") ? engine::FrameGenerationBackend::XeSS
+    const auto want = value == QLatin1String("anr") ? engine::FrameGenerationBackend::Anr
+                    : value == QLatin1String("xess") ? engine::FrameGenerationBackend::XeSS
                     : value == QLatin1String("fsr3") ? engine::FrameGenerationBackend::Fsr
                     : value == QLatin1String("fsr4") ? engine::FrameGenerationBackend::Fsr4
                     : value == QLatin1String("vfg") ? engine::FrameGenerationBackend::Vfg
@@ -108,6 +112,8 @@ int QmlPlayerBridge::fgMaxMultiplier() const {
     // new context validates it. XeSS: 4X with the audited unlock provider, else
     // 2X, or what a running session already reported above 2X.
     const auto& s = impl_->snapshot;
+    if(settings().frameGenerationBackend==engine::FrameGenerationBackend::Anr)
+        return s.applied.frameGenerationBackend==engine::FrameGenerationBackend::Anr&&s.fgCapabilityKnown&&s.fgMultiFrameMax>0?std::clamp(s.fgMultiFrameMax+1,2,6):6;
     if(settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg)return 8;
     if(engine::fsrFrameGeneration(settings().frameGenerationBackend))return 2;
     if (settings().frameGenerationBackend == engine::FrameGenerationBackend::XeSS)
@@ -125,7 +131,7 @@ QVariantList QmlPlayerBridge::fgMultiplierChoices() const {
     const int ceiling = xess ? std::min(fgMaxMultiplier(), 4) : fgMaxMultiplier();
     QVariantList out;
     const auto choices=settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg?
-        std::span<const uint32_t>(engine::kVfgMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
+        std::span<const uint32_t>(engine::kVfgMultiplierChoices):settings().frameGenerationBackend==engine::FrameGenerationBackend::Anr?std::span<const uint32_t>(engine::kAnrMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
     for (const auto choice : choices) {
         const int m = int(choice);
         if (m < 2 || m > ceiling) continue;
