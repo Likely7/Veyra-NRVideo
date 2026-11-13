@@ -1,5 +1,11 @@
 # 当前工作日志
 
+## 2026-11-13 SDR 截图 Alpha 与暗部量化修复（独立分支）
+
+基于公开 main 8332c8a8，在 fix/screenshot-alpha-quantization 修复 SDR 视频/采集截图：显式选择不透明 BGR PNG 编码；普通图片继续保留原 Alpha 策略，HDR JXR、处理 Shader、录制与呈现代码不改，无新增持续回读。原图 straight RGB 在 Pillow/WIC 一致，原始纯黑37像素；实际 WIC 8-bit 预乘/反预乘后为20.8582%纯黑，首次量化在该消费者转换中观察到。低 Alpha 的上游产生阶段未宣称定位。
+
+独立构建实际 sink/device/ring/ScaleBlit，RX9070XT上21项通过、0失败；旧保存路径4项不透明截图断言失败。现有 HDR display state/tuning 两目标通过，原图经修复 writer 重导出RGB逐通道一致且全不透明。构建/复现说明与未验边界见 `@tests/screenshot-alpha/README.md`。本机完整工程缺SDK配置触发已有缺失veyra目标错误，完整应用、真实ASUS采集卡F7、录制与厂商增强组合未复测，不称通过。证据在 `@E:/项目/Veyra/reports/screenshot-alpha-20261113`。仅准备独立提交；PR需用户另行确认。
+
 ## 2026-11-03 RX7000补丁后worker退出：新日志与诊断更新
 
 用户veyra-qml(4).log与cache(1).zip表明NVAPI身份修复确实生效（m_gpuArch0x1b0），新失败是12:35之后三次worker管道中断。NGX已进入Small1920×1080网络建立，最后权重heap请求108.6MiB；不能凭末行认定显存不足或具体CUDA错误。当前只更新worker诊断：阶段/请求参数、CRT与Win32 stderr、Rust backtrace、普通未处理SEH独立记录；保持原Windows异常处理、不吞异常。算法/模型/共享GPU同步/主EXE/设置不改，附只读Windows1000/1001事件收集，不包数据库或模型。

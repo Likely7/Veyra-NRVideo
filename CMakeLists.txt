@@ -294,6 +294,8 @@ veyra_add_compute_shader(veyra_shader_packed_capture PackedCaptureToLinear)
 add_dependencies(veyra_shader_rgb_to_linear veyra_shader_yuy2_to_linear)
 # ScaleBlit: working frame -> swapchain backbuffer (Phase 6 present path).
 veyra_add_compute_shader(veyra_shader_scale_blit ScaleBlit)
+enable_testing()
+add_subdirectory(tests/screenshot-alpha)
 # Nv12Upload: byte buffer -> luma/chroma planes (copy-free upload path).
 veyra_add_compute_shader(veyra_shader_nv12_upload Nv12Upload)
 # PresentBlit: fullscreen-triangle pixel blit onto flip-model back buffers.
