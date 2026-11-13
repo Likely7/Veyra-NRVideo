@@ -70,9 +70,11 @@ static bool readImage(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlo
     for(unsigned y=0;y<image.height;++y)for(unsigned x=0;x<image.width;++x){uint32_t pixel=0;std::memcpy(&pixel,static_cast<const uint8_t*>(mapped)+fp.Offset+y*fp.Footprint.RowPitch+x*4,4);for(unsigned c=0;c<3;++c)image.pixels[(size_t(y)*image.width+x)*4+c]=decode((pixel>>(c*10))&1023);image.pixels[(size_t(y)*image.width+x)*4+3]=255;}
     D3D12_RANGE written{0,0};rb->Unmap(0,&written);return true;
 }
+#include "EffectExclusionCases.h"
 int wmain(int argc,wchar_t** argv){
     const std::wstring modeWide=argc>1?argv[1]:L"off";
     const std::string mode(modeWide.begin(),modeWide.end());
+    if(mode.starts_with("exclusion"))return effectExclusionCases(argc,argv);
     using namespace veyra;CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;pipeline::EnhanceGraph graph(ctx,ring);
     Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.commandSlotCount=6;dd.enableDebugLayer=mode.find("-debug")!=std::string::npos;bool ok=ctx.initialize(dd,st)&&ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),6,st);

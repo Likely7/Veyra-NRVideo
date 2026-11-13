@@ -4044,6 +4044,15 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 failedBackend_=engine::FailedBackend::Fg;return false;
             }
         }else if(!fgBackend_->evaluate(flist,ngxParams_,fe,st)){failedBackend_=engine::FailedBackend::Fg;return false;}
+        if(desc_.exclusion.enabled&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Anr){
+            // ANR's Vulkan bridge fulfills the recorded evaluation when this
+            // list is submitted. Post-generation composition in the same list
+            // runs before that output exists and is then overwritten. Submit
+            // the producer before recording its consumer; queue ordering owns
+            // the dependency, with no CPU wait or additional source frame.
+            if(!submitGraph(slot))return false;
+            flist=ring_.acquireNext(slot,st);if(!flist)return false;
+        }
         cpuTrace.mark("fgEvaluate");
         if(previewCheckpoint&&!reset)previewCheckpoint();
         ++out.fgEvaluated;

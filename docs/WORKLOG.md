@@ -1181,3 +1181,13 @@ build-recording-handoff.py --task codex-gpu-vfg-defaults-20261113 --root E:/项�
 build-recording-handoff.py --task codex-fg-quality-labels-20261113 --root E:/项目/Veyra/worktrees/main-claude-anr-20261113 --build-dir E:/项目/Veyra/build/codex-main-claude-anr-20261113 --label 2.1.5-main-integration-test --jobs 2 veyra_qml_ui veyra_ui_contract_tests：12.2s通过。UI合同通过，QtQuick198/0/1（旧spring raster需显式输出目录，未设），i18n2797条缺失/占位0。独立真实软件UI列表/节点两后端菜单及选中项颜色、6选项完整/硬件限制/长文案无裁切和👑通过，截图已目视检查，无ERROR；104个QML模块文件（86个.qml）恢复并与源码一致。
 
 原用户实例12588及旧app保持，不打断播放。新app tests/codex-fg-quality-labels-20261113/app，EXE 3b5d20a3…，397个不变文件硬链接、可变小文件与QML私有复制。原main启动入口仅改目标EXE到新app，保留原manual-profile，原脚本字节备份reports同任务；新独立配置入口“启动补帧质量标注测试.cmd”实启退出正常。日志/报告/TEMP均E盘同任务；详细命令、结果与边界docs/FG_QUALITY_LABELS_2026-11-13.md、reports同任务FINAL.json。没有改算法/运行库/真实配置，没有push/Release/关机。
+
+## 2026-11-13 全效果剔除修复（用户要求完成后关机）
+
+起点main2271bc9。用户选区accepted=true，但日志反复EffectExclusion.dxil missing：Agent私有stage继承旧包shaders漏新文件且PresentBlit_ps过旧。原子同步两项后88个build着色器逐SHA一致；新增sync-built-shaders.py默认只查、--apply拒绝活动app、不写穿硬链接，纳入开发指南。
+
+GPU另抓出ANR生成帧区域平均差57.55/255：Vulkan桥接在列表提交时生成，同列表遮罩先跑后被覆盖。仅ANR＋剔除先提交生产者、下一列表消费，不加CPU fence wait或额外源帧。RepairFgTests新增独立EffectExclusionCases.h，以无效果图为真值。最终4目标28.4s/完善夹具单目标4.3s；11组66真实80生成通过，矩形/椭圆/羽化/尺寸/SDR/PQ/VFG3X/DLSS2X/ANR2X和6X/NR＋SR，D3D12错误0；内部采样均差≤0.424/255，区域外0。合同308/0、预设629、i18n2797三语0缺失/占位错误。
+
+真实UI绘制两区/39px羽化/启停/切ANR/seek/导出通过；GUI worker60→120，独立解码120帧、PTS单调且插值误差0.333us，生成帧遮罩内均差0.80–1.48/255，区域外增强差31.67。HDR首夹具错误SDR→HDR被合同拒绝，改P010/PQ后过；UI首轮漏--export-out进入目录选择并createDIB错误，仅终止本任务实例，保留失败回执/日志；补参数新配置重试0ERROR。XeSS本轮仅图内真实帧，不冒称SDK生成节奏/其他显卡/实卡或光学延迟通过。
+
+新EXE00b39a4f…已原子部署到现有app，入口和原manual-profile保持；旧EXE单归档，19ANR原件/104QML模块文件核验。最终程序实启退出0/0ERROR，活动app资产保护拒绝实测。临时QA app1779文件退役（逻辑1.088GB非物理回收，E可用实测+46.1MB）；当前构建/交付和必要证据保留。所有输出E盘codex-effect-exclusion-repair-20261113，详细命令/失败/边界docs/EFFECT_EXCLUSION_REPAIR_2026-11-13.md及reports同任务FINAL.json。未push/发布，收尾后按用户明确要求正常关机。
