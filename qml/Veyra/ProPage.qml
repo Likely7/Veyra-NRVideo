@@ -75,12 +75,6 @@ VPage {
     // Design's st.tab: quality / fg / color / audio / display.
     property string tab: "quality"
     property int selectedEffect: -1
-    // engine::ContentRate order.
-    readonly property var contentRates: [
-        { id: "0", label: qsTr("采用源时间戳") }, { id: "1", label: qsTr("自动剔除重复帧") },
-        { id: "2", label: qsTr("识别 30fps 内容") }, { id: "3", label: qsTr("识别 50fps 内容") },
-        { id: "4", label: qsTr("识别 60fps 内容") }, { id: "5", label: qsTr("采集 60→30（PS5 30 帧）") }
-    ]
     // 处理顺序 "点击定位": switch to the chip's tab, open its card and scroll
     // the inspector so the card sits at the top.
     function locateNode(chip) {
@@ -224,12 +218,22 @@ VPage {
                 font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
             }
         }
-        headerActions: VButton {
-            objectName: "beauty-card-more-" + card.layerNumber
-            icon: true; ghost: true; iconName: "dup"
-            implicitWidth: 26; implicitHeight: 26
-            tip: qsTr("复制 · 移动 · 恢复默认 · 删除")
-            onClicked: { beautyLayerMenu.layer = card; beautyLayerMenu.openAt(this, "down") }
+        headerActions: RowLayout {
+            spacing: 2
+            VButton {
+                objectName: "beauty-card-more-" + card.layerNumber
+                icon: true; ghost: true; iconName: "dup"
+                implicitWidth: 26; implicitHeight: 26
+                tip: qsTr("复制 · 移动 · 恢复默认 · 删除")
+                onClicked: { beautyLayerMenu.layer = card; beautyLayerMenu.openAt(this, "down") }
+            }
+            VButton {
+                objectName: "beauty-card-delete-" + card.layerNumber
+                icon: true; ghost: true; iconName: "trash"
+                implicitWidth: 26; implicitHeight: 26
+                tip: qsTr("删除这一层")
+                onClicked: veyra.removeEffect(card.layerData.index)
+            }
         }
         readonly property var timing: veyra.nodeTimings[String(layerData.index + 2)] || ({})
         readonly property string timingText: timing.state === "measured" ? timing.ms.toFixed(2) + " ms"
@@ -1579,70 +1583,26 @@ VPage {
                                 objectName: "list-global-protection"
                                 Layout.fillWidth: true
                                 Layout.topMargin: 4
-                                visible: veyra.nodeMode === 0
+                                visible: veyra.nodeMode===0
                                 title: qsTr("NR 全局保护区域")
                                 glyph: "shield"; hue: Theme.accent
-                                summary: qsTr("区域内排除所有 NR 层 · 仅列表模式")
+                                summary: qsTr("区域内排除所有 NR 层")
                                 on: veyra.protectionEnabled
-                                onToggled: on => veyra.protectionEnabled = on
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: veyra.protectionDrawShape.length > 0
-                                          ? qsTr("在画面上按住左键拖出") + (veyra.protectionDrawShape === "ellipse" ? qsTr("圆形 / 椭圆") : qsTr("矩形")) + qsTr("区域 · Esc 取消")
-                                          : qsTr("在画面上画出矩形或圆形区域（最多 4 个），区域内的画面不做任何一层 NR 处理。")
-                                    wrapMode: Text.WordWrap
-                                    color: veyra.protectionDrawShape.length > 0 ? Theme.accent : Theme.t3
-                                    font.family: Theme.fontUi; font.pixelSize: 11
-                                }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 6
-                                    VButton {
-                                        objectName: "list-protection-draw-rect"
-                                        text: qsTr("画矩形")
-                                        primary: veyra.protectionDrawShape === "rect"
-                                        onClicked: veyra.beginProtectionDraw(veyra.protectionDrawShape === "rect" ? "" : "rect")
-                                    }
-                                    VButton {
-                                        objectName: "list-protection-draw-ellipse"
-                                        text: qsTr("画圆形")
-                                        primary: veyra.protectionDrawShape === "ellipse"
-                                        onClicked: veyra.beginProtectionDraw(veyra.protectionDrawShape === "ellipse" ? "" : "ellipse")
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                    VButton {
-                                        text: qsTr("清空"); ghost: true
-                                        visible: veyra.protectionRegions.length > 0
-                                        onClicked: veyra.clearProtectionRegions()
-                                    }
-                                }
-                                Repeater {
-                                    model: veyra.protectionRegions
-                                    delegate: VRow {
-                                        required property var modelData
-                                        required property int index
-                                        label: (modelData.ellipse ? qsTr("圆形 ") : qsTr("矩形 ")) + (index + 1)
-                                        value: Math.round(modelData.left * 100) + "," + Math.round(modelData.top * 100) + " → "
-                                               + Math.round(modelData.right * 100) + "," + Math.round(modelData.bottom * 100) + " %"
-                                        VButton {
-                                            objectName: "list-protection-remove-" + index
-                                            icon: true; ghost: true; iconName: "x"
-                                            onClicked: veyra.removeProtectionRegion(modelData.index)
-                                        }
-                                    }
-                                }
-                                VRow {
-                                    label: qsTr("羽化像素")
-                                    value: Number(veyra.protectionState.feather).toFixed(0) + " px"
-                                    VSlider {
-                                        objectName: "list-protection-feather"
-                                        implicitWidth: 110
-                                        from: 0; to: 64
-                                        value: veyra.protectionState.feather
-                                        onMoved: value => veyra.setProtectionFeather(Math.round(value))
-                                    }
-                                }
+                                onToggled: on=>veyra.protectionEnabled=on
+                                MaskEditor { namePrefix: "list-protection" }
                             }
+                        }
+
+                        VAccordion {
+                            objectName: "list-effect-exclusion"
+                            Layout.fillWidth: true
+                            visible: veyra.nodeMode===0
+                            title: qsTr("全效果剔除")
+                            glyph: "shield"; hue: Theme.accent
+                            summary: qsTr("区域内恢复原始画面与帧率")
+                            on: veyra.exclusionState.enabled===true
+                            onToggled: on=>veyra.setMaskEnabled(true,on)
+                            MaskEditor { allEffects: true; namePrefix: "list-exclusion" }
                         }
 
                         // Beauty: face restore and skin smoothing, after the whole NR group
@@ -1863,17 +1823,7 @@ VPage {
                                         onPicked: id => veyra.flowQuality = Number(id)
                                     }
                                 }
-                                VRow {
-                                    label: qsTr("内容节奏")
-                                    hint: qsTr("游戏锁 30/40 帧、采集卡输出 60 帧时选“自动剔除重复帧”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧")
-                                    VSelect {
-                                        objectName: "list-content-rate"
-                                        implicitWidth: 170
-                                        options: root.contentRates
-                                        value: (root.contentRates[veyra.contentRate] || root.contentRates[0]).label
-                                        onPicked: id => veyra.contentRate = Number(id)
-                                    }
-                                }
+                                DedupModeRow { backend: veyra; namePrefix: "list" }
                             }
                             NvidiaLowLatencyEditor { namePrefix: "list" }
                             VRow {
@@ -2066,7 +2016,9 @@ VPage {
             else if (o.act === "up") veyra.moveBeautyLayer(nodeIndex, -1)
             else if (o.act === "down") veyra.moveBeautyLayer(nodeIndex, 1)
             else if (o.act === "reset") veyra.resetBeautyLayer(nodeIndex)
-            else if (o.act === "del") card.bye(() => veyra.removeEffect(nodeIndex))
+            // Let the model remove the card only after acceptance; a fade also
+            // hides a retained layer when the engine refuses deletion.
+            else if (o.act === "del") veyra.removeEffect(nodeIndex)
         }
     }
 

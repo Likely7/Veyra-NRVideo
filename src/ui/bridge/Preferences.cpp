@@ -1,5 +1,6 @@
 // QML bridge: Preferences responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/ngx/AnrProvider.h"
 
 namespace veyra::ui {
 // --- shell preferences -------------------------------------------------------
@@ -76,6 +77,9 @@ QVariantList QmlPlayerBridge::readComponentList() const {
     // Read from the runtime manifest the build produces rather than a list written
     // by hand here, so the page cannot claim a component the package lacks.
     QVariantList out;
+    const auto anrDirectory=ngx::AnrProvider::directory(runtime::localRuntimeDirectory().wstring());
+    out<<QVariantMap{{"name",QStringLiteral("ANR FG")},{"detail",QString::fromStdWString(anrDirectory)},
+        {"loaded",ngx::AnrProvider::available(runtime::localRuntimeDirectory().wstring())},{"experimental",true}};
     const auto vfgDirectory=pipeline::VfgBackend::runtimeDirectory(runtime::localRuntimeDirectory().wstring());
     const bool vfgAvailable=pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring());
     out<<QVariantMap{{"name",QStringLiteral("NVIDIA VFG")},{"detail",QString::fromStdWString(vfgDirectory)},
@@ -577,7 +581,8 @@ bool QmlPlayerBridge::openSponsorLink(const QString& id) {
         {"x", "https://x.com/likely2002"},
         {"github", "https://github.com/Likely7"},
         {"youtube", "https://www.youtube.com/@Likely7Ai"},
-        {"kofi", "https://ko-fi.com/likely7"},
+        {"patreon", "https://www.patreon.com/cw/Likely7"},
+        {"patreonCoffee", "https://www.patreon.com/Likely7/posts/buy-me-coffee-175018110"},
     };
     for (const auto& [name, url] : links) {
         if (id != QLatin1StringView(name)) continue;

@@ -36,11 +36,11 @@ struct PresetFlowSettings {
     bool amdHalfResolution = false;
     ContentRate content = ContentRate::Transport;
     static PresetFlowSettings capture(const EnhancementSettings& s) {
-        return {s.opticalFlowBackend, s.flow, s.amdFlowHalfResolution, s.content};
+        return {s.opticalFlowBackend, s.flow, s.amdFlowHalfResolution, currentContentRate(s.content)};
     }
     void apply(EnhancementSettings& s) const {
         s.opticalFlowBackend = backend; s.flow = quality;
-        s.amdFlowHalfResolution = amdHalfResolution; s.content = content;
+        s.amdFlowHalfResolution = amdHalfResolution; s.content = currentContentRate(content);
     }
     bool operator==(const PresetFlowSettings&) const = default;
 };

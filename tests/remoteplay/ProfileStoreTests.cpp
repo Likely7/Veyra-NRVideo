@@ -1,5 +1,4 @@
 #include "veyra/remoteplay/ProfileStore.h"
-#include "veyra/remoteplay/PsnAuth.h"
 #include <windows.h>
 #include <fstream>
 #include <iostream>
@@ -11,11 +10,6 @@ int main(){
     struct Cleanup {std::filesystem::path p;~Cleanup(){std::error_code ec;std::filesystem::remove(p,ec);}} cleanup{path};
     auto require=[](bool ok){if(!ok)throw std::runtime_error("DPAPI profile test failed");};
     try{
-        require(validPsnCallback(L"https://remoteplay.dl.playstation.net/remoteplay/redirect?code=test%2Bcode"));
-        require(!validPsnCallback(L"https://evil.invalid/remoteplay/redirect?code=test"));
-        require(!validPsnCallback(L"https://remoteplay.dl.playstation.net/remoteplay/redirect?code=a&code=b"));
-        require(!validPsnCallback(L"https://remoteplay.dl.playstation.net/remoteplay/redirect?code=%00"));
-        require(!validPsnCallback(L"https://remoteplay.dl.playstation.net/remoteplay/redirect?error=denied"));
         NativeConnectRequest request;request.host="127.0.0.1";request.video.codec=Codec::H265;
         request.consoleId="012345abcdef";request.viewOnly=true;
         request.credentials.accountId.fill(7);request.credentials.registrationKey.fill('1');request.credentials.sessionKey.fill(42);

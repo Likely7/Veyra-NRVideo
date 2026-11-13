@@ -491,6 +491,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     wchar_t rotateTest[32]{};
     if (GetEnvironmentVariableW(L"VEYRA_TEST_LOG_ROTATE_BYTES", rotateTest, 32) > 0 && _wtoi64(rotateTest) > 0)
         rotateAtStart = rotateWhileRunning = uint64_t(_wtoi64(rotateTest));
+    if(!veyra::Logger::instance().startAsync())
+        veyra::log::warn("log", "asynchronous output unavailable; using synchronous logging");
     veyra::Logger::instance().setRotation(rotateAtStart, rotateWhileRunning);
     if (!veyra::Logger::instance().openFile(logPath.wstring(), true)) {
         logPath = logPath.parent_path() / (L"veyra-qml-" + std::to_wstring(GetCurrentProcessId()) + L".log");

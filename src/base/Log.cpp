@@ -1,5 +1,6 @@
 #include "veyra/Log.h"
 #include "veyra/diagnostics/Redaction.h"
+#include <algorithm>
 #include <sstream>
 #include <optional>
 #include <regex>
@@ -50,12 +51,19 @@ Logger& Logger::instance()
 
 Logger::~Logger()
 {
+    if(writer_.joinable()){
+        flush();
+        // Writers after this point use the synchronous sink (serialized with the
+        // writer by sinkMutex_); a line queued after the writer left was lost.
+        {std::lock_guard lock(mutex_);stopping_=true;async_=false;}
+        writerWake_.notify_one();writer_.join();
+    }
     closeFile();
 }
 
 void Logger::setRotation(uint64_t startBytes, uint64_t runningBytes)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(sinkMutex_);
     rotateAtOpen_=startBytes;rotateWhileRunning_=runningBytes;nextRotation_=runningBytes;
 }
 
@@ -68,6 +76,7 @@ std::filesystem::path oldLogPath(const std::filesystem::path& path)
 
 bool Logger::openFile(const std::wstring& path, bool append)
 {
+    flush();
     std::error_code ec;
     const std::filesystem::path fsPath(path);
     if (fsPath.has_parent_path()) {
@@ -76,7 +85,7 @@ bool Logger::openFile(const std::wstring& path, bool append)
             return false;
         }
     }
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(sinkMutex_);
     if (file_ != nullptr) {
         std::fclose(file_);
         file_ = nullptr;
@@ -108,7 +117,7 @@ bool Logger::openFile(const std::wstring& path, bool append)
     return true;
 }
 
-// Caller holds mutex_. Starts a fresh file under the same name; when the rename is
+// Caller holds sinkMutex_. Starts a fresh file under the same name; when the rename is
 // refused (the old copy is open elsewhere) logging continues in the current file and
 // the next attempt waits for another rotateWhileRunning_ bytes.
 bool Logger::rotateLocked(const char* reason)
@@ -133,7 +142,8 @@ bool Logger::rotateLocked(const char* reason)
 
 void Logger::closeFile()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    flush();
+    std::lock_guard<std::mutex> lock(sinkMutex_);
     if (file_ != nullptr) {
         std::fclose(file_);
         file_ = nullptr;
@@ -142,14 +152,28 @@ void Logger::closeFile()
 
 void Logger::setConsoleEnabled(bool enabled)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(sinkMutex_);
     consoleEnabled_ = enabled;
+}
+
+bool Logger::startAsync()
+{
+    std::lock_guard lock(mutex_);
+    if(async_)return true;
+    try{writer_=std::thread([this]{writerLoop();});async_=true;return true;}
+    catch(...){return false;}
+}
+
+Logger::AsyncStats Logger::asyncStats()
+{
+    std::lock_guard lock(mutex_);
+    return {pending_.size(),queuedBytes_,highWaterBytes_,dropped_};
 }
 
 void Logger::write(LogLevel level, const char* component, const std::string& message)
 {
     const unsigned long threadId = GetCurrentThreadId();
-    const std::string line = std::format("{} t={} [{}] [{}] {}",
+    std::string line = std::format("{} t={} [{}] [{}] {}",
         timestampUtc(), threadId, levelTag(level), component, message);
 
     // Diagnostic extraction runs before taking the global lock and uses
@@ -171,8 +195,33 @@ void Logger::write(LogLevel level, const char* component, const std::string& mes
         event.stage=event.stage.empty()?"runtime":event.stage;event.message=message;event.fingerprint=event.component+"|"+event.stage+"|"+diagnostics::redact(message);
         pendingEvent=std::move(event);
     }
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::unique_lock lock(mutex_);
     if(pendingEvent){latestProblem_=pendingEvent->component+": "+pendingEvent->message;diagnostics_.add(std::move(*pendingEvent));}
+    if(async_){
+        // Bounded in both line count and bytes, including a single huge event.
+        // Preserve recent warnings/errors ahead of verbose frame telemetry.
+        // A sustained blocked sink cannot have all three of lossless logging,
+        // bounded memory and nonblocking producers: any loss is counted here
+        // and reported by the writer and local diagnostic report.
+        if(line.size()>kMaxQueuedBytes){line.resize(kMaxQueuedBytes-48);line+=" [log-backpressure: oversized event truncated]";++dropped_;}
+        while(!pending_.empty()&&(pending_.size()>=kMaxQueuedLines||queuedBytes_+line.size()>kMaxQueuedBytes)){
+            auto victim=std::find_if(pending_.begin(),pending_.end(),[](const auto& p){return p.level<LogLevel::Warn;});
+            if(victim==pending_.end()&&level<LogLevel::Warn){++dropped_;lock.unlock();writerWake_.notify_one();return;}
+            if(victim==pending_.end())victim=pending_.begin();
+            queuedBytes_-=victim->text.size();pending_.erase(victim);++dropped_;
+        }
+        queuedBytes_+=line.size();highWaterBytes_=std::max(highWaterBytes_,queuedBytes_);
+        pending_.push_back({level,++issued_,std::move(line)});
+        lock.unlock();writerWake_.notify_one();return;
+    }
+    lock.unlock();
+    std::lock_guard sinkLock(sinkMutex_);
+    writeSink(level,line);
+}
+
+// Caller owns sinkMutex_. The writer never holds mutex_ during output I/O.
+void Logger::writeSink(LogLevel level,const std::string& line)
+{
     if (consoleEnabled_) {
         std::fprintf(stdout, "%s\n", line.c_str());
         std::fflush(stdout);
@@ -185,6 +234,44 @@ void Logger::write(LogLevel level, const char* component, const std::string& mes
         // Keep every event, but avoid a write/flush syscall for every pass.
         // Errors and explicit crash/teardown flush() calls remain immediate.
         if(level==LogLevel::Warn||level==LogLevel::Error||bufferedLogBytes_>=64*1024||tick-lastFileFlushTick_>=250){std::fflush(file_);bufferedLogBytes_=0;lastFileFlushTick_=tick;}
+    }
+}
+
+void Logger::flushSink()
+{
+    if(file_){std::fflush(file_);bufferedLogBytes_=0;lastFileFlushTick_=GetTickCount64();}
+}
+
+void Logger::writerLoop()
+{
+    for(;;){
+        PendingLine next{};uint64_t dropped=0,ticket=0;
+        {
+            std::unique_lock lock(mutex_);
+            writerWake_.wait_for(lock,std::chrono::milliseconds(250),[&]{return stopping_||!pending_.empty()||flushRequested_>flushCompleted_;});
+            if(stopping_&&pending_.empty()){
+                if(flushRequested_>flushCompleted_){flushCompleted_=flushRequested_;flushDone_.notify_all();}
+                break;
+            }
+            if(dropped_!=reportedDropped_){dropped=dropped_-reportedDropped_;reportedDropped_=dropped_;}
+            if(!pending_.empty()){
+                next=std::move(pending_.front());pending_.pop_front();queuedBytes_-=next.text.size();
+            }
+            // Every line up to the flush target was written or dropped once the
+            // queue holds only newer ones; the popped line is written below first.
+            if(flushRequested_>flushCompleted_&&(pending_.empty()||pending_.front().sequence>flushTarget_))ticket=flushRequested_;
+        }
+        {
+            std::lock_guard sinkLock(sinkMutex_);
+            if(dropped)writeSink(LogLevel::Warn,std::format("{} t={} [WARN ] [log-backpressure] dropped={} (bounded asynchronous output queue; realtime producers continued)",timestampUtc(),GetCurrentThreadId(),dropped));
+            if(next.sequence)writeSink(next.level,next.text);
+            if(ticket||!next.sequence)flushSink();
+        }
+        {
+            std::lock_guard lock(mutex_);
+            if(next.sequence)written_=next.sequence;
+            if(ticket){flushCompleted_=ticket;flushDone_.notify_all();}
+        }
     }
 }
 
@@ -228,6 +315,7 @@ void Logger::recordFrame(diagnostics::FrameTraceEvent event){std::lock_guard loc
 std::pair<size_t,uint64_t> Logger::frameTraceSize(){std::lock_guard lock(traceMutex_);return {frameTrace_.size(),frameTrace_.overwritten()};}
 std::string Logger::diagnosticReport(){std::ostringstream o;o<<"Veyra 本地诊断（复制前脱敏预览；不会上传）\n";
     {std::lock_guard lock(mutex_);
+    o<<"Log output: async="<<async_<<" queuedLines="<<pending_.size()<<" queuedBytes="<<queuedBytes_<<" highWaterBytes="<<highWaterBytes_<<" dropped="<<dropped_<<'\n';
     for(size_t i=0;i<diagnostics_.size();++i){const auto& e=diagnostics_.events()[i];const auto& r=e.resolution;
         auto code=[](std::optional<uint64_t> v){return v?std::format("0x{:X}",*v):std::string("未提供");};
         o<<"\n时间="<<e.timestamp<<" 严重级别="<<e.severity<<"\n组件="<<e.component<<" 阶段="<<e.stage<<" 次数="<<e.occurrenceCount<<"\n"<<e.message<<"\nHRESULT="<<code(e.hresult)<<" NGX="<<code(e.ngx)<<" NVOF="<<code(e.nvof)<<" SEH="<<code(e.seh)<<"\n";
@@ -256,10 +344,18 @@ std::string Logger::diagnosticReport(){std::ostringstream o;o<<"Veyra 本地诊�
 }
 void Logger::flush()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (file_ != nullptr) {
-        std::fflush(file_);
-        bufferedLogBytes_=0;lastFileFlushTick_=GetTickCount64();
+    {
+        std::unique_lock lock(mutex_);
+        if(async_){
+            // A fault in the output worker can reach the process crash filter.
+            // It cannot wait for its own queue barrier (or reacquire its sink).
+            if(writer_.get_id()==std::this_thread::get_id())return;
+            const auto ticket=++flushRequested_;flushTarget_=issued_;
+            writerWake_.notify_one();
+            flushDone_.wait(lock,[&]{return flushCompleted_>=ticket;});
+            return;
+        }
     }
+    std::lock_guard sinkLock(sinkMutex_);flushSink();
 }
 } // namespace veyra

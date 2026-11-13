@@ -109,6 +109,11 @@ target_compile_definitions(veyra_base PUBLIC
 target_include_directories(veyra_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(veyra_base PUBLIC bcrypt wintrust crypt32 version)
 
+add_executable(veyra_logger_tests tests/unit/LoggerTests.cpp)
+target_compile_features(veyra_logger_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_logger_tests PRIVATE veyra_base)
+veyra_apply_warnings(veyra_logger_tests)
+
 add_library(veyra_gfx STATIC
   src/gfx/GpuSchedulingPriority.cpp
   src/gfx/D3D12DeviceContext.cpp
@@ -155,6 +160,7 @@ add_library(veyra_ngx STATIC
   src/ngx/DlssSrBackend.cpp
     src/ngx/VideoSrBackend.cpp
     src/ngx/TrueHdrBackend.cpp
+  src/ngx/AnrProvider.cpp
   src/ngx/DlssFgBackend.cpp
   src/ngx/FgCompatibilitySession.cpp
   src/ngx/compat/hde/hde64.c
@@ -294,6 +300,7 @@ veyra_add_compute_shader(veyra_shader_packed_capture PackedCaptureToLinear)
 add_dependencies(veyra_shader_rgb_to_linear veyra_shader_yuy2_to_linear)
 # ScaleBlit: working frame -> swapchain backbuffer (Phase 6 present path).
 veyra_add_compute_shader(veyra_shader_scale_blit ScaleBlit)
+veyra_add_compute_shader(veyra_shader_effect_exclusion EffectExclusion)
 # Nv12Upload: byte buffer -> luma/chroma planes (copy-free upload path).
 veyra_add_compute_shader(veyra_shader_nv12_upload Nv12Upload)
 # PresentBlit: fullscreen-triangle pixel blit onto flip-model back buffers.
@@ -667,7 +674,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
@@ -1527,6 +1534,11 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_features(veyra_preset_library_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_preset_library_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_preset_library_tests PRIVATE veyra_base)
+  add_executable(veyra_anr_settings_tests tests/unit/AnrSettingsTests.cpp src/engine/PresetLibrary.cpp src/engine/PresetStore.cpp src/engine/EffectChain.cpp)
+  target_compile_features(veyra_anr_settings_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_anr_settings_tests PRIVATE veyra_base)
+  target_compile_options(veyra_anr_settings_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_anr_settings_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   add_executable(veyra_vfg_settings_tests tests/unit/VfgSettingsTests.cpp src/engine/PresetLibrary.cpp src/engine/PresetStore.cpp src/engine/EffectChain.cpp)
   target_compile_features(veyra_vfg_settings_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_vfg_settings_tests PRIVATE /utf-8)

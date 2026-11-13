@@ -49,6 +49,9 @@ inline double livePairHoldMs(bool hasGenerated,double realPtsMs,double generated
 // application reports starts at the callback and would read 0.6 ms higher at P95
 // only because its start point jitters; kLead100ns keeps it where it was, for
 // 0.5% more late generated frames (reports/claude-fg-sidefx-20261101/sim_final).
+// On capture cards the lead cancels the 0.5 ms readiness margin of LivePairLatency
+// (it learns readiness against the callback); LiveDeadlineMargin adds back what the
+// generated frames actually need there.
 // One callback beyond min(interval/3, 8 ms) does not move the line; a second on
 // the same side moves it there at once. The FG budget, generated-frame expiry
 // stays tied to the callback. Deduplicated capture also learns GPU readiness on the content clock.

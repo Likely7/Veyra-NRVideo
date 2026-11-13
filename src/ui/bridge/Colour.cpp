@@ -30,6 +30,8 @@ void QmlPlayerBridge::resetCurrentPage() {
     s.model = engine::NrSettings{};
     s.residual = engine::ResidualSettings{};
     s.protection = engine::ProtectionSettings{};
+    s.exclusion = engine::ProtectionSettings{};
+    s.nrHoldStrength=0;
     s.color = engine::ColorSettings{};
     s.additionalColors = {}; s.additionalColorCount = 0;
     s.antiAlias = engine::AntiAliasSettings{}; s.additionalAntiAlias = {}; s.additionalAntiAliasCount = 0;
@@ -41,7 +43,6 @@ void QmlPlayerBridge::resetCurrentPage() {
     impl_->chain=engine::toChain(s); impl_->selectedNr=-1; impl_->selectedColour=-1;
     impl_->chain.mode = before.mode;
     if (before.mode == engine::ChainMode::Node) {
-        engine::removeLegacyNodeProtection(impl_->chain);
         const auto initialized = impl_->layout.initialize(impl_->chain);
         if (!initialized.accepted) {
             impl_->chain = before; impl_->layout = oldLayout;

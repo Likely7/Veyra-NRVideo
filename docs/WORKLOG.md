@@ -1000,6 +1000,30 @@ T911 实卡 4K NV12 接受指定 59.94，协商 59.939820，正常回调和驱�
 Patreon 主页 HTTP200。咖啡页面自动访问返回HTTP403，按用户给定原链接接入，未作付款流程验收。初始远程徽章服务HTTP403后，按钮改用仓库内自包含SVG。所有快照、21份新正文、原始图标和CC0许可、渲染HTML与核验回执位于 E:/项目/Veyra/reports/codex-patreon-support-20261111。最终回执 FINAL.json。
 
 
+## 2026-11-11 软件内 Patreon 与全效果遮罩/独立 NR 节点
+
+Patreon 软件入口基线提交 37f13a0，位于前一分支 codex/patreon-sponsor-20261111，设置页/赞助页双入口、图标和多语言已更新。前一轮应用构建119.3秒，Qt Quick175/0/0、合同与i18n通过；用户随后要求暂缓构建并新增遮罩，实际赞助窗口未验。证据 E:/项目/Veyra/reports/codex-patreon-sponsor-20261111。
+
+当前分支 codex/effect-exclusion-nodes-20261111。用户明确遮罩连补帧也排除、区域内保持原始帧节奏。实现全效果剔除（最多四个矩形/圆形/椭圆、羽化0–64像素），图内生成帧恢复A、真实帧恢复B，XeSS接UI/HUD-less合成接口；保留未遮罩补帧历史。恢复独立NR保护区域、NR输出稳定器节点和节点存储，停止自动删除保护节点。共享列表/节点编辑器，保护/稳定器滑条独立通知、不刷新整图。预设库21/会话16旁文件、平面预设37及导出worker15；旧文件保留，删除新节点后也不丢后续存储。
+
+执行 reports/codex-effect-exclusion-nodes-20261111/check_syntax.py：18个翻译单元 MSVC /Zs全部通过，不生成OBJ/链接程序。Qt6.8.3 qmltestrunner -input tests/qml/quick/tst_mask_editor.qml -import qml，QT_QPA_PLATFORM=offscreen、QT_QUICK_BACKEND=software，6/0/0。qmllint检查MaskEditor/ProPage/NodePage无语法错误，存在动态上下文等警告；两着色器DXC -Fo NUL通过，不更新程序着色器。python -B scripts/i18n/extract.py --check：2812条，三语言缺失0、占位符错误0；git diff --check通过。首次ComPtr重载取址和HLSL保留字错误修复后复查；不支持的DXC语法检查参数和首次错误日志保留。
+
+本轮不构建、打包、运行Veyra，不改真实配置、运行库或驱动，未合main或推送。新增C++回归用例仅语法通过，未执行；真实GPU画面、补帧帧节奏（特别是XeSS相位/HDR羽化）、播放/采集/导出、生命周期及显存压力待后续应用构建验收。方案 docs/EFFECT_EXCLUSION_NODES_2026-11-11.md，证据 E:/项目/Veyra/reports/codex-effect-exclusion-nodes-20261111，日志 E:/项目/Veyra/logs/codex-effect-exclusion-nodes-20261111，临时响应文件 E:/项目/Veyra/tmp/codex-effect-exclusion-nodes-20261111。
+
+
+## 2026-11-11 列表美颜删除与 PSNTools Account ID
+
+用户追加两项：列表美颜只能添加不能删除，废弃失效的内置PSN登录，改用 https://www.psntools.com/psn/checker。分支 codex/beauty-delete-psn-checker-20261111，基线3e179db。检查发现removeEffect仅对节点/NR/调色调用实时提交，美颜只更新待定设置；改为所有删除均revalidate(true)，保留拒绝回滚。每层新增直接删除按钮，菜单不再先淡出，避免拒绝时卡片永久透明。旧版对照确认拒绝后opacity0；中间层复用隐藏在测试中未复现，未当成根因。
+
+删除PSN OAuth源码/头文件、CMake目标/专属JSON导入、桥接登录/回调/刷新/ready状态和失效专用测试。串流与设置页面改为浏览器打开用户给定固定网址，不带账号参数；手动填写数字/Base64 Account ID与八位配对码，保留已有配对、唤醒和设备登录PIN。主机配对实现及原用户数据保持，历史psn.auth不自动删除。README双语、i18n、历史来源标注同步。
+
+执行 reports/codex-beauty-psn-20261111/check_syntax.py，MSVC /Zs四单元（含启用REMOTEPLAY的实际编译宏）通过，不生成程序。Qt6.8.3 qmltestrunner离屏软件后端，美颜6/0/0、PS5窗口5/0/0，均无QWARN；包含启用/关闭最后一层真实鼠标点击、中间层菜单删除、拒绝保留、网页按钮路由和Account ID编辑信号。模拟桥接，不等于实时GPU或PS5串流验证。旧3e179db QML对照3pass/3fail，首轮因私有组件导入缺失失败，补齐导入后复测，原日志保留。测试VeyraTest qmldir直接指向源码，不修改现有应用/构建目录。
+
+qmllint检查ProPage/Ps5SourceDialog/SettingsPage无语法错误，有动态上下文等警告；python -B scripts/i18n/extract.py --check：2803条、三语言缺失0、占位符错误0。git diff --check及旧OAuth引用清除检查通过。外部网页自动读取HTTP403，没有登录或查询真实账号。继续遵守暂缓构建，不构建/启动应用、不运行C++回归程序、不合main/push/发布。方案docs/BEAUTY_DELETE_PSN_CHECKER_2026-11-11.md；证据和日志 E:/项目/Veyra/{reports,logs,tmp,tests}/codex-beauty-psn-20261111。
+
+补充：最终Qt复测使用任务专用QML_DISK_CACHE_PATH。初轮未指定该项，Qt默认共享缓存目录现有72文件/1,647,592字节；没有假定全部属于本轮，也未删除共享缓存，清单reports/codex-beauty-psn-20261111/qt-cache.json。
+
+
 ## 2026-11-11 GitHub 交流群更换为 10 群
 
 用户提供10群原图，明确9群已满。原图314×470、75186字节、SHA256 0dcc82e304b5313b37049ec0cb6102877a9391fc5802610cb69886b12bbdad92，原字节保存docs/images/community/group-10-20261111.png。独立文档分支codex/group10-qr-20261111从远端main e91882a创建，图与README双语/RELEASE_SUPPORT提交fdc6265后推送main；没有发布尚未验收的软件源码或重构建安装包。
@@ -1007,3 +1031,137 @@ Patreon 主页 HTTP200。咖啡页面自动访问返回HTTP403，按用户给定
 执行 E:/项目/Veyra/reports/codex-group10-qr-20261111/update.py prepare、releases fdc626547b4020b888efd8d420d6dc28743b0d88、verify。两个含旧9群码的Release（v2.1.5和v2.1.5-sources）只替换群图URL、群号和图示11月18日前有效的说明；逐字反向还原验证其余正文不变。Release使用图提交的固定URL，README和模板引用main。赞助与群图仍各220，Patreon两个入口和Discord保持。匿名GET核对群图原字节和赞助图可达，API核对文档Git blob、Latest2.1.5、资产ID/大小/digest及发布元数据不变。首次将GitHub LF文本与Windows CRLF工作副本直接比较导致误报；改为比较提交blob后通过，无需改远端内容。
 
 报告、前后Release快照及patch、图片身份和更新脚本在 E:/项目/Veyra/reports/codex-group10-qr-20261111，最终回执FINAL.json。用户原图不裁剪、不重绘、不改像素；不修改发布标签、产品配置或运行库，不代发群消息。
+
+
+## 2026-11-11 去除重复帧：精简为60→30与自动去除
+
+用户要求将内容节奏改名去除重复帧、只留60→30和自动去除。分支codex/dedup-mode-simplify-20261111从288772b继续，保留此前软件工作。两页统一DedupModeRow，独立开关保持默认关闭，下拉只含5和1两个ID，按ID查值而不是数组下标，关后在当前界面保留上一次模式。UI偏好、待定/提交设置、旧预设应用统一currentContentRate；旧2/3/4变自动，0关闭与5隔帧原意不变，不重排存储枚举、不改变偏好键或worker ABI，不改去重/采集/补帧算法。同步状态、预设摘要及多语言。
+
+执行reports/codex-dedup-modes-20261111/check_syntax.py，8个MSVC /Zs单元通过。执行native_tests.py，单独编译/链接预设测试工具（3个翻译单元、复用现有未改veyra_base.lib），--dedup-migration共251项通过，覆盖旧预设实际保存/读取/不覆盖/应用、非法ID拒绝、全部32个内容组合和后端质量组合；不是应用构建或GPU测试。qmltestrunner离屏软件，tests/qml/quick/tst_dedup_modes.qml：7/0/0，无QWARN，含开关与默认、稀疏ID5、同步、旧值和240px布局。QML静态无语法错误但有动态上下文警告；i18n2797条、繁体/英文/日文缺失0、占位符错误0，git diff --check通过。所有TEMP/TMP/QML缓存定向本任务E盘目录。
+
+方案docs/DEDUP_MODES_2026-11-11.md；证据E:/项目/Veyra/{reports,logs,tmp,tests}/codex-dedup-modes-20261111。本轮不构建应用、不运行真实采集/GPU、不合main/push/发布。用户曾追加“搞好电脑关机”，随后明确“不要关机了”，关机授权已撤回。shutdown /a 返回1116（无正在执行的关机），本任务目录关联关机辅助进程为0；未启动关机。取消回执在任务报告shutdown-cancelled.json。
+
+
+## 2026-11-12 NVIDIA低延迟增强档移除、全屏日志与真实T911验收
+
+用户要求移除开＋增强并排查全屏1% low降30，随后明确本机实测（覆盖此前暂缓构建）；保持取消关机。基线0fd8a68，分支codex/remove-reflex-boost-fullscreen-20261111。UI关/开，旧偏好2迁1并写回，桥接别名2只解释为1；删除Boost枚举/启用参数，NVAPI ABI字段固定0，不改全屏/补帧节奏或统计。
+
+python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-reflex-fullscreen-20261111 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.5-reflex-test --jobs 2 veyra_qml_ui veyra_qml_quick_tests veyra_repair_contract_tests veyra_presentation_pacing_tests veyra_live_timing_tests veyra_preset_library_tests：81步骤、131.9s通过；补充veyra_ui_i18n_tests 3.2s通过。当前QtQuick199/0/0、合同301、计时172、预设629项，MSVC/Zs7单元、i18n2793缺失/占位0，git diff --check通过。原合同启动缺DLL搜索路径、Quick暂存旧测试、独立runner测试类型导入、诊断helper路径/导入/未创建节点编辑器问题均保留首次证据并纠正复测，不包装成产品失败或通过。
+
+python E:/项目/Veyra/reports/codex-reflex-fullscreen-20261111/live.py baseline-vfg-signal、baseline-dlss-signal、fixed-vfg-signal、fixed-dlss-signal：真实T911 3840x2160 60NV12，1080p NR一层实际启用，DLSS/VFG2X、VFG中，自动显示同步、VRR开关关、输出不限。首轮无信号且新NR未启用不算验收，用户接通后重测，Computer Use看见游戏与全屏画面。旧增强各窗口/全屏/窗口，新版关/开各同组三段，4s稳定+12s采样，18段共25922个提交样本、6次进全屏。新VFG全屏关/开120.005/120.003提交fps，折算1% low108.630/108.661；DLSS120.010/120.007，105.817/105.649。每段NR/FG均活动、mailbox覆盖增量0。本机RTX5070/320Hz也未复现旧增强掉30，不能冒充4070TiSUPER/160Hz现场根治或物理刷新/屏幕延迟验收。
+
+原用户ZIP c75fe89a…：07:06:33–51Z输入稳定59.94、VFG GPU批次P95读数约1.44ms、Present CPU P95约0.65ms，而提交中位31（30–61）。对应Reflex Sleep均值25.964ms、最大27.497ms，补帧期限为负而不准入；退出全屏后短等恢复120。定位到读帧前驱动长等待；不是仅数字显示假象，不支持归因采集输入不稳。没有普通开有效对照，不证明增强开关是唯一根因；为何该驱动在特定全屏组合下等待仍未证实。原文行号见user-evidence.json、user-reflex-intervals.json，不额外修调度。
+
+migration.py：真实应用旧2→1写回、实际列表两选项、桥接请求2仍1、同配置重启再验通过。源码docs/NVIDIA_BOOST_REMOVAL_FULLSCREEN_2026-11-12.md，外部报告/日志/测试/tmp统一E:/项目/Veyra相应子目录/codex-reflex-fullscreen-20261111；FINAL.json、LIVE.json、QA-final.json、migration.json。用户ZIP自存原字节，10大日志SHA核验gzip，展开与重复日志逻辑减少207.4MiB（非卷净回收）；程序/依赖不重复整份复制，共享只读依赖改动用新文件替换。可启动入口tests同任务/启动低延迟移除测试.cmd，EXE787cf3e8…；不合main/push/发布，不关机。
+
+
+## 2026-11-12 Claude送帧时序与采集延迟续接
+
+用户要求继续Claude未完成的两项排查，随后确认保持PS5信号继续实测。基线1cd2ff7，新分支codex/live-deadline-latency-20261112，保留原桌面脏树和其他分支。单owner精确等待仅限已就绪实时原生帧，尾段≤1ms，可由到帧/围栏/停止/暂停/seek退出；GPU/显示容量轮询不自旋。SDR实时FG图检查点只呈现旧租约，独立ring，不重入图/收查询/改结构设置；XeSS、HDR输出、文件、图片、导出、reset不进入。物理采集无FG沿用GPU队列Wait提前提交，完成观察和租约保持；修正无期限/未知ready日志语义。输出队列/PTS/1%low统计公式保持。
+
+执行scripts/acceptance/build-recording-handoff.py --task codex-live-deadline-20261112 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.5-latency-test --jobs 2；首次--reconfigure六目标103.4s，最终产品/呈现/合同29.2s、AMD图8.7s。最终EXE SHA256 4b0e2b7b82250ad22747cd71014c06a1938804a7094ccdf8bcf04a854a212a20。scheduler156、时序172、预览57、合同301、等待/事件9通过，AMD模拟图128/0、D3D12 Debug0（不是HIP实卡推理）；原生文件DLSS生命周期及VFG播放通过。等待微测旧P99 0.988ms→新0.010ms。AMD夹具缺测试DLL、文件生命周期错传Off及FFmpeg DLL-only前缀无CLI的首次失败保留，纠正参数/夹具后复测通过；合成输入由本机CLI生成，产品patched FFmpeg保持。
+
+实卡命令reports/codex-live-deadline-20261112/live.py、quiet_matrix.py；T911 3840x2160 60NV12、一层1080p NR，RTX5070/9700X/320Hz，独立配置。旧版为上轮去Boost测试EXE787cf3e8…。相同8秒稳定测量：DLSS2X窗口/全屏1%low105.39/106.66→115.19/115.76，原帧迟到P50 0.954/0.922→0.095/0.091ms；VFG107.08/109.10→114.67/115.36，迟到P50 0.304→0.001ms；均约120提交fps。无FG回调到Present返回1.548/1.564→1.067/1.081ms，约60fps。DLSS4X/60→30、FSR3.1+Vsync、XeSS+VRR、VFG+普通Reflex/VRR及自动去重、暂停/恢复/停止/重启实测完成。非物理刷新或光学延迟，不扩展成4070TiSUPER/160Hz现场根治、其他卡或HDR收益。
+
+最初夹具重复每帧stdout到console.log，Logger在全局锁内每条fflush；连续批测有100–300ms CPU停顿与源丢弃，控制PASS未算性能通过，失败数据完整保留。仅改夹具stdout→NUL、保留引擎文件与stderr后，9组18段全部满足逐帧帧率/长迟到/错误检查；另补同条件VFG2段及VFG40秒稳定样本。该结果与重复输出I/O干扰相符；三轮监测未捕到原停顿栈，不能称唯一根因已由栈证明。实验第二版唤醒后直接advance捷径撤掉，不拿其116读数作交付。PresentMon权限不足，没有改系统权限或编造独立上屏状态。原始Claude run1全屏DXGI等待约1.9ms，不沿用“始终合成”的未分析结论。
+
+身份脚本identity.py：128组件/便携DLL与既有清单SHA256/大小一致，旧供体EXE不变、QML探针已恢复。入口E:/项目/Veyra/tests/codex-live-deadline-20261112/启动送帧与采集延迟测试.cmd，manual-profile独立，原应用/配置/运行组件不改。证据与脚本在reports同任务，原始日志在logs同任务，临时文件在tmp同任务；清理/逻辑占用和保留清单见CLEANUP.json，不把硬链接逻辑大小当卷实占。方案与结果：docs/LIVE_DEADLINE_LATENCY_PLAN_2026-11-12.md、docs/LIVE_DEADLINE_LATENCY_2026-11-12.md，最终FINAL.json。未合main、未推送发布，不关机；本轮为自审，没有独立Reviewer。
+
+收尾：系统自动审批以blocked by policy拒绝删除6个已核验的本轮测试EXE（22,372,352字节），未给出更具体原因。未执行删除，未尝试替代方式；工具/缓存/原始日志保留，CLEANUP.json记录路径与逻辑字节，不声称回收。手动启动入口实际启动版本正确、私有配置session0未自动连接，随后正常退出；遮挡的截图不作视觉验收。最终产品源码提交5ab263b，后续仅补充这条收尾文档。
+
+
+## 2026-11-12 两份用户附件的间歇卡顿日志诊断
+
+用户提供 logs fg-probe(1).zip 与 logs(1).rar，要求排查玩着玩着突然卡一下。活动树 codex/live-deadline-latency-20261112 / cefce81 起始干净，未停止或启动用户程序；本轮只读分析日志与源码，无产品修改、构建、GPU/采集卡实测或发布。
+
+原件只读复制后逐 SHA256 核验；ZIP 路径/类型检查后 Python 解压，RAR 先 tar -tf 确认仅目录和日志后固定 E 盘目录解压，不执行附件。5 日志共277322行；ZIP中7个旧dump的日期为10月24日至11月8日，不能作为当前卡顿调用栈。报告 reports/codex-user-stutter-logs-20261112/INPUT.json、INVENTORY.json、EVENTS.json、STALL_ANALYSIS.json、FINDINGS.md、FINAL.json，原始解压 logs/codex-user-stutter-logs-20261112，临时 tmp 同任务为空。
+
+执行 py -3.11 -X utf8 -B -I reports/<task>/analyze.py 及 verify_analysis.py，通过原件/副本SHA和所有数值锚点断言：381条engine-stall中，≥90ms的29条有28条与图重建对应；5070旧日志313条约50ms停在frame666且前有live pause。实际异常分开报告：①5070最新日志12:08:46.175Z回调间隔1282.3259ms、PTS跳2575.914ms，随后几秒调度等待约87ms、VFG延后探测；不能从中判定USB/HDMI/硬件/驱动/回调阻塞哪项是根因，也未证去重误判。②5080旧日志11月10日19:03:01.854Z播放线程348.092ms，control346.080ms，GPU span18.667ms；相邻fg-deadline/fg-drops日志差328ms，源码同步日志持全局锁并flush，日志I/O/锁或线程失去调度是重点嫌疑，未抓栈不称唯一根因证明。③5080最新12:42:00.126–12:42:59.962，同revision/epoch，输入+3591、处理+2872、mailbox覆盖+718、图前去重/跳过+1、生成后过期+0，即60输入/48处理/96提交，确有处理或调度欠速，不能称该分钟主要是去重或生成帧过期。
+
+Reflex Sleep汇总不足以解释数百ms突停；两机overlay已注入但无因果证据；未见对应GPU移除或frame-ready超时。部分最初源码路径检索不存在，改用rg --files定位实际src/base/Log.cpp并复核v2.1.5与当前实现；未把检索失败当检查通过。现场EXE精确哈希/提交未知，不用附件证明刚交付latency-test已解决现场问题。具体原始行号、下一步需抓日志锁/stdout/file flush调用栈及输入断点恢复时钟的范围见FINDINGS.md。本轮为单Agent自审，没有独立Reviewer。
+
+必要原附件副本/解压证据/分析约123.4MiB逻辑字节保留，不代表物理卷新增空间；无重复运行包或缓存需回收，无删除操作。未改真实配置/驱动/运行库，无merge/push/Release或关机。诊断已交付，全部随机卡顿的最终根因和现场修复仍未证明。
+
+## 2026-11-12 自动识别、60→30与间歇卡顿修复及测试视频
+
+用户追加把自动识别仅稳定帧率有效、60→30容易顿卡与附件间歇卡顿一起修复，并在本人不在电脑前时要求制作测试视频。前轮诊断存档57c75cd，检查点checkpoint/pre-dedup-stutter-repair-20261112，隔离分支codex/dedup-stutter-repair-20261112。沿用E盘活动树与共享build，不改桌面脏树、驱动、真实用户设置或运行库；单Agent自审，无独立Reviewer。
+
+ContentDedup将独立滚动内容率与固定周期拟合分开；回调picture serial区分软件漏读与源低帧率，静止刷新不虚构新图。CaptureHalfRate使用相邻新→重复证据和回调序列，每对取一份；静止不误触发相位换挡，驱动PTS漂移与mailbox漏读不触发相邻追取。软件Drop不重启整个内容时钟，静止hold周期与此前停顿跨度分开，FG预算与VFG旧成本在硬断点／呈现代之间隔离。QML在实时生产前启用异步有界日志，排队4096行／2MiB，上限丢弃／截断明确报告，显式flush／关闭排空。另修Waiting／EOF真实完成快照滞后，没有造帧或改计数公式。
+
+构建命令：py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-dedup-stutter-20261112 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.5-dedup-stutter-test --jobs 2 veyra_qml_ui veyra_live_presentation_tests veyra_repair_contract_tests veyra_presentation_pacing_tests。最终产品相关4目标13.3s通过，logs/codex-dedup-stutter-20261112/build-20261112-172824/receipt.json；此前完整8目标213.2s，后续仅测试工具全片时长入口5.3s。构建并发2，所有单进程测试≤300s。当前EXE Product/FileVersion 2.1.5-dedup-stutter-test，SHA256 e0e8d66ad55387cfc0c8b22e996d5f2a61aa42d501cae2a030206330f257eb60；最后仅纠正日志锁归属注释，不影响二进制行为。
+
+执行报告目录cpu_qa.py、replay.py／replay_matrix.py、supplementary.py、final_followup.py、diagnostic_matrix.py、integrity.py（均py -3.11 -X utf8 -B -I）。CPU-QA最终日志12、时序230、调度156、预览57、合同301、等待9全通过；预设251、半速热切换34、回滚33通过，SDR/HDR各8次图切换debugErrors0；QML显式文件输出qml-dedup-final.txt实际7/0/0。REPLAY-MATRIX-final 13组生产引擎回放覆盖无FG/DLSS/VFG/XeSS/FSR/NR+VFG、稳定／变帧率／半速／注入漏读，全部通过，无观察到的新图误丢、PTS单调不超前；正常运行日志丢弃0。最新产品FINAL-FOLLOWUP：Waiting与EOF6项通过，1800处理／1800完成／1800真实呈现；稳定30→DLSS60约59.952提交fps，间隔P99 16.999ms；半速VFG约59.953、P99 17.371ms；自动VFG漏读恢复最大phase35.277ms。所有Present与分位数均为软件提交，非屏幕刷新或光学延迟。
+
+按用户要求生成60秒1080p60技术测试片。media/diagnostic60.mp4 H264全I固定QP18，374011919字节，SHA256 009e37ea094237e3d823da91fc2cfadaf4ef19131f9d7103de889090ae7ce0f9；FFV1无损参考MKV284983614字节，二者3600帧完整解码，重复图不一致0、新图不可见0。Pillow/FFmpeg管道生成，图中计数仅随真实新图更新；没有原始大文件落盘。另有1.65MiB观看版preview.mp4及已检查JPG，观看版不作像素真值。片段30/40/20–60变帧/60/30带已知250ms源停顿/静止/恢复30，真值JSON、CSV、framemd5和make_diagnostic_video.py保留。DIAGNOSTIC-MATRIX与独立DIAGNOSTIC-AUDIT：三组全片回放通过，自动无FG及NR+VFG各3600连续采样、1898次画面变化全部保留（包括最后一组），半速索引0到3598步长2共1800帧，间隔33.3333/33.3334ms。帧迹环仅代表采样窗口，完整全片结论来自完整决策日志；素材故意停顿不算软件新卡顿。
+
+实卡PHYSICAL-MATRIX：T911 4K60 NV12＋1080p一层NR，自动DLSS2X、60→30 DLSS4X、自动VFG2X，窗口/全屏请求6段，VFG暂停/恢复/停止/重启通过，无ERROR。但连续像素maxDiff0，是静止PS5画面，未把它冒充动态游戏识别；用户不在场后用上述技术片验证生产采集回放入口。其他现场GPU、HDR动态去重与屏幕端到端延迟未验。外部1.28秒回调断档的USB/HDMI/驱动/阻塞根因未证实；348ms停顿未抓当时调用栈，异步日志测试证明消除生产者的sink I/O依赖，不证明现场唯一根因；GPU欠速不能承诺凭软件调度完全消除。
+
+失败证据完整保留：旧实现先失败两项新回归；Logger测试对象过大在启动前0xC00000FD，改堆分配后12项通过，生产单例未因此改造；365次scene cut的首版随机图夹具改为连续运动，未关闭检测；冷缓存NR+FG约10s超过最初8s测试启动窗，放宽启动至30s后仍要求第12帧同一400ms等待内进展；源尾帧快照1798实际1800属于产品统计缺口，最终补发真实快照通过。第三方ANSI日志解码的首次失败、QML空输出不算通过、cmd多嵌套引号及Unicode/管道观察失败分别留回执后纠正，没有隐藏。已确认Logger首败PID27168／dump UTC与回执相同秒，SHA25680e69bd1…迁到E盘logs同任务/logger-first-stack-overflow-27168.dmp，C盘该系统自动dump入口移除，其他用户dump不动。
+
+最终启动入口E:/项目/Veyra/tests/codex-dedup-stutter-20261112/启动自动与60转30修复测试.cmd，manual-profile独立，默认无输入连接；实际cmd启动/进程路径/退出0已核对，无ERROR，104个QML文件与源码一致，无测试探针。97运行组件与供体逐字节一致，产品与测试EXE私有拷贝，其余只读运行库／资源硬链接，无SDK/模型/二进制入Git。产物统一E:/项目/Veyra/{tests,logs,reports,tmp}/codex-dedup-stutter-20261112；CLEANUP.json按逻辑字节与硬链接分别记账，保留当前构建／视频真值／失败与最终证据，未做重复整包。源码方案／验收见DEDUP_STUTTER_REPAIR_PLAN_2026-11-12.md、DEDUP_STUTTER_REPAIR_2026-11-12.md，最终提交与回执见reports同任务/SOURCE-COMMIT.json、FINAL.json。未合main、未推送或发布，不关机。
+
+## 2026-11-12 ANR FG 全功能本地实验
+
+用户要求开分支并完整接入上游现有FG，不交只支持SDR2X的菜单演示。单Agent，起点6e3747a，独立工作树/分支anr-fg-experiment-20261112、checkpoint/pre-anr-fg-20261112；未改Claude脏树和共享build，未合main/push/Release/关机。
+
+实现与事实见 `docs/ANR_FG_EXPERIMENT_PLAN_2026-11-12.md`、`docs/ANR_FG_EXPERIMENT_2026-11-12.md`、`THIRD_PARTY_NOTICES.md`。官方FG-V.B15 addon原件19文件只在任务私有运行目录，未入Git；核心未公开/明确分发许可未找到，不复制无许可核心。自主直连AnrProvider，共享增强/输出/导出图，实际能力2–6X、完整持久化和界面、SDR/HDR、NR/SR共存与故障回退。精确平移揭示ANR像素运动契约与DLSS归一化反向不同；D3D12严格调试揭示depth/motion的COPY_DEST边界，转换和恢复后0错误。共享模块最后释放和新Init串行，防旧图销毁关闭替换图。
+
+产物全部 `E:/项目/Veyra/{build,tests,logs,reports,tmp}/codex-anr-fg-20261112`。构建命令 `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-anr-fg-20261112 --root E:/项目/Veyra/worktrees/anr-fg-experiment-20261112 --label 2.1.5-anr-test --jobs 2 veyra_qml_ui veyra_repair_fg_tests veyra_live_presentation_tests veyra_hdr_enhancement_tests veyra_vfg_export_probe veyra_fg_lifecycle_tests`，首次235.3s/最终6.7s通过，日志build-20261112-233112。i18n/extract.py --check：2796条、三语缺失0/占位错误0。
+
+48项ANR设置、301合同、251预设、683 VFG和230时序通过。SDR全倍率176生成帧像素/PTS真值，HDR全倍率270生成帧＋20NR/20SR每例＋JXR对比通过；最新HDR6X再次90帧正确。原生DLSS/ANR双向共存和双ANR中途释放，6→2→5→3→4→6/尺寸/reset均通过。GUI列表/节点/暂停改倍率/跨后端切换/保存重启、非法尺寸回退继续播放、ANR5X独立导出worker通过。六输出独立解码/帧数/时间戳/非黑/HDR元数据通过。4组最新回放与完整60秒3600决策覆盖无新画面误丢/重复；60→30约59.95提交FPS/P99 17.35ms，有界NR+SR回放仍有一次33.45ms间隔，不宣称零卡顿。T911三组（普通/自动/半速）静态4K60＋NR1080＋ANR2X及重启通过；当前输入完全不变，不能替代动态PS5验收。未验证其他GPU/远端串流/光学延迟，不承诺ANR质量优于DLSS。
+
+失败原始记录全部保留：低于640×360；初始运动单位错误但API成功；调试层27项错误；非法SDR/HDR夹具；HDR夹具漏out目录、VFG单测漏目录参数；独立解码首版误用绝对恒定帧间隔门槛（修正为真实源PTS插值真值，误差≤0.667us）。修复后相关复测通过，没有删日志或造通过。诊断GPU回读仅测试，产品未新增像素回读/CPU逐帧等待。
+
+97既有运行二进制和19ANR原件SHA不变；104QML恢复、Claude脏树branch/head/diff/status开工至收尾一致；自有独立启动器实启/子进程退出0。无中间分发包或整工程备份；保留当前独立构建、必要原始失败/验收证据和源码。入口tests同任务/启动ANR补帧测试.cmd，预选ANR2X、其他效果默认关闭且不自动连接输入。EXE ffee8327c84e86b70b37ac42fbe7f0c95a2911360458e1ce40e60a256223a752。来源提交与最终状态在报告FINAL.json；本轮自审，未称独立Reviewer。
+
+
+## 2026-11-13 Claude复审Codex送帧/去重修复与1% low、采集延迟修正
+
+用户要求复审Codex顺着Claude排查所做的修复并修好，指出1% low仍未解决、软件延迟未看。读Codex线程原始记录中的用户原话（只取用户输入作背景）。基线6e3747a，新分支claude/live-latency-review-20261113，活动树未提交；Codex分支与提交原样保留。
+
+复审：5ab263b检查点送帧（独立队列、不重入图、resolveFrame只读围栏/状态位、租约不在处理中释放）、无补帧GPU交接（读下一帧前仍等完成）、6e3747a去重滚动帧率/相邻证据/序号取帧/Drop不重置与异步日志均未发现实现缺陷；先怀疑flush目标行被挤掉会永久等待，复核后不成立（挤掉目标的必是更新的行），仅补关闭时同步/异步切换窗口。记录未改的行为变化：硬断点重置补帧预算与相位。
+
+改动：advanceLive先送到期帧再完成轮询；图处理前、VFG每次生成提交后增加检查点（不等待未到期帧）；1% low按DXGI Present调用开始计时；PictureReference新画面超4096分量即停、参考帧拷贝由采集回调在发布后提交；ReflexSession实时源Sleep 16次中10次超max(6ms,0.6×源帧间隔)即本次关闭并给新状态（四语翻译）。撤回：检查点最多0.3ms精确等待（真实帧P99迟到0.2–0.39→0.01–0.07ms，但推后下一帧GPU、相位学大、撞车时延迟+0.3–0.4ms，1% low不变）；相位改256对P99（生成帧迟到比例不降，尖峰使4X真实帧P95 34.9→38.4ms）。
+
+构建：py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-low-latency-audit-20261112 --root <活动树> --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.5-latency-review-test --jobs 2 veyra_qml_ui veyra_live_timing_tests veyra_repair_contract_tests veyra_logger_tests veyra_presentation_worker_tests veyra_realtime_preview_tests。首次因测试变量名small与Windows宏冲突失败，改名后通过（67.0s），后续增量通过。CPU-QA：日志12、时序238（新增8）、调度156、预览57、合同308（新增7）全通过；i18n 2794条缺失0。
+
+实机：reports同任务live2.py/probe2.qml，T911 4K60 NV12+1080p NR，进程内探针无模拟输入，stdout→NUL。首次基线运行时有真实鼠标操作并退出全屏，该段不计；之后只测窗口。探针移除补帧的写法错误使前两次未跑完后两段，改为开关补帧后完整。同探针段末界面1% low：DLSS2X 115.0/113.8→117.1/116.1，60→30+4X 115.2→116.6，VFG2X 114.5→115.5，仅NR 57.5→58.2；提升主要来自计时口径，实际节奏改善小，各条件单次、运行间±1–2fps。自动去重段画面逐像素静止，新画面路径仅有微基准（交出前0.5→0.001ms）。剩余主因为生成帧期限按就绪P95（约5–8%晚0.1–0.4ms），实测回放推算期限后移0.25ms约119–119.8（VFG116.6–119.6），未实施，待用户取舍。延迟现状：无补帧回调→Present约1.5ms，窗口合成多一刷新（320Hz约3ms），全屏直接上屏，补帧2X真实帧约到达后17ms。
+
+最终实测EXE 3b6a458c…，之后仅改一行日志注释重编为4a1ba8d9…。入口E:/项目/Veyra/tests/claude-low-latency-audit-20261112/启动送帧精度与延迟复审测试.cmd（manual-profile独立）；测试stage为硬链接加私有EXE/catalog。证据reports同任务FINDINGS.md/FINAL.json，原始日志logs同任务。未合main、未推送或发布，不关机。
+
+### 2026-11-13 续：补帧期限后移0.25ms（用户选择）
+
+LiveArrivalSmoother::kLead100ns 5000→2500：原0.5ms提前量抵消了LivePairLatency按回调学习的0.5ms余量，生成帧期限落在GPU就绪P95。只影响按回调锚定的采集补帧（含60→30），去重内容锚点按锚点自身学习、余量本就完整，不变；串流不用该锚点。单测：新增余量关系1项；原“60Hz回放上报P95不增长”改为“增长不超过所选0.25ms”（实测模拟42.09→42.43ms，平均采集到屏仍低于旧锚点），时序239通过，其余同前。
+
+实机ab-shift（EXE a911f3f1…）：生成帧迟到DLSS 23–28→2–5/360、VFG 23–28→6、4X 4/539，P99迟到0.3–1.4→0.07ms；段末界面1% low DLSS2X 117.2/117.5、60→30+4X 116.3、VFG 115.0、仅NR 57.7（基线e0e8d66a为115.0/113.8、115.2、114.5、57.5），真实帧采集到上屏P50 17.4ms。推算的119未达成：期限后移后7–12%的呈现落在下一帧图处理中，在检查点晚0.1–0.3ms。随后试检查点最多0.3ms等待并把等待从相位学习中扣除（ab-hold，e21eae88…）：4X 119.2、VFG 118.1，但DLSS首段113.1、真实帧P95 18.6ms，生成帧迟到回升，撤回。最终源码与ab-shift逻辑相同（仅注释），重编9d077495…，CPU-QA全通过，测试stage已替换。剩余差距需要独立送帧线程，未实施。
+
+### 2026-11-13 续：补帧期限余量改为自动（用户要求，≤1ms）
+
+用户问固定0.25ms是否只对本机有效后，要求自动控制、1ms以内可接受。kLead100ns恢复5000：屏幕捕获（固定相位，余量本就充足）及其他非自适应路径不再多0.25ms。新增LiveDeadlineMargin（LivePairLatency.h），只作用于采集卡补帧对（adaptiveCapturePhase且非XeSS，含60→30与去重）：样本为生成帧在无额外余量时的期限余量，目标为P1+0.05ms，0–1ms，起点0.25ms，上升0.1ms/0.25s、回落0.04ms/0.25s，窗口240帧/4s，单帧最多计2ms晚，重置后前2s不学习；修订/硬断点/排空时重置。只计期限前已观察到就绪、或本步骤见过未完成（完成由事件即时观察）的生成帧，排除仅因线程忙而晚看的帧及historyReset/fgRecovery对。live-anchor日志增加deadlineExtraMs。
+
+第一版（ab-auto，5a7aea25…）只计“期限后仍未完成”，漏掉晚0.1–0.2ms的帧，某段生成帧迟到2.5%；开播热身把余量顶到0.9ms、6s才回落。改为“见过未完成即计入”（ab-auto2，c69cb393…）后迟到约1%；再加2s热身不学习、回落加倍（ab-auto3，d1a3d1f9…）后开播不再冲高。ab-auto3：生成帧迟到DLSS1–2/360、VFG3/359、4X8/539，去重0/180且余量降到0；余量DLSS0.30–0.53、VFG0.25–0.47、4X0.13–0.37ms；界面1% low DLSS 115.9/115.6、VFG115.9、4X116.1，真实帧采集到上屏P50 DLSS17.8ms。与固定0.25（ab-shift 117.2/117.4、115.0、116.2）及ab-auto2（115.6/117.5、116.7、116.2）相当，运行间差异明显；推算119未达成，原因是期限越后真实帧越常落入下一帧处理而在检查点晚送。单测调度164（新增8）、时序238（去掉固定提前量检查、回放P95恢复原界）、日志12、预览57、合同308通过。stage与手动入口已换d1a3d1f9…。用户决定暂不做独立送帧线程。
+
+
+### 2026-11-13 续：实机30帧复测与两处修复（用户要求）
+
+实机30帧游戏（T911 4K60+1080p NR，只测VFG）复测上一轮修复后，用户要求修两处。①FgRecoveryBudget::phaseAllowance：基础+补帧P95能在一个源间隔内完成时，60→30/直通采集补帧相位上限加补帧耗时；去重保持transport/2。②LiveFgRejectionHold：补帧连续被拒1s后真实帧就绪即送（准入仍用补帧相位），保持期间探测对的生成帧自动过期，连续8对被接纳恢复（第一版3对被每次预算探测解除，已改）。单测调度179（+15）、时序238、预览57、合同308、日志12通过。同时段A/B（d1a3d1f9→afea9bef）：60→30高+低4X 1% low 97.5→111–114、GPU迟到300→2–9/段，高2X 56→57–59，真实帧+0.3–2.2ms；高3X被拒时真实帧38–46→6.5ms，1% low 29.8→26.5–29.4（预算探测拖慢少数帧）。自动识别路径与修复前相同。只改注释重编为2a93ed2c，已放入手动入口tests/claude-low-latency-audit-20261112/启动送帧精度与延迟复审测试.cmd。另：同条件对照2.1.4正式包，高3X/4X同样被拒，非退化。报告E:/项目/Veyra/reports/claude-game30-live-20261113/FINDINGS.md。
+
+## 2026-11-12 ANR（Apex Neural Rendering）接入可行性调研
+
+用户提供ANR第三方帧生成文章截图，要求调研能否加入Veyra。本轮只读源码/官方资料并做静态包清单，不执行接入、不构建/跑GPU、不改驱动/真实配置/现有运行库、不联系作者。活动树已为Claude的claude/live-latency-review-20261113，HEAD6e3747a且已有未提交复审改动；保持分支与这些改动，仅追加本记录，不暂存或提交。
+
+官方仓库固定20a5e7731d899eca3a289904929879588448664d，核对最新FG-V.B15（11月12日17:49Z）。README仍称核心源码coming soon，公开的是nr-record/回放对比工具，SR/RR尚未开放Beta。官方nr-replay的provider路径直接调用ANR自身NGX D3D12导出，故可设计独立后端复用Veyra共享图/FG末端/调度，不必接OptiScaler注入或Streamline；这是接口可行性推断，没有加载DLL实测。当前Veyra估算运动/常量深度与上游游戏原生guidance不同，不能外推视频效果；官方RTX5090 4K2X 1.26→1.01ms仅生成阶段约少19.8%，214对562MB约少61.9%，均未本机复现，非Veyra全链路收益。B15刚修原生D3D12重建泄漏，实例可能延迟5秒释放，需后续生命周期/显存验证。
+
+GitHub工具不支持二进制下载，Python urllib仅HTTPS下载官方addon/full两小包，分别3231158/10856642字节，SHA256717e93b3…/45969be1…与API digest/大小一致；zipfile仅列目录和在内存读取README/ini/许可，未解压、执行安装器、加载DLL。Addon未见许可，Full唯一许可名为OptiScaler-GPL-3.0.txt，仓库license为null；未找到ANR核心明确集成/分发授权，Issue9已有第三方问许可未得维护者答复。不能把OptiScaler GPL自动套到ANR核心，也不能把自行下载DLL当许可问题已解决。没有上游代码/SDK/模型/二进制加入Veyra Git或依赖。
+
+报告E:/项目/Veyra/reports/codex-anr-research-20261112/FINDINGS.md及FINAL.json，官方API/原始源码参考快照在upstream，原ZIP只保留E:/项目/Veyra/downloads/codex-anr-research-20261112（约13.4MiB，无解压副本、构建或临时产物）。文档给出独立provider、先1080p SDR2X、真值/估算输入画质对照、GPU与全链路分开计时、去重/断点/热切换与5秒释放后的显存检查、再到4K/HDR/其他GPU的门槛。结论为可列实验候选，许可与视频实际验证未补齐前不作为成熟支持或随包分发；没有实现完成/性能通过声明。本轮没有merge/push/Release或关机。
+
+## 2026-11-13 Claude／Codex／ANR整理与本地main合并
+
+用户明确要求整理Claude后续修复及Codex内容、全部合入main。原main8332c8a打checkpoint/pre-main-claude-anr-20261113。Claude活动树基于6e3747a的20个未提交文件原字节归档，独立worktrees/main-claude-anr-20261113原样提交d4be12d；原脏树、分支、HEAD、index/status及每文件SHA保持。ANRbc4cbfa合入组合2c278af，只有AGENTS/WORKLOG追加冲突，双方保留。43个非共同修改Git blob与来源完全一致；全部已完成产品分支均为组合祖先，仅Lecram两线/原生音频原型/AVerMedia诊断存档继续保留。
+
+组合17目标独立构建332.4s，label2.1.5-main-integration-test，receipt logs/codex-main-claude-anr-20261113/build-20261113-051520。日志12/时序238/调度179/预览57/合同308/预设629/ANR48/VFG683/效果链466/UI合同通过；QtQuick199/0/0，第一轮默认stdout空没有用exit0冒充验收，显式txt+junitxml取得完整结果；i18n2797条三语0缺失/占位错误0。9组真实像素/精确运动/HDR纵向/原生DLSS与双ANR共存均debug0，ANR全倍率176生成子帧正确；HDR6X NR/SR20/20/90生成和JXR通过，生命周期6→2→5→3→4→6通过。
+
+7组生产回放加60秒3600采样决策逐条覆盖、0新画面误丢/重复、无隐藏日志丢行、PTS合法。ANR稳定30→60/P99=16.95ms，ANR与VFG半速约59.95提交FPS/P99约17.2ms。GUI热切换/暂停改倍率/列表节点/保存重启、320尺寸拒绝后播放继续和UI倍率回退、真实导出worker均通过。4输出独立解码计数/PTS/非黑/4K尺寸/HDR10元数据通过，插值PTS误差≤0.667us。实卡T9114K60＋1080NR：DLSS4X半速末120提交/1%low113.18/captureDropped1；VFG高3X半速因算力不足末30提交/26.62/drop14，正确触发拒绝保持保护，不能算90FPS通过；ANR自动2X末60提交/58.76/drop0，1061采样/531不同picture/maxDiff102证明确有动态画面。无ERROR，不是全部游戏质量或屏幕端延迟验收。
+
+97运行二进制、19ANR原件SHA一致；104QML探针恢复；私有默认效果关闭启动器实启/退出0，EXE c343e4286a429357f6530ad65847d0fec927e367b16ad460cd4ebca6e8cb1c09。当前源码与独立build/tests入口更新；源代码与2c278af产品部分无差异，后续整理只改文档。详细命令/回执/失误及剩余边界见docs/MAIN_CLAUDE_ANR_INTEGRATION_2026-11-13.md和reports同任务。VFG高档窗口上屏减半、周期预算探测慢帧、参数切换重建等保留未解决，不擅自改GPU优先级或重启已撤销实验。公开Release保持原字节，无push/发布/消息或关机。

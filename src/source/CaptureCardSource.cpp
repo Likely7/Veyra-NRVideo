@@ -295,23 +295,38 @@ bool parseCapturePath(std::wstring_view path,CaptureSelection& selection){
 // picture (PictureCompare.h) and tags the frame with its picture number. About
 // 0.3 ms for 1440p NV12 plus a copy of each new picture, so only while a
 // content mode asks for it.
-static void compareCaptureSample(const CaptureMediaLayout& layout,const uint8_t* data,AVFrame& frame,pipeline::PictureReference& reference){
-    auto* info=pipeline::captureUploadFrame(&frame);if(!info)return;
-    pipeline::PicturePlane planes[3]{{data,layout.stride,layout.rowBytes,layout.height}};unsigned count=1;
+static unsigned capturePicturePlanes(const CaptureMediaLayout& layout,const uint8_t* data,pipeline::PicturePlane (&planes)[3]){
+    planes[0]={data,layout.stride,layout.rowBytes,layout.height};unsigned count=1;
     for(unsigned p=1;p<layout.planes&&p<3;++p)planes[count++]={data+(p==1?layout.chromaOffset:layout.secondChromaOffset),layout.chromaStride,layout.chromaRowBytes,layout.height/2};
+    return count;
+}
+// Returns true when the sample is a new picture whose copy into the reference
+// is still owed: commitCaptureSample() after the frame was published, while the
+// driver sample is still valid. Publishing first keeps that 12 MB copy (4K NV12)
+// off every new frame's capture-to-engine path.
+static bool compareCaptureSample(const CaptureMediaLayout& layout,const uint8_t* data,AVFrame& frame,pipeline::PictureReference& reference){
+    auto* info=pipeline::captureUploadFrame(&frame);if(!info)return false;
+    pipeline::PicturePlane planes[3];const unsigned count=capturePicturePlanes(layout,data,planes);
     // P010/P016 are 16-bit words; packed 10-bit and 5/6-bit RGB fields compare exactly; the rest are 8-bit components.
     const bool p016=layout.packing==CapturePacking::P016,words=p016||layout.packing==CapturePacking::P010;
     const bool exact=layout.packing==CapturePacking::V210||layout.packing==CapturePacking::Rgb10xLE||layout.packing==CapturePacking::Rgb555||
         layout.packing==CapturePacking::Rgb565||layout.packing==CapturePacking::Unknown;
     const auto r=reference.observe(planes,count,exact?pipeline::PictureComponents::Exact:words?pipeline::PictureComponents::Words:pipeline::PictureComponents::Bytes,
-        words?pipeline::PictureReference::bandFor(p016?16:10,p016?0:6):pipeline::PictureReference::kBand8);
+        words?pipeline::PictureReference::bandFor(p016?16:10,p016?0:6):pipeline::PictureReference::kBand8,true);
     info->pictureId=r.id;info->pictureRepeat=r.repeat;info->pictureOver=r.over;info->pictureMax8=r.max8;info->pictureValid=true;
+    return r.commit;
+}
+static void commitCaptureSample(const CaptureMediaLayout& layout,const uint8_t* data,pipeline::PictureReference& reference){
+    pipeline::PicturePlane planes[3];const unsigned count=capturePicturePlanes(layout,data,planes);
+    reference.commit(planes,count);
 }
 // One native sample into a mailbox frame. Upload-backed frames
 // (CaptureUploadFrame.h) are written once, straight into GPU upload memory, or
 // into their CPU planes while the GPU still reads the buffer; planar I420/YV12
 // is interleaved into the frame's NV12 layout here instead of in the graph.
-static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* data,size_t bytes,AVFrame& frame,bool flipRows,pipeline::PictureReference* pictures){
+// commit: the caller copies a new picture into `pictures` after publishing the
+// frame (commitCaptureSample); without it the copy happens here.
+static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* data,size_t bytes,AVFrame& frame,bool flipRows,pipeline::PictureReference* pictures,bool* commit=nullptr){
     pipeline::selectCaptureUploadTarget(frame);
     const bool flip=layout.bottomUp!=flipRows;
     if(layout.planes==3&&frame.format==AV_PIX_FMT_NV12&&pipeline::captureUploadFrame(&frame)){
@@ -320,7 +335,9 @@ static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* da
     }else if(!copyCaptureSample(layout,data,bytes,frame,flipRows))return false;
     if(layout.packing==CapturePacking::V210)pipeline::sampleCaptureV210Proxy(frame,data,layout.stride,flip);
     else pipeline::sampleCaptureUploadProxy(frame,data,layout.stride,flip);
-    if(pictures)compareCaptureSample(layout,data,frame,*pictures);
+    if(pictures&&compareCaptureSample(layout,data,frame,*pictures)){
+        if(commit)*commit=true;else commitCaptureSample(layout,data,*pictures);
+    }
     return true;
 }
 struct CaptureCardSource::Impl:ISampleGrabberCB {
@@ -471,9 +488,11 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     void deliverExternal(const uint8_t* data,size_t bytes,double deviceSeconds,bool discontinuity,int64_t duration100ns=0,int64_t nativePts100ns=0){
         const auto arrival=Clock::now();
         externalFrames.fetch_add(1,std::memory_order_relaxed);
-        AVFrame* staged=nullptr;bool written=false;
+        AVFrame* staged=nullptr;bool written=false,commitPicture=false;
+        // A new picture's reference copy runs when this call returns, after the publish below.
+        struct CommitAfterPublish{Impl& p;const uint8_t* data;bool& owed;~CommitAfterPublish(){if(owed)commitCaptureSample(p.layout,data,p.pictureReference);}} commitLater{*this,data,commitPicture};
         {std::lock_guard lock(mutex);if(stagingFrame&&!stagingBusy){stagingBusy=true;staged=stagingFrame;}}
-        if(staged)written=writeCaptureFrame(layout,data,bytes,*staged,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr);
+        if(staged)written=writeCaptureFrame(layout,data,bytes,*staged,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr,&commitPicture);
         {
             std::lock_guard lock(mutex);
             if(staged)stagingBusy=false;
@@ -664,12 +683,14 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
             (compressedPath?sample->GetActualDataLength()>0:sample->GetActualDataLength()>=LONG(layout.sampleBytes));
         bool enqueued=false;uint64_t timingSequence=0;int64_t copied100ns=0;double lockWaitMs=0,arrivalDeltaMs=0,ptsDeltaMs=0;
         // Native path: claim the staging frame, copy outside the lock.
-        AVFrame* staged=nullptr;bool stagedOk=false,probeNow=false;CaptureSignalSample signalSample;
+        AVFrame* staged=nullptr;bool stagedOk=false,probeNow=false,commitPicture=false;CaptureSignalSample signalSample;
+        // A new picture's reference copy runs when this call returns (every path), after the publish below.
+        struct CommitAfterPublish{Impl& p;const uint8_t* data;bool& owed;~CommitAfterPublish(){if(owed)commitCaptureSample(p.layout,data,p.pictureReference);}} commitLater{*this,data,commitPicture};
         if(valid&&!compressedPath){
             {std::lock_guard lock(mutex);if(stagingFrame&&!stagingBusy){stagingBusy=true;staged=stagingFrame;}
                 if(signalProbeEnabled&&arrival>=nextSignalProbe){nextSignalProbe=arrival+std::chrono::seconds(1);probeNow=true;}}
             if(probeNow)signalSample=sampleCaptureSignal(layout,data,size_t(sample->GetActualDataLength()));
-            if(staged)stagedOk=writeCaptureFrame(layout,data,size_t(sample->GetActualDataLength()),*staged,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr);
+            if(staged)stagedOk=writeCaptureFrame(layout,data,size_t(sample->GetActualDataLength()),*staged,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr,&commitPicture);
         }
         {
             std::lock_guard lock(mutex);

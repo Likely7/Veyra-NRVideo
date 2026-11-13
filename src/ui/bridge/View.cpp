@@ -33,52 +33,61 @@ void drawProtectionOutline(HWND overlay, HWND video, RECT box, bool ellipse) {
 }
 }
 
-QVariantList QmlPlayerBridge::protectionRegions() const {
-    QVariantList out;
-    const auto& p = settings().protection;
-    for (int i = 0; i < int(p.regions.size()); ++i) {
-        const auto& q = p.regions[size_t(i)];
-        if (q.empty()) continue;
-        out << QVariantMap{{"index", i}, {"left", double(q.left)}, {"top", double(q.top)}, {"right", double(q.right)},
-                           {"bottom", double(q.bottom)}, {"ellipse", q.ellipse}};
+QVariantMap QmlPlayerBridge::maskState(bool allEffects) const {
+    const auto* node=impl_->chain.firstOf(allEffects?engine::EffectType::Exclusion:engine::EffectType::Protection);
+    const auto value=node?node->protection:engine::ProtectionSettings{};
+    QVariantList regions;
+    for(int index=0;index<int(value.regions.size());++index){
+        const auto& q=value.regions[size_t(index)];
+        if(!q.empty())regions<<QVariantMap{{"index",index},{"left",q.left},{"top",q.top},
+            {"right",q.right},{"bottom",q.bottom},{"ellipse",q.ellipse}};
     }
-    return out;
+    const auto& first=value.regions[0];
+    return {{"enabled",node&&node->enabled},{"feather",value.featherPixels},{"regions",regions},
+        {"left",first.left},{"top",first.top},{"right",first.right},{"bottom",first.bottom},
+        {"drawShape",impl_->protExclusion==allEffects?impl_->protDraw:QString{}}};
 }
+QVariantMap QmlPlayerBridge::exclusionState() const {return maskState(true);}
+QVariantList QmlPlayerBridge::protectionRegions() const {return maskState(false).value("regions").toList();}
 QString QmlPlayerBridge::protectionDrawShape() const { return impl_->protDraw; }
 
-bool QmlPlayerBridge::editProtection(const std::function<bool(engine::ChainNode&)>& edit) {
-    if (impl_->chain.mode != engine::ChainMode::List) { emit notice(tr("NR 保护区域仅在列表模式可用"), true); return false; }
+bool QmlPlayerBridge::editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool allEffects) {
+    const auto type=allEffects?engine::EffectType::Exclusion:engine::EffectType::Protection;
+    if(allEffects&&!impl_->chain.firstOf(type)&&addEffect(QStringLiteral("exclusion"))<0)return false;
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i) {
         auto& node = impl_->chain.nodes[i];
-        if (node.type != engine::EffectType::Protection) continue;
+        if (node.type != type) continue;
         const auto before = node; const bool wasValid = chainValid();
         if (!edit(node)) return false;
         if (node == before) return true;
         const bool accepted = impl_->revalidate(true);
         if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(uiText(error), true); }
         emit settingsChanged();
-        if (before.enabled != node.enabled) emitChainChanged(); else emitParameterChanged(&QmlPlayerBridge::protectionChanged, wasValid);
+        if(before.enabled!=node.enabled)emitChainChanged();
+        else emitParameterChanged(&QmlPlayerBridge::protectionChanged,wasValid);
         return accepted;
     }
     emit notice(tr("处理链中没有 NR 保护节点，未更改设置"), true);
     return false;
 }
 
-bool QmlPlayerBridge::beginProtectionDraw(const QString& shape) {
+bool QmlPlayerBridge::beginProtectionDraw(const QString& shape) {return beginMaskDraw(false,shape);}
+bool QmlPlayerBridge::beginMaskDraw(bool allEffects,const QString& shape) {
     auto& i = *impl_;
     if (shape.isEmpty()) {
         if (i.protOverlay) ShowWindow(i.protOverlay, SW_HIDE);
-        if (!i.protDraw.isEmpty()) { i.protDraw.clear(); emit protectionDrawChanged(); }
+        if (!i.protDraw.isEmpty()) { i.protDraw.clear(); emit protectionDrawChanged();emit protectionChanged(); }
         return true;
     }
     if (shape != QLatin1String("rect") && shape != QLatin1String("ellipse")) return false;
-    if (i.chain.mode != engine::ChainMode::List) { emit notice(tr("NR 保护区域仅在列表模式可用"), true); return false; }
     if (!i.snapshot.running || !i.videoWindow) { emit notice(tr("请先打开视频，再在画面上绘制保护区域"), true); return false; }
     bool space = false;
-    for (const auto& q : settings().protection.regions) space |= q.empty();
+    const auto* node=i.chain.firstOf(allEffects?engine::EffectType::Exclusion:engine::EffectType::Protection);
+    const auto parameters=node?node->protection:engine::ProtectionSettings{};
+    for(const auto& q:parameters.regions)space|=q.empty();
     if (!space) { emit notice(tr("最多 4 个保护区域，请先删除一个"), true); return false; }
-    i.protDraw = shape;
-    emit protectionDrawChanged();
+    i.protDraw = shape;i.protExclusion=allEffects;
+    emit protectionDrawChanged();emit protectionChanged();
     return true;
 }
 
@@ -96,6 +105,7 @@ void QmlPlayerBridge::updateProtectionDraw(double x0, double y0, double x1, doub
 
 bool QmlPlayerBridge::commitProtectionDraw(double x0, double y0, double x1, double y1) {
     auto& i = *impl_;
+    const bool allEffects=i.protExclusion;
     const bool ellipse = i.protDraw == QLatin1String("ellipse");
     const bool armed = !i.protDraw.isEmpty();
     beginProtectionDraw(QString());
@@ -118,10 +128,29 @@ bool QmlPlayerBridge::commitProtectionDraw(double x0, double y0, double x1, doub
             if (slot.empty()) { slot = q; node.enabled = true; node.protection.enabled = true; return true; }
         emit notice(tr("最多 4 个保护区域，请先删除一个"), true);
         return false;
-    });
-    veyra::log::info("ui-protection", std::format("{} accepted={} bounds={:.3f},{:.3f},{:.3f},{:.3f} source-normalized NR-only",
-                                                  ellipse ? "ellipse" : "rectangle", ok, q.left, q.top, q.right, q.bottom));
+    },allEffects);
+    veyra::log::info("ui-protection", std::format("{} accepted={} bounds={:.3f},{:.3f},{:.3f},{:.3f} allEffects={} source-normalized",
+                                                  ellipse ? "ellipse" : "rectangle", ok, q.left, q.top, q.right, q.bottom,allEffects));
     return ok;
+}
+
+bool QmlPlayerBridge::setMaskEnabled(bool allEffects,bool enabled) {
+    return editProtection([&](engine::ChainNode& node){node.enabled=enabled;node.protection.enabled=enabled;return true;},allEffects);
+}
+bool QmlPlayerBridge::setMaskFeather(bool allEffects,double pixels) {
+    if(!std::isfinite(pixels)||pixels<0||pixels>64)return false;
+    return editProtection([&](engine::ChainNode& node){node.protection.featherPixels=float(pixels);return true;},allEffects);
+}
+bool QmlPlayerBridge::clearMaskRegions(bool allEffects) {
+    return editProtection([](engine::ChainNode& node){node.protection.regions={};return true;},allEffects);
+}
+bool QmlPlayerBridge::removeMaskRegion(bool allEffects,int index) {
+    if(index<0||index>=int(engine::ProtectionSettings{}.regions.size()))return false;
+    return editProtection([&](engine::ChainNode& node){
+        auto& regions=node.protection.regions;
+        for(size_t i=size_t(index);i+1<regions.size();++i)regions[i]=regions[i+1];
+        regions.back()={};return true;
+    },allEffects);
 }
 
 bool QmlPlayerBridge::removeProtectionRegion(int index) {

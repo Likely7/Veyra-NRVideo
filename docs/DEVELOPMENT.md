@@ -1,14 +1,16 @@
 # 开发与验证入口
 
+> 2026-11-13：当前本地main及独立验收入口见[整合记录](MAIN_CLAUDE_ANR_INTEGRATION_2026-11-13.md)。Claude原脏树和旧ANR入口保留作原样证据，不再把旧共享build当当前主线程序。公开发行包与本轮测试目录分开；ANR组件未获本轮公开分发授权。
+
 ## 路径
 
 | 用途 | 当前入口 |
 |---|---|
-| 源码施工树 | `E:/项目/Veyra/worktrees/screen-recording-fix-20261022` |
+| 源码施工树 | `E:/项目/Veyra/worktrees/main-claude-anr-20261113` |
 | 共用Git库 | `C:/Users/123/Desktop/Veyra DLSS Video Player/.git`，不可按旧副本删除 |
-| 可复用构建 | `E:/项目/Veyra/build/claude-screen-recording-20261022` |
-| 正式包/源码 | `E:/项目/Veyra/releases/codex-release-2.1.2-20261102`（含对应源码/摘要） |
-| 当前完整运行供体 | `E:/项目/Veyra/releases/codex-release-2.1.2-20261102` 的不可变NVIDIA/AMD ZIP；不要复制正在使用的解压目录 |
+| 可复用构建 | `E:/项目/Veyra/build/codex-main-claude-anr-20261113` |
+| 正式包/源码 | `E:/项目/Veyra/releases/codex-release-2.1.5-20261110`（含对应源码/摘要） |
+| 当前完整运行供体 | `E:/项目/Veyra/releases/codex-release-2.1.5-20261110` 的不可变NVIDIA/AMD ZIP；不要复制正在使用的解压目录 |
 | 基础依赖 | `E:/项目/Veyra/deps/core`；其他根看`E:/项目/Veyra/deps/DEPENDENCY_ROOTS.json` |
 | Qt | `E:/项目/Veyra/deps/qt/6.8.3/msvc2022_64` |
 
@@ -19,7 +21,7 @@
 从施工树运行现有入口，复用已验证的MSVC/Ninja及依赖参数；此脚本不下载依赖：
 
 ```powershell
-python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-project-maintenance-20261027 --root 'E:/项目/Veyra/worktrees/screen-recording-fix-20261022' --build-dir 'E:/项目/Veyra/build/claude-screen-recording-20261022' --reconfigure --label 2.1.1 --jobs 2 veyra_qml_ui
+python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-main-claude-anr-20261113 --root 'E:/项目/Veyra/worktrees/main-claude-anr-20261113' --build-dir 'E:/项目/Veyra/build/codex-main-claude-anr-20261113' --reconfigure --label 2.1.5-main-integration-test --jobs 2 veyra_qml_ui
 ```
 
 后续任务更换`--task`，保持`codex-`或`claude-`前缀；构建目录只有在准备独立配置时才新建。首次/变更CMake或QML资源清单时传`--reconfigure`。构建限并发2、≤900秒；无需修改全局PATH/TEMP。

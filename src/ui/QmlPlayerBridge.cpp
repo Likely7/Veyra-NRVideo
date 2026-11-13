@@ -278,7 +278,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
-            if (rate >= 0 && rate <= int(engine::ContentRate::Capture60To30) && int(s.content) != rate) { s.content = static_cast<engine::ContentRate>(rate); changed = true; }
+            if(rate>=0&&rate<=int(engine::ContentRate::Capture60To30)){
+                const auto mode=engine::currentContentRate(static_cast<engine::ContentRate>(rate));
+                if(s.content!=mode){s.content=mode;changed=true;}
+                if(rate!=int(mode)){
+                    impl_->prefs[QStringLiteral("contentRate")]=int(mode);
+                    if(!impl_->savePrefs())veyra::log::warn("ui-prefs","duplicate-removal mode migration not saved");
+                }
+            }
         }
         auto restoreHold = [&](const char* key, float& target) {
             if (!p.contains(QLatin1String(key))) return;
@@ -308,8 +315,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         pr.hdrFgCompatibility = impl_->prefBool("hdrFgCompatibility", false);
         if (!saved.isEmpty()) {
             pr.enabled = saved.value(QStringLiteral("lowQueue")).toBool();
-            // Before the three states the low queue was 开 on NVIDIA.
-            pr.nvidiaLowLatency=engine::savedNvidiaLowLatency(saved.value(QStringLiteral("nvidiaLowLatency"),pr.enabled&&nvidiaLowLatencyAvailable()?1:0).toInt());
+            // Before NVIDIA-specific choices, the low queue meant On on NVIDIA.
+            const int savedLatency=saved.value(QStringLiteral("nvidiaLowLatency"),pr.enabled&&nvidiaLowLatencyAvailable()?1:0).toInt();
+            pr.nvidiaLowLatency=engine::savedNvidiaLowLatency(savedLatency);
+            if(savedLatency!=int(pr.nvidiaLowLatency)){
+                auto migrated=saved;migrated[QStringLiteral("nvidiaLowLatency")]=int(pr.nvidiaLowLatency);
+                impl_->prefs[QStringLiteral("presentation")]=migrated;
+                if(!impl_->savePrefs())veyra::log::warn("ui-prefs","retired NVIDIA latency mode migration not saved");
+            }
             engine::syncNvidiaLowLatencyQueue(pr,nvidiaLowLatencyAvailable());
             pr.display = static_cast<engine::DisplaySync>(std::clamp(saved.value(QStringLiteral("display")).toInt(), 0, 2));
             pr.outputRate = static_cast<engine::OutputRateMode>(std::clamp(saved.value(QStringLiteral("outputRate")).toInt(), 0, 2));

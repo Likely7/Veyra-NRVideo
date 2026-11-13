@@ -195,7 +195,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString remotePlayHost READ remotePlayHost WRITE setRemotePlayHost NOTIFY settingsChanged)
     Q_PROPERTY(QString remotePlayPin READ remotePlayPin WRITE setRemotePlayPin NOTIFY settingsChanged)
     // P4-e PS5 Remote Play, ported from the 1.4.4 panel: saved pairings (shared
-    // %LOCALAPPDATA%\Veyra\remoteplay, encrypted), discovery, pairing, PSN login,
+    // %LOCALAPPDATA%\Veyra\remoteplay, encrypted), discovery, pairing, Account ID lookup,
     // wake, stream profile, decode/sampling, view-only, login PIN, controller
     // forwarding and gyro calibration. `ps5` carries the form state.
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
@@ -410,6 +410,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int srOutput READ srOutput WRITE setSrOutput NOTIFY settingsChanged)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY protectionChanged)
+    Q_PROPERTY(QVariantMap exclusionState READ exclusionState NOTIFY protectionChanged)
+    Q_PROPERTY(QVariantMap nrStabilizerState READ nrStabilizerState NOTIFY nrStabilizerChanged)
     Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int audioOffsetMs READ audioOffsetMs WRITE setAudioOffsetMs NOTIFY settingsChanged)
     // 1.4.4 声音补偿: 0 自动(软件估算) / 1 手动 / 2 关闭; live sources only.
@@ -821,9 +823,7 @@ public:
     Q_INVOKABLE bool ps5Connect();
     Q_INVOKABLE void ps5Wake();
     Q_INVOKABLE void ps5Forget();
-    Q_INVOKABLE void ps5PsnLogin();
-    Q_INVOKABLE void ps5PsnComplete();
-    Q_INVOKABLE void ps5PsnForget();
+    Q_INVOKABLE void ps5OpenAccountChecker();
     Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
@@ -1083,6 +1083,14 @@ public:
     bool protectionEnabled() const;
     void setProtectionEnabled(bool value);
     QVariantMap protectionState() const;
+    QVariantMap exclusionState() const;
+    QVariantMap nrStabilizerState() const;
+    Q_INVOKABLE bool beginMaskDraw(bool allEffects,const QString& shape);
+    Q_INVOKABLE bool setMaskEnabled(bool allEffects,bool enabled);
+    Q_INVOKABLE bool setMaskFeather(bool allEffects,double pixels);
+    Q_INVOKABLE bool removeMaskRegion(bool allEffects,int index);
+    Q_INVOKABLE bool clearMaskRegions(bool allEffects);
+    Q_INVOKABLE bool setStabilizerParameter(int index,const QString& key,double value);
     Q_INVOKABLE bool setProtectionRegion(double left, double top, double right, double bottom, double feather);
     bool colorEnabled() const;
     void setColorEnabled(bool value);
@@ -1449,6 +1457,7 @@ signals:
     void beautyChanged();
     void colourParamsChanged();
     void protectionChanged();
+    void nrStabilizerChanged();
     void recentFilesChanged();
     void presetsChanged();
     void exportChanged();
@@ -1501,8 +1510,9 @@ private:
     // connecting note, and start the engine once the page and window have settled.
     void openAfterCinema(const QString& pending, std::function<void()> open);
     void rememberSource(const QString& kind, const QString& label);
-    // Edits the list chain's protection node; rolls back when refused.
-    bool editProtection(const std::function<bool(engine::ChainNode&)>& edit);
+    // Edits either mask node in the active chain; rolls back when refused.
+    QVariantMap maskState(bool allEffects) const;
+    bool editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool allEffects=false);
     engine::ColorSettings selectedColourSettings() const;
     bool commitColour(const engine::ColorSettings& colour);
     // Reads the export job's snapshot and emits exportChanged.

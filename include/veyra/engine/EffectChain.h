@@ -20,7 +20,7 @@ namespace veyra::engine {
 // input, and toChain()/fromChain() convert between the two. Later engine work
 // (multi-NR, ordered executor, node mode) consumes the chain directly.
 // 32 since the effect-chain extension (anti-aliasing, beauty): a full list chain is
-// 6 colours + SR + 4 NR + protection + 2 anti-aliasing + 6 beauty + HDR + FG = 22.
+// 6 colours + SR + 4 NR + protection + hold + 2 anti-aliasing + 6 beauty + HDR + exclusion + FG = 24.
 inline constexpr uint32_t kMaxChainNodes = 32;
 
 enum class EffectType : uint8_t {
@@ -32,6 +32,8 @@ enum class EffectType : uint8_t {
     FrameGeneration,    // must be the last node
     AntiAliasing,       // spatial anti-aliasing (#53): same size, repeatable, before RTX Video HDR
     Beauty,             // face restore + skin smoothing: same size, repeatable, before RTX Video HDR
+    NrStabilizer,       // one output hold pass after the NR stack
+    Exclusion,          // raw-source restoration, including generated frames
     Count
 };
 constexpr uint32_t effectTypeCount = uint32_t(EffectType::Count);
@@ -45,6 +47,8 @@ constexpr std::string_view effectTypeName(EffectType type) {
     case EffectType::FrameGeneration: return "frame-generation";
     case EffectType::AntiAliasing: return "aa";
     case EffectType::Beauty: return "beauty";
+    case EffectType::NrStabilizer: return "nr-stabilizer";
+    case EffectType::Exclusion: return "exclusion";
     case EffectType::Count: break;
     }
     return "unknown";
@@ -75,6 +79,7 @@ struct ChainNode {
     // Per-type payload; only the fields that belong to `type` are meaningful.
     ChainNrParams nr{};
     ProtectionSettings protection{};
+    float holdStrength = 0.8f, holdTolerance = 0.02f;
     ColorSettings color{};
     VideoHdrSettings videoHdr{};
     AntiAliasSettings aa{};
@@ -140,7 +145,7 @@ struct NodeGraphLayout {
     uint32_t inputNext = Output, nextId = 2;
     bool operator==(const NodeGraphLayout&) const = default;
 
-    // Explicit migration from an already cleaned, valid legacy linear chain.
+    // Explicit migration from a valid legacy linear chain, including protection.
     ChainValidation initialize(const EffectChain&);
     int indexOf(const EffectChain&, uint32_t id) const;
     // Partial/disconnected documents are legal, but duplicate IDs, merges,

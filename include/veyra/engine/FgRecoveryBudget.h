@@ -69,6 +69,18 @@ public:
     int64_t processingAllowance(int64_t now,int64_t interval)const{
         return int64_t(std::min(double(std::max<int64_t>(0,interval)),baseCost(now).value_or(0)*10000));
     }
+    // Capture pairs (LivePairLatency): how far the learned phase may go past
+    // interval + base cost. A generated frame also waits for its own
+    // interpolation: VFG High 2X at 4K is 16 ms on an RTX 5070, more than half a
+    // 30 fps interval, and 60->30 pairs capped at the base cost showed 36-55% of
+    // their generated frames late (2026-11-13). Only while base + FG fit in one
+    // source interval: a group the GPU cannot sustain must not earn later
+    // deadlines, and with them more admissions.
+    int64_t phaseAllowance(int64_t now,int64_t interval)const{
+        const auto base=baseCost(now);const auto fg=p95(fg_,now,20000000);
+        if(!base||!fg||interval<=0||(*base+*fg)*10000>double(interval))return 0;
+        return int64_t(*fg*10000);
+    }
     bool canAdmit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0)const{
         const auto cost=predicted(now,warmingHistory);
         // FG has not been submitted at admission. CPU time can at most cover

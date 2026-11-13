@@ -659,6 +659,13 @@
    "ja": "6 項目"
   },
   {
+   "zh": "60→30：固定每两帧保留一帧。自动去除：检测并跳过重复画面。",
+   "src": "qml/DedupModeRow.qml",
+   "zh-TW": "60→30：固定每兩幀保留一幀。自動去除：偵測並跳過重複畫面。",
+   "en": "60→30 keeps every other frame. Automatic removal detects and skips duplicate images.",
+   "ja": "60→30 は2フレームに1枚を保持します。自動除去は重複した映像を検出してスキップします。"
+  },
+  {
    "zh": "8 位配对码",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "8 位配對碼",
@@ -722,11 +729,32 @@
    "ja": "AMD パフォーマンス（縦横半分）"
   },
   {
+   "zh": "ANR FG · 本地实验",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "ANR FG · 本機實驗",
+   "en": "ANR FG · Local experiment",
+   "ja": "ANR FG · ローカル実験"
+  },
+  {
+   "zh": "ANR 帧生成未能启用，已关闭补帧；请检查运行组件、驱动与工作尺寸（至少 640×360），详细原因见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "ANR 畫格生成無法啟用，已關閉補幀；請檢查執行元件、驅動程式與處理尺寸（至少 640×360），詳細原因請見日誌",
+   "en": "ANR frame generation could not start and has been turned off. Check its runtime, driver and processing size (at least 640×360); see the log for details.",
+   "ja": "ANR フレーム生成を開始できないためオフにしました。ランタイム、ドライバー、処理解像度（640×360以上）を確認してください。詳細はログにあります。"
+  },
+  {
    "zh": "AV1 需要主机显卡能编码、本机显卡能解码",
    "src": "qml/PcSourceDialog.qml",
    "zh-TW": "AV1 需要主機顯示卡能編碼、本機顯示卡能解碼",
    "en": "AV1 needs a host GPU that can encode it and a local GPU that can decode it",
    "ja": "AV1 にはホスト GPU のエンコード対応と、この PC の GPU のデコード対応が必要です"
+  },
+  {
+   "zh": "Apex Neural Rendering · 2X～6X · 视频估算输入，效果与速度以实际运行结果为准",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "Apex Neural Rendering · 2X～6X · 影片估算輸入，效果與速度以實際執行結果為準",
+   "en": "Apex Neural Rendering · 2X–6X · Estimated video inputs; quality and speed depend on actual results",
+   "ja": "Apex Neural Rendering · 2X～6X · 映像から推定した入力を使用。画質と速度は実際の動作によります"
   },
   {
    "zh": "BMD HDR 帧的 EOTF 不受支持；仅接受 SDR、PQ 或 HLG，拒绝猜测颜色传递",
@@ -1352,13 +1380,6 @@
    "ja": "K は従来モデル、M・L は DLSS 4.5 です。L は低い入力解像度向けです。画質と処理時間は映像により異なります。"
   },
   {
-   "zh": "Ko-fi、微信与支付宝",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "Ko-fi、微信與支付寶",
-   "en": "Ko-fi, WeChat and Alipay",
-   "ja": "Ko-fi・WeChat・Alipay"
-  },
-  {
    "zh": "LUT 不可用：%1",
    "src": "src/ui/bridge/Colour.cpp",
    "zh-TW": "LUT 不可用：%1",
@@ -1464,13 +1485,6 @@
    "ja": "NR 保護領域"
   },
   {
-   "zh": "NR 保护区域仅在列表模式可用",
-   "src": "src/ui/bridge/Enhancement.cpp",
-   "zh-TW": "NR 保護區域僅在列表模式可用",
-   "en": "NR protected areas are available in list mode only",
-   "ja": "NR 保護領域はリストモードでのみ使えます"
-  },
-  {
    "zh": "NR 全局保护区域",
    "src": "qml/ProPage.qml",
    "zh-TW": "NR 全域保護區域",
@@ -1541,6 +1555,13 @@
    "ja": "NR 画質補正 · 第 %1 層"
   },
   {
+   "zh": "NR 稳定器必须位于最后一层 NR 与 NR 保护区域之后",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "NR 穩定器必須位於最後一層 NR 與 NR 保護區域之後",
+   "en": "Place the NR stabilizer after the final NR layer and NR protection.",
+   "ja": "NR 安定化は最後の NR レイヤーと NR 保護領域の後に置いてください。"
+  },
+  {
    "zh": "NR 第1层",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "NR 第1層",
@@ -1581,6 +1602,13 @@
    "zh-TW": "NR 自動推理復用",
    "en": "NR automatic inference reuse",
    "ja": "NR 推論の自動再利用"
+  },
+  {
+   "zh": "NR 输出稳定器",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "NR 輸出穩定器",
+   "en": "NR output stabilizer",
+   "ja": "NR 出力安定化"
   },
   {
    "zh": "NR 运动来源",
@@ -1961,32 +1989,32 @@
    "ja": "PS5 の接続に失敗しました。診断を確認してください"
   },
   {
-   "zh": "PSN 授权失败（{}）；原有配对不受影响，可重新登录。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "PSN 授權失敗（{}）；原有配對不受影響，可重新登入。",
-   "en": "PSN authorization failed ({}); existing pairing is unaffected, you can sign in again.",
-   "ja": "PSN の認証に失敗しました（{}）。既存のペアリングには影響ありません。再度サインインできます。"
-  },
-  {
-   "zh": "PSN 授权已删除，局域网配对保留。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "PSN 授權已刪除，區域網路配對保留。",
-   "en": "PSN authorization removed; LAN pairing kept.",
-   "ja": "PSN の認証を削除しました。LAN のペアリングは保持されます。"
-  },
-  {
-   "zh": "PSN 登录已保存，Account ID 已填入。首次仍需配对；已配对主机直接连接。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "PSN 登入已儲存，Account ID 已填入。首次仍需配對；已配對主機直接連接。",
-   "en": "PSN sign-in saved and the Account ID filled in. First use still needs pairing; paired consoles connect directly.",
-   "ja": "PSN のサインインを保存し、Account ID を入力しました。初回はペアリングが必要です。ペアリング済みの本体はそのまま接続できます。"
-  },
-  {
    "zh": "PSN 账号",
-   "src": "qml/Ps5SourceDialog.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "PSN 帳號",
    "en": "PSN account",
    "ja": "PSN アカウント"
+  },
+  {
+   "zh": "Patreon 主页",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "Patreon 主頁",
+   "en": "Patreon home",
+   "ja": "Patreon ホーム"
+  },
+  {
+   "zh": "Patreon 主页查看作者动态，咖啡赞助为 US$5。",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "Patreon 主頁查看作者動態，咖啡贊助為 US$5。",
+   "en": "Visit Patreon for creator updates, or buy me a coffee for US$5.",
+   "ja": "Patreon で作者の近況をチェック。コーヒー支援は US$5 です。"
+  },
+  {
+   "zh": "Patreon、微信与支付宝",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "Patreon、微信與支付寶",
+   "en": "Patreon, WeChat and Alipay",
+   "ja": "Patreon・WeChat・Alipay"
   },
   {
    "zh": "RTX 30 VFG 为实验兼容，复用现有模型；支持 2X～8X，实际画质与速度需实卡验证",
@@ -2003,11 +2031,11 @@
    "ja": "RTX 50 · NVIDIA オリジナル"
   },
   {
-   "zh": "RTX Video HDR 之后只能接补帧",
+   "zh": "RTX Video HDR 之后只能接全效果剔除与补帧",
    "src": "src/engine/EffectChain.cpp",
-   "zh-TW": "RTX Video HDR 之後只能接補幀",
-   "en": "Only frame generation can follow RTX Video HDR",
-   "ja": "RTX Video HDR の後に置けるのはフレーム生成だけです"
+   "zh-TW": "RTX Video HDR 之後只能接全效果剔除與補幀",
+   "en": "Only effect exclusion and frame generation may follow RTX Video HDR.",
+   "ja": "RTX Video HDR の後には効果除外とフレーム生成のみ接続できます。"
   },
   {
    "zh": "RTX Video HDR 只能放在补帧前面",
@@ -2596,6 +2624,13 @@
    "zh-TW": "{}顯示卡重置 {} 次，已分 {} 段匯出並無損拼接",
    "en": "{}GPU reset {} time(s); exported in {} parts and joined without re-encoding",
    "ja": "{}GPU リセット {} 回、{} 分割で書き出し再エンコードなしで結合しました"
+  },
+  {
+   "zh": "☕ 请作者喝杯咖啡 · US$5",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "☕ 請作者喝杯咖啡 · US$5",
+   "en": "☕ Buy me a coffee · US$5",
+   "ja": "☕ コーヒーで支援 · US$5"
   },
   {
    "zh": "一键推荐",
@@ -3228,13 +3263,6 @@
    "ja": "ホストがこの PC を認識していません。再ペアリングしてください。"
   },
   {
-   "zh": "主机与 PSN 凭据加密保存在用户数据目录。",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "主機與 PSN 憑據加密儲存在使用者資料目錄。",
-   "en": "Hosts and PSN credentials are stored encrypted in the user data folder.",
-   "ja": "ホストと PSN の認証情報はユーザーデータフォルダーに暗号化して保存されます。"
-  },
-  {
    "zh": "主机列表",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "主機列表",
@@ -3373,6 +3401,13 @@
    "zh-TW": "主機連上了，但沒有完成握手。請重試。",
    "en": "Connected to the host, but the handshake did not complete. Try again.",
    "ja": "ホストに接続しましたが、ハンドシェイクが完了しませんでした。再試行してください。"
+  },
+  {
+   "zh": "主机配对凭据加密保存在用户数据目录。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "主機配對憑證加密儲存在使用者資料目錄。",
+   "en": "Console pairing credentials are encrypted in the user data directory.",
+   "ja": "本体のペアリング情報はユーザーデータフォルダーに暗号化して保存されます。"
   },
   {
    "zh": "主机长时间没有准备好串流。请确认主机开着并且网络正常。",
@@ -3802,6 +3837,13 @@
    "ja": "プリセットの保存に失敗しました：%1"
   },
   {
+   "zh": "保护区域参数无效",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "保護區域參數無效",
+   "en": "Invalid protection region parameters.",
+   "ja": "保護領域のパラメーターが無効です。"
+  },
+  {
    "zh": "保护强度",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "保護強度",
@@ -3984,11 +4026,11 @@
    "ja": "オプティカルフロー · 動き推定"
   },
   {
-   "zh": "光流与内容节奏",
+   "zh": "光流与去除重复帧",
    "src": "src/ui/bridge/Chain.cpp",
-   "zh-TW": "光流與內容節奏",
-   "en": "Optical flow and content cadence",
-   "ja": "オプティカルフローとコンテンツのフレームレート"
+   "zh-TW": "光流與去除重複幀",
+   "en": "Optical flow and duplicate removal",
+   "ja": "オプティカルフローと重複フレーム除去"
   },
   {
    "zh": "光流宽高减半，更省但更糙",
@@ -4073,6 +4115,20 @@
    "zh-TW": "全螢幕（雙擊畫面 / F11）· 全螢幕後按 %1 開啟快速調整",
    "en": "Fullscreen (double-click / F11) · Press %1 for quick adjustments",
    "ja": "全画面（ダブルクリック / F11）· %1 でクイック調整"
+  },
+  {
+   "zh": "全效果剔除",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "全效果剔除",
+   "en": "Exclude all effects",
+   "ja": "すべての効果を除外"
+  },
+  {
+   "zh": "全效果剔除必须位于其他画质效果之后、补帧之前",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "全效果剔除必須位於其他畫質效果之後、補幀之前",
+   "en": "Place effect exclusion after image effects and before frame generation.",
+   "ja": "効果除外は画質効果の後、フレーム生成の前に置いてください。"
   },
   {
    "zh": "全部显卡",
@@ -4249,13 +4305,6 @@
    "zh-TW": "內容亮度遠超顯示裝置能力",
    "en": "Content brightness far exceeds the display capability",
    "ja": "コンテンツの輝度がディスプレイの能力を大幅に上回ります"
-  },
-  {
-   "zh": "内容节奏",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "內容節奏",
-   "en": "Content pacing",
-   "ja": "コンテンツのペーシング"
   },
   {
    "zh": "内容：两头极端",
@@ -4438,13 +4487,6 @@
    "zh-TW": "減少處理排隊",
    "en": "Reduce processing queue depth",
    "ja": "処理の待ち行列を減らす"
-  },
-  {
-   "zh": "减少处理排队。高负载时建议选「开」而不是「开＋增强」：增强有概率导致掉帧，还会提高 GPU 频率、增加功耗。",
-   "src": "qml/NvidiaLowLatencyEditor.qml",
-   "zh-TW": "減少處理排隊。高負載時建議選「開」而不是「開＋增強」：增強有機率導致掉幀，還會提高 GPU 時脈、增加功耗。",
-   "en": "Reduce processing queue depth. Under heavy load, choose On rather than On + Boost: Boost can drop frames, and it raises GPU clocks and power use.",
-   "ja": "処理の待ち行列を減らします。高負荷時は「オン＋ブースト」ではなく「オン」を推奨します。ブーストはフレーム落ちを起こすことがあり、GPU クロックと消費電力も上がります。"
   },
   {
    "zh": "减少暗部被进一步压黑，保留提亮细节",
@@ -4720,13 +4762,6 @@
    "ja": "削除に失敗しました。フォルダーの権限を確認してください。"
   },
   {
-   "zh": "删除授权失败，请检查目录权限。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "刪除授權失敗，請檢查目錄權限。",
-   "en": "Could not delete the authorization; check folder permissions.",
-   "ja": "認証情報を削除できませんでした。フォルダーの権限を確認してください。"
-  },
-  {
    "zh": "删除此层",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "刪除此層",
@@ -4818,13 +4853,6 @@
    "ja": "ページを開く"
   },
   {
-   "zh": "剪贴板不是有效的 Sony 授权回调地址。请复制登录完成后的完整 URL。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "剪貼簿不是有效的 Sony 授權回調地址。請複製登入完成後的完整 URL。",
-   "en": "The clipboard does not hold a valid Sony authorization callback URL. Copy the full URL after signing in.",
-   "ja": "クリップボードの内容は有効な Sony 認証コールバック URL ではありません。サインイン完了後の URL を丸ごとコピーしてください。"
-  },
-  {
    "zh": "剪辑入点已超过源视频时长",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "剪輯入點已超過源影片時長",
@@ -4902,18 +4930,32 @@
    "ja": "含む"
   },
   {
-   "zh": "区域 · Esc 取消",
+   "zh": "区域内恢复原始画面与帧率",
    "src": "qml/ProPage.qml",
-   "zh-TW": "區域 · Esc 取消",
-   "en": "area · Esc to cancel",
-   "ja": "領域 · Esc でキャンセル"
+   "zh-TW": "區域內恢復原始畫面與幀率",
+   "en": "Restore source picture and frame cadence inside the regions",
+   "ja": "領域内を元の映像とフレーム周期に戻す"
   },
   {
-   "zh": "区域内排除所有 NR 层 · 仅列表模式",
+   "zh": "区域内恢复原始画面，补帧也不参与，按原始帧节奏更新。最多 4 个区域。",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "區域內恢復原始畫面，補幀也不參與，按原始幀節奏更新。最多 4 個區域。",
+   "en": "Restore the source picture inside each region, updating only at the source frame cadence. Up to 4 regions.",
+   "ja": "領域内を元の映像に戻し、元のフレーム周期で更新します。最大 4 領域。"
+  },
+  {
+   "zh": "区域内排除 NR 处理。最多 4 个区域。",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "區域內排除 NR 處理。最多 4 個區域。",
+   "en": "Exclude NR processing inside the regions. Up to 4 regions.",
+   "ja": "領域内の NR 処理を除外します。最大 4 領域。"
+  },
+  {
+   "zh": "区域内排除所有 NR 层",
    "src": "qml/ProPage.qml",
-   "zh-TW": "區域內排除所有 NR 層 · 僅列表模式",
-   "en": "Excludes the area from every NR layer · list mode only",
-   "ja": "領域内をすべての NR 層から除外 · リストモードのみ"
+   "zh-TW": "區域內排除所有 NR 層",
+   "en": "Exclude every NR layer inside the regions",
+   "ja": "領域内のすべての NR レイヤーを除外"
   },
   {
    "zh": "区域扩展",
@@ -5112,18 +5154,25 @@
    "ja": "かすみの除去"
   },
   {
-   "zh": "去登录",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "去登入",
-   "en": "Sign in",
-   "ja": "サインインへ"
-  },
-  {
    "zh": "去配对",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "去配對",
    "en": "Pair",
    "ja": "ペアリングへ"
+  },
+  {
+   "zh": "去重关闭",
+   "src": "src/ui/bridge/Chain.cpp",
+   "zh-TW": "去重關閉",
+   "en": "Duplicate removal off",
+   "ja": "重複除去オフ"
+  },
+  {
+   "zh": "去除重复帧",
+   "src": "qml/DedupModeRow.qml",
+   "zh-TW": "去除重複幀",
+   "en": "Remove duplicate frames",
+   "ja": "重複フレームを除去"
   },
   {
    "zh": "去除锯齿边缘，适合游戏画面、文字和界面线条。列表模式开着 NR 时排在 NR 之后，NR 重新勾出的边缘也会处理；不开 NR 时在源分辨率、超分之前运行，锯齿不会被一起放大。",
@@ -5323,7 +5372,7 @@
   },
   {
    "zh": "变化容差",
-   "src": "qml/ProPage.qml",
+   "src": "qml/NodePage.qml",
    "zh-TW": "變化容差",
    "en": "Change tolerance",
    "ja": "変化の許容幅"
@@ -5904,31 +5953,17 @@
   },
   {
    "zh": "圆形 ",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "圓形 ",
    "en": "Circle ",
    "ja": "円 "
   },
   {
-   "zh": "圆形 / 椭圆",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "圓形 / 橢圓",
-   "en": "Circle / ellipse",
-   "ja": "円 / 楕円"
-  },
-  {
-   "zh": "在 Sony 网页完成登录，复制最终回调地址，再点“提交登录结果”。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "在 Sony 網頁完成登入，複製最終回調地址，再點“提交登入結果”。",
-   "en": "Sign in on the Sony web page, copy the final callback URL, then click \"Submit sign-in result\".",
-   "ja": "Sony の Web ページでサインインし、最後のコールバック URL をコピーしてから「サインイン結果を送信」を押してください。"
-  },
-  {
-   "zh": "在 Sony 网页登录后复制回调地址再提交；软件不接触密码",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "在 Sony 網頁登入後複製回調地址再提交；軟體不接觸密碼",
-   "en": "Sign in on the Sony page, then copy the callback URL and submit it; the app never sees your password",
-   "ja": "Sony のページでサインイン後、コールバック URL をコピーして送信します。アプリはパスワードに触れません"
+   "zh": "在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "在 PSNTools 網頁取得 Account ID，再到 PS5 串流視窗填入並配對。",
+   "en": "Get your Account ID on PSNTools, then enter it in the PS5 streaming window to pair.",
+   "ja": "PSNTools で Account ID を取得し、PS5 ストリーミング画面に入力してペアリングします。"
   },
   {
    "zh": "在主机上打开 Sunshine 网页（https://主机IP:47990），进入「PIN」页，输入下面的数字并提交：",
@@ -5959,6 +5994,13 @@
    "ja": "スマートフォンまたはブラウザーで %1 を開き、上のコードを入力して Xbox（Microsoft）アカウントでサインインしてください。完了すると自動で続行します。"
   },
   {
+   "zh": "在最后一层 NR 之后稳住未变化的像素。",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "在最後一層 NR 之後穩住未變化的像素。",
+   "en": "Stabilize unchanged pixels after the final NR layer.",
+   "ja": "最後の NR レイヤーの後で、変化のないピクセルを安定させます。"
+  },
+  {
    "zh": "在浏览器打开登录页",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "在瀏覽器開啟登入頁",
@@ -5966,11 +6008,11 @@
    "ja": "ブラウザーでサインインページを開く"
   },
   {
-   "zh": "在画面上按住左键拖出",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "在畫面上按住左鍵拖出",
-   "en": "Hold the left button and drag on the picture",
-   "ja": "映像上で左ボタンを押したままドラッグ"
+   "zh": "在画面上拖出区域，Esc 取消",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "在畫面上拖出區域，Esc 取消",
+   "en": "Drag a region on the picture. Press Esc to cancel.",
+   "ja": "映像上をドラッグして領域を作成。Esc でキャンセル。"
   },
   {
    "zh": "在画面上按住左键拖动分割线：左边原画、右边增强。",
@@ -5978,13 +6020,6 @@
    "zh-TW": "在畫面上按住左鍵拖曳分割線：左邊原畫、右邊增強。",
    "en": "Hold the left button on the picture and drag the divider: original on the left, enhanced on the right.",
    "ja": "映像上で左ボタンを押したまま分割線をドラッグ：左がオリジナル、右が補正後です。"
-  },
-  {
-   "zh": "在画面上画出矩形或圆形区域（最多 4 个），区域内的画面不做任何一层 NR 处理。",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "在畫面上畫出矩形或圓形區域（最多 4 個），區域內的畫面不做任何一層 NR 處理。",
-   "en": "Draw rectangles or circles on the picture (up to 4); the picture inside them gets no NR at all.",
-   "ja": "映像上に四角形または円を描きます（最大 4 個）。領域内はどの NR 層の処理も受けません。"
   },
   {
    "zh": "在线",
@@ -5999,6 +6034,13 @@
    "zh-TW": "在線 · 有遊戲在執行",
    "en": "Online · a game is running",
    "ja": "オンライン · ゲーム実行中"
+  },
+  {
+   "zh": "在网页获取 PSN Account ID 后，复制到配对栏，再填写主机的 8 位配对码。",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "在網頁取得 PSN Account ID 後，複製到配對欄，再填入主機的 8 位配對碼。",
+   "en": "Copy the PSN Account ID from the website into the pairing field, then enter the console’s 8-digit pairing code.",
+   "ja": "ウェブサイトで取得した PSN Account ID をペアリング欄に貼り付け、本体の8桁のペアリングコードを入力してください。"
   },
   {
    "zh": "地址格式不对。",
@@ -6254,7 +6296,7 @@
   },
   {
    "zh": "处理链中没有 NR 保护节点，未更改设置",
-   "src": "src/ui/bridge/Enhancement.cpp",
+   "src": "src/ui/bridge/View.cpp",
    "zh-TW": "處理鏈中沒有 NR 保護節點，未更改設定",
    "en": "The chain has no NR protection node; settings unchanged",
    "ja": "処理チェーンに NR 保護ノードがないため、設定は変更していません"
@@ -7955,7 +7997,7 @@
   },
   {
    "zh": "已登录",
-   "src": "qml/Ps5SourceDialog.qml",
+   "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "已登入",
    "en": "Signed in",
    "ja": "サインイン済み"
@@ -8360,13 +8402,6 @@
    "ja": "電源オン"
   },
   {
-   "zh": "开＋增强",
-   "src": "qml/NvidiaLowLatencyEditor.qml",
-   "zh-TW": "開＋增強",
-   "en": "On + Boost",
-   "ja": "オン＋ブースト"
-  },
-  {
    "zh": "引擎异常，请查看诊断",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "引擎異常，請查看診斷",
@@ -8409,11 +8444,11 @@
    "ja": "エンジンがオプティカルフロー設定を受け付けなかったため、元の設定のままです"
   },
   {
-   "zh": "引擎未接受内容节奏，原设置保留",
+   "zh": "引擎未接受去除重复帧设置，原设置保留",
    "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "引擎未接受內容節奏，原設定保留",
-   "en": "The engine did not accept content pacing; previous setting kept",
-   "ja": "エンジンがコンテンツのペーシングを受け付けなかったため、元の設定のままです"
+   "zh-TW": "引擎未接受去除重複幀設定，保留原設定",
+   "en": "The engine rejected the duplicate-removal setting. The previous setting was kept.",
+   "ja": "重複フレーム除去の設定が拒否されました。以前の設定を維持します。"
   },
   {
    "zh": "引擎未接受模式设置，当前配置不变",
@@ -9662,13 +9697,6 @@
    "ja": "送信フレームレート"
   },
   {
-   "zh": "提交登录结果",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "提交登入結果",
-   "en": "Submit sign-in result",
-   "ja": "サインイン結果を送信"
-  },
-  {
    "zh": "提亮暗部与中间调，保留高光峰值。",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "提亮暗部與中間調，保留高光峰值。",
@@ -10636,20 +10664,6 @@
    "ja": "従来の形式選択"
   },
   {
-   "zh": "旧节点配置的 NR 保护区域已移除；列表保护及其他节点参数保留，后续保存到 .p3-node 文件，原文件不覆盖",
-   "src": "src/engine/PresetLibrary.cpp",
-   "zh-TW": "舊節點設定的 NR 保護區域已移除；列表保護及其他節點參數保留，後續儲存到 .p3-node 檔案，原檔案不覆蓋",
-   "en": "NR protected areas from the old node configuration were removed; list protection and other node settings are kept and saved to a .p3-node file from now on; the original file is not overwritten",
-   "ja": "旧ノード構成の NR 保護領域を削除しました。リストの保護とその他のノード設定は保持し、今後は .p3-node ファイルに保存します。元のファイルは上書きしません"
-  },
-  {
-   "zh": "旧节点预设的 NR 保护区域已移除；其余参数保留，后续保存到 .p3-node 文件，原文件不覆盖",
-   "src": "src/engine/PresetLibrary.cpp",
-   "zh-TW": "舊節點預設的 NR 保護區域已移除；其餘參數保留，後續儲存到 .p3-node 檔案，原檔案不覆蓋",
-   "en": "NR protected areas from the old node preset were removed; other settings are kept and saved to a .p3-node file from now on; the original file is not overwritten",
-   "ja": "旧ノードプリセットの NR 保護領域を削除しました。その他の設定は保持し、今後は .p3-node ファイルに保存します。元のファイルは上書きしません"
-  },
-  {
    "zh": "时域稳定",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "時域穩定",
@@ -11393,17 +11407,10 @@
   },
   {
    "zh": "未登录",
-   "src": "qml/Ps5SourceDialog.qml",
+   "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "未登入",
    "en": "Not signed in",
    "ja": "未サインイン"
-  },
-  {
-   "zh": "未登录 · 在 PS5 串流窗口里登录",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "未登入 · 在 PS5 串流視窗裡登入",
-   "en": "Not signed in · sign in from the PS5 streaming window",
-   "ja": "未サインイン · PS5 ストリーミングのウィンドウでサインイン"
   },
   {
    "zh": "未知",
@@ -12813,13 +12820,6 @@
    "ja": "ゲームモード：マウス透過を解除"
   },
   {
-   "zh": "游戏锁 30/40 帧、采集卡输出 60 帧时选“自动剔除重复帧”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "遊戲鎖 30/40 幀、擷取卡輸出 60 幀時選“自動剔除重複幀”：只去掉與上一張完全相同的畫面，補幀時間均勻；“擷取 60→30”固定每兩幀取一幀，穩定 30 幀",
-   "en": "For a game locked to 30/40 fps behind a 60 fps capture card, choose \"Remove duplicate frames automatically\": only pictures identical to the previous one are dropped and generated frames stay evenly timed; \"Capture 60→30\" always keeps every second frame for a steady 30",
-   "ja": "ゲームが 30/40 fps 固定でキャプチャーカードが 60 fps を出力する場合は「重複フレームを自動で除去」を選択：直前とまったく同じ映像だけを除き、補間フレームの間隔を均一にします。「キャプチャー 60→30」は常に 2 フレームごとに 1 フレームを取り、安定した 30 fps にします"
-  },
-  {
    "zh": "源 %1 fps",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "源 %1 fps",
@@ -12923,6 +12923,13 @@
    "zh-TW": "點擊畫面選擇片源",
    "en": "Click the picture to choose a source",
    "ja": "映像をクリックしてソースを選択"
+  },
+  {
+   "zh": "点击获取 Account ID，在网页查询后复制到这里。支持数字 ID 或 8 字节 Base64，不是 PSN 昵称。",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "點選取得 Account ID，在網頁查詢後複製到這裡。支援數字 ID 或 8 位元組 Base64，不是 PSN 暱稱。",
+   "en": "Click Get Account ID and copy the result here. Accepts a numeric ID or 8-byte Base64, not your PSN nickname.",
+   "ja": "「Account ID を取得」から調べた ID をここに貼り付けてください。数字の ID または8バイトの Base64 に対応しています。PSN のニックネームではありません。"
   },
   {
    "zh": "点左侧文件可重新预览（会和导出抢显卡）",
@@ -13087,14 +13094,14 @@
   },
   {
    "zh": "画圆形",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "畫圓形",
    "en": "Draw circle",
    "ja": "円を描く"
   },
   {
    "zh": "画矩形",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "畫矩形",
    "en": "Draw rectangle",
    "ja": "四角形を描く"
@@ -13338,13 +13345,6 @@
    "ja": "サインイン PIN は数字で入力してください。"
   },
   {
-   "zh": "登录 PSN",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "登入 PSN",
-   "en": "Sign in to PSN",
-   "ja": "PSN にサインイン"
-  },
-  {
    "zh": "登录信息加密保存在本机；退出会删除它",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "登入資訊加密儲存在本機；退出會刪除它",
@@ -13513,15 +13513,8 @@
    "ja": "スリープ（起動可能）"
   },
   {
-   "zh": "矩形",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "矩形",
-   "en": "Rectangle",
-   "ja": "四角形"
-  },
-  {
    "zh": "矩形 ",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "矩形 ",
    "en": "Rectangle ",
    "ja": "四角形 "
@@ -13639,8 +13632,15 @@
    "ja": "後で"
   },
   {
+   "zh": "稳定器参数超出范围",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "穩定器參數超出範圍",
+   "en": "Stabilizer parameters are out of range.",
+   "ja": "安定化のパラメーターが範囲外です。"
+  },
+  {
    "zh": "稳定强度",
-   "src": "qml/ProPage.qml",
+   "src": "qml/NodePage.qml",
    "zh-TW": "穩定強度",
    "en": "Stabilization strength",
    "ja": "安定化の強さ"
@@ -14354,7 +14354,7 @@
   },
   {
    "zh": "羽化像素",
-   "src": "qml/ProPage.qml",
+   "src": "qml/MaskEditor.qml",
    "zh-TW": "羽化像素",
    "en": "Feather (pixels)",
    "ja": "ぼかし（ピクセル）"
@@ -14514,11 +14514,11 @@
    "ja": "自動推定：キャプチャーカード / PS5 のライブ入力時に有効"
   },
   {
-   "zh": "自动剔除重复帧",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "自動剔除重複幀",
-   "en": "Remove duplicate frames automatically",
-   "ja": "重複フレームを自動で除去"
+   "zh": "自动去除",
+   "src": "qml/DedupModeRow.qml",
+   "zh-TW": "自動去除",
+   "en": "Automatic removal",
+   "ja": "自動除去"
   },
   {
    "zh": "自动去隔行",
@@ -14983,20 +14983,6 @@
    "ja": "ノードモードは大きな画像の分割処理にまだ対応していません。リストモードに切り替えて開いてください"
   },
   {
-   "zh": "节点模式已取消 NR 保护区域，请迁移旧节点配置",
-   "src": "src/engine/EffectChain.cpp",
-   "zh-TW": "節點模式已取消 NR 保護區域，請遷移舊節點設定",
-   "en": "Node mode no longer has NR protected areas; migrate the old node configuration",
-   "ja": "ノードモードでは NR 保護領域を廃止しました。旧ノード構成を移行してください"
-  },
-  {
-   "zh": "节点模式已取消 NR 保护区域；请在列表模式使用全局保护",
-   "src": "src/ui/bridge/Chain.cpp",
-   "zh-TW": "節點模式已取消 NR 保護區域；請在列表模式使用全域保護",
-   "en": "Node mode no longer has NR protected areas; use global protection in list mode",
-   "ja": "ノードモードでは NR 保護領域を廃止しました。リストモードの全体保護を使ってください"
-  },
-  {
    "zh": "节点模式按连线顺序真实执行；离线导出仅支持列表模式。",
    "src": "qml/ProPage.qml",
    "zh-TW": "節點模式按連線順序真實執行；離線匯出僅支援列表模式。",
@@ -15088,13 +15074,6 @@
    "ja": "NVIDIA 低遅延 · オン"
   },
   {
-   "zh": "英伟达低延迟 · 开＋增强",
-   "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "NVIDIA 低延遲 · 開＋增強",
-   "en": "NVIDIA Low Latency · On + Boost",
-   "ja": "NVIDIA 低遅延 · オン＋ブースト"
-  },
-  {
    "zh": "英伟达低延迟 · 当前未生效",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "NVIDIA 低延遲 · 目前未生效",
@@ -15144,11 +15123,11 @@
    "ja": "NVIDIA 低遅延：オン（有効）"
   },
   {
-   "zh": "英伟达低延迟：开＋增强（已启用）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "NVIDIA 低延遲：開＋增強（已啟用）",
-   "en": "NVIDIA Low Latency: On + Boost (active)",
-   "ja": "NVIDIA 低遅延：オン＋ブースト（有効）"
+   "zh": "英伟达低延迟：驱动每帧等待过长，本次播放已关闭；当前使用低排队",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "NVIDIA 低延遲：驅動程式每格等待過久，本次播放已關閉；目前使用低排隊",
+   "en": "NVIDIA Low Latency: the driver waited too long every frame and was turned off for this session; using low queue depth",
+   "ja": "NVIDIA 低遅延：ドライバーが毎フレーム長く待機したため、今回の再生ではオフにしました。低遅延キューを使用中です"
   },
   {
    "zh": "范围 0.25～4.00 倍，保持原有音调",
@@ -15163,6 +15142,13 @@
    "zh-TW": "草稿未執行",
    "en": "Draft not run",
    "ja": "下書きは未実行"
+  },
+  {
+   "zh": "获取 Account ID",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "取得 Account ID",
+   "en": "Get Account ID",
+   "ja": "Account ID を取得"
   },
   {
    "zh": "蓝",
@@ -15704,34 +15690,6 @@
    "ja": "設定復元時に描画処理を完了できなかったため、再生を停止しました。"
   },
   {
-   "zh": "识别 %1 fps 内容",
-   "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "辨識 %1 fps 內容",
-   "en": "Detect %1 fps content",
-   "ja": "%1 fps のコンテンツを検出"
-  },
-  {
-   "zh": "识别 30fps 内容",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "識別 30fps 內容",
-   "en": "Detect 30 fps content",
-   "ja": "30fps コンテンツを判別"
-  },
-  {
-   "zh": "识别 50fps 内容",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "識別 50fps 內容",
-   "en": "Detect 50 fps content",
-   "ja": "50fps コンテンツを判別"
-  },
-  {
-   "zh": "识别 60fps 内容",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "識別 60fps 內容",
-   "en": "Detect 60 fps content",
-   "ja": "60fps コンテンツを判別"
-  },
-  {
    "zh": "识别档位",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "識別檔位",
@@ -15891,13 +15849,6 @@
    "zh-TW": "請先添加超解析節點",
    "en": "Add a super resolution node first",
    "ja": "先に超解像ノードを追加してください"
-  },
-  {
-   "zh": "请先点登录 PSN，完成网页授权后再提交。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "請先點登入 PSN，完成網頁授權後再提交。",
-   "en": "Click Sign in to PSN, finish the web authorization, then submit.",
-   "ja": "先に「PSN にサインイン」を押し、Web での認証を完了してから送信してください。"
   },
   {
    "zh": "请先登录 Xbox 账号。",
@@ -16248,13 +16199,6 @@
    "zh-TW": "帳號",
    "en": "Account",
    "ja": "アカウント"
-  },
-  {
-   "zh": "账号数字 ID 或 8 字节 Base64，不是昵称；登录 PSN 后自动填入",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "帳號數字 ID 或 8 字節 Base64，不是昵稱；登入 PSN 後自動填入",
-   "en": "The account's numeric ID or 8-byte Base64, not the nickname; filled in automatically after signing in to PSN",
-   "ja": "アカウントの数値 ID または 8 バイトの Base64 で、ニックネームではありません。PSN にサインインすると自動で入力されます"
   },
   {
    "zh": "账号登录 · 实验",
@@ -16881,7 +16825,7 @@
   },
   {
    "zh": "输出稳定器 · 抗闪烁",
-   "src": "qml/NodePage.qml",
+   "src": "qml/ProPage.qml",
    "zh-TW": "輸出穩定器 · 抗閃爍",
    "en": "Output stabilizer · anti-flicker",
    "ja": "出力スタビライザー · ちらつき防止"
@@ -17370,13 +17314,6 @@
    "ja": "デバイスを接続したら、まず補正をオフにして元の映像を確認し、必要に応じてオンにしてください"
   },
   {
-   "zh": "退出",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "退出",
-   "en": "Quit",
-   "ja": "終了"
-  },
-  {
    "zh": "退出全屏，恢复普通窗口操作",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "退出全螢幕，恢復一般視窗操作",
@@ -17573,6 +17510,13 @@
    "ja": "ペアリングしましたが保存に失敗しました。ユーザーフォルダーの権限を確認してください。"
   },
   {
+   "zh": "配对设置",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "配對設定",
+   "en": "Pairing settings",
+   "ja": "ペアリング設定"
+  },
+  {
    "zh": "配对（首次）",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "配對（首次）",
@@ -17608,32 +17552,11 @@
    "ja": "現在のスタイルの自動値を使う"
   },
   {
-   "zh": "采用源时间戳",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "采用源時間戳",
-   "en": "Use source timestamps",
-   "ja": "ソースのタイムスタンプを使用"
-  },
-  {
    "zh": "采集",
    "src": "qml/ScreenSourceDialog.qml",
    "zh-TW": "擷取",
    "en": "Capture",
    "ja": "キャプチャー"
-  },
-  {
-   "zh": "采集 60→30",
-   "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "擷取 60→30",
-   "en": "Capture 60→30",
-   "ja": "キャプチャ 60→30"
-  },
-  {
-   "zh": "采集 60→30（PS5 30 帧）",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "擷取 60→30（PS5 30 幀）",
-   "en": "Capture 60→30 (PS5 at 30 fps)",
-   "ja": "キャプチャー 60→30（PS5 30 フレーム）"
   },
   {
    "zh": "采集: 接收 %1 丢弃 %2 速率 %3 fps",
@@ -17984,13 +17907,6 @@
    "zh-TW": "重連中",
    "en": "Reconnecting",
    "ja": "再接続中"
-  },
-  {
-   "zh": "金额随意，每一份支持都是很大的鼓励",
-   "src": "qml/SponsorPanel.qml",
-   "zh-TW": "金額隨意，每一份支持都是很大的鼓勵",
-   "en": "Any amount is welcome, and every bit of support means a lot",
-   "ja": "金額は自由です。どんな支援も大きな励みになります"
   },
   {
    "zh": "链路中固定为最后一步；画布上可移动",
@@ -18595,11 +18511,11 @@
    "ja": "プリセットのオプティカルフロー設定が破損しています"
   },
   {
-   "zh": "预设光流或内容节奏无效",
+   "zh": "预设光流或去除重复帧设置无效",
    "src": "src/engine/PresetLibrary.cpp",
-   "zh-TW": "預設光流或內容節奏無效",
-   "en": "Invalid preset optical flow or content cadence",
-   "ja": "プリセットのオプティカルフローまたはコンテンツのフレームレートが無効です"
+   "zh-TW": "預設的光流或去除重複幀設定無效",
+   "en": "Invalid optical-flow or duplicate-removal preset settings",
+   "ja": "プリセットのオプティカルフローまたは重複除去の設定が無効です"
   },
   {
    "zh": "预设内容类型无效",
@@ -18845,6 +18761,13 @@
    "zh-TW": "預設庫版本不支援 DLAA 抗鋸齒",
    "en": "This preset library version does not support DLAA anti-aliasing",
    "ja": "このプリセットライブラリのバージョンは DLAA アンチエイリアスに対応していません"
+  },
+  {
+   "zh": "预设库稳定器字段损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫穩定器欄位損壞",
+   "en": "Invalid preset stabilizer data.",
+   "ja": "プリセットの安定化データが無効です。"
   },
   {
    "zh": "预设库美颜人脸识别字段损坏",
