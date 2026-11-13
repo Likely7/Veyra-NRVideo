@@ -87,7 +87,7 @@ VPage {
         case "nr-stabilizer": return "#5DCCA1"
         case "exclusion": return "#E7B868"
         case "video-hdr": return "#FFB547"
-        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": return "#3DDC84"
+        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": case "anr-fg": return "#3DDC84"
         }
         return "#55555C"
     }

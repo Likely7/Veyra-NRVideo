@@ -440,6 +440,7 @@ void QmlPlayerBridge::updateRunStatus() {
             case engine::FrameGenerationBackend::XeSS: backend = tr("XeSS"); break;
             case engine::FrameGenerationBackend::Fsr: backend = tr("FSR 3.1"); break;
             case engine::FrameGenerationBackend::Fsr4: backend = tr("FSR 4 ML"); break;
+            case engine::FrameGenerationBackend::Anr: backend = QStringLiteral("ANR FG"); break;
             case engine::FrameGenerationBackend::Vfg: backend = QStringLiteral("NVIDIA VFG"); break;
             }
             detail << tr("补帧 %1X · %2").arg(s.applied.multiplier)

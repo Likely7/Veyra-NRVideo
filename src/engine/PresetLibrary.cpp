@@ -702,11 +702,11 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
     });
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return e.globals.has_value();});
     const bool vfg=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
-        if(e.fg.backend==FrameGenerationBackend::Vfg||e.fg.vfgQuality!=1||
-           (e.globals&&(e.globals->fgBackend==FrameGenerationBackend::Vfg||e.globals->vfgQuality!=1)))return true;
+        if((e.fg.backend==FrameGenerationBackend::Vfg||e.fg.backend==FrameGenerationBackend::Anr)||e.fg.vfgQuality!=1||
+           (e.globals&&((e.globals->fgBackend==FrameGenerationBackend::Vfg||e.globals->fgBackend==FrameGenerationBackend::Anr)||e.globals->vfgQuality!=1)))return true;
         if(!e.nodeConfiguration)return false;const auto& c=*e.nodeConfiguration;
-        return c.fgBackend==FrameGenerationBackend::Vfg||c.vfgQuality!=1||
-            (c.editor&&c.editor->globals&&(c.editor->globals->fgBackend==FrameGenerationBackend::Vfg||c.editor->globals->vfgQuality!=1));
+        return (c.fgBackend==FrameGenerationBackend::Vfg||c.fgBackend==FrameGenerationBackend::Anr)||c.vfgQuality!=1||
+            (c.editor&&c.editor->globals&&((c.editor->globals->fgBackend==FrameGenerationBackend::Vfg||c.editor->globals->fgBackend==FrameGenerationBackend::Anr)||c.editor->globals->vfgQuality!=1));
     });
     const bool correction=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
         for(unsigned i=0;i<e.chain.nodeCount;++i)if(e.chain.nodes[i].nr.residual.extendedSchema())return true;
@@ -868,7 +868,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             (e.contents & ~(version>=10?kPresetAllContent:kPresetLegacyContent)) ||
             nodeCount > kMaxChainNodes || e.fg.multiplier < 1 || e.fg.multiplier > (version>=7?8u:6u)) { error = L"预设库字段超出范围"; return false; }
         if(version>=7&&!(in>>e.fg.vfgQuality)){error=L"预设库 VFG 质量字段损坏";return false;}
-        if(fgBackend<0||fgBackend>(version>=7?4:3)){error=L"预设库补帧后端无效";return false;}
+        if(fgBackend<0||fgBackend>(version>=7?5:3)){error=L"预设库补帧后端无效";return false;}
         e.name = wide(name);
         e.note = wide(note);
         e.kind = static_cast<ChainMode>(kind);
@@ -1001,7 +1001,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const auto& editor = session.configurations[1].editor;
     const auto extended=[](const ChainGlobalSettings& g){return g.srTarget>pipeline::SrTarget::Uhd8K||g.hdrOutputMode!=HdrOutputMode::Hdr10||g.fgMotion!=MotionSource::Automatic||g.srMotion!=MotionSource::OpticalFlow||g.nrMotion!=MotionSource::OpticalFlow;};
     const bool rendering=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return extended(c)||(c.editor&&c.editor->globals&&extended(*c.editor->globals));});
-    const auto usesVfg=[](const ChainGlobalSettings& g){return g.fgBackend==FrameGenerationBackend::Vfg||g.vfgQuality!=1;};
+    const auto usesVfg=[](const ChainGlobalSettings& g){return (g.fgBackend==FrameGenerationBackend::Vfg||g.fgBackend==FrameGenerationBackend::Anr)||g.vfgQuality!=1;};
     const bool vfg=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return usesVfg(c)||(c.editor&&c.editor->globals&&usesVfg(*c.editor->globals));});
     // Session v6 carries the static HDR output tuning (curve + metadata).
     const auto tuningCustom=[](const ChainConfiguration& c){

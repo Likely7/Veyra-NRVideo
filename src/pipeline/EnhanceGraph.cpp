@@ -29,6 +29,7 @@
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/ngx/DlssFgBackend.h"
+#include "veyra/ngx/AnrProvider.h"
 #include "veyra/ngx/FgCompatibilitySession.h"
 #include "veyra/ngx/AdaMfgUnlock.h"
 #include "veyra/ngx/AmpereMfgUnlock.h"
@@ -771,7 +772,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     nrEnabled_ = desc.enableNr && !desc.noFeatures && (!desc.noNgx || lmxxfNr_);
     fgEnabled_ = desc.enableFg && !desc.noFeatures && !desc.stillImage &&
         desc.frameGenerationBackend != engine::FrameGenerationBackend::XeSS &&
-        (!desc.noNgx || engine::fsrFrameGeneration(desc.frameGenerationBackend)||desc.frameGenerationBackend==engine::FrameGenerationBackend::Vfg);
+        (!desc.noNgx || engine::fsrFrameGeneration(desc.frameGenerationBackend)||desc.frameGenerationBackend==engine::FrameGenerationBackend::Vfg||desc.frameGenerationBackend==engine::FrameGenerationBackend::Anr);
     nvofStandalone_ = desc.enableNvofStandalone && !desc.noFeatures;
     if(desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx&&desc.amdFlowHalfResolution){nvofW_=std::max(1u,nvofW_/2);nvofH_=std::max(1u,nvofH_/2);}
     wchar_t refine[4]{};
@@ -1277,7 +1278,7 @@ bool EnhanceGraph::initNvof()
     // FSR needs external flow even with NR/SR and standalone guidance off.
     // Keep the zero-motion and VFG paths free of an unused optical-flow session.
     const bool inGraphFgFlow=fgEnabled_&&desc_.fgUsesFlow()&&
-        (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss||engine::fsrFrameGeneration(desc_.frameGenerationBackend));
+        (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss||desc_.frameGenerationBackend==engine::FrameGenerationBackend::Anr||engine::fsrFrameGeneration(desc_.frameGenerationBackend));
     // DLAA takes its motion from the same flow.
     if (desc_.noFeatures || !(nvofStandalone_ || (presentSinkFg()&&desc_.fgUsesFlow()) || inGraphFgFlow || (srEnabled_&&desc_.srUsesFlow()&&temporalSrPass(desc_)) || dlaaRequested())) {
         mvecSource_="zero motion (no external flow consumer)";
@@ -1549,6 +1550,14 @@ bool EnhanceGraph::initVfg()
 
 bool EnhanceGraph::initNgxFeatures()
 {
+    const bool anr=fgEnabled_&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Anr;
+    if(anr){
+        failedBackend_=engine::FailedBackend::Fg;
+        fgBackend_=std::make_unique<ngx::DlssFgBackend>();unsigned maximum=0;
+        if(!fgBackend_->openAnr(context_.device(),desc_.runtimeAbsPath,maximum))return false;
+        fgCapsAvailable_=true;fgMultiFrameMax_=int(maximum);
+        if(desc_.fgMultiplier<2||desc_.fgMultiplier>maximum+1){log::error("anr","requested multiplier exceeds actual provider capability");return false;}
+    }
     Status st = Status::Ok;
     failedBackend_=engine::FailedBackend::NgxCore;
     // DLSS-G performance mode: its runtime directory is searched before the
@@ -1576,13 +1585,13 @@ bool EnhanceGraph::initNgxFeatures()
         if(!coreCache_->prepare(std::move(key),enabled))return false;
     }
     if(desc_.convertVideoHdr()&&(desc_.noNgx||desc_.noFeatures)){failedBackend_=engine::FailedBackend::VideoHdr;return false;}
-    if ((desc_.noNgx && !lmxxfNr_) || desc_.noFeatures || (!nrEnabled_&&!srEnabled_&&!fgEnabled_&&!desc_.convertVideoHdr()&&!dlaaRequested())) {
+    if ((desc_.noNgx && !lmxxfNr_ && !anr) || desc_.noFeatures || (!nrEnabled_&&!srEnabled_&&!fgEnabled_&&!desc_.convertVideoHdr()&&!dlaaRequested())) {
         veyra::log::info("graph", "NGX core/features skipped by disabled-feature configuration");
         return true;
     }
     // FSR upscaling is a FidelityFX effect: a session whose only feature is
     // FSR SR must not require (or fail on) the NGX core.
-    const bool needNgxCore = (nrEnabled_ && !lmxxfNr_) || (fgEnabled_ && !fsrEnabled() && !vfgBackend_) || desc_.convertVideoHdr() ||
+    const bool needNgxCore = (nrEnabled_ && !lmxxfNr_) || (fgEnabled_ && !fsrEnabled() && !vfgBackend_ && !anr) || desc_.convertVideoHdr() ||
         (srEnabled_ && (desc_.finalSrQuality()==0 || desc_.firstSrRuns(0) || ngxVideoSrPass(desc_))) || dlaaRequested();
     if (!needNgxCore) {
         veyra::log::info("graph", "NGX core skipped: lmxxf NR / AMD FSR stages use their own runtimes");
@@ -1650,7 +1659,7 @@ bool EnhanceGraph::initNgxFeatures()
     }
     }
 
-    if(!vfgBackend_){fgCapsAvailable_ = false;fgMultiFrameMax_ = 0;}
+    if(!vfgBackend_&&!anr){fgCapsAvailable_ = false;fgMultiFrameMax_ = 0;}
     if (fgEnabled_ && desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss) {
     failedBackend_=engine::FailedBackend::Fg;
     fgBackend_ = std::make_unique<ngx::DlssFgBackend>();
@@ -1898,7 +1907,7 @@ bool EnhanceGraph::initNgxFeatures()
     // FG create + warm-up evaluate BEFORE descriptor views (the runtime
     // allocates internals at the first evaluate and would fail after views
     // exist on this system).
-    if (fgEnabled_ && desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss) {
+    if (fgEnabled_ && (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss||anr)) {
         ngx::DlssFgBackend::CreateDesc fd{};
         fd.width = workW_; fd.height = workH_;
         fd.renderWidth = workW_; fd.renderHeight = workH_;
@@ -1907,7 +1916,7 @@ bool EnhanceGraph::initNgxFeatures()
         ID3D12GraphicsCommandList* list = ring_.acquire(0, st);
         if (list == nullptr) { failedBackend_=engine::FailedBackend::Infrastructure; return false; }
         failedBackend_=engine::FailedBackend::Fg;
-        if (!fgBackend_->create(*coreHost_, list, ngxParams_, fd, st) || !fgBackend_->created()) {
+        if (!fgBackend_->create(list, ngxParams_, fd, st) || !fgBackend_->created()) {
             veyra::log::error("graph", std::format("FG create failed 0x{:X}", fgBackend_->createResult()));
             return false;
         }
@@ -4014,9 +4023,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         fe.outputDisableInterpolation=fgDisable_[parity].Get();
         fe.multiFrameCount=fgCalls;fe.multiFrameIndex=sub;
         fe.frameId=realFrameIndex_+1;
-        // FG consumer adapter: current->previous pixel flow -> normalized reverse flow.
-        fe.mvecScaleX=(haveFlow||desc_.fgMotionProbe)?-1.0f/static_cast<float>(workW_):1.0f;
-        fe.mvecScaleY=(haveFlow||desc_.fgMotionProbe)?-1.0f/static_cast<float>(workH_):1.0f;
+        // ANR consumes current->previous pixel motion directly. NVIDIA DLSSG
+        // consumes normalized reverse motion. Verified against exact translated
+        // image truth; keep this conversion at the consumer, not in shared flow.
+        fe.mvecScaleX=(haveFlow||desc_.fgMotionProbe)&&desc_.frameGenerationBackend!=engine::FrameGenerationBackend::Anr?-1.0f/static_cast<float>(workW_):1.0f;
+        fe.mvecScaleY=(haveFlow||desc_.fgMotionProbe)&&desc_.frameGenerationBackend!=engine::FrameGenerationBackend::Anr?-1.0f/static_cast<float>(workH_):1.0f;
         if(sub==1)gpuTimer_.mark(flist,GpuStage::FgBatch);
         const auto timingStage=static_cast<GpuStage>(unsigned(GpuStage::Fg1)+sub-1);gpuTimer_.mark(flist,timingStage);
         cpuTrace.mark("fgPrepare");

@@ -36,7 +36,7 @@ std::string PresetStore::serialize()const{
     const bool fsr4=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4;});
     const bool higher=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.srTarget>pipeline::SrTarget::Uhd8K;});
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){const auto& s=p.settings;return s.hdrOutputMode!=HdrOutputMode::Hdr10||s.fgMotion!=MotionSource::Automatic||s.srMotion!=MotionSource::OpticalFlow||s.nrMotion!=MotionSource::OpticalFlow;});
-    const bool vfg=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.frameGenerationBackend==FrameGenerationBackend::Vfg||p.settings.vfgQuality!=1;});
+    const bool vfg=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return (p.settings.frameGenerationBackend==FrameGenerationBackend::Vfg||p.settings.frameGenerationBackend==FrameGenerationBackend::Anr)||p.settings.vfgQuality!=1;});
     const bool correction=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
         if(p.settings.residual.extendedSchema())return true;
         for(unsigned i=0;i<p.settings.nrLayerCount;++i)if(p.settings.nrLayers[i].residual.extendedSchema())return true;
@@ -118,7 +118,7 @@ bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std
         if(version>=3&&!(in>>s.videoSrQuality))return false;
         // Retired local FSR4 mode: keep the preset, use RTX Video SR high.
         if(version==20&&s.videoSrQuality==6)s.videoSrQuality=3;
-        if(version>=4){int backend;if(!(in>>backend)||backend<0||backend>(version>=28?4:version>=25?3:version>=13?2:(version>=6&&version<=7?2:1)))return false;
+        if(version>=4){int backend;if(!(in>>backend)||backend<0||backend>(version>=28?5:version>=25?3:version>=13?2:(version>=6&&version<=7?2:1)))return false;
             // Before v8, 1 meant removed FRUC and 2 meant XeSS. New writes use v10.
             s.frameGenerationBackend=version<8
                 ?(backend==2?FrameGenerationBackend::XeSS:FrameGenerationBackend::Dlss)

@@ -1117,7 +1117,7 @@ int QmlPlayerBridge::fgMultiplier() const {
 }
 void QmlPlayerBridge::setFgMultiplier(int multiplier) {
     const auto choices=settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg?
-        std::span<const uint32_t>(engine::kVfgMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
+        std::span<const uint32_t>(engine::kVfgMultiplierChoices):settings().frameGenerationBackend==engine::FrameGenerationBackend::Anr?std::span<const uint32_t>(engine::kAnrMultiplierChoices):std::span<const uint32_t>(engine::kFgMultiplierChoices);
     const bool legal = std::find(choices.begin(),choices.end(),uint32_t(std::max(multiplier,0)))!=choices.end();
     if (!legal || multiplier > fgMaxMultiplier()) {
         emit notice(tr("补帧倍率超出当前后端范围"), true); return;
