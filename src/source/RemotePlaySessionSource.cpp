@@ -3,6 +3,7 @@
 #include "veyra/remoteplay/StreamRecovery.h"
 #include <cmath>
 #include <format>
+#include <algorithm>
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -262,6 +263,31 @@ void RemotePlaySessionSource::controller(remoteplay::ControllerState state){
     std::lock_guard lock(mutex_);controllerStamp_=remoteplay::monotonic100ns();
     // A neutral input (focus/device loss) cancels queued actions immediately.
     if(!state.inputActive)pendingControllers_.clear();
+    if(!pendingControllers_.empty()){
+        auto& last=pendingControllers_.back();
+        const auto& previous=last.second;
+        // Keep real press/release and touch-contact edges. Axes, pressure,
+        // touch motion and sensor updates are current state, not a FIFO of
+        // actions: a 125 Hz UI must not build latency behind a 60 Hz owner.
+        const bool sameEdges=state.inputActive==previous.inputActive&&state.buttons==previous.buttons&&
+            bool(state.l2)==bool(previous.l2)&&bool(state.r2)==bool(previous.r2)&&
+            state.touches[0].id==previous.touches[0].id&&state.touches[1].id==previous.touches[1].id;
+        if(sameEdges){
+            // Retain a bounded ordered sensor batch across coalesced UI polls.
+            if(state.motionValid&&previous.motionValid){
+                std::array<remoteplay::ControllerState::MotionSample,16> samples{};uint8_t count=0;
+                const auto append=[&](const auto& sample){
+                    if(!sample.timestampUs||(count&&sample.timestampUs<=samples[count-1].timestampUs))return;
+                    if(count==samples.size()){std::move(samples.begin()+1,samples.end(),samples.begin());--count;}
+                    samples[count++]=sample;
+                };
+                for(size_t i=0;i<std::min(size_t(previous.motionSampleCount),previous.motionSamples.size());++i)append(previous.motionSamples[i]);
+                for(size_t i=0;i<std::min(size_t(state.motionSampleCount),state.motionSamples.size());++i)append(state.motionSamples[i]);
+                state.motionSamples=samples;state.motionSampleCount=count;
+            }
+            last={controllerStamp_,std::move(state)};return;
+        }
+    }
     if(pendingControllers_.size()>=16){
         pendingControllers_.clear();pendingControllers_.push_back({controllerStamp_,{}});
         log::warn("remoteplay-input","Controller queue overflow; releasing before latest state");
@@ -271,8 +297,9 @@ void RemotePlaySessionSource::controller(remoteplay::ControllerState state){
 remoteplay::ControllerState RemotePlaySessionSource::takeControllerLocked(remoteplay::HostTime now){
     if(now-controllerStamp_>1000000){pendingControllers_.clear();controller_={};return controller_;}
     if(!pendingControllers_.empty()&&now-pendingControllers_.front().first>1000000){
-        while(!pendingControllers_.empty()&&now-pendingControllers_.front().first>1000000)pendingControllers_.pop_front();
-        controller_={};return controller_;
+        // Obsolete edges cannot be replayed safely, but fresh physical input
+        // must not be replaced by neutral just because an older edge expired.
+        controller_=std::move(pendingControllers_.back().second);pendingControllers_.clear();return controller_;
     }
     if(!pendingControllers_.empty()){controller_=std::move(pendingControllers_.front().second);pendingControllers_.pop_front();}
     return controller_;
