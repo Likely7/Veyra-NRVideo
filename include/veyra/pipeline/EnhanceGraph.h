@@ -145,7 +145,7 @@ struct EnhanceGraphDesc {
     engine::FrameGenerationBackend frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;
     bool vfgAsyncSubmission=false; // preview-only; export retains synchronous SDK verdicts
-    bool vfgAutoRegulate=true;
+    bool vfgAutoRegulate=false;
     bool vfgFastFallback=false; // live 2X with vfgAutoRegulate: also load the next faster VFG model
     uint64_t settingsRevision=1;
     engine::FlowQuality flowQuality=engine::FlowQuality::Balanced;

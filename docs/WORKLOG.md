@@ -1165,3 +1165,11 @@ GitHub工具不支持二进制下载，Python urllib仅HTTPS下载官方addon/fu
 7组生产回放加60秒3600采样决策逐条覆盖、0新画面误丢/重复、无隐藏日志丢行、PTS合法。ANR稳定30→60/P99=16.95ms，ANR与VFG半速约59.95提交FPS/P99约17.2ms。GUI热切换/暂停改倍率/列表节点/保存重启、320尺寸拒绝后播放继续和UI倍率回退、真实导出worker均通过。4输出独立解码计数/PTS/非黑/4K尺寸/HDR10元数据通过，插值PTS误差≤0.667us。实卡T9114K60＋1080NR：DLSS4X半速末120提交/1%low113.18/captureDropped1；VFG高3X半速因算力不足末30提交/26.62/drop14，正确触发拒绝保持保护，不能算90FPS通过；ANR自动2X末60提交/58.76/drop0，1061采样/531不同picture/maxDiff102证明确有动态画面。无ERROR，不是全部游戏质量或屏幕端延迟验收。
 
 97运行二进制、19ANR原件SHA一致；104QML探针恢复；私有默认效果关闭启动器实启/退出0，EXE c343e4286a429357f6530ad65847d0fec927e367b16ad460cd4ebca6e8cb1c09。当前源码与独立build/tests入口更新；源代码与2c278af产品部分无差异，后续整理只改文档。详细命令/回执/失误及剩余边界见docs/MAIN_CLAUDE_ANR_INTEGRATION_2026-11-13.md和reports同任务。VFG高档窗口上屏减半、周期预算探测慢帧、参数切换重建等保留未解决，不擅自改GPU优先级或重启已撤销实验。公开Release保持原字节，无push/发布/消息或关机。
+
+## 2026-11-13 GPU优先级与VFG自动调控默认值
+
+用户明确授权默认GPU改高、VFG自动调控默认关。main起点325f300，checkpoint/pre-gpu-vfg-defaults-20261113。7文件最小实现：GPU初始请求High、缺失偏好回退High、设置页high和四语提示；EnhancementSettings与EnhanceGraphDesc的vfgAutoRegulate=false。保留显式普通/高/实时、VFG开关和无上限cap，不改用户真实配置/驱动全局设置。
+
+build-recording-handoff.py --task codex-gpu-vfg-defaults-20261113 --root E:/项目/Veyra/worktrees/main-claude-anr-20261113 --build-dir E:/项目/Veyra/build/codex-main-claude-anr-20261113 --reconfigure --label 2.1.5-main-integration-test --jobs 2 veyra_qml_ui veyra_vfg_settings_tests veyra_repair_contract_tests veyra_preset_library_tests：235.0s通过。日志logs同任务/build-20261113-070817，VFG683/合同308/预设629通过，i18n2797条三语缺失与占位错误0。真实私有配置：新配置高4/4+VFG自动false；手动普通2/2+true保存重启保持；已有实时5/5+true保持，三组VFG2X实际播放通过。首轮从设置页开视频导致host矩形尚未就绪ERROR，严格判失败并保留；测试先切专业页待布局后复测无ERROR，未修改几何逻辑。
+
+当前main测试app EXE与SettingsPage已原子替换，其他运行组件不变、104QML与源码一致/探针恢复。原c343e428 EXE单独归档archives同任务，未备份整个包；新身份见FINAL.json。范围仅默认值，未声称VFG高档窗口上屏已修好；无push/Release/关机。详细记录docs/GPU_VFG_DEFAULTS_2026-11-13.md，所有新产物在E盘。

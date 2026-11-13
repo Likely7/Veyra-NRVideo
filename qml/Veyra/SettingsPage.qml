@@ -706,11 +706,11 @@ VPage {
                     VGroup {
                         VRow {
                             label: qsTr("GPU 优先级")
-                            hint: veyra.gpuPriorityStatus + qsTr("；默认“实时”，同时运行游戏或其他重负载程序变慢时可改为“高”或“普通”")
+                            hint: veyra.gpuPriorityStatus + qsTr("；默认“高”，同时运行游戏或其他重负载程序变慢时可改为“普通”")
                             VSeg {
                                 objectName: "set-gpu-priority"
                                 options: [{ id: "normal", label: qsTr("普通") }, { id: "high", label: qsTr("高") }, { id: "realtime", label: qsTr("实时") }]
-                                current: veyra.preferences.gpuPriority || "realtime"
+                                current: veyra.preferences.gpuPriority || "high"
                                 onPicked: id => veyra.setPreference("gpuPriority", id)
                             }
                         }

@@ -19575,11 +19575,11 @@
    "ja": "；今回の書き出しは AMD FSR 超解像を使用します"
   },
   {
-   "zh": "；默认“实时”，同时运行游戏或其他重负载程序变慢时可改为“高”或“普通”",
+   "zh": "；默认“高”，同时运行游戏或其他重负载程序变慢时可改为“普通”",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "；預設“即時”，同時執行遊戲或其他重負載程式變慢時可改為“高”或“普通”",
-   "en": "; Realtime by default. If a game or other heavy program running alongside slows down, choose High or Normal",
-   "ja": "；既定は「リアルタイム」。同時に動かすゲームや重い処理が遅くなる場合は「高」か「通常」に変更してください"
+   "zh-TW": "；預設“高”，同時執行遊戲或其他重負載程式變慢時可改為“普通”",
+   "en": "; High by default. If a game or other heavy program running alongside slows down, choose Normal",
+   "ja": "；既定は「高」。同時に動かすゲームや重い処理が遅くなる場合は「通常」に変更してください"
   }
  ]
 }
