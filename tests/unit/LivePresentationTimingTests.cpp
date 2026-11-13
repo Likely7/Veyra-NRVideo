@@ -77,8 +77,34 @@ int main(){
         // 45 fps in 60 Hz (new,new,new,repeat): never three second copies in a row.
         std::vector<int> fortyFive;
         check(run([](int i){return uint64_t(i-i/4);},0,600,fortyFive)==0&&fortyFive.size()==300,"irregular content keeps the plain grid");
+        // A still screen is no evidence that the half-rate grid sits on second
+        // copies. Resuming with true 60 fps must not insert an extra sample.
+        CaptureHalfRate still;unsigned stillKept=0;
+        for(int i=0;i<720;++i){
+            const uint64_t id=i<240?uint64_t(i/2):i<421?1000:uint64_t(1000+i-420);
+            stillKept+=still.accept(i*dt,dt,false,&id);
+        }
+        check(still.shifts()==0&&stillKept==360,
+              "half-rate still-to-60 transition does not mistake a hold for second-copy phase");
     }
     check(!CaptureHalfRate::supported(30)&&!CaptureHalfRate::supported(18)&&!CaptureHalfRate::supported(120)&&CaptureHalfRate::supported(59.94),"60-to-30 setting does not halve other transport modes");
+    {
+        constexpr int64_t dt=166667;
+        CaptureHalfRate sampler;unsigned kept=0;bool spaced=true;int last=-2;
+        for(int i=1;i<=1200;++i){
+            // The card still sends 60 callbacks: its reported PTS runs 25% fast.
+            if(sampler.accept(i*208333,dt,false,nullptr,uint64_t(i))){++kept;spaced&=i-last>=2;last=i;}
+        }
+        check(kept==600&&spaced,"half-rate uses callback sequence despite driver timestamp drift");
+        CaptureHalfRate late;last=-2;spaced=true;
+        for(int i=1;i<=600;++i){
+            if(i%11==0)continue; // reader missed an input; don't invent a source reset
+            if(late.accept(i*dt,dt,false,nullptr,uint64_t(i))){spaced&=i-last>=2;last=i;}
+        }
+        check(spaced,"half-rate mailbox misses never trigger an adjacent catch-up sample");
+        check(!veyra::engine::presentationGenerationResetRequired(false,static_cast<veyra::pipeline::FrameFlags>(veyra::pipeline::FrameFlagBits::Drop)),
+              "mailbox-only loss is not a new cadence or presentation generation");
+    }
     veyra::engine::FrameRateWindow rate;rate.reset(0);
     for(int i=1;i<=60;++i)rate.complete(i*166666);
     check(std::abs(rate.rate(10000000)-60)<.01,"one second counts 60 actual completion events");
@@ -463,7 +489,49 @@ int main(){
             }
             return r;
         };
+        {
+            // Content runs at a genuinely varying rate, with repeated transport
+            // samples between changes. Failed fixed-period fitting must not
+            // erase the measured content rate or suppress any new picture.
+            constexpr std::array<int,11> runs{1,4,1,3,1,2,5,2,1,3,4};
+            constexpr int64_t dt=166667;
+            ContentDedup variable;uint64_t id=1;int left=runs[0],step=0,unknown=0,lost=0;
+            int64_t last=-1;bool ordered=true;
+            for(int i=0;i<1800;++i){
+                const bool changed=i==0||left==0;
+                if(left==0){++id;left=runs[++step%runs.size()];}
+                const auto d=variable.observe(&id,i*dt,dt,i==0);
+                lost+=changed&&!d.keep;
+                if(d.keep){ordered&=d.contentPts>last&&d.contentPts<=i*dt;last=d.contentPts;}
+                if(i>120&&variable.contentFps()==0)++unknown;
+                --left;
+            }
+            check(lost==0&&ordered,"variable content retains each changed picture with monotonic bounded timestamps");
+            check(unknown==0&&variable.contentFps()>20&&variable.contentFps()<30,
+                  "variable content reports its observed rate even when no fixed cadence fits");
+        }
         const int n=1200;
+        for(double captureFps:{58.0,60000.0/1001.0,60.0}){
+            for(double fps:{24.0,25.0,30000.0/1001.0,30.0,40.0,45.0,50.0,60.0}){
+                const auto effective=std::min(fps,captureFps);
+                const auto r=run(captureFps,[&](int i){return int64_t(std::floor(i*effective/captureFps+1e-9));},n,1,0,int64_t(std::llround(1e7/effective)));
+                check(r.droppedReal==0&&r.keptRepeats==0&&r.monotonic&&r.neverLate,
+                      "content-rate matrix keeps every unique picture once with bounded monotonic PTS");
+                const auto expected=int64_t(std::floor((n-1)*effective/captureFps+1e-9))+1;
+                check(r.kept==expected,"content-rate matrix matches independent 24/25/29.97/30/40/45/50/60 picture truth");
+            }
+        }
+        {
+            ContentDedup missed;constexpr int64_t dt=166667;
+            for(uint64_t i=1;i<=600;i+=2){const auto id=(1ull<<56)+i;missed.observe(&id,int64_t(i)*dt,dt,i==1,0,i);}
+            check(std::abs(missed.contentFps()-60)<.1,
+                  "capture picture serials distinguish engine mailbox losses from lower source content rate");
+        }
+        {
+            ContentDedup forty;double maxError=0;
+            for(int i=0;i<1200;++i){const uint64_t id=uint64_t(i*2/3);forty.observe(&id,i*166667,166667,i==0);if(i>120)maxError=std::max(maxError,std::abs(forty.contentFps()-40));}
+            check(maxError<.1,"stable 40-in-60 reporting is not quantized into 40/41 FPS flicker");
+        }
         {const auto r=run(60.0,[](int i){return int64_t(i/2);},n,0,0,333333);
          check(r.kept==n/2&&r.keptRepeats==0&&r.droppedReal==0,"dedup 30-in-60: every real picture kept once, every repeat dropped");
          check(r.monotonic&&r.neverLate&&r.regularSpans==r.spans,"dedup 30-in-60: content spans exactly 33.3 ms, never later than the sample");}
@@ -541,6 +609,18 @@ int main(){
          ContentDedup dedup;int kept=0;
          for(int i=0;i<600;++i){const uint64_t shown=i<240?uint64_t(i/2):1000u;const bool keep=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;if(i>=300)kept+=keep;}
          check(kept>=148&&kept<=152&&dedup.stats().held>=140,"dedup still picture after 30 fps content is held at a steady 30 fps");}
+        {
+            ContentDedup recovering;constexpr int64_t dt=166667;const uint64_t picture=7;
+            int64_t firstHeldSpan=0,firstHeldCadence=0;
+            for(int i=0;i<30;++i){
+                const auto d=recovering.observe(&picture,i*dt,dt,i==0);
+                if(d.keep&&d.holdInterval&&!firstHeldSpan){firstHeldSpan=d.interval;firstHeldCadence=d.holdInterval;}
+            }
+            check(firstHeldSpan>firstHeldCadence&&firstHeldCadence==2*dt,
+                  "static refresh distinguishes its preceding hold gap from the ongoing content cadence");
+            const auto phase=veyra::engine::capturePairInterval100ns({firstHeldCadence,10000000},60,0,double(firstHeldSpan)/10000,true);
+            check(phase==2*dt,"post-boundary static hold cannot stretch subsequent pair scheduling to the hitch duration");
+        }
         {// Still picture after 40 fps content in 60 Hz: held on the 25 ms grid (33/17 ms samples).
          ContentDedup dedup;int kept=0;
          for(int i=0;i<600;++i){const uint64_t shown=i<240?uint64_t(std::floor(i*40.0/60.0+1e-9)):1000u;const bool keep=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;if(i>=300)kept+=keep;}

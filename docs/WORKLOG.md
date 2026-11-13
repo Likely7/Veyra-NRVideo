@@ -1081,3 +1081,21 @@ migration.py：真实应用旧2→1写回、实际列表两选项、桥接请求
 Reflex Sleep汇总不足以解释数百ms突停；两机overlay已注入但无因果证据；未见对应GPU移除或frame-ready超时。部分最初源码路径检索不存在，改用rg --files定位实际src/base/Log.cpp并复核v2.1.5与当前实现；未把检索失败当检查通过。现场EXE精确哈希/提交未知，不用附件证明刚交付latency-test已解决现场问题。具体原始行号、下一步需抓日志锁/stdout/file flush调用栈及输入断点恢复时钟的范围见FINDINGS.md。本轮为单Agent自审，没有独立Reviewer。
 
 必要原附件副本/解压证据/分析约123.4MiB逻辑字节保留，不代表物理卷新增空间；无重复运行包或缓存需回收，无删除操作。未改真实配置/驱动/运行库，无merge/push/Release或关机。诊断已交付，全部随机卡顿的最终根因和现场修复仍未证明。
+
+## 2026-11-12 自动识别、60→30与间歇卡顿修复及测试视频
+
+用户追加把自动识别仅稳定帧率有效、60→30容易顿卡与附件间歇卡顿一起修复，并在本人不在电脑前时要求制作测试视频。前轮诊断存档57c75cd，检查点checkpoint/pre-dedup-stutter-repair-20261112，隔离分支codex/dedup-stutter-repair-20261112。沿用E盘活动树与共享build，不改桌面脏树、驱动、真实用户设置或运行库；单Agent自审，无独立Reviewer。
+
+ContentDedup将独立滚动内容率与固定周期拟合分开；回调picture serial区分软件漏读与源低帧率，静止刷新不虚构新图。CaptureHalfRate使用相邻新→重复证据和回调序列，每对取一份；静止不误触发相位换挡，驱动PTS漂移与mailbox漏读不触发相邻追取。软件Drop不重启整个内容时钟，静止hold周期与此前停顿跨度分开，FG预算与VFG旧成本在硬断点／呈现代之间隔离。QML在实时生产前启用异步有界日志，排队4096行／2MiB，上限丢弃／截断明确报告，显式flush／关闭排空。另修Waiting／EOF真实完成快照滞后，没有造帧或改计数公式。
+
+构建命令：py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-dedup-stutter-20261112 --root E:/项目/Veyra/worktrees/screen-recording-fix-20261022 --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --label 2.1.5-dedup-stutter-test --jobs 2 veyra_qml_ui veyra_live_presentation_tests veyra_repair_contract_tests veyra_presentation_pacing_tests。最终产品相关4目标13.3s通过，logs/codex-dedup-stutter-20261112/build-20261112-172824/receipt.json；此前完整8目标213.2s，后续仅测试工具全片时长入口5.3s。构建并发2，所有单进程测试≤300s。当前EXE Product/FileVersion 2.1.5-dedup-stutter-test，SHA256 e0e8d66ad55387cfc0c8b22e996d5f2a61aa42d501cae2a030206330f257eb60；最后仅纠正日志锁归属注释，不影响二进制行为。
+
+执行报告目录cpu_qa.py、replay.py／replay_matrix.py、supplementary.py、final_followup.py、diagnostic_matrix.py、integrity.py（均py -3.11 -X utf8 -B -I）。CPU-QA最终日志12、时序230、调度156、预览57、合同301、等待9全通过；预设251、半速热切换34、回滚33通过，SDR/HDR各8次图切换debugErrors0；QML显式文件输出qml-dedup-final.txt实际7/0/0。REPLAY-MATRIX-final 13组生产引擎回放覆盖无FG/DLSS/VFG/XeSS/FSR/NR+VFG、稳定／变帧率／半速／注入漏读，全部通过，无观察到的新图误丢、PTS单调不超前；正常运行日志丢弃0。最新产品FINAL-FOLLOWUP：Waiting与EOF6项通过，1800处理／1800完成／1800真实呈现；稳定30→DLSS60约59.952提交fps，间隔P99 16.999ms；半速VFG约59.953、P99 17.371ms；自动VFG漏读恢复最大phase35.277ms。所有Present与分位数均为软件提交，非屏幕刷新或光学延迟。
+
+按用户要求生成60秒1080p60技术测试片。media/diagnostic60.mp4 H264全I固定QP18，374011919字节，SHA256 009e37ea094237e3d823da91fc2cfadaf4ef19131f9d7103de889090ae7ce0f9；FFV1无损参考MKV284983614字节，二者3600帧完整解码，重复图不一致0、新图不可见0。Pillow/FFmpeg管道生成，图中计数仅随真实新图更新；没有原始大文件落盘。另有1.65MiB观看版preview.mp4及已检查JPG，观看版不作像素真值。片段30/40/20–60变帧/60/30带已知250ms源停顿/静止/恢复30，真值JSON、CSV、framemd5和make_diagnostic_video.py保留。DIAGNOSTIC-MATRIX与独立DIAGNOSTIC-AUDIT：三组全片回放通过，自动无FG及NR+VFG各3600连续采样、1898次画面变化全部保留（包括最后一组），半速索引0到3598步长2共1800帧，间隔33.3333/33.3334ms。帧迹环仅代表采样窗口，完整全片结论来自完整决策日志；素材故意停顿不算软件新卡顿。
+
+实卡PHYSICAL-MATRIX：T911 4K60 NV12＋1080p一层NR，自动DLSS2X、60→30 DLSS4X、自动VFG2X，窗口/全屏请求6段，VFG暂停/恢复/停止/重启通过，无ERROR。但连续像素maxDiff0，是静止PS5画面，未把它冒充动态游戏识别；用户不在场后用上述技术片验证生产采集回放入口。其他现场GPU、HDR动态去重与屏幕端到端延迟未验。外部1.28秒回调断档的USB/HDMI/驱动/阻塞根因未证实；348ms停顿未抓当时调用栈，异步日志测试证明消除生产者的sink I/O依赖，不证明现场唯一根因；GPU欠速不能承诺凭软件调度完全消除。
+
+失败证据完整保留：旧实现先失败两项新回归；Logger测试对象过大在启动前0xC00000FD，改堆分配后12项通过，生产单例未因此改造；365次scene cut的首版随机图夹具改为连续运动，未关闭检测；冷缓存NR+FG约10s超过最初8s测试启动窗，放宽启动至30s后仍要求第12帧同一400ms等待内进展；源尾帧快照1798实际1800属于产品统计缺口，最终补发真实快照通过。第三方ANSI日志解码的首次失败、QML空输出不算通过、cmd多嵌套引号及Unicode/管道观察失败分别留回执后纠正，没有隐藏。已确认Logger首败PID27168／dump UTC与回执相同秒，SHA25680e69bd1…迁到E盘logs同任务/logger-first-stack-overflow-27168.dmp，C盘该系统自动dump入口移除，其他用户dump不动。
+
+最终启动入口E:/项目/Veyra/tests/codex-dedup-stutter-20261112/启动自动与60转30修复测试.cmd，manual-profile独立，默认无输入连接；实际cmd启动/进程路径/退出0已核对，无ERROR，104个QML文件与源码一致，无测试探针。97运行组件与供体逐字节一致，产品与测试EXE私有拷贝，其余只读运行库／资源硬链接，无SDK/模型/二进制入Git。产物统一E:/项目/Veyra/{tests,logs,reports,tmp}/codex-dedup-stutter-20261112；CLEANUP.json按逻辑字节与硬链接分别记账，保留当前构建／视频真值／失败与最终证据，未做重复整包。源码方案／验收见DEDUP_STUTTER_REPAIR_PLAN_2026-11-12.md、DEDUP_STUTTER_REPAIR_2026-11-12.md，最终提交与回执见reports同任务/SOURCE-COMMIT.json、FINAL.json。未合main、未推送或发布，不关机。

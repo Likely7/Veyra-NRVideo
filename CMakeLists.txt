@@ -109,6 +109,11 @@ target_compile_definitions(veyra_base PUBLIC
 target_include_directories(veyra_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(veyra_base PUBLIC bcrypt wintrust crypt32 version)
 
+add_executable(veyra_logger_tests tests/unit/LoggerTests.cpp)
+target_compile_features(veyra_logger_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_logger_tests PRIVATE veyra_base)
+veyra_apply_warnings(veyra_logger_tests)
+
 add_library(veyra_gfx STATIC
   src/gfx/GpuSchedulingPriority.cpp
   src/gfx/D3D12DeviceContext.cpp

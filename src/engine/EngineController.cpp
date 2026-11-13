@@ -522,6 +522,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     // File replay has no hardware arrival clock; retain its continuous PTS anchor.
     // VEYRA_TEST_REPLAY_AS_CARD=1 delivers it like a capture card instead (see below).
     const bool testReplayAsCard=options.captureReplayForTest&&GetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_AS_CARD",nullptr,0)>0;
+    const bool cardTiming=physicalCapture||testReplayAsCard;
     const bool pairAnchoredLive=physicalCapture||isStream||isScreen||testReplayAsCard;
     source::IFrameSource* activeSource=physicalCapture?static_cast<source::IFrameSource*>(&captureSource):&source;
     if(isScreen)activeSource=&screenSource;
@@ -1166,6 +1167,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             const bool adaptiveCapturePhase=(physicalCapture||testReplayAsCard||(isScreen&&GetEnvironmentVariableW(L"VEYRA_TEST_ADAPTIVE_SCREEN_PHASE",nullptr,0)>0))&&GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_CAPTURE_PHASE",nullptr,0)==0;
             static const double testArrivalJitterMs=[]{wchar_t v[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_ARRIVAL_JITTER_MS",v,16)?std::clamp(_wtof(v),0.0,10.0):0.0;}();
             uint32_t testArrivalSeed=7;int64_t testCardStart=0;double testCardFirstPtsMs=0;
+            const unsigned testReplayDropEvery=[]{wchar_t value[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_DROP_EVERY",value,16)?unsigned(std::clamp(_wtoi(value),0,120)):0u;}();
+            bool testReplayDropPending=false;
             int64_t nextFgAdmissionLog=0,nextFgRejectionLog=0;
             uint64_t fgAdmittedPairs=0,fgRejectedPairs=0,fgReducedPairs=0;int64_t nextFgReducedLog=0;
             std::atomic<uint64_t> historyResets=0,presentationDrains=0,presentationCompletedReal=0,presentationSkippedGenerated=0,presentationCancelledJobs=0;
@@ -1290,19 +1293,21 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // see FgRecoveryBudget::complete. A history reset, an FG
                     // recovery and a live VFG pair settling after a long skip
                     // (FgCostSettling) are warmup samples.
+                    const bool currentCost=batch.batch.identity.settingsRevision==fgBudgetRevision&&
+                        watch.presentationGeneration==presentationGeneration.load();
                     const auto vfgHeldUntil=vfgCostSettling.holdUntil();
-                    const bool costSettling=batch.batch.identity.settingsRevision==fgBudgetRevision&&isCapture&&!legacyLivePacing&&options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&
+                    const bool costSettling=currentCost&&isCapture&&!legacyLivePacing&&options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&
                         vfgCostSettling.observe((batch.fgCandidates>0&&batch.fgEvaluated==0)||batch.fgFastForBudget,batch.fgEvaluated>0&&!batch.fgFast,host100ns());
                     // Each model's own time. The steady time is the low envelope: an
                     // evaluation after skips can cost 1.7x (see FgCostSettling).
-                    if(batch.batch.identity.settingsRevision==fgBudgetRevision&&watch.fgExecutionMs&&batch.fgEvaluated>0&&!batch.fgReduced&&!batch.historyReset&&!batch.fgRecovery){
+                    if(currentCost&&watch.fgExecutionMs&&batch.fgEvaluated>0&&!batch.fgReduced&&!batch.historyReset&&!batch.fgRecovery){
                         auto& cost=batch.fgFast?vfgFastFgMs:vfgChosenFgMs;const double ms=*watch.fgExecutionMs;
                         cost=cost>0&&ms>=cost?cost+.1*(ms-cost):ms;
                         if(!batch.fgFast){vfgChosenAt=host100ns();++vfgChosenPairs;}
                     }
                     if(vfgCostSettling.holdUntil()!=vfgHeldUntil)veyra::log::info("vfg-probe",std::format("revision={} retryInMs={} (a VFG probe after a long skip stayed over budget; failed probes retry after 2, 4, then every 8 s)",options.settings.revision,(vfgCostSettling.holdUntil()-host100ns())/10000));
-                    if(batch.batch.identity.settingsRevision==fgBudgetRevision)fgBudget.complete(watch.gpuExecutionMs,batch.fgEvaluated>0,batch.historyReset||batch.fgRecovery||costSettling,host100ns(),watch.fgExecutionMs,!batch.fgReduced&&!batch.fgFast);
-                    if(options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&batch.batch.identity.settingsRevision==fgBudgetRevision){
+                    if(currentCost)fgBudget.complete(watch.gpuExecutionMs,batch.fgEvaluated>0,batch.historyReset||batch.fgRecovery||costSettling,host100ns(),watch.fgExecutionMs,!batch.fgReduced&&!batch.fgFast);
+                    if(options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&currentCost){
                         if(batch.historyReset)vfgOverload.reset();
                         if(!batch.historyReset&&!batch.fgRecovery&&!batch.fgReduced&&batch.fgEvaluated+1==options.fgMultiplier)
                             vfgOverload.observe(watch.fgExecutionMs,watch.firstFgExecutionMs,host100ns());
@@ -1398,6 +1403,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             };
             auto drainLivePresentation=[&]{cadence.reset();if(liveScheduler){++presentationDrains;liveScheduler->cancel();pollCompletions();pendingCompletions.clear();}pairLatency.reset();};
             auto advanceLive=[&]{applyPresentation();if(liveScheduler){pollCompletions();if(stop_||(paused_&&!seekPreviewPending)||seekSeconds_>=0){liveScheduler->cancel();cadence.reset();}else liveScheduler->advance(host100ns());}};
+            FrameFlowWindow* waitingFlow=nullptr;uint64_t waitingPresented=0;size_t waitingPending=0;
+            auto publishWaitingProgress=[&](bool force=false){
+                if(!frameFlow)return;
+                const auto presented=presentationCompletedReal.load();const auto pending=pendingCompletions.size();
+                if(!force&&waitingFlow==frameFlow.get()&&waitingPresented==presented&&waitingPending==pending)return;
+                waitingFlow=frameFlow.get();waitingPresented=presented;waitingPending=pending;
+                // A source can stop delivering after submitting its last batch.
+                // Publish actual completion/presentation progress without waiting
+                // for another input. No GPU work, timer change or frame replay.
+                const auto flow=frameFlow->snapshot(host100ns());
+                std::lock_guard lock(mutex_);snapshot_.metrics.flow=flow;
+            };
             const bool preciseDeadlines=GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_DEADLINE_WAIT",nullptr,0)==0;
             const bool checkpointPresentation=GetEnvironmentVariableW(L"VEYRA_TEST_NO_PROCESS_PRESENT",nullptr,0)==0;
             const bool capturePresentAfterReady=GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_PRESENT_AFTER_READY",nullptr,0)>0;
@@ -1985,7 +2002,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 loopTrace.mark("controlAndSchedule");
                 if(injectSourceGap&&frames>=12){
                     if(!sourceGapUntil){sourceGapUntil=Clock::now()+std::chrono::milliseconds(400);veyra::log::info("capture-test","inject 400ms Waiting before next source read");}
-                    if(Clock::now()<*sourceGapUntil){advanceLive();waitLive();continue;}
+                    if(Clock::now()<*sourceGapUntil){advanceLive();publishWaitingProgress();waitLive();continue;}
                 }
                 pipeline::FramePacket pkt;const AVFrame* frame=imageFrame;
                 if(cachedFrame&&((initialRemoteFramePending||initialFileFramePending)||(transaction&&(!isCapture||paused_)))){frame=cachedFrame;pkt=cachedPacket;initialRemoteFramePending=false;initialFileFramePending=false;}
@@ -1995,17 +2012,19 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // the next real capture sample arrives. Never bind old PTS to now.
                     while(transaction&&isCapture&&rs==source::SourceReadStatus::Waiting&&!stop_){
                         if(paused_&&cachedFrame){frame=cachedFrame;pkt=cachedPacket;rs=source::SourceReadStatus::Frame;break;}
-                        advanceLive();waitLive();rs=physicalCapture?captureSource.tryRead(pkt,&frame):activeSource->read(pkt,&frame);
+                        advanceLive();publishWaitingProgress();waitLive();rs=physicalCapture?captureSource.tryRead(pkt,&frame):activeSource->read(pkt,&frame);
                     }
                     if(stop_)break;
-                    if(rs==source::SourceReadStatus::Waiting){if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}advanceLive();waitLive();continue;}
+                    if(rs==source::SourceReadStatus::Waiting){if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}advanceLive();publishWaitingProgress();waitLive();continue;}
                     if(rs==source::SourceReadStatus::Eos){
                         fileInputEnded=true;
                         while(liveScheduler&&liveScheduler->occupancy()&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){advanceLive();if(liveScheduler->occupancy())waitLive();}
                         if(stop_)break;
                         if(liveScheduler&&liveScheduler->failed()){status(L"视频尾帧呈现失败，请查看诊断",true);break;}
                         if(paused_)continue;
-                        collectTimings();seekPreviewPending=false;status(L"视频已播放完毕");paused_=true;{std::lock_guard lock(mutex_);snapshot_.transport=TransportState::Ended;}continue;
+                        collectTimings();seekPreviewPending=false;status(L"视频已播放完毕");paused_=true;
+                        publishWaitingProgress(true);{std::lock_guard lock(mutex_);snapshot_.transport=TransportState::Ended;}
+                        continue;
                     }
                     if(rs!=source::SourceReadStatus::Frame||pkt.pts.isUnknown()){
                         if(physicalCapture){
@@ -2103,6 +2122,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     vramRecoverDone=step;vramRecoverCheckAt=Clock::now()+std::chrono::seconds(3);
                 }
                 const bool rereadCached=transaction&&frame==cachedFrame;
+                if(testReplayAsCard&&testReplayDropEvery>1&&!rereadCached){
+                    if(pkt.sequence%testReplayDropEvery==0){
+                        testReplayDropPending=true;
+                        veyra::log::info("capture-replay-drop",std::format("source={} (test-only missed mailbox input)",pkt.sequence));
+                        continue;
+                    }
+                    if(testReplayDropPending){pkt.flags|=static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Drop);testReplayDropPending=false;}
+                }
                 if(!isImage&&!isCapture&&seekSeconds_>=0)continue;
                 const bool halfRate=isCapture&&options.settings.content==ContentRate::Capture60To30&&
                     CaptureHalfRate::supported(activeSource->info().averageFps);
@@ -2112,6 +2139,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const int64_t driverPts100ns=pkt.pts.isUnknown()?0:pkt.pts.to100ns();
                 const auto capturePeriod=liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps);
                 bool captureClockCorrected=false;
+                int64_t dedupHoldInterval100ns=0;
                 if(physicalCapture&&!nativeCapture&&!captureSource.compressedVideo()&&!rereadCached&&
                    CaptureHalfRate::supported(activeSource->info().averageFps)&&!pkt.pts.isUnknown()&&pkt.arrivalHost100ns>0){
                     const bool wasCorrecting=capturePreviewClock.correcting();
@@ -2127,7 +2155,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         pkt.duration={capturePeriod,10000000};
                     }
                 }
-                if(reset||pipeline::breaksHistory(pkt.flags))captureSampler.reset();
+                // Drop is a late capacity-one mailbox reader, not a source clock
+                // boundary. Resetting the half-rate sampler here accepted each
+                // dropped packet as a new first frame, defeating 60->30 under load.
+                const bool cadenceBoundary=presentationGenerationResetRequired(reset,pkt.flags);
+                if(cadenceBoundary)captureSampler.reset();
                 const int64_t samplePts100ns=captureClockCorrected?pkt.pts.to100ns():driverPts100ns;
                 if(dedupActive&&!rereadCached&&!pkt.pts.isUnknown()){
                     const auto interval=capturePeriod;
@@ -2136,15 +2168,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const bool pictured=pipeline::captureFramePicture(frame,enginePictures,gd.packedInput==6||gd.packedInput==7,picture);
                     if(pictured&&picture.repeat){dedupRepeatMax8=std::max(dedupRepeatMax8,picture.max8);dedupRepeatMaxOver=std::max(dedupRepeatMaxOver,picture.over);}
                     else if(pictured&&picture.over)dedupNewMinOver=std::min(dedupNewMinOver,picture.over);
-                    const bool boundary=reset||pipeline::breaksHistory(pkt.flags)||dedupRevision!=options.settings.revision;
+                    const bool boundary=cadenceBoundary||dedupRevision!=options.settings.revision;
                     dedupRevision=options.settings.revision;
                     const auto content=options.settings.content;
                     const int64_t hint=content==ContentRate::Fps30?333333:content==ContentRate::Fps50?200000:content==ContentRate::Fps60?166667:0;
-                    const auto decision=contentDedup.observe(pictured?&picture.id:nullptr,pkt.pts.to100ns(),interval,boundary,hint);
+                    const auto* capturedPicture=pipeline::captureUploadFrame(frame);
+                    const auto pictureSequence=capturedPicture&&capturedPicture->pictureValid?pkt.sequence:0;
+                    const auto decision=contentDedup.observe(pictured?&picture.id:nullptr,pkt.pts.to100ns(),interval,boundary,hint,pictureSequence);
                     const double dedupUs=elapsedMs(compareStart)*1000;
                     if(veyra::log::verboseFrameLogs())veyra::log::info("content-dedup-frame",std::format("source={} pts100ns={} keep={} reason={} picture={:x} withinBand={} over={} maxDiff={} contentPts100ns={} intervalMs={:.3f} cpuUs={:.1f}",
                         pkt.sequence,pkt.pts.to100ns(),decision.keep,decision.reason,pictured?picture.id:0,picture.repeat,picture.over,picture.max8,decision.contentPts,decision.interval/1e4,dedupUs));
                     if(!decision.keep){std::lock_guard lock(mutex_);++snapshot_.captureRateSkipped;continue;}
+                    dedupHoldInterval100ns=decision.holdInterval;
                     pkt.pts={decision.contentPts,10000000};
                     if(decision.interval>0)pkt.duration={decision.interval,10000000};
                 }else if(halfRate&&!rereadCached){
@@ -2155,7 +2190,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const auto* upload=pipeline::captureUploadFrame(frame);
                     const uint64_t* picture=upload&&upload->pictureValid?&upload->pictureId:nullptr;
                     const auto shifts=captureSampler.shifts();
-                    if(!pkt.pts.isUnknown()&&!captureSampler.accept(pkt.pts.to100ns(),interval,false,picture)){
+                    if(!pkt.pts.isUnknown()&&!captureSampler.accept(pkt.pts.to100ns(),interval,false,picture,pkt.sequence)){
                         std::lock_guard lock(mutex_);++snapshot_.captureRateSkipped;continue;
                     }
                     if(captureSampler.shifts()!=shifts||(picture&&captureSampler.gridKept()%600==0))
@@ -2300,7 +2335,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     nextFgAdmissionLog=now+10000000;if(!admitted)nextFgRejectionLog=now+10000000;
                     veyra::log::info("live-fg-admission",std::format("timeline={} revision={} source={} multiplier={} requestedMultiplier={} admitted={} admittedPairs={} rejectedPairs={} remainingDeadlineMs={:.3f} firstDeadlineMs={:.3f} queuedGpuMs={:.3f} predictedMs={:.3f} elapsedMs={:.3f} blitGpuP95Ms={:.3f} presentCpuP95Ms={:.3f} warmingHistory={} (CPU Present is backpressure, not added GPU cost; firstDeadlineMs=-1 when unused)",timeline,batch.identity.settingsRevision,batch.identity.sourceFrameId,previewFgMultiplier,options.fgMultiplier,admitted,fgAdmittedPairs,fgRejectedPairs,double(deadline-now)/10000,firstDeadline?double(firstDeadline-now)/10000:-1,queuedMs,fgBudget.predicted(now,warmingHistory).value_or(-1),elapsed,blit,livePresent.p95(),warmingHistory));
                 };
-                if(fgBudgetRevision!=options.settings.revision){fgBudget.reset();vfgOverload.reset();vfgCostSettling.reset();vfgChosenFgMs=vfgFastFgMs=0;liveArrival.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;displayFgGate.reset();}
+                if(fgBudgetRevision!=options.settings.revision||hardFrameReset){fgBudget.reset();vfgOverload.reset();vfgCostSettling.reset();vfgChosenFgMs=vfgFastFgMs=0;liveArrival.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;displayFgGate.reset();}
                 previewFgMultiplier=options.fgMultiplier;
                 // An output cap used to only drop candidates at present time, so
                 // the GPU still generated frames that were thrown away: at 6X on
@@ -2343,12 +2378,19 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.displayFgRefreshHz=refreshHz;snapshot_.displayFgContentFps=contentFps;
                 }
                 {std::lock_guard lock(mutex_);snapshot_.previewFgMultiplier=previewFgMultiplier;}
-                const auto liveInterval=physicalCapture?
+                // A deduplicated packet spans the last kept frame. After OUR
+                // mailbox miss that duration includes missing inputs, so it must
+                // not stretch the next pair's scheduling phase and cause another
+                // miss. The A/B timestamps used by interpolation stay untouched.
+                const auto phaseDuration=dedupHoldInterval100ns>0?
+                    pipeline::Rational{dedupHoldInterval100ns,10000000}:gapCandidate&&dedupActive?
+                    pipeline::Rational{contentDedup.intervalHint(capturePeriod),10000000}:pkt.duration;
+                const auto liveInterval=cardTiming?
                     // A span across frames WE skipped is not the source cadence. Using it
                     // stretched the next pair's presentation over the gap, which made
                     // the mailbox drop again: one background hiccup locked live capture
                     // at ~10 pairs/s (field log 2026-10-04, 60 -> 22 fps until refocus).
-                    capturePairInterval100ns(pkt.duration,activeSource->info().averageFps,lastProcessedPtsMs,pts,historyReset||gapCandidate):
+                    capturePairInterval100ns(phaseDuration,activeSource->info().averageFps,lastProcessedPtsMs,pts,historyReset||gapCandidate||dedupHoldInterval100ns>0):
                     livePhaseInterval100ns(pkt.duration,activeSource->info().averageFps/(isScreen&&halfRate?2:1),isScreen);
                 const auto processingAllowance=isCapture&&options.fg&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)?
                     fgBudget.processingAllowance(host100ns(),liveInterval):0;
@@ -2360,7 +2402,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const bool smoothAnchor=pairAnchoredLive&&options.fg&&!isStream&&!legacyLivePacing&&
                     !presentSinkFrameGeneration(options.settings.frameGenerationBackend);
                 const bool smoothTransportAnchor=smoothAnchor&&!dedupActive;
-                const bool smoothContentAnchor=smoothAnchor&&dedupActive&&physicalCapture&&!pkt.pts.isUnknown();
+                const bool smoothContentAnchor=smoothAnchor&&dedupActive&&cardTiming&&!pkt.pts.isUnknown();
                 const auto transportInterval=smoothContentAnchor?
                     liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps):0;
                 const auto pairDelay=adaptiveCapturePhase&&options.fg&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)?
