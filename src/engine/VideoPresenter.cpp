@@ -7,8 +7,8 @@
 #include <array>
 #include <memory>
 namespace veyra::engine {
-bool VideoPresenter::beginSourceInput(){
-    if(!reflexInputFrame_&&reflex_.active())reflexInputFrame_=reflex_.begin();
+bool VideoPresenter::beginSourceInput(uint64_t stallUs){
+    if(!reflexInputFrame_&&reflex_.active())reflexInputFrame_=reflex_.begin(stallUs);
     auto* xess=sink_.xess();if(!xess)return true;
     // Waiting/filtered inputs keep the same preparation ID. Do not sleep again
     // until one accepted source has been submitted to the enhancement graph.
@@ -500,6 +500,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         publishLiveCoverage(hdrCurve,identity);lastBuffer_=backBufferIndex;hasPresented_=true;
     if(presentationQueue_)graph.presentationSubmitted(slot,fence,ring.lastSignaledValue());
     const auto dxgiStart=std::chrono::steady_clock::now();
+    lastPresentCallHost100ns_=std::chrono::duration_cast<std::chrono::nanoseconds>(dxgiStart.time_since_epoch()).count()/100;
     reflex_.presentStart(reflexFrame,generated);
     const bool presented=sink_.present(st);
     reflex_.presentEnd(reflexFrame,generated);

@@ -30,8 +30,9 @@ private:
 };
 // The "1% low" a frame-time overlay (RTSS, PresentMon) reports for an
 // application: the 99th-percentile interval between consecutive presents over
-// the last ten seconds, as a frame rate. Like those tools it measures Present
-// calls, the same events as the submit rate, not panel scanout. A gap over half
+// the last ten seconds, as a frame rate. Like those tools it spaces Present
+// calls by their start (FrameCompletionRates::presented paceAt), the same events
+// as the submit rate, not panel scanout. A gap over half
 // a second is a pause or a seek rather than a slow frame: it is not counted and
 // the next present starts a new run.
 class FramePaceWindow {

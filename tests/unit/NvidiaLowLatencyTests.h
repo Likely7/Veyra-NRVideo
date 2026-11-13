@@ -1,5 +1,6 @@
 #pragma once
 #include "veyra/gfx/ReflexSession.h"
+#include <chrono>
 #include <vector>
 namespace nvidia_latency_test {
 using R=veyra::gfx::ReflexSession;
@@ -8,7 +9,12 @@ inline std::vector<R::SleepParams> modes;
 inline std::vector<Event> events;
 inline int sleeps=0;inline bool failSleep=false,failQueue=false,failDisable=false,failNotify=false;
 inline int __cdecl set(IUnknown*,R::SleepParams* p){if(!p->low&&failDisable)return -1;modes.push_back(*p);return 0;}
-inline int __cdecl sleep(IUnknown*){++sleeps;return failSleep?-1:0;}
+inline int sleepDelayUs=0;
+inline int __cdecl sleep(IUnknown*){
+    ++sleeps;
+    if(sleepDelayUs>0){const auto end=std::chrono::steady_clock::now()+std::chrono::microseconds(sleepDelayUs);while(std::chrono::steady_clock::now()<end){}}
+    return failSleep?-1:0;
+}
 inline int __cdecl marker(IUnknown* target,R::MarkerParams* p){const bool queue=target==reinterpret_cast<IUnknown*>(uintptr_t(2));events.push_back({p->frame,p->type,0,queue});return queue&&failQueue?-1:0;}
 inline int __cdecl notify(ID3D12CommandQueue*,uint32_t type){return type==3&&!failNotify?0:-1;}
 template<class Check>void run(Check check){
@@ -61,5 +67,21 @@ template<class Check>void run(Check check){
     failNotify=false;
     check(std::all_of(modes.begin(),modes.end(),[](const auto& p){return p.boost==0;}),"every enable, disable and failure-recovery NVAPI call leaves Boost off");
     R old({set,sleep,marker,nullptr});check(!old.enable(device,true,queue)&&!old.active(),"FG does not masquerade as enabled on a driver without out-of-band queue notification");
+    // A driver Sleep that holds every source past the stall limit (field log
+    // 2026-11-12: 26 ms at 59.94 fps) ends low latency; short ones never do.
+    check(r.enable(device)&&r.active()&&!r.stalled(),"enable before the sleep stall check");
+    for(int i=0;i<40;++i)r.begin(1000000);
+    check(r.active()&&!r.stalled(),"sleeps within the stall limit keep low latency on");
+    for(int i=0;i<32;++i){sleepDelayUs=i%16<R::kStallSleeps-1?1500:0;r.begin(1000);}
+    sleepDelayUs=0;
+    check(r.active()&&!r.stalled(),"fewer than ten long sleeps in any sixteen keep low latency on");
+    sleepDelayUs=1500;unsigned calls=0;
+    while(calls<R::kStallWindow&&r.active()){r.begin(1000);++calls;}
+    sleepDelayUs=0;
+    check(!r.active()&&r.stalled()&&r.failed()&&!r.disablePending()&&calls<=R::kStallSleeps,"ten sleeps over the limit end low latency and report a stall");
+    check(!modes.back().low&&!modes.back().boost,"a stall revokes the driver mode");
+    check(r.enable(device)&&r.active()&&!r.stalled()&&!r.failed(),"re-enable clears the stall state");
+    sleepDelayUs=1500;for(int i=0;i<20;++i)r.begin();sleepDelayUs=0;
+    check(r.active(),"without a stall limit (files) long sleeps are not judged");
 }
 }

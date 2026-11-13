@@ -1099,3 +1099,45 @@ ContentDedup将独立滚动内容率与固定周期拟合分开；回调picture 
 失败证据完整保留：旧实现先失败两项新回归；Logger测试对象过大在启动前0xC00000FD，改堆分配后12项通过，生产单例未因此改造；365次scene cut的首版随机图夹具改为连续运动，未关闭检测；冷缓存NR+FG约10s超过最初8s测试启动窗，放宽启动至30s后仍要求第12帧同一400ms等待内进展；源尾帧快照1798实际1800属于产品统计缺口，最终补发真实快照通过。第三方ANSI日志解码的首次失败、QML空输出不算通过、cmd多嵌套引号及Unicode/管道观察失败分别留回执后纠正，没有隐藏。已确认Logger首败PID27168／dump UTC与回执相同秒，SHA25680e69bd1…迁到E盘logs同任务/logger-first-stack-overflow-27168.dmp，C盘该系统自动dump入口移除，其他用户dump不动。
 
 最终启动入口E:/项目/Veyra/tests/codex-dedup-stutter-20261112/启动自动与60转30修复测试.cmd，manual-profile独立，默认无输入连接；实际cmd启动/进程路径/退出0已核对，无ERROR，104个QML文件与源码一致，无测试探针。97运行组件与供体逐字节一致，产品与测试EXE私有拷贝，其余只读运行库／资源硬链接，无SDK/模型/二进制入Git。产物统一E:/项目/Veyra/{tests,logs,reports,tmp}/codex-dedup-stutter-20261112；CLEANUP.json按逻辑字节与硬链接分别记账，保留当前构建／视频真值／失败与最终证据，未做重复整包。源码方案／验收见DEDUP_STUTTER_REPAIR_PLAN_2026-11-12.md、DEDUP_STUTTER_REPAIR_2026-11-12.md，最终提交与回执见reports同任务/SOURCE-COMMIT.json、FINAL.json。未合main、未推送或发布，不关机。
+
+
+## 2026-11-13 Claude复审Codex送帧/去重修复与1% low、采集延迟修正
+
+用户要求复审Codex顺着Claude排查所做的修复并修好，指出1% low仍未解决、软件延迟未看。读Codex线程原始记录中的用户原话（只取用户输入作背景）。基线6e3747a，新分支claude/live-latency-review-20261113，活动树未提交；Codex分支与提交原样保留。
+
+复审：5ab263b检查点送帧（独立队列、不重入图、resolveFrame只读围栏/状态位、租约不在处理中释放）、无补帧GPU交接（读下一帧前仍等完成）、6e3747a去重滚动帧率/相邻证据/序号取帧/Drop不重置与异步日志均未发现实现缺陷；先怀疑flush目标行被挤掉会永久等待，复核后不成立（挤掉目标的必是更新的行），仅补关闭时同步/异步切换窗口。记录未改的行为变化：硬断点重置补帧预算与相位。
+
+改动：advanceLive先送到期帧再完成轮询；图处理前、VFG每次生成提交后增加检查点（不等待未到期帧）；1% low按DXGI Present调用开始计时；PictureReference新画面超4096分量即停、参考帧拷贝由采集回调在发布后提交；ReflexSession实时源Sleep 16次中10次超max(6ms,0.6×源帧间隔)即本次关闭并给新状态（四语翻译）。撤回：检查点最多0.3ms精确等待（真实帧P99迟到0.2–0.39→0.01–0.07ms，但推后下一帧GPU、相位学大、撞车时延迟+0.3–0.4ms，1% low不变）；相位改256对P99（生成帧迟到比例不降，尖峰使4X真实帧P95 34.9→38.4ms）。
+
+构建：py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-low-latency-audit-20261112 --root <活动树> --build-dir E:/项目/Veyra/build/claude-screen-recording-20261022 --reconfigure --label 2.1.5-latency-review-test --jobs 2 veyra_qml_ui veyra_live_timing_tests veyra_repair_contract_tests veyra_logger_tests veyra_presentation_worker_tests veyra_realtime_preview_tests。首次因测试变量名small与Windows宏冲突失败，改名后通过（67.0s），后续增量通过。CPU-QA：日志12、时序238（新增8）、调度156、预览57、合同308（新增7）全通过；i18n 2794条缺失0。
+
+实机：reports同任务live2.py/probe2.qml，T911 4K60 NV12+1080p NR，进程内探针无模拟输入，stdout→NUL。首次基线运行时有真实鼠标操作并退出全屏，该段不计；之后只测窗口。探针移除补帧的写法错误使前两次未跑完后两段，改为开关补帧后完整。同探针段末界面1% low：DLSS2X 115.0/113.8→117.1/116.1，60→30+4X 115.2→116.6，VFG2X 114.5→115.5，仅NR 57.5→58.2；提升主要来自计时口径，实际节奏改善小，各条件单次、运行间±1–2fps。自动去重段画面逐像素静止，新画面路径仅有微基准（交出前0.5→0.001ms）。剩余主因为生成帧期限按就绪P95（约5–8%晚0.1–0.4ms），实测回放推算期限后移0.25ms约119–119.8（VFG116.6–119.6），未实施，待用户取舍。延迟现状：无补帧回调→Present约1.5ms，窗口合成多一刷新（320Hz约3ms），全屏直接上屏，补帧2X真实帧约到达后17ms。
+
+最终实测EXE 3b6a458c…，之后仅改一行日志注释重编为4a1ba8d9…。入口E:/项目/Veyra/tests/claude-low-latency-audit-20261112/启动送帧精度与延迟复审测试.cmd（manual-profile独立）；测试stage为硬链接加私有EXE/catalog。证据reports同任务FINDINGS.md/FINAL.json，原始日志logs同任务。未合main、未推送或发布，不关机。
+
+### 2026-11-13 续：补帧期限后移0.25ms（用户选择）
+
+LiveArrivalSmoother::kLead100ns 5000→2500：原0.5ms提前量抵消了LivePairLatency按回调学习的0.5ms余量，生成帧期限落在GPU就绪P95。只影响按回调锚定的采集补帧（含60→30），去重内容锚点按锚点自身学习、余量本就完整，不变；串流不用该锚点。单测：新增余量关系1项；原“60Hz回放上报P95不增长”改为“增长不超过所选0.25ms”（实测模拟42.09→42.43ms，平均采集到屏仍低于旧锚点），时序239通过，其余同前。
+
+实机ab-shift（EXE a911f3f1…）：生成帧迟到DLSS 23–28→2–5/360、VFG 23–28→6、4X 4/539，P99迟到0.3–1.4→0.07ms；段末界面1% low DLSS2X 117.2/117.5、60→30+4X 116.3、VFG 115.0、仅NR 57.7（基线e0e8d66a为115.0/113.8、115.2、114.5、57.5），真实帧采集到上屏P50 17.4ms。推算的119未达成：期限后移后7–12%的呈现落在下一帧图处理中，在检查点晚0.1–0.3ms。随后试检查点最多0.3ms等待并把等待从相位学习中扣除（ab-hold，e21eae88…）：4X 119.2、VFG 118.1，但DLSS首段113.1、真实帧P95 18.6ms，生成帧迟到回升，撤回。最终源码与ab-shift逻辑相同（仅注释），重编9d077495…，CPU-QA全通过，测试stage已替换。剩余差距需要独立送帧线程，未实施。
+
+### 2026-11-13 续：补帧期限余量改为自动（用户要求，≤1ms）
+
+用户问固定0.25ms是否只对本机有效后，要求自动控制、1ms以内可接受。kLead100ns恢复5000：屏幕捕获（固定相位，余量本就充足）及其他非自适应路径不再多0.25ms。新增LiveDeadlineMargin（LivePairLatency.h），只作用于采集卡补帧对（adaptiveCapturePhase且非XeSS，含60→30与去重）：样本为生成帧在无额外余量时的期限余量，目标为P1+0.05ms，0–1ms，起点0.25ms，上升0.1ms/0.25s、回落0.04ms/0.25s，窗口240帧/4s，单帧最多计2ms晚，重置后前2s不学习；修订/硬断点/排空时重置。只计期限前已观察到就绪、或本步骤见过未完成（完成由事件即时观察）的生成帧，排除仅因线程忙而晚看的帧及historyReset/fgRecovery对。live-anchor日志增加deadlineExtraMs。
+
+第一版（ab-auto，5a7aea25…）只计“期限后仍未完成”，漏掉晚0.1–0.2ms的帧，某段生成帧迟到2.5%；开播热身把余量顶到0.9ms、6s才回落。改为“见过未完成即计入”（ab-auto2，c69cb393…）后迟到约1%；再加2s热身不学习、回落加倍（ab-auto3，d1a3d1f9…）后开播不再冲高。ab-auto3：生成帧迟到DLSS1–2/360、VFG3/359、4X8/539，去重0/180且余量降到0；余量DLSS0.30–0.53、VFG0.25–0.47、4X0.13–0.37ms；界面1% low DLSS 115.9/115.6、VFG115.9、4X116.1，真实帧采集到上屏P50 DLSS17.8ms。与固定0.25（ab-shift 117.2/117.4、115.0、116.2）及ab-auto2（115.6/117.5、116.7、116.2）相当，运行间差异明显；推算119未达成，原因是期限越后真实帧越常落入下一帧处理而在检查点晚送。单测调度164（新增8）、时序238（去掉固定提前量检查、回放P95恢复原界）、日志12、预览57、合同308通过。stage与手动入口已换d1a3d1f9…。用户决定暂不做独立送帧线程。
+
+
+### 2026-11-13 续：实机30帧复测与两处修复（用户要求）
+
+实机30帧游戏（T911 4K60+1080p NR，只测VFG）复测上一轮修复后，用户要求修两处。①FgRecoveryBudget::phaseAllowance：基础+补帧P95能在一个源间隔内完成时，60→30/直通采集补帧相位上限加补帧耗时；去重保持transport/2。②LiveFgRejectionHold：补帧连续被拒1s后真实帧就绪即送（准入仍用补帧相位），保持期间探测对的生成帧自动过期，连续8对被接纳恢复（第一版3对被每次预算探测解除，已改）。单测调度179（+15）、时序238、预览57、合同308、日志12通过。同时段A/B（d1a3d1f9→afea9bef）：60→30高+低4X 1% low 97.5→111–114、GPU迟到300→2–9/段，高2X 56→57–59，真实帧+0.3–2.2ms；高3X被拒时真实帧38–46→6.5ms，1% low 29.8→26.5–29.4（预算探测拖慢少数帧）。自动识别路径与修复前相同。只改注释重编为2a93ed2c，已放入手动入口tests/claude-low-latency-audit-20261112/启动送帧精度与延迟复审测试.cmd。另：同条件对照2.1.4正式包，高3X/4X同样被拒，非退化。报告E:/项目/Veyra/reports/claude-game30-live-20261113/FINDINGS.md。
+
+## 2026-11-12 ANR（Apex Neural Rendering）接入可行性调研
+
+用户提供ANR第三方帧生成文章截图，要求调研能否加入Veyra。本轮只读源码/官方资料并做静态包清单，不执行接入、不构建/跑GPU、不改驱动/真实配置/现有运行库、不联系作者。活动树已为Claude的claude/live-latency-review-20261113，HEAD6e3747a且已有未提交复审改动；保持分支与这些改动，仅追加本记录，不暂存或提交。
+
+官方仓库固定20a5e7731d899eca3a289904929879588448664d，核对最新FG-V.B15（11月12日17:49Z）。README仍称核心源码coming soon，公开的是nr-record/回放对比工具，SR/RR尚未开放Beta。官方nr-replay的provider路径直接调用ANR自身NGX D3D12导出，故可设计独立后端复用Veyra共享图/FG末端/调度，不必接OptiScaler注入或Streamline；这是接口可行性推断，没有加载DLL实测。当前Veyra估算运动/常量深度与上游游戏原生guidance不同，不能外推视频效果；官方RTX5090 4K2X 1.26→1.01ms仅生成阶段约少19.8%，214对562MB约少61.9%，均未本机复现，非Veyra全链路收益。B15刚修原生D3D12重建泄漏，实例可能延迟5秒释放，需后续生命周期/显存验证。
+
+GitHub工具不支持二进制下载，Python urllib仅HTTPS下载官方addon/full两小包，分别3231158/10856642字节，SHA256717e93b3…/45969be1…与API digest/大小一致；zipfile仅列目录和在内存读取README/ini/许可，未解压、执行安装器、加载DLL。Addon未见许可，Full唯一许可名为OptiScaler-GPL-3.0.txt，仓库license为null；未找到ANR核心明确集成/分发授权，Issue9已有第三方问许可未得维护者答复。不能把OptiScaler GPL自动套到ANR核心，也不能把自行下载DLL当许可问题已解决。没有上游代码/SDK/模型/二进制加入Veyra Git或依赖。
+
+报告E:/项目/Veyra/reports/codex-anr-research-20261112/FINDINGS.md及FINAL.json，官方API/原始源码参考快照在upstream，原ZIP只保留E:/项目/Veyra/downloads/codex-anr-research-20261112（约13.4MiB，无解压副本、构建或临时产物）。文档给出独立provider、先1080p SDR2X、真值/估算输入画质对照、GPU与全链路分开计时、去重/断点/热切换与5秒释放后的显存检查、再到4K/HDR/其他GPU的门槛。结论为可列实验候选，许可与视频实际验证未补齐前不作为成熟支持或随包分发；没有实现完成/性能通过声明。本轮没有merge/push/Release或关机。

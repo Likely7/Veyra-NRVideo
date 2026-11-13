@@ -12,9 +12,11 @@
 #include <array>
 #include <vector>
 #include "veyra/engine/FrameRateWindow.h"
+#include "veyra/engine/FrameFlowWindow.h"
 #include "veyra/engine/PresentationScheduler.h"
 #include "veyra/engine/PresentationSettings.h"
 #include <cmath>
+#include <chrono>
 #include <limits>
 #include <cstdio>
 int main(){
@@ -659,6 +661,56 @@ int main(){
         for(int i=0;i<700;++i){old.complete(t);t+=166667;}
         const auto recent=old.lowFps(t);
         check(recent&&std::abs(*recent-60.0)<0.1,"intervals older than ten seconds leave the 1% low");
+        // Presents begun exactly on a 120 fps grid whose calls take 0.15-0.55 ms:
+        // spaced by return, the call's own jitter sets the 1% low; by start, it does not.
+        veyra::engine::FrameCompletionRates byStart(0),byReturn(0);t=1000000;
+        veyra::diagnostics::FrameFlowMetrics startMetrics,returnMetrics;
+        for(int i=0;i<1200;++i){const int64_t call=1500+(i*7919)%4000;byStart.presented(i%2==0,t+call,t);byReturn.presented(i%2==0,t+call);t+=83333;}
+        byStart.snapshot(startMetrics,t);byReturn.snapshot(returnMetrics,t);
+        check(startMetrics.presentLow1Fps&&*startMetrics.presentLow1Fps>119.9&&returnMetrics.presentLow1Fps&&*returnMetrics.presentLow1Fps<116,
+              "1% low spaces presents by the call start, as RTSS and PresentMon, not by the call's return");
+        check(std::abs(startMetrics.presentSubmitFps-returnMetrics.presentSubmitFps)<0.2,"the submit rate counts the same presents either way");
+    }
+    {// PictureCompare.h: a new picture stops the comparison early; its reference copy can wait.
+        using veyra::pipeline::PictureReference;using veyra::pipeline::PicturePlane;using veyra::pipeline::PictureComponents;
+        std::vector<uint8_t> a(3840*64),b(3840*64);
+        for(size_t i=0;i<a.size();++i){a[i]=uint8_t(40+(i*7919)%160);b[i]=uint8_t(a[i]+20);}
+        PicturePlane pa{a.data(),3840,3840,64},pb{b.data(),3840,3840,64};
+        PictureReference ref;const auto first=ref.observe(&pa,1,PictureComponents::Bytes,PictureReference::kBand8,true);
+        check(first.commit&&!first.repeat,"a deferred new picture asks for its reference copy");
+        ref.commit(&pa,1);
+        const auto again=ref.observe(&pa,1,PictureComponents::Bytes,PictureReference::kBand8,true);
+        check(again.repeat&&again.id==first.id&&!again.commit,"after commit the same picture repeats");
+        const auto moved=ref.observe(&pb,1,PictureComponents::Bytes,PictureReference::kBand8,true);
+        check(!moved.repeat&&moved.commit&&moved.over>=PictureReference::kDecidedOver&&moved.over<=2*3840&&moved.id!=first.id,
+              "a frame changed everywhere is decided after kDecidedOver components, not after the whole picture");
+        const auto uncommitted=ref.observe(&pb,1,PictureComponents::Bytes,PictureReference::kBand8,true);
+        check(!uncommitted.repeat&&uncommitted.id!=moved.id,"a skipped commit makes the next sample new, never a false repeat");
+        ref.commit(&pb,1);
+        check(ref.observe(&pb,1,PictureComponents::Bytes).repeat,"the committed picture is the reference again");
+        auto sparse=b;for(int k=0;k<200;++k)sparse[size_t(k)*997%sparse.size()]=uint8_t(sparse[size_t(k)*997%sparse.size()]+9);
+        PicturePlane ps{sparse.data(),3840,3840,64};
+        const auto few=ref.observe(&ps,1,PictureComponents::Bytes);
+        check(!few.repeat&&few.over==200,"a small real change below kDecidedOver keeps its exact count");
+        // Timing only (no assertion): what a 4K NV12 capture callback spends before it
+        // can publish the frame, for a repeat and for a moving new picture.
+        std::vector<uint8_t> y0(3840*2160),uv0(3840*1080),y1(y0.size()),uv1(uv0.size());
+        for(size_t i=0;i<y0.size();++i){y0[i]=uint8_t(40+(i*7919)%160);y1[i]=uint8_t(y0[i]+9);}
+        for(size_t i=0;i<uv0.size();++i){uv0[i]=uint8_t(90+(i*104729)%60);uv1[i]=uint8_t(uv0[i]+5);}
+        PicturePlane f0[2]{{y0.data(),3840,3840,2160},{uv0.data(),3840,3840,1080}},f1[2]{{y1.data(),3840,3840,2160},{uv1.data(),3840,3840,1080}};
+        const auto ms=[](auto a,auto b){return std::chrono::duration<double,std::milli>(b-a).count();};
+        double repeatMs=1e9,deferredMs=1e9,commitMs=1e9,immediateMs=1e9;
+        for(int k=0;k<12;++k){
+            PictureReference timed;timed.observe(f0,2,PictureComponents::Bytes);
+            auto t0=std::chrono::steady_clock::now();timed.observe(f0,2,PictureComponents::Bytes);auto t1=std::chrono::steady_clock::now();
+            repeatMs=std::min(repeatMs,ms(t0,t1));
+            t0=std::chrono::steady_clock::now();timed.observe(f1,2,PictureComponents::Bytes,PictureReference::kBand8,true);t1=std::chrono::steady_clock::now();
+            timed.commit(f1,2);const auto t2=std::chrono::steady_clock::now();
+            deferredMs=std::min(deferredMs,ms(t0,t1));commitMs=std::min(commitMs,ms(t1,t2));
+            t0=std::chrono::steady_clock::now();timed.observe(f0,2,PictureComponents::Bytes);t1=std::chrono::steady_clock::now();
+            immediateMs=std::min(immediateMs,ms(t0,t1));
+        }
+        std::printf("PICTURE_TIMING 4K NV12 repeatMs=%.3f newBeforePublishMs=%.3f deferredCopyMs=%.3f newImmediateMs=%.3f (best of 12)\n",repeatMs,deferredMs,commitMs,immediateMs);
     }
     return failed?1:0;
 }

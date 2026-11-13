@@ -53,9 +53,10 @@ Logger::~Logger()
 {
     if(writer_.joinable()){
         flush();
-        {std::lock_guard lock(mutex_);stopping_=true;}
+        // Writers after this point use the synchronous sink (serialized with the
+        // writer by sinkMutex_); a line queued after the writer left was lost.
+        {std::lock_guard lock(mutex_);stopping_=true;async_=false;}
         writerWake_.notify_one();writer_.join();
-        {std::lock_guard lock(mutex_);async_=false;}
     }
     closeFile();
 }
@@ -248,12 +249,17 @@ void Logger::writerLoop()
         {
             std::unique_lock lock(mutex_);
             writerWake_.wait_for(lock,std::chrono::milliseconds(250),[&]{return stopping_||!pending_.empty()||flushRequested_>flushCompleted_;});
-            if(stopping_&&pending_.empty())break;
+            if(stopping_&&pending_.empty()){
+                if(flushRequested_>flushCompleted_){flushCompleted_=flushRequested_;flushDone_.notify_all();}
+                break;
+            }
             if(dropped_!=reportedDropped_){dropped=dropped_-reportedDropped_;reportedDropped_=dropped_;}
             if(!pending_.empty()){
                 next=std::move(pending_.front());pending_.pop_front();queuedBytes_-=next.text.size();
             }
-            if(flushRequested_>flushCompleted_&&written_>=flushTarget_)ticket=flushRequested_;
+            // Every line up to the flush target was written or dropped once the
+            // queue holds only newer ones; the popped line is written below first.
+            if(flushRequested_>flushCompleted_&&(pending_.empty()||pending_.front().sequence>flushTarget_))ticket=flushRequested_;
         }
         {
             std::lock_guard sinkLock(sinkMutex_);

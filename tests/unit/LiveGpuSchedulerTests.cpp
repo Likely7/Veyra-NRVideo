@@ -248,7 +248,78 @@ int main(){
         check(bounded,"2X/4X/6X preserves readiness and bounded phase at 29.97 Hz");
         phase.reset();check(phase.select(30001000,interval+90000,interval,multiplier)==interval+90000,"reset discards earlier readiness");
     }
+    {// LiveDeadlineMargin: automatic extra (0-1 ms) so 99 of 100 generated frames are on time.
+        using veyra::engine::LiveDeadlineMargin;
+        // Base slack samples (deadline without extra minus readiness); one generated frame per 1/60 s.
+        const auto feed=[](LiveDeadlineMargin& m,int64_t& now,int count,auto slackOf){
+            for(int i=0;i<count;++i){now+=166667;const int64_t extra=m.extra(),deadline=now+extra;m.observe(now,deadline,deadline-extra-slackOf(i),extra);}
+        };
+        LiveDeadlineMargin easy;int64_t now=100000000;
+        check(easy.extra()==LiveDeadlineMargin::kStart100ns,"the margin starts at 0.25 ms");
+        feed(easy,now,1200,[](int){return int64_t(20000);});
+        check(easy.extra()==0,"generated frames 2 ms early give the whole margin back");
+        LiveDeadlineMargin late;now=100000000;
+        // One frame in twenty is 0.3 ms late without extra, the rest 0.4 ms early.
+        feed(late,now,600,[](int i){return i%20==7?int64_t(-3000):int64_t(4000);});
+        const auto settled=late.extra();
+        check(settled>=3000&&settled<=3000+LiveDeadlineMargin::kGuard100ns,"5% of frames 0.3 ms late: the margin covers them and no more");
+        LiveDeadlineMargin rare;now=100000000;
+        feed(rare,now,600,[](int i){return i%240==9?int64_t(-8000):int64_t(4000);});
+        check(rare.extra()==0,"one late frame in 240 does not buy margin for all the others");
+        LiveDeadlineMargin overload;now=100000000;
+        feed(overload,now,600,[](int){return int64_t(-50000);});
+        check(overload.extra()==LiveDeadlineMargin::kMax100ns,"a GPU that cannot keep up never costs more than 1 ms");
+        LiveDeadlineMargin warm;now=100000000;
+        feed(warm,now,110,[](int){return int64_t(-20000);});
+        check(warm.extra()==LiveDeadlineMargin::kStart100ns,"the first 2 s (feature warmup) learn nothing");
+        LiveDeadlineMargin step;now=100000000;
+        feed(step,now,300,[](int){return int64_t(4000);});
+        const auto before=step.extra();feed(step,now,15,[](int){return int64_t(-9000);});
+        check(step.extra()-before<=2*LiveDeadlineMargin::kRise100ns,"the margin rises in steps, no sudden jump of the deadline");
+        step.reset();check(step.extra()==LiveDeadlineMargin::kStart100ns,"reset returns to the starting margin");
+    }
     phase.observe(40000000,-1);phase.observe(40000000,30000000);
     check(phase.select(40000001,420000,333333,4)==420000,"invalid observations cannot train phase");
+    {// FgRecoveryBudget::phaseAllowance: room for the generated frames' own interpolation (2026-11-13).
+        veyra::engine::FgRecoveryBudget fit;
+        check(fit.phaseAllowance(50000000,333333)==0,"no measured cost, no phase allowance");
+        fit.fgCost(16,50000000);fit.complete(21.5,true,false,50000000,16);
+        check(fit.phaseAllowance(50000000,333333)==160000,"base + FG within one interval: the phase may cover the FG cost");
+        check(fit.phaseAllowance(50000000,166667)==0,"the same cost at 60 fps does not fit and keeps the legacy bound");
+        veyra::engine::FgRecoveryBudget over;
+        over.fgCost(32,50000000);over.complete(37,true,false,50000000,32);
+        check(over.phaseAllowance(50000000,333333)==0,"a group the GPU cannot sustain earns no later deadlines");
+        veyra::engine::LivePairLatency heavy;
+        const int64_t legacy=388000,interval=333333,needed=406000;
+        for(int i=0;i<16;++i)heavy.observe(60000000+i,needed);
+        check(heavy.select(60000020,legacy,interval,2)==legacy,"without the allowance the phase stops at the legacy bound");
+        check(heavy.select(60000021,legacy,interval,2,fit.phaseAllowance(50000000,333333))==needed+veyra::engine::LivePairLatency::kMargin100ns,
+              "with the FG allowance the phase covers the generated frames' readiness");
+    }
+    {// LiveFgRejectionHold: real frames without the FG phase after a second of rejections (2026-11-13).
+        using veyra::engine::LiveFgRejectionHold;
+        LiveFgRejectionHold hold;int64_t now=70000000;const int64_t pair=333333;
+        bool any=false;
+        for(int i=0;i<29;++i){any|=hold.observe(now,false);now+=pair;}
+        check(!any&&!hold.held(),"under a second of rejections keeps the FG phase");
+        bool held=false;for(int i=0;i<3;++i){held=hold.observe(now,false);now+=pair;}
+        check(held&&hold.held(),"a second of rejections shows real frames without the FG phase");
+        check(hold.observe(now,true)&&hold.held(),"a lone admitted probe stays held, its generated frames expire");now+=pair;
+        check(hold.observe(now,false),"rejections after the probe are held at once");now+=pair;
+        using veyra::engine::FgCostSettling;
+        check(LiveFgRejectionHold::kResumePairs>FgCostSettling::kEvaluations+FgCostSettling::kProbeGroups,
+              "resuming needs more admitted pairs in a row than one budget probe runs");
+        bool probeHeld=true;
+        for(unsigned i=0;i<FgCostSettling::kEvaluations+FgCostSettling::kProbeGroups;++i){probeHeld&=hold.observe(now,true);now+=pair;}
+        probeHeld&=hold.observe(now,false);now+=pair;
+        check(probeHeld&&hold.held(),"a whole budget probe (2 warmup + 4 measured pairs) stays held");
+        bool resumed=false;
+        for(unsigned i=0;i<LiveFgRejectionHold::kResumePairs;++i){resumed=!hold.observe(now,true);now+=pair;}
+        check(resumed&&!hold.held(),"a few admitted pairs in a row resume FG on its phase");
+        bool partial=false;for(int i=0;i<120;++i){partial|=hold.observe(now,i%3==2);now+=pair;}
+        check(!partial,"FG admitted every third pair is never held");
+        for(int i=0;i<40;++i){hold.observe(now,false);now+=pair;}
+        hold.reset();check(!hold.held()&&!hold.observe(now,false),"reset clears the hold and the rejection streak");
+    }
     return failures?1:0;
 }

@@ -15102,6 +15102,13 @@
    "ja": "NVIDIA 低遅延：オン（有効）"
   },
   {
+   "zh": "英伟达低延迟：驱动每帧等待过长，本次播放已关闭；当前使用低排队",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "NVIDIA 低延遲：驅動程式每格等待過久，本次播放已關閉；目前使用低排隊",
+   "en": "NVIDIA Low Latency: the driver waited too long every frame and was turned off for this session; using low queue depth",
+   "ja": "NVIDIA 低遅延：ドライバーが毎フレーム長く待機したため、今回の再生ではオフにしました。低遅延キューを使用中です"
+  },
+  {
    "zh": "范围 0.25～4.00 倍，保持原有音调",
    "src": "qml/PlaybackRateDialog.qml",
    "zh-TW": "範圍 0.25～4.00 倍，保持原有音調",

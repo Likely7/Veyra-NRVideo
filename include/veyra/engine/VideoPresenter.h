@@ -41,7 +41,9 @@ public:
     // 2026-09-22 (X3): the provider then estimated its period from the
     // longer hand-off intervals and the source rate fell 51 -> 24/s at 44%
     // GPU. The synchronous call stays; see FG_INDEPENDENT_REPAIR_EXECUTION.
-    bool beginSourceInput();
+    // stallUs > 0: a live source; a driver low-latency Sleep longer than this,
+    // repeatedly, ends NVIDIA Low Latency for the session (ReflexSession).
+    bool beginSourceInput(uint64_t stallUs=0);
     bool beginSourceProcessing();
     void sourceProcessed(pipeline::FrameIdentity);
     PresentationSettings configurePresentation(gfx::D3D12DeviceContext&,PresentationSettings,bool fg,std::wstring& status);
@@ -62,6 +64,11 @@ public:
     bool reflexActive()const{return reflex_.active();}
     bool reflexDisablePending()const{return reflex_.disablePending();}
     bool reflexFailed()const{return reflex_.failed();}
+    bool reflexStalled()const{return reflex_.stalled();}
+    // Host time (steady clock, 100 ns) of the last swap-chain Present call, taken
+    // just before it as RTSS and PresentMon do: the 1% low counts these, not
+    // returns, whose spacing also carries the call's own 0.2-0.6 ms jitter.
+    int64_t lastPresentCallHost100ns()const{return lastPresentCallHost100ns_;}
     bool pacingActive()const{return sink_.pacingActive();}
     uint64_t generation()const{return generation_;}
     // Explicit integration-test capture only; never called by playback/export.
@@ -120,6 +127,7 @@ private:
     DXGI_HDR_METADATA_HDR10 lastMetadata_{};
     gfx::ReflexSession reflex_;
     uint64_t reflexFrame_=0,reflexInputFrame_=0,generation_=0;
+    int64_t lastPresentCallHost100ns_=0;
     bool providerOwnedPresentation_=false;
     PresentCapture* capture_=nullptr;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> presentationQueue_;
