@@ -68,19 +68,33 @@ formula nor the earlier 97.99%/88.01% figures establishes exact codec arithmetic
 
 ## Validation limits
 
-The tests demonstrate that the low-alpha texture, final shader, GPU readback and
-PNG writer can preserve straight RGB, and that consumer premultiplication then
-loses dark detail. They do not identify which capture/enhancement stage first
-produced the field image's low alpha, or which consumer produced an earlier
-analysis image. They also do not constitute an ASUS capture-card/F7 end-to-end
-test or validation of vendor enhancement/FG runtimes.
+The tests demonstrate the export-boundary bug: an opaque video frame's texture
+alpha is exported as transparency, allowing a consumer to lose dark RGB detail.
+The low-alpha texture, final shader, GPU readback and original PNG writer can
+preserve straight RGB. The specific producer of the intermediate alpha and the
+consumer used in the original report have not been identified; this change
+does not assert a fault in capture, inference or WIC's straight PNG encoder.
 
-The full player was not rebuilt in this environment: a root configure without
-the optional SDKs fails on existing unconditional references to missing target
-`veyra`. That separate build issue is not changed by this patch. Existing full
-engine integration targets (`ScreenshotCombinationTests`, `HdrColorTests`,
-`FileSafetyTests`, `ImageDimensionTests`) were not run. A future PR should remain
-draft until the full build and actual capture/F7 acceptance are complete.
+A complete local QML player was subsequently built. An ASUS 4KPRO -> RX 9070 XT
+capture with FSR 4.1.2 and AMD NR produced an opaque 3840x2160 F7 PNG from
+2560x1440 input; the reporter confirmed normal display. Production WIC decode
+and the materialized consumer roundtrip preserve all channels of that PNG.
+F7 still reads the processed real frame, before presentation/UI composition.
+
+Final review also passed the root-build `screenshot_alpha` CTest target,
+eight ScreenshotCombination save/reopen cases, the HdrColor synthetic GPU
+subset, and FileSafety graph/normal-EOS/overload-EOS modes. HDR display-state
+and tuning unit tests pass with a fresh temporary directory; the existing
+tuning persistence test is not repeatable in a reused temporary directory.
+ScreenshotCombination requested HDR but the display's output remained SDR.
+
+The local player build disables optional PS5/Moonlight/Xbox streaming and does
+not stage libass/XeSS. Actual HDR capture/F7, recording integration and those
+optional features were not retested. Their production code is outside this
+patch. `ImageDimensionTests --tiled-color` fails all six cases with
+`invalid staged SR extent` on both the untouched upstream base and this branch,
+before image save; the per-case results match exactly. This pre-existing failure
+is disclosed separately and is outside the screenshot fix.
 
 Optional local inspection (creates large RGBA dumps; never uploads input):
 

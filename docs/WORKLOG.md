@@ -4,7 +4,9 @@
 
 基于公开 main 8332c8a8，在 fix/screenshot-alpha-quantization 修复 SDR 视频/采集截图：显式选择不透明 BGR PNG 编码；普通图片继续保留原 Alpha 策略，HDR JXR、处理 Shader、录制与呈现代码不改，无新增持续回读。原图 straight RGB 在 Pillow/WIC 一致，原始纯黑37像素；实际 WIC 8-bit 预乘/反预乘后为20.8582%纯黑，首次量化在该消费者转换中观察到。低 Alpha 的上游产生阶段未宣称定位。
 
-独立构建实际 sink/device/ring/ScaleBlit，RX9070XT上21项通过、0失败；旧保存路径4项不透明截图断言失败。现有 HDR display state/tuning 两目标通过，原图经修复 writer 重导出RGB逐通道一致且全不透明。构建/复现说明与未验边界见 `@tests/screenshot-alpha/README.md`。本机完整工程缺SDK配置触发已有缺失veyra目标错误，完整应用、真实ASUS采集卡F7、录制与厂商增强组合未复测，不称通过。证据在 `@E:/项目/Veyra/reports/screenshot-alpha-20261113`。仅准备独立提交；PR需用户另行确认。
+独立及完整工程入口均构建实际 sink/device/ring/ScaleBlit，RX9070XT上21项通过、0失败；旧保存路径4项不透明截图断言失败。完整QML播放器构建通过；ASUS 4KPRO采集、FSR 4.1.2及AMD NR实际F7输出3840×2160不透明PNG，反馈显示正常，WIC消费者往返RGB完全一致。最终复查通过截图8组、HDR合成GPU、文件图处理与正常/过载EOS；HDR display state/tuning在新临时目录通过。复现和验证边界见 `@tests/screenshot-alpha/README.md`。实际HDR采集截图、录制集成与可选串流未复测，不称全部功能已验。
+
+额外 ImageDimension --tiled-color 六例在本分支与未修改的同一上游基线均于图初始化报 invalid staged SR extent，逐例结果完全一致；尚未进入图片保存，本次不扩改该既有问题。仅公开经授权且无元数据的游戏裁剪对比图，使用Fork独立证据分支，截图、配置与日志原件不随代码提交。
 
 ## 2026-11-03 RX7000补丁后worker退出：新日志与诊断更新
 
