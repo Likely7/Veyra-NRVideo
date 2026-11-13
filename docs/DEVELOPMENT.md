@@ -1,5 +1,7 @@
 # 开发与验证入口
 
+> 2026-11-13补帧标注：最新本地app为tests/codex-fg-quality-labels-20261113/app，源/build仍为下表main目录。原main启动器已指向新app并保留原manual-profile，用户原运行实例未中断。参见[标注改动与验证](FG_QUALITY_LABELS_2026-11-13.md)。
+
 > 2026-11-13：当前本地main及独立验收入口见[整合记录](MAIN_CLAUDE_ANR_INTEGRATION_2026-11-13.md)。Claude原脏树和旧ANR入口保留作原样证据，不再把旧共享build当当前主线程序。公开发行包与本轮测试目录分开；ANR组件未获本轮公开分发授权。
 
 ## 路径

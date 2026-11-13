@@ -729,11 +729,11 @@
    "ja": "AMD パフォーマンス（縦横半分）"
   },
   {
-   "zh": "ANR FG · 本地实验",
+   "zh": "ANR FG（极差质量） · 本地实验",
    "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "ANR FG · 本機實驗",
-   "en": "ANR FG · Local experiment",
-   "ja": "ANR FG · ローカル実験"
+   "zh-TW": "ANR FG（極差品質） · 本機實驗",
+   "en": "ANR FG (Very poor quality) · Local experiment",
+   "ja": "ANR FG（極めて低い品質） · ローカル実験"
   },
   {
    "zh": "ANR 帧生成未能启用，已关闭补帧；请检查运行组件、驱动与工作尺寸（至少 640×360），详细原因见日志",
@@ -1660,11 +1660,11 @@
    "ja": "NVIDIA RTX のフレーム生成。倍率はランタイムの実際の対応範囲によります"
   },
   {
-   "zh": "NVIDIA VFG · RTX 30（实验）/ 40 / 50",
+   "zh": "NVIDIA VFG 👑（顶级补帧质量） · RTX 30（实验）/ 40 / 50",
    "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "NVIDIA VFG · RTX 30（實驗）/ 40 / 50",
-   "en": "NVIDIA VFG · RTX 30 (experimental) / 40 / 50",
-   "ja": "NVIDIA VFG · RTX 30（実験）/ 40 / 50"
+   "zh-TW": "NVIDIA VFG 👑（頂級補幀品質） · RTX 30（實驗）/ 40 / 50",
+   "en": "NVIDIA VFG 👑 (Top-tier frame generation quality) · RTX 30 (experimental) / 40 / 50",
+   "ja": "NVIDIA VFG 👑（最高級のフレーム生成品質） · RTX 30（実験）/ 40 / 50"
   },
   {
    "zh": "NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志",

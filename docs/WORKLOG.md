@@ -1173,3 +1173,11 @@ GitHub工具不支持二进制下载，Python urllib仅HTTPS下载官方addon/fu
 build-recording-handoff.py --task codex-gpu-vfg-defaults-20261113 --root E:/项目/Veyra/worktrees/main-claude-anr-20261113 --build-dir E:/项目/Veyra/build/codex-main-claude-anr-20261113 --reconfigure --label 2.1.5-main-integration-test --jobs 2 veyra_qml_ui veyra_vfg_settings_tests veyra_repair_contract_tests veyra_preset_library_tests：235.0s通过。日志logs同任务/build-20261113-070817，VFG683/合同308/预设629通过，i18n2797条三语缺失与占位错误0。真实私有配置：新配置高4/4+VFG自动false；手动普通2/2+true保存重启保持；已有实时5/5+true保持，三组VFG2X实际播放通过。首轮从设置页开视频导致host矩形尚未就绪ERROR，严格判失败并保留；测试先切专业页待布局后复测无ERROR，未修改几何逻辑。
 
 当前main测试app EXE与SettingsPage已原子替换，其他运行组件不变、104QML与源码一致/探针恢复。原c343e428 EXE单独归档archives同任务，未备份整个包；新身份见FINAL.json。范围仅默认值，未声称VFG高档窗口上屏已修好；无push/Release/关机。详细记录docs/GPU_VFG_DEFAULTS_2026-11-13.md，所有新产物在E盘。
+
+## 2026-11-13 VFG／ANR选项质量标注
+
+用户指定VFG加👑、金色、“顶级补帧质量”，ANR红色、“极差质量”。main起点ccbf9d5，4产品文件最小变更：同一桥接选项源保留硬件/本地实验说明和后端ID，VMenu/VSelect消费gold/danger标志，菜单与已选项一致，三语翻译同步。文案为用户指定，不是本轮新增客观画质评测。
+
+build-recording-handoff.py --task codex-fg-quality-labels-20261113 --root E:/项目/Veyra/worktrees/main-claude-anr-20261113 --build-dir E:/项目/Veyra/build/codex-main-claude-anr-20261113 --label 2.1.5-main-integration-test --jobs 2 veyra_qml_ui veyra_ui_contract_tests：12.2s通过。UI合同通过，QtQuick198/0/1（旧spring raster需显式输出目录，未设），i18n2797条缺失/占位0。独立真实软件UI列表/节点两后端菜单及选中项颜色、6选项完整/硬件限制/长文案无裁切和👑通过，截图已目视检查，无ERROR；104个QML模块文件（86个.qml）恢复并与源码一致。
+
+原用户实例12588及旧app保持，不打断播放。新app tests/codex-fg-quality-labels-20261113/app，EXE 3b5d20a3…，397个不变文件硬链接、可变小文件与QML私有复制。原main启动入口仅改目标EXE到新app，保留原manual-profile，原脚本字节备份reports同任务；新独立配置入口“启动补帧质量标注测试.cmd”实启退出正常。日志/报告/TEMP均E盘同任务；详细命令、结果与边界docs/FG_QUALITY_LABELS_2026-11-13.md、reports同任务FINAL.json。没有改算法/运行库/真实配置，没有push/Release/关机。
