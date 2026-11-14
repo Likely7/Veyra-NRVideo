@@ -1215,3 +1215,6 @@ GPU另抓出ANR生成帧区域平均差57.55/255：Vulkan桥接在列表提交�
 ## 2026-11-13 即时回放按钮与HDR收纳
 
 用户要求专业页录制旁加即时回放开关、设置HDR高级区默认折叠。分支codex/replay-controls-hdr-fold-20261113，基线main2dcff36；ProPage常显开关写replayEnabled并与设置同步，原保存/F9保留；曲线预设/曲线参数/元数据默认折叠，输出格式仍外露，HDR已有值不改。补展开三语译文，i18n2845/0。沿用2.1.6 build，3目标7.7s；UI合同、Quick199/0/0、四语双宽八组布局、实际程序同步/保存/收纳/重启保持通过。初始夹具缺qml-tests、同tick/隐藏页视觉树查找失败已修，失败日志保留。新完整包及验收见docs/REPLAY_HDR_UI_2026-11-13.md与reports/test-packages的codex-replay-hdr-ui-20261113；不push/Release/关机。
+
+
+收尾完成：产品/包源码f46df7f，EXEbf27ebed5d81a79814441671e933c7a8ef6be584c784f75b8ec80493642c10f3，PE2.1.6.0。NVIDIA 728848705字节/SHA3c11ec9ac6629ede4e62d4c5e585b3d90dee7158fb9056169796bef38734dd38；AMD 719843259字节/SHAbeef54c411b880ba1452820193b468e5a028a28e2a9af38ff71d512129da3a37。两包1671/2295文件及全部88着色器审核，ZIP逐SHA与重新解压最小PATH冷启动213/222真实帧、0错误通过（仅本机RTX5070基础播放）。旧/新启动器均指向新app且保留旧manual-NVIDIA/AMD data-dir，配置JSON逐SHA未变；仅本轮QA/解压副本按路径/reparse/进程检查后退役。完整包/源码/摘要/当前build与必要证据保留。最终main后续仅补文档，不改变交付产品；完整事实见reports/codex-replay-hdr-ui-20261113/FINAL.json，交付见test-packages同任务。未push/Release/关机。
