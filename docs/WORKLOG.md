@@ -1218,3 +1218,10 @@ GPU另抓出ANR生成帧区域平均差57.55/255：Vulkan桥接在列表提交�
 
 
 收尾完成：产品/包源码f46df7f，EXEbf27ebed5d81a79814441671e933c7a8ef6be584c784f75b8ec80493642c10f3，PE2.1.6.0。NVIDIA 728848705字节/SHA3c11ec9ac6629ede4e62d4c5e585b3d90dee7158fb9056169796bef38734dd38；AMD 719843259字节/SHAbeef54c411b880ba1452820193b468e5a028a28e2a9af38ff71d512129da3a37。两包1671/2295文件及全部88着色器审核，ZIP逐SHA与重新解压最小PATH冷启动213/222真实帧、0错误通过（仅本机RTX5070基础播放）。旧/新启动器均指向新app且保留旧manual-NVIDIA/AMD data-dir，配置JSON逐SHA未变；仅本轮QA/解压副本按路径/reparse/进程检查后退役。完整包/源码/摘要/当前build与必要证据保留。最终main后续仅补文档，不改变交付产品；完整事实见reports/codex-replay-hdr-ui-20261113/FINAL.json，交付见test-packages同任务。未push/Release/关机。
+
+
+## 2026-11-13 发布2.1.6（用户明确授权）
+
+对照v2.1.5至main6cb960b的32条提交，汇总回放/麦克风、全效果剔除/NR节点、美颜删除/PSNTools、自动/半速去重、送帧/Reflex/异步日志、精修光流和默认/界面/社区更新。RELEASE_NOTES/VALIDATION列明本机阶段A/B条件、CPU/真实帧延后及高3X探测代价，不冒充两正式包对照或光学延迟。GitHub连接器已核对最新2.1.5/远端main8332c8a；连接器无Release上传接口，使用已登录gh。
+
+ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发，最新公开包不带任何ANR DLL/模型/配置/程序包/生成loader，保留自写适配源码；原本机包/配置保持。固定其余运行身份、source/binary分离，复用EXEbf27ebed（源f46df7f），不改引擎/运行库。准备NVIDIA/AMD公开ZIP、精确应用/网络源码和摘要，两Release与两固定QR支持块；所有新产物E盘codex-release-2.1.6-20261113。实际结果/失败/命令与最终发布以本次执行记录及reports同任务FINAL为准；不关机、不代发群消息。

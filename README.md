@@ -73,6 +73,8 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 **📖 [English User Guide / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki)** — installation, software setup, capture card compatibility, troubleshooting, and community-tested solutions. [中文知识库（飞书）](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home).
 
+**2.1.6:** Instant replay/F9, microphone mixing/separate tracks, all-effect exclusion, VFR dedup/60→30 and presentation/logging repairs, refined flow, updated defaults and collapsed HDR controls. [All changes and measured data](docs/RELEASE_NOTES_2.1.6.md). ANR host source is included; its runtime is not distributed.
+
 **2.1.5:** Smoother frame pacing after capture deduplication and preview correction for invalid capture timestamps. [Full changes](docs/RELEASE_NOTES_2.1.5.md).
 
 **2.1.4:** Optional VB-CABLE capture audio, DLSS/FSR/RTX dual super resolution, NVIDIA DLAA, HDR wide-gamut restoration, NR inference reuse, 1% low FPS, and recording and compatibility fixes. [Full changes and settings migration](docs/RELEASE_NOTES_2.1.4.md).
@@ -89,7 +91,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** SF310.9.16 performance/legacy models, NVIDIA original for RTX50 and AMD lmxxf, DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-**Current version: [2.1.5](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.5)** · [Full bilingual update](docs/RELEASE_NOTES_2.1.5.md).
+**Current version: [2.1.6](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.6)** · [Full bilingual update](docs/RELEASE_NOTES_2.1.6.md).
 
 ## New in 2.1.2
 
@@ -126,7 +128,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ## Install and upgrade
 
-Download **Veyra-2.1.5-NVIDIA-win64-portable.zip** or **Veyra-2.1.5-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.1.6-NVIDIA-win64-portable.zip** or **Veyra-2.1.6-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -227,7 +229,7 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 ## Source and build
 
-The local 2026-11-13 integration combines Claude’s presentation/capture/low-latency fixes with the ANR FG experiment and the preceding cadence/UI repairs. See the [combined validation and remaining limits](docs/MAIN_CLAUDE_ANR_INTEGRATION_2026-11-13.md). These changes have not been published in the existing 2.1.5 portable packages; ANR runtime components remain a local experiment and are absent from source control.
+2.1.6 integrates the presentation/capture/low-latency, cadence and UI repairs; see the [full update and measurement limits](docs/RELEASE_NOTES_2.1.6.md). The independently written ANR host is traceable in source. No ANR DLLs, models or program packs are distributed because upstream explicitly prohibits third-party redistribution during the beta.
 
 Developer entry: [current documentation](docs/README.md), [build and validation](docs/DEVELOPMENT.md), [UI code responsibilities](docs/ARCHITECTURE.md). Historical task notes are indexed separately.
 
