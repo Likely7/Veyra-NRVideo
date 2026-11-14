@@ -4342,6 +4342,13 @@
    "ja": "補正なし"
   },
   {
+   "zh": "其他桌面",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "其他桌面",
+   "en": "Other desktop",
+   "ja": "別のデスクトップ"
+  },
+  {
    "zh": "兼容",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "相容",
@@ -11966,6 +11973,20 @@
    "ja": "フォーマットと映像"
   },
   {
+   "zh": "桌面 %1",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "桌面 %1",
+   "en": "Desktop %1",
+   "ja": "デスクトップ %1"
+  },
+  {
+   "zh": "桌面 %1 · %2",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "桌面 %1 · %2",
+   "en": "Desktop %1 · %2",
+   "ja": "デスクトップ %1 · %2"
+  },
+  {
    "zh": "档位",
    "src": "qml/SrStageEditor.qml",
    "zh-TW": "檔位",
@@ -13079,6 +13100,13 @@
    "ja": "ゲームモードのキーボード監視を利用できません。マウス透過を解除しました。全画面を終了して再試行してください。"
   },
   {
+   "zh": "游戏模式需要窗口和 Veyra 在同一个虚拟桌面：请把窗口移到当前桌面，或关闭游戏模式后直接捕获",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "遊戲模式需要視窗和 Veyra 在同一個虛擬桌面：請把視窗移到目前桌面，或關閉遊戲模式後直接擷取",
+   "en": "Game mode needs the window on the same virtual desktop as Veyra: move the window to the current desktop, or turn game mode off and capture it directly",
+   "ja": "ゲームモードではウィンドウと Veyra が同じ仮想デスクトップにある必要があります。ウィンドウを現在のデスクトップに移すか、ゲームモードをオフにしてそのままキャプチャーしてください"
+  },
+  {
    "zh": "游戏模式：调整画面",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "遊戲模式：調整畫面",
@@ -13938,6 +13966,13 @@
    "zh-TW": "視窗只能用 Windows Graphics Capture",
    "en": "Windows can only be captured with Windows Graphics Capture",
    "ja": "ウィンドウのキャプチャーには Windows Graphics Capture のみ使用できます"
+  },
+  {
+   "zh": "窗口在其他虚拟桌面上，暂时没有新画面：部分程序（如 Chrome、Edge）在所在桌面不显示时会暂停绘制",
+   "src": "src/source/ScreenCaptureSource.cpp",
+   "zh-TW": "視窗在其他虛擬桌面上，暫時沒有新畫面：部分程式（如 Chrome、Edge）在所在桌面不顯示時會暫停繪製",
+   "en": "The window is on another virtual desktop and has no new picture yet: some programs (such as Chrome and Edge) stop drawing while their desktop is not shown",
+   "ja": "ウィンドウは別の仮想デスクトップにあり、新しい映像がまだありません。一部のプログラム（Chrome、Edge など）は、そのデスクトップが表示されていない間は描画を止めます"
   },
   {
    "zh": "窗口小于裁剪范围，等待尺寸恢复",
@@ -17347,6 +17382,13 @@
    "zh-TW": "這個模式還沒有預設。",
    "en": "This mode has no presets yet.",
    "ja": "このモードにはまだプリセットがありません。"
+  },
+  {
+   "zh": "这个窗口在其他虚拟桌面上，不用切换桌面即可捕获；部分程序在所在桌面不显示时会暂停绘制",
+   "src": "qml/ScreenSourceDialog.qml",
+   "zh-TW": "這個視窗在其他虛擬桌面上，不用切換桌面即可擷取；部分程式在所在桌面不顯示時會暫停繪製",
+   "en": "This window is on another virtual desktop and can be captured without switching to it; some programs stop drawing while their desktop is not shown",
+   "ja": "このウィンドウは別の仮想デスクトップにあり、切り替えずにキャプチャーできます。一部のプログラムは、そのデスクトップが表示されていない間は描画を止めます"
   },
   {
    "zh": "这个语言的翻译没有找到，界面保持简体中文",
