@@ -2764,20 +2764,6 @@ bool EnhanceGraph::uploadElCurve(ID3D12GraphicsCommandList* list) {
     return true;
 }
 
-bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh, const AVFrame* doviEl, const DoviP7Constants* doviP7)
-{
-    doviElFrame_ = doviEl;   // Custom (P5): borrowed for this frame only
-    p7Ready_ = doviP7 != nullptr && doviP7->ready;
-    if (p7Ready_) {
-        std::memcpy(p7Params_, doviP7->params, sizeof(p7Params_));
-        std::memcpy(p7Curve_, doviP7->curve, sizeof(p7Curve_));
-    }
-    if (doviEl != nullptr && std::getenv("VEYRA_DOVI_TRACE") != nullptr) {
-        static unsigned elArrived = 0;
-        if (++elArrived <= 3 || elArrived % 100 == 0)
-            veyra::log::info("dovi-el-graph", std::format("frames_with_el={} {}x{} fmt={}",
-                elArrived, doviEl->width, doviEl->height, int(doviEl->format)));
-    }
 bool EnhanceGraph::composeExclusion(ID3D12GraphicsCommandList* list,unsigned output,unsigned rawParity,bool ui) {
     if(!desc_.exclusion.enabled)return true;
     auto* enhanced=output<2?videoFrame_[output].Get():genFrame_[output-2].Get();
@@ -2814,8 +2800,14 @@ bool EnhanceGraph::composeExclusion(ID3D12GraphicsCommandList* list,unsigned out
     return true;
 }
 
-bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh, const std::function<void()>& previewCheckpoint)
+bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId, const ColorDescription* color, const HardwareSurfaceInput* hardwareSurface, bool retainReferences, const FgAdmission& admitFg, unsigned previewMultiplier, bool pausedResidualRefresh, const std::function<void()>& previewCheckpoint, const AVFrame* doviEl, const DoviP7Constants* doviP7)
 {
+    doviElFrame_ = doviEl;   // Custom (P5): borrowed for this frame only
+    p7Ready_ = doviP7 != nullptr && doviP7->ready;
+    if (p7Ready_) {
+        std::memcpy(p7Params_, doviP7->params, sizeof(p7Params_));
+        std::memcpy(p7Curve_, doviP7->curve, sizeof(p7Curve_));
+    }
     retainReferences=retainReferences||desc_.exclusion.enabled;
 
     reset=reset||nrAutoResetPending_;nrAutoResetPending_=false;
