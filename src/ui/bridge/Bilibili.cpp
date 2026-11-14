@@ -1099,16 +1099,20 @@ bool QmlPlayerBridge::bilibiliPlayResolved(const QString& bvid, qlonglong cid,
         veyra::log::info("bilibili", std::format("watch progress reporting queued bvid={} played_time={}",
             utf8Of(pendingReportBvid).toStdString(), pendingPlayed));
     media::setBiliCookie(media::loadBilibiliCookie());
+    // 重播同一视频（播放结束后再点播放）时弹幕列表仍然有效：时间轴是同一个，
+    // 清空它只会让重播没有弹幕。只有换 track（不同 bvid/cid）才需要丢掉旧的。
+    // A replay of the same video keeps its danmaku: the timeline is identical, so
+    // clearing it only makes the replay start without comments. Only a different
+    // track needs the old list dropped.
+    const bool sameTrackReplay = fromStart && bvid == impl_->biliReplayBvid
+        && cid == impl_->biliReplayCid && impl_->biliReplayCid > 0;
     // 记下这次要播什么，供播完后「播放」重播用：地址会过期，bvid/cid/画质不会。
     // Remember what this play is, so Play after the end can resolve again: the address
     // expires, the bvid/cid/quality do not.
     impl_->biliReplayBvid = bvid;
     impl_->biliReplayCid = cid;
     impl_->biliReplayQuality = qn;
-    // Every play is a new track (a different part, or the same part replayed): the
-    // comments already on screen belong to the previous one. Done before the resolve so
-    // a failure below leaves nothing stale on screen either.
-    if (impl_->danmakuEnabled) bilibiliDisableDanmaku();
+    if (impl_->danmakuEnabled && !sameTrackReplay) bilibiliDisableDanmaku();
     // The three Bilibili settings that change what gets requested. qn 0 means the
     // quality preference, which itself may be 0 (automatic).
     const int qualityPref = impl_->prefInt("biliQuality", 0);
