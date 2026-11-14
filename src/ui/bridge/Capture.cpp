@@ -3,6 +3,9 @@
 #include "veyra/source/VirtualDesktop.h"
 #include "veyra/source/WasapiAudioInput.h"
 #include "VirtualCaptureAudioSetup.h"
+#include <dxgi1_6.h>
+#include <wrl/client.h>
+#include <map>
 
 namespace veyra::ui {
 // --- capture dialog ----------------------------------------------------------
@@ -574,10 +577,31 @@ void QmlPlayerBridge::setCaptureFlipVertical(bool value) {
 }
 
 // --- screen capture ----------------------------------------------------------
+namespace {
+// An adapter's name by LUID (DXGI). Cached: neither changes while the program runs.
+QString adapterName(uint64_t luid) {
+    static std::map<uint64_t, QString> names;
+    if (const auto it = names.find(luid); it != names.end()) return it->second;
+    QString name;
+    Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+    DXGI_ADAPTER_DESC1 d{};
+    if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) &&
+        SUCCEEDED(factory->EnumAdapterByLuid(LUID{DWORD(luid & 0xFFFFFFFFu), LONG(luid >> 32)}, IID_PPV_ARGS(&adapter))) &&
+        SUCCEEDED(adapter->GetDesc1(&d)))
+        name = QString::fromWCharArray(d.Description);
+    return names[luid] = name;
+}
+}
+
 QVariantList QmlPlayerBridge::screenTargets() const {
     // Enumerated from the source for the chosen kind; cached until refreshed so a
     // binding re-evaluation does not walk every window again.
     QVariantList out;
+    // Issue #107: a target whose display another GPU drives is copied between the
+    // GPUs by Windows on every frame; the dialog names both adapters.
+    const auto* engine = engineAdapterDesc();
+    const uint64_t processing = engine ? uint64_t(uint32_t(engine->AdapterLuid.HighPart)) << 32 | engine->AdapterLuid.LowPart : 0;
     for (const auto& target : impl_->screenList) {
         QVariantMap item;
         item["id"] = QString::number(target.handle);
@@ -599,6 +623,11 @@ QVariantList QmlPlayerBridge::screenTargets() const {
         item["height"] = int(target.height);
         item["otherDesktop"] = target.otherDesktop;
         item["desktop"] = int(target.desktopNumber);
+        if (processing && target.displayAdapter && target.displayAdapter != processing) {
+            item["otherGpu"] = true;
+            item["displayGpu"] = adapterName(target.displayAdapter);
+            item["processingGpu"] = QString::fromWCharArray(engine->Description);
+        }
         out << item;
     }
     return out;

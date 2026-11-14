@@ -798,7 +798,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   add_executable(veyra_screen_capture_tests tests/integration/ScreenCaptureTests.cpp)
   target_compile_features(veyra_screen_capture_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_screen_capture_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-  target_link_libraries(veyra_screen_capture_tests PRIVATE veyra_engine dwmapi)
+  target_link_libraries(veyra_screen_capture_tests PRIVATE veyra_engine dwmapi dxgi)
   add_executable(veyra_wasapi_input_tests tests/integration/WasapiInputTests.cpp)
   target_compile_features(veyra_wasapi_input_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_wasapi_input_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)

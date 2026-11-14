@@ -9,6 +9,7 @@
 #include <dwmapi.h>
 #include <shobjidl.h>
 #include <wrl/client.h>
+#include <dxgi1_6.h>
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -145,6 +146,25 @@ int wmain(int argc,wchar_t** argv){
     HWND excluded=CreateWindowW(L"STATIC",L"Screen exclusion test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,880,40,200,160,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     DWORD affinity=0;check(GetWindowDisplayAffinity(excluded,&affinity)&&affinity==WDA_NONE,"initial own window remains capturable");
     auto monitors=source::ScreenCaptureSource::targets(source::ScreenTargetKind::Monitor);check(!monitors.empty(),"enumerate monitors");
+    {   // Issue #107: each monitor names the adapter driving its display path, the
+        // adapter DXGI lists it under; a window target names its monitor's adapter.
+        Microsoft::WRL::ComPtr<IDXGIFactory1> factory;CreateDXGIFactory1(IID_PPV_ARGS(&factory));
+        bool named=!monitors.empty()&&factory;
+        for(const auto& m:monitors){
+            bool listed=false;
+            for(UINT a=0;factory;++a){Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;if(factory->EnumAdapters1(a,&adapter)==DXGI_ERROR_NOT_FOUND)break;
+                DXGI_ADAPTER_DESC1 d{};adapter->GetDesc1(&d);const uint64_t luid=uint64_t(uint32_t(d.AdapterLuid.HighPart))<<32|d.AdapterLuid.LowPart;
+                for(UINT o=0;;++o){Microsoft::WRL::ComPtr<IDXGIOutput> output;if(adapter->EnumOutputs(o,&output)==DXGI_ERROR_NOT_FOUND)break;
+                    DXGI_OUTPUT_DESC od{};if(SUCCEEDED(output->GetDesc(&od))&&uint64_t(od.Monitor)==m.handle&&luid==m.displayAdapter)listed=true;}}
+            std::cout<<"DISPLAY-ADAPTER monitor="<<m.handle<<" luid="<<std::hex<<m.displayAdapter<<std::dec<<" listedByDxgi="<<listed<<std::endl;
+            named=named&&m.displayAdapter&&listed&&m.displayAdapter==source::displayAdapterLuid(reinterpret_cast<void*>(m.handle));
+        }
+        check(named,"monitors name the adapter that drives their display");
+        bool window=false;const auto own=source::displayAdapterLuid(MonitorFromWindow(child.window,MONITOR_DEFAULTTONEAREST));
+        for(const auto& t:source::ScreenCaptureSource::targets(source::ScreenTargetKind::Window))if(t.handle==uint64_t(child.window))window=own&&t.displayAdapter==own;
+        check(window,"window target names its monitor's display adapter");
+        check(!source::displayAdapterLuid(nullptr),"no monitor has no display adapter");
+    }
     if(!monitors.empty())for(auto method:{source::ScreenCaptureMethod::Wgc,source::ScreenCaptureMethod::Duplication}){
         const auto monitor=MonitorFromWindow(child.window,MONITOR_DEFAULTTONEAREST);MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(monitor,&mi);
         RECT client{};GetClientRect(child.window,&client);POINT origin{};ClientToScreen(child.window,&origin);

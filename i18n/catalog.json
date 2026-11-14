@@ -17391,6 +17391,13 @@
    "ja": "このウィンドウは別の仮想デスクトップにあり、切り替えずにキャプチャーできます。一部のプログラムは、そのデスクトップが表示されていない間は描画を止めます"
   },
   {
+   "zh": "这个目标所在的显示器接在 %1 上，Veyra 在 %2 上处理：每帧画面都要由 Windows 在两块显卡之间复制，延迟更高。双显卡分工时，建议把显示器接到处理用的显卡上（笔记本可开独显直连）",
+   "src": "qml/ScreenSourceDialog.qml",
+   "zh-TW": "這個目標所在的顯示器接在 %1 上，Veyra 在 %2 上處理：每格畫面都要由 Windows 在兩張顯示卡之間複製，延遲更高。雙顯示卡分工時，建議把顯示器接到處理用的顯示卡上（筆電可開啟獨顯直連）",
+   "en": "The display this target is on is connected to %1, while Veyra processes on %2: Windows copies every frame between the two GPUs, which adds latency. When two GPUs share the work, connect the display to the processing GPU (on a laptop, turn on the discrete-GPU-only (MUX) mode)",
+   "ja": "この対象が映っているディスプレイは %1 に接続され、Veyra は %2 で処理しています。毎フレーム Windows が 2 つの GPU の間でコピーするため、遅延が増えます。2 つの GPU で分担する場合は、ディスプレイを処理用の GPU に接続してください（ノート PC では dGPU 直結モードをオンに）"
+  },
+  {
    "zh": "这个语言的翻译没有找到，界面保持简体中文",
    "src": "src/ui/bridge/Preferences.cpp",
    "zh-TW": "這個語言的翻譯沒有找到，介面保持簡體中文",

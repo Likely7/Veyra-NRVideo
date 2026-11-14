@@ -130,6 +130,29 @@ void excludeWindowFromScreenCapture(void* handle){
     DWORD previous=0;
     if(exclude(window,previous)){excludedWindows.emplace_back(window,previous);log::info("screen",std::format("late window excluded from capture hwnd={}",uint64_t(window)));}
 }
+uint64_t displayAdapterLuid(void* handle){
+    MONITORINFOEXW mi{};mi.cbSize=sizeof(mi);
+    if(!handle||!GetMonitorInfoW(static_cast<HMONITOR>(handle),&mi))return 0;
+    for(unsigned attempt=0;attempt<3;++attempt){
+        UINT32 pathCount=0,modeCount=0;
+        if(GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS,&pathCount,&modeCount)!=ERROR_SUCCESS)return 0;
+        std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
+        std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
+        const auto result=QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS,&pathCount,paths.data(),&modeCount,modes.data(),nullptr);
+        if(result==ERROR_INSUFFICIENT_BUFFER)continue;
+        if(result!=ERROR_SUCCESS)return 0;
+        for(UINT32 i=0;i<pathCount;++i){
+            DISPLAYCONFIG_SOURCE_DEVICE_NAME name{};
+            name.header.type=DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;name.header.size=sizeof(name);
+            name.header.adapterId=paths[i].sourceInfo.adapterId;name.header.id=paths[i].sourceInfo.id;
+            if(DisplayConfigGetDeviceInfo(&name.header)!=ERROR_SUCCESS||wcscmp(name.viewGdiDeviceName,mi.szDevice))continue;
+            const auto& id=paths[i].sourceInfo.adapterId;
+            return uint64_t(uint32_t(id.HighPart))<<32|id.LowPart;
+        }
+        return 0;
+    }
+    return 0;
+}
 std::wstring ScreenCaptureOptions::uri()const{
     return std::format(L"screen:{}:{}:{}:{}:{}:{}:{}:{}:{}",unsigned(kind),target,unsigned(method),fps,unsigned(cursor)|(borderless?2u:0u),left,top,right,bottom);
 }
@@ -145,7 +168,14 @@ bool ScreenCaptureOptions::parse(const std::wstring& uri,ScreenCaptureOptions& o
 std::vector<ScreenCaptureTarget> ScreenCaptureSource::targets(ScreenTargetKind kind){
     std::vector<ScreenCaptureTarget> result;
     if(kind==ScreenTargetKind::Window){
-        struct Walk {std::vector<ScreenCaptureTarget>& list;vdesk::Lookup desktops;size_t other=0;} walk{result};
+        struct Walk {std::vector<ScreenCaptureTarget>& list;vdesk::Lookup desktops;size_t other=0;
+            // One display-path query per monitor, not per window.
+            std::vector<std::pair<HMONITOR,uint64_t>> adapters;
+            uint64_t adapter(HMONITOR monitor){
+                for(const auto& [m,luid]:adapters)if(m==monitor)return luid;
+                return adapters.emplace_back(monitor,displayAdapterLuid(monitor)).second;
+            }
+        } walk{result};
         EnumWindows([](HWND window,LPARAM param)->BOOL{
             auto& walk=*reinterpret_cast<Walk*>(param);
             DWORD pid=0;GetWindowThreadProcessId(window,&pid);
@@ -158,6 +188,7 @@ std::vector<ScreenCaptureTarget> ScreenCaptureSource::targets(ScreenTargetKind k
             if(r.right<=0||r.bottom<=0)return TRUE;
             ScreenCaptureTarget target{ScreenTargetKind::Window,uint64_t(window),pid,title,unsigned(r.right),unsigned(r.bottom),0};
             target.otherDesktop=desktop.other;target.desktopNumber=desktop.number;target.desktopName=std::move(desktop.name);
+            target.displayAdapter=walk.adapter(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST));
             if(desktop.other)++walk.other;
             walk.list.push_back(std::move(target));return TRUE;
         },reinterpret_cast<LPARAM>(&walk));
@@ -173,7 +204,8 @@ std::vector<ScreenCaptureTarget> ScreenCaptureSource::targets(ScreenTargetKind k
             MONITORINFOEXW info{};info.cbSize=sizeof(info);if(!GetMonitorInfoW(monitor,&info))return TRUE;
             DEVMODEW mode{};mode.dmSize=sizeof(mode);EnumDisplaySettingsW(info.szDevice,ENUM_CURRENT_SETTINGS,&mode);
             auto& list=*reinterpret_cast<std::vector<ScreenCaptureTarget>*>(param);
-            list.push_back({ScreenTargetKind::Monitor,uint64_t(monitor),0,std::format(L"{}  {} x {}  {} Hz",info.szDevice,mode.dmPelsWidth,mode.dmPelsHeight,mode.dmDisplayFrequency),mode.dmPelsWidth,mode.dmPelsHeight,mode.dmDisplayFrequency});return TRUE;
+            list.push_back({ScreenTargetKind::Monitor,uint64_t(monitor),0,std::format(L"{}  {} x {}  {} Hz",info.szDevice,mode.dmPelsWidth,mode.dmPelsHeight,mode.dmDisplayFrequency),mode.dmPelsWidth,mode.dmPelsHeight,mode.dmDisplayFrequency});
+            list.back().displayAdapter=displayAdapterLuid(monitor);return TRUE;
         },reinterpret_cast<LPARAM>(&result));
     }return result;
 }
@@ -240,6 +272,32 @@ struct ScreenCaptureSource::Impl {
     }
     std::wstring message;DXGI_FORMAT format=DXGI_FORMAT_B8G8R8A8_UNORM;
     ~Impl(){av_frame_free(&frame);}
+    // The GPU that drives the target's display against the one Veyra processes on
+    // (issue #107, two-GPU setups). When they differ, Windows copies every captured
+    // frame between the two; recorded when the capture opens and when the target
+    // moves to a display driven by another adapter. Only the display-path query
+    // (about 0.1 ms) runs, and only when the monitor changed.
+    HMONITOR pathMonitor=nullptr;uint64_t displayAdapter=~0ull;
+    void logGpuPath(HMONITOR monitor){
+        if(!consumer||monitor==pathMonitor)return;
+        pathMonitor=monitor;
+        const auto display=displayAdapterLuid(monitor);
+        if(display==displayAdapter)return;
+        displayAdapter=display;
+        const auto own=consumer->GetAdapterLuid();
+        const uint64_t processing=uint64_t(uint32_t(own.HighPart))<<32|own.LowPart;
+        ComPtr<IDXGIFactory4> names;
+        const auto name=[&](uint64_t luid){
+            ComPtr<IDXGIAdapter1> adapter;DXGI_ADAPTER_DESC1 d{};
+            if(!luid||!names||FAILED(names->EnumAdapterByLuid(LUID{DWORD(luid&0xFFFFFFFFu),LONG(luid>>32)},IID_PPV_ARGS(&adapter)))||FAILED(adapter->GetDesc1(&d)))return std::string("unknown");
+            return winrt::to_string(std::wstring_view(d.Description));
+        };
+        if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&names))))names.Reset();
+        const bool cross=display&&display!=processing;
+        (cross?log::warn:log::info)("screen",std::format("gpu path display adapter={} luid={:016X} processing adapter={} luid={:016X} crossGpu={}{}",
+            name(display),display,name(processing),processing,display?(cross?"true":"false"):"unknown",
+            cross?" (Windows copies every captured frame between the two GPUs; a display connected to the processing GPU avoids the copy)":""));
+    }
     int64_t interval()const{return 10000000LL*info.nominalRateDen/info.nominalRateNum;}
     void updateRate(HMONITOR monitor){
         auto rate=options.fps?DXGI_RATIONAL{options.fps,1}:monitorRate(monitor);
@@ -331,6 +389,7 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
         if(p.otherDesktop)log::info("screen","target window is on another virtual desktop; WGC captures it while that desktop is hidden");
         p.displayHdr(monitor,p.hdr);p.format=p.hdr?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_B8G8R8A8_UNORM;
         p.consumer=static_cast<ID3D12Device*>(desc.d3d12Device);
+        p.logGpuPath(monitor);
         ComPtr<IDXGIFactory4> factory;check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)),"factory");ComPtr<IDXGIAdapter> adapter;
         check(factory->EnumAdapterByLuid(p.consumer->GetAdapterLuid(),IID_PPV_ARGS(&adapter)),"processing adapter");
         ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;
@@ -388,6 +447,7 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
                 if(!other&&p.message==otherDesktopNotice)p.message.clear();
             }
             if(!p.options.fps)p.updateRate(monitor);
+            p.logGpuPath(monitor);
             bool hdr=p.hdr;
             if(p.displayHdr(monitor,hdr)&&hdr!=p.hdr){
                 p.hdr=hdr;p.format=hdr?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_B8G8R8A8_UNORM;p.color();p.wasWaiting=true;
