@@ -25,6 +25,13 @@ struct ScreenCaptureTarget {
     uint32_t processId=0;
     std::wstring name;
     unsigned width=0,height=0,refresh=0;
+    // A window on another Windows virtual desktop (cloaked by the shell, still
+    // captured by WGC). desktopNumber is that desktop's 1-based Task View position
+    // (0 if Windows does not say), desktopName the user's name for it (may be empty).
+    // Such windows are listed after those on the shown desktop.
+    bool otherDesktop=false;
+    unsigned desktopNumber=0;
+    std::wstring desktopName;
 };
 struct ScreenCaptureMetrics {uint64_t received=0,delivered=0,dropped=0;double ageMs=0;};
 // While a monitor capture runs, Veyra's own windows are excluded from it. A window
