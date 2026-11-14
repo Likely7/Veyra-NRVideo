@@ -62,6 +62,11 @@ def audit(app,flavor):
     assert m['version']==V and m['localOnly'] and not m['published']
     assert sha(app/'veyra_qml_ui.exe')==sha(D/'veyra_qml_ui.exe')==m['exeSha256']
     pe_version=version(app/'veyra_qml_ui.exe');names={r['path'] for r in rows};pkg.check_models(app)
+    # GPU DIS shaders live below shaders/dis. A top-level glob silently
+    # produced a startable package with that optional backend missing.
+    built={p.relative_to(D/'shaders').as_posix():sha(p) for p in (D/'shaders').rglob('*.dxil')}
+    deployed={p.relative_to(app/'shaders').as_posix():sha(p) for p in (app/'shaders').rglob('*.dxil')}
+    assert built==deployed,('Missing or stale shaders',sorted(set(built)^set(deployed)))
     # App QML is replaced, while every deployed Qt module remains the pinned donor's.
     for row in donor_json(flavor,'package-manifest.json')['files']:
         if row['path'].startswith('qml/') and not row['path'].startswith('qml/Veyra/'):
@@ -124,7 +129,7 @@ def stage():
         for folder in ('qml','i18n'):
             for p in (R/folder).rglob('*'):
                 if p.is_file():copy(p,a/folder/p.relative_to(R/folder))
-        for p in (D/'shaders').glob('*.dxil'):copy(p,a/'shaders'/p.name)
+        for p in (D/'shaders').rglob('*.dxil'):copy(p,a/'shaders'/p.relative_to(D/'shaders'))
         for name in ('LICENSE','THIRD_PARTY_NOTICES.md','README.md','README_CN.md','README_EN.md'):copy(R/name,a/name)
         for name in ('BUILD_2.1.6_PLAN_2026-11-13.md','BUILD_2.1.6_2026-11-13.md','FG_REFINED_FLOW_2026-11-13.md','ANR_FG_EXPERIMENT_2026-11-12.md','BUILD_2.1.5.md','RDNA3_NVAPI_LUID_2026-11-03.md','RDNA3_MULTI_GPU_HIP_2026-11-03.md'):
             copy(R/'docs'/name,a/'docs'/name)
@@ -202,7 +207,7 @@ def cold():
         dest=B/'verify'/T/flavor;dest.mkdir(parents=True,exist_ok=False)
         with zipfile.ZipFile(path) as z:z.extractall(dest)
         a=dest/appdir(flavor).name;audit(a,flavor)
-        tmp=B/'tmp'/T/('cold-'+flavor);profile=B/'tests'/T/('cold-'+flavor);logs=B/'logs'/T/('cold-'+flavor)
+        tmp=B/'tmp'/T/('cold-complete-shaders-'+flavor);profile=B/'tests'/T/('cold-complete-shaders-'+flavor);logs=B/'logs'/T/('cold-complete-shaders-'+flavor)
         for p in (tmp,profile,logs):p.mkdir(parents=True,exist_ok=False)
         write(profile/'qml-preferences.v1.json',dict(language='zh-CN',autoResume=False,prewarmEnhancement=False,rememberPosition=False,sentinel=T))
         e={k:v for k,v in os.environ.items() if not k.upper().startswith(('VEYRA_','QT_','QSG_','QML_'))};win=Path(e['WINDIR'])

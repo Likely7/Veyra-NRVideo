@@ -27,3 +27,5 @@ Claude精修光流10文件原样提交7bacdb0；即时回放/麦克风25文件�
 完整包从不可变公开2.1.5两ZIP提取运行原件，替换本次EXE/QML/词库/88着色器/AMD自建worker；原Qt部署模块逐SHA保留，ANR19个原件单列本地实验与许可未解决，禁止公开上传。应用源码及RDNA3网络源码独立ZIP，manifest逐文件/PE导入/模型/运行库审计，ZIP逐SHA及解压最小PATH冷启动在收尾执行，结果以reports/codex-build-2.1.6-20261113/FINAL.json和test-packages同任务DELIVERY.json为准。
 
 本机RTX5070，不扩展成RTX30/40、AMD/Intel、所有采集卡或物理屏幕端到端延迟通过。窗口VFG高档已知DWM上屏限制未在这批功能中根治。没有独立Reviewer；为单Agent自审。原脏树/暂停分支保留，分支整理见外部BRANCHES.json及原树指纹复核。
+
+首轮打包发现并拦截：沿用脚本顶层glob漏19个GPU DIS子目录着色器。首轮冷启动只证明基础播放，不能证明完整交付；已修为递归相对路径复制，并让audit比较全部88个文件名/SHA，重新打包/解压验收。首轮ZIP与manifest的身份及失败shader检查保留在reports同任务，错误包不交付。
