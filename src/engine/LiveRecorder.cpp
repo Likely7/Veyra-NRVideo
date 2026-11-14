@@ -1235,6 +1235,10 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
         s.retire(s.current,s.replayMode?std::wstring{}:L"画面尺寸或 HDR 模式变化，已接着写入新文件");s.current.reset();
     }
     if(!s.current){
+        // Rapid source/settings changes must not create an unbounded number
+        // of encoder workers while the previous segments are draining.
+        s.reap();
+        if(s.replayMode&&s.finishing.size()>=2)return false;
         auto fail=[&](const std::wstring& reason){
             s.failed=true;s.error=reason;
             if(s.replayMode)s.retryAfterUs=now+kReplayRetryUs;else s.armed=false;

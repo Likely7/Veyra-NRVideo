@@ -90,6 +90,11 @@ int main(){
         check(buffer.coverage().bytes==before,"nothing is added after the end");
         const auto last=buffer.clip(INT64_MAX/2);
         check(last.endUs==1830*kFrameUs,"a finished buffer's clip ends where the segment ended");
+        const int64_t requested=30'200'000;
+        const auto requestedClip=buffer.clip(5'000'000+requested);
+        check(requestedClip.endUs<=requested+kFrameUs&&requestedClip.videoPackets.back().pts<requested,
+              "a segment ending during a save never extends the requested clip into the future");
+        check(buffer.clip(5'000'000).videoPackets.empty(),"an expired request never returns a later picture");
     }
     {
         // A memory cap of about 4 s at this bitrate: the cap trims, the length does not.
@@ -112,6 +117,24 @@ int main(){
         const auto clip=young.clip(INT64_MAX/4);
         check(young.coverage().seconds>4.9&&young.coverage().seconds<5.1,"a young buffer reports what it has");
         check(clip.startUs==0&&clip.videoPackets.size()==300,"a young buffer's clip starts at its first frame");
+    }
+    {
+        ReplayBuffer audioHeavy(60'000'000,8192);
+        audioHeavy.setFormat(format(),{{nullptr,"Veyra sound"}});
+        audioHeavy.pushVideo(video(0));
+        for(int i=0;i<100;++i)audioHeavy.pushAudio(0,sound(i*1024));
+        check(audioHeavy.coverage().bytes<=8192&&audioHeavy.coverage().limited,
+              "audio without new pictures cannot grow beyond the replay memory cap");
+        ReplayBuffer oversized(60'000'000,8192);
+        oversized.setFormat(format(),{});
+        oversized.pushVideo(video(0,9000));
+        check(oversized.coverage().bytes<=8192&&!oversized.coverage().picture,
+              "a single GOP larger than the cap is dropped whole");
+        oversized.pushVideo(video(1));
+        check(!oversized.coverage().picture,"an oversized GOP is not resumed on a dependent frame");
+        oversized.pushVideo(video(120));
+        check(oversized.coverage().picture&&oversized.clip(INT64_MAX/4).videoPackets.front().key,
+              "buffering recovers at the next keyframe after a capacity drop");
     }
     {
         // Two listeners on the rendered-sound tap; removing one leaves the other.

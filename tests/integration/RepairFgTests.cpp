@@ -161,6 +161,14 @@ int wmain(int argc,wchar_t** argv){
         pipeline::EnhanceGraph::FrameOutputs out;if(!graph.process(hdrFrame?hdrFrame:f,i*20.0,i==0,out)){ok=false;break;}
         sink::RgbaImage real,g;if(!readImage(ctx,ring,graph.videoFrameResource(out.videoSlot),real)){ok=false;break;}
         if(!ring.waitIdle()||!graph.resolveGeneration(out)){ok=false;break;}
+        // Completed queue timestamps, including reverse flow and refinement.
+        // Keep CPU readback/fixture work outside the measured GPU interval.
+        if(i>=2){
+            const auto timing=graph.gpuMetrics();
+            const auto flow=timing.gpu[size_t(diagnostics::GpuStage::Flow)].milliseconds;
+            const auto span=diagnostics::graphExecutionSpanMs({timing.identity,timing.gpu});
+            std::cout<<"GPU_TIMING frame="<<i<<" flowMs="<<flow.value_or(-1)<<" graphMs="<<span.value_or(-1)<<std::endl;
+        }
         uint64_t previousGeneratedHash=0;
         for(uint32_t j=0;j<out.batch.count;++j){const auto& item=out.batch.frames[j];if(item.kind!=pipeline::FrameKind::Generated)continue;
             ++generated;if(!readImage(ctx,ring,graph.generatedFrameResource(item.lease->slot),g)){ok=false;break;}

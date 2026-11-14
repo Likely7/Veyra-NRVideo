@@ -1199,3 +1199,8 @@ GPU另抓出ANR生成帧区域平均差57.55/255：Vulkan桥接在列表提交�
 构建：py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-fg-refined-flow-20261113 --root <本工作树> --label 2.1.5-refined-flow-test --jobs 2 …，334.3s，EXE fac1630c…；着色器88个与测试副本一致。
 
 单测：效果链475、合同308、VFG683/0、预设629、调度179、界面合同3、Quick199/0/0（首跑缺产物目录及已知间歇弹簧断言各1失败，重跑通过）、i18n 2797/0。GPU（RepairFgTests，1080p NVOF）：DLSS2X/3X、ANR、FSR真实光流及ANR精确均全部有效、调试层0错误。新-hud测量边缘带误差ANR 5.08→0.80、FSR 2.64→0.27，DLSS不变；静止UI误差不降（ANR6.97→7.12、FSR9.38→9.54）。GPU耗时和实机效果未测。详见docs/FG_REFINED_FLOW_2026-11-13.md与E:/项目/Veyra/reports/claude-fg-refined-flow-20261113/FINAL.json。
+
+
+## 2026-11-13 接手Claude并构建2.1.6
+
+原样保存精修光流7bacdb0、即时回放/麦克风6061d90；原29树HEAD/status/修改文件SHA与原始补丁保留于archives/reports的codex-build-2.1.6-20261113任务。修回放音频突破内存上限、单GOP超限/依赖帧、保存过程中结束片段截取未来、过期请求及快速切源积压。负例32/4、中间夹具35/1和目录夹具误测保留并纠正；缓冲最终37/0、原生第五快捷键真实重复触发/效果链/合同308/VFG683/预设629/调度179/UI合同、Quick199/0/0、i18n2844/0、GPU19组/debug0通过；实际回放/普通录制并存、混音/双轨/单声源/静音、切源尺寸/seek/暂停/保存并发/关闭重开/错误目录及恢复/退出中保存、MF与HDR10通过。独立解码/频谱/时间戳确认，不用合成麦克风冒充真实设备；真实T911-MIC 48k float stereo开关hr0。构建12目标+AMD可选worker固定源码路径完成，早期两次worker命令错误不冒称产品失败。命令/日志/失败/边界见docs/BUILD_2.1.6_2026-11-13.md及logs同任务；完整便携包与源码用scripts/acceptance/package-2.1.6.py从2.1.5固定ZIP供体生成，包装后逐文件审计/冷启动，收尾看FINAL.json。仅本地授权，无push/Release/关机。

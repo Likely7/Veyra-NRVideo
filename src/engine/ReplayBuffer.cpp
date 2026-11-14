@@ -41,14 +41,13 @@ void ReplayBuffer::pushVideo(Packet packet){
 
 void ReplayBuffer::pushAudio(size_t track,Packet packet){
     std::lock_guard lock(m_);
-    if(end_>=0||!packet.data||track>=audioPackets_.size())return;
+    if(end_>=0||!packet.data||track>=audioPackets_.size()||videoPackets_.empty())return;
     audioEnd_[track]=std::max(audioEnd_[track],packet.pts+packet.duration);
     bytes_+=packet.data->size();
     audioPackets_[track].push_back(std::move(packet));
-    // Sound older than the oldest picture is of no use to any clip.
-    const int64_t first=videoPackets_.empty()?INT64_MIN:samplesOf(videoPackets_.front().pts)-kAudioLead;
-    auto& queue=audioPackets_[track];
-    while(!queue.empty()&&queue.front().pts+queue.front().duration<first){bytes_-=queue.front().data->size();queue.pop_front();}
+    // Audio can keep arriving while pictures are paused. Enforce the same
+    // capacity on both arrival paths, including a single oversized GOP.
+    trim();
 }
 
 void ReplayBuffer::finish(int64_t endUs){
@@ -75,6 +74,15 @@ void ReplayBuffer::trim(){
     const int64_t first=samplesOf(videoPackets_.front().pts)-kAudioLead;
     for(auto& queue:audioPackets_)
         while(!queue.empty()&&queue.front().pts+queue.front().duration<first){bytes_-=queue.front().data->size();queue.pop_front();}
+    if(bytes_>capacity_){
+        // A partial GOP is not independently decodable. If even the last GOP
+        // cannot fit, discard it whole and wait for the next keyframe.
+        videoPackets_.clear();keys_.clear();
+        for(auto& queue:audioPackets_)queue.clear();
+        std::fill(audioEnd_.begin(),audioEnd_.end(),INT64_MIN);
+        frontSequence_=nextSequence_;
+        bytes_=0;limited_=true;
+    }
 }
 
 int64_t ReplayBuffer::videoEnd() const {
@@ -108,7 +116,8 @@ ReplayBuffer::Clip ReplayBuffer::clip(int64_t clockUs) const {
     out.video=video_;out.audio=audio_;out.originUs=origin_;
     out.audioPackets.resize(audioPackets_.size());
     if(videoPackets_.empty())return out;
-    int64_t end=end_>=0?end_:std::min(clockUs-origin_,videoEnd());
+    const int64_t end=std::min(clockUs-origin_,videoEnd());
+    if(end<=videoPackets_.front().pts)return out;
     const size_t start=clipStart(end);
     out.startUs=videoPackets_[start].pts;
     for(size_t i=start;i<videoPackets_.size()&&videoPackets_[i].pts<end;++i){

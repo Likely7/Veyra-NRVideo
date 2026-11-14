@@ -5,11 +5,11 @@
 
 using namespace veyra::ui;
 namespace {
-int failures=0, panels=0, exits=0;
+int failures=0, panels=0, exits=0, replays=0;
 GameHotkeyListener* listener=nullptr;
 void check(bool ok,const char* text){std::cout<<(ok?"PASS ":"FAIL ")<<text<<std::endl;failures+=!ok;}
 LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp){
-    if(m==GameHotkeyListener::message){const bool current=listener&&listener->current(lp);if(current){if(wp==0)++panels;else if(wp==1)++exits;}
+    if(m==GameHotkeyListener::message){const bool current=listener&&listener->current(lp);if(current){if(wp==0)++panels;else if(wp==1)++exits;else if(wp==4)++replays;}
         std::cout<<"EVENT action="<<wp<<" epoch="<<lp<<" current="<<current<<" panels="<<panels<<" exits="<<exits<<std::endl;return 0;}
     return DefWindowProcW(w,m,wp,lp);
 }
@@ -155,7 +155,11 @@ int main(int argc,char** argv){
         std::thread inputThread([]{Sleep(100);key(VK_F9);key(VK_F9,true);});Sleep(1500);inputThread.join();pump(100);
         check(panels==3,"keyboard listener survives a busy GUI thread");
         hook.stop();tap(VK_F9);check(panels==3&&!hook.running(),"stopped listener does not consume or trigger keys");
-        check(hook.start(window),"listener can reenter after exit");hook.panelOwned(true);tap(VK_F9);check(panels==4,"new session responds to custom key");hook.stop();
+        check(hook.start(window),"listener can reenter after exit");hook.panelOwned(true);tap(VK_F9);check(panels==4,"new session responds to custom key");
+        hook.bindings({VK_HOME,0},{VK_F10,3},{VK_F7,0},{VK_F8,0},{VK_F9,0});
+        check(send({{VK_F9,false},{VK_F9,false},{VK_F9,true}}),"real replay input and repeat delivered");pump(100);
+        check(replays==1&&panels==4,"fifth hotkey binding emits one real replay event without triggering the panel");
+        hook.stop();
     }
     listener=nullptr;quickWindowSequence(target);
     DestroyWindow(target);DestroyWindow(window);if(IsWindow(previous))SetForegroundWindow(previous);
