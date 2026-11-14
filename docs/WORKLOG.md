@@ -1191,3 +1191,11 @@ GPU另抓出ANR生成帧区域平均差57.55/255：Vulkan桥接在列表提交�
 真实UI绘制两区/39px羽化/启停/切ANR/seek/导出通过；GUI worker60→120，独立解码120帧、PTS单调且插值误差0.333us，生成帧遮罩内均差0.80–1.48/255，区域外增强差31.67。HDR首夹具错误SDR→HDR被合同拒绝，改P010/PQ后过；UI首轮漏--export-out进入目录选择并createDIB错误，仅终止本任务实例，保留失败回执/日志；补参数新配置重试0ERROR。XeSS本轮仅图内真实帧，不冒称SDK生成节奏/其他显卡/实卡或光学延迟通过。
 
 新EXE00b39a4f…已原子部署到现有app，入口和原manual-profile保持；旧EXE单归档，19ANR原件/104QML模块文件核验。最终程序实启退出0/0ERROR，活动app资产保护拒绝实测。临时QA app1779文件退役（逻辑1.088GB非物理回收，E可用实测+46.1MB）；当前构建/交付和必要证据保留。所有输出E盘codex-effect-exclusion-repair-20261113，详细命令/失败/边界docs/EFFECT_EXCLUSION_REPAIR_2026-11-13.md及reports同任务FINAL.json。未push/发布，收尾后按用户明确要求正常关机。
+
+## 2026-11-13 DLSS/FSR/ANR接入精修光流（Claude，用户选择）
+
+用户问高速运动下补帧糊UI、UI闪、边缘闪能否解决，选“先接个精修光流”。分支claude/fg-refined-flow-20261113基于main 3682f8a，未提交。XeSS原有FlowRefine/FlowFill（边缘神盾）现也给图内DLSS/FSR/ANR：flowRefine_对图内补帧启用，运动输入改fgBaseFlow_；设置归一化、图原地套用检查、界面文案与词库同步。
+
+构建：py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task claude-fg-refined-flow-20261113 --root <本工作树> --label 2.1.5-refined-flow-test --jobs 2 …，334.3s，EXE fac1630c…；着色器88个与测试副本一致。
+
+单测：效果链475、合同308、VFG683/0、预设629、调度179、界面合同3、Quick199/0/0（首跑缺产物目录及已知间歇弹簧断言各1失败，重跑通过）、i18n 2797/0。GPU（RepairFgTests，1080p NVOF）：DLSS2X/3X、ANR、FSR真实光流及ANR精确均全部有效、调试层0错误。新-hud测量边缘带误差ANR 5.08→0.80、FSR 2.64→0.27，DLSS不变；静止UI误差不降（ANR6.97→7.12、FSR9.38→9.54）。GPU耗时和实机效果未测。详见docs/FG_REFINED_FLOW_2026-11-13.md与E:/项目/Veyra/reports/claude-fg-refined-flow-20261113/FINAL.json。

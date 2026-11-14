@@ -779,7 +779,9 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const bool refineDisabled=GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_REFINE",refine,4)&&refine[0]==L'0';
     const bool nvidiaFlow=desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia,
         fidelityFlow=desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx;
-    flowRefine_=presentSinkFg()&&desc_.fgUsesFlow()&&desc_.fgMotionRefine&&(nvidiaFlow||fidelityFlow)&&!refineDisabled;
+    // FG motion refinement (FlowRefine/FlowFill with the occlusion check) for every FG that
+    // takes optical-flow motion: the XeSS present sink and graph DLSS/FSR/ANR (2026-11-13).
+    flowRefine_=(presentSinkFg()||fgEnabled_)&&desc_.fgUsesFlow()&&desc_.fgMotionRefine&&(nvidiaFlow||fidelityFlow)&&!refineDisabled;
     wchar_t consistency[4]{};
     const bool occlusionCheck=flowRefine_&&!(GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_CONSISTENCY",consistency,4)&&consistency[0]==L'0');
     flowConsistency_=occlusionCheck&&nvidiaFlow;
@@ -1020,8 +1022,8 @@ bool EnhanceGraph::createResources()
     baseFlow_=makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16_FLOAT,true);
     if(presentSinkFg())for(auto& motion:presentMotion_){motion=makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16_FLOAT,false);if(!motion)return false;}
     if(!residualRgba_||!nrFlow_||!baseFlow_)return false;
-    // XeSS with the optical-flow source: refined NVOF or FidelityFX vectors (FlowRefine/
-    // FlowFill) - the refinement reads their grid vectors.
+    // FG with optical-flow motion (XeSS present sink, graph DLSS/FSR/ANR): refined NVOF or
+    // FidelityFX vectors (FlowRefine/FlowFill) - the refinement reads their grid vectors.
     if(flowRefine_){
         fgFlowRefined_=makeTexture(context_.device(),nvofW_,nvofH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
         fgFlowFilled_=makeTexture(context_.device(),nvofW_,nvofH_,DXGI_FORMAT_R16G16_FLOAT,true);
@@ -1033,7 +1035,8 @@ bool EnhanceGraph::createResources()
             if(!fgFlowClaims_||!fgFlowAgreement_)return false;
         }
     }
-    if(presentSinkFg())veyra::log::info("graph",std::format("present-sink FG motion: {}",!desc_.fgUsesFlow()?"zero":flowConsistency_?"refined NVOF (FlowRefine+FlowFill, forward-backward)":
+    if(presentSinkFg()||(fgEnabled_&&desc_.frameGenerationBackend!=engine::FrameGenerationBackend::Vfg))
+        veyra::log::info("graph",std::format("{} FG motion: {}",presentSinkFg()?"present-sink":"graph",!desc_.fgUsesFlow()?"zero":flowConsistency_?"refined NVOF (FlowRefine+FlowFill, forward-backward)":
         flowClaims_?"refined FidelityFX (FlowRefine+FlowClaim+FlowFill)":!flowRefine_?"validated flow":
         desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx?"refined FidelityFX (FlowRefine+FlowFill)":"refined NVOF (FlowRefine+FlowFill)"));
     // Colour grade tables (v4): only allocated when the stage is enabled.
@@ -3256,7 +3259,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 list->Dispatch((nvofW_+15)/16,(nvofH_+15)/16,1);
                 tracker_.uavBarrier(list,flowTex_.Get());tracker_.uavBarrier(list,confTex_.Get());
                 if(flowRefine_){
-                    // XeSS motion: per-pixel candidate choice, then disocclusion fill.
+                    // FG motion (XeSS present sink, graph DLSS/FSR/ANR): per-pixel candidate
+                    // choice, then disocclusion fill.
                     tracker_.transition(list,fgFlowRefined_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                     if(flowConsistency_)tracker_.transition(list,nvofReverseTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                     // Flags: 1 NVOF backward output, 2 FidelityFX vectors, 4 FidelityFX warming up.
@@ -4003,7 +4007,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             continue;
         }
         auto* flist=ring_.acquireNext(slot,st); if(!flist)return false;
-        auto* motion=desc_.fgMotionProbe?desc_.fgMotionProbe:(haveFlow&&desc_.fgUsesFlow()?baseFlow_.Get():nrZeroMotion_.Get());
+        // 边缘神盾: the refined vectors, same current->previous work-pixel units as baseFlow_.
+        auto* motion=desc_.fgMotionProbe?desc_.fgMotionProbe:(haveFlow&&desc_.fgUsesFlow()?(flowRefine_?fgBaseFlow_.Get():baseFlow_.Get()):nrZeroMotion_.Get());
         tracker_.transition(flist,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         if(!desc_.fgMotionProbe)tracker_.transition(flist,motion,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(flist,depthTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -4202,8 +4207,9 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     const bool usesSharedFlow=dlaaRequested()||nvofStandalone_||(desc_.enableFg&&desc_.fgUsesFlow())||
         (srEnabled_&&desc_.srUsesFlow()&&temporalSrPass(desc_));
     if(usesSharedFlow&&(requestedFlow!=desc_.opticalFlowBackend||s.amdFlowHalfResolution!=desc_.amdFlowHalfResolution))return false;
-    // The XeSS motion refinement owns textures, passes and NVOF's direction.
-    if(presentSinkFg()&&desc_.fgUsesFlow()&&s.fgMotionRefine!=desc_.fgMotionRefine)return false;
+    // The FG motion refinement (XeSS present sink, graph DLSS/FSR/ANR) owns textures,
+    // passes and NVOF's direction.
+    if((presentSinkFg()||desc_.enableFg)&&desc_.fgUsesFlow()&&s.fgMotionRefine!=desc_.fgMotionRefine)return false;
     // The DLSS-G performance mode selects the runtime and a create-time parameter.
     if(desc_.enableFg&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&s.dlssgLite!=desc_.dlssgLite)return false;
     // DLSS allocates multiplier-specific feature/output resources.

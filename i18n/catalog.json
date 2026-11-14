@@ -2535,11 +2535,11 @@
    "ja": "XeSS を有効にできませんでした。以前の設定に戻しました"
   },
   {
-   "zh": "XeSS 补帧、运动来源选“光流”时生效：修人物边缘果冻，背景不再被人物拖着晃",
+   "zh": "DLSS、FSR、ANR 补帧，及运动来源选“光流”的 XeSS 生效：修人物边缘果冻，背景不再被人物拖着晃",
    "src": "qml/ProPage.qml",
-   "zh-TW": "XeSS 補幀、運動來源選「光流」時生效：修人物邊緣果凍，背景不再被人物拖著晃",
-   "en": "For XeSS frame generation with the optical-flow motion source: stops the jelly at character edges, so the background no longer drags along",
-   "ja": "XeSS フレーム生成で動きの推定を「オプティカルフロー」にしたときに有効：人物の輪郭のゼリー状の揺れを抑え、背景が人物に引きずられなくなります"
+   "zh-TW": "DLSS、FSR、ANR 補幀，及運動來源選「光流」的 XeSS 生效：修人物邊緣果凍，背景不再被人物拖著晃",
+   "en": "For DLSS, FSR and ANR frame generation, and XeSS with the optical-flow motion source: stops the jelly at character edges, so the background no longer drags along",
+   "ja": "DLSS・FSR・ANR のフレーム生成と、動きの推定を「オプティカルフロー」にした XeSS で有効：人物の輪郭のゼリー状の揺れを抑え、背景が人物に引きずられなくなります"
   },
   {
    "zh": "XeSS 默认零运动；FSR 仍有自身的光流计算",
@@ -16901,11 +16901,11 @@
    "ja": "エッジイージス"
   },
   {
-   "zh": "边缘神盾（XeSS 防果冻）",
+   "zh": "边缘神盾（防果冻）",
    "src": "qml/NodePage.qml",
-   "zh-TW": "邊緣神盾（XeSS 防果凍）",
-   "en": "Edge Aegis (XeSS anti-jelly)",
-   "ja": "エッジイージス（XeSS ゼリー対策）"
+   "zh-TW": "邊緣神盾（防果凍）",
+   "en": "Edge Aegis (anti-jelly)",
+   "ja": "エッジイージス（ゼリー対策）"
   },
   {
    "zh": "边缘羽化",

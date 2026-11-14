@@ -447,8 +447,10 @@ struct EnhancementSettings {
     FlowQuality flow=FlowQuality::Balanced;
     OpticalFlowBackend opticalFlowBackend=OpticalFlowBackend::Nvidia;
     bool amdFlowHalfResolution=false;
-    // UI "边缘神盾": refined optical-flow motion for XeSS frame generation (edge refinement
-    // and the uncovered-background fill). A global control kept in shell preferences.
+    // UI "边缘神盾": refined optical-flow motion for frame generation (edge refinement and
+    // the uncovered-background fill): DLSS, FSR and ANR, and XeSS with the optical-flow
+    // source (2026-11-13; VFG estimates its own motion). A global control kept in shell
+    // preferences.
     bool fgMotionRefine=true;
     // UI "DLSS 性能模式": NVIDIA's DLSS-G performance mode (ngx/DlssgLite.h),
     // DLSS frame generation only. A global control kept in shell preferences.
@@ -528,8 +530,9 @@ struct EnhancementSettings {
             (sr&&temporalSr()&&motionUsesFlow(srMotion))||
             (multiplier>1&&motionUsesFlow(fgMotion,frameGenerationBackend));
         if(!flowUsed){active.flow=defaults.flow;active.opticalFlowBackend=defaults.opticalFlowBackend;active.amdFlowHalfResolution=defaults.amdFlowHalfResolution;}
-        // Only XeSS frame generation with optical-flow motion reads the refined vectors.
-        if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::XeSS&&motionUsesFlow(fgMotion,frameGenerationBackend)))
+        // Every frame generation that takes its motion from optical flow reads the refined
+        // vectors (DLSS, FSR, ANR; XeSS only with the optical-flow source; never VFG).
+        if(!(multiplier>1&&motionUsesFlow(fgMotion,frameGenerationBackend)))
             active.fgMotionRefine=defaults.fgMotionRefine;
         if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::Dlss))active.dlssgLite=defaults.dlssgLite;
         if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::Vfg))active.vfgAutoRegulate=defaults.vfgAutoRegulate;

@@ -917,10 +917,10 @@ private:
     uint32_t nrLayerCount_=1;
     ComPtr<ID3D12Resource> presentMotion_[2];
     bool presentMotionValid_[2]={};
-    // XeSS present-path motion with the optical-flow source: per-pixel refined NVOF or
-    // FidelityFX vectors with disocclusion fill (FlowRefine/FlowFill), never zeroed. NR/SR
-    // keep the validated baseFlow_. desc.fgMotionRefine=false (or VEYRA_TEST_FLOW_REFINE=0)
-    // restores the previous input.
+    // FG motion with the optical-flow source (XeSS present path, and graph DLSS/FSR/ANR since
+    // 2026-11-13): per-pixel refined NVOF or FidelityFX vectors with disocclusion fill
+    // (FlowRefine/FlowFill), never zeroed. NR/SR keep the validated baseFlow_.
+    // desc.fgMotionRefine=false (or VEYRA_TEST_FLOW_REFINE=0) restores the previous input.
     bool flowRefine_=false;
     ComPtr<ID3D12Resource> fgFlowRefined_,fgFlowFilled_,fgBaseFlow_;
     // NVOF backward output (previous->current) for the refinement's forward-backward check

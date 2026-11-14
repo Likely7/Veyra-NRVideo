@@ -32,6 +32,24 @@ uint8_t detailedPlane(unsigned x,unsigned y,unsigned frame){
     const double b=latticeValue(cellX,cellY+1)*(1-tx)+latticeValue(cellX+1,cellY+1)*tx;
     return uint8_t(std::lround(a*(1-ty)+b*ty));
 }
+// The same lattice as detailedPlane at a fractional texture position: the analytic
+// intermediate frame, also where content enters through the frame edge.
+double detailedPlaneAt(double local,unsigned y){
+    const double cell=std::floor(local/8);const unsigned cellX=unsigned(cell),cellY=y/8;
+    const double tx=(local-cell*8)/8,ty=double(y%8)/8;
+    const double a=latticeValue(cellX,cellY)*(1-tx)+latticeValue(cellX+1,cellY)*tx;
+    const double b=latticeValue(cellX,cellY+1)*(1-tx)+latticeValue(cellX+1,cellY+1)*tx;
+    return a*(1-ty)+b*ty;
+}
+// "-hud": a static striped UI box above the translation measurement rows (y 200..880).
+constexpr unsigned kHudX0=1560,kHudX1=1860,kHudY0=40,kHudY1=180;
+bool hudPixel(unsigned x,unsigned y,uint8_t& value){
+    if(x<kHudX0||x>=kHudX1||y<kHudY0||y>=kHudY1)return false;
+    const unsigned lx=x-kHudX0,ly=y-kHudY0;
+    const bool frame=lx<4||lx>=kHudX1-kHudX0-4||ly<4||ly>=kHudY1-kHudY0-4;
+    const bool text=(ly/6)%3==1&&((lx/5)%4)!=3&&lx>=16&&lx<kHudX1-kHudX0-16;
+    value=frame||text?uint8_t(20):uint8_t(236);return true;
+}
 double center(const veyra::sink::RgbaImage& im){double total=0,sum=0;for(unsigned y=300;y<780;++y)for(unsigned x=0;x<im.width;++x){const auto v=im.pixels[(size_t(y)*im.width+x)*4];if(v>160){total+=1;sum+=x;}}return total?sum/total:-1;}
 double translation(const veyra::sink::RgbaImage& previous,const veyra::sink::RgbaImage& generated,bool vertical=false){
     double best=1e30,shift=0;
@@ -83,6 +101,7 @@ int wmain(int argc,wchar_t** argv){
     if(!artifacts.empty())std::filesystem::create_directories(artifacts);
     if(argc>3)gd.runtimeAbsPath=std::filesystem::path(argv[3]).wstring();
     if(argc>4&&std::wstring(argv[4])==L"anr")gd.frameGenerationBackend=engine::FrameGenerationBackend::Anr;
+    if(argc>4&&std::wstring(argv[4])==L"fsr")gd.frameGenerationBackend=engine::FrameGenerationBackend::Fsr;
     gd.hdrInput=gd.hdrOutput=mode.find("-hdr")!=std::string::npos;
     gd.rgbInput=mode.find("-rgb")!=std::string::npos;
     gd.enableNr=mode!="off";gd.enableNvofStandalone=gd.enableNr;
@@ -97,6 +116,8 @@ int wmain(int argc,wchar_t** argv){
     const bool globalMotion=mode.find("-pan")!=std::string::npos;
     const bool planar=mode.find("-planar")!=std::string::npos;
     const bool detailed=mode.find("-detail")!=std::string::npos;
+    const bool hud=mode.find("-hud")!=std::string::npos;
+    double hudSum=0,edgeSum=0,interiorSum=0;unsigned qualityFrames=0;
     const uint16_t motionBits=mode.find("-reverse")!=std::string::npos?0x4c00:mode.find("-zero")!=std::string::npos?0:0xcc00;
     pipeline::ComPtr<ID3D12Resource> motion,upload;
     if(ok&&exact){motion=pipeline::makeTexture(ctx.device(),1920,1080,DXGI_FORMAT_R16G16_FLOAT,false);upload=pipeline::makeUploadBuffer(ctx.device(),1920ull*1080*4);ok=motion&&upload;gd.fgMotionProbe=motion.Get();}
@@ -128,6 +149,7 @@ int wmain(int argc,wchar_t** argv){
             auto* p=f->data[0]+size_t(y)*f->linesize[0]+x*4;const double local=(vertical?y:x)-int(i)*16;const double cross=vertical?x:y;
             p[0]=p[1]=p[2]=uint8_t(std::lround(128+45*std::sin(local*0.07)+35*std::sin(local*0.031+cross*0.06)+25*std::sin(cross*0.031)));p[3]=255;
             if(detailed)p[0]=p[1]=p[2]=detailedPlane(unsigned(vertical?y:x),unsigned(vertical?x:y),i);
+            if(uint8_t v=0;hud&&hudPixel(unsigned(x),unsigned(y),v))p[0]=p[1]=p[2]=v;
         }
         if(hdrFrame)for(unsigned y=0;y<1080;++y)for(unsigned x=0;x<1920;++x){
             const double srgb=double(f->data[0][size_t(y)*f->linesize[0]+x*4])/255;
@@ -156,10 +178,26 @@ int wmain(int argc,wchar_t** argv){
             previousGeneratedHash=hash(g);
             std::cout<<"CONTENT frame="<<i<<" subframe="<<item.subframe<<" pts="<<item.pts100ns<<" previousHash="<<hash(previous)<<" realHash="<<hash(real)<<" generatedHash="<<hash(g)<<" expectedCenter="<<expected<<" actualCenter="<<center(g)<<" blendResidual="<<blendResidual<<" valid="<<good<<std::endl;
             if(planar)std::cout<<"TRANSLATION expected="<<16*t<<" observed="<<displacement<<std::endl;
+            if(planar&&detailed&&!vertical&&!gd.hdrInput){
+                // Mean absolute error (0..255) against the analytic intermediate plane or the static UI.
+                double hudError=0,edgeError=0,interiorError=0;unsigned hudCount=0,edgeCount=0,interiorCount=0;
+                const double frame=double(i)-1+t;
+                for(unsigned y=0;y<g.height;++y)for(unsigned x=0;x<g.width;++x){
+                    const double actual=g.pixels[(size_t(y)*g.width+x)*4];uint8_t ui=0;
+                    if(hud&&hudPixel(x,y,ui)){hudError+=std::abs(actual-ui);++hudCount;continue;}
+                    const double expected=detailedPlaneAt(double(x)+256-frame*16,y);
+                    if(x<48||x>=g.width-48){edgeError+=std::abs(actual-expected);++edgeCount;}
+                    else if(x>=300&&x<1620&&y>=200&&y<880){interiorError+=std::abs(actual-expected);++interiorCount;}
+                }
+                if(hudCount)hudError/=hudCount;if(edgeCount)edgeError/=edgeCount;if(interiorCount)interiorError/=interiorCount;
+                if(i>=2){hudSum+=hudError;edgeSum+=edgeError;interiorSum+=interiorError;++qualityFrames;}
+                std::cout<<"QUALITY frame="<<i<<" subframe="<<item.subframe<<" hudMae="<<hudError<<" edgeMae="<<edgeError<<" interiorMae="<<interiorError<<std::endl;
+            }
         }
         previous=std::move(real);
         if(i==10)retained=out.batch;
     }
+    if(qualityFrames)std::cout<<"QUALITY_SUMMARY frames="<<qualityFrames<<" hudMae="<<hudSum/qualityFrames<<" edgeMae="<<edgeSum/qualityFrames<<" interiorMae="<<interiorSum/qualityFrames<<std::endl;
     std::cout<<"RESULT source="<<graph.metrics().nvofExecuteCount+graph.metrics().gpuDisExecuteCount+1<<" generated="<<generated<<" contentValid="<<valid<<" display=unmeasured"<<std::endl;
     pipeline::EnhanceGraph::FrameOutputs rejected;
     const bool protectedLease=ok&&!graph.process(hdrFrame?hdrFrame:f,240,false,rejected);

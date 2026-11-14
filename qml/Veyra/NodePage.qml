@@ -714,7 +714,7 @@ VPage {
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            NodeLabel { Layout.fillWidth: true; text: qsTr("边缘神盾（XeSS 防果冻）") }
+                            NodeLabel { Layout.fillWidth: true; text: qsTr("边缘神盾（防果冻）") }
                             VSwitch { objectName: "node-edge-aegis"; checked: veyra.edgeAegis; onToggled: checked => veyra.edgeAegis = checked }
                         }
                         NodeLabel { text: qsTr("运动估算质量") }

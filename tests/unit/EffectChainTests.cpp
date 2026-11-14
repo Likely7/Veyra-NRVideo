@@ -1071,18 +1071,22 @@ __declspec(noinline) void testInactiveEffectEdits(){
         }
         check(!active.sameVideoConfiguration(edited)&&!active.sameActiveVideoParameters(edited),"enabling an edited effect changes active identity");
     }
-    for(auto backend:{FrameGenerationBackend::Dlss,FrameGenerationBackend::XeSS,FrameGenerationBackend::Fsr,FrameGenerationBackend::Vfg}){
+    for(auto backend:{FrameGenerationBackend::Dlss,FrameGenerationBackend::XeSS,FrameGenerationBackend::Fsr,FrameGenerationBackend::Anr,FrameGenerationBackend::Vfg}){
         auto active=off;active.multiplier=2;active.frameGenerationBackend=backend;active.fgMotion=MotionSource::OpticalFlow;
         auto next=active;next.flow=FlowQuality::Performance;
         check(active.sameVideoConfiguration(next)==(backend==FrameGenerationBackend::Vfg),"shared flow stays active for every external-flow FG consumer");
         next=active;next.nrPolicy=veyra::pipeline::NrSizePolicy::Native;next.nrRuntime=NrRuntime::LmxxfAmd;
         check(active.sameVideoConfiguration(next),"active FG does not activate stored NR parameters");
-        // 边缘神盾 (fgMotionRefine) shapes only XeSS motion taken from optical flow.
+        // 边缘神盾 (fgMotionRefine) shapes every FG motion taken from optical flow (2026-11-13):
+        // DLSS/FSR/ANR, and XeSS with the optical-flow source; VFG estimates its own.
         next=active;next.fgMotionRefine=false;
-        const bool refines=backend==FrameGenerationBackend::XeSS;
-        check(active.sameVideoConfiguration(next)!=refines&&requiresGraphRebuild(active,next)==refines,"edge aegis rebuilds only XeSS optical-flow motion");
+        const bool refines=backend!=FrameGenerationBackend::Vfg;
+        check(active.sameVideoConfiguration(next)!=refines&&requiresGraphRebuild(active,next)==refines,"edge aegis rebuilds every optical-flow FG motion, not VFG");
         auto automatic=active;automatic.fgMotion=MotionSource::Automatic;next=automatic;next.fgMotionRefine=false;
-        check(!requiresGraphRebuild(automatic,next),"edge aegis is inactive while XeSS motion stays automatic");
+        const bool automaticFlow=backend!=FrameGenerationBackend::Vfg&&backend!=FrameGenerationBackend::XeSS;
+        check(requiresGraphRebuild(automatic,next)==automaticFlow,"edge aegis follows automatic motion: flow for DLSS/FSR/ANR, none for XeSS");
+        auto zero=active;zero.fgMotion=MotionSource::Zero;next=zero;next.fgMotionRefine=false;
+        check(!requiresGraphRebuild(zero,next),"edge aegis is inactive with zero FG motion");
     }
     auto stack=populated();stack.nrLayerCount=2;stack.nrLayers[0].enabled=false;stack.nrLayers[1].enabled=true;
     stack.nrLayers[1].runtime=stack.nrRuntime;stack.nrLayers[1].lowLatencyPairing=stack.lowLatency;

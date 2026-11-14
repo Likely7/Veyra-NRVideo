@@ -1797,7 +1797,7 @@ VPage {
                                 }
                                 VRow {
                                     label: qsTr("边缘神盾")
-                                    hint: qsTr("XeSS 补帧、运动来源选“光流”时生效：修人物边缘果冻，背景不再被人物拖着晃")
+                                    hint: qsTr("DLSS、FSR、ANR 补帧，及运动来源选“光流”的 XeSS 生效：修人物边缘果冻，背景不再被人物拖着晃")
                                     VSwitch {
                                         objectName: "list-edge-aegis"
                                         checked: veyra.edgeAegis
